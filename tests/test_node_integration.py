@@ -3,7 +3,7 @@
 
 class TestIntegrationNode:
     def test_integrate_keeps_placeholders_and_metadata(self):
-        from systemedu.agents.builtin.integration_agent import IntegrationAgent
+        from systemedu.core.agents.builtin.integration_agent import IntegrationAgent
 
         plan = "段落A[[IDEA:i1]]段落B[[IDEA:i2]]"
         ideas = [

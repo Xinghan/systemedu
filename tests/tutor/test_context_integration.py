@@ -17,10 +17,10 @@ from typing import Any
 import pytest
 from langchain_core.messages import AIMessage, HumanMessage
 
-from systemedu.tutor.nodes.skill_router import ROUTER_PROMPT, make_skill_router_node
-from systemedu.tutor.skills import SkillBase, SkillConfig
-from systemedu.tutor.skills._common import render_memory_block
-from systemedu.tutor.state import MemorySnapshot, TutorState
+from systemedu.core.tutor.nodes.skill_router import ROUTER_PROMPT, make_skill_router_node
+from systemedu.core.tutor.skills import SkillBase, SkillConfig
+from systemedu.core.tutor.skills._common import render_memory_block
+from systemedu.core.tutor.state import MemorySnapshot, TutorState
 
 
 # ---------------------------------------------------------------------------
@@ -151,7 +151,7 @@ class TestMemoryInjectPassesActiveTab:
     @pytest.mark.asyncio
     async def test_forwards_active_tab_to_injector(self):
         """memory_inject_node passes state.active_tab to injector.inject()."""
-        from systemedu.tutor.nodes import make_memory_inject_node
+        from systemedu.core.tutor.nodes import make_memory_inject_node
 
         @dataclass
         class RecordingInjector:
@@ -179,7 +179,7 @@ class TestMemoryInjectPassesActiveTab:
     @pytest.mark.asyncio
     async def test_no_active_tab_passes_none(self):
         """Without active_tab in state, None is passed."""
-        from systemedu.tutor.nodes import make_memory_inject_node
+        from systemedu.core.tutor.nodes import make_memory_inject_node
 
         @dataclass
         class RecordingInjector:

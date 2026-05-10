@@ -31,17 +31,14 @@ import pytest
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
 
 from systemedu.core.config import TutorConfig
-from systemedu.tutor.checkpoint import get_checkpointer
-from systemedu.tutor.graph import build_tutor_graph
-from systemedu.tutor.skills import SkillLoader
+from systemedu.core.tutor.checkpoint import get_checkpointer
+from systemedu.core.tutor.graph import build_tutor_graph
+from systemedu.core.tutor.skills import SkillLoader
 
 
 SKILLS_ROOT = (
-    Path(__file__).resolve().parents[2]
-    / "src"
-    / "systemedu"
-    / "tutor"
-    / "skills"
+    Path(__file__).resolve().parents[2]  # repo root
+    / "packages" / "core" / "src" / "systemedu" / "core" / "tutor" / "skills"
 )
 
 
@@ -254,7 +251,7 @@ class TestScenario4_SafetyShortCircuit:
         it captured at import time) and restore it in a `finally`.
         Rebuilding the graph afterwards is enough — no module reload.
         """
-        from systemedu.tutor import graph as graph_module
+        from systemedu.core.tutor import graph as graph_module
 
         async def triggered_gate(state):
             return {"_safety_triggered": True}

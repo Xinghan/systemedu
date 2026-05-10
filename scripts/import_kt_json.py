@@ -22,7 +22,7 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT / "src"))
 
-from systemedu.education.services import convert_uploaded_tree, extract_project_brief, extract_project_meta
+from systemedu.core.education.services import convert_uploaded_tree, extract_project_brief, extract_project_meta
 
 
 def main() -> None:

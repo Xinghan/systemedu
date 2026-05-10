@@ -7,8 +7,8 @@ import sqlalchemy as sa
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from systemedu.storage.db import Base, StudentFact
-from systemedu.tutor.memory import StudentFactDAO
+from systemedu.core.storage.db import Base, StudentFact
+from systemedu.core.tutor.memory import StudentFactDAO
 
 
 @pytest.fixture

@@ -23,11 +23,11 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from systemedu.core.config import TutorConfig
-from systemedu.storage.db import Base, Escalation, StudentFact
-from systemedu.tutor.checkpoint import get_checkpointer
-from systemedu.tutor.graph import build_tutor_graph
-from systemedu.tutor.nodes.safety_gate import SAFETY_RESPONSE
-from systemedu.tutor.skills import SkillLoader
+from systemedu.core.storage.db import Base, Escalation, StudentFact
+from systemedu.core.tutor.checkpoint import get_checkpointer
+from systemedu.core.tutor.graph import build_tutor_graph
+from systemedu.core.tutor.nodes.safety_gate import SAFETY_RESPONSE
+from systemedu.core.tutor.skills import SkillLoader
 
 pytestmark = pytest.mark.e2e
 
@@ -204,8 +204,8 @@ class TestScenario1_InterestExtraction:
     async def test_fact_extractor_finds_interest(self, real_llm, db_session, tmp_path):
         """FactExtractor extracts an interest fact from a conversation
         where the student expresses enthusiasm about rockets."""
-        from systemedu.storage.db import ChatMessage, ChatSession, PendingFactExtraction
-        from systemedu.tutor.memory import FactExtractor
+        from systemedu.core.storage.db import ChatMessage, ChatSession, PendingFactExtraction
+        from systemedu.core.tutor.memory import FactExtractor
 
         # Seed a session + messages
         session = ChatSession(

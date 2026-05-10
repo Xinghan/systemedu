@@ -26,13 +26,13 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from systemedu.core.config import TutorConfig
-from systemedu.gateway.chat_payload import ChatPayload
-from systemedu.storage.db import Base, StudentFact
-from systemedu.tutor.checkpoint import get_checkpointer
-from systemedu.tutor.graph import build_tutor_graph
-from systemedu.tutor.memory import MemoryInjector, StudentFactDAO
-from systemedu.tutor.skills import SkillLoader
-from systemedu.tutor.state import TutorState
+from systemedu.cloud.gateway.chat_payload import ChatPayload
+from systemedu.core.storage.db import Base, StudentFact
+from systemedu.core.tutor.checkpoint import get_checkpointer
+from systemedu.core.tutor.graph import build_tutor_graph
+from systemedu.core.tutor.memory import MemoryInjector, StudentFactDAO
+from systemedu.core.tutor.skills import SkillLoader
+from systemedu.core.tutor.state import TutorState
 
 pytestmark = pytest.mark.e2e
 
@@ -443,7 +443,7 @@ class TestScenario9_ExerciseIdPropagation:
     async def test_exercise_id_flows_to_tutor_runner_input(self):
         """_build_input includes exercise_id path-through via the
         payload fields (knode_id, active_tab)."""
-        from systemedu.gateway.tutor_runner import _build_input
+        from systemedu.cloud.gateway.tutor_runner import _build_input
 
         payload = ChatPayload(
             message="选 A",

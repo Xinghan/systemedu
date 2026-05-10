@@ -12,7 +12,7 @@ from __future__ import annotations
 import pytest
 from langchain_core.messages import AIMessage, HumanMessage
 
-from systemedu.tutor.nodes.safety_gate import (
+from systemedu.core.tutor.nodes.safety_gate import (
     SAFETY_RESPONSE,
     safety_gate_node,
 )

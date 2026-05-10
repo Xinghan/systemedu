@@ -13,7 +13,7 @@ import asyncio
 
 import pytest
 
-from systemedu.tutor.tools.decorator import (
+from systemedu.core.tutor.tools.decorator import (
     ToolContext,
     ToolMeta,
     current_tool_context,

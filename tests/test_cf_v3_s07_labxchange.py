@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import pytest
 
-from systemedu.course_factory_v3.progress import Emitter
-from systemedu.course_factory_v3.steps import s07_labxchange
+from systemedu.core.course_factory_v3.progress import Emitter
+from systemedu.core.course_factory_v3.steps import s07_labxchange
 
 
 @pytest.mark.asyncio
@@ -41,7 +41,7 @@ async def test_run_returns_empty_on_error(monkeypatch):
 @pytest.mark.asyncio
 async def test_run_real_index():
     """集成测试:真跑 LabXchange 本地索引,rocket-design knode 0 应至少返 1 条。"""
-    from systemedu.course_factory_v3.steps import s00_boot
+    from systemedu.core.course_factory_v3.steps import s00_boot
     em = Emitter(lambda e, d: None)
     ctx = await s00_boot.run("rocket-design", 0, user_id="t", overrides={}, em=em)
     res = await s07_labxchange.run(ctx, em=em, top_k=3)

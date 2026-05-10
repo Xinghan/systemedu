@@ -8,7 +8,7 @@ from pathlib import Path
 @pytest.fixture(autouse=True)
 def isolated_db(tmp_path, monkeypatch):
     """Use a fresh in-memory DB for each test."""
-    import systemedu.storage.db as db_module
+    import systemedu.core.storage.db as db_module
     import systemedu.core.config as config_module
 
     db_file = tmp_path / "test.db"
@@ -47,14 +47,14 @@ def _patch_agent(result):
     mock_agent.search.return_value = result
     mock_agent_cls = MagicMock(return_value=mock_agent)
     return (
-        patch("systemedu.education.search_service.SearchAgent", mock_agent_cls),
-        patch("systemedu.education.search_service.get_llm", return_value=MagicMock()),
+        patch("systemedu.core.education.search_service.SearchAgent", mock_agent_cls),
+        patch("systemedu.core.education.search_service.get_llm", return_value=MagicMock()),
     )
 
 
 def test_search_resources_creates_rows():
     """search_resources should insert web + youtube rows and set status=done."""
-    from systemedu.education.search_service import search_resources, get_resources
+    from systemedu.core.education.search_service import search_resources, get_resources
 
     p1, p2 = _patch_agent(_make_agent_result(web_n=10, yt_n=8))
     with p1, p2:
@@ -73,7 +73,7 @@ def test_search_resources_creates_rows():
 
 def test_search_resources_handles_agent_failure():
     """When SearchAgent returns None, status should be failed."""
-    from systemedu.education.search_service import search_resources, get_resources
+    from systemedu.core.education.search_service import search_resources, get_resources
 
     p1, p2 = _patch_agent(None)  # agent returns None
     with p1, p2:
@@ -86,7 +86,7 @@ def test_search_resources_handles_agent_failure():
 
 def test_saved_resources_preserved_on_re_search():
     """Pre-saved resources should survive a re-search."""
-    from systemedu.education.search_service import (
+    from systemedu.core.education.search_service import (
         search_resources,
         get_resources,
         toggle_resource_saved,
@@ -121,7 +121,7 @@ def test_saved_resources_preserved_on_re_search():
 
 def test_search_agent_query_generation():
     """SearchAgent should call LLM for query generation and Tavily for search."""
-    from systemedu.agents.builtin.search_agent import SearchAgent
+    from systemedu.core.agents.builtin.search_agent import SearchAgent
 
     mock_llm = MagicMock()
     mock_llm.invoke.return_value = MagicMock(
@@ -155,7 +155,7 @@ def test_search_agent_query_generation():
 
 def test_search_agent_llm_fallback():
     """SearchAgent should fall back to node_title if LLM fails."""
-    from systemedu.agents.builtin.search_agent import SearchAgent
+    from systemedu.core.agents.builtin.search_agent import SearchAgent
 
     mock_llm = MagicMock()
     mock_llm.invoke.side_effect = RuntimeError("LLM down")

@@ -131,14 +131,14 @@ VISUAL_DESIGN_LANGUAGE = """
 
 def ensure_db_tables() -> None:
     """确保所有表存在。"""
-    from systemedu.storage.db import Base, get_engine
+    from systemedu.core.storage.db import Base, get_engine
     Base.metadata.create_all(get_engine())
 
 
 def upsert_project(name: str, title: str, description: str, category: str,
                     age_range: list[int], estimated_hours: float, tags: list[str]) -> None:
     """注册或更新项目到 LocalProject 表。"""
-    from systemedu.storage.db import LocalProject, get_session
+    from systemedu.core.storage.db import LocalProject, get_session
     db = get_session()
     try:
         existing = db.query(LocalProject).filter_by(name=name).first()
@@ -335,7 +335,7 @@ def generate_assignment(knode: dict, milestone: dict, plan_markdown: str = "") -
 
 def upsert_assignment(project_name: str, knode_id: int, assignment: str) -> None:
     """仅更新 LessonContent.project_assignment 字段 (v2/cf 表)。"""
-    from systemedu.storage.db import LessonContent, get_session
+    from systemedu.core.storage.db import LessonContent, get_session
     db = get_session()
     try:
         lesson = db.query(LessonContent).filter_by(
@@ -356,7 +356,7 @@ def upsert_assignment_v3(project_name: str, knode_id: int, assignment: str,
 
     若 version_label 给出, 只更新该版本; 否则更新 active 版本(没有 active 则更新最新)。
     """
-    from systemedu.storage.db import LessonContentV3, get_session
+    from systemedu.core.storage.db import LessonContentV3, get_session
     db = get_session()
     try:
         q = db.query(LessonContentV3).filter_by(
@@ -414,7 +414,7 @@ def generate_audio_scripts(project_name: str, knode_id: int,
     """
     import re
     import uuid
-    from systemedu.storage.db import LessonContent, get_session
+    from systemedu.core.storage.db import LessonContent, get_session
     from systemedu.core.config import get_config
     from langchain_openai import ChatOpenAI
 
@@ -440,7 +440,7 @@ def generate_audio_scripts(project_name: str, knode_id: int,
             return existing
 
         # Step 1: 分段
-        from systemedu.agents.builtin.course_segment_agent import _split_by_headings
+        from systemedu.core.agents.builtin.course_segment_agent import _split_by_headings
         sections = _split_by_headings(plan_md)
 
         # Step 2: LLM 生成 audio_script
@@ -526,7 +526,7 @@ def upsert_lesson_v3(project_name: str, knode_id: int, course_content: dict, *,
         if html and "animation_runtime.js" in html:
             section["html"] = _inline_runtime(html)
 
-    from systemedu.storage.db import LessonContentV3, get_session
+    from systemedu.core.storage.db import LessonContentV3, get_session
     db = get_session()
     try:
         lesson = db.query(LessonContentV3).filter_by(
@@ -573,7 +573,7 @@ def upsert_lesson_v3(project_name: str, knode_id: int, course_content: dict, *,
 
 def set_active_v3_version(project_name: str, knode_id: int, version_label: str) -> bool:
     """切换 active 版本。返回 True 成功, False 没找到对应版本。"""
-    from systemedu.storage.db import LessonContentV3, get_session
+    from systemedu.core.storage.db import LessonContentV3, get_session
     db = get_session()
     try:
         target = db.query(LessonContentV3).filter_by(
@@ -595,7 +595,7 @@ def set_active_v3_version(project_name: str, knode_id: int, version_label: str) 
 
 def list_v3_versions(project_name: str, knode_id: int) -> list[dict]:
     """返回 (project, knode) 下所有版本的元数据 (用于前端下拉)。"""
-    from systemedu.storage.db import LessonContentV3, get_session
+    from systemedu.core.storage.db import LessonContentV3, get_session
     db = get_session()
     try:
         rows = (
@@ -623,7 +623,7 @@ def list_v3_versions(project_name: str, knode_id: int) -> list[dict]:
 
 def list_slides_v3(project_name: str, knode_id: int, version_label: str) -> list[dict]:
     """返回 (project, knode, version_label) 下所有 slides 按 slide_index 升序。"""
-    from systemedu.storage.db import LessonSlideV3, get_session
+    from systemedu.core.storage.db import LessonSlideV3, get_session
     db = get_session()
     try:
         rows = (
@@ -656,7 +656,7 @@ def replace_slides_v3(project_name: str, knode_id: int, version_label: str,
     每个 slide dict 必须含: slide_id, kind, 可选含 title/body_markdown/audio_script/payload。
     slide_index 自动按列表顺序赋 0..N-1。
     """
-    from systemedu.storage.db import LessonSlideV3, get_session
+    from systemedu.core.storage.db import LessonSlideV3, get_session
     db = get_session()
     try:
         # 删旧
@@ -689,7 +689,7 @@ def replace_slides_v3(project_name: str, knode_id: int, version_label: str,
 
 def delete_slides_v3(project_name: str, knode_id: int, version_label: str) -> int:
     """删除指定 version 的所有 slides。返回删除条数。"""
-    from systemedu.storage.db import LessonSlideV3, get_session
+    from systemedu.core.storage.db import LessonSlideV3, get_session
     db = get_session()
     try:
         n = (
@@ -714,7 +714,7 @@ def upsert_lesson(project_name: str, knode_id: int, content_type: str,
         if html and "animation_runtime.js" in html:
             section["html"] = _inline_runtime(html)
 
-    from systemedu.storage.db import LessonContent, get_session
+    from systemedu.core.storage.db import LessonContent, get_session
     db = get_session()
     try:
         lesson = db.query(LessonContent).filter_by(
@@ -754,8 +754,8 @@ def _sync_external_resources_to_db(project_name: str, knode_id: int, ext: dict) 
     包含三类来源：Tavily web_results、Tavily youtube_results、LabXchange pathways。
     已存在的 URL 不会重复插入。
     """
-    from systemedu.storage.db import get_session
-    from systemedu.education.search_service import NodeResource
+    from systemedu.core.storage.db import get_session
+    from systemedu.core.education.search_service import NodeResource
 
     items: list[dict] = []
 
@@ -832,8 +832,8 @@ def _sync_external_resources_to_db(project_name: str, knode_id: int, ext: dict) 
 
 def init_progress(project_name: str, node_count: int) -> None:
     """初始化用户学习进度（第一个节点 available，其余 locked）。"""
-    from systemedu.storage.db import ProgressRecord, get_session
-    from systemedu.education.models import NodeStatus
+    from systemedu.core.storage.db import ProgressRecord, get_session
+    from systemedu.core.education.models import NodeStatus
     db = get_session()
     try:
         for i in range(node_count):
@@ -928,7 +928,7 @@ def make_spec_html(
         "outline_variant": "rgba(138,136,134,0.15)",
     }
     try:
-        from systemedu.agents.builtin.media_art_direction import STYLE_KITS
+        from systemedu.core.agents.builtin.media_art_direction import STYLE_KITS
         if style_key in STYLE_KITS:
             palette = STYLE_KITS[style_key]["palette"]
     except Exception:
@@ -1392,12 +1392,12 @@ def load_knode_context(project_name: str, knode_global_idx: int) -> dict:
 
     # v5 format: stages + modules
     if "stages" in tree and "modules" in tree:
-        from systemedu.education.tree_adapter import (
+        from systemedu.core.education.tree_adapter import (
             build_module_index_map,
             sorted_modules as _sorted_modules,
             v5_to_milestones_view,
         )
-        from systemedu.education.models import V5KnowledgeTree
+        from systemedu.core.education.models import V5KnowledgeTree
 
         v5_tree = V5KnowledgeTree.model_validate(tree)
         index_map = build_module_index_map(v5_tree)

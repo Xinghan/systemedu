@@ -49,7 +49,7 @@ class TestCoursePlannerAgent:
 
     @pytest.mark.asyncio
     async def test_plan_returns_manifest(self):
-        from systemedu.agents.builtin.course_planner import CoursePlannerAgent
+        from systemedu.core.agents.builtin.course_planner import CoursePlannerAgent
 
         llm = self._make_llm(self._valid_manifest())
         agent = CoursePlannerAgent(llm=llm)
@@ -65,7 +65,7 @@ class TestCoursePlannerAgent:
     @pytest.mark.asyncio
     async def test_plan_with_code_fences(self):
         """Should strip markdown code fences from LLM response."""
-        from systemedu.agents.builtin.course_planner import CoursePlannerAgent
+        from systemedu.core.agents.builtin.course_planner import CoursePlannerAgent
 
         wrapped = f"```json\n{self._valid_manifest()}\n```"
         llm = self._make_llm(wrapped)
@@ -77,7 +77,7 @@ class TestCoursePlannerAgent:
 
     @pytest.mark.asyncio
     async def test_plan_returns_none_on_invalid_json(self):
-        from systemedu.agents.builtin.course_planner import CoursePlannerAgent
+        from systemedu.core.agents.builtin.course_planner import CoursePlannerAgent
 
         llm = self._make_llm("这不是JSON")
         agent = CoursePlannerAgent(llm=llm)
@@ -87,7 +87,7 @@ class TestCoursePlannerAgent:
 
     @pytest.mark.asyncio
     async def test_plan_returns_none_on_missing_steps(self):
-        from systemedu.agents.builtin.course_planner import CoursePlannerAgent
+        from systemedu.core.agents.builtin.course_planner import CoursePlannerAgent
 
         llm = self._make_llm(json.dumps({"node_title": "变量", "total_steps": 0}))
         agent = CoursePlannerAgent(llm=llm)
@@ -98,7 +98,7 @@ class TestCoursePlannerAgent:
     @pytest.mark.asyncio
     async def test_plan_fixes_step_indices(self):
         """step_index should be corrected based on position."""
-        from systemedu.agents.builtin.course_planner import CoursePlannerAgent
+        from systemedu.core.agents.builtin.course_planner import CoursePlannerAgent
 
         manifest = json.loads(self._valid_manifest())
         # Corrupt step indices
@@ -125,7 +125,7 @@ class TestStepGenerator:
 
     @pytest.mark.asyncio
     async def test_generate_concept_step(self):
-        from systemedu.education.step_generator import generate_step
+        from systemedu.core.education.step_generator import generate_step
 
         llm = self._make_llm("## 什么是变量\n变量是存储数据的容器。")
         step_spec = {
@@ -145,7 +145,7 @@ class TestStepGenerator:
 
     @pytest.mark.asyncio
     async def test_generate_practice_step(self):
-        from systemedu.education.step_generator import generate_step
+        from systemedu.core.education.step_generator import generate_step
 
         practice_json = json.dumps({
             "exercises": [
@@ -183,7 +183,7 @@ class TestStepGenerator:
     @pytest.mark.asyncio
     async def test_generate_step_handles_exception(self):
         """If LLM raises, step should have status=failed."""
-        from systemedu.education.step_generator import generate_step
+        from systemedu.core.education.step_generator import generate_step
 
         llm = MagicMock()
         llm.invoke = MagicMock(side_effect=RuntimeError("LLM error"))
@@ -202,7 +202,7 @@ class TestStepGenerator:
     @pytest.mark.asyncio
     async def test_generate_game_step_falls_back_to_concept(self):
         """If GameSpecPlannerAgent fails, game step should fallback to concept."""
-        from systemedu.education.step_generator import generate_step
+        from systemedu.core.education.step_generator import generate_step
 
         llm = self._make_llm("## 变量赋值\n赋值就是给变量存值。")
 
@@ -229,13 +229,13 @@ class TestDBMigration:
 
     def test_lesson_content_has_course_columns(self, tmp_path, monkeypatch):
         """LessonContent model should have course_manifest and course_steps columns."""
-        from systemedu.storage.db import reset_db
+        from systemedu.core.storage.db import reset_db
         db_file = tmp_path / "test.db"
-        monkeypatch.setattr("systemedu.storage.db.DB_FILE", db_file)
+        monkeypatch.setattr("systemedu.core.storage.db.DB_FILE", db_file)
         monkeypatch.setattr("systemedu.core.config.DB_FILE", db_file)
         reset_db()
 
-        from systemedu.storage.db import LessonContent, get_session
+        from systemedu.core.storage.db import LessonContent, get_session
 
         db = get_session()
         try:

@@ -14,7 +14,7 @@ import pytest
 import yaml
 from starlette.testclient import TestClient
 
-from systemedu.gateway.server import (
+from systemedu.cloud.gateway.server import (
     _looks_like_mask,
     _mask_api_key,
     create_app,

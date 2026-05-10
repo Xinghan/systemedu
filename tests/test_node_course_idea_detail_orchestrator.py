@@ -42,7 +42,7 @@ class _FakeSimplifier:
 class TestCourseIdeaDetailOrchestratorNode:
     @pytest.mark.asyncio
     async def test_elaborate_uses_fallback_when_planner_fails(self):
-        from systemedu.agents.builtin.course_idea_detail_agent import CourseIdeaDetailAgent
+        from systemedu.core.agents.builtin.course_idea_detail_agent import CourseIdeaDetailAgent
 
         planner = _FakePlanner(plan_result=None)
         critic = _FakeCritic([{"pass": True, "complexity_score": 100, "persuasion_score": 100, "feedback": ""}])
@@ -59,7 +59,7 @@ class TestCourseIdeaDetailOrchestratorNode:
 
     @pytest.mark.asyncio
     async def test_elaborate_triggers_revision_when_critic_fails(self):
-        from systemedu.agents.builtin.course_idea_detail_agent import CourseIdeaDetailAgent
+        from systemedu.core.agents.builtin.course_idea_detail_agent import CourseIdeaDetailAgent
 
         first = {"style_key": "edu_soft_tech", "frame_count": 8, "frames": [], "beats": [], "layout": {"safe_area_fill": 0.2}}
         revised = {"style_key": "edu_soft_tech", "frame_count": 4, "frames": [], "beats": [], "layout": {"safe_area_fill": 0.62}}

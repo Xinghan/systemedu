@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from systemedu.education.career_path import (
+from systemedu.core.education.career_path import (
     enroll_path,
     get_all_earned_badges,
     get_path_progress,
@@ -18,8 +18,8 @@ from systemedu.education.career_path import (
     recalculate_progress,
     scan_paths,
 )
-from systemedu.education.models import CareerPath
-from systemedu.storage.db import (
+from systemedu.core.education.models import CareerPath
+from systemedu.core.storage.db import (
     Base,
     CareerPathProgress,
     CareerPathRecord,
@@ -35,7 +35,7 @@ from systemedu.storage.db import (
 def _reset(tmp_path, monkeypatch):
     """Reset DB between tests, using a unique temp DB per test."""
     db_file = tmp_path / "test.db"
-    monkeypatch.setattr("systemedu.storage.db.DB_FILE", db_file)
+    monkeypatch.setattr("systemedu.core.storage.db.DB_FILE", db_file)
     reset_db()
     get_engine()  # Force table creation
     yield
@@ -238,7 +238,7 @@ class TestEnrollAndProgress:
 class TestAutoEnroll:
     def test_auto_enroll_on_project_start(self, paths_dir, tmp_path):
         """Starting a project auto-enrolls user in related career paths."""
-        from systemedu.education.career_path import auto_enroll_for_project
+        from systemedu.core.education.career_path import auto_enroll_for_project
 
         _setup_db(tmp_path)
         scan_paths(paths_dir)
@@ -253,7 +253,7 @@ class TestAutoEnroll:
 
     def test_auto_enroll_idempotent(self, paths_dir, tmp_path):
         """Auto-enroll doesn't duplicate if already enrolled."""
-        from systemedu.education.career_path import auto_enroll_for_project
+        from systemedu.core.education.career_path import auto_enroll_for_project
 
         _setup_db(tmp_path)
         scan_paths(paths_dir)
@@ -266,7 +266,7 @@ class TestAutoEnroll:
 
     def test_auto_enroll_unrelated_project(self, paths_dir, tmp_path):
         """Unrelated projects don't trigger auto-enroll."""
-        from systemedu.education.career_path import auto_enroll_for_project
+        from systemedu.core.education.career_path import auto_enroll_for_project
 
         _setup_db(tmp_path)
         scan_paths(paths_dir)
@@ -333,7 +333,7 @@ class TestListAndQuery:
 
 class TestBadgeSvg:
     def test_get_badge_svg(self, paths_dir, tmp_path):
-        from systemedu.education.career_path import get_badge_svg
+        from systemedu.core.education.career_path import get_badge_svg
 
         _setup_db(tmp_path)
         scan_paths(paths_dir)
@@ -343,7 +343,7 @@ class TestBadgeSvg:
         assert b"<svg" in svg
 
     def test_get_badge_svg_missing(self, paths_dir, tmp_path):
-        from systemedu.education.career_path import get_badge_svg
+        from systemedu.core.education.career_path import get_badge_svg
 
         _setup_db(tmp_path)
         scan_paths(paths_dir)
@@ -355,7 +355,7 @@ class TestBadgeSvg:
 class TestXPAccumulation:
     def test_add_xp_basic(self, paths_dir, tmp_path):
         """XP accumulates on career path progress."""
-        from systemedu.education.career_path import add_xp
+        from systemedu.core.education.career_path import add_xp
 
         _setup_db(tmp_path)
         scan_paths(paths_dir)
@@ -369,7 +369,7 @@ class TestXPAccumulation:
 
     def test_add_xp_triggers_avatar_evolution(self, paths_dir, tmp_path):
         """XP crossing threshold triggers avatar stage upgrade."""
-        from systemedu.education.career_path import add_xp
+        from systemedu.core.education.career_path import add_xp
 
         _setup_db(tmp_path)
         scan_paths(paths_dir)
@@ -383,7 +383,7 @@ class TestXPAccumulation:
 
     def test_add_xp_cumulative(self, paths_dir, tmp_path):
         """Multiple XP additions accumulate correctly."""
-        from systemedu.education.career_path import add_xp
+        from systemedu.core.education.career_path import add_xp
 
         _setup_db(tmp_path)
         scan_paths(paths_dir)
@@ -396,7 +396,7 @@ class TestXPAccumulation:
 
     def test_add_xp_skips_unenrolled_path(self, paths_dir, tmp_path):
         """XP is not added if user is not enrolled in the path."""
-        from systemedu.education.career_path import add_xp
+        from systemedu.core.education.career_path import add_xp
 
         _setup_db(tmp_path)
         scan_paths(paths_dir)
@@ -407,7 +407,7 @@ class TestXPAccumulation:
 
     def test_add_xp_unrelated_project(self, paths_dir, tmp_path):
         """XP from unrelated project has no effect."""
-        from systemedu.education.career_path import add_xp
+        from systemedu.core.education.career_path import add_xp
 
         _setup_db(tmp_path)
         scan_paths(paths_dir)
@@ -418,7 +418,7 @@ class TestXPAccumulation:
 
     def test_add_xp_zero_or_negative(self, paths_dir, tmp_path):
         """Zero or negative XP is rejected."""
-        from systemedu.education.career_path import add_xp
+        from systemedu.core.education.career_path import add_xp
 
         _setup_db(tmp_path)
         scan_paths(paths_dir)
@@ -429,7 +429,7 @@ class TestXPAccumulation:
 
     def test_add_xp_multi_stage_evolution(self, paths_dir, tmp_path):
         """Large XP can skip to higher avatar stages."""
-        from systemedu.education.career_path import add_xp
+        from systemedu.core.education.career_path import add_xp
 
         _setup_db(tmp_path)
         scan_paths(paths_dir)
@@ -442,7 +442,7 @@ class TestXPAccumulation:
 
     def test_progress_includes_xp_info(self, paths_dir, tmp_path):
         """get_path_progress returns XP and next threshold."""
-        from systemedu.education.career_path import add_xp
+        from systemedu.core.education.career_path import add_xp
 
         _setup_db(tmp_path)
         scan_paths(paths_dir)
@@ -455,7 +455,7 @@ class TestXPAccumulation:
 
     def test_list_paths_includes_xp(self, paths_dir, tmp_path):
         """list_paths returns total_xp and next_avatar_xp."""
-        from systemedu.education.career_path import add_xp
+        from systemedu.core.education.career_path import add_xp
 
         _setup_db(tmp_path)
         scan_paths(paths_dir)

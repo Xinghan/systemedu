@@ -2,7 +2,7 @@
 
 import pytest
 
-from systemedu.storage.db import (
+from systemedu.core.storage.db import (
     Base,
     ChatMessage,
     ChatSession,
@@ -22,7 +22,7 @@ def setup_test_db(tmp_path, monkeypatch):
     """Use a temp database for tests."""
     reset_db()
     db_file = tmp_path / "test.db"
-    monkeypatch.setattr("systemedu.storage.db.DB_FILE", db_file)
+    monkeypatch.setattr("systemedu.core.storage.db.DB_FILE", db_file)
     yield
     reset_db()
 

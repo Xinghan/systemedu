@@ -16,7 +16,7 @@ def _make_llm_with_responses(*responses: str):
 class TestCoursePlannerNode:
     @pytest.mark.asyncio
     async def test_plan_detailed_expands_when_first_pass_short(self):
-        from systemedu.agents.builtin.course_planner import CoursePlannerAgent
+        from systemedu.core.agents.builtin.course_planner import CoursePlannerAgent
 
         short = "## 学习目标\n\n1. 理解概念\n\n## 正文\n\n简短内容。"
         long = "## 学习目标\n\n- 目标1\n\n## 正文\n\n" + ("详细内容。" * 600)
@@ -28,7 +28,7 @@ class TestCoursePlannerNode:
 
     @pytest.mark.asyncio
     async def test_plan_detailed_returns_empty_on_exception(self):
-        from systemedu.agents.builtin.course_planner import CoursePlannerAgent
+        from systemedu.core.agents.builtin.course_planner import CoursePlannerAgent
 
         llm = MagicMock()
         llm.invoke = MagicMock(side_effect=RuntimeError("llm error"))

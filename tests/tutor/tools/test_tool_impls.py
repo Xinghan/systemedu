@@ -13,24 +13,24 @@ import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from systemedu.storage.db import (
+from systemedu.core.storage.db import (
     Base,
     Escalation,
     LessonContent,
     ProgressRecord,
     StudentFact,
 )
-from systemedu.tutor.tools.decorator import ToolContext, push_tool_context
+from systemedu.core.tutor.tools.decorator import ToolContext, push_tool_context
 
-from systemedu.tutor.tools.progress import (
+from systemedu.core.tutor.tools.progress import (
     complete_node,
     get_knode_content,
     get_knode_prerequisites,
     get_progress,
 )
-from systemedu.tutor.tools.memory import search_student_facts
-from systemedu.tutor.tools.practice import get_practice_exercises, grade_submission
-from systemedu.tutor.tools.meta import escalate_to_human
+from systemedu.core.tutor.tools.memory import search_student_facts
+from systemedu.core.tutor.tools.practice import get_practice_exercises, grade_submission
+from systemedu.core.tutor.tools.meta import escalate_to_human
 
 
 @pytest.fixture()

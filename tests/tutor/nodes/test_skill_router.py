@@ -22,9 +22,9 @@ from typing import Any
 import pytest
 from langchain_core.messages import AIMessage, HumanMessage
 
-from systemedu.tutor.nodes import make_skill_router_node, skill_router_node
-from systemedu.tutor.skills import SkillBase, SkillConfig
-from systemedu.tutor.state import TutorState
+from systemedu.core.tutor.nodes import make_skill_router_node, skill_router_node
+from systemedu.core.tutor.skills import SkillBase, SkillConfig
+from systemedu.core.tutor.state import TutorState
 
 
 # ---------------------------------------------------------------------------

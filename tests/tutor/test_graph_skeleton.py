@@ -6,8 +6,8 @@ import pytest
 from langchain_core.messages import HumanMessage
 
 from systemedu.core.config import TutorConfig
-from systemedu.tutor.checkpoint import get_checkpointer
-from systemedu.tutor.graph import build_tutor_graph
+from systemedu.core.tutor.checkpoint import get_checkpointer
+from systemedu.core.tutor.graph import build_tutor_graph
 
 
 class TestGraphCompiles:
@@ -92,7 +92,7 @@ class TestSafetyShortCircuit:
 
     async def test_short_circuit_skips_memory_inject(self, monkeypatch):
         """Monkeypatch safety_gate to set the flag and verify routing."""
-        from systemedu.tutor.nodes import safety_gate as sg_module
+        from systemedu.core.tutor.nodes import safety_gate as sg_module
 
         async def tripped_safety(state):
             return {"_safety_triggered": True}
@@ -101,12 +101,12 @@ class TestSafetyShortCircuit:
 
         # Re-import graph module after patch so the build captures the stub
         # (graph.py imports via nodes/__init__.py; patch the re-export too).
-        from systemedu.tutor import nodes
+        from systemedu.core.tutor import nodes
         monkeypatch.setattr(nodes, "safety_gate_node", tripped_safety)
 
         import importlib
 
-        from systemedu.tutor import graph as graph_module
+        from systemedu.core.tutor import graph as graph_module
         importlib.reload(graph_module)
         try:
             graph = graph_module.build_tutor_graph()

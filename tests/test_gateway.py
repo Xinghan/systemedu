@@ -8,7 +8,7 @@ from langchain_core.messages import AIMessage
 from starlette.testclient import TestClient
 
 from systemedu.core.config import reset_config
-from systemedu.gateway.server import create_app
+from systemedu.cloud.gateway.server import create_app
 
 
 def _auth_client(app) -> TestClient:
@@ -50,15 +50,15 @@ def config_env(tmp_path, monkeypatch):
     monkeypatch.setattr("systemedu.core.config.SYSTEMEDU_HOME", home)
     # Point DB to temp dir so sessions load from a clean database
     db_file = home / "systemedu.db"
-    monkeypatch.setattr("systemedu.storage.db.DB_FILE", db_file)
-    from systemedu.storage.db import reset_db
+    monkeypatch.setattr("systemedu.core.storage.db.DB_FILE", db_file)
+    from systemedu.core.storage.db import reset_db
     reset_db()
     return home
 
 
 @pytest.fixture
 def client(config_env):
-    from systemedu.gateway import server
+    from systemedu.cloud.gateway import server
     server._session_manager = None  # Reset cached session manager
     app = create_app()
     c = TestClient(app)
@@ -254,11 +254,11 @@ class TestGatewayNodeContext:
 
     def test_node_context_returns_cached(self, config_env, tmp_path, monkeypatch):
         """Returns cached context if available."""
-        from systemedu.storage.db import NodeContextCache, get_session as get_db_session, reset_db
+        from systemedu.core.storage.db import NodeContextCache, get_session as get_db_session, reset_db
 
         # Set up DB in tmp
         db_file = tmp_path / "test_ctx.db"
-        monkeypatch.setattr("systemedu.storage.db.DB_FILE", db_file)
+        monkeypatch.setattr("systemedu.core.storage.db.DB_FILE", db_file)
         reset_db()
 
         db = get_db_session()
@@ -292,8 +292,8 @@ class TestGatewayLessonAPI:
     def test_update_progress(self, config_env, tmp_path, monkeypatch):
         """PATCH /api/projects/{name}/nodes/{id}/progress updates status and returns full progress."""
         db_file = tmp_path / "test_progress.db"
-        monkeypatch.setattr("systemedu.storage.db.DB_FILE", db_file)
-        from systemedu.storage.db import reset_db
+        monkeypatch.setattr("systemedu.core.storage.db.DB_FILE", db_file)
+        from systemedu.core.storage.db import reset_db
         reset_db()
 
         app = create_app()
@@ -315,8 +315,8 @@ class TestGatewayLessonAPI:
     def test_update_progress_invalid_status(self, config_env, tmp_path, monkeypatch):
         """PATCH /api/projects/{name}/nodes/{id}/progress rejects invalid status."""
         db_file = tmp_path / "test_progress2.db"
-        monkeypatch.setattr("systemedu.storage.db.DB_FILE", db_file)
-        from systemedu.storage.db import reset_db
+        monkeypatch.setattr("systemedu.core.storage.db.DB_FILE", db_file)
+        from systemedu.core.storage.db import reset_db
         reset_db()
 
         app = create_app()
@@ -332,8 +332,8 @@ class TestGatewayLessonAPI:
     def test_update_progress_missing_status(self, config_env, tmp_path, monkeypatch):
         """PATCH /api/projects/{name}/nodes/{id}/progress requires status field."""
         db_file = tmp_path / "test_progress3.db"
-        monkeypatch.setattr("systemedu.storage.db.DB_FILE", db_file)
-        from systemedu.storage.db import reset_db
+        monkeypatch.setattr("systemedu.core.storage.db.DB_FILE", db_file)
+        from systemedu.core.storage.db import reset_db
         reset_db()
 
         app = create_app()
@@ -354,8 +354,8 @@ class TestGatewayUnlockNodes:
         """When a node is marked 'passed', dependent nodes should be unlocked."""
         import json
         db_file = tmp_path / "test_unlock.db"
-        monkeypatch.setattr("systemedu.storage.db.DB_FILE", db_file)
-        from systemedu.storage.db import reset_db
+        monkeypatch.setattr("systemedu.core.storage.db.DB_FILE", db_file)
+        from systemedu.core.storage.db import reset_db
         reset_db()
 
         # Create a project with prerequisite chain: node0 → node1
@@ -398,12 +398,12 @@ class TestGatewayUnlockNodes:
         )
 
         monkeypatch.setattr(
-            "systemedu.education.project_loader.find_project_dir",
+            "systemedu.core.education.project_loader.find_project_dir",
             lambda name: project_dir,
         )
 
         # Initialize progress via loading context (creates initial records)
-        from systemedu.education.project_loader import load_project_context
+        from systemedu.core.education.project_loader import load_project_context
         ctx = load_project_context("unlock-test", user_id="default", project_dir=project_dir)
         # Node 0 should be available, node 1 should be locked
         assert ctx.progress[0].status.value == "available"
@@ -622,8 +622,8 @@ class TestGatewayEnrollment:
         """POST /api/projects/{name}/enroll returns 404 for missing project."""
         monkeypatch.chdir(tmp_path)
         db_file = tmp_path / "test_enroll.db"
-        monkeypatch.setattr("systemedu.storage.db.DB_FILE", db_file)
-        from systemedu.storage.db import reset_db
+        monkeypatch.setattr("systemedu.core.storage.db.DB_FILE", db_file)
+        from systemedu.core.storage.db import reset_db
         reset_db()
 
         app = create_app()
@@ -670,8 +670,8 @@ class TestGatewayEnrollment:
         }))
 
         db_file = tmp_path / "test_enroll2.db"
-        monkeypatch.setattr("systemedu.storage.db.DB_FILE", db_file)
-        from systemedu.storage.db import reset_db
+        monkeypatch.setattr("systemedu.core.storage.db.DB_FILE", db_file)
+        from systemedu.core.storage.db import reset_db
         reset_db()
 
         app = create_app()
@@ -689,8 +689,8 @@ class TestGatewayEnrollment:
     def test_get_enrollment_not_enrolled(self, config_env, tmp_path, monkeypatch):
         """GET /api/projects/{name}/enrollment returns null when not enrolled."""
         db_file = tmp_path / "test_enroll3.db"
-        monkeypatch.setattr("systemedu.storage.db.DB_FILE", db_file)
-        from systemedu.storage.db import reset_db
+        monkeypatch.setattr("systemedu.core.storage.db.DB_FILE", db_file)
+        from systemedu.core.storage.db import reset_db
         reset_db()
 
         app = create_app()
@@ -704,8 +704,8 @@ class TestGatewayEnrollment:
     def test_get_enrollment_exists(self, config_env, tmp_path, monkeypatch):
         """GET /api/projects/{name}/enrollment returns enrollment data."""
         db_file = tmp_path / "test_enroll4.db"
-        monkeypatch.setattr("systemedu.storage.db.DB_FILE", db_file)
-        from systemedu.storage.db import Enrollment, get_session as get_db_session, reset_db
+        monkeypatch.setattr("systemedu.core.storage.db.DB_FILE", db_file)
+        from systemedu.core.storage.db import Enrollment, get_session as get_db_session, reset_db
         from datetime import datetime
         reset_db()
 
@@ -738,8 +738,8 @@ class TestGatewayEnrollment:
     def test_update_enrollment_not_enrolled(self, config_env, tmp_path, monkeypatch):
         """PATCH /api/projects/{name}/enrollment returns 404 when not enrolled."""
         db_file = tmp_path / "test_enroll5.db"
-        monkeypatch.setattr("systemedu.storage.db.DB_FILE", db_file)
-        from systemedu.storage.db import reset_db
+        monkeypatch.setattr("systemedu.core.storage.db.DB_FILE", db_file)
+        from systemedu.core.storage.db import reset_db
         reset_db()
 
         app = create_app()
@@ -755,8 +755,8 @@ class TestGatewayEnrollment:
     def test_update_enrollment_add_time(self, config_env, tmp_path, monkeypatch):
         """PATCH /api/projects/{name}/enrollment adds learning time."""
         db_file = tmp_path / "test_enroll6.db"
-        monkeypatch.setattr("systemedu.storage.db.DB_FILE", db_file)
-        from systemedu.storage.db import Enrollment, get_session as get_db_session, reset_db
+        monkeypatch.setattr("systemedu.core.storage.db.DB_FILE", db_file)
+        from systemedu.core.storage.db import Enrollment, get_session as get_db_session, reset_db
         from datetime import datetime
         reset_db()
 
@@ -787,8 +787,8 @@ class TestGatewayEnrollment:
     def test_update_enrollment_pause(self, config_env, tmp_path, monkeypatch):
         """PATCH /api/projects/{name}/enrollment can pause enrollment."""
         db_file = tmp_path / "test_enroll7.db"
-        monkeypatch.setattr("systemedu.storage.db.DB_FILE", db_file)
-        from systemedu.storage.db import Enrollment, get_session as get_db_session, reset_db
+        monkeypatch.setattr("systemedu.core.storage.db.DB_FILE", db_file)
+        from systemedu.core.storage.db import Enrollment, get_session as get_db_session, reset_db
         from datetime import datetime
         reset_db()
 
@@ -850,8 +850,8 @@ class TestGatewayEnrollment:
         }))
 
         db_file = tmp_path / "test_detail.db"
-        monkeypatch.setattr("systemedu.storage.db.DB_FILE", db_file)
-        from systemedu.storage.db import reset_db
+        monkeypatch.setattr("systemedu.core.storage.db.DB_FILE", db_file)
+        from systemedu.core.storage.db import reset_db
         reset_db()
 
         app = create_app()
@@ -910,8 +910,8 @@ class TestGatewayEnrollment:
         }))
 
         db_file = tmp_path / "test_complete.db"
-        monkeypatch.setattr("systemedu.storage.db.DB_FILE", db_file)
-        from systemedu.storage.db import reset_db
+        monkeypatch.setattr("systemedu.core.storage.db.DB_FILE", db_file)
+        from systemedu.core.storage.db import reset_db
         reset_db()
 
         app = create_app()
@@ -943,7 +943,7 @@ class TestGatewayChatUserId:
     def test_chat_with_user_id(self, config_env):
         """POST /api/chat with user_id should pass it to tutor_runner."""
         with patch(
-            "systemedu.gateway.tutor_runner.invoke",
+            "systemedu.cloud.gateway.tutor_runner.invoke",
             new_callable=AsyncMock,
             return_value={
                 "response": "hello user",
@@ -966,7 +966,7 @@ class TestGatewayChatUserId:
     def test_chat_default_user_id(self, config_env):
         """POST /api/chat without user_id should default to 'default'."""
         with patch(
-            "systemedu.gateway.tutor_runner.invoke",
+            "systemedu.cloud.gateway.tutor_runner.invoke",
             new_callable=AsyncMock,
             return_value={
                 "response": "ok",
@@ -1009,7 +1009,7 @@ class TestGatewayGenerateTree:
 
     def test_generate_tree_success(self, config_env):
         """POST /api/projects/generate-tree returns TreePreviewResponse on success."""
-        from systemedu.education.models import V5KnowledgeTree, Stage, Module
+        from systemedu.core.education.models import V5KnowledgeTree, Stage, Module
 
         mock_tree = V5KnowledgeTree(
             stages=[Stage(stage_id="S1", title="基础模块", stage_description="")],
@@ -1038,7 +1038,7 @@ class TestGatewayGenerateTree:
         )
 
         with patch(
-            "systemedu.education.tree_generator.generate_knowledge_tree",
+            "systemedu.core.education.tree_generator.generate_knowledge_tree",
             new_callable=AsyncMock,
             return_value=mock_tree,
         ):
@@ -1062,7 +1062,7 @@ class TestGatewayGenerateTree:
     def test_generate_tree_llm_failure(self, config_env):
         """POST /api/projects/generate-tree returns 500 when LLM fails."""
         with patch(
-            "systemedu.education.tree_generator.generate_knowledge_tree",
+            "systemedu.core.education.tree_generator.generate_knowledge_tree",
             new_callable=AsyncMock,
             side_effect=RuntimeError("LLM timeout"),
         ):
@@ -1077,7 +1077,7 @@ class TestGatewayGenerateTree:
 
     def test_generate_tree_with_node_count(self, config_env):
         """POST /api/projects/generate-tree passes node_count to generate_knowledge_tree."""
-        from systemedu.education.models import V5KnowledgeTree, Stage, Module
+        from systemedu.core.education.models import V5KnowledgeTree, Stage, Module
 
         mock_tree = V5KnowledgeTree(
             stages=[Stage(stage_id="S1", title="M1")],
@@ -1091,7 +1091,7 @@ class TestGatewayGenerateTree:
         )
 
         with patch(
-            "systemedu.education.tree_generator.generate_knowledge_tree",
+            "systemedu.core.education.tree_generator.generate_knowledge_tree",
             new_callable=AsyncMock,
             return_value=mock_tree,
         ) as mock_gen:
@@ -1108,7 +1108,7 @@ class TestGatewayGenerateTree:
 
     def test_generate_tree_node_count_clamped(self, config_env):
         """node_count should be clamped to [5, 500]."""
-        from systemedu.education.models import V5KnowledgeTree, Stage, Module
+        from systemedu.core.education.models import V5KnowledgeTree, Stage, Module
 
         mock_tree = V5KnowledgeTree(
             stages=[Stage(stage_id="S1", title="M1")],
@@ -1122,7 +1122,7 @@ class TestGatewayGenerateTree:
         )
 
         with patch(
-            "systemedu.education.tree_generator.generate_knowledge_tree",
+            "systemedu.core.education.tree_generator.generate_knowledge_tree",
             new_callable=AsyncMock,
             return_value=mock_tree,
         ) as mock_gen:
@@ -1138,7 +1138,7 @@ class TestGatewayGenerateTree:
 
     def test_generate_tree_node_count_default(self, config_env):
         """node_count defaults to 20 when not provided."""
-        from systemedu.education.models import V5KnowledgeTree, Stage, Module
+        from systemedu.core.education.models import V5KnowledgeTree, Stage, Module
 
         mock_tree = V5KnowledgeTree(
             stages=[Stage(stage_id="S1", title="M1")],
@@ -1152,7 +1152,7 @@ class TestGatewayGenerateTree:
         )
 
         with patch(
-            "systemedu.education.tree_generator.generate_knowledge_tree",
+            "systemedu.core.education.tree_generator.generate_knowledge_tree",
             new_callable=AsyncMock,
             return_value=mock_tree,
         ) as mock_gen:
@@ -1340,7 +1340,7 @@ class TestGatewayDeleteProject:
         assert client.delete(f"/api/projects/{name}").status_code == 200
 
         # DB records should be cleaned up
-        from systemedu.storage.db import Enrollment, get_session as get_db_session
+        from systemedu.core.storage.db import Enrollment, get_session as get_db_session
         db = get_db_session()
         try:
             count = db.query(Enrollment).filter_by(project_name=name).count()
@@ -1394,10 +1394,10 @@ class TestCareerPathAPI:
         (paths_dir / "avatars" / "s0.svg").write_text('<svg xmlns="http://www.w3.org/2000/svg"><rect width="10" height="10"/></svg>')
 
         # Register the career path in DB
-        from systemedu.education.career_path import scan_paths
+        from systemedu.core.education.career_path import scan_paths
         scan_paths(tmp_path / "paths")
 
-        from systemedu.gateway import server
+        from systemedu.cloud.gateway import server
         server._session_manager = None
         app = create_app()
         c = TestClient(app)
@@ -1497,7 +1497,7 @@ class TestCareerPathAPI:
     def test_project_completion_triggers_career_path(self, career_client):
         """When a project enrollment is completed, career path progress updates."""
         from datetime import datetime
-        from systemedu.storage.db import Enrollment, get_session as get_db_session
+        from systemedu.core.storage.db import Enrollment, get_session as get_db_session
 
         # Enroll in career path
         career_client.post("/api/career-paths/test-path/enroll", json={"user_id": "default"})

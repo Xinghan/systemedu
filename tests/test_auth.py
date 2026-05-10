@@ -3,7 +3,7 @@
 import pytest
 from starlette.testclient import TestClient
 
-from systemedu.gateway.server import create_app
+from systemedu.cloud.gateway.server import create_app
 
 
 @pytest.fixture

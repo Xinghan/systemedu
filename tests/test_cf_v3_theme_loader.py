@@ -1,6 +1,6 @@
 """theme_loader 单元测试 — 解析 theme_style/themes.js 的 26 条主题。"""
 
-from systemedu.course_factory_v3.theme_loader import (
+from systemedu.core.course_factory_v3.theme_loader import (
     load_themes,
     pick_theme,
     themes_by_id,

@@ -6,8 +6,8 @@ import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from systemedu.storage.db import Base, Escalation
-from systemedu.tutor.audit.escalation import EscalationDAO
+from systemedu.core.storage.db import Base, Escalation
+from systemedu.core.tutor.audit.escalation import EscalationDAO
 
 
 @pytest.fixture()

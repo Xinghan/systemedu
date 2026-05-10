@@ -2,7 +2,7 @@
 
 import pytest
 
-from systemedu.storage.db import UserNote, get_engine, get_session, reset_db
+from systemedu.core.storage.db import UserNote, get_engine, get_session, reset_db
 from sqlalchemy import text
 
 
@@ -11,7 +11,7 @@ def setup_test_db(tmp_path, monkeypatch):
     """Use a temp database for tests."""
     reset_db()
     db_file = tmp_path / "test_notes.db"
-    monkeypatch.setattr("systemedu.storage.db.DB_FILE", db_file)
+    monkeypatch.setattr("systemedu.core.storage.db.DB_FILE", db_file)
     yield
     reset_db()
 

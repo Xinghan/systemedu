@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from systemedu.storage.files import (
+from systemedu.core.storage.files import (
     init_project_skeleton,
     load_project_yaml,
     save_project_yaml,

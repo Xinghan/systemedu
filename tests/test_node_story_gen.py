@@ -7,7 +7,7 @@ class TestStoryGenNode:
     @pytest.mark.asyncio
     async def test_generate_returns_text_only_paragraphs(self):
         """spec 022: image_gen.py 已删, story 只产出 text + 空 image_url"""
-        from systemedu.agents.builtin import story_gen_agent as story_mod
+        from systemedu.core.agents.builtin import story_gen_agent as story_mod
 
         detail = {
             "style_key": "storybook_vivid",
@@ -24,6 +24,6 @@ class TestStoryGenNode:
 
     @pytest.mark.asyncio
     async def test_generate_empty_paragraphs(self):
-        from systemedu.agents.builtin import story_gen_agent as story_mod
+        from systemedu.core.agents.builtin import story_gen_agent as story_mod
         out = await story_mod.StoryGenAgent().generate({"paragraphs": []})
         assert out == []

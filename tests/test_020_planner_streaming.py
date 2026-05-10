@@ -59,7 +59,7 @@ class FakeLLM:
 def test_astream_to_text_concatenates_chunks() -> None:
     """spec 020 helper: _astream_to_text 应把所有 chunk 拼起来."""
     import asyncio
-    from systemedu.agents.builtin.planner import _astream_to_text
+    from systemedu.core.agents.builtin.planner import _astream_to_text
 
     class _LLM:
         def astream(self, _msgs):
@@ -75,7 +75,7 @@ def test_astream_to_text_concatenates_chunks() -> None:
 def test_astream_to_text_skips_empty_content() -> None:
     """reasoning model 偶尔 yield 空 chunk (delta.role only), 应跳过."""
     import asyncio
-    from systemedu.agents.builtin.planner import _astream_to_text
+    from systemedu.core.agents.builtin.planner import _astream_to_text
 
     class _LLM:
         def astream(self, _msgs):
@@ -91,8 +91,8 @@ def test_astream_to_text_skips_empty_content() -> None:
 def test_planner_process_uses_streaming(isolated_config) -> None:
     """planner.process 应通过 astream 收 chunk, 不是 ainvoke."""
     import asyncio
-    from systemedu.agents.builtin.planner import PlannerAgent
-    from systemedu.agents.base import AgentConfig
+    from systemedu.core.agents.builtin.planner import PlannerAgent
+    from systemedu.core.agents.base import AgentConfig
 
     # outline + expand 两步 mock 输出
     outline_full = '```json\n{"milestones":[{"title":"M1","description":"d","topic_groups":[{"group_name":"G","is_parallel":true,"topics":["t1"]}]}]}\n```'
@@ -109,7 +109,7 @@ def test_planner_process_uses_streaming(isolated_config) -> None:
         captured_kwargs["max_retries"] = max_retries
         return fake
 
-    with patch("systemedu.agents.builtin.planner.get_llm", side_effect=fake_get_llm):
+    with patch("systemedu.core.agents.builtin.planner.get_llm", side_effect=fake_get_llm):
         agent = PlannerAgent(AgentConfig(name="planner", type="builtin:planner"))
         result = asyncio.run(agent.process(
             "项目标题：测试\n项目描述：测试描述",
@@ -134,8 +134,8 @@ def test_planner_process_uses_streaming(isolated_config) -> None:
 def test_planner_process_handles_chunked_json(isolated_config) -> None:
     """JSON 被切到多 chunk (包括 markdown ``` 标记被切断), 拼回后能解析."""
     import asyncio
-    from systemedu.agents.builtin.planner import PlannerAgent
-    from systemedu.agents.base import AgentConfig
+    from systemedu.core.agents.builtin.planner import PlannerAgent
+    from systemedu.core.agents.base import AgentConfig
 
     outline_full = '```json\n{"milestones":[{"title":"M1","description":"d","topic_groups":[{"group_name":"G","is_parallel":true,"topics":["t1"]}]}]}\n```'
     expand_full = '```json\n{"milestones":[{"title":"M1","description":"d","order":0,"knodes":[{"title":"t1","summary":"s","difficulty_level":3,"content_type":"text","acceptance_type":"quiz","estimated_minutes":15,"xp_reward":35,"order":0,"prerequisite_indices":[]}]}]}\n```'
@@ -149,7 +149,7 @@ def test_planner_process_handles_chunked_json(isolated_config) -> None:
         expand_chunks=chunk_by(expand_full, 7),
     )
 
-    with patch("systemedu.agents.builtin.planner.get_llm", return_value=fake):
+    with patch("systemedu.core.agents.builtin.planner.get_llm", return_value=fake):
         agent = PlannerAgent(AgentConfig(name="planner", type="builtin:planner"))
         result = asyncio.run(agent.process(
             "项目标题：测试\n项目描述：测试描述",

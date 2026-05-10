@@ -1,6 +1,6 @@
 """Tests for Mem0AsyncAdapter + layers.py L4 wiring (spec 014 T2.6).
 
-We mock `systemedu.memory.client.retrieve_memories` at module scope so
+We mock `systemedu.core.memory.client.retrieve_memories` at module scope so
 Mem0 / Qdrant never get imported. The goal is to pin down the contract
 between MemoryInjector and retrieve_memories — filter pass-through,
 scope-aware filtering, and the "disabled" short-circuit.
@@ -14,8 +14,8 @@ import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from systemedu.storage.db import Base, StudentFact
-from systemedu.tutor.memory import Mem0AsyncAdapter, MemoryInjector
+from systemedu.core.storage.db import Base, StudentFact
+from systemedu.core.tutor.memory import Mem0AsyncAdapter, MemoryInjector
 
 
 # ---------------------------------------------------------------------------
@@ -50,7 +50,7 @@ class TestAdapter:
     async def test_passes_project_id_to_client(self):
         adapter = Mem0AsyncAdapter()
         with patch(
-            "systemedu.tutor.memory.mem0_adapter.retrieve_memories",
+            "systemedu.core.tutor.memory.mem0_adapter.retrieve_memories",
             return_value=["片段1", "片段2"],
         ) as mock:
             out = await adapter.search(
@@ -71,7 +71,7 @@ class TestAdapter:
     async def test_no_filters_passes_none(self):
         adapter = Mem0AsyncAdapter()
         with patch(
-            "systemedu.tutor.memory.mem0_adapter.retrieve_memories",
+            "systemedu.core.tutor.memory.mem0_adapter.retrieve_memories",
             return_value=[],
         ) as mock:
             await adapter.search("q", user_id="u1", filters=None, limit=3)
@@ -82,7 +82,7 @@ class TestAdapter:
     async def test_empty_results_returns_empty_list(self):
         adapter = Mem0AsyncAdapter()
         with patch(
-            "systemedu.tutor.memory.mem0_adapter.retrieve_memories",
+            "systemedu.core.tutor.memory.mem0_adapter.retrieve_memories",
             return_value=[],
         ):
             out = await adapter.search("q", user_id="u1")
@@ -93,7 +93,7 @@ class TestAdapter:
         """Tolerate both project_name and project_id keys in filters."""
         adapter = Mem0AsyncAdapter()
         with patch(
-            "systemedu.tutor.memory.mem0_adapter.retrieve_memories",
+            "systemedu.core.tutor.memory.mem0_adapter.retrieve_memories",
             return_value=[],
         ) as mock:
             await adapter.search(
@@ -112,7 +112,7 @@ class TestInjectorWithAdapter:
     ):
         adapter = Mem0AsyncAdapter()
         with patch(
-            "systemedu.tutor.memory.mem0_adapter.retrieve_memories",
+            "systemedu.core.tutor.memory.mem0_adapter.retrieve_memories",
             return_value=["只有 P1 的记忆"],
         ) as mock:
             inj = MemoryInjector(session_factory, adapter)
@@ -129,7 +129,7 @@ class TestInjectorWithAdapter:
     async def test_global_scope_unfiltered(self, session_factory, seeded):
         adapter = Mem0AsyncAdapter()
         with patch(
-            "systemedu.tutor.memory.mem0_adapter.retrieve_memories",
+            "systemedu.core.tutor.memory.mem0_adapter.retrieve_memories",
             return_value=["跨项目的记忆"],
         ) as mock:
             inj = MemoryInjector(session_factory, adapter)
@@ -151,7 +151,7 @@ class TestInjectorWithAdapter:
         """
         adapter = Mem0AsyncAdapter()
         with patch(
-            "systemedu.tutor.memory.mem0_adapter.retrieve_memories",
+            "systemedu.core.tutor.memory.mem0_adapter.retrieve_memories",
             return_value=[],
         ):
             inj = MemoryInjector(session_factory, adapter)
@@ -169,7 +169,7 @@ class TestInjectorWithAdapter:
     ):
         """When the injector is built without a mem0_client, don't even try."""
         with patch(
-            "systemedu.tutor.memory.mem0_adapter.retrieve_memories",
+            "systemedu.core.tutor.memory.mem0_adapter.retrieve_memories",
         ) as mock:
             inj = MemoryInjector(session_factory, mem0_client=None)
             snap = await inj.inject(

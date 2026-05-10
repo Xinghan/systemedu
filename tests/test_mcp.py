@@ -5,8 +5,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from systemedu.core.config import MCPServerConfig
-from systemedu.mcp.client import MCPClient
-from systemedu.mcp.manager import MCPManager
+from systemedu.core.mcp.client import MCPClient
+from systemedu.core.mcp.manager import MCPManager
 
 
 class TestMCPClient:
@@ -65,7 +65,7 @@ class TestMCPClient:
         mock_session_cm.__aexit__ = AsyncMock(return_value=False)
 
         with (
-            patch("systemedu.mcp.client.AsyncExitStack") as mock_stack_class,
+            patch("systemedu.core.mcp.client.AsyncExitStack") as mock_stack_class,
         ):
             mock_stack = AsyncMock()
             mock_stack.enter_async_context = AsyncMock(
@@ -149,7 +149,7 @@ class TestMCPManager:
 
         config = MCPServerConfig(command="test", args=[])
 
-        with patch("systemedu.mcp.manager.MCPClient", return_value=mock_client):
+        with patch("systemedu.core.mcp.manager.MCPClient", return_value=mock_client):
             await manager.start_server("filesystem", config)
 
         tools = manager.list_tools()
@@ -179,7 +179,7 @@ class TestMCPManager:
 
         config = MCPServerConfig(command="echo-server")
 
-        with patch("systemedu.mcp.manager.MCPClient", return_value=mock_client):
+        with patch("systemedu.core.mcp.manager.MCPClient", return_value=mock_client):
             await manager.start_server("echo", config)
 
         result = await manager.call_tool("echo__echo", {"text": "hello"})
@@ -207,7 +207,7 @@ class TestMCPManager:
 
         config = MCPServerConfig(command="test")
 
-        with patch("systemedu.mcp.manager.MCPClient", return_value=mock_client):
+        with patch("systemedu.core.mcp.manager.MCPClient", return_value=mock_client):
             await manager.start_server("srv", config)
 
         assert len(manager.list_tools()) == 1
@@ -229,7 +229,7 @@ class TestMCPManager:
             mock_client.list_tools = AsyncMock(return_value=[])
 
             config = MCPServerConfig(command=name)
-            with patch("systemedu.mcp.manager.MCPClient", return_value=mock_client):
+            with patch("systemedu.core.mcp.manager.MCPClient", return_value=mock_client):
                 await manager.start_server(name, config)
 
         await manager.stop_all()
@@ -245,7 +245,7 @@ class TestMCPManager:
         mock_client.list_tools = AsyncMock(return_value=[])
 
         config = MCPServerConfig(command="test")
-        with patch("systemedu.mcp.manager.MCPClient", return_value=mock_client):
+        with patch("systemedu.core.mcp.manager.MCPClient", return_value=mock_client):
             await manager.start_server("test", config)
 
         servers = manager.list_servers()

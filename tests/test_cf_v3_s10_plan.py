@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import pytest
 
-from systemedu.course_factory_v3.progress import Emitter
-from systemedu.course_factory_v3.steps import s10_plan
+from systemedu.core.course_factory_v3.progress import Emitter
+from systemedu.core.course_factory_v3.steps import s10_plan
 
 
 @pytest.fixture
@@ -232,7 +232,7 @@ ok
 async def test_run_with_real_llm_rocket_design():
     """集成测试: 真实 Kimi 生成 rocket-design knode 0 的 plan_markdown,
     验证 4 项硬规自检通过。"""
-    from systemedu.course_factory_v3.steps import s00_boot
+    from systemedu.core.course_factory_v3.steps import s00_boot
     em = Emitter(lambda e, d: None)
     ctx = await s00_boot.run("rocket-design", 0, user_id="t", overrides={}, em=em)
     plan = await s10_plan.run(ctx, em=em)

@@ -7,7 +7,7 @@ import sqlalchemy as sa
 from sqlalchemy import create_engine, inspect
 from sqlalchemy.orm import sessionmaker
 
-from systemedu.storage.db import (
+from systemedu.core.storage.db import (
     Base,
     ChatSession,
     Escalation,
