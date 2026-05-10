@@ -2,15 +2,15 @@
 
 import pytest
 
-from systemedu.education.services import (
+from systemedu.core.education.services import (
     convert_uploaded_tree,
     extract_project_brief,
     extract_project_meta,
     validate_knowledge_tree,
     validate_v5_tree,
 )
-from systemedu.education.tree_adapter import v5_to_milestones_view
-from systemedu.education.models import V5KnowledgeTree
+from systemedu.core.education.tree_adapter import v5_to_milestones_view
+from systemedu.core.education.models import V5KnowledgeTree
 
 
 # -- Sample data --

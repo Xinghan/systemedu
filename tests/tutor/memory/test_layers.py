@@ -14,13 +14,13 @@ import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from systemedu.storage.db import (
+from systemedu.core.storage.db import (
     Base,
     Enrollment,
     ProgressRecord,
     StudentFact,
 )
-from systemedu.tutor.memory import MemoryInjector, render_memory
+from systemedu.core.tutor.memory import MemoryInjector, render_memory
 
 
 # ---------------------------------------------------------------------------

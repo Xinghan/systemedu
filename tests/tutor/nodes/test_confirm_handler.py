@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 from langchain_core.messages import HumanMessage, SystemMessage
 
-from systemedu.tutor.nodes.confirm_handler import confirm_handler_node
+from systemedu.core.tutor.nodes.confirm_handler import confirm_handler_node
 
 
 def _pending(tool="complete_node", confirm_id="c-42"):

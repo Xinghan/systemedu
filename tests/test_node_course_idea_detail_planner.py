@@ -16,7 +16,7 @@ def _make_llm(response_text: str):
 class TestCourseIdeaDetailPlannerNode:
     @pytest.mark.asyncio
     async def test_plan_animation_returns_detail_plan(self):
-        from systemedu.agents.builtin.course_idea_detail_planner_agent import (
+        from systemedu.core.agents.builtin.course_idea_detail_planner_agent import (
             CourseIdeaDetailPlannerAgent,
         )
 
@@ -48,7 +48,7 @@ class TestCourseIdeaDetailPlannerNode:
 
     @pytest.mark.asyncio
     async def test_revise_returns_revised_plan(self):
-        from systemedu.agents.builtin.course_idea_detail_planner_agent import (
+        from systemedu.core.agents.builtin.course_idea_detail_planner_agent import (
             CourseIdeaDetailPlannerAgent,
         )
 

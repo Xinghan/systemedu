@@ -16,8 +16,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from langchain_core.messages import AIMessage, HumanMessage
 
-from systemedu.gateway.chat_payload import ChatPayload
-from systemedu.gateway.tutor_runner import (
+from systemedu.cloud.gateway.chat_payload import ChatPayload
+from systemedu.cloud.gateway.tutor_runner import (
     _build_config,
     _build_input,
     invoke,
@@ -128,7 +128,7 @@ class TestInvoke:
         }
 
         with patch(
-            "systemedu.gateway.tutor_runner._get_graph",
+            "systemedu.cloud.gateway.tutor_runner._get_graph",
             return_value=fake_graph,
         ):
             result = await invoke(_make_payload(), "u1")
@@ -143,7 +143,7 @@ class TestInvoke:
         fake_graph.ainvoke.return_value = {"messages": []}
 
         with patch(
-            "systemedu.gateway.tutor_runner._get_graph",
+            "systemedu.cloud.gateway.tutor_runner._get_graph",
             return_value=fake_graph,
         ):
             result = await invoke(_make_payload(), "u1")
@@ -162,7 +162,7 @@ class TestInvoke:
         }
 
         with patch(
-            "systemedu.gateway.tutor_runner._get_graph",
+            "systemedu.cloud.gateway.tutor_runner._get_graph",
             return_value=fake_graph,
         ):
             result = await invoke(_make_payload(), "u1")
@@ -181,7 +181,7 @@ class TestInvoke:
         }
 
         with patch(
-            "systemedu.gateway.tutor_runner._get_graph",
+            "systemedu.cloud.gateway.tutor_runner._get_graph",
             return_value=fake_graph,
         ):
             result = await invoke(_make_payload(), "u1")
@@ -225,7 +225,7 @@ class TestStream:
         fake_graph.astream_events = fake_stream
 
         with patch(
-            "systemedu.gateway.tutor_runner._get_graph",
+            "systemedu.cloud.gateway.tutor_runner._get_graph",
             return_value=fake_graph,
         ):
             collected = [evt async for evt in stream(_make_payload(), "u1")]
@@ -263,7 +263,7 @@ class TestStream:
         fake_graph.astream_events = fake_stream
 
         with patch(
-            "systemedu.gateway.tutor_runner._get_graph",
+            "systemedu.cloud.gateway.tutor_runner._get_graph",
             return_value=fake_graph,
         ):
             collected = [evt async for evt in stream(_make_payload(), "u1")]
@@ -298,7 +298,7 @@ class TestStream:
         fake_graph.astream_events = fake_stream
 
         with patch(
-            "systemedu.gateway.tutor_runner._get_graph",
+            "systemedu.cloud.gateway.tutor_runner._get_graph",
             return_value=fake_graph,
         ):
             collected = [evt async for evt in stream(_make_payload(), "u1")]
@@ -336,7 +336,7 @@ class TestStream:
         fake_graph.astream_events = fake_stream
 
         with patch(
-            "systemedu.gateway.tutor_runner._get_graph",
+            "systemedu.cloud.gateway.tutor_runner._get_graph",
             return_value=fake_graph,
         ):
             collected = [evt async for evt in stream(_make_payload(), "u1")]
@@ -354,7 +354,7 @@ class TestStream:
 class TestShutdown:
     @pytest.mark.asyncio
     async def test_shutdown_closes_checkpointer(self):
-        import systemedu.gateway.tutor_runner as tr
+        import systemedu.cloud.gateway.tutor_runner as tr
 
         mock_cp = AsyncMock()
         old_cp = tr._checkpointer
@@ -368,7 +368,7 @@ class TestShutdown:
 
     @pytest.mark.asyncio
     async def test_shutdown_noop_when_no_checkpointer(self):
-        import systemedu.gateway.tutor_runner as tr
+        import systemedu.cloud.gateway.tutor_runner as tr
 
         old_cp = tr._checkpointer
         try:

@@ -24,7 +24,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 sys.path.insert(0, str(ROOT))
 
-from systemedu.course_factory_v3.pipeline import generate_course_v3
+from systemedu.core.course_factory_v3.pipeline import generate_course_v3
 
 
 def main():

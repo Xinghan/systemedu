@@ -16,15 +16,15 @@ import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from systemedu.storage.db import (
+from systemedu.core.storage.db import (
     Base,
     ChatMessage,
     ChatSession,
     PendingFactExtraction,
     StudentFact,
 )
-from systemedu.tutor.memory import FactExtractor
-from systemedu.tutor.worker import FactExtractionWorker
+from systemedu.core.tutor.memory import FactExtractor
+from systemedu.core.tutor.worker import FactExtractionWorker
 
 
 # ---------------------------------------------------------------------------

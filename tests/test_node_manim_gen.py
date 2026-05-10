@@ -11,7 +11,7 @@ import pytest
 
 class TestManimGenNode:
     def test_runtime_profile_collects_tex_env(self, monkeypatch):
-        from systemedu.agents.builtin import manim_gen_agent as module
+        from systemedu.core.agents.builtin import manim_gen_agent as module
 
         agent = module.ManimGenAgent(MagicMock())
 
@@ -41,7 +41,7 @@ class TestManimGenNode:
         assert profile["tex_env"]["LIBGS"] == "/opt/homebrew/lib/libgs.dylib"
 
     def test_is_available_requires_manim_and_ffmpeg(self, monkeypatch):
-        from systemedu.agents.builtin import manim_gen_agent as module
+        from systemedu.core.agents.builtin import manim_gen_agent as module
 
         agent = module.ManimGenAgent(MagicMock())
 
@@ -58,7 +58,7 @@ class TestManimGenNode:
 
     @pytest.mark.asyncio
     async def test_generate_uses_deterministic_fallback_code(self, monkeypatch):
-        from systemedu.agents.builtin.manim_gen_agent import ManimGenAgent
+        from systemedu.core.agents.builtin.manim_gen_agent import ManimGenAgent
 
         agent = ManimGenAgent(llm=None)
         captured: dict[str, str] = {}
@@ -107,7 +107,7 @@ class TestManimGenNode:
         assert captured["env"]["TEXMFCNF"] == "/tmp/texmf.cnf.dir"
 
     def test_render_to_media_smoke(self, tmp_path, monkeypatch):
-        from systemedu.agents.builtin import manim_gen_agent as module
+        from systemedu.core.agents.builtin import manim_gen_agent as module
 
         venv_python = Path.cwd() / ".venv" / "bin" / "python"
         if not venv_python.exists():

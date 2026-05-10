@@ -6,15 +6,15 @@ import pytest
 import yaml
 
 from systemedu.core.config import reset_config
-from systemedu.education.models import NodeStatus
-from systemedu.education.project_loader import (
+from systemedu.core.education.models import NodeStatus
+from systemedu.core.education.project_loader import (
     ProjectContext,
     find_project_dir,
     load_project_context,
     load_progress,
     save_progress,
 )
-from systemedu.storage.db import reset_db
+from systemedu.core.storage.db import reset_db
 
 
 @pytest.fixture(autouse=True)
@@ -120,7 +120,7 @@ def sample_project_dir(tmp_path):
 def db_env(tmp_path, monkeypatch):
     """Point DB to tmp_path for isolation."""
     db_file = tmp_path / "test.db"
-    monkeypatch.setattr("systemedu.storage.db.DB_FILE", db_file)
+    monkeypatch.setattr("systemedu.core.storage.db.DB_FILE", db_file)
     reset_db()
     return db_file
 
@@ -202,7 +202,7 @@ class TestLoadProjectContext:
 
 class TestProgressPersistence:
     def test_save_and_load_progress(self, db_env):
-        from systemedu.education.models import UserNodeProgress
+        from systemedu.core.education.models import UserNodeProgress
 
         progresses = [
             UserNodeProgress(knode_id=0, status=NodeStatus.PASSED, attempts=1),

@@ -19,7 +19,7 @@ class TestCoursePlannerAgentDetailed:
 
     @pytest.mark.asyncio
     async def test_plan_detailed_returns_markdown(self):
-        from systemedu.agents.builtin.course_planner import CoursePlannerAgent
+        from systemedu.core.agents.builtin.course_planner import CoursePlannerAgent
 
         llm = _make_llm("## 学习目标\n\n1. 理解力的概念\n\n## 正文\n\n力是物体间的相互作用。")
         agent = CoursePlannerAgent(llm)
@@ -29,7 +29,7 @@ class TestCoursePlannerAgentDetailed:
 
     @pytest.mark.asyncio
     async def test_plan_detailed_empty_on_failure(self):
-        from systemedu.agents.builtin.course_planner import CoursePlannerAgent
+        from systemedu.core.agents.builtin.course_planner import CoursePlannerAgent
 
         llm = MagicMock()
         llm.invoke = MagicMock(side_effect=RuntimeError("LLM error"))
@@ -39,7 +39,7 @@ class TestCoursePlannerAgentDetailed:
 
     @pytest.mark.asyncio
     async def test_plan_detailed_empty_response(self):
-        from systemedu.agents.builtin.course_planner import CoursePlannerAgent
+        from systemedu.core.agents.builtin.course_planner import CoursePlannerAgent
 
         llm = _make_llm("")
         agent = CoursePlannerAgent(llm)
@@ -82,7 +82,7 @@ class TestCourseIdeaAgent:
 
     @pytest.mark.asyncio
     async def test_identify_returns_plan_and_ideas(self):
-        from systemedu.agents.builtin.course_idea_agent import CourseIdeaAgent
+        from systemedu.core.agents.builtin.course_idea_agent import CourseIdeaAgent
 
         llm = _make_llm(self._make_idea_response())
         agent = CourseIdeaAgent(llm)
@@ -98,7 +98,7 @@ class TestCourseIdeaAgent:
 
     @pytest.mark.asyncio
     async def test_identify_fallback_on_no_separator(self):
-        from systemedu.agents.builtin.course_idea_agent import CourseIdeaAgent
+        from systemedu.core.agents.builtin.course_idea_agent import CourseIdeaAgent
 
         llm = _make_llm("no separator here")
         agent = CourseIdeaAgent(llm)
@@ -109,7 +109,7 @@ class TestCourseIdeaAgent:
 
     @pytest.mark.asyncio
     async def test_identify_filters_invalid_mode(self):
-        from systemedu.agents.builtin.course_idea_agent import CourseIdeaAgent
+        from systemedu.core.agents.builtin.course_idea_agent import CourseIdeaAgent
 
         plan = "内容[[IDEA:abc]]"
         bad_ideas = [{"idea_id": "abc", "mode": "invalid", "topic": "x", "context_summary": "y"}]
@@ -121,7 +121,7 @@ class TestCourseIdeaAgent:
     @pytest.mark.asyncio
     async def test_identify_handles_prefix_text_before_json(self):
         """Regression: LLM sometimes outputs description text before the JSON array after SEPARATOR."""
-        from systemedu.agents.builtin.course_idea_agent import CourseIdeaAgent
+        from systemedu.core.agents.builtin.course_idea_agent import CourseIdeaAgent
 
         plan = "内容[[IDEA:idea-x]]"
         ideas = [{"idea_id": "idea-x", "mode": "animation", "topic": "测试", "context_summary": "上下文"}]
@@ -140,7 +140,7 @@ class TestCourseIdeaDetailAgent:
 
     @pytest.mark.asyncio
     async def test_elaborate_animation(self):
-        from systemedu.agents.builtin.course_idea_detail_agent import CourseIdeaDetailAgent
+        from systemedu.core.agents.builtin.course_idea_detail_agent import CourseIdeaDetailAgent
 
         detail = {
             "title": "力传递动画",
@@ -161,7 +161,7 @@ class TestCourseIdeaDetailAgent:
 
     @pytest.mark.asyncio
     async def test_elaborate_game(self):
-        from systemedu.agents.builtin.course_idea_detail_agent import CourseIdeaDetailAgent
+        from systemedu.core.agents.builtin.course_idea_detail_agent import CourseIdeaDetailAgent
 
         detail = {
             "game_mechanic": "drag_sort",
@@ -180,7 +180,7 @@ class TestCourseIdeaDetailAgent:
 
     @pytest.mark.asyncio
     async def test_elaborate_story(self):
-        from systemedu.agents.builtin.course_idea_detail_agent import CourseIdeaDetailAgent
+        from systemedu.core.agents.builtin.course_idea_detail_agent import CourseIdeaDetailAgent
 
         detail = {
             "title": "苹果的故事",
@@ -197,7 +197,7 @@ class TestCourseIdeaDetailAgent:
 
     @pytest.mark.asyncio
     async def test_elaborate_unknown_mode(self):
-        from systemedu.agents.builtin.course_idea_detail_agent import CourseIdeaDetailAgent
+        from systemedu.core.agents.builtin.course_idea_detail_agent import CourseIdeaDetailAgent
 
         llm = _make_llm("{}")
         agent = CourseIdeaDetailAgent(llm)
@@ -208,7 +208,7 @@ class TestCourseIdeaDetailAgent:
 
     @pytest.mark.asyncio
     async def test_elaborate_applies_simplification_for_overly_complex_animation(self):
-        from systemedu.agents.builtin.course_idea_detail_agent import CourseIdeaDetailAgent
+        from systemedu.core.agents.builtin.course_idea_detail_agent import CourseIdeaDetailAgent
 
         complex_detail = {
             "title": "复杂动画",
@@ -277,7 +277,7 @@ _MOCK_ANIM_SPEC = json.dumps({
 class TestIntegrationAgent:
 
     def test_integrate_basic(self):
-        from systemedu.agents.builtin.integration_agent import IntegrationAgent
+        from systemedu.core.agents.builtin.integration_agent import IntegrationAgent
 
         plan = "学习内容\n[[IDEA:id-1]]\n更多内容\n[[IDEA:id-2]]"
         ideas = [
@@ -313,7 +313,7 @@ class TestIntegrationAgent:
         assert result["rendered_sections"]["id-2"]["story_paragraphs"] is not None
 
     def test_integrate_empty_ideas(self):
-        from systemedu.agents.builtin.integration_agent import IntegrationAgent
+        from systemedu.core.agents.builtin.integration_agent import IntegrationAgent
 
         plan = "学习内容"
         agent = IntegrationAgent()
@@ -323,7 +323,7 @@ class TestIntegrationAgent:
         assert result["rendered_sections"] == {}
 
     def test_integrate_failed_result(self):
-        from systemedu.agents.builtin.integration_agent import IntegrationAgent
+        from systemedu.core.agents.builtin.integration_agent import IntegrationAgent
 
         plan = "内容[[IDEA:id-x]]"
         ideas = [
@@ -349,8 +349,8 @@ class TestDbCourseContent:
         db_file = tmp_path / "systemedu.db"
         monkeypatch.setenv("SYSTEMEDU_HOME", str(tmp_path))
         monkeypatch.setattr("systemedu.core.config.DB_FILE", db_file)
-        monkeypatch.setattr("systemedu.storage.db.DB_FILE", db_file)
-        from systemedu.storage import db as _db
+        monkeypatch.setattr("systemedu.core.storage.db.DB_FILE", db_file)
+        from systemedu.core.storage import db as _db
         _db.reset_db()
         try:
             engine = _db.get_engine()
@@ -366,8 +366,8 @@ class TestDbCourseContent:
         db_file = tmp_path / "systemedu.db"
         monkeypatch.setenv("SYSTEMEDU_HOME", str(tmp_path))
         monkeypatch.setattr("systemedu.core.config.DB_FILE", db_file)
-        monkeypatch.setattr("systemedu.storage.db.DB_FILE", db_file)
-        from systemedu.storage import db as _db
+        monkeypatch.setattr("systemedu.core.storage.db.DB_FILE", db_file)
+        from systemedu.core.storage import db as _db
         _db.reset_db()
 
         session = _db.get_session()
@@ -386,7 +386,7 @@ class TestDbCourseContent:
             session.add(lesson)
             session.commit()
 
-            from systemedu.education.lesson_generator import _course_content_to_dict
+            from systemedu.core.education.lesson_generator import _course_content_to_dict
             data = _course_content_to_dict(lesson)
             assert data["status"] == "ready"
             assert data["course_content"]["plan_markdown"] == "## 目标\n内容"
@@ -401,7 +401,7 @@ class TestCourseSegmentAgent:
 
     @pytest.mark.asyncio
     async def test_segment_fallback_on_invalid_json(self):
-        from systemedu.agents.builtin.course_segment_agent import CourseSegmentAgent
+        from systemedu.core.agents.builtin.course_segment_agent import CourseSegmentAgent
 
         llm = _make_llm("这不是 JSON")
         agent = CourseSegmentAgent(llm)
@@ -414,7 +414,7 @@ class TestCourseSegmentAgent:
 
     @pytest.mark.asyncio
     async def test_segment_preserves_idea_placeholders(self):
-        from systemedu.agents.builtin.course_segment_agent import CourseSegmentAgent
+        from systemedu.core.agents.builtin.course_segment_agent import CourseSegmentAgent
 
         plan_with_idea = "## 第一段\n\n内容[[IDEA:abc123]]\n\n继续内容。"
         response_json = json.dumps([
@@ -437,7 +437,7 @@ class TestCourseSegmentAgent:
 class TestKaTeXInjection:
 
     def test_inject_katex_when_latex_detected(self):
-        from systemedu.agents.builtin.media_art_direction import inject_katex_if_needed
+        from systemedu.core.agents.builtin.media_art_direction import inject_katex_if_needed
 
         html = "<html><head></head><body><p>公式 \\(E = mc^2\\)</p></body></html>"
         result = inject_katex_if_needed(html)
@@ -445,21 +445,21 @@ class TestKaTeXInjection:
         assert "auto-render" in result
 
     def test_no_inject_when_no_latex(self):
-        from systemedu.agents.builtin.media_art_direction import inject_katex_if_needed
+        from systemedu.core.agents.builtin.media_art_direction import inject_katex_if_needed
 
         html = "<html><head></head><body><p>普通文本，没有公式</p></body></html>"
         result = inject_katex_if_needed(html)
         assert result == html
 
     def test_no_double_inject(self):
-        from systemedu.agents.builtin.media_art_direction import inject_katex_if_needed
+        from systemedu.core.agents.builtin.media_art_direction import inject_katex_if_needed
 
         html = "<html><head><script src='katex.min.js'></script></head><body>\\(x^2\\)</body></html>"
         result = inject_katex_if_needed(html)
         assert result.lower().count("katex") == 1
 
     def test_inject_various_latex_markers(self):
-        from systemedu.agents.builtin.media_art_direction import inject_katex_if_needed
+        from systemedu.core.agents.builtin.media_art_direction import inject_katex_if_needed
 
         markers = [
             r"\(x\)",
@@ -477,7 +477,7 @@ class TestKaTeXInjection:
             assert "katex" in result.lower(), f"KaTeX not injected for marker: {marker!r}"
 
     def test_inject_before_head_close(self):
-        from systemedu.agents.builtin.media_art_direction import inject_katex_if_needed
+        from systemedu.core.agents.builtin.media_art_direction import inject_katex_if_needed
 
         html = "<html><head><title>Test</title></head><body>\\(a+b\\)</body></html>"
         result = inject_katex_if_needed(html)
@@ -486,7 +486,7 @@ class TestKaTeXInjection:
         assert katex_pos < head_end
 
     def test_inject_fallback_no_head_tag(self):
-        from systemedu.agents.builtin.media_art_direction import inject_katex_if_needed
+        from systemedu.core.agents.builtin.media_art_direction import inject_katex_if_needed
 
         html = "<body>\\(x^2\\)</body>"
         result = inject_katex_if_needed(html)
@@ -495,11 +495,11 @@ class TestKaTeXInjection:
     def test_animation_spec_prompt_contains_formula_type(self):
         # AnimationGenAgent 现在使用 AnimationSpec DSL，LLM 输出 JSON spec
         # formula 类型元素支持 LaTeX（由 compile_animation_spec 自动注入 KaTeX）
-        from systemedu.agents.builtin.animation_spec import ANIMATION_SPEC_PROMPT
+        from systemedu.core.agents.builtin.animation_spec import ANIMATION_SPEC_PROMPT
         assert "formula" in ANIMATION_SPEC_PROMPT
 
     def test_katex_prompt_hint_content(self):
-        from systemedu.agents.builtin.media_art_direction import KATEX_PROMPT_HINT
+        from systemedu.core.agents.builtin.media_art_direction import KATEX_PROMPT_HINT
 
         assert r"\frac" in KATEX_PROMPT_HINT
         assert r"\int" in KATEX_PROMPT_HINT
@@ -511,18 +511,18 @@ class TestKaTeXInjection:
 class TestGameMechanicSelection:
 
     def test_game_detail_prompt_no_longer_forces_simulation(self):
-        from systemedu.agents.builtin.course_idea_detail_planner_agent import GAME_DETAIL_PROMPT
+        from systemedu.core.agents.builtin.course_idea_detail_planner_agent import GAME_DETAIL_PROMPT
         # Prompt must NOT hard-code simulation as the only option
         assert 'game_mechanic 必须是 "simulation"' not in GAME_DETAIL_PROMPT
         assert '"simulation"' not in GAME_DETAIL_PROMPT or "drag_sort" in GAME_DETAIL_PROMPT
 
     def test_game_detail_prompt_lists_all_mechanics(self):
-        from systemedu.agents.builtin.course_idea_detail_planner_agent import GAME_DETAIL_PROMPT
+        from systemedu.core.agents.builtin.course_idea_detail_planner_agent import GAME_DETAIL_PROMPT
         for mechanic in ["simulation", "drag_sort", "match_pairs", "timeline_order", "boss_quiz"]:
             assert mechanic in GAME_DETAIL_PROMPT
 
     def test_game_detail_prompt_has_mechanic_reason(self):
-        from systemedu.agents.builtin.course_idea_detail_planner_agent import GAME_DETAIL_PROMPT
+        from systemedu.core.agents.builtin.course_idea_detail_planner_agent import GAME_DETAIL_PROMPT
         assert "mechanic_reason" in GAME_DETAIL_PROMPT
 
 
@@ -532,7 +532,7 @@ class TestGameMechanicSelection:
 class TestScientificModelAgent:
 
     def test_should_run_science_categories(self):
-        from systemedu.agents.builtin.scientific_model_agent import ScientificModelAgent
+        from systemedu.core.agents.builtin.scientific_model_agent import ScientificModelAgent
 
         assert ScientificModelAgent.should_run("physics", "牛顿第二定律", "") is True
         assert ScientificModelAgent.should_run("chemistry", "化学反应", "") is True
@@ -540,21 +540,21 @@ class TestScientificModelAgent:
         assert ScientificModelAgent.should_run("biology", "细胞", "") is True
 
     def test_should_run_keyword_detection(self):
-        from systemedu.agents.builtin.scientific_model_agent import ScientificModelAgent
+        from systemedu.core.agents.builtin.scientific_model_agent import ScientificModelAgent
 
         assert ScientificModelAgent.should_run("other", "力与运动", "牛顿定律描述了力") is True
         assert ScientificModelAgent.should_run("other", "化学反应速率", "") is True
         assert ScientificModelAgent.should_run("other", "积分与面积", "") is True
 
     def test_should_not_run_unrelated(self):
-        from systemedu.agents.builtin.scientific_model_agent import ScientificModelAgent
+        from systemedu.core.agents.builtin.scientific_model_agent import ScientificModelAgent
 
         assert ScientificModelAgent.should_run("music", "音乐节拍", "学习音乐节奏") is False
         assert ScientificModelAgent.should_run("other", "项目管理", "学习如何管理项目时间") is False
 
     @pytest.mark.asyncio
     async def test_extract_returns_model(self):
-        from systemedu.agents.builtin.scientific_model_agent import ScientificModelAgent
+        from systemedu.core.agents.builtin.scientific_model_agent import ScientificModelAgent
         import json
 
         model_data = {
@@ -575,7 +575,7 @@ class TestScientificModelAgent:
 
     @pytest.mark.asyncio
     async def test_extract_returns_none_on_failure(self):
-        from systemedu.agents.builtin.scientific_model_agent import ScientificModelAgent
+        from systemedu.core.agents.builtin.scientific_model_agent import ScientificModelAgent
         from unittest.mock import MagicMock
         from langchain_core.messages import AIMessage
 
@@ -586,7 +586,7 @@ class TestScientificModelAgent:
         assert result is None
 
     def test_build_prompt_block_contains_key_fields(self):
-        from systemedu.agents.builtin.scientific_model_agent import ScientificModelAgent
+        from systemedu.core.agents.builtin.scientific_model_agent import ScientificModelAgent
 
         model = {
             "core_formulas": ["\\(F = ma\\)"],
@@ -602,7 +602,7 @@ class TestScientificModelAgent:
         assert "科学准确性约束" in block
 
     def test_build_prompt_block_empty_returns_empty(self):
-        from systemedu.agents.builtin.scientific_model_agent import ScientificModelAgent
+        from systemedu.core.agents.builtin.scientific_model_agent import ScientificModelAgent
 
         assert ScientificModelAgent.build_prompt_block({}) == ""
         assert ScientificModelAgent.build_prompt_block(None) == ""
@@ -641,7 +641,7 @@ class TestAnimationQualityScoring:
         </body></html>"""
 
     def test_score_has_tech_and_ped_keys(self):
-        from systemedu.agents.builtin.media_art_direction import evaluate_animation_html_quality
+        from systemedu.core.agents.builtin.media_art_direction import evaluate_animation_html_quality
 
         report = evaluate_animation_html_quality(self._make_full_html())
         assert "tech_score" in report
@@ -651,13 +651,13 @@ class TestAnimationQualityScoring:
         assert "issues" in report
 
     def test_full_html_passes(self):
-        from systemedu.agents.builtin.media_art_direction import evaluate_animation_html_quality
+        from systemedu.core.agents.builtin.media_art_direction import evaluate_animation_html_quality
 
         report = evaluate_animation_html_quality(self._make_full_html())
         assert report["pass"] is True, f"Expected pass but score={report['score']}, issues={report['issues']}"
 
     def test_minimal_html_fails(self):
-        from systemedu.agents.builtin.media_art_direction import evaluate_animation_html_quality
+        from systemedu.core.agents.builtin.media_art_direction import evaluate_animation_html_quality
 
         html = "<html><body><p>hello</p></body></html>"
         report = evaluate_animation_html_quality(html)
@@ -665,7 +665,7 @@ class TestAnimationQualityScoring:
         assert report["score"] < 72
 
     def test_pedagogical_issues_reported(self):
-        from systemedu.agents.builtin.media_art_direction import evaluate_animation_html_quality
+        from systemedu.core.agents.builtin.media_art_direction import evaluate_animation_html_quality
 
         # Good technical structure but no teaching rhythm or captions
         html = """<html><head><style>
@@ -685,13 +685,13 @@ class TestAnimationQualityScoring:
         assert len(pedagogical_issues) >= 1, f"No pedagogical issues found: {report['issues']}"
 
     def test_tech_score_capped_at_60(self):
-        from systemedu.agents.builtin.media_art_direction import evaluate_animation_html_quality
+        from systemedu.core.agents.builtin.media_art_direction import evaluate_animation_html_quality
 
         report = evaluate_animation_html_quality(self._make_full_html())
         assert report["tech_score"] <= 60
 
     def test_format_feedback_shows_both_scores(self):
-        from systemedu.agents.builtin.media_art_direction import (
+        from systemedu.core.agents.builtin.media_art_direction import (
             evaluate_animation_html_quality,
             format_animation_quality_feedback,
         )
@@ -728,7 +728,7 @@ class TestExerciseGenAgent:
 
     @pytest.mark.asyncio
     async def test_generate_returns_choice_exercises(self):
-        from systemedu.agents.builtin.exercise_gen_agent import ExerciseGenAgent
+        from systemedu.core.agents.builtin.exercise_gen_agent import ExerciseGenAgent
 
         llm = _make_llm(self._make_exercise_response())
         agent = ExerciseGenAgent(llm)
@@ -749,7 +749,7 @@ class TestExerciseGenAgent:
 
     @pytest.mark.asyncio
     async def test_generate_fallback_on_invalid_json(self):
-        from systemedu.agents.builtin.exercise_gen_agent import ExerciseGenAgent
+        from systemedu.core.agents.builtin.exercise_gen_agent import ExerciseGenAgent
 
         llm = _make_llm("这不是有效的JSON")
         agent = ExerciseGenAgent(llm)
@@ -765,7 +765,7 @@ class TestExerciseGenAgent:
 
     @pytest.mark.asyncio
     async def test_generate_filters_invalid_types(self):
-        from systemedu.agents.builtin.exercise_gen_agent import ExerciseGenAgent
+        from systemedu.core.agents.builtin.exercise_gen_agent import ExerciseGenAgent
 
         bad = json.dumps([
             {"type": "unknown", "question": "坏题目"},
@@ -780,7 +780,7 @@ class TestExerciseGenAgent:
     @pytest.mark.asyncio
     async def test_elaborate_exercise_mode_passthrough(self):
         """CourseIdeaDetailAgent should passthrough exercise mode without calling LLM planner."""
-        from systemedu.agents.builtin.course_idea_detail_agent import CourseIdeaDetailAgent
+        from systemedu.core.agents.builtin.course_idea_detail_agent import CourseIdeaDetailAgent
 
         llm = _make_llm("{}")
         agent = CourseIdeaDetailAgent(llm)
@@ -793,7 +793,7 @@ class TestExerciseGenAgent:
         assert "context_summary" in dp
 
     def test_integration_agent_handles_exercise_mode(self):
-        from systemedu.agents.builtin.integration_agent import IntegrationAgent
+        from systemedu.core.agents.builtin.integration_agent import IntegrationAgent
 
         exercises = [
             {"type": "choice", "question": "问题", "options": ["A. 一", "B. 二", "C. 三", "D. 四"], "correct": 0, "explanation": "解析"},
@@ -829,7 +829,7 @@ class TestPatternRouterAgent:
 
     @pytest.mark.asyncio
     async def test_matched_relative_motion(self):
-        from systemedu.agents.builtin.pattern_router_agent import PatternRouterAgent
+        from systemedu.core.agents.builtin.pattern_router_agent import PatternRouterAgent
 
         match_resp = json.dumps({
             "matched": True,
@@ -864,7 +864,7 @@ class TestPatternRouterAgent:
 
     @pytest.mark.asyncio
     async def test_no_match_returns_empty_html(self):
-        from systemedu.agents.builtin.pattern_router_agent import PatternRouterAgent
+        from systemedu.core.agents.builtin.pattern_router_agent import PatternRouterAgent
 
         no_match_resp = json.dumps({
             "matched": False,
@@ -884,7 +884,7 @@ class TestPatternRouterAgent:
 
     @pytest.mark.asyncio
     async def test_wave_oscillation_spring_mode(self):
-        from systemedu.agents.builtin.pattern_router_agent import PatternRouterAgent
+        from systemedu.core.agents.builtin.pattern_router_agent import PatternRouterAgent
 
         match_resp = json.dumps({
             "matched": True,
@@ -916,7 +916,7 @@ class TestPatternRouterAgent:
     @pytest.mark.asyncio
     async def test_render_pattern_direct(self):
         """Test render_pattern function directly without LLM."""
-        from systemedu.agents.builtin.animation_patterns.registry import render_pattern
+        from systemedu.core.agents.builtin.animation_patterns.registry import render_pattern
 
         html = render_pattern("relative_motion", {
             "title": "测试标题",
@@ -936,7 +936,7 @@ class TestPatternRouterAgent:
         assert "<!DOCTYPE html>" in html
 
     def test_render_pattern_unknown_id(self):
-        from systemedu.agents.builtin.animation_patterns.registry import render_pattern
+        from systemedu.core.agents.builtin.animation_patterns.registry import render_pattern
 
         html = render_pattern("nonexistent_pattern", {})
         assert html == ""
@@ -944,7 +944,7 @@ class TestPatternRouterAgent:
     @pytest.mark.asyncio
     async def test_json_parse_from_markdown_fence(self):
         """PatternRouterAgent should handle LLM wrapping JSON in code fence."""
-        from systemedu.agents.builtin.pattern_router_agent import PatternRouterAgent
+        from systemedu.core.agents.builtin.pattern_router_agent import PatternRouterAgent
 
         fenced_resp = '```json\n' + json.dumps({
             "matched": True,

@@ -100,15 +100,15 @@ def client(tmp_path, monkeypatch, project_dir):
     monkeypatch.setattr("systemedu.core.config.CONFIG_FILE", config_file)
     monkeypatch.setattr("systemedu.core.config.SYSTEMEDU_HOME", home)
     db_file = home / "systemedu.db"
-    monkeypatch.setattr("systemedu.storage.db.DB_FILE", db_file)
+    monkeypatch.setattr("systemedu.core.storage.db.DB_FILE", db_file)
 
-    from systemedu.storage.db import reset_db
+    from systemedu.core.storage.db import reset_db
     reset_db()
 
     # Patch find_project_dir to return our temp project dir
     monkeypatch.setattr(
-        "systemedu.gateway.server.api_update_tree.__module__",
-        "systemedu.gateway.server",
+        "systemedu.cloud.gateway.server.api_update_tree.__module__",
+        "systemedu.cloud.gateway.server",
     )
 
     def _fake_find(name: str) -> Path:
@@ -117,13 +117,13 @@ def client(tmp_path, monkeypatch, project_dir):
         raise FileNotFoundError(f"Project '{name}' not found")
 
     monkeypatch.setattr(
-        "systemedu.education.project_loader.find_project_dir",
+        "systemedu.core.education.project_loader.find_project_dir",
         _fake_find,
     )
 
-    from systemedu.gateway import server
+    from systemedu.cloud.gateway import server
     server._runtime = None
-    from systemedu.gateway.server import create_app
+    from systemedu.cloud.gateway.server import create_app
     app = create_app()
     c = TestClient(app)
     token = c.post("/api/auth/login", json={"username": "root", "password": "123systemedu"}).json()["token"]

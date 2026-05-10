@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from systemedu.skills.loader import SkillLoader, parse_skill_md
+from systemedu.core.skills.loader import SkillLoader, parse_skill_md
 
 
 @pytest.fixture

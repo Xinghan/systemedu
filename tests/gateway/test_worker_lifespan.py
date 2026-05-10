@@ -16,8 +16,8 @@ import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from systemedu.storage.db import Base
-from systemedu.tutor.worker import FactExtractionWorker
+from systemedu.core.storage.db import Base
+from systemedu.core.tutor.worker import FactExtractionWorker
 
 
 @pytest.fixture()
@@ -103,7 +103,7 @@ class TestWorkerLifecycle:
     @pytest.mark.asyncio
     async def test_zombie_reap_on_startup(self, db_factory, noop_extractor_factory):
         """Worker reaps zombie rows (status=processing for > zombie_after) on start."""
-        from systemedu.storage.db import PendingFactExtraction
+        from systemedu.core.storage.db import PendingFactExtraction
 
         # Seed a zombie row
         db = db_factory()

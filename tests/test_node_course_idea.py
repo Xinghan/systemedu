@@ -16,7 +16,7 @@ def _make_llm(response_text: str):
 class TestCourseIdeaNode:
     @pytest.mark.asyncio
     async def test_identify_keeps_style_and_mode_reason(self):
-        from systemedu.agents.builtin.course_idea_agent import CourseIdeaAgent
+        from systemedu.core.agents.builtin.course_idea_agent import CourseIdeaAgent
 
         plan = "正文段落[[IDEA:idea-1]]"
         ideas = [
@@ -38,7 +38,7 @@ class TestCourseIdeaNode:
 
     @pytest.mark.asyncio
     async def test_identify_returns_empty_ideas_on_invalid_json(self):
-        from systemedu.agents.builtin.course_idea_agent import CourseIdeaAgent
+        from systemedu.core.agents.builtin.course_idea_agent import CourseIdeaAgent
 
         llm = _make_llm("内容\n---SEPARATOR---\nnot json")
         plan_text, ideas = await CourseIdeaAgent(llm).identify("原始", "力")

@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from systemedu.tutor.skills import SkillBase, SkillConfig
+from systemedu.core.tutor.skills import SkillBase, SkillConfig
 
 
 # ---------------------------------------------------------------------------

@@ -3,7 +3,7 @@
 
 class TestCourseIdeaDetailCriticNode:
     def test_review_fails_for_over_complex_animation(self):
-        from systemedu.agents.builtin.course_idea_detail_critic_agent import (
+        from systemedu.core.agents.builtin.course_idea_detail_critic_agent import (
             CourseIdeaDetailCriticAgent,
         )
 
@@ -22,7 +22,7 @@ class TestCourseIdeaDetailCriticNode:
         assert isinstance(report["feedback"], str)
 
     def test_review_pass_for_simple_game_with_persuasion(self):
-        from systemedu.agents.builtin.course_idea_detail_critic_agent import (
+        from systemedu.core.agents.builtin.course_idea_detail_critic_agent import (
             CourseIdeaDetailCriticAgent,
         )
 

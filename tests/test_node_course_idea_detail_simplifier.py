@@ -3,7 +3,7 @@
 
 class TestCourseIdeaDetailSimplifierNode:
     def test_simplify_animation_caps_complexity(self):
-        from systemedu.agents.builtin.course_idea_detail_simplifier_agent import (
+        from systemedu.core.agents.builtin.course_idea_detail_simplifier_agent import (
             CourseIdeaDetailSimplifierAgent,
         )
 
@@ -22,7 +22,7 @@ class TestCourseIdeaDetailSimplifierNode:
         assert isinstance(out["persuasion"], dict)
 
     def test_fallback_story_has_minimum_fields(self):
-        from systemedu.agents.builtin.course_idea_detail_simplifier_agent import (
+        from systemedu.core.agents.builtin.course_idea_detail_simplifier_agent import (
             CourseIdeaDetailSimplifierAgent,
         )
 

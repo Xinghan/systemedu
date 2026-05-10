@@ -8,8 +8,8 @@ import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from systemedu.storage.db import Base, PendingFactExtraction
-from systemedu.tutor.memory import PendingFactExtractionDAO
+from systemedu.core.storage.db import Base, PendingFactExtraction
+from systemedu.core.tutor.memory import PendingFactExtractionDAO
 
 
 @pytest.fixture

@@ -14,7 +14,7 @@ from datetime import datetime
 
 import pytest
 
-from systemedu.storage.db import (
+from systemedu.core.storage.db import (
     Base,
     Escalation,
     PendingFactExtraction,
@@ -49,7 +49,7 @@ def db_session(tmp_path):
 
 class TestSessionEnd:
     def test_enqueue_creates_row(self, db_session):
-        from systemedu.tutor.memory.pending_extraction import PendingFactExtractionDAO
+        from systemedu.core.tutor.memory.pending_extraction import PendingFactExtractionDAO
 
         dao = PendingFactExtractionDAO(db_session)
         row = dao.enqueue(
@@ -61,7 +61,7 @@ class TestSessionEnd:
         assert row.status == "pending"
 
     def test_enqueue_idempotent(self, db_session):
-        from systemedu.tutor.memory.pending_extraction import PendingFactExtractionDAO
+        from systemedu.core.tutor.memory.pending_extraction import PendingFactExtractionDAO
 
         dao = PendingFactExtractionDAO(db_session)
         row1 = dao.enqueue(
@@ -86,14 +86,14 @@ class TestSessionEnd:
 
 class TestFacts:
     def test_list_facts_empty(self, db_session):
-        from systemedu.tutor.memory.student_fact import StudentFactDAO
+        from systemedu.core.tutor.memory.student_fact import StudentFactDAO
 
         dao = StudentFactDAO(db_session)
         facts = dao.list_by_user("u1")
         assert facts == []
 
     def test_list_facts_returns_current_only(self, db_session):
-        from systemedu.tutor.memory.student_fact import StudentFactDAO
+        from systemedu.core.tutor.memory.student_fact import StudentFactDAO
 
         # Add two facts: one current, one superseded
         f1 = StudentFact(
@@ -125,7 +125,7 @@ class TestFacts:
         assert facts[0].content == "thinks Mars has no gravity"
 
     def test_list_facts_filter_by_project(self, db_session):
-        from systemedu.tutor.memory.student_fact import StudentFactDAO
+        from systemedu.core.tutor.memory.student_fact import StudentFactDAO
 
         f1 = StudentFact(
             user_id="u1", project_name="mars", knode_id="1",
@@ -146,7 +146,7 @@ class TestFacts:
         assert mars_facts[0].project_name == "mars"
 
     def test_list_facts_filter_by_category(self, db_session):
-        from systemedu.tutor.memory.student_fact import StudentFactDAO
+        from systemedu.core.tutor.memory.student_fact import StudentFactDAO
 
         f1 = StudentFact(
             user_id="u1", project_name="mars", knode_id="1",
@@ -174,7 +174,7 @@ class TestFacts:
 
 class TestSessionHistory:
     def test_list_by_session(self, db_session):
-        from systemedu.tutor.audit.tool_call_log import ToolCallLogDAO
+        from systemedu.core.tutor.audit.tool_call_log import ToolCallLogDAO
 
         dao = ToolCallLogDAO(db_session)
         dao.log_call(
@@ -204,7 +204,7 @@ class TestSessionHistory:
         assert rows[1].tool_name == "complete_node"
 
     def test_list_empty_session(self, db_session):
-        from systemedu.tutor.audit.tool_call_log import ToolCallLogDAO
+        from systemedu.core.tutor.audit.tool_call_log import ToolCallLogDAO
 
         dao = ToolCallLogDAO(db_session)
         rows = dao.list_by_session("nonexistent")
@@ -218,7 +218,7 @@ class TestSessionHistory:
 
 class TestEscalations:
     def test_list_open(self, db_session):
-        from systemedu.tutor.audit.escalation import EscalationDAO
+        from systemedu.core.tutor.audit.escalation import EscalationDAO
 
         dao = EscalationDAO(db_session)
         dao.open_escalation(
@@ -234,7 +234,7 @@ class TestEscalations:
         assert len(rows) == 2
 
     def test_list_open_filter_by_user(self, db_session):
-        from systemedu.tutor.audit.escalation import EscalationDAO
+        from systemedu.core.tutor.audit.escalation import EscalationDAO
 
         dao = EscalationDAO(db_session)
         dao.open_escalation(
@@ -249,7 +249,7 @@ class TestEscalations:
         assert rows[0].user_id == "u1"
 
     def test_handled_not_in_open(self, db_session):
-        from systemedu.tutor.audit.escalation import EscalationDAO
+        from systemedu.core.tutor.audit.escalation import EscalationDAO
 
         dao = EscalationDAO(db_session)
         esc = dao.open_escalation(
@@ -272,13 +272,13 @@ class TestSessionDelete:
         """Delete endpoint should return success even when graph is unavailable."""
         from unittest.mock import MagicMock, patch
 
-        from systemedu.gateway.server import api_tutor_session_delete
+        from systemedu.cloud.gateway.server import api_tutor_session_delete
 
         request = MagicMock()
         request.path_params = {"id": "test-thread-123"}
 
         # Patch the tutor_runner import to raise ImportError
-        with patch.dict("sys.modules", {"systemedu.gateway.tutor_runner": None}):
+        with patch.dict("sys.modules", {"systemedu.cloud.gateway.tutor_runner": None}):
             resp = await api_tutor_session_delete(request)
             assert resp.status_code == 200
             import json
@@ -291,7 +291,7 @@ class TestSessionDelete:
         """Delete endpoint should return success when graph is available."""
         from unittest.mock import AsyncMock, MagicMock, patch
 
-        from systemedu.gateway.server import api_tutor_session_delete
+        from systemedu.cloud.gateway.server import api_tutor_session_delete
 
         request = MagicMock()
         request.path_params = {"id": "test-thread-456"}
@@ -305,7 +305,7 @@ class TestSessionDelete:
         mock_runner = MagicMock()
         mock_runner._get_graph = AsyncMock(return_value=mock_graph)
 
-        with patch.dict("sys.modules", {"systemedu.gateway.tutor_runner": mock_runner}):
+        with patch.dict("sys.modules", {"systemedu.cloud.gateway.tutor_runner": mock_runner}):
             resp = await api_tutor_session_delete(request)
             assert resp.status_code == 200
             import json

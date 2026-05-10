@@ -13,9 +13,9 @@ import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from systemedu.storage.db import Base, ToolCallLog
-from systemedu.tutor.audit.tool_call_log import ToolCallLogDAO, make_log_sink
-from systemedu.tutor.tools.decorator import (
+from systemedu.core.storage.db import Base, ToolCallLog
+from systemedu.core.tutor.audit.tool_call_log import ToolCallLogDAO, make_log_sink
+from systemedu.core.tutor.tools.decorator import (
     ToolContext,
     push_tool_context,
     require_tool_context,

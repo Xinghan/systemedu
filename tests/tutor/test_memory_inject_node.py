@@ -18,9 +18,9 @@ from typing import Any
 import pytest
 from langchain_core.messages import AIMessage, HumanMessage
 
-from systemedu.tutor.graph import build_tutor_graph
-from systemedu.tutor.nodes import make_memory_inject_node, memory_inject_node
-from systemedu.tutor.state import MemorySnapshot, TutorState
+from systemedu.core.tutor.graph import build_tutor_graph
+from systemedu.core.tutor.nodes import make_memory_inject_node, memory_inject_node
+from systemedu.core.tutor.state import MemorySnapshot, TutorState
 
 
 @dataclass

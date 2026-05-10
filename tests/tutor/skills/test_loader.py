@@ -12,7 +12,7 @@ from textwrap import dedent
 
 import pytest
 
-from systemedu.tutor.skills import SkillBase, SkillConfig, SkillLoader
+from systemedu.core.tutor.skills import SkillBase, SkillConfig, SkillLoader
 
 
 # ---------------------------------------------------------------------------
@@ -20,7 +20,7 @@ from systemedu.tutor.skills import SkillBase, SkillConfig, SkillLoader
 # ---------------------------------------------------------------------------
 FAKE_SKILL_PY = dedent('''
     """Fake skill used in loader tests."""
-    from systemedu.tutor.skills import SkillBase
+    from systemedu.core.tutor.skills import SkillBase
 
     class __CLS__(SkillBase):
         def build_subgraph(self, llm, tools):
@@ -253,7 +253,7 @@ class TestClassResolution:
             "---\nname: override\ndescription: d\n---\n\nbody\n",
         )
         (d / "skill.py").write_text(dedent('''
-            from systemedu.tutor.skills import SkillBase
+            from systemedu.core.tutor.skills import SkillBase
             class SomethingElse(SkillBase):
                 def build_subgraph(self, llm, tools):
                     return "via-SKILL_CLASS"

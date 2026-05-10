@@ -162,7 +162,7 @@ def isolated_config(tmp_path: Path, monkeypatch, mock_creative):
 
 @pytest.fixture
 def auth_client(isolated_config):
-    from systemedu.gateway.server import create_app
+    from systemedu.cloud.gateway.server import create_app
     app = create_app()
     client = TestClient(app, raise_server_exceptions=False)
     token = client.post(

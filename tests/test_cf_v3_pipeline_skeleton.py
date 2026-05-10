@@ -11,8 +11,8 @@ from unittest.mock import patch, AsyncMock, MagicMock
 
 import pytest
 
-from systemedu.course_factory_v3 import generate_course_v3
-from systemedu.course_factory_v3.progress import (
+from systemedu.core.course_factory_v3 import generate_course_v3
+from systemedu.core.course_factory_v3.progress import (
     EV_BOOT, EV_STEP_START, EV_STEP_DONE, EV_DONE,
     STEP_BOOT, STEP_RESEARCH, STEP_LABXCHANGE,
     STEP_PLAN, STEP_THEORY,
@@ -53,21 +53,21 @@ async def test_pipeline_skeleton_emits_full_sse_sequence(monkeypatch, tmp_path):
 
     # patch DB helpers 避免真打数据库
     monkeypatch.setattr(
-        "systemedu.course_factory_v3.pipeline._load_cached",
+        "systemedu.core.course_factory_v3.pipeline._load_cached",
         lambda p, k: None,
     )
     monkeypatch.setattr(
-        "systemedu.course_factory_v3.pipeline._mark_generating",
+        "systemedu.core.course_factory_v3.pipeline._mark_generating",
         lambda p, k: None,
     )
     monkeypatch.setattr(
-        "systemedu.course_factory_v3.pipeline._mark_failed",
+        "systemedu.core.course_factory_v3.pipeline._mark_failed",
         lambda p, k: None,
     )
 
     # patch 所有 step 模块
     mocks = _make_step_mocks()
-    from systemedu.course_factory_v3.steps import (
+    from systemedu.core.course_factory_v3.steps import (
         s00_boot, s05_research, s07_labxchange,
         s10_plan, s15_theory,
         s20_ideation, s25_divergence, s26_creativity_gate,
@@ -135,8 +135,8 @@ async def test_pipeline_skeleton_emits_full_sse_sequence(monkeypatch, tmp_path):
 @pytest.mark.asyncio
 async def test_s00_boot_emits_boot_event_with_full_checklist():
     """单独验证 s00_boot.run 真实跑时会发出含 15 项 checklist 的 boot 事件 (F.0.1)。"""
-    from systemedu.course_factory_v3.steps import s00_boot
-    from systemedu.course_factory_v3.progress import Emitter, EV_BOOT
+    from systemedu.core.course_factory_v3.steps import s00_boot
+    from systemedu.core.course_factory_v3.progress import Emitter, EV_BOOT
 
     events = []
     em = Emitter(lambda e, d: events.append((e, d)))
@@ -169,7 +169,7 @@ async def test_s00_boot_emits_boot_event_with_full_checklist():
 async def test_pipeline_returns_cached_when_not_regenerate(monkeypatch):
     """已 ready 时 regenerate=False 应直接返回 cache,不走 step。"""
     monkeypatch.setattr(
-        "systemedu.course_factory_v3.pipeline._load_cached",
+        "systemedu.core.course_factory_v3.pipeline._load_cached",
         lambda p, k: {
             "project_name": p, "knode_id": k,
             "status": "ready", "course_content": {"plan_markdown": "cached"},

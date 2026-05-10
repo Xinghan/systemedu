@@ -5,8 +5,8 @@ from __future__ import annotations
 import pytest
 from langchain_core.tools import StructuredTool
 
-from systemedu.tutor.tools.decorator import ToolContext, push_tool_context, tutor_tool
-from systemedu.tutor.tools.registry import ToolRegistry
+from systemedu.core.tutor.tools.decorator import ToolContext, push_tool_context, tutor_tool
+from systemedu.core.tutor.tools.registry import ToolRegistry
 
 
 @tutor_tool()

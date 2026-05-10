@@ -22,7 +22,7 @@ from typing import Any
 import pytest
 from langchain_core.messages import AIMessage, HumanMessage
 
-from systemedu.tutor.skills import SkillLoader
+from systemedu.core.tutor.skills import SkillLoader
 
 pytestmark = pytest.mark.e2e
 

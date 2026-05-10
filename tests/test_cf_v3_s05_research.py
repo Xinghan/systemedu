@@ -7,8 +7,8 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from systemedu.course_factory_v3.progress import Emitter
-from systemedu.course_factory_v3.steps import s05_research
+from systemedu.core.course_factory_v3.progress import Emitter
+from systemedu.core.course_factory_v3.steps import s05_research
 
 
 @pytest.fixture

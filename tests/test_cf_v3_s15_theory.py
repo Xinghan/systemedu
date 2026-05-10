@@ -6,8 +6,8 @@ import json
 
 import pytest
 
-from systemedu.course_factory_v3.progress import Emitter
-from systemedu.course_factory_v3.steps import s15_theory
+from systemedu.core.course_factory_v3.progress import Emitter
+from systemedu.core.course_factory_v3.steps import s15_theory
 
 
 @pytest.fixture
@@ -205,7 +205,7 @@ def test_insert_placeholders_no_duplicate():
 @pytest.mark.asyncio
 async def test_run_with_real_llm_rocket_design():
     """集成测试: 真实 Kimi 跑 rocket-design knode 0,验证 theories 生成 + 占位符插入。"""
-    from systemedu.course_factory_v3.steps import s00_boot, s10_plan
+    from systemedu.core.course_factory_v3.steps import s00_boot, s10_plan
     em = Emitter(lambda e, d: None)
     ctx = await s00_boot.run("rocket-design", 0, user_id="t", overrides={}, em=em)
     ctx["plan_markdown"] = await s10_plan.run(ctx, em=em)

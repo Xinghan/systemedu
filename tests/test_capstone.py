@@ -9,7 +9,7 @@ import yaml
 from starlette.testclient import TestClient
 
 from systemedu.core.config import reset_config
-from systemedu.gateway.server import create_app
+from systemedu.cloud.gateway.server import create_app
 
 
 @pytest.fixture(autouse=True)
@@ -42,15 +42,15 @@ def config_env(tmp_path, monkeypatch):
     monkeypatch.setattr("systemedu.core.config.CONFIG_FILE", config_file)
     monkeypatch.setattr("systemedu.core.config.SYSTEMEDU_HOME", home)
     db_file = home / "systemedu.db"
-    monkeypatch.setattr("systemedu.storage.db.DB_FILE", db_file)
-    from systemedu.storage.db import reset_db
+    monkeypatch.setattr("systemedu.core.storage.db.DB_FILE", db_file)
+    from systemedu.core.storage.db import reset_db
     reset_db()
     return home
 
 
 @pytest.fixture
 def client(config_env):
-    from systemedu.gateway import server
+    from systemedu.cloud.gateway import server
     server._runtime = None
     app = create_app()
     c = TestClient(app)
@@ -63,7 +63,7 @@ class TestCapstoneDB:
     """Test CapstoneSubmission DB model."""
 
     def test_create_submission(self, config_env):
-        from systemedu.storage.db import CapstoneSubmission, get_session
+        from systemedu.core.storage.db import CapstoneSubmission, get_session
 
         db = get_session()
         try:
@@ -89,7 +89,7 @@ class TestCapstoneDB:
 
     def test_unique_constraint(self, config_env):
         from sqlalchemy.exc import IntegrityError
-        from systemedu.storage.db import CapstoneSubmission, get_session
+        from systemedu.core.storage.db import CapstoneSubmission, get_session
 
         db = get_session()
         try:
@@ -129,8 +129,8 @@ class TestCapstoneEndpoints:
         assert resp.status_code == 400
         assert "Reflections are required" in resp.json()["error"]
 
-    @patch("systemedu.gateway.server._grade_capstone_sync")
-    @patch("systemedu.education.project_loader.load_project_context")
+    @patch("systemedu.cloud.gateway.server._grade_capstone_sync")
+    @patch("systemedu.core.education.project_loader.load_project_context")
     def test_submit_with_reflections(self, mock_load, mock_grade, client, config_env):
         """Submit with reflections (no file) should succeed."""
         mock_knode = MagicMock()
@@ -161,8 +161,8 @@ class TestCapstoneEndpoints:
         assert data["attempt"] == 1
         assert data["submission_id"] > 0
 
-    @patch("systemedu.gateway.server._grade_capstone_sync")
-    @patch("systemedu.education.project_loader.load_project_context")
+    @patch("systemedu.cloud.gateway.server._grade_capstone_sync")
+    @patch("systemedu.core.education.project_loader.load_project_context")
     def test_submit_with_file(self, mock_load, mock_grade, client, config_env):
         """Submit with a file should store the file."""
         mock_knode = MagicMock()
@@ -204,8 +204,8 @@ class TestCapstoneEndpoints:
         assert resp.status_code == 400
         assert "not allowed" in resp.json()["error"]
 
-    @patch("systemedu.gateway.server._grade_capstone_sync")
-    @patch("systemedu.education.project_loader.load_project_context")
+    @patch("systemedu.cloud.gateway.server._grade_capstone_sync")
+    @patch("systemedu.core.education.project_loader.load_project_context")
     def test_submissions_list(self, mock_load, mock_grade, client, config_env):
         """After submit, submissions list should return the record."""
         mock_knode = MagicMock()
@@ -229,8 +229,8 @@ class TestCapstoneEndpoints:
         assert subs[0]["attempt"] == 1
         assert subs[0]["status"] == "submitted"
 
-    @patch("systemedu.gateway.server._grade_capstone_sync")
-    @patch("systemedu.education.project_loader.load_project_context")
+    @patch("systemedu.cloud.gateway.server._grade_capstone_sync")
+    @patch("systemedu.core.education.project_loader.load_project_context")
     def test_status_after_submit(self, mock_load, mock_grade, client, config_env):
         """Status should be 'submitted' right after submit."""
         mock_knode = MagicMock()

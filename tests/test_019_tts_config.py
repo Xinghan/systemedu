@@ -7,7 +7,7 @@ import pytest
 import yaml
 from starlette.testclient import TestClient
 
-from systemedu.gateway.server import create_app
+from systemedu.cloud.gateway.server import create_app
 
 
 @pytest.fixture
@@ -147,7 +147,7 @@ def test_tts_raises_tts_not_configured(isolated_config) -> None:
     old = os.environ.pop("DASHSCOPE_API_KEY", None)
     try:
         from systemedu.core.llm_client import TTSNotConfigured
-        from systemedu.education.tts import synthesize_speech
+        from systemedu.core.education.tts import synthesize_speech
 
         with pytest.raises(TTSNotConfigured):
             synthesize_speech(

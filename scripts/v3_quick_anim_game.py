@@ -37,11 +37,11 @@ def log(msg: str) -> None:
 
 
 async def main(knode_id: int = 27) -> None:
-    from systemedu.course_factory_v3.steps import s00_boot, s50_implement_anim, s50_implement_game
-    from systemedu.course_factory_v3.gates.g_a_code_review import CodeReviewGate
-    from systemedu.course_factory_v3.progress import Emitter
+    from systemedu.core.course_factory_v3.steps import s00_boot, s50_implement_anim, s50_implement_game
+    from systemedu.core.course_factory_v3.gates.g_a_code_review import CodeReviewGate
+    from systemedu.core.course_factory_v3.progress import Emitter
     from course_factory.factory import ensure_db_tables
-    from systemedu.storage.db import LessonContentV3, get_session
+    from systemedu.core.storage.db import LessonContentV3, get_session
 
     em = Emitter(lambda e, d: log(f"  EVT[{e}]: {str(d)[:160]}"))
 

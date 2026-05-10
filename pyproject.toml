@@ -1,55 +1,55 @@
-[build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
+# spec 022 monorepo refactor
+#
+# 这个根 pyproject.toml 是 uv workspace root, 自身不是一个包。
+# 实际代码在 packages/ 下:
+#   packages/core/         - 共享 lib (systemedu-core)
+#   packages/cloud-app/    - 多租户 SaaS gateway (Phase 3 实现)
+#   packages/library-app/  - 内容服务 (spec 023)
+#
+# 安装: uv sync 或 pip install -e packages/core (Phase 2 起步)
+# 运行测试: pytest tests/  (跨 package, 暂时统一在根)
 
 [project]
-name = "systemedu"
+name = "systemedu-monorepo"
 version = "0.1.0"
-description = "AI Agent-driven project-based learning platform"
-readme = "README.md"
+description = "systemedu monorepo workspace root"
 requires-python = ">=3.12"
-license = "MIT"
-dependencies = [
-    "typer>=0.12",
-    "rich>=13.0",
-    "pyyaml>=6.0",
-    "pydantic>=2.0",
-    "pydantic-settings>=2.0",
-    "langchain-core>=1.0",
-    "langchain-openai>=1.0",
-    "langgraph>=0.2.0",
-    "langgraph-checkpoint-sqlite>=2.0",
-    "aiosqlite>=0.19.0",
-    "python-dotenv>=1.0",
-    "openai>=1.0",
-    "prompt_toolkit>=3.0",
-    "sqlalchemy>=2.0",
-    "starlette>=0.40",
-    "python-multipart>=0.0.9",
-    "uvicorn>=0.30",
-    "websockets>=13.0",
-    "httpx>=0.27",
-    "tavily-python>=0.5",
-]
+# 不再有 dependencies, 各 package 自己声明; 这里只保留 dev tooling
+dependencies = []
 
 [project.optional-dependencies]
-dashscope = ["dashscope>=1.0"]
-mem0 = ["mem0ai>=1.0"]
-mcp = ["mcp>=1.0"]
 dev = [
     "pytest>=9.0",
     "pytest-asyncio>=0.24",
     "ruff>=0.8",
 ]
 
-[project.scripts]
-systemedu = "systemedu.cli.main:app"
+[tool.uv.workspace]
+members = [
+    "packages/core",
+    "packages/cloud-app",
+    # "packages/library-app", # spec 023 启用
+    # "tools/content-pipeline", # spec 023 Phase 3 启用
+]
+
+[tool.uv.sources]
+systemedu-core = { workspace = true }
+systemedu-cloud = { workspace = true }
+
+# 根仓库本身不再是一个有代码的 package, packages/* 才有代码;
+# CLI 已删 (spec 022 Phase 3 删); 进入 service 模式后用 systemd / docker 启动
+# build-system 留着是因为 [project] 块要求, 但不会有 source 被打包
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/systemedu"]
+# 不打包任何代码进根 wheel
+bypass-selection = true
 
 [tool.pytest.ini_options]
-testpaths = ["tests"]
+testpaths = ["tests", "packages/core/tests"]
 asyncio_mode = "auto"
 markers = [
     "regression: slow integration tests (DB + Playwright); run with -m regression",

@@ -18,9 +18,9 @@ import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from systemedu.storage.db import Base, LessonContent
-from systemedu.tutor.memory import MemoryInjector, render_memory
-from systemedu.tutor.skills._common import render_memory_block
+from systemedu.core.storage.db import Base, LessonContent
+from systemedu.core.tutor.memory import MemoryInjector, render_memory
+from systemedu.core.tutor.skills._common import render_memory_block
 
 
 @pytest.fixture

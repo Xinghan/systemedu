@@ -12,7 +12,7 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from systemedu.gateway.chat_payload import ChatPayload
+from systemedu.cloud.gateway.chat_payload import ChatPayload
 
 
 class TestProjectScope:

@@ -7,7 +7,7 @@ import pytest
 from langgraph.checkpoint.base import Checkpoint, CheckpointMetadata
 
 from systemedu.core.config import TutorConfig
-from systemedu.tutor.checkpoint import get_checkpointer, open_sqlite_checkpointer
+from systemedu.core.tutor.checkpoint import get_checkpointer, open_sqlite_checkpointer
 
 
 @pytest.fixture

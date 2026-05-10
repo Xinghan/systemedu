@@ -7,7 +7,7 @@ from datetime import datetime
 from langchain_core.messages import AIMessage, HumanMessage
 from langgraph.graph import END, START, StateGraph
 
-from systemedu.tutor.state import MemorySnapshot, SkillDecision, TutorState
+from systemedu.core.tutor.state import MemorySnapshot, SkillDecision, TutorState
 
 
 class TestTypedDictConstruction:

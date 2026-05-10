@@ -23,7 +23,7 @@ from typing import Any
 import pytest
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
 
-from systemedu.tutor.skills import SkillLoader
+from systemedu.core.tutor.skills import SkillLoader
 
 
 # ---------------------------------------------------------------------------
@@ -58,11 +58,8 @@ class FakeLLM:
 # Fixtures
 # ---------------------------------------------------------------------------
 SKILLS_ROOT = (
-    Path(__file__).resolve().parents[3]
-    / "src"
-    / "systemedu"
-    / "tutor"
-    / "skills"
+    Path(__file__).resolve().parents[3]  # repo root
+    / "packages" / "core" / "src" / "systemedu" / "core" / "tutor" / "skills"
 )
 
 

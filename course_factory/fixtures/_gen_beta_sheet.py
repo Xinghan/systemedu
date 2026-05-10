@@ -1395,7 +1395,7 @@ def write_everything():
     from course_factory.factory import (
         _ensure_db_tables, _upsert_project, _init_progress, _write_project_files
     )
-    from systemedu.storage.db import LessonContent, get_session as get_db_session
+    from systemedu.core.storage.db import LessonContent, get_session as get_db_session
     from datetime import datetime as dt
 
     console.print(Panel.fit(

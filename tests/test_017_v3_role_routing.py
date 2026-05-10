@@ -52,7 +52,7 @@ def isolated_config(tmp_path: Path, monkeypatch):
 
 def test_role_to_provider_constant() -> None:
     """spec 021: creative -> coding, fast -> fast"""
-    from systemedu.course_factory_v3.kimi_client import ROLE_TO_PROVIDER
+    from systemedu.core.course_factory_v3.kimi_client import ROLE_TO_PROVIDER
     assert ROLE_TO_PROVIDER == {"creative": "coding", "fast": "fast"}
 
 
@@ -64,8 +64,8 @@ def test_llm_for_creative_uses_coding_provider(isolated_config) -> None:
         captured["provider"] = provider
         return object()
 
-    with patch("systemedu.course_factory_v3.kimi_client.get_llm", side_effect=fake_get_llm):
-        from systemedu.course_factory_v3.kimi_client import llm_for
+    with patch("systemedu.core.course_factory_v3.kimi_client.get_llm", side_effect=fake_get_llm):
+        from systemedu.core.course_factory_v3.kimi_client import llm_for
         llm_for("creative")
 
     assert captured["provider"] == "coding"
@@ -79,8 +79,8 @@ def test_llm_for_fast_uses_fast_provider(isolated_config) -> None:
         captured["provider"] = provider
         return object()
 
-    with patch("systemedu.course_factory_v3.kimi_client.get_llm", side_effect=fake_get_llm):
-        from systemedu.course_factory_v3.kimi_client import llm_for
+    with patch("systemedu.core.course_factory_v3.kimi_client.get_llm", side_effect=fake_get_llm):
+        from systemedu.core.course_factory_v3.kimi_client import llm_for
         llm_for("fast")
 
     assert captured["provider"] == "fast"
@@ -108,8 +108,8 @@ def test_llm_for_creative_fallbacks_to_fast(tmp_path, monkeypatch) -> None:
         captured["provider"] = provider
         return object()
 
-    with patch("systemedu.course_factory_v3.kimi_client.get_llm", side_effect=fake_get_llm):
-        from systemedu.course_factory_v3.kimi_client import llm_for
+    with patch("systemedu.core.course_factory_v3.kimi_client.get_llm", side_effect=fake_get_llm):
+        from systemedu.core.course_factory_v3.kimi_client import llm_for
         llm_for("creative")
 
     assert captured["provider"] == "fast"
