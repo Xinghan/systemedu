@@ -10,19 +10,105 @@ description: Generate rich-media course content (animation, game, theory, exerci
 
 ---
 
+## 两种模式（必须先确认）
+
+**spec 023 起 course_factory 有两种输出模式，每次任务开始必须先选定**：
+
+| 模式 | 输入 | 输出位置 | 用于 |
+|------|------|----------|------|
+| `legacy` (旧) | `project_name + knode_global_idx` (SQLite) | `~/.systemedu/` 本地 SQLite + media | 本地单用户开发期 |
+| `workspace` (新, 默认) | `slug + module_id` (V5 树, 蓝图驱动) | `content-workspace/generated/<slug>/knodes/<dir>/` + manifest | 内容上架到 library service |
+
+### Workspace 模式快速路径
+
+```python
+from course_factory import (
+    load_blueprint_for_workspace,
+    generate_knowledge_tree_from_blueprint,
+    load_knode_context_from_workspace,
+    save_knode_to_workspace,
+)
+
+# Step 0 (workspace): 蓝图必须先用 CLI sync 进来
+#   $ systemedu-content blueprint sync ~/Dev/systemeduidea
+
+# Step 0a: 第一次给某个项目生成时, 先一次性生成知识树骨架
+tree = generate_knowledge_tree_from_blueprint("ai-ant-ethologist")
+# → 写 content-workspace/generated/ai-ant-ethologist/tree/knowledge_tree.json
+#   + manifest.json (skeleton) + 24 个空 knode 目录
+# 你 (Claude) 应该 review tree 是否合理, 必要时手工补 acceptance_artifacts /
+# hands_on_components / depends_on 等 V5 字段后再继续。
+
+# Step 0b: 逐 knode 加载上下文 (替代 load_context)
+ctx = load_knode_context_from_workspace("ai-ant-ethologist", "M01")
+knode = ctx.knode           # V5 module dict
+stage = ctx.stage           # 所属 stage
+project = ctx.project_meta  # slug / age_band / domain / 等
+
+# Step 1..6.6: 跑下面的标准 SKILL 流程, 拿到 course_content / assignment /
+# audio_scripts (跟 legacy 模式完全一致)
+
+# Step 7 (workspace 替代 upsert_lesson + upsert_assignment + audio_scripts):
+save_knode_to_workspace(
+    "ai-ant-ethologist",
+    "M01",
+    course_content=course_content,
+    assignment=assignment_md,
+    audio_scripts=audio_scripts,
+)
+# → 写 lesson.md / sections.json / theories.json / audio_scripts.json /
+#   assignment.md / media/animation-*.html / media/game-*.html
+# → 自动重算 manifest.json 的 files + sha256
+```
+
+### 上架到 library
+
+24 个 module 全部跑完后:
+
+```bash
+$ systemedu-content publish ai-ant-ethologist --target=local
+# → 打 tarball + 上传 library-app, library 验证 manifest sha256 入库
+# → admin UI 里点"发布"才对公开 API 可见
+```
+
+### 模式选择规则
+
+- 用户给 **slug + module_id (如 "M01")** → workspace 模式
+- 用户给 **project_name + knode_global_idx (数字)** → legacy 模式
+- 用户没明说 → 默认 workspace, 反问确认
+
+**开工声明必须注明所选模式**：
+
+```
+=== course_factory 开工声明 ===
+模式: workspace            # 或 legacy
+slug: ai-ant-ethologist    # workspace 模式
+module_id: M01             # workspace 模式
+# (legacy 模式则写 project_name + knode_global_idx)
+...
+```
+
+---
+
 ## 启动协议 (Boot Protocol) — 必读必答
 
 **收到生成任务后，第一个回复必须严格按下面格式输出"开工声明"。在没有输出开工声明之前，禁止做任何文件读写、Bash、Agent 调用或代码编写动作。**
 
 ```
 === course_factory 开工声明 ===
+模式: <workspace | legacy>     ← spec 023 后默认 workspace
+# workspace 模式:
+slug: <project-slug>
+module_id: <M01..MNN>
+# legacy 模式:
 项目: <project_name>
 节点: knode_global_idx=<N>
+
 节点角色: <foundation / core / deepening / synthesis / capstone>
 用户覆盖（user override）: <列出所有 user-explicit 跳过项，例如 "skip 0.5, skip 0.7"；无则写 none>
 
 我承诺按 12 步顺序执行，不跳步、不合并、不省略验证：
-[ ] Step 0    加载 knode 上下文（load_knode_context）
+[ ] Step 0    加载 knode 上下文（workspace: load_knode_context_from_workspace; legacy: load_knode_context）
 [ ] Step 0.5  Tavily 外部研究（除非 user override）
 [ ] Step 0.7  LabXchange 匹配（除非 user override）
 [ ] Step 1    plan_markdown（800-1500 字，围绕 core_question）
@@ -34,7 +120,7 @@ description: Generate rich-media course content (animation, game, theory, exerci
 [ ] Step 4    Debate 决策（保留/拒绝，每条 reject 写理由）
 [ ] Step 5    实现 HTML / exercises JSON
 [ ] Step 5.5  五道闸门（5.5a code review / 5.5b browser verify / 5.5c 科学一致性 Agent / 5.5d theory 等级 Agent / 5.5e 游戏性美观 Agent / 5.5f 文字重叠）
-[ ] Step 6    make_course_content + preflight_v41 + upsert_lesson
+[ ] Step 6    make_course_content + preflight_v41 + 写入 (workspace: save_knode_to_workspace; legacy: upsert_lesson)
 [ ] Step 6.5  generate_assignment + upsert_assignment
 [ ] Step 6.6  generate_audio_scripts
 === 开工 ===
@@ -74,6 +160,31 @@ import course_factory.factory as _cf
 _cf.search_labxchange_for_knode = lambda *a, **kw: []  # 禁用 labxchange 自动兜底
 # research 调用直接传 research=None
 ```
+
+### Workspace 模式 API (spec 023+)
+
+```python
+from course_factory import (
+    load_blueprint_for_workspace,             # bp = load_blueprint_for_workspace(slug)
+    generate_knowledge_tree_from_blueprint,   # tree = generate_knowledge_tree_from_blueprint(slug)
+    get_knowledge_tree,                       # tree = get_knowledge_tree(slug)  # 读已生成
+    load_knode_context_from_workspace,        # ctx = load_knode_context_from_workspace(slug, module_id)
+    save_knode_to_workspace,                  # save_knode_to_workspace(slug, module_id, course_content, *, assignment, audio_scripts)
+    clear_knode_workspace,                    # clear_knode_workspace(slug, module_id)  # 清旧内容重跑
+)
+```
+
+**输出文件硬约束** (manifest 期望, 缺会让 status 显示 partial):
+
+| 文件 | 内容 | 来源 |
+|------|------|------|
+| `lesson.md` | plan_markdown | course_content["plan_markdown"] |
+| `sections.json` | ideas / story_paragraphs / external_resources / rendered_sections | course_content 的多个字段合并 |
+| `theories.json` | theories 列表 | course_content["theories"] |
+| `audio_scripts.json` | audio scripts | `audio_scripts=` 参数 (或 course_content) |
+| `assignment.md` | 作业 markdown | `assignment=` 参数 |
+| `media/animation-*.html` | animation HTML | 自动从 ideas[*].animation_html 拆出 |
+| `media/game-*.html` | game HTML | 自动从 ideas[*].game_html 或 .html 拆出 |
 
 ## 验证脚本速查
 
