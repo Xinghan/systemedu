@@ -10,11 +10,12 @@ import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from .auth import maybe_bootstrap_admin
 from .models import init_db
 from .routes import admin, public
-from .settings import HOST, PORT, ensure_dirs
+from .settings import CORS_ORIGINS, HOST, PORT, ensure_dirs
 
 logger = logging.getLogger(__name__)
 
@@ -40,6 +41,16 @@ app = FastAPI(
     version="0.1.0",
     lifespan=lifespan,
 )
+
+# CORS (允许 admin-ui SPA 跨源调; 生产 nginx 同源代理时可缩到空)
+if CORS_ORIGINS:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=CORS_ORIGINS,
+        allow_credentials=False,
+        allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
+        allow_headers=["Authorization", "Content-Type"],
+    )
 
 # routes
 app.include_router(public.router, prefix="/v1", tags=["public"])
