@@ -38,9 +38,10 @@ cd /opt/systemedu
 tar -xzf /tmp/systemedu_code.tar.gz 2>/dev/null || true
 
 # 安装 Linux 系统依赖（Python/Node/Manim/TeX/ffmpeg 等）
-source scripts/linux_system_deps.sh
-systemedu_install_linux_system_deps
-systemedu_verify_linux_runtime
+# 默认跳过 (大部分情况下系统依赖已就绪); 首次部署或依赖更新时取消注释下两行
+# source scripts/linux_system_deps.sh
+# systemedu_install_linux_system_deps && systemedu_verify_linux_runtime
+echo "[skip] system deps (取消注释 deploy.sh 里 systemedu_install_linux_system_deps 强制装)"
 
 # 准备 Python 虚拟环境
 if [ ! -x .venv/bin/python ]; then
@@ -49,14 +50,17 @@ fi
 source .venv/bin/activate
 python -m pip install --upgrade pip setuptools wheel >/tmp/systemedu_pip_bootstrap.log 2>&1
 
-# 重新安装 Python 依赖（如有变更）
-python -m pip install -e . >/tmp/systemedu_pip_install.log 2>&1
-python -m pip install dashscope manim >/tmp/systemedu_pip_media.log 2>&1
-tail -n 3 /tmp/systemedu_pip_install.log || true
+# 重新安装 Python 依赖（spec 022 monorepo: 显式装每个 package）
+python -m pip install -e packages/core >/tmp/systemedu_pip_install.log 2>&1
+python -m pip install -e packages/cloud-app >>/tmp/systemedu_pip_install.log 2>&1
+python -m pip install -e packages/library-app >>/tmp/systemedu_pip_install.log 2>&1
+python -m pip install -e tools/content-pipeline >>/tmp/systemedu_pip_install.log 2>&1
+python -m pip install dashscope manim >/tmp/systemedu_pip_media.log 2>&1 || true
+tail -n 5 /tmp/systemedu_pip_install.log || true
 tail -n 3 /tmp/systemedu_pip_media.log || true
 
-# 验证媒体运行时
-python - <<'PY'
+# 验证媒体运行时 (manim agent 不是 spec 023 必需, warn but not fail)
+python - <<'PY' || echo "[warn] manim runtime check failed (non-fatal)"
 from systemedu.agents.builtin.manim_gen_agent import ManimGenAgent
 profile = ManimGenAgent().runtime_profile()
 required = {
@@ -66,31 +70,71 @@ required = {
 }
 missing = [key for key, value in required.items() if not value]
 if missing:
-    raise SystemExit(f"Manim runtime incomplete: {missing} profile={profile}")
-print("Manim runtime OK:", required)
+    print(f"WARN: Manim runtime incomplete: {missing} profile={profile}")
+else:
+    print("Manim runtime OK:", required)
 PY
 
 # 重新构建前端
 cd web
 NEXT_PUBLIC_GATEWAY_URL=http://47.92.200.21 npm install --legacy-peer-deps --quiet 2>&1 | tail -3
 NEXT_PUBLIC_GATEWAY_URL=http://47.92.200.21 npm run build 2>&1 | tail -5
+
+# --- spec 023: 编译 library-admin-ui ---
+cd /opt/systemedu/packages/library-admin-ui
+NEXT_PUBLIC_BASE_PATH=/library NEXT_PUBLIC_LIBRARY_BASE_URL=http://47.92.200.21/library-api \
+    npm install --quiet 2>&1 | tail -3
+NEXT_PUBLIC_BASE_PATH=/library NEXT_PUBLIC_LIBRARY_BASE_URL=http://47.92.200.21/library-api \
+    npm run build 2>&1 | tail -5
 ENDSSH
 
-echo "[4/5] 重启服务..."
+echo "[4/6] 更新 cloud-app systemd unit + 重启..."
 ssh -o StrictHostKeyChecking=no ${SERVER} "
-systemctl start systemedu-backend
-sleep 2
-systemctl start systemedu-frontend
-systemctl reload nginx
+set -e
+cd /opt/systemedu
+export REPO_ROOT=/opt/systemedu HOST=47.92.200.21
+bash scripts/install/write_systemd_nginx.sh
 "
 
-echo "[5/5] 验证..."
+echo "[5/6] 部署 library-app + library-admin-ui systemd + nginx..."
+ssh -o StrictHostKeyChecking=no ${SERVER} "
+set -euo pipefail
+cd /opt/systemedu
+export REPO_ROOT=/opt/systemedu
+export HOST=47.92.200.21
+# library 鉴权 token: 优先复用已存在文件, 否则首次生成
+SECRETS_FILE=/root/.systemedu-library-secrets
+if [ -f \"\$SECRETS_FILE\" ]; then
+    source \"\$SECRETS_FILE\"
+else
+    LIBRARY_JWT_SECRET=\$(openssl rand -hex 32)
+    LIBRARY_LICENSE_TOKEN=\$(openssl rand -hex 32)
+    LIBRARY_BOOTSTRAP_ADMIN='admin:changeme-on-first-login'
+    cat > \"\$SECRETS_FILE\" <<EOF
+LIBRARY_JWT_SECRET=\$LIBRARY_JWT_SECRET
+LIBRARY_LICENSE_TOKEN=\$LIBRARY_LICENSE_TOKEN
+LIBRARY_BOOTSTRAP_ADMIN=\$LIBRARY_BOOTSTRAP_ADMIN
+EOF
+    chmod 600 \"\$SECRETS_FILE\"
+    echo '生成 library secrets: /root/.systemedu-library-secrets'
+fi
+export LIBRARY_JWT_SECRET LIBRARY_LICENSE_TOKEN LIBRARY_BOOTSTRAP_ADMIN
+bash scripts/install/write_library_systemd_nginx.sh
+"
+
+echo "[6/6] 验证..."
 sleep 5
 STATUS=$(curl --noproxy '*' -s http://47.92.200.21/api/status | python3 -c "import sys,json; d=json.load(sys.stdin); print('OK v' + d['version'])" 2>/dev/null || echo "FAILED")
-echo "   Backend: $STATUS"
+echo "   cloud-app /api/status: $STATUS"
 HTTP=$(curl --noproxy '*' -s -o /dev/null -w "%{http_code}" -L http://47.92.200.21/login)
-echo "   Frontend /login: $HTTP"
+echo "   cloud-app /login: $HTTP"
+LIB_HTTP=$(curl --noproxy '*' -s -o /dev/null -w "%{http_code}" http://47.92.200.21/library-api/health)
+echo "   library /health:   $LIB_HTTP"
+UI_HTTP=$(curl --noproxy '*' -s -o /dev/null -w "%{http_code}" -L http://47.92.200.21/library/login)
+echo "   library-ui /login: $UI_HTTP"
 
 echo ""
-echo "部署完成! 访问: http://47.92.200.21"
-echo "账号: root / 123systemedu"
+echo "部署完成!"
+echo "  cloud-app:     http://47.92.200.21/        (root / 123systemedu)"
+echo "  library admin: http://47.92.200.21/library/ (admin / changeme-on-first-login)"
+echo "  library API:   http://47.92.200.21/library-api/v1/  (license token in /root/.systemedu-library-secrets)"

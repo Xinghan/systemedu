@@ -1,6 +1,11 @@
 import type { NextConfig } from "next";
 
+// 部署到 IP 时通过路径前缀 /library 提供, 通过 BASE_PATH env 控制
+// (dev / 域名场景: 留空)
+const basePath = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
+
 const nextConfig: NextConfig = {
+  basePath: basePath || undefined,
   // 大文件上传 (tarball 可能 50-200MB)
   experimental: {
     serverActions: {

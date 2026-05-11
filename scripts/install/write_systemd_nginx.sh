@@ -107,7 +107,7 @@ NGINX
 ln -sf /etc/nginx/sites-available/systemedu /etc/nginx/sites-enabled/systemedu
 rm -f /etc/nginx/sites-enabled/default
 
-if ! nginx -t 2>&1 | grep -q "syntax is ok"; then
+if ! nginx -t >/dev/null 2>&1; then
     warn "nginx 配置语法可能有误："
     nginx -t || true
     exit 1
