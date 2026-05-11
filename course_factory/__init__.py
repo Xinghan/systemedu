@@ -25,7 +25,9 @@ from .workspace_bridge import (  # noqa: F401
     clear_knode_workspace,
     generate_knowledge_tree_from_blueprint,
     get_knowledge_tree,
+    init_workspace_project,
     load_blueprint_for_workspace,
     load_knode_context_from_workspace,
     save_knode_to_workspace,
+    save_knowledge_tree_to_workspace,
 )

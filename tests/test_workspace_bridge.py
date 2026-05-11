@@ -20,9 +20,11 @@ from course_factory import (
     clear_knode_workspace,
     generate_knowledge_tree_from_blueprint,
     get_knowledge_tree,
+    init_workspace_project,
     load_blueprint_for_workspace,
     load_knode_context_from_workspace,
     save_knode_to_workspace,
+    save_knowledge_tree_to_workspace,
 )
 from content_pipeline import workspace as ws_mod
 
@@ -262,3 +264,129 @@ def test_save_knode_then_publish_compatible(ws: Path):
         full = gen / f["path"]
         assert full.is_file(), f"manifest references missing file {f['path']}"
         assert full.stat().st_size == f["size"]
+
+
+# ---------------------------------------------------------------------------
+# 项目级流程 P0-P2: init_workspace_project + save_knowledge_tree_to_workspace
+# (SKILL.md 让 Claude 自己设计 V5 tree, 不依赖正则编译)
+# ---------------------------------------------------------------------------
+
+def test_init_workspace_project(ws: Path):
+    """SKILL Step P0: 读蓝图 + 解析 Phase/Week 给 Claude 参考."""
+    info = init_workspace_project("ai-ant-ethologist")
+    assert info["slug"] == "ai-ant-ethologist"
+    assert info["frontmatter"]["duration_weeks"] == 4
+    assert info["frontmatter"]["title_zh"] == "蚁群行为学家"
+    # 蓝图有 2 个 Phase, 4 个 week
+    assert len(info["phases"]) == 2
+    assert info["phases"][0]["phase_num"] == 1
+    assert info["phases"][0]["title"] == "Background"
+    assert len(info["phases"][0]["weeks"]) == 2
+    # body_markdown 完整传过来 (Claude 后续用作设计依据)
+    assert "Phase 1" in info["blueprint_body_markdown"]
+
+
+def _minimal_v5_tree(modules: int = 3) -> dict:
+    """构造一个最小可用 V5 tree (Claude 在 SKILL P2 应该产出的形状)."""
+    return {
+        "schema_version": "5.0",
+        "title": "蚁群行为学家",
+        "description": "测试 V5 树",
+        "stages": [
+            {
+                "stage_id": "S1",
+                "title": "Background",
+                "stage_goal": "建立蚁群行为学基础认知",
+            },
+        ],
+        "modules": [
+            {
+                "module_id": f"M{i+1:02d}",
+                "title": f"模块 {i+1}",
+                "stage_id": "S1",
+                "sequence_order": i + 1,
+                "summary": f"模块 {i+1} 摘要",
+                "core_question": f"模块 {i+1} 核心问题?",
+                "depends_on": [f"M{i:02d}"] if i > 0 else [],
+                "week": i + 1,
+            }
+            for i in range(modules)
+        ],
+        "edges": [],
+    }
+
+
+def test_save_claude_v5_tree_writes_files(ws: Path):
+    """Claude 写一棵 V5 tree, save_knowledge_tree_to_workspace 落盘 +
+    建 knode 目录占位 + 写 manifest skeleton."""
+    tree = _minimal_v5_tree(modules=3)
+    result = save_knowledge_tree_to_workspace("ai-ant-ethologist", tree)
+    assert result["stage_count"] == 1
+    assert result["module_count"] == 3
+    assert result["errors"] == []
+
+    gen = ws_mod.project_generated_dir("ai-ant-ethologist")
+    # tree.json 写盘
+    tree_data = json.loads((gen / "tree" / "knowledge_tree.json").read_text(encoding="utf-8"))
+    assert tree_data["schema_version"] == "5.0"
+    assert len(tree_data["modules"]) == 3
+    # project_identity 自动从蓝图 frontmatter 补 (Claude 没填的情况)
+    pi = tree_data["project_identity"]
+    assert pi["slug"] == "ai-ant-ethologist"
+    assert pi["duration_weeks"] == 4
+    assert pi["age_band"] == "10-12"
+    # manifest 写盘 + knodes 列表完整
+    manifest = json.loads((gen / "manifest.json").read_text(encoding="utf-8"))
+    assert manifest["slug"] == "ai-ant-ethologist"
+    assert manifest["knode_count"] == 3
+    assert len(manifest["knodes"]) == 3
+    assert manifest["version_tag"] == "draft"
+    # 3 个 knode 目录占位
+    knode_dirs = sorted([k["knode_dir"] for k in manifest["knodes"]])
+    assert all((gen / d).is_dir() for d in knode_dirs)
+    # 蓝图被拷贝到 generated/blueprint/
+    assert (gen / "blueprint" / "README.zh.md").is_file()
+
+
+def test_save_claude_v5_tree_strict_rejects_invalid(ws: Path):
+    """strict=True 时, V5 缺必填字段抛 ValueError."""
+    bad_tree = {
+        "schema_version": "5.0",
+        "stages": [{"stage_id": "S1", "title": "S1", "stage_goal": "ok"}],
+        "modules": [
+            # 缺 core_question / sequence_order / summary 等
+            {"module_id": "M01", "title": "x", "stage_id": "S1", "depends_on": []},
+        ],
+    }
+    with pytest.raises(ValueError, match="invalid V5 tree"):
+        save_knowledge_tree_to_workspace("ai-ant-ethologist", bad_tree, strict=True)
+
+
+def test_save_claude_v5_tree_validates_depends_on(ws: Path):
+    """depends_on 引用不存在的 module_id 应被报错."""
+    tree = _minimal_v5_tree(modules=2)
+    # M01 依赖一个不存在的 M99
+    tree["modules"][0]["depends_on"] = ["M99"]
+    with pytest.raises(ValueError, match="M99"):
+        save_knowledge_tree_to_workspace("ai-ant-ethologist", tree, strict=True)
+
+
+def test_save_claude_v5_tree_then_save_knodes_compatible(ws: Path):
+    """Claude 写完 tree 后, 用 load_knode_context + save_knode 应能正常
+    走 SKILL 单 knode 流程."""
+    tree = _minimal_v5_tree(modules=2)
+    save_knowledge_tree_to_workspace("ai-ant-ethologist", tree)
+
+    ctx = load_knode_context_from_workspace("ai-ant-ethologist", "M01")
+    assert ctx.knode["module_id"] == "M01"
+    assert ctx.knode["core_question"] == "模块 1 核心问题?"
+    assert ctx.stage["stage_id"] == "S1"
+
+    # 写 knode 内容 → manifest 自动更新 files
+    save_knode_to_workspace(
+        "ai-ant-ethologist", "M01",
+        {"plan_markdown": "# M01\n", "ideas": [], "theories": []},
+    )
+    gen = ws_mod.project_generated_dir("ai-ant-ethologist")
+    manifest = json.loads((gen / "manifest.json").read_text(encoding="utf-8"))
+    assert any(f["path"].endswith("/lesson.md") for f in manifest["files"])
