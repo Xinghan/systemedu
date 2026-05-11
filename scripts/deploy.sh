@@ -82,9 +82,9 @@ NEXT_PUBLIC_GATEWAY_URL=http://47.92.200.21 npm run build 2>&1 | tail -5
 
 # --- spec 023: 编译 library-admin-ui ---
 cd /opt/systemedu/packages/library-admin-ui
-NEXT_PUBLIC_BASE_PATH=/library NEXT_PUBLIC_LIBRARY_BASE_URL=http://47.92.200.21/library-api \
+NEXT_PUBLIC_BASE_PATH=/library-admin NEXT_PUBLIC_LIBRARY_BASE_URL=http://47.92.200.21/library-api \
     npm install --quiet 2>&1 | tail -3
-NEXT_PUBLIC_BASE_PATH=/library NEXT_PUBLIC_LIBRARY_BASE_URL=http://47.92.200.21/library-api \
+NEXT_PUBLIC_BASE_PATH=/library-admin NEXT_PUBLIC_LIBRARY_BASE_URL=http://47.92.200.21/library-api \
     npm run build 2>&1 | tail -5
 ENDSSH
 
@@ -93,6 +93,22 @@ ssh -o StrictHostKeyChecking=no ${SERVER} "
 set -e
 cd /opt/systemedu
 export REPO_ROOT=/opt/systemedu HOST=47.92.200.21
+# 复用 library secrets (P7 [5/6] 生成); 同时 cloud-app 需要 JWT secret
+CLOUD_SECRETS=/root/.systemedu-cloud-secrets
+if [ -f \"\$CLOUD_SECRETS\" ]; then
+    source \"\$CLOUD_SECRETS\"
+else
+    CLOUD_JWT_SECRET=\$(openssl rand -hex 32)
+    cat > \"\$CLOUD_SECRETS\" <<EOF
+CLOUD_JWT_SECRET=\$CLOUD_JWT_SECRET
+EOF
+    chmod 600 \"\$CLOUD_SECRETS\"
+fi
+LIB_SECRETS=/root/.systemedu-library-secrets
+if [ -f \"\$LIB_SECRETS\" ]; then
+    source \"\$LIB_SECRETS\"
+fi
+export CLOUD_JWT_SECRET LIBRARY_LICENSE_TOKEN
 bash scripts/install/write_systemd_nginx.sh
 "
 
@@ -135,6 +151,7 @@ echo "   library-ui /login: $UI_HTTP"
 
 echo ""
 echo "部署完成!"
-echo "  cloud-app:     http://47.92.200.21/        (root / 123systemedu)"
-echo "  library admin: http://47.92.200.21/library/ (admin / changeme-on-first-login)"
-echo "  library API:   http://47.92.200.21/library-api/v1/  (license token in /root/.systemedu-library-secrets)"
+echo "  cloud-app:        http://47.92.200.21/login   (自助注册 → /library)"
+echo "  cloud-app library: http://47.92.200.21/library (学生学习入口)"
+echo "  library admin:    http://47.92.200.21/library-admin/login (admin / changeme-on-first-login)"
+echo "  library API:      http://47.92.200.21/library-api/v1/  (license token in /root/.systemedu-library-secrets)"

@@ -1,6 +1,6 @@
 # 024-cloud-multiuser
 
-**Status**: 024-A in progress (2026-05-11), 024-B draft
+**Status**: 024-A shipped (2026-05-11), 024-B draft
 **Owner**: xinghan
 **Created**: 2026-05-08
 **Last revised**: 2026-05-11 (拆 A/B 两阶段, A 先做)

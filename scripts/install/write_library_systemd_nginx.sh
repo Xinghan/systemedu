@@ -79,7 +79,7 @@ RestartSec=5
 StandardOutput=journal
 StandardError=journal
 Environment=PORT=3001
-Environment=NEXT_PUBLIC_BASE_PATH=/library
+Environment=NEXT_PUBLIC_BASE_PATH=/library-admin
 Environment=NEXT_PUBLIC_LIBRARY_BASE_URL=http://$HOST/library-api
 
 [Install]
@@ -137,10 +137,9 @@ server {
         proxy_read_timeout 3600s;
     }
 
-    # --- library service (spec 023) ---
-    # admin UI 用 Next.js basePath="/library", 所以包括 /library/_next/...
-    # 在内的所有资源都自然走这一个 location, 不需要 rewrite
-    location /library/ {
+    # --- library admin UI (spec 023, 路径 /library-admin/ 避免跟
+    #     cloud-app web 学习路径 /library 冲突 - spec 024-A 后) ---
+    location /library-admin/ {
         proxy_pass http://127.0.0.1:3001;
         proxy_http_version 1.1;
         proxy_set_header Upgrade \$http_upgrade;
