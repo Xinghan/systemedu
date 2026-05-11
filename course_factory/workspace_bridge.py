@@ -373,3 +373,259 @@ def clear_knode_workspace(slug: str, module_id: str) -> None:
                 shutil.rmtree(item)
             else:
                 item.unlink()
+
+
+# ---------------------------------------------------------------------------
+# 6. Claude-authored V5 tree 写入 (SKILL.md 项目级流程 Step P2 用)
+#
+# 这是给 SKILL.md 流程的新入口: Claude 自己读蓝图后, 在脑里设计出一棵
+# V5 KnowledgeTree, 然后调这个函数把它写盘 + 建 knode 目录占位 + 同步
+# manifest. 节点数 / 字段完整度由 Claude 决定 (手册里有约束)。
+# ---------------------------------------------------------------------------
+
+# V5 module 必填字段 (SKILL.md 流程强制 Claude 填全)
+_V5_MODULE_REQUIRED = (
+    "module_id",
+    "title",
+    "stage_id",
+    "sequence_order",
+    "summary",
+    "core_question",
+    "depends_on",
+)
+
+_V5_STAGE_REQUIRED = (
+    "stage_id",
+    "title",
+    "stage_goal",
+)
+
+
+def _validate_v5_tree(tree: dict) -> list[str]:
+    """校验 Claude 写的 V5 tree, 返回错误列表 (空 = 通过)."""
+    errors: list[str] = []
+    if tree.get("schema_version") != "5.0":
+        errors.append("schema_version must be '5.0'")
+    stages = tree.get("stages") or []
+    modules = tree.get("modules") or []
+    if not stages:
+        errors.append("stages must be non-empty")
+    if not modules:
+        errors.append("modules must be non-empty")
+
+    seen_stage_ids: set[str] = set()
+    for i, s in enumerate(stages):
+        for k in _V5_STAGE_REQUIRED:
+            if not s.get(k):
+                errors.append(f"stage[{i}] missing required field {k!r}")
+        sid = s.get("stage_id")
+        if sid in seen_stage_ids:
+            errors.append(f"stage[{i}] duplicate stage_id {sid!r}")
+        if sid:
+            seen_stage_ids.add(sid)
+
+    seen_module_ids: set[str] = set()
+    valid_module_ids: set[str] = set()
+    for i, m in enumerate(modules):
+        for k in _V5_MODULE_REQUIRED:
+            if k not in m:
+                errors.append(f"modules[{i}] missing required field {k!r}")
+        mid = m.get("module_id")
+        if mid in seen_module_ids:
+            errors.append(f"modules[{i}] duplicate module_id {mid!r}")
+        if mid:
+            seen_module_ids.add(mid)
+            valid_module_ids.add(mid)
+        if m.get("stage_id") and m.get("stage_id") not in seen_stage_ids:
+            errors.append(f"modules[{i}] stage_id {m['stage_id']!r} not in stages")
+
+    # depends_on 引用必须指向已存在的 module_id
+    for i, m in enumerate(modules):
+        for dep in m.get("depends_on") or []:
+            if dep not in valid_module_ids:
+                errors.append(
+                    f"modules[{i}] depends_on {dep!r} not a valid module_id"
+                )
+
+    return errors
+
+
+def save_knowledge_tree_to_workspace(
+    slug: str,
+    tree: dict,
+    *,
+    strict: bool = True,
+) -> dict:
+    """把 Claude 设计好的 V5 KnowledgeTree 写到 content-workspace.
+
+    用途: SKILL.md 项目级流程 Step P2 — Claude 读蓝图后, 自行决定 stages
+    / modules / 依赖, 拼出 V5 tree dict, 调此函数落盘。
+
+    步骤:
+    1. 校验 V5 必填字段 / 引用完整性 (strict=True 时 errors 非空抛异常)
+    2. 写 generated/<slug>/tree/knowledge_tree.json
+    3. 给每个 module 建 knodes/<knode_dir>/ 空目录
+    4. 写 manifest skeleton (frontmatter 从蓝图取, files=[] 由后续 save
+       knode 时 regenerate_manifest 更新)
+
+    Args:
+        slug: 项目 slug, 必须先 sync 过蓝图
+        tree: 完整 V5 KnowledgeTree dict (schema_version="5.0",
+              含 stages / modules / project_identity / 等)
+        strict: True 时校验失败抛 ValueError; False 时只 warn 返回
+
+    Returns:
+        {"slug": ..., "stage_count": int, "module_count": int,
+         "tree_path": str, "manifest_path": str, "errors": list[str]}
+    """
+    # 1. 校验蓝图存在
+    blueprint = load_blueprint_for_workspace(slug)
+
+    # 2. 校验 tree
+    errors = _validate_v5_tree(tree)
+    if errors and strict:
+        raise ValueError(
+            f"invalid V5 tree ({len(errors)} errors):\n  - " + "\n  - ".join(errors)
+        )
+
+    # 3. 准备目录
+    gen = _ws_mod.project_generated_dir(slug)
+    gen.mkdir(parents=True, exist_ok=True)
+    (gen / "tree").mkdir(exist_ok=True)
+    (gen / "knodes").mkdir(exist_ok=True)
+    (gen / "blueprint").mkdir(exist_ok=True)
+
+    # 把蓝图也拷进 generated (export 时一并打包)
+    bp_dir = _ws_mod.project_blueprint_dir(slug)
+    for fname in ("README.md", "README.zh.md"):
+        src = bp_dir / fname
+        if src.is_file():
+            (gen / "blueprint" / fname).write_text(
+                src.read_text(encoding="utf-8"), encoding="utf-8"
+            )
+
+    # 4. 补充 project_identity 默认值 (Claude 没填的话从蓝图补)
+    tree = dict(tree)
+    tree.setdefault("schema_version", "5.0")
+    fm = blueprint.frontmatter
+    pi = dict(tree.get("project_identity") or {})
+    pi.setdefault("slug", slug)
+    pi.setdefault("title_en", blueprint.title_en)
+    pi.setdefault("title_zh", blueprint.title_zh)
+    if fm.age_band:
+        pi.setdefault("age_band", fm.age_band)
+    if fm.domain:
+        pi.setdefault("domain", fm.domain)
+    if fm.duration_weeks:
+        pi.setdefault("duration_weeks", fm.duration_weeks)
+    if fm.weekly_hours:
+        pi.setdefault("weekly_hours", fm.weekly_hours)
+    if fm.budget_usd:
+        pi.setdefault("budget_usd", fm.budget_usd)
+    if fm.difficulty:
+        pi.setdefault("difficulty", fm.difficulty)
+    tree["project_identity"] = pi
+    tree.setdefault("title", fm.title or blueprint.title_zh or slug)
+
+    # 5. 写 tree.json
+    tree_path = gen / "tree" / "knowledge_tree.json"
+    tree_path.write_text(
+        json.dumps(tree, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+
+    # 6. 建 knode 目录占位 + 收集 manifest knode entries
+    knode_entries: list[dict] = []
+    for module in tree.get("modules", []):
+        dir_name = _compile_mod.knode_dir_name(module)
+        knode_path = gen / "knodes" / dir_name
+        knode_path.mkdir(parents=True, exist_ok=True)
+        knode_entries.append({
+            "module_id": module["module_id"],
+            "title": module.get("title", ""),
+            "week": module.get("week"),
+            "stage": module.get("stage_id", ""),
+            "duration_minutes": module.get("duration_minutes"),
+            "knode_dir": f"knodes/{dir_name}",
+        })
+
+    # 7. 写 manifest skeleton (后续 save_knode_to_workspace 会
+    #    regenerate_manifest 重算 files + sha256)
+    manifest = {
+        "schema_version": "1.0",
+        "slug": slug,
+        "title": tree["title"],
+        "title_zh": blueprint.title_zh or tree["title"],
+        "description": tree.get("description", ""),
+        "version": tree.get("version", "0.1.0"),
+        "version_tag": "draft",
+        "frontmatter": {
+            "age_band": fm.age_band,
+            "domain": fm.domain,
+            "duration_weeks": fm.duration_weeks,
+            "weekly_hours": fm.weekly_hours,
+            "budget_usd": fm.budget_usd,
+            "difficulty": fm.difficulty,
+        },
+        "knode_count": len(knode_entries),
+        "stage_count": len(tree.get("stages", [])),
+        "languages": ["zh-CN", "en"],
+        "total_size_bytes": 0,
+        "files": [],
+        "knodes": knode_entries,
+        "cover_image_path": None,
+        "tags": tree.get("tags") or [],
+        "created_at": None,
+        "updated_at": None,
+    }
+    manifest_path = gen / "manifest.json"
+    manifest_path.write_text(
+        json.dumps(manifest, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+
+    return {
+        "slug": slug,
+        "stage_count": len(tree.get("stages", [])),
+        "module_count": len(knode_entries),
+        "tree_path": str(tree_path),
+        "manifest_path": str(manifest_path),
+        "errors": errors,
+    }
+
+
+def init_workspace_project(slug: str) -> dict:
+    """SKILL.md 项目级流程 Step P0: 校验蓝图存在 + 准备目录骨架.
+
+    返回蓝图 frontmatter + Phase/Week 解析, 供 Claude 读取后再生成树。
+    """
+    bp = load_blueprint_for_workspace(slug)
+    gen = _ws_mod.project_generated_dir(slug)
+    gen.mkdir(parents=True, exist_ok=True)
+    # 解析 Phase/Week 给 Claude 看 (作为节点合并/拆分的参考, 不强制)
+    phases = _compile_mod.parse_syllabus(bp.body_markdown)
+    phases_data = [
+        {
+            "phase_num": ph.phase_num,
+            "title": ph.title_short,
+            "title_raw": ph.title_raw,
+            "weeks": [{"week": w.week, "raw_title": w.raw_title} for w in ph.weeks],
+        }
+        for ph in phases
+    ]
+    return {
+        "slug": slug,
+        "frontmatter": {
+            "title": bp.frontmatter.title,
+            "title_zh": bp.title_zh,
+            "age_band": bp.frontmatter.age_band,
+            "domain": bp.frontmatter.domain,
+            "duration_weeks": bp.frontmatter.duration_weeks,
+            "weekly_hours": bp.frontmatter.weekly_hours,
+            "budget_usd": bp.frontmatter.budget_usd,
+            "difficulty": bp.frontmatter.difficulty,
+        },
+        "phases": phases_data,
+        "blueprint_body_markdown": bp.body_markdown,
+        "workspace_dir": str(gen),
+    }

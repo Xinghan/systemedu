@@ -206,7 +206,7 @@ def _build_tree_skeleton(blueprint: ParsedBlueprint, slug: str) -> dict:
     return tree
 
 
-def _knode_dir_name(module: dict) -> str:
+def knode_dir_name(module: dict) -> str:
     """生成 knode 目录名: 'M01-w1-<slug>'.
 
     slug 取 title_short 简单 ascii-lower + 连字符。
@@ -274,7 +274,7 @@ def compile_project(slug: str) -> CompileResult:
     knode_dirs: list[Path] = []
     knode_entries: list[dict] = []
     for module in tree["modules"]:
-        dir_name = _knode_dir_name(module)
+        dir_name = knode_dir_name(module)
         knode_path = generated / "knodes" / dir_name
         knode_path.mkdir(exist_ok=True)
         knode_dirs.append(knode_path)
