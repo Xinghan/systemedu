@@ -3751,6 +3751,13 @@ async def api_get_all_notes(request: Request) -> JSONResponse:
 
 _AUTH_PUBLIC_PATHS = {"/api/auth/login", "/api/auth/logout", "/api/auth/me", "/api/status", "/"}
 
+# spec 024-A: 新前缀走 endpoint 内部鉴权 (旧 /api/auth/login 上面留作 legacy)
+_AUTH_PUBLIC_PREFIXES = (
+    "/api/auth/",         # 注册/登录/me/logout (新)
+    "/api/library/",      # library 内容 (公开页 + endpoint 内部检查购买)
+    "/api/purchases",     # purchases (endpoint 内部检查 token)
+)
+
 
 class _AuthMiddleware:
     """ASGI middleware that enforces Bearer token auth on all /api/* paths except public ones."""
@@ -3774,6 +3781,7 @@ class _AuthMiddleware:
             path in _AUTH_PUBLIC_PATHS
             or path.startswith("/api/media/")
             or path.startswith("/api/course-images/")
+            or any(path.startswith(p) for p in _AUTH_PUBLIC_PREFIXES)
         ):
             await self.app(scope, receive, send)
             return
@@ -3792,7 +3800,13 @@ class _AuthMiddleware:
                     token = part[6:]
                     break
 
-        if not token or not verify_token(token):
+        # spec 024-A: 兼容旧 verify_token (内存) + 新 JWT (multiuser.decode_token)
+        token_ok = bool(token) and verify_token(token)
+        if not token_ok and token:
+            from systemedu.cloud.gateway.multiuser.jwt import decode_token as _decode_jwt
+            token_ok = _decode_jwt(token) is not None
+
+        if not token_ok:
             response = JSONResponse({"error": "Unauthorized"}, status_code=401)
             await response(scope, receive, send)
             return
@@ -4121,6 +4135,12 @@ def create_app() -> Starlette:
         WebSocketRoute("/api/chat/stream", ws_chat_stream),
     ]
 
+    # spec 024-A: 多用户 auth + library proxy + purchases
+    from systemedu.cloud.gateway.multiuser import init_db as _multiuser_init_db
+    from systemedu.cloud.gateway.multiuser.endpoints import register_routes as _mu_routes
+    _multiuser_init_db()
+    routes.extend(_mu_routes())
+
     # Mount media files directory for TTS audio serving
     from systemedu.core.config import SYSTEMEDU_HOME
     media_dir = SYSTEMEDU_HOME / "media"
@@ -4140,10 +4160,10 @@ def create_app() -> Starlette:
         )
     )
 
-    # Auth routes (public)
-    routes.insert(0, Route("/api/auth/login", api_auth_login, methods=["POST"]))
-    routes.insert(1, Route("/api/auth/logout", api_auth_logout, methods=["POST"]))
-    routes.insert(2, Route("/api/auth/me", api_auth_me, methods=["GET"]))
+    # spec 024-A: 旧的 /api/auth/{login,logout,me} 用硬编码 root/123systemedu
+    # 内存 token, 被 multiuser 替代. 这里不再注册旧 endpoints. CREDENTIALS
+    # / create_token / verify_token / require_auth 还在使用的地方逐步迁移
+    # 到 multiuser JWT (decode_token + _extract_user_id).
 
     middleware = [
         Middleware(

@@ -1,8 +1,96 @@
 # 024-cloud-multiuser
 
-**Status**: draft
+**Status**: 024-A in progress (2026-05-11), 024-B draft
 **Owner**: xinghan
 **Created**: 2026-05-08
+**Last revised**: 2026-05-11 (拆 A/B 两阶段, A 先做)
+
+## 阶段拆分
+
+| 阶段 | 范围 | 状态 |
+|------|------|------|
+| **024-A** | 用户系统 (username/password 自助注册, bcrypt+JWT) + cloud-app /api/library/* 接 library 服务 + 用户×项目购买 (免支付) + web 前端学习页 | 当前实施 |
+| **024-B** | 微信 + 短信登录 + 邮箱验证 + 学习进度追踪 + 多儿童档案 + 支付接入 | 之后 |
+
+## 024-A 范围
+
+### 决策
+- 用户系统: username + password (自助注册, bcrypt + JWT)
+  - 不预置 bootstrap user, 每个用户自己注册
+  - 后续 024-B 加微信扫码 / 短信验证码
+- 浏览权限: 游客可看「项目列表 + 项目概述 + 知识树」
+- 学习权限: 必须登录 + 购买项目才能看 knode 详情
+- 购买: user × project 维度 (整体购买, 一买解锁该项目全部 knode)
+  - 本期免支付, 点击"购买"按钮即刻解锁
+  - 后续 024-B 接微信支付
+- 进度追踪: 本期不做 (024-B)
+- 多儿童档案: 本期不做 (024-B)
+
+### 后端 API (cloud-app gateway)
+```
+POST   /api/auth/register     {username, password} → {token, username}
+POST   /api/auth/login        {username, password} → {token, username}
+POST   /api/auth/logout       (Authorization) → {ok}
+GET    /api/auth/me           (Authorization) → {username, created_at}
+
+# library 内容 (游客可访问列表/概述/树, knode 详情需登录+购买)
+GET    /api/library/projects                       (公开) → list
+GET    /api/library/projects/<slug>                (公开) → project + tree
+GET    /api/library/projects/<slug>/tree           (公开) → V5 tree
+GET    /api/library/projects/<slug>/blueprint      (公开) → 蓝图 README
+GET    /api/library/projects/<slug>/knodes/<id>    (需登录+购买) → 完整 knode
+GET    /api/library/projects/<slug>/files/<path>   (需登录+购买) → 媒体文件
+
+# 购买
+POST   /api/purchases/<slug>                       (登录) → 解锁该项目
+GET    /api/purchases                              (登录) → 已购买列表
+```
+
+### DB schema (cloud-app sqlite, ~/.systemedu/systemedu.db 复用)
+```python
+class User:
+    id: UUID            primary key
+    username: str       unique, index
+    password_hash: str  bcrypt
+    created_at: datetime
+    last_login_at: datetime | None
+
+class Purchase:
+    id: UUID            primary key
+    user_id: UUID       FK User.id, index
+    project_slug: str   index
+    created_at: datetime
+    # 未来扩展: payment_method / payment_amount_cny / payment_ref
+    # 唯一约束: (user_id, project_slug)
+```
+
+### 前端 (web/)
+- `/login` 登录页
+- `/register` 注册页
+- `/library` 项目列表 (游客可见)
+- `/library/[slug]` 项目概述 + 知识树 + 行为按钮:
+  - 未登录: "登录后购买"
+  - 已登录未购买: "立即购买" (本期免费)
+  - 已购买: "开始学习"
+- `/library/[slug]/[knode_id]` 学习页 (蓝图引言 + plan_markdown + animation iframe + game iframe + audio + assignment)
+- 顶栏加"登录 | 注册" / "{username} | 退出"
+
+### Phase 实施计划
+- P0: 写 spec (本文档)
+- P1: cloud-app 后端 (User/Purchase DB + auth/library/purchases API + 鉴权)
+- P2: web 前端 (登录/注册 + library 列表/概述/学习页 + 顶栏)
+- P3: 部署 47.92.200.21 + Playwright e2e (注册→登录→列表→概述→购买→学习)
+
+### 验收
+1. 一个全新用户能在浏览器自助注册、登录、看到 library 列表
+2. 未登录访问 knode 详情 → 跳转登录
+3. 登录但未购买 → 显示"立即购买"按钮, 点击后免支付解锁
+4. 已购买访问 knode → 正常显示 lesson + animation + game + audio
+5. 已购买的项目 status 在 /library 列表正常显示, 重启服务后用户数据不丢
+
+---
+
+## 024-B 范围 (后续, draft)
 
 ## 背景
 
