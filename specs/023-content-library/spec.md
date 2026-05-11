@@ -1,9 +1,29 @@
 # 023-content-library
 
-**Status**: draft
+**Status**: shipped (2026-05-11)
 **Owner**: xinghan
 **Created**: 2026-05-08
-**Last revised**: 2026-05-08 (含 package layout + 内容流水线 CLI + admin UI 独立 SPA)
+**Last revised**: 2026-05-11 (P1-P7 全部完成, 部署到 47.92.200.21)
+
+## 实施总结 (2026-05-11)
+
+7 个 phase 全部完成, 测试 40/40 通过:
+
+- **P1**: packages/library-app 后端骨架 (FastAPI + SQLAlchemy + JWT)
+- **P2**: library-app 16 个 API (admin 9 + 公开 7) + tarball importer + sha256 验证
+- **P3**: tools/content-pipeline CLI (blueprint sync / compile / status / publish / export / import / login), 跑通 24 个项目蓝图 (9 测试)
+- **P4**: packages/core/library_client/ SDK (sync + async, 8 API), 19 测试 (含 e2e)
+- **P5**: packages/library-admin-ui Next.js SPA (5 页) + (P5b) Cognitive Sanctuary 紫色 shadcn 风格统一
+- **P6**: course_factory/workspace_bridge.py + SKILL.md 双模式 (workspace + legacy), 12 测试 (含完整 workspace → publish → library 公开 API e2e)
+- **P7**: 部署 47.92.200.21 (cloud-app + library 双站, nginx 路径分流, systemd 4 个 unit), Playwright 端到端 3 步通过
+
+生产 URLs:
+- http://47.92.200.21/                  cloud-app (学习系统)
+- http://47.92.200.21/library/login     library admin UI
+- http://47.92.200.21/library-api/v1/   library 公开 API (license token)
+- http://47.92.200.21/library-api/admin library 管理 API (JWT)
+
+下一阶段 (spec 024 等): cloud-app 多租户化 + 通过 LibraryClient SDK 读 library 内容.
 
 ## 背景
 
