@@ -43,6 +43,15 @@ LICENSE_TOKEN: Final[str] = os.environ.get(
 # 首次部署时 bootstrap admin (env var 形式: LIBRARY_BOOTSTRAP_ADMIN=user:pass)
 BOOTSTRAP_ADMIN: Final[str | None] = os.environ.get("LIBRARY_BOOTSTRAP_ADMIN")
 
+# CORS allowed origins (逗号分隔; 默认含 dev 端口)
+# 生产: nginx 同源代理时可留空, 但 dev 时 SPA 在 3001 跨源调 18821 必须开
+_default_origins = "http://localhost:3001,http://127.0.0.1:3001"
+CORS_ORIGINS: Final[list[str]] = [
+    o.strip()
+    for o in os.environ.get("LIBRARY_CORS_ORIGINS", _default_origins).split(",")
+    if o.strip()
+]
+
 
 def ensure_dirs() -> None:
     """启动时确保目录存在."""
