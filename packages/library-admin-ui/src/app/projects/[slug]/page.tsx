@@ -3,8 +3,15 @@
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
+import { ArrowLeft, Edit3, FileText, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import TopBar from "@/components/topbar";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { api, type ProjectDetail } from "@/lib/library-admin-api";
 import { formatBytes, formatDate } from "@/lib/utils";
 
@@ -18,7 +25,6 @@ export default function ProjectDetailPage() {
   const [editing, setEditing] = useState(false);
   const [busy, setBusy] = useState(false);
 
-  // 编辑表单
   const [titleZh, setTitleZh] = useState("");
   const [description, setDescription] = useState("");
   const [tagsInput, setTagsInput] = useState("");
@@ -84,7 +90,8 @@ export default function ProjectDetailPage() {
   }
 
   async function onDelete() {
-    if (!confirm(`确定删除项目 "${slug}"? 此操作不可撤销, 媒体文件也会被删除.`)) return;
+    if (!confirm(`确定删除项目 "${slug}"? 此操作不可撤销, 媒体文件也会被删除.`))
+      return;
     setBusy(true);
     try {
       await api.deleteProject(slug);
@@ -100,8 +107,16 @@ export default function ProjectDetailPage() {
     if (!project?.manifest) return null;
     const manifest = project.manifest as Record<string, unknown>;
     const files = (manifest.files as Array<{ path: string; size: number }>) ?? [];
-    const knodes = (manifest.knodes as Array<{ module_id: string; knode_dir: string; title: string }>) ?? [];
-    const grouped: Record<string, { module_id: string; title: string; files: { path: string; size: number }[] }> = {};
+    const knodes =
+      (manifest.knodes as Array<{
+        module_id: string;
+        knode_dir: string;
+        title: string;
+      }>) ?? [];
+    const grouped: Record<
+      string,
+      { module_id: string; title: string; files: { path: string; size: number }[] }
+    > = {};
     for (const k of knodes) {
       grouped[k.knode_dir] = { module_id: k.module_id, title: k.title, files: [] };
     }
@@ -124,7 +139,9 @@ export default function ProjectDetailPage() {
     return (
       <>
         <TopBar />
-        <main className="max-w-6xl mx-auto px-6 py-12 text-muted-foreground text-sm">加载中...</main>
+        <main className="max-w-6xl mx-auto px-6 py-12 text-muted-foreground text-sm">
+          加载中...
+        </main>
       </>
     );
   }
@@ -133,11 +150,14 @@ export default function ProjectDetailPage() {
     return (
       <>
         <TopBar />
-        <main className="max-w-6xl mx-auto px-6 py-12">
+        <main className="max-w-6xl mx-auto px-6 py-12 space-y-3">
           <div className="text-muted-foreground">项目不存在.</div>
-          <Link href="/projects" className="text-primary hover:underline text-sm">
-            ← 返回列表
-          </Link>
+          <Button variant="ghost" size="sm" asChild>
+            <Link href="/projects">
+              <ArrowLeft className="size-4" />
+              返回列表
+            </Link>
+          </Button>
         </main>
       </>
     );
@@ -148,180 +168,223 @@ export default function ProjectDetailPage() {
       <TopBar />
       <main className="max-w-6xl mx-auto px-6 py-8 space-y-8">
         {/* Header */}
-        <div className="flex items-start justify-between gap-6">
-          <div>
-            <Link href="/projects" className="text-xs text-muted-foreground hover:text-foreground">
-              ← 返回列表
+        <div>
+          <Button variant="ghost" size="sm" asChild className="-ml-2 mb-2">
+            <Link href="/projects">
+              <ArrowLeft className="size-4" />
+              返回列表
             </Link>
-            <h1 className="text-2xl font-semibold mt-1.5">{project.title_zh || project.title}</h1>
-            <div className="text-sm text-muted-foreground mt-1 font-mono">{project.slug}</div>
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={onTogglePublish}
-              disabled={busy}
-              className={`h-9 px-4 rounded-md text-sm font-medium ${
-                project.status === "published"
-                  ? "border border-border hover:bg-muted"
-                  : "bg-primary text-primary-foreground hover:opacity-90"
-              } disabled:opacity-50`}
-            >
-              {project.status === "published" ? "下线" : "发布"}
-            </button>
-            <button
-              onClick={onDelete}
-              disabled={busy}
-              className="h-9 px-4 rounded-md border border-destructive text-destructive hover:bg-destructive hover:text-destructive-foreground text-sm disabled:opacity-50"
-            >
-              删除
-            </button>
+          </Button>
+          <div className="flex items-start justify-between gap-6">
+            <div>
+              <h1 className="text-2xl font-semibold">{project.title_zh || project.title}</h1>
+              <div className="text-sm text-muted-foreground mt-1 font-mono">
+                {project.slug}
+              </div>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <Button
+                variant={project.status === "published" ? "outline" : "default"}
+                size="sm"
+                onClick={onTogglePublish}
+                disabled={busy}
+              >
+                {project.status === "published" ? "下线" : "发布"}
+              </Button>
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={onDelete}
+                disabled={busy}
+              >
+                <Trash2 className="size-4" />
+                删除
+              </Button>
+            </div>
           </div>
         </div>
 
         {/* Summary */}
-        <section className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <SummaryCard label="状态" value={project.status === "published" ? "已发布" : "草稿"} />
-          <SummaryCard label="版本" value={project.version} mono />
-          <SummaryCard label="规模" value={`${project.stage_count}S · ${project.knode_count}K`} />
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+          <SummaryCard
+            label="状态"
+            value={
+              <Badge variant={project.status === "published" ? "default" : "secondary"}>
+                {project.status === "published" ? "已发布" : "草稿"}
+              </Badge>
+            }
+          />
+          <SummaryCard label="版本" value={<span className="font-mono">{project.version}</span>} />
+          <SummaryCard
+            label="规模"
+            value={`${project.stage_count}S · ${project.knode_count}K`}
+          />
           <SummaryCard label="包大小" value={formatBytes(project.total_size_bytes)} />
-          <SummaryCard label="时长 (周)" value={project.duration_weeks != null ? String(project.duration_weeks) : "-"} />
+          <SummaryCard
+            label="时长 (周)"
+            value={project.duration_weeks != null ? String(project.duration_weeks) : "-"}
+          />
           <SummaryCard label="领域" value={project.domain || "-"} />
           <SummaryCard label="年龄" value={project.age_band || "-"} />
-          <SummaryCard label="难度" value={project.difficulty != null ? String(project.difficulty) : "-"} />
+          <SummaryCard
+            label="难度"
+            value={project.difficulty != null ? String(project.difficulty) : "-"}
+          />
           <SummaryCard label="发布时间" value={formatDate(project.published_at)} />
           <SummaryCard label="更新时间" value={formatDate(project.updated_at)} />
-        </section>
+        </div>
 
-        {/* Metadata 编辑 */}
-        <section className="border border-border rounded-md bg-card p-6 space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="font-semibold">元数据</h2>
+        {/* Metadata */}
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <CardTitle className="text-base">元数据</CardTitle>
             {!editing && (
-              <button
+              <Button
+                variant="ghost"
+                size="sm"
                 onClick={() => setEditing(true)}
-                className="text-sm text-primary hover:underline"
               >
+                <Edit3 className="size-4" />
                 编辑
-              </button>
+              </Button>
             )}
-          </div>
-          {editing ? (
-            <div className="space-y-4">
-              <label className="block space-y-1.5">
-                <span className="text-sm font-medium">中文标题</span>
-                <input
-                  type="text"
-                  value={titleZh}
-                  onChange={(e) => setTitleZh(e.target.value)}
-                  className="w-full h-9 px-3 rounded-md border border-border bg-background text-sm"
-                />
-              </label>
-              <label className="block space-y-1.5">
-                <span className="text-sm font-medium">描述</span>
-                <textarea
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  rows={3}
-                  className="w-full px-3 py-2 rounded-md border border-border bg-background text-sm"
-                />
-              </label>
-              <label className="block space-y-1.5">
-                <span className="text-sm font-medium">标签 (逗号分隔)</span>
-                <input
-                  type="text"
-                  value={tagsInput}
-                  onChange={(e) => setTagsInput(e.target.value)}
-                  className="w-full h-9 px-3 rounded-md border border-border bg-background text-sm"
-                />
-              </label>
-              <div className="flex gap-2">
-                <button
-                  onClick={onSavePatch}
-                  disabled={busy}
-                  className="h-9 px-4 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 disabled:opacity-50"
-                >
-                  保存
-                </button>
-                <button
-                  onClick={() => {
-                    setEditing(false);
-                    setTitleZh(project.title_zh ?? "");
-                    setDescription(project.description ?? "");
-                    setTagsInput((project.tags ?? []).join(", "));
-                  }}
-                  disabled={busy}
-                  className="h-9 px-4 rounded-md border border-border text-sm"
-                >
-                  取消
-                </button>
+          </CardHeader>
+          <CardContent>
+            {editing ? (
+              <div className="space-y-4">
+                <div className="space-y-1.5">
+                  <Label htmlFor="titleZh">中文标题</Label>
+                  <Input
+                    id="titleZh"
+                    value={titleZh}
+                    onChange={(e) => setTitleZh(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="desc">描述</Label>
+                  <Textarea
+                    id="desc"
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    rows={3}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="tags">标签 (逗号分隔)</Label>
+                  <Input
+                    id="tags"
+                    value={tagsInput}
+                    onChange={(e) => setTagsInput(e.target.value)}
+                  />
+                </div>
+                <div className="flex gap-2">
+                  <Button onClick={onSavePatch} disabled={busy} size="sm">
+                    保存
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setEditing(false);
+                      setTitleZh(project.title_zh ?? "");
+                      setDescription(project.description ?? "");
+                      setTagsInput((project.tags ?? []).join(", "));
+                    }}
+                    disabled={busy}
+                  >
+                    取消
+                  </Button>
+                </div>
               </div>
-            </div>
-          ) : (
-            <dl className="text-sm space-y-2">
-              <Row label="英文标题" value={project.title} />
-              <Row label="中文标题" value={project.title_zh || "-"} />
-              <Row label="描述" value={project.description || "-"} />
-              <Row label="标签" value={(project.tags ?? []).join(", ") || "-"} />
-            </dl>
-          )}
-        </section>
+            ) : (
+              <dl className="text-sm space-y-2">
+                <Row label="英文标题" value={project.title} />
+                <Row label="中文标题" value={project.title_zh || "-"} />
+                <Row label="描述" value={project.description || "-"} />
+                <Row label="标签" value={(project.tags ?? []).join(", ") || "-"} />
+              </dl>
+            )}
+          </CardContent>
+        </Card>
 
-        {/* 文件树 */}
-        <section className="border border-border rounded-md bg-card p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="font-semibold">文件清单</h2>
+        {/* 文件清单 */}
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <CardTitle className="text-base">文件清单</CardTitle>
             <span className="text-xs text-muted-foreground">
-              {(((project.manifest as Record<string, unknown>)?.files as unknown[]) ?? []).length} 个文件
+              {(((project.manifest as Record<string, unknown>)?.files as unknown[]) ?? []).length}{" "}
+              个文件
             </span>
-          </div>
-          {filesByKnode ? (
-            <div className="space-y-3">
-              {Object.entries(filesByKnode).map(([dir, info]) => (
-                <details key={dir} className="border border-border rounded-md" open={info.files.length > 0 && info.files.length < 10}>
-                  <summary className="px-3 py-2 text-sm font-medium cursor-pointer flex items-center justify-between">
-                    <span>
-                      <span className="font-mono text-xs text-muted-foreground mr-2">{info.module_id}</span>
-                      {info.title}
-                    </span>
-                    <span className="text-xs text-muted-foreground">
-                      {info.files.length} 个 · {formatBytes(info.files.reduce((a, b) => a + b.size, 0))}
-                    </span>
-                  </summary>
-                  <ul className="border-t border-border divide-y divide-border">
-                    {info.files.length === 0 ? (
-                      <li className="px-3 py-2 text-xs text-muted-foreground">(空)</li>
-                    ) : (
-                      info.files.map((f) => (
-                        <li key={f.path} className="px-3 py-1.5 text-xs flex items-center justify-between hover:bg-muted/30">
-                          <Link
-                            href={`/projects/${slug}/preview?path=${encodeURIComponent(f.path)}`}
-                            className="font-mono truncate flex-1 hover:underline"
+          </CardHeader>
+          <CardContent>
+            {filesByKnode ? (
+              <div className="space-y-2">
+                {Object.entries(filesByKnode).map(([dir, info]) => (
+                  <details
+                    key={dir}
+                    className="border border-border rounded-xl overflow-hidden group"
+                    open={info.files.length > 0 && info.files.length < 10}
+                  >
+                    <summary className="px-4 py-2.5 text-sm cursor-pointer flex items-center justify-between hover:bg-muted/30 transition-colors">
+                      <span className="flex items-center gap-2">
+                        <FileText className="size-4 text-muted-foreground" />
+                        <span className="font-mono text-xs text-muted-foreground">
+                          {info.module_id}
+                        </span>
+                        <span>{info.title}</span>
+                      </span>
+                      <span className="text-xs text-muted-foreground">
+                        {info.files.length} 个 ·{" "}
+                        {formatBytes(info.files.reduce((a, b) => a + b.size, 0))}
+                      </span>
+                    </summary>
+                    <ul className="border-t border-border divide-y divide-border">
+                      {info.files.length === 0 ? (
+                        <li className="px-4 py-2 text-xs text-muted-foreground">(空)</li>
+                      ) : (
+                        info.files.map((f) => (
+                          <li
+                            key={f.path}
+                            className="px-4 py-1.5 text-xs flex items-center justify-between hover:bg-muted/30 transition-colors"
                           >
-                            {f.path}
-                          </Link>
-                          <span className="text-muted-foreground ml-3 shrink-0">{formatBytes(f.size)}</span>
-                        </li>
-                      ))
-                    )}
-                  </ul>
-                </details>
-              ))}
-            </div>
-          ) : (
-            <div className="text-muted-foreground text-sm">manifest 缺失.</div>
-          )}
-        </section>
+                            <Link
+                              href={`/projects/${slug}/preview?path=${encodeURIComponent(f.path)}`}
+                              className="font-mono truncate flex-1 hover:text-primary"
+                            >
+                              {f.path}
+                            </Link>
+                            <span className="text-muted-foreground ml-3 shrink-0">
+                              {formatBytes(f.size)}
+                            </span>
+                          </li>
+                        ))
+                      )}
+                    </ul>
+                  </details>
+                ))}
+              </div>
+            ) : (
+              <div className="text-muted-foreground text-sm">manifest 缺失.</div>
+            )}
+          </CardContent>
+        </Card>
       </main>
     </>
   );
 }
 
-function SummaryCard({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
+function SummaryCard({
+  label,
+  value,
+}: {
+  label: string;
+  value: React.ReactNode;
+}) {
   return (
-    <div className="border border-border rounded-md bg-card px-4 py-3">
+    <Card size="sm" className="px-4 py-3">
       <div className="text-xs text-muted-foreground">{label}</div>
-      <div className={`text-sm mt-1 ${mono ? "font-mono" : ""}`}>{value}</div>
-    </div>
+      <div className="text-sm mt-1">{value}</div>
+    </Card>
   );
 }
 

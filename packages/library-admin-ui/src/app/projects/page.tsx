@@ -2,14 +2,21 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { Plus, Search } from "lucide-react";
 import { toast } from "sonner";
 import TopBar from "@/components/topbar";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { api, type ProjectSummary } from "@/lib/library-admin-api";
-import { formatBytes, formatDate } from "@/lib/utils";
+import { cn, formatBytes, formatDate } from "@/lib/utils";
+
+type StatusFilter = "all" | "draft" | "published";
 
 export default function ProjectsPage() {
   const [projects, setProjects] = useState<ProjectSummary[] | null>(null);
-  const [status, setStatus] = useState<"all" | "draft" | "published">("all");
+  const [status, setStatus] = useState<StatusFilter>("all");
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
 
@@ -38,69 +45,91 @@ export default function ProjectsPage() {
       <TopBar />
       <main className="max-w-6xl mx-auto px-6 py-8">
         <div className="flex items-center justify-between mb-6">
-          <h1 className="text-2xl font-semibold">项目库</h1>
-          <Link
-            href="/projects/upload"
-            className="h-9 px-4 inline-flex items-center rounded-md bg-primary text-primary-foreground text-sm font-medium hover:opacity-90"
-          >
-            上传 tarball
-          </Link>
+          <div>
+            <h1 className="text-2xl font-semibold">项目库</h1>
+            <p className="text-sm text-muted-foreground mt-0.5">
+              管理已导入的项目内容包.
+            </p>
+          </div>
+          <Button asChild>
+            <Link href="/projects/upload">
+              <Plus className="size-4" />
+              上传 tarball
+            </Link>
+          </Button>
         </div>
 
-        <div className="flex items-center gap-3 mb-5">
-          <input
-            type="text"
-            placeholder="按 slug / 标题搜索"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") load();
-            }}
-            className="h-9 px-3 rounded-md border border-border bg-background text-sm flex-1 max-w-sm"
-          />
-          <select
-            value={status}
-            onChange={(e) => setStatus(e.target.value as typeof status)}
-            className="h-9 px-3 rounded-md border border-border bg-background text-sm"
-          >
-            <option value="all">全部状态</option>
-            <option value="draft">草稿</option>
-            <option value="published">已发布</option>
-          </select>
+        <div className="flex items-center gap-2 mb-5">
+          <div className="relative flex-1 max-w-sm">
+            <Search className="size-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              type="text"
+              placeholder="按 slug / 标题搜索"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") load();
+              }}
+              className="pl-9"
+            />
+          </div>
+          <div className="flex items-center gap-1 p-1 rounded-xl bg-muted/60">
+            {(["all", "draft", "published"] as StatusFilter[]).map((s) => (
+              <button
+                key={s}
+                onClick={() => setStatus(s)}
+                className={cn(
+                  "px-3 py-1.5 rounded-lg text-sm transition-colors",
+                  status === s
+                    ? "bg-background shadow-sm text-foreground"
+                    : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                {s === "all" ? "全部" : s === "draft" ? "草稿" : "已发布"}
+              </button>
+            ))}
+          </div>
         </div>
 
-        {loading && <div className="text-muted-foreground text-sm py-12 text-center">加载中...</div>}
+        {loading && (
+          <div className="text-muted-foreground text-sm py-12 text-center">加载中...</div>
+        )}
 
         {projects && projects.length === 0 && (
-          <div className="text-muted-foreground text-sm py-16 text-center border border-dashed border-border rounded-md">
-            还没有项目, 先上传一个 tarball.
-          </div>
+          <Card className="py-16 items-center justify-center">
+            <p className="text-muted-foreground text-sm">
+              还没有项目, 先上传一个 tarball.
+            </p>
+          </Card>
         )}
 
         {projects && projects.length > 0 && (
-          <div className="border border-border rounded-md overflow-hidden bg-card">
+          <Card className="overflow-hidden p-0 gap-0">
             <table className="w-full text-sm">
-              <thead className="bg-muted/40 text-left text-xs uppercase text-muted-foreground">
+              <thead className="bg-muted/40 text-left text-xs font-medium text-muted-foreground">
                 <tr>
-                  <th className="px-4 py-2.5 font-medium">slug</th>
-                  <th className="px-4 py-2.5 font-medium">标题</th>
-                  <th className="px-4 py-2.5 font-medium">状态</th>
-                  <th className="px-4 py-2.5 font-medium">版本</th>
-                  <th className="px-4 py-2.5 font-medium">规模</th>
-                  <th className="px-4 py-2.5 font-medium">大小</th>
-                  <th className="px-4 py-2.5 font-medium">更新</th>
+                  <th className="px-4 py-2.5">slug</th>
+                  <th className="px-4 py-2.5">标题</th>
+                  <th className="px-4 py-2.5">状态</th>
+                  <th className="px-4 py-2.5">版本</th>
+                  <th className="px-4 py-2.5">规模</th>
+                  <th className="px-4 py-2.5">大小</th>
+                  <th className="px-4 py-2.5">更新</th>
                 </tr>
               </thead>
               <tbody>
                 {projects.map((p) => (
-                  <tr key={p.slug} className="border-t border-border hover:bg-muted/20">
+                  <tr
+                    key={p.slug}
+                    className="border-t border-border hover:bg-muted/20 transition-colors"
+                  >
                     <td className="px-4 py-3 font-mono text-xs">
-                      <Link className="hover:underline" href={`/projects/${p.slug}`}>
+                      <Link className="hover:text-primary" href={`/projects/${p.slug}`}>
                         {p.slug}
                       </Link>
                     </td>
                     <td className="px-4 py-3">
-                      <Link className="hover:underline" href={`/projects/${p.slug}`}>
+                      <Link className="hover:text-primary" href={`/projects/${p.slug}`}>
                         {p.title_zh || p.title}
                       </Link>
                     </td>
@@ -109,15 +138,19 @@ export default function ProjectsPage() {
                     </td>
                     <td className="px-4 py-3 font-mono text-xs">{p.version}</td>
                     <td className="px-4 py-3 text-muted-foreground">
-                      {p.stage_count} stages · {p.knode_count} knodes
+                      {p.stage_count}S · {p.knode_count}K
                     </td>
-                    <td className="px-4 py-3 text-muted-foreground">{formatBytes(p.total_size_bytes)}</td>
-                    <td className="px-4 py-3 text-muted-foreground text-xs">{formatDate(p.updated_at)}</td>
+                    <td className="px-4 py-3 text-muted-foreground">
+                      {formatBytes(p.total_size_bytes)}
+                    </td>
+                    <td className="px-4 py-3 text-muted-foreground text-xs">
+                      {formatDate(p.updated_at)}
+                    </td>
                   </tr>
                 ))}
               </tbody>
             </table>
-          </div>
+          </Card>
         )}
       </main>
     </>
@@ -125,17 +158,8 @@ export default function ProjectsPage() {
 }
 
 function StatusBadge({ status }: { status: string }) {
-  const map: Record<string, string> = {
-    draft: "bg-muted text-muted-foreground",
-    published: "bg-primary/10 text-primary",
-  };
-  const label: Record<string, string> = {
-    draft: "草稿",
-    published: "已发布",
-  };
-  return (
-    <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs ${map[status] ?? "bg-muted"}`}>
-      {label[status] ?? status}
-    </span>
-  );
+  if (status === "published") {
+    return <Badge>已发布</Badge>;
+  }
+  return <Badge variant="secondary">草稿</Badge>;
 }

@@ -3,11 +3,14 @@
 import Link from "next/link";
 import { useParams, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
+import { ArrowLeft } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { toast } from "sonner";
 import TopBar from "@/components/topbar";
-import { api, getBase, getToken } from "@/lib/library-admin-api";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { api, getToken } from "@/lib/library-admin-api";
 
 export default function PreviewPage() {
   const params = useParams<{ slug: string }>();
@@ -25,8 +28,6 @@ export default function PreviewPage() {
 
   const [text, setText] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  // 对于二进制 / iframe 内容: 后端要 Authorization header, 浏览器不能给 <img>/<iframe> 加 header,
-  // 所以 fetch 下来变 blob: URL 再喂给元素
   const [blobUrl, setBlobUrl] = useState<string | null>(null);
 
   const fileUrl = path ? api.fileUrl(slug, path) : "";
@@ -89,23 +90,28 @@ export default function PreviewPage() {
       <TopBar />
       <main className="max-w-6xl mx-auto px-6 py-6 space-y-4">
         <div>
-          <Link href={`/projects/${slug}`} className="text-xs text-muted-foreground hover:text-foreground">
-            ← 返回 {slug}
-          </Link>
-          <h1 className="text-base font-mono mt-1.5 break-all">{path}</h1>
+          <Button variant="ghost" size="sm" asChild className="-ml-2 mb-1">
+            <Link href={`/projects/${slug}`}>
+              <ArrowLeft className="size-4" />
+              返回 {slug}
+            </Link>
+          </Button>
+          <h1 className="text-base font-mono break-all">{path}</h1>
         </div>
 
-        <div className="border border-border rounded-md bg-card overflow-hidden">
+        <Card className="overflow-hidden p-0">
           {loading && <div className="p-8 text-sm text-muted-foreground">加载中...</div>}
 
           {isMd && text != null && (
-            <article className="prose prose-stone max-w-none p-6 [&_pre]:bg-muted [&_pre]:p-3 [&_pre]:rounded [&_pre]:overflow-x-auto [&_code]:font-mono [&_code]:text-sm">
+            <article className="prose prose-stone max-w-none p-6 [&_pre]:bg-muted [&_pre]:p-3 [&_pre]:rounded-lg [&_pre]:overflow-x-auto [&_code]:font-mono [&_code]:text-sm">
               <ReactMarkdown remarkPlugins={[remarkGfm]}>{text}</ReactMarkdown>
             </article>
           )}
 
           {(ext === "json" || ext === "txt") && text != null && (
-            <pre className="p-4 text-xs font-mono overflow-x-auto max-h-[70vh]">{text}</pre>
+            <pre className="p-4 text-xs font-mono overflow-x-auto max-h-[70vh]">
+              {text}
+            </pre>
           )}
 
           {isHtml && blobUrl && (
@@ -140,7 +146,7 @@ export default function PreviewPage() {
               </a>
             </div>
           )}
-        </div>
+        </Card>
       </main>
     </>
   );
