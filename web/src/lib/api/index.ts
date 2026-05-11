@@ -40,6 +40,23 @@ import { api, GATEWAY_URL } from "./client"
 import { setToken, clearToken, getToken } from "@/lib/auth"
 
 export const auth = {
+  register: async (username: string, password: string): Promise<{ token: string; username: string; user_id: string }> => {
+    const res = await fetch(`${GATEWAY_URL}/api/auth/register`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username, password }),
+    })
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}))
+      throw new Error(body.error || "注册失败")
+    }
+    const data = await res.json()
+    setToken(data.token)
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem("sysedu-username", data.username)
+    }
+    return data
+  },
   login: async (username: string, password: string): Promise<{ token: string; username: string }> => {
     const res = await fetch(`${GATEWAY_URL}/api/auth/login`, {
       method: "POST",
@@ -48,10 +65,13 @@ export const auth = {
     })
     if (!res.ok) {
       const body = await res.json().catch(() => ({}))
-      throw new Error(body.error || "Login failed")
+      throw new Error(body.error || "登录失败")
     }
     const data = await res.json()
     setToken(data.token)
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem("sysedu-username", data.username)
+    }
     return data
   },
   logout: async (): Promise<void> => {
@@ -63,8 +83,61 @@ export const auth = {
       }).catch(() => {})
     }
     clearToken()
+    if (typeof window !== "undefined") {
+      window.localStorage.removeItem("sysedu-username")
+    }
   },
-  me: () => api.get<{ username: string; valid: boolean }>("/api/auth/me"),
+  me: () => api.get<{ username: string; user_id?: string; created_at?: string; valid?: boolean }>("/api/auth/me"),
+  getCachedUsername: (): string | null => {
+    if (typeof window === "undefined") return null
+    return window.localStorage.getItem("sysedu-username")
+  },
+}
+
+// spec 024-A library API
+export interface LibraryProjectSummary {
+  slug: string
+  title: string
+  title_zh?: string | null
+  description?: string
+  version?: string
+  knode_count?: number
+  stage_count?: number
+  duration_weeks?: number | null
+  domain?: string | null
+  age_band?: string | null
+  difficulty?: number | null
+  tags?: string[]
+  cover_image_path?: string | null
+  published_at?: string | null
+}
+
+export interface LibraryKnodeContent {
+  project_slug: string
+  knode_id: string
+  title: string
+  summary?: string
+  week?: number | null
+  stage?: string | null
+  duration_minutes?: number | null
+  knode_dir?: string
+  plan_markdown?: string
+  rendered_sections?: { ideas?: Array<Record<string, unknown>>; [k: string]: unknown }
+  audio_scripts?: unknown
+  assignment_md?: string
+  theories?: unknown
+  files?: Array<{ path: string; size: number; sha256: string }>
+}
+
+export const library = {
+  listProjects: () => api.get<LibraryProjectSummary[]>("/api/library/projects"),
+  getProject: (slug: string) => api.get<LibraryProjectSummary & { knowledge_tree?: Record<string, unknown> }>(`/api/library/projects/${encodeURIComponent(slug)}`),
+  getTree: (slug: string) => api.get<Record<string, unknown>>(`/api/library/projects/${encodeURIComponent(slug)}/tree`),
+  getBlueprint: (slug: string, lang = "zh-CN") => api.get<{ content: string; lang_returned: string }>(`/api/library/projects/${encodeURIComponent(slug)}/blueprint?lang=${lang}`),
+  getKnode: (slug: string, knodeId: string) => api.get<LibraryKnodeContent>(`/api/library/projects/${encodeURIComponent(slug)}/knodes/${encodeURIComponent(knodeId)}`),
+  fileUrl: (slug: string, path: string) => `${GATEWAY_URL}/api/library/projects/${encodeURIComponent(slug)}/files/${path}`,
+  listPurchases: () => api.get<Array<{ project_slug: string; created_at?: string }>>("/api/purchases"),
+  buy: (slug: string) => api.post<{ purchased: boolean; project_slug: string; already_owned: boolean }>(`/api/purchases/${encodeURIComponent(slug)}`, {}),
 }
 
 export interface FullSession {

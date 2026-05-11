@@ -10,21 +10,34 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { auth } from "@/lib/api"
 
-export default function LoginPage() {
+export default function RegisterPage() {
   const router = useRouter()
   const [username, setUsername] = useState("")
   const [password, setPassword] = useState("")
+  const [confirm, setConfirm] = useState("")
   const [loading, setLoading] = useState(false)
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
+    if (password !== confirm) {
+      toast.error("两次输入的密码不一致")
+      return
+    }
+    if (password.length < 6) {
+      toast.error("密码至少 6 位")
+      return
+    }
+    if (username.length < 3 || username.length > 32) {
+      toast.error("用户名长度 3-32")
+      return
+    }
     setLoading(true)
     try {
-      await auth.login(username, password)
-      toast.success("登录成功")
+      await auth.register(username, password)
+      toast.success("注册成功")
       router.replace("/library")
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : "登录失败")
+      toast.error(err instanceof Error ? err.message : "注册失败")
     } finally {
       setLoading(false)
     }
@@ -34,8 +47,8 @@ export default function LoginPage() {
     <main className="min-h-screen flex items-center justify-center bg-background px-4">
       <Card className="w-full max-w-sm">
         <CardHeader>
-          <CardTitle className="text-xl">SystemEdu</CardTitle>
-          <CardDescription>请登录以继续</CardDescription>
+          <CardTitle className="text-xl">注册 SystemEdu</CardTitle>
+          <CardDescription>创建你的账号开始学习</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
@@ -47,6 +60,7 @@ export default function LoginPage() {
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 autoComplete="username"
+                placeholder="字母/数字/_-., 3-32 位"
                 required
               />
             </div>
@@ -57,15 +71,27 @@ export default function LoginPage() {
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                autoComplete="current-password"
+                autoComplete="new-password"
+                placeholder="至少 6 位"
+                required
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="confirm">确认密码</Label>
+              <Input
+                id="confirm"
+                type="password"
+                value={confirm}
+                onChange={(e) => setConfirm(e.target.value)}
+                autoComplete="new-password"
                 required
               />
             </div>
             <Button type="submit" disabled={loading} className="w-full">
-              {loading ? "登录中..." : "登录"}
+              {loading ? "注册中..." : "注册"}
             </Button>
             <p className="text-sm text-muted-foreground text-center pt-2">
-              还没有账号? <Link href="/register" className="text-primary hover:underline">立即注册</Link>
+              已有账号? <Link href="/login" className="text-primary hover:underline">直接登录</Link>
             </p>
           </form>
         </CardContent>
