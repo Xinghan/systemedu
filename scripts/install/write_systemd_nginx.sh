@@ -31,6 +31,10 @@ RestartSec=5
 StandardOutput=journal
 StandardError=journal
 Environment=HOME=/root
+# spec 024-A: cloud-app 连 library + JWT secret
+Environment=LIBRARY_URL=http://127.0.0.1:18821
+Environment=LIBRARY_LICENSE_TOKEN=${LIBRARY_LICENSE_TOKEN:-dev-only-license-token-change-me}
+Environment=CLOUD_JWT_SECRET=${CLOUD_JWT_SECRET:-dev-only-cloud-jwt-secret-change-me}
 
 [Install]
 WantedBy=multi-user.target

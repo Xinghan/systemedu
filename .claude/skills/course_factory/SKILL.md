@@ -19,27 +19,125 @@ description: Generate rich-media course content (animation, game, theory, exerci
 | `legacy` (旧) | `project_name + knode_global_idx` (SQLite) | `~/.systemedu/` 本地 SQLite + media | 本地单用户开发期 |
 | `workspace` (新, 默认) | `slug + module_id` (V5 树, 蓝图驱动) | `content-workspace/generated/<slug>/knodes/<dir>/` + manifest | 内容上架到 library service |
 
-### Workspace 模式快速路径
+### Workspace 模式的两类任务
+
+Workspace 模式下你会接到两类任务:
+
+**任务 A — 项目级 (从蓝图开始, 输出完整项目包)**
+
+输入: `slug` (蓝图必须已 sync), 输出: `content-workspace/generated/<slug>/`
+完整项目包 (manifest + tree + 24 个 knode 目录) → 可被 `systemedu-content publish`
+导入 library。
+
+走 **项目级流程 Step P0-P3 + 单 knode 流程 1-6.6** (循环跑 N 个 module)。
+
+**任务 B — 单 knode 级 (已有 tree, 只生成一个 module 内容)**
+
+输入: `slug + module_id`, 输出: 单个 knode 目录下的 6 个文件。
+
+跳过 P0-P3, 直接走 单 knode 流程 1-6.6 + Step 7 写入。
+
+### 项目级流程 (任务 A 专用)
 
 ```python
 from course_factory import (
-    load_blueprint_for_workspace,
-    generate_knowledge_tree_from_blueprint,
+    init_workspace_project,
+    save_knowledge_tree_to_workspace,
     load_knode_context_from_workspace,
     save_knode_to_workspace,
 )
 
-# Step 0 (workspace): 蓝图必须先用 CLI sync 进来
-#   $ systemedu-content blueprint sync ~/Dev/systemeduidea
+# === Step P0: 读蓝图, 准备目录 ===
+info = init_workspace_project("ai-ant-ethologist")
+# info = {
+#   "slug": ...,
+#   "frontmatter": {title_zh, age_band, domain, duration_weeks, difficulty, ...},
+#   "phases": [
+#     {"phase_num": 1, "title": "Background", "weeks": [{"week": 1, "raw_title": "..."}]},
+#     ...
+#   ],
+#   "blueprint_body_markdown": "..."  # 蓝图正文全文
+# }
 
-# Step 0a: 第一次给某个项目生成时, 先一次性生成知识树骨架
-tree = generate_knowledge_tree_from_blueprint("ai-ant-ethologist")
-# → 写 content-workspace/generated/ai-ant-ethologist/tree/knowledge_tree.json
-#   + manifest.json (skeleton) + 24 个空 knode 目录
-# 你 (Claude) 应该 review tree 是否合理, 必要时手工补 acceptance_artifacts /
-# hands_on_components / depends_on 等 V5 字段后再继续。
+# === Step P1: 设计 V5 知识树 (你在脑里 + 工具) ===
+# 你 (Claude) 根据 info 自行设计 V5 KnowledgeTree。
+#
+# 核心原则:
+#   - 节点数不必等于蓝图周数; 周数只是参考。可以合并相似周成 1 个 module,
+#     可以把 1 个复杂周拆成 2 个 module。
+#   - 优先按"学习成果 / acceptance 检查点"切, 不按"日历周"切。
+#   - 中等长度项目 (12-24 周) 通常 8-15 module 比较合理; 节点过多会冗余, 过少
+#     会让单节点过载。
+#   - 每个 stage 对应一个 Phase, stage_id 用 S1/S2/...
+#   - 每个 module 用 M01/M02/... 顺序编号
+#
+# V5 必填字段 (缺则 save 校验失败):
+#   - module_id, title, stage_id, sequence_order, summary,
+#     core_question, depends_on
+#
+# 建议加上的字段 (内容生成时会用):
+#   - mission_role, why_non_skippable, real_world_anchor,
+#     hands_on_components, acceptance_artifacts, acceptance_standard,
+#     rough_learning_topics, knowledge_level, estimated_duration_months
+#
+# === Step P2: 写树到 workspace ===
+tree = {
+    "schema_version": "5.0",
+    "title": info["frontmatter"]["title_zh"],
+    "stages": [
+        {
+            "stage_id": "S1",
+            "title": "Background & Colony",
+            "stage_goal": "建立 RFID 行为学基础认知 + 准备实验环境",
+        },
+        ...
+    ],
+    "modules": [
+        {
+            "module_id": "M01",
+            "title": "Kronauer 实验室的 RFID 蚁群追踪",
+            "stage_id": "S1",
+            "sequence_order": 1,
+            "summary": "读论文了解 Rockefeller Kronauer 实验室如何用 ...",
+            "core_question": "为什么要给每只蚂蚁贴 RFID 标签, 而不是直接观察?",
+            "depends_on": [],
+            "hands_on_components": ["阅读 2 篇 Kronauer 论文 + 1 篇 ASU Anttracker 教程"],
+            "acceptance_artifacts": [{"title": "笔记", "kind": "text"}],
+            ...
+        },
+        ...
+    ],
+    "edges": [],
+}
+result = save_knowledge_tree_to_workspace("ai-ant-ethologist", tree)
+# → 写 tree/knowledge_tree.json + manifest skeleton + 建 N 个空 knode 目录
+# → 校验失败抛 ValueError (strict 模式)
 
-# Step 0b: 逐 knode 加载上下文 (替代 load_context)
+# === Step P3: 跟用户确认知识树 ===
+# 把 stage / module 列表展示给用户, 等用户确认 (或要求修改) 后才进入下一阶段。
+# 不要自动闷头进 Step 1+。
+
+# === Step 1..6.6 + Step 7: 逐 module 跑单 knode 流程 ===
+for module_id in ["M01", "M02", ..., "MNN"]:
+    ctx = load_knode_context_from_workspace("ai-ant-ethologist", module_id)
+    # ... 跑下面的标准 SKILL 12 步, 拿到 course_content / assignment / audio_scripts
+    save_knode_to_workspace(
+        "ai-ant-ethologist",
+        module_id,
+        course_content=course_content,
+        assignment=assignment_md,
+        audio_scripts=audio_scripts,
+    )
+```
+
+### 单 knode 流程 (任务 B 直接进, 任务 A 在 P3 之后跑)
+
+```python
+from course_factory import (
+    load_knode_context_from_workspace,
+    save_knode_to_workspace,
+)
+
 ctx = load_knode_context_from_workspace("ai-ant-ethologist", "M01")
 knode = ctx.knode           # V5 module dict
 stage = ctx.stage           # 所属 stage
