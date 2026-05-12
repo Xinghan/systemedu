@@ -1903,6 +1903,136 @@ def should_research_knode(knode: dict, milestone: dict | None = None) -> bool:
     return True
 
 
+# 3D object 触发判定 (spec 026, AESTHETIC.md §5b)
+# 硬件型号 / 大型物体的常用关键词。命中即视为"可解剖物体"候选。
+_3D_OBJECT_HARDWARE_KEYWORDS = [
+    # 传感器型号
+    "pms5003", "pms7003", "bme280", "bme680", "sht31", "dht22", "dht11",
+    "mq-135", "mq135", "mq-7", "mq-2", "ccs811", "scd30", "scd40", "scd41",
+    "sgp30", "sgp40", "ds18b20", "mpu6050", "bmp280", "bmp388",
+    # 微控制器 / 单板
+    "raspberry pi", "pi zero", "arduino", "esp32", "esp8266", "stm32",
+    "micro:bit", "nodemcu", "jetson",
+    # 通用元器件
+    "sensor", "module", "camera", "lens", "motor", "engine",
+    "传感器", "模块", "摄像头", "镜头", "电机", "马达", "引擎",
+    # 大型物体
+    "rocket", "satellite", "reactor", "drone", "robot",
+    "火箭", "卫星", "探测器", "反应器", "无人机", "机器人",
+]
+
+# "应该解剖"的学习内容关键词
+_3D_OBJECT_TOPIC_KEYWORDS = [
+    "内部结构", "结构", "解剖", "原理", "接线", "工作原理", "工作方式",
+    "构造", "组成", "零件", "部件",
+    "cutaway", "structure", "anatomy", "how it works", "internal",
+    "components", "parts",
+]
+
+# 应该 reject 的 module_role
+_3D_OBJECT_REJECT_ROLES = {"capstone", "synthesis"}
+
+
+def should_generate_3d_object(
+    knode: dict, milestone: dict | None = None
+) -> dict:
+    """判断节点是否应该生成 mode='3d_object' 富媒体 (spec 026)。
+
+    课堂工厂自动决策, 用户不需要手动标记。大多数节点应该 reject ——
+    整个项目 30 个 module 期望平均只有 4-6 个生成 3D object,
+    且仅在节点讲解"项目核心硬件物体"且物体可拆 3-5 个互不重复子部件时才生成。
+
+    规则详见 `course_factory/AESTHETIC.md §5b` 与
+    `course_factory/3d_template/README.md`。
+
+    Args:
+        knode: v4.1 knode dict (含 hands_on_components / rough_learning_topics /
+               module_role / name / summary 等字段)
+        milestone: 所属 milestone dict (可选, 当前未使用, 预留)
+
+    Returns:
+        {
+          "should_generate": bool,
+          "reason": str,            # 通过/拒绝理由 (一句话)
+          "object_name_hint": str,  # 推荐的 L0 object 名 (如 "PMS5003"), 仅 should_generate=True 时有值
+          "matched_keywords": list[str],  # 命中的硬件关键词
+        }
+    """
+    role = (knode.get("module_role") or "").lower()
+    if role in _3D_OBJECT_REJECT_ROLES:
+        return {
+            "should_generate": False,
+            "reason": f"module_role={role} 应综合多个之前的产物, 不再画 3D",
+            "object_name_hint": "",
+            "matched_keywords": [],
+        }
+
+    haystack_parts: list[str] = []
+    for k in ("name", "title", "summary", "core_question"):
+        v = knode.get(k)
+        if isinstance(v, str):
+            haystack_parts.append(v)
+    hands_on = knode.get("hands_on_components") or []
+    if isinstance(hands_on, list):
+        for item in hands_on:
+            if isinstance(item, str):
+                haystack_parts.append(item)
+            elif isinstance(item, dict):
+                # hands_on_components 项可能是 {"action":..., "component":...}
+                for v in item.values():
+                    if isinstance(v, str):
+                        haystack_parts.append(v)
+    learning_topics = knode.get("rough_learning_topics") or []
+    if isinstance(learning_topics, list):
+        for t in learning_topics:
+            if isinstance(t, str):
+                haystack_parts.append(t)
+
+    haystack = " ".join(haystack_parts).lower()
+
+    matched_hw = [
+        kw for kw in _3D_OBJECT_HARDWARE_KEYWORDS if kw.lower() in haystack
+    ]
+    if not matched_hw:
+        return {
+            "should_generate": False,
+            "reason": "未命中任何硬件型号/物体关键词, 节点应讲抽象概念或过程动作",
+            "object_name_hint": "",
+            "matched_keywords": [],
+        }
+
+    matched_topic = [
+        kw for kw in _3D_OBJECT_TOPIC_KEYWORDS if kw.lower() in haystack
+    ]
+    if not matched_topic:
+        return {
+            "should_generate": False,
+            "reason": (
+                f"命中硬件 {matched_hw[:2]} 但学习内容不含'内部结构/原理/解剖'类话题, "
+                f"该节点可能只是 mention 硬件名, 不需要 3D 解剖"
+            ),
+            "object_name_hint": "",
+            "matched_keywords": matched_hw,
+        }
+
+    # 选择最像 object_name 的命中: 优先具体型号 (含数字), 再退到通用词
+    def _score(kw: str) -> tuple[int, int]:
+        has_digit = any(c.isdigit() for c in kw)
+        return (1 if has_digit else 0, len(kw))
+
+    name_hint = max(matched_hw, key=_score)
+
+    return {
+        "should_generate": True,
+        "reason": (
+            f"命中硬件 {name_hint} + 学习内容含 {matched_topic[:2]}, "
+            f"可生成可交互 3D 解剖 + 2 层下钻"
+        ),
+        "object_name_hint": name_hint,
+        "matched_keywords": matched_hw,
+    }
+
+
 def _extract_youtube_id(url: str) -> str | None:
     """
     从 YouTube URL 提取 video id。
@@ -2943,6 +3073,13 @@ def make_course_content(
     game_hands_on_ref: str = "",
     game_acceptance_ref: str = "",
     game_mode_reason: str = "互动操作直接检验动手动作",
+    # 3D object 可交互解剖 + 2 层下钻 (spec 026, mode='3d_object')
+    # 仅当 should_generate_3d_object(knode)['should_generate']=True 时传入
+    threed_object_html: str | None = None,
+    threed_object_topic: str = "",
+    threed_object_hands_on_ref: str = "",
+    threed_object_acceptance_ref: str = "",
+    threed_object_mode_reason: str = "核心硬件物体需要可交互 3D 解剖, 帮助学生建立空间结构理解",
     preflight: bool = True,
     # 外部资料（Tavily research_knode() 的返回值）
     research: dict | None = None,
@@ -3123,6 +3260,35 @@ def make_course_content(
             "story_paragraphs": None,
             "exercises": None,
             "generation_backend": "canvas_direct",
+        }
+
+    threed_id: str | None = None
+    if threed_object_html:
+        threed_id = _id("3dobj")
+        threed_idea: dict = {
+            "idea_id": threed_id,
+            "mode": "3d_object",
+            "topic": threed_object_topic or animation_topic,
+            "context_summary": threed_object_topic or animation_topic,
+            "generation_backend": "threejs_inline",
+            "style_key": "flipbook_paper",
+            "mode_reason": threed_object_mode_reason,
+            # 挂在 idea 上以便 workspace_bridge._split_html_assets 自动拆到
+            # media/3d_object-<slug>.html 并改写为 idea["3d_object_path"]
+            "3d_object_html": threed_object_html,
+        }
+        if threed_object_hands_on_ref:
+            threed_idea["hands_on_ref"] = threed_object_hands_on_ref
+        if threed_object_acceptance_ref:
+            threed_idea["acceptance_ref"] = threed_object_acceptance_ref
+        ideas.append(threed_idea)
+        rendered_sections[threed_id] = {
+            "mode": "3d_object",
+            "status": "ready",
+            "html": threed_object_html,
+            "story_paragraphs": None,
+            "exercises": None,
+            "generation_backend": "threejs_inline",
         }
 
     ex_idea: dict = {

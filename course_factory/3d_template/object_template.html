@@ -1,0 +1,1340 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<title>PMS5003 3D · 点击下钻</title>
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Inter:wght@400;500;700&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+/* === SystemEdu AESTHETIC.md — Flipbook 暖白手册插画风 (M01 = earth) === */
+:root {
+  /* 基底 */
+  --paper:        #f5f3ee;   /* flipbook 暖白纸 */
+  --paper-shade:  #e8e4d8;   /* 阴影面 */
+  --paper-bright: #fcfaf4;   /* 高光 */
+  --ink:          #2a2620;   /* 深棕黑 — 描边 + 文字 */
+  --ink-dim:      #5a5248;
+  --ink-mute:     #8a8278;
+  /* 物体浅色填充 (核心铁律: 所有 mesh 只能从这选) */
+  --fill-1:       #f8f6f0;   /* 极浅 (最白) */
+  --fill-2:       #e4dcc8;   /* 浅暖灰 (默认外壳) */
+  --fill-3:       #cdd4d8;   /* 浅蓝灰 (金属) */
+  --fill-glass:   #c4d4dc;   /* 玻璃半透 */
+  --fill-pcb:     #b5c8a8;   /* 浅薄荷绿 (PCB) */
+  --fill-warm:    #e4dcc8;   /* 浅奶 */
+  --fill-blue:    #a8c4d8;   /* 浅淡蓝 */
+  /* 学科 accent (M01 = earth) */
+  --accent:       #c97a4e;   /* earth sepia 橙 */
+  --alert:        #d4534c;   /* 警示红 / 激光 / PM2.5 */
+  --success:      #7a9b5e;
+  --warning:      #d4a050;
+  --accent-blue:  #5d8aa8;
+  /* 别名 (向下兼容) */
+  --bg:           var(--paper);
+  --bg2:          var(--paper-shade);
+  --surface:      var(--paper-bright);
+  --text:         var(--ink);
+  --muted:        var(--ink-dim);
+  --primary:      var(--ink);
+  --tertiary:     var(--accent);
+  --laser:        var(--alert);
+  --label-bg:     var(--paper-bright);
+  --label-bd:     var(--ink);
+  --sb-bg:        var(--paper-shade);
+  --sb-border:    var(--ink);
+}
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;}
+html,body{width:100%;height:100vh;overflow:hidden;background:var(--bg);color:var(--text);font-family:'Inter','Noto Sans SC',sans-serif;}
+.app{display:flex;flex-direction:row;height:100vh;}
+.sidebar{width:240px;min-width:240px;display:flex;flex-direction:column;gap:8px;padding:14px;background:var(--sb-bg);border-right:1.5px solid var(--sb-border);overflow-y:auto;}
+.lang-btn{align-self:flex-start;font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:700;padding:4px 10px;cursor:pointer;border:1.5px solid var(--primary);background:var(--surface);color:var(--primary);letter-spacing:0.15em;text-transform:uppercase;}
+.lang-btn:hover{background:var(--primary);color:var(--surface);}
+h1.sb-title{font-family:'JetBrains Mono',monospace;font-size:13px;color:var(--primary);text-transform:uppercase;letter-spacing:0.05em;line-height:1.3;}
+.sb-sub{font-family:'Noto Sans SC',sans-serif;font-size:11px;color:var(--muted);margin-top:-4px;}
+.divider{height:1px;background:var(--sb-border);margin:6px 0;opacity:0.4;}
+.section-label{font-family:'JetBrains Mono',monospace;font-size:9px;font-weight:700;color:var(--muted);letter-spacing:0.15em;text-transform:uppercase;margin-top:4px;}
+.zoom-hint{font-size:11px;color:var(--text);line-height:1.6;background:var(--surface);border:1.5px solid var(--primary);padding:8px 10px;margin-top:4px;}
+.zoom-hint strong{color:var(--primary);}
+.parts-list{display:flex;flex-direction:column;gap:4px;margin-top:4px;}
+.part-row{font-size:11px;color:var(--text);padding:5px 10px;border:1.5px solid var(--primary);cursor:pointer;font-family:'Noto Sans SC',sans-serif;display:flex;align-items:center;gap:6px;background:var(--surface);}
+.part-row:hover{background:var(--primary);color:var(--surface);}
+.part-row:hover .num{color:var(--surface);}
+.part-row .num{font-family:'JetBrains Mono',monospace;font-weight:700;color:var(--primary);}
+.legend{font-size:10px;color:var(--muted);line-height:1.6;}
+.legend strong{color:var(--primary);}
+.action-btn{font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;padding:7px 10px;cursor:pointer;background:var(--primary);color:var(--surface);border:1.5px solid var(--primary);letter-spacing:0.1em;text-transform:uppercase;margin-top:4px;box-shadow:3px 3px 0 var(--primary);}
+.action-btn:active{box-shadow:1px 1px 0 var(--primary);transform:translate(2px, 2px);}
+.action-btn.secondary{background:var(--surface);color:var(--primary);}
+.action-btn.secondary:hover{background:var(--primary);color:var(--surface);}
+
+.main{flex:1;position:relative;overflow:hidden;background:var(--bg);}
+.canvas-wrap{position:absolute;inset:0;}
+.canvas-wrap canvas{display:block;width:100%!important;height:100%!important;cursor:grab;}
+.canvas-wrap canvas:active{cursor:grabbing;}
+.title-overlay{position:absolute;top:14px;left:14px;background:var(--surface);border:1.5px solid var(--primary);padding:10px 16px;max-width:380px;z-index:5;box-shadow:4px 4px 0 var(--primary);}
+.title-overlay h2{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--primary);font-weight:700;letter-spacing:0.08em;text-transform:uppercase;}
+.title-overlay p{font-size:11px;color:var(--text);margin-top:4px;line-height:1.5;font-family:'Noto Sans SC',sans-serif;}
+.hud{position:absolute;top:14px;right:14px;background:var(--surface);border:1.5px solid var(--primary);padding:10px 14px;font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text);line-height:1.6;min-width:200px;z-index:5;box-shadow:4px 4px 0 var(--primary);}
+.hud .label{color:var(--muted);font-size:9px;letter-spacing:0.15em;text-transform:uppercase;}
+.hud .val{color:var(--primary);font-weight:700;font-size:13px;}
+.hint-bar{position:absolute;bottom:14px;left:50%;transform:translateX(-50%);background:var(--surface);border:1.5px solid var(--primary);padding:6px 14px;font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--muted);letter-spacing:0.1em;z-index:5;box-shadow:3px 3px 0 var(--primary);}
+.hint-bar strong{color:var(--primary);}
+
+/* ===== Zoom modal (flipbook style) ===== */
+.zoom-modal{position:absolute;inset:0;background:rgba(42, 37, 32, 0.45);display:flex;align-items:center;justify-content:center;z-index:100;}
+.zoom-modal.hidden{display:none;}
+.zoom-card{width:min(85%, 1100px);height:min(85vh, 700px);background:var(--surface);border:1.5px solid var(--primary);display:flex;flex-direction:column;box-shadow:8px 8px 0 var(--primary);}
+.zoom-header{display:flex;align-items:center;justify-content:space-between;padding:10px 18px;border-bottom:1.5px solid var(--primary);background:var(--bg2);}
+.zoom-bc{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text);letter-spacing:0.05em;}
+.zoom-bc .crumb{color:var(--muted);}
+.zoom-bc .sep{color:var(--muted);margin:0 8px;}
+.zoom-bc .current{color:var(--primary);font-weight:700;}
+.zoom-actions{display:flex;gap:8px;}
+.zoom-btn{font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:700;padding:5px 12px;cursor:pointer;border:1.5px solid var(--primary);background:var(--surface);color:var(--primary);letter-spacing:0.1em;text-transform:uppercase;}
+.zoom-btn:hover{background:var(--primary);color:var(--surface);}
+.zoom-btn.close{color:var(--laser);border-color:var(--laser);}
+.zoom-btn.close:hover{background:var(--laser);color:var(--surface);}
+
+.zoom-body{flex:1;display:flex;flex-direction:row;min-height:0;}
+.zoom-3d{flex:1;position:relative;background:var(--bg);overflow:hidden;}
+.zoom-3d canvas{display:block;width:100%!important;height:100%!important;}
+.zoom-info{width:320px;min-width:320px;border-left:1.5px solid var(--primary);padding:18px 22px;overflow-y:auto;display:flex;flex-direction:column;gap:10px;background:var(--surface);}
+.zoom-info h3{font-family:'JetBrains Mono',monospace;font-size:13px;color:var(--primary);text-transform:uppercase;letter-spacing:0.06em;line-height:1.3;}
+.zoom-info .sub{font-family:'Noto Sans SC',sans-serif;font-size:11px;color:var(--muted);margin-top:-4px;}
+.zoom-info p{font-size:12px;color:var(--text);line-height:1.7;font-family:'Noto Sans SC',sans-serif;}
+.zoom-info .key-fact{background:var(--bg2);border-left:3px solid var(--accent);padding:8px 12px;font-size:11px;color:var(--text);line-height:1.6;}
+.zoom-info .key-fact strong{color:var(--accent);}
+.zoom-info .note{font-size:10px;color:var(--muted);font-style:italic;border-top:1px dashed var(--muted);padding-top:8px;line-height:1.5;}
+
+/* Hover highlight on main scene clickable objects */
+.cursor-pointer{cursor:pointer;}
+
+/* Highlight overlay text */
+.click-prompt{position:absolute;background:var(--tertiary);color:var(--surface);font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;padding:4px 10px;pointer-events:none;transform:translate(-50%,-150%);white-space:nowrap;z-index:8;display:none;border:1.5px solid var(--primary);box-shadow:2px 2px 0 var(--primary);}
+.click-prompt.show{display:block;}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="sidebar">
+    <button class="lang-btn" id="langBtn">CN</button>
+    <h1 class="sb-title" id="title">PMS5003 · 点击下钻</h1>
+    <div class="sb-sub" id="subtitle">主体 + 4 个可点击零件</div>
+    <div class="divider"></div>
+
+    <div class="section-label" id="lblHowto">使用方法</div>
+    <div class="zoom-hint" id="howtoText">
+      <strong>① 拖拽旋转 / 滚轮缩放</strong>主场景<br>
+      <strong>② 点击任意</strong>高亮零件<br>
+      <strong>③ 弹出</strong>独立 3D 子场景<br>
+      <strong>④ 子场景里继续</strong>拖拽看细节
+    </div>
+
+    <div class="divider"></div>
+    <div class="section-label" id="lblParts">可点击零件</div>
+    <div class="parts-list">
+      <div class="part-row" data-jump="laser"><span class="num">①</span><span data-i18n="part_laser">激光器</span></div>
+      <div class="part-row" data-jump="photodiode"><span class="num">②</span><span data-i18n="part_photo">光电二极管</span></div>
+      <div class="part-row" data-jump="fan"><span class="num">③</span><span data-i18n="part_fan">微风扇</span></div>
+      <div class="part-row" data-jump="pcb"><span class="num">④</span><span data-i18n="part_pcb">PCB 主板</span></div>
+    </div>
+
+    <div class="divider"></div>
+    <div class="section-label" id="lblLegend">原理速览</div>
+    <div class="legend" id="legendText">
+      <strong>①</strong> 激光发射红光<br>
+      <strong>③</strong> 风扇吸入空气<br>
+      <strong>颗粒</strong>穿过激光 → 散射<br>
+      <strong>②</strong> 光电二极管接到脉冲<br>
+      <strong>④</strong> PCB 输出 UART 数据
+    </div>
+
+    <div class="divider"></div>
+    <button class="action-btn secondary" id="btnReset" data-i18n="reset_view">重置视角</button>
+    <button class="action-btn secondary" id="btnOrbit" data-i18n="auto_orbit">自动旋转</button>
+  </div>
+
+  <div class="main">
+    <div class="canvas-wrap"><canvas id="canvas-main"></canvas></div>
+    <div class="title-overlay">
+      <h2 id="overlayH" data-i18n="overlay_h">PMS5003 · Plantower 激光颗粒传感器</h2>
+      <p id="overlayP" data-i18n="overlay_p">PurpleAir 全球节点用的就是这款。点击任意零件 ① ② ③ ④ 进入 3D 子场景看内部。</p>
+    </div>
+    <div class="hud" id="hud">
+      <div><span class="label" data-i18n="hud_hover">悬停对象</span><br><span class="val" id="hudHover">--</span></div>
+      <div style="margin-top:6px;"><span class="label" data-i18n="hud_depth">下钻深度</span><br><span class="val" id="hudDepth">L0 · 主场景</span></div>
+    </div>
+    <div class="hint-bar" id="hintBar"><strong data-i18n="hint_strong">拖拽 · 滚轮 · 点击零件</strong><span data-i18n="hint_rest"> 进入子场景</span></div>
+    <div class="click-prompt" id="clickPrompt" data-i18n="click_to_zoom">点击进入子场景</div>
+
+    <!-- Zoom modal -->
+    <div class="zoom-modal hidden" id="zoomModal">
+      <div class="zoom-card">
+        <div class="zoom-header">
+          <div class="zoom-bc">
+            <span class="crumb">PMS5003</span>
+            <span class="sep">/</span>
+            <span class="current" id="zoomCrumb">--</span>
+          </div>
+          <div class="zoom-actions">
+            <button class="zoom-btn" id="zoomBack" data-i18n="back">返回</button>
+            <button class="zoom-btn close" id="zoomClose" data-i18n="close">关闭</button>
+          </div>
+        </div>
+        <div class="zoom-body">
+          <div class="zoom-3d"><canvas id="canvas-zoom"></canvas></div>
+          <div class="zoom-info">
+            <h3 id="zoomTitle">--</h3>
+            <div class="sub" id="zoomSub">--</div>
+            <p id="zoomDesc">--</p>
+            <div class="key-fact" id="zoomKey">--</div>
+            <div class="note" id="zoomNote">--</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+// ============================================================
+// i18n
+// ============================================================
+const I18N = {
+  title:       {cn:'PMS5003 · 点击下钻', en:'PMS5003 · Click to zoom'},
+  subtitle:    {cn:'主体 + 4 个可点击零件', en:'Main + 4 clickable parts'},
+  part_laser:  {cn:'激光器', en:'Laser'},
+  part_photo:  {cn:'光电二极管', en:'Photodiode'},
+  part_fan:    {cn:'微风扇', en:'Micro-fan'},
+  part_pcb:    {cn:'PCB 主板', en:'PCB board'},
+  reset_view:  {cn:'重置视角', en:'Reset view'},
+  auto_orbit:  {cn:'自动旋转', en:'Auto-orbit'},
+  overlay_h:   {cn:'PMS5003 · Plantower 激光颗粒传感器', en:'PMS5003 · Plantower laser PM sensor'},
+  overlay_p:   {cn:'PurpleAir 全球节点用的就是这款。点击任意零件 ① ② ③ ④ 进入 3D 子场景看内部。', en:'The sensor PurpleAir uses globally. Click any of ① ② ③ ④ to enter a sub-3D scene.'},
+  hud_hover:   {cn:'悬停对象', en:'Hovering'},
+  hud_depth:   {cn:'下钻深度', en:'Zoom depth'},
+  click_to_zoom:{cn:'点击进入子场景', en:'Click to enter sub-scene'},
+  hint_strong: {cn:'拖拽 · 滚轮 · 点击零件', en:'Drag · Scroll · Click parts'},
+  hint_rest:   {cn:' 进入子场景', en:' to enter sub-scene'},
+  back:        {cn:'返回', en:'BACK'},
+  close:       {cn:'关闭', en:'CLOSE'},
+  // L0 hovers
+  hov_laser:   {cn:'激光器模块', en:'Laser module'},
+  hov_photo:   {cn:'光电二极管', en:'Photodiode'},
+  hov_fan:     {cn:'微风扇', en:'Micro-fan'},
+  hov_pcb:     {cn:'PCB 主板', en:'PCB board'},
+  hov_case:    {cn:'外壳', en:'Case'},
+  // L1 cards
+  card_laser_h:  {cn:'① 激光器内部', en:'① Inside the laser'},
+  card_laser_s:  {cn:'650 nm 红色二极管激光', en:'650nm red diode laser'},
+  card_laser_p:  {cn:'里面是一颗激光二极管芯片 — 当电流通过 PN 结时，电子和空穴复合放出红光。前端的准直透镜把发散光收成一束细激光。外面套金属管 + 散热栅，防止温度漂移让光偏色。', en:'A laser diode chip sits at the core — when current flows across the PN junction, electrons and holes recombine to emit red light. The front collimating lens focuses divergent light into a tight beam. Metal housing + heat fins prevent thermal drift.'},
+  card_laser_k:  {cn:'关键：激光必须稳定 + 准直 — 否则散射强度无法定量', en:'Key: the beam must be stable and collimated — or scattering intensity is unmeasurable.'},
+  card_laser_n:  {cn:'拖拽看里面的 PN 结芯片 + 光路', en:'Drag to see the PN junction chip and beam path inside.'},
+  // L1 photodiode
+  card_photo_h:  {cn:'② 光电二极管内部', en:'② Inside the photodiode'},
+  card_photo_s:  {cn:'把光脉冲变成电脉冲', en:'Converts light pulses to electrical pulses'},
+  card_photo_p:  {cn:'位置在激光束侧面 90° — 看不到直射激光，只看到颗粒挡到激光时散射出来的光。每次散射 = 一个电脉冲。脉冲个数 = 颗粒数；脉冲幅度 = 颗粒大小。', en:'Mounted 90° to the laser axis — does NOT see direct laser, only scattered light from particles. Each scatter = one electrical pulse. Count = number; amplitude = size.'},
+  card_photo_k:  {cn:'关键：黑色掩膜环只露出活性 PIN 层 — 抑制杂散光干扰', en:'Key: a black mask ring exposes only the active PIN layer — suppresses stray light.'},
+  card_photo_n:  {cn:'拖拽看 PIN 三层结构 + 入射光子', en:'Drag to see the PIN three-layer structure and incoming photons.'},
+  // L1 fan
+  card_fan_h:    {cn:'③ 微风扇内部', en:'③ Inside the micro-fan'},
+  card_fan_s:    {cn:'稳定气流是定量浓度的前提', en:'Steady airflow is the basis of quantitative density'},
+  card_fan_p:    {cn:'5 叶无刷直流电机风扇 — 通过 PWM 控制保持恒定转速。流速不稳的话，单位时间穿过激光的颗粒数会变化，浓度算不准。', en:'5-blade brushless DC fan — PWM-controlled for constant RPM. If flow varies, particles-per-second through the laser fluctuates and density readings become unreliable.'},
+  card_fan_k:    {cn:'关键：流速必须恒定 — 否则浓度估计噪声极大', en:'Key: flow rate must be constant — otherwise density estimates are very noisy.'},
+  card_fan_n:    {cn:'看转子上的磁极 + 定子线圈', en:'See rotor magnets and stator coils.'},
+  // L1 pcb
+  card_pcb_h:    {cn:'④ PCB 主板内部', en:'④ Inside the PCB'},
+  card_pcb_s:    {cn:'STM32 + EEPROM + UART 输出', en:'STM32 + EEPROM + UART output'},
+  card_pcb_p:    {cn:'微控制器实时读光电二极管脉冲、按粒径分箱、调用厂内校准表算出 PM1/PM2.5/PM10 浓度，每 1 秒通过 8 针接口的 UART 把 32 字节帧发出去。Pi 用 pyserial 读这个帧 — 就是 M11 你要做的事。', en:'A microcontroller samples photodiode pulses in real time, bins by size, applies factory calibration to compute PM1/PM2.5/PM10, and emits a 32-byte UART frame every second through the 8-pin connector. Your Pi reads this with pyserial in M11.'},
+  card_pcb_k:    {cn:'关键：32 字节帧固定结构 — 帧头 0x42 0x4D + 数据 + 校验', en:'Key: 32-byte frame is fixed — header 0x42 0x4D + data + checksum.'},
+  card_pcb_n:    {cn:'看 STM32 / EEPROM / UART 引脚的相对位置', en:'See the layout of STM32 / EEPROM / UART pins.'},
+};
+let LANG = 'cn';
+const t = k => (I18N[k] && I18N[k][LANG]) || (I18N[k] && I18N[k].en) || k;
+
+function refreshI18N() {
+  document.getElementById('title').textContent = t('title');
+  document.getElementById('subtitle').textContent = t('subtitle');
+  document.querySelectorAll('[data-i18n]').forEach(el => {
+    const key = el.getAttribute('data-i18n');
+    if (I18N[key]) el.textContent = t(key);
+  });
+}
+
+document.getElementById('langBtn').addEventListener('click', () => {
+  LANG = LANG === 'cn' ? 'en' : 'cn';
+  document.getElementById('langBtn').textContent = LANG.toUpperCase();
+  refreshI18N();
+  // Update zoom card if open
+  if (currentZoom) renderZoomCard(currentZoom);
+});
+
+// ============================================================
+// MAIN SCENE (L0)
+// ============================================================
+const mainCanvas = document.getElementById('canvas-main');
+const renderer = new THREE.WebGLRenderer({ canvas: mainCanvas, antialias: true, alpha: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.0;
+
+// === SystemEdu MAT palette — Flipbook 暖白手册插画风 (M01 = earth) ===
+// 铁律: 所有物体填充必须是浅色 (亮度 > 0.5); 唯一深色 = MAT.fill2 用于描边
+const MAT = {
+  // 纸张基底
+  paper:        0xf5f3ee,
+  paperShade:   0xe8e4d8,
+  paperBright:  0xfcfaf4,
+  ink:          0x2a2620,   // 唯一深色, 只用于 EdgesGeometry 描边
+  inkDim:       0x5a5248,
+  inkMute:      0x8a8278,
+  // 浅色物体填充 (所有 3D mesh 只能从这里选)
+  fill1:        0xf8f6f0,   // 极浅 (最白)
+  fill2:        0xe4dcc8,   // 浅暖灰 (默认外壳)
+  fill3:        0xcdd4d8,   // 浅蓝灰 (金属)
+  fillGlass:    0xc4d4dc,   // 玻璃半透
+  fillPcb:      0xb5c8a8,   // 浅薄荷绿 (PCB)
+  fillWarm:     0xe4dcc8,   // 浅奶
+  fillBlue:     0xa8c4d8,   // 浅淡蓝
+  // 学科 accent (M01 = earth)
+  accent:       0xc97a4e,   // earth sepia 橙
+  alert:        0xd4534c,   // 警示红 / 激光 / PM2.5
+  success:      0x7a9b5e,
+  warning:      0xd4a050,
+  accentBlue:   0x5d8aa8,
+  // grid 棕色调
+  grid1:        0x6a625a,
+  grid2:        0xb8a890,
+  fogNear:      0xf5f3ee,
+  gold:         0xddc580,   // 金线 bond wire (允许 metalness > 0.9)
+  // 旧 key 别名 (向下兼容, 全部映射到浅色)
+  caseShell:    0xc4d4dc,   // → fillGlass
+  metalLight:   0xcdd4d8,   // → fill3
+  metalDark:    0xe4dcc8,   // ⚠️ 旧名误导, 实际应该是浅色 → fill2
+  pcbGreen:     0xb5c8a8,   // → fillPcb
+  engineering:  0xe4dcc8,   // → fill2
+};
+
+// === Toon 渐变贴图: 让 MeshToonMaterial 平涂分段着色 (3 档亮度) ===
+function makeToonGradient() {
+  const c = document.createElement('canvas');
+  c.width = 3; c.height = 1;
+  const cx = c.getContext('2d');
+  cx.fillStyle = '#404040'; cx.fillRect(0, 0, 1, 1);
+  cx.fillStyle = '#a0a0a0'; cx.fillRect(1, 0, 1, 1);
+  cx.fillStyle = '#ffffff'; cx.fillRect(2, 0, 1, 1);
+  const tex = new THREE.CanvasTexture(c);
+  tex.minFilter = THREE.NearestFilter;
+  tex.magFilter = THREE.NearestFilter;
+  tex.generateMipmaps = false;
+  return tex;
+}
+const TOON_GRADIENT = makeToonGradient();
+
+// === Toon mesh helper: 创建带 EdgesGeometry 黑描边的 toon mesh ===
+function toonMesh(geom, color, opts = {}) {
+  const mat = new THREE.MeshToonMaterial({
+    color,
+    gradientMap: TOON_GRADIENT,
+    transparent: !!opts.transparent,
+    opacity: opts.opacity !== undefined ? opts.opacity : 1,
+  });
+  const m = new THREE.Mesh(geom, mat);
+  // EdgesGeometry 黑描边 (30° threshold 让圆柱也有描边)
+  if (!opts.noEdges) {
+    const edges = new THREE.LineSegments(
+      new THREE.EdgesGeometry(geom, opts.edgeAngle || 30),
+      new THREE.LineBasicMaterial({ color: MAT.ink, linewidth: 1 })
+    );
+    m.add(edges);
+  }
+  return m;
+}
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(MAT.paper);
+scene.fog = new THREE.Fog(MAT.fogNear, 90, 220);
+
+const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 500);
+const DEFAULT_CAM = new THREE.Vector3(32, 22, 36);
+camera.position.copy(DEFAULT_CAM);
+
+function resizeMain() {
+  const r = mainCanvas.parentElement.getBoundingClientRect();
+  if (r.width === 0 || r.height === 0) { requestAnimationFrame(resizeMain); return; }
+  renderer.setSize(r.width, r.height, true);
+  camera.aspect = r.width / r.height;
+  camera.updateProjectionMatrix();
+}
+window.addEventListener('resize', resizeMain);
+if (typeof ResizeObserver !== 'undefined') {
+  new ResizeObserver(resizeMain).observe(mainCanvas.parentElement);
+}
+requestAnimationFrame(() => requestAnimationFrame(resizeMain));
+
+const controls = new OrbitControls(camera, mainCanvas);
+controls.enableDamping = true;
+controls.dampingFactor = 0.08;
+controls.minDistance = 15;
+controls.maxDistance = 100;
+controls.target.set(0, 0, 0);
+
+// Lighting — 米黄环境下的"插画式"灯光: 高亮 + 弱冷副光
+scene.add(new THREE.AmbientLight(0xfff5e0, 0.55));
+const keyLight = new THREE.DirectionalLight(0xfff8e8, 1.0);
+keyLight.position.set(20, 30, 15);
+keyLight.castShadow = true;
+keyLight.shadow.mapSize.set(2048, 2048);
+keyLight.shadow.camera.left = -30;
+keyLight.shadow.camera.right = 30;
+keyLight.shadow.camera.top = 30;
+keyLight.shadow.camera.bottom = -30;
+keyLight.shadow.bias = -0.0005;
+scene.add(keyLight);
+const fillLight = new THREE.DirectionalLight(0xc4d8e8, 0.35);  // 偏蓝白副光, 配米黄
+fillLight.position.set(-18, 10, -12);
+scene.add(fillLight);
+const rimLight = new THREE.DirectionalLight(0xffd89a, 0.25);   // 暖色 rim
+rimLight.position.set(8, -12, -20);
+scene.add(rimLight);
+scene.add(new THREE.HemisphereLight(0xffeed0, 0x6a5a4a, 0.4)); // 上暖下暗
+
+// === Sensor body ===
+const SENSOR_W = 18, SENSOR_H = 7, SENSOR_D = 12;
+const sensorGroup = new THREE.Group();
+scene.add(sensorGroup);
+
+// Clickable parts registry: each must have userData.zoomTarget
+const clickableParts = [];
+
+function tagClickable(obj, target, hoverKey) {
+  obj.userData.zoomTarget = target;
+  obj.userData.hoverKey = hoverKey;
+  obj.traverse?.(c => { c.userData.zoomTarget = target; c.userData.hoverKey = hoverKey; });
+  clickableParts.push(obj);
+}
+
+// --- Case (semi-transparent shell) ---
+function makeCase() {
+  const group = new THREE.Group();
+  // 米黄底下用偏冷的蓝灰色, 提高透明度让内部可见
+  const caseMat = new THREE.MeshToonMaterial({
+    color: MAT.caseShell, metalness: 0.25, roughness: 0.55,
+    transparent: true, opacity: 0.25, side: THREE.DoubleSide,
+    clearcoat: 0.5, clearcoatRoughness: 0.5,
+  });
+  const t_wall = 0.4;
+  const w = SENSOR_W, h = SENSOR_H, d = SENSOR_D;
+  for (const y of [h/2, -h/2]) {
+    const m = new THREE.Mesh(new THREE.BoxGeometry(w, t_wall, d), caseMat);
+    m.position.y = y; m.castShadow = true; m.receiveShadow = true;
+    group.add(m);
+  }
+  const lf = new THREE.Mesh(new THREE.BoxGeometry(t_wall, h, 3), caseMat);
+  lf.position.set(-w/2, 0, d/2 - 1.5); group.add(lf);
+  const lr = new THREE.Mesh(new THREE.BoxGeometry(t_wall, h, 3), caseMat);
+  lr.position.set(-w/2, 0, -d/2 + 1.5); group.add(lr);
+  const rs = new THREE.Mesh(new THREE.BoxGeometry(t_wall, h, d), caseMat);
+  rs.position.set(w/2, 0, 0); group.add(rs);
+  for (let i = 0; i < 4; i++) {
+    const hole = new THREE.Mesh(
+      new THREE.CircleGeometry(0.9, 24),
+      new THREE.MeshBasicMaterial({ color: MAT.fill3 })
+    );
+    hole.position.set(w/2 + 0.01, 0, -d/2 + 2 + i * 2.5);
+    hole.rotation.y = Math.PI / 2;
+    group.add(hole);
+  }
+  for (const z of [d/2, -d/2]) {
+    const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, t_wall), caseMat);
+    m.position.z = z; group.add(m);
+  }
+  // Label decal
+  const lc = document.createElement('canvas'); lc.width=512; lc.height=128;
+  const lctx = lc.getContext('2d');
+  lctx.fillStyle='#142e4a'; lctx.fillRect(0,0,512,128);             // bpDeep 标签底
+  lctx.fillStyle='#e8eef4'; lctx.font='bold 50px JetBrains Mono';    // paper 米白字
+  lctx.textAlign='center'; lctx.textBaseline='middle';
+  lctx.fillText('PMS5003', 256, 50);
+  lctx.fillStyle='#a8b8c8'; lctx.font='18px JetBrains Mono';         // paperDim 副字
+  lctx.fillText('LASER PARTICULATE SENSOR', 256, 95);
+  const labelMat = new THREE.MeshToonMaterial({
+    map: new THREE.CanvasTexture(lc), transparent: true, roughness: 0.6
+  });
+  const labelPlane = new THREE.Mesh(new THREE.PlaneGeometry(8, 2), labelMat);
+  labelPlane.rotation.x = -Math.PI/2;
+  labelPlane.position.set(2, h/2+0.05, -1);
+  group.add(labelPlane);
+  return group;
+}
+const caseMesh = makeCase();
+sensorGroup.add(caseMesh);
+
+// --- Laser module (CLICKABLE) ---
+function makeLaserModule() {
+  const group = new THREE.Group();
+  const housingMat = new THREE.MeshToonMaterial({ color: MAT.fill2, metalness: 0.85, roughness: 0.35 });
+  const housing = new THREE.Mesh(new THREE.CylinderGeometry(1.1, 1.3, 3.5, 24), housingMat);
+  housing.rotation.z = Math.PI/2;
+  housing.position.set(-SENSOR_W/2 + 2.5, 0, -1);
+  housing.castShadow = true;
+  group.add(housing);
+  const finMat = new THREE.MeshToonMaterial({ color: MAT.fill2, metalness: 0.7, roughness: 0.4 });
+  for (let i = 0; i < 5; i++) {
+    const fin = new THREE.Mesh(new THREE.BoxGeometry(0.15, 2.2, 0.35), finMat);
+    fin.position.set(-SENSOR_W/2 + 1 + i * 0.3, 0, -1);
+    group.add(fin);
+  }
+  const lensMat = new THREE.MeshToonMaterial({
+    color: MAT.alert, metalness: 0.1, roughness: 0.1,
+    transmission: 0.6, transparent: true, opacity: 0.85,
+    clearcoat: 1, clearcoatRoughness: 0.05, ior: 1.5,
+  });
+  const lens = new THREE.Mesh(new THREE.SphereGeometry(0.7, 24, 24, 0, Math.PI*2, 0, Math.PI/2), lensMat);
+  lens.rotation.z = -Math.PI/2;
+  lens.position.set(-SENSOR_W/2 + 4.5, 0, -1);
+  group.add(lens);
+  const mount = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.5, 2.2), housingMat);
+  mount.position.set(-SENSOR_W/2 + 2.5, -1.5, -1);
+  group.add(mount);
+  const led = new THREE.Mesh(new THREE.SphereGeometry(0.18, 16, 16), new THREE.MeshBasicMaterial({ color: MAT.alert }));
+  led.position.set(-SENSOR_W/2 + 0.8, 0.8, -1);
+  group.add(led);
+  return group;
+}
+const laserModule = makeLaserModule();
+sensorGroup.add(laserModule);
+tagClickable(laserModule, 'laser', 'hov_laser');
+
+// --- Laser beam ---
+const LASER_START = new THREE.Vector3(-SENSOR_W/2 + 4.5, 0, -1);
+const LASER_END = new THREE.Vector3(SENSOR_W/2 - 4.5, 0, -1);
+function makeLaserBeam() {
+  const group = new THREE.Group();
+  const len = LASER_START.distanceTo(LASER_END);
+  const beamGeo = new THREE.CylinderGeometry(0.05, 0.05, len, 12);
+  const beam = new THREE.Mesh(beamGeo, new THREE.MeshBasicMaterial({ color: MAT.alert, transparent: true, opacity: 0.9, depthWrite: false }));
+  beam.rotation.z = Math.PI/2;
+  beam.position.copy(LASER_START.clone().lerp(LASER_END, 0.5));
+  group.add(beam);
+  const glow = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.22, len, 12), new THREE.MeshBasicMaterial({ color: MAT.alert, transparent: true, opacity: 0.18, depthWrite: false }));
+  glow.rotation.z = Math.PI/2; glow.position.copy(beam.position); group.add(glow);
+  const halo = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.45, len, 12), new THREE.MeshBasicMaterial({ color: MAT.alert, transparent: true, opacity: 0.06, depthWrite: false }));
+  halo.rotation.z = Math.PI/2; halo.position.copy(beam.position); group.add(halo);
+  return group;
+}
+sensorGroup.add(makeLaserBeam());
+
+// --- Photodiode (CLICKABLE) ---
+function makePhotodiode() {
+  const group = new THREE.Group();
+  const bodyMat = new THREE.MeshToonMaterial({ color: MAT.accent, metalness: 0.6, roughness: 0.3, clearcoat: 0.5 });
+  const base = new THREE.Mesh(new THREE.BoxGeometry(2.5, 0.3, 2.2), new THREE.MeshToonMaterial({ color: MAT.fill2 }));
+  base.position.set(0, -SENSOR_H/2 + 1.5, -1);
+  group.add(base);
+  const chip = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.6, 0.6, 24), bodyMat);
+  chip.position.set(0, -SENSOR_H/2 + 2.0, -1);
+  group.add(chip);
+  const mask = new THREE.Mesh(new THREE.RingGeometry(0.35, 0.55, 32), new THREE.MeshBasicMaterial({ color: MAT.fill3, side: THREE.DoubleSide }));
+  mask.rotation.x = -Math.PI/2;
+  mask.position.set(0, -SENSOR_H/2 + 2.32, -1);
+  group.add(mask);
+  const active = new THREE.Mesh(new THREE.CircleGeometry(0.34, 24), new THREE.MeshBasicMaterial({ color: MAT.alert }));
+  active.rotation.x = -Math.PI/2;
+  active.position.set(0, -SENSOR_H/2 + 2.33, -1);
+  group.add(active);
+  // photodiode 引脚 — 非金线 (是镀锡金属), metalness 降到 0.7 (agent 必改 27)
+  const leadMat = new THREE.MeshToonMaterial({ color: MAT.gold, metalness: 0.7, roughness: 0.3 });
+  for (const dx of [-0.4, 0.4]) {
+    const lead = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.6, 0.1), leadMat);
+    lead.position.set(dx, -SENSOR_H/2 + 1.1, -1);
+    group.add(lead);
+  }
+  return group;
+}
+const photodiode = makePhotodiode();
+sensorGroup.add(photodiode);
+tagClickable(photodiode, 'photodiode', 'hov_photo');
+
+// --- Airway ---
+function makeAirway() {
+  const group = new THREE.Group();
+  const wallMat = new THREE.MeshToonMaterial({ color: MAT.fill2, metalness: 0.1, roughness: 0.75, transparent: true, opacity: 0.32 });
+  const inletChan = new THREE.Mesh(new THREE.BoxGeometry(4, 4, 2.2), wallMat);
+  inletChan.position.set(SENSOR_W/2 - 3, 0, -1);
+  group.add(inletChan);
+  const chamber = new THREE.Mesh(new THREE.BoxGeometry(10, 3.6, 2), wallMat);
+  chamber.position.set(0, 0, -1);
+  group.add(chamber);
+  const outletChan = new THREE.Mesh(new THREE.BoxGeometry(3, 4, 2.2), wallMat);
+  outletChan.position.set(-SENSOR_W/2 + 2, 0, 2.8);
+  group.add(outletChan);
+  return group;
+}
+sensorGroup.add(makeAirway());
+
+// --- Fan (CLICKABLE) ---
+const fanGroup = new THREE.Group();
+function makeFan() {
+  const fanShell = new THREE.Mesh(new THREE.CylinderGeometry(1.5, 1.5, 1.4, 32), new THREE.MeshToonMaterial({ color: MAT.fill2, metalness: 0.5, roughness: 0.6 }));
+  fanShell.rotation.x = Math.PI/2;
+  fanGroup.add(fanShell);
+  const hub = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, 1.45, 18), new THREE.MeshToonMaterial({ color: MAT.metalLight, metalness: 0.6, roughness: 0.4 }));
+  hub.rotation.x = Math.PI/2;
+  fanGroup.add(hub);
+  const bladeMat = new THREE.MeshToonMaterial({ color: MAT.accent, metalness: 0.1, roughness: 0.5, transparent: true, opacity: 0.6 });
+  for (let i = 0; i < 5; i++) {
+    const ang = (i / 5) * Math.PI * 2;
+    const bladeShape = new THREE.Shape();
+    bladeShape.moveTo(0.5, -0.4);
+    bladeShape.quadraticCurveTo(0.9, -0.1, 1.35, 0.1);
+    bladeShape.quadraticCurveTo(1.0, 0.5, 0.5, 0.4);
+    bladeShape.lineTo(0.5, -0.4);
+    const blade = new THREE.Mesh(new THREE.ExtrudeGeometry(bladeShape, { depth: 0.05, bevelEnabled: false }), bladeMat);
+    blade.rotation.z = ang;
+    fanGroup.add(blade);
+  }
+  fanGroup.position.set(-SENSOR_W/2 + 3, 0, 2.8);
+  return fanGroup;
+}
+sensorGroup.add(makeFan());
+tagClickable(fanGroup, 'fan', 'hov_fan');
+
+// --- PCB (CLICKABLE) ---
+const pcbGroup = new THREE.Group();
+function makePCB() {
+  const pcb = new THREE.Mesh(
+    new THREE.BoxGeometry(SENSOR_W + 1, 0.25, SENSOR_D + 1),
+    new THREE.MeshToonMaterial({ color: MAT.pcbGreen, metalness: 0.1, roughness: 0.85 })
+  );
+  pcb.position.y = -SENSOR_H/2 - 0.5;
+  pcb.receiveShadow = true;
+  pcbGroup.add(pcb);
+  for (let i = 0; i < 24; i++) {
+    const dot = new THREE.Mesh(new THREE.CircleGeometry(0.15, 12), new THREE.MeshToonMaterial({ color: MAT.gold, metalness: 0.9, roughness: 0.3 }));
+    dot.rotation.x = -Math.PI/2;
+    dot.position.set(
+      -SENSOR_W/2 + 0.5 + (i % 8) * 2.5,
+      pcb.position.y + 0.14,
+      -SENSOR_D/2 + 0.6 + Math.floor(i / 8) * 4
+    );
+    pcbGroup.add(dot);
+  }
+  const conn = new THREE.Mesh(new THREE.BoxGeometry(SENSOR_W * 0.55, 0.6, 0.8), new THREE.MeshToonMaterial({ color: MAT.fill2 }));
+  conn.position.set(0, pcb.position.y + 0.3, SENSOR_D/2 - 0.4);
+  pcbGroup.add(conn);
+  return pcbGroup;
+}
+sensorGroup.add(makePCB());
+tagClickable(pcbGroup, 'pcb', 'hov_pcb');
+
+// Ground — 米黄底地板, 棕色细 grid 仿等距插画
+const ground = new THREE.Mesh(new THREE.PlaneGeometry(80, 80), new THREE.ShadowMaterial({ opacity: 0.30 }));
+ground.rotation.x = -Math.PI/2;
+ground.position.y = -SENSOR_H/2 - 4;
+ground.receiveShadow = true;
+scene.add(ground);
+const grid = new THREE.GridHelper(60, 30, 0x6a625a, 0xb8a890);
+grid.position.y = -SENSOR_H/2 - 4;
+grid.material.transparent = true;
+grid.material.opacity = 0.35;
+scene.add(grid);
+
+// ============================================================
+// Raycaster for click + hover
+// ============================================================
+const raycaster = new THREE.Raycaster();
+const pointer = new THREE.Vector2();
+let hoveredTarget = null;
+const clickPrompt = document.getElementById('clickPrompt');
+
+function updatePointer(e) {
+  const r = mainCanvas.getBoundingClientRect();
+  pointer.x = ((e.clientX - r.left) / r.width) * 2 - 1;
+  pointer.y = -((e.clientY - r.top) / r.height) * 2 + 1;
+}
+
+mainCanvas.addEventListener('pointermove', (e) => {
+  updatePointer(e);
+  raycaster.setFromCamera(pointer, camera);
+  const hits = raycaster.intersectObjects(clickableParts, true);
+  if (hits.length > 0) {
+    const t_obj = hits[0].object;
+    const tgt = t_obj.userData?.zoomTarget;
+    const hk = t_obj.userData?.hoverKey;
+    if (tgt) {
+      hoveredTarget = tgt;
+      document.getElementById('hudHover').textContent = hk ? t(hk) : tgt;
+      mainCanvas.style.cursor = 'pointer';
+      clickPrompt.style.left = e.clientX + 'px';
+      clickPrompt.style.top = e.clientY + 'px';
+      clickPrompt.textContent = t('click_to_zoom');
+      clickPrompt.classList.add('show');
+      return;
+    }
+  }
+  hoveredTarget = null;
+  document.getElementById('hudHover').textContent = '--';
+  mainCanvas.style.cursor = 'grab';
+  clickPrompt.classList.remove('show');
+});
+
+mainCanvas.addEventListener('click', (e) => {
+  if (hoveredTarget) {
+    openZoom(hoveredTarget);
+  }
+});
+
+// ============================================================
+// === FLIPBOOK STYLE: 给所有 mesh 加黑色 EdgesGeometry 描边 ===
+// ============================================================
+// 这是 flipbook "浅色填充 + 黑色线稿" 视觉的核心 —— 必须在所有 mesh 创建后执行
+function addEdgesToAllMeshes(root, edgeAngle = 30) {
+  const edgeMat = new THREE.LineBasicMaterial({ color: MAT.ink });
+  root.traverse((obj) => {
+    if (obj.isMesh && obj.geometry && !obj.userData._hasEdges) {
+      // 跳过激光束 / 颗粒物 / banner 等 BasicMaterial 装饰
+      const m = obj.material;
+      if (!m) return;
+      // 跳过非 Toon (例如 LineSegments、Sprites、纯发光体)
+      if (!(m.isMeshToonMaterial || m.isMeshBasicMaterial)) return;
+      // 跳过过小或纯发光物 (例如 LED / 激光粒子, 它们要保持纯色)
+      const geom = obj.geometry;
+      if (geom.type === 'CircleGeometry' || geom.type === 'PlaneGeometry') return; // 平面贴图不加描边
+      try {
+        const edges = new THREE.LineSegments(
+          new THREE.EdgesGeometry(geom, edgeAngle),
+          edgeMat
+        );
+        // 描边稍微外扩防止 z-fighting
+        edges.renderOrder = 1;
+        obj.add(edges);
+        obj.userData._hasEdges = true;
+      } catch (e) { /* 部分 geometry 不支持 EdgesGeometry, 静默跳过 */ }
+    }
+  });
+}
+
+// 主场景所有 mesh 加描边
+addEdgesToAllMeshes(scene);
+
+// ============================================================
+// Animation loop (main)
+// ============================================================
+let autoOrbit = false;
+const clock = new THREE.Clock();
+function animateMain() {
+  fanGroup.rotation.z -= 0.18;
+  if (autoOrbit) {
+    const now = performance.now() * 0.0002;
+    camera.position.x = Math.cos(now) * 48;
+    camera.position.z = Math.sin(now) * 48;
+    camera.position.y = 22 + Math.sin(now * 1.3) * 3;
+    camera.lookAt(0, 0, 0);
+  }
+  controls.update();
+  renderer.render(scene, camera);
+  requestAnimationFrame(animateMain);
+}
+animateMain();
+
+// ============================================================
+// L1 SUB-SCENES
+// ============================================================
+let currentZoom = null;
+let zoomRenderer = null;
+let zoomScene = null;
+let zoomCamera = null;
+let zoomControls = null;
+let zoomAnimId = null;
+const zoomCanvas = document.getElementById('canvas-zoom');
+
+function initZoomRenderer() {
+  if (zoomRenderer) return;
+  zoomRenderer = new THREE.WebGLRenderer({ canvas: zoomCanvas, antialias: true });
+  zoomRenderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  zoomRenderer.shadowMap.enabled = true;
+  zoomRenderer.toneMapping = THREE.ACESFilmicToneMapping;
+  zoomRenderer.toneMappingExposure = 1.05;
+}
+
+function resizeZoom() {
+  const r = zoomCanvas.parentElement.getBoundingClientRect();
+  if (r.width === 0 || r.height === 0) return;
+  zoomRenderer.setSize(r.width, r.height, true);
+  if (zoomCamera) {
+    zoomCamera.aspect = r.width / r.height;
+    zoomCamera.updateProjectionMatrix();
+  }
+}
+window.addEventListener('resize', resizeZoom);
+
+function cleanupZoom() {
+  if (zoomAnimId) cancelAnimationFrame(zoomAnimId);
+  zoomAnimId = null;
+  zoomScene = null;
+  zoomCamera = null;
+  if (zoomControls) { zoomControls.dispose(); zoomControls = null; }
+}
+
+function setupSubScene() {
+  cleanupZoom();
+  zoomScene = new THREE.Scene();
+  // flipbook 米黄底
+  zoomScene.background = new THREE.Color(MAT.paper);
+  zoomCamera = new THREE.PerspectiveCamera(45, 1, 0.01, 200);
+  zoomControls = new OrbitControls(zoomCamera, zoomCanvas);
+  zoomControls.enableDamping = true;
+  zoomControls.dampingFactor = 0.08;
+  // 插画式灯光 5 件套 (与主场景一致): 环境 + 暖白主 + 冷副 + 暖 rim + 半球
+  zoomScene.add(new THREE.AmbientLight(0xfff5e0, 0.55));
+  const kl = new THREE.DirectionalLight(0xfff8e8, 1.0);
+  kl.position.set(10, 14, 8);
+  zoomScene.add(kl);
+  const fl = new THREE.DirectionalLight(0xc4d8e8, 0.35);
+  fl.position.set(-10, 5, -8);
+  zoomScene.add(fl);
+  const rim = new THREE.DirectionalLight(0xffd89a, 0.25); // 暖 rim, 规范第 5 节灯光 5 件套
+  rim.position.set(6, -8, -14);
+  zoomScene.add(rim);
+  zoomScene.add(new THREE.HemisphereLight(0xffeed0, 0x6a5a4a, 0.4));
+  // 子场景雾 — 米黄远雾自然融入背景
+  zoomScene.fog = new THREE.Fog(MAT.fogNear, 20, 60);
+}
+
+// ---------- L1: Laser internal ----------
+function buildLaserSubScene() {
+  setupSubScene();
+  zoomCamera.position.set(6, 3, 6);
+  zoomControls.target.set(0, 0, 0);
+
+  // Outer metal housing (CUT AWAY half)
+  const housingMat = new THREE.MeshToonMaterial({ color: MAT.fill2, metalness: 0.85, roughness: 0.3 });
+  // Use cylinder, cut by ThetaLength to expose interior
+  const housing = new THREE.Mesh(
+    new THREE.CylinderGeometry(2, 2.2, 5, 32, 1, false, 0, Math.PI),
+    housingMat
+  );
+  housing.rotation.z = Math.PI/2;
+  housing.rotation.x = Math.PI;
+  zoomScene.add(housing);
+  // End cap (back)
+  const cap = new THREE.Mesh(new THREE.CircleGeometry(2, 32, 0, Math.PI), housingMat);
+  cap.rotation.y = Math.PI/2;
+  cap.position.x = -2.5;
+  zoomScene.add(cap);
+
+  // Heat fins on outside
+  const finMat = new THREE.MeshToonMaterial({ color: MAT.fill2, metalness: 0.7, roughness: 0.4 });
+  for (let i = 0; i < 8; i++) {
+    const fin = new THREE.Mesh(new THREE.BoxGeometry(0.2, 3.5, 0.3), finMat);
+    fin.position.set(-2.3 + i * 0.4, 0, 0);
+    fin.position.y = 0;
+    fin.position.z = 0;
+    fin.rotation.x = Math.PI/2;
+    // Place fins on top of housing
+    fin.position.y = 2.0;
+    zoomScene.add(fin);
+  }
+
+  // PN junction chip (red-orange laser die)
+  const dieMat = new THREE.MeshToonMaterial({
+    color: MAT.accent, emissive: MAT.alert, emissiveIntensity: 0.6,
+    metalness: 0.3, roughness: 0.2,
+  });
+  const die = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.4, 0.6), dieMat);
+  die.position.set(-1.5, 0, 0);
+  zoomScene.add(die);
+  // Bond wires from die to housing
+  const wireMat = new THREE.MeshToonMaterial({ color: MAT.gold, metalness: 0.95, roughness: 0.2 });
+  for (const [yo, zo] of [[0.3, 0.1], [0.3, -0.1]]) {
+    const curve = new THREE.QuadraticBezierCurve3(
+      new THREE.Vector3(-1.5, yo, zo),
+      new THREE.Vector3(-1.7, 0.9, zo),
+      new THREE.Vector3(-2.3, 0.4, zo)
+    );
+    const tube = new THREE.Mesh(new THREE.TubeGeometry(curve, 16, 0.04, 8), wireMat);
+    zoomScene.add(tube);
+  }
+
+  // Collimating lens (front)
+  const lensMat = new THREE.MeshToonMaterial({
+    color: MAT.accent, metalness: 0, roughness: 0.05,
+    transmission: 0.85, transparent: true, opacity: 0.9,
+    clearcoat: 1, clearcoatRoughness: 0.05, ior: 1.5,
+  });
+  const lens = new THREE.Mesh(new THREE.SphereGeometry(0.9, 32, 32, 0, Math.PI*2, 0, Math.PI/2), lensMat);
+  lens.rotation.z = -Math.PI/2;
+  lens.position.set(1.8, 0, 0);
+  zoomScene.add(lens);
+  // Lens mount
+  const lensMount = new THREE.Mesh(
+    new THREE.TorusGeometry(0.95, 0.15, 8, 32),
+    new THREE.MeshToonMaterial({ color: MAT.fill2, metalness: 0.8, roughness: 0.4 })
+  );
+  lensMount.rotation.y = Math.PI/2;
+  lensMount.position.set(1.7, 0, 0);
+  zoomScene.add(lensMount);
+
+  // Beam emission cone (diverging then collimated)
+  // Inside die->lens: diverging cone
+  const coneGeo = new THREE.CylinderGeometry(0.8, 0.05, 3.3, 24, 1, true);
+  const coneMat = new THREE.MeshBasicMaterial({
+    color: MAT.alert, transparent: true, opacity: 0.18, side: THREE.DoubleSide, depthWrite: false
+  });
+  const cone = new THREE.Mesh(coneGeo, coneMat);
+  cone.rotation.z = -Math.PI/2;
+  cone.position.set(0.15, 0, 0);
+  zoomScene.add(cone);
+  // Output collimated beam (after lens)
+  const outBeam = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.18, 0.18, 5, 24),
+    new THREE.MeshBasicMaterial({ color: MAT.alert, transparent: true, opacity: 0.85, depthWrite: false })
+  );
+  outBeam.rotation.z = Math.PI/2;
+  outBeam.position.set(5, 0, 0);
+  zoomScene.add(outBeam);
+  const outGlow = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.5, 0.5, 5, 24),
+    new THREE.MeshBasicMaterial({ color: MAT.alert, transparent: true, opacity: 0.15, depthWrite: false })
+  );
+  outGlow.rotation.z = Math.PI/2;
+  outGlow.position.set(5, 0, 0);
+  zoomScene.add(outGlow);
+
+  // Floor & grid
+  const fl = new THREE.Mesh(new THREE.PlaneGeometry(20, 20), new THREE.ShadowMaterial({ opacity: 0.30 }));
+  fl.rotation.x = -Math.PI/2;
+  fl.position.y = -2.5;
+  zoomScene.add(fl);
+  const gr = new THREE.GridHelper(20, 20, 0x6a625a, 0xb8a890);
+  gr.position.y = -2.5;
+  gr.material.transparent = true; gr.material.opacity = 0.25;
+  zoomScene.add(gr);
+}
+
+// ---------- L1: Photodiode internal ----------
+function buildPhotodiodeSubScene() {
+  setupSubScene();
+  zoomCamera.position.set(5, 3, 5);
+  zoomControls.target.set(0, 0, 0);
+
+  // Substrate (P++ silicon, brown-grey) — engineering 灰
+  const subMat = new THREE.MeshToonMaterial({ color: MAT.fill2, metalness: 0.4, roughness: 0.6 });
+  const sub = new THREE.Mesh(new THREE.BoxGeometry(3, 0.4, 3), subMat);
+  sub.position.y = -1;
+  zoomScene.add(sub);
+
+  // I layer (intrinsic, dark grey-green)
+  const iMat = new THREE.MeshToonMaterial({ color: MAT.fill2, metalness: 0.2, roughness: 0.5 });
+  const iLayer = new THREE.Mesh(new THREE.BoxGeometry(2.8, 0.25, 2.8), iMat);
+  iLayer.position.y = -0.7;
+  zoomScene.add(iLayer);
+
+  // N+ top layer (active surface, green emissive)
+  const nMat = new THREE.MeshToonMaterial({ color: MAT.accent, emissive: MAT.alert, emissiveIntensity: 0.4, metalness: 0.2, roughness: 0.4 });
+  const nLayer = new THREE.Mesh(new THREE.BoxGeometry(2.6, 0.15, 2.6), nMat);
+  nLayer.position.y = -0.5;
+  zoomScene.add(nLayer);
+
+  // Black mask ring on top
+  const maskMat = new THREE.MeshToonMaterial({ color: MAT.fill3, metalness: 0.5, roughness: 0.6 });
+  const mask = new THREE.Mesh(
+    new THREE.RingGeometry(0.6, 1.3, 32),
+    maskMat
+  );
+  mask.rotation.x = -Math.PI/2;
+  mask.position.y = -0.42;
+  zoomScene.add(mask);
+
+  // Anode metal ring (gold)
+  const goldMat = new THREE.MeshToonMaterial({ color: MAT.gold, metalness: 0.95, roughness: 0.25 });
+  const anode = new THREE.Mesh(new THREE.TorusGeometry(0.62, 0.05, 8, 32), goldMat);
+  anode.rotation.x = -Math.PI/2;
+  anode.position.y = -0.41;
+  zoomScene.add(anode);
+
+  // Leads
+  for (const dx of [-1.4, 1.4]) {
+    const lead = new THREE.Mesh(new THREE.BoxGeometry(0.18, 1.6, 0.18), goldMat);
+    lead.position.set(dx, -1.8, 0);
+    zoomScene.add(lead);
+  }
+
+  // Bond wire from anode to lead
+  const wireMat = new THREE.MeshToonMaterial({ color: MAT.gold, metalness: 0.95, roughness: 0.2 });
+  const wireCurve = new THREE.QuadraticBezierCurve3(
+    new THREE.Vector3(0.62, -0.4, 0),
+    new THREE.Vector3(1.1, 0.3, 0),
+    new THREE.Vector3(1.4, -1.0, 0)
+  );
+  zoomScene.add(new THREE.Mesh(new THREE.TubeGeometry(wireCurve, 24, 0.03, 6), wireMat));
+
+  // Incoming photons (yellow particles falling from above)
+  const photons = [];
+  for (let i = 0; i < 6; i++) {
+    const ph = new THREE.Mesh(
+      new THREE.SphereGeometry(0.12, 16, 16),
+      new THREE.MeshBasicMaterial({ color: MAT.alert })
+    );
+    ph.userData.startY = 3 + i * 0.5;
+    ph.userData.speed = 0.025 + Math.random() * 0.015;
+    ph.userData.offsetX = (Math.random() - 0.5) * 1.5;
+    ph.userData.offsetZ = (Math.random() - 0.5) * 1.5;
+    ph.position.set(ph.userData.offsetX, ph.userData.startY, ph.userData.offsetZ);
+    zoomScene.add(ph);
+    photons.push(ph);
+  }
+
+  // Detection flash plane (gets opacity bumps when photons hit)
+  const flashMat = new THREE.MeshBasicMaterial({ color: MAT.alert, transparent: true, opacity: 0, depthWrite: false });
+  const flash = new THREE.Mesh(new THREE.CircleGeometry(0.55, 32), flashMat);
+  flash.rotation.x = -Math.PI/2;
+  flash.position.y = -0.39;
+  zoomScene.add(flash);
+
+  zoomScene.userData.tick = () => {
+    photons.forEach(ph => {
+      ph.position.y -= ph.userData.speed * 60 / 60;
+      if (ph.position.y < -0.5) {
+        // Hit, reset to top
+        ph.position.set(ph.userData.offsetX, ph.userData.startY, ph.userData.offsetZ);
+        flashMat.opacity = 0.85;
+      }
+    });
+    flashMat.opacity = Math.max(0, flashMat.opacity - 0.03);
+  };
+
+  // Floor
+  const fl = new THREE.Mesh(new THREE.PlaneGeometry(20, 20), new THREE.ShadowMaterial({ opacity: 0.30 }));
+  fl.rotation.x = -Math.PI/2;
+  fl.position.y = -2.6;
+  zoomScene.add(fl);
+  const gr = new THREE.GridHelper(20, 20, 0x6a625a, 0xb8a890);
+  gr.position.y = -2.6;
+  gr.material.transparent = true; gr.material.opacity = 0.25;
+  zoomScene.add(gr);
+}
+
+// ---------- L1: Fan internal ----------
+function buildFanSubScene() {
+  setupSubScene();
+  zoomCamera.position.set(0, 3, 8);
+  zoomControls.target.set(0, 0, 0);
+
+  // Stator (outer ring, with coil bumps)
+  const statorMat = new THREE.MeshToonMaterial({ color: MAT.fill2, metalness: 0.7, roughness: 0.4 });
+  const stator = new THREE.Mesh(new THREE.TorusGeometry(2.2, 0.4, 16, 48), statorMat);
+  stator.rotation.x = Math.PI/2;
+  zoomScene.add(stator);
+  // Coil bumps (6 around stator)
+  const coilMat = new THREE.MeshToonMaterial({ color: MAT.gold, metalness: 0.95, roughness: 0.25 });
+  for (let i = 0; i < 6; i++) {
+    const a = (i / 6) * Math.PI * 2;
+    const coil = new THREE.Mesh(new THREE.TorusGeometry(0.35, 0.18, 8, 16), coilMat);
+    coil.position.set(Math.cos(a) * 2.0, 0, Math.sin(a) * 2.0);
+    coil.rotation.y = -a;
+    coil.rotation.x = Math.PI/2;
+    zoomScene.add(coil);
+  }
+
+  // Rotor (inner, with magnet poles)
+  const rotorGroup = new THREE.Group();
+  zoomScene.add(rotorGroup);
+  const rotorHub = new THREE.Mesh(
+    new THREE.CylinderGeometry(1.4, 1.4, 0.6, 32),
+    new THREE.MeshToonMaterial({ color: MAT.metalLight, metalness: 0.7, roughness: 0.4 })
+  );
+  rotorGroup.add(rotorHub);
+  // Magnet poles (alternating N/S — red/blue)
+  for (let i = 0; i < 6; i++) {
+    const a = (i / 6) * Math.PI * 2;
+    const mag = new THREE.Mesh(
+      new THREE.BoxGeometry(0.4, 0.55, 0.7),
+      new THREE.MeshToonMaterial({
+        color: i % 2 === 0 ? MAT.alert : MAT.accentBlue,
+        metalness: 0.6, roughness: 0.4,
+        emissive: i % 2 === 0 ? MAT.alert : MAT.accentBlue,
+        emissiveIntensity: 0.2,
+      })
+    );
+    mag.position.set(Math.cos(a) * 1.5, 0, Math.sin(a) * 1.5);
+    mag.rotation.y = -a;
+    rotorGroup.add(mag);
+  }
+
+  // Blades (semi-transparent)
+  const bladeMat = new THREE.MeshToonMaterial({ color: MAT.accent, metalness: 0.1, roughness: 0.5, transparent: true, opacity: 0.6 });
+  for (let i = 0; i < 5; i++) {
+    const ang = (i / 5) * Math.PI * 2;
+    const bladeShape = new THREE.Shape();
+    bladeShape.moveTo(0.6, -0.5);
+    bladeShape.quadraticCurveTo(1.2, -0.1, 1.9, 0.15);
+    bladeShape.quadraticCurveTo(1.3, 0.6, 0.6, 0.5);
+    bladeShape.lineTo(0.6, -0.5);
+    const blade = new THREE.Mesh(new THREE.ExtrudeGeometry(bladeShape, { depth: 0.08, bevelEnabled: false }), bladeMat);
+    blade.rotation.z = ang;
+    blade.position.y = 0.4;
+    rotorGroup.add(blade);
+  }
+
+  // Airflow lines (animated particles)
+  const flowParticles = [];
+  for (let i = 0; i < 30; i++) {
+    const p = new THREE.Mesh(
+      new THREE.SphereGeometry(0.06, 8, 8),
+      new THREE.MeshBasicMaterial({ color: MAT.accent, transparent: true, opacity: 0.7 })
+    );
+    p.userData.theta = (i / 30) * Math.PI * 2;
+    p.userData.r = 2.4 + Math.random() * 0.4;
+    p.userData.zSpeed = 0.03 + Math.random() * 0.02;
+    p.position.set(Math.cos(p.userData.theta) * p.userData.r, 3, Math.sin(p.userData.theta) * p.userData.r);
+    zoomScene.add(p);
+    flowParticles.push(p);
+  }
+
+  zoomScene.userData.tick = () => {
+    rotorGroup.rotation.y += 0.06;
+    flowParticles.forEach(p => {
+      p.position.y -= p.userData.zSpeed;
+      // Spiral down + outward
+      p.userData.theta += 0.04;
+      const r = p.userData.r * (1 + Math.max(0, (1 - p.position.y) * 0.2));
+      p.position.x = Math.cos(p.userData.theta) * r;
+      p.position.z = Math.sin(p.userData.theta) * r;
+      if (p.position.y < -1) {
+        p.position.y = 3;
+        p.userData.theta = Math.random() * Math.PI * 2;
+      }
+    });
+  };
+
+  // Floor
+  const fl = new THREE.Mesh(new THREE.PlaneGeometry(20, 20), new THREE.ShadowMaterial({ opacity: 0.30 }));
+  fl.rotation.x = -Math.PI/2;
+  fl.position.y = -1.5;
+  zoomScene.add(fl);
+  const gr = new THREE.GridHelper(20, 20, 0x6a625a, 0xb8a890);
+  gr.position.y = -1.5;
+  gr.material.transparent = true; gr.material.opacity = 0.25;
+  zoomScene.add(gr);
+}
+
+// ---------- L1: PCB internal ----------
+function buildPCBSubScene() {
+  setupSubScene();
+  zoomCamera.position.set(8, 6, 8);
+  zoomControls.target.set(0, 0, 0);
+
+  // Main PCB board
+  const pcbMat = new THREE.MeshToonMaterial({ color: MAT.pcbGreen, metalness: 0.1, roughness: 0.8 });
+  const pcb = new THREE.Mesh(new THREE.BoxGeometry(8, 0.3, 6), pcbMat);
+  pcb.position.y = 0;
+  zoomScene.add(pcb);
+
+  // STM32 microcontroller (square IC with leads)
+  const icMat = new THREE.MeshToonMaterial({ color: MAT.fill2, metalness: 0.4, roughness: 0.55 });
+  const stm = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.25, 1.5), icMat);
+  stm.position.set(-1.5, 0.275, 0);
+  zoomScene.add(stm);
+  // Label "STM32"
+  const stmLabel = makeTextSprite('STM32', 1.5);
+  stmLabel.position.set(-1.5, 0.42, 0);
+  zoomScene.add(stmLabel);
+  // Lead pins around STM32
+  for (let side = 0; side < 4; side++) {
+    for (let p = 0; p < 8; p++) {
+      const pin = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.05, 0.2), new THREE.MeshToonMaterial({ color: MAT.gold, metalness: 0.9, roughness: 0.3 }));
+      const off = -0.7 + p * 0.2;
+      if (side === 0) pin.position.set(-1.5 + off, 0.2, 0.78);
+      else if (side === 1) pin.position.set(-1.5 + 0.78, 0.2, off);
+      else if (side === 2) pin.position.set(-1.5 + off, 0.2, -0.78);
+      else pin.position.set(-1.5 - 0.78, 0.2, off);
+      zoomScene.add(pin);
+    }
+  }
+
+  // EEPROM (smaller rectangle)
+  const eeprom = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.2, 0.5), icMat);
+  eeprom.position.set(1.2, 0.25, 1.5);
+  zoomScene.add(eeprom);
+  const eeLabel = makeTextSprite('EEPROM', 1.2);
+  eeLabel.position.set(1.2, 0.42, 1.5);
+  zoomScene.add(eeLabel);
+
+  // Capacitors (small cylinders)
+  for (const [x, z] of [[2.5, 0.3], [2.0, -0.5], [-2.5, -1.5], [0.5, -1.8]]) {
+    const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.18, 0.5, 16), new THREE.MeshToonMaterial({ color: MAT.fill2, metalness: 0.4, roughness: 0.5 }));
+    cap.position.set(x, 0.4, z);
+    zoomScene.add(cap);
+    const top = new THREE.Mesh(new THREE.CircleGeometry(0.18, 16), new THREE.MeshBasicMaterial({ color: MAT.gold }));
+    top.rotation.x = -Math.PI/2;
+    top.position.set(x, 0.66, z);
+    zoomScene.add(top);
+  }
+
+  // Resistors (small horizontal cylinders)
+  for (const [x, z, rot] of [[-1, 0.3, 1.5], [-0.5, 1.8, 0], [3, -0.3, 0]]) {
+    const res = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 0.4, 12), new THREE.MeshToonMaterial({ color: MAT.accent, metalness: 0.3, roughness: 0.5 }));
+    res.rotation.z = Math.PI/2;
+    res.rotation.y = rot;
+    res.position.set(x, 0.2, z);
+    zoomScene.add(res);
+  }
+
+  // UART connector strip on edge
+  const conn = new THREE.Mesh(new THREE.BoxGeometry(3.5, 0.4, 0.6), new THREE.MeshToonMaterial({ color: MAT.fill2, metalness: 0.5 }));
+  conn.position.set(0.5, 0.35, -2.8);
+  zoomScene.add(conn);
+  // Pins on UART
+  for (let i = 0; i < 8; i++) {
+    const pin = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.6, 0.1), new THREE.MeshToonMaterial({ color: MAT.gold, metalness: 0.95, roughness: 0.2 }));
+    pin.position.set(-1.0 + i * 0.4, 0.2, -2.8);
+    zoomScene.add(pin);
+  }
+  // UART label
+  const uartLabel = makeTextSprite('UART (8-pin)', 1.8);
+  uartLabel.position.set(0.5, 0.7, -2.8);
+  zoomScene.add(uartLabel);
+
+  // Solder pads scattered
+  for (let i = 0; i < 30; i++) {
+    const pad = new THREE.Mesh(new THREE.CircleGeometry(0.06, 8), new THREE.MeshToonMaterial({ color: MAT.gold, metalness: 0.95, roughness: 0.25 }));
+    pad.rotation.x = -Math.PI/2;
+    pad.position.set((Math.random() - 0.5) * 7, 0.155, (Math.random() - 0.5) * 5);
+    zoomScene.add(pad);
+  }
+
+  // Traces (lines on PCB)
+  const traceMat = new THREE.LineBasicMaterial({ color: MAT.gold, transparent: true, opacity: 0.6 });
+  const tracePoints = [
+    [-0.7, 0.16, 0.5], [0.5, 0.16, 0.5], [0.5, 0.16, 1.5], [0.8, 0.16, 1.5],
+  ];
+  const tracePts = tracePoints.map(p => new THREE.Vector3(...p));
+  zoomScene.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(tracePts), traceMat));
+  const tp2 = [
+    new THREE.Vector3(-0.7, 0.16, -0.5),
+    new THREE.Vector3(-0.7, 0.16, -2.5),
+    new THREE.Vector3(0.5, 0.16, -2.5),
+  ];
+  zoomScene.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(tp2), traceMat));
+
+  // Floor
+  const fl = new THREE.Mesh(new THREE.PlaneGeometry(20, 20), new THREE.ShadowMaterial({ opacity: 0.30 }));
+  fl.rotation.x = -Math.PI/2;
+  fl.position.y = -0.3;
+  zoomScene.add(fl);
+  const gr = new THREE.GridHelper(20, 20, 0x6a625a, 0xb8a890);
+  gr.position.y = -0.31;
+  gr.material.transparent = true; gr.material.opacity = 0.25;
+  zoomScene.add(gr);
+}
+
+// Helper: create simple text sprite for IC labels
+function makeTextSprite(text, w) {
+  const c = document.createElement('canvas');
+  c.width = 256; c.height = 64;
+  const cx = c.getContext('2d');
+  cx.fillStyle = 'rgba(0,0,0,0)';
+  cx.clearRect(0, 0, 256, 64);
+  cx.font = 'bold 28px JetBrains Mono';
+  cx.fillStyle = '#e8eef4';  // paper 米白 (蓝图风文字)
+  cx.textAlign = 'center';
+  cx.textBaseline = 'middle';
+  cx.fillText(text, 128, 32);
+  const tex = new THREE.CanvasTexture(c);
+  const mat = new THREE.SpriteMaterial({ map: tex, transparent: true });
+  const sp = new THREE.Sprite(mat);
+  sp.scale.set(w, w/4, 1);
+  return sp;
+}
+
+// ============================================================
+// Zoom modal management
+// ============================================================
+const SCENE_BUILDERS = {
+  laser: buildLaserSubScene,
+  photodiode: buildPhotodiodeSubScene,
+  fan: buildFanSubScene,
+  pcb: buildPCBSubScene,
+};
+
+function openZoom(target) {
+  if (!SCENE_BUILDERS[target]) return;
+  currentZoom = target;
+  document.getElementById('zoomModal').classList.remove('hidden');
+  document.getElementById('hudDepth').textContent = LANG === 'cn' ? `L1 · ${t('hov_' + (target === 'photodiode' ? 'photo' : target === 'pcb' ? 'pcb' : target))}` : `L1 · ${t('hov_' + (target === 'photodiode' ? 'photo' : target === 'pcb' ? 'pcb' : target))}`;
+
+  initZoomRenderer();
+  SCENE_BUILDERS[target]();
+  // 给 L1 子场景所有 mesh 加 flipbook 黑描边
+  if (zoomScene) addEdgesToAllMeshes(zoomScene);
+  renderZoomCard(target);
+
+  // Start sub render loop
+  setTimeout(resizeZoom, 50);
+  function loop() {
+    if (zoomScene && zoomCamera) {
+      if (zoomScene.userData.tick) zoomScene.userData.tick();
+      zoomControls.update();
+      zoomRenderer.render(zoomScene, zoomCamera);
+    }
+    zoomAnimId = requestAnimationFrame(loop);
+  }
+  loop();
+}
+
+function closeZoom() {
+  document.getElementById('zoomModal').classList.add('hidden');
+  cleanupZoom();
+  currentZoom = null;
+  document.getElementById('hudDepth').textContent = 'L0 · ' + (LANG === 'cn' ? '主场景' : 'Main scene');
+}
+
+document.getElementById('zoomClose').addEventListener('click', closeZoom);
+document.getElementById('zoomBack').addEventListener('click', closeZoom);
+
+function renderZoomCard(target) {
+  const partLabel = {laser:'hov_laser', photodiode:'hov_photo', fan:'hov_fan', pcb:'hov_pcb'};
+  document.getElementById('zoomCrumb').textContent = t(partLabel[target]);
+  const prefix = target === 'photodiode' ? 'photo' : target;
+  document.getElementById('zoomTitle').textContent = t(`card_${prefix}_h`);
+  document.getElementById('zoomSub').textContent = t(`card_${prefix}_s`);
+  document.getElementById('zoomDesc').textContent = t(`card_${prefix}_p`);
+  document.getElementById('zoomKey').innerHTML = '<strong>' + (LANG === 'cn' ? '关键' : 'Key') + '</strong>: ' + t(`card_${prefix}_k`).replace(/^关键：|^Key: /, '');
+  document.getElementById('zoomNote').textContent = t(`card_${prefix}_n`);
+}
+
+// Sidebar shortcut buttons
+document.querySelectorAll('.part-row').forEach(r => {
+  r.addEventListener('click', () => openZoom(r.getAttribute('data-jump')));
+});
+
+document.getElementById('btnReset').addEventListener('click', () => {
+  camera.position.copy(DEFAULT_CAM);
+  controls.target.set(0, 0, 0);
+  autoOrbit = false;
+});
+document.getElementById('btnOrbit').addEventListener('click', (e) => {
+  autoOrbit = !autoOrbit;
+  e.target.textContent = autoOrbit ? (LANG === 'cn' ? '停止旋转' : 'STOP ORBIT') : t('auto_orbit');
+});
+
+refreshI18N();
+</script>
+</body>
+</html>
