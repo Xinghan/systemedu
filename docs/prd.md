@@ -312,6 +312,16 @@ Course Factory 手册新增两个必做步骤，补全课程内容的"练习"和
 - [x] **COURSE_FACTORY.md 更新**: 步骤表、产物自检清单、常见遗漏均已更新
 - [ ] **TTS 集成**: 讲课稿已存储，待接入 TTS 模型批量生成音频文件
 
+#### 3t: 富媒体类型 #9 -- 3D Object (spec 026) ✅
+Course Factory 手册新增第 9 类富媒体，把"可交互 3D 物体解剖 + 2 层下钻"做成正式产物。
+
+- [x] **触发判定** (`should_generate_3d_object`): 命中核心硬件型号 + 解剖类话题 + 非 capstone 才返回 True; course_factory 完全决定, 用户无须标记
+- [x] **关键词库**: 30+ 硬件型号 (PMS5003 / Pi Zero / BME280 / sensor / 传感器 / 镜头 / 火箭 / 卫星 等) + 12+ 解剖话题词 (内部结构 / 解剖 / 原理 / 接线 / cutaway / structure / how it works 等)
+- [x] **生成集成** (`make_course_content(threed_object_html=...)`): 注入 `mode='3d_object'` idea + rendered_section, `_split_html_assets` 自动拆到 `media/3d_object-<slug>.html`
+- [x] **美学闸门 5.5g** (`aesthetic_reviewer_prompt.md`): flipbook 米黄手册风 + toon shading + EdgesGeometry + L0/L1/L2 三层下钻铁律
+- [x] **参考实现** (`course_factory/3d_template/object_template.html`): M01 PMS5003 demo 通过 49/50 美学闸门, 1340 行
+- [x] **测试**: 9 个单元测试 + M11 PMS5003 端到端集成测试全过
+
 #### 3h: 待完成
 - [ ] `systemedu chat --agent tutor --project <name>` (CLI 端项目模式)
 - [ ] Quiz 结构化交互（选项点击 + 即时反馈 + AI 批改简答题）

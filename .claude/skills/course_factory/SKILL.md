@@ -29,7 +29,12 @@ Workspace 模式下你会接到两类任务:
 完整项目包 (manifest + tree + 24 个 knode 目录) → 可被 `systemedu-content publish`
 导入 library。
 
-走 **项目级流程 Step P0-P3 + 单 knode 流程 1-6.6** (循环跑 N 个 module)。
+走 **项目级流程 Step P0 → P1 → P1.5 (评估闸门) → P1.6 (修订, 必要时循环) → P2 → P3 + 单 knode 流程 1-6.6** (循环跑 N 个 module)。
+
+**关键加固 (spec 023 后)**: P1 设计完树**不能**直接 P2 写盘。必须先过
+P1.5 三维评估闸门 (科学性 / 可完成性 / 教学法 三个 sub-agent 并行评)。
+任何一维评分 < 21/30 或出现 Critical/Blocking 项必须回到 P1.6 修订。
+详见下方 P1.5 章节。
 
 **任务 B — 单 knode 级 (已有 tree, 只生成一个 module 内容)**
 
@@ -80,7 +85,67 @@ info = init_workspace_project("ai-ant-ethologist")
 #     hands_on_components, acceptance_artifacts, acceptance_standard,
 #     rough_learning_topics, knowledge_level, estimated_duration_months
 #
+# === Step P1.5: 三维评估闸门 (强制, 必须通过才能进 P2) ===
+#
+# 设计原则: 你 (Claude) 是树的作者, 不能自己评自己的树 — 必须 dispatch
+# **3 个 sub-agent 并行** 从 3 个独立维度评估, 任何一维评分 < 21/30 或
+# 出现 Critical/Blocking 项必须回到 P1 修订, 再评一轮, 直到三维全部通过。
+#
+# 评估 agent 输入: 把当前树草案落到项目内可访问路径:
+#   content-workspace/_review/<slug>_v5_tree_draft.json
+# (注: 不要落 /tmp/, sub-agent 沙盒访问不到)
+#
+# 三个并行 sub-agent (用 Agent 工具, run_in_background=true 同时发):
+#
+# (1) 科学性 agent — 概念是否准确、有没有教错知识、公式/型号/物理图像是否一致
+#     输出 Critical/Major/Minor + 评分:
+#       - 概念准确性 X/10
+#       - 前置完整性 X/10
+#       - 类比恰当性 X/10
+#       - 总分 X/30 + Go/No-go
+#
+# (2) 可完成性 agent — 时长是否合理、设备能否买到、acceptance 标准是否现实
+#     必须显式检查国别本地化 (中国大陆 vs 美国 API/账号年龄/官方站点可达性)
+#     和未成年人门槛 (ToS 13+, ORCID, GitHub 账号)
+#     输出 Blocking/Risk/TimeBudget + 评分:
+#       - 时长合理性 X/10
+#       - 资源可获得性 X/10
+#       - 标准达成度 X/10
+#       - 总分 X/30 + Go/No-go
+#
+# (3) 教学法 agent — 学习曲线 / 动机曲线 / 节奏 / 信息断崖
+#     必须显式检查 Python/git/前端 这种"突然出现的大栈"是否有铺垫
+#     和动机曲线 (首个'哇时刻'≤ 第 5 节, 高潮节点是否仪式化, 倦怠点是否有 vlog 等防倦怠手段)
+#     输出 Curve/Motivation/Pacing/Highlight + 评分:
+#       - 概念顺序 X/10
+#       - 动机曲线 X/10
+#       - 节奏 X/10
+#       - 总分 X/30 + Go/No-go
+#
+# Agent 约束 (写在 prompt 里):
+#   - 不允许增删节点 (P1 已经定数量)
+#   - 不允许改 stage 划分
+#   - 只允许改字段: summary / core_question / hands_on_components /
+#     acceptance_artifacts / acceptance_standard / rough_learning_topics /
+#     estimated_duration_months
+#   - 报告用中文, 必须给具体节点 ID + 具体字段建议
+#
+# 通过标准 (全部满足才能进 P2):
+#   - 三个 agent 总分都 ≥ 21/30
+#   - 没有任何 Critical (科学性) 或 Blocking (可完成性) 项
+#   - 教学法的"必修 Curve Issues"全部已修
+#   - 如不满足, 必须回到 P1 修订 (Step P1.6) 再评一轮
+#
+# === Step P1.6: 按评估聚合清单修订树 ===
+#
+# 聚合三个 agent 的报告, 按节点去重 + 合并多角度建议, 输出修订 v2:
+#   content-workspace/_review/<slug>_v5_tree_v2.json
+#
+# 修订完成后回到 Step P1.5 再评一轮 (用同样 3 个 agent prompt,
+# 输入指向 v2 文件)。最多 3 轮迭代, 仍未通过则把分歧呈给用户决定。
+
 # === Step P2: 写树到 workspace ===
+# 前置: Step P1.5 三维评估全部通过, 用的是最新 v2/v3 树。
 tree = {
     "schema_version": "5.0",
     "title": info["frontmatter"]["title_zh"],
@@ -114,7 +179,8 @@ result = save_knowledge_tree_to_workspace("ai-ant-ethologist", tree)
 # → 校验失败抛 ValueError (strict 模式)
 
 # === Step P3: 跟用户确认知识树 ===
-# 把 stage / module 列表展示给用户, 等用户确认 (或要求修改) 后才进入下一阶段。
+# 把 stage / module 列表 + 三维评估摘要 (各维度评分 + 剩余 Minor 建议) 一起
+# 展示给用户, 等用户确认 (或要求修改) 后才进入下一阶段。
 # 不要自动闷头进 Step 1+。
 
 # === Step 1..6.6 + Step 7: 逐 module 跑单 knode 流程 ===
@@ -203,6 +269,11 @@ module_id: <M01..MNN>
 节点: knode_global_idx=<N>
 
 节点角色: <foundation / core / deepening / synthesis / capstone>
+theme_style: <学科 id, **必须**从 course_factory/AESTHETIC.md §2 的 **8 个学科 accent** 之一选: physics / chemistry / biology / space / earth / cs / math / engineering>
+  — **不允许**使用 animation_runtime.js 旧 PALETTES（oklch 26 色）— 已废弃，必须改用 AESTHETIC.md hex 8 学科表
+  — **必须按节点本身的学科内容选**，不能按项目大类一刀切（参见 memory `feedback_theme_selection.md`）
+  — 例: 项目是 Climate, 节点讲"PMS5003 激光散射" → 选 **physics**；讲"AQI 分段线性映射" → 选 **math**；讲"颗粒物来源 / 大气" → 选 **earth**
+  — accent 选定后即用 AESTHETIC.md §2 表中的具体 hex (如 earth = `#c97a4e`)，**禁止**任何 oklch 创新色
 用户覆盖（user override）: <列出所有 user-explicit 跳过项，例如 "skip 0.5, skip 0.7"；无则写 none>
 
 我承诺按 12 步顺序执行，不跳步、不合并、不省略验证：
@@ -211,13 +282,21 @@ module_id: <M01..MNN>
 [ ] Step 0.7  LabXchange 匹配（除非 user override）
 [ ] Step 1    plan_markdown（800-1500 字，围绕 core_question）
 [ ] Step 1.5  theories（≥ 2 个，含 K1 + 项目 knowledge_level，每个 1-3 道选择题）
-[ ] Step 2    8 类富媒体逐条 debate（theory/anim/game/kit/image/diagram/youtube/labxchange）
+[ ] Step 2    9 类富媒体逐条 debate（theory/anim/game/kit/image/diagram/youtube/labxchange/**3d_object**）— 第 9 类 3d_object 大多数节点应 reject，详 §富媒体表 #9 + AESTHETIC.md §5b
 [ ] Step 2.5  Ideation Divergence（每个 anim/game 给 3 个跨 Pattern 候选）
 [ ] Step 2.6  Creativity Gate（Subtract / Replay / Surprise / Aha 四问）
 [ ] Step 3    Ideas 详细描述（user_guide / persuasion / hands_on_ref / acceptance_ref）
 [ ] Step 4    Debate 决策（保留/拒绝，每条 reject 写理由）
 [ ] Step 5    实现 HTML / exercises JSON
-[ ] Step 5.5  五道闸门（5.5a code review / 5.5b browser verify / 5.5c 科学一致性 Agent / 5.5d theory 等级 Agent / 5.5e 游戏性美观 Agent / 5.5f 文字重叠）
+              — animation/game/3D 必须遵守 **course_factory/AESTHETIC.md**:
+                  · :root 变量名严格用 `--paper / --paper-shade / --paper-bright / --ink / --ink-dim / --ink-mute / --accent / --alert / --success / --warning / --accent-blue` (不准换名)
+                  · 主背景 = `var(--paper)` (米黄 `#f3ecdc`)，**禁深色底**
+                  · accent = 学科表对应 hex (M01 earth → `#c97a4e`)
+                  · 警示/激光红 = `var(--alert)` `#d4534c`
+                  · 边框 = `1.5px solid var(--ink)`，offset shadow = `3px 3px 0 var(--ink)`
+              — 禁止 hardcode `#50ffb0` `#80ffc0` `#ff2244` 等饱和 web 默认色；3D 端禁纯黑 `0x000000` (用 `0x2a2520`)
+              — 禁用 light/dark/cyberpunk 三态切换（旧规范遗留，AESTHETIC.md 是**单一品牌风格** = 米黄手册插画）
+[ ] Step 5.5  七道闸门（5.5a code review / 5.5b browser verify / 5.5c 科学一致性 Agent / 5.5d theory 等级 Agent / 5.5e 游戏性美观 Agent / 5.5f 文字重叠 / 5.5g 美学审查 Agent — 强制对照 course_factory/AESTHETIC.md, prompt 模板见 course_factory/aesthetic_reviewer_prompt.md, 任一硬规则违反 = fail）
 [ ] Step 6    make_course_content + preflight_v41 + 写入 (workspace: save_knode_to_workspace; legacy: upsert_lesson)
 [ ] Step 6.5  generate_assignment + upsert_assignment
 [ ] Step 6.6  generate_audio_scripts
@@ -317,8 +396,10 @@ node course_factory/validate/verify/learn_page.mjs <url> --out /tmp/verify_lp
 | 6 | **diagram（静态示意图）** | `ideas[mode='diagram']` + `rendered_sections.html` | Step 2-5 | 允许 0 |
 | 7 | **youtube（外部视频）** | `external_resources.youtube_results[]` | Step 0.5 Tavily | 非 0（除非搜索无命中） |
 | 8 | **labxchange（外部互动路径）** | `external_resources.labxchange_results[]` | Step 0.7 本地匹配 | 非 0（除非学科不匹配） |
+| 9 | **3d_object（可交互 3D 解剖 + 2 层下钻）** | `ideas[mode='3d_object']` + `media/3d_object-*.html` | Step 2-5 | **允许 0, 大多数节点应该 reject**。仅当节点讲解"项目主题核心硬件物体"时才生成 (例: PMS5003 / Pi Zero / BME280 / 引擎 / 镜头)。**禁止用于抽象概念 / 算法 / 公式 / 软件 / 过程动作节点**。详细判定规则见 `AESTHETIC.md §5b`。生成时调 `course_factory.factory.should_generate_3d_object(knode)` 自动判断 (返回 `{should_generate, reason, object_name_hint, matched_keywords}`), **course_factory 完全决定要不要做**, 不需用户手动标记。生成 HTML 后通过 `make_course_content(threed_object_html=..., threed_object_topic=..., ...)` 注入 idea, `_split_html_assets` 自动拆到 `media/3d_object-<slug>.html` |
 
 > exercise 也是必做产物（每个 knode ≥ 1 个），但它是"评测/练习"而非"呈现媒介"，不计入富媒体栏。
+> 3d_object 是 spec-026 新增类型, 大部分节点会 reject; 但保留的节点要做到 flipbook 米黄手册插画风 toon shading + EdgesGeometry 黑描边 + L0/L1/L2 三层下钻, 参考实现 `course_factory/3d_template/object_template.html`
 
 #### hands_on_kit 价格指引
 
@@ -396,7 +477,7 @@ kit 是**独立模块**，`[[IDEA:kit_xxx]]` 必须放在独立的 `## 实物操
 - [ ] `make_course_content` 直接传入 **未经重包装的** `research=research_knode() 返回值`、`labxchange_results=lx`、`theories=theories`
 - [ ] acceptance_ref / hands_on_ref 完全匹配 knode 原文（含句号）
 
-富媒体全集检查（8 类）——每类都要显式确认"考虑过"：
+富媒体全集检查（9 类）——每类都要显式确认"考虑过"：
 - [ ] **theory**：`len(theories) ≥ 2`（纯方法论节点除外），且 `[[THEORY:xxx]]` 占位符对应完整
 - [ ] **animation**：至少 1 个 animation idea 或已在 Debate 中写明 reject 理由
 - [ ] **game**：至少 1 个 game idea 或已在 Debate 中写明 reject 理由
@@ -405,6 +486,7 @@ kit 是**独立模块**，`[[IDEA:kit_xxx]]` 必须放在独立的 `## 实物操
 - [ ] **diagram**：是否有必要用一张静态示意图（SVG/HTML）？如果 reject 需写明理由
 - [ ] **youtube**：`research_knode(youtube_query=...)` 已调用，`external_resources.youtube_results` 有值（除非 Tavily 命中为 0）
 - [ ] **labxchange**：`search_labxchange(keywords=...)` 已调用，`labxchange_results=lx` 已传入 `make_course_content`
+- [ ] **3d_object** (spec-026 新增, 大多数节点应 reject)：调用 `should_generate_3d_object(knode)` 自动判断。返回 True 时, 必须产出 L0+L1 (3-5 个) 三层下钻 HTML, 经过 5.5g 美学闸门 PASS。返回 False 时, Debate 中显式写明 reject 理由 (如"本节讲算法不涉及具体硬件物体")。详 AESTHETIC.md §5b + `course_factory/3d_template/README.md`
 
 作业练习检查（Step 6.5）：
 - [ ] `generate_assignment()` 已调用并返回非空文本
@@ -1751,9 +1833,15 @@ Game 的交互方式不设固定模板，可以自由设计适合教学内容的
 
 `/tmp/v3_game_k27_kimi26_simplified.html`(45 行 prompt + kimi-k2.6 streaming) 是早期 fogsight 自由风格的火箭推力 sandbox 演示 (47760 字符), 含动态比例尺 + 玻璃态 HUD + 6 个 input range 滑块。当前 v3 在它基础上**额外强制 sidebar 板式**。
 
-#### 学科主题色（同 anim）
+#### 学科主题色（同 anim） — **已迁移到 AESTHETIC.md**
 
-按学科 id 选主题色（见 `theme_style/themes.js`）：cs / bio / space / mech / ai / math / med / chem / phys / env / robo / elec / astro / geo / ocean / meteo / paleo / quant / nuke / neuro / mat / micro / zoo / bot / arch / agri。
+旧 `theme_style/themes.js` 26 色 oklch palette **已废弃**。
+
+新规范：按 `course_factory/AESTHETIC.md` §2 的 **8 学科 accent hex**:
+physics `#5d8aa8` / chemistry `#7a9b5e` / biology `#a35a40` / space `#3d4a6e` /
+earth `#c97a4e` / cs `#5e6e8c` / math `#8a5e6e` / engineering `#6a6a5e`。
+
+不允许在 game 里创新色，不允许 oklch hue 自由选。
 
 ### 物理常识约束（必须遵守）
 
@@ -1907,7 +1995,10 @@ Game 的交互方式不设固定模板，可以自由设计适合教学内容的
 
 #### 学科主题色 (同 game)
 
-按学科 id 选主题色 (见 `theme_style/themes.js`)：cs / bio / space / mech / ai / math / med / chem / phys / env / robo / elec / astro / geo / ocean / meteo / paleo / quant / nuke / neuro / mat / micro / zoo / bot / arch / agri。每个主题 5 色 oklch palette, 使用 `oklch(0.72 0.17 295)` 语法, 配合 Tailwind 暗色基底。
+按学科 id 选主题色 — **已迁移到 `course_factory/AESTHETIC.md` §2 的 8 学科 hex accent**:
+physics `#5d8aa8` / chemistry `#7a9b5e` / biology `#a35a40` / space `#3d4a6e` /
+earth `#c97a4e` / cs `#5e6e8c` / math `#8a5e6e` / engineering `#6a6a5e`。
+旧 26 色 oklch palette 已废弃；旧 cyberpunk 暗色基底已废弃，统一改米黄手册风。
 
 ---
 
