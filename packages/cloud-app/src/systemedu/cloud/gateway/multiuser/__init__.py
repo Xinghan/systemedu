@@ -1,6 +1,12 @@
 """spec 024-A multi-user system.
 
-Public API:
+DEPRECATED (spec 027 P1, 2026-05-16):
+    本模块的 auth + library_proxy + purchases 路由已迁到独立的
+    packages/student-app/ (systemedu-student)。生产部署只跑 student-app:18820,
+    不再跑老 cloud-app。本目录保留供本地 studio 工作流 (course_factory + 老 web/) 使用,
+    将来 spec 031 做 desktop app 时整体迁出, 老 cloud-app 退役。
+
+Public API (legacy):
     init_db()                  # 启动时建表
     api_register / api_login / api_logout / api_me   # auth endpoints
     api_library_*              # library proxy endpoints

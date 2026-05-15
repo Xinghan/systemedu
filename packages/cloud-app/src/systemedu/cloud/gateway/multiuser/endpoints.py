@@ -1,5 +1,10 @@
 """spec 024-A HTTP endpoints (auth + library proxy + purchases).
 
+DEPRECATED (spec 027 P1): 这些路由现在的"权威实现"在
+packages/student-app/src/systemedu/student/{auth,library_proxy,catalog}/。
+本模块只在本地 cloud-app dev 流程里继续工作 (studio + 老 web/), 生产不部署。
+新功能 (chat/notes/assignment) 一律加到 student-app。
+
 注册 + 登录 + me + logout    /api/auth/*
 library 内容代理              /api/library/*    (knode 详情需登录+购买)
 购买                         /api/purchases/*
