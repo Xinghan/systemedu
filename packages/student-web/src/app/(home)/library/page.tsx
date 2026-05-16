@@ -3,7 +3,7 @@
 import Link from "next/link"
 import { useEffect, useState } from "react"
 import { toast } from "sonner"
-import { Sparkles } from "lucide-react"
+import { BarChart3, Calendar, Globe, Sparkles, Users } from "lucide-react"
 import { library, myProjects, type LibraryProjectSummary } from "@/lib/api"
 import { useAuthStore } from "@/lib/stores/auth-store"
 import { useT } from "@/lib/hooks/use-t"
@@ -84,10 +84,18 @@ export default function LibraryListPage() {
                 </p>
               )}
               <div className="mt-4 flex flex-wrap gap-1.5">
-                {p.domain && <Tag>{p.domain}</Tag>}
-                {p.age_band && <Tag>{p.age_band} 岁</Tag>}
-                {p.duration_weeks != null && <Tag>{p.duration_weeks} 周</Tag>}
-                {p.difficulty != null && <Tag>难度 {p.difficulty}/10</Tag>}
+                {p.domain && (
+                  <Tag icon={<Globe size={11} />}>{p.domain}</Tag>
+                )}
+                {p.age_band && (
+                  <Tag icon={<Users size={11} />}>{p.age_band} 岁</Tag>
+                )}
+                {p.duration_weeks != null && (
+                  <Tag icon={<Calendar size={11} />}>{p.duration_weeks} 周</Tag>
+                )}
+                {p.difficulty != null && (
+                  <Tag icon={<BarChart3 size={11} />}>难度 {p.difficulty}/10</Tag>
+                )}
               </div>
               <div className="mt-3 text-xs text-muted-foreground">
                 {p.stage_count}S · {p.knode_count}K
@@ -100,9 +108,16 @@ export default function LibraryListPage() {
   )
 }
 
-function Tag({ children }: { children: React.ReactNode }) {
+function Tag({
+  children,
+  icon,
+}: {
+  children: React.ReactNode
+  icon?: React.ReactNode
+}) {
   return (
-    <span className="rounded-full border border-border/60 px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+    <span className="inline-flex items-center gap-1 rounded-full border border-border/60 px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+      {icon}
       {children}
     </span>
   )
