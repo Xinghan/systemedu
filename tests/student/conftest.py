@@ -199,6 +199,8 @@ def services(tmp_path_factory):
             "STUDENT_BIND_HOST": "127.0.0.1",
             "LIBRARY_BASE_URL": base_lib,
             "LIBRARY_LICENSE_TOKEN": license_tok,
+            # spec 028: 测试时跳过 tutor preload (省 5-10s, 不用 LLM)
+            "STUDENT_SKIP_TUTOR_PRELOAD": "1",
         })
         proc_stu = subprocess.Popen(
             [

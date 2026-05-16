@@ -135,18 +135,37 @@ class LastVisited(Base):
 
 
 # ---------------------------------------------------------------------------
-# 预留表 (spec 028/029) — schema 占位, 本 spec 不实现 endpoint
+# spec 028: AI 助教 chat session + message
 # ---------------------------------------------------------------------------
+
+class ChatSession(Base):
+    __tablename__ = "chat_sessions"
+    __table_args__ = (
+        UniqueConstraint("user_id", "library_slug", "module_id", "title", name="uq_chat_session"),
+    )
+
+    id = Column(String(36), primary_key=True, default=_uuid)
+    user_id = Column(String(36), ForeignKey("users.id"), index=True, nullable=False)
+    library_slug = Column(String(128), index=True, nullable=False, default="")
+    module_id = Column(String(64), index=True, nullable=True)
+    title = Column(String(120), nullable=False, default="新对话")
+    active_skill = Column(String(64), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
 
 class ChatMessage(Base):
     __tablename__ = "chat_messages"
 
     id = Column(String(36), primary_key=True, default=_uuid)
+    session_id = Column(String(36), ForeignKey("chat_sessions.id"), index=True, nullable=False)
     user_id = Column(String(36), ForeignKey("users.id"), index=True, nullable=False)
-    library_slug = Column(String(128), index=True, nullable=False)
-    module_id = Column(String(64), index=True, nullable=False)
-    role = Column(String(16), nullable=False)
+    library_slug = Column(String(128), index=True, nullable=False, default="")
+    module_id = Column(String(64), index=True, nullable=False, default="")
+    role = Column(String(16), nullable=False)  # 'user' | 'assistant' | 'tool' | 'system'
     content = Column(Text, nullable=False)
+    tool_calls = Column(Text, nullable=True)  # JSON string
+    skill = Column(String(64), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
 

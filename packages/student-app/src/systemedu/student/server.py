@@ -28,6 +28,8 @@ from starlette.responses import JSONResponse
 
 from .auth.routes import ROUTES as _auth_routes
 from .catalog.routes import ROUTES as _catalog_routes
+from .chat import ROUTES as _chat_routes
+from .chat import preload_graph as _preload_tutor, shutdown_graph as _shutdown_tutor
 from .db import init_db
 from .library_proxy.routes import ROUTES as _lib_routes
 
@@ -60,6 +62,7 @@ def create_app() -> Starlette:
         *_auth_routes,
         *_lib_routes,
         *_catalog_routes,
+        *_chat_routes,
     ]
 
     middleware = [
@@ -76,7 +79,18 @@ def create_app() -> Starlette:
     async def _lifespan(_app):
         init_db()
         logger.info("student-app started, db initialized")
+        # spec 028: 预热 tutor graph 避免首次 chat 请求等 5-10s
+        if os.environ.get("STUDENT_SKIP_TUTOR_PRELOAD") != "1":
+            try:
+                await _preload_tutor()
+                logger.info("tutor graph preloaded")
+            except Exception:
+                logger.exception("preload tutor graph failed (will retry on first request)")
         yield
+        try:
+            await _shutdown_tutor()
+        except Exception:
+            logger.exception("shutdown tutor graph failed")
         logger.info("student-app shutting down")
 
     return Starlette(routes=routes, middleware=middleware, lifespan=_lifespan)
