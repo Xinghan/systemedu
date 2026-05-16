@@ -48,9 +48,16 @@ test("注册到首次学习完整流程", async ({ page }) => {
   await startLink.click()
   await expect(page).toHaveURL(/\/learn\/purpleair-airquality-node\/M01/)
 
-  // 8. 学习页内容: 标题渲染 + iframe (animation/game) 至少 1 个
-  await expect(page.locator("h1").first()).toContainText(/PurpleAir|颗粒|空气|认识/)
-  await expect(page.locator("iframe").first()).toBeVisible({ timeout: 15000 })
+  // 8. 学习页内容: CourseContentView 渲染了 h1 (knode 标题)
+  await expect(page.locator("h1").first()).toContainText(/PurpleAir|颗粒|空气|认识/, {
+    timeout: 15000,
+  })
+  // 动画演示 / 互动游戏 卡片出现 (CourseContentView 的 IdeaBlock)
+  await expect(page.getByText("动画演示").first()).toBeVisible({ timeout: 15000 })
+  await expect(page.getByText("互动游戏").first()).toBeVisible()
+  // 点击动画卡片 -> IframeModal 打开 -> iframe 出现
+  await page.getByText("动画演示").first().click()
+  await page.waitForSelector("iframe", { state: "attached", timeout: 10000 })
 
   // 9. 进度反映: 再回 /home 看 last_module
   await page.goto("/home")

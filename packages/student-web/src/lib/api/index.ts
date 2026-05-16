@@ -139,4 +139,7 @@ export const myProjects = {
     ),
 }
 
+// spec 027 P2.4-redo: gateway shim 给老 web 学习页用
+export { gateway, setCurrentModuleId } from "./gateway"
+
 export { STUDENT_API_URL }

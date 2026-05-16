@@ -4,7 +4,16 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useEffect, useState } from "react"
 import { toast } from "sonner"
-import { ArrowRight, BookOpen, Search, Trash2 } from "lucide-react"
+import {
+  AlertTriangle,
+  ArrowRight,
+  BookMarked,
+  BookOpen,
+  History,
+  Layers,
+  Search,
+  Trash2,
+} from "lucide-react"
 import { myProjects, type MyProjectItem } from "@/lib/api"
 import { useAuthStore } from "@/lib/stores/auth-store"
 import { useT } from "@/lib/hooks/use-t"
@@ -62,7 +71,10 @@ export default function HomePage() {
 
       <section>
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-lg font-semibold">{t("home.my_projects")}</h2>
+          <h2 className="flex items-center gap-2 text-lg font-semibold">
+            <BookMarked size={18} className="text-primary" />
+            {t("home.my_projects")}
+          </h2>
           <Link
             href="/library"
             className="inline-flex items-center gap-1 text-sm text-primary hover:underline"
@@ -140,17 +152,25 @@ function MyProjectCard({
       {project.description && (
         <p className="mt-2 line-clamp-2 text-sm text-muted-foreground">{project.description}</p>
       )}
-      <div className="mt-4 text-xs text-muted-foreground">
-        {project.knode_count != null && t("home.knode_count", { n: project.knode_count })}
+      <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+        {project.knode_count != null && (
+          <span className="inline-flex items-center gap-1">
+            <Layers size={12} />
+            {t("home.knode_count", { n: project.knode_count })}
+          </span>
+        )}
         {project.last_module_id && (
-          <>
-            {" · "}
-            <span>{t("home.last_module", { m: project.last_module_id })}</span>
-          </>
+          <span className="inline-flex items-center gap-1 text-primary">
+            <History size={12} />
+            {t("home.last_module", { m: project.last_module_id })}
+          </span>
         )}
       </div>
       {project.unavailable && (
-        <p className="mt-2 text-xs text-amber-600">{t("home.unavailable")}</p>
+        <p className="mt-2 inline-flex items-center gap-1 text-xs text-amber-600">
+          <AlertTriangle size={12} />
+          {t("home.unavailable")}
+        </p>
       )}
       <div className="mt-auto pt-5">
         {project.unavailable ? (

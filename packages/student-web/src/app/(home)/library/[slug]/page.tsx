@@ -3,7 +3,22 @@
 import Link from "next/link"
 import { useParams, useRouter } from "next/navigation"
 import { useEffect, useMemo, useState } from "react"
-import { ArrowLeft, ArrowRight, BookOpen, Lock, Download } from "lucide-react"
+import {
+  ArrowLeft,
+  ArrowRight,
+  BarChart3,
+  BookOpen,
+  Calendar,
+  ClipboardList,
+  Download,
+  Globe,
+  Info,
+  Layers,
+  Lock,
+  Network,
+  Package,
+  Users,
+} from "lucide-react"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 import { toast } from "sonner"
@@ -151,11 +166,19 @@ export default function LibraryProjectDetail() {
             </h1>
             <div className="mt-1 font-mono text-sm text-muted-foreground">{project.slug}</div>
             <div className="mt-3 flex flex-wrap gap-1.5">
-              {project.domain && <Tag>{project.domain}</Tag>}
-              {project.age_band && <Tag>{project.age_band} 岁</Tag>}
-              {project.duration_weeks != null && <Tag>{project.duration_weeks} 周</Tag>}
-              {project.difficulty != null && <Tag>难度 {project.difficulty}/10</Tag>}
-              <Tag>
+              {project.domain && (
+                <Tag icon={<Globe size={11} />}>{project.domain}</Tag>
+              )}
+              {project.age_band && (
+                <Tag icon={<Users size={11} />}>{project.age_band} 岁</Tag>
+              )}
+              {project.duration_weeks != null && (
+                <Tag icon={<Calendar size={11} />}>{project.duration_weeks} 周</Tag>
+              )}
+              {project.difficulty != null && (
+                <Tag icon={<BarChart3 size={11} />}>难度 {project.difficulty}/10</Tag>
+              )}
+              <Tag icon={<Package size={11} />}>
                 {project.stage_count}S · {project.knode_count}K
               </Tag>
             </div>
@@ -194,25 +217,32 @@ export default function LibraryProjectDetail() {
       </div>
 
       {blueprint && (
-        <section className="rounded-2xl border border-border/60 bg-card p-6">
-          <h2 className="mb-3 text-base font-semibold">项目介绍</h2>
-          <article className="prose prose-stone max-w-none text-sm [&_pre]:overflow-x-auto [&_pre]:rounded-lg [&_pre]:bg-muted [&_pre]:p-3 [&_table]:text-xs">
-            <ReactMarkdown remarkPlugins={[remarkGfm]}>{blueprint}</ReactMarkdown>
+        <section className="rounded-2xl border border-border/60 bg-card p-6 sm:p-8">
+          <h2 className="mb-4 flex items-center gap-2 text-base font-semibold">
+            <Info size={16} className="text-primary" />
+            项目介绍
+          </h2>
+          <article className="prose prose-stone prose-sm max-w-3xl prose-headings:font-semibold prose-h1:text-2xl prose-h2:mt-8 prose-h2:text-xl prose-h3:text-base prose-p:leading-relaxed prose-table:text-xs prose-pre:overflow-x-auto prose-pre:rounded-lg prose-pre:bg-muted prose-code:rounded prose-code:bg-muted prose-code:px-1 prose-code:py-0.5 prose-code:font-normal prose-code:before:content-none prose-code:after:content-none">
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>{stripFrontmatter(blueprint)}</ReactMarkdown>
           </article>
         </section>
       )}
 
       <section className="rounded-2xl border border-border/60 bg-card p-6">
-        <h2 className="mb-4 text-base font-semibold">知识树</h2>
+        <h2 className="mb-4 flex items-center gap-2 text-base font-semibold">
+          <Network size={16} className="text-primary" />
+          知识树
+        </h2>
         {stages.length === 0 ? (
           <p className="text-sm text-muted-foreground">没有 stage 数据。</p>
         ) : (
           <div className="space-y-6">
             {stages.map((s) => (
               <div key={s.stage_id}>
-                <div className="mb-2 font-medium">
-                  <span className="mr-2 font-mono text-primary">{s.stage_id}</span>
-                  {s.title}
+                <div className="mb-2 flex items-center gap-2 font-medium">
+                  <Layers size={14} className="text-muted-foreground" />
+                  <span className="font-mono text-primary">{s.stage_id}</span>
+                  <span>{s.title}</span>
                 </div>
                 {s.stage_goal && (
                   <p className="mb-3 text-xs text-muted-foreground">{s.stage_goal}</p>
@@ -269,10 +299,25 @@ export default function LibraryProjectDetail() {
   )
 }
 
-function Tag({ children }: { children: React.ReactNode }) {
+function Tag({
+  children,
+  icon,
+}: {
+  children: React.ReactNode
+  icon?: React.ReactNode
+}) {
   return (
-    <span className="rounded-full border border-border/60 px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+    <span className="inline-flex items-center gap-1 rounded-full border border-border/60 px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+      {icon}
       {children}
     </span>
   )
+}
+
+// 剥掉文件头的 YAML frontmatter (--- ... ---), react-markdown 不识别会显示成行内文本
+function stripFrontmatter(md: string): string {
+  if (!md.startsWith("---")) return md
+  const end = md.indexOf("\n---", 3)
+  if (end < 0) return md
+  return md.slice(end + 4).replace(/^\n+/, "")
 }
