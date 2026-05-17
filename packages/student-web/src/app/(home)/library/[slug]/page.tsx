@@ -3,28 +3,29 @@
 import Link from "next/link"
 import { useParams, useRouter } from "next/navigation"
 import { useEffect, useMemo, useState } from "react"
-import {
-  ArrowLeft,
-  ArrowRight,
-  BarChart3,
-  BookOpen,
-  Calendar,
-  ClipboardList,
-  Download,
-  Globe,
-  Info,
-  Layers,
-  Lock,
-  Network,
-  Package,
-  Users,
-} from "lucide-react"
+import { toast } from "sonner"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
-import { toast } from "sonner"
-import { library, myProjects, type LibraryProjectSummary } from "@/lib/api"
+import {
+  ArrowUpRight,
+  ChevronDown,
+  ChevronRight,
+  CirclePlay,
+  CircleCheck,
+  CircleDot,
+  Circle,
+  Download,
+  Flag,
+  Lock,
+  Network,
+  Wind,
+} from "lucide-react"
+import {
+  library,
+  myProjects,
+  type LibraryProjectSummary,
+} from "@/lib/api"
 import { useAuthStore } from "@/lib/stores/auth-store"
-import { useT } from "@/lib/hooks/use-t"
 
 type Stage = { stage_id: string; title: string; stage_goal?: string }
 type Module = {
@@ -44,8 +45,71 @@ type DetailProject = LibraryProjectSummary & {
   } | null
 }
 
-export default function LibraryProjectDetail() {
-  const t = useT()
+// ──────────────────────────────────────────────────────────────────────────
+// Helpers
+// ──────────────────────────────────────────────────────────────────────────
+
+function stripFrontmatter(md: string): string {
+  if (!md.startsWith("---")) return md
+  const end = md.indexOf("\n---", 3)
+  if (end < 0) return md
+  return md.slice(end + 4).replace(/^\n+/, "")
+}
+
+function firstParagraph(md: string, maxLen = 380): string {
+  const stripped = stripFrontmatter(md)
+  // 去标题, 取首段
+  const lines = stripped.split("\n")
+  const buf: string[] = []
+  for (const l of lines) {
+    if (l.startsWith("#")) continue
+    if (l.trim() === "" && buf.length > 0) break
+    buf.push(l)
+  }
+  let para = buf.join(" ").trim()
+  if (para.length > maxLen) para = para.slice(0, maxLen) + "…"
+  return para
+}
+
+function domainClass(domain?: string | null): string {
+  if (!domain) return "violet"
+  const d = domain.toLowerCase()
+  if (d.includes("climate")) return "climate"
+  if (d.includes("aero") || d.includes("space")) return "aerospace"
+  if (d.includes("bio")) return "bio"
+  if (d.includes("robot")) return "robotics"
+  if (d.includes("comput") || d.includes("ai")) return "computing"
+  if (d.includes("material")) return "materials"
+  if (d.includes("energy")) return "energy"
+  return "violet"
+}
+
+function initials(name?: string | null): string {
+  if (!name) return "SE"
+  const parts = name.trim().split(/\s+/).filter(Boolean)
+  if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase()
+  return name.slice(0, 2).toUpperCase()
+}
+
+// 计算 module 状态: 已 visited (last_module 之前的都算 done) / current / locked
+function moduleStatus(
+  modIdx: number,
+  lastModuleId: string | null,
+  modules: Module[],
+): "done" | "current" | "locked" | "available" {
+  if (!lastModuleId) return modIdx === 0 ? "current" : "locked"
+  const lastIdx = modules.findIndex((m) => m.module_id === lastModuleId)
+  if (lastIdx < 0) return "locked"
+  if (modIdx < lastIdx) return "done"
+  if (modIdx === lastIdx) return "current"
+  return "available" // pulled 项目所有 modules 都可访问
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// Page
+// ──────────────────────────────────────────────────────────────────────────
+
+export default function ProjectHome() {
   const router = useRouter()
   const params = useParams<{ slug: string }>()
   const slug = decodeURIComponent(params.slug)
@@ -79,12 +143,9 @@ export default function LibraryProjectDetail() {
             if (item) {
               setPulled(true)
               setLastModuleId(item.last_module_id ?? null)
-            } else {
-              setPulled(false)
-              setLastModuleId(null)
             }
           } catch {
-            // ignore
+            /* ignore */
           }
         }
       } catch (err) {
@@ -96,7 +157,13 @@ export default function LibraryProjectDetail() {
   }, [slug, loggedIn])
 
   const stages = project?.knowledge_tree?.stages || []
-  const modules = project?.knowledge_tree?.modules || []
+  const modules = useMemo(() => {
+    const m = project?.knowledge_tree?.modules || []
+    return [...m].sort(
+      (a, b) => (a.sequence_order ?? 0) - (b.sequence_order ?? 0),
+    )
+  }, [project])
+
   const modulesByStage = useMemo(() => {
     const grouped: Record<string, Module[]> = {}
     for (const m of modules) {
@@ -104,14 +171,15 @@ export default function LibraryProjectDetail() {
       if (!grouped[k]) grouped[k] = []
       grouped[k].push(m)
     }
-    for (const k of Object.keys(grouped)) {
-      grouped[k].sort((a, b) => (a.sequence_order ?? 0) - (b.sequence_order ?? 0))
-    }
     return grouped
   }, [modules])
 
   const firstModuleId = modules[0]?.module_id
   const targetModuleId = lastModuleId || firstModuleId
+  const completed = lastModuleId
+    ? modules.findIndex((m) => m.module_id === lastModuleId)
+    : 0
+  const pct = modules.length > 0 ? Math.round((completed / modules.length) * 100) : 0
 
   async function handlePull() {
     if (!loggedIn) {
@@ -122,7 +190,7 @@ export default function LibraryProjectDetail() {
     try {
       await myProjects.pull(slug)
       setPulled(true)
-      toast.success(t("library.pulled_toast"))
+      toast.success("已加入我的书架")
       router.push("/home")
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Pull 失败")
@@ -132,192 +200,793 @@ export default function LibraryProjectDetail() {
   }
 
   if (loading) {
-    return <div className="py-16 text-center text-sm text-muted-foreground">加载中...</div>
+    return (
+      <main className="page-wide" style={{ maxWidth: 1100, paddingTop: 18 }}>
+        <div className="card" style={{ padding: 32, textAlign: "center", color: "var(--sub)" }}>
+          加载中…
+        </div>
+      </main>
+    )
   }
   if (!project) {
     return (
-      <div className="py-12">
-        <p className="mb-3 text-sm text-muted-foreground">项目不存在。</p>
-        <Link
-          href="/library"
-          className="inline-flex items-center gap-1 text-sm text-primary hover:underline"
-        >
-          <ArrowLeft size={14} />
-          返回列表
-        </Link>
-      </div>
+      <main className="page-wide" style={{ maxWidth: 1100, paddingTop: 18 }}>
+        <div className="card" style={{ padding: 32, textAlign: "center" }}>
+          <p style={{ color: "var(--sub)", marginBottom: 12 }}>项目不存在</p>
+          <Link href="/library" className="btn btn-ghost btn-sm">
+            返回 Library
+          </Link>
+        </div>
+      </main>
     )
   }
 
+  const dClass = domainClass(project.domain)
+
   return (
-    <div className="space-y-8">
-      <div>
-        <Link
-          href="/library"
-          className="-ml-2 mb-2 inline-flex items-center gap-1 rounded-md px-2 py-1 text-sm text-muted-foreground hover:bg-accent hover:text-foreground"
+    <main className="page-wide" style={{ paddingTop: 18, maxWidth: 1100 }}>
+      <Crumbs
+        items={[
+          { label: "Home" },
+          { label: "Library" },
+          { label: project.slug, mono: true },
+        ]}
+      />
+
+      {/* Hero header */}
+      <header
+        style={{
+          marginTop: 16,
+          paddingBottom: 22,
+          borderBottom: "1px solid var(--border)",
+        }}
+      >
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "1.4fr 1fr",
+            gap: 36,
+            alignItems: "start",
+          }}
         >
-          <ArrowLeft size={14} />
-          返回列表
-        </Link>
-        <div className="flex flex-wrap items-start justify-between gap-6">
           <div>
-            <h1 className="text-3xl font-semibold tracking-tight">
-              {project.title_zh || project.title}
-            </h1>
-            <div className="mt-1 font-mono text-sm text-muted-foreground">{project.slug}</div>
-            <div className="mt-3 flex flex-wrap gap-1.5">
+            <div
+              style={{
+                display: "flex",
+                gap: 6,
+                alignItems: "center",
+                marginBottom: 12,
+                flexWrap: "wrap",
+              }}
+            >
               {project.domain && (
-                <Tag icon={<Globe size={11} />}>{project.domain}</Tag>
+                <span className={`tag ${dClass}`}>{project.domain}</span>
               )}
-              {project.age_band && (
-                <Tag icon={<Users size={11} />}>{project.age_band} 岁</Tag>
-              )}
+              {project.age_band && <span className="tag">{project.age_band}</span>}
               {project.duration_weeks != null && (
-                <Tag icon={<Calendar size={11} />}>{project.duration_weeks} 周</Tag>
+                <span className="tag">{project.duration_weeks}w</span>
               )}
               {project.difficulty != null && (
-                <Tag icon={<BarChart3 size={11} />}>难度 {project.difficulty}/10</Tag>
+                <span className="tag">diff {project.difficulty}/10</span>
               )}
-              <Tag icon={<Package size={11} />}>
-                {project.stage_count}S · {project.knode_count}K
-              </Tag>
+            </div>
+            <div className="mono" style={{ fontSize: 11.5, color: "var(--sub)" }}>
+              {project.slug}
+            </div>
+            <h1
+              style={{
+                fontSize: 34,
+                lineHeight: 1.1,
+                letterSpacing: "-.03em",
+                fontWeight: 600,
+                marginTop: 8,
+                maxWidth: 640,
+              }}
+            >
+              {project.title_zh || project.title}
+            </h1>
+
+            {/* meta line */}
+            <div
+              style={{
+                marginTop: 18,
+                display: "flex",
+                alignItems: "center",
+                gap: 12,
+                color: "var(--sub)",
+                flexWrap: "wrap",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <div
+                  style={{
+                    width: 24,
+                    height: 24,
+                    borderRadius: 999,
+                    background: "var(--primary-soft)",
+                    display: "grid",
+                    placeItems: "center",
+                    fontFamily: "var(--mono)",
+                    fontSize: 9.5,
+                    color: "var(--primary-ink)",
+                    fontWeight: 600,
+                  }}
+                >
+                  SE
+                </div>
+                <span style={{ fontSize: 13, color: "var(--ink-2)" }}>
+                  by{" "}
+                  <strong style={{ color: "var(--ink)" }}>
+                    SystemEdu Library
+                  </strong>
+                </span>
+              </div>
+              {project.published_at && (
+                <>
+                  <span style={{ opacity: 0.5 }}>·</span>
+                  <span className="mono" style={{ fontSize: 11.5 }}>
+                    published{" "}
+                    {new Date(project.published_at).toLocaleDateString("zh-CN")}
+                  </span>
+                </>
+              )}
+              {project.version && (
+                <>
+                  <span style={{ opacity: 0.5 }}>·</span>
+                  <span className="mono" style={{ fontSize: 11.5 }}>
+                    v{project.version}
+                  </span>
+                </>
+              )}
             </div>
           </div>
-          <div className="shrink-0">
+
+          {/* Action panel */}
+          <div
+            style={{
+              border: "1px solid var(--border)",
+              borderRadius: 12,
+              padding: 16,
+              background: "var(--card)",
+              display: "flex",
+              flexDirection: "column",
+              gap: 10,
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+              }}
+            >
+              <div className="eyebrow">
+                <span className="dot" />
+                {pulled ? "Your shelf" : "Library"}
+              </div>
+              {pulled ? (
+                <span className="pip run" style={{ fontSize: 10.5 }}>
+                  IN PROGRESS
+                </span>
+              ) : (
+                <span className="pip idle" style={{ fontSize: 10.5 }}>
+                  NOT PULLED
+                </span>
+              )}
+            </div>
+
+            {pulled && modules.length > 0 && (
+              <div style={{ marginTop: 2 }}>
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    fontSize: 11,
+                    color: "var(--sub)",
+                    fontFamily: "var(--mono)",
+                    marginBottom: 6,
+                  }}
+                >
+                  <span>
+                    {completed} / {modules.length} modules
+                  </span>
+                  <span>{pct}%</span>
+                </div>
+                <div className="bar violet">
+                  <i style={{ width: `${pct}%` }} />
+                </div>
+              </div>
+            )}
+
             {!loggedIn ? (
               <Link
                 href={`/login?next=${encodeURIComponent(`/library/${slug}`)}`}
-                className="inline-flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+                className="btn btn-violet btn-lg"
+                style={{ justifyContent: "center" }}
               >
-                <Lock size={14} />
-                {t("library.login_first")}
+                <Lock size={14} strokeWidth={1.5} /> 登录后 Pull
               </Link>
             ) : !pulled ? (
               <button
                 type="button"
                 onClick={handlePull}
                 disabled={pulling}
-                className="inline-flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition hover:bg-primary/90 disabled:opacity-60"
+                className="btn btn-violet btn-lg"
+                style={{ justifyContent: "center" }}
               >
-                <Download size={14} />
-                {pulling ? t("library.pulling") : t("library.pull")}
+                <Download size={15} strokeWidth={1.5} />
+                {pulling ? "Pulling..." : "Pull to my shelf"}
               </button>
             ) : targetModuleId ? (
               <Link
                 href={`/learn/${encodeURIComponent(slug)}/${encodeURIComponent(targetModuleId)}`}
-                className="inline-flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+                className="btn btn-violet btn-lg"
+                style={{ justifyContent: "center" }}
               >
-                <BookOpen size={14} />
-                {lastModuleId ? `继续学习 (${lastModuleId})` : "开始学习"}
-                <ArrowRight size={14} />
+                <CirclePlay size={15} strokeWidth={1.5} /> Continue ·{" "}
+                {targetModuleId}
               </Link>
             ) : null}
+
+            <button
+              type="button"
+              className="btn btn-ghost"
+              style={{ justifyContent: "center" }}
+              onClick={() => {
+                toast.info("Knowledge tree modal (待 spec 030 加)")
+              }}
+            >
+              <Network size={14} strokeWidth={1.5} /> Open knowledge tree
+            </button>
           </div>
         </div>
-      </div>
+      </header>
 
-      {blueprint && (
-        <section className="rounded-2xl border border-border/60 bg-card p-6 sm:p-8">
-          <h2 className="mb-4 flex items-center gap-2 text-base font-semibold">
-            <Info size={16} className="text-primary" />
-            项目介绍
-          </h2>
-          <article className="prose prose-stone prose-sm max-w-3xl prose-headings:font-semibold prose-h1:text-2xl prose-h2:mt-8 prose-h2:text-xl prose-h3:text-base prose-p:leading-relaxed prose-table:text-xs prose-pre:overflow-x-auto prose-pre:rounded-lg prose-pre:bg-muted prose-code:rounded prose-code:bg-muted prose-code:px-1 prose-code:py-0.5 prose-code:font-normal prose-code:before:content-none prose-code:after:content-none">
-            <ReactMarkdown remarkPlugins={[remarkGfm]}>{stripFrontmatter(blueprint)}</ReactMarkdown>
-          </article>
-        </section>
-      )}
-
-      <section className="rounded-2xl border border-border/60 bg-card p-6">
-        <h2 className="mb-4 flex items-center gap-2 text-base font-semibold">
-          <Network size={16} className="text-primary" />
-          知识树
-        </h2>
-        {stages.length === 0 ? (
-          <p className="text-sm text-muted-foreground">没有 stage 数据。</p>
-        ) : (
-          <div className="space-y-6">
-            {stages.map((s) => (
-              <div key={s.stage_id}>
-                <div className="mb-2 flex items-center gap-2 font-medium">
-                  <Layers size={14} className="text-muted-foreground" />
-                  <span className="font-mono text-primary">{s.stage_id}</span>
-                  <span>{s.title}</span>
-                </div>
-                {s.stage_goal && (
-                  <p className="mb-3 text-xs text-muted-foreground">{s.stage_goal}</p>
-                )}
-                <div className="space-y-2">
-                  {(modulesByStage[s.stage_id] || []).map((m) => {
-                    const locked = !pulled
-                    const content = (
-                      <div className="flex items-start gap-3 text-sm">
-                        {locked ? (
-                          <Lock size={14} className="mt-0.5 shrink-0 text-muted-foreground" />
-                        ) : (
-                          <BookOpen size={14} className="mt-0.5 shrink-0 text-primary" />
-                        )}
-                        <div className="flex-1">
-                          <div>
-                            <span className="mr-2 font-mono text-xs text-muted-foreground">
-                              {m.module_id}
-                            </span>
-                            <span className={locked ? "text-muted-foreground" : ""}>{m.title}</span>
-                          </div>
-                          {m.summary && (
-                            <div className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">
-                              {m.summary}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    )
-                    return locked ? (
-                      <div
-                        key={m.module_id}
-                        className="rounded-lg border border-border/60 px-3 py-2.5 opacity-70"
-                      >
-                        {content}
-                      </div>
-                    ) : (
-                      <Link
-                        key={m.module_id}
-                        href={`/learn/${encodeURIComponent(slug)}/${encodeURIComponent(m.module_id)}`}
-                        className="block rounded-lg border border-border/60 px-3 py-2.5 transition hover:border-primary/40 hover:bg-muted/30"
-                      >
-                        {content}
-                      </Link>
-                    )
-                  })}
-                </div>
+      {/* Body */}
+      <div
+        style={{
+          marginTop: 28,
+          display: "grid",
+          gridTemplateColumns: "1fr",
+          gap: 0,
+          maxWidth: 880,
+        }}
+      >
+        {/* §01 About */}
+        <Block n="01" t="About">
+          {blueprint ? (
+            <>
+              <p className="body" style={{ fontSize: 14.5, lineHeight: 1.65 }}>
+                {firstParagraph(blueprint)}
+              </p>
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "1.4fr 1fr",
+                  gap: 12,
+                  marginTop: 16,
+                }}
+              >
+                <CoverArt kind={dClass} />
+                <StripeArt label={`${project.slug} · v${project.version || "—"}`} />
               </div>
-            ))}
-          </div>
-        )}
-      </section>
+              <details
+                style={{
+                  marginTop: 18,
+                  paddingTop: 14,
+                  borderTop: "1px dashed var(--border)",
+                }}
+              >
+                <summary
+                  style={{
+                    cursor: "pointer",
+                    fontSize: 13,
+                    color: "var(--violet)",
+                    fontWeight: 500,
+                    marginBottom: 12,
+                  }}
+                >
+                  展开完整介绍
+                </summary>
+                <article
+                  className="prose prose-stone prose-sm max-w-none prose-headings:font-semibold prose-h1:text-2xl prose-h2:mt-6 prose-h2:text-xl prose-h3:text-base prose-p:leading-relaxed prose-pre:overflow-x-auto prose-pre:rounded-lg prose-pre:bg-muted prose-code:rounded prose-code:bg-muted prose-code:px-1 prose-code:py-0.5 prose-code:font-normal prose-code:before:content-none prose-code:after:content-none"
+                >
+                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                    {stripFrontmatter(blueprint)}
+                  </ReactMarkdown>
+                </article>
+              </details>
+            </>
+          ) : (
+            <p className="body" style={{ color: "var(--sub)" }}>
+              暂无介绍
+            </p>
+          )}
+        </Block>
+
+        {/* §02 What you'll ship — stub (待项目 metadata 加 outcomes 字段) */}
+        <Block n="02" t="What you'll ship">
+          <ul
+            style={{
+              listStyle: "none",
+              padding: 0,
+              margin: 0,
+              display: "grid",
+              gridTemplateColumns: "1fr 1fr",
+              gap: 10,
+            }}
+          >
+            <Outcome
+              t={
+                modules.length > 0
+                  ? `${modules.length} 个章节走完`
+                  : "全部章节走完"
+              }
+              sub="按知识树顺序完成"
+            />
+            <Outcome
+              t="AI 助教共学记录"
+              sub="苏格拉底式问答陪伴整个项目"
+            />
+            <Outcome
+              t={
+                project.duration_weeks
+                  ? `${project.duration_weeks} 周完整学习路径`
+                  : "完整学习路径"
+              }
+              sub="按节奏 weekly 推进"
+            />
+            <Outcome t="项目成果交付" sub="动手输出 + 作业提交" />
+          </ul>
+        </Block>
+
+        {/* §03 Curriculum */}
+        <Block
+          n="03"
+          t={`Curriculum · ${stages.length} stages · ${modules.length} modules`}
+          last
+        >
+          {stages.length === 0 ? (
+            <p className="body" style={{ color: "var(--sub)" }}>
+              暂无章节数据
+            </p>
+          ) : (
+            <Curriculum
+              slug={slug}
+              stages={stages}
+              modulesByStage={modulesByStage}
+              orderedModules={modules}
+              lastModuleId={lastModuleId}
+              pulled={pulled}
+            />
+          )}
+        </Block>
+      </div>
+    </main>
+  )
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// Subcomponents
+// ──────────────────────────────────────────────────────────────────────────
+
+function Crumbs({ items }: { items: { label: string; mono?: boolean }[] }) {
+  return (
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 8,
+        color: "var(--sub)",
+        fontSize: 12.5,
+      }}
+    >
+      {items.map((it, i) => (
+        <span key={i} style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+          {i > 0 && (
+            <ChevronRight size={12} strokeWidth={1.5} style={{ color: "var(--sub-2)" }} />
+          )}
+          <span
+            style={{
+              color: i === items.length - 1 ? "var(--ink-2)" : "var(--sub)",
+              fontFamily: it.mono ? "var(--mono)" : "inherit",
+            }}
+          >
+            {it.label}
+          </span>
+        </span>
+      ))}
     </div>
   )
 }
 
-function Tag({
+function Block({
+  n,
+  t,
   children,
-  icon,
+  last,
 }: {
+  n: string
+  t: string
   children: React.ReactNode
-  icon?: React.ReactNode
+  last?: boolean
 }) {
   return (
-    <span className="inline-flex items-center gap-1 rounded-full border border-border/60 px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
-      {icon}
+    <section
+      style={{
+        paddingBottom: 28,
+        marginBottom: 28,
+        borderBottom: last ? "0" : "1px solid var(--border)",
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          gap: 10,
+          alignItems: "baseline",
+          marginBottom: 14,
+        }}
+      >
+        <span className="mono" style={{ fontSize: 11, color: "var(--sub-2)" }}>
+          § {n}
+        </span>
+        <h2 className="h2">{t}</h2>
+      </div>
       {children}
-    </span>
+    </section>
   )
 }
 
-// 剥掉文件头的 YAML frontmatter (--- ... ---), react-markdown 不识别会显示成行内文本
-function stripFrontmatter(md: string): string {
-  if (!md.startsWith("---")) return md
-  const end = md.indexOf("\n---", 3)
-  if (end < 0) return md
-  return md.slice(end + 4).replace(/^\n+/, "")
+function Outcome({ t, sub }: { t: string; sub: string }) {
+  return (
+    <li
+      style={{
+        padding: 14,
+        border: "1px solid var(--border)",
+        borderRadius: 9,
+        background: "var(--card)",
+        display: "grid",
+        gridTemplateColumns: "auto 1fr",
+        gap: 12,
+        alignItems: "flex-start",
+      }}
+    >
+      <span style={{ color: "var(--emerald)", marginTop: 2 }}>
+        <Flag size={15} strokeWidth={1.5} />
+      </span>
+      <div>
+        <div style={{ fontSize: 13.5, fontWeight: 600, color: "var(--ink)" }}>
+          {t}
+        </div>
+        <div
+          className="body"
+          style={{ fontSize: 12.5, color: "var(--sub)", marginTop: 4 }}
+        >
+          {sub}
+        </div>
+      </div>
+    </li>
+  )
+}
+
+function Curriculum({
+  slug,
+  stages,
+  modulesByStage,
+  orderedModules,
+  lastModuleId,
+  pulled,
+}: {
+  slug: string
+  stages: Stage[]
+  modulesByStage: Record<string, Module[]>
+  orderedModules: Module[]
+  lastModuleId: string | null
+  pulled: boolean
+}) {
+  const [open, setOpen] = useState<Record<string, boolean>>(() => {
+    // 默认展开包含 current module 的 stage
+    if (!lastModuleId) {
+      return stages.length > 0 ? { [stages[0].stage_id]: true } : {}
+    }
+    const m = orderedModules.find((x) => x.module_id === lastModuleId)
+    return m?.stage_id ? { [m.stage_id]: true } : {}
+  })
+
+  return (
+    <div>
+      {stages.map((s) => {
+        const mods = modulesByStage[s.stage_id] || []
+        const isOpen = !!open[s.stage_id]
+
+        // count done in this stage
+        let done = 0
+        let hasCurrent = false
+        if (lastModuleId) {
+          const lastIdx = orderedModules.findIndex((m) => m.module_id === lastModuleId)
+          done = mods.filter((m) => {
+            const i = orderedModules.findIndex((x) => x.module_id === m.module_id)
+            return i >= 0 && i < lastIdx
+          }).length
+          hasCurrent = mods.some((m) => m.module_id === lastModuleId)
+        }
+
+        return (
+          <div
+            key={s.stage_id}
+            style={{
+              border: "1px solid var(--border)",
+              borderRadius: 10,
+              marginBottom: 10,
+              background: "var(--card)",
+            }}
+          >
+            <button
+              type="button"
+              onClick={() => setOpen((o) => ({ ...o, [s.stage_id]: !o[s.stage_id] }))}
+              style={{
+                display: "grid",
+                gridTemplateColumns: "auto auto 1fr auto auto",
+                gap: 12,
+                alignItems: "center",
+                padding: "14px 18px",
+                width: "100%",
+                border: 0,
+                background: "transparent",
+                cursor: "pointer",
+                textAlign: "left",
+              }}
+            >
+              <span
+                className="mono"
+                style={{ fontSize: 11, color: "var(--sub-2)", width: 28 }}
+              >
+                {s.stage_id}
+              </span>
+              <span style={{ fontWeight: 600, fontSize: 14.5 }}>{s.title}</span>
+              <span className="mono" style={{ fontSize: 11, color: "var(--sub)" }}>
+                {mods.length > 0 ? `${mods.length} modules` : ""}
+              </span>
+              <span
+                className="mono"
+                style={{
+                  fontSize: 11,
+                  color:
+                    done === mods.length && mods.length > 0
+                      ? "var(--emerald)"
+                      : "var(--ink-2)",
+                }}
+              >
+                {done}/{mods.length || "—"}
+              </span>
+              {isOpen ? (
+                <ChevronDown
+                  size={14}
+                  strokeWidth={1.5}
+                  style={{ color: "var(--sub-2)" }}
+                />
+              ) : (
+                <ChevronRight
+                  size={14}
+                  strokeWidth={1.5}
+                  style={{ color: "var(--sub-2)" }}
+                />
+              )}
+            </button>
+            {isOpen && mods.length > 0 && (
+              <div style={{ borderTop: "1px solid var(--border)" }}>
+                {mods.map((m, i) => {
+                  const modIdx = orderedModules.findIndex(
+                    (x) => x.module_id === m.module_id,
+                  )
+                  const status = moduleStatus(modIdx, lastModuleId, orderedModules)
+                  const clickable = pulled
+                  const inner = (
+                    <div
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns: "auto auto 1fr auto",
+                        gap: 12,
+                        alignItems: "center",
+                        padding: "10px 18px",
+                        cursor: clickable ? "pointer" : "default",
+                        background:
+                          status === "current"
+                            ? "var(--violet-soft)"
+                            : "transparent",
+                        borderBottom:
+                          i === mods.length - 1
+                            ? "0"
+                            : "1px dashed var(--border)",
+                      }}
+                    >
+                      {status === "done" ? (
+                        <CircleCheck
+                          size={15}
+                          strokeWidth={1.5}
+                          style={{ color: "var(--emerald)" }}
+                        />
+                      ) : status === "current" ? (
+                        <CircleDot
+                          size={15}
+                          strokeWidth={1.5}
+                          style={{ color: "var(--violet)" }}
+                        />
+                      ) : pulled ? (
+                        <Circle
+                          size={15}
+                          strokeWidth={1.5}
+                          style={{ color: "var(--sub-2)" }}
+                        />
+                      ) : (
+                        <Lock
+                          size={14}
+                          strokeWidth={1.5}
+                          style={{ color: "var(--sub-2)" }}
+                        />
+                      )}
+                      <span
+                        className="mono"
+                        style={{
+                          fontSize: 11.5,
+                          color: "var(--sub-2)",
+                          width: 32,
+                        }}
+                      >
+                        {m.module_id}
+                      </span>
+                      <span
+                        style={{
+                          fontSize: 13.5,
+                          color:
+                            status === "done"
+                              ? "var(--sub)"
+                              : status === "locked" || !pulled
+                                ? "var(--sub-2)"
+                                : "var(--ink-2)",
+                        }}
+                      >
+                        {m.title}
+                      </span>
+                      {status === "current" && (
+                        <span className="tag violet" style={{ fontSize: 10 }}>
+                          NEXT
+                        </span>
+                      )}
+                    </div>
+                  )
+                  return clickable ? (
+                    <Link
+                      key={m.module_id}
+                      href={`/learn/${encodeURIComponent(slug)}/${encodeURIComponent(m.module_id)}`}
+                      style={{ textDecoration: "none", color: "inherit" }}
+                    >
+                      {inner}
+                    </Link>
+                  ) : (
+                    <div key={m.module_id}>{inner}</div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// Cover & Stripe art
+// ──────────────────────────────────────────────────────────────────────────
+
+function CoverArt({ kind }: { kind: string }) {
+  if (kind === "climate") {
+    return (
+      <div
+        style={{
+          height: 168,
+          background: "linear-gradient(180deg, #F8EDE5 0%, #FBF9FF 100%)",
+          position: "relative",
+          overflow: "hidden",
+          borderRadius: 10,
+          border: "1px solid var(--border)",
+        }}
+      >
+        <svg
+          viewBox="0 0 320 168"
+          width="100%"
+          height="100%"
+          preserveAspectRatio="none"
+          style={{ position: "absolute", inset: 0 }}
+        >
+          <defs>
+            <linearGradient id="ph-aq" x1="0" x2="0" y1="0" y2="1">
+              <stop offset="0" stopColor="#D97757" stopOpacity=".25" />
+              <stop offset="1" stopColor="#D97757" stopOpacity="0" />
+            </linearGradient>
+          </defs>
+          {[40, 80, 120].map((y, i) => (
+            <line
+              key={i}
+              x1="0"
+              x2="320"
+              y1={y}
+              y2={y}
+              stroke="#ECCFB8"
+              strokeDasharray="2 4"
+            />
+          ))}
+          <path
+            d="M0 110 L30 95 L60 100 L90 80 L120 70 L150 55 L180 65 L210 45 L240 50 L270 35 L300 40 L320 30 L320 168 L0 168 Z"
+            fill="url(#ph-aq)"
+          />
+          <path
+            d="M0 110 L30 95 L60 100 L90 80 L120 70 L150 55 L180 65 L210 45 L240 50 L270 35 L300 40 L320 30"
+            fill="none"
+            stroke="#D97757"
+            strokeWidth="1.5"
+          />
+        </svg>
+        <div
+          style={{
+            position: "absolute",
+            top: 14,
+            left: 16,
+            display: "flex",
+            gap: 6,
+            alignItems: "center",
+          }}
+        >
+          <Wind size={16} strokeWidth={1.5} style={{ color: "var(--violet-ink)" }} />
+          <span
+            style={{
+              fontFamily: "var(--mono)",
+              fontSize: 11,
+              color: "var(--violet-ink)",
+              fontWeight: 500,
+            }}
+          >
+            project · live
+          </span>
+        </div>
+      </div>
+    )
+  }
+  return <StripeArt label="cover" />
+}
+
+function StripeArt({ label, color = "var(--paper-2)" }: { label?: string; color?: string }) {
+  return (
+    <div
+      style={{
+        position: "relative",
+        width: "100%",
+        height: 168,
+        borderRadius: 10,
+        background: `repeating-linear-gradient(135deg, ${color} 0 12px, transparent 12px 24px), var(--paper)`,
+        border: "1px solid var(--border)",
+        overflow: "hidden",
+      }}
+    >
+      {label && (
+        <div
+          style={{
+            position: "absolute",
+            left: 12,
+            bottom: 10,
+            fontFamily: "var(--mono)",
+            fontSize: 11,
+            color: "var(--sub)",
+            padding: "3px 7px",
+            background: "rgba(255,255,255,.85)",
+            borderRadius: 5,
+            border: "1px solid var(--border)",
+          }}
+        >
+          {label}
+        </div>
+      )}
+    </div>
+  )
 }
