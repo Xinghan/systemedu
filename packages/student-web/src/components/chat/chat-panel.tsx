@@ -169,47 +169,108 @@ export function ChatPanel({ librarySlug, moduleId }: ChatPanelProps) {
   const skillLabel = currentSkill ? SKILL_LABELS[currentSkill] ?? currentSkill : null
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
-      {/* Header */}
-      <div className="flex shrink-0 items-center gap-2 border-b border-border/60 px-4 py-3">
-        <Sparkles size={16} className="text-primary" />
-        <h3 className="text-sm font-semibold">AI 助教</h3>
-        {skillLabel && (
-          <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary">
-            {skillLabel}
-          </span>
-        )}
-        <div className="flex-1" />
-        {/* Session 切换 */}
-        <div className="relative">
+    <div style={{ display: "flex", height: "100%", minHeight: 0, flexDirection: "column" }}>
+      {/* Scope chips + session 切换 */}
+      <div
+        style={{
+          padding: "10px 14px",
+          borderBottom: "1px solid var(--border)",
+          display: "flex",
+          alignItems: "center",
+          flexWrap: "wrap",
+          gap: 6,
+        }}
+      >
+        {moduleId && <span className="tag violet">{moduleId} context</span>}
+        {skillLabel && <span className="tag">{skillLabel}</span>}
+        <div style={{ flex: 1 }} />
+        <div style={{ position: "relative" }}>
           <button
             type="button"
             onClick={() => setSessionMenuOpen((v) => !v)}
-            className="inline-flex max-w-[200px] items-center gap-1 truncate rounded-md border border-border/60 bg-card px-2 py-1 text-xs text-muted-foreground hover:bg-accent hover:text-foreground"
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 4,
+              maxWidth: 160,
+              padding: "4px 8px",
+              border: "1px solid var(--border-2)",
+              borderRadius: 6,
+              background: "var(--card)",
+              fontSize: 11,
+              color: "var(--sub)",
+              cursor: "pointer",
+            }}
           >
-            <span className="truncate">{activeSession?.title || "未选择会话"}</span>
-            <ChevronDown size={12} />
+            <span
+              style={{
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+              }}
+            >
+              {activeSession?.title || "未选择"}
+            </span>
+            <ChevronDown size={11} strokeWidth={1.5} />
           </button>
           {sessionMenuOpen && (
-            <div className="absolute right-0 top-full z-50 mt-1 w-72 overflow-hidden rounded-lg border border-border/60 bg-popover shadow-lg">
+            <div
+              style={{
+                position: "absolute",
+                right: 0,
+                top: "100%",
+                marginTop: 4,
+                width: 260,
+                background: "var(--card)",
+                border: "1px solid var(--border)",
+                borderRadius: 8,
+                boxShadow: "var(--shadow-md)",
+                zIndex: 50,
+                overflow: "hidden",
+              }}
+            >
               <button
                 type="button"
                 onClick={handleNewSession}
-                className="flex w-full items-center gap-2 border-b border-border/60 px-3 py-2 text-sm hover:bg-accent"
+                style={{
+                  display: "flex",
+                  width: "100%",
+                  alignItems: "center",
+                  gap: 8,
+                  border: 0,
+                  borderBottom: "1px solid var(--border)",
+                  padding: "10px 12px",
+                  background: "transparent",
+                  fontSize: 13,
+                  color: "var(--ink-2)",
+                  cursor: "pointer",
+                  textAlign: "left",
+                }}
               >
-                <Plus size={14} />
+                <Plus size={13} strokeWidth={1.5} />
                 新建对话
               </button>
-              <div className="max-h-64 overflow-y-auto">
+              <div style={{ maxHeight: 240, overflowY: "auto" }}>
                 {relevantSessions.length === 0 ? (
-                  <div className="px-3 py-3 text-xs text-muted-foreground">还没有对话</div>
+                  <div style={{ padding: 12, fontSize: 12, color: "var(--sub)" }}>
+                    还没有对话
+                  </div>
                 ) : (
                   relevantSessions.map((s) => (
                     <div
                       key={s.id}
-                      className={`group flex items-center gap-2 px-3 py-2 text-sm hover:bg-accent ${
-                        s.id === activeSessionId ? "bg-primary/5 text-primary" : ""
-                      }`}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 6,
+                        padding: "8px 12px",
+                        fontSize: 12.5,
+                        background:
+                          s.id === activeSessionId ? "var(--violet-soft)" : "transparent",
+                        color:
+                          s.id === activeSessionId ? "var(--violet-ink)" : "var(--ink-2)",
+                      }}
+                      className="chat-session-row"
                     >
                       <button
                         type="button"
@@ -217,7 +278,17 @@ export function ChatPanel({ librarySlug, moduleId }: ChatPanelProps) {
                           setActiveSession(s.id)
                           setSessionMenuOpen(false)
                         }}
-                        className="flex-1 truncate text-left"
+                        style={{
+                          flex: 1,
+                          border: 0,
+                          background: "transparent",
+                          color: "inherit",
+                          textAlign: "left",
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                          cursor: "pointer",
+                        }}
                       >
                         {s.title}
                       </button>
@@ -225,12 +296,19 @@ export function ChatPanel({ librarySlug, moduleId }: ChatPanelProps) {
                         type="button"
                         onClick={(e) => {
                           e.stopPropagation()
-                          if (confirm("确定删除这条对话?")) handleDeleteSession(s.id)
+                          if (confirm("确定删除这条对话?"))
+                            handleDeleteSession(s.id)
                         }}
-                        className="opacity-0 transition group-hover:opacity-100 hover:text-destructive"
                         aria-label="删除"
+                        style={{
+                          border: 0,
+                          background: "transparent",
+                          cursor: "pointer",
+                          color: "var(--sub-2)",
+                          padding: 2,
+                        }}
                       >
-                        <Trash2 size={12} />
+                        <Trash2 size={12} strokeWidth={1.5} />
                       </button>
                     </div>
                   ))
@@ -243,53 +321,92 @@ export function ChatPanel({ librarySlug, moduleId }: ChatPanelProps) {
 
       {/* Message area */}
       <div
-        className="flex-1 min-h-0 overflow-y-auto"
-        style={{ scrollbarWidth: "thin", scrollbarColor: "#d9daff transparent" }}
+        style={{
+          flex: 1,
+          minHeight: 0,
+          overflowY: "auto",
+          scrollbarWidth: "thin",
+          padding: "16px",
+        }}
       >
-        <div className="mx-auto max-w-3xl px-4 py-6">
-          {!hasMessages ? (
-            <div className="space-y-6 py-6">
-              <div className="text-center">
-                <h2 className="text-xl font-semibold tracking-tight text-foreground">
-                  我是你的 AI 助教
-                </h2>
-                <p className="mt-2 text-sm text-muted-foreground">
-                  不直接给答案,通过提问帮你思考。试试问我:
-                </p>
-              </div>
-              <div className="space-y-2">
-                {QUICK_PROMPTS.map((qp, i) => (
-                  <button
-                    key={i}
-                    type="button"
-                    onClick={() => handleSend(qp.prompt)}
-                    className="block w-full rounded-xl border border-border/60 bg-card px-4 py-3 text-left text-sm transition hover:border-primary/40 hover:bg-accent"
-                  >
-                    {qp.label}
-                  </button>
-                ))}
-              </div>
+        {!hasMessages ? (
+          <div style={{ display: "flex", flexDirection: "column", gap: 14, padding: "12px 0" }}>
+            <div style={{ textAlign: "left" }}>
+              <p style={{ fontSize: 13, color: "var(--ink-2)", lineHeight: 1.55 }}>
+                我是你的 AI 助教。不直接给答案，通过提问帮你思考。
+              </p>
+              <p style={{ marginTop: 4, fontSize: 11, color: "var(--sub)", fontFamily: "var(--mono)" }}>
+                试试问我:
+              </p>
             </div>
-          ) : (
-            <div className="space-y-6">
-              {activeSession?.messages.map((msg) => (
-                <MessageBubble key={msg.id} message={msg} />
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              {QUICK_PROMPTS.map((qp, i) => (
+                <button
+                  key={i}
+                  type="button"
+                  onClick={() => handleSend(qp.prompt)}
+                  style={{
+                    textAlign: "left",
+                    padding: "8px 10px",
+                    background: "var(--paper)",
+                    border: "1px dashed var(--border-2)",
+                    borderRadius: 7,
+                    fontSize: 12.5,
+                    color: "var(--sub)",
+                    cursor: "pointer",
+                    display: "flex",
+                    gap: 8,
+                    alignItems: "center",
+                  }}
+                >
+                  <Sparkles
+                    size={11}
+                    strokeWidth={1.5}
+                    style={{ color: "var(--violet)", flexShrink: 0 }}
+                  />
+                  {qp.label}
+                </button>
               ))}
-              {streaming && streamToolCalls.length > 0 && (
-                <ToolCallIndicator toolCalls={streamToolCalls} />
-              )}
-              {streaming && streamContent && <StreamingBubble content={streamContent} />}
-              {streaming && !streamContent && streamToolCalls.length === 0 && <TypingIndicator />}
-              <div ref={bottomRef} />
             </div>
-          )}
-        </div>
+          </div>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+            {activeSession?.messages.map((msg) => (
+              <MessageBubble key={msg.id} message={msg} />
+            ))}
+            {streaming && streamToolCalls.length > 0 && (
+              <ToolCallIndicator toolCalls={streamToolCalls} />
+            )}
+            {streaming && streamContent && <StreamingBubble content={streamContent} />}
+            {streaming && !streamContent && streamToolCalls.length === 0 && (
+              <TypingIndicator />
+            )}
+            <div ref={bottomRef} />
+          </div>
+        )}
       </div>
 
       {/* Input */}
-      <div className="shrink-0 border-t border-border/60 bg-background/60 px-4 pb-4 pt-3">
-        <div className="mx-auto max-w-3xl">
-          <ChatInput onSend={handleSend} disabled={streaming} />
+      <div
+        style={{
+          flexShrink: 0,
+          borderTop: "1px solid var(--border)",
+          padding: "12px 14px",
+        }}
+      >
+        <ChatInput onSend={handleSend} disabled={streaming} />
+        <div
+          className="mono"
+          style={{
+            fontSize: 10,
+            color: "var(--sub-2)",
+            marginTop: 8,
+            display: "flex",
+            justifyContent: "space-between",
+          }}
+        >
+          <span>GLM-5.1 · {moduleId ? `scoped to ${moduleId}` : "global"}</span>
+          <span>{activeSession?.messages.length ?? 0} msgs</span>
         </div>
       </div>
     </div>
