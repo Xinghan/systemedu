@@ -435,13 +435,33 @@ export interface NoteInfo {
 export type ProjectNotesResponse = Record<string, NoteInfo>
 
 export interface WSMessage {
-  type: "chunk" | "done" | "error" | "tool_call" | "tool_result"
+  type:
+    | "chunk"
+    | "done"
+    | "error"
+    | "tool_call"
+    | "tool_result"
+    | "session"          // spec 028: server 回告 session_id (新建/复用)
+    | "skill"            // spec 028: agent 切了 skill
+    | "tool_confirm"     // spec 028: 等学生确认工具调用
+    | "escalation"       // spec 028: 安全护栏触发, 推送家长热线
   content?: string
   session_id?: string
+  thread_id?: string
   message?: string
   name?: string
   args?: Record<string, unknown>
   result?: string
+  // skill 事件
+  action?: string
+  target_skill?: string
+  reason?: string
+  // tool_confirm
+  confirm_id?: string
+  tool?: string
+  // escalation
+  severity?: string
+  contact_info?: string
 }
 
 

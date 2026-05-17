@@ -142,4 +142,50 @@ export const myProjects = {
 // spec 027 P2.4-redo: gateway shim 给老 web 学习页用
 export { gateway, setCurrentModuleId } from "./gateway"
 
+// ---------------------------------------------------------------------------
+// spec 028: AI 助教 chat sessions
+// ---------------------------------------------------------------------------
+
+export interface ChatSessionDTO {
+  id: string
+  user_id: string
+  library_slug: string
+  module_id: string | null
+  title: string
+  active_skill: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface ChatMessageDTO {
+  id: string
+  session_id: string
+  user_id: string
+  library_slug: string
+  module_id: string
+  role: "user" | "assistant" | "tool" | "system"
+  content: string
+  tool_calls: Record<string, unknown> | null
+  skill: string | null
+  created_at: string
+}
+
+export const chatSessions = {
+  list: (params?: { library_slug?: string; module_id?: string }) => {
+    const qs = new URLSearchParams()
+    if (params?.library_slug) qs.set("library_slug", params.library_slug)
+    if (params?.module_id) qs.set("module_id", params.module_id)
+    const q = qs.toString()
+    return api.get<ChatSessionDTO[]>(`/api/chat/sessions${q ? `?${q}` : ""}`)
+  },
+  get: (id: string) =>
+    api.get<{ session: ChatSessionDTO; messages: ChatMessageDTO[] }>(
+      `/api/chat/sessions/${encodeURIComponent(id)}`,
+    ),
+  create: (body: { library_slug?: string; module_id?: string; title?: string }) =>
+    api.post<ChatSessionDTO>("/api/chat/sessions", body),
+  delete: (id: string) =>
+    api.delete<{ deleted: boolean }>(`/api/chat/sessions/${encodeURIComponent(id)}`),
+}
+
 export { STUDENT_API_URL }
