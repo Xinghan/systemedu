@@ -19,7 +19,7 @@ import { auth } from "@/lib/api"
 const TABS = [
   { id: "home",     label: "Home",         icon: Home,       href: "/home" },
   { id: "library",  label: "Library",      icon: LibraryIcon, href: "/library" },
-  { id: "projects", label: "My Projects",  icon: GitBranch,  href: "/home" }, // 暂复用 /home
+  { id: "projects", label: "My Projects",  icon: GitBranch,  href: "/my-projects" },
 ]
 
 function initials(name?: string | null): string {
@@ -49,14 +49,16 @@ export function StudentHeader() {
   }
 
   function isActive(href: string): boolean {
-    if (href === "/home") return pathname.startsWith("/home")
+    if (href === "/home") return pathname === "/home"
     if (href === "/library") return pathname.startsWith("/library")
+    if (href === "/my-projects") return pathname.startsWith("/my-projects")
     return pathname === href
   }
 
   return (
     <header className="topnav">
-      <Link className="brand" href={loggedIn ? "/home" : "/"}>
+      {/* brand 永远跳整站首页 / */}
+      <Link className="brand" href="/">
         <span className="brand-mark"><span>SE</span></span>
         <span>SystemEdu</span>
         <span
