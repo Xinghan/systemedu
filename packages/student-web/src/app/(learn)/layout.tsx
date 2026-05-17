@@ -6,9 +6,9 @@ export default function LearnGroupLayout({
   children: React.ReactNode
 }) {
   return (
-    <div className="min-h-screen bg-background text-foreground">
+    <div className="app">
       <StudentHeader />
-      <main>{children}</main>
+      {children}
     </div>
   )
 }

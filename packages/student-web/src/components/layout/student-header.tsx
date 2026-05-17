@@ -1,16 +1,39 @@
 "use client"
 
 import Link from "next/link"
-import { useRouter } from "next/navigation"
+import { useRouter, usePathname } from "next/navigation"
 import { useEffect, useState } from "react"
+import {
+  ChevronDown,
+  Command,
+  GitBranch,
+  Home,
+  Library as LibraryIcon,
+  LogOut,
+  Search,
+  Sparkles,
+} from "lucide-react"
 import { useAuthStore } from "@/lib/stores/auth-store"
 import { auth } from "@/lib/api"
-import { useT } from "@/lib/hooks/use-t"
-import { GraduationCap, LogOut, ChevronDown, User2 } from "lucide-react"
+
+const TABS = [
+  { id: "home",     label: "Home",         icon: Home,       href: "/home" },
+  { id: "library",  label: "Library",      icon: LibraryIcon, href: "/library" },
+  { id: "projects", label: "My Projects",  icon: GitBranch,  href: "/home" }, // 暂复用 /home
+]
+
+function initials(name?: string | null): string {
+  if (!name) return "?"
+  const trimmed = name.trim()
+  if (trimmed.length === 0) return "?"
+  const parts = trimmed.split(/[\s_\-.]+/).filter(Boolean)
+  if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase()
+  return trimmed.slice(0, 2).toUpperCase()
+}
 
 export function StudentHeader() {
-  const t = useT()
   const router = useRouter()
+  const pathname = usePathname() || "/"
   const { loggedIn, username, hydrate, logout } = useAuthStore()
   const [menuOpen, setMenuOpen] = useState(false)
 
@@ -25,80 +48,128 @@ export function StudentHeader() {
     router.replace("/login")
   }
 
+  function isActive(href: string): boolean {
+    if (href === "/home") return pathname.startsWith("/home")
+    if (href === "/library") return pathname.startsWith("/library")
+    return pathname === href
+  }
+
   return (
-    <header className="sticky top-0 z-40 border-b border-border/60 bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-      <div className="mx-auto flex h-16 max-w-7xl items-center gap-6 px-4">
-        <Link
-          href={loggedIn ? "/home" : "/"}
-          className="flex items-center gap-2 font-semibold tracking-tight"
+    <header className="topnav">
+      <Link className="brand" href={loggedIn ? "/home" : "/"}>
+        <span className="brand-mark"><span>SE</span></span>
+        <span>SystemEdu</span>
+        <span
+          style={{
+            fontFamily: "var(--mono)",
+            fontSize: 10.5,
+            padding: "2px 6px",
+            background: "var(--paper-2)",
+            borderRadius: 4,
+            color: "var(--sub)",
+            marginLeft: 2,
+            border: "1px solid var(--border)",
+          }}
         >
-          <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-            <GraduationCap size={18} />
-          </span>
-          <span>SystemEdu</span>
-        </Link>
+          v2.4
+        </span>
+      </Link>
 
-        <nav className="flex flex-1 items-center gap-1 text-sm">
-          <Link
-            href="/library"
-            className="rounded-md px-3 py-2 text-muted-foreground transition hover:bg-accent hover:text-foreground"
+      <nav className="nav-tabs">
+        {TABS.map((t) => {
+          const Icon = t.icon
+          return (
+            <Link
+              key={t.id}
+              href={t.href}
+              className={"nav-tab " + (isActive(t.href) ? "active" : "")}
+            >
+              <Icon size={15} strokeWidth={1.5} />
+              {t.label}
+            </Link>
+          )
+        })}
+      </nav>
+
+      <div className="nav-spacer" />
+
+      <button
+        type="button"
+        className="kbar"
+        onClick={() => {
+          // TODO spec 030: 全局搜索
+        }}
+        aria-label="搜索"
+      >
+        <Search size={15} strokeWidth={1.5} />
+        <span>Search projects, modules, concepts…</span>
+        <span className="kbd">
+          <Command size={10} strokeWidth={1.5} style={{ verticalAlign: -1 }} /> K
+        </span>
+      </button>
+
+      <button type="button" className="btn btn-ghost btn-sm" style={{ height: 32 }}>
+        <Sparkles size={14} strokeWidth={1.5} /> Assistant
+      </button>
+
+      {loggedIn ? (
+        <div style={{ position: "relative" }}>
+          <button
+            type="button"
+            className="user-chip"
+            onClick={() => setMenuOpen((v) => !v)}
           >
-            {t("nav.library")}
-          </Link>
-          {loggedIn && (
-            <Link
-              href="/home"
-              className="rounded-md px-3 py-2 text-muted-foreground transition hover:bg-accent hover:text-foreground"
+            <span className="avatar">{initials(username)}</span>
+            {username}
+            <ChevronDown size={13} strokeWidth={1.5} />
+          </button>
+          {menuOpen && (
+            <div
+              style={{
+                position: "absolute",
+                right: 0,
+                top: "calc(100% + 6px)",
+                minWidth: 160,
+                background: "var(--card)",
+                border: "1px solid var(--border)",
+                borderRadius: 10,
+                boxShadow: "var(--shadow-md)",
+                overflow: "hidden",
+                zIndex: 100,
+              }}
             >
-              {t("nav.my_projects")}
-            </Link>
-          )}
-        </nav>
-
-        {loggedIn ? (
-          <div className="relative">
-            <button
-              type="button"
-              onClick={() => setMenuOpen((v) => !v)}
-              className="inline-flex items-center gap-2 rounded-md border border-border/60 bg-card px-3 py-1.5 text-sm font-medium hover:bg-accent"
-            >
-              <User2 size={16} />
-              <span>{username ?? "User"}</span>
-              <ChevronDown size={14} />
-            </button>
-            {menuOpen && (
-              <div
-                role="menu"
-                className="absolute right-0 mt-2 w-44 overflow-hidden rounded-lg border border-border/60 bg-popover shadow-lg"
+              <button
+                type="button"
+                onClick={handleLogout}
+                style={{
+                  width: "100%",
+                  padding: "10px 12px",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  border: 0,
+                  background: "transparent",
+                  color: "var(--ink-2)",
+                  fontSize: 13,
+                  textAlign: "left",
+                }}
               >
-                <button
-                  type="button"
-                  onClick={handleLogout}
-                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-accent"
-                >
-                  <LogOut size={14} />
-                  {t("nav.logout")}
-                </button>
-              </div>
-            )}
-          </div>
-        ) : (
-          <div className="flex items-center gap-2 text-sm">
-            <Link
-              href="/login"
-              className="rounded-md px-3 py-1.5 font-medium hover:bg-accent"
-            >
-              {t("nav.login")}
-            </Link>
-            <Link
-              href="/register"
-              className="rounded-md bg-primary px-3 py-1.5 font-medium text-primary-foreground hover:bg-primary/90"
-            >
-              {t("nav.register")}
-            </Link>
-          </div>
-        )}
-      </div>
+                <LogOut size={14} strokeWidth={1.5} />
+                退出登录
+              </button>
+            </div>
+          )}
+        </div>
+      ) : (
+        <div style={{ display: "flex", gap: 8 }}>
+          <Link href="/login" className="btn btn-ghost btn-sm">
+            登录
+          </Link>
+          <Link href="/register" className="btn btn-violet btn-sm">
+            注册
+          </Link>
+        </div>
+      )}
     </header>
   )
 }
