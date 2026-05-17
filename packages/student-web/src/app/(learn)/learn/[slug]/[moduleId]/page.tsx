@@ -10,10 +10,12 @@ import {
   ChevronRight,
   Lock,
   MessageSquare,
+  X,
 } from "lucide-react"
 import { library, myProjects, setCurrentModuleId } from "@/lib/api"
 import { useAuthStore } from "@/lib/stores/auth-store"
 import { CourseContentView } from "@/components/learning/course-content-view"
+import { ChatPanel } from "@/components/chat/chat-panel"
 import type { KnodeInfo } from "@/lib/types/api"
 
 interface ProjectTreeModule {
@@ -165,7 +167,7 @@ export default function LearnPage() {
 
   return (
     <div className="mx-auto flex max-w-7xl gap-6 px-4 py-6">
-      <aside className="hidden w-64 shrink-0 lg:block">
+      <aside className="hidden w-56 shrink-0 md:block xl:w-64">
         <div className="sticky top-20 max-h-[calc(100vh-6rem)] overflow-y-auto rounded-2xl border border-border/60 bg-card p-4">
           <Link
             href={`/library/${encodeURIComponent(slug)}`}
@@ -251,13 +253,57 @@ export default function LearnPage() {
           )}
         </nav>
 
-        {/* spec 028 占位: AI 助教 */}
-        <div className="mt-8 flex items-center gap-2 rounded-2xl border border-dashed border-border/60 bg-card/50 p-4 text-sm text-muted-foreground">
-          <MessageSquare size={16} className="text-muted-foreground" />
-          <span>AI 助教(spec 028 启用)</span>
-        </div>
       </article>
+
+      {/* spec 028: AI 助教浮动按钮 + 右侧 drawer */}
+      <ChatDock librarySlug={slug} moduleId={moduleId} />
     </div>
+  )
+}
+
+function ChatDock({
+  librarySlug,
+  moduleId,
+}: {
+  librarySlug: string
+  moduleId: string
+}) {
+  const [open, setOpen] = useState(false)
+  useEffect(() => {
+    if (!open) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false)
+    }
+    window.addEventListener("keydown", onKey)
+    return () => window.removeEventListener("keydown", onKey)
+  }, [open])
+  return (
+    <>
+      {!open && (
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          aria-label="AI 助教"
+          className="fixed bottom-6 right-6 z-40 inline-flex h-14 items-center gap-2 rounded-full bg-primary px-5 text-sm font-medium text-primary-foreground shadow-lg transition hover:bg-primary/90 hover:shadow-xl"
+        >
+          <MessageSquare size={18} />
+          AI 助教
+        </button>
+      )}
+      {open && (
+        <div className="fixed inset-y-0 right-0 z-50 flex w-full max-w-md flex-col border-l border-border/60 bg-background shadow-2xl md:max-w-lg">
+          <button
+            type="button"
+            onClick={() => setOpen(false)}
+            aria-label="关闭"
+            className="absolute right-3 top-3 z-10 rounded-md p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
+          >
+            <X size={16} />
+          </button>
+          <ChatPanel librarySlug={librarySlug} moduleId={moduleId} />
+        </div>
+      )}
+    </>
   )
 }
 
