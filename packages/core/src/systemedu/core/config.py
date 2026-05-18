@@ -121,6 +121,13 @@ class MemoryConfig(BaseModel):
 
     enabled: bool = True
     backend: str = "mem0"
+    # spec 031: Qdrant server (docker), 替代老的 embedded file path
+    qdrant_url: str = ""  # e.g. http://127.0.0.1:6335; 空时 fallback embedded file
+    qdrant_collection: str = "student_memories"
+    # spec 031: 默认用 qwen-plus 做 embed (跟项目主 LLM 同 provider)
+    embed_provider: str = ""  # 空时 fallback default llm provider
+    embed_model: str = "text-embedding-v3"
+    embed_dims: int = 1024
 
 
 class TTSConfig(BaseModel):

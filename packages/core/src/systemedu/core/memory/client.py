@@ -14,8 +14,12 @@ _memory_instance = None
 
 
 def _build_config() -> dict:
-    """Build Mem0 config using the current LLM provider settings."""
+    """Build Mem0 config using the current LLM provider settings.
+
+    spec 031: 优先用 qdrant_url (docker server), 否则 fallback embedded file.
+    """
     config = get_config()
+    mem_cfg = config.memory
 
     # Use the default LLM provider for memory operations
     provider_name = config.llm.default
@@ -23,13 +27,42 @@ def _build_config() -> dict:
     if provider is None:
         raise ValueError(f"LLM provider '{provider_name}' not configured")
 
+    # embed provider: 可独立配置 (默认跟 LLM 同 provider)
+    embed_provider_name = mem_cfg.embed_provider or provider_name
+    embed_provider = config.llm.providers.get(embed_provider_name) or provider
+
+    # vector store: server (qdrant_url) or embedded file fallback
+    if mem_cfg.qdrant_url:
+        # parse url -> host + port
+        from urllib.parse import urlparse
+        parsed = urlparse(mem_cfg.qdrant_url)
+        vector_store = {
+            "provider": "qdrant",
+            "config": {
+                "collection_name": mem_cfg.qdrant_collection,
+                "host": parsed.hostname or "127.0.0.1",
+                "port": parsed.port or 6333,
+                "embedding_model_dims": mem_cfg.embed_dims,
+            },
+        }
+    else:
+        vector_store = {
+            "provider": "qdrant",
+            "config": {
+                "collection_name": mem_cfg.qdrant_collection,
+                "path": str(get_config_home() / "memory" / "qdrant_data"),
+                "embedding_model_dims": mem_cfg.embed_dims,
+                "on_disk": True,
+            },
+        }
+
     return {
         "llm": {
             "provider": "openai",
             "config": {
                 "model": provider.model,
                 "api_key": provider.api_key,
-                "base_url": provider.base_url,
+                "openai_base_url": provider.base_url,  # Mem0 用 openai_base_url
                 "temperature": 0.1,
                 "max_tokens": 2000,
             },
@@ -37,21 +70,13 @@ def _build_config() -> dict:
         "embedder": {
             "provider": "openai",
             "config": {
-                "model": "text-embedding-v3",
-                "api_key": provider.api_key,
-                "base_url": provider.base_url,
-                "embedding_dims": 1024,
+                "model": mem_cfg.embed_model,
+                "api_key": embed_provider.api_key,
+                "openai_base_url": embed_provider.base_url,  # Mem0 用 openai_base_url
+                "embedding_dims": mem_cfg.embed_dims,
             },
         },
-        "vector_store": {
-            "provider": "qdrant",
-            "config": {
-                "collection_name": "systemedu_memories",
-                "path": str(get_config_home() / "memory" / "qdrant_data"),
-                "embedding_model_dims": 1024,
-                "on_disk": True,
-            },
-        },
+        "vector_store": vector_store,
     }
 
 
@@ -94,13 +119,13 @@ def retrieve_memories(
 
     try:
         mem = get_memory()
-        kwargs: dict = {"query": query, "user_id": user_id, "limit": limit}
+        # Mem0 v2: user_id 走 filters
+        filters: dict = {"user_id": user_id}
         if project_id:
-            kwargs["filters"] = {"project_id": project_id}
-
-        results = mem.search(**kwargs)
-        memories = results.get("results", [])
-        return [m["memory"] for m in memories if m.get("memory")]
+            filters["project_id"] = project_id
+        results = mem.search(query=query, filters=filters, limit=limit)
+        memories = results.get("results", []) if isinstance(results, dict) else results
+        return [m["memory"] for m in memories if isinstance(m, dict) and m.get("memory")]
     except Exception:
         logger.exception("Failed to retrieve memories")
         return []
