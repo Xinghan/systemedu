@@ -59,13 +59,13 @@ echo "worker pid=$WORKER_PID"
 
 echo ""
 echo "=== Starting student-app web (:4000) ==="
-if [ -d "$PROJECT_DIR/web/node_modules" ]; then
-  nohup bash -lc "cd '$PROJECT_DIR/web' && PORT=4000 npm run dev" \
+if [ -d "$PROJECT_DIR/packages/student-web/node_modules" ]; then
+  nohup bash -lc "cd '$PROJECT_DIR/packages/student-web' && PORT=4000 npm run dev" \
     > "$PROJECT_DIR/.run/student-web.log" 2>&1 &
   WEB_PID=$!
   echo "web pid=$WEB_PID"
 else
-  echo "web: skipping (run 'cd web && npm install' first)"
+  echo "web: skipping (run 'cd packages/student-web && npm install' first)"
   WEB_PID=""
 fi
 
