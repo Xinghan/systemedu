@@ -1,8 +1,27 @@
 # 032-multi-user-claude-ui
 
-**Status**: draft
+**Status**: shipped (2026-05-18)
 **Owner**: xinghan
 **Created**: 2026-05-18
+**Shipped**: 2026-05-18
+
+## 实施总结
+
+P1-P7 全部完成, build 通过, 测试 140/140.
+
+| Phase | Commit | 说明 |
+|---|---|---|
+| P1 | 59ab487 | sidebar 4 项 + 删 6 老页 + 登录 gate (-7626 / +96 行) |
+| P2 | 6469ebf | /api/memory/facts GET+DELETE (7 unit test) |
+| P3 | 5a99bb8 | Dashboard 首页 — 我的项目 + 推荐 |
+| P4+P5 | 5488303 | Sessions 历史 + Memory 管理 |
+| P6 | 5bb6ab6 | 全局 FloatingChatPanel + page_kind 派发 |
+| P7 | (this) | 重启 + 自验 + status shipped |
+
+11 个路由保留:
+`/` `/dashboard` `/library` `/library/[slug]` `/library/[slug]/[knode_id]`
+`/login` `/memory` `/register` `/sessions` `/sessions/[id]` `/test-dighuman`
+
 
 ## 背景 / 问题
 
