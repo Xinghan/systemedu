@@ -135,6 +135,8 @@ def _build_input(payload: ChatPayload, user_id: str) -> dict[str, Any]:
         "project_name": payload.library_slug,
         "knode_id": payload.module_id,
         "active_tab": None,
+        # spec 031: page_kind 决定 5 层 memory 激活哪些
+        "page_kind": payload.page_kind,
     }
     if payload.session_id:
         state["session_id"] = payload.session_id

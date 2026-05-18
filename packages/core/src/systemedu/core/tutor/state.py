@@ -56,6 +56,8 @@ class TutorState(TypedDict, total=False):
     project_name: str | None
     knode_id: str | None
     active_tab: str | None
+    # spec 031: 前端按路由透传, MemoryInjector 据此激活相应层
+    page_kind: str  # 'global' | 'home' | 'library_detail' | 'learn'
 
     # === 记忆层 ===
     memory: MemorySnapshot
