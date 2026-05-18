@@ -16,6 +16,9 @@ router = APIRouter(dependencies=[Depends(require_license)])
 
 
 def _public_project_view(p: Project) -> dict:
+    # spec 030: 把 tree 顶层 final_outcomes 提到项目元数据
+    tree = p.knowledge_tree_json or {}
+    final_outcomes = tree.get("final_outcomes") or []
     return {
         "slug": p.slug,
         "title": p.title,
@@ -32,6 +35,7 @@ def _public_project_view(p: Project) -> dict:
         "languages": p.languages or [],
         "cover_image_path": p.cover_image_path,
         "published_at": p.published_at.isoformat() if p.published_at else None,
+        "final_outcomes": final_outcomes,
     }
 
 
