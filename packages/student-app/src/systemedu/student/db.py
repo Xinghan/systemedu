@@ -535,3 +535,265 @@ def upsert_last_visited(user_id: str, library_slug: str, module_id: str) -> Last
         session.commit()
         session.refresh(lv)
         return _detach_last_visited(lv)  # type: ignore[return-value]
+
+
+# ---------------------------------------------------------------------------
+# spec 031: ExerciseAttempt DAO
+# ---------------------------------------------------------------------------
+
+def _detach_exercise_attempt(ea: ExerciseAttempt | None) -> dict | None:
+    if ea is None:
+        return None
+    return {
+        "id": ea.id,
+        "user_id": ea.user_id,
+        "library_slug": ea.library_slug,
+        "module_id": ea.module_id,
+        "idea_id": ea.idea_id,
+        "exercise_index": ea.exercise_index,
+        "question": ea.question,
+        "student_answer": ea.student_answer,
+        "correct": ea.correct,
+        "explanation_shown": ea.explanation_shown,
+        "created_at": ea.created_at,
+    }
+
+
+def record_exercise_attempt(
+    user_id: str,
+    library_slug: str,
+    module_id: str,
+    *,
+    idea_id: str | None = None,
+    exercise_index: int | None = None,
+    question: str | None = None,
+    student_answer: str | None = None,
+    correct: bool | None = None,
+    explanation_shown: str | None = None,
+) -> dict:
+    with get_session() as sess:
+        ea = ExerciseAttempt(
+            user_id=user_id,
+            library_slug=library_slug,
+            module_id=module_id,
+            idea_id=idea_id,
+            exercise_index=exercise_index,
+            question=question,
+            student_answer=student_answer,
+            correct=correct,
+            explanation_shown=explanation_shown,
+        )
+        sess.add(ea)
+        sess.commit()
+        sess.refresh(ea)
+        return _detach_exercise_attempt(ea)  # type: ignore[return-value]
+
+
+def list_exercise_attempts(
+    user_id: str,
+    library_slug: str | None = None,
+    module_id: str | None = None,
+    only_wrong: bool = False,
+    limit: int = 20,
+) -> list[dict]:
+    with get_session() as sess:
+        stmt = select(ExerciseAttempt).where(ExerciseAttempt.user_id == user_id)
+        if library_slug:
+            stmt = stmt.where(ExerciseAttempt.library_slug == library_slug)
+        if module_id:
+            stmt = stmt.where(ExerciseAttempt.module_id == module_id)
+        if only_wrong:
+            stmt = stmt.where(ExerciseAttempt.correct.is_(False))
+        stmt = stmt.order_by(ExerciseAttempt.created_at.desc()).limit(limit)
+        rows = sess.execute(stmt).scalars().all()
+        return [_detach_exercise_attempt(r) for r in rows]  # type: ignore[misc]
+
+
+# ---------------------------------------------------------------------------
+# spec 031: StudentFact DAO (supersede chain)
+# ---------------------------------------------------------------------------
+
+def _detach_student_fact(f: StudentFact | None) -> dict | None:
+    if f is None:
+        return None
+    return {
+        "id": f.id,
+        "user_id": f.user_id,
+        "scope": f.scope,
+        "library_slug": f.library_slug,
+        "module_id": f.module_id,
+        "category": f.category,
+        "key": f.key,
+        "value": f.value,
+        "source_session": f.source_session,
+        "confidence": f.confidence,
+        "valid_from": f.valid_from,
+        "valid_to": f.valid_to,
+        "superseded_by": f.superseded_by,
+        "created_at": f.created_at,
+    }
+
+
+def list_current_facts(
+    user_id: str,
+    scope: str | None = None,
+    library_slug: str | None = None,
+    module_id: str | None = None,
+    limit: int = 50,
+) -> list[dict]:
+    """查当前 (valid_to IS NULL) 事实."""
+    with get_session() as sess:
+        stmt = select(StudentFact).where(
+            StudentFact.user_id == user_id,
+            StudentFact.valid_to.is_(None),
+        )
+        if scope:
+            stmt = stmt.where(StudentFact.scope == scope)
+        if library_slug is not None:
+            stmt = stmt.where(StudentFact.library_slug == library_slug)
+        if module_id is not None:
+            stmt = stmt.where(StudentFact.module_id == module_id)
+        stmt = stmt.order_by(StudentFact.created_at.desc()).limit(limit)
+        rows = sess.execute(stmt).scalars().all()
+        return [_detach_student_fact(r) for r in rows]  # type: ignore[misc]
+
+
+def upsert_fact(
+    user_id: str,
+    scope: str,
+    category: str,
+    key: str,
+    value: str,
+    *,
+    library_slug: str | None = None,
+    module_id: str | None = None,
+    source_session: str | None = None,
+    confidence: float = 0.7,
+) -> dict:
+    """Supersede chain: 同 (user_id, scope, slug, module_id, key) 的老 fact valid_to=now,
+    superseded_by=new.id. 新 fact INSERT 并返回."""
+    now = datetime.utcnow()
+    with get_session() as sess:
+        # find existing current
+        existing = sess.execute(
+            select(StudentFact).where(
+                StudentFact.user_id == user_id,
+                StudentFact.scope == scope,
+                StudentFact.key == key,
+                StudentFact.valid_to.is_(None),
+            ).where(
+                # 处理 nullable slug/module: 比较时把 NULL 当 ''
+                (StudentFact.library_slug == (library_slug or None))
+                | (
+                    StudentFact.library_slug.is_(None)
+                    & (library_slug is None)
+                )
+            )
+        ).scalar_one_or_none()
+
+        # 构造新 fact
+        new = StudentFact(
+            user_id=user_id,
+            scope=scope,
+            library_slug=library_slug,
+            module_id=module_id,
+            category=category,
+            key=key,
+            value=value,
+            source_session=source_session,
+            confidence=confidence,
+            valid_from=now,
+        )
+        sess.add(new)
+        sess.flush()  # 拿 new.id
+
+        if existing is not None:
+            existing.valid_to = now
+            existing.superseded_by = new.id
+
+        sess.commit()
+        sess.refresh(new)
+        return _detach_student_fact(new)  # type: ignore[return-value]
+
+
+# ---------------------------------------------------------------------------
+# spec 031: PendingExtraction DAO
+# ---------------------------------------------------------------------------
+
+def _detach_pending(p: PendingExtraction | None) -> dict | None:
+    if p is None:
+        return None
+    return {
+        "id": p.id,
+        "session_id": p.session_id,
+        "user_id": p.user_id,
+        "enqueued_at": p.enqueued_at,
+        "processed_at": p.processed_at,
+        "status": p.status,
+        "error": p.error,
+        "attempts": p.attempts,
+    }
+
+
+def enqueue_extraction(session_id: str, user_id: str) -> dict | None:
+    """入队. 同 session_id 已存在则静默返 None (unique 约束 dedup)."""
+    from sqlalchemy.exc import IntegrityError
+    with get_session() as sess:
+        try:
+            p = PendingExtraction(session_id=session_id, user_id=user_id)
+            sess.add(p)
+            sess.commit()
+            sess.refresh(p)
+            return _detach_pending(p)
+        except IntegrityError:
+            sess.rollback()
+            return None
+
+
+def list_pending_extractions(limit: int = 20) -> list[dict]:
+    """status='pending', 按 enqueued_at 早→晚."""
+    with get_session() as sess:
+        stmt = (
+            select(PendingExtraction)
+            .where(PendingExtraction.status == "pending")
+            .order_by(PendingExtraction.enqueued_at)
+            .limit(limit)
+        )
+        rows = sess.execute(stmt).scalars().all()
+        return [_detach_pending(r) for r in rows]  # type: ignore[misc]
+
+
+def mark_extraction_processing(extraction_id: str) -> None:
+    with get_session() as sess:
+        p = sess.get(PendingExtraction, extraction_id)
+        if p is None:
+            return
+        p.status = "processing"
+        p.attempts += 1
+        sess.commit()
+
+
+def mark_extraction_done(extraction_id: str) -> None:
+    with get_session() as sess:
+        p = sess.get(PendingExtraction, extraction_id)
+        if p is None:
+            return
+        p.status = "done"
+        p.processed_at = datetime.utcnow()
+        sess.commit()
+
+
+def mark_extraction_failed(
+    extraction_id: str,
+    error: str,
+    max_attempts: int = 3,
+) -> None:
+    """attempts >= max_attempts → status='dead', 否则 'failed' (5min 后 worker 重试)."""
+    with get_session() as sess:
+        p = sess.get(PendingExtraction, extraction_id)
+        if p is None:
+            return
+        p.error = error[:1000]
+        p.processed_at = datetime.utcnow()
+        p.status = "dead" if p.attempts >= max_attempts else "failed"
+        sess.commit()
