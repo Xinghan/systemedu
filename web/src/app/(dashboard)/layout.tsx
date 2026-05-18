@@ -4,6 +4,7 @@ import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar"
 import { AppSidebar } from "@/components/layout/app-sidebar"
+import { FloatingChatPanel } from "@/components/chat/floating-chat-panel"
 import { isLoggedIn } from "@/lib/auth"
 
 export default function DashboardLayout({
@@ -34,6 +35,7 @@ export default function DashboardLayout({
     <SidebarProvider>
       <AppSidebar />
       <SidebarInset>{children}</SidebarInset>
+      <FloatingChatPanel />
     </SidebarProvider>
   )
 }
