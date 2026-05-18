@@ -11,8 +11,9 @@ Public API:
 
 from .routes import ROUTES as _CHAT_ROUTES
 from .exercise_routes import ROUTES as _EXERCISE_ROUTES
+from .memory_routes import ROUTES as _MEMORY_ROUTES
 from .tutor_runner import preload_graph, shutdown_graph
 
-ROUTES = [*_CHAT_ROUTES, *_EXERCISE_ROUTES]
+ROUTES = [*_CHAT_ROUTES, *_EXERCISE_ROUTES, *_MEMORY_ROUTES]
 
 __all__ = ["ROUTES", "preload_graph", "shutdown_graph"]

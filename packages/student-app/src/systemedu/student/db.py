@@ -716,6 +716,26 @@ def upsert_fact(
         return _detach_student_fact(new)  # type: ignore[return-value]
 
 
+def retire_fact(fact_id: str, user_id: str) -> tuple[bool, str]:
+    """spec 032 P2: 手动 retire 一条 fact (valid_to=now, superseded_by=None).
+
+    返回 (ok, reason). reason: "" / "not_found" / "forbidden" / "already_retired".
+    校验 user_id 必须等于 fact.user_id, 避免 A 删 B 的 fact.
+    """
+    now = datetime.utcnow()
+    with get_session() as sess:
+        row = sess.get(StudentFact, fact_id)
+        if row is None:
+            return False, "not_found"
+        if row.user_id != user_id:
+            return False, "forbidden"
+        if row.valid_to is not None:
+            return False, "already_retired"
+        row.valid_to = now
+        sess.commit()
+        return True, ""
+
+
 # ---------------------------------------------------------------------------
 # spec 031: PendingExtraction DAO
 # ---------------------------------------------------------------------------
