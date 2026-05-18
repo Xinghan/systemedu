@@ -1,8 +1,23 @@
 # 031-tutor-context-memory
 
-**Status**: draft
+**Status**: shipped (2026-05-18)
 **Owner**: xinghan
 **Created**: 2026-05-18
+**Shipped**: 2026-05-18
+
+## 实施总结
+
+7 phase 全 ship, pytest 133/133:
+- P1 infra (PG/Redis/Qdrant/Mem0/fact-extractor)
+- P2 schema (3 张新表 + DAO + alembic baseline)
+- P3 5 层 inject 重写 (StudentMemoryInjector + page_kind dispatch)
+- P4 FactExtractor 独立 worker (5min tick, inactive>30min 自动入队)
+- P5 POST /api/exercise/attempt + ChatPayload page_kind 校验
+- P6 A class page matrix + C class contract (B/D testcontainers 留独立 spec)
+- P7 真 LLM eval 骨架 + 10 条 demo (judge.py / runner.py / dataset.yaml)
+
+Commits: cc0b607 → bdf34d5 (~15 commit).
+
 
 ## 背景 / 问题
 
