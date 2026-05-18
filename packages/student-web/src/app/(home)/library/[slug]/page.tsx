@@ -463,9 +463,14 @@ export default function ProjectHome() {
         <Block n="01" t="About">
           {blueprint ? (
             <>
-              <p className="body" style={{ fontSize: 14.5, lineHeight: 1.65 }}>
-                {firstParagraph(blueprint)}
-              </p>
+              <article
+                className="prose prose-stone prose-sm max-w-none prose-p:leading-relaxed prose-strong:font-semibold prose-strong:text-foreground prose-code:rounded prose-code:bg-muted prose-code:px-1 prose-code:py-0.5 prose-code:font-normal prose-code:before:content-none prose-code:after:content-none"
+                style={{ fontSize: 14.5 }}
+              >
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                  {firstParagraph(blueprint)}
+                </ReactMarkdown>
+              </article>
               <div
                 style={{
                   display: "grid",
