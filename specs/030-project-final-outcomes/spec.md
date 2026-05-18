@@ -1,6 +1,6 @@
 # 030-project-final-outcomes
 
-**Status**: draft
+**Status**: shipped (2026-05-18)
 **Owner**: xinghan
 **Created**: 2026-05-18
 
