@@ -148,6 +148,74 @@ export interface FullSession {
   messages: { role: string; content: string; timestamp: string }[]
 }
 
+// spec 032 P4: student-app /api/chat/sessions
+export interface ChatSessionSummary {
+  id: string
+  user_id: string
+  library_slug: string
+  module_id: string | null
+  title: string
+  active_skill?: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface ChatMessageRow {
+  id: string
+  session_id: string
+  role: "user" | "assistant" | "tool" | "system"
+  content: string
+  skill?: string | null
+  created_at: string
+}
+
+export const chat = {
+  listSessions: (params?: { library_slug?: string; module_id?: string }) => {
+    const q = new URLSearchParams()
+    if (params?.library_slug) q.set("library_slug", params.library_slug)
+    if (params?.module_id) q.set("module_id", params.module_id)
+    const qs = q.toString()
+    return api.get<ChatSessionSummary[]>(
+      `/api/chat/sessions${qs ? "?" + qs : ""}`,
+    )
+  },
+  getSession: (id: string) =>
+    api.get<{ session: ChatSessionSummary; messages: ChatMessageRow[] }>(
+      `/api/chat/sessions/${encodeURIComponent(id)}`,
+    ),
+  deleteSession: (id: string) =>
+    api.delete<{ deleted: boolean }>(
+      `/api/chat/sessions/${encodeURIComponent(id)}`,
+    ),
+}
+
+// spec 032 P2/P5: /api/memory/facts
+export interface MemoryFact {
+  id: string
+  user_id: string
+  scope: "global" | "project" | "knode"
+  library_slug?: string | null
+  module_id?: string | null
+  category: string
+  key: string
+  value: string
+  source_session?: string | null
+  confidence: number
+  valid_from: string
+  created_at: string
+}
+
+export const memory = {
+  listFacts: () =>
+    api.get<{ total: number; by_category: Record<string, MemoryFact[]> }>(
+      "/api/memory/facts",
+    ),
+  retireFact: (id: string) =>
+    api.delete<{ retired: boolean; id: string }>(
+      `/api/memory/facts/${encodeURIComponent(id)}`,
+    ),
+}
+
 export const gateway = {
   status: () => api.get<StatusResponse>("/api/status"),
   config: () => api.get<ConfigResponse>("/api/config"),
