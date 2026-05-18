@@ -26,6 +26,7 @@ import {
   type LibraryProjectSummary,
 } from "@/lib/api"
 import { useAuthStore } from "@/lib/stores/auth-store"
+import { KnowledgeTreeModal } from "@/components/learning/knowledge-tree-modal"
 
 type Stage = { stage_id: string; title: string; stage_goal?: string }
 type Module = {
@@ -121,6 +122,7 @@ export default function ProjectHome() {
   const [lastModuleId, setLastModuleId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [pulling, setPulling] = useState(false)
+  const [treeOpen, setTreeOpen] = useState(false)
 
   useEffect(() => {
     hydrate()
@@ -432,9 +434,8 @@ export default function ProjectHome() {
               type="button"
               className="btn btn-ghost"
               style={{ justifyContent: "center" }}
-              onClick={() => {
-                toast.info("Knowledge tree modal (待 spec 030 加)")
-              }}
+              onClick={() => setTreeOpen(true)}
+              disabled={modules.length === 0}
             >
               <Network size={14} strokeWidth={1.5} /> Open knowledge tree
             </button>
@@ -562,6 +563,18 @@ export default function ProjectHome() {
           )}
         </Block>
       </div>
+
+      {treeOpen && (
+        <KnowledgeTreeModal
+          slug={slug}
+          projectTitle={project.title_zh || project.title}
+          stages={stages}
+          modules={modules}
+          lastModuleId={lastModuleId}
+          pulled={pulled}
+          onClose={() => setTreeOpen(false)}
+        />
+      )}
     </main>
   )
 }

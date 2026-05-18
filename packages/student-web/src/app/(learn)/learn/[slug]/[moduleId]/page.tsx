@@ -15,12 +15,14 @@ import {
   Clock,
   Layers,
   Lock,
+  Network,
   Search,
 } from "lucide-react"
 import { library, myProjects, setCurrentModuleId } from "@/lib/api"
 import { useAuthStore } from "@/lib/stores/auth-store"
 import { CourseContentView } from "@/components/learning/course-content-view"
 import { ChatPanel } from "@/components/chat/chat-panel"
+import { KnowledgeTreeModal } from "@/components/learning/knowledge-tree-modal"
 import type { KnodeInfo } from "@/lib/types/api"
 
 interface ProjectTreeModule {
@@ -64,6 +66,7 @@ export default function LearnPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [agentOpen, setAgentOpen] = useState(true)
+  const [treeOpen, setTreeOpen] = useState(false)
   const [search, setSearch] = useState("")
 
   useEffect(() => {
@@ -487,6 +490,14 @@ export default function LearnPage() {
             )}
             <button
               type="button"
+              className="btn btn-ghost btn-sm"
+              onClick={() => setTreeOpen(true)}
+              disabled={modules.length === 0}
+            >
+              <Network size={13} strokeWidth={1.5} /> Tree
+            </button>
+            <button
+              type="button"
               className="btn btn-violet btn-sm"
               onClick={() => {
                 myProjects
@@ -679,6 +690,18 @@ export default function LearnPage() {
           </button>
         )}
       </aside>
+
+      {treeOpen && (
+        <KnowledgeTreeModal
+          slug={slug}
+          projectTitle={projectTitle || slug}
+          stages={stages}
+          modules={modules}
+          lastModuleId={lastModuleId}
+          pulled={true}
+          onClose={() => setTreeOpen(false)}
+        />
+      )}
     </main>
   )
 }
