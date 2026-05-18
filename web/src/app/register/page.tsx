@@ -35,7 +35,7 @@ export default function RegisterPage() {
     try {
       await auth.register(username, password)
       toast.success("注册成功")
-      router.replace("/library")
+      router.replace("/dashboard")
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : "注册失败")
     } finally {

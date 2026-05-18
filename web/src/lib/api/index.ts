@@ -136,8 +136,26 @@ export const library = {
   getBlueprint: (slug: string, lang = "zh-CN") => api.get<{ content: string; lang_returned: string }>(`/api/library/projects/${encodeURIComponent(slug)}/blueprint?lang=${lang}`),
   getKnode: (slug: string, knodeId: string) => api.get<LibraryKnodeContent>(`/api/library/projects/${encodeURIComponent(slug)}/knodes/${encodeURIComponent(knodeId)}`),
   fileUrl: (slug: string, path: string) => `${GATEWAY_URL}/api/library/projects/${encodeURIComponent(slug)}/files/${path}`,
-  listPurchases: () => api.get<Array<{ project_slug: string; created_at?: string }>>("/api/purchases"),
-  buy: (slug: string) => api.post<{ purchased: boolean; project_slug: string; already_owned: boolean }>(`/api/purchases/${encodeURIComponent(slug)}`, {}),
+  // spec 028 后端字段是 library_slug + pulled_at, 这里前端保留 project_slug
+  // 兼容字段做映射 (其它老调用方仍用 project_slug)
+  listPurchases: async () => {
+    const raw = await api.get<Array<{ library_slug: string; pulled_at?: string; last_module_id?: string | null; unavailable?: boolean }>>("/api/my/projects")
+    return raw
+      .filter((p) => !p.unavailable)
+      .map((p) => ({
+        project_slug: p.library_slug,
+        created_at: p.pulled_at,
+        last_module_id: p.last_module_id,
+      }))
+  },
+  buy: async (slug: string) => {
+    const r = await api.post<{ library_slug: string; created: boolean }>(`/api/my/projects/${encodeURIComponent(slug)}`, {})
+    return {
+      purchased: true,
+      project_slug: r.library_slug,
+      already_owned: !r.created,
+    }
+  },
 }
 
 export interface FullSession {
