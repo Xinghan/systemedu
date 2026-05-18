@@ -49,12 +49,13 @@ async def _get_graph():
     if _graph is not None:
         return _graph
 
-    from systemedu.core.config import TutorConfig
+    from systemedu.core.config import TutorConfig, get_config
     from systemedu.core.llm_client import get_llm
     from systemedu.core.tutor.checkpoint import get_checkpointer
     from systemedu.core.tutor.graph import build_tutor_graph
-    from systemedu.core.tutor.memory import MemoryInjector
     from systemedu.core.tutor.skills import SkillLoader
+    from systemedu.core.library_client import AsyncLibraryClient
+    from .memory_layers import CloudInjectorAdapter, StudentMemoryInjector
 
     # LLM
     try:
@@ -76,10 +77,27 @@ async def _get_graph():
     _checkpointer_cm = get_checkpointer(tutor_cfg)
     _checkpointer = await _checkpointer_cm.__aenter__()
 
-    # Memory injector — student.db 作为 student_fact 落点
-    from ..db import get_session as get_student_db_session
+    # spec 031: Memory injector — student-app 版本 5 层
+    # L4 用 Mem0 (若 config.memory.enabled), L3 knode 内容用 library API
+    mem0_client = None
+    cfg = get_config()
+    if cfg.memory.enabled:
+        try:
+            from systemedu.core.tutor.memory.mem0_adapter import Mem0AsyncAdapter
+            mem0_client = Mem0AsyncAdapter()
+        except Exception as e:
+            log.warning("Mem0 init failed (%s); L4 disabled", e)
 
-    injector = MemoryInjector(db_session_factory=get_student_db_session)
+    # library client (复用 library_proxy 已有 singleton)
+    from ..library_proxy.client import get_library_client
+    library_client = get_library_client()
+
+    student_injector = StudentMemoryInjector(
+        mem0_client=mem0_client,
+        library_client=library_client,
+    )
+    # 用 adapter 适配 core/tutor MemoryInjector 接口
+    injector = CloudInjectorAdapter(student_injector)
 
     _graph = build_tutor_graph(
         loader=loader,
@@ -134,8 +152,9 @@ def _build_input(payload: ChatPayload, user_id: str) -> dict[str, Any]:
         "user_id": user_id,
         "project_name": payload.library_slug,
         "knode_id": payload.module_id,
-        "active_tab": None,
-        # spec 031: page_kind 决定 5 层 memory 激活哪些
+        # spec 031: 借 active_tab 透传 page_kind 到 memory_inject_node
+        # (CloudInjectorAdapter 读 active_tab 派生 page_kind)
+        "active_tab": payload.page_kind,
         "page_kind": payload.page_kind,
     }
     if payload.session_id:
