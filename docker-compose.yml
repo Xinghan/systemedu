@@ -1,0 +1,59 @@
+# spec 031: tutor context + memory 基础设施
+# 起 PG (student.db 升级目标) + Redis (knode content cache) + Qdrant (Mem0 向量)
+#
+# 用法:
+#   docker compose up -d postgres redis qdrant
+#   docker compose ps
+#   docker compose down (保留数据)
+#   docker compose down -v (删数据)
+#
+# 数据持久化: ./.data/{pg,redis,qdrant}
+
+services:
+  postgres:
+    image: postgres:13-alpine
+    container_name: systemedu-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: systemedu
+      POSTGRES_PASSWORD: systemedu
+      POSTGRES_DB: student
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./.data/pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U systemedu -d student"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: systemedu-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - ./.data/redis:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  qdrant:
+    image: qdrant/qdrant:v1.11.0
+    container_name: systemedu-qdrant
+    restart: unless-stopped
+    ports:
+      - "6335:6333"   # HTTP / dashboard (避开 xhealth-qdrant 占的 6333)
+      - "6336:6334"   # gRPC
+    volumes:
+      - ./.data/qdrant:/qdrant/storage
+    healthcheck:
+      test: ["CMD-SHELL", "echo > /dev/tcp/127.0.0.1/6333 || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
