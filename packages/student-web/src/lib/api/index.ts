@@ -45,6 +45,17 @@ export const auth = {
 // library
 // ---------------------------------------------------------------------------
 
+// spec 030: 项目级最终产出物
+export type FinalOutcomeKind = "capability" | "artifact" | "service" | "publication"
+
+export interface FinalOutcome {
+  title: string
+  kind: FinalOutcomeKind
+  description: string
+  evidence?: string | null
+  related_stage_id?: string | null
+}
+
 export interface LibraryProjectSummary {
   slug: string
   title: string
@@ -61,6 +72,7 @@ export interface LibraryProjectSummary {
   cover_image_path?: string | null
   published_at?: string | null
   knowledge_tree?: Record<string, unknown> | null
+  final_outcomes?: FinalOutcome[] | null
 }
 
 export interface LibraryKnodeContent {

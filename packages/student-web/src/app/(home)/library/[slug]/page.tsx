@@ -15,14 +15,20 @@ import {
   CircleDot,
   Circle,
   Download,
+  FileText,
   Flag,
+  Globe,
+  GraduationCap,
   Lock,
   Network,
   Wind,
+  Wrench,
 } from "lucide-react"
 import {
   library,
   myProjects,
+  type FinalOutcome,
+  type FinalOutcomeKind,
   type LibraryProjectSummary,
 } from "@/lib/api"
 import { useAuthStore } from "@/lib/stores/auth-store"
@@ -505,40 +511,54 @@ export default function ProjectHome() {
           )}
         </Block>
 
-        {/* §02 What you'll ship — stub (待项目 metadata 加 outcomes 字段) */}
+        {/* §02 What you'll ship — spec 030: 真数据 final_outcomes, 老项目退回 stub */}
         <Block n="02" t="What you'll ship">
-          <ul
-            style={{
-              listStyle: "none",
-              padding: 0,
-              margin: 0,
-              display: "grid",
-              gridTemplateColumns: "1fr 1fr",
-              gap: 10,
-            }}
-          >
-            <Outcome
-              t={
-                modules.length > 0
-                  ? `${modules.length} 个章节走完`
-                  : "全部章节走完"
-              }
-              sub="按知识树顺序完成"
-            />
-            <Outcome
-              t="AI 助教共学记录"
-              sub="苏格拉底式问答陪伴整个项目"
-            />
-            <Outcome
-              t={
-                project.duration_weeks
-                  ? `${project.duration_weeks} 周完整学习路径`
-                  : "完整学习路径"
-              }
-              sub="按节奏 weekly 推进"
-            />
-            <Outcome t="项目成果交付" sub="动手输出 + 作业提交" />
-          </ul>
+          {project.final_outcomes && project.final_outcomes.length > 0 ? (
+            <ul
+              style={{
+                listStyle: "none",
+                padding: 0,
+                margin: 0,
+                display: "grid",
+                gridTemplateColumns: "1fr 1fr",
+                gap: 10,
+              }}
+            >
+              {project.final_outcomes.map((fo, i) => (
+                <FinalOutcomeCard key={i} outcome={fo} />
+              ))}
+            </ul>
+          ) : (
+            <ul
+              style={{
+                listStyle: "none",
+                padding: 0,
+                margin: 0,
+                display: "grid",
+                gridTemplateColumns: "1fr 1fr",
+                gap: 10,
+              }}
+            >
+              <Outcome
+                t={
+                  modules.length > 0
+                    ? `${modules.length} 个章节走完`
+                    : "全部章节走完"
+                }
+                sub="按知识树顺序完成"
+              />
+              <Outcome t="AI 助教共学记录" sub="苏格拉底式问答陪伴整个项目" />
+              <Outcome
+                t={
+                  project.duration_weeks
+                    ? `${project.duration_weeks} 周完整学习路径`
+                    : "完整学习路径"
+                }
+                sub="按节奏 weekly 推进"
+              />
+              <Outcome t="项目成果交付" sub="动手输出 + 作业提交" />
+            </ul>
+          )}
         </Block>
 
         {/* §03 Curriculum */}
@@ -678,6 +698,132 @@ function Outcome({ t, sub }: { t: string; sub: string }) {
           {sub}
         </div>
       </div>
+    </li>
+  )
+}
+
+// spec 030: FinalOutcome 卡 (4 类 kind 各自 icon + tint)
+const KIND_META: Record<
+  FinalOutcomeKind,
+  { Icon: React.ComponentType<{ size?: number; strokeWidth?: number }>; label: string; tint: string; soft: string }
+> = {
+  capability: {
+    Icon: GraduationCap,
+    label: "能力",
+    tint: "var(--computing)",
+    soft: "var(--computing-soft)",
+  },
+  artifact: {
+    Icon: Wrench,
+    label: "制品",
+    tint: "var(--aerospace)",
+    soft: "var(--aerospace-soft)",
+  },
+  service: {
+    Icon: Globe,
+    label: "服务",
+    tint: "var(--climate)",
+    soft: "var(--climate-soft)",
+  },
+  publication: {
+    Icon: FileText,
+    label: "出版",
+    tint: "var(--bio)",
+    soft: "var(--bio-soft)",
+  },
+}
+
+function FinalOutcomeCard({ outcome }: { outcome: FinalOutcome }) {
+  const meta = KIND_META[outcome.kind] || KIND_META.artifact
+  const Icon = meta.Icon
+  return (
+    <li
+      style={{
+        padding: 14,
+        border: "1px solid var(--border)",
+        borderRadius: 10,
+        background: "var(--card)",
+        display: "flex",
+        flexDirection: "column",
+        gap: 10,
+      }}
+    >
+      <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
+        <span
+          style={{
+            width: 32,
+            height: 32,
+            borderRadius: 8,
+            background: meta.soft,
+            color: meta.tint,
+            display: "grid",
+            placeItems: "center",
+            flexShrink: 0,
+          }}
+        >
+          <Icon size={16} strokeWidth={1.5} />
+        </span>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+              flexWrap: "wrap",
+              marginBottom: 4,
+            }}
+          >
+            <span
+              className="mono"
+              style={{ fontSize: 10.5, color: meta.tint, fontWeight: 500 }}
+            >
+              {meta.label.toUpperCase()}
+            </span>
+            {outcome.related_stage_id && (
+              <span
+                className="mono"
+                style={{
+                  fontSize: 10,
+                  color: "var(--sub-2)",
+                  padding: "1px 5px",
+                  border: "1px solid var(--border-2)",
+                  borderRadius: 4,
+                }}
+              >
+                {outcome.related_stage_id}
+              </span>
+            )}
+          </div>
+          <div style={{ fontSize: 13.5, fontWeight: 600, color: "var(--ink)" }}>
+            {outcome.title}
+          </div>
+          <div
+            className="body"
+            style={{ fontSize: 12.5, color: "var(--ink-2)", marginTop: 4, lineHeight: 1.5 }}
+          >
+            {outcome.description}
+          </div>
+        </div>
+      </div>
+      {outcome.evidence && (
+        <div
+          className="mono"
+          style={{
+            fontSize: 10.5,
+            color: "var(--sub)",
+            padding: "6px 10px",
+            background: "var(--paper)",
+            border: "1px dashed var(--border-2)",
+            borderRadius: 6,
+            display: "flex",
+            alignItems: "flex-start",
+            gap: 6,
+          }}
+        >
+          <span style={{ color: "var(--sub-2)", flexShrink: 0 }}>evidence ·</span>
+          <span>{outcome.evidence}</span>
+        </div>
+      )}
     </li>
   )
 }
