@@ -36,15 +36,26 @@ from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 
 # ---------------------------------------------------------------------------
-# engine / session — 独立于 systemedu.core
+# engine / session — spec 031: PG via STUDENT_DB_URL
+#
+# 优先级:
+#   STUDENT_DB_URL env (e.g. postgresql+psycopg2://...)
+#   else if STUDENT_DB_PATH env: SQLite file (老 pytest 兼容)
+#   else: default PG localhost
 # ---------------------------------------------------------------------------
 
-def _default_db_path() -> Path:
-    """`~/.systemedu/student.db`，可由 STUDENT_DB_PATH 覆盖（测试用）。"""
-    override = os.environ.get("STUDENT_DB_PATH")
-    if override:
-        return Path(override).expanduser()
-    return Path.home() / ".systemedu" / "student.db"
+DEFAULT_PG_URL = "postgresql+psycopg2://systemedu:systemedu@127.0.0.1:5432/student"
+
+
+def _resolve_db_url() -> str:
+    if url := os.environ.get("STUDENT_DB_URL"):
+        return url
+    # 兼容老 STUDENT_DB_PATH (pytest fixture 用)
+    if path := os.environ.get("STUDENT_DB_PATH"):
+        p = Path(path).expanduser()
+        p.parent.mkdir(parents=True, exist_ok=True)
+        return f"sqlite:///{p}"
+    return DEFAULT_PG_URL
 
 
 _engine = None
@@ -55,13 +66,13 @@ def _ensure_engine():
     global _engine, _SessionLocal
     if _engine is not None:
         return _engine
-    db_path = _default_db_path()
-    db_path.parent.mkdir(parents=True, exist_ok=True)
-    _engine = create_engine(
-        f"sqlite:///{db_path}",
-        connect_args={"check_same_thread": False},
-        future=True,
-    )
+    url = _resolve_db_url()
+    if url.startswith("sqlite"):
+        _engine = create_engine(
+            url, connect_args={"check_same_thread": False}, future=True
+        )
+    else:
+        _engine = create_engine(url, future=True, pool_pre_ping=True)
     _SessionLocal = sessionmaker(bind=_engine, autoflush=False, future=True)
     return _engine
 
@@ -300,9 +311,37 @@ class PendingExtraction(Base):
 # ---------------------------------------------------------------------------
 
 def init_db() -> None:
-    """启动时调一次, 建表 (幂等)."""
+    """启动时调一次, 建表 (幂等).
+
+    spec 031: PG 用 alembic, SQLite (pytest 兼容) 用 create_all.
+    """
     engine = _ensure_engine()
-    Base.metadata.create_all(engine)
+    url = str(engine.url)
+    if url.startswith("sqlite"):
+        # pytest 临时 db 走 create_all (alembic 太重)
+        Base.metadata.create_all(engine)
+    else:
+        # PG 生产 / dev 走 alembic upgrade head
+        _run_alembic_upgrade()
+
+
+def _run_alembic_upgrade() -> None:
+    """跑 alembic upgrade head, 用 student-app 自带的 alembic 配置."""
+    import logging
+    from alembic import command
+    from alembic.config import Config
+
+    pkg_dir = Path(__file__).resolve().parent.parent.parent.parent  # student-app/
+    alembic_ini = pkg_dir / "alembic.ini"
+    if not alembic_ini.exists():
+        logging.getLogger(__name__).warning(
+            "alembic.ini not found at %s; skip migration", alembic_ini
+        )
+        return
+    cfg = Config(str(alembic_ini))
+    # script_location 指向 student-app/alembic
+    cfg.set_main_option("script_location", str(pkg_dir / "alembic"))
+    command.upgrade(cfg, "head")
 
 
 # ---------------------------------------------------------------------------
