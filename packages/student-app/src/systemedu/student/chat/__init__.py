@@ -9,7 +9,10 @@ Public API:
     shutdown_graph()       关闭时清理
 """
 
-from .routes import ROUTES
+from .routes import ROUTES as _CHAT_ROUTES
+from .exercise_routes import ROUTES as _EXERCISE_ROUTES
 from .tutor_runner import preload_graph, shutdown_graph
+
+ROUTES = [*_CHAT_ROUTES, *_EXERCISE_ROUTES]
 
 __all__ = ["ROUTES", "preload_graph", "shutdown_graph"]
