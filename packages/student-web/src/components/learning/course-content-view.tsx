@@ -13,7 +13,7 @@ import remarkGfm from "remark-gfm"
 import remarkMath from "remark-math"
 import rehypeKatex from "rehype-katex"
 import "katex/dist/katex.min.css"
-import { gateway } from "@/lib/api"
+import { gateway, exercise } from "@/lib/api"
 import { getCourseFactoryVariant } from "@/data/course-factory-variants"
 import { TeacherSceneView } from "@/components/learning/teacher-scene-view"
 import type {
@@ -583,6 +583,18 @@ function TheoryQuiz({ theoryId, exercises }: { theoryId: string; exercises: NonN
       error_analysis: errorAnalysis,
       explanation: ex.explanation || null,
     }]).catch(() => { /* silent — localStorage is the fallback */ })
+
+    // spec 031 P5: 同步 POST 到 student-app /api/exercise/attempt
+    // (用于 L3 history layer, 供 AI 导师 "你刚做错了这题" 类回答)
+    void exercise.postAttempt({
+      library_slug: projectName,
+      module_id: knodeId,
+      idea_id: `${theoryId}_q${qi}`,
+      exercise_index: qi,
+      question: ex.question,
+      student_answer: String(state.selected),
+      correct: state.isCorrect,
+    }).catch(() => { /* silent */ })
   }
 
   const handleSelect = (qi: number, oi: number) => {

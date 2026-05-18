@@ -12,9 +12,12 @@ const MAX_RETRIES = 10
 const INITIAL_DELAY = 1000
 const MAX_DELAY = 30000
 
+export type PageKind = "global" | "home" | "library_detail" | "learn"
+
 interface SendOptions {
   library_slug?: string
   module_id?: string | null
+  page_kind?: PageKind
   confirm_response?: Record<string, unknown>
 }
 
@@ -203,6 +206,7 @@ export function useWebSocketChat() {
           session_id: currentSessionId,
           library_slug: options?.library_slug,
           module_id: options?.module_id,
+          page_kind: options?.page_kind || "global",
           confirm_response: options?.confirm_response,
         }),
       )

@@ -200,4 +200,53 @@ export const chatSessions = {
     api.delete<{ deleted: boolean }>(`/api/chat/sessions/${encodeURIComponent(id)}`),
 }
 
+// ---------------------------------------------------------------------------
+// spec 031 P2 / 032: memory facts (用户记忆 — 由 fact_extractor worker 抽出)
+// ---------------------------------------------------------------------------
+
+export interface MemoryFact {
+  id: string
+  user_id: string
+  scope: "global" | "project" | "knode"
+  library_slug?: string | null
+  module_id?: string | null
+  category: string
+  key: string
+  value: string
+  source_session?: string | null
+  confidence: number
+  valid_from: string
+  created_at: string
+}
+
+export const memory = {
+  listFacts: () =>
+    api.get<{ total: number; by_category: Record<string, MemoryFact[]> }>(
+      "/api/memory/facts",
+    ),
+  retireFact: (id: string) =>
+    api.delete<{ retired: boolean; id: string }>(
+      `/api/memory/facts/${encodeURIComponent(id)}`,
+    ),
+}
+
+// ---------------------------------------------------------------------------
+// spec 031 P5: exercise attempt POST (学生答题 → L3 history)
+// ---------------------------------------------------------------------------
+
+export interface ExerciseAttemptBody {
+  library_slug: string
+  module_id: string
+  correct: boolean
+  idea_id?: string
+  exercise_index?: number
+  question?: string
+  student_answer?: string
+}
+
+export const exercise = {
+  postAttempt: (body: ExerciseAttemptBody) =>
+    api.post<{ ok: boolean; id: string }>("/api/exercise/attempt", body),
+}
+
 export { STUDENT_API_URL }

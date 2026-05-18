@@ -10,6 +10,7 @@ import {
   Home,
   Library as LibraryIcon,
   LogOut,
+  MessageSquare,
   Search,
   Sparkles,
 } from "lucide-react"
@@ -17,9 +18,11 @@ import { useAuthStore } from "@/lib/stores/auth-store"
 import { auth } from "@/lib/api"
 
 const TABS = [
-  { id: "home",     label: "Home",         icon: Home,       href: "/home" },
+  { id: "home",     label: "Home",         icon: Home,        href: "/home" },
   { id: "library",  label: "Library",      icon: LibraryIcon, href: "/library" },
-  { id: "projects", label: "My Projects",  icon: GitBranch,  href: "/my-projects" },
+  { id: "projects", label: "My Projects",  icon: GitBranch,   href: "/my-projects" },
+  { id: "sessions", label: "Sessions",     icon: MessageSquare, href: "/sessions" },
+  { id: "memory",   label: "Memory",       icon: Sparkles,    href: "/memory" },
 ]
 
 function initials(name?: string | null): string {
@@ -52,6 +55,8 @@ export function StudentHeader() {
     if (href === "/home") return pathname === "/home"
     if (href === "/library") return pathname.startsWith("/library")
     if (href === "/my-projects") return pathname.startsWith("/my-projects")
+    if (href === "/sessions") return pathname.startsWith("/sessions")
+    if (href === "/memory") return pathname.startsWith("/memory")
     return pathname === href
   }
 
