@@ -68,7 +68,7 @@ fi
 echo ""
 echo "=== Waiting for backend ==="
 for i in $(seq 1 10); do
-  if curl -s --noproxy '*' http://127.0.0.1:18820/api/status >/dev/null 2>&1; then
+  if curl -s --noproxy '*' http://127.0.0.1:18820/api/health >/dev/null 2>&1; then
     echo "backend ready: http://127.0.0.1:18820"
     break
   fi
