@@ -18,14 +18,19 @@ from datetime import datetime
 from pathlib import Path
 
 from sqlalchemy import (
+    Boolean,
     Column,
     DateTime,
+    Float,
     ForeignKey,
+    Index,
+    Integer,
     String,
     Text,
     UniqueConstraint,
     create_engine,
     select,
+    text,
 )
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
@@ -191,6 +196,103 @@ class AssignmentSubmission(Base):
     content = Column(Text, nullable=False)
     media_paths = Column(Text, nullable=True)  # JSON array as string
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+# ---------------------------------------------------------------------------
+# spec 031: tutor context + memory 3 张新表
+# ---------------------------------------------------------------------------
+
+class ExerciseAttempt(Base):
+    """L3 学生答题记录."""
+
+    __tablename__ = "exercise_attempts"
+
+    id = Column(String(36), primary_key=True, default=_uuid)
+    user_id = Column(String(36), ForeignKey("users.id"), index=True, nullable=False)
+    library_slug = Column(String(128), nullable=False)
+    module_id = Column(String(64), nullable=False)
+    idea_id = Column(String(128), nullable=True)
+    exercise_index = Column(Integer, nullable=True)
+    question = Column(Text, nullable=True)
+    student_answer = Column(Text, nullable=True)
+    correct = Column(Boolean, nullable=True)
+    explanation_shown = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    __table_args__ = (
+        Index("idx_ea_user_slug_module", "user_id", "library_slug", "module_id"),
+        Index("idx_ea_user_created", "user_id", "created_at"),
+    )
+
+
+class StudentFact(Base):
+    """L1/L3 长期记忆事实 — 跨 session 的学生画像 / 项目级 / knode 级.
+
+    Supersede chain: 新事实进 → 老事实 valid_to=now + superseded_by=new.id.
+    """
+
+    __tablename__ = "student_facts"
+
+    id = Column(String(36), primary_key=True, default=_uuid)
+    user_id = Column(String(36), ForeignKey("users.id"), index=True, nullable=False)
+    scope = Column(String(16), nullable=False)  # 'global' | 'project' | 'knode'
+    library_slug = Column(String(128), nullable=True)
+    module_id = Column(String(64), nullable=True)
+    category = Column(String(32), nullable=False)  # interest|goal|skill_level|family|misconception|preference
+    key = Column(String(128), nullable=False)
+    value = Column(Text, nullable=False)
+    source_session = Column(String(36), nullable=True)
+    confidence = Column(Float, default=0.7, nullable=False)
+    valid_from = Column(DateTime, default=datetime.utcnow, nullable=False)
+    valid_to = Column(DateTime, nullable=True)  # NULL = current
+    superseded_by = Column(String(36), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    __table_args__ = (
+        Index(
+            "idx_sf_user_scope_current",
+            "user_id",
+            "scope",
+            postgresql_where=text("valid_to IS NULL"),
+        ),
+        Index(
+            "idx_sf_user_slug_current",
+            "user_id",
+            "library_slug",
+            postgresql_where=text("valid_to IS NULL"),
+        ),
+    )
+
+
+class PendingExtraction(Base):
+    """fact_extractor worker 队列 — chat session done 后入队."""
+
+    __tablename__ = "pending_extractions"
+
+    id = Column(String(36), primary_key=True, default=_uuid)
+    session_id = Column(
+        String(36),
+        ForeignKey("chat_sessions.id", ondelete="CASCADE"),
+        index=True,
+        nullable=False,
+    )
+    user_id = Column(String(36), ForeignKey("users.id"), index=True, nullable=False)
+    enqueued_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    processed_at = Column(DateTime, nullable=True)
+    status = Column(String(16), default="pending", nullable=False)  # pending|processing|done|failed|dead
+    error = Column(Text, nullable=True)
+    attempts = Column(Integer, default=0, nullable=False)
+
+    __table_args__ = (
+        # 一个 session 最多一条 pending — dedup
+        UniqueConstraint("session_id", name="uq_pending_extraction_session"),
+        Index(
+            "idx_pe_status_enqueued",
+            "status",
+            "enqueued_at",
+            postgresql_where=text("status IN ('pending','failed')"),
+        ),
+    )
 
 
 # ---------------------------------------------------------------------------
