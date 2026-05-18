@@ -2,6 +2,7 @@
 
 from datetime import datetime
 from enum import Enum
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
@@ -220,6 +221,24 @@ class Stage(BaseModel):
     expansion_priority: str = ""
 
 
+class FinalOutcome(BaseModel):
+    """spec 030: 学生在项目结束时能交付的一项具体能力或制品.
+
+    项目级产出物清单, 跟 blueprint Learning Outcomes 对齐.
+    分 4 类:
+    - capability: 能力 (能讲清 X / 能算 X / 能 debug X)
+    - artifact:   物理或数字制品 (sensor box / dashboard / dataset)
+    - service:    上线运行的服务 (注册到公共网络的节点 / 公开 API)
+    - publication: 文档/写作 (field report / 带 DOI 的开放数据集)
+    """
+
+    title: str
+    kind: Literal["capability", "artifact", "service", "publication"]
+    description: str
+    evidence: str | None = None
+    related_stage_id: str | None = None
+
+
 class V5KnowledgeTree(BaseModel):
     """Native v5 knowledge tree with stages, modules, and edges."""
 
@@ -239,6 +258,8 @@ class V5KnowledgeTree(BaseModel):
     knowledge_levels: list[dict] = Field(default_factory=list)
     stage_relationship_rule: str = ""
     global_integration_rule: str = ""
+    # spec 030: 项目级产出物
+    final_outcomes: list[FinalOutcome] = Field(default_factory=list)
 
 
 class PathBadge(BaseModel):
