@@ -750,6 +750,32 @@ def enqueue_extraction(session_id: str, user_id: str) -> dict | None:
             return None
 
 
+def enqueue_inactive_sessions(inactive_minutes: int = 30, limit: int = 50) -> int:
+    """spec 031 P4.3: 扫所有 chat_sessions, 把 updated_at 超 inactive_minutes
+    且尚无 pending_extractions row 的 session 入队.
+
+    幂等 — enqueue_extraction 内部去重. 返新入队条数.
+    """
+    from datetime import timedelta
+    cutoff = datetime.utcnow() - timedelta(minutes=inactive_minutes)
+    enqueued = 0
+    with get_session() as sess:
+        # 找出: chat_sessions.updated_at < cutoff AND 没在 pending_extractions
+        # 注: 简单 left join (SQLite/PG 都行)
+        stmt = (
+            select(ChatSession.id, ChatSession.user_id)
+            .outerjoin(PendingExtraction, PendingExtraction.session_id == ChatSession.id)
+            .where(ChatSession.updated_at < cutoff)
+            .where(PendingExtraction.id.is_(None))
+            .limit(limit)
+        )
+        rows = sess.execute(stmt).all()
+    for sid, uid in rows:
+        if enqueue_extraction(sid, uid) is not None:
+            enqueued += 1
+    return enqueued
+
+
 def list_pending_extractions(limit: int = 20) -> list[dict]:
     """status='pending', 按 enqueued_at 早→晚."""
     with get_session() as sess:

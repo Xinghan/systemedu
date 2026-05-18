@@ -89,8 +89,15 @@ async def run_forever(interval_sec: int = 300, batch: int = 5) -> None:
         except NotImplementedError:
             pass  # windows
 
+    inactive_min = int(os.environ.get("FACT_EXTRACTOR_INACTIVE_MIN", "30"))
+
     while not stop.is_set():
         try:
+            # 1) 扫 inactive session 入队 (spec 031 P4.3)
+            ne = _db.enqueue_inactive_sessions(inactive_minutes=inactive_min, limit=50)
+            if ne:
+                log.info("auto-enqueued %d inactive sessions (>%dmin)", ne, inactive_min)
+            # 2) 处理 pending
             n = await tick(extractor, batch=batch)
             if n:
                 log.info("tick processed %d pending rows", n)

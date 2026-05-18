@@ -224,6 +224,35 @@ async def test_worker_tick_empty_queue(tmp_db):
     assert n == 0
 
 
+def test_enqueue_inactive_sessions(tmp_db):
+    """P4.3: 自动入队 inactive>30min 且未入队的 session."""
+    from datetime import datetime, timedelta
+    from systemedu.student import db as _db
+
+    old = datetime.utcnow() - timedelta(minutes=45)
+    new = datetime.utcnow() - timedelta(minutes=5)
+    with _db.get_session() as sess:
+        s_old = _db.ChatSession(user_id=tmp_db, library_slug="a", title="t",
+                                updated_at=old)
+        s_new = _db.ChatSession(user_id=tmp_db, library_slug="b", title="t",
+                                updated_at=new)
+        s_done = _db.ChatSession(user_id=tmp_db, library_slug="c", title="t",
+                                 updated_at=old)
+        sess.add_all([s_old, s_new, s_done])
+        sess.commit()
+        sess.refresh(s_old); sess.refresh(s_new); sess.refresh(s_done)
+        sid_old, sid_new, sid_done = s_old.id, s_new.id, s_done.id
+    # 第三个已经手动入队 (模拟之前入过)
+    _db.enqueue_extraction(sid_done, tmp_db)
+
+    n = _db.enqueue_inactive_sessions(inactive_minutes=30)
+    assert n == 1  # 只有 s_old 新入队
+    pending_sids = {p["session_id"] for p in _db.list_pending_extractions()}
+    assert sid_old in pending_sids
+    assert sid_new not in pending_sids  # 太新
+    # sid_done 也在 (上次入的) but 不重复
+
+
 async def test_worker_tick_processes_multiple(tmp_db):
     from systemedu.student.workers.fact_extractor_worker import tick
     from systemedu.student.chat.fact_extractor import StudentFactExtractor
