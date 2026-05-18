@@ -39,16 +39,20 @@ sleep 1
 
 mkdir -p "$PROJECT_DIR/.run"
 
+# library-app 跑在 :18821, 跟 student-app 共享 LICENSE_TOKEN
+export LIBRARY_BASE_URL="${LIBRARY_BASE_URL:-http://127.0.0.1:18821}"
+export LIBRARY_LICENSE_TOKEN="${LIBRARY_LICENSE_TOKEN:-dev-license-027}"
+
 echo ""
 echo "=== Starting student-app backend (:18820) ==="
-nohup bash -lc "cd '$PROJECT_DIR' && source .venv/bin/activate && python -m systemedu.student.server" \
+nohup bash -lc "cd '$PROJECT_DIR' && source .venv/bin/activate && LIBRARY_BASE_URL='$LIBRARY_BASE_URL' LIBRARY_LICENSE_TOKEN='$LIBRARY_LICENSE_TOKEN' python -m systemedu.student.server" \
   > "$PROJECT_DIR/.run/student-backend.log" 2>&1 &
 BACKEND_PID=$!
 echo "backend pid=$BACKEND_PID"
 
 echo ""
 echo "=== Starting fact_extractor worker ==="
-nohup bash -lc "cd '$PROJECT_DIR' && source .venv/bin/activate && python -m systemedu.student.workers.fact_extractor_worker" \
+nohup bash -lc "cd '$PROJECT_DIR' && source .venv/bin/activate && LIBRARY_BASE_URL='$LIBRARY_BASE_URL' LIBRARY_LICENSE_TOKEN='$LIBRARY_LICENSE_TOKEN' python -m systemedu.student.workers.fact_extractor_worker" \
   > "$PROJECT_DIR/.run/fact-extractor.log" 2>&1 &
 WORKER_PID=$!
 echo "worker pid=$WORKER_PID"

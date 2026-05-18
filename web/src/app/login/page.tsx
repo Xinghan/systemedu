@@ -22,7 +22,7 @@ export default function LoginPage() {
     try {
       await auth.login(username, password)
       toast.success("登录成功")
-      router.replace("/library")
+      router.replace("/dashboard")
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : "登录失败")
     } finally {
