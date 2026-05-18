@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import { auth } from "@/lib/api"
 import { getToken } from "@/lib/auth"
+import { FloatingChatPanel } from "@/components/chat/floating-chat-panel"
 
 export default function LibraryLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
@@ -81,6 +82,7 @@ export default function LibraryLayout({ children }: { children: React.ReactNode 
         </div>
       </header>
       <div className="flex-1">{children}</div>
+      {authReady && username && <FloatingChatPanel />}
     </div>
   )
 }
