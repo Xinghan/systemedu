@@ -5,6 +5,7 @@ import { Sparkles, Plus, Trash2, ChevronDown } from "lucide-react"
 import { toast } from "sonner"
 import { useChatStore } from "@/lib/stores/chat-store"
 import { useWebSocketChat } from "@/lib/hooks/use-websocket-chat"
+import { usePageKind } from "@/lib/hooks/use-page-kind"
 import { chatSessions } from "@/lib/api"
 import { randomUUID } from "@/lib/utils/uuid"
 import { ChatInput } from "./chat-input"
@@ -127,10 +128,16 @@ export function ChatPanel({ librarySlug, moduleId }: ChatPanelProps) {
     bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" })
   }, [activeSession?.messages.length, streamContent])
 
+  const pageCtx = usePageKind()
+
   const handleSend = (message: string) => {
+    // spec 031: page_kind 由 usePageKind 按 pathname 推;
+    // librarySlug/moduleId 优先用 props (ChatPanel 调用方传的精确值),
+    // 否则用 hook 推出来的 (站在哪一页就是哪一页).
     sendMessage(message, {
-      library_slug: librarySlug,
-      module_id: moduleId,
+      library_slug: librarySlug ?? pageCtx.library_slug,
+      module_id: moduleId ?? pageCtx.module_id,
+      page_kind: pageCtx.page_kind,
     })
   }
 
