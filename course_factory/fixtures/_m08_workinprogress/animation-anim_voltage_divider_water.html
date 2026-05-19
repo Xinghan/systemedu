@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<script>window.__systemedu_resize_patch_optout=true;</script>
+<title>分压电路：电压如何被一刀切开 · ELC-12</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Space+Grotesk:wght@400;500;700&family=Inter:wght@400;500&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+/* === theme: elec (Circuit Grid / 电路之网) ELC-12 oklch 275 === */
+:root{
+  --signal:   oklch(0.72 0.17 275);
+  --core:     oklch(0.52 0.16 275);
+  --depth:    oklch(0.35 0.10 275);
+  --flash:    oklch(0.92 0.08 275);
+  --query:    oklch(0.85 0.14 85);
+  --bg:       oklch(0.13 0.025 275);
+  --bg2:      oklch(0.16 0.030 275);
+  --surface:  oklch(0.20 0.035 275);
+  --ink:      oklch(0.96 0.012 275);
+  --ink-dim:  oklch(0.62 0.020 275);
+  --danger:   oklch(0.65 0.180 25);
+  --success:  oklch(0.72 0.17 145);
+  --grid:     oklch(0.72 0.17 275 / 0.06);
+}
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;}
+html,body{width:100%;height:100vh;overflow:hidden;background:var(--bg);color:var(--ink);font-family:'Inter','Noto Sans SC',sans-serif;}
+.wrapper{display:flex;flex-direction:row;height:100vh;overflow:hidden;}
+.sidebar{width:200px;min-width:200px;max-width:200px;display:flex;flex-direction:column;gap:6px;padding:10px;background:var(--bg2);overflow-y:auto;}
+.lang-btn{align-self:flex-start;flex-shrink:0;font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:700;padding:3px 8px;cursor:pointer;border:1px solid transparent;background:transparent;color:var(--signal);letter-spacing:1px;text-transform:uppercase;}
+.lang-btn:hover{border-color:var(--signal);background:var(--surface);}
+.code-tag{font-family:'JetBrains Mono',monospace;font-size:8px;font-weight:700;letter-spacing:0.18em;color:var(--query);text-transform:uppercase;margin-top:6px;}
+.sidebar h1{font-family:'Space Grotesk','JetBrains Mono',sans-serif;font-size:14px;font-weight:700;color:var(--signal);margin-top:2px;line-height:1.25;letter-spacing:0.02em;}
+.cn-name{font-family:'Noto Sans SC',sans-serif;font-size:11px;font-weight:500;color:var(--flash);margin-top:2px;}
+.tagline{font-family:'Inter','Noto Sans SC',sans-serif;font-size:10px;color:var(--ink-dim);margin-top:6px;line-height:1.4;font-style:italic;}
+.divider{height:1px;background:var(--grid);margin:8px 0 4px;}
+.guide-label{font-family:'JetBrains Mono',monospace;font-size:9px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:var(--signal);margin-top:8px;}
+.guide-content{font-family:'Noto Sans SC',sans-serif;font-size:11px;color:var(--ink-dim);line-height:1.6;}
+.cmd-line{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--flash);margin-top:6px;padding:4px 8px;background:var(--surface);}
+.scenario-block{margin-top:8px;padding:8px;background:var(--surface);}
+.scenario-label{font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:0.12em;text-transform:uppercase;color:var(--query);}
+.scenario-text{font-family:'Noto Sans SC',sans-serif;font-size:12px;color:var(--ink);margin-top:4px;line-height:1.4;}
+.anim-main{flex:1;display:flex;flex-direction:column;min-width:0;background:var(--bg);}
+.canvas-wrap{flex:1;min-height:0;position:relative;}
+canvas{width:100%!important;height:100%!important;display:block;}
+.hud{height:44px;display:flex;align-items:center;justify-content:space-around;background:var(--bg2);border-top:1px solid var(--grid);padding:0 16px;flex-shrink:0;}
+.hud-item{text-align:center;}
+.hud-label{font-family:'JetBrains Mono',monospace;font-size:8px;letter-spacing:0.15em;color:var(--ink-dim);text-transform:uppercase;}
+.hud-val{font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:700;color:var(--signal);letter-spacing:0.05em;margin-top:2px;}
+.hud-val.q{color:var(--query);}
+.hud-val.f{color:var(--flash);}
+</style>
+</head>
+<body>
+<div class="wrapper">
+  <div class="sidebar">
+    <button class="lang-btn" id="langBtn">CN</button>
+    <div class="code-tag">ELC-12 · PRINCIPLE</div>
+    <h1 id="title">VOLTAGE DIVIDER</h1>
+    <div class="cn-name" id="cnName">电路之网 · CIRCUIT GRID</div>
+    <div class="tagline" id="tagline">how two resistors split 5V into 3.3V.</div>
+    <div class="divider"></div>
+    <div class="guide-label" id="guideTitle">观察 / WATCH</div>
+    <div class="guide-content">
+      <ul style="padding-left:14px;margin:0;">
+        <li id="g0">电子从 5V 流向 0V (GND)</li>
+        <li id="g1">流过 R1 时损失部分电压</li>
+        <li id="g2">中点 Vout 是剩下的电压</li>
+        <li id="g3">R2 占总阻比例 → Vout</li>
+      </ul>
+    </div>
+    <div class="scenario-block">
+      <div class="scenario-label" id="scLbl">场景 / SCENARIO</div>
+      <div class="scenario-text" id="scText">R1 = 1.8kΩ, R2 = 3.3kΩ → Vout = 3.24 V</div>
+    </div>
+    <div class="cmd-line" id="cmdLine">$ vdivide --vin=5 --r1=1.8k --r2=3.3k</div>
+  </div>
+
+  <div class="anim-main">
+    <div class="canvas-wrap"><canvas id="c"></canvas></div>
+    <div class="hud">
+      <div class="hud-item"><div class="hud-label" id="hudL1">VIN</div><div class="hud-val f" id="hudV1">5.00 V</div></div>
+      <div class="hud-item"><div class="hud-label" id="hudL2">R1</div><div class="hud-val" id="hudV2">1.8 kΩ</div></div>
+      <div class="hud-item"><div class="hud-label" id="hudL3">R2</div><div class="hud-val" id="hudV3">3.3 kΩ</div></div>
+      <div class="hud-item"><div class="hud-label" id="hudL4">VOUT</div><div class="hud-val q" id="hudV4">3.24 V</div></div>
+    </div>
+  </div>
+</div>
+
+<script>
+'use strict';
+
+var PAL = {
+  signal:  'oklch(0.72 0.17 275)',
+  core:    'oklch(0.52 0.16 275)',
+  depth:   'oklch(0.35 0.10 275)',
+  flash:   'oklch(0.92 0.08 275)',
+  query:   'oklch(0.85 0.14 85)',
+  bg:      'oklch(0.13 0.025 275)',
+  bg2:     'oklch(0.16 0.030 275)',
+  surface: 'oklch(0.20 0.035 275)',
+  ink:     'oklch(0.96 0.012 275)',
+  inkDim:  'oklch(0.62 0.020 275)',
+  danger:  'oklch(0.65 0.180 25)',
+  success: 'oklch(0.72 0.17 145)',
+  grid:    'oklch(0.72 0.17 275 / 0.06)',
+};
+
+var I18N = {
+  cn: {
+    title:'分压电路：电压是怎样被切开的',
+    cnName:'电路之网 · CIRCUIT GRID',
+    tagline:'两段电阻 = 两段水位差',
+    g0:'电子从 5V 流向 0V (GND)',
+    g1:'流过 R1 时损失部分电压',
+    g2:'中点 Vout 是剩下的电压',
+    g3:'R2 占总阻的比例决定 Vout',
+    guideTitle:'观察 / WATCH',
+    scLbl:'场景 / SCENARIO',
+    hudL1:'VIN', hudL2:'R1', hudL3:'R2', hudL4:'VOUT',
+    label_vin:'Vin (5V)',
+    label_vout:'Vout (Pi GPIO)',
+    label_gnd:'GND (0V)',
+    label_r1_drop:'R1 上压降',
+    label_r2_drop:'R2 上压降',
+    formula_tpl:'Vout = 5 × {r2} / ({r1} + {r2}) = {vout} V',
+    scen1:'R1 = 1.8kΩ, R2 = 3.3kΩ → Vout = 3.24 V (给 Pi)',
+    scen2:'R1 = R2 = 1kΩ → Vout = 2.50 V (一刀切两半)',
+    scen3:'R1 = 4.7kΩ, R2 = 2.2kΩ → Vout = 1.59 V',
+    scen4:'R1 = 1kΩ, R2 = 9kΩ → Vout = 4.50 V (R2 占大)',
+    cmd_tpl:'$ vdivide --vin=5 --r1={r1}k --r2={r2}k',
+    note:'电子流过电阻 = 失去能量 = 电压降低。比例决定 Vout。',
+    high:'高电势', mid:'中电势', low:'低电势 (GND)',
+  },
+  en: {
+    title:'VOLTAGE DIVIDER — HOW VOLTAGE IS SPLIT',
+    cnName:'CIRCUIT GRID · ELC-12',
+    tagline:'TWO RESISTORS = TWO POTENTIAL DROPS',
+    g0:'Electrons flow 5V → 0V (GND)',
+    g1:'R1 takes part of the drop',
+    g2:'Vout is whats left in the middle',
+    g3:'R2 share of total R sets Vout',
+    guideTitle:'WATCH',
+    scLbl:'SCENARIO',
+    hudL1:'VIN', hudL2:'R1', hudL3:'R2', hudL4:'VOUT',
+    label_vin:'Vin (5V)',
+    label_vout:'Vout (TO Pi GPIO)',
+    label_gnd:'GND (0V)',
+    label_r1_drop:'DROP ACROSS R1',
+    label_r2_drop:'DROP ACROSS R2',
+    formula_tpl:'Vout = 5 × {r2} / ({r1} + {r2}) = {vout} V',
+    scen1:'R1=1.8k, R2=3.3k → Vout=3.24V (feed Pi)',
+    scen2:'R1=R2=1k → Vout=2.50V (split in half)',
+    scen3:'R1=4.7k, R2=2.2k → Vout=1.59V',
+    scen4:'R1=1k, R2=9k → Vout=4.50V (R2 dominates)',
+    cmd_tpl:'$ vdivide --vin=5 --r1={r1}k --r2={r2}k',
+    note:'Electron loses energy through R = voltage drops. Ratio sets Vout.',
+    high:'HIGH', mid:'MID', low:'GND',
+  }
+};
+var lang = 'cn';
+function t(k){return I18N[lang][k] || k;}
+
+// Four scenarios cycle every 7s, but transition is smooth (not snap).
+// Each scenario animates electron flow continuously, what changes is R1/R2.
+var SCENARIOS = [
+  {r1:1.8, r2:3.3, key:'scen1'},
+  {r1:1.0, r2:1.0, key:'scen2'},
+  {r1:4.7, r2:2.2, key:'scen3'},
+  {r1:1.0, r2:9.0, key:'scen4'},
+];
+var SCEN_MS = 7000;          // one scenario lasts 7s
+var TRANSITION_FRAC = 0.15;  // first 15% is smooth tween from prev R values
+var curScen = 0;
+var prevR1 = SCENARIOS[0].r1, prevR2 = SCENARIOS[0].r2;
+var nextR1 = SCENARIOS[0].r1, nextR2 = SCENARIOS[0].r2;
+var scenStart = performance.now();
+
+function lerp(a,b,p){return a + (b - a) * p;}
+function easeInOut(x){return x < 0.5 ? 2*x*x : 1 - Math.pow(-2*x + 2, 2)/2;}
+
+var canvas = document.getElementById('c');
+var ctx = canvas.getContext('2d');
+function fitCanvas(){
+  var dpr = window.devicePixelRatio || 1;
+  var w = canvas.parentElement.clientWidth, h = canvas.parentElement.clientHeight;
+  canvas.width = Math.max(1, Math.floor(w * dpr));
+  canvas.height = Math.max(1, Math.floor(h * dpr));
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+window.addEventListener('resize', fitCanvas);
+fitCanvas();
+
+// Continuous electron particles flowing through the circuit.
+// Particles are parametrized by `s` in [0, 1]: 0 = top (Vin), 1 = bottom (GND).
+var N_PARTICLES = 28;
+var particles = [];
+for (var i = 0; i < N_PARTICLES; i++){
+  particles.push({s: i / N_PARTICLES, speed: 0.20 + Math.random() * 0.05});
+}
+
+function drawGrid(W,H){
+  ctx.strokeStyle = PAL.grid;
+  ctx.lineWidth = 1;
+  for (var x=0; x<W; x+=40){ ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,H); ctx.stroke(); }
+  for (var y=0; y<H; y+=40){ ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(W,y); ctx.stroke(); }
+}
+
+// Resistor zigzag from (x,y1) to (x,y2). Returns the bounding x extent.
+function drawResistor(x, y1, y2, color, w){
+  ctx.strokeStyle = color;
+  ctx.lineWidth = w || 2.2;
+  var n = 6;
+  var amp = 14;
+  ctx.beginPath();
+  ctx.moveTo(x, y1);
+  for (var i = 0; i < n; i++){
+    var yy = y1 + (i + 0.5) * (y2 - y1) / n;
+    var xx = x + ((i % 2 === 0) ? amp : -amp);
+    ctx.lineTo(xx, yy);
+  }
+  ctx.lineTo(x, y2);
+  ctx.stroke();
+}
+
+// Convert s∈[0,1] into (x,y) along the wire from top Vin to bottom GND.
+// Topology:
+//   s in [0.00, 0.15] : top horizontal wire (Vin label → top of R1)
+//   s in [0.15, 0.45] : R1 (vertical zigzag); we just go straight down
+//   s in [0.45, 0.55] : mid junction → Vout pickoff tee
+//   s in [0.55, 0.85] : R2 vertical zigzag
+//   s in [0.85, 1.00] : bottom horizontal wire to GND
+function pathPos(s, geo){
+  var topY = geo.topY, r1Top = geo.r1Top, r1Bot = geo.r1Bot;
+  var midY = geo.midY, r2Top = geo.r2Top, r2Bot = geo.r2Bot, botY = geo.botY;
+  var x = geo.cx;
+  if (s < 0.15){
+    // from Vin label (left) to wire top, then down to r1Top
+    var p = s / 0.15;
+    if (p < 0.6){
+      // along horizontal: x moves from xLeft to cx
+      var px = (p / 0.6);
+      var xL = geo.vinX;
+      return {x: lerp(xL, x, px), y: topY};
+    } else {
+      var pp = (p - 0.6) / 0.4;
+      return {x: x, y: lerp(topY, r1Top, pp)};
+    }
+  } else if (s < 0.45){
+    var p = (s - 0.15) / 0.30;
+    return {x: x, y: lerp(r1Top, r1Bot, p)};
+  } else if (s < 0.55){
+    var p = (s - 0.45) / 0.10;
+    return {x: x, y: lerp(r1Bot, r2Top, p)};
+  } else if (s < 0.85){
+    var p = (s - 0.55) / 0.30;
+    return {x: x, y: lerp(r2Top, r2Bot, p)};
+  } else {
+    var p = (s - 0.85) / 0.15;
+    if (p < 0.4){
+      return {x: x, y: lerp(r2Bot, botY, p / 0.4)};
+    } else {
+      var pp = (p - 0.4) / 0.6;
+      return {x: lerp(x, geo.gndX, pp), y: botY};
+    }
+  }
+}
+
+// Voltage along the wire vs s. Vin=5 at s=0, drops linearly across R1
+// (between s=0.15 and s=0.45 from 5V to Vout), stays at Vout in mid segment
+// (0.45-0.55), drops linearly across R2 (0.55-0.85) from Vout to 0V, stays
+// at 0V on the bottom wire.
+function voltageAtS(s, vout){
+  if (s < 0.15) return 5;
+  if (s < 0.45){
+    var p = (s - 0.15) / 0.30;
+    return lerp(5, vout, p);
+  }
+  if (s < 0.55) return vout;
+  if (s < 0.85){
+    var p = (s - 0.55) / 0.30;
+    return lerp(vout, 0, p);
+  }
+  return 0;
+}
+
+// Color for a given voltage (0V dim, 5V bright).
+function colorForV(v){
+  var p = Math.max(0, Math.min(1, v / 5));
+  // mix from depth (low) to query (high)
+  // simple oklch with varying lightness in 275 hue
+  var L = 0.30 + 0.55 * p;
+  return 'oklch(' + L.toFixed(2) + ' 0.17 275)';
+}
+
+function compute(vin, r1, r2){
+  return vin * r2 / (r1 + r2);
+}
+
+// Render one frame
+function render(now){
+  var W = canvas.parentElement.clientWidth;
+  var H = canvas.parentElement.clientHeight;
+
+  // Scenario timing
+  var elapsed = now - scenStart;
+  if (elapsed > SCEN_MS){
+    curScen = (curScen + 1) % SCENARIOS.length;
+    scenStart = now;
+    elapsed = 0;
+    prevR1 = nextR1; prevR2 = nextR2;
+    nextR1 = SCENARIOS[curScen].r1;
+    nextR2 = SCENARIOS[curScen].r2;
+    updateScenarioUI();
+  }
+  // Tween R1, R2 from prev to next over first TRANSITION_FRAC of scenario
+  var sp = elapsed / SCEN_MS;
+  var tp = Math.min(1, sp / TRANSITION_FRAC);
+  var R1 = lerp(prevR1, nextR1, easeInOut(tp));
+  var R2 = lerp(prevR2, nextR2, easeInOut(tp));
+  var VIN = 5.0;
+  var VOUT = compute(VIN, R1, R2);
+
+  // Update HUD
+  document.getElementById('hudV2').textContent = R1.toFixed(2) + ' kΩ';
+  document.getElementById('hudV3').textContent = R2.toFixed(2) + ' kΩ';
+  document.getElementById('hudV4').textContent = VOUT.toFixed(2) + ' V';
+
+  // Clear
+  ctx.fillStyle = PAL.bg;
+  ctx.fillRect(0, 0, W, H);
+  drawGrid(W, H);
+
+  // Geometry: leave room on left for "voltage bar" and labels; right side circuit
+  var cx = W * 0.62;
+  var vinX = W * 0.06;
+  var gndX = W * 0.06;
+  var topY = H * 0.10;
+  var botY = H * 0.90;
+  var r1Top = topY + (botY - topY) * 0.12;
+  var r1Bot = topY + (botY - topY) * 0.42;
+  var midY  = topY + (botY - topY) * 0.50;
+  var r2Top = topY + (botY - topY) * 0.58;
+  var r2Bot = topY + (botY - topY) * 0.88;
+
+  var geo = {cx:cx, vinX:vinX, gndX:gndX, topY:topY, botY:botY,
+             r1Top:r1Top, r1Bot:r1Bot, midY:midY, r2Top:r2Top, r2Bot:r2Bot};
+
+  // === LEFT: vertical voltage "ladder" showing the gradient ===
+  // Draw a vertical bar where height encodes voltage (5V at top, 0V at bottom).
+  // Above the bar we show "5V high potential", in the middle "Vout (variable)",
+  // and at the bottom "0V GND".
+  var barX = W * 0.20, barW = W * 0.10;
+  var barTop = topY - 10, barBot = botY + 10;
+  // gradient fill
+  var g = ctx.createLinearGradient(0, barTop, 0, barBot);
+  g.addColorStop(0,   colorForV(5));
+  g.addColorStop((1 - VOUT/5) * 0.45, colorForV(VOUT));
+  g.addColorStop(1,   colorForV(0));
+  ctx.fillStyle = g;
+  ctx.fillRect(barX, barTop, barW, barBot - barTop);
+  ctx.strokeStyle = PAL.ink; ctx.lineWidth = 1.5;
+  ctx.strokeRect(barX, barTop, barW, barBot - barTop);
+
+  // Tick marks at 5V (top), Vout (varies), 0V (bottom)
+  function tick(v, label, color){
+    var y = barTop + (1 - v/5) * (barBot - barTop);
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(barX - 8, y);
+    ctx.lineTo(barX + barW + 8, y);
+    ctx.stroke();
+    ctx.font = "bold 12px 'JetBrains Mono', monospace";
+    ctx.fillStyle = color;
+    ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+    ctx.fillText(label, barX - 12, y);
+  }
+  tick(5,    '5.00 V', PAL.flash);
+  tick(VOUT, 'Vout = ' + VOUT.toFixed(2) + ' V', PAL.query);
+  tick(0,    '0 V', PAL.inkDim);
+
+  // bar caption above + below
+  ctx.font = "10px 'JetBrains Mono', monospace";
+  ctx.fillStyle = PAL.inkDim; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText(t('high'), barX + barW/2, barTop - 20);
+  ctx.fillText(t('low'),  barX + barW/2, barBot + 20);
+
+  // === RIGHT: circuit ===
+  // Vin terminal (top-left of cx)
+  ctx.strokeStyle = PAL.ink; ctx.lineWidth = 2;
+  // horizontal top wire from vinX to cx, voltage = 5V (color uniform)
+  ctx.strokeStyle = colorForV(5); ctx.lineWidth = 2.5;
+  ctx.beginPath(); ctx.moveTo(vinX, topY); ctx.lineTo(cx, topY); ctx.lineTo(cx, r1Top); ctx.stroke();
+  // R1 (in mid color since voltage gradient across it)
+  drawResistor(cx, r1Top, r1Bot, colorForV((5 + VOUT)/2), 2.5);
+  // junction segment to mid (Vout color)
+  ctx.strokeStyle = colorForV(VOUT); ctx.lineWidth = 2.5;
+  ctx.beginPath(); ctx.moveTo(cx, r1Bot); ctx.lineTo(cx, r2Top); ctx.stroke();
+  // junction dot
+  ctx.fillStyle = PAL.query;
+  ctx.beginPath(); ctx.arc(cx, midY, 5, 0, Math.PI*2); ctx.fill();
+  // Vout pickoff line to right
+  ctx.strokeStyle = colorForV(VOUT); ctx.lineWidth = 2;
+  ctx.setLineDash([4,3]);
+  ctx.beginPath(); ctx.moveTo(cx, midY); ctx.lineTo(W - 30, midY); ctx.stroke();
+  ctx.setLineDash([]);
+  // arrow head at right
+  ctx.fillStyle = PAL.query;
+  ctx.beginPath();
+  ctx.moveTo(W - 18, midY); ctx.lineTo(W - 30, midY - 6); ctx.lineTo(W - 30, midY + 6); ctx.closePath();
+  ctx.fill();
+  // R2
+  drawResistor(cx, r2Top, r2Bot, colorForV(VOUT/2), 2.5);
+  // bottom wire to GND
+  ctx.strokeStyle = colorForV(0); ctx.lineWidth = 2.5;
+  ctx.beginPath(); ctx.moveTo(cx, r2Bot); ctx.lineTo(cx, botY); ctx.lineTo(gndX, botY); ctx.stroke();
+  // GND symbol
+  ctx.strokeStyle = PAL.inkDim; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.arc(gndX, botY, 5, 0, Math.PI*2); ctx.stroke();
+  for (var i = 0; i < 3; i++){
+    var ly = botY + 10 + i * 4;
+    var lw = 16 - i * 4;
+    ctx.beginPath();
+    ctx.moveTo(gndX - lw/2, ly); ctx.lineTo(gndX + lw/2, ly); ctx.stroke();
+  }
+  // Vin & GND labels on left
+  ctx.font = "bold 11px 'JetBrains Mono', monospace";
+  ctx.fillStyle = PAL.flash; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+  ctx.fillText(t('label_vin'), vinX, topY - 16);
+  ctx.fillStyle = PAL.inkDim;
+  ctx.fillText(t('label_gnd'), gndX, botY + 32);
+
+  // Vout label on right (where arrow points)
+  ctx.font = "bold 12px 'JetBrains Mono', monospace";
+  ctx.fillStyle = PAL.query; ctx.textAlign = 'right';
+  ctx.fillText(t('label_vout'), W - 30, midY - 14);
+
+  // R1 / R2 value labels
+  ctx.font = "11px 'JetBrains Mono', monospace";
+  ctx.fillStyle = PAL.ink; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+  ctx.fillText('R1 = ' + R1.toFixed(2) + ' kΩ', cx + 30, (r1Top + r1Bot)/2);
+  ctx.fillText('R2 = ' + R2.toFixed(2) + ' kΩ', cx + 30, (r2Top + r2Bot)/2);
+
+  // R1 drop & R2 drop labels (small annotations next to the resistor segments)
+  ctx.font = "10px 'JetBrains Mono', monospace";
+  ctx.fillStyle = PAL.inkDim;
+  ctx.textAlign = 'right';
+  ctx.fillText(t('label_r1_drop') + ' = ' + (5 - VOUT).toFixed(2) + ' V', cx - 30, (r1Top + r1Bot)/2);
+  ctx.fillText(t('label_r2_drop') + ' = ' + VOUT.toFixed(2) + ' V',    cx - 30, (r2Top + r2Bot)/2);
+
+  // === Electron particles flowing ===
+  for (var i = 0; i < particles.length; i++){
+    var pa = particles[i];
+    pa.s += pa.speed * (1/60);  // advance s
+    if (pa.s > 1) pa.s -= 1;
+    var pt = pathPos(pa.s, geo);
+    var v = voltageAtS(pa.s, VOUT);
+    var col = colorForV(v);
+    // particle
+    var rad = 3.5 + 1.5 * (v / 5);
+    ctx.fillStyle = col;
+    ctx.beginPath(); ctx.arc(pt.x, pt.y, rad, 0, Math.PI*2); ctx.fill();
+    // a faint trail
+    ctx.fillStyle = colorForV(v).replace(')', ' / 0.3)');
+    ctx.beginPath(); ctx.arc(pt.x, pt.y, rad * 1.8, 0, Math.PI*2); ctx.fill();
+  }
+
+  // Formula at bottom
+  ctx.font = "13px 'JetBrains Mono', monospace";
+  ctx.fillStyle = PAL.flash; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  var formulaText = t('formula_tpl')
+    .replace('{r1}', R1.toFixed(2))
+    .replace('{r2}', R2.toFixed(2))
+    .replace('{vout}', VOUT.toFixed(2));
+  ctx.fillText(formulaText, W/2, H - 30);
+
+  // Note
+  ctx.font = "11px 'Noto Sans SC', sans-serif";
+  ctx.fillStyle = PAL.inkDim;
+  ctx.fillText(t('note'), W/2, H - 10);
+
+  requestAnimationFrame(render);
+}
+
+function updateScenarioUI(){
+  var sc = SCENARIOS[curScen];
+  document.getElementById('scText').textContent = t(sc.key);
+  document.getElementById('cmdLine').textContent = t('cmd_tpl')
+    .replace('{r1}', sc.r1.toFixed(1))
+    .replace('{r2}', sc.r2.toFixed(1));
+}
+
+function refreshI18N(){
+  document.getElementById('title').textContent = t('title');
+  document.getElementById('cnName').textContent = t('cnName');
+  document.getElementById('tagline').textContent = t('tagline');
+  document.getElementById('g0').textContent = t('g0');
+  document.getElementById('g1').textContent = t('g1');
+  document.getElementById('g2').textContent = t('g2');
+  document.getElementById('g3').textContent = t('g3');
+  document.getElementById('guideTitle').textContent = t('guideTitle');
+  document.getElementById('scLbl').textContent = t('scLbl');
+  document.querySelectorAll('.hud-label').forEach(function(el, i){
+    el.textContent = t(['hudL1','hudL2','hudL3','hudL4'][i]);
+  });
+  updateScenarioUI();
+}
+
+document.getElementById('langBtn').addEventListener('click', function(){
+  lang = lang === 'cn' ? 'en' : 'cn';
+  this.textContent = lang.toUpperCase();
+  refreshI18N();
+});
+
+refreshI18N();
+requestAnimationFrame(render);
+</script>
+</body>
+</html>
