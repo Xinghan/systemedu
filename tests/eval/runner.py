@@ -57,7 +57,8 @@ async def _register_user(client: httpx.AsyncClient) -> tuple[str, str]:
         f"{STUDENT_BASE}/api/auth/me",
         headers={"Authorization": f"Bearer {token}"},
     )
-    uid = r2.json()["id"]
+    me = r2.json()
+    uid = me.get("user_id") or me.get("id")
     return uid, token
 
 
@@ -181,7 +182,15 @@ async def main() -> None:
     log.info("eval: %d cases against %s", len(cases), STUDENT_BASE)
 
     from systemedu.core.llm_client import get_llm
-    judge_llm = get_llm("qwen", model="qwen-plus", temperature=0.0, streaming=False)
+    # judge 默认走 cfg.llm.default (本机 = GLM 5.1 thinking),
+    # 用户可 export EVAL_JUDGE_PROVIDER=qwen 切其它 provider.
+    judge_provider = os.environ.get("EVAL_JUDGE_PROVIDER")
+    if judge_provider:
+        judge_llm = get_llm(judge_provider, temperature=0.0, streaming=False)
+        log.info("eval: judge = %s", judge_provider)
+    else:
+        judge_llm = get_llm(temperature=0.0, streaming=False)
+        log.info("eval: judge = (default LLM)")
 
     async with httpx.AsyncClient() as client:
         # 串行跑 — 避免互相干扰 & API 限流

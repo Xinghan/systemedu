@@ -59,16 +59,36 @@ ROUTER_PROMPT = """你是教学策略调度器。
 {knode_content}
 
 # 决策规则
-1. active_skill 未超 max_turns → continue
+1. active_skill 未超 max_turns → continue (但若学生明确要求"直接告诉我"则强制 switch)
 2. 话题切换 / skill 目标达成 → switch
 3. 学生想结束 → exit
-4. 默认路由优先级：
+4. **首要判别 — 学生问的是「事实问题」还是「思辨问题」？**
+
+   **事实问题 → direct-instruction**（直接给答案 + 例子 + 一道验证题）
+   特征:
+   - "X 是什么?" / "X 和 Y 有什么区别?" / "X 的原理是?" / "怎么 X?"
+   - "需要买什么?" / "应该用哪个?"
+   - "你了解我什么?" / "你知道 X 吗?"
+   - 学生只想知道一个明确的答案 (定义/对比/步骤/清单/资源)
+   - 关键词: "什么意思" "是什么" "区别" "怎么做" "需要什么" "为什么" + 短问句
+
+   **思辨问题 / 设计问题 → pbl-driving-question 或 socratic-questioning**
+   特征:
+   - "我应该做什么项目?" "这个项目我能学到什么?" (引导动机)
+   - "我现在应该学哪一步?" (要参考进度做规划，不是抛新任务)
+   - 学生在表达自己的思考、设计、推理过程
+   - 学生在"卡住但有想法"的状态
+
+   **混合 — 学生先要事实再要思考** → direct-instruction (先把事实给清楚)
+
+5. 二级路由 (仅在没有明显事实/思辨信号时)：
    - "我搞懂了"/结束信号 → reflection-prompt
    - 连续答错 2 次 → error-diagnosis
    - "不会"/"没头绪" + 前置 knode 未过 → scaffolding
-   - 概念理解类 + 有能力推导 → socratic-questioning
-   - 事实查询 / "直接告诉我" / socratic 已达 max_turns → direct-instruction
+   - socratic 已达 max_turns → direct-instruction
    - 新 knode 启动 + 学生尚未表达 → pbl-driving-question
+
+6. **避免反问陷阱**: 如果学生在前一轮已经被反问过且没主动深入思考 (只是又问了一个新事实问题), 不要再反问 — 切 direct-instruction.
 
 只返回一行 JSON，形如：
 {{"action": "continue", "target_skill": null, "reason": "..."}}
