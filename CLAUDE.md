@@ -23,10 +23,34 @@ SystemEdu 是一款**本地优先的 AI Agent Sandbox 平台**，教育为核心
 - **MCP**: Python MCP SDK
 - **Skills**: SKILL.md format
 
-### Cloud App (`packages/cloud-app/`, spec 022 monorepo)
+### Student App (`packages/student-app/`, spec 027 起, port 18820)
+**当前主入口**, 多用户 SaaS gateway.
 - **Web server**: Starlette + uvicorn
-- **Auth**: JWT (spec 024 多租户)
-- **Frontend**: Next.js 16 + TypeScript (`web/`, 同仓库)
+- **DB**: PostgreSQL (docker) + SQLAlchemy + alembic; pytest 走 SQLite
+- **Cache**: Redis (docker) — 跨实例共享
+- **Auth**: JWT
+- **Library**: 通过 LIBRARY_LICENSE_TOKEN 反向调 `library-app:18821`
+- **Chat**: WebSocket /api/chat/stream — LangGraph + spec 031 五层 memory inject
+- **Worker**: 独立进程 `python -m systemedu.student.workers.fact_extractor_worker`,
+  5min tick 抽 chat → StudentFact
+
+### Student Web (`packages/student-web/`, spec 027/032, port 4000)
+**当前主前端**, Industrial Atelier 暖纸色设计 (#FAF9F5 / Claude coral #D97757).
+- **Stack**: Next.js 16 + TypeScript + Tailwind v4
+- **Routes**: / (landing), /home (dashboard), /library (项目库 + 详情 + 学习页),
+  /my-projects, /sessions, /memory, /login, /register
+- **Chat**: FloatingChat panel (右下角), 自动按 pathname 推 `page_kind` 到 student-app
+- **设计稿源**: `main_design/UI/` (设计权威源)
+
+### Library App (`packages/library-app/`, port 18821)
+内容服务, 提供 /v1/projects/* (公开) + /admin/* (管理).
+- student-app 走 LIBRARY_LICENSE_TOKEN 调用 /v1/*
+- library-admin-ui 前端 (port 3001) 调 /admin/*
+
+### Cloud App (`packages/cloud-app/`, **deprecated** 2026-05-19)
+**不再演进** — 见 `packages/cloud-app/DEPRECATED.md`. 老 spec 022/024 时期的
+单用户 SaaS gateway, 现 student-app 完全替代. 生产 47.92.200.21 仍跑这个, 等
+独立 spec 迁移.
 
 ### LLM Support (multi-provider, OpenAI-compatible API)
 - Qwen (DashScope): `qwen-plus`, `qwen-turbo`
@@ -38,14 +62,18 @@ SystemEdu 是一款**本地优先的 AI Agent Sandbox 平台**，教育为核心
 - Django 6 + DRF (reused from legacy backend)
 - Project registry, auth, reviews
 
-### Web UI (`/web/`, optional)
-- Next.js 16 + TypeScript (reused from legacy frontend)
+### Web UI (`/web/`, **deprecated** 2026-05-19)
+**不再演进** — 见 `web/DEPRECATED.md`. 老 cloud-app 时期单用户前端 (Lumina Nexus
+紫色). 新前端在 `packages/student-web/` (Industrial Atelier). 生产 47.92.200.21
+仍跑这个, 等独立 spec 迁移.
 
 ### Legacy (removed)
 - 旧的 `backend/` `frontend/` `adminsite/` `adminsite-fe/` 已于 2026-04-15 删除
 - spec 022 (2026-05-11) 拆 monorepo: `src/systemedu/` → `packages/{core, cloud-app}/`;
   删除 `cli/` `channels/` `hub/` `image_gen.py` (OpenClaw 残留 / Wanx 文生图)
-- Gateway API 现在走 `packages/cloud-app/src/systemedu/cloud/gateway/`
+- spec 031 (2026-05-18): tutor 多用户五层 memory, 走 student-app (PG + Redis + Qdrant + Mem0)
+- spec 032 (2026-05-19): student-web Industrial Atelier UI 整合 spec 031 (chat panel
+  page_kind / /sessions / /memory / exercise attempt POST)
 
 ## Project Structure (spec 022 monorepo, shipped 2026-05-11)
 
@@ -69,31 +97,42 @@ systemedu/                              uv workspace, 闭源 monorepo
 │   │       ├── memory/                 mem0 客户端
 │   │       ├── mcp/                    MCP servers
 │   │       └── skills/                 SKILL.md loader + builtin
-│   ├── cloud-app/                      多租户 SaaS gateway (systemedu-cloud)
-│   │   ├── pyproject.toml              depends on systemedu-core
-│   │   └── src/systemedu/cloud/gateway/
-│   │       ├── server.py               FastAPI/Starlette HTTP server
-│   │       ├── auth.py                 JWT (spec 024 强化)
-│   │       ├── tutor_runner.py         LangGraph runner
-│   │       └── session.py              chat session 管理
-│   └── (library-app/)                  spec 023 起步, 内容服务
+│   ├── student-app/                    **主后端** (systemedu-student, port 18820)
+│   │   └── src/systemedu/student/      JWT + PG + Redis + 五层 memory chat
+│   │       ├── server.py               Starlette HTTP/WS server
+│   │       ├── auth/                   JWT (spec 027)
+│   │       ├── db.py                   SQLAlchemy schema (alembic 管理)
+│   │       ├── cache.py                Redis 异步客户端
+│   │       ├── chat/                   tutor_runner / memory_layers / exercise / memory
+│   │       ├── workers/                fact_extractor_worker (独立进程)
+│   │       ├── library_proxy/          反代 library-app /v1/*
+│   │       └── catalog/                我的项目 / last_visited
+│   ├── student-web/                    **主前端** (Next.js, port 4000)
+│   │   └── src/                        Industrial Atelier 设计 (main_design/UI/)
+│   ├── library-app/                    内容服务 (port 18821, spec 023)
+│   ├── library-admin-ui/               library 管理前端 (port 3001)
+│   └── cloud-app/                      **deprecated** (DEPRECATED.md), 老 spec 022 gateway
 │
 ├── tools/
 │   └── content-pipeline/               内容流水线 CLI (dev 装, 不进生产, spec 023)
 │
 ├── content-workspace/                  gitignored, 内容创作工作区 (spec 023)
-├── web/                                Next.js 前端
+├── web/                                **deprecated** 老 cloud-app 前端
+├── main_design/UI/                     设计稿权威源 (Industrial Atelier)
 ├── course_factory/                     Claude Code SKILL.md (内容生产手册)
+├── docker-compose.yml                  本地 PG + Redis + Qdrant (spec 031)
 ├── scripts/
 │   ├── install.sh                      一键安装入口
-│   ├── restart.sh                      本地启 backend + frontend + dighuman
+│   ├── restart-student.sh              **本地主入口**: student-app + worker + student-web
+│   ├── restart.sh                      **老**: 启 cloud-app + 老 web (生产部署用)
 │   └── install/                        平台特定脚本
 ├── tests/                              跨 package 集成测试
 ├── specs/                              per-feature spec/plan/tasks (speckit)
 └── docs/                               prd.md / 长期文档
 ```
 
-**关键依赖单向**: `cloud-app → core`; core 不知道 cloud 存在。
+**关键依赖单向**: `student-app → core`; core 不知道 student/cloud 存在。
+**student-app 跟 library-app 走 HTTP**, 不互相 import.
 
 **Course Factory** 流程 (Claude Code 作为 skill 调用): 见 `course_factory/SKILL.md`。
 Python API 通过 `from course_factory import ...` 调用; 内部依赖
@@ -101,15 +140,25 @@ Python API 通过 `from course_factory import ...` 调用; 内部依赖
 
 ## Common Commands
 
-### Restart (Backend + Frontend) - 本地开发
+### Restart - 本地开发 (主入口)
+```bash
+./scripts/restart-student.sh
+```
+启 student-app backend (:18820) + fact_extractor worker + student-web (:4000).
+依赖 docker compose 起 PG/Redis/Qdrant (`docker compose up -d`).
+
+- Backend: `python -m systemedu.student.server`
+- Worker: `python -m systemedu.student.workers.fact_extractor_worker`
+- Frontend: `cd packages/student-web && PORT=4000 npm run dev`
+- Library: 单独跑 `cd packages/library-app && uvicorn library.main:app --port 18821`
+- 本机有 HTTP proxy (`http_proxy=http://127.0.0.1:7890`); curl 测试加 `--noproxy '*'`
+- WS 调试 Python 时设 `NO_PROXY=127.0.0.1,localhost`
+
+### 老入口 (deprecated, 仅生产 deploy 用)
 ```bash
 ./scripts/restart.sh
 ```
-Kills existing processes on ports 18820 (backend) and 3000 (frontend), then starts both.
-
-- Backend: `source .venv/bin/activate && python -m systemedu.cloud.gateway.server` (port 18820, spec 022 后)
-- Frontend: `cd web && npm run dev` (port 3000)
-- Note: 本机有 HTTP proxy (`http_proxy=http://127.0.0.1:7890`)，curl 测试时需加 `--noproxy '*'`
+启老 cloud-app gateway (:18820) + 老 web (:3000). 不要新功能跑这个.
 
 ### Run Tests
 ```bash
