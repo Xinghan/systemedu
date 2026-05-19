@@ -120,7 +120,12 @@ class User(Base):
 
 
 class UserProject(Base):
-    """"我的书架" — 学生 Pull 进自己列表的 library 项目。"""
+    """"我的书架" — 学生 Pull 进自己列表的 library 项目.
+
+    spec 033: pull 时真把 tarball 解压到本地 (~/.systemedu/student/users/<uid>/projects/<slug>/<version>/).
+    `cloned_version` / `local_path` / `cloned_at` 三列代表本地 clone 状态;
+    全 NULL = 老式 pull (没真下载), 学习时返 403 让用户重新 Pull.
+    """
 
     __tablename__ = "user_projects"
     __table_args__ = (
@@ -133,6 +138,10 @@ class UserProject(Base):
     library_version = Column(String(64), nullable=True)
     pulled_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     removed_at = Column(DateTime, nullable=True)
+    # spec 033: 本地 clone 状态
+    cloned_version = Column(String(64), nullable=True)
+    local_path = Column(String(512), nullable=True)
+    cloned_at = Column(DateTime, nullable=True)
 
 
 class LastVisited(Base):
@@ -404,6 +413,9 @@ def _detach_user_project(p: UserProject | None) -> UserProject | None:
         library_version=p.library_version,
         pulled_at=p.pulled_at,
         removed_at=p.removed_at,
+        cloned_version=p.cloned_version,
+        local_path=p.local_path,
+        cloned_at=p.cloned_at,
     )
 
 
@@ -437,8 +449,14 @@ def upsert_user_project(
     user_id: str,
     library_slug: str,
     library_version: str | None = None,
+    *,
+    cloned_version: str | None = None,
+    local_path: str | None = None,
+    cloned_at: datetime | None = None,
 ) -> tuple[UserProject, bool]:
     """Pull: 如果存在 (即便 removed) 则 removed_at=NULL + 刷 version; 否则新建.
+
+    spec 033: 可选传 cloned_version / local_path / cloned_at 表示已完成本地 clone.
 
     Returns: (project, created) — created=True 表示是新行。
     """
@@ -453,6 +471,12 @@ def upsert_user_project(
             existing.removed_at = None
             if library_version:
                 existing.library_version = library_version
+            if cloned_version is not None:
+                existing.cloned_version = cloned_version
+            if local_path is not None:
+                existing.local_path = local_path
+            if cloned_at is not None:
+                existing.cloned_at = cloned_at
             existing.pulled_at = datetime.utcnow()
             session.commit()
             session.refresh(existing)
@@ -461,6 +485,9 @@ def upsert_user_project(
             user_id=user_id,
             library_slug=library_slug,
             library_version=library_version,
+            cloned_version=cloned_version,
+            local_path=local_path,
+            cloned_at=cloned_at,
         )
         session.add(p)
         session.commit()

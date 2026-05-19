@@ -155,6 +155,13 @@ def import_tarball(tarball_path: Path, allow_overwrite: bool = True) -> Manifest
                 shutil.rmtree(target_dir)
             shutil.copytree(project_dir, target_dir)
 
+            # spec 033: 把原始 tarball 拷一份到 _archive/<slug>-<version>.tar.gz
+            # 用于 /v1/projects/<slug>/download 给 student-app pull 时下载
+            archive_dir = target_dir / "_archive"
+            archive_dir.mkdir(parents=True, exist_ok=True)
+            archive_path = archive_dir / f"{manifest.slug}-{manifest.version}.tar.gz"
+            shutil.copy2(tarball_path, archive_path)
+
             db.commit()
         except Exception:
             db.rollback()

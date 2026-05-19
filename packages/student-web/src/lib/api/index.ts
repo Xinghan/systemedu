@@ -90,6 +90,7 @@ export interface LibraryKnodeContent {
   assignment_md?: string
   theories?: unknown
   files?: Array<{ path: string; size: number; sha256: string }>
+  version?: string
 }
 
 export const library = {
@@ -149,6 +150,13 @@ export const myProjects = {
       `/api/my/progress/${encodeURIComponent(slug)}/${encodeURIComponent(moduleId)}`,
       {},
     ),
+  // spec 033: 从本地 clone 读 knode + 流出 media 文件
+  getKnode: (slug: string, knodeId: string) =>
+    api.get<LibraryKnodeContent>(
+      `/api/my/projects/${encodeURIComponent(slug)}/knodes/${encodeURIComponent(knodeId)}`,
+    ),
+  fileUrl: (slug: string, path: string) =>
+    `${STUDENT_API_URL}/api/my/projects/${encodeURIComponent(slug)}/files/${path}`,
 }
 
 // spec 027 P2.4-redo: gateway shim 给老 web 学习页用

@@ -3,7 +3,7 @@
  * 桥接到 student-app + library API。
  *
  * 设计:
- *  - getCourseV2/V3, getCourseV2Assignment 由 library.getKnode 提供数据 +
+ *  - getCourseV2/V3, getCourseV2Assignment 由 myProjects.getKnode (本地 clone) 提供数据 +
  *    转成老的 CourseContentData / CourseAssignmentData 格式
  *  - 任何"生成 / 重生成 / 评判"接口在学生端是 no-op (返回稳定空值, 让 UI 不爆)
  *  - 进度调用桥到 myProjects.setProgress (学生端进度模型: slug + module_id 字符串,
@@ -14,7 +14,7 @@
  */
 
 import { STUDENT_API_URL } from "./client"
-import { library, myProjects, type LibraryKnodeContent } from "./index"
+import { myProjects, type LibraryKnodeContent } from "./index"
 import { getToken } from "@/lib/auth"
 import type {
   CourseAssignmentData,
@@ -32,7 +32,8 @@ import type {
 async function fetchInlineHtml(slug: string, path: string): Promise<string | null> {
   try {
     const token = getToken()
-    const url = `${STUDENT_API_URL}/api/library/projects/${encodeURIComponent(slug)}/files/${path}`
+    // spec 033: 走本地 clone (/api/my/projects/) 而不是 library 代理
+    const url = `${STUDENT_API_URL}/api/my/projects/${encodeURIComponent(slug)}/files/${path}`
     const res = await fetch(url, {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
     })
@@ -148,7 +149,7 @@ export const gateway = {
   // === 取课程内容 (主路径) ===
   getCourseV2: async (projectName: string): Promise<CourseContentData> => {
     const moduleId = requireModule()
-    const k = await library.getKnode(projectName, moduleId)
+    const k = await myProjects.getKnode(projectName, moduleId)
     const data = knodeToCourseContent(k)
     const cc = (data as unknown as { course_content: { rendered_sections: Record<string, unknown> } }).course_content
     await inlineHtmlPaths(projectName, k.knode_dir || "", cc.rendered_sections)
@@ -156,7 +157,7 @@ export const gateway = {
   },
   getCourseV3: async (projectName: string): Promise<CourseContentData> => {
     const moduleId = requireModule()
-    const k = await library.getKnode(projectName, moduleId)
+    const k = await myProjects.getKnode(projectName, moduleId)
     const data = knodeToCourseContent(k)
     const cc = (data as unknown as { course_content: { rendered_sections: Record<string, unknown> } }).course_content
     await inlineHtmlPaths(projectName, k.knode_dir || "", cc.rendered_sections)
@@ -164,7 +165,7 @@ export const gateway = {
   },
   getCourseV2Assignment: async (projectName: string): Promise<CourseAssignmentData> => {
     const moduleId = requireModule()
-    const k = await library.getKnode(projectName, moduleId)
+    const k = await myProjects.getKnode(projectName, moduleId)
     return knodeToAssignment(k)
   },
 
@@ -173,7 +174,7 @@ export const gateway = {
     projectName: string,
   ): Promise<CourseV3VersionsData> => {
     const moduleId = requireModule()
-    const k = await library.getKnode(projectName, moduleId).catch(() => null)
+    const k = await myProjects.getKnode(projectName, moduleId).catch(() => null)
     const v = k?.version || "v1"
     return {
       versions: [

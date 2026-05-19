@@ -331,3 +331,12 @@ class AsyncLibraryClient:
         r = await self._client.get(self.get_file_url(slug, path))
         _raise_for_status(r)
         return r.content
+
+    async def download_project(self, slug: str) -> bytes:
+        """spec 033: 下载完整 tarball, 用于 student-app pull 时本地 clone."""
+        r = await self._client.get(
+            _build_path(self.base_url, "v1", "projects", slug, "download"),
+            timeout=60.0,
+        )
+        _raise_for_status(r)
+        return r.content

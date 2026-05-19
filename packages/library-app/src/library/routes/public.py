@@ -172,3 +172,42 @@ def get_file(slug: str, file_path: str):
     except ValueError:
         raise HTTPException(status_code=403, detail="path traversal blocked")
     return FileResponse(target)
+
+
+@router.get("/projects/{slug}/download")
+def download_project(slug: str):
+    """spec 033: 下载完整项目 tarball.
+
+    用于 student-app pull 时把项目 clone 到本地。返回 import 时存档的原始 tarball
+    (PROJECTS_MEDIA_DIR/<slug>/_archive/<slug>-<version>.tar.gz)。
+    """
+    db = get_session()
+    try:
+        p = db.query(Project).filter_by(slug=slug, status=ProjectStatus.published).first()
+    finally:
+        db.close()
+    if not p:
+        raise HTTPException(status_code=404, detail="project not found or not published")
+
+    archive_dir = PROJECTS_MEDIA_DIR / slug / "_archive"
+    expected = archive_dir / f"{slug}-{p.version}.tar.gz"
+    if expected.exists() and expected.is_file():
+        return FileResponse(
+            expected,
+            media_type="application/gzip",
+            filename=f"{slug}-{p.version}.tar.gz",
+        )
+    # Fallback: 如果 import 时 (在 spec 033 之前) 没存 archive, 找目录里任一 tarball
+    if archive_dir.exists():
+        candidates = sorted(archive_dir.glob(f"{slug}-*.tar.gz"))
+        if candidates:
+            chosen = candidates[-1]
+            return FileResponse(
+                chosen,
+                media_type="application/gzip",
+                filename=chosen.name,
+            )
+    raise HTTPException(
+        status_code=503,
+        detail=f"archive not available for {slug}-{p.version}; admin must re-import",
+    )
