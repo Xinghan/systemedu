@@ -278,7 +278,7 @@ def save_knode_to_workspace(
             ├── sections.json        ← {"ideas": [...], "story_paragraphs":..., 等}
             ├── theories.json        ← course_content.theories
             ├── audio_scripts.json   ← audio_scripts (传入 OR course_content.audio_scripts)
-            ├── slides.json          ← slides 列表 (含每页 audio_script), 由 generate_slides() 产
+            ├── slides.json          ← slides 列表 (含每页 audio_script), Claude 手写, finalize_slides() 校验后传入
             ├── assignment.md        ← assignment (可空)
             └── media/<*.html>       ← animation/game HTML 拆出来的独立文件
 
@@ -288,7 +288,7 @@ def save_knode_to_workspace(
         course_content: make_course_content() 返回的 dict
         assignment: assignment markdown (可空)
         audio_scripts: 该 knode 的 audio_scripts (可在 course_content 里也可单独传)
-        slides: generate_slides() 产出的 slide 列表 (可空, 但完整流程应有)
+        slides: Claude 按 slide_gen.md schema 手写的 slide 列表, 调 finalize_slides() 校验后传入 (可空, 但完整流程应有)
         update_manifest: 写完后是否调 regenerate_manifest 重算 files+sha256
 
     Returns:

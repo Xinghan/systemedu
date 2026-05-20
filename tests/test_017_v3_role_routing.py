@@ -3,7 +3,7 @@
 spec 021 把单一 creative provider 拆成 thinking / coding / fast 三个角色:
 - creative role -> coding provider (fallback: fast / thinking)
 - fast role     -> fast provider   (fallback: coding / thinking)
-- factory.generate_assignment / audio_script: fast role
+(spec 034: factory.generate_assignment / generate_audio_scripts 已删除, 这里只剩 v3 pipeline 角色路由测试)
 """
 
 from pathlib import Path
@@ -114,61 +114,3 @@ def test_llm_for_creative_fallbacks_to_fast(tmp_path, monkeypatch) -> None:
 
     assert captured["provider"] == "fast"
 
-
-def test_factory_assignment_uses_fast_url(isolated_config, monkeypatch) -> None:
-    """spec 021: factory.generate_assignment 走 fast provider URL"""
-    captured: dict = {}
-
-    class _FakeResp:
-        status_code = 200
-
-        def json(self):
-            return {"choices": [{"message": {"content": "# Test\n"}}]}
-
-        def raise_for_status(self):
-            pass
-
-    def fake_post(url, **kw):
-        captured["url"] = url
-        captured["headers"] = kw.get("headers", {})
-        return _FakeResp()
-
-    import requests as _requests
-    monkeypatch.setattr(_requests, "post", fake_post)
-
-    from course_factory.factory import generate_assignment
-    generate_assignment(
-        knode={"name": "test", "module_role": "regular"},
-        milestone={"title": "test"},
-        plan_markdown="## test",
-    )
-
-    assert "fast.example.com" in captured["url"]
-    assert captured["headers"]["Authorization"] == "Bearer sk-fast-key"
-
-
-def test_factory_assignment_no_key_raises_llm_not_configured(tmp_path, monkeypatch) -> None:
-    """spec 021: 三个 provider 全都没 key -> LLMNotConfigured."""
-    cfg_path = tmp_path / "config.yaml"
-    cfg_path.write_text(yaml.dump({
-        "llm": {
-            "default": "thinking",
-            "providers": {
-                "thinking": {"base_url": "https://t/v1", "api_key": "", "model": "m"},
-                "coding":   {"base_url": "https://c/v1", "api_key": "", "model": "m"},
-                "fast":     {"base_url": "https://f/v1", "api_key": "", "model": "m"},
-            },
-        },
-    }, default_flow_style=False), encoding="utf-8")
-    monkeypatch.setattr(cfg_mod, "CONFIG_FILE", cfg_path)
-    cfg_mod.reset_config()
-
-    from course_factory.factory import generate_assignment
-    from systemedu.core.llm_client import LLMNotConfigured
-
-    with pytest.raises(LLMNotConfigured):
-        generate_assignment(
-            knode={"name": "test", "module_role": "regular"},
-            milestone={"title": "test"},
-            plan_markdown="## test",
-        )

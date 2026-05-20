@@ -180,157 +180,11 @@ def _inline_runtime(html: str) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Assignment generation (Step 6.5)
+# Assignment 写盘 (Step 6.5 工具)
 # ---------------------------------------------------------------------------
-
-_ASSIGNMENT_PROMPT_NORMAL = """你是一位经验丰富的教育内容设计师。请根据以下知识节点信息，生成一份循序渐进的作业练习。
-
-知识节点：{node_title}
-内容摘要：{node_summary}
-难度等级：{difficulty}/5
-所属模块：{milestone_title}
-
-请按照以下结构生成作业（全部用中文）：
-
-## 一、选择题（3题）
-
-每题给出4个选项，标注正确答案。格式：
-**1. 题目内容**
-A. 选项A
-B. 选项B
-C. 选项C
-D. 选项D
-**答案：X**
-
-## 二、问答题（2题）
-
-开放性问题，引导学生深入思考。每题后附参考答案要点。
-
-## 三、动手项目
-
-设计一个可以在家完成的动手操作项目（实验/制作/观察均可），要求：
-- 使用身边容易获得的材料
-- 步骤清晰，适合独立完成
-- 与本节知识点紧密相关
-
-在动手项目标题前加上 [HANDS_ON] 标记。
-
-请直接输出作业内容，不要有额外的前言说明。"""
-
-_ASSIGNMENT_PROMPT_CAPSTONE = """你是一位经验丰富的教育内容设计师。请根据以下大作业节点信息，生成一份严谨的大作业提交考核指南。
-
-大作业名称：{node_title}
-所属模块：{milestone_title}
-
-交付物清单：
-{artifacts_text}
-
-验收标准：
-{standards_text}
-
-请按照以下结构生成考核指南（全部用中文）：
-
-## 一、考核要点说明
-
-逐条对照验收标准，详细解释每条标准的评判要点、常见扣分原因和满分示例。每条标准用以下格式：
-
-**标准 N：[标准内容]**
-- 评判要点：具体说明达标需要满足哪些条件
-- 常见扣分原因：列举 2-3 个学生容易犯的错误
-- 满分示例：描述一个理想的达标表现
-
-## 二、交付物自检清单
-
-为每个交付物列出 3-5 个自检项，帮助学生在提交前确认作品质量：
-
-**交付物：[名称]（格式：[format]）**
-- [ ] 自检项 1
-- [ ] 自检项 2
-- ...
-
-## 三、自评说明写作指引
-
-指导学生如何撰写高质量的自评说明，包括：
-- 自评说明应包含哪些要素（具体做了什么、用了什么方法、遇到什么困难、如何解决）
-- 避免笼统空泛的描述
-- 给出一个好的自评说明示例和一个差的自评说明示例
-
-请直接输出考核指南内容，不要有额外的前言说明。"""
-
-
-def generate_assignment(knode: dict, milestone: dict, plan_markdown: str = "") -> str:
-    """
-    生成作业练习内容。普通节点生成选择题+问答题+动手项目，
-    大作业节点生成考核指南+自检清单+自评写作指引。
-
-    返回 Markdown 文本，用于写入 LessonContent.project_assignment。
-    需要 LLM 调用，使用配置中的默认 provider。
-    """
-    import requests as _requests
-    from systemedu.core.config import get_config
-
-    cfg = get_config()
-    # spec 021: assignment 是文本 fast 任务, 走 fast provider (fallback chain)
-    from systemedu.core.llm_client import LLMNotConfigured, resolve_role_provider
-    provider_name = resolve_role_provider("fast")
-    provider = cfg.llm.providers.get(provider_name)
-    if not provider or not provider.api_key:
-        raise LLMNotConfigured(provider_name)
-    _api_url = provider.base_url.rstrip("/") + "/chat/completions"
-    _headers = {
-        "Authorization": f"Bearer {provider.api_key}",
-        "Content-Type": "application/json",
-    }
-
-    module_role = knode.get("module_role", "")
-    node_title = knode.get("name") or knode.get("title", "")
-    milestone_title = milestone.get("title", "")
-
-    if module_role == "capstone":
-        # 大作业节点：生成考核指南
-        artifacts = knode.get("acceptance_artifacts", [])
-        standards = knode.get("acceptance_standard", [])
-        artifacts_text = "\n".join(
-            f"- {a.get('title', '')}: {a.get('description', '')} (格式: {a.get('format', '')})"
-            for a in artifacts
-        ) or "(无)"
-        standards_text = "\n".join(
-            f"- {i+1}. {s}" for i, s in enumerate(standards)
-        ) or "(无)"
-        prompt = _ASSIGNMENT_PROMPT_CAPSTONE.format(
-            node_title=node_title,
-            milestone_title=milestone_title,
-            artifacts_text=artifacts_text,
-            standards_text=standards_text,
-        )
-    else:
-        # 普通节点：生成选择题+问答题+动手项目
-        difficulty = knode.get("difficulty", 3)
-        node_summary = plan_markdown[:500] if plan_markdown else ""
-        prompt = _ASSIGNMENT_PROMPT_NORMAL.format(
-            node_title=node_title,
-            node_summary=node_summary,
-            difficulty=difficulty,
-            milestone_title=milestone_title,
-        )
-
-    messages = [
-        {"role": "system", "content": "你是专业的教育内容设计师，擅长为中小学生设计循序渐进的练习题和考核方案。"},
-        {"role": "user", "content": prompt},
-    ]
-    # 用 provider 自带 temperature, 避免硬编码 0.7 撞 kimi-k2.x 强制 temperature=1
-    _temp = getattr(provider, "temperature", None)
-    if _temp is None:
-        _temp = 0.7
-    resp = _requests.post(
-        _api_url, headers=_headers,
-        json={"model": provider.model, "temperature": _temp, "messages": messages},
-        timeout=180,
-        proxies={"http": None, "https": None},
-    )
-    resp.raise_for_status()
-    text = resp.json()["choices"][0]["message"]["content"]
-    return text.strip()
+# spec 034: Step 6.5 是 Claude 手写 assignment.md, 不再调 LLM 生成。这里只保留
+# upsert_assignment 写 DB 工具 (legacy DB 模式仍可用; workspace 模式直接通过
+# save_knode_to_workspace(..., assignment=md) 传字符串写盘)。
 
 
 def upsert_assignment(project_name: str, knode_id: int, assignment: str) -> None:
@@ -377,223 +231,61 @@ def upsert_assignment_v3(project_name: str, knode_id: int, assignment: str,
         db.close()
 
 
-# ---------------------------------------------------------------------------
-# Audio script generation (Step 6a equivalent for Course Factory)
-# ---------------------------------------------------------------------------
-
-_TEACHER_SCRIPT_PROMPT = """你是一位经验丰富的教育内容讲解师，正在为面向 {age_range} 岁学生的课程录制讲解音频。
-
-课程主题：{node_title}
-段落标题：{heading}
-段落正文：
-{body}
-
-请生成一段口语化的讲解稿。要求：
-- 长度：150-300 字
-- 风格：像一位亲切的老师在课堂上对学生讲解，不是照着课文念
-- 内容：提炼段落核心要点，用通俗易懂的语言重新讲述
-- 技巧：适当补充背景知识、举生活中的例子、用设问引导思考
-- 语气词：可以用"同学们"、"大家想想看"、"你们有没有注意到"等课堂用语
-- 语言：中文
-- 不要加标题、前言或"以下是讲解稿"之类的元描述
-- 直接输出可朗读的讲解内容"""
-
-
-def generate_audio_scripts(project_name: str, knode_id: int,
-                           knode: dict, milestone: dict) -> list[dict]:
-    """
-    为一个 knode 的 plan_markdown 生成分段讲课稿。
-
-    流程：
-    1. 从 DB 读取 course_content.plan_markdown
-    2. 按 ##/### 标题分段（纯 Python，保留占位符）
-    3. 对每段调用 LLM 生成 audio_script
-    4. 将 sections 写回 course_content 并保存 DB
-
-    返回生成的 sections 列表。
-    """
-    import re
-    import uuid
-    from systemedu.core.storage.db import LessonContent, get_session
-    from systemedu.core.config import get_config
-    from langchain_openai import ChatOpenAI
-
-    db = get_session()
-    try:
-        lesson = db.query(LessonContent).filter_by(
-            project_name=project_name, knode_id=knode_id
-        ).first()
-        if not lesson or not lesson.course_content:
-            print(f"[WARN] knode {knode_id} 没有 course_content，跳过")
-            return []
-
-        cc = json.loads(lesson.course_content)
-        plan_md = cc.get("plan_markdown", "")
-        if not plan_md:
-            print(f"[WARN] knode {knode_id} 没有 plan_markdown，跳过")
-            return []
-
-        # 如果已有 sections 且 audio_script 非空，跳过
-        existing = cc.get("sections", [])
-        if existing and all(s.get("audio_script") for s in existing):
-            print(f"[SKIP] knode {knode_id} 已有 {len(existing)} 段讲课稿")
-            return existing
-
-        # Step 1: 分段
-        from systemedu.core.agents.builtin.course_segment_agent import _split_by_headings
-        sections = _split_by_headings(plan_md)
-
-        # Step 2: LLM 生成 audio_script
-        # NOTE: Use requests (urllib3) instead of langchain/httpx because
-        # httpx has SSL incompatibility with DashScope on this machine.
-        import requests as _requests
-        cfg = get_config()
-        # spec 021: audio_script (讲课稿文本) 走 fast provider (fallback chain)
-        from systemedu.core.llm_client import LLMNotConfigured, resolve_role_provider
-        provider_name = resolve_role_provider("fast")
-        provider = cfg.llm.providers.get(provider_name)
-        if not provider or not provider.api_key:
-            raise LLMNotConfigured(provider_name)
-        _api_url = provider.base_url.rstrip("/") + "/chat/completions"
-        _api_key = provider.api_key
-        _model = provider.model
-        _audio_temp = getattr(provider, "temperature", None)
-        if _audio_temp is None:
-            _audio_temp = 0.7
-        _headers = {
-            "Authorization": f"Bearer {_api_key}",
-            "Content-Type": "application/json",
-        }
-
-        node_title = knode.get("name") or knode.get("title", "")
-        age_range = "6-18"
-
-        for sec in sections:
-            # 去掉占位符和标题，检查是否有实质正文
-            body_text = re.sub(r'\[\[IDEA:[^\]]+\]\]', '', sec["body_markdown"]).strip()
-            body_text = re.sub(r'^#{2,3}\s+.*$', '', body_text, flags=re.MULTILINE).strip()
-            body_text = re.sub(r'\[\[THEORY:[^\]]+\]\]', '', body_text).strip()
-            if len(body_text) < 30:
-                continue
-
-            prompt = _TEACHER_SCRIPT_PROMPT.format(
-                node_title=node_title,
-                heading=sec["heading"] or node_title,
-                body=body_text[:1000],
-                age_range=age_range,
-            )
-            try:
-                resp = _requests.post(
-                    _api_url, headers=_headers,
-                    json={"model": _model, "temperature": _audio_temp,
-                          "messages": [{"role": "user", "content": prompt}]},
-                    timeout=180,
-                    proxies={"http": None, "https": None},
-                )
-                resp.raise_for_status()
-                text = resp.json()["choices"][0]["message"]["content"]
-                sec["audio_script"] = text.strip()
-            except Exception as e:
-                print(f"  [ERR] section '{sec['heading']}': {e}")
-
-        # Step 3: 写回 DB
-        cc["sections"] = sections
-        lesson.course_content = json.dumps(cc, ensure_ascii=False)
-        db.commit()
-
-        return sections
-    finally:
-        db.close()
-
 
 # ---------------------------------------------------------------------------
-# Slide generation (Step 6.7) — workspace 模式 + DB 模式都能调
+# Step 6.6 / 6.7 finalize 工具 (spec 034)
 #
-# 把 course_content (plan_markdown / theories / ideas / external_resources) +
-# knode 元信息, 调 fast LLM 生成一份"老师讲课用" slide 列表, 每页含 audio_script。
-# 输出文件位置: <knode_dir>/slides.json (由 save_knode_to_workspace 写盘)。
+# spec 034 改造: Step 6.5 / 6.6 / 6.7 三步内容全部由 Claude 手写, factory.py
+# 不再调 LLM 生成。这里提供 finalize_audio_scripts / finalize_slides 两个纯校验
+# 工具, 让 Claude 写完后跑一遍, 拿到 errs 自己决定改不改。errs 是软警告, 非空不
+# 阻断写盘 — save_knode_to_workspace 始终把内容存下来。
 # ---------------------------------------------------------------------------
 
-# 复用 v3 pipeline 的 prompt 模板, 已经验证好的 schema 不重复维护
-_SLIDE_GEN_PROMPT_PATH = (
-    ROOT / "packages" / "core" / "src" / "systemedu" / "core"
-    / "course_factory_v3" / "prompts" / "slide_gen.md"
-)
+
+def finalize_audio_scripts(sections: list[dict]) -> tuple[list[dict], list[str]]:
+    """校验 Claude 手写的 audio_scripts (Step 6.6 写完调).
+
+    输入 sections: list[{"section_title"|"heading": str, "audio_script": str,
+                          "body_markdown": str (可选, 校验"非朗读版"用)}]
+    校验项:
+      - 每个非空 section 必须有 audio_script
+      - audio_script 长度 100-400 字 (软警告, 150-300 是推荐区间)
+      - audio_script 不能跟 body_markdown 文本重叠超过 60% (软警告: "疑似课文朗读版")
+    返回 (sections_passthrough, errs)
+    """
+    errs: list[str] = []
+    if not sections:
+        return [], ["audio_scripts sections 为空"]
+
+    for i, sec in enumerate(sections):
+        title = sec.get("section_title") or sec.get("heading") or f"section_{i}"
+        body = (sec.get("body_markdown") or "").strip()
+        audio = (sec.get("audio_script") or "").strip()
+        # 跳过没正文的占位 section (如纯占位符段)
+        body_text = re.sub(r"\[\[(?:IDEA|THEORY):[^\]]+\]\]", "", body)
+        body_text = re.sub(r"^#{2,3}\s+.*$", "", body_text, flags=re.MULTILINE).strip()
+        if len(body_text) < 30:
+            continue
+        if not audio:
+            errs.append(f"section {i} ({title}) 缺 audio_script")
+            continue
+        L = len(audio)
+        if L < 100:
+            errs.append(f"section {i} ({title}) audio_script 过短 ({L} 字, 推荐 150-300)")
+        elif L > 400:
+            errs.append(f"section {i} ({title}) audio_script 过长 ({L} 字, 推荐 150-300)")
+        # 朗读版检测: 取 body 前 60 字, 看 audio 里出现的字符比例
+        if body_text and audio:
+            sample = body_text[:60]
+            overlap = sum(1 for ch in sample if ch in audio)
+            if len(sample) > 20 and overlap / len(sample) > 0.6:
+                errs.append(
+                    f"section {i} ({title}) audio_script 跟 body_markdown 重叠 > 60% — 疑似课文朗读版, 应口语化重写"
+                )
+    return sections, errs
 
 
-def _slide_format_theories(theories: list[dict]) -> str:
-    if not theories:
-        return "(无 theories)"
-    lines = []
-    for t in theories:
-        tid = t.get("theory_id", "")
-        title = t.get("title", "")
-        subj = t.get("subject", "")
-        body = (t.get("body_markdown") or "")[:200]
-        lines.append(f"- theory_id={tid} | {title} ({subj}) | {body[:120]}...")
-    return "\n".join(lines)
-
-
-def _slide_format_ideas(ideas: list[dict], rendered: dict) -> str:
-    if not ideas:
-        return "(无 ideas)"
-    lines = []
-    for i in ideas:
-        iid = i.get("idea_id", "")
-        mode = i.get("mode", "")
-        topic = i.get("topic", "")
-        rs = rendered.get(iid) or {}
-        has_html = bool(rs.get("html"))
-        lines.append(
-            f"- idea_id={iid} | mode={mode} | topic={topic} | has_content={has_html}"
-        )
-    return "\n".join(lines)
-
-
-def _slide_format_list(items: list) -> str:
-    if not items:
-        return "(无)"
-    out = []
-    for x in items:
-        if isinstance(x, str):
-            out.append(f"- {x}")
-        elif isinstance(x, dict):
-            out.append(f"- {x.get('title', x.get('name', str(x)))}")
-    return "\n".join(out) if out else "(无)"
-
-
-_SLIDE_JSON_ARR_RE = re.compile(r"\[\s*\{[\s\S]*\}\s*\]", re.MULTILINE)
-
-
-def _slide_parse_json(raw: str) -> list[dict]:
-    """LLM 输出可能含 ```json 包裹或前后说明; 鲁棒抽取顶层 JSON 数组。"""
-    if not raw:
-        return []
-    s = raw.strip()
-    if s.startswith("```"):
-        lines = s.split("\n")
-        if lines[0].startswith("```"):
-            lines = lines[1:]
-        if lines and lines[-1].strip() == "```":
-            lines = lines[:-1]
-        s = "\n".join(lines).strip()
-    try:
-        v = json.loads(s)
-        if isinstance(v, list):
-            return [x for x in v if isinstance(x, dict)]
-    except Exception:
-        pass
-    m = _SLIDE_JSON_ARR_RE.search(s)
-    if m:
-        try:
-            v = json.loads(m.group(0))
-            if isinstance(v, list):
-                return [x for x in v if isinstance(x, dict)]
-        except Exception:
-            pass
-    return []
-
-
+# 内部 helper for finalize_slides
 def _slide_yt_thumb(url: str) -> str:
     m = re.search(r"(?:v=|youtu\.be/|/embed/)([A-Za-z0-9_-]{11})", url or "")
     if m:
@@ -602,8 +294,8 @@ def _slide_yt_thumb(url: str) -> str:
 
 
 def _slide_enrich_payloads(slides: list[dict], ideas: list[dict],
-                           rendered: dict, ext: dict) -> list[dict]:
-    """LLM 把 videos/labxchange/image 当占位, 这里填回真实 URL。"""
+                            rendered: dict, ext: dict) -> list[dict]:
+    """videos/labxchange/image 用真实 URL 回填 (LLM/Claude 可能留占位空数组)。"""
     youtube = ext.get("youtube_results") or []
     labxchange = ext.get("labxchange_results") or []
 
@@ -646,8 +338,8 @@ def _slide_enrich_payloads(slides: list[dict], ideas: list[dict],
 
 def _slide_normalize_ids(slides: list[dict], theories: list[dict],
                          ideas: list[dict]) -> list[dict]:
-    """LLM 经常用 topic 字段当 idea_id, 或自动加/去 theory_/anim_/game_ 前缀。
-    这里按真实 (id, topic) 索引做一次匹配修正。"""
+    """Claude 写 slide payload 时可能误用 topic 当 idea_id, 或加 theory_/anim_/
+    game_ 前缀。这里按真实 (id, topic) 反查修正, 减少 typo."""
     real_theory_ids = {t.get("theory_id") for t in theories if t.get("theory_id")}
     real_idea_ids = {i.get("idea_id") for i in ideas if i.get("idea_id")}
     topic_to_idea = {
@@ -691,7 +383,6 @@ def _slide_normalize_ids(slides: list[dict], theories: list[dict],
 
 def _slide_validate(slides: list[dict], theories: list[dict],
                     ideas: list[dict]) -> list[str]:
-    """soft 校验 (不抛, 只返错误清单)。"""
     errs: list[str] = []
     if not slides:
         return ["slides 列表为空"]
@@ -729,132 +420,46 @@ def _slide_validate(slides: list[dict], theories: list[dict],
             errs.append(f"slide {i} ({sid}) 缺 audio_script")
         elif len(a) < 30:
             errs.append(f"slide {i} ({sid}) audio_script 过短 (<30 字)")
+        # inline_svg 占位检测
+        payload = s.get("payload") or {}
+        if s.get("kind") in ("intro", "bullet", "theory", "outro"):
+            svg = payload.get("inline_svg") or ""
+            if not svg:
+                errs.append(f"slide {i} ({sid}) 缺 inline_svg")
+            elif "<circle" in svg and "<line" not in svg and "<path" not in svg and "<polygon" not in svg and len(svg) < 200:
+                errs.append(f"slide {i} ({sid}) inline_svg 疑似占位 (只有 circle, 无其他元素)")
     return errs
 
 
-def generate_slides(knode: dict, course_content: dict, *,
-                    age_band: str = "10-15",
-                    timeout: int = 600,
-                    max_retries: int = 2) -> tuple[list[dict], list[str]]:
-    """为一个 knode 生成 slide 列表 + 每页 audio_script。
+def finalize_slides(slides: list[dict], theories: list[dict], ideas: list[dict],
+                    *, external_resources: dict | None = None,
+                    rendered_sections: dict | None = None
+                    ) -> tuple[list[dict], list[str]]:
+    """校验 Claude 手写的 slides (Step 6.7 写完调).
 
     输入:
-        knode:          V5 module dict, 至少含 title / core_question /
-                        acceptance_standard / hands_on_components
-        course_content: make_course_content() 的产物 (含 plan_markdown /
-                        theories / ideas / rendered_sections /
-                        external_resources)。也可以从 workspace 文件重组:
-                            {
-                              "plan_markdown": <lesson.md>,
-                              "theories": <theories.json>,
-                              "ideas": sections["ideas"],
-                              "rendered_sections": sections["rendered_sections"],
-                              "external_resources": sections["external_resources"],
-                            }
-        age_band:       "10-12" / "10-15" 等, 从 manifest.frontmatter.age_band 或
-                        project_meta 里取
-        timeout:        单次 LLM 调用超时 (秒, 默认 600)
-        max_retries:    LLM 重试次数 (默认 2)
-
-    返回: (slides, validation_errors)
-        slides 列表已 normalize (theory_id / idea_id 跟 theories/ideas 对齐) +
-        enrich (videos/labxchange/image 真实 URL 已填回)。
-        validation_errors 为 soft 校验, 即使非空也不抛, 由调用方决定是否写盘。
-
-    后续: save_knode_to_workspace(..., slides=slides) 把 slides 写到 slides.json。
+      slides: Claude 按 slide_gen.md schema 手写的 list[dict] (intro/bullet/
+              theory/animation/game/image/videos/labxchange/outro)
+      theories: course_content["theories"], 用于 normalize theory_id
+      ideas: course_content["ideas"], 用于 normalize idea_id
+      external_resources: course_content["external_resources"] (可选, enrich
+                         videos/labxchange URL 用)
+      rendered_sections: course_content["rendered_sections"] (可选, enrich image
+                         URL 用)
+    操作:
+      1. enrich payloads — videos/labxchange/image 真实 URL 填回
+      2. normalize ids — theory_id / idea_id 跟 theories/ideas 对齐 (前缀/topic 反查)
+      3. validate — intro/outro 必含, theory/anim/game 全覆盖, 每页 audio_script ≥ 30 字,
+                    inline_svg 非空非占位
+    返回 (slides_finalized, errs); errs 是软警告列表。
     """
-    import requests as _requests
-    from systemedu.core.config import get_config
-    from systemedu.core.llm_client import LLMNotConfigured, resolve_role_provider
-
-    if not _SLIDE_GEN_PROMPT_PATH.exists():
-        raise FileNotFoundError(f"slide_gen prompt 缺失: {_SLIDE_GEN_PROMPT_PATH}")
-
-    plan_markdown = course_content.get("plan_markdown") or ""
-    theories = course_content.get("theories") or []
-    ideas = course_content.get("ideas") or []
-    rendered = course_content.get("rendered_sections") or {}
-    ext = course_content.get("external_resources") or {}
-
-    youtube = ext.get("youtube_results") or []
-    web = ext.get("web_results") or []
-    labxchange = ext.get("labxchange_results") or []
-
-    # age_band 解析
-    age_min, age_max = 10, 15
-    if age_band and "-" in age_band:
-        try:
-            a, b = age_band.split("-", 1)
-            age_min, age_max = int(a.strip()), int(b.strip())
-        except Exception:
-            pass
-
-    title = knode.get("title") or knode.get("name") or ""
-    core_question = knode.get("core_question") or "(无)"
-    acceptance = knode.get("acceptance_standard") or []
-    if isinstance(acceptance, str):
-        acceptance = [acceptance]
-    hands_on = knode.get("hands_on_components") or []
-
-    template = _SLIDE_GEN_PROMPT_PATH.read_text(encoding="utf-8")
-    prompt = (
-        template
-        .replace("{node_title}", title)
-        .replace("{core_question}", core_question)
-        .replace("{acceptance_summary}", _slide_format_list(acceptance))
-        .replace("{hands_on_summary}", _slide_format_list(hands_on))
-        .replace("{age_min}", str(age_min))
-        .replace("{age_max}", str(age_max))
-        .replace("{plan_markdown}", plan_markdown[:6000])
-        .replace("{theories_count}", str(len(theories)))
-        .replace("{theories_block}", _slide_format_theories(theories))
-        .replace("{ideas_block}", _slide_format_ideas(ideas, rendered))
-        .replace("{youtube_count}", str(len(youtube)))
-        .replace("{web_count}", str(len(web)))
-        .replace("{labxchange_count}", str(len(labxchange)))
-    )
-
-    # 跟 generate_audio_scripts 一样: requests 直调 OpenAI-compatible endpoint,
-    # 绕开 langchain/httpx 的 SSL + retry 黑魔法 (M02 那次 5min×N retry 就是被它坑的)
-    cfg = get_config()
-    provider_name = resolve_role_provider("fast")
-    provider = cfg.llm.providers.get(provider_name)
-    if not provider or not provider.api_key:
-        raise LLMNotConfigured(provider_name)
-    api_url = provider.base_url.rstrip("/") + "/chat/completions"
-    headers = {"Authorization": f"Bearer {provider.api_key}",
-               "Content-Type": "application/json"}
-    body = {
-        "model": provider.model,
-        "temperature": getattr(provider, "temperature", None) or 0.6,
-        "max_tokens": 16384,
-        "messages": [{"role": "user", "content": prompt}],
-    }
-
-    last_exc: Exception | None = None
-    raw = ""
-    for attempt in range(1, max_retries + 2):  # max_retries=2 → 3 次尝试
-        try:
-            resp = _requests.post(api_url, headers=headers, json=body,
-                                  timeout=timeout,
-                                  proxies={"http": None, "https": None})
-            resp.raise_for_status()
-            raw = resp.json()["choices"][0]["message"]["content"]
-            break
-        except Exception as e:
-            last_exc = e
-            if attempt > max_retries:
-                raise
-            console.print(f"[yellow]  slide LLM attempt {attempt} 失败: {e}, 重试[/yellow]")
-
-    slides = _slide_parse_json(raw)
-    if not slides:
-        return [], [f"LLM 输出无法解析为 JSON 数组; raw head={raw[:200]!r}"]
-
-    slides = _slide_enrich_payloads(slides, ideas, rendered, ext)
+    ext = external_resources or {}
+    rendered = rendered_sections or {}
+    slides = _slide_enrich_payloads(list(slides), ideas, rendered, ext)
     slides = _slide_normalize_ids(slides, theories, ideas)
     errs = _slide_validate(slides, theories, ideas)
     return slides, errs
+
 
 
 def upsert_lesson_v3(project_name: str, knode_id: int, course_content: dict, *,

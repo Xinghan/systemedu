@@ -95,3 +95,5 @@
 - [ ] Loading 深色模式适配 — SVG 火箭/描边颜色跟随 CSS 变量，dark mode 下更清晰
 - [ ] 列表页骨架屏 (Skeleton) — 项目/会话/技能等列表页加入 skeleton placeholder，展示即将加载的内容结构
 - [ ] Loading 超时提示 — 加载超过 5 秒后显示"加载时间较长，请检查网络"提示
+- [ ] purpleair-airquality-node 30 节 assignment.md / audio_scripts.json 是 spec 034 改造前 LLM 自动跑出, 质量未人工 review。下次 v0.5.0 升级时由 Claude 按新规范 (SKILL.md Step 6.5 / 6.6) 手写覆盖
+- [ ] purpleair-airquality-node M01-M30 slides.json (老师讲课 slide) Claude 手写补完 — Batch B 滚动 (spec 034)

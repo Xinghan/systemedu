@@ -5,7 +5,7 @@ spec 019 合并了 fast → creative，所有 LLM 调用都走唯一 creative pr
 
 1. api_generate_description → 打到 creative
 2. api_generate_tree         → 打到 creative
-3. factory.generate_assignment → 也打到 creative (spec 019 改动)
+(spec 034: factory.generate_assignment 已删除, 这里只剩 web/api 路径的 LLM 路由测试)
 4. 清空 creative.api_key 后调 generate-description → 412 LLM_NOT_CONFIGURED
 """
 
@@ -213,23 +213,6 @@ def test_generate_tree_routes_to_thinking(auth_client, mock_creative) -> None:
     assert len(mock_creative.requests) >= 1
     # 所有请求都打到 thinking provider (test-model-thinking)
     assert all(r["model"] == "test-model-thinking" for r in mock_creative.requests)
-
-
-def test_factory_assignment_routes_to_fast(isolated_config, mock_creative) -> None:
-    """spec 021: factory.generate_assignment 走 fast role"""
-    mock_creative.requests.clear()
-    from course_factory.factory import generate_assignment
-
-    result = generate_assignment(
-        knode={"name": "测试节点", "module_role": "regular"},
-        milestone={"title": "M1"},
-        plan_markdown="## test\n",
-    )
-    assert isinstance(result, str)
-    assert len(mock_creative.requests) >= 1
-    assert mock_creative.requests[0]["model"] == "test-model-fast"
-    assert mock_creative.requests[0]["headers"]["Authorization"] == "Bearer sk-fast-test"
-
 
 def test_412_when_all_keys_empty(auth_client, isolated_config, mock_creative) -> None:
     """spec 021: 三个 provider 全没 key, generate-description -> 412"""
