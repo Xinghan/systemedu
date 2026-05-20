@@ -99,15 +99,17 @@
 - [x] M19 Barkjohn 湿度校正 (10 slides, errs=[], 2026-05-20)
 - [x] M20 Flask 仪表盘 (10 slides, errs=[], 2026-05-20)
 - [x] M21 7 天连跑 + vlog (9 slides, errs=[], 2026-05-20)
-- [ ] M22 API + JSON
-- [ ] M23 PurpleAir + OpenAQ 整合 (← checkpoint 6)
-- [ ] M24 AirNow + CNEMC
-- [ ] M25 MAE 误差度量
-- [ ] M26 V2 迭代
-- [ ] M27 GitHub 30 commits (← checkpoint 7)
-- [ ] M28 田野报告 5 篇
-- [ ] M29 5 分钟 demo
-- [ ] M30 Zenodo DOI
+- [x] M22 API + JSON (10 slides, errs=[], 2026-05-21)
+- [x] M23 PurpleAir + OpenAQ 上线 (10 slides, errs=[], 2026-05-21)
+- [x] M24 找最近官方站 (9 slides, errs=[], 2026-05-21)
+- [x] M25 r MAE bias 三剑客 (9 slides, errs=[], 2026-05-21)
+- [x] M26 诊断 + V2 公式 (9 slides, errs=[], 2026-05-21)
+- [x] M27 GitHub 30 天数据 (9 slides, errs=[], 2026-05-21)
+- [x] M28 IMRaD 论文 (9 slides, errs=[], 2026-05-21)
+- [x] M29 公开 dashboard + 5min demo (9 slides, errs=[], 2026-05-21)
+- [x] M30 Zenodo DOI + 反思博文 (9 slides, errs=[], 2026-05-21)
+
+**🎉 全部 29 节完成! 共 ~290 张 slide, 全部 finalize errs=[]**
 
 ### B3. spec 收尾
 

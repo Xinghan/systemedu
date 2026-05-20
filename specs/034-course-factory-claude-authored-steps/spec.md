@@ -1,6 +1,6 @@
 # 034-course-factory-claude-authored-steps
 
-**Status**: draft
+**Status**: shipped (2026-05-21) — Batch A 改造 + Batch B M02-M30 全部 29 节完成
 **Owner**: Xinghan Cui
 **Created**: 2026-05-20
 
