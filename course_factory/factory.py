@@ -506,6 +506,357 @@ def generate_audio_scripts(project_name: str, knode_id: int,
         db.close()
 
 
+# ---------------------------------------------------------------------------
+# Slide generation (Step 6.7) — workspace 模式 + DB 模式都能调
+#
+# 把 course_content (plan_markdown / theories / ideas / external_resources) +
+# knode 元信息, 调 fast LLM 生成一份"老师讲课用" slide 列表, 每页含 audio_script。
+# 输出文件位置: <knode_dir>/slides.json (由 save_knode_to_workspace 写盘)。
+# ---------------------------------------------------------------------------
+
+# 复用 v3 pipeline 的 prompt 模板, 已经验证好的 schema 不重复维护
+_SLIDE_GEN_PROMPT_PATH = (
+    ROOT / "packages" / "core" / "src" / "systemedu" / "core"
+    / "course_factory_v3" / "prompts" / "slide_gen.md"
+)
+
+
+def _slide_format_theories(theories: list[dict]) -> str:
+    if not theories:
+        return "(无 theories)"
+    lines = []
+    for t in theories:
+        tid = t.get("theory_id", "")
+        title = t.get("title", "")
+        subj = t.get("subject", "")
+        body = (t.get("body_markdown") or "")[:200]
+        lines.append(f"- theory_id={tid} | {title} ({subj}) | {body[:120]}...")
+    return "\n".join(lines)
+
+
+def _slide_format_ideas(ideas: list[dict], rendered: dict) -> str:
+    if not ideas:
+        return "(无 ideas)"
+    lines = []
+    for i in ideas:
+        iid = i.get("idea_id", "")
+        mode = i.get("mode", "")
+        topic = i.get("topic", "")
+        rs = rendered.get(iid) or {}
+        has_html = bool(rs.get("html"))
+        lines.append(
+            f"- idea_id={iid} | mode={mode} | topic={topic} | has_content={has_html}"
+        )
+    return "\n".join(lines)
+
+
+def _slide_format_list(items: list) -> str:
+    if not items:
+        return "(无)"
+    out = []
+    for x in items:
+        if isinstance(x, str):
+            out.append(f"- {x}")
+        elif isinstance(x, dict):
+            out.append(f"- {x.get('title', x.get('name', str(x)))}")
+    return "\n".join(out) if out else "(无)"
+
+
+_SLIDE_JSON_ARR_RE = re.compile(r"\[\s*\{[\s\S]*\}\s*\]", re.MULTILINE)
+
+
+def _slide_parse_json(raw: str) -> list[dict]:
+    """LLM 输出可能含 ```json 包裹或前后说明; 鲁棒抽取顶层 JSON 数组。"""
+    if not raw:
+        return []
+    s = raw.strip()
+    if s.startswith("```"):
+        lines = s.split("\n")
+        if lines[0].startswith("```"):
+            lines = lines[1:]
+        if lines and lines[-1].strip() == "```":
+            lines = lines[:-1]
+        s = "\n".join(lines).strip()
+    try:
+        v = json.loads(s)
+        if isinstance(v, list):
+            return [x for x in v if isinstance(x, dict)]
+    except Exception:
+        pass
+    m = _SLIDE_JSON_ARR_RE.search(s)
+    if m:
+        try:
+            v = json.loads(m.group(0))
+            if isinstance(v, list):
+                return [x for x in v if isinstance(x, dict)]
+        except Exception:
+            pass
+    return []
+
+
+def _slide_yt_thumb(url: str) -> str:
+    m = re.search(r"(?:v=|youtu\.be/|/embed/)([A-Za-z0-9_-]{11})", url or "")
+    if m:
+        return f"https://img.youtube.com/vi/{m.group(1)}/hqdefault.jpg"
+    return ""
+
+
+def _slide_enrich_payloads(slides: list[dict], ideas: list[dict],
+                           rendered: dict, ext: dict) -> list[dict]:
+    """LLM 把 videos/labxchange/image 当占位, 这里填回真实 URL。"""
+    youtube = ext.get("youtube_results") or []
+    labxchange = ext.get("labxchange_results") or []
+
+    image_payloads = []
+    for i in ideas:
+        if i.get("mode") == "image":
+            iid = i.get("idea_id", "")
+            rs = rendered.get(iid) or {}
+            src = rs.get("src") or rs.get("image_url") or ""
+            if src:
+                image_payloads.append({
+                    "src": src,
+                    "caption": rs.get("caption") or rs.get("alt") or i.get("topic", ""),
+                    "source_url": rs.get("source_url", ""),
+                })
+
+    out: list[dict] = []
+    for s in slides:
+        s = dict(s)
+        kind = s.get("kind", "")
+        payload = dict(s.get("payload") or {})
+        if kind == "videos" and not payload.get("videos"):
+            payload["videos"] = [
+                {"title": v.get("title", ""), "url": v.get("url", ""),
+                 "thumbnail": v.get("thumbnail", "") or _slide_yt_thumb(v.get("url", ""))}
+                for v in youtube
+            ]
+        elif kind == "labxchange" and not payload.get("labxchange"):
+            payload["labxchange"] = [
+                {"title": x.get("title", ""), "url": x.get("url", ""),
+                 "description": x.get("description", "")}
+                for x in labxchange
+            ]
+        elif kind == "image" and not payload.get("images"):
+            payload["images"] = image_payloads
+        s["payload"] = payload
+        out.append(s)
+    return out
+
+
+def _slide_normalize_ids(slides: list[dict], theories: list[dict],
+                         ideas: list[dict]) -> list[dict]:
+    """LLM 经常用 topic 字段当 idea_id, 或自动加/去 theory_/anim_/game_ 前缀。
+    这里按真实 (id, topic) 索引做一次匹配修正。"""
+    real_theory_ids = {t.get("theory_id") for t in theories if t.get("theory_id")}
+    real_idea_ids = {i.get("idea_id") for i in ideas if i.get("idea_id")}
+    topic_to_idea = {
+        i.get("topic"): i.get("idea_id")
+        for i in ideas
+        if i.get("topic") and i.get("idea_id")
+    }
+
+    def _match(candidate: str, real: set[str],
+               topic_map: dict[str, str] | None = None) -> str | None:
+        if not candidate:
+            return None
+        if candidate in real:
+            return candidate
+        if topic_map and candidate in topic_map:
+            return topic_map[candidate]
+        for pre in ("theory_", "anim_", "animation_", "game_"):
+            if candidate.startswith(pre) and candidate[len(pre):] in real:
+                return candidate[len(pre):]
+        for pre in ("theory_", "anim_", "game_"):
+            if (pre + candidate) in real:
+                return pre + candidate
+        return None
+
+    for s in slides:
+        kind = s.get("kind")
+        payload = s.get("payload") or {}
+        if kind == "theory":
+            tid = payload.get("theory_id")
+            fixed = _match(tid, real_theory_ids)
+            if fixed and fixed != tid:
+                payload["theory_id"] = fixed
+        elif kind in ("animation", "game"):
+            iid = payload.get("idea_id")
+            fixed = _match(iid, real_idea_ids, topic_to_idea)
+            if fixed and fixed != iid:
+                payload["idea_id"] = fixed
+        s["payload"] = payload
+    return slides
+
+
+def _slide_validate(slides: list[dict], theories: list[dict],
+                    ideas: list[dict]) -> list[str]:
+    """soft 校验 (不抛, 只返错误清单)。"""
+    errs: list[str] = []
+    if not slides:
+        return ["slides 列表为空"]
+    if slides[0].get("kind") != "intro":
+        errs.append(f"第一张必须 intro, 实际 {slides[0].get('kind')}")
+    if slides[-1].get("kind") != "outro":
+        errs.append(f"最后一张必须 outro, 实际 {slides[-1].get('kind')}")
+
+    theory_ids = {t.get("theory_id") for t in theories if t.get("theory_id")}
+    anim_ids = {i.get("idea_id") for i in ideas if i.get("mode") == "animation"}
+    game_ids = {i.get("idea_id") for i in ideas if i.get("mode") == "game"}
+    covered_t: set[str] = set()
+    covered_a: set[str] = set()
+    covered_g: set[str] = set()
+    for s in slides:
+        kind = s.get("kind")
+        payload = s.get("payload") or {}
+        if kind == "theory" and payload.get("theory_id"):
+            covered_t.add(payload["theory_id"])
+        elif kind == "animation" and payload.get("idea_id"):
+            covered_a.add(payload["idea_id"])
+        elif kind == "game" and payload.get("idea_id"):
+            covered_g.add(payload["idea_id"])
+    if theory_ids - covered_t:
+        errs.append(f"theory 未覆盖: {theory_ids - covered_t}")
+    if anim_ids - covered_a:
+        errs.append(f"animation 未覆盖: {anim_ids - covered_a}")
+    if game_ids - covered_g:
+        errs.append(f"game 未覆盖: {game_ids - covered_g}")
+
+    for i, s in enumerate(slides):
+        sid = s.get("slide_id", f"slide_{i}")
+        a = (s.get("audio_script") or "").strip()
+        if not a:
+            errs.append(f"slide {i} ({sid}) 缺 audio_script")
+        elif len(a) < 30:
+            errs.append(f"slide {i} ({sid}) audio_script 过短 (<30 字)")
+    return errs
+
+
+def generate_slides(knode: dict, course_content: dict, *,
+                    age_band: str = "10-15",
+                    timeout: int = 600,
+                    max_retries: int = 2) -> tuple[list[dict], list[str]]:
+    """为一个 knode 生成 slide 列表 + 每页 audio_script。
+
+    输入:
+        knode:          V5 module dict, 至少含 title / core_question /
+                        acceptance_standard / hands_on_components
+        course_content: make_course_content() 的产物 (含 plan_markdown /
+                        theories / ideas / rendered_sections /
+                        external_resources)。也可以从 workspace 文件重组:
+                            {
+                              "plan_markdown": <lesson.md>,
+                              "theories": <theories.json>,
+                              "ideas": sections["ideas"],
+                              "rendered_sections": sections["rendered_sections"],
+                              "external_resources": sections["external_resources"],
+                            }
+        age_band:       "10-12" / "10-15" 等, 从 manifest.frontmatter.age_band 或
+                        project_meta 里取
+        timeout:        单次 LLM 调用超时 (秒, 默认 600)
+        max_retries:    LLM 重试次数 (默认 2)
+
+    返回: (slides, validation_errors)
+        slides 列表已 normalize (theory_id / idea_id 跟 theories/ideas 对齐) +
+        enrich (videos/labxchange/image 真实 URL 已填回)。
+        validation_errors 为 soft 校验, 即使非空也不抛, 由调用方决定是否写盘。
+
+    后续: save_knode_to_workspace(..., slides=slides) 把 slides 写到 slides.json。
+    """
+    import requests as _requests
+    from systemedu.core.config import get_config
+    from systemedu.core.llm_client import LLMNotConfigured, resolve_role_provider
+
+    if not _SLIDE_GEN_PROMPT_PATH.exists():
+        raise FileNotFoundError(f"slide_gen prompt 缺失: {_SLIDE_GEN_PROMPT_PATH}")
+
+    plan_markdown = course_content.get("plan_markdown") or ""
+    theories = course_content.get("theories") or []
+    ideas = course_content.get("ideas") or []
+    rendered = course_content.get("rendered_sections") or {}
+    ext = course_content.get("external_resources") or {}
+
+    youtube = ext.get("youtube_results") or []
+    web = ext.get("web_results") or []
+    labxchange = ext.get("labxchange_results") or []
+
+    # age_band 解析
+    age_min, age_max = 10, 15
+    if age_band and "-" in age_band:
+        try:
+            a, b = age_band.split("-", 1)
+            age_min, age_max = int(a.strip()), int(b.strip())
+        except Exception:
+            pass
+
+    title = knode.get("title") or knode.get("name") or ""
+    core_question = knode.get("core_question") or "(无)"
+    acceptance = knode.get("acceptance_standard") or []
+    if isinstance(acceptance, str):
+        acceptance = [acceptance]
+    hands_on = knode.get("hands_on_components") or []
+
+    template = _SLIDE_GEN_PROMPT_PATH.read_text(encoding="utf-8")
+    prompt = (
+        template
+        .replace("{node_title}", title)
+        .replace("{core_question}", core_question)
+        .replace("{acceptance_summary}", _slide_format_list(acceptance))
+        .replace("{hands_on_summary}", _slide_format_list(hands_on))
+        .replace("{age_min}", str(age_min))
+        .replace("{age_max}", str(age_max))
+        .replace("{plan_markdown}", plan_markdown[:6000])
+        .replace("{theories_count}", str(len(theories)))
+        .replace("{theories_block}", _slide_format_theories(theories))
+        .replace("{ideas_block}", _slide_format_ideas(ideas, rendered))
+        .replace("{youtube_count}", str(len(youtube)))
+        .replace("{web_count}", str(len(web)))
+        .replace("{labxchange_count}", str(len(labxchange)))
+    )
+
+    # 跟 generate_audio_scripts 一样: requests 直调 OpenAI-compatible endpoint,
+    # 绕开 langchain/httpx 的 SSL + retry 黑魔法 (M02 那次 5min×N retry 就是被它坑的)
+    cfg = get_config()
+    provider_name = resolve_role_provider("fast")
+    provider = cfg.llm.providers.get(provider_name)
+    if not provider or not provider.api_key:
+        raise LLMNotConfigured(provider_name)
+    api_url = provider.base_url.rstrip("/") + "/chat/completions"
+    headers = {"Authorization": f"Bearer {provider.api_key}",
+               "Content-Type": "application/json"}
+    body = {
+        "model": provider.model,
+        "temperature": getattr(provider, "temperature", None) or 0.6,
+        "max_tokens": 16384,
+        "messages": [{"role": "user", "content": prompt}],
+    }
+
+    last_exc: Exception | None = None
+    raw = ""
+    for attempt in range(1, max_retries + 2):  # max_retries=2 → 3 次尝试
+        try:
+            resp = _requests.post(api_url, headers=headers, json=body,
+                                  timeout=timeout,
+                                  proxies={"http": None, "https": None})
+            resp.raise_for_status()
+            raw = resp.json()["choices"][0]["message"]["content"]
+            break
+        except Exception as e:
+            last_exc = e
+            if attempt > max_retries:
+                raise
+            console.print(f"[yellow]  slide LLM attempt {attempt} 失败: {e}, 重试[/yellow]")
+
+    slides = _slide_parse_json(raw)
+    if not slides:
+        return [], [f"LLM 输出无法解析为 JSON 数组; raw head={raw[:200]!r}"]
+
+    slides = _slide_enrich_payloads(slides, ideas, rendered, ext)
+    slides = _slide_normalize_ids(slides, theories, ideas)
+    errs = _slide_validate(slides, theories, ideas)
+    return slides, errs
+
+
 def upsert_lesson_v3(project_name: str, knode_id: int, course_content: dict, *,
                       version_label: str,
                       set_active: bool = True,

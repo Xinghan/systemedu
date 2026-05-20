@@ -266,6 +266,7 @@ def save_knode_to_workspace(
     *,
     assignment: str = "",
     audio_scripts: dict | list | None = None,
+    slides: list[dict] | None = None,
     update_manifest: bool = True,
 ) -> dict:
     """把 SKILL.md 跑完得到的 course_content 写到 workspace.
@@ -277,6 +278,7 @@ def save_knode_to_workspace(
             ├── sections.json        ← {"ideas": [...], "story_paragraphs":..., 等}
             ├── theories.json        ← course_content.theories
             ├── audio_scripts.json   ← audio_scripts (传入 OR course_content.audio_scripts)
+            ├── slides.json          ← slides 列表 (含每页 audio_script), 由 generate_slides() 产
             ├── assignment.md        ← assignment (可空)
             └── media/<*.html>       ← animation/game HTML 拆出来的独立文件
 
@@ -286,6 +288,7 @@ def save_knode_to_workspace(
         course_content: make_course_content() 返回的 dict
         assignment: assignment markdown (可空)
         audio_scripts: 该 knode 的 audio_scripts (可在 course_content 里也可单独传)
+        slides: generate_slides() 产出的 slide 列表 (可空, 但完整流程应有)
         update_manifest: 写完后是否调 regenerate_manifest 重算 files+sha256
 
     Returns:
@@ -346,6 +349,17 @@ def save_knode_to_workspace(
     if assignment:
         (knode_path / "assignment.md").write_text(assignment, encoding="utf-8")
         written.append("assignment.md")
+
+    # slides.json (Step 6.7 产物, 可空)
+    slides_payload = slides
+    if slides_payload is None:
+        slides_payload = course_content.get("slides")
+    if slides_payload:
+        (knode_path / "slides.json").write_text(
+            json.dumps({"slides": slides_payload}, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+        written.append("slides.json")
 
     # 重算 manifest 的 files + sha256
     if update_manifest:
