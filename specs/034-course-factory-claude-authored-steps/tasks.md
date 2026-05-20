@@ -79,8 +79,8 @@
 
 ### B2. 滚动列表
 
-- [ ] M02 PM2.5 / PM10 是什么
-- [ ] M03 AQI 怎么算 (← checkpoint 1: 你 review M02+M03 的 slides 风格)
+- [x] M02 PM2.5 / PM10 是什么 (11 slides, errs=[], 2026-05-20)
+- [x] M03 AQI 怎么算 (11 slides, errs=[], 2026-05-20) ← checkpoint 1: 请 review M02+M03 的 slides 风格再继续
 - [ ] M04 PurpleAir / OpenAQ / EPA / CNEMC 数据源
 - [ ] M05 实地考察模块 (S1 总结)
 - [ ] M06 SSH 远程登录
