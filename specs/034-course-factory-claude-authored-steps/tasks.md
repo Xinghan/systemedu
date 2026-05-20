@@ -91,10 +91,10 @@
 - [x] M11 PMS5003 接入 Python (12 slides, errs=[], 2026-05-20)
 - [x] M12 BME280 I2C (12 slides, errs=[], 2026-05-20)
 - [x] M13 PMS7003 + MQ-135 (12 slides, errs=[], 2026-05-20)
-- [ ] M14 模块 (S3 启动)
-- [ ] M15 CSV 数据存储 (← checkpoint 4)
-- [ ] M16 浓度 vs AQI
-- [ ] M17 EPA NowCast 算法
+- [x] M14 户外安装 + 命名仪式 (11 slides, errs=[], 2026-05-20)
+- [x] M15 CSV 时间序列 + pandas (11 slides, errs=[], 2026-05-20)
+- [x] M16 加权平均 vs 移动平均 (11 slides, errs=[], 2026-05-20)
+- [x] M17 EPA NowCast 完整公式 (11 slides, errs=[], 2026-05-20)
 - [ ] M18 Python 实现 nowcast.py
 - [ ] M19 跨数据源对比 (← checkpoint 5)
 - [ ] M20 模块 (S4)
