@@ -39,8 +39,19 @@ def _extract_token(request: Request) -> str | None:
 
 
 async def require_auth(request: Request) -> JSONResponse | None:
-    """Return 401 JSONResponse if token is missing/invalid, else None."""
+    """Return 401 JSONResponse if token is missing/invalid, else None.
+
+    spec 024-A: 兼容旧 verify_token (内存) + 新 JWT (multiuser.decode_token).
+    """
     token = _extract_token(request)
-    if not token or not verify_token(token):
+    if not token:
         return JSONResponse({"error": "Unauthorized"}, status_code=401)
-    return None
+    if verify_token(token):
+        return None
+    try:
+        from systemedu.cloud.gateway.multiuser.jwt import decode_token as _decode_jwt
+        if _decode_jwt(token) is not None:
+            return None
+    except Exception:
+        pass
+    return JSONResponse({"error": "Unauthorized"}, status_code=401)
