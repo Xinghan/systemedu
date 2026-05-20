@@ -95,10 +95,10 @@
 - [x] M15 CSV 时间序列 + pandas (11 slides, errs=[], 2026-05-20)
 - [x] M16 加权平均 vs 移动平均 (11 slides, errs=[], 2026-05-20)
 - [x] M17 EPA NowCast 完整公式 (11 slides, errs=[], 2026-05-20)
-- [ ] M18 Python 实现 nowcast.py
-- [ ] M19 跨数据源对比 (← checkpoint 5)
-- [ ] M20 模块 (S4)
-- [ ] M21 7 集 vlog
+- [x] M18 Python 实现 nowcast.py (10 slides, errs=[], 2026-05-20)
+- [x] M19 Barkjohn 湿度校正 (10 slides, errs=[], 2026-05-20)
+- [x] M20 Flask 仪表盘 (10 slides, errs=[], 2026-05-20)
+- [x] M21 7 天连跑 + vlog (9 slides, errs=[], 2026-05-20)
 - [ ] M22 API + JSON
 - [ ] M23 PurpleAir + OpenAQ 整合 (← checkpoint 6)
 - [ ] M24 AirNow + CNEMC
