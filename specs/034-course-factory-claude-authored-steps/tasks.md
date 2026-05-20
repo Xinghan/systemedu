@@ -84,13 +84,13 @@
 - [x] M04 全球空气网络 (11 slides, errs=[], 2026-05-20)
 - [x] M05 树莓派开箱+烧录 (11 slides, errs=[], 2026-05-20)
 - [x] M06 SSH 远程登录 (11 slides, errs=[], 2026-05-20)
-- [ ] M07 Linux 10 命令 (← checkpoint 2)
-- [ ] M08 电与焊接 + 万用表
-- [ ] M09 模块 (S2 启动)
-- [ ] M10 UART
-- [ ] M11 PMS5003 接入 Python (← checkpoint 3)
-- [ ] M12 BME280 I2C
-- [ ] M13 PMS7003 + MQ-135
+- [x] M07 Linux 10 命令 (12 slides, errs=[], 2026-05-20)
+- [x] M08 电与焊接 + 万用表 (14 slides, errs=[], 2026-05-20)
+- [x] M09 激光散射 (12 slides, errs=[], 2026-05-20)
+- [x] M10 UART (12 slides, errs=[], 2026-05-20)
+- [x] M11 PMS5003 接入 Python (12 slides, errs=[], 2026-05-20)
+- [x] M12 BME280 I2C (12 slides, errs=[], 2026-05-20)
+- [x] M13 PMS7003 + MQ-135 (12 slides, errs=[], 2026-05-20)
 - [ ] M14 模块 (S3 启动)
 - [ ] M15 CSV 数据存储 (← checkpoint 4)
 - [ ] M16 浓度 vs AQI
