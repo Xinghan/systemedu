@@ -71,8 +71,16 @@ info = init_workspace_project("ai-ant-ethologist")
 #   - 节点数不必等于蓝图周数; 周数只是参考。可以合并相似周成 1 个 module,
 #     可以把 1 个复杂周拆成 2 个 module。
 #   - 优先按"学习成果 / acceptance 检查点"切, 不按"日历周"切。
-#   - 中等长度项目 (12-24 周) 通常 8-15 module 比较合理; 节点过多会冗余, 过少
-#     会让单节点过载。
+#   - **节点数无硬性上下限**: 20 也行 100 也行。Claude 必须给出科学严谨的论证 (写在
+#     stages[].stage_goal 末尾或 project_identity.node_count_rationale 里),
+#     在三个维度间平衡:
+#       · **紧凑性**: 节点过多 → 单节点价值密度低, 学生倦怠; 同主题应合并
+#       · **趣味性**: 节点过少 → 单节点过载, 信息密度太大无戏剧性; 复杂主题应拆
+#       · **科学性**: 每个 module 必须有独立的 acceptance 产物可验证, 不允许凑数
+#         也不允许"两件事塞一节"
+#   - 同时考虑 **系统呈现成本**: 每个 module = 1 个 lesson 页 + 一组 audio_scripts
+#     + 一组 slides (10-12 张) + animation/game HTML; module 数量直接决定生成工作
+#     量。在保证科学性的前提下倾向紧凑。
 #   - 每个 stage 对应一个 Phase, stage_id 用 S1/S2/...
 #   - 每个 module 用 M01/M02/... 顺序编号
 #
@@ -123,9 +131,12 @@ info = init_workspace_project("ai-ant-ethologist")
 #       - 总分 X/30 + Go/No-go
 #
 # Agent 约束 (写在 prompt 里):
-#   - 不允许增删节点 (P1 已经定数量)
+#   - **不允许增删节点** (P1 已经定数量) — 但允许在 Critical/Blocking 项里**建议**
+#     "M07+M08 应合并" / "M16 太单薄建议拆成两节" 这种结构性意见。Claude 在 P1.6
+#     聚合时如果三个 agent 都对节点数量有共识 (例如都说"M07+M08 合并"), 可以接受
+#     建议在 P1.6 重设计 module 数量, 然后**重跑一轮三维评估**。
 #   - 不允许改 stage 划分
-#   - 只允许改字段: summary / core_question / hands_on_components /
+#   - 只允许在 v2 文件中改字段: summary / core_question / hands_on_components /
 #     acceptance_artifacts / acceptance_standard / rough_learning_topics /
 #     estimated_duration_months
 #   - 报告用中文, 必须给具体节点 ID + 具体字段建议
