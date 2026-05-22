@@ -96,6 +96,50 @@ async def api_library_knode(request: Request) -> JSONResponse:
         return _lib_error_response(e)
 
 
+async def api_library_cover(request: Request):
+    """公开 (无需登录/Pull). 流式透传项目封面图.
+
+    封面图是项目橱窗资源, 列表页/详情页未登录也要能看, 所以不走 file 端点的
+    登录+Pull 鉴权。从项目摘要取 cover_image_path 再透传, 没有封面则 404。
+    """
+    slug = request.path_params["slug"]
+    try:
+        meta = await get_library_client().get_project(slug)
+    except Exception as e:
+        return _lib_error_response(e)
+    cover_path = getattr(meta, "cover_image_path", None)
+    if not cover_path:
+        return JSONResponse({"error": "no_cover", "slug": slug}, status_code=404)
+
+    url = get_library_client().get_file_url(slug, cover_path)
+    license_token = os.environ.get(
+        "LIBRARY_LICENSE_TOKEN", "dev-only-license-token-change-me"
+    )
+    base_url = os.environ.get("LIBRARY_BASE_URL") or os.environ.get(
+        "LIBRARY_URL", "http://127.0.0.1:18821"
+    )
+    trust_env = "127.0.0.1" not in base_url and "localhost" not in base_url
+
+    async def _stream():
+        async with httpx.AsyncClient(timeout=60.0, trust_env=trust_env) as client:
+            async with client.stream(
+                "GET", url, headers={"Authorization": f"Bearer {license_token}"}
+            ) as r:
+                if r.status_code != 200:
+                    return
+                async for chunk in r.aiter_bytes():
+                    yield chunk
+
+    ct, _ = mimetypes.guess_type(cover_path)
+    if not ct:
+        ct = "application/octet-stream"
+    return StreamingResponse(
+        _stream(),
+        media_type=ct,
+        headers={"Cache-Control": "public, max-age=3600"},
+    )
+
+
 async def api_library_file(request: Request):
     """需登录 + 已 Pull. 流式透传媒体文件 (anim html / 图片 / 音频)."""
     slug = request.path_params["slug"]
@@ -143,6 +187,11 @@ ROUTES = [
     Route(
         "/api/library/projects/{slug}/knodes/{knode_id}",
         api_library_knode,
+        methods=["GET"],
+    ),
+    Route(
+        "/api/library/projects/{slug}/cover",
+        api_library_cover,
         methods=["GET"],
     ),
     Route(

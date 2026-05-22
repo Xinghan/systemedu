@@ -7,7 +7,6 @@ import { toast } from "sonner"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 import {
-  ArrowUpRight,
   ChevronDown,
   ChevronRight,
   CirclePlay,
@@ -21,7 +20,6 @@ import {
   GraduationCap,
   Lock,
   Network,
-  Wind,
   Wrench,
 } from "lucide-react"
 import {
@@ -230,6 +228,7 @@ export default function ProjectHome() {
   }
 
   const dClass = domainClass(project.domain)
+  const hasCover = Boolean(project.cover_image_path)
 
   return (
     <main className="page-wide" style={{ paddingTop: 18, maxWidth: 1100 }}>
@@ -241,20 +240,59 @@ export default function ProjectHome() {
         ]}
       />
 
-      {/* Hero header */}
+      {/* Hero header — 有封面时整幅海报做背景 + 暖色渐变蒙层, 文字反白 */}
       <header
         style={{
           marginTop: 16,
-          paddingBottom: 22,
-          borderBottom: "1px solid var(--border)",
+          position: "relative",
+          overflow: "hidden",
+          borderRadius: hasCover ? 16 : 0,
+          border: hasCover ? "1px solid var(--border)" : undefined,
+          borderBottom: hasCover ? "1px solid var(--border)" : "1px solid var(--border)",
+          background: hasCover ? "#15110d" : undefined,
+          padding: hasCover ? 28 : 0,
+          paddingBottom: hasCover ? 28 : 22,
+          color: hasCover ? "#fff" : undefined,
         }}
       >
+        {hasCover && (
+          <>
+            {/* 海报背景 */}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={library.coverUrl(slug)}
+              alt=""
+              aria-hidden
+              style={{
+                position: "absolute",
+                inset: 0,
+                width: "100%",
+                height: "100%",
+                objectFit: "cover",
+                objectPosition: "center 42%",
+                opacity: 0.95,
+                pointerEvents: "none",
+              }}
+            />
+            {/* 左侧深→右透明的暖色渐变蒙层, 保证左栏白字可读 */}
+            <div
+              style={{
+                position: "absolute",
+                inset: 0,
+                background:
+                  "linear-gradient(100deg, rgba(15,11,8,0.94) 0%, rgba(15,11,8,0.82) 34%, rgba(15,11,8,0.42) 60%, rgba(15,11,8,0.12) 100%)",
+                pointerEvents: "none",
+              }}
+            />
+          </>
+        )}
         <div
           style={{
+            position: "relative",
             display: "grid",
             gridTemplateColumns: "1.4fr 1fr",
             gap: 36,
-            alignItems: "start",
+            alignItems: hasCover ? "stretch" : "start",
           }}
         >
           <div>
@@ -267,18 +305,51 @@ export default function ProjectHome() {
                 flexWrap: "wrap",
               }}
             >
-              {project.domain && (
-                <span className={`tag ${dClass}`}>{project.domain}</span>
-              )}
-              {project.age_band && <span className="tag">{project.age_band}</span>}
-              {project.duration_weeks != null && (
-                <span className="tag">{project.duration_weeks}w</span>
-              )}
-              {project.difficulty != null && (
-                <span className="tag">diff {project.difficulty}/10</span>
-              )}
+              {(() => {
+                // 有封面时标签在深色背景上, 用半透明白底反白字
+                const tagStyle = hasCover
+                  ? ({
+                      background: "rgba(255,255,255,0.14)",
+                      color: "#fff",
+                      border: "1px solid rgba(255,255,255,0.22)",
+                    } as const)
+                  : undefined
+                return (
+                  <>
+                    {project.domain && (
+                      <span
+                        className={hasCover ? "tag" : `tag ${dClass}`}
+                        style={tagStyle}
+                      >
+                        {project.domain}
+                      </span>
+                    )}
+                    {project.age_band && (
+                      <span className="tag" style={tagStyle}>
+                        {project.age_band}
+                      </span>
+                    )}
+                    {project.duration_weeks != null && (
+                      <span className="tag" style={tagStyle}>
+                        {project.duration_weeks}w
+                      </span>
+                    )}
+                    {project.difficulty != null && (
+                      <span className="tag" style={tagStyle}>
+                        diff {project.difficulty}/10
+                      </span>
+                    )}
+                  </>
+                )
+              })()}
             </div>
-            <div className="mono" style={{ fontSize: 11.5, color: "var(--sub)" }}>
+            <div
+              className="mono"
+              style={{
+                fontSize: 11.5,
+                color: hasCover ? "rgba(255,255,255,0.6)" : "var(--sub)",
+              }}
+            >
               {project.slug}
             </div>
             <h1
@@ -289,6 +360,8 @@ export default function ProjectHome() {
                 fontWeight: 600,
                 marginTop: 8,
                 maxWidth: 640,
+                color: hasCover ? "#fff" : undefined,
+                textShadow: hasCover ? "0 1px 16px rgba(0,0,0,0.5)" : undefined,
               }}
             >
               {project.title_zh || project.title}
@@ -301,7 +374,7 @@ export default function ProjectHome() {
                 display: "flex",
                 alignItems: "center",
                 gap: 12,
-                color: "var(--sub)",
+                color: hasCover ? "rgba(255,255,255,0.7)" : "var(--sub)",
                 flexWrap: "wrap",
               }}
             >
@@ -311,20 +384,27 @@ export default function ProjectHome() {
                     width: 24,
                     height: 24,
                     borderRadius: 999,
-                    background: "var(--primary-soft)",
+                    background: hasCover
+                      ? "rgba(255,255,255,0.18)"
+                      : "var(--primary-soft)",
                     display: "grid",
                     placeItems: "center",
                     fontFamily: "var(--mono)",
                     fontSize: 9.5,
-                    color: "var(--primary-ink)",
+                    color: hasCover ? "#fff" : "var(--primary-ink)",
                     fontWeight: 600,
                   }}
                 >
                   SE
                 </div>
-                <span style={{ fontSize: 13, color: "var(--ink-2)" }}>
+                <span
+                  style={{
+                    fontSize: 13,
+                    color: hasCover ? "rgba(255,255,255,0.8)" : "var(--ink-2)",
+                  }}
+                >
                   by{" "}
-                  <strong style={{ color: "var(--ink)" }}>
+                  <strong style={{ color: hasCover ? "#fff" : "var(--ink)" }}>
                     SystemEdu Library
                   </strong>
                 </span>
@@ -349,13 +429,22 @@ export default function ProjectHome() {
             </div>
           </div>
 
+          {/* Right column: action panel (封面已作为整块 hero 背景, 不再放独立图) */}
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              justifyContent: hasCover ? "flex-end" : "flex-start",
+            }}
+          >
           {/* Action panel */}
           <div
             style={{
-              border: "1px solid var(--border)",
+              border: hasCover ? "1px solid rgba(255,255,255,0.18)" : "1px solid var(--border)",
               borderRadius: 12,
               padding: 16,
-              background: "var(--card)",
+              background: hasCover ? "rgba(15,11,8,0.66)" : "var(--card)",
+              backdropFilter: hasCover ? "blur(10px)" : undefined,
               display: "flex",
               flexDirection: "column",
               gap: 10,
@@ -368,7 +457,10 @@ export default function ProjectHome() {
                 justifyContent: "space-between",
               }}
             >
-              <div className="eyebrow">
+              <div
+                className="eyebrow"
+                style={hasCover ? { color: "rgba(255,255,255,0.7)" } : undefined}
+              >
                 <span className="dot" />
                 {pulled ? "Your shelf" : "Library"}
               </div>
@@ -390,7 +482,7 @@ export default function ProjectHome() {
                     display: "flex",
                     justifyContent: "space-between",
                     fontSize: 11,
-                    color: "var(--sub)",
+                    color: hasCover ? "rgba(255,255,255,0.7)" : "var(--sub)",
                     fontFamily: "var(--mono)",
                     marginBottom: 6,
                   }}
@@ -439,12 +531,22 @@ export default function ProjectHome() {
             <button
               type="button"
               className="btn btn-ghost"
-              style={{ justifyContent: "center" }}
+              style={{
+                justifyContent: "center",
+                ...(hasCover
+                  ? {
+                      background: "rgba(255,255,255,0.08)",
+                      border: "1px solid rgba(255,255,255,0.25)",
+                      color: "#fff",
+                    }
+                  : {}),
+              }}
               onClick={() => setTreeOpen(true)}
               disabled={modules.length === 0}
             >
               <Network size={14} strokeWidth={1.5} /> Open knowledge tree
             </button>
+          </div>
           </div>
         </div>
       </header>
@@ -471,17 +573,6 @@ export default function ProjectHome() {
                   {firstParagraph(blueprint)}
                 </ReactMarkdown>
               </article>
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "1.4fr 1fr",
-                  gap: 12,
-                  marginTop: 16,
-                }}
-              >
-                <CoverArt kind={dClass} />
-                <StripeArt label={`${project.slug} · v${project.version || "—"}`} />
-              </div>
               <details
                 style={{
                   marginTop: 18,
@@ -1040,117 +1131,3 @@ function Curriculum({
   )
 }
 
-// ──────────────────────────────────────────────────────────────────────────
-// Cover & Stripe art
-// ──────────────────────────────────────────────────────────────────────────
-
-function CoverArt({ kind }: { kind: string }) {
-  if (kind === "climate") {
-    return (
-      <div
-        style={{
-          height: 168,
-          background: "linear-gradient(180deg, #F8EDE5 0%, #FBF9FF 100%)",
-          position: "relative",
-          overflow: "hidden",
-          borderRadius: 10,
-          border: "1px solid var(--border)",
-        }}
-      >
-        <svg
-          viewBox="0 0 320 168"
-          width="100%"
-          height="100%"
-          preserveAspectRatio="none"
-          style={{ position: "absolute", inset: 0 }}
-        >
-          <defs>
-            <linearGradient id="ph-aq" x1="0" x2="0" y1="0" y2="1">
-              <stop offset="0" stopColor="#D97757" stopOpacity=".25" />
-              <stop offset="1" stopColor="#D97757" stopOpacity="0" />
-            </linearGradient>
-          </defs>
-          {[40, 80, 120].map((y, i) => (
-            <line
-              key={i}
-              x1="0"
-              x2="320"
-              y1={y}
-              y2={y}
-              stroke="#ECCFB8"
-              strokeDasharray="2 4"
-            />
-          ))}
-          <path
-            d="M0 110 L30 95 L60 100 L90 80 L120 70 L150 55 L180 65 L210 45 L240 50 L270 35 L300 40 L320 30 L320 168 L0 168 Z"
-            fill="url(#ph-aq)"
-          />
-          <path
-            d="M0 110 L30 95 L60 100 L90 80 L120 70 L150 55 L180 65 L210 45 L240 50 L270 35 L300 40 L320 30"
-            fill="none"
-            stroke="#D97757"
-            strokeWidth="1.5"
-          />
-        </svg>
-        <div
-          style={{
-            position: "absolute",
-            top: 14,
-            left: 16,
-            display: "flex",
-            gap: 6,
-            alignItems: "center",
-          }}
-        >
-          <Wind size={16} strokeWidth={1.5} style={{ color: "var(--violet-ink)" }} />
-          <span
-            style={{
-              fontFamily: "var(--mono)",
-              fontSize: 11,
-              color: "var(--violet-ink)",
-              fontWeight: 500,
-            }}
-          >
-            project · live
-          </span>
-        </div>
-      </div>
-    )
-  }
-  return <StripeArt label="cover" />
-}
-
-function StripeArt({ label, color = "var(--paper-2)" }: { label?: string; color?: string }) {
-  return (
-    <div
-      style={{
-        position: "relative",
-        width: "100%",
-        height: 168,
-        borderRadius: 10,
-        background: `repeating-linear-gradient(135deg, ${color} 0 12px, transparent 12px 24px), var(--paper)`,
-        border: "1px solid var(--border)",
-        overflow: "hidden",
-      }}
-    >
-      {label && (
-        <div
-          style={{
-            position: "absolute",
-            left: 12,
-            bottom: 10,
-            fontFamily: "var(--mono)",
-            fontSize: 11,
-            color: "var(--sub)",
-            padding: "3px 7px",
-            background: "rgba(255,255,255,.85)",
-            borderRadius: 5,
-            border: "1px solid var(--border)",
-          }}
-        >
-          {label}
-        </div>
-      )}
-    </div>
-  )
-}

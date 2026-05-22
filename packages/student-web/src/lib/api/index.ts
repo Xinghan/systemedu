@@ -109,6 +109,9 @@ export const library = {
     ),
   fileUrl: (slug: string, path: string) =>
     `${STUDENT_API_URL}/api/library/projects/${encodeURIComponent(slug)}/files/${path}`,
+  // 公开封面图 (无需登录/pull); 后端从 manifest.cover_image_path 透传
+  coverUrl: (slug: string) =>
+    `${STUDENT_API_URL}/api/library/projects/${encodeURIComponent(slug)}/cover`,
 }
 
 // ---------------------------------------------------------------------------

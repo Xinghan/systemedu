@@ -284,7 +284,11 @@ function ProjectCard({
         transition: "transform var(--t-med), box-shadow var(--t-med)",
       }}
     >
-      <CoverArt kind={dClass} />
+      {project.cover_image_path ? (
+        <CoverPhoto slug={project.slug} dClass={dClass} />
+      ) : (
+        <CoverArt kind={dClass} />
+      )}
       <div
         style={{
           padding: 18,
@@ -358,7 +362,50 @@ function ProjectCard({
   )
 }
 
-// ---- 封面 ----
+// ---- 真实封面图 ----
+// 项目带 cover_image_path 时, 用作者生成的封面图 (后端 /cover 公开端点透传)。
+// 卡片封面区 168px 横向窄条, object-fit:cover + center 取主视觉居中。
+function CoverPhoto({ slug, dClass }: { slug: string; dClass: string }) {
+  const [failed, setFailed] = useState(false)
+  if (failed) return <CoverArt kind={dClass} />
+  return (
+    <div
+      style={{
+        height: 168,
+        position: "relative",
+        overflow: "hidden",
+        background: "#15110d",
+        borderBottom: "1px solid var(--border)",
+      }}
+    >
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={library.coverUrl(slug)}
+        alt=""
+        onError={() => setFailed(true)}
+        style={{
+          width: "100%",
+          height: "100%",
+          objectFit: "cover",
+          objectPosition: "center 48%",
+          display: "block",
+        }}
+      />
+      {/* 底部柔和渐变, 让卡片内容区过渡自然 */}
+      <div
+        style={{
+          position: "absolute",
+          inset: 0,
+          background:
+            "linear-gradient(180deg, rgba(21,17,13,0) 55%, rgba(21,17,13,0.5) 100%)",
+          pointerEvents: "none",
+        }}
+      />
+    </div>
+  )
+}
+
+// ---- 封面 (抽象 SVG 兜底) ----
 // 跟设计稿 Homepage.jsx CoverArt 同源, 但 student-app 没有项目特定数据,
 // 用 domain 选 climate/space/bio/violet 抽象图案
 function CoverArt({ kind }: { kind: string }) {

@@ -93,6 +93,29 @@ info = init_workspace_project("ai-ant-ethologist")
 #     hands_on_components, acceptance_artifacts, acceptance_standard,
 #     rough_learning_topics, knowledge_level, estimated_duration_months
 #
+# ── 树顶层 final_outcomes (项目终极产出物, 前端 "What you'll ship" 区块用) ──
+#   **必须是结构化对象数组, 不能是纯字符串!** (spec 030)
+#   写成字符串 → 前端读不到 title, 整块退化成空 "制品" 占位卡。
+#   每条 = {title, kind, description, related_stage_id?}:
+#     - title:       产出物名称 (8-20 字, 如 "6 个月 RFID 蚁群完整数据集")
+#     - kind:        必须是这 4 类之一 (前端按 kind 配图标+颜色):
+#                      · capability  能力 (能完成 X / 能做出有记录的 X 实验)
+#                      · artifact    物理/数字制品 (数据集 / sensor box / dashboard)
+#                      · service     上线运行的服务 (公开 API / 注册到公共网络的节点)
+#                      · publication 文档/写作 (报告 / 带 DOI 的开放数据集 / 论文)
+#     - description: 一句话说清这个产出物是什么 (20-50 字)
+#     - related_stage_id: 该产出物在哪个 stage 完成 (如 "S4"), 可选
+#   数量建议 4-6 条, 覆盖项目从数据采集到最终发表的关键交付里程碑。
+#   示例:
+#     "final_outcomes": [
+#       {"title":"6 个月 RFID 蚁群完整数据集","kind":"artifact",
+#        "description":"50 只蚂蚁 / 4 个门 / 24×7 连续追踪的 parquet 数据集。","related_stage_id":"S2"},
+#       {"title":"有记录的扰动-恢复实验","kind":"capability",
+#        "description":"关闭 1 个门 48h, 用 pre/during/post 三段数据记录蚁群响应。","related_stage_id":"S4"},
+#       {"title":"4 页 IMRaD 报告 + 5min demo","kind":"publication",
+#        "description":"论文风格 4 页报告 + 5 分钟成果演示视频。","related_stage_id":"S5"}
+#     ]
+#
 # === Step P1.5: 三维评估闸门 (强制, 必须通过才能进 P2) ===
 #
 # 设计原则: 你 (Claude) 是树的作者, 不能自己评自己的树 — 必须 dispatch
@@ -184,6 +207,18 @@ tree = {
         ...
     ],
     "edges": [],
+    # 项目终极产出物 (结构化对象, 不是字符串!) — 前端 "What you'll ship" 区块
+    "final_outcomes": [
+        {"title": "6 个月 RFID 蚁群完整数据集", "kind": "artifact",
+         "description": "50 只蚂蚁 / 4 个门 / 24×7 连续追踪的 parquet 数据集。",
+         "related_stage_id": "S2"},
+        {"title": "有记录的扰动-恢复实验", "kind": "capability",
+         "description": "关闭 1 个门 48h, 用 pre/during/post 三段数据记录蚁群响应。",
+         "related_stage_id": "S4"},
+        {"title": "4 页 IMRaD 报告 + 5min demo", "kind": "publication",
+         "description": "论文风格 4 页报告 + 5 分钟成果演示视频。",
+         "related_stage_id": "S5"},
+    ],
 }
 result = save_knowledge_tree_to_workspace("ai-ant-ethologist", tree)
 # → 写 tree/knowledge_tree.json + manifest skeleton + 建 N 个空 knode 目录
