@@ -406,6 +406,7 @@ _V5_MODULE_REQUIRED = (
     "summary",
     "core_question",
     "depends_on",
+    "generation_guide",  # 设计阶段必须填; 详见 course_factory/GENERATION_GUIDE.md
 )
 
 _V5_STAGE_REQUIRED = (
@@ -413,6 +414,39 @@ _V5_STAGE_REQUIRED = (
     "title",
     "stage_goal",
 )
+
+# generation_guide 内部必填字段 (强约束差异化生成)
+_V5_GUIDE_REQUIRED = (
+    "importance",          # 1-5 星
+    "wow_moment",          # null | wow_1..wow_N
+    "mission_role",        # foundation | concept_intro | hands_on | synthesis | capstone
+    "narrative_role",      # intro | build | climax | celebration | wind_down
+    "theory_depth",        # shallow | medium | deep
+    "handson_difficulty",  # low | medium | high
+    "expected_lengths",    # dict with plan_chars / k1_chars_per_theory / k3_chars_per_theory / n_theories / assignment_chars / n_exercises
+    "anim_complexity",     # simple | standard | rich | ceremonial
+    "game_complexity",     # simple | standard | rich
+    "key_concepts",        # list[str]
+)
+
+_V5_GUIDE_LENGTHS_REQUIRED = (
+    "plan_chars",
+    "k1_chars_per_theory",
+    "k3_chars_per_theory",
+    "n_theories",
+    "assignment_chars",
+    "n_exercises",
+)
+
+# 字段取值枚举 (用于校验)
+_V5_GUIDE_ENUMS = {
+    "mission_role": {"foundation", "concept_intro", "hands_on", "synthesis", "capstone"},
+    "narrative_role": {"intro", "build", "climax", "celebration", "wind_down"},
+    "theory_depth": {"shallow", "medium", "deep"},
+    "handson_difficulty": {"low", "medium", "high"},
+    "anim_complexity": {"simple", "standard", "rich", "ceremonial"},
+    "game_complexity": {"simple", "standard", "rich"},
+}
 
 
 def _validate_v5_tree(tree: dict) -> list[str]:
@@ -460,6 +494,87 @@ def _validate_v5_tree(tree: dict) -> list[str]:
                 errors.append(
                     f"modules[{i}] depends_on {dep!r} not a valid module_id"
                 )
+
+    # generation_guide 严格校验 (差异化生成的核心约束)
+    # 设计角色: "课程生成指导者" agent 在 P1 阶段为每个 module 独立算 guide,
+    # 让 importance/wow_moment/expected_lengths/anim_complexity 这些字段从设计时
+    # 就拉开节点之间的预期, 避免生成时所有节点退化到模板长度.
+    # 详见 course_factory/GENERATION_GUIDE.md
+    for i, m in enumerate(modules):
+        mid = m.get("module_id", f"modules[{i}]")
+        guide = m.get("generation_guide")
+        if not guide:
+            errors.append(
+                f"{mid} missing generation_guide (P1 必填: 课程生成指导者 agent 输出)"
+            )
+            continue
+        if not isinstance(guide, dict):
+            errors.append(f"{mid} generation_guide must be a dict, got {type(guide).__name__}")
+            continue
+
+        # 必填子字段
+        for k in _V5_GUIDE_REQUIRED:
+            if k not in guide:
+                errors.append(f"{mid} generation_guide missing required field {k!r}")
+
+        # importance 1-5
+        imp = guide.get("importance")
+        if imp is not None and not (isinstance(imp, int) and 1 <= imp <= 5):
+            errors.append(
+                f"{mid} generation_guide.importance must be int 1..5, got {imp!r}"
+            )
+
+        # 枚举字段
+        for k, allowed in _V5_GUIDE_ENUMS.items():
+            v = guide.get(k)
+            if v is not None and v not in allowed:
+                errors.append(
+                    f"{mid} generation_guide.{k} = {v!r} not in {sorted(allowed)}"
+                )
+
+        # wow_moment 允许 null 或 wow_N 格式
+        wow = guide.get("wow_moment")
+        if wow is not None and not (
+            isinstance(wow, str) and wow.startswith("wow_") and wow[4:].isdigit()
+        ):
+            errors.append(
+                f"{mid} generation_guide.wow_moment must be null or 'wow_N', got {wow!r}"
+            )
+
+        # expected_lengths 子字段
+        el = guide.get("expected_lengths")
+        if el is not None:
+            if not isinstance(el, dict):
+                errors.append(
+                    f"{mid} generation_guide.expected_lengths must be a dict"
+                )
+            else:
+                for k in _V5_GUIDE_LENGTHS_REQUIRED:
+                    if k not in el:
+                        errors.append(
+                            f"{mid} generation_guide.expected_lengths missing {k!r}"
+                        )
+                        continue
+                    v = el[k]
+                    if not (isinstance(v, list) and len(v) == 2):
+                        errors.append(
+                            f"{mid} generation_guide.expected_lengths.{k} must be [min, max], got {v!r}"
+                        )
+                    elif not all(isinstance(x, int) and x >= 0 for x in v):
+                        errors.append(
+                            f"{mid} generation_guide.expected_lengths.{k} entries must be non-negative ints"
+                        )
+                    elif v[0] > v[1]:
+                        errors.append(
+                            f"{mid} generation_guide.expected_lengths.{k} min > max ({v[0]} > {v[1]})"
+                        )
+
+        # key_concepts list
+        kc = guide.get("key_concepts")
+        if kc is not None and not (isinstance(kc, list) and all(isinstance(x, str) for x in kc)):
+            errors.append(
+                f"{mid} generation_guide.key_concepts must be list[str]"
+            )
 
     return errors
 
