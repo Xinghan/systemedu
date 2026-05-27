@@ -1,0 +1,1465 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>M45 · Demo 视频剧本编排 — 把 12 段素材拼成 5 分钟故事</title>
+<style>
+  :root{
+    /* Surfaces — Claude warm cream */
+    --paper:    #FAF9F5;
+    --paper-2:  #F1EDDF;
+    --card:     #FFFFFF;
+    --ink:      #191814;
+    --ink-2:    #2B2924;
+    --sub:      #6B6557;
+    --sub-2:    #9D978A;
+    --border:   #EBE5D6;
+    --border-2: #D9D1BD;
+    --hairline: #F2EDE0;
+
+    /* Primary — Claude coral */
+    --primary:      #D97757;
+    --primary-ink:  #9A4A2E;
+    --primary-soft: #F8EDE5;
+    --primary-line: #ECCFB8;
+
+    /* Domain accent — climate */
+    --accent:       #527B95;
+    --accent-soft:  #DEE5EC;
+    --accent-line:  #B6C5D3;
+    --accent-ink:   #345366;
+
+    /* Semantic */
+    --good:   #6F8B5C;
+    --warn:   #C89B3C;
+    --bad:    #B0593F;
+    --dim:    #9D978A;
+
+    /* Shadow — soft (C 类 Industrial Atelier) */
+    --shadow-sm: 0 1px 2px 0 rgba(25,24,20,.04);
+    --shadow:    0 1px 3px 0 rgba(25,24,20,.06), 0 1px 2px -1px rgba(25,24,20,.04);
+    --shadow-md: 0 4px 8px -2px rgba(25,24,20,.06), 0 2px 4px -2px rgba(25,24,20,.04);
+    --shadow-lg: 0 12px 24px -6px rgba(25,24,20,.1), 0 4px 8px -4px rgba(25,24,20,.05);
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    height:100vh;width:100vw;overflow:hidden;
+    background:var(--paper);color:var(--ink);
+    font-family:'Inter','PingFang SC','Noto Sans SC',sans-serif;
+    display:flex;
+  }
+  .mono{font-family:'JetBrains Mono','Menlo',monospace;}
+
+  /* ============== 200px sidebar ============== */
+  .game-sidebar{
+    width:200px;flex-shrink:0;
+    background:var(--paper-2);
+    border-right:1px solid var(--border);
+    display:flex;flex-direction:column;
+    padding:14px 12px;gap:12px;
+    overflow-y:auto;
+  }
+  .brand{display:flex;flex-direction:column;gap:3px;}
+  .brand-tag{
+    font-family:'JetBrains Mono',monospace;
+    font-size:10px;letter-spacing:.16em;
+    color:var(--accent);font-weight:700;
+  }
+  .brand-name{
+    font-size:13px;font-weight:700;color:var(--ink);
+    line-height:1.35;
+  }
+
+  .side-block{
+    background:var(--card);border:1px solid var(--border);
+    border-radius:8px;padding:10px 11px;
+    display:flex;flex-direction:column;gap:6px;
+  }
+  .side-label{
+    font-size:10px;letter-spacing:.12em;color:var(--sub);
+    font-family:'JetBrains Mono',monospace;font-weight:700;
+    text-transform:uppercase;
+  }
+
+  /* Segment list in sidebar */
+  .seg-list{display:flex;flex-direction:column;gap:5px;}
+  .seg-row{
+    text-align:left;background:var(--card);border:1.5px solid var(--border);
+    border-radius:6px;padding:6px 8px;cursor:pointer;
+    font-family:inherit;color:var(--ink-2);
+    font-size:11px;line-height:1.3;
+    display:flex;flex-direction:column;gap:2px;
+    transition:border-color 180ms, background 180ms;
+  }
+  .seg-row:hover{border-color:var(--accent-line);background:var(--accent-soft);}
+  .seg-row.active{
+    border-color:var(--primary);background:var(--primary-soft);
+    color:var(--primary-ink);font-weight:700;
+  }
+  .seg-row-head{
+    font-family:'JetBrains Mono',monospace;font-size:9.5px;
+    color:var(--sub);letter-spacing:.08em;font-weight:700;
+    display:flex;justify-content:space-between;align-items:center;
+  }
+  .seg-row.active .seg-row-head{color:var(--primary-ink);}
+  .seg-row-count{
+    background:var(--paper-2);color:var(--sub);
+    padding:1px 5px;border-radius:8px;font-size:9px;
+  }
+  .seg-row.active .seg-row-count{background:var(--primary-line);color:var(--primary-ink);}
+  .seg-row-name{font-size:11.5px;line-height:1.3;}
+
+  /* HUD total time */
+  .hud-time{
+    display:flex;flex-direction:column;gap:3px;
+    background:var(--card);border:1px solid var(--border);
+    border-radius:8px;padding:9px 11px;
+  }
+  .hud-time-cur{
+    font-family:'JetBrains Mono',monospace;font-size:18px;
+    font-weight:700;color:var(--ink);
+    display:flex;align-items:baseline;gap:4px;
+  }
+  .hud-time-cur .slash{color:var(--sub-2);font-weight:400;}
+  .hud-time-cur .target{color:var(--sub);font-size:13px;font-weight:400;}
+  .hud-time-bar{
+    width:100%;height:5px;background:var(--paper-2);
+    border-radius:3px;overflow:hidden;position:relative;
+  }
+  .hud-time-fill{
+    height:100%;background:var(--accent);
+    transition:width 220ms cubic-bezier(.4,.0,.2,1);
+    border-radius:3px;
+  }
+  .hud-time-fill.over{background:var(--bad);}
+  .hud-time-fill.ok{background:var(--good);}
+  .hud-time-cap{font-size:9.5px;color:var(--sub);font-family:'JetBrains Mono',monospace;letter-spacing:.06em;}
+
+  .guide{
+    display:flex;flex-direction:column;gap:5px;
+    font-size:10.5px;color:var(--sub);line-height:1.5;
+  }
+  .guide-li{padding-left:8px;border-left:2px solid var(--accent);}
+
+  .lang-btn{
+    margin-top:auto;
+    border:1px solid var(--border-2);background:var(--card);
+    color:var(--ink-2);font-size:11px;font-weight:600;
+    padding:8px 12px;border-radius:6px;cursor:pointer;
+    font-family:'JetBrains Mono',monospace;letter-spacing:.05em;
+    transition:background 200ms;
+  }
+  .lang-btn:hover{background:var(--paper);}
+
+  /* ============== Main ============== */
+  .game-main{
+    flex:1;display:flex;flex-direction:column;
+    padding:16px 22px 14px;overflow:hidden;min-width:0;
+    gap:12px;position:relative;
+  }
+  .scene-header{
+    display:flex;align-items:flex-end;justify-content:space-between;
+    padding-bottom:10px;border-bottom:1px solid var(--hairline);
+    gap:14px;flex-shrink:0;
+  }
+  .scene-title-block{display:flex;flex-direction:column;gap:3px;max-width:60%;}
+  .scene-num{
+    font-size:10px;letter-spacing:.18em;color:var(--accent);font-weight:700;
+    text-transform:uppercase;font-family:'JetBrains Mono',monospace;
+  }
+  .scene-title{font-size:18px;font-weight:700;color:var(--ink);line-height:1.3;}
+  .scene-sub{font-size:11.5px;color:var(--sub);margin-top:2px;line-height:1.45;}
+
+  .header-right{display:flex;align-items:center;gap:8px;}
+  .ctrl-btn{
+    border:1px solid var(--border-2);background:var(--card);
+    color:var(--ink-2);font-family:inherit;font-size:11.5px;font-weight:600;
+    padding:7px 12px;border-radius:7px;cursor:pointer;
+    transition:background 160ms, border-color 160ms;
+    display:flex;align-items:center;gap:5px;
+  }
+  .ctrl-btn:hover{background:var(--paper);border-color:var(--accent-line);}
+  .ctrl-btn.primary{
+    background:var(--primary);color:#fff;border-color:var(--primary);
+  }
+  .ctrl-btn.primary:hover{background:var(--primary-ink);}
+  .ctrl-btn .mono{font-size:10.5px;color:var(--sub);}
+  .ctrl-btn.primary .mono{color:#fde0d0;}
+
+  /* ============== Body grid: pool + timeline ============== */
+  .body-grid{
+    flex:1;display:grid;
+    grid-template-columns: 1.05fr 1fr;
+    gap:12px;min-height:0;
+  }
+
+  /* Asset pool (left of main grid) */
+  .pool-pane{
+    background:var(--card);border:1px solid var(--border);
+    border-radius:10px;
+    display:flex;flex-direction:column;
+    overflow:hidden;min-height:0;
+  }
+  .pane-head{
+    display:flex;align-items:center;justify-content:space-between;
+    padding:10px 14px 9px;border-bottom:1px solid var(--hairline);
+    background:var(--paper-2);
+  }
+  .pane-title{
+    font-size:12px;font-weight:700;color:var(--ink);
+    letter-spacing:.02em;display:flex;align-items:center;gap:7px;
+  }
+  .pane-title-tag{
+    font-family:'JetBrains Mono',monospace;font-size:9.5px;
+    color:var(--accent);background:var(--accent-soft);
+    padding:2px 6px;border-radius:4px;letter-spacing:.08em;font-weight:700;
+  }
+  .pane-sub{
+    font-size:10px;color:var(--sub);
+    font-family:'JetBrains Mono',monospace;letter-spacing:.06em;
+  }
+  .pool-grid{
+    flex:1;overflow-y:auto;
+    padding:12px;
+    display:grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap:9px;
+    align-content:flex-start;
+  }
+  .asset-card{
+    cursor:grab;
+    background:var(--card);border:1.5px solid var(--border);
+    border-radius:8px;padding:8px 9px;
+    display:flex;flex-direction:column;gap:6px;
+    transition:border-color 160ms, transform 80ms, box-shadow 160ms;
+    user-select:none;
+  }
+  .asset-card:hover{
+    border-color:var(--accent);
+    box-shadow:var(--shadow-md);
+    transform:translateY(-1px);
+  }
+  .asset-card:active{cursor:grabbing;transform:scale(.97);}
+  .asset-card.dragging{opacity:.4;}
+  .asset-thumb{
+    width:100%;aspect-ratio: 16/9;
+    background:var(--paper-2);border-radius:5px;
+    border:1px solid var(--border);
+    display:flex;align-items:center;justify-content:center;
+    position:relative;overflow:hidden;
+  }
+  .asset-name{
+    font-size:11px;color:var(--ink-2);font-weight:600;line-height:1.3;
+    display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical;
+    overflow:hidden;
+  }
+  .asset-meta{
+    display:flex;align-items:center;justify-content:space-between;
+    font-size:9.5px;color:var(--sub);font-family:'JetBrains Mono',monospace;
+    letter-spacing:.04em;
+  }
+  .asset-tag{
+    padding:1px 5px;border-radius:3px;
+    background:var(--accent-soft);color:var(--accent-ink);
+    font-weight:700;
+  }
+  .asset-tag.t-cam   {background:#F8EDE5;color:#9A4A2E;}
+  .asset-tag.t-data  {background:#DEE5EC;color:#345366;}
+  .asset-tag.t-hw    {background:#EAE3CC;color:#6E5E2C;}
+  .asset-tag.t-paper {background:#EFE2D2;color:#6F4E2F;}
+  .asset-tag.t-talk  {background:#F4DDE3;color:#7B324A;}
+  .asset-tag.t-title {background:#F2DDD0;color:#7B3A1A;}
+  .asset-tag.t-cta   {background:#E9DBE3;color:#52334A;}
+
+  /* Timeline pane (right side) */
+  .timeline-pane{
+    background:var(--card);border:1px solid var(--border);
+    border-radius:10px;
+    display:flex;flex-direction:column;
+    overflow:hidden;min-height:0;
+  }
+  .timeline-body{
+    flex:1;display:flex;flex-direction:column;
+    overflow:hidden;min-height:0;
+  }
+  /* 5-segment timeline strip */
+  .strip{
+    display:flex;gap:6px;padding:10px 12px;
+    border-bottom:1px solid var(--hairline);
+    background:var(--paper-2);
+    flex-shrink:0;
+  }
+  .strip-cell{
+    flex:1;min-width:0;
+    background:var(--card);border:1.5px solid var(--border);
+    border-radius:7px;padding:7px 8px;cursor:pointer;
+    display:flex;flex-direction:column;gap:3px;
+    transition:border-color 160ms, background 160ms;
+    position:relative;min-height:64px;
+  }
+  .strip-cell:hover{border-color:var(--accent-line);background:var(--accent-soft);}
+  .strip-cell.active{border-color:var(--primary);background:var(--primary-soft);}
+  .strip-cell-num{
+    font-family:'JetBrains Mono',monospace;font-size:9px;
+    color:var(--sub);letter-spacing:.08em;font-weight:700;
+    display:flex;justify-content:space-between;align-items:center;
+  }
+  .strip-cell.active .strip-cell-num{color:var(--primary-ink);}
+  .strip-cell-time{color:var(--accent);}
+  .strip-cell.active .strip-cell-time{color:var(--primary-ink);}
+  .strip-cell-title{
+    font-size:10.5px;font-weight:700;color:var(--ink-2);
+    line-height:1.3;
+  }
+  .strip-cell.active .strip-cell-title{color:var(--primary-ink);}
+  .strip-cell-bar{
+    margin-top:auto;display:flex;gap:2px;align-items:center;
+  }
+  .strip-pip{
+    width:6px;height:6px;border-radius:50%;
+    background:var(--border-2);
+  }
+  .strip-pip.on{background:var(--accent);}
+  .strip-cell.active .strip-pip.on{background:var(--primary);}
+  .strip-pip.empty{background:transparent;border:1px solid var(--border-2);}
+  .strip-cell-warn{
+    position:absolute;top:5px;right:5px;
+    width:10px;height:10px;border-radius:50%;
+    background:var(--warn);box-shadow:0 0 0 2px var(--card);
+    display:none;
+  }
+  .strip-cell.warned .strip-cell-warn{display:block;}
+
+  /* Active segment slot (drop area) */
+  .slot-wrap{
+    flex:1;display:flex;flex-direction:column;
+    padding:14px 16px 12px;overflow:hidden;min-height:0;gap:10px;
+  }
+  .slot-head{
+    display:flex;align-items:flex-end;justify-content:space-between;
+    padding-bottom:8px;border-bottom:1px dashed var(--border);
+  }
+  .slot-head-l{display:flex;flex-direction:column;gap:3px;}
+  .slot-tag{
+    font-family:'JetBrains Mono',monospace;font-size:9.5px;
+    color:var(--accent);background:var(--accent-soft);
+    padding:2px 7px;border-radius:4px;letter-spacing:.08em;font-weight:700;
+    align-self:flex-start;
+  }
+  .slot-title{font-size:14px;font-weight:700;color:var(--ink);}
+  .slot-sub{font-size:11px;color:var(--sub);line-height:1.45;}
+  .slot-head-r{
+    display:flex;flex-direction:column;align-items:flex-end;gap:4px;
+  }
+  .slot-time{
+    font-family:'JetBrains Mono',monospace;font-size:18px;font-weight:700;
+    color:var(--ink);
+  }
+  .slot-time .slash{color:var(--sub-2);font-weight:400;}
+  .slot-time .target{color:var(--sub);font-size:12px;font-weight:400;}
+  .slot-status{
+    font-size:10px;font-weight:700;letter-spacing:.06em;
+    padding:2px 8px;border-radius:10px;
+    font-family:'JetBrains Mono',monospace;
+  }
+  .slot-status.ok  {background:#E2EBDE;color:#3D5A2C;}
+  .slot-status.warn{background:#F7E8C8;color:#6E5117;}
+  .slot-status.under{background:#DEE5EC;color:#345366;}
+  .slot-status.empty{background:var(--paper-2);color:var(--sub);}
+
+  /* Drop zone for current segment */
+  .drop-zone{
+    flex:1;border:2px dashed var(--border-2);
+    border-radius:10px;padding:10px;
+    background:var(--paper);
+    overflow-y:auto;
+    transition:background 180ms, border-color 180ms;
+    min-height:0;
+    position:relative;
+  }
+  .drop-zone.over{
+    background:var(--accent-soft);border-color:var(--accent);
+  }
+  .drop-empty{
+    height:100%;display:flex;flex-direction:column;
+    align-items:center;justify-content:center;
+    text-align:center;color:var(--sub);gap:6px;
+    font-size:11.5px;line-height:1.5;
+    pointer-events:none;
+  }
+  .drop-empty.hidden{display:none;}
+  .drop-empty-ico{opacity:.55;}
+  .drop-list{display:flex;flex-direction:column;gap:7px;}
+  .clip{
+    display:flex;align-items:center;gap:9px;
+    background:var(--card);border:1px solid var(--border);
+    border-radius:7px;padding:7px 9px;
+    box-shadow:var(--shadow-sm);
+    position:relative;
+  }
+  .clip-thumb{
+    width:54px;aspect-ratio:16/9;flex-shrink:0;
+    background:var(--paper-2);border:1px solid var(--border);
+    border-radius:4px;overflow:hidden;
+    display:flex;align-items:center;justify-content:center;
+  }
+  .clip-info{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;}
+  .clip-name{font-size:11.5px;font-weight:600;color:var(--ink-2);line-height:1.3;}
+  .clip-meta{
+    font-size:9.5px;color:var(--sub);font-family:'JetBrains Mono',monospace;
+    display:flex;align-items:center;gap:6px;
+  }
+  .clip-tag{padding:1px 5px;border-radius:3px;font-weight:700;}
+  .clip-tag.t-cam   {background:#F8EDE5;color:#9A4A2E;}
+  .clip-tag.t-data  {background:#DEE5EC;color:#345366;}
+  .clip-tag.t-hw    {background:#EAE3CC;color:#6E5E2C;}
+  .clip-tag.t-paper {background:#EFE2D2;color:#6F4E2F;}
+  .clip-tag.t-talk  {background:#F4DDE3;color:#7B324A;}
+  .clip-tag.t-title {background:#F2DDD0;color:#7B3A1A;}
+  .clip-tag.t-cta   {background:#E9DBE3;color:#52334A;}
+  .clip-dur-edit{
+    display:flex;align-items:center;gap:4px;
+    font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--sub);
+  }
+  .clip-dur-edit input{
+    width:42px;height:22px;padding:0 5px;
+    border:1px solid var(--border);border-radius:4px;
+    font-family:'JetBrains Mono',monospace;font-size:11px;
+    background:var(--card);color:var(--ink);text-align:right;
+  }
+  .clip-dur-edit input:focus{outline:none;border-color:var(--accent);}
+  .clip-actions{display:flex;align-items:center;gap:3px;}
+  .clip-mv,.clip-del{
+    width:22px;height:22px;
+    border:1px solid var(--border);background:var(--card);
+    border-radius:4px;cursor:pointer;
+    display:flex;align-items:center;justify-content:center;
+    color:var(--sub);transition:color 160ms,border-color 160ms;
+  }
+  .clip-mv:hover{color:var(--accent);border-color:var(--accent-line);}
+  .clip-del:hover{color:var(--bad);border-color:var(--bad);}
+  .clip-mv[disabled]{opacity:.3;cursor:not-allowed;}
+
+  /* Requirement hints in slot (what the segment expects) */
+  .slot-req{
+    display:flex;flex-wrap:wrap;gap:5px;
+    padding:7px 9px;background:var(--paper-2);
+    border:1px dashed var(--border-2);border-radius:7px;
+    font-size:10.5px;color:var(--sub);line-height:1.4;
+    align-items:center;
+  }
+  .slot-req-lab{
+    font-family:'JetBrains Mono',monospace;font-size:9.5px;
+    color:var(--sub);letter-spacing:.08em;font-weight:700;
+    margin-right:4px;
+  }
+  .req-chip{
+    padding:2px 7px;border-radius:10px;
+    background:var(--card);border:1px solid var(--border);
+    font-size:10.5px;color:var(--ink-2);font-weight:600;
+    display:inline-flex;align-items:center;gap:4px;
+  }
+  .req-chip.met{background:#E2EBDE;border-color:#B7C9A8;color:#3D5A2C;}
+  .req-chip-dot{width:6px;height:6px;border-radius:50%;background:var(--sub-2);}
+  .req-chip.met .req-chip-dot{background:var(--good);}
+
+  /* Toast */
+  .toast{
+    position:absolute;left:50%;bottom:18px;transform:translateX(-50%) translateY(20px);
+    background:var(--ink);color:#fff;padding:8px 16px;border-radius:8px;
+    font-size:12px;opacity:0;pointer-events:none;
+    transition:opacity 220ms, transform 220ms;
+    font-family:inherit;letter-spacing:.02em;
+    box-shadow:var(--shadow-lg);
+    max-width:62%;line-height:1.4;text-align:center;
+  }
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+  .toast.warn{background:#7B3A1A;}
+  .toast.good{background:#3D5A2C;}
+
+  /* Preview modal */
+  .preview-mask{
+    position:fixed;inset:0;background:rgba(25,24,20,.45);
+    display:flex;align-items:center;justify-content:center;
+    z-index:50;opacity:0;pointer-events:none;
+    transition:opacity 220ms;
+  }
+  .preview-mask.show{opacity:1;pointer-events:auto;}
+  .preview-card{
+    background:var(--card);border-radius:14px;
+    width:min(720px,86vw);max-height:84vh;overflow:hidden;
+    box-shadow:var(--shadow-lg);
+    display:flex;flex-direction:column;
+    transform:scale(.96);transition:transform 220ms cubic-bezier(.4,0,.2,1);
+  }
+  .preview-mask.show .preview-card{transform:scale(1);}
+  .preview-head{
+    padding:14px 18px;border-bottom:1px solid var(--hairline);
+    display:flex;align-items:center;justify-content:space-between;
+    background:var(--paper-2);
+  }
+  .preview-title{
+    font-size:14px;font-weight:700;color:var(--ink);
+    display:flex;align-items:center;gap:8px;
+  }
+  .preview-close{
+    border:1px solid var(--border);background:var(--card);
+    width:28px;height:28px;border-radius:6px;cursor:pointer;
+    display:flex;align-items:center;justify-content:center;color:var(--sub);
+  }
+  .preview-close:hover{color:var(--primary);border-color:var(--primary-line);}
+  .preview-body{
+    padding:16px 18px;overflow-y:auto;
+    display:flex;flex-direction:column;gap:14px;
+  }
+  .preview-timeline{
+    display:flex;height:54px;border-radius:7px;overflow:hidden;
+    border:1px solid var(--border);
+  }
+  .preview-seg{
+    flex:1;min-width:0;background:var(--accent-soft);
+    border-right:1px solid var(--border);
+    padding:5px 7px;display:flex;flex-direction:column;justify-content:space-between;
+    font-family:'JetBrains Mono',monospace;font-size:9.5px;color:var(--accent-ink);
+    position:relative;
+  }
+  .preview-seg:last-child{border-right:none;}
+  .preview-seg.under{background:#F1EDDF;color:var(--sub);}
+  .preview-seg.over{background:#F1D7CB;color:#7B3A1A;}
+  .preview-seg.ok{background:#E2EBDE;color:#3D5A2C;}
+  .preview-seg-label{font-weight:700;letter-spacing:.08em;}
+  .preview-seg-time{font-weight:700;}
+  .preview-list{display:flex;flex-direction:column;gap:10px;}
+  .preview-row{
+    display:flex;flex-direction:column;gap:4px;
+    padding:8px 10px;background:var(--paper);border:1px solid var(--border);border-radius:7px;
+  }
+  .preview-row-head{
+    display:flex;justify-content:space-between;align-items:center;
+    font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--sub);
+  }
+  .preview-row-title{
+    font-family:inherit;font-size:12px;color:var(--ink-2);font-weight:700;
+  }
+  .preview-row-clips{
+    font-size:11px;color:var(--sub);line-height:1.5;
+  }
+  .preview-row-clips em{font-style:normal;color:var(--ink-2);}
+  .preview-foot{
+    padding:12px 18px;border-top:1px solid var(--hairline);
+    display:flex;justify-content:space-between;align-items:center;
+    background:var(--paper-2);font-size:11.5px;color:var(--sub);
+  }
+  .preview-final{
+    font-family:'JetBrains Mono',monospace;font-weight:700;color:var(--ink);
+    font-size:13px;
+  }
+</style>
+</head>
+<body>
+  <!-- ===== Sidebar ===== -->
+  <aside class="game-sidebar">
+    <div class="brand">
+      <span class="brand-tag" id="brandTag">M45 · STRATEGY MAP</span>
+      <span class="brand-name" id="brandName">Demo 视频剧本编排</span>
+    </div>
+
+    <div class="hud-time">
+      <div class="side-label" id="hudLabel">TOTAL DURATION</div>
+      <div class="hud-time-cur"><span id="hudTotal" class="mono">0:00</span><span class="slash">/</span><span class="target mono">5:00</span></div>
+      <div class="hud-time-bar"><div class="hud-time-fill" id="hudFill" style="width:0%"></div></div>
+      <div class="hud-time-cap" id="hudCap">TARGET 5 MIN</div>
+    </div>
+
+    <div class="side-block">
+      <div class="side-label" id="segLabel">5 SEGMENTS</div>
+      <div class="seg-list" id="segList"></div>
+    </div>
+
+    <div class="side-block">
+      <div class="side-label" id="guideLabel">HOW TO PLAY</div>
+      <div class="guide">
+        <div class="guide-li" id="g1">从素材池拖卡片到当前段落</div>
+        <div class="guide-li" id="g2">每段时长目标 60s，可调每条素材时长</div>
+        <div class="guide-li" id="g3">所有需求满足后点 Preview 看 5 分钟成片</div>
+      </div>
+    </div>
+
+    <button class="lang-btn" id="langBtn" type="button">EN · 中文</button>
+  </aside>
+
+  <!-- ===== Main ===== -->
+  <main class="game-main">
+    <div class="scene-header">
+      <div class="scene-title-block">
+        <div class="scene-num" id="sceneNum">SCENE · STRATEGY MAP</div>
+        <div class="scene-title" id="sceneTitle">把 12 段素材拼成 5 分钟的项目 demo 视频</div>
+        <div class="scene-sub" id="sceneSub">每段 60 秒，按 Hook / Why / How / What / CTA 五幕结构。</div>
+      </div>
+      <div class="header-right">
+        <button class="ctrl-btn" id="resetBtn" type="button"><span id="resetTxt">重置</span></button>
+        <button class="ctrl-btn primary" id="previewBtn" type="button"><span id="previewTxt">预览成片</span></button>
+      </div>
+    </div>
+
+    <div class="body-grid">
+      <!-- LEFT: Asset pool -->
+      <section class="pool-pane">
+        <div class="pane-head">
+          <div class="pane-title">
+            <span id="poolTitle">素材池</span>
+            <span class="pane-title-tag" id="poolTitleTag">12 CLIPS</span>
+          </div>
+          <div class="pane-sub" id="poolSub">DRAG · OR · CLICK</div>
+        </div>
+        <div class="pool-grid" id="poolGrid"></div>
+      </section>
+
+      <!-- RIGHT: Timeline + active slot -->
+      <section class="timeline-pane">
+        <div class="pane-head">
+          <div class="pane-title">
+            <span id="tlTitle">5 段 Timeline</span>
+            <span class="pane-title-tag" id="tlTitleTag">VIDEO STORYBOARD</span>
+          </div>
+          <div class="pane-sub" id="tlSub">CLICK · SEGMENT · TO · EDIT</div>
+        </div>
+        <div class="timeline-body">
+          <div class="strip" id="strip"></div>
+          <div class="slot-wrap">
+            <div class="slot-head">
+              <div class="slot-head-l">
+                <span class="slot-tag" id="slotTag">SEG 1 · 0:00 — 1:00</span>
+                <div class="slot-title" id="slotTitle">Hook · 开场吸引</div>
+                <div class="slot-sub" id="slotSub">用项目封面 / 装置展示快速立项目身份。</div>
+              </div>
+              <div class="slot-head-r">
+                <div class="slot-time"><span id="slotTimeCur" class="mono">0:00</span><span class="slash">/</span><span class="target mono">1:00</span></div>
+                <span class="slot-status empty" id="slotStatus">EMPTY</span>
+              </div>
+            </div>
+            <div class="slot-req" id="slotReq"></div>
+            <div class="drop-zone" id="dropZone">
+              <div class="drop-empty" id="dropEmpty">
+                <svg class="drop-empty-ico" width="38" height="38" viewBox="0 0 38 38" fill="none" aria-hidden="true">
+                  <rect x="3" y="9" width="32" height="22" rx="3" stroke="#9D978A" stroke-width="1.5" stroke-dasharray="3 3"/>
+                  <path d="M14 20 L19 15 L24 20 M19 15 V26" stroke="#9D978A" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+                <div id="dropEmptyText">拖素材到这里 · 或直接点素材卡</div>
+              </div>
+              <div class="drop-list" id="dropList"></div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <div class="toast" id="toast"><span id="toastText">已加入</span></div>
+  </main>
+
+  <!-- ===== Preview modal ===== -->
+  <div class="preview-mask" id="previewMask">
+    <div class="preview-card">
+      <div class="preview-head">
+        <div class="preview-title">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <polygon points="4,3 13,8 4,13" fill="#D97757"/>
+          </svg>
+          <span id="prTitle">成片预览 · 5 段 Storyboard</span>
+        </div>
+        <button class="preview-close" id="prClose" type="button" aria-label="close">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+            <line x1="3" y1="3" x2="11" y2="11" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+            <line x1="11" y1="3" x2="3" y2="11" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+          </svg>
+        </button>
+      </div>
+      <div class="preview-body">
+        <div>
+          <div class="pane-sub" style="margin-bottom:6px;letter-spacing:.08em;" id="prTimelineLabel">5-MINUTE TIMELINE</div>
+          <div class="preview-timeline" id="prTimeline"></div>
+        </div>
+        <div>
+          <div class="pane-sub" style="margin-bottom:6px;letter-spacing:.08em;" id="prListLabel">SEGMENT BREAKDOWN</div>
+          <div class="preview-list" id="prList"></div>
+        </div>
+      </div>
+      <div class="preview-foot">
+        <div id="prFootHint">总时长越接近 5:00，叙事节奏越稳</div>
+        <div class="preview-final"><span id="prFinal" class="mono">0:00</span><span style="color:var(--sub-2);"> / </span><span class="mono" style="color:var(--sub);">5:00</span></div>
+      </div>
+    </div>
+  </div>
+
+<script>
+(function(){
+  'use strict';
+
+  /* ============= I18N ============= */
+  var lang = 'cn';
+  var I18N = {
+    brandTag:   { cn:'M45 · 战略地图', en:'M45 · STRATEGY MAP' },
+    brandName:  { cn:'Demo 视频剧本编排', en:'Demo Video Script Storyboarding' },
+    hudLabel:   { cn:'总时长', en:'TOTAL DURATION' },
+    segLabel:   { cn:'5 段视频结构', en:'5 SEGMENTS' },
+    guideLabel: { cn:'操作说明', en:'HOW TO PLAY' },
+    g1: { cn:'从素材池拖卡片到当前段落', en:'Drag a clip from the pool into the active segment' },
+    g2: { cn:'每段时长目标 60s，可调每条素材时长', en:'Each segment targets 60s, tune clip duration inline' },
+    g3: { cn:'所有需求满足后点 Preview 看 5 分钟成片', en:'When all reqs are met, hit Preview for the 5-min cut' },
+    resetTxt:   { cn:'重置', en:'Reset' },
+    previewTxt: { cn:'预览成片', en:'Preview Cut' },
+    sceneNum:   { cn:'场景 · 战略地图', en:'SCENE · STRATEGY MAP' },
+    sceneTitle: { cn:'把 12 段素材拼成 5 分钟的项目 demo 视频', en:'Storyboard 12 clips into a 5-minute project demo' },
+    sceneSub:   { cn:'每段 60 秒，按 Hook / Why / How / What / CTA 五幕结构。', en:'Each segment 60s, in Hook / Why / How / What / CTA five-act flow.' },
+    poolTitle:  { cn:'素材池', en:'Asset Pool' },
+    poolTitleTag:{ cn:'12 段', en:'12 CLIPS' },
+    poolSub:    { cn:'拖入 · 或点击加入', en:'DRAG · OR · CLICK' },
+    tlTitle:    { cn:'5 段 Timeline', en:'5-Segment Timeline' },
+    tlTitleTag: { cn:'视频故事板', en:'STORYBOARD' },
+    tlSub:      { cn:'点段切换编辑', en:'CLICK SEGMENT TO EDIT' },
+    dropEmpty:  { cn:'拖素材到这里 · 或直接点素材卡', en:'Drop clips here · or click a card' },
+    hudCap:     { cn:'目标 5 分钟', en:'TARGET 5 MIN' },
+    /* status pill */
+    stEmpty: { cn:'EMPTY', en:'EMPTY' },
+    stUnder: { cn:'UNDER',  en:'UNDER' },
+    stOk:    { cn:'OK',     en:'OK' },
+    stWarn:  { cn:'OVER',   en:'OVER' },
+    /* toast */
+    tAdded:     { cn:'已加入 SEG ', en:'Added to SEG ' },
+    tRemoved:   { cn:'已删除', en:'Removed' },
+    tReset:     { cn:'已重置所有段落', en:'All segments reset' },
+    tPoolEmpty: { cn:'素材池里已经没有这条了', en:'This clip has been used already' },
+    /* preview */
+    prTitle:    { cn:'成片预览 · 5 段 Storyboard', en:'Preview · 5-segment Storyboard' },
+    prTimelineLabel:{ cn:'5 分钟 TIMELINE', en:'5-MINUTE TIMELINE' },
+    prListLabel:{ cn:'每段拆解', en:'SEGMENT BREAKDOWN' },
+    prFootHint: { cn:'总时长越接近 5:00，叙事节奏越稳', en:'The closer to 5:00, the tighter your story' },
+    prEmpty:    { cn:'(无素材)', en:'(empty)' },
+    prReqLabel: { cn:'需求', en:'REQ' },
+    /* requirements label */
+    reqLabel:   { cn:'本段需要', en:'REQUIRES' },
+
+    /* Segments */
+    s1Name:{ cn:'Hook · 开场吸引', en:'Hook · open strong' },
+    s2Name:{ cn:'Why · 为什么做', en:'Why · the motivation' },
+    s3Name:{ cn:'How · 我怎么做', en:'How · the method' },
+    s4Name:{ cn:'What · 结果与发现', en:'What · the result' },
+    s5Name:{ cn:'CTA · 收尾呼吁', en:'CTA · close & invite' },
+    s1Sub: { cn:'用项目封面 / 装置展示快速立项目身份。', en:'Lead with the cover card and the device to anchor identity.' },
+    s2Sub: { cn:'用邻居采访和真实数据说清楚 — 为什么这件事值得做。', en:'Show real data and a neighbor quote — why this matters.' },
+    s3Sub: { cn:'讲清楚装置 + 校正方法 (论文 / raw vs corrected)。', en:'Walk through the hardware + correction method (paper / raw vs corrected).' },
+    s4Sub: { cn:'秀 dashboard + 一周数据 + 下载能力 — 你的成果。', en:'Show the dashboard, the week of data, the download — your result.' },
+    s5Sub: { cn:'本人出镜说收获，留二维码 / 鸣谢，请人来玩。', en:'You on camera, then QR / credits — invite folks in.' },
+
+    /* requirement chips */
+    rTitleCard: { cn:'封面/标题卡', en:'title card' },
+    rDevice:    { cn:'装置特写', en:'device' },
+    rInterview: { cn:'邻居采访', en:'neighbor' },
+    rDataLive:  { cn:'实时数据', en:'live data' },
+    rPaper:     { cn:'论文/校正', en:'paper/calib' },
+    rCorrect:   { cn:'raw vs corrected', en:'raw vs cor' },
+    rDashboard: { cn:'dashboard', en:'dashboard' },
+    rDownload:  { cn:'下载演示', en:'download' },
+    rTalk:      { cn:'本人特写', en:'you on cam' },
+    rCTA:       { cn:'鸣谢/二维码', en:'QR/credits' },
+    rTimeline:  { cn:'时间轴动画', en:'timeline anim' },
+    rMap:       { cn:'地图视角', en:'map shot' },
+
+    /* asset names */
+    a01:{ cn:'项目封面 · 标题卡', en:'Cover · title card' },
+    a02:{ cn:'PurpleAir 装置特写', en:'PurpleAir device close-up' },
+    a03:{ cn:'阳台安装实拍', en:'Balcony install footage' },
+    a04:{ cn:'邻居采访 · 大爷', en:'Neighbor interview · uncle' },
+    a05:{ cn:'实时 AQI 滚动数据', en:'Live AQI stream' },
+    a06:{ cn:'一周时间轴动画', en:'One-week timeline anim' },
+    a07:{ cn:'PurpleAir 校正论文', en:'PurpleAir correction paper' },
+    a08:{ cn:'raw vs corrected 对比', en:'raw vs corrected compare' },
+    a09:{ cn:'Dashboard UI 截屏', en:'Dashboard UI capture' },
+    a10:{ cn:'CSV 下载演示', en:'CSV download demo' },
+    a11:{ cn:'本人出镜讲收获', en:'You on cam · takeaway' },
+    a12:{ cn:'鸣谢 + GitHub 二维码', en:'Credits + GitHub QR' }
+  };
+  function t(k){ return (I18N[k] && I18N[k][lang]) || k; }
+
+  /* ============= Asset definitions ============= */
+  /*
+   * each asset has a `kind` (one of: title/hw/cam/data/paper/correct/dashboard/download/talk/cta/timeline/map),
+   * default duration, and an SVG thumb tuned to the climate / Industrial Atelier palette.
+   */
+  var ASSETS = [
+    { id:'a01', nameKey:'a01', kind:'title',    tag:'TITLE',  tagClass:'t-title', dur:6,  thumb: titleSvg() },
+    { id:'a02', nameKey:'a02', kind:'hw',       tag:'B-ROLL', tagClass:'t-hw',    dur:10, thumb: deviceSvg() },
+    { id:'a03', nameKey:'a03', kind:'hw',       tag:'B-ROLL', tagClass:'t-hw',    dur:9,  thumb: balconySvg() },
+    { id:'a04', nameKey:'a04', kind:'interview',tag:'INTV',   tagClass:'t-cam',   dur:14, thumb: interviewSvg() },
+    { id:'a05', nameKey:'a05', kind:'data',     tag:'DATA',   tagClass:'t-data',  dur:8,  thumb: liveDataSvg() },
+    { id:'a06', nameKey:'a06', kind:'timeline', tag:'ANIM',   tagClass:'t-data',  dur:12, thumb: weekTimelineSvg() },
+    { id:'a07', nameKey:'a07', kind:'paper',    tag:'PAPER',  tagClass:'t-paper', dur:8,  thumb: paperSvg() },
+    { id:'a08', nameKey:'a08', kind:'correct',  tag:'CMP',    tagClass:'t-paper', dur:11, thumb: compareSvg() },
+    { id:'a09', nameKey:'a09', kind:'dashboard',tag:'UI',     tagClass:'t-data',  dur:11, thumb: dashboardSvg() },
+    { id:'a10', nameKey:'a10', kind:'download', tag:'UI',     tagClass:'t-data',  dur:6,  thumb: downloadSvg() },
+    { id:'a11', nameKey:'a11', kind:'talk',     tag:'A-CAM',  tagClass:'t-talk',  dur:18, thumb: talkingHeadSvg() },
+    { id:'a12', nameKey:'a12', kind:'cta',      tag:'OUTRO',  tagClass:'t-cta',   dur:10, thumb: qrCreditSvg() }
+  ];
+
+  /* ============= Segment definitions ============= */
+  /* each segment: name, target seconds, required asset kinds (at least 1 of) */
+  var SEGMENTS = [
+    {
+      idx:1, nameKey:'s1Name', subKey:'s1Sub', tagCN:'SEG 1 · 0:00 — 1:00', tagEN:'SEG 1 · 0:00 — 1:00',
+      target:60,
+      reqs:[
+        { kinds:['title'],            labelKey:'rTitleCard' },
+        { kinds:['hw'],               labelKey:'rDevice' }
+      ]
+    },
+    {
+      idx:2, nameKey:'s2Name', subKey:'s2Sub', tagCN:'SEG 2 · 1:00 — 2:00', tagEN:'SEG 2 · 1:00 — 2:00',
+      target:60,
+      reqs:[
+        { kinds:['interview'],        labelKey:'rInterview' },
+        { kinds:['data','timeline'],  labelKey:'rDataLive' }
+      ]
+    },
+    {
+      idx:3, nameKey:'s3Name', subKey:'s3Sub', tagCN:'SEG 3 · 2:00 — 3:00', tagEN:'SEG 3 · 2:00 — 3:00',
+      target:60,
+      reqs:[
+        { kinds:['hw'],               labelKey:'rDevice' },
+        { kinds:['paper','correct'],  labelKey:'rPaper' }
+      ]
+    },
+    {
+      idx:4, nameKey:'s4Name', subKey:'s4Sub', tagCN:'SEG 4 · 3:00 — 4:00', tagEN:'SEG 4 · 3:00 — 4:00',
+      target:60,
+      reqs:[
+        { kinds:['dashboard'],        labelKey:'rDashboard' },
+        { kinds:['download','correct'], labelKey:'rDownload' }
+      ]
+    },
+    {
+      idx:5, nameKey:'s5Name', subKey:'s5Sub', tagCN:'SEG 5 · 4:00 — 5:00', tagEN:'SEG 5 · 4:00 — 5:00',
+      target:60,
+      reqs:[
+        { kinds:['talk'],             labelKey:'rTalk' },
+        { kinds:['cta'],              labelKey:'rCTA' }
+      ]
+    }
+  ];
+
+  /* ============= State ============= */
+  var stateGame = {
+    active: 1,
+    placed: { 1:[], 2:[], 3:[], 4:[], 5:[] },  /* each item: { uid, assetId, dur } */
+    usedAssetIds: {},   /* assetId -> segIdx (so an asset is used in at most one segment at a time) */
+    nextUid: 1
+  };
+
+  /* ============= DOM refs ============= */
+  var elPool      = document.getElementById('poolGrid');
+  var elStrip     = document.getElementById('strip');
+  var elSegList   = document.getElementById('segList');
+  var elSlotTag   = document.getElementById('slotTag');
+  var elSlotTitle = document.getElementById('slotTitle');
+  var elSlotSub   = document.getElementById('slotSub');
+  var elSlotTime  = document.getElementById('slotTimeCur');
+  var elSlotStat  = document.getElementById('slotStatus');
+  var elSlotReq   = document.getElementById('slotReq');
+  var elDropZone  = document.getElementById('dropZone');
+  var elDropEmpty = document.getElementById('dropEmpty');
+  var elDropList  = document.getElementById('dropList');
+  var elHudTotal  = document.getElementById('hudTotal');
+  var elHudFill   = document.getElementById('hudFill');
+  var elResetBtn  = document.getElementById('resetBtn');
+  var elPreviewBtn= document.getElementById('previewBtn');
+  var elLangBtn   = document.getElementById('langBtn');
+  var elToast     = document.getElementById('toast');
+  var elToastText = document.getElementById('toastText');
+  var elPrMask    = document.getElementById('previewMask');
+  var elPrClose   = document.getElementById('prClose');
+  var elPrTimeline= document.getElementById('prTimeline');
+  var elPrList    = document.getElementById('prList');
+  var elPrFinal   = document.getElementById('prFinal');
+
+  /* ============= Helpers ============= */
+  function fmtTime(sec){
+    sec = Math.max(0, Math.round(sec));
+    var m = Math.floor(sec / 60);
+    var s = sec % 60;
+    return m + ':' + (s < 10 ? '0' + s : s);
+  }
+  function findAsset(id){
+    for (var i=0; i<ASSETS.length; i++) if (ASSETS[i].id === id) return ASSETS[i];
+    return null;
+  }
+  function curSeg(){ return SEGMENTS[stateGame.active - 1]; }
+  function segSeconds(seg){
+    var list = stateGame.placed[seg.idx];
+    var s = 0;
+    for (var i=0;i<list.length;i++) s += list[i].dur;
+    return s;
+  }
+  function totalSeconds(){
+    var s = 0;
+    for (var k=1;k<=5;k++) s += segSeconds(SEGMENTS[k-1]);
+    return s;
+  }
+  function statusFor(seg){
+    var sec = segSeconds(seg);
+    if (sec === 0)   return 'empty';
+    if (sec > seg.target + 10) return 'warn'; /* > 70s */
+    if (sec < seg.target - 10) return 'under'; /* < 50s */
+    return 'ok';
+  }
+  function reqsMet(seg){
+    var list = stateGame.placed[seg.idx];
+    var have = {};
+    for (var i=0;i<list.length;i++) have[ findAsset(list[i].assetId).kind ] = true;
+    return seg.reqs.map(function(r){
+      var ok = false;
+      for (var j=0;j<r.kinds.length;j++) if (have[r.kinds[j]]) { ok = true; break; }
+      return { req:r, ok:ok };
+    });
+  }
+  function allReqsMet(seg){
+    var r = reqsMet(seg);
+    for (var i=0;i<r.length;i++) if (!r[i].ok) return false;
+    return true;
+  }
+
+  /* ============= SVG thumbs (climate / Industrial Atelier) ============= */
+  function titleSvg(){
+    return '<svg viewBox="0 0 80 45" preserveAspectRatio="xMidYMid meet" width="100%" height="100%">'+
+      '<rect x="0" y="0" width="80" height="45" fill="#527B95"/>'+
+      '<rect x="6" y="11" width="68" height="9" rx="1.5" fill="#FAF9F5"/>'+
+      '<rect x="6" y="23" width="44" height="5" rx="1" fill="#DEE5EC"/>'+
+      '<rect x="6" y="31" width="22" height="4" rx="1" fill="#D97757"/>'+
+      '<circle cx="68" cy="34" r="3" fill="#D97757"/>'+
+    '</svg>';
+  }
+  function deviceSvg(){
+    return '<svg viewBox="0 0 80 45" preserveAspectRatio="xMidYMid meet" width="100%" height="100%">'+
+      '<rect x="0" y="0" width="80" height="45" fill="#F1EDDF"/>'+
+      '<rect x="26" y="11" width="28" height="26" rx="3" fill="#FFFFFF" stroke="#9D978A" stroke-width="0.6"/>'+
+      '<circle cx="40" cy="22" r="6" fill="#527B95"/>'+
+      '<circle cx="40" cy="22" r="3" fill="#FAF9F5"/>'+
+      '<rect x="33" y="32" width="14" height="2" fill="#191814"/>'+
+      '<line x1="20" y1="14" x2="26" y2="14" stroke="#D97757" stroke-width="1.4"/>'+
+    '</svg>';
+  }
+  function balconySvg(){
+    return '<svg viewBox="0 0 80 45" preserveAspectRatio="xMidYMid meet" width="100%" height="100%">'+
+      '<rect x="0" y="0" width="80" height="45" fill="#DEE5EC"/>'+
+      '<rect x="0" y="28" width="80" height="17" fill="#F1EDDF"/>'+
+      '<line x1="0" y1="32" x2="80" y2="32" stroke="#9D978A" stroke-width=".6"/>'+
+      '<line x1="14" y1="28" x2="14" y2="45" stroke="#9D978A" stroke-width=".5"/>'+
+      '<line x1="28" y1="28" x2="28" y2="45" stroke="#9D978A" stroke-width=".5"/>'+
+      '<line x1="42" y1="28" x2="42" y2="45" stroke="#9D978A" stroke-width=".5"/>'+
+      '<line x1="56" y1="28" x2="56" y2="45" stroke="#9D978A" stroke-width=".5"/>'+
+      '<line x1="70" y1="28" x2="70" y2="45" stroke="#9D978A" stroke-width=".5"/>'+
+      '<rect x="50" y="20" width="9" height="9" rx="1.5" fill="#FFFFFF" stroke="#527B95" stroke-width=".7"/>'+
+      '<circle cx="54.5" cy="24.5" r="2.2" fill="#527B95"/>'+
+      '<circle cx="20" cy="8" r="3" fill="#D97757"/>'+
+    '</svg>';
+  }
+  function interviewSvg(){
+    return '<svg viewBox="0 0 80 45" preserveAspectRatio="xMidYMid meet" width="100%" height="100%">'+
+      '<rect x="0" y="0" width="80" height="45" fill="#F1EDDF"/>'+
+      '<circle cx="38" cy="20" r="8" fill="#D97757"/>'+
+      '<path d="M22 42 Q22 30 38 30 Q54 30 54 42" fill="#9A4A2E"/>'+
+      '<rect x="58" y="22" width="2.6" height="14" rx="1" fill="#191814"/>'+
+      '<circle cx="59.3" cy="20" r="3" fill="#2B2924"/>'+
+      '<rect x="3" y="36" width="22" height="5" rx="1" fill="#FFFFFF" stroke="#9D978A" stroke-width=".5"/>'+
+      '<rect x="5" y="38" width="11" height="1.5" fill="#191814"/>'+
+    '</svg>';
+  }
+  function liveDataSvg(){
+    return '<svg viewBox="0 0 80 45" preserveAspectRatio="xMidYMid meet" width="100%" height="100%">'+
+      '<rect x="0" y="0" width="80" height="45" fill="#191814"/>'+
+      '<text x="6" y="13" font-family="JetBrains Mono,monospace" font-size="6" fill="#6F8B5C">PM2.5</text>'+
+      '<text x="6" y="22" font-family="JetBrains Mono,monospace" font-size="9" fill="#FAF9F5">52.3</text>'+
+      '<text x="32" y="22" font-family="JetBrains Mono,monospace" font-size="5" fill="#6B6557">µg/m³</text>'+
+      '<rect x="6" y="26" width="68" height="4" fill="#2B2924"/>'+
+      '<rect x="6" y="26" width="34" height="4" fill="#C89B3C"/>'+
+      '<text x="6" y="38" font-family="JetBrains Mono,monospace" font-size="4.5" fill="#9D978A">UPDATED 2s AGO</text>'+
+      '<circle cx="72" cy="13" r="2" fill="#D97757"><animate attributeName="opacity" values="1;.3;1" dur="1.8s" repeatCount="indefinite"/></circle>'+
+    '</svg>';
+  }
+  function weekTimelineSvg(){
+    return '<svg viewBox="0 0 80 45" preserveAspectRatio="xMidYMid meet" width="100%" height="100%">'+
+      '<rect x="0" y="0" width="80" height="45" fill="#FAF9F5"/>'+
+      '<line x1="4" y1="32" x2="76" y2="32" stroke="#9D978A" stroke-width=".5"/>'+
+      '<polyline points="4,28 14,24 24,30 34,18 44,22 54,12 64,20 74,16" stroke="#527B95" stroke-width="1.4" fill="none"/>'+
+      '<polyline points="4,28 14,24 24,30 34,18 44,22 54,12 64,20 74,16" stroke="#527B95" stroke-opacity=".2" stroke-width="5" fill="none"/>'+
+      '<text x="4" y="40" font-family="JetBrains Mono,monospace" font-size="3.4" fill="#6B6557">MON</text>'+
+      '<text x="34" y="40" font-family="JetBrains Mono,monospace" font-size="3.4" fill="#6B6557">THU</text>'+
+      '<text x="66" y="40" font-family="JetBrains Mono,monospace" font-size="3.4" fill="#6B6557">SUN</text>'+
+      '<circle cx="54" cy="12" r="2" fill="#D97757"/>'+
+    '</svg>';
+  }
+  function paperSvg(){
+    return '<svg viewBox="0 0 80 45" preserveAspectRatio="xMidYMid meet" width="100%" height="100%">'+
+      '<rect x="0" y="0" width="80" height="45" fill="#F1EDDF"/>'+
+      '<rect x="20" y="5" width="40" height="36" rx="1" fill="#FFFFFF" stroke="#9D978A" stroke-width=".5"/>'+
+      '<rect x="24" y="9" width="32" height="2.5" fill="#191814"/>'+
+      '<rect x="24" y="14" width="26" height="1.4" fill="#6B6557"/>'+
+      '<rect x="24" y="17" width="28" height="1.4" fill="#6B6557"/>'+
+      '<rect x="24" y="22" width="32" height="9" fill="#DEE5EC"/>'+
+      '<polyline points="24,28 32,25 40,27 48,24 56,22" stroke="#527B95" stroke-width=".8" fill="none"/>'+
+      '<rect x="24" y="34" width="20" height="1.4" fill="#6B6557"/>'+
+      '<rect x="24" y="37" width="14" height="1.4" fill="#6B6557"/>'+
+    '</svg>';
+  }
+  function compareSvg(){
+    return '<svg viewBox="0 0 80 45" preserveAspectRatio="xMidYMid meet" width="100%" height="100%">'+
+      '<rect x="0" y="0" width="80" height="45" fill="#FFFFFF"/>'+
+      '<line x1="40" y1="4" x2="40" y2="41" stroke="#EBE5D6" stroke-width=".6"/>'+
+      '<text x="4" y="10" font-family="JetBrains Mono,monospace" font-size="4" fill="#B0593F">RAW</text>'+
+      '<polyline points="4,30 12,22 20,28 28,16 36,24" stroke="#B0593F" stroke-width="1.3" fill="none"/>'+
+      '<text x="44" y="10" font-family="JetBrains Mono,monospace" font-size="4" fill="#527B95">COR</text>'+
+      '<polyline points="44,30 52,26 60,30 68,22 76,28" stroke="#527B95" stroke-width="1.3" fill="none"/>'+
+      '<text x="4" y="42" font-family="JetBrains Mono,monospace" font-size="3.5" fill="#9D978A">- 18 % bias</text>'+
+    '</svg>';
+  }
+  function dashboardSvg(){
+    return '<svg viewBox="0 0 80 45" preserveAspectRatio="xMidYMid meet" width="100%" height="100%">'+
+      '<rect x="0" y="0" width="80" height="45" fill="#FAF9F5"/>'+
+      '<rect x="0" y="0" width="80" height="7" fill="#F1EDDF"/>'+
+      '<circle cx="4" cy="3.5" r="1" fill="#B0593F"/>'+
+      '<circle cx="8" cy="3.5" r="1" fill="#C89B3C"/>'+
+      '<circle cx="12" cy="3.5" r="1" fill="#6F8B5C"/>'+
+      '<rect x="4" y="11" width="34" height="14" rx="1.5" fill="#FFFFFF" stroke="#EBE5D6" stroke-width=".5"/>'+
+      '<text x="6" y="16" font-family="JetBrains Mono,monospace" font-size="3.4" fill="#6B6557">PM2.5</text>'+
+      '<text x="6" y="22" font-family="JetBrains Mono,monospace" font-size="7" fill="#191814">52</text>'+
+      '<rect x="40" y="11" width="36" height="14" rx="1.5" fill="#FFFFFF" stroke="#EBE5D6" stroke-width=".5"/>'+
+      '<polyline points="42,22 48,16 54,20 60,14 66,18 72,12" stroke="#527B95" stroke-width="1" fill="none"/>'+
+      '<rect x="4" y="27" width="72" height="14" rx="1.5" fill="#FFFFFF" stroke="#EBE5D6" stroke-width=".5"/>'+
+      '<rect x="6" y="32" width="6" height="7" fill="#527B95"/>'+
+      '<rect x="14" y="29" width="6" height="10" fill="#527B95" opacity=".7"/>'+
+      '<rect x="22" y="33" width="6" height="6" fill="#527B95" opacity=".5"/>'+
+      '<rect x="30" y="30" width="6" height="9" fill="#527B95" opacity=".8"/>'+
+      '<rect x="38" y="34" width="6" height="5" fill="#527B95" opacity=".4"/>'+
+      '<rect x="46" y="31" width="6" height="8" fill="#D97757"/>'+
+      '<rect x="54" y="34" width="6" height="5" fill="#527B95" opacity=".4"/>'+
+      '<rect x="62" y="32" width="6" height="7" fill="#527B95" opacity=".7"/>'+
+      '<rect x="70" y="29" width="6" height="10" fill="#527B95" opacity=".8"/>'+
+    '</svg>';
+  }
+  function downloadSvg(){
+    return '<svg viewBox="0 0 80 45" preserveAspectRatio="xMidYMid meet" width="100%" height="100%">'+
+      '<rect x="0" y="0" width="80" height="45" fill="#F1EDDF"/>'+
+      '<rect x="20" y="8" width="40" height="29" rx="2" fill="#FFFFFF" stroke="#9D978A" stroke-width=".5"/>'+
+      '<text x="24" y="16" font-family="JetBrains Mono,monospace" font-size="4" fill="#6B6557">data.csv</text>'+
+      '<line x1="24" y1="20" x2="56" y2="20" stroke="#EBE5D6"/>'+
+      '<text x="24" y="25" font-family="JetBrains Mono,monospace" font-size="3.4" fill="#191814">2026-05, 52</text>'+
+      '<text x="24" y="30" font-family="JetBrains Mono,monospace" font-size="3.4" fill="#191814">2026-06, 48</text>'+
+      '<text x="24" y="35" font-family="JetBrains Mono,monospace" font-size="3.4" fill="#191814">2026-07, 53</text>'+
+      '<circle cx="64" cy="13" r="5" fill="#D97757"/>'+
+      '<path d="M61 13 L64 16 L67 13 M64 10 V16" stroke="#FFFFFF" stroke-width="1" stroke-linecap="round" stroke-linejoin="round" fill="none"/>'+
+    '</svg>';
+  }
+  function talkingHeadSvg(){
+    return '<svg viewBox="0 0 80 45" preserveAspectRatio="xMidYMid meet" width="100%" height="100%">'+
+      '<rect x="0" y="0" width="80" height="45" fill="#DEE5EC"/>'+
+      '<rect x="0" y="34" width="80" height="11" fill="#F1EDDF"/>'+
+      '<circle cx="40" cy="22" r="9" fill="#D97757"/>'+
+      '<path d="M22 45 Q22 32 40 32 Q58 32 58 45" fill="#9A4A2E"/>'+
+      '<rect x="4" y="4" width="20" height="5" rx="1" fill="#191814" opacity=".8"/>'+
+      '<text x="5.5" y="8" font-family="JetBrains Mono,monospace" font-size="3.6" fill="#FAF9F5">REC</text>'+
+      '<circle cx="20.5" cy="6.5" r="1" fill="#D97757"/>'+
+    '</svg>';
+  }
+  function qrCreditSvg(){
+    return '<svg viewBox="0 0 80 45" preserveAspectRatio="xMidYMid meet" width="100%" height="100%">'+
+      '<rect x="0" y="0" width="80" height="45" fill="#FAF9F5"/>'+
+      '<rect x="6" y="6" width="33" height="33" rx="1" fill="#FFFFFF" stroke="#191814" stroke-width=".5"/>'+
+      qrPattern()+
+      '<text x="44" y="13" font-family="Inter,sans-serif" font-size="4.5" font-weight="700" fill="#191814">Thanks</text>'+
+      '<text x="44" y="20" font-family="JetBrains Mono,monospace" font-size="3.4" fill="#6B6557">github.com/</text>'+
+      '<text x="44" y="25" font-family="JetBrains Mono,monospace" font-size="3.4" fill="#6B6557">purpleair-node</text>'+
+      '<rect x="44" y="30" width="28" height="2" fill="#D97757"/>'+
+      '<text x="44" y="40" font-family="JetBrains Mono,monospace" font-size="3.2" fill="#9D978A">CC-BY-4.0</text>'+
+    '</svg>';
+  }
+  function qrPattern(){
+    /* simplistic QR-like pattern from a deterministic seed */
+    var out = '';
+    var cells = [
+      '1110111','1000101','1011101','1011101','1000001','1111111','0000000',
+      '1010101','0101010','1101101','0011011','1100110','0110011','1011001'
+    ];
+    for (var r=0;r<cells.length && r<7;r++){
+      var row = cells[r];
+      for (var c=0;c<row.length;c++){
+        if (row.charAt(c) === '1'){
+          out += '<rect x="'+(8+c*4)+'" y="'+(8+r*4)+'" width="3.5" height="3.5" fill="#191814"/>';
+        }
+      }
+    }
+    /* three corner finder squares */
+    out += '<rect x="7" y="7" width="9" height="9" fill="none" stroke="#191814" stroke-width=".9"/>';
+    out += '<rect x="9" y="9" width="5" height="5" fill="#191814"/>';
+    out += '<rect x="29" y="7" width="9" height="9" fill="none" stroke="#191814" stroke-width=".9"/>';
+    out += '<rect x="31" y="9" width="5" height="5" fill="#191814"/>';
+    out += '<rect x="7" y="29" width="9" height="9" fill="none" stroke="#191814" stroke-width=".9"/>';
+    out += '<rect x="9" y="31" width="5" height="5" fill="#191814"/>';
+    return out;
+  }
+
+  /* ============= Rendering ============= */
+  function applyI18nText(){
+    document.getElementById('brandTag').textContent  = t('brandTag');
+    document.getElementById('brandName').textContent = t('brandName');
+    document.getElementById('hudLabel').textContent  = t('hudLabel');
+    document.getElementById('hudCap').textContent    = t('hudCap');
+    document.getElementById('segLabel').textContent  = t('segLabel');
+    document.getElementById('guideLabel').textContent= t('guideLabel');
+    document.getElementById('g1').textContent        = t('g1');
+    document.getElementById('g2').textContent        = t('g2');
+    document.getElementById('g3').textContent        = t('g3');
+    document.getElementById('resetTxt').textContent  = t('resetTxt');
+    document.getElementById('previewTxt').textContent= t('previewTxt');
+    document.getElementById('sceneNum').textContent  = t('sceneNum');
+    document.getElementById('sceneTitle').textContent= t('sceneTitle');
+    document.getElementById('sceneSub').textContent  = t('sceneSub');
+    document.getElementById('poolTitle').textContent = t('poolTitle');
+    document.getElementById('poolTitleTag').textContent = t('poolTitleTag');
+    document.getElementById('poolSub').textContent   = t('poolSub');
+    document.getElementById('tlTitle').textContent   = t('tlTitle');
+    document.getElementById('tlTitleTag').textContent= t('tlTitleTag');
+    document.getElementById('tlSub').textContent     = t('tlSub');
+    document.getElementById('dropEmptyText').textContent = t('dropEmpty');
+    document.getElementById('prTitle').textContent   = t('prTitle');
+    document.getElementById('prTimelineLabel').textContent = t('prTimelineLabel');
+    document.getElementById('prListLabel').textContent = t('prListLabel');
+    document.getElementById('prFootHint').textContent = t('prFootHint');
+    elLangBtn.textContent = lang === 'cn' ? 'EN · 中文' : '中文 · EN';
+  }
+
+  function renderPool(){
+    elPool.innerHTML = '';
+    ASSETS.forEach(function(a){
+      var used = stateGame.usedAssetIds[a.id];
+      var card = document.createElement('div');
+      card.className = 'asset-card';
+      card.setAttribute('draggable', 'true');
+      card.dataset.aid = a.id;
+      card.style.opacity = used ? '.42' : '1';
+      card.style.cursor  = used ? 'not-allowed' : 'grab';
+      card.innerHTML =
+        '<div class="asset-thumb">'+a.thumb+'</div>'+
+        '<div class="asset-name">'+t(a.nameKey)+'</div>'+
+        '<div class="asset-meta">'+
+          '<span class="asset-tag '+a.tagClass+'">'+a.tag+'</span>'+
+          '<span>'+ (used ? ('→ S'+used) : (a.dur + 's')) +'</span>'+
+        '</div>';
+      card.addEventListener('dragstart', function(e){
+        if (used){ e.preventDefault(); return; }
+        card.classList.add('dragging');
+        try{
+          e.dataTransfer.effectAllowed = 'copy';
+          e.dataTransfer.setData('text/plain', a.id);
+        }catch(_e){}
+      });
+      card.addEventListener('dragend', function(){ card.classList.remove('dragging'); });
+      card.addEventListener('click', function(){
+        if (used){
+          showToast(t('tPoolEmpty'), 'warn');
+          return;
+        }
+        addClip(a.id, stateGame.active);
+      });
+      elPool.appendChild(card);
+    });
+  }
+
+  function renderStrip(){
+    elStrip.innerHTML = '';
+    SEGMENTS.forEach(function(seg, i){
+      var sec = segSeconds(seg);
+      var stat = statusFor(seg);
+      var cell = document.createElement('button');
+      cell.type = 'button';
+      cell.className = 'strip-cell' + (seg.idx === stateGame.active ? ' active' : '') + (stat === 'warn' ? ' warned' : '');
+      var segName = t(seg.nameKey);
+      cell.innerHTML =
+        '<div class="strip-cell-num"><span>SEG '+seg.idx+'</span><span class="strip-cell-time mono">'+fmtTime(sec)+'</span></div>'+
+        '<div class="strip-cell-title">'+segName+'</div>'+
+        '<div class="strip-cell-bar">'+ buildPips(seg) +'</div>'+
+        '<span class="strip-cell-warn" aria-label="over time"></span>';
+      cell.addEventListener('click', function(){
+        stateGame.active = seg.idx;
+        renderAll(false);
+      });
+      elStrip.appendChild(cell);
+    });
+  }
+  function buildPips(seg){
+    var list = stateGame.placed[seg.idx];
+    var n = Math.max(3, Math.min(6, Math.max(3, list.length)));
+    var out = '';
+    for (var i=0;i<n;i++){
+      if (i < list.length) out += '<span class="strip-pip on"></span>';
+      else                 out += '<span class="strip-pip empty"></span>';
+    }
+    return out;
+  }
+
+  function renderSegList(){
+    elSegList.innerHTML = '';
+    SEGMENTS.forEach(function(seg){
+      var sec = segSeconds(seg);
+      var row = document.createElement('button');
+      row.type = 'button';
+      row.className = 'seg-row' + (seg.idx === stateGame.active ? ' active' : '');
+      row.innerHTML =
+        '<div class="seg-row-head"><span>S'+seg.idx+' · '+fmtTime(sec)+'/'+fmtTime(seg.target)+'</span><span class="seg-row-count">'+ stateGame.placed[seg.idx].length +'</span></div>'+
+        '<div class="seg-row-name">'+t(seg.nameKey)+'</div>';
+      row.addEventListener('click', function(){
+        stateGame.active = seg.idx;
+        renderAll(false);
+      });
+      elSegList.appendChild(row);
+    });
+  }
+
+  function renderSlot(){
+    var seg = curSeg();
+    elSlotTag.textContent   = seg.tagCN;
+    elSlotTitle.textContent = t(seg.nameKey);
+    elSlotSub.textContent   = t(seg.subKey);
+    var sec = segSeconds(seg);
+    elSlotTime.textContent = fmtTime(sec);
+    /* status pill */
+    var stat = statusFor(seg);
+    elSlotStat.className = 'slot-status ' + stat;
+    elSlotStat.textContent =
+      stat === 'empty' ? t('stEmpty') :
+      stat === 'ok'    ? t('stOk') :
+      stat === 'warn'  ? t('stWarn') : t('stUnder');
+
+    /* requirement chips */
+    var rs = reqsMet(seg);
+    var html = '<span class="slot-req-lab">'+t('reqLabel')+'</span>';
+    rs.forEach(function(r){
+      html += '<span class="req-chip'+(r.ok?' met':'')+'"><span class="req-chip-dot"></span>'+t(r.req.labelKey)+'</span>';
+    });
+    elSlotReq.innerHTML = html;
+
+    /* clip list */
+    elDropList.innerHTML = '';
+    var list = stateGame.placed[seg.idx];
+    if (list.length === 0){
+      elDropEmpty.classList.remove('hidden');
+    } else {
+      elDropEmpty.classList.add('hidden');
+    }
+    list.forEach(function(item, idx){
+      var a = findAsset(item.assetId);
+      var clip = document.createElement('div');
+      clip.className = 'clip';
+      clip.innerHTML =
+        '<div class="clip-thumb">'+a.thumb+'</div>'+
+        '<div class="clip-info">'+
+          '<div class="clip-name">'+t(a.nameKey)+'</div>'+
+          '<div class="clip-meta"><span class="clip-tag '+a.tagClass+'">'+a.tag+'</span><span>#'+ (idx+1) +'</span></div>'+
+        '</div>'+
+        '<div class="clip-dur-edit">'+
+          '<input type="number" min="3" max="60" step="1" value="'+item.dur+'" aria-label="duration seconds"><span>s</span>'+
+        '</div>'+
+        '<div class="clip-actions">'+
+          '<button class="clip-mv" data-act="up" type="button" title="move up" '+ (idx===0?'disabled':'') +'>'+
+            '<svg width="11" height="11" viewBox="0 0 11 11" fill="none"><path d="M2 7 L5.5 3 L9 7" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>'+
+          '</button>'+
+          '<button class="clip-mv" data-act="down" type="button" title="move down" '+ (idx===list.length-1?'disabled':'') +'>'+
+            '<svg width="11" height="11" viewBox="0 0 11 11" fill="none"><path d="M2 4 L5.5 8 L9 4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>'+
+          '</button>'+
+          '<button class="clip-del" data-act="del" type="button" title="remove">'+
+            '<svg width="11" height="11" viewBox="0 0 11 11" fill="none"><line x1="3" y1="3" x2="8" y2="8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><line x1="8" y1="3" x2="3" y2="8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>'+
+          '</button>'+
+        '</div>';
+      var inp = clip.querySelector('input');
+      inp.addEventListener('input', function(){
+        var v = parseInt(inp.value, 10);
+        if (isNaN(v)) return;
+        if (v < 3) v = 3; if (v > 60) v = 60;
+        item.dur = v;
+        renderHud();
+        renderStrip();
+        renderSegList();
+        elSlotTime.textContent = fmtTime(segSeconds(seg));
+        var st = statusFor(seg);
+        elSlotStat.className = 'slot-status ' + st;
+        elSlotStat.textContent =
+          st === 'empty' ? t('stEmpty') :
+          st === 'ok'    ? t('stOk') :
+          st === 'warn'  ? t('stWarn') : t('stUnder');
+      });
+      clip.querySelector('[data-act="up"]').addEventListener('click', function(){
+        if (idx === 0) return;
+        var arr = stateGame.placed[seg.idx];
+        var tmp = arr[idx-1]; arr[idx-1] = arr[idx]; arr[idx] = tmp;
+        renderAll(false);
+      });
+      clip.querySelector('[data-act="down"]').addEventListener('click', function(){
+        var arr = stateGame.placed[seg.idx];
+        if (idx === arr.length-1) return;
+        var tmp = arr[idx+1]; arr[idx+1] = arr[idx]; arr[idx] = tmp;
+        renderAll(false);
+      });
+      clip.querySelector('[data-act="del"]').addEventListener('click', function(){
+        removeClip(item.uid, seg.idx);
+      });
+      elDropList.appendChild(clip);
+    });
+  }
+
+  function renderHud(){
+    var sec = totalSeconds();
+    elHudTotal.textContent = fmtTime(sec);
+    var pct = Math.min(100, Math.round(sec / 300 * 100));
+    elHudFill.style.width = pct + '%';
+    elHudFill.className = 'hud-time-fill';
+    if (sec > 320) elHudFill.classList.add('over');
+    else if (sec >= 280 && sec <= 320) elHudFill.classList.add('ok');
+  }
+
+  function renderAll(animate){
+    renderPool();
+    renderStrip();
+    renderSegList();
+    renderSlot();
+    renderHud();
+  }
+
+  /* ============= Actions ============= */
+  function addClip(assetId, segIdx){
+    var existingSeg = stateGame.usedAssetIds[assetId];
+    if (existingSeg){
+      showToast(t('tPoolEmpty'), 'warn');
+      return;
+    }
+    var a = findAsset(assetId);
+    if (!a) return;
+    stateGame.placed[segIdx].push({ uid: stateGame.nextUid++, assetId: assetId, dur: a.dur });
+    stateGame.usedAssetIds[assetId] = segIdx;
+    showToast(t('tAdded') + segIdx, 'good');
+    renderAll(true);
+  }
+  function removeClip(uid, segIdx){
+    var arr = stateGame.placed[segIdx];
+    for (var i=0;i<arr.length;i++){
+      if (arr[i].uid === uid){
+        delete stateGame.usedAssetIds[arr[i].assetId];
+        arr.splice(i, 1);
+        break;
+      }
+    }
+    showToast(t('tRemoved'), 'warn');
+    renderAll(true);
+  }
+  function resetAll(){
+    stateGame.placed = { 1:[], 2:[], 3:[], 4:[], 5:[] };
+    stateGame.usedAssetIds = {};
+    stateGame.active = 1;
+    showToast(t('tReset'), 'warn');
+    renderAll(true);
+  }
+
+  /* ============= Drop wiring on the drop zone ============= */
+  elDropZone.addEventListener('dragover', function(e){
+    e.preventDefault();
+    try{ e.dataTransfer.dropEffect = 'copy'; }catch(_e){}
+    elDropZone.classList.add('over');
+  });
+  elDropZone.addEventListener('dragleave', function(){
+    elDropZone.classList.remove('over');
+  });
+  elDropZone.addEventListener('drop', function(e){
+    e.preventDefault();
+    elDropZone.classList.remove('over');
+    var id = '';
+    try{ id = e.dataTransfer.getData('text/plain'); }catch(_e){}
+    if (!id) return;
+    addClip(id, stateGame.active);
+  });
+
+  /* ============= Toast ============= */
+  var toastTimer = null;
+  function showToast(msg, mood){
+    elToastText.textContent = msg;
+    elToast.className = 'toast show' + (mood ? ' ' + mood : '');
+    if (toastTimer) clearTimeout(toastTimer);
+    toastTimer = setTimeout(function(){
+      elToast.className = 'toast' + (mood ? ' ' + mood : '');
+    }, 1800);
+  }
+
+  /* ============= Preview ============= */
+  function openPreview(){
+    /* compose horizontal timeline by segment */
+    elPrTimeline.innerHTML = '';
+    SEGMENTS.forEach(function(seg){
+      var sec = segSeconds(seg);
+      var st = statusFor(seg);
+      var cell = document.createElement('div');
+      cell.className = 'preview-seg ' + st;
+      cell.innerHTML =
+        '<div class="preview-seg-label">SEG '+seg.idx+'</div>'+
+        '<div class="preview-seg-time">'+fmtTime(sec)+'</div>';
+      elPrTimeline.appendChild(cell);
+    });
+    /* list */
+    elPrList.innerHTML = '';
+    SEGMENTS.forEach(function(seg){
+      var list = stateGame.placed[seg.idx];
+      var clipsHtml = '';
+      if (list.length === 0){
+        clipsHtml = '<em>'+t('prEmpty')+'</em>';
+      } else {
+        clipsHtml = list.map(function(it){
+          var a = findAsset(it.assetId);
+          return '<em>'+t(a.nameKey)+'</em> · '+it.dur+'s';
+        }).join('  →  ');
+      }
+      var rs = reqsMet(seg);
+      var reqHtml = '<span style="font-family:JetBrains Mono,monospace;font-size:9.5px;color:#9D978A;letter-spacing:.08em;">'+t('prReqLabel')+': </span>'+
+        rs.map(function(r){
+          return '<span style="color:'+(r.ok ? '#3D5A2C':'#9D978A')+'">'+ (r.ok?'+ ':'- ') + t(r.req.labelKey)+'</span>';
+        }).join('  ');
+      var row = document.createElement('div');
+      row.className = 'preview-row';
+      row.innerHTML =
+        '<div class="preview-row-head"><span>SEG '+seg.idx+' · '+fmtTime(segSeconds(seg))+'/1:00</span><span>'+reqHtml+'</span></div>'+
+        '<div class="preview-row-title">'+t(seg.nameKey)+'</div>'+
+        '<div class="preview-row-clips">'+clipsHtml+'</div>';
+      elPrList.appendChild(row);
+    });
+    elPrFinal.textContent = fmtTime(totalSeconds());
+    elPrMask.classList.add('show');
+  }
+  function closePreview(){
+    elPrMask.classList.remove('show');
+  }
+
+  /* ============= Wire buttons ============= */
+  elResetBtn.addEventListener('click', resetAll);
+  elPreviewBtn.addEventListener('click', openPreview);
+  elPrClose.addEventListener('click', closePreview);
+  elPrMask.addEventListener('click', function(e){
+    if (e.target === elPrMask) closePreview();
+  });
+  elLangBtn.addEventListener('click', function(){
+    lang = (lang === 'cn') ? 'en' : 'cn';
+    applyI18nText();
+    renderAll(false);
+  });
+
+  /* ============= Init ============= */
+  applyI18nText();
+  renderAll(false);
+})();
+</script>
+</body>
+</html>

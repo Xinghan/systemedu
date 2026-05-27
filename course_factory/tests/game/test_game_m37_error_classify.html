@@ -1,0 +1,994 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>M37 误差归类侦探</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+SC:wght@400;500;700&family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    /* Industrial Atelier — Claude warm cream */
+    --paper:#FAF9F5;
+    --paper-2:#F1EDDF;
+    --card:#FFFFFF;
+    --ink:#191814;
+    --ink-2:#2B2924;
+    --sub:#6B6557;
+    --sub-2:#9D978A;
+    --border:#EBE5D6;
+    --border-2:#D9D1BD;
+    --hairline:#F2EDE0;
+
+    /* Primary — Claude coral */
+    --primary:#D97757;
+    --primary-ink:#9A4A2E;
+    --primary-soft:#F8EDE5;
+    --primary-line:#ECCFB8;
+
+    /* Domain accent — climate */
+    --climate:#527B95;
+    --climate-soft:#DEE5EC;
+    --climate-line:#B7C5D2;
+    --climate-ink:#2F4858;
+
+    --ok:#5C7A4A;
+    --ok-soft:#E4ECDB;
+    --ok-line:#BACBA5;
+    --warn:#C89B3C;
+    --warn-soft:#F4E9CB;
+
+    --shadow-sm:0 1px 2px 0 rgba(25,24,20,.04);
+    --shadow:0 1px 3px 0 rgba(25,24,20,.06),0 1px 2px -1px rgba(25,24,20,.04);
+    --shadow-md:0 4px 8px -2px rgba(25,24,20,.06),0 2px 4px -2px rgba(25,24,20,.04);
+    --shadow-lg:0 12px 24px -6px rgba(25,24,20,.1),0 4px 8px -4px rgba(25,24,20,.05);
+  }
+
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    height:100vh;width:100vw;overflow:hidden;
+    background:var(--paper);
+    color:var(--ink);
+    font-family:'Noto Sans SC','Inter',sans-serif;
+    font-size:14px;
+  }
+  .mono{font-family:'JetBrains Mono',monospace;}
+
+  .app{display:flex;flex-direction:row;width:100vw;height:100vh;}
+
+  /* ====== Sidebar 200px ====== */
+  .game-sidebar{
+    width:200px;flex-shrink:0;
+    background:var(--paper-2);
+    border-right:1px solid var(--border);
+    display:flex;flex-direction:column;
+    padding:18px 14px;gap:14px;
+    overflow-y:auto;
+  }
+  .brand{
+    display:flex;flex-direction:column;gap:2px;
+    border-bottom:1px solid var(--border);padding-bottom:12px;
+  }
+  .brand .mod{
+    font-family:'JetBrains Mono',monospace;
+    font-size:11px;color:var(--sub);letter-spacing:1.5px;
+  }
+  .brand .title{font-size:16px;font-weight:700;color:var(--ink);line-height:1.3;}
+  .brand .sub{font-size:11px;color:var(--sub);margin-top:2px;}
+
+  .section-label{
+    font-family:'JetBrains Mono',monospace;
+    font-size:10px;color:var(--sub-2);
+    letter-spacing:1.5px;text-transform:uppercase;
+    margin-bottom:6px;
+  }
+
+  /* 4 大类说明 */
+  .cat-legend{display:flex;flex-direction:column;gap:6px;}
+  .cat-row{
+    display:flex;align-items:flex-start;gap:8px;
+    padding:7px 9px;
+    background:var(--card);
+    border:1px solid var(--border);
+    border-radius:6px;
+    font-size:11px;color:var(--ink);
+    line-height:1.4;
+  }
+  .cat-row .swatch{
+    width:10px;height:10px;border-radius:2px;flex-shrink:0;margin-top:3px;
+    border:1px solid rgba(0,0,0,0.06);
+  }
+  .cat-row .ttl{font-weight:700;font-size:11.5px;}
+  .cat-row .desc{color:var(--sub);font-size:10px;margin-top:2px;line-height:1.4;}
+  .sw-instrument{background:#C04E68;}
+  .sw-environment{background:var(--climate);}
+  .sw-algorithm{background:#7C4569;}
+  .sw-spatiotemporal{background:var(--warn);}
+
+  /* 进度 */
+  .progress-card{
+    padding:10px 12px;
+    background:var(--card);
+    border:1px solid var(--border);
+    border-radius:8px;
+    box-shadow:var(--shadow-sm);
+  }
+  .progress-row{
+    display:flex;justify-content:space-between;align-items:baseline;
+    font-size:11px;color:var(--sub);
+    margin-bottom:6px;
+  }
+  .progress-row .num{
+    font-family:'JetBrains Mono',monospace;
+    font-size:18px;font-weight:700;color:var(--ink);
+  }
+  .progress-row .denom{
+    font-family:'JetBrains Mono',monospace;
+    font-size:11px;color:var(--sub-2);
+  }
+  .progress-bar{
+    width:100%;height:5px;
+    background:var(--paper-2);
+    border-radius:3px;overflow:hidden;
+    border:1px solid var(--border);
+  }
+  .progress-fill{
+    height:100%;background:var(--primary);
+    width:0%;
+    transition:width 0.35s ease;
+  }
+  .progress-stats{
+    display:flex;justify-content:space-between;
+    margin-top:8px;
+    font-family:'JetBrains Mono',monospace;
+    font-size:10px;
+    color:var(--sub);
+  }
+  .progress-stats .right.ok{color:var(--ok);}
+  .progress-stats .right.warn{color:var(--primary-ink);}
+
+  /* 底部按钮 */
+  .sidebar-bottom{margin-top:auto;display:flex;flex-direction:column;gap:8px;}
+  .reset-btn, .lang-btn{
+    padding:8px;border-radius:6px;
+    background:var(--card);border:1px solid var(--border);
+    font-family:'JetBrains Mono',monospace;font-size:11px;
+    color:var(--ink);cursor:pointer;
+    transition:all 0.15s;
+    text-align:center;font-weight:500;
+  }
+  .reset-btn:hover, .lang-btn:hover{
+    background:var(--primary-soft);
+    border-color:var(--primary-line);
+    color:var(--primary-ink);
+  }
+
+  /* 难度滑块 */
+  .slider-wrap{display:flex;flex-direction:column;gap:6px;}
+  .slider-label{display:flex;justify-content:space-between;font-size:11px;color:var(--sub);}
+  .slider-label .val{font-family:'JetBrains Mono',monospace;color:var(--ink);font-weight:700;}
+  input[type=range]{
+    -webkit-appearance:none;appearance:none;
+    width:100%;height:4px;
+    background:var(--border);
+    border-radius:2px;outline:none;
+  }
+  input[type=range]::-webkit-slider-thumb{
+    -webkit-appearance:none;appearance:none;
+    width:14px;height:14px;
+    background:var(--primary);
+    border-radius:50%;
+    cursor:pointer;
+    border:2px solid var(--card);
+    box-shadow:var(--shadow-sm);
+  }
+  input[type=range]::-moz-range-thumb{
+    width:14px;height:14px;background:var(--primary);border-radius:50%;
+    cursor:pointer;border:2px solid var(--card);
+  }
+
+  /* ====== Main ====== */
+  .game-main{
+    flex:1;display:flex;flex-direction:column;
+    background:var(--paper);
+    min-width:0;min-height:0;
+    padding:18px 22px;
+    gap:14px;
+  }
+  .main-header{
+    display:flex;justify-content:space-between;align-items:flex-start;flex-shrink:0;
+  }
+  .main-title{font-size:18px;font-weight:700;color:var(--ink);}
+  .main-sub{font-size:12px;color:var(--sub);margin-top:2px;}
+  .stage-tag{
+    font-family:'JetBrains Mono',monospace;
+    font-size:10px;color:var(--climate-ink);
+    background:var(--climate-soft);
+    border:1px solid var(--climate-line);
+    border-radius:4px;
+    padding:4px 8px;letter-spacing:1px;
+  }
+
+  /* 两栏 grid : 12 现象列 + 4 大类槽 */
+  .stage-grid{
+    flex:1;
+    display:grid;
+    grid-template-columns:1fr 1.15fr;
+    gap:14px;
+    min-height:0;
+  }
+
+  .panel{
+    background:var(--card);
+    border:1px solid var(--border);
+    border-radius:10px;
+    box-shadow:var(--shadow-sm);
+    display:flex;flex-direction:column;
+    min-height:0;
+    overflow:hidden;
+  }
+  .panel-head{
+    padding:10px 14px;
+    border-bottom:1px solid var(--hairline);
+    display:flex;justify-content:space-between;align-items:center;
+    flex-shrink:0;
+  }
+  .panel-head .ttl{
+    font-size:12px;font-weight:700;color:var(--ink);
+  }
+  .panel-head .tag{
+    font-family:'JetBrains Mono',monospace;
+    font-size:10px;color:var(--sub);letter-spacing:1px;
+  }
+  .panel-body{
+    flex:1;
+    padding:10px;
+    overflow-y:auto;
+    display:flex;flex-direction:column;gap:7px;
+    min-height:0;
+  }
+
+  /* ====== 现象卡片 (左栏) ====== */
+  .case{
+    display:flex;align-items:stretch;gap:8px;
+    padding:8px 10px;
+    background:var(--card);
+    border:1.5px dashed var(--border-2);
+    border-radius:7px;
+    cursor:grab;
+    transition:all 0.15s ease;
+    user-select:none;
+    flex-shrink:0;
+  }
+  .case:hover{
+    border-color:var(--climate);
+    background:var(--climate-soft);
+    transform:translateX(2px);
+  }
+  .case:active{cursor:grabbing;}
+  .case.solved{
+    opacity:0.45;
+    cursor:default;
+    border-style:solid;
+    background:var(--ok-soft);
+    border-color:var(--ok-line);
+  }
+  .case.solved:hover{transform:none;}
+  .case.wrong{
+    border-color:var(--primary);
+    background:var(--primary-soft);
+    animation:shake 0.4s ease;
+  }
+  @keyframes shake{
+    0%,100%{transform:translateX(0);}
+    25%{transform:translateX(-4px);}
+    75%{transform:translateX(4px);}
+  }
+  .case-id{
+    flex-shrink:0;
+    width:24px;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;
+    font-family:'JetBrains Mono',monospace;
+    font-size:10px;color:var(--sub-2);
+    border-right:1px solid var(--hairline);
+    padding-right:6px;
+    line-height:1.2;
+  }
+  .case-id .num{font-size:13px;font-weight:700;color:var(--ink);}
+  .case-meta{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px;}
+  .case-desc{
+    font-size:12px;color:var(--ink);
+    line-height:1.4;
+  }
+  .case-clues{
+    display:flex;flex-wrap:wrap;gap:4px;
+    margin-top:2px;
+  }
+  .clue{
+    display:inline-flex;align-items:center;gap:3px;
+    font-family:'JetBrains Mono',monospace;
+    font-size:9.5px;
+    padding:2px 5px;
+    border-radius:3px;
+    background:var(--paper-2);
+    border:1px solid var(--border);
+    color:var(--sub);
+    letter-spacing:0.3px;
+  }
+  .clue .k{color:var(--sub-2);}
+  .clue.freq{background:var(--warn-soft);border-color:#E0CC8E;color:#6B5417;}
+  .clue.cost{background:var(--climate-soft);border-color:var(--climate-line);color:var(--climate-ink);}
+
+  /* ====== 4 大类槽 (右栏) ====== */
+  .slots-grid{
+    flex:1;
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    grid-template-rows:1fr 1fr;
+    gap:10px;
+    padding:10px;
+    min-height:0;
+  }
+  .slot{
+    background:var(--paper-2);
+    border:1.5px dashed var(--border-2);
+    border-radius:8px;
+    display:flex;flex-direction:column;
+    padding:9px 10px;
+    min-height:0;
+    overflow:hidden;
+    transition:all 0.2s ease;
+    position:relative;
+  }
+  .slot.over{
+    border-style:solid;
+    background:var(--card);
+    box-shadow:var(--shadow-md);
+  }
+  .slot.over.cat-instrument{border-color:#C04E68;}
+  .slot.over.cat-environment{border-color:var(--climate);}
+  .slot.over.cat-algorithm{border-color:#7C4569;}
+  .slot.over.cat-spatiotemporal{border-color:var(--warn);}
+
+  .slot-head{
+    display:flex;align-items:center;gap:6px;
+    flex-shrink:0;
+    padding-bottom:6px;
+    border-bottom:1px solid var(--hairline);
+    margin-bottom:6px;
+  }
+  .slot-head .swatch{
+    width:8px;height:8px;border-radius:2px;flex-shrink:0;
+  }
+  .slot-head .ttl{
+    font-size:12.5px;font-weight:700;color:var(--ink);
+    flex:1;
+  }
+  .slot-head .count{
+    font-family:'JetBrains Mono',monospace;
+    font-size:9.5px;color:var(--sub);
+    background:var(--card);
+    border:1px solid var(--border);
+    border-radius:3px;padding:1px 5px;letter-spacing:0.5px;
+  }
+  .slot-head .count.full{
+    background:var(--ok-soft);border-color:var(--ok-line);color:var(--ok);
+  }
+  .slot-body{
+    flex:1;
+    overflow-y:auto;
+    display:flex;flex-direction:column;gap:5px;
+    min-height:0;
+  }
+  .placed{
+    display:flex;align-items:center;gap:6px;
+    padding:5px 7px;
+    background:var(--card);
+    border:1px solid var(--border);
+    border-radius:5px;
+    font-size:11px;color:var(--ink);
+    line-height:1.3;
+    box-shadow:var(--shadow-sm);
+  }
+  .placed .pn{
+    font-family:'JetBrains Mono',monospace;
+    font-size:10px;color:var(--sub);
+    flex-shrink:0;
+  }
+  .placed .pd{
+    flex:1;min-width:0;
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  }
+  .slot-empty{
+    font-family:'JetBrains Mono',monospace;
+    font-size:10.5px;color:var(--sub-2);
+    text-align:center;
+    padding:14px 6px;
+    letter-spacing:0.5px;
+    font-style:italic;
+  }
+
+  /* footer log */
+  .footer-log{
+    flex-shrink:0;
+    background:var(--paper-2);
+    border:1px solid var(--border);
+    border-radius:8px;
+    padding:8px 12px;
+    font-family:'JetBrains Mono',monospace;
+    font-size:11px;
+    line-height:1.5;
+    color:var(--sub);
+    max-height:80px;
+    overflow-y:auto;
+  }
+  .log-line{margin-bottom:2px;}
+  .log-line.ok{color:var(--ok);}
+  .log-line.err{color:var(--primary-ink);}
+  .log-line.info{color:var(--ink);}
+  .log-line .stamp{color:var(--sub-2);margin-right:6px;}
+
+  /* badge */
+  .badge{
+    flex-shrink:0;
+    padding:10px 14px;
+    background:var(--ok-soft);
+    border:1px solid var(--ok-line);
+    border-radius:8px;
+    text-align:center;
+    display:none;
+    box-shadow:var(--shadow-sm);
+  }
+  .badge.show{display:block;}
+  .badge .badge-ttl{
+    font-size:13px;font-weight:700;color:var(--ok);
+    margin-bottom:3px;
+    letter-spacing:0.5px;
+  }
+  .badge .badge-sub{
+    font-family:'JetBrains Mono',monospace;
+    font-size:10.5px;color:var(--ink);
+  }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- ========== Sidebar ========== -->
+  <aside class="game-sidebar">
+    <div class="brand">
+      <div class="mod">MODULE M37</div>
+      <div class="title" data-cn="误差归类侦探" data-en="Error Triage Detective">误差归类侦探</div>
+      <div class="sub mono" data-cn="12 现象 · 4 大类 · 拖拽归类" data-en="12 cases · 4 classes · drag to bin">12 现象 · 4 大类 · 拖拽归类</div>
+    </div>
+
+    <div>
+      <div class="section-label" data-cn="4 大类" data-en="FOUR BINS">4 大类</div>
+      <div class="cat-legend">
+        <div class="cat-row">
+          <div class="swatch sw-instrument"></div>
+          <div>
+            <div class="ttl" data-cn="仪器" data-en="Instrument">仪器</div>
+            <div class="desc" data-cn="传感器老化 / 个体差异 / 硬件故障" data-en="aging / unit variance / hardware fault">传感器老化 / 个体差异 / 硬件故障</div>
+          </div>
+        </div>
+        <div class="cat-row">
+          <div class="swatch sw-environment"></div>
+          <div>
+            <div class="ttl" data-cn="环境" data-en="Environment">环境</div>
+            <div class="desc" data-cn="温湿度 / 近源污染干扰" data-en="temp/humidity / nearby source">温湿度 / 近源污染干扰</div>
+          </div>
+        </div>
+        <div class="cat-row">
+          <div class="swatch sw-algorithm"></div>
+          <div>
+            <div class="ttl" data-cn="算法" data-en="Algorithm">算法</div>
+            <div class="desc" data-cn="校准曲线 / 公式版本 / 聚合窗口" data-en="calib curve / formula / window">校准曲线 / 公式版本 / 聚合窗口</div>
+          </div>
+        </div>
+        <div class="cat-row">
+          <div class="swatch sw-spatiotemporal"></div>
+          <div>
+            <div class="ttl" data-cn="时空" data-en="Spatio-temporal">时空</div>
+            <div class="desc" data-cn="高度 / 微环境 / 时区错位" data-en="height / micro-env / timezone">高度 / 微环境 / 时区错位</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="section-label" data-cn="进度" data-en="PROGRESS">进度</div>
+      <div class="progress-card">
+        <div class="progress-row">
+          <span><span class="num" id="progNum">0</span><span class="denom"> / 12</span></span>
+          <span class="mono" id="progPct">0%</span>
+        </div>
+        <div class="progress-bar"><div class="progress-fill" id="progFill"></div></div>
+        <div class="progress-stats">
+          <span class="left" data-cn="正确" data-en="OK">正确</span>
+          <span class="right ok mono" id="okCount">0</span>
+        </div>
+        <div class="progress-stats">
+          <span class="left" data-cn="错次" data-en="MISS">错次</span>
+          <span class="right warn mono" id="missCount">0</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="slider-wrap">
+      <div class="slider-label">
+        <span data-cn="显示线索数" data-en="Clues shown">显示线索数</span>
+        <span class="val mono"><span id="clueVal">3</span></span>
+      </div>
+      <input type="range" id="clueSlider" min="1" max="3" value="3" step="1">
+    </div>
+
+    <div class="sidebar-bottom">
+      <button class="reset-btn" id="resetBtn" data-cn="重新归类" data-en="Reset triage">重新归类</button>
+      <button class="lang-btn" id="langBtn">EN / 中</button>
+    </div>
+  </aside>
+
+  <!-- ========== Main ========== -->
+  <main class="game-main">
+    <div class="main-header">
+      <div>
+        <div class="main-title" data-cn="误差归类侦探 · 把 12 个误差现象归到 4 大类" data-en="Error Triage · sort 12 cases into 4 bins">误差归类侦探 · 把 12 个误差现象归到 4 大类</div>
+        <div class="main-sub mono" data-cn="读线索 (频率/表现/修复成本) → 拖到对应类别 → 全归对解锁徽章" data-en="Read clues (freq/symptom/fix-cost) → drag to bin → solve all to unlock badge">
+          读线索 (频率/表现/修复成本) → 拖到对应类别 → 全归对解锁徽章
+        </div>
+      </div>
+      <div class="stage-tag">PATTERN 05 · DETECTIVE</div>
+    </div>
+
+    <div class="stage-grid">
+
+      <!-- 左: 12 现象 -->
+      <div class="panel">
+        <div class="panel-head">
+          <div class="ttl" data-cn="待归类现象" data-en="Unclassified cases">待归类现象</div>
+          <div class="tag mono"><span id="remainCount">12</span> / 12 OPEN</div>
+        </div>
+        <div class="panel-body" id="casesBin">
+          <!-- 12 cases injected by JS -->
+        </div>
+      </div>
+
+      <!-- 右: 4 大类槽 -->
+      <div class="panel">
+        <div class="panel-head">
+          <div class="ttl" data-cn="4 大类归类槽" data-en="4 classification bins">4 大类归类槽</div>
+          <div class="tag mono"><span id="placedTotal">0</span> / 12 PLACED</div>
+        </div>
+        <div class="panel-body" style="padding:0;">
+          <div class="slots-grid">
+            <div class="slot cat-instrument" data-cat="instrument">
+              <div class="slot-head">
+                <div class="swatch sw-instrument"></div>
+                <div class="ttl" data-cn="仪器" data-en="Instrument">仪器</div>
+                <div class="count mono"><span data-count="instrument">0</span> / 3</div>
+              </div>
+              <div class="slot-body" data-slot-body="instrument">
+                <div class="slot-empty" data-cn="拖现象到这里" data-en="Drop case here">拖现象到这里</div>
+              </div>
+            </div>
+
+            <div class="slot cat-environment" data-cat="environment">
+              <div class="slot-head">
+                <div class="swatch sw-environment"></div>
+                <div class="ttl" data-cn="环境" data-en="Environment">环境</div>
+                <div class="count mono"><span data-count="environment">0</span> / 3</div>
+              </div>
+              <div class="slot-body" data-slot-body="environment">
+                <div class="slot-empty" data-cn="拖现象到这里" data-en="Drop case here">拖现象到这里</div>
+              </div>
+            </div>
+
+            <div class="slot cat-algorithm" data-cat="algorithm">
+              <div class="slot-head">
+                <div class="swatch sw-algorithm"></div>
+                <div class="ttl" data-cn="算法" data-en="Algorithm">算法</div>
+                <div class="count mono"><span data-count="algorithm">0</span> / 3</div>
+              </div>
+              <div class="slot-body" data-slot-body="algorithm">
+                <div class="slot-empty" data-cn="拖现象到这里" data-en="Drop case here">拖现象到这里</div>
+              </div>
+            </div>
+
+            <div class="slot cat-spatiotemporal" data-cat="spatiotemporal">
+              <div class="slot-head">
+                <div class="swatch sw-spatiotemporal"></div>
+                <div class="ttl" data-cn="时空" data-en="Spatio-temporal">时空</div>
+                <div class="count mono"><span data-count="spatiotemporal">0</span> / 3</div>
+              </div>
+              <div class="slot-body" data-slot-body="spatiotemporal">
+                <div class="slot-empty" data-cn="拖现象到这里" data-en="Drop case here">拖现象到这里</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer-log" id="footerLog">
+      <div class="log-line"><span class="stamp">[start]</span><span data-cn="拖左侧现象卡到右侧 4 大类槽, 读线索做判断" data-en="Drag cases on the left into the 4 bins on the right; read clues">拖左侧现象卡到右侧 4 大类槽, 读线索做判断</span></div>
+    </div>
+
+    <div class="badge" id="badge">
+      <div class="badge-ttl mono" data-cn="徽章解锁: ERROR ENGINEER" data-en="Badge unlocked: ERROR ENGINEER">徽章解锁: ERROR ENGINEER</div>
+      <div class="badge-sub" data-cn="你已经能把空气数据的误差按来源拆开了" data-en="You can now triage air-quality data errors by source">你已经能把空气数据的误差按来源拆开了</div>
+    </div>
+  </main>
+</div>
+
+<script>
+(function(){
+  'use strict';
+
+  // ===== 12 现象数据 =====
+  // 每条带 desc (现象描述) + 3 个线索 (freq 出现频率 / symp 表现 / cost 修复成本) + cat 正确归类
+  var CASES = [
+    // 仪器 (instrument)
+    {id:1, cat:'instrument',
+      desc_cn:'PMS5003 用了 3 年, 读数比新装时整体偏高 8%',
+      desc_en:'PMS5003 in service 3 yrs, reads ~8% higher than when new',
+      freq_cn:'缓慢漂移', freq_en:'slow drift',
+      symp_cn:'整体抬升', symp_en:'global shift up',
+      cost_cn:'换传感器', cost_en:'swap sensor'},
+    {id:2, cat:'instrument',
+      desc_cn:'两台 PMS5003 装同一窗台, 读数差 15 μg/m³',
+      desc_en:'Two PMS5003 on the same windowsill differ by 15 μg/m³',
+      freq_cn:'常驻', freq_en:'persistent',
+      symp_cn:'同地两值', symp_en:'two readings, same spot',
+      cost_cn:'交叉校准', cost_en:'cross-calibrate'},
+    {id:3, cat:'instrument',
+      desc_cn:'风扇堵了不抽风, 读数忽高忽低无规律',
+      desc_en:'Fan jammed, readings spike up and down at random',
+      freq_cn:'突发', freq_en:'sudden',
+      symp_cn:'剧烈抖动', symp_en:'erratic swings',
+      cost_cn:'清理风扇', cost_en:'clean fan'},
+
+    // 环境 (environment)
+    {id:4, cat:'environment',
+      desc_cn:'雨天后湿度 95%, 读数突然飙到 200 μg/m³',
+      desc_en:'After rain, humidity 95%, readings jump to 200 μg/m³',
+      freq_cn:'随天气', freq_en:'with weather',
+      symp_cn:'湿度同步峰', symp_en:'peak tracks humidity',
+      cost_cn:'湿度校正', cost_en:'humidity correction'},
+    {id:5, cat:'environment',
+      desc_cn:'阳台午后 50 ℃, 读数反而比凉爽时低',
+      desc_en:'Balcony hits 50 °C at noon, readings drop below cool periods',
+      freq_cn:'日周期', freq_en:'daily cycle',
+      symp_cn:'温度同步反相', symp_en:'inverse to temp',
+      cost_cn:'遮阳通风', cost_en:'shade and vent'},
+    {id:6, cat:'environment',
+      desc_cn:'楼下烧烤摊一开, PM2.5 从 30 飙到 500',
+      desc_en:'Downstairs BBQ stand opens, PM2.5 jumps 30 to 500',
+      freq_cn:'偶发', freq_en:'occasional',
+      symp_cn:'短时强峰', symp_en:'sharp local peak',
+      cost_cn:'换位置', cost_en:'relocate'},
+
+    // 算法 (algorithm)
+    {id:7, cat:'algorithm',
+      desc_cn:'用 PMS CF=1 模式直接出值, 比国标偏高 30%',
+      desc_en:'PMS CF=1 raw output reads 30% above the national standard',
+      freq_cn:'常驻', freq_en:'persistent',
+      symp_cn:'比例偏置', symp_en:'proportional bias',
+      cost_cn:'改用 atm 模式', cost_en:'switch to atm mode'},
+    {id:8, cat:'algorithm',
+      desc_cn:'用了美国 AQI 公式给中国 PM2.5 算 AQI, 等级偏移',
+      desc_en:'US AQI formula used on China PM2.5, AQI level shifted',
+      freq_cn:'常驻', freq_en:'persistent',
+      symp_cn:'分级错档', symp_en:'level offset',
+      cost_cn:'换 HJ 633 公式', cost_en:'use HJ 633 formula'},
+    {id:9, cat:'algorithm',
+      desc_cn:'5 分钟均值忽高忽低, 1 小时均值差 2 倍',
+      desc_en:'5-min mean swings wildly, 1-hr mean differs by 2x',
+      freq_cn:'与窗口相关', freq_en:'window-dependent',
+      symp_cn:'尺度敏感', symp_en:'scale-sensitive',
+      cost_cn:'改聚合窗口', cost_en:'change avg window'},
+
+    // 时空 (spatiotemporal)
+    {id:10, cat:'spatiotemporal',
+      desc_cn:'装 2 楼阳台 (3 m), 比官方 10 m 监测站读数高',
+      desc_en:'Mounted at 3 m, reads higher than the official 10 m station',
+      freq_cn:'常驻', freq_en:'persistent',
+      symp_cn:'高度偏差', symp_en:'height bias',
+      cost_cn:'标注采样高度', cost_en:'log sample height'},
+    {id:11, cat:'spatiotemporal',
+      desc_cn:'距马路 5 m, 早高峰比小区里高 3 倍',
+      desc_en:'5 m from road, morning rush reads 3x inside compound',
+      freq_cn:'通勤时段', freq_en:'commute hours',
+      symp_cn:'位置依赖', symp_en:'site-dependent',
+      cost_cn:'选代表性位置', cost_en:'pick rep. site'},
+    {id:12, cat:'spatiotemporal',
+      desc_cn:'数据时间戳 UTC, 本地是 UTC+8, 早晚峰对不上',
+      desc_en:'Timestamp in UTC, local is UTC+8, peaks misaligned',
+      freq_cn:'常驻', freq_en:'persistent',
+      symp_cn:'8 小时错位', symp_en:'8-hr shift',
+      cost_cn:'转本地时区', cost_en:'convert to local tz'}
+  ];
+
+  var CAT_NAMES = {
+    instrument:     {cn:'仪器',   en:'Instrument'},
+    environment:    {cn:'环境',   en:'Environment'},
+    algorithm:      {cn:'算法',   en:'Algorithm'},
+    spatiotemporal: {cn:'时空',   en:'Spatio-temporal'}
+  };
+
+  // ===== state (避开 window 同名顶层 var) =====
+  var gameState = {
+    placed: {},          // case id -> cat
+    okCount: 0,
+    missCount: 0,
+    lang: 'cn',
+    cluesShown: 3        // 1-3
+  };
+
+  // ===== i18n apply =====
+  function applyLang(){
+    var nodes = document.querySelectorAll('[data-cn]');
+    for (var i=0;i<nodes.length;i++){
+      var n = nodes[i];
+      var txt = gameState.lang === 'cn' ? n.getAttribute('data-cn') : n.getAttribute('data-en');
+      if (txt !== null) n.textContent = txt;
+    }
+    var langBtn = document.getElementById('langBtn');
+    langBtn.textContent = gameState.lang === 'cn' ? 'EN / 中' : '中 / EN';
+    renderCases();
+    renderSlots();
+  }
+
+  // ===== Render: 现象列表 =====
+  function renderCases(){
+    var bin = document.getElementById('casesBin');
+    bin.innerHTML = '';
+    var remaining = 0;
+    for (var i=0;i<CASES.length;i++){
+      var c = CASES[i];
+      if (gameState.placed[c.id]) continue;
+      remaining++;
+      var card = document.createElement('div');
+      card.className = 'case';
+      card.setAttribute('draggable', 'true');
+      card.setAttribute('data-case-id', String(c.id));
+
+      var idBox = document.createElement('div');
+      idBox.className = 'case-id';
+      var num = document.createElement('div');
+      num.className = 'num mono';
+      num.textContent = (c.id < 10 ? '0' : '') + c.id;
+      idBox.appendChild(num);
+      var tag = document.createElement('div');
+      tag.className = 'mono';
+      tag.textContent = 'CASE';
+      idBox.appendChild(tag);
+      card.appendChild(idBox);
+
+      var meta = document.createElement('div');
+      meta.className = 'case-meta';
+      var d = document.createElement('div');
+      d.className = 'case-desc';
+      d.textContent = gameState.lang === 'cn' ? c.desc_cn : c.desc_en;
+      meta.appendChild(d);
+
+      var clues = document.createElement('div');
+      clues.className = 'case-clues';
+      var clueList = [
+        {kind:'freq', k_cn:'频率', k_en:'freq', v_cn:c.freq_cn, v_en:c.freq_en},
+        {kind:'symp', k_cn:'表现', k_en:'symptom', v_cn:c.symp_cn, v_en:c.symp_en},
+        {kind:'cost', k_cn:'修复', k_en:'fix',     v_cn:c.cost_cn, v_en:c.cost_en}
+      ];
+      var nShow = Math.min(gameState.cluesShown, clueList.length);
+      for (var j=0;j<nShow;j++){
+        var cl = clueList[j];
+        var sp = document.createElement('span');
+        sp.className = 'clue ' + cl.kind;
+        var k = document.createElement('span');
+        k.className = 'k';
+        k.textContent = (gameState.lang === 'cn' ? cl.k_cn : cl.k_en) + ':';
+        var v = document.createElement('span');
+        v.textContent = gameState.lang === 'cn' ? cl.v_cn : cl.v_en;
+        sp.appendChild(k);
+        sp.appendChild(v);
+        clues.appendChild(sp);
+      }
+      meta.appendChild(clues);
+      card.appendChild(meta);
+
+      bin.appendChild(card);
+    }
+
+    document.getElementById('remainCount').textContent = String(remaining);
+    bindCaseDrag();
+  }
+
+  // ===== Render: 4 槽 =====
+  function renderSlots(){
+    var cats = ['instrument','environment','algorithm','spatiotemporal'];
+    var totalPlaced = 0;
+    for (var i=0;i<cats.length;i++){
+      var cat = cats[i];
+      var body = document.querySelector('[data-slot-body="'+cat+'"]');
+      body.innerHTML = '';
+      var n = 0;
+      for (var cid in gameState.placed){
+        if (gameState.placed[cid] === cat){
+          n++; totalPlaced++;
+          var c = caseById(parseInt(cid, 10));
+          if (!c) continue;
+          var pl = document.createElement('div');
+          pl.className = 'placed';
+          var pn = document.createElement('span');
+          pn.className = 'pn';
+          pn.textContent = (c.id < 10 ? '0' : '') + c.id;
+          var pd = document.createElement('span');
+          pd.className = 'pd';
+          pd.textContent = gameState.lang === 'cn' ? c.desc_cn : c.desc_en;
+          pl.appendChild(pn);
+          pl.appendChild(pd);
+          body.appendChild(pl);
+        }
+      }
+      if (n === 0){
+        var empty = document.createElement('div');
+        empty.className = 'slot-empty';
+        empty.textContent = gameState.lang === 'cn' ? '拖现象到这里' : 'Drop case here';
+        body.appendChild(empty);
+      }
+      // count badge
+      var cnt = document.querySelector('[data-count="'+cat+'"]');
+      cnt.textContent = String(n);
+      var head = cnt.parentNode;
+      if (n >= 3) head.classList.add('full');
+      else head.classList.remove('full');
+    }
+    document.getElementById('placedTotal').textContent = String(totalPlaced);
+
+    // progress
+    var num = Object.keys(gameState.placed).length;
+    document.getElementById('progNum').textContent = String(gameState.okCount);
+    document.getElementById('progPct').textContent = Math.round(gameState.okCount/12*100) + '%';
+    document.getElementById('progFill').style.width = (gameState.okCount/12*100) + '%';
+    document.getElementById('okCount').textContent = String(gameState.okCount);
+    document.getElementById('missCount').textContent = String(gameState.missCount);
+
+    // unlock badge
+    if (gameState.okCount >= 12){
+      document.getElementById('badge').classList.add('show');
+    } else {
+      document.getElementById('badge').classList.remove('show');
+    }
+  }
+
+  function caseById(id){
+    for (var i=0;i<CASES.length;i++){
+      if (CASES[i].id === id) return CASES[i];
+    }
+    return null;
+  }
+
+  // ===== Drag =====
+  function bindCaseDrag(){
+    var cards = document.querySelectorAll('.case');
+    for (var i=0;i<cards.length;i++){
+      cards[i].addEventListener('dragstart', function(ev){
+        var id = this.getAttribute('data-case-id');
+        ev.dataTransfer.setData('text/plain', id);
+        ev.dataTransfer.effectAllowed = 'move';
+      });
+    }
+  }
+
+  function bindSlotDrop(){
+    var slots = document.querySelectorAll('.slot');
+    for (var i=0;i<slots.length;i++){
+      var s = slots[i];
+      s.addEventListener('dragover', function(ev){
+        ev.preventDefault();
+        ev.dataTransfer.dropEffect = 'move';
+        this.classList.add('over');
+      });
+      s.addEventListener('dragleave', function(){
+        this.classList.remove('over');
+      });
+      s.addEventListener('drop', function(ev){
+        ev.preventDefault();
+        this.classList.remove('over');
+        var id = parseInt(ev.dataTransfer.getData('text/plain'), 10);
+        var cat = this.getAttribute('data-cat');
+        if (!id || !cat) return;
+        tryClassify(id, cat);
+      });
+    }
+  }
+
+  function tryClassify(id, cat){
+    if (gameState.placed[id]) return;
+    var c = caseById(id);
+    if (!c) return;
+    if (c.cat === cat){
+      // 正确
+      gameState.placed[id] = cat;
+      gameState.okCount++;
+      var catLabel = CAT_NAMES[cat][gameState.lang];
+      log((gameState.lang === 'cn'
+        ? 'OK · CASE ' + pad2(id) + ' 归到 ' + catLabel
+        : 'OK · CASE ' + pad2(id) + ' to ' + catLabel), 'ok');
+      renderCases();
+      renderSlots();
+    } else {
+      // 错误: 短闪 wrong, 不写入
+      gameState.missCount++;
+      var card = document.querySelector('[data-case-id="'+id+'"]');
+      if (card){
+        card.classList.add('wrong');
+        window.setTimeout(function(){ card.classList.remove('wrong'); }, 500);
+      }
+      var rightLabel = CAT_NAMES[c.cat][gameState.lang];
+      var wrongLabel = CAT_NAMES[cat][gameState.lang];
+      log((gameState.lang === 'cn'
+        ? 'MISS · CASE ' + pad2(id) + ' 不属于 ' + wrongLabel + ' (再读一遍线索)'
+        : 'MISS · CASE ' + pad2(id) + ' is not in ' + wrongLabel + ' (re-read clues)'), 'err');
+      renderSlots();
+    }
+  }
+
+  function pad2(n){return (n<10?'0':'') + n;}
+
+  // ===== Log =====
+  function log(text, kind){
+    var box = document.getElementById('footerLog');
+    var ln = document.createElement('div');
+    ln.className = 'log-line ' + (kind || '');
+    var stamp = document.createElement('span');
+    stamp.className = 'stamp';
+    var d = new Date();
+    var hh = ('0'+d.getHours()).slice(-2);
+    var mm = ('0'+d.getMinutes()).slice(-2);
+    var ss = ('0'+d.getSeconds()).slice(-2);
+    stamp.textContent = '[' + hh+':'+mm+':'+ss + ']';
+    ln.appendChild(stamp);
+    var span = document.createElement('span');
+    span.textContent = text;
+    ln.appendChild(span);
+    box.appendChild(ln);
+    box.scrollTop = box.scrollHeight;
+  }
+
+  // ===== Reset =====
+  function resetAll(){
+    gameState.placed = {};
+    gameState.okCount = 0;
+    gameState.missCount = 0;
+    document.getElementById('footerLog').innerHTML = '';
+    log(gameState.lang === 'cn' ? '归类台已重置, 重新开始' : 'Triage reset, start over', 'info');
+    renderCases();
+    renderSlots();
+  }
+
+  // ===== Wire up =====
+  bindSlotDrop();
+  document.getElementById('resetBtn').addEventListener('click', resetAll);
+  document.getElementById('langBtn').addEventListener('click', function(){
+    gameState.lang = gameState.lang === 'cn' ? 'en' : 'cn';
+    applyLang();
+  });
+
+  var clueSlider = document.getElementById('clueSlider');
+  var clueVal = document.getElementById('clueVal');
+  clueSlider.addEventListener('input', function(){
+    gameState.cluesShown = parseInt(clueSlider.value, 10);
+    clueVal.textContent = String(gameState.cluesShown);
+    renderCases();
+  });
+
+  // init
+  renderCases();
+  renderSlots();
+})();
+</script>
+</body>
+</html>

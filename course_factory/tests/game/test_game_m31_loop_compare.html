@@ -1,0 +1,1377 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<title>M31 — 你 vs EPA 闭环对比 · Detective</title>
+<style>
+  /* ---------- Industrial Atelier palette (C 类 + climate accent) ---------- */
+  :root {
+    --paper:    #FAF9F5;
+    --paper-2:  #F1EDDF;
+    --card:     #FFFFFF;
+    --ink:      #191814;
+    --ink-2:    #2B2924;
+    --sub:      #6B6557;
+    --sub-2:    #9D978A;
+    --border:   #EBE5D6;
+    --border-2: #D9D1BD;
+    --hairline: #F2EDE0;
+
+    --primary:      #D97757;
+    --primary-ink:  #9A4A2E;
+    --primary-soft: #F8EDE5;
+    --primary-line: #ECCFB8;
+
+    --climate:      #527B95;
+    --climate-soft: #DEE5EC;
+    --climate-line: #B8C8D5;
+
+    --good:    #2F7D5B;
+    --good-bg: #DCEBE0;
+    --warn:    #B07530;
+    --warn-bg: #F2E2C9;
+    --bad:     #A04030;
+    --bad-bg:  #F0D6CC;
+    --gold:    #B98A2A;
+    --gold-bg: #F1E4BD;
+
+    --shadow-sm: 0 1px 2px 0 rgba(25,24,20,.04);
+    --shadow:    0 1px 3px 0 rgba(25,24,20,.06), 0 1px 2px -1px rgba(25,24,20,.04);
+    --shadow-md: 0 4px 8px -2px rgba(25,24,20,.06), 0 2px 4px -2px rgba(25,24,20,.04);
+    --shadow-lg: 0 12px 24px -6px rgba(25,24,20,.10), 0 4px 8px -4px rgba(25,24,20,.05);
+
+    --font-cn: "PingFang SC", "Noto Sans SC", "Inter", system-ui, sans-serif;
+    --font-mono: "JetBrains Mono", "SF Mono", "Menlo", "Consolas", monospace;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; height: 100%; }
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--font-cn);
+    overflow: hidden;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ---------- root layout ---------- */
+  .stage {
+    display: flex;
+    height: 100vh;
+    width: 100vw;
+  }
+
+  /* ---------- sidebar (200px) ---------- */
+  .game-sidebar {
+    width: 200px;
+    min-width: 200px;
+    background: var(--paper-2);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    padding: 18px 14px 14px;
+    gap: 12px;
+    overflow-y: auto;
+  }
+  .brand {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 10px;
+  }
+  .brand-tag {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    color: var(--primary-ink);
+    text-transform: uppercase;
+  }
+  .brand-name {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--ink);
+    line-height: 1.25;
+  }
+  .brand-sub {
+    font-size: 11px;
+    color: var(--sub);
+    line-height: 1.45;
+  }
+
+  .scene-nav {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .scene-nav-label {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 0.16em;
+    color: var(--sub);
+    text-transform: uppercase;
+    margin-bottom: 2px;
+  }
+  .scene-item {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 8px 9px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    cursor: pointer;
+    transition: border-color .15s, background .15s, transform .12s;
+  }
+  .scene-item:hover {
+    border-color: var(--climate-line);
+    background: var(--climate-soft);
+  }
+  .scene-item.active {
+    border-color: var(--primary);
+    background: var(--primary-soft);
+    box-shadow: var(--shadow-sm);
+  }
+  .scene-item.done {
+    border-left: 3px solid var(--good);
+  }
+  .scene-item .si-idx {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    color: var(--sub);
+  }
+  .scene-item.active .si-idx { color: var(--primary-ink); }
+  .scene-item .si-time {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--ink);
+    letter-spacing: 0.04em;
+  }
+  .scene-item .si-tag {
+    font-size: 10.5px;
+    color: var(--sub);
+    line-height: 1.3;
+  }
+  .scene-item.done .si-tag {
+    color: var(--good);
+  }
+
+  .progress-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 11px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .progress-card .pc-label {
+    font-family: var(--font-mono);
+    font-size: 9.5px;
+    letter-spacing: 0.16em;
+    color: var(--sub);
+    text-transform: uppercase;
+  }
+  .progress-card .pc-value {
+    font-family: var(--font-mono);
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--primary-ink);
+    letter-spacing: 0.04em;
+  }
+  .progress-card .pc-bar {
+    height: 6px;
+    background: var(--paper-2);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    overflow: hidden;
+    margin-top: 4px;
+  }
+  .progress-card .pc-bar-fill {
+    height: 100%;
+    background: var(--primary);
+    transition: width .25s ease;
+  }
+
+  .formula-mini {
+    background: var(--climate-soft);
+    border: 1px solid var(--climate-line);
+    border-radius: 8px;
+    padding: 9px 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+  .formula-mini-label {
+    font-family: var(--font-mono);
+    font-size: 9.5px;
+    letter-spacing: 0.16em;
+    color: var(--climate);
+    text-transform: uppercase;
+  }
+  .formula-mini-eq {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    line-height: 1.45;
+    color: var(--ink-2);
+    word-break: break-word;
+  }
+
+  .lang-btn {
+    margin-top: auto;
+    align-self: stretch;
+    background: var(--card);
+    border: 1px solid var(--border-2);
+    border-radius: 6px;
+    color: var(--ink-2);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 0.18em;
+    padding: 9px 0;
+    cursor: pointer;
+    transition: background .15s, border-color .15s;
+  }
+  .lang-btn:hover {
+    background: var(--primary-soft);
+    border-color: var(--primary-line);
+    color: var(--primary-ink);
+  }
+
+  /* ---------- main ---------- */
+  .game-main {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    padding: 20px 24px 18px;
+    gap: 14px;
+    overflow: hidden;
+  }
+
+  .top-row {
+    display: flex;
+    gap: 14px;
+    align-items: stretch;
+  }
+  .scene-header {
+    flex: 1;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 18px;
+    box-shadow: var(--shadow-sm);
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+  }
+  .scene-header .sh-tag {
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    letter-spacing: 0.18em;
+    color: var(--sub);
+    text-transform: uppercase;
+  }
+  .scene-header .sh-title {
+    font-size: 17px;
+    font-weight: 600;
+    color: var(--ink);
+    line-height: 1.3;
+  }
+  .scene-header .sh-desc {
+    font-size: 12.5px;
+    color: var(--sub);
+    line-height: 1.5;
+  }
+
+  .badge-card {
+    flex: 0 0 auto;
+    background: var(--gold-bg);
+    border: 1px solid var(--gold);
+    border-radius: 10px;
+    padding: 10px 14px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    min-width: 110px;
+  }
+  .badge-card .bc-label {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 0.16em;
+    color: var(--gold);
+    text-transform: uppercase;
+  }
+  .badge-card .bc-icon {
+    width: 26px;
+    height: 26px;
+    margin: 2px 0;
+  }
+  .badge-card .bc-text {
+    font-size: 11.5px;
+    font-weight: 600;
+    color: var(--ink-2);
+  }
+  .badge-card.locked {
+    background: var(--paper-2);
+    border-color: var(--border-2);
+  }
+  .badge-card.locked .bc-label { color: var(--sub); }
+  .badge-card.locked .bc-text  { color: var(--sub); }
+  .badge-card.locked .bc-icon path { stroke: var(--sub-2); fill: none; }
+
+  /* ---------- data + calc grid ---------- */
+  .work-grid {
+    display: grid;
+    grid-template-columns: 320px 1fr;
+    gap: 14px;
+    flex: 1;
+    min-height: 0;
+  }
+
+  .data-panel {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 16px;
+    box-shadow: var(--shadow-sm);
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    min-height: 0;
+  }
+  .panel-label {
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    letter-spacing: 0.18em;
+    color: var(--primary-ink);
+    text-transform: uppercase;
+  }
+  .data-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    padding: 6px 0;
+    border-bottom: 1px dashed var(--hairline);
+  }
+  .data-row:last-of-type { border-bottom: none; }
+  .data-row .dr-k {
+    font-size: 12.5px;
+    color: var(--sub);
+  }
+  .data-row .dr-v {
+    font-family: var(--font-mono);
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--ink);
+    letter-spacing: 0.03em;
+  }
+  .data-row .dr-v .dr-u {
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--sub);
+    margin-left: 3px;
+  }
+
+  .epa-box {
+    background: var(--climate-soft);
+    border: 1px solid var(--climate-line);
+    border-radius: 8px;
+    padding: 10px 12px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .epa-box .eb-l {
+    font-size: 12px;
+    color: var(--climate);
+    line-height: 1.35;
+  }
+  .epa-box .eb-l b {
+    color: var(--ink-2);
+    font-weight: 600;
+  }
+  .epa-box .eb-v {
+    font-family: var(--font-mono);
+    font-size: 19px;
+    font-weight: 700;
+    color: var(--climate);
+    letter-spacing: 0.02em;
+  }
+
+  /* ---------- calc panel ---------- */
+  .calc-panel {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 18px 12px;
+    box-shadow: var(--shadow-sm);
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    min-height: 0;
+    overflow: hidden;
+  }
+  .calc-formula {
+    background: var(--paper-2);
+    border: 1px dashed var(--border-2);
+    border-radius: 8px;
+    padding: 14px 12px;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    font-family: var(--font-mono);
+    font-size: 14px;
+    color: var(--ink-2);
+    justify-content: center;
+  }
+  .calc-formula .cf-pm {
+    font-weight: 700;
+    color: var(--primary-ink);
+    font-size: 15px;
+  }
+  .calc-formula .cf-op {
+    color: var(--sub);
+    font-size: 14px;
+  }
+  .calc-slot {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 110px;
+    height: 38px;
+    padding: 0 12px;
+    background: var(--card);
+    border: 2px dashed var(--border-2);
+    border-radius: 7px;
+    font-family: var(--font-mono);
+    font-size: 12.5px;
+    color: var(--sub-2);
+    transition: background .15s, border-color .15s, color .15s;
+  }
+  .calc-slot.drop-hint {
+    border-color: var(--primary);
+    background: var(--primary-soft);
+    color: var(--primary-ink);
+  }
+  .calc-slot.filled {
+    border-style: solid;
+    border-color: var(--climate-line);
+    background: var(--climate-soft);
+    color: var(--ink);
+    cursor: grab;
+  }
+  .calc-slot.filled-correct {
+    border-color: var(--good);
+    background: var(--good-bg);
+    color: var(--ink-2);
+  }
+  .calc-slot.filled-wrong {
+    border-color: var(--bad);
+    background: var(--bad-bg);
+    color: var(--ink-2);
+  }
+
+  .calc-result-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    padding: 8px 0 2px;
+  }
+  .calc-result-row .cr-eq {
+    font-family: var(--font-mono);
+    font-size: 14px;
+    color: var(--sub);
+  }
+  .calc-result-row .cr-val {
+    font-family: var(--font-mono);
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--primary-ink);
+    letter-spacing: 0.02em;
+    min-width: 70px;
+    text-align: right;
+  }
+  .calc-result-row .cr-u {
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    color: var(--sub);
+  }
+  .calc-result-row.dim .cr-val {
+    color: var(--sub-2);
+  }
+
+  .blocks-tray {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .blocks-tray-label {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 0.16em;
+    color: var(--sub);
+    text-transform: uppercase;
+  }
+  .blocks-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .calc-block {
+    user-select: none;
+    cursor: grab;
+    background: var(--card);
+    border: 1px solid var(--border-2);
+    border-radius: 7px;
+    padding: 8px 12px;
+    font-family: var(--font-mono);
+    font-size: 12.5px;
+    color: var(--ink-2);
+    box-shadow: var(--shadow-sm);
+    transition: transform .12s, box-shadow .12s, opacity .15s;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .calc-block:hover {
+    transform: translateY(-1px);
+    box-shadow: var(--shadow);
+    border-color: var(--primary-line);
+  }
+  .calc-block.dragging {
+    opacity: 0.4;
+    cursor: grabbing;
+  }
+  .calc-block.used {
+    opacity: 0.25;
+    pointer-events: none;
+    text-decoration: line-through;
+  }
+  .calc-block .cb-mark {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--sub);
+    letter-spacing: 0.1em;
+  }
+
+  /* ---------- gap estimator ---------- */
+  .estimator {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px 18px 14px;
+    box-shadow: var(--shadow-sm);
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .est-row {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+  .est-q {
+    flex: 0 0 auto;
+    font-size: 13px;
+    color: var(--ink-2);
+    line-height: 1.4;
+  }
+  .est-q b {
+    color: var(--primary-ink);
+    font-weight: 600;
+  }
+  .slider-wrap {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+  }
+  .slider-ticks {
+    display: flex;
+    justify-content: space-between;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--sub-2);
+    letter-spacing: 0.04em;
+  }
+  input[type=range].gap-slider {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    height: 6px;
+    border-radius: 3px;
+    background: linear-gradient(to right,
+      var(--good-bg) 0%,
+      var(--good-bg) 25%,
+      var(--warn-bg) 25%,
+      var(--warn-bg) 60%,
+      var(--bad-bg) 60%,
+      var(--bad-bg) 100%);
+    border: 1px solid var(--border-2);
+    cursor: pointer;
+  }
+  input[type=range].gap-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: var(--primary);
+    border: 2px solid var(--card);
+    box-shadow: var(--shadow);
+    cursor: grab;
+  }
+  input[type=range].gap-slider::-moz-range-thumb {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: var(--primary);
+    border: 2px solid var(--card);
+    box-shadow: var(--shadow);
+    cursor: grab;
+  }
+  .gap-readout {
+    flex: 0 0 92px;
+    text-align: right;
+    font-family: var(--font-mono);
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--primary-ink);
+  }
+  .gap-readout .gr-u {
+    font-size: 10.5px;
+    color: var(--sub);
+    font-weight: 500;
+    margin-left: 2px;
+  }
+
+  .action-row {
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+    align-items: center;
+  }
+  .feedback-pill {
+    flex: 1;
+    font-size: 12.5px;
+    color: var(--sub);
+    line-height: 1.45;
+    padding: 6px 0;
+  }
+  .feedback-pill.ok {
+    color: var(--good);
+    font-weight: 600;
+  }
+  .feedback-pill.bad {
+    color: var(--bad);
+    font-weight: 600;
+  }
+  .btn {
+    background: var(--card);
+    color: var(--ink-2);
+    border: 1px solid var(--border-2);
+    border-radius: 6px;
+    padding: 9px 16px;
+    font-family: var(--font-cn);
+    font-size: 12.5px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background .15s, border-color .15s, color .15s;
+  }
+  .btn:hover {
+    background: var(--paper-2);
+    border-color: var(--primary-line);
+  }
+  .btn-primary {
+    background: var(--primary);
+    color: #FFFFFF;
+    border-color: var(--primary);
+  }
+  .btn-primary:hover {
+    background: var(--primary-ink);
+    border-color: var(--primary-ink);
+  }
+  .btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+
+  /* ---------- overlay ---------- */
+  .overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(25, 24, 20, 0.42);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 50;
+  }
+  .overlay.on { display: flex; }
+  .overlay-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 28px 36px 24px;
+    box-shadow: var(--shadow-lg);
+    max-width: 460px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+  }
+  .overlay-card h2 {
+    font-size: 19px;
+    font-weight: 700;
+    color: var(--ink);
+    margin: 0;
+    text-align: center;
+  }
+  .overlay-card p {
+    font-size: 13px;
+    color: var(--sub);
+    line-height: 1.6;
+    text-align: center;
+    margin: 0;
+  }
+  .seal {
+    width: 96px;
+    height: 96px;
+    border-radius: 50%;
+    background: var(--gold-bg);
+    border: 3px solid var(--gold);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    animation: sealPulse 2.4s ease-in-out infinite;
+  }
+  @keyframes sealPulse {
+    0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(185, 138, 42, 0.35); }
+    50%      { transform: scale(1.04); box-shadow: 0 0 0 14px rgba(185, 138, 42, 0); }
+  }
+  .seal svg {
+    width: 56px;
+    height: 56px;
+  }
+</style>
+</head>
+<body>
+<div class="stage">
+
+  <!-- ===== Sidebar (200px) ===== -->
+  <aside class="game-sidebar">
+    <div class="brand">
+      <div class="brand-tag">M31 · LOOP</div>
+      <div class="brand-name" data-cn="你 vs EPA 闭环对比" data-en="You vs EPA Loop">你 vs EPA 闭环对比</div>
+      <div class="brand-sub" data-cn="把 PMS 原始值校正成 EPA 口径，比比谁更准。"
+                            data-en="Correct PMS raw → match EPA quality.">把 PMS 原始值校正成 EPA 口径，比比谁更准。</div>
+    </div>
+
+    <div class="scene-nav">
+      <div class="scene-nav-label" data-cn="5 个时间点" data-en="5 SNAPSHOTS">5 个时间点</div>
+      <!-- scenes injected by JS -->
+      <div id="sceneList"></div>
+    </div>
+
+    <div class="progress-card">
+      <div class="pc-label" data-cn="闭环进度" data-en="LOOP PROGRESS">闭环进度</div>
+      <div class="pc-value" id="progressTxt">0 / 5</div>
+      <div class="pc-bar"><div class="pc-bar-fill" id="progressBar" style="width: 0%"></div></div>
+    </div>
+
+    <div class="formula-mini">
+      <div class="formula-mini-label">Barkjohn</div>
+      <div class="formula-mini-eq">PM2.5 = 0.524 &middot; PA<br>&minus; 0.0862 &middot; RH + 5.75</div>
+    </div>
+
+    <button type="button" class="lang-btn" id="langBtn">EN</button>
+  </aside>
+
+  <!-- ===== Main ===== -->
+  <main class="game-main">
+
+    <!-- top row: scene header + badge -->
+    <div class="top-row">
+      <div class="scene-header">
+        <div class="sh-tag" id="shTag">SCENE 1 / 5</div>
+        <div class="sh-title" id="shTitle">—</div>
+        <div class="sh-desc"  id="shDesc">—</div>
+      </div>
+      <div class="badge-card locked" id="badgeCard">
+        <span class="bc-label" data-cn="闭环徽章" data-en="LOOP BADGE">闭环徽章</span>
+        <svg class="bc-icon" viewBox="0 0 24 24" fill="none">
+          <path d="M12 3 L19 7 V13 C19 17 16 20 12 21 C8 20 5 17 5 13 V7 Z" stroke="#B98A2A" stroke-width="1.6" stroke-linejoin="round"/>
+          <path d="M9 12 L11.2 14.3 L15.2 10" stroke="#B98A2A" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        <span class="bc-text" id="badgeText" data-cn="待解锁" data-en="Locked">待解锁</span>
+      </div>
+    </div>
+
+    <!-- work grid: data + calc -->
+    <div class="work-grid">
+
+      <!-- data panel -->
+      <div class="data-panel">
+        <div class="panel-label" data-cn="你的节点读数" data-en="YOUR NODE READING">你的节点读数</div>
+
+        <div class="data-row">
+          <span class="dr-k" data-cn="时间" data-en="Time">时间</span>
+          <span class="dr-v" id="vTime">—</span>
+        </div>
+        <div class="data-row">
+          <span class="dr-k" data-cn="PMS 原始 (PA)" data-en="PMS raw (PA)">PMS 原始 (PA)</span>
+          <span class="dr-v" id="vPa">— <span class="dr-u">ug/m3</span></span>
+        </div>
+        <div class="data-row">
+          <span class="dr-k" data-cn="湿度 RH" data-en="Humidity RH">湿度 RH</span>
+          <span class="dr-v" id="vRh">— <span class="dr-u">%</span></span>
+        </div>
+        <div class="data-row">
+          <span class="dr-k" data-cn="场景" data-en="Scene">场景</span>
+          <span class="dr-v" id="vSceneShort" style="font-size:13px;font-weight:600">—</span>
+        </div>
+
+        <div class="epa-box">
+          <span class="eb-l" data-cn="EPA AirNow 报告 <b>PM2.5</b>" data-en="EPA AirNow reports <b>PM2.5</b>">EPA AirNow 报告 <b>PM2.5</b></span>
+          <span class="eb-v" id="vEpa">— ug/m3</span>
+        </div>
+      </div>
+
+      <!-- calc panel -->
+      <div class="calc-panel">
+        <div class="panel-label" data-cn="第 1 步 · 拖块组装 Barkjohn 公式" data-en="STEP 1 · DRAG BLOCKS INTO BARKJOHN">第 1 步 · 拖块组装 Barkjohn 公式</div>
+
+        <div class="calc-formula" id="calcFormula">
+          <span class="cf-pm">PM2.5</span>
+          <span class="cf-op">=</span>
+          <span class="calc-slot" data-slot="A" id="slotA" data-cn="拖 a·PA 到这" data-en="drop a·PA">拖 a·PA 到这</span>
+          <span class="cf-op">&minus;</span>
+          <span class="calc-slot" data-slot="B" id="slotB" data-cn="拖 b·RH 到这" data-en="drop b·RH">拖 b·RH 到这</span>
+          <span class="cf-op">+</span>
+          <span class="calc-slot" data-slot="C" id="slotC" data-cn="拖 +c 到这" data-en="drop +c">拖 +c 到这</span>
+        </div>
+
+        <div class="calc-result-row dim" id="calcResultRow">
+          <span class="cr-eq" data-cn="组装完成 →" data-en="when complete →">组装完成 →</span>
+          <span class="cr-val" id="calcResult">— —</span>
+          <span class="cr-u">ug/m3</span>
+        </div>
+
+        <div class="blocks-tray">
+          <div class="blocks-tray-label" data-cn="4 个候选块 (含 1 个干扰项, 别拖错)" data-en="4 BLOCKS (1 DECOY)">4 个候选块 (含 1 个干扰项, 别拖错)</div>
+          <div class="blocks-row" id="blocksRow">
+            <!-- blocks injected -->
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- gap estimator -->
+    <div class="estimator">
+      <div class="panel-label" data-cn="第 2 步 · 估算 |你 − EPA| 差距" data-en="STEP 2 · ESTIMATE |YOU − EPA| GAP">第 2 步 · 估算 |你 − EPA| 差距</div>
+      <div class="est-row">
+        <div class="est-q" data-cn="你校正后的 PM2.5 跟 EPA 报告 <b>差几 ug/m3</b>?"
+                          data-en="How many <b>ug/m3</b> apart are you and EPA?">你校正后的 PM2.5 跟 EPA 报告 <b>差几 ug/m3</b>?</div>
+        <div class="slider-wrap">
+          <input type="range" id="gapSlider" class="gap-slider" min="0" max="10" step="0.5" value="0">
+          <div class="slider-ticks">
+            <span>0</span><span>2</span><span>4</span><span>6</span><span>8</span><span>10</span>
+          </div>
+        </div>
+        <div class="gap-readout"><span id="gapVal">0.0</span><span class="gr-u">ug/m3</span></div>
+      </div>
+      <div class="action-row">
+        <div class="feedback-pill" id="feedback" data-cn="先拖完 3 个公式块, 再拨滑块估差距" data-en="First fill all 3 slots, then drag the slider">先拖完 3 个公式块, 再拨滑块估差距</div>
+        <button type="button" class="btn" id="resetBtn" data-cn="重置本场景" data-en="Reset scene">重置本场景</button>
+        <button type="button" class="btn btn-primary" id="submitBtn" data-cn="提交答案" data-en="Submit" disabled>提交答案</button>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<!-- ===== Win overlay ===== -->
+<div class="overlay" id="winOverlay">
+  <div class="overlay-card">
+    <div class="seal">
+      <svg viewBox="0 0 24 24" fill="none">
+        <path d="M12 3 L19 7 V13 C19 17 16 20 12 21 C8 20 5 17 5 13 V7 Z" stroke="#B98A2A" stroke-width="1.6" stroke-linejoin="round"/>
+        <path d="M8.5 12 L11 14.4 L15.7 9.6" stroke="#B98A2A" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </div>
+    <h2 id="winTitle" data-cn="闭环成功 · 你和 EPA 对上口径了"
+                     data-en="Loop closed · you and EPA speak the same number">闭环成功 · 你和 EPA 对上口径了</h2>
+    <p id="winBody"
+       data-cn="5 个时间点全部校正 + 差距估对。你的节点现在是 EPA AirNow 的同行了, 这就是 PurpleAir 网络的工作方式。"
+       data-en="5 snapshots, all corrected, all gaps estimated. Your node is now an EPA AirNow peer — this is how the PurpleAir network works.">5 个时间点全部校正 + 差距估对。你的节点现在是 EPA AirNow 的同行了, 这就是 PurpleAir 网络的工作方式。</p>
+    <button type="button" class="btn btn-primary" id="winBtn" data-cn="再来一轮" data-en="Play again">再来一轮</button>
+  </div>
+</div>
+
+<script>
+"use strict";
+
+// ========================================================================
+// SCENES — 5 timestamps, each with real PMS / RH / EPA truth
+// Barkjohn formula:   PM2.5 = 0.524 * PA - 0.0862 * RH + 5.75
+// Each scene's "computed" PM2.5 is computed exactly, EPA reports a real
+// nearby value that differs by 1-5 ug/m3 (the "你 vs EPA" gap).
+// ========================================================================
+const BARKJOHN = { a: 0.524, b: 0.0862, c: 5.75 };
+
+function barkjohn(pa, rh) {
+  return BARKJOHN.a * pa - BARKJOHN.b * rh + BARKJOHN.c;
+}
+
+const SCENES = [
+  {
+    idx: 1,
+    timeCn: "14:00 周二 · 平静午后",
+    timeEn: "14:00 Tue · Calm afternoon",
+    shortCn: "平静午后",
+    shortEn: "Calm",
+    titleCn: "正常时段 · 风平浪静",
+    titleEn: "Normal hour · steady air",
+    descCn: "上班一整天, 街上车少湿度低。PMS 跟 EPA 应该几乎对得上。",
+    descEn: "Workday afternoon, light traffic, dry air. PMS and EPA should nearly match.",
+    pa: 18.4,
+    rh: 38,
+    epa: 14.0,
+    gapPattern: "small"
+  },
+  {
+    idx: 2,
+    timeCn: "06:30 周三 · 雨前湿气",
+    timeEn: "06:30 Wed · Pre-rain humid",
+    shortCn: "雨前湿气",
+    shortEn: "Humid",
+    titleCn: "雨前湿度高 · PMS 容易虚高",
+    titleEn: "Humid pre-rain · PMS over-reports",
+    descCn: "RH 87%, 颗粒物吸水变大变胖, PMS 把雾滴当成 PM2.5。Barkjohn 公式专治这个虚高。",
+    descEn: "RH 87% — particles absorb water, PMS counts droplets. Barkjohn subtracts this bias.",
+    pa: 32.0,
+    rh: 87,
+    epa: 13.5,
+    gapPattern: "small"
+  },
+  {
+    idx: 3,
+    timeCn: "20:00 周四 · 雾霾日",
+    timeEn: "20:00 Thu · Smog day",
+    shortCn: "雾霾日",
+    shortEn: "Smog",
+    titleCn: "雾霾日 · 颗粒物真的多",
+    titleEn: "Smog day · particles really are high",
+    descCn: "城市烧暖气 + 静风, RH 中等。PMS 读数真高, EPA 也确认高浓度。",
+    descEn: "Heating + still air, mid RH. PMS reads high, EPA also confirms high PM.",
+    pa: 120.0,
+    rh: 55,
+    epa: 60.0,
+    gapPattern: "mid"
+  },
+  {
+    idx: 4,
+    timeCn: "10:00 周五 · 大风后",
+    timeEn: "10:00 Fri · Post-wind",
+    shortCn: "大风后",
+    shortEn: "Wind",
+    titleCn: "大风过境后 · 空气干燥洗净",
+    titleEn: "After windstorm · dry & clean",
+    descCn: "夜里刮了 8 级风, RH 28%。PMS 跟 EPA 都应该读到很低的值。",
+    descEn: "Overnight 8-grade wind, RH 28%. Both PMS and EPA should read very low.",
+    pa: 8.0,
+    rh: 28,
+    epa: 7.5,
+    gapPattern: "small"
+  },
+  {
+    idx: 5,
+    timeCn: "22:30 周六 · 烟雾日",
+    timeEn: "22:30 Sat · Smoke night",
+    shortCn: "烟雾日",
+    shortEn: "Smoke",
+    titleCn: "野火烟雾飘过 · PMS 极高",
+    titleEn: "Wildfire smoke · PMS very high",
+    descCn: "远处野火烟雾飘到城市, 颗粒物粒径偏大, PMS 读数飙升。EPA AirNow 用参考仪也确认了。",
+    descEn: "Wildfire smoke drifts in, large particles, PMS spikes. EPA AirNow's reference monitor confirms.",
+    pa: 260.0,
+    rh: 42,
+    epa: 130.0,
+    gapPattern: "big"
+  }
+];
+
+// pre-compute truths
+SCENES.forEach(s => {
+  s.computed = barkjohn(s.pa, s.rh);
+  s.gapTrue  = Math.abs(s.computed - s.epa);
+  // round to 0.5 for slider
+  s.gapTrueRounded = Math.round(s.gapTrue * 2) / 2;
+});
+
+// ========================================================================
+// State
+// ========================================================================
+const state = {
+  lang: "cn",
+  sceneIdx: 0,
+  // per-scene state
+  // results[i] = { calcOk, gapOk, slots:{A,B,C}, gap }
+  results: SCENES.map(() => ({ calcOk: false, gapOk: false, slots: { A: null, B: null, C: null }, gap: 0 })),
+  finished: false
+};
+
+// ========================================================================
+// Calc blocks
+// the 4 candidate blocks (3 correct + 1 decoy)
+// blockKey: A => 0.524·PA, B => 0.0862·RH, C => +5.75, D => decoy (0.862·RH wrong magnitude)
+// ========================================================================
+const BLOCK_DEFS = [
+  { key: "A", labelCn: "0.524 × PA",  labelEn: "0.524 × PA",  fits: "A" },
+  { key: "B", labelCn: "0.0862 × RH", labelEn: "0.0862 × RH", fits: "B" },
+  { key: "C", labelCn: "+ 5.75",      labelEn: "+ 5.75",      fits: "C" },
+  { key: "D", labelCn: "× 0.10 (干扰项)", labelEn: "× 0.10 (decoy)", fits: null }
+];
+
+// ========================================================================
+// i18n helper
+// ========================================================================
+function applyI18N() {
+  document.querySelectorAll("[data-cn]").forEach(el => {
+    const txt = state.lang === "cn" ? el.getAttribute("data-cn") : el.getAttribute("data-en");
+    if (txt != null) el.innerHTML = txt;
+  });
+  document.getElementById("langBtn").textContent = state.lang === "cn" ? "EN" : "中文";
+  renderSceneList();
+  renderScene();
+}
+
+// ========================================================================
+// Render scene list (sidebar)
+// ========================================================================
+function renderSceneList() {
+  const list = document.getElementById("sceneList");
+  list.innerHTML = "";
+  SCENES.forEach((s, i) => {
+    const r = state.results[i];
+    const done = r.calcOk && r.gapOk;
+    const div = document.createElement("div");
+    div.className = "scene-item" + (i === state.sceneIdx ? " active" : "") + (done ? " done" : "");
+    div.setAttribute("data-i", String(i));
+    div.innerHTML = `
+      <span class="si-idx">SCENE ${s.idx}</span>
+      <span class="si-time">${state.lang === "cn" ? s.timeCn : s.timeEn}</span>
+      <span class="si-tag">${done ? (state.lang === "cn" ? "已闭环 ✓" : "closed ✓").replace("✓","") + (done ? "" : "") : (state.lang === "cn" ? s.shortCn : s.shortEn)}</span>
+    `;
+    div.addEventListener("click", () => {
+      state.sceneIdx = i;
+      applyI18N();
+    });
+    list.appendChild(div);
+  });
+}
+
+// ========================================================================
+// Render current scene
+// ========================================================================
+function renderScene() {
+  const i = state.sceneIdx;
+  const s = SCENES[i];
+  const r = state.results[i];
+
+  document.getElementById("shTag").textContent = `SCENE ${s.idx} / 5`;
+  document.getElementById("shTitle").textContent  = state.lang === "cn" ? s.titleCn : s.titleEn;
+  document.getElementById("shDesc").textContent   = state.lang === "cn" ? s.descCn  : s.descEn;
+
+  document.getElementById("vTime").textContent = state.lang === "cn" ? s.timeCn : s.timeEn;
+  document.getElementById("vPa").innerHTML     = `${s.pa.toFixed(1)} <span class="dr-u">ug/m3</span>`;
+  document.getElementById("vRh").innerHTML     = `${s.rh} <span class="dr-u">%</span>`;
+  document.getElementById("vSceneShort").textContent = state.lang === "cn" ? s.shortCn : s.shortEn;
+  document.getElementById("vEpa").textContent  = `${s.epa.toFixed(1)} ug/m3`;
+
+  // slots
+  ["A", "B", "C"].forEach(k => {
+    const slot = document.getElementById("slot" + k);
+    const filled = r.slots[k];
+    slot.classList.remove("filled", "filled-correct", "filled-wrong", "drop-hint");
+    if (filled) {
+      slot.classList.add("filled");
+      slot.textContent = labelOfBlock(filled);
+      // mark correctness only if submitted
+      if (r.submitted) {
+        slot.classList.add(filled === k ? "filled-correct" : "filled-wrong");
+      }
+    } else {
+      slot.textContent = state.lang === "cn"
+        ? (k === "A" ? "拖 a·PA 到这" : k === "B" ? "拖 b·RH 到这" : "拖 +c 到这")
+        : (k === "A" ? "drop a·PA" : k === "B" ? "drop b·RH" : "drop +c");
+    }
+  });
+
+  // blocks tray
+  const tray = document.getElementById("blocksRow");
+  tray.innerHTML = "";
+  // which blocks are used?
+  const usedKeys = new Set(Object.values(r.slots).filter(Boolean));
+  BLOCK_DEFS.forEach(b => {
+    const el = document.createElement("div");
+    el.className = "calc-block" + (usedKeys.has(b.key) ? " used" : "");
+    el.setAttribute("draggable", "true");
+    el.setAttribute("data-block", b.key);
+    el.innerHTML = `<span>${state.lang === "cn" ? b.labelCn : b.labelEn}</span>`;
+    el.addEventListener("dragstart", onBlockDragStart);
+    el.addEventListener("dragend", onBlockDragEnd);
+    tray.appendChild(el);
+  });
+
+  // computed result
+  const resultRow = document.getElementById("calcResultRow");
+  const resultEl  = document.getElementById("calcResult");
+  if (r.calcReady) {
+    const myComputed = computeFromSlots(s, r.slots);
+    resultEl.textContent = myComputed.toFixed(1);
+    resultRow.classList.remove("dim");
+  } else {
+    resultEl.textContent = "— —";
+    resultRow.classList.add("dim");
+  }
+
+  // gap slider
+  document.getElementById("gapSlider").value = r.gap;
+  document.getElementById("gapVal").textContent = Number(r.gap).toFixed(1);
+
+  // feedback + submit
+  updateActionRow();
+
+  // badge
+  const allDone = state.results.every(x => x.calcOk && x.gapOk);
+  const badge = document.getElementById("badgeCard");
+  const badgeText = document.getElementById("badgeText");
+  if (allDone) {
+    badge.classList.remove("locked");
+    badgeText.textContent = state.lang === "cn" ? "已颁发" : "Earned";
+  } else {
+    badge.classList.add("locked");
+    badgeText.textContent = state.lang === "cn" ? "待解锁" : "Locked";
+  }
+
+  // progress
+  const done = state.results.filter(x => x.calcOk && x.gapOk).length;
+  document.getElementById("progressTxt").textContent = `${done} / 5`;
+  document.getElementById("progressBar").style.width = `${(done / 5) * 100}%`;
+}
+
+function labelOfBlock(key) {
+  const def = BLOCK_DEFS.find(b => b.key === key);
+  return state.lang === "cn" ? def.labelCn : def.labelEn;
+}
+
+// computed PM2.5 from the slots the player picked
+// slots = {A: blockKey or null, B:..., C:...}
+function computeFromSlots(scene, slots) {
+  // each slot contributes its value with its sign
+  let val = 0;
+  const map = {
+    A: { A: 0.524 * scene.pa, B: 0.0862 * scene.rh, C: 5.75, D: 0.10 * scene.rh },
+    B: { A: 0.524 * scene.pa, B: 0.0862 * scene.rh, C: 5.75, D: 0.10 * scene.rh },
+    C: { A: 0.524 * scene.pa, B: 0.0862 * scene.rh, C: 5.75, D: 0.10 * scene.rh }
+  };
+  // slot A is added, slot B is subtracted, slot C is added
+  if (slots.A) val += map.A[slots.A];
+  if (slots.B) val -= map.B[slots.B];
+  if (slots.C) val += map.C[slots.C];
+  return val;
+}
+
+// ========================================================================
+// Drag & drop
+// ========================================================================
+let dragKey = null;
+
+function onBlockDragStart(e) {
+  const k = e.currentTarget.getAttribute("data-block");
+  dragKey = k;
+  e.currentTarget.classList.add("dragging");
+  // highlight drop slots
+  document.querySelectorAll(".calc-slot").forEach(s => s.classList.add("drop-hint"));
+  e.dataTransfer.effectAllowed = "move";
+  try { e.dataTransfer.setData("text/plain", k); } catch (_) {}
+}
+function onBlockDragEnd(e) {
+  dragKey = null;
+  e.currentTarget.classList.remove("dragging");
+  document.querySelectorAll(".calc-slot").forEach(s => s.classList.remove("drop-hint"));
+}
+function onSlotDragOver(e) {
+  e.preventDefault();
+  e.dataTransfer.dropEffect = "move";
+}
+function onSlotDrop(e) {
+  e.preventDefault();
+  const slotName = e.currentTarget.getAttribute("data-slot");
+  const k = dragKey || (e.dataTransfer && e.dataTransfer.getData("text/plain"));
+  if (!k) return;
+  const r = state.results[state.sceneIdx];
+  // if this block is in another slot, remove it
+  ["A","B","C"].forEach(s => { if (r.slots[s] === k) r.slots[s] = null; });
+  r.slots[slotName] = k;
+  r.submitted = false;
+  r.calcReady = ["A","B","C"].every(s => r.slots[s]);
+  renderScene();
+}
+
+// click on filled slot → remove block
+function onSlotClick(e) {
+  const slot = e.currentTarget;
+  const slotName = slot.getAttribute("data-slot");
+  const r = state.results[state.sceneIdx];
+  if (r.slots[slotName]) {
+    r.slots[slotName] = null;
+    r.submitted = false;
+    r.calcReady = false;
+    renderScene();
+  }
+}
+
+// ========================================================================
+// Action row + submit
+// ========================================================================
+function updateActionRow() {
+  const r = state.results[state.sceneIdx];
+  const submitBtn = document.getElementById("submitBtn");
+  const fb = document.getElementById("feedback");
+  fb.classList.remove("ok", "bad");
+
+  submitBtn.disabled = !r.calcReady;
+
+  if (!r.calcReady) {
+    fb.textContent = state.lang === "cn"
+      ? "先拖完 3 个公式块, 再拨滑块估差距"
+      : "First fill all 3 slots, then drag the slider";
+    return;
+  }
+  if (r.submitted) {
+    // show last feedback
+    fb.textContent = r.lastFeedback || "";
+    if (r.calcOk && r.gapOk) fb.classList.add("ok");
+    else fb.classList.add("bad");
+  } else {
+    fb.textContent = state.lang === "cn"
+      ? "已组装公式, 拨滑块估出 |你 − EPA|, 再提交。"
+      : "Formula assembled — drag the slider to estimate |you − EPA|, then submit.";
+  }
+}
+
+function onSubmit() {
+  const i = state.sceneIdx;
+  const s = SCENES[i];
+  const r = state.results[i];
+  if (!r.calcReady) return;
+
+  const slotsOk = r.slots.A === "A" && r.slots.B === "B" && r.slots.C === "C";
+  const myComputed = computeFromSlots(s, r.slots);
+  const myGap = Math.abs(myComputed - s.epa);
+  const playerGap = Number(r.gap);
+  // gap correct if within ±0.6 ug/m3 AND only if slots are correct
+  const gapOk = slotsOk && Math.abs(playerGap - s.gapTrueRounded) <= 0.6;
+
+  r.calcOk = slotsOk;
+  r.gapOk = gapOk;
+  r.submitted = true;
+
+  if (slotsOk && gapOk) {
+    r.lastFeedback = state.lang === "cn"
+      ? `闭环成功 · 你算得 ${myComputed.toFixed(1)}, EPA 报 ${s.epa.toFixed(1)}, 差 ${s.gapTrueRounded.toFixed(1)} ug/m3, 估得很准。`
+      : `Loop closed · you got ${myComputed.toFixed(1)}, EPA ${s.epa.toFixed(1)}, gap ${s.gapTrueRounded.toFixed(1)} ug/m3 — spot on.`;
+  } else if (slotsOk && !gapOk) {
+    r.lastFeedback = state.lang === "cn"
+      ? `公式对了, 但差距估错。真实差 |${myComputed.toFixed(1)} − ${s.epa.toFixed(1)}| ≈ ${s.gapTrueRounded.toFixed(1)} ug/m3, 你估 ${playerGap.toFixed(1)}。再拨拨滑块。`
+      : `Formula correct, gap wrong. Real |${myComputed.toFixed(1)} − ${s.epa.toFixed(1)}| ≈ ${s.gapTrueRounded.toFixed(1)} ug/m3, you said ${playerGap.toFixed(1)}. Try the slider again.`;
+  } else {
+    r.lastFeedback = state.lang === "cn"
+      ? `公式拖错了。Barkjohn 应该是 0.524·PA − 0.0862·RH + 5.75, 看 sidebar 提示。`
+      : `Wrong blocks. Barkjohn is 0.524·PA − 0.0862·RH + 5.75 — check the sidebar.`;
+  }
+
+  renderScene();
+
+  // win?
+  const allDone = state.results.every(x => x.calcOk && x.gapOk);
+  if (allDone && !state.finished) {
+    state.finished = true;
+    setTimeout(showWin, 350);
+  } else if (slotsOk && gapOk) {
+    // auto-advance to next unsolved scene after a beat
+    setTimeout(() => {
+      const next = state.results.findIndex((x, idx) => idx > i && !(x.calcOk && x.gapOk));
+      const wrap = state.results.findIndex(x => !(x.calcOk && x.gapOk));
+      const target = next >= 0 ? next : (wrap >= 0 ? wrap : i);
+      if (target !== i) {
+        state.sceneIdx = target;
+        applyI18N();
+      }
+    }, 900);
+  }
+}
+
+function onReset() {
+  const i = state.sceneIdx;
+  state.results[i] = { calcOk: false, gapOk: false, slots: { A: null, B: null, C: null }, gap: 0 };
+  renderScene();
+}
+
+function onResetAll() {
+  state.results = SCENES.map(() => ({ calcOk: false, gapOk: false, slots: { A: null, B: null, C: null }, gap: 0 }));
+  state.sceneIdx = 0;
+  state.finished = false;
+  document.getElementById("winOverlay").classList.remove("on");
+  applyI18N();
+}
+
+function showWin() {
+  document.getElementById("winOverlay").classList.add("on");
+}
+
+// ========================================================================
+// Wire up
+// ========================================================================
+function init() {
+  // lang
+  document.getElementById("langBtn").addEventListener("click", () => {
+    state.lang = state.lang === "cn" ? "en" : "cn";
+    applyI18N();
+  });
+  // slots
+  ["slotA", "slotB", "slotC"].forEach(id => {
+    const el = document.getElementById(id);
+    el.addEventListener("dragover", onSlotDragOver);
+    el.addEventListener("drop", onSlotDrop);
+    el.addEventListener("click", onSlotClick);
+  });
+  // gap slider
+  document.getElementById("gapSlider").addEventListener("input", (e) => {
+    const r = state.results[state.sceneIdx];
+    r.gap = parseFloat(e.target.value);
+    r.submitted = false;
+    document.getElementById("gapVal").textContent = r.gap.toFixed(1);
+    updateActionRow();
+  });
+  // buttons
+  document.getElementById("submitBtn").addEventListener("click", onSubmit);
+  document.getElementById("resetBtn").addEventListener("click", onReset);
+  document.getElementById("winBtn").addEventListener("click", onResetAll);
+
+  applyI18N();
+}
+
+init();
+</script>
+</body>
+</html>

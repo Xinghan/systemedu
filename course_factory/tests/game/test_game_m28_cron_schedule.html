@@ -1,0 +1,1151 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>M28 Cron 任务调度规划台</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+SC:wght@400;500;700&family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    /* Industrial Atelier — Claude warm cream */
+    --paper:#FAF9F5;
+    --paper-2:#F1EDDF;
+    --card:#FFFFFF;
+    --ink:#191814;
+    --ink-2:#2B2924;
+    --sub:#6B6557;
+    --sub-2:#9D978A;
+    --border:#EBE5D6;
+    --border-2:#D9D1BD;
+    --hairline:#F2EDE0;
+
+    /* Primary — Claude coral */
+    --primary:#D97757;
+    --primary-ink:#9A4A2E;
+    --primary-soft:#F8EDE5;
+    --primary-line:#ECCFB8;
+
+    /* Domain accent — computing */
+    --computing:#C04E68;
+    --computing-soft:#F4DDE3;
+    --computing-line:#E5B5C2;
+    --computing-ink:#8A2E48;
+
+    --ok:#5C7A4A;
+    --ok-soft:#E4ECDB;
+    --ok-line:#BFD0AA;
+
+    --warn:#C89B3C;
+    --warn-soft:#F2E6C9;
+
+    --shadow-sm:0 1px 2px 0 rgba(25,24,20,.04);
+    --shadow:0 1px 3px 0 rgba(25,24,20,.06),0 1px 2px -1px rgba(25,24,20,.04);
+    --shadow-md:0 4px 8px -2px rgba(25,24,20,.06),0 2px 4px -2px rgba(25,24,20,.04);
+    --shadow-lg:0 12px 24px -6px rgba(25,24,20,.1),0 4px 8px -4px rgba(25,24,20,.05);
+  }
+
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    height:100vh;width:100vw;overflow:hidden;
+    background:var(--paper);
+    color:var(--ink);
+    font-family:'Noto Sans SC','Inter',sans-serif;
+    font-size:14px;
+  }
+  .mono{font-family:'JetBrains Mono',monospace;}
+
+  .app{display:flex;flex-direction:row;width:100vw;height:100vh;}
+
+  /* ====== Sidebar 200px ====== */
+  .game-sidebar{
+    width:200px;flex-shrink:0;
+    background:var(--paper-2);
+    border-right:1px solid var(--border);
+    display:flex;flex-direction:column;
+    padding:18px 14px;gap:14px;
+    overflow-y:auto;
+  }
+  .brand{
+    display:flex;flex-direction:column;gap:2px;
+    border-bottom:1px solid var(--border);padding-bottom:12px;
+  }
+  .brand .mod{
+    font-family:'JetBrains Mono',monospace;
+    font-size:11px;color:var(--sub);letter-spacing:1.5px;
+  }
+  .brand .title{font-size:15px;font-weight:700;color:var(--ink);line-height:1.3;}
+  .brand .sub{font-size:11px;color:var(--sub);margin-top:2px;line-height:1.35;}
+
+  .section-label{
+    font-family:'JetBrains Mono',monospace;
+    font-size:10px;color:var(--sub-2);
+    letter-spacing:1.5px;text-transform:uppercase;
+    margin-bottom:6px;
+  }
+
+  .task-card{
+    padding:10px 12px;
+    background:var(--card);
+    border:1px solid var(--border);
+    border-radius:8px;
+    box-shadow:var(--shadow-sm);
+    font-size:11.5px;color:var(--sub);
+    line-height:1.55;
+  }
+  .task-card strong{color:var(--ink);font-weight:700;}
+
+  .legend-list{display:flex;flex-direction:column;gap:6px;}
+  .legend-item{
+    padding:7px 9px;
+    background:var(--card);
+    border:1px solid var(--border);
+    border-radius:6px;
+    font-size:11px;color:var(--sub);
+    line-height:1.4;
+  }
+  .legend-item .cron{
+    font-family:'JetBrains Mono',monospace;
+    font-size:10.5px;color:var(--computing-ink);
+    background:var(--computing-soft);
+    padding:1px 5px;border-radius:3px;
+    border:1px solid var(--computing-line);
+    margin-right:5px;
+    display:inline-block;
+  }
+  .legend-item .nm{color:var(--ink);font-weight:600;}
+
+  /* 速度滑块 */
+  .speed-wrap{display:flex;flex-direction:column;gap:6px;}
+  .slider-label{display:flex;justify-content:space-between;font-size:11px;color:var(--sub);}
+  .slider-label .val{font-family:'JetBrains Mono',monospace;color:var(--ink);font-weight:700;}
+  input[type=range]{
+    -webkit-appearance:none;appearance:none;
+    width:100%;height:4px;
+    background:var(--border);
+    border-radius:2px;outline:none;
+  }
+  input[type=range]::-webkit-slider-thumb{
+    -webkit-appearance:none;appearance:none;
+    width:14px;height:14px;
+    background:var(--primary);
+    border-radius:50%;
+    cursor:pointer;
+    border:2px solid var(--card);
+    box-shadow:var(--shadow-sm);
+  }
+  input[type=range]::-moz-range-thumb{
+    width:14px;height:14px;background:var(--primary);border-radius:50%;
+    cursor:pointer;border:2px solid var(--card);
+  }
+
+  .sidebar-bottom{margin-top:auto;display:flex;flex-direction:column;gap:8px;}
+  .reset-btn, .lang-btn{
+    padding:8px;border-radius:6px;
+    background:var(--card);border:1px solid var(--border);
+    font-family:'JetBrains Mono',monospace;font-size:11px;
+    color:var(--ink);cursor:pointer;
+    transition:all 0.15s;
+    text-align:center;font-weight:500;
+  }
+  .reset-btn:hover, .lang-btn:hover{
+    background:var(--primary-soft);
+    border-color:var(--primary-line);
+    color:var(--primary-ink);
+  }
+
+  /* ====== Main ====== */
+  .game-main{
+    flex:1;display:flex;flex-direction:column;
+    background:var(--paper);
+    min-width:0;min-height:0;
+    padding:18px 22px;
+    gap:14px;
+  }
+  .main-header{
+    display:flex;justify-content:space-between;align-items:flex-start;flex-shrink:0;
+  }
+  .main-title{font-size:18px;font-weight:700;color:var(--ink);}
+  .main-sub{font-size:12px;color:var(--sub);margin-top:2px;}
+  .stage-tag{
+    font-family:'JetBrains Mono',monospace;
+    font-size:10px;color:var(--computing-ink);
+    background:var(--computing-soft);
+    border:1px solid var(--computing-line);
+    border-radius:4px;
+    padding:4px 8px;letter-spacing:1px;
+  }
+
+  /* 主区 split */
+  .stage-grid{
+    flex:1;
+    display:grid;
+    grid-template-rows:auto 1fr auto;
+    gap:14px;
+    min-height:0;
+  }
+
+  /* cron 表达式 chip 池 */
+  .palette-row{
+    display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+    padding:12px 14px;
+    background:var(--card);
+    border:1px solid var(--border);
+    border-radius:10px;
+    box-shadow:var(--shadow-sm);
+    flex-shrink:0;
+  }
+  .palette-label{
+    font-family:'JetBrains Mono',monospace;
+    font-size:10px;color:var(--sub);
+    letter-spacing:1.5px;
+    margin-right:4px;
+  }
+  .cron-chip{
+    font-family:'JetBrains Mono',monospace;
+    font-size:12px;font-weight:600;
+    color:var(--computing-ink);
+    background:var(--computing-soft);
+    border:1.5px dashed var(--computing-line);
+    padding:6px 10px;
+    border-radius:6px;
+    cursor:grab;
+    user-select:none;
+    transition:all 0.15s ease;
+    display:inline-flex;align-items:center;gap:6px;
+  }
+  .cron-chip .freq-tip{
+    font-family:'Noto Sans SC',sans-serif;
+    font-size:10px;color:var(--sub);
+    font-weight:500;
+  }
+  .cron-chip:hover{
+    background:var(--card);
+    border-color:var(--computing);
+    transform:translateY(-1px);
+    box-shadow:var(--shadow-sm);
+  }
+  .cron-chip:active{cursor:grabbing;}
+  .cron-chip.used{
+    opacity:0.3;
+    cursor:not-allowed;
+    border-style:solid;
+  }
+  .cron-chip.dragging{
+    opacity:0.55;
+  }
+
+  /* schedule 表 */
+  .schedule-panel{
+    flex:1;
+    background:var(--card);
+    border:1px solid var(--border);
+    border-radius:10px;
+    box-shadow:var(--shadow-sm);
+    display:flex;flex-direction:column;
+    min-height:0;
+    overflow:hidden;
+  }
+  .panel-head{
+    padding:10px 14px;
+    border-bottom:1px solid var(--hairline);
+    display:flex;justify-content:space-between;align-items:center;
+    flex-shrink:0;
+  }
+  .panel-head .ttl{font-size:12px;font-weight:700;color:var(--ink);}
+  .panel-head .meta{
+    font-family:'JetBrains Mono',monospace;
+    font-size:10px;color:var(--sub);letter-spacing:1px;
+  }
+
+  .schedule-body{
+    flex:1;
+    padding:10px 14px;
+    overflow-y:auto;
+    display:flex;flex-direction:column;gap:8px;
+    min-height:0;
+  }
+
+  /* 单行 task row */
+  .task-row{
+    display:grid;
+    grid-template-columns:36px 1fr 180px 130px 80px;
+    gap:10px;
+    align-items:center;
+    padding:10px 12px;
+    background:var(--paper-2);
+    border:1px solid var(--border);
+    border-radius:8px;
+    transition:all 0.18s ease;
+  }
+  .task-row.matched{
+    background:var(--ok-soft);
+    border-color:var(--ok-line);
+  }
+  .task-row.wrong{
+    background:var(--primary-soft);
+    border-color:var(--primary-line);
+  }
+  .task-row .idx{
+    width:30px;height:30px;
+    border-radius:50%;
+    background:var(--card);
+    border:1px solid var(--border);
+    display:flex;align-items:center;justify-content:center;
+    font-family:'JetBrains Mono',monospace;
+    font-size:11px;color:var(--sub);font-weight:600;
+  }
+  .task-row.matched .idx{
+    background:var(--ok);border-color:var(--ok);color:var(--card);
+  }
+  .task-row.wrong .idx{
+    background:var(--computing);border-color:var(--computing);color:var(--card);
+  }
+  .task-meta{display:flex;flex-direction:column;gap:2px;min-width:0;}
+  .task-name{font-size:12.5px;font-weight:600;color:var(--ink);line-height:1.25;}
+  .task-desc{
+    font-size:11px;color:var(--sub);
+    line-height:1.4;
+    overflow:hidden;text-overflow:ellipsis;
+  }
+  .task-freq{
+    font-family:'JetBrains Mono',monospace;
+    font-size:10px;color:var(--sub-2);
+    letter-spacing:0.5px;
+    margin-top:2px;
+  }
+
+  /* drop slot */
+  .cron-slot{
+    height:38px;
+    border:2px dashed var(--border-2);
+    border-radius:6px;
+    display:flex;align-items:center;justify-content:center;
+    font-family:'JetBrains Mono',monospace;
+    font-size:11px;color:var(--sub-2);
+    transition:all 0.15s ease;
+    background:var(--card);
+  }
+  .cron-slot.over{
+    border-color:var(--computing);
+    background:var(--computing-soft);
+    color:var(--computing-ink);
+  }
+  .cron-slot.filled{
+    border-style:solid;
+    border-color:var(--ink-2);
+    color:var(--ink);
+    background:var(--card);
+    font-weight:600;
+    cursor:pointer;
+  }
+  .cron-slot.filled:hover{
+    border-color:var(--primary);
+    color:var(--primary-ink);
+  }
+  .cron-slot.matched.filled{
+    border-color:var(--ok);
+    color:var(--ok);
+    background:var(--ok-soft);
+  }
+  .cron-slot.wrong.filled{
+    border-color:var(--computing);
+    color:var(--computing-ink);
+    background:var(--computing-soft);
+  }
+
+  /* status pill in row */
+  .row-status{
+    font-family:'JetBrains Mono',monospace;
+    font-size:10px;
+    text-align:center;
+    padding:5px 6px;
+    border-radius:4px;
+    background:var(--paper-2);
+    border:1px solid var(--border);
+    color:var(--sub);
+    letter-spacing:0.5px;
+  }
+  .task-row.matched .row-status{
+    background:var(--ok);color:var(--card);border-color:var(--ok);
+  }
+  .task-row.wrong .row-status{
+    background:var(--computing);color:var(--card);border-color:var(--computing);
+  }
+
+  .row-fires{
+    font-family:'JetBrains Mono',monospace;
+    font-size:11px;
+    text-align:center;
+    color:var(--ink);font-weight:700;
+  }
+  .row-fires .lbl{font-size:9px;color:var(--sub);font-weight:500;display:block;margin-bottom:2px;letter-spacing:0.5px;}
+
+  /* warning bar */
+  .warn-bar{
+    margin-top:8px;
+    padding:10px 12px;
+    border-radius:6px;
+    font-size:11.5px;
+    line-height:1.5;
+    display:none;
+  }
+  .warn-bar.show{display:block;}
+  .warn-bar.err{
+    background:var(--primary-soft);
+    border:1px solid var(--primary-line);
+    color:var(--primary-ink);
+    border-left:3px solid var(--primary);
+  }
+  .warn-bar.ok{
+    background:var(--ok-soft);
+    border:1px solid var(--ok-line);
+    color:var(--ok);
+    border-left:3px solid var(--ok);
+  }
+  .warn-bar .title{font-weight:700;display:block;margin-bottom:2px;}
+  .warn-bar .body{font-family:'JetBrains Mono',monospace;font-size:10.5px;line-height:1.55;}
+
+  /* ============= timeline panel ============= */
+  .timeline-panel{
+    background:var(--card);
+    border:1px solid var(--border);
+    border-radius:10px;
+    box-shadow:var(--shadow-sm);
+    display:flex;flex-direction:column;
+    flex-shrink:0;
+    overflow:hidden;
+  }
+  .timeline-head{
+    padding:10px 14px;
+    border-bottom:1px solid var(--hairline);
+    display:flex;justify-content:space-between;align-items:center;
+    gap:14px;
+  }
+  .timeline-head .ttl{font-size:12px;font-weight:700;color:var(--ink);}
+  .clock-display{
+    display:flex;align-items:center;gap:10px;
+  }
+  .clock-display .clock{
+    font-family:'JetBrains Mono',monospace;
+    font-size:14px;font-weight:700;color:var(--computing-ink);
+    background:var(--computing-soft);
+    border:1px solid var(--computing-line);
+    padding:4px 10px;
+    border-radius:4px;
+    letter-spacing:1px;
+  }
+  .play-btn{
+    padding:6px 14px;
+    border-radius:6px;
+    background:var(--primary);
+    color:var(--card);
+    border:1px solid var(--primary);
+    font-family:'JetBrains Mono',monospace;
+    font-size:11px;font-weight:600;
+    cursor:pointer;
+    letter-spacing:0.5px;
+    transition:all 0.15s ease;
+  }
+  .play-btn:hover{background:var(--primary-ink);border-color:var(--primary-ink);}
+  .play-btn:disabled{
+    background:var(--paper-2);color:var(--sub-2);
+    border-color:var(--border);cursor:not-allowed;
+  }
+  .play-btn.stop{background:var(--computing);border-color:var(--computing);}
+  .play-btn.stop:hover{background:var(--computing-ink);border-color:var(--computing-ink);}
+
+  /* timeline svg area */
+  .timeline-svg-wrap{
+    padding:10px 14px 14px 14px;
+    background:var(--paper-2);
+  }
+  .timeline-svg{
+    width:100%;
+    height:160px;
+    display:block;
+  }
+  .timeline-legend{
+    display:flex;gap:14px;flex-wrap:wrap;
+    padding:0 14px 10px 14px;
+    font-family:'JetBrains Mono',monospace;
+    font-size:10px;color:var(--sub);
+  }
+  .legend-dot{
+    display:inline-flex;align-items:center;gap:5px;
+  }
+  .legend-dot .sw{
+    width:10px;height:10px;border-radius:2px;display:inline-block;
+  }
+
+  /* badge 通关 */
+  .badge{
+    margin-top:6px;
+    padding:12px 14px;
+    background:var(--ok-soft);
+    border:1px solid var(--ok-line);
+    border-radius:8px;
+    text-align:center;
+    display:none;
+  }
+  .badge.show{display:block;}
+  .badge .badge-ttl{
+    font-size:13px;font-weight:700;color:var(--ok);
+    margin-bottom:4px;
+  }
+  .badge .badge-sub{
+    font-family:'JetBrains Mono',monospace;
+    font-size:10.5px;color:var(--ink);
+  }
+
+  @keyframes tickPulse{
+    0%{opacity:0;transform:scale(0.6);}
+    35%{opacity:1;transform:scale(1.2);}
+    100%{opacity:0;transform:scale(1.0);}
+  }
+  .fire-pulse{
+    transform-origin:center;
+    animation:tickPulse 0.55s ease-out;
+  }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- ========== Sidebar ========== -->
+  <aside class="game-sidebar">
+    <div class="brand">
+      <div class="mod">MODULE M28</div>
+      <div class="title" data-cn="Cron 任务调度" data-en="Cron Scheduling">Cron 任务调度</div>
+      <div class="sub mono" data-cn="规划 5 个周期任务" data-en="Plan 5 periodic jobs">规划 5 个周期任务</div>
+    </div>
+
+    <div>
+      <div class="section-label" data-cn="任务" data-en="MISSION">任务</div>
+      <div class="task-card">
+        <div data-cn="把 5 个 cron 表达式拖到右侧 schedule 表正确的任务行, 然后启动时间轴, 看任务是否在该触发的刻度被触发。" data-en="Drag the 5 cron strings to the right task rows, then start the timeline and check that each job fires at the right tick.">
+          把 5 个 cron 表达式拖到右侧 schedule 表正确的任务行, 然后启动时间轴, 看任务是否在该触发的刻度被触发。
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="section-label" data-cn="cron 字段说明" data-en="CRON FIELDS">cron 字段说明</div>
+      <div class="legend-list">
+        <div class="legend-item">
+          <div><span class="cron mono">m h dom mon dow</span></div>
+          <div data-cn="分 时 日 月 周" data-en="min hr day mon wk" style="margin-top:4px;">分 时 日 月 周</div>
+        </div>
+        <div class="legend-item">
+          <div><span class="cron mono">*</span><span data-cn="任意值" data-en="any">任意值</span></div>
+        </div>
+        <div class="legend-item">
+          <div><span class="cron mono">0</span><span data-cn="固定 0 (整点)" data-en="exact 0 (top)">固定 0 (整点)</span></div>
+        </div>
+        <div class="legend-item">
+          <div><span class="nm" data-cn="周日" data-en="Sunday">周日</span><span data-cn="dow=0" data-en="dow=0" style="font-family:'JetBrains Mono',monospace;color:var(--sub);">dow=0</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="speed-wrap">
+      <div class="section-label" data-cn="模拟速度" data-en="SIM SPEED">模拟速度</div>
+      <div class="slider-label">
+        <span data-cn="每秒分钟数" data-en="min/sec">每秒分钟数</span>
+        <span class="val mono" id="speedVal">120</span>
+      </div>
+      <input type="range" id="speedSlider" min="30" max="360" step="30" value="120">
+    </div>
+
+    <div class="sidebar-bottom">
+      <button class="reset-btn" id="resetBtn" data-cn="重置面板" data-en="Reset Board">重置面板</button>
+      <button class="lang-btn" id="langBtn">EN</button>
+    </div>
+  </aside>
+
+  <!-- ========== Main ========== -->
+  <main class="game-main">
+    <div class="main-header">
+      <div>
+        <div class="main-title" data-cn="规划站 — 给 PurpleAir 节点排周期任务" data-en="Planner — Schedule jobs for PurpleAir node">
+          规划站 — 给 PurpleAir 节点排周期任务
+        </div>
+        <div class="main-sub mono" data-cn="读 sensor / 算 NowCast / 打包 parquet / 清日志 / 月备份" data-en="read sensor / nowcast / pack parquet / clean logs / monthly backup">
+          读 sensor / 算 NowCast / 打包 parquet / 清日志 / 月备份
+        </div>
+      </div>
+      <div class="stage-tag" data-cn="PATTERN 7 · STRATEGY MAP" data-en="PATTERN 7 · STRATEGY MAP">PATTERN 7 · STRATEGY MAP</div>
+    </div>
+
+    <div class="stage-grid">
+
+      <!-- cron 表达式池 -->
+      <div class="palette-row" id="cronPalette">
+        <span class="palette-label" data-cn="可拖动表达式" data-en="DRAG CRONS">可拖动表达式</span>
+      </div>
+
+      <!-- schedule 表 -->
+      <div class="schedule-panel">
+        <div class="panel-head">
+          <div class="ttl" data-cn="crontab — 任务调度表" data-en="crontab — schedule table">crontab — 任务调度表</div>
+          <div class="meta" id="matchCount">matched 0 / 5</div>
+        </div>
+        <div class="schedule-body" id="scheduleBody">
+          <!-- task rows injected by JS -->
+        </div>
+      </div>
+
+      <!-- timeline 模拟 -->
+      <div class="timeline-panel">
+        <div class="timeline-head">
+          <div class="ttl" data-cn="模拟时间轴 (压缩 30 天)" data-en="Sim timeline (compressed 30d)">模拟时间轴 (压缩 30 天)</div>
+          <div class="clock-display">
+            <span class="clock mono" id="simClock">D01 00:00</span>
+            <button class="play-btn" id="playBtn" data-cn="启动模拟" data-en="Start Sim">启动模拟</button>
+          </div>
+        </div>
+        <div class="timeline-svg-wrap">
+          <svg class="timeline-svg" id="timelineSvg" viewBox="0 0 1000 160" preserveAspectRatio="none"></svg>
+        </div>
+        <div class="timeline-legend" id="timelineLegend">
+          <!-- legend dots injected -->
+        </div>
+      </div>
+
+    </div>
+
+    <div class="warn-bar" id="warnBar"></div>
+    <div class="badge" id="badge">
+      <div class="badge-ttl" data-cn="规划通过" data-en="Plan validated">规划通过</div>
+      <div class="badge-sub" data-cn="5 个 cron 全部匹配, 时间轴上无浪费, crontab 完工" data-en="All 5 cron lines correct, no waste on the timeline">5 个 cron 全部匹配, 时间轴上无浪费, crontab 完工</div>
+    </div>
+  </main>
+</div>
+
+<script>
+(function(){
+  'use strict';
+
+  // ========== i18n ==========
+  let lang = 'cn';
+  const langBtn = document.getElementById('langBtn');
+  function applyLang(){
+    document.querySelectorAll('[data-cn]').forEach(el => {
+      const v = lang === 'cn' ? el.getAttribute('data-cn') : el.getAttribute('data-en');
+      if(v != null) el.textContent = v;
+    });
+    langBtn.textContent = lang === 'cn' ? 'EN' : '中';
+  }
+  langBtn.addEventListener('click', () => {
+    lang = (lang === 'cn') ? 'en' : 'cn';
+    applyLang();
+    renderLegend();
+    redrawTimeline();
+  });
+
+  // ========== 任务定义 ==========
+  // 期望触发频率 + 正确 cron 表达式
+  const TASKS = [
+    {
+      id:'sensor',
+      cn:'读 sensor 数据', en:'Read sensor data',
+      descCn:'PurpleAir PMS5003 每分钟采一次 PM2.5',
+      descEn:'Sample PM2.5 from PMS5003 every minute',
+      freqCn:'每分钟', freqEn:'every minute',
+      correct:'* * * * *',
+      kind:'minute',
+    },
+    {
+      id:'nowcast',
+      cn:'算 NowCast', en:'Compute NowCast',
+      descCn:'对过去 12 小时数据加权算 NowCast 浓度',
+      descEn:'Weighted NowCast over last 12h data',
+      freqCn:'每小时整点', freqEn:'every hour on the hour',
+      correct:'0 * * * *',
+      kind:'hour',
+    },
+    {
+      id:'pack',
+      cn:'打包当天 parquet', en:'Pack daily parquet',
+      descCn:'每天 00:00 把当天 1440 条记录打成 parquet 归档',
+      descEn:'Pack 1440 daily records to parquet at 00:00',
+      freqCn:'每天 00:00', freqEn:'daily at 00:00',
+      correct:'0 0 * * *',
+      kind:'day',
+    },
+    {
+      id:'clean',
+      cn:'清 30 天前日志', en:'Purge 30d-old logs',
+      descCn:'每周日凌晨扫一次日志, 删 30 天前的',
+      descEn:'Sweep logs every Sunday, delete >30d old',
+      freqCn:'每周日 00:00', freqEn:'Sunday 00:00',
+      correct:'0 0 * * 0',
+      kind:'week',
+    },
+    {
+      id:'backup',
+      cn:'备份到 cloud', en:'Backup to cloud',
+      descCn:'每月 1 号把上月所有 parquet 推到 S3 备份',
+      descEn:'Push last month parquet to S3 on day 1',
+      freqCn:'每月 1 号 00:00', freqEn:'1st of month 00:00',
+      correct:'0 0 1 * *',
+      kind:'month',
+    },
+  ];
+
+  // cron 池 (含正确 + 干扰已合并: 5 个正确表达式)
+  const CRON_OPTIONS = [
+    {expr:'* * * * *',     descCn:'每分钟',          descEn:'every minute'},
+    {expr:'0 * * * *',     descCn:'每小时整点',      descEn:'every hour'},
+    {expr:'0 0 * * *',     descCn:'每天 00:00',      descEn:'daily 00:00'},
+    {expr:'0 0 * * 0',     descCn:'每周日 00:00',    descEn:'Sun 00:00'},
+    {expr:'0 0 1 * *',     descCn:'每月 1 号 00:00', descEn:'day-1 00:00'},
+  ];
+
+  // 颜色 (与 timeline 上每行一条颜色对齐)
+  const ROW_COLORS = ['#C04E68', '#D97757', '#527B95', '#8C7B3F', '#5C7A4A'];
+
+  // ========== state ==========
+  // assignment: taskId -> cronExpr (null if 未分配)
+  const assignment = {};
+  TASKS.forEach(t => { assignment[t.id] = null; });
+
+  let speed = 120;           // 模拟 min/sec
+  let playing = false;
+  let simMin = 0;            // 0..43200 (30 天)
+  let simTimer = null;
+  const SIM_TOTAL = 30 * 24 * 60; // 43200 分钟
+  const fireLog = [];        // {taskId, min}
+
+  // ========== 渲染: cron palette ==========
+  const cronPalette = document.getElementById('cronPalette');
+  function renderPalette(){
+    // 清掉已经存在的 chip (保留 label)
+    [...cronPalette.querySelectorAll('.cron-chip')].forEach(n => n.remove());
+    CRON_OPTIONS.forEach(opt => {
+      const chip = document.createElement('div');
+      chip.className = 'cron-chip mono';
+      chip.draggable = true;
+      chip.dataset.expr = opt.expr;
+      const optDesc = lang === 'cn' ? opt.descCn : opt.descEn;
+      chip.innerHTML = `<span>${opt.expr}</span><span class="freq-tip">${optDesc}</span>`;
+
+      // 检查是否已被使用
+      const used = Object.values(assignment).includes(opt.expr);
+      if(used) chip.classList.add('used');
+
+      chip.addEventListener('dragstart', (ev) => {
+        if(chip.classList.contains('used')) { ev.preventDefault(); return; }
+        ev.dataTransfer.setData('text/plain', opt.expr);
+        ev.dataTransfer.effectAllowed = 'move';
+        chip.classList.add('dragging');
+      });
+      chip.addEventListener('dragend', () => chip.classList.remove('dragging'));
+
+      cronPalette.appendChild(chip);
+    });
+  }
+
+  // ========== 渲染: schedule body ==========
+  const scheduleBody = document.getElementById('scheduleBody');
+  function renderSchedule(){
+    scheduleBody.innerHTML = '';
+    TASKS.forEach((t, i) => {
+      const row = document.createElement('div');
+      row.className = 'task-row';
+      row.dataset.task = t.id;
+
+      const taskLabel = lang === 'cn' ? t.cn : t.en;
+      const taskDesc = lang === 'cn' ? t.descCn : t.descEn;
+      const taskFreq = lang === 'cn' ? t.freqCn : t.freqEn;
+
+      const cronExpr = assignment[t.id];
+      let slotClass = 'cron-slot';
+      let slotText = lang === 'cn' ? '拖 cron 到此' : 'drop cron here';
+      if(cronExpr){
+        slotClass += ' filled';
+        slotText = cronExpr;
+        if(cronExpr === t.correct){
+          slotClass += ' matched';
+          row.classList.add('matched');
+        } else {
+          slotClass += ' wrong';
+          row.classList.add('wrong');
+        }
+      }
+
+      const statusText = !cronExpr
+        ? (lang==='cn'?'未排':'unset')
+        : (cronExpr === t.correct
+            ? (lang==='cn'?'匹配':'matched')
+            : (lang==='cn'?'错配':'mismatch'));
+
+      // 触发次数 (模拟期间)
+      const fires = fireLog.filter(f => f.taskId === t.id).length;
+
+      row.innerHTML = `
+        <div class="idx mono">${i+1}</div>
+        <div class="task-meta">
+          <div class="task-name">${taskLabel}</div>
+          <div class="task-desc">${taskDesc}</div>
+          <div class="task-freq mono">expect: ${taskFreq}</div>
+        </div>
+        <div class="${slotClass}" data-slot="${t.id}">${slotText}</div>
+        <div class="row-status">${statusText}</div>
+        <div class="row-fires">
+          <span class="lbl">FIRES</span>
+          <span>${fires}</span>
+        </div>
+      `;
+
+      // drop handlers
+      const slot = row.querySelector('[data-slot]');
+      slot.addEventListener('dragover', (ev) => {
+        ev.preventDefault();
+        ev.dataTransfer.dropEffect = 'move';
+        slot.classList.add('over');
+      });
+      slot.addEventListener('dragleave', () => slot.classList.remove('over'));
+      slot.addEventListener('drop', (ev) => {
+        ev.preventDefault();
+        slot.classList.remove('over');
+        const expr = ev.dataTransfer.getData('text/plain');
+        if(!expr) return;
+        // 若已被分配到别的任务行, 先收回
+        for(const tid in assignment){
+          if(assignment[tid] === expr) assignment[tid] = null;
+        }
+        assignment[t.id] = expr;
+        // 触发次数依赖 cron 改动, 时间轴重置以避免误导
+        resetSim(false);
+        rerender();
+      });
+      // click 已 filled 的 slot → 取消分配
+      slot.addEventListener('click', () => {
+        if(assignment[t.id]){
+          assignment[t.id] = null;
+          resetSim(false);
+          rerender();
+        }
+      });
+
+      scheduleBody.appendChild(row);
+    });
+    // match count
+    const matched = TASKS.filter(t => assignment[t.id] === t.correct).length;
+    document.getElementById('matchCount').textContent = `matched ${matched} / 5`;
+    updateWarn(matched);
+    updatePlayBtnState();
+    if(matched === 5 && fireLog.length > 0 && !playing){
+      document.getElementById('badge').classList.add('show');
+    } else {
+      document.getElementById('badge').classList.remove('show');
+    }
+  }
+
+  function updateWarn(matched){
+    const warn = document.getElementById('warnBar');
+    // 查找错配
+    const wrongs = TASKS.filter(t => assignment[t.id] && assignment[t.id] !== t.correct);
+    const unmatched = TASKS.filter(t => !assignment[t.id]);
+    if(wrongs.length > 0){
+      warn.className = 'warn-bar err show';
+      const w = wrongs[0];
+      const wname = lang === 'cn' ? w.cn : w.en;
+      const wfreq = lang === 'cn' ? w.freqCn : w.freqEn;
+      // 估算错配后果
+      const symptom = describeSymptom(w, assignment[w.id]);
+      warn.innerHTML = `
+        <span class="title">${lang==='cn'?'警告 — cron 错配':'WARN — cron mismatch'}</span>
+        <span class="body">[${wname}] expect <b>${wfreq}</b> -- set <b>${assignment[w.id]}</b><br>${symptom}</span>
+      `;
+    } else if(matched === 5){
+      warn.className = 'warn-bar ok show';
+      warn.innerHTML = `
+        <span class="title">${lang==='cn'?'调度合理':'Schedule looks good'}</span>
+        <span class="body">${lang==='cn'?'5 行 cron 都对上预期频率, 启动模拟看 30 天触发分布':'all 5 cron rows match expected frequency, start sim to watch 30-day fire pattern'}</span>
+      `;
+    } else if(unmatched.length > 0){
+      warn.className = 'warn-bar';
+      warn.innerHTML = '';
+      warn.classList.remove('show');
+    }
+  }
+
+  function describeSymptom(task, expr){
+    // 简单基于实际/期望频率落差给提示
+    const setFreq = freqMinutes(expr);
+    const expectFreq = freqMinutes(task.correct);
+    if(setFreq < expectFreq / 2){
+      return lang==='cn'
+        ? `频率过高: 卡盘满 / CPU 浪费, 实际触发是预期的约 ${Math.round(expectFreq/setFreq)} 倍`
+        : `over-frequency: disk fills up / CPU waste, ~${Math.round(expectFreq/setFreq)}x more than expected`;
+    }
+    if(setFreq > expectFreq * 2){
+      return lang==='cn'
+        ? `频率过低: 数据漏采 / NowCast 断档, 实际触发只有预期的 1/${Math.round(setFreq/expectFreq)}`
+        : `under-frequency: data gap, fires only 1/${Math.round(setFreq/expectFreq)} of expected`;
+    }
+    return lang==='cn'
+      ? '时机不对: 触发时刻偏离预期, 比如不在整点 / 不在月初'
+      : 'wrong moment: fires off-target, e.g. not at hour 0 / not month-start';
+  }
+
+  // 估算 cron 在 30 天内的触发次数 (粗算频率)
+  function freqMinutes(expr){
+    if(expr === '* * * * *')   return 1;
+    if(expr === '0 * * * *')   return 60;
+    if(expr === '0 0 * * *')   return 60*24;
+    if(expr === '0 0 * * 0')   return 60*24*7;
+    if(expr === '0 0 1 * *')   return 60*24*30;
+    return 60;
+  }
+
+  // ========== timeline 绘制 ==========
+  const tlSvg = document.getElementById('timelineSvg');
+  const TL_W = 1000;
+  const TL_H = 160;
+  const TL_MARGIN_L = 36;
+  const TL_MARGIN_R = 16;
+  const TL_TOP = 22;
+  const TL_BOTTOM = 24;
+  const TL_INNER_W = TL_W - TL_MARGIN_L - TL_MARGIN_R;
+  const TL_INNER_H = TL_H - TL_TOP - TL_BOTTOM;
+  const ROW_H = TL_INNER_H / 5;
+
+  function minToX(min){
+    return TL_MARGIN_L + (min / SIM_TOTAL) * TL_INNER_W;
+  }
+
+  function redrawTimeline(){
+    const parts = [];
+    // 行背景 + 行 label
+    TASKS.forEach((t, i) => {
+      const y = TL_TOP + i * ROW_H;
+      const yMid = y + ROW_H/2;
+      parts.push(`<rect x="${TL_MARGIN_L}" y="${y+2}" width="${TL_INNER_W}" height="${ROW_H-4}" fill="${i%2===0?'#FAF9F5':'#F1EDDF'}" stroke="#EBE5D6" stroke-width="0.5"/>`);
+      const lbl = lang === 'cn' ? t.cn.substring(0,4) : t.en.split(' ')[0];
+      parts.push(`<text x="${TL_MARGIN_L-6}" y="${yMid+3}" text-anchor="end" font-family="JetBrains Mono,monospace" font-size="9" fill="#6B6557">${lbl}</text>`);
+    });
+
+    // 顶部坐标轴 (天刻度)
+    for(let d=0; d<=30; d++){
+      const x = minToX(d * 24 * 60);
+      const big = (d % 5 === 0);
+      parts.push(`<line x1="${x}" y1="${TL_TOP}" x2="${x}" y2="${TL_TOP - (big?8:4)}" stroke="#9D978A" stroke-width="${big?1:0.5}"/>`);
+      if(big){
+        parts.push(`<text x="${x}" y="${TL_TOP-10}" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="9" fill="#6B6557">D${String(d).padStart(2,'0')}</text>`);
+      }
+    }
+
+    // 当前时刻竖线
+    const xNow = minToX(Math.min(simMin, SIM_TOTAL));
+    parts.push(`<line x1="${xNow}" y1="${TL_TOP-2}" x2="${xNow}" y2="${TL_H - TL_BOTTOM + 4}" stroke="#D97757" stroke-width="1.2" stroke-dasharray="3 3"/>`);
+
+    // 触发事件 dot — 按行画
+    TASKS.forEach((t, i) => {
+      const y = TL_TOP + i * ROW_H + ROW_H/2;
+      const color = ROW_COLORS[i];
+      const fires = fireLog.filter(f => f.taskId === t.id);
+      // 对每个 fire 画 dot; 如果 fires 太密, 用 stroke line 表示密集
+      if(fires.length > 200){
+        // 直接画一条粗线段表示 "几乎连续触发"
+        parts.push(`<line x1="${TL_MARGIN_L}" y1="${y}" x2="${xNow}" y2="${y}" stroke="${color}" stroke-width="3" opacity="0.7"/>`);
+        parts.push(`<text x="${xNow+4}" y="${y+3}" font-family="JetBrains Mono,monospace" font-size="9" fill="${color}">×${fires.length}</text>`);
+      } else {
+        for(const f of fires){
+          const fx = minToX(f.min);
+          parts.push(`<circle cx="${fx}" cy="${y}" r="2.6" fill="${color}" stroke="#FFFFFF" stroke-width="0.5"/>`);
+        }
+        if(fires.length > 0){
+          // 当前 fire pulse
+          const last = fires[fires.length-1];
+          if(playing && (simMin - last.min) < 60){
+            const fx = minToX(last.min);
+            parts.push(`<circle class="fire-pulse" cx="${fx}" cy="${y}" r="6" fill="none" stroke="${color}" stroke-width="1.5"/>`);
+          }
+        }
+      }
+    });
+
+    // 底部坐标轴 label
+    parts.push(`<text x="${TL_MARGIN_L}" y="${TL_H-6}" font-family="JetBrains Mono,monospace" font-size="9" fill="#9D978A">${lang==='cn'?'天 (压缩 30 天周期)':'days (compressed 30-day cycle)'}</text>`);
+
+    tlSvg.innerHTML = parts.join('');
+  }
+
+  function renderLegend(){
+    const el = document.getElementById('timelineLegend');
+    el.innerHTML = '';
+    TASKS.forEach((t, i) => {
+      const dot = document.createElement('span');
+      dot.className = 'legend-dot';
+      const legendLabel = lang === 'cn' ? t.cn : t.en;
+      dot.innerHTML = `<span class="sw" style="background:${ROW_COLORS[i]}"></span><span>${legendLabel}</span>`;
+      el.appendChild(dot);
+    });
+  }
+
+  // ========== sim engine ==========
+  function shouldFire(expr, min){
+    // min 是模拟分钟数. 把它映射到 (day-of-month, day-of-week, hour, minute).
+    // 简化: 一年 = 30 天 = 一个月; week = 7 天起从 D01 (周一假设); D01 是月 1 号.
+    const dayOfMonth = Math.floor(min / (24*60)) + 1;     // 1..30
+    const hour = Math.floor((min % (24*60)) / 60);        // 0..23
+    const minute = min % 60;                              // 0..59
+    // 假设 D01 是周日 (dow=0), 这样 D08/D15/D22/D29 都是周日
+    const dow = ((dayOfMonth - 1) % 7);                   // 0..6, 0=Sun
+    switch(expr){
+      case '* * * * *':   return true;
+      case '0 * * * *':   return minute === 0;
+      case '0 0 * * *':   return minute === 0 && hour === 0;
+      case '0 0 * * 0':   return minute === 0 && hour === 0 && dow === 0;
+      case '0 0 1 * *':   return minute === 0 && hour === 0 && dayOfMonth === 1;
+      default: return false;
+    }
+  }
+
+  // 推进 N 分钟, 累积 fire
+  function advance(nMin){
+    const prevMin = simMin;
+    const target = Math.min(simMin + nMin, SIM_TOTAL);
+    for(let m = prevMin + 1; m <= target; m++){
+      for(const t of TASKS){
+        const expr = assignment[t.id];
+        if(!expr) continue;
+        if(shouldFire(expr, m - 1)){
+          fireLog.push({taskId: t.id, min: m - 1});
+        }
+      }
+    }
+    simMin = target;
+    if(simMin >= SIM_TOTAL){
+      stopSim(true);
+    }
+  }
+
+  function tick(){
+    if(!playing) return;
+    // 每次 tick 推进 (speed / 4) 分钟, 每 250ms tick 一次 → 每秒走 speed 分钟
+    advance(Math.max(1, Math.round(speed / 4)));
+    updateClock();
+    redrawTimeline();
+    rerenderRowsCount();
+  }
+
+  function updateClock(){
+    const day = Math.floor(simMin / (24*60)) + 1;
+    const hour = Math.floor((simMin % (24*60)) / 60);
+    const minute = simMin % 60;
+    const clock = document.getElementById('simClock');
+    clock.textContent = `D${String(day).padStart(2,'0')} ${String(hour).padStart(2,'0')}:${String(minute).padStart(2,'0')}`;
+  }
+
+  function rerenderRowsCount(){
+    // 高效: 只更新每行的 fires 数字
+    TASKS.forEach(t => {
+      const row = scheduleBody.querySelector(`[data-task="${t.id}"]`);
+      if(!row) return;
+      const fires = fireLog.filter(f => f.taskId === t.id).length;
+      const n = row.querySelector('.row-fires span:last-child');
+      if(n) n.textContent = fires;
+    });
+  }
+
+  const playBtn = document.getElementById('playBtn');
+  function updatePlayBtnState(){
+    const allSet = TASKS.every(t => assignment[t.id]);
+    if(!playing){
+      playBtn.disabled = !allSet;
+      playBtn.classList.remove('stop');
+      playBtn.setAttribute('data-cn', simMin > 0 ? '继续模拟' : '启动模拟');
+      playBtn.setAttribute('data-en', simMin > 0 ? 'Resume Sim' : 'Start Sim');
+    } else {
+      playBtn.disabled = false;
+      playBtn.classList.add('stop');
+      playBtn.setAttribute('data-cn', '暂停');
+      playBtn.setAttribute('data-en', 'Pause');
+    }
+    playBtn.textContent = playBtn.getAttribute('data-' + lang) || playBtn.textContent;
+  }
+
+  function startSim(){
+    if(playing) return;
+    playing = true;
+    if(simTimer) clearInterval(simTimer);
+    simTimer = setInterval(tick, 250);
+    updatePlayBtnState();
+  }
+  function stopSim(finished){
+    playing = false;
+    if(simTimer){ clearInterval(simTimer); simTimer = null; }
+    updatePlayBtnState();
+    if(finished){
+      // 30 天结束, 显示通过 badge (如果全 matched)
+      const matched = TASKS.filter(t => assignment[t.id] === t.correct).length;
+      if(matched === 5){
+        document.getElementById('badge').classList.add('show');
+      }
+    }
+  }
+
+  function resetSim(alsoAssignments){
+    stopSim(false);
+    simMin = 0;
+    fireLog.length = 0;
+    if(alsoAssignments){
+      TASKS.forEach(t => { assignment[t.id] = null; });
+    }
+    updateClock();
+  }
+
+  playBtn.addEventListener('click', () => {
+    if(playing){
+      stopSim(false);
+    } else {
+      if(simMin >= SIM_TOTAL){
+        // 已结束 → 重置
+        simMin = 0;
+        fireLog.length = 0;
+        updateClock();
+      }
+      startSim();
+    }
+    redrawTimeline();
+    rerender();
+  });
+
+  // ========== 速度滑块 ==========
+  const speedSlider = document.getElementById('speedSlider');
+  const speedVal = document.getElementById('speedVal');
+  speedSlider.addEventListener('input', () => {
+    speed = parseInt(speedSlider.value, 10);
+    speedVal.textContent = speed;
+  });
+
+  // ========== 重置按钮 ==========
+  document.getElementById('resetBtn').addEventListener('click', () => {
+    resetSim(true);
+    rerender();
+  });
+
+  // ========== rerender ==========
+  function rerender(){
+    renderPalette();
+    renderSchedule();
+    renderLegend();
+    redrawTimeline();
+    updateClock();
+    applyLang();
+  }
+
+  // 初始化
+  rerender();
+  updatePlayBtnState();
+
+})();
+</script>
+</body>
+</html>

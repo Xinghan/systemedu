@@ -1,0 +1,1600 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>M29 - 烟雾日空气事件 - 我家最差那天节点抓到了吗</title>
+<style>
+  /* F2 layer 1 - shared deep space (theme_style/styles.css L8-21) */
+  :root{
+    --bg-0: oklch(0.14 0.035 265);
+    --bg-1: oklch(0.18 0.04 265);
+    --bg-2: oklch(0.22 0.045 265);
+    --bg-3: oklch(0.28 0.05 265);
+    --line: oklch(0.35 0.05 265 / 0.35);
+    --line-strong: oklch(0.55 0.08 265 / 0.55);
+    --fg: oklch(0.96 0.01 265);
+    --fg-dim: oklch(0.75 0.02 265);
+    --fg-mute: oklch(0.55 0.03 265);
+    --gold: oklch(0.85 0.14 85);
+
+    /* F2 layer 2 - meteo accent (cloud-blue) */
+    --meteo: oklch(0.82 0.10 245);
+    --meteo-dim: oklch(0.62 0.10 245);
+
+    /* F2 layer 3 - meteo 5-color palette (themes.js meteo: CIRRUS / FRONT / STORM / MIST / SUNLIGHT) */
+    --CIRRUS:   oklch(0.82 0.10 245); /* 浅蓝 - 平静天 + Cloud mascot 主体 */
+    --FRONT:    oklch(0.62 0.13 245); /* 中蓝 - 烟柱飘来 锋面气团 */
+    --STORM:    oklch(0.38 0.10 245); /* 深蓝 - 重污染 mascot 阴影 */
+    --MIST:     oklch(0.95 0.05 245); /* 近白 - 高光 字幕主色 */
+    --SUNLIGHT: oklch(0.85 0.14 85);  /* 金 - 事件抓到 key moment */
+
+    /* AQI official 6-tier (EPA physical fact, used in Y-axis color band) */
+    --aqi-good:    oklch(0.78 0.16 145);   /* 绿: Good 0-50 (PM2.5 0-12) */
+    --aqi-mod:     oklch(0.85 0.16 95);    /* 黄: Moderate 51-100 (12-35.4) */
+    --aqi-usg:     oklch(0.74 0.17 50);    /* 橙: USG 101-150 (35.4-55.4) */
+    --aqi-unhc:    oklch(0.66 0.20 25);    /* 红: Unhealthy 151-200 (55.4-150.4) */
+    --aqi-veryunhc:oklch(0.50 0.18 320);   /* 紫: Very Unhealthy 201-300 */
+    --aqi-haz:     oklch(0.40 0.14 15);    /* 暗红: Hazardous 301+ */
+  }
+
+  *{box-sizing:border-box;margin:0;padding:0;}
+  html,body{height:100%;overflow:hidden;}
+  body{
+    background: var(--bg-0);
+    color: var(--fg);
+    font-family: 'Inter','Noto Sans SC',-apple-system,BlinkMacSystemFont,sans-serif;
+    display: flex;
+    height: 100vh;
+  }
+
+  /* 200px sidebar */
+  .sidebar{
+    width: 200px;
+    flex-shrink: 0;
+    background: var(--bg-1);
+    border-right: 1px solid var(--line);
+    padding: 16px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .brand{
+    border-bottom: 1px solid var(--line);
+    padding-bottom: 10px;
+    margin-bottom: 4px;
+  }
+  .brand .badge{
+    display: inline-block;
+    font-family: 'JetBrains Mono',ui-monospace,monospace;
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    color: var(--meteo);
+    background: var(--bg-2);
+    padding: 3px 7px;
+    border: 1px solid var(--line);
+    box-shadow: 2px 2px 0 var(--bg-0);
+    margin-bottom: 6px;
+  }
+  .brand h1{
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--fg);
+    line-height: 1.3;
+  }
+  .brand .sub{
+    font-size: 10px;
+    color: var(--fg-mute);
+    margin-top: 4px;
+    font-family: 'JetBrains Mono',ui-monospace,monospace;
+    letter-spacing: 0.04em;
+  }
+
+  /* Cloud mascot in sidebar top */
+  .mascot-box{
+    background: var(--bg-2);
+    border: 1px solid var(--line);
+    box-shadow: 3px 3px 0 var(--bg-0);
+    padding: 10px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .mascot-box .label{
+    font-family: 'JetBrains Mono',ui-monospace,monospace;
+    font-size: 9px;
+    color: var(--fg-dim);
+    letter-spacing: 0.08em;
+  }
+  .mascot-box .name{
+    font-size: 11px;
+    color: var(--fg);
+    font-weight: 600;
+    margin-top: 2px;
+  }
+
+  /* Guide 3 items */
+  .guide{
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .guide-item{
+    font-size: 11px;
+    line-height: 1.45;
+    color: var(--fg-dim);
+    padding-left: 9px;
+    border-left: 2px solid var(--meteo);
+    padding-top: 2px;
+    padding-bottom: 2px;
+  }
+  .guide-item .num{
+    font-family: 'JetBrains Mono',ui-monospace,monospace;
+    color: var(--meteo);
+    font-weight: 700;
+    margin-right: 4px;
+  }
+
+  .sidebar .spacer{flex: 1;}
+
+  .lang-btn{
+    background: var(--bg-2);
+    border: 1px solid var(--line-strong);
+    box-shadow: 2px 2px 0 var(--bg-0);
+    color: var(--fg);
+    font-family: 'JetBrains Mono',ui-monospace,monospace;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    padding: 7px 10px;
+    cursor: pointer;
+    width: 100%;
+  }
+  .lang-btn:hover{
+    border-color: var(--meteo);
+    color: var(--meteo);
+  }
+  .lang-btn:active{
+    transform: translate(2px, 2px);
+    box-shadow: none;
+  }
+
+  /* Main stage */
+  .main{
+    flex: 1;
+    position: relative;
+    overflow: hidden;
+    background: var(--bg-0);
+  }
+  #stage{
+    width: 100%;
+    height: 100%;
+    display: block;
+  }
+
+  /* HUD top-right */
+  .hud{
+    position: absolute;
+    top: 18px;
+    right: 18px;
+    background: var(--bg-2);
+    border: 1px solid var(--line);
+    box-shadow: 3px 3px 0 var(--bg-0);
+    padding: 10px 14px;
+    font-family: 'JetBrains Mono',ui-monospace,monospace;
+    min-width: 240px;
+  }
+  .hud .row{
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 14px;
+    font-size: 11px;
+    line-height: 1.6;
+  }
+  .hud .label{color: var(--fg-mute); letter-spacing: 0.06em;}
+  .hud .value{color: var(--fg); font-weight: 700;}
+  .hud .value.accent{color: var(--meteo);}
+  .hud .value.gold{color: var(--gold);}
+  .hud .value.alarm{color: var(--aqi-unhc);}
+  .hud .sep{
+    height: 1px;
+    background: var(--line);
+    margin: 6px 0;
+  }
+
+  /* Subtitle bottom */
+  .subtitle{
+    position: absolute;
+    left: 50%;
+    bottom: 28px;
+    transform: translateX(-50%);
+    text-align: center;
+    max-width: 80%;
+    pointer-events: none;
+  }
+  .subtitle .cn{
+    font-size: 17px;
+    font-weight: 700;
+    color: var(--fg);
+    letter-spacing: 0.01em;
+  }
+  .subtitle .en{
+    font-size: 12px;
+    color: var(--fg-mute);
+    margin-top: 4px;
+    font-style: italic;
+    font-family: 'JetBrains Mono',ui-monospace,monospace;
+    letter-spacing: 0.03em;
+  }
+
+  /* Frame chips bottom-left */
+  .frame-progress{
+    position: absolute;
+    left: 24px;
+    bottom: 28px;
+    display: flex;
+    gap: 6px;
+    align-items: center;
+  }
+  .chip{
+    width: 24px;
+    height: 6px;
+    background: var(--bg-2);
+    border: 1px solid var(--line);
+  }
+  .chip.active{
+    background: var(--meteo);
+    border-color: var(--meteo);
+  }
+  .chip.done{
+    background: var(--meteo-dim);
+    border-color: var(--meteo-dim);
+  }
+  .frame-progress .stepname{
+    font-family: 'JetBrains Mono',ui-monospace,monospace;
+    font-size: 10px;
+    color: var(--fg-dim);
+    margin-left: 8px;
+    letter-spacing: 0.08em;
+  }
+
+  /* key moment flash overlay */
+  .flash{
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-family: 'JetBrains Mono',ui-monospace,monospace;
+    font-size: 28px;
+    font-weight: 800;
+    color: var(--gold);
+    letter-spacing: 0.18em;
+    opacity: 0;
+    pointer-events: none;
+    text-shadow: 0 0 24px var(--gold);
+    text-align: center;
+  }
+  .flash.on{ opacity: 1; }
+  .flash .small{
+    display: block;
+    text-align: center;
+    font-size: 11px;
+    color: var(--fg-dim);
+    letter-spacing: 0.08em;
+    margin-top: 8px;
+    text-shadow: none;
+    font-weight: 400;
+  }
+</style>
+</head>
+<body>
+  <aside class="sidebar">
+    <div class="brand">
+      <span class="badge" id="badgeMod">MOD-M29 / METEO</span>
+      <h1 id="brandH1">烟雾日空气事件</h1>
+      <div class="sub" id="brandSub">a real smoke event captured</div>
+    </div>
+
+    <div class="mascot-box">
+      <svg width="48" height="48" viewBox="0 0 60 60" aria-hidden="true">
+        <!-- Cloud mascot - rounded nimbus, lightning eyes, gold sparkle (themes.js meteo) -->
+        <ellipse cx="32" cy="38" rx="22" ry="11" fill="var(--STORM)" opacity="0.5"/>
+        <circle cx="20" cy="32" r="11" fill="var(--CIRRUS)"/>
+        <circle cx="34" cy="28" r="14" fill="var(--CIRRUS)"/>
+        <circle cx="46" cy="34" r="9"  fill="var(--CIRRUS)"/>
+        <ellipse cx="32" cy="40" rx="22" ry="6" fill="var(--CIRRUS)"/>
+        <circle cx="26" cy="26" r="4" fill="var(--MIST)" opacity="0.65"/>
+        <circle cx="28" cy="34" r="2.2" fill="var(--FRONT)"/>
+        <circle cx="40" cy="34" r="2.2" fill="var(--FRONT)"/>
+        <polygon points="28,30 26,34 28,34 27,38 30,34 28,34" fill="var(--SUNLIGHT)"/>
+        <polygon points="40,30 38,34 40,34 39,38 42,34 40,34" fill="var(--SUNLIGHT)"/>
+        <circle cx="14" cy="46" r="1.4" fill="var(--SUNLIGHT)"/>
+        <circle cx="50" cy="48" r="1.2" fill="var(--SUNLIGHT)"/>
+      </svg>
+      <div>
+        <div class="label">MASCOT</div>
+        <div class="name" id="mascotName">Cloud · 云仔</div>
+      </div>
+    </div>
+
+    <div class="guide">
+      <div class="guide-item" id="g1"><span class="num">01</span><span class="gtxt">真实空气有平静日, 也有突发事件日</span></div>
+      <div class="guide-item" id="g2"><span class="num">02</span><span class="gtxt">远处烟柱飘来 PM2.5 几分钟就会冲十倍</span></div>
+      <div class="guide-item" id="g3"><span class="num">03</span><span class="gtxt">7×24 节点能完整抓下整条突跳曲线</span></div>
+    </div>
+
+    <div class="spacer"></div>
+    <button id="langBtn" class="lang-btn" type="button">CN / EN</button>
+  </aside>
+
+  <main class="main">
+    <svg id="stage" viewBox="0 0 1080 720" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg"></svg>
+
+    <div class="hud">
+      <div class="row"><span class="label" id="hudL1">FRAME</span><span class="value accent" id="hudV1">1 / 5</span></div>
+      <div class="row"><span class="label" id="hudL2">STAGE</span><span class="value" id="hudV2">Calm baseline</span></div>
+      <div class="sep"></div>
+      <div class="row"><span class="label" id="hudL3">CLOCK</span><span class="value" id="hudV3">09 : 00</span></div>
+      <div class="row"><span class="label" id="hudL4">PM2.5</span><span class="value gold" id="hudV4">15 ug/m3</span></div>
+    </div>
+
+    <div class="subtitle">
+      <div class="cn" id="subCn">平静的一天 - PM2.5 才 15 微克, 折线像一条贴底的细绳</div>
+      <div class="en" id="subEn">A calm day - PM2.5 only 15 ug/m3, the line hugs the floor</div>
+    </div>
+
+    <div class="frame-progress">
+      <div class="chip" id="chip0"></div>
+      <div class="chip" id="chip1"></div>
+      <div class="chip" id="chip2"></div>
+      <div class="chip" id="chip3"></div>
+      <div class="chip" id="chip4"></div>
+      <span class="stepname" id="stepName">01 · CALM</span>
+    </div>
+
+    <div class="flash" id="flash">
+      EVENT
+      <span class="small" id="flashSub">山火烟团飘到我家 - PM2.5 从 15 冲到 152</span>
+    </div>
+  </main>
+
+<script>
+(function(){
+  "use strict";
+
+  // ====== i18n ======
+  var LANG = 'cn';
+  var I18N = {
+    badgeMod:   { cn: 'MOD-M29 / METEO', en: 'MOD-M29 / METEO' },
+    brandH1:    { cn: '烟雾日空气事件',  en: 'Smoke Day Air Event' },
+    brandSub:   { cn: '一次真事件被节点抓到', en: 'a real smoke event captured' },
+    mascotName: { cn: 'Cloud · 云仔',     en: 'Cloud · the nimbus' },
+    g1: { cn: '真实空气有平静日, 也有突发事件日',
+          en: 'Real-world air has calm days and event days' },
+    g2: { cn: '远处烟柱飘来 PM2.5 几分钟就会冲十倍',
+          en: 'A drifting plume can multiply PM2.5 ten-fold in minutes' },
+    g3: { cn: '7×24 节点能完整抓下整条突跳曲线',
+          en: 'A 7x24 node captures the entire spike curve end to end' },
+    hudL1: { cn: '帧',     en: 'FRAME' },
+    hudL2: { cn: '时段',   en: 'STAGE' },
+    hudL3: { cn: '时刻',   en: 'CLOCK' },
+    hudL4: { cn: 'PM2.5',  en: 'PM2.5' },
+    btnLang: { cn: 'CN / EN', en: 'CN / EN' }
+  };
+
+  // ====== Event day synthetic 24h PM2.5 timeline ======
+  // baseline ~15, plume arrives at hour 13, peaks 152 at hour 15, decays after wind shift
+  var SERIES = [
+    {h: 0,  v: 14}, {h: 1,  v: 13}, {h: 2,  v: 12}, {h: 3,  v: 12},
+    {h: 4,  v: 13}, {h: 5,  v: 14}, {h: 6,  v: 15}, {h: 7,  v: 16},
+    {h: 8,  v: 15}, {h: 9,  v: 15}, {h:10,  v: 16}, {h:11,  v: 17},
+    {h:12,  v: 22}, {h:13,  v: 78}, {h:14,  v: 134}, {h:15,  v: 152},
+    {h:16,  v: 138}, {h:17,  v: 96}, {h:18,  v: 58}, {h:19,  v: 38},
+    {h:20,  v: 26}, {h:21,  v: 20}, {h:22,  v: 17}, {h:23,  v: 16}
+  ];
+  var BASELINE = 15;
+  var PEAK_H = 15;
+  var PEAK_V = 152;
+
+  // AQI tier boundaries (PM2.5 24h breakpoints, EPA)
+  function aqiColor(v){
+    if (v <= 12.0)  return 'var(--aqi-good)';
+    if (v <= 35.4)  return 'var(--aqi-mod)';
+    if (v <= 55.4)  return 'var(--aqi-usg)';
+    if (v <= 150.4) return 'var(--aqi-unhc)';
+    if (v <= 250.4) return 'var(--aqi-veryunhc)';
+    return 'var(--aqi-haz)';
+  }
+  function aqiLabel(v){
+    if (v <= 12.0)  return LANG === 'cn' ? '好 GOOD' : 'GOOD';
+    if (v <= 35.4)  return LANG === 'cn' ? '中 MOD'  : 'MOD';
+    if (v <= 55.4)  return LANG === 'cn' ? '橙 USG'  : 'USG';
+    if (v <= 150.4) return LANG === 'cn' ? '红 不健康' : 'UNHC';
+    if (v <= 250.4) return LANG === 'cn' ? '紫 很差' : 'V-UNHC';
+    return LANG === 'cn' ? '暗红 危' : 'HAZ';
+  }
+
+  // ====== 5-frame story ======
+  var FRAME_MS = 6000;
+  var FRAMES = [
+    {
+      id: 'calm',
+      stepName: '01 · CALM',
+      hudStage: { cn: '平静日 baseline', en: 'Calm baseline' },
+      hudHour:  '09 : 00',
+      hudPM:    '15 ug/m3',
+      subCn: '平静的一天 - PM2.5 才 15 微克, 折线像一条贴底的细绳',
+      subEn: 'A calm day - PM2.5 only 15 ug/m3, the line hugs the floor'
+    },
+    {
+      id: 'plume',
+      stepName: '02 · PLUME APPROACH',
+      hudStage: { cn: '烟柱 飘来', en: 'Plume incoming' },
+      hudHour:  '13 : 00',
+      hudPM:    '22 -> 78 ug/m3',
+      subCn: '远处升起一柱浓烟 - 山火or工厂or烧烤, 风把它一团一团吹过来',
+      subEn: 'A column of smoke rises far away - wildfire, factory, or BBQ, wind ferries it over'
+    },
+    {
+      id: 'spike',
+      stepName: '03 · SPIKE',
+      hudStage: { cn: '事件高峰 红色 UNHC', en: 'Event peak - Red UNHC' },
+      hudHour:  '15 : 00',
+      hudPM:    '152 ug/m3',
+      subCn: '15:00 烟团吞掉我家 - PM2.5 从 15 飙到 152, AQI 跳进 红色 不健康档',
+      subEn: '15:00 plume engulfs home - PM2.5 leaps 15->152, AQI jumps into RED Unhealthy'
+    },
+    {
+      id: 'capture',
+      stepName: '04 · NODE CAPTURE',
+      hudStage: { cn: '节点完整捕获 24h', en: '24h full capture' },
+      hudHour:  '24 / 24',
+      hudPM:    'spike snapshot',
+      subCn: '我的节点 7×24 跑着 - 整条上山再下山的尖峰曲线被完整抓下',
+      subEn: 'My node runs 7x24 - the full rise-and-fall spike curve is fully captured'
+    },
+    {
+      id: 'return',
+      stepName: '05 · RETURN + SEAL',
+      hudStage: { cn: '事件后 回归平静', en: 'Post-event calm restored' },
+      hudHour:  '23 : 00',
+      hudPM:    '16 ug/m3',
+      subCn: '风换向了, 空气清回来 - 但这次事件已被节点永久记录, 你是数据守望者',
+      subEn: 'Wind shifts, air returns clean - but the event is permanently logged, you are the data watcher'
+    }
+  ];
+
+  // ====== state ======
+  var currentFrame = 0;
+  var frameStartTs = 0;
+  var rafId = null;
+  var stage = document.getElementById('stage');
+  var SVGNS = 'http://www.w3.org/2000/svg';
+
+  // ====== util ======
+  function el(name, attrs, parent){
+    var n = document.createElementNS(SVGNS, name);
+    if (attrs){
+      for (var k in attrs){
+        if (Object.prototype.hasOwnProperty.call(attrs, k)){
+          n.setAttribute(k, attrs[k]);
+        }
+      }
+    }
+    if (parent) parent.appendChild(n);
+    return n;
+  }
+  function clearStage(){ while(stage.firstChild) stage.removeChild(stage.firstChild); }
+  function t(key){
+    if (!I18N[key]) return key;
+    return I18N[key][LANG] || I18N[key].en || key;
+  }
+  function lerp(a, b, p){ return a + (b - a) * p; }
+  function easeInOut(x){ return x < 0.5 ? 2*x*x : 1 - Math.pow(-2*x + 2, 2)/2; }
+  function easeOut(x){ return 1 - Math.pow(1 - x, 3); }
+  function clamp(x, lo, hi){ return x < lo ? lo : (x > hi ? hi : x); }
+
+  // ====== shared drawing helpers ======
+  function drawBgGrid(){
+    var g = el('g', { opacity: '0.16' }, stage);
+    for (var x = 0; x <= 1080; x += 60){
+      el('line', { x1: x, y1: 0, x2: x, y2: 720, stroke: 'var(--line)', 'stroke-width': '0.5' }, g);
+    }
+    for (var y = 0; y <= 720; y += 60){
+      el('line', { x1: 0, y1: y, x2: 1080, y2: y, stroke: 'var(--line)', 'stroke-width': '0.5' }, g);
+    }
+    var defs = el('defs', null, stage);
+    var rg = el('radialGradient', { id: 'centerGlow', cx: '50%', cy: '45%', r: '60%' }, defs);
+    el('stop', { offset: '0%', 'stop-color': 'var(--meteo)', 'stop-opacity': '0.05' }, rg);
+    el('stop', { offset: '100%', 'stop-color': 'var(--bg-0)', 'stop-opacity': '0' }, rg);
+    el('rect', { x: 0, y: 0, width: 1080, height: 720, fill: 'url(#centerGlow)' }, stage);
+  }
+
+  // 5-step chain bottom
+  function drawStepChain(activeIdx){
+    var labels = [
+      { cn: '平静',   en: 'Calm' },
+      { cn: '烟来',   en: 'Plume' },
+      { cn: '突跳',   en: 'Spike' },
+      { cn: '捕获',   en: 'Capture' },
+      { cn: '归位',   en: 'Return' }
+    ];
+    var y = 640;
+    var startX = 110;
+    var gap = (1080 - 220) / 4;
+    var g = el('g', null, stage);
+    for (var i = 0; i < 5; i++){
+      var cx = startX + gap * i;
+      var on = i <= activeIdx;
+      var ringColor = on ? 'var(--meteo)' : 'var(--line)';
+      var fillColor = on ? 'var(--bg-2)' : 'var(--bg-1)';
+      var textColor = on ? 'var(--fg)' : 'var(--fg-mute)';
+      el('rect', {
+        x: cx - 48, y: y - 16, width: 96, height: 32,
+        fill: fillColor, stroke: ringColor, 'stroke-width': on ? '1.6' : '1', rx: '2'
+      }, g);
+      var tx = el('text', {
+        x: cx, y: y + 4, fill: textColor,
+        'font-family': "'Inter','Noto Sans SC',sans-serif",
+        'font-size': '12', 'font-weight': on ? '700' : '500',
+        'text-anchor': 'middle'
+      }, g);
+      tx.textContent = labels[i][LANG] || labels[i].en;
+      var ix = el('text', {
+        x: cx, y: y - 22, fill: on ? 'var(--meteo)' : 'var(--fg-mute)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '9', 'text-anchor': 'middle', 'letter-spacing': '0.1em'
+      }, g);
+      ix.textContent = '0' + (i+1);
+      if (i < 4){
+        var x1 = cx + 48;
+        var x2 = cx + gap - 48;
+        var connColor = (on && (i+1) <= activeIdx) ? 'var(--meteo)' : 'var(--line)';
+        el('line', {
+          x1: x1, y1: y, x2: x2 - 6, y2: y,
+          stroke: connColor, 'stroke-width': '1.2'
+        }, g);
+        el('polygon', {
+          points: (x2-6)+','+(y-4)+' '+(x2)+','+y+' '+(x2-6)+','+(y+4),
+          fill: connColor
+        }, g);
+      }
+    }
+  }
+
+  // Cloud mascot - body changes tint (CIRRUS clean -> STORM dirty -> CIRRUS clean again)
+  // tint: 0 = clean cirrus, 1 = full storm dirty
+  function drawCloudMascot(g, pulse, tint, alarmMode){
+    tint = clamp(tint, 0, 1);
+    // mascot body color blend: bright CIRRUS to dark STORM happens via two stacked circles
+    // shadow STORM under
+    el('ellipse', { cx: 0, cy: 18, rx: 36, ry: 8, fill: 'var(--STORM)', opacity: 0.4 + tint * 0.35 }, g);
+    // body CIRRUS - 3 puffs
+    el('circle', { cx: -16, cy: 4,  r: 16, fill: 'var(--CIRRUS)' }, g);
+    el('circle', { cx: 8,   cy: -4, r: 22, fill: 'var(--CIRRUS)' }, g);
+    el('circle', { cx: 28,  cy: 6,  r: 14, fill: 'var(--CIRRUS)' }, g);
+    el('ellipse', { cx: 6, cy: 14, rx: 34, ry: 8, fill: 'var(--CIRRUS)' }, g);
+    // dirty overlay (STORM at high opacity tints body dark)
+    if (tint > 0.05){
+      el('circle', { cx: -16, cy: 4,  r: 16, fill: 'var(--STORM)', opacity: tint * 0.7 }, g);
+      el('circle', { cx: 8,   cy: -4, r: 22, fill: 'var(--STORM)', opacity: tint * 0.7 }, g);
+      el('circle', { cx: 28,  cy: 6,  r: 14, fill: 'var(--STORM)', opacity: tint * 0.7 }, g);
+      el('ellipse', { cx: 6, cy: 14, rx: 34, ry: 8, fill: 'var(--STORM)', opacity: tint * 0.7 }, g);
+      // a few FRONT soot specks across body
+      for (var sp = 0; sp < 7; sp++){
+        var spx = -22 + sp * 8;
+        var spy = -2 + Math.sin(pulse * 2 + sp) * 3;
+        el('circle', { cx: spx, cy: spy, r: 1 + tint * 1.2, fill: 'var(--FRONT)', opacity: tint * 0.8 }, g);
+      }
+    }
+    // MIST highlight (clean only)
+    el('circle', { cx: -2, cy: -8, r: 6, fill: 'var(--MIST)', opacity: (1 - tint) * 0.6 }, g);
+    // eyes
+    var eyeAlpha = alarmMode ? (0.6 + 0.4*Math.sin(pulse*6)) : 0.85;
+    el('circle', { cx: -2, cy: 4, r: 3.4, fill: 'var(--FRONT)', opacity: eyeAlpha }, g);
+    el('circle', { cx: 16, cy: 4, r: 3.4, fill: 'var(--FRONT)', opacity: eyeAlpha }, g);
+    if (alarmMode && Math.sin(pulse*6) > 0.2){
+      el('polygon', { points: '-2,-2 -5,4 -2,4 -3,10 0,4 -2,4', fill: 'var(--SUNLIGHT)' }, g);
+      el('polygon', { points: '16,-2 13,4 16,4 15,10 18,4 16,4', fill: 'var(--SUNLIGHT)' }, g);
+    } else {
+      el('circle', { cx: -2, cy: 4, r: 1.2, fill: 'var(--MIST)' }, g);
+      el('circle', { cx: 16, cy: 4, r: 1.2, fill: 'var(--MIST)' }, g);
+    }
+    // mouth state: smile (clean) -> flat -> frown (dirty)
+    if (tint < 0.3){
+      // smile arc
+      el('path', { d: 'M -4 11 Q 7 17 18 11', fill: 'none', stroke: 'var(--FRONT)', 'stroke-width': '1.6', 'stroke-linecap': 'round' }, g);
+    } else if (tint < 0.7){
+      el('line', { x1: -4, y1: 12, x2: 18, y2: 12, stroke: 'var(--FRONT)', 'stroke-width': '1.6', 'stroke-linecap': 'round' }, g);
+    } else {
+      el('path', { d: 'M -4 14 Q 7 8 18 14', fill: 'none', stroke: 'var(--FRONT)', 'stroke-width': '1.6', 'stroke-linecap': 'round' }, g);
+    }
+    // gold sparkle when clean
+    if (tint < 0.3){
+      var sx = Math.sin(pulse*3);
+      el('circle', { cx: -32, cy: 24, r: 1.4 + Math.abs(sx)*0.6, fill: 'var(--SUNLIGHT)', opacity: 0.7 }, g);
+      el('circle', { cx: 40,  cy: 22, r: 1.2 + Math.abs(sx)*0.6, fill: 'var(--SUNLIGHT)', opacity: 0.7 }, g);
+    }
+  }
+
+  // House icon (under the sky), used as anchor for "我家"
+  function drawHouse(parent, cx, cy, scale){
+    scale = scale || 1;
+    var s = scale;
+    var g = el('g', { transform: 'translate(' + cx + ',' + cy + ') scale(' + s + ')' }, parent);
+    // body
+    el('rect', { x: -40, y: 0, width: 80, height: 50, fill: 'var(--bg-2)',
+                 stroke: 'var(--meteo)', 'stroke-width': '1.4' }, g);
+    // roof
+    el('polygon', { points: '-46,0 0,-30 46,0', fill: 'var(--FRONT)',
+                    stroke: 'var(--meteo)', 'stroke-width': '1.4' }, g);
+    // door
+    el('rect', { x: -10, y: 22, width: 20, height: 28, fill: 'var(--STORM)' }, g);
+    // window
+    el('rect', { x: -32, y: 8, width: 16, height: 14, fill: 'var(--SUNLIGHT)', opacity: 0.85 }, g);
+    el('rect', { x: 16, y: 8, width: 16, height: 14, fill: 'var(--SUNLIGHT)', opacity: 0.85 }, g);
+    // antenna - the sensor node
+    el('line', { x1: 0, y1: -30, x2: 0, y2: -54, stroke: 'var(--meteo)', 'stroke-width': '1.4' }, g);
+    el('rect', { x: -8, y: -64, width: 16, height: 10, fill: 'var(--bg-3)',
+                 stroke: 'var(--SUNLIGHT)', 'stroke-width': '1.2', rx: '1' }, g);
+    el('circle', { cx: 0, cy: -59, r: 2, fill: 'var(--SUNLIGHT)' }, g);
+    var lbl = el('text', { x: 0, y: -76, fill: 'var(--SUNLIGHT)',
+                            'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                            'font-size': '9', 'text-anchor': 'middle', 'font-weight': '700',
+                            'letter-spacing': '0.1em' }, g);
+    lbl.textContent = 'NODE';
+  }
+
+  // ============================================================
+  // Frame 1 - CALM (baseline ~15, mascot smiling, line flat near 0)
+  // ============================================================
+  function drawFrame1(p){
+    drawBgGrid();
+    drawStepChain(0);
+
+    var ttl = el('text', {
+      x: 540, y: 60, fill: 'var(--meteo)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '14', 'text-anchor': 'middle', 'letter-spacing': '0.14em', 'font-weight': '700'
+    }, stage);
+    ttl.textContent = LANG === 'cn'
+      ? '平静的一天 - PM2.5 = 15, 折线贴在地板上'
+      : 'A calm day - PM2.5 = 15, line hugs the floor';
+
+    // sky background - CIRRUS gentle gradient
+    var defs = el('defs', null, stage);
+    var sg = el('linearGradient', { id: 'calmSky', x1: '0%', y1: '0%', x2: '0%', y2: '100%' }, defs);
+    el('stop', { offset: '0%', 'stop-color': 'var(--CIRRUS)', 'stop-opacity': '0.22' }, sg);
+    el('stop', { offset: '100%', 'stop-color': 'var(--MIST)', 'stop-opacity': '0.06' }, sg);
+    el('rect', { x: 60, y: 100, width: 980, height: 360, fill: 'url(#calmSky)',
+                 stroke: 'var(--line)', 'stroke-width': '1', rx: '4' }, stage);
+
+    // drifting cirrus wisps - 4 wisps slow drift
+    for (var w = 0; w < 4; w++){
+      var wx = 100 + ((p * 60 + w * 240) % 920);
+      var wy = 150 + (w % 2) * 60;
+      var wg = el('g', { transform: 'translate(' + wx + ',' + wy + ')', opacity: 0.7 }, stage);
+      el('ellipse', { cx: 0,  cy: 0, rx: 40, ry: 8,  fill: 'var(--CIRRUS)', opacity: 0.6 }, wg);
+      el('ellipse', { cx: 10, cy: -4, rx: 28, ry: 6, fill: 'var(--MIST)',   opacity: 0.5 }, wg);
+      el('ellipse', { cx: -8, cy: 3,  rx: 22, ry: 5, fill: 'var(--CIRRUS)', opacity: 0.5 }, wg);
+    }
+
+    // sun (SUNLIGHT) gentle pulsing
+    var sunAlpha = 0.85 + 0.1 * Math.sin(p * 3);
+    el('circle', { cx: 900, cy: 160, r: 26, fill: 'var(--SUNLIGHT)', opacity: sunAlpha }, stage);
+    el('circle', { cx: 900, cy: 160, r: 40, fill: 'var(--SUNLIGHT)', opacity: 0.18 }, stage);
+
+    // ground
+    el('rect', { x: 60, y: 380, width: 980, height: 80, fill: 'var(--bg-2)' }, stage);
+    el('line', { x1: 60, y1: 380, x2: 1040, y2: 380, stroke: 'var(--meteo)', 'stroke-width': '1.2' }, stage);
+
+    // my house with node antenna
+    drawHouse(stage, 540, 330, 1.0);
+
+    // small mascot floating above house, smiling CIRRUS clean
+    var hover = Math.sin(p * 4) * 3;
+    var mg = el('g', { transform: 'translate(' + (640 + Math.sin(p*2)*8) + ',' + (220 + hover) + ')' }, stage);
+    drawCloudMascot(mg, p * 2, 0, false);
+
+    // mini-chart bottom: baseline flat line from 0 to current hour
+    var chartX = 100, chartY = 580;
+    var chartW = 880, chartH = 60;
+    drawMiniChart(chartX, chartY, chartW, chartH, lerp(0, 9, easeInOut(p)), 'calm');
+
+    // PM card top-left
+    drawPMBigCard(stage, 200, 220, 15, LANG === 'cn' ? '此刻 PM2.5' : 'NOW PM2.5');
+
+    // AQI good chip
+    var ab = el('g', { transform: 'translate(200, 320)' }, stage);
+    el('rect', { x: -60, y: -14, width: 120, height: 28,
+                 fill: 'var(--aqi-good)', opacity: '0.28', stroke: 'var(--aqi-good)', 'stroke-width': '1.4' }, ab);
+    var abt = el('text', {
+      x: 0, y: 5, fill: 'var(--aqi-good)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '12', 'text-anchor': 'middle', 'font-weight': '700', 'letter-spacing': '0.12em'
+    }, ab);
+    abt.textContent = LANG === 'cn' ? 'AQI = GOOD' : 'AQI = GOOD';
+  }
+
+  // ============================================================
+  // Frame 2 - PLUME APPROACH (smoke column rising far, wind ferries puffs)
+  // ============================================================
+  function drawFrame2(p){
+    drawBgGrid();
+    drawStepChain(1);
+
+    var ttl = el('text', {
+      x: 540, y: 60, fill: 'var(--meteo)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '14', 'text-anchor': 'middle', 'letter-spacing': '0.14em', 'font-weight': '700'
+    }, stage);
+    ttl.textContent = LANG === 'cn'
+      ? '远处升起烟柱 - 山火/工厂/烧烤, 风带它一团一团飘来'
+      : 'A plume rises far away - wildfire/factory/BBQ, wind drifts it our way';
+
+    // sky background dimming (CIRRUS -> FRONT)
+    var defs = el('defs', null, stage);
+    var sg = el('linearGradient', { id: 'plumeSky', x1: '0%', y1: '0%', x2: '0%', y2: '100%' }, defs);
+    el('stop', { offset: '0%', 'stop-color': 'var(--FRONT)', 'stroke-opacity': '0.32' }, sg);
+    el('stop', { offset: '100%', 'stop-color': 'var(--CIRRUS)', 'stop-opacity': '0.1' }, sg);
+    el('rect', { x: 60, y: 100, width: 980, height: 360, fill: 'url(#plumeSky)',
+                 stroke: 'var(--line)', 'stroke-width': '1', rx: '4' }, stage);
+
+    // distant mountains (STORM silhouette)
+    var mp = '60,400 ' +
+             '120,340 180,380 240,310 300,360 360,290 420,350 480,300 ' +
+             '540,360 600,310 660,350 720,300 780,340 840,290 900,350 960,320 1040,360 ' +
+             '1040,400';
+    el('polygon', { points: mp, fill: 'var(--STORM)', opacity: 0.7 }, stage);
+
+    // smoke source on left distant mountain - rising column
+    var srcX = 240, srcY = 310;
+    // base fire glow
+    el('ellipse', { cx: srcX, cy: srcY + 4, rx: 14, ry: 5,
+                    fill: 'var(--SUNLIGHT)', opacity: 0.6 + 0.3 * Math.sin(p * 12) }, stage);
+    el('ellipse', { cx: srcX, cy: srcY + 4, rx: 8, ry: 3,
+                    fill: 'var(--aqi-unhc)', opacity: 0.85 }, stage);
+    // column - particles rising
+    var colN = 36;
+    for (var c = 0; c < colN; c++){
+      var phase = (p * 0.5 + c / colN) % 1;
+      var sx = srcX + Math.sin(phase * 4 + c * 0.4) * (10 + phase * 32);
+      var sy = srcY - phase * 220;
+      var sr = 4 + phase * 14;
+      var sa = (1 - phase) * 0.7;
+      // base FRONT to STORM dark
+      var sc = phase < 0.4 ? 'var(--STORM)' : (phase < 0.7 ? 'var(--FRONT)' : 'var(--CIRRUS)');
+      el('circle', { cx: sx, cy: sy, r: sr, fill: sc, opacity: sa }, stage);
+    }
+
+    // wind direction arrow (top)
+    var arrX = 380, arrY = 150;
+    el('line', { x1: arrX, y1: arrY, x2: arrX + 360, y2: arrY,
+                 stroke: 'var(--SUNLIGHT)', 'stroke-width': '1.6', 'stroke-dasharray': '6 4', opacity: 0.7 }, stage);
+    el('polygon', { points: (arrX+360)+','+arrY+' '+(arrX+348)+','+(arrY-7)+' '+(arrX+348)+','+(arrY+7),
+                    fill: 'var(--SUNLIGHT)', opacity: 0.85 }, stage);
+    var wlb = el('text', {
+      x: arrX + 180, y: arrY - 12, fill: 'var(--SUNLIGHT)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '11', 'text-anchor': 'middle', 'font-weight': '700', 'letter-spacing': '0.1em'
+    }, stage);
+    wlb.textContent = LANG === 'cn' ? '西风 WIND 5 m/s' : 'WIND 5 m/s';
+
+    // drifting smoke puffs traveling left -> right toward house
+    var puffs = 5;
+    for (var pf = 0; pf < puffs; pf++){
+      var t0 = (p + pf * 0.18) % 1;
+      var puffX = srcX + 60 + t0 * 620;
+      var puffY = 180 + Math.sin(t0 * 3 + pf) * 18;
+      var puffR = 18 + t0 * 10;
+      var puffA = clamp(1 - Math.abs(t0 - 0.5) * 1.6, 0.2, 0.7);
+      var pg = el('g', { transform: 'translate(' + puffX + ',' + puffY + ')', opacity: puffA }, stage);
+      el('circle', { cx: -8, cy: 0, r: puffR, fill: 'var(--FRONT)' }, pg);
+      el('circle', { cx: 6,  cy: -4, r: puffR + 4, fill: 'var(--FRONT)' }, pg);
+      el('circle', { cx: 14, cy: 2,  r: puffR - 2, fill: 'var(--STORM)', opacity: 0.6 }, pg);
+      el('circle', { cx: 0,  cy: -6, r: puffR * 0.4, fill: 'var(--MIST)', opacity: 0.4 }, pg);
+    }
+
+    // ground
+    el('rect', { x: 60, y: 400, width: 980, height: 60, fill: 'var(--bg-2)' }, stage);
+    el('line', { x1: 60, y1: 400, x2: 1040, y2: 400, stroke: 'var(--meteo)', 'stroke-width': '1.2' }, stage);
+
+    // my house far right
+    drawHouse(stage, 880, 360, 0.9);
+
+    // mascot - mildly worried, slight tint
+    var tintNow = lerp(0.05, 0.35, easeInOut(p));
+    var mg = el('g', { transform: 'translate(' + (760 + Math.sin(p*3)*6) + ', 250)' }, stage);
+    drawCloudMascot(mg, p * 4, tintNow, false);
+
+    // chart - line is rising from 15 to ~78
+    var chartX = 100, chartY = 580;
+    var chartW = 880, chartH = 60;
+    drawMiniChart(chartX, chartY, chartW, chartH, lerp(11, 13.5, easeInOut(p)), 'rising');
+
+    // PM card
+    var pmNow = Math.round(lerp(22, 78, easeInOut(p)));
+    drawPMBigCard(stage, 200, 200, pmNow, LANG === 'cn' ? '13:00 烟雾边缘' : '13:00 plume edge');
+
+    // AQI moderate / USG
+    var ab = el('g', { transform: 'translate(200, 300)' }, stage);
+    var col = pmNow > 55.4 ? 'var(--aqi-unhc)' : (pmNow > 35.4 ? 'var(--aqi-usg)' : 'var(--aqi-mod)');
+    el('rect', { x: -78, y: -14, width: 156, height: 28,
+                 fill: col, opacity: '0.3', stroke: col, 'stroke-width': '1.4' }, ab);
+    var abt = el('text', {
+      x: 0, y: 5, fill: col,
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '12', 'text-anchor': 'middle', 'font-weight': '700', 'letter-spacing': '0.12em'
+    }, ab);
+    abt.textContent = 'AQI = ' + aqiLabel(pmNow);
+  }
+
+  // ============================================================
+  // Frame 3 - SPIKE (smoke engulfs home, PM=152, red flash, mascot dirty)
+  // ============================================================
+  function drawFrame3(p){
+    drawBgGrid();
+    drawStepChain(2);
+
+    var ttl = el('text', {
+      x: 540, y: 60, fill: 'var(--aqi-unhc)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '14', 'text-anchor': 'middle', 'letter-spacing': '0.14em', 'font-weight': '700'
+    }, stage);
+    ttl.textContent = LANG === 'cn'
+      ? '15:00 烟团吞掉我家 - PM2.5 = 152 - AQI 红色 不健康'
+      : '15:00 plume engulfs home - PM2.5 = 152 - AQI Red Unhealthy';
+
+    // sky background dense smoke - STORM heavy
+    var defs = el('defs', null, stage);
+    var sg = el('linearGradient', { id: 'spikeSky', x1: '0%', y1: '0%', x2: '0%', y2: '100%' }, defs);
+    el('stop', { offset: '0%', 'stop-color': 'var(--STORM)', 'stop-opacity': '0.55' }, sg);
+    el('stop', { offset: '100%', 'stop-color': 'var(--FRONT)', 'stop-opacity': '0.4' }, sg);
+    el('rect', { x: 60, y: 100, width: 980, height: 360, fill: 'url(#spikeSky)',
+                 stroke: 'var(--line)', 'stroke-width': '1', rx: '4' }, stage);
+
+    // dim sun barely visible
+    var dimAlpha = 0.3 + 0.15 * Math.sin(p * 4);
+    el('circle', { cx: 900, cy: 160, r: 22, fill: 'var(--SUNLIGHT)', opacity: dimAlpha * 0.5 }, stage);
+    el('circle', { cx: 900, cy: 160, r: 36, fill: 'var(--SUNLIGHT)', opacity: 0.08 }, stage);
+
+    // dense floating PM particles everywhere (STORM + FRONT)
+    var pn = 120;
+    for (var pp_ = 0; pp_ < pn; pp_++){
+      var ppx = 70 + ((pp_ * 41 + p * 60) % 960);
+      var ppy = 110 + ((pp_ * 23 + p * 80) % 340);
+      var ppa = 0.45 + 0.4 * Math.sin(p * 4 + pp_);
+      var ppc = pp_ % 3 === 0 ? 'var(--FRONT)' : 'var(--STORM)';
+      el('circle', { cx: ppx, cy: ppy, r: 1.8 + (pp_ % 4) * 0.4, fill: ppc, opacity: ppa }, stage);
+    }
+
+    // ground
+    el('rect', { x: 60, y: 400, width: 980, height: 60, fill: 'var(--bg-2)' }, stage);
+
+    // house engulfed - rendered with smoke around
+    drawHouse(stage, 540, 360, 1.0);
+
+    // big number readout - PM rapidly climbing 15 -> 80 -> 152
+    var t1 = easeInOut(clamp(p / 0.4, 0, 1));
+    var pmNow;
+    if (p < 0.4){
+      pmNow = Math.round(lerp(22, 80, t1));
+    } else {
+      var t2 = easeOut(clamp((p - 0.4) / 0.5, 0, 1));
+      pmNow = Math.round(lerp(80, 152, t2));
+    }
+
+    // huge PM number left
+    var ng = el('g', { transform: 'translate(200, 240)' }, stage);
+    el('rect', { x: -110, y: -64, width: 220, height: 130,
+                 fill: 'var(--bg-3)', stroke: 'var(--aqi-unhc)', 'stroke-width': '2.2', rx: '4' }, ng);
+    var nlbl = el('text', {
+      x: 0, y: -38, fill: 'var(--fg-mute)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '11', 'text-anchor': 'middle', 'letter-spacing': '0.14em', 'font-weight': '700'
+    }, ng);
+    nlbl.textContent = LANG === 'cn' ? '此刻 PM2.5' : 'NOW PM2.5';
+    var nv = el('text', {
+      x: 0, y: 18, fill: aqiColor(pmNow),
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '64', 'text-anchor': 'middle', 'font-weight': '800'
+    }, ng);
+    nv.textContent = String(pmNow);
+    var nu = el('text', {
+      x: 0, y: 46, fill: 'var(--fg-dim)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '11', 'text-anchor': 'middle'
+    }, ng);
+    nu.textContent = 'ug/m3';
+
+    // AQI color block big - turns RED at p > 0.55
+    var aqg = el('g', { transform: 'translate(840, 240)' }, stage);
+    var aqCol = aqiColor(pmNow);
+    var aqOp = (pmNow > 55.4) ? (0.45 + 0.25 * Math.sin(p * 9)) : 0.32;
+    el('rect', { x: -100, y: -64, width: 200, height: 130,
+                 fill: aqCol, opacity: aqOp, stroke: aqCol, 'stroke-width': '2.2', rx: '4' }, aqg);
+    var alb = el('text', {
+      x: 0, y: -38, fill: 'var(--fg)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '11', 'text-anchor': 'middle', 'letter-spacing': '0.14em', 'font-weight': '700'
+    }, aqg);
+    alb.textContent = 'AQI BAND';
+    var alv = el('text', {
+      x: 0, y: 6, fill: 'var(--fg)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '32', 'text-anchor': 'middle', 'font-weight': '800', 'letter-spacing': '0.06em'
+    }, aqg);
+    alv.textContent = aqiLabel(pmNow);
+    var alu = el('text', {
+      x: 0, y: 32, fill: 'var(--fg)',
+      'font-family': "'Inter','Noto Sans SC',sans-serif",
+      'font-size': '12', 'text-anchor': 'middle', 'font-weight': '600'
+    }, aqg);
+    alu.textContent = LANG === 'cn'
+      ? (pmNow > 55.4 ? '室外 不适合 长时间停留' : '已偏脏 注意')
+      : (pmNow > 55.4 ? 'Unhealthy outdoors' : 'Edge of concern');
+
+    // big up-arrow connecting number to AQI - emphasize jump
+    if (p > 0.3){
+      var arrAlpha = clamp((p - 0.3) / 0.3, 0, 1);
+      el('line', { x1: 320, y1: 240, x2: 720, y2: 240,
+                   stroke: 'var(--aqi-unhc)', 'stroke-width': '3',
+                   'stroke-dasharray': '6 4', opacity: arrAlpha * 0.8 }, stage);
+      el('polygon', { points: '720,240 700,232 700,248',
+                      fill: 'var(--aqi-unhc)', opacity: arrAlpha }, stage);
+      var jmp = el('text', {
+        x: 520, y: 220, fill: 'var(--aqi-unhc)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '13', 'text-anchor': 'middle', 'letter-spacing': '0.12em',
+        'font-weight': '700', opacity: arrAlpha
+      }, stage);
+      jmp.textContent = LANG === 'cn' ? '+137 ug/m3 - 突跳事件' : '+137 ug/m3 - SPIKE';
+    }
+
+    // mascot - heavily dirty, alarm pulse
+    var tintNow = lerp(0.5, 1.0, easeInOut(p));
+    var mg = el('g', { transform: 'translate(' + (660 + Math.sin(p*5)*4) + ', 240)' }, stage);
+    drawCloudMascot(mg, p * 8, tintNow, true);
+
+    // chart - rapid spike segment
+    var chartX = 100, chartY = 580;
+    var chartW = 880, chartH = 60;
+    drawMiniChart(chartX, chartY, chartW, chartH, lerp(13, 16, easeInOut(p)), 'spike');
+
+    // flash overlay at peak moment
+    var flash = document.getElementById('flash');
+    document.getElementById('flashSub').textContent = LANG === 'cn'
+      ? '烟团吞掉我家 - PM2.5 从 15 冲到 152'
+      : 'Plume engulfs home - PM2.5 leaps 15 to 152';
+    if (p > 0.6 && p < 0.92){
+      flash.classList.add('on');
+    } else {
+      flash.classList.remove('on');
+    }
+  }
+
+  // ============================================================
+  // Frame 4 - NODE CAPTURE (full 24h chart with single spike, node logs everything)
+  // ============================================================
+  function drawFrame4(p){
+    drawBgGrid();
+    drawStepChain(3);
+
+    var ttl = el('text', {
+      x: 540, y: 56, fill: 'var(--meteo)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '14', 'text-anchor': 'middle', 'letter-spacing': '0.14em', 'font-weight': '700'
+    }, stage);
+    ttl.textContent = LANG === 'cn'
+      ? '节点 7×24 不睡觉 - 整条上山再下山的尖峰曲线被完整抓下'
+      : 'Node never sleeps 7x24 - the full rise-and-fall spike is captured end to end';
+
+    // big chart in main area
+    var chartX = 110, chartY = 540;
+    var chartW = 770, chartH = 380;
+    drawFullChart(chartX, chartY, chartW, chartH, p);
+
+    // node mini block top-right showing data stream
+    var ng = el('g', { transform: 'translate(960, 220)' }, stage);
+    el('rect', { x: -80, y: -90, width: 160, height: 220,
+                 fill: 'var(--bg-2)', stroke: 'var(--meteo)', 'stroke-width': '1.4', rx: '3' }, ng);
+    var nlb = el('text', {
+      x: 0, y: -68, fill: 'var(--meteo)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '10', 'text-anchor': 'middle', 'letter-spacing': '0.14em', 'font-weight': '700'
+    }, ng);
+    nlb.textContent = 'NODE-01';
+    // small antenna icon
+    el('rect', { x: -10, y: -56, width: 20, height: 14, fill: 'var(--bg-3)',
+                 stroke: 'var(--SUNLIGHT)', 'stroke-width': '1' }, ng);
+    el('circle', { cx: 0, cy: -49, r: 2, fill: 'var(--SUNLIGHT)' }, ng);
+    el('line', { x1: 0, y1: -42, x2: 0, y2: -34, stroke: 'var(--SUNLIGHT)', 'stroke-width': '1.2' }, ng);
+    // running counter - hours captured
+    var hrsCaptured = Math.floor(lerp(0, 24, easeInOut(p)));
+    var hc = el('text', {
+      x: 0, y: -10, fill: 'var(--SUNLIGHT)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '28', 'text-anchor': 'middle', 'font-weight': '800'
+    }, ng);
+    hc.textContent = (hrsCaptured < 10 ? '0' : '') + hrsCaptured + 'h';
+    var hcl = el('text', {
+      x: 0, y: 8, fill: 'var(--fg-mute)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '9', 'text-anchor': 'middle', 'letter-spacing': '0.1em'
+    }, ng);
+    hcl.textContent = LANG === 'cn' ? '已抓 / 24' : 'captured / 24';
+
+    // data log lines - faux samples streaming in
+    var sampleHours = [12, 13, 14, 15, 16, 17];
+    var sampleVs    = [22, 78, 134, 152, 138, 96];
+    for (var sm = 0; sm < 6; sm++){
+      var rowAlpha = clamp((p - sm * 0.12) / 0.1, 0, 1);
+      if (rowAlpha <= 0) continue;
+      var ry = 28 + sm * 16;
+      var hh = sampleHours[sm];
+      var vv = sampleVs[sm];
+      var rs = el('text', {
+        x: -68, y: ry, fill: 'var(--fg-dim)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '10', 'text-anchor': 'start', opacity: rowAlpha
+      }, ng);
+      rs.textContent = (hh < 10 ? '0' : '') + hh + ':00';
+      var rv = el('text', {
+        x: 68, y: ry, fill: aqiColor(vv),
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '10', 'text-anchor': 'end', 'font-weight': '700', opacity: rowAlpha
+      }, ng);
+      rv.textContent = vv + ' ug';
+    }
+
+    // bottom annotation
+    if (p > 0.6){
+      var capAlpha = clamp((p - 0.6) / 0.25, 0, 1);
+      var capG = el('g', { opacity: capAlpha, transform: 'translate(495, 600)' }, stage);
+      el('rect', { x: -200, y: -16, width: 400, height: 32,
+                   fill: 'var(--bg-2)', stroke: 'var(--SUNLIGHT)', 'stroke-width': '1.6', rx: '2' }, capG);
+      var ct = el('text', {
+        x: 0, y: 5, fill: 'var(--SUNLIGHT)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '12', 'text-anchor': 'middle', 'letter-spacing': '0.1em', 'font-weight': '700'
+      }, capG);
+      ct.textContent = LANG === 'cn'
+        ? '24 个采样点 全部入库 - 一次事件 = 一条曲线'
+        : '24 samples all logged - one event = one full curve';
+    }
+  }
+
+  // ============================================================
+  // Frame 5 - RETURN + SEAL (back to calm, gold seal "data watcher")
+  // ============================================================
+  function drawFrame5(p){
+    drawBgGrid();
+    drawStepChain(4);
+
+    var ttl = el('text', {
+      x: 540, y: 60, fill: 'var(--meteo)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '14', 'text-anchor': 'middle', 'letter-spacing': '0.14em', 'font-weight': '700'
+    }, stage);
+    ttl.textContent = LANG === 'cn'
+      ? '风换向了 - 空气清回来, 但事件已永久记录在数据里'
+      : 'Wind shifts - air returns clean, but the event is permanently in the data';
+
+    // sky returning to calm
+    var defs = el('defs', null, stage);
+    var sg = el('linearGradient', { id: 'returnSky', x1: '0%', y1: '0%', x2: '0%', y2: '100%' }, defs);
+    el('stop', { offset: '0%', 'stop-color': 'var(--CIRRUS)', 'stop-opacity': '0.22' }, sg);
+    el('stop', { offset: '100%', 'stop-color': 'var(--MIST)', 'stop-opacity': '0.06' }, sg);
+    el('rect', { x: 60, y: 100, width: 980, height: 240, fill: 'url(#returnSky)',
+                 stroke: 'var(--line)', 'stroke-width': '1', rx: '4' }, stage);
+
+    // sun returns bright
+    var sunAlpha = 0.85 + 0.1 * Math.sin(p * 3);
+    el('circle', { cx: 900, cy: 160, r: 28, fill: 'var(--SUNLIGHT)', opacity: sunAlpha }, stage);
+    el('circle', { cx: 900, cy: 160, r: 44, fill: 'var(--SUNLIGHT)', opacity: 0.18 }, stage);
+
+    // wind reverse arrow
+    var arrX = 720, arrY = 150;
+    el('line', { x1: arrX, y1: arrY, x2: arrX - 300, y2: arrY,
+                 stroke: 'var(--MIST)', 'stroke-width': '1.6', 'stroke-dasharray': '6 4', opacity: 0.7 }, stage);
+    el('polygon', { points: (arrX-300)+','+arrY+' '+(arrX-288)+','+(arrY-7)+' '+(arrX-288)+','+(arrY+7),
+                    fill: 'var(--MIST)', opacity: 0.85 }, stage);
+    var wlb = el('text', {
+      x: arrX - 150, y: arrY - 12, fill: 'var(--MIST)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '11', 'text-anchor': 'middle', 'font-weight': '700', 'letter-spacing': '0.1em'
+    }, stage);
+    wlb.textContent = LANG === 'cn' ? '东风换向 WIND' : 'WIND shifted';
+
+    // drifting cirrus wisps - clean now
+    for (var w = 0; w < 3; w++){
+      var wx = 200 + ((p * 50 + w * 280) % 700);
+      var wy = 200 + (w % 2) * 50;
+      var wg = el('g', { transform: 'translate(' + wx + ',' + wy + ')', opacity: 0.6 }, stage);
+      el('ellipse', { cx: 0,  cy: 0, rx: 38, ry: 7,  fill: 'var(--CIRRUS)', opacity: 0.55 }, wg);
+      el('ellipse', { cx: 10, cy: -3, rx: 26, ry: 5, fill: 'var(--MIST)',   opacity: 0.5 }, wg);
+    }
+
+    // ground
+    el('rect', { x: 60, y: 340, width: 980, height: 60, fill: 'var(--bg-2)' }, stage);
+    el('line', { x1: 60, y1: 340, x2: 1040, y2: 340, stroke: 'var(--meteo)', 'stroke-width': '1.2' }, stage);
+
+    // house in center
+    drawHouse(stage, 280, 290, 0.9);
+
+    // mascot - calm clean again
+    var hover = Math.sin(p * 4) * 3;
+    var mg = el('g', { transform: 'translate(' + (380 + Math.sin(p*2)*8) + ',' + (200 + hover) + ')' }, stage);
+    drawCloudMascot(mg, p * 2, 0, false);
+
+    // mini summary chart - full 24h faint, with one peak marker
+    var chartX = 540, chartY = 320;
+    var chartW = 480, chartH = 160;
+    drawSummaryChart(chartX, chartY, chartW, chartH);
+
+    // PM card now
+    drawPMBigCard(stage, 200, 200, 16, LANG === 'cn' ? '此刻 PM2.5' : 'NOW PM2.5');
+
+    // gold seal - "你抓到了一次真事件"
+    var sealAlpha = clamp((p - 0.4) / 0.3, 0, 1);
+    if (sealAlpha > 0){
+      var sg2 = el('g', { opacity: sealAlpha, transform: 'translate(540, 610)' }, stage);
+      el('rect', { x: -290, y: -28, width: 580, height: 56,
+                   fill: 'var(--bg-2)', stroke: 'var(--SUNLIGHT)', 'stroke-width': '2.4', rx: '4' }, sg2);
+      // gold ring stamp left
+      el('circle', { cx: -252, cy: 0, r: 18,
+                     fill: 'none', stroke: 'var(--SUNLIGHT)', 'stroke-width': '2' }, sg2);
+      var stxt = el('text', {
+        x: -252, y: 5, fill: 'var(--SUNLIGHT)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '14', 'text-anchor': 'middle', 'font-weight': '800', 'letter-spacing': '0.06em'
+      }, sg2);
+      stxt.textContent = 'OK';
+      var st = el('text', {
+        x: 30, y: -4, fill: 'var(--SUNLIGHT)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '14', 'text-anchor': 'middle', 'letter-spacing': '0.08em', 'font-weight': '700'
+      }, sg2);
+      st.textContent = LANG === 'cn'
+        ? '你抓到了一次真事件'
+        : 'You captured a real event';
+      var st2 = el('text', {
+        x: 30, y: 18, fill: 'var(--fg-dim)',
+        'font-family': "'Inter','Noto Sans SC',sans-serif",
+        'font-size': '12', 'text-anchor': 'middle'
+      }, sg2);
+      st2.textContent = LANG === 'cn'
+        ? '这就是数据守望者的作用 - 我家空气最差那天, 节点真的抓到了'
+        : 'This is the data watcher role - my worst air day, the node really got it';
+    }
+
+    // flash overlay
+    var flash = document.getElementById('flash');
+    if (p > 0.5 && p < 0.85){
+      flash.classList.add('on');
+      var flashCN = LANG === 'cn'
+        ? '数据守望者'
+        : 'DATA WATCHER';
+      var flashSubCN = LANG === 'cn'
+        ? '24h 一条曲线 - 平静 -> 烟来 -> 突跳 -> 归位, 全在你节点里'
+        : '24h one curve - calm -> plume -> spike -> return, all in your node';
+      flash.firstChild.textContent = flashCN;
+      document.getElementById('flashSub').textContent = flashSubCN;
+    } else {
+      flash.classList.remove('on');
+    }
+  }
+
+  // ============================================================
+  // Mini chart (used in F1/F2/F3 bottom strip)
+  // ============================================================
+  function drawMiniChart(chartX, chartY, chartW, chartH, drawToH, mode){
+    var hMax = 24;
+    var vMax = 170;
+    function hToX(h){ return chartX + (h / hMax) * chartW; }
+    function vToY(v){ return chartY - (v / vMax) * chartH; }
+
+    // bg
+    el('rect', { x: chartX - 10, y: chartY - chartH - 14, width: chartW + 28, height: chartH + 40,
+                 fill: 'var(--bg-1)', stroke: 'var(--line)', 'stroke-width': '1', rx: '3' }, stage);
+    // axes faint
+    el('line', { x1: chartX, y1: chartY, x2: chartX + chartW, y2: chartY,
+                 stroke: 'var(--meteo)', 'stroke-width': '1' }, stage);
+    el('line', { x1: chartX, y1: chartY, x2: chartX, y2: chartY - chartH,
+                 stroke: 'var(--meteo)', 'stroke-width': '1' }, stage);
+    // hour labels (sparse)
+    [0, 6, 12, 18, 24].forEach(function(h){
+      var hx = hToX(h);
+      var hl = el('text', {
+        x: hx, y: chartY + 16, fill: 'var(--fg-mute)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '9', 'text-anchor': 'middle'
+      }, stage);
+      hl.textContent = (h < 10 ? '0' : '') + h + 'h';
+    });
+    // baseline reference (PM=15)
+    el('line', { x1: chartX, y1: vToY(BASELINE), x2: chartX + chartW, y2: vToY(BASELINE),
+                 stroke: 'var(--CIRRUS)', 'stroke-width': '0.8',
+                 'stroke-dasharray': '3 3', opacity: 0.4 }, stage);
+
+    // line up to drawToH
+    var pts = [];
+    SERIES.forEach(function(pt){
+      if (pt.h <= drawToH){
+        pts.push(hToX(pt.h) + ',' + vToY(pt.v));
+      }
+    });
+    if (pts.length >= 2){
+      var lineColor = (mode === 'spike') ? 'var(--aqi-unhc)'
+                    : (mode === 'rising') ? 'var(--FRONT)'
+                    : 'var(--meteo)';
+      el('polyline', {
+        points: pts.join(' '),
+        fill: 'none', stroke: lineColor, 'stroke-width': '2',
+        'stroke-linejoin': 'round', 'stroke-linecap': 'round'
+      }, stage);
+    }
+    // current point dot
+    SERIES.forEach(function(pt){
+      if (pt.h <= drawToH){
+        el('circle', { cx: hToX(pt.h), cy: vToY(pt.v), r: 1.8,
+                       fill: aqiColor(pt.v) }, stage);
+      }
+    });
+
+    // strip caption
+    var cap = el('text', {
+      x: chartX + chartW / 2, y: chartY - chartH - 2, fill: 'var(--fg-dim)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '10', 'text-anchor': 'middle', 'letter-spacing': '0.1em'
+    }, stage);
+    cap.textContent = LANG === 'cn'
+      ? '今日 24h PM2.5 时序 (节点实时记录)'
+      : 'Today 24h PM2.5 series (live from node)';
+  }
+
+  // ============================================================
+  // Full chart F4 - whole 24h emerges, single big spike highlighted
+  // ============================================================
+  function drawFullChart(chartX, chartY, chartW, chartH, p){
+    var hMax = 24;
+    var vMax = 170;
+    function hToX(h){ return chartX + (h / hMax) * chartW; }
+    function vToY(v){ return chartY - (v / vMax) * chartH; }
+
+    // bg
+    el('rect', { x: chartX - 14, y: chartY - chartH - 28, width: chartW + 36, height: chartH + 60,
+                 fill: 'var(--bg-1)', stroke: 'var(--line-strong)', 'stroke-width': '1.2', rx: '4' }, stage);
+
+    // AQI bands behind
+    var bands = [
+      { lo: 0,    hi: 12.0,  c: 'var(--aqi-good)',  op: 0.08 },
+      { lo: 12.0, hi: 35.4,  c: 'var(--aqi-mod)',   op: 0.08 },
+      { lo: 35.4, hi: 55.4,  c: 'var(--aqi-usg)',   op: 0.08 },
+      { lo: 55.4, hi: vMax,  c: 'var(--aqi-unhc)',  op: 0.10 }
+    ];
+    bands.forEach(function(b){
+      var y1 = vToY(b.hi);
+      var y2 = vToY(b.lo);
+      el('rect', {
+        x: chartX, y: y1, width: chartW, height: Math.max(0, y2 - y1),
+        fill: b.c, opacity: b.op
+      }, stage);
+    });
+
+    // axes
+    el('line', { x1: chartX, y1: chartY, x2: chartX + chartW, y2: chartY,
+                 stroke: 'var(--meteo)', 'stroke-width': '1.4' }, stage);
+    el('polygon', {
+      points: (chartX + chartW + 8) + ',' + chartY + ' ' +
+              (chartX + chartW + 2) + ',' + (chartY - 4) + ' ' +
+              (chartX + chartW + 2) + ',' + (chartY + 4),
+      fill: 'var(--meteo)'
+    }, stage);
+    el('line', { x1: chartX, y1: chartY, x2: chartX, y2: chartY - chartH - 8,
+                 stroke: 'var(--meteo)', 'stroke-width': '1.4' }, stage);
+    el('polygon', {
+      points: chartX + ',' + (chartY - chartH - 12) + ' ' +
+              (chartX - 4) + ',' + (chartY - chartH - 6) + ' ' +
+              (chartX + 4) + ',' + (chartY - chartH - 6),
+      fill: 'var(--meteo)'
+    }, stage);
+
+    // X ticks every 4h
+    for (var h = 0; h <= hMax; h += 4){
+      var hx = hToX(h);
+      el('line', { x1: hx, y1: chartY, x2: hx, y2: chartY + 5,
+                   stroke: 'var(--meteo)', 'stroke-width': '0.8' }, stage);
+      var hl = el('text', {
+        x: hx, y: chartY + 20, fill: 'var(--fg-mute)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '10', 'text-anchor': 'middle'
+      }, stage);
+      hl.textContent = (h < 10 ? '0' : '') + h + 'h';
+    }
+    // Y ticks
+    [0, 50, 100, 150].forEach(function(v){
+      var yy = vToY(v);
+      el('line', { x1: chartX - 5, y1: yy, x2: chartX, y2: yy,
+                   stroke: 'var(--meteo)', 'stroke-width': '0.8' }, stage);
+      var vl = el('text', {
+        x: chartX - 10, y: yy + 4, fill: 'var(--fg-mute)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '10', 'text-anchor': 'end'
+      }, stage);
+      vl.textContent = String(v);
+    });
+    var unit = el('text', {
+      x: chartX - 10, y: chartY - chartH - 14, fill: 'var(--fg-dim)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '10', 'text-anchor': 'end'
+    }, stage);
+    unit.textContent = 'PM2.5 ug/m3';
+
+    // baseline reference line
+    el('line', { x1: chartX, y1: vToY(BASELINE), x2: chartX + chartW, y2: vToY(BASELINE),
+                 stroke: 'var(--CIRRUS)', 'stroke-width': '1',
+                 'stroke-dasharray': '4 3', opacity: 0.5 }, stage);
+    var blb = el('text', {
+      x: chartX + chartW - 6, y: vToY(BASELINE) - 4, fill: 'var(--CIRRUS)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '10', 'text-anchor': 'end', opacity: 0.7
+    }, stage);
+    blb.textContent = LANG === 'cn' ? 'baseline 15' : 'baseline 15';
+
+    // line emerges fully over first 55% of frame
+    var drawProgress = clamp(p / 0.55, 0, 1);
+    var drawTo = lerp(0, 23, drawProgress);
+    var pts = [];
+    SERIES.forEach(function(pt){
+      if (pt.h <= drawTo){
+        pts.push(hToX(pt.h) + ',' + vToY(pt.v));
+      }
+    });
+    if (pts.length >= 2){
+      el('polyline', {
+        points: pts.join(' '),
+        fill: 'none', stroke: 'var(--meteo)', 'stroke-width': '2.6',
+        'stroke-linejoin': 'round', 'stroke-linecap': 'round'
+      }, stage);
+    }
+    // area under curve - fade in
+    if (drawProgress > 0.5){
+      var areaAlpha = clamp((drawProgress - 0.5) / 0.4, 0, 1) * 0.2;
+      var apts = [hToX(0) + ',' + chartY];
+      SERIES.forEach(function(pt){
+        if (pt.h <= drawTo){
+          apts.push(hToX(pt.h) + ',' + vToY(pt.v));
+        }
+      });
+      apts.push(hToX(drawTo) + ',' + chartY);
+      el('polygon', { points: apts.join(' '), fill: 'var(--meteo)', opacity: areaAlpha }, stage);
+    }
+
+    // all points colored by tier
+    SERIES.forEach(function(pt){
+      if (pt.h <= drawTo){
+        var inPeakBand = (pt.h >= 14 && pt.h <= 16);
+        el('circle', { cx: hToX(pt.h), cy: vToY(pt.v),
+                       r: inPeakBand ? 3.6 : 2.4,
+                       fill: aqiColor(pt.v),
+                       stroke: inPeakBand ? 'var(--SUNLIGHT)' : 'none',
+                       'stroke-width': inPeakBand ? 1.4 : 0 }, stage);
+      }
+    });
+
+    // peak callout after p > 0.55
+    if (p > 0.55 && drawTo >= PEAK_H){
+      var calloutAlpha = clamp((p - 0.55) / 0.25, 0, 1);
+      var px = hToX(PEAK_H);
+      var py = vToY(PEAK_V);
+      // ring around peak
+      el('circle', { cx: px, cy: py, r: 8,
+                     fill: 'none', stroke: 'var(--SUNLIGHT)',
+                     'stroke-width': '2', opacity: calloutAlpha }, stage);
+      el('circle', { cx: px, cy: py, r: 16,
+                     fill: 'var(--SUNLIGHT)', opacity: calloutAlpha * 0.2 }, stage);
+      // dashed line down to bottom
+      el('line', { x1: px, y1: py - 6, x2: px, y2: py - 60,
+                   stroke: 'var(--SUNLIGHT)', 'stroke-width': '1.4',
+                   'stroke-dasharray': '3 2', opacity: calloutAlpha }, stage);
+      // box
+      var boxW = 180;
+      var boxX = px - boxW / 2;
+      if (boxX < chartX + 10) boxX = chartX + 10;
+      if (boxX + boxW > chartX + chartW - 10) boxX = chartX + chartW - boxW - 10;
+      var boxY = py - 110;
+      el('rect', { x: boxX, y: boxY, width: boxW, height: 46,
+                   fill: 'var(--bg-2)', stroke: 'var(--SUNLIGHT)',
+                   'stroke-width': '1.4', rx: '2', opacity: calloutAlpha }, stage);
+      var lt = el('text', {
+        x: boxX + boxW / 2, y: boxY + 16, fill: 'var(--SUNLIGHT)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '11', 'text-anchor': 'middle', 'font-weight': '700',
+        opacity: calloutAlpha
+      }, stage);
+      lt.textContent = '15:00 - PM2.5 = ' + PEAK_V;
+      var lt2 = el('text', {
+        x: boxX + boxW / 2, y: boxY + 33, fill: 'var(--fg)',
+        'font-family': "'Inter','Noto Sans SC',sans-serif",
+        'font-size': '11', 'text-anchor': 'middle',
+        opacity: calloutAlpha
+      }, stage);
+      lt2.textContent = LANG === 'cn'
+        ? '事件高峰 红色 UNHC'
+        : 'Event peak - Red UNHC';
+    }
+  }
+
+  // ============================================================
+  // Summary chart F5 - faint full curve + peak marker
+  // ============================================================
+  function drawSummaryChart(chartX, chartY, chartW, chartH){
+    var hMax = 24;
+    var vMax = 170;
+    function hToX(h){ return chartX + (h / hMax) * chartW; }
+    function vToY(v){ return chartY - (v / vMax) * chartH; }
+
+    el('rect', { x: chartX - 10, y: chartY - chartH - 18, width: chartW + 28, height: chartH + 38,
+                 fill: 'var(--bg-1)', stroke: 'var(--line)', 'stroke-width': '1', rx: '3' }, stage);
+    el('line', { x1: chartX, y1: chartY, x2: chartX + chartW, y2: chartY,
+                 stroke: 'var(--meteo)', 'stroke-width': '1' }, stage);
+    el('line', { x1: chartX, y1: chartY, x2: chartX, y2: chartY - chartH,
+                 stroke: 'var(--meteo)', 'stroke-width': '1' }, stage);
+    // baseline
+    el('line', { x1: chartX, y1: vToY(BASELINE), x2: chartX + chartW, y2: vToY(BASELINE),
+                 stroke: 'var(--CIRRUS)', 'stroke-width': '0.8',
+                 'stroke-dasharray': '3 3', opacity: 0.4 }, stage);
+
+    // full curve - all of it
+    var pts = SERIES.map(function(pt){ return hToX(pt.h) + ',' + vToY(pt.v); }).join(' ');
+    el('polyline', {
+      points: pts,
+      fill: 'none', stroke: 'var(--meteo)', 'stroke-width': '1.8',
+      'stroke-linejoin': 'round', 'stroke-linecap': 'round'
+    }, stage);
+    // dots
+    SERIES.forEach(function(pt){
+      el('circle', { cx: hToX(pt.h), cy: vToY(pt.v), r: 1.8,
+                     fill: aqiColor(pt.v) }, stage);
+    });
+    // peak ring
+    el('circle', { cx: hToX(PEAK_H), cy: vToY(PEAK_V), r: 7,
+                   fill: 'none', stroke: 'var(--SUNLIGHT)', 'stroke-width': '1.6' }, stage);
+    el('circle', { cx: hToX(PEAK_H), cy: vToY(PEAK_V), r: 12,
+                   fill: 'var(--SUNLIGHT)', opacity: 0.2 }, stage);
+
+    // labels
+    [0, 12, 24].forEach(function(h){
+      var hx = hToX(h);
+      var hl = el('text', {
+        x: hx, y: chartY + 14, fill: 'var(--fg-mute)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '9', 'text-anchor': 'middle'
+      }, stage);
+      hl.textContent = (h < 10 ? '0' : '') + h + 'h';
+    });
+    // caption
+    var cap = el('text', {
+      x: chartX + chartW / 2, y: chartY - chartH - 4, fill: 'var(--fg-dim)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '10', 'text-anchor': 'middle', 'letter-spacing': '0.1em'
+    }, stage);
+    cap.textContent = LANG === 'cn'
+      ? '事件日 24h 摘要 - 一峰一谷, 入档'
+      : 'Event-day 24h summary - one peak, one trough, archived';
+  }
+
+  // ============================================================
+  // PM big card (reusable for F1/F2/F5)
+  // ============================================================
+  function drawPMBigCard(parent, cx, cy, val, caption){
+    var card = el('g', { transform: 'translate(' + cx + ',' + cy + ')' }, parent);
+    el('rect', { x: -100, y: -50, width: 200, height: 110,
+                 fill: 'var(--bg-3)', stroke: aqiColor(val), 'stroke-width': '1.8',
+                 rx: '4' }, card);
+    var cap = el('text', {
+      x: 0, y: -28, fill: 'var(--fg-mute)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '11', 'text-anchor': 'middle', 'letter-spacing': '0.12em', 'font-weight': '700'
+    }, card);
+    cap.textContent = caption;
+    var v = el('text', {
+      x: 0, y: 18, fill: aqiColor(val),
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '42', 'text-anchor': 'middle', 'font-weight': '800'
+    }, card);
+    v.textContent = String(val);
+    var u = el('text', {
+      x: 0, y: 42, fill: 'var(--fg-dim)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '10', 'text-anchor': 'middle'
+    }, card);
+    u.textContent = 'ug/m3 PM2.5';
+  }
+
+  // ====== Frame dispatcher ======
+  function drawFrame(idx, pp){
+    clearStage();
+    if (idx !== 2 && idx !== 4){
+      document.getElementById('flash').classList.remove('on');
+    }
+    if (idx === 0) drawFrame1(pp);
+    else if (idx === 1) drawFrame2(pp);
+    else if (idx === 2) drawFrame3(pp);
+    else if (idx === 3) drawFrame4(pp);
+    else if (idx === 4) drawFrame5(pp);
+  }
+
+  function updateUI(idx){
+    var f = FRAMES[idx];
+    document.getElementById('hudV1').textContent = (idx+1) + ' / 5';
+    document.getElementById('hudV2').textContent = f.hudStage[LANG] || f.hudStage.en;
+    document.getElementById('hudV3').textContent = f.hudHour;
+    document.getElementById('hudV4').textContent = f.hudPM;
+    // tint pm value by frame mode
+    var pmEl = document.getElementById('hudV4');
+    pmEl.classList.remove('gold','alarm','accent');
+    if (idx === 2){ pmEl.classList.add('alarm'); }
+    else if (idx === 3){ pmEl.classList.add('accent'); }
+    else { pmEl.classList.add('gold'); }
+    document.getElementById('subCn').textContent = LANG === 'cn' ? f.subCn : f.subEn;
+    document.getElementById('subEn').textContent = LANG === 'cn' ? f.subEn : f.subCn;
+    document.getElementById('stepName').textContent = f.stepName;
+    for (var i = 0; i < 5; i++){
+      var c = document.getElementById('chip' + i);
+      c.classList.remove('active', 'done');
+      if (i < idx) c.classList.add('done');
+      else if (i === idx) c.classList.add('active');
+    }
+  }
+
+  function updateI18N(){
+    document.getElementById('badgeMod').textContent = t('badgeMod');
+    document.getElementById('brandH1').textContent = t('brandH1');
+    document.getElementById('brandSub').textContent = t('brandSub');
+    document.getElementById('mascotName').textContent = t('mascotName');
+    document.querySelector('#g1 .gtxt').textContent = t('g1');
+    document.querySelector('#g2 .gtxt').textContent = t('g2');
+    document.querySelector('#g3 .gtxt').textContent = t('g3');
+    document.getElementById('hudL1').textContent = t('hudL1');
+    document.getElementById('hudL2').textContent = t('hudL2');
+    document.getElementById('hudL3').textContent = t('hudL3');
+    document.getElementById('hudL4').textContent = t('hudL4');
+    document.getElementById('langBtn').textContent = t('btnLang');
+  }
+
+  function tick(ts){
+    if (!frameStartTs) frameStartTs = ts;
+    var elapsed = ts - frameStartTs;
+    if (elapsed >= FRAME_MS){
+      currentFrame = (currentFrame + 1) % 5;
+      frameStartTs = ts;
+      updateUI(currentFrame);
+      elapsed = 0;
+    }
+    var pp = elapsed / FRAME_MS;
+    drawFrame(currentFrame, pp);
+    rafId = requestAnimationFrame(tick);
+  }
+
+  function start(){
+    updateI18N();
+    updateUI(currentFrame);
+    frameStartTs = 0;
+    if (rafId) cancelAnimationFrame(rafId);
+    rafId = requestAnimationFrame(tick);
+  }
+
+  document.getElementById('langBtn').addEventListener('click', function(){
+    LANG = (LANG === 'cn') ? 'en' : 'cn';
+    updateI18N();
+    updateUI(currentFrame);
+  });
+
+  start();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,708 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Barkjohn 公式实时调参 — Live Tuning</title>
+<script>window.__systemedu_resize_patch_optout=true;</script>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Inter:wght@400;500;700&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;}
+:root{
+  /* 第 1 层 — shared deep-space */
+  --bg-0: oklch(0.14 0.035 265);
+  --bg-1: oklch(0.18 0.04 265);
+  --bg-2: oklch(0.22 0.045 265);
+  --bg-3: oklch(0.28 0.05 265);
+  --line: oklch(0.35 0.05 265 / 0.35);
+  --line-strong: oklch(0.55 0.08 265 / 0.55);
+  --fg:      oklch(0.96 0.01 265);
+  --fg-dim:  oklch(0.75 0.02 265);
+  --fg-mute: oklch(0.55 0.03 265);
+  --gold:    oklch(0.85 0.14 85);
+
+  /* 第 2 层 — math accent (electric blue) */
+  --math: oklch(0.72 0.17 245);
+
+  /* 第 3 层 — math palette (Geometry Void) */
+  --axis:     oklch(0.72 0.17 245);
+  --proof:    oklch(0.52 0.16 245);
+  --shadow:   oklch(0.35 0.10 245);
+  --solution: oklch(0.92 0.08 240);
+  --qed:      oklch(0.85 0.14 85);
+}
+html,body{width:100%;height:100vh;overflow:hidden;background:var(--bg-0);color:var(--fg);font-family:'Inter','Noto Sans SC',sans-serif;}
+.game-wrap{display:flex;flex-direction:row;height:100vh;overflow:hidden;}
+
+/* ── Sidebar (200px) ── */
+.game-sidebar{
+  width:200px;min-width:200px;max-width:200px;
+  display:flex;flex-direction:column;gap:8px;padding:12px 10px;
+  background:var(--bg-1);
+  border-right:1px solid var(--line);
+  overflow-y:auto;
+}
+.sidebar-lang{
+  align-self:flex-start;flex-shrink:0;
+  font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:700;
+  padding:3px 9px;cursor:pointer;
+  border:1px solid var(--math);background:transparent;color:var(--math);
+  letter-spacing:0.18em;text-transform:uppercase;
+}
+.sidebar-lang:hover{background:var(--bg-2);}
+.sidebar-brand{
+  font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;
+  letter-spacing:0.15em;text-transform:uppercase;color:var(--math);
+  margin-top:6px;
+}
+.sidebar-title{
+  font-family:'Noto Sans SC',sans-serif;font-size:13px;font-weight:700;
+  color:var(--fg);line-height:1.3;
+}
+.sidebar-sub{
+  font-family:'JetBrains Mono',monospace;font-size:9px;
+  color:var(--fg-mute);letter-spacing:0.12em;text-transform:uppercase;
+}
+.sidebar-divider{height:1px;background:var(--line);margin:4px 0;}
+.sidebar-section{
+  font-family:'JetBrains Mono',monospace;font-size:9px;font-weight:700;
+  color:var(--fg-mute);letter-spacing:0.18em;text-transform:uppercase;
+  margin-top:2px;
+}
+.sidebar-goal{
+  font-family:'Noto Sans SC',sans-serif;font-size:11px;
+  color:var(--fg-dim);line-height:1.55;
+}
+
+/* mascot — Pi tetrahedron */
+.mascot-wrap{
+  display:flex;justify-content:center;align-items:center;
+  padding:6px 0 2px 0;
+}
+.mascot-wrap svg{width:88px;height:88px;}
+
+/* sliders */
+.slider-group{display:flex;flex-direction:column;gap:4px;margin-top:6px;}
+.slider-row{display:flex;justify-content:space-between;align-items:baseline;}
+.slider-label{
+  font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;
+  color:var(--solution);letter-spacing:0.08em;
+}
+.slider-val{
+  font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:700;
+  color:var(--math);letter-spacing:0.05em;
+}
+.slider-epa{
+  font-family:'JetBrains Mono',monospace;font-size:9px;
+  color:var(--fg-mute);letter-spacing:0.05em;
+}
+input[type=range]{
+  width:100%;-webkit-appearance:none;appearance:none;
+  background:var(--bg-3);height:4px;outline:none;border-radius:0;
+}
+input[type=range]::-webkit-slider-thumb{
+  -webkit-appearance:none;appearance:none;
+  width:14px;height:14px;background:var(--math);
+  cursor:pointer;border-radius:0;
+  box-shadow:2px 2px 0 var(--bg-0);
+}
+input[type=range]::-moz-range-thumb{
+  width:14px;height:14px;background:var(--math);
+  cursor:pointer;border-radius:0;border:none;
+  box-shadow:2px 2px 0 var(--bg-0);
+}
+
+.reset-btn{
+  font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:700;
+  padding:7px 10px;border:1px solid var(--math);
+  cursor:pointer;color:var(--math);background:transparent;
+  letter-spacing:0.15em;text-transform:uppercase;
+  width:100%;margin-top:6px;
+  box-shadow:3px 3px 0 var(--bg-0);
+}
+.reset-btn:hover{background:var(--bg-2);}
+.reset-btn:active{transform:translate(2px,2px);box-shadow:1px 1px 0 var(--bg-0);}
+
+/* ── Main area ── */
+.game-main{flex:1;display:flex;flex-direction:column;min-width:0;}
+.game-hud{
+  display:flex;align-items:center;justify-content:space-between;gap:14px;
+  padding:8px 18px;background:var(--bg-1);
+  border-bottom:1px solid var(--line);flex-shrink:0;
+}
+.hud-formula{
+  font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:500;
+  color:var(--solution);letter-spacing:0.05em;
+}
+.hud-formula .coef{color:var(--math);font-weight:700;}
+.hud-formula .var{color:var(--proof);}
+.hud-items{display:flex;gap:18px;}
+.hud-item{display:flex;flex-direction:column;align-items:flex-end;gap:1px;}
+.hud-label{
+  font-family:'JetBrains Mono',monospace;font-size:8px;
+  letter-spacing:0.18em;color:var(--fg-mute);text-transform:uppercase;
+}
+.hud-val{
+  font-family:'JetBrains Mono',monospace;font-size:15px;font-weight:700;
+  color:var(--math);letter-spacing:0.08em;
+}
+.hud-val.good{color:var(--qed);}
+.hud-val.bad{color:var(--proof);}
+
+.game-body{
+  flex:1;display:flex;flex-direction:column;min-height:0;
+  background:var(--bg-0);position:relative;
+}
+.game-body canvas{
+  width:100%!important;height:100%!important;display:block;
+}
+
+.status-bar{
+  display:flex;align-items:center;justify-content:space-between;gap:12px;
+  padding:6px 18px;background:var(--bg-1);
+  border-top:1px solid var(--line);flex-shrink:0;
+}
+.status-msg{
+  font-family:'Noto Sans SC',sans-serif;font-size:12px;
+  color:var(--fg-dim);
+}
+.status-msg.win{color:var(--qed);font-weight:700;}
+.status-tag{
+  font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:700;
+  letter-spacing:0.18em;text-transform:uppercase;
+  color:var(--math);
+}
+</style>
+</head>
+<body>
+<div class="game-wrap">
+  <div class="game-sidebar">
+    <button class="sidebar-lang" id="langBtn">CN</button>
+
+    <div class="mascot-wrap" aria-hidden="true">
+      <!-- Pi mascot: rotating tetrahedron flashing math -->
+      <svg viewBox="0 0 100 100" id="mascot">
+        <defs>
+          <linearGradient id="faceA" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="var(--axis)" stop-opacity="0.9"/>
+            <stop offset="1" stop-color="var(--proof)" stop-opacity="0.7"/>
+          </linearGradient>
+          <linearGradient id="faceB" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="var(--solution)" stop-opacity="0.8"/>
+            <stop offset="1" stop-color="var(--axis)" stop-opacity="0.5"/>
+          </linearGradient>
+        </defs>
+        <!-- back face -->
+        <polygon points="50,12 16,80 84,80" fill="url(#faceB)" stroke="var(--solution)" stroke-width="1"/>
+        <!-- front face -->
+        <polygon points="50,12 50,68 16,80" fill="url(#faceA)" stroke="var(--math)" stroke-width="1.2" opacity="0.85"/>
+        <polygon points="50,12 50,68 84,80" fill="var(--shadow)" stroke="var(--math)" stroke-width="1.2" opacity="0.75"/>
+        <!-- formula flash -->
+        <text x="50" y="46" text-anchor="middle"
+              font-family="JetBrains Mono, monospace" font-size="9"
+              fill="var(--solution)" font-weight="700" id="mascotEq">a + b + c</text>
+        <text x="50" y="92" text-anchor="middle"
+              font-family="JetBrains Mono, monospace" font-size="8"
+              fill="var(--fg-mute)" letter-spacing="2">PI · MTH-06</text>
+      </svg>
+    </div>
+
+    <div class="sidebar-brand" id="brandTag">M20 · LIVE TUNING</div>
+    <div class="sidebar-title" id="sideTitle">Barkjohn 公式调参</div>
+    <div class="sidebar-sub" id="sideSub">PM2.5 = a·PA − b·RH + c</div>
+
+    <div class="sidebar-divider"></div>
+    <div class="sidebar-section" id="goalLabel">TARGET</div>
+    <div class="sidebar-goal" id="goalText">
+      拖三个滑块, 让校正点全部贴近 y=x 对角线。目标: R² ≥ 0.90, MAE ≤ 2.0。
+    </div>
+
+    <div class="sidebar-divider"></div>
+    <div class="sidebar-section" id="paramsLabel">PARAMS</div>
+
+    <div class="slider-group">
+      <div class="slider-row">
+        <span class="slider-label">a · PA</span>
+        <span class="slider-val" id="aVal">0.524</span>
+      </div>
+      <input type="range" id="sliderA" min="0" max="1.2" step="0.001" value="0.524">
+      <div class="slider-epa" id="epaA">EPA = 0.524</div>
+    </div>
+
+    <div class="slider-group">
+      <div class="slider-row">
+        <span class="slider-label">b · RH</span>
+        <span class="slider-val" id="bVal">-0.0862</span>
+      </div>
+      <input type="range" id="sliderB" min="-0.3" max="0.3" step="0.001" value="-0.0862">
+      <div class="slider-epa" id="epaB">EPA = -0.0862</div>
+    </div>
+
+    <div class="slider-group">
+      <div class="slider-row">
+        <span class="slider-label">c · bias</span>
+        <span class="slider-val" id="cVal">5.75</span>
+      </div>
+      <input type="range" id="sliderC" min="-10" max="20" step="0.05" value="5.75">
+      <div class="slider-epa" id="epaC">EPA = 5.75</div>
+    </div>
+
+    <button class="reset-btn" id="resetBtn">RESET TO EPA</button>
+  </div>
+
+  <div class="game-main">
+    <div class="game-hud">
+      <div class="hud-formula" id="formulaDisplay">
+        PM2.5 = <span class="coef" id="fA">0.524</span> ·
+        <span class="var">PA</span> +
+        <span class="coef" id="fB">-0.086</span> ·
+        <span class="var">RH</span> +
+        <span class="coef" id="fC">5.75</span>
+      </div>
+      <div class="hud-items">
+        <div class="hud-item">
+          <span class="hud-label" id="lblR2">R²</span>
+          <span class="hud-val" id="valR2">0.94</span>
+        </div>
+        <div class="hud-item">
+          <span class="hud-label" id="lblMAE">MAE (μg/m³)</span>
+          <span class="hud-val" id="valMAE">1.42</span>
+        </div>
+        <div class="hud-item">
+          <span class="hud-label" id="lblN">N samples</span>
+          <span class="hud-val" id="valN">30</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="game-body"><canvas id="gc"></canvas></div>
+
+    <div class="status-bar">
+      <span class="status-tag" id="modeTag">SCATTER · y = x diagonal</span>
+      <span class="status-msg" id="statusMsg">拖动滑块, 观察 R² 与 MAE 实时变化</span>
+    </div>
+  </div>
+</div>
+
+<script>
+// ────────────────────────────────────────────────────────────
+// i18n
+// ────────────────────────────────────────────────────────────
+var LANG = 'cn';
+var I18N = {
+  brandTag:    {cn:'M20 · 实时调参',          en:'M20 · LIVE TUNING'},
+  sideTitle:   {cn:'Barkjohn 公式调参',       en:'Barkjohn Formula Tuning'},
+  sideSub:     {cn:'PM2.5 = a·PA − b·RH + c', en:'PM2.5 = a·PA − b·RH + c'},
+  goalLabel:   {cn:'TARGET',                  en:'TARGET'},
+  goalText:    {cn:'拖三个滑块, 让校正点全部贴近 y=x 对角线。目标: R² ≥ 0.90, MAE ≤ 2.0。',
+                en:'Drag the 3 sliders so corrected points hug the y=x diagonal. Goal: R² ≥ 0.90, MAE ≤ 2.0.'},
+  paramsLabel: {cn:'PARAMS',                  en:'PARAMS'},
+  lblR2:       {cn:'R²',                      en:'R²'},
+  lblMAE:      {cn:'MAE (μg/m³)',             en:'MAE (μg/m³)'},
+  lblN:        {cn:'样本数',                  en:'N samples'},
+  modeTag:     {cn:'SCATTER · y = x 对角线',  en:'SCATTER · y = x diagonal'},
+  msgIdle:     {cn:'拖动滑块, 观察 R² 与 MAE 实时变化',
+                en:'Drag sliders, watch R² and MAE update live.'},
+  msgClose:    {cn:'接近了! 再微调一下。',
+                en:'Getting close — fine-tune a bit more.'},
+  msgWin:      {cn:'达成! 你重新拟合到 EPA 区间。点周围全是对角线。',
+                en:'Cleared! You re-tuned into the EPA band. Points hug the diagonal.'},
+  msgEPA:      {cn:'这就是 EPA 校准过的 Barkjohn 默认值 — 别人替你拟合好了。',
+                en:'These are EPA Barkjohn defaults — others fit them for you.'},
+  msgBad:      {cn:'R² 在下降, 校正反而比原始更差。',
+                en:'R² is dropping — correction is worse than raw.'},
+  reset:       {cn:'RESET TO EPA',            en:'RESET TO EPA'},
+};
+function t(k){ return (I18N[k]&&I18N[k][LANG])||(I18N[k]&&I18N[k]['en'])||k; }
+
+function refreshI18N(){
+  document.getElementById('brandTag').textContent = t('brandTag');
+  document.getElementById('sideTitle').textContent = t('sideTitle');
+  document.getElementById('sideSub').textContent = t('sideSub');
+  document.getElementById('goalLabel').textContent = t('goalLabel');
+  document.getElementById('goalText').textContent = t('goalText');
+  document.getElementById('paramsLabel').textContent = t('paramsLabel');
+  document.getElementById('lblR2').textContent = t('lblR2');
+  document.getElementById('lblMAE').textContent = t('lblMAE');
+  document.getElementById('lblN').textContent = t('lblN');
+  document.getElementById('modeTag').textContent = t('modeTag');
+  document.getElementById('resetBtn').textContent = t('reset');
+  document.getElementById('langBtn').textContent = LANG.toUpperCase();
+  updateStatus();
+}
+
+document.getElementById('langBtn').addEventListener('click', function(){
+  LANG = LANG === 'cn' ? 'en' : 'cn';
+  refreshI18N();
+});
+
+// ────────────────────────────────────────────────────────────
+// Virtual measurement data (PA_cf1, RH, true PM2.5 from reference)
+// Generated so EPA defaults (a=0.524, b=-0.0862, c=5.75) yield R² ≈ 0.94
+// ────────────────────────────────────────────────────────────
+var EPA = { a: 0.524, b: -0.0862, c: 5.75 };
+
+// 30 virtual samples: [PA_cf1, RH (%), PM2.5_true (μg/m³)]
+// Built by sampling PA & RH, computing true = EPA(PA,RH) + small noise
+var SAMPLES = [
+  [12.0, 35, 9.6],   [18.5, 42, 11.7],  [25.0, 50, 13.7],  [32.0, 55, 17.1],
+  [40.0, 58, 21.7],  [48.0, 62, 25.3],  [55.0, 65, 29.0],  [62.0, 68, 32.0],
+  [72.0, 70, 37.4],  [85.0, 72, 43.9],  [96.0, 74, 49.0],  [110.0, 76, 56.0],
+  [125.0, 78, 63.5], [142.0, 80, 71.9], [160.0, 82, 80.9], [180.0, 84, 90.7],
+  [200.0, 86, 100.6],[220.0, 88, 110.6],[240.0, 90, 120.4],
+  [8.0,  28, 7.6],   [15.0, 38, 10.5],  [22.0, 45, 12.5],  [30.0, 52, 16.0],
+  [45.0, 60, 23.6],  [60.0, 66, 31.0],  [78.0, 71, 40.4],  [100.0, 75, 51.6],
+  [135.0, 79, 68.6], [170.0, 83, 85.8], [210.0, 87, 105.7]
+];
+
+function correctedY(s, a, b, c){
+  return a * s[0] + b * s[1] + c;
+}
+
+function computeStats(a, b, c){
+  var n = SAMPLES.length;
+  var sumAbs = 0, sumTrue = 0;
+  for (var i = 0; i < n; i++) sumTrue += SAMPLES[i][2];
+  var meanTrue = sumTrue / n;
+  var ssRes = 0, ssTot = 0;
+  for (var j = 0; j < n; j++) {
+    var pred = correctedY(SAMPLES[j], a, b, c);
+    var tru  = SAMPLES[j][2];
+    var resid = tru - pred;
+    ssRes += resid * resid;
+    ssTot += (tru - meanTrue) * (tru - meanTrue);
+    sumAbs += Math.abs(resid);
+  }
+  var r2 = 1 - ssRes / Math.max(1e-9, ssTot);
+  var mae = sumAbs / n;
+  return { r2: r2, mae: mae };
+}
+
+// ────────────────────────────────────────────────────────────
+// State
+// ────────────────────────────────────────────────────────────
+var paramState = { a: EPA.a, b: EPA.b, c: EPA.c };
+var rotPhase = 0;            // mascot rotation
+var hasShownWin = false;     // gold flash latch
+
+// ────────────────────────────────────────────────────────────
+// Canvas drawing
+// ────────────────────────────────────────────────────────────
+var canvas = document.getElementById('gc');
+var ctx = canvas.getContext('2d');
+var DPR = Math.max(1, window.devicePixelRatio || 1);
+
+function resizeCanvas(){
+  var rect = canvas.getBoundingClientRect();
+  canvas.width  = Math.max(100, Math.floor(rect.width * DPR));
+  canvas.height = Math.max(100, Math.floor(rect.height * DPR));
+}
+resizeCanvas();
+window.addEventListener('resize', resizeCanvas);
+
+function getCssVar(name){
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+}
+
+function drawScatter(){
+  var W = canvas.width, H = canvas.height;
+  ctx.clearRect(0, 0, W, H);
+
+  // ── Background gradient ──
+  var bg = ctx.createLinearGradient(0, 0, 0, H);
+  bg.addColorStop(0, getCssVar('--bg-0') || '#0a0d1e');
+  bg.addColorStop(1, getCssVar('--bg-1') || '#11142b');
+  ctx.fillStyle = bg;
+  ctx.fillRect(0, 0, W, H);
+
+  // ── Plot area (margins) ──
+  var ml = 70 * DPR, mr = 30 * DPR, mt = 30 * DPR, mb = 50 * DPR;
+  var pw = W - ml - mr, ph = H - mt - mb;
+  // make square-ish using min
+  var side = Math.min(pw, ph);
+  var px = ml + (pw - side) / 2;
+  var py = mt + (ph - side) / 2;
+
+  // Domain: 0..130 for both axes (μg/m³)
+  var X_MAX = 130, Y_MAX = 130;
+
+  function sx(v){ return px + (v / X_MAX) * side; }
+  function sy(v){ return py + side - (v / Y_MAX) * side; }
+
+  // ── Grid ──
+  ctx.strokeStyle = getCssVar('--line') || 'rgba(120,140,200,0.25)';
+  ctx.lineWidth = 1 * DPR;
+  ctx.font = (10 * DPR) + 'px JetBrains Mono, monospace';
+  ctx.fillStyle = getCssVar('--fg-mute') || '#777a99';
+  for (var v = 0; v <= X_MAX; v += 20) {
+    var x = sx(v), y = sy(v);
+    ctx.beginPath(); ctx.moveTo(x, py); ctx.lineTo(x, py + side); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(px, y); ctx.lineTo(px + side, y); ctx.stroke();
+    // axis labels
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    ctx.fillText(String(v), x, py + side + 4 * DPR);
+    ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+    ctx.fillText(String(v), px - 6 * DPR, y);
+  }
+
+  // ── Axis lines ──
+  ctx.strokeStyle = getCssVar('--line-strong') || 'rgba(140,160,220,0.5)';
+  ctx.lineWidth = 1.5 * DPR;
+  ctx.beginPath();
+  ctx.moveTo(px, py); ctx.lineTo(px, py + side); ctx.lineTo(px + side, py + side);
+  ctx.stroke();
+
+  // ── y = x diagonal (target) ──
+  var qed = getCssVar('--qed') || '#e8c45c';
+  ctx.strokeStyle = qed;
+  ctx.globalAlpha = 0.55;
+  ctx.lineWidth = 1.5 * DPR;
+  ctx.setLineDash([6 * DPR, 5 * DPR]);
+  ctx.beginPath();
+  ctx.moveTo(sx(0), sy(0));
+  ctx.moveTo(sx(0), sy(0));
+  ctx.lineTo(sx(X_MAX), sy(Y_MAX));
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.globalAlpha = 1;
+
+  // ── Axis titles ──
+  ctx.fillStyle = getCssVar('--fg-dim') || '#b8c0d8';
+  ctx.font = 'bold ' + (11 * DPR) + 'px JetBrains Mono, monospace';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+  ctx.fillText((LANG === 'cn' ? '真实 PM2.5 (参考仪器)' : 'TRUE PM2.5 (reference)'),
+               px + side / 2, py + side + 22 * DPR);
+  ctx.save();
+  ctx.translate(px - 50 * DPR, py + side / 2);
+  ctx.rotate(-Math.PI / 2);
+  ctx.fillText((LANG === 'cn' ? '校正后 PM2.5 (你的公式)' : 'CORRECTED PM2.5 (your formula)'),
+               0, 0);
+  ctx.restore();
+
+  // y=x label
+  ctx.fillStyle = qed;
+  ctx.font = (10 * DPR) + 'px JetBrains Mono, monospace';
+  ctx.textAlign = 'left'; ctx.textBaseline = 'bottom';
+  ctx.fillText('y = x  (perfect)', sx(X_MAX) - 100 * DPR, sy(X_MAX) - 6 * DPR);
+
+  // ── Points ──
+  var a = paramState.a, b = paramState.b, c = paramState.c;
+  var axis = getCssVar('--axis') || '#5fa8ff';
+  var proof = getCssVar('--proof') || '#3b6dd4';
+  var solColor = getCssVar('--solution') || '#d8e4ff';
+
+  for (var i = 0; i < SAMPLES.length; i++) {
+    var s = SAMPLES[i];
+    var tru = s[2];
+    var pred = correctedY(s, a, b, c);
+    var resid = pred - tru;
+    var absR = Math.abs(resid);
+
+    // clip to plot domain
+    var trcl = Math.max(0, Math.min(X_MAX, tru));
+    var prcl = Math.max(-10, Math.min(Y_MAX + 10, pred));
+
+    var cx = sx(trcl);
+    var cy = sy(prcl);
+
+    // residual stub from y=x → point
+    ctx.strokeStyle = absR < 3 ? (getCssVar('--qed') || '#e8c45c')
+                               : (absR < 8 ? axis : proof);
+    ctx.globalAlpha = 0.35;
+    ctx.lineWidth = 1 * DPR;
+    ctx.beginPath();
+    ctx.moveTo(sx(trcl), sy(trcl));
+    ctx.lineTo(cx, cy);
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+
+    // point — color by residual size
+    var col;
+    if (absR < 3) col = getCssVar('--qed') || '#e8c45c';
+    else if (absR < 8) col = axis;
+    else col = proof;
+
+    // outer glow halo
+    ctx.fillStyle = col;
+    ctx.globalAlpha = 0.18;
+    ctx.beginPath(); ctx.arc(cx, cy, 7 * DPR, 0, Math.PI * 2); ctx.fill();
+    ctx.globalAlpha = 1;
+
+    // solid core
+    ctx.fillStyle = col;
+    ctx.beginPath(); ctx.arc(cx, cy, 3.2 * DPR, 0, Math.PI * 2); ctx.fill();
+
+    // dark outline
+    ctx.strokeStyle = getCssVar('--bg-0') || '#0a0d1e';
+    ctx.lineWidth = 0.8 * DPR;
+    ctx.stroke();
+  }
+
+  // ── Legend top-right ──
+  var lx = px + side - 130 * DPR;
+  var ly = py + 8 * DPR;
+  ctx.font = (9 * DPR) + 'px JetBrains Mono, monospace';
+  ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+  drawLegendDot(lx, ly + 6 * DPR, getCssVar('--qed') || '#e8c45c');
+  ctx.fillStyle = getCssVar('--fg-dim') || '#b8c0d8';
+  ctx.fillText((LANG === 'cn' ? '|误差| < 3' : '|err| < 3'), lx + 12 * DPR, ly + 6 * DPR);
+
+  drawLegendDot(lx, ly + 22 * DPR, axis);
+  ctx.fillStyle = getCssVar('--fg-dim') || '#b8c0d8';
+  ctx.fillText((LANG === 'cn' ? '|误差| < 8' : '|err| < 8'), lx + 12 * DPR, ly + 22 * DPR);
+
+  drawLegendDot(lx, ly + 38 * DPR, proof);
+  ctx.fillStyle = getCssVar('--fg-dim') || '#b8c0d8';
+  ctx.fillText((LANG === 'cn' ? '|误差| ≥ 8' : '|err| ≥ 8'), lx + 12 * DPR, ly + 38 * DPR);
+}
+
+function drawLegendDot(x, y, color){
+  ctx.fillStyle = color;
+  ctx.beginPath(); ctx.arc(x, y, 3 * DPR, 0, Math.PI * 2); ctx.fill();
+}
+
+// ────────────────────────────────────────────────────────────
+// HUD + status
+// ────────────────────────────────────────────────────────────
+function fmt(x, d){
+  if (!isFinite(x)) return '—';
+  return (x >= 0 ? '+' : '') + x.toFixed(d);
+}
+
+function updateHUD(){
+  var stats = computeStats(paramState.a, paramState.b, paramState.c);
+  var r2 = stats.r2;
+  var mae = stats.mae;
+  var r2El = document.getElementById('valR2');
+  var maeEl = document.getElementById('valMAE');
+
+  r2El.textContent = (r2 >= 0 ? '' : '') + r2.toFixed(3);
+  maeEl.textContent = mae.toFixed(2);
+
+  r2El.classList.remove('good','bad');
+  maeEl.classList.remove('good','bad');
+  if (r2 >= 0.90) r2El.classList.add('good');
+  else if (r2 < 0.50) r2El.classList.add('bad');
+  if (mae <= 2.0) maeEl.classList.add('good');
+  else if (mae > 8.0) maeEl.classList.add('bad');
+
+  // formula display
+  document.getElementById('fA').textContent = paramState.a.toFixed(3);
+  document.getElementById('fB').textContent = paramState.b.toFixed(4);
+  document.getElementById('fC').textContent = paramState.c.toFixed(2);
+
+  return stats;
+}
+
+function updateStatus(){
+  var stats = { r2: 0, mae: 0 };
+  try { stats = computeStats(paramState.a, paramState.b, paramState.c); } catch(e){}
+  var msg = document.getElementById('statusMsg');
+  msg.classList.remove('win');
+
+  var isEPA = Math.abs(paramState.a - EPA.a) < 0.01
+           && Math.abs(paramState.b - EPA.b) < 0.005
+           && Math.abs(paramState.c - EPA.c) < 0.1;
+
+  if (stats.r2 >= 0.90 && stats.mae <= 2.0) {
+    msg.textContent = t('msgWin');
+    msg.classList.add('win');
+    if (!hasShownWin) {
+      hasShownWin = true;
+      flashGold();
+    }
+  } else if (isEPA) {
+    msg.textContent = t('msgEPA');
+    msg.classList.add('win');
+  } else if (stats.r2 < 0.3) {
+    msg.textContent = t('msgBad');
+  } else if (stats.r2 > 0.75) {
+    msg.textContent = t('msgClose');
+  } else {
+    msg.textContent = t('msgIdle');
+  }
+}
+
+// ────────────────────────────────────────────────────────────
+// Gold flash (--gold key moment)
+// ────────────────────────────────────────────────────────────
+var goldFlashAlpha = 0;
+function flashGold(){ goldFlashAlpha = 1; }
+
+function drawGoldOverlay(){
+  if (goldFlashAlpha <= 0.001) return;
+  var W = canvas.width, H = canvas.height;
+  ctx.save();
+  ctx.globalAlpha = goldFlashAlpha * 0.18;
+  var rg = ctx.createRadialGradient(W * 0.5, H * 0.45, 0, W * 0.5, H * 0.45, Math.max(W, H) * 0.6);
+  rg.addColorStop(0, getCssVar('--qed') || '#e8c45c');
+  rg.addColorStop(1, 'transparent');
+  ctx.fillStyle = rg;
+  ctx.fillRect(0, 0, W, H);
+  ctx.restore();
+  goldFlashAlpha *= 0.94;
+}
+
+// ────────────────────────────────────────────────────────────
+// Mascot rotation + equation flash (subtle, per-frame)
+// ────────────────────────────────────────────────────────────
+var EQ_LABELS = ['a·PA', 'b·RH', '+ c', 'R² ↑', 'MAE↓', 'fit'];
+function tickMascot(){
+  rotPhase += 0.02;
+  var ang = Math.sin(rotPhase) * 4;
+  var m = document.getElementById('mascot');
+  if (m) m.style.transform = 'rotate(' + ang.toFixed(2) + 'deg)';
+  var idx = Math.floor(rotPhase / 1.2) % EQ_LABELS.length;
+  var eqEl = document.getElementById('mascotEq');
+  if (eqEl) eqEl.textContent = EQ_LABELS[idx];
+}
+
+// ────────────────────────────────────────────────────────────
+// Main loop
+// ────────────────────────────────────────────────────────────
+function loop(){
+  resizeCanvas();
+  drawScatter();
+  drawGoldOverlay();
+  tickMascot();
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+
+// ────────────────────────────────────────────────────────────
+// Slider events
+// ────────────────────────────────────────────────────────────
+function onSlider(){
+  paramState.a = parseFloat(document.getElementById('sliderA').value);
+  paramState.b = parseFloat(document.getElementById('sliderB').value);
+  paramState.c = parseFloat(document.getElementById('sliderC').value);
+  document.getElementById('aVal').textContent = paramState.a.toFixed(3);
+  document.getElementById('bVal').textContent = paramState.b.toFixed(4);
+  document.getElementById('cVal').textContent = paramState.c.toFixed(2);
+  // moved away from EPA = unlock win flash again next time
+  var isEPA = Math.abs(paramState.a - EPA.a) < 0.01
+           && Math.abs(paramState.b - EPA.b) < 0.005
+           && Math.abs(paramState.c - EPA.c) < 0.1;
+  if (!isEPA) hasShownWin = false;
+  updateHUD();
+  updateStatus();
+}
+document.getElementById('sliderA').addEventListener('input', onSlider);
+document.getElementById('sliderB').addEventListener('input', onSlider);
+document.getElementById('sliderC').addEventListener('input', onSlider);
+
+document.getElementById('resetBtn').addEventListener('click', function(){
+  document.getElementById('sliderA').value = EPA.a;
+  document.getElementById('sliderB').value = EPA.b;
+  document.getElementById('sliderC').value = EPA.c;
+  hasShownWin = false;  // re-trigger win flash on reset
+  onSlider();
+});
+
+// init
+updateHUD();
+updateStatus();
+refreshI18N();
+</script>
+</body>
+</html>

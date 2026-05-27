@@ -1,0 +1,1120 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>M45 · ship_2 · Ship it — Live dashboard + 5min demo</title>
+<style>
+  :root {
+    --paper:    #FAF9F5;
+    --paper-2:  #F1EDDF;
+    --card:     #FFFFFF;
+    --ink:      #191814;
+    --ink-2:    #2B2924;
+    --sub:      #6B6557;
+    --sub-2:    #9D978A;
+    --border:   #EBE5D6;
+    --border-2: #D9D1BD;
+    --hairline: #F2EDE0;
+
+    --primary:      #D97757;
+    --primary-ink:  #9A4A2E;
+    --primary-soft: #F8EDE5;
+    --primary-line: #ECCFB8;
+
+    --climate:      #527B95;
+    --climate-soft: #DEE5EC;
+    --climate-line: #B6C5D2;
+
+    /* AQI 颜色 (EPA) */
+    --aqi-good:      #4FAE6F;
+    --aqi-moderate:  #E6C04C;
+    --aqi-usg:       #E89A4A;
+    --aqi-unhealthy: #C95757;
+
+    --shadow-sm: 0 1px 2px 0 rgba(25,24,20,.04);
+    --shadow:    0 1px 3px 0 rgba(25,24,20,.06), 0 1px 2px -1px rgba(25,24,20,.04);
+    --shadow-md: 0 4px 8px -2px rgba(25,24,20,.06), 0 2px 4px -2px rgba(25,24,20,.04);
+    --shadow-lg: 0 12px 24px -6px rgba(25,24,20,.1), 0 4px 8px -4px rgba(25,24,20,.05);
+
+    --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+    --sans: "PingFang SC", "Inter", "Noto Sans SC", system-ui, sans-serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: 14px;
+    line-height: 1.5;
+    display: flex;
+    overflow: hidden;
+  }
+
+  /* i18n */
+  body [data-i18n-en] { display: none; }
+  body [data-i18n-cn] { display: inline; }
+  body.lang-en [data-i18n-en] { display: inline; }
+  body.lang-en [data-i18n-cn] { display: none; }
+
+  /* ===== Sidebar ===== */
+  .sidebar {
+    width: 200px;
+    flex-shrink: 0;
+    background: var(--paper-2);
+    border-right: 1px solid var(--border);
+    padding: 20px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+  }
+  .brand {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding-bottom: 14px;
+    border-bottom: 1px solid var(--border);
+  }
+  .brand-row { display: flex; align-items: center; gap: 8px; }
+  .brand-mark {
+    width: 22px; height: 22px;
+    border-radius: 5px;
+    background: var(--primary);
+    display: flex; align-items: center; justify-content: center;
+    color: #fff;
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 700;
+  }
+  .brand-title {
+    font-size: 13px; font-weight: 600;
+    color: var(--ink); letter-spacing: .02em;
+  }
+  .brand-sub {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--sub);
+    letter-spacing: .04em;
+  }
+  .guide-title {
+    font-size: 11px; font-weight: 600;
+    color: var(--sub);
+    text-transform: uppercase;
+    letter-spacing: .08em;
+  }
+  .guide { display: flex; flex-direction: column; gap: 10px; }
+  .guide-item { display: flex; gap: 8px; align-items: flex-start; }
+  .guide-bullet {
+    width: 16px; height: 16px;
+    border-radius: 4px;
+    background: var(--card);
+    border: 1px solid var(--border-2);
+    color: var(--primary-ink);
+    font-family: var(--mono);
+    font-size: 10px; font-weight: 600;
+    flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    margin-top: 1px;
+  }
+  .guide-text {
+    font-size: 11.5px;
+    color: var(--ink-2);
+    line-height: 1.45;
+  }
+  .sidebar-spacer { flex: 1; }
+  .lang-btn {
+    align-self: flex-start;
+    padding: 6px 12px;
+    border: 1px solid var(--border-2);
+    background: var(--card);
+    border-radius: 6px;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--ink-2);
+    cursor: pointer;
+    letter-spacing: .04em;
+  }
+  .lang-btn:hover { border-color: var(--primary-line); color: var(--primary-ink); }
+
+  /* ===== Main ===== */
+  .main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    padding: 14px 22px 14px 22px;
+    gap: 10px;
+    overflow: hidden;
+    min-width: 0;
+  }
+
+  /* --- Hero --- */
+  .hero {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    padding-bottom: 4px;
+  }
+  .hero-tag {
+    font-family: var(--mono);
+    font-size: 10.5px;
+    color: var(--primary-ink);
+    background: var(--primary-soft);
+    border: 1px solid var(--primary-line);
+    padding: 3px 9px;
+    border-radius: 4px;
+    letter-spacing: .08em;
+    flex-shrink: 0;
+  }
+  .hero-title {
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--ink);
+    letter-spacing: -0.005em;
+  }
+  .hero-title .accent { color: var(--primary); }
+  .hero-q {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--sub);
+    border-left: 2px solid var(--climate);
+    padding-left: 10px;
+    margin-left: auto;
+    max-width: 360px;
+    line-height: 1.4;
+  }
+
+  /* --- Content row: dashboard mock + demo right --- */
+  .content {
+    flex: 1;
+    display: grid;
+    grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
+    gap: 14px;
+    min-height: 0;
+  }
+
+  .section {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    box-shadow: var(--shadow-sm);
+    min-height: 0;
+    overflow: hidden;
+  }
+  .section-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 10px;
+    padding-bottom: 8px;
+    border-bottom: 1px dashed var(--border);
+  }
+  .section-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--ink);
+    letter-spacing: .01em;
+  }
+  .section-sub {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--sub);
+    letter-spacing: .04em;
+  }
+
+  /* === Dashboard mockup === */
+  .mock-row {
+    flex: 1;
+    display: grid;
+    grid-template-columns: 200px minmax(0, 1fr);
+    gap: 14px;
+    min-height: 0;
+  }
+
+  /* phone */
+  .mock-phone {
+    position: relative;
+    border: 2px solid var(--ink);
+    border-radius: 22px;
+    padding: 18px 8px 14px 8px;
+    background: var(--paper);
+    box-shadow: var(--shadow-md);
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    overflow: hidden;
+  }
+  .mock-phone::before {
+    content: "";
+    position: absolute;
+    top: 4px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 56px; height: 6px;
+    border-radius: 3px;
+    background: var(--ink);
+  }
+  .mock-url {
+    margin: 0 auto;
+    background: var(--paper-2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 3px 7px;
+    font-family: var(--mono);
+    font-size: 8.5px;
+    color: var(--sub);
+    width: calc(100% - 6px);
+    text-align: center;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .mock-url .lock {
+    display: inline-block;
+    width: 7px; height: 7px;
+    border: 1px solid var(--aqi-good);
+    border-radius: 2px;
+    margin-right: 3px;
+    vertical-align: middle;
+  }
+
+  .pm-big-wrap {
+    text-align: center;
+    padding: 4px 0 2px 0;
+  }
+  .pm-big-label {
+    font-family: var(--mono);
+    font-size: 8.5px;
+    color: var(--sub);
+    letter-spacing: .12em;
+  }
+  .pm-big-num {
+    font-family: var(--mono);
+    font-size: 36px;
+    font-weight: 700;
+    color: var(--ink);
+    line-height: 1;
+    margin: 2px 0;
+  }
+  .pm-big-unit {
+    font-family: var(--mono);
+    font-size: 8.5px;
+    color: var(--sub);
+  }
+  .aqi-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 10px;
+    border-radius: 12px;
+    background: var(--aqi-moderate);
+    color: #2B2924;
+    font-family: var(--mono);
+    font-size: 9.5px;
+    font-weight: 700;
+    letter-spacing: .04em;
+    margin-top: 5px;
+    animation: aqi-breathe 2.6s ease-in-out infinite;
+  }
+  @keyframes aqi-breathe {
+    0%,100% { box-shadow: 0 0 0 0 rgba(230,192,76,.55); }
+    50%     { box-shadow: 0 0 0 6px rgba(230,192,76,0); }
+  }
+  .aqi-dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: #2B2924;
+    opacity: .7;
+  }
+
+  .toggle-row {
+    display: flex;
+    gap: 4px;
+    padding: 4px;
+    background: var(--paper-2);
+    border-radius: 6px;
+    margin: 4px 4px 0 4px;
+  }
+  .toggle-row .seg {
+    flex: 1;
+    padding: 4px 0;
+    text-align: center;
+    font-family: var(--mono);
+    font-size: 8.5px;
+    color: var(--sub);
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 180ms ease;
+  }
+  .toggle-row .seg.active {
+    background: var(--card);
+    color: var(--ink);
+    box-shadow: var(--shadow-sm);
+    font-weight: 700;
+  }
+  .toggle-row .seg .corr-mark {
+    display: inline-block;
+    width: 5px; height: 5px;
+    border-radius: 1px;
+    background: var(--climate);
+    margin-right: 3px;
+    vertical-align: middle;
+  }
+
+  .spark-row {
+    margin: 4px 4px 0 4px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .spark-block {
+    background: var(--paper-2);
+    border-radius: 6px;
+    padding: 4px 6px;
+  }
+  .spark-block .sb-label {
+    display: flex;
+    justify-content: space-between;
+    font-family: var(--mono);
+    font-size: 8px;
+    color: var(--sub);
+  }
+  .spark-block .sb-val {
+    color: var(--ink);
+    font-weight: 700;
+  }
+  .spark-block svg {
+    display: block;
+    width: 100%;
+    height: 22px;
+  }
+
+  /* tablet + desktop column */
+  .mock-rest {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    min-height: 0;
+  }
+  .mock-tablet, .mock-desktop {
+    flex: 1;
+    border: 1.5px solid var(--ink);
+    border-radius: 8px;
+    background: var(--paper);
+    box-shadow: var(--shadow-sm);
+    padding: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-height: 0;
+    overflow: hidden;
+    position: relative;
+  }
+  .mock-vp-tag {
+    position: absolute;
+    top: -8px;
+    left: 10px;
+    background: var(--card);
+    border: 1px solid var(--border-2);
+    border-radius: 3px;
+    padding: 1px 6px;
+    font-family: var(--mono);
+    font-size: 8.5px;
+    color: var(--sub);
+    letter-spacing: .06em;
+  }
+  .mock-mini-url {
+    background: var(--paper-2);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 2px 6px;
+    font-family: var(--mono);
+    font-size: 8.5px;
+    color: var(--sub);
+    text-align: center;
+  }
+  .mock-grid-2 {
+    flex: 1;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+    min-height: 0;
+  }
+  .mock-cell {
+    background: var(--paper-2);
+    border-radius: 4px;
+    padding: 6px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    gap: 2px;
+    min-height: 0;
+  }
+  .mock-cell .mc-num {
+    font-family: var(--mono);
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--ink);
+    line-height: 1;
+  }
+  .mock-cell .mc-lbl {
+    font-family: var(--mono);
+    font-size: 8px;
+    color: var(--sub);
+    letter-spacing: .06em;
+  }
+  .mock-cell.aqi-fill {
+    background: var(--aqi-moderate);
+    color: #2B2924;
+  }
+  .mock-cell.aqi-fill .mc-num { color: #2B2924; }
+  .mock-cell.aqi-fill .mc-lbl { color: #2B2924; opacity: .75; }
+
+  .mock-grid-4 {
+    flex: 1;
+    display: grid;
+    grid-template-columns: 0.9fr 1fr 1fr;
+    grid-template-rows: 1fr 1fr;
+    gap: 5px;
+    min-height: 0;
+  }
+  .mock-grid-4 .mc-big {
+    grid-row: 1 / 3;
+    background: var(--aqi-moderate);
+  }
+  .mock-grid-4 .mc-big .mc-num { font-size: 24px; color: #2B2924; }
+  .mock-grid-4 .mc-big .mc-lbl { color: #2B2924; opacity: .75; }
+  .mock-cell.full-w {
+    grid-column: 2 / 4;
+  }
+  .mock-cell .mini-spark {
+    width: 100%;
+    height: 16px;
+  }
+
+  /* === Demo video section === */
+  .demo-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    flex: 1;
+    min-height: 0;
+  }
+  .demo-bar {
+    display: flex;
+    height: 28px;
+    border-radius: 6px;
+    overflow: hidden;
+    border: 1px solid var(--border-2);
+    background: var(--paper-2);
+    flex-shrink: 0;
+  }
+  .demo-seg {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--ink);
+    border-right: 1px solid var(--border-2);
+    cursor: pointer;
+    position: relative;
+    transition: background 180ms ease;
+  }
+  .demo-seg:last-child { border-right: none; }
+  .demo-seg:hover { background: var(--climate-soft); }
+  .demo-seg.active { background: var(--primary-soft); color: var(--primary-ink); }
+  .demo-seg .seg-time {
+    position: absolute;
+    bottom: 1px;
+    right: 4px;
+    font-size: 7.5px;
+    color: var(--sub);
+    letter-spacing: 0;
+  }
+
+  .demo-cards {
+    flex: 1;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: 1fr 1fr 1fr;
+    gap: 8px;
+    min-height: 0;
+  }
+  .demo-card {
+    background: var(--paper);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 7px 9px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-height: 0;
+    overflow: hidden;
+    transition: all 200ms ease;
+  }
+  .demo-card.active {
+    border-color: var(--primary);
+    background: var(--primary-soft);
+    box-shadow: var(--shadow-sm);
+  }
+  .demo-card-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 4px;
+  }
+  .demo-card-no {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--primary-ink);
+    font-weight: 700;
+  }
+  .demo-card-t {
+    font-family: var(--mono);
+    font-size: 9px;
+    color: var(--sub);
+    letter-spacing: .04em;
+  }
+  .demo-card-title {
+    font-size: 11.5px;
+    font-weight: 700;
+    color: var(--ink);
+    line-height: 1.3;
+  }
+  .demo-card-desc {
+    font-size: 10px;
+    color: var(--sub);
+    line-height: 1.35;
+  }
+  .demo-card.span-2 {
+    grid-column: 1 / 3;
+  }
+  .demo-card.span-2 .tips-list {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr 1fr;
+    gap: 6px;
+    margin-top: 2px;
+  }
+  .tip-item {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 4px 6px;
+  }
+  .tip-icon {
+    color: var(--climate);
+    width: 14px; height: 14px;
+  }
+  .tip-name {
+    font-family: var(--mono);
+    font-size: 9px;
+    font-weight: 700;
+    color: var(--ink);
+    letter-spacing: .04em;
+  }
+  .tip-desc {
+    font-size: 9.5px;
+    color: var(--sub);
+    line-height: 1.3;
+  }
+
+  /* --- Vows footer --- */
+  .vows {
+    flex: 0 0 auto;
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 10px;
+    padding-top: 4px;
+  }
+  .vow {
+    background: var(--paper-2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 9px 12px;
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    transition: all 200ms ease;
+  }
+  .vow:hover {
+    border-color: var(--climate);
+    background: var(--climate-soft);
+  }
+  .vow-num {
+    font-family: var(--mono);
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--primary);
+    line-height: 1;
+    flex-shrink: 0;
+    padding-top: 1px;
+  }
+  .vow-text {
+    font-size: 11.5px;
+    color: var(--ink-2);
+    line-height: 1.4;
+  }
+
+</style>
+</head>
+<body>
+
+<aside class="sidebar">
+  <div class="brand">
+    <div class="brand-row">
+      <div class="brand-mark">M45</div>
+      <div class="brand-title">SystemEdu</div>
+    </div>
+    <div class="brand-sub">ship_2 · PUBLISH</div>
+  </div>
+
+  <div class="guide-title">
+    <span data-i18n-cn>看图指南</span>
+    <span data-i18n-en>How to read</span>
+  </div>
+  <div class="guide">
+    <div class="guide-item">
+      <div class="guide-bullet">1</div>
+      <div class="guide-text">
+        <span data-i18n-cn>上面 = 你的实时网页 dashboard, 手机能开</span>
+        <span data-i18n-en>Top: live web dashboard, opens on phone</span>
+      </div>
+    </div>
+    <div class="guide-item">
+      <div class="guide-bullet">2</div>
+      <div class="guide-text">
+        <span data-i18n-cn>右边 = 5 分钟 demo 录像 5 段脚本</span>
+        <span data-i18n-en>Right: 5-min demo, 5 scripted segments</span>
+      </div>
+    </div>
+    <div class="guide-item">
+      <div class="guide-bullet">3</div>
+      <div class="guide-text">
+        <span data-i18n-cn>底下 = 3 件你今天就该做的事</span>
+        <span data-i18n-en>Bottom: 3 things to do today</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="sidebar-spacer"></div>
+  <button class="lang-btn" id="langBtn" type="button">CN / EN</button>
+</aside>
+
+<main class="main">
+
+  <!-- Hero -->
+  <header class="hero">
+    <div class="hero-tag">M45 · SHIP IT</div>
+    <div class="hero-title">
+      <span data-i18n-cn>上线 <span class="accent">dashboard</span> + 录 5 分钟 demo = 你的项目能被陌生人看懂</span>
+      <span data-i18n-en>Ship a <span class="accent">live dashboard</span> + record a 5-min demo — strangers can finally get it</span>
+    </div>
+    <div class="hero-q">
+      <span data-i18n-cn>"我能让任何人在他手机上看到我家空气, 一刷新就刷新吗?"</span>
+      <span data-i18n-en>"Can anyone, on their phone, see my home's air — refresh and it refreshes?"</span>
+    </div>
+  </header>
+
+  <!-- Main content grid -->
+  <div class="content">
+
+    <!-- LEFT: dashboard mockup -->
+    <section class="section">
+      <div class="section-head">
+        <div class="section-title">
+          <span data-i18n-cn>实时 dashboard · mobile-first 网页</span>
+          <span data-i18n-en>Live dashboard · mobile-first web app</span>
+        </div>
+        <div class="section-sub">your-node.example.com</div>
+      </div>
+
+      <div class="mock-row">
+
+        <!-- PHONE -->
+        <div class="mock-phone" id="mockPhone">
+          <div class="mock-url"><span class="lock"></span>your-node.example.com</div>
+
+          <div class="pm-big-wrap">
+            <div class="pm-big-label">PM2.5</div>
+            <div class="pm-big-num">42</div>
+            <div class="pm-big-unit">µg/m³</div>
+            <div class="aqi-chip">
+              <span class="aqi-dot"></span>
+              <span data-i18n-cn>MODERATE · 中等</span>
+              <span data-i18n-en>MODERATE</span>
+            </div>
+          </div>
+
+          <div class="toggle-row" id="toggleRow">
+            <div class="seg" data-mode="raw">RAW</div>
+            <div class="seg active" data-mode="corr"><span class="corr-mark"></span>CORR</div>
+          </div>
+
+          <div class="spark-row">
+            <div class="spark-block">
+              <div class="sb-label">
+                <span>1h</span>
+                <span class="sb-val">42 µg/m³</span>
+              </div>
+              <svg viewBox="0 0 100 22" preserveAspectRatio="none">
+                <polyline points="0,15 8,12 16,14 24,10 32,11 40,9 48,12 56,8 64,10 72,7 80,9 88,6 96,8 100,7"
+                          fill="none" stroke="var(--climate)" stroke-width="1.4" stroke-linejoin="round" stroke-linecap="round"/>
+                <polyline points="0,17 8,15 16,16 24,13 32,14 40,12 48,15 56,11 64,13 72,10 80,12 88,9 96,11 100,10"
+                          fill="none" stroke="var(--sub-2)" stroke-width="1" stroke-dasharray="2 2"/>
+              </svg>
+            </div>
+            <div class="spark-block">
+              <div class="sb-label">
+                <span>7d</span>
+                <span class="sb-val">~38 avg</span>
+              </div>
+              <svg viewBox="0 0 100 22" preserveAspectRatio="none">
+                <polyline points="0,16 14,13 28,17 42,9 56,11 70,7 84,10 100,8"
+                          fill="none" stroke="var(--climate)" stroke-width="1.4" stroke-linejoin="round" stroke-linecap="round"/>
+                <line x1="0" y1="11" x2="100" y2="11" stroke="var(--aqi-moderate)" stroke-width="0.6" stroke-dasharray="3 2"/>
+              </svg>
+            </div>
+          </div>
+        </div>
+
+        <!-- TABLET + DESKTOP stacked -->
+        <div class="mock-rest">
+
+          <div class="mock-tablet">
+            <span class="mock-vp-tag">TABLET · 768px</span>
+            <div class="mock-mini-url"><span class="lock" style="display:inline-block;width:6px;height:6px;border:1px solid var(--aqi-good);border-radius:2px;margin-right:3px;vertical-align:middle;"></span>your-node.example.com</div>
+            <div class="mock-grid-2">
+              <div class="mock-cell aqi-fill">
+                <div class="mc-lbl">PM2.5 · CORR</div>
+                <div class="mc-num">42</div>
+                <div class="mc-lbl">µg/m³ · MODERATE</div>
+              </div>
+              <div class="mock-cell">
+                <div class="mc-lbl">1H TREND</div>
+                <svg class="mini-spark" viewBox="0 0 100 22" preserveAspectRatio="none">
+                  <polyline points="0,14 12,11 24,13 36,9 48,10 60,7 72,9 84,6 100,7"
+                            fill="none" stroke="var(--climate)" stroke-width="1.4" stroke-linejoin="round" stroke-linecap="round"/>
+                </svg>
+              </div>
+              <div class="mock-cell">
+                <div class="mc-lbl">7D AVG</div>
+                <div class="mc-num">38</div>
+                <div class="mc-lbl">µg/m³</div>
+              </div>
+              <div class="mock-cell">
+                <div class="mc-lbl">7D TREND</div>
+                <svg class="mini-spark" viewBox="0 0 100 22" preserveAspectRatio="none">
+                  <polyline points="0,16 14,13 28,17 42,9 56,11 70,7 84,10 100,8"
+                            fill="none" stroke="var(--climate)" stroke-width="1.4" stroke-linejoin="round" stroke-linecap="round"/>
+                </svg>
+              </div>
+            </div>
+          </div>
+
+          <div class="mock-desktop">
+            <span class="mock-vp-tag">DESKTOP · 1280px</span>
+            <div class="mock-mini-url"><span class="lock" style="display:inline-block;width:6px;height:6px;border:1px solid var(--aqi-good);border-radius:2px;margin-right:3px;vertical-align:middle;"></span>your-node.example.com  ·  refresh = re-fetch /api/latest</div>
+            <div class="mock-grid-4">
+              <div class="mock-cell mc-big">
+                <div class="mc-lbl">PM2.5</div>
+                <div class="mc-num">42</div>
+                <div class="mc-lbl">µg/m³</div>
+              </div>
+              <div class="mock-cell">
+                <div class="mc-num">1H</div>
+                <div class="mc-lbl">last hour</div>
+              </div>
+              <div class="mock-cell">
+                <div class="mc-num">7D</div>
+                <div class="mc-lbl">week trend</div>
+              </div>
+              <div class="mock-cell full-w">
+                <div class="mc-lbl" style="align-self:flex-start;">CORR vs RAW</div>
+                <svg class="mini-spark" viewBox="0 0 100 22" preserveAspectRatio="none" style="height:18px;">
+                  <polyline points="0,15 10,12 20,14 30,10 40,11 50,9 60,12 70,8 80,10 90,7 100,9"
+                            fill="none" stroke="var(--climate)" stroke-width="1.4" stroke-linejoin="round" stroke-linecap="round"/>
+                  <polyline points="0,18 10,16 20,17 30,14 40,15 50,13 60,16 70,12 80,14 90,11 100,13"
+                            fill="none" stroke="var(--sub-2)" stroke-width="1" stroke-dasharray="2 2"/>
+                </svg>
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+      </div>
+    </section>
+
+    <!-- RIGHT: 5-min demo -->
+    <section class="section">
+      <div class="section-head">
+        <div class="section-title">
+          <span data-i18n-cn>5 分钟 demo · 5 段脚本</span>
+          <span data-i18n-en>5-min demo · 5 scripted segments</span>
+        </div>
+        <div class="section-sub">00:00 — 05:00</div>
+      </div>
+
+      <div class="demo-stack">
+
+        <!-- Time bar -->
+        <div class="demo-bar" id="demoBar">
+          <div class="demo-seg active" data-seg="1">
+            <span data-i18n-cn>开场</span><span data-i18n-en>Intro</span>
+            <span class="seg-time">0:00-1:00</span>
+          </div>
+          <div class="demo-seg" data-seg="2">
+            <span data-i18n-cn>装置</span><span data-i18n-en>Build</span>
+            <span class="seg-time">1:00-2:00</span>
+          </div>
+          <div class="demo-seg" data-seg="3">
+            <span data-i18n-cn>数据</span><span data-i18n-en>Data</span>
+            <span class="seg-time">2:00-3:00</span>
+          </div>
+          <div class="demo-seg" data-seg="4">
+            <span data-i18n-cn>校正</span><span data-i18n-en>Correct</span>
+            <span class="seg-time">3:00-4:00</span>
+          </div>
+          <div class="demo-seg" data-seg="5">
+            <span data-i18n-cn>总结</span><span data-i18n-en>Wrap</span>
+            <span class="seg-time">4:00-5:00</span>
+          </div>
+        </div>
+
+        <!-- 5 segment cards + tips card -->
+        <div class="demo-cards" id="demoCards">
+
+          <div class="demo-card active" data-card="1">
+            <div class="demo-card-head">
+              <div class="demo-card-no">01</div>
+              <div class="demo-card-t">1 MIN · INTRO</div>
+            </div>
+            <div class="demo-card-title">
+              <span data-i18n-cn>我是谁 · 在解决什么</span>
+              <span data-i18n-en>Who I am · What I solve</span>
+            </div>
+            <div class="demo-card-desc">
+              <span data-i18n-cn>"我家在 XX, 想知道屋里 PM2.5 比 EPA 站点高多少 —— 这是我自己造的节点"</span>
+              <span data-i18n-en>"I live in XX, wanted to know how much higher PM2.5 is at home vs EPA station — here's my node"</span>
+            </div>
+          </div>
+
+          <div class="demo-card" data-card="2">
+            <div class="demo-card-head">
+              <div class="demo-card-no">02</div>
+              <div class="demo-card-t">1 MIN · BUILD</div>
+            </div>
+            <div class="demo-card-title">
+              <span data-i18n-cn>装置走一圈</span>
+              <span data-i18n-en>Tour the hardware</span>
+            </div>
+            <div class="demo-card-desc">
+              <span data-i18n-cn>PMS5003 + ESP32 + 防雨外壳, 镜头从传感器到电源, 30 秒一镜到底</span>
+              <span data-i18n-en>PMS5003 + ESP32 + weatherproof case · 30s one-take pan from sensor to power</span>
+            </div>
+          </div>
+
+          <div class="demo-card" data-card="3">
+            <div class="demo-card-head">
+              <div class="demo-card-no">03</div>
+              <div class="demo-card-t">1 MIN · DATA</div>
+            </div>
+            <div class="demo-card-title">
+              <span data-i18n-cn>打开 dashboard 实时刷新</span>
+              <span data-i18n-en>Open dashboard, refresh live</span>
+            </div>
+            <div class="demo-card-desc">
+              <span data-i18n-cn>手机扫码进 URL, 当场吹一口烟 / 开窗 — 看数字 30 秒后变</span>
+              <span data-i18n-en>Scan QR on phone · puff smoke / open window — number changes ~30s later</span>
+            </div>
+          </div>
+
+          <div class="demo-card" data-card="4">
+            <div class="demo-card-head">
+              <div class="demo-card-no">04</div>
+              <div class="demo-card-t">1 MIN · CORRECT</div>
+            </div>
+            <div class="demo-card-title">
+              <span data-i18n-cn>RAW vs CORR 切一下</span>
+              <span data-i18n-en>Toggle RAW vs CORR</span>
+            </div>
+            <div class="demo-card-desc">
+              <span data-i18n-cn>"原始 58, 校正后 42 —— 因为湿度让 PMS 高估" · 给图给公式</span>
+              <span data-i18n-en>"Raw 58, corrected 42 — humidity makes PMS over-read" · show plot + formula</span>
+            </div>
+          </div>
+
+          <div class="demo-card" data-card="5">
+            <div class="demo-card-head">
+              <div class="demo-card-no">05</div>
+              <div class="demo-card-t">1 MIN · WRAP</div>
+            </div>
+            <div class="demo-card-title">
+              <span data-i18n-cn>下一步 + DOI + 致谢</span>
+              <span data-i18n-en>Next steps + DOI + thanks</span>
+            </div>
+            <div class="demo-card-desc">
+              <span data-i18n-cn>把 URL / DOI / GitHub 三个链接打在结尾字幕上, 30 秒</span>
+              <span data-i18n-en>End-card: URL / DOI / GitHub · 30s captions</span>
+            </div>
+          </div>
+
+          <!-- Recording tips card span 2 -->
+          <div class="demo-card span-2" data-card="tips">
+            <div class="demo-card-head">
+              <div class="demo-card-no" style="color:var(--climate);">TIPS</div>
+              <div class="demo-card-t">
+                <span data-i18n-cn>录制小贴士</span>
+                <span data-i18n-en>Recording tips</span>
+              </div>
+            </div>
+            <div class="tips-list">
+              <div class="tip-item">
+                <svg class="tip-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="3" y="5" width="18" height="14" rx="2"/>
+                  <circle cx="12" cy="12" r="3"/>
+                  <circle cx="17" cy="9" r=".6" fill="currentColor"/>
+                </svg>
+                <div class="tip-name">OBS</div>
+                <div class="tip-desc">
+                  <span data-i18n-cn>免费 · 录屏 + 摄像头分窗</span>
+                  <span data-i18n-en>Free · screen + cam split</span>
+                </div>
+              </div>
+              <div class="tip-item">
+                <svg class="tip-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="7" y="3" width="10" height="18" rx="2"/>
+                  <circle cx="12" cy="18" r=".8" fill="currentColor"/>
+                  <path d="M9 6h6"/>
+                </svg>
+                <div class="tip-name">PHONE</div>
+                <div class="tip-desc">
+                  <span data-i18n-cn>手机 + 三脚架 / 稳定器</span>
+                  <span data-i18n-en>Phone + tripod / gimbal</span>
+                </div>
+              </div>
+              <div class="tip-item">
+                <svg class="tip-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="3" y="5" width="18" height="12" rx="1"/>
+                  <path d="M3 17l4-4 3 3 5-6 6 7"/>
+                </svg>
+                <div class="tip-name">BG</div>
+                <div class="tip-desc">
+                  <span data-i18n-cn>背景干净 · 一面白墙够用</span>
+                  <span data-i18n-en>Clean BG · plain wall is fine</span>
+                </div>
+              </div>
+              <div class="tip-item">
+                <svg class="tip-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="3" y="4" width="18" height="16" rx="2"/>
+                  <path d="M6 14h12M6 17h7"/>
+                </svg>
+                <div class="tip-name">SUB</div>
+                <div class="tip-desc">
+                  <span data-i18n-cn>大字幕 · 关声音也能懂</span>
+                  <span data-i18n-en>Big subs · mute-friendly</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </section>
+
+  </div>
+
+  <!-- 三承诺 -->
+  <section class="vows">
+    <div class="vow">
+      <div class="vow-num">01</div>
+      <div class="vow-text">
+        <span data-i18n-cn>把 dashboard URL 发到同学群 · "进去看看, 我家空气活的"</span>
+        <span data-i18n-en>Drop the dashboard URL in the class chat — "open it, my home's air is live"</span>
+      </div>
+    </div>
+    <div class="vow">
+      <div class="vow-num">02</div>
+      <div class="vow-text">
+        <span data-i18n-cn>5 分钟 demo 上 YouTube · 标题加 PM2.5 + 城市名 + DOI</span>
+        <span data-i18n-en>Upload the 5-min demo to YouTube — title with PM2.5 + city + DOI</span>
+      </div>
+    </div>
+    <div class="vow">
+      <div class="vow-num">03</div>
+      <div class="vow-text">
+        <span data-i18n-cn>找老师演示一次 · "打开手机, 这是我做的, 是真在跑的"</span>
+        <span data-i18n-en>Demo to a teacher in person — "open my phone, this is mine, it's live right now"</span>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<script>
+  (function () {
+    var langBtn = document.getElementById("langBtn");
+    var bodyEl = document.body;
+    langBtn.addEventListener("click", function () {
+      bodyEl.classList.toggle("lang-en");
+      langBtn.textContent = bodyEl.classList.contains("lang-en") ? "EN / CN" : "CN / EN";
+    });
+
+    // toggle RAW/CORR on phone mock
+    var toggleRow = document.getElementById("toggleRow");
+    var segs = toggleRow.querySelectorAll(".seg");
+    segs.forEach(function (s) {
+      s.addEventListener("click", function () {
+        segs.forEach(function (x) { x.classList.remove("active"); });
+        s.classList.add("active");
+      });
+    });
+
+    // demo bar -> demo card sync
+    var demoBar = document.getElementById("demoBar");
+    var demoCards = document.getElementById("demoCards");
+    var barSegs = demoBar.querySelectorAll(".demo-seg");
+    var cardSegs = demoCards.querySelectorAll(".demo-card");
+    barSegs.forEach(function (b) {
+      b.addEventListener("click", function () {
+        var id = b.getAttribute("data-seg");
+        barSegs.forEach(function (x) { x.classList.remove("active"); });
+        b.classList.add("active");
+        cardSegs.forEach(function (c) {
+          if (c.getAttribute("data-card") === id) { c.classList.add("active"); }
+          else if (c.getAttribute("data-card") !== "tips") { c.classList.remove("active"); }
+        });
+      });
+    });
+    cardSegs.forEach(function (c) {
+      var id = c.getAttribute("data-card");
+      if (id === "tips") return;
+      c.addEventListener("click", function () {
+        barSegs.forEach(function (x) {
+          if (x.getAttribute("data-seg") === id) { x.classList.add("active"); }
+          else { x.classList.remove("active"); }
+        });
+        cardSegs.forEach(function (x) {
+          if (x.getAttribute("data-card") === "tips") return;
+          x.classList.remove("active");
+        });
+        c.classList.add("active");
+      });
+    });
+  })();
+</script>
+</body>
+</html>

@@ -1,0 +1,807 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<title>M23 · NowCast w 实时调参 — Geometry Void</title>
+<style>
+  :root{
+    /* Layer 1 — shared deep space canvas */
+    --bg-0: oklch(0.14 0.035 265);
+    --bg-1: oklch(0.18 0.04 265);
+    --bg-2: oklch(0.22 0.045 265);
+    --bg-3: oklch(0.28 0.05 265);
+    --line: oklch(0.35 0.05 265 / 0.35);
+    --line-strong: oklch(0.55 0.08 265 / 0.55);
+    --fg:      oklch(0.96 0.01 265);
+    --fg-dim:  oklch(0.75 0.02 265);
+    --fg-mute: oklch(0.55 0.03 265);
+    --gold:    oklch(0.85 0.14 85);
+
+    /* Layer 2 — math signature accent */
+    --math: oklch(0.72 0.17 245);
+
+    /* Layer 3 — math 5-color palette (themes.js MTH-06) */
+    --AXIS:     oklch(0.72 0.17 245);
+    --PROOF:    oklch(0.52 0.16 245);
+    --SHADOW:   oklch(0.35 0.10 245);
+    --SOLUTION: oklch(0.92 0.08 240);
+    --QED:      oklch(0.85 0.14 85);
+
+    /* mission band colors */
+    --band-low:  oklch(0.78 0.16 25);    /* 剧烈变化 w<0.3 */
+    --band-mid:  oklch(0.85 0.14 95);    /* 中等 w 0.4-0.6 */
+    --band-high: oklch(0.78 0.16 145);   /* 平稳 w>0.8 */
+  }
+
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{
+    height:100%;width:100%;
+    font-family:'Inter','PingFang SC',sans-serif;
+    color:var(--fg);background:var(--bg-0);overflow:hidden;
+  }
+
+  .stage{
+    display:flex;flex-direction:row;height:100vh;width:100vw;
+  }
+
+  /* ---------- 200px sidebar ---------- */
+  .game-sidebar{
+    width:200px;flex:0 0 200px;
+    background:var(--bg-1);
+    border-right:1px solid var(--line);
+    display:flex;flex-direction:column;
+    padding:14px 12px;gap:10px;
+    overflow-y:auto;
+  }
+  .brand{
+    display:flex;flex-direction:column;gap:2px;
+    border-bottom:1px solid var(--line);padding-bottom:8px;
+  }
+  .brand .code{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--fg-mute);letter-spacing:1.2px}
+  .brand .title{font-size:13px;color:var(--fg);font-weight:600}
+  .brand .sub{font-size:10px;color:var(--fg-dim);margin-top:2px}
+
+  .mascot{
+    width:100%;height:78px;display:flex;align-items:center;justify-content:center;
+    background:var(--bg-2);border:1px solid var(--line);
+  }
+  .mascot svg{width:100%;height:100%}
+
+  .guide{
+    background:var(--bg-2);border:1px solid var(--line);
+    padding:8px;display:flex;flex-direction:column;gap:4px;
+  }
+  .guide-title{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--AXIS);letter-spacing:1px}
+  .guide-line{font-size:10px;color:var(--fg-dim);line-height:1.4}
+
+  .data-block{
+    background:var(--bg-2);border:1px solid var(--line);padding:8px 8px 10px;
+    display:flex;flex-direction:column;gap:5px;
+  }
+  .data-title{
+    font-family:'JetBrains Mono',monospace;font-size:9px;
+    color:var(--AXIS);letter-spacing:1px;
+    display:flex;justify-content:space-between;align-items:baseline;
+  }
+  .data-title .hint{color:var(--fg-mute);font-size:8px;letter-spacing:.5px}
+  .slider-row{
+    display:grid;grid-template-columns:22px 1fr 30px;gap:5px;align-items:center;
+  }
+  .slider-row .hr{
+    font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--fg-mute);
+    text-align:right;
+  }
+  .slider-row .val{
+    font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--AXIS);
+    text-align:right;
+  }
+  input[type=range].pm-mini{
+    -webkit-appearance:none;appearance:none;width:100%;height:4px;
+    background:var(--bg-3);border:1px solid var(--line);outline:none;cursor:pointer;
+  }
+  input[type=range].pm-mini::-webkit-slider-thumb{
+    -webkit-appearance:none;appearance:none;
+    width:10px;height:14px;background:var(--SOLUTION);
+    border:1.5px solid var(--bg-0);box-shadow:1.5px 1.5px 0 var(--bg-0);
+    cursor:grab;
+  }
+  input[type=range].pm-mini::-moz-range-thumb{
+    width:10px;height:14px;background:var(--SOLUTION);
+    border:1.5px solid var(--bg-0);box-shadow:1.5px 1.5px 0 var(--bg-0);
+    cursor:grab;
+  }
+
+  .mission-block{
+    background:var(--bg-2);border:1px solid var(--line);padding:8px;
+    display:flex;flex-direction:column;gap:5px;
+  }
+  .mission-title{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--AXIS);letter-spacing:1px}
+  .mission-row{
+    display:grid;grid-template-columns:14px 1fr 30px;gap:5px;align-items:center;
+    padding:4px 5px;background:var(--bg-3);border:1px solid var(--line);
+    font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--fg-dim);
+    transition:all .15s;
+  }
+  .mission-row .swatch{width:10px;height:10px;border:1px solid var(--line)}
+  .mission-row .lbl{font-size:9px;color:var(--fg-dim);line-height:1.1}
+  .mission-row .lbl .cn{font-family:'Inter','PingFang SC',sans-serif;color:var(--fg)}
+  .mission-row .status{font-size:9px;color:var(--fg-mute);text-align:right}
+  .mission-row.hit{background:var(--bg-3);border-color:var(--QED)}
+  .mission-row.hit .status{color:var(--QED);font-weight:700}
+  .mission-row.active{border-color:var(--AXIS);box-shadow:2px 2px 0 var(--bg-0)}
+
+  .preset-row{display:flex;gap:4px}
+  .preset-btn{
+    flex:1;padding:5px 4px;background:var(--bg-3);border:1px solid var(--line-strong);
+    color:var(--fg-dim);font-family:'JetBrains Mono',monospace;font-size:9px;
+    letter-spacing:.5px;cursor:pointer;
+  }
+  .preset-btn:hover{background:var(--PROOF);color:var(--SOLUTION)}
+
+  .sidebar-spacer{flex:1}
+
+  .lang-btn{
+    width:100%;padding:7px 8px;background:var(--bg-3);
+    color:var(--fg);border:1px solid var(--line-strong);
+    font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:1px;
+    cursor:pointer;box-shadow:3px 3px 0 var(--bg-0);
+  }
+  .lang-btn:hover{background:var(--PROOF);color:var(--SOLUTION)}
+
+  /* ---------- main ---------- */
+  .game-main{
+    flex:1;display:flex;flex-direction:column;
+    background:var(--bg-0);min-width:0;
+  }
+  .main-header{
+    height:46px;border-bottom:1px solid var(--line);
+    display:flex;align-items:center;justify-content:space-between;
+    padding:0 18px;background:var(--bg-1);
+  }
+  .header-left{
+    font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--fg-dim);letter-spacing:1.5px;
+  }
+  .header-right{
+    display:flex;gap:14px;font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--fg-mute);
+  }
+  .hud-cell{display:flex;flex-direction:column;align-items:flex-end}
+  .hud-cell .label{font-size:9px;color:var(--fg-mute);letter-spacing:1px}
+  .hud-cell .val{color:var(--AXIS);font-size:13px;font-weight:600}
+  .hud-cell .val.gold{color:var(--QED)}
+
+  /* formula bar at top of body */
+  .formula-bar{
+    padding:14px 22px 8px;
+    background:var(--bg-1);border-bottom:1px solid var(--line);
+    display:flex;flex-direction:column;gap:6px;
+  }
+  .formula-master{
+    font-family:'JetBrains Mono',monospace;font-size:14px;
+    color:var(--fg);letter-spacing:.3px;line-height:1.6;
+  }
+  .formula-master .var{color:var(--AXIS)}
+  .formula-master .num{color:var(--SOLUTION)}
+  .formula-master .accent{color:var(--QED);font-weight:700}
+  .formula-sub{
+    font-family:'JetBrains Mono',monospace;font-size:11px;
+    color:var(--fg-dim);line-height:1.6;letter-spacing:.2px;
+  }
+  .formula-sub .num{color:var(--SOLUTION)}
+  .formula-sub .var{color:var(--AXIS)}
+
+  /* main body — 2 panes */
+  .two-pane{
+    flex:1;display:flex;flex-direction:column;min-height:0;
+  }
+  .pane-title{
+    padding:9px 18px;font-family:'JetBrains Mono',monospace;font-size:11px;
+    color:var(--AXIS);letter-spacing:1.5px;
+    border-bottom:1px solid var(--line);background:var(--bg-1);
+    display:flex;justify-content:space-between;align-items:center;
+  }
+  .pane-title .legend{
+    display:flex;gap:14px;font-size:9px;letter-spacing:.5px;
+  }
+  .pane-title .legend .li{display:flex;align-items:center;gap:5px;color:var(--fg-dim)}
+  .pane-title .legend .li .sw{width:18px;height:3px}
+
+  /* chart pane */
+  .pane-chart{
+    flex:1.4;display:flex;flex-direction:column;min-height:0;
+    border-bottom:1px solid var(--line);
+  }
+  .pane-body{flex:1;display:flex;flex-direction:column;min-height:0;padding:10px 14px}
+  #chartCanvas{flex:1;width:100%;background:var(--bg-1);border:1px solid var(--line)}
+
+  /* diff pane */
+  .pane-diff{
+    flex:1;display:flex;flex-direction:column;min-height:0;
+  }
+  .diff-body{
+    flex:1;padding:14px 18px;
+    display:grid;grid-template-columns:1fr 1fr 1.2fr;gap:16px;
+    min-height:0;
+  }
+  .diff-card{
+    background:var(--bg-2);border:1px solid var(--line);padding:12px;
+    display:flex;flex-direction:column;gap:8px;min-width:0;
+  }
+  .diff-card .ct{
+    font-family:'JetBrains Mono',monospace;font-size:10px;
+    color:var(--fg-mute);letter-spacing:1px;
+  }
+  .diff-card .big{
+    font-family:'JetBrains Mono',monospace;font-size:30px;font-weight:700;
+    color:var(--AXIS);line-height:1;letter-spacing:-1px;
+  }
+  .diff-card.now .big{color:var(--AXIS)}
+  .diff-card.mean .big{color:var(--SOLUTION)}
+  .diff-card .sub{
+    font-family:'JetBrains Mono',monospace;font-size:10px;
+    color:var(--fg-dim);line-height:1.5;
+  }
+  .diff-card .sub .v{color:var(--fg);font-weight:600}
+  .diff-card.delta .big{color:var(--QED)}
+  .diff-bar-wrap{
+    height:18px;background:var(--bg-3);border:1px solid var(--line);
+    display:flex;align-items:center;padding:0;position:relative;overflow:hidden;
+  }
+  .diff-bar{
+    height:100%;background:var(--QED);transition:width .25s;
+  }
+  .diff-bar-zero{
+    position:absolute;left:50%;top:0;bottom:0;width:1px;
+    background:var(--line-strong);
+  }
+  .diff-explain{
+    font-family:'JetBrains Mono',monospace;font-size:10px;
+    color:var(--fg-dim);line-height:1.5;
+  }
+  .diff-explain .accent{color:var(--QED)}
+  .diff-explain .var{color:var(--AXIS)}
+
+  /* milestone toast */
+  .milestone{
+    position:absolute;left:50%;top:60px;transform:translateX(-50%) translateY(-20px);
+    background:var(--QED);color:var(--bg-0);
+    font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:700;
+    padding:10px 22px;letter-spacing:1.5px;
+    box-shadow:4px 4px 0 var(--bg-0);
+    opacity:0;transition:all .35s;pointer-events:none;
+  }
+  .milestone.show{opacity:1;transform:translateX(-50%) translateY(0)}
+</style>
+</head>
+<body>
+  <div class="stage">
+    <!-- ============ Sidebar ============ -->
+    <aside class="game-sidebar">
+      <div class="brand">
+        <span class="code">MTH-06 · M23</span>
+        <span class="title" data-i18n-cn="NowCast w 调参" data-i18n-en="NowCast w Live Tuning">NowCast w 调参</span>
+        <span class="sub" data-i18n-cn="w = c_min / c_max" data-i18n-en="w = c_min / c_max">w = c_min / c_max</span>
+      </div>
+
+      <div class="mascot" aria-label="Pi mascot">
+        <svg viewBox="0 0 160 78" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <linearGradient id="piGrad" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0%" stop-color="var(--AXIS)"/>
+              <stop offset="100%" stop-color="var(--PROOF)"/>
+            </linearGradient>
+          </defs>
+          <g id="piMascot" transform="translate(80 40)">
+            <polygon points="0,-26 24,14 -24,14" fill="url(#piGrad)" stroke="var(--SOLUTION)" stroke-width="1"/>
+            <polygon points="0,-26 24,14 0,3" fill="var(--PROOF)" opacity=".75" stroke="var(--SOLUTION)" stroke-width="0.7"/>
+            <polygon points="0,-26 -24,14 0,3" fill="var(--SHADOW)" opacity=".8" stroke="var(--SOLUTION)" stroke-width="0.7"/>
+            <text x="0" y="5" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="12" fill="var(--SOLUTION)" font-weight="700">w</text>
+          </g>
+        </svg>
+      </div>
+
+      <div class="guide">
+        <div class="guide-title">HOW TO PLAY</div>
+        <div class="guide-line" data-i18n-cn="1 · 拖 12 个滑块编 PM2.5 数据" data-i18n-en="1 · Drag 12 sliders to set data">1 · 拖 12 个滑块编 PM2.5 数据</div>
+        <div class="guide-line" data-i18n-cn="2 · 看 w 落在哪一档" data-i18n-en="2 · Watch which band w hits">2 · 看 w 落在哪一档</div>
+        <div class="guide-line" data-i18n-cn="3 · 3 档都解锁 = 通关" data-i18n-en="3 · Unlock all 3 bands to win">3 · 3 档都解锁 = 通关</div>
+      </div>
+
+      <div class="data-block">
+        <div class="data-title">
+          <span data-i18n-cn="12h PMS 数据" data-i18n-en="12h PMS data">12h PMS 数据</span>
+          <span class="hint">ug/m3</span>
+        </div>
+        <div id="sliderList"></div>
+      </div>
+
+      <div class="data-block">
+        <div class="data-title"><span data-i18n-cn="预设场景" data-i18n-en="Preset">预设场景</span></div>
+        <div class="preset-row">
+          <button id="presetFlat" class="preset-btn" type="button">FLAT</button>
+          <button id="presetMild" class="preset-btn" type="button">MILD</button>
+          <button id="presetSpike" class="preset-btn" type="button">SPIKE</button>
+        </div>
+      </div>
+
+      <div class="mission-block">
+        <div class="mission-title" data-i18n-cn="任务 · 解锁 w 三档" data-i18n-en="MISSIONS · 3 w bands">任务 · 解锁 w 三档</div>
+        <div class="mission-row" id="mRow0" data-idx="0">
+          <div class="swatch" style="background:var(--band-low)"></div>
+          <div class="lbl">
+            <span class="cn" data-i18n-cn="剧烈变化" data-i18n-en="Volatile">剧烈变化</span><br/>
+            w &lt; 0.3
+          </div>
+          <div class="status" id="mStat0">—</div>
+        </div>
+        <div class="mission-row" id="mRow1" data-idx="1">
+          <div class="swatch" style="background:var(--band-mid)"></div>
+          <div class="lbl">
+            <span class="cn" data-i18n-cn="中等" data-i18n-en="Medium">中等</span><br/>
+            0.4 ≤ w ≤ 0.6
+          </div>
+          <div class="status" id="mStat1">—</div>
+        </div>
+        <div class="mission-row" id="mRow2" data-idx="2">
+          <div class="swatch" style="background:var(--band-high)"></div>
+          <div class="lbl">
+            <span class="cn" data-i18n-cn="平稳" data-i18n-en="Stable">平稳</span><br/>
+            w &gt; 0.8
+          </div>
+          <div class="status" id="mStat2">—</div>
+        </div>
+      </div>
+
+      <div class="sidebar-spacer"></div>
+
+      <button id="langBtn" class="lang-btn" type="button">EN / 中文</button>
+    </aside>
+
+    <!-- ============ Main ============ -->
+    <main class="game-main">
+      <header class="main-header">
+        <div class="header-left" data-i18n-cn="M23 · NowCast 加权平均的 w" data-i18n-en="M23 · NowCast weight w">M23 · NowCast 加权平均的 w</div>
+        <div class="header-right">
+          <div class="hud-cell">
+            <span class="label">c_min</span>
+            <span class="val" id="hudMin">0.0</span>
+          </div>
+          <div class="hud-cell">
+            <span class="label">c_max</span>
+            <span class="val" id="hudMax">0.0</span>
+          </div>
+          <div class="hud-cell">
+            <span class="label">w</span>
+            <span class="val" id="hudW">0.00</span>
+          </div>
+          <div class="hud-cell">
+            <span class="label">NowCast</span>
+            <span class="val" id="hudNow">0.0</span>
+          </div>
+        </div>
+      </header>
+
+      <div class="formula-bar">
+        <div class="formula-master">
+          <span class="accent">w</span> = <span class="var">c_min</span> / <span class="var">c_max</span>
+          = <span class="num" id="fMin">0.0</span> / <span class="num" id="fMax">0.0</span>
+          = <span class="accent" id="fW">0.00</span>
+        </div>
+        <div class="formula-sub">
+          <span data-i18n-cn="加权和" data-i18n-en="Weighted sum">加权和</span>
+          = SUM (<span class="var">w</span><sup>i</sup> · c<sub>i</sub>) / SUM <span class="var">w</span><sup>i</sup>
+          &nbsp;·&nbsp;
+          <span data-i18n-cn="i = 0 是最新一小时" data-i18n-en="i = 0 is the newest hour">i = 0 是最新一小时</span>
+        </div>
+      </div>
+
+      <div class="two-pane">
+        <!-- Top: timeseries chart -->
+        <section class="pane-chart">
+          <div class="pane-title">
+            <span data-i18n-cn="12h 时序 · NowCast vs 普通平均" data-i18n-en="12h series · NowCast vs Mean">12h 时序 · NowCast vs 普通平均</span>
+            <div class="legend">
+              <div class="li"><div class="sw" style="background:var(--AXIS)"></div><span data-i18n-cn="NowCast" data-i18n-en="NowCast">NowCast</span></div>
+              <div class="li"><div class="sw" style="background:var(--SOLUTION)"></div><span data-i18n-cn="普通平均" data-i18n-en="Simple mean">普通平均</span></div>
+              <div class="li"><div class="sw" style="background:var(--QED)"></div><span data-i18n-cn="最新一小时" data-i18n-en="Newest hour">最新一小时</span></div>
+            </div>
+          </div>
+          <div class="pane-body">
+            <canvas id="chartCanvas"></canvas>
+          </div>
+        </section>
+
+        <!-- Bottom: diff pane -->
+        <section class="pane-diff">
+          <div class="pane-title" data-i18n-cn="对比 · NowCast 与普通平均的差" data-i18n-en="Compare · NowCast vs Mean">对比 · NowCast 与普通平均的差</div>
+          <div class="diff-body">
+            <div class="diff-card now">
+              <div class="ct" data-i18n-cn="NowCast 加权" data-i18n-en="NowCast (weighted)">NowCast 加权</div>
+              <div class="big" id="cardNow">0.0</div>
+              <div class="sub">
+                <span data-i18n-cn="权重最大放最新" data-i18n-en="Newest gets most weight">权重最大放最新</span>
+              </div>
+            </div>
+            <div class="diff-card mean">
+              <div class="ct" data-i18n-cn="普通平均" data-i18n-en="Simple mean">普通平均</div>
+              <div class="big" id="cardMean">0.0</div>
+              <div class="sub">
+                <span data-i18n-cn="每小时同等权重" data-i18n-en="Equal weight per hour">每小时同等权重</span>
+              </div>
+            </div>
+            <div class="diff-card delta">
+              <div class="ct" data-i18n-cn="差值 NowCast − 平均" data-i18n-en="Δ NowCast − Mean">差值 NowCast − 平均</div>
+              <div class="big" id="cardDelta">0.0</div>
+              <div class="diff-bar-wrap">
+                <div class="diff-bar-zero"></div>
+                <div class="diff-bar" id="diffBar" style="width:0%;margin-left:50%"></div>
+              </div>
+              <div class="diff-explain" id="diffExplain">
+                <span data-i18n-cn="拖出剧烈数据看差距扩大" data-i18n-en="Make data volatile to see Δ grow">拖出剧烈数据看差距扩大</span>
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <div id="milestone" class="milestone" data-i18n-cn="解锁 · 我懂 NowCast w 范围" data-i18n-en="Unlocked · NowCast w intuition">解锁 · 我懂 NowCast w 范围</div>
+    </main>
+  </div>
+
+<script>
+(function(){
+  'use strict';
+
+  // ----- state (no window-shadow names) -----
+  var NHOURS = 12;
+  var stateGame = {
+    // hour 0 是最旧, hour 11 是最新 (UI 上左旧右新)
+    data: [12, 14, 15, 13, 16, 14, 18, 22, 28, 35, 30, 25],
+    lang: 'cn',
+    missionHit: [false, false, false],
+    milestoneFired: false
+  };
+
+  // ----- build sliders -----
+  var sliderList = document.getElementById('sliderList');
+  function buildSliders(){
+    var html = '';
+    for (var i = 0; i < NHOURS; i++){
+      var hrLabel = '-' + (NHOURS - 1 - i) + 'h';  // -11h ... 0h
+      html += '<div class="slider-row" data-h="'+i+'">'
+            +   '<div class="hr">'+hrLabel+'</div>'
+            +   '<input type="range" min="0" max="200" step="1" value="'+stateGame.data[i]+'" data-h="'+i+'" class="pm-mini" aria-label="hour '+i+'" />'
+            +   '<div class="val" id="sv'+i+'">'+stateGame.data[i]+'</div>'
+            + '</div>';
+    }
+    sliderList.innerHTML = html;
+    // wire input
+    var inputs = sliderList.querySelectorAll('input[type=range]');
+    for (var k = 0; k < inputs.length; k++){
+      inputs[k].addEventListener('input', onSliderInput);
+      inputs[k].addEventListener('change', onSliderInput);
+    }
+  }
+  function onSliderInput(ev){
+    var idx = parseInt(ev.target.getAttribute('data-h'), 10);
+    var v = parseFloat(ev.target.value);
+    stateGame.data[idx] = v;
+    var sv = document.getElementById('sv' + idx);
+    if (sv) sv.textContent = v.toFixed(0);
+    update();
+  }
+
+  // ----- compute -----
+  function computeStats(){
+    var d = stateGame.data;
+    var cMin = d[0], cMax = d[0];
+    var sum = 0;
+    for (var i = 0; i < d.length; i++){
+      if (d[i] < cMin) cMin = d[i];
+      if (d[i] > cMax) cMax = d[i];
+      sum += d[i];
+    }
+    var mean = sum / d.length;
+    // NowCast standard: w = c_min / c_max, clamped to [0.5, 1]
+    // 但教学/游戏里我们故意露出原始 w (允许低到 0), 让玩家看到衰减底数变化
+    var w = cMax > 0 ? (cMin / cMax) : 1;
+    // NowCast weighted: i=0 是最新一小时, w^0 最大
+    // 我们的 stateGame.data hour 11 = newest, hour 0 = oldest
+    // 转成 NowCast index: idxNow = NHOURS-1-h
+    var num = 0, den = 0;
+    for (var h = 0; h < NHOURS; h++){
+      var i_now = (NHOURS - 1) - h;   // 最新 -> i=0
+      var wPow = Math.pow(w, i_now);
+      num += wPow * d[h];
+      den += wPow;
+    }
+    var nowcast = den > 0 ? (num / den) : mean;
+    return {cMin: cMin, cMax: cMax, w: w, mean: mean, nowcast: nowcast};
+  }
+
+  // ----- mission check -----
+  function checkMissions(stats){
+    var w = stats.w;
+    var rows = [document.getElementById('mRow0'), document.getElementById('mRow1'), document.getElementById('mRow2')];
+    var stats_el = [document.getElementById('mStat0'), document.getElementById('mStat1'), document.getElementById('mStat2')];
+    // active = w currently in this band
+    var activeIdx = -1;
+    if (w < 0.3) activeIdx = 0;
+    else if (w >= 0.4 && w <= 0.6) activeIdx = 1;
+    else if (w > 0.8) activeIdx = 2;
+
+    for (var i = 0; i < 3; i++){
+      rows[i].classList.toggle('active', i === activeIdx);
+      if (i === activeIdx && !stateGame.missionHit[i]){
+        stateGame.missionHit[i] = true;
+        rows[i].classList.add('hit');
+        stats_el[i].textContent = 'OK';
+      } else if (stateGame.missionHit[i]){
+        rows[i].classList.add('hit');
+        stats_el[i].textContent = 'OK';
+      } else {
+        stats_el[i].textContent = (i === activeIdx) ? 'NOW' : '—';
+      }
+    }
+    // all 3 -> milestone
+    if (stateGame.missionHit[0] && stateGame.missionHit[1] && stateGame.missionHit[2] && !stateGame.milestoneFired){
+      stateGame.milestoneFired = true;
+      var ms = document.getElementById('milestone');
+      ms.classList.add('show');
+      setTimeout(function(){ ms.classList.remove('show'); }, 3500);
+    }
+  }
+
+  // ----- chart -----
+  var chartCanvas = document.getElementById('chartCanvas');
+  var ctx = chartCanvas.getContext('2d');
+  function resizeCanvas(){
+    var rect = chartCanvas.getBoundingClientRect();
+    var dpr = window.devicePixelRatio || 1;
+    chartCanvas.width = Math.max(200, Math.floor(rect.width * dpr));
+    chartCanvas.height = Math.max(140, Math.floor(rect.height * dpr));
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+  function cssCol(v){ return getComputedStyle(document.documentElement).getPropertyValue(v).trim(); }
+
+  function drawChart(stats){
+    var rect = chartCanvas.getBoundingClientRect();
+    var W = rect.width, H = rect.height;
+    ctx.clearRect(0, 0, W, H);
+
+    var padL = 46, padR = 16, padT = 16, padB = 30;
+    var plotW = W - padL - padR;
+    var plotH = H - padT - padB;
+
+    // y range from data
+    var d = stateGame.data;
+    var dMax = stats.cMax;
+    var dMin = stats.cMin;
+    // ensure visible
+    var yHi = Math.max(20, dMax * 1.15);
+    var yLo = 0;
+    function xToPx(i){ return padL + (i / (NHOURS - 1)) * plotW; }
+    function yToPx(v){ return padT + plotH - ((v - yLo) / (yHi - yLo)) * plotH; }
+
+    // grid
+    ctx.strokeStyle = cssCol('--line');
+    ctx.lineWidth = 1;
+    ctx.font = "10px 'JetBrains Mono',monospace";
+    ctx.fillStyle = cssCol('--fg-mute');
+    // y ticks
+    var nY = 4;
+    for (var ty = 0; ty <= nY; ty++){
+      var yv = yLo + (yHi - yLo) * ty / nY;
+      var py = yToPx(yv);
+      ctx.beginPath(); ctx.moveTo(padL, py); ctx.lineTo(padL + plotW, py); ctx.stroke();
+      ctx.fillText(yv.toFixed(0), padL - 36, py + 3);
+    }
+    // x ticks (hour labels)
+    for (var hi = 0; hi < NHOURS; hi++){
+      var px = xToPx(hi);
+      var hrLab = '-' + (NHOURS - 1 - hi) + 'h';
+      ctx.fillStyle = cssCol('--fg-mute');
+      ctx.fillText(hrLab, px - 11, padT + plotH + 14);
+    }
+    // axis labels
+    ctx.fillStyle = cssCol('--fg-dim');
+    ctx.font = "10px 'JetBrains Mono',monospace";
+    ctx.fillText('time (hour)', padL + plotW / 2 - 26, H - 6);
+    ctx.save();
+    ctx.translate(12, padT + plotH / 2 + 36);
+    ctx.rotate(-Math.PI / 2);
+    ctx.fillText('PM2.5 ug/m3', 0, 0);
+    ctx.restore();
+
+    // bars (data per hour)
+    var barW = Math.max(6, plotW / (NHOURS * 1.6));
+    for (var b = 0; b < NHOURS; b++){
+      var bx = xToPx(b) - barW / 2;
+      var by = yToPx(d[b]);
+      var bh = padT + plotH - by;
+      var isNewest = (b === NHOURS - 1);
+      ctx.fillStyle = isNewest ? cssCol('--QED') : cssCol('--PROOF');
+      ctx.fillRect(bx, by, barW, bh);
+      ctx.strokeStyle = cssCol('--line-strong');
+      ctx.lineWidth = 1;
+      ctx.strokeRect(bx, by, barW, bh);
+    }
+
+    // value labels on bars (only newest few to avoid clutter)
+    ctx.fillStyle = cssCol('--fg');
+    ctx.font = "9px 'JetBrains Mono',monospace";
+    for (var bb = 0; bb < NHOURS; bb++){
+      var lblY = yToPx(d[bb]) - 4;
+      if (lblY < padT + 8) lblY = padT + 8;
+      ctx.fillText(d[bb].toFixed(0), xToPx(bb) - 7, lblY);
+    }
+
+    // Simple mean line (horizontal solution color)
+    ctx.strokeStyle = cssCol('--SOLUTION');
+    ctx.lineWidth = 2;
+    ctx.setLineDash([6, 4]);
+    var myMean = yToPx(stats.mean);
+    ctx.beginPath();
+    ctx.moveTo(padL, myMean);
+    ctx.lineTo(padL + plotW, myMean);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = cssCol('--SOLUTION');
+    ctx.font = "10px 'JetBrains Mono',monospace";
+    ctx.fillText('mean=' + stats.mean.toFixed(1), padL + plotW - 86, myMean - 4);
+
+    // NowCast line (horizontal AXIS color)
+    ctx.strokeStyle = cssCol('--AXIS');
+    ctx.lineWidth = 3;
+    var myNow = yToPx(stats.nowcast);
+    ctx.beginPath();
+    ctx.moveTo(padL, myNow);
+    ctx.lineTo(padL + plotW, myNow);
+    ctx.stroke();
+    ctx.fillStyle = cssCol('--AXIS');
+    ctx.fillText('NowCast=' + stats.nowcast.toFixed(1), padL + 8, myNow - 4);
+
+    // weight curve overlay (on right axis sketch) — small inset
+    // 用细线画 w^i 衰减曲线在底部
+    var inH = 30, inY = padT + plotH - inH - 2;
+    var inX = padL + 4, inW = Math.min(180, plotW * 0.5);
+    ctx.strokeStyle = cssCol('--line');
+    ctx.lineWidth = 1;
+    ctx.strokeRect(inX, inY, inW, inH);
+    ctx.fillStyle = cssCol('--bg-2');
+    ctx.fillRect(inX + 1, inY + 1, inW - 2, inH - 2);
+    ctx.fillStyle = cssCol('--fg-mute');
+    ctx.font = "8px 'JetBrains Mono',monospace";
+    ctx.fillText('weights w^i (newest -> oldest)', inX + 4, inY + 9);
+
+    ctx.strokeStyle = cssCol('--AXIS');
+    ctx.lineWidth = 1.6;
+    ctx.beginPath();
+    for (var wi = 0; wi < NHOURS; wi++){
+      var wPow = Math.pow(stats.w, wi);
+      var wx = inX + (wi / (NHOURS - 1)) * (inW - 6) + 3;
+      var wy = (inY + inH - 4) - wPow * (inH - 14);
+      if (wi === 0) ctx.moveTo(wx, wy); else ctx.lineTo(wx, wy);
+    }
+    ctx.stroke();
+  }
+
+  // ----- update -----
+  function update(){
+    var s = computeStats();
+    document.getElementById('hudMin').textContent = s.cMin.toFixed(1);
+    document.getElementById('hudMax').textContent = s.cMax.toFixed(1);
+    document.getElementById('hudW').textContent = s.w.toFixed(2);
+    document.getElementById('hudNow').textContent = s.nowcast.toFixed(1);
+
+    document.getElementById('fMin').textContent = s.cMin.toFixed(1);
+    document.getElementById('fMax').textContent = s.cMax.toFixed(1);
+    document.getElementById('fW').textContent = s.w.toFixed(2);
+
+    document.getElementById('cardNow').textContent = s.nowcast.toFixed(1);
+    document.getElementById('cardMean').textContent = s.mean.toFixed(1);
+    var delta = s.nowcast - s.mean;
+    var dCard = document.getElementById('cardDelta');
+    dCard.textContent = (delta >= 0 ? '+' : '') + delta.toFixed(1);
+
+    // diff bar: scale +/- 30 to 50% each side
+    var bar = document.getElementById('diffBar');
+    var maxAbs = Math.max(1, Math.abs(s.cMax - s.mean));
+    var pct = Math.min(48, Math.abs(delta) / maxAbs * 48);
+    if (delta >= 0){
+      bar.style.marginLeft = '50%';
+      bar.style.width = pct + '%';
+      bar.style.background = cssCol('--QED');
+    } else {
+      bar.style.marginLeft = (50 - pct) + '%';
+      bar.style.width = pct + '%';
+      bar.style.background = cssCol('--AXIS');
+    }
+
+    // diff explain
+    var expEl = document.getElementById('diffExplain');
+    if (s.w < 0.3){
+      expEl.innerHTML = stateGame.lang === 'cn'
+        ? 'w 很小, NowCast <span class="accent">几乎只看最新一小时</span>, 跟 mean 差距最大.'
+        : 'w is tiny — NowCast <span class="accent">almost only uses the newest hour</span>; gap from mean is large.';
+    } else if (s.w > 0.8){
+      expEl.innerHTML = stateGame.lang === 'cn'
+        ? 'w 很大, NowCast <span class="accent">权重均匀</span>, 跟 mean 几乎一样.'
+        : 'w is high — NowCast <span class="accent">weights are flat</span>; almost identical to mean.';
+    } else {
+      expEl.innerHTML = stateGame.lang === 'cn'
+        ? 'w 中等, NowCast <span class="accent">兼顾历史和近时</span>, 比 mean 更跟得上变化.'
+        : 'w mid — NowCast <span class="accent">balances history and recency</span>; reacts faster than mean.';
+    }
+
+    checkMissions(s);
+    drawChart(s);
+  }
+
+  // ----- presets -----
+  function setData(arr){
+    for (var i = 0; i < NHOURS; i++){
+      stateGame.data[i] = arr[i];
+      var sl = sliderList.querySelector('input[data-h="' + i + '"]');
+      if (sl) sl.value = arr[i];
+      var sv = document.getElementById('sv' + i);
+      if (sv) sv.textContent = arr[i].toFixed(0);
+    }
+    update();
+  }
+  document.getElementById('presetFlat').addEventListener('click', function(){
+    // w ~ 0.9 (平稳)
+    setData([18, 19, 18, 20, 19, 19, 18, 19, 20, 19, 18, 20]);
+  });
+  document.getElementById('presetMild').addEventListener('click', function(){
+    // w ~ 0.5 (中等)
+    setData([14, 16, 18, 15, 20, 17, 22, 19, 24, 21, 26, 28]);
+  });
+  document.getElementById('presetSpike').addEventListener('click', function(){
+    // w ~ 0.1 (剧烈)
+    setData([8, 10, 9, 11, 8, 12, 9, 14, 20, 35, 60, 95]);
+  });
+
+  // ----- i18n -----
+  function refreshI18N(){
+    var nodes = document.querySelectorAll('[data-i18n-cn]');
+    for (var i = 0; i < nodes.length; i++){
+      var el = nodes[i];
+      var cn = el.getAttribute('data-i18n-cn');
+      var en = el.getAttribute('data-i18n-en');
+      el.textContent = stateGame.lang === 'cn' ? cn : en;
+    }
+    document.documentElement.lang = stateGame.lang === 'cn' ? 'zh-CN' : 'en';
+    update();
+  }
+  document.getElementById('langBtn').addEventListener('click', function(){
+    stateGame.lang = stateGame.lang === 'cn' ? 'en' : 'cn';
+    refreshI18N();
+  });
+
+  // ----- mascot tetrahedron rotate -----
+  var piMascot = document.getElementById('piMascot');
+  var rot = 0;
+  function tick(){
+    rot += 0.4;
+    if (piMascot) piMascot.setAttribute('transform', 'translate(80 40) rotate(' + rot + ')');
+    requestAnimationFrame(tick);
+  }
+  requestAnimationFrame(tick);
+
+  // ----- resize -----
+  function onResize(){
+    resizeCanvas();
+    update();
+  }
+  window.addEventListener('resize', onResize);
+
+  // ----- init -----
+  buildSliders();
+  resizeCanvas();
+  refreshI18N();
+  setTimeout(onResize, 50);
+  setTimeout(onResize, 200);
+})();
+</script>
+</body>
+</html>

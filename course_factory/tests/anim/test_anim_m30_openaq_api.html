@@ -1,0 +1,1613 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>M30 — OpenAQ API + Python requests</title>
+<style>
+  /* ===== F2 第 1 层 — 共享深空底 (theme_style/styles.css L8-21, 26 学科统一) ===== */
+  :root{
+    --bg-0: oklch(0.14 0.035 265);
+    --bg-1: oklch(0.18 0.04 265);
+    --bg-2: oklch(0.22 0.045 265);
+    --bg-3: oklch(0.28 0.05 265);
+    --line: oklch(0.35 0.05 265 / 0.35);
+    --line-strong: oklch(0.55 0.08 265 / 0.55);
+    --fg: oklch(0.96 0.01 265);
+    --fg-dim: oklch(0.75 0.02 265);
+    --fg-mute: oklch(0.55 0.03 265);
+    --gold: oklch(0.85 0.14 85);
+
+    /* ===== F2 第 2 层 — cs accent (cyan, themes.js L8) ===== */
+    --cs: oklch(0.75 0.17 200);
+    --cs-dim: oklch(0.55 0.16 200);
+
+    /* ===== F2 第 3 层 — cs 5 色 palette (themes.js L12-18) ===== */
+    --SIGNAL: oklch(0.75 0.17 200);  /* cyan 主 — GET 动词 / URL host / request 包主体 */
+    --CORE:   oklch(0.55 0.16 200);  /* 中 cyan — URL path / 中间链路 / 已访问站点 */
+    --DEPTH:  oklch(0.35 0.10 210);  /* 深 cyan — 未激活节点 / 网络底色 / 未访问站点 */
+    --FLASH:  oklch(0.92 0.08 190);  /* 近白 cyan — response 包高光 / 响应 body 闪 */
+    --QUERY:  oklch(0.85 0.14 85);   /* 金 — 200 OK 状态 + key moment + PM2.5 数值高亮 */
+  }
+
+  *{box-sizing:border-box;margin:0;padding:0;}
+  html,body{height:100%;overflow:hidden;}
+  body{
+    background: var(--bg-0);
+    color: var(--fg);
+    font-family: 'Inter','Noto Sans SC',-apple-system,BlinkMacSystemFont,sans-serif;
+    display: flex;
+    height: 100vh;
+  }
+
+  /* ===== 200px 左侧 sidebar ===== */
+  .sidebar{
+    width: 200px;
+    flex-shrink: 0;
+    background: var(--bg-1);
+    border-right: 1px solid var(--line);
+    padding: 16px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .brand{
+    border-bottom: 1px solid var(--line);
+    padding-bottom: 10px;
+    margin-bottom: 4px;
+  }
+  .brand .badge{
+    display: inline-block;
+    font-family: 'JetBrains Mono',ui-monospace,monospace;
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    color: var(--cs);
+    background: var(--bg-2);
+    padding: 3px 7px;
+    border: 1px solid var(--line);
+    box-shadow: 2px 2px 0 var(--bg-0);
+    margin-bottom: 6px;
+  }
+  .brand h1{
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--fg);
+    line-height: 1.3;
+  }
+  .brand .sub{
+    font-size: 10px;
+    color: var(--fg-mute);
+    margin-top: 4px;
+    font-family: 'JetBrains Mono',ui-monospace,monospace;
+    letter-spacing: 0.04em;
+  }
+
+  /* ===== Bit mascot 在 sidebar ===== */
+  .mascot-box{
+    background: var(--bg-2);
+    border: 1px solid var(--line);
+    box-shadow: 3px 3px 0 var(--bg-0);
+    padding: 10px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .mascot-box .label{
+    font-family: 'JetBrains Mono',ui-monospace,monospace;
+    font-size: 9px;
+    color: var(--fg-dim);
+    letter-spacing: 0.08em;
+  }
+  .mascot-box .name{
+    font-size: 11px;
+    color: var(--fg);
+    font-weight: 600;
+    margin-top: 2px;
+  }
+
+  /* ===== Guide 3 条 ===== */
+  .guide{
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .guide-item{
+    font-size: 11px;
+    line-height: 1.45;
+    color: var(--fg-dim);
+    padding-left: 9px;
+    border-left: 2px solid var(--cs);
+    padding-top: 2px;
+    padding-bottom: 2px;
+  }
+  .guide-item .num{
+    font-family: 'JetBrains Mono',ui-monospace,monospace;
+    color: var(--cs);
+    font-weight: 700;
+    margin-right: 4px;
+  }
+
+  .sidebar .spacer{flex: 1;}
+
+  .lang-btn{
+    background: var(--bg-2);
+    border: 1px solid var(--line-strong);
+    box-shadow: 2px 2px 0 var(--bg-0);
+    color: var(--fg);
+    font-family: 'JetBrains Mono',ui-monospace,monospace;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    padding: 7px 10px;
+    cursor: pointer;
+    width: 100%;
+  }
+  .lang-btn:hover{
+    border-color: var(--cs);
+    color: var(--cs);
+  }
+  .lang-btn:active{
+    transform: translate(2px, 2px);
+    box-shadow: none;
+  }
+
+  /* ===== Main stage ===== */
+  .main{
+    flex: 1;
+    position: relative;
+    overflow: hidden;
+    background: var(--bg-0);
+  }
+  #stage{
+    width: 100%;
+    height: 100%;
+    display: block;
+  }
+
+  /* ===== HUD 右上 ===== */
+  .hud{
+    position: absolute;
+    top: 18px;
+    right: 18px;
+    background: var(--bg-2);
+    border: 1px solid var(--line);
+    box-shadow: 3px 3px 0 var(--bg-0);
+    padding: 10px 14px;
+    font-family: 'JetBrains Mono',ui-monospace,monospace;
+    min-width: 256px;
+  }
+  .hud .row{
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 14px;
+    font-size: 11px;
+    line-height: 1.6;
+  }
+  .hud .label{color: var(--fg-mute); letter-spacing: 0.06em;}
+  .hud .value{color: var(--fg); font-weight: 700;}
+  .hud .value.accent{color: var(--cs);}
+  .hud .value.gold{color: var(--gold);}
+  .hud .sep{
+    height: 1px;
+    background: var(--line);
+    margin: 6px 0;
+  }
+
+  /* ===== Subtitle 底部 ===== */
+  .subtitle{
+    position: absolute;
+    left: 50%;
+    bottom: 28px;
+    transform: translateX(-50%);
+    text-align: center;
+    max-width: 80%;
+    pointer-events: none;
+  }
+  .subtitle .cn{
+    font-size: 17px;
+    font-weight: 700;
+    color: var(--fg);
+    letter-spacing: 0.01em;
+  }
+  .subtitle .en{
+    font-size: 12px;
+    color: var(--fg-mute);
+    margin-top: 4px;
+    font-style: italic;
+    font-family: 'JetBrains Mono',ui-monospace,monospace;
+    letter-spacing: 0.03em;
+  }
+
+  /* ===== Frame chip 左下 — 5 步进度 ===== */
+  .frame-progress{
+    position: absolute;
+    left: 24px;
+    bottom: 28px;
+    display: flex;
+    gap: 6px;
+    align-items: center;
+  }
+  .chip{
+    width: 24px;
+    height: 6px;
+    background: var(--bg-2);
+    border: 1px solid var(--line);
+  }
+  .chip.active{
+    background: var(--cs);
+    border-color: var(--cs);
+  }
+  .chip.done{
+    background: var(--cs-dim);
+    border-color: var(--cs-dim);
+  }
+  .frame-progress .stepname{
+    font-family: 'JetBrains Mono',ui-monospace,monospace;
+    font-size: 10px;
+    color: var(--fg-dim);
+    margin-left: 8px;
+    letter-spacing: 0.08em;
+  }
+
+  /* ===== key moment 完成 overlay ===== */
+  .flash{
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-family: 'JetBrains Mono',ui-monospace,monospace;
+    font-size: 28px;
+    font-weight: 800;
+    color: var(--gold);
+    letter-spacing: 0.18em;
+    opacity: 0;
+    pointer-events: none;
+    text-shadow: 0 0 24px var(--gold);
+    text-align: center;
+  }
+  .flash.on{ opacity: 1; }
+  .flash .small{
+    display: block;
+    text-align: center;
+    font-size: 11px;
+    color: var(--fg-dim);
+    letter-spacing: 0.08em;
+    margin-top: 8px;
+    text-shadow: none;
+    font-weight: 400;
+  }
+</style>
+</head>
+<body>
+  <aside class="sidebar">
+    <div class="brand">
+      <span class="badge" id="badgeMod">MOD-M30 / CS-01</span>
+      <h1 id="brandH1">用 Python 拿别人的数据</h1>
+      <div class="sub" id="brandSub">requests.get -> JSON -> plot</div>
+    </div>
+
+    <div class="mascot-box">
+      <svg width="44" height="44" viewBox="0 0 60 60" aria-hidden="true">
+        <!-- Bit mascot: a levitating cubic sprite that rearranges its pixels (themes.js cs) -->
+        <rect x="14" y="48" width="32" height="3" fill="var(--DEPTH)" opacity="0.5"/>
+        <rect x="14" y="14" width="32" height="32" fill="var(--DEPTH)" opacity="0.45"/>
+        <rect x="14" y="14" width="32" height="32" fill="none" stroke="var(--SIGNAL)" stroke-width="1.4"/>
+        <rect x="17" y="17" width="8" height="8" fill="var(--SIGNAL)"/>
+        <rect x="26" y="17" width="8" height="8" fill="var(--CORE)"/>
+        <rect x="35" y="17" width="8" height="8" fill="var(--FLASH)"/>
+        <rect x="17" y="26" width="8" height="8" fill="var(--CORE)"/>
+        <rect x="26" y="26" width="8" height="8" fill="var(--QUERY)"/>
+        <rect x="35" y="26" width="8" height="8" fill="var(--SIGNAL)"/>
+        <rect x="17" y="35" width="8" height="8" fill="var(--FLASH)"/>
+        <rect x="26" y="35" width="8" height="8" fill="var(--SIGNAL)"/>
+        <rect x="35" y="35" width="8" height="8" fill="var(--CORE)"/>
+      </svg>
+      <div>
+        <div class="label">MASCOT</div>
+        <div class="name" id="mascotName">Bit · 比特</div>
+      </div>
+    </div>
+
+    <div class="guide">
+      <div class="guide-item" id="g1"><span class="num">01</span><span class="gtxt">API = 别人写好的"数据自动柜", 用 URL 取货</span></div>
+      <div class="guide-item" id="g2"><span class="num">02</span><span class="gtxt">requests.get(url) 发包, 等响应回来</span></div>
+      <div class="guide-item" id="g3"><span class="num">03</span><span class="gtxt">响应是 JSON, .json() 解出嵌套结构再画图</span></div>
+    </div>
+
+    <div class="spacer"></div>
+    <button id="langBtn" class="lang-btn" type="button">CN / EN</button>
+  </aside>
+
+  <main class="main">
+    <svg id="stage" viewBox="0 0 1080 720" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg"></svg>
+
+    <div class="hud">
+      <div class="row"><span class="label" id="hudL1">FRAME</span><span class="value accent" id="hudV1">1 / 5</span></div>
+      <div class="row"><span class="label" id="hudL2">STAGE</span><span class="value" id="hudV2">OpenAQ</span></div>
+      <div class="sep"></div>
+      <div class="row"><span class="label" id="hudL3">STATUS</span><span class="value" id="hudV3">--</span></div>
+      <div class="row"><span class="label" id="hudL4">DATA</span><span class="value gold" id="hudV4">--</span></div>
+    </div>
+
+    <div class="subtitle">
+      <div class="cn" id="subCn">OpenAQ 是全球公开空气数据库, 4 万多个站点全免费开放</div>
+      <div class="en" id="subEn">OpenAQ is a global open air-quality DB, 40k+ stations, all free</div>
+    </div>
+
+    <div class="frame-progress">
+      <div class="chip" id="chip0"></div>
+      <div class="chip" id="chip1"></div>
+      <div class="chip" id="chip2"></div>
+      <div class="chip" id="chip3"></div>
+      <div class="chip" id="chip4"></div>
+      <span class="stepname" id="stepName">01 · OPENAQ</span>
+    </div>
+
+    <div class="flash" id="flash">
+      <span id="flashMain">CONNECTED</span>
+      <span class="small" id="flashSub">你刚刚连上了一个全球网络</span>
+    </div>
+  </main>
+
+<script>
+(function(){
+  "use strict";
+
+  // ====== i18n ======
+  var LANG = 'cn';
+  var I18N = {
+    badgeMod:  { cn: 'MOD-M30 / CS-01', en: 'MOD-M30 / CS-01' },
+    brandH1:   { cn: '用 Python 拿别人的数据', en: 'Pull Public Data with Python' },
+    brandSub:  { cn: 'requests.get -> JSON -> plot', en: 'requests.get -> JSON -> plot' },
+    mascotName:{ cn: 'Bit · 比特', en: 'Bit · the cubic sprite' },
+    g1: { cn: 'API = 别人写好的"数据自动柜", 用 URL 取货',
+          en: 'API = a vending machine for data; URL is the slot code' },
+    g2: { cn: 'requests.get(url) 发包, 等响应回来',
+          en: 'requests.get(url) sends a packet; wait for response' },
+    g3: { cn: '响应是 JSON, .json() 解出嵌套结构再画图',
+          en: 'Response is JSON; .json() parses the nested tree, then plot' },
+    hudL1: { cn: '帧',     en: 'FRAME' },
+    hudL2: { cn: '阶段',   en: 'STAGE' },
+    hudL3: { cn: '状态',   en: 'STATUS' },
+    hudL4: { cn: '数据',   en: 'DATA' }
+  };
+
+  // ====== 5 帧故事 ======
+  var FRAME_MS = 6500;
+  var FRAMES = [
+    {
+      id: 'openaq',
+      stepName: '01 · OPENAQ',
+      hudStage: { cn: 'OpenAQ',  en: 'OpenAQ' },
+      hudStatus: '40k+ stations',
+      hudResult: 'global',
+      subCn: 'OpenAQ — 全球公开空气数据库, 4 万多个站点的实时读数全部免费开放',
+      subEn: 'OpenAQ — a global open air-quality DB, 40k+ stations, all free in real time'
+    },
+    {
+      id: 'request',
+      stepName: '02 · REQUEST',
+      hudStage: { cn: 'requests',en: 'requests' },
+      hudStatus: 'building',
+      hudResult: 'GET url',
+      subCn: '两行 Python 就够: import requests, 然后 requests.get(url) 把请求发出去',
+      subEn: 'Two Python lines: import requests, then requests.get(url) — done'
+    },
+    {
+      id: 'http',
+      stepName: '03 · HTTP',
+      hudStage: { cn: 'HTTP',    en: 'HTTP' },
+      hudStatus: '200 OK',
+      hudResult: 'round-trip',
+      subCn: '请求包飞到 OpenAQ 服务器, 服务器查库, 把响应包打包送回来',
+      subEn: 'Request packet flies to OpenAQ server, server queries DB, ships response back'
+    },
+    {
+      id: 'json',
+      stepName: '04 · JSON',
+      hudStage: { cn: 'JSON',    en: 'JSON' },
+      hudStatus: 'parsed',
+      hudResult: '24 measurements',
+      subCn: 'JSON 是嵌套结构: results -> measurements -> value/datetime/parameter',
+      subEn: 'JSON is nested: results -> measurements -> value/datetime/parameter'
+    },
+    {
+      id: 'plot',
+      stepName: '05 · PLOT',
+      hudStage: { cn: '可视化',  en: 'Plot' },
+      hudStatus: 'done',
+      hudResult: 'PM2.5 24h',
+      subCn: '上海 PM2.5 24 小时折线已出 — 你刚连上了一个全球网络',
+      subEn: 'Shanghai PM2.5 24h line plotted — you just joined a global network'
+    }
+  ];
+
+  // ====== State ======
+  var currentFrame = 0;
+  var frameStartTs = 0;
+  var rafId = null;
+  var stage = document.getElementById('stage');
+  var SVGNS = 'http://www.w3.org/2000/svg';
+
+  // ====== Utility ======
+  function el(name, attrs, parent){
+    var n = document.createElementNS(SVGNS, name);
+    if (attrs){
+      for (var k in attrs){
+        if (Object.prototype.hasOwnProperty.call(attrs, k)){
+          n.setAttribute(k, attrs[k]);
+        }
+      }
+    }
+    if (parent) parent.appendChild(n);
+    return n;
+  }
+  function clearStage(){ while(stage.firstChild) stage.removeChild(stage.firstChild); }
+  function tr(key){
+    if (!I18N[key]) return key;
+    return I18N[key][LANG] || I18N[key].en || key;
+  }
+  function lerp(a, b, p){ return a + (b - a) * p; }
+  function easeOut(x){ return 1 - Math.pow(1 - x, 3); }
+  function easeInOut(x){ return x < 0.5 ? 2*x*x : 1 - Math.pow(-2*x + 2, 2) / 2; }
+  function clamp(x, lo, hi){ return x < lo ? lo : (x > hi ? hi : x); }
+
+  // ====== 共享: 背景 grid + 中央 glow ======
+  function drawBgGrid(){
+    var g = el('g', { opacity: '0.18' }, stage);
+    for (var x = 0; x <= 1080; x += 60){
+      el('line', { x1: x, y1: 0, x2: x, y2: 720, stroke: 'var(--line)', 'stroke-width': '0.5' }, g);
+    }
+    for (var y = 0; y <= 720; y += 60){
+      el('line', { x1: 0, y1: y, x2: 1080, y2: y, stroke: 'var(--line)', 'stroke-width': '0.5' }, g);
+    }
+    var defs = el('defs', null, stage);
+    var rg = el('radialGradient', { id: 'centerGlow', cx: '50%', cy: '45%', r: '60%' }, defs);
+    el('stop', { offset: '0%', 'stop-color': 'var(--cs)', 'stop-opacity': '0.07' }, rg);
+    el('stop', { offset: '100%', 'stop-color': 'var(--bg-0)', 'stop-opacity': '0' }, rg);
+    el('rect', { x: 0, y: 0, width: 1080, height: 720, fill: 'url(#centerGlow)' }, stage);
+  }
+
+  // ====== 共享: 5 步进度链 ======
+  function drawStepChain(activeIdx){
+    var labels = [
+      { cn: 'OpenAQ', en: 'OpenAQ' },
+      { cn: '请求',   en: 'Req' },
+      { cn: 'HTTP',   en: 'HTTP' },
+      { cn: 'JSON',   en: 'JSON' },
+      { cn: '画图',   en: 'Plot' }
+    ];
+    var y = 650;
+    var startX = 110;
+    var gap = (1080 - 220) / 4;
+    var g = el('g', null, stage);
+    for (var i = 0; i < 5; i++){
+      var cx = startX + gap * i;
+      var on = i <= activeIdx;
+      var ringColor = on ? 'var(--cs)' : 'var(--line)';
+      var fillColor = on ? 'var(--bg-2)' : 'var(--bg-1)';
+      var textColor = on ? 'var(--fg)' : 'var(--fg-mute)';
+      el('rect', {
+        x: cx - 44, y: y - 16, width: 88, height: 32,
+        fill: fillColor, stroke: ringColor, 'stroke-width': on ? '1.6' : '1', rx: '2'
+      }, g);
+      var tx = el('text', {
+        x: cx, y: y + 4, fill: textColor,
+        'font-family': "'Inter','Noto Sans SC',sans-serif",
+        'font-size': '12', 'font-weight': on ? '700' : '500',
+        'text-anchor': 'middle'
+      }, g);
+      tx.textContent = labels[i][LANG] || labels[i].en;
+      var ix = el('text', {
+        x: cx, y: y - 22, fill: on ? 'var(--cs)' : 'var(--fg-mute)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '9', 'text-anchor': 'middle', 'letter-spacing': '0.1em'
+      }, g);
+      ix.textContent = '0' + (i+1);
+      if (i < 4){
+        var x1 = cx + 44;
+        var x2 = cx + gap - 44;
+        var connColor = (on && (i+1) <= activeIdx) ? 'var(--cs)' : 'var(--line)';
+        el('line', {
+          x1: x1, y1: y, x2: x2 - 6, y2: y,
+          stroke: connColor, 'stroke-width': '1.2'
+        }, g);
+        el('polygon', {
+          points: (x2-6)+','+(y-4)+' '+(x2)+','+y+' '+(x2-6)+','+(y+4),
+          fill: connColor
+        }, g);
+      }
+    }
+  }
+
+  // ====== 共享: 代码 panel ======
+  function drawCodePanel(parent, lines, activeLine, originX, originY, width, fileName){
+    var W = width || 460;
+    var H = 26 + lines.length * 26 + 12;
+    var g = el('g', { transform: 'translate('+originX+','+originY+')' }, parent);
+    el('rect', { x: 0, y: 0, width: W, height: H, fill: 'var(--bg-1)',
+                 stroke: 'var(--line-strong)', 'stroke-width': '1.4', rx: '2' }, g);
+    el('rect', { x: 0, y: 0, width: W, height: 22, fill: 'var(--bg-2)',
+                 stroke: 'var(--line)', 'stroke-width': '0.8' }, g);
+    el('circle', { cx: 12, cy: 11, r: 3.2, fill: 'var(--DEPTH)' }, g);
+    el('circle', { cx: 24, cy: 11, r: 3.2, fill: 'var(--CORE)' }, g);
+    el('circle', { cx: 36, cy: 11, r: 3.2, fill: 'var(--SIGNAL)' }, g);
+    var title = el('text', {
+      x: W/2, y: 15, fill: 'var(--fg-dim)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '10', 'text-anchor': 'middle', 'letter-spacing': '0.08em'
+    }, g);
+    title.textContent = fileName || 'openaq.py';
+    for (var i = 0; i < lines.length; i++){
+      var L = lines[i];
+      var ly = 44 + i * 26;
+      var isActive = (activeLine != null && i === activeLine);
+      if (isActive){
+        el('rect', { x: 4, y: ly - 16, width: W - 8, height: 24,
+                     fill: 'var(--CORE)', opacity: 0.18,
+                     stroke: 'var(--cs)', 'stroke-width': '1' }, g);
+        var ar = el('text', {
+          x: 10, y: ly + 1, fill: 'var(--cs)',
+          'font-family': "'JetBrains Mono',ui-monospace,monospace",
+          'font-size': '12', 'font-weight': '700'
+        }, g);
+        ar.textContent = '>';
+      }
+      var lnStr = (i + 1) < 10 ? '0' + (i + 1) : String(i + 1);
+      var ln = el('text', {
+        x: 28, y: ly + 1, fill: 'var(--fg-mute)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '10'
+      }, g);
+      ln.textContent = lnStr;
+      var tx0 = 50 + (L.indent || 0) * 14;
+      var cursor = tx0;
+      for (var k = 0; k < L.tokens.length; k++){
+        var tok = L.tokens[k];
+        var col = tokColor(tok.kind);
+        var t = el('text', {
+          x: cursor, y: ly + 1, fill: col,
+          'font-family': "'JetBrains Mono',ui-monospace,monospace",
+          'font-size': '13', 'font-weight': (tok.kind==='kw'||tok.kind==='fn') ? '700' : '500'
+        }, g);
+        t.textContent = tok.txt;
+        cursor += tok.txt.length * 7.4;
+      }
+    }
+    return g;
+  }
+  function tokColor(kind){
+    switch(kind){
+      case 'kw':      return 'var(--cs)';
+      case 'fn':      return 'var(--FLASH)';
+      case 'name':    return 'var(--fg)';
+      case 'num':     return 'var(--QUERY)';
+      case 'op':      return 'var(--fg-dim)';
+      case 'str':     return 'var(--SIGNAL)';
+      case 'paren':   return 'var(--fg-dim)';
+      case 'comment': return 'var(--fg-mute)';
+      case 'punct':   return 'var(--fg-dim)';
+      case 'mod':     return 'var(--CORE)';
+      default:        return 'var(--fg)';
+    }
+  }
+
+  // ====== Frame 1 — OpenAQ 全球网站 ======
+  // 5 色 palette: SIGNAL = 上海点(亮起), CORE = 已连通城市, DEPTH = 未激活点, FLASH = 闪光, QUERY = 标语金高亮
+  var CITIES = [
+    {name:'Shanghai',  cn:'上海',     x: 850, y: 320},
+    {name:'New York',  cn:'纽约',     x: 295, y: 305},
+    {name:'London',    cn:'伦敦',     x: 545, y: 270},
+    {name:'Delhi',     cn:'德里',     x: 745, y: 360},
+    {name:'Mexico',    cn:'墨西哥城', x: 230, y: 385},
+    {name:'Lagos',     cn:'拉各斯',   x: 555, y: 410},
+    {name:'Tokyo',     cn:'东京',     x: 905, y: 305},
+    {name:'Sydney',    cn:'悉尼',     x: 945, y: 510},
+    {name:'Seoul',     cn:'首尔',     x: 875, y: 295},
+    {name:'Cairo',     cn:'开罗',     x: 605, y: 350},
+    {name:'Sao Paulo', cn:'圣保罗',   x: 355, y: 480},
+    {name:'Moscow',    cn:'莫斯科',   x: 625, y: 240}
+  ];
+  function drawFrame1(p){
+    drawBgGrid();
+    drawStepChain(0);
+
+    // 标题
+    var capAlpha = clamp((p - 0.05) / 0.18, 0, 1);
+    var capTx = el('text', {
+      x: 540, y: 75, fill: 'var(--cs)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '15', 'text-anchor': 'middle', opacity: capAlpha,
+      'letter-spacing': '0.14em', 'font-weight': '700'
+    }, stage);
+    capTx.textContent = 'openaq.org';
+
+    // 副标题
+    var subAlpha = clamp((p - 0.1) / 0.2, 0, 1);
+    var subTx = el('text', {
+      x: 540, y: 102, fill: 'var(--fg-dim)',
+      'font-family': "'Inter','Noto Sans SC',sans-serif",
+      'font-size': '13', 'text-anchor': 'middle', opacity: subAlpha
+    }, stage);
+    subTx.textContent = LANG === 'cn'
+      ? '全球公开空气数据库 — 40,000+ 个站点'
+      : 'Global open air-quality DB — 40,000+ stations';
+
+    // 中央世界地图框 (示意, 用经纬度网格 + 大陆色块)
+    var mapAlpha = clamp((p - 0.12) / 0.15, 0, 1);
+    var mg = el('g', { opacity: mapAlpha, transform: 'translate(140, 130)' }, stage);
+    el('rect', { x: 0, y: 0, width: 800, height: 440, fill: 'var(--bg-1)',
+                 stroke: 'var(--line-strong)', 'stroke-width': '1.4', rx: '2' }, mg);
+    el('rect', { x: 0, y: 0, width: 800, height: 22, fill: 'var(--bg-2)',
+                 stroke: 'var(--line)' }, mg);
+    var mTtl = el('text', {
+      x: 400, y: 15, fill: 'var(--cs)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '10', 'text-anchor': 'middle',
+      'letter-spacing': '0.14em', 'font-weight': '700'
+    }, mg);
+    mTtl.textContent = LANG === 'cn' ? '全球监测点地图' : 'GLOBAL STATION MAP';
+
+    // 经纬网
+    for (var lat = 60; lat <= 380; lat += 80){
+      el('line', { x1: 16, y1: lat, x2: 784, y2: lat, stroke: 'var(--line)',
+                   'stroke-width': '0.4', 'stroke-dasharray': '2 4' }, mg);
+    }
+    for (var lon = 80; lon <= 720; lon += 80){
+      el('line', { x1: lon, y1: 38, x2: lon, y2: 420, stroke: 'var(--line)',
+                   'stroke-width': '0.4', 'stroke-dasharray': '2 4' }, mg);
+    }
+
+    // 大陆轮廓 (极简多边形示意, 非真实测绘)
+    var landColor = 'var(--bg-3)';
+    var landStroke = 'var(--line-strong)';
+    // 北美
+    el('path', { d:'M 110 130 L 200 110 L 280 140 L 320 200 L 250 280 L 180 290 L 120 240 Z',
+                 fill:landColor, stroke:landStroke, 'stroke-width':'0.8', opacity:'0.55' }, mg);
+    // 南美
+    el('path', { d:'M 290 320 L 360 320 L 380 410 L 330 420 L 295 380 Z',
+                 fill:landColor, stroke:landStroke, 'stroke-width':'0.8', opacity:'0.55' }, mg);
+    // 欧洲
+    el('path', { d:'M 500 100 L 600 110 L 615 200 L 540 240 L 490 200 Z',
+                 fill:landColor, stroke:landStroke, 'stroke-width':'0.8', opacity:'0.55' }, mg);
+    // 非洲
+    el('path', { d:'M 510 240 L 620 240 L 640 360 L 580 410 L 520 380 L 500 300 Z',
+                 fill:landColor, stroke:landStroke, 'stroke-width':'0.8', opacity:'0.55' }, mg);
+    // 亚洲
+    el('path', { d:'M 600 100 L 760 100 L 780 240 L 720 290 L 640 250 L 615 180 Z',
+                 fill:landColor, stroke:landStroke, 'stroke-width':'0.8', opacity:'0.55' }, mg);
+    // 澳洲
+    el('path', { d:'M 730 360 L 800 370 L 805 410 L 740 410 Z',
+                 fill:landColor, stroke:landStroke, 'stroke-width':'0.8', opacity:'0.55' }, mg);
+
+    // 站点点亮 — 逐个出现, 上海最后高亮 (SIGNAL)
+    for (var i = 0; i < CITIES.length; i++){
+      var c = CITIES[i];
+      var lit = clamp((p - 0.18 - i * 0.04) / 0.04, 0, 1);
+      if (lit <= 0) continue;
+      var isShanghai = c.name === 'Shanghai';
+      var color = isShanghai ? 'var(--SIGNAL)' : 'var(--CORE)';
+      // 站点 dot 在 map 坐标系内 (mg translate 140,130 已生效 — 用相对坐标)
+      var cx = c.x - 140;
+      var cy = c.y - 130;
+      // 光环 (只上海有持续呼吸光环)
+      if (isShanghai && p >= 0.55){
+        var pulseR = 8 + Math.sin((p - 0.55) * 8 * Math.PI) * 3;
+        el('circle', { cx: cx, cy: cy, r: pulseR, fill: 'none',
+                       stroke: 'var(--SIGNAL)', 'stroke-width': '1.2', opacity: 0.7 }, mg);
+        el('circle', { cx: cx, cy: cy, r: pulseR + 4, fill: 'none',
+                       stroke: 'var(--SIGNAL)', 'stroke-width': '0.6', opacity: 0.3 }, mg);
+      }
+      el('circle', { cx: cx, cy: cy, r: 3.5, fill: color, opacity: lit }, mg);
+      // 城市名
+      if (lit > 0.5){
+        var lab = el('text', {
+          x: cx + 7, y: cy + 3, fill: isShanghai ? 'var(--SIGNAL)' : 'var(--fg-dim)',
+          'font-family': "'JetBrains Mono',ui-monospace,monospace",
+          'font-size': isShanghai ? '11' : '9',
+          'font-weight': isShanghai ? '700' : '500', opacity: lit
+        }, mg);
+        lab.textContent = LANG === 'cn' ? c.cn : c.name;
+      }
+    }
+
+    // 散点 (DEPTH 未命名站点, 模拟 40k 量级)
+    if (p >= 0.3){
+      var depthAlpha = clamp((p - 0.3) / 0.2, 0, 0.7);
+      var dg = el('g', { opacity: depthAlpha }, mg);
+      var seed = 1337;
+      for (var s = 0; s < 90; s++){
+        seed = (seed * 9301 + 49297) % 233280;
+        var rx = 40 + (seed % 720);
+        seed = (seed * 9301 + 49297) % 233280;
+        var ry = 50 + (seed % 360);
+        el('circle', { cx: rx, cy: ry, r: 1.2, fill: 'var(--DEPTH)' }, dg);
+      }
+    }
+
+    // 右下 stat 计数
+    if (p >= 0.4){
+      var statAlpha = clamp((p - 0.4) / 0.2, 0, 1);
+      var sg = el('g', { opacity: statAlpha, transform: 'translate(560, 330)' }, mg);
+      el('rect', { x: 0, y: 0, width: 220, height: 80, fill: 'var(--bg-2)',
+                   stroke: 'var(--QUERY)', 'stroke-width': '1.2', rx: '2' }, sg);
+      var sl = el('text', {
+        x: 110, y: 22, fill: 'var(--fg-dim)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '9', 'text-anchor': 'middle', 'letter-spacing': '0.12em'
+      }, sg);
+      sl.textContent = LANG === 'cn' ? '全球站点总数' : 'TOTAL STATIONS';
+      var countTarget = 41827;
+      var countNow = Math.floor(lerp(0, countTarget, easeOut(statAlpha)));
+      var sv = el('text', {
+        x: 110, y: 52, fill: 'var(--QUERY)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '24', 'text-anchor': 'middle', 'font-weight': '700'
+      }, sg);
+      sv.textContent = countNow.toLocaleString();
+      var su = el('text', {
+        x: 110, y: 68, fill: 'var(--fg-mute)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '9', 'text-anchor': 'middle'
+      }, sg);
+      su.textContent = LANG === 'cn' ? '100+ 国家 / 全部免费' : '100+ countries / all free';
+    }
+
+    // 底部"今天我们要拿上海的数据"
+    if (p >= 0.65){
+      var tgtAlpha = clamp((p - 0.65) / 0.2, 0, 1);
+      var tg = el('g', { opacity: tgtAlpha }, stage);
+      el('rect', { x: 360, y: 590, width: 360, height: 34,
+                   fill: 'var(--bg-2)', stroke: 'var(--SIGNAL)',
+                   'stroke-width': '1.4', rx: '2' }, tg);
+      var tgTx = el('text', {
+        x: 540, y: 612, fill: 'var(--SIGNAL)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '12', 'text-anchor': 'middle',
+        'font-weight': '700', 'letter-spacing': '0.08em'
+      }, tg);
+      tgTx.textContent = LANG === 'cn'
+        ? '目标 - 拿上海 PM2.5 24h 读数'
+        : 'TARGET - get Shanghai PM2.5 24h';
+    }
+  }
+
+  // ====== Frame 2 — REQUEST 代码 ======
+  function drawFrame2(p){
+    drawBgGrid();
+    drawStepChain(1);
+
+    var capAlpha = clamp((p - 0.05) / 0.18, 0, 1);
+    var capTx = el('text', {
+      x: 540, y: 78, fill: 'var(--fg-dim)',
+      'font-family': "'Inter','Noto Sans SC',sans-serif",
+      'font-size': '14', 'text-anchor': 'middle', opacity: capAlpha
+    }, stage);
+    capTx.textContent = LANG === 'cn'
+      ? 'requests 库 — Python 里最简单的 HTTP 客户端'
+      : 'requests library — the simplest HTTP client in Python';
+
+    // 左半: 代码
+    var lines = [
+      { tokens: [
+        { txt: 'import', kind: 'kw' },
+        { txt: ' requests', kind: 'mod' }
+      ]},
+      { tokens: [] },
+      { tokens: [
+        { txt: 'url', kind: 'name' },
+        { txt: ' = ', kind: 'op' },
+        { txt: '"https://api.openaq.org/v3/measurements"', kind: 'str' }
+      ]},
+      { tokens: [
+        { txt: 'params', kind: 'name' },
+        { txt: ' = ', kind: 'op' },
+        { txt: '{', kind: 'punct' },
+        { txt: '"city"', kind: 'str' },
+        { txt: ': ', kind: 'punct' },
+        { txt: '"Shanghai"', kind: 'str' },
+        { txt: ', ', kind: 'punct' },
+        { txt: '"parameter"', kind: 'str' },
+        { txt: ': ', kind: 'punct' },
+        { txt: '"pm25"', kind: 'str' },
+        { txt: '}', kind: 'punct' }
+      ]},
+      { tokens: [] },
+      { tokens: [
+        { txt: 'r', kind: 'name' },
+        { txt: ' = ', kind: 'op' },
+        { txt: 'requests', kind: 'mod' },
+        { txt: '.', kind: 'punct' },
+        { txt: 'get', kind: 'fn' },
+        { txt: '(', kind: 'paren' },
+        { txt: 'url', kind: 'name' },
+        { txt: ', params=', kind: 'punct' },
+        { txt: 'params', kind: 'name' },
+        { txt: ')', kind: 'paren' }
+      ]}
+    ];
+    var typeP = clamp(p / 0.45, 0, 1);
+    var revealLines = Math.min(lines.length, Math.floor(typeP * lines.length) + 1);
+    var visLines = lines.slice(0, revealLines);
+    var activeLine = (p >= 0.5 && p < 0.85) ? 5 : null;
+    drawCodePanel(stage, visLines, activeLine, 50, 145, 500);
+
+    // 右半: URL 拆解面板
+    var urlAlpha = clamp((p - 0.25) / 0.3, 0, 1);
+    var ug = el('g', { opacity: urlAlpha, transform: 'translate(600, 145)' }, stage);
+    el('rect', { x: 0, y: 0, width: 440, height: 200, fill: 'var(--bg-1)',
+                 stroke: 'var(--line-strong)', 'stroke-width': '1.2', rx: '2' }, ug);
+    el('rect', { x: 0, y: 0, width: 440, height: 22, fill: 'var(--bg-2)',
+                 stroke: 'var(--line)' }, ug);
+    var uTtl = el('text', {
+      x: 220, y: 15, fill: 'var(--cs)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '10', 'text-anchor': 'middle',
+      'letter-spacing': '0.14em', 'font-weight': '700'
+    }, ug);
+    uTtl.textContent = LANG === 'cn' ? 'URL 拆解' : 'URL ANATOMY';
+
+    // URL 分段着色
+    var urlParts = [
+      {key:'scheme',  txt:'https://',      color:'var(--SIGNAL)', cnLab:'协议', enLab:'scheme'},
+      {key:'host',    txt:'api.openaq.org', color:'var(--cs)',     cnLab:'主机', enLab:'host'},
+      {key:'path',    txt:'/v3/measurements', color:'var(--CORE)', cnLab:'路径', enLab:'path'},
+      {key:'sep',     txt:'?',             color:'var(--fg-dim)', cnLab:'?',  enLab:'?'},
+      {key:'q1',      txt:'city=Shanghai', color:'var(--QUERY)',  cnLab:'参数 1', enLab:'param 1'},
+      {key:'amp',     txt:'&',             color:'var(--fg-dim)', cnLab:'&',  enLab:'&'},
+      {key:'q2',      txt:'parameter=pm25', color:'var(--QUERY)', cnLab:'参数 2', enLab:'param 2'}
+    ];
+    var cursor = 16;
+    var rowY = 52;
+    for (var i = 0; i < urlParts.length; i++){
+      var part = urlParts[i];
+      var partP = clamp((p - 0.28 - i * 0.04) / 0.04, 0, 1);
+      if (partP <= 0) continue;
+      var t = el('text', {
+        x: cursor, y: rowY, fill: part.color,
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '12', 'font-weight': '700', opacity: partP
+      }, ug);
+      t.textContent = part.txt;
+      // 计算宽度
+      var charW = 7.0;
+      cursor += part.txt.length * charW;
+      if (cursor > 420){
+        cursor = 16;
+        rowY += 22;
+      }
+    }
+    // 图例
+    if (p >= 0.55){
+      var legAlpha = clamp((p - 0.55) / 0.15, 0, 1);
+      var legG = el('g', { opacity: legAlpha, transform: 'translate(16, 110)' }, ug);
+      var legend = [
+        {c:'var(--SIGNAL)', cn:'协议 = https 加密', en:'scheme = https (encrypted)'},
+        {c:'var(--cs)',     cn:'主机 = OpenAQ 服务器域名', en:'host = OpenAQ server domain'},
+        {c:'var(--CORE)',   cn:'路径 = 要哪个接口', en:'path = which endpoint'},
+        {c:'var(--QUERY)',  cn:'参数 = 过滤条件 (city / parameter)', en:'params = filters (city / parameter)'}
+      ];
+      for (var j = 0; j < legend.length; j++){
+        el('rect', { x: 0, y: j * 18, width: 10, height: 10, fill: legend[j].c }, legG);
+        var lt = el('text', {
+          x: 16, y: j * 18 + 9, fill: 'var(--fg-dim)',
+          'font-family': "'Inter','Noto Sans SC',sans-serif", 'font-size': '11'
+        }, legG);
+        lt.textContent = LANG === 'cn' ? legend[j].cn : legend[j].en;
+      }
+    }
+
+    // 底部提示
+    if (p >= 0.7){
+      var noteAlpha = clamp((p - 0.7) / 0.2, 0, 1);
+      var nb = el('g', { opacity: noteAlpha }, stage);
+      el('rect', { x: 340, y: 525, width: 400, height: 32,
+                   fill: 'var(--bg-2)', stroke: 'var(--cs)',
+                   'stroke-width': '1.2', rx: '2' }, nb);
+      var nt = el('text', {
+        x: 540, y: 546, fill: 'var(--cs)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '12', 'text-anchor': 'middle',
+        'font-weight': '700', 'letter-spacing': '0.06em'
+      }, nb);
+      nt.textContent = LANG === 'cn'
+        ? '5 行代码 - 请求已组装好, 等待发出'
+        : '5 lines - request built, ready to send';
+    }
+  }
+
+  // ====== Frame 3 — HTTP 包飞 ======
+  function drawFrame3(p){
+    drawBgGrid();
+    drawStepChain(2);
+
+    var capAlpha = clamp((p - 0.05) / 0.18, 0, 1);
+    var capTx = el('text', {
+      x: 540, y: 75, fill: 'var(--fg-dim)',
+      'font-family': "'Inter','Noto Sans SC',sans-serif",
+      'font-size': '14', 'text-anchor': 'middle', opacity: capAlpha
+    }, stage);
+    capTx.textContent = LANG === 'cn'
+      ? 'HTTP 往返 - 请求包飞出去, 响应包飞回来'
+      : 'HTTP round-trip - request packet out, response packet back';
+
+    // 左: 客户端 (我的电脑)
+    var clientG = el('g', { transform: 'translate(80, 230)' }, stage);
+    el('rect', { x: 4, y: 4, width: 200, height: 180, fill: 'var(--bg-0)', opacity: 0.85 }, clientG);
+    el('rect', { x: 0, y: 0, width: 200, height: 180, fill: 'var(--bg-1)',
+                 stroke: 'var(--cs)', 'stroke-width': '1.6', rx: '2' }, clientG);
+    el('rect', { x: 0, y: 0, width: 200, height: 22, fill: 'var(--bg-2)',
+                 stroke: 'var(--line)' }, clientG);
+    var cTtl = el('text', {
+      x: 100, y: 15, fill: 'var(--cs)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '10', 'text-anchor': 'middle',
+      'letter-spacing': '0.14em', 'font-weight': '700'
+    }, clientG);
+    cTtl.textContent = LANG === 'cn' ? '我的电脑 (CLIENT)' : 'MY LAPTOP (CLIENT)';
+    // 终端图标
+    el('rect', { x: 36, y: 50, width: 128, height: 80, fill: 'var(--bg-2)',
+                 stroke: 'var(--line-strong)', 'stroke-width': '1.2', rx: '2' }, clientG);
+    var pTx = el('text', {
+      x: 46, y: 70, fill: 'var(--fg-dim)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace", 'font-size': '10'
+    }, clientG);
+    pTx.textContent = '$ python';
+    var pTx2 = el('text', {
+      x: 46, y: 86, fill: 'var(--SIGNAL)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace", 'font-size': '10'
+    }, clientG);
+    pTx2.textContent = '>>> r = requests.get(';
+    var pTx3 = el('text', {
+      x: 46, y: 100, fill: 'var(--CORE)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace", 'font-size': '10'
+    }, clientG);
+    pTx3.textContent = '...   url, params=p)';
+    if (p >= 0.85){
+      var blink = (Math.floor(p * 16) % 2 === 0) ? 1 : 0.2;
+      var pTx4 = el('text', {
+        x: 46, y: 118, fill: 'var(--QUERY)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '10', 'font-weight': '700', opacity: blink
+      }, clientG);
+      pTx4.textContent = '>>> r.status_code';
+    }
+    var cLab = el('text', {
+      x: 100, y: 160, fill: 'var(--fg-mute)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '10', 'text-anchor': 'middle'
+    }, clientG);
+    cLab.textContent = '127.0.0.1';
+
+    // 右: 服务器 (OpenAQ)
+    var serverG = el('g', { transform: 'translate(800, 230)' }, stage);
+    el('rect', { x: 4, y: 4, width: 200, height: 180, fill: 'var(--bg-0)', opacity: 0.85 }, serverG);
+    el('rect', { x: 0, y: 0, width: 200, height: 180, fill: 'var(--bg-1)',
+                 stroke: 'var(--QUERY)', 'stroke-width': '1.6', rx: '2' }, serverG);
+    el('rect', { x: 0, y: 0, width: 200, height: 22, fill: 'var(--bg-2)',
+                 stroke: 'var(--line)' }, serverG);
+    var sTtl = el('text', {
+      x: 100, y: 15, fill: 'var(--QUERY)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '10', 'text-anchor': 'middle',
+      'letter-spacing': '0.14em', 'font-weight': '700'
+    }, serverG);
+    sTtl.textContent = LANG === 'cn' ? 'OpenAQ 服务器' : 'OPENAQ SERVER';
+    // server 机架图
+    for (var rack = 0; rack < 4; rack++){
+      el('rect', { x: 52, y: 42 + rack * 22, width: 96, height: 18, fill: 'var(--bg-2)',
+                   stroke: 'var(--line-strong)', 'stroke-width': '1' }, serverG);
+      el('circle', { cx: 60, cy: 51 + rack * 22, r: 2, fill: 'var(--SIGNAL)' }, serverG);
+      el('circle', { cx: 68, cy: 51 + rack * 22, r: 2, fill: 'var(--CORE)' }, serverG);
+      el('line', { x1: 78, y1: 51 + rack * 22, x2: 140, y2: 51 + rack * 22,
+                   stroke: 'var(--line)', 'stroke-width': '0.6' }, serverG);
+    }
+    // server 查询闪烁
+    if (p >= 0.45 && p < 0.6){
+      var queryBlink = (Math.floor(p * 20) % 2 === 0) ? 1 : 0.3;
+      var qy = el('rect', { x: 50, y: 140, width: 100, height: 22,
+                            fill: 'none', stroke: 'var(--QUERY)',
+                            'stroke-width': '1.4', opacity: queryBlink }, serverG);
+      var qt = el('text', {
+        x: 100, y: 154, fill: 'var(--QUERY)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '10', 'text-anchor': 'middle', 'font-weight': '700',
+        opacity: queryBlink
+      }, serverG);
+      qt.textContent = LANG === 'cn' ? '查询 DB...' : 'querying DB...';
+    } else if (p >= 0.6){
+      var hitG = el('g', { opacity: clamp((p - 0.6) / 0.05, 0, 1) }, serverG);
+      el('rect', { x: 50, y: 140, width: 100, height: 22,
+                   fill: 'var(--QUERY)', opacity: 0.2,
+                   stroke: 'var(--QUERY)', 'stroke-width': '1.4' }, hitG);
+      var ht = el('text', {
+        x: 100, y: 154, fill: 'var(--QUERY)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '10', 'text-anchor': 'middle', 'font-weight': '700'
+      }, hitG);
+      ht.textContent = LANG === 'cn' ? '已找到 24 条' : 'found 24 rows';
+    }
+    var sLab = el('text', {
+      x: 100, y: 175, fill: 'var(--fg-mute)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '10', 'text-anchor': 'middle'
+    }, serverG);
+    sLab.textContent = 'api.openaq.org';
+
+    // 中间网络 (深色波形 / 节点点)
+    var netG = el('g', { transform: 'translate(280, 230)' }, stage);
+    var pathY = 90;
+    el('line', { x1: 0, y1: pathY, x2: 520, y2: pathY,
+                 stroke: 'var(--DEPTH)', 'stroke-width': '1.4',
+                 'stroke-dasharray': '3 6' }, netG);
+    // 路由节点 dots
+    for (var n = 0; n < 5; n++){
+      el('circle', { cx: 60 + n * 100, cy: pathY, r: 3.5,
+                     fill: 'var(--DEPTH)', stroke: 'var(--line-strong)', 'stroke-width': '0.8' }, netG);
+    }
+    var netLab = el('text', {
+      x: 260, y: 50, fill: 'var(--fg-mute)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '10', 'text-anchor': 'middle', 'letter-spacing': '0.18em'
+    }, netG);
+    netLab.textContent = LANG === 'cn' ? '互联网 - INTERNET' : 'THE INTERNET';
+
+    // 请求包 (GET ... 飞向右) — 0.18-0.4
+    var reqP = clamp((p - 0.18) / 0.22, 0, 1);
+    if (reqP > 0 && reqP <= 1){
+      var rx = lerp(20, 500, easeInOut(reqP));
+      var rg = el('g', { transform: 'translate('+rx+','+(pathY)+')' }, netG);
+      // 包外框
+      el('rect', { x: -34, y: -16, width: 68, height: 32,
+                   fill: 'var(--bg-1)', stroke: 'var(--SIGNAL)',
+                   'stroke-width': '1.4', rx: '2' }, rg);
+      var rTx = el('text', {
+        x: 0, y: -2, fill: 'var(--SIGNAL)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '10', 'text-anchor': 'middle', 'font-weight': '700'
+      }, rg);
+      rTx.textContent = 'GET';
+      var rTx2 = el('text', {
+        x: 0, y: 11, fill: 'var(--FLASH)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '8', 'text-anchor': 'middle'
+      }, rg);
+      rTx2.textContent = '/v3/...';
+      // 拖尾
+      el('line', { x1: -34, y1: 0, x2: -68, y2: 0,
+                   stroke: 'var(--SIGNAL)', 'stroke-width': '1.2',
+                   opacity: 0.5, 'stroke-dasharray': '2 3' }, rg);
+    }
+
+    // 响应包 (200 OK + 数据飞向左) — 0.62-0.92
+    var resP = clamp((p - 0.62) / 0.3, 0, 1);
+    if (resP > 0 && resP <= 1){
+      var rx2 = lerp(500, 20, easeInOut(resP));
+      var rg2 = el('g', { transform: 'translate('+rx2+','+(pathY)+')' }, netG);
+      el('rect', { x: -42, y: -18, width: 84, height: 36,
+                   fill: 'var(--bg-1)', stroke: 'var(--QUERY)',
+                   'stroke-width': '1.6', rx: '2' }, rg2);
+      var rsTx = el('text', {
+        x: 0, y: -3, fill: 'var(--QUERY)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '11', 'text-anchor': 'middle', 'font-weight': '700'
+      }, rg2);
+      rsTx.textContent = '200 OK';
+      var rsTx2 = el('text', {
+        x: 0, y: 11, fill: 'var(--FLASH)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '8', 'text-anchor': 'middle'
+      }, rg2);
+      rsTx2.textContent = '{ "results": [...] }';
+      // 拖尾
+      el('line', { x1: 42, y1: 0, x2: 78, y2: 0,
+                   stroke: 'var(--QUERY)', 'stroke-width': '1.4',
+                   opacity: 0.5, 'stroke-dasharray': '2 3' }, rg2);
+    }
+
+    // 5 色 HTTP 字段图例 (右下)
+    if (p >= 0.3){
+      var fieldsAlpha = clamp((p - 0.3) / 0.2, 0, 1);
+      var fg = el('g', { opacity: fieldsAlpha, transform: 'translate(80, 440)' }, stage);
+      el('rect', { x: 0, y: 0, width: 920, height: 110, fill: 'var(--bg-1)',
+                   stroke: 'var(--line-strong)', 'stroke-width': '1.2', rx: '2' }, fg);
+      el('rect', { x: 0, y: 0, width: 920, height: 22, fill: 'var(--bg-2)',
+                   stroke: 'var(--line)' }, fg);
+      var fTtl = el('text', {
+        x: 460, y: 15, fill: 'var(--cs)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '10', 'text-anchor': 'middle',
+        'letter-spacing': '0.14em', 'font-weight': '700'
+      }, fg);
+      fTtl.textContent = LANG === 'cn' ? 'HTTP 报文 - 5 个核心字段' : 'HTTP PACKET - 5 CORE FIELDS';
+
+      var fields = [
+        {color:'var(--SIGNAL)', tag:'METHOD', val:'GET',                         cn:'动词',     en:'verb'},
+        {color:'var(--CORE)',   tag:'PATH',   val:'/v3/measurements',            cn:'路径',     en:'endpoint'},
+        {color:'var(--QUERY)',  tag:'STATUS', val:'200 OK',                      cn:'响应状态', en:'response status'},
+        {color:'var(--FLASH)',  tag:'HEADER', val:'Content-Type: json',          cn:'元数据',   en:'metadata'},
+        {color:'var(--DEPTH)',  tag:'BODY',   val:'{ "results": [...24...] }',   cn:'数据体',   en:'data body'}
+      ];
+      var colW = 920 / 5;
+      for (var i = 0; i < fields.length; i++){
+        var ff = fields[i];
+        var fx = i * colW;
+        var fgg = el('g', { transform: 'translate('+fx+', 32)' }, fg);
+        el('rect', { x: 8, y: 0, width: colW - 16, height: 14,
+                     fill: ff.color, opacity: 0.85 }, fgg);
+        var ftag = el('text', {
+          x: colW/2, y: 11, fill: 'var(--bg-0)',
+          'font-family': "'JetBrains Mono',ui-monospace,monospace",
+          'font-size': '10', 'text-anchor': 'middle',
+          'font-weight': '700', 'letter-spacing': '0.16em'
+        }, fgg);
+        ftag.textContent = ff.tag;
+        var fval = el('text', {
+          x: colW/2, y: 36, fill: 'var(--fg)',
+          'font-family': "'JetBrains Mono',ui-monospace,monospace",
+          'font-size': '11', 'text-anchor': 'middle', 'font-weight': '700'
+        }, fgg);
+        fval.textContent = ff.val;
+        var fdesc = el('text', {
+          x: colW/2, y: 56, fill: 'var(--fg-mute)',
+          'font-family': "'Inter','Noto Sans SC',sans-serif",
+          'font-size': '10', 'text-anchor': 'middle'
+        }, fgg);
+        fdesc.textContent = LANG === 'cn' ? ff.cn : ff.en;
+      }
+    }
+  }
+
+  // ====== Frame 4 — JSON 嵌套结构 ======
+  function drawFrame4(p){
+    drawBgGrid();
+    drawStepChain(3);
+
+    var capAlpha = clamp((p - 0.05) / 0.18, 0, 1);
+    var capTx = el('text', {
+      x: 540, y: 75, fill: 'var(--fg-dim)',
+      'font-family': "'Inter','Noto Sans SC',sans-serif",
+      'font-size': '14', 'text-anchor': 'middle', opacity: capAlpha
+    }, stage);
+    capTx.textContent = LANG === 'cn'
+      ? 'r.json() 把字符串变成嵌套字典 - 一层一层往里钻'
+      : 'r.json() turns string into nested dict - drill in layer by layer';
+
+    // 左半: raw JSON 文本面板
+    var jsonAlpha = clamp((p - 0.08) / 0.2, 0, 1);
+    var jg = el('g', { opacity: jsonAlpha, transform: 'translate(50, 110)' }, stage);
+    el('rect', { x: 0, y: 0, width: 460, height: 460, fill: 'var(--bg-1)',
+                 stroke: 'var(--line-strong)', 'stroke-width': '1.4', rx: '2' }, jg);
+    el('rect', { x: 0, y: 0, width: 460, height: 22, fill: 'var(--bg-2)',
+                 stroke: 'var(--line)' }, jg);
+    el('circle', { cx: 12, cy: 11, r: 3.2, fill: 'var(--DEPTH)' }, jg);
+    el('circle', { cx: 24, cy: 11, r: 3.2, fill: 'var(--CORE)' }, jg);
+    el('circle', { cx: 36, cy: 11, r: 3.2, fill: 'var(--SIGNAL)' }, jg);
+    var jTtl = el('text', {
+      x: 230, y: 15, fill: 'var(--fg-dim)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '10', 'text-anchor': 'middle', 'letter-spacing': '0.08em'
+    }, jg);
+    jTtl.textContent = 'response.json()';
+
+    // JSON 行
+    var jsonLines = [
+      {txt:'{',                                indent:0, color:'var(--fg-dim)'},
+      {txt:'"meta": {',                        indent:1, color:'var(--fg)'},
+      {txt:'"found": 24,',                     indent:2, color:'var(--fg)'},
+      {txt:'"page": 1',                        indent:2, color:'var(--fg)'},
+      {txt:'},',                               indent:1, color:'var(--fg-dim)'},
+      {txt:'"results": [',                     indent:1, color:'var(--SIGNAL)',  highlight:true},
+      {txt:'{',                                indent:2, color:'var(--fg-dim)'},
+      {txt:'"location": "Shanghai US Consulate",', indent:3, color:'var(--fg)'},
+      {txt:'"parameter": "pm25",',             indent:3, color:'var(--CORE)'},
+      {txt:'"value": 38.4,',                   indent:3, color:'var(--QUERY)', highlight:true},
+      {txt:'"unit": "µg/m³",',                 indent:3, color:'var(--fg)'},
+      {txt:'"date": {',                        indent:3, color:'var(--fg-dim)'},
+      {txt:'"utc": "2026-05-27T08:00:00Z"',    indent:4, color:'var(--FLASH)'},
+      {txt:'}',                                indent:3, color:'var(--fg-dim)'},
+      {txt:'},',                               indent:2, color:'var(--fg-dim)'},
+      {txt:'... (23 more) ...',                indent:2, color:'var(--fg-mute)'},
+      {txt:']',                                indent:1, color:'var(--SIGNAL)', highlight:true},
+      {txt:'}',                                indent:0, color:'var(--fg-dim)'}
+    ];
+    var revealP = clamp((p - 0.1) / 0.4, 0, 1);
+    var nLines = Math.floor(revealP * jsonLines.length) + 1;
+    for (var i = 0; i < Math.min(nLines, jsonLines.length); i++){
+      var L = jsonLines[i];
+      var ly = 42 + i * 22;
+      var lineAlpha = clamp((revealP * jsonLines.length - i), 0, 1);
+      if (L.highlight){
+        el('rect', { x: 8, y: ly - 14, width: 444, height: 20,
+                     fill: L.color, opacity: 0.12 }, jg);
+      }
+      var tx = el('text', {
+        x: 20 + L.indent * 16, y: ly,
+        fill: L.color,
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '12', opacity: lineAlpha,
+        'font-weight': L.highlight ? '700' : '500'
+      }, jg);
+      tx.textContent = L.txt;
+    }
+
+    // 右半: 树形结构图
+    var treeAlpha = clamp((p - 0.3) / 0.25, 0, 1);
+    var tg = el('g', { opacity: treeAlpha, transform: 'translate(560, 110)' }, stage);
+    el('rect', { x: 0, y: 0, width: 480, height: 460, fill: 'var(--bg-1)',
+                 stroke: 'var(--line-strong)', 'stroke-width': '1.4', rx: '2' }, tg);
+    el('rect', { x: 0, y: 0, width: 480, height: 22, fill: 'var(--bg-2)',
+                 stroke: 'var(--line)' }, tg);
+    var tTtl = el('text', {
+      x: 240, y: 15, fill: 'var(--cs)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '10', 'text-anchor': 'middle',
+      'letter-spacing': '0.14em', 'font-weight': '700'
+    }, tg);
+    tTtl.textContent = LANG === 'cn' ? '嵌套结构树' : 'NESTED TREE';
+
+    // 节点绘制
+    function node(parentEl, x, y, w, h, color, label, fontSize){
+      el('rect', { x: x - w/2, y: y - h/2, width: w, height: h,
+                   fill: 'var(--bg-2)', stroke: color, 'stroke-width': '1.4', rx: '3' }, parentEl);
+      var t = el('text', {
+        x: x, y: y + 4, fill: color,
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': String(fontSize || 11), 'text-anchor': 'middle', 'font-weight': '700'
+      }, parentEl);
+      t.textContent = label;
+    }
+    function link(parentEl, x1, y1, x2, y2, color){
+      el('line', { x1: x1, y1: y1, x2: x2, y2: y2,
+                   stroke: color || 'var(--line-strong)', 'stroke-width': '1' }, parentEl);
+    }
+    // root data
+    node(tg, 240, 56, 110, 28, 'var(--cs)', 'data', 12);
+    // meta + results
+    link(tg, 240, 70, 130, 110, 'var(--line)');
+    link(tg, 240, 70, 350, 110, 'var(--SIGNAL)');
+    node(tg, 130, 120, 100, 24, 'var(--fg-dim)', 'meta');
+    node(tg, 350, 120, 130, 28, 'var(--SIGNAL)', 'results [24]', 12);
+    // results -> measurement[0]
+    if (p >= 0.4){
+      var lvl2A = clamp((p - 0.4) / 0.1, 0, 1);
+      var lvl2G = el('g', { opacity: lvl2A }, tg);
+      link(lvl2G, 350, 134, 350, 180, 'var(--SIGNAL)');
+      node(lvl2G, 350, 196, 200, 28, 'var(--CORE)', 'measurement[0]', 11);
+      // 子字段
+      link(lvl2G, 350, 210, 220, 260, 'var(--CORE)');
+      link(lvl2G, 350, 210, 340, 260, 'var(--CORE)');
+      link(lvl2G, 350, 210, 440, 260, 'var(--CORE)');
+      node(lvl2G, 220, 274, 110, 26, 'var(--fg-dim)', 'location', 10);
+      node(lvl2G, 340, 274, 100, 26, 'var(--CORE)',   'parameter', 10);
+      node(lvl2G, 440, 274, 80, 26,  'var(--QUERY)',  'value', 10);
+    }
+    // value 高亮
+    if (p >= 0.55){
+      var vA = clamp((p - 0.55) / 0.1, 0, 1);
+      var vG = el('g', { opacity: vA }, tg);
+      link(vG, 440, 287, 440, 330, 'var(--QUERY)');
+      el('rect', { x: 396, y: 332, width: 88, height: 38,
+                   fill: 'var(--bg-2)', stroke: 'var(--QUERY)',
+                   'stroke-width': '1.8', rx: '2' }, vG);
+      var vTx = el('text', {
+        x: 440, y: 357, fill: 'var(--QUERY)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '17', 'text-anchor': 'middle', 'font-weight': '700'
+      }, vG);
+      vTx.textContent = '38.4';
+      var vLab = el('text', {
+        x: 440, y: 386, fill: 'var(--fg-mute)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '9', 'text-anchor': 'middle'
+      }, vG);
+      vLab.textContent = 'µg/m³';
+    }
+
+    // 底部 — Python 取值代码
+    if (p >= 0.7){
+      var codeA = clamp((p - 0.7) / 0.15, 0, 1);
+      var ccg = el('g', { opacity: codeA, transform: 'translate(20, 400)' }, tg);
+      el('rect', { x: 0, y: 0, width: 440, height: 46,
+                   fill: 'var(--bg-0)', stroke: 'var(--cs)', 'stroke-width': '1.2', rx: '2' }, ccg);
+      var ct1 = el('text', {
+        x: 12, y: 20, fill: 'var(--fg)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace", 'font-size': '12'
+      }, ccg);
+      ct1.textContent = 'data = r.json()';
+      var ct2 = el('text', {
+        x: 12, y: 38, fill: 'var(--fg)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace", 'font-size': '12'
+      }, ccg);
+      // 用 tspan 着色
+      var seg1 = el('tspan', { fill:'var(--fg)' }, ct2); seg1.textContent = 'pm = data[';
+      var seg2 = el('tspan', { fill:'var(--SIGNAL)', 'font-weight':'700' }, ct2); seg2.textContent = '"results"';
+      var seg3 = el('tspan', { fill:'var(--fg-dim)' }, ct2); seg3.textContent = '][';
+      var seg4 = el('tspan', { fill:'var(--QUERY)', 'font-weight':'700' }, ct2); seg4.textContent = '0';
+      var seg5 = el('tspan', { fill:'var(--fg-dim)' }, ct2); seg5.textContent = '][';
+      var seg6 = el('tspan', { fill:'var(--QUERY)', 'font-weight':'700' }, ct2); seg6.textContent = '"value"';
+      var seg7 = el('tspan', { fill:'var(--fg-dim)' }, ct2); seg7.textContent = ']';
+    }
+
+    // 中间箭头 (json -> tree)
+    if (p >= 0.3){
+      var arrAlpha = clamp((p - 0.3) / 0.1, 0, 1);
+      var ag = el('g', { opacity: arrAlpha }, stage);
+      el('line', { x1: 520, y1: 340, x2: 550, y2: 340,
+                   stroke: 'var(--cs)', 'stroke-width': '2.4' }, ag);
+      el('polygon', { points: '550,334 562,340 550,346', fill: 'var(--cs)' }, ag);
+    }
+  }
+
+  // ====== Frame 5 — PLOT ======
+  // 上海 PM2.5 24h 模拟数据 (中午峰)
+  var PM_DATA = [
+    32,29,28,30,33,38,45,52,58,55,49,44,
+    41,40,42,46,52,58,62,56,48,42,38,35
+  ];
+  function drawFrame5(p){
+    drawBgGrid();
+    drawStepChain(4);
+
+    var capAlpha = clamp((p - 0.05) / 0.15, 0, 1);
+    var capTx = el('text', {
+      x: 540, y: 78, fill: 'var(--fg-dim)',
+      'font-family': "'Inter','Noto Sans SC',sans-serif",
+      'font-size': '14', 'text-anchor': 'middle', opacity: capAlpha
+    }, stage);
+    capTx.textContent = LANG === 'cn'
+      ? 'matplotlib 4 行 - 24 个数据点连成上海 PM2.5 当天曲线'
+      : 'matplotlib 4 lines - 24 points connect into Shanghai PM2.5 daily curve';
+
+    // 左: 代码
+    var lines = [
+      { tokens: [
+        { txt: 'import', kind: 'kw' },
+        { txt: ' matplotlib.pyplot ', kind: 'mod' },
+        { txt: 'as', kind: 'kw' },
+        { txt: ' plt', kind: 'name' }
+      ]},
+      { tokens: [
+        { txt: 'vals', kind: 'name' },
+        { txt: ' = ', kind: 'op' },
+        { txt: '[', kind: 'punct' },
+        { txt: 'm', kind: 'name' },
+        { txt: '[', kind: 'punct' },
+        { txt: '"value"', kind: 'str' },
+        { txt: '] ', kind: 'punct' },
+        { txt: 'for', kind: 'kw' },
+        { txt: ' m ', kind: 'name' },
+        { txt: 'in', kind: 'kw' },
+        { txt: ' data', kind: 'name' },
+        { txt: '[', kind: 'punct' },
+        { txt: '"results"', kind: 'str' },
+        { txt: ']]', kind: 'punct' }
+      ]},
+      { tokens: [
+        { txt: 'plt', kind: 'mod' },
+        { txt: '.', kind: 'punct' },
+        { txt: 'plot', kind: 'fn' },
+        { txt: '(', kind: 'paren' },
+        { txt: 'vals', kind: 'name' },
+        { txt: ')', kind: 'paren' }
+      ]},
+      { tokens: [
+        { txt: 'plt', kind: 'mod' },
+        { txt: '.', kind: 'punct' },
+        { txt: 'show', kind: 'fn' },
+        { txt: '(', kind: 'paren' },
+        { txt: ')', kind: 'paren' }
+      ]}
+    ];
+    drawCodePanel(stage, lines, null, 40, 130, 420, 'plot.py');
+
+    // 右: 图表
+    var chartAlpha = clamp((p - 0.1) / 0.15, 0, 1);
+    var cg = el('g', { opacity: chartAlpha, transform: 'translate(490, 110)' }, stage);
+    var CW = 550, CH = 360;
+    el('rect', { x: 0, y: 0, width: CW, height: CH, fill: 'var(--bg-1)',
+                 stroke: 'var(--line-strong)', 'stroke-width': '1.4', rx: '2' }, cg);
+    el('rect', { x: 0, y: 0, width: CW, height: 22, fill: 'var(--bg-2)',
+                 stroke: 'var(--line)' }, cg);
+    var cTtl = el('text', {
+      x: CW/2, y: 15, fill: 'var(--cs)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '10', 'text-anchor': 'middle',
+      'letter-spacing': '0.14em', 'font-weight': '700'
+    }, cg);
+    cTtl.textContent = LANG === 'cn'
+      ? '上海 PM2.5 - 24 小时 (µg/m³)'
+      : 'SHANGHAI PM2.5 - 24h (µg/m³)';
+
+    // 绘图区
+    var plotL = 50, plotR = CW - 30, plotT = 50, plotB = CH - 40;
+    var minV = 20, maxV = 70;
+    function xAt(i){ return plotL + (i / 23) * (plotR - plotL); }
+    function yAt(v){ return plotB - ((v - minV) / (maxV - minV)) * (plotB - plotT); }
+
+    // Y 轴 grid + label
+    for (var v = 20; v <= 70; v += 10){
+      var gy = yAt(v);
+      el('line', { x1: plotL, y1: gy, x2: plotR, y2: gy,
+                   stroke: 'var(--line)', 'stroke-width': '0.5',
+                   'stroke-dasharray': '2 4' }, cg);
+      var ly = el('text', {
+        x: plotL - 8, y: gy + 3, fill: 'var(--fg-mute)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '9', 'text-anchor': 'end'
+      }, cg);
+      ly.textContent = String(v);
+    }
+    // X 轴
+    el('line', { x1: plotL, y1: plotB, x2: plotR, y2: plotB,
+                 stroke: 'var(--line-strong)', 'stroke-width': '1' }, cg);
+    el('line', { x1: plotL, y1: plotT, x2: plotL, y2: plotB,
+                 stroke: 'var(--line-strong)', 'stroke-width': '1' }, cg);
+    // X tick (0/6/12/18/23)
+    var ticks = [0, 6, 12, 18, 23];
+    for (var t = 0; t < ticks.length; t++){
+      var tx = xAt(ticks[t]);
+      el('line', { x1: tx, y1: plotB, x2: tx, y2: plotB + 4,
+                   stroke: 'var(--line-strong)', 'stroke-width': '1' }, cg);
+      var tlab = el('text', {
+        x: tx, y: plotB + 16, fill: 'var(--fg-mute)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '9', 'text-anchor': 'middle'
+      }, cg);
+      tlab.textContent = (ticks[t] < 10 ? '0' : '') + ticks[t] + ':00';
+    }
+
+    // 不健康阈值线 (35)
+    var thrY = yAt(35);
+    el('line', { x1: plotL, y1: thrY, x2: plotR, y2: thrY,
+                 stroke: 'var(--FLASH)', 'stroke-width': '1', 'stroke-dasharray': '4 3' }, cg);
+    var thrLab = el('text', {
+      x: plotR - 6, y: thrY - 4, fill: 'var(--FLASH)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '9', 'text-anchor': 'end', 'font-weight': '700'
+    }, cg);
+    thrLab.textContent = LANG === 'cn' ? 'WHO 阈值 35' : 'WHO threshold 35';
+
+    // 折线 — 渐进绘制
+    var drawP = clamp((p - 0.2) / 0.5, 0, 1);
+    var nPts = Math.max(1, Math.floor(drawP * 24));
+    if (nPts >= 2){
+      var pathD = 'M ' + xAt(0) + ' ' + yAt(PM_DATA[0]);
+      for (var i = 1; i < nPts; i++){
+        pathD += ' L ' + xAt(i) + ' ' + yAt(PM_DATA[i]);
+      }
+      // 阴影填充 (面积)
+      var fillD = pathD + ' L ' + xAt(nPts-1) + ' ' + plotB + ' L ' + xAt(0) + ' ' + plotB + ' Z';
+      el('path', { d: fillD, fill: 'var(--SIGNAL)', opacity: '0.18' }, cg);
+      // 主线
+      el('path', { d: pathD, fill: 'none', stroke: 'var(--SIGNAL)',
+                   'stroke-width': '2.2', 'stroke-linejoin': 'round' }, cg);
+      // 点
+      for (var i = 0; i < nPts; i++){
+        var dotColor = PM_DATA[i] > 35 ? 'var(--QUERY)' : 'var(--FLASH)';
+        el('circle', { cx: xAt(i), cy: yAt(PM_DATA[i]), r: 3, fill: dotColor }, cg);
+      }
+    }
+
+    // 峰值标注
+    if (p >= 0.6){
+      var pkAlpha = clamp((p - 0.6) / 0.15, 0, 1);
+      var maxV2 = 0, maxI = 0;
+      for (var i = 0; i < 24; i++){
+        if (PM_DATA[i] > maxV2){ maxV2 = PM_DATA[i]; maxI = i; }
+      }
+      var pkX = xAt(maxI), pkY = yAt(maxV2);
+      var pkG = el('g', { opacity: pkAlpha }, cg);
+      el('circle', { cx: pkX, cy: pkY, r: 8, fill: 'none',
+                     stroke: 'var(--gold)', 'stroke-width': '1.4' }, pkG);
+      el('line', { x1: pkX, y1: pkY - 14, x2: pkX, y2: pkY - 36,
+                   stroke: 'var(--gold)', 'stroke-width': '1' }, pkG);
+      el('rect', { x: pkX - 36, y: pkY - 60, width: 72, height: 24,
+                   fill: 'var(--bg-2)', stroke: 'var(--gold)',
+                   'stroke-width': '1.2', rx: '2' }, pkG);
+      var pkTx = el('text', {
+        x: pkX, y: pkY - 44, fill: 'var(--gold)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '11', 'text-anchor': 'middle', 'font-weight': '700'
+      }, pkG);
+      pkTx.textContent = (LANG === 'cn' ? '峰值 ' : 'peak ') + maxV2 + ' µg/m³';
+    }
+
+    // key moment overlay
+    var flash = document.getElementById('flash');
+    var flashMain = document.getElementById('flashMain');
+    var fSub = document.getElementById('flashSub');
+    if (p >= 0.85){
+      flash.classList.add('on');
+      flashMain.textContent = LANG === 'cn' ? 'CONNECTED' : 'CONNECTED';
+      fSub.textContent = LANG === 'cn'
+        ? '你刚刚连上了一个全球网络'
+        : 'You just joined a global network';
+    } else {
+      flash.classList.remove('on');
+    }
+  }
+
+  // ====== Frame chip ======
+  function updateChips(idx){
+    for (var i = 0; i < 5; i++){
+      var c = document.getElementById('chip' + i);
+      c.classList.remove('active', 'done');
+      if (i < idx) c.classList.add('done');
+      else if (i === idx) c.classList.add('active');
+    }
+    document.getElementById('stepName').textContent = FRAMES[idx].stepName;
+  }
+
+  function updateHud(idx){
+    var F = FRAMES[idx];
+    document.getElementById('hudV1').textContent = (idx+1) + ' / 5';
+    document.getElementById('hudV2').textContent = F.hudStage[LANG] || F.hudStage.en;
+    document.getElementById('hudV3').textContent = F.hudStatus;
+    document.getElementById('hudV4').textContent = F.hudResult;
+  }
+
+  function updateSubtitle(idx){
+    var F = FRAMES[idx];
+    document.getElementById('subCn').textContent = LANG === 'cn' ? F.subCn : F.subEn;
+    document.getElementById('subEn').textContent = LANG === 'cn' ? F.subEn : F.subCn;
+  }
+
+  function refreshI18N(){
+    document.getElementById('badgeMod').textContent = tr('badgeMod');
+    document.getElementById('brandH1').textContent = tr('brandH1');
+    document.getElementById('brandSub').textContent = tr('brandSub');
+    document.getElementById('mascotName').textContent = tr('mascotName');
+    document.getElementById('g1').lastChild.textContent = I18N.g1[LANG];
+    document.getElementById('g2').lastChild.textContent = I18N.g2[LANG];
+    document.getElementById('g3').lastChild.textContent = I18N.g3[LANG];
+    document.getElementById('hudL1').textContent = tr('hudL1');
+    document.getElementById('hudL2').textContent = tr('hudL2');
+    document.getElementById('hudL3').textContent = tr('hudL3');
+    document.getElementById('hudL4').textContent = tr('hudL4');
+    updateHud(currentFrame);
+    updateSubtitle(currentFrame);
+  }
+
+  function drawFrame(idx, p){
+    clearStage();
+    if (idx === 0) drawFrame1(p);
+    else if (idx === 1) drawFrame2(p);
+    else if (idx === 2) drawFrame3(p);
+    else if (idx === 3) drawFrame4(p);
+    else if (idx === 4) drawFrame5(p);
+  }
+
+  function tick(ts){
+    if (!frameStartTs) frameStartTs = ts;
+    var elapsed = ts - frameStartTs;
+    var p = elapsed / FRAME_MS;
+    if (p >= 1){
+      currentFrame = (currentFrame + 1) % FRAMES.length;
+      frameStartTs = ts;
+      updateChips(currentFrame);
+      updateHud(currentFrame);
+      updateSubtitle(currentFrame);
+      if (currentFrame === 0){
+        document.getElementById('flash').classList.remove('on');
+      }
+      p = 0;
+    }
+    drawFrame(currentFrame, p);
+    rafId = requestAnimationFrame(tick);
+  }
+
+  document.getElementById('langBtn').addEventListener('click', function(){
+    LANG = (LANG === 'cn') ? 'en' : 'cn';
+    refreshI18N();
+  });
+
+  updateChips(0);
+  updateHud(0);
+  updateSubtitle(0);
+  rafId = requestAnimationFrame(tick);
+})();
+</script>
+</body>
+</html>

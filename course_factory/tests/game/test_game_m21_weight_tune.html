@@ -1,0 +1,854 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>M21 · 加权平均权重调参 — Geometry Void</title>
+<style>
+  :root{
+    /* Layer 1 — shared deep space canvas (all 26 subjects) */
+    --bg-0: oklch(0.14 0.035 265);
+    --bg-1: oklch(0.18 0.04 265);
+    --bg-2: oklch(0.22 0.045 265);
+    --bg-3: oklch(0.28 0.05 265);
+    --line: oklch(0.35 0.05 265 / 0.35);
+    --line-strong: oklch(0.55 0.08 265 / 0.55);
+    --fg:      oklch(0.96 0.01 265);
+    --fg-dim:  oklch(0.75 0.02 265);
+    --fg-mute: oklch(0.55 0.03 265);
+    --gold:    oklch(0.85 0.14 85);
+
+    /* Layer 2 — math signature accent (MTH-06) */
+    --math: oklch(0.72 0.17 245);
+
+    /* Layer 3 — math 5-color palette (themes.js MTH-06: Geometry Void) */
+    --AXIS:     oklch(0.72 0.17 245);
+    --PROOF:    oklch(0.52 0.16 245);
+    --SHADOW:   oklch(0.35 0.10 245);
+    --SOLUTION: oklch(0.92 0.08 240);
+    --QED:      oklch(0.85 0.14 85);
+  }
+
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{
+    height:100vh;width:100vw;overflow:hidden;
+    font-family:'Inter','PingFang SC','Noto Sans SC',sans-serif;
+    color:var(--fg);background:var(--bg-0);
+  }
+
+  .stage{
+    display:flex;flex-direction:row;
+    height:100vh;width:100vw;
+  }
+
+  /* ========== 200px sidebar ========== */
+  .game-sidebar{
+    width:200px;flex:0 0 200px;
+    background:var(--bg-1);
+    border-right:1px solid var(--line);
+    display:flex;flex-direction:column;
+    padding:14px 12px;gap:10px;
+    overflow-y:auto;
+  }
+  .brand{
+    display:flex;flex-direction:column;gap:2px;
+    border-bottom:1px solid var(--line);padding-bottom:8px;
+  }
+  .brand .code{
+    font-family:'JetBrains Mono',monospace;font-size:10px;
+    color:var(--fg-mute);letter-spacing:1.2px;
+  }
+  .brand .title{font-size:13px;color:var(--fg);font-weight:600;line-height:1.25}
+  .brand .sub{font-size:10px;color:var(--fg-dim);margin-top:2px}
+
+  .mascot{
+    width:100%;height:72px;
+    background:var(--bg-2);border:1px solid var(--line);
+    display:flex;align-items:center;justify-content:center;
+  }
+  .mascot svg{width:100%;height:100%}
+
+  .guide{
+    background:var(--bg-2);border:1px solid var(--line);
+    padding:8px 10px;display:flex;flex-direction:column;gap:4px;
+  }
+  .guide-title{
+    font-family:'JetBrains Mono',monospace;font-size:9px;
+    color:var(--AXIS);letter-spacing:1px;
+  }
+  .guide-line{font-size:10px;color:var(--fg-dim);line-height:1.45}
+
+  /* ---- 5 sliders pack ---- */
+  .sliders-block{
+    background:var(--bg-2);border:1px solid var(--line);
+    padding:8px 10px;display:flex;flex-direction:column;gap:6px;
+  }
+  .sliders-title{
+    font-family:'JetBrains Mono',monospace;font-size:9px;
+    color:var(--fg-dim);letter-spacing:1px;display:flex;justify-content:space-between;
+  }
+  .sliders-title .reset{
+    color:var(--AXIS);font-size:9px;background:var(--bg-3);
+    border:1px solid var(--line-strong);padding:1px 6px;cursor:pointer;
+    font-family:'JetBrains Mono',monospace;letter-spacing:.5px;
+  }
+  .sliders-title .reset:hover{background:var(--PROOF);color:var(--SOLUTION)}
+  .slider-row{
+    display:grid;grid-template-columns:32px 1fr 30px;gap:6px;align-items:center;
+    font-family:'JetBrains Mono',monospace;font-size:10px;
+  }
+  .slider-row .data-tag{color:var(--fg-dim);font-size:9px}
+  .slider-row .data-tag .dn{color:var(--SOLUTION);font-weight:600}
+  .slider-row .weight-val{
+    color:var(--AXIS);font-weight:600;text-align:right;font-size:11px;
+  }
+  input[type=range].w-slider{
+    -webkit-appearance:none;appearance:none;width:100%;height:5px;
+    background:var(--bg-3);
+    border:1px solid var(--line);outline:none;cursor:pointer;
+  }
+  input[type=range].w-slider::-webkit-slider-thumb{
+    -webkit-appearance:none;appearance:none;
+    width:12px;height:16px;background:var(--SOLUTION);
+    border:1.5px solid var(--AXIS);box-shadow:1.5px 1.5px 0 var(--bg-0);
+    cursor:grab;
+  }
+  input[type=range].w-slider::-moz-range-thumb{
+    width:12px;height:16px;background:var(--SOLUTION);
+    border:1.5px solid var(--AXIS);box-shadow:1.5px 1.5px 0 var(--bg-0);
+    cursor:grab;
+  }
+
+  /* ---- result HUD in sidebar ---- */
+  .hud-block{
+    background:var(--bg-2);border:1px solid var(--line);
+    padding:8px 10px;display:flex;flex-direction:column;gap:4px;
+  }
+  .hud-row{
+    display:flex;justify-content:space-between;align-items:baseline;
+    font-family:'JetBrains Mono',monospace;font-size:10px;
+  }
+  .hud-row .lbl{color:var(--fg-mute);letter-spacing:.8px}
+  .hud-row .v{color:var(--AXIS);font-size:13px;font-weight:600}
+  .hud-row .v.gold{color:var(--QED)}
+  .hud-row .v.warn{color:var(--PROOF)}
+  .hud-diff{
+    font-family:'JetBrains Mono',monospace;font-size:9px;
+    color:var(--fg-mute);text-align:right;margin-top:-2px;
+  }
+  .hud-diff.near{color:var(--QED)}
+
+  /* ---- task list (5 solutions to unlock) ---- */
+  .tasks-block{
+    background:var(--bg-2);border:1px solid var(--line);
+    padding:8px 10px;display:flex;flex-direction:column;gap:5px;
+  }
+  .tasks-title{
+    font-family:'JetBrains Mono',monospace;font-size:9px;
+    color:var(--fg-dim);letter-spacing:1px;
+    display:flex;justify-content:space-between;align-items:baseline;
+  }
+  .tasks-title .count{color:var(--AXIS);font-size:10px;font-weight:600}
+  .task-row{
+    display:grid;grid-template-columns:14px 1fr;gap:6px;align-items:center;
+    font-size:10px;color:var(--fg-mute);
+  }
+  .task-row.done{color:var(--fg)}
+  .task-row .dot{
+    width:10px;height:10px;border:1px solid var(--line-strong);
+    background:var(--bg-3);
+  }
+  .task-row.done .dot{
+    background:var(--QED);border-color:var(--QED);
+  }
+  .task-row .label{font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.5px}
+
+  .sidebar-spacer{flex:1;min-height:8px}
+
+  .lang-btn{
+    width:100%;padding:7px 10px;background:var(--bg-3);
+    color:var(--fg);border:1px solid var(--line-strong);
+    font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:1px;
+    cursor:pointer;box-shadow:3px 3px 0 var(--bg-0);
+  }
+  .lang-btn:hover{background:var(--PROOF);color:var(--SOLUTION)}
+
+  /* ========== main stage ========== */
+  .game-main{
+    flex:1;display:flex;flex-direction:column;
+    background:var(--bg-0);min-width:0;
+  }
+  .main-header{
+    height:42px;border-bottom:1px solid var(--line);
+    display:flex;align-items:center;justify-content:space-between;
+    padding:0 18px;background:var(--bg-1);
+  }
+  .header-left{
+    font-family:'JetBrains Mono',monospace;font-size:11px;
+    color:var(--fg-dim);letter-spacing:1.4px;
+  }
+  .header-right{
+    display:flex;gap:14px;
+    font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--fg-mute);
+  }
+  .hud-cell{display:flex;flex-direction:column;align-items:flex-end;line-height:1.1}
+  .hud-cell .label{font-size:9px;color:var(--fg-mute);letter-spacing:1px}
+  .hud-cell .val{color:var(--AXIS);font-size:13px;font-weight:600;font-family:'JetBrains Mono',monospace}
+  .hud-cell .val.gold{color:var(--QED)}
+
+  .main-body{
+    flex:1;display:flex;flex-direction:column;
+    min-height:0;padding:14px 18px;gap:10px;
+  }
+
+  /* dual chart panes — stacked column with flex chain */
+  .pane{
+    flex:1;display:flex;flex-direction:column;
+    background:var(--bg-1);border:1px solid var(--line);
+    min-height:0;
+  }
+  .pane-title{
+    padding:6px 14px;
+    font-family:'JetBrains Mono',monospace;font-size:11px;
+    color:var(--AXIS);letter-spacing:1.4px;
+    border-bottom:1px solid var(--line);background:var(--bg-2);
+    display:flex;justify-content:space-between;align-items:baseline;
+  }
+  .pane-title .note{color:var(--fg-mute);font-size:9px;letter-spacing:.8px}
+  .pane-body{
+    flex:1;display:flex;flex-direction:column;
+    min-height:0;padding:8px;
+  }
+  canvas.chart{
+    flex:1;width:100%;height:100%;
+    background:var(--bg-1);
+  }
+
+  /* formula strip */
+  .formula-strip{
+    flex:0 0 auto;padding:8px 14px;
+    background:var(--bg-1);border:1px solid var(--line);
+    font-family:'JetBrains Mono',monospace;font-size:12px;
+    color:var(--fg-dim);line-height:1.5;
+    display:flex;flex-wrap:wrap;gap:6px 14px;align-items:baseline;
+  }
+  .formula-strip .var{color:var(--AXIS)}
+  .formula-strip .num{color:var(--SOLUTION)}
+  .formula-strip .res{color:var(--QED);font-weight:600}
+  .formula-strip .op{color:var(--fg-mute)}
+
+  /* milestone */
+  .milestone{
+    position:absolute;left:50%;top:60px;
+    transform:translateX(-50%) translateY(-20px);
+    background:var(--QED);color:var(--bg-0);
+    font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:700;
+    padding:10px 22px;letter-spacing:1.5px;
+    box-shadow:4px 4px 0 var(--bg-0);
+    opacity:0;transition:all .35s;pointer-events:none;
+    z-index:50;
+  }
+  .milestone.show{
+    opacity:1;transform:translateX(-50%) translateY(0);
+  }
+
+  /* hit pulse on chart center */
+  .hit-pulse{
+    position:absolute;left:50%;top:50%;
+    transform:translate(-50%,-50%) scale(0.6);
+    width:120px;height:120px;border-radius:50%;
+    border:2px solid var(--QED);
+    opacity:0;pointer-events:none;z-index:40;
+  }
+  .hit-pulse.fire{
+    animation:pulse 1s ease-out 1;
+  }
+  @keyframes pulse{
+    0%{opacity:.9;transform:translate(-50%,-50%) scale(0.4)}
+    100%{opacity:0;transform:translate(-50%,-50%) scale(1.6)}
+  }
+
+  .main-body{position:relative}
+</style>
+</head>
+<body>
+  <div class="stage">
+    <!-- ============ Sidebar ============ -->
+    <aside class="game-sidebar">
+      <div class="brand">
+        <span class="code">MTH-06 · M21</span>
+        <span class="title" data-i18n-cn="加权平均 · 调参" data-i18n-en="Weighted Avg · Tune">加权平均 · 调参</span>
+        <span class="sub" data-i18n-cn="拖滑块, 让结果命中 40" data-i18n-en="Slide weights, hit 40">拖滑块, 让结果命中 40</span>
+      </div>
+
+      <div class="mascot" aria-label="Pi mascot">
+        <!-- Pi — rotating tetrahedron mascot (math) -->
+        <svg viewBox="0 0 200 72" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <linearGradient id="piGrad" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0%" stop-color="var(--AXIS)"/>
+              <stop offset="100%" stop-color="var(--PROOF)"/>
+            </linearGradient>
+          </defs>
+          <g id="piMascot" transform="translate(100 36)">
+            <polygon points="0,-22 21,12 -21,12" fill="url(#piGrad)" stroke="var(--SOLUTION)" stroke-width="1"/>
+            <polygon points="0,-22 21,12 0,3" fill="var(--PROOF)" opacity=".75" stroke="var(--SOLUTION)" stroke-width="0.6"/>
+            <polygon points="0,-22 -21,12 0,3" fill="var(--SHADOW)" opacity=".85" stroke="var(--SOLUTION)" stroke-width="0.6"/>
+            <text x="0" y="6" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="12" fill="var(--SOLUTION)" font-weight="700">Pi</text>
+          </g>
+          <text x="100" y="66" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="8" fill="var(--fg-mute)" letter-spacing="1.5">w &middot; x / w</text>
+        </svg>
+      </div>
+
+      <div class="guide">
+        <div class="guide-title">HOW TO PLAY</div>
+        <div class="guide-line" data-i18n-cn="1 · 5 个数据 (10/20/30/40/50) 固定" data-i18n-en="1 · Data fixed (10/20/30/40/50)">1 · 5 个数据 (10/20/30/40/50) 固定</div>
+        <div class="guide-line" data-i18n-cn="2 · 拖动权重滑块, 求加权均值 = 40" data-i18n-en="2 · Tune weights so avg = 40">2 · 拖动权重滑块, 求加权均值 = 40</div>
+        <div class="guide-line" data-i18n-cn="3 · 找出 5 组不同方案解锁直觉" data-i18n-en="3 · Find 5 distinct configs to unlock">3 · 找出 5 组不同方案解锁直觉</div>
+      </div>
+
+      <div class="sliders-block">
+        <div class="sliders-title">
+          <span data-i18n-cn="权重 w&#8321;..w&#8325; (0-10)" data-i18n-en="Weights w1..w5 (0-10)">权重 w&#8321;..w&#8325; (0-10)</span>
+          <button id="resetBtn" type="button" class="reset" data-i18n-cn="重置" data-i18n-en="Reset">重置</button>
+        </div>
+        <!-- 5 weight sliders -->
+        <div class="slider-row">
+          <span class="data-tag">x&#8321;=<span class="dn">10</span></span>
+          <input type="range" min="0" max="10" step="0.5" value="2" id="w0" class="w-slider" aria-label="weight 1" />
+          <span class="weight-val" id="w0v">2.0</span>
+        </div>
+        <div class="slider-row">
+          <span class="data-tag">x&#8322;=<span class="dn">20</span></span>
+          <input type="range" min="0" max="10" step="0.5" value="2" id="w1" class="w-slider" aria-label="weight 2" />
+          <span class="weight-val" id="w1v">2.0</span>
+        </div>
+        <div class="slider-row">
+          <span class="data-tag">x&#8323;=<span class="dn">30</span></span>
+          <input type="range" min="0" max="10" step="0.5" value="2" id="w2" class="w-slider" aria-label="weight 3" />
+          <span class="weight-val" id="w2v">2.0</span>
+        </div>
+        <div class="slider-row">
+          <span class="data-tag">x&#8324;=<span class="dn">40</span></span>
+          <input type="range" min="0" max="10" step="0.5" value="2" id="w3" class="w-slider" aria-label="weight 4" />
+          <span class="weight-val" id="w3v">2.0</span>
+        </div>
+        <div class="slider-row">
+          <span class="data-tag">x&#8325;=<span class="dn">50</span></span>
+          <input type="range" min="0" max="10" step="0.5" value="2" id="w4" class="w-slider" aria-label="weight 5" />
+          <span class="weight-val" id="w4v">2.0</span>
+        </div>
+      </div>
+
+      <div class="hud-block">
+        <div class="hud-row">
+          <span class="lbl" data-i18n-cn="加权均值" data-i18n-en="Weighted avg">加权均值</span>
+          <span class="v" id="hudAvg">30.00</span>
+        </div>
+        <div class="hud-diff" id="hudDiff" data-i18n-cn="距目标 10.00" data-i18n-en="from target 10.00">距目标 10.00</div>
+        <div class="hud-row">
+          <span class="lbl" data-i18n-cn="目标" data-i18n-en="Target">目标</span>
+          <span class="v gold">40.00</span>
+        </div>
+        <div class="hud-row">
+          <span class="lbl">SUM(w)</span>
+          <span class="v" id="hudSumW">10.0</span>
+        </div>
+      </div>
+
+      <div class="tasks-block">
+        <div class="tasks-title">
+          <span data-i18n-cn="不同方案" data-i18n-en="Distinct configs">不同方案</span>
+          <span class="count"><span id="taskCount">0</span> / 5</span>
+        </div>
+        <div class="task-row" id="task0"><div class="dot"></div><div class="label" data-i18n-cn="方案 #1" data-i18n-en="config #1">方案 #1</div></div>
+        <div class="task-row" id="task1"><div class="dot"></div><div class="label" data-i18n-cn="方案 #2" data-i18n-en="config #2">方案 #2</div></div>
+        <div class="task-row" id="task2"><div class="dot"></div><div class="label" data-i18n-cn="方案 #3" data-i18n-en="config #3">方案 #3</div></div>
+        <div class="task-row" id="task3"><div class="dot"></div><div class="label" data-i18n-cn="方案 #4" data-i18n-en="config #4">方案 #4</div></div>
+        <div class="task-row" id="task4"><div class="dot"></div><div class="label" data-i18n-cn="方案 #5" data-i18n-en="config #5">方案 #5</div></div>
+      </div>
+
+      <div class="sidebar-spacer"></div>
+
+      <button id="langBtn" class="lang-btn" type="button">EN / 中文</button>
+    </aside>
+
+    <!-- ============ Main ============ -->
+    <main class="game-main">
+      <header class="main-header">
+        <div class="header-left" data-i18n-cn="M21 · 加权平均的几何直觉" data-i18n-en="M21 · Geometric Intuition of Weighted Avg">M21 · 加权平均的几何直觉</div>
+        <div class="header-right">
+          <div class="hud-cell">
+            <span class="label">AVG</span>
+            <span class="val" id="headerAvg">30.00</span>
+          </div>
+          <div class="hud-cell">
+            <span class="label" data-i18n-cn="目标" data-i18n-en="TARGET">目标</span>
+            <span class="val gold">40.00</span>
+          </div>
+          <div class="hud-cell">
+            <span class="label" data-i18n-cn="命中" data-i18n-en="HITS">命中</span>
+            <span class="val" id="headerHits">0/5</span>
+          </div>
+        </div>
+      </header>
+
+      <div class="main-body">
+        <!-- Pane A: data bars -->
+        <section class="pane">
+          <div class="pane-title">
+            <span data-i18n-cn="上 · 数据 x&#8321;..x&#8325; (固定)" data-i18n-en="Top · Data x1..x5 (fixed)">上 · 数据 x&#8321;..x&#8325; (固定)</span>
+            <span class="note" data-i18n-cn="柱顶圆点 = 当前加权均值参考" data-i18n-en="dotted line = current weighted average">柱顶圆点 = 当前加权均值参考</span>
+          </div>
+          <div class="pane-body">
+            <canvas id="dataCanvas" class="chart"></canvas>
+          </div>
+        </section>
+
+        <!-- Pane B: weight bars + result -->
+        <section class="pane">
+          <div class="pane-title">
+            <span data-i18n-cn="下 · 权重 w&#8321;..w&#8325; (你在拖)" data-i18n-en="Bottom · Weights w1..w5 (you drag)">下 · 权重 w&#8321;..w&#8325; (你在拖)</span>
+            <span class="note" data-i18n-cn="权重越高的数据点 = 拉得越用力" data-i18n-en="bigger weight = stronger pull">权重越高的数据点 = 拉得越用力</span>
+          </div>
+          <div class="pane-body">
+            <canvas id="weightCanvas" class="chart"></canvas>
+          </div>
+        </section>
+
+        <!-- Formula strip -->
+        <div class="formula-strip">
+          <span class="var" data-i18n-cn="加权平均" data-i18n-en="weighted avg">加权平均</span>
+          <span class="op">=</span>
+          <span>(<span class="num" id="fNum">60.0</span>)</span>
+          <span class="op">/</span>
+          <span>(<span class="num" id="fDen">10.0</span>)</span>
+          <span class="op">=</span>
+          <span class="res" id="fRes">30.00</span>
+          <span class="op">|</span>
+          <span data-i18n-cn="分子" data-i18n-en="numerator">分子</span>
+          <span class="op">=</span>
+          <span><span class="num" id="fExpand">2.0&times;10 + 2.0&times;20 + 2.0&times;30 + 2.0&times;40 + 2.0&times;50</span></span>
+        </div>
+
+        <div id="milestone" class="milestone" data-i18n-cn="解锁 · 权重直觉" data-i18n-en="Unlocked · Weight Intuition">解锁 · 权重直觉</div>
+        <div id="hitPulse" class="hit-pulse"></div>
+      </div>
+    </main>
+  </div>
+
+<script>
+(function(){
+  'use strict';
+
+  // ----- fixed data -----
+  var DATA = [10, 20, 30, 40, 50];
+  var TARGET = 40.0;
+  var TOL = 0.15;   // |avg - target| <= TOL counts as a hit
+  var NEED_CONFIGS = 5;
+
+  // ----- state (no window-shadow names) -----
+  var stateGame = {
+    w: [2.0, 2.0, 2.0, 2.0, 2.0],
+    lang: 'cn',
+    solutions: [],          // list of [w0..w4] solutions already found (rounded sigs)
+    lastHitSig: null,       // dedupe rapid input events on same config
+    milestoneFired: false,
+    lastAvg: 30.0
+  };
+
+  // ----- DOM refs -----
+  var sliders = [];
+  var weightLabels = [];
+  for (var i = 0; i < 5; i++){
+    sliders.push(document.getElementById('w' + i));
+    weightLabels.push(document.getElementById('w' + i + 'v'));
+  }
+  var hudAvg = document.getElementById('hudAvg');
+  var hudDiff = document.getElementById('hudDiff');
+  var hudSumW = document.getElementById('hudSumW');
+  var headerAvg = document.getElementById('headerAvg');
+  var headerHits = document.getElementById('headerHits');
+  var taskCount = document.getElementById('taskCount');
+  var taskRows = [];
+  for (var j = 0; j < 5; j++) taskRows.push(document.getElementById('task' + j));
+  var fNum = document.getElementById('fNum');
+  var fDen = document.getElementById('fDen');
+  var fRes = document.getElementById('fRes');
+  var fExpand = document.getElementById('fExpand');
+
+  var dataCanvas = document.getElementById('dataCanvas');
+  var weightCanvas = document.getElementById('weightCanvas');
+  var dctx = dataCanvas.getContext('2d');
+  var wctx = weightCanvas.getContext('2d');
+
+  var milestone = document.getElementById('milestone');
+  var hitPulse = document.getElementById('hitPulse');
+  var langBtn = document.getElementById('langBtn');
+  var resetBtn = document.getElementById('resetBtn');
+
+  // ----- math -----
+  function computeAvg(){
+    var num = 0, den = 0;
+    for (var i = 0; i < 5; i++){
+      num += stateGame.w[i] * DATA[i];
+      den += stateGame.w[i];
+    }
+    var avg = den > 0 ? num / den : 0;
+    return {num: num, den: den, avg: avg};
+  }
+
+  function configSignature(){
+    // round each weight to 0.5 step to dedupe
+    var parts = [];
+    for (var i = 0; i < 5; i++){
+      parts.push((Math.round(stateGame.w[i] * 2) / 2).toFixed(1));
+    }
+    return parts.join('|');
+  }
+
+  // ----- canvas sizing (DPR aware) -----
+  function resizeCanvas(cvs, ctx){
+    var rect = cvs.getBoundingClientRect();
+    var dpr = window.devicePixelRatio || 1;
+    cvs.width  = Math.max(200, Math.floor(rect.width  * dpr));
+    cvs.height = Math.max(100, Math.floor(rect.height * dpr));
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+
+  // ----- css var read -----
+  function cssVar(name){
+    return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  }
+
+  // ----- draw data bars (top pane) -----
+  function drawDataBars(avg){
+    var rect = dataCanvas.getBoundingClientRect();
+    var W = rect.width, H = rect.height;
+    dctx.clearRect(0, 0, W, H);
+
+    var padL = 56, padR = 30, padT = 18, padB = 36;
+    var plotW = W - padL - padR;
+    var plotH = H - padT - padB;
+    if (plotW < 80 || plotH < 50) return;
+
+    var maxV = 60;  // data goes up to 50, leave headroom
+
+    // grid
+    dctx.strokeStyle = 'oklch(0.30 0.04 265 / 0.55)';
+    dctx.lineWidth = 1;
+    dctx.font = "10px 'JetBrains Mono',monospace";
+    dctx.fillStyle = 'oklch(0.55 0.03 265)';
+    var yTicks = [0, 10, 20, 30, 40, 50, 60];
+    for (var ti = 0; ti < yTicks.length; ti++){
+      var yt = yTicks[ti];
+      var py = padT + plotH - (yt / maxV) * plotH;
+      dctx.beginPath(); dctx.moveTo(padL, py); dctx.lineTo(padL + plotW, py); dctx.stroke();
+      dctx.fillText(String(yt), padL - 26, py + 3);
+    }
+
+    // axis labels
+    dctx.fillStyle = 'oklch(0.75 0.02 265)';
+    dctx.font = "10px 'JetBrains Mono',monospace";
+    dctx.fillText('value', 6, padT + plotH / 2);
+
+    // bars
+    var n = DATA.length;
+    var gap = 14;
+    var barW = (plotW - gap * (n - 1)) / n;
+    barW = Math.min(barW, 80);
+    var totalUsed = barW * n + gap * (n - 1);
+    var startX = padL + (plotW - totalUsed) / 2;
+
+    var colAxis     = cssVar('--AXIS');
+    var colProof    = cssVar('--PROOF');
+    var colSolution = cssVar('--SOLUTION');
+    var colGold     = cssVar('--QED');
+
+    for (var i = 0; i < n; i++){
+      var v = DATA[i];
+      var bx = startX + i * (barW + gap);
+      var bh = (v / maxV) * plotH;
+      var by = padT + plotH - bh;
+
+      // bar body — gradient AXIS -> PROOF
+      var grad = dctx.createLinearGradient(0, by, 0, by + bh);
+      grad.addColorStop(0, colAxis);
+      grad.addColorStop(1, colProof);
+      dctx.fillStyle = grad;
+      dctx.fillRect(bx, by, barW, bh);
+
+      // bar outline
+      dctx.strokeStyle = colSolution;
+      dctx.lineWidth = 1;
+      dctx.strokeRect(bx + 0.5, by + 0.5, barW - 1, bh - 1);
+
+      // value label on top
+      dctx.fillStyle = colSolution;
+      dctx.font = "11px 'JetBrains Mono',monospace";
+      dctx.textAlign = 'center';
+      dctx.fillText(String(v), bx + barW / 2, by - 6);
+
+      // x-axis label
+      dctx.fillStyle = 'oklch(0.75 0.02 265)';
+      dctx.font = "10px 'JetBrains Mono',monospace";
+      dctx.fillText('x' + (i + 1), bx + barW / 2, padT + plotH + 14);
+
+      dctx.textAlign = 'start';
+    }
+
+    // weighted average horizontal line
+    var ay = padT + plotH - (avg / maxV) * plotH;
+    dctx.strokeStyle = colGold;
+    dctx.lineWidth = 1.5;
+    dctx.setLineDash([6, 4]);
+    dctx.beginPath();
+    dctx.moveTo(padL, ay);
+    dctx.lineTo(padL + plotW, ay);
+    dctx.stroke();
+    dctx.setLineDash([]);
+
+    // avg label
+    dctx.fillStyle = colGold;
+    dctx.font = "11px 'JetBrains Mono',monospace";
+    dctx.textAlign = 'right';
+    dctx.fillText('avg = ' + avg.toFixed(2), padL + plotW - 4, ay - 4);
+    dctx.textAlign = 'start';
+
+    // target line (TARGET = 40)
+    var ty = padT + plotH - (TARGET / maxV) * plotH;
+    dctx.strokeStyle = 'oklch(0.92 0.08 240 / 0.7)';
+    dctx.lineWidth = 1;
+    dctx.setLineDash([2, 3]);
+    dctx.beginPath();
+    dctx.moveTo(padL, ty);
+    dctx.lineTo(padL + plotW, ty);
+    dctx.stroke();
+    dctx.setLineDash([]);
+
+    dctx.fillStyle = colSolution;
+    dctx.font = "10px 'JetBrains Mono',monospace";
+    dctx.fillText('target 40', padL + 4, ty - 4);
+  }
+
+  // ----- draw weight bars (bottom pane) -----
+  function drawWeightBars(){
+    var rect = weightCanvas.getBoundingClientRect();
+    var W = rect.width, H = rect.height;
+    wctx.clearRect(0, 0, W, H);
+
+    var padL = 56, padR = 30, padT = 18, padB = 36;
+    var plotW = W - padL - padR;
+    var plotH = H - padT - padB;
+    if (plotW < 80 || plotH < 50) return;
+
+    var maxW = 10;
+
+    // grid
+    wctx.strokeStyle = 'oklch(0.30 0.04 265 / 0.55)';
+    wctx.lineWidth = 1;
+    wctx.font = "10px 'JetBrains Mono',monospace";
+    wctx.fillStyle = 'oklch(0.55 0.03 265)';
+    var yTicks = [0, 2, 4, 6, 8, 10];
+    for (var ti = 0; ti < yTicks.length; ti++){
+      var yt = yTicks[ti];
+      var py = padT + plotH - (yt / maxW) * plotH;
+      wctx.beginPath(); wctx.moveTo(padL, py); wctx.lineTo(padL + plotW, py); wctx.stroke();
+      wctx.fillText(String(yt), padL - 26, py + 3);
+    }
+    wctx.fillStyle = 'oklch(0.75 0.02 265)';
+    wctx.fillText('weight', 6, padT + plotH / 2);
+
+    var n = stateGame.w.length;
+    var gap = 14;
+    var barW = (plotW - gap * (n - 1)) / n;
+    barW = Math.min(barW, 80);
+    var totalUsed = barW * n + gap * (n - 1);
+    var startX = padL + (plotW - totalUsed) / 2;
+
+    var colAxis     = cssVar('--AXIS');
+    var colShadow   = cssVar('--SHADOW');
+    var colSolution = cssVar('--SOLUTION');
+    var colGold     = cssVar('--QED');
+
+    for (var i = 0; i < n; i++){
+      var v = stateGame.w[i];
+      var bx = startX + i * (barW + gap);
+      var bh = (v / maxW) * plotH;
+      var by = padT + plotH - bh;
+
+      // empty rail
+      wctx.strokeStyle = 'oklch(0.35 0.05 265 / 0.6)';
+      wctx.lineWidth = 1;
+      wctx.strokeRect(bx + 0.5, padT + 0.5, barW - 1, plotH - 1);
+
+      // filled bar — gradient PROOF -> AXIS (darker bottom, lighter top)
+      var grad = wctx.createLinearGradient(0, by, 0, by + bh);
+      grad.addColorStop(0, colSolution);
+      grad.addColorStop(1, colAxis);
+      wctx.fillStyle = grad;
+      wctx.fillRect(bx, by, barW, bh);
+
+      // bar outline
+      wctx.strokeStyle = colSolution;
+      wctx.lineWidth = 1;
+      wctx.strokeRect(bx + 0.5, by + 0.5, barW - 1, bh - 1);
+
+      // value label
+      wctx.fillStyle = colSolution;
+      wctx.font = "11px 'JetBrains Mono',monospace";
+      wctx.textAlign = 'center';
+      wctx.fillText(v.toFixed(1), bx + barW / 2, by - 6);
+
+      // x-axis label  "w_i (x=v)"
+      wctx.fillStyle = 'oklch(0.75 0.02 265)';
+      wctx.font = "10px 'JetBrains Mono',monospace";
+      wctx.fillText('w' + (i + 1), bx + barW / 2, padT + plotH + 14);
+      wctx.fillStyle = 'oklch(0.55 0.03 265)';
+      wctx.font = "9px 'JetBrains Mono',monospace";
+      wctx.fillText('x=' + DATA[i], bx + barW / 2, padT + plotH + 26);
+
+      wctx.textAlign = 'start';
+    }
+  }
+
+  // ----- update everything -----
+  function update(){
+    var info = computeAvg();
+    var avg = info.avg;
+    stateGame.lastAvg = avg;
+    var diff = Math.abs(avg - TARGET);
+
+    // weight labels in sidebar
+    for (var i = 0; i < 5; i++){
+      weightLabels[i].textContent = stateGame.w[i].toFixed(1);
+    }
+    hudAvg.textContent = avg.toFixed(2);
+    headerAvg.textContent = avg.toFixed(2);
+    hudSumW.textContent = info.den.toFixed(1);
+
+    var lang = stateGame.lang;
+    hudDiff.textContent = lang === 'cn'
+      ? ('距目标 ' + diff.toFixed(2))
+      : ('from target ' + diff.toFixed(2));
+    if (diff <= TOL) hudDiff.classList.add('near');
+    else hudDiff.classList.remove('near');
+
+    if (diff <= TOL) hudAvg.classList.add('gold');
+    else hudAvg.classList.remove('gold');
+
+    // formula strip
+    fNum.textContent = info.num.toFixed(1);
+    fDen.textContent = info.den.toFixed(1);
+    fRes.textContent = avg.toFixed(2);
+    var parts = [];
+    for (var k = 0; k < 5; k++){
+      parts.push(stateGame.w[k].toFixed(1) + '×' + DATA[k]);
+    }
+    fExpand.textContent = parts.join(' + ');
+
+    // hit detection (real-time, but dedupe by signature)
+    if (diff <= TOL){
+      var sig = configSignature();
+      // require SUM(w) > 0 to be a meaningful config
+      if (info.den > 0 && sig !== stateGame.lastHitSig){
+        if (stateGame.solutions.indexOf(sig) < 0 && stateGame.solutions.length < NEED_CONFIGS){
+          stateGame.solutions.push(sig);
+          var n = stateGame.solutions.length;
+          taskCount.textContent = n;
+          headerHits.textContent = n + '/5';
+          taskRows[n - 1].classList.add('done');
+          // pulse
+          hitPulse.classList.remove('fire');
+          // force reflow to restart animation
+          void hitPulse.offsetWidth;
+          hitPulse.classList.add('fire');
+
+          if (n === NEED_CONFIGS && !stateGame.milestoneFired){
+            stateGame.milestoneFired = true;
+            milestone.classList.add('show');
+            setTimeout(function(){ milestone.classList.remove('show'); }, 3600);
+          }
+        }
+        stateGame.lastHitSig = sig;
+      }
+    } else {
+      // moved off target — allow next distinct hit
+      stateGame.lastHitSig = null;
+    }
+
+    drawDataBars(avg);
+    drawWeightBars();
+  }
+
+  // ----- i18n -----
+  function refreshI18N(){
+    var nodes = document.querySelectorAll('[data-i18n-cn]');
+    for (var i = 0; i < nodes.length; i++){
+      var el = nodes[i];
+      var cn = el.getAttribute('data-i18n-cn');
+      var en = el.getAttribute('data-i18n-en');
+      if (cn !== null){
+        // some elements may have inner html (the &#... is already decoded)
+        el.innerHTML = stateGame.lang === 'cn' ? cn : en;
+      }
+    }
+    document.documentElement.lang = stateGame.lang === 'cn' ? 'zh-CN' : 'en';
+    update();
+  }
+
+  // ----- listeners -----
+  for (var s = 0; s < sliders.length; s++){
+    (function(idx){
+      var el = sliders[idx];
+      var handler = function(){
+        stateGame.w[idx] = parseFloat(el.value);
+        update();
+      };
+      el.addEventListener('input', handler);
+      el.addEventListener('change', handler);
+    })(s);
+  }
+
+  langBtn.addEventListener('click', function(){
+    stateGame.lang = stateGame.lang === 'cn' ? 'en' : 'cn';
+    refreshI18N();
+  });
+
+  resetBtn.addEventListener('click', function(){
+    for (var i = 0; i < 5; i++){
+      stateGame.w[i] = 2.0;
+      sliders[i].value = 2;
+    }
+    // reset solutions? no — keep progress; just reset weights to neutral
+    update();
+  });
+
+  function onResize(){
+    resizeCanvas(dataCanvas, dctx);
+    resizeCanvas(weightCanvas, wctx);
+    update();
+  }
+  window.addEventListener('resize', onResize);
+
+  // mascot slow rotation
+  var piMascot = document.getElementById('piMascot');
+  var rot = 0;
+  function tick(){
+    rot += 0.35;
+    if (piMascot) piMascot.setAttribute('transform', 'translate(100 36) rotate(' + rot + ')');
+    requestAnimationFrame(tick);
+  }
+  requestAnimationFrame(tick);
+
+  // init
+  resizeCanvas(dataCanvas, dctx);
+  resizeCanvas(weightCanvas, wctx);
+  refreshI18N();
+  // re-fit after browser layout settles
+  setTimeout(onResize, 50);
+  setTimeout(onResize, 250);
+})();
+</script>
+</body>
+</html>

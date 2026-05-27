@@ -1,0 +1,924 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<title>M24 · 12h NowCast 实战计算器 — Geometry Void</title>
+<style>
+  :root{
+    /* Layer 1 — shared deep space canvas */
+    --bg-0: oklch(0.14 0.035 265);
+    --bg-1: oklch(0.18 0.04 265);
+    --bg-2: oklch(0.22 0.045 265);
+    --bg-3: oklch(0.28 0.05 265);
+    --line: oklch(0.35 0.05 265 / 0.35);
+    --line-strong: oklch(0.55 0.08 265 / 0.55);
+    --fg:      oklch(0.96 0.01 265);
+    --fg-dim:  oklch(0.75 0.02 265);
+    --fg-mute: oklch(0.55 0.03 265);
+    --gold:    oklch(0.85 0.14 85);
+
+    /* Layer 2 — math signature accent (electric blue 245) */
+    --math: oklch(0.72 0.17 245);
+
+    /* Layer 3 — math 5-color palette (themes.js MTH-06 Geometry Void) */
+    --AXIS:     oklch(0.72 0.17 245);
+    --PROOF:    oklch(0.52 0.16 245);
+    --SHADOW:   oklch(0.35 0.10 245);
+    --SOLUTION: oklch(0.92 0.08 240);
+    --QED:      oklch(0.85 0.14 85);
+
+    /* AQI band colors (EPA standard hues) */
+    --aqi-good:   oklch(0.78 0.16 145);   /* green */
+    --aqi-mod:    oklch(0.88 0.16 95);    /* yellow */
+    --aqi-usg:    oklch(0.78 0.16 55);    /* orange */
+    --aqi-unh:    oklch(0.70 0.20 25);    /* red */
+    --aqi-vunh:   oklch(0.55 0.18 320);   /* purple */
+    --aqi-haz:    oklch(0.40 0.14 25);    /* maroon */
+  }
+
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{
+    height:100%;width:100%;
+    font-family:'Inter','PingFang SC',sans-serif;
+    color:var(--fg);background:var(--bg-0);overflow:hidden;
+  }
+
+  .stage{
+    display:flex;flex-direction:row;height:100vh;width:100vw;
+  }
+
+  /* ---------- 200px sidebar ---------- */
+  .game-sidebar{
+    width:200px;flex:0 0 200px;
+    background:var(--bg-1);
+    border-right:1px solid var(--line);
+    display:flex;flex-direction:column;
+    padding:14px 12px;gap:10px;
+    overflow-y:auto;
+  }
+  .brand{
+    display:flex;flex-direction:column;gap:2px;
+    border-bottom:1px solid var(--line);padding-bottom:8px;
+  }
+  .brand .code{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--fg-mute);letter-spacing:1.2px}
+  .brand .title{font-size:13px;color:var(--fg);font-weight:600}
+  .brand .sub{font-size:10px;color:var(--fg-dim);margin-top:2px;font-family:'JetBrains Mono',monospace;letter-spacing:.3px}
+
+  .mascot{
+    width:100%;height:78px;display:flex;align-items:center;justify-content:center;
+    background:var(--bg-2);border:1px solid var(--line);
+  }
+  .mascot svg{width:100%;height:100%}
+
+  .preset-block{
+    background:var(--bg-2);border:1px solid var(--line);padding:8px;
+    display:flex;flex-direction:column;gap:6px;
+  }
+  .preset-title{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--AXIS);letter-spacing:1px}
+  .preset-grid{display:grid;grid-template-columns:1fr 1fr;gap:4px}
+  .preset-btn{
+    padding:6px 4px;background:var(--bg-3);border:1px solid var(--line-strong);
+    color:var(--fg-dim);font-family:'JetBrains Mono',monospace;font-size:9px;
+    letter-spacing:.8px;cursor:pointer;box-shadow:2px 2px 0 var(--bg-0);
+    text-align:center;
+  }
+  .preset-btn:hover{background:var(--PROOF);color:var(--SOLUTION)}
+  .preset-btn .lbl{display:block;font-size:9px;color:var(--AXIS);font-weight:700}
+  .preset-btn .hint{display:block;font-size:7px;color:var(--fg-mute);margin-top:1px;letter-spacing:.3px}
+
+  .mission-block{
+    background:var(--bg-2);border:1px solid var(--line);padding:8px;
+    display:flex;flex-direction:column;gap:5px;
+  }
+  .mission-title{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--AXIS);letter-spacing:1px}
+  .mission-sub{font-family:'JetBrains Mono',monospace;font-size:8px;color:var(--fg-mute);letter-spacing:.3px;line-height:1.4}
+  .mission-row{
+    display:grid;grid-template-columns:14px 1fr 26px;gap:5px;align-items:center;
+    padding:5px;background:var(--bg-3);border:1px solid var(--line);
+    font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--fg-dim);
+    transition:all .15s;
+  }
+  .mission-row .num{font-size:11px;color:var(--AXIS);font-weight:700;text-align:center}
+  .mission-row .lbl{font-size:9px;color:var(--fg-dim);line-height:1.2}
+  .mission-row .lbl .cn{font-family:'Inter','PingFang SC',sans-serif;color:var(--fg)}
+  .mission-row .status{font-size:9px;color:var(--fg-mute);text-align:right}
+  .mission-row.hit{background:var(--bg-3);border-color:var(--QED)}
+  .mission-row.hit .status{color:var(--QED);font-weight:700}
+  .mission-row.hit .num{color:var(--QED)}
+
+  .guide{
+    background:var(--bg-2);border:1px solid var(--line);
+    padding:8px;display:flex;flex-direction:column;gap:4px;
+  }
+  .guide-title{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--AXIS);letter-spacing:1px}
+  .guide-line{font-size:10px;color:var(--fg-dim);line-height:1.4}
+
+  .sidebar-spacer{flex:1;min-height:6px}
+
+  .lang-btn{
+    width:100%;padding:7px 8px;background:var(--bg-3);
+    color:var(--fg);border:1px solid var(--line-strong);
+    font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:1px;
+    cursor:pointer;box-shadow:3px 3px 0 var(--bg-0);
+  }
+  .lang-btn:hover{background:var(--PROOF);color:var(--SOLUTION)}
+
+  /* ---------- main ---------- */
+  .game-main{
+    flex:1;display:flex;flex-direction:column;
+    background:var(--bg-0);min-width:0;
+  }
+  .main-header{
+    height:46px;flex:0 0 46px;border-bottom:1px solid var(--line);
+    display:flex;align-items:center;justify-content:space-between;
+    padding:0 18px;background:var(--bg-1);
+  }
+  .header-left{
+    font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--fg-dim);letter-spacing:1.5px;
+  }
+  .header-right{
+    display:flex;gap:14px;font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--fg-mute);
+  }
+  .hud-cell{display:flex;flex-direction:column;align-items:flex-end}
+  .hud-cell .label{font-size:9px;color:var(--fg-mute);letter-spacing:1px}
+  .hud-cell .val{color:var(--AXIS);font-size:13px;font-weight:600}
+  .hud-cell .val.gold{color:var(--QED)}
+
+  /* formula bar */
+  .formula-bar{
+    flex:0 0 auto;
+    padding:12px 22px 10px;
+    background:var(--bg-1);border-bottom:1px solid var(--line);
+    display:flex;flex-direction:column;gap:5px;
+  }
+  .formula-row{
+    font-family:'JetBrains Mono',monospace;font-size:13px;
+    color:var(--fg);letter-spacing:.3px;line-height:1.5;
+  }
+  .formula-row .var{color:var(--AXIS)}
+  .formula-row .num{color:var(--SOLUTION)}
+  .formula-row .accent{color:var(--QED);font-weight:700}
+  .formula-row .op{color:var(--fg-mute);margin:0 4px}
+  .formula-row.sub{font-size:11px;color:var(--fg-dim)}
+
+  /* body — 3 columns: data sliders | weight table | AQI panel */
+  .body-wrap{
+    flex:1;display:flex;flex-direction:row;min-height:0;min-width:0;
+  }
+
+  /* col 1: 12h data sliders */
+  .col-data{
+    flex:1.1;display:flex;flex-direction:column;min-width:0;min-height:0;
+    border-right:1px solid var(--line);
+  }
+  .col-title{
+    padding:9px 14px;font-family:'JetBrains Mono',monospace;font-size:10px;
+    color:var(--AXIS);letter-spacing:1.5px;
+    border-bottom:1px solid var(--line);background:var(--bg-1);
+    display:flex;justify-content:space-between;align-items:center;
+  }
+  .col-title .ct{font-size:9px;color:var(--fg-mute);letter-spacing:.5px}
+  .col-data-body{
+    flex:1;padding:10px 14px;overflow-y:auto;
+    display:flex;flex-direction:column;gap:5px;min-height:0;
+  }
+  .slider-row{
+    display:grid;grid-template-columns:32px 1fr 40px;gap:8px;align-items:center;
+    padding:3px 0;
+  }
+  .slider-row .hr{
+    font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--fg-mute);
+    text-align:right;
+  }
+  .slider-row.newest .hr{color:var(--QED);font-weight:700}
+  .slider-row .val{
+    font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--AXIS);
+    text-align:right;font-weight:600;
+  }
+  .slider-row.newest .val{color:var(--QED)}
+  input[type=range].pm-slider{
+    -webkit-appearance:none;appearance:none;width:100%;height:6px;
+    background:var(--bg-3);border:1px solid var(--line);outline:none;cursor:pointer;
+  }
+  input[type=range].pm-slider::-webkit-slider-thumb{
+    -webkit-appearance:none;appearance:none;
+    width:14px;height:18px;background:var(--SOLUTION);
+    border:1.5px solid var(--bg-0);box-shadow:2px 2px 0 var(--bg-0);
+    cursor:grab;
+  }
+  input[type=range].pm-slider::-moz-range-thumb{
+    width:14px;height:18px;background:var(--SOLUTION);
+    border:1.5px solid var(--bg-0);box-shadow:2px 2px 0 var(--bg-0);
+    cursor:grab;
+  }
+  input[type=range].pm-slider.newest::-webkit-slider-thumb{
+    background:var(--QED);
+  }
+  input[type=range].pm-slider.newest::-moz-range-thumb{
+    background:var(--QED);
+  }
+
+  /* col 2: weight table */
+  .col-table{
+    flex:1.2;display:flex;flex-direction:column;min-width:0;min-height:0;
+    border-right:1px solid var(--line);
+  }
+  .col-table-body{
+    flex:1;padding:10px 14px;overflow-y:auto;min-height:0;
+    display:flex;flex-direction:column;
+  }
+  table.weights{
+    width:100%;border-collapse:collapse;
+    font-family:'JetBrains Mono',monospace;font-size:10px;
+  }
+  table.weights th{
+    text-align:right;padding:5px 6px;color:var(--fg-mute);font-weight:500;
+    border-bottom:1px solid var(--line);font-size:9px;letter-spacing:.5px;
+  }
+  table.weights th.lab{text-align:left}
+  table.weights td{
+    text-align:right;padding:4px 6px;color:var(--fg-dim);
+    border-bottom:1px solid var(--bg-3);
+  }
+  table.weights td.idx{text-align:left;color:var(--AXIS);font-weight:600}
+  table.weights td.ci{color:var(--SOLUTION)}
+  table.weights td.wi{color:var(--AXIS)}
+  table.weights td.wc{color:var(--fg)}
+  table.weights tr.newest td{background:oklch(0.85 0.14 85 / 0.10)}
+  table.weights tr.newest td.idx{color:var(--QED)}
+  table.weights tr.sum td{
+    border-top:1.5px solid var(--AXIS);border-bottom:none;
+    padding-top:8px;color:var(--fg);font-weight:700;background:var(--bg-2);
+  }
+  table.weights tr.sum td.ci{color:var(--SOLUTION)}
+  table.weights tr.sum td.wi{color:var(--AXIS)}
+  table.weights tr.sum td.wc{color:var(--QED);font-size:12px}
+  table.weights tr.div td{
+    border-top:1px dashed var(--line-strong);border-bottom:none;
+    padding-top:6px;color:var(--QED);font-weight:700;
+    font-size:11px;background:var(--bg-3);
+  }
+  table.weights tr.div td.idx{color:var(--QED)}
+
+  /* col 3: AQI big card */
+  .col-aqi{
+    flex:1.0;display:flex;flex-direction:column;min-width:0;min-height:0;
+  }
+  .col-aqi-body{
+    flex:1;padding:14px 16px;display:flex;flex-direction:column;gap:10px;
+    overflow-y:auto;min-height:0;
+  }
+  .aqi-big{
+    background:var(--bg-2);border:1px solid var(--line);padding:14px;
+    display:flex;flex-direction:column;align-items:center;gap:6px;
+    box-shadow:3px 3px 0 var(--bg-0);
+  }
+  .aqi-pm{
+    font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--fg-mute);
+    letter-spacing:1px;
+  }
+  .aqi-pm .v{color:var(--SOLUTION);font-weight:700;font-size:13px}
+  .aqi-num{
+    font-family:'JetBrains Mono',monospace;font-size:54px;font-weight:700;
+    color:var(--AXIS);line-height:1;letter-spacing:-2px;
+  }
+  .aqi-band{
+    font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:700;
+    letter-spacing:1.5px;padding:6px 12px;
+    border:1.5px solid var(--AXIS);color:var(--AXIS);
+    box-shadow:2px 2px 0 var(--bg-0);
+  }
+  .aqi-band-cn{
+    font-size:11px;color:var(--fg-dim);letter-spacing:.5px;
+  }
+
+  /* AQI legend strip */
+  .aqi-strip{
+    background:var(--bg-2);border:1px solid var(--line);padding:10px;
+    display:flex;flex-direction:column;gap:6px;
+  }
+  .aqi-strip-title{
+    font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--AXIS);
+    letter-spacing:1px;
+  }
+  .aqi-strip-bar{
+    display:flex;height:18px;border:1px solid var(--line-strong);
+  }
+  .aqi-strip-bar .seg{
+    flex:1;display:flex;align-items:center;justify-content:center;
+    font-family:'JetBrains Mono',monospace;font-size:8px;color:var(--bg-0);
+    font-weight:700;letter-spacing:.5px;position:relative;
+  }
+  .aqi-strip-marker{
+    height:24px;position:relative;
+  }
+  .aqi-strip-marker .arrow{
+    position:absolute;top:0;width:0;height:0;
+    border-left:7px solid transparent;border-right:7px solid transparent;
+    border-top:9px solid var(--QED);
+    transform:translateX(-50%);
+    transition:left .25s;
+  }
+  .aqi-strip-marker .label{
+    position:absolute;top:11px;font-family:'JetBrains Mono',monospace;
+    font-size:9px;color:var(--QED);font-weight:700;
+    transform:translateX(-50%);transition:left .25s;
+  }
+  .aqi-strip-ticks{
+    display:flex;justify-content:space-between;
+    font-family:'JetBrains Mono',monospace;font-size:8px;color:var(--fg-mute);
+  }
+
+  /* gap card vs simple mean */
+  .compare-card{
+    background:var(--bg-2);border:1px solid var(--line);padding:10px 12px;
+    display:flex;flex-direction:column;gap:5px;
+  }
+  .compare-card .ct{
+    font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--AXIS);letter-spacing:1px;
+  }
+  .compare-card .row{
+    display:flex;justify-content:space-between;align-items:baseline;
+    font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--fg-dim);
+  }
+  .compare-card .row .v{font-size:13px;font-weight:700}
+  .compare-card .row.now .v{color:var(--AXIS)}
+  .compare-card .row.mean .v{color:var(--SOLUTION)}
+  .compare-card .row.delta .v{color:var(--QED)}
+  .compare-card .hint{
+    font-size:10px;color:var(--fg-dim);line-height:1.4;
+    border-top:1px dashed var(--line);padding-top:6px;
+  }
+  .compare-card .hint .accent{color:var(--QED)}
+  .compare-card .hint .var{color:var(--AXIS)}
+
+  /* milestone toast */
+  .milestone{
+    position:absolute;left:50%;top:60px;transform:translateX(-50%) translateY(-20px);
+    background:var(--QED);color:var(--bg-0);
+    font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:700;
+    padding:10px 22px;letter-spacing:1.5px;
+    box-shadow:4px 4px 0 var(--bg-0);
+    opacity:0;transition:all .35s;pointer-events:none;z-index:50;
+  }
+  .milestone.show{opacity:1;transform:translateX(-50%) translateY(0)}
+</style>
+</head>
+<body>
+  <div class="stage">
+    <!-- ============ Sidebar ============ -->
+    <aside class="game-sidebar">
+      <div class="brand">
+        <span class="code">MTH-06 · M24</span>
+        <span class="title" data-i18n-cn="NowCast 计算器" data-i18n-en="NowCast Calculator">NowCast 计算器</span>
+        <span class="sub">12h · EPA NowCast</span>
+      </div>
+
+      <div class="mascot" aria-label="Pi mascot">
+        <svg viewBox="0 0 160 78" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <linearGradient id="piGrad" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0%" stop-color="var(--AXIS)"/>
+              <stop offset="100%" stop-color="var(--PROOF)"/>
+            </linearGradient>
+          </defs>
+          <g id="piMascot" transform="translate(80 40)">
+            <polygon points="0,-26 24,14 -24,14" fill="url(#piGrad)" stroke="var(--SOLUTION)" stroke-width="1"/>
+            <polygon points="0,-26 24,14 0,3" fill="var(--PROOF)" opacity=".75" stroke="var(--SOLUTION)" stroke-width="0.7"/>
+            <polygon points="0,-26 -24,14 0,3" fill="var(--SHADOW)" opacity=".8" stroke="var(--SOLUTION)" stroke-width="0.7"/>
+            <text x="0" y="5" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="11" fill="var(--SOLUTION)" font-weight="700">AQI</text>
+          </g>
+        </svg>
+      </div>
+
+      <div class="preset-block">
+        <div class="preset-title" data-i18n-cn="预设场景" data-i18n-en="PRESET SCENARIOS">预设场景</div>
+        <div class="preset-grid">
+          <button id="presetFlat" class="preset-btn" type="button">
+            <span class="lbl">FLAT</span>
+            <span class="hint" data-i18n-cn="平稳日" data-i18n-en="steady">平稳日</span>
+          </button>
+          <button id="presetSpike" class="preset-btn" type="button">
+            <span class="lbl">SPIKE</span>
+            <span class="hint" data-i18n-cn="烟雾突发" data-i18n-en="smoke spike">烟雾突发</span>
+          </button>
+          <button id="presetRain" class="preset-btn" type="button">
+            <span class="lbl">RAIN</span>
+            <span class="hint" data-i18n-cn="雨前" data-i18n-en="pre-rain">雨前</span>
+          </button>
+          <button id="presetOscil" class="preset-btn" type="button">
+            <span class="lbl">OSCIL</span>
+            <span class="hint" data-i18n-cn="上下波动" data-i18n-en="oscillation">上下波动</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="mission-block">
+        <div class="mission-title" data-i18n-cn="任务 · 3 种 AQI 100 配置" data-i18n-en="MISSIONS · 3 ways to AQI 100">任务 · 3 种 AQI 100 配置</div>
+        <div class="mission-sub" data-i18n-cn="找到 3 种不同数据组合让 AQI=100" data-i18n-en="Find 3 distinct setups giving AQI=100">找到 3 种不同数据组合让 AQI=100</div>
+        <div class="mission-row" id="mRow0" data-idx="0">
+          <div class="num">1</div>
+          <div class="lbl">
+            <span class="cn" data-i18n-cn="最新值 = 35.5" data-i18n-en="newest near 35.5">最新值 = 35.5</span>
+          </div>
+          <div class="status" id="mStat0">--</div>
+        </div>
+        <div class="mission-row" id="mRow1" data-idx="1">
+          <div class="num">2</div>
+          <div class="lbl">
+            <span class="cn" data-i18n-cn="历史均匀 ≈ 35" data-i18n-en="flat ≈ 35">历史均匀 ≈ 35</span>
+          </div>
+          <div class="status" id="mStat1">--</div>
+        </div>
+        <div class="mission-row" id="mRow2" data-idx="2">
+          <div class="num">3</div>
+          <div class="lbl">
+            <span class="cn" data-i18n-cn="新高旧低混合" data-i18n-en="new-hi + old-lo">新高旧低混合</span>
+          </div>
+          <div class="status" id="mStat2">--</div>
+        </div>
+      </div>
+
+      <div class="guide">
+        <div class="guide-title">HOW TO PLAY</div>
+        <div class="guide-line" data-i18n-cn="1 · 拖 12 个滑块编 12h 数据" data-i18n-en="1 · Drag 12 sliders to set 12h data">1 · 拖 12 个滑块编 12h 数据</div>
+        <div class="guide-line" data-i18n-cn="2 · 看右边 AQI 指针落在哪" data-i18n-en="2 · Watch right AQI pointer">2 · 看右边 AQI 指针落在哪</div>
+        <div class="guide-line" data-i18n-cn="3 · 用 3 种方式凑到 AQI=100" data-i18n-en="3 · Land AQI=100 in 3 ways">3 · 用 3 种方式凑到 AQI=100</div>
+      </div>
+
+      <div class="sidebar-spacer"></div>
+
+      <button id="langBtn" class="lang-btn" type="button">EN / 中文</button>
+    </aside>
+
+    <!-- ============ Main ============ -->
+    <main class="game-main">
+      <header class="main-header">
+        <div class="header-left" data-i18n-cn="M24 · 12h NowCast 实战计算器" data-i18n-en="M24 · 12h NowCast Live Calculator">M24 · 12h NowCast 实战计算器</div>
+        <div class="header-right">
+          <div class="hud-cell">
+            <span class="label">c_min</span>
+            <span class="val" id="hudMin">0.0</span>
+          </div>
+          <div class="hud-cell">
+            <span class="label">c_max</span>
+            <span class="val" id="hudMax">0.0</span>
+          </div>
+          <div class="hud-cell">
+            <span class="label">w</span>
+            <span class="val" id="hudW">0.00</span>
+          </div>
+          <div class="hud-cell">
+            <span class="label">NowCast</span>
+            <span class="val" id="hudNow">0.0</span>
+          </div>
+          <div class="hud-cell">
+            <span class="label">AQI</span>
+            <span class="val gold" id="hudAqi">0</span>
+          </div>
+        </div>
+      </header>
+
+      <div class="formula-bar">
+        <div class="formula-row">
+          <span class="var">w</span><span class="op">=</span>max(<span class="var">c_min</span><span class="op">/</span><span class="var">c_max</span>, <span class="num">0.5</span>)
+          <span class="op">=</span>max(<span class="num" id="fMin">0.0</span><span class="op">/</span><span class="num" id="fMax">0.0</span>, 0.5)
+          <span class="op">=</span><span class="accent" id="fW">0.50</span>
+        </div>
+        <div class="formula-row sub">
+          NowCast<span class="op">=</span>SUM(<span class="var">w</span><sup>i</sup><span class="op">*</span>c<sub>i</sub>)<span class="op">/</span>SUM(<span class="var">w</span><sup>i</sup>)
+          <span class="op">=</span><span class="num" id="fNum">0.00</span><span class="op">/</span><span class="num" id="fDen">0.00</span>
+          <span class="op">=</span><span class="accent" id="fNow">0.0</span>&nbsp;ug/m3
+          &nbsp;<span class="op">|</span>&nbsp;
+          <span data-i18n-cn="i=0 是最新一小时" data-i18n-en="i=0 = newest hour">i=0 是最新一小时</span>
+        </div>
+      </div>
+
+      <div class="body-wrap">
+        <!-- col 1 — 12h data sliders -->
+        <section class="col-data">
+          <div class="col-title">
+            <span data-i18n-cn="12h PMS 数据 · 拖滑块改值" data-i18n-en="12h PMS data · drag to edit">12h PMS 数据 · 拖滑块改值</span>
+            <span class="ct">ug/m3 · 0-200</span>
+          </div>
+          <div class="col-data-body" id="sliderList"></div>
+        </section>
+
+        <!-- col 2 — weight table -->
+        <section class="col-table">
+          <div class="col-title">
+            <span data-i18n-cn="权重表 · 12 行 w^i * c_i" data-i18n-en="Weight table · w^i * c_i">权重表 · 12 行 w^i * c_i</span>
+            <span class="ct">EPA NowCast</span>
+          </div>
+          <div class="col-table-body">
+            <table class="weights" id="weightsTable">
+              <thead>
+                <tr>
+                  <th class="lab">i</th>
+                  <th>c_i</th>
+                  <th>w^i</th>
+                  <th>w^i*c_i</th>
+                </tr>
+              </thead>
+              <tbody id="weightsBody"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <!-- col 3 — AQI big -->
+        <section class="col-aqi">
+          <div class="col-title">
+            <span data-i18n-cn="AQI 结果 · EPA 分段" data-i18n-en="AQI · EPA breakpoints">AQI 结果 · EPA 分段</span>
+            <span class="ct">PM2.5 -&gt; AQI</span>
+          </div>
+          <div class="col-aqi-body">
+            <div class="aqi-big">
+              <div class="aqi-pm">
+                <span data-i18n-cn="NowCast PM2.5" data-i18n-en="NowCast PM2.5">NowCast PM2.5</span>
+                = <span class="v" id="aqiPm">0.0</span> ug/m3
+              </div>
+              <div class="aqi-num" id="aqiNum">0</div>
+              <div class="aqi-band" id="aqiBand">--</div>
+              <div class="aqi-band-cn" id="aqiBandCn" data-i18n-cn="--" data-i18n-en="--">--</div>
+            </div>
+
+            <div class="aqi-strip">
+              <div class="aqi-strip-title" data-i18n-cn="EPA AQI 6 段位置" data-i18n-en="EPA AQI 6-band position">EPA AQI 6 段位置</div>
+              <div class="aqi-strip-bar">
+                <div class="seg" style="background:var(--aqi-good)">0-50</div>
+                <div class="seg" style="background:var(--aqi-mod)">51-100</div>
+                <div class="seg" style="background:var(--aqi-usg)">101-150</div>
+                <div class="seg" style="background:var(--aqi-unh)">151-200</div>
+                <div class="seg" style="background:var(--aqi-vunh);color:var(--fg)">201-300</div>
+                <div class="seg" style="background:var(--aqi-haz);color:var(--fg)">301+</div>
+              </div>
+              <div class="aqi-strip-marker">
+                <div class="arrow" id="aqiArrow" style="left:0%"></div>
+                <div class="label" id="aqiArrowLabel" style="left:0%">0</div>
+              </div>
+              <div class="aqi-strip-ticks">
+                <span>0</span><span>50</span><span>100</span><span>150</span><span>200</span><span>300</span><span>500</span>
+              </div>
+            </div>
+
+            <div class="compare-card">
+              <div class="ct" data-i18n-cn="对比 · NowCast vs 普通平均" data-i18n-en="Compare · NowCast vs simple mean">对比 · NowCast vs 普通平均</div>
+              <div class="row now">
+                <span data-i18n-cn="NowCast 加权" data-i18n-en="NowCast (weighted)">NowCast 加权</span>
+                <span class="v" id="cmpNow">0.0</span>
+              </div>
+              <div class="row mean">
+                <span data-i18n-cn="普通平均" data-i18n-en="Simple mean">普通平均</span>
+                <span class="v" id="cmpMean">0.0</span>
+              </div>
+              <div class="row delta">
+                <span data-i18n-cn="差 NowCast - 平均" data-i18n-en="Delta NowCast - Mean">差 NowCast - 平均</span>
+                <span class="v" id="cmpDelta">+0.0</span>
+              </div>
+              <div class="hint" id="cmpHint" data-i18n-cn="拖滑块看 w 怎么把权重压向最新一小时" data-i18n-en="Drag sliders to see how w shifts weight to newest hour">拖滑块看 w 怎么把权重压向最新一小时</div>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <div id="milestone" class="milestone" data-i18n-cn="解锁 · NowCast 直觉" data-i18n-en="Unlocked · NowCast intuition">解锁 · NowCast 直觉</div>
+    </main>
+  </div>
+
+<script>
+(function(){
+  'use strict';
+
+  // ----- state (no window-shadow names: avoid history/location/name/status/length/origin/parent/top/self/event/closed/opener/frames) -----
+  var NHOURS = 12;
+  var stateGame = {
+    // hour 0 = oldest (-11h), hour 11 = newest (0h, displayed bottom)
+    data: [12, 14, 15, 13, 16, 14, 18, 22, 28, 35, 30, 25],
+    lang: 'cn',
+    missionHit: [false, false, false],
+    milestoneFired: false
+  };
+
+  // ----- EPA NowCast formula -----
+  // w_raw = c_min / c_max
+  // w = max(w_raw, 0.5)  (EPA cap so we keep at least 50% history weight)
+  // NowCast = SUM(w^i * c_i) / SUM(w^i)  for i = 0..N-1 (i=0 = newest)
+  function computeStats(){
+    var d = stateGame.data;
+    var cMin = d[0], cMax = d[0], sum = 0;
+    for (var i = 0; i < d.length; i++){
+      if (d[i] < cMin) cMin = d[i];
+      if (d[i] > cMax) cMax = d[i];
+      sum += d[i];
+    }
+    var mean = sum / d.length;
+    var wRaw = cMax > 0 ? (cMin / cMax) : 1;
+    var w = Math.max(wRaw, 0.5);   // EPA cap at 0.5
+    // i=0 = newest hour; our data[11] is newest -> map: i_now = (NHOURS-1 - h)
+    var num = 0, den = 0;
+    var perRow = [];
+    for (var h = 0; h < NHOURS; h++){
+      var i_now = (NHOURS - 1) - h;
+      var wPow = Math.pow(w, i_now);
+      var wc = wPow * d[h];
+      num += wc;
+      den += wPow;
+      perRow.push({i: i_now, c: d[h], wPow: wPow, wc: wc, h: h});
+    }
+    var nowcast = den > 0 ? (num / den) : mean;
+    // sort perRow so display goes i=0 (newest) -> i=11 (oldest)
+    perRow.sort(function(a, b){ return a.i - b.i; });
+    return {cMin:cMin, cMax:cMax, wRaw:wRaw, w:w, mean:mean, nowcast:nowcast,
+            num:num, den:den, rows:perRow};
+  }
+
+  // ----- EPA AQI breakpoints for PM2.5 (24h, 2024 revised) -----
+  // We round NowCast to 0.1 ug/m3 then look up.
+  var AQI_BP = [
+    {pmLo: 0.0,   pmHi: 9.0,    aLo: 0,   aHi: 50,  band:'GOOD',     cn:'优',         color:'var(--aqi-good)'},
+    {pmLo: 9.1,   pmHi: 35.4,   aLo: 51,  aHi: 100, band:'MODERATE', cn:'良',         color:'var(--aqi-mod)'},
+    {pmLo: 35.5,  pmHi: 55.4,   aLo: 101, aHi: 150, band:'USG',      cn:'敏感人群不健康', color:'var(--aqi-usg)'},
+    {pmLo: 55.5,  pmHi: 125.4,  aLo: 151, aHi: 200, band:'UNHEALTHY',cn:'不健康',     color:'var(--aqi-unh)'},
+    {pmLo: 125.5, pmHi: 225.4,  aLo: 201, aHi: 300, band:'VERY UNH', cn:'很不健康',   color:'var(--aqi-vunh)'},
+    {pmLo: 225.5, pmHi: 500.0,  aLo: 301, aHi: 500, band:'HAZARDOUS',cn:'危险',       color:'var(--aqi-haz)'}
+  ];
+  function pmToAqi(pm){
+    // truncate to 0.1
+    var p = Math.round(pm * 10) / 10;
+    for (var i = 0; i < AQI_BP.length; i++){
+      var bp = AQI_BP[i];
+      if (p >= bp.pmLo && p <= bp.pmHi){
+        var aqi = ((bp.aHi - bp.aLo) / (bp.pmHi - bp.pmLo)) * (p - bp.pmLo) + bp.aLo;
+        return {aqi: Math.round(aqi), bp: bp};
+      }
+    }
+    // > 500
+    return {aqi: 500, bp: AQI_BP[AQI_BP.length - 1]};
+  }
+
+  // ----- mission check (3 distinct AQI=100 configs) -----
+  // A config "hits AQI=100" when AQI in [98,102].
+  // Classify config shape:
+  //   slot 0: newest-driven  -> data[11] (newest hour) >= 35 and oldest mean < 25
+  //   slot 1: flat           -> max - min <= 8 and abs(mean - 33) <= 5
+  //   slot 2: new-hi old-lo  -> data[11] >= 50 and (data[0]+data[1]+data[2])/3 <= 15
+  function classifyHit(stats){
+    var d = stateGame.data;
+    var newest = d[NHOURS - 1];
+    var oldMean = (d[0] + d[1] + d[2] + d[3]) / 4;
+    var range = stats.cMax - stats.cMin;
+    if (newest >= 32 && oldMean < 25 && !(newest >= 50 && oldMean <= 15)) return 0;
+    if (range <= 10) return 1;
+    if (newest >= 45 && oldMean <= 18) return 2;
+    return -1;
+  }
+
+  function checkMissions(stats, aqi){
+    var rows = [document.getElementById('mRow0'), document.getElementById('mRow1'), document.getElementById('mRow2')];
+    var stat_el = [document.getElementById('mStat0'), document.getElementById('mStat1'), document.getElementById('mStat2')];
+    var hitAqi = (aqi >= 98 && aqi <= 102);
+    if (hitAqi){
+      var slot = classifyHit(stats);
+      if (slot >= 0 && !stateGame.missionHit[slot]){
+        stateGame.missionHit[slot] = true;
+      }
+    }
+    for (var i = 0; i < 3; i++){
+      if (stateGame.missionHit[i]){
+        rows[i].classList.add('hit');
+        stat_el[i].textContent = 'OK';
+      } else {
+        rows[i].classList.remove('hit');
+        stat_el[i].textContent = '--';
+      }
+    }
+    if (stateGame.missionHit[0] && stateGame.missionHit[1] && stateGame.missionHit[2] && !stateGame.milestoneFired){
+      stateGame.milestoneFired = true;
+      var ms = document.getElementById('milestone');
+      ms.classList.add('show');
+      setTimeout(function(){ ms.classList.remove('show'); }, 3800);
+    }
+  }
+
+  // ----- build sliders (oldest top -> newest bottom) -----
+  var sliderList = document.getElementById('sliderList');
+  function buildSliders(){
+    var html = '';
+    // render hour 0..11 top to bottom; hour 11 (newest) at bottom with QED color
+    for (var i = 0; i < NHOURS; i++){
+      var hrLabel = '-' + (NHOURS - 1 - i) + 'h';
+      var isNew = (i === NHOURS - 1);
+      var rowCls = 'slider-row' + (isNew ? ' newest' : '');
+      var slCls = 'pm-slider' + (isNew ? ' newest' : '');
+      html += '<div class="'+rowCls+'" data-h="'+i+'">'
+            +   '<div class="hr">'+hrLabel+'</div>'
+            +   '<input type="range" min="0" max="200" step="1" value="'+stateGame.data[i]+'" data-h="'+i+'" class="'+slCls+'" aria-label="hour '+i+'" />'
+            +   '<div class="val" id="sv'+i+'">'+stateGame.data[i]+'</div>'
+            + '</div>';
+    }
+    sliderList.innerHTML = html;
+    var inputs = sliderList.querySelectorAll('input[type=range]');
+    for (var k = 0; k < inputs.length; k++){
+      inputs[k].addEventListener('input', onSliderInput);
+      inputs[k].addEventListener('change', onSliderInput);
+    }
+  }
+  function onSliderInput(ev){
+    var idx = parseInt(ev.target.getAttribute('data-h'), 10);
+    var v = parseFloat(ev.target.value);
+    stateGame.data[idx] = v;
+    var sv = document.getElementById('sv' + idx);
+    if (sv) sv.textContent = v.toFixed(0);
+    update();
+  }
+
+  // ----- weight table render -----
+  function renderTable(stats){
+    var tbody = document.getElementById('weightsBody');
+    var html = '';
+    for (var k = 0; k < stats.rows.length; k++){
+      var r = stats.rows[k];
+      var isNewest = (r.i === 0);
+      var trCls = isNewest ? 'newest' : '';
+      html += '<tr class="'+trCls+'">'
+            +   '<td class="idx">'+r.i+(isNewest?' *':'')+'</td>'
+            +   '<td class="ci">'+r.c.toFixed(1)+'</td>'
+            +   '<td class="wi">'+r.wPow.toFixed(3)+'</td>'
+            +   '<td class="wc">'+r.wc.toFixed(2)+'</td>'
+            + '</tr>';
+    }
+    // sum row
+    html += '<tr class="sum">'
+          +   '<td class="idx">SUM</td>'
+          +   '<td class="ci">--</td>'
+          +   '<td class="wi">'+stats.den.toFixed(3)+'</td>'
+          +   '<td class="wc">'+stats.num.toFixed(2)+'</td>'
+          + '</tr>';
+    // division row -> NowCast
+    html += '<tr class="div">'
+          +   '<td class="idx">NowCast</td>'
+          +   '<td>--</td>'
+          +   '<td>--</td>'
+          +   '<td>'+stats.nowcast.toFixed(2)+'</td>'
+          + '</tr>';
+    tbody.innerHTML = html;
+  }
+
+  // ----- AQI panel + strip -----
+  // AQI strip layout: 6 equal segments, but x-axis is 0..500 in band-stops
+  // band stops: 0, 50, 100, 150, 200, 300, 500
+  var BAND_STOPS = [0, 50, 100, 150, 200, 300, 500];
+  function aqiToPct(a){
+    // place a on 6-segment uniform strip; each segment = 100/6 ≈ 16.667%
+    if (a <= 0) return 0;
+    if (a >= 500) return 100;
+    var segW = 100 / 6;
+    for (var i = 0; i < BAND_STOPS.length - 1; i++){
+      var lo = BAND_STOPS[i], hi = BAND_STOPS[i+1];
+      if (a >= lo && a <= hi){
+        var frac = (a - lo) / (hi - lo);
+        return i * segW + frac * segW;
+      }
+    }
+    return 100;
+  }
+
+  function setAqi(stats){
+    var pm = stats.nowcast;
+    var res = pmToAqi(pm);
+    var aqi = res.aqi;
+    var bp = res.bp;
+
+    document.getElementById('aqiPm').textContent = pm.toFixed(1);
+    document.getElementById('aqiNum').textContent = aqi;
+    document.getElementById('aqiNum').style.color = bp.color;
+
+    var bandEl = document.getElementById('aqiBand');
+    bandEl.textContent = bp.band;
+    bandEl.style.color = bp.color;
+    bandEl.style.borderColor = bp.color;
+
+    var bandCnEl = document.getElementById('aqiBandCn');
+    bandCnEl.setAttribute('data-i18n-cn', bp.cn);
+    bandCnEl.setAttribute('data-i18n-en', bp.band);
+    bandCnEl.textContent = stateGame.lang === 'cn' ? bp.cn : bp.band;
+    bandCnEl.style.color = bp.color;
+
+    var pct = aqiToPct(aqi);
+    var arrow = document.getElementById('aqiArrow');
+    var lbl = document.getElementById('aqiArrowLabel');
+    arrow.style.left = pct + '%';
+    arrow.style.borderTopColor = bp.color;
+    lbl.style.left = pct + '%';
+    lbl.style.color = bp.color;
+    lbl.textContent = aqi;
+
+    document.getElementById('hudAqi').textContent = aqi;
+    document.getElementById('hudAqi').style.color = bp.color;
+
+    return aqi;
+  }
+
+  // ----- compare card -----
+  function setCompare(stats){
+    document.getElementById('cmpNow').textContent = stats.nowcast.toFixed(1);
+    document.getElementById('cmpMean').textContent = stats.mean.toFixed(1);
+    var delta = stats.nowcast - stats.mean;
+    document.getElementById('cmpDelta').textContent = (delta >= 0 ? '+' : '') + delta.toFixed(1);
+    var hint = document.getElementById('cmpHint');
+    if (stats.wRaw < 0.5){
+      hint.innerHTML = stateGame.lang === 'cn'
+        ? 'w_raw=<span class="var">'+stats.wRaw.toFixed(2)+'</span>&lt;0.5, EPA <span class="accent">封顶到 0.5</span>, NowCast 偏新但保留 50% 历史.'
+        : 'w_raw=<span class="var">'+stats.wRaw.toFixed(2)+'</span>&lt;0.5; EPA <span class="accent">caps at 0.5</span> — NowCast leans new but keeps history.';
+    } else if (stats.w > 0.9){
+      hint.innerHTML = stateGame.lang === 'cn'
+        ? 'w=<span class="var">'+stats.w.toFixed(2)+'</span> 很大, 权重几乎均匀, NowCast <span class="accent">≈ 普通平均</span>.'
+        : 'w=<span class="var">'+stats.w.toFixed(2)+'</span> high; weights nearly flat — NowCast <span class="accent">≈ simple mean</span>.';
+    } else {
+      hint.innerHTML = stateGame.lang === 'cn'
+        ? 'w=<span class="var">'+stats.w.toFixed(2)+'</span>, NowCast <span class="accent">兼顾历史和近时</span>, 反应比 mean 快.'
+        : 'w=<span class="var">'+stats.w.toFixed(2)+'</span> — NowCast <span class="accent">balances history and recency</span>, reacts faster than mean.';
+    }
+  }
+
+  // ----- top-level update -----
+  function update(){
+    var s = computeStats();
+    document.getElementById('hudMin').textContent = s.cMin.toFixed(1);
+    document.getElementById('hudMax').textContent = s.cMax.toFixed(1);
+    document.getElementById('hudW').textContent = s.w.toFixed(2);
+    document.getElementById('hudNow').textContent = s.nowcast.toFixed(1);
+    document.getElementById('fMin').textContent = s.cMin.toFixed(1);
+    document.getElementById('fMax').textContent = s.cMax.toFixed(1);
+    document.getElementById('fW').textContent = s.w.toFixed(2);
+    document.getElementById('fNum').textContent = s.num.toFixed(2);
+    document.getElementById('fDen').textContent = s.den.toFixed(2);
+    document.getElementById('fNow').textContent = s.nowcast.toFixed(1);
+    renderTable(s);
+    var aqi = setAqi(s);
+    setCompare(s);
+    checkMissions(s, aqi);
+  }
+
+  // ----- presets -----
+  function setData(arr){
+    for (var i = 0; i < NHOURS; i++){
+      stateGame.data[i] = arr[i];
+      var sl = sliderList.querySelector('input[data-h="' + i + '"]');
+      if (sl) sl.value = arr[i];
+      var sv = document.getElementById('sv' + i);
+      if (sv) sv.textContent = arr[i].toFixed(0);
+    }
+    update();
+  }
+  // FLAT: 平稳日, 全部 ~12 ug/m3, AQI ~50 GOOD
+  document.getElementById('presetFlat').addEventListener('click', function(){
+    setData([10, 11, 12, 11, 13, 12, 11, 12, 13, 12, 11, 12]);
+  });
+  // SPIKE: 烟雾突发, 后期飙升, AQI ~150 USG
+  document.getElementById('presetSpike').addEventListener('click', function(){
+    setData([8, 10, 9, 11, 10, 12, 18, 28, 45, 70, 95, 120]);
+  });
+  // RAIN: 雨前, 渐降, AQI ~80 MODERATE
+  document.getElementById('presetRain').addEventListener('click', function(){
+    setData([55, 50, 45, 40, 38, 35, 32, 28, 25, 22, 20, 18]);
+  });
+  // OSCIL: 上下波动, AQI ~70 MODERATE
+  document.getElementById('presetOscil').addEventListener('click', function(){
+    setData([15, 35, 18, 38, 16, 40, 14, 36, 17, 39, 15, 32]);
+  });
+
+  // ----- i18n -----
+  function refreshI18N(){
+    var nodes = document.querySelectorAll('[data-i18n-cn]');
+    for (var i = 0; i < nodes.length; i++){
+      var el = nodes[i];
+      var cn = el.getAttribute('data-i18n-cn');
+      var en = el.getAttribute('data-i18n-en');
+      el.textContent = stateGame.lang === 'cn' ? cn : en;
+    }
+    document.documentElement.lang = stateGame.lang === 'cn' ? 'zh-CN' : 'en';
+    update();
+  }
+  document.getElementById('langBtn').addEventListener('click', function(){
+    stateGame.lang = stateGame.lang === 'cn' ? 'en' : 'cn';
+    refreshI18N();
+  });
+
+  // ----- mascot tetrahedron rotate -----
+  var piMascot = document.getElementById('piMascot');
+  var rot = 0;
+  function tick(){
+    rot += 0.4;
+    if (piMascot) piMascot.setAttribute('transform', 'translate(80 40) rotate(' + rot + ')');
+    requestAnimationFrame(tick);
+  }
+  requestAnimationFrame(tick);
+
+  // ----- init -----
+  buildSliders();
+  refreshI18N();
+})();
+</script>
+</body>
+</html>

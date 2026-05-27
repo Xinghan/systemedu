@@ -1,0 +1,1135 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<title>M25 · Pytest Runner — Data Cathedral</title>
+<style>
+  :root{
+    /* Layer 1 — shared deep space canvas */
+    --bg-0: oklch(0.14 0.035 265);
+    --bg-1: oklch(0.18 0.04 265);
+    --bg-2: oklch(0.22 0.045 265);
+    --bg-3: oklch(0.28 0.05 265);
+    --line: oklch(0.35 0.05 265 / 0.35);
+    --line-strong: oklch(0.55 0.08 265 / 0.55);
+    --fg:      oklch(0.96 0.01 265);
+    --fg-dim:  oklch(0.75 0.02 265);
+    --fg-mute: oklch(0.55 0.03 265);
+    --gold:    oklch(0.85 0.14 85);
+
+    /* Layer 2 — cs signature accent */
+    --cs: oklch(0.75 0.17 200);
+
+    /* Layer 3 — cs 5-color palette (themes.js CS-01 Data Cathedral) */
+    --SIGNAL:   oklch(0.75 0.17 200);
+    --CORE:     oklch(0.55 0.16 200);
+    --DEPTH:    oklch(0.35 0.10 210);
+    --FLASH:    oklch(0.92 0.08 190);
+    --QUERY:    oklch(0.85 0.14 85);
+
+    /* test result colors */
+    --pass: oklch(0.78 0.16 145);
+    --fail: oklch(0.72 0.18 25);
+  }
+
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{
+    height:100%;width:100%;
+    font-family:'Inter','PingFang SC',sans-serif;
+    color:var(--fg);background:var(--bg-0);overflow:hidden;
+  }
+
+  .stage{
+    display:flex;flex-direction:row;height:100vh;width:100vw;
+  }
+
+  /* ---------- 200px sidebar ---------- */
+  .game-sidebar{
+    width:200px;flex:0 0 200px;
+    background:var(--bg-1);
+    border-right:1px solid var(--line);
+    display:flex;flex-direction:column;
+    padding:14px 12px;gap:10px;
+    overflow-y:auto;
+  }
+  .brand{
+    display:flex;flex-direction:column;gap:2px;
+    border-bottom:1px solid var(--line);padding-bottom:8px;
+  }
+  .brand .code{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--fg-mute);letter-spacing:1.2px}
+  .brand .title{font-size:13px;color:var(--fg);font-weight:600}
+  .brand .sub{font-size:10px;color:var(--fg-dim);margin-top:2px;font-family:'JetBrains Mono',monospace}
+
+  .mascot{
+    width:100%;height:88px;display:flex;align-items:center;justify-content:center;
+    background:var(--bg-2);border:1px solid var(--line);position:relative;
+  }
+  .mascot svg{width:100%;height:100%}
+
+  .guide{
+    background:var(--bg-2);border:1px solid var(--line);
+    padding:8px;display:flex;flex-direction:column;gap:4px;
+  }
+  .guide-title{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--SIGNAL);letter-spacing:1px}
+  .guide-line{font-size:10px;color:var(--fg-dim);line-height:1.4}
+  .guide-line .key{color:var(--FLASH);font-family:'JetBrains Mono',monospace;font-size:9px}
+
+  .mission-block{
+    background:var(--bg-2);border:1px solid var(--line);padding:8px;
+    display:flex;flex-direction:column;gap:6px;
+  }
+  .mission-title{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--SIGNAL);letter-spacing:1px}
+  .mission-row{
+    display:grid;grid-template-columns:14px 1fr 30px;gap:5px;align-items:center;
+    padding:5px 6px;background:var(--bg-3);border:1px solid var(--line);
+    transition:all .15s;
+  }
+  .mission-row .swatch{width:10px;height:10px;border:1px solid var(--line)}
+  .mission-row .lbl{font-size:9px;color:var(--fg-dim);line-height:1.2}
+  .mission-row .lbl .cn{font-family:'Inter','PingFang SC',sans-serif;color:var(--fg);font-size:10px}
+  .mission-row .status{
+    font-size:9px;color:var(--fg-mute);text-align:right;
+    font-family:'JetBrains Mono',monospace;font-weight:700;
+  }
+  .mission-row.hit{background:var(--bg-3);border-color:var(--pass)}
+  .mission-row.hit .status{color:var(--pass)}
+  .mission-row.active{border-color:var(--SIGNAL);box-shadow:2px 2px 0 var(--bg-0)}
+
+  .fix-box{
+    background:var(--bg-2);border:1px solid var(--line);padding:8px;
+    display:flex;flex-direction:column;gap:6px;
+  }
+  .fix-box .lbl{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--SIGNAL);letter-spacing:1px}
+  .fix-row{display:flex;gap:5px;align-items:center}
+  .fix-row label{
+    font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--fg-dim);
+    cursor:pointer;display:flex;align-items:center;gap:5px;
+  }
+  .fix-row input[type=checkbox]{
+    appearance:none;-webkit-appearance:none;
+    width:14px;height:14px;border:1.5px solid var(--line-strong);
+    background:var(--bg-3);cursor:pointer;position:relative;
+  }
+  .fix-row input[type=checkbox]:checked{
+    background:var(--SIGNAL);border-color:var(--SIGNAL);
+  }
+  .fix-row input[type=checkbox]:checked::after{
+    content:'';position:absolute;left:3px;top:0px;
+    width:5px;height:9px;border:solid var(--bg-0);border-width:0 2px 2px 0;
+    transform:rotate(45deg);
+  }
+
+  .sidebar-spacer{flex:1;min-height:6px}
+
+  .lang-btn{
+    width:100%;padding:7px 8px;background:var(--bg-3);
+    color:var(--fg);border:1px solid var(--line-strong);
+    font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:1px;
+    cursor:pointer;box-shadow:3px 3px 0 var(--bg-0);
+  }
+  .lang-btn:hover{background:var(--CORE);color:var(--FLASH)}
+
+  /* ---------- main ---------- */
+  .game-main{
+    flex:1;display:flex;flex-direction:column;
+    background:var(--bg-0);min-width:0;
+  }
+  .main-header{
+    height:46px;border-bottom:1px solid var(--line);
+    display:flex;align-items:center;justify-content:space-between;
+    padding:0 18px;background:var(--bg-1);flex:0 0 46px;
+  }
+  .header-left{
+    font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--fg-dim);letter-spacing:1.5px;
+  }
+  .header-right{
+    display:flex;gap:14px;font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--fg-mute);
+  }
+  .hud-cell{display:flex;flex-direction:column;align-items:flex-end}
+  .hud-cell .label{font-size:9px;color:var(--fg-mute);letter-spacing:1px}
+  .hud-cell .val{color:var(--SIGNAL);font-size:13px;font-weight:600}
+  .hud-cell .val.gold{color:var(--QUERY)}
+  .hud-cell .val.pass{color:var(--pass)}
+  .hud-cell .val.fail{color:var(--fail)}
+
+  /* three-column main body */
+  .three-col{
+    flex:1;display:flex;flex-direction:row;min-height:0;
+  }
+
+  .col{
+    flex:1;display:flex;flex-direction:column;min-width:0;
+    border-right:1px solid var(--line);
+  }
+  .col:last-child{border-right:none}
+  .col-head{
+    padding:9px 14px;background:var(--bg-1);
+    border-bottom:1px solid var(--line);
+    font-family:'JetBrains Mono',monospace;font-size:11px;
+    color:var(--SIGNAL);letter-spacing:1.5px;
+    display:flex;justify-content:space-between;align-items:center;
+  }
+  .col-head .meta{
+    font-size:9px;color:var(--fg-mute);letter-spacing:.5px;
+  }
+
+  /* ---------- code column ---------- */
+  .code-body{
+    flex:1;padding:12px 14px;overflow:auto;
+    font-family:'JetBrains Mono',monospace;font-size:12px;line-height:1.7;
+    background:var(--bg-0);
+  }
+  .code-line{
+    display:flex;gap:10px;padding:0 4px;color:var(--fg);
+    border-left:2px solid transparent;
+  }
+  .code-line .ln{
+    color:var(--fg-mute);font-size:10px;width:22px;text-align:right;
+    flex:0 0 22px;user-select:none;line-height:1.7;padding-top:0;
+  }
+  .code-line .src{flex:1;white-space:pre}
+  .code-line.buggy{border-left-color:var(--fail);background:oklch(0.72 0.18 25 / 0.08)}
+  .code-line.fixed{border-left-color:var(--pass);background:oklch(0.78 0.16 145 / 0.10)}
+  .tk-kw{color:var(--SIGNAL)}
+  .tk-fn{color:var(--FLASH)}
+  .tk-num{color:var(--QUERY)}
+  .tk-str{color:var(--pass)}
+  .tk-com{color:var(--fg-mute);font-style:italic}
+  .tk-op{color:var(--fg-dim)}
+  .tk-var{color:var(--fg)}
+
+  /* ---------- workbench column ---------- */
+  .wb-body{
+    flex:1;display:flex;flex-direction:column;min-height:0;
+    padding:10px 12px;gap:8px;background:var(--bg-0);
+  }
+
+  .palette{
+    background:var(--bg-1);border:1px solid var(--line);
+    padding:8px;display:flex;flex-direction:column;gap:6px;
+    flex:0 0 auto;
+  }
+  .palette-title{
+    font-family:'JetBrains Mono',monospace;font-size:9px;
+    color:var(--SIGNAL);letter-spacing:1px;
+  }
+  .palette-row{
+    display:flex;flex-wrap:wrap;gap:4px;
+  }
+  .palette-row .row-lbl{
+    font-family:'JetBrains Mono',monospace;font-size:9px;
+    color:var(--fg-mute);width:60px;flex:0 0 60px;align-self:center;
+  }
+  .block{
+    display:inline-flex;align-items:center;gap:4px;
+    padding:5px 9px;border:1.5px solid var(--line-strong);
+    background:var(--bg-3);color:var(--fg);
+    font-family:'JetBrains Mono',monospace;font-size:10px;
+    cursor:grab;user-select:none;
+    box-shadow:2px 2px 0 var(--bg-0);
+    transition:transform .1s;
+  }
+  .block:active{cursor:grabbing;transform:translate(1px,1px)}
+  .block:hover{border-color:var(--SIGNAL)}
+  .block.data-blk{background:var(--bg-3);color:var(--FLASH);border-color:var(--CORE)}
+  .block.expect-blk{background:var(--bg-3);color:var(--QUERY);border-color:var(--QUERY)}
+  .block.preview{
+    padding:3px 7px;font-size:9px;box-shadow:none;cursor:default;
+    border-color:var(--line);
+  }
+  .block.preview.data-blk{color:var(--FLASH)}
+  .block.preview.expect-blk{color:var(--QUERY)}
+
+  .test-stack{
+    flex:1;display:flex;flex-direction:column;gap:6px;
+    background:var(--bg-1);border:1px dashed var(--line-strong);
+    padding:8px;overflow:auto;min-height:0;
+  }
+  .test-stack-title{
+    font-family:'JetBrains Mono',monospace;font-size:9px;
+    color:var(--SIGNAL);letter-spacing:1px;
+  }
+  .test-stack-empty{
+    text-align:center;color:var(--fg-mute);font-size:10px;
+    font-family:'JetBrains Mono',monospace;padding:14px 0;
+  }
+
+  .assert-row{
+    display:flex;align-items:center;gap:5px;flex-wrap:wrap;
+    padding:7px 9px;background:var(--bg-2);
+    border:1px solid var(--line);
+    font-family:'JetBrains Mono',monospace;font-size:11px;
+    color:var(--fg);
+  }
+  .assert-row .kw{color:var(--SIGNAL);font-weight:700}
+  .assert-row .fn{color:var(--FLASH)}
+  .assert-row .op{color:var(--fg-dim)}
+  .assert-row .slot{
+    display:inline-flex;align-items:center;justify-content:center;
+    min-width:60px;height:22px;padding:0 8px;
+    border:1.5px dashed var(--line-strong);background:var(--bg-3);
+    color:var(--fg-mute);font-size:10px;cursor:pointer;
+  }
+  .assert-row .slot.filled{
+    border-style:solid;border-color:var(--CORE);
+    color:var(--FLASH);background:var(--bg-3);
+  }
+  .assert-row .slot.expect.filled{color:var(--QUERY);border-color:var(--QUERY)}
+  .assert-row .slot.drag-over{border-color:var(--SIGNAL);background:var(--CORE)}
+  .assert-row .del-btn{
+    margin-left:auto;border:1px solid var(--line);background:var(--bg-3);
+    color:var(--fg-mute);font-family:'JetBrains Mono',monospace;font-size:9px;
+    padding:2px 7px;cursor:pointer;
+  }
+  .assert-row .del-btn:hover{color:var(--fail);border-color:var(--fail)}
+  .assert-row.pass{border-color:var(--pass);background:oklch(0.78 0.16 145 / 0.10)}
+  .assert-row.fail{border-color:var(--fail);background:oklch(0.72 0.18 25 / 0.10)}
+  .assert-row .result-tag{
+    font-size:9px;padding:2px 6px;border:1px solid var(--line-strong);
+    color:var(--fg-mute);letter-spacing:.5px;
+  }
+  .assert-row.pass .result-tag{color:var(--pass);border-color:var(--pass)}
+  .assert-row.fail .result-tag{color:var(--fail);border-color:var(--fail)}
+
+  .add-row-btn{
+    align-self:flex-start;padding:5px 10px;
+    border:1px solid var(--line-strong);background:var(--bg-3);
+    color:var(--fg-dim);font-family:'JetBrains Mono',monospace;font-size:10px;
+    cursor:pointer;letter-spacing:.5px;
+  }
+  .add-row-btn:hover{border-color:var(--SIGNAL);color:var(--SIGNAL)}
+
+  .run-bar{
+    display:flex;gap:8px;align-items:center;
+    flex:0 0 auto;
+  }
+  .run-btn{
+    flex:1;padding:9px 12px;
+    background:var(--SIGNAL);color:var(--bg-0);border:1px solid var(--SIGNAL);
+    font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;
+    letter-spacing:1.5px;cursor:pointer;
+    box-shadow:3px 3px 0 var(--bg-0);
+  }
+  .run-btn:hover{background:var(--FLASH);border-color:var(--FLASH)}
+  .clear-btn{
+    padding:9px 12px;
+    background:var(--bg-3);color:var(--fg-dim);border:1px solid var(--line-strong);
+    font-family:'JetBrains Mono',monospace;font-size:11px;
+    letter-spacing:1px;cursor:pointer;
+  }
+
+  /* ---------- console column ---------- */
+  .console-body{
+    flex:1;padding:12px 14px;overflow:auto;
+    font-family:'JetBrains Mono',monospace;font-size:11px;line-height:1.65;
+    background:var(--bg-0);color:var(--fg-dim);
+  }
+  .console-line{white-space:pre-wrap;word-break:break-word}
+  .c-head{color:var(--SIGNAL);font-weight:700}
+  .c-dim{color:var(--fg-mute)}
+  .c-pass{color:var(--pass)}
+  .c-fail{color:var(--fail);font-weight:700}
+  .c-info{color:var(--fg)}
+  .c-dot-pass{color:var(--pass);font-weight:700}
+  .c-dot-fail{color:var(--fail);font-weight:700}
+  .c-rule{color:var(--line-strong);letter-spacing:1px}
+  .c-trace{color:var(--fg-mute);padding-left:14px}
+  .c-num{color:var(--QUERY)}
+  .c-fn{color:var(--FLASH)}
+
+  /* milestone toast */
+  .milestone{
+    position:absolute;left:50%;top:60px;transform:translateX(-50%) translateY(-20px);
+    background:var(--QUERY);color:var(--bg-0);
+    font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:700;
+    padding:10px 22px;letter-spacing:1.5px;
+    box-shadow:4px 4px 0 var(--bg-0);
+    opacity:0;transition:all .35s;pointer-events:none;
+    z-index:99;
+  }
+  .milestone.show{opacity:1;transform:translateX(-50%) translateY(0)}
+</style>
+</head>
+<body>
+  <div class="stage">
+    <!-- ============ Sidebar ============ -->
+    <aside class="game-sidebar">
+      <div class="brand">
+        <span class="code">CS-01 · M25</span>
+        <span class="title" data-i18n-cn="Pytest Runner" data-i18n-en="Pytest Runner">Pytest Runner</span>
+        <span class="sub">def nowcast(...):</span>
+      </div>
+
+      <div class="mascot" aria-label="Bit mascot">
+        <svg viewBox="0 0 160 88" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <linearGradient id="bitGrad" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0%" stop-color="var(--SIGNAL)"/>
+              <stop offset="100%" stop-color="var(--CORE)"/>
+            </linearGradient>
+          </defs>
+          <g id="bitMascot" transform="translate(80 44)">
+            <!-- isometric cube (Bit) -->
+            <polygon points="0,-24 22,-12 22,12 0,24 -22,12 -22,-12"
+                     fill="url(#bitGrad)" stroke="var(--FLASH)" stroke-width="1.2"/>
+            <polygon points="0,-24 22,-12 0,0 -22,-12"
+                     fill="var(--FLASH)" opacity=".55"/>
+            <polygon points="22,-12 22,12 0,24 0,0"
+                     fill="var(--CORE)" opacity=".7"/>
+            <polygon points="-22,-12 0,0 0,24 -22,12"
+                     fill="var(--DEPTH)" opacity=".75"/>
+            <!-- pixel face dots -->
+            <rect x="-9" y="-3" width="4" height="4" fill="var(--QUERY)"/>
+            <rect x="3" y="-3" width="4" height="4" fill="var(--QUERY)"/>
+            <rect x="-5" y="5" width="8" height="2" fill="var(--FLASH)"/>
+          </g>
+          <text x="80" y="82" text-anchor="middle"
+                font-family="JetBrains Mono,monospace" font-size="9"
+                fill="var(--fg-mute)" letter-spacing="1.5">BIT</text>
+        </svg>
+      </div>
+
+      <div class="guide">
+        <div class="guide-title">HOW TO PLAY</div>
+        <div class="guide-line" data-i18n-cn="1 · 拖数据/期望块到 assert 槽位"
+             data-i18n-en="1 · Drag data/expected blocks to slots">1 · 拖数据/期望块到 assert 槽位</div>
+        <div class="guide-line" data-i18n-cn="2 · 点 RUN 跑 pytest"
+             data-i18n-en="2 · Click RUN to run pytest">2 · 点 RUN 跑 pytest</div>
+        <div class="guide-line" data-i18n-cn="3 · FAIL 暴露 bug 后勾 fix"
+             data-i18n-en="3 · After FAIL, toggle fix">3 · FAIL 暴露 bug 后勾 fix</div>
+      </div>
+
+      <div class="mission-block">
+        <div class="mission-title" data-i18n-cn="任务 · 写 3 个测试找 bug"
+             data-i18n-en="MISSIONS · Find bug in 3 tests">任务 · 写 3 个测试找 bug</div>
+        <div class="mission-row" id="mRow0">
+          <div class="swatch" style="background:var(--pass)"></div>
+          <div class="lbl">
+            <span class="cn" data-i18n-cn="平稳数据通过" data-i18n-en="Stable PASS">平稳数据通过</span><br/>
+            FLAT pass
+          </div>
+          <div class="status" id="mStat0">—</div>
+        </div>
+        <div class="mission-row" id="mRow1">
+          <div class="swatch" style="background:var(--fail)"></div>
+          <div class="lbl">
+            <span class="cn" data-i18n-cn="尖刺数据爆 bug" data-i18n-en="Spike FAIL">尖刺数据爆 bug</span><br/>
+            SPIKE fail
+          </div>
+          <div class="status" id="mStat1">—</div>
+        </div>
+        <div class="mission-row" id="mRow2">
+          <div class="swatch" style="background:var(--QUERY)"></div>
+          <div class="lbl">
+            <span class="cn" data-i18n-cn="修代码后全绿" data-i18n-en="All green after fix">修代码后全绿</span><br/>
+            ALL pass
+          </div>
+          <div class="status" id="mStat2">—</div>
+        </div>
+      </div>
+
+      <div class="fix-box">
+        <div class="lbl" data-i18n-cn="代码修复" data-i18n-en="CODE FIX">代码修复</div>
+        <div class="fix-row">
+          <label>
+            <input type="checkbox" id="fixToggle" />
+            <span data-i18n-cn="加 max(w, 0.5)" data-i18n-en="add max(w, 0.5)">加 max(w, 0.5)</span>
+          </label>
+        </div>
+      </div>
+
+      <div class="sidebar-spacer"></div>
+
+      <button id="langBtn" class="lang-btn" type="button">EN / 中文</button>
+    </aside>
+
+    <!-- ============ Main ============ -->
+    <main class="game-main">
+      <header class="main-header">
+        <div class="header-left" data-i18n-cn="M25 · 拖块写 pytest 找代码 bug"
+             data-i18n-en="M25 · Drag blocks to write pytest, hunt the bug">M25 · 拖块写 pytest 找代码 bug</div>
+        <div class="header-right">
+          <div class="hud-cell">
+            <span class="label">TESTS</span>
+            <span class="val" id="hudTotal">0</span>
+          </div>
+          <div class="hud-cell">
+            <span class="label">PASS</span>
+            <span class="val pass" id="hudPass">0</span>
+          </div>
+          <div class="hud-cell">
+            <span class="label">FAIL</span>
+            <span class="val fail" id="hudFail">0</span>
+          </div>
+          <div class="hud-cell">
+            <span class="label">FIX</span>
+            <span class="val" id="hudFix">OFF</span>
+          </div>
+        </div>
+      </header>
+
+      <div class="three-col">
+        <!-- Col 1 — code -->
+        <section class="col">
+          <div class="col-head">
+            <span data-i18n-cn="nowcast.py · 被测函数"
+                  data-i18n-en="nowcast.py · Function under test">nowcast.py · 被测函数</span>
+            <span class="meta" id="codeStateLbl"
+                  data-i18n-cn="BUGGY 版本" data-i18n-en="BUGGY version">BUGGY 版本</span>
+          </div>
+          <div class="code-body" id="codeBody">
+            <!-- filled by JS -->
+          </div>
+        </section>
+
+        <!-- Col 2 — workbench -->
+        <section class="col">
+          <div class="col-head">
+            <span data-i18n-cn="测试工作台 · 拖块拼 assert"
+                  data-i18n-en="Test workbench · drag assert blocks">测试工作台 · 拖块拼 assert</span>
+            <span class="meta">drag &amp; drop</span>
+          </div>
+
+          <div class="wb-body">
+            <!-- block palette -->
+            <div class="palette">
+              <div class="palette-title" data-i18n-cn="数据块 · pm25_list 参数"
+                   data-i18n-en="DATA BLOCKS · pm25_list arg">数据块 · pm25_list 参数</div>
+              <div class="palette-row">
+                <div class="block data-blk" draggable="true" data-kind="data" data-key="flat">
+                  FLAT [20]*12
+                </div>
+                <div class="block data-blk" draggable="true" data-kind="data" data-key="mild">
+                  MILD [14..28]
+                </div>
+                <div class="block data-blk" draggable="true" data-kind="data" data-key="spike">
+                  SPIKE [8..95]
+                </div>
+                <div class="block data-blk" draggable="true" data-kind="data" data-key="lowflat">
+                  LOWFLAT [12]*12
+                </div>
+              </div>
+
+              <div class="palette-title" data-i18n-cn="期望块 · 等号右边"
+                   data-i18n-en="EXPECTED BLOCKS · rhs">期望块 · 等号右边</div>
+              <div class="palette-row">
+                <div class="block expect-blk" draggable="true" data-kind="expect" data-key="20">20.0</div>
+                <div class="block expect-blk" draggable="true" data-kind="expect" data-key="12">12.0</div>
+                <div class="block expect-blk" draggable="true" data-kind="expect" data-key="26">25.8</div>
+                <div class="block expect-blk" draggable="true" data-kind="expect" data-key="69">68.9</div>
+                <div class="block expect-blk" draggable="true" data-kind="expect" data-key="95">95.0</div>
+              </div>
+            </div>
+
+            <!-- test stack -->
+            <div class="test-stack" id="testStack">
+              <div class="test-stack-title"
+                   data-i18n-cn="test_nowcast.py · 你的断言"
+                   data-i18n-en="test_nowcast.py · your asserts">test_nowcast.py · 你的断言</div>
+              <!-- assert rows injected here -->
+              <button class="add-row-btn" id="addRowBtn" type="button"
+                      data-i18n-cn="+ 加一行 assert" data-i18n-en="+ add assert row">+ 加一行 assert</button>
+            </div>
+
+            <div class="run-bar">
+              <button class="run-btn" id="runBtn" type="button">RUN PYTEST</button>
+              <button class="clear-btn" id="clearBtn" type="button"
+                      data-i18n-cn="清空" data-i18n-en="CLEAR">清空</button>
+            </div>
+          </div>
+        </section>
+
+        <!-- Col 3 — pytest console -->
+        <section class="col">
+          <div class="col-head">
+            <span data-i18n-cn="pytest 输出"
+                  data-i18n-en="pytest output">pytest 输出</span>
+            <span class="meta" id="consoleMeta">idle</span>
+          </div>
+          <div class="console-body" id="consoleBody">
+            <!-- filled by RUN -->
+          </div>
+        </section>
+      </div>
+
+      <div id="milestone" class="milestone"
+           data-i18n-cn="解锁 · TDD 思维 = 用边界测试找 bug"
+           data-i18n-en="Unlocked · TDD mindset = edge tests find bugs">解锁 · TDD 思维 = 用边界测试找 bug</div>
+    </main>
+  </div>
+
+<script>
+(function(){
+  'use strict';
+
+  // ===================== state =====================
+  var stateGame = {
+    lang: 'cn',
+    rows: [],            // [{dataKey, expectKey}]
+    fix: false,          // toggle max(w, 0.5)
+    lastResults: [],     // [{idx, status, actual, expected, why}]
+    missionHit: [false, false, false],
+    milestoneFired: false,
+    rowSeq: 0
+  };
+
+  // canonical data presets (12h pm25)
+  var DATA = {
+    flat:    [20,20,20,20,20,20,20,20,20,20,20,20],
+    mild:    [14,16,18,15,20,17,22,19,24,21,26,28],
+    spike:   [8,10,9,11,8,12,9,14,20,35,60,95],
+    lowflat: [12,12,12,12,12,12,12,12,12,12,12,12]
+  };
+  var DATA_LBL = {
+    flat: 'FLAT [20]*12',
+    mild: 'MILD [14..28]',
+    spike: 'SPIKE [8..95]',
+    lowflat: 'LOWFLAT [12]*12'
+  };
+  var EXPECT_LBL = {
+    '20':'20.0','12':'12.0','26':'25.8','69':'68.9','95':'95.0'
+  };
+  var EXPECT_NUM = {'20':20.0,'12':12.0,'26':25.8,'69':68.9,'95':95.0};
+
+  // ===================== nowcast impl =====================
+  // BUGGY version: missing max(w, 0.5) clamp.  When data is flat low values
+  // c_min == c_max so w = 1 (OK), but our buggy snippet skips the clamp,
+  // so when c_max == 0 we get DivByZero AND when c_min == 0 with c_max>0
+  // we get w=0 -> 0**0 trick collapses to newest only.  For SPIKE inputs
+  // (c_min=8, c_max=95) w = 0.084 -> result drifts way above the true
+  // 60-ish weighted answer because the buggy code raises 0.084**11 → ~0 but
+  // dividing by ~0 explodes.  We model the bug as: no clamp -> answer
+  // saturates to the newest sample (95).
+  function nowcastBuggy(pmList){
+    if (!pmList.length) return 0;
+    var cMin = pmList[0], cMax = pmList[0];
+    for (var i=0;i<pmList.length;i++){
+      if (pmList[i]<cMin) cMin = pmList[i];
+      if (pmList[i]>cMax) cMax = pmList[i];
+    }
+    if (cMax === 0) return 0;
+    var w = cMin / cMax;        // BUG: no max(w, 0.5)
+    // pmList[0] = oldest, pmList[N-1] = newest -> i_now = (N-1-h)
+    var N = pmList.length;
+    var num = 0, den = 0;
+    for (var h=0; h<N; h++){
+      var iNow = (N - 1) - h;
+      var wp = Math.pow(w, iNow);
+      num += wp * pmList[h];
+      den += wp;
+    }
+    if (den === 0) return pmList[N-1];
+    return num / den;
+  }
+  function nowcastFixed(pmList){
+    if (!pmList.length) return 0;
+    var cMin = pmList[0], cMax = pmList[0];
+    for (var i=0;i<pmList.length;i++){
+      if (pmList[i]<cMin) cMin = pmList[i];
+      if (pmList[i]>cMax) cMax = pmList[i];
+    }
+    if (cMax === 0) return 0;
+    var w = cMin / cMax;
+    if (w < 0.5) w = 0.5;       // FIX: clamp
+    var N = pmList.length;
+    var num = 0, den = 0;
+    for (var h=0; h<N; h++){
+      var iNow = (N - 1) - h;
+      var wp = Math.pow(w, iNow);
+      num += wp * pmList[h];
+      den += wp;
+    }
+    return num / den;
+  }
+  function runNowcast(pmList){
+    return stateGame.fix ? nowcastFixed(pmList) : nowcastBuggy(pmList);
+  }
+
+  // expected truth (what the EPA spec says):
+  // FLAT  [20]*12 -> 20.0
+  // LOWFLAT [12]*12 -> 12.0
+  // MILD ->        ~19.x (clamped)
+  // SPIKE ->       ~60.x (clamped)
+  // Buggy result for SPIKE saturates near 95 (since w ~ 0.08, only newest).
+  // We treat the round-to-1dp value within ±0.6 as match for FLAT/LOWFLAT.
+
+  // ===================== code rendering =====================
+  var SRC_BUGGY = [
+    {ln:1, html:'<span class="tk-kw">def</span> <span class="tk-fn">nowcast</span>(<span class="tk-var">pm25_list</span>):'},
+    {ln:2, html:'    <span class="tk-kw">if</span> <span class="tk-kw">not</span> pm25_list:'},
+    {ln:3, html:'        <span class="tk-kw">return</span> <span class="tk-num">0</span>'},
+    {ln:4, html:'    c_min = <span class="tk-fn">min</span>(pm25_list)'},
+    {ln:5, html:'    c_max = <span class="tk-fn">max</span>(pm25_list)'},
+    {ln:6, html:'    <span class="tk-kw">if</span> c_max == <span class="tk-num">0</span>: <span class="tk-kw">return</span> <span class="tk-num">0</span>'},
+    {ln:7, html:'    w = c_min / c_max  <span class="tk-com"># BUG: 缺 clamp</span>', buggy:true},
+    {ln:8, html:'    n = <span class="tk-fn">len</span>(pm25_list)'},
+    {ln:9, html:'    num = den = <span class="tk-num">0</span>'},
+    {ln:10, html:'    <span class="tk-kw">for</span> h <span class="tk-kw">in</span> <span class="tk-fn">range</span>(n):'},
+    {ln:11, html:'        i_now = (n - <span class="tk-num">1</span>) - h'},
+    {ln:12, html:'        wp = w ** i_now'},
+    {ln:13, html:'        num += wp * pm25_list[h]'},
+    {ln:14, html:'        den += wp'},
+    {ln:15, html:'    <span class="tk-kw">return</span> num / den'}
+  ];
+  var SRC_FIXED = [
+    {ln:1, html:'<span class="tk-kw">def</span> <span class="tk-fn">nowcast</span>(<span class="tk-var">pm25_list</span>):'},
+    {ln:2, html:'    <span class="tk-kw">if</span> <span class="tk-kw">not</span> pm25_list:'},
+    {ln:3, html:'        <span class="tk-kw">return</span> <span class="tk-num">0</span>'},
+    {ln:4, html:'    c_min = <span class="tk-fn">min</span>(pm25_list)'},
+    {ln:5, html:'    c_max = <span class="tk-fn">max</span>(pm25_list)'},
+    {ln:6, html:'    <span class="tk-kw">if</span> c_max == <span class="tk-num">0</span>: <span class="tk-kw">return</span> <span class="tk-num">0</span>'},
+    {ln:7, html:'    w = c_min / c_max'},
+    {ln:8, html:'    w = <span class="tk-fn">max</span>(w, <span class="tk-num">0.5</span>)  <span class="tk-com"># FIX: clamp</span>', fixed:true},
+    {ln:9, html:'    n = <span class="tk-fn">len</span>(pm25_list)'},
+    {ln:10, html:'    num = den = <span class="tk-num">0</span>'},
+    {ln:11, html:'    <span class="tk-kw">for</span> h <span class="tk-kw">in</span> <span class="tk-fn">range</span>(n):'},
+    {ln:12, html:'        i_now = (n - <span class="tk-num">1</span>) - h'},
+    {ln:13, html:'        wp = w ** i_now'},
+    {ln:14, html:'        num += wp * pm25_list[h]'},
+    {ln:15, html:'        den += wp'},
+    {ln:16, html:'    <span class="tk-kw">return</span> num / den'}
+  ];
+  function renderCode(){
+    var src = stateGame.fix ? SRC_FIXED : SRC_BUGGY;
+    var host = document.getElementById('codeBody');
+    var out = '';
+    for (var i=0; i<src.length; i++){
+      var cls = 'code-line';
+      if (src[i].buggy) cls += ' buggy';
+      if (src[i].fixed) cls += ' fixed';
+      out += '<div class="'+cls+'"><span class="ln">'+src[i].ln+'</span>'
+           + '<span class="src">'+src[i].html+'</span></div>';
+    }
+    host.innerHTML = out;
+    var lbl = document.getElementById('codeStateLbl');
+    if (stateGame.fix){
+      lbl.textContent = stateGame.lang === 'cn' ? 'FIXED 版本' : 'FIXED version';
+    } else {
+      lbl.textContent = stateGame.lang === 'cn' ? 'BUGGY 版本' : 'BUGGY version';
+    }
+    var hudFix = document.getElementById('hudFix');
+    hudFix.textContent = stateGame.fix ? 'ON' : 'OFF';
+    hudFix.className = 'val' + (stateGame.fix ? ' gold' : '');
+  }
+
+  // ===================== test stack rendering =====================
+  function rowHtml(row){
+    var dl = row.dataKey
+      ? '<span class="slot filled" data-slot="data" data-rid="'+row.id+'">'+DATA_LBL[row.dataKey]+'</span>'
+      : '<span class="slot" data-slot="data" data-rid="'+row.id+'">'
+        + (stateGame.lang==='cn'?'拖数据块':'drop data')
+        + '</span>';
+    var el = row.expectKey
+      ? '<span class="slot expect filled" data-slot="expect" data-rid="'+row.id+'">'+EXPECT_LBL[row.expectKey]+'</span>'
+      : '<span class="slot expect" data-slot="expect" data-rid="'+row.id+'">'
+        + (stateGame.lang==='cn'?'拖期望块':'drop expected')
+        + '</span>';
+
+    var resultCls = row.result || '';
+    var resultTag = '';
+    if (row.result === 'pass') resultTag = '<span class="result-tag">PASS</span>';
+    else if (row.result === 'fail') resultTag = '<span class="result-tag">FAIL</span>';
+
+    return '<div class="assert-row '+resultCls+'" data-rid="'+row.id+'">'
+         + '<span class="kw">assert</span>'
+         + '<span class="fn">nowcast</span>'
+         + '<span class="op">(</span>'
+         + dl
+         + '<span class="op">)</span>'
+         + '<span class="op">==</span>'
+         + el
+         + resultTag
+         + '<button class="del-btn" type="button" data-del="'+row.id+'">DEL</button>'
+         + '</div>';
+  }
+
+  function renderRows(){
+    var stack = document.getElementById('testStack');
+    var btn = '<button class="add-row-btn" id="addRowBtn" type="button">'
+            + (stateGame.lang==='cn'?'+ 加一行 assert':'+ add assert row')
+            + '</button>';
+    var title = '<div class="test-stack-title">'
+              + (stateGame.lang==='cn'?'test_nowcast.py · 你的断言':'test_nowcast.py · your asserts')
+              + '</div>';
+    var body = '';
+    if (stateGame.rows.length === 0){
+      body = '<div class="test-stack-empty">'
+           + (stateGame.lang==='cn'?'空 · 点下面按钮加一行':'empty · click + to add a row')
+           + '</div>';
+    } else {
+      for (var i=0; i<stateGame.rows.length; i++){
+        body += rowHtml(stateGame.rows[i]);
+      }
+    }
+    stack.innerHTML = title + body + btn;
+    wireRowEvents();
+  }
+
+  function wireRowEvents(){
+    // delete buttons
+    var dels = document.querySelectorAll('[data-del]');
+    for (var i=0; i<dels.length; i++){
+      dels[i].addEventListener('click', function(ev){
+        var rid = parseInt(ev.currentTarget.getAttribute('data-del'), 10);
+        stateGame.rows = stateGame.rows.filter(function(r){return r.id !== rid;});
+        renderRows();
+        updateHud();
+      });
+    }
+    // slot drop
+    var slots = document.querySelectorAll('.slot');
+    for (var k=0; k<slots.length; k++){
+      var s = slots[k];
+      s.addEventListener('dragover', function(ev){
+        ev.preventDefault();
+        ev.currentTarget.classList.add('drag-over');
+      });
+      s.addEventListener('dragleave', function(ev){
+        ev.currentTarget.classList.remove('drag-over');
+      });
+      s.addEventListener('drop', function(ev){
+        ev.preventDefault();
+        ev.currentTarget.classList.remove('drag-over');
+        var rid = parseInt(ev.currentTarget.getAttribute('data-rid'), 10);
+        var slot = ev.currentTarget.getAttribute('data-slot');
+        var payload = ev.dataTransfer.getData('text/plain');
+        if (!payload) return;
+        var parts = payload.split('|');
+        var kind = parts[0], key = parts[1];
+        if (slot === 'data' && kind !== 'data') return;
+        if (slot === 'expect' && kind !== 'expect') return;
+        var row = stateGame.rows.find(function(r){return r.id === rid;});
+        if (!row) return;
+        if (slot === 'data') row.dataKey = key;
+        if (slot === 'expect') row.expectKey = key;
+        // changing inputs invalidates previous run result
+        row.result = '';
+        row.actual = null;
+        renderRows();
+        updateHud();
+      });
+      // click empty slot also triggers visual feedback (no-op when empty)
+      s.addEventListener('click', function(ev){
+        ev.currentTarget.classList.add('drag-over');
+        setTimeout(function(el){return function(){ el.classList.remove('drag-over'); };}(ev.currentTarget), 250);
+      });
+    }
+    // add row
+    var addBtn = document.getElementById('addRowBtn');
+    if (addBtn){
+      addBtn.addEventListener('click', addRow);
+    }
+  }
+
+  function addRow(){
+    stateGame.rowSeq += 1;
+    stateGame.rows.push({
+      id: stateGame.rowSeq,
+      dataKey: null,
+      expectKey: null,
+      result: '',
+      actual: null
+    });
+    renderRows();
+    updateHud();
+  }
+
+  // ===================== palette drag =====================
+  function wirePalette(){
+    var blocks = document.querySelectorAll('.palette .block');
+    for (var i=0; i<blocks.length; i++){
+      var b = blocks[i];
+      b.addEventListener('dragstart', function(ev){
+        var kind = ev.currentTarget.getAttribute('data-kind');
+        var key = ev.currentTarget.getAttribute('data-key');
+        ev.dataTransfer.setData('text/plain', kind + '|' + key);
+        ev.dataTransfer.effectAllowed = 'copy';
+      });
+      // click-to-fill fallback (a11y / when drag fails in iframe)
+      b.addEventListener('click', function(ev){
+        var kind = ev.currentTarget.getAttribute('data-kind');
+        var key = ev.currentTarget.getAttribute('data-key');
+        // fill into the first empty matching slot of the last row, or add row
+        var rows = stateGame.rows;
+        var target = null;
+        for (var r=0; r<rows.length; r++){
+          if (kind === 'data' && !rows[r].dataKey){ target = rows[r]; break; }
+          if (kind === 'expect' && !rows[r].expectKey){ target = rows[r]; break; }
+        }
+        if (!target){
+          // add a new row
+          addRow();
+          target = stateGame.rows[stateGame.rows.length - 1];
+        }
+        if (kind === 'data') target.dataKey = key;
+        if (kind === 'expect') target.expectKey = key;
+        target.result = '';
+        target.actual = null;
+        renderRows();
+        updateHud();
+      });
+    }
+  }
+
+  // ===================== run pytest =====================
+  function runTests(){
+    var rows = stateGame.rows;
+    if (rows.length === 0){
+      pushConsoleEmpty();
+      updateHud();
+      return;
+    }
+    var passCount = 0, failCount = 0, incomplete = 0;
+    for (var i=0; i<rows.length; i++){
+      var r = rows[i];
+      if (!r.dataKey || !r.expectKey){
+        r.result = 'fail';
+        r.actual = null;
+        r.why = 'incomplete';
+        failCount++;
+        incomplete++;
+        continue;
+      }
+      var pmList = DATA[r.dataKey];
+      var actual = runNowcast(pmList);
+      var expected = EXPECT_NUM[r.expectKey];
+      r.actual = actual;
+      r.expected = expected;
+      // tolerance 0.2 — tight enough to expose ~23 ug/m3 spike bug, loose enough
+      // for the 1-dp rounded expected blocks (25.8 vs 25.84, 68.9 vs 68.88).
+      var ok = Math.abs(actual - expected) <= 0.2;
+      r.result = ok ? 'pass' : 'fail';
+      r.why = ok ? '' : 'mismatch';
+      if (ok) passCount++; else failCount++;
+    }
+    renderRows();
+    renderConsole(rows, passCount, failCount, incomplete);
+    updateHud();
+    checkMissions(passCount, failCount, rows);
+  }
+
+  function pushConsoleEmpty(){
+    var c = document.getElementById('consoleBody');
+    var cn = stateGame.lang === 'cn';
+    c.innerHTML =
+      '<div class="console-line c-head">$ pytest test_nowcast.py -v</div>'
+      + '<div class="console-line c-dim">'+(cn?'未发现测试用例 · 先加一行 assert':'no tests collected · add an assert row first')+'</div>';
+  }
+
+  function renderConsole(rows, p, f, incomplete){
+    var c = document.getElementById('consoleBody');
+    var cn = stateGame.lang === 'cn';
+    var lines = [];
+    lines.push('<div class="console-line c-head">$ pytest test_nowcast.py -v</div>');
+    lines.push('<div class="console-line c-dim">============================= test session starts =============================</div>');
+    lines.push('<div class="console-line c-dim">platform linux -- Python 3.12.3, pytest-8.3 -- /usr/bin/python3</div>');
+    lines.push('<div class="console-line c-dim">rootdir: /tmp/m25 · collected '+rows.length+' items</div>');
+    lines.push('<div class="console-line c-dim">&nbsp;</div>');
+    var dots = '';
+    for (var i=0; i<rows.length; i++){
+      if (rows[i].result === 'pass') dots += '<span class="c-dot-pass">.</span>';
+      else dots += '<span class="c-dot-fail">F</span>';
+    }
+    lines.push('<div class="console-line c-info">test_nowcast.py '+dots
+      + '  <span class="c-dim">['+rows.length+']</span></div>');
+
+    // per-row block
+    for (var k=0; k<rows.length; k++){
+      var r = rows[k];
+      var nodeId = 'test_nowcast.py::test_case_' + (k+1);
+      if (r.result === 'pass'){
+        lines.push('<div class="console-line c-pass">'+nodeId+' PASSED</div>');
+      } else {
+        lines.push('<div class="console-line c-fail">'+nodeId+' FAILED</div>');
+      }
+    }
+
+    // failure details
+    var anyFail = false;
+    for (var j=0; j<rows.length; j++){
+      if (rows[j].result === 'fail'){ anyFail = true; break; }
+    }
+    if (anyFail){
+      lines.push('<div class="console-line c-dim">&nbsp;</div>');
+      lines.push('<div class="console-line c-rule">================================== FAILURES ===================================</div>');
+      for (var m=0; m<rows.length; m++){
+        var rr = rows[m];
+        if (rr.result !== 'fail') continue;
+        var hdr = '_________________________ test_case_' + (m+1) + ' _________________________';
+        lines.push('<div class="console-line c-fail">'+hdr+'</div>');
+        lines.push('<div class="console-line c-dim">&nbsp;</div>');
+        if (rr.why === 'incomplete'){
+          lines.push('<div class="console-line c-info">  '+(cn?'断言未拼完整 · 请拖数据/期望块':'assert not assembled · drag data/expected')+'</div>');
+        } else {
+          var dataSrc = DATA_LBL[rr.dataKey];
+          lines.push('<div class="console-line c-info">  &gt; <span class="c-kw">assert</span> <span class="c-fn">nowcast</span>('+dataSrc+') == <span class="c-num">'+EXPECT_LBL[rr.expectKey]+'</span></div>');
+          lines.push('<div class="console-line c-fail">E   AssertionError: <span class="c-num">'+rr.actual.toFixed(2)+'</span> != <span class="c-num">'+rr.expected.toFixed(2)+'</span></div>');
+          lines.push('<div class="console-line c-trace">'
+            + (cn?'实际':'actual') + '='+rr.actual.toFixed(2)+'  '
+            + (cn?'期望':'expected') + '='+rr.expected.toFixed(2)
+            + '  abs_diff='+Math.abs(rr.actual-rr.expected).toFixed(2)+'</div>');
+          if (!stateGame.fix && rr.dataKey === 'spike'){
+            lines.push('<div class="console-line c-trace">'
+              + (cn?'提示 · w = c_min/c_max = 8/95 = 0.084 没 clamp, w^11 ~ 0, NowCast 几乎只剩最新一小时'
+                   :'hint · w = c_min/c_max = 8/95 = 0.084 not clamped, w^11 ~ 0, NowCast collapses to newest hour')
+              + '</div>');
+          }
+        }
+        lines.push('<div class="console-line c-dim">&nbsp;</div>');
+      }
+    }
+
+    // summary line
+    lines.push('<div class="console-line c-rule">============================== short test summary info ===============================</div>');
+    if (f === 0 && p > 0){
+      lines.push('<div class="console-line c-pass">'+p+' passed in 0.0'+(rows.length)+'s</div>');
+    } else if (p === 0){
+      lines.push('<div class="console-line c-fail">'+f+' failed in 0.0'+(rows.length)+'s</div>');
+    } else {
+      lines.push('<div class="console-line c-info"><span class="c-fail">'+f+' failed</span>, <span class="c-pass">'+p+' passed</span> in 0.0'+(rows.length)+'s</div>');
+    }
+    c.innerHTML = lines.join('');
+    c.scrollTop = c.scrollHeight;
+    document.getElementById('consoleMeta').textContent = (p+'P / '+f+'F');
+  }
+
+  // ===================== missions =====================
+  function checkMissions(p, f, rows){
+    var statEl = [
+      document.getElementById('mStat0'),
+      document.getElementById('mStat1'),
+      document.getElementById('mStat2')
+    ];
+    var rowEl = [
+      document.getElementById('mRow0'),
+      document.getElementById('mRow1'),
+      document.getElementById('mRow2')
+    ];
+
+    // M0: FLAT pass — a row with dataKey=flat, expect=20, passing
+    var m0 = rows.some(function(r){
+      return r.dataKey === 'flat' && r.expectKey === '20' && r.result === 'pass';
+    }) || rows.some(function(r){
+      return r.dataKey === 'lowflat' && r.expectKey === '12' && r.result === 'pass';
+    });
+
+    // M1: SPIKE fail (exposes bug) — only when fix OFF, an assert with spike vs 69 -> fail
+    var m1 = !stateGame.fix && rows.some(function(r){
+      return r.dataKey === 'spike' && r.expectKey === '69' && r.result === 'fail';
+    });
+
+    // M2: all green after fix — fix ON, rows.length >= 3, all pass, includes spike or mild
+    var hasEdge = rows.some(function(r){return r.dataKey === 'spike' || r.dataKey === 'mild';});
+    var hasFlat = rows.some(function(r){return r.dataKey === 'flat' || r.dataKey === 'lowflat';});
+    var m2 = stateGame.fix && rows.length >= 3 && f === 0 && p >= 3 && hasEdge && hasFlat;
+
+    if (m0 && !stateGame.missionHit[0]){ stateGame.missionHit[0] = true; }
+    if (m1 && !stateGame.missionHit[1]){ stateGame.missionHit[1] = true; }
+    if (m2 && !stateGame.missionHit[2]){ stateGame.missionHit[2] = true; }
+
+    for (var i=0; i<3; i++){
+      if (stateGame.missionHit[i]){
+        rowEl[i].classList.add('hit');
+        statEl[i].textContent = 'OK';
+      } else {
+        rowEl[i].classList.remove('hit');
+        statEl[i].textContent = '—';
+      }
+    }
+
+    // milestone
+    if (stateGame.missionHit[0] && stateGame.missionHit[1] && stateGame.missionHit[2] && !stateGame.milestoneFired){
+      stateGame.milestoneFired = true;
+      var ms = document.getElementById('milestone');
+      ms.classList.add('show');
+      setTimeout(function(){ ms.classList.remove('show'); }, 4000);
+    }
+  }
+
+  // ===================== hud =====================
+  function updateHud(){
+    var p = 0, f = 0;
+    for (var i=0; i<stateGame.rows.length; i++){
+      if (stateGame.rows[i].result === 'pass') p++;
+      else if (stateGame.rows[i].result === 'fail') f++;
+    }
+    document.getElementById('hudTotal').textContent = stateGame.rows.length;
+    document.getElementById('hudPass').textContent = p;
+    document.getElementById('hudFail').textContent = f;
+  }
+
+  // ===================== clear =====================
+  function clearAll(){
+    stateGame.rows = [];
+    renderRows();
+    var c = document.getElementById('consoleBody');
+    c.innerHTML = '<div class="console-line c-dim">'
+      + (stateGame.lang==='cn'?'$ pytest test_nowcast.py -v · 等待运行 ...':'$ pytest test_nowcast.py -v · waiting ...')
+      + '</div>';
+    document.getElementById('consoleMeta').textContent = 'idle';
+    updateHud();
+  }
+
+  // ===================== i18n =====================
+  function refreshI18N(){
+    var nodes = document.querySelectorAll('[data-i18n-cn]');
+    for (var i = 0; i < nodes.length; i++){
+      var el = nodes[i];
+      var cn = el.getAttribute('data-i18n-cn');
+      var en = el.getAttribute('data-i18n-en');
+      el.textContent = stateGame.lang === 'cn' ? cn : en;
+    }
+    document.documentElement.lang = stateGame.lang === 'cn' ? 'zh-CN' : 'en';
+    renderCode();
+    renderRows();
+  }
+
+  // ===================== mascot tick =====================
+  var bitMascot = document.getElementById('bitMascot');
+  var bitT = 0;
+  function bitTick(){
+    bitT += 0.02;
+    if (bitMascot){
+      var dy = Math.sin(bitT) * 3;
+      bitMascot.setAttribute('transform', 'translate(80 '+(44 + dy)+')');
+    }
+    requestAnimationFrame(bitTick);
+  }
+  requestAnimationFrame(bitTick);
+
+  // ===================== wire base =====================
+  document.getElementById('langBtn').addEventListener('click', function(){
+    stateGame.lang = stateGame.lang === 'cn' ? 'en' : 'cn';
+    refreshI18N();
+  });
+  document.getElementById('runBtn').addEventListener('click', runTests);
+  document.getElementById('clearBtn').addEventListener('click', clearAll);
+  document.getElementById('fixToggle').addEventListener('change', function(ev){
+    stateGame.fix = !!ev.target.checked;
+    // invalidate prior results since impl changed
+    for (var i=0; i<stateGame.rows.length; i++){
+      stateGame.rows[i].result = '';
+      stateGame.rows[i].actual = null;
+    }
+    renderCode();
+    renderRows();
+    updateHud();
+  });
+
+  // ===================== init =====================
+  renderCode();
+  // seed two empty rows so the workbench is alive
+  addRow();
+  addRow();
+  wirePalette();
+  refreshI18N();
+  clearAll.__seedConsole = true;
+  // seed console line
+  var c0 = document.getElementById('consoleBody');
+  c0.innerHTML = '<div class="console-line c-dim">$ pytest test_nowcast.py -v · '
+    + (stateGame.lang==='cn'?'等待运行 ...':'waiting ...') + '</div>';
+
+})();
+</script>
+</body>
+</html>

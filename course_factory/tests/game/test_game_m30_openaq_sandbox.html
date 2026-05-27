@@ -1,0 +1,1048 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<title>M30 · OpenAQ API Sandbox — Compose &amp; Request</title>
+<style>
+  :root{
+    /* Layer 1 — shared deep space canvas (26 subjects unified) */
+    --bg-0: oklch(0.14 0.035 265);
+    --bg-1: oklch(0.18 0.04 265);
+    --bg-2: oklch(0.22 0.045 265);
+    --bg-3: oklch(0.28 0.05 265);
+    --line: oklch(0.35 0.05 265 / 0.35);
+    --line-strong: oklch(0.55 0.08 265 / 0.55);
+    --fg:      oklch(0.96 0.01 265);
+    --fg-dim:  oklch(0.75 0.02 265);
+    --fg-mute: oklch(0.55 0.03 265);
+    --gold:    oklch(0.85 0.14 85);
+
+    /* Layer 2 — cs signature accent (cyan) */
+    --cs: oklch(0.75 0.17 200);
+
+    /* Layer 3 — cs 5-color palette (themes.js CS-01) */
+    --SIGNAL: oklch(0.75 0.17 200);
+    --CORE:   oklch(0.55 0.16 200);
+    --DEPTH:  oklch(0.35 0.10 210);
+    --FLASH:  oklch(0.92 0.08 190);
+    --QUERY:  oklch(0.85 0.14 85);
+  }
+
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{
+    height:100%;width:100%;
+    font-family:'Inter','PingFang SC',sans-serif;
+    color:var(--fg);background:var(--bg-0);overflow:hidden;
+  }
+  .mono{font-family:'JetBrains Mono',ui-monospace,'SF Mono',Consolas,monospace}
+
+  .stage{display:flex;flex-direction:row;height:100vh;width:100vw}
+
+  /* ---------- 200px sidebar ---------- */
+  .game-sidebar{
+    width:200px;flex:0 0 200px;
+    background:var(--bg-1);border-right:1px solid var(--line);
+    display:flex;flex-direction:column;padding:14px 12px;gap:10px;
+    overflow-y:auto;
+  }
+  .brand{
+    display:flex;flex-direction:column;gap:2px;
+    border-bottom:1px solid var(--line);padding-bottom:8px;
+  }
+  .brand .code{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--fg-mute);letter-spacing:1.2px}
+  .brand .title{font-size:13px;color:var(--fg);font-weight:600}
+  .brand .sub{font-size:10px;color:var(--fg-dim);margin-top:2px}
+
+  .mascot{
+    width:100%;height:78px;display:flex;align-items:center;justify-content:center;
+    background:var(--bg-2);border:1px solid var(--line);
+  }
+  .mascot svg{width:100%;height:100%}
+
+  .endpoint-box{
+    background:var(--bg-2);border:1px solid var(--line);
+    padding:8px;display:flex;flex-direction:column;gap:6px;
+  }
+  .ep-title{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--SIGNAL);letter-spacing:1px}
+  .ep-item{
+    font-family:'JetBrains Mono',monospace;font-size:10.5px;color:var(--fg-dim);
+    padding:5px 7px;border:1px solid var(--line);cursor:pointer;
+    display:flex;justify-content:space-between;align-items:center;gap:4px;
+  }
+  .ep-item:hover{border-color:var(--SIGNAL);color:var(--fg)}
+  .ep-item.active{border-color:var(--SIGNAL);background:var(--bg-3);color:var(--SIGNAL)}
+  .ep-item .ep-tag{font-size:8.5px;color:var(--fg-mute)}
+  .ep-item.active .ep-tag{color:var(--SIGNAL)}
+
+  .task-list{
+    background:var(--bg-2);border:1px solid var(--line);
+    padding:8px;display:flex;flex-direction:column;gap:5px;
+  }
+  .task-title{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--SIGNAL);letter-spacing:1px}
+  .task-line{
+    font-size:10.5px;color:var(--fg-dim);line-height:1.4;
+    padding:4px 6px;border:1px solid var(--line);
+    display:flex;align-items:center;gap:6px;
+  }
+  .task-line.done{border-color:var(--gold);color:var(--gold)}
+  .task-dot{
+    width:8px;height:8px;border:1px solid currentColor;flex:0 0 8px;
+  }
+  .task-line.done .task-dot{background:var(--gold)}
+
+  .guide{
+    background:var(--bg-2);border:1px solid var(--line);
+    padding:8px;display:flex;flex-direction:column;gap:4px;
+  }
+  .guide-title{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--SIGNAL);letter-spacing:1px}
+  .guide-line{font-size:10px;color:var(--fg-dim);line-height:1.4}
+
+  .lang-btn{
+    margin-top:auto;
+    background:var(--bg-2);color:var(--fg);
+    border:1px solid var(--line-strong);
+    padding:6px 8px;font-size:10.5px;cursor:pointer;
+    font-family:'JetBrains Mono',monospace;letter-spacing:.5px;
+    box-shadow:2px 2px 0 var(--bg-0);
+    transition:transform .08s,box-shadow .08s;
+  }
+  .lang-btn:hover{transform:translate(-1px,-1px);box-shadow:3px 3px 0 var(--bg-0)}
+  .lang-btn:active{transform:translate(1px,1px);box-shadow:1px 1px 0 var(--bg-0)}
+
+  /* ---------- main stage (2 columns: param library + composer/response) ---------- */
+  .main{
+    flex:1;display:flex;flex-direction:row;min-width:0;height:100vh;
+    background:var(--bg-0);
+  }
+
+  /* col A — param library */
+  .lib{
+    width:240px;flex:0 0 240px;background:var(--bg-1);
+    border-right:1px solid var(--line);
+    display:flex;flex-direction:column;padding:12px 10px;gap:8px;overflow-y:auto;
+  }
+  .lib-head{
+    font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--SIGNAL);
+    letter-spacing:1px;padding-bottom:4px;border-bottom:1px solid var(--line);
+  }
+  .lib-group{display:flex;flex-direction:column;gap:5px}
+  .lib-group-title{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--fg-mute);letter-spacing:.8px}
+
+  /* param block visual (palette-coded by category) */
+  .pblk{
+    display:inline-flex;align-items:center;gap:4px;padding:6px 9px;
+    font-family:'JetBrains Mono',monospace;font-size:11px;
+    background:var(--bg-2);border:1.5px solid var(--line-strong);
+    cursor:grab;user-select:none;color:var(--fg);
+    transition:transform .08s,box-shadow .08s;
+    box-shadow:2px 2px 0 var(--bg-0);
+    white-space:nowrap;
+  }
+  .pblk:hover{transform:translate(-1px,-1px);box-shadow:3px 3px 0 var(--bg-0)}
+  .pblk.loc-blk     {border-color:var(--SIGNAL);color:var(--SIGNAL)}
+  .pblk.geo-blk     {border-color:var(--FLASH); color:var(--FLASH)}
+  .pblk.param-blk   {border-color:var(--QUERY); color:var(--QUERY)}
+  .pblk.date-blk    {border-color:var(--CORE);  color:var(--FLASH);background:var(--DEPTH)}
+  .pblk.limit-blk   {border-color:var(--cs);    color:var(--bg-0);background:var(--cs)}
+  .pblk.bad-blk     {border-color:oklch(0.65 0.20 25);color:oklch(0.85 0.18 25)}
+  .pblk.dragging{opacity:.55;cursor:grabbing}
+
+  .lib-row{display:flex;flex-wrap:wrap;gap:5px}
+
+  /* col B — composer + response */
+  .work{
+    flex:1;min-width:0;display:flex;flex-direction:column;
+    background:var(--bg-0);padding:14px 16px;gap:10px;
+  }
+  .work-head{
+    display:flex;justify-content:space-between;align-items:center;
+    padding-bottom:6px;border-bottom:1px solid var(--line);
+  }
+  .work-title{font-size:14px;color:var(--fg);font-weight:600}
+  .work-mission{
+    font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--SIGNAL);
+    padding:3px 8px;border:1px solid var(--SIGNAL);
+  }
+
+  /* URL composer */
+  .composer{
+    background:var(--bg-1);border:1px dashed var(--line-strong);
+    padding:12px;display:flex;flex-direction:column;gap:10px;flex-shrink:0;
+  }
+  .composer.drop-hot{background:var(--bg-2);border-color:var(--SIGNAL)}
+  .url-line{
+    display:flex;align-items:center;flex-wrap:wrap;gap:4px;
+    font-family:'JetBrains Mono',monospace;font-size:12.5px;
+    padding:8px 10px;background:#000;border:1px solid var(--line);
+    color:var(--fg-dim);min-height:42px;line-height:1.5;
+  }
+  .url-base{color:var(--fg-mute)}
+  .url-ep{color:var(--SIGNAL);font-weight:600}
+  .url-q{color:var(--fg-mute)}
+  .url-amp{color:var(--fg-mute);margin:0 1px}
+  .url-pair{
+    display:inline-flex;align-items:center;gap:2px;
+    padding:1px 6px;border:1px solid var(--line);background:var(--bg-2);
+    color:var(--FLASH);position:relative;
+  }
+  .url-pair.bad{border-color:oklch(0.65 0.20 25);color:oklch(0.85 0.18 25)}
+  .url-pair .rm{
+    display:inline-flex;align-items:center;justify-content:center;
+    width:14px;height:14px;border:1px solid currentColor;
+    margin-left:4px;font-size:9px;cursor:pointer;background:transparent;
+    color:inherit;font-family:inherit;
+  }
+  .url-pair .rm:hover{background:currentColor;color:var(--bg-0)}
+
+  .composer-foot{display:flex;justify-content:space-between;align-items:center;gap:10px}
+  .composer-hint{
+    font-family:'JetBrains Mono',monospace;font-size:10.5px;color:var(--fg-mute);
+    flex:1;line-height:1.4;
+  }
+  .composer-hint.warn{color:oklch(0.85 0.18 25)}
+
+  .control-bar{
+    display:flex;gap:8px;align-items:center;flex-shrink:0;
+  }
+  .btn{
+    padding:8px 14px;font-family:'JetBrains Mono',monospace;font-size:11px;
+    background:var(--bg-2);color:var(--fg);border:1.5px solid var(--line-strong);
+    cursor:pointer;box-shadow:2px 2px 0 var(--bg-0);letter-spacing:.5px;
+    transition:transform .08s,box-shadow .08s;
+  }
+  .btn:hover{transform:translate(-1px,-1px);box-shadow:3px 3px 0 var(--bg-0)}
+  .btn:active{transform:translate(1px,1px);box-shadow:1px 1px 0 var(--bg-0)}
+  .btn.primary{
+    background:var(--cs);color:var(--bg-0);border-color:var(--cs);font-weight:700;
+  }
+  .btn.ghost{background:transparent;color:var(--fg-dim);border-color:var(--line)}
+
+  /* Response panel */
+  .response{
+    flex:1;min-height:0;display:flex;flex-direction:column;
+    background:var(--bg-1);border:1px solid var(--line);
+  }
+  .resp-head{
+    display:flex;justify-content:space-between;align-items:center;
+    padding:8px 12px;border-bottom:1px solid var(--line);
+    font-family:'JetBrains Mono',monospace;font-size:11px;
+    background:var(--bg-2);
+  }
+  .resp-head .status-pill{
+    padding:2px 8px;border:1px solid var(--line);color:var(--fg-mute);
+    font-size:10px;
+  }
+  .resp-head .status-pill.ok-200{border-color:var(--gold);color:var(--gold)}
+  .resp-head .status-pill.err-404{border-color:oklch(0.65 0.20 25);color:oklch(0.85 0.18 25)}
+  .resp-head .status-pill.err-422{border-color:oklch(0.7 0.16 60);color:oklch(0.82 0.15 60)}
+
+  .resp-body{
+    flex:1;min-height:0;overflow:auto;
+    background:#000;padding:12px 14px;
+    font-family:'JetBrains Mono',monospace;font-size:11.5px;line-height:1.55;
+    white-space:pre;color:var(--FLASH);
+  }
+  .resp-body .k{color:var(--cs)}
+  .resp-body .s{color:var(--FLASH)}
+  .resp-body .n{color:var(--QUERY)}
+  .resp-body .b{color:var(--SIGNAL)}
+  .resp-body .err{color:oklch(0.85 0.18 25)}
+  .resp-body .com{color:var(--fg-mute);font-style:italic}
+
+  .verdict{
+    margin-top:8px;
+    padding:8px 12px;border:1px solid var(--line);background:var(--bg-2);
+    font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--fg-dim);
+    line-height:1.5;flex-shrink:0;
+  }
+  .verdict.pass{border-color:var(--gold);color:var(--gold);background:rgba(0,0,0,.2)}
+  .verdict.fail{border-color:oklch(0.65 0.20 25);color:oklch(0.85 0.18 25)}
+
+  .floating-toast{
+    position:absolute;top:18px;left:50%;transform:translateX(-50%);
+    padding:8px 16px;background:var(--bg-2);border:1.5px solid var(--gold);
+    color:var(--gold);font-family:'JetBrains Mono',monospace;font-size:12px;
+    box-shadow:3px 3px 0 var(--bg-0);z-index:50;pointer-events:none;
+    opacity:0;transition:opacity .25s;
+  }
+  .floating-toast.show{opacity:1}
+
+  ::-webkit-scrollbar{width:8px;height:8px}
+  ::-webkit-scrollbar-track{background:var(--bg-1)}
+  ::-webkit-scrollbar-thumb{background:var(--bg-3);border:1px solid var(--line)}
+</style>
+</head>
+<body>
+
+<div class="stage">
+
+  <!-- ============== 200px sidebar ============== -->
+  <aside class="game-sidebar">
+    <div class="brand">
+      <div class="code mono">CS-01 · M30</div>
+      <div class="title" id="brandTitle">OpenAQ 沙盒</div>
+      <div class="sub" id="brandSub">拼 URL · 发请求 · 看 JSON</div>
+    </div>
+
+    <!-- Bit mascot — levitating cubic sprite -->
+    <div class="mascot" aria-label="Bit mascot">
+      <svg viewBox="0 0 172 78" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <linearGradient id="bitFace" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stop-color="oklch(0.92 0.08 190)"/>
+            <stop offset="100%" stop-color="oklch(0.55 0.16 200)"/>
+          </linearGradient>
+        </defs>
+        <g stroke="oklch(0.35 0.05 265 / 0.55)" stroke-width="0.6">
+          <line x1="20" y1="66" x2="152" y2="66"/>
+          <line x1="34" y1="72" x2="138" y2="72"/>
+        </g>
+        <g transform="translate(86 36)">
+          <ellipse cx="0" cy="28" rx="22" ry="3.2" fill="oklch(0.18 0.04 265)" opacity="0.85"/>
+          <polygon points="-20,-16 0,-24 20,-16 0,-8" fill="oklch(0.85 0.16 200)" stroke="oklch(0.14 0.035 265)" stroke-width="1.4"/>
+          <polygon points="-20,-16 -20,12 0,20 0,-8" fill="url(#bitFace)" stroke="oklch(0.14 0.035 265)" stroke-width="1.4"/>
+          <polygon points="20,-16 20,12 0,20 0,-8" fill="oklch(0.35 0.10 210)" stroke="oklch(0.14 0.035 265)" stroke-width="1.4"/>
+          <rect x="-13" y="-2" width="4" height="4" fill="oklch(0.85 0.14 85)"/>
+          <rect x="-5"  y="2"  width="4" height="4" fill="oklch(0.85 0.14 85)"/>
+          <rect x="6"   y="-1" width="4" height="4" fill="oklch(0.85 0.14 85)"/>
+        </g>
+        <g fill="oklch(0.85 0.14 85)">
+          <rect x="20" y="20" width="3" height="3"/>
+          <rect x="150" y="28" width="3" height="3"/>
+          <rect x="28" y="44" width="2" height="2"/>
+        </g>
+      </svg>
+    </div>
+
+    <div class="endpoint-box">
+      <div class="ep-title mono" id="epTitle">ENDPOINT</div>
+      <div class="ep-item active mono" data-ep="locations">
+        <span>/locations</span><span class="ep-tag">站点</span>
+      </div>
+      <div class="ep-item mono" data-ep="parameters">
+        <span>/parameters</span><span class="ep-tag">指标</span>
+      </div>
+      <div class="ep-item mono" data-ep="measurements">
+        <span>/measurements</span><span class="ep-tag">读数</span>
+      </div>
+      <div class="ep-item mono" data-ep="sensors">
+        <span>/sensors</span><span class="ep-tag">传感器</span>
+      </div>
+    </div>
+
+    <div class="task-list">
+      <div class="task-title mono" id="taskHead">MISSIONS</div>
+      <div class="task-line mono" data-mis="0">
+        <span class="task-dot"></span><span id="m0">M1 上海站点列表</span>
+      </div>
+      <div class="task-line mono" data-mis="1">
+        <span class="task-dot"></span><span id="m1">M2 PM2.5 实测值</span>
+      </div>
+      <div class="task-line mono" data-mis="2">
+        <span class="task-dot"></span><span id="m2">M3 自定义日期段</span>
+      </div>
+    </div>
+
+    <div class="guide">
+      <div class="guide-title mono" id="guideHead">HOW</div>
+      <div class="guide-line" id="g1">· 左中拖参数块到 URL 行</div>
+      <div class="guide-line" id="g2">· 选 endpoint 切端点</div>
+      <div class="guide-line" id="g3">· 点 Send 真的回 JSON</div>
+    </div>
+
+    <button class="lang-btn" id="langBtn">中文 / EN</button>
+  </aside>
+
+  <!-- ============== main stage ============== -->
+  <main class="main">
+
+    <!-- col A: param library -->
+    <section class="lib" id="lib">
+      <div class="lib-head mono" id="libHead">PARAM LIBRARY</div>
+
+      <div class="lib-group">
+        <div class="lib-group-title mono" id="grpLoc">位置 · location</div>
+        <div class="lib-row" id="rowLoc"></div>
+      </div>
+      <div class="lib-group">
+        <div class="lib-group-title mono" id="grpGeo">坐标 · geo</div>
+        <div class="lib-row" id="rowGeo"></div>
+      </div>
+      <div class="lib-group">
+        <div class="lib-group-title mono" id="grpParam">指标 · parameter</div>
+        <div class="lib-row" id="rowParam"></div>
+      </div>
+      <div class="lib-group">
+        <div class="lib-group-title mono" id="grpDate">日期 · date range</div>
+        <div class="lib-row" id="rowDate"></div>
+      </div>
+      <div class="lib-group">
+        <div class="lib-group-title mono" id="grpLimit">分页 · limit/page</div>
+        <div class="lib-row" id="rowLimit"></div>
+      </div>
+      <div class="lib-group">
+        <div class="lib-group-title mono" id="grpBad">错块 · typo</div>
+        <div class="lib-row" id="rowBad"></div>
+      </div>
+    </section>
+
+    <!-- col B: composer + response -->
+    <section class="work">
+      <div class="work-head">
+        <div class="work-title" id="workTitle">URL 拼装 + 响应</div>
+        <div class="work-mission mono" id="workMission">M1 上海站点列表</div>
+      </div>
+
+      <div class="composer" id="composer">
+        <div class="url-line mono" id="urlLine">
+          <!-- injected by JS -->
+        </div>
+        <div class="composer-foot">
+          <div class="composer-hint mono" id="composerHint">拖块到 URL 行, 然后点 Send</div>
+          <div class="control-bar">
+            <button class="btn primary mono" id="btnSend">SEND &gt; 发请求</button>
+            <button class="btn mono" id="btnClear">清空</button>
+            <button class="btn ghost mono" id="btnHint">示范</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="response">
+        <div class="resp-head mono">
+          <span id="respMethod">GET https://api.openaq.org/v3/...</span>
+          <span class="status-pill" id="respStatus">idle</span>
+        </div>
+        <div class="resp-body mono" id="respBody">// 等待请求 / waiting for request</div>
+      </div>
+
+      <div class="verdict mono" id="verdict">还没发请求 / no request yet</div>
+    </section>
+
+  </main>
+
+  <div class="floating-toast mono" id="toast">REQUEST 成功</div>
+</div>
+
+<script>
+"use strict";
+
+// ============ i18n ============
+var LANG = 'cn';
+var I18N = {
+  brandTitle:{cn:'OpenAQ 沙盒',en:'OpenAQ Sandbox'},
+  brandSub:{cn:'拼 URL · 发请求 · 看 JSON',en:'compose URL · send · read JSON'},
+  epTitle:{cn:'端点 ENDPOINT',en:'ENDPOINT'},
+  taskHead:{cn:'任务 MISSIONS',en:'MISSIONS'},
+  m0:{cn:'M1 上海站点列表',en:'M1 Shanghai locations'},
+  m1:{cn:'M2 PM2.5 实测值',en:'M2 PM2.5 readings'},
+  m2:{cn:'M3 自定义日期段',en:'M3 custom date range'},
+  guideHead:{cn:'操作 HOW',en:'HOW TO PLAY'},
+  g1:{cn:'· 左中拖参数块到 URL 行',en:'· Drag blocks from middle column'},
+  g2:{cn:'· 选 endpoint 切端点',en:'· Pick endpoint to switch route'},
+  g3:{cn:'· 点 Send 真的回 JSON',en:'· Hit Send for real JSON'},
+  libHead:{cn:'参数块库 PARAM LIBRARY',en:'PARAM LIBRARY'},
+  grpLoc:{cn:'位置 · location',en:'location params'},
+  grpGeo:{cn:'坐标 · geo',en:'geo coords'},
+  grpParam:{cn:'指标 · parameter',en:'parameter id'},
+  grpDate:{cn:'日期 · date range',en:'date range'},
+  grpLimit:{cn:'分页 · limit/page',en:'limit / page'},
+  grpBad:{cn:'错块 · typo',en:'typo blocks'},
+  workTitle:{cn:'URL 拼装 + 响应',en:'URL Composer + Response'},
+  workMission:{cn:'M1 上海站点列表',en:'M1 Shanghai locations'},
+  btnSend:{cn:'SEND > 发请求',en:'SEND > request'},
+  btnClear:{cn:'清空',en:'clear'},
+  btnHint:{cn:'示范',en:'demo'},
+  composerHint:{cn:'拖块到 URL 行, 然后点 Send',en:'Drag blocks here then hit Send'},
+  composerHintHasBad:{cn:'有错块 — 发出去会拿 404 / 422',en:'typo blocks present — will get 404/422'},
+  composerHintEmpty:{cn:'URL 还没参数, 试试加 country=CN 或 limit=10',en:'no params yet, try country=CN or limit=10'},
+  waitVerdict:{cn:'还没发请求 / no request yet',en:'no request yet'},
+  toastWin:{cn:'REQUEST 成功',en:'REQUEST OK'},
+  passPrefix:{cn:'通过',en:'PASS'},
+  failPrefix:{cn:'未达标',en:'NOT YET'},
+  reqLog:{cn:'GET 请求',en:'GET request'},
+  miss0Hint:{cn:'要 /locations + country=CN + city=Shanghai (limit≥3)',en:'need /locations + country=CN + city=Shanghai (limit≥3)'},
+  miss1Hint:{cn:'要 /measurements + parameter=pm25 + city=Shanghai (limit≥3)',en:'need /measurements + parameter=pm25 + city=Shanghai (limit≥3)'},
+  miss2Hint:{cn:'要 /measurements + parameter=pm25 + 任一日期块 (date_from / date_to)',en:'need /measurements + parameter=pm25 + at least one date_from/date_to'}
+};
+function refreshI18N(){
+  document.documentElement.lang = (LANG==='cn'?'zh-CN':'en');
+  for (var k in I18N){
+    var el = document.getElementById(k);
+    if (el) el.textContent = I18N[k][LANG];
+  }
+  document.getElementById('toast').textContent = I18N.toastWin[LANG];
+  refreshMissionLabel();
+  refreshVerdict();
+  refreshHint();
+}
+
+// ============ param block specs ============
+function paramSpec(){
+  return [
+    // location: country / city / location_id
+    {grp:'rowLoc',   cls:'loc-blk',   key:'country',     val:'CN'},
+    {grp:'rowLoc',   cls:'loc-blk',   key:'country',     val:'US'},
+    {grp:'rowLoc',   cls:'loc-blk',   key:'city',        val:'Shanghai'},
+    {grp:'rowLoc',   cls:'loc-blk',   key:'city',        val:'Beijing'},
+    {grp:'rowLoc',   cls:'loc-blk',   key:'location_id', val:'8118'},
+
+    // geo
+    {grp:'rowGeo',   cls:'geo-blk',   key:'coordinates', val:'31.23,121.47'},
+    {grp:'rowGeo',   cls:'geo-blk',   key:'radius',      val:'25000'},
+
+    // parameter
+    {grp:'rowParam', cls:'param-blk', key:'parameter',   val:'pm25'},
+    {grp:'rowParam', cls:'param-blk', key:'parameter',   val:'pm10'},
+    {grp:'rowParam', cls:'param-blk', key:'parameter',   val:'o3'},
+    {grp:'rowParam', cls:'param-blk', key:'parameter',   val:'no2'},
+
+    // date
+    {grp:'rowDate',  cls:'date-blk',  key:'date_from',   val:'2025-04-01'},
+    {grp:'rowDate',  cls:'date-blk',  key:'date_to',     val:'2025-04-07'},
+    {grp:'rowDate',  cls:'date-blk',  key:'date_from',   val:'2025-05-20'},
+
+    // limit / page
+    {grp:'rowLimit', cls:'limit-blk', key:'limit',       val:'10'},
+    {grp:'rowLimit', cls:'limit-blk', key:'limit',       val:'100'},
+    {grp:'rowLimit', cls:'limit-blk', key:'page',        val:'2'},
+
+    // typo / bad blocks — 用来教 schema 严格性
+    {grp:'rowBad',   cls:'bad-blk',   key:'citi',        val:'Shanghai', bad:true},
+    {grp:'rowBad',   cls:'bad-blk',   key:'parameter',   val:'pm2.5',    bad:true},
+    {grp:'rowBad',   cls:'bad-blk',   key:'limit',       val:'abc',      bad:true}
+  ];
+}
+
+// ============ state ============
+var stateGame = {
+  endpoint: 'locations',
+  pairs: [],   // [{key, val, cls, bad}]
+  cleared: [false, false, false],
+  draggingPair: null
+};
+
+// ============ build param library ============
+function buildLib(){
+  var spec = paramSpec();
+  ['rowLoc','rowGeo','rowParam','rowDate','rowLimit','rowBad'].forEach(function(id){
+    var n = document.getElementById(id);
+    if (n) n.innerHTML='';
+  });
+  spec.forEach(function(s){
+    var b = document.createElement('div');
+    b.className = 'pblk '+s.cls;
+    b.textContent = s.key+'='+s.val;
+    b.setAttribute('draggable','true');
+    b.dataset.key = s.key;
+    b.dataset.val = s.val;
+    b.dataset.cls = s.cls;
+    if (s.bad) b.dataset.bad = '1';
+    b.addEventListener('dragstart', function(ev){
+      stateGame.draggingPair = {key:s.key, val:s.val, cls:s.cls, bad:!!s.bad};
+      b.classList.add('dragging');
+      try { ev.dataTransfer.setData('text/plain', s.key+'='+s.val); } catch(e){}
+      ev.dataTransfer.effectAllowed = 'copy';
+    });
+    b.addEventListener('dragend', function(){
+      b.classList.remove('dragging');
+    });
+    // also support click-to-add (touch-friendly + a11y)
+    b.addEventListener('click', function(){
+      addPair({key:s.key, val:s.val, cls:s.cls, bad:!!s.bad});
+    });
+    document.getElementById(s.grp).appendChild(b);
+  });
+}
+
+function addPair(p){
+  // 同 key 同 val 已存在则跳过
+  for (var i=0;i<stateGame.pairs.length;i++){
+    if (stateGame.pairs[i].key===p.key && stateGame.pairs[i].val===p.val) return;
+  }
+  stateGame.pairs.push(p);
+  renderUrl();
+  refreshHint();
+}
+
+function removePair(idx){
+  stateGame.pairs.splice(idx,1);
+  renderUrl();
+  refreshHint();
+}
+
+// ============ render URL line ============
+function renderUrl(){
+  var line = document.getElementById('urlLine');
+  line.innerHTML = '';
+  var base = document.createElement('span');
+  base.className='url-base';
+  base.textContent = 'GET https://api.openaq.org/v3';
+  line.appendChild(base);
+
+  var ep = document.createElement('span');
+  ep.className='url-ep';
+  ep.textContent = '/'+stateGame.endpoint;
+  line.appendChild(ep);
+
+  if (stateGame.pairs.length){
+    var q = document.createElement('span');
+    q.className='url-q';
+    q.textContent = '?';
+    line.appendChild(q);
+  }
+  stateGame.pairs.forEach(function(p, idx){
+    if (idx>0){
+      var amp = document.createElement('span');
+      amp.className='url-amp';
+      amp.textContent='&';
+      line.appendChild(amp);
+    }
+    var pair = document.createElement('span');
+    pair.className = 'url-pair'+(p.bad?' bad':'');
+    pair.textContent = p.key+'='+p.val;
+    var rm = document.createElement('button');
+    rm.className='rm mono';
+    rm.textContent='x';
+    rm.title='remove';
+    rm.addEventListener('click', function(ev){
+      ev.stopPropagation();
+      removePair(idx);
+    });
+    pair.appendChild(rm);
+    line.appendChild(pair);
+  });
+
+  // update resp head method preview
+  document.getElementById('respMethod').textContent =
+    'GET '+buildFullUrl();
+}
+
+function buildFullUrl(){
+  var s = 'https://api.openaq.org/v3/'+stateGame.endpoint;
+  if (stateGame.pairs.length){
+    s += '?'+stateGame.pairs.map(function(p){return p.key+'='+p.val;}).join('&');
+  }
+  return s;
+}
+
+// ============ mock backend ============
+// 假装是 OpenAQ v3 schema, 内置上海/北京样本数据.
+function mockBackend(){
+  var ep = stateGame.endpoint;
+  var pairs = stateGame.pairs;
+  var hasBad = pairs.some(function(p){return p.bad;});
+
+  // 错块: parameter=pm2.5 是 OpenAQ 真坑(应该 pm25), citi 是 typo
+  if (hasBad){
+    var badOnes = pairs.filter(function(p){return p.bad;});
+    if (badOnes.some(function(p){return p.key==='citi';})){
+      return {status:404, body:{
+        message:'Unknown query parameter: citi',
+        detail:'OpenAQ v3 expects city (no typo). Closest match: city',
+        hint:'remove citi=... and use city=Shanghai instead'
+      }};
+    }
+    if (badOnes.some(function(p){return p.key==='parameter' && p.val==='pm2.5';})){
+      return {status:422, body:{
+        message:'Validation error: parameter must be one of pm25,pm10,o3,no2,so2,co,bc',
+        offending:'parameter=pm2.5',
+        hint:'OpenAQ v3 uses pm25 (no dot). Drop pm2.5 and use pm25'
+      }};
+    }
+    if (badOnes.some(function(p){return p.key==='limit' && isNaN(parseInt(p.val,10));})){
+      return {status:422, body:{
+        message:'Validation error: limit must be integer 1-1000',
+        offending:'limit='+badOnes[0].val,
+        hint:'use limit=10 / limit=100, not a word'
+      }};
+    }
+  }
+
+  var get = function(k){
+    var hits = pairs.filter(function(p){return p.key===k;});
+    return hits.length ? hits[0].val : null;
+  };
+  var limit = parseInt(get('limit')||'10',10);
+  var country = get('country');
+  var city = get('city');
+  var param = get('parameter');
+  var df = get('date_from');
+  var dt = get('date_to');
+
+  // ----- /locations -----
+  if (ep==='locations'){
+    var locsAll = [
+      {id:8118, name:'Shanghai-Pudong', city:'Shanghai', country:'CN', coords:{lat:31.21,lon:121.55}, parameters:['pm25','pm10','o3','no2']},
+      {id:8120, name:'Shanghai-Xuhui',  city:'Shanghai', country:'CN', coords:{lat:31.18,lon:121.43}, parameters:['pm25','pm10','no2']},
+      {id:8121, name:'Shanghai-Jingan', city:'Shanghai', country:'CN', coords:{lat:31.23,lon:121.45}, parameters:['pm25','pm10','o3','co']},
+      {id:8122, name:'Shanghai-Hongkou',city:'Shanghai', country:'CN', coords:{lat:31.28,lon:121.49}, parameters:['pm25','o3']},
+      {id:7301, name:'Beijing-Chaoyang',city:'Beijing',  country:'CN', coords:{lat:39.92,lon:116.43}, parameters:['pm25','pm10','o3','no2']},
+      {id:7302, name:'Beijing-Haidian', city:'Beijing',  country:'CN', coords:{lat:39.99,lon:116.31}, parameters:['pm25','pm10']},
+      {id:9001, name:'LA-Downtown',     city:'Los Angeles', country:'US', coords:{lat:34.05,lon:-118.25}, parameters:['pm25','o3']}
+    ];
+    var filtered = locsAll.filter(function(l){
+      if (country && l.country!==country) return false;
+      if (city && l.city!==city) return false;
+      return true;
+    }).slice(0, limit);
+    return {status:200, body:{
+      meta:{found:filtered.length, limit:limit, page:1, endpoint:'/v3/locations'},
+      results: filtered
+    }};
+  }
+
+  // ----- /parameters -----
+  if (ep==='parameters'){
+    return {status:200, body:{
+      meta:{found:7, limit:limit, page:1, endpoint:'/v3/parameters'},
+      results:[
+        {id:2,  name:'pm25', units:'µg/m³', description:'Particulate matter <2.5µm'},
+        {id:1,  name:'pm10', units:'µg/m³', description:'Particulate matter <10µm'},
+        {id:10, name:'o3',   units:'ppm',   description:'Ozone'},
+        {id:7,  name:'no2',  units:'ppm',   description:'Nitrogen dioxide'},
+        {id:9,  name:'so2',  units:'ppm',   description:'Sulfur dioxide'},
+        {id:8,  name:'co',   units:'ppm',   description:'Carbon monoxide'},
+        {id:19, name:'bc',   units:'µg/m³', description:'Black carbon'}
+      ].slice(0, limit)
+    }};
+  }
+
+  // ----- /measurements -----
+  if (ep==='measurements'){
+    if (!param){
+      return {status:200, body:{
+        meta:{found:0, limit:limit, page:1, endpoint:'/v3/measurements'},
+        results:[],
+        note:'no parameter= filter — server defaults to all params; add parameter=pm25 to narrow'
+      }};
+    }
+    // 简化: 按 city + parameter 生成假读数
+    var rows = [];
+    var stations = [
+      {city:'Shanghai', loc:'Shanghai-Pudong', id:8118, base:42},
+      {city:'Shanghai', loc:'Shanghai-Xuhui',  id:8120, base:51},
+      {city:'Shanghai', loc:'Shanghai-Jingan', id:8121, base:38},
+      {city:'Beijing',  loc:'Beijing-Chaoyang',id:7301, base:65},
+      {city:'Beijing',  loc:'Beijing-Haidian', id:7302, base:58}
+    ];
+    var dates = [];
+    if (df && dt){
+      // 简化: 在 from 和 to 之间撒两个时间戳
+      dates.push(df+'T03:00:00Z');
+      dates.push(df+'T15:00:00Z');
+      dates.push(dt+'T09:00:00Z');
+    } else if (df){
+      dates.push(df+'T08:00:00Z');
+      dates.push(df+'T20:00:00Z');
+    } else {
+      dates.push('2025-05-26T08:00:00Z');
+      dates.push('2025-05-26T20:00:00Z');
+    }
+    stations.forEach(function(st){
+      if (city && st.city!==city) return;
+      dates.forEach(function(d, di){
+        // 用 param/base 做个伪随机
+        var v = st.base + (di*7) - (param==='o3'?20:0);
+        if (param==='pm10') v += 12;
+        if (param==='no2')  v = (v/3).toFixed(2)*1;
+        rows.push({
+          locationId:st.id,
+          location:st.loc,
+          parameter:param,
+          value:Number(v.toFixed(1)),
+          unit: (param==='pm25'||param==='pm10'||param==='bc')?'µg/m³':'ppm',
+          date:{utc:d},
+          city:st.city,
+          country:'CN'
+        });
+      });
+    });
+    rows = rows.slice(0, limit);
+    return {status:200, body:{
+      meta:{found:rows.length, limit:limit, page:1, endpoint:'/v3/measurements'},
+      results: rows
+    }};
+  }
+
+  // ----- /sensors -----
+  if (ep==='sensors'){
+    return {status:200, body:{
+      meta:{found:4, limit:limit, page:1, endpoint:'/v3/sensors'},
+      results:[
+        {id:50111, locationId:8118, parameter:'pm25', manufacturer:'Met One',  lastValue:42.3, unit:'µg/m³'},
+        {id:50112, locationId:8118, parameter:'o3',   manufacturer:'Met One',  lastValue:0.025,unit:'ppm'},
+        {id:50221, locationId:8120, parameter:'pm25', manufacturer:'PurpleAir',lastValue:51.7, unit:'µg/m³'},
+        {id:50321, locationId:8121, parameter:'pm25', manufacturer:'Met One',  lastValue:38.9, unit:'µg/m³'}
+      ].slice(0, limit)
+    }};
+  }
+
+  return {status:404, body:{message:'unknown endpoint'}};
+}
+
+// ============ pretty JSON renderer (token-colored) ============
+function jsonHTML(obj, indent){
+  indent = indent || 0;
+  var pad = function(n){var s='';for (var i=0;i<n;i++) s+='  ';return s;};
+  function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+  function render(v, lvl){
+    if (v===null) return '<span class="b">null</span>';
+    if (typeof v==='boolean') return '<span class="b">'+v+'</span>';
+    if (typeof v==='number') return '<span class="n">'+v+'</span>';
+    if (typeof v==='string') return '<span class="s">"'+esc(v)+'"</span>';
+    if (Array.isArray(v)){
+      if (v.length===0) return '[]';
+      var parts = v.map(function(item){return pad(lvl+1)+render(item, lvl+1);});
+      return '[\n'+parts.join(',\n')+'\n'+pad(lvl)+']';
+    }
+    if (typeof v==='object'){
+      var ks = Object.keys(v);
+      if (ks.length===0) return '{}';
+      var lines = ks.map(function(k){
+        return pad(lvl+1)+'<span class="k">"'+esc(k)+'"</span>: '+render(v[k], lvl+1);
+      });
+      return '{\n'+lines.join(',\n')+'\n'+pad(lvl)+'}';
+    }
+    return esc(String(v));
+  }
+  return render(obj, indent);
+}
+
+// ============ send + verdict ============
+function sendRequest(){
+  var resp = mockBackend();
+  var head = document.getElementById('respStatus');
+  head.classList.remove('ok-200','err-404','err-422');
+  if (resp.status===200) head.classList.add('ok-200');
+  else if (resp.status===404) head.classList.add('err-404');
+  else head.classList.add('err-422');
+  head.textContent = resp.status===200 ? '200 OK' : (resp.status+' ERR');
+
+  var body = document.getElementById('respBody');
+  var prefix = '// '+I18N.reqLog[LANG]+' · '+stateGame.endpoint+'\n// '+stateGame.pairs.length+' query params\n\n';
+  if (resp.status===200){
+    body.innerHTML = '<span class="com">'+prefix+'</span>'+jsonHTML(resp.body, 0);
+  } else {
+    body.innerHTML = '<span class="com">'+prefix+'</span><span class="err">'+jsonHTML(resp.body, 0).replace(/class="[bsnk]"/g,'class="err"')+'</span>';
+  }
+
+  // 检查任务
+  checkMissions(resp);
+}
+
+function checkMissions(resp){
+  if (resp.status!==200){
+    setVerdict('fail', resp.body.message || 'error', resp.body.message || 'error');
+    return;
+  }
+  var newly = [];
+
+  // 内省 pairs
+  var hasParam = function(k, v){
+    return stateGame.pairs.some(function(p){
+      return !p.bad && p.key===k && (v===undefined || p.val===v);
+    });
+  };
+  var keyCount = function(k){
+    return stateGame.pairs.filter(function(p){return !p.bad && p.key===k;}).length;
+  };
+
+  // M1: /locations + country=CN + city=Shanghai + 返回 >=3 条
+  var m1 = (stateGame.endpoint==='locations'
+            && hasParam('country','CN')
+            && hasParam('city','Shanghai')
+            && resp.body.results && resp.body.results.length>=3);
+  if (m1 && !stateGame.cleared[0]){ stateGame.cleared[0]=true; newly.push(0); }
+
+  // M2: /measurements + parameter=pm25 + city=Shanghai + 返回 >=3 条
+  var m2 = (stateGame.endpoint==='measurements'
+            && hasParam('parameter','pm25')
+            && hasParam('city','Shanghai')
+            && resp.body.results && resp.body.results.length>=3);
+  if (m2 && !stateGame.cleared[1]){ stateGame.cleared[1]=true; newly.push(1); }
+
+  // M3: /measurements + parameter=pm25 + 至少一个 date_from 或 date_to + 返回 >=2 条
+  var m3 = (stateGame.endpoint==='measurements'
+            && hasParam('parameter','pm25')
+            && (keyCount('date_from')>=1 || keyCount('date_to')>=1)
+            && resp.body.results && resp.body.results.length>=2);
+  if (m3 && !stateGame.cleared[2]){ stateGame.cleared[2]=true; newly.push(2); }
+
+  updateMissionUI();
+  if (newly.length){
+    showToast();
+  }
+  var doneCount = stateGame.cleared.filter(function(x){return x;}).length;
+  if (doneCount===3){
+    setVerdict('pass',
+      '3 种组合全拿到了 (M1 站点 / M2 实测 / M3 日期)',
+      'all 3 combinations done (M1 / M2 / M3)');
+  } else if (doneCount>0){
+    setVerdict('pass',
+      doneCount+' / 3 任务完成, 还差 '+(3-doneCount)+' 种组合',
+      doneCount+' / 3 missions, '+(3-doneCount)+' to go');
+  } else {
+    setVerdict('fail',
+      '请求成功了, 但还不是任务要求的组合 — 看左下任务列表',
+      'request ok, but not yet the target combo — see missions');
+  }
+}
+
+function setVerdict(state, msgCn, msgEn){
+  var el = document.getElementById('verdict');
+  el.classList.remove('pass','fail');
+  if (state==='wait'){ el.textContent = I18N.waitVerdict[LANG]; return; }
+  el.classList.add(state);
+  var p = (state==='pass'?I18N.passPrefix[LANG]:I18N.failPrefix[LANG]);
+  el.textContent = p+' · '+(LANG==='cn'?msgCn:msgEn);
+}
+function refreshVerdict(){
+  // re-localize last verdict text — simplified: keep state classes, re-set wait if none
+  var el = document.getElementById('verdict');
+  if (!el.classList.contains('pass') && !el.classList.contains('fail')){
+    el.textContent = I18N.waitVerdict[LANG];
+  }
+}
+function refreshHint(){
+  var hint = document.getElementById('composerHint');
+  hint.classList.remove('warn');
+  if (stateGame.pairs.length===0){
+    hint.textContent = I18N.composerHintEmpty[LANG];
+  } else if (stateGame.pairs.some(function(p){return p.bad;})){
+    hint.classList.add('warn');
+    hint.textContent = I18N.composerHintHasBad[LANG];
+  } else {
+    hint.textContent = I18N.composerHint[LANG];
+  }
+}
+function refreshMissionLabel(){
+  // 按当前 endpoint 切显示主任务: locations→M1, measurements→M2/M3
+  var label;
+  if (stateGame.endpoint==='locations') label = I18N.m0[LANG];
+  else if (stateGame.endpoint==='measurements'){
+    label = stateGame.cleared[1] ? I18N.m2[LANG] : I18N.m1[LANG];
+  } else if (stateGame.endpoint==='parameters') label = (LANG==='cn'?'参考 — /parameters 列出所有指标':'reference — /parameters lists all metrics');
+  else label = (LANG==='cn'?'参考 — /sensors 列出传感器':'reference — /sensors lists sensors');
+  document.getElementById('workMission').textContent = label;
+}
+
+function updateMissionUI(){
+  document.querySelectorAll('.task-line').forEach(function(el){
+    var i = parseInt(el.dataset.mis,10);
+    el.classList.toggle('done', !!stateGame.cleared[i]);
+  });
+}
+
+function showToast(){
+  var t = document.getElementById('toast');
+  t.classList.add('show');
+  setTimeout(function(){t.classList.remove('show');}, 1500);
+}
+
+// ============ demo loader (示范) ============
+function loadDemo(){
+  stateGame.pairs = [];
+  // 找第一个未完成的任务给个起手
+  var firstUndone = stateGame.cleared.findIndex(function(x){return !x;});
+  if (firstUndone<0) firstUndone = 0;
+  if (firstUndone===0){
+    stateGame.endpoint = 'locations';
+    addPair({key:'country', val:'CN',       cls:'loc-blk'});
+    addPair({key:'city',    val:'Shanghai', cls:'loc-blk'});
+    addPair({key:'limit',   val:'10',       cls:'limit-blk'});
+  } else if (firstUndone===1){
+    stateGame.endpoint = 'measurements';
+    addPair({key:'parameter', val:'pm25',     cls:'param-blk'});
+    addPair({key:'city',      val:'Shanghai', cls:'loc-blk'});
+    addPair({key:'limit',     val:'10',       cls:'limit-blk'});
+  } else {
+    stateGame.endpoint = 'measurements';
+    addPair({key:'parameter', val:'pm25',       cls:'param-blk'});
+    addPair({key:'date_from', val:'2025-04-01', cls:'date-blk'});
+    addPair({key:'date_to',   val:'2025-04-07', cls:'date-blk'});
+  }
+  updateEndpointUI();
+  refreshMissionLabel();
+  renderUrl();
+}
+
+// ============ endpoint selector ============
+function updateEndpointUI(){
+  document.querySelectorAll('.ep-item').forEach(function(el){
+    el.classList.toggle('active', el.dataset.ep===stateGame.endpoint);
+  });
+}
+
+// ============ DOM ready ============
+document.addEventListener('DOMContentLoaded', function(){
+  buildLib();
+  renderUrl();
+  updateEndpointUI();
+  refreshI18N();
+
+  // composer drag-drop
+  var composer = document.getElementById('composer');
+  composer.addEventListener('dragover', function(ev){
+    ev.preventDefault();
+    ev.dataTransfer.dropEffect = 'copy';
+    composer.classList.add('drop-hot');
+  });
+  composer.addEventListener('dragleave', function(ev){
+    if (ev.target===composer) composer.classList.remove('drop-hot');
+  });
+  composer.addEventListener('drop', function(ev){
+    ev.preventDefault();
+    composer.classList.remove('drop-hot');
+    var p = stateGame.draggingPair;
+    if (!p) return;
+    addPair(p);
+    stateGame.draggingPair = null;
+  });
+
+  // buttons
+  document.getElementById('btnSend').addEventListener('click', sendRequest);
+  document.getElementById('btnClear').addEventListener('click', function(){
+    stateGame.pairs = [];
+    renderUrl();
+    refreshHint();
+    document.getElementById('respBody').textContent = '// '+I18N.waitVerdict[LANG];
+    var head = document.getElementById('respStatus');
+    head.classList.remove('ok-200','err-404','err-422');
+    head.textContent = 'idle';
+    setVerdict('wait');
+  });
+  document.getElementById('btnHint').addEventListener('click', loadDemo);
+
+  // endpoint switch
+  document.querySelectorAll('.ep-item').forEach(function(el){
+    el.addEventListener('click', function(){
+      stateGame.endpoint = el.dataset.ep;
+      updateEndpointUI();
+      renderUrl();
+      refreshMissionLabel();
+    });
+  });
+
+  // mission click — focus that mission (clear pairs + hint endpoint)
+  document.querySelectorAll('.task-line').forEach(function(el){
+    el.addEventListener('click', function(){
+      var i = parseInt(el.dataset.mis,10);
+      // 切到该任务对应端点 (不清空, 让用户感知差异)
+      if (i===0) stateGame.endpoint = 'locations';
+      else stateGame.endpoint = 'measurements';
+      updateEndpointUI();
+      renderUrl();
+      refreshMissionLabel();
+    });
+  });
+
+  // language toggle
+  document.getElementById('langBtn').addEventListener('click', function(){
+    LANG = (LANG==='cn'?'en':'cn');
+    refreshI18N();
+    renderUrl();
+  });
+});
+</script>
+</body>
+</html>

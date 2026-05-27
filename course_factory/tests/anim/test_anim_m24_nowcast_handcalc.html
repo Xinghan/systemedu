@@ -1,0 +1,1461 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>M24 — 12h NowCast 完整手算 (climax)</title>
+<style>
+  /* F2 第 1 层 — 共享深空底 (theme_style/styles.css L8-21) */
+  :root{
+    --bg-0: oklch(0.14 0.035 265);
+    --bg-1: oklch(0.18 0.04 265);
+    --bg-2: oklch(0.22 0.045 265);
+    --bg-3: oklch(0.28 0.05 265);
+    --line: oklch(0.35 0.05 265 / 0.35);
+    --line-strong: oklch(0.55 0.08 265 / 0.55);
+    --fg: oklch(0.96 0.01 265);
+    --fg-dim: oklch(0.75 0.02 265);
+    --fg-mute: oklch(0.55 0.03 265);
+    --gold: oklch(0.85 0.14 85);
+
+    /* F2 第 2 层 — math accent (electric blue) */
+    --math: oklch(0.72 0.17 245);
+    --math-dim: oklch(0.52 0.16 245);
+
+    /* F2 第 3 层 — math 5 色 palette (themes.js math: AXIS/PROOF/SHADOW/SOLUTION/QED) */
+    --AXIS:     oklch(0.72 0.17 245); /* electric blue 主 — 坐标轴 / mascot 主体 / 公式高亮 */
+    --PROOF:    oklch(0.52 0.16 245); /* 中 blue — 推导步骤连线 / 公式系数 */
+    --SHADOW:   oklch(0.35 0.10 245); /* 深 blue — 老柱子背景 / 卡片底纹 */
+    --SOLUTION: oklch(0.92 0.08 240); /* 近白 blue — 新柱子高亮 / 数字光晕 */
+    --QED:      oklch(0.85 0.14 85);  /* 金色 QED — 关键结论 / EPA 一致 */
+
+    /* AQI 分段色 (M05 已介绍) */
+    --aqi-moderate: oklch(0.85 0.16 95); /* 黄 — AQI 51-100 */
+  }
+
+  *{box-sizing:border-box;margin:0;padding:0;}
+  html,body{height:100%;overflow:hidden;}
+  body{
+    background: var(--bg-0);
+    color: var(--fg);
+    font-family: 'Inter','Noto Sans SC',-apple-system,BlinkMacSystemFont,sans-serif;
+    display: flex;
+    height: 100vh;
+  }
+
+  /* 200px 左侧 sidebar */
+  .sidebar{
+    width: 200px;
+    flex-shrink: 0;
+    background: var(--bg-1);
+    border-right: 1px solid var(--line);
+    padding: 16px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .brand{
+    border-bottom: 1px solid var(--line);
+    padding-bottom: 10px;
+    margin-bottom: 4px;
+  }
+  .brand .badge{
+    display: inline-block;
+    font-family: 'JetBrains Mono',ui-monospace,monospace;
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    color: var(--math);
+    background: var(--bg-2);
+    padding: 3px 7px;
+    border: 1px solid var(--line);
+    box-shadow: 2px 2px 0 var(--bg-0);
+    margin-bottom: 6px;
+  }
+  .brand h1{
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--fg);
+    line-height: 1.3;
+  }
+  .brand .sub{
+    font-size: 10px;
+    color: var(--fg-mute);
+    margin-top: 4px;
+    font-family: 'JetBrains Mono',ui-monospace,monospace;
+    letter-spacing: 0.04em;
+  }
+
+  /* Pi mascot 在 sidebar */
+  .mascot-box{
+    background: var(--bg-2);
+    border: 1px solid var(--line);
+    box-shadow: 3px 3px 0 var(--bg-0);
+    padding: 10px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .mascot-box .label{
+    font-family: 'JetBrains Mono',ui-monospace,monospace;
+    font-size: 9px;
+    color: var(--fg-dim);
+    letter-spacing: 0.08em;
+  }
+  .mascot-box .name{
+    font-size: 11px;
+    color: var(--fg);
+    font-weight: 600;
+    margin-top: 2px;
+  }
+
+  /* Guide 3 条 */
+  .guide{ display: flex; flex-direction: column; gap: 8px; }
+  .guide-item{
+    font-size: 11px;
+    line-height: 1.45;
+    color: var(--fg-dim);
+    padding-left: 9px;
+    border-left: 2px solid var(--math);
+    padding-top: 2px;
+    padding-bottom: 2px;
+  }
+  .guide-item .num{
+    font-family: 'JetBrains Mono',ui-monospace,monospace;
+    color: var(--math);
+    font-weight: 700;
+    margin-right: 4px;
+  }
+
+  .sidebar .spacer{ flex: 1; }
+
+  .lang-btn{
+    background: var(--bg-2);
+    border: 1px solid var(--line-strong);
+    box-shadow: 2px 2px 0 var(--bg-0);
+    color: var(--fg);
+    font-family: 'JetBrains Mono',ui-monospace,monospace;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    padding: 7px 10px;
+    cursor: pointer;
+    width: 100%;
+  }
+  .lang-btn:hover{ border-color: var(--math); color: var(--math); }
+  .lang-btn:active{ transform: translate(2px, 2px); box-shadow: none; }
+
+  /* Main stage */
+  .main{
+    flex: 1;
+    position: relative;
+    overflow: hidden;
+    background: var(--bg-0);
+  }
+  #stage{
+    width: 100%;
+    height: 100%;
+    display: block;
+  }
+
+  /* HUD 右上 */
+  .hud{
+    position: absolute;
+    top: 18px;
+    right: 18px;
+    background: var(--bg-2);
+    border: 1px solid var(--line);
+    box-shadow: 3px 3px 0 var(--bg-0);
+    padding: 10px 14px;
+    font-family: 'JetBrains Mono',ui-monospace,monospace;
+    min-width: 260px;
+  }
+  .hud .row{
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 14px;
+    font-size: 11px;
+    line-height: 1.6;
+  }
+  .hud .label{ color: var(--fg-mute); letter-spacing: 0.06em; }
+  .hud .value{ color: var(--fg); font-weight: 700; }
+  .hud .value.accent{ color: var(--math); }
+  .hud .value.gold{ color: var(--gold); }
+  .hud .sep{
+    height: 1px;
+    background: var(--line);
+    margin: 6px 0;
+  }
+
+  /* Subtitle 底部 */
+  .subtitle{
+    position: absolute;
+    left: 50%;
+    bottom: 28px;
+    transform: translateX(-50%);
+    text-align: center;
+    max-width: 80%;
+    pointer-events: none;
+  }
+  .subtitle .cn{
+    font-size: 17px;
+    font-weight: 700;
+    color: var(--fg);
+    letter-spacing: 0.01em;
+  }
+  .subtitle .en{
+    font-size: 12px;
+    color: var(--fg-mute);
+    margin-top: 4px;
+    font-style: italic;
+    font-family: 'JetBrains Mono',ui-monospace,monospace;
+    letter-spacing: 0.03em;
+  }
+
+  /* Frame chip 左下 — 5 步进度 */
+  .frame-progress{
+    position: absolute;
+    left: 24px;
+    bottom: 28px;
+    display: flex;
+    gap: 6px;
+    align-items: center;
+  }
+  .chip{
+    width: 24px;
+    height: 6px;
+    background: var(--bg-2);
+    border: 1px solid var(--line);
+  }
+  .chip.active{
+    background: var(--math);
+    border-color: var(--math);
+  }
+  .chip.done{
+    background: var(--math-dim);
+    border-color: var(--math-dim);
+  }
+  .frame-progress .stepname{
+    font-family: 'JetBrains Mono',ui-monospace,monospace;
+    font-size: 10px;
+    color: var(--fg-dim);
+    margin-left: 8px;
+    letter-spacing: 0.08em;
+  }
+
+  /* QED flash overlay (key moment) */
+  .flash{
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-family: 'JetBrains Mono',ui-monospace,monospace;
+    font-size: 28px;
+    font-weight: 800;
+    color: var(--gold);
+    letter-spacing: 0.18em;
+    opacity: 0;
+    pointer-events: none;
+    text-shadow: 0 0 24px var(--gold);
+    text-align: center;
+  }
+  .flash.on{ opacity: 1; }
+  .flash .small{
+    display: block;
+    text-align: center;
+    font-size: 11px;
+    color: var(--fg-dim);
+    letter-spacing: 0.08em;
+    margin-top: 8px;
+    text-shadow: none;
+    font-weight: 400;
+  }
+</style>
+</head>
+<body>
+  <aside class="sidebar">
+    <div class="brand">
+      <span class="badge" id="badgeMod">MOD-M24 / MATH</span>
+      <h1 id="brandH1">12h NowCast 完整手算</h1>
+      <div class="sub" id="brandSub">PM2.5 -> NowCast -> AQI</div>
+    </div>
+
+    <div class="mascot-box">
+      <svg width="42" height="42" viewBox="0 0 60 60" aria-hidden="true">
+        <!-- Pi mascot: 旋转的正四面体, 翻面亮方程 (themes.js math) -->
+        <polygon points="30,12 14,46 46,46" fill="var(--SHADOW)" opacity="0.55"/>
+        <polygon points="30,12 18,42 42,42" fill="none" stroke="var(--AXIS)" stroke-width="1.6" stroke-linejoin="round"/>
+        <polygon points="30,18 22,40 38,40" fill="var(--PROOF)" opacity="0.45"/>
+        <circle cx="30" cy="12" r="1.8" fill="var(--SOLUTION)"/>
+        <circle cx="18" cy="42" r="1.8" fill="var(--SOLUTION)"/>
+        <circle cx="42" cy="42" r="1.8" fill="var(--SOLUTION)"/>
+        <text x="30" y="34" fill="var(--QED)" font-family="'JetBrains Mono',monospace" font-size="9" text-anchor="middle" font-weight="700">AQI</text>
+      </svg>
+      <div>
+        <div class="label">MASCOT</div>
+        <div class="name" id="mascotName">Pi · 派</div>
+      </div>
+    </div>
+
+    <div class="guide">
+      <div class="guide-item" id="g1"><span class="num">01</span><span class="gtxt">12 个 PM2.5 数, 真按 EPA NowCast 算一次</span></div>
+      <div class="guide-item" id="g2"><span class="num">02</span><span class="gtxt">w = c_min/c_max, 若 &lt; 0.5 则 clamp 到 0.5</span></div>
+      <div class="guide-item" id="g3"><span class="num">03</span><span class="gtxt">最终对照 EPA AirNow 官方 — 数字必须一致</span></div>
+    </div>
+
+    <div class="spacer"></div>
+    <button id="langBtn" class="lang-btn" type="button">CN / EN</button>
+  </aside>
+
+  <main class="main">
+    <svg id="stage" viewBox="0 0 1080 720" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg"></svg>
+
+    <div class="hud">
+      <div class="row"><span class="label" id="hudL1">FRAME</span><span class="value accent" id="hudV1">1 / 5</span></div>
+      <div class="row"><span class="label" id="hudL2">STAGE</span><span class="value" id="hudV2">Data</span></div>
+      <div class="sep"></div>
+      <div class="row"><span class="label" id="hudL3">c_max</span><span class="value" id="hudV3">-- ug/m3</span></div>
+      <div class="row"><span class="label" id="hudL4">c_min</span><span class="value" id="hudV4">-- ug/m3</span></div>
+      <div class="row"><span class="label" id="hudL5">w</span><span class="value accent" id="hudV5">--</span></div>
+      <div class="row"><span class="label" id="hudL6">NowCast</span><span class="value accent" id="hudV6">--</span></div>
+      <div class="row"><span class="label" id="hudL7">AQI</span><span class="value gold" id="hudV7">--</span></div>
+    </div>
+
+    <div class="subtitle">
+      <div class="cn" id="subCn">这是过去 12 小时 PurpleAir 节点真实读到的 PM2.5</div>
+      <div class="en" id="subEn">12 hours of real PM2.5 from a PurpleAir node</div>
+    </div>
+
+    <div class="frame-progress">
+      <div class="chip" id="chip0"></div>
+      <div class="chip" id="chip1"></div>
+      <div class="chip" id="chip2"></div>
+      <div class="chip" id="chip3"></div>
+      <div class="chip" id="chip4"></div>
+      <span class="stepname" id="stepName">01 · DATA</span>
+    </div>
+
+    <div class="flash" id="flash">
+      AQI 100
+      <span class="small" id="flashSub">EPA AirNow 算出一样的数 — 你也是科学家</span>
+    </div>
+  </main>
+
+<script>
+(function(){
+  "use strict";
+
+  // ====== i18n ======
+  var LANG = 'cn';
+  var I18N = {
+    badgeMod:   { cn: 'MOD-M24 / MATH', en: 'MOD-M24 / MATH' },
+    brandH1:    { cn: '12h NowCast 完整手算', en: '12h NowCast Hand Calculation' },
+    brandSub:   { cn: 'PM2.5 -> NowCast -> AQI', en: 'PM2.5 -> NowCast -> AQI' },
+    mascotName: { cn: 'Pi · 派', en: 'Pi · the tetrahedron' },
+    g1: { cn: '12 个 PM2.5 数, 真按 EPA NowCast 算一次',
+          en: '12 PM2.5 numbers, run the real EPA NowCast formula' },
+    g2: { cn: 'w = c_min/c_max, 若 < 0.5 则 clamp 到 0.5',
+          en: 'w = c_min/c_max, clamp to 0.5 if below' },
+    g3: { cn: '最终对照 EPA AirNow 官方 — 数字必须一致',
+          en: 'Cross-check EPA AirNow — numbers must match' },
+    hudL1: { cn: '帧',      en: 'FRAME' },
+    hudL2: { cn: '阶段',    en: 'STAGE' },
+    hudL3: { cn: 'c_max',   en: 'c_max' },
+    hudL4: { cn: 'c_min',   en: 'c_min' },
+    hudL5: { cn: 'w',       en: 'w' },
+    hudL6: { cn: 'NowCast', en: 'NowCast' },
+    hudL7: { cn: 'AQI',     en: 'AQI' },
+    btnLang: { cn: 'CN / EN', en: 'CN / EN' }
+  };
+
+  // ====== 真实 12h PM2.5 数据 (ug/m3) ======
+  // 索引 0 = 最新 (i=1 in EPA notation), 11 = 11 小时前 (i=12)
+  // 模拟 PurpleAir 节点 — 烟雾散去后的衰减场景
+  var C = [40, 35, 30, 25, 22, 20, 18, 15, 14, 12, 11, 10];
+  var TIMES = ['00:00', '01:00', '02:00', '03:00', '04:00', '05:00',
+               '06:00', '07:00', '08:00', '09:00', '10:00', '11:00'];
+
+  // ====== 预计算 (严格对齐 EPA AirNow Tech Memo) ======
+  // c_max = 40, c_min = 10, w_star = 10/40 = 0.25 < 0.5 -> w = 0.5
+  var C_MAX = 40, C_MIN = 10;
+  var W_STAR = C_MIN / C_MAX;     // 0.25
+  var W = W_STAR < 0.5 ? 0.5 : W_STAR; // 0.5 (EPA clamp)
+
+  // 12 个 w^(i-1) 权重 (i = 1..12, 索引 0..11)
+  var POW = [];
+  for (var i = 0; i < 12; i++) POW.push(Math.pow(W, i));
+  // [1, 0.5, 0.25, 0.125, 0.0625, 0.03125, 0.015625, 0.0078125,
+  //  0.00390625, 0.001953125, 0.0009765625, 0.00048828125]
+
+  // 每项贡献 w^(i-1) * c_i
+  var TERMS = [];
+  for (var k = 0; k < 12; k++) TERMS.push(POW[k] * C[k]);
+
+  var NUM = 0, DEN = 0;
+  for (var j = 0; j < 12; j++){ NUM += TERMS[j]; DEN += POW[j]; }
+  // NUM ≈ 70.612, DEN ≈ 1.99951
+  var NOWCAST = NUM / DEN;        // ≈ 35.314
+  var NOWCAST_R = Math.round(NOWCAST * 10) / 10; // 35.3 (EPA 1 dp)
+
+  // ====== AQI 计算 (EPA 24h PM2.5 breakpoints) ======
+  // 35.3 落在 12.1 - 35.4 -> AQI 51 - 100
+  var BP_LO = 12.1, BP_HI = 35.4, AQI_LO = 51, AQI_HI = 100;
+  var AQI_RAW = (AQI_HI - AQI_LO) / (BP_HI - BP_LO) * (NOWCAST_R - BP_LO) + AQI_LO;
+  // = 49/23.3 * 23.2 + 51 = 2.10300 * 23.2 + 51 = 48.78970 + 51 = 99.78970
+  var AQI = Math.round(AQI_RAW);  // 100
+
+  // ====== 5 帧故事 ======
+  var FRAME_MS = 7000;
+  var FRAMES = [
+    {
+      id: 'data',
+      stepName: '01 · DATA',
+      hudStage: { cn: '12h 数据', en: '12h data' },
+      subCn: '这是过去 12 小时 PurpleAir 节点真实读到的 PM2.5',
+      subEn: 'Real 12h PM2.5 from a PurpleAir node'
+    },
+    {
+      id: 'minmax_w',
+      stepName: '02 · c_min/c_max -> w',
+      hudStage: { cn: '求 w', en: 'compute w' },
+      subCn: 'c_min/c_max = 10/40 = 0.25, < 0.5 所以 EPA 规则把 w clamp 到 0.5',
+      subEn: 'c_min/c_max = 10/40 = 0.25 < 0.5, so EPA clamps w to 0.5'
+    },
+    {
+      id: 'powers',
+      stepName: '03 · w^(i-1) 表',
+      hudStage: { cn: '12 个权重', en: '12 weights' },
+      subCn: '12 个权重: 1, 0.5, 0.25, 0.125, ... 每一步减半',
+      subEn: '12 weights: 1, 0.5, 0.25, 0.125, ... halving each step'
+    },
+    {
+      id: 'weighted_avg',
+      stepName: '04 · 加权平均',
+      hudStage: { cn: 'SUM / SUM', en: 'sum / sum' },
+      subCn: '分子 SUM w^(i-1)·c_i = 70.612, 分母 SUM w^(i-1) = 1.99951',
+      subEn: 'Num SUM w^(i-1)·c_i = 70.612, Den SUM w^(i-1) = 1.99951'
+    },
+    {
+      id: 'aqi_match',
+      stepName: '05 · AQI = 100',
+      hudStage: { cn: 'AQI = 100', en: 'AQI = 100' },
+      subCn: '35.3 -> AQI 插值 -> 100; EPA AirNow 算出同一个数, 你跟科学家一致',
+      subEn: '35.3 -> AQI interp -> 100; EPA AirNow gets the same number'
+    }
+  ];
+
+  // ====== State ======
+  var currentFrame = 0;
+  var frameStartTs = 0;
+  var rafId = null;
+  var stage = document.getElementById('stage');
+  var SVGNS = 'http://www.w3.org/2000/svg';
+
+  // ====== Utility ======
+  function el(name, attrs, parent){
+    var n = document.createElementNS(SVGNS, name);
+    if (attrs){
+      for (var k in attrs){
+        if (Object.prototype.hasOwnProperty.call(attrs, k)){
+          n.setAttribute(k, attrs[k]);
+        }
+      }
+    }
+    if (parent) parent.appendChild(n);
+    return n;
+  }
+  function clearStage(){ while(stage.firstChild) stage.removeChild(stage.firstChild); }
+  function t(key){
+    if (!I18N[key]) return key;
+    return I18N[key][LANG] || I18N[key].en || key;
+  }
+  function clamp(x, lo, hi){ return x < lo ? lo : (x > hi ? hi : x); }
+  function easeInOut(x){ return x < 0.5 ? 2*x*x : 1 - Math.pow(-2*x + 2, 2)/2; }
+  function fmt(n, d){ d = (d===undefined) ? 1 : d; return Number(n).toFixed(d); }
+
+  // ====== Drawing helpers ======
+  function drawBgGrid(){
+    var g = el('g', { opacity: '0.18' }, stage);
+    for (var x = 0; x <= 1080; x += 60){
+      el('line', { x1: x, y1: 0, x2: x, y2: 720, stroke: 'var(--line)', 'stroke-width': '0.5' }, g);
+    }
+    for (var y = 0; y <= 720; y += 60){
+      el('line', { x1: 0, y1: y, x2: 1080, y2: y, stroke: 'var(--line)', 'stroke-width': '0.5' }, g);
+    }
+    var defs = el('defs', null, stage);
+    var rg = el('radialGradient', { id: 'centerGlow', cx: '50%', cy: '45%', r: '60%' }, defs);
+    el('stop', { offset: '0%', 'stop-color': 'var(--math)', 'stop-opacity': '0.06' }, rg);
+    el('stop', { offset: '100%', 'stop-color': 'var(--bg-0)', 'stop-opacity': '0' }, rg);
+    el('rect', { x: 0, y: 0, width: 1080, height: 720, fill: 'url(#centerGlow)' }, stage);
+  }
+
+  function drawStepChain(activeIdx){
+    var labels = [
+      { cn: '数据',   en: 'Data' },
+      { cn: '求 w',   en: 'w' },
+      { cn: '权重表', en: 'Powers' },
+      { cn: '加权和', en: 'Weighted' },
+      { cn: 'AQI',    en: 'AQI' }
+    ];
+    var y = 660;
+    var startX = 110;
+    var gap = (1080 - 220) / 4;
+    var g = el('g', null, stage);
+    for (var i = 0; i < 5; i++){
+      var cx = startX + gap * i;
+      var on = i <= activeIdx;
+      var ringColor = on ? 'var(--math)' : 'var(--line)';
+      var fillColor = on ? 'var(--bg-2)' : 'var(--bg-1)';
+      var textColor = on ? 'var(--fg)' : 'var(--fg-mute)';
+      el('rect', {
+        x: cx - 44, y: y - 16, width: 88, height: 32,
+        fill: fillColor, stroke: ringColor, 'stroke-width': on ? '1.6' : '1', rx: '2'
+      }, g);
+      var tx = el('text', {
+        x: cx, y: y + 4, fill: textColor,
+        'font-family': "'Inter','Noto Sans SC',sans-serif",
+        'font-size': '12', 'font-weight': on ? '700' : '500',
+        'text-anchor': 'middle'
+      }, g);
+      tx.textContent = labels[i][LANG] || labels[i].en;
+      var ix = el('text', {
+        x: cx, y: y - 22, fill: on ? 'var(--math)' : 'var(--fg-mute)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '9', 'text-anchor': 'middle', 'letter-spacing': '0.1em'
+      }, g);
+      ix.textContent = '0' + (i+1);
+      if (i < 4){
+        var x1 = cx + 44;
+        var x2 = cx + gap - 44;
+        var connColor = (on && (i+1) <= activeIdx) ? 'var(--math)' : 'var(--line)';
+        el('line', {
+          x1: x1, y1: y, x2: x2 - 6, y2: y,
+          stroke: connColor, 'stroke-width': '1.2'
+        }, g);
+        el('polygon', {
+          points: (x2-6)+','+(y-4)+' '+(x2)+','+y+' '+(x2-6)+','+(y+4),
+          fill: connColor
+        }, g);
+      }
+    }
+  }
+
+  // Pi mascot — 旋转的正四面体, 翻面亮 QED
+  function drawPiMascot(g, rot, qed){
+    el('circle', { cx: 0, cy: 0, r: 36, fill: 'none', stroke: 'var(--AXIS)', 'stroke-width': '0.8',
+                   'stroke-dasharray': '3 5', opacity: '0.5',
+                   transform: 'rotate(' + (rot * 30 % 360) + ')' }, g);
+    el('polygon', { points: '0,-22 -20,16 20,16', fill: 'var(--SHADOW)', opacity: '0.55' }, g);
+    el('polygon', { points: '0,-22 -16,14 16,14', fill: 'none', stroke: 'var(--AXIS)',
+                    'stroke-width': '1.6', 'stroke-linejoin': 'round' }, g);
+    el('polygon', { points: '0,-14 -10,10 10,10', fill: 'var(--PROOF)', opacity: '0.5' }, g);
+    el('circle', { cx: 0, cy: -22, r: 2, fill: 'var(--SOLUTION)' }, g);
+    el('circle', { cx: -16, cy: 14, r: 2, fill: 'var(--SOLUTION)' }, g);
+    el('circle', { cx: 16, cy: 14, r: 2, fill: 'var(--SOLUTION)' }, g);
+    var eqText = qed ? 'QED' : 'AQI';
+    var eqTx = el('text', {
+      x: 0, y: 4, fill: 'var(--QED)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': qed ? '11' : '8', 'text-anchor': 'middle', 'font-weight': '700'
+    }, g);
+    eqTx.textContent = eqText;
+    var lab = el('text', {
+      x: 0, y: 48, fill: 'var(--fg-dim)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '10', 'text-anchor': 'middle', 'letter-spacing': '0.1em'
+    }, g);
+    lab.textContent = qed
+      ? (LANG === 'cn' ? 'Pi · QED' : 'Pi · QED')
+      : (LANG === 'cn' ? 'Pi · 算' : 'Pi · calc');
+  }
+
+  // ====== Frame 1 — DATA (12h PM2.5 表) ======
+  function drawFrame1(p){
+    drawBgGrid();
+    drawStepChain(0);
+
+    var ttl = el('text', {
+      x: 540, y: 60, fill: 'var(--math)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '14', 'text-anchor': 'middle', 'letter-spacing': '0.14em', 'font-weight': '700'
+    }, stage);
+    ttl.textContent = LANG === 'cn' ? '过去 12 小时 PM2.5 (按时间顺序)' : 'Past 12h PM2.5 (chronological)';
+
+    // 表头
+    var headerG = el('g', { transform: 'translate(180, 95)' }, stage);
+    var hdrs = LANG === 'cn'
+      ? ['i', '时间戳', 'c_i (ug/m3)']
+      : ['i', 'timestamp', 'c_i (ug/m3)'];
+    var colX = [40, 200, 460];
+    var colW = [120, 220, 200];
+    for (var hi = 0; hi < 3; hi++){
+      el('rect', {
+        x: colX[hi] - colW[hi]/2, y: 0, width: colW[hi], height: 28,
+        fill: 'var(--bg-2)', stroke: 'var(--AXIS)', 'stroke-width': '1'
+      }, headerG);
+      var ht = el('text', {
+        x: colX[hi], y: 18, fill: 'var(--AXIS)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '11', 'text-anchor': 'middle', 'font-weight': '700', 'letter-spacing': '0.08em'
+      }, headerG);
+      ht.textContent = hdrs[hi];
+    }
+
+    // 表格 12 行 — 逐行显现 (从最新 i=1 开始)
+    var rowG = el('g', { transform: 'translate(180, 128)' }, stage);
+    var rowH = 28;
+    for (var r = 0; r < 12; r++){
+      // 行进入: 每行 0.04 * 12 = 0.48 完成揭示
+      var revealP = clamp((p - r * 0.04) / 0.18, 0, 1);
+      if (revealP <= 0) continue;
+      var ry = r * rowH;
+      var alpha = revealP;
+
+      var isLatest = (r === 0);
+      var rowFill = isLatest ? 'var(--SOLUTION)' : 'var(--bg-1)';
+      var rowOp = isLatest ? '0.22' : '1';
+      var strokeC = isLatest ? 'var(--SOLUTION)' : 'var(--line)';
+
+      // 行背景
+      el('rect', {
+        x: -150, y: ry, width: 720, height: rowH,
+        fill: rowFill, 'fill-opacity': rowOp,
+        stroke: strokeC, 'stroke-width': isLatest ? '1.4' : '0.5',
+        opacity: alpha
+      }, rowG);
+
+      // i 列
+      var iv = el('text', {
+        x: 40, y: ry + 18, fill: isLatest ? 'var(--SOLUTION)' : 'var(--fg-dim)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '11', 'text-anchor': 'middle', 'font-weight': '700',
+        opacity: alpha
+      }, rowG);
+      iv.textContent = String(r + 1);
+
+      // 时间列
+      var tv = el('text', {
+        x: 200, y: ry + 18, fill: 'var(--fg)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '11', 'text-anchor': 'middle',
+        opacity: alpha
+      }, rowG);
+      tv.textContent = TIMES[r] + (r === 0 ? (LANG === 'cn' ? ' (现在)' : ' (now)') : '');
+
+      // 值列 — 数字从右滑入
+      var cv = el('text', {
+        x: 460, y: ry + 18,
+        fill: isLatest ? 'var(--SOLUTION)' : 'var(--fg)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '13', 'text-anchor': 'middle', 'font-weight': '700',
+        opacity: alpha
+      }, rowG);
+      cv.textContent = String(C[r]);
+    }
+
+    // 右侧 mini 折线图 — 显示衰减形状
+    if (p > 0.5){
+      var alphaC = clamp((p - 0.5) / 0.3, 0, 1);
+      var chartG = el('g', { transform: 'translate(820, 130)', opacity: alphaC }, stage);
+      el('rect', { x: -10, y: -10, width: 220, height: 360,
+                   fill: 'var(--bg-1)', stroke: 'var(--line)', 'stroke-width': '0.8' }, chartG);
+      var cttl = el('text', {
+        x: 100, y: 8, fill: 'var(--fg-dim)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '10', 'text-anchor': 'middle', 'letter-spacing': '0.1em'
+      }, chartG);
+      cttl.textContent = LANG === 'cn' ? '衰减形状' : 'decay shape';
+      // 轴
+      el('line', { x1: 20, y1: 320, x2: 200, y2: 320, stroke: 'var(--AXIS)', 'stroke-width': '1' }, chartG);
+      el('line', { x1: 20, y1: 30, x2: 20, y2: 320, stroke: 'var(--AXIS)', 'stroke-width': '1' }, chartG);
+      // 折线: i=0 (最新, 40) 在右, i=11 (老, 10) 在左
+      var pts = [];
+      for (var pi = 0; pi < 12; pi++){
+        var px = 20 + (11 - pi) / 11 * 180;
+        var py = 320 - (C[pi] / 50) * 280;
+        pts.push(px + ',' + py);
+      }
+      el('polyline', {
+        points: pts.join(' '),
+        fill: 'none', stroke: 'var(--AXIS)', 'stroke-width': '2'
+      }, chartG);
+      for (var pj = 0; pj < 12; pj++){
+        var dx = 20 + (11 - pj) / 11 * 180;
+        var dy = 320 - (C[pj] / 50) * 280;
+        el('circle', { cx: dx, cy: dy, r: pj === 0 ? 4 : 2.4,
+                       fill: pj === 0 ? 'var(--SOLUTION)' : 'var(--AXIS)' }, chartG);
+      }
+      // X 轴注 "old <- now"
+      var xn = el('text', {
+        x: 110, y: 340, fill: 'var(--fg-mute)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '8', 'text-anchor': 'middle'
+      }, chartG);
+      xn.textContent = LANG === 'cn' ? '老 <- 现在' : 'old <- now';
+    }
+
+    var mg = el('g', { transform: 'translate(110, 580)' }, stage);
+    drawPiMascot(mg, p * 4, false);
+
+    document.getElementById('hudV3').textContent = '40 ug/m3';
+    document.getElementById('hudV4').textContent = '10 ug/m3';
+    document.getElementById('hudV5').textContent = '--';
+    document.getElementById('hudV6').textContent = '--';
+    document.getElementById('hudV7').textContent = '--';
+  }
+
+  // ====== Frame 2 — c_min / c_max -> w (clamp 演示) ======
+  function drawFrame2(p){
+    drawBgGrid();
+    drawStepChain(1);
+
+    var ttl = el('text', {
+      x: 540, y: 60, fill: 'var(--math)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '14', 'text-anchor': 'middle', 'letter-spacing': '0.14em', 'font-weight': '700'
+    }, stage);
+    ttl.textContent = LANG === 'cn' ? 'Step 1 — 找极值, 算 w' : 'Step 1 — pick extremes, compute w';
+
+    // 左半 — 高亮 c_max 和 c_min 在 12 个数中
+    var dataG = el('g', { transform: 'translate(80, 110)' }, stage);
+    var nlbl = el('text', {
+      x: 200, y: 0, fill: 'var(--fg-dim)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '11', 'text-anchor': 'middle', 'letter-spacing': '0.08em'
+    }, dataG);
+    nlbl.textContent = LANG === 'cn' ? '12 个数里挑最大、最小' : 'pick max & min from 12';
+
+    // 12 个数字 横排
+    var nx0 = 20;
+    var nspace = 35;
+    for (var n = 0; n < 12; n++){
+      var nx = nx0 + n * nspace;
+      var ny = 30;
+      // 进入: 整体显现
+      var phase = clamp(p * 1.4, 0, 1);
+      var isMax = (C[n] === 40);
+      var isMin = (C[n] === 10);
+      // c_max 高亮在 0.15 - 0.35
+      var hitMax = (isMax && p > 0.15);
+      var hitMin = (isMin && p > 0.30);
+      var col = hitMax ? 'var(--QED)' : (hitMin ? 'var(--SOLUTION)' : 'var(--fg-dim)');
+      var boxStroke = hitMax ? 'var(--QED)' : (hitMin ? 'var(--SOLUTION)' : 'var(--line)');
+      el('rect', {
+        x: nx - 14, y: ny - 18, width: 28, height: 26,
+        fill: 'var(--bg-2)', stroke: boxStroke,
+        'stroke-width': (hitMax || hitMin) ? '1.8' : '0.6',
+        opacity: phase
+      }, dataG);
+      var ntx = el('text', {
+        x: nx, y: ny + 2, fill: col,
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '13', 'text-anchor': 'middle', 'font-weight': '700',
+        opacity: phase
+      }, dataG);
+      ntx.textContent = String(C[n]);
+      // 标签 max / min
+      if (hitMax){
+        var ml = el('text', {
+          x: nx, y: ny + 30, fill: 'var(--QED)',
+          'font-family': "'JetBrains Mono',ui-monospace,monospace",
+          'font-size': '9', 'text-anchor': 'middle', 'font-weight': '700'
+        }, dataG);
+        ml.textContent = 'c_max';
+      }
+      if (hitMin){
+        var mn2 = el('text', {
+          x: nx, y: ny + 30, fill: 'var(--SOLUTION)',
+          'font-family': "'JetBrains Mono',ui-monospace,monospace",
+          'font-size': '9', 'text-anchor': 'middle', 'font-weight': '700'
+        }, dataG);
+        mn2.textContent = 'c_min';
+      }
+    }
+
+    // 计算块 — 阶梯出现
+    if (p > 0.40){
+      var step1A = clamp((p - 0.40) / 0.12, 0, 1);
+      var box1 = el('g', { transform: 'translate(180, 260)', opacity: step1A }, stage);
+      el('rect', { x: 0, y: 0, width: 320, height: 70,
+                   fill: 'var(--bg-2)', stroke: 'var(--AXIS)', 'stroke-width': '1.2', rx: '3' }, box1);
+      var b1l = el('text', {
+        x: 16, y: 24, fill: 'var(--fg-dim)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace", 'font-size': '11'
+      }, box1);
+      b1l.textContent = LANG === 'cn' ? '比值 w* = c_min / c_max' : 'ratio w* = c_min / c_max';
+      var b1v = el('text', {
+        x: 16, y: 52, fill: 'var(--AXIS)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace", 'font-size': '17', 'font-weight': '700'
+      }, box1);
+      b1v.textContent = 'w* = 10 / 40 = 0.25';
+    }
+
+    if (p > 0.55){
+      var step2A = clamp((p - 0.55) / 0.12, 0, 1);
+      var box2 = el('g', { transform: 'translate(560, 260)', opacity: step2A }, stage);
+      el('rect', { x: 0, y: 0, width: 320, height: 70,
+                   fill: 'var(--bg-2)', stroke: 'var(--PROOF)', 'stroke-width': '1.2', rx: '3' }, box2);
+      var b2l = el('text', {
+        x: 16, y: 24, fill: 'var(--fg-dim)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace", 'font-size': '11'
+      }, box2);
+      b2l.textContent = LANG === 'cn' ? 'EPA 规则: 若 w* < 0.5, 则' : 'EPA rule: if w* < 0.5, then';
+      var b2v = el('text', {
+        x: 16, y: 52, fill: 'var(--PROOF)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace", 'font-size': '15', 'font-weight': '700'
+      }, box2);
+      b2v.textContent = LANG === 'cn' ? 'w 强制 = 0.5  (不能再小)' : 'force w = 0.5  (no lower)';
+    }
+
+    // 结论横条
+    if (p > 0.72){
+      var concA = clamp((p - 0.72) / 0.18, 0, 1);
+      var conc = el('g', { transform: 'translate(540, 380)', opacity: concA }, stage);
+      el('rect', { x: -280, y: -28, width: 560, height: 56,
+                   fill: 'var(--bg-2)', stroke: 'var(--QED)', 'stroke-width': '2', rx: '3' }, conc);
+      var ct = el('text', {
+        x: 0, y: 8, fill: 'var(--QED)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '20', 'text-anchor': 'middle', 'font-weight': '700', 'letter-spacing': '0.06em'
+      }, conc);
+      ct.textContent = '0.25 < 0.5  =>  w = 0.5';
+    }
+
+    // 数轴可视化 clamp
+    if (p > 0.85){
+      var axA = clamp((p - 0.85) / 0.15, 0, 1);
+      var axG = el('g', { transform: 'translate(180, 470)', opacity: axA }, stage);
+      el('line', { x1: 0, y1: 0, x2: 700, y2: 0, stroke: 'var(--AXIS)', 'stroke-width': '1.4' }, axG);
+      for (var av = 0; av <= 10; av++){
+        var ax = av / 10 * 700;
+        el('line', { x1: ax, y1: -5, x2: ax, y2: 5, stroke: 'var(--AXIS)', 'stroke-width': '0.8' }, axG);
+        if (av % 2 === 0){
+          var atx = el('text', {
+            x: ax, y: 22, fill: 'var(--fg-mute)',
+            'font-family': "'JetBrains Mono',ui-monospace,monospace",
+            'font-size': '10', 'text-anchor': 'middle'
+          }, axG);
+          atx.textContent = (av / 10).toFixed(1);
+        }
+      }
+      // 0.25 marker (原值)
+      var origX = 0.25 * 700;
+      el('circle', { cx: origX, cy: -16, r: 6, fill: 'none',
+                     stroke: 'var(--fg-mute)', 'stroke-width': '1.4',
+                     'stroke-dasharray': '2 2' }, axG);
+      var ol = el('text', {
+        x: origX, y: -26, fill: 'var(--fg-mute)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '10', 'text-anchor': 'middle'
+      }, axG);
+      ol.textContent = 'w* = 0.25';
+      // 0.5 marker (clamped)
+      var clX = 0.5 * 700;
+      el('circle', { cx: clX, cy: -16, r: 8, fill: 'var(--QED)' }, axG);
+      var cl = el('text', {
+        x: clX, y: -28, fill: 'var(--QED)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '12', 'text-anchor': 'middle', 'font-weight': '700'
+      }, axG);
+      cl.textContent = 'w = 0.5';
+      // 箭头从 0.25 跳到 0.5
+      el('path', {
+        d: 'M ' + origX + ' -38 Q ' + ((origX + clX)/2) + ' -60 ' + (clX - 6) + ' -32',
+        fill: 'none', stroke: 'var(--QED)', 'stroke-width': '1.4'
+      }, axG);
+      el('polygon', {
+        points: (clX-12)+',-30 '+(clX-2)+',-26 '+(clX-12)+',-22',
+        fill: 'var(--QED)'
+      }, axG);
+      // floor 标注
+      el('rect', {
+        x: -10, y: 0, width: clX + 10, height: 14,
+        fill: 'var(--SHADOW)', opacity: '0.35'
+      }, axG);
+      var fl = el('text', {
+        x: clX/2, y: 50, fill: 'var(--fg-dim)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '10', 'text-anchor': 'middle', 'font-style': 'italic'
+      }, axG);
+      fl.textContent = LANG === 'cn' ? '小于 0.5 一律拉回 0.5 (floor)' : 'anything below 0.5 pulled up to 0.5 (floor)';
+    }
+
+    var mg = el('g', { transform: 'translate(950, 130)' }, stage);
+    drawPiMascot(mg, p * 4, false);
+
+    document.getElementById('hudV3').textContent = '40 ug/m3';
+    document.getElementById('hudV4').textContent = '10 ug/m3';
+    document.getElementById('hudV5').textContent = p > 0.72 ? '0.500 (clamp)' : (p > 0.40 ? '0.250 -> ?' : '--');
+    document.getElementById('hudV6').textContent = '--';
+    document.getElementById('hudV7').textContent = '--';
+  }
+
+  // ====== Frame 3 — w^(i-1) 12 个权重表 ======
+  function drawFrame3(p){
+    drawBgGrid();
+    drawStepChain(2);
+
+    var ttl = el('text', {
+      x: 540, y: 60, fill: 'var(--math)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '14', 'text-anchor': 'middle', 'letter-spacing': '0.14em', 'font-weight': '700'
+    }, stage);
+    ttl.textContent = LANG === 'cn'
+      ? 'Step 2 — 算 12 个权重 w^(i-1), w = 0.5'
+      : 'Step 2 — compute 12 weights w^(i-1), w = 0.5';
+
+    // 公式提示
+    var fhdr = el('text', {
+      x: 540, y: 92, fill: 'var(--fg-dim)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '12', 'text-anchor': 'middle', 'letter-spacing': '0.06em'
+    }, stage);
+    fhdr.textContent = '0.5^0 = 1   0.5^1 = 0.5   0.5^2 = 0.25   0.5^3 = 0.125   ...';
+
+    // 12 列, 每列一个权重 — 逐个亮起
+    var startX = 95;
+    var colW = 78;
+    var topY = 165;
+    var barAreaH = 200;
+    for (var k = 0; k < 12; k++){
+      var cx = startX + k * colW;
+      // 每个权重出现时间窗口 (k=0 最先)
+      var revealP = clamp((p - k * 0.05) / 0.10, 0, 1);
+      if (revealP <= 0) continue;
+
+      var w_pow = POW[k];
+      // 柱高 — 用对数视觉, 但显示真数值
+      var visualH = Math.pow(w_pow, 0.45) * barAreaH; // 视觉缩放
+      var by = topY + barAreaH - visualH;
+
+      // 颜色: i=1 (k=0) SOLUTION, k=1-2 AXIS, k=3-5 PROOF, k=6+ SHADOW
+      var col;
+      if (k === 0) col = 'var(--SOLUTION)';
+      else if (k <= 2) col = 'var(--AXIS)';
+      else if (k <= 5) col = 'var(--PROOF)';
+      else col = 'var(--SHADOW)';
+
+      // 柱子
+      el('rect', {
+        x: cx - 26, y: by, width: 52, height: visualH,
+        fill: col, opacity: 0.85 * revealP,
+        stroke: 'var(--bg-0)', 'stroke-width': '0.6'
+      }, stage);
+
+      // i 标 (i = k + 1)
+      var iLab = el('text', {
+        x: cx, y: topY + barAreaH + 18, fill: 'var(--fg-mute)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '10', 'text-anchor': 'middle', opacity: revealP
+      }, stage);
+      iLab.textContent = 'i=' + (k + 1);
+
+      // 权重数值 (上方)
+      var wText;
+      if (w_pow >= 0.01) wText = w_pow.toFixed(w_pow >= 0.1 ? 3 : 4);
+      else wText = w_pow.toExponential(2);
+      var wLab = el('text', {
+        x: cx, y: by - 6, fill: col === 'var(--SHADOW)' ? 'var(--fg-mute)' : 'var(--fg)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': k <= 4 ? '11' : '9', 'text-anchor': 'middle',
+        'font-weight': '700', opacity: revealP
+      }, stage);
+      wLab.textContent = wText;
+
+      // age (后 6 个标 "老")
+      if (k >= 9){
+        var aL = el('text', {
+          x: cx, y: topY + barAreaH + 32, fill: 'var(--SHADOW)',
+          'font-family': "'JetBrains Mono',ui-monospace,monospace",
+          'font-size': '8', 'text-anchor': 'middle', opacity: revealP
+        }, stage);
+        aL.textContent = LANG === 'cn' ? '~0' : '~0';
+      }
+    }
+
+    // X 轴底线
+    el('line', {
+      x1: 60, y1: topY + barAreaH, x2: 1030, y2: topY + barAreaH,
+      stroke: 'var(--AXIS)', 'stroke-width': '1.2'
+    }, stage);
+
+    // 后半段 — 关键说明 "每步减半"
+    if (p > 0.65){
+      var hA = clamp((p - 0.65) / 0.2, 0, 1);
+      var halveG = el('g', { transform: 'translate(540, 460)', opacity: hA }, stage);
+      el('rect', { x: -340, y: -28, width: 680, height: 56,
+                   fill: 'var(--bg-2)', stroke: 'var(--AXIS)', 'stroke-width': '1.4', rx: '3' }, halveG);
+      var hT = el('text', {
+        x: 0, y: -2, fill: 'var(--AXIS)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '14', 'text-anchor': 'middle', 'font-weight': '700'
+      }, halveG);
+      hT.textContent = LANG === 'cn'
+        ? '每往前 1 小时, 权重就减半 (因为 w = 0.5)'
+        : 'each hour back, weight halves (because w = 0.5)';
+      var hS = el('text', {
+        x: 0, y: 18, fill: 'var(--fg-dim)',
+        'font-family': "'Inter','Noto Sans SC',sans-serif",
+        'font-size': '12', 'text-anchor': 'middle', 'font-style': 'italic'
+      }, halveG);
+      hS.textContent = LANG === 'cn'
+        ? '11 小时前的数, 权重只剩 0.000488 — 几乎不影响结果'
+        : '11h-ago weight = 0.000488 — barely affects the result';
+    }
+
+    // 求和提示
+    if (p > 0.82){
+      var sA = clamp((p - 0.82) / 0.15, 0, 1);
+      var sumG = el('g', { transform: 'translate(540, 550)', opacity: sA }, stage);
+      el('rect', { x: -260, y: -22, width: 520, height: 44,
+                   fill: 'var(--bg-2)', stroke: 'var(--QED)', 'stroke-width': '1.8', rx: '3' }, sumG);
+      var sT = el('text', {
+        x: 0, y: 8, fill: 'var(--QED)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '14', 'text-anchor': 'middle', 'font-weight': '700'
+      }, sumG);
+      sT.textContent = 'SUM w^(i-1) = 1.99951';
+    }
+
+    var mg = el('g', { transform: 'translate(110, 580)' }, stage);
+    drawPiMascot(mg, p * 4, false);
+
+    document.getElementById('hudV3').textContent = '40 ug/m3';
+    document.getElementById('hudV4').textContent = '10 ug/m3';
+    document.getElementById('hudV5').textContent = '0.500';
+    document.getElementById('hudV6').textContent = '--';
+    document.getElementById('hudV7').textContent = '--';
+  }
+
+  // ====== Frame 4 — 加权平均 (SUM / SUM) 完整代入 ======
+  function drawFrame4(p){
+    drawBgGrid();
+    drawStepChain(3);
+
+    var ttl = el('text', {
+      x: 540, y: 50, fill: 'var(--math)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '14', 'text-anchor': 'middle', 'letter-spacing': '0.14em', 'font-weight': '700'
+    }, stage);
+    ttl.textContent = LANG === 'cn'
+      ? 'Step 3 — 加权和: NowCast = SUM(w^(i-1) · c_i) / SUM(w^(i-1))'
+      : 'Step 3 — weighted: NowCast = SUM(w^(i-1) · c_i) / SUM(w^(i-1))';
+
+    // 表格: i | c_i | w^(i-1) | 贡献 = w^(i-1)·c_i
+    var tx0 = 110;
+    var ty0 = 92;
+    var rowH = 28;
+    var cols = [
+      { x: 30,  w: 50,  hCn: 'i',           hEn: 'i' },
+      { x: 110, w: 90,  hCn: 'c_i',         hEn: 'c_i' },
+      { x: 240, w: 130, hCn: 'w^(i-1)',     hEn: 'w^(i-1)' },
+      { x: 410, w: 180, hCn: '贡献',         hEn: 'term' }
+    ];
+    // 表头
+    for (var ci = 0; ci < 4; ci++){
+      var co = cols[ci];
+      el('rect', {
+        x: tx0 + co.x - co.w/2, y: ty0, width: co.w, height: 24,
+        fill: 'var(--bg-2)', stroke: 'var(--AXIS)', 'stroke-width': '1'
+      }, stage);
+      var ht = el('text', {
+        x: tx0 + co.x, y: ty0 + 16, fill: 'var(--AXIS)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '11', 'text-anchor': 'middle', 'font-weight': '700'
+      }, stage);
+      ht.textContent = LANG === 'cn' ? co.hCn : co.hEn;
+    }
+
+    // 12 行 — 逐行计算并累加
+    var runningSum = 0;
+    var runningDen = 0;
+    for (var r = 0; r < 12; r++){
+      var revealP = clamp((p - r * 0.035) / 0.10, 0, 1);
+      if (revealP <= 0) continue;
+      var ry = ty0 + 24 + r * rowH;
+      var alpha = revealP;
+      var isLatest = (r === 0);
+
+      // 行背景
+      el('rect', {
+        x: tx0 + cols[0].x - cols[0].w/2,
+        y: ry, width: 540, height: rowH,
+        fill: isLatest ? 'var(--SOLUTION)' : 'var(--bg-1)',
+        'fill-opacity': isLatest ? '0.18' : '1',
+        stroke: 'var(--line)', 'stroke-width': '0.4',
+        opacity: alpha
+      }, stage);
+
+      // 列值
+      var iv = el('text', {
+        x: tx0 + cols[0].x, y: ry + 18,
+        fill: isLatest ? 'var(--SOLUTION)' : 'var(--fg-dim)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '11', 'text-anchor': 'middle', 'font-weight': '700',
+        opacity: alpha
+      }, stage);
+      iv.textContent = String(r + 1);
+
+      var cv = el('text', {
+        x: tx0 + cols[1].x, y: ry + 18, fill: 'var(--fg)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '12', 'text-anchor': 'middle', 'font-weight': '600',
+        opacity: alpha
+      }, stage);
+      cv.textContent = String(C[r]);
+
+      var wv = el('text', {
+        x: tx0 + cols[2].x, y: ry + 18, fill: 'var(--PROOF)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '11', 'text-anchor': 'middle',
+        opacity: alpha
+      }, stage);
+      wv.textContent = (POW[r] >= 0.01) ? POW[r].toFixed(POW[r] >= 0.1 ? 3 : 4) : POW[r].toExponential(2);
+
+      // 贡献: "0.25 × 30 = 7.500"
+      var termVal = TERMS[r];
+      var termStr = (POW[r] >= 0.01 ? POW[r].toFixed(POW[r] >= 0.1 ? 3 : 4) : POW[r].toExponential(1))
+                    + ' x ' + C[r] + ' = '
+                    + (termVal >= 0.01 ? termVal.toFixed(termVal >= 0.1 ? 3 : 4) : termVal.toExponential(2));
+      var tv2 = el('text', {
+        x: tx0 + cols[3].x, y: ry + 18,
+        fill: isLatest ? 'var(--SOLUTION)' : 'var(--AXIS)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '10', 'text-anchor': 'middle', 'font-weight': isLatest ? '700' : '500',
+        opacity: alpha
+      }, stage);
+      tv2.textContent = termStr;
+    }
+
+    // 右侧 — 累加 progress + 最终公式
+    if (p > 0.55){
+      var sA = clamp((p - 0.55) / 0.15, 0, 1);
+      var sumG = el('g', { transform: 'translate(720, 130)', opacity: sA }, stage);
+      el('rect', { x: -10, y: -10, width: 320, height: 220,
+                   fill: 'var(--bg-2)', stroke: 'var(--AXIS)', 'stroke-width': '1.2' }, sumG);
+      var sl = el('text', {
+        x: 150, y: 14, fill: 'var(--AXIS)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '11', 'text-anchor': 'middle', 'font-weight': '700', 'letter-spacing': '0.08em'
+      }, sumG);
+      sl.textContent = LANG === 'cn' ? '累加 (SUM)' : 'sum up';
+
+      var lines = [
+        { lab: LANG === 'cn' ? '分子 SUM(term):' : 'Num SUM(term):', val: '70.612', col: 'var(--SOLUTION)' },
+        { lab: LANG === 'cn' ? '分母 SUM(w^k):' : 'Den SUM(w^k):',  val: '1.99951', col: 'var(--PROOF)' },
+        { lab: '',                                                   val: '',        col: '' },
+        { lab: 'NowCast =',                                          val: '70.612 / 1.99951', col: 'var(--fg)' },
+        { lab: '         =',                                         val: '35.314...', col: 'var(--fg)' },
+        { lab: LANG === 'cn' ? '取 1 位小数:' : 'round 1dp:',         val: '35.3',     col: 'var(--QED)' }
+      ];
+      var ly = 50;
+      for (var li = 0; li < lines.length; li++){
+        var L = lines[li];
+        if (!L.lab) { ly += 18; continue; }
+        var lt = el('text', {
+          x: 8, y: ly, fill: 'var(--fg-dim)',
+          'font-family': "'JetBrains Mono',ui-monospace,monospace",
+          'font-size': '11'
+        }, sumG);
+        lt.textContent = L.lab;
+        var lv = el('text', {
+          x: 175, y: ly, fill: L.col,
+          'font-family': "'JetBrains Mono',ui-monospace,monospace",
+          'font-size': li >= 4 ? '13' : '11', 'font-weight': li >= 4 ? '700' : '500'
+        }, sumG);
+        lv.textContent = L.val;
+        ly += 26;
+      }
+    }
+
+    // 最终 NowCast 横条
+    if (p > 0.82){
+      var ncA = clamp((p - 0.82) / 0.15, 0, 1);
+      var ncG = el('g', { transform: 'translate(540, 600)', opacity: ncA }, stage);
+      el('rect', { x: -260, y: -28, width: 520, height: 56,
+                   fill: 'var(--bg-2)', stroke: 'var(--QED)', 'stroke-width': '2', rx: '3' }, ncG);
+      var ncT = el('text', {
+        x: 0, y: 8, fill: 'var(--QED)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '20', 'text-anchor': 'middle', 'font-weight': '700', 'letter-spacing': '0.08em'
+      }, ncG);
+      ncT.textContent = 'NowCast PM2.5 = 35.3 ug/m3';
+    }
+
+    document.getElementById('hudV3').textContent = '40 ug/m3';
+    document.getElementById('hudV4').textContent = '10 ug/m3';
+    document.getElementById('hudV5').textContent = '0.500';
+    document.getElementById('hudV6').textContent = p > 0.82 ? '35.3 ug/m3' : (p > 0.55 ? '70.612 / 1.99951' : '...');
+    document.getElementById('hudV7').textContent = '--';
+  }
+
+  // ====== Frame 5 — AQI 插值 + EPA 一致 ======
+  function drawFrame5(p){
+    drawBgGrid();
+    drawStepChain(4);
+
+    var ttl = el('text', {
+      x: 540, y: 50, fill: 'var(--math)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '14', 'text-anchor': 'middle', 'letter-spacing': '0.14em', 'font-weight': '700'
+    }, stage);
+    ttl.textContent = LANG === 'cn'
+      ? 'Step 4 — NowCast 35.3 -> AQI 分段线性插值'
+      : 'Step 4 — NowCast 35.3 -> AQI piecewise interp';
+
+    // EPA 分段表 (左侧)
+    var bpG = el('g', { transform: 'translate(70, 95)' }, stage);
+    var bphdr = el('text', {
+      x: 220, y: 0, fill: 'var(--fg-dim)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '11', 'text-anchor': 'middle', 'letter-spacing': '0.08em'
+    }, bpG);
+    bphdr.textContent = LANG === 'cn' ? 'EPA PM2.5 分段 (24h)' : 'EPA PM2.5 breakpoints (24h)';
+
+    var bps = [
+      { lo: 0.0,    hi: 12.0,  aLo: 0,   aHi: 50,  cat: 'Good',     col: 'var(--SOLUTION)' },
+      { lo: 12.1,   hi: 35.4,  aLo: 51,  aHi: 100, cat: 'Moderate', col: 'var(--QED)' },
+      { lo: 35.5,   hi: 55.4,  aLo: 101, aHi: 150, cat: 'USG',      col: 'var(--PROOF)' },
+      { lo: 55.5,   hi: 150.4, aLo: 151, aHi: 200, cat: 'Unhealthy',col: 'var(--SHADOW)' }
+    ];
+    var ry0 = 20;
+    var rh = 32;
+    for (var bi = 0; bi < bps.length; bi++){
+      var b = bps[bi];
+      var revealP = clamp((p - bi * 0.04) / 0.10, 0, 1);
+      var hit = (bi === 1) && p > 0.35;
+      var rry = ry0 + bi * rh;
+      el('rect', {
+        x: 0, y: rry, width: 440, height: rh - 4,
+        fill: hit ? 'var(--bg-2)' : 'var(--bg-1)',
+        stroke: hit ? 'var(--QED)' : 'var(--line)',
+        'stroke-width': hit ? '1.8' : '0.6',
+        opacity: revealP
+      }, bpG);
+      var rl = el('text', {
+        x: 14, y: rry + 19, fill: b.col,
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '11', 'font-weight': '700',
+        opacity: revealP
+      }, bpG);
+      rl.textContent = b.lo.toFixed(1) + ' - ' + b.hi.toFixed(1) + ' ug/m3';
+      var rm = el('text', {
+        x: 200, y: rry + 19, fill: 'var(--fg)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '11', 'text-anchor': 'middle',
+        opacity: revealP
+      }, bpG);
+      rm.textContent = '-> AQI ' + b.aLo + ' - ' + b.aHi;
+      var rc = el('text', {
+        x: 360, y: rry + 19, fill: b.col,
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '10', 'text-anchor': 'middle', 'font-style': 'italic',
+        opacity: revealP
+      }, bpG);
+      rc.textContent = b.cat;
+      // hit 行加 ">"
+      if (hit){
+        var ar = el('text', {
+          x: -10, y: rry + 20, fill: 'var(--QED)',
+          'font-family': "'JetBrains Mono',ui-monospace,monospace",
+          'font-size': '14', 'text-anchor': 'end', 'font-weight': '700'
+        }, bpG);
+        ar.textContent = '>>';
+      }
+    }
+
+    // 命中提示
+    if (p > 0.35 && p < 0.55){
+      var hitG = el('g', { transform: 'translate(530, 170)' }, stage);
+      var hl = el('text', {
+        x: 0, y: 0, fill: 'var(--QED)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '12', 'text-anchor': 'middle', 'font-weight': '700'
+      }, stage);
+      hl.textContent = LANG === 'cn'
+        ? '35.3 落在 12.1 ~ 35.4 -> AQI 51 ~ 100'
+        : '35.3 falls in 12.1 ~ 35.4 -> AQI 51 ~ 100';
+      el('rect', {
+        x: 290, y: -12, width: 480, height: 22,
+        fill: 'none', stroke: 'var(--QED)', 'stroke-width': '1.2',
+        'stroke-dasharray': '4 3', opacity: '0.6'
+      }, stage);
+    }
+
+    // 右侧 — 线性插值代入
+    if (p > 0.45){
+      var iA = clamp((p - 0.45) / 0.15, 0, 1);
+      var iG = el('g', { transform: 'translate(560, 220)', opacity: iA }, stage);
+      el('rect', { x: -10, y: -10, width: 470, height: 180,
+                   fill: 'var(--bg-2)', stroke: 'var(--AXIS)', 'stroke-width': '1.2' }, iG);
+      var il = el('text', {
+        x: 225, y: 14, fill: 'var(--AXIS)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '11', 'text-anchor': 'middle', 'font-weight': '700', 'letter-spacing': '0.06em'
+      }, iG);
+      il.textContent = LANG === 'cn' ? '分段插值公式代入' : 'Plug into interpolation';
+
+      var calc = [
+        { txt: 'AQI = (AQI_hi - AQI_lo) / (BP_hi - BP_lo) x (C - BP_lo) + AQI_lo', size: 10 },
+        { txt: '    = (100 - 51) / (35.4 - 12.1) x (35.3 - 12.1) + 51', size: 11 },
+        { txt: '    = 49 / 23.3 x 23.2 + 51', size: 12 },
+        { txt: '    = 2.1030 x 23.2 + 51', size: 12 },
+        { txt: '    = 48.79 + 51', size: 12 },
+        { txt: '    = 99.79  =>  AQI = 100', size: 13, col: 'var(--QED)' }
+      ];
+      var cy = 40;
+      for (var ci2 = 0; ci2 < calc.length; ci2++){
+        var c = calc[ci2];
+        var tx2 = el('text', {
+          x: 12, y: cy,
+          fill: c.col || 'var(--fg)',
+          'font-family': "'JetBrains Mono',ui-monospace,monospace",
+          'font-size': c.size, 'font-weight': c.col ? '700' : '500'
+        }, iG);
+        tx2.textContent = c.txt;
+        cy += c.size + 8;
+      }
+    }
+
+    // 最终 EPA 对比横条
+    if (p > 0.65){
+      var fA = clamp((p - 0.65) / 0.15, 0, 1);
+      var fG = el('g', { transform: 'translate(540, 470)', opacity: fA }, stage);
+      el('rect', { x: -360, y: -38, width: 720, height: 78,
+                   fill: 'var(--bg-2)', stroke: 'var(--QED)', 'stroke-width': '2.4', rx: '3' }, fG);
+      var f1 = el('text', {
+        x: 0, y: -10, fill: 'var(--fg)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '13', 'text-anchor': 'middle', 'letter-spacing': '0.04em'
+      }, fG);
+      f1.textContent = LANG === 'cn' ? '你手算:  AQI = 100  (Moderate)' : 'You hand-calc:  AQI = 100  (Moderate)';
+      var f2 = el('text', {
+        x: 0, y: 12, fill: 'var(--QED)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '13', 'text-anchor': 'middle', 'font-weight': '700', 'letter-spacing': '0.04em'
+      }, fG);
+      f2.textContent = LANG === 'cn' ? 'EPA AirNow:  AQI = 100  (Moderate)' : 'EPA AirNow:  AQI = 100  (Moderate)';
+      var f3 = el('text', {
+        x: 0, y: 30, fill: 'var(--QED)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '11', 'text-anchor': 'middle', 'font-style': 'italic'
+      }, fG);
+      f3.textContent = LANG === 'cn' ? '== 完全一致 ==' : '== exact match ==';
+    }
+
+    // QED flash
+    var flash = document.getElementById('flash');
+    if (p > 0.78 && p < 0.95){
+      flash.classList.add('on');
+    } else {
+      flash.classList.remove('on');
+    }
+
+    // Seal 句
+    if (p > 0.85){
+      var sealP = clamp((p - 0.85) / 0.15, 0, 1);
+      var sg = el('g', { opacity: sealP, transform: 'translate(540, 625)' }, stage);
+      el('rect', { x: -300, y: -22, width: 600, height: 44,
+                   fill: 'var(--bg-2)', stroke: 'var(--QED)', 'stroke-width': '2', rx: '3' }, sg);
+      var st = el('text', {
+        x: 0, y: 6, fill: 'var(--QED)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '12', 'text-anchor': 'middle', 'letter-spacing': '0.08em', 'font-weight': '700'
+      }, sg);
+      st.textContent = LANG === 'cn'
+        ? '你跟 EPA 科学家算出同一个数 — 公式真的有用'
+        : 'You and EPA scientists got the same number — the formula works';
+    }
+
+    var mg = el('g', { transform: 'translate(960, 130)' }, stage);
+    drawPiMascot(mg, p * 4, p > 0.7);
+
+    document.getElementById('hudV3').textContent = '40 ug/m3';
+    document.getElementById('hudV4').textContent = '10 ug/m3';
+    document.getElementById('hudV5').textContent = '0.500';
+    document.getElementById('hudV6').textContent = '35.3 ug/m3';
+    document.getElementById('hudV7').textContent = p > 0.65 ? '100' : (p > 0.45 ? '99.79 -> 100' : '...');
+  }
+
+  // ====== Frame dispatcher ======
+  function drawFrame(idx, pp){
+    clearStage();
+    if (idx !== 4){
+      document.getElementById('flash').classList.remove('on');
+    }
+    if (idx === 0) drawFrame1(pp);
+    else if (idx === 1) drawFrame2(pp);
+    else if (idx === 2) drawFrame3(pp);
+    else if (idx === 3) drawFrame4(pp);
+    else if (idx === 4) drawFrame5(pp);
+  }
+
+  function updateUI(idx){
+    var f = FRAMES[idx];
+    document.getElementById('hudV1').textContent = (idx+1) + ' / 5';
+    document.getElementById('hudV2').textContent = f.hudStage[LANG] || f.hudStage.en;
+    document.getElementById('subCn').textContent = LANG === 'cn' ? f.subCn : f.subEn;
+    document.getElementById('subEn').textContent = LANG === 'cn' ? f.subEn : f.subCn;
+    document.getElementById('stepName').textContent = f.stepName;
+    for (var i = 0; i < 5; i++){
+      var c = document.getElementById('chip' + i);
+      c.classList.remove('active', 'done');
+      if (i < idx) c.classList.add('done');
+      else if (i === idx) c.classList.add('active');
+    }
+  }
+
+  function updateI18N(){
+    document.getElementById('badgeMod').textContent = t('badgeMod');
+    document.getElementById('brandH1').textContent = t('brandH1');
+    document.getElementById('brandSub').textContent = t('brandSub');
+    document.getElementById('mascotName').textContent = t('mascotName');
+    document.querySelector('#g1 .gtxt').textContent = t('g1');
+    document.querySelector('#g2 .gtxt').textContent = t('g2');
+    document.querySelector('#g3 .gtxt').textContent = t('g3');
+    document.getElementById('hudL1').textContent = t('hudL1');
+    document.getElementById('hudL2').textContent = t('hudL2');
+    document.getElementById('hudL3').textContent = t('hudL3');
+    document.getElementById('hudL4').textContent = t('hudL4');
+    document.getElementById('hudL5').textContent = t('hudL5');
+    document.getElementById('hudL6').textContent = t('hudL6');
+    document.getElementById('hudL7').textContent = t('hudL7');
+    document.getElementById('langBtn').textContent = t('btnLang');
+    document.getElementById('flashSub').textContent = LANG === 'cn'
+      ? 'EPA AirNow 算出一样的数 — 你也是科学家'
+      : 'EPA AirNow gets the same number — you are a scientist now';
+  }
+
+  function tick(ts){
+    if (!frameStartTs) frameStartTs = ts;
+    var elapsed = ts - frameStartTs;
+    if (elapsed >= FRAME_MS){
+      currentFrame = (currentFrame + 1) % 5;
+      frameStartTs = ts;
+      updateUI(currentFrame);
+      elapsed = 0;
+    }
+    var pp = elapsed / FRAME_MS;
+    drawFrame(currentFrame, pp);
+    rafId = requestAnimationFrame(tick);
+  }
+
+  function start(){
+    updateI18N();
+    updateUI(currentFrame);
+    frameStartTs = 0;
+    if (rafId) cancelAnimationFrame(rafId);
+    rafId = requestAnimationFrame(tick);
+  }
+
+  document.getElementById('langBtn').addEventListener('click', function(){
+    LANG = (LANG === 'cn') ? 'en' : 'cn';
+    updateI18N();
+    updateUI(currentFrame);
+  });
+
+  start();
+})();
+</script>
+</body>
+</html>

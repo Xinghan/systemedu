@@ -1,0 +1,1387 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>M35 - 散点图配对: 我节点 vs EPA 720 点</title>
+<style>
+  /* F2 layer 1 - shared deep space (theme_style/styles.css L8-21) */
+  :root{
+    --bg-0: oklch(0.14 0.035 265);
+    --bg-1: oklch(0.18 0.04 265);
+    --bg-2: oklch(0.22 0.045 265);
+    --bg-3: oklch(0.28 0.05 265);
+    --line: oklch(0.35 0.05 265 / 0.35);
+    --line-strong: oklch(0.55 0.08 265 / 0.55);
+    --fg: oklch(0.96 0.01 265);
+    --fg-dim: oklch(0.75 0.02 265);
+    --fg-mute: oklch(0.55 0.03 265);
+    --gold: oklch(0.85 0.14 85);
+
+    /* F2 layer 2 - math accent (electric blue 245) */
+    --math: oklch(0.72 0.17 245);
+    --math-dim: oklch(0.52 0.14 245);
+
+    /* F2 layer 3 - math 5-color palette (themes.js math: AXIS / PROOF / SHADOW / SOLUTION / QED) */
+    --AXIS:     oklch(0.72 0.17 245); /* 亮蓝 - 坐标轴/主链路 + Pi 面 */
+    --PROOF:    oklch(0.52 0.16 245); /* 中蓝 - y=x 参考线 + 配对连线 */
+    --SHADOW:   oklch(0.35 0.10 245); /* 深蓝 - 表格暗格 + Pi 阴影 */
+    --SOLUTION: oklch(0.92 0.08 240); /* 近白蓝 - 命中数高光 + Pi 高光 */
+    --QED:      oklch(0.85 0.14 85);  /* 金 - F5 key moment "一张图 = 720 行" */
+
+    /* AQI official 6-tier - 用 5 等级给散点染色 (M35 任务约束: 5 等级) */
+    --aqi-good:    oklch(0.78 0.16 145);   /* 绿 Good     0-50 */
+    --aqi-mod:     oklch(0.85 0.16 95);    /* 黄 Moderate 51-100 */
+    --aqi-usg:     oklch(0.74 0.17 50);    /* 橙 USG     101-150 */
+    --aqi-unhc:    oklch(0.66 0.20 25);    /* 红 Unhealthy 151-200 */
+    --aqi-vunhc:   oklch(0.50 0.18 320);   /* 紫 V.Unh   201-300 */
+  }
+
+  *{box-sizing:border-box;margin:0;padding:0;}
+  html,body{height:100%;overflow:hidden;}
+  body{
+    background: var(--bg-0);
+    color: var(--fg);
+    font-family: 'Inter','Noto Sans SC',-apple-system,BlinkMacSystemFont,sans-serif;
+    display: flex;
+    height: 100vh;
+  }
+
+  /* 200px sidebar */
+  .sidebar{
+    width: 200px;
+    flex-shrink: 0;
+    background: var(--bg-1);
+    border-right: 1px solid var(--line);
+    padding: 16px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .brand{
+    border-bottom: 1px solid var(--line);
+    padding-bottom: 10px;
+  }
+  .brand .badge{
+    display: inline-block;
+    font-family: 'JetBrains Mono',ui-monospace,monospace;
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    color: var(--math);
+    background: var(--bg-2);
+    padding: 3px 7px;
+    border: 1px solid var(--line);
+    box-shadow: 2px 2px 0 var(--bg-0);
+    margin-bottom: 6px;
+  }
+  .brand h1{
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--fg);
+    line-height: 1.3;
+  }
+  .brand .sub{
+    font-size: 10px;
+    color: var(--fg-mute);
+    margin-top: 4px;
+    font-family: 'JetBrains Mono',ui-monospace,monospace;
+    letter-spacing: 0.04em;
+  }
+
+  .mascot-box{
+    background: var(--bg-2);
+    border: 1px solid var(--line);
+    box-shadow: 3px 3px 0 var(--bg-0);
+    padding: 10px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .mascot-box .label{
+    font-family: 'JetBrains Mono',ui-monospace,monospace;
+    font-size: 9px;
+    color: var(--fg-dim);
+    letter-spacing: 0.08em;
+  }
+  .mascot-box .name{
+    font-size: 11px;
+    color: var(--fg);
+    font-weight: 600;
+    margin-top: 2px;
+  }
+
+  .guide{
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .guide-item{
+    font-size: 11px;
+    line-height: 1.45;
+    color: var(--fg-dim);
+    padding-left: 9px;
+    border-left: 2px solid var(--math);
+    padding-top: 2px;
+    padding-bottom: 2px;
+  }
+  .guide-item .num{
+    font-family: 'JetBrains Mono',ui-monospace,monospace;
+    color: var(--math);
+    font-weight: 700;
+    margin-right: 4px;
+  }
+
+  .sidebar .spacer{flex: 1;}
+
+  .lang-btn{
+    background: var(--bg-2);
+    border: 1px solid var(--line-strong);
+    box-shadow: 2px 2px 0 var(--bg-0);
+    color: var(--fg);
+    font-family: 'JetBrains Mono',ui-monospace,monospace;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    padding: 7px 10px;
+    cursor: pointer;
+    width: 100%;
+  }
+  .lang-btn:hover{
+    border-color: var(--math);
+    color: var(--math);
+  }
+  .lang-btn:active{
+    transform: translate(2px, 2px);
+    box-shadow: none;
+  }
+
+  /* Main stage */
+  .main{
+    flex: 1;
+    position: relative;
+    overflow: hidden;
+    background: var(--bg-0);
+  }
+  #stage{
+    width: 100%;
+    height: 100%;
+    display: block;
+  }
+
+  /* HUD top-right */
+  .hud{
+    position: absolute;
+    top: 18px;
+    right: 18px;
+    background: var(--bg-2);
+    border: 1px solid var(--line);
+    box-shadow: 3px 3px 0 var(--bg-0);
+    padding: 10px 14px;
+    font-family: 'JetBrains Mono',ui-monospace,monospace;
+    min-width: 240px;
+  }
+  .hud .row{
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 14px;
+    font-size: 11px;
+    line-height: 1.6;
+  }
+  .hud .label{color: var(--fg-mute); letter-spacing: 0.06em;}
+  .hud .value{color: var(--fg); font-weight: 700;}
+  .hud .value.accent{color: var(--math);}
+  .hud .value.gold{color: var(--QED);}
+  .hud .sep{
+    height: 1px;
+    background: var(--line);
+    margin: 6px 0;
+  }
+
+  /* Subtitle bottom */
+  .subtitle{
+    position: absolute;
+    left: 50%;
+    bottom: 28px;
+    transform: translateX(-50%);
+    text-align: center;
+    max-width: 80%;
+    pointer-events: none;
+  }
+  .subtitle .cn{
+    font-size: 17px;
+    font-weight: 700;
+    color: var(--fg);
+    letter-spacing: 0.01em;
+  }
+  .subtitle .en{
+    font-size: 12px;
+    color: var(--fg-mute);
+    margin-top: 4px;
+    font-style: italic;
+    font-family: 'JetBrains Mono',ui-monospace,monospace;
+    letter-spacing: 0.03em;
+  }
+
+  /* Frame chips bottom-left */
+  .frame-progress{
+    position: absolute;
+    left: 24px;
+    bottom: 28px;
+    display: flex;
+    gap: 6px;
+    align-items: center;
+  }
+  .chip{
+    width: 24px;
+    height: 6px;
+    background: var(--bg-2);
+    border: 1px solid var(--line);
+  }
+  .chip.active{
+    background: var(--math);
+    border-color: var(--math);
+  }
+  .chip.done{
+    background: var(--math-dim);
+    border-color: var(--math-dim);
+  }
+  .frame-progress .stepname{
+    font-family: 'JetBrains Mono',ui-monospace,monospace;
+    font-size: 10px;
+    color: var(--fg-dim);
+    margin-left: 8px;
+    letter-spacing: 0.08em;
+  }
+
+  /* key moment flash overlay */
+  .flash{
+    position: absolute;
+    top: 46%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-family: 'JetBrains Mono',ui-monospace,monospace;
+    font-size: 26px;
+    font-weight: 800;
+    color: var(--QED);
+    letter-spacing: 0.18em;
+    opacity: 0;
+    pointer-events: none;
+    text-shadow: 0 0 24px var(--QED);
+    text-align: center;
+  }
+  .flash.on{ opacity: 1; }
+  .flash .small{
+    display: block;
+    text-align: center;
+    font-size: 11px;
+    color: var(--fg-dim);
+    letter-spacing: 0.08em;
+    margin-top: 8px;
+    text-shadow: none;
+    font-weight: 400;
+  }
+</style>
+</head>
+<body>
+  <aside class="sidebar">
+    <div class="brand">
+      <span class="badge" id="badgeMod">MOD-M35 / MATH</span>
+      <h1 id="brandH1">散点图配对<br>你 vs EPA 720 点</h1>
+      <div class="sub" id="brandSub">scatter pairing</div>
+    </div>
+
+    <div class="mascot-box">
+      <svg width="48" height="48" viewBox="0 0 60 60" aria-hidden="true">
+        <!-- Pi mascot - rotating tetrahedron, faces flash equations -->
+        <!-- shadow SHADOW -->
+        <ellipse cx="30" cy="50" rx="18" ry="4" fill="var(--SHADOW)" opacity="0.6"/>
+        <!-- back face PROOF -->
+        <polygon points="30,8 50,42 10,42" fill="var(--PROOF)" opacity="0.95"/>
+        <!-- front face AXIS -->
+        <polygon points="30,8 40,42 10,42" fill="var(--AXIS)" opacity="0.9"/>
+        <!-- right face SHADOW -->
+        <polygon points="30,8 50,42 40,42" fill="var(--SHADOW)"/>
+        <!-- highlight SOLUTION -->
+        <polygon points="30,8 34,22 26,22" fill="var(--SOLUTION)" opacity="0.55"/>
+        <!-- equation glyph (y=x) on front face -->
+        <text x="25" y="36" fill="var(--SOLUTION)" font-family="'JetBrains Mono',monospace" font-size="9" font-weight="700">y=x</text>
+        <!-- QED sparkle when scatter resolves -->
+        <circle cx="48" cy="14" r="1.6" fill="var(--QED)"/>
+        <circle cx="12" cy="20" r="1.2" fill="var(--QED)" opacity="0.7"/>
+      </svg>
+      <div>
+        <div class="label">MASCOT</div>
+        <div class="name" id="mascotName">Pi · 派</div>
+      </div>
+    </div>
+
+    <div class="guide">
+      <div class="guide-item" id="g1"><span class="num">01</span><span class="gtxt">720 行数字读不动 - 看不出准不准</span></div>
+      <div class="guide-item" id="g2"><span class="num">02</span><span class="gtxt">同一时刻配成 (你, EPA) 一个点</span></div>
+      <div class="guide-item" id="g3"><span class="num">03</span><span class="gtxt">散点贴 y=x 线 = 我节点准</span></div>
+    </div>
+
+    <div class="spacer"></div>
+    <button id="langBtn" class="lang-btn" type="button">CN / EN</button>
+  </aside>
+
+  <main class="main">
+    <svg id="stage" viewBox="0 0 1080 720" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg"></svg>
+
+    <div class="hud">
+      <div class="row"><span class="label" id="hudL1">FRAME</span><span class="value accent" id="hudV1">1 / 5</span></div>
+      <div class="row"><span class="label" id="hudL2">STAGE</span><span class="value" id="hudV2">Raw table</span></div>
+      <div class="sep"></div>
+      <div class="row"><span class="label" id="hudL3">PAIRS</span><span class="value" id="hudV3">0 / 720</span></div>
+      <div class="row"><span class="label" id="hudL4">FIT</span><span class="value gold" id="hudV4">-- %</span></div>
+    </div>
+
+    <div class="subtitle">
+      <div class="cn" id="subCn">第 1 帧: 720 行数字读不动 - 准不准谁说得清?</div>
+      <div class="en" id="subEn">Frame 1: 720 rows of numbers - cannot tell if accurate</div>
+    </div>
+
+    <div class="frame-progress">
+      <div class="chip" id="chip0"></div>
+      <div class="chip" id="chip1"></div>
+      <div class="chip" id="chip2"></div>
+      <div class="chip" id="chip3"></div>
+      <div class="chip" id="chip4"></div>
+      <span class="stepname" id="stepName">01 · TABLE</span>
+    </div>
+
+    <div class="flash" id="flash">
+      Q.E.D
+      <span class="small" id="flashSub">一张图代替 720 行数字 - 准不准一眼明</span>
+    </div>
+  </main>
+
+<script>
+(function(){
+  "use strict";
+
+  // ====== i18n ======
+  var LANG = 'cn';
+  var I18N = {
+    badgeMod:   { cn: 'MOD-M35 / MATH', en: 'MOD-M35 / MATH' },
+    brandH1:    { cn: '散点图配对<br>你 vs EPA 720 点', en: 'Scatter Pairing<br>you vs EPA 720 pts' },
+    brandSub:   { cn: '你节点 vs EPA 官方', en: 'your node vs EPA official' },
+    mascotName: { cn: 'Pi · 派', en: 'Pi · the tetra' },
+    g1: { cn: '720 行数字读不动 - 看不出准不准',
+          en: '720 rows of numbers - cannot read accuracy' },
+    g2: { cn: '同一时刻配成 (你, EPA) 一个点',
+          en: 'Same timestamp pairs into (you, EPA) point' },
+    g3: { cn: '散点贴 y=x 线 = 我节点准',
+          en: 'Points hugging y=x = your node is accurate' },
+    hudL1: { cn: '帧',     en: 'FRAME' },
+    hudL2: { cn: '阶段',   en: 'STAGE' },
+    hudL3: { cn: '配对',   en: 'PAIRS' },
+    hudL4: { cn: '贴线度', en: 'FIT' },
+    btnLang: { cn: 'CN / EN', en: 'CN / EN' }
+  };
+
+  // ====== Synthetic 720 paired data (you_ug, epa_ug) ======
+  // 物理事实: 我节点比 EPA 略偏 (低成本传感器轻微高读), 整体相关高
+  // 30 天 x 24h = 720 点, 这里抽样 720 用 deterministic seed
+  function mulberry32(a){
+    return function(){
+      a |= 0; a = a + 0x6D2B79F5 | 0;
+      var t = Math.imul(a ^ a >>> 15, 1 | a);
+      t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+      return ((t ^ t >>> 14) >>> 0) / 4294967296;
+    };
+  }
+  var rnd = mulberry32(20260527);
+  var PAIRS = [];           // {epa: 真值, you: 我节点读数, ts: hour-index}
+  for (var i = 0; i < 720; i++){
+    // EPA 真值 - 时段周期 + 日级波动 (0-160 ug/m3 范围)
+    var hour = i % 24;
+    var day = Math.floor(i / 24);
+    var base = 18 + 32 * Math.max(0, Math.sin((hour - 7) / 12 * Math.PI));   // 日间高峰
+    var dayShift = 8 * Math.sin(day / 4) + 6 * Math.sin(day / 9);
+    var epa = Math.max(2, base + dayShift + (rnd() - 0.5) * 14);
+    // 我节点: 整体 1.08x + 噪声 +/- 8, 偶尔 outlier
+    var you = epa * (1.04 + (rnd() - 0.5) * 0.18) + (rnd() - 0.5) * 9;
+    if (rnd() < 0.02) you += (rnd() - 0.5) * 60;   // 2% outlier
+    you = Math.max(1, you);
+    PAIRS.push({ ts: i, epa: epa, you: you });
+  }
+
+  // AQI 5 等级染色 (官方 6 阶, 这里用 0-200 内常见 5 阶)
+  function aqiColor(v){
+    if (v <= 12.0)  return 'var(--aqi-good)';
+    if (v <= 35.4)  return 'var(--aqi-mod)';
+    if (v <= 55.4)  return 'var(--aqi-usg)';
+    if (v <= 150.4) return 'var(--aqi-unhc)';
+    return 'var(--aqi-vunhc)';
+  }
+
+  // ====== 5-frame story ======
+  var FRAME_MS = 6500;
+  var FRAMES = [
+    {
+      id: 'table',
+      stepName: '01 · 720 ROWS',
+      hudStage: { cn: '原始两列表 720 行', en: '720 raw rows' },
+      hudPairs: '0 / 720',
+      hudFit:   '-- %',
+      subCn: '第 1 帧: 30 天 x 24h = 720 行数字, 你节点 vs EPA, 读得头晕',
+      subEn: 'Frame 1: 30d x 24h = 720 rows, your node vs EPA, eyes spin'
+    },
+    {
+      id: 'pair',
+      stepName: '02 · TIME ALIGN',
+      hudStage: { cn: '按 timestamp 配对', en: 'Pair by timestamp' },
+      hudPairs: '~ / 720',
+      hudFit:   '-- %',
+      subCn: '第 2 帧: 同一时刻把 (你的读, EPA 读) 系成一根线, 一行 -> 一个点对',
+      subEn: 'Frame 2: at each timestamp, bind (you, EPA) - one row to one pair'
+    },
+    {
+      id: 'scatter-build',
+      stepName: '03 · SCATTER',
+      hudStage: { cn: '建立 x=你 y=EPA', en: 'Build x=you y=EPA axes' },
+      hudPairs: '~ / 720',
+      hudFit:   '-- %',
+      subCn: '第 3 帧: 立坐标系 x=你 y=EPA, 配对点一个一个落, AQI 等级染色',
+      subEn: 'Frame 3: axes x=you y=EPA, points land one by one, colored by AQI tier'
+    },
+    {
+      id: 'fullplot',
+      stepName: '04 · y=x LINE',
+      hudStage: { cn: '画 y=x 理想线', en: 'Draw y=x ideal' },
+      hudPairs: '720 / 720',
+      hudFit:   '92 %',
+      subCn: '第 4 帧: 720 点都落了, 画 y=x 理想线 - 贴线的点 = 我节点跟 EPA 一致',
+      subEn: 'Frame 4: all 720 land, draw y=x ideal - points hugging line agree with EPA'
+    },
+    {
+      id: 'verdict',
+      stepName: '05 · VERDICT',
+      hudStage: { cn: '一图代替 720 行', en: '1 chart = 720 rows' },
+      hudPairs: '720 / 720',
+      hudFit:   '92 %',
+      subCn: '第 5 帧: 散点紧贴 y=x, 偶有偏离 - 一张图就讲清 720 行讲不清的事',
+      subEn: 'Frame 5: scatter hugs y=x with rare outliers - 1 chart tells what 720 rows cannot'
+    }
+  ];
+
+  // ====== state ======
+  var currentFrame = 0;
+  var frameStartTs = 0;
+  var rafId = null;
+  var stage = document.getElementById('stage');
+  var SVGNS = 'http://www.w3.org/2000/svg';
+
+  // ====== util ======
+  function el(name, attrs, parent){
+    var n = document.createElementNS(SVGNS, name);
+    if (attrs){
+      for (var k in attrs){
+        if (Object.prototype.hasOwnProperty.call(attrs, k)){
+          n.setAttribute(k, attrs[k]);
+        }
+      }
+    }
+    if (parent) parent.appendChild(n);
+    return n;
+  }
+  function clearStage(){ while(stage.firstChild) stage.removeChild(stage.firstChild); }
+  function t(key){
+    if (!I18N[key]) return key;
+    return I18N[key][LANG] || I18N[key].en || key;
+  }
+  function lerp(a, b, p){ return a + (b - a) * p; }
+  function easeInOut(x){ return x < 0.5 ? 2*x*x : 1 - Math.pow(-2*x + 2, 2)/2; }
+  function easeOut(x){ return 1 - Math.pow(1 - x, 3); }
+  function clamp(x, lo, hi){ return x < lo ? lo : (x > hi ? hi : x); }
+
+  // shared deep-space backdrop
+  function drawBgGrid(){
+    var g = el('g', { opacity: '0.16' }, stage);
+    for (var x = 0; x <= 1080; x += 60){
+      el('line', { x1: x, y1: 0, x2: x, y2: 720, stroke: 'var(--line)', 'stroke-width': '0.5' }, g);
+    }
+    for (var y = 0; y <= 720; y += 60){
+      el('line', { x1: 0, y1: y, x2: 1080, y2: y, stroke: 'var(--line)', 'stroke-width': '0.5' }, g);
+    }
+    var defs = el('defs', null, stage);
+    var rg = el('radialGradient', { id: 'centerGlow', cx: '50%', cy: '45%', r: '60%' }, defs);
+    el('stop', { offset: '0%', 'stop-color': 'var(--math)', 'stop-opacity': '0.05' }, rg);
+    el('stop', { offset: '100%', 'stop-color': 'var(--bg-0)', 'stop-opacity': '0' }, rg);
+    el('rect', { x: 0, y: 0, width: 1080, height: 720, fill: 'url(#centerGlow)' }, stage);
+  }
+
+  function drawStepChain(activeIdx){
+    var labels = [
+      { cn: '原表',   en: 'Table' },
+      { cn: '配对',   en: 'Pair' },
+      { cn: '散点',   en: 'Scatter' },
+      { cn: 'y=x',    en: 'y=x' },
+      { cn: '判断',   en: 'Verdict' }
+    ];
+    var y = 640;
+    var startX = 110;
+    var gap = (1080 - 220) / 4;
+    var g = el('g', null, stage);
+    for (var i = 0; i < 5; i++){
+      var cx = startX + gap * i;
+      var on = i <= activeIdx;
+      var ringColor = on ? 'var(--math)' : 'var(--line)';
+      var fillColor = on ? 'var(--bg-2)' : 'var(--bg-1)';
+      var textColor = on ? 'var(--fg)' : 'var(--fg-mute)';
+      el('rect', {
+        x: cx - 48, y: y - 16, width: 96, height: 32,
+        fill: fillColor, stroke: ringColor, 'stroke-width': on ? '1.6' : '1', rx: '2'
+      }, g);
+      var tx = el('text', {
+        x: cx, y: y + 4, fill: textColor,
+        'font-family': "'Inter','Noto Sans SC',sans-serif",
+        'font-size': '12', 'font-weight': on ? '700' : '500',
+        'text-anchor': 'middle'
+      }, g);
+      tx.textContent = labels[i][LANG] || labels[i].en;
+      var ix = el('text', {
+        x: cx, y: y - 22, fill: on ? 'var(--math)' : 'var(--fg-mute)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '9', 'text-anchor': 'middle', 'letter-spacing': '0.1em'
+      }, g);
+      ix.textContent = '0' + (i+1);
+      if (i < 4){
+        var x1 = cx + 48;
+        var x2 = cx + gap - 48;
+        var connColor = (on && (i+1) <= activeIdx) ? 'var(--math)' : 'var(--line)';
+        el('line', {
+          x1: x1, y1: y, x2: x2 - 6, y2: y,
+          stroke: connColor, 'stroke-width': '1.2'
+        }, g);
+        el('polygon', {
+          points: (x2-6)+','+(y-4)+' '+(x2)+','+y+' '+(x2-6)+','+(y+4),
+          fill: connColor
+        }, g);
+      }
+    }
+  }
+
+  // ====== axis math (right-half scatter coord) ======
+  // x range = 0..160 (you), y range = 0..160 (epa)
+  // scatter rect (frame-local)
+  function scatterRect(){
+    return { x: 540, y: 130, w: 440, h: 380, vMin: 0, vMax: 160 };
+  }
+  function pairToXY(rect, pair){
+    var fx = clamp(pair.you, rect.vMin, rect.vMax);
+    var fy = clamp(pair.epa, rect.vMin, rect.vMax);
+    var sx = rect.x + (fx - rect.vMin) / (rect.vMax - rect.vMin) * rect.w;
+    var sy = rect.y + rect.h - (fy - rect.vMin) / (rect.vMax - rect.vMin) * rect.h;
+    return { x: sx, y: sy };
+  }
+  function drawScatterAxes(rect, opts){
+    opts = opts || {};
+    var stroke = opts.stroke || 'var(--AXIS)';
+    var labelOp = opts.labelOp == null ? 1 : opts.labelOp;
+    // axes box
+    el('rect', { x: rect.x, y: rect.y, width: rect.w, height: rect.h,
+                 fill: 'var(--bg-1)', stroke: 'var(--line)', 'stroke-width': '0.6',
+                 rx: '2' }, stage);
+    // ticks every 40
+    for (var v = rect.vMin; v <= rect.vMax; v += 40){
+      var fx = (v - rect.vMin) / (rect.vMax - rect.vMin);
+      var sx = rect.x + fx * rect.w;
+      var sy = rect.y + rect.h - fx * rect.h;
+      // x tick
+      el('line', { x1: sx, y1: rect.y + rect.h, x2: sx, y2: rect.y + rect.h + 5,
+                   stroke: stroke, 'stroke-width': '1' }, stage);
+      // y tick
+      el('line', { x1: rect.x, y1: sy, x2: rect.x - 5, y2: sy,
+                   stroke: stroke, 'stroke-width': '1' }, stage);
+      if (v > 0){
+        var tx = el('text', {
+          x: sx, y: rect.y + rect.h + 18, fill: 'var(--fg-mute)',
+          'font-family': "'JetBrains Mono',ui-monospace,monospace",
+          'font-size': '9', 'text-anchor': 'middle', opacity: labelOp
+        }, stage);
+        tx.textContent = String(v);
+        var ty = el('text', {
+          x: rect.x - 10, y: sy + 3, fill: 'var(--fg-mute)',
+          'font-family': "'JetBrains Mono',ui-monospace,monospace",
+          'font-size': '9', 'text-anchor': 'end', opacity: labelOp
+        }, stage);
+        ty.textContent = String(v);
+      }
+    }
+    // axis main strokes
+    el('line', { x1: rect.x, y1: rect.y + rect.h, x2: rect.x + rect.w + 6, y2: rect.y + rect.h,
+                 stroke: stroke, 'stroke-width': '1.6' }, stage);
+    el('line', { x1: rect.x, y1: rect.y + rect.h, x2: rect.x, y2: rect.y - 6,
+                 stroke: stroke, 'stroke-width': '1.6' }, stage);
+    // arrowheads
+    el('polygon', {
+      points: (rect.x + rect.w + 6)+','+(rect.y + rect.h)+' '+(rect.x + rect.w)+','+(rect.y + rect.h - 5)+' '+(rect.x + rect.w)+','+(rect.y + rect.h + 5),
+      fill: stroke
+    }, stage);
+    el('polygon', {
+      points: rect.x+','+(rect.y - 6)+' '+(rect.x - 5)+','+rect.y+' '+(rect.x + 5)+','+rect.y,
+      fill: stroke
+    }, stage);
+    // axis labels
+    var xL = el('text', {
+      x: rect.x + rect.w/2, y: rect.y + rect.h + 38, fill: 'var(--AXIS)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '12', 'text-anchor': 'middle', 'font-weight': '700',
+      'letter-spacing': '0.12em', opacity: labelOp
+    }, stage);
+    xL.textContent = LANG === 'cn' ? 'x = 你的节点 (ug/m3)' : 'x = your node (ug/m3)';
+    var yL = el('text', {
+      x: rect.x - 38, y: rect.y + rect.h/2, fill: 'var(--AXIS)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '12', 'text-anchor': 'middle', 'font-weight': '700',
+      'letter-spacing': '0.12em', opacity: labelOp,
+      transform: 'rotate(-90 ' + (rect.x - 38) + ' ' + (rect.y + rect.h/2) + ')'
+    }, stage);
+    yL.textContent = LANG === 'cn' ? 'y = EPA 官方 (ug/m3)' : 'y = EPA (ug/m3)';
+  }
+
+  // Pi mascot (tetrahedron rotating)
+  function drawPiMascot(g, rot, hit){
+    // shadow
+    el('ellipse', { cx: 0, cy: 30, rx: 22, ry: 5, fill: 'var(--SHADOW)', opacity: '0.55' }, g);
+    // rotating tetra approximated by 3 face polygons whose alpha changes with rot
+    var phase = rot % (Math.PI * 2);
+    var aBack  = 0.5 + 0.4 * Math.sin(phase);
+    var aFront = 0.5 + 0.4 * Math.sin(phase + 2.0);
+    var aRight = 0.5 + 0.4 * Math.sin(phase + 4.0);
+    el('polygon', { points: '0,-22 22,18 -22,18', fill: 'var(--PROOF)', opacity: aBack }, g);
+    el('polygon', { points: '0,-22 14,18 -16,18', fill: 'var(--AXIS)',  opacity: aFront }, g);
+    el('polygon', { points: '0,-22 22,18 14,18',  fill: 'var(--SHADOW)', opacity: aRight }, g);
+    // highlight
+    el('polygon', { points: '0,-22 4,-10 -4,-10', fill: 'var(--SOLUTION)', opacity: '0.6' }, g);
+    if (hit){
+      el('text', {
+        x: 0, y: 8, fill: 'var(--QED)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '11', 'text-anchor': 'middle', 'font-weight': '700'
+      }, g).textContent = 'y=x';
+      el('circle', { cx: 24, cy: -16, r: 2.4, fill: 'var(--QED)' }, g);
+      el('circle', { cx: -22, cy: -8, r: 1.8, fill: 'var(--QED)', opacity: '0.7' }, g);
+    } else {
+      el('text', {
+        x: 0, y: 8, fill: 'var(--SOLUTION)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '10', 'text-anchor': 'middle', 'font-weight': '700'
+      }, g).textContent = 'π';
+    }
+  }
+
+  // ============================================================
+  // Frame 1 - 720 rows raw table (you | EPA), eye-strain
+  // ============================================================
+  function drawFrame1(p){
+    drawBgGrid();
+    drawStepChain(0);
+
+    var ttl = el('text', {
+      x: 540, y: 56, fill: 'var(--math)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '14', 'text-anchor': 'middle', 'letter-spacing': '0.14em', 'font-weight': '700'
+    }, stage);
+    ttl.textContent = LANG === 'cn'
+      ? '30 天 x 24h = 720 行 - 你节点 vs EPA 双列, 数字眼花'
+      : '30d x 24h = 720 rows - your node vs EPA, eye-strain';
+
+    // two scrolling columns
+    var colYouX = 220;
+    var colEpaX = 470;
+    var colW = 200;
+    var colY = 110;
+    var colH = 420;
+
+    // column headers
+    el('rect', { x: colYouX, y: colY - 36, width: colW, height: 30,
+                 fill: 'var(--bg-2)', stroke: 'var(--AXIS)', 'stroke-width': '1.2', rx: '2' }, stage);
+    el('text', {
+      x: colYouX + colW/2, y: colY - 16, fill: 'var(--AXIS)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '13', 'text-anchor': 'middle', 'font-weight': '700', 'letter-spacing': '0.1em'
+    }, stage).textContent = LANG === 'cn' ? '你的节点' : 'YOUR NODE';
+
+    el('rect', { x: colEpaX, y: colY - 36, width: colW, height: 30,
+                 fill: 'var(--bg-2)', stroke: 'var(--PROOF)', 'stroke-width': '1.2', rx: '2' }, stage);
+    el('text', {
+      x: colEpaX + colW/2, y: colY - 16, fill: 'var(--PROOF)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '13', 'text-anchor': 'middle', 'font-weight': '700', 'letter-spacing': '0.1em'
+    }, stage).textContent = LANG === 'cn' ? 'EPA 官方' : 'EPA OFFICIAL';
+
+    // index column (timestamp)
+    var idxX = 130;
+    el('rect', { x: idxX, y: colY - 36, width: 70, height: 30,
+                 fill: 'var(--bg-1)', stroke: 'var(--line)', 'stroke-width': '1', rx: '2' }, stage);
+    el('text', {
+      x: idxX + 35, y: colY - 16, fill: 'var(--fg-mute)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '11', 'text-anchor': 'middle', 'letter-spacing': '0.08em'
+    }, stage).textContent = 'TIMESTAMP';
+
+    // clip
+    var defs = el('defs', null, stage);
+    var clip = el('clipPath', { id: 'tableclip' }, defs);
+    el('rect', { x: idxX - 4, y: colY, width: colEpaX + colW + 8 - idxX, height: colH }, clip);
+
+    var tg = el('g', { 'clip-path': 'url(#tableclip)' }, stage);
+
+    // rows scroll - 30 visible at a time, scroll through ~120 rows during frame
+    var scrollSpeed = 1200;   // px over whole frame
+    var rowH = 22;
+    var totalShow = 60;       // pre-render 60 rows worth
+    var startIdx = Math.floor(easeInOut(p) * 660);   // we sweep across 720 - 60
+    var offset = (p * scrollSpeed) % rowH;
+
+    for (var r = 0; r < totalShow; r++){
+      var realIdx = startIdx + r;
+      if (realIdx >= 720) break;
+      var ry = colY + r * rowH - offset;
+      var pair = PAIRS[realIdx];
+      // index col
+      el('text', {
+        x: idxX + 35, y: ry + 14, fill: 'var(--fg-mute)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '10', 'text-anchor': 'middle', opacity: '0.75'
+      }, tg).textContent = String(realIdx + 1).padStart(3, '0');
+      // your value
+      el('text', {
+        x: colYouX + colW/2, y: ry + 14, fill: 'var(--fg)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '12', 'text-anchor': 'middle', 'font-weight': '600'
+      }, tg).textContent = pair.you.toFixed(1);
+      // epa value
+      el('text', {
+        x: colEpaX + colW/2, y: ry + 14, fill: 'var(--fg)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '12', 'text-anchor': 'middle', 'font-weight': '600'
+      }, tg).textContent = pair.epa.toFixed(1);
+      // separator line
+      if (r > 0){
+        el('line', { x1: idxX, y1: ry, x2: colEpaX + colW, y2: ry,
+                     stroke: 'var(--line)', 'stroke-width': '0.5' }, tg);
+      }
+    }
+
+    // overlay: top fade
+    var defsG = el('defs', null, stage);
+    var grdT = el('linearGradient', { id: 'fadeTop', x1: '0', y1: '0', x2: '0', y2: '1' }, defsG);
+    el('stop', { offset: '0%', 'stop-color': 'var(--bg-0)', 'stop-opacity': '1' }, grdT);
+    el('stop', { offset: '100%', 'stop-color': 'var(--bg-0)', 'stop-opacity': '0' }, grdT);
+    el('rect', { x: idxX - 4, y: colY, width: colEpaX + colW + 8 - idxX, height: 24,
+                 fill: 'url(#fadeTop)' }, stage);
+    var grdB = el('linearGradient', { id: 'fadeBot', x1: '0', y1: '0', x2: '0', y2: '1' }, defsG);
+    el('stop', { offset: '0%', 'stop-color': 'var(--bg-0)', 'stop-opacity': '0' }, grdB);
+    el('stop', { offset: '100%', 'stop-color': 'var(--bg-0)', 'stop-opacity': '1' }, grdB);
+    el('rect', { x: idxX - 4, y: colY + colH - 24, width: colEpaX + colW + 8 - idxX, height: 24,
+                 fill: 'url(#fadeBot)' }, stage);
+
+    // pain indicator (rolling counter)
+    var painCard = el('g', { transform: 'translate(880, 200)' }, stage);
+    el('rect', { x: -90, y: -40, width: 180, height: 110,
+                 fill: 'var(--bg-2)', stroke: 'var(--SHADOW)', 'stroke-width': '1.4', rx: '3' }, painCard);
+    el('text', {
+      x: 0, y: -22, fill: 'var(--fg-mute)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '9', 'text-anchor': 'middle', 'letter-spacing': '0.12em'
+    }, painCard).textContent = LANG === 'cn' ? '已读到' : 'READ';
+    var readCount = Math.round(lerp(60, 660, easeInOut(p)));
+    el('text', {
+      x: 0, y: 8, fill: 'var(--AXIS)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '32', 'text-anchor': 'middle', 'font-weight': '700'
+    }, painCard).textContent = readCount + ' / 720';
+    el('text', {
+      x: 0, y: 30, fill: 'var(--fg-mute)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '9', 'text-anchor': 'middle'
+    }, painCard).textContent = LANG === 'cn' ? '一行一行看' : 'row by row';
+    // jitter "eyes spin" hint
+    var spin = Math.sin(p * 14) * 4;
+    el('text', {
+      x: 0, y: 56, fill: 'var(--fg-dim)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '10', 'text-anchor': 'middle',
+      transform: 'rotate(' + spin + ' 0 56)'
+    }, painCard).textContent = LANG === 'cn' ? '... 看不出准不准' : '... cannot tell';
+
+    // pi mascot
+    var mg = el('g', { transform: 'translate(890, 380)' }, stage);
+    drawPiMascot(mg, p * 4, false);
+    el('text', {
+      x: 890, y: 432, fill: 'var(--fg-dim)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '10', 'text-anchor': 'middle', 'letter-spacing': '0.08em'
+    }, stage).textContent = LANG === 'cn' ? 'Pi: 数学有更好办法' : 'Pi: math knows better';
+  }
+
+  // ============================================================
+  // Frame 2 - time-align pairing: row -> (you, epa) tuple, fly to right
+  // ============================================================
+  function drawFrame2(p){
+    drawBgGrid();
+    drawStepChain(1);
+
+    var ttl = el('text', {
+      x: 540, y: 56, fill: 'var(--math)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '14', 'text-anchor': 'middle', 'letter-spacing': '0.14em', 'font-weight': '700'
+    }, stage);
+    ttl.textContent = LANG === 'cn'
+      ? '同一 timestamp 配对 - 两列一行 -> 一个点对'
+      : 'Pair by timestamp - one row -> one (you, EPA) pair';
+
+    // left: compact table showing ~10 rows, pairing animation
+    var colYouX = 70;
+    var colEpaX = 220;
+    var colW = 130;
+    var colY = 100;
+    var rowH = 38;
+    var visible = 9;
+
+    // headers
+    el('rect', { x: colYouX, y: colY - 30, width: colW, height: 26,
+                 fill: 'var(--bg-2)', stroke: 'var(--AXIS)', 'stroke-width': '1.2', rx: '2' }, stage);
+    el('text', {
+      x: colYouX + colW/2, y: colY - 12, fill: 'var(--AXIS)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '11', 'text-anchor': 'middle', 'font-weight': '700'
+    }, stage).textContent = LANG === 'cn' ? '你的节点' : 'YOU';
+
+    el('rect', { x: colEpaX, y: colY - 30, width: colW, height: 26,
+                 fill: 'var(--bg-2)', stroke: 'var(--PROOF)', 'stroke-width': '1.2', rx: '2' }, stage);
+    el('text', {
+      x: colEpaX + colW/2, y: colY - 12, fill: 'var(--PROOF)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '11', 'text-anchor': 'middle', 'font-weight': '700'
+    }, stage).textContent = 'EPA';
+
+    var sampleStart = 12;   // we focus on rows 12..20 for visibility
+    var activeRow = Math.floor(p * visible);   // 0..visible-1
+    activeRow = clamp(activeRow, 0, visible - 1);
+
+    for (var r = 0; r < visible; r++){
+      var ry = colY + r * rowH;
+      var pair = PAIRS[sampleStart + r];
+      var done = r < activeRow;
+      var doing = r === activeRow;
+      var rowAlpha = done ? 0.35 : 1.0;
+      // you cell
+      el('rect', { x: colYouX, y: ry, width: colW, height: rowH - 4,
+                   fill: doing ? 'var(--SHADOW)' : 'var(--bg-1)',
+                   stroke: doing ? 'var(--AXIS)' : 'var(--line)',
+                   'stroke-width': doing ? '1.6' : '0.6',
+                   opacity: rowAlpha, rx: '2' }, stage);
+      el('text', {
+        x: colYouX + colW/2, y: ry + 22, fill: doing ? 'var(--SOLUTION)' : 'var(--fg)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '14', 'text-anchor': 'middle', 'font-weight': '700',
+        opacity: rowAlpha
+      }, stage).textContent = pair.you.toFixed(1);
+      // epa cell
+      el('rect', { x: colEpaX, y: ry, width: colW, height: rowH - 4,
+                   fill: doing ? 'var(--SHADOW)' : 'var(--bg-1)',
+                   stroke: doing ? 'var(--PROOF)' : 'var(--line)',
+                   'stroke-width': doing ? '1.6' : '0.6',
+                   opacity: rowAlpha, rx: '2' }, stage);
+      el('text', {
+        x: colEpaX + colW/2, y: ry + 22, fill: doing ? 'var(--SOLUTION)' : 'var(--fg)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '14', 'text-anchor': 'middle', 'font-weight': '700',
+        opacity: rowAlpha
+      }, stage).textContent = pair.epa.toFixed(1);
+      // pairing bracket on active row
+      if (doing){
+        // bracket bind line
+        var bx1 = colYouX + colW;
+        var bx2 = colEpaX;
+        var by  = ry + rowH/2 - 2;
+        el('line', { x1: bx1, y1: by, x2: bx2, y2: by,
+                     stroke: 'var(--AXIS)', 'stroke-width': '2.2',
+                     'stroke-dasharray': '4 3' }, stage);
+        el('circle', { cx: bx1, cy: by, r: 4, fill: 'var(--AXIS)' }, stage);
+        el('circle', { cx: bx2, cy: by, r: 4, fill: 'var(--PROOF)' }, stage);
+      }
+      // already-paired: small "(y, e)" badge to the right
+      if (done){
+        var badX = colEpaX + colW + 14;
+        el('rect', { x: badX, y: ry + 6, width: 100, height: 22,
+                     fill: 'var(--bg-2)', stroke: 'var(--AXIS)', 'stroke-width': '1', rx: '2',
+                     opacity: 0.85 }, stage);
+        el('text', {
+          x: badX + 50, y: ry + 21, fill: 'var(--AXIS)',
+          'font-family': "'JetBrains Mono',ui-monospace,monospace",
+          'font-size': '11', 'text-anchor': 'middle', 'font-weight': '600'
+        }, stage).textContent = '(' + pair.you.toFixed(0) + ',' + pair.epa.toFixed(0) + ')';
+      }
+    }
+
+    // active-row flying pair to right (toward where scatter will be)
+    if (activeRow < visible){
+      var pair = PAIRS[sampleStart + activeRow];
+      var localP = (p * visible) - activeRow;
+      localP = clamp(localP, 0, 1);
+      var startX = colEpaX + colW + 24;
+      var startY = colY + activeRow * rowH + rowH/2 - 2;
+      var endX = 760 + (pair.you / 160) * 200 - 100;
+      var endY = 280 + (1 - pair.epa / 160) * 200 - 100;
+      var fx = lerp(startX, endX, easeOut(localP));
+      var fy = lerp(startY, endY, easeOut(localP));
+      // trail
+      el('line', { x1: startX, y1: startY, x2: fx, y2: fy,
+                   stroke: 'var(--AXIS)', 'stroke-width': '1', opacity: 0.3,
+                   'stroke-dasharray': '2 4' }, stage);
+      // pair card flying
+      var pg = el('g', { transform: 'translate(' + fx + ',' + fy + ')' }, stage);
+      el('rect', { x: -40, y: -14, width: 80, height: 28,
+                   fill: 'var(--SHADOW)', stroke: 'var(--AXIS)', 'stroke-width': '1.4', rx: '2' }, pg);
+      el('text', {
+        x: 0, y: 4, fill: 'var(--SOLUTION)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '11', 'text-anchor': 'middle', 'font-weight': '700'
+      }, pg).textContent = '(' + pair.you.toFixed(0) + ', ' + pair.epa.toFixed(0) + ')';
+    }
+
+    // right destination: preview empty scatter plane
+    var rect = scatterRect();
+    rect.y = 130; rect.h = 380;
+    drawScatterAxes(rect, { labelOp: 0.35 });
+    // hint
+    el('text', {
+      x: rect.x + rect.w/2, y: rect.y + rect.h/2, fill: 'var(--fg-mute)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '12', 'text-anchor': 'middle', 'letter-spacing': '0.1em',
+      opacity: 0.55
+    }, stage).textContent = LANG === 'cn'
+        ? '点对将飞到这里 (下一帧)'
+        : 'pairs will land here (next frame)';
+
+    // pi mascot
+    var mg = el('g', { transform: 'translate(940, 580)' }, stage);
+    drawPiMascot(mg, p * 5, false);
+  }
+
+  // ============================================================
+  // Frame 3 - scatter coord built, points land one by one
+  // ============================================================
+  function drawFrame3(p){
+    drawBgGrid();
+    drawStepChain(2);
+
+    var ttl = el('text', {
+      x: 540, y: 56, fill: 'var(--math)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '14', 'text-anchor': 'middle', 'letter-spacing': '0.14em', 'font-weight': '700'
+    }, stage);
+    ttl.textContent = LANG === 'cn'
+      ? '立坐标系 x=你 y=EPA - 720 点开始落场, AQI 等级染色'
+      : 'Axes x=you y=EPA - 720 points begin landing, AQI-tier colored';
+
+    // left: AQI legend (5 tiers)
+    drawAqiLegend(70, 130);
+
+    // scatter on right
+    var rect = scatterRect();
+    rect.x = 350; rect.w = 600;
+    rect.y = 110; rect.h = 460;
+    drawScatterAxes(rect, {});
+
+    // landing - 0 to N points
+    var nShow = Math.floor(easeOut(p) * 720);
+    // limit to subset (deterministic stride for performance)
+    var stride = 1;
+    if (nShow > 360) stride = 1; else stride = 1;
+    for (var i = 0; i < nShow; i++){
+      var pair = PAIRS[i];
+      var pt = pairToXY(rect, pair);
+      // recent points pulse
+      var ageRel = (nShow - i) / 80;
+      var r = 2.6 + (i === nShow - 1 ? 2 : 0);
+      var alpha = i > nShow - 30 ? clamp(1 - ageRel * 0.5, 0.4, 1) : 0.78;
+      el('circle', {
+        cx: pt.x, cy: pt.y, r: r,
+        fill: aqiColor((pair.you + pair.epa) / 2),
+        opacity: alpha
+      }, stage);
+    }
+
+    // running count card
+    var cc = el('g', { transform: 'translate(140, 540)' }, stage);
+    el('rect', { x: -90, y: -32, width: 180, height: 70,
+                 fill: 'var(--bg-2)', stroke: 'var(--AXIS)', 'stroke-width': '1.4', rx: '3' }, cc);
+    el('text', {
+      x: 0, y: -14, fill: 'var(--fg-mute)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '9', 'text-anchor': 'middle', 'letter-spacing': '0.12em'
+    }, cc).textContent = LANG === 'cn' ? '已落点' : 'POINTS PLACED';
+    el('text', {
+      x: 0, y: 18, fill: 'var(--AXIS)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '26', 'text-anchor': 'middle', 'font-weight': '700'
+    }, cc).textContent = nShow + ' / 720';
+
+    // pi mascot
+    var mg = el('g', { transform: 'translate(220, 420)' }, stage);
+    drawPiMascot(mg, p * 5, false);
+  }
+
+  // ============================================================
+  // Frame 4 - all 720 placed, y=x ideal line drawn (PROOF)
+  // ============================================================
+  function drawFrame4(p){
+    drawBgGrid();
+    drawStepChain(3);
+
+    var ttl = el('text', {
+      x: 540, y: 56, fill: 'var(--math)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '14', 'text-anchor': 'middle', 'letter-spacing': '0.14em', 'font-weight': '700'
+    }, stage);
+    ttl.textContent = LANG === 'cn'
+      ? '720 点全落, 画 y=x 理想线 - 贴线 = 你和 EPA 一致'
+      : 'All 720 placed, draw y=x ideal line - hugging = your node matches EPA';
+
+    // legend
+    drawAqiLegend(70, 110);
+
+    var rect = scatterRect();
+    rect.x = 350; rect.w = 600;
+    rect.y = 90; rect.h = 480;
+    drawScatterAxes(rect, {});
+
+    // all points
+    for (var i = 0; i < 720; i++){
+      var pair = PAIRS[i];
+      var pt = pairToXY(rect, pair);
+      el('circle', {
+        cx: pt.x, cy: pt.y, r: 2.6,
+        fill: aqiColor((pair.you + pair.epa) / 2),
+        opacity: 0.7
+      }, stage);
+    }
+
+    // y=x line drawn progressively
+    var diagP = clamp(p * 1.4, 0, 1);
+    var d0 = pairToXY(rect, { you: 0, epa: 0 });
+    var d1 = pairToXY(rect, { you: rect.vMax, epa: rect.vMax });
+    var dxEnd = d0.x + (d1.x - d0.x) * easeOut(diagP);
+    var dyEnd = d0.y + (d1.y - d0.y) * easeOut(diagP);
+    el('line', {
+      x1: d0.x, y1: d0.y, x2: dxEnd, y2: dyEnd,
+      stroke: 'var(--PROOF)', 'stroke-width': '2.4',
+      'stroke-dasharray': '6 4'
+    }, stage);
+    // line label
+    if (diagP > 0.7){
+      var labelAlpha = clamp((diagP - 0.7) / 0.2, 0, 1);
+      var midX = (d0.x + d1.x) / 2 + 60;
+      var midY = (d0.y + d1.y) / 2 - 24;
+      el('rect', { x: midX - 56, y: midY - 14, width: 112, height: 26,
+                   fill: 'var(--bg-2)', stroke: 'var(--PROOF)', 'stroke-width': '1.4', rx: '2',
+                   opacity: labelAlpha }, stage);
+      el('text', {
+        x: midX, y: midY + 4, fill: 'var(--PROOF)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '13', 'text-anchor': 'middle', 'font-weight': '700',
+        'letter-spacing': '0.12em', opacity: labelAlpha
+      }, stage).textContent = LANG === 'cn' ? 'y = x (理想)' : 'y = x (ideal)';
+    }
+
+    // hug + outlier readouts (right side)
+    if (p > 0.55){
+      var statAlpha = clamp((p - 0.55) / 0.25, 0, 1);
+      // hug count - within +/- 15% deviation
+      var hug = 0, out = 0;
+      for (var k = 0; k < 720; k++){
+        var dev = Math.abs(PAIRS[k].you - PAIRS[k].epa);
+        if (dev <= Math.max(6, PAIRS[k].epa * 0.18)) hug++;
+        else if (dev > Math.max(12, PAIRS[k].epa * 0.35)) out++;
+      }
+      var sc = el('g', { transform: 'translate(140, 460)', opacity: statAlpha }, stage);
+      el('rect', { x: -90, y: -50, width: 180, height: 130,
+                   fill: 'var(--bg-2)', stroke: 'var(--PROOF)', 'stroke-width': '1.4', rx: '3' }, sc);
+      el('text', {
+        x: 0, y: -28, fill: 'var(--fg-mute)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '9', 'text-anchor': 'middle', 'letter-spacing': '0.12em'
+      }, sc).textContent = LANG === 'cn' ? '统计' : 'STATS';
+      el('text', {
+        x: -80, y: -2, fill: 'var(--fg-dim)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '11'
+      }, sc).textContent = LANG === 'cn' ? '贴线' : 'hug';
+      el('text', {
+        x: 80, y: -2, fill: 'var(--AXIS)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '13', 'text-anchor': 'end', 'font-weight': '700'
+      }, sc).textContent = hug + ' / 720';
+      el('text', {
+        x: -80, y: 22, fill: 'var(--fg-dim)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '11'
+      }, sc).textContent = LANG === 'cn' ? '偏离' : 'far';
+      el('text', {
+        x: 80, y: 22, fill: 'var(--aqi-unhc)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '13', 'text-anchor': 'end', 'font-weight': '700'
+      }, sc).textContent = out + ' / 720';
+      el('text', {
+        x: -80, y: 50, fill: 'var(--fg-dim)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '11'
+      }, sc).textContent = LANG === 'cn' ? '贴线度' : 'FIT';
+      el('text', {
+        x: 80, y: 50, fill: 'var(--QED)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '15', 'text-anchor': 'end', 'font-weight': '700'
+      }, sc).textContent = Math.round(hug / 720 * 100) + ' %';
+    }
+
+    // pi mascot
+    var mg = el('g', { transform: 'translate(220, 340)' }, stage);
+    drawPiMascot(mg, p * 5, false);
+  }
+
+  // ============================================================
+  // Frame 5 - verdict: scatter pattern interpretation + QED flash
+  // ============================================================
+  function drawFrame5(p){
+    drawBgGrid();
+    drawStepChain(4);
+
+    var ttl = el('text', {
+      x: 540, y: 56, fill: 'var(--math)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '14', 'text-anchor': 'middle', 'letter-spacing': '0.14em', 'font-weight': '700'
+    }, stage);
+    ttl.textContent = LANG === 'cn'
+      ? '看散点判断 - 紧贴 y=x = 准, 散开 = 有偏'
+      : 'Read pattern - tight = accurate, spread = bias';
+
+    var rect = scatterRect();
+    rect.x = 350; rect.w = 600;
+    rect.y = 90; rect.h = 480;
+    drawScatterAxes(rect, {});
+
+    // all points with halo on outliers
+    for (var i = 0; i < 720; i++){
+      var pair = PAIRS[i];
+      var pt = pairToXY(rect, pair);
+      var dev = Math.abs(pair.you - pair.epa);
+      var isOutlier = dev > Math.max(12, pair.epa * 0.35);
+      // outlier halo (pulse)
+      if (isOutlier){
+        var ha = 0.4 + 0.4 * Math.sin(p * 6 + i);
+        el('circle', { cx: pt.x, cy: pt.y, r: 9,
+                       fill: 'var(--aqi-unhc)', opacity: ha * 0.25 }, stage);
+      }
+      el('circle', {
+        cx: pt.x, cy: pt.y, r: isOutlier ? 3.6 : 2.6,
+        fill: aqiColor((pair.you + pair.epa) / 2),
+        opacity: isOutlier ? 0.95 : 0.7,
+        stroke: isOutlier ? 'var(--aqi-unhc)' : 'none',
+        'stroke-width': isOutlier ? '1.2' : '0'
+      }, stage);
+    }
+
+    // y=x line full + +/- band
+    var d0 = pairToXY(rect, { you: 0, epa: 0 });
+    var d1 = pairToXY(rect, { you: rect.vMax, epa: rect.vMax });
+    // tolerance band (+/- 12 ug/m3)
+    var bandPxX = (12 / 160) * rect.w;
+    var bandPxY = (12 / 160) * rect.h;
+    el('polygon', {
+      points: (d0.x + bandPxX) + ',' + d0.y + ' '
+            + d0.x + ',' + (d0.y - bandPxY) + ' '
+            + (d1.x) + ',' + (d1.y - bandPxY) + ' '
+            + d1.x + ',' + (d1.y + bandPxY) + ' '
+            + (d1.x - bandPxX) + ',' + d1.y,
+      fill: 'var(--PROOF)', opacity: 0.12
+    }, stage);
+    el('line', {
+      x1: d0.x, y1: d0.y, x2: d1.x, y2: d1.y,
+      stroke: 'var(--PROOF)', 'stroke-width': '2.4',
+      'stroke-dasharray': '6 4'
+    }, stage);
+
+    // legend for scatter
+    drawAqiLegend(70, 110);
+
+    // verdict card (large)
+    var vc = el('g', { transform: 'translate(170, 380)' }, stage);
+    el('rect', { x: -110, y: -50, width: 220, height: 150,
+                 fill: 'var(--bg-2)', stroke: 'var(--QED)', 'stroke-width': '1.8',
+                 rx: '3' }, vc);
+    el('text', {
+      x: 0, y: -28, fill: 'var(--QED)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '11', 'text-anchor': 'middle', 'letter-spacing': '0.18em', 'font-weight': '700'
+    }, vc).textContent = LANG === 'cn' ? '一图代替 720 行' : '1 CHART = 720 ROWS';
+    el('line', { x1: -90, y1: -16, x2: 90, y2: -16,
+                 stroke: 'var(--QED)', 'stroke-width': '0.8', opacity: '0.4' }, vc);
+    el('text', {
+      x: -90, y: 8, fill: 'var(--fg-dim)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '11'
+    }, vc).textContent = LANG === 'cn' ? '主簇贴线' : 'main hugs';
+    el('text', {
+      x: 90, y: 8, fill: 'var(--AXIS)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '14', 'text-anchor': 'end', 'font-weight': '700'
+    }, vc).textContent = '92 %';
+    el('text', {
+      x: -90, y: 32, fill: 'var(--fg-dim)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '11'
+    }, vc).textContent = LANG === 'cn' ? '少量偏离' : 'few outliers';
+    el('text', {
+      x: 90, y: 32, fill: 'var(--aqi-unhc)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '14', 'text-anchor': 'end', 'font-weight': '700'
+    }, vc).textContent = '~ 2 %';
+    el('text', {
+      x: -90, y: 56, fill: 'var(--fg-dim)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '11'
+    }, vc).textContent = LANG === 'cn' ? '结论' : 'verdict';
+    el('text', {
+      x: 90, y: 56, fill: 'var(--QED)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '12', 'text-anchor': 'end', 'font-weight': '700'
+    }, vc).textContent = LANG === 'cn' ? '我节点准' : 'node OK';
+    el('text', {
+      x: 0, y: 82, fill: 'var(--fg-mute)',
+      'font-family': "'Inter','Noto Sans SC',sans-serif",
+      'font-size': '10', 'text-anchor': 'middle', 'font-style': 'italic'
+    }, vc).textContent = LANG === 'cn'
+        ? '720 行讲不清的话, 散点图一眼看清'
+        : '720 rows cannot say, scatter tells in a glance';
+
+    // pi mascot (hit mode)
+    var mg = el('g', { transform: 'translate(220, 250)' }, stage);
+    drawPiMascot(mg, p * 6, true);
+
+    // flash overlay
+    var flash = document.getElementById('flash');
+    if (p > 0.55 && p < 0.92){
+      flash.classList.add('on');
+    } else {
+      flash.classList.remove('on');
+    }
+  }
+
+  // AQI 5-tier legend (used in F3-F5)
+  function drawAqiLegend(originX, originY){
+    var tiers = [
+      { color: 'var(--aqi-good)',   labCn: '良 0-12',    labEn: 'Good 0-12' },
+      { color: 'var(--aqi-mod)',    labCn: '中 12-35',   labEn: 'Mod 12-35' },
+      { color: 'var(--aqi-usg)',    labCn: 'USG 35-55',  labEn: 'USG 35-55' },
+      { color: 'var(--aqi-unhc)',   labCn: '差 55-150',  labEn: 'Unh 55-150' },
+      { color: 'var(--aqi-vunhc)',  labCn: '极差 150+',  labEn: 'V.Unh 150+' }
+    ];
+    var g = el('g', { transform: 'translate(' + originX + ',' + originY + ')' }, stage);
+    el('rect', { x: -10, y: -22, width: 180, height: 24 + tiers.length * 22,
+                 fill: 'var(--bg-2)', stroke: 'var(--line-strong)', 'stroke-width': '1', rx: '2' }, g);
+    el('text', {
+      x: 80, y: -4, fill: 'var(--fg-mute)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '9', 'text-anchor': 'middle', 'letter-spacing': '0.14em', 'font-weight': '700'
+    }, g).textContent = LANG === 'cn' ? '点色 = AQI 5 等级' : 'COLOR = AQI 5 TIER';
+    for (var i = 0; i < tiers.length; i++){
+      var ty = 12 + i * 22;
+      el('rect', { x: 0, y: ty - 8, width: 16, height: 16,
+                   fill: tiers[i].color, stroke: 'var(--line)', 'stroke-width': '0.6' }, g);
+      el('text', {
+        x: 22, y: ty + 4, fill: 'var(--fg)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '10'
+      }, g).textContent = LANG === 'cn' ? tiers[i].labCn : tiers[i].labEn;
+    }
+  }
+
+  // ====== Frame dispatcher ======
+  function drawFrame(idx, pp){
+    clearStage();
+    if (idx !== 4){
+      document.getElementById('flash').classList.remove('on');
+    }
+    if (idx === 0) drawFrame1(pp);
+    else if (idx === 1) drawFrame2(pp);
+    else if (idx === 2) drawFrame3(pp);
+    else if (idx === 3) drawFrame4(pp);
+    else if (idx === 4) drawFrame5(pp);
+  }
+
+  function updateUI(idx){
+    var f = FRAMES[idx];
+    document.getElementById('hudV1').textContent = (idx+1) + ' / 5';
+    document.getElementById('hudV2').textContent = f.hudStage[LANG] || f.hudStage.en;
+    document.getElementById('hudV3').textContent = f.hudPairs;
+    document.getElementById('hudV4').textContent = f.hudFit;
+    document.getElementById('subCn').textContent = LANG === 'cn' ? f.subCn : f.subEn;
+    document.getElementById('subEn').textContent = LANG === 'cn' ? f.subEn : f.subCn;
+    document.getElementById('stepName').textContent = f.stepName;
+    for (var i = 0; i < 5; i++){
+      var c = document.getElementById('chip' + i);
+      c.classList.remove('active', 'done');
+      if (i < idx) c.classList.add('done');
+      else if (i === idx) c.classList.add('active');
+    }
+  }
+
+  function updateI18N(){
+    document.getElementById('badgeMod').textContent = t('badgeMod');
+    document.getElementById('brandH1').innerHTML = t('brandH1');
+    document.getElementById('brandSub').textContent = t('brandSub');
+    document.getElementById('mascotName').textContent = t('mascotName');
+    document.querySelector('#g1 .gtxt').textContent = t('g1');
+    document.querySelector('#g2 .gtxt').textContent = t('g2');
+    document.querySelector('#g3 .gtxt').textContent = t('g3');
+    document.getElementById('hudL1').textContent = t('hudL1');
+    document.getElementById('hudL2').textContent = t('hudL2');
+    document.getElementById('hudL3').textContent = t('hudL3');
+    document.getElementById('hudL4').textContent = t('hudL4');
+    document.getElementById('langBtn').textContent = t('btnLang');
+    document.getElementById('flashSub').textContent = LANG === 'cn'
+      ? '一张图代替 720 行数字 - 准不准一眼明'
+      : '1 chart replaces 720 rows - accuracy at a glance';
+  }
+
+  function tick(ts){
+    if (!frameStartTs) frameStartTs = ts;
+    var elapsed = ts - frameStartTs;
+    if (elapsed >= FRAME_MS){
+      currentFrame = (currentFrame + 1) % 5;
+      frameStartTs = ts;
+      updateUI(currentFrame);
+      elapsed = 0;
+    }
+    var pp = elapsed / FRAME_MS;
+    drawFrame(currentFrame, pp);
+    rafId = requestAnimationFrame(tick);
+  }
+
+  function start(){
+    updateI18N();
+    updateUI(currentFrame);
+    frameStartTs = 0;
+    if (rafId) cancelAnimationFrame(rafId);
+    rafId = requestAnimationFrame(tick);
+  }
+
+  document.getElementById('langBtn').addEventListener('click', function(){
+    LANG = (LANG === 'cn') ? 'en' : 'cn';
+    updateI18N();
+    updateUI(currentFrame);
+  });
+
+  start();
+})();
+</script>
+</body>
+</html>

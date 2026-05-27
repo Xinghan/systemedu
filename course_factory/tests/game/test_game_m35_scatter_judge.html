@@ -1,0 +1,1071 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>散点图侦探 — Scatter Detective</title>
+<script>window.__systemedu_resize_patch_optout=true;</script>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Inter:wght@400;500;700&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;}
+:root{
+  /* 第 1 层 — shared deep-space */
+  --bg-0: oklch(0.14 0.035 265);
+  --bg-1: oklch(0.18 0.04 265);
+  --bg-2: oklch(0.22 0.045 265);
+  --bg-3: oklch(0.28 0.05 265);
+  --line: oklch(0.35 0.05 265 / 0.35);
+  --line-strong: oklch(0.55 0.08 265 / 0.55);
+  --fg:      oklch(0.96 0.01 265);
+  --fg-dim:  oklch(0.75 0.02 265);
+  --fg-mute: oklch(0.55 0.03 265);
+  --gold:    oklch(0.85 0.14 85);
+
+  /* 第 2 层 — math accent (electric blue) */
+  --math: oklch(0.72 0.17 245);
+
+  /* 第 3 层 — math palette (Geometry Void) */
+  --axis:     oklch(0.72 0.17 245);
+  --proof:    oklch(0.52 0.16 245);
+  --shadow:   oklch(0.35 0.10 245);
+  --solution: oklch(0.92 0.08 240);
+  --qed:      oklch(0.85 0.14 85);
+
+  /* 状态色 (从 palette 派生, 不引入新色相) */
+  --warn:     oklch(0.70 0.18 35);
+  --bad:      oklch(0.62 0.20 25);
+}
+html,body{width:100%;height:100vh;overflow:hidden;background:var(--bg-0);color:var(--fg);font-family:'Inter','Noto Sans SC',sans-serif;}
+.game-wrap{display:flex;flex-direction:row;height:100vh;overflow:hidden;}
+
+/* ── Sidebar (200px) ── */
+.game-sidebar{
+  width:200px;min-width:200px;max-width:200px;
+  display:flex;flex-direction:column;gap:8px;padding:12px 10px;
+  background:var(--bg-1);
+  border-right:1px solid var(--line);
+  overflow-y:auto;
+}
+.sidebar-lang{
+  align-self:flex-start;flex-shrink:0;
+  font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:700;
+  padding:3px 9px;cursor:pointer;
+  border:1px solid var(--math);background:transparent;color:var(--math);
+  letter-spacing:0.18em;text-transform:uppercase;
+}
+.sidebar-lang:hover{background:var(--bg-2);}
+.sidebar-brand{
+  font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:700;
+  letter-spacing:0.18em;text-transform:uppercase;color:var(--math);
+  margin-top:6px;
+}
+.sidebar-title{
+  font-family:'Noto Sans SC',sans-serif;font-size:14px;font-weight:700;
+  color:var(--fg);line-height:1.3;
+}
+.sidebar-sub{
+  font-family:'JetBrains Mono',monospace;font-size:9px;
+  color:var(--fg-mute);letter-spacing:0.12em;text-transform:uppercase;
+}
+.sidebar-divider{height:1px;background:var(--line);margin:4px 0;}
+.sidebar-section{
+  font-family:'JetBrains Mono',monospace;font-size:9px;font-weight:700;
+  color:var(--fg-mute);letter-spacing:0.18em;text-transform:uppercase;
+  margin-top:2px;
+}
+.sidebar-goal{
+  font-family:'Noto Sans SC',sans-serif;font-size:11px;
+  color:var(--fg-dim);line-height:1.55;
+}
+
+/* mascot — Pi tetrahedron with magnifying glass */
+.mascot-wrap{
+  display:flex;justify-content:center;align-items:center;
+  padding:4px 0 2px 0;
+}
+.mascot-wrap svg{width:88px;height:88px;}
+
+/* progress dots */
+.progress-row{
+  display:flex;gap:6px;margin-top:4px;
+}
+.dot{
+  width:22px;height:22px;
+  display:flex;align-items:center;justify-content:center;
+  font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:700;
+  border:1px solid var(--line-strong);
+  color:var(--fg-mute);
+  background:var(--bg-2);
+}
+.dot.current{border-color:var(--math);color:var(--math);box-shadow:2px 2px 0 var(--bg-0);}
+.dot.pass{border-color:var(--qed);color:var(--qed);background:var(--bg-2);}
+.dot.fail{border-color:var(--bad);color:var(--bad);background:var(--bg-2);}
+
+/* how-list */
+.howlist{
+  font-family:'Noto Sans SC',sans-serif;font-size:10.5px;
+  color:var(--fg-dim);line-height:1.55;
+  list-style:none;display:flex;flex-direction:column;gap:3px;
+}
+.howlist li{padding-left:8px;border-left:2px solid var(--line);}
+
+/* sidebar layer toggles */
+.layer-toggle{
+  display:flex;align-items:center;gap:7px;
+  font-family:'Noto Sans SC',sans-serif;font-size:11px;
+  color:var(--fg-dim);cursor:pointer;
+  padding:3px 2px;
+  user-select:none;
+}
+.layer-toggle input[type=checkbox]{
+  -webkit-appearance:none;appearance:none;
+  width:13px;height:13px;
+  border:1px solid var(--math);background:transparent;cursor:pointer;
+  position:relative;flex-shrink:0;
+  margin:0;
+}
+.layer-toggle input[type=checkbox]:checked{
+  background:var(--math);
+  box-shadow:1.5px 1.5px 0 var(--bg-0);
+}
+.layer-toggle input[type=checkbox]:checked::after{
+  content:'';position:absolute;
+  left:3px;top:0px;width:5px;height:9px;
+  border-right:2px solid var(--bg-0);
+  border-bottom:2px solid var(--bg-0);
+  transform:rotate(45deg);
+}
+.layer-toggle:hover{color:var(--fg);}
+
+.badge-slot{
+  margin-top:auto;
+  padding:8px 6px;
+  border:1px dashed var(--line);
+  text-align:center;
+  min-height:44px;
+}
+.badge-slot.unlocked{border-color:var(--qed);background:oklch(0.20 0.05 85 / 0.25);}
+.badge-label{
+  font-family:'JetBrains Mono',monospace;font-size:9px;font-weight:700;
+  letter-spacing:0.18em;text-transform:uppercase;color:var(--fg-mute);
+}
+.badge-slot.unlocked .badge-label{color:var(--qed);}
+.badge-name{
+  font-family:'Noto Sans SC',sans-serif;font-size:11px;font-weight:700;
+  color:var(--fg-dim);margin-top:3px;
+}
+.badge-slot.unlocked .badge-name{color:var(--qed);}
+
+/* ── Main area ── */
+.game-main{flex:1;display:flex;flex-direction:column;min-width:0;}
+
+.game-hud{
+  display:flex;align-items:center;justify-content:space-between;gap:14px;
+  padding:8px 18px;background:var(--bg-1);
+  border-bottom:1px solid var(--line);flex-shrink:0;
+}
+.hud-left{
+  display:flex;align-items:center;gap:18px;
+}
+.hud-q{
+  font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:700;
+  color:var(--math);letter-spacing:0.08em;
+}
+.hud-q .qed{color:var(--qed);}
+.hud-q .bad{color:var(--bad);}
+.hud-prompt{
+  font-family:'Noto Sans SC',sans-serif;font-size:13px;
+  color:var(--solution);
+}
+.hud-right{display:flex;gap:18px;}
+.hud-item{display:flex;flex-direction:column;align-items:flex-end;gap:1px;}
+.hud-label{
+  font-family:'JetBrains Mono',monospace;font-size:8px;
+  letter-spacing:0.18em;color:var(--fg-mute);text-transform:uppercase;
+}
+.hud-val{
+  font-family:'JetBrains Mono',monospace;font-size:15px;font-weight:700;
+  color:var(--math);letter-spacing:0.08em;
+}
+.hud-val.good{color:var(--qed);}
+.hud-val.bad{color:var(--bad);}
+
+/* game body */
+.game-body{
+  flex:1;display:flex;flex-direction:column;min-height:0;
+  background:var(--bg-0);position:relative;
+}
+.canvas-wrap{
+  flex:1;display:flex;flex-direction:column;min-height:0;position:relative;
+}
+.game-body canvas{
+  width:100%!important;height:100%!important;display:block;
+}
+
+/* options row */
+.opt-bar{
+  display:grid;grid-template-columns:repeat(4,1fr);gap:8px;
+  padding:10px 18px 8px 18px;
+  background:var(--bg-1);
+  border-top:1px solid var(--line);flex-shrink:0;
+}
+.opt-chip{
+  padding:9px 10px;
+  background:var(--bg-2);
+  border:1px solid var(--line-strong);
+  color:var(--fg);
+  font-family:'Noto Sans SC',sans-serif;font-size:11.5px;font-weight:600;
+  cursor:pointer;text-align:left;
+  display:flex;flex-direction:column;gap:3px;
+  box-shadow:3px 3px 0 var(--bg-0);
+  transition:transform .08s, box-shadow .08s, background .12s, border-color .12s;
+}
+.opt-chip:hover:not(:disabled){background:var(--bg-3);border-color:var(--math);transform:translate(-1px,-1px);box-shadow:4px 4px 0 var(--bg-0);}
+.opt-chip:active:not(:disabled){transform:translate(1px,1px);box-shadow:1px 1px 0 var(--bg-0);}
+.opt-chip:disabled{cursor:default;opacity:0.65;}
+.opt-chip .opt-key{
+  font-family:'JetBrains Mono',monospace;font-size:9px;font-weight:700;
+  letter-spacing:0.18em;text-transform:uppercase;color:var(--math);
+}
+.opt-chip .opt-text{color:var(--fg);}
+.opt-chip.correct{border-color:var(--qed);background:oklch(0.22 0.06 95);}
+.opt-chip.correct .opt-key{color:var(--qed);}
+.opt-chip.wrong{border-color:var(--bad);background:oklch(0.22 0.06 25);}
+.opt-chip.wrong .opt-key{color:var(--bad);}
+.opt-chip.dim{opacity:0.4;}
+
+/* feedback area */
+.fb-bar{
+  padding:7px 18px;background:var(--bg-1);
+  border-top:1px solid var(--line);flex-shrink:0;
+  display:flex;align-items:center;justify-content:space-between;gap:14px;
+  min-height:42px;
+}
+.fb-msg{
+  font-family:'Noto Sans SC',sans-serif;font-size:12px;
+  color:var(--fg-dim);line-height:1.4;
+}
+.fb-msg.good{color:var(--qed);}
+.fb-msg.bad{color:var(--bad);}
+.fb-actions{display:flex;gap:8px;}
+.action-btn{
+  font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:700;
+  padding:7px 12px;border:1px solid var(--math);
+  cursor:pointer;color:var(--math);background:transparent;
+  letter-spacing:0.18em;text-transform:uppercase;
+  box-shadow:3px 3px 0 var(--bg-0);
+}
+.action-btn:hover{background:var(--bg-2);}
+.action-btn:active{transform:translate(2px,2px);box-shadow:1px 1px 0 var(--bg-0);}
+.action-btn.primary{border-color:var(--qed);color:var(--qed);}
+.action-btn:disabled{opacity:0.4;cursor:not-allowed;}
+</style>
+</head>
+<body>
+<div class="game-wrap">
+
+  <!-- ── Sidebar ── -->
+  <div class="game-sidebar">
+    <button class="sidebar-lang" id="langBtn">CN</button>
+
+    <div class="mascot-wrap" aria-hidden="true">
+      <!-- Pi mascot tetrahedron + magnifying glass overlay -->
+      <svg viewBox="0 0 100 100" id="mascot">
+        <defs>
+          <linearGradient id="faceA" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="var(--axis)" stop-opacity="0.9"/>
+            <stop offset="1" stop-color="var(--proof)" stop-opacity="0.7"/>
+          </linearGradient>
+          <linearGradient id="faceB" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="var(--solution)" stop-opacity="0.8"/>
+            <stop offset="1" stop-color="var(--axis)" stop-opacity="0.5"/>
+          </linearGradient>
+        </defs>
+        <polygon points="46,10 12,72 80,72" fill="url(#faceB)" stroke="var(--solution)" stroke-width="1"/>
+        <polygon points="46,10 46,60 12,72" fill="url(#faceA)" stroke="var(--math)" stroke-width="1.2" opacity="0.88"/>
+        <polygon points="46,10 46,60 80,72" fill="var(--shadow)" stroke="var(--math)" stroke-width="1.2" opacity="0.78"/>
+        <!-- magnifying glass -->
+        <circle cx="72" cy="68" r="14" fill="none" stroke="var(--qed)" stroke-width="2.4"/>
+        <line x1="83" y1="79" x2="93" y2="92" stroke="var(--qed)" stroke-width="3" stroke-linecap="round"/>
+        <circle cx="72" cy="68" r="14" fill="var(--qed)" opacity="0.10"/>
+      </svg>
+    </div>
+
+    <div class="sidebar-brand" id="sbBrand">M35 · DETECTIVE</div>
+    <div class="sidebar-title" id="sbTitle">散点图侦探</div>
+    <div class="sidebar-sub" id="sbSub">SCATTER · 5 CASES</div>
+
+    <div class="sidebar-divider"></div>
+
+    <div class="sidebar-section" id="secProgress">PROGRESS</div>
+    <div class="progress-row" id="progressRow">
+      <div class="dot current" data-idx="0">1</div>
+      <div class="dot" data-idx="1">2</div>
+      <div class="dot" data-idx="2">3</div>
+      <div class="dot" data-idx="3">4</div>
+      <div class="dot" data-idx="4">5</div>
+    </div>
+
+    <div class="sidebar-section" id="secHow">HOW</div>
+    <ul class="howlist" id="howlist">
+      <li id="how1">看你 (Y) vs EPA (X) 散点图</li>
+      <li id="how2">注意 y=x 参考线 + 拟合直线</li>
+      <li id="how3">从 4 个诊断中选一个</li>
+      <li id="how4">5 题全对解锁徽章</li>
+    </ul>
+
+    <div class="sidebar-section" id="secLayers">LAYERS</div>
+    <label class="layer-toggle">
+      <input type="checkbox" id="tglYX" checked>
+      <span id="tglYXLbl">y = x 参考线</span>
+    </label>
+    <label class="layer-toggle">
+      <input type="checkbox" id="tglFit" checked>
+      <span id="tglFitLbl">拟合直线</span>
+    </label>
+    <label class="layer-toggle">
+      <input type="checkbox" id="tglGrid" checked>
+      <span id="tglGridLbl">网格线</span>
+    </label>
+
+    <div class="badge-slot" id="badgeSlot">
+      <div class="badge-label" id="badgeLbl">BADGE LOCKED</div>
+      <div class="badge-name" id="badgeName">5/5 解锁 · 散点图侦探</div>
+    </div>
+  </div>
+
+  <!-- ── Main area ── -->
+  <div class="game-main">
+
+    <!-- HUD -->
+    <div class="game-hud">
+      <div class="hud-left">
+        <div class="hud-q" id="hudQ">CASE 1 / 5</div>
+        <div class="hud-prompt" id="hudPrompt">这个节点是什么情况?</div>
+      </div>
+      <div class="hud-right">
+        <div class="hud-item">
+          <div class="hud-label" id="hudLblScore">SCORE</div>
+          <div class="hud-val" id="hudScore">0 / 5</div>
+        </div>
+        <div class="hud-item">
+          <div class="hud-label" id="hudLblR">R</div>
+          <div class="hud-val" id="hudR">—</div>
+        </div>
+        <div class="hud-item">
+          <div class="hud-label" id="hudLblBias">BIAS</div>
+          <div class="hud-val" id="hudBias">—</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- canvas body -->
+    <div class="game-body">
+      <div class="canvas-wrap">
+        <canvas id="stage"></canvas>
+      </div>
+    </div>
+
+    <!-- options -->
+    <div class="opt-bar" id="optBar">
+      <button class="opt-chip" data-key="A">
+        <span class="opt-key">A</span>
+        <span class="opt-text" id="optTextA">理想节点</span>
+      </button>
+      <button class="opt-chip" data-key="B">
+        <span class="opt-key">B</span>
+        <span class="opt-text" id="optTextB">系统偏高</span>
+      </button>
+      <button class="opt-chip" data-key="C">
+        <span class="opt-key">C</span>
+        <span class="opt-text" id="optTextC">系统偏低</span>
+      </button>
+      <button class="opt-chip" data-key="D">
+        <span class="opt-key">D</span>
+        <span class="opt-text" id="optTextD">噪声大</span>
+      </button>
+    </div>
+
+    <!-- feedback bar -->
+    <div class="fb-bar">
+      <div class="fb-msg" id="fbMsg">点击下方一个诊断, 看你的推理是否正确。</div>
+      <div class="fb-actions">
+        <button class="action-btn" id="btnReset">RESET</button>
+        <button class="action-btn primary" id="btnNext" disabled>NEXT</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ────────────────────────────────────────────────────────────
+// i18n
+// ────────────────────────────────────────────────────────────
+var LANG='cn';
+var I18N = {
+  brand:    {cn:'M35 · 侦探', en:'M35 · DETECTIVE'},
+  title:    {cn:'散点图侦探', en:'Scatter Detective'},
+  sub:      {cn:'散点 · 5 个节点', en:'SCATTER · 5 CASES'},
+  progress: {cn:'进度', en:'PROGRESS'},
+  how:      {cn:'如何破案', en:'HOW'},
+  how1:     {cn:'看你 (Y) vs EPA (X) 散点图', en:'Read YOU(Y) vs EPA(X) scatter'},
+  how2:     {cn:'注意 y=x 参考线 + 拟合直线', en:'Watch y=x ref vs fit line'},
+  how3:     {cn:'从 4 个诊断中选一个', en:'Pick 1 of 4 diagnoses'},
+  how4:     {cn:'5 题全对解锁徽章', en:'5/5 unlocks the badge'},
+  secLayers:{cn:'图层', en:'LAYERS'},
+  tglYX:    {cn:'y = x 参考线', en:'y = x reference'},
+  tglFit:   {cn:'拟合直线', en:'best-fit line'},
+  tglGrid:  {cn:'网格线', en:'grid lines'},
+  badgeLocked: {cn:'徽章未解锁', en:'BADGE LOCKED'},
+  badgeUnlocked: {cn:'徽章已解锁', en:'BADGE UNLOCKED'},
+  badgeName: {cn:'5/5 解锁 · 散点图侦探', en:'5/5 to unlock · Scatter Detective'},
+  badgeWon:  {cn:'散点图侦探', en:'Scatter Detective'},
+  hudCase:   {cn:'第 N / 5 张', en:'CASE N / 5'},
+  hudPrompt: {cn:'这个节点是什么情况?', en:'What is this node showing?'},
+  lblScore:  {cn:'SCORE', en:'SCORE'},
+  lblR:      {cn:'R 相关系数', en:'R'},
+  lblBias:   {cn:'BIAS 系统偏差', en:'BIAS'},
+  reset:     {cn:'重置', en:'RESET'},
+  next:      {cn:'下一题', en:'NEXT'},
+  done:      {cn:'查看结果', en:'FINISH'},
+  pickOne:   {cn:'点击下方一个诊断, 看你的推理是否正确。', en:'Pick one diagnosis below to test your reasoning.'},
+  // 5 cases:  (label_cn, label_en, kind_id, true_diag_index, hint_cn, hint_en)
+  // diag indices: 0=ideal 1=high 2=low 3=noise 4=curved
+  cases: [
+    {
+      lbl:{cn:'CASE 1 · 节点 A1B2', en:'CASE 1 · Node A1B2'},
+      kind:'ideal', truth:0,
+      story:{
+        cn:'A1B2 节点在过去 30 天里, 每小时跟最近 EPA 站点比对。',
+        en:'Node A1B2 was compared hourly with the nearest EPA station for 30 days.'
+      }
+    },
+    {
+      lbl:{cn:'CASE 2 · 节点 C4D8', en:'CASE 2 · Node C4D8'},
+      kind:'high', truth:1,
+      story:{
+        cn:'C4D8 节点同一时段对比 EPA, 点都在 y=x 上方。',
+        en:'C4D8 vs EPA, same window — points sit above y=x.'
+      }
+    },
+    {
+      lbl:{cn:'CASE 3 · 节点 E7F1', en:'CASE 3 · Node E7F1'},
+      kind:'low', truth:2,
+      story:{
+        cn:'E7F1 节点报的值始终比 EPA 低一点。',
+        en:'E7F1 systematically reads lower than EPA.'
+      }
+    },
+    {
+      lbl:{cn:'CASE 4 · 节点 G3H5', en:'CASE 4 · Node G3H5'},
+      kind:'noise', truth:3,
+      story:{
+        cn:'G3H5 节点点云粗大, 没有明显方向偏差。',
+        en:'G3H5 has a fat cloud with no clear directional bias.'
+      }
+    },
+    {
+      lbl:{cn:'CASE 5 · 节点 J9K2', en:'CASE 5 · Node J9K2'},
+      kind:'curved', truth:4,
+      story:{
+        cn:'J9K2 节点低浓度准, 高浓度变弯翘起。',
+        en:'J9K2 fits at low values, then curves up at high values.'
+      }
+    },
+  ],
+  opts: [
+    {cn:'理想节点 · 紧贴 y=x', en:'Ideal · tight to y=x'},
+    {cn:'校准漂移 · 系统偏高', en:'Calibration drift · reads high'},
+    {cn:'校准漂移 · 系统偏低', en:'Calibration drift · reads low'},
+    {cn:'传感器噪声大', en:'Sensor noise · large scatter'},
+    {cn:'湿度干扰 · 非线性弯曲', en:'Humidity bias · non-linear curve'},
+  ],
+  fbGood: [
+    {cn:'对。点紧贴 y=x, 拟合直线斜率≈1, 截距≈0, R 接近 1。这就是节点该有的样子。',
+     en:'Correct. Points hug y=x, slope≈1, intercept≈0, R≈1. This is the gold node.'},
+    {cn:'对。整条点云在 y=x 上方, 斜率≈1 但截距正 — 这是稳定的系统偏高, 可加一个负偏置校正。',
+     en:'Correct. Cloud sits above y=x, slope≈1, intercept positive — classic high bias, fix with a negative offset.'},
+    {cn:'对。点云在 y=x 下方, 同样平移性偏差, 加正偏置即可。常见于元件老化降敏。',
+     en:'Correct. Cloud below y=x — same kind of shift, fix with a positive offset. Often due to aging sensors.'},
+    {cn:'对。点云胖, 无方向性, 平均仍贴 y=x, 但 R 低。增加平滑窗口或更换传感器。',
+     en:'Correct. Fat cloud, no direction, mean stays on y=x but R is low. Smooth or replace the sensor.'},
+    {cn:'对。低浓度准, 高浓度抬起 — 典型 PurpleAir 湿度过敏, 必须套 Barkjohn 校正。',
+     en:'Correct. Linear at low values, lifts at high values — classic PurpleAir humidity bias, apply Barkjohn.'},
+  ],
+  fbBad: [
+    {cn:'再看一眼: 点云相对 y=x 是否整体偏离, 还是只是离散?',
+     en:'Look again: is the cloud shifted off y=x, or just scattered around it?'},
+    {cn:'再想想: 系统偏高 = 点都在 y=x 上方; 系统偏低 = 点都在下方; 噪声 = 点云胖; 弯曲 = 高浓度翘起。',
+     en:'Think again: HIGH=above y=x, LOW=below, NOISE=fat cloud, CURVED=lifts at high values.'},
+  ],
+  fbAllDone: {cn:'五题全部完成! 总分 N / 5。', en:'All 5 cases done! Score: N / 5.'},
+  fbBadgeWon: {cn:'5/5 满分! 你解锁了"散点图侦探"徽章。',
+               en:'5/5 perfect! You unlocked the Scatter Detective badge.'},
+  fbBadgeMiss: {cn:'还差一点。点 RESET 再来一轮, 把 5 题都做对。',
+                en:'So close. Hit RESET to try again for a perfect 5/5.'},
+  axisX: {cn:'EPA 参考 (ug/m3)', en:'EPA reference (ug/m3)'},
+  axisY: {cn:'你的节点 (ug/m3)', en:'YOUR node (ug/m3)'},
+  legendYX: {cn:'y = x 参考', en:'y = x reference'},
+  legendFit: {cn:'实际拟合线', en:'best-fit line'},
+};
+function t(k){return (I18N[k]&&I18N[k][LANG])||(I18N[k]&&I18N[k]['en'])||k;}
+
+// ────────────────────────────────────────────────────────────
+// state
+// ────────────────────────────────────────────────────────────
+var stateGame = {
+  caseIdx: 0,
+  score: 0,
+  history: [],          // [{caseIdx, pickedIdx, correct}]
+  answered: false,
+  pickedIdx: -1,
+  scatters: [],         // pre-generated cloud per case [{pts, slope, intercept, r, biasMean, label}]
+  layers: { yx: true, fit: true, grid: true },
+};
+
+// pseudo-random gaussian using deterministic seed
+function rng(seed){
+  // mulberry32-ish
+  var s = seed | 0;
+  return function(){
+    s = (s + 0x6D2B79F5) | 0;
+    var t1 = s;
+    t1 = Math.imul(t1 ^ (t1 >>> 15), t1 | 1);
+    t1 ^= t1 + Math.imul(t1 ^ (t1 >>> 7), t1 | 61);
+    return ((t1 ^ (t1 >>> 14)) >>> 0) / 4294967296;
+  };
+}
+function gauss(r){
+  var u1 = r(); if (u1 < 0.0001) u1 = 0.0001;
+  var u2 = r();
+  return Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
+}
+
+// build one scatter dataset per kind
+function buildCase(kind, seed){
+  var r = rng(seed);
+  var N = 90;
+  var pts = [];
+  var i;
+  for (i = 0; i < N; i++){
+    // EPA x: log-spaced concentration 2 .. 55
+    var x = 2 + (53) * Math.pow(r(), 1.3);
+    var y, noiseY;
+    if (kind === 'ideal'){
+      // tight y=x, R ~ 0.97
+      noiseY = gauss(r) * 1.2;
+      y = x + noiseY;
+    } else if (kind === 'high'){
+      // shift up ~+ 6, narrow band
+      noiseY = gauss(r) * 1.6;
+      y = x + 6.5 + noiseY;
+    } else if (kind === 'low'){
+      // shift down ~- 5
+      noiseY = gauss(r) * 1.6;
+      y = x - 5.5 + noiseY;
+    } else if (kind === 'noise'){
+      // fat cloud, no shift, sigma 6
+      noiseY = gauss(r) * 6.5;
+      y = x + noiseY;
+    } else if (kind === 'curved'){
+      // linear for x<20, lifts: y = x + alpha*(x-15)^2 / 12 for x>15
+      var lift = x > 15 ? 0.12 * (x - 15) * (x - 15) : 0;
+      noiseY = gauss(r) * 1.6;
+      y = x + lift + noiseY;
+    } else {
+      y = x;
+    }
+    if (y < 0) y = 0;
+    pts.push([x, y]);
+  }
+  // simple linear regression
+  var sx = 0, sy = 0;
+  for (i = 0; i < N; i++){ sx += pts[i][0]; sy += pts[i][1]; }
+  var mx = sx / N, my = sy / N;
+  var sxy = 0, sxx = 0, syy = 0;
+  for (i = 0; i < N; i++){
+    var dx = pts[i][0] - mx, dy = pts[i][1] - my;
+    sxy += dx * dy; sxx += dx * dx; syy += dy * dy;
+  }
+  var slope = sxx > 0 ? sxy / sxx : 1;
+  var intercept = my - slope * mx;
+  var rCoef = (sxx > 0 && syy > 0) ? sxy / Math.sqrt(sxx * syy) : 0;
+  var biasMean = my - mx;
+  return { pts: pts, slope: slope, intercept: intercept, r: rCoef, biasMean: biasMean };
+}
+
+function prepareScatters(){
+  var kinds = I18N.cases.map(function(c){return c.kind;});
+  var seeds = [101, 211, 307, 419, 523];
+  stateGame.scatters = kinds.map(function(k, i){return buildCase(k, seeds[i]);});
+}
+
+// ────────────────────────────────────────────────────────────
+// canvas
+// ────────────────────────────────────────────────────────────
+var canvas = document.getElementById('stage');
+var ctx = canvas.getContext('2d');
+var W = 0, H = 0, DPR = 1;
+
+function resize(){
+  var rect = canvas.parentElement.getBoundingClientRect();
+  if (rect.width < 1 || rect.height < 1) return;
+  DPR = window.devicePixelRatio || 1;
+  canvas.width = Math.round(rect.width * DPR);
+  canvas.height = Math.round(rect.height * DPR);
+  canvas.style.width = rect.width + 'px';
+  canvas.style.height = rect.height + 'px';
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  W = rect.width;
+  H = rect.height;
+  draw();
+}
+
+function cssVar(name){
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || '#888';
+}
+
+function draw(){
+  if (!W || !H) return;
+  ctx.clearRect(0, 0, W, H);
+
+  // bg
+  ctx.fillStyle = cssVar('--bg-0');
+  ctx.fillRect(0, 0, W, H);
+
+  // panel inset margins
+  var mL = 64, mR = 28, mT = 22, mB = 56;
+  var plotW = W - mL - mR;
+  var plotH = H - mT - mB;
+  if (plotW < 80 || plotH < 80) return;
+
+  // domain 0..60 both axes
+  var xMin = 0, xMax = 60, yMin = 0, yMax = 60;
+
+  // grid
+  if (stateGame.layers.grid){
+    ctx.strokeStyle = cssVar('--line');
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    var g;
+    for (g = 0; g <= 60; g += 10){
+      var px = mL + (g - xMin) / (xMax - xMin) * plotW;
+      ctx.moveTo(px, mT); ctx.lineTo(px, mT + plotH);
+      var py = mT + plotH - (g - yMin) / (yMax - yMin) * plotH;
+      ctx.moveTo(mL, py); ctx.lineTo(mL + plotW, py);
+    }
+    ctx.stroke();
+  }
+
+  // axes
+  ctx.strokeStyle = cssVar('--line-strong');
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(mL, mT); ctx.lineTo(mL, mT + plotH);
+  ctx.lineTo(mL + plotW, mT + plotH);
+  ctx.stroke();
+
+  // axis tick labels
+  ctx.fillStyle = cssVar('--fg-mute');
+  ctx.font = '500 10px JetBrains Mono, monospace';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'top';
+  var i;
+  for (i = 0; i <= 60; i += 10){
+    var tx = mL + (i - xMin) / (xMax - xMin) * plotW;
+    ctx.fillText(i.toString(), tx, mT + plotH + 6);
+  }
+  ctx.textAlign = 'right';
+  ctx.textBaseline = 'middle';
+  for (i = 0; i <= 60; i += 10){
+    var ty = mT + plotH - (i - yMin) / (yMax - yMin) * plotH;
+    ctx.fillText(i.toString(), mL - 8, ty);
+  }
+
+  // axis titles
+  ctx.fillStyle = cssVar('--solution');
+  ctx.font = '700 11px JetBrains Mono, monospace';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'bottom';
+  ctx.fillText(t('axisX'), mL + plotW / 2, H - 8);
+  ctx.save();
+  ctx.translate(16, mT + plotH / 2);
+  ctx.rotate(-Math.PI / 2);
+  ctx.textBaseline = 'top';
+  ctx.fillText(t('axisY'), 0, 0);
+  ctx.restore();
+
+  // y = x reference line (gold dashed)
+  if (stateGame.layers.yx){
+    ctx.strokeStyle = cssVar('--gold');
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([6, 5]);
+    ctx.beginPath();
+    var rx0 = mL, ry0 = mT + plotH - (xMin - yMin) / (yMax - yMin) * plotH;
+    var rx1 = mL + plotW, ry1 = mT + plotH - (xMax - yMin) / (yMax - yMin) * plotH;
+    ctx.moveTo(rx0, ry0);
+    ctx.lineTo(rx1, ry1);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  // case data
+  var sc = stateGame.scatters[stateGame.caseIdx];
+  if (!sc) return;
+  var pts = sc.pts;
+
+  // scatter points
+  ctx.fillStyle = cssVar('--math');
+  for (i = 0; i < pts.length; i++){
+    var x = pts[i][0], y = pts[i][1];
+    if (x < xMin || x > xMax || y < yMin || y > yMax) continue;
+    var cx = mL + (x - xMin) / (xMax - xMin) * plotW;
+    var cy = mT + plotH - (y - yMin) / (yMax - yMin) * plotH;
+    ctx.beginPath();
+    ctx.arc(cx, cy, 2.6, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // best-fit line (electric blue solid)
+  if (stateGame.layers.fit){
+    ctx.strokeStyle = cssVar('--solution');
+    ctx.lineWidth = 2.2;
+    ctx.beginPath();
+    var fy0 = sc.slope * xMin + sc.intercept;
+    var fy1 = sc.slope * xMax + sc.intercept;
+    var clampY = function(v){ return Math.max(yMin, Math.min(yMax, v)); };
+    var fx0 = xMin, fx1 = xMax;
+    // if intercept pushes line off domain, recompute boundary
+    if (fy0 < yMin || fy0 > yMax){
+      fy0 = clampY(fy0);
+      fx0 = sc.slope !== 0 ? (fy0 - sc.intercept) / sc.slope : xMin;
+    }
+    if (fy1 < yMin || fy1 > yMax){
+      fy1 = clampY(fy1);
+      fx1 = sc.slope !== 0 ? (fy1 - sc.intercept) / sc.slope : xMax;
+    }
+    var px0 = mL + (fx0 - xMin) / (xMax - xMin) * plotW;
+    var py0 = mT + plotH - (fy0 - yMin) / (yMax - yMin) * plotH;
+    var px1 = mL + (fx1 - xMin) / (xMax - xMin) * plotW;
+    var py1 = mT + plotH - (fy1 - yMin) / (yMax - yMin) * plotH;
+    ctx.moveTo(px0, py0);
+    ctx.lineTo(px1, py1);
+    ctx.stroke();
+  }
+
+  // legend (top-right inside plot)
+  var legX = mL + plotW - 168, legY = mT + 8;
+  ctx.fillStyle = cssVar('--bg-1');
+  ctx.strokeStyle = cssVar('--line-strong');
+  ctx.lineWidth = 1;
+  ctx.fillRect(legX, legY, 160, 46);
+  ctx.strokeRect(legX, legY, 160, 46);
+  // y=x sample
+  ctx.strokeStyle = cssVar('--gold');
+  ctx.lineWidth = 1.5;
+  ctx.setLineDash([6, 5]);
+  ctx.beginPath(); ctx.moveTo(legX + 8, legY + 14); ctx.lineTo(legX + 36, legY + 14); ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle = cssVar('--fg-dim');
+  ctx.font = '600 10px Inter, sans-serif';
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(t('legendYX'), legX + 44, legY + 14);
+  // fit sample
+  ctx.strokeStyle = cssVar('--solution');
+  ctx.lineWidth = 2.2;
+  ctx.beginPath(); ctx.moveTo(legX + 8, legY + 32); ctx.lineTo(legX + 36, legY + 32); ctx.stroke();
+  ctx.fillText(t('legendFit'), legX + 44, legY + 32);
+
+  // case story (top-left inside plot)
+  var c = I18N.cases[stateGame.caseIdx];
+  ctx.fillStyle = cssVar('--bg-1');
+  ctx.strokeStyle = cssVar('--line');
+  ctx.lineWidth = 1;
+  ctx.fillRect(mL + 8, mT + 8, 220, 46);
+  ctx.strokeRect(mL + 8, mT + 8, 220, 46);
+  ctx.fillStyle = cssVar('--math');
+  ctx.font = '700 11px JetBrains Mono, monospace';
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'top';
+  ctx.fillText(c.lbl[LANG] || c.lbl.en, mL + 14, mT + 12);
+  ctx.fillStyle = cssVar('--fg-dim');
+  ctx.font = '500 10.5px Inter, "Noto Sans SC", sans-serif';
+  wrapText(ctx, c.story[LANG] || c.story.en, mL + 14, mT + 28, 208, 13);
+}
+
+function wrapText(ctx, text, x, y, maxW, lh){
+  if (!text) return;
+  var words = (text + '').split('');
+  var line = '';
+  var cy = y;
+  for (var i = 0; i < words.length; i++){
+    var test = line + words[i];
+    if (ctx.measureText(test).width > maxW && line.length > 0){
+      ctx.fillText(line, x, cy);
+      cy += lh;
+      line = words[i];
+    } else {
+      line = test;
+    }
+    if (cy > y + lh * 2 + 1) break;
+  }
+  if (line) ctx.fillText(line, x, cy);
+}
+
+// ────────────────────────────────────────────────────────────
+// UI sync
+// ────────────────────────────────────────────────────────────
+function refreshSidebar(){
+  document.getElementById('sbBrand').textContent = t('brand');
+  document.getElementById('sbTitle').textContent = t('title');
+  document.getElementById('sbSub').textContent = t('sub');
+  document.getElementById('secProgress').textContent = t('progress');
+  document.getElementById('secHow').textContent = t('how');
+  document.getElementById('how1').textContent = t('how1');
+  document.getElementById('how2').textContent = t('how2');
+  document.getElementById('how3').textContent = t('how3');
+  document.getElementById('how4').textContent = t('how4');
+  document.getElementById('secLayers').textContent = t('secLayers');
+  document.getElementById('tglYXLbl').textContent = t('tglYX');
+  document.getElementById('tglFitLbl').textContent = t('tglFit');
+  document.getElementById('tglGridLbl').textContent = t('tglGrid');
+  document.getElementById('langBtn').textContent = LANG === 'cn' ? 'CN' : 'EN';
+  // badge
+  var badge = document.getElementById('badgeSlot');
+  var bL = document.getElementById('badgeLbl');
+  var bN = document.getElementById('badgeName');
+  if (stateGame.history.length === 5 && stateGame.score === 5){
+    badge.classList.add('unlocked');
+    bL.textContent = t('badgeUnlocked');
+    bN.textContent = t('badgeWon');
+  } else {
+    badge.classList.remove('unlocked');
+    bL.textContent = t('badgeLocked');
+    bN.textContent = t('badgeName');
+  }
+  // progress dots
+  var dots = document.querySelectorAll('.dot');
+  for (var i = 0; i < dots.length; i++){
+    dots[i].classList.remove('current', 'pass', 'fail');
+    var rec = stateGame.history.find(function(h){return h.caseIdx === i;});
+    if (rec){
+      dots[i].classList.add(rec.correct ? 'pass' : 'fail');
+    } else if (i === stateGame.caseIdx){
+      dots[i].classList.add('current');
+    }
+  }
+}
+
+function refreshOpts(){
+  var optKeys = ['A', 'B', 'C', 'D'];
+  var optIds  = ['optTextA', 'optTextB', 'optTextC', 'optTextD'];
+  // current case's truth idx; we need to pick 4 of 5 diags to display incl. truth
+  var c = I18N.cases[stateGame.caseIdx];
+  var truthIdx = c.truth;
+  // build 4 options: truth + 3 distractors from remaining 4 diags, deterministic by case idx
+  var allDiagIdx = [0,1,2,3,4];
+  var distractors = allDiagIdx.filter(function(x){return x !== truthIdx;});
+  // pick 3 distractors deterministic — shift by caseIdx
+  var picked = [];
+  for (var k = 0; k < 3; k++){
+    picked.push(distractors[(k + stateGame.caseIdx) % distractors.length]);
+  }
+  // assemble 4: insert truth at position (caseIdx % 4)
+  var positionOfTruth = stateGame.caseIdx % 4;
+  var optDiags = [];
+  var distrCursor = 0;
+  for (var p = 0; p < 4; p++){
+    if (p === positionOfTruth){
+      optDiags.push(truthIdx);
+    } else {
+      optDiags.push(picked[distrCursor++]);
+    }
+  }
+  stateGame._currentOptDiags = optDiags;
+  for (var i = 0; i < 4; i++){
+    document.getElementById(optIds[i]).textContent = I18N.opts[optDiags[i]][LANG];
+    var btn = document.querySelectorAll('.opt-chip')[i];
+    btn.classList.remove('correct', 'wrong', 'dim');
+    btn.disabled = false;
+  }
+  // if already answered, replay state
+  if (stateGame.answered){
+    var pickedPos = optDiags.indexOf(I18N.opts.findIndex(function(_, idx){
+      return idx === stateGame._lastPickedDiagIdx;
+    }));
+    // simpler: re-lookup
+    for (var j = 0; j < 4; j++){
+      var bj = document.querySelectorAll('.opt-chip')[j];
+      bj.disabled = true;
+      if (optDiags[j] === truthIdx) bj.classList.add('correct');
+      if (j === stateGame._lastPickedOptPos && optDiags[j] !== truthIdx) bj.classList.add('wrong');
+      if (j !== stateGame._lastPickedOptPos && optDiags[j] !== truthIdx) bj.classList.add('dim');
+    }
+  }
+}
+
+function refreshHUD(){
+  var hudQ = document.getElementById('hudQ');
+  hudQ.textContent = t('hudCase').replace('N', (stateGame.caseIdx + 1));
+  document.getElementById('hudPrompt').textContent = t('hudPrompt');
+  document.getElementById('hudScore').textContent = stateGame.score + ' / 5';
+  document.getElementById('hudLblScore').textContent = t('lblScore');
+  document.getElementById('hudLblR').textContent = t('lblR');
+  document.getElementById('hudLblBias').textContent = t('lblBias');
+  var sc = stateGame.scatters[stateGame.caseIdx];
+  if (sc && stateGame.answered){
+    document.getElementById('hudR').textContent = sc.r.toFixed(2);
+    document.getElementById('hudBias').textContent = (sc.biasMean >= 0 ? '+' : '') + sc.biasMean.toFixed(1);
+    // colourize
+    var rEl = document.getElementById('hudR');
+    rEl.classList.remove('good', 'bad');
+    if (sc.r >= 0.85) rEl.classList.add('good');
+    else if (sc.r < 0.65) rEl.classList.add('bad');
+    var bEl = document.getElementById('hudBias');
+    bEl.classList.remove('good', 'bad');
+    if (Math.abs(sc.biasMean) <= 1.5) bEl.classList.add('good');
+    else if (Math.abs(sc.biasMean) > 3) bEl.classList.add('bad');
+  } else {
+    document.getElementById('hudR').textContent = '—';
+    document.getElementById('hudBias').textContent = '—';
+    document.getElementById('hudR').classList.remove('good', 'bad');
+    document.getElementById('hudBias').classList.remove('good', 'bad');
+  }
+}
+
+function refreshActions(){
+  document.getElementById('btnReset').textContent = t('reset');
+  var btnNext = document.getElementById('btnNext');
+  if (stateGame.caseIdx >= 4 && stateGame.answered){
+    btnNext.textContent = t('done');
+  } else {
+    btnNext.textContent = t('next');
+  }
+  btnNext.disabled = !stateGame.answered;
+}
+
+function refreshAll(){
+  refreshSidebar();
+  refreshHUD();
+  refreshOpts();
+  refreshActions();
+  draw();
+}
+
+// ────────────────────────────────────────────────────────────
+// events
+// ────────────────────────────────────────────────────────────
+document.getElementById('langBtn').addEventListener('click', function(){
+  LANG = (LANG === 'cn') ? 'en' : 'cn';
+  refreshAll();
+  // also refresh current feedback message in new lang if we already answered
+  if (stateGame.answered){
+    var last = stateGame.history[stateGame.history.length - 1];
+    showAnswerFeedback(last.correct, last.caseIdx);
+  } else {
+    document.getElementById('fbMsg').textContent = t('pickOne');
+    document.getElementById('fbMsg').classList.remove('good', 'bad');
+  }
+});
+
+function showAnswerFeedback(correct, caseIdx){
+  var fb = document.getElementById('fbMsg');
+  fb.classList.remove('good', 'bad');
+  if (correct){
+    fb.classList.add('good');
+    fb.textContent = I18N.fbGood[I18N.cases[caseIdx].truth][LANG];
+  } else {
+    fb.classList.add('bad');
+    // pick variant by caseIdx
+    var variant = I18N.fbBad[caseIdx % I18N.fbBad.length];
+    fb.textContent = variant[LANG];
+  }
+}
+
+function onPick(optPos){
+  if (stateGame.answered) return;
+  var optDiags = stateGame._currentOptDiags;
+  var pickedDiag = optDiags[optPos];
+  var c = I18N.cases[stateGame.caseIdx];
+  var correct = pickedDiag === c.truth;
+  stateGame.answered = true;
+  stateGame._lastPickedOptPos = optPos;
+  stateGame._lastPickedDiagIdx = pickedDiag;
+  if (correct) stateGame.score++;
+  stateGame.history.push({caseIdx: stateGame.caseIdx, pickedDiag: pickedDiag, correct: correct});
+  showAnswerFeedback(correct, stateGame.caseIdx);
+  refreshAll();
+}
+
+// layer toggles
+document.getElementById('tglYX').addEventListener('change', function(e){
+  stateGame.layers.yx = e.target.checked; draw();
+});
+document.getElementById('tglFit').addEventListener('change', function(e){
+  stateGame.layers.fit = e.target.checked; draw();
+});
+document.getElementById('tglGrid').addEventListener('change', function(e){
+  stateGame.layers.grid = e.target.checked; draw();
+});
+
+var optBtns = document.querySelectorAll('.opt-chip');
+for (var bi = 0; bi < optBtns.length; bi++){
+  (function(idx){
+    optBtns[idx].addEventListener('click', function(){ onPick(idx); });
+  })(bi);
+}
+
+document.getElementById('btnNext').addEventListener('click', function(){
+  if (!stateGame.answered) return;
+  if (stateGame.caseIdx >= 4){
+    // finished — show summary in feedback
+    var fb = document.getElementById('fbMsg');
+    fb.classList.remove('good', 'bad');
+    if (stateGame.score === 5){
+      fb.classList.add('good');
+      fb.textContent = t('fbBadgeWon');
+    } else {
+      fb.classList.add('bad');
+      fb.textContent = t('fbBadgeMiss');
+    }
+    refreshSidebar();
+    return;
+  }
+  stateGame.caseIdx++;
+  stateGame.answered = false;
+  stateGame._lastPickedOptPos = -1;
+  stateGame._lastPickedDiagIdx = -1;
+  document.getElementById('fbMsg').textContent = t('pickOne');
+  document.getElementById('fbMsg').classList.remove('good', 'bad');
+  refreshAll();
+});
+
+document.getElementById('btnReset').addEventListener('click', function(){
+  stateGame.caseIdx = 0;
+  stateGame.score = 0;
+  stateGame.history = [];
+  stateGame.answered = false;
+  stateGame._lastPickedOptPos = -1;
+  stateGame._lastPickedDiagIdx = -1;
+  prepareScatters();
+  document.getElementById('fbMsg').textContent = t('pickOne');
+  document.getElementById('fbMsg').classList.remove('good', 'bad');
+  refreshAll();
+});
+
+// ────────────────────────────────────────────────────────────
+// init
+// ────────────────────────────────────────────────────────────
+window.addEventListener('resize', resize);
+prepareScatters();
+refreshAll();
+setTimeout(resize, 50);
+setTimeout(resize, 200);
+setTimeout(resize, 600);
+if (document.fonts && document.fonts.ready){
+  document.fonts.ready.then(function(){ resize(); });
+}
+</script>
+</body>
+</html>

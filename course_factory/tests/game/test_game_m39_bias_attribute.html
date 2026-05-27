@@ -1,0 +1,895 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<title>M39 · 偏差归因 — Bias Attribution Detective</title>
+<style>
+  /* ============================================================
+     F2 第 1 层 — 共享深空底 (theme_style/styles.css L8-21)
+     ============================================================ */
+  :root{
+    --bg-0: oklch(0.14 0.035 265);
+    --bg-1: oklch(0.18 0.04 265);
+    --bg-2: oklch(0.22 0.045 265);
+    --bg-3: oklch(0.28 0.05 265);
+    --line: oklch(0.35 0.05 265 / 0.35);
+    --line-strong: oklch(0.55 0.08 265 / 0.55);
+    --fg:      oklch(0.96 0.01 265);
+    --fg-dim:  oklch(0.75 0.02 265);
+    --fg-mute: oklch(0.55 0.03 265);
+    --gold:    oklch(0.85 0.14 85);
+
+    /* F2 第 2 层 — math signature accent (electric blue, themes.js MTH-06) */
+    --math: oklch(0.72 0.17 245);
+
+    /* F2 第 3 层 — math 5 色 palette (themes.js MTH-06) */
+    --AXIS:     oklch(0.72 0.17 245);
+    --PROOF:    oklch(0.52 0.16 245);
+    --SHADOW:   oklch(0.35 0.10 245);
+    --SOLUTION: oklch(0.92 0.08 240);
+    --QED:      oklch(0.85 0.14 85);
+  }
+
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{
+    height:100%;width:100%;
+    font-family:'Inter','PingFang SC',sans-serif;
+    color:var(--fg);background:var(--bg-0);overflow:hidden;
+  }
+
+  .stage{display:flex;flex-direction:row;height:100vh;width:100vw}
+
+  /* ============================================================
+     200px sidebar
+     ============================================================ */
+  .game-sidebar{
+    width:200px;flex:0 0 200px;
+    background:var(--bg-1);
+    border-right:1px solid var(--line);
+    display:flex;flex-direction:column;
+    padding:14px 12px;gap:10px;
+    overflow-y:auto;
+  }
+
+  .brand{
+    display:flex;flex-direction:column;gap:2px;
+    border-bottom:1px solid var(--line);padding-bottom:8px;
+  }
+  .brand .code{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--fg-mute);letter-spacing:1.2px}
+  .brand .title{font-size:13px;color:var(--fg);font-weight:600}
+  .brand .sub{font-size:10px;color:var(--fg-dim);margin-top:2px}
+
+  .mascot{
+    width:100%;height:74px;display:flex;align-items:center;justify-content:center;
+    background:var(--bg-2);border:1px solid var(--line);
+  }
+  .mascot svg{width:100%;height:100%}
+
+  .guide{
+    background:var(--bg-2);border:1px solid var(--line);
+    padding:8px;display:flex;flex-direction:column;gap:4px;
+  }
+  .guide-title{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--math);letter-spacing:1px}
+  .guide-line{font-size:10px;color:var(--fg-dim);line-height:1.4}
+
+  /* task list */
+  .task-block{display:flex;flex-direction:column;gap:6px}
+  .task-title{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--fg-dim);letter-spacing:1px}
+  .task-list{display:flex;flex-direction:column;gap:4px}
+  .task-row{
+    background:var(--bg-2);border:1px solid var(--line);
+    padding:6px 8px;display:flex;align-items:center;gap:6px;
+    cursor:pointer;
+    transition:background .15s, border-color .15s;
+  }
+  .task-row:hover{border-color:var(--math)}
+  .task-row.active{background:var(--bg-3);border-color:var(--math);box-shadow:3px 3px 0 var(--bg-0)}
+  .task-row .tidx{
+    font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--math);font-weight:600;
+    width:22px;text-align:center;
+  }
+  .task-row .tlabel{font-size:10px;color:var(--fg-dim);flex:1;line-height:1.2}
+  .task-row.solved .tidx{color:var(--QED)}
+  .task-row.solved .tlabel{color:var(--fg)}
+  .task-row.solved .tmark{background:var(--QED);border-color:var(--QED)}
+  .task-row.wrong .tmark{background:var(--PROOF);border-color:var(--PROOF)}
+  .task-row .tmark{width:10px;height:10px;border:1px solid var(--line-strong)}
+
+  /* slice buttons */
+  .slice-block{
+    background:var(--bg-2);border:1px solid var(--line);padding:8px;
+    display:flex;flex-direction:column;gap:6px;
+  }
+  .slice-title{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--fg-dim);letter-spacing:1px}
+  .slice-grid{display:flex;flex-direction:column;gap:4px}
+  .slice-btn{
+    width:100%;padding:7px 8px;
+    background:var(--bg-3);color:var(--fg-dim);
+    border:1px solid var(--line);
+    font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.6px;
+    cursor:pointer;text-align:left;
+    display:flex;align-items:center;justify-content:space-between;
+  }
+  .slice-btn:hover{color:var(--math);border-color:var(--math)}
+  .slice-btn.active{
+    background:var(--math);color:var(--bg-0);
+    border-color:var(--math);box-shadow:3px 3px 0 var(--bg-0);
+  }
+  .slice-btn .spread{
+    font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--fg-mute);
+  }
+  .slice-btn.active .spread{color:var(--bg-0)}
+
+  /* progress badges */
+  .progress-block{
+    background:var(--bg-2);border:1px solid var(--line);padding:8px;
+    display:flex;flex-direction:column;gap:6px;
+  }
+  .progress-title{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--fg-dim);letter-spacing:1px}
+  .progress-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:3px}
+  .progress-cell{
+    height:8px;background:var(--bg-3);border:1px solid var(--line);
+  }
+  .progress-cell.hit{background:var(--QED);border-color:var(--QED)}
+  .progress-cell.miss{background:var(--PROOF);border-color:var(--PROOF)}
+  .progress-text{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--fg-mute)}
+
+  .sidebar-spacer{flex:1;min-height:6px}
+
+  .lang-btn{
+    width:100%;padding:7px 8px;background:var(--bg-3);
+    color:var(--fg);border:1px solid var(--line-strong);
+    font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:1px;
+    cursor:pointer;box-shadow:3px 3px 0 var(--bg-0);
+  }
+  .lang-btn:hover{background:var(--PROOF);color:var(--SOLUTION)}
+
+  .reset-btn{
+    width:100%;padding:6px 8px;background:var(--bg-2);
+    color:var(--fg-dim);border:1px solid var(--line);
+    font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:1px;
+    cursor:pointer;
+  }
+  .reset-btn:hover{color:var(--math);border-color:var(--math)}
+
+  /* ============================================================
+     main column
+     ============================================================ */
+  .game-main{
+    flex:1;display:flex;flex-direction:column;
+    background:var(--bg-0);min-width:0;
+  }
+  .main-header{
+    height:46px;border-bottom:1px solid var(--line);
+    display:flex;align-items:center;justify-content:space-between;
+    padding:0 18px;background:var(--bg-1);flex:0 0 46px;
+  }
+  .header-left{
+    font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--fg-dim);letter-spacing:1.4px;
+  }
+  .header-right{
+    display:flex;gap:18px;
+    font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--fg-mute);
+  }
+  .hud-cell{display:flex;flex-direction:column;align-items:flex-end}
+  .hud-cell .label{font-size:9px;color:var(--fg-mute);letter-spacing:1px}
+  .hud-cell .val{color:var(--math);font-size:13px;font-weight:600}
+  .hud-cell .val.gold{color:var(--QED)}
+  .hud-cell .val.dim{color:var(--fg-dim)}
+
+  .main-body{
+    flex:1;display:flex;flex-direction:column;min-height:0;
+    padding:12px 16px;gap:10px;
+  }
+
+  /* pane: dataset (full points scatter) */
+  .dataset-pane{
+    flex:1;display:flex;flex-direction:column;min-height:0;
+    background:var(--bg-1);border:1px solid var(--line);
+  }
+  /* pane: slice comparison (3 bins of bias) */
+  .slice-pane{
+    flex:1;display:flex;flex-direction:column;min-height:0;
+    background:var(--bg-1);border:1px solid var(--line);
+  }
+  /* pane: hypothesis submit row */
+  .hyp-pane{
+    flex:0 0 96px;display:flex;flex-direction:column;
+    background:var(--bg-1);border:1px solid var(--line);
+  }
+
+  .pane-title{
+    padding:6px 14px;font-family:'JetBrains Mono',monospace;font-size:10px;
+    color:var(--math);letter-spacing:1.4px;
+    border-bottom:1px solid var(--line);background:var(--bg-2);
+    display:flex;justify-content:space-between;align-items:center;flex:0 0 28px;
+  }
+  .pane-title .sub{color:var(--fg-mute);font-size:9px;letter-spacing:.8px}
+
+  .pane-body{flex:1;position:relative;display:flex;flex-direction:column;min-height:0}
+  .pane-body svg{width:100%;height:100%;display:block}
+
+  /* hypothesis row */
+  .hyp-row{
+    flex:1;display:flex;flex-direction:row;
+    padding:8px 10px;gap:8px;
+  }
+  .hyp-btn{
+    flex:1;background:var(--bg-2);border:1px solid var(--line);
+    padding:8px 8px;cursor:pointer;
+    display:flex;flex-direction:column;gap:3px;justify-content:center;
+    transition:background .15s, border-color .15s;
+  }
+  .hyp-btn:hover{border-color:var(--math)}
+  .hyp-btn.active{background:var(--bg-3);border-color:var(--math);box-shadow:3px 3px 0 var(--bg-0)}
+  .hyp-btn .hcode{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--math);letter-spacing:1px}
+  .hyp-btn .hlabel{font-size:11px;color:var(--fg)}
+  .hyp-btn .hhint{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--fg-mute)}
+
+  /* milestone */
+  .milestone{
+    position:absolute;left:50%;top:30%;transform:translateX(-50%);
+    background:var(--QED);color:var(--bg-0);
+    font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:700;
+    padding:12px 24px;letter-spacing:1.6px;
+    box-shadow:5px 5px 0 var(--bg-0);
+    z-index:50;
+    opacity:0;pointer-events:none;
+    transition:opacity .3s ease;
+  }
+  .milestone.show{opacity:1}
+
+  /* small wrong feedback */
+  .wrong-toast{
+    position:absolute;left:50%;top:30%;transform:translateX(-50%);
+    background:var(--PROOF);color:var(--SOLUTION);
+    font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:600;
+    padding:10px 18px;letter-spacing:1.2px;
+    box-shadow:4px 4px 0 var(--bg-0);
+    z-index:50;
+    opacity:0;pointer-events:none;
+    transition:opacity .25s ease;
+  }
+  .wrong-toast.show{opacity:1}
+</style>
+</head>
+<body>
+<div class="stage">
+
+  <!-- ============================================================ -->
+  <!-- 200px sidebar                                                -->
+  <!-- ============================================================ -->
+  <aside class="game-sidebar">
+    <div class="brand">
+      <div class="code">M39 · MTH-06</div>
+      <div class="title" data-i18n="brandTitle">偏差归因侦探</div>
+      <div class="sub" data-i18n="brandSub">Bias Attribution Detective</div>
+    </div>
+
+    <div class="mascot" aria-label="Pi mascot">
+      <!-- Pi — rotating tetrahedron whose faces flash equations -->
+      <svg viewBox="0 0 200 90" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <linearGradient id="piFace" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="oklch(0.72 0.17 245)"/>
+            <stop offset="1" stop-color="oklch(0.52 0.16 245)"/>
+          </linearGradient>
+        </defs>
+        <g transform="translate(100,45)">
+          <polygon id="piFace1" points="-22,16 22,16 0,-22" fill="url(#piFace)" stroke="oklch(0.92 0.08 240)" stroke-width="1"/>
+          <polygon id="piFace2" points="-22,16 0,28 22,16" fill="oklch(0.35 0.10 245)" stroke="oklch(0.92 0.08 240)" stroke-width="1"/>
+          <text x="0" y="6" text-anchor="middle" font-family="JetBrains Mono" font-size="13" font-weight="700" fill="oklch(0.92 0.08 240)">y - y</text>
+          <text x="32" y="-12" font-family="JetBrains Mono" font-size="9" fill="oklch(0.85 0.14 85)">QED</text>
+        </g>
+      </svg>
+    </div>
+
+    <div class="guide">
+      <div class="guide-title" data-i18n="guideTitle">HOW TO PLAY</div>
+      <div class="guide-line" data-i18n="guideL1">1. 选一个任务: 数据集偏差 +5</div>
+      <div class="guide-line" data-i18n="guideL2">2. 点切片按钮: 按某维度分 3 组</div>
+      <div class="guide-line" data-i18n="guideL3">3. 哪个维度切完差距最大 = 元凶</div>
+    </div>
+
+    <div class="task-block">
+      <div class="task-title" data-i18n="taskTitle">TASKS · 3 datasets</div>
+      <div class="task-list" id="taskList"></div>
+    </div>
+
+    <div class="slice-block">
+      <div class="slice-title" data-i18n="sliceTitle">SLICE BY</div>
+      <div class="slice-grid" id="sliceGrid"></div>
+    </div>
+
+    <div class="progress-block">
+      <div class="progress-title" data-i18n="progTitle">DETECTIVE BADGE</div>
+      <div class="progress-grid" id="progressGrid"></div>
+      <div class="progress-text" id="progressText">0 / 3 solved</div>
+    </div>
+
+    <div class="sidebar-spacer"></div>
+
+    <button class="reset-btn" id="resetBtn" data-i18n="resetBtn">RESET</button>
+    <button class="lang-btn" id="langBtn">EN</button>
+  </aside>
+
+  <!-- ============================================================ -->
+  <!-- main column                                                  -->
+  <!-- ============================================================ -->
+  <section class="game-main">
+    <header class="main-header">
+      <div class="header-left">M39 · BIAS ATTRIBUTION · PURPLEAIR SENSOR</div>
+      <div class="header-right">
+        <div class="hud-cell">
+          <div class="label" data-i18n="hudTask">TASK</div>
+          <div class="val" id="hudTask">1 / 3</div>
+        </div>
+        <div class="hud-cell">
+          <div class="label" data-i18n="hudBias">DATASET BIAS</div>
+          <div class="val" id="hudBias">+5.00 μg/m³</div>
+        </div>
+        <div class="hud-cell">
+          <div class="label" data-i18n="hudSlice">CURRENT SLICE</div>
+          <div class="val dim" id="hudSlice">—</div>
+        </div>
+        <div class="hud-cell">
+          <div class="label" data-i18n="hudSpread">|Δ| BIAS SPREAD</div>
+          <div class="val gold" id="hudSpread">—</div>
+        </div>
+      </div>
+    </header>
+
+    <div class="main-body">
+
+      <!-- dataset pane (full scatter, predicted vs actual, points colored by current slice dim) -->
+      <div class="dataset-pane">
+        <div class="pane-title">
+          <span data-i18n="datasetTitle">DATASET · 30 samples · predicted vs actual</span>
+          <span class="sub" id="datasetSub" data-i18n="datasetSub">点越在虚线上方 = 高估 (positive bias)</span>
+        </div>
+        <div class="pane-body">
+          <svg id="datasetSvg" viewBox="0 0 800 220" preserveAspectRatio="none"></svg>
+        </div>
+      </div>
+
+      <!-- slice pane (3 bins of bias) -->
+      <div class="slice-pane">
+        <div class="pane-title">
+          <span data-i18n="sliceTitle2">SLICE RESULT · bias by 3 bins</span>
+          <span class="sub" id="sliceSub" data-i18n="sliceSub">点左侧 SLICE BY 按钮看每个维度的偏差差距</span>
+        </div>
+        <div class="pane-body">
+          <svg id="sliceSvg" viewBox="0 0 800 220" preserveAspectRatio="none"></svg>
+          <div class="milestone" id="milestone" data-i18n="badgeText">CORRECT · DETECTIVE BADGE</div>
+          <div class="wrong-toast" id="wrongToast" data-i18n="wrongText">WRONG · 再切一个维度比一比</div>
+        </div>
+      </div>
+
+      <!-- hypothesis row -->
+      <div class="hyp-pane">
+        <div class="pane-title">
+          <span data-i18n="hypTitle">SUBMIT HYPOTHESIS · 选定元凶提交</span>
+          <span class="sub" data-i18n="hypSub">切完每个维度再下结论, 不要凭直觉</span>
+        </div>
+        <div class="hyp-row" id="hypRow"></div>
+      </div>
+
+    </div>
+  </section>
+
+</div>
+
+<script>
+'use strict';
+/* ===================================================================
+   M39 — Bias Attribution Detective
+   3 tasks, each dataset has bias=+5 from one true cause.
+   Player slices by 4 dims (humidity / hour / temperature / wind),
+   the dim that produces the largest spread is the culprit.
+   =================================================================== */
+
+// ------------- i18n -------------
+const I18N = {
+  cn: {
+    brandTitle:'偏差归因侦探', brandSub:'Bias Attribution Detective',
+    guideTitle:'游戏规则',
+    guideL1:'1. 选一个任务: 数据集偏差 +5',
+    guideL2:'2. 点切片按钮: 按某维度分 3 组',
+    guideL3:'3. 哪个维度切完差距最大 = 元凶',
+    taskTitle:'任务 · 3 个数据集',
+    sliceTitle:'切片维度', sliceTitle2:'切片结果 · 3 组的偏差',
+    progTitle:'侦探勋章',
+    resetBtn:'重置',
+    hudTask:'任务', hudBias:'数据集偏差', hudSlice:'当前切片', hudSpread:'|Δ| 偏差跨度',
+    datasetTitle:'数据集 · 30 个样本 · 预测 vs 实测',
+    datasetSub:'点在虚线上方 = 高估 (正偏差)',
+    sliceSub:'点左侧 [切片维度] 按钮看每个维度的偏差差距',
+    hypTitle:'提交假设 · 选定元凶提交',
+    hypSub:'切完每个维度再下结论, 不要凭直觉',
+    badgeText:'正确 · 获得侦探徽章',
+    wrongText:'错误 · 再切其他维度比一比',
+    sliceLabels:{humidity:'湿度', hour:'时段', temp:'温度', wind:'风速'},
+    binNames:{
+      humidity:['干 < 40%','中 40-70%','湿 > 70%'],
+      hour:['凌晨 0-8h','白天 8-18h','夜晚 18-24h'],
+      temp:['冷 < 10℃','常温 10-25℃','热 > 25℃'],
+      wind:['静 < 1m/s','轻 1-3m/s','大 > 3m/s'],
+    },
+    taskNames:[
+      '#1 雾天偏差',
+      '#2 高温偏差',
+      '#3 静风偏差',
+    ],
+  },
+  en: {
+    brandTitle:'Bias Attribution Detective', brandSub:'M39 · Find the culprit dim',
+    guideTitle:'HOW TO PLAY',
+    guideL1:'1. Pick a task: dataset bias is +5',
+    guideL2:'2. Click a slice button to split by dim',
+    guideL3:'3. The dim with largest spread = culprit',
+    taskTitle:'TASKS · 3 datasets',
+    sliceTitle:'SLICE BY', sliceTitle2:'SLICE RESULT · bias by 3 bins',
+    progTitle:'DETECTIVE BADGE',
+    resetBtn:'RESET',
+    hudTask:'TASK', hudBias:'DATASET BIAS', hudSlice:'CURRENT SLICE', hudSpread:'|Δ| BIAS SPREAD',
+    datasetTitle:'DATASET · 30 samples · predicted vs actual',
+    datasetSub:'point above dashed = overestimate (positive bias)',
+    sliceSub:'click left SLICE BY buttons to see each dim spread',
+    hypTitle:'SUBMIT HYPOTHESIS · pick the culprit',
+    hypSub:'slice every dim before you decide',
+    badgeText:'CORRECT · DETECTIVE BADGE',
+    wrongText:'WRONG · try slicing other dims',
+    sliceLabels:{humidity:'humidity', hour:'hour', temp:'temp', wind:'wind'},
+    binNames:{
+      humidity:['dry < 40%','mid 40-70%','humid > 70%'],
+      hour:['dawn 0-8h','day 8-18h','night 18-24h'],
+      temp:['cold < 10C','mild 10-25C','hot > 25C'],
+      wind:['still < 1m/s','light 1-3m/s','strong > 3m/s'],
+    },
+    taskNames:[
+      '#1 Fog bias',
+      '#2 Hot-day bias',
+      '#3 Still-air bias',
+    ],
+  },
+};
+let lang = 'cn';
+
+// ------------- seeded RNG -------------
+function mulberry32(seed){
+  return function(){
+    let t = seed += 0x6D2B79F5;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+// ------------- dataset generator -------------
+// Each task: 30 samples. base bias near 0. The TRUE_CAUSE dim's
+// "extreme bin" carries a strong +ve bias contribution.
+// Other dims should have ≈ uniform bias across bins.
+function genDataset(taskIdx){
+  const TASKS = [
+    {true_cause:'humidity', extreme_bin:2, name:'fog'},   // humid → +bias
+    {true_cause:'temp',     extreme_bin:2, name:'hot'},   // hot → +bias
+    {true_cause:'wind',     extreme_bin:0, name:'still'}, // still → +bias
+  ];
+  const cfg = TASKS[taskIdx];
+  const rng = mulberry32(7919 + taskIdx * 31);
+  const samples = [];
+
+  for (let i=0;i<30;i++){
+    // sample dims independently
+    const humidity = Math.floor(rng() * 100);          // 0-100
+    const hour     = Math.floor(rng() * 24);           // 0-23
+    const temp     = Math.floor(rng() * 35) + 2;       // 2-36
+    const wind     = +(rng() * 5).toFixed(1);          // 0-5
+
+    const binIdx = (() => {
+      switch (cfg.true_cause){
+        case 'humidity': return humidity < 40 ? 0 : humidity <= 70 ? 1 : 2;
+        case 'hour':     return hour < 8 ? 0 : hour < 18 ? 1 : 2;
+        case 'temp':     return temp < 10 ? 0 : temp <= 25 ? 1 : 2;
+        case 'wind':     return wind < 1 ? 0 : wind <= 3 ? 1 : 2;
+      }
+    })();
+
+    const actual = +(8 + rng() * 22).toFixed(1);       // PM2.5 actual 8-30
+    // bias contribution
+    let bias = (rng() * 4 - 2); // ±2 noise
+    if (binIdx === cfg.extreme_bin){
+      bias += 12 + rng() * 6;   // strong +bias in culprit bin
+    } else {
+      bias += (rng() - 0.5) * 2;
+    }
+    const predicted = +(actual + bias).toFixed(1);
+
+    samples.push({humidity, hour, temp, wind, actual, predicted, bias});
+  }
+
+  // normalize so dataset overall bias ≈ +5
+  const meanBias = samples.reduce((a,s)=>a+s.bias,0)/samples.length;
+  const shift = 5 - meanBias;
+  samples.forEach(s => {
+    s.bias = +(s.bias + shift).toFixed(2);
+    s.predicted = +(s.actual + s.bias).toFixed(1);
+  });
+
+  return {cfg, samples};
+}
+
+// bin computation
+function binOf(dim, sample){
+  switch (dim){
+    case 'humidity': return sample.humidity < 40 ? 0 : sample.humidity <= 70 ? 1 : 2;
+    case 'hour':     return sample.hour < 8 ? 0 : sample.hour < 18 ? 1 : 2;
+    case 'temp':     return sample.temp < 10 ? 0 : sample.temp <= 25 ? 1 : 2;
+    case 'wind':     return sample.wind < 1 ? 0 : sample.wind <= 3 ? 1 : 2;
+  }
+}
+
+function binStats(samples, dim){
+  const bins = [[],[],[]];
+  samples.forEach(s => bins[binOf(dim,s)].push(s.bias));
+  return bins.map(arr => arr.length
+    ? +(arr.reduce((a,b)=>a+b,0)/arr.length).toFixed(2)
+    : 0
+  );
+}
+
+function biasSpread(samples, dim){
+  const m = binStats(samples, dim);
+  return +(Math.max(...m) - Math.min(...m)).toFixed(2);
+}
+
+// ------------- state (avoid window-shadowing names) -------------
+const playState = {
+  taskIdx: 0,
+  datasets: [genDataset(0), genDataset(1), genDataset(2)],
+  currentSlice: null,    // 'humidity'|'hour'|'temp'|'wind'|null
+  hypothesisDim: null,   // selected hypothesis (dim string)
+  solved: [false,false,false],
+  attempted: [false,false,false],
+};
+
+const DIMS = ['humidity','hour','temp','wind'];
+
+// ------------- rendering: task list -------------
+function renderTaskList(){
+  const t = I18N[lang];
+  const root = document.getElementById('taskList');
+  root.innerHTML = '';
+  for (let i=0;i<3;i++){
+    const row = document.createElement('div');
+    row.className = 'task-row';
+    if (i === playState.taskIdx) row.classList.add('active');
+    if (playState.solved[i]) row.classList.add('solved');
+    else if (playState.attempted[i] && !playState.solved[i]) row.classList.add('wrong');
+    row.innerHTML = `
+      <div class="tidx">T${i+1}</div>
+      <div class="tlabel">${t.taskNames[i]}</div>
+      <div class="tmark"></div>
+    `;
+    row.addEventListener('click', () => switchTask(i));
+    root.appendChild(row);
+  }
+}
+
+// ------------- rendering: slice button grid -------------
+function renderSliceGrid(){
+  const t = I18N[lang];
+  const root = document.getElementById('sliceGrid');
+  root.innerHTML = '';
+  DIMS.forEach(dim => {
+    const btn = document.createElement('button');
+    btn.className = 'slice-btn';
+    if (playState.currentSlice === dim) btn.classList.add('active');
+    const spread = biasSpread(playState.datasets[playState.taskIdx].samples, dim);
+    btn.innerHTML = `
+      <span>BY ${t.sliceLabels[dim].toUpperCase()}</span>
+      <span class="spread">Δ=${spread.toFixed(1)}</span>
+    `;
+    btn.addEventListener('click', () => setSlice(dim));
+    root.appendChild(btn);
+  });
+}
+
+// ------------- rendering: progress -------------
+function renderProgress(){
+  const root = document.getElementById('progressGrid');
+  root.innerHTML = '';
+  for (let i=0;i<3;i++){
+    const c = document.createElement('div');
+    c.className = 'progress-cell';
+    if (playState.solved[i]) c.classList.add('hit');
+    else if (playState.attempted[i]) c.classList.add('miss');
+    root.appendChild(c);
+  }
+  const solvedCount = playState.solved.filter(Boolean).length;
+  document.getElementById('progressText').textContent =
+    lang === 'cn'
+      ? `${solvedCount} / 3 已破案`
+      : `${solvedCount} / 3 solved`;
+}
+
+// ------------- rendering: hypothesis row -------------
+function renderHypRow(){
+  const t = I18N[lang];
+  const root = document.getElementById('hypRow');
+  root.innerHTML = '';
+  DIMS.forEach(dim => {
+    const btn = document.createElement('button');
+    btn.className = 'hyp-btn';
+    if (playState.hypothesisDim === dim) btn.classList.add('active');
+    const label = t.sliceLabels[dim];
+    const hint = lang === 'cn' ? '点击 → 提交' : 'click → submit';
+    btn.innerHTML = `
+      <div class="hcode">HYP · ${dim.toUpperCase()}</div>
+      <div class="hlabel">${label}</div>
+      <div class="hhint">${hint}</div>
+    `;
+    btn.addEventListener('click', () => submitHypothesis(dim));
+    root.appendChild(btn);
+  });
+}
+
+// ------------- rendering: HUD -------------
+function renderHud(){
+  const t = I18N[lang];
+  const ds = playState.datasets[playState.taskIdx];
+  const meanBias = +(ds.samples.reduce((a,s)=>a+s.bias,0)/ds.samples.length).toFixed(2);
+  document.getElementById('hudTask').textContent = `${playState.taskIdx+1} / 3`;
+  document.getElementById('hudBias').textContent = `+${meanBias.toFixed(2)} μg/m³`;
+  const sliceEl = document.getElementById('hudSlice');
+  const spreadEl = document.getElementById('hudSpread');
+  if (playState.currentSlice){
+    sliceEl.textContent = t.sliceLabels[playState.currentSlice];
+    sliceEl.classList.remove('dim');
+    const sp = biasSpread(ds.samples, playState.currentSlice);
+    spreadEl.textContent = `${sp.toFixed(2)} μg/m³`;
+  } else {
+    sliceEl.textContent = '—';
+    sliceEl.classList.add('dim');
+    spreadEl.textContent = '—';
+  }
+}
+
+// ------------- rendering: dataset scatter -------------
+function renderDataset(){
+  const svg = document.getElementById('datasetSvg');
+  const W = 800, H = 220;
+  const padL = 50, padR = 18, padT = 18, padB = 30;
+  const ds = playState.datasets[playState.taskIdx];
+
+  // domain: actual ~ [0, 35], predicted ~ [0, 50]
+  const xMin = 0, xMax = 35;
+  const yMin = 0, yMax = 50;
+  const sx = v => padL + (v - xMin) / (xMax - xMin) * (W - padL - padR);
+  const sy = v => H - padB - (v - yMin) / (yMax - yMin) * (H - padT - padB);
+
+  let s = '';
+
+  // gridlines + axes
+  s += `<rect x="0" y="0" width="${W}" height="${H}" fill="var(--bg-1)"/>`;
+  // y axis
+  s += `<line x1="${padL}" y1="${padT}" x2="${padL}" y2="${H-padB}" stroke="var(--line-strong)" stroke-width="1"/>`;
+  // x axis
+  s += `<line x1="${padL}" y1="${H-padB}" x2="${W-padR}" y2="${H-padB}" stroke="var(--line-strong)" stroke-width="1"/>`;
+  // y ticks
+  for (let v=0; v<=50; v+=10){
+    const yy = sy(v);
+    s += `<line x1="${padL-4}" y1="${yy}" x2="${padL}" y2="${yy}" stroke="var(--fg-mute)"/>`;
+    s += `<text x="${padL-8}" y="${yy+3}" text-anchor="end" font-family="JetBrains Mono" font-size="8" fill="var(--fg-mute)">${v}</text>`;
+  }
+  // x ticks
+  for (let v=0; v<=35; v+=5){
+    const xx = sx(v);
+    s += `<line x1="${xx}" y1="${H-padB}" x2="${xx}" y2="${H-padB+4}" stroke="var(--fg-mute)"/>`;
+    s += `<text x="${xx}" y="${H-padB+14}" text-anchor="middle" font-family="JetBrains Mono" font-size="8" fill="var(--fg-mute)">${v}</text>`;
+  }
+  // axis labels
+  s += `<text x="${W/2}" y="${H-6}" text-anchor="middle" font-family="JetBrains Mono" font-size="9" fill="var(--fg-dim)">actual PM2.5 (μg/m³)</text>`;
+  s += `<text x="12" y="${H/2}" text-anchor="middle" font-family="JetBrains Mono" font-size="9" fill="var(--fg-dim)" transform="rotate(-90 12 ${H/2})">predicted PM2.5</text>`;
+
+  // y = x dashed reference
+  s += `<line x1="${sx(0)}" y1="${sy(0)}" x2="${sx(35)}" y2="${sy(35)}" stroke="var(--fg-mute)" stroke-width="1.2" stroke-dasharray="4 4"/>`;
+  s += `<text x="${sx(33)}" y="${sy(33)-6}" font-family="JetBrains Mono" font-size="8" fill="var(--fg-mute)">y = x</text>`;
+
+  // bin coloring legend (top right)
+  const t = I18N[lang];
+  const legendDim = playState.currentSlice;
+  if (legendDim){
+    const names = t.binNames[legendDim];
+    const lx = W - padR - 200;
+    s += `<rect x="${lx-6}" y="${padT-4}" width="200" height="16" fill="var(--bg-2)" stroke="var(--line)"/>`;
+    const palette = ['var(--SOLUTION)', 'var(--AXIS)', 'var(--QED)'];
+    for (let i=0;i<3;i++){
+      const cx = lx + 4 + i*66;
+      s += `<circle cx="${cx}" cy="${padT+4}" r="4" fill="${palette[i]}" stroke="var(--bg-0)"/>`;
+      s += `<text x="${cx+8}" y="${padT+7}" font-family="JetBrains Mono" font-size="8" fill="var(--fg)">${names[i]}</text>`;
+    }
+  }
+
+  // scatter points
+  const palette = ['var(--SOLUTION)', 'var(--AXIS)', 'var(--QED)'];
+  ds.samples.forEach(p => {
+    let color = 'var(--fg-dim)';
+    if (legendDim){
+      color = palette[binOf(legendDim, p)];
+    }
+    const cx = sx(p.actual);
+    const cy = sy(p.predicted);
+    s += `<circle cx="${cx}" cy="${cy}" r="3.5" fill="${color}" stroke="var(--bg-0)" stroke-width="0.8" opacity="0.9"/>`;
+  });
+
+  svg.innerHTML = s;
+}
+
+// ------------- rendering: slice bar chart (3 bins of bias) -------------
+function renderSliceChart(){
+  const svg = document.getElementById('sliceSvg');
+  const W = 800, H = 220;
+  const padL = 60, padR = 24, padT = 22, padB = 38;
+  const ds = playState.datasets[playState.taskIdx];
+  const t = I18N[lang];
+
+  let s = '';
+  s += `<rect x="0" y="0" width="${W}" height="${H}" fill="var(--bg-1)"/>`;
+
+  if (!playState.currentSlice){
+    s += `<text x="${W/2}" y="${H/2}" text-anchor="middle" font-family="JetBrains Mono" font-size="12" fill="var(--fg-mute)">${lang==='cn'?'选一个切片维度':'pick a slice dim →'}</text>`;
+    svg.innerHTML = s;
+    return;
+  }
+
+  const means = binStats(ds.samples, playState.currentSlice);
+  const counts = [[],[],[]];
+  ds.samples.forEach(p => counts[binOf(playState.currentSlice,p)].push(p));
+
+  // y domain auto-fit, but anchored at 0 (so bars go up = +bias, down = -bias)
+  const absMax = Math.max(15, Math.ceil(Math.max(...means.map(Math.abs))+1));
+  const yMin = -absMax, yMax = absMax;
+  const sy = v => padT + (1 - (v - yMin)/(yMax - yMin)) * (H - padT - padB);
+
+  // axes
+  s += `<line x1="${padL}" y1="${padT}" x2="${padL}" y2="${H-padB}" stroke="var(--line-strong)" stroke-width="1"/>`;
+  s += `<line x1="${padL}" y1="${sy(0)}" x2="${W-padR}" y2="${sy(0)}" stroke="var(--line-strong)" stroke-width="1"/>`;
+  // y ticks
+  for (let v=-absMax; v<=absMax; v+=5){
+    const yy = sy(v);
+    s += `<line x1="${padL-4}" y1="${yy}" x2="${padL}" y2="${yy}" stroke="var(--fg-mute)"/>`;
+    s += `<text x="${padL-8}" y="${yy+3}" text-anchor="end" font-family="JetBrains Mono" font-size="8" fill="var(--fg-mute)">${v>0?'+'+v:v}</text>`;
+  }
+  s += `<text x="14" y="${H/2}" text-anchor="middle" font-family="JetBrains Mono" font-size="9" fill="var(--fg-dim)" transform="rotate(-90 14 ${H/2})">mean bias (μg/m³)</text>`;
+
+  // bars
+  const binNames = t.binNames[playState.currentSlice];
+  const palette = ['var(--SOLUTION)', 'var(--AXIS)', 'var(--QED)'];
+  const barW = 110;
+  const slotW = (W - padL - padR) / 3;
+  const maxMean = Math.max(...means);
+
+  for (let i=0;i<3;i++){
+    const cx = padL + slotW/2 + i*slotW;
+    const m = means[i];
+    const y0 = sy(0), y1 = sy(m);
+    const barTop = Math.min(y0, y1);
+    const barH = Math.abs(y1 - y0);
+    const fill = palette[i];
+    s += `<rect x="${cx - barW/2}" y="${barTop}" width="${barW}" height="${barH}" fill="${fill}" stroke="var(--bg-0)" stroke-width="1.2"/>`;
+    // highlight max
+    if (m === maxMean && m > 8){
+      s += `<rect x="${cx - barW/2 - 3}" y="${barTop - 3}" width="${barW + 6}" height="${barH + 6}" fill="none" stroke="var(--QED)" stroke-width="2" stroke-dasharray="3 3"/>`;
+      s += `<text x="${cx}" y="${barTop - 7}" text-anchor="middle" font-family="JetBrains Mono" font-size="10" font-weight="700" fill="var(--QED)">MAX</text>`;
+    }
+    // value on top
+    s += `<text x="${cx}" y="${y1 + (m>=0?-6:14)}" text-anchor="middle" font-family="JetBrains Mono" font-size="11" font-weight="600" fill="var(--fg)">${m>0?'+':''}${m.toFixed(2)}</text>`;
+    // bin label
+    s += `<text x="${cx}" y="${H-padB+14}" text-anchor="middle" font-family="JetBrains Mono" font-size="9" fill="var(--fg-dim)">${binNames[i]}</text>`;
+    // sample count
+    s += `<text x="${cx}" y="${H-padB+26}" text-anchor="middle" font-family="JetBrains Mono" font-size="8" fill="var(--fg-mute)">n=${counts[i].length}</text>`;
+  }
+
+  // spread annotation
+  const spread = biasSpread(ds.samples, playState.currentSlice);
+  s += `<text x="${W-padR}" y="${padT-6}" text-anchor="end" font-family="JetBrains Mono" font-size="10" fill="var(--math)">|Δ| spread = ${spread.toFixed(2)}</text>`;
+
+  svg.innerHTML = s;
+}
+
+// ------------- master render -------------
+function render(){
+  renderTaskList();
+  renderSliceGrid();
+  renderProgress();
+  renderHypRow();
+  renderHud();
+  renderDataset();
+  renderSliceChart();
+}
+
+// ------------- actions -------------
+function switchTask(i){
+  if (i === playState.taskIdx) return;
+  playState.taskIdx = i;
+  playState.currentSlice = null;
+  playState.hypothesisDim = null;
+  render();
+}
+
+function setSlice(dim){
+  playState.currentSlice = (playState.currentSlice === dim) ? null : dim;
+  render();
+}
+
+function submitHypothesis(dim){
+  if (playState.solved[playState.taskIdx]) return;
+  playState.hypothesisDim = dim;
+  playState.attempted[playState.taskIdx] = true;
+  const truth = playState.datasets[playState.taskIdx].cfg.true_cause;
+  const correct = (dim === truth);
+  if (correct){
+    playState.solved[playState.taskIdx] = true;
+    showMilestone();
+    // advance after pause if there are more
+    setTimeout(() => {
+      const next = playState.solved.findIndex(v => !v);
+      if (next >= 0){
+        switchTask(next);
+      } else {
+        render();
+      }
+    }, 1800);
+  } else {
+    showWrong();
+  }
+  render();
+}
+
+function showMilestone(){
+  const el = document.getElementById('milestone');
+  el.classList.add('show');
+  setTimeout(()=> el.classList.remove('show'), 1500);
+}
+function showWrong(){
+  const el = document.getElementById('wrongToast');
+  el.classList.add('show');
+  setTimeout(()=> el.classList.remove('show'), 1300);
+}
+
+function resetGame(){
+  playState.taskIdx = 0;
+  playState.currentSlice = null;
+  playState.hypothesisDim = null;
+  playState.solved = [false,false,false];
+  playState.attempted = [false,false,false];
+  // regen seeds same way → deterministic
+  playState.datasets = [genDataset(0), genDataset(1), genDataset(2)];
+  render();
+}
+
+// ------------- i18n refresh -------------
+function refreshI18N(){
+  const t = I18N[lang];
+  document.querySelectorAll('[data-i18n]').forEach(el => {
+    const key = el.getAttribute('data-i18n');
+    if (t[key] !== undefined) el.textContent = t[key];
+  });
+  document.getElementById('langBtn').textContent = (lang === 'cn') ? 'EN' : 'CN';
+  render();
+}
+
+// ------------- wiring -------------
+document.getElementById('langBtn').addEventListener('click', () => {
+  lang = (lang === 'cn') ? 'en' : 'cn';
+  refreshI18N();
+});
+document.getElementById('resetBtn').addEventListener('click', resetGame);
+
+// initial render
+refreshI18N();
+
+</script>
+</body>
+</html>

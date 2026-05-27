@@ -1,0 +1,1214 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>M19 — 湿度让颗粒变胖: PMS 在下雨前为啥读数偏高</title>
+<style>
+  /* ========== F2 第 1 层 — 共享深空底 (theme_style/styles.css L8-21) ========== */
+  :root{
+    --bg-0: oklch(0.14 0.035 265);
+    --bg-1: oklch(0.18 0.04 265);
+    --bg-2: oklch(0.22 0.045 265);
+    --bg-3: oklch(0.28 0.05 265);
+    --line: oklch(0.35 0.05 265 / 0.35);
+    --line-strong: oklch(0.55 0.08 265 / 0.55);
+    --fg:      oklch(0.96 0.01 265);
+    --fg-dim:  oklch(0.75 0.02 265);
+    --fg-mute: oklch(0.55 0.03 265);
+    --gold:    oklch(0.85 0.14 85);
+
+    /* ========== F2 第 2 层 — chem accent (lime green) ========== */
+    --chem:     oklch(0.82 0.17 125);
+    --chem-dim: oklch(0.62 0.16 125);
+
+    /* ========== F2 第 3 层 — chem 5 色 palette (themes.js id:'chem') ========== */
+    --CATALYST: oklch(0.82 0.17 125);   /* lime 主体 — mascot 主色 / RH=30 dry 区间 */
+    --BOND:     oklch(0.62 0.16 125);   /* 中等 lime — 主连线 / RH=60 区间 */
+    --DEEP:     oklch(0.35 0.10 130);   /* 深 lime — 未激活 / RH=80 区间 */
+    --REACTION: oklch(0.95 0.08 120);   /* 近白 lime — 高亮 / RH=95 区间 */
+    --YIELD:    oklch(0.85 0.14 85);    /* 金色 — key moment / RH>=99 区间 */
+
+    /* 5 个 RH 区间的散点配色 (F5 用) */
+    --rh-dry:  oklch(0.82 0.17 125);    /* CATALYST — RH < 40% */
+    --rh-low:  oklch(0.62 0.16 125);    /* BOND     — 40-60% */
+    --rh-med:  oklch(0.35 0.10 130);    /* DEEP     — 60-80% */
+    --rh-high: oklch(0.95 0.08 120);    /* REACTION — 80-95% */
+    --rh-sat:  oklch(0.85 0.14 85);     /* YIELD    — > 95% */
+  }
+
+  *{box-sizing:border-box;margin:0;padding:0;}
+  html,body{height:100%;overflow:hidden;}
+  body{
+    background: var(--bg-0);
+    color: var(--fg);
+    font-family: 'Inter','Noto Sans SC',-apple-system,BlinkMacSystemFont,sans-serif;
+    display: flex;
+    height: 100vh;
+  }
+
+  /* ========== 200px 左侧 sidebar ========== */
+  .sidebar{
+    width: 200px;
+    flex-shrink: 0;
+    background: var(--bg-1);
+    border-right: 1px solid var(--line);
+    padding: 16px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .brand{
+    border-bottom: 1px solid var(--line);
+    padding-bottom: 10px;
+    margin-bottom: 4px;
+  }
+  .brand .badge{
+    display: inline-block;
+    font-family: 'JetBrains Mono',ui-monospace,monospace;
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    color: var(--chem);
+    background: var(--bg-2);
+    padding: 3px 7px;
+    border: 1px solid var(--line);
+    box-shadow: 2px 2px 0 var(--bg-0);
+    margin-bottom: 6px;
+  }
+  .brand h1{
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--fg);
+    line-height: 1.3;
+  }
+  .brand .sub{
+    font-size: 10px;
+    color: var(--fg-mute);
+    margin-top: 4px;
+    font-family: 'JetBrains Mono',ui-monospace,monospace;
+    letter-spacing: 0.04em;
+  }
+
+  /* Ion mascot box */
+  .mascot-box{
+    background: var(--bg-2);
+    border: 1px solid var(--line);
+    box-shadow: 3px 3px 0 var(--bg-0);
+    padding: 10px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .mascot-box .label{
+    font-family: 'JetBrains Mono',ui-monospace,monospace;
+    font-size: 9px;
+    color: var(--fg-dim);
+    letter-spacing: 0.08em;
+  }
+  .mascot-box .name{
+    font-size: 11px;
+    color: var(--fg);
+    font-weight: 600;
+    margin-top: 2px;
+  }
+
+  /* Guide 3 条 */
+  .guide{
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .guide-item{
+    font-size: 11px;
+    line-height: 1.45;
+    color: var(--fg-dim);
+    padding-left: 9px;
+    border-left: 2px solid var(--chem);
+    padding-top: 2px;
+    padding-bottom: 2px;
+  }
+  .guide-item .num{
+    font-family: 'JetBrains Mono',ui-monospace,monospace;
+    color: var(--chem);
+    font-weight: 700;
+    margin-right: 4px;
+  }
+
+  .sidebar .spacer{flex: 1;}
+
+  .lang-btn{
+    background: var(--bg-2);
+    border: 1px solid var(--line-strong);
+    box-shadow: 2px 2px 0 var(--bg-0);
+    color: var(--fg);
+    font-family: 'JetBrains Mono',ui-monospace,monospace;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    padding: 7px 10px;
+    cursor: pointer;
+    width: 100%;
+  }
+  .lang-btn:hover{
+    border-color: var(--chem);
+    color: var(--chem);
+  }
+  .lang-btn:active{
+    transform: translate(2px, 2px);
+    box-shadow: none;
+  }
+
+  /* ========== Main stage ========== */
+  .main{
+    flex: 1;
+    position: relative;
+    overflow: hidden;
+    background: var(--bg-0);
+  }
+  #stage{
+    width: 100%;
+    height: 100%;
+    display: block;
+  }
+
+  /* HUD 右上 */
+  .hud{
+    position: absolute;
+    top: 18px;
+    right: 18px;
+    background: var(--bg-2);
+    border: 1px solid var(--line);
+    box-shadow: 3px 3px 0 var(--bg-0);
+    padding: 10px 14px;
+    font-family: 'JetBrains Mono',ui-monospace,monospace;
+    min-width: 260px;
+  }
+  .hud .row{
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 14px;
+    font-size: 11px;
+    line-height: 1.6;
+  }
+  .hud .label{color: var(--fg-mute); letter-spacing: 0.06em;}
+  .hud .value{color: var(--fg); font-weight: 700;}
+  .hud .value.accent{color: var(--chem);}
+  .hud .value.gold{color: var(--gold);}
+  .hud .sep{
+    height: 1px;
+    background: var(--line);
+    margin: 6px 0;
+  }
+
+  /* Subtitle 底部 */
+  .subtitle{
+    position: absolute;
+    left: 50%;
+    bottom: 32px;
+    transform: translateX(-50%);
+    text-align: center;
+    max-width: 80%;
+    pointer-events: none;
+  }
+  .subtitle .cn{
+    font-size: 17px;
+    font-weight: 700;
+    color: var(--fg);
+    letter-spacing: 0.01em;
+  }
+  .subtitle .en{
+    font-size: 12px;
+    color: var(--fg-mute);
+    margin-top: 4px;
+    font-style: italic;
+    font-family: 'JetBrains Mono',ui-monospace,monospace;
+    letter-spacing: 0.03em;
+  }
+
+  /* Frame chip 左下 */
+  .frame-progress{
+    position: absolute;
+    left: 24px;
+    bottom: 28px;
+    display: flex;
+    gap: 6px;
+    align-items: center;
+  }
+  .chip{
+    width: 24px;
+    height: 6px;
+    background: var(--bg-2);
+    border: 1px solid var(--line);
+  }
+  .chip.active{
+    background: var(--chem);
+    border-color: var(--chem);
+  }
+  .chip.done{
+    background: var(--chem-dim);
+    border-color: var(--chem-dim);
+  }
+  .frame-progress .stepname{
+    font-family: 'JetBrains Mono',ui-monospace,monospace;
+    font-size: 10px;
+    color: var(--fg-dim);
+    margin-left: 8px;
+    letter-spacing: 0.08em;
+  }
+
+  /* gold flash overlay (key moment in F5) */
+  .flash{
+    position: absolute;
+    top: 44%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-family: 'JetBrains Mono',ui-monospace,monospace;
+    font-size: 26px;
+    font-weight: 800;
+    color: var(--gold);
+    letter-spacing: 0.16em;
+    opacity: 0;
+    pointer-events: none;
+    text-shadow: 0 0 24px var(--gold);
+    text-align: center;
+    transition: opacity 0.3s;
+  }
+  .flash.on{ opacity: 1; }
+  .flash .small{
+    display: block;
+    text-align: center;
+    font-size: 11px;
+    color: var(--fg-dim);
+    letter-spacing: 0.08em;
+    margin-top: 8px;
+    text-shadow: none;
+    font-weight: 400;
+  }
+</style>
+</head>
+<body>
+  <aside class="sidebar">
+    <div class="brand">
+      <span class="badge" id="badgeMod">MOD-M19 / CHEM</span>
+      <h1 id="brandH1">湿度让颗粒变胖</h1>
+      <div class="sub" id="brandSub">RH -&gt; PM2.5 bias</div>
+    </div>
+
+    <div class="mascot-box">
+      <svg width="42" height="42" viewBox="0 0 60 60" aria-hidden="true">
+        <!-- Ion mascot: atom cluster, gains rings with each bond (chem palette) -->
+        <circle cx="30" cy="30" r="24" fill="none" stroke="var(--DEEP)" stroke-width="0.8"
+                stroke-dasharray="2 4" opacity="0.5"/>
+        <circle cx="30" cy="30" r="14" fill="var(--DEEP)" opacity="0.55"/>
+        <circle cx="30" cy="30" r="10" fill="var(--BOND)" opacity="0.7"/>
+        <circle cx="30" cy="30" r="5"  fill="var(--CATALYST)"/>
+        <circle cx="14" cy="30" r="2.2" fill="var(--REACTION)"/>
+        <circle cx="46" cy="30" r="2.2" fill="var(--REACTION)"/>
+        <circle cx="30" cy="14" r="2.2" fill="var(--REACTION)"/>
+        <circle cx="30" cy="46" r="2.2" fill="var(--REACTION)"/>
+        <text x="30" y="34" fill="var(--YIELD)" font-family="'JetBrains Mono',monospace"
+              font-size="8" text-anchor="middle" font-weight="700">H2O</text>
+      </svg>
+      <div>
+        <div class="label">MASCOT</div>
+        <div class="name" id="mascotName">Ion · 离子君</div>
+      </div>
+    </div>
+
+    <div class="guide">
+      <div class="guide-item" id="g1"><span class="num">01</span><span class="gtxt">颗粒里有吸湿盐 (NH4HSO4 / NaCl)</span></div>
+      <div class="guide-item" id="g2"><span class="num">02</span><span class="gtxt">RH 越高, 颗粒吸水越多, 体积越胖</span></div>
+      <div class="guide-item" id="g3"><span class="num">03</span><span class="gtxt">PMS 激光看到的更大 -&gt; 读数偏高</span></div>
+    </div>
+
+    <div class="spacer"></div>
+    <button id="langBtn" class="lang-btn" type="button">CN / EN</button>
+  </aside>
+
+  <main class="main">
+    <svg id="stage" viewBox="0 0 1080 720" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg"></svg>
+
+    <div class="hud">
+      <div class="row"><span class="label" id="hudL1">FRAME</span><span class="value accent" id="hudV1">1 / 5</span></div>
+      <div class="row"><span class="label" id="hudL2">STAGE</span><span class="value" id="hudV2">Dry</span></div>
+      <div class="sep"></div>
+      <div class="row"><span class="label" id="hudL3">RH</span><span class="value accent" id="hudV3">30 %</span></div>
+      <div class="row"><span class="label" id="hudL4">GF (D/D0)</span><span class="value" id="hudV4">1.00</span></div>
+      <div class="row"><span class="label" id="hudL5">PMS bias</span><span class="value gold" id="hudV5">0 %</span></div>
+    </div>
+
+    <div class="subtitle">
+      <div class="cn" id="subCn">干燥时 (RH=30%) 颗粒就是一颗小小的盐核 — PMS 读数最老实</div>
+      <div class="en" id="subEn">When dry (RH=30%) the particle is a small bare salt core — PMS reads honestly</div>
+    </div>
+
+    <div class="frame-progress">
+      <div class="chip" id="chip0"></div>
+      <div class="chip" id="chip1"></div>
+      <div class="chip" id="chip2"></div>
+      <div class="chip" id="chip3"></div>
+      <div class="chip" id="chip4"></div>
+      <span class="stepname" id="stepName">01 · DRY</span>
+    </div>
+
+    <div class="flash" id="flash">
+      RAIN-ALERT
+      <span class="small" id="flashSub">下雨前 RH 飙升, PMS 偏高 50%+ — 阈值要松一档</span>
+    </div>
+  </main>
+
+<script>
+(function(){
+  "use strict";
+
+  // ====== i18n ======
+  var LANG = 'cn';
+  var I18N = {
+    badgeMod:   { cn: 'MOD-M19 / CHEM', en: 'MOD-M19 / CHEM' },
+    brandH1:    { cn: '湿度让颗粒变胖', en: 'Humidity Bloats the Particle' },
+    brandSub:   { cn: 'RH -> PM2.5 bias', en: 'RH -> PM2.5 bias' },
+    mascotName: { cn: 'Ion · 离子君',     en: 'Ion · the atom-cluster' },
+    g1: { cn: '颗粒里有吸湿盐 (NH4HSO4 / NaCl)',
+          en: 'Particle has hygroscopic salt (NH4HSO4 / NaCl)' },
+    g2: { cn: 'RH 越高, 颗粒吸水越多, 体积越胖',
+          en: 'Higher RH -> more water uptake -> larger volume' },
+    g3: { cn: 'PMS 激光看到的更大 -> 读数偏高',
+          en: 'PMS laser sees it bigger -> reading inflated' },
+    hudL1: { cn: '帧',         en: 'FRAME' },
+    hudL2: { cn: '阶段',       en: 'STAGE' },
+    hudL3: { cn: '相对湿度',   en: 'RH' },
+    hudL4: { cn: '生长因子',   en: 'GF (D/D0)' },
+    hudL5: { cn: 'PMS 偏差',   en: 'PMS bias' },
+    btnLang: { cn: 'CN / EN', en: 'CN / EN' }
+  };
+
+  // ====== 5 帧故事 ======
+  var FRAME_MS = 6000;
+  var FRAMES = [
+    {
+      id: 'dry', stepName: '01 · DRY',
+      hudStage:{cn:'干燥 RH=30%', en:'Dry RH=30%'},
+      rh: 30, gf: 1.00, bias: 0,
+      subCn: '干燥时 (RH=30%) 颗粒就是一颗小小的盐核 — PMS 读数最老实',
+      subEn: 'When dry (RH=30%) the particle is a small bare salt core — PMS reads honestly'
+    },
+    {
+      id: 'wet60', stepName: '02 · WATER-VAPOR',
+      hudStage:{cn:'水汽贴附 RH=60%', en:'Vapor sticks RH=60%'},
+      rh: 60, gf: 1.10, bias: 8,
+      subCn: 'RH 升到 60% — 空气中的水分子开始贴附在盐核表面, 颗粒微微变大',
+      subEn: 'RH rises to 60% — water vapor sticks to salt core, particle slightly grows'
+    },
+    {
+      id: 'wet80', stepName: '03 · UPTAKE',
+      hudStage:{cn:'吸湿增长 RH=80%', en:'Hygro-uptake RH=80%'},
+      rh: 80, gf: 1.42, bias: 24,
+      subCn: 'RH=80%: 盐核全溶解成水滴, 直径长大 ~1.5x (体积 ~3x) — 公式 GF=(1-RH/100)^(-1/3)',
+      subEn: 'RH=80%: salt dissolves into droplet, D x 1.5 (V x 3) — formula GF=(1-RH/100)^(-1/3)'
+    },
+    {
+      id: 'wet95', stepName: '04 · MIE-INFLATE',
+      hudStage:{cn:'激光看大 RH=95%', en:'Laser sees big RH=95%'},
+      rh: 95, gf: 2.7, bias: 60,
+      subCn: 'RH=95%: 颗粒胖到原来 ~3x — PMS 激光散射能量暴涨, 输出读数也跟着飙',
+      subEn: 'RH=95%: particle is ~3x bigger — laser scattering surges, PMS reading inflates'
+    },
+    {
+      id: 'scatter', stepName: '05 · SCATTER-MAP',
+      hudStage:{cn:'RH vs bias 散点', en:'RH vs bias scatter'},
+      rh: 100, gf: 3.0, bias: 80,
+      subCn: '把全天 RH 和 PMS 偏差画散点: 下雨前 RH 飙升 -> 读数偏高 50%+, 阈值要松一档',
+      subEn: 'Scatter RH vs PMS bias: pre-rain RH spike -> reading +50%, raise alert threshold'
+    }
+  ];
+
+  // ====== State ======
+  var currentFrame = 0;
+  var frameStartTs = 0;
+  var rafId = null;
+  var stage = document.getElementById('stage');
+  var SVGNS = 'http://www.w3.org/2000/svg';
+
+  // ====== Utility ======
+  function el(name, attrs, parent){
+    var n = document.createElementNS(SVGNS, name);
+    if (attrs){
+      for (var k in attrs){
+        if (Object.prototype.hasOwnProperty.call(attrs, k)){
+          n.setAttribute(k, attrs[k]);
+        }
+      }
+    }
+    if (parent) parent.appendChild(n);
+    return n;
+  }
+  function clearStage(){ while(stage.firstChild) stage.removeChild(stage.firstChild); }
+  function tr(key){
+    if (!I18N[key]) return key;
+    return I18N[key][LANG] || I18N[key].en || key;
+  }
+  function lerp(a, b, p){ return a + (b - a) * p; }
+  function easeInOut(x){ return x < 0.5 ? 2*x*x : 1 - Math.pow(-2*x + 2, 2)/2; }
+  function easeOut(x){ return 1 - Math.pow(1 - x, 3); }
+  function clamp(x, lo, hi){ return x < lo ? lo : (x > hi ? hi : x); }
+  // pseudo-random with seed (for stable particle positions)
+  function rng(seed){
+    var s = seed % 2147483647;
+    if (s <= 0) s += 2147483646;
+    return function(){
+      s = s * 16807 % 2147483647;
+      return (s - 1) / 2147483646;
+    };
+  }
+
+  // ====== 通用背景 ======
+  function drawBgGrid(){
+    var g = el('g', { opacity: '0.18' }, stage);
+    for (var x = 0; x <= 1080; x += 60){
+      el('line', { x1: x, y1: 0, x2: x, y2: 720, stroke: 'var(--line)', 'stroke-width': '0.5' }, g);
+    }
+    for (var y = 0; y <= 720; y += 60){
+      el('line', { x1: 0, y1: y, x2: 1080, y2: y, stroke: 'var(--line)', 'stroke-width': '0.5' }, g);
+    }
+    var defs = el('defs', null, stage);
+    var rg = el('radialGradient', { id: 'centerGlow', cx: '50%', cy: '45%', r: '60%' }, defs);
+    el('stop', { offset: '0%', 'stop-color': 'var(--chem)', 'stop-opacity': '0.06' }, rg);
+    el('stop', { offset: '100%', 'stop-color': 'var(--bg-0)', 'stop-opacity': '0' }, rg);
+    el('rect', { x: 0, y: 0, width: 1080, height: 720, fill: 'url(#centerGlow)' }, stage);
+  }
+
+  // ====== 5 帧 step chain ======
+  function drawStepChain(activeIdx){
+    var labels = [
+      { cn: '干燥',   en: 'Dry' },
+      { cn: '水汽',   en: 'Vapor' },
+      { cn: '吸湿',   en: 'Uptake' },
+      { cn: '激光看大', en: 'Inflate' },
+      { cn: '散点图', en: 'Scatter' }
+    ];
+    var y = 660;
+    var startX = 110;
+    var gap = (1080 - 220) / 4;
+    var g = el('g', null, stage);
+    for (var i = 0; i < 5; i++){
+      var cx = startX + gap * i;
+      var on = i <= activeIdx;
+      var ringColor = on ? 'var(--chem)' : 'var(--line)';
+      var fillColor = on ? 'var(--bg-2)' : 'var(--bg-1)';
+      var textColor = on ? 'var(--fg)' : 'var(--fg-mute)';
+      el('rect', {
+        x: cx - 44, y: y - 16, width: 88, height: 32,
+        fill: fillColor, stroke: ringColor, 'stroke-width': on ? '1.6' : '1', rx: '2'
+      }, g);
+      var tx = el('text', {
+        x: cx, y: y + 4, fill: textColor,
+        'font-family': "'Inter','Noto Sans SC',sans-serif",
+        'font-size': '12', 'font-weight': on ? '700' : '500',
+        'text-anchor': 'middle'
+      }, g);
+      tx.textContent = labels[i][LANG] || labels[i].en;
+      var ix = el('text', {
+        x: cx, y: y - 22, fill: on ? 'var(--chem)' : 'var(--fg-mute)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '9', 'text-anchor': 'middle', 'letter-spacing': '0.1em'
+      }, g);
+      ix.textContent = '0' + (i+1);
+      if (i < 4){
+        var x1 = cx + 44;
+        var x2 = cx + gap - 44;
+        var connColor = (on && (i+1) <= activeIdx) ? 'var(--chem)' : 'var(--line)';
+        el('line', {
+          x1: x1, y1: y, x2: x2 - 6, y2: y,
+          stroke: connColor, 'stroke-width': '1.2'
+        }, g);
+        el('polygon', {
+          points: (x2-6)+','+(y-4)+' '+(x2)+','+y+' '+(x2-6)+','+(y+4),
+          fill: connColor
+        }, g);
+      }
+    }
+  }
+
+  // ====== Ion mascot (with growing rings as RH rises) ======
+  function drawIonMascot(g, rh, glow){
+    var ringCount = rh < 40 ? 1 : (rh < 70 ? 2 : (rh < 90 ? 3 : 4));
+    el('circle', { cx: 0, cy: 0, r: 32, fill: 'none', stroke: 'var(--DEEP)',
+                   'stroke-width': '0.8', 'stroke-dasharray': '2 4', opacity: '0.5' }, g);
+    el('circle', { cx: 0, cy: 0, r: 18, fill: 'var(--DEEP)', opacity: '0.55' }, g);
+    el('circle', { cx: 0, cy: 0, r: 12, fill: 'var(--BOND)', opacity: '0.7' }, g);
+    el('circle', { cx: 0, cy: 0, r: 6,  fill: 'var(--CATALYST)' }, g);
+    // satellite H2O bonds — grow with RH
+    var angles = [0, 90, 180, 270];
+    for (var i = 0; i < ringCount; i++){
+      var a = angles[i] * Math.PI / 180;
+      var ox = Math.cos(a) * 22, oy = Math.sin(a) * 22;
+      el('circle', { cx: ox, cy: oy, r: 2.4, fill: 'var(--REACTION)' }, g);
+    }
+    var eqTx = el('text', {
+      x: 0, y: 4, fill: 'var(--YIELD)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': glow ? '10' : '8', 'text-anchor': 'middle', 'font-weight': '700'
+    }, g);
+    eqTx.textContent = glow ? 'GF*' : 'H2O';
+    var lab = el('text', {
+      x: 0, y: 50, fill: 'var(--fg-dim)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '10', 'text-anchor': 'middle', 'letter-spacing': '0.1em'
+    }, g);
+    lab.textContent = glow
+      ? (LANG === 'cn' ? 'Ion · 吸饱了' : 'Ion · saturated')
+      : (LANG === 'cn' ? 'Ion · 吸湿中' : 'Ion · absorbing');
+  }
+
+  // ====== 通用绘制: 吸湿增长状态下的颗粒 ======
+  // baseR: 干态半径; rh: 当前 RH; cx,cy: 位置
+  // 根据 Kohler-like growth factor: D/D0 = (1 - RH/100)^(-1/3), 截断 RH<99
+  function gfFromRH(rh){
+    var r = clamp(rh, 0, 98) / 100;
+    return Math.pow(1 - r, -1/3);
+  }
+  function drawWetParticle(parent, cx, cy, baseR, rh, hilite){
+    var gf = gfFromRH(rh);
+    var R = baseR * gf;
+    // 水壳 (近透明 lime)
+    if (rh > 40){
+      el('circle', { cx: cx, cy: cy, r: R, fill: 'var(--REACTION)', opacity: 0.18 }, parent);
+      el('circle', { cx: cx, cy: cy, r: R, fill: 'none', stroke: 'var(--BOND)',
+                     'stroke-width': hilite ? 1.4 : 0.8, opacity: 0.7 }, parent);
+    }
+    // 盐核 (深 chem)
+    var coreCol = rh < 50 ? 'var(--CATALYST)' :
+                  rh < 80 ? 'var(--BOND)' : 'var(--DEEP)';
+    el('circle', { cx: cx, cy: cy, r: baseR * 0.85, fill: coreCol, opacity: 0.95 }, parent);
+    // RH 高时的高光
+    if (rh >= 80){
+      el('circle', { cx: cx - R*0.3, cy: cy - R*0.3, r: R * 0.25,
+                     fill: 'var(--REACTION)', opacity: 0.4 }, parent);
+    }
+  }
+
+  // ====== 水汽分子 (小 H2O 点子, 在颗粒周围漂) ======
+  function drawVaporCloud(parent, cx, cy, count, radius, p, seed){
+    var rand = rng(seed);
+    for (var i = 0; i < count; i++){
+      var a = rand() * Math.PI * 2;
+      var rr = radius * (0.5 + rand() * 0.5);
+      var jitter = Math.sin(p * 6.28 + i * 0.7) * 4;
+      var x = cx + Math.cos(a) * rr + jitter;
+      var y = cy + Math.sin(a) * rr + jitter * 0.5;
+      // H2O 用小三角 (1 个 O + 2 个 H 风格)
+      el('circle', { cx: x, cy: y, r: 1.6, fill: 'var(--REACTION)', opacity: 0.65 }, parent);
+    }
+  }
+
+  // ===================================================================
+  // Frame 1 — DRY (RH=30%)
+  // 1 颗 dry PM2.5 小盐核浮在低湿空气, 水汽分子稀少, HUD 显示 RH/GF/bias
+  // ===================================================================
+  function drawFrame1(p){
+    drawBgGrid();
+    drawStepChain(0);
+
+    var ttl = el('text', { x: 540, y: 100, fill: 'var(--chem)',
+                  'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                  'font-size': '14', 'text-anchor': 'middle',
+                  'letter-spacing': '0.14em', 'font-weight': '700' }, stage);
+    ttl.textContent = LANG === 'cn'
+      ? '干燥时 — 颗粒只是一颗小小的盐核'
+      : 'Dry — particle is just a tiny salt core';
+
+    // 中央大颗粒展示
+    var px = 540, py = 320;
+    var pgroup = el('g', null, stage);
+    drawWetParticle(pgroup, px, py, 38, 30, false);
+
+    // 标注: 盐核成分
+    var lblA = clamp((p - 0.15) / 0.3, 0, 1);
+    var lg = el('g', { opacity: lblA }, stage);
+    el('line', { x1: 580, y1: 310, x2: 730, y2: 240, stroke: 'var(--CATALYST)',
+                 'stroke-width': '1' }, lg);
+    el('rect', { x: 720, y: 215, width: 220, height: 56, rx: '3',
+                 fill: 'var(--bg-2)', stroke: 'var(--CATALYST)', 'stroke-width': '1.2' }, lg);
+    el('text', { x: 830, y: 234, fill: 'var(--CATALYST)',
+                'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                'font-size': '11', 'text-anchor': 'middle', 'font-weight': '700' }, lg)
+      .textContent = LANG === 'cn' ? '吸湿盐核' : 'Hygroscopic core';
+    el('text', { x: 830, y: 254, fill: 'var(--fg-dim)',
+                'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                'font-size': '10', 'text-anchor': 'middle' }, lg)
+      .textContent = 'NH4HSO4 / NaCl';
+
+    // 直径标注 (D0)
+    var dimA = clamp((p - 0.35) / 0.3, 0, 1);
+    var dg = el('g', { opacity: dimA }, stage);
+    el('line', { x1: px - 40, y1: py + 70, x2: px + 40, y2: py + 70,
+                 stroke: 'var(--fg-dim)', 'stroke-width': '1' }, dg);
+    el('line', { x1: px - 40, y1: py + 65, x2: px - 40, y2: py + 75,
+                 stroke: 'var(--fg-dim)', 'stroke-width': '1' }, dg);
+    el('line', { x1: px + 40, y1: py + 65, x2: px + 40, y2: py + 75,
+                 stroke: 'var(--fg-dim)', 'stroke-width': '1' }, dg);
+    el('text', { x: px, y: py + 92, fill: 'var(--CATALYST)',
+                'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                'font-size': '13', 'text-anchor': 'middle', 'font-weight': '700' }, dg)
+      .textContent = 'D0 (dry diameter)';
+
+    // 稀少水汽分子 (仅 6 颗, 远离)
+    var vp = clamp((p - 0.1) / 0.6, 0, 1);
+    drawVaporCloud(stage, px, py, Math.floor(6 * vp), 200, p, 17);
+
+    // RH 计 (右下) — 30%
+    drawRHMeter(stage, 860, 480, 30, p);
+
+    // Ion mascot
+    var mg = el('g', { transform: 'translate(180, 470)' }, stage);
+    drawIonMascot(mg, 30, false);
+  }
+
+  // ===================================================================
+  // Frame 2 — VAPOR (RH=60%)
+  // 水汽分子上升, 开始贴附颗粒表面, 颗粒微微膨胀, 出现薄水壳
+  // ===================================================================
+  function drawFrame2(p){
+    drawBgGrid();
+    drawStepChain(1);
+
+    var ttl = el('text', { x: 540, y: 100, fill: 'var(--chem)',
+                  'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                  'font-size': '14', 'text-anchor': 'middle',
+                  'letter-spacing': '0.14em', 'font-weight': '700' }, stage);
+    ttl.textContent = LANG === 'cn'
+      ? '湿度上升 — H2O 分子贴附到颗粒表面'
+      : 'RH rises — H2O molecules stick to particle surface';
+
+    var px = 540, py = 320;
+
+    // 水汽分子 从下向上飘 (大量)
+    var rand = rng(33);
+    var vpGroup = el('g', null, stage);
+    var N = 60;
+    for (var i = 0; i < N; i++){
+      var lane = rand();
+      // 起点 y 在底部, 随 p 向上飘到颗粒附近, 然后被颗粒吸住
+      var pi = (p * 1.2 + i / N) % 1;
+      var startY = 620 - lane * 60;
+      var endY = py + Math.cos(i) * 80;
+      var endX = px + Math.sin(i) * 100;
+      var startX = 200 + lane * 680;
+      var x = lerp(startX, endX, easeInOut(pi));
+      var y = lerp(startY, endY, easeInOut(pi));
+      // 越靠近颗粒越淡 (被吸住)
+      var dist = Math.sqrt((x-px)*(x-px) + (y-py)*(y-py));
+      var fade = dist < 60 ? clamp(dist/60, 0, 1) : 1;
+      el('circle', { cx: x, cy: y, r: 1.8,
+                     fill: 'var(--REACTION)', opacity: 0.55 * fade }, vpGroup);
+      // 一条小尾巴
+      if (pi > 0.3 && pi < 0.85){
+        el('line', { x1: x, y1: y, x2: x - 0.5, y2: y + 4,
+                     stroke: 'var(--REACTION)', 'stroke-width': '0.5', opacity: 0.25 * fade }, vpGroup);
+      }
+    }
+
+    // 颗粒 — 从 RH=30 渐变到 RH=60
+    var rhNow = lerp(30, 60, easeOut(clamp(p / 0.7, 0, 1)));
+    var pgroup = el('g', null, stage);
+    drawWetParticle(pgroup, px, py, 38, rhNow, true);
+
+    // 飞出箭头标注: 水分子开始贴上
+    if (p > 0.4){
+      var aA = clamp((p - 0.4) / 0.3, 0, 1);
+      var ag = el('g', { opacity: aA }, stage);
+      // 4 个方向小箭头指向颗粒
+      var aPts = [[px-90,py], [px+90,py], [px,py-90], [px,py+90]];
+      aPts.forEach(function(pt){
+        var dx = (px - pt[0]) * 0.7;
+        var dy = (py - pt[1]) * 0.7;
+        var x2 = pt[0] + dx, y2 = pt[1] + dy;
+        el('line', { x1: pt[0], y1: pt[1], x2: x2, y2: y2,
+                     stroke: 'var(--BOND)', 'stroke-width': '1.2',
+                     'stroke-dasharray': '3 3' }, ag);
+        // arrow head
+        var nx = (x2 - pt[0]) * 0.1, ny = (y2 - pt[1]) * 0.1;
+        el('polygon', {
+          points: x2+','+y2 + ' ' + (x2-nx+ny)+','+(y2-ny-nx) + ' ' + (x2-nx-ny)+','+(y2-ny+nx),
+          fill: 'var(--BOND)'
+        }, ag);
+      });
+    }
+
+    // 标注卡: 表面吸附
+    var lblA = clamp((p - 0.55) / 0.3, 0, 1);
+    var lg = el('g', { opacity: lblA, transform: 'translate(820, 280)' }, stage);
+    el('rect', { x: -110, y: -28, width: 220, height: 64, rx: '3',
+                 fill: 'var(--bg-2)', stroke: 'var(--BOND)', 'stroke-width': '1.2' }, lg);
+    el('text', { x: 0, y: -8, fill: 'var(--BOND)',
+                'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                'font-size': '12', 'text-anchor': 'middle', 'font-weight': '700' }, lg)
+      .textContent = LANG === 'cn' ? '表面吸附' : 'Surface uptake';
+    el('text', { x: 0, y: 12, fill: 'var(--fg-dim)',
+                'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                'font-size': '10', 'text-anchor': 'middle' }, lg)
+      .textContent = 'GF ~ 1.10  ·  D + 10%';
+
+    drawRHMeter(stage, 860, 480, rhNow, p);
+
+    var mg = el('g', { transform: 'translate(180, 470)' }, stage);
+    drawIonMascot(mg, rhNow, false);
+  }
+
+  // ===================================================================
+  // Frame 3 — UPTAKE (RH=80%)
+  // 盐核全溶解成水滴, 直径长大 ~1.5x; 旁边写公式 GF=(1-RH/100)^(-1/3)
+  // ===================================================================
+  function drawFrame3(p){
+    drawBgGrid();
+    drawStepChain(2);
+
+    var ttl = el('text', { x: 540, y: 100, fill: 'var(--chem)',
+                  'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                  'font-size': '14', 'text-anchor': 'middle',
+                  'letter-spacing': '0.14em', 'font-weight': '700' }, stage);
+    ttl.textContent = LANG === 'cn'
+      ? '吸湿增长 — 盐核溶解成水滴, 体积涨 ~3 倍'
+      : 'Hygroscopic uptake — salt dissolves, V x ~3';
+
+    var px = 440, py = 330;
+
+    // 干态 (左) vs 湿态 (右) 对比
+    // 左: D0 干态
+    var lg = el('g', null, stage);
+    el('text', { x: px, y: py - 80, fill: 'var(--fg-mute)',
+                'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                'font-size': '10', 'text-anchor': 'middle', 'letter-spacing': '0.1em' }, lg)
+      .textContent = LANG === 'cn' ? 'BEFORE  RH=30%' : 'BEFORE  RH=30%';
+    drawWetParticle(lg, px, py, 38, 30, false);
+    el('text', { x: px, y: py + 90, fill: 'var(--CATALYST)',
+                'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                'font-size': '12', 'text-anchor': 'middle', 'font-weight': '700' }, lg)
+      .textContent = 'D0';
+
+    // 大箭头中间
+    var aA = clamp((p - 0.1) / 0.2, 0, 1);
+    var ag = el('g', { opacity: aA, transform: 'translate(640, '+py+')' }, stage);
+    el('line', { x1: -50, y1: 0, x2: 50, y2: 0, stroke: 'var(--BOND)', 'stroke-width': '2.4' }, ag);
+    el('polygon', { points: '50,-8 66,0 50,8', fill: 'var(--BOND)' }, ag);
+    el('text', { x: 0, y: -16, fill: 'var(--BOND)',
+                'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                'font-size': '11', 'text-anchor': 'middle', 'font-weight': '700' }, ag)
+      .textContent = LANG === 'cn' ? '吸水增长' : 'Water uptake';
+
+    // 右: 湿态 渐变长大
+    var rhNow = lerp(30, 80, easeInOut(clamp((p - 0.15) / 0.55, 0, 1)));
+    var rgg = el('g', null, stage);
+    el('text', { x: 800, y: py - 80, fill: 'var(--fg-mute)',
+                'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                'font-size': '10', 'text-anchor': 'middle', 'letter-spacing': '0.1em' }, rgg)
+      .textContent = LANG === 'cn' ? 'AFTER  RH=80%' : 'AFTER  RH=80%';
+    drawWetParticle(rgg, 800, py, 38, rhNow, true);
+    var dCol = rhNow > 75 ? 'var(--BOND)' : 'var(--CATALYST)';
+    el('text', { x: 800, y: py + 90, fill: dCol,
+                'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                'font-size': '12', 'text-anchor': 'middle', 'font-weight': '700' }, rgg)
+      .textContent = 'D = D0 x ' + gfFromRH(rhNow).toFixed(2);
+
+    // 公式卡 (底部居中)
+    var fA = clamp((p - 0.35) / 0.3, 0, 1);
+    var fg = el('g', { opacity: fA, transform: 'translate(540, 540)' }, stage);
+    el('rect', { x: -340, y: -38, width: 680, height: 76, rx: '4',
+                 fill: 'var(--bg-2)', stroke: 'var(--gold)', 'stroke-width': '1.6' }, fg);
+    el('text', { x: 0, y: -8, fill: 'var(--gold)',
+                'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                'font-size': '18', 'text-anchor': 'middle', 'font-weight': '700',
+                'letter-spacing': '0.05em' }, fg)
+      .textContent = 'GF  =  D / D0  =  ( 1  -  RH / 100 )^( -1/3 )';
+    el('text', { x: 0, y: 18, fill: 'var(--fg-dim)',
+                'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                'font-size': '10', 'text-anchor': 'middle', 'letter-spacing': '0.06em' }, fg)
+      .textContent = LANG === 'cn'
+        ? '生长因子 GF: RH=80% -> GF~1.42 (D 长 42%, V 长 ~3 倍)'
+        : 'Growth factor GF: at RH=80% -> GF~1.42 (D +42%, V x ~3)';
+
+    drawRHMeter(stage, 970, 200, rhNow, p);
+
+    var mg = el('g', { transform: 'translate(110, 460)' }, stage);
+    drawIonMascot(mg, rhNow, false);
+  }
+
+  // ===================================================================
+  // Frame 4 — MIE INFLATE (RH=95%)
+  // 颗粒胖到 ~3x, PMS 激光扫过, 散射信号大幅增强
+  // ===================================================================
+  function drawFrame4(p){
+    drawBgGrid();
+    drawStepChain(3);
+
+    var ttl = el('text', { x: 540, y: 100, fill: 'var(--chem)',
+                  'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                  'font-size': '14', 'text-anchor': 'middle',
+                  'letter-spacing': '0.14em', 'font-weight': '700' }, stage);
+    ttl.textContent = LANG === 'cn'
+      ? '激光看大 — PMS 把胖颗粒当大颗粒数, 读数飙'
+      : 'Laser sees big — PMS treats bloated particle as huge, reading surges';
+
+    var px = 560, py = 330;
+    var rhNow = lerp(80, 95, easeInOut(clamp(p / 0.5, 0, 1)));
+
+    // 颗粒
+    var pgroup = el('g', null, stage);
+    drawWetParticle(pgroup, px, py, 38, rhNow, true);
+    var R = 38 * gfFromRH(rhNow);
+    el('text', { x: px, y: py + R + 24, fill: 'var(--REACTION)',
+                'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                'font-size': '12', 'text-anchor': 'middle', 'font-weight': '700' }, stage)
+      .textContent = 'D ~ ' + gfFromRH(rhNow).toFixed(1) + ' x D0';
+
+    // 激光束 — 红线从左穿过颗粒, 扫描
+    var laserY = py;
+    var laserPhase = (p * 1.6) % 1;
+    var laserStart = lerp(120, 360, laserPhase);
+    el('line', { x1: laserStart, y1: laserY, x2: px - R - 6, y2: laserY,
+                 stroke: 'var(--REACTION)', 'stroke-width': '1.6', opacity: 0.85 }, stage);
+    el('text', { x: 150, y: laserY - 12, fill: 'var(--REACTION)',
+                'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                'font-size': '10', 'letter-spacing': '0.14em' }, stage)
+      .textContent = LANG === 'cn' ? 'LASER 650nm ->' : 'LASER 650nm ->';
+
+    // 散射 — 颗粒后端发出多束散射光 (随颗粒大小而强)
+    var scatterA = clamp((p - 0.25) / 0.3, 0, 1);
+    var sg = el('g', { opacity: scatterA }, stage);
+    var Nrays = 16;
+    var scatterStrength = Math.pow(gfFromRH(rhNow), 6) / 64; // Mie ~ D^6 normalized
+    for (var i = 0; i < Nrays; i++){
+      var ang = (-Math.PI / 2) + (i / (Nrays - 1)) * Math.PI; // 散到右半圆
+      var len = 90 + scatterStrength * 14;
+      var x2 = px + Math.cos(ang) * (R + len);
+      var y2 = py + Math.sin(ang) * (R + len);
+      var w = 0.6 + scatterStrength * 0.04;
+      el('line', { x1: px + Math.cos(ang) * (R + 2),
+                   y1: py + Math.sin(ang) * (R + 2),
+                   x2: x2, y2: y2,
+                   stroke: 'var(--REACTION)', 'stroke-width': w, opacity: 0.55 }, sg);
+    }
+    // 接收器
+    var rcvX = 880;
+    el('rect', { x: rcvX, y: py - 30, width: 70, height: 60,
+                 fill: 'var(--bg-2)', stroke: 'var(--chem)', 'stroke-width': '1.4', rx: '3' }, stage);
+    el('text', { x: rcvX + 35, y: py - 12, fill: 'var(--fg-mute)',
+                'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                'font-size': '9', 'text-anchor': 'middle', 'letter-spacing': '0.1em' }, stage)
+      .textContent = 'PD';
+    // 接收器强度
+    var pdLevel = Math.floor(scatterStrength * 40);
+    el('text', { x: rcvX + 35, y: py + 8, fill: 'var(--chem)',
+                'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                'font-size': '14', 'text-anchor': 'middle', 'font-weight': '700' }, stage)
+      .textContent = 'x' + (1 + pdLevel * 0.6).toFixed(1);
+    el('text', { x: rcvX + 35, y: py + 24, fill: 'var(--fg-dim)',
+                'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                'font-size': '8', 'text-anchor': 'middle' }, stage)
+      .textContent = 'signal';
+
+    // 信号 bar — 干态 vs 湿态对比
+    var barA = clamp((p - 0.4) / 0.4, 0, 1);
+    var bg = el('g', { opacity: barA, transform: 'translate(540, 510)' }, stage);
+    el('text', { x: 0, y: -10, fill: 'var(--fg-mute)',
+                'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                'font-size': '11', 'text-anchor': 'middle', 'letter-spacing': '0.1em' }, bg)
+      .textContent = LANG === 'cn' ? '散射信号 ~ D^6 (Mie)' : 'Scattering signal ~ D^6 (Mie)';
+    // dry bar
+    el('rect', { x: -300, y: 6, width: 30, height: 20, fill: 'var(--CATALYST)' }, bg);
+    el('text', { x: -260, y: 22, fill: 'var(--CATALYST)',
+                'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                'font-size': '11' }, bg).textContent = 'dry  RH=30%  signal=1';
+    // wet bar (D^6 ~ (gf)^6)
+    var ratio = Math.pow(gfFromRH(95), 6);
+    var bw = clamp(ratio * 8, 30, 580) * easeOut(barA);
+    el('rect', { x: -300, y: 36, width: bw, height: 20, fill: 'var(--REACTION)' }, bg);
+    el('text', { x: -300 + Math.min(bw, 280) + 8, y: 52, fill: 'var(--REACTION)',
+                'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                'font-size': '11' }, bg)
+      .textContent = 'wet  RH=95%  signal ~ x' + ratio.toFixed(0);
+
+    drawRHMeter(stage, 970, 200, rhNow, p);
+
+    var mg = el('g', { transform: 'translate(120, 460)' }, stage);
+    drawIonMascot(mg, rhNow, false);
+  }
+
+  // ===================================================================
+  // Frame 5 — SCATTER MAP (RH vs PMS bias)
+  // 散点图: x=RH (0-100%), y=PMS bias %, 5 个 RH 区间用 chem 5 色染色
+  // ===================================================================
+  function drawFrame5(p){
+    drawBgGrid();
+    drawStepChain(4);
+
+    var ttl = el('text', { x: 540, y: 90, fill: 'var(--chem)',
+                  'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                  'font-size': '14', 'text-anchor': 'middle',
+                  'letter-spacing': '0.14em', 'font-weight': '700' }, stage);
+    ttl.textContent = LANG === 'cn'
+      ? '一整天的 RH vs PMS 偏差 — 下雨前会怎样'
+      : 'Whole-day RH vs PMS bias — what happens before rain';
+
+    // 轴系
+    var ax = 180, ay = 540, aw = 720, ah = 320;
+    var axG = el('g', null, stage);
+    // 坐标框
+    el('rect', { x: ax, y: ay - ah, width: aw, height: ah, fill: 'var(--bg-1)',
+                 stroke: 'var(--line-strong)', 'stroke-width': '1', opacity: 0.6 }, axG);
+    // x grid (RH)
+    for (var rh = 0; rh <= 100; rh += 20){
+      var xx = ax + (rh / 100) * aw;
+      el('line', { x1: xx, y1: ay, x2: xx, y2: ay - ah,
+                   stroke: 'var(--line)', 'stroke-width': '0.5', opacity: 0.5 }, axG);
+      el('text', { x: xx, y: ay + 16, fill: 'var(--fg-dim)',
+                  'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                  'font-size': '10', 'text-anchor': 'middle' }, axG)
+        .textContent = rh + '%';
+    }
+    // y grid (bias)
+    for (var b = 0; b <= 100; b += 25){
+      var yy = ay - (b / 100) * ah;
+      el('line', { x1: ax, y1: yy, x2: ax + aw, y2: yy,
+                   stroke: 'var(--line)', 'stroke-width': '0.5', opacity: 0.5 }, axG);
+      el('text', { x: ax - 8, y: yy + 4, fill: 'var(--fg-dim)',
+                  'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                  'font-size': '10', 'text-anchor': 'end' }, axG)
+        .textContent = '+' + b + '%';
+    }
+    // 坐标标签
+    el('text', { x: ax + aw/2, y: ay + 36, fill: 'var(--fg)',
+                'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                'font-size': '11', 'text-anchor': 'middle', 'letter-spacing': '0.14em' }, axG)
+      .textContent = LANG === 'cn' ? 'RH  相对湿度' : 'RH  Relative Humidity';
+    el('text', { x: ax - 50, y: ay - ah/2, fill: 'var(--fg)',
+                'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                'font-size': '11', 'text-anchor': 'middle',
+                transform: 'rotate(-90, ' + (ax - 50) + ', ' + (ay - ah/2) + ')',
+                'letter-spacing': '0.12em' }, axG)
+      .textContent = LANG === 'cn' ? 'PMS bias %  PMS 偏差' : 'PMS bias %';
+
+    // 理论曲线 (D^6 - 1) * scale
+    var curveA = clamp(p / 0.3, 0, 1);
+    var pts = '';
+    for (var r = 0; r <= 100; r += 2){
+      var bias = (Math.pow(gfFromRH(r), 6) - 1) * 100 / 4; // 缩放到 100% 内
+      bias = clamp(bias, 0, 100);
+      var px2 = ax + (r / 100) * aw;
+      var py2 = ay - (bias / 100) * ah;
+      pts += (pts ? ' L ' : 'M ') + px2 + ' ' + py2;
+    }
+    el('path', { d: pts, fill: 'none', stroke: 'var(--gold)',
+                 'stroke-width': '1.4', 'stroke-dasharray': '6 5', opacity: 0.6 * curveA }, axG);
+    el('text', { x: ax + aw - 70, y: ay - ah + 40, fill: 'var(--gold)',
+                'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                'font-size': '10', 'text-anchor': 'end',
+                opacity: curveA }, axG)
+      .textContent = LANG === 'cn' ? '理论曲线' : 'theory curve';
+
+    // 散点 — 24h 数据, 按 RH 5 区间染色
+    // 模拟数据: 凌晨 RH 高, 中午低, 傍晚高, 晚上爆高 (下雨前)
+    var hourData = [
+      // [hour, RH, bias, isPreRain]
+      [0, 78, 22, false], [1, 82, 30, false], [2, 85, 35, false], [3, 86, 38, false],
+      [4, 88, 42, false], [5, 84, 33, false], [6, 78, 24, false], [7, 70, 14, false],
+      [8, 62, 8, false],  [9, 55, 5, false],  [10, 50, 3, false], [11, 45, 2, false],
+      [12, 42, 1, false], [13, 40, 1, false], [14, 44, 3, false], [15, 48, 4, false],
+      [16, 56, 6, false], [17, 64, 11, false], [18, 72, 16, false],
+      [19, 80, 28, true], [20, 88, 48, true], [21, 94, 78, true], [22, 96, 88, true], [23, 92, 62, true]
+    ];
+
+    var revealCount = Math.floor(easeInOut(clamp((p - 0.15) / 0.6, 0, 1)) * hourData.length);
+    var sg = el('g', null, stage);
+    for (var i = 0; i < Math.min(revealCount, hourData.length); i++){
+      var d = hourData[i];
+      var rh2 = d[1], bias2 = d[2], pre = d[3];
+      var col = rh2 < 40 ? 'var(--rh-dry)' :
+                rh2 < 60 ? 'var(--rh-low)' :
+                rh2 < 80 ? 'var(--rh-med)' :
+                rh2 < 95 ? 'var(--rh-high)' : 'var(--rh-sat)';
+      var sx = ax + (rh2 / 100) * aw;
+      var sy = ay - (bias2 / 100) * ah;
+      var rad = pre ? 7 : 5;
+      el('circle', { cx: sx, cy: sy, r: rad, fill: col,
+                     stroke: pre ? 'var(--gold)' : 'none',
+                     'stroke-width': pre ? '1.6' : '0', opacity: 0.9 }, sg);
+      if (pre){
+        // 点旁注小时
+        el('text', { x: sx + rad + 4, y: sy + 3, fill: 'var(--gold)',
+                    'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                    'font-size': '9', 'font-weight': '700' }, sg)
+          .textContent = d[0] + 'h';
+      }
+    }
+
+    // 5 区间图例 (顶部)
+    var lA = clamp((p - 0.1) / 0.2, 0, 1);
+    var lg = el('g', { opacity: lA, transform: 'translate(540, 145)' }, stage);
+    var bins = [
+      {col:'var(--rh-dry)',  cn:'<40 干',    en:'<40 dry'},
+      {col:'var(--rh-low)',  cn:'40-60 低', en:'40-60 low'},
+      {col:'var(--rh-med)',  cn:'60-80 中', en:'60-80 med'},
+      {col:'var(--rh-high)', cn:'80-95 高', en:'80-95 high'},
+      {col:'var(--rh-sat)',  cn:'>95 饱和', en:'>95 sat'}
+    ];
+    var bx = -240;
+    bins.forEach(function(b, i){
+      var x = bx + i * 100;
+      el('circle', { cx: x, cy: 0, r: 6, fill: b.col, opacity: 0.95 }, lg);
+      el('text', { x: x + 12, y: 4, fill: 'var(--fg-dim)',
+                  'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                  'font-size': '10' }, lg)
+        .textContent = LANG === 'cn' ? b.cn : b.en;
+    });
+
+    // 阈值松一档 注释 (右上角金色框)
+    var thA = clamp((p - 0.55) / 0.3, 0, 1);
+    var th = el('g', { opacity: thA, transform: 'translate(720, 230)' }, stage);
+    el('rect', { x: -150, y: -28, width: 300, height: 70, rx: '3',
+                 fill: 'var(--bg-2)', stroke: 'var(--gold)', 'stroke-width': '1.6' }, th);
+    el('text', { x: 0, y: -8, fill: 'var(--gold)',
+                'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                'font-size': '12', 'text-anchor': 'middle', 'font-weight': '700' }, th)
+      .textContent = LANG === 'cn' ? '雨前 RH > 90%' : 'pre-rain RH > 90%';
+    el('text', { x: 0, y: 10, fill: 'var(--fg)',
+                'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                'font-size': '10', 'text-anchor': 'middle' }, th)
+      .textContent = LANG === 'cn' ? 'PMS 报警阈值松一档' : 'raise PMS alert threshold';
+    el('text', { x: 0, y: 26, fill: 'var(--fg-dim)',
+                'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                'font-size': '9', 'text-anchor': 'middle' }, th)
+      .textContent = LANG === 'cn' ? '(否则误报漫天)' : '(or false alarms)';
+
+    // gold flash overlay (key moment)
+    var flash = document.getElementById('flash');
+    if (p > 0.7 && p < 0.95){
+      flash.classList.add('on');
+    } else {
+      flash.classList.remove('on');
+    }
+
+    // Ion mascot (saturated 模式)
+    var mg = el('g', { transform: 'translate(960, 100)' }, stage);
+    drawIonMascot(mg, 95, true);
+  }
+
+  // ====== RH 计 (用于 F1-F4 右下角) ======
+  function drawRHMeter(parent, cx, cy, rh, p){
+    var g = el('g', { transform: 'translate('+cx+','+cy+')' }, parent);
+    el('rect', { x: -90, y: -16, width: 180, height: 100, rx: '3',
+                 fill: 'var(--bg-2)', stroke: 'var(--line-strong)', 'stroke-width': '1' }, g);
+    el('text', { x: 0, y: 2, fill: 'var(--fg-mute)',
+                'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                'font-size': '9', 'text-anchor': 'middle', 'letter-spacing': '0.14em' }, g)
+      .textContent = LANG === 'cn' ? '相对湿度计' : 'RH METER';
+    // 数字
+    var col = rh < 40 ? 'var(--CATALYST)' :
+              rh < 70 ? 'var(--BOND)' :
+              rh < 90 ? 'var(--REACTION)' : 'var(--YIELD)';
+    el('text', { x: 0, y: 38, fill: col,
+                'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                'font-size': '28', 'text-anchor': 'middle', 'font-weight': '700' }, g)
+      .textContent = rh.toFixed(0) + ' %';
+    // bar
+    var barW = 160;
+    el('rect', { x: -80, y: 56, width: barW, height: 10,
+                 fill: 'var(--bg-3)', stroke: 'var(--line)', 'stroke-width': '0.6' }, g);
+    el('rect', { x: -80, y: 56, width: barW * (rh/100), height: 10,
+                 fill: col, opacity: 0.85 }, g);
+    el('text', { x: 0, y: 80, fill: 'var(--fg-mute)',
+                'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                'font-size': '8', 'text-anchor': 'middle' }, g)
+      .textContent = '0%                            100%';
+  }
+
+  // ====== Frame dispatcher ======
+  function drawFrame(idx, pp){
+    clearStage();
+    if (idx !== 4){
+      document.getElementById('flash').classList.remove('on');
+    }
+    if (idx === 0) drawFrame1(pp);
+    else if (idx === 1) drawFrame2(pp);
+    else if (idx === 2) drawFrame3(pp);
+    else if (idx === 3) drawFrame4(pp);
+    else if (idx === 4) drawFrame5(pp);
+  }
+
+  function updateUI(idx, pp){
+    var f = FRAMES[idx];
+    document.getElementById('hudV1').textContent = (idx+1) + ' / 5';
+    document.getElementById('hudV2').textContent = f.hudStage[LANG] || f.hudStage.en;
+    // 动态 HUD: RH/GF/bias 跟 pp 渐变
+    var prev = idx === 0 ? { rh: 30, gf: 1.00, bias: 0 } : FRAMES[idx - 1];
+    var pp01 = clamp(pp, 0, 1);
+    var liveRh = lerp(prev.rh, f.rh, easeInOut(pp01));
+    var liveGf = lerp(prev.gf, f.gf, easeInOut(pp01));
+    var liveBias = lerp(prev.bias, f.bias, easeInOut(pp01));
+    document.getElementById('hudV3').textContent = liveRh.toFixed(0) + ' %';
+    document.getElementById('hudV4').textContent = liveGf.toFixed(2);
+    document.getElementById('hudV5').textContent = '+' + liveBias.toFixed(0) + ' %';
+    document.getElementById('subCn').textContent = LANG === 'cn' ? f.subCn : f.subEn;
+    document.getElementById('subEn').textContent = LANG === 'cn' ? f.subEn : f.subCn;
+    document.getElementById('stepName').textContent = f.stepName;
+    for (var i = 0; i < 5; i++){
+      var c = document.getElementById('chip' + i);
+      c.classList.remove('active', 'done');
+      if (i < idx) c.classList.add('done');
+      else if (i === idx) c.classList.add('active');
+    }
+  }
+
+  function updateI18N(){
+    document.getElementById('badgeMod').textContent = tr('badgeMod');
+    document.getElementById('brandH1').textContent = tr('brandH1');
+    document.getElementById('brandSub').textContent = tr('brandSub');
+    document.getElementById('mascotName').textContent = tr('mascotName');
+    document.querySelector('#g1 .gtxt').textContent = tr('g1');
+    document.querySelector('#g2 .gtxt').textContent = tr('g2');
+    document.querySelector('#g3 .gtxt').textContent = tr('g3');
+    document.getElementById('hudL1').textContent = tr('hudL1');
+    document.getElementById('hudL2').textContent = tr('hudL2');
+    document.getElementById('hudL3').textContent = tr('hudL3');
+    document.getElementById('hudL4').textContent = tr('hudL4');
+    document.getElementById('hudL5').textContent = tr('hudL5');
+    document.getElementById('langBtn').textContent = tr('btnLang');
+    document.getElementById('flashSub').textContent = LANG === 'cn'
+      ? '下雨前 RH 飙升, PMS 偏高 50%+ — 阈值要松一档'
+      : 'Pre-rain RH spike, PMS reads +50% — raise alert threshold';
+  }
+
+  function tick(ts){
+    if (!frameStartTs) frameStartTs = ts;
+    var elapsed = ts - frameStartTs;
+    if (elapsed >= FRAME_MS){
+      currentFrame = (currentFrame + 1) % 5;
+      frameStartTs = ts;
+      elapsed = 0;
+    }
+    var pp = elapsed / FRAME_MS;
+    updateUI(currentFrame, pp);
+    drawFrame(currentFrame, pp);
+    rafId = requestAnimationFrame(tick);
+  }
+
+  function start(){
+    updateI18N();
+    updateUI(currentFrame, 0);
+    frameStartTs = 0;
+    if (rafId) cancelAnimationFrame(rafId);
+    rafId = requestAnimationFrame(tick);
+  }
+
+  document.getElementById('langBtn').addEventListener('click', function(){
+    LANG = (LANG === 'cn') ? 'en' : 'cn';
+    updateI18N();
+    updateUI(currentFrame, 0);
+  });
+
+  start();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,886 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>M37 误差来源清单 — 我的数为啥跟 EPA 不完全一样</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&family=Noto+Sans+SC:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    /* Industrial Atelier — Claude warm cream + coral */
+    --paper:     #FAF9F5;
+    --paper-2:   #F1EDDF;
+    --card:      #FFFFFF;
+    --ink:       #191814;
+    --ink-2:     #2B2924;
+    --sub:       #6B6557;
+    --sub-2:     #9D978A;
+    --border:    #EBE5D6;
+    --border-2:  #D9D1BD;
+    --hairline:  #F2EDE0;
+
+    --primary:       #D97757;
+    --primary-ink:   #9A4A2E;
+    --primary-soft:  #F8EDE5;
+    --primary-line:  #ECCFB8;
+
+    /* domain accent = climate */
+    --climate:       #527B95;
+    --climate-soft:  #DEE5EC;
+    --climate-line:  #B8C9D6;
+    --climate-ink:   #2D4759;
+
+    --shadow-sm: 0 1px 2px 0 rgba(25,24,20,.04);
+    --shadow:    0 1px 3px 0 rgba(25,24,20,.06), 0 1px 2px -1px rgba(25,24,20,.04);
+    --shadow-md: 0 4px 8px -2px rgba(25,24,20,.06), 0 2px 4px -2px rgba(25,24,20,.04);
+    --shadow-lg: 0 12px 24px -6px rgba(25,24,20,.1), 0 4px 8px -4px rgba(25,24,20,.05);
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    height:100vh;overflow:hidden;
+    background:var(--paper);
+    color:var(--ink);
+    font-family:'Inter','PingFang SC','Noto Sans SC',system-ui,sans-serif;
+    display:flex;
+    -webkit-font-smoothing:antialiased;
+    text-rendering:optimizeLegibility;
+  }
+  .mono{font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,monospace;}
+
+  /* ---------- Sidebar ---------- */
+  .sidebar{
+    width:200px;flex-shrink:0;height:100vh;
+    background:var(--card);
+    border-right:1px solid var(--border);
+    display:flex;flex-direction:column;
+    padding:20px 16px;gap:14px;
+  }
+  .brand{
+    font-size:13px;font-weight:700;letter-spacing:0.02em;color:var(--ink);
+    padding-bottom:14px;border-bottom:1px solid var(--hairline);
+  }
+  .brand-sub{
+    display:block;margin-top:6px;font-size:11px;font-weight:500;
+    color:var(--sub);letter-spacing:0;
+  }
+  .deco{
+    width:100%;height:104px;
+    background:var(--paper-2);
+    border:1px solid var(--border);
+    border-radius:8px;
+    display:flex;align-items:center;justify-content:center;
+    box-shadow:var(--shadow-sm);
+  }
+  .deco svg{width:88px;height:88px;}
+  .guide{display:flex;flex-direction:column;gap:10px;margin-top:4px;}
+  .guide-li{
+    font-size:11.5px;line-height:1.5;
+    color:var(--sub);
+    padding:2px 0 2px 10px;
+    border-left:2px solid var(--border-2);
+  }
+  .guide-li.hl{border-left-color:var(--primary);color:var(--ink-2);}
+  .lang-btn{
+    margin-top:auto;
+    font-family:'JetBrains Mono',monospace;
+    font-size:11px;font-weight:600;letter-spacing:0.06em;
+    padding:8px 12px;cursor:pointer;
+    background:var(--card);color:var(--ink);
+    border:1px solid var(--border-2);
+    border-radius:6px;
+    transition:background 120ms ease, border-color 120ms ease;
+  }
+  .lang-btn:hover{background:var(--paper-2);border-color:var(--primary-line);}
+  .lang-btn:active{background:var(--primary-soft);}
+
+  /* ---------- Main ---------- */
+  .main{
+    flex:1;height:100vh;overflow:hidden;
+    display:grid;
+    grid-template-rows: auto 1fr auto;
+    padding:18px 22px;gap:12px;position:relative;
+    background:var(--paper);
+  }
+
+  /* === 顶部 公式条 — 引入 4 大类 === */
+  .formula{
+    display:flex;align-items:center;gap:14px;
+    padding:14px 20px;
+    background:var(--card);
+    border:1px solid var(--border);
+    border-radius:10px;
+    box-shadow:var(--shadow-sm);
+    position:relative;
+  }
+  .formula .core-q{
+    flex-shrink:0;
+    padding-right:18px;border-right:1px solid var(--hairline);
+    max-width:280px;
+  }
+  .formula .core-q .q-ttl{font-size:11px;font-weight:700;color:var(--primary);letter-spacing:0.08em;margin-bottom:4px;font-family:'JetBrains Mono',monospace;}
+  .formula .core-q .q-txt{font-size:13.5px;line-height:1.45;color:var(--ink);font-weight:600;letter-spacing:-0.005em;}
+  .formula .eq{
+    flex:1;
+    display:flex;align-items:center;justify-content:center;gap:8px;
+    flex-wrap:nowrap;
+  }
+  .formula .eq-lhs{
+    font-family:'JetBrains Mono',monospace;
+    font-size:14px;font-weight:700;color:var(--ink);
+    padding:6px 12px;background:var(--paper-2);border:1px solid var(--border);
+    border-radius:6px;letter-spacing:0.02em;
+  }
+  .formula .eq-eq{font-family:'JetBrains Mono',monospace;font-size:16px;color:var(--sub);font-weight:600;}
+  .formula .eq-term{
+    font-family:'JetBrains Mono',monospace;
+    font-size:11.5px;font-weight:700;letter-spacing:0.04em;
+    padding:5px 9px;border-radius:5px;
+    cursor:pointer;outline:none;
+    transition:transform 160ms ease, box-shadow 160ms ease;
+  }
+  .formula .eq-term:hover{transform:translateY(-1px);box-shadow:var(--shadow);}
+  .formula .eq-plus{font-family:'JetBrains Mono',monospace;font-size:14px;color:var(--sub-2);font-weight:600;}
+  .eq-term.cat-instr{background:var(--primary-soft);color:var(--primary-ink);border:1px solid var(--primary-line);}
+  .eq-term.cat-env  {background:var(--climate-soft);color:var(--climate-ink);border:1px solid var(--climate-line);}
+  .eq-term.cat-algo {background:var(--paper-2);color:var(--ink-2);border:1px solid var(--border-2);}
+  .eq-term.cat-st   {background:var(--card);color:var(--climate-ink);border:1px solid var(--climate);}
+  .eq-term.active{transform:translateY(-2px);box-shadow:var(--shadow-md);outline:2px solid var(--primary);outline-offset:1px;}
+
+  /* === 中部 4×3 卡片网格 === */
+  .grid-wrap{
+    position:relative;min-height:0;overflow:hidden;
+    background:var(--card);
+    border:1px solid var(--border);
+    border-radius:10px;
+    box-shadow:var(--shadow-sm);
+    padding:14px 16px 12px;
+    display:flex;flex-direction:column;gap:10px;
+  }
+  .gw-head{display:flex;align-items:baseline;justify-content:space-between;}
+  .gw-head .ttl{font-size:13.5px;font-weight:700;color:var(--ink);letter-spacing:-0.01em;}
+  .gw-head .ttl .count{color:var(--primary);font-family:'JetBrains Mono',monospace;margin-left:6px;}
+  .gw-head .hint{font-size:11px;color:var(--sub);font-family:'JetBrains Mono',monospace;}
+  .gw-head .hint .pin{color:var(--primary);font-weight:700;}
+
+  .grid{
+    flex:1;min-height:0;
+    display:grid;
+    grid-template-columns:repeat(4, 1fr);
+    grid-template-rows:repeat(3, 1fr);
+    gap:8px;
+  }
+  .src{
+    position:relative;
+    padding:10px 11px 9px;
+    background:var(--card);
+    border:1px solid var(--border);
+    border-radius:7px;
+    cursor:pointer;outline:none;
+    transition:background 180ms ease, border-color 180ms ease, transform 180ms ease, box-shadow 180ms ease;
+    display:flex;flex-direction:column;gap:5px;
+    min-height:0;overflow:hidden;
+  }
+  .src::before{
+    content:"";position:absolute;top:0;left:0;right:0;height:3px;
+    background:var(--border-2);border-radius:7px 7px 0 0;
+  }
+  .src.cat-instr::before{background:var(--primary);}
+  .src.cat-env  ::before{background:var(--climate);}
+  .src.cat-algo ::before{background:var(--sub-2);}
+  .src.cat-st   ::before{background:var(--climate-ink);}
+  .src .src-head{display:flex;align-items:center;gap:6px;}
+  .src .src-id{
+    font-family:'JetBrains Mono',monospace;font-size:9.5px;font-weight:700;
+    color:var(--sub);letter-spacing:0.08em;
+  }
+  .src .src-cat{
+    font-family:'JetBrains Mono',monospace;font-size:9px;font-weight:700;
+    letter-spacing:0.06em;padding:1px 5px;border-radius:3px;
+  }
+  .src.cat-instr .src-cat{background:var(--primary-soft);color:var(--primary-ink);}
+  .src.cat-env   .src-cat{background:var(--climate-soft);color:var(--climate-ink);}
+  .src.cat-algo  .src-cat{background:var(--paper-2);color:var(--sub);}
+  .src.cat-st    .src-cat{background:var(--card);color:var(--climate-ink);border:1px solid var(--climate-line);}
+  .src .src-ttl{
+    font-size:12.5px;font-weight:600;color:var(--ink);line-height:1.3;letter-spacing:-0.005em;
+  }
+  .src .src-mag{
+    margin-top:auto;font-family:'JetBrains Mono',monospace;
+    font-size:10px;color:var(--sub-2);font-weight:600;letter-spacing:0.04em;
+  }
+  .src .src-mag .num{color:var(--primary);font-weight:700;}
+  .src:hover, .src:focus-visible{
+    transform:translateY(-2px);
+    border-color:var(--climate-line);
+    background:var(--climate-soft);
+    box-shadow:var(--shadow);
+  }
+  .src.active{
+    transform:translateY(-2px);
+    border-color:var(--primary);
+    background:var(--primary-soft);
+    box-shadow:var(--shadow-md);
+  }
+  .src.active .src-id{color:var(--primary-ink);}
+  .src.dim{opacity:0.32;}
+
+  /* hover/active detail panel */
+  .detail{
+    position:absolute;right:18px;bottom:14px;
+    width:300px;
+    padding:14px 16px;
+    background:var(--card);color:var(--ink);
+    border:1px solid var(--primary-line);
+    border-radius:8px;
+    box-shadow:var(--shadow-lg);
+    opacity:0;pointer-events:none;
+    transition:opacity 200ms ease;
+    z-index:4;
+  }
+  .detail.show{opacity:1;}
+  .detail .d-id{
+    font-family:'JetBrains Mono',monospace;font-size:10.5px;font-weight:700;
+    color:var(--primary);letter-spacing:0.06em;margin-bottom:6px;
+  }
+  .detail .d-ttl{font-size:14px;font-weight:700;margin-bottom:8px;color:var(--ink);letter-spacing:-0.01em;}
+  .detail .d-row{font-size:11.5px;line-height:1.5;margin-bottom:5px;color:var(--ink-2);}
+  .detail .d-row .lbl{
+    color:var(--sub);font-weight:700;margin-right:6px;font-size:10px;
+    letter-spacing:0.06em;text-transform:uppercase;
+    font-family:'JetBrains Mono',monospace;
+  }
+  .detail .d-row .num{
+    font-family:'JetBrains Mono',monospace;color:var(--primary-ink);font-weight:700;
+  }
+
+  /* === 中下 饼图 + 承诺 并排 === */
+  .bottom{
+    display:grid;
+    grid-template-columns: 320px 1fr;
+    gap:12px;min-height:0;
+  }
+  .pie-card{
+    padding:12px 14px;
+    background:var(--card);
+    border:1px solid var(--border);
+    border-radius:10px;
+    box-shadow:var(--shadow-sm);
+    display:flex;gap:14px;align-items:center;
+  }
+  .pie-wrap{position:relative;flex-shrink:0;width:120px;height:120px;}
+  .pie-wrap svg{width:120px;height:120px;display:block;transform:rotate(-90deg);}
+  .pie-center{
+    position:absolute;inset:0;display:flex;flex-direction:column;
+    align-items:center;justify-content:center;pointer-events:none;
+  }
+  .pie-center .pc-num{font-family:'JetBrains Mono',monospace;font-size:22px;font-weight:700;color:var(--ink);letter-spacing:-0.02em;}
+  .pie-center .pc-lbl{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--sub);letter-spacing:0.08em;margin-top:2px;}
+  .pie-legend{flex:1;min-width:0;display:flex;flex-direction:column;gap:5px;}
+  .pie-legend .pl-ttl{font-size:11.5px;font-weight:700;color:var(--ink);margin-bottom:4px;letter-spacing:-0.005em;}
+  .pl-row{display:flex;align-items:center;gap:7px;font-size:11px;color:var(--ink-2);}
+  .pl-dot{width:9px;height:9px;border-radius:2px;flex-shrink:0;}
+  .pl-dot.c-instr{background:var(--primary);}
+  .pl-dot.c-env  {background:var(--climate);}
+  .pl-dot.c-algo {background:var(--sub-2);}
+  .pl-dot.c-st   {background:var(--climate-ink);}
+  .pl-name{flex:1;min-width:0;}
+  .pl-pct{font-family:'JetBrains Mono',monospace;font-size:10.5px;color:var(--sub);font-weight:600;}
+
+  .vows{
+    display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;
+  }
+  .vow{
+    padding:10px 12px;
+    background:var(--card);
+    border:1px solid var(--border);
+    border-radius:8px;
+    box-shadow:var(--shadow-sm);
+    cursor:pointer;outline:none;
+    transition:transform 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
+    display:flex;gap:10px;align-items:flex-start;
+    position:relative;min-width:0;
+  }
+  .vow:hover{border-color:var(--primary-line);box-shadow:var(--shadow);}
+  .vow.tap{transform:scale(1.02);border-color:var(--primary);box-shadow:var(--shadow-md);}
+  .vow .vmark{
+    flex-shrink:0;width:30px;height:30px;
+    border-radius:6px;
+    background:var(--paper-2);
+    border:1px solid var(--border);
+    display:flex;align-items:center;justify-content:center;
+    color:var(--sub);
+  }
+  .vow .vmark svg{width:17px;height:17px;}
+  .vow:hover .vmark, .vow.tap .vmark{background:var(--primary-soft);border-color:var(--primary-line);color:var(--primary);}
+  .vow .vtxt{flex:1;min-width:0;}
+  .vow .vnum{
+    font-family:'JetBrains Mono',monospace;font-size:9.5px;font-weight:700;
+    color:var(--sub-2);letter-spacing:0.1em;margin-bottom:4px;
+  }
+  .vow .vline{font-size:12px;line-height:1.4;color:var(--ink);font-weight:500;letter-spacing:-0.005em;}
+  .vow .vline-en{font-size:9.5px;font-style:italic;color:var(--sub-2);margin-top:3px;line-height:1.35;}
+
+  /* 当前位置心跳: pie 中心数字温和呼吸 (CSS 唯一允许动画) */
+  @keyframes count-breathe{
+    0%,100%{opacity:1;}
+    50%   {opacity:0.78;}
+  }
+  .pie-center .pc-num{animation:count-breathe 2.8s ease-in-out infinite;}
+</style>
+</head>
+<body>
+  <aside class="sidebar">
+    <div class="brand">
+      <span id="brandMain">PurpleAir Node</span>
+      <span class="brand-sub" id="brandSub">M37 · 误差来源清单</span>
+    </div>
+    <div class="deco" aria-hidden="true">
+      <!-- 抽象装饰: 节点 vs EPA 站点的差值脉冲 -->
+      <svg viewBox="0 0 100 100" fill="none" stroke="currentColor" stroke-width="1.5" style="color:var(--sub);">
+        <!-- 左侧节点 (你) -->
+        <circle cx="28" cy="50" r="10" fill="var(--primary-soft)" stroke="var(--primary)" stroke-width="1.4"/>
+        <text x="28" y="54" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="9" font-weight="700" fill="var(--primary-ink)" stroke="none">YOU</text>
+        <!-- 右侧 EPA -->
+        <circle cx="72" cy="50" r="10" fill="var(--climate-soft)" stroke="var(--climate)" stroke-width="1.4"/>
+        <text x="72" y="54" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="8" font-weight="700" fill="var(--climate-ink)" stroke="none">EPA</text>
+        <!-- 中间差 Δ -->
+        <line x1="38" y1="50" x2="62" y2="50" stroke="var(--border-2)" stroke-width="1" stroke-dasharray="2 2"/>
+        <text x="50" y="44" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="11" font-weight="700" fill="var(--primary)" stroke="none">Δ</text>
+        <text x="50" y="62" text-anchor="middle" font-family="Inter, sans-serif" font-size="6.5" fill="var(--sub)" stroke="none">12 sources</text>
+        <!-- 顶底括号暗示分解 -->
+        <path d="M18 24 Q50 16 82 24" stroke="var(--border-2)" stroke-width="0.8" fill="none"/>
+        <path d="M18 76 Q50 84 82 76" stroke="var(--border-2)" stroke-width="0.8" fill="none"/>
+      </svg>
+    </div>
+    <div class="guide">
+      <div class="guide-li hl" id="g1">悬停一张卡, 看影响量级 + 缓解办法</div>
+      <div class="guide-li" id="g2">点击公式中的项, 高亮该类全部卡片</div>
+      <div class="guide-li" id="g3">珊瑚色项 = 当前聚焦类别</div>
+    </div>
+    <button class="lang-btn" id="langBtn" type="button">CN / EN</button>
+  </aside>
+
+  <main class="main">
+    <!-- 顶部 公式条 -->
+    <section class="formula">
+      <div class="core-q">
+        <div class="q-ttl mono">CORE Q</div>
+        <div class="q-txt" id="coreQ">我的数为啥跟 EPA 不完全一样? 有多少种误差源?</div>
+      </div>
+      <div class="eq">
+        <div class="eq-lhs" id="eqLhs">Δ(node, EPA)</div>
+        <div class="eq-eq">=</div>
+        <div class="eq-term cat-instr" data-cat="instr" role="button" tabindex="0"><span id="termInstr">仪器误差</span></div>
+        <div class="eq-plus">+</div>
+        <div class="eq-term cat-env" data-cat="env" role="button" tabindex="0"><span id="termEnv">环境误差</span></div>
+        <div class="eq-plus">+</div>
+        <div class="eq-term cat-algo" data-cat="algo" role="button" tabindex="0"><span id="termAlgo">算法误差</span></div>
+        <div class="eq-plus">+</div>
+        <div class="eq-term cat-st" data-cat="st" role="button" tabindex="0"><span id="termSt">时空误差</span></div>
+      </div>
+    </section>
+
+    <!-- 中部 12 卡片网格 -->
+    <section class="grid-wrap">
+      <div class="gw-head">
+        <div class="ttl" id="gwTtl">12 个误差来源 · 4 类 × 3 子项<span class="count mono">12 / 12</span></div>
+        <div class="hint mono" id="gwHint">hover = 看明细 · click = 钉住 <span class="pin">·</span></div>
+      </div>
+      <div class="grid" id="grid">
+        <!-- 仪器 3 -->
+        <div class="src cat-instr" data-id="i1" tabindex="0" role="button">
+          <div class="src-head"><span class="src-id mono">I1</span><span class="src-cat mono" id="catLabelInstr1">仪器</span></div>
+          <div class="src-ttl" id="i1Ttl">PMS5003 激光老化</div>
+          <div class="src-mag mono" id="i1Mag">≈ <span class="num">+8%</span> / 年</div>
+        </div>
+        <div class="src cat-instr" data-id="i2" tabindex="0" role="button">
+          <div class="src-head"><span class="src-id mono">I2</span><span class="src-cat mono">仪器</span></div>
+          <div class="src-ttl" id="i2Ttl">出厂校准漂移</div>
+          <div class="src-mag mono" id="i2Mag">≈ <span class="num">±10%</span></div>
+        </div>
+        <div class="src cat-instr" data-id="i3" tabindex="0" role="button">
+          <div class="src-head"><span class="src-id mono">I3</span><span class="src-cat mono">仪器</span></div>
+          <div class="src-ttl" id="i3Ttl">颗粒计数采样限</div>
+          <div class="src-mag mono" id="i3Mag">≈ <span class="num">±5 μg</span></div>
+        </div>
+
+        <!-- 环境 3 -->
+        <div class="src cat-env" data-id="e1" tabindex="0" role="button">
+          <div class="src-head"><span class="src-id mono">E1</span><span class="src-cat mono">环境</span></div>
+          <div class="src-ttl" id="e1Ttl">湿度致颗粒吸水增长</div>
+          <div class="src-mag mono" id="e1Mag">RH&gt;70% → <span class="num">+40%</span></div>
+        </div>
+        <div class="src cat-env" data-id="e2" tabindex="0" role="button">
+          <div class="src-head"><span class="src-id mono">E2</span><span class="src-cat mono">环境</span></div>
+          <div class="src-ttl" id="e2Ttl">温度影响光散射</div>
+          <div class="src-mag mono" id="e2Mag">ΔT 10°C → <span class="num">±3%</span></div>
+        </div>
+        <div class="src cat-env" data-id="e3" tabindex="0" role="button">
+          <div class="src-head"><span class="src-id mono">E3</span><span class="src-cat mono">环境</span></div>
+          <div class="src-ttl" id="e3Ttl">风速冷却外壳</div>
+          <div class="src-mag mono" id="e3Mag">风 5m/s → <span class="num">±2%</span></div>
+        </div>
+
+        <!-- 算法 3 -->
+        <div class="src cat-algo" data-id="a1" tabindex="0" role="button">
+          <div class="src-head"><span class="src-id mono">A1</span><span class="src-cat mono">算法</span></div>
+          <div class="src-ttl" id="a1Ttl">Barkjohn 不适所有粒径</div>
+          <div class="src-mag mono" id="a1Mag">细颗粒外 <span class="num">+15%</span> 残差</div>
+        </div>
+        <div class="src cat-algo" data-id="a2" tabindex="0" role="button">
+          <div class="src-head"><span class="src-id mono">A2</span><span class="src-cat mono">算法</span></div>
+          <div class="src-ttl" id="a2Ttl">NowCast 权重过简</div>
+          <div class="src-mag mono" id="a2Mag">陡变时 <span class="num">滞后 30min</span></div>
+        </div>
+        <div class="src cat-algo" data-id="a3" tabindex="0" role="button">
+          <div class="src-head"><span class="src-id mono">A3</span><span class="src-cat mono">算法</span></div>
+          <div class="src-ttl" id="a3Ttl">AQI 分段断点跳跃</div>
+          <div class="src-mag mono" id="a3Mag">边界 ±1 μg → <span class="num">跳 1 档</span></div>
+        </div>
+
+        <!-- 时空 3 -->
+        <div class="src cat-st" data-id="s1" tabindex="0" role="button">
+          <div class="src-head"><span class="src-id mono">S1</span><span class="src-cat mono">时空</span></div>
+          <div class="src-ttl" id="s1Ttl">节点 vs EPA 位置差</div>
+          <div class="src-mag mono" id="s1Mag">距离 5km → <span class="num">±20%</span></div>
+        </div>
+        <div class="src cat-st" data-id="s2" tabindex="0" role="button">
+          <div class="src-head"><span class="src-id mono">S2</span><span class="src-cat mono">时空</span></div>
+          <div class="src-ttl" id="s2Ttl">时间分辨率不一致</div>
+          <div class="src-mag mono" id="s2Mag">1min vs 1h → <span class="num">尖峰丢</span></div>
+        </div>
+        <div class="src cat-st" data-id="s3" tabindex="0" role="button">
+          <div class="src-head"><span class="src-id mono">S3</span><span class="src-cat mono">时空</span></div>
+          <div class="src-ttl" id="s3Ttl">海拔与垂直梯度</div>
+          <div class="src-mag mono" id="s3Mag">10m 高差 → <span class="num">±5%</span></div>
+        </div>
+      </div>
+
+      <div class="detail" id="detail" aria-live="polite">
+        <div class="d-id mono" id="dId">I1 · 仪器误差</div>
+        <div class="d-ttl" id="dTtl">PMS5003 激光老化</div>
+        <div class="d-row"><span class="lbl">影响</span><span id="dMag" class="num">≈ +8% / 年</span></div>
+        <div class="d-row"><span class="lbl">机理</span><span id="dMech">激光二极管功率随使用衰减, 散射信号减弱, 仪器误判颗粒变少。</span></div>
+        <div class="d-row"><span class="lbl">缓解</span><span id="dFix">每 6 个月用参考仪器校准一次; 满 2 年换传感器。</span></div>
+      </div>
+    </section>
+
+    <!-- 中下 饼图 + 承诺 -->
+    <section class="bottom">
+      <div class="pie-card">
+        <div class="pie-wrap">
+          <!-- 饼图 (mock 数据): instr 30, env 35, algo 20, st 15 -->
+          <!-- 半径 50, 周长 = 2π·50 ≈ 314.16, 从 0° 开始顺序填充 -->
+          <svg viewBox="0 0 120 120" aria-label="error budget pie">
+            <circle cx="60" cy="60" r="50" fill="none" stroke="var(--paper-2)" stroke-width="20"/>
+            <!-- instr 30% -->
+            <circle cx="60" cy="60" r="50" fill="none" stroke="var(--primary)" stroke-width="20"
+                    stroke-dasharray="94.25 314.16" stroke-dashoffset="0"/>
+            <!-- env 35% -->
+            <circle cx="60" cy="60" r="50" fill="none" stroke="var(--climate)" stroke-width="20"
+                    stroke-dasharray="109.96 314.16" stroke-dashoffset="-94.25"/>
+            <!-- algo 20% -->
+            <circle cx="60" cy="60" r="50" fill="none" stroke="var(--sub-2)" stroke-width="20"
+                    stroke-dasharray="62.83 314.16" stroke-dashoffset="-204.21"/>
+            <!-- st 15% -->
+            <circle cx="60" cy="60" r="50" fill="none" stroke="var(--climate-ink)" stroke-width="20"
+                    stroke-dasharray="47.12 314.16" stroke-dashoffset="-267.04"/>
+          </svg>
+          <div class="pie-center">
+            <div class="pc-num mono">12</div>
+            <div class="pc-lbl mono" id="pieLbl">SOURCES</div>
+          </div>
+        </div>
+        <div class="pie-legend">
+          <div class="pl-ttl" id="pieTtl">误差预算 · mock</div>
+          <div class="pl-row"><div class="pl-dot c-env"></div><div class="pl-name" id="legEnv">环境</div><div class="pl-pct mono">35%</div></div>
+          <div class="pl-row"><div class="pl-dot c-instr"></div><div class="pl-name" id="legInstr">仪器</div><div class="pl-pct mono">30%</div></div>
+          <div class="pl-row"><div class="pl-dot c-algo"></div><div class="pl-name" id="legAlgo">算法</div><div class="pl-pct mono">20%</div></div>
+          <div class="pl-row"><div class="pl-dot c-st"></div><div class="pl-name" id="legSt">时空</div><div class="pl-pct mono">15%</div></div>
+        </div>
+      </div>
+
+      <div class="vows">
+        <div class="vow" data-vow="1" tabindex="0" role="button">
+          <div class="vmark" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M4 7h16M4 12h16M4 17h10"/>
+              <path d="M16 17l3 3 4-5"/>
+            </svg>
+          </div>
+          <div class="vtxt">
+            <div class="vnum mono">VOW · 01</div>
+            <div class="vline" id="vow1">我能一口气说出全部 12 个误差源。</div>
+            <div class="vline-en" id="vow1en">I can name all 12 error sources in one breath.</div>
+          </div>
+        </div>
+        <div class="vow" data-vow="2" tabindex="0" role="button">
+          <div class="vmark" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M14 3l7 7-11 11H3v-7L14 3z"/>
+              <path d="M13 5l6 6"/>
+            </svg>
+          </div>
+          <div class="vtxt">
+            <div class="vnum mono">VOW · 02</div>
+            <div class="vline" id="vow2">我知道哪几个是我能修的, 哪几个不能。</div>
+            <div class="vline-en" id="vow2en">I know which ones I can fix and which I cannot.</div>
+          </div>
+        </div>
+        <div class="vow" data-vow="3" tabindex="0" role="button">
+          <div class="vmark" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="4" width="18" height="16" rx="2"/>
+              <path d="M3 9h18"/>
+              <path d="M8 14h5"/>
+            </svg>
+          </div>
+          <div class="vtxt">
+            <div class="vnum mono">VOW · 03</div>
+            <div class="vline" id="vow3">我会在报告里诚实写明残差量级。</div>
+            <div class="vline-en" id="vow3en">I will state residual magnitude honestly in my report.</div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+<script>
+(function(){
+  "use strict";
+
+  var LANG = 'cn';
+
+  var I18N = {
+    brandMain:{cn:'PurpleAir Node',                en:'PurpleAir Node'},
+    brandSub: {cn:'M37 · 误差来源清单',             en:'M37 · Error Sources Inventory'},
+    g1:       {cn:'悬停一张卡, 看影响量级 + 缓解办法', en:'Hover a card to see magnitude + mitigation'},
+    g2:       {cn:'点击公式中的项, 高亮该类全部卡片',  en:'Click a formula term to filter its category'},
+    g3:       {cn:'珊瑚色项 = 当前聚焦类别',         en:'Coral term = active category'},
+    coreQ:    {cn:'我的数为啥跟 EPA 不完全一样? 有多少种误差源?',
+               en:'Why does my reading not match EPA exactly? How many error sources are there?'},
+    eqLhs:    {cn:'Δ(node, EPA)',                  en:'Δ(node, EPA)'},
+    termInstr:{cn:'仪器误差',                       en:'instrument'},
+    termEnv:  {cn:'环境误差',                       en:'environment'},
+    termAlgo: {cn:'算法误差',                       en:'algorithm'},
+    termSt:   {cn:'时空误差',                       en:'space-time'},
+    gwTtl:    {cn:'12 个误差来源 · 4 类 × 3 子项',  en:'12 Error Sources · 4 categories × 3 each'},
+    gwHint:   {cn:'hover = 看明细 · click = 钉住',  en:'hover = inspect · click = pin'},
+    pieTtl:   {cn:'误差预算 · mock',                en:'Error budget · mock'},
+    pieLbl:   {cn:'SOURCES',                       en:'SOURCES'},
+    legInstr: {cn:'仪器',                           en:'instrument'},
+    legEnv:   {cn:'环境',                           en:'environment'},
+    legAlgo:  {cn:'算法',                           en:'algorithm'},
+    legSt:    {cn:'时空',                           en:'space-time'},
+    vow1:     {cn:'我能一口气说出全部 12 个误差源。',  en:'I can name all 12 error sources in one breath.'},
+    vow1en:   {cn:'I can name all 12 error sources in one breath.',
+               en:'Memory is the floor of competence.'},
+    vow2:     {cn:'我知道哪几个是我能修的, 哪几个不能。',
+               en:'I know which I can fix and which I cannot.'},
+    vow2en:   {cn:'I know which I can fix and which I cannot.',
+               en:'Triage before action.'},
+    vow3:     {cn:'我会在报告里诚实写明残差量级。',
+               en:'I will state residual magnitude honestly.'},
+    vow3en:   {cn:'I will state residual magnitude honestly in my report.',
+               en:'Honesty is calibration.'},
+    langBtn:  {cn:'CN / EN',                       en:'EN / CN'}
+  };
+
+  // 误差源详细数据
+  var SOURCES = {
+    i1:{
+      cat:'instr', catName:{cn:'仪器误差',en:'instrument'},
+      ttl:{cn:'PMS5003 激光老化',     en:'PMS5003 laser aging'},
+      mag:{cn:'≈ +8% / 年',            en:'≈ +8% / year'},
+      mech:{cn:'激光二极管功率随使用衰减, 散射信号减弱, 仪器误判颗粒变少。',
+            en:'Laser diode power decays with use; weaker scattering signal makes the device under-count particles.'},
+      fix: {cn:'每 6 个月用参考仪器校准一次; 满 2 年换传感器。',
+            en:'Cross-calibrate against a reference every 6 months; replace sensor after 2 years.'}
+    },
+    i2:{
+      cat:'instr', catName:{cn:'仪器误差',en:'instrument'},
+      ttl:{cn:'出厂校准漂移',           en:'Factory calibration drift'},
+      mag:{cn:'≈ ±10% 单元间差',        en:'≈ ±10% unit-to-unit'},
+      mech:{cn:'同型号传感器的出厂标定有个体差异, 不同批次更明显。',
+            en:'Same model sensors carry per-unit calibration variance, more so across batches.'},
+      fix: {cn:'部署前用同一台参考仪并排测 24h 拿到偏置常数, 写进配置。',
+            en:'Co-locate with reference for 24h before deploy to extract bias constant; store in config.'}
+    },
+    i3:{
+      cat:'instr', catName:{cn:'仪器误差',en:'instrument'},
+      ttl:{cn:'颗粒计数采样下限',       en:'Particle count sampling floor'},
+      mag:{cn:'低浓度区 ±5 μg/m³',     en:'±5 μg/m³ at low concentration'},
+      mech:{cn:'光学计数器在 <10 μg 时统计噪声大, 单次 1 min 采样不稳。',
+            en:'Optical counter statistical noise dominates below 10 μg in a single 1-min sample.'},
+      fix: {cn:'用 10 min 移动平均压低单次噪声, 报告低浓度时附置信区间。',
+            en:'Apply 10-min rolling mean; report confidence interval at low concentration.'}
+    },
+    e1:{
+      cat:'env', catName:{cn:'环境误差',en:'environment'},
+      ttl:{cn:'湿度致颗粒吸水增长',     en:'Humidity-driven particle growth'},
+      mag:{cn:'RH > 70% → +40% 高估',  en:'RH > 70% → +40% over-read'},
+      mech:{cn:'颗粒在高湿下吸水变大, 光学计数器把虚胖颗粒当成真颗粒。',
+            en:'Hygroscopic particles swell at high RH; optical counter treats inflated size as real mass.'},
+      fix: {cn:'Barkjohn 公式 / EPA US-correction 用 RH 做湿度补偿。',
+            en:'Apply Barkjohn / EPA US-correction with RH as input feature.'}
+    },
+    e2:{
+      cat:'env', catName:{cn:'环境误差',en:'environment'},
+      ttl:{cn:'温度影响光散射',         en:'Temperature affects scattering'},
+      mag:{cn:'ΔT 10°C → ±3%',         en:'ΔT 10°C → ±3%'},
+      mech:{cn:'空气密度随温度变, 颗粒折射率轻微变, 光学读数小幅漂移。',
+            en:'Air density and refractive index drift with temperature; scattering reading shifts slightly.'},
+      fix: {cn:'在校准式中加 T 项 (Barkjohn 2021 默认已含)。',
+            en:'Include T term in correction formula (Barkjohn 2021 already does).'}
+    },
+    e3:{
+      cat:'env', catName:{cn:'环境误差',en:'environment'},
+      ttl:{cn:'风速冷却外壳',           en:'Wind cools enclosure'},
+      mag:{cn:'风 5 m/s → ±2%',        en:'Wind 5 m/s → ±2%'},
+      mech:{cn:'强风改变进气流速, 颗粒采样代表性下降; 外壳冷却影响内部传感温度。',
+            en:'Strong wind shifts intake flow; enclosure cooling alters internal sensor temperature.'},
+      fix: {cn:'装防风导流罩; 后处理时剔除 wind > 8 m/s 的样点。',
+            en:'Mount wind shroud; drop wind > 8 m/s samples in post-processing.'}
+    },
+    a1:{
+      cat:'algo', catName:{cn:'算法误差',en:'algorithm'},
+      ttl:{cn:'Barkjohn 不适所有粒径',  en:'Barkjohn not universal'},
+      mag:{cn:'细粉外残差 +15%',       en:'+15% residual outside fine PM'},
+      mech:{cn:'Barkjohn 公式基于 PM2.5 拟合, 对粗颗粒/沙尘/烟雾事件适配不佳。',
+            en:'Barkjohn was fit on PM2.5; underperforms on coarse, dust, or wildfire smoke regimes.'},
+      fix: {cn:'分场景用不同公式 (烟雾用 PA-II 烟雾版); 报告时注明所用版本。',
+            en:'Use scenario-specific formulas (PA-II wildfire variant); cite formula version in report.'}
+    },
+    a2:{
+      cat:'algo', catName:{cn:'算法误差',en:'algorithm'},
+      ttl:{cn:'NowCast 权重过简',       en:'NowCast weights oversimplified'},
+      mag:{cn:'陡变时滞后 ~30 min',     en:'~30 min lag on sharp changes'},
+      mech:{cn:'NowCast 用前 12 小时加权平均, 火灾烟羽冲过来时反应慢。',
+            en:'NowCast weights the last 12 hours; reacts slowly to sudden plumes.'},
+      fix: {cn:'高变化率时段并存原始 1h 平均; 仪表盘标出"未滤波"线。',
+            en:'Show raw 1h mean alongside NowCast in high-volatility periods; label unfiltered line.'}
+    },
+    a3:{
+      cat:'algo', catName:{cn:'算法误差',en:'algorithm'},
+      ttl:{cn:'AQI 分段断点跳跃',       en:'AQI breakpoint discontinuity'},
+      mag:{cn:'边界 ±1 μg → 跨 1 档',  en:'Boundary ±1 μg → cross 1 band'},
+      mech:{cn:'AQI 是分段函数, 12.0 / 35.4 等断点上小幅波动会让颜色档跳变。',
+            en:'AQI is piecewise; small fluctuations near 12.0 / 35.4 breakpoints flip the color band.'},
+      fix: {cn:'仪表盘显示连续 PM2.5 数值 + AQI 颜色, 不要只给颜色。',
+            en:'Show continuous PM2.5 value alongside AQI color; do not give color alone.'}
+    },
+    s1:{
+      cat:'st', catName:{cn:'时空误差',en:'space-time'},
+      ttl:{cn:'节点 vs EPA 位置差',     en:'Node vs EPA location offset'},
+      mag:{cn:'距离 5 km → ±20%',      en:'5 km apart → ±20%'},
+      mech:{cn:'你阳台 vs 城区 EPA 站点空间上隔几公里, 局地源 (车流/工地) 不同。',
+            en:'Your balcony and the EPA station are kilometers apart; local sources (traffic/construction) differ.'},
+      fix: {cn:'比对时挑同一风向时段; 报告里说明节点坐标和最近 EPA 站距离。',
+            en:'Compare during matched wind direction; report node coords and nearest EPA station distance.'}
+    },
+    s2:{
+      cat:'st', catName:{cn:'时空误差',en:'space-time'},
+      ttl:{cn:'时间分辨率不一致',       en:'Temporal resolution mismatch'},
+      mag:{cn:'1 min vs 1 h · 尖峰丢',  en:'1 min vs 1 h · peaks lost'},
+      mech:{cn:'PurpleAir 1 min 采样能抓到尖峰, EPA 1 h 平均把它们抹平。',
+            en:'PurpleAir 1-min sampling captures spikes; EPA 1-h averages smooth them out.'},
+      fix: {cn:'比对时把节点也降到 1 h 平均; 单独报告 1 min 尖峰事件清单。',
+            en:'Downsample node to 1 h for comparison; report 1-min spike events separately.'}
+    },
+    s3:{
+      cat:'st', catName:{cn:'时空误差',en:'space-time'},
+      ttl:{cn:'海拔与垂直梯度',         en:'Altitude and vertical gradient'},
+      mag:{cn:'10 m 高差 → ±5%',       en:'10 m altitude diff → ±5%'},
+      mech:{cn:'PM2.5 在垂直方向有梯度, 你 5 楼阳台 vs 路面 EPA 站不在一层空气。',
+            en:'PM2.5 has vertical gradient; your 5th-floor balcony vs ground EPA station sample different layers.'},
+      fix: {cn:'报告中标明节点高度; 与同高度参考点比对优先于地面站。',
+            en:'State node altitude; prefer comparison with same-elevation references.'}
+    }
+  };
+
+  // ---- elements
+  var grid = document.getElementById('grid');
+  var detail = document.getElementById('detail');
+  var dId = document.getElementById('dId');
+  var dTtl = document.getElementById('dTtl');
+  var dMag = document.getElementById('dMag');
+  var dMech = document.getElementById('dMech');
+  var dFix = document.getElementById('dFix');
+  var langBtn = document.getElementById('langBtn');
+
+  var pinned = null;       // pinned src id (click 钉住)
+  var activeCat = null;    // category filter from formula click
+
+  function applyLang(){
+    Object.keys(I18N).forEach(function(k){
+      var el = document.getElementById(k);
+      if(el) el.textContent = I18N[k][LANG];
+    });
+    // cards
+    Object.keys(SOURCES).forEach(function(id){
+      var src = SOURCES[id];
+      var tEl = document.getElementById(id+'Ttl');
+      var mEl = document.getElementById(id+'Mag');
+      if(tEl) tEl.textContent = src.ttl[LANG];
+      if(mEl){
+        // mag 里有 .num — 重建结构
+        var raw = src.mag[LANG];
+        // 简单处理: 高亮第一个数字 token (≈ +8% 或类似)
+        var m = raw.match(/([+\-]?\d[\d.,]*\s?(?:%|μg(?:\/m³)?|min|h|m\/s|°C|km|μg))/);
+        if(m){
+          var idx = raw.indexOf(m[0]);
+          mEl.innerHTML = escapeHtml(raw.slice(0, idx)) +
+            '<span class="num">' + escapeHtml(m[0]) + '</span>' +
+            escapeHtml(raw.slice(idx + m[0].length));
+        } else {
+          mEl.textContent = raw;
+        }
+      }
+    });
+    // refresh detail if any shown
+    if(pinned) showDetail(pinned);
+  }
+
+  function escapeHtml(s){
+    return s.replace(/[&<>"']/g, function(c){
+      return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c];
+    });
+  }
+
+  function showDetail(id){
+    var s = SOURCES[id];
+    if(!s){ detail.classList.remove('show'); return; }
+    var catKey = s.cat;
+    dId.textContent = id.toUpperCase() + ' · ' + s.catName[LANG];
+    dTtl.textContent = s.ttl[LANG];
+    dMag.textContent = s.mag[LANG];
+    dMech.textContent = s.mech[LANG];
+    dFix.textContent = s.fix[LANG];
+    detail.classList.add('show');
+  }
+
+  function hideDetail(){
+    if(pinned) return; // 钉住时不消失
+    detail.classList.remove('show');
+  }
+
+  function setActiveCat(cat){
+    activeCat = cat;
+    // formula 高亮
+    var terms = document.querySelectorAll('.eq-term');
+    terms.forEach(function(t){
+      if(cat && t.getAttribute('data-cat') === cat) t.classList.add('active');
+      else t.classList.remove('active');
+    });
+    // cards 过滤效果
+    var cards = document.querySelectorAll('.src');
+    cards.forEach(function(c){
+      if(!cat){ c.classList.remove('dim'); return; }
+      if(c.classList.contains('cat-'+cat)) c.classList.remove('dim');
+      else c.classList.add('dim');
+    });
+  }
+
+  // ---- card hover/click
+  grid.addEventListener('mouseover', function(e){
+    var card = e.target.closest('.src');
+    if(!card) return;
+    if(pinned) return;
+    var id = card.getAttribute('data-id');
+    showDetail(id);
+    // 软高亮 — 不打 active class (留给 pin)
+  });
+  grid.addEventListener('mouseout', function(e){
+    var card = e.target.closest('.src');
+    if(!card) return;
+    if(pinned) return;
+    hideDetail();
+  });
+  grid.addEventListener('click', function(e){
+    var card = e.target.closest('.src');
+    if(!card) return;
+    var id = card.getAttribute('data-id');
+    // 取消旧
+    var prev = grid.querySelector('.src.active');
+    if(prev) prev.classList.remove('active');
+    if(pinned === id){
+      // 二次点击取消钉住
+      pinned = null;
+      hideDetail();
+    } else {
+      pinned = id;
+      card.classList.add('active');
+      showDetail(id);
+    }
+  });
+  grid.addEventListener('keydown', function(e){
+    if(e.key !== 'Enter' && e.key !== ' ') return;
+    var card = e.target.closest('.src');
+    if(!card) return;
+    e.preventDefault();
+    card.click();
+  });
+
+  // ---- formula term click — 类别过滤
+  var formulaSec = document.querySelector('.formula');
+  formulaSec.addEventListener('click', function(e){
+    var t = e.target.closest('.eq-term');
+    if(!t) return;
+    var cat = t.getAttribute('data-cat');
+    if(activeCat === cat){
+      setActiveCat(null);
+    } else {
+      setActiveCat(cat);
+    }
+  });
+  formulaSec.addEventListener('keydown', function(e){
+    if(e.key !== 'Enter' && e.key !== ' ') return;
+    var t = e.target.closest('.eq-term');
+    if(!t) return;
+    e.preventDefault();
+    t.click();
+  });
+
+  // ---- 外部点击取消 pin
+  document.addEventListener('click', function(e){
+    if(e.target.closest('.src')) return;
+    if(e.target.closest('.eq-term')) return;
+    if(e.target.closest('.detail')) return;
+    if(pinned){
+      var prev = grid.querySelector('.src.active');
+      if(prev) prev.classList.remove('active');
+      pinned = null;
+      hideDetail();
+    }
+  });
+
+  // ---- vows tap
+  var vows = document.querySelectorAll('.vow');
+  vows.forEach(function(v){
+    v.addEventListener('click', function(){
+      v.classList.toggle('tap');
+    });
+    v.addEventListener('keydown', function(e){
+      if(e.key === 'Enter' || e.key === ' '){
+        e.preventDefault();
+        v.classList.toggle('tap');
+      }
+    });
+  });
+
+  // ---- lang
+  langBtn.addEventListener('click', function(){
+    LANG = (LANG === 'cn') ? 'en' : 'cn';
+    applyLang();
+  });
+
+  // initial
+  applyLang();
+
+})();
+</script>
+</body>
+</html>

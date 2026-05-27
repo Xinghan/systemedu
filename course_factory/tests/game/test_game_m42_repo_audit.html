@@ -1,0 +1,1205 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>M42 · GitHub 仓库可复用性审查</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&family=Noto+Sans+SC:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    /* Industrial Atelier — Claude warm cream + coral */
+    --paper:     #FAF9F5;
+    --paper-2:   #F1EDDF;
+    --card:      #FFFFFF;
+    --ink:       #191814;
+    --ink-2:     #2B2924;
+    --sub:       #6B6557;
+    --sub-2:     #9D978A;
+    --border:    #EBE5D6;
+    --border-2:  #D9D1BD;
+    --hairline:  #F2EDE0;
+
+    --primary:       #D97757;
+    --primary-ink:   #9A4A2E;
+    --primary-soft:  #F8EDE5;
+    --primary-line:  #ECCFB8;
+
+    /* domain accent: computing */
+    --computing:      #C04E68;
+    --computing-soft: #F4DDE3;
+    --computing-line: #E5B7C2;
+    --computing-ink:  #6F2A3C;
+
+    --ok:        #5F8B5A;
+    --ok-soft:   #E1ECDE;
+    --warn:      #B58A2C;
+    --warn-soft: #F2E6C9;
+    --alert:     #B85A33;
+    --alert-soft:#F2DDD0;
+
+    --shadow-sm: 0 1px 2px 0 rgba(25,24,20,.04);
+    --shadow:    0 1px 3px 0 rgba(25,24,20,.06), 0 1px 2px -1px rgba(25,24,20,.04);
+    --shadow-md: 0 4px 8px -2px rgba(25,24,20,.06), 0 2px 4px -2px rgba(25,24,20,.04);
+    --shadow-lg: 0 12px 24px -6px rgba(25,24,20,.1), 0 4px 8px -4px rgba(25,24,20,.05);
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    height:100vh;width:100vw;overflow:hidden;
+    background:var(--paper);
+    color:var(--ink);
+    font-family:'Inter','PingFang SC','Noto Sans SC',system-ui,sans-serif;
+    display:flex;
+    -webkit-font-smoothing:antialiased;
+    text-rendering:optimizeLegibility;
+  }
+  .mono{font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,monospace;}
+
+  /* ---------- Sidebar (200px) ---------- */
+  .game-sidebar{
+    width:200px;flex-shrink:0;height:100vh;
+    background:var(--card);
+    border-right:1px solid var(--border);
+    display:flex;flex-direction:column;
+    padding:18px 14px;gap:12px;
+    overflow-y:auto;
+  }
+  .brand{
+    padding-bottom:12px;border-bottom:1px solid var(--hairline);
+  }
+  .brand-code{
+    font-family:'JetBrains Mono',monospace;font-size:10px;
+    color:var(--sub-2);letter-spacing:0.14em;
+  }
+  .brand-title{
+    margin-top:4px;font-size:13px;font-weight:700;color:var(--ink);
+    line-height:1.35;
+  }
+  .brand-sub{
+    margin-top:4px;font-size:10.5px;color:var(--sub);line-height:1.4;
+  }
+
+  /* repo list */
+  .repo-block{display:flex;flex-direction:column;gap:6px;}
+  .repo-header{
+    font-family:'JetBrains Mono',monospace;font-size:9.5px;
+    color:var(--sub-2);letter-spacing:0.12em;
+  }
+  .repo-row{
+    display:flex;align-items:center;gap:8px;
+    padding:8px 9px;
+    background:var(--card);
+    border:1px solid var(--border);
+    border-radius:6px;
+    cursor:pointer;
+    transition:background 140ms ease, border-color 140ms ease;
+  }
+  .repo-row:hover{background:var(--paper-2);border-color:var(--computing-line);}
+  .repo-row.active{
+    background:var(--computing-soft);
+    border-color:var(--computing);
+    box-shadow:var(--shadow-sm);
+  }
+  .repo-row.judged{border-color:var(--ok);}
+  .repo-row.judged.wrong{border-color:var(--alert);}
+  .repo-tag{
+    font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;
+    color:var(--computing-ink);width:20px;
+  }
+  .repo-row.active .repo-tag{color:var(--computing);}
+  .repo-name{
+    flex:1;font-size:10.5px;color:var(--ink-2);line-height:1.3;
+  }
+  .repo-mark{
+    width:10px;height:10px;border-radius:50%;
+    border:1px solid var(--border-2);
+    background:transparent;
+  }
+  .repo-row.judged .repo-mark{background:var(--ok);border-color:var(--ok);}
+  .repo-row.judged.wrong .repo-mark{background:var(--alert);border-color:var(--alert);}
+
+  /* progress */
+  .progress-block{
+    padding:10px;background:var(--paper-2);border:1px solid var(--border);
+    border-radius:6px;
+    display:flex;flex-direction:column;gap:6px;
+  }
+  .progress-title{
+    font-family:'JetBrains Mono',monospace;font-size:9.5px;
+    color:var(--sub-2);letter-spacing:0.12em;
+  }
+  .progress-bar{
+    width:100%;height:6px;background:var(--card);
+    border:1px solid var(--border-2);border-radius:3px;overflow:hidden;
+  }
+  .progress-fill{
+    height:100%;width:0%;background:var(--computing);
+    transition:width 200ms ease;
+  }
+  .progress-text{
+    font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--ink-2);
+  }
+
+  /* badge slot */
+  .badge-slot{
+    padding:10px;background:var(--card);border:1px dashed var(--border-2);
+    border-radius:6px;
+    display:flex;flex-direction:column;gap:6px;align-items:center;
+    text-align:center;
+    opacity:0.55;
+    transition:opacity 200ms ease, border-color 200ms ease, background 200ms ease;
+  }
+  .badge-slot.earned{
+    opacity:1;
+    border:1px solid var(--primary);
+    background:var(--primary-soft);
+  }
+  .badge-medal{
+    width:42px;height:42px;
+  }
+  .badge-label{
+    font-size:10.5px;font-weight:600;color:var(--ink);line-height:1.35;
+  }
+  .badge-sub{
+    font-family:'JetBrains Mono',monospace;font-size:9px;
+    color:var(--sub);letter-spacing:0.08em;
+  }
+
+  .lang-btn{
+    margin-top:auto;
+    font-family:'JetBrains Mono',monospace;
+    font-size:11px;font-weight:600;letter-spacing:0.06em;
+    padding:8px 12px;cursor:pointer;
+    background:var(--card);color:var(--ink);
+    border:1px solid var(--border-2);
+    border-radius:6px;
+    transition:background 120ms ease, border-color 120ms ease;
+  }
+  .lang-btn:hover{background:var(--paper-2);border-color:var(--primary-line);}
+  .lang-btn:active{background:var(--primary-soft);}
+
+  /* ---------- Main ---------- */
+  .game-main{
+    flex:1;height:100vh;
+    display:flex;flex-direction:column;
+    padding:20px 24px;gap:14px;
+    background:var(--paper);
+    overflow:hidden;
+  }
+
+  .topbar{
+    display:flex;align-items:flex-end;justify-content:space-between;
+    gap:14px;
+    padding-bottom:10px;
+    border-bottom:1px solid var(--hairline);
+  }
+  .topbar-l{display:flex;flex-direction:column;gap:3px;}
+  .topbar-code{
+    font-family:'JetBrains Mono',monospace;font-size:10px;
+    color:var(--sub-2);letter-spacing:0.16em;
+  }
+  .topbar-title{
+    font-size:18px;font-weight:700;color:var(--ink);line-height:1.25;
+  }
+  .topbar-hint{
+    font-size:11px;color:var(--sub);
+  }
+  .topbar-r{
+    display:flex;align-items:center;gap:8px;
+    font-family:'JetBrains Mono',monospace;font-size:11px;
+    color:var(--computing-ink);
+    padding:6px 10px;background:var(--computing-soft);
+    border:1px solid var(--computing-line);border-radius:5px;
+  }
+
+  /* README card */
+  .readme-area{
+    flex:1;min-height:0;
+    display:grid;
+    grid-template-columns: 1.55fr 1fr;
+    gap:14px;
+  }
+  .readme-card{
+    background:var(--card);
+    border:1px solid var(--border);
+    border-radius:10px;
+    box-shadow:var(--shadow-sm);
+    display:flex;flex-direction:column;
+    overflow:hidden;
+  }
+  .readme-head{
+    display:flex;align-items:center;gap:10px;
+    padding:10px 14px;
+    background:var(--paper-2);
+    border-bottom:1px solid var(--border);
+  }
+  .readme-dot{
+    width:10px;height:10px;border-radius:50%;
+    background:var(--computing);
+    box-shadow:0 0 0 2px var(--computing-soft);
+  }
+  .readme-path{
+    font-family:'JetBrains Mono',monospace;font-size:11px;
+    color:var(--ink-2);flex:1;
+  }
+  .readme-stars{
+    font-family:'JetBrains Mono',monospace;font-size:10.5px;
+    color:var(--sub);
+  }
+  .readme-body{
+    flex:1;overflow-y:auto;
+    padding:16px 20px;
+    font-size:12.5px;line-height:1.65;
+    color:var(--ink-2);
+  }
+  .readme-body h2{
+    font-size:14px;color:var(--ink);
+    margin:0 0 8px 0;font-weight:700;
+    padding-bottom:6px;border-bottom:1px solid var(--hairline);
+  }
+  .readme-body h3{
+    font-size:12.5px;color:var(--ink);
+    margin:14px 0 6px 0;font-weight:600;
+  }
+  .readme-body p{margin:6px 0;color:var(--ink-2);}
+  .readme-body code{
+    font-family:'JetBrains Mono',monospace;font-size:11.5px;
+    background:var(--paper-2);
+    padding:1px 5px;border-radius:3px;color:var(--computing-ink);
+  }
+  .readme-body pre{
+    background:var(--paper-2);
+    border:1px solid var(--border);
+    border-radius:5px;
+    padding:10px 12px;margin:8px 0;
+    font-family:'JetBrains Mono',monospace;font-size:11px;
+    color:var(--ink-2);overflow-x:auto;
+  }
+  .readme-body ul{margin:4px 0 8px 18px;color:var(--ink-2);}
+  .readme-body li{margin:2px 0;}
+  .readme-body .meta-line{
+    display:flex;flex-wrap:wrap;gap:6px;margin:6px 0 10px 0;
+  }
+  .meta-chip{
+    font-family:'JetBrains Mono',monospace;font-size:10px;
+    padding:2px 7px;border-radius:3px;
+    background:var(--paper-2);color:var(--sub);
+    border:1px solid var(--border);
+  }
+  .meta-chip.good{background:var(--ok-soft);color:#3F5F3B;border-color:#BBD0B6;}
+  .meta-chip.bad{background:var(--alert-soft);color:var(--alert);border-color:#E5C6B5;}
+  .meta-chip.warn{background:var(--warn-soft);color:#7A5C12;border-color:#E5D5A0;}
+  .readme-body .empty-hint{
+    color:var(--sub-2);font-style:italic;font-size:11.5px;
+    padding:18px 0;text-align:center;
+  }
+
+  /* Judge panel */
+  .judge-card{
+    background:var(--card);
+    border:1px solid var(--border);
+    border-radius:10px;
+    box-shadow:var(--shadow-sm);
+    display:flex;flex-direction:column;
+    overflow:hidden;
+  }
+  .judge-head{
+    padding:10px 14px;
+    background:var(--paper-2);
+    border-bottom:1px solid var(--border);
+    font-family:'JetBrains Mono',monospace;font-size:10.5px;
+    color:var(--sub);letter-spacing:0.12em;
+  }
+  .judge-body{
+    flex:1;overflow-y:auto;
+    padding:14px 16px;
+    display:flex;flex-direction:column;gap:12px;
+  }
+  .judge-section{display:flex;flex-direction:column;gap:6px;}
+  .judge-label{
+    font-size:11.5px;font-weight:600;color:var(--ink);
+  }
+  .judge-sub{
+    font-size:10.5px;color:var(--sub);line-height:1.4;
+  }
+
+  /* star rating */
+  .star-row{
+    display:flex;gap:5px;align-items:center;
+  }
+  .star-btn{
+    width:30px;height:30px;
+    background:var(--card);
+    border:1px solid var(--border-2);
+    border-radius:5px;
+    cursor:pointer;
+    display:flex;align-items:center;justify-content:center;
+    color:var(--sub-2);
+    transition:all 140ms ease;
+    padding:0;
+  }
+  .star-btn:hover{
+    border-color:var(--primary);
+    background:var(--primary-soft);
+  }
+  .star-btn.active{
+    background:var(--primary);
+    border-color:var(--primary-ink);
+    color:var(--card);
+  }
+  .star-btn svg{width:14px;height:14px;}
+  .star-value{
+    margin-left:8px;
+    font-family:'JetBrains Mono',monospace;font-size:11px;
+    color:var(--ink-2);
+  }
+
+  /* issue chips */
+  .issue-grid{
+    display:grid;grid-template-columns:1fr 1fr;gap:6px;
+  }
+  .issue-chip{
+    padding:7px 10px;
+    background:var(--card);
+    border:1px solid var(--border-2);
+    border-radius:5px;
+    font-size:11px;
+    color:var(--ink-2);
+    cursor:pointer;
+    line-height:1.35;
+    text-align:left;
+    transition:all 140ms ease;
+  }
+  .issue-chip:hover{
+    background:var(--paper-2);
+    border-color:var(--computing-line);
+  }
+  .issue-chip.active{
+    background:var(--computing-soft);
+    border-color:var(--computing);
+    color:var(--computing-ink);
+    font-weight:600;
+  }
+
+  /* submit + feedback */
+  .judge-foot{
+    padding:10px 14px;
+    background:var(--paper-2);
+    border-top:1px solid var(--border);
+    display:flex;flex-direction:column;gap:8px;
+  }
+  .submit-btn{
+    padding:9px 14px;
+    background:var(--computing);
+    color:var(--card);
+    border:none;
+    border-radius:5px;
+    font-family:'JetBrains Mono',monospace;font-size:11.5px;font-weight:600;
+    letter-spacing:0.06em;
+    cursor:pointer;
+    transition:background 140ms ease, transform 80ms ease;
+  }
+  .submit-btn:hover{background:var(--computing-ink);}
+  .submit-btn:active{transform:translateY(1px);}
+  .submit-btn:disabled{
+    background:var(--border-2);
+    color:var(--sub-2);cursor:not-allowed;
+  }
+  .feedback-line{
+    font-size:11px;line-height:1.45;min-height:30px;
+    padding:7px 10px;border-radius:4px;
+  }
+  .feedback-line.ok{
+    background:var(--ok-soft);color:#3F5F3B;
+    border:1px solid #BBD0B6;
+  }
+  .feedback-line.bad{
+    background:var(--alert-soft);color:var(--alert);
+    border:1px solid #E5C6B5;
+  }
+  .feedback-line.idle{
+    background:transparent;color:var(--sub);
+    border:1px dashed var(--border-2);
+  }
+
+  /* finale overlay */
+  .finale{
+    position:absolute;inset:0;
+    background:rgba(250,249,245,0.94);
+    display:none;
+    align-items:center;justify-content:center;
+    z-index:50;
+  }
+  .finale.show{display:flex;}
+  .finale-card{
+    width:min(440px,90%);
+    padding:28px 32px;
+    background:var(--card);
+    border:1px solid var(--primary);
+    border-radius:12px;
+    box-shadow:var(--shadow-lg);
+    text-align:center;
+    animation:finalePop 320ms ease;
+  }
+  @keyframes finalePop{
+    from{opacity:0;transform:scale(0.96);}
+    to{opacity:1;transform:scale(1);}
+  }
+  .finale-medal{width:96px;height:96px;margin:0 auto 14px;}
+  .finale-title{
+    font-size:18px;font-weight:700;color:var(--ink);
+    margin-bottom:6px;
+  }
+  .finale-sub{
+    font-size:12.5px;color:var(--sub);line-height:1.55;
+    margin-bottom:18px;
+  }
+  .finale-stat{
+    display:flex;justify-content:center;gap:18px;
+    margin-bottom:18px;
+    padding:10px 14px;
+    background:var(--paper-2);
+    border-radius:6px;
+  }
+  .finale-stat .s-num{
+    font-family:'JetBrains Mono',monospace;font-size:18px;font-weight:700;
+    color:var(--computing);
+  }
+  .finale-stat .s-lab{
+    font-size:10.5px;color:var(--sub);margin-top:2px;
+  }
+  .finale-close{
+    padding:8px 18px;
+    background:var(--primary);color:var(--card);
+    border:none;border-radius:5px;cursor:pointer;
+    font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:600;
+    letter-spacing:0.08em;
+  }
+  .finale-close:hover{background:var(--primary-ink);}
+
+  .game-main-wrap{position:relative;flex:1;display:flex;flex-direction:column;}
+</style>
+</head>
+<body>
+
+<aside class="game-sidebar">
+  <div class="brand">
+    <div class="brand-code mono">M42 · DETECTIVE</div>
+    <div class="brand-title" id="brand-title">仓库审查台</div>
+    <div class="brand-sub" id="brand-sub">5 个候选, 哪个能复用?</div>
+  </div>
+
+  <!-- mascot: 放大镜 + 文档 -->
+  <div class="badge-slot" id="badge-slot">
+    <svg class="badge-medal" viewBox="0 0 64 64" fill="none">
+      <circle cx="32" cy="32" r="28" stroke="var(--primary)" stroke-width="2" fill="var(--primary-soft)"/>
+      <circle cx="32" cy="32" r="22" stroke="var(--primary-line)" stroke-width="1" stroke-dasharray="3 3"/>
+      <text x="32" y="37" text-anchor="middle" font-family="JetBrains Mono" font-size="13" font-weight="700" fill="var(--primary-ink)">CUR</text>
+      <path d="M14 50 L20 56 L26 50" stroke="var(--primary)" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round" opacity="0.5"/>
+      <path d="M38 50 L44 56 L50 50" stroke="var(--primary)" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round" opacity="0.5"/>
+    </svg>
+    <div class="badge-label" id="badge-label">数据策展员徽章</div>
+    <div class="badge-sub mono" id="badge-sub">0 / 5 LOCKED</div>
+  </div>
+
+  <div class="repo-block">
+    <div class="repo-header mono" id="repo-header">CANDIDATES</div>
+    <div id="repo-list"></div>
+  </div>
+
+  <div class="progress-block">
+    <div class="progress-title mono" id="progress-title">AUDIT PROGRESS</div>
+    <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
+    <div class="progress-text mono" id="progress-text">0 / 5 audited</div>
+  </div>
+
+  <button class="lang-btn" id="langBtn">中 / EN</button>
+</aside>
+
+<main class="game-main">
+  <div class="topbar">
+    <div class="topbar-l">
+      <div class="topbar-code mono" id="topbar-code">REPO AUDIT · ROUND 1</div>
+      <div class="topbar-title" id="topbar-title">GitHub 仓库可复用性审查</div>
+      <div class="topbar-hint" id="topbar-hint">看 README、LICENSE、数据格式 → 决定能不能用</div>
+    </div>
+    <div class="topbar-r mono" id="topbar-rule">
+      RULE: 评分 + 找问题 全对才解锁徽章
+    </div>
+  </div>
+
+  <div class="game-main-wrap">
+    <div class="readme-area">
+      <div class="readme-card">
+        <div class="readme-head">
+          <div class="readme-dot"></div>
+          <div class="readme-path mono" id="readme-path">github.com/...</div>
+          <div class="readme-stars mono" id="readme-stars">stars 0</div>
+        </div>
+        <div class="readme-body" id="readme-body">
+          <div class="empty-hint" id="readme-empty">从左侧选一个仓库开始审查</div>
+        </div>
+      </div>
+
+      <div class="judge-card">
+        <div class="judge-head mono" id="judge-head">YOUR JUDGEMENT</div>
+        <div class="judge-body" id="judge-body">
+          <div class="judge-section">
+            <div class="judge-label" id="rate-label">这个仓库的可复用性如何?</div>
+            <div class="judge-sub" id="rate-sub">1 星 = 完全不能用; 5 星 = 拿来就跑</div>
+            <div class="star-row" id="star-row">
+              <button class="star-btn" data-star="1" type="button"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 1 L9.8 5.9 L15 6.3 L11 9.7 L12.3 14.8 L8 12 L3.7 14.8 L5 9.7 L1 6.3 L6.2 5.9 Z"/></svg></button>
+              <button class="star-btn" data-star="2" type="button"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 1 L9.8 5.9 L15 6.3 L11 9.7 L12.3 14.8 L8 12 L3.7 14.8 L5 9.7 L1 6.3 L6.2 5.9 Z"/></svg></button>
+              <button class="star-btn" data-star="3" type="button"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 1 L9.8 5.9 L15 6.3 L11 9.7 L12.3 14.8 L8 12 L3.7 14.8 L5 9.7 L1 6.3 L6.2 5.9 Z"/></svg></button>
+              <button class="star-btn" data-star="4" type="button"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 1 L9.8 5.9 L15 6.3 L11 9.7 L12.3 14.8 L8 12 L3.7 14.8 L5 9.7 L1 6.3 L6.2 5.9 Z"/></svg></button>
+              <button class="star-btn" data-star="5" type="button"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 1 L9.8 5.9 L15 6.3 L11 9.7 L12.3 14.8 L8 12 L3.7 14.8 L5 9.7 L1 6.3 L6.2 5.9 Z"/></svg></button>
+              <span class="star-value mono" id="star-value">— / 5</span>
+            </div>
+          </div>
+          <div class="judge-section">
+            <div class="judge-label" id="issue-label">这个仓库最大的问题是什么?</div>
+            <div class="judge-sub" id="issue-sub">选一个你认为最致命的问题</div>
+            <div class="issue-grid" id="issue-grid"></div>
+          </div>
+        </div>
+        <div class="judge-foot">
+          <div class="feedback-line idle" id="feedback-line" data-default="选好星级和问题后按下方提交">选好星级和问题后按下方提交</div>
+          <button class="submit-btn" id="submit-btn" type="button" disabled>提交审查 (SUBMIT AUDIT)</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="finale" id="finale">
+      <div class="finale-card">
+        <svg class="finale-medal" viewBox="0 0 96 96" fill="none">
+          <circle cx="48" cy="48" r="42" fill="var(--primary-soft)" stroke="var(--primary)" stroke-width="2"/>
+          <circle cx="48" cy="48" r="34" fill="none" stroke="var(--primary-line)" stroke-width="1" stroke-dasharray="4 3"/>
+          <path d="M28 78 L34 88 L40 78" stroke="var(--primary)" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M56 78 L62 88 L68 78" stroke="var(--primary)" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+          <text x="48" y="44" text-anchor="middle" font-family="JetBrains Mono" font-size="11" font-weight="700" fill="var(--primary-ink)" letter-spacing="1">DATA</text>
+          <text x="48" y="58" text-anchor="middle" font-family="JetBrains Mono" font-size="11" font-weight="700" fill="var(--primary-ink)" letter-spacing="1">CURATOR</text>
+        </svg>
+        <div class="finale-title" id="finale-title">数据策展员徽章 解锁</div>
+        <div class="finale-sub" id="finale-sub">5 个仓库全部诊断到位. 你已经具备开源数据审查的基本眼力.</div>
+        <div class="finale-stat">
+          <div>
+            <div class="s-num mono" id="finale-correct">5</div>
+            <div class="s-lab" id="finale-correct-lab">正确诊断</div>
+          </div>
+          <div>
+            <div class="s-num mono" id="finale-attempts">5</div>
+            <div class="s-lab" id="finale-attempts-lab">总尝试</div>
+          </div>
+        </div>
+        <button class="finale-close" id="finale-close" type="button">继续 (CLOSE)</button>
+      </div>
+    </div>
+  </div>
+</main>
+
+<script>
+"use strict";
+
+// ============ i18n ============
+var LANG = 'cn';
+var I18N = {
+  brand_title: {cn:'仓库审查台', en:'Repo Audit Bench'},
+  brand_sub:   {cn:'5 个候选, 哪个能复用?', en:'5 candidates — which is reusable?'},
+  repo_header: {cn:'候选仓库', en:'CANDIDATES'},
+  progress_title:{cn:'审查进度', en:'AUDIT PROGRESS'},
+  progress_text: {cn:function(n){return n+' / 5 已审';}, en:function(n){return n+' / 5 audited';}},
+  topbar_code:   {cn:function(n){return 'REPO AUDIT · 第 '+n+' 轮';}, en:function(n){return 'REPO AUDIT · ROUND '+n;}},
+  topbar_title:  {cn:'GitHub 仓库可复用性审查', en:'GitHub Repo Reusability Audit'},
+  topbar_hint:   {cn:'看 README、LICENSE、数据格式 → 决定能不能用', en:'Inspect README / LICENSE / data format → decide if reusable'},
+  topbar_rule:   {cn:'规则: 评分 + 找问题 全对才解锁徽章', en:'RULE: rate + diagnose all 5 to unlock badge'},
+  judge_head:    {cn:'你的判断', en:'YOUR JUDGEMENT'},
+  rate_label:    {cn:'这个仓库的可复用性如何?', en:'How reusable is this repo?'},
+  rate_sub:      {cn:'1 星 = 完全不能用; 5 星 = 拿来就跑', en:'1 = unusable, 5 = plug-and-play'},
+  issue_label:   {cn:'这个仓库最大的问题是什么?', en:'What is the worst issue?'},
+  issue_sub:     {cn:'选一个你认为最致命的问题', en:'Pick the most fatal one'},
+  star_value:    {cn:function(n){return n+' / 5';}, en:function(n){return n+' / 5';}},
+  star_idle:     {cn:'— / 5', en:'— / 5'},
+  submit_btn:    {cn:'提交审查 (SUBMIT AUDIT)', en:'SUBMIT AUDIT'},
+  fb_idle:       {cn:'选好星级和问题后按下方提交', en:'Pick a rating + issue then submit'},
+  fb_ok:         {cn:'判断到位: 评分和诊断都对.', en:'Solid judgement: rating and diagnosis both correct.'},
+  fb_bad_rate:   {cn:'评分偏离了 — ', en:'Rating off — '},
+  fb_bad_issue:  {cn:'问题没找准 — ', en:'Wrong issue — '},
+  fb_judged:     {cn:'已审, 可以切下一个仓库继续.', en:'Audited. Pick the next repo to continue.'},
+  badge_label:   {cn:'数据策展员徽章', en:'Data Curator Badge'},
+  badge_locked:  {cn:function(n){return n+' / 5 LOCKED';}, en:function(n){return n+' / 5 LOCKED';}},
+  badge_earned:  {cn:'已解锁', en:'UNLOCKED'},
+  finale_title:  {cn:'数据策展员徽章 解锁', en:'Data Curator Badge Unlocked'},
+  finale_sub:    {cn:'5 个仓库全部诊断到位. 你已经具备开源数据审查的基本眼力.', en:'All 5 repos diagnosed correctly. You now have basic open-source data audit eyes.'},
+  finale_correct_lab:{cn:'正确诊断', en:'Correct'},
+  finale_attempts_lab:{cn:'总尝试', en:'Attempts'},
+  finale_close:  {cn:'继续 (CLOSE)', en:'CLOSE'},
+  empty_hint:    {cn:'从左侧选一个仓库开始审查', en:'Pick a repo on the left to start'},
+  empty_hint_done:{cn:'5 个仓库已全部审完. 看左侧徽章.', en:'All 5 audited. See the badge on the left.'},
+  rule_fb:{
+    A:{
+      ok:{cn:'仓库 A 是完美样板: README+LICENSE+引用 全齐.', en:'Repo A is the gold standard: README + LICENSE + citation all present.'},
+      rate_hi:{cn:'A 是合格仓库, 应该高分 (4-5).', en:'A is a solid repo — should be high rating (4-5).'},
+      rate_lo:{cn:'A 没明显缺陷, 不该低分.', en:'A has no clear flaw — should not be low.'},
+      issue_wrong:{cn:'A 没什么大问题, 应选"无明显问题".', en:'A has no real issue — pick "no major issue".'}
+    },
+    B:{
+      ok:{cn:'仓库 B 缺 LICENSE — 法律上别人无法放心引用.', en:'Repo B has no LICENSE — legally others cannot reuse it.'},
+      rate_hi:{cn:'B 缺 LICENSE 是硬伤, 不该高分.', en:'B lacks LICENSE — should not score high.'},
+      rate_lo:{cn:'B 评分太低了, 缺 LICENSE 但代码本身不错.', en:'B too low — missing LICENSE but the code itself is fine.'},
+      issue_wrong:{cn:'B 的致命问题是 LICENSE 缺失, 不是别的.', en:'B\'s fatal flaw is missing LICENSE — not the others.'}
+    },
+    C:{
+      ok:{cn:'仓库 C 缺数据字典 — 列名是 v1/v2/v3, 没人知道是啥.', en:'Repo C has no data dictionary — columns are v1/v2/v3, unintelligible.'},
+      rate_hi:{cn:'C 字段没有解释, 用起来全靠猜, 不该高分.', en:'C has cryptic columns — should not score high.'},
+      rate_lo:{cn:'C 代码可用, 评分别太低.', en:'C code works — do not rate it too low.'},
+      issue_wrong:{cn:'C 的致命问题是字段含义缺失, 不是别的.', en:'C\'s fatal flaw is missing field semantics — not the others.'}
+    },
+    D:{
+      ok:{cn:'仓库 D 用 .xlsx 存数据 — 二进制锁定, diff/脚本都不友好.', en:'Repo D ships data as .xlsx — binary lock-in, not diff- or script-friendly.'},
+      rate_hi:{cn:'D 数据是 xlsx, 流水线友好度差, 不该高分.', en:'D uses xlsx — pipeline-unfriendly, do not rate high.'},
+      rate_lo:{cn:'D 评分太低, 数据是真的但格式可换.', en:'D too low — data is real, format can be converted.'},
+      issue_wrong:{cn:'D 的致命问题是数据格式 (xlsx) 不开源友好.', en:'D\'s fatal flaw is xlsx format being non-open-friendly.'}
+    },
+    E:{
+      ok:{cn:'仓库 E 只有一行 README — 装不上, 没人知道怎么跑.', en:'Repo E has a one-line README — uninstallable, no one knows how to run.'},
+      rate_hi:{cn:'E README 太薄, 安装步骤都没有, 不该高分.', en:'E has paper-thin README — no install steps, should not rate high.'},
+      rate_lo:{cn:'E 评分太低 — 代码本身可能可用.', en:'E too low — the code itself might be fine.'},
+      issue_wrong:{cn:'E 的致命问题是 README 缺失安装/使用说明.', en:'E\'s fatal flaw is missing install/usage docs.'}
+    }
+  }
+};
+function t(key, arg){
+  var entry = I18N[key];
+  if(!entry) return key;
+  var v = entry[LANG] || entry.en;
+  if(typeof v === 'function') return v(arg);
+  return v;
+}
+
+// ============ Repo data ============
+// 5 repos, each with: id / path / stars / readmeBlocks / metaChips / correctRate range / correctIssueId
+var ISSUES = [
+  {id:'no_license',  cn:'缺 LICENSE — 法律上不能放心用', en:'No LICENSE — legally risky'},
+  {id:'no_dict',     cn:'缺数据字典 — 字段名看不懂',     en:'No data dictionary — cryptic columns'},
+  {id:'binary_xlsx', cn:'数据是 xlsx — 二进制, 不开源友好', en:'Data is xlsx — binary, non-friendly'},
+  {id:'thin_readme', cn:'README 太薄 — 装不上, 没法跑',    en:'Thin README — uninstallable'},
+  {id:'none',        cn:'无明显问题 — 可以直接复用',       en:'No major issue — directly reusable'}
+];
+
+var REPOS = [
+  {
+    id:'A', tag:'A', stars:382,
+    path:'github.com/openair-lab/pm25-daily-loader',
+    // 完美范本
+    blocks: {
+      cn:[
+        {type:'h2', text:'PM2.5 Daily Loader'},
+        {type:'meta', chips:[
+          {kind:'good', label:'LICENSE: MIT'},
+          {kind:'good', label:'README 完整'},
+          {kind:'good', label:'CITATION.cff'},
+          {kind:'good', label:'数据: CSV + 字段字典'}
+        ]},
+        {type:'p', text:'一个轻量 Python 包, 把全球 PM2.5 公开站点的日均值统一成清洁 CSV.'},
+        {type:'h3', text:'安装'},
+        {type:'pre', text:'pip install pm25-daily-loader'},
+        {type:'h3', text:'使用'},
+        {type:'pre', text:'from pm25 import load\ndf = load("Beijing", "2024-01")'},
+        {type:'h3', text:'数据字段 (data/SCHEMA.md)'},
+        {type:'ul', items:[
+          'date — ISO 8601 日期 (YYYY-MM-DD)',
+          'station_id — WHO 站点代码',
+          'pm25_ugm3 — 24h 平均, 单位 ug/m3',
+          'flag — 质控标记 (clean / suspect / missing)'
+        ]},
+        {type:'h3', text:'授权'},
+        {type:'p', text:'本仓库以 MIT 协议发布; 引用请用根目录 CITATION.cff.'}
+      ],
+      en:[
+        {type:'h2', text:'PM2.5 Daily Loader'},
+        {type:'meta', chips:[
+          {kind:'good', label:'LICENSE: MIT'},
+          {kind:'good', label:'Full README'},
+          {kind:'good', label:'CITATION.cff'},
+          {kind:'good', label:'Data: CSV + dictionary'}
+        ]},
+        {type:'p', text:'Lightweight Python package that unifies daily PM2.5 from global public stations into a clean CSV.'},
+        {type:'h3', text:'Install'},
+        {type:'pre', text:'pip install pm25-daily-loader'},
+        {type:'h3', text:'Usage'},
+        {type:'pre', text:'from pm25 import load\ndf = load("Beijing", "2024-01")'},
+        {type:'h3', text:'Schema (data/SCHEMA.md)'},
+        {type:'ul', items:[
+          'date — ISO 8601 (YYYY-MM-DD)',
+          'station_id — WHO station code',
+          'pm25_ugm3 — 24h mean, ug/m3',
+          'flag — QC flag (clean / suspect / missing)'
+        ]},
+        {type:'h3', text:'License'},
+        {type:'p', text:'Released under MIT; cite via CITATION.cff at repo root.'}
+      ]
+    },
+    correctRate:{min:4,max:5},
+    correctIssue:'none'
+  },
+
+  {
+    id:'B', tag:'B', stars:1024,
+    path:'github.com/foundry-air/sensor-rapid-cal',
+    // 缺 LICENSE
+    blocks:{
+      cn:[
+        {type:'h2', text:'Sensor Rapid Calibration'},
+        {type:'meta', chips:[
+          {kind:'bad',  label:'LICENSE: 缺失'},
+          {kind:'good', label:'README 完整'},
+          {kind:'good', label:'代码质量高'},
+          {kind:'good', label:'数据: CSV'}
+        ]},
+        {type:'p', text:'低成本 PM 传感器的快速线性标定脚本, 跑过几千次实测, 代码本身相当稳.'},
+        {type:'h3', text:'安装'},
+        {type:'pre', text:'git clone ...\npip install -e .'},
+        {type:'h3', text:'使用'},
+        {type:'pre', text:'python calibrate.py --raw data/raw.csv --ref data/ref.csv'},
+        {type:'h3', text:'授权'},
+        {type:'p', text:'(未提供 LICENSE 文件) — 作者只写了一句"自由使用"在 README 里.'},
+        {type:'h3', text:'引用'},
+        {type:'p', text:'如果论文要用, 请联系作者邮件确认.'}
+      ],
+      en:[
+        {type:'h2', text:'Sensor Rapid Calibration'},
+        {type:'meta', chips:[
+          {kind:'bad',  label:'LICENSE: missing'},
+          {kind:'good', label:'Full README'},
+          {kind:'good', label:'Solid code'},
+          {kind:'good', label:'Data: CSV'}
+        ]},
+        {type:'p', text:'Fast linear calibration scripts for low-cost PM sensors. Battle-tested over thousands of runs.'},
+        {type:'h3', text:'Install'},
+        {type:'pre', text:'git clone ...\npip install -e .'},
+        {type:'h3', text:'Usage'},
+        {type:'pre', text:'python calibrate.py --raw data/raw.csv --ref data/ref.csv'},
+        {type:'h3', text:'License'},
+        {type:'p', text:'(No LICENSE file present) — README just says "feel free to use".'},
+        {type:'h3', text:'Citation'},
+        {type:'p', text:'For paper use, please email the author to confirm.'}
+      ]
+    },
+    correctRate:{min:1,max:2},
+    correctIssue:'no_license'
+  },
+
+  {
+    id:'C', tag:'C', stars:217,
+    path:'github.com/aero-sense/indoor-aq-pack',
+    // 缺数据字典
+    blocks:{
+      cn:[
+        {type:'h2', text:'Indoor Air Quality Pack'},
+        {type:'meta', chips:[
+          {kind:'good', label:'LICENSE: Apache 2.0'},
+          {kind:'good', label:'README 有'},
+          {kind:'bad',  label:'数据: 无字段说明'},
+          {kind:'warn', label:'数据: CSV (列名 v1/v2/v3)'}
+        ]},
+        {type:'p', text:'室内空气质量监测打包数据集, 包含 PM2.5/CO2/TVOC 等多源融合.'},
+        {type:'h3', text:'安装'},
+        {type:'pre', text:'pip install indoor-aq-pack'},
+        {type:'h3', text:'数据示例 (data/sample.csv)'},
+        {type:'pre', text:'ts,v1,v2,v3,v4,v5\n1717920000,12.3,420,0.31,1,2\n1717920060,11.9,418,0.28,1,2'},
+        {type:'p', text:'(v1-v5 各列含义未在仓库中说明; issue 区有人问过但作者三个月没回复.)'},
+        {type:'h3', text:'授权'},
+        {type:'p', text:'Apache 2.0, 引用请用 README 底部的 BibTeX 块.'}
+      ],
+      en:[
+        {type:'h2', text:'Indoor Air Quality Pack'},
+        {type:'meta', chips:[
+          {kind:'good', label:'LICENSE: Apache 2.0'},
+          {kind:'good', label:'README present'},
+          {kind:'bad',  label:'Data: no field dict'},
+          {kind:'warn', label:'Data: CSV (cols v1/v2/v3)'}
+        ]},
+        {type:'p', text:'Bundled indoor air quality dataset — fused PM2.5/CO2/TVOC streams.'},
+        {type:'h3', text:'Install'},
+        {type:'pre', text:'pip install indoor-aq-pack'},
+        {type:'h3', text:'Data sample (data/sample.csv)'},
+        {type:'pre', text:'ts,v1,v2,v3,v4,v5\n1717920000,12.3,420,0.31,1,2\n1717920060,11.9,418,0.28,1,2'},
+        {type:'p', text:'(v1-v5 meanings are not documented; an issue asked but the author has not replied in 3 months.)'},
+        {type:'h3', text:'License'},
+        {type:'p', text:'Apache 2.0; cite via BibTeX block at the README bottom.'}
+      ]
+    },
+    correctRate:{min:1,max:2},
+    correctIssue:'no_dict'
+  },
+
+  {
+    id:'D', tag:'D', stars:88,
+    path:'github.com/citizen-pollen/spring-2024-counts',
+    // 数据是 xlsx
+    blocks:{
+      cn:[
+        {type:'h2', text:'Spring 2024 Pollen Counts'},
+        {type:'meta', chips:[
+          {kind:'good', label:'LICENSE: CC-BY-4.0'},
+          {kind:'good', label:'README 有'},
+          {kind:'bad',  label:'数据: .xlsx 二进制'},
+          {kind:'warn', label:'无 schema.md'}
+        ]},
+        {type:'p', text:'2024 春季公民科学家手工记录的花粉数, 覆盖北美 12 个城市.'},
+        {type:'h3', text:'安装'},
+        {type:'p', text:'无需安装. 直接下载 data/spring_2024_counts.xlsx.'},
+        {type:'h3', text:'数据'},
+        {type:'p', text:'data/spring_2024_counts.xlsx (12 MB, 3 个 sheet, 含合并单元格和颜色高亮)'},
+        {type:'p', text:'颜色含义 (口头约定): 红色 = 高浓度; 绿色 = 低浓度.'},
+        {type:'h3', text:'授权'},
+        {type:'p', text:'CC-BY-4.0, 引用请使用 cite.txt.'}
+      ],
+      en:[
+        {type:'h2', text:'Spring 2024 Pollen Counts'},
+        {type:'meta', chips:[
+          {kind:'good', label:'LICENSE: CC-BY-4.0'},
+          {kind:'good', label:'README present'},
+          {kind:'bad',  label:'Data: .xlsx binary'},
+          {kind:'warn', label:'No schema.md'}
+        ]},
+        {type:'p', text:'Spring 2024 hand-recorded pollen counts by citizen scientists across 12 NA cities.'},
+        {type:'h3', text:'Install'},
+        {type:'p', text:'No install. Just download data/spring_2024_counts.xlsx.'},
+        {type:'h3', text:'Data'},
+        {type:'p', text:'data/spring_2024_counts.xlsx (12 MB, 3 sheets, merged cells and color highlights)'},
+        {type:'p', text:'Colors (verbal convention): red = high; green = low.'},
+        {type:'h3', text:'License'},
+        {type:'p', text:'CC-BY-4.0; cite via cite.txt.'}
+      ]
+    },
+    correctRate:{min:1,max:2},
+    correctIssue:'binary_xlsx'
+  },
+
+  {
+    id:'E', tag:'E', stars:46,
+    path:'github.com/nh-research/dust-quick',
+    // README 一行
+    blocks:{
+      cn:[
+        {type:'h2', text:'dust-quick'},
+        {type:'meta', chips:[
+          {kind:'good', label:'LICENSE: MIT'},
+          {kind:'bad',  label:'README: 1 行'},
+          {kind:'warn', label:'无安装/使用说明'},
+          {kind:'good', label:'数据: CSV'}
+        ]},
+        {type:'p', text:'A quick dust analyzer.'},
+        {type:'p', text:'(仓库根目录除了 src/ 之外只有这一行 README. 没说 Python 版本, 没说怎么装, 没说参数, 也没示例.)'}
+      ],
+      en:[
+        {type:'h2', text:'dust-quick'},
+        {type:'meta', chips:[
+          {kind:'good', label:'LICENSE: MIT'},
+          {kind:'bad',  label:'README: 1 line'},
+          {kind:'warn', label:'No install/usage'},
+          {kind:'good', label:'Data: CSV'}
+        ]},
+        {type:'p', text:'A quick dust analyzer.'},
+        {type:'p', text:'(That single line is the whole README. No Python version, no install steps, no params, no example.)'}
+      ]
+    },
+    correctRate:{min:1,max:2},
+    correctIssue:'thin_readme'
+  }
+];
+
+// ============ State ============
+var stateAudit = {
+  currentRepo: null,           // 'A'/'B'/...
+  rating: 0,
+  issue: null,                 // issue id
+  judged: {},                  // {repoId: {correct:bool, rating:n, issue:id}}
+  attempts: 0,
+  badgeEarned: false
+};
+
+// ============ Rendering ============
+function $(id){ return document.getElementById(id); }
+
+function renderRepoList(){
+  var list = $('repo-list');
+  list.innerHTML = '';
+  REPOS.forEach(function(r){
+    var row = document.createElement('div');
+    row.className = 'repo-row';
+    if(stateAudit.currentRepo === r.id) row.classList.add('active');
+    var j = stateAudit.judged[r.id];
+    if(j){
+      row.classList.add('judged');
+      if(!j.correct) row.classList.add('wrong');
+    }
+    row.setAttribute('data-repo', r.id);
+
+    var nameCn = r.path.replace('github.com/','');
+    row.innerHTML =
+      '<span class="repo-tag mono">'+r.tag+'</span>' +
+      '<span class="repo-name">'+nameCn+'</span>' +
+      '<span class="repo-mark"></span>';
+    row.addEventListener('click', function(){ pickRepo(r.id); });
+    list.appendChild(row);
+  });
+}
+
+function renderIssueGrid(){
+  var grid = $('issue-grid');
+  grid.innerHTML = '';
+  ISSUES.forEach(function(it){
+    var btn = document.createElement('button');
+    btn.type='button';
+    btn.className='issue-chip';
+    btn.setAttribute('data-issue', it.id);
+    btn.textContent = LANG==='cn' ? it.cn : it.en;
+    if(stateAudit.issue === it.id) btn.classList.add('active');
+    btn.addEventListener('click', function(){ pickIssue(it.id); });
+    grid.appendChild(btn);
+  });
+}
+
+function renderReadme(){
+  var body = $('readme-body');
+  body.innerHTML = '';
+  if(!stateAudit.currentRepo){
+    var hint = document.createElement('div');
+    hint.className='empty-hint';
+    var anyLeft = REPOS.some(function(r){ return !stateAudit.judged[r.id]; });
+    hint.textContent = anyLeft ? t('empty_hint') : t('empty_hint_done');
+    body.appendChild(hint);
+    $('readme-path').textContent = 'github.com/...';
+    $('readme-stars').textContent = 'stars 0';
+    return;
+  }
+  var repo = REPOS.filter(function(r){ return r.id===stateAudit.currentRepo; })[0];
+  $('readme-path').textContent = repo.path;
+  $('readme-stars').textContent = 'stars '+repo.stars;
+  var blocks = repo.blocks[LANG] || repo.blocks.en;
+  blocks.forEach(function(b){
+    if(b.type==='h2'){ var h=document.createElement('h2'); h.textContent=b.text; body.appendChild(h); }
+    else if(b.type==='h3'){ var h=document.createElement('h3'); h.textContent=b.text; body.appendChild(h); }
+    else if(b.type==='p'){ var p=document.createElement('p'); p.textContent=b.text; body.appendChild(p); }
+    else if(b.type==='pre'){ var pre=document.createElement('pre'); pre.textContent=b.text; body.appendChild(pre); }
+    else if(b.type==='ul'){
+      var ul=document.createElement('ul');
+      b.items.forEach(function(it){ var li=document.createElement('li'); li.textContent=it; ul.appendChild(li); });
+      body.appendChild(ul);
+    }
+    else if(b.type==='meta'){
+      var m=document.createElement('div'); m.className='meta-line';
+      b.chips.forEach(function(c){
+        var s=document.createElement('span');
+        s.className='meta-chip mono '+(c.kind||'');
+        s.textContent=c.label;
+        m.appendChild(s);
+      });
+      body.appendChild(m);
+    }
+  });
+}
+
+function renderStars(){
+  var btns = document.querySelectorAll('.star-btn');
+  btns.forEach(function(b){
+    var v = parseInt(b.getAttribute('data-star'),10);
+    if(v <= stateAudit.rating) b.classList.add('active');
+    else b.classList.remove('active');
+  });
+  $('star-value').textContent = stateAudit.rating
+    ? t('star_value', stateAudit.rating)
+    : t('star_idle');
+}
+
+function renderProgress(){
+  var done = Object.keys(stateAudit.judged).filter(function(k){ return stateAudit.judged[k].correct; }).length;
+  $('progress-fill').style.width = (done/5*100)+'%';
+  $('progress-text').textContent = t('progress_text', done);
+
+  var slot = $('badge-slot');
+  var label = $('badge-label');
+  var sub = $('badge-sub');
+  label.textContent = t('badge_label');
+  if(done >= 5){
+    slot.classList.add('earned');
+    sub.textContent = t('badge_earned');
+  } else {
+    slot.classList.remove('earned');
+    sub.textContent = t('badge_locked', done);
+  }
+}
+
+function renderSubmitState(){
+  var btn = $('submit-btn');
+  var canSubmit = (
+    stateAudit.currentRepo &&
+    stateAudit.rating > 0 &&
+    stateAudit.issue !== null &&
+    !(stateAudit.judged[stateAudit.currentRepo] && stateAudit.judged[stateAudit.currentRepo].correct)
+  );
+  btn.disabled = !canSubmit;
+}
+
+function refreshI18N(){
+  $('brand-title').textContent  = t('brand_title');
+  $('brand-sub').textContent    = t('brand_sub');
+  $('repo-header').textContent  = t('repo_header');
+  $('progress-title').textContent = t('progress_title');
+  $('topbar-title').textContent = t('topbar_title');
+  $('topbar-hint').textContent  = t('topbar_hint');
+  $('topbar-rule').textContent  = t('topbar_rule');
+  $('judge-head').textContent   = t('judge_head');
+  $('rate-label').textContent   = t('rate_label');
+  $('rate-sub').textContent     = t('rate_sub');
+  $('issue-label').textContent  = t('issue_label');
+  $('issue-sub').textContent    = t('issue_sub');
+  $('submit-btn').textContent   = t('submit_btn');
+  $('finale-title').textContent = t('finale_title');
+  $('finale-sub').textContent   = t('finale_sub');
+  $('finale-correct-lab').textContent = t('finale_correct_lab');
+  $('finale-attempts-lab').textContent = t('finale_attempts_lab');
+  $('finale-close').textContent = t('finale_close');
+  $('langBtn').textContent = LANG==='cn' ? '中 / EN' : 'EN / 中';
+
+  // topbar code shows round = next repo or current
+  var doneCnt = Object.keys(stateAudit.judged).filter(function(k){ return stateAudit.judged[k].correct; }).length;
+  $('topbar-code').textContent = t('topbar_code', Math.min(5, doneCnt+1));
+
+  // feedback default
+  var fb = $('feedback-line');
+  if(fb.classList.contains('idle')){
+    fb.textContent = t('fb_idle');
+    fb.setAttribute('data-default', t('fb_idle'));
+  }
+
+  renderRepoList();
+  renderIssueGrid();
+  renderReadme();
+  renderStars();
+  renderProgress();
+  renderSubmitState();
+}
+
+// ============ Actions ============
+function pickRepo(rid){
+  stateAudit.currentRepo = rid;
+  var prev = stateAudit.judged[rid];
+  if(prev){
+    stateAudit.rating = prev.rating;
+    stateAudit.issue = prev.issue;
+  } else {
+    stateAudit.rating = 0;
+    stateAudit.issue = null;
+  }
+  var fb = $('feedback-line');
+  fb.className = 'feedback-line idle';
+  fb.textContent = prev && prev.correct ? t('fb_judged') : t('fb_idle');
+  refreshI18N();
+}
+
+function pickRate(n){
+  if(!stateAudit.currentRepo) return;
+  if(stateAudit.judged[stateAudit.currentRepo] && stateAudit.judged[stateAudit.currentRepo].correct) return;
+  stateAudit.rating = n;
+  renderStars();
+  renderSubmitState();
+}
+
+function pickIssue(iid){
+  if(!stateAudit.currentRepo) return;
+  if(stateAudit.judged[stateAudit.currentRepo] && stateAudit.judged[stateAudit.currentRepo].correct) return;
+  stateAudit.issue = iid;
+  renderIssueGrid();
+  renderSubmitState();
+}
+
+function submitAudit(){
+  var rid = stateAudit.currentRepo;
+  if(!rid) return;
+  var repo = REPOS.filter(function(r){ return r.id===rid; })[0];
+  var rating = stateAudit.rating;
+  var issue = stateAudit.issue;
+  if(rating < 1 || issue === null) return;
+
+  stateAudit.attempts++;
+  var rateOk = rating >= repo.correctRate.min && rating <= repo.correctRate.max;
+  var issueOk = issue === repo.correctIssue;
+  var correct = rateOk && issueOk;
+
+  stateAudit.judged[rid] = {correct:correct, rating:rating, issue:issue};
+
+  var fb = $('feedback-line');
+  fb.classList.remove('idle');
+  var rule = I18N.rule_fb[rid];
+
+  if(correct){
+    fb.classList.remove('bad');
+    fb.classList.add('ok');
+    fb.textContent = rule.ok[LANG];
+  } else {
+    fb.classList.remove('ok');
+    fb.classList.add('bad');
+    var msg = '';
+    if(!rateOk){
+      msg += (LANG==='cn' ? t('fb_bad_rate') : t('fb_bad_rate')) +
+             (rating > repo.correctRate.max ? rule.rate_hi[LANG] : rule.rate_lo[LANG]);
+    }
+    if(!issueOk){
+      if(msg) msg += '  ';
+      msg += (LANG==='cn' ? t('fb_bad_issue') : t('fb_bad_issue')) + rule.issue_wrong[LANG];
+    }
+    fb.textContent = msg;
+  }
+
+  renderRepoList();
+  renderProgress();
+  renderSubmitState();
+
+  // 全对触发徽章
+  var doneCorrect = Object.keys(stateAudit.judged).filter(function(k){ return stateAudit.judged[k].correct; }).length;
+  if(doneCorrect >= 5 && !stateAudit.badgeEarned){
+    stateAudit.badgeEarned = true;
+    $('finale-correct').textContent = '5';
+    $('finale-attempts').textContent = String(stateAudit.attempts);
+    setTimeout(function(){ $('finale').classList.add('show'); }, 600);
+  }
+}
+
+function resetGame(){
+  stateAudit.currentRepo = null;
+  stateAudit.rating = 0;
+  stateAudit.issue = null;
+  stateAudit.judged = {};
+  stateAudit.attempts = 0;
+  stateAudit.badgeEarned = false;
+  $('finale').classList.remove('show');
+  var fb = $('feedback-line');
+  fb.className='feedback-line idle';
+  fb.textContent = t('fb_idle');
+  refreshI18N();
+}
+
+// ============ Wire up ============
+document.querySelectorAll('.star-btn').forEach(function(b){
+  b.addEventListener('click', function(){
+    var v = parseInt(b.getAttribute('data-star'),10);
+    pickRate(v);
+  });
+});
+$('submit-btn').addEventListener('click', submitAudit);
+$('finale-close').addEventListener('click', function(){ $('finale').classList.remove('show'); });
+$('langBtn').addEventListener('click', function(){
+  LANG = LANG === 'cn' ? 'en' : 'cn';
+  refreshI18N();
+});
+
+// initial render
+refreshI18N();
+</script>
+</body>
+</html>

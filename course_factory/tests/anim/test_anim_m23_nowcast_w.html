@@ -1,0 +1,1349 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>M23 — EPA NowCast 动态权重 w</title>
+<style>
+  /* F2 第 1 层 — 共享深空底 (theme_style/styles.css L8-21) */
+  :root{
+    --bg-0: oklch(0.14 0.035 265);
+    --bg-1: oklch(0.18 0.04 265);
+    --bg-2: oklch(0.22 0.045 265);
+    --bg-3: oklch(0.28 0.05 265);
+    --line: oklch(0.35 0.05 265 / 0.35);
+    --line-strong: oklch(0.55 0.08 265 / 0.55);
+    --fg: oklch(0.96 0.01 265);
+    --fg-dim: oklch(0.75 0.02 265);
+    --fg-mute: oklch(0.55 0.03 265);
+    --gold: oklch(0.85 0.14 85);
+
+    /* F2 第 2 层 — math accent (electric blue) */
+    --math: oklch(0.72 0.17 245);
+    --math-dim: oklch(0.52 0.16 245);
+
+    /* F2 第 3 层 — math 5 色 palette (themes.js math: AXIS/PROOF/SHADOW/SOLUTION/QED) */
+    --AXIS:     oklch(0.72 0.17 245); /* electric blue 主 — 坐标轴 / mascot 主体 / 公式高亮 */
+    --PROOF:    oklch(0.52 0.16 245); /* 中 blue — 推导步骤连线 / 公式系数 */
+    --SHADOW:   oklch(0.35 0.10 245); /* 深 blue — 老柱子背景 / 卡片底纹 */
+    --SOLUTION: oklch(0.92 0.08 240); /* 近白 blue — 新柱子高亮 / 数字光晕 */
+    --QED:      oklch(0.85 0.14 85);  /* 金色 QED — 关键结论 / NowCast 命中 */
+
+    /* 对比辅色 — 简单平均 (灰)、NowCast (math accent) */
+    --simple-avg: oklch(0.55 0.03 265);  /* 灰白对比柱 */
+    --event:      oklch(0.66 0.20 25);   /* 红 — 突发事件标记 */
+  }
+
+  *{box-sizing:border-box;margin:0;padding:0;}
+  html,body{height:100%;overflow:hidden;}
+  body{
+    background: var(--bg-0);
+    color: var(--fg);
+    font-family: 'Inter','Noto Sans SC',-apple-system,BlinkMacSystemFont,sans-serif;
+    display: flex;
+    height: 100vh;
+  }
+
+  /* 200px 左侧 sidebar */
+  .sidebar{
+    width: 200px;
+    flex-shrink: 0;
+    background: var(--bg-1);
+    border-right: 1px solid var(--line);
+    padding: 16px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .brand{
+    border-bottom: 1px solid var(--line);
+    padding-bottom: 10px;
+    margin-bottom: 4px;
+  }
+  .brand .badge{
+    display: inline-block;
+    font-family: 'JetBrains Mono',ui-monospace,monospace;
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    color: var(--math);
+    background: var(--bg-2);
+    padding: 3px 7px;
+    border: 1px solid var(--line);
+    box-shadow: 2px 2px 0 var(--bg-0);
+    margin-bottom: 6px;
+  }
+  .brand h1{
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--fg);
+    line-height: 1.3;
+  }
+  .brand .sub{
+    font-size: 10px;
+    color: var(--fg-mute);
+    margin-top: 4px;
+    font-family: 'JetBrains Mono',ui-monospace,monospace;
+    letter-spacing: 0.04em;
+  }
+
+  /* Pi mascot 在 sidebar */
+  .mascot-box{
+    background: var(--bg-2);
+    border: 1px solid var(--line);
+    box-shadow: 3px 3px 0 var(--bg-0);
+    padding: 10px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .mascot-box .label{
+    font-family: 'JetBrains Mono',ui-monospace,monospace;
+    font-size: 9px;
+    color: var(--fg-dim);
+    letter-spacing: 0.08em;
+  }
+  .mascot-box .name{
+    font-size: 11px;
+    color: var(--fg);
+    font-weight: 600;
+    margin-top: 2px;
+  }
+
+  /* Guide 3 条 */
+  .guide{ display: flex; flex-direction: column; gap: 8px; }
+  .guide-item{
+    font-size: 11px;
+    line-height: 1.45;
+    color: var(--fg-dim);
+    padding-left: 9px;
+    border-left: 2px solid var(--math);
+    padding-top: 2px;
+    padding-bottom: 2px;
+  }
+  .guide-item .num{
+    font-family: 'JetBrains Mono',ui-monospace,monospace;
+    color: var(--math);
+    font-weight: 700;
+    margin-right: 4px;
+  }
+
+  .sidebar .spacer{ flex: 1; }
+
+  .lang-btn{
+    background: var(--bg-2);
+    border: 1px solid var(--line-strong);
+    box-shadow: 2px 2px 0 var(--bg-0);
+    color: var(--fg);
+    font-family: 'JetBrains Mono',ui-monospace,monospace;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    padding: 7px 10px;
+    cursor: pointer;
+    width: 100%;
+  }
+  .lang-btn:hover{ border-color: var(--math); color: var(--math); }
+  .lang-btn:active{ transform: translate(2px, 2px); box-shadow: none; }
+
+  /* Main stage */
+  .main{
+    flex: 1;
+    position: relative;
+    overflow: hidden;
+    background: var(--bg-0);
+  }
+  #stage{
+    width: 100%;
+    height: 100%;
+    display: block;
+  }
+
+  /* HUD 右上 */
+  .hud{
+    position: absolute;
+    top: 18px;
+    right: 18px;
+    background: var(--bg-2);
+    border: 1px solid var(--line);
+    box-shadow: 3px 3px 0 var(--bg-0);
+    padding: 10px 14px;
+    font-family: 'JetBrains Mono',ui-monospace,monospace;
+    min-width: 250px;
+  }
+  .hud .row{
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 14px;
+    font-size: 11px;
+    line-height: 1.6;
+  }
+  .hud .label{ color: var(--fg-mute); letter-spacing: 0.06em; }
+  .hud .value{ color: var(--fg); font-weight: 700; }
+  .hud .value.accent{ color: var(--math); }
+  .hud .value.gold{ color: var(--gold); }
+  .hud .value.event{ color: var(--event); }
+  .hud .sep{
+    height: 1px;
+    background: var(--line);
+    margin: 6px 0;
+  }
+
+  /* Subtitle 底部 */
+  .subtitle{
+    position: absolute;
+    left: 50%;
+    bottom: 28px;
+    transform: translateX(-50%);
+    text-align: center;
+    max-width: 80%;
+    pointer-events: none;
+  }
+  .subtitle .cn{
+    font-size: 17px;
+    font-weight: 700;
+    color: var(--fg);
+    letter-spacing: 0.01em;
+  }
+  .subtitle .en{
+    font-size: 12px;
+    color: var(--fg-mute);
+    margin-top: 4px;
+    font-style: italic;
+    font-family: 'JetBrains Mono',ui-monospace,monospace;
+    letter-spacing: 0.03em;
+  }
+
+  /* Frame chip 左下 — 5 步进度 */
+  .frame-progress{
+    position: absolute;
+    left: 24px;
+    bottom: 28px;
+    display: flex;
+    gap: 6px;
+    align-items: center;
+  }
+  .chip{
+    width: 24px;
+    height: 6px;
+    background: var(--bg-2);
+    border: 1px solid var(--line);
+  }
+  .chip.active{
+    background: var(--math);
+    border-color: var(--math);
+  }
+  .chip.done{
+    background: var(--math-dim);
+    border-color: var(--math-dim);
+  }
+  .frame-progress .stepname{
+    font-family: 'JetBrains Mono',ui-monospace,monospace;
+    font-size: 10px;
+    color: var(--fg-dim);
+    margin-left: 8px;
+    letter-spacing: 0.08em;
+  }
+
+  /* QED flash overlay (key moment) */
+  .flash{
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-family: 'JetBrains Mono',ui-monospace,monospace;
+    font-size: 28px;
+    font-weight: 800;
+    color: var(--gold);
+    letter-spacing: 0.18em;
+    opacity: 0;
+    pointer-events: none;
+    text-shadow: 0 0 24px var(--gold);
+    text-align: center;
+  }
+  .flash.on{ opacity: 1; }
+  .flash .small{
+    display: block;
+    text-align: center;
+    font-size: 11px;
+    color: var(--fg-dim);
+    letter-spacing: 0.08em;
+    margin-top: 8px;
+    text-shadow: none;
+    font-weight: 400;
+  }
+</style>
+</head>
+<body>
+  <aside class="sidebar">
+    <div class="brand">
+      <span class="badge" id="badgeMod">MOD-M23 / MATH</span>
+      <h1 id="brandH1">NowCast 动态权重 w</h1>
+      <div class="sub" id="brandSub">w = c_min / c_max</div>
+    </div>
+
+    <div class="mascot-box">
+      <svg width="42" height="42" viewBox="0 0 60 60" aria-hidden="true">
+        <!-- Pi mascot: 旋转的正四面体, 翻面亮方程 (themes.js math) -->
+        <polygon points="30,12 14,46 46,46" fill="var(--SHADOW)" opacity="0.55"/>
+        <polygon points="30,12 18,42 42,42" fill="none" stroke="var(--AXIS)" stroke-width="1.6" stroke-linejoin="round"/>
+        <polygon points="30,18 22,40 38,40" fill="var(--PROOF)" opacity="0.45"/>
+        <circle cx="30" cy="12" r="1.8" fill="var(--SOLUTION)"/>
+        <circle cx="18" cy="42" r="1.8" fill="var(--SOLUTION)"/>
+        <circle cx="42" cy="42" r="1.8" fill="var(--SOLUTION)"/>
+        <text x="30" y="34" fill="var(--QED)" font-family="'JetBrains Mono',monospace" font-size="9" text-anchor="middle" font-weight="700">w^t</text>
+      </svg>
+      <div>
+        <div class="label">MASCOT</div>
+        <div class="name" id="mascotName">Pi · 派</div>
+      </div>
+    </div>
+
+    <div class="guide">
+      <div class="guide-item" id="g1"><span class="num">01</span><span class="gtxt">看 12 小时浓度的 max 和 min, 算比值 w</span></div>
+      <div class="guide-item" id="g2"><span class="num">02</span><span class="gtxt">稳定 → w 近 1, 老数据等权; 突变 → w 很小, 老数据被压</span></div>
+      <div class="guide-item" id="g3"><span class="num">03</span><span class="gtxt">权重越靠后衰减越快: w⁰ w¹ w² w³ ...</span></div>
+    </div>
+
+    <div class="spacer"></div>
+    <button id="langBtn" class="lang-btn" type="button">CN / EN</button>
+  </aside>
+
+  <main class="main">
+    <svg id="stage" viewBox="0 0 1080 720" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg"></svg>
+
+    <div class="hud">
+      <div class="row"><span class="label" id="hudL1">FRAME</span><span class="value accent" id="hudV1">1 / 5</span></div>
+      <div class="row"><span class="label" id="hudL2">STAGE</span><span class="value" id="hudV2">Series</span></div>
+      <div class="sep"></div>
+      <div class="row"><span class="label" id="hudL3">c_max</span><span class="value" id="hudV3">-- ug/m3</span></div>
+      <div class="row"><span class="label" id="hudL4">c_min</span><span class="value" id="hudV4">-- ug/m3</span></div>
+      <div class="row"><span class="label" id="hudL5">w</span><span class="value gold" id="hudV5">--</span></div>
+      <div class="row"><span class="label" id="hudL6">NowCast</span><span class="value accent" id="hudV6">--</span></div>
+    </div>
+
+    <div class="subtitle">
+      <div class="cn" id="subCn">12 小时 PM2.5 都在 20 左右, 风平浪静</div>
+      <div class="en" id="subEn">12 hours of PM2.5 all around 20 — calm</div>
+    </div>
+
+    <div class="frame-progress">
+      <div class="chip" id="chip0"></div>
+      <div class="chip" id="chip1"></div>
+      <div class="chip" id="chip2"></div>
+      <div class="chip" id="chip3"></div>
+      <div class="chip" id="chip4"></div>
+      <span class="stepname" id="stepName">01 · SERIES</span>
+    </div>
+
+    <div class="flash" id="flash">
+      QED
+      <span class="small" id="flashSub">w 自适应是关键 — NowCast 反应更快</span>
+    </div>
+  </main>
+
+<script>
+(function(){
+  "use strict";
+
+  // ====== i18n ======
+  var LANG = 'cn';
+  var I18N = {
+    badgeMod:   { cn: 'MOD-M23 / MATH', en: 'MOD-M23 / MATH' },
+    brandH1:    { cn: 'NowCast 动态权重 w', en: 'NowCast Dynamic Weight w' },
+    brandSub:   { cn: 'w = c_min / c_max', en: 'w = c_min / c_max' },
+    mascotName: { cn: 'Pi · 派', en: 'Pi · the tetrahedron' },
+    g1: { cn: '看 12 小时浓度的 max 和 min, 算比值 w',
+          en: 'Take 12h c_max and c_min, compute ratio w' },
+    g2: { cn: '稳定 → w 近 1, 老数据等权; 突变 → w 很小, 老数据被压',
+          en: 'Calm → w near 1 (equal weight); spike → w small (old data damped)' },
+    g3: { cn: '权重越靠后衰减越快: w⁰ w¹ w² w³ ...',
+          en: 'Weights decay with age: w^0, w^1, w^2, w^3 ...' },
+    hudL1: { cn: '帧',       en: 'FRAME' },
+    hudL2: { cn: '阶段',     en: 'STAGE' },
+    hudL3: { cn: 'c_max',    en: 'c_max' },
+    hudL4: { cn: 'c_min',    en: 'c_min' },
+    hudL5: { cn: 'w',        en: 'w' },
+    hudL6: { cn: 'NowCast',  en: 'NowCast' },
+    btnLang: { cn: 'CN / EN', en: 'CN / EN' }
+  };
+
+  // ====== 数据 — 两个 12h 场景 (单位 ug/m3) ======
+  // 索引 0 = 最近小时 (t), 11 = 11 小时前
+  // STABLE: 平稳期, 都在 20 上下 (小幅 1-2 抖动)
+  var SERIES_STABLE = [20, 21, 19, 20, 20, 21, 19, 20, 22, 19, 20, 20];
+  // EVENT: 烟雾突袭, 最近 1-2h 飙到 80, 历史 15-25
+  var SERIES_EVENT  = [80, 65, 40, 25, 22, 20, 18, 16, 15, 18, 20, 22];
+
+  function statsOf(arr){
+    var mn = arr[0], mx = arr[0];
+    for (var i = 1; i < arr.length; i++){
+      if (arr[i] < mn) mn = arr[i];
+      if (arr[i] > mx) mx = arr[i];
+    }
+    var w = mn / mx;
+    if (w < 0.5) w = 0.5 < w ? 0.5 : w; // EPA 规定 w 下限 0.5 — 但我们演示中允许低于以展示自适应直觉
+    // 注意: 教学动画里保留真实比例展示直觉; 真实 EPA 强制 w = max(c_min/c_max, 0.5)
+    return { min: mn, max: mx, w: arr[0] === 0 ? 0 : (mn / mx) };
+  }
+
+  function simpleAvg(arr){
+    var s = 0;
+    for (var i = 0; i < arr.length; i++) s += arr[i];
+    return s / arr.length;
+  }
+
+  // NowCast 加权平均: numerator = sum(w^i * c_i),  denominator = sum(w^i)
+  // i = 0 是最近, w^0 = 1; i=1 是 1h 前, 权重 w; ... 越老衰减越快
+  function nowCast(arr, w){
+    var num = 0, den = 0;
+    for (var i = 0; i < arr.length; i++){
+      var coef = Math.pow(w, i);
+      num += coef * arr[i];
+      den += coef;
+    }
+    return den > 0 ? (num / den) : 0;
+  }
+
+  var STABLE_STATS = statsOf(SERIES_STABLE);  // min=19 max=22 w≈0.864
+  var EVENT_STATS  = statsOf(SERIES_EVENT);   // min=15 max=80 w≈0.188
+
+  // ====== 5 帧故事 ======
+  var FRAME_MS = 6500;
+  var FRAMES = [
+    {
+      id: 'series',
+      stepName: '01 · SERIES',
+      hudStage: { cn: '12h 序列', en: '12h series' },
+      subCn: '过去 12 小时 PM2.5 都在 20 左右 — 风平浪静',
+      subEn: 'Last 12 hours PM2.5 stays around 20 — totally calm'
+    },
+    {
+      id: 'stable_w',
+      stepName: '02 · STABLE w',
+      hudStage: { cn: '稳定 w ≈ 1', en: 'Stable w ≈ 1' },
+      subCn: 'c_max ≈ c_min → w ≈ 1; 老数据满权重, NowCast 几乎 = 普通平均',
+      subEn: 'c_max ≈ c_min → w ≈ 1; old data keeps full weight, NowCast ≈ simple avg'
+    },
+    {
+      id: 'spike',
+      stepName: '03 · SPIKE',
+      hudStage: { cn: '烟雾突袭', en: 'Smoke spike' },
+      subCn: '突然一波烟雾来了; c_max = 80, c_min = 15 → w 跳到 0.19',
+      subEn: 'A smoke plume hits; c_max = 80, c_min = 15 → w drops to 0.19'
+    },
+    {
+      id: 'weights',
+      stepName: '04 · WEIGHTS',
+      hudStage: { cn: '权重展开', en: 'Weights unfold' },
+      subCn: '最新 1, 1h 前 0.19, 2h 前 0.036, 3h 前 0.007 — 老数据被压得很轻',
+      subEn: 'Now 1, 1h ago 0.19, 2h 0.036, 3h 0.007 — old data shrinks fast'
+    },
+    {
+      id: 'compare',
+      stepName: '05 · QED',
+      hudStage: { cn: 'NowCast 反应快', en: 'NowCast reacts fast' },
+      subCn: 'NowCast ≈ 58, 普通平均 ≈ 28 — 同一突发, NowCast 更接近"现在"',
+      subEn: 'NowCast ≈ 58, simple avg ≈ 28 — same spike, NowCast follows "now"'
+    }
+  ];
+
+  // ====== State ======
+  var currentFrame = 0;
+  var frameStartTs = 0;
+  var rafId = null;
+  var stage = document.getElementById('stage');
+  var SVGNS = 'http://www.w3.org/2000/svg';
+
+  // ====== Utility ======
+  function el(name, attrs, parent){
+    var n = document.createElementNS(SVGNS, name);
+    if (attrs){
+      for (var k in attrs){
+        if (Object.prototype.hasOwnProperty.call(attrs, k)){
+          n.setAttribute(k, attrs[k]);
+        }
+      }
+    }
+    if (parent) parent.appendChild(n);
+    return n;
+  }
+  function clearStage(){ while(stage.firstChild) stage.removeChild(stage.firstChild); }
+  function t(key){
+    if (!I18N[key]) return key;
+    return I18N[key][LANG] || I18N[key].en || key;
+  }
+  function lerp(a, b, p){ return a + (b - a) * p; }
+  function easeInOut(x){ return x < 0.5 ? 2*x*x : 1 - Math.pow(-2*x + 2, 2)/2; }
+  function clamp(x, lo, hi){ return x < lo ? lo : (x > hi ? hi : x); }
+  function fmt(n, d){ d = (d===undefined) ? 1 : d; return Number(n).toFixed(d); }
+
+  // ====== Drawing helpers ======
+  function drawBgGrid(){
+    var g = el('g', { opacity: '0.18' }, stage);
+    for (var x = 0; x <= 1080; x += 60){
+      el('line', { x1: x, y1: 0, x2: x, y2: 720, stroke: 'var(--line)', 'stroke-width': '0.5' }, g);
+    }
+    for (var y = 0; y <= 720; y += 60){
+      el('line', { x1: 0, y1: y, x2: 1080, y2: y, stroke: 'var(--line)', 'stroke-width': '0.5' }, g);
+    }
+    var defs = el('defs', null, stage);
+    var rg = el('radialGradient', { id: 'centerGlow', cx: '50%', cy: '45%', r: '60%' }, defs);
+    el('stop', { offset: '0%', 'stop-color': 'var(--math)', 'stop-opacity': '0.06' }, rg);
+    el('stop', { offset: '100%', 'stop-color': 'var(--bg-0)', 'stop-opacity': '0' }, rg);
+    el('rect', { x: 0, y: 0, width: 1080, height: 720, fill: 'url(#centerGlow)' }, stage);
+  }
+
+  function drawStepChain(activeIdx){
+    var labels = [
+      { cn: '序列',   en: 'Series' },
+      { cn: '稳定 w', en: 'Stable' },
+      { cn: '突袭',   en: 'Spike' },
+      { cn: '权重',   en: 'Weights' },
+      { cn: 'QED',    en: 'QED' }
+    ];
+    var y = 660;
+    var startX = 110;
+    var gap = (1080 - 220) / 4;
+    var g = el('g', null, stage);
+    for (var i = 0; i < 5; i++){
+      var cx = startX + gap * i;
+      var on = i <= activeIdx;
+      var ringColor = on ? 'var(--math)' : 'var(--line)';
+      var fillColor = on ? 'var(--bg-2)' : 'var(--bg-1)';
+      var textColor = on ? 'var(--fg)' : 'var(--fg-mute)';
+      el('rect', {
+        x: cx - 44, y: y - 16, width: 88, height: 32,
+        fill: fillColor, stroke: ringColor, 'stroke-width': on ? '1.6' : '1', rx: '2'
+      }, g);
+      var tx = el('text', {
+        x: cx, y: y + 4, fill: textColor,
+        'font-family': "'Inter','Noto Sans SC',sans-serif",
+        'font-size': '12', 'font-weight': on ? '700' : '500',
+        'text-anchor': 'middle'
+      }, g);
+      tx.textContent = labels[i][LANG] || labels[i].en;
+      var ix = el('text', {
+        x: cx, y: y - 22, fill: on ? 'var(--math)' : 'var(--fg-mute)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '9', 'text-anchor': 'middle', 'letter-spacing': '0.1em'
+      }, g);
+      ix.textContent = '0' + (i+1);
+      if (i < 4){
+        var x1 = cx + 44;
+        var x2 = cx + gap - 44;
+        var connColor = (on && (i+1) <= activeIdx) ? 'var(--math)' : 'var(--line)';
+        el('line', {
+          x1: x1, y1: y, x2: x2 - 6, y2: y,
+          stroke: connColor, 'stroke-width': '1.2'
+        }, g);
+        el('polygon', {
+          points: (x2-6)+','+(y-4)+' '+(x2)+','+y+' '+(x2-6)+','+(y+4),
+          fill: connColor
+        }, g);
+      }
+    }
+  }
+
+  // Pi mascot — 旋转的正四面体, 翻面亮 QED
+  function drawPiMascot(g, rot, qed){
+    el('circle', { cx: 0, cy: 0, r: 36, fill: 'none', stroke: 'var(--AXIS)', 'stroke-width': '0.8',
+                   'stroke-dasharray': '3 5', opacity: '0.5',
+                   transform: 'rotate(' + (rot * 30 % 360) + ')' }, g);
+    el('polygon', { points: '0,-22 -20,16 20,16', fill: 'var(--SHADOW)', opacity: '0.55' }, g);
+    el('polygon', { points: '0,-22 -16,14 16,14', fill: 'none', stroke: 'var(--AXIS)',
+                    'stroke-width': '1.6', 'stroke-linejoin': 'round' }, g);
+    el('polygon', { points: '0,-14 -10,10 10,10', fill: 'var(--PROOF)', opacity: '0.5' }, g);
+    el('circle', { cx: 0, cy: -22, r: 2, fill: 'var(--SOLUTION)' }, g);
+    el('circle', { cx: -16, cy: 14, r: 2, fill: 'var(--SOLUTION)' }, g);
+    el('circle', { cx: 16, cy: 14, r: 2, fill: 'var(--SOLUTION)' }, g);
+    var eqText = qed ? 'QED' : 'w^t';
+    var eqTx = el('text', {
+      x: 0, y: 4, fill: 'var(--QED)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': qed ? '11' : '8', 'text-anchor': 'middle', 'font-weight': '700'
+    }, g);
+    eqTx.textContent = eqText;
+    var lab = el('text', {
+      x: 0, y: 48, fill: 'var(--fg-dim)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '10', 'text-anchor': 'middle', 'letter-spacing': '0.1em'
+    }, g);
+    lab.textContent = qed
+      ? (LANG === 'cn' ? 'Pi · QED' : 'Pi · QED')
+      : (LANG === 'cn' ? 'Pi · 思考中' : 'Pi · thinking');
+  }
+
+  // 画 12h 柱状条 (索引 0 = 最近, 在右边)
+  // 返回每个柱子的 (x, topY, w, h) 数组, 方便后续标注权重
+  function drawBars(ox, oy, axW, axH, arr, opts){
+    opts = opts || {};
+    var n = arr.length; // 12
+    var yMax = opts.yMax || 100;
+    var barGap = 6;
+    var barW = (axW - (n - 1) * barGap) / n;
+    var bars = [];
+
+    // 坐标轴
+    el('line', { x1: ox, y1: oy, x2: ox + axW + 8, y2: oy,
+                 stroke: 'var(--AXIS)', 'stroke-width': '1.2' }, stage);
+    el('line', { x1: ox, y1: oy, x2: ox, y2: oy - axH - 10,
+                 stroke: 'var(--AXIS)', 'stroke-width': '1.2' }, stage);
+
+    // Y 轴刻度
+    for (var v = 0; v <= yMax; v += 20){
+      var ty = oy - (v / yMax) * axH;
+      el('line', { x1: ox - 4, y1: ty, x2: ox, y2: ty, stroke: 'var(--AXIS)', 'stroke-width': '0.8' }, stage);
+      var yl = el('text', {
+        x: ox - 8, y: ty + 3, fill: 'var(--fg-mute)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '9', 'text-anchor': 'end'
+      }, stage);
+      yl.textContent = String(v);
+    }
+    var yUnit = el('text', {
+      x: ox - 8, y: oy - axH - 16, fill: 'var(--fg-dim)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '10', 'text-anchor': 'end'
+    }, stage);
+    yUnit.textContent = 'ug/m3';
+
+    // 柱子 — 最近 (i=0) 在右边
+    for (var i = 0; i < n; i++){
+      // 在 X 轴上的位置: i=0 在最右
+      var slot = n - 1 - i;
+      var bx = ox + slot * (barW + barGap);
+      var v = arr[i];
+      var bh = (v / yMax) * axH;
+      var by = oy - bh;
+      var revealP = opts.reveal === undefined ? 1 : clamp(opts.reveal, 0, 1);
+      // 进入动画 — 从右到左逐根升起
+      var localP = clamp(revealP * n - slot * 0.6, 0, 1);
+      var animH = bh * easeInOut(localP);
+      var animY = oy - animH;
+      // 颜色: 最近 SOLUTION 高亮, 老的 SHADOW
+      var col;
+      if (opts.colorBy === 'age'){
+        // gradient: 越新越亮
+        var ageRatio = 1 - i / (n - 1); // i=0 -> 1.0
+        if (i === 0) col = 'var(--SOLUTION)';
+        else if (i <= 2) col = 'var(--AXIS)';
+        else if (i <= 5) col = 'var(--PROOF)';
+        else col = 'var(--SHADOW)';
+      } else {
+        col = opts.barColor || 'var(--AXIS)';
+      }
+      el('rect', {
+        x: bx, y: animY, width: barW, height: animH,
+        fill: col, opacity: opts.barOpacity || '0.92',
+        stroke: 'var(--bg-0)', 'stroke-width': '0.6'
+      }, stage);
+      // 标 i=0 是"现在"
+      if (opts.labelHours){
+        var hLab = el('text', {
+          x: bx + barW/2, y: oy + 14, fill: 'var(--fg-mute)',
+          'font-family': "'JetBrains Mono',ui-monospace,monospace",
+          'font-size': '8', 'text-anchor': 'middle'
+        }, stage);
+        hLab.textContent = i === 0 ? 'now' : ('-' + i + 'h');
+      }
+      bars.push({ x: bx, y: animY, w: barW, h: animH, val: v, age: i, baseY: oy });
+    }
+    return bars;
+  }
+
+  // ====== Frame 1 — SERIES (12h 平稳期) ======
+  function drawFrame1(p){
+    drawBgGrid();
+    drawStepChain(0);
+
+    var ttl = el('text', {
+      x: 540, y: 80, fill: 'var(--math)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '14', 'text-anchor': 'middle', 'letter-spacing': '0.14em', 'font-weight': '700'
+    }, stage);
+    ttl.textContent = LANG === 'cn' ? '过去 12 小时 PM2.5 (平稳期)' : 'Past 12h PM2.5 (calm)';
+
+    var ox = 200, oy = 460, axW = 720, axH = 280;
+    drawBars(ox, oy, axW, axH, SERIES_STABLE, {
+      yMax: 100,
+      reveal: p / 0.7,
+      colorBy: 'age',
+      labelHours: true
+    });
+
+    // X 轴标签 "时间"
+    var xlab = el('text', {
+      x: ox + axW/2, y: oy + 36, fill: 'var(--fg-dim)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '10', 'text-anchor': 'middle', 'letter-spacing': '0.1em'
+    }, stage);
+    xlab.textContent = LANG === 'cn' ? '小时 (越右越近)' : 'hours ago (right = now)';
+
+    // 引语 — 后半段出现 "你看, 这种情况怎么算平均都差不多"
+    if (p > 0.55){
+      var a = clamp((p - 0.55) / 0.3, 0, 1);
+      var quoteG = el('g', { opacity: a, transform: 'translate(540, 130)' }, stage);
+      el('rect', {
+        x: -240, y: -24, width: 480, height: 48,
+        fill: 'var(--bg-2)', stroke: 'var(--math)', 'stroke-width': '1.4', rx: '3'
+      }, quoteG);
+      var qtx = el('text', {
+        x: 0, y: 6, fill: 'var(--fg)',
+        'font-family': "'Inter','Noto Sans SC',sans-serif",
+        'font-size': '13', 'text-anchor': 'middle', 'font-weight': '600'
+      }, quoteG);
+      qtx.textContent = LANG === 'cn'
+        ? '都差不多 — 现在和 11 小时前没区别'
+        : 'all similar — now is no different from 11h ago';
+    }
+
+    var mg = el('g', { transform: 'translate(110, 560)' }, stage);
+    drawPiMascot(mg, p * 4, false);
+
+    // HUD
+    document.getElementById('hudV3').textContent = '--';
+    document.getElementById('hudV4').textContent = '--';
+    document.getElementById('hudV5').textContent = '--';
+    document.getElementById('hudV6').textContent = '--';
+  }
+
+  // ====== Frame 2 — STABLE w (w = c_min/c_max ≈ 1) ======
+  function drawFrame2(p){
+    drawBgGrid();
+    drawStepChain(1);
+
+    var ttl = el('text', {
+      x: 540, y: 70, fill: 'var(--math)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '14', 'text-anchor': 'middle', 'letter-spacing': '0.14em', 'font-weight': '700'
+    }, stage);
+    ttl.textContent = LANG === 'cn' ? '看 max 和 min, 算比值 w' : 'Take max, min, compute ratio w';
+
+    // 左半 — 柱子, 标 max 和 min
+    var ox = 80, oy = 420, axW = 420, axH = 240;
+    var bars = drawBars(ox, oy, axW, axH, SERIES_STABLE, {
+      yMax: 100,
+      reveal: 1,
+      colorBy: 'age',
+      labelHours: false
+    });
+
+    // 标 c_max 和 c_min
+    var statsRevealP = clamp((p - 0.15) / 0.25, 0, 1);
+    var maxV = STABLE_STATS.max, minV = STABLE_STATS.min;
+    // 找到对应柱子
+    var maxBar = null, minBar = null;
+    for (var i = 0; i < bars.length; i++){
+      if (bars[i].val === maxV && !maxBar) maxBar = bars[i];
+      if (bars[i].val === minV && !minBar) minBar = bars[i];
+    }
+    if (statsRevealP > 0 && maxBar){
+      var mg1 = el('g', { opacity: statsRevealP }, stage);
+      el('rect', { x: maxBar.x - 2, y: maxBar.y - 2, width: maxBar.w + 4, height: maxBar.h + 4,
+                   fill: 'none', stroke: 'var(--gold)', 'stroke-width': '2', rx: '1' }, mg1);
+      var mt1 = el('text', {
+        x: maxBar.x + maxBar.w/2, y: maxBar.y - 8, fill: 'var(--gold)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '11', 'text-anchor': 'middle', 'font-weight': '700'
+      }, mg1);
+      mt1.textContent = 'c_max=' + maxV;
+    }
+    if (statsRevealP > 0 && minBar && minBar !== maxBar){
+      var mg2 = el('g', { opacity: statsRevealP }, stage);
+      el('rect', { x: minBar.x - 2, y: minBar.y - 2, width: minBar.w + 4, height: minBar.h + 4,
+                   fill: 'none', stroke: 'var(--SOLUTION)', 'stroke-width': '2', rx: '1' }, mg2);
+      var mt2 = el('text', {
+        x: minBar.x + minBar.w/2, y: minBar.y - 8, fill: 'var(--SOLUTION)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '11', 'text-anchor': 'middle', 'font-weight': '700'
+      }, mg2);
+      mt2.textContent = 'c_min=' + minV;
+    }
+
+    // 右半 — w 公式 + 数值代入 + 权重表
+    var formulaP = clamp((p - 0.35) / 0.25, 0, 1);
+    var fg = el('g', { opacity: formulaP, transform: 'translate(580, 160)' }, stage);
+    el('rect', {
+      x: 0, y: 0, width: 400, height: 100,
+      fill: 'var(--bg-2)', stroke: 'var(--math)', 'stroke-width': '1.6', rx: '3'
+    }, fg);
+    var f1 = el('text', {
+      x: 200, y: 30, fill: 'var(--fg-mute)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '11', 'text-anchor': 'middle', 'letter-spacing': '0.1em'
+    }, fg);
+    f1.textContent = 'WEIGHT FORMULA';
+    var f2 = el('text', {
+      x: 200, y: 64, fill: 'var(--AXIS)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '22', 'text-anchor': 'middle', 'font-weight': '700'
+    }, fg);
+    f2.textContent = 'w = c_min / c_max';
+    var f3 = el('text', {
+      x: 200, y: 88, fill: 'var(--QED)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '14', 'text-anchor': 'middle', 'font-weight': '700'
+    }, fg);
+    f3.textContent = '= ' + minV + ' / ' + maxV + ' = ' + fmt(STABLE_STATS.w, 3);
+
+    // 权重序列展开 w^0 w^1 ...  全部 ≈ 1
+    var wsP = clamp((p - 0.55) / 0.25, 0, 1);
+    var wsG = el('g', { opacity: wsP, transform: 'translate(580, 290)' }, stage);
+    var ttl2 = el('text', {
+      x: 0, y: 0, fill: 'var(--fg-mute)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '10', 'letter-spacing': '0.1em'
+    }, wsG);
+    ttl2.textContent = LANG === 'cn' ? '权重展开 (w 接近 1, 老数据满权)' : 'Weights unfold (w near 1, old data full)';
+    for (var i = 0; i < 6; i++){
+      var coef = Math.pow(STABLE_STATS.w, i);
+      var cx = 12 + i * 64;
+      el('rect', { x: cx - 26, y: 16, width: 52, height: 50,
+                   fill: 'var(--bg-1)', stroke: 'var(--AXIS)', 'stroke-width': '1', rx: '2' }, wsG);
+      var lc = el('text', {
+        x: cx, y: 34, fill: 'var(--fg-dim)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '10', 'text-anchor': 'middle'
+      }, wsG);
+      lc.textContent = i === 0 ? 'now' : ('-' + i + 'h');
+      var vc = el('text', {
+        x: cx, y: 56, fill: 'var(--SOLUTION)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '13', 'text-anchor': 'middle', 'font-weight': '700'
+      }, wsG);
+      vc.textContent = fmt(coef, 2);
+    }
+    var note = el('text', {
+      x: 200, y: 92, fill: 'var(--fg-dim)',
+      'font-family': "'Inter','Noto Sans SC',sans-serif",
+      'font-size': '11', 'text-anchor': 'middle'
+    }, wsG);
+    note.textContent = LANG === 'cn' ? '都接近 1 — 每小时同等重要' : 'all near 1 — every hour equally weighted';
+
+    // NowCast 等于 simple avg — gold check
+    var sumP = clamp((p - 0.78) / 0.18, 0, 1);
+    if (sumP > 0){
+      var sg = el('g', { opacity: sumP, transform: 'translate(580, 430)' }, stage);
+      el('rect', { x: 0, y: 0, width: 400, height: 52,
+                   fill: 'var(--bg-2)', stroke: 'var(--QED)', 'stroke-width': '2', rx: '3' }, sg);
+      var nc = nowCast(SERIES_STABLE, STABLE_STATS.w);
+      var sa = simpleAvg(SERIES_STABLE);
+      var tx1 = el('text', {
+        x: 200, y: 22, fill: 'var(--QED)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '14', 'text-anchor': 'middle', 'font-weight': '700'
+      }, sg);
+      tx1.textContent = 'NowCast = ' + fmt(nc, 1) + '  |  Simple avg = ' + fmt(sa, 1);
+      var tx2 = el('text', {
+        x: 200, y: 42, fill: 'var(--fg-dim)',
+        'font-family': "'Inter','Noto Sans SC',sans-serif",
+        'font-size': '11', 'text-anchor': 'middle', 'font-style': 'italic'
+      }, sg);
+      tx2.textContent = LANG === 'cn' ? '稳定期: 两个几乎相等 — w 没起作用' : 'Calm: two are nearly equal — w idle';
+    }
+
+    var mg = el('g', { transform: 'translate(110, 560)' }, stage);
+    drawPiMascot(mg, p * 4, false);
+
+    // HUD
+    document.getElementById('hudV3').textContent = maxV + ' ug/m3';
+    document.getElementById('hudV4').textContent = minV + ' ug/m3';
+    document.getElementById('hudV5').textContent = fmt(STABLE_STATS.w, 3);
+    document.getElementById('hudV6').textContent = fmt(nowCast(SERIES_STABLE, STABLE_STATS.w), 1);
+  }
+
+  // ====== Frame 3 — SPIKE (烟雾突袭 → w 跳到 0.19) ======
+  function drawFrame3(p){
+    drawBgGrid();
+    drawStepChain(2);
+
+    var ttl = el('text', {
+      x: 540, y: 70, fill: 'var(--event)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '15', 'text-anchor': 'middle', 'letter-spacing': '0.14em', 'font-weight': '700'
+    }, stage);
+    ttl.textContent = LANG === 'cn' ? '突发! 烟雾来了 — c_max 飙到 80' : 'SPIKE! Smoke hits — c_max jumps to 80';
+
+    // 左半 — 切到 EVENT 序列, 最近柱子飙高
+    var ox = 80, oy = 460, axW = 480, axH = 320;
+    var revealP = clamp(p / 0.5, 0, 1);
+    // 序列从 STABLE morph 到 EVENT
+    var mixed = SERIES_STABLE.slice();
+    for (var i = 0; i < mixed.length; i++){
+      var morphP = revealP;
+      mixed[i] = SERIES_STABLE[i] + (SERIES_EVENT[i] - SERIES_STABLE[i]) * easeInOut(morphP);
+    }
+    var bars = drawBars(ox, oy, axW, axH, mixed, {
+      yMax: 100,
+      reveal: 1,
+      colorBy: 'age',
+      labelHours: true
+    });
+
+    // 高亮最近 1h 柱子 (event 主要冲击)
+    if (revealP > 0.3 && bars[0]){
+      var hp = clamp((revealP - 0.3) / 0.3, 0, 1);
+      var b0 = bars[0];
+      el('rect', { x: b0.x - 3, y: b0.y - 3, width: b0.w + 6, height: b0.h + 6,
+                   fill: 'none', stroke: 'var(--event)', 'stroke-width': 2.4,
+                   opacity: hp, rx: 1 }, stage);
+      var hb = el('text', {
+        x: b0.x + b0.w/2, y: b0.y - 12, fill: 'var(--event)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '12', 'text-anchor': 'middle', 'font-weight': '700',
+        opacity: hp
+      }, stage);
+      hb.textContent = 'c_max=' + Math.round(mixed[0]);
+    }
+    if (revealP > 0.5){
+      // 标 min
+      var minIdx = 8; // EVENT[8] = 15
+      var bm = bars[minIdx];
+      if (bm){
+        var mp = clamp((revealP - 0.5) / 0.3, 0, 1);
+        el('rect', { x: bm.x - 3, y: bm.y - 3, width: bm.w + 6, height: bm.h + 6,
+                     fill: 'none', stroke: 'var(--SOLUTION)', 'stroke-width': 2,
+                     opacity: mp, rx: 1 }, stage);
+        var mlb = el('text', {
+          x: bm.x + bm.w/2, y: bm.y - 12, fill: 'var(--SOLUTION)',
+          'font-family': "'JetBrains Mono',ui-monospace,monospace",
+          'font-size': '11', 'text-anchor': 'middle', 'font-weight': '700',
+          opacity: mp
+        }, stage);
+        mlb.textContent = 'c_min=' + Math.round(mixed[minIdx]);
+      }
+    }
+
+    var xlab = el('text', {
+      x: ox + axW/2, y: oy + 30, fill: 'var(--fg-dim)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '10', 'text-anchor': 'middle', 'letter-spacing': '0.1em'
+    }, stage);
+    xlab.textContent = LANG === 'cn' ? '小时 (越右越近)' : 'hours ago (right = now)';
+
+    // 右半 — w 公式重新代入, 闪到 0.19
+    var fgP = clamp((p - 0.4) / 0.3, 0, 1);
+    var fg = el('g', { opacity: fgP, transform: 'translate(620, 140)' }, stage);
+    el('rect', { x: 0, y: 0, width: 380, height: 110,
+                 fill: 'var(--bg-2)', stroke: 'var(--event)', 'stroke-width': '2', rx: '3' }, fg);
+    var f1 = el('text', {
+      x: 190, y: 28, fill: 'var(--fg-mute)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '11', 'text-anchor': 'middle', 'letter-spacing': '0.1em'
+    }, fg);
+    f1.textContent = 'w RECOMPUTED';
+    var f2 = el('text', {
+      x: 190, y: 62, fill: 'var(--AXIS)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '20', 'text-anchor': 'middle', 'font-weight': '700'
+    }, fg);
+    f2.textContent = 'w = ' + EVENT_STATS.min + ' / ' + EVENT_STATS.max;
+    var f3 = el('text', {
+      x: 190, y: 94, fill: 'var(--event)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '22', 'text-anchor': 'middle', 'font-weight': '800'
+    }, fg);
+    f3.textContent = '= ' + fmt(EVENT_STATS.w, 3);
+
+    // 对比 — 之前 1.0 vs 现在 0.19
+    var cmpP = clamp((p - 0.65) / 0.25, 0, 1);
+    if (cmpP > 0){
+      var cg = el('g', { opacity: cmpP, transform: 'translate(620, 290)' }, stage);
+      el('rect', { x: 0, y: 0, width: 380, height: 80,
+                   fill: 'var(--bg-1)', stroke: 'var(--line-strong)', 'stroke-width': '1', rx: '2' }, cg);
+      var cttl = el('text', {
+        x: 190, y: 22, fill: 'var(--fg-dim)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '11', 'text-anchor': 'middle'
+      }, cg);
+      cttl.textContent = LANG === 'cn' ? 'w 自动响应了' : 'w auto-reacted';
+      // 之前
+      var lb1 = el('text', {
+        x: 90, y: 48, fill: 'var(--fg-mute)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '10', 'text-anchor': 'middle'
+      }, cg);
+      lb1.textContent = LANG === 'cn' ? '平稳期' : 'calm';
+      var vv1 = el('text', {
+        x: 90, y: 70, fill: 'var(--SOLUTION)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '18', 'text-anchor': 'middle', 'font-weight': '700'
+      }, cg);
+      vv1.textContent = fmt(STABLE_STATS.w, 2);
+
+      // 箭头
+      el('polygon', { points: '160,58 200,58 200,52 220,62 200,72 200,66 160,66',
+                      fill: 'var(--PROOF)' }, cg);
+
+      // 现在
+      var lb2 = el('text', {
+        x: 290, y: 48, fill: 'var(--fg-mute)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '10', 'text-anchor': 'middle'
+      }, cg);
+      lb2.textContent = LANG === 'cn' ? '突发期' : 'spike';
+      var vv2 = el('text', {
+        x: 290, y: 70, fill: 'var(--event)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '20', 'text-anchor': 'middle', 'font-weight': '800'
+      }, cg);
+      vv2.textContent = fmt(EVENT_STATS.w, 2);
+    }
+
+    var mg = el('g', { transform: 'translate(640, 440)' }, stage);
+    drawPiMascot(mg, p * 6, false);
+
+    // HUD — event 颜色
+    var hud3 = document.getElementById('hudV3');
+    var hud4 = document.getElementById('hudV4');
+    var hud5 = document.getElementById('hudV5');
+    var hud6 = document.getElementById('hudV6');
+    hud3.textContent = EVENT_STATS.max + ' ug/m3';
+    hud3.classList.add('event');
+    hud4.textContent = EVENT_STATS.min + ' ug/m3';
+    hud5.textContent = fmt(EVENT_STATS.w, 3);
+    hud6.textContent = '...';
+  }
+
+  // ====== Frame 4 — WEIGHTS (w 的幂次衰减) ======
+  function drawFrame4(p){
+    drawBgGrid();
+    drawStepChain(3);
+
+    var ttl = el('text', {
+      x: 540, y: 60, fill: 'var(--math)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '14', 'text-anchor': 'middle', 'letter-spacing': '0.14em', 'font-weight': '700'
+    }, stage);
+    ttl.textContent = LANG === 'cn'
+      ? 'NowCast 公式 — 老数据权重 = w 的幂次'
+      : 'NowCast — older data weight = power of w';
+
+    // 公式大字
+    var ww = EVENT_STATS.w;
+    var fg = el('g', { transform: 'translate(540, 110)' }, stage);
+    var fc = el('text', {
+      x: 0, y: 0, fill: 'var(--AXIS)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '18', 'text-anchor': 'middle', 'font-weight': '700'
+    }, fg);
+    fc.textContent = 'NowCast = SUM(w^i · c_i) / SUM(w^i),  i = 0,1,...,11';
+
+    // 12 列权重柱 — i=0 (最近) 在右; 高度按 w^i
+    var ox = 100, oy = 460, axW = 880, axH = 240;
+    var n = 12;
+    var gap = 8;
+    var barW = (axW - (n - 1) * gap) / n;
+
+    // 坐标 + 注释
+    el('line', { x1: ox, y1: oy, x2: ox + axW + 6, y2: oy,
+                 stroke: 'var(--AXIS)', 'stroke-width': '1.2' }, stage);
+    el('line', { x1: ox, y1: oy, x2: ox, y2: oy - axH - 10,
+                 stroke: 'var(--AXIS)', 'stroke-width': '1.2' }, stage);
+    var yLab = el('text', {
+      x: ox - 8, y: oy - axH - 16, fill: 'var(--fg-dim)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '11', 'text-anchor': 'end'
+    }, stage);
+    yLab.textContent = 'w^i';
+    // Y 刻度
+    for (var v = 0; v <= 1; v += 0.25){
+      var ty = oy - v * axH;
+      el('line', { x1: ox - 4, y1: ty, x2: ox, y2: ty, stroke: 'var(--AXIS)', 'stroke-width': '0.8' }, stage);
+      var yl = el('text', {
+        x: ox - 8, y: ty + 3, fill: 'var(--fg-mute)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '9', 'text-anchor': 'end'
+      }, stage);
+      yl.textContent = fmt(v, 2);
+    }
+
+    // 逐根入场 — 从 i=0 (现在) 到 i=11 (最老)
+    for (var i = 0; i < n; i++){
+      var slot = n - 1 - i;
+      var bx = ox + slot * (barW + gap);
+      var coef = Math.pow(ww, i);
+      // 逐根入场
+      var localP = clamp(p * n * 0.85 - i * 0.5, 0, 1);
+      var animH = coef * axH * easeInOut(localP);
+      var animY = oy - animH;
+      var fill;
+      if (i === 0) fill = 'var(--SOLUTION)';
+      else if (i <= 2) fill = 'var(--AXIS)';
+      else if (i <= 5) fill = 'var(--PROOF)';
+      else fill = 'var(--SHADOW)';
+      el('rect', { x: bx, y: animY, width: barW, height: animH,
+                   fill: fill, opacity: '0.95',
+                   stroke: 'var(--bg-0)', 'stroke-width': '0.6' }, stage);
+      // 上方写 w^i = 0.19
+      if (localP > 0.6 && coef >= 0.001){
+        var ap = clamp((localP - 0.6) / 0.3, 0, 1);
+        var lb = el('text', {
+          x: bx + barW/2, y: animY - 5, fill: 'var(--fg)',
+          'font-family': "'JetBrains Mono',ui-monospace,monospace",
+          'font-size': '9', 'text-anchor': 'middle', 'font-weight': '700',
+          opacity: ap
+        }, stage);
+        lb.textContent = fmt(coef, coef < 0.01 ? 4 : 3);
+      }
+      // 底部 时间标签
+      var hLab = el('text', {
+        x: bx + barW/2, y: oy + 14, fill: i === 0 ? 'var(--SOLUTION)' : 'var(--fg-mute)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '9', 'text-anchor': 'middle',
+        'font-weight': i === 0 ? '700' : '400'
+      }, stage);
+      hLab.textContent = i === 0 ? 'now' : ('-' + i + 'h');
+      // 下方再写 i 指数
+      var ix = el('text', {
+        x: bx + barW/2, y: oy + 28, fill: 'var(--PROOF)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '9', 'text-anchor': 'middle'
+      }, stage);
+      ix.textContent = 'w^' + i;
+    }
+
+    // 中段注释 — 几个关键点
+    if (p > 0.45){
+      var ap = clamp((p - 0.45) / 0.25, 0, 1);
+      var noteG = el('g', { opacity: ap, transform: 'translate(540, 580)' }, stage);
+      el('rect', { x: -260, y: -22, width: 520, height: 44,
+                   fill: 'var(--bg-2)', stroke: 'var(--PROOF)', 'stroke-width': '1.4', rx: '2' }, noteG);
+      var nt = el('text', {
+        x: 0, y: 6, fill: 'var(--fg)',
+        'font-family': "'Inter','Noto Sans SC',sans-serif",
+        'font-size': '13', 'text-anchor': 'middle', 'font-weight': '600'
+      }, noteG);
+      nt.textContent = LANG === 'cn'
+        ? '权重指数衰减: 1.0 → 0.19 → 0.036 → 0.007 → 几乎为 0'
+        : 'weights decay exponentially: 1.0 to 0.19 to 0.036 to 0.007 to ~0';
+    }
+
+    var mg = el('g', { transform: 'translate(940, 110)' }, stage);
+    drawPiMascot(mg, p * 4, false);
+
+    // HUD
+    var hud3 = document.getElementById('hudV3');
+    hud3.classList.add('event');
+    hud3.textContent = EVENT_STATS.max + ' ug/m3';
+    document.getElementById('hudV4').textContent = EVENT_STATS.min + ' ug/m3';
+    document.getElementById('hudV5').textContent = fmt(EVENT_STATS.w, 3);
+    document.getElementById('hudV6').textContent = fmt(nowCast(SERIES_EVENT, EVENT_STATS.w), 1);
+  }
+
+  // ====== Frame 5 — COMPARE + GOLD ======
+  function drawFrame5(p){
+    drawBgGrid();
+    drawStepChain(4);
+
+    var ttl = el('text', {
+      x: 540, y: 60, fill: 'var(--math)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '14', 'text-anchor': 'middle', 'letter-spacing': '0.14em', 'font-weight': '700'
+    }, stage);
+    ttl.textContent = LANG === 'cn'
+      ? 'NowCast vs 简单平均 — 同一突发期'
+      : 'NowCast vs Simple Avg — same spike';
+
+    // 上方两条横条 — 比较 NowCast 和 simple avg
+    var nc = nowCast(SERIES_EVENT, EVENT_STATS.w);
+    var sa = simpleAvg(SERIES_EVENT);
+    var maxScale = 100;
+    var ox = 200, axW = 700;
+
+    function row(yc, label, value, color, alpha){
+      var rg = el('g', { opacity: alpha }, stage);
+      var lb = el('text', {
+        x: ox - 14, y: yc + 5, fill: 'var(--fg-dim)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '12', 'text-anchor': 'end'
+      }, rg);
+      lb.textContent = label;
+      // 背景轨
+      el('rect', { x: ox, y: yc - 16, width: axW, height: 32,
+                   fill: 'var(--bg-1)', stroke: 'var(--line)', 'stroke-width': '1', rx: '2' }, rg);
+      // value 条
+      var w = (value / maxScale) * axW;
+      el('rect', { x: ox, y: yc - 14, width: w, height: 28,
+                   fill: color, opacity: '0.9', rx: '1' }, rg);
+      // 数值
+      var vx = el('text', {
+        x: ox + w + 10, y: yc + 6, fill: color,
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '18', 'text-anchor': 'start', 'font-weight': '700'
+      }, rg);
+      vx.textContent = fmt(value, 1);
+      var unit = el('text', {
+        x: ox + w + 64, y: yc + 6, fill: 'var(--fg-mute)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '10', 'text-anchor': 'start'
+      }, rg);
+      unit.textContent = 'ug/m3';
+    }
+
+    // NowCast (先入场)
+    var p1 = clamp(p / 0.35, 0, 1);
+    row(160, 'NowCast', nc * easeInOut(p1), 'var(--QED)', p1);
+
+    // Simple avg (后入场)
+    var p2 = clamp((p - 0.3) / 0.3, 0, 1);
+    row(220, 'Simple', sa * easeInOut(p2), 'var(--simple-avg)', p2);
+
+    // c_now (最近 1h 实际值)
+    var p3 = clamp((p - 0.45) / 0.25, 0, 1);
+    row(280, 'c_now', SERIES_EVENT[0] * easeInOut(p3), 'var(--event)', p3);
+
+    // 刻度
+    if (p1 > 0.5){
+      var sg = el('g', { opacity: clamp((p1-0.5)/0.4, 0, 1) }, stage);
+      for (var v = 0; v <= maxScale; v += 20){
+        var tx = ox + (v / maxScale) * axW;
+        el('line', { x1: tx, y1: 304, x2: tx, y2: 310,
+                     stroke: 'var(--fg-mute)', 'stroke-width': '0.6' }, sg);
+        var lbl = el('text', {
+          x: tx, y: 322, fill: 'var(--fg-mute)',
+          'font-family': "'JetBrains Mono',ui-monospace,monospace",
+          'font-size': '9', 'text-anchor': 'middle'
+        }, sg);
+        lbl.textContent = String(v);
+      }
+    }
+
+    // 中段对比注释 — NowCast 离 c_now 更近
+    if (p > 0.55){
+      var ap = clamp((p - 0.55) / 0.2, 0, 1);
+      var noteG = el('g', { opacity: ap, transform: 'translate(540, 380)' }, stage);
+      el('rect', { x: -300, y: -28, width: 600, height: 56,
+                   fill: 'var(--bg-2)', stroke: 'var(--QED)', 'stroke-width': '1.6', rx: '3' }, noteG);
+      var nt1 = el('text', {
+        x: 0, y: -4, fill: 'var(--QED)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '14', 'text-anchor': 'middle', 'font-weight': '700'
+      }, noteG);
+      nt1.textContent = 'NowCast ' + fmt(nc,0) + '  |  Simple ' + fmt(sa,0)
+                       + '  |  c_now ' + SERIES_EVENT[0];
+      var nt2 = el('text', {
+        x: 0, y: 16, fill: 'var(--fg)',
+        'font-family': "'Inter','Noto Sans SC',sans-serif",
+        'font-size': '12', 'text-anchor': 'middle', 'font-style': 'italic'
+      }, noteG);
+      nt2.textContent = LANG === 'cn'
+        ? 'NowCast 紧追"现在"; Simple 被老数据稀释, 反应慢'
+        : 'NowCast follows "now"; Simple is diluted by old data, lags behind';
+    }
+
+    // QED flash
+    var flash = document.getElementById('flash');
+    if (p > 0.7 && p < 0.95){
+      flash.classList.add('on');
+    } else {
+      flash.classList.remove('on');
+    }
+
+    // 最后 seal
+    if (p > 0.78){
+      var sealP = clamp((p - 0.78) / 0.2, 0, 1);
+      var sg = el('g', { opacity: sealP, transform: 'translate(540, 620)' }, stage);
+      el('rect', { x: -260, y: -22, width: 520, height: 44,
+                   fill: 'var(--bg-2)', stroke: 'var(--QED)', 'stroke-width': '2', rx: '3' }, sg);
+      var st = el('text', {
+        x: 0, y: 6, fill: 'var(--QED)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '13', 'text-anchor': 'middle', 'letter-spacing': '0.1em', 'font-weight': '700'
+      }, sg);
+      st.textContent = LANG === 'cn'
+        ? 'w 自适应 → NowCast 反应快, 不被老数据平均掉'
+        : 'w adapts → NowCast reacts fast, not diluted by old data';
+    }
+
+    var mg = el('g', { transform: 'translate(950, 120)' }, stage);
+    drawPiMascot(mg, p * 4, p > 0.6);
+
+    document.getElementById('hudV3').textContent = EVENT_STATS.max + ' ug/m3';
+    document.getElementById('hudV4').textContent = EVENT_STATS.min + ' ug/m3';
+    document.getElementById('hudV5').textContent = fmt(EVENT_STATS.w, 3);
+    document.getElementById('hudV6').textContent = fmt(nc, 1);
+  }
+
+  // ====== Frame dispatcher ======
+  function drawFrame(idx, pp){
+    clearStage();
+    if (idx !== 4){
+      document.getElementById('flash').classList.remove('on');
+    }
+    if (idx === 0) drawFrame1(pp);
+    else if (idx === 1) drawFrame2(pp);
+    else if (idx === 2) drawFrame3(pp);
+    else if (idx === 3) drawFrame4(pp);
+    else if (idx === 4) drawFrame5(pp);
+  }
+
+  function updateUI(idx){
+    var f = FRAMES[idx];
+    document.getElementById('hudV1').textContent = (idx+1) + ' / 5';
+    document.getElementById('hudV2').textContent = f.hudStage[LANG] || f.hudStage.en;
+    document.getElementById('subCn').textContent = LANG === 'cn' ? f.subCn : f.subEn;
+    document.getElementById('subEn').textContent = LANG === 'cn' ? f.subEn : f.subCn;
+    document.getElementById('stepName').textContent = f.stepName;
+    for (var i = 0; i < 5; i++){
+      var c = document.getElementById('chip' + i);
+      c.classList.remove('active', 'done');
+      if (i < idx) c.classList.add('done');
+      else if (i === idx) c.classList.add('active');
+    }
+  }
+
+  function updateI18N(){
+    document.getElementById('badgeMod').textContent = t('badgeMod');
+    document.getElementById('brandH1').textContent = t('brandH1');
+    document.getElementById('brandSub').textContent = t('brandSub');
+    document.getElementById('mascotName').textContent = t('mascotName');
+    document.querySelector('#g1 .gtxt').textContent = t('g1');
+    document.querySelector('#g2 .gtxt').textContent = t('g2');
+    document.querySelector('#g3 .gtxt').textContent = t('g3');
+    document.getElementById('hudL1').textContent = t('hudL1');
+    document.getElementById('hudL2').textContent = t('hudL2');
+    document.getElementById('hudL3').textContent = t('hudL3');
+    document.getElementById('hudL4').textContent = t('hudL4');
+    document.getElementById('hudL5').textContent = t('hudL5');
+    document.getElementById('hudL6').textContent = t('hudL6');
+    document.getElementById('langBtn').textContent = t('btnLang');
+    document.getElementById('flashSub').textContent = LANG === 'cn'
+      ? 'w 自适应是关键 — NowCast 反应更快'
+      : 'w is the key — NowCast reacts faster';
+  }
+
+  function tick(ts){
+    if (!frameStartTs) frameStartTs = ts;
+    var elapsed = ts - frameStartTs;
+    if (elapsed >= FRAME_MS){
+      currentFrame = (currentFrame + 1) % 5;
+      frameStartTs = ts;
+      updateUI(currentFrame);
+      elapsed = 0;
+    }
+    var pp = elapsed / FRAME_MS;
+    drawFrame(currentFrame, pp);
+    rafId = requestAnimationFrame(tick);
+  }
+
+  function start(){
+    updateI18N();
+    updateUI(currentFrame);
+    frameStartTs = 0;
+    if (rafId) cancelAnimationFrame(rafId);
+    rafId = requestAnimationFrame(tick);
+  }
+
+  document.getElementById('langBtn').addEventListener('click', function(){
+    LANG = (LANG === 'cn') ? 'en' : 'cn';
+    updateI18N();
+    updateUI(currentFrame);
+  });
+
+  start();
+})();
+</script>
+</body>
+</html>

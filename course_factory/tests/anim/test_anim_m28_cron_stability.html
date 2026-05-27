@@ -1,0 +1,925 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>M28 · 让节点自己跑 — cron 定时 + 7 天稳定性</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&family=Noto+Sans+SC:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    /* Industrial Atelier — Claude warm cream + coral */
+    --paper:     #FAF9F5;
+    --paper-2:   #F1EDDF;
+    --card:      #FFFFFF;
+    --ink:       #191814;
+    --ink-2:     #2B2924;
+    --sub:       #6B6557;
+    --sub-2:     #9D978A;
+    --border:    #EBE5D6;
+    --border-2:  #D9D1BD;
+    --hairline:  #F2EDE0;
+
+    --primary:       #D97757;
+    --primary-ink:   #9A4A2E;
+    --primary-soft:  #F8EDE5;
+    --primary-line:  #ECCFB8;
+
+    /* domain accent: computing (定时调度/系统编排) */
+    --computing:      #C04E68;
+    --computing-soft: #F4DDE3;
+    --computing-line: #E9BDC9;
+    --computing-ink:  #6E2236;
+
+    --shadow-sm: 0 1px 2px 0 rgba(25,24,20,.04);
+    --shadow:    0 1px 3px 0 rgba(25,24,20,.06), 0 1px 2px -1px rgba(25,24,20,.04);
+    --shadow-md: 0 4px 8px -2px rgba(25,24,20,.06), 0 2px 4px -2px rgba(25,24,20,.04);
+    --shadow-lg: 0 12px 24px -6px rgba(25,24,20,.1), 0 4px 8px -4px rgba(25,24,20,.05);
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    height:100vh;overflow:hidden;
+    background:var(--paper);
+    color:var(--ink);
+    font-family:'Inter','PingFang SC','Noto Sans SC',system-ui,sans-serif;
+    display:flex;
+    -webkit-font-smoothing:antialiased;
+    text-rendering:optimizeLegibility;
+  }
+  .mono{font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,monospace;}
+
+  /* ---------- Sidebar ---------- */
+  .sidebar{
+    width:200px;flex-shrink:0;height:100vh;
+    background:var(--card);
+    border-right:1px solid var(--border);
+    display:flex;flex-direction:column;
+    padding:20px 16px;gap:14px;
+  }
+  .brand{
+    font-size:13px;font-weight:700;letter-spacing:0.02em;color:var(--ink);
+    padding-bottom:12px;border-bottom:1px solid var(--hairline);
+  }
+  .brand-sub{
+    display:block;margin-top:6px;font-size:11px;font-weight:500;
+    color:var(--sub);letter-spacing:0;
+  }
+  .deco{
+    width:100%;height:100px;
+    background:var(--paper-2);
+    border:1px solid var(--border);
+    border-radius:8px;
+    display:flex;align-items:center;justify-content:center;
+    box-shadow:var(--shadow-sm);
+  }
+  .deco svg{width:84px;height:84px;}
+  .guide{display:flex;flex-direction:column;gap:10px;margin-top:2px;}
+  .guide-li{
+    font-size:11.5px;line-height:1.5;
+    color:var(--sub);
+    padding:2px 0 2px 10px;
+    border-left:2px solid var(--border-2);
+  }
+  .guide-li.hl{border-left-color:var(--primary);color:var(--ink-2);}
+  .lang-btn{
+    margin-top:auto;
+    font-family:'JetBrains Mono',monospace;
+    font-size:11px;font-weight:600;letter-spacing:0.06em;
+    padding:8px 12px;cursor:pointer;
+    background:var(--card);color:var(--ink);
+    border:1px solid var(--border-2);
+    border-radius:6px;
+    transition:background 120ms ease, border-color 120ms ease;
+  }
+  .lang-btn:hover{background:var(--paper-2);border-color:var(--primary-line);}
+  .lang-btn:active{background:var(--primary-soft);}
+
+  /* ---------- Main ---------- */
+  .main{
+    flex:1;height:100vh;overflow:hidden;
+    display:grid;
+    grid-template-rows: minmax(80px, 10.5%) minmax(280px, 44%) minmax(130px, 18%) minmax(108px, 16%);
+    padding:16px 22px;gap:11px;position:relative;
+    background:var(--paper);
+  }
+
+  /* === 顶部 Title === */
+  .topcard{
+    display:flex;align-items:center;gap:18px;
+    padding:12px 20px;
+    background:var(--card);
+    border:1px solid var(--border);
+    border-radius:10px;
+    box-shadow:var(--shadow-sm);
+    position:relative;
+  }
+  .topcard .badge{
+    flex-shrink:0;
+    width:60px;height:60px;
+    background:var(--computing-soft);
+    border:1.5px solid var(--computing-line);
+    border-radius:8px;
+    display:flex;align-items:center;justify-content:center;
+    color:var(--computing-ink);
+    box-shadow:var(--shadow-sm);
+    position:relative;
+  }
+  .topcard .badge svg{width:34px;height:34px;}
+  .topcard .badge .corner-dot{
+    position:absolute;top:6px;right:6px;
+    width:6px;height:6px;border-radius:50%;
+    background:var(--primary);
+    animation:pulse-dot 2.4s ease-in-out infinite;
+  }
+  .topcard .ttext{flex:1;min-width:0;}
+  .topcard .ttext .ttl{
+    font-size:18px;font-weight:700;color:var(--ink);letter-spacing:-0.01em;
+    margin-bottom:4px;
+  }
+  .topcard .ttext .lead{
+    font-size:12.5px;line-height:1.55;color:var(--sub);
+  }
+  .topcard .ttext .lead .em{color:var(--computing);font-weight:700;}
+  .topcard .ttext .lead-en{
+    font-size:10.5px;font-style:italic;color:var(--sub-2);margin-top:3px;
+  }
+  .topcard .stamp{
+    position:absolute;right:18px;top:50%;transform:translateY(-50%);
+    display:flex;align-items:center;gap:8px;
+    padding:6px 12px;
+    background:var(--paper-2);
+    border:1px solid var(--border-2);
+    border-radius:20px;
+    font-family:'JetBrains Mono',monospace;
+    font-size:10.5px;font-weight:700;letter-spacing:0.08em;
+    color:var(--computing-ink);
+  }
+  .topcard .stamp .dot{
+    width:7px;height:7px;border-radius:50%;
+    background:var(--computing);
+    animation:pulse-dot 2.4s ease-in-out infinite;
+  }
+
+  /* === 中部三栏 === */
+  .pillars{
+    display:grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap:11px;min-height:0;
+  }
+  .pillar{
+    display:flex;flex-direction:column;gap:8px;min-height:0;
+    background:var(--card);
+    border:1px solid var(--border);
+    border-radius:10px;
+    padding:12px 12px 11px;
+    box-shadow:var(--shadow-sm);
+  }
+  .pillar-head{
+    display:flex;align-items:center;gap:8px;
+    padding-bottom:8px;
+    border-bottom:1px solid var(--hairline);
+  }
+  .pillar-icon{
+    flex-shrink:0;
+    width:30px;height:30px;
+    border-radius:6px;
+    background:var(--computing-soft);
+    border:1px solid var(--computing-line);
+    display:flex;align-items:center;justify-content:center;
+    color:var(--computing-ink);
+  }
+  .pillar-icon svg{width:18px;height:18px;}
+  .pillar-ttl{
+    flex:1;min-width:0;
+    font-size:13px;font-weight:700;color:var(--ink);letter-spacing:-0.01em;
+    line-height:1.25;
+  }
+  .pillar-num{
+    font-family:'JetBrains Mono',monospace;
+    font-size:9.5px;font-weight:700;
+    color:var(--sub-2);letter-spacing:0.1em;
+  }
+  .pillar-body{
+    display:flex;flex-direction:column;gap:7px;min-height:0;
+    flex:1;
+  }
+
+  /* --- cron 行卡 --- */
+  .cron-row{
+    background:var(--paper);
+    border:1px solid var(--border);
+    border-radius:7px;
+    padding:7px 9px 7px 10px;
+    cursor:pointer;outline:none;position:relative;
+    transition:transform 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
+  }
+  .cron-row:hover, .cron-row:focus-visible{
+    transform:translateY(-1px);
+    border-color:var(--computing-line);
+    box-shadow:var(--shadow);
+  }
+  .cron-row.tap{
+    border-color:var(--computing);
+    box-shadow:var(--shadow-md);
+    background:var(--card);
+  }
+  .cron-row-head{
+    display:flex;align-items:center;gap:8px;
+  }
+  .cron-tick{
+    flex-shrink:0;
+    font-family:'JetBrains Mono',monospace;font-size:9.5px;font-weight:700;
+    padding:2px 6px;border-radius:3px;letter-spacing:0.05em;
+    background:var(--computing-soft);color:var(--computing-ink);border:1px solid var(--computing-line);
+  }
+  .cron-name{
+    flex:1;min-width:0;
+    font-size:11.5px;font-weight:600;color:var(--ink);line-height:1.3;
+  }
+  .cron-syntax{
+    margin-top:5px;
+    font-family:'JetBrains Mono',monospace;font-size:10.5px;font-weight:600;
+    color:var(--computing-ink);
+    background:var(--computing-soft);
+    border:1px dashed var(--computing-line);
+    border-radius:4px;
+    padding:4px 8px;
+    letter-spacing:0.02em;
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  }
+  .cron-hint{
+    margin-top:4px;
+    font-size:10px;color:var(--sub);line-height:1.4;
+    max-height:0;overflow:hidden;
+    transition:max-height 220ms ease;
+  }
+  .cron-row:hover .cron-hint, .cron-row.tap .cron-hint{
+    max-height:60px;
+  }
+
+  /* --- 监控/恢复 卡片 --- */
+  .mcard{
+    background:var(--paper);
+    border:1px solid var(--border);
+    border-radius:7px;
+    padding:8px 10px 9px;
+    cursor:pointer;outline:none;position:relative;
+    transition:transform 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
+    display:flex;flex-direction:column;gap:4px;
+  }
+  .mcard:hover, .mcard:focus-visible{
+    transform:translateY(-1px);
+    border-color:var(--computing-line);
+    box-shadow:var(--shadow);
+  }
+  .mcard.tap{
+    border-color:var(--computing);
+    box-shadow:var(--shadow-md);
+    background:var(--card);
+  }
+  .mcard-head{display:flex;align-items:center;gap:8px;}
+  .mcard-glyph{
+    flex-shrink:0;
+    width:24px;height:24px;border-radius:5px;
+    background:var(--paper-2);
+    border:1px solid var(--border-2);
+    display:flex;align-items:center;justify-content:center;
+    color:var(--sub);
+  }
+  .mcard:hover .mcard-glyph, .mcard.tap .mcard-glyph{
+    background:var(--computing-soft);
+    border-color:var(--computing-line);
+    color:var(--computing);
+  }
+  .mcard-glyph svg{width:14px;height:14px;}
+  .mcard-name{
+    flex:1;min-width:0;
+    font-size:11.5px;font-weight:700;color:var(--ink);letter-spacing:-0.005em;
+    font-family:'JetBrains Mono',monospace;
+  }
+  .mcard-role{
+    font-size:10.5px;color:var(--sub);line-height:1.45;
+  }
+  .mcard-detail{
+    margin-top:2px;
+    font-size:9.5px;color:var(--sub-2);line-height:1.4;
+    max-height:0;overflow:hidden;
+    transition:max-height 220ms ease;
+  }
+  .mcard:hover .mcard-detail, .mcard.tap .mcard-detail{
+    max-height:60px;
+  }
+
+  /* === 中下 一周稳定性 === */
+  .week{
+    background:var(--card);
+    border:1px solid var(--border);
+    border-radius:10px;
+    padding:11px 14px 9px;
+    display:flex;flex-direction:column;gap:6px;
+    box-shadow:var(--shadow-sm);
+    min-height:0;
+  }
+  .week-head{
+    display:flex;align-items:baseline;justify-content:space-between;
+  }
+  .week-ttl{font-size:12.5px;font-weight:700;color:var(--ink);letter-spacing:-0.005em;}
+  .week-hint{
+    font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--sub);
+  }
+  .week-body{
+    flex:1;display:grid;
+    grid-template-columns: 80px 1fr 88px;
+    gap:8px 14px;align-items:center;
+    min-height:0;
+  }
+  .week-label{
+    font-size:11px;color:var(--ink-2);font-weight:600;
+  }
+  .week-bar-wrap{
+    height:14px;
+    background:var(--paper-2);
+    border:1px solid var(--border);
+    border-radius:7px;
+    position:relative;overflow:hidden;
+  }
+  .week-bar{
+    height:100%;
+    background:linear-gradient(90deg, var(--computing) 0%, var(--primary) 100%);
+    border-radius:6px 0 0 6px;
+  }
+  .week-bar.good{
+    background:linear-gradient(90deg, var(--computing-line) 0%, var(--computing) 100%);
+  }
+  .week-bar.warn{
+    background:linear-gradient(90deg, var(--primary-line) 0%, var(--primary) 100%);
+  }
+  .week-bar-thresh{
+    position:absolute;top:-2px;bottom:-2px;
+    width:1.5px;
+    background:var(--sub);
+    opacity:0.55;
+  }
+  .week-val{
+    font-family:'JetBrains Mono',monospace;font-size:11.5px;font-weight:700;
+    color:var(--computing-ink);text-align:right;
+    letter-spacing:-0.01em;
+  }
+  .week-val .vsub{
+    color:var(--sub-2);font-weight:500;font-size:9.5px;margin-left:3px;
+  }
+
+  /* === 底部 三承诺 === */
+  .vows{display:grid;grid-template-columns:1fr 1fr 1fr;gap:11px;}
+  .vow{
+    padding:10px 13px 11px;
+    background:var(--card);
+    border:1px solid var(--border);
+    border-radius:8px;
+    box-shadow:var(--shadow-sm);
+    cursor:pointer;outline:none;
+    transition:transform 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
+    display:flex;gap:11px;align-items:flex-start;
+    position:relative;
+  }
+  .vow:hover{border-color:var(--computing-line);box-shadow:var(--shadow);}
+  .vow.tap{transform:scale(1.02);border-color:var(--computing);box-shadow:var(--shadow-md);}
+  .vow .vmark{
+    flex-shrink:0;width:30px;height:30px;
+    border-radius:6px;
+    background:var(--paper-2);
+    border:1px solid var(--border);
+    display:flex;align-items:center;justify-content:center;
+    color:var(--sub);
+  }
+  .vow .vmark svg{width:17px;height:17px;}
+  .vow:hover .vmark, .vow.tap .vmark{background:var(--computing-soft);border-color:var(--computing-line);color:var(--computing);}
+  .vow .vtxt{flex:1;min-width:0;}
+  .vow .vnum{
+    font-family:'JetBrains Mono',monospace;font-size:9.5px;font-weight:700;
+    color:var(--sub-2);letter-spacing:0.1em;margin-bottom:3px;
+  }
+  .vow .vline{font-size:12px;line-height:1.4;color:var(--ink);font-weight:500;letter-spacing:-0.005em;}
+  .vow .vline-en{font-size:9.5px;font-style:italic;color:var(--sub-2);margin-top:3px;line-height:1.4;}
+
+  /* === 柔和心跳 === */
+  @keyframes pulse-dot{
+    0%,100%{opacity:1;transform:scale(1);}
+    50%{opacity:0.45;transform:scale(0.82);}
+  }
+</style>
+</head>
+<body>
+  <aside class="sidebar">
+    <div class="brand">
+      <span id="brandMain">PurpleAir Node</span>
+      <span class="brand-sub" id="brandSub">M28 · 无人值守 7×24</span>
+    </div>
+    <div class="deco" aria-hidden="true">
+      <!-- 装饰: 时钟 + 循环箭头 = 定时自循环 -->
+      <svg viewBox="0 0 100 100" fill="none" stroke="currentColor" stroke-width="1.5" style="color:var(--sub);">
+        <!-- 时钟外圈 -->
+        <circle cx="50" cy="50" r="26" fill="var(--card)" stroke="var(--border-2)" stroke-width="1.5"/>
+        <!-- 时钟刻度 -->
+        <line x1="50" y1="26" x2="50" y2="30" stroke="var(--sub)" stroke-width="1.2"/>
+        <line x1="74" y1="50" x2="70" y2="50" stroke="var(--sub)" stroke-width="1.2"/>
+        <line x1="50" y1="74" x2="50" y2="70" stroke="var(--sub)" stroke-width="1.2"/>
+        <line x1="26" y1="50" x2="30" y2="50" stroke="var(--sub)" stroke-width="1.2"/>
+        <!-- 时针指 12, 分针指 3 -->
+        <line x1="50" y1="50" x2="50" y2="36" stroke="var(--ink)" stroke-width="2" stroke-linecap="round"/>
+        <line x1="50" y1="50" x2="62" y2="50" stroke="var(--computing)" stroke-width="2" stroke-linecap="round"/>
+        <circle cx="50" cy="50" r="2" fill="var(--ink)"/>
+        <!-- 外圈循环箭头 -->
+        <path d="M 50 14 A 36 36 0 0 1 86 50" stroke="var(--computing)" stroke-width="1.2" fill="none" stroke-dasharray="3 3"/>
+        <path d="M 86 50 L 84 46 M 86 50 L 90 48" stroke="var(--computing)" stroke-width="1.2" stroke-linecap="round" fill="none"/>
+        <path d="M 14 50 A 36 36 0 0 1 50 14" stroke="var(--computing)" stroke-width="1.2" fill="none" stroke-dasharray="3 3"/>
+        <path d="M 50 14 L 46 16 M 50 14 L 48 10" stroke="var(--computing)" stroke-width="1.2" stroke-linecap="round" fill="none"/>
+        <!-- 标签 -->
+        <text x="50" y="92" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="8" font-weight="700" fill="var(--sub)" stroke="none">7 × 24</text>
+      </svg>
+    </div>
+    <div class="guide">
+      <div class="guide-li hl" id="g1">悬停左列 cron, 看 crontab 语法</div>
+      <div class="guide-li" id="g2">中右两列 = 监控 + 故障恢复</div>
+      <div class="guide-li" id="g3">看下方 7 天稳定性指标线</div>
+    </div>
+    <button class="lang-btn" id="langBtn" type="button">CN / EN</button>
+  </aside>
+
+  <main class="main">
+    <!-- 顶部 Title -->
+    <section class="topcard">
+      <div class="badge" aria-hidden="true">
+        <!-- 齿轮 + 心电监控线 = 自动 + 监控 -->
+        <svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="16" cy="16" r="5" fill="var(--computing-soft)" stroke="currentColor"/>
+          <path d="M16 5 L16 8 M16 24 L16 27 M5 16 L8 16 M24 16 L27 16 M8.5 8.5 L10.6 10.6 M21.4 21.4 L23.5 23.5 M8.5 23.5 L10.6 21.4 M21.4 10.6 L23.5 8.5" />
+          <circle cx="16" cy="16" r="2" fill="currentColor" stroke="none"/>
+        </svg>
+        <span class="corner-dot"></span>
+      </div>
+      <div class="ttext">
+        <div class="ttl" id="topTtl">无人值守 7×24 = 自动化 + 监控 + 错误恢复</div>
+        <div class="lead" id="topLead">让节点自己跑, 不靠我守着, 靠 <span class="em">"定时调度 · 状态监控 · 故障自愈"</span> 三件套撑起一周稳定运行。</div>
+        <div class="lead-en" id="topLeadEn">Unattended 7×24 = scheduled jobs + health monitoring + auto-recovery, three pillars together.</div>
+      </div>
+      <div class="stamp">
+        <span class="dot"></span>
+        <span id="stampLbl">LIVE · 168h</span>
+      </div>
+    </section>
+
+    <!-- 中部 三栏 -->
+    <section class="pillars">
+
+      <!-- 左: cron 定时调度 -->
+      <div class="pillar">
+        <div class="pillar-head">
+          <div class="pillar-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="9"/>
+              <line x1="12" y1="7" x2="12" y2="12"/>
+              <line x1="12" y1="12" x2="15.5" y2="14"/>
+            </svg>
+          </div>
+          <div class="pillar-ttl" id="p1Ttl">cron · 定时调度</div>
+          <span class="pillar-num mono">01</span>
+        </div>
+        <div class="pillar-body">
+          <div class="cron-row" data-row="c1" tabindex="0" role="button">
+            <div class="cron-row-head">
+              <span class="cron-tick mono">1min</span>
+              <span class="cron-name" id="c1Name">读传感器 · 每分钟一次</span>
+            </div>
+            <div class="cron-syntax mono">* * * * *  python read_pms.py</div>
+            <div class="cron-hint" id="c1Hint">五颗星 = 每分钟、每小时、每天、每月、每周; 任何分钟都跑。</div>
+          </div>
+          <div class="cron-row" data-row="c2" tabindex="0" role="button">
+            <div class="cron-row-head">
+              <span class="cron-tick mono">1h</span>
+              <span class="cron-name" id="c2Name">算 NowCast · 每小时一次</span>
+            </div>
+            <div class="cron-syntax mono">0 * * * *  python nowcast.py</div>
+            <div class="cron-hint" id="c2Hint">分钟=0, 其余*; 整点触发, 算出当前小时聚合 AQI。</div>
+          </div>
+          <div class="cron-row" data-row="c3" tabindex="0" role="button">
+            <div class="cron-row-head">
+              <span class="cron-tick mono">1d</span>
+              <span class="cron-name" id="c3Name">打包数据 · 每天 02:30</span>
+            </div>
+            <div class="cron-syntax mono">30 2 * * *  bash pack_daily.sh</div>
+            <div class="cron-hint" id="c3Hint">凌晨低峰打包昨日 CSV, 上传到云盘留档。</div>
+          </div>
+          <div class="cron-row" data-row="c4" tabindex="0" role="button">
+            <div class="cron-row-head">
+              <span class="cron-tick mono">1w</span>
+              <span class="cron-name" id="c4Name">清旧日志 · 每周日 03:00</span>
+            </div>
+            <div class="cron-syntax mono">0 3 * * 0  find /log -mtime +7 -delete</div>
+            <div class="cron-hint" id="c4Hint">周日凌晨删 7 天前日志; 避免 SD 卡爆满让节点挂掉。</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 中: 监控 -->
+      <div class="pillar">
+        <div class="pillar-head">
+          <div class="pillar-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M3 12 L7 12 L9 7 L13 17 L15 12 L21 12"/>
+            </svg>
+          </div>
+          <div class="pillar-ttl" id="p2Ttl">监控 · 健康检查</div>
+          <span class="pillar-num mono">02</span>
+        </div>
+        <div class="pillar-body">
+          <div class="mcard" data-mcard="m1" tabindex="0" role="button">
+            <div class="mcard-head">
+              <div class="mcard-glyph" aria-hidden="true">
+                <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                  <circle cx="8" cy="8" r="6"/>
+                  <path d="M8 4 L8 8 L11 9"/>
+                </svg>
+              </div>
+              <div class="mcard-name">systemd</div>
+            </div>
+            <div class="mcard-role" id="m1Role">把脚本注册成系统服务, 开机自启 + 挂了自动拉起</div>
+            <div class="mcard-detail" id="m1Det">systemctl enable purpleair.service; Restart=always</div>
+          </div>
+          <div class="mcard" data-mcard="m2" tabindex="0" role="button">
+            <div class="mcard-head">
+              <div class="mcard-glyph" aria-hidden="true">
+                <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="2" y="3" width="12" height="10" rx="1"/>
+                  <line x1="2" y1="6" x2="14" y2="6"/>
+                  <circle cx="4" cy="4.5" r="0.5" fill="currentColor"/>
+                </svg>
+              </div>
+              <div class="mcard-name">supervisord</div>
+            </div>
+            <div class="mcard-role" id="m2Role">进程级管家, 一个 supervisord 看好几个脚本同时活着</div>
+            <div class="mcard-detail" id="m2Det">[program:reader] autorestart=true; stderr_logfile=/var/log/...</div>
+          </div>
+          <div class="mcard" data-mcard="m3" tabindex="0" role="button">
+            <div class="mcard-head">
+              <div class="mcard-glyph" aria-hidden="true">
+                <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M3 4 L13 4 L12 13 L4 13 Z"/>
+                  <line x1="6" y1="7" x2="10" y2="7"/>
+                  <line x1="6" y1="10" x2="10" y2="10"/>
+                </svg>
+              </div>
+              <div class="mcard-name">logrotate</div>
+            </div>
+            <div class="mcard-role" id="m3Role">每天按时切日志, 旧的压缩存档, 防止单一文件爆 GB</div>
+            <div class="mcard-detail" id="m3Det">daily; rotate 14; compress; copytruncate</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 右: 错误恢复 -->
+      <div class="pillar">
+        <div class="pillar-head">
+          <div class="pillar-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M3 12 A9 9 0 0 1 18 6.3"/>
+              <path d="M18 3 L18 7 L14 7"/>
+              <path d="M21 12 A9 9 0 0 1 6 17.7"/>
+              <path d="M6 21 L6 17 L10 17"/>
+            </svg>
+          </div>
+          <div class="pillar-ttl" id="p3Ttl">恢复 · 故障自愈</div>
+          <span class="pillar-num mono">03</span>
+        </div>
+        <div class="pillar-body">
+          <div class="mcard" data-mcard="r1" tabindex="0" role="button">
+            <div class="mcard-head">
+              <div class="mcard-glyph" aria-hidden="true">
+                <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M3 8 A5 5 0 0 1 12 5"/>
+                  <path d="M12 3 L12 6 L9 6"/>
+                  <path d="M13 8 A5 5 0 0 1 4 11"/>
+                </svg>
+              </div>
+              <div class="mcard-name" id="r1Name">auto-restart</div>
+            </div>
+            <div class="mcard-role" id="r1Role">脚本 crash 后 5 秒自动重启, 不需要手动 ssh 上去 kick</div>
+            <div class="mcard-detail" id="r1Det">Restart=always, RestartSec=5; 累计重启次数会进 metrics</div>
+          </div>
+          <div class="mcard" data-mcard="r2" tabindex="0" role="button">
+            <div class="mcard-head">
+              <div class="mcard-glyph" aria-hidden="true">
+                <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M8 2 L14 12 L2 12 Z"/>
+                  <line x1="8" y1="6" x2="8" y2="9"/>
+                  <circle cx="8" cy="11" r="0.5" fill="currentColor"/>
+                </svg>
+              </div>
+              <div class="mcard-name" id="r2Name">alert</div>
+            </div>
+            <div class="mcard-role" id="r2Role">连续 10 分钟无数据 → 推送通知到手机 (微信 / Bark / 邮件)</div>
+            <div class="mcard-detail" id="r2Det">heartbeat 表 timestamp 老于 600s 触发 webhook</div>
+          </div>
+          <div class="mcard" data-mcard="r3" tabindex="0" role="button">
+            <div class="mcard-head">
+              <div class="mcard-glyph" aria-hidden="true">
+                <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="2" y="4" width="12" height="8" rx="1"/>
+                  <line x1="2" y1="7" x2="14" y2="7"/>
+                  <circle cx="5" cy="9.5" r="0.6" fill="currentColor"/>
+                  <circle cx="8" cy="9.5" r="0.6" fill="currentColor"/>
+                  <circle cx="11" cy="9.5" r="0.6" fill="currentColor"/>
+                </svg>
+              </div>
+              <div class="mcard-name" id="r3Name">cache buffer</div>
+            </div>
+            <div class="mcard-role" id="r3Role">网络断了先写本地 buffer, 网恢复后批量补传, 不丢任何一条数据</div>
+            <div class="mcard-detail" id="r3Det">SQLite WAL + retry queue; 已读未上传 flag</div>
+          </div>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- 中下: 7 天稳定性指标 -->
+    <section class="week">
+      <div class="week-head">
+        <div class="week-ttl" id="wkTtl">最近 7 天稳定性 · 工业级合格线</div>
+        <div class="week-hint mono" id="wkHint">last 168h · vs SLO</div>
+      </div>
+      <div class="week-body">
+
+        <div class="week-label" id="wk1Lbl">uptime · 在线率</div>
+        <div class="week-bar-wrap">
+          <div class="week-bar good" style="width:99.6%;"></div>
+          <div class="week-bar-thresh" style="left:95%;"></div>
+        </div>
+        <div class="week-val mono">99.6%<span class="vsub">SLO 95%</span></div>
+
+        <div class="week-label" id="wk2Lbl">错误率 · errors</div>
+        <div class="week-bar-wrap">
+          <div class="week-bar warn" style="width:8%;"></div>
+          <div class="week-bar-thresh" style="left:20%;"></div>
+        </div>
+        <div class="week-val mono">0.8%<span class="vsub">SLO &lt;2%</span></div>
+
+        <div class="week-label" id="wk3Lbl">数据完整 · coverage</div>
+        <div class="week-bar-wrap">
+          <div class="week-bar good" style="width:98.2%;"></div>
+          <div class="week-bar-thresh" style="left:90%;"></div>
+        </div>
+        <div class="week-val mono">98.2%<span class="vsub">SLO 90%</span></div>
+
+      </div>
+    </section>
+
+    <!-- 底部 三承诺 -->
+    <section class="vows">
+      <div class="vow" data-vow="1" tabindex="0" role="button">
+        <div class="vmark" aria-hidden="true">
+          <!-- 日历 7 天 -->
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="5" width="18" height="15" rx="1"/>
+            <line x1="3" y1="9" x2="21" y2="9"/>
+            <line x1="8" y1="3" x2="8" y2="6"/>
+            <line x1="16" y1="3" x2="16" y2="6"/>
+          </svg>
+        </div>
+        <div class="vtxt">
+          <div class="vnum mono">VOW · 01</div>
+          <div class="vline" id="vow1">我看 7 天 — 走开睡觉吃饭节点也照跑, uptime ≥ 95%。</div>
+          <div class="vline-en" id="vow1en">I watch 7 days — node runs while I sleep, eat, leave; uptime &ge; 95%.</div>
+        </div>
+      </div>
+      <div class="vow" data-vow="2" tabindex="0" role="button">
+        <div class="vmark" aria-hidden="true">
+          <!-- 铃铛 + 信号 -->
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M6 17 L18 17 L17 12 C17 8 15 6 12 6 C9 6 7 8 7 12 Z"/>
+            <line x1="10" y1="20" x2="14" y2="20"/>
+            <circle cx="19" cy="6" r="1"/>
+          </svg>
+        </div>
+        <div class="vtxt">
+          <div class="vnum mono">VOW · 02</div>
+          <div class="vline" id="vow2">一旦故障我知道 — 10 分钟无数据自动推到手机, 不靠我盯。</div>
+          <div class="vline-en" id="vow2en">When it breaks I know — 10-min silence triggers a push to my phone, no manual watching.</div>
+        </div>
+      </div>
+      <div class="vow" data-vow="3" tabindex="0" role="button">
+        <div class="vmark" aria-hidden="true">
+          <!-- 数据库 + 安全锁 -->
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <ellipse cx="12" cy="6" rx="7" ry="2.5"/>
+            <path d="M5 6 L5 12 C5 13.4 8.1 14.5 12 14.5 C15.9 14.5 19 13.4 19 12 L19 6"/>
+            <path d="M5 12 L5 18 C5 19.4 8.1 20.5 12 20.5 C15.9 20.5 19 19.4 19 18 L19 12"/>
+          </svg>
+        </div>
+        <div class="vtxt">
+          <div class="vnum mono">VOW · 03</div>
+          <div class="vline" id="vow3">数据不丢 — 断网先存本地 buffer, 通了批量补传, 一条不漏。</div>
+          <div class="vline-en" id="vow3en">No data loss — buffer locally on outage, batch-resend on recovery, every sample arrives.</div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+<script>
+(function(){
+  "use strict";
+
+  var LANG = 'cn';
+
+  var I18N = {
+    brandMain:{cn:'PurpleAir Node',                       en:'PurpleAir Node'},
+    brandSub: {cn:'M28 · 无人值守 7×24',                   en:'M28 · Unattended 7×24'},
+    g1:       {cn:'悬停左列 cron, 看 crontab 语法',         en:'Hover left column cron rows for crontab syntax'},
+    g2:       {cn:'中右两列 = 监控 + 故障恢复',              en:'Middle + right = monitoring & recovery'},
+    g3:       {cn:'看下方 7 天稳定性指标线',                 en:'See 7-day stability metrics below'},
+
+    topTtl:   {cn:'无人值守 7×24 = 自动化 + 监控 + 错误恢复',
+               en:'Unattended 7×24 = automation + monitoring + recovery'},
+    topLead:  {cn:'让节点自己跑, 不靠我守着, 靠 "定时调度 · 状态监控 · 故障自愈" 三件套撑起一周稳定运行。',
+               en:'Let the node run itself — built on three pillars: scheduled jobs, health monitoring, and auto-recovery.'},
+    topLeadEn:{cn:'Unattended 7×24 = scheduled jobs + health monitoring + auto-recovery, three pillars together.',
+               en:'Three pillars together carry a full week of stable operation, hands-off.'},
+    stampLbl: {cn:'LIVE · 168h',                          en:'LIVE · 168h'},
+
+    p1Ttl:    {cn:'cron · 定时调度',                       en:'cron · scheduled jobs'},
+    c1Name:   {cn:'读传感器 · 每分钟一次',                  en:'Read sensor · once per minute'},
+    c1Hint:   {cn:'五颗星 = 每分钟、每小时、每天、每月、每周; 任何分钟都跑。',
+               en:'Five stars = any minute, hour, day, month, weekday — runs every minute.'},
+    c2Name:   {cn:'算 NowCast · 每小时一次',                en:'Compute NowCast · hourly'},
+    c2Hint:   {cn:'分钟=0, 其余*; 整点触发, 算出当前小时聚合 AQI。',
+               en:'Minute=0, rest=*; fires on the hour to aggregate hourly AQI.'},
+    c3Name:   {cn:'打包数据 · 每天 02:30',                  en:'Pack data · daily 02:30'},
+    c3Hint:   {cn:'凌晨低峰打包昨日 CSV, 上传到云盘留档。',
+               en:'Pre-dawn off-peak: archive yesterday CSV and push to cloud storage.'},
+    c4Name:   {cn:'清旧日志 · 每周日 03:00',                 en:'Clean old logs · Sunday 03:00'},
+    c4Hint:   {cn:'周日凌晨删 7 天前日志; 避免 SD 卡爆满让节点挂掉。',
+               en:'Sunday pre-dawn: drop logs older than 7 days so the SD card never fills up.'},
+
+    p2Ttl:    {cn:'监控 · 健康检查',                        en:'Monitoring · health checks'},
+    m1Role:   {cn:'把脚本注册成系统服务, 开机自启 + 挂了自动拉起',
+               en:'Register script as a system service; auto-start on boot, auto-revive on crash.'},
+    m1Det:    {cn:'systemctl enable purpleair.service; Restart=always',
+               en:'systemctl enable purpleair.service; Restart=always'},
+    m2Role:   {cn:'进程级管家, 一个 supervisord 看好几个脚本同时活着',
+               en:'Process-level supervisor: one supervisord keeps several scripts alive together.'},
+    m2Det:    {cn:'[program:reader] autorestart=true; stderr_logfile=/var/log/...',
+               en:'[program:reader] autorestart=true; stderr_logfile=/var/log/...'},
+    m3Role:   {cn:'每天按时切日志, 旧的压缩存档, 防止单一文件爆 GB',
+               en:'Rotate logs on a fixed schedule, compress old ones, stop any single file ballooning to GB.'},
+    m3Det:    {cn:'daily; rotate 14; compress; copytruncate',
+               en:'daily; rotate 14; compress; copytruncate'},
+
+    p3Ttl:    {cn:'恢复 · 故障自愈',                        en:'Recovery · self-healing'},
+    r1Name:   {cn:'auto-restart',                           en:'auto-restart'},
+    r1Role:   {cn:'脚本 crash 后 5 秒自动重启, 不需要手动 ssh 上去 kick',
+               en:'Auto-relaunch within 5 sec after crash — no manual ssh kick needed.'},
+    r1Det:    {cn:'Restart=always, RestartSec=5; 累计重启次数会进 metrics',
+               en:'Restart=always, RestartSec=5; restart-count flows into metrics.'},
+    r2Name:   {cn:'alert',                                  en:'alert'},
+    r2Role:   {cn:'连续 10 分钟无数据 → 推送通知到手机 (微信 / Bark / 邮件)',
+               en:'10-min data silence → push notification to phone (WeChat / Bark / email).'},
+    r2Det:    {cn:'heartbeat 表 timestamp 老于 600s 触发 webhook',
+               en:'heartbeat row older than 600s triggers the webhook.'},
+    r3Name:   {cn:'cache buffer',                           en:'cache buffer'},
+    r3Role:   {cn:'网络断了先写本地 buffer, 网恢复后批量补传, 不丢任何一条数据',
+               en:'On network outage: write to local buffer; on recovery: batch-resend; lose nothing.'},
+    r3Det:    {cn:'SQLite WAL + retry queue; 已读未上传 flag',
+               en:'SQLite WAL + retry queue; read-but-unsent flag.'},
+
+    wkTtl:    {cn:'最近 7 天稳定性 · 工业级合格线',            en:'Last 7 days stability · industrial SLO'},
+    wkHint:   {cn:'last 168h · vs SLO',                     en:'last 168h · vs SLO'},
+    wk1Lbl:   {cn:'uptime · 在线率',                        en:'uptime · online ratio'},
+    wk2Lbl:   {cn:'错误率 · errors',                         en:'error rate · errors'},
+    wk3Lbl:   {cn:'数据完整 · coverage',                     en:'data coverage · completeness'},
+
+    vow1:     {cn:'我看 7 天 — 走开睡觉吃饭节点也照跑, uptime ≥ 95%。',
+               en:'I watch 7 days — node runs while I sleep, eat, leave; uptime ≥ 95%.'},
+    vow1en:   {cn:'I watch 7 days — node runs while I sleep, eat, leave; uptime ≥ 95%.',
+               en:'A full week unattended is the only real proof of stability.'},
+    vow2:     {cn:'一旦故障我知道 — 10 分钟无数据自动推到手机, 不靠我盯。',
+               en:'When it breaks I know — 10-min silence pushes to my phone; no eyeballing.'},
+    vow2en:   {cn:'When it breaks I know — 10-min silence triggers a push to my phone, no manual watching.',
+               en:'Alerts replace the human watchdog; silence = signal.'},
+    vow3:     {cn:'数据不丢 — 断网先存本地 buffer, 通了批量补传, 一条不漏。',
+               en:'No data loss — buffer locally on outage, batch-resend on recovery, every sample arrives.'},
+    vow3en:   {cn:'No data loss — buffer locally on outage, batch-resend on recovery, every sample arrives.',
+               en:'Network drop is a delay, never an erasure.'},
+
+    langBtn:  {cn:'CN / EN',                                en:'EN / CN'}
+  };
+
+  function $(id){return document.getElementById(id);}
+  function $$(sel){return document.querySelectorAll(sel);}
+
+  function setText(key, el){
+    if(!el || !I18N[key]) return;
+    var v = I18N[key][LANG];
+    if(v != null) el.textContent = v;
+  }
+
+  function applyLang(){
+    var ids = [
+      'brandMain','brandSub','g1','g2','g3',
+      'topTtl','topLeadEn','stampLbl',
+      'p1Ttl','c1Name','c1Hint','c2Name','c2Hint','c3Name','c3Hint','c4Name','c4Hint',
+      'p2Ttl','m1Role','m1Det','m2Role','m2Det','m3Role','m3Det',
+      'p3Ttl','r1Name','r1Role','r1Det','r2Name','r2Role','r2Det','r3Name','r3Role','r3Det',
+      'wkTtl','wkHint','wk1Lbl','wk2Lbl','wk3Lbl',
+      'vow1','vow1en','vow2','vow2en','vow3','vow3en'
+    ];
+    ids.forEach(function(id){ setText(id, $(id)); });
+    $('langBtn').textContent = I18N.langBtn[LANG];
+
+    // topLead 含强调段, 重建保留 .em
+    var lead = $('topLead');
+    if(lead){
+      lead.innerHTML = '';
+      var raw = I18N.topLead[LANG];
+      var emText = LANG === 'cn'
+        ? '"定时调度 · 状态监控 · 故障自愈"'
+        : 'three pillars: scheduled jobs, health monitoring, and auto-recovery';
+      var idx = raw.indexOf(emText);
+      if(idx >= 0){
+        lead.appendChild(document.createTextNode(raw.slice(0, idx)));
+        var span = document.createElement('span');
+        span.className = 'em';
+        span.textContent = emText;
+        lead.appendChild(span);
+        lead.appendChild(document.createTextNode(raw.slice(idx + emText.length)));
+      }else{
+        lead.textContent = raw;
+      }
+    }
+  }
+
+  // ---- cron rows: hover + click pin ----
+  var cronEls = $$('.cron-row');
+  var pinnedCron = null;
+  cronEls.forEach(function(el){
+    el.addEventListener('click', function(){
+      if(pinnedCron === el){
+        el.classList.remove('tap');
+        pinnedCron = null;
+      }else{
+        cronEls.forEach(function(c){ c.classList.remove('tap'); });
+        el.classList.add('tap');
+        pinnedCron = el;
+      }
+    });
+    el.addEventListener('keydown', function(e){
+      if(e.key === 'Enter' || e.key === ' '){
+        e.preventDefault();
+        el.click();
+      }
+    });
+  });
+
+  // ---- mcards (monitor + recover): click toggle ----
+  var mcardEls = $$('.mcard');
+  mcardEls.forEach(function(el){
+    el.addEventListener('click', function(){
+      var was = el.classList.contains('tap');
+      el.classList.toggle('tap', !was);
+    });
+    el.addEventListener('keydown', function(e){
+      if(e.key === 'Enter' || e.key === ' '){
+        e.preventDefault();
+        el.click();
+      }
+    });
+  });
+
+  // ---- Vow cards: click toggle highlight ----
+  var vowEls = $$('.vow');
+  vowEls.forEach(function(el){
+    el.addEventListener('click', function(){
+      var was = el.classList.contains('tap');
+      vowEls.forEach(function(v){ v.classList.remove('tap'); });
+      if(!was) el.classList.add('tap');
+    });
+    el.addEventListener('keydown', function(e){
+      if(e.key === 'Enter' || e.key === ' '){
+        e.preventDefault();
+        el.click();
+      }
+    });
+  });
+
+  // ---- Lang toggle ----
+  $('langBtn').addEventListener('click', function(){
+    LANG = (LANG === 'cn') ? 'en' : 'cn';
+    applyLang();
+  });
+
+  // ---- Init ----
+  applyLang();
+})();
+</script>
+</body>
+</html>

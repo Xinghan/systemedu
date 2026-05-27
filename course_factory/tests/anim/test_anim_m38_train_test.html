@@ -1,0 +1,674 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>M38 — 防过拟合 训练 / 测试 切分</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&family=Noto+Sans+SC:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    /* Industrial Atelier — Claude warm cream + coral */
+    --paper:     #FAF9F5;
+    --paper-2:   #F1EDDF;
+    --card:      #FFFFFF;
+    --ink:       #191814;
+    --ink-2:     #2B2924;
+    --sub:       #6B6557;
+    --sub-2:     #9D978A;
+    --border:    #EBE5D6;
+    --border-2:  #D9D1BD;
+    --hairline:  #F2EDE0;
+
+    /* Claude coral — primary */
+    --primary:       #D97757;
+    --primary-ink:   #9A4A2E;
+    --primary-soft:  #F8EDE5;
+    --primary-line:  #ECCFB8;
+
+    /* Domain accent — computing */
+    --computing:      #C04E68;
+    --computing-soft: #F4DDE3;
+    --computing-line: #E0AEBC;
+    --computing-ink:  #80324A;
+
+    --shadow-sm: 0 1px 2px 0 rgba(25,24,20,.04);
+    --shadow:    0 1px 3px 0 rgba(25,24,20,.06), 0 1px 2px -1px rgba(25,24,20,.04);
+    --shadow-md: 0 4px 8px -2px rgba(25,24,20,.06), 0 2px 4px -2px rgba(25,24,20,.04);
+    --shadow-lg: 0 12px 24px -6px rgba(25,24,20,.1), 0 4px 8px -4px rgba(25,24,20,.05);
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    height:100vh;overflow:hidden;
+    background:var(--paper);
+    color:var(--ink);
+    font-family:'Inter','PingFang SC','Noto Sans SC',system-ui,sans-serif;
+    display:flex;
+    -webkit-font-smoothing:antialiased;
+    text-rendering:optimizeLegibility;
+  }
+  .mono{font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,monospace;}
+
+  /* ---------- Sidebar ---------- */
+  .sidebar{
+    width:200px;flex-shrink:0;height:100vh;
+    background:var(--card);
+    border-right:1px solid var(--border);
+    display:flex;flex-direction:column;
+    padding:20px 16px;gap:14px;
+  }
+  .brand{
+    font-size:13px;font-weight:700;letter-spacing:0.02em;color:var(--ink);
+    padding-bottom:12px;border-bottom:1px solid var(--hairline);
+  }
+  .brand-sub{
+    display:block;margin-top:6px;font-size:11px;font-weight:500;
+    color:var(--sub);letter-spacing:0;
+  }
+  .deco{
+    width:100%;height:96px;
+    background:var(--paper-2);
+    border:1px solid var(--border);
+    border-radius:8px;
+    display:flex;align-items:center;justify-content:center;
+    box-shadow:var(--shadow-sm);
+  }
+  .deco svg{width:120px;height:76px;}
+  .guide{display:flex;flex-direction:column;gap:9px;margin-top:2px;}
+  .guide-li{
+    font-size:11.5px;line-height:1.5;
+    color:var(--sub);
+    padding:2px 0 2px 10px;
+    border-left:2px solid var(--border-2);
+  }
+  .guide-li.hl{border-left-color:var(--primary);color:var(--ink-2);}
+  .lang-btn{
+    margin-top:auto;
+    font-family:'JetBrains Mono',monospace;
+    font-size:11px;font-weight:600;letter-spacing:0.06em;
+    padding:8px 12px;cursor:pointer;
+    background:var(--card);color:var(--ink);
+    border:1px solid var(--border-2);
+    border-radius:6px;
+    transition:background 120ms ease, border-color 120ms ease;
+  }
+  .lang-btn:hover{background:var(--paper-2);border-color:var(--primary-line);}
+  .lang-btn:active{background:var(--primary-soft);}
+
+  /* ---------- Main ---------- */
+  .main{
+    flex:1;height:100vh;overflow:hidden;
+    display:grid;
+    grid-template-rows: auto auto 1fr auto auto;
+    padding:14px 20px;gap:10px;
+    background:var(--paper);
+  }
+
+  /* === Top warning bar === */
+  .warn{
+    display:flex;align-items:center;gap:14px;
+    padding:11px 18px;
+    background:var(--primary-soft);
+    border:1.5px solid var(--primary);
+    border-left:5px solid var(--primary);
+    border-radius:10px;
+    box-shadow:var(--shadow);
+  }
+  .warn-mark{
+    flex-shrink:0;width:36px;height:36px;
+    border-radius:50%;
+    background:var(--primary);
+    display:flex;align-items:center;justify-content:center;
+    animation:pulse 2.6s ease-in-out infinite;
+  }
+  @keyframes pulse{
+    0%,100%{box-shadow:0 0 0 0 rgba(217,119,87,.45);}
+    50%{box-shadow:0 0 0 8px rgba(217,119,87,0);}
+  }
+  .warn-mark svg{width:18px;height:18px;}
+  .warn-text{display:flex;flex-direction:column;gap:2px;}
+  .warn-title{font-size:14.5px;font-weight:700;color:var(--primary-ink);}
+  .warn-sub{font-size:12px;color:var(--ink-2);line-height:1.5;}
+
+  /* === Section 2 痛点对比 === */
+  .pain-row{
+    display:grid;grid-template-columns:1fr 1fr;gap:10px;
+  }
+  .pain-card{
+    background:var(--card);
+    border:1px solid var(--border);
+    border-radius:10px;
+    padding:10px 14px;
+    box-shadow:var(--shadow-sm);
+    display:flex;gap:12px;align-items:center;
+  }
+  .pain-svg{flex-shrink:0;width:120px;height:78px;}
+  .pain-body{flex:1;min-width:0;}
+  .pain-tag{
+    display:inline-block;font-size:10px;font-weight:600;letter-spacing:.04em;
+    padding:2px 7px;border-radius:4px;margin-bottom:4px;
+    font-family:'JetBrains Mono',monospace;
+  }
+  .pain-tag.bad{background:var(--primary-soft);color:var(--primary-ink);border:1px solid var(--primary-line);}
+  .pain-tag.fix{background:var(--computing-soft);color:var(--computing-ink);border:1px solid var(--computing-line);}
+  .pain-title{font-size:13.5px;font-weight:700;color:var(--ink);margin:0 0 3px 0;}
+  .pain-desc{font-size:11.5px;color:var(--sub);line-height:1.55;}
+
+  /* === Section 3 四步流水线 === */
+  .pipe-wrap{
+    background:var(--card);
+    border:1px solid var(--border);
+    border-radius:12px;
+    padding:14px 16px 12px;
+    box-shadow:var(--shadow);
+    display:flex;flex-direction:column;gap:10px;
+    overflow:hidden;
+  }
+  .pipe-head{
+    display:flex;align-items:baseline;gap:10px;
+  }
+  .pipe-num{
+    font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;
+    color:var(--computing);letter-spacing:.06em;
+  }
+  .pipe-title{font-size:15px;font-weight:700;color:var(--ink);}
+  .pipe-row{
+    display:grid;grid-template-columns:repeat(4,1fr);gap:10px;
+    align-items:stretch;flex:1;min-height:0;
+  }
+  .pstep{
+    position:relative;
+    background:var(--paper-2);
+    border:1px solid var(--border);
+    border-radius:8px;
+    padding:10px 12px;
+    display:flex;flex-direction:column;gap:6px;
+    min-width:0;
+    transition:transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease;
+    cursor:default;
+  }
+  .pstep:hover{
+    transform:translateY(-2px);
+    box-shadow:var(--shadow-md);
+    border-color:var(--computing-line);
+    background:var(--card);
+  }
+  .pstep-h{display:flex;align-items:center;gap:8px;}
+  .pstep-n{
+    width:22px;height:22px;border-radius:50%;
+    background:var(--computing);color:#fff;
+    display:flex;align-items:center;justify-content:center;
+    font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;
+    flex-shrink:0;
+  }
+  .pstep-t{font-size:12.5px;font-weight:700;color:var(--ink-2);line-height:1.3;}
+  .pstep-svg{height:54px;display:flex;align-items:center;justify-content:center;}
+  .pstep-svg svg{width:100%;height:100%;}
+  .pstep-d{font-size:10.5px;color:var(--sub);line-height:1.5;}
+
+  /* === Section 4 切法对比 === */
+  .split-row{
+    display:grid;grid-template-columns:repeat(3,1fr);gap:10px;
+  }
+  .split-card{
+    background:var(--card);
+    border:1px solid var(--border);
+    border-radius:10px;
+    padding:9px 12px;
+    box-shadow:var(--shadow-sm);
+    display:flex;gap:10px;align-items:center;
+    transition:border-color 180ms ease, box-shadow 180ms ease;
+  }
+  .split-card:hover{border-color:var(--computing-line);box-shadow:var(--shadow);}
+  .split-card.cross{border-color:var(--primary-line);background:#FFFCF8;}
+  .split-card.cross:hover{border-color:var(--primary);}
+  .split-svg{flex-shrink:0;width:84px;height:50px;}
+  .split-body{flex:1;min-width:0;}
+  .split-h{display:flex;align-items:center;gap:6px;margin-bottom:2px;}
+  .split-name{font-size:12.5px;font-weight:700;color:var(--ink);}
+  .split-mark{
+    font-family:'JetBrains Mono',monospace;font-size:9.5px;font-weight:700;
+    padding:1px 5px;border-radius:3px;letter-spacing:.04em;
+  }
+  .split-mark.ok{background:var(--computing-soft);color:var(--computing-ink);border:1px solid var(--computing-line);}
+  .split-mark.no{background:var(--primary-soft);color:var(--primary-ink);border:1px solid var(--primary-line);}
+  .split-desc{font-size:10.5px;color:var(--sub);line-height:1.5;}
+
+  /* === Section 5 承诺 === */
+  .vow-row{
+    display:grid;grid-template-columns:repeat(3,1fr);gap:10px;
+  }
+  .vow-card{
+    background:var(--card);
+    border:1px solid var(--border);
+    border-radius:10px;
+    padding:10px 14px;
+    box-shadow:var(--shadow-sm);
+    display:flex;gap:10px;align-items:center;
+    border-top:3px solid var(--computing);
+  }
+  .vow-stamp{
+    flex-shrink:0;width:38px;height:38px;border-radius:50%;
+    background:var(--computing-soft);
+    border:1.5px solid var(--computing);
+    display:flex;align-items:center;justify-content:center;
+  }
+  .vow-stamp svg{width:20px;height:20px;}
+  .vow-body{flex:1;min-width:0;}
+  .vow-t{font-size:12.5px;font-weight:700;color:var(--ink);margin-bottom:2px;}
+  .vow-d{font-size:10.5px;color:var(--sub);line-height:1.45;}
+
+  /* lang display */
+  [data-lang="en"] .cn{display:none;}
+  [data-lang="zh"] .en{display:none;}
+</style>
+</head>
+<body data-lang="zh">
+<aside class="sidebar">
+  <div class="brand">
+    <span class="cn">M38 防过拟合</span>
+    <span class="en">M38 Anti-Overfitting</span>
+    <span class="brand-sub cn">PurpleAir · 训练/测试切分</span>
+    <span class="brand-sub en">PurpleAir · Train/Test split</span>
+  </div>
+  <div class="deco" aria-hidden="true">
+    <svg viewBox="0 0 120 76" fill="none">
+      <!-- 数据条 30 天: 24 训练 + 6 测试 -->
+      <rect x="6"  y="32" width="76" height="14" rx="2" fill="#F4DDE3" stroke="#C04E68" stroke-width="1.2"/>
+      <rect x="86" y="32" width="28" height="14" rx="2" fill="#F8EDE5" stroke="#D97757" stroke-width="1.2"/>
+      <!-- 切分线 -->
+      <line x1="82" y1="22" x2="82" y2="56" stroke="#191814" stroke-width="1.5" stroke-dasharray="2 2"/>
+      <text x="44" y="58" text-anchor="middle" font-family="JetBrains Mono" font-size="8" font-weight="700" fill="#80324A">TRAIN 24d</text>
+      <text x="100" y="58" text-anchor="middle" font-family="JetBrains Mono" font-size="8" font-weight="700" fill="#9A4A2E">TEST 6d</text>
+      <text x="60" y="18" text-anchor="middle" font-family="Inter" font-size="9" font-weight="600" fill="#6B6557">30 days</text>
+      <!-- 轴 -->
+      <line x1="6" y1="50" x2="114" y2="50" stroke="#9D978A" stroke-width=".6"/>
+    </svg>
+  </div>
+  <div class="guide">
+    <div class="guide-li hl">
+      <span class="cn">1 · 看上方红条：把所有数据拿来拟合 + 评估 = 自欺欺人</span>
+      <span class="en">1 · Fit on ALL data and evaluate on ALL data = self-deception</span>
+    </div>
+    <div class="guide-li">
+      <span class="cn">2 · 正确流水线 4 步：切 → 训 → 测 → 验</span>
+      <span class="en">2 · Pipeline: split → train → test → verify</span>
+    </div>
+    <div class="guide-li">
+      <span class="cn">3 · 时序数据不能随机切，必须按时间切</span>
+      <span class="en">3 · Time-series data must split by time, not random</span>
+    </div>
+  </div>
+  <button class="lang-btn" id="langBtn" type="button">EN / 中文</button>
+</aside>
+
+<main class="main">
+  <!-- ============ 1. 顶部反问警告 ============ -->
+  <div class="warn">
+    <div class="warn-mark" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none">
+        <path d="M12 4v9" stroke="#FFFFFF" stroke-width="2.4" stroke-linecap="round"/>
+        <circle cx="12" cy="18" r="1.4" fill="#FFFFFF"/>
+      </svg>
+    </div>
+    <div class="warn-text">
+      <div class="warn-title">
+        <span class="cn">用所有数据拟合 + 用所有数据评估 = 自欺欺人</span>
+        <span class="en">Fit on ALL data + evaluate on ALL data = self-deception</span>
+      </div>
+      <div class="warn-sub">
+        <span class="cn">"我看到我抄过的题答对了" — 这叫过拟合 (overfit) 加数据泄漏 (data leakage)，不是真本事。</span>
+        <span class="en">"I got the answers right on questions I already saw" — that's overfit plus data leakage, not real skill.</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ 2. 痛点对比两卡 ============ -->
+  <div class="pain-row">
+    <div class="pain-card">
+      <svg class="pain-svg" viewBox="0 0 120 78" fill="none">
+        <!-- 坐标轴 -->
+        <line x1="10" y1="68" x2="114" y2="68" stroke="#9D978A" stroke-width=".8"/>
+        <line x1="10" y1="68" x2="10" y2="8" stroke="#9D978A" stroke-width=".8"/>
+        <!-- 点 -->
+        <circle cx="18" cy="50" r="2.4" fill="#191814"/>
+        <circle cx="30" cy="40" r="2.4" fill="#191814"/>
+        <circle cx="42" cy="56" r="2.4" fill="#191814"/>
+        <circle cx="54" cy="32" r="2.4" fill="#191814"/>
+        <circle cx="66" cy="46" r="2.4" fill="#191814"/>
+        <circle cx="78" cy="22" r="2.4" fill="#191814"/>
+        <circle cx="90" cy="38" r="2.4" fill="#191814"/>
+        <circle cx="102" cy="28" r="2.4" fill="#191814"/>
+        <!-- 蜿蜒曲线穿过所有点 (过拟合) -->
+        <path d="M14 60 C 18 50, 26 38, 30 40 S 38 60, 42 56 S 50 28, 54 32 S 62 50, 66 46 S 74 18, 78 22 S 86 42, 90 38 S 98 24, 102 28 L 110 30" stroke="#D97757" stroke-width="1.6" fill="none"/>
+        <text x="60" y="76" text-anchor="middle" font-family="JetBrains Mono" font-size="8" font-weight="700" fill="#9A4A2E">R² = 1.00</text>
+      </svg>
+      <div class="pain-body">
+        <span class="pain-tag bad">SYMPTOM A</span>
+        <div class="pain-title">
+          <span class="cn">曲线穿过每个点</span>
+          <span class="en">Curve passes every point</span>
+        </div>
+        <div class="pain-desc">
+          <span class="cn">R² 看着 = 1，像把每道题答案都背下来。新一天数据来了，预测就崩。</span>
+          <span class="en">R² looks like 1, as if memorising every answer. New data arrives — predictions collapse.</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="pain-card">
+      <svg class="pain-svg" viewBox="0 0 120 78" fill="none">
+        <!-- 坐标轴 -->
+        <line x1="10" y1="68" x2="114" y2="68" stroke="#9D978A" stroke-width=".8"/>
+        <line x1="10" y1="68" x2="10" y2="8" stroke="#9D978A" stroke-width=".8"/>
+        <!-- 训练点 (小圆) -->
+        <circle cx="20" cy="50" r="2" fill="#9D978A"/>
+        <circle cx="30" cy="42" r="2" fill="#9D978A"/>
+        <circle cx="42" cy="46" r="2" fill="#9D978A"/>
+        <circle cx="54" cy="34" r="2" fill="#9D978A"/>
+        <circle cx="66" cy="38" r="2" fill="#9D978A"/>
+        <!-- 训练拟合的平滑线 -->
+        <path d="M14 56 Q 50 30, 90 24" stroke="#C04E68" stroke-width="1.4" fill="none"/>
+        <!-- 新测试点 (大叉) -->
+        <g stroke="#D97757" stroke-width="1.6" stroke-linecap="round">
+          <line x1="82" y1="60" x2="88" y2="66"/>
+          <line x1="88" y1="60" x2="82" y2="66"/>
+          <line x1="96" y1="54" x2="102" y2="60"/>
+          <line x1="102" y1="54" x2="96" y2="60"/>
+        </g>
+        <!-- 距离虚线 -->
+        <line x1="85" y1="63" x2="85" y2="27" stroke="#D97757" stroke-width=".6" stroke-dasharray="2 2"/>
+        <text x="60" y="76" text-anchor="middle" font-family="JetBrains Mono" font-size="8" font-weight="700" fill="#9A4A2E">MAE 突然爆增</text>
+      </svg>
+      <div class="pain-body">
+        <span class="pain-tag bad">SYMPTOM B</span>
+        <div class="pain-title">
+          <span class="cn">真实新数据来时崩了</span>
+          <span class="en">Crashes on unseen data</span>
+        </div>
+        <div class="pain-desc">
+          <span class="cn">曲线只贴住老点。明天传感器读出的 PM2.5 偏离十几微克，预测全错。</span>
+          <span class="en">Curve only hugs old points. Tomorrow's reading drifts a lot — predictions go wrong.</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ 3. 正确 4 步流水线 ============ -->
+  <section class="pipe-wrap">
+    <div class="pipe-head">
+      <span class="pipe-num">PIPELINE / 正确做法</span>
+      <span class="pipe-title">
+        <span class="cn">把 30 天数据分两份，公式只看其中一份</span>
+        <span class="en">Split 30 days into two parts, formula sees only one</span>
+      </span>
+    </div>
+    <div class="pipe-row">
+      <!-- step 1 切分 -->
+      <div class="pstep">
+        <div class="pstep-h">
+          <div class="pstep-n">1</div>
+          <div class="pstep-t">
+            <span class="cn">按时间切 80 / 20</span>
+            <span class="en">Split 80 / 20 by time</span>
+          </div>
+        </div>
+        <div class="pstep-svg">
+          <svg viewBox="0 0 140 50" fill="none">
+            <rect x="4"   y="16" width="100" height="18" rx="3" fill="#F4DDE3" stroke="#C04E68" stroke-width="1.2"/>
+            <rect x="108" y="16" width="28"  height="18" rx="3" fill="#F8EDE5" stroke="#D97757" stroke-width="1.2"/>
+            <line x1="105" y1="8" x2="105" y2="42" stroke="#191814" stroke-width="1.2" stroke-dasharray="2 2"/>
+            <text x="54"  y="28" text-anchor="middle" font-family="JetBrains Mono" font-size="9" font-weight="700" fill="#80324A">TRAIN  24d</text>
+            <text x="122" y="28" text-anchor="middle" font-family="JetBrains Mono" font-size="9" font-weight="700" fill="#9A4A2E">TEST 6d</text>
+          </svg>
+        </div>
+        <div class="pstep-d">
+          <span class="cn">前 24 天 = 训练。最后 6 天 = hold-out 测试 (锁起来)。</span>
+          <span class="en">First 24 days = train. Last 6 days = hold-out test (locked away).</span>
+        </div>
+      </div>
+
+      <!-- step 2 训练 -->
+      <div class="pstep">
+        <div class="pstep-h">
+          <div class="pstep-n">2</div>
+          <div class="pstep-t">
+            <span class="cn">只用训练集拟参数</span>
+            <span class="en">Fit params on train only</span>
+          </div>
+        </div>
+        <div class="pstep-svg">
+          <svg viewBox="0 0 140 50" fill="none">
+            <circle cx="20" cy="36" r="1.8" fill="#80324A"/>
+            <circle cx="34" cy="30" r="1.8" fill="#80324A"/>
+            <circle cx="48" cy="32" r="1.8" fill="#80324A"/>
+            <circle cx="62" cy="22" r="1.8" fill="#80324A"/>
+            <circle cx="76" cy="26" r="1.8" fill="#80324A"/>
+            <circle cx="90" cy="18" r="1.8" fill="#80324A"/>
+            <path d="M14 40 Q 50 24, 96 14" stroke="#C04E68" stroke-width="1.5" fill="none"/>
+            <text x="110" y="22" font-family="JetBrains Mono" font-size="9" font-weight="700" fill="#80324A">a, b, c</text>
+            <text x="110" y="34" font-family="JetBrains Mono" font-size="8" fill="#6B6557">fit()</text>
+          </svg>
+        </div>
+        <div class="pstep-d">
+          <span class="cn">解三参数 a/b/c。测试集这一步绝不能碰。</span>
+          <span class="en">Solve for a/b/c. Test set must not be touched here.</span>
+        </div>
+      </div>
+
+      <!-- step 3 测试 -->
+      <div class="pstep">
+        <div class="pstep-h">
+          <div class="pstep-n">3</div>
+          <div class="pstep-t">
+            <span class="cn">在测试集算 MAE / R²</span>
+            <span class="en">Score MAE / R² on test</span>
+          </div>
+        </div>
+        <div class="pstep-svg">
+          <svg viewBox="0 0 140 50" fill="none">
+            <!-- 锁打开 -->
+            <rect x="60" y="6" width="20" height="14" rx="1.5" stroke="#D97757" stroke-width="1.4" fill="#F8EDE5"/>
+            <path d="M64 6 V3 a6 6 0 0 1 12 0 V8" stroke="#D97757" stroke-width="1.4" fill="none"/>
+            <!-- 测试点 + 预测 -->
+            <path d="M14 32 Q 50 22, 96 14" stroke="#C04E68" stroke-width="1.2" fill="none" stroke-dasharray="3 2"/>
+            <g stroke="#D97757" stroke-width="1.4" stroke-linecap="round">
+              <line x1="100" y1="20" x2="106" y2="26"/>
+              <line x1="106" y1="20" x2="100" y2="26"/>
+              <line x1="114" y1="14" x2="120" y2="20"/>
+              <line x1="120" y1="14" x2="114" y2="20"/>
+            </g>
+            <text x="20" y="48" font-family="JetBrains Mono" font-size="9" font-weight="700" fill="#80324A">predict()</text>
+          </svg>
+        </div>
+        <div class="pstep-d">
+          <span class="cn">把固定后的公式套上测试集，算误差。这是公正成绩。</span>
+          <span class="en">Run the locked formula on test, compute error. That is the fair score.</span>
+        </div>
+      </div>
+
+      <!-- step 4 验证 -->
+      <div class="pstep">
+        <div class="pstep-h">
+          <div class="pstep-n">4</div>
+          <div class="pstep-t">
+            <span class="cn">训练 ≈ 测试 → 没过拟合</span>
+            <span class="en">Train ≈ Test → no overfit</span>
+          </div>
+        </div>
+        <div class="pstep-svg">
+          <svg viewBox="0 0 140 50" fill="none">
+            <!-- 两条柱: train MAE / test MAE -->
+            <rect x="22" y="20" width="22" height="22" fill="#F4DDE3" stroke="#C04E68" stroke-width="1.2"/>
+            <rect x="58" y="22" width="22" height="20" fill="#F8EDE5" stroke="#D97757" stroke-width="1.2"/>
+            <text x="33" y="14" text-anchor="middle" font-family="JetBrains Mono" font-size="8" font-weight="700" fill="#80324A">train</text>
+            <text x="69" y="14" text-anchor="middle" font-family="JetBrains Mono" font-size="8" font-weight="700" fill="#9A4A2E">test</text>
+            <text x="33" y="48" text-anchor="middle" font-family="JetBrains Mono" font-size="8" fill="#6B6557">3.2</text>
+            <text x="69" y="48" text-anchor="middle" font-family="JetBrains Mono" font-size="8" fill="#6B6557">3.5</text>
+            <!-- check svg -->
+            <path d="M92 26 L98 32 L114 16" stroke="#C04E68" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+        <div class="pstep-d">
+          <span class="cn">两边 MAE 接近 → 公式真学到规律。差距大就重练。</span>
+          <span class="en">Close MAE on both → formula learned the pattern. Big gap → retrain.</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 4. 三种切法对比 ============ -->
+  <div class="split-row">
+    <div class="split-card">
+      <svg class="split-svg" viewBox="0 0 84 50" fill="none">
+        <!-- 随机散点切: 蓝灰=训练 红=测试 混在一起 -->
+        <line x1="4" y1="42" x2="80" y2="42" stroke="#9D978A" stroke-width=".6"/>
+        <circle cx="10" cy="34" r="2" fill="#9D978A"/>
+        <circle cx="18" cy="22" r="2" fill="#D97757"/>
+        <circle cx="26" cy="30" r="2" fill="#9D978A"/>
+        <circle cx="34" cy="14" r="2" fill="#9D978A"/>
+        <circle cx="42" cy="26" r="2" fill="#D97757"/>
+        <circle cx="50" cy="18" r="2" fill="#9D978A"/>
+        <circle cx="58" cy="24" r="2" fill="#9D978A"/>
+        <circle cx="66" cy="12" r="2" fill="#D97757"/>
+        <circle cx="74" cy="20" r="2" fill="#9D978A"/>
+      </svg>
+      <div class="split-body">
+        <div class="split-h">
+          <span class="split-name">
+            <span class="cn">随机切</span><span class="en">Random split</span>
+          </span>
+          <span class="split-mark no">NO</span>
+        </div>
+        <div class="split-desc">
+          <span class="cn">测试点夹在训练点里，公式偷偷"看过未来"，分数虚高。</span>
+          <span class="en">Test points sit between train ones; the formula peeks at the future.</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="split-card">
+      <svg class="split-svg" viewBox="0 0 84 50" fill="none">
+        <line x1="4" y1="42" x2="80" y2="42" stroke="#9D978A" stroke-width=".6"/>
+        <rect x="4"  y="14" width="56" height="22" rx="2" fill="#F4DDE3" stroke="#C04E68" stroke-width="1"/>
+        <rect x="62" y="14" width="18" height="22" rx="2" fill="#F8EDE5" stroke="#D97757" stroke-width="1"/>
+        <text x="32" y="28" text-anchor="middle" font-family="JetBrains Mono" font-size="7" font-weight="700" fill="#80324A">TRAIN</text>
+        <text x="71" y="28" text-anchor="middle" font-family="JetBrains Mono" font-size="7" font-weight="700" fill="#9A4A2E">TEST</text>
+      </svg>
+      <div class="split-body">
+        <div class="split-h">
+          <span class="split-name">
+            <span class="cn">时序切 (用这个)</span><span class="en">Time split (use this)</span>
+          </span>
+          <span class="split-mark ok">USE</span>
+        </div>
+        <div class="split-desc">
+          <span class="cn">前 24 天训，最后 6 天测。模拟真实部署：明天的数据我看不到。</span>
+          <span class="en">Train on first 24d, test on last 6d. Mirrors real deployment.</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="split-card cross">
+      <svg class="split-svg" viewBox="0 0 84 50" fill="none">
+        <line x1="4" y1="42" x2="80" y2="42" stroke="#9D978A" stroke-width=".6"/>
+        <!-- 5 折块 -->
+        <rect x="4"  y="14" width="15" height="22" rx="2" fill="#F4DDE3" stroke="#C04E68" stroke-width="1"/>
+        <rect x="20" y="14" width="15" height="22" rx="2" fill="#F8EDE5" stroke="#D97757" stroke-width="1"/>
+        <rect x="36" y="14" width="15" height="22" rx="2" fill="#F4DDE3" stroke="#C04E68" stroke-width="1"/>
+        <rect x="52" y="14" width="15" height="22" rx="2" fill="#F4DDE3" stroke="#C04E68" stroke-width="1"/>
+        <rect x="68" y="14" width="12" height="22" rx="2" fill="#F4DDE3" stroke="#C04E68" stroke-width="1"/>
+        <text x="42" y="28" text-anchor="middle" font-family="JetBrains Mono" font-size="7" font-weight="700" fill="#80324A">k=5 fold</text>
+      </svg>
+      <div class="split-body">
+        <div class="split-h">
+          <span class="split-name">
+            <span class="cn">交叉验证</span><span class="en">K-fold CV</span>
+          </span>
+          <span class="split-mark ok">PRO</span>
+        </div>
+        <div class="split-desc">
+          <span class="cn">切 5 份轮流当测试。数据少时更稳。时序版叫 TimeSeriesSplit。</span>
+          <span class="en">Rotate 5 folds as test. Stabler on small data. Time variant: TimeSeriesSplit.</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ 5. 三张承诺 ============ -->
+  <div class="vow-row">
+    <div class="vow-card">
+      <div class="vow-stamp" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none">
+          <rect x="5" y="10" width="14" height="10" rx="1.4" stroke="#80324A" stroke-width="1.6"/>
+          <path d="M8 10 V6 a4 4 0 0 1 8 0 V10" stroke="#80324A" stroke-width="1.6" fill="none"/>
+        </svg>
+      </div>
+      <div class="vow-body">
+        <div class="vow-t">
+          <span class="cn">我永远留 hold-out</span>
+          <span class="en">I always keep hold-out</span>
+        </div>
+        <div class="vow-d">
+          <span class="cn">最后 6 天数据写脚本时就分走，存在另一个文件里。</span>
+          <span class="en">Set aside last 6 days in a separate file from day one.</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="vow-card">
+      <div class="vow-stamp" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none">
+          <path d="M5 12 L10 17 L19 7" stroke="#80324A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+        </svg>
+      </div>
+      <div class="vow-body">
+        <div class="vow-t">
+          <span class="cn">我报告测试集指标</span>
+          <span class="en">I report test-set metrics</span>
+        </div>
+        <div class="vow-d">
+          <span class="cn">README 写的 MAE / R² 必须是测试集上的成绩，不是训练集。</span>
+          <span class="en">MAE / R² in README must come from test set, not train.</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="vow-card">
+      <div class="vow-stamp" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none">
+          <circle cx="12" cy="12" r="3" stroke="#80324A" stroke-width="1.6"/>
+          <path d="M3 12 C 6 6, 10 4, 12 4 C 14 4, 18 6, 21 12" stroke="#80324A" stroke-width="1.6" fill="none"/>
+          <path d="M3 12 C 6 18, 10 20, 12 20 C 14 20, 18 18, 21 12" stroke="#80324A" stroke-width="1.6" fill="none"/>
+          <line x1="5" y1="5" x2="19" y2="19" stroke="#D97757" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+      </div>
+      <div class="vow-body">
+        <div class="vow-t">
+          <span class="cn">我不偷看测试集</span>
+          <span class="en">I do not peek at test</span>
+        </div>
+        <div class="vow-d">
+          <span class="cn">不靠测试集结果回去调公式，否则等于又把测试集变训练集。</span>
+          <span class="en">No tuning the formula based on test scores — that leaks test into train.</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<script>
+  (function(){
+    var langBtn = document.getElementById('langBtn');
+    if (langBtn) {
+      langBtn.addEventListener('click', function(){
+        var cur = document.body.getAttribute('data-lang') || 'zh';
+        document.body.setAttribute('data-lang', cur === 'zh' ? 'en' : 'zh');
+      });
+    }
+  })();
+</script>
+</body>
+</html>

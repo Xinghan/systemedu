@@ -1,0 +1,1058 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>M38 训练-测试切法对比 — 拖滑块找最佳切分</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=Inter:wght@400;500;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  /* Industrial Atelier — warm cream */
+  --paper:#FAF9F5;
+  --paper-2:#F1EDDF;
+  --card:#FFFFFF;
+  --ink:#191814;
+  --ink-2:#2B2924;
+  --sub:#6B6557;
+  --sub-2:#9D978A;
+  --border:#EBE5D6;
+  --border-2:#D9D1BD;
+  --hairline:#F2EDE0;
+  /* Claude coral */
+  --primary:#D97757;
+  --primary-ink:#9A4A2E;
+  --primary-soft:#F8EDE5;
+  --primary-line:#ECCFB8;
+  /* Domain accent: computing */
+  --computing:#C04E68;
+  --computing-soft:#F4DDE3;
+  --computing-line:#E2BAC7;
+  /* Secondary accents used as data hues (cream-friendly) */
+  --train:#527B95;
+  --train-soft:#DEE5EC;
+  --train-line:#B7C5D3;
+  --test:#C04E68;
+  --test-soft:#F4DDE3;
+  --test-line:#E2BAC7;
+  /* gold for badge */
+  --gold:#C89B3C;
+  --gold-soft:#F2E6C9;
+  /* shadows */
+  --shadow-sm:0 1px 2px 0 rgba(25,24,20,.04);
+  --shadow:0 1px 3px 0 rgba(25,24,20,.06), 0 1px 2px -1px rgba(25,24,20,.04);
+  --shadow-md:0 4px 8px -2px rgba(25,24,20,.06), 0 2px 4px -2px rgba(25,24,20,.04);
+  --shadow-lg:0 12px 24px -6px rgba(25,24,20,.10), 0 4px 8px -4px rgba(25,24,20,.05);
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+html,body{height:100vh;width:100vw;overflow:hidden;background:var(--paper);color:var(--ink);
+  font-family:'Inter','PingFang SC','Noto Sans SC',system-ui,sans-serif;font-size:13px;line-height:1.5;}
+body{display:flex;}
+
+/* ============= SIDEBAR 200px ============= */
+.game-sidebar{
+  width:200px;flex-shrink:0;height:100vh;background:var(--paper-2);
+  border-right:1px solid var(--border);padding:16px 14px;
+  display:flex;flex-direction:column;gap:12px;overflow-y:auto;
+}
+.brand-block{padding-bottom:10px;border-bottom:1px solid var(--border);}
+.brand-mark{
+  display:inline-block;width:28px;height:28px;background:var(--primary);
+  border-radius:6px;position:relative;margin-bottom:7px;box-shadow:var(--shadow-sm);
+}
+.brand-mark::after{
+  content:'';position:absolute;left:6px;top:6px;right:6px;bottom:6px;
+  border:1.5px solid var(--paper);border-left-color:transparent;border-radius:2px;
+}
+.brand-title{font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;
+  color:var(--ink);letter-spacing:.5px;}
+.brand-sub{font-size:10px;color:var(--sub);margin-top:2px;line-height:1.3;}
+
+.sidebar-h{
+  font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:600;
+  color:var(--sub);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:6px;
+}
+
+.task-list{display:flex;flex-direction:column;gap:5px;}
+.task-item{
+  display:flex;align-items:flex-start;gap:8px;padding:8px 9px;background:var(--card);
+  border:1px solid var(--border);border-radius:6px;font-size:11px;font-weight:500;
+  color:var(--sub);transition:all .2s ease;line-height:1.4;
+}
+.task-item.done{background:var(--computing-soft);border-color:var(--computing-line);color:var(--computing);}
+.task-item.active{background:var(--primary-soft);border-color:var(--primary-line);
+  color:var(--primary-ink);font-weight:600;box-shadow:var(--shadow-sm);}
+.task-num{
+  width:18px;height:18px;border-radius:50%;background:var(--paper);
+  border:1px solid var(--border);display:flex;align-items:center;justify-content:center;
+  font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:700;flex-shrink:0;
+  margin-top:1px;
+}
+.task-item.done .task-num{background:var(--computing);color:var(--card);border-color:var(--computing);}
+.task-item.active .task-num{background:var(--primary);color:var(--card);border-color:var(--primary);}
+.task-text{flex:1;}
+
+/* split mode radio block */
+.split-mode-block{
+  background:var(--card);border:1px solid var(--border);border-radius:6px;
+  padding:9px 10px;display:flex;flex-direction:column;gap:6px;
+}
+.split-mode-h{
+  font-family:'JetBrains Mono',monospace;font-size:9px;font-weight:700;
+  color:var(--computing);text-transform:uppercase;letter-spacing:1.2px;
+}
+.radio-row{
+  display:flex;align-items:center;gap:7px;padding:5px 7px;border-radius:4px;
+  cursor:pointer;transition:all .15s ease;font-size:11px;color:var(--ink-2);
+}
+.radio-row:hover{background:var(--paper-2);}
+.radio-row input[type=radio]{accent-color:var(--computing);width:13px;height:13px;cursor:pointer;}
+.radio-row.checked{background:var(--computing-soft);color:var(--computing);font-weight:600;}
+.radio-label{font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:600;letter-spacing:.3px;}
+.radio-desc{font-size:10px;color:var(--sub);line-height:1.3;margin-top:-2px;margin-left:20px;}
+
+.tip-card{
+  background:var(--card);border:1px solid var(--border);border-radius:6px;
+  padding:9px 11px;font-size:11px;color:var(--ink-2);line-height:1.5;
+}
+.tip-card .tip-h{
+  font-family:'JetBrains Mono',monospace;font-size:9px;font-weight:700;
+  color:var(--computing);text-transform:uppercase;letter-spacing:1.2px;margin-bottom:5px;
+}
+
+.sidebar-spacer{flex:1;}
+.lang-btn{
+  background:var(--card);border:1px solid var(--border-2);color:var(--ink);
+  padding:7px 10px;font-size:11px;font-weight:600;font-family:'JetBrains Mono',monospace;
+  cursor:pointer;border-radius:6px;transition:all .15s ease;
+  display:flex;align-items:center;justify-content:center;gap:6px;
+}
+.lang-btn:hover{background:var(--paper);box-shadow:var(--shadow-sm);}
+.lang-btn:active{transform:translateY(1px);}
+
+/* ============= MAIN STAGE ============= */
+.game-main{flex:1;height:100vh;display:flex;flex-direction:column;overflow:hidden;background:var(--paper);}
+
+.stage-header{
+  padding:12px 22px;border-bottom:1px solid var(--border);background:var(--card);
+  display:flex;align-items:center;justify-content:space-between;gap:18px;flex-shrink:0;
+}
+.stage-title-block{display:flex;flex-direction:column;gap:2px;}
+.stage-title{font-size:14px;font-weight:700;color:var(--ink);
+  font-family:'JetBrains Mono',monospace;letter-spacing:.3px;}
+.stage-sub{font-size:11px;color:var(--sub);}
+.hud-row{display:flex;align-items:center;gap:8px;flex-shrink:0;}
+.hud{
+  font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:600;
+  color:var(--computing);background:var(--computing-soft);padding:5px 11px;
+  border-radius:4px;border:1px solid var(--computing-line);
+}
+.hud.primary{color:var(--primary-ink);background:var(--primary-soft);border-color:var(--primary-line);}
+
+.stage-body{
+  flex:1;display:flex;flex-direction:column;gap:12px;padding:14px 22px;overflow:hidden;
+}
+
+/* ============ slider panel ============ */
+.slider-panel{
+  background:var(--card);border:1px solid var(--border);border-radius:8px;
+  box-shadow:var(--shadow);padding:14px 18px;display:flex;flex-direction:column;gap:10px;flex-shrink:0;
+}
+.slider-row{display:flex;align-items:center;gap:14px;}
+.slider-lbl{
+  font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:700;color:var(--sub);
+  text-transform:uppercase;letter-spacing:1px;min-width:96px;
+}
+.slider-wrap{flex:1;display:flex;flex-direction:column;gap:6px;}
+.slider-track-row{display:flex;align-items:center;gap:12px;}
+input[type=range]{
+  flex:1;-webkit-appearance:none;appearance:none;height:6px;border-radius:3px;
+  background:linear-gradient(to right,var(--train-soft) 0%,var(--train-soft) var(--ratio,80%),
+    var(--test-soft) var(--ratio,80%),var(--test-soft) 100%);
+  border:1px solid var(--border);outline:none;cursor:pointer;
+}
+input[type=range]::-webkit-slider-thumb{
+  -webkit-appearance:none;appearance:none;width:18px;height:18px;border-radius:50%;
+  background:var(--primary);border:2px solid var(--card);box-shadow:var(--shadow-md);
+  cursor:grab;transition:transform .1s ease;
+}
+input[type=range]::-webkit-slider-thumb:active{cursor:grabbing;transform:scale(1.15);}
+input[type=range]::-moz-range-thumb{
+  width:18px;height:18px;border-radius:50%;background:var(--primary);
+  border:2px solid var(--card);box-shadow:var(--shadow-md);cursor:grab;
+}
+.ratio-value{
+  font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:700;
+  color:var(--primary-ink);background:var(--primary-soft);
+  padding:5px 12px;border-radius:5px;border:1px solid var(--primary-line);
+  min-width:78px;text-align:center;
+}
+.split-legend{
+  display:flex;align-items:center;gap:14px;font-family:'JetBrains Mono',monospace;
+  font-size:10px;color:var(--sub);
+}
+.legend-chip{display:flex;align-items:center;gap:5px;}
+.legend-chip .sw{width:11px;height:11px;border-radius:2px;display:inline-block;}
+.legend-chip .sw.train{background:var(--train);}
+.legend-chip .sw.test{background:var(--test);}
+.legend-chip b{color:var(--ink-2);font-weight:700;}
+
+/* zone warning labels */
+.zone-warn{
+  display:inline-block;padding:3px 8px;font-family:'JetBrains Mono',monospace;
+  font-size:10px;font-weight:700;letter-spacing:.5px;border-radius:3px;
+  background:var(--paper-2);color:var(--sub);border:1px solid var(--border);
+  margin-left:auto;
+}
+.zone-warn.bad{background:var(--primary-soft);color:var(--primary-ink);border-color:var(--primary-line);}
+.zone-warn.good{background:var(--computing-soft);color:var(--computing);border-color:var(--computing-line);}
+
+/* ============ chart + HUD row ============ */
+.lower-split{
+  flex:1;display:grid;grid-template-columns:1.6fr 1fr;gap:12px;overflow:hidden;min-height:0;
+}
+
+.chart-panel,.metric-panel{
+  background:var(--card);border:1px solid var(--border);border-radius:8px;
+  box-shadow:var(--shadow);display:flex;flex-direction:column;overflow:hidden;
+}
+.panel-head{
+  padding:10px 16px;border-bottom:1px solid var(--border);background:var(--paper);
+  display:flex;align-items:center;justify-content:space-between;gap:10px;flex-shrink:0;
+}
+.panel-h{
+  font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;color:var(--ink);
+  letter-spacing:.6px;text-transform:uppercase;
+}
+.panel-tag{
+  font-family:'JetBrains Mono',monospace;font-size:9px;font-weight:600;color:var(--sub);
+  background:var(--paper-2);padding:3px 8px;border-radius:3px;border:1px solid var(--border);
+}
+
+.chart-body{flex:1;padding:12px 14px;display:flex;flex-direction:column;gap:8px;min-height:0;overflow:hidden;}
+.chart-svg-wrap{flex:1;display:flex;flex-direction:column;min-height:0;}
+.chart-svg{width:100%;height:100%;display:block;}
+.chart-foot{
+  display:flex;align-items:center;justify-content:space-between;flex-shrink:0;
+  font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--sub);
+}
+.chart-foot b{color:var(--ink-2);}
+
+/* metric panel: two big MAE blocks + delta + verdict */
+.metric-body{flex:1;padding:14px 16px;display:flex;flex-direction:column;gap:11px;overflow-y:auto;}
+.mae-card{
+  background:var(--paper);border:1px solid var(--border);border-radius:7px;
+  padding:11px 14px;display:flex;flex-direction:column;gap:4px;
+}
+.mae-card.train{border-left:3px solid var(--train);}
+.mae-card.test{border-left:3px solid var(--test);}
+.mae-row{display:flex;align-items:baseline;justify-content:space-between;gap:8px;}
+.mae-name{
+  font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:700;
+  color:var(--sub);text-transform:uppercase;letter-spacing:1px;
+}
+.mae-size{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--sub-2);}
+.mae-value{
+  font-family:'JetBrains Mono',monospace;font-size:30px;font-weight:700;
+  letter-spacing:.5px;line-height:1.05;
+}
+.mae-card.train .mae-value{color:var(--train);}
+.mae-card.test .mae-value{color:var(--test);}
+.mae-unit{font-size:13px;color:var(--sub);margin-left:5px;}
+
+.verdict-card{
+  background:var(--paper-2);border:1px solid var(--border-2);border-radius:7px;
+  padding:10px 13px;display:flex;flex-direction:column;gap:5px;
+}
+.verdict-h{
+  font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:700;
+  color:var(--sub);letter-spacing:1px;text-transform:uppercase;
+}
+.verdict-body{font-size:12px;color:var(--ink-2);line-height:1.5;}
+.verdict-body b{color:var(--primary-ink);font-weight:700;}
+.verdict-card.warn{background:var(--primary-soft);border-color:var(--primary-line);}
+.verdict-card.ok{background:var(--computing-soft);border-color:var(--computing-line);}
+
+/* progress trace: best test MAE so far */
+.trace-card{
+  background:var(--card);border:1px dashed var(--border-2);border-radius:6px;
+  padding:9px 12px;display:flex;flex-direction:column;gap:6px;
+}
+.trace-h{
+  font-family:'JetBrains Mono',monospace;font-size:9px;font-weight:700;
+  color:var(--sub);letter-spacing:1.2px;text-transform:uppercase;
+}
+.trace-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px 12px;
+  font-family:'JetBrains Mono',monospace;font-size:11px;}
+.trace-grid .tk{color:var(--sub);}
+.trace-grid .tv{color:var(--ink);font-weight:700;}
+.trace-grid .tv.ok{color:var(--computing);}
+.trace-grid .tv.bad{color:var(--primary-ink);}
+
+/* badge popup */
+.badge-overlay{
+  position:absolute;inset:0;background:rgba(25,24,20,.55);
+  display:none;align-items:center;justify-content:center;z-index:100;
+}
+.badge-overlay.show{display:flex;animation:fadeBg .3s ease;}
+@keyframes fadeBg{from{opacity:0;}to{opacity:1;}}
+.badge-card{
+  background:var(--card);border-radius:14px;padding:30px 34px;
+  box-shadow:var(--shadow-lg);max-width:380px;text-align:center;
+  display:flex;flex-direction:column;gap:13px;align-items:center;
+  animation:popIn .35s cubic-bezier(.3,1.4,.5,1);
+}
+@keyframes popIn{from{transform:scale(.85);opacity:0;}to{transform:scale(1);opacity:1;}}
+.badge-mark{
+  width:70px;height:70px;border-radius:50%;background:var(--gold-soft);
+  border:3px solid var(--gold);display:flex;align-items:center;justify-content:center;
+  animation:pulse 2s ease-in-out infinite;
+}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 0 var(--gold-soft);}50%{box-shadow:0 0 0 10px transparent;}}
+.badge-mark svg{width:36px;height:36px;}
+.badge-title{font-size:17px;font-weight:700;color:var(--ink);
+  font-family:'JetBrains Mono',monospace;letter-spacing:.5px;}
+.badge-desc{font-size:13px;color:var(--sub);line-height:1.55;}
+.badge-close{
+  background:var(--primary);color:var(--card);border:none;border-radius:6px;
+  padding:9px 22px;font-size:12px;font-weight:700;cursor:pointer;margin-top:4px;
+  font-family:'JetBrains Mono',monospace;letter-spacing:.5px;
+}
+.badge-close:hover{background:var(--primary-ink);}
+
+/* toast */
+.toast{
+  position:absolute;top:14px;left:50%;transform:translateX(-50%);
+  background:var(--ink-2);color:var(--paper);padding:8px 15px;border-radius:6px;
+  font-size:12px;font-weight:600;font-family:'JetBrains Mono',monospace;
+  letter-spacing:.3px;box-shadow:var(--shadow-md);display:none;z-index:80;
+}
+.toast.show{display:block;animation:slideDown .3s ease;}
+@keyframes slideDown{from{transform:translate(-50%,-12px);opacity:0;}to{transform:translate(-50%,0);opacity:1;}}
+.toast.ok{background:var(--computing);}
+.toast.warn{background:var(--primary);}
+
+@media (max-height:660px){
+  .stage-body{padding:10px 16px;gap:9px;}
+  .mae-value{font-size:24px;}
+  .slider-panel{padding:10px 14px;gap:7px;}
+}
+</style>
+</head>
+<body>
+
+<!-- ============= SIDEBAR ============= -->
+<aside class="game-sidebar">
+  <div class="brand-block">
+    <span class="brand-mark"></span>
+    <div class="brand-title" id="brandTitle">TRAIN / TEST</div>
+    <div class="brand-sub" id="brandSub">实时调参 · 找最佳切分</div>
+  </div>
+
+  <div>
+    <div class="sidebar-h" id="tasksHeader">3 个任务</div>
+    <div class="task-list" id="taskList">
+      <div class="task-item active" data-task="1">
+        <div class="task-num">1</div>
+        <div class="task-text" data-i18n="task1">把滑块拖到极端区, 看一个非常差的切法</div>
+      </div>
+      <div class="task-item" data-task="2">
+        <div class="task-num">2</div>
+        <div class="task-text" data-i18n="task2">找到测试 MAE 最低的切分比例</div>
+      </div>
+      <div class="task-item" data-task="3">
+        <div class="task-num">3</div>
+        <div class="task-text" data-i18n="task3">切到"随机切"对比"时序切"差异</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="split-mode-block">
+    <div class="split-mode-h" id="splitModeH">切分方式</div>
+    <label class="radio-row checked" data-mode="time" id="rowTime">
+      <input type="radio" name="splitMode" value="time" checked />
+      <span>
+        <div class="radio-label" id="lblTimeMode">TIME-SPLIT</div>
+      </span>
+    </label>
+    <div class="radio-desc" id="descTime">按日期前后切, 后段作为测试</div>
+    <label class="radio-row" data-mode="random" id="rowRandom">
+      <input type="radio" name="splitMode" value="random" />
+      <span>
+        <div class="radio-label" id="lblRandomMode">RANDOM-SPLIT</div>
+      </span>
+    </label>
+    <div class="radio-desc" id="descRandom">从全部 30 天随机抽测试</div>
+  </div>
+
+  <div class="tip-card">
+    <div class="tip-h" id="tipH">滑块提示</div>
+    <div id="tipBody">把<b>训练比例</b>拖太大测试样本就太少, 拖太小公式没拟合好, 80% 附近常是甜区。</div>
+  </div>
+
+  <div class="sidebar-spacer"></div>
+  <button class="lang-btn" id="langBtn">EN / 中</button>
+</aside>
+
+<!-- ============= MAIN STAGE ============= -->
+<main class="game-main">
+  <header class="stage-header">
+    <div class="stage-title-block">
+      <div class="stage-title" id="stageTitle">M38 — TRAIN / TEST SPLIT</div>
+      <div class="stage-sub" id="stageSub">30 天 PM2.5 数据, 用切法和比例调出最佳模型</div>
+    </div>
+    <div class="hud-row">
+      <div class="hud" id="hudTask">任务 1 / 3</div>
+      <div class="hud primary" id="hudProgress">进度 0%</div>
+    </div>
+  </header>
+
+  <section class="stage-body">
+    <!-- slider panel -->
+    <div class="slider-panel">
+      <div class="slider-row">
+        <div class="slider-lbl" id="lblRatio">TRAIN RATIO</div>
+        <div class="slider-wrap">
+          <div class="slider-track-row">
+            <input type="range" id="ratioSlider" min="50" max="95" step="1" value="80" />
+            <div class="ratio-value" id="ratioVal">80%</div>
+          </div>
+          <div class="split-legend">
+            <div class="legend-chip">
+              <span class="sw train"></span>
+              <span>TRAIN = <b id="trainN">24</b> <span data-i18n="dayUnit">天</span></span>
+            </div>
+            <div class="legend-chip">
+              <span class="sw test"></span>
+              <span>TEST = <b id="testN">6</b> <span data-i18n="dayUnit2">天</span></span>
+            </div>
+            <div class="zone-warn" id="zoneWarn" data-i18n="zoneOk">SWEET</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- lower split: chart + metrics -->
+    <div class="lower-split">
+      <div class="chart-panel">
+        <div class="panel-head">
+          <div class="panel-h" id="chartH">30 天 PM2.5 时间序列</div>
+          <div class="panel-tag" id="chartTag">切割线随滑块移动</div>
+        </div>
+        <div class="chart-body">
+          <div class="chart-svg-wrap">
+            <svg id="chartSvg" class="chart-svg" viewBox="0 0 760 280" preserveAspectRatio="none"></svg>
+          </div>
+          <div class="chart-foot">
+            <span><span data-i18n="chartFootLeft">蓝点 = 训练集 · 红点 = 测试集</span></span>
+            <span><span data-i18n="chartFootRight">虚线 = 训练集均值预测</span> · <b id="meanLbl">train_mean = 47.2</b></span>
+          </div>
+        </div>
+      </div>
+
+      <div class="metric-panel">
+        <div class="panel-head">
+          <div class="panel-h" id="metricsH">MAE 指标</div>
+          <div class="panel-tag" id="metricsTag">数字 = 越小越好</div>
+        </div>
+        <div class="metric-body">
+          <div class="mae-card train">
+            <div class="mae-row">
+              <span class="mae-name" id="lblTrainMae">TRAIN MAE</span>
+              <span class="mae-size">n=<span id="trainNMet">24</span></span>
+            </div>
+            <div class="mae-value" id="trainMaeVal">11.2<span class="mae-unit" data-i18n="unitUg">μg/m³</span></div>
+          </div>
+          <div class="mae-card test">
+            <div class="mae-row">
+              <span class="mae-name" id="lblTestMae">TEST MAE</span>
+              <span class="mae-size">n=<span id="testNMet">6</span></span>
+            </div>
+            <div class="mae-value" id="testMaeVal">9.5<span class="mae-unit" data-i18n="unitUg2">μg/m³</span></div>
+          </div>
+
+          <div class="verdict-card" id="verdictCard">
+            <div class="verdict-h" id="verdictH">判读</div>
+            <div class="verdict-body" id="verdictBody">80% 时序切, 测试集 6 天充足且未泄漏。</div>
+          </div>
+
+          <div class="trace-card">
+            <div class="trace-h" id="traceH">本轮记录</div>
+            <div class="trace-grid">
+              <div class="tk" id="lblBestTest">最低 TEST MAE</div>
+              <div class="tv ok" id="bestTestVal">—</div>
+              <div class="tk" id="lblWorstTest">最高 TEST MAE</div>
+              <div class="tv bad" id="worstTestVal">—</div>
+              <div class="tk" id="lblModesTried">试过的切法</div>
+              <div class="tv" id="modesTriedVal">time</div>
+              <div class="tk" id="lblExploredRatios">已扫描比例</div>
+              <div class="tv" id="exploredRatiosVal">1</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- badge overlay -->
+    <div class="badge-overlay" id="badgeOverlay">
+      <div class="badge-card">
+        <div class="badge-mark">
+          <svg viewBox="0 0 40 40" fill="none">
+            <circle cx="20" cy="20" r="13" stroke="#C89B3C" stroke-width="2.5"/>
+            <path d="M14 22 L18 26 L26 14" stroke="#C89B3C" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+          </svg>
+        </div>
+        <div class="badge-title" id="badgeTitle">数据科学家</div>
+        <div class="badge-desc" id="badgeDesc">你掌握了训练-测试切法的核心权衡: 比例适中, 时序数据按时间切, 才能拿到真实可信的 MAE。</div>
+        <button class="badge-close" id="badgeClose">继续探索</button>
+      </div>
+    </div>
+
+    <div class="toast" id="toast">message</div>
+  </section>
+</main>
+
+<script>
+'use strict';
+
+// ============= STATE =============
+var LANG = 'cn';
+var pageState = {
+  taskIndex: 1,
+  taskDone: [false, false, false],
+  ratio: 80,
+  mode: 'time',                 // 'time' or 'random'
+  bestTestMae: null,
+  worstTestMae: null,
+  bestTestRatio: null,
+  modesTried: { time: true, random: false },
+  exploredRatios: { 80: true },
+  extremePushed: false,         // task 1 done if user pushed to <=55 or >=92
+  sweetFound: false,            // task 2 done if user lands in [76..84] with reasonable MAE
+};
+
+// ============= DATA: 30 days PM2.5 (synthetic, plausible Beijing-like) =============
+// Designed so that mean prediction works: gentle rising trend over 30 days makes
+// time-split predictably worse than random-split — pedagogically clear.
+var PM_SERIES = [
+  28, 32, 30, 35, 33, 38, 36, 41, 39, 44,
+  42, 47, 45, 50, 48, 53, 51, 56, 54, 59,
+  57, 62, 60, 65, 63, 68, 66, 71, 69, 74,
+];
+var N_DAYS = PM_SERIES.length;
+
+// fixed random permutation for "random split" — deterministic so verify is stable
+var RAND_PERM = [
+  17, 4, 22, 9, 28, 11, 1, 25, 14, 6,
+  19, 0, 27, 13, 8, 23, 3, 16, 29, 10,
+  21, 5, 18, 26, 12, 2, 20, 7, 24, 15,
+];
+
+// ============= I18N =============
+var I18N = {
+  brandTitle: { cn: 'TRAIN / TEST', en: 'TRAIN / TEST' },
+  brandSub: { cn: '实时调参 · 找最佳切分', en: 'Live tuning · find the sweet split' },
+  tasksHeader: { cn: '3 个任务', en: '3 TASKS' },
+  task1: { cn: '把滑块拖到极端区, 看一个非常差的切法', en: 'Drag to an extreme — see a really bad split' },
+  task2: { cn: '找到测试 MAE 最低的切分比例', en: 'Find the ratio with the lowest test MAE' },
+  task3: { cn: '切到"随机切"对比"时序切"差异', en: 'Switch to RANDOM-SPLIT and compare with TIME-SPLIT' },
+  splitModeH: { cn: '切分方式', en: 'SPLIT MODE' },
+  lblTimeMode: { cn: '时序切 TIME', en: 'TIME-SPLIT' },
+  descTime: { cn: '按日期前后切, 后段作为测试', en: 'Split by date; later days = test set' },
+  lblRandomMode: { cn: '随机切 RANDOM', en: 'RANDOM-SPLIT' },
+  descRandom: { cn: '从全部 30 天随机抽测试', en: 'Randomly pick test days from all 30' },
+  tipH: { cn: '滑块提示', en: 'SLIDER TIP' },
+  tipBody: {
+    cn: '把<b>训练比例</b>拖太大测试样本就太少, 拖太小公式没拟合好, 80% 附近常是甜区。',
+    en: 'Push <b>train ratio</b> too high — test gets tiny. Too low — model under-fits. ~80% is usually the sweet zone.',
+  },
+  stageTitle: { cn: 'M38 — 训练 / 测试切分', en: 'M38 — TRAIN / TEST SPLIT' },
+  stageSub: {
+    cn: '30 天 PM2.5 数据, 用切法和比例调出最佳模型',
+    en: '30 days of PM2.5 — tune split mode + ratio to find the best model',
+  },
+  hudTask: { cn: '任务 __I__ / 3', en: 'TASK __I__ / 3' },
+  hudProgress: { cn: '进度 __P__%', en: 'PROGRESS __P__%' },
+  lblRatio: { cn: '训练比例', en: 'TRAIN RATIO' },
+  zoneOk: { cn: '甜区', en: 'SWEET' },
+  zoneTooHigh: { cn: '训练过大', en: 'OVER-TRAIN' },
+  zoneTooLow: { cn: '欠拟合区', en: 'UNDER-FIT' },
+  zoneEdge: { cn: '极端', en: 'EXTREME' },
+  dayUnit: { cn: '天', en: 'days' },
+  dayUnit2: { cn: '天', en: 'days' },
+  chartH: { cn: '30 天 PM2.5 时间序列', en: '30-DAY PM2.5 TIME SERIES' },
+  chartTag: { cn: '切割线随滑块移动', en: 'Cut line moves with the slider' },
+  chartFootLeft: { cn: '蓝点 = 训练集 · 红点 = 测试集', en: 'Blue = train · Red = test' },
+  chartFootRight: { cn: '虚线 = 训练集均值预测', en: 'Dashed = train mean prediction' },
+  metricsH: { cn: 'MAE 指标', en: 'MAE METRICS' },
+  metricsTag: { cn: '数字 = 越小越好', en: 'Lower is better' },
+  lblTrainMae: { cn: 'TRAIN MAE', en: 'TRAIN MAE' },
+  lblTestMae: { cn: 'TEST MAE', en: 'TEST MAE' },
+  unitUg: { cn: 'μg/m³', en: 'μg/m³' },
+  unitUg2: { cn: 'μg/m³', en: 'μg/m³' },
+  verdictH: { cn: '判读', en: 'VERDICT' },
+  traceH: { cn: '本轮记录', en: 'SESSION TRACE' },
+  lblBestTest: { cn: '最低 TEST MAE', en: 'BEST TEST MAE' },
+  lblWorstTest: { cn: '最高 TEST MAE', en: 'WORST TEST MAE' },
+  lblModesTried: { cn: '试过的切法', en: 'MODES TRIED' },
+  lblExploredRatios: { cn: '已扫描比例', en: 'RATIOS EXPLORED' },
+  badgeTitle: { cn: '数据科学家', en: 'DATA SCIENTIST' },
+  badgeDesc: {
+    cn: '你掌握了训练-测试切法的核心权衡: 比例适中, 时序数据按时间切, 才能拿到真实可信的 MAE。',
+    en: 'You mastered the train/test trade-off — balanced ratio, time-aware split on time-series data — to get an honest, trustworthy MAE.',
+  },
+  badgeClose: { cn: '继续探索', en: 'KEEP EXPLORING' },
+  // verdicts
+  vBadHigh: {
+    cn: '训练比例 <b>太高</b>! 测试只剩 <b>__T__</b> 天, MAE 不稳定 — 高了纯运气低了也是噪声。',
+    en: 'Train ratio is <b>too high</b>! Test has only <b>__T__</b> days — MAE is noisy, neither high nor low is meaningful.',
+  },
+  vBadLow: {
+    cn: '训练比例 <b>太低</b>! 训练只剩 <b>__N__</b> 天, 均值估得不准, train MAE 都偏高。',
+    en: 'Train ratio is <b>too low</b>! Only <b>__N__</b> training days — the mean is unreliable, train MAE is also high.',
+  },
+  vSweet: {
+    cn: '<b>__R__%</b> 是合理切分, 训练 <b>__N__</b> 天 + 测试 <b>__T__</b> 天都够用。',
+    en: '<b>__R__%</b> is a reasonable split — train <b>__N__</b> days + test <b>__T__</b> days, both usable.',
+  },
+  vRandomVsTime: {
+    cn: '随机切的测试 MAE 通常 <b>比时序切低</b> — 因为随机切偷看了未来。',
+    en: 'Random-split test MAE is usually <b>lower than time-split</b> — random peeks at the future.',
+  },
+  vTimeMode: {
+    cn: '时序数据要 <b>按时间切</b>, 否则未来泄漏到训练里。',
+    en: 'Time-series data must be split <b>by time</b> — otherwise the future leaks into training.',
+  },
+  // toasts
+  toastTask1: { cn: '任务 1 完成 · 你看到了一个糟糕的切分', en: 'Task 1 done · you saw a really bad split' },
+  toastTask2: { cn: '任务 2 完成 · 找到了甜区 (TEST MAE 最低)', en: 'Task 2 done · found the sweet spot (lowest TEST MAE)' },
+  toastTask3: { cn: '任务 3 完成 · 对比了两种切法, 解锁徽章', en: 'Task 3 done · both modes compared, badge unlocked' },
+};
+
+function t(key) { return I18N[key] ? (I18N[key][LANG] || I18N[key].en) : key; }
+
+// ============= DOM helpers =============
+function $(id) { return document.getElementById(id); }
+function fmt(v, d) { return Number(v).toFixed(d == null ? 1 : d); }
+
+// ============= TOAST =============
+var toastTimer = null;
+function showToast(msg, kind) {
+  var toastEl = $('toast');
+  toastEl.innerHTML = msg;
+  toastEl.className = 'toast show ' + (kind || '');
+  if (toastTimer) clearTimeout(toastTimer);
+  toastTimer = setTimeout(function () { toastEl.className = 'toast'; }, 2800);
+}
+
+// ============= COMPUTE: split + MAE =============
+// returns {trainIdx[], testIdx[], trainMean, trainMae, testMae}
+function computeSplit(ratio, mode) {
+  var trainCount = Math.max(1, Math.round(N_DAYS * ratio / 100));
+  trainCount = Math.min(N_DAYS - 1, trainCount);   // need at least 1 test
+  var trainIdx, testIdx;
+
+  if (mode === 'time') {
+    trainIdx = [];
+    testIdx = [];
+    for (var i = 0; i < N_DAYS; i++) {
+      (i < trainCount ? trainIdx : testIdx).push(i);
+    }
+  } else {
+    // random — use fixed permutation, take first trainCount as train
+    var trainSet = {};
+    for (var k = 0; k < trainCount; k++) trainSet[RAND_PERM[k]] = true;
+    trainIdx = [];
+    testIdx = [];
+    for (var j = 0; j < N_DAYS; j++) {
+      if (trainSet[j]) trainIdx.push(j); else testIdx.push(j);
+    }
+  }
+
+  var sum = 0;
+  for (var a = 0; a < trainIdx.length; a++) sum += PM_SERIES[trainIdx[a]];
+  var trainMean = sum / trainIdx.length;
+
+  var trErr = 0;
+  for (var b = 0; b < trainIdx.length; b++) trErr += Math.abs(PM_SERIES[trainIdx[b]] - trainMean);
+  var trainMae = trErr / trainIdx.length;
+
+  var teErr = 0;
+  for (var c = 0; c < testIdx.length; c++) teErr += Math.abs(PM_SERIES[testIdx[c]] - trainMean);
+  var testMae = teErr / testIdx.length;
+
+  return {
+    trainIdx: trainIdx, testIdx: testIdx,
+    trainMean: trainMean, trainMae: trainMae, testMae: testMae,
+  };
+}
+
+// ============= CHART =============
+function renderChart(split) {
+  var svg = $('chartSvg');
+  while (svg.firstChild) svg.removeChild(svg.firstChild);
+  var W = 760, H = 280;
+  var padL = 38, padR = 14, padT = 14, padB = 30;
+  var plotW = W - padL - padR;
+  var plotH = H - padT - padB;
+
+  // Y scale: 0..80 (data 28..74)
+  var yMin = 20, yMax = 80;
+  function xOf(i) { return padL + (i / (N_DAYS - 1)) * plotW; }
+  function yOf(v) { return padT + (1 - (v - yMin) / (yMax - yMin)) * plotH; }
+
+  // grid + axes
+  var svgNS = 'http://www.w3.org/2000/svg';
+  function mk(tag, attrs, text) {
+    var n = document.createElementNS(svgNS, tag);
+    for (var k in attrs) n.setAttribute(k, attrs[k]);
+    if (text != null) n.textContent = text;
+    return n;
+  }
+
+  // y gridlines + labels
+  var yTicks = [20, 35, 50, 65, 80];
+  for (var ti = 0; ti < yTicks.length; ti++) {
+    var yy = yOf(yTicks[ti]);
+    svg.appendChild(mk('line', {
+      x1: padL, x2: W - padR, y1: yy, y2: yy,
+      stroke: '#F2EDE0', 'stroke-width': '1',
+    }));
+    svg.appendChild(mk('text', {
+      x: padL - 6, y: yy + 3, 'text-anchor': 'end',
+      'font-family': 'JetBrains Mono, monospace', 'font-size': '9',
+      fill: '#9D978A',
+    }, String(yTicks[ti])));
+  }
+
+  // x axis label
+  svg.appendChild(mk('line', {
+    x1: padL, x2: W - padR, y1: H - padB, y2: H - padB,
+    stroke: '#D9D1BD', 'stroke-width': '1',
+  }));
+  // x ticks every 5 days
+  for (var di = 0; di < N_DAYS; di += 5) {
+    svg.appendChild(mk('text', {
+      x: xOf(di), y: H - padB + 14, 'text-anchor': 'middle',
+      'font-family': 'JetBrains Mono, monospace', 'font-size': '9',
+      fill: '#9D978A',
+    }, 'day ' + (di + 1)));
+  }
+  // unit on left
+  svg.appendChild(mk('text', {
+    x: padL - 30, y: padT + 8,
+    'font-family': 'JetBrains Mono, monospace', 'font-size': '9',
+    fill: '#6B6557', 'font-weight': '700',
+  }, 'μg/m³'));
+
+  // train-mean prediction line (dashed, horizontal)
+  var meanY = yOf(split.trainMean);
+  svg.appendChild(mk('line', {
+    x1: padL, x2: W - padR, y1: meanY, y2: meanY,
+    stroke: '#9A4A2E', 'stroke-width': '1.4',
+    'stroke-dasharray': '5,4', opacity: '0.75',
+  }));
+  svg.appendChild(mk('text', {
+    x: W - padR - 4, y: meanY - 4, 'text-anchor': 'end',
+    'font-family': 'JetBrains Mono, monospace', 'font-size': '10',
+    fill: '#9A4A2E', 'font-weight': '700',
+  }, 'train_mean = ' + fmt(split.trainMean, 1)));
+
+  // Mode-specific overlay
+  if (pageState.mode === 'time') {
+    // shade train region (left) light blue, test region (right) light red
+    var cutI = split.trainIdx.length;            // first test index in time mode
+    var cutX = (cutI === 0 || cutI >= N_DAYS) ? null : (xOf(cutI - 1) + xOf(cutI)) / 2;
+    var realCut = cutX != null ? cutX : (cutI === 0 ? padL : (W - padR));
+    // train shade
+    svg.appendChild(mk('rect', {
+      x: padL, y: padT, width: Math.max(0, realCut - padL), height: plotH,
+      fill: '#DEE5EC', opacity: '0.55',
+    }));
+    // test shade
+    svg.appendChild(mk('rect', {
+      x: realCut, y: padT, width: Math.max(0, (W - padR) - realCut), height: plotH,
+      fill: '#F4DDE3', opacity: '0.6',
+    }));
+    // cut line
+    svg.appendChild(mk('line', {
+      x1: realCut, x2: realCut, y1: padT, y2: H - padB,
+      stroke: '#D97757', 'stroke-width': '2',
+    }));
+    // labels
+    svg.appendChild(mk('text', {
+      x: (padL + realCut) / 2, y: padT + 14, 'text-anchor': 'middle',
+      'font-family': 'JetBrains Mono, monospace', 'font-size': '10',
+      fill: '#527B95', 'font-weight': '700',
+    }, LANG === 'cn' ? '训练' : 'TRAIN'));
+    svg.appendChild(mk('text', {
+      x: (realCut + W - padR) / 2, y: padT + 14, 'text-anchor': 'middle',
+      'font-family': 'JetBrains Mono, monospace', 'font-size': '10',
+      fill: '#C04E68', 'font-weight': '700',
+    }, LANG === 'cn' ? '测试' : 'TEST'));
+  } else {
+    // random — sprinkle small markers at top edge for test indices
+    var topMark = padT + 4;
+    for (var ri = 0; ri < split.testIdx.length; ri++) {
+      var ix = split.testIdx[ri];
+      svg.appendChild(mk('rect', {
+        x: xOf(ix) - 4, y: topMark, width: 8, height: 4,
+        fill: '#C04E68', opacity: '0.75', rx: '1',
+      }));
+    }
+    svg.appendChild(mk('text', {
+      x: padL + 4, y: topMark - 1,
+      'font-family': 'JetBrains Mono, monospace', 'font-size': '9',
+      fill: '#C04E68', 'font-weight': '700',
+    }, LANG === 'cn' ? '随机测试日:' : 'random test days:'));
+  }
+
+  // connecting trend line (light)
+  var pathD = '';
+  for (var p = 0; p < N_DAYS; p++) {
+    pathD += (p === 0 ? 'M' : ' L') + xOf(p) + ',' + yOf(PM_SERIES[p]);
+  }
+  svg.appendChild(mk('path', {
+    d: pathD, fill: 'none', stroke: '#D9D1BD', 'stroke-width': '1', opacity: '0.7',
+  }));
+
+  // residual stubs from each point to mean (the |y - train_mean|)
+  for (var rs = 0; rs < N_DAYS; rs++) {
+    var isTest = split.testIdx.indexOf(rs) >= 0;
+    svg.appendChild(mk('line', {
+      x1: xOf(rs), x2: xOf(rs), y1: yOf(PM_SERIES[rs]), y2: meanY,
+      stroke: isTest ? '#E2BAC7' : '#B7C5D3', 'stroke-width': '1', opacity: '0.55',
+    }));
+  }
+
+  // points: train = blue circle, test = red circle (bigger)
+  for (var ip = 0; ip < N_DAYS; ip++) {
+    var isT = split.testIdx.indexOf(ip) >= 0;
+    var cx = xOf(ip), cy = yOf(PM_SERIES[ip]);
+    svg.appendChild(mk('circle', {
+      cx: cx, cy: cy, r: isT ? '4.5' : '3.2',
+      fill: isT ? '#C04E68' : '#527B95',
+      stroke: '#FFFFFF', 'stroke-width': '1.2',
+    }));
+  }
+}
+
+// ============= UI helpers =============
+function classifyZone(ratio) {
+  if (ratio <= 55 || ratio >= 92) return 'edge';
+  if (ratio < 65) return 'low';
+  if (ratio > 88) return 'high';
+  return 'ok';
+}
+
+function renderUI() {
+  var ratio = pageState.ratio;
+  var mode = pageState.mode;
+  var split = computeSplit(ratio, mode);
+  var trainN = split.trainIdx.length;
+  var testN = split.testIdx.length;
+
+  // slider gradient
+  var sl = $('ratioSlider');
+  sl.style.setProperty('--ratio', ratio + '%');
+  $('ratioVal').textContent = ratio + '%';
+  $('trainN').textContent = trainN;
+  $('testN').textContent = testN;
+  $('trainNMet').textContent = trainN;
+  $('testNMet').textContent = testN;
+  $('trainMaeVal').innerHTML = fmt(split.trainMae, 1) +
+    '<span class="mae-unit">' + t('unitUg') + '</span>';
+  $('testMaeVal').innerHTML = fmt(split.testMae, 1) +
+    '<span class="mae-unit">' + t('unitUg2') + '</span>';
+  $('meanLbl').textContent = 'train_mean = ' + fmt(split.trainMean, 1);
+
+  // zone warn
+  var zone = classifyZone(ratio);
+  var warnEl = $('zoneWarn');
+  warnEl.classList.remove('bad', 'good');
+  if (zone === 'edge') {
+    warnEl.textContent = t('zoneEdge');
+    warnEl.classList.add('bad');
+  } else if (zone === 'low') {
+    warnEl.textContent = t('zoneTooLow');
+    warnEl.classList.add('bad');
+  } else if (zone === 'high') {
+    warnEl.textContent = t('zoneTooHigh');
+    warnEl.classList.add('bad');
+  } else {
+    warnEl.textContent = t('zoneOk');
+    warnEl.classList.add('good');
+  }
+
+  // verdict
+  var vCard = $('verdictCard');
+  var vBody = $('verdictBody');
+  vCard.classList.remove('warn', 'ok');
+  if (zone === 'edge' || zone === 'high') {
+    vBody.innerHTML = t('vBadHigh').replace('__T__', testN);
+    vCard.classList.add('warn');
+  } else if (zone === 'low') {
+    vBody.innerHTML = t('vBadLow').replace('__N__', trainN);
+    vCard.classList.add('warn');
+  } else {
+    var msg = t('vSweet').replace('__R__', ratio).replace('__N__', trainN).replace('__T__', testN);
+    if (mode === 'random') {
+      msg += ' ' + t('vRandomVsTime');
+    } else {
+      msg += ' ' + t('vTimeMode');
+    }
+    vBody.innerHTML = msg;
+    vCard.classList.add('ok');
+  }
+
+  // trace card
+  var key = mode + ':' + ratio;
+  pageState.exploredRatios[key] = true;
+  $('exploredRatiosVal').textContent = Object.keys(pageState.exploredRatios).length;
+  pageState.modesTried[mode] = true;
+  var modeStrs = [];
+  if (pageState.modesTried.time) modeStrs.push('time');
+  if (pageState.modesTried.random) modeStrs.push('random');
+  $('modesTriedVal').textContent = modeStrs.join(' + ');
+
+  if (pageState.bestTestMae == null || split.testMae < pageState.bestTestMae) {
+    pageState.bestTestMae = split.testMae;
+    pageState.bestTestRatio = ratio;
+  }
+  if (pageState.worstTestMae == null || split.testMae > pageState.worstTestMae) {
+    pageState.worstTestMae = split.testMae;
+  }
+  $('bestTestVal').textContent = fmt(pageState.bestTestMae, 1) +
+    ' (r=' + pageState.bestTestRatio + '%)';
+  $('worstTestVal').textContent = fmt(pageState.worstTestMae, 1);
+
+  // task progression
+  if (!pageState.taskDone[0]) {
+    if (zone === 'edge' || split.testMae > 16 || trainN <= 17) {
+      pageState.taskDone[0] = true;
+      pageState.extremePushed = true;
+      if (pageState.taskIndex === 1) pageState.taskIndex = 2;
+      showToast(t('toastTask1'), 'ok');
+    }
+  }
+  if (pageState.taskDone[0] && !pageState.taskDone[1]) {
+    if (ratio >= 75 && ratio <= 85 && split.testMae < 12 && Object.keys(pageState.exploredRatios).length >= 4) {
+      pageState.taskDone[1] = true;
+      pageState.sweetFound = true;
+      if (pageState.taskIndex === 2) pageState.taskIndex = 3;
+      showToast(t('toastTask2'), 'ok');
+    }
+  }
+  if (pageState.taskDone[0] && pageState.taskDone[1] && !pageState.taskDone[2]) {
+    if (pageState.modesTried.time && pageState.modesTried.random) {
+      pageState.taskDone[2] = true;
+      if (pageState.taskIndex === 3) pageState.taskIndex = 3;
+      showToast(t('toastTask3'), 'ok');
+      setTimeout(showBadge, 700);
+    }
+  }
+
+  renderHud();
+  renderTaskList();
+  renderChart(split);
+}
+
+function renderHud() {
+  var done = pageState.taskDone.filter(function (b) { return b; }).length;
+  var pct = Math.round(done / 3 * 100);
+  $('hudTask').textContent = t('hudTask').replace('__I__', pageState.taskIndex);
+  $('hudProgress').textContent = t('hudProgress').replace('__P__', pct);
+}
+
+function renderTaskList() {
+  var nodes = document.querySelectorAll('.task-item');
+  for (var i = 0; i < nodes.length; i++) {
+    var idx = parseInt(nodes[i].getAttribute('data-task'), 10);
+    nodes[i].classList.remove('active', 'done');
+    if (pageState.taskDone[idx - 1]) nodes[i].classList.add('done');
+    else if (idx === pageState.taskIndex) nodes[i].classList.add('active');
+  }
+}
+
+// ============= I18N rendering =============
+function renderI18n() {
+  $('brandTitle').textContent = t('brandTitle');
+  $('brandSub').textContent = t('brandSub');
+  $('tasksHeader').textContent = t('tasksHeader');
+  document.querySelectorAll('[data-i18n]').forEach(function (n) {
+    var k = n.getAttribute('data-i18n');
+    if (I18N[k]) n.innerHTML = t(k);
+  });
+  $('splitModeH').textContent = t('splitModeH');
+  $('lblTimeMode').textContent = t('lblTimeMode');
+  $('descTime').textContent = t('descTime');
+  $('lblRandomMode').textContent = t('lblRandomMode');
+  $('descRandom').textContent = t('descRandom');
+  $('tipH').textContent = t('tipH');
+  $('tipBody').innerHTML = t('tipBody');
+  $('stageTitle').textContent = t('stageTitle');
+  $('stageSub').textContent = t('stageSub');
+  $('lblRatio').textContent = t('lblRatio');
+  $('chartH').textContent = t('chartH');
+  $('chartTag').textContent = t('chartTag');
+  $('metricsH').textContent = t('metricsH');
+  $('metricsTag').textContent = t('metricsTag');
+  $('lblTrainMae').textContent = t('lblTrainMae');
+  $('lblTestMae').textContent = t('lblTestMae');
+  $('verdictH').textContent = t('verdictH');
+  $('traceH').textContent = t('traceH');
+  $('lblBestTest').textContent = t('lblBestTest');
+  $('lblWorstTest').textContent = t('lblWorstTest');
+  $('lblModesTried').textContent = t('lblModesTried');
+  $('lblExploredRatios').textContent = t('lblExploredRatios');
+  $('badgeTitle').textContent = t('badgeTitle');
+  $('badgeDesc').textContent = t('badgeDesc');
+  $('badgeClose').textContent = t('badgeClose');
+  renderUI();
+}
+
+// ============= BADGE =============
+function showBadge() {
+  $('badgeOverlay').classList.add('show');
+}
+
+// ============= EVENTS =============
+function bindEvents() {
+  $('ratioSlider').addEventListener('input', function (ev) {
+    pageState.ratio = parseInt(ev.target.value, 10);
+    renderUI();
+  });
+
+  function setMode(mode) {
+    if (pageState.mode === mode) return;
+    pageState.mode = mode;
+    $('rowTime').classList.toggle('checked', mode === 'time');
+    $('rowRandom').classList.toggle('checked', mode === 'random');
+    var radios = document.querySelectorAll('input[name=splitMode]');
+    for (var i = 0; i < radios.length; i++) radios[i].checked = (radios[i].value === mode);
+    renderUI();
+  }
+  $('rowTime').addEventListener('click', function () { setMode('time'); });
+  $('rowRandom').addEventListener('click', function () { setMode('random'); });
+  document.querySelectorAll('input[name=splitMode]').forEach(function (r) {
+    r.addEventListener('change', function (ev) { setMode(ev.target.value); });
+  });
+
+  $('langBtn').addEventListener('click', function () {
+    LANG = (LANG === 'cn') ? 'en' : 'cn';
+    document.documentElement.setAttribute('lang', LANG === 'cn' ? 'zh-CN' : 'en');
+    renderI18n();
+  });
+  $('badgeClose').addEventListener('click', function () {
+    $('badgeOverlay').classList.remove('show');
+  });
+}
+
+// ============= BOOT =============
+(function boot() {
+  renderI18n();   // includes renderUI
+  bindEvents();
+})();
+
+</script>
+</body>
+</html>

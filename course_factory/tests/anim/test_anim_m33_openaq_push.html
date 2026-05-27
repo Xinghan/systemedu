@@ -1,0 +1,963 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>M33 · 把你的数据推到 OpenAQ API</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+SC:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --paper:    #FAF9F5;
+    --paper-2:  #F1EDDF;
+    --card:     #FFFFFF;
+    --ink:      #191814;
+    --ink-2:    #2B2924;
+    --sub:      #6B6557;
+    --sub-2:    #9D978A;
+    --border:   #EBE5D6;
+    --border-2: #D9D1BD;
+    --hairline: #F2EDE0;
+
+    --primary:      #D97757;
+    --primary-ink:  #9A4A2E;
+    --primary-soft: #F8EDE5;
+    --primary-line: #ECCFB8;
+
+    --computing:      #C04E68;
+    --computing-soft: #F4DDE3;
+
+    --shadow-sm: 0 1px 2px 0 rgba(25,24,20,.04);
+    --shadow:    0 1px 3px 0 rgba(25,24,20,.06), 0 1px 2px -1px rgba(25,24,20,.04);
+    --shadow-md: 0 4px 8px -2px rgba(25,24,20,.06), 0 2px 4px -2px rgba(25,24,20,.04);
+    --shadow-lg: 0 12px 24px -6px rgba(25,24,20,.1), 0 4px 8px -4px rgba(25,24,20,.05);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    height: 100vh; overflow: hidden;
+    background: var(--paper); color: var(--ink);
+    font-family: 'Inter', 'Noto Sans SC', 'PingFang SC', sans-serif;
+    font-size: 14px; line-height: 1.5;
+    display: flex;
+  }
+  .mono { font-family: 'JetBrains Mono', monospace; }
+
+  /* ============ Sidebar 200px ============ */
+  .sidebar {
+    width: 200px; flex-shrink: 0; height: 100vh;
+    background: var(--paper-2);
+    border-right: 1px solid var(--border);
+    display: flex; flex-direction: column;
+    padding: 22px 18px 18px;
+  }
+  .brand-row { display: flex; align-items: center; gap: 8px; margin-bottom: 18px; }
+  .brand-dot {
+    width: 10px; height: 10px; border-radius: 50%;
+    background: var(--primary);
+    box-shadow: 0 0 0 4px var(--primary-soft);
+    animation: pulse 2.4s ease-in-out infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { box-shadow: 0 0 0 4px var(--primary-soft); }
+    50%      { box-shadow: 0 0 0 6px var(--primary-soft); }
+  }
+  .brand-tag {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; letter-spacing: 0.08em;
+    color: var(--sub); font-weight: 600;
+  }
+  .brand-title {
+    font-size: 15px; font-weight: 700; color: var(--ink);
+    line-height: 1.35; margin-bottom: 4px;
+  }
+  .brand-sub {
+    font-size: 11px; color: var(--sub); line-height: 1.5;
+    font-family: 'JetBrains Mono', monospace;
+  }
+  .guide-h {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px; letter-spacing: 0.12em;
+    color: var(--sub-2); margin: 24px 0 8px;
+    text-transform: uppercase;
+  }
+  .guide-list { list-style: none; padding: 0; margin: 0; }
+  .guide-list li {
+    font-size: 12px; color: var(--ink-2); line-height: 1.55;
+    padding: 8px 0 8px 12px;
+    border-left: 2px solid var(--border-2);
+    margin-bottom: 4px;
+  }
+  .guide-list li .num {
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--primary-ink); font-weight: 600;
+    font-size: 10px; margin-right: 6px;
+  }
+  .guide-list li .en {
+    display: block; font-family: 'JetBrains Mono', monospace;
+    font-size: 10px; color: var(--sub-2); margin-top: 2px;
+  }
+  .lang-btn {
+    margin-top: auto;
+    border: 1px solid var(--border-2);
+    background: var(--card);
+    color: var(--ink); cursor: pointer;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; font-weight: 600;
+    padding: 9px 12px; border-radius: 6px;
+    transition: all 180ms ease;
+    letter-spacing: 0.06em;
+  }
+  .lang-btn:hover {
+    border-color: var(--primary-line);
+    background: var(--primary-soft);
+    color: var(--primary-ink);
+  }
+
+  /* ============ Main ============ */
+  .main {
+    flex: 1; height: 100vh; overflow-y: auto;
+    padding: 22px 28px 24px;
+    display: flex; flex-direction: column; gap: 16px;
+  }
+  .section-tag {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px; letter-spacing: 0.12em;
+    color: var(--sub); text-transform: uppercase;
+  }
+  .section-tag .bar {
+    width: 18px; height: 1px; background: var(--border-2);
+  }
+
+  /* ----- A: Hero / reversal ----- */
+  .hero {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    box-shadow: var(--shadow-sm);
+    padding: 16px 22px;
+    margin-top: 6px;
+  }
+  .hero-row {
+    display: flex; justify-content: space-between; align-items: flex-start;
+    gap: 18px;
+  }
+  .hero-title {
+    font-size: 18px; font-weight: 700; color: var(--ink);
+    line-height: 1.35;
+  }
+  .hero-title .strike {
+    color: var(--sub-2); text-decoration: line-through;
+    text-decoration-thickness: 1.5px;
+    text-decoration-color: var(--sub-2);
+    font-weight: 600;
+  }
+  .hero-title .accent { color: var(--primary-ink); }
+  .hero-sub {
+    font-size: 12px; color: var(--sub); margin-top: 6px;
+    font-family: 'JetBrains Mono', monospace;
+    line-height: 1.5;
+  }
+  .hero-badge {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px; font-weight: 700;
+    padding: 5px 11px; border-radius: 999px;
+    background: var(--computing-soft); color: var(--computing);
+    border: 1px solid rgba(192,78,104,.3);
+    letter-spacing: 0.08em; white-space: nowrap;
+    align-self: center;
+  }
+
+  /* ----- B: Dataflow ----- */
+  .flow-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    box-shadow: var(--shadow-sm);
+    padding: 14px 18px 12px;
+  }
+  .flow-head {
+    display: flex; justify-content: space-between; align-items: baseline;
+    margin-bottom: 8px;
+  }
+  .flow-h2 {
+    font-size: 14px; font-weight: 700; color: var(--ink); margin: 0;
+  }
+  .flow-sub {
+    font-size: 11px; color: var(--sub); font-family: 'JetBrains Mono', monospace;
+  }
+  .flow-svg-wrap {
+    display: flex; align-items: center; justify-content: center;
+    padding: 2px 0 0;
+  }
+  .flow-svg {
+    width: 100%; max-width: 980px; height: 178px; display: block;
+  }
+  .node-grp { cursor: pointer; }
+  .node-bg { fill: var(--card); stroke: var(--border-2); stroke-width: 1.2; transition: stroke 200ms ease, fill 200ms ease; }
+  .node-grp:hover .node-bg { stroke: var(--computing); fill: var(--computing-soft); }
+  .node-label {
+    font-family: 'Inter', 'Noto Sans SC', sans-serif;
+    font-size: 12px; fill: var(--ink); font-weight: 600;
+    pointer-events: none;
+  }
+  .node-mono {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px; fill: var(--sub);
+    pointer-events: none;
+  }
+  .arrow-line {
+    fill: none; stroke: var(--border-2); stroke-width: 1.5;
+    marker-end: url(#arrowhead);
+  }
+  .arrow-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px; fill: var(--sub-2);
+    letter-spacing: 0.04em;
+  }
+  .arrow-line.live { stroke: var(--computing); }
+
+  .flow-detail {
+    margin-top: 8px;
+    background: var(--paper-2);
+    border: 1px dashed var(--border-2);
+    border-radius: 6px;
+    padding: 10px 14px;
+    min-height: 56px;
+    transition: border-color 200ms ease, background 200ms ease;
+  }
+  .flow-detail.active {
+    border-style: solid;
+    border-color: var(--computing);
+    background: var(--computing-soft);
+  }
+  .flow-detail-title {
+    font-size: 12px; font-weight: 700; color: var(--ink-2);
+    margin-bottom: 3px;
+  }
+  .flow-detail-body {
+    font-size: 11px; color: var(--sub); line-height: 1.55;
+    font-family: 'JetBrains Mono', monospace;
+  }
+  .flow-detail-body .cn {
+    color: var(--ink-2); font-family: 'Inter', 'Noto Sans SC', sans-serif;
+    margin-right: 6px;
+  }
+
+  /* ----- C: Schema + Verify split ----- */
+  .split-row {
+    display: grid; grid-template-columns: 1.05fr 1fr; gap: 14px;
+  }
+  .split-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    box-shadow: var(--shadow-sm);
+    padding: 14px 18px;
+    display: flex; flex-direction: column;
+  }
+  .split-card-h {
+    font-size: 13px; font-weight: 700; color: var(--ink);
+    margin: 0 0 4px;
+  }
+  .split-card-sub {
+    font-size: 11px; color: var(--sub);
+    font-family: 'JetBrains Mono', monospace;
+    margin-bottom: 10px;
+  }
+
+  /* Schema table */
+  .schema-table {
+    border-collapse: collapse;
+    width: 100%;
+    font-family: 'JetBrains Mono', monospace;
+  }
+  .schema-table th {
+    text-align: left;
+    font-size: 9px; color: var(--sub-2);
+    letter-spacing: 0.08em; text-transform: uppercase;
+    padding: 4px 8px 6px;
+    border-bottom: 1px solid var(--border-2);
+    font-weight: 600;
+  }
+  .schema-table td {
+    font-size: 11px; color: var(--ink-2);
+    padding: 6px 8px;
+    border-bottom: 1px solid var(--hairline);
+  }
+  .schema-table tr:last-child td { border-bottom: none; }
+  .schema-table .field { color: var(--computing); font-weight: 700; }
+  .schema-table .type { color: var(--sub); }
+  .schema-table .req {
+    display: inline-block;
+    font-size: 8px; font-weight: 700;
+    padding: 2px 5px; border-radius: 3px;
+    background: var(--primary-soft); color: var(--primary-ink);
+    letter-spacing: 0.06em;
+  }
+  .schema-table .opt {
+    display: inline-block;
+    font-size: 8px; font-weight: 600;
+    padding: 2px 5px; border-radius: 3px;
+    background: var(--paper-2); color: var(--sub-2);
+    border: 1px solid var(--border-2);
+    letter-spacing: 0.06em;
+  }
+  .schema-note {
+    margin-top: 8px; font-size: 10px; color: var(--sub);
+    font-family: 'JetBrains Mono', monospace;
+    border-left: 2px solid var(--primary-line);
+    padding-left: 8px; line-height: 1.5;
+  }
+  .schema-note .cn {
+    color: var(--ink-2); font-family: 'Inter', 'Noto Sans SC', sans-serif;
+    display: block; margin-bottom: 2px; font-size: 11px;
+  }
+
+  /* Verify card */
+  .verify-step {
+    display: flex; gap: 10px; align-items: flex-start;
+    margin-bottom: 8px;
+  }
+  .verify-num {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px; font-weight: 700;
+    background: var(--primary-soft); color: var(--primary-ink);
+    padding: 2px 7px; border-radius: 999px;
+    margin-top: 1px;
+    letter-spacing: 0.06em;
+  }
+  .verify-text {
+    font-size: 12px; color: var(--ink-2); flex: 1;
+    line-height: 1.45;
+  }
+  .verify-text .en {
+    display: block; font-family: 'JetBrains Mono', monospace;
+    font-size: 10px; color: var(--sub-2); margin-top: 2px;
+  }
+  .verify-curl {
+    background: var(--paper-2);
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    padding: 8px 11px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; color: var(--ink);
+    line-height: 1.5;
+    margin: 6px 0 4px;
+    overflow-x: auto; white-space: nowrap;
+  }
+  .verify-curl .prompt { color: var(--primary-ink); margin-right: 4px; }
+  .verify-curl .flag   { color: var(--computing); }
+  .verify-curl .url    { color: var(--ink); }
+
+  .verify-json {
+    background: #1a1814;
+    border: 1px solid var(--border-2);
+    border-radius: 5px;
+    padding: 9px 12px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10.5px; color: #F1EDDF;
+    line-height: 1.5;
+    margin-top: 4px;
+    max-height: 138px; overflow: auto;
+  }
+  .verify-json .k { color: #E8B473; }
+  .verify-json .s { color: #B4D4A8; }
+  .verify-json .n { color: #D9A0A0; }
+  .verify-json .p { color: #9D978A; }
+
+  /* ----- D: 3 promises ----- */
+  .promise-grid {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px;
+  }
+  .promise-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 14px;
+    box-shadow: var(--shadow-sm);
+    display: flex; gap: 12px; align-items: flex-start;
+    transition: border-color 200ms ease, background 200ms ease;
+  }
+  .promise-card.active {
+    border-color: var(--primary);
+    background: var(--primary-soft);
+  }
+  .promise-card.active .promise-num {
+    color: var(--primary-ink);
+  }
+  .promise-num {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 20px; font-weight: 700;
+    color: var(--sub-2);
+    line-height: 1; min-width: 28px;
+  }
+  .promise-body { flex: 1; }
+  .promise-title {
+    font-size: 12.5px; font-weight: 700; color: var(--ink);
+    margin-bottom: 4px; line-height: 1.35;
+  }
+  .promise-sub {
+    font-size: 10.5px; color: var(--sub); line-height: 1.5;
+    font-family: 'JetBrains Mono', monospace;
+  }
+</style>
+</head>
+<body>
+
+<aside class="sidebar">
+  <div class="brand-row">
+    <span class="brand-dot"></span>
+    <span class="brand-tag" id="brandTag">M33 · INGEST</span>
+  </div>
+  <div class="brand-title" id="brandTitle">数据怎么进 OpenAQ</div>
+  <div class="brand-sub" id="brandSub">PurpleAir → OpenAQ pipeline</div>
+
+  <div class="guide-h" id="guideH">怎么看这张图</div>
+  <ul class="guide-list">
+    <li id="g1"><span class="num">01</span>先看顶部那句反转: OpenAQ 不让你 POST<span class="en">Read the reversal on top</span></li>
+    <li id="g2"><span class="num">02</span>悬停 4 个节点看数据怎么跑过去<span class="en">Hover the 4 dataflow nodes</span></li>
+    <li id="g3"><span class="num">03</span>用 curl 验证自家 sensor_id 已到了<span class="en">Verify your sensor_id via curl</span></li>
+  </ul>
+
+  <button class="lang-btn" id="langBtn" type="button">中文 / EN</button>
+</aside>
+
+<main class="main">
+
+  <!-- ========= A · Hero / Reversal ========= -->
+  <section>
+    <div class="section-tag"><span class="bar"></span><span id="t1">A · 30 秒看清 OpenAQ 是怎么收数据的</span></div>
+    <div class="hero">
+      <div class="hero-row">
+        <div>
+          <div class="hero-title" id="heroTitle">
+            <span class="strike">你以为要 POST</span> &nbsp;其实 <span class="accent">OpenAQ 自动来拉</span>
+          </div>
+          <div class="hero-sub" id="heroSub">
+            OpenAQ 是 ingestion-only API · 用户/学生不能直接推数据 · 你只要让 PurpleAir 收到数据, OpenAQ 自己每小时来拉一次。
+          </div>
+        </div>
+        <span class="hero-badge" id="heroBadge">INGESTION-ONLY · NO POST</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========= B · Dataflow 4 nodes ========= -->
+  <section>
+    <div class="section-tag"><span class="bar"></span><span id="t2">B · 数据怎么从你的 Pi 跑到全球数据库</span></div>
+    <div class="flow-card" style="margin-top:8px">
+      <div class="flow-head">
+        <h2 class="flow-h2" id="flowH2">4 步走 · 悬停看每步明细</h2>
+        <span class="flow-sub" id="flowSub">hover each node for details</span>
+      </div>
+
+      <div class="flow-svg-wrap">
+        <svg class="flow-svg" viewBox="0 0 980 178" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <marker id="arrowhead" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+              <path d="M0,0 L10,5 L0,10 z" fill="#D9D1BD"/>
+            </marker>
+          </defs>
+
+          <!-- Node 1: Pi -->
+          <g class="node-grp" data-node="pi" tabindex="0">
+            <rect class="node-bg" x="20" y="36" width="180" height="84" rx="8"/>
+            <!-- pcb -->
+            <rect x="50" y="56" width="120" height="46" rx="3" fill="#DDE7DA" stroke="#D9D1BD" stroke-width="1"/>
+            <rect x="92" y="68" width="36" height="22" rx="1.5" fill="#2B2924"/>
+            <text x="110" y="83" text-anchor="middle" font-family="JetBrains Mono" font-size="7" fill="#F1EDDF">Pi</text>
+            <circle cx="62" cy="92" r="2.4" fill="#D97757"/>
+            <!-- gpio dots -->
+            <g fill="#9D978A">
+              <rect x="58" y="60" width="3" height="3"/>
+              <rect x="64" y="60" width="3" height="3"/>
+              <rect x="70" y="60" width="3" height="3"/>
+              <rect x="76" y="60" width="3" height="3"/>
+              <rect x="82" y="60" width="3" height="3"/>
+            </g>
+            <text x="110" y="138" text-anchor="middle" class="node-label" data-i="nNode1">你的 Pi 节点</text>
+            <text x="110" y="152" text-anchor="middle" class="node-mono">node uploads</text>
+            <text x="110" y="50" text-anchor="middle" class="node-mono">STEP 1</text>
+          </g>
+
+          <!-- arrow 1 -->
+          <line class="arrow-line live" x1="208" y1="78" x2="248" y2="78"/>
+          <text x="228" y="68" text-anchor="middle" class="arrow-label">HTTPS</text>
+
+          <!-- Node 2: PurpleAir cloud -->
+          <g class="node-grp" data-node="purpleair" tabindex="0">
+            <rect class="node-bg" x="252" y="36" width="180" height="84" rx="8"/>
+            <!-- cloud shape -->
+            <path d="M298 86 q-14 0 -14 -14 q0 -14 14 -14 q4 -12 18 -12 q14 0 18 12 q14 0 14 14 q0 14 -14 14 z"
+                  fill="#F1EDDF" stroke="#D9D1BD" stroke-width="1"/>
+            <text x="316" y="78" text-anchor="middle" font-family="JetBrains Mono" font-size="9" fill="#9A4A2E" font-weight="700">PA</text>
+            <!-- db cylinder -->
+            <ellipse cx="380" cy="68" rx="20" ry="5" fill="#F1EDDF" stroke="#D9D1BD" stroke-width="1"/>
+            <path d="M360 68 L360 88 Q380 92 400 88 L400 68" fill="#F1EDDF" stroke="#D9D1BD" stroke-width="1"/>
+            <ellipse cx="380" cy="88" rx="20" ry="5" fill="none" stroke="#D9D1BD" stroke-width="1"/>
+            <text x="342" y="138" text-anchor="middle" class="node-label" data-i="nNode2">PurpleAir 云存储</text>
+            <text x="342" y="152" text-anchor="middle" class="node-mono">PurpleAir Cloud</text>
+            <text x="342" y="50" text-anchor="middle" class="node-mono">STEP 2</text>
+          </g>
+
+          <!-- arrow 2 (pulled, not pushed) -->
+          <line class="arrow-line" x1="440" y1="78" x2="488" y2="78"/>
+          <text x="464" y="68" text-anchor="middle" class="arrow-label">PULL · 1h</text>
+
+          <!-- Node 3: OpenAQ ETL -->
+          <g class="node-grp" data-node="etl" tabindex="0">
+            <rect class="node-bg" x="492" y="36" width="180" height="84" rx="8"/>
+            <!-- gears -->
+            <g transform="translate(540,78)">
+              <circle r="14" fill="#F1EDDF" stroke="#D9D1BD" stroke-width="1"/>
+              <circle r="6" fill="#9D978A"/>
+              <g stroke="#D9D1BD" stroke-width="2.5">
+                <line x1="0" y1="-14" x2="0" y2="-18"/>
+                <line x1="0" y1="14" x2="0" y2="18"/>
+                <line x1="-14" y1="0" x2="-18" y2="0"/>
+                <line x1="14" y1="0" x2="18" y2="0"/>
+              </g>
+            </g>
+            <g transform="translate(590,78)">
+              <circle r="11" fill="#F1EDDF" stroke="#D9D1BD" stroke-width="1"/>
+              <circle r="4" fill="#9D978A"/>
+              <g stroke="#D9D1BD" stroke-width="2">
+                <line x1="0" y1="-11" x2="0" y2="-15"/>
+                <line x1="0" y1="11" x2="0" y2="15"/>
+                <line x1="-11" y1="0" x2="-15" y2="0"/>
+                <line x1="11" y1="0" x2="15" y2="0"/>
+              </g>
+            </g>
+            <text x="630" y="74" font-family="JetBrains Mono" font-size="8" fill="#6B6557">ETL</text>
+            <text x="630" y="86" font-family="JetBrains Mono" font-size="7" fill="#9D978A">normalize</text>
+            <text x="582" y="138" text-anchor="middle" class="node-label" data-i="nNode3">OpenAQ ETL</text>
+            <text x="582" y="152" text-anchor="middle" class="node-mono">aggregator</text>
+            <text x="582" y="50" text-anchor="middle" class="node-mono">STEP 3</text>
+          </g>
+
+          <!-- arrow 3 -->
+          <line class="arrow-line" x1="680" y1="78" x2="728" y2="78"/>
+          <text x="704" y="68" text-anchor="middle" class="arrow-label">WRITE</text>
+
+          <!-- Node 4: Global DB -->
+          <g class="node-grp" data-node="db" tabindex="0">
+            <rect class="node-bg" x="732" y="36" width="225" height="84" rx="8"/>
+            <!-- globe -->
+            <g transform="translate(792,78)">
+              <circle r="22" fill="#F1EDDF" stroke="#D9D1BD" stroke-width="1"/>
+              <ellipse rx="22" ry="9" fill="none" stroke="#9D978A" stroke-width="0.8"/>
+              <line x1="-22" y1="0" x2="22" y2="0" stroke="#9D978A" stroke-width="0.8"/>
+              <path d="M0 -22 Q -12 0 0 22" fill="none" stroke="#9D978A" stroke-width="0.8"/>
+              <path d="M0 -22 Q 12 0 0 22" fill="none" stroke="#9D978A" stroke-width="0.8"/>
+              <circle cx="-8" cy="-4" r="2" fill="#D97757"/>
+              <circle cx="6" cy="-10" r="2" fill="#C04E68"/>
+              <circle cx="9" cy="6" r="2" fill="#C04E68"/>
+              <circle cx="-4" cy="12" r="2" fill="#D97757"/>
+            </g>
+            <!-- explorer screen -->
+            <rect x="838" y="56" width="100" height="46" rx="3" fill="#FAF9F5" stroke="#D9D1BD" stroke-width="1"/>
+            <rect x="844" y="62" width="50" height="3" fill="#C04E68" rx="0.5"/>
+            <rect x="844" y="68" width="80" height="2" fill="#9D978A" rx="0.5"/>
+            <rect x="844" y="74" width="74" height="2" fill="#9D978A" rx="0.5"/>
+            <rect x="844" y="80" width="68" height="2" fill="#9D978A" rx="0.5"/>
+            <text x="844" y="96" font-family="JetBrains Mono" font-size="6" fill="#6B6557">explore.openaq.org</text>
+            <text x="845" y="138" text-anchor="middle" class="node-label" data-i="nNode4">OpenAQ 全球数据库</text>
+            <text x="845" y="152" text-anchor="middle" class="node-mono">global open data</text>
+            <text x="845" y="50" text-anchor="middle" class="node-mono">STEP 4</text>
+          </g>
+        </svg>
+      </div>
+
+      <div class="flow-detail" id="flowDetail">
+        <div class="flow-detail-title" id="flowDetailTitle">悬停上面任一节点看明细</div>
+        <div class="flow-detail-body" id="flowDetailBody">
+          <span class="cn">每个节点告诉你它具体做什么、用什么协议、谁负责。</span>
+          hover any node above · each step has a short explanation
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========= C · Schema + Verify ========= -->
+  <section>
+    <div class="split-row">
+
+      <!-- Schema -->
+      <div class="split-card">
+        <div>
+          <h3 class="split-card-h" id="schemaH">C1 · OpenAQ 一条记录长啥样</h3>
+          <div class="split-card-sub" id="schemaSub">measurements JSON schema · what each row carries</div>
+        </div>
+        <table class="schema-table">
+          <thead>
+            <tr>
+              <th id="thField">FIELD</th>
+              <th id="thType">TYPE</th>
+              <th id="thMean" style="width:36%">MEANING</th>
+              <th id="thReq" style="width:60px">REQ</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><span class="field">sensor_id</span></td>
+              <td><span class="type">int</span></td>
+              <td data-i="sm1">你的传感器编号</td>
+              <td><span class="req">REQ</span></td>
+            </tr>
+            <tr>
+              <td><span class="field">parameter</span></td>
+              <td><span class="type">str</span></td>
+              <td data-i="sm2">测哪个 · pm25 / pm10 / o3</td>
+              <td><span class="req">REQ</span></td>
+            </tr>
+            <tr>
+              <td><span class="field">value</span></td>
+              <td><span class="type">float</span></td>
+              <td data-i="sm3">浓度数字</td>
+              <td><span class="req">REQ</span></td>
+            </tr>
+            <tr>
+              <td><span class="field">unit</span></td>
+              <td><span class="type">str</span></td>
+              <td data-i="sm4">µg/m³ 或 ppb</td>
+              <td><span class="req">REQ</span></td>
+            </tr>
+            <tr>
+              <td><span class="field">datetime</span></td>
+              <td><span class="type">iso8601</span></td>
+              <td data-i="sm5">UTC 时间, 别用本地时</td>
+              <td><span class="req">REQ</span></td>
+            </tr>
+            <tr>
+              <td><span class="field">coordinates</span></td>
+              <td><span class="type">obj</span></td>
+              <td data-i="sm6">lat / lon · 你的节点位置</td>
+              <td><span class="req">REQ</span></td>
+            </tr>
+            <tr>
+              <td><span class="field">provider</span></td>
+              <td><span class="type">str</span></td>
+              <td data-i="sm7">谁送的 · "PurpleAir"</td>
+              <td><span class="opt">AUTO</span></td>
+            </tr>
+            <tr>
+              <td><span class="field">isMobile</span></td>
+              <td><span class="type">bool</span></td>
+              <td data-i="sm8">固定点还是移动的</td>
+              <td><span class="opt">OPT</span></td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="schema-note" id="schemaNote">
+          <span class="cn">为什么这些必填: 没 datetime 就排不了时序; 没 coordinates 就上不了地图; 没 unit 就不知道是 µg/m³ 还是 mg/m³ 差 1000 倍。</span>
+          why required: no datetime → no timeseries · no coordinates → no map · no unit → wrong magnitude.
+        </div>
+      </div>
+
+      <!-- Verify -->
+      <div class="split-card">
+        <div>
+          <h3 class="split-card-h" id="verifyH">C2 · 验证你的数据真的到了</h3>
+          <div class="split-card-sub" id="verifySub">GET request · check by your sensor_id</div>
+        </div>
+
+        <div class="verify-step">
+          <span class="verify-num">01</span>
+          <div class="verify-text" id="vt1">先记下你在 PurpleAir 上的 sensor_id (M32 注册时拿到)
+            <span class="en">Note your PurpleAir sensor_id from M32</span>
+          </div>
+        </div>
+
+        <div class="verify-step">
+          <span class="verify-num">02</span>
+          <div class="verify-text" id="vt2">向 OpenAQ 发一条 GET 查询
+            <span class="en">Send one GET request to OpenAQ</span>
+          </div>
+        </div>
+
+        <div class="verify-curl">
+<span class="prompt">$</span> curl <span class="flag">-H</span> <span class="url">"X-API-Key: $TOKEN"</span> \
+&nbsp;&nbsp;<span class="url">https://api.openaq.org/v3/sensors/<span style="color:#C04E68">12345</span>/measurements</span>
+        </div>
+
+        <div class="verify-step">
+          <span class="verify-num">03</span>
+          <div class="verify-text" id="vt3">看返回的 JSON · 有最近 1 小时数据 = pipeline 跑通了
+            <span class="en">If JSON has last-hour data → pipeline is alive</span>
+          </div>
+        </div>
+
+        <pre class="verify-json"><span class="p">{</span>
+&nbsp;&nbsp;<span class="k">"results"</span>: [
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="p">{</span>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="k">"sensor_id"</span>: <span class="n">12345</span>,
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="k">"parameter"</span>: <span class="s">"pm25"</span>,
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="k">"value"</span>: <span class="n">18.4</span>,
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="k">"unit"</span>: <span class="s">"µg/m³"</span>,
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="k">"datetime"</span>: <span class="s">"2026-05-27T14:00:00Z"</span>,
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="k">"coordinates"</span>: <span class="p">{</span><span class="k">"lat"</span>:<span class="n">37.78</span>,<span class="k">"lon"</span>:<span class="n">-122.41</span><span class="p">}</span>,
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="k">"provider"</span>: <span class="s">"PurpleAir"</span>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="p">}</span>
+&nbsp;&nbsp;]
+<span class="p">}</span></pre>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ========= D · 3 promises ========= -->
+  <section>
+    <div class="section-tag"><span class="bar"></span><span id="t3">D · 这周就要做的三件事</span></div>
+    <div class="promise-grid" style="margin-top:8px">
+      <div class="promise-card active">
+        <span class="promise-num">01</span>
+        <div class="promise-body">
+          <div class="promise-title" id="p1t">跑一次 curl 验证</div>
+          <div class="promise-sub" id="p1s">GET /sensors/&lt;id&gt;/measurements · 看到 JSON 即过</div>
+        </div>
+      </div>
+      <div class="promise-card">
+        <span class="promise-num">02</span>
+        <div class="promise-body">
+          <div class="promise-title" id="p2t">把 sensor_id 抄进项目本</div>
+          <div class="promise-sub" id="p2s">write sensor_id into your project notebook</div>
+        </div>
+      </div>
+      <div class="promise-card">
+        <span class="promise-num">03</span>
+        <div class="promise-body">
+          <div class="promise-title" id="p3t">把 OpenAQ 链接发同学一份</div>
+          <div class="promise-sub" id="p3s">share your explore.openaq.org url</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<script>
+(function(){
+  "use strict";
+
+  var LANG = 'cn';
+
+  var I18N = {
+    brandTag:   { cn: 'M33 · 接入',                 en: 'M33 · INGEST' },
+    brandTitle: { cn: '数据怎么进 OpenAQ',          en: 'How data lands in OpenAQ' },
+    brandSub:   { cn: 'PurpleAir → OpenAQ pipeline', en: 'PurpleAir → OpenAQ pipeline' },
+    guideH:     { cn: '怎么看这张图',                en: 'HOW TO READ' },
+    g1: {
+      cn: '<span class="num">01</span>先看顶部那句反转: OpenAQ 不让你 POST<span class="en">Read the reversal on top</span>',
+      en: '<span class="num">01</span>Read the reversal: OpenAQ does not accept POST<span class="en">先看顶部反转</span>'
+    },
+    g2: {
+      cn: '<span class="num">02</span>悬停 4 个节点看数据怎么跑过去<span class="en">Hover the 4 dataflow nodes</span>',
+      en: '<span class="num">02</span>Hover the 4 dataflow nodes<span class="en">悬停 4 个节点</span>'
+    },
+    g3: {
+      cn: '<span class="num">03</span>用 curl 验证自家 sensor_id 已到了<span class="en">Verify your sensor_id via curl</span>',
+      en: '<span class="num">03</span>Verify your sensor_id via curl<span class="en">用 curl 验证</span>'
+    },
+
+    t1: { cn: 'A · 30 秒看清 OpenAQ 是怎么收数据的', en: 'A · HOW OPENAQ COLLECTS DATA' },
+    t2: { cn: 'B · 数据怎么从你的 Pi 跑到全球数据库', en: 'B · FROM YOUR PI TO THE GLOBAL DB' },
+    t3: { cn: 'D · 这周就要做的三件事',               en: 'D · THIS WEEK — 3 THINGS' },
+
+    heroTitle: {
+      cn: '<span class="strike">你以为要 POST</span> &nbsp;其实 <span class="accent">OpenAQ 自动来拉</span>',
+      en: '<span class="strike">You thought you would POST</span> &nbsp;Actually <span class="accent">OpenAQ pulls it for you</span>'
+    },
+    heroSub: {
+      cn: 'OpenAQ 是 ingestion-only API · 用户/学生不能直接推数据 · 你只要让 PurpleAir 收到数据, OpenAQ 自己每小时来拉一次。',
+      en: 'OpenAQ is an ingestion-only API · users cannot POST · just feed PurpleAir, OpenAQ pulls hourly.'
+    },
+    heroBadge: { cn: '只收不发 · 无 POST', en: 'INGESTION-ONLY · NO POST' },
+
+    flowH2:  { cn: '4 步走 · 悬停看每步明细', en: '4 steps · hover for details' },
+    flowSub: { cn: '悬停任一节点查看明细',     en: 'hover any node above' },
+
+    nNode1: { cn: '你的 Pi 节点', en: 'Your Pi node' },
+    nNode2: { cn: 'PurpleAir 云存储', en: 'PurpleAir Cloud' },
+    nNode3: { cn: 'OpenAQ ETL', en: 'OpenAQ ETL' },
+    nNode4: { cn: 'OpenAQ 全球数据库', en: 'OpenAQ global DB' },
+
+    flowDetailDefaultT: { cn: '悬停上面任一节点看明细', en: 'Hover any node above for details' },
+    flowDetailDefaultB: {
+      cn: '<span class="cn">每个节点告诉你它具体做什么、用什么协议、谁负责。</span>hover any node · each step has a short explanation',
+      en: '<span class="cn">Each node shows what it does, which protocol it uses, who runs it.</span>每个节点解释自己做什么'
+    },
+
+    detailPiT: { cn: 'STEP 1 · 你的 Pi 每分钟上传一条记录', en: 'STEP 1 · Pi uploads one record per minute' },
+    detailPiB: {
+      cn: '<span class="cn">cron 跑 Python 脚本 → 把 PM2.5 浓度 + 时间 + GPS 通过 HTTPS POST 给 PurpleAir 注册接口。这一步你已经在 M32 做好了。</span>cron → python → https POST to PurpleAir',
+      en: '<span class="cn">A cron job runs your Python uploader. It HTTPS-POSTs PM2.5 + time + GPS to PurpleAir. Done in M32.</span>cron → python → https POST to PurpleAir'
+    },
+    detailPaT: { cn: 'STEP 2 · PurpleAir 云收下并存到自己 DB', en: 'STEP 2 · PurpleAir stores it in its own DB' },
+    detailPaB: {
+      cn: '<span class="cn">PurpleAir 是 data provider · 它给你 sensor_id 后所有数据归档在它家。OpenAQ 不直接碰你的 Pi。</span>PurpleAir = data provider · keeps everything internally',
+      en: '<span class="cn">PurpleAir is a data provider. It owns the storage; OpenAQ never touches your Pi directly.</span>PurpleAir = data provider'
+    },
+    detailEtlT: { cn: 'STEP 3 · OpenAQ ETL 每小时来 PurpleAir 拉一次', en: 'STEP 3 · OpenAQ ETL pulls hourly from PurpleAir' },
+    detailEtlB: {
+      cn: '<span class="cn">OpenAQ 是 aggregator (汇聚平台) · 它运行一组 ETL 任务, 调 PurpleAir / AirNow / 政府站点的 API, 把单位/字段/时间都对齐成统一 schema。</span>aggregator runs ETL · normalize units, fields, timezones',
+      en: '<span class="cn">OpenAQ is an aggregator. ETL jobs pull from PurpleAir, AirNow, gov sites, then normalize into one schema.</span>aggregator runs ETL · normalize'
+    },
+    detailDbT: { cn: 'STEP 4 · 写入全球开放数据库 + 上 explorer 地图', en: 'STEP 4 · written to global DB + shown on explorer' },
+    detailDbB: {
+      cn: '<span class="cn">explore.openaq.org 全世界都能搜 · 你的 sensor_id 一旦进 OpenAQ, 研究员/记者/同学都能引用你的浓度做分析。</span>explore.openaq.org · public · cite-friendly',
+      en: '<span class="cn">explore.openaq.org · anyone can search your sensor_id and cite your data.</span>explore.openaq.org · public · cite-friendly'
+    },
+
+    schemaH:    { cn: 'C1 · OpenAQ 一条记录长啥样', en: 'C1 · What one OpenAQ row looks like' },
+    schemaSub:  { cn: 'measurements JSON schema · 每条记录带哪些字段', en: 'measurements JSON schema · per-row fields' },
+    thField:    { cn: '字段',     en: 'FIELD' },
+    thType:     { cn: '类型',     en: 'TYPE' },
+    thMean:     { cn: '含义',     en: 'MEANING' },
+    thReq:      { cn: '必填',     en: 'REQ' },
+    sm1: { cn: '你的传感器编号',           en: 'your sensor id' },
+    sm2: { cn: '测哪个 · pm25 / pm10 / o3', en: 'which param · pm25/pm10/o3' },
+    sm3: { cn: '浓度数字',                  en: 'concentration number' },
+    sm4: { cn: 'µg/m³ 或 ppb',             en: 'µg/m³ or ppb' },
+    sm5: { cn: 'UTC 时间, 别用本地时',     en: 'UTC time · not local' },
+    sm6: { cn: 'lat / lon · 你的节点位置', en: 'lat / lon · node location' },
+    sm7: { cn: '谁送的 · "PurpleAir"',      en: 'who sent it · "PurpleAir"' },
+    sm8: { cn: '固定点还是移动的',          en: 'fixed point or mobile' },
+    schemaNote: {
+      cn: '<span class="cn">为什么这些必填: 没 datetime 就排不了时序; 没 coordinates 就上不了地图; 没 unit 就不知道是 µg/m³ 还是 mg/m³ 差 1000 倍。</span>why required: no datetime → no timeseries · no coords → no map · no unit → wrong magnitude.',
+      en: '<span class="cn">Why required — no datetime → no timeseries · no coords → no map · no unit → wrong magnitude (1000x).</span>why these fields are non-negotiable.'
+    },
+
+    verifyH:   { cn: 'C2 · 验证你的数据真的到了',                 en: 'C2 · Verify your data actually arrived' },
+    verifySub: { cn: 'GET 查询 · 用 sensor_id 校验',              en: 'GET request · check by sensor_id' },
+    vt1: {
+      cn: '先记下你在 PurpleAir 上的 sensor_id (M32 注册时拿到)<span class="en">Note your PurpleAir sensor_id from M32</span>',
+      en: 'Note your PurpleAir sensor_id from M32<span class="en">先记下 sensor_id</span>'
+    },
+    vt2: {
+      cn: '向 OpenAQ 发一条 GET 查询<span class="en">Send one GET request to OpenAQ</span>',
+      en: 'Send one GET request to OpenAQ<span class="en">发一条 GET 查询</span>'
+    },
+    vt3: {
+      cn: '看返回的 JSON · 有最近 1 小时数据 = pipeline 跑通了<span class="en">If JSON has last-hour data → pipeline is alive</span>',
+      en: 'Read the JSON · last-hour data means pipeline is alive<span class="en">JSON 有近 1h 数据 = 通了</span>'
+    },
+
+    p1t: { cn: '跑一次 curl 验证',                         en: 'Run the curl verification once' },
+    p1s: { cn: 'GET /sensors/<id>/measurements · 看到 JSON 即过', en: 'GET /sensors/<id>/measurements · JSON returned = pass' },
+    p2t: { cn: '把 sensor_id 抄进项目本',                  en: 'Copy sensor_id into your project notebook' },
+    p2s: { cn: 'write sensor_id into your project notebook', en: 'write sensor_id · keep it safe' },
+    p3t: { cn: '把 OpenAQ 链接发同学一份',                 en: 'Share your OpenAQ link with a classmate' },
+    p3s: { cn: 'share your explore.openaq.org url',         en: 'share your explore.openaq.org url' }
+  };
+
+  // —— Detail panel content keyed by node ——
+  var DETAIL = {
+    pi:        { t: 'detailPiT',  b: 'detailPiB'  },
+    purpleair: { t: 'detailPaT',  b: 'detailPaB'  },
+    etl:       { t: 'detailEtlT', b: 'detailEtlB' },
+    db:        { t: 'detailDbT',  b: 'detailDbB'  }
+  };
+
+  function setHTML(id, html) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    el.innerHTML = html;
+  }
+  function setText(id, txt) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    el.textContent = txt;
+  }
+
+  function applyDetail(nodeKey) {
+    var panel = document.getElementById('flowDetail');
+    if (!panel) return;
+    if (!nodeKey || !DETAIL[nodeKey]) {
+      setHTML('flowDetailTitle', I18N.flowDetailDefaultT[LANG]);
+      setHTML('flowDetailBody',  I18N.flowDetailDefaultB[LANG]);
+      panel.classList.remove('active');
+      return;
+    }
+    var d = DETAIL[nodeKey];
+    setHTML('flowDetailTitle', I18N[d.t][LANG]);
+    setHTML('flowDetailBody',  I18N[d.b][LANG]);
+    panel.classList.add('active');
+  }
+
+  function apply() {
+    setHTML('brandTag',   I18N.brandTag[LANG]);
+    setHTML('brandTitle', I18N.brandTitle[LANG]);
+    setHTML('brandSub',   I18N.brandSub[LANG]);
+    setHTML('guideH',     I18N.guideH[LANG]);
+    setHTML('g1',         I18N.g1[LANG]);
+    setHTML('g2',         I18N.g2[LANG]);
+    setHTML('g3',         I18N.g3[LANG]);
+
+    setHTML('t1', I18N.t1[LANG]);
+    setHTML('t2', I18N.t2[LANG]);
+    setHTML('t3', I18N.t3[LANG]);
+
+    setHTML('heroTitle', I18N.heroTitle[LANG]);
+    setHTML('heroSub',   I18N.heroSub[LANG]);
+    setHTML('heroBadge', I18N.heroBadge[LANG]);
+
+    setHTML('flowH2',  I18N.flowH2[LANG]);
+    setHTML('flowSub', I18N.flowSub[LANG]);
+
+    // node labels (SVG text)
+    var nodes = document.querySelectorAll('[data-i]');
+    for (var i = 0; i < nodes.length; i++) {
+      var k = nodes[i].getAttribute('data-i');
+      if (I18N[k]) nodes[i].textContent = I18N[k][LANG];
+    }
+
+    // schema labels
+    setHTML('schemaH',   I18N.schemaH[LANG]);
+    setHTML('schemaSub', I18N.schemaSub[LANG]);
+    setHTML('thField', I18N.thField[LANG]);
+    setHTML('thType',  I18N.thType[LANG]);
+    setHTML('thMean',  I18N.thMean[LANG]);
+    setHTML('thReq',   I18N.thReq[LANG]);
+    setHTML('schemaNote', I18N.schemaNote[LANG]);
+
+    // verify labels
+    setHTML('verifyH',   I18N.verifyH[LANG]);
+    setHTML('verifySub', I18N.verifySub[LANG]);
+    setHTML('vt1', I18N.vt1[LANG]);
+    setHTML('vt2', I18N.vt2[LANG]);
+    setHTML('vt3', I18N.vt3[LANG]);
+
+    // promises
+    setHTML('p1t', I18N.p1t[LANG]); setHTML('p1s', I18N.p1s[LANG]);
+    setHTML('p2t', I18N.p2t[LANG]); setHTML('p2s', I18N.p2s[LANG]);
+    setHTML('p3t', I18N.p3t[LANG]); setHTML('p3s', I18N.p3s[LANG]);
+
+    // default detail (reset to default on lang switch)
+    applyDetail(null);
+
+    document.documentElement.setAttribute('lang', LANG === 'cn' ? 'zh-CN' : 'en');
+  }
+
+  // Wire node hover/focus -> detail panel
+  var groups = document.querySelectorAll('.node-grp');
+  for (var j = 0; j < groups.length; j++) {
+    (function (g) {
+      var key = g.getAttribute('data-node');
+      g.addEventListener('mouseenter', function () { applyDetail(key); });
+      g.addEventListener('focus',      function () { applyDetail(key); });
+      g.addEventListener('click',      function () { applyDetail(key); });
+    })(groups[j]);
+  }
+
+  document.getElementById('langBtn').addEventListener('click', function () {
+    LANG = (LANG === 'cn') ? 'en' : 'cn';
+    apply();
+  });
+
+  apply();
+})();
+</script>
+</body>
+</html>

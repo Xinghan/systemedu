@@ -1,0 +1,1439 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>M39 — 诊断系统偏差: 湿度? 时段? 温度?</title>
+<style>
+  /* F2 第 1 层 — 共享深空底 (theme_style/styles.css L8-21) */
+  :root{
+    --bg-0: oklch(0.14 0.035 265);
+    --bg-1: oklch(0.18 0.04 265);
+    --bg-2: oklch(0.22 0.045 265);
+    --bg-3: oklch(0.28 0.05 265);
+    --line: oklch(0.35 0.05 265 / 0.35);
+    --line-strong: oklch(0.55 0.08 265 / 0.55);
+    --fg: oklch(0.96 0.01 265);
+    --fg-dim: oklch(0.75 0.02 265);
+    --fg-mute: oklch(0.55 0.03 265);
+    --gold: oklch(0.85 0.14 85);
+
+    /* F2 第 2 层 — math accent (electric blue) */
+    --math: oklch(0.72 0.17 245);
+    --math-dim: oklch(0.52 0.16 245);
+
+    /* F2 第 3 层 — math 5 色 palette (themes.js math: AXIS/PROOF/SHADOW/SOLUTION/QED) */
+    --AXIS:     oklch(0.72 0.17 245); /* electric blue 主 — 坐标轴 / 主链路 / mascot 框 / current hypothesis bar */
+    --PROOF:    oklch(0.52 0.16 245); /* 中等 blue — 已排除的假设柱 / 推导步骤连线 */
+    --SHADOW:   oklch(0.35 0.10 245); /* 深 blue — 未激活分组 / 卡片底纹 */
+    --SOLUTION: oklch(0.92 0.08 240); /* 近白 blue — 数字高光 / 散点 */
+    --QED:      oklch(0.85 0.14 85);  /* 金 — +5 系统偏差 call-out + 找到原因 climax + 印章 */
+  }
+
+  *{box-sizing:border-box;margin:0;padding:0;}
+  html,body{height:100%;overflow:hidden;}
+  body{
+    background: var(--bg-0);
+    color: var(--fg);
+    font-family: 'Inter','Noto Sans SC',-apple-system,BlinkMacSystemFont,sans-serif;
+    display: flex;
+    height: 100vh;
+  }
+
+  /* 200px 左侧 sidebar */
+  .sidebar{
+    width: 200px;
+    flex-shrink: 0;
+    background: var(--bg-1);
+    border-right: 1px solid var(--line);
+    padding: 16px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .brand{
+    border-bottom: 1px solid var(--line);
+    padding-bottom: 10px;
+    margin-bottom: 4px;
+  }
+  .brand .badge{
+    display: inline-block;
+    font-family: 'JetBrains Mono',ui-monospace,monospace;
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    color: var(--math);
+    background: var(--bg-2);
+    padding: 3px 7px;
+    border: 1px solid var(--line);
+    box-shadow: 2px 2px 0 var(--bg-0);
+    margin-bottom: 6px;
+  }
+  .brand h1{
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--fg);
+    line-height: 1.3;
+  }
+  .brand .sub{
+    font-size: 10px;
+    color: var(--fg-mute);
+    margin-top: 4px;
+    font-family: 'JetBrains Mono',ui-monospace,monospace;
+    letter-spacing: 0.04em;
+  }
+
+  .mascot-box{
+    background: var(--bg-2);
+    border: 1px solid var(--line);
+    box-shadow: 3px 3px 0 var(--bg-0);
+    padding: 10px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .mascot-box .label{
+    font-family: 'JetBrains Mono',ui-monospace,monospace;
+    font-size: 9px;
+    color: var(--fg-dim);
+    letter-spacing: 0.08em;
+  }
+  .mascot-box .name{
+    font-size: 11px;
+    color: var(--fg);
+    font-weight: 600;
+    margin-top: 2px;
+  }
+
+  .guide{
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .guide-item{
+    font-size: 11px;
+    line-height: 1.45;
+    color: var(--fg-dim);
+    padding-left: 9px;
+    border-left: 2px solid var(--math);
+    padding-top: 2px;
+    padding-bottom: 2px;
+  }
+  .guide-item .num{
+    font-family: 'JetBrains Mono',ui-monospace,monospace;
+    color: var(--math);
+    font-weight: 700;
+    margin-right: 4px;
+  }
+
+  .sidebar .spacer{flex: 1;}
+
+  .lang-btn{
+    background: var(--bg-2);
+    border: 1px solid var(--line-strong);
+    box-shadow: 2px 2px 0 var(--bg-0);
+    color: var(--fg);
+    font-family: 'JetBrains Mono',ui-monospace,monospace;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    padding: 7px 10px;
+    cursor: pointer;
+    width: 100%;
+  }
+  .lang-btn:hover{ border-color: var(--math); color: var(--math); }
+  .lang-btn:active{ transform: translate(2px, 2px); box-shadow: none; }
+
+  /* Main stage */
+  .main{
+    flex: 1;
+    position: relative;
+    overflow: hidden;
+    background: var(--bg-0);
+  }
+  #stage{
+    width: 100%;
+    height: 100%;
+    display: block;
+  }
+
+  /* HUD 右上 */
+  .hud{
+    position: absolute;
+    top: 18px;
+    right: 18px;
+    background: var(--bg-2);
+    border: 1px solid var(--line);
+    box-shadow: 3px 3px 0 var(--bg-0);
+    padding: 10px 14px;
+    font-family: 'JetBrains Mono',ui-monospace,monospace;
+    min-width: 260px;
+  }
+  .hud .row{
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 14px;
+    font-size: 11px;
+    line-height: 1.6;
+  }
+  .hud .label{color: var(--fg-mute); letter-spacing: 0.06em;}
+  .hud .value{color: var(--fg); font-weight: 700;}
+  .hud .value.accent{color: var(--math);}
+  .hud .value.gold{color: var(--gold);}
+  .hud .value.sol{color: var(--SOLUTION);}
+  .hud .sep{
+    height: 1px;
+    background: var(--line);
+    margin: 6px 0;
+  }
+
+  /* Subtitle 底部 */
+  .subtitle{
+    position: absolute;
+    left: 50%;
+    bottom: 30px;
+    transform: translateX(-50%);
+    text-align: center;
+    max-width: 80%;
+    pointer-events: none;
+  }
+  .subtitle .cn{
+    font-size: 17px;
+    font-weight: 700;
+    color: var(--fg);
+    letter-spacing: 0.01em;
+  }
+  .subtitle .en{
+    font-size: 12px;
+    color: var(--fg-mute);
+    margin-top: 4px;
+    font-style: italic;
+    font-family: 'JetBrains Mono',ui-monospace,monospace;
+    letter-spacing: 0.03em;
+  }
+
+  /* Frame chip 左下 — 5 步进度 */
+  .frame-progress{
+    position: absolute;
+    left: 24px;
+    bottom: 30px;
+    display: flex;
+    gap: 6px;
+    align-items: center;
+  }
+  .chip{
+    width: 24px;
+    height: 6px;
+    background: var(--bg-2);
+    border: 1px solid var(--line);
+  }
+  .chip.active{ background: var(--math); border-color: var(--math); }
+  .chip.done{ background: var(--math-dim); border-color: var(--math-dim); }
+  .frame-progress .stepname{
+    font-family: 'JetBrains Mono',ui-monospace,monospace;
+    font-size: 10px;
+    color: var(--fg-dim);
+    margin-left: 8px;
+    letter-spacing: 0.08em;
+  }
+
+  /* QED flash overlay */
+  .flash{
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-family: 'JetBrains Mono',ui-monospace,monospace;
+    font-size: 26px;
+    font-weight: 800;
+    color: var(--gold);
+    letter-spacing: 0.18em;
+    opacity: 0;
+    pointer-events: none;
+    text-shadow: 0 0 24px var(--gold);
+    text-align: center;
+  }
+  .flash.on{ opacity: 1; }
+  .flash .small{
+    display: block;
+    text-align: center;
+    font-size: 11px;
+    color: var(--fg-dim);
+    letter-spacing: 0.08em;
+    margin-top: 8px;
+    text-shadow: none;
+    font-weight: 400;
+  }
+</style>
+</head>
+<body>
+  <aside class="sidebar">
+    <div class="brand">
+      <span class="badge" id="badgeMod">MOD-M39 / MATH</span>
+      <h1 id="brandH1">诊断系统偏差: 湿度? 时段? 温度?</h1>
+      <div class="sub" id="brandSub">slice the data to find the cause</div>
+    </div>
+
+    <div class="mascot-box">
+      <svg width="42" height="42" viewBox="0 0 60 60" aria-hidden="true">
+        <!-- Pi mascot: 四面体, 面闪公式 (themes.js math) -->
+        <polygon points="30,12 14,46 46,46" fill="var(--SHADOW)" opacity="0.55"/>
+        <polygon points="30,12 18,42 42,42" fill="none" stroke="var(--AXIS)" stroke-width="1.6" stroke-linejoin="round"/>
+        <polygon points="30,18 22,40 38,40" fill="var(--PROOF)" opacity="0.45"/>
+        <circle cx="30" cy="12" r="1.8" fill="var(--SOLUTION)"/>
+        <circle cx="18" cy="42" r="1.8" fill="var(--SOLUTION)"/>
+        <circle cx="42" cy="42" r="1.8" fill="var(--SOLUTION)"/>
+        <text x="30" y="34" fill="var(--QED)" font-family="'JetBrains Mono',monospace" font-size="6" text-anchor="middle" font-weight="700">SLICE</text>
+      </svg>
+      <div>
+        <div class="label">MASCOT</div>
+        <div class="name" id="mascotName">Pi · 数据侦探</div>
+      </div>
+    </div>
+
+    <div class="guide">
+      <div class="guide-item" id="g1"><span class="num">01</span><span class="gtxt">看现状: 节点比 EPA 总偏 +5</span></div>
+      <div class="guide-item" id="g2"><span class="num">02</span><span class="gtxt">分组切片: 湿度/时段/温度</span></div>
+      <div class="guide-item" id="g3"><span class="num">03</span><span class="gtxt">差异最大那组 = 元凶</span></div>
+    </div>
+
+    <div class="spacer"></div>
+    <button id="langBtn" class="lang-btn" type="button">CN / EN</button>
+  </aside>
+
+  <main class="main">
+    <svg id="stage" viewBox="0 0 1080 720" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg"></svg>
+
+    <div class="hud">
+      <div class="row"><span class="label" id="hudL1">FRAME</span><span class="value accent" id="hudV1">1 / 5</span></div>
+      <div class="row"><span class="label" id="hudL2">STAGE</span><span class="value" id="hudV2">Observe</span></div>
+      <div class="sep"></div>
+      <div class="row"><span class="label" id="hudL3">HYPOTH</span><span class="value accent" id="hudV3">--</span></div>
+      <div class="row"><span class="label" id="hudL4">SPREAD</span><span class="value gold" id="hudV4">--</span></div>
+      <div class="row"><span class="label" id="hudL5">VERDICT</span><span class="value sol" id="hudV5">--</span></div>
+    </div>
+
+    <div class="subtitle">
+      <div class="cn" id="subCn">你跟 EPA 总差 +5 ug/m^3 — 怎么知道是湿度的问题还是别的?</div>
+      <div class="en" id="subEn">Your sensor is +5 ug/m^3 above EPA — humidity? time? location? how to tell?</div>
+    </div>
+
+    <div class="frame-progress">
+      <div class="chip" id="chip0"></div>
+      <div class="chip" id="chip1"></div>
+      <div class="chip" id="chip2"></div>
+      <div class="chip" id="chip3"></div>
+      <div class="chip" id="chip4"></div>
+      <span class="stepname" id="stepName">01 OBSERVE</span>
+    </div>
+
+    <div class="flash" id="flash">
+      FOUND
+      <span class="small" id="flashSub">温度切片 spread 跳到 7 — 找到元凶!</span>
+    </div>
+  </main>
+
+<script>
+(function(){
+  "use strict";
+
+  var LANG = 'cn';
+  var I18N = {
+    badgeMod:   { cn: 'MOD-M39 / MATH', en: 'MOD-M39 / MATH' },
+    brandH1:    { cn: '诊断系统偏差: 湿度? 时段? 温度?', en: 'Diagnose Bias: Humidity? Time? Temp?' },
+    brandSub:   { cn: '切片找元凶', en: 'slice the data to find the cause' },
+    mascotName: { cn: 'Pi · 数据侦探', en: 'Pi · the data detective' },
+    g1: { cn: '看现状: 节点比 EPA 总偏 +5',
+          en: 'OBSERVE: your sensor reads +5 above EPA' },
+    g2: { cn: '分组切片: 湿度 / 时段 / 温度',
+          en: 'GROUP BY: humidity / time / temp' },
+    g3: { cn: '差异最大那组 = 元凶',
+          en: 'biggest spread = the cause' },
+    hudL1: { cn: '帧',     en: 'FRAME' },
+    hudL2: { cn: '阶段',   en: 'STAGE' },
+    hudL3: { cn: '假设',   en: 'HYPOTH' },
+    hudL4: { cn: '差异度', en: 'SPREAD' },
+    hudL5: { cn: '判定',   en: 'VERDICT' },
+    btnLang: { cn: 'CN / EN', en: 'CN / EN' }
+  };
+
+  // ====== 真实样本: 12 对 (你节点, EPA) PM2.5 读数, 单位 ug/m^3 ======
+  // 每条记录附带 RH (相对湿度), HOUR (0-23), TEMP (温度 °C)
+  // 设计目标: 整体 bias=+5 (近似), 按 RH/HOUR 分组 spread 很小 (排除); 按 TEMP 分组 spread 跳到 7 (温度依赖!)
+  //
+  // 12 条原始记录 (12 hours of data, 模拟一天采样, 每 2 小时一条)
+  // 公式: residual = you - EPA
+  // 设计: 低温 (T<15) bias≈+2 ; 中温 (15-25) bias≈+4 ; 高温 (T>25) bias≈+9
+  // RH 跟 HOUR 在每个温度组内分布均匀 → 按 RH/HOUR 分组 spread 小
+  var RECORDS = [
+    // i, you, epa, rh%, hour, temp
+    { you: 12, epa: 10, rh: 45, hour: 6,  temp: 12 }, // 低温 bias=+2
+    { you: 17, epa: 15, rh: 75, hour: 8,  temp: 13 }, // 低温 bias=+2
+    { you: 22, epa: 20, rh: 30, hour: 22, temp: 14 }, // 低温 bias=+2
+    { you: 18, epa: 16, rh: 60, hour: 4,  temp: 11 }, // 低温 bias=+2
+    { you: 24, epa: 20, rh: 35, hour: 10, temp: 18 }, // 中温 bias=+4
+    { you: 29, epa: 25, rh: 80, hour: 12, temp: 22 }, // 中温 bias=+4
+    { you: 19, epa: 15, rh: 55, hour: 20, temp: 20 }, // 中温 bias=+4
+    { you: 32, epa: 28, rh: 40, hour: 2,  temp: 17 }, // 中温 bias=+4
+    { you: 27, epa: 18, rh: 65, hour: 14, temp: 29 }, // 高温 bias=+9 (day)
+    { you: 35, epa: 26, rh: 35, hour: 16, temp: 31 }, // 高温 bias=+9 (day)
+    { you: 23, epa: 14, rh: 50, hour: 22, temp: 28 }, // 高温 bias=+9 (night)
+    { you: 30, epa: 21, rh: 70, hour: 4,  temp: 30 }  // 高温 bias=+9 (night)
+  ];
+  var N = RECORDS.length;
+
+  function biasOf(rec){ return rec.you - rec.epa; }
+  function mean(xs){ var s=0; for(var i=0;i<xs.length;i++) s+=xs[i]; return xs.length ? s/xs.length : 0; }
+
+  // 整体 bias
+  function overallBias(){
+    var xs = RECORDS.map(biasOf);
+    return mean(xs);
+  } // = (2*4 + 4*4 + 9*4) / 12 = (8+16+36)/12 = 60/12 = +5.0
+
+  // 按 RH 分组: 低 0-40 / 中 40-70 / 高 70-100
+  function rhBuckets(){
+    var lo = [], mid = [], hi = [];
+    for (var i=0;i<N;i++){
+      var r = RECORDS[i];
+      if (r.rh < 40) lo.push(biasOf(r));
+      else if (r.rh < 70) mid.push(biasOf(r));
+      else hi.push(biasOf(r));
+    }
+    return [mean(lo), mean(mid), mean(hi)];
+  }
+  // 按时段: 白天 (6-18) / 夜晚 (18-6)
+  function hourBuckets(){
+    var day = [], night = [];
+    for (var i=0;i<N;i++){
+      var r = RECORDS[i];
+      if (r.hour >= 6 && r.hour < 18) day.push(biasOf(r));
+      else night.push(biasOf(r));
+    }
+    return [mean(day), mean(night)];
+  }
+  // 按温度: 低 <15 / 中 15-25 / 高 >25
+  function tempBuckets(){
+    var lo = [], mid = [], hi = [];
+    for (var i=0;i<N;i++){
+      var r = RECORDS[i];
+      if (r.temp < 15) lo.push(biasOf(r));
+      else if (r.temp <= 25) mid.push(biasOf(r));
+      else hi.push(biasOf(r));
+    }
+    return [mean(lo), mean(mid), mean(hi)];
+  }
+
+  var BIAS_OVERALL = overallBias();   // +5.0
+  var RH_BIAS   = rhBuckets();        // 约 [+5, +5, +5]  (近平, spread ~0)
+  var HOUR_BIAS = hourBuckets();      // 约 [+5, +5]
+  var TEMP_BIAS = tempBuckets();      // 约 [+2, +4, +9]  spread = 7  → 元凶!
+
+  function spreadOf(arr){
+    var mn = arr[0], mx = arr[0];
+    for (var i=1;i<arr.length;i++){
+      if (arr[i] < mn) mn = arr[i];
+      if (arr[i] > mx) mx = arr[i];
+    }
+    return mx - mn;
+  }
+  var SPREAD_RH   = spreadOf(RH_BIAS);     // ~0
+  var SPREAD_HOUR = spreadOf(HOUR_BIAS);   // ~0
+  var SPREAD_TEMP = spreadOf(TEMP_BIAS);   // ~7
+
+  var FRAME_MS = 6500;
+  var FRAMES = [
+    {
+      stepName: '01 OBSERVE',
+      hudStage:  { cn: '观察现状', en: 'Observe' },
+      hudHypoth: { cn: '--',      en: '--' },
+      hudSpread: '--',
+      hudVerdict:{ cn: '系统偏差', en: 'systematic' },
+      subCn: '12 条记录 — 你 vs EPA 全部偏高, 残差直方图集中在 +5',
+      subEn: '12 records — you reads HIGH overall, residuals cluster at +5'
+    },
+    {
+      stepName: '02 RH SLICE',
+      hudStage:  { cn: '假设 1: 湿度', en: 'H1: humidity' },
+      hudHypoth: { cn: '湿度?', en: 'humidity?' },
+      hudSpread: '0.0',
+      hudVerdict:{ cn: '排除', en: 'REJECT' },
+      subCn: '按 RH 分 3 组: 0-40 / 40-70 / 70-100% — 3 组 bias 都 +5, spread 0 → 排除湿度',
+      subEn: 'Group by RH: 0-40 / 40-70 / 70-100% — all bars at +5, spread 0 -> REJECT humidity'
+    },
+    {
+      stepName: '03 TIME SLICE',
+      hudStage:  { cn: '假设 2: 时段', en: 'H2: time' },
+      hudHypoth: { cn: '时段?', en: 'time?' },
+      hudSpread: '0.0',
+      hudVerdict:{ cn: '排除', en: 'REJECT' },
+      subCn: '按白天 / 夜晚 分 2 组 — 两根柱都 +5, spread 0 → 排除时段',
+      subEn: 'Group by day / night — both bars at +5, spread 0 -> REJECT time-of-day'
+    },
+    {
+      stepName: '04 TEMP SLICE',
+      hudStage:  { cn: '假设 3: 温度', en: 'H3: temperature' },
+      hudHypoth: { cn: '温度?', en: 'temp?' },
+      hudSpread: '7.0',
+      hudVerdict:{ cn: '找到!', en: 'FOUND!' },
+      subCn: '按温度分 3 组 (低/中/高): +2 / +4 / +9 — spread 跳到 7, 温度越高偏得越多!',
+      subEn: 'Group by temp (lo/mid/hi): +2 / +4 / +9 — spread jumps to 7, hot day = high bias!'
+    },
+    {
+      stepName: '05 FIX',
+      hudStage:  { cn: '结论 + 修复', en: 'Fix' },
+      hudHypoth: { cn: '温度依赖', en: 'temp-dep' },
+      hudSpread: '7.0',
+      hudVerdict:{ cn: '加补偿', en: 'COMPENSATE' },
+      subCn: '元凶: 温度敏感性 → 修复公式: corrected = raw - 0.35 * (T - 15)',
+      subEn: 'Cause: temp sensitivity -> fix: corrected = raw - 0.35 * (T - 15)'
+    }
+  ];
+
+  var currentFrame = 0;
+  var frameStartTs = 0;
+  var rafId = null;
+  var stage = document.getElementById('stage');
+  var SVGNS = 'http://www.w3.org/2000/svg';
+
+  function el(name, attrs, parent){
+    var n = document.createElementNS(SVGNS, name);
+    if (attrs){
+      for (var k in attrs){
+        if (Object.prototype.hasOwnProperty.call(attrs, k)){
+          n.setAttribute(k, attrs[k]);
+        }
+      }
+    }
+    if (parent) parent.appendChild(n);
+    return n;
+  }
+  function clearStage(){ while(stage.firstChild) stage.removeChild(stage.firstChild); }
+  function tt(key){
+    if (!I18N[key]) return key;
+    return I18N[key][LANG] || I18N[key].en || key;
+  }
+  function lerp(a, b, p){ return a + (b - a) * p; }
+  function easeInOut(x){ return x < 0.5 ? 2*x*x : 1 - Math.pow(-2*x + 2, 2)/2; }
+  function clamp(x, lo, hi){ return x < lo ? lo : (x > hi ? hi : x); }
+  function fmt1(x){ return (Math.round(x * 10) / 10).toFixed(1); }
+  function fmtSigned(x){ var s = x >= 0 ? '+' : ''; return s + fmt1(x); }
+
+  function drawBgGrid(){
+    var g = el('g', { opacity: '0.18' }, stage);
+    for (var x = 0; x <= 1080; x += 60){
+      el('line', { x1: x, y1: 0, x2: x, y2: 720, stroke: 'var(--line)', 'stroke-width': '0.5' }, g);
+    }
+    for (var y = 0; y <= 720; y += 60){
+      el('line', { x1: 0, y1: y, x2: 1080, y2: y, stroke: 'var(--line)', 'stroke-width': '0.5' }, g);
+    }
+    var defs = el('defs', null, stage);
+    var rg = el('radialGradient', { id: 'centerGlow', cx: '50%', cy: '45%', r: '60%' }, defs);
+    el('stop', { offset: '0%', 'stop-color': 'var(--math)', 'stop-opacity': '0.06' }, rg);
+    el('stop', { offset: '100%', 'stop-color': 'var(--bg-0)', 'stop-opacity': '0' }, rg);
+    el('rect', { x: 0, y: 0, width: 1080, height: 720, fill: 'url(#centerGlow)' }, stage);
+  }
+
+  function drawStepChain(activeIdx){
+    var labels = [
+      { cn: '观察',   en: 'Observe' },
+      { cn: '湿度?',  en: 'RH?' },
+      { cn: '时段?',  en: 'Time?' },
+      { cn: '温度?',  en: 'Temp?' },
+      { cn: '修复',   en: 'Fix' }
+    ];
+    var y = 644;
+    var startX = 110;
+    var gap = (1080 - 220) / 4;
+    var g = el('g', null, stage);
+    for (var i = 0; i < 5; i++){
+      var cx = startX + gap * i;
+      var on = i <= activeIdx;
+      var ringColor = on ? 'var(--math)' : 'var(--line)';
+      var fillColor = on ? 'var(--bg-2)' : 'var(--bg-1)';
+      var textColor = on ? 'var(--fg)' : 'var(--fg-mute)';
+      el('rect', {
+        x: cx - 44, y: y - 16, width: 88, height: 32,
+        fill: fillColor, stroke: ringColor, 'stroke-width': on ? '1.6' : '1', rx: '2'
+      }, g);
+      var tx = el('text', {
+        x: cx, y: y + 4, fill: textColor,
+        'font-family': "'Inter','Noto Sans SC',sans-serif",
+        'font-size': '12', 'font-weight': on ? '700' : '500',
+        'text-anchor': 'middle'
+      }, g);
+      tx.textContent = labels[i][LANG] || labels[i].en;
+      var ix = el('text', {
+        x: cx, y: y - 22, fill: on ? 'var(--math)' : 'var(--fg-mute)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '9', 'text-anchor': 'middle', 'letter-spacing': '0.1em'
+      }, g);
+      ix.textContent = '0' + (i+1);
+      if (i < 4){
+        var x1 = cx + 44;
+        var x2 = cx + gap - 44;
+        var connColor = (on && (i+1) <= activeIdx) ? 'var(--math)' : 'var(--line)';
+        el('line', {
+          x1: x1, y1: y, x2: x2 - 6, y2: y,
+          stroke: connColor, 'stroke-width': '1.2'
+        }, g);
+        el('polygon', {
+          points: (x2-6)+','+(y-4)+' '+(x2)+','+y+' '+(x2-6)+','+(y+4),
+          fill: connColor
+        }, g);
+      }
+    }
+  }
+
+  function drawPiMascot(g, rot, key){
+    el('circle', { cx: 0, cy: 0, r: 36, fill: 'none', stroke: 'var(--AXIS)', 'stroke-width': '0.8',
+                   'stroke-dasharray': '3 5', opacity: '0.5',
+                   transform: 'rotate(' + (rot * 30 % 360) + ')' }, g);
+    el('polygon', { points: '0,-22 -20,16 20,16', fill: 'var(--SHADOW)', opacity: '0.55' }, g);
+    el('polygon', { points: '0,-22 -16,14 16,14', fill: 'none', stroke: 'var(--AXIS)',
+                    'stroke-width': '1.6', 'stroke-linejoin': 'round' }, g);
+    el('polygon', { points: '0,-14 -10,10 10,10', fill: 'var(--PROOF)', opacity: '0.5' }, g);
+    el('circle', { cx: 0, cy: -22, r: 2, fill: 'var(--SOLUTION)' }, g);
+    el('circle', { cx: -16, cy: 14, r: 2, fill: 'var(--SOLUTION)' }, g);
+    el('circle', { cx: 16, cy: 14, r: 2, fill: 'var(--SOLUTION)' }, g);
+    var eqText = key ? 'AHA' : 'SLICE';
+    var eqTx = el('text', {
+      x: 0, y: 4, fill: 'var(--QED)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': key ? '11' : '7', 'text-anchor': 'middle', 'font-weight': '700'
+    }, g);
+    eqTx.textContent = eqText;
+    var lab = el('text', {
+      x: 0, y: 50, fill: 'var(--fg-dim)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '10', 'text-anchor': 'middle', 'letter-spacing': '0.1em'
+    }, g);
+    lab.textContent = key
+      ? (LANG === 'cn' ? 'Pi · 找到了!' : 'Pi · found it!')
+      : (LANG === 'cn' ? 'Pi · 切片中' : 'Pi · slicing');
+  }
+
+  // 画散点 (you vs EPA) 在给定矩形区
+  function plotScatterAxes(b, range, opts){
+    opts = opts || {};
+    el('line', { x1: b.x, y1: b.y + b.h, x2: b.x + b.w + 6, y2: b.y + b.h,
+                 stroke: 'var(--AXIS)', 'stroke-width': '1.4' }, stage);
+    el('line', { x1: b.x, y1: b.y - 6, x2: b.x, y2: b.y + b.h,
+                 stroke: 'var(--AXIS)', 'stroke-width': '1.4' }, stage);
+    el('text', { x: b.x + b.w + 16, y: b.y + b.h + 4, fill: 'var(--fg-mute)',
+                 'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                 'font-size': '11'
+    }, stage).textContent = opts.xlabel || 'EPA';
+    el('text', { x: b.x - 8, y: b.y - 12, fill: 'var(--fg-mute)',
+                 'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                 'font-size': '11', 'text-anchor': 'end'
+    }, stage).textContent = opts.ylabel || 'YOU';
+    var n = 4;
+    for (var i = 0; i <= n; i++){
+      var v = range[0] + (range[1] - range[0]) * i / n;
+      var px = b.x + (b.w * i / n);
+      var py = b.y + b.h - (b.h * i / n);
+      el('line', { x1: px, y1: b.y + b.h, x2: px, y2: b.y + b.h + 4,
+                   stroke: 'var(--AXIS)', 'stroke-width': '1' }, stage);
+      el('text', { x: px, y: b.y + b.h + 16, fill: 'var(--fg-mute)',
+                   'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                   'font-size': '9', 'text-anchor': 'middle'
+      }, stage).textContent = Math.round(v);
+      el('line', { x1: b.x - 4, y1: py, x2: b.x, y2: py,
+                   stroke: 'var(--AXIS)', 'stroke-width': '1' }, stage);
+      el('text', { x: b.x - 8, y: py + 3, fill: 'var(--fg-mute)',
+                   'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                   'font-size': '9', 'text-anchor': 'end'
+      }, stage).textContent = Math.round(v);
+    }
+  }
+  function mapX(b, range, v){ return b.x + ((v - range[0]) / (range[1] - range[0])) * b.w; }
+  function mapY(b, range, v){ return b.y + b.h - ((v - range[0]) / (range[1] - range[0])) * b.h; }
+
+  // ====== Frame 1 — OBSERVE: 散点 + 残差直方图, +5 系统偏差 call-out ======
+  function drawFrame1(p){
+    drawBgGrid();
+    drawStepChain(0);
+
+    var ttl = el('text', {
+      x: 540, y: 78, fill: 'var(--math)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '14', 'text-anchor': 'middle', 'letter-spacing': '0.14em', 'font-weight': '700'
+    }, stage);
+    ttl.textContent = LANG === 'cn'
+      ? '现状: 节点比 EPA 全面偏高, 残差集中在 +5'
+      : 'STATUS: sensor reads HIGH, residuals cluster at +5';
+
+    // 左侧: 散点图 (you vs EPA)
+    var box = { x: 110, y: 130, w: 380, h: 360 };
+    var range = [0, 40];
+    plotScatterAxes(box, range, {
+      xlabel: 'EPA ug/m^3',
+      ylabel: LANG==='cn' ? '你 ug/m^3' : 'YOU ug/m^3'
+    });
+
+    // y=x 对角虚线
+    var diagAlpha = clamp((p - 0.1) / 0.2, 0, 1);
+    el('line', {
+      x1: mapX(box, range, 0), y1: mapY(box, range, 0),
+      x2: mapX(box, range, 40), y2: mapY(box, range, 40),
+      stroke: 'var(--PROOF)', 'stroke-width': '1.3',
+      'stroke-dasharray': '5 4', opacity: diagAlpha
+    }, stage);
+    el('text', {
+      x: mapX(box, range, 35), y: mapY(box, range, 35) - 6,
+      fill: 'var(--PROOF)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '10', 'text-anchor': 'middle', opacity: diagAlpha
+    }, stage).textContent = LANG==='cn' ? 'y = x (完美)' : 'y = x (perfect)';
+
+    // y = x + 5 实线 (回归)
+    var fitAlpha = clamp((p - 0.35) / 0.2, 0, 1);
+    el('line', {
+      x1: mapX(box, range, 0), y1: mapY(box, range, 5),
+      x2: mapX(box, range, 35), y2: mapY(box, range, 40),
+      stroke: 'var(--QED)', 'stroke-width': '2', opacity: fitAlpha
+    }, stage);
+    el('text', {
+      x: mapX(box, range, 18), y: mapY(box, range, 24) - 6,
+      fill: 'var(--QED)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '11', 'text-anchor': 'middle', opacity: fitAlpha, 'font-weight': '700'
+    }, stage).textContent = LANG==='cn' ? 'y = x + 5 (你)' : 'y = x + 5 (you)';
+
+    // 12 散点 依次出现
+    for (var i = 0; i < N; i++){
+      var alpha = clamp((p - i*0.025) / 0.18, 0, 1);
+      var px = mapX(box, range, RECORDS[i].epa);
+      var py = mapY(box, range, RECORDS[i].you);
+      el('circle', {
+        cx: px, cy: py, r: 5.5,
+        fill: 'var(--SOLUTION)', stroke: 'var(--AXIS)', 'stroke-width': '1.4',
+        opacity: alpha
+      }, stage);
+    }
+
+    // 右侧: 残差直方图 (residual = you - EPA)
+    var hAlpha = clamp((p - 0.45) / 0.2, 0, 1);
+    var histBox = { x: 580, y: 150, w: 380, h: 280 };
+    var hg = el('g', { opacity: hAlpha }, stage);
+    el('text', {
+      x: histBox.x + histBox.w/2, y: histBox.y - 16,
+      fill: 'var(--math)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '12', 'text-anchor': 'middle', 'letter-spacing': '0.12em', 'font-weight': '700'
+    }, hg).textContent = LANG==='cn' ? '残差直方图 (你 - EPA)' : 'Residual histogram (you - EPA)';
+
+    // 计算 bins: -2,-1,0,1,2,3,4,5,6,7,8,9,10
+    var bins = {};
+    for (var ri=0; ri<N; ri++){
+      var r = biasOf(RECORDS[ri]);
+      bins[r] = (bins[r] || 0) + 1;
+    }
+    var binMin = -2, binMax = 10;
+    var nBins = binMax - binMin + 1;
+    var barW = histBox.w / nBins;
+    // axis
+    el('line', { x1: histBox.x, y1: histBox.y + histBox.h,
+                 x2: histBox.x + histBox.w, y2: histBox.y + histBox.h,
+                 stroke: 'var(--AXIS)', 'stroke-width': '1.4' }, hg);
+    // x labels
+    for (var bx = binMin; bx <= binMax; bx += 2){
+      var bxPx = histBox.x + (bx - binMin + 0.5) * barW;
+      el('text', { x: bxPx, y: histBox.y + histBox.h + 16, fill: 'var(--fg-mute)',
+                   'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                   'font-size': '9', 'text-anchor': 'middle'
+      }, hg).textContent = (bx > 0 ? '+' : '') + bx;
+    }
+    el('text', { x: histBox.x + histBox.w/2, y: histBox.y + histBox.h + 36,
+                 fill: 'var(--fg-mute)',
+                 'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                 'font-size': '11', 'text-anchor': 'middle'
+    }, hg).textContent = LANG==='cn' ? '残差 ug/m^3' : 'residual ug/m^3';
+
+    // 0 ref line
+    var zX = histBox.x + (0 - binMin + 0.5) * barW;
+    el('line', { x1: zX, y1: histBox.y, x2: zX, y2: histBox.y + histBox.h,
+                 stroke: 'var(--PROOF)', 'stroke-width': '1', 'stroke-dasharray': '4 4', opacity: 0.7 }, hg);
+    el('text', { x: zX, y: histBox.y - 4, fill: 'var(--PROOF)',
+                 'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                 'font-size': '9', 'text-anchor': 'middle'
+    }, hg).textContent = '0';
+
+    // 5 ref line (gold)
+    var fX = histBox.x + (5 - binMin + 0.5) * barW;
+    el('line', { x1: fX, y1: histBox.y, x2: fX, y2: histBox.y + histBox.h,
+                 stroke: 'var(--QED)', 'stroke-width': '1.6', 'stroke-dasharray': '5 3' }, hg);
+    el('text', { x: fX, y: histBox.y - 4, fill: 'var(--QED)',
+                 'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                 'font-size': '11', 'text-anchor': 'middle', 'font-weight': '700'
+    }, hg).textContent = LANG==='cn' ? '均值 +5' : 'mean +5';
+
+    // bars
+    var maxCount = 0;
+    for (var k in bins){ if (bins[k] > maxCount) maxCount = bins[k]; }
+    for (var b2 = binMin; b2 <= binMax; b2++){
+      var c = bins[b2] || 0;
+      if (c === 0) continue;
+      var barH = (c / maxCount) * (histBox.h - 30);
+      var bxx = histBox.x + (b2 - binMin) * barW + 2;
+      var byy = histBox.y + histBox.h - barH;
+      var barAlpha = clamp((p - 0.55 - Math.abs(b2 - 5)*0.03) / 0.15, 0, 1);
+      var col = (b2 === 2 || b2 === 4 || b2 === 9) ? 'var(--AXIS)' : 'var(--SOLUTION)';
+      el('rect', {
+        x: bxx, y: byy, width: barW - 4, height: barH,
+        fill: col, opacity: 0.85 * barAlpha,
+        stroke: 'var(--AXIS)', 'stroke-width': '1'
+      }, hg);
+      el('text', {
+        x: bxx + (barW-4)/2, y: byy - 4, fill: 'var(--fg-dim)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '10', 'text-anchor': 'middle', opacity: barAlpha
+      }, hg).textContent = c;
+    }
+
+    // 整体 bias 大数 (中下)
+    var sAlpha = clamp((p - 0.75) / 0.15, 0, 1);
+    var sg = el('g', { opacity: sAlpha, transform: 'translate(780, 500)' }, stage);
+    el('rect', { x: -120, y: -34, width: 240, height: 78,
+                 fill: 'var(--bg-2)', stroke: 'var(--QED)', 'stroke-width': '2', rx: '4' }, sg);
+    el('text', { x: 0, y: -12, fill: 'var(--fg-mute)',
+                 'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                 'font-size': '10', 'text-anchor': 'middle', 'letter-spacing': '0.14em'
+    }, sg).textContent = LANG==='cn' ? '整体偏差 OVERALL BIAS' : 'OVERALL BIAS';
+    el('text', { x: 0, y: 22, fill: 'var(--QED)',
+                 'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                 'font-size': '28', 'text-anchor': 'middle', 'font-weight': '700'
+    }, sg).textContent = fmtSigned(BIAS_OVERALL);
+    el('text', { x: 0, y: 38, fill: 'var(--fg-dim)',
+                 'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                 'font-size': '10', 'text-anchor': 'middle'
+    }, sg).textContent = LANG==='cn' ? 'n=12, 系统偏高' : 'n=12, reads HIGH';
+
+    document.getElementById('flash').classList.remove('on');
+    var mg = el('g', { transform: 'translate(120, 580)' }, stage);
+    drawPiMascot(mg, p * 4, false);
+  }
+
+  // 通用: 画分组 bar chart + ref line at 5 + spread 大数
+  // groups: [{label, value, color, n}], baseline = 0, refLine = 5
+  function drawGroupBars(bx, by, bw, bh, groups, p, opts){
+    opts = opts || {};
+    var maxAbs = 12; // y 轴 0 ~ 12
+    var minY = 0;
+    // 轴
+    el('line', { x1: bx, y1: by + bh, x2: bx + bw + 6, y2: by + bh,
+                 stroke: 'var(--AXIS)', 'stroke-width': '1.4' }, stage);
+    el('line', { x1: bx, y1: by - 6, x2: bx, y2: by + bh,
+                 stroke: 'var(--AXIS)', 'stroke-width': '1.4' }, stage);
+    // y 刻度 0, 3, 6, 9, 12
+    for (var yk = 0; yk <= 12; yk += 3){
+      var ypx = by + bh - (yk / maxAbs) * bh;
+      el('line', { x1: bx - 4, y1: ypx, x2: bx, y2: ypx,
+                   stroke: 'var(--AXIS)', 'stroke-width': '1' }, stage);
+      el('text', { x: bx - 8, y: ypx + 3, fill: 'var(--fg-mute)',
+                   'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                   'font-size': '9', 'text-anchor': 'end'
+      }, stage).textContent = '+' + yk;
+      el('line', { x1: bx, y1: ypx, x2: bx + bw, y2: ypx,
+                   stroke: 'var(--line)', 'stroke-width': '0.5', opacity: 0.5 }, stage);
+    }
+    // y label
+    el('text', { x: bx - 8, y: by - 14, fill: 'var(--fg-mute)',
+                 'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                 'font-size': '11', 'text-anchor': 'end'
+    }, stage).textContent = LANG==='cn' ? 'bias ug/m^3' : 'bias ug/m^3';
+    // ref line +5 (gold)
+    var refY = by + bh - (5 / maxAbs) * bh;
+    el('line', { x1: bx, y1: refY, x2: bx + bw, y2: refY,
+                 stroke: 'var(--QED)', 'stroke-width': '1.4', 'stroke-dasharray': '6 4', opacity: 0.85 }, stage);
+    el('text', { x: bx + bw + 8, y: refY + 4, fill: 'var(--QED)',
+                 'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                 'font-size': '11', 'text-anchor': 'start', 'font-weight': '700'
+    }, stage).textContent = LANG==='cn' ? '整体 +5' : 'overall +5';
+
+    // bars
+    var nG = groups.length;
+    var slotW = bw / nG;
+    var barWidth = slotW * 0.62;
+    for (var gi = 0; gi < nG; gi++){
+      var g = groups[gi];
+      var alpha = clamp((p - 0.2 - gi*0.12) / 0.2, 0, 1);
+      var anim = easeInOut(alpha);
+      var fullH = (g.value / maxAbs) * bh;
+      var hh = fullH * anim;
+      var x0 = bx + gi * slotW + (slotW - barWidth) / 2;
+      var y0 = by + bh - hh;
+      var col = g.color || 'var(--PROOF)';
+      el('rect', { x: x0, y: y0, width: barWidth, height: hh,
+                   fill: col, opacity: 0.7,
+                   stroke: col, 'stroke-width': '1.6' }, stage);
+      // value 数字 (top of bar)
+      if (alpha > 0.1){
+        el('text', { x: x0 + barWidth/2, y: y0 - 6, fill: col,
+                     'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                     'font-size': '15', 'text-anchor': 'middle', 'font-weight': '700',
+                     opacity: alpha
+        }, stage).textContent = fmtSigned(g.value * anim);
+      }
+      // group label (below axis)
+      el('text', { x: x0 + barWidth/2, y: by + bh + 18, fill: 'var(--fg-dim)',
+                   'font-family': "'Inter','Noto Sans SC',sans-serif",
+                   'font-size': '12', 'text-anchor': 'middle', 'font-weight': '600'
+      }, stage).textContent = LANG==='cn' ? g.labelCn : g.labelEn;
+      // n=
+      el('text', { x: x0 + barWidth/2, y: by + bh + 34, fill: 'var(--fg-mute)',
+                   'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                   'font-size': '10', 'text-anchor': 'middle'
+      }, stage).textContent = 'n=' + g.n;
+    }
+  }
+
+  // ====== Frame 2 — HYPOTHESIS 1: RH 分组, spread = 0, REJECT ======
+  function drawFrame2(p){
+    drawBgGrid();
+    drawStepChain(1);
+
+    var ttl = el('text', {
+      x: 540, y: 78, fill: 'var(--math)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '14', 'text-anchor': 'middle', 'letter-spacing': '0.14em', 'font-weight': '700'
+    }, stage);
+    ttl.textContent = LANG === 'cn'
+      ? '假设 1: 湿度的问题? — 按 RH 分 3 组看 bias'
+      : 'H1: Is humidity the cause? — group by RH, compare bias';
+
+    // 假设条 (top)
+    var hAlpha = clamp(p / 0.15, 0, 1);
+    var hg = el('g', { opacity: hAlpha, transform: 'translate(540, 122)' }, stage);
+    el('rect', { x: -340, y: -22, width: 680, height: 44,
+                 fill: 'var(--bg-2)', stroke: 'var(--AXIS)', 'stroke-width': '1.6', rx: '3' }, hg);
+    el('text', { x: 0, y: 6, fill: 'var(--SOLUTION)',
+                 'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                 'font-size': '15', 'text-anchor': 'middle', 'font-weight': '700', 'letter-spacing': '0.1em'
+    }, hg).textContent = LANG==='cn'
+      ? 'IF 湿度有影响 THEN 高 RH 组 bias > 低 RH 组'
+      : 'IF humidity matters THEN high-RH bias > low-RH bias';
+
+    // 分组 bars (居中, 大尺寸)
+    var groups = [
+      { value: RH_BIAS[0], n: RECORDS.filter(function(r){ return r.rh < 40; }).length,
+        labelCn: '0-40% (干)', labelEn: '0-40% (dry)', color: 'var(--AXIS)' },
+      { value: RH_BIAS[1], n: RECORDS.filter(function(r){ return r.rh >= 40 && r.rh < 70; }).length,
+        labelCn: '40-70% (中)', labelEn: '40-70% (mid)', color: 'var(--AXIS)' },
+      { value: RH_BIAS[2], n: RECORDS.filter(function(r){ return r.rh >= 70; }).length,
+        labelCn: '70-100% (湿)', labelEn: '70-100% (wet)', color: 'var(--AXIS)' }
+    ];
+    drawGroupBars(280, 200, 540, 280, groups, p);
+
+    // spread = max - min 小数
+    var spread = SPREAD_RH;
+    var sAlpha = clamp((p - 0.65) / 0.15, 0, 1);
+    var sg = el('g', { opacity: sAlpha, transform: 'translate(900, 280)' }, stage);
+    el('rect', { x: -75, y: -32, width: 150, height: 70,
+                 fill: 'var(--bg-2)', stroke: 'var(--line-strong)', 'stroke-width': '1', rx: '3' }, sg);
+    el('text', { x: 0, y: -12, fill: 'var(--fg-mute)',
+                 'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                 'font-size': '10', 'text-anchor': 'middle', 'letter-spacing': '0.12em'
+    }, sg).textContent = 'SPREAD';
+    el('text', { x: 0, y: 16, fill: 'var(--fg-mute)',
+                 'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                 'font-size': '24', 'text-anchor': 'middle', 'font-weight': '700'
+    }, sg).textContent = fmt1(spread);
+    el('text', { x: 0, y: 30, fill: 'var(--fg-mute)',
+                 'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                 'font-size': '9', 'text-anchor': 'middle'
+    }, sg).textContent = 'max - min';
+
+    // VERDICT 卡 (中下)
+    var vAlpha = clamp((p - 0.78) / 0.15, 0, 1);
+    var vg = el('g', { opacity: vAlpha, transform: 'translate(540, 540)' }, stage);
+    el('rect', { x: -280, y: -22, width: 560, height: 50,
+                 fill: 'var(--bg-3)', stroke: 'var(--PROOF)', 'stroke-width': '2', rx: '3' }, vg);
+    el('text', { x: -210, y: 8, fill: 'var(--PROOF)',
+                 'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                 'font-size': '16', 'text-anchor': 'middle', 'font-weight': '700', 'letter-spacing': '0.16em'
+    }, vg).textContent = LANG==='cn' ? '排除 REJECT' : 'REJECT';
+    el('text', { x: 60, y: 8, fill: 'var(--fg)',
+                 'font-family': "'Inter','Noto Sans SC',sans-serif",
+                 'font-size': '14', 'text-anchor': 'middle'
+    }, vg).textContent = LANG==='cn'
+      ? '3 组都 +5, spread 0 — 湿度无关'
+      : 'all 3 bars at +5, spread 0 — humidity unrelated';
+
+    document.getElementById('flash').classList.remove('on');
+    var mg = el('g', { transform: 'translate(100, 580)' }, stage);
+    drawPiMascot(mg, p * 4, false);
+  }
+
+  // ====== Frame 3 — HYPOTHESIS 2: TIME 分组, spread = 0, REJECT ======
+  function drawFrame3(p){
+    drawBgGrid();
+    drawStepChain(2);
+
+    var ttl = el('text', {
+      x: 540, y: 78, fill: 'var(--math)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '14', 'text-anchor': 'middle', 'letter-spacing': '0.14em', 'font-weight': '700'
+    }, stage);
+    ttl.textContent = LANG === 'cn'
+      ? '假设 2: 时段的问题? — 按 白天 / 夜晚 分 2 组'
+      : 'H2: Is time-of-day the cause? — group by day / night';
+
+    // 上方排除清单 (回顾)
+    var rAlpha = clamp(p / 0.15, 0, 1);
+    var rg2 = el('g', { opacity: rAlpha, transform: 'translate(540, 116)' }, stage);
+    el('rect', { x: -340, y: -22, width: 680, height: 40,
+                 fill: 'var(--bg-2)', stroke: 'var(--line-strong)', 'stroke-width': '1', rx: '3' }, rg2);
+    el('text', { x: -310, y: 5, fill: 'var(--fg-mute)',
+                 'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                 'font-size': '11', 'text-anchor': 'start', 'letter-spacing': '0.1em'
+    }, rg2).textContent = LANG==='cn' ? '已排除:' : 'REJECTED:';
+    el('rect', { x: -200, y: -10, width: 100, height: 22,
+                 fill: 'none', stroke: 'var(--PROOF)', 'stroke-width': '1.4', rx: '2' }, rg2);
+    el('text', { x: -150, y: 6, fill: 'var(--PROOF)',
+                 'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                 'font-size': '11', 'text-anchor': 'middle', 'font-weight': '700'
+    }, rg2).textContent = LANG==='cn' ? '湿度' : 'RH';
+    // 划线
+    el('line', { x1: -200, y1: 1, x2: -100, y2: 1, stroke: 'var(--PROOF)', 'stroke-width': '1.4' }, rg2);
+
+    // 当前假设 highlight
+    el('text', { x: 60, y: 5, fill: 'var(--fg-dim)',
+                 'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                 'font-size': '11', 'text-anchor': 'start'
+    }, rg2).textContent = LANG==='cn' ? '当前:' : 'NOW:';
+    el('rect', { x: 130, y: -10, width: 100, height: 22,
+                 fill: 'var(--bg-3)', stroke: 'var(--AXIS)', 'stroke-width': '1.6', rx: '2' }, rg2);
+    el('text', { x: 180, y: 6, fill: 'var(--AXIS)',
+                 'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                 'font-size': '11', 'text-anchor': 'middle', 'font-weight': '700'
+    }, rg2).textContent = LANG==='cn' ? '时段' : 'TIME';
+    el('text', { x: 260, y: 5, fill: 'var(--fg-dim)',
+                 'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                 'font-size': '11', 'text-anchor': 'start'
+    }, rg2).textContent = LANG==='cn' ? '剩:' : 'LEFT:';
+    el('text', { x: 320, y: 6, fill: 'var(--fg-mute)',
+                 'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                 'font-size': '11', 'text-anchor': 'start'
+    }, rg2).textContent = LANG==='cn' ? '温度' : 'TEMP';
+
+    // 假设条
+    var hAlpha = clamp((p - 0.1) / 0.15, 0, 1);
+    var hg = el('g', { opacity: hAlpha, transform: 'translate(540, 175)' }, stage);
+    el('rect', { x: -340, y: -22, width: 680, height: 44,
+                 fill: 'var(--bg-2)', stroke: 'var(--AXIS)', 'stroke-width': '1.6', rx: '3' }, hg);
+    el('text', { x: 0, y: 6, fill: 'var(--SOLUTION)',
+                 'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                 'font-size': '15', 'text-anchor': 'middle', 'font-weight': '700', 'letter-spacing': '0.1em'
+    }, hg).textContent = LANG==='cn'
+      ? 'IF 时段有影响 THEN 白天 bias 不同于 夜晚'
+      : 'IF time matters THEN day bias differs from night';
+
+    // 分组 bars (只 2 根)
+    var groups = [
+      { value: HOUR_BIAS[0], n: RECORDS.filter(function(r){ return r.hour >= 6 && r.hour < 18; }).length,
+        labelCn: '白天 (6-18 时)', labelEn: 'DAY (6-18h)', color: 'var(--AXIS)' },
+      { value: HOUR_BIAS[1], n: RECORDS.filter(function(r){ return r.hour < 6 || r.hour >= 18; }).length,
+        labelCn: '夜晚 (18-6 时)', labelEn: 'NIGHT (18-6h)', color: 'var(--AXIS)' }
+    ];
+    drawGroupBars(320, 240, 440, 250, groups, p);
+
+    // spread
+    var spread = SPREAD_HOUR;
+    var sAlpha = clamp((p - 0.6) / 0.15, 0, 1);
+    var sg = el('g', { opacity: sAlpha, transform: 'translate(900, 320)' }, stage);
+    el('rect', { x: -75, y: -32, width: 150, height: 70,
+                 fill: 'var(--bg-2)', stroke: 'var(--line-strong)', 'stroke-width': '1', rx: '3' }, sg);
+    el('text', { x: 0, y: -12, fill: 'var(--fg-mute)',
+                 'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                 'font-size': '10', 'text-anchor': 'middle', 'letter-spacing': '0.12em'
+    }, sg).textContent = 'SPREAD';
+    el('text', { x: 0, y: 16, fill: 'var(--fg-mute)',
+                 'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                 'font-size': '24', 'text-anchor': 'middle', 'font-weight': '700'
+    }, sg).textContent = fmt1(spread);
+    el('text', { x: 0, y: 30, fill: 'var(--fg-mute)',
+                 'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                 'font-size': '9', 'text-anchor': 'middle'
+    }, sg).textContent = 'max - min';
+
+    // VERDICT REJECT
+    var vAlpha = clamp((p - 0.75) / 0.15, 0, 1);
+    var vg = el('g', { opacity: vAlpha, transform: 'translate(540, 540)' }, stage);
+    el('rect', { x: -280, y: -22, width: 560, height: 50,
+                 fill: 'var(--bg-3)', stroke: 'var(--PROOF)', 'stroke-width': '2', rx: '3' }, vg);
+    el('text', { x: -210, y: 8, fill: 'var(--PROOF)',
+                 'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                 'font-size': '16', 'text-anchor': 'middle', 'font-weight': '700', 'letter-spacing': '0.16em'
+    }, vg).textContent = LANG==='cn' ? '排除 REJECT' : 'REJECT';
+    el('text', { x: 60, y: 8, fill: 'var(--fg)',
+                 'font-family': "'Inter','Noto Sans SC',sans-serif",
+                 'font-size': '14', 'text-anchor': 'middle'
+    }, vg).textContent = LANG==='cn'
+      ? '2 根都 +5, spread 0 — 时段无关'
+      : 'both bars at +5, spread 0 — time-of-day unrelated';
+
+    document.getElementById('flash').classList.remove('on');
+    var mg = el('g', { transform: 'translate(100, 580)' }, stage);
+    drawPiMascot(mg, p * 4, false);
+  }
+
+  // ====== Frame 4 — HYPOTHESIS 3: TEMPERATURE 分组, spread = 7, FOUND! ======
+  function drawFrame4(p){
+    drawBgGrid();
+    drawStepChain(3);
+
+    var ttl = el('text', {
+      x: 540, y: 78, fill: 'var(--QED)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '14', 'text-anchor': 'middle', 'letter-spacing': '0.14em', 'font-weight': '700'
+    }, stage);
+    ttl.textContent = LANG === 'cn'
+      ? '假设 3: 温度的问题? — 按 低/中/高 温分 3 组'
+      : 'H3: Is temperature the cause? — group by low/mid/high temp';
+
+    // 已排除回顾
+    var rAlpha = clamp(p / 0.12, 0, 1);
+    var rg3 = el('g', { opacity: rAlpha, transform: 'translate(540, 116)' }, stage);
+    el('rect', { x: -340, y: -22, width: 680, height: 40,
+                 fill: 'var(--bg-2)', stroke: 'var(--line-strong)', 'stroke-width': '1', rx: '3' }, rg3);
+    el('text', { x: -310, y: 5, fill: 'var(--fg-mute)',
+                 'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                 'font-size': '11', 'text-anchor': 'start', 'letter-spacing': '0.1em'
+    }, rg3).textContent = LANG==='cn' ? '已排除:' : 'REJECTED:';
+    // RH 划线
+    el('rect', { x: -210, y: -10, width: 80, height: 22,
+                 fill: 'none', stroke: 'var(--PROOF)', 'stroke-width': '1.4', rx: '2' }, rg3);
+    el('text', { x: -170, y: 6, fill: 'var(--PROOF)',
+                 'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                 'font-size': '11', 'text-anchor': 'middle', 'font-weight': '700'
+    }, rg3).textContent = LANG==='cn' ? '湿度' : 'RH';
+    el('line', { x1: -210, y1: 1, x2: -130, y2: 1, stroke: 'var(--PROOF)', 'stroke-width': '1.4' }, rg3);
+    // 时段划线
+    el('rect', { x: -110, y: -10, width: 80, height: 22,
+                 fill: 'none', stroke: 'var(--PROOF)', 'stroke-width': '1.4', rx: '2' }, rg3);
+    el('text', { x: -70, y: 6, fill: 'var(--PROOF)',
+                 'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                 'font-size': '11', 'text-anchor': 'middle', 'font-weight': '700'
+    }, rg3).textContent = LANG==='cn' ? '时段' : 'TIME';
+    el('line', { x1: -110, y1: 1, x2: -30, y2: 1, stroke: 'var(--PROOF)', 'stroke-width': '1.4' }, rg3);
+    // 最后一张牌
+    el('text', { x: 30, y: 5, fill: 'var(--fg-dim)',
+                 'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                 'font-size': '11', 'text-anchor': 'start'
+    }, rg3).textContent = LANG==='cn' ? '只剩:' : 'LAST:';
+    el('rect', { x: 90, y: -10, width: 90, height: 22,
+                 fill: 'var(--QED)', stroke: 'var(--QED)', 'stroke-width': '1.6', rx: '2', opacity: 0.25 }, rg3);
+    el('text', { x: 135, y: 6, fill: 'var(--QED)',
+                 'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                 'font-size': '11', 'text-anchor': 'middle', 'font-weight': '700'
+    }, rg3).textContent = LANG==='cn' ? '温度' : 'TEMP';
+
+    // 假设条
+    var hAlpha = clamp((p - 0.08) / 0.12, 0, 1);
+    var hg = el('g', { opacity: hAlpha, transform: 'translate(540, 175)' }, stage);
+    el('rect', { x: -340, y: -22, width: 680, height: 44,
+                 fill: 'var(--bg-2)', stroke: 'var(--QED)', 'stroke-width': '1.8', rx: '3' }, hg);
+    el('text', { x: 0, y: 6, fill: 'var(--QED)',
+                 'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                 'font-size': '15', 'text-anchor': 'middle', 'font-weight': '700', 'letter-spacing': '0.1em'
+    }, hg).textContent = LANG==='cn'
+      ? 'IF 温度有影响 THEN 高温组 bias > 低温组'
+      : 'IF temperature matters THEN hot-day bias > cold-day';
+
+    // 分组 bars — 3 根, 颜色从低 -> 高 渐 (蓝 -> 蓝 -> 金 强调高温)
+    var groups = [
+      { value: TEMP_BIAS[0], n: RECORDS.filter(function(r){ return r.temp < 15; }).length,
+        labelCn: '低 (<15°C)', labelEn: 'LOW (<15°C)', color: 'var(--AXIS)' },
+      { value: TEMP_BIAS[1], n: RECORDS.filter(function(r){ return r.temp >= 15 && r.temp <= 25; }).length,
+        labelCn: '中 (15-25°C)', labelEn: 'MID (15-25°C)', color: 'var(--AXIS)' },
+      { value: TEMP_BIAS[2], n: RECORDS.filter(function(r){ return r.temp > 25; }).length,
+        labelCn: '高 (>25°C)', labelEn: 'HIGH (>25°C)', color: 'var(--QED)' }
+    ];
+    drawGroupBars(280, 230, 540, 260, groups, p);
+
+    // 趋势箭头: 把 3 根柱顶串起来 (递增 = 温度依赖)
+    var trendAlpha = clamp((p - 0.55) / 0.15, 0, 1);
+    if (trendAlpha > 0){
+      var bx = 280, bw = 540;
+      var slotW = bw / 3;
+      var by = 230, bh = 260, maxAbs = 12;
+      // 3 个柱顶坐标 (柱中心)
+      var t1x = bx + 0 * slotW + slotW/2;
+      var t1y = by + bh - (TEMP_BIAS[0]/maxAbs)*bh;
+      var t2x = bx + 1 * slotW + slotW/2;
+      var t2y = by + bh - (TEMP_BIAS[1]/maxAbs)*bh;
+      var t3x = bx + 2 * slotW + slotW/2;
+      var t3y = by + bh - (TEMP_BIAS[2]/maxAbs)*bh;
+      // 画递增折线
+      var path = 'M ' + t1x + ' ' + t1y + ' L ' + t2x + ' ' + t2y + ' L ' + t3x + ' ' + t3y;
+      el('path', { d: path, stroke: 'var(--QED)', 'stroke-width': '2.5', fill: 'none',
+                   'stroke-linecap': 'round', opacity: trendAlpha,
+                   'stroke-dasharray': '500', 'stroke-dashoffset': (1 - trendAlpha) * 500 }, stage);
+      el('circle', { cx: t1x, cy: t1y, r: 5, fill: 'var(--QED)', opacity: trendAlpha }, stage);
+      el('circle', { cx: t2x, cy: t2y, r: 5, fill: 'var(--QED)', opacity: trendAlpha }, stage);
+      el('circle', { cx: t3x, cy: t3y, r: 7, fill: 'var(--QED)',
+                     stroke: 'var(--gold)', 'stroke-width': '2', opacity: trendAlpha }, stage);
+    }
+
+    // SPREAD 跳到 7 (大数 + glow)
+    var spread = SPREAD_TEMP;
+    var sAlpha = clamp((p - 0.65) / 0.15, 0, 1);
+    var sg = el('g', { opacity: sAlpha, transform: 'translate(900, 310)' }, stage);
+    el('rect', { x: -80, y: -36, width: 160, height: 80,
+                 fill: 'var(--bg-3)', stroke: 'var(--QED)', 'stroke-width': '2.4', rx: '3' }, sg);
+    el('text', { x: 0, y: -14, fill: 'var(--QED)',
+                 'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                 'font-size': '10', 'text-anchor': 'middle', 'letter-spacing': '0.14em', 'font-weight': '700'
+    }, sg).textContent = 'SPREAD';
+    el('text', { x: 0, y: 20, fill: 'var(--QED)',
+                 'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                 'font-size': '32', 'text-anchor': 'middle', 'font-weight': '700'
+    }, sg).textContent = fmt1(spread);
+    el('text', { x: 0, y: 36, fill: 'var(--fg-dim)',
+                 'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                 'font-size': '9', 'text-anchor': 'middle'
+    }, sg).textContent = LANG==='cn' ? '跳了 7 个单位!' : 'jump by 7 !';
+
+    // VERDICT FOUND!
+    var vAlpha = clamp((p - 0.78) / 0.12, 0, 1);
+    var vg = el('g', { opacity: vAlpha, transform: 'translate(540, 540)' }, stage);
+    el('rect', { x: -300, y: -24, width: 600, height: 54,
+                 fill: 'var(--bg-3)', stroke: 'var(--QED)', 'stroke-width': '2.4', rx: '3' }, vg);
+    el('text', { x: -220, y: 9, fill: 'var(--QED)',
+                 'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                 'font-size': '18', 'text-anchor': 'middle', 'font-weight': '700', 'letter-spacing': '0.2em'
+    }, vg).textContent = LANG==='cn' ? '找到! FOUND' : 'FOUND!';
+    el('text', { x: 80, y: 9, fill: 'var(--fg)',
+                 'font-family': "'Inter','Noto Sans SC',sans-serif",
+                 'font-size': '14', 'text-anchor': 'middle', 'font-weight': '700'
+    }, vg).textContent = LANG==='cn'
+      ? '温度越高 偏差越大 — 温度依赖!'
+      : 'higher temp -> bigger bias — temp-dependent!';
+
+    // gold flash near end of frame
+    var flash = document.getElementById('flash');
+    if (p > 0.82 && p < 0.97){ flash.classList.add('on'); } else { flash.classList.remove('on'); }
+
+    var mg = el('g', { transform: 'translate(100, 580)' }, stage);
+    drawPiMascot(mg, p * 4, p > 0.7);
+  }
+
+  // ====== Frame 5 — CONCLUSION + FIX + GOLD SEAL ======
+  function drawFrame5(p){
+    drawBgGrid();
+    drawStepChain(4);
+
+    // 主标题
+    var ttl = el('text', {
+      x: 540, y: 80, fill: 'var(--QED)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '16', 'text-anchor': 'middle', 'letter-spacing': '0.16em', 'font-weight': '700'
+    }, stage);
+    ttl.textContent = LANG === 'cn'
+      ? '结论 + 修复 — 数据侦探收工'
+      : 'Conclusion + Fix — case closed';
+
+    // 上方 3 张诊断卡 (RH REJECT, TIME REJECT, TEMP FOUND)
+    var cardW = 280, cardH = 170;
+    var cardY = 130;
+    var gap = 14;
+    var totalW = 3 * cardW + 2 * gap;
+    var startX = (1080 - totalW) / 2;
+    var cardData = [
+      { idx: 0, label: LANG==='cn'?'湿度':'RH',
+        spread: '0.0', verdictCn: '排除', verdictEn: 'REJECT',
+        color: 'var(--PROOF)', whyCn: '3 组 bias 一样', whyEn: 'all bars equal' },
+      { idx: 1, label: LANG==='cn'?'时段':'TIME',
+        spread: '0.0', verdictCn: '排除', verdictEn: 'REJECT',
+        color: 'var(--PROOF)', whyCn: '白天夜晚一样', whyEn: 'day=night' },
+      { idx: 2, label: LANG==='cn'?'温度':'TEMP',
+        spread: '7.0', verdictCn: '找到!', verdictEn: 'FOUND!',
+        color: 'var(--QED)', whyCn: '高温组 +9 vs 低温组 +2', whyEn: 'hot +9 vs cold +2' }
+    ];
+
+    for (var ci = 0; ci < 3; ci++){
+      var cd = cardData[ci];
+      var alpha = clamp((p - cd.idx * 0.08) / 0.18, 0, 1);
+      var cx = startX + ci * (cardW + gap);
+      var cardGroup = el('g', { opacity: alpha }, stage);
+      el('rect', { x: cx, y: cardY, width: cardW, height: cardH,
+                   fill: 'var(--bg-2)', stroke: cd.color,
+                   'stroke-width': cd.idx === 2 ? '2.6' : '1.8', rx: '3' }, cardGroup);
+      // top stripe
+      el('rect', { x: cx, y: cardY, width: cardW, height: 6,
+                   fill: cd.color, opacity: 0.85 }, cardGroup);
+      // 标签
+      el('text', { x: cx + cardW/2, y: cardY + 36, fill: cd.color,
+                   'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                   'font-size': '14', 'text-anchor': 'middle', 'letter-spacing': '0.18em', 'font-weight': '700'
+      }, cardGroup).textContent = cd.label;
+      // 大数 SPREAD
+      el('text', { x: cx + cardW/2, y: cardY + 88, fill: cd.color,
+                   'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                   'font-size': '42', 'text-anchor': 'middle', 'font-weight': '700'
+      }, cardGroup).textContent = cd.spread;
+      el('text', { x: cx + cardW/2, y: cardY + 106, fill: 'var(--fg-mute)',
+                   'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                   'font-size': '10', 'text-anchor': 'middle'
+      }, cardGroup).textContent = 'SPREAD';
+      // verdict
+      el('text', { x: cx + cardW/2, y: cardY + 134, fill: 'var(--fg)',
+                   'font-family': "'Inter','Noto Sans SC',sans-serif",
+                   'font-size': '14', 'text-anchor': 'middle', 'font-weight': '700'
+      }, cardGroup).textContent = LANG==='cn' ? cd.verdictCn : cd.verdictEn;
+      // why
+      el('text', { x: cx + cardW/2, y: cardY + 154, fill: 'var(--fg-dim)',
+                   'font-family': "'Inter','Noto Sans SC',sans-serif",
+                   'font-size': '11', 'text-anchor': 'middle'
+      }, cardGroup).textContent = LANG==='cn' ? cd.whyCn : cd.whyEn;
+      // 划线 (REJECT 卡)
+      if (cd.idx < 2){
+        el('line', { x1: cx + 30, y1: cardY + 88, x2: cx + cardW - 30, y2: cardY + 88,
+                     stroke: 'var(--PROOF)', 'stroke-width': '2', opacity: 0.7 }, cardGroup);
+      }
+    }
+
+    // 修复公式卡 (中下)
+    var fAlpha = clamp((p - 0.4) / 0.18, 0, 1);
+    var fg = el('g', { opacity: fAlpha, transform: 'translate(540, 360)' }, stage);
+    el('rect', { x: -360, y: -28, width: 720, height: 60,
+                 fill: 'var(--bg-2)', stroke: 'var(--AXIS)', 'stroke-width': '2', rx: '4' }, fg);
+    el('text', { x: -290, y: 8, fill: 'var(--fg-mute)',
+                 'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                 'font-size': '11', 'text-anchor': 'start', 'letter-spacing': '0.12em', 'font-weight': '700'
+    }, fg).textContent = LANG==='cn' ? 'FIX 修复:' : 'FIX:';
+    el('text', { x: 30, y: 8, fill: 'var(--SOLUTION)',
+                 'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                 'font-size': '20', 'text-anchor': 'middle', 'font-weight': '700'
+    }, fg).textContent = 'corrected = raw - 0.35 * (T - 15)';
+
+    // 计算示意: 高温 T=30 时, 修正 = -5.25 → bias 从 +9 拉回 +3.75
+    var cAlpha = clamp((p - 0.5) / 0.15, 0, 1);
+    el('text', {
+      x: 540, y: 420, fill: 'var(--fg-dim)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '12', 'text-anchor': 'middle', opacity: cAlpha
+    }, stage).textContent = LANG==='cn'
+      ? '验算: T=30°C 时 修正 -5.25, 高温 bias 从 +9 拉回到 +3.75 (跟低温 +2 接近)'
+      : 'check: at T=30°C correction -5.25, high-temp bias drops from +9 to +3.75 (close to +2 low)';
+
+    // 底部金句 + 印章
+    var goldAlpha = clamp((p - 0.55) / 0.18, 0, 1);
+    var gg = el('g', { opacity: goldAlpha, transform: 'translate(540, 490)' }, stage);
+    el('rect', { x: -380, y: -24, width: 760, height: 52,
+                 fill: 'var(--bg-3)', stroke: 'var(--QED)', 'stroke-width': '2.2', rx: '3' }, gg);
+    el('text', { x: 0, y: 8, fill: 'var(--QED)',
+                 'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                 'font-size': '15', 'text-anchor': 'middle', 'letter-spacing': '0.14em', 'font-weight': '700'
+    }, gg).textContent = LANG === 'cn'
+      ? '数据侦探: 多角度切片 找系统偏差源'
+      : 'DATA DETECTIVE — slice the data, find the bias source';
+
+    // 印章 (右下)
+    var sealAlpha = clamp((p - 0.7) / 0.15, 0, 1);
+    var sealG = el('g', { opacity: sealAlpha, transform: 'translate(960, 540) rotate(-8)' }, stage);
+    el('rect', { x: -60, y: -28, width: 120, height: 56,
+                 fill: 'none', stroke: 'var(--QED)', 'stroke-width': '2.4', rx: '3' }, sealG);
+    el('rect', { x: -54, y: -22, width: 108, height: 44,
+                 fill: 'none', stroke: 'var(--QED)', 'stroke-width': '1', rx: '2', opacity: 0.6 }, sealG);
+    el('text', { x: 0, y: -4, fill: 'var(--QED)',
+                 'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                 'font-size': '13', 'text-anchor': 'middle', 'font-weight': '700', 'letter-spacing': '0.18em'
+    }, sealG).textContent = 'CASE';
+    el('text', { x: 0, y: 14, fill: 'var(--QED)',
+                 'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                 'font-size': '13', 'text-anchor': 'middle', 'font-weight': '700', 'letter-spacing': '0.18em'
+    }, sealG).textContent = 'CLOSED';
+
+    // flash on (gold KEY moment)
+    var flash = document.getElementById('flash');
+    if (p > 0.55 && p < 0.95){ flash.classList.add('on'); } else { flash.classList.remove('on'); }
+
+    var mg = el('g', { transform: 'translate(100, 580)' }, stage);
+    drawPiMascot(mg, p * 4, p > 0.5);
+  }
+
+  function drawFrame(idx, pp){
+    clearStage();
+    if (idx !== 3 && idx !== 4){
+      document.getElementById('flash').classList.remove('on');
+    }
+    if (idx === 0) drawFrame1(pp);
+    else if (idx === 1) drawFrame2(pp);
+    else if (idx === 2) drawFrame3(pp);
+    else if (idx === 3) drawFrame4(pp);
+    else if (idx === 4) drawFrame5(pp);
+  }
+
+  function updateUI(idx){
+    var f = FRAMES[idx];
+    document.getElementById('hudV1').textContent = (idx+1) + ' / 5';
+    document.getElementById('hudV2').textContent = f.hudStage[LANG] || f.hudStage.en;
+    document.getElementById('hudV3').textContent = f.hudHypoth[LANG] || f.hudHypoth.en;
+    document.getElementById('hudV4').textContent = f.hudSpread;
+    document.getElementById('hudV5').textContent = f.hudVerdict[LANG] || f.hudVerdict.en;
+    document.getElementById('subCn').textContent = LANG === 'cn' ? f.subCn : f.subEn;
+    document.getElementById('subEn').textContent = LANG === 'cn' ? f.subEn : f.subCn;
+    document.getElementById('stepName').textContent = f.stepName;
+    for (var i = 0; i < 5; i++){
+      var c = document.getElementById('chip' + i);
+      c.classList.remove('active', 'done');
+      if (i < idx) c.classList.add('done');
+      else if (i === idx) c.classList.add('active');
+    }
+  }
+
+  function updateI18N(){
+    document.getElementById('badgeMod').textContent = tt('badgeMod');
+    document.getElementById('brandH1').textContent = tt('brandH1');
+    document.getElementById('brandSub').textContent = tt('brandSub');
+    document.getElementById('mascotName').textContent = tt('mascotName');
+    document.querySelector('#g1 .gtxt').textContent = tt('g1');
+    document.querySelector('#g2 .gtxt').textContent = tt('g2');
+    document.querySelector('#g3 .gtxt').textContent = tt('g3');
+    document.getElementById('hudL1').textContent = tt('hudL1');
+    document.getElementById('hudL2').textContent = tt('hudL2');
+    document.getElementById('hudL3').textContent = tt('hudL3');
+    document.getElementById('hudL4').textContent = tt('hudL4');
+    document.getElementById('hudL5').textContent = tt('hudL5');
+    document.getElementById('langBtn').textContent = tt('btnLang');
+    document.getElementById('flashSub').textContent = LANG === 'cn'
+      ? '温度切片 spread 跳到 7 — 找到元凶!'
+      : 'temp slice — spread jumps to 7 — case closed!';
+  }
+
+  function tick(ts){
+    if (!frameStartTs) frameStartTs = ts;
+    var elapsed = ts - frameStartTs;
+    if (elapsed >= FRAME_MS){
+      currentFrame = (currentFrame + 1) % 5;
+      frameStartTs = ts;
+      updateUI(currentFrame);
+      elapsed = 0;
+    }
+    var pp = elapsed / FRAME_MS;
+    drawFrame(currentFrame, pp);
+    rafId = requestAnimationFrame(tick);
+  }
+
+  function start(){
+    updateI18N();
+    updateUI(currentFrame);
+    frameStartTs = 0;
+    if (rafId) cancelAnimationFrame(rafId);
+    rafId = requestAnimationFrame(tick);
+  }
+
+  document.getElementById('langBtn').addEventListener('click', function(){
+    LANG = (LANG === 'cn') ? 'en' : 'cn';
+    updateI18N();
+    updateUI(currentFrame);
+  });
+
+  start();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,951 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>M36 · 三剑客实时计算器 — Geometry Void</title>
+<style>
+  :root{
+    /* Layer 1 — shared deep space canvas (all 26 subjects) */
+    --bg-0: oklch(0.14 0.035 265);
+    --bg-1: oklch(0.18 0.04 265);
+    --bg-2: oklch(0.22 0.045 265);
+    --bg-3: oklch(0.28 0.05 265);
+    --line: oklch(0.35 0.05 265 / 0.35);
+    --line-strong: oklch(0.55 0.08 265 / 0.55);
+    --fg:      oklch(0.96 0.01 265);
+    --fg-dim:  oklch(0.75 0.02 265);
+    --fg-mute: oklch(0.55 0.03 265);
+    --gold:    oklch(0.85 0.14 85);
+
+    /* Layer 2 — math signature accent (MTH-06) */
+    --math: oklch(0.72 0.17 245);
+
+    /* Layer 3 — math 5-color palette (themes.js MTH-06: Geometry Void) */
+    --AXIS:     oklch(0.72 0.17 245);
+    --PROOF:    oklch(0.52 0.16 245);
+    --SHADOW:   oklch(0.35 0.10 245);
+    --SOLUTION: oklch(0.92 0.08 240);
+    --QED:      oklch(0.85 0.14 85);
+  }
+
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{
+    height:100vh;width:100vw;overflow:hidden;
+    font-family:'Inter','PingFang SC','Noto Sans SC',sans-serif;
+    color:var(--fg);background:var(--bg-0);
+  }
+
+  .stage{
+    display:flex;flex-direction:row;
+    height:100vh;width:100vw;
+  }
+
+  /* ========== 200px sidebar ========== */
+  .game-sidebar{
+    width:200px;flex:0 0 200px;
+    background:var(--bg-1);
+    border-right:1px solid var(--line);
+    display:flex;flex-direction:column;
+    padding:14px 12px;gap:10px;
+    overflow-y:auto;
+  }
+  .brand{
+    display:flex;flex-direction:column;gap:2px;
+    border-bottom:1px solid var(--line);padding-bottom:8px;
+  }
+  .brand .code{
+    font-family:'JetBrains Mono',monospace;font-size:10px;
+    color:var(--fg-mute);letter-spacing:1.2px;
+  }
+  .brand .title{font-size:13px;color:var(--fg);font-weight:600;line-height:1.25}
+  .brand .sub{font-size:10px;color:var(--fg-dim);margin-top:2px}
+
+  .mascot{
+    width:100%;height:72px;
+    background:var(--bg-2);border:1px solid var(--line);
+    display:flex;align-items:center;justify-content:center;
+  }
+  .mascot svg{width:100%;height:100%}
+
+  .guide{
+    background:var(--bg-2);border:1px solid var(--line);
+    padding:8px 10px;display:flex;flex-direction:column;gap:4px;
+  }
+  .guide-title{
+    font-family:'JetBrains Mono',monospace;font-size:9px;
+    color:var(--AXIS);letter-spacing:1px;
+  }
+  .guide-line{font-size:10px;color:var(--fg-dim);line-height:1.45}
+
+  /* ---- tasks (4 unlock) ---- */
+  .tasks-block{
+    background:var(--bg-2);border:1px solid var(--line);
+    padding:8px 10px;display:flex;flex-direction:column;gap:6px;
+  }
+  .tasks-title{
+    font-family:'JetBrains Mono',monospace;font-size:9px;
+    color:var(--fg-dim);letter-spacing:1px;
+    display:flex;justify-content:space-between;align-items:baseline;
+  }
+  .tasks-title .count{color:var(--AXIS);font-size:10px;font-weight:600}
+  .task-row{
+    display:grid;grid-template-columns:14px 1fr;gap:6px;align-items:start;
+    font-size:10px;color:var(--fg-mute);line-height:1.35;
+  }
+  .task-row.done{color:var(--fg)}
+  .task-row .dot{
+    width:10px;height:10px;border:1px solid var(--line-strong);
+    background:var(--bg-3);margin-top:2px;
+  }
+  .task-row.done .dot{
+    background:var(--QED);border-color:var(--QED);
+  }
+  .task-row .label{
+    font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.4px;
+  }
+  .task-row .label .sub{
+    display:block;color:var(--fg-mute);font-size:8.5px;margin-top:2px;
+    font-family:'Inter','PingFang SC',sans-serif;letter-spacing:0;
+  }
+  .task-row.done .label .sub{color:var(--fg-dim)}
+
+  /* ---- reset row ---- */
+  .ctrl-block{
+    background:var(--bg-2);border:1px solid var(--line);
+    padding:8px 10px;display:flex;flex-direction:column;gap:6px;
+  }
+  .ctrl-row{
+    display:flex;gap:6px;
+  }
+  .ctrl-btn{
+    flex:1;background:var(--bg-3);border:1px solid var(--line-strong);
+    color:var(--fg);cursor:pointer;padding:5px 4px;
+    font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.6px;
+  }
+  .ctrl-btn:hover{background:var(--PROOF);color:var(--SOLUTION)}
+
+  /* ---- shuffle slider (≥1 slider硬约束) ---- */
+  .ctrl-row.spread{
+    flex-direction:column;gap:4px;
+  }
+  .spread-lbl{
+    font-family:'JetBrains Mono',monospace;font-size:9px;
+    color:var(--fg-dim);display:flex;justify-content:space-between;
+  }
+  .spread-lbl .v{color:var(--AXIS)}
+  input[type=range].n-slider{
+    -webkit-appearance:none;appearance:none;width:100%;height:5px;
+    background:var(--bg-3);border:1px solid var(--line);outline:none;cursor:pointer;
+  }
+  input[type=range].n-slider::-webkit-slider-thumb{
+    -webkit-appearance:none;appearance:none;
+    width:12px;height:16px;background:var(--SOLUTION);
+    border:1.5px solid var(--AXIS);box-shadow:1.5px 1.5px 0 var(--bg-0);
+    cursor:grab;
+  }
+  input[type=range].n-slider::-moz-range-thumb{
+    width:12px;height:16px;background:var(--SOLUTION);
+    border:1.5px solid var(--AXIS);box-shadow:1.5px 1.5px 0 var(--bg-0);
+    cursor:grab;
+  }
+
+  .sidebar-spacer{flex:1;min-height:8px}
+
+  .lang-btn{
+    width:100%;padding:7px 10px;background:var(--bg-3);
+    color:var(--fg);border:1px solid var(--line-strong);
+    font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:1px;
+    cursor:pointer;box-shadow:3px 3px 0 var(--bg-0);
+  }
+  .lang-btn:hover{background:var(--PROOF);color:var(--SOLUTION)}
+
+  /* ========== main stage ========== */
+  .game-main{
+    flex:1;display:flex;flex-direction:column;
+    background:var(--bg-0);min-width:0;
+  }
+  .main-header{
+    height:42px;border-bottom:1px solid var(--line);
+    display:flex;align-items:center;justify-content:space-between;
+    padding:0 18px;background:var(--bg-1);
+  }
+  .header-left{
+    font-family:'JetBrains Mono',monospace;font-size:11px;
+    color:var(--fg-dim);letter-spacing:1.4px;
+  }
+  .header-right{
+    display:flex;gap:18px;
+    font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--fg-mute);
+  }
+  .hud-cell{display:flex;flex-direction:column;align-items:flex-end;line-height:1.1}
+  .hud-cell .label{font-size:9px;color:var(--fg-mute);letter-spacing:1px}
+  .hud-cell .val{color:var(--AXIS);font-size:13px;font-weight:600;font-family:'JetBrains Mono',monospace}
+  .hud-cell .val.gold{color:var(--QED)}
+  .hud-cell .val.warn{color:var(--PROOF)}
+
+  .main-body{
+    flex:1;display:flex;flex-direction:column;
+    min-height:0;padding:12px 16px;gap:10px;
+    position:relative;
+  }
+
+  /* metric HUD strip */
+  .metric-strip{
+    flex:0 0 auto;
+    display:grid;grid-template-columns:repeat(3, 1fr);gap:8px;
+  }
+  .metric-card{
+    background:var(--bg-1);border:1px solid var(--line);
+    padding:8px 12px;
+    display:flex;flex-direction:column;gap:4px;
+    position:relative;
+  }
+  .metric-card .mname{
+    font-family:'JetBrains Mono',monospace;font-size:9px;
+    color:var(--fg-mute);letter-spacing:1.4px;
+  }
+  .metric-card .mval{
+    font-family:'JetBrains Mono',monospace;
+    font-size:22px;font-weight:700;color:var(--AXIS);
+    line-height:1.1;
+  }
+  .metric-card .mval.good{color:var(--QED)}
+  .metric-card .mval.bad{color:var(--PROOF)}
+  .metric-card .mformula{
+    font-family:'JetBrains Mono',monospace;font-size:10px;
+    color:var(--fg-dim);line-height:1.35;
+  }
+  .metric-card .mformula .num{color:var(--SOLUTION)}
+  .metric-card .mformula .op{color:var(--fg-mute)}
+  .metric-card .mformula .res{color:var(--QED)}
+
+  /* R² color bar */
+  .r2bar{
+    height:5px;width:100%;
+    background:linear-gradient(to right,
+      oklch(0.52 0.16 245) 0%,
+      oklch(0.72 0.17 245) 50%,
+      oklch(0.85 0.14 85) 100%);
+    position:relative;border:1px solid var(--line);
+  }
+  .r2bar .pin{
+    position:absolute;top:-3px;width:3px;height:11px;
+    background:var(--SOLUTION);transition:left .12s;
+  }
+
+  /* chart pane */
+  .chart-pane{
+    flex:1;display:flex;flex-direction:column;
+    background:var(--bg-1);border:1px solid var(--line);
+    min-height:0;
+  }
+  .chart-title{
+    padding:6px 14px;
+    font-family:'JetBrains Mono',monospace;font-size:11px;
+    color:var(--AXIS);letter-spacing:1.4px;
+    border-bottom:1px solid var(--line);background:var(--bg-2);
+    display:flex;justify-content:space-between;align-items:baseline;
+  }
+  .chart-title .hint{color:var(--fg-mute);font-size:9px;letter-spacing:.8px}
+  .chart-wrap{
+    flex:1;display:flex;flex-direction:column;
+    min-height:0;padding:6px;position:relative;
+  }
+  canvas.scatter{
+    flex:1;width:100%;height:100%;
+    background:var(--bg-1);cursor:grab;
+  }
+  canvas.scatter.dragging{cursor:grabbing}
+
+  /* milestone */
+  .milestone{
+    position:absolute;left:50%;top:64px;
+    transform:translateX(-50%) translateY(-20px);
+    background:var(--QED);color:var(--bg-0);
+    font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:700;
+    padding:10px 22px;letter-spacing:1.5px;
+    box-shadow:4px 4px 0 var(--bg-0);
+    opacity:0;transition:all .35s;pointer-events:none;
+    z-index:50;
+  }
+  .milestone.show{
+    opacity:1;transform:translateX(-50%) translateY(0);
+  }
+
+  /* hit pulse */
+  .hit-pulse{
+    position:absolute;left:50%;top:55%;
+    transform:translate(-50%,-50%) scale(0.6);
+    width:140px;height:140px;border-radius:50%;
+    border:2px solid var(--QED);
+    opacity:0;pointer-events:none;z-index:40;
+  }
+  .hit-pulse.fire{
+    animation:pulse 1s ease-out 1;
+  }
+  @keyframes pulse{
+    0%{opacity:.9;transform:translate(-50%,-50%) scale(0.4)}
+    100%{opacity:0;transform:translate(-50%,-50%) scale(1.6)}
+  }
+</style>
+</head>
+<body>
+  <div class="stage">
+    <!-- ============ Sidebar ============ -->
+    <aside class="game-sidebar">
+      <div class="brand">
+        <span class="code">MTH-06 · M36</span>
+        <span class="title" data-i18n-cn="三剑客实时计算" data-i18n-en="Metrics Calculator">三剑客实时计算</span>
+        <span class="sub" data-i18n-cn="拖散点, 看 MAE / Bias / R² 变" data-i18n-en="Drag points, watch MAE / Bias / R²">拖散点, 看 MAE / Bias / R² 变</span>
+      </div>
+
+      <div class="mascot" aria-label="Pi mascot">
+        <!-- Pi — rotating tetrahedron mascot (math) -->
+        <svg viewBox="0 0 200 72" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <linearGradient id="piGrad" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0%" stop-color="var(--AXIS)"/>
+              <stop offset="100%" stop-color="var(--PROOF)"/>
+            </linearGradient>
+          </defs>
+          <g id="piMascot" transform="translate(100 36)">
+            <polygon points="0,-22 21,12 -21,12" fill="url(#piGrad)" stroke="var(--SOLUTION)" stroke-width="1"/>
+            <polygon points="0,-22 21,12 0,3" fill="var(--PROOF)" opacity=".75" stroke="var(--SOLUTION)" stroke-width="0.6"/>
+            <polygon points="0,-22 -21,12 0,3" fill="var(--SHADOW)" opacity=".85" stroke="var(--SOLUTION)" stroke-width="0.6"/>
+            <text x="0" y="6" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="12" fill="var(--SOLUTION)" font-weight="700">Pi</text>
+          </g>
+          <text x="100" y="66" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="8" fill="var(--fg-mute)" letter-spacing="1.5">MAE Bias R&sup2;</text>
+        </svg>
+      </div>
+
+      <div class="guide">
+        <div class="guide-title">HOW TO PLAY</div>
+        <div class="guide-line" data-i18n-cn="1 · 上下拖任一散点 = 改你的预测" data-i18n-en="1 · Drag any dot up/down = your value">1 · 上下拖任一散点 = 改你的预测</div>
+        <div class="guide-line" data-i18n-cn="2 · EPA 横坐标固定不动" data-i18n-en="2 · EPA on x-axis stays fixed">2 · EPA 横坐标固定不动</div>
+        <div class="guide-line" data-i18n-cn="3 · 4 个任务全过 = 解锁直觉" data-i18n-en="3 · Hit 4 tasks to unlock">3 · 4 个任务全过 = 解锁直觉</div>
+      </div>
+
+      <div class="tasks-block">
+        <div class="tasks-title">
+          <span data-i18n-cn="任务" data-i18n-en="Tasks">任务</span>
+          <span class="count"><span id="taskCount">0</span> / 4</span>
+        </div>
+        <div class="task-row" id="task0">
+          <div class="dot"></div>
+          <div class="label">
+            A · MAE &lt; 2
+            <span class="sub" data-i18n-cn="贴近 y=x 线" data-i18n-en="hug the y=x line">贴近 y=x 线</span>
+          </div>
+        </div>
+        <div class="task-row" id="task1">
+          <div class="dot"></div>
+          <div class="label">
+            B · MAE &gt; 10
+            <span class="sub" data-i18n-cn="离 y=x 远点" data-i18n-en="far from y=x">离 y=x 远点</span>
+          </div>
+        </div>
+        <div class="task-row" id="task2">
+          <div class="dot"></div>
+          <div class="label">
+            C · |Bias|&lt;0.3, MAE&gt;5
+            <span class="sub" data-i18n-cn="均匀分两侧, 但都很远" data-i18n-en="balanced both sides, all far">均匀分两侧, 但都很远</span>
+          </div>
+        </div>
+        <div class="task-row" id="task3">
+          <div class="dot"></div>
+          <div class="label">
+            D · R² &gt; 0.95
+            <span class="sub" data-i18n-cn="哪怕都偏高, 形状跟得上" data-i18n-en="shape matches EPA trend">哪怕都偏高, 形状跟得上</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="ctrl-block">
+        <div class="ctrl-row spread">
+          <div class="spread-lbl">
+            <span data-i18n-cn="新一组噪声" data-i18n-en="noise level">新一组噪声</span>
+            <span class="v" id="noiseV">2.0</span>
+          </div>
+          <input type="range" min="0" max="10" step="0.5" value="2" id="noiseSlider" class="n-slider" aria-label="noise"/>
+        </div>
+        <div class="ctrl-row">
+          <button id="resetBtn" type="button" class="ctrl-btn" data-i18n-cn="重置点" data-i18n-en="Reset Pts">重置点</button>
+          <button id="copyBtn" type="button" class="ctrl-btn" data-i18n-cn="贴线 y=x" data-i18n-en="Snap y=x">贴线 y=x</button>
+        </div>
+      </div>
+
+      <div class="sidebar-spacer"></div>
+
+      <button id="langBtn" class="lang-btn" type="button">EN / 中文</button>
+    </aside>
+
+    <!-- ============ Main ============ -->
+    <main class="game-main">
+      <header class="main-header">
+        <div class="header-left" data-i18n-cn="M36 · 误差三剑客 · 拖散点感受" data-i18n-en="M36 · 3 Metrics · Drag Scatter">M36 · 误差三剑客 · 拖散点感受</div>
+        <div class="header-right">
+          <div class="hud-cell">
+            <span class="label">MAE</span>
+            <span class="val" id="hMae">0.00</span>
+          </div>
+          <div class="hud-cell">
+            <span class="label">BIAS</span>
+            <span class="val" id="hBias">0.00</span>
+          </div>
+          <div class="hud-cell">
+            <span class="label">R&sup2;</span>
+            <span class="val" id="hR2">0.00</span>
+          </div>
+          <div class="hud-cell">
+            <span class="label" data-i18n-cn="任务" data-i18n-en="TASKS">任务</span>
+            <span class="val gold" id="hTasks">0/4</span>
+          </div>
+        </div>
+      </header>
+
+      <div class="main-body">
+        <!-- 3 metric cards strip -->
+        <div class="metric-strip">
+          <div class="metric-card">
+            <div class="mname">MAE — Mean Absolute Error</div>
+            <div class="mval" id="mMaeVal">0.00</div>
+            <div class="mformula">
+              <span data-i18n-cn="平均" data-i18n-en="mean">平均</span>
+              <span class="op">|</span>
+              <span data-i18n-cn="你 - EPA" data-i18n-en="you - EPA">你 - EPA</span>
+              <span class="op">|</span>
+              <span class="op">=</span>
+              <span><span data-i18n-cn="sum" data-i18n-en="sum">sum</span> <span class="num" id="mMaeSum">0</span> / 10 = <span class="res" id="mMaeRes">0.00</span></span>
+            </div>
+          </div>
+
+          <div class="metric-card">
+            <div class="mname">BIAS — mean(you - EPA)</div>
+            <div class="mval" id="mBiasVal">0.00</div>
+            <div class="mformula">
+              <span><span class="num" id="mBiasSum">0</span> / 10 = <span class="res" id="mBiasRes">0.00</span></span>
+              <span class="op">·</span>
+              <span data-i18n-cn="正=偏高" data-i18n-en="+ = over">正=偏高</span>
+              <span class="op">/</span>
+              <span data-i18n-cn="负=偏低" data-i18n-en="- = under">负=偏低</span>
+            </div>
+          </div>
+
+          <div class="metric-card">
+            <div class="mname">R&sup2; — coefficient of determination</div>
+            <div class="mval" id="mR2Val">0.00</div>
+            <div class="r2bar"><div class="pin" id="r2pin" style="left:0%"></div></div>
+            <div class="mformula">
+              <span>1 - SS_res / SS_tot</span>
+              <span class="op">=</span>
+              <span>1 - <span class="num" id="mR2Res">0</span>/<span class="num" id="mR2Tot">0</span></span>
+            </div>
+          </div>
+        </div>
+
+        <!-- main scatter chart -->
+        <section class="chart-pane">
+          <div class="chart-title">
+            <span data-i18n-cn="散点图 · x=EPA, y=你的预测 · 拖动任意点" data-i18n-en="Scatter · x=EPA, y=YOU · drag any point">散点图 · x=EPA, y=你的预测 · 拖动任意点</span>
+            <span class="hint" data-i18n-cn="金色虚线 = y=x (完美预测)" data-i18n-en="gold dashed = y=x (perfect)">金色虚线 = y=x (完美预测)</span>
+          </div>
+          <div class="chart-wrap">
+            <canvas id="scatterCanvas" class="scatter"></canvas>
+            <div id="milestone" class="milestone" data-i18n-cn="解锁 · 三剑客直觉" data-i18n-en="Unlocked · Metrics Intuition">解锁 · 三剑客直觉</div>
+            <div id="hitPulse" class="hit-pulse"></div>
+          </div>
+        </section>
+      </div>
+    </main>
+  </div>
+
+<script>
+(function(){
+  'use strict';
+
+  // ----- 10 EPA values (fixed, x-axis) — typical PM2.5 reference values 5..50 -----
+  var EPA = [6.5, 9.0, 12.5, 15.0, 18.5, 23.0, 28.0, 32.5, 38.0, 44.0];
+  var N = EPA.length;
+
+  // domain of axes
+  var X_MIN = 0, X_MAX = 50;
+  var Y_MIN = 0, Y_MAX = 60;
+
+  // ----- state (no window-shadow names) -----
+  var stateGame = {
+    you: EPA.slice(),     // start = perfect on y=x
+    lang: 'cn',
+    dragIdx: -1,
+    dragOffsetY: 0,
+    noise: 2.0,
+    tasksDone: [false, false, false, false],
+    milestoneFired: false
+  };
+
+  // ----- DOM refs -----
+  var canvas = document.getElementById('scatterCanvas');
+  var ctx = canvas.getContext('2d');
+
+  var hMae = document.getElementById('hMae');
+  var hBias = document.getElementById('hBias');
+  var hR2 = document.getElementById('hR2');
+  var hTasks = document.getElementById('hTasks');
+
+  var mMaeVal = document.getElementById('mMaeVal');
+  var mMaeSum = document.getElementById('mMaeSum');
+  var mMaeRes = document.getElementById('mMaeRes');
+  var mBiasVal = document.getElementById('mBiasVal');
+  var mBiasSum = document.getElementById('mBiasSum');
+  var mBiasRes = document.getElementById('mBiasRes');
+  var mR2Val = document.getElementById('mR2Val');
+  var mR2Res = document.getElementById('mR2Res');
+  var mR2Tot = document.getElementById('mR2Tot');
+  var r2pin = document.getElementById('r2pin');
+
+  var taskCount = document.getElementById('taskCount');
+  var taskRows = [];
+  for (var ti = 0; ti < 4; ti++) taskRows.push(document.getElementById('task' + ti));
+
+  var milestone = document.getElementById('milestone');
+  var hitPulse = document.getElementById('hitPulse');
+  var langBtn = document.getElementById('langBtn');
+  var resetBtn = document.getElementById('resetBtn');
+  var copyBtn = document.getElementById('copyBtn');
+  var noiseSlider = document.getElementById('noiseSlider');
+  var noiseV = document.getElementById('noiseV');
+
+  // ----- math -----
+  function computeMetrics(){
+    var sumAbs = 0, sumDiff = 0, ssRes = 0;
+    var meanEpa = 0;
+    for (var i = 0; i < N; i++) meanEpa += EPA[i];
+    meanEpa /= N;
+
+    var ssTot = 0;
+    for (var j = 0; j < N; j++){
+      var d = stateGame.you[j] - EPA[j];
+      sumAbs += Math.abs(d);
+      sumDiff += d;
+      ssRes += d * d;
+      ssTot += (EPA[j] - meanEpa) * (EPA[j] - meanEpa);
+    }
+    var mae = sumAbs / N;
+    var bias = sumDiff / N;
+    var r2;
+    if (ssTot < 1e-9) r2 = 0;
+    else r2 = 1 - ssRes / ssTot;   // can go negative; clamp display to [-1, 1]
+    return {
+      mae: mae, bias: bias, r2: r2,
+      sumAbs: sumAbs, sumDiff: sumDiff,
+      ssRes: ssRes, ssTot: ssTot
+    };
+  }
+
+  // ----- canvas sizing -----
+  function resizeCanvas(){
+    var rect = canvas.getBoundingClientRect();
+    var dpr = window.devicePixelRatio || 1;
+    canvas.width = Math.max(200, Math.floor(rect.width * dpr));
+    canvas.height = Math.max(200, Math.floor(rect.height * dpr));
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+
+  function cssVar(name){
+    return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  }
+
+  // plot region (in CSS pixels)
+  function plotRect(){
+    var rect = canvas.getBoundingClientRect();
+    var padL = 50, padR = 18, padT = 14, padB = 36;
+    return {
+      x: padL, y: padT,
+      w: Math.max(20, rect.width - padL - padR),
+      h: Math.max(20, rect.height - padT - padB)
+    };
+  }
+
+  function xToPx(x){
+    var R = plotRect();
+    return R.x + (x - X_MIN) / (X_MAX - X_MIN) * R.w;
+  }
+  function yToPx(y){
+    var R = plotRect();
+    return R.y + R.h - (y - Y_MIN) / (Y_MAX - Y_MIN) * R.h;
+  }
+  function pxToY(py){
+    var R = plotRect();
+    var t = (R.y + R.h - py) / R.h;
+    return Y_MIN + t * (Y_MAX - Y_MIN);
+  }
+
+  // ----- draw scatter chart -----
+  function drawChart(m){
+    var rect = canvas.getBoundingClientRect();
+    var W = rect.width, H = rect.height;
+    ctx.clearRect(0, 0, W, H);
+
+    var R = plotRect();
+    var colAxis     = cssVar('--AXIS');
+    var colProof    = cssVar('--PROOF');
+    var colSolution = cssVar('--SOLUTION');
+    var colGold     = cssVar('--QED');
+    var colShadow   = cssVar('--SHADOW');
+
+    // grid
+    ctx.strokeStyle = 'oklch(0.30 0.04 265 / 0.55)';
+    ctx.lineWidth = 1;
+    ctx.font = "10px 'JetBrains Mono',monospace";
+    ctx.fillStyle = 'oklch(0.55 0.03 265)';
+    ctx.textAlign = 'right';
+    var yTicks = [0, 10, 20, 30, 40, 50, 60];
+    for (var ti = 0; ti < yTicks.length; ti++){
+      var yt = yTicks[ti];
+      var py = yToPx(yt);
+      ctx.beginPath(); ctx.moveTo(R.x, py); ctx.lineTo(R.x + R.w, py); ctx.stroke();
+      ctx.fillText(String(yt), R.x - 6, py + 3);
+    }
+    var xTicks = [0, 10, 20, 30, 40, 50];
+    ctx.textAlign = 'center';
+    for (var xi = 0; xi < xTicks.length; xi++){
+      var xt = xTicks[xi];
+      var px = xToPx(xt);
+      ctx.beginPath(); ctx.moveTo(px, R.y); ctx.lineTo(px, R.y + R.h); ctx.stroke();
+      ctx.fillText(String(xt), px, R.y + R.h + 14);
+    }
+
+    // axis labels
+    ctx.fillStyle = 'oklch(0.75 0.02 265)';
+    ctx.font = "10px 'JetBrains Mono',monospace";
+    ctx.textAlign = 'right';
+    ctx.fillText('YOU', R.x - 6, R.y + 10);
+    ctx.textAlign = 'center';
+    ctx.fillText('EPA', R.x + R.w / 2, R.y + R.h + 28);
+
+    // y=x reference line (gold dashed)
+    ctx.strokeStyle = colGold;
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([6, 4]);
+    ctx.beginPath();
+    var xa = Math.max(X_MIN, Y_MIN);
+    var xb = Math.min(X_MAX, Y_MAX);
+    ctx.moveTo(xToPx(xa), yToPx(xa));
+    ctx.lineTo(xToPx(xb), yToPx(xb));
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = colGold;
+    ctx.font = "10px 'JetBrains Mono',monospace";
+    ctx.textAlign = 'left';
+    ctx.fillText('y = x', xToPx(xb) - 38, yToPx(xb) - 6);
+
+    // residual lines (each point -> y=x)
+    ctx.lineWidth = 1;
+    for (var k = 0; k < N; k++){
+      var ex = EPA[k];
+      var yy = stateGame.you[k];
+      var px1 = xToPx(ex), py1 = yToPx(yy);
+      var py2 = yToPx(ex);   // y=x at the same x means y=ex
+      var d = yy - ex;
+      var col = d >= 0
+        ? 'oklch(0.85 0.14 85 / 0.45)'   // gold-ish above
+        : 'oklch(0.72 0.17 245 / 0.55)'; // axis blue below
+      ctx.strokeStyle = col;
+      ctx.beginPath();
+      ctx.moveTo(px1, py1);
+      ctx.lineTo(px1, py2);
+      ctx.stroke();
+    }
+
+    // scatter points (draggable)
+    for (var i = 0; i < N; i++){
+      var cx = xToPx(EPA[i]);
+      var cy = yToPx(stateGame.you[i]);
+      var isDrag = (stateGame.dragIdx === i);
+
+      // halo when dragging
+      if (isDrag){
+        ctx.beginPath();
+        ctx.fillStyle = 'oklch(0.85 0.14 85 / 0.25)';
+        ctx.arc(cx, cy, 14, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // outer ring (drag affordance)
+      ctx.strokeStyle = colSolution;
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.arc(cx, cy, 8, 0, Math.PI * 2);
+      ctx.stroke();
+
+      // body
+      var bodyCol;
+      var residual = stateGame.you[i] - EPA[i];
+      var ar = Math.abs(residual);
+      if (ar < 0.5) bodyCol = colGold;            // near y=x -> gold
+      else if (ar < 4) bodyCol = colAxis;         // moderate
+      else bodyCol = colProof;                    // far -> dark blue (warn)
+      ctx.fillStyle = bodyCol;
+      ctx.beginPath();
+      ctx.arc(cx, cy, 5.5, 0, Math.PI * 2);
+      ctx.fill();
+
+      // small index label
+      ctx.fillStyle = colSolution;
+      ctx.font = "9px 'JetBrains Mono',monospace";
+      ctx.textAlign = 'left';
+      ctx.fillText('#' + (i + 1), cx + 11, cy - 6);
+    }
+
+    // legend strip at top-left of plot
+    ctx.font = "10px 'JetBrains Mono',monospace";
+    ctx.fillStyle = 'oklch(0.75 0.02 265)';
+    ctx.textAlign = 'left';
+    ctx.fillText('MAE=' + m.mae.toFixed(2) + '  BIAS=' + (m.bias >= 0 ? '+' : '') + m.bias.toFixed(2) + '  R2=' + m.r2.toFixed(3),
+      R.x + 8, R.y + 14);
+
+    ctx.textAlign = 'start';
+  }
+
+  // ----- task evaluation -----
+  function evalTasks(m){
+    var done = [
+      m.mae < 2.0,
+      m.mae > 10.0,
+      (Math.abs(m.bias) < 0.3 && m.mae > 5.0),
+      m.r2 > 0.95
+    ];
+    var changed = false;
+    for (var t = 0; t < 4; t++){
+      if (done[t] && !stateGame.tasksDone[t]){
+        stateGame.tasksDone[t] = true;
+        taskRows[t].classList.add('done');
+        changed = true;
+      }
+    }
+    var count = 0;
+    for (var u = 0; u < 4; u++) if (stateGame.tasksDone[u]) count++;
+    taskCount.textContent = count;
+    hTasks.textContent = count + '/4';
+
+    if (changed){
+      hitPulse.classList.remove('fire');
+      void hitPulse.offsetWidth;
+      hitPulse.classList.add('fire');
+    }
+    if (count === 4 && !stateGame.milestoneFired){
+      stateGame.milestoneFired = true;
+      milestone.classList.add('show');
+      setTimeout(function(){ milestone.classList.remove('show'); }, 3800);
+    }
+  }
+
+  // ----- update everything -----
+  function update(){
+    var m = computeMetrics();
+
+    // header HUD
+    hMae.textContent = m.mae.toFixed(2);
+    hBias.textContent = (m.bias >= 0 ? '+' : '') + m.bias.toFixed(2);
+    hR2.textContent = m.r2.toFixed(3);
+
+    // big metric cards
+    mMaeVal.textContent = m.mae.toFixed(2);
+    mMaeSum.textContent = m.sumAbs.toFixed(2);
+    mMaeRes.textContent = m.mae.toFixed(2);
+    mBiasVal.textContent = (m.bias >= 0 ? '+' : '') + m.bias.toFixed(2);
+    mBiasSum.textContent = (m.sumDiff >= 0 ? '+' : '') + m.sumDiff.toFixed(2);
+    mBiasRes.textContent = (m.bias >= 0 ? '+' : '') + m.bias.toFixed(2);
+    mR2Val.textContent = m.r2.toFixed(3);
+    mR2Res.textContent = m.ssRes.toFixed(1);
+    mR2Tot.textContent = m.ssTot.toFixed(1);
+
+    // R² pin: clamp to [0,1] for bar position
+    var r2c = Math.max(0, Math.min(1, m.r2));
+    r2pin.style.left = (r2c * 100).toFixed(1) + '%';
+
+    // color coding
+    mMaeVal.classList.toggle('good', m.mae < 2.0);
+    mMaeVal.classList.toggle('bad', m.mae > 10.0);
+    mBiasVal.classList.toggle('good', Math.abs(m.bias) < 0.3);
+    mBiasVal.classList.toggle('bad', Math.abs(m.bias) > 5);
+    mR2Val.classList.toggle('good', m.r2 > 0.95);
+    mR2Val.classList.toggle('bad', m.r2 < 0);
+
+    hMae.classList.toggle('gold', m.mae < 2.0);
+    hBias.classList.toggle('gold', Math.abs(m.bias) < 0.3);
+    hR2.classList.toggle('gold', m.r2 > 0.95);
+
+    drawChart(m);
+    evalTasks(m);
+  }
+
+  // ----- i18n -----
+  function refreshI18N(){
+    var nodes = document.querySelectorAll('[data-i18n-cn]');
+    for (var i = 0; i < nodes.length; i++){
+      var el = nodes[i];
+      var cn = el.getAttribute('data-i18n-cn');
+      var en = el.getAttribute('data-i18n-en');
+      if (cn !== null){
+        el.innerHTML = stateGame.lang === 'cn' ? cn : en;
+      }
+    }
+    document.documentElement.lang = stateGame.lang === 'cn' ? 'zh-CN' : 'en';
+    update();
+  }
+
+  // ----- pointer handlers (drag points) -----
+  function pickPoint(px, py){
+    // find nearest point within 18px
+    var bestIdx = -1, bestD = 1e9;
+    for (var i = 0; i < N; i++){
+      var cx = xToPx(EPA[i]);
+      var cy = yToPx(stateGame.you[i]);
+      var dx = px - cx, dy = py - cy;
+      var d = Math.sqrt(dx * dx + dy * dy);
+      if (d < 18 && d < bestD){
+        bestD = d; bestIdx = i;
+      }
+    }
+    return bestIdx;
+  }
+
+  function relativePointer(evt){
+    var rect = canvas.getBoundingClientRect();
+    var clientX, clientY;
+    if (evt.touches && evt.touches.length){
+      clientX = evt.touches[0].clientX;
+      clientY = evt.touches[0].clientY;
+    } else {
+      clientX = evt.clientX;
+      clientY = evt.clientY;
+    }
+    return { x: clientX - rect.left, y: clientY - rect.top };
+  }
+
+  function onPointerDown(evt){
+    var p = relativePointer(evt);
+    var idx = pickPoint(p.x, p.y);
+    if (idx >= 0){
+      stateGame.dragIdx = idx;
+      // offset between point center and pointer
+      var cy = yToPx(stateGame.you[idx]);
+      stateGame.dragOffsetY = p.y - cy;
+      canvas.classList.add('dragging');
+      evt.preventDefault();
+      update();
+    }
+  }
+  function onPointerMove(evt){
+    if (stateGame.dragIdx < 0) return;
+    var p = relativePointer(evt);
+    var newPy = p.y - stateGame.dragOffsetY;
+    var newY = pxToY(newPy);
+    if (newY < Y_MIN) newY = Y_MIN;
+    if (newY > Y_MAX) newY = Y_MAX;
+    stateGame.you[stateGame.dragIdx] = newY;
+    evt.preventDefault();
+    update();
+  }
+  function onPointerUp(){
+    if (stateGame.dragIdx >= 0){
+      stateGame.dragIdx = -1;
+      canvas.classList.remove('dragging');
+      update();
+    }
+  }
+
+  canvas.addEventListener('mousedown', onPointerDown);
+  window.addEventListener('mousemove', onPointerMove);
+  window.addEventListener('mouseup', onPointerUp);
+  canvas.addEventListener('touchstart', onPointerDown, { passive: false });
+  window.addEventListener('touchmove', onPointerMove, { passive: false });
+  window.addEventListener('touchend', onPointerUp);
+  window.addEventListener('touchcancel', onPointerUp);
+
+  // ----- noise slider: regenerate points with given noise -----
+  noiseSlider.addEventListener('input', function(){
+    var nv = parseFloat(noiseSlider.value);
+    stateGame.noise = nv;
+    noiseV.textContent = nv.toFixed(1);
+    // deterministic-ish noise from a simple LCG seeded by Date.now
+    var seed = (Date.now() & 0xffff) ^ 0xa5a5;
+    function rand(){
+      seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+      return (seed / 0x7fffffff) * 2 - 1;   // [-1, 1]
+    }
+    for (var i = 0; i < N; i++){
+      var y = EPA[i] + rand() * nv;
+      if (y < Y_MIN) y = Y_MIN;
+      if (y > Y_MAX) y = Y_MAX;
+      stateGame.you[i] = y;
+    }
+    update();
+  });
+
+  // ----- reset / snap buttons -----
+  resetBtn.addEventListener('click', function(){
+    // randomize moderate
+    var seed = (Date.now() & 0xffff) ^ 0x33aa;
+    function rand(){
+      seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+      return (seed / 0x7fffffff) * 2 - 1;
+    }
+    for (var i = 0; i < N; i++){
+      stateGame.you[i] = EPA[i] + rand() * 5;
+      if (stateGame.you[i] < Y_MIN) stateGame.you[i] = Y_MIN;
+      if (stateGame.you[i] > Y_MAX) stateGame.you[i] = Y_MAX;
+    }
+    update();
+  });
+  copyBtn.addEventListener('click', function(){
+    for (var i = 0; i < N; i++) stateGame.you[i] = EPA[i];
+    update();
+  });
+
+  // ----- language -----
+  langBtn.addEventListener('click', function(){
+    stateGame.lang = stateGame.lang === 'cn' ? 'en' : 'cn';
+    refreshI18N();
+  });
+
+  // ----- resize -----
+  function onResize(){
+    resizeCanvas();
+    update();
+  }
+  window.addEventListener('resize', onResize);
+
+  // mascot slow rotation
+  var piMascot = document.getElementById('piMascot');
+  var rot = 0;
+  function tick(){
+    rot += 0.35;
+    if (piMascot) piMascot.setAttribute('transform', 'translate(100 36) rotate(' + rot + ')');
+    requestAnimationFrame(tick);
+  }
+  requestAnimationFrame(tick);
+
+  // ----- init -----
+  resizeCanvas();
+  // mild initial noise so first metrics are non-trivial
+  (function initialNoise(){
+    var seed = 0xdeadbeef;
+    function rand(){
+      seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+      return (seed / 0x7fffffff) * 2 - 1;
+    }
+    for (var i = 0; i < N; i++){
+      stateGame.you[i] = EPA[i] + rand() * 2;
+      if (stateGame.you[i] < Y_MIN) stateGame.you[i] = Y_MIN;
+      if (stateGame.you[i] > Y_MAX) stateGame.you[i] = Y_MAX;
+    }
+  })();
+  refreshI18N();
+  setTimeout(onResize, 50);
+  setTimeout(onResize, 250);
+})();
+</script>
+</body>
+</html>

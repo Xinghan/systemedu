@@ -1,0 +1,1297 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>M20 — EPA Barkjohn 公式校正一组真数据</title>
+<style>
+  /* ========== F2 第 1 层 — 共享深空底 (theme_style/styles.css L8-21) ========== */
+  :root{
+    --bg-0: oklch(0.14 0.035 265);
+    --bg-1: oklch(0.18 0.04 265);
+    --bg-2: oklch(0.22 0.045 265);
+    --bg-3: oklch(0.28 0.05 265);
+    --line: oklch(0.35 0.05 265 / 0.35);
+    --line-strong: oklch(0.55 0.08 265 / 0.55);
+    --fg:      oklch(0.96 0.01 265);
+    --fg-dim:  oklch(0.75 0.02 265);
+    --fg-mute: oklch(0.55 0.03 265);
+    --gold:    oklch(0.85 0.14 85);
+
+    /* ========== F2 第 2 层 — math accent (electric blue) ========== */
+    --math:     oklch(0.72 0.17 245);
+    --math-dim: oklch(0.52 0.16 245);
+
+    /* ========== F2 第 3 层 — math 5 色 palette (themes.js id:'math') ========== */
+    --AXIS:     oklch(0.72 0.17 245);   /* electric blue 主轴 / 公式高亮 / mascot 主体 */
+    --PROOF:    oklch(0.52 0.16 245);   /* 中等 blue — 推导连线 / 系数高亮 */
+    --SHADOW:   oklch(0.35 0.10 245);   /* 深 blue — 未激活 / 偏差区 */
+    --SOLUTION: oklch(0.92 0.08 240);   /* 近白 blue — 数字光晕 / 计算结果 */
+    --QED:      oklch(0.85 0.14 85);    /* 金色 — 信号 / key moment / 真实参考线 */
+
+    /* 数据层语义色: 原值 / 校正值 / 真值 */
+    --raw:     oklch(0.65 0.20 25);     /* 偏暖红 — PMS 原始读数 (有偏) */
+    --corr:    oklch(0.72 0.17 245);    /* AXIS 蓝 — 校正后 */
+    --truth:   oklch(0.85 0.14 85);     /* gold — 真实参考 */
+  }
+
+  *{box-sizing:border-box;margin:0;padding:0;}
+  html,body{height:100%;overflow:hidden;}
+  body{
+    background: var(--bg-0);
+    color: var(--fg);
+    font-family: 'Inter','Noto Sans SC',-apple-system,BlinkMacSystemFont,sans-serif;
+    display: flex;
+    height: 100vh;
+  }
+
+  /* ========== 200px 左侧 sidebar ========== */
+  .sidebar{
+    width: 200px;
+    flex-shrink: 0;
+    background: var(--bg-1);
+    border-right: 1px solid var(--line);
+    padding: 16px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .brand{
+    border-bottom: 1px solid var(--line);
+    padding-bottom: 10px;
+    margin-bottom: 4px;
+  }
+  .brand .badge{
+    display: inline-block;
+    font-family: 'JetBrains Mono',ui-monospace,monospace;
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    color: var(--math);
+    background: var(--bg-2);
+    padding: 3px 7px;
+    border: 1px solid var(--line);
+    box-shadow: 2px 2px 0 var(--bg-0);
+    margin-bottom: 6px;
+  }
+  .brand h1{
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--fg);
+    line-height: 1.3;
+  }
+  .brand .sub{
+    font-size: 10px;
+    color: var(--fg-mute);
+    margin-top: 4px;
+    font-family: 'JetBrains Mono',ui-monospace,monospace;
+    letter-spacing: 0.04em;
+  }
+
+  /* Pi mascot */
+  .mascot-box{
+    background: var(--bg-2);
+    border: 1px solid var(--line);
+    box-shadow: 3px 3px 0 var(--bg-0);
+    padding: 10px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .mascot-box .label{
+    font-family: 'JetBrains Mono',ui-monospace,monospace;
+    font-size: 9px;
+    color: var(--fg-dim);
+    letter-spacing: 0.08em;
+  }
+  .mascot-box .name{
+    font-size: 11px;
+    color: var(--fg);
+    font-weight: 600;
+    margin-top: 2px;
+  }
+
+  /* Guide 3 条 */
+  .guide{
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .guide-item{
+    font-size: 11px;
+    line-height: 1.45;
+    color: var(--fg-dim);
+    padding-left: 9px;
+    border-left: 2px solid var(--math);
+    padding-top: 2px;
+    padding-bottom: 2px;
+  }
+  .guide-item .num{
+    font-family: 'JetBrains Mono',ui-monospace,monospace;
+    color: var(--math);
+    font-weight: 700;
+    margin-right: 4px;
+  }
+
+  .sidebar .spacer{flex: 1;}
+
+  .lang-btn{
+    background: var(--bg-2);
+    border: 1px solid var(--line-strong);
+    box-shadow: 2px 2px 0 var(--bg-0);
+    color: var(--fg);
+    font-family: 'JetBrains Mono',ui-monospace,monospace;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    padding: 7px 10px;
+    cursor: pointer;
+    width: 100%;
+  }
+  .lang-btn:hover{
+    border-color: var(--math);
+    color: var(--math);
+  }
+  .lang-btn:active{
+    transform: translate(2px, 2px);
+    box-shadow: none;
+  }
+
+  /* ========== Main stage ========== */
+  .main{
+    flex: 1;
+    position: relative;
+    overflow: hidden;
+    background: var(--bg-0);
+  }
+  #stage{
+    width: 100%;
+    height: 100%;
+    display: block;
+  }
+
+  /* HUD 右上 */
+  .hud{
+    position: absolute;
+    top: 18px;
+    right: 18px;
+    background: var(--bg-2);
+    border: 1px solid var(--line);
+    box-shadow: 3px 3px 0 var(--bg-0);
+    padding: 10px 14px;
+    font-family: 'JetBrains Mono',ui-monospace,monospace;
+    min-width: 260px;
+  }
+  .hud .row{
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 14px;
+    font-size: 11px;
+    line-height: 1.6;
+  }
+  .hud .label{color: var(--fg-mute); letter-spacing: 0.06em;}
+  .hud .value{color: var(--fg); font-weight: 700;}
+  .hud .value.accent{color: var(--math);}
+  .hud .value.gold{color: var(--gold);}
+  .hud .value.raw{color: var(--raw);}
+  .hud .sep{
+    height: 1px;
+    background: var(--line);
+    margin: 6px 0;
+  }
+
+  /* Subtitle 底部 */
+  .subtitle{
+    position: absolute;
+    left: 50%;
+    bottom: 32px;
+    transform: translateX(-50%);
+    text-align: center;
+    max-width: 80%;
+    pointer-events: none;
+  }
+  .subtitle .cn{
+    font-size: 17px;
+    font-weight: 700;
+    color: var(--fg);
+    letter-spacing: 0.01em;
+  }
+  .subtitle .en{
+    font-size: 12px;
+    color: var(--fg-mute);
+    margin-top: 4px;
+    font-style: italic;
+    font-family: 'JetBrains Mono',ui-monospace,monospace;
+    letter-spacing: 0.03em;
+  }
+
+  /* Frame chip 左下 */
+  .frame-progress{
+    position: absolute;
+    left: 24px;
+    bottom: 28px;
+    display: flex;
+    gap: 6px;
+    align-items: center;
+  }
+  .chip{
+    width: 24px;
+    height: 6px;
+    background: var(--bg-2);
+    border: 1px solid var(--line);
+  }
+  .chip.active{
+    background: var(--math);
+    border-color: var(--math);
+  }
+  .chip.done{
+    background: var(--math-dim);
+    border-color: var(--math-dim);
+  }
+  .frame-progress .stepname{
+    font-family: 'JetBrains Mono',ui-monospace,monospace;
+    font-size: 10px;
+    color: var(--fg-dim);
+    margin-left: 8px;
+    letter-spacing: 0.08em;
+  }
+
+  /* QED gold flash overlay (key moment in F5) */
+  .flash{
+    position: absolute;
+    top: 44%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-family: 'JetBrains Mono',ui-monospace,monospace;
+    font-size: 26px;
+    font-weight: 800;
+    color: var(--gold);
+    letter-spacing: 0.18em;
+    opacity: 0;
+    pointer-events: none;
+    text-shadow: 0 0 24px var(--gold);
+    text-align: center;
+    transition: opacity 0.3s;
+  }
+  .flash.on{ opacity: 1; }
+  .flash .small{
+    display: block;
+    text-align: center;
+    font-size: 11px;
+    color: var(--fg-dim);
+    letter-spacing: 0.08em;
+    margin-top: 8px;
+    text-shadow: none;
+    font-weight: 400;
+  }
+</style>
+</head>
+<body>
+  <aside class="sidebar">
+    <div class="brand">
+      <span class="badge" id="badgeMod">MOD-M20 / MATH</span>
+      <h1 id="brandH1">Barkjohn 公式校正</h1>
+      <div class="sub" id="brandSub">raw -&gt; corrected</div>
+    </div>
+
+    <div class="mascot-box">
+      <svg width="42" height="42" viewBox="0 0 60 60" aria-hidden="true">
+        <!-- Pi mascot: 旋转的正四面体, 翻面亮公式 (themes.js math) -->
+        <polygon points="30,12 14,46 46,46" fill="var(--SHADOW)" opacity="0.55"/>
+        <polygon points="30,12 18,42 42,42" fill="none" stroke="var(--AXIS)" stroke-width="1.6" stroke-linejoin="round"/>
+        <polygon points="30,18 22,40 38,40" fill="var(--PROOF)" opacity="0.45"/>
+        <circle cx="30" cy="12" r="1.8" fill="var(--SOLUTION)"/>
+        <circle cx="18" cy="42" r="1.8" fill="var(--SOLUTION)"/>
+        <circle cx="42" cy="42" r="1.8" fill="var(--SOLUTION)"/>
+        <text x="30" y="34" fill="var(--QED)" font-family="'JetBrains Mono',monospace" font-size="7" text-anchor="middle" font-weight="700">y=ax+b</text>
+      </svg>
+      <div>
+        <div class="label">MASCOT</div>
+        <div class="name" id="mascotName">Pi · 派</div>
+      </div>
+    </div>
+
+    <div class="guide">
+      <div class="guide-item" id="g1"><span class="num">01</span><span class="gtxt">PMS 读数偏高 — 跟参考差 22 ug/m3</span></div>
+      <div class="guide-item" id="g2"><span class="num">02</span><span class="gtxt">EPA Barkjohn 公式: 系数已替你拟好</span></div>
+      <div class="guide-item" id="g3"><span class="num">03</span><span class="gtxt">代入 PMS + 湿度, 整组数据贴回真值</span></div>
+    </div>
+
+    <div class="spacer"></div>
+    <button id="langBtn" class="lang-btn" type="button">CN / EN</button>
+  </aside>
+
+  <main class="main">
+    <svg id="stage" viewBox="0 0 1080 720" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg"></svg>
+
+    <div class="hud">
+      <div class="row"><span class="label" id="hudL1">FRAME</span><span class="value accent" id="hudV1">1 / 5</span></div>
+      <div class="row"><span class="label" id="hudL2">STAGE</span><span class="value" id="hudV2">Raw vs Truth</span></div>
+      <div class="sep"></div>
+      <div class="row"><span class="label" id="hudL3">PMS RAW</span><span class="value raw" id="hudV3">60 ug/m3</span></div>
+      <div class="row"><span class="label" id="hudL4">TRUTH</span><span class="value gold" id="hudV4">38 ug/m3</span></div>
+      <div class="row"><span class="label" id="hudL5">CORR</span><span class="value accent" id="hudV5">— ug/m3</span></div>
+    </div>
+
+    <div class="subtitle">
+      <div class="cn" id="subCn">PMS 写着 60, 参考真值 38 — 偏高了 22 ug/m3, 大约 +58%</div>
+      <div class="en" id="subEn">PMS reads 60, the truth is 38 — overshoot by 22 ug/m3, about +58%</div>
+    </div>
+
+    <div class="frame-progress">
+      <div class="chip" id="chip0"></div>
+      <div class="chip" id="chip1"></div>
+      <div class="chip" id="chip2"></div>
+      <div class="chip" id="chip3"></div>
+      <div class="chip" id="chip4"></div>
+      <span class="stepname" id="stepName">01 · GAP</span>
+    </div>
+
+    <div class="flash" id="flash">
+      QED
+      <span class="small" id="flashSub">现在我能信我的节点了</span>
+    </div>
+  </main>
+
+<script>
+(function(){
+  "use strict";
+
+  // ====== i18n ======
+  var LANG = 'cn';
+  var I18N = {
+    badgeMod:   { cn: 'MOD-M20 / MATH', en: 'MOD-M20 / MATH' },
+    brandH1:    { cn: 'Barkjohn 公式校正', en: 'Barkjohn Correction' },
+    brandSub:   { cn: 'raw -> corrected', en: 'raw -> corrected' },
+    mascotName: { cn: 'Pi · 派',          en: 'Pi · the tetrahedron' },
+    g1: { cn: 'PMS 读数偏高 — 跟参考差 22 ug/m3',
+          en: 'PMS overshoots — 22 ug/m3 above truth' },
+    g2: { cn: 'EPA Barkjohn 公式: 系数已替你拟好',
+          en: 'EPA Barkjohn: coefficients already fitted' },
+    g3: { cn: '代入 PMS + 湿度, 整组数据贴回真值',
+          en: 'Plug in PMS + RH, the whole set hugs truth' },
+    hudL1: { cn: '帧',      en: 'FRAME' },
+    hudL2: { cn: '阶段',    en: 'STAGE' },
+    hudL3: { cn: 'PMS 原值',en: 'PMS RAW' },
+    hudL4: { cn: '真值',    en: 'TRUTH' },
+    hudL5: { cn: '校正值',  en: 'CORR' },
+    btnLang: { cn: 'CN / EN', en: 'CN / EN' }
+  };
+
+  // ====== 一组真数据 (20 点, 用于 F5 散点) ======
+  // 每点: pms (PMS 原始 cf1), rh (相对湿度 %), truth (参考监测站真值)
+  // 数据近似 Barkjohn 2021 用的 AirNow vs PA 公开点云风格 (示意)
+  var DATASET = [
+    { pms:  8, rh: 45, truth:  4 },
+    { pms: 15, rh: 50, truth:  9 },
+    { pms: 22, rh: 55, truth: 13 },
+    { pms: 30, rh: 60, truth: 17 },
+    { pms: 38, rh: 65, truth: 22 },
+    { pms: 45, rh: 70, truth: 26 },
+    { pms: 52, rh: 75, truth: 31 },
+    { pms: 60, rh: 80, truth: 38 },   // <- 主示例点
+    { pms: 68, rh: 78, truth: 41 },
+    { pms: 75, rh: 72, truth: 47 },
+    { pms: 84, rh: 68, truth: 54 },
+    { pms: 92, rh: 60, truth: 62 },
+    { pms:100, rh: 55, truth: 70 },
+    { pms:110, rh: 50, truth: 78 },
+    { pms:120, rh: 45, truth: 86 },
+    { pms:130, rh: 50, truth: 92 },
+    { pms:140, rh: 55, truth: 98 },
+    { pms:150, rh: 60, truth:104 },
+    { pms:160, rh: 65, truth:108 },
+    { pms:170, rh: 70, truth:114 }
+  ];
+
+  // ====== Barkjohn 2021 公式 (US 公开版) ======
+  // PM2.5_corr = 0.524 * PMS_cf1 - 0.0862 * RH + 5.75
+  function barkjohn(pms, rh){
+    return 0.524 * pms - 0.0862 * rh + 5.75;
+  }
+
+  // ====== 5 帧 ======
+  var FRAME_MS = 6000;
+  var FRAMES = [
+    {
+      id: 'gap',
+      stepName: '01 · GAP',
+      hudStage: { cn: '原值 vs 真值', en: 'Raw vs Truth' },
+      hudCorr:  '— ug/m3',
+      subCn: 'PMS 写着 60, 参考真值 38 — 偏高了 22 ug/m3, 大约 +58%',
+      subEn: 'PMS reads 60, truth is 38 — over by 22 ug/m3, about +58%'
+    },
+    {
+      id: 'formula',
+      stepName: '02 · FORMULA',
+      hudStage: { cn: 'EPA 公式', en: 'EPA formula' },
+      hudCorr:  'PM = a*x + b*RH + c',
+      subCn: 'EPA Barkjohn (2021): PM2.5_corr = 0.524 x PMS_cf1 - 0.0862 x RH + 5.75',
+      subEn: 'EPA Barkjohn (2021): PM2.5_corr = 0.524 x PMS_cf1 - 0.0862 x RH + 5.75'
+    },
+    {
+      id: 'plugin',
+      stepName: '03 · PLUG-IN',
+      hudStage: { cn: '代入数值', en: 'Plug in values' },
+      hudCorr:  '0.524 x 60 - 0.0862 x 80 + 5.75',
+      subCn: '把这一刻的 PMS=60 和 湿度 RH=80 一一代入公式三项',
+      subEn: 'Plug PMS=60 and RH=80 into the three terms one by one'
+    },
+    {
+      id: 'evaluate',
+      stepName: '04 · EVALUATE',
+      hudStage: { cn: '逐项相加', en: 'Add term by term' },
+      hudCorr:  '30.29 ug/m3',
+      subCn: '31.44 - 6.90 + 5.75 = 30.29 ug/m3 — 跟真值 38 只差 ~8, 比原 +22 准多了',
+      subEn: '31.44 - 6.90 + 5.75 = 30.29 ug/m3 — only ~8 off truth, far closer than +22'
+    },
+    {
+      id: 'batch',
+      stepName: '05 · BATCH',
+      hudStage: { cn: '整组校正', en: 'Whole set' },
+      hudCorr:  '20 / 20 done',
+      subCn: '整组 20 个点都套同一公式 — 校正后曲线贴上真值参考线, 现在我能信我的节点了',
+      subEn: 'All 20 points use the same formula — corrected curve hugs the truth line; I can trust my node now'
+    }
+  ];
+
+  // ====== State ======
+  var currentFrame = 0;
+  var frameStartTs = 0;
+  var rafId = null;
+  var stage = document.getElementById('stage');
+  var SVGNS = 'http://www.w3.org/2000/svg';
+
+  // ====== Utility ======
+  function el(name, attrs, parent){
+    var n = document.createElementNS(SVGNS, name);
+    if (attrs){
+      for (var k in attrs){
+        if (Object.prototype.hasOwnProperty.call(attrs, k)){
+          n.setAttribute(k, attrs[k]);
+        }
+      }
+    }
+    if (parent) parent.appendChild(n);
+    return n;
+  }
+  function clearStage(){ while(stage.firstChild) stage.removeChild(stage.firstChild); }
+  function tr(key){
+    if (!I18N[key]) return key;
+    return I18N[key][LANG] || I18N[key].en || key;
+  }
+  function lerp(a, b, p){ return a + (b - a) * p; }
+  function easeInOut(x){ return x < 0.5 ? 2*x*x : 1 - Math.pow(-2*x + 2, 2)/2; }
+  function easeOut(x){ return 1 - Math.pow(1 - x, 3); }
+  function clamp(x, lo, hi){ return x < lo ? lo : (x > hi ? hi : x); }
+
+  // ====== 通用背景 grid + glow ======
+  function drawBgGrid(){
+    var g = el('g', { opacity: '0.18' }, stage);
+    for (var x = 0; x <= 1080; x += 60){
+      el('line', { x1: x, y1: 0, x2: x, y2: 720, stroke: 'var(--line)', 'stroke-width': '0.5' }, g);
+    }
+    for (var y = 0; y <= 720; y += 60){
+      el('line', { x1: 0, y1: y, x2: 1080, y2: y, stroke: 'var(--line)', 'stroke-width': '0.5' }, g);
+    }
+    var defs = el('defs', null, stage);
+    var rg = el('radialGradient', { id: 'centerGlow', cx: '50%', cy: '45%', r: '60%' }, defs);
+    el('stop', { offset: '0%', 'stop-color': 'var(--math)', 'stop-opacity': '0.06' }, rg);
+    el('stop', { offset: '100%', 'stop-color': 'var(--bg-0)', 'stop-opacity': '0' }, rg);
+    el('rect', { x: 0, y: 0, width: 1080, height: 720, fill: 'url(#centerGlow)' }, stage);
+  }
+
+  // ====== 5 帧 step chain ======
+  function drawStepChain(activeIdx){
+    var labels = [
+      { cn: '差距',     en: 'Gap' },
+      { cn: '公式',     en: 'Formula' },
+      { cn: '代入',     en: 'Plug-in' },
+      { cn: '相加',     en: 'Add' },
+      { cn: '整组',     en: 'Batch' }
+    ];
+    var y = 660;
+    var startX = 110;
+    var gap = (1080 - 220) / 4;
+    var g = el('g', null, stage);
+    for (var i = 0; i < 5; i++){
+      var cx = startX + gap * i;
+      var on = i <= activeIdx;
+      var ringColor = on ? 'var(--math)' : 'var(--line)';
+      var fillColor = on ? 'var(--bg-2)' : 'var(--bg-1)';
+      var textColor = on ? 'var(--fg)' : 'var(--fg-mute)';
+      el('rect', {
+        x: cx - 44, y: y - 16, width: 88, height: 32,
+        fill: fillColor, stroke: ringColor, 'stroke-width': on ? '1.6' : '1', rx: '2'
+      }, g);
+      var tx = el('text', {
+        x: cx, y: y + 4, fill: textColor,
+        'font-family': "'Inter','Noto Sans SC',sans-serif",
+        'font-size': '12', 'font-weight': on ? '700' : '500',
+        'text-anchor': 'middle'
+      }, g);
+      tx.textContent = labels[i][LANG] || labels[i].en;
+      var ix = el('text', {
+        x: cx, y: y - 22, fill: on ? 'var(--math)' : 'var(--fg-mute)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '9', 'text-anchor': 'middle', 'letter-spacing': '0.1em'
+      }, g);
+      ix.textContent = '0' + (i+1);
+      if (i < 4){
+        var x1 = cx + 44;
+        var x2 = cx + gap - 44;
+        var connColor = (on && (i+1) <= activeIdx) ? 'var(--math)' : 'var(--line)';
+        el('line', {
+          x1: x1, y1: y, x2: x2 - 6, y2: y,
+          stroke: connColor, 'stroke-width': '1.2'
+        }, g);
+        el('polygon', {
+          points: (x2-6)+','+(y-4)+' '+(x2)+','+y+' '+(x2-6)+','+(y+4),
+          fill: connColor
+        }, g);
+      }
+    }
+  }
+
+  // ====== Pi mascot (主舞台上的独立大版本) ======
+  function drawPiMascot(g, rot, glow){
+    el('circle', { cx: 0, cy: 0, r: 36, fill: 'none', stroke: 'var(--AXIS)', 'stroke-width': '0.8',
+                   'stroke-dasharray': '3 5', opacity: '0.5',
+                   transform: 'rotate(' + (rot * 30 % 360) + ')' }, g);
+    el('polygon', { points: '0,-22 -20,16 20,16', fill: 'var(--SHADOW)', opacity: '0.55' }, g);
+    el('polygon', { points: '0,-22 -16,14 16,14', fill: 'none', stroke: 'var(--AXIS)',
+                    'stroke-width': '1.6', 'stroke-linejoin': 'round' }, g);
+    el('polygon', { points: '0,-14 -10,10 10,10', fill: 'var(--PROOF)', opacity: '0.5' }, g);
+    el('circle', { cx: 0, cy: -22, r: 2, fill: 'var(--SOLUTION)' }, g);
+    el('circle', { cx: -16, cy: 14, r: 2, fill: 'var(--SOLUTION)' }, g);
+    el('circle', { cx: 16, cy: 14, r: 2, fill: 'var(--SOLUTION)' }, g);
+    var eqTx = el('text', {
+      x: 0, y: 4, fill: 'var(--QED)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': glow ? '11' : '8', 'text-anchor': 'middle', 'font-weight': '700'
+    }, g);
+    eqTx.textContent = glow ? 'QED' : '0.524x';
+    var lab = el('text', {
+      x: 0, y: 50, fill: 'var(--fg-dim)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '10', 'text-anchor': 'middle', 'letter-spacing': '0.1em'
+    }, g);
+    lab.textContent = glow
+      ? (LANG === 'cn' ? 'Pi · 信得过' : 'Pi · trusted')
+      : (LANG === 'cn' ? 'Pi · 验算中' : 'Pi · checking');
+  }
+
+  // ===================================================================
+  // Frame 1 — GAP: 一组真数据 — PMS=60, 真值=38, 偏 +22
+  // 左侧 PMS 显示牌 (raw 红橙) vs 右侧参考站 (truth 金) — 中间金色差距条
+  // ===================================================================
+  function drawFrame1(p){
+    drawBgGrid();
+    drawStepChain(0);
+
+    var ttl = el('text', { x: 540, y: 80, fill: 'var(--math)',
+                  'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                  'font-size': '13', 'text-anchor': 'middle', 'letter-spacing': '0.14em', 'font-weight': '700' }, stage);
+    ttl.textContent = LANG === 'cn' ? '同一时刻, 两台仪器读出两个数' : 'Same moment, two devices, two readings';
+
+    // 左卡片 — PMS 节点 (raw 红橙) — PMS 读数 0 -> 60
+    var leftA = clamp(p / 0.3, 0, 1);
+    var lg = el('g', { transform: 'translate(280, 290)', opacity: leftA }, stage);
+    el('rect', { x: -150, y: -110, width: 300, height: 220, rx: '4',
+                 fill: 'var(--bg-2)', stroke: 'var(--raw)', 'stroke-width': '1.6' }, lg);
+    el('text', { x: 0, y: -88, fill: 'var(--raw)',
+                'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                'font-size': '11', 'text-anchor': 'middle', 'letter-spacing': '0.14em', 'font-weight': '700' }, lg)
+      .textContent = LANG === 'cn' ? '我的 PurpleAir (PMS 原始)' : 'My PurpleAir (PMS raw)';
+    // device 小图标
+    el('rect', { x: -56, y: -68, width: 112, height: 28, rx: '2',
+                 fill: 'var(--bg-1)', stroke: 'var(--raw)', 'stroke-width': '0.8' }, lg);
+    el('circle', { cx: -30, cy: -54, r: 3, fill: 'var(--raw)' }, lg);
+    el('circle', { cx: 0, cy: -54, r: 3, fill: 'var(--raw)' }, lg);
+    el('circle', { cx: 30, cy: -54, r: 3, fill: 'var(--raw)' }, lg);
+    // 大数字 (count up to 60)
+    var pmsVal = Math.floor(easeOut(clamp((p - 0.05) / 0.4, 0, 1)) * 60);
+    el('text', { x: 0, y: 22, fill: 'var(--raw)',
+                'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                'font-size': '64', 'text-anchor': 'middle', 'font-weight': '700' }, lg)
+      .textContent = pmsVal;
+    el('text', { x: 0, y: 52, fill: 'var(--fg-dim)',
+                'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                'font-size': '13', 'text-anchor': 'middle' }, lg).textContent = 'ug / m3 (PM2.5, raw)';
+    el('text', { x: 0, y: 86, fill: 'var(--fg-mute)',
+                'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                'font-size': '9', 'text-anchor': 'middle', 'letter-spacing': '0.14em' }, lg)
+      .textContent = LANG === 'cn' ? 'RH = 80%, T = 22 C' : 'RH = 80%, T = 22 C';
+
+    // 右卡片 — 参考监测站 (truth gold)
+    var rightA = clamp((p - 0.15) / 0.3, 0, 1);
+    var rg = el('g', { transform: 'translate(800, 290)', opacity: rightA }, stage);
+    el('rect', { x: -150, y: -110, width: 300, height: 220, rx: '4',
+                 fill: 'var(--bg-2)', stroke: 'var(--truth)', 'stroke-width': '1.6' }, rg);
+    el('text', { x: 0, y: -88, fill: 'var(--truth)',
+                'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                'font-size': '11', 'text-anchor': 'middle', 'letter-spacing': '0.14em', 'font-weight': '700' }, rg)
+      .textContent = LANG === 'cn' ? '参考监测站 (FRM/FEM)' : 'Reference monitor (FRM/FEM)';
+    // 监测站小图标 (天线 + 三角)
+    el('polygon', { points: '-30,-40 0,-72 30,-40', fill: 'none',
+                    stroke: 'var(--truth)', 'stroke-width': '1.4' }, rg);
+    el('line', { x1: 0, y1: -72, x2: 0, y2: -82, stroke: 'var(--truth)', 'stroke-width': '1.2' }, rg);
+    el('circle', { cx: 0, cy: -82, r: 2.5, fill: 'var(--truth)' }, rg);
+    // 大数字 truth = 38
+    var truthVal = Math.floor(easeOut(clamp((p - 0.18) / 0.4, 0, 1)) * 38);
+    el('text', { x: 0, y: 22, fill: 'var(--truth)',
+                'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                'font-size': '64', 'text-anchor': 'middle', 'font-weight': '700' }, rg)
+      .textContent = truthVal;
+    el('text', { x: 0, y: 52, fill: 'var(--fg-dim)',
+                'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                'font-size': '13', 'text-anchor': 'middle' }, rg).textContent = 'ug / m3 (PM2.5, truth)';
+    el('text', { x: 0, y: 86, fill: 'var(--fg-mute)',
+                'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                'font-size': '9', 'text-anchor': 'middle', 'letter-spacing': '0.14em' }, rg)
+      .textContent = LANG === 'cn' ? 'AirNow / EPA' : 'AirNow / EPA';
+
+    // 中央 GAP 条 (双箭头 + +22 ug/m3, +58%)
+    var gapA = clamp((p - 0.45) / 0.25, 0, 1);
+    var gp = el('g', { transform: 'translate(540, 290)', opacity: gapA }, stage);
+    el('line', { x1: -100, y1: -40, x2: 100, y2: -40,
+                 stroke: 'var(--SHADOW)', 'stroke-width': '2' }, gp);
+    el('polygon', { points: '-100,-46 -110,-40 -100,-34', fill: 'var(--SHADOW)' }, gp);
+    el('polygon', { points: '100,-46 110,-40 100,-34', fill: 'var(--SHADOW)' }, gp);
+    el('rect', { x: -68, y: -16, width: 136, height: 80, rx: '3',
+                 fill: 'var(--bg-3)', stroke: 'var(--gold)', 'stroke-width': '1.5' }, gp);
+    el('text', { x: 0, y: 4, fill: 'var(--fg-mute)',
+                'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                'font-size': '10', 'text-anchor': 'middle', 'letter-spacing': '0.16em' }, gp)
+      .textContent = 'GAP';
+    el('text', { x: 0, y: 28, fill: 'var(--gold)',
+                'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                'font-size': '20', 'text-anchor': 'middle', 'font-weight': '700' }, gp)
+      .textContent = '+22 ug/m3';
+    el('text', { x: 0, y: 50, fill: 'var(--gold)',
+                'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                'font-size': '13', 'text-anchor': 'middle' }, gp)
+      .textContent = '+58%';
+
+    // 底部问题
+    var qA = clamp((p - 0.65) / 0.25, 0, 1);
+    var qg = el('g', { transform: 'translate(540, 480)', opacity: qA }, stage);
+    el('rect', { x: -300, y: -22, width: 600, height: 44, rx: '3',
+                 fill: 'var(--bg-1)', stroke: 'var(--math)', 'stroke-width': '1.2' }, qg);
+    el('text', { x: 0, y: 6, fill: 'var(--SOLUTION)',
+                'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                'font-size': '13', 'text-anchor': 'middle', 'font-weight': '700' }, qg)
+      .textContent = LANG === 'cn'
+        ? '?  EPA 用什么公式校正 PurpleAir? 我能自己套吗  ?'
+        : '?  What formula does EPA use? Can I apply it myself  ?';
+
+    // Pi mascot
+    var mg = el('g', { transform: 'translate(110, 580)' }, stage);
+    drawPiMascot(mg, p * 4, false);
+  }
+
+  // ===================================================================
+  // Frame 2 — FORMULA: Barkjohn 公式登场
+  // 主公式横条 + 三项分色拆解 (slope x PMS / RH 修正 / intercept) + Barkjohn 2021 出处
+  // ===================================================================
+  function drawFrame2(p){
+    drawBgGrid();
+    drawStepChain(1);
+
+    var ttl = el('text', { x: 540, y: 80, fill: 'var(--math)',
+                  'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                  'font-size': '13', 'text-anchor': 'middle', 'letter-spacing': '0.14em', 'font-weight': '700' }, stage);
+    ttl.textContent = LANG === 'cn'
+      ? 'EPA Barkjohn (2021) — 一行线性公式, 系数已替你拟好'
+      : 'EPA Barkjohn (2021) — one linear formula, coefficients pre-fitted';
+
+    // 主公式 (居中, 高对比金边)
+    var fA = clamp(p / 0.25, 0, 1);
+    var fg = el('g', { transform: 'translate(540, 180)', opacity: fA }, stage);
+    el('rect', { x: -440, y: -42, width: 880, height: 90, rx: '4',
+                 fill: 'var(--bg-2)', stroke: 'var(--AXIS)', 'stroke-width': '1.8' }, fg);
+    // 分段着色: 左 = corrected, 中 = pms 项, 中 = rh 项, 右 = intercept
+    // 文字: "PM2.5_corr  =  0.524 x PMS_cf1  -  0.0862 x RH  +  5.75"
+    // 用三个 tspan 拆色, 但 SVG text 直接放整体也行 - 我们用多个 text 拼接精确控制宽度
+    // 整行用 4 个分段, 中心对齐, 等宽字体, 视觉清晰
+    var segs = [
+      { txt: 'PM2.5_corr', col: 'var(--QED)' },
+      { txt: ' = ', col: 'var(--fg-mute)' },
+      { txt: '0.524 x PMS_cf1', col: 'var(--AXIS)' },
+      { txt: ' - ', col: 'var(--fg-mute)' },
+      { txt: '0.0862 x RH', col: 'var(--PROOF)' },
+      { txt: ' + ', col: 'var(--fg-mute)' },
+      { txt: '5.75', col: 'var(--SOLUTION)' }
+    ];
+    // 用一个 group 居中, 串联多个 text
+    var fxRow = el('text', { x: 0, y: 6, 'text-anchor': 'middle',
+                  'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                  'font-size': '22', 'font-weight': '700', 'letter-spacing': '0.02em' }, fg);
+    segs.forEach(function(s){
+      var ts = el('tspan', { fill: s.col }, fxRow);
+      ts.textContent = s.txt;
+    });
+    el('text', { x: 0, y: 32, fill: 'var(--fg-dim)',
+                'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                'font-size': '10', 'text-anchor': 'middle', 'letter-spacing': '0.06em' }, fg)
+      .textContent = LANG === 'cn'
+        ? '校正质量浓度 = 0.524 x PMS原值 - 0.0862 x 相对湿度 + 5.75'
+        : 'corrected mass = 0.524 x PMS raw - 0.0862 x RH + 5.75';
+
+    // 三项拆解卡片 (依次出现)
+    var cardData = [
+      {
+        title: { cn: 'PMS 项 (主)',  en: 'PMS term (main)' },
+        eq:    '0.524 x PMS_cf1',
+        sub:   { cn: '把原值缩到约一半, 因为 PMS 系统性偏高',
+                 en: 'shrinks raw by ~half — PMS reads systematically high' },
+        col: 'var(--AXIS)'
+      },
+      {
+        title: { cn: '湿度项 (减)', en: 'RH term (subtract)' },
+        eq:    '- 0.0862 x RH',
+        sub:   { cn: '湿度越高, 颗粒吸水变大 — 要扣掉',
+                 en: 'higher RH = particles swell with water — subtract' },
+        col: 'var(--PROOF)'
+      },
+      {
+        title: { cn: '常数项 (加)',  en: 'Intercept (add)' },
+        eq:    '+ 5.75',
+        sub:   { cn: '回归拟合留下的截距, 直接加',
+                 en: 'regression intercept — just add' },
+        col: 'var(--SOLUTION)'
+      }
+    ];
+    cardData.forEach(function(c, i){
+      var cA = clamp((p - 0.3 - i*0.12) / 0.25, 0, 1);
+      var cx = 200 + i * 280;
+      var cg = el('g', { transform: 'translate('+cx+', 380)', opacity: cA }, stage);
+      el('rect', { x: -120, y: -60, width: 240, height: 150, rx: '4',
+                   fill: 'var(--bg-1)', stroke: c.col, 'stroke-width': '1.4' }, cg);
+      el('text', { x: 0, y: -34, fill: c.col,
+                  'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                  'font-size': '11', 'text-anchor': 'middle', 'letter-spacing': '0.14em', 'font-weight': '700' }, cg)
+        .textContent = c.title[LANG] || c.title.en;
+      el('text', { x: 0, y: 6, fill: c.col,
+                  'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                  'font-size': '20', 'text-anchor': 'middle', 'font-weight': '700' }, cg)
+        .textContent = c.eq;
+      // 多行注释 (分两行)
+      var subTxt = c.sub[LANG] || c.sub.en;
+      el('text', { x: 0, y: 48, fill: 'var(--fg-dim)',
+                  'font-family': "'Inter','Noto Sans SC',sans-serif",
+                  'font-size': '11', 'text-anchor': 'middle' }, cg)
+        .textContent = subTxt.length > 22 ? subTxt.slice(0, 22) : subTxt;
+      if (subTxt.length > 22){
+        el('text', { x: 0, y: 66, fill: 'var(--fg-dim)',
+                    'font-family': "'Inter','Noto Sans SC',sans-serif",
+                    'font-size': '11', 'text-anchor': 'middle' }, cg)
+          .textContent = subTxt.slice(22);
+      }
+    });
+
+    // Barkjohn 出处
+    var citA = clamp((p - 0.75) / 0.2, 0, 1);
+    var cit = el('g', { transform: 'translate(540, 540)', opacity: citA }, stage);
+    el('rect', { x: -240, y: -18, width: 480, height: 36, rx: '3',
+                 fill: 'var(--bg-2)', stroke: 'var(--gold)', 'stroke-width': '1.2' }, cit);
+    el('text', { x: 0, y: 6, fill: 'var(--gold)',
+                'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                'font-size': '11', 'text-anchor': 'middle', 'letter-spacing': '0.08em' }, cit)
+      .textContent = LANG === 'cn'
+        ? 'Barkjohn et al. 2021 · US-wide PurpleAir correction (AMT 14:4617)'
+        : 'Barkjohn et al. 2021 · US-wide PurpleAir correction (AMT 14:4617)';
+
+    // Pi mascot
+    var mg = el('g', { transform: 'translate(110, 580)' }, stage);
+    drawPiMascot(mg, p * 4, false);
+  }
+
+  // ===================================================================
+  // Frame 3 — PLUG-IN: 把这一刻的 PMS=60 / RH=80 代入三项 (高亮值替换变量)
+  // ===================================================================
+  function drawFrame3(p){
+    drawBgGrid();
+    drawStepChain(2);
+
+    var ttl = el('text', { x: 540, y: 80, fill: 'var(--math)',
+                  'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                  'font-size': '13', 'text-anchor': 'middle', 'letter-spacing': '0.14em', 'font-weight': '700' }, stage);
+    ttl.textContent = LANG === 'cn'
+      ? '把这一刻的 PMS = 60, RH = 80 代入'
+      : 'Plug in this moment: PMS = 60, RH = 80';
+
+    // 公式行 1: 变量形式
+    var f1A = clamp(p / 0.18, 0, 1);
+    var f1 = el('g', { transform: 'translate(540, 180)', opacity: f1A }, stage);
+    el('rect', { x: -440, y: -32, width: 880, height: 64, rx: '4',
+                 fill: 'var(--bg-1)', stroke: 'var(--line-strong)', 'stroke-width': '1' }, f1);
+    var row1 = el('text', { x: 0, y: 12, 'text-anchor': 'middle',
+                  'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                  'font-size': '20', 'font-weight': '600', 'letter-spacing': '0.03em' }, f1);
+    var row1Segs = [
+      { txt: 'PM2.5_corr = ', col: 'var(--fg-dim)' },
+      { txt: '0.524 x ', col: 'var(--AXIS)' },
+      { txt: 'PMS_cf1', col: 'var(--SOLUTION)' },
+      { txt: '  -  ', col: 'var(--fg-dim)' },
+      { txt: '0.0862 x ', col: 'var(--PROOF)' },
+      { txt: 'RH', col: 'var(--SOLUTION)' },
+      { txt: '  +  5.75', col: 'var(--AXIS)' }
+    ];
+    row1Segs.forEach(function(s){
+      var ts = el('tspan', { fill: s.col }, row1);
+      ts.textContent = s.txt;
+    });
+
+    // 中间 down arrow
+    var arA = clamp((p - 0.2) / 0.15, 0, 1);
+    var ar = el('g', { transform: 'translate(540, 240)', opacity: arA }, stage);
+    el('line', { x1: 0, y1: 0, x2: 0, y2: 30, stroke: 'var(--math)', 'stroke-width': '2' }, ar);
+    el('polygon', { points: '-6,24 0,38 6,24', fill: 'var(--math)' }, ar);
+    el('text', { x: 18, y: 26, fill: 'var(--math)',
+                'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                'font-size': '11', 'letter-spacing': '0.14em', 'font-weight': '700' }, ar)
+      .textContent = LANG === 'cn' ? '代入数值' : 'substitute';
+
+    // 公式行 2: 数值代入 — PMS_cf1 -> 60, RH -> 80
+    var f2A = clamp((p - 0.3) / 0.2, 0, 1);
+    var f2 = el('g', { transform: 'translate(540, 320)', opacity: f2A }, stage);
+    el('rect', { x: -440, y: -32, width: 880, height: 64, rx: '4',
+                 fill: 'var(--bg-2)', stroke: 'var(--math)', 'stroke-width': '1.6' }, f2);
+    var row2 = el('text', { x: 0, y: 12, 'text-anchor': 'middle',
+                  'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                  'font-size': '22', 'font-weight': '700', 'letter-spacing': '0.04em' }, f2);
+    var row2Segs = [
+      { txt: 'PM2.5_corr = ', col: 'var(--QED)' },
+      { txt: '0.524 x ', col: 'var(--AXIS)' },
+      { txt: '60', col: 'var(--gold)' },
+      { txt: '  -  ', col: 'var(--fg-dim)' },
+      { txt: '0.0862 x ', col: 'var(--PROOF)' },
+      { txt: '80', col: 'var(--gold)' },
+      { txt: '  +  5.75', col: 'var(--AXIS)' }
+    ];
+    row2Segs.forEach(function(s){
+      var ts = el('tspan', { fill: s.col }, row2);
+      ts.textContent = s.txt;
+    });
+
+    // 下方两个数值卡 (PMS 和 RH 来源)
+    // PMS 来源
+    var pA = clamp((p - 0.5) / 0.25, 0, 1);
+    var ps = el('g', { transform: 'translate(280, 460)', opacity: pA }, stage);
+    el('rect', { x: -130, y: -40, width: 260, height: 96, rx: '4',
+                 fill: 'var(--bg-1)', stroke: 'var(--raw)', 'stroke-width': '1.2' }, ps);
+    el('text', { x: 0, y: -18, fill: 'var(--raw)',
+                'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                'font-size': '10', 'text-anchor': 'middle', 'letter-spacing': '0.12em', 'font-weight': '700' }, ps)
+      .textContent = LANG === 'cn' ? 'PMS_cf1 来自我的节点' : 'PMS_cf1 from my node';
+    el('text', { x: 0, y: 22, fill: 'var(--raw)',
+                'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                'font-size': '32', 'text-anchor': 'middle', 'font-weight': '700' }, ps)
+      .textContent = '60';
+    el('text', { x: 0, y: 42, fill: 'var(--fg-dim)',
+                'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                'font-size': '10', 'text-anchor': 'middle' }, ps)
+      .textContent = 'ug/m3 (raw)';
+
+    // RH 来源
+    var rA = clamp((p - 0.6) / 0.25, 0, 1);
+    var rs = el('g', { transform: 'translate(800, 460)', opacity: rA }, stage);
+    el('rect', { x: -130, y: -40, width: 260, height: 96, rx: '4',
+                 fill: 'var(--bg-1)', stroke: 'var(--PROOF)', 'stroke-width': '1.2' }, rs);
+    el('text', { x: 0, y: -18, fill: 'var(--PROOF)',
+                'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                'font-size': '10', 'text-anchor': 'middle', 'letter-spacing': '0.12em', 'font-weight': '700' }, rs)
+      .textContent = LANG === 'cn' ? 'RH 来自 BME280 湿度' : 'RH from BME280 humidity';
+    el('text', { x: 0, y: 22, fill: 'var(--PROOF)',
+                'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                'font-size': '32', 'text-anchor': 'middle', 'font-weight': '700' }, rs)
+      .textContent = '80';
+    el('text', { x: 0, y: 42, fill: 'var(--fg-dim)',
+                'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                'font-size': '10', 'text-anchor': 'middle' }, rs)
+      .textContent = '% (RH)';
+
+    // 来源箭头: 卡片 -> row2 黄色数字
+    if (pA > 0.5){
+      el('line', { x1: 280, y1: 420, x2: 460, y2: 340,
+                   stroke: 'var(--raw)', 'stroke-width': '1', 'stroke-dasharray': '4 4',
+                   opacity: pA * 0.6 }, stage);
+    }
+    if (rA > 0.5){
+      el('line', { x1: 800, y1: 420, x2: 610, y2: 340,
+                   stroke: 'var(--PROOF)', 'stroke-width': '1', 'stroke-dasharray': '4 4',
+                   opacity: rA * 0.6 }, stage);
+    }
+
+    // Pi mascot
+    var mg = el('g', { transform: 'translate(110, 580)' }, stage);
+    drawPiMascot(mg, p * 4, false);
+  }
+
+  // ===================================================================
+  // Frame 4 — EVALUATE: 逐项算出来, 31.44 - 6.90 + 5.75 = 30.29
+  // 每项算出一个中间值, 渐进出现, 最后加起来 + 跟 truth=38 比对
+  // ===================================================================
+  function drawFrame4(p){
+    drawBgGrid();
+    drawStepChain(3);
+
+    var ttl = el('text', { x: 540, y: 80, fill: 'var(--math)',
+                  'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                  'font-size': '13', 'text-anchor': 'middle', 'letter-spacing': '0.14em', 'font-weight': '700' }, stage);
+    ttl.textContent = LANG === 'cn' ? '一项一项算 — 三个数字相加' : 'Compute term by term — add three numbers';
+
+    // 三项中间结果 (横排)
+    var t1A = clamp((p - 0.02) / 0.15, 0, 1);
+    var t2A = clamp((p - 0.18) / 0.15, 0, 1);
+    var t3A = clamp((p - 0.34) / 0.15, 0, 1);
+
+    function drawTerm(cx, opacity, eqTop, eqMid, val, color, label){
+      var g = el('g', { transform: 'translate('+cx+', 220)', opacity: opacity }, stage);
+      el('rect', { x: -110, y: -50, width: 220, height: 160, rx: '4',
+                   fill: 'var(--bg-1)', stroke: color, 'stroke-width': '1.4' }, g);
+      el('text', { x: 0, y: -28, fill: 'var(--fg-mute)',
+                  'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                  'font-size': '10', 'text-anchor': 'middle', 'letter-spacing': '0.14em' }, g)
+        .textContent = label;
+      el('text', { x: 0, y: -2, fill: color,
+                  'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                  'font-size': '15', 'text-anchor': 'middle', 'font-weight': '600' }, g)
+        .textContent = eqTop;
+      el('text', { x: 0, y: 22, fill: 'var(--fg-dim)',
+                  'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                  'font-size': '11', 'text-anchor': 'middle' }, g)
+        .textContent = eqMid;
+      el('line', { x1: -80, y1: 38, x2: 80, y2: 38,
+                   stroke: color, 'stroke-width': '0.8', opacity: '0.6' }, g);
+      el('text', { x: 0, y: 76, fill: 'var(--SOLUTION)',
+                  'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                  'font-size': '28', 'text-anchor': 'middle', 'font-weight': '700' }, g)
+        .textContent = val;
+    }
+    drawTerm(220, t1A, '0.524 x 60', '= 31.44', '+31.44', 'var(--AXIS)',
+             LANG === 'cn' ? '项 1 · PMS' : 'TERM 1 · PMS');
+    drawTerm(540, t2A, '- 0.0862 x 80', '= - 6.90', '-6.90', 'var(--PROOF)',
+             LANG === 'cn' ? '项 2 · RH 扣' : 'TERM 2 · RH (subtract)');
+    drawTerm(860, t3A, '+ 5.75', '= + 5.75', '+5.75', 'var(--SOLUTION)',
+             LANG === 'cn' ? '项 3 · 常数' : 'TERM 3 · constant');
+
+    // 中间加号连接
+    if (t2A > 0.3){
+      el('text', { x: 380, y: 300, fill: 'var(--fg-mute)',
+                  'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                  'font-size': '32', 'text-anchor': 'middle', 'font-weight': '700',
+                  opacity: t2A }, stage).textContent = '+';
+    }
+    if (t3A > 0.3){
+      el('text', { x: 700, y: 300, fill: 'var(--fg-mute)',
+                  'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                  'font-size': '32', 'text-anchor': 'middle', 'font-weight': '700',
+                  opacity: t3A }, stage).textContent = '+';
+    }
+
+    // 加法竖式 -> 结果 30.29
+    var sumA = clamp((p - 0.55) / 0.2, 0, 1);
+    var sg = el('g', { transform: 'translate(540, 430)', opacity: sumA }, stage);
+    el('rect', { x: -260, y: -32, width: 520, height: 86, rx: '4',
+                 fill: 'var(--bg-2)', stroke: 'var(--math)', 'stroke-width': '1.8' }, sg);
+    var sumRow = el('text', { x: 0, y: 6, 'text-anchor': 'middle',
+                  'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                  'font-size': '22', 'font-weight': '700', 'letter-spacing': '0.04em' }, sg);
+    var sumSegs = [
+      { txt: '31.44 - 6.90 + 5.75  =  ', col: 'var(--fg)' },
+      { txt: '30.29', col: 'var(--QED)' },
+      { txt: '  ug/m3', col: 'var(--fg-dim)' }
+    ];
+    sumSegs.forEach(function(s){
+      var ts = el('tspan', { fill: s.col }, sumRow);
+      ts.textContent = s.txt;
+    });
+    el('text', { x: 0, y: 36, fill: 'var(--fg-dim)',
+                'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                'font-size': '11', 'text-anchor': 'middle', 'letter-spacing': '0.06em' }, sg)
+      .textContent = LANG === 'cn' ? '这就是 Barkjohn 校正后的 PM2.5' : 'this is the Barkjohn-corrected PM2.5';
+
+    // 跟真值对比 (底部小条 — 原值 / 校正 / 真值 三道竖线)
+    var cmpA = clamp((p - 0.7) / 0.25, 0, 1);
+    var cmp = el('g', { transform: 'translate(540, 550)', opacity: cmpA }, stage);
+    el('rect', { x: -320, y: -22, width: 640, height: 64, rx: '3',
+                 fill: 'var(--bg-1)', stroke: 'var(--line-strong)', 'stroke-width': '1' }, cmp);
+    // 数轴
+    el('line', { x1: -280, y1: 8, x2: 280, y2: 8,
+                 stroke: 'var(--line-strong)', 'stroke-width': '1' }, cmp);
+    // 刻度 0 .. 80
+    [0, 20, 40, 60, 80].forEach(function(v){
+      var xx = -280 + (v / 80) * 560;
+      el('line', { x1: xx, y1: 6, x2: xx, y2: 14,
+                   stroke: 'var(--fg-mute)', 'stroke-width': '0.8' }, cmp);
+      el('text', { x: xx, y: 28, fill: 'var(--fg-mute)',
+                  'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                  'font-size': '9', 'text-anchor': 'middle' }, cmp).textContent = v;
+    });
+    // 三个值 markers — raw=60 (上), corr=30.29, truth=38
+    function marker(val, col, lab){
+      var xx = -280 + (val / 80) * 560;
+      el('line', { x1: xx, y1: -14, x2: xx, y2: 8,
+                   stroke: col, 'stroke-width': '2' }, cmp);
+      el('circle', { cx: xx, cy: -16, r: 4, fill: col }, cmp);
+      el('text', { x: xx, y: -22, fill: col,
+                  'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                  'font-size': '10', 'text-anchor': 'middle', 'font-weight': '700' }, cmp)
+        .textContent = lab;
+    }
+    marker(60, 'var(--raw)', 'raw 60');
+    marker(30.29, 'var(--corr)', 'corr 30.3');
+    marker(38, 'var(--truth)', 'truth 38');
+
+    // Pi mascot
+    var mg = el('g', { transform: 'translate(110, 580)' }, stage);
+    drawPiMascot(mg, p * 4, false);
+  }
+
+  // ===================================================================
+  // Frame 5 — BATCH: 整组 20 个数据点 — raw vs corrected vs truth 散点 + 真值参考线
+  // 公式扫过 20 点, 校正后点向 y=x 真值线收拢, gold "现在我能信我的节点了"
+  // ===================================================================
+  function drawFrame5(p){
+    drawBgGrid();
+    drawStepChain(4);
+
+    // 散点 chart 区
+    // x = truth (0..120), y = reported (0..180)
+    // 画 raw 散点 (静态, 红橙, 高于 y=x 线) + corrected 散点 (渐进出现, 蓝, 贴近 y=x)
+    var plotL = 200, plotR = 980, plotT = 130, plotB = 530;
+    var pw = plotR - plotL, ph = plotB - plotT;
+    var maxX = 140, maxY = 180;
+
+    function toX(v){ return plotL + (v / maxX) * pw; }
+    function toY(v){ return plotB - (v / maxY) * ph; }
+
+    // 标题
+    el('text', { x: 540, y: 80, fill: 'var(--math)',
+                'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                'font-size': '13', 'text-anchor': 'middle', 'letter-spacing': '0.14em', 'font-weight': '700' }, stage)
+      .textContent = LANG === 'cn'
+        ? '整组 20 个点都套同一公式 — 散点贴回真值线'
+        : 'Apply one formula to all 20 points — scatter hugs the truth line';
+
+    // 坐标轴
+    el('line', { x1: plotL, y1: plotB, x2: plotR, y2: plotB,
+                 stroke: 'var(--line-strong)', 'stroke-width': '1.2' }, stage);
+    el('line', { x1: plotL, y1: plotT, x2: plotL, y2: plotB,
+                 stroke: 'var(--line-strong)', 'stroke-width': '1.2' }, stage);
+    // x 轴刻度
+    [0, 40, 80, 120].forEach(function(v){
+      var xx = toX(v);
+      el('line', { x1: xx, y1: plotB, x2: xx, y2: plotB + 6,
+                   stroke: 'var(--fg-mute)', 'stroke-width': '0.8' }, stage);
+      el('text', { x: xx, y: plotB + 20, fill: 'var(--fg-mute)',
+                  'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                  'font-size': '10', 'text-anchor': 'middle' }, stage).textContent = v;
+    });
+    // y 轴刻度
+    [0, 60, 120, 180].forEach(function(v){
+      var yy = toY(v);
+      el('line', { x1: plotL - 6, y1: yy, x2: plotL, y2: yy,
+                   stroke: 'var(--fg-mute)', 'stroke-width': '0.8' }, stage);
+      el('text', { x: plotL - 12, y: yy + 4, fill: 'var(--fg-mute)',
+                  'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                  'font-size': '10', 'text-anchor': 'end' }, stage).textContent = v;
+    });
+    // 轴标签
+    el('text', { x: (plotL + plotR)/2, y: plotB + 42, fill: 'var(--fg-dim)',
+                'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                'font-size': '11', 'text-anchor': 'middle', 'letter-spacing': '0.1em' }, stage)
+      .textContent = LANG === 'cn' ? 'TRUTH (ug/m3, 参考站)' : 'TRUTH (ug/m3, reference)';
+    var yLbl = el('text', { x: 0, y: 0, fill: 'var(--fg-dim)',
+                'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                'font-size': '11', 'text-anchor': 'middle', 'letter-spacing': '0.1em',
+                transform: 'translate(' + (plotL - 50) + ',' + ((plotT+plotB)/2) + ') rotate(-90)' }, stage);
+    yLbl.textContent = LANG === 'cn' ? 'REPORTED (ug/m3)' : 'REPORTED (ug/m3)';
+
+    // y=x 真值参考线 (gold)
+    var truthLineA = clamp(p / 0.15, 0, 1);
+    el('line', {
+      x1: toX(0), y1: toY(0),
+      x2: toX(maxY), y2: toY(maxY),
+      stroke: 'var(--truth)', 'stroke-width': '1.5',
+      'stroke-dasharray': '5 4', opacity: truthLineA * 0.85
+    }, stage);
+    // y=x 标签
+    if (truthLineA > 0.5){
+      el('text', { x: toX(110), y: toY(110) - 10, fill: 'var(--truth)',
+                  'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                  'font-size': '10', 'text-anchor': 'start', 'letter-spacing': '0.06em',
+                  opacity: truthLineA }, stage)
+        .textContent = 'y = x  (truth)';
+    }
+
+    // raw 散点 (红橙, 都在线上方 — 因为 PMS 偏高)
+    var rawA = clamp((p - 0.05) / 0.2, 0, 1);
+    DATASET.forEach(function(d, i){
+      var dA = clamp((p - 0.05 - i*0.005) / 0.18, 0, 1);
+      if (dA <= 0) return;
+      el('circle', {
+        cx: toX(d.truth), cy: toY(d.pms),
+        r: 4, fill: 'var(--raw)', opacity: dA * 0.85
+      }, stage);
+    });
+    if (rawA > 0.5){
+      el('circle', { cx: 760, cy: 595, r: 5, fill: 'var(--raw)', opacity: rawA }, stage);
+      el('text', { x: 772, y: 599, fill: 'var(--raw)',
+                  'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                  'font-size': '11', 'text-anchor': 'start', 'font-weight': '700',
+                  opacity: rawA }, stage)
+        .textContent = LANG === 'cn' ? 'PMS 原值 (偏高)' : 'PMS raw (high)';
+    }
+
+    // corrected 散点 (蓝, 一颗一颗"塌"到接近 y=x)
+    // 进度: 从 p=0.35 开始, 每点 0.025 错开
+    var corrEnter = clamp((p - 0.32) / 0.5, 0, 1);
+    DATASET.forEach(function(d, i){
+      var cA = clamp((p - 0.32 - i*0.022) / 0.18, 0, 1);
+      if (cA <= 0) return;
+      var corr = barkjohn(d.pms, d.rh);
+      // 起始位置 = raw, 终止位置 = corrected, 用 cA 做插值
+      var sx = toX(d.truth);
+      var sy = toY(d.pms);
+      var ex = toX(d.truth);
+      var ey = toY(corr);
+      var cx = sx; // 同列 (x = truth)
+      var cy = lerp(sy, ey, easeOut(cA));
+      el('circle', { cx: cx, cy: cy, r: 4.5,
+                     fill: 'var(--corr)', opacity: 0.95,
+                     stroke: 'var(--SOLUTION)', 'stroke-width': '0.6' }, stage);
+      // 轨迹竖虚线 (淡)
+      if (cA < 0.95){
+        el('line', { x1: sx, y1: sy, x2: cx, y2: cy,
+                     stroke: 'var(--corr)', 'stroke-width': '0.6',
+                     'stroke-dasharray': '2 3', opacity: 0.35 }, stage);
+      }
+    });
+    if (corrEnter > 0.5){
+      el('circle', { cx: 920, cy: 595, r: 5, fill: 'var(--corr)',
+                     stroke: 'var(--SOLUTION)', 'stroke-width': '0.6',
+                     opacity: corrEnter }, stage);
+      el('text', { x: 932, y: 599, fill: 'var(--corr)',
+                  'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                  'font-size': '11', 'text-anchor': 'start', 'font-weight': '700',
+                  opacity: corrEnter }, stage)
+        .textContent = LANG === 'cn' ? '校正后 (贴 y=x)' : 'corrected (on y=x)';
+    }
+
+    // 公式小卡 (左上)
+    var fmA = clamp(p / 0.2, 0, 1);
+    var fm = el('g', { transform: 'translate(380, 100)', opacity: fmA * 0.85 }, stage);
+    el('rect', { x: -180, y: -16, width: 360, height: 32, rx: '3',
+                 fill: 'var(--bg-2)', stroke: 'var(--AXIS)', 'stroke-width': '1' }, fm);
+    el('text', { x: 0, y: 6, fill: 'var(--AXIS)',
+                'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                'font-size': '11', 'text-anchor': 'middle', 'font-weight': '700' }, fm)
+      .textContent = 'corr = 0.524 x PMS - 0.0862 x RH + 5.75';
+
+    // gold flash overlay (key moment)
+    var flash = document.getElementById('flash');
+    if (p > 0.6 && p < 0.92){
+      flash.classList.add('on');
+    } else {
+      flash.classList.remove('on');
+    }
+
+    // 印章: "现在我能信我的节点了"
+    var sealA = clamp((p - 0.75) / 0.2, 0, 1);
+    var ss = el('g', { transform: 'translate(540, 640)', opacity: sealA }, stage);
+    el('rect', { x: -250, y: -20, width: 500, height: 40, rx: '3',
+                 fill: 'var(--bg-2)', stroke: 'var(--QED)', 'stroke-width': '2' }, ss);
+    el('text', { x: 0, y: 7, fill: 'var(--QED)',
+                'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                'font-size': '13', 'text-anchor': 'middle', 'letter-spacing': '0.1em', 'font-weight': '700' }, ss)
+      .textContent = LANG === 'cn' ? '现在我能信我的节点了' : 'I can trust my node now';
+
+    // Pi mascot (QED 模式) — F5 旁观
+    var mg = el('g', { transform: 'translate(110, 580)' }, stage);
+    drawPiMascot(mg, p * 4, true);
+  }
+
+  // ====== Frame dispatcher ======
+  function drawFrame(idx, pp){
+    clearStage();
+    if (idx !== 4){
+      document.getElementById('flash').classList.remove('on');
+    }
+    if (idx === 0) drawFrame1(pp);
+    else if (idx === 1) drawFrame2(pp);
+    else if (idx === 2) drawFrame3(pp);
+    else if (idx === 3) drawFrame4(pp);
+    else if (idx === 4) drawFrame5(pp);
+  }
+
+  function updateUI(idx){
+    var f = FRAMES[idx];
+    document.getElementById('hudV1').textContent = (idx+1) + ' / 5';
+    document.getElementById('hudV2').textContent = f.hudStage[LANG] || f.hudStage.en;
+    document.getElementById('hudV5').textContent = f.hudCorr;
+    document.getElementById('subCn').textContent = LANG === 'cn' ? f.subCn : f.subEn;
+    document.getElementById('subEn').textContent = LANG === 'cn' ? f.subEn : f.subCn;
+    document.getElementById('stepName').textContent = f.stepName;
+    for (var i = 0; i < 5; i++){
+      var c = document.getElementById('chip' + i);
+      c.classList.remove('active', 'done');
+      if (i < idx) c.classList.add('done');
+      else if (i === idx) c.classList.add('active');
+    }
+  }
+
+  function updateI18N(){
+    document.getElementById('badgeMod').textContent = tr('badgeMod');
+    document.getElementById('brandH1').textContent = tr('brandH1');
+    document.getElementById('brandSub').textContent = tr('brandSub');
+    document.getElementById('mascotName').textContent = tr('mascotName');
+    document.querySelector('#g1 .gtxt').textContent = tr('g1');
+    document.querySelector('#g2 .gtxt').textContent = tr('g2');
+    document.querySelector('#g3 .gtxt').textContent = tr('g3');
+    document.getElementById('hudL1').textContent = tr('hudL1');
+    document.getElementById('hudL2').textContent = tr('hudL2');
+    document.getElementById('hudL3').textContent = tr('hudL3');
+    document.getElementById('hudL4').textContent = tr('hudL4');
+    document.getElementById('hudL5').textContent = tr('hudL5');
+    document.getElementById('langBtn').textContent = tr('btnLang');
+    document.getElementById('flashSub').textContent = LANG === 'cn'
+      ? '现在我能信我的节点了'
+      : 'I can trust my node now';
+  }
+
+  function tick(ts){
+    if (!frameStartTs) frameStartTs = ts;
+    var elapsed = ts - frameStartTs;
+    if (elapsed >= FRAME_MS){
+      currentFrame = (currentFrame + 1) % 5;
+      frameStartTs = ts;
+      updateUI(currentFrame);
+      elapsed = 0;
+    }
+    var pp = elapsed / FRAME_MS;
+    drawFrame(currentFrame, pp);
+    rafId = requestAnimationFrame(tick);
+  }
+
+  function start(){
+    updateI18N();
+    updateUI(currentFrame);
+    frameStartTs = 0;
+    if (rafId) cancelAnimationFrame(rafId);
+    rafId = requestAnimationFrame(tick);
+  }
+
+  document.getElementById('langBtn').addEventListener('click', function(){
+    LANG = (LANG === 'cn') ? 'en' : 'cn';
+    updateI18N();
+    updateUI(currentFrame);
+  });
+
+  start();
+})();
+</script>
+</body>
+</html>

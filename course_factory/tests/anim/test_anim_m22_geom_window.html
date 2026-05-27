@@ -1,0 +1,1274 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>M22 — 几何级数与滚动窗口直觉 (NowCast)</title>
+<style>
+  /* F2 第 1 层 — 共享深空底 (theme_style/styles.css L8-21) */
+  :root{
+    --bg-0: oklch(0.14 0.035 265);
+    --bg-1: oklch(0.18 0.04 265);
+    --bg-2: oklch(0.22 0.045 265);
+    --bg-3: oklch(0.28 0.05 265);
+    --line: oklch(0.35 0.05 265 / 0.35);
+    --line-strong: oklch(0.55 0.08 265 / 0.55);
+    --fg: oklch(0.96 0.01 265);
+    --fg-dim: oklch(0.75 0.02 265);
+    --fg-mute: oklch(0.55 0.03 265);
+    --gold: oklch(0.85 0.14 85);
+
+    /* F2 第 2 层 — math accent (electric blue) */
+    --math: oklch(0.72 0.17 245);
+    --math-dim: oklch(0.52 0.16 245);
+
+    /* F2 第 3 层 — math 5 色 palette (themes.js math: AXIS/PROOF/SHADOW/SOLUTION/QED) */
+    --AXIS:     oklch(0.72 0.17 245);  /* electric blue 主 — 坐标轴 / 主链路 / mascot 主体 */
+    --PROOF:    oklch(0.52 0.16 245);  /* 中等 blue — 推导步骤 / 折线相邻段 / 旧权重 */
+    --SHADOW:   oklch(0.35 0.10 245);  /* 深 blue — 未活跃柱底 / 卡片底纹 */
+    --SOLUTION: oklch(0.92 0.08 240);  /* 近白 blue — 当前帧高光 / 数字光晕 */
+    --QED:      oklch(0.85 0.14 85);   /* 金色 QED — 总和闭合 + 公式完成 + key moment */
+  }
+
+  *{box-sizing:border-box;margin:0;padding:0;}
+  html,body{height:100%;overflow:hidden;}
+  body{
+    background: var(--bg-0);
+    color: var(--fg);
+    font-family: 'Inter','Noto Sans SC',-apple-system,BlinkMacSystemFont,sans-serif;
+    display: flex;
+    height: 100vh;
+  }
+
+  /* 200px 左侧 sidebar */
+  .sidebar{
+    width: 200px;
+    flex-shrink: 0;
+    background: var(--bg-1);
+    border-right: 1px solid var(--line);
+    padding: 16px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .brand{
+    border-bottom: 1px solid var(--line);
+    padding-bottom: 10px;
+    margin-bottom: 4px;
+  }
+  .brand .badge{
+    display: inline-block;
+    font-family: 'JetBrains Mono',ui-monospace,monospace;
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    color: var(--math);
+    background: var(--bg-2);
+    padding: 3px 7px;
+    border: 1px solid var(--line);
+    box-shadow: 2px 2px 0 var(--bg-0);
+    margin-bottom: 6px;
+  }
+  .brand h1{
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--fg);
+    line-height: 1.3;
+  }
+  .brand .sub{
+    font-size: 10px;
+    color: var(--fg-mute);
+    margin-top: 4px;
+    font-family: 'JetBrains Mono',ui-monospace,monospace;
+    letter-spacing: 0.04em;
+  }
+
+  /* Pi mascot 在 sidebar 顶 */
+  .mascot-box{
+    background: var(--bg-2);
+    border: 1px solid var(--line);
+    box-shadow: 3px 3px 0 var(--bg-0);
+    padding: 10px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .mascot-box .label{
+    font-family: 'JetBrains Mono',ui-monospace,monospace;
+    font-size: 9px;
+    color: var(--fg-dim);
+    letter-spacing: 0.08em;
+  }
+  .mascot-box .name{
+    font-size: 11px;
+    color: var(--fg);
+    font-weight: 600;
+    margin-top: 2px;
+  }
+
+  .guide{ display: flex; flex-direction: column; gap: 8px; }
+  .guide-item{
+    font-size: 11px;
+    line-height: 1.45;
+    color: var(--fg-dim);
+    padding-left: 9px;
+    border-left: 2px solid var(--math);
+    padding-top: 2px;
+    padding-bottom: 2px;
+  }
+  .guide-item .num{
+    font-family: 'JetBrains Mono',ui-monospace,monospace;
+    color: var(--math);
+    font-weight: 700;
+    margin-right: 4px;
+  }
+
+  .sidebar .spacer{flex: 1;}
+
+  .lang-btn{
+    background: var(--bg-2);
+    border: 1px solid var(--line-strong);
+    box-shadow: 2px 2px 0 var(--bg-0);
+    color: var(--fg);
+    font-family: 'JetBrains Mono',ui-monospace,monospace;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    padding: 7px 10px;
+    cursor: pointer;
+    width: 100%;
+  }
+  .lang-btn:hover{ border-color: var(--math); color: var(--math); }
+  .lang-btn:active{ transform: translate(2px, 2px); box-shadow: none; }
+
+  /* Main stage */
+  .main{
+    flex: 1;
+    position: relative;
+    overflow: hidden;
+    background: var(--bg-0);
+  }
+  #stage{
+    width: 100%;
+    height: 100%;
+    display: block;
+  }
+
+  /* HUD 右上 */
+  .hud{
+    position: absolute;
+    top: 18px;
+    right: 18px;
+    background: var(--bg-2);
+    border: 1px solid var(--line);
+    box-shadow: 3px 3px 0 var(--bg-0);
+    padding: 10px 14px;
+    font-family: 'JetBrains Mono',ui-monospace,monospace;
+    min-width: 240px;
+  }
+  .hud .row{
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 14px;
+    font-size: 11px;
+    line-height: 1.6;
+  }
+  .hud .label{color: var(--fg-mute); letter-spacing: 0.06em;}
+  .hud .value{color: var(--fg); font-weight: 700;}
+  .hud .value.accent{color: var(--math);}
+  .hud .value.gold{color: var(--gold);}
+  .hud .sep{ height: 1px; background: var(--line); margin: 6px 0; }
+
+  /* Subtitle 底部 */
+  .subtitle{
+    position: absolute;
+    left: 50%;
+    bottom: 28px;
+    transform: translateX(-50%);
+    text-align: center;
+    max-width: 80%;
+    pointer-events: none;
+  }
+  .subtitle .cn{
+    font-size: 17px;
+    font-weight: 700;
+    color: var(--fg);
+    letter-spacing: 0.01em;
+  }
+  .subtitle .en{
+    font-size: 12px;
+    color: var(--fg-mute);
+    margin-top: 4px;
+    font-style: italic;
+    font-family: 'JetBrains Mono',ui-monospace,monospace;
+    letter-spacing: 0.03em;
+  }
+
+  /* Frame chip 左下 — 5 步进度 */
+  .frame-progress{
+    position: absolute;
+    left: 24px;
+    bottom: 28px;
+    display: flex;
+    gap: 6px;
+    align-items: center;
+  }
+  .chip{ width: 24px; height: 6px; background: var(--bg-2); border: 1px solid var(--line); }
+  .chip.active{ background: var(--math); border-color: var(--math); }
+  .chip.done{ background: var(--math-dim); border-color: var(--math-dim); }
+  .frame-progress .stepname{
+    font-family: 'JetBrains Mono',ui-monospace,monospace;
+    font-size: 10px;
+    color: var(--fg-dim);
+    margin-left: 8px;
+    letter-spacing: 0.08em;
+  }
+
+  /* QED flash overlay (key moment) */
+  .flash{
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-family: 'JetBrains Mono',ui-monospace,monospace;
+    font-size: 28px;
+    font-weight: 800;
+    color: var(--gold);
+    letter-spacing: 0.18em;
+    opacity: 0;
+    pointer-events: none;
+    text-shadow: 0 0 24px var(--gold);
+    text-align: center;
+  }
+  .flash.on{ opacity: 1; }
+  .flash .small{
+    display: block;
+    text-align: center;
+    font-size: 11px;
+    color: var(--fg-dim);
+    letter-spacing: 0.08em;
+    margin-top: 8px;
+    text-shadow: none;
+    font-weight: 400;
+  }
+</style>
+</head>
+<body>
+  <aside class="sidebar">
+    <div class="brand">
+      <span class="badge" id="badgeMod">MOD-M22 / MATH</span>
+      <h1 id="brandH1">几何级数 + 滚动窗口</h1>
+      <div class="sub" id="brandSub">w = 1 / 2^age</div>
+    </div>
+
+    <div class="mascot-box">
+      <svg width="42" height="42" viewBox="0 0 60 60" aria-hidden="true">
+        <!-- Pi mascot: 旋转正四面体, 翻面亮方程 (themes.js math) -->
+        <polygon points="30,12 14,46 46,46" fill="var(--SHADOW)" opacity="0.55"/>
+        <polygon points="30,12 18,42 42,42" fill="none" stroke="var(--AXIS)" stroke-width="1.6" stroke-linejoin="round"/>
+        <polygon points="30,18 22,40 38,40" fill="var(--PROOF)" opacity="0.45"/>
+        <circle cx="30" cy="12" r="1.8" fill="var(--SOLUTION)"/>
+        <circle cx="18" cy="42" r="1.8" fill="var(--SOLUTION)"/>
+        <circle cx="42" cy="42" r="1.8" fill="var(--SOLUTION)"/>
+        <text x="30" y="34" fill="var(--QED)" font-family="'JetBrains Mono',monospace" font-size="9" text-anchor="middle" font-weight="700">1/2^n</text>
+      </svg>
+      <div>
+        <div class="label">MASCOT</div>
+        <div class="name" id="mascotName">Pi · 派</div>
+      </div>
+    </div>
+
+    <div class="guide">
+      <div class="guide-item" id="g1"><span class="num">01</span><span class="gtxt">几何级数: 每项除以 2, 越走越小</span></div>
+      <div class="guide-item" id="g2"><span class="num">02</span><span class="gtxt">5 项面积加起来快 = 2, 但永远到不了</span></div>
+      <div class="guide-item" id="g3"><span class="num">03</span><span class="gtxt">用它当"时间权重", 老数据自动淡出</span></div>
+    </div>
+
+    <div class="spacer"></div>
+    <button id="langBtn" class="lang-btn" type="button">CN / EN</button>
+  </aside>
+
+  <main class="main">
+    <svg id="stage" viewBox="0 0 1080 720" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg"></svg>
+
+    <div class="hud">
+      <div class="row"><span class="label" id="hudL1">FRAME</span><span class="value accent" id="hudV1">1 / 5</span></div>
+      <div class="row"><span class="label" id="hudL2">STAGE</span><span class="value" id="hudV2">Sequence</span></div>
+      <div class="sep"></div>
+      <div class="row"><span class="label" id="hudL3">RATIO r</span><span class="value" id="hudV3">1 / 2</span></div>
+      <div class="row"><span class="label" id="hudL4">NOWCAST</span><span class="value gold" id="hudV4">--</span></div>
+    </div>
+
+    <div class="subtitle">
+      <div class="cn" id="subCn">看一串数字: 1, 1/2, 1/4, 1/8, ... 每项是前一项的一半</div>
+      <div class="en" id="subEn">Look at: 1, 1/2, 1/4, 1/8, ... each term is half the previous</div>
+    </div>
+
+    <div class="frame-progress">
+      <div class="chip" id="chip0"></div>
+      <div class="chip" id="chip1"></div>
+      <div class="chip" id="chip2"></div>
+      <div class="chip" id="chip3"></div>
+      <div class="chip" id="chip4"></div>
+      <span class="stepname" id="stepName">01 · SEQUENCE</span>
+    </div>
+
+    <div class="flash" id="flash">
+      QED
+      <span class="small" id="flashSub">几何衰减 = 自然忘旧</span>
+    </div>
+  </main>
+
+<script>
+(function(){
+  "use strict";
+
+  // ====== i18n ======
+  var LANG = 'cn';
+  var I18N = {
+    badgeMod:   { cn: 'MOD-M22 / MATH', en: 'MOD-M22 / MATH' },
+    brandH1:    { cn: '几何级数 + 滚动窗口', en: 'Geometric series + Rolling window' },
+    brandSub:   { cn: 'w = 1 / 2^age', en: 'w = 1 / 2^age' },
+    mascotName: { cn: 'Pi · 派', en: 'Pi · the tetrahedron' },
+    g1: { cn: '几何级数: 每项除以 2, 越走越小',
+          en: 'Geometric series: divide by 2 each step, smaller and smaller' },
+    g2: { cn: '5 项面积加起来快 = 2, 但永远到不了',
+          en: '5 bar areas sum near 2, but never quite reach it' },
+    g3: { cn: '用它当"时间权重", 老数据自动淡出',
+          en: 'Use as "time weight" — older data fades out automatically' },
+    hudL1: { cn: '帧',      en: 'FRAME' },
+    hudL2: { cn: '阶段',    en: 'STAGE' },
+    hudL3: { cn: '公比 r',  en: 'RATIO r' },
+    hudL4: { cn: 'NowCast', en: 'NOWCAST' },
+    btnLang: { cn: 'CN / EN', en: 'CN / EN' }
+  };
+
+  // ====== 数据: 5 个 PM2.5 历史读数 (age=0 现在, 5 小时前) ======
+  // age (h) : 0    1    2    3    4
+  var PM_READINGS = [22, 30, 40, 55, 70];  // 现在 22, 越老越脏 (污染逐渐过去)
+  // 权重 w_i = 1 / 2^age = 1, 0.5, 0.25, 0.125, 0.0625
+  var WEIGHTS = [1, 0.5, 0.25, 0.125, 0.0625];
+  var W_SUM = WEIGHTS.reduce(function(a,b){return a+b;}, 0);  // 1.9375
+  // NowCast = sum(w_i * c_i) / sum(w_i)
+  var NUMER = 0;
+  for (var i = 0; i < 5; i++) NUMER += WEIGHTS[i] * PM_READINGS[i];
+  // 22*1 + 30*0.5 + 40*0.25 + 55*0.125 + 70*0.0625 = 22+15+10+6.875+4.375 = 58.25
+  // / 1.9375 = 30.06... 约 30
+  var NOWCAST = NUMER / W_SUM;     // ~30.06
+  var NOWCAST_R = Math.round(NOWCAST);  // 30
+  // 对照: 简单平均 (43.4) vs NowCast (30) — 后者贴近现在
+  var SIMPLE_AVG = PM_READINGS.reduce(function(a,b){return a+b;},0) / 5;  // 43.4
+
+  // ====== 5 帧故事 ======
+  var FRAME_MS = 6500;
+  var FRAMES = [
+    {
+      id: 'sequence',
+      stepName: '01 · SEQUENCE',
+      hudStage: { cn: '认级数', en: 'Meet the series' },
+      hudR: '1 / 2',
+      hudNow: '--',
+      subCn: '看一串数字: 1, 1/2, 1/4, 1/8, ... 每项是前一项的一半',
+      subEn: 'Look at: 1, 1/2, 1/4, 1/8, ... each term is half the previous'
+    },
+    {
+      id: 'bars',
+      stepName: '02 · BARS',
+      hudStage: { cn: '画成柱状', en: 'Draw as bars' },
+      hudR: '1 / 2',
+      hudNow: 'sum = 1.94',
+      subCn: '5 个柱面积越摞越小, 总和 = 1.9375 — 离 2 还差一点, 永远摸不到',
+      subEn: '5 stacked areas shrink fast — sum = 1.9375 — close to 2 but never reach'
+    },
+    {
+      id: 'attach',
+      stepName: '03 · ATTACH',
+      hudStage: { cn: '贴到时间轴', en: 'Attach to time' },
+      hudR: '1 / 2',
+      hudNow: '--',
+      subCn: '把级数贴到"几小时前": 现在 = 1, 1h前 = 0.5, 2h前 = 0.25 ... 这就是权重',
+      subEn: 'Pin series onto hours-ago: now=1, 1h=0.5, 2h=0.25 ... that is the weight'
+    },
+    {
+      id: 'window',
+      stepName: '04 · WINDOW',
+      hudStage: { cn: '滚动窗口', en: 'Rolling window' },
+      hudR: '1 / 2',
+      hudNow: '--',
+      subCn: '时间向前流, 每个旧数据的权重再 ÷2 一次, 老到几乎为 0 就被自动忽略',
+      subEn: 'Time flows forward, old weights halve again, fade to ~0 and drop out'
+    },
+    {
+      id: 'nowcast',
+      stepName: '05 · NOWCAST',
+      hudStage: { cn: '加权平均', en: 'Weighted mean' },
+      hudR: '1 / 2',
+      hudNow: String(NOWCAST_R),
+      subCn: '代入 5 个读数 -> 加权平均 约 30 (简单平均是 43) — 几何衰减让 NowCast 贴近现在',
+      subEn: 'Plug 5 readings -> weighted mean ~ 30 (plain avg is 43) — geometric decay tracks now'
+    }
+  ];
+
+  // ====== State ======
+  var currentFrame = 0;
+  var frameStartTs = 0;
+  var rafId = null;
+  var stage = document.getElementById('stage');
+  var SVGNS = 'http://www.w3.org/2000/svg';
+
+  // ====== Utility ======
+  function el(name, attrs, parent){
+    var n = document.createElementNS(SVGNS, name);
+    if (attrs){
+      for (var k in attrs){
+        if (Object.prototype.hasOwnProperty.call(attrs, k)){
+          n.setAttribute(k, attrs[k]);
+        }
+      }
+    }
+    if (parent) parent.appendChild(n);
+    return n;
+  }
+  function clearStage(){ while(stage.firstChild) stage.removeChild(stage.firstChild); }
+  function t(key){
+    if (!I18N[key]) return key;
+    return I18N[key][LANG] || I18N[key].en || key;
+  }
+  function lerp(a, b, p){ return a + (b - a) * p; }
+  function easeInOut(x){ return x < 0.5 ? 2*x*x : 1 - Math.pow(-2*x + 2, 2)/2; }
+  function clamp(x, lo, hi){ return x < lo ? lo : (x > hi ? hi : x); }
+  function fmtFrac(i){
+    // 0 -> '1', 1 -> '1/2', 2 -> '1/4', ...
+    if (i === 0) return '1';
+    return '1/' + Math.pow(2, i);
+  }
+
+  // ====== Background grid + center glow ======
+  function drawBgGrid(){
+    var g = el('g', { opacity: '0.18' }, stage);
+    for (var x = 0; x <= 1080; x += 60){
+      el('line', { x1: x, y1: 0, x2: x, y2: 720, stroke: 'var(--line)', 'stroke-width': '0.5' }, g);
+    }
+    for (var y = 0; y <= 720; y += 60){
+      el('line', { x1: 0, y1: y, x2: 1080, y2: y, stroke: 'var(--line)', 'stroke-width': '0.5' }, g);
+    }
+    var defs = el('defs', null, stage);
+    var rg = el('radialGradient', { id: 'centerGlow', cx: '50%', cy: '45%', r: '60%' }, defs);
+    el('stop', { offset: '0%', 'stop-color': 'var(--math)', 'stop-opacity': '0.06' }, rg);
+    el('stop', { offset: '100%', 'stop-color': 'var(--bg-0)', 'stop-opacity': '0' }, rg);
+    el('rect', { x: 0, y: 0, width: 1080, height: 720, fill: 'url(#centerGlow)' }, stage);
+  }
+
+  function drawStepChain(activeIdx){
+    var labels = [
+      { cn: '级数',   en: 'Series' },
+      { cn: '柱状',   en: 'Bars' },
+      { cn: '贴时间', en: 'Attach' },
+      { cn: '窗口',   en: 'Window' },
+      { cn: 'NowCast',en: 'NowCast' }
+    ];
+    var y = 640;
+    var startX = 110;
+    var gap = (1080 - 220) / 4;
+    var g = el('g', null, stage);
+    for (var i = 0; i < 5; i++){
+      var cx = startX + gap * i;
+      var on = i <= activeIdx;
+      var ringColor = on ? 'var(--math)' : 'var(--line)';
+      var fillColor = on ? 'var(--bg-2)' : 'var(--bg-1)';
+      var textColor = on ? 'var(--fg)' : 'var(--fg-mute)';
+      el('rect', {
+        x: cx - 44, y: y - 16, width: 88, height: 32,
+        fill: fillColor, stroke: ringColor, 'stroke-width': on ? '1.6' : '1', rx: '2'
+      }, g);
+      var tx = el('text', {
+        x: cx, y: y + 4, fill: textColor,
+        'font-family': "'Inter','Noto Sans SC',sans-serif",
+        'font-size': '12', 'font-weight': on ? '700' : '500',
+        'text-anchor': 'middle'
+      }, g);
+      tx.textContent = labels[i][LANG] || labels[i].en;
+      var ix = el('text', {
+        x: cx, y: y - 22, fill: on ? 'var(--math)' : 'var(--fg-mute)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '9', 'text-anchor': 'middle', 'letter-spacing': '0.1em'
+      }, g);
+      ix.textContent = '0' + (i+1);
+      if (i < 4){
+        var x1 = cx + 44;
+        var x2 = cx + gap - 44;
+        var connColor = (on && (i+1) <= activeIdx) ? 'var(--math)' : 'var(--line)';
+        el('line', {
+          x1: x1, y1: y, x2: x2 - 6, y2: y,
+          stroke: connColor, 'stroke-width': '1.2'
+        }, g);
+        el('polygon', {
+          points: (x2-6)+','+(y-4)+' '+(x2)+','+y+' '+(x2-6)+','+(y+4),
+          fill: connColor
+        }, g);
+      }
+    }
+  }
+
+  // Pi mascot
+  function drawPiMascot(g, rot, qed){
+    el('circle', { cx: 0, cy: 0, r: 36, fill: 'none', stroke: 'var(--AXIS)', 'stroke-width': '0.8',
+                   'stroke-dasharray': '3 5', opacity: '0.5',
+                   transform: 'rotate(' + (rot * 30 % 360) + ')' }, g);
+    el('polygon', { points: '0,-22 -20,16 20,16', fill: 'var(--SHADOW)', opacity: '0.55' }, g);
+    el('polygon', { points: '0,-22 -16,14 16,14', fill: 'none', stroke: 'var(--AXIS)',
+                    'stroke-width': '1.6', 'stroke-linejoin': 'round' }, g);
+    el('polygon', { points: '0,-14 -10,10 10,10', fill: 'var(--PROOF)', opacity: '0.5' }, g);
+    el('circle', { cx: 0, cy: -22, r: 2, fill: 'var(--SOLUTION)' }, g);
+    el('circle', { cx: -16, cy: 14, r: 2, fill: 'var(--SOLUTION)' }, g);
+    el('circle', { cx: 16, cy: 14, r: 2, fill: 'var(--SOLUTION)' }, g);
+    var eqText = qed ? 'QED' : '1/2^n';
+    var eqTx = el('text', {
+      x: 0, y: 4, fill: 'var(--QED)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': qed ? '11' : '8', 'text-anchor': 'middle', 'font-weight': '700'
+    }, g);
+    eqTx.textContent = eqText;
+    var lab = el('text', {
+      x: 0, y: 48, fill: 'var(--fg-dim)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '10', 'text-anchor': 'middle', 'letter-spacing': '0.1em'
+    }, g);
+    lab.textContent = qed
+      ? (LANG === 'cn' ? 'Pi · 公式收敛' : 'Pi · QED')
+      : (LANG === 'cn' ? 'Pi · 思考中' : 'Pi · thinking');
+  }
+
+  // ====== Frame 1 — SEQUENCE: 1, 1/2, 1/4, 1/8, 1/16 逐一登场 + 箭头标 ÷2 ======
+  function drawFrame1(p){
+    drawBgGrid();
+    drawStepChain(0);
+
+    var ttl = el('text', {
+      x: 540, y: 90, fill: 'var(--math)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '14', 'text-anchor': 'middle', 'letter-spacing': '0.14em', 'font-weight': '700'
+    }, stage);
+    ttl.textContent = LANG === 'cn' ? '几何级数 — 每项 = 前项 / 2' : 'Geometric series — each = previous / 2';
+
+    var n = 5;
+    var startX = 180, gap = 145, baseY = 280;
+    var STEP_DURS = [0.0, 0.16, 0.32, 0.48, 0.64];
+
+    // numbers + arrows
+    for (var i = 0; i < n; i++){
+      var alpha = clamp((p - STEP_DURS[i]) / 0.14, 0, 1);
+      if (alpha <= 0) continue;
+      var cx = startX + i * gap;
+      var ng = el('g', { opacity: alpha }, stage);
+      // box
+      var isNew = (i === n-1) || ((i < n-1) && p < STEP_DURS[i+1]);
+      el('rect', {
+        x: cx - 50, y: baseY - 40, width: 100, height: 80,
+        fill: 'var(--bg-2)', stroke: isNew ? 'var(--math)' : 'var(--line-strong)',
+        'stroke-width': isNew ? '2' : '1.2', rx: '4'
+      }, ng);
+      var idx = el('text', {
+        x: cx, y: baseY - 22, fill: 'var(--fg-mute)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '10', 'text-anchor': 'middle', 'letter-spacing': '0.12em'
+      }, ng);
+      idx.textContent = 'a' + (i+1);
+      var fr = el('text', {
+        x: cx, y: baseY + 14, fill: isNew ? 'var(--math)' : 'var(--fg)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '24', 'text-anchor': 'middle', 'font-weight': '700'
+      }, ng);
+      fr.textContent = fmtFrac(i);
+      var dec = el('text', {
+        x: cx, y: baseY + 32, fill: 'var(--fg-dim)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '10', 'text-anchor': 'middle'
+      }, ng);
+      dec.textContent = '= ' + (1 / Math.pow(2, i)).toFixed(i === 0 ? 1 : 4).replace(/0+$/,'').replace(/\.$/,'.0');
+    }
+    // arrows ÷2
+    for (var j = 0; j < n - 1; j++){
+      var aStart = STEP_DURS[j+1] - 0.03;
+      var alphaA = clamp((p - aStart) / 0.12, 0, 1);
+      if (alphaA <= 0) continue;
+      var cxA = startX + j * gap + 50;
+      var cxB = startX + (j+1) * gap - 50;
+      var arrG = el('g', { opacity: alphaA }, stage);
+      el('line', {
+        x1: cxA + 8, y1: baseY, x2: cxB - 14, y2: baseY,
+        stroke: 'var(--PROOF)', 'stroke-width': '1.6'
+      }, arrG);
+      el('polygon', {
+        points: (cxB - 14)+','+(baseY - 5)+' '+(cxB - 4)+','+(baseY)+' '+(cxB - 14)+','+(baseY + 5),
+        fill: 'var(--PROOF)'
+      }, arrG);
+      var labA = el('text', {
+        x: (cxA + cxB)/2 + 6, y: baseY - 10, fill: 'var(--math)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '12', 'text-anchor': 'middle', 'font-weight': '700'
+      }, arrG);
+      labA.textContent = LANG === 'cn' ? '÷ 2' : '/ 2';
+    }
+
+    // formula bottom
+    var fAlpha = clamp((p - 0.78) / 0.18, 0, 1);
+    var fg = el('g', { opacity: fAlpha, transform: 'translate(540, 460)' }, stage);
+    el('rect', {
+      x: -260, y: -30, width: 520, height: 60,
+      fill: 'var(--bg-2)', stroke: 'var(--QED)', 'stroke-width': '1.8', rx: '4'
+    }, fg);
+    var fLab = el('text', {
+      x: 0, y: -8, fill: 'var(--fg-dim)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '10', 'text-anchor': 'middle', 'letter-spacing': '0.14em'
+    }, fg);
+    fLab.textContent = LANG === 'cn' ? '通项 (general term)' : 'GENERAL TERM';
+    var fEq = el('text', {
+      x: 0, y: 20, fill: 'var(--QED)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '20', 'text-anchor': 'middle', 'font-weight': '700'
+    }, fg);
+    fEq.textContent = 'a_n = (1/2)^(n-1)';
+
+    var mg = el('g', { transform: 'translate(110, 540)' }, stage);
+    drawPiMascot(mg, p * 5, false);
+  }
+
+  // ====== Frame 2 — BARS: 5 柱面积摞起来 = 1.94 -> 2 ======
+  function drawFrame2(p){
+    drawBgGrid();
+    drawStepChain(1);
+
+    var ttl = el('text', {
+      x: 540, y: 90, fill: 'var(--math)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '14', 'text-anchor': 'middle', 'letter-spacing': '0.14em', 'font-weight': '700'
+    }, stage);
+    ttl.textContent = LANG === 'cn' ? '把级数画成 5 个柱状面积' : 'Draw the series as 5 bar areas';
+
+    var n = 5;
+    var ox = 160, oy = 480;
+    var barW = 110, barGap = 18;
+    var unitH = 320;  // 1.0 对应 320px
+
+    // axis
+    el('line', { x1: ox - 10, y1: oy, x2: ox + n*(barW+barGap), y2: oy,
+                 stroke: 'var(--AXIS)', 'stroke-width': '1.4' }, stage);
+    el('line', { x1: ox - 10, y1: oy, x2: ox - 10, y2: oy - unitH - 20,
+                 stroke: 'var(--AXIS)', 'stroke-width': '1.4' }, stage);
+    // y-axis 1.0 label
+    var yLab = el('text', {
+      x: ox - 18, y: oy - unitH + 4, fill: 'var(--fg-mute)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '10', 'text-anchor': 'end'
+    }, stage);
+    yLab.textContent = '1.0';
+    el('line', { x1: ox - 14, y1: oy - unitH, x2: ox - 6, y2: oy - unitH,
+                 stroke: 'var(--AXIS)', 'stroke-width': '0.9' }, stage);
+
+    // STEP timings: 5 bars then sum
+    var BAR_DURS = [0.0, 0.10, 0.20, 0.30, 0.40];
+    var runningSum = 0;
+
+    for (var i = 0; i < n; i++){
+      var alpha = clamp((p - BAR_DURS[i]) / 0.10, 0, 1);
+      if (alpha <= 0) continue;
+      var v = 1 / Math.pow(2, i);
+      runningSum += (alpha >= 1 ? v : 0);
+      var h = unitH * v * easeInOut(alpha);
+      var bx = ox + i * (barW + barGap);
+      var by = oy - h;
+      var isNew = (i === n-1) || ((i < n-1) && p < BAR_DURS[i+1]);
+      var bg = el('g', null, stage);
+      el('rect', {
+        x: bx, y: by, width: barW, height: h,
+        fill: isNew ? 'var(--AXIS)' : 'var(--PROOF)',
+        stroke: 'var(--SOLUTION)', 'stroke-width': isNew ? '1.6' : '0.8',
+        opacity: '0.85'
+      }, bg);
+      // value on top
+      if (alpha >= 0.9){
+        var vTx = el('text', {
+          x: bx + barW/2, y: by - 8, fill: isNew ? 'var(--math)' : 'var(--fg-dim)',
+          'font-family': "'JetBrains Mono',ui-monospace,monospace",
+          'font-size': '14', 'text-anchor': 'middle', 'font-weight': '700'
+        }, bg);
+        vTx.textContent = fmtFrac(i);
+      }
+      // x-axis label
+      var xTx = el('text', {
+        x: bx + barW/2, y: oy + 22, fill: 'var(--fg-mute)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '11', 'text-anchor': 'middle'
+      }, stage);
+      xTx.textContent = 'a' + (i+1);
+      var dTx = el('text', {
+        x: bx + barW/2, y: oy + 38, fill: 'var(--fg-mute)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '9', 'text-anchor': 'middle', opacity: '0.75'
+      }, stage);
+      dTx.textContent = v.toFixed(i === 0 ? 1 : 4).replace(/0+$/,'').replace(/\.$/,'.0');
+    }
+
+    // Sum reveal at p > 0.55
+    var sumAlpha = clamp((p - 0.55) / 0.18, 0, 1);
+    if (sumAlpha > 0){
+      var sg = el('g', { opacity: sumAlpha, transform: 'translate(800, 250)' }, stage);
+      el('rect', {
+        x: -120, y: -50, width: 240, height: 100,
+        fill: 'var(--bg-2)', stroke: 'var(--math)', 'stroke-width': '1.8', rx: '4'
+      }, sg);
+      var sLab = el('text', {
+        x: 0, y: -28, fill: 'var(--fg-mute)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '10', 'text-anchor': 'middle', 'letter-spacing': '0.12em'
+      }, sg);
+      sLab.textContent = LANG === 'cn' ? '5 项总和' : 'SUM OF 5';
+      var sVal = el('text', {
+        x: 0, y: 10, fill: 'var(--math)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '32', 'text-anchor': 'middle', 'font-weight': '700'
+      }, sg);
+      sVal.textContent = '1.9375';
+      var sEq = el('text', {
+        x: 0, y: 34, fill: 'var(--fg-dim)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '10', 'text-anchor': 'middle'
+      }, sg);
+      sEq.textContent = '1 + 1/2 + 1/4 + 1/8 + 1/16';
+    }
+
+    // "near 2 forever" insight at p > 0.78
+    var insAlpha = clamp((p - 0.78) / 0.18, 0, 1);
+    if (insAlpha > 0){
+      var ig = el('g', { opacity: insAlpha, transform: 'translate(800, 400)' }, stage);
+      el('rect', {
+        x: -130, y: -22, width: 260, height: 64,
+        fill: 'var(--bg-2)', stroke: 'var(--QED)', 'stroke-width': '1.6', rx: '3'
+      }, ig);
+      var iLab = el('text', {
+        x: 0, y: -4, fill: 'var(--QED)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '13', 'text-anchor': 'middle', 'font-weight': '700'
+      }, ig);
+      iLab.textContent = LANG === 'cn' ? '极限 -> 2' : 'LIMIT -> 2';
+      var iDesc = el('text', {
+        x: 0, y: 22, fill: 'var(--fg-dim)',
+        'font-family': "'Inter','Noto Sans SC',sans-serif",
+        'font-size': '11', 'text-anchor': 'middle'
+      }, ig);
+      iDesc.textContent = LANG === 'cn' ? '永远靠近, 永远不到' : 'approaches forever, never reaches';
+    }
+
+    var mg = el('g', { transform: 'translate(110, 540)' }, stage);
+    drawPiMascot(mg, p * 5, false);
+  }
+
+  // ====== Frame 3 — ATTACH: 把级数贴到时间轴 (现在=1, 1h前=0.5,...) ======
+  function drawFrame3(p){
+    drawBgGrid();
+    drawStepChain(2);
+
+    var ttl = el('text', {
+      x: 540, y: 80, fill: 'var(--math)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '14', 'text-anchor': 'middle', 'letter-spacing': '0.14em', 'font-weight': '700'
+    }, stage);
+    ttl.textContent = LANG === 'cn' ? '贴到时间轴: 每个时刻配一个权重' : 'Pin onto time-axis: each moment gets a weight';
+
+    var n = 5;
+    // time axis from right (now) to left (4h ago)
+    var axisY = 380;
+    var axisX1 = 130, axisX2 = 980;
+    var axisLen = axisX2 - axisX1;
+
+    // axis line + arrow (right = now)
+    el('line', { x1: axisX1, y1: axisY, x2: axisX2 + 6, y2: axisY,
+                 stroke: 'var(--AXIS)', 'stroke-width': '1.4' }, stage);
+    el('polygon', {
+      points: (axisX2+12)+','+(axisY)+' '+(axisX2+2)+','+(axisY-5)+' '+(axisX2+2)+','+(axisY+5),
+      fill: 'var(--AXIS)'
+    }, stage);
+    var axLab = el('text', {
+      x: axisX2 + 22, y: axisY + 4, fill: 'var(--fg-dim)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '11'
+    }, stage);
+    axLab.textContent = LANG === 'cn' ? '时间' : 'time';
+
+    // labels: now, 1h ago, 2h ago, 3h ago, 4h ago
+    // positions: spread evenly; right end = now
+    var posXs = [];
+    var pitch = axisLen / (n - 1);
+    for (var i = 0; i < n; i++){
+      // i=0 现在 (右), i=4 4h前 (左)
+      posXs.push(axisX2 - i * pitch);
+    }
+
+    var ATT_DURS = [0.0, 0.12, 0.22, 0.32, 0.42];
+
+    for (var i = 0; i < n; i++){
+      var alpha = clamp((p - ATT_DURS[i]) / 0.12, 0, 1);
+      if (alpha <= 0) continue;
+      var cx = posXs[i];
+      var w = WEIGHTS[i];
+      var isNew = (i === n-1) || ((i < n-1) && p < ATT_DURS[i+1]);
+
+      // tick on axis
+      el('line', { x1: cx, y1: axisY - 5, x2: cx, y2: axisY + 8,
+                   stroke: 'var(--AXIS)', 'stroke-width': '1.2', opacity: alpha }, stage);
+      // time label below axis
+      var tLab = el('text', {
+        x: cx, y: axisY + 28, fill: 'var(--fg-dim)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '11', 'text-anchor': 'middle', opacity: alpha
+      }, stage);
+      tLab.textContent = i === 0 ? (LANG === 'cn' ? '现在' : 'now') : ('-' + i + 'h');
+
+      // weight orb above axis, radius prop to w
+      var r = 8 + 36 * w;   // r at w=1 -> 44; w=1/16 -> 10.25
+      var orbY = axisY - 60 - r;
+      var bg = el('g', { opacity: alpha }, stage);
+      // glow
+      if (isNew){
+        el('circle', { cx: cx, cy: orbY, r: r + 6, fill: 'var(--SOLUTION)', opacity: 0.18 }, bg);
+      }
+      var orbColor = isNew ? 'var(--math)' : 'var(--PROOF)';
+      el('circle', {
+        cx: cx, cy: orbY, r: r,
+        fill: orbColor, opacity: 0.55 + 0.4 * w,
+        stroke: isNew ? 'var(--SOLUTION)' : 'var(--AXIS)', 'stroke-width': isNew ? '1.8' : '1.2'
+      }, bg);
+      // weight value inside orb
+      var wTx = el('text', {
+        x: cx, y: orbY + 4, fill: 'var(--SOLUTION)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': r > 22 ? '14' : '10', 'text-anchor': 'middle', 'font-weight': '700'
+      }, bg);
+      wTx.textContent = fmtFrac(i);
+      // dim "w =" label
+      var wLab = el('text', {
+        x: cx, y: orbY - r - 10, fill: 'var(--fg-mute)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '9', 'text-anchor': 'middle', 'letter-spacing': '0.1em'
+      }, bg);
+      wLab.textContent = 'w_' + (i+1);
+      // tether from orb down to axis tick
+      el('line', { x1: cx, y1: orbY + r, x2: cx, y2: axisY - 4,
+                   stroke: 'var(--line-strong)', 'stroke-width': '0.8',
+                   'stroke-dasharray': '2 3', opacity: alpha * 0.7 }, bg);
+    }
+
+    // formula bottom
+    var fAlpha = clamp((p - 0.6) / 0.2, 0, 1);
+    var fg = el('g', { opacity: fAlpha, transform: 'translate(540, 540)' }, stage);
+    el('rect', {
+      x: -250, y: -32, width: 500, height: 64,
+      fill: 'var(--bg-2)', stroke: 'var(--QED)', 'stroke-width': '1.8', rx: '4'
+    }, fg);
+    var fLab = el('text', {
+      x: 0, y: -10, fill: 'var(--fg-dim)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '10', 'text-anchor': 'middle', 'letter-spacing': '0.14em'
+    }, fg);
+    fLab.textContent = LANG === 'cn' ? '时间权重公式' : 'TIME-WEIGHT FORMULA';
+    var fEq = el('text', {
+      x: 0, y: 18, fill: 'var(--QED)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '22', 'text-anchor': 'middle', 'font-weight': '700'
+    }, fg);
+    fEq.textContent = 'w(age) = 1 / 2^age';
+
+    var mg = el('g', { transform: 'translate(60, 90)' }, stage);
+    drawPiMascot(mg, p * 5, false);
+  }
+
+  // ====== Frame 4 — WINDOW: 时间向前流, 旧权重再 ÷2 ======
+  function drawFrame4(p){
+    drawBgGrid();
+    drawStepChain(3);
+
+    var ttl = el('text', {
+      x: 540, y: 80, fill: 'var(--math)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '14', 'text-anchor': 'middle', 'letter-spacing': '0.14em', 'font-weight': '700'
+    }, stage);
+    ttl.textContent = LANG === 'cn' ? '滚动窗口: 时间往前走, 旧权重自动 ÷2' : 'Rolling window: time advances, old weights halve again';
+
+    var n = 5;
+    var axisY = 360;
+    var axisX1 = 130, axisX2 = 980;
+    var axisLen = axisX2 - axisX1;
+    var pitch = axisLen / (n - 1);
+
+    // window phase: 0..1 表示时间向前流逝程度 (新一小时 fade in 从右)
+    // 模拟"时间流动": age 实数 (从 0 滑到 1) -- 5 个 token 整体向左移 1 个 pitch, 同时
+    // 一个新 token 从右进入, 最左的 token 滑出.
+    // 用 easeInOut.
+    var shift = easeInOut(clamp(p / 0.85, 0, 1));   // 0..1
+
+    // 6 个 token, 序号 0..5, 真实 age = (i - 1) + shift; 即 i=0 是新数据 (age 从 -1 -> 0)
+    // ages: i=0: -1+shift -> shift-1 (drawn at age slot 0 when shift=1)
+    //       i=1: shift
+    //       i=2: 1+shift
+    //       i=3: 2+shift
+    //       i=4: 3+shift
+    //       i=5: 4+shift  (age 4..5 时基本淡出)
+    // 我们画 6 个, 让"新来的"从右进, "老的"从左淡出.
+    el('line', { x1: axisX1, y1: axisY, x2: axisX2 + 6, y2: axisY,
+                 stroke: 'var(--AXIS)', 'stroke-width': '1.4' }, stage);
+    el('polygon', {
+      points: (axisX2+12)+','+(axisY)+' '+(axisX2+2)+','+(axisY-5)+' '+(axisX2+2)+','+(axisY+5),
+      fill: 'var(--AXIS)'
+    }, stage);
+
+    // 5 fixed time slots labels (now, -1h, -2h, -3h, -4h)
+    for (var s = 0; s < n; s++){
+      var slotX = axisX2 - s * pitch;
+      el('line', { x1: slotX, y1: axisY - 4, x2: slotX, y2: axisY + 6,
+                   stroke: 'var(--AXIS)', 'stroke-width': '1', opacity: 0.7 }, stage);
+      var lab = el('text', {
+        x: slotX, y: axisY + 26, fill: 'var(--fg-mute)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '11', 'text-anchor': 'middle'
+      }, stage);
+      lab.textContent = s === 0 ? (LANG === 'cn' ? '现在' : 'now') : ('-' + s + 'h');
+    }
+
+    // tokens move: total 6, indices 0..5
+    // virtual age (continuous) for token i = (i - 1) + shift
+    // visible if vAge > -1 and vAge < 5
+    var FLOW_BG_ALPHA = 0.12;
+    // background flow lines indicating motion
+    for (var line = 0; line < 5; line++){
+      var phase = (shift + line * 0.2) % 1;
+      var fx = axisX2 - phase * pitch * 1.6;
+      var fy = axisY + 80;
+      el('line', { x1: fx + 30, y1: fy, x2: fx - 24, y2: fy,
+                   stroke: 'var(--PROOF)', 'stroke-width': '1', opacity: FLOW_BG_ALPHA + 0.05 * (1-phase) }, stage);
+      el('polygon', {
+        points: (fx - 24)+','+(fy - 3)+' '+(fx - 30)+','+(fy)+' '+(fx - 24)+','+(fy + 3),
+        fill: 'var(--PROOF)', opacity: FLOW_BG_ALPHA + 0.05 * (1-phase)
+      }, stage);
+    }
+
+    for (var i = 0; i < 6; i++){
+      var vAge = (i - 1) + shift;          // -1..5
+      if (vAge < -0.5 || vAge > 4.5) continue;
+      // weight if vAge >= 0 else interpret as fading-in new arrival
+      var w = vAge >= 0 ? (1 / Math.pow(2, vAge)) : (1 + vAge);  // when vAge in [-1,0): fade in from 0->1
+      var r = 8 + 36 * Math.max(0, Math.min(1, w));
+      var cx = axisX2 - vAge * pitch;
+      // edge alpha fade
+      var edgeFade = 1;
+      if (vAge > 3.8) edgeFade = Math.max(0, 1 - (vAge - 3.8) / 0.7);
+      if (vAge < -0.2) edgeFade = Math.max(0, 1 + (vAge + 0.2) / 0.6);
+
+      var isNew = vAge < 0.4;
+      var isFading = vAge > 3.0;
+      var orbY = axisY - 60 - r;
+
+      var bg = el('g', { opacity: edgeFade }, stage);
+      if (isNew){
+        el('circle', { cx: cx, cy: orbY, r: r + 8, fill: 'var(--SOLUTION)', opacity: 0.20 }, bg);
+      }
+      var orbColor = isNew ? 'var(--math)' : (isFading ? 'var(--SHADOW)' : 'var(--PROOF)');
+      el('circle', {
+        cx: cx, cy: orbY, r: Math.max(2, r),
+        fill: orbColor, opacity: Math.max(0.18, 0.55 + 0.4 * w),
+        stroke: isNew ? 'var(--SOLUTION)' : (isFading ? 'var(--line)' : 'var(--AXIS)'),
+        'stroke-width': isNew ? '1.8' : '1.0'
+      }, bg);
+      // weight label
+      if (r > 12 && edgeFade > 0.5){
+        var wTx = el('text', {
+          x: cx, y: orbY + 4, fill: 'var(--SOLUTION)',
+          'font-family': "'JetBrains Mono',ui-monospace,monospace",
+          'font-size': r > 22 ? '13' : '10', 'text-anchor': 'middle', 'font-weight': '700'
+        }, bg);
+        // show rounded weight value
+        wTx.textContent = vAge >= 0 ? (vAge < 0.05 ? '1' : (1 / Math.pow(2, Math.round(vAge))).toFixed(2).replace(/0+$/,'').replace(/\.$/,'.0')) : '~';
+      }
+      // small tether
+      if (edgeFade > 0.3 && r > 6){
+        el('line', { x1: cx, y1: orbY + r, x2: cx, y2: axisY - 4,
+                     stroke: 'var(--line-strong)', 'stroke-width': '0.7',
+                     'stroke-dasharray': '2 3', opacity: edgeFade * 0.6 }, bg);
+      }
+    }
+
+    // explanation cards on right
+    var cardAlpha = clamp((p - 0.4) / 0.2, 0, 1);
+    var cg = el('g', { opacity: cardAlpha, transform: 'translate(540, 510)' }, stage);
+    el('rect', {
+      x: -250, y: -26, width: 500, height: 56,
+      fill: 'var(--bg-2)', stroke: 'var(--math)', 'stroke-width': '1.6', rx: '3'
+    }, cg);
+    var ct1 = el('text', {
+      x: -240, y: -8, fill: 'var(--math)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '11', 'letter-spacing': '0.12em', 'font-weight': '700'
+    }, cg);
+    ct1.textContent = LANG === 'cn' ? '每过 1 小时:' : 'EVERY 1 HOUR:';
+    var ct2 = el('text', {
+      x: -240, y: 16, fill: 'var(--fg-dim)',
+      'font-family': "'Inter','Noto Sans SC',sans-serif",
+      'font-size': '12'
+    }, cg);
+    ct2.textContent = LANG === 'cn'
+      ? '所有旧数据 age + 1, 权重再 ÷ 2  ->  越老越接近 0, 自动出局'
+      : 'all ages +1, all weights /2  ->  oldest fades to ~0, drops out';
+
+    var mg = el('g', { transform: 'translate(60, 90)' }, stage);
+    drawPiMascot(mg, p * 6, false);
+  }
+
+  // ====== Frame 5 — NOWCAST: 公式 + 加权和 = 30, QED gold flash ======
+  function drawFrame5(p){
+    drawBgGrid();
+    drawStepChain(4);
+
+    var ttl = el('text', {
+      x: 540, y: 70, fill: 'var(--math)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '14', 'text-anchor': 'middle', 'letter-spacing': '0.14em', 'font-weight': '700'
+    }, stage);
+    ttl.textContent = LANG === 'cn' ? 'NowCast = 几何级数 + 加权平均' : 'NowCast = geometric series + weighted mean';
+
+    // table of 5 readings + weights + products
+    var headers = LANG === 'cn'
+      ? ['时间', 'PM2.5', 'w = 1/2^age', 'w * PM2.5']
+      : ['age', 'PM2.5', 'w = 1/2^age', 'w * PM2.5'];
+
+    var cardX = 100, cardY = 110;
+    var rowH = 38;
+    var colX = [0, 130, 270, 440];
+    var totalW = 600;
+
+    // header
+    var hg = el('g', { transform: 'translate(' + cardX + ',' + cardY + ')' }, stage);
+    el('rect', { x: -10, y: -10, width: totalW, height: 28,
+                 fill: 'var(--bg-2)', stroke: 'var(--line)', 'stroke-width': '0.8' }, hg);
+    headers.forEach(function(h, ci){
+      var hx = el('text', {
+        x: colX[ci], y: 8, fill: 'var(--math)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '11', 'letter-spacing': '0.1em', 'font-weight': '700'
+      }, hg);
+      hx.textContent = h;
+    });
+
+    var ROW_DURS = [0.0, 0.10, 0.20, 0.30, 0.40];
+    var visibleNumer = 0;
+    var visibleDenom = 0;
+
+    for (var i = 0; i < 5; i++){
+      var alpha = clamp((p - ROW_DURS[i]) / 0.10, 0, 1);
+      if (alpha <= 0) continue;
+      var rowY = cardY + 30 + i * rowH;
+      var rg = el('g', { opacity: alpha }, stage);
+      var bgColor = i % 2 === 0 ? 'var(--bg-1)' : 'var(--bg-2)';
+      el('rect', { x: cardX - 10, y: rowY - 18, width: totalW, height: rowH,
+                   fill: bgColor, opacity: 0.6 }, rg);
+      var pm = PM_READINGS[i];
+      var w = WEIGHTS[i];
+      var prod = w * pm;
+      if (alpha >= 1){ visibleNumer += prod; visibleDenom += w; }
+
+      var ageT = el('text', {
+        x: cardX + colX[0], y: rowY + 2, fill: 'var(--fg-dim)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '12'
+      }, rg);
+      ageT.textContent = i === 0 ? (LANG === 'cn' ? '现在 (0h)' : 'now (0h)') : ('-' + i + 'h');
+
+      var pmT = el('text', {
+        x: cardX + colX[1], y: rowY + 2, fill: 'var(--fg)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '13', 'font-weight': '700'
+      }, rg);
+      pmT.textContent = pm;
+
+      var wT = el('text', {
+        x: cardX + colX[2], y: rowY + 2, fill: 'var(--math)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '13', 'font-weight': '700'
+      }, rg);
+      wT.textContent = fmtFrac(i) + ' = ' + w;
+
+      var prT = el('text', {
+        x: cardX + colX[3], y: rowY + 2, fill: 'var(--SOLUTION)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '13', 'font-weight': '700'
+      }, rg);
+      prT.textContent = pm + ' * ' + w + ' = ' + prod.toFixed(prod === Math.floor(prod) ? 0 : 3).replace(/0+$/,'').replace(/\.$/,'');
+    }
+
+    // sum bar
+    var sumAlpha = clamp((p - 0.55) / 0.15, 0, 1);
+    if (sumAlpha > 0){
+      var sumY = cardY + 30 + 5 * rowH + 12;
+      var sg = el('g', { opacity: sumAlpha, transform: 'translate(' + cardX + ',' + sumY + ')' }, stage);
+      el('rect', { x: -10, y: -8, width: totalW, height: 38,
+                   fill: 'var(--bg-3)', stroke: 'var(--math)', 'stroke-width': '1.4', rx: '3' }, sg);
+      var s1 = el('text', {
+        x: colX[0], y: 16, fill: 'var(--fg-dim)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '11', 'letter-spacing': '0.08em'
+      }, sg);
+      s1.textContent = LANG === 'cn' ? '加总' : 'SUM';
+      var s2 = el('text', {
+        x: colX[2], y: 16, fill: 'var(--math)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '13', 'font-weight': '700'
+      }, sg);
+      s2.textContent = 'sum_w = 1.9375';
+      var s3 = el('text', {
+        x: colX[3], y: 16, fill: 'var(--SOLUTION)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '13', 'font-weight': '700'
+      }, sg);
+      s3.textContent = 'sum_wp = 58.25';
+    }
+
+    // formula + result
+    var resAlpha = clamp((p - 0.7) / 0.18, 0, 1);
+    if (resAlpha > 0){
+      var rg2 = el('g', { opacity: resAlpha, transform: 'translate(800, 470)' }, stage);
+      el('rect', {
+        x: -160, y: -56, width: 320, height: 130,
+        fill: 'var(--bg-2)', stroke: 'var(--QED)', 'stroke-width': '2.2', rx: '4'
+      }, rg2);
+      var rLab = el('text', {
+        x: 0, y: -36, fill: 'var(--fg-mute)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '10', 'text-anchor': 'middle', 'letter-spacing': '0.14em'
+      }, rg2);
+      rLab.textContent = 'NOWCAST';
+      var rEq = el('text', {
+        x: 0, y: -14, fill: 'var(--fg-dim)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '12', 'text-anchor': 'middle'
+      }, rg2);
+      rEq.textContent = '58.25 / 1.9375';
+      var rVal = el('text', {
+        x: 0, y: 28, fill: 'var(--QED)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '46', 'text-anchor': 'middle', 'font-weight': '700'
+      }, rg2);
+      rVal.textContent = '~ 30';
+      var rUnit = el('text', {
+        x: 0, y: 52, fill: 'var(--fg-dim)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '11', 'text-anchor': 'middle'
+      }, rg2);
+      rUnit.textContent = 'ug / m3';
+    }
+
+    // contrast with simple avg
+    var caAlpha = clamp((p - 0.78) / 0.15, 0, 1);
+    if (caAlpha > 0){
+      var cag = el('g', { opacity: caAlpha, transform: 'translate(800, 600)' }, stage);
+      el('rect', { x: -160, y: -22, width: 320, height: 44,
+                   fill: 'var(--bg-2)', stroke: 'var(--line-strong)', 'stroke-width': '1.2', rx: '3' }, cag);
+      var ca = el('text', {
+        x: 0, y: 6, fill: 'var(--fg-dim)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '12', 'text-anchor': 'middle'
+      }, cag);
+      ca.textContent = LANG === 'cn' ? '简单平均 = 43 (被旧脏数据拉高)' : 'plain avg = 43 (dragged up by old dirty data)';
+    }
+
+    var flash = document.getElementById('flash');
+    if (resAlpha > 0.6 && p > 0.78 && p < 0.95){
+      flash.classList.add('on');
+    } else {
+      flash.classList.remove('on');
+    }
+
+    var mg = el('g', { transform: 'translate(60, 540)' }, stage);
+    drawPiMascot(mg, p * 4, resAlpha >= 1);
+  }
+
+  // ====== Frame dispatcher ======
+  function drawFrame(idx, pp){
+    clearStage();
+    if (idx !== 4){
+      document.getElementById('flash').classList.remove('on');
+    }
+    if (idx === 0) drawFrame1(pp);
+    else if (idx === 1) drawFrame2(pp);
+    else if (idx === 2) drawFrame3(pp);
+    else if (idx === 3) drawFrame4(pp);
+    else if (idx === 4) drawFrame5(pp);
+  }
+
+  function updateUI(idx){
+    var f = FRAMES[idx];
+    document.getElementById('hudV1').textContent = (idx+1) + ' / 5';
+    document.getElementById('hudV2').textContent = f.hudStage[LANG] || f.hudStage.en;
+    document.getElementById('hudV3').textContent = f.hudR;
+    document.getElementById('hudV4').textContent = f.hudNow;
+    document.getElementById('subCn').textContent = LANG === 'cn' ? f.subCn : f.subEn;
+    document.getElementById('subEn').textContent = LANG === 'cn' ? f.subEn : f.subCn;
+    document.getElementById('stepName').textContent = f.stepName;
+    for (var i = 0; i < 5; i++){
+      var c = document.getElementById('chip' + i);
+      c.classList.remove('active', 'done');
+      if (i < idx) c.classList.add('done');
+      else if (i === idx) c.classList.add('active');
+    }
+  }
+
+  function updateI18N(){
+    document.getElementById('badgeMod').textContent = t('badgeMod');
+    document.getElementById('brandH1').textContent = t('brandH1');
+    document.getElementById('brandSub').textContent = t('brandSub');
+    document.getElementById('mascotName').textContent = t('mascotName');
+    document.querySelector('#g1 .gtxt').textContent = t('g1');
+    document.querySelector('#g2 .gtxt').textContent = t('g2');
+    document.querySelector('#g3 .gtxt').textContent = t('g3');
+    document.getElementById('hudL1').textContent = t('hudL1');
+    document.getElementById('hudL2').textContent = t('hudL2');
+    document.getElementById('hudL3').textContent = t('hudL3');
+    document.getElementById('hudL4').textContent = t('hudL4');
+    document.getElementById('langBtn').textContent = t('btnLang');
+    document.getElementById('flashSub').textContent = LANG === 'cn'
+      ? '几何衰减 = 自然忘旧'
+      : 'geometric decay = natural forgetting';
+  }
+
+  function tick(ts){
+    if (!frameStartTs) frameStartTs = ts;
+    var elapsed = ts - frameStartTs;
+    if (elapsed >= FRAME_MS){
+      currentFrame = (currentFrame + 1) % 5;
+      frameStartTs = ts;
+      updateUI(currentFrame);
+      elapsed = 0;
+    }
+    var pp = elapsed / FRAME_MS;
+    drawFrame(currentFrame, pp);
+    rafId = requestAnimationFrame(tick);
+  }
+
+  function start(){
+    updateI18N();
+    updateUI(currentFrame);
+    frameStartTs = 0;
+    if (rafId) cancelAnimationFrame(rafId);
+    rafId = requestAnimationFrame(tick);
+  }
+
+  document.getElementById('langBtn').addEventListener('click', function(){
+    LANG = (LANG === 'cn') ? 'en' : 'cn';
+    updateI18N();
+    updateUI(currentFrame);
+  });
+
+  start();
+})();
+</script>
+</body>
+</html>

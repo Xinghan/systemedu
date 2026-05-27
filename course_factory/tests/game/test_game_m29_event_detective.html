@@ -1,0 +1,952 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<title>M29 · 事件类型识别 — Sky Tower</title>
+<style>
+  :root{
+    /* Layer 1 — shared deep space canvas */
+    --bg-0: oklch(0.14 0.035 265);
+    --bg-1: oklch(0.18 0.04 265);
+    --bg-2: oklch(0.22 0.045 265);
+    --bg-3: oklch(0.28 0.05 265);
+    --line: oklch(0.35 0.05 265 / 0.35);
+    --line-strong: oklch(0.55 0.08 265 / 0.55);
+    --fg:      oklch(0.96 0.01 265);
+    --fg-dim:  oklch(0.75 0.02 265);
+    --fg-mute: oklch(0.55 0.03 265);
+    --gold:    oklch(0.85 0.14 85);
+
+    /* Layer 2 — meteo signature accent (cloud-blue) */
+    --meteo: oklch(0.82 0.10 245);
+
+    /* Layer 3 — meteo 5-color palette (themes.js MET-16) */
+    --CIRRUS:   oklch(0.82 0.10 245);
+    --FRONT:    oklch(0.62 0.13 245);
+    --STORM:    oklch(0.38 0.10 245);
+    --MIST:     oklch(0.95 0.05 245);
+    --SUNLIGHT: oklch(0.85 0.14 85);
+  }
+
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%;width:100%;font-family:'Inter','PingFang SC',sans-serif;color:var(--fg);background:var(--bg-0);overflow:hidden}
+
+  .stage{display:flex;flex-direction:row;height:100vh;width:100vw}
+
+  /* ---------- 200px sidebar ---------- */
+  .game-sidebar{
+    width:200px;flex:0 0 200px;
+    background:var(--bg-1);
+    border-right:1px solid var(--line);
+    display:flex;flex-direction:column;
+    padding:14px 12px;gap:10px;
+    overflow-y:auto;
+  }
+  .brand{
+    display:flex;flex-direction:column;gap:2px;
+    border-bottom:1px solid var(--line);padding-bottom:8px;
+  }
+  .brand .code{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--fg-mute);letter-spacing:1.2px}
+  .brand .title{font-size:13px;color:var(--fg);font-weight:600}
+  .brand .sub{font-size:10px;color:var(--fg-dim);margin-top:2px}
+
+  .mascot{
+    width:100%;height:78px;display:flex;align-items:center;justify-content:center;
+    background:var(--bg-2);border:1px solid var(--line);
+  }
+  .mascot svg{width:100%;height:100%}
+
+  .guide{
+    background:var(--bg-2);border:1px solid var(--line);
+    padding:8px;display:flex;flex-direction:column;gap:4px;
+  }
+  .guide-title{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--meteo);letter-spacing:1px}
+  .guide-line{font-size:10px;color:var(--fg-dim);line-height:1.4}
+
+  /* case list (6 cases) */
+  .case-block{display:flex;flex-direction:column;gap:6px}
+  .case-title{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--fg-dim);letter-spacing:1px}
+  .case-list{display:flex;flex-direction:column;gap:4px}
+  .case-row{
+    background:var(--bg-2);border:1px solid var(--line);
+    padding:6px 8px;display:flex;align-items:center;gap:6px;
+    cursor:pointer;
+    transition:background .15s, border-color .15s;
+  }
+  .case-row:hover{border-color:var(--meteo)}
+  .case-row.active{background:var(--bg-3);border-color:var(--meteo);box-shadow:3px 3px 0 var(--bg-0)}
+  .case-row .cidx{
+    font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--meteo);font-weight:600;
+    width:22px;text-align:center;
+  }
+  .case-row .clabel{
+    font-size:10px;color:var(--fg-dim);flex:1;line-height:1.2;
+  }
+  .case-row.solved .cidx{color:var(--SUNLIGHT)}
+  .case-row.solved .clabel{color:var(--fg)}
+  .case-row .cmark{
+    width:10px;height:10px;border:1px solid var(--line-strong);
+  }
+  .case-row.solved .cmark{background:var(--SUNLIGHT);border-color:var(--SUNLIGHT)}
+  .case-row.wrong .cmark{background:var(--STORM);border-color:var(--STORM)}
+
+  /* progress */
+  .progress-block{
+    background:var(--bg-2);border:1px solid var(--line);padding:8px;
+    display:flex;flex-direction:column;gap:6px;
+  }
+  .progress-title{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--fg-dim);letter-spacing:1px}
+  .progress-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:3px}
+  .progress-cell{
+    height:6px;background:var(--bg-3);border:1px solid var(--line);
+  }
+  .progress-cell.hit{background:var(--SUNLIGHT);border-color:var(--SUNLIGHT)}
+  .progress-cell.miss{background:var(--STORM);border-color:var(--STORM)}
+  .progress-text{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--fg-mute)}
+
+  /* sensitivity slider — secondary control so verify can wiggle it */
+  .slider-block{
+    background:var(--bg-2);border:1px solid var(--line);padding:8px;
+    display:flex;flex-direction:column;gap:6px;
+  }
+  .slider-label{
+    display:flex;justify-content:space-between;align-items:baseline;
+    font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--fg-dim);
+  }
+  .slider-label .val{color:var(--meteo);font-size:12px;font-weight:600}
+  input[type=range].threshold-slider{
+    -webkit-appearance:none;appearance:none;width:100%;height:5px;
+    background:linear-gradient(90deg, var(--MIST) 0%, var(--FRONT) 50%, var(--STORM) 100%);
+    border:1px solid var(--line);outline:none;cursor:pointer;
+  }
+  input[type=range].threshold-slider::-webkit-slider-thumb{
+    -webkit-appearance:none;appearance:none;
+    width:12px;height:16px;background:var(--SUNLIGHT);
+    border:2px solid var(--bg-0);box-shadow:2px 2px 0 var(--bg-0);
+    cursor:grab;
+  }
+  input[type=range].threshold-slider::-moz-range-thumb{
+    width:12px;height:16px;background:var(--SUNLIGHT);
+    border:2px solid var(--bg-0);box-shadow:2px 2px 0 var(--bg-0);
+    cursor:grab;
+  }
+
+  .sidebar-spacer{flex:1;min-height:6px}
+
+  .lang-btn{
+    width:100%;padding:7px 8px;background:var(--bg-3);
+    color:var(--fg);border:1px solid var(--line-strong);
+    font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:1px;
+    cursor:pointer;box-shadow:3px 3px 0 var(--bg-0);
+  }
+  .lang-btn:hover{background:var(--FRONT);color:var(--MIST)}
+
+  .reset-btn{
+    width:100%;padding:6px 8px;background:var(--bg-2);
+    color:var(--fg-dim);border:1px solid var(--line);
+    font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:1px;
+    cursor:pointer;
+  }
+  .reset-btn:hover{color:var(--meteo);border-color:var(--meteo)}
+
+  /* ---------- main ---------- */
+  .game-main{
+    flex:1;display:flex;flex-direction:column;
+    background:var(--bg-0);
+    min-width:0;
+  }
+  .main-header{
+    height:46px;border-bottom:1px solid var(--line);
+    display:flex;align-items:center;justify-content:space-between;
+    padding:0 18px;background:var(--bg-1);flex:0 0 46px;
+  }
+  .header-left{
+    font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--fg-dim);letter-spacing:1.4px;
+  }
+  .header-right{
+    display:flex;gap:14px;font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--fg-mute);
+  }
+  .hud-cell{display:flex;flex-direction:column;align-items:flex-end}
+  .hud-cell .label{font-size:9px;color:var(--fg-mute);letter-spacing:1px}
+  .hud-cell .val{color:var(--meteo);font-size:13px;font-weight:600}
+  .hud-cell .val.gold{color:var(--SUNLIGHT)}
+
+  .main-body{
+    flex:1;display:flex;flex-direction:column;min-height:0;
+    padding:14px 18px;gap:12px;
+  }
+
+  /* timeline pane */
+  .timeline-pane{
+    flex:2;display:flex;flex-direction:column;min-height:0;
+    background:var(--bg-1);border:1px solid var(--line);
+  }
+  .pane-title{
+    padding:8px 14px;font-family:'JetBrains Mono',monospace;font-size:10px;
+    color:var(--meteo);letter-spacing:1.4px;
+    border-bottom:1px solid var(--line);background:var(--bg-2);
+    display:flex;justify-content:space-between;align-items:center;
+  }
+  .pane-title .sub{color:var(--fg-mute);font-size:9px;letter-spacing:.8px}
+  .timeline-body{flex:1;position:relative;display:flex;flex-direction:column;min-height:0}
+  #timelineSvg{width:100%;height:100%;display:block}
+
+  /* milestone toast */
+  .milestone{
+    position:absolute;left:50%;top:50px;transform:translateX(-50%) translateY(-20px);
+    background:var(--SUNLIGHT);color:var(--bg-0);
+    font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:700;
+    padding:10px 22px;letter-spacing:1.5px;
+    box-shadow:4px 4px 0 var(--bg-0);
+    opacity:0;transition:all .35s;pointer-events:none;z-index:20;
+  }
+  .milestone.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+  /* reasoning pane — 5 event-type chips + case caption + verdict */
+  .reason-pane{
+    flex:1;display:flex;flex-direction:column;min-height:0;
+    background:var(--bg-1);border:1px solid var(--line);
+  }
+  .reason-body{
+    flex:1;display:flex;flex-direction:column;gap:10px;
+    padding:12px 14px;min-height:0;
+  }
+  .case-caption{
+    font-size:11px;color:var(--fg-dim);line-height:1.5;
+  }
+  .case-caption .cn{color:var(--meteo);font-weight:600;font-family:'JetBrains Mono',monospace;letter-spacing:.6px}
+  .chips-row{
+    display:flex;flex-wrap:wrap;gap:8px;
+  }
+  .type-chip{
+    background:var(--bg-2);border:1px solid var(--line-strong);
+    padding:8px 12px;cursor:pointer;
+    display:flex;flex-direction:column;gap:2px;
+    box-shadow:3px 3px 0 var(--bg-0);
+    transition:transform .12s, border-color .15s;
+    user-select:none;
+    min-width:140px;
+  }
+  .type-chip:hover{transform:translate(-1px,-1px);box-shadow:4px 4px 0 var(--bg-0);border-color:var(--meteo)}
+  .type-chip:active{transform:translate(1px,1px);box-shadow:1px 1px 0 var(--bg-0)}
+  .type-chip[data-type="local_burst"]{border-left:3px solid var(--FRONT)}
+  .type-chip[data-type="regional_haze"]{border-left:3px solid var(--STORM)}
+  .type-chip[data-type="wind_clear"]{border-left:3px solid var(--CIRRUS)}
+  .type-chip[data-type="calm_baseline"]{border-left:3px solid var(--MIST)}
+  .type-chip[data-type="wildfire_long"]{border-left:3px solid var(--SUNLIGHT)}
+  .type-chip.disabled{pointer-events:none;opacity:.5}
+  .type-chip .tname{
+    font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:600;letter-spacing:.5px;color:var(--fg);
+  }
+  .type-chip .tdesc{
+    font-size:9px;color:var(--fg-dim);line-height:1.3;
+  }
+  .verdict-box{
+    margin-top:auto;
+    font-size:11px;color:var(--fg-dim);line-height:1.45;min-height:38px;
+    border-top:1px dashed var(--line);padding-top:8px;
+  }
+  .verdict-box .verdict-tag{
+    display:inline-block;padding:2px 8px;
+    font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:600;letter-spacing:1px;
+    margin-right:8px;
+    border:1px solid var(--line-strong);
+  }
+  .verdict-box.right .verdict-tag{color:var(--SUNLIGHT);border-color:var(--SUNLIGHT);background:var(--bg-2)}
+  .verdict-box.wrong .verdict-tag{color:var(--STORM);border-color:var(--STORM);background:var(--bg-2)}
+  .verdict-box .verdict-text{color:var(--fg)}
+
+  .case-nav{
+    display:flex;gap:8px;align-items:center;
+  }
+  .nav-btn{
+    padding:6px 12px;background:var(--bg-3);
+    color:var(--fg);border:1px solid var(--line-strong);
+    font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:1px;
+    cursor:pointer;box-shadow:3px 3px 0 var(--bg-0);
+  }
+  .nav-btn:hover{background:var(--FRONT);color:var(--MIST)}
+  .nav-btn:disabled{opacity:.35;cursor:not-allowed}
+
+  /* cloud mascot animation */
+  @keyframes drift {
+    0%, 100% { transform: translateX(-2px); }
+    50%      { transform: translateX(2px); }
+  }
+  #cloudBody { animation: drift 4.5s ease-in-out infinite; transform-origin: center; }
+</style>
+</head>
+<body>
+  <div class="stage">
+    <!-- ============ Sidebar ============ -->
+    <aside class="game-sidebar">
+      <div class="brand">
+        <span class="code">MET-16 · M29</span>
+        <span class="title" data-i18n-cn="事件类型识别" data-i18n-en="Event Type Detective">事件类型识别</span>
+        <span class="sub" data-i18n-cn="看 24h 曲线推断空气事件" data-i18n-en="Read 24h curves, infer events">看 24h 曲线推断空气事件</span>
+      </div>
+
+      <div class="mascot" aria-label="Cloud mascot">
+        <svg viewBox="0 0 160 78" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <linearGradient id="cloudGrad" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="var(--MIST)"/>
+              <stop offset="100%" stop-color="var(--CIRRUS)"/>
+            </linearGradient>
+          </defs>
+          <g id="cloudBody" transform="translate(80 40)">
+            <ellipse cx="-22" cy="4" rx="16" ry="13" fill="url(#cloudGrad)" stroke="var(--FRONT)" stroke-width="1"/>
+            <ellipse cx="0" cy="-4" rx="20" ry="16" fill="url(#cloudGrad)" stroke="var(--FRONT)" stroke-width="1"/>
+            <ellipse cx="22" cy="4" rx="16" ry="13" fill="url(#cloudGrad)" stroke="var(--FRONT)" stroke-width="1"/>
+            <polygon points="-9,-3 -5,-3 -7,1 -3,1 -7,7 -7,3 -11,3" fill="var(--SUNLIGHT)" stroke="var(--STORM)" stroke-width="0.5"/>
+            <polygon points="5,-3 9,-3 7,1 11,1 7,7 7,3 3,3" fill="var(--SUNLIGHT)" stroke="var(--STORM)" stroke-width="0.5"/>
+            <circle cx="-12" cy="20" r="1.5" fill="var(--SUNLIGHT)"/>
+            <circle cx="0" cy="24" r="1.2" fill="var(--SUNLIGHT)"/>
+            <circle cx="12" cy="20" r="1.5" fill="var(--SUNLIGHT)"/>
+          </g>
+        </svg>
+      </div>
+
+      <div class="guide">
+        <div class="guide-title">HOW TO PLAY</div>
+        <div class="guide-line" data-i18n-cn="1 · 选案件看 24h 曲线" data-i18n-en="1 · Pick a case, read curve">1 · 选案件看 24h 曲线</div>
+        <div class="guide-line" data-i18n-cn="2 · 从 5 种类型 chip 选答案" data-i18n-en="2 · Pick a type from 5 chips">2 · 从 5 种类型 chip 选答案</div>
+        <div class="guide-line" data-i18n-cn="3 · 答对 5 个解锁数据侦探" data-i18n-en="3 · Solve 5 to unlock detective">3 · 答对 5 个解锁数据侦探</div>
+      </div>
+
+      <div class="case-block">
+        <div class="case-title" data-i18n-cn="6 个案件 · CASES" data-i18n-en="6 CASES">6 个案件 · CASES</div>
+        <div class="case-list" id="caseList">
+          <div class="case-row active" data-case="0">
+            <span class="cidx">01</span>
+            <span class="clabel" data-i18n-cn="邻居烧烤" data-i18n-en="Neighbor BBQ">邻居烧烤</span>
+            <span class="cmark"></span>
+          </div>
+          <div class="case-row" data-case="1">
+            <span class="cidx">02</span>
+            <span class="clabel" data-i18n-cn="冬雾笼罩" data-i18n-en="Winter haze">冬雾笼罩</span>
+            <span class="cmark"></span>
+          </div>
+          <div class="case-row" data-case="2">
+            <span class="cidx">03</span>
+            <span class="clabel" data-i18n-cn="午后大风" data-i18n-en="Afternoon gust">午后大风</span>
+            <span class="cmark"></span>
+          </div>
+          <div class="case-row" data-case="3">
+            <span class="cidx">04</span>
+            <span class="clabel" data-i18n-cn="周末清晨" data-i18n-en="Quiet weekend">周末清晨</span>
+            <span class="cmark"></span>
+          </div>
+          <div class="case-row" data-case="4">
+            <span class="cidx">05</span>
+            <span class="clabel" data-i18n-cn="除夕鞭炮" data-i18n-en="Firework eve">除夕鞭炮</span>
+            <span class="cmark"></span>
+          </div>
+          <div class="case-row" data-case="5">
+            <span class="cidx">06</span>
+            <span class="clabel" data-i18n-cn="山火飘烟" data-i18n-en="Wildfire smoke">山火飘烟</span>
+            <span class="cmark"></span>
+          </div>
+        </div>
+      </div>
+
+      <div class="progress-block">
+        <div class="progress-title" data-i18n-cn="侦探进度" data-i18n-en="DETECTIVE">侦探进度</div>
+        <div class="progress-grid" id="progressGrid">
+          <div class="progress-cell" data-slot="0"></div>
+          <div class="progress-cell" data-slot="1"></div>
+          <div class="progress-cell" data-slot="2"></div>
+          <div class="progress-cell" data-slot="3"></div>
+          <div class="progress-cell" data-slot="4"></div>
+          <div class="progress-cell" data-slot="5"></div>
+        </div>
+        <div class="progress-text"><span id="progressCount">0</span> / 6 <span data-i18n-cn="对" data-i18n-en="solved">对</span> · <span data-i18n-cn="目标 5" data-i18n-en="goal 5">目标 5</span></div>
+      </div>
+
+      <div class="slider-block">
+        <div class="slider-label">
+          <span data-i18n-cn="阈值 (μg/m³)" data-i18n-en="Threshold (μg/m³)">阈值 (μg/m³)</span>
+          <span class="val"><span id="threshReadout">75</span></span>
+        </div>
+        <input type="range" min="20" max="200" step="5" value="75" id="threshSlider" class="threshold-slider" aria-label="PM2.5 threshold line" />
+        <div class="slider-label" style="font-size:8px">
+          <span>20</span><span>75</span><span>150</span><span>200</span>
+        </div>
+      </div>
+
+      <div class="sidebar-spacer"></div>
+
+      <button id="resetBtn" class="reset-btn" type="button" data-i18n-cn="重置 RESET" data-i18n-en="RESET">重置 RESET</button>
+      <button id="langBtn" class="lang-btn" type="button">EN / 中文</button>
+    </aside>
+
+    <!-- ============ Main ============ -->
+    <main class="game-main">
+      <header class="main-header">
+        <div class="header-left" data-i18n-cn="M29 · 6 个 24h PM2.5 案件" data-i18n-en="M29 · 6 cases of 24h PM2.5">M29 · 6 个 24h PM2.5 案件</div>
+        <div class="header-right">
+          <div class="hud-cell">
+            <span class="label">CASE</span>
+            <span class="val"><span id="hudCase">01</span>/06</span>
+          </div>
+          <div class="hud-cell">
+            <span class="label">PEAK</span>
+            <span class="val" id="hudPeak">--</span>
+          </div>
+          <div class="hud-cell">
+            <span class="label">SOLVED</span>
+            <span class="val" id="hudSolved">0/6</span>
+          </div>
+        </div>
+      </header>
+
+      <div class="main-body">
+        <section class="timeline-pane">
+          <div class="pane-title">
+            <span data-i18n-cn="案件曲线 · PM2.5 (μg/m³) vs 小时" data-i18n-en="Case curve · PM2.5 (μg/m³) vs hour">案件曲线 · PM2.5 (μg/m³) vs 小时</span>
+            <span class="sub" data-i18n-cn="形状即线索 · 突跳/平台/突降/平稳/长持续" data-i18n-en="Shape is the clue: spike / plateau / drop / flat / long">形状即线索 · 突跳/平台/突降/平稳/长持续</span>
+          </div>
+          <div class="timeline-body">
+            <svg id="timelineSvg" viewBox="0 0 900 360" preserveAspectRatio="xMidYMid meet"></svg>
+            <div id="milestone" class="milestone" data-i18n-cn="解锁 · 数据侦探" data-i18n-en="Unlocked · Data Detective">解锁 · 数据侦探</div>
+          </div>
+        </section>
+
+        <section class="reason-pane">
+          <div class="pane-title">
+            <span data-i18n-cn="选 1 种事件类型" data-i18n-en="Pick 1 event type">选 1 种事件类型</span>
+            <span class="sub" id="caseHintTag" data-i18n-cn="案件 01" data-i18n-en="Case 01">案件 01</span>
+          </div>
+          <div class="reason-body">
+            <div class="case-caption" id="caseCaption">
+              <span class="cn" id="caseCn">邻居烧烤</span>
+              <span id="caseDesc" data-i18n-cn="楼下邻居傍晚架烤炉" data-i18n-en="Neighbor fires up grill at dusk">楼下邻居傍晚架烤炉</span>
+            </div>
+            <div class="chips-row" id="chipsRow">
+              <button type="button" class="type-chip" data-type="local_burst">
+                <span class="tname" data-i18n-cn="本地短暂源" data-i18n-en="Local burst">本地短暂源</span>
+                <span class="tdesc" data-i18n-cn="突跳 &lt;4h · 烧烤/鞭炮" data-i18n-en="Spike &lt;4h · BBQ/firework">突跳 &lt;4h · 烧烤/鞭炮</span>
+              </button>
+              <button type="button" class="type-chip" data-type="regional_haze">
+                <span class="tname" data-i18n-cn="区域雾霾" data-i18n-en="Regional haze">区域雾霾</span>
+                <span class="tdesc" data-i18n-cn="平台 12-24h 持续高" data-i18n-en="Plateau 12-24h high">平台 12-24h 持续高</span>
+              </button>
+              <button type="button" class="type-chip" data-type="wind_clear">
+                <span class="tname" data-i18n-cn="大风清吹" data-i18n-en="Wind clearance">大风清吹</span>
+                <span class="tdesc" data-i18n-cn="突降 4-8h 浓度对折" data-i18n-en="Drop 4-8h halves">突降 4-8h 浓度对折</span>
+              </button>
+              <button type="button" class="type-chip" data-type="calm_baseline">
+                <span class="tname" data-i18n-cn="平静基线" data-i18n-en="Calm baseline">平静基线</span>
+                <span class="tdesc" data-i18n-cn="全天 &lt;30 几乎不动" data-i18n-en="All-day &lt;30 flat">全天 &lt;30 几乎不动</span>
+              </button>
+              <button type="button" class="type-chip" data-type="wildfire_long">
+                <span class="tname" data-i18n-cn="山火/沙尘暴" data-i18n-en="Wildfire/dust">山火/沙尘暴</span>
+                <span class="tdesc" data-i18n-cn="长持续 24h+ 高位" data-i18n-en="Long &gt;24h sustained">长持续 24h+ 高位</span>
+              </button>
+            </div>
+            <div class="verdict-box" id="verdictBox">
+              <span class="verdict-tag" id="verdictTag" data-i18n-cn="待判定" data-i18n-en="PENDING">待判定</span>
+              <span class="verdict-text" id="verdictText" data-i18n-cn="选一个 chip 提交你的推断。" data-i18n-en="Pick a chip to submit your inference.">选一个 chip 提交你的推断。</span>
+            </div>
+            <div class="case-nav">
+              <button type="button" class="nav-btn" id="prevBtn" data-i18n-cn="上一个" data-i18n-en="PREV">上一个</button>
+              <button type="button" class="nav-btn" id="nextBtn" data-i18n-cn="下一个" data-i18n-en="NEXT">下一个</button>
+            </div>
+          </div>
+        </section>
+      </div>
+    </main>
+  </div>
+
+<script>
+(function(){
+  'use strict';
+
+  // ===== 6 cases =====
+  // Each curve: 24 hourly PM2.5 samples. Hand-tuned so shape uniquely encodes type.
+  var CASES = [
+    {
+      id: 0, cnName:'邻居烧烤', enName:'Neighbor BBQ',
+      cnDesc:'楼下邻居傍晚架烤炉, 18-20 点单峰突跳',
+      enDesc:'Neighbor fires up grill at dusk, sharp 18-20 spike',
+      // baseline ~18, single spike 18-20h to 145, decay by 21h
+      series: [18,17,16,16,17,18, 20,22,20,18,17,18, 19,20,18,17,16,32, 95,148,132,55,24,18],
+      correct: 'local_burst',
+      cnExplain:'18-20 点 3 小时窗口浓度从 32 飙到 148, 21 点已掉回 55 — 典型本地源短脉冲, 没有传播到第二天。',
+      enExplain:'18-20 spike 32→148 then drops to 55 by 21h — classic local short-pulse, no carry-over to next day.'
+    },
+    {
+      id: 1, cnName:'冬雾笼罩', enName:'Winter haze',
+      cnDesc:'冷高压稳定 + 边界层降低, 全天 PM2.5 居高不下',
+      enDesc:'Cold high-pressure + low boundary layer, all-day PM2.5 stays high',
+      // plateau 90-120 all day, gentle daily swing
+      series: [95,98,102,105,108,110, 112,115,118,118,116,114, 112,110,108,106,108,110, 113,116,118,115,108,100],
+      correct: 'regional_haze',
+      cnExplain:'24 小时全部 >90, 上下振幅小, 无突跳无突降 — 大尺度气团稳定罩住整个区域。',
+      enExplain:'24h all >90, low amplitude, no spike or drop — large-scale air mass stably blanketing the region.'
+    },
+    {
+      id: 2, cnName:'午后大风', enName:'Afternoon gust',
+      cnDesc:'清晨高浓度积压, 14 点起冷锋过境瞬间清吹',
+      enDesc:'Morning buildup, cold front passes at 14h and clears air',
+      // 60-85 morning, sharp drop 13->17 from 78 to 16
+      series: [62,68,72,78,82,85, 84,80,78,75,72,70, 68,62,48,30,20,16, 15,16,17,18,18,17],
+      correct: 'wind_clear',
+      cnExplain:'13 点 62 到 17 点 16, 4 小时浓度对折再对折 — 风把颗粒从盆地里吹走, 之后维持低位。',
+      enExplain:'62 at 13h drops to 16 by 17h, halving twice in 4h — wind sweeps particles out of basin, baseline stays low after.'
+    },
+    {
+      id: 3, cnName:'周末清晨', enName:'Quiet weekend',
+      cnDesc:'无通勤无工厂运转, 全天 PM2.5 几乎不波动',
+      enDesc:'No commute, no factory, PM2.5 nearly motionless all day',
+      // flat 18-26 all day
+      series: [18,19,20,20,21,22, 22,23,24,25,26,26, 25,24,23,22,22,23, 24,25,24,23,21,20],
+      correct: 'calm_baseline',
+      cnExplain:'24 小时全部 <30, 振幅 <10, 没有任何事件信号 — 就是干净的"什么都没发生"基线。',
+      enExplain:'24h all <30, amplitude <10, no event signal — this is just a clean "nothing happened" baseline.'
+    },
+    {
+      id: 4, cnName:'除夕鞭炮', enName:'Firework eve',
+      cnDesc:'22 点到次日 0 点多个尖峰群发, 邻居此起彼伏放炮',
+      enDesc:'Multiple clustered spikes 22h to midnight as neighbors set off fireworks',
+      // 22-23h cluster of sharp spikes
+      series: [20,18,18,17,17,18, 20,22,22,20,18,18, 19,20,18,17,18,22, 28,42,55,135,168,142],
+      correct: 'local_burst',
+      cnExplain:'22-23 点 3 个尖峰 (135/168/142) 集中在 2 小时窗口, 之间快速回落 — 多个本地脉冲源同时燃放, 没有持续。',
+      enExplain:'3 spikes (135/168/142) packed into 22-23h with fast troughs between — many simultaneous local pulse sources, no persistence.'
+    },
+    {
+      id: 5, cnName:'山火飘烟', enName:'Wildfire smoke',
+      cnDesc:'上风向山火持续燃烧, 烟柱整日不散',
+      enDesc:'Upwind wildfire burns nonstop, smoke plume lingers all day',
+      // sustained 160-200 all day
+      series: [162,168,172,178,182,185, 188,192,195,198,200,198, 195,192,188,185,183,180, 178,175,172,170,168,165],
+      correct: 'wildfire_long',
+      cnExplain:'24 小时全部 >160, 没有任何低谷, 没有正常昼夜节律 — 单一巨型外部源持续输入, 比雾霾峰值更高、更稳。',
+      enExplain:'24h all >160, no trough, no diurnal cycle — one giant external source pours in continuously, higher and steadier than haze.'
+    }
+  ];
+
+  // ===== state (no window-shadow names) =====
+  var stateGame = {
+    lang: 'cn',
+    activeCase: 0,
+    threshold: 75,
+    answers: [null, null, null, null, null, null],  // 'local_burst' etc, null = not yet
+    correctMark: [null, null, null, null, null, null], // true / false / null
+    milestoneFired: false
+  };
+
+  // ===== DOM refs =====
+  var svg = document.getElementById('timelineSvg');
+  var threshSlider = document.getElementById('threshSlider');
+  var threshReadout = document.getElementById('threshReadout');
+  var hudCase = document.getElementById('hudCase');
+  var hudPeak = document.getElementById('hudPeak');
+  var hudSolved = document.getElementById('hudSolved');
+  var progressGrid = document.getElementById('progressGrid');
+  var progressCount = document.getElementById('progressCount');
+  var milestone = document.getElementById('milestone');
+  var langBtn = document.getElementById('langBtn');
+  var resetBtn = document.getElementById('resetBtn');
+  var caseList = document.getElementById('caseList');
+  var caseRows = caseList.querySelectorAll('.case-row');
+  var chips = document.querySelectorAll('.type-chip');
+  var prevBtn = document.getElementById('prevBtn');
+  var nextBtn = document.getElementById('nextBtn');
+  var caseCn = document.getElementById('caseCn');
+  var caseDesc = document.getElementById('caseDesc');
+  var caseHintTag = document.getElementById('caseHintTag');
+  var verdictBox = document.getElementById('verdictBox');
+  var verdictTag = document.getElementById('verdictTag');
+  var verdictText = document.getElementById('verdictText');
+
+  // ===== SVG timeline build =====
+  var SVG_NS = 'http://www.w3.org/2000/svg';
+  var VBW = 900, VBH = 360;
+  var PAD_L = 56, PAD_R = 24, PAD_T = 26, PAD_B = 56;
+  var plotW = VBW - PAD_L - PAD_R;
+  var plotH = VBH - PAD_T - PAD_B;
+  var maxPM = 220;
+
+  function xFromHour(h){ return PAD_L + (h / 23) * plotW; }
+  function yFromPM(v){ return PAD_T + plotH - (Math.min(v, maxPM) / maxPM) * plotH; }
+
+  function elNS(name, attrs){
+    var el = document.createElementNS(SVG_NS, name);
+    if (attrs){
+      for (var k in attrs){ el.setAttribute(k, attrs[k]); }
+    }
+    return el;
+  }
+
+  function getActiveSeries(){ return CASES[stateGame.activeCase].series; }
+
+  function buildTimeline(){
+    while (svg.firstChild) svg.removeChild(svg.firstChild);
+
+    var series = getActiveSeries();
+
+    // hour ticks
+    var hourTicks = [0,3,6,9,12,15,18,21,23];
+    for (var hi = 0; hi < hourTicks.length; hi++){
+      var hh = hourTicks[hi];
+      var x = xFromHour(hh);
+      svg.appendChild(elNS('line', {
+        x1:x, y1:PAD_T, x2:x, y2:PAD_T+plotH,
+        stroke:'oklch(0.30 0.04 265 / 0.5)', 'stroke-width':1
+      }));
+      var t = elNS('text', {
+        x:x, y:PAD_T+plotH+18,
+        'text-anchor':'middle',
+        'font-family':'JetBrains Mono, monospace', 'font-size':11,
+        fill:'oklch(0.55 0.03 265)'
+      });
+      t.textContent = (hh < 10 ? '0'+hh : hh) + 'h';
+      svg.appendChild(t);
+    }
+
+    // y grid + labels
+    var yTicks = [0, 50, 100, 150, 200];
+    for (var yi = 0; yi < yTicks.length; yi++){
+      var pv = yTicks[yi];
+      var y = yFromPM(pv);
+      svg.appendChild(elNS('line', {
+        x1:PAD_L, y1:y, x2:PAD_L+plotW, y2:y,
+        stroke:'oklch(0.30 0.04 265 / 0.45)', 'stroke-width':1
+      }));
+      var yt = elNS('text', {
+        x:PAD_L-8, y:y+4,
+        'text-anchor':'end',
+        'font-family':'JetBrains Mono, monospace', 'font-size':10,
+        fill:'oklch(0.55 0.03 265)'
+      });
+      yt.textContent = pv;
+      svg.appendChild(yt);
+    }
+
+    // axis labels
+    var xlbl = elNS('text', {
+      x:PAD_L+plotW/2, y:VBH-12,
+      'text-anchor':'middle',
+      'font-family':'JetBrains Mono, monospace', 'font-size':12,
+      fill:'oklch(0.75 0.02 265)'
+    });
+    xlbl.textContent = stateGame.lang === 'cn' ? '小时 (00 — 23 h)' : 'hour (00 — 23 h)';
+    svg.appendChild(xlbl);
+
+    var ylbl = elNS('text', {
+      x:18, y:PAD_T+plotH/2,
+      'text-anchor':'middle',
+      'font-family':'JetBrains Mono, monospace', 'font-size':12,
+      fill:'oklch(0.75 0.02 265)',
+      transform:'rotate(-90 18 '+(PAD_T+plotH/2)+')'
+    });
+    ylbl.textContent = 'PM2.5 (μg/m³)';
+    svg.appendChild(ylbl);
+
+    // threshold band — STORM tint above slider value
+    var thrY = yFromPM(stateGame.threshold);
+    svg.appendChild(elNS('rect', {
+      x:PAD_L, y:PAD_T, width:plotW, height:Math.max(0, thrY-PAD_T),
+      fill:'oklch(0.38 0.10 245 / 0.10)', stroke:'none'
+    }));
+    svg.appendChild(elNS('line', {
+      x1:PAD_L, y1:thrY, x2:PAD_L+plotW, y2:thrY,
+      stroke:'var(--SUNLIGHT)', 'stroke-width':1.3,
+      'stroke-dasharray':'6,4', opacity:0.85
+    }));
+    var thrLbl = elNS('text', {
+      x:PAD_L+plotW-4, y:thrY-6,
+      'text-anchor':'end',
+      'font-family':'JetBrains Mono, monospace', 'font-size':10,
+      fill:'var(--SUNLIGHT)', 'font-weight':600
+    });
+    thrLbl.textContent = 'threshold ' + stateGame.threshold + ' μg/m³';
+    svg.appendChild(thrLbl);
+
+    // area under curve
+    var ptsArr = [];
+    for (var i = 0; i < series.length; i++){
+      ptsArr.push(xFromHour(i) + ',' + yFromPM(series[i]));
+    }
+    var area = elNS('polygon', {
+      points: PAD_L + ',' + (PAD_T+plotH) + ' ' + ptsArr.join(' ') + ' ' + (PAD_L+plotW) + ',' + (PAD_T+plotH),
+      fill: 'oklch(0.82 0.10 245 / 0.14)',
+      stroke:'none'
+    });
+    svg.appendChild(area);
+
+    var poly = elNS('polyline', {
+      points: ptsArr.join(' '),
+      fill:'none',
+      stroke:'var(--meteo)',
+      'stroke-width':2.4,
+      'stroke-linejoin':'round'
+    });
+    svg.appendChild(poly);
+
+    // sample dots — light cirrus marker
+    for (var d = 0; d < series.length; d++){
+      var aboveThr = series[d] > stateGame.threshold;
+      svg.appendChild(elNS('circle', {
+        cx:xFromHour(d), cy:yFromPM(series[d]),
+        r:2.4,
+        fill: aboveThr ? 'var(--SUNLIGHT)' : 'var(--CIRRUS)',
+        stroke:'var(--MIST)', 'stroke-width':0.6,
+        opacity:0.9
+      }));
+    }
+
+    // peak marker
+    var maxIdx = 0, maxVal = series[0];
+    for (var p = 1; p < series.length; p++){
+      if (series[p] > maxVal){ maxVal = series[p]; maxIdx = p; }
+    }
+    svg.appendChild(elNS('circle', {
+      cx:xFromHour(maxIdx), cy:yFromPM(maxVal),
+      r:5,
+      fill:'var(--FRONT)',
+      stroke:'var(--MIST)', 'stroke-width':1.4
+    }));
+    var pkl = elNS('text', {
+      x:xFromHour(maxIdx), y:yFromPM(maxVal)-10,
+      'text-anchor':'middle',
+      'font-family':'JetBrains Mono, monospace', 'font-size':10,
+      fill:'var(--FRONT)', 'font-weight':600
+    });
+    pkl.textContent = 'peak ' + maxVal;
+    svg.appendChild(pkl);
+
+    // case caption inside SVG (top-left)
+    var caption = elNS('text', {
+      x:PAD_L+6, y:PAD_T-6,
+      'font-family':'JetBrains Mono, monospace', 'font-size':11,
+      fill:'var(--meteo)', 'font-weight':600,
+      'letter-spacing':1
+    });
+    caption.textContent = (stateGame.lang === 'cn'
+      ? 'CASE ' + (stateGame.activeCase < 9 ? '0' : '') + (stateGame.activeCase+1) + ' · ' + CASES[stateGame.activeCase].cnName
+      : 'CASE ' + (stateGame.activeCase < 9 ? '0' : '') + (stateGame.activeCase+1) + ' · ' + CASES[stateGame.activeCase].enName);
+    svg.appendChild(caption);
+  }
+
+  // ===== update HUD / progress =====
+  function solvedCount(){
+    var n = 0;
+    for (var i = 0; i < stateGame.correctMark.length; i++){
+      if (stateGame.correctMark[i] === true) n++;
+    }
+    return n;
+  }
+
+  function updateHUD(){
+    var idx = stateGame.activeCase;
+    hudCase.textContent = (idx < 9 ? '0' : '') + (idx+1);
+    var series = getActiveSeries();
+    var maxVal = series[0];
+    for (var i = 1; i < series.length; i++){ if (series[i] > maxVal) maxVal = series[i]; }
+    hudPeak.textContent = maxVal;
+
+    var s = solvedCount();
+    hudSolved.textContent = s + '/6';
+    progressCount.textContent = s;
+
+    var cells = progressGrid.querySelectorAll('.progress-cell');
+    for (var ci = 0; ci < cells.length; ci++){
+      var sid = parseInt(cells[ci].getAttribute('data-slot'), 10);
+      cells[ci].classList.remove('hit','miss');
+      if (stateGame.correctMark[sid] === true) cells[ci].classList.add('hit');
+      else if (stateGame.correctMark[sid] === false) cells[ci].classList.add('miss');
+    }
+
+    // case rows
+    for (var cri = 0; cri < caseRows.length; cri++){
+      var cidx = parseInt(caseRows[cri].getAttribute('data-case'), 10);
+      caseRows[cri].classList.remove('active','solved','wrong');
+      if (cidx === idx) caseRows[cri].classList.add('active');
+      if (stateGame.correctMark[cidx] === true) caseRows[cri].classList.add('solved');
+      else if (stateGame.correctMark[cidx] === false) caseRows[cri].classList.add('wrong');
+    }
+
+    // milestone — solve >= 5
+    if (s >= 5 && !stateGame.milestoneFired){
+      stateGame.milestoneFired = true;
+      hudSolved.classList.add('gold');
+      milestone.classList.add('show');
+      setTimeout(function(){ milestone.classList.remove('show'); }, 3500);
+    } else if (s < 5){
+      hudSolved.classList.remove('gold');
+      stateGame.milestoneFired = false;
+    }
+  }
+
+  function updateCaseHeader(){
+    var c = CASES[stateGame.activeCase];
+    caseCn.textContent = stateGame.lang === 'cn' ? c.cnName : c.enName;
+    caseDesc.textContent = stateGame.lang === 'cn' ? c.cnDesc : c.enDesc;
+    caseHintTag.textContent = stateGame.lang === 'cn'
+      ? '案件 ' + (stateGame.activeCase < 9 ? '0' : '') + (stateGame.activeCase+1)
+      : 'Case ' + (stateGame.activeCase < 9 ? '0' : '') + (stateGame.activeCase+1);
+  }
+
+  function updateVerdict(){
+    var idx = stateGame.activeCase;
+    var ans = stateGame.answers[idx];
+    var mark = stateGame.correctMark[idx];
+    var c = CASES[idx];
+
+    verdictBox.classList.remove('right','wrong');
+
+    if (ans === null){
+      verdictTag.textContent = stateGame.lang === 'cn' ? '待判定' : 'PENDING';
+      verdictText.textContent = stateGame.lang === 'cn'
+        ? '选一个 chip 提交你的推断。'
+        : 'Pick a chip to submit your inference.';
+      // re-enable chips
+      for (var k = 0; k < chips.length; k++) chips[k].classList.remove('disabled');
+      return;
+    }
+
+    // chips disabled after answer
+    for (var m = 0; m < chips.length; m++) chips[m].classList.add('disabled');
+
+    if (mark === true){
+      verdictBox.classList.add('right');
+      verdictTag.textContent = stateGame.lang === 'cn' ? '推断正确' : 'CORRECT';
+      verdictText.textContent = stateGame.lang === 'cn' ? c.cnExplain : c.enExplain;
+    } else {
+      verdictBox.classList.add('wrong');
+      verdictTag.textContent = stateGame.lang === 'cn' ? '推断不对' : 'WRONG';
+      var pickedName = pickedTypeName(ans);
+      var correctName = pickedTypeName(c.correct);
+      verdictText.textContent = stateGame.lang === 'cn'
+        ? '你选了 "'+pickedName+'", 真相是 "'+correctName+'"。' + c.cnExplain
+        : 'You picked "'+pickedName+'", truth is "'+correctName+'". ' + c.enExplain;
+    }
+  }
+
+  function pickedTypeName(typeId){
+    var dict_cn = {
+      local_burst:'本地短暂源', regional_haze:'区域雾霾',
+      wind_clear:'大风清吹', calm_baseline:'平静基线', wildfire_long:'山火/沙尘暴'
+    };
+    var dict_en = {
+      local_burst:'Local burst', regional_haze:'Regional haze',
+      wind_clear:'Wind clearance', calm_baseline:'Calm baseline', wildfire_long:'Wildfire/dust'
+    };
+    return stateGame.lang === 'cn' ? dict_cn[typeId] : dict_en[typeId];
+  }
+
+  // ===== switch case =====
+  function switchCase(newIdx){
+    if (newIdx < 0 || newIdx >= CASES.length) return;
+    stateGame.activeCase = newIdx;
+    buildTimeline();
+    updateHUD();
+    updateCaseHeader();
+    updateVerdict();
+    refreshNavBtns();
+  }
+
+  function refreshNavBtns(){
+    prevBtn.disabled = (stateGame.activeCase === 0);
+    nextBtn.disabled = (stateGame.activeCase === CASES.length - 1);
+  }
+
+  // ===== answer chip =====
+  function pickType(typeId){
+    var idx = stateGame.activeCase;
+    if (stateGame.answers[idx] !== null) return;  // already answered
+    stateGame.answers[idx] = typeId;
+    stateGame.correctMark[idx] = (CASES[idx].correct === typeId);
+    updateVerdict();
+    updateHUD();
+  }
+
+  // ===== reset =====
+  function resetAll(){
+    stateGame.activeCase = 0;
+    stateGame.threshold = 75;
+    stateGame.answers = [null, null, null, null, null, null];
+    stateGame.correctMark = [null, null, null, null, null, null];
+    stateGame.milestoneFired = false;
+    threshSlider.value = 75;
+    threshReadout.textContent = '75';
+    hudSolved.classList.remove('gold');
+    milestone.classList.remove('show');
+    buildTimeline();
+    updateHUD();
+    updateCaseHeader();
+    updateVerdict();
+    refreshNavBtns();
+  }
+
+  // ===== i18n =====
+  function refreshI18N(){
+    var nodes = document.querySelectorAll('[data-i18n-cn]');
+    for (var i = 0; i < nodes.length; i++){
+      var el = nodes[i];
+      var cn = el.getAttribute('data-i18n-cn');
+      var en = el.getAttribute('data-i18n-en');
+      var content = stateGame.lang === 'cn' ? cn : en;
+      if (content.indexOf('<') >= 0) el.innerHTML = content;
+      else el.textContent = content;
+    }
+    document.documentElement.lang = stateGame.lang === 'cn' ? 'zh-CN' : 'en';
+    buildTimeline();
+    updateCaseHeader();
+    updateVerdict();
+  }
+
+  // ===== event listeners =====
+  threshSlider.addEventListener('input', function(){
+    stateGame.threshold = parseInt(threshSlider.value, 10);
+    threshReadout.textContent = stateGame.threshold;
+    buildTimeline();
+  });
+  threshSlider.addEventListener('change', function(){
+    stateGame.threshold = parseInt(threshSlider.value, 10);
+    threshReadout.textContent = stateGame.threshold;
+    buildTimeline();
+  });
+
+  langBtn.addEventListener('click', function(){
+    stateGame.lang = stateGame.lang === 'cn' ? 'en' : 'cn';
+    refreshI18N();
+  });
+
+  resetBtn.addEventListener('click', resetAll);
+
+  prevBtn.addEventListener('click', function(){ switchCase(stateGame.activeCase - 1); });
+  nextBtn.addEventListener('click', function(){ switchCase(stateGame.activeCase + 1); });
+
+  for (var ri = 0; ri < caseRows.length; ri++){
+    (function(row){
+      row.addEventListener('click', function(){
+        var idx = parseInt(row.getAttribute('data-case'), 10);
+        switchCase(idx);
+      });
+    })(caseRows[ri]);
+  }
+
+  for (var ci = 0; ci < chips.length; ci++){
+    (function(chip){
+      chip.addEventListener('click', function(){
+        if (chip.classList.contains('disabled')) return;
+        var t = chip.getAttribute('data-type');
+        pickType(t);
+      });
+    })(chips[ci]);
+  }
+
+  // init
+  buildTimeline();
+  updateHUD();
+  updateCaseHeader();
+  updateVerdict();
+  refreshNavBtns();
+})();
+</script>
+</body>
+</html>

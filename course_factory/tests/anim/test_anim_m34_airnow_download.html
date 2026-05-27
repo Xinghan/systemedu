@@ -1,0 +1,1094 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>M34 · 找最近 AirNow 站点 + 下载 30 天数据</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+SC:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    /* Surfaces — Claude warm cream */
+    --paper:    #FAF9F5;
+    --paper-2:  #F1EDDF;
+    --card:     #FFFFFF;
+    --ink:      #191814;
+    --ink-2:    #2B2924;
+    --sub:      #6B6557;
+    --sub-2:    #9D978A;
+    --border:   #EBE5D6;
+    --border-2: #D9D1BD;
+    --hairline: #F2EDE0;
+
+    /* Primary — Claude coral */
+    --primary:      #D97757;
+    --primary-ink:  #9A4A2E;
+    --primary-soft: #F8EDE5;
+    --primary-line: #ECCFB8;
+
+    /* Domain accent · climate */
+    --climate:      #527B95;
+    --climate-soft: #DEE5EC;
+    --climate-line: #B6C5D2;
+
+    --shadow-sm: 0 1px 2px 0 rgba(25,24,20,.04);
+    --shadow:    0 1px 3px 0 rgba(25,24,20,.06), 0 1px 2px -1px rgba(25,24,20,.04);
+    --shadow-md: 0 4px 8px -2px rgba(25,24,20,.06), 0 2px 4px -2px rgba(25,24,20,.04);
+    --shadow-lg: 0 12px 24px -6px rgba(25,24,20,.1), 0 4px 8px -4px rgba(25,24,20,.05);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    height: 100vh; overflow: hidden;
+    background: var(--paper); color: var(--ink);
+    font-family: 'Inter', 'Noto Sans SC', 'PingFang SC', sans-serif;
+    font-size: 14px; line-height: 1.5;
+    display: flex;
+  }
+  .mono { font-family: 'JetBrains Mono', monospace; }
+
+  /* ============ Sidebar 200px ============ */
+  .sidebar {
+    width: 200px; flex-shrink: 0; height: 100vh;
+    background: var(--paper-2);
+    border-right: 1px solid var(--border);
+    display: flex; flex-direction: column;
+    padding: 22px 18px 18px;
+  }
+  .brand-row { display: flex; align-items: center; gap: 8px; margin-bottom: 18px; }
+  .brand-dot {
+    width: 10px; height: 10px; border-radius: 50%;
+    background: var(--primary);
+    box-shadow: 0 0 0 4px var(--primary-soft);
+    animation: pulse 2.4s ease-in-out infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { box-shadow: 0 0 0 4px var(--primary-soft); }
+    50%      { box-shadow: 0 0 0 6px var(--primary-soft); }
+  }
+  .brand-tag {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; letter-spacing: 0.08em;
+    color: var(--sub); font-weight: 600;
+  }
+  .brand-title {
+    font-size: 15px; font-weight: 700; color: var(--ink);
+    line-height: 1.35; margin-bottom: 4px;
+  }
+  .brand-sub {
+    font-size: 11px; color: var(--sub); line-height: 1.5;
+    font-family: 'JetBrains Mono', monospace;
+  }
+  .guide-h {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px; letter-spacing: 0.12em;
+    color: var(--sub-2); margin: 24px 0 8px;
+    text-transform: uppercase;
+  }
+  .guide-list { list-style: none; padding: 0; margin: 0; }
+  .guide-list li {
+    font-size: 12px; color: var(--ink-2); line-height: 1.55;
+    padding: 8px 0 8px 12px;
+    border-left: 2px solid var(--border-2);
+    margin-bottom: 4px;
+  }
+  .guide-list li .num {
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--primary-ink); font-weight: 600;
+    font-size: 10px; margin-right: 6px;
+  }
+  .guide-list li .en {
+    display: block; font-family: 'JetBrains Mono', monospace;
+    font-size: 10px; color: var(--sub-2); margin-top: 2px;
+  }
+  .lang-btn {
+    margin-top: auto;
+    border: 1px solid var(--border-2);
+    background: var(--card);
+    color: var(--ink); cursor: pointer;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; font-weight: 600;
+    padding: 9px 12px; border-radius: 6px;
+    transition: all 180ms ease;
+    letter-spacing: 0.06em;
+  }
+  .lang-btn:hover {
+    border-color: var(--primary-line);
+    background: var(--primary-soft);
+    color: var(--primary-ink);
+  }
+
+  /* ============ Main ============ */
+  .main {
+    flex: 1; height: 100vh; overflow-y: auto;
+    padding: 20px 26px 22px;
+    display: flex; flex-direction: column; gap: 14px;
+  }
+  .section-tag {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px; letter-spacing: 0.12em;
+    color: var(--sub); text-transform: uppercase;
+  }
+  .section-tag .bar { width: 18px; height: 1px; background: var(--border-2); }
+
+  /* ----- A: Hero ----- */
+  .hero {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    box-shadow: var(--shadow-sm);
+    padding: 14px 22px;
+    margin-top: 4px;
+  }
+  .hero-row {
+    display: flex; justify-content: space-between; align-items: flex-start;
+    gap: 18px;
+  }
+  .hero-title {
+    font-size: 18px; font-weight: 700; color: var(--ink);
+    line-height: 1.35;
+  }
+  .hero-title .accent { color: var(--primary-ink); }
+  .hero-title .km { color: var(--climate); font-family: 'JetBrains Mono', monospace; }
+  .hero-sub {
+    font-size: 12px; color: var(--sub); margin-top: 6px;
+    font-family: 'JetBrains Mono', monospace;
+    line-height: 1.5;
+  }
+  .hero-badge {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px; font-weight: 700;
+    padding: 5px 11px; border-radius: 999px;
+    background: var(--climate-soft); color: var(--climate);
+    border: 1px solid var(--climate-line);
+    letter-spacing: 0.08em; white-space: nowrap;
+    align-self: center;
+  }
+
+  /* ----- B: Map ----- */
+  .map-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    box-shadow: var(--shadow-sm);
+    padding: 14px 18px 14px;
+    display: grid;
+    grid-template-columns: 1.35fr 1fr;
+    gap: 18px;
+  }
+  .map-svg-wrap {
+    display: flex; align-items: stretch;
+  }
+  .map-svg {
+    width: 100%; height: 220px; display: block;
+    background: var(--paper);
+    border: 1px solid var(--hairline);
+    border-radius: 6px;
+  }
+  .station-grp { cursor: pointer; }
+  .station-dot {
+    fill: var(--card); stroke: var(--climate);
+    stroke-width: 1.4; transition: fill 200ms ease, r 200ms ease;
+  }
+  .station-grp:hover .station-dot {
+    fill: var(--climate-soft);
+  }
+  .station-grp.nearest .station-dot {
+    fill: var(--climate); stroke: var(--climate); stroke-width: 1.6;
+  }
+  .station-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px; fill: var(--sub-2);
+    pointer-events: none; text-anchor: middle;
+  }
+  .station-grp.nearest .station-label {
+    fill: var(--climate); font-weight: 700;
+  }
+  .home-pin .home-dot {
+    fill: var(--primary); stroke: #fff; stroke-width: 1.6;
+  }
+  .home-pin .home-ring {
+    fill: none; stroke: var(--primary); stroke-width: 1; opacity: 0.5;
+    animation: ringPulse 2.6s ease-in-out infinite;
+  }
+  @keyframes ringPulse {
+    0%, 100% { r: 14; opacity: 0.6; }
+    50%      { r: 22; opacity: 0.15; }
+  }
+  .home-label {
+    font-family: 'Inter', 'Noto Sans SC', sans-serif;
+    font-size: 11px; fill: var(--primary-ink); font-weight: 700;
+    text-anchor: middle; pointer-events: none;
+  }
+  .connector {
+    stroke: var(--climate); stroke-width: 1.6;
+    stroke-dasharray: 4 3; fill: none;
+  }
+  .connector-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px; fill: var(--climate); font-weight: 700;
+    text-anchor: middle; pointer-events: none;
+  }
+  .map-grid {
+    stroke: var(--hairline); stroke-width: 1; fill: none;
+  }
+  .map-compass {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 8px; fill: var(--sub-2);
+  }
+  .map-explain {
+    display: flex; flex-direction: column; gap: 8px;
+    padding: 4px 0;
+  }
+  .map-explain h3 {
+    font-size: 13px; font-weight: 700; color: var(--ink);
+    margin: 0 0 2px;
+  }
+  .map-explain p {
+    font-size: 11.5px; color: var(--sub); line-height: 1.55;
+    margin: 0;
+  }
+  .map-explain p .cn {
+    color: var(--ink-2); font-family: 'Inter', 'Noto Sans SC', sans-serif;
+    display: block; margin-bottom: 1px;
+  }
+  .legend-row {
+    display: flex; gap: 12px; flex-wrap: wrap;
+    margin-top: 4px;
+  }
+  .legend-item {
+    display: inline-flex; align-items: center; gap: 5px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px; color: var(--sub);
+  }
+  .legend-dot {
+    width: 9px; height: 9px; border-radius: 50%;
+    border: 1px solid var(--border-2);
+  }
+  .legend-dot.home { background: var(--primary); border-color: var(--primary); }
+  .legend-dot.nearest { background: var(--climate); border-color: var(--climate); }
+  .legend-dot.other { background: var(--card); border-color: var(--climate); }
+  .legend-line {
+    width: 14px; height: 0; border-top: 1.5px dashed var(--climate);
+  }
+
+  /* ----- C: 4 steps ----- */
+  .steps-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    box-shadow: var(--shadow-sm);
+    padding: 14px 18px 12px;
+  }
+  .steps-head {
+    display: flex; justify-content: space-between; align-items: baseline;
+    margin-bottom: 10px;
+  }
+  .steps-h2 {
+    font-size: 14px; font-weight: 700; color: var(--ink); margin: 0;
+  }
+  .steps-sub {
+    font-size: 11px; color: var(--sub); font-family: 'JetBrains Mono', monospace;
+  }
+  .steps-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+  }
+  .step-tile {
+    border: 1px solid var(--border-2);
+    border-radius: 8px;
+    padding: 10px 12px 10px;
+    background: var(--paper);
+    cursor: pointer;
+    transition: border-color 200ms ease, background 200ms ease, transform 200ms ease;
+    display: flex; flex-direction: column; gap: 6px;
+    min-height: 96px;
+  }
+  .step-tile:hover {
+    border-color: var(--climate);
+    background: var(--climate-soft);
+  }
+  .step-tile.active {
+    border-color: var(--climate);
+    background: var(--climate-soft);
+  }
+  .step-head {
+    display: flex; align-items: center; gap: 8px;
+  }
+  .step-num {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px; font-weight: 700;
+    color: var(--climate);
+    background: var(--card);
+    border: 1px solid var(--climate-line);
+    padding: 2px 7px; border-radius: 999px;
+    letter-spacing: 0.06em;
+  }
+  .step-tag {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px; color: var(--sub-2);
+    margin-left: auto;
+    letter-spacing: 0.06em;
+  }
+  .step-title {
+    font-size: 12.5px; font-weight: 700; color: var(--ink);
+    line-height: 1.35;
+  }
+  .step-sub {
+    font-size: 10.5px; color: var(--sub); line-height: 1.45;
+    font-family: 'JetBrains Mono', monospace;
+  }
+  .step-hint {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px; color: var(--climate);
+    letter-spacing: 0.06em;
+    margin-top: auto;
+  }
+
+  .step-detail {
+    margin-top: 10px;
+    background: #1a1814;
+    border: 1px solid var(--border-2);
+    border-radius: 6px;
+    padding: 11px 14px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; color: #F1EDDF;
+    line-height: 1.55;
+    overflow-x: auto;
+    min-height: 92px;
+    display: none;
+  }
+  .step-detail.show { display: block; }
+  .step-detail .prompt { color: var(--primary); margin-right: 4px; }
+  .step-detail .cmt    { color: #9D978A; }
+  .step-detail .k      { color: #E8B473; }
+  .step-detail .s      { color: #B4D4A8; }
+  .step-detail .url    { color: #B6C5D2; }
+  .step-detail .hl     { color: #D97757; }
+  .step-detail-empty {
+    margin-top: 10px;
+    background: var(--paper-2);
+    border: 1px dashed var(--border-2);
+    border-radius: 6px;
+    padding: 10px 14px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; color: var(--sub);
+    line-height: 1.55;
+    min-height: 44px;
+  }
+  .step-detail-empty.hide { display: none; }
+  .step-detail-empty .cn {
+    color: var(--ink-2); font-family: 'Inter', 'Noto Sans SC', sans-serif;
+    margin-right: 6px;
+  }
+
+  /* ----- D: CSV Schema ----- */
+  .schema-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    box-shadow: var(--shadow-sm);
+    padding: 14px 18px 12px;
+  }
+  .schema-head {
+    display: flex; justify-content: space-between; align-items: baseline;
+    margin-bottom: 8px;
+  }
+  .schema-h2 {
+    font-size: 14px; font-weight: 700; color: var(--ink); margin: 0;
+  }
+  .schema-sub {
+    font-size: 11px; color: var(--sub); font-family: 'JetBrains Mono', monospace;
+  }
+  .schema-row {
+    display: grid;
+    grid-template-columns: 1.05fr 0.95fr;
+    gap: 14px;
+  }
+  .schema-table {
+    border-collapse: collapse;
+    width: 100%;
+    font-family: 'JetBrains Mono', monospace;
+  }
+  .schema-table th {
+    text-align: left;
+    font-size: 9px; color: var(--sub-2);
+    letter-spacing: 0.08em; text-transform: uppercase;
+    padding: 4px 8px 6px;
+    border-bottom: 1px solid var(--border-2);
+    font-weight: 600;
+  }
+  .schema-table td {
+    font-size: 11px; color: var(--ink-2);
+    padding: 5px 8px;
+    border-bottom: 1px solid var(--hairline);
+  }
+  .schema-table tr:last-child td { border-bottom: none; }
+  .schema-table .field { color: var(--climate); font-weight: 700; }
+  .schema-table .type  { color: var(--sub); }
+  .schema-table .ex    { color: var(--primary-ink); }
+  .csv-preview {
+    background: var(--paper-2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 9px 12px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10.5px; line-height: 1.65;
+    color: var(--ink-2);
+    overflow-x: auto;
+    white-space: pre;
+    max-height: 220px;
+    overflow-y: auto;
+  }
+  .csv-preview .head { color: var(--climate); font-weight: 700; }
+  .csv-preview .num  { color: var(--primary-ink); }
+  .csv-preview .dim  { color: var(--sub-2); }
+
+  /* ----- E: 3 promises ----- */
+  .promise-grid {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px;
+  }
+  .promise-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 14px;
+    box-shadow: var(--shadow-sm);
+    display: flex; gap: 12px; align-items: flex-start;
+    transition: border-color 200ms ease, background 200ms ease;
+  }
+  .promise-card.active {
+    border-color: var(--primary);
+    background: var(--primary-soft);
+  }
+  .promise-card.active .promise-num {
+    color: var(--primary-ink);
+  }
+  .promise-num {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 20px; font-weight: 700;
+    color: var(--sub-2);
+    line-height: 1; min-width: 28px;
+  }
+  .promise-body { flex: 1; }
+  .promise-title {
+    font-size: 12.5px; font-weight: 700; color: var(--ink);
+    margin-bottom: 4px; line-height: 1.35;
+  }
+  .promise-sub {
+    font-size: 10.5px; color: var(--sub); line-height: 1.5;
+    font-family: 'JetBrains Mono', monospace;
+  }
+</style>
+</head>
+<body>
+
+<aside class="sidebar">
+  <div class="brand-row">
+    <span class="brand-dot"></span>
+    <span class="brand-tag" id="brandTag">M34 · AIRNOW</span>
+  </div>
+  <div class="brand-title" id="brandTitle">下载 30 天 EPA 数据</div>
+  <div class="brand-sub" id="brandSub">find nearest site · pull 30d CSV</div>
+
+  <div class="guide-h" id="guideH">怎么看这张图</div>
+  <ul class="guide-list">
+    <li id="g1"><span class="num">01</span>看地图 · 你家离最近 EPA 站点多远<span class="en">How far is the nearest EPA site</span></li>
+    <li id="g2"><span class="num">02</span>点 4 个步骤卡 · 展开命令<span class="en">Click each step for the command</span></li>
+    <li id="g3"><span class="num">03</span>对照 CSV schema · 知道下完啥<span class="en">Read the CSV schema</span></li>
+  </ul>
+
+  <button class="lang-btn" id="langBtn" type="button">中文 / EN</button>
+</aside>
+
+<main class="main">
+
+  <!-- ========= A · Hero ========= -->
+  <section>
+    <div class="section-tag"><span class="bar"></span><span id="t1">A · AirNow 是什么</span></div>
+    <div class="hero">
+      <div class="hero-row">
+        <div>
+          <div class="hero-title" id="heroTitle">
+            AirNow = <span class="accent">美国 EPA 官方实时空气网</span> · 你家方圆 <span class="km">5 km</span> 内可能就有一个
+          </div>
+          <div class="hero-sub" id="heroSub">
+            EPA + NOAA + 地方环保局共建 · 全美 ~2000 个 BAM/FEM 高保真站点 · 数据用于 AQI 官方发布, 法庭/学术都引这家。
+          </div>
+        </div>
+        <span class="hero-badge" id="heroBadge">EPA · FEM-GRADE · CITABLE</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========= B · Map ========= -->
+  <section>
+    <div class="section-tag"><span class="bar"></span><span id="t2">B · 你家方圆 10 km 的 EPA 站点</span></div>
+    <div class="map-card" style="margin-top:6px">
+
+      <div class="map-svg-wrap">
+        <svg class="map-svg" viewBox="0 0 480 220" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg">
+          <!-- subtle grid -->
+          <g class="map-grid">
+            <line x1="0"   y1="55"  x2="480" y2="55"/>
+            <line x1="0"   y1="110" x2="480" y2="110"/>
+            <line x1="0"   y1="165" x2="480" y2="165"/>
+            <line x1="120" y1="0"   x2="120" y2="220"/>
+            <line x1="240" y1="0"   x2="240" y2="220"/>
+            <line x1="360" y1="0"   x2="360" y2="220"/>
+          </g>
+
+          <!-- scale bar -->
+          <g transform="translate(20,196)">
+            <line x1="0" y1="0" x2="60" y2="0" stroke="#9D978A" stroke-width="1.4"/>
+            <line x1="0" y1="-3" x2="0" y2="3" stroke="#9D978A" stroke-width="1.4"/>
+            <line x1="60" y1="-3" x2="60" y2="3" stroke="#9D978A" stroke-width="1.4"/>
+            <text x="30" y="14" class="map-compass" text-anchor="middle">5 km</text>
+          </g>
+
+          <!-- compass -->
+          <g transform="translate(450,30)">
+            <circle r="11" fill="#FAF9F5" stroke="#D9D1BD" stroke-width="1"/>
+            <path d="M0,-7 L3,2 L0,0 L-3,2 z" fill="#527B95"/>
+            <text x="0" y="-13" class="map-compass" text-anchor="middle">N</text>
+          </g>
+
+          <!-- connector home -> nearest (st2) -->
+          <line class="connector" x1="240" y1="110" x2="180" y2="78"/>
+          <text x="195" y="86" class="connector-label">3.2 km</text>
+
+          <!-- Home pin -->
+          <g class="home-pin">
+            <circle class="home-ring" cx="240" cy="110" r="14"/>
+            <circle class="home-dot" cx="240" cy="110" r="7"/>
+            <text x="240" y="134" class="home-label" data-i="homeLabel">你家</text>
+          </g>
+
+          <!-- EPA stations -->
+          <!-- nearest -->
+          <g class="station-grp nearest" data-station="s2">
+            <circle class="station-dot" cx="180" cy="78" r="6"/>
+            <text x="180" y="62" class="station-label" data-i="s2name">Oakland-West</text>
+            <text x="180" y="96" class="station-label" data-i="s2id">SiteID 060010011</text>
+          </g>
+          <g class="station-grp" data-station="s1">
+            <circle class="station-dot" cx="92" cy="44" r="5"/>
+            <text x="92" y="32" class="station-label" data-i="s1name">Berkeley-N</text>
+            <text x="92" y="60" class="station-label">8.7 km</text>
+          </g>
+          <g class="station-grp" data-station="s3">
+            <circle class="station-dot" cx="320" cy="62" r="5"/>
+            <text x="320" y="50" class="station-label" data-i="s3name">SF-Mission</text>
+            <text x="320" y="78" class="station-label">6.5 km</text>
+          </g>
+          <g class="station-grp" data-station="s4">
+            <circle class="station-dot" cx="358" cy="158" r="5"/>
+            <text x="358" y="146" class="station-label" data-i="s4name">San-Pablo-Ave</text>
+            <text x="358" y="174" class="station-label">9.1 km</text>
+          </g>
+          <g class="station-grp" data-station="s5">
+            <circle class="station-dot" cx="118" cy="170" r="5"/>
+            <text x="118" y="158" class="station-label" data-i="s5name">Hayward-S</text>
+            <text x="118" y="186" class="station-label">11.8 km</text>
+          </g>
+        </svg>
+      </div>
+
+      <div class="map-explain">
+        <h3 id="mapH">最近站点 · Oakland-West</h3>
+        <p id="mapP1">
+          <span class="cn">EPA 站点全国 ~2000 个 · 主要在城市 + 工业区 · 离你家最近的就是要的那个, 它的数据你完全可以拿。</span>
+          ~2000 EPA sites in US · cluster in cities · the closest one is yours to use.
+        </p>
+        <p id="mapP2">
+          <span class="cn">下载靠 SiteID (9 位数字) · 不是名字 · 在 AirNow 监测点列表里查一次记住。</span>
+          Download by 9-digit SiteID · not name · look it up once on AirNow monitoring sites list.
+        </p>
+        <div class="legend-row">
+          <span class="legend-item"><span class="legend-dot home"></span><span data-i="lgHome">你家</span></span>
+          <span class="legend-item"><span class="legend-dot nearest"></span><span data-i="lgNear">最近站点</span></span>
+          <span class="legend-item"><span class="legend-dot other"></span><span data-i="lgOther">其他 EPA 站</span></span>
+          <span class="legend-item"><span class="legend-line"></span><span data-i="lgDist">直线距离</span></span>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ========= C · 4 steps ========= -->
+  <section>
+    <div class="section-tag"><span class="bar"></span><span id="t3">C · 4 步把 30 天数据搬回家</span></div>
+    <div class="steps-card" style="margin-top:6px">
+      <div class="steps-head">
+        <h2 class="steps-h2" id="stepsH2">点任一步骤展开命令</h2>
+        <span class="steps-sub" id="stepsSub">click any step to expand the command</span>
+      </div>
+
+      <div class="steps-grid">
+
+        <div class="step-tile" data-step="s1" tabindex="0">
+          <div class="step-head">
+            <span class="step-num">STEP 1</span>
+            <span class="step-tag" data-i="st1tag">5 分钟</span>
+          </div>
+          <div class="step-title" data-i="st1t">注册 AirNow API key</div>
+          <div class="step-sub" data-i="st1s">docs.airnowapi.org · 邮箱激活即得</div>
+          <div class="step-hint" data-i="st1h">CLICK TO OPEN</div>
+        </div>
+
+        <div class="step-tile" data-step="s2" tabindex="0">
+          <div class="step-head">
+            <span class="step-num">STEP 2</span>
+            <span class="step-tag" data-i="st2tag">1 行命令</span>
+          </div>
+          <div class="step-title" data-i="st2t">装 airnow-py 库</div>
+          <div class="step-sub" data-i="st2s">pip · 官方 SDK 已封好 endpoint</div>
+          <div class="step-hint" data-i="st2h">CLICK TO OPEN</div>
+        </div>
+
+        <div class="step-tile" data-step="s3" tabindex="0">
+          <div class="step-head">
+            <span class="step-num">STEP 3</span>
+            <span class="step-tag" data-i="st3tag">查表</span>
+          </div>
+          <div class="step-title" data-i="st3t">选定站点 SiteID</div>
+          <div class="step-sub" data-i="st3s">monitoring-sites endpoint · 按坐标过滤</div>
+          <div class="step-hint" data-i="st3h">CLICK TO OPEN</div>
+        </div>
+
+        <div class="step-tile" data-step="s4" tabindex="0">
+          <div class="step-head">
+            <span class="step-num">STEP 4</span>
+            <span class="step-tag" data-i="st4tag">30 天</span>
+          </div>
+          <div class="step-title" data-i="st4t">下载 30 天 CSV</div>
+          <div class="step-sub" data-i="st4s">historical endpoint · startDate / endDate</div>
+          <div class="step-hint" data-i="st4h">CLICK TO OPEN</div>
+        </div>
+
+      </div>
+
+      <div class="step-detail-empty" id="stepDetailEmpty">
+        <span class="cn">点上面任一步看具体命令。</span>click any step above to see the exact command
+      </div>
+
+      <pre class="step-detail" id="stepDetail"></pre>
+    </div>
+  </section>
+
+  <!-- ========= D · CSV Schema ========= -->
+  <section>
+    <div class="section-tag"><span class="bar"></span><span id="t4">D · 下完的 CSV 长啥样</span></div>
+    <div class="schema-card" style="margin-top:6px">
+      <div class="schema-head">
+        <h2 class="schema-h2" id="schemaH2">CSV 字段表 + 预览前 5 行</h2>
+        <span class="schema-sub" id="schemaSub">column dictionary · preview rows</span>
+      </div>
+
+      <div class="schema-row">
+        <table class="schema-table">
+          <thead>
+            <tr>
+              <th id="thField">COLUMN</th>
+              <th id="thType">TYPE</th>
+              <th id="thMean" style="width:38%">MEANING</th>
+              <th id="thEx">EXAMPLE</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><span class="field">DateObserved</span></td>
+              <td><span class="type">date</span></td>
+              <td data-i="sm1">观测日期 (本地)</td>
+              <td><span class="ex">2026-05-01</span></td>
+            </tr>
+            <tr>
+              <td><span class="field">HourObserved</span></td>
+              <td><span class="type">int 0-23</span></td>
+              <td data-i="sm2">观测小时</td>
+              <td><span class="ex">14</span></td>
+            </tr>
+            <tr>
+              <td><span class="field">PM2.5</span></td>
+              <td><span class="type">µg/m³</span></td>
+              <td data-i="sm3">细颗粒物浓度</td>
+              <td><span class="ex">18.4</span></td>
+            </tr>
+            <tr>
+              <td><span class="field">PM10</span></td>
+              <td><span class="type">µg/m³</span></td>
+              <td data-i="sm4">粗颗粒物浓度</td>
+              <td><span class="ex">27.2</span></td>
+            </tr>
+            <tr>
+              <td><span class="field">O3</span></td>
+              <td><span class="type">ppb</span></td>
+              <td data-i="sm5">臭氧浓度</td>
+              <td><span class="ex">38</span></td>
+            </tr>
+            <tr>
+              <td><span class="field">NO2</span></td>
+              <td><span class="type">ppb</span></td>
+              <td data-i="sm6">二氧化氮浓度</td>
+              <td><span class="ex">12</span></td>
+            </tr>
+            <tr>
+              <td><span class="field">SiteID</span></td>
+              <td><span class="type">str 9 位</span></td>
+              <td data-i="sm7">站点编号 · 哪个站测的</td>
+              <td><span class="ex">060010011</span></td>
+            </tr>
+            <tr>
+              <td><span class="field">Latitude</span></td>
+              <td><span class="type">float</span></td>
+              <td data-i="sm8">站点纬度</td>
+              <td><span class="ex">37.8044</span></td>
+            </tr>
+            <tr>
+              <td><span class="field">Longitude</span></td>
+              <td><span class="type">float</span></td>
+              <td data-i="sm9">站点经度</td>
+              <td><span class="ex">-122.2712</span></td>
+            </tr>
+          </tbody>
+        </table>
+
+        <pre class="csv-preview" id="csvPreview"><span class="head">DateObserved,HourObserved,PM2.5,PM10,O3,NO2,SiteID,Latitude,Longitude</span>
+2026-05-01,<span class="num">14</span>,<span class="num">18.4</span>,<span class="num">27.2</span>,<span class="num">38</span>,<span class="num">12</span>,060010011,37.8044,-122.2712
+2026-05-01,<span class="num">15</span>,<span class="num">19.1</span>,<span class="num">28.0</span>,<span class="num">41</span>,<span class="num">11</span>,060010011,37.8044,-122.2712
+2026-05-01,<span class="num">16</span>,<span class="num">20.3</span>,<span class="num">29.4</span>,<span class="num">44</span>,<span class="num">13</span>,060010011,37.8044,-122.2712
+2026-05-01,<span class="num">17</span>,<span class="num">22.8</span>,<span class="num">31.1</span>,<span class="num">46</span>,<span class="num">15</span>,060010011,37.8044,-122.2712
+2026-05-01,<span class="num">18</span>,<span class="num">24.5</span>,<span class="num">33.0</span>,<span class="num">42</span>,<span class="num">14</span>,060010011,37.8044,-122.2712
+<span class="dim">... 30 天 × 24 小时 = ~720 行</span></pre>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========= E · 3 promises ========= -->
+  <section>
+    <div class="section-tag"><span class="bar"></span><span id="t5">E · 这周要交付的三件事</span></div>
+    <div class="promise-grid" style="margin-top:6px">
+      <div class="promise-card active">
+        <span class="promise-num">01</span>
+        <div class="promise-body">
+          <div class="promise-title" id="p1t">拿到 AirNow API key</div>
+          <div class="promise-sub" id="p1s">注册 + 邮箱激活 · token 抄进 .env</div>
+        </div>
+      </div>
+      <div class="promise-card">
+        <span class="promise-num">02</span>
+        <div class="promise-body">
+          <div class="promise-title" id="p2t">下完 30 天 CSV</div>
+          <div class="promise-sub" id="p2s">~720 行 · 保存 data/airnow_30d.csv</div>
+        </div>
+      </div>
+      <div class="promise-card">
+        <span class="promise-num">03</span>
+        <div class="promise-body">
+          <div class="promise-title" id="p3t">跟我的数据日期对齐</div>
+          <div class="promise-sub" id="p3s">两份 CSV 同一时段 · 后面可做对比</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<script>
+(function(){
+  "use strict";
+
+  var LANG = 'cn';
+
+  var I18N = {
+    brandTag:   { cn: 'M34 · AIRNOW',           en: 'M34 · AIRNOW' },
+    brandTitle: { cn: '下载 30 天 EPA 数据',    en: 'Pull 30 days of EPA data' },
+    brandSub:   { cn: '找最近站点 · 拉 30 天 CSV', en: 'find nearest site · pull 30d CSV' },
+    guideH:     { cn: '怎么看这张图',           en: 'HOW TO READ' },
+    g1: {
+      cn: '<span class="num">01</span>看地图 · 你家离最近 EPA 站点多远<span class="en">How far is the nearest EPA site</span>',
+      en: '<span class="num">01</span>How far is the nearest EPA site<span class="en">看地图距离</span>'
+    },
+    g2: {
+      cn: '<span class="num">02</span>点 4 个步骤卡 · 展开命令<span class="en">Click each step for the command</span>',
+      en: '<span class="num">02</span>Click each step for the command<span class="en">点步骤看命令</span>'
+    },
+    g3: {
+      cn: '<span class="num">03</span>对照 CSV schema · 知道下完啥<span class="en">Read the CSV schema</span>',
+      en: '<span class="num">03</span>Read the CSV schema<span class="en">看清 CSV 字段</span>'
+    },
+
+    t1: { cn: 'A · AirNow 是什么', en: 'A · WHAT IS AIRNOW' },
+    t2: { cn: 'B · 你家方圆 10 km 的 EPA 站点', en: 'B · EPA SITES WITHIN 10 KM' },
+    t3: { cn: 'C · 4 步把 30 天数据搬回家', en: 'C · 4 STEPS TO PULL 30 DAYS' },
+    t4: { cn: 'D · 下完的 CSV 长啥样', en: 'D · WHAT THE CSV LOOKS LIKE' },
+    t5: { cn: 'E · 这周要交付的三件事', en: 'E · THIS WEEK — 3 DELIVERABLES' },
+
+    heroTitle: {
+      cn: 'AirNow = <span class="accent">美国 EPA 官方实时空气网</span> · 你家方圆 <span class="km">5 km</span> 内可能就有一个',
+      en: 'AirNow = <span class="accent">US EPA official real-time air network</span> · likely a station within <span class="km">5 km</span> of your home'
+    },
+    heroSub: {
+      cn: 'EPA + NOAA + 地方环保局共建 · 全美 ~2000 个 BAM/FEM 高保真站点 · 数据用于 AQI 官方发布, 法庭/学术都引这家。',
+      en: 'Built by EPA + NOAA + local agencies · ~2000 BAM/FEM-grade sites in US · cited in AQI, courts, papers.'
+    },
+    heroBadge: { cn: 'EPA · FEM 级别 · 可引用', en: 'EPA · FEM-GRADE · CITABLE' },
+
+    homeLabel: { cn: '你家', en: 'Home' },
+    s1name: { cn: 'Berkeley-N', en: 'Berkeley-N' },
+    s2name: { cn: 'Oakland-West', en: 'Oakland-West' },
+    s2id:   { cn: 'SiteID 060010011', en: 'SiteID 060010011' },
+    s3name: { cn: 'SF-Mission', en: 'SF-Mission' },
+    s4name: { cn: 'San-Pablo-Ave', en: 'San-Pablo-Ave' },
+    s5name: { cn: 'Hayward-S', en: 'Hayward-S' },
+
+    mapH:  { cn: '最近站点 · Oakland-West', en: 'Nearest site · Oakland-West' },
+    mapP1: {
+      cn: '<span class="cn">EPA 站点全国 ~2000 个 · 主要在城市 + 工业区 · 离你家最近的就是要的那个, 它的数据你完全可以拿。</span>~2000 EPA sites in US · cluster in cities · the closest one is yours to use.',
+      en: '<span class="cn">~2000 EPA sites in US · cluster in cities / industry · the closest one is yours.</span>EPA 站点全国 ~2000 个 · 离你家最近的就是要的那个。'
+    },
+    mapP2: {
+      cn: '<span class="cn">下载靠 SiteID (9 位数字) · 不是名字 · 在 AirNow 监测点列表里查一次记住。</span>Download by 9-digit SiteID · not name · look it up once on AirNow monitoring sites list.',
+      en: '<span class="cn">Download by 9-digit SiteID · not by name · look it up once on AirNow monitoring-sites list.</span>下载靠 SiteID · 不是名字。'
+    },
+
+    lgHome:  { cn: '你家',         en: 'Home' },
+    lgNear:  { cn: '最近站点',     en: 'Nearest site' },
+    lgOther: { cn: '其他 EPA 站',  en: 'Other EPA sites' },
+    lgDist:  { cn: '直线距离',     en: 'Straight-line dist' },
+
+    stepsH2:  { cn: '点任一步骤展开命令',     en: 'Click any step to expand the command' },
+    stepsSub: { cn: '4 步走 · 每步一段代码',  en: '4 steps · one snippet per step' },
+
+    st1tag: { cn: '5 分钟', en: '5 min' },
+    st1t:   { cn: '注册 AirNow API key', en: 'Register an AirNow API key' },
+    st1s:   { cn: 'docs.airnowapi.org · 邮箱激活即得', en: 'docs.airnowapi.org · activate via email' },
+    st1h:   { cn: '点开看代码', en: 'CLICK TO OPEN' },
+
+    st2tag: { cn: '1 行命令', en: '1 line' },
+    st2t:   { cn: '装 airnow-py 库', en: 'Install airnow-py' },
+    st2s:   { cn: 'pip · 官方 SDK 已封好 endpoint', en: 'pip · official SDK wraps endpoints' },
+    st2h:   { cn: '点开看代码', en: 'CLICK TO OPEN' },
+
+    st3tag: { cn: '查表', en: 'Lookup' },
+    st3t:   { cn: '选定站点 SiteID', en: 'Pick the SiteID' },
+    st3s:   { cn: 'monitoring-sites endpoint · 按坐标过滤', en: 'monitoring-sites endpoint · filter by lat/lon' },
+    st3h:   { cn: '点开看代码', en: 'CLICK TO OPEN' },
+
+    st4tag: { cn: '30 天', en: '30 days' },
+    st4t:   { cn: '下载 30 天 CSV', en: 'Pull 30 days of CSV' },
+    st4s:   { cn: 'historical endpoint · startDate / endDate', en: 'historical endpoint · startDate / endDate' },
+    st4h:   { cn: '点开看代码', en: 'CLICK TO OPEN' },
+
+    schemaH2:  { cn: 'CSV 字段表 + 预览前 5 行', en: 'CSV columns + first 5 rows' },
+    schemaSub: { cn: '字段字典 · 预览数据',      en: 'column dictionary · preview rows' },
+    thField:   { cn: '列名', en: 'COLUMN' },
+    thType:    { cn: '类型', en: 'TYPE' },
+    thMean:    { cn: '含义', en: 'MEANING' },
+    thEx:      { cn: '示例', en: 'EXAMPLE' },
+    sm1: { cn: '观测日期 (本地)',          en: 'observation date (local)' },
+    sm2: { cn: '观测小时',                 en: 'observation hour 0-23' },
+    sm3: { cn: '细颗粒物浓度',             en: 'fine PM concentration' },
+    sm4: { cn: '粗颗粒物浓度',             en: 'coarse PM concentration' },
+    sm5: { cn: '臭氧浓度',                 en: 'ozone concentration' },
+    sm6: { cn: '二氧化氮浓度',             en: 'NO2 concentration' },
+    sm7: { cn: '站点编号 · 哪个站测的',    en: 'site id · which station' },
+    sm8: { cn: '站点纬度',                 en: 'station latitude' },
+    sm9: { cn: '站点经度',                 en: 'station longitude' },
+
+    p1t: { cn: '拿到 AirNow API key',          en: 'Get your AirNow API key' },
+    p1s: { cn: '注册 + 邮箱激活 · token 抄进 .env', en: 'register + activate · token in .env' },
+    p2t: { cn: '下完 30 天 CSV',               en: 'Download the full 30-day CSV' },
+    p2s: { cn: '~720 行 · 保存 data/airnow_30d.csv', en: '~720 rows · save to data/airnow_30d.csv' },
+    p3t: { cn: '跟我的数据日期对齐',           en: 'Align dates with my own data' },
+    p3s: { cn: '两份 CSV 同一时段 · 后面可做对比', en: 'same window · enables side-by-side comparison' }
+  };
+
+  // —— Step detail snippets ——
+  var STEP_DETAIL = {
+    s1: {
+      cn: '<span class="cmt"># 1) 打开网页注册 (浏览器干)</span>\n' +
+          '<span class="prompt">$</span> open <span class="url">https://docs.airnowapi.org/account/request/</span>\n' +
+          '<span class="cmt"># 2) 填邮箱 + 用途 = "student air-quality project"</span>\n' +
+          '<span class="cmt"># 3) 邮件里点激活, 复制 API key</span>\n' +
+          '<span class="prompt">$</span> echo <span class="s">"AIRNOW_API_KEY=</span><span class="hl">YOUR_KEY_HERE</span><span class="s">"</span> >> .env\n' +
+          '<span class="cmt"># key 不要 push 到 git, .env 加进 .gitignore</span>',
+      en: '<span class="cmt"># 1) Open the registration page</span>\n' +
+          '<span class="prompt">$</span> open <span class="url">https://docs.airnowapi.org/account/request/</span>\n' +
+          '<span class="cmt"># 2) Fill email + purpose = "student air-quality project"</span>\n' +
+          '<span class="cmt"># 3) Click the activation link, copy the API key</span>\n' +
+          '<span class="prompt">$</span> echo <span class="s">"AIRNOW_API_KEY=</span><span class="hl">YOUR_KEY_HERE</span><span class="s">"</span> >> .env\n' +
+          '<span class="cmt"># never push .env — add it to .gitignore</span>'
+    },
+    s2: {
+      cn: '<span class="prompt">$</span> pip install <span class="hl">airnow-py</span>\n' +
+          '<span class="cmt"># 验证装好了</span>\n' +
+          '<span class="prompt">$</span> python -c <span class="s">"import airnow; print(airnow.__version__)"</span>\n' +
+          '<span class="s">"1.4.2"</span>\n' +
+          '<span class="cmt"># 之后所有代码用:</span>\n' +
+          '<span class="k">from</span> airnow <span class="k">import</span> Client\n' +
+          'client = Client(api_key=os.environ[<span class="s">"AIRNOW_API_KEY"</span>])',
+      en: '<span class="prompt">$</span> pip install <span class="hl">airnow-py</span>\n' +
+          '<span class="cmt"># Verify install</span>\n' +
+          '<span class="prompt">$</span> python -c <span class="s">"import airnow; print(airnow.__version__)"</span>\n' +
+          '<span class="s">"1.4.2"</span>\n' +
+          '<span class="cmt"># Then in code:</span>\n' +
+          '<span class="k">from</span> airnow <span class="k">import</span> Client\n' +
+          'client = Client(api_key=os.environ[<span class="s">"AIRNOW_API_KEY"</span>])'
+    },
+    s3: {
+      cn: '<span class="cmt"># 查方圆 10 km 内所有 EPA 站</span>\n' +
+          'sites = client.monitoring_sites(\n' +
+          '    latitude=<span class="hl">37.8044</span>,   <span class="cmt"># 你家纬度</span>\n' +
+          '    longitude=<span class="hl">-122.2712</span>, <span class="cmt"># 你家经度</span>\n' +
+          '    radius_km=<span class="num">10</span>,\n' +
+          ')\n' +
+          'nearest = min(sites, key=<span class="k">lambda</span> s: s.distance_km)\n' +
+          '<span class="k">print</span>(nearest.site_id, nearest.name, nearest.distance_km)\n' +
+          '<span class="cmt"># returns: 060010011 Oakland-West 3.2 km</span>',
+      en: '<span class="cmt"># Find all EPA sites within 10 km</span>\n' +
+          'sites = client.monitoring_sites(\n' +
+          '    latitude=<span class="hl">37.8044</span>,   <span class="cmt"># your latitude</span>\n' +
+          '    longitude=<span class="hl">-122.2712</span>, <span class="cmt"># your longitude</span>\n' +
+          '    radius_km=<span class="num">10</span>,\n' +
+          ')\n' +
+          'nearest = min(sites, key=<span class="k">lambda</span> s: s.distance_km)\n' +
+          '<span class="k">print</span>(nearest.site_id, nearest.name, nearest.distance_km)\n' +
+          '<span class="cmt"># returns: 060010011 Oakland-West 3.2 km</span>'
+    },
+    s4: {
+      cn: '<span class="k">from</span> datetime <span class="k">import</span> date, timedelta\n' +
+          'end   = date.today()\n' +
+          'start = end - timedelta(days=<span class="num">30</span>)\n' +
+          '\n' +
+          'rows = client.historical(\n' +
+          '    site_id=<span class="hl">"060010011"</span>,\n' +
+          '    start_date=start,\n' +
+          '    end_date=end,\n' +
+          '    parameters=[<span class="s">"PM2.5"</span>,<span class="s">"PM10"</span>,<span class="s">"O3"</span>,<span class="s">"NO2"</span>],\n' +
+          ')\n' +
+          '<span class="cmt"># 写盘 · ~720 行 (30 天 × 24 小时)</span>\n' +
+          'rows.to_csv(<span class="hl">"data/airnow_30d.csv"</span>, index=<span class="k">False</span>)',
+      en: '<span class="k">from</span> datetime <span class="k">import</span> date, timedelta\n' +
+          'end   = date.today()\n' +
+          'start = end - timedelta(days=<span class="num">30</span>)\n' +
+          '\n' +
+          'rows = client.historical(\n' +
+          '    site_id=<span class="hl">"060010011"</span>,\n' +
+          '    start_date=start,\n' +
+          '    end_date=end,\n' +
+          '    parameters=[<span class="s">"PM2.5"</span>,<span class="s">"PM10"</span>,<span class="s">"O3"</span>,<span class="s">"NO2"</span>],\n' +
+          ')\n' +
+          '<span class="cmt"># Save to disk · ~720 rows (30d × 24h)</span>\n' +
+          'rows.to_csv(<span class="hl">"data/airnow_30d.csv"</span>, index=<span class="k">False</span>)'
+    }
+  };
+
+  function setHTML(id, html) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    el.innerHTML = html;
+  }
+
+  function applyStepDetail(key) {
+    var pane = document.getElementById('stepDetail');
+    var empty = document.getElementById('stepDetailEmpty');
+    if (!key || !STEP_DETAIL[key]) {
+      pane.classList.remove('show');
+      empty.classList.remove('hide');
+      return;
+    }
+    pane.innerHTML = STEP_DETAIL[key][LANG];
+    pane.classList.add('show');
+    empty.classList.add('hide');
+  }
+
+  function apply() {
+    setHTML('brandTag',   I18N.brandTag[LANG]);
+    setHTML('brandTitle', I18N.brandTitle[LANG]);
+    setHTML('brandSub',   I18N.brandSub[LANG]);
+    setHTML('guideH',     I18N.guideH[LANG]);
+    setHTML('g1',         I18N.g1[LANG]);
+    setHTML('g2',         I18N.g2[LANG]);
+    setHTML('g3',         I18N.g3[LANG]);
+
+    setHTML('t1', I18N.t1[LANG]);
+    setHTML('t2', I18N.t2[LANG]);
+    setHTML('t3', I18N.t3[LANG]);
+    setHTML('t4', I18N.t4[LANG]);
+    setHTML('t5', I18N.t5[LANG]);
+
+    setHTML('heroTitle', I18N.heroTitle[LANG]);
+    setHTML('heroSub',   I18N.heroSub[LANG]);
+    setHTML('heroBadge', I18N.heroBadge[LANG]);
+
+    setHTML('mapH',  I18N.mapH[LANG]);
+    setHTML('mapP1', I18N.mapP1[LANG]);
+    setHTML('mapP2', I18N.mapP2[LANG]);
+
+    setHTML('stepsH2',  I18N.stepsH2[LANG]);
+    setHTML('stepsSub', I18N.stepsSub[LANG]);
+
+    // labels with data-i
+    var nodes = document.querySelectorAll('[data-i]');
+    for (var i = 0; i < nodes.length; i++) {
+      var k = nodes[i].getAttribute('data-i');
+      if (I18N[k]) nodes[i].textContent = I18N[k][LANG];
+    }
+
+    setHTML('schemaH2',  I18N.schemaH2[LANG]);
+    setHTML('schemaSub', I18N.schemaSub[LANG]);
+    setHTML('thField', I18N.thField[LANG]);
+    setHTML('thType',  I18N.thType[LANG]);
+    setHTML('thMean',  I18N.thMean[LANG]);
+    setHTML('thEx',    I18N.thEx[LANG]);
+
+    setHTML('p1t', I18N.p1t[LANG]); setHTML('p1s', I18N.p1s[LANG]);
+    setHTML('p2t', I18N.p2t[LANG]); setHTML('p2s', I18N.p2s[LANG]);
+    setHTML('p3t', I18N.p3t[LANG]); setHTML('p3s', I18N.p3s[LANG]);
+
+    // refresh active step detail content if any
+    var activeTile = document.querySelector('.step-tile.active');
+    if (activeTile) {
+      applyStepDetail(activeTile.getAttribute('data-step'));
+    } else {
+      applyStepDetail(null);
+    }
+
+    document.documentElement.setAttribute('lang', LANG === 'cn' ? 'zh-CN' : 'en');
+  }
+
+  // Wire step tiles
+  var tiles = document.querySelectorAll('.step-tile');
+  for (var j = 0; j < tiles.length; j++) {
+    (function (tile) {
+      tile.addEventListener('click', function () {
+        var was = tile.classList.contains('active');
+        for (var k = 0; k < tiles.length; k++) tiles[k].classList.remove('active');
+        if (was) {
+          applyStepDetail(null);
+        } else {
+          tile.classList.add('active');
+          applyStepDetail(tile.getAttribute('data-step'));
+        }
+      });
+      tile.addEventListener('keydown', function (ev) {
+        if (ev.key === 'Enter' || ev.key === ' ') {
+          ev.preventDefault();
+          tile.click();
+        }
+      });
+    })(tiles[j]);
+  }
+
+  document.getElementById('langBtn').addEventListener('click', function () {
+    LANG = (LANG === 'cn') ? 'en' : 'cn';
+    apply();
+  });
+
+  apply();
+})();
+</script>
+</body>
+</html>

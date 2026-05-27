@@ -1,0 +1,916 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>M40 · A/B 公式调参 — Live Tuning v2</title>
+<script>window.__systemedu_resize_patch_optout=true;</script>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Inter:wght@400;500;700&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;}
+:root{
+  /* 第 1 层 — shared deep-space */
+  --bg-0: oklch(0.14 0.035 265);
+  --bg-1: oklch(0.18 0.04 265);
+  --bg-2: oklch(0.22 0.045 265);
+  --bg-3: oklch(0.28 0.05 265);
+  --line: oklch(0.35 0.05 265 / 0.35);
+  --line-strong: oklch(0.55 0.08 265 / 0.55);
+  --fg:      oklch(0.96 0.01 265);
+  --fg-dim:  oklch(0.75 0.02 265);
+  --fg-mute: oklch(0.55 0.03 265);
+  --gold:    oklch(0.85 0.14 85);
+
+  /* 第 2 层 — math accent (electric blue) */
+  --math: oklch(0.72 0.17 245);
+
+  /* 第 3 层 — math palette (Geometry Void) */
+  --axis:     oklch(0.72 0.17 245);
+  --proof:    oklch(0.52 0.16 245);
+  --shadow:   oklch(0.35 0.10 245);
+  --solution: oklch(0.92 0.08 240);
+  --qed:      oklch(0.85 0.14 85);
+}
+html,body{width:100%;height:100vh;overflow:hidden;background:var(--bg-0);color:var(--fg);font-family:'Inter','Noto Sans SC',sans-serif;}
+.game-wrap{display:flex;flex-direction:row;height:100vh;overflow:hidden;}
+
+/* ── Sidebar (200px) ── */
+.game-sidebar{
+  width:200px;min-width:200px;max-width:200px;
+  display:flex;flex-direction:column;gap:7px;padding:11px 10px;
+  background:var(--bg-1);
+  border-right:1px solid var(--line);
+  overflow-y:auto;
+}
+.sidebar-lang{
+  align-self:flex-start;flex-shrink:0;
+  font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:700;
+  padding:3px 9px;cursor:pointer;
+  border:1px solid var(--math);background:transparent;color:var(--math);
+  letter-spacing:0.18em;text-transform:uppercase;
+}
+.sidebar-lang:hover{background:var(--bg-2);}
+.sidebar-brand{
+  font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;
+  letter-spacing:0.15em;text-transform:uppercase;color:var(--math);
+  margin-top:4px;
+}
+.sidebar-title{
+  font-family:'Noto Sans SC',sans-serif;font-size:13px;font-weight:700;
+  color:var(--fg);line-height:1.3;
+}
+.sidebar-sub{
+  font-family:'JetBrains Mono',monospace;font-size:9px;
+  color:var(--fg-mute);letter-spacing:0.10em;text-transform:uppercase;
+}
+.sidebar-divider{height:1px;background:var(--line);margin:3px 0;}
+.sidebar-section{
+  font-family:'JetBrains Mono',monospace;font-size:9px;font-weight:700;
+  color:var(--fg-mute);letter-spacing:0.18em;text-transform:uppercase;
+  margin-top:1px;
+}
+.sidebar-goal{
+  font-family:'Noto Sans SC',sans-serif;font-size:10.5px;
+  color:var(--fg-dim);line-height:1.55;
+}
+.unlock-row{
+  display:flex;align-items:center;gap:6px;
+  padding:5px 7px;border:1px dashed var(--line-strong);
+  background:var(--bg-2);
+}
+.unlock-dot{
+  width:8px;height:8px;background:var(--shadow);flex-shrink:0;
+}
+.unlock-row.cleared{
+  border:1px solid var(--qed);
+  background:rgba(232,196,92,0.08);
+}
+.unlock-row.cleared .unlock-dot{background:var(--qed);}
+.unlock-txt{
+  font-family:'JetBrains Mono',monospace;font-size:9px;font-weight:700;
+  letter-spacing:0.10em;text-transform:uppercase;
+  color:var(--fg-dim);
+}
+.unlock-row.cleared .unlock-txt{color:var(--qed);}
+
+/* mascot — Pi tetrahedron */
+.mascot-wrap{
+  display:flex;justify-content:center;align-items:center;
+  padding:5px 0 1px 0;
+}
+.mascot-wrap svg{width:82px;height:82px;}
+
+/* sliders */
+.slider-group{display:flex;flex-direction:column;gap:3px;margin-top:4px;}
+.slider-row{display:flex;justify-content:space-between;align-items:baseline;}
+.slider-label{
+  font-family:'JetBrains Mono',monospace;font-size:10.5px;font-weight:700;
+  color:var(--solution);letter-spacing:0.06em;
+}
+.slider-val{
+  font-family:'JetBrains Mono',monospace;font-size:11.5px;font-weight:700;
+  color:var(--math);letter-spacing:0.04em;
+}
+.slider-hint{
+  font-family:'JetBrains Mono',monospace;font-size:8.5px;
+  color:var(--fg-mute);letter-spacing:0.05em;
+}
+input[type=range]{
+  width:100%;-webkit-appearance:none;appearance:none;
+  background:var(--bg-3);height:4px;outline:none;border-radius:0;
+}
+input[type=range]::-webkit-slider-thumb{
+  -webkit-appearance:none;appearance:none;
+  width:14px;height:14px;background:var(--math);
+  cursor:pointer;border-radius:0;
+  box-shadow:2px 2px 0 var(--bg-0);
+}
+input[type=range]::-moz-range-thumb{
+  width:14px;height:14px;background:var(--math);
+  cursor:pointer;border-radius:0;border:none;
+  box-shadow:2px 2px 0 var(--bg-0);
+}
+
+.reset-btn{
+  font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:700;
+  padding:7px 10px;border:1px solid var(--math);
+  cursor:pointer;color:var(--math);background:transparent;
+  letter-spacing:0.15em;text-transform:uppercase;
+  width:100%;margin-top:5px;
+  box-shadow:3px 3px 0 var(--bg-0);
+}
+.reset-btn:hover{background:var(--bg-2);}
+.reset-btn:active{transform:translate(2px,2px);box-shadow:1px 1px 0 var(--bg-0);}
+
+/* ── Main area ── */
+.game-main{flex:1;display:flex;flex-direction:column;min-width:0;}
+.game-hud{
+  display:flex;align-items:center;justify-content:space-between;gap:14px;
+  padding:8px 18px;background:var(--bg-1);
+  border-bottom:1px solid var(--line);flex-shrink:0;
+}
+.hud-formula{
+  font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:500;
+  color:var(--solution);letter-spacing:0.04em;
+}
+.hud-formula .coef{color:var(--math);font-weight:700;}
+.hud-formula .var{color:var(--proof);}
+.hud-formula .tag-v1{color:var(--fg-mute);font-weight:700;margin-right:4px;}
+.hud-formula .tag-v2{color:var(--qed);font-weight:700;margin-right:4px;}
+.hud-formula-row{display:flex;flex-direction:column;gap:2px;}
+
+.hud-items{display:flex;gap:14px;}
+.hud-item{display:flex;flex-direction:column;align-items:flex-end;gap:1px;min-width:78px;}
+.hud-label{
+  font-family:'JetBrains Mono',monospace;font-size:8px;
+  letter-spacing:0.18em;color:var(--fg-mute);text-transform:uppercase;
+}
+.hud-pair{display:flex;align-items:baseline;gap:6px;}
+.hud-v1{
+  font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:500;
+  color:var(--fg-mute);letter-spacing:0.05em;
+  text-decoration:line-through;text-decoration-thickness:1px;
+}
+.hud-val{
+  font-family:'JetBrains Mono',monospace;font-size:15px;font-weight:700;
+  color:var(--math);letter-spacing:0.05em;
+}
+.hud-val.good{color:var(--qed);}
+.hud-val.bad{color:var(--proof);}
+.hud-delta{
+  font-family:'JetBrains Mono',monospace;font-size:9px;
+  color:var(--fg-mute);letter-spacing:0.05em;margin-top:1px;
+}
+.hud-delta.good{color:var(--qed);}
+.hud-delta.bad{color:var(--proof);}
+
+.game-body{
+  flex:1;display:flex;flex-direction:row;min-height:0;
+  background:var(--bg-0);position:relative;
+}
+.panel-wrap{
+  flex:1;display:flex;flex-direction:column;min-width:0;min-height:0;
+}
+.panel-wrap + .panel-wrap{border-left:1px solid var(--line);}
+.panel-head{
+  display:flex;align-items:center;justify-content:space-between;gap:8px;
+  padding:6px 14px;background:var(--bg-1);
+  border-bottom:1px solid var(--line);flex-shrink:0;
+}
+.panel-tag{
+  font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:700;
+  letter-spacing:0.18em;text-transform:uppercase;
+}
+.panel-tag.v1{color:var(--fg-mute);}
+.panel-tag.v2{color:var(--qed);}
+.panel-sub{
+  font-family:'JetBrains Mono',monospace;font-size:9px;
+  color:var(--fg-mute);letter-spacing:0.08em;
+}
+.canvas-box{
+  flex:1;display:flex;flex-direction:column;min-height:0;
+  position:relative;
+}
+.canvas-box canvas{
+  width:100%!important;height:100%!important;display:block;
+}
+
+.status-bar{
+  display:flex;align-items:center;justify-content:space-between;gap:12px;
+  padding:6px 18px;background:var(--bg-1);
+  border-top:1px solid var(--line);flex-shrink:0;
+}
+.status-msg{
+  font-family:'Noto Sans SC',sans-serif;font-size:12px;
+  color:var(--fg-dim);
+}
+.status-msg.win{color:var(--qed);font-weight:700;}
+.status-msg.warn{color:var(--proof);}
+.status-tag{
+  font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:700;
+  letter-spacing:0.18em;text-transform:uppercase;
+  color:var(--math);
+}
+</style>
+</head>
+<body>
+<div class="game-wrap">
+  <div class="game-sidebar">
+    <button class="sidebar-lang" id="langBtn">CN</button>
+
+    <div class="mascot-wrap" aria-hidden="true">
+      <!-- Pi mascot: rotating tetrahedron flashing math -->
+      <svg viewBox="0 0 100 100" id="mascot">
+        <defs>
+          <linearGradient id="faceA" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="var(--axis)" stop-opacity="0.9"/>
+            <stop offset="1" stop-color="var(--proof)" stop-opacity="0.7"/>
+          </linearGradient>
+          <linearGradient id="faceB" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="var(--solution)" stop-opacity="0.85"/>
+            <stop offset="1" stop-color="var(--axis)" stop-opacity="0.5"/>
+          </linearGradient>
+        </defs>
+        <!-- back face -->
+        <polygon points="50,12 16,80 84,80" fill="url(#faceB)" stroke="var(--solution)" stroke-width="1"/>
+        <!-- front faces -->
+        <polygon points="50,12 50,68 16,80" fill="url(#faceA)" stroke="var(--math)" stroke-width="1.2" opacity="0.85"/>
+        <polygon points="50,12 50,68 84,80" fill="var(--shadow)" stroke="var(--math)" stroke-width="1.2" opacity="0.75"/>
+        <!-- formula flash -->
+        <text x="50" y="46" text-anchor="middle"
+              font-family="JetBrains Mono, monospace" font-size="9"
+              fill="var(--solution)" font-weight="700" id="mascotEq">a T + b W</text>
+        <text x="50" y="92" text-anchor="middle"
+              font-family="JetBrains Mono, monospace" font-size="8"
+              fill="var(--fg-mute)" letter-spacing="2">PI · MTH-06</text>
+      </svg>
+    </div>
+
+    <div class="sidebar-brand" id="brandTag">M40 · LIVE TUNING</div>
+    <div class="sidebar-title" id="sideTitle">A/B 公式调参 v2</div>
+    <div class="sidebar-sub" id="sideSub">v2 = v1 + aT + bW + c·alt/1000</div>
+
+    <div class="sidebar-divider"></div>
+    <div class="sidebar-section" id="goalLabel">TASK</div>
+    <div class="sidebar-goal" id="goalText">
+      在 v1 Barkjohn 基础上加温度/风速/海拔修正, 在 30 天 hold-out 上把 MAE 比 v1 降 50%。
+    </div>
+
+    <div class="unlock-row" id="unlockRow">
+      <span class="unlock-dot"></span>
+      <span class="unlock-txt" id="unlockTxt">LOCKED · FORMULA ENGINEER</span>
+    </div>
+
+    <div class="sidebar-divider"></div>
+    <div class="sidebar-section" id="paramsLabel">v2 EXTRA TERMS</div>
+
+    <div class="slider-group">
+      <div class="slider-row">
+        <span class="slider-label">a · T</span>
+        <span class="slider-val" id="aVal">0.000</span>
+      </div>
+      <input type="range" id="sliderA" min="-0.1" max="0.1" step="0.001" value="0">
+      <div class="slider-hint" id="aHint">range -0.1 .. +0.1 (°C)</div>
+    </div>
+
+    <div class="slider-group">
+      <div class="slider-row">
+        <span class="slider-label">b · wind</span>
+        <span class="slider-val" id="bVal">0.000</span>
+      </div>
+      <input type="range" id="sliderB" min="-0.5" max="0.5" step="0.005" value="0">
+      <div class="slider-hint" id="bHint">range -0.5 .. +0.5 (m/s)</div>
+    </div>
+
+    <div class="slider-group">
+      <div class="slider-row">
+        <span class="slider-label">c · alt/1k</span>
+        <span class="slider-val" id="cVal">0.00</span>
+      </div>
+      <input type="range" id="sliderC" min="-2" max="2" step="0.01" value="0">
+      <div class="slider-hint" id="cHint">range -2 .. +2 (km)</div>
+    </div>
+
+    <button class="reset-btn" id="resetBtn">RESET v2 = v1</button>
+  </div>
+
+  <div class="game-main">
+    <div class="game-hud">
+      <div class="hud-formula-row">
+        <div class="hud-formula">
+          <span class="tag-v1" id="tagV1">v1</span>
+          PM2.5 = 0.524·<span class="var">PA</span> &minus; 0.086·<span class="var">RH</span> + 5.75
+        </div>
+        <div class="hud-formula">
+          <span class="tag-v2" id="tagV2">v2</span>
+          + <span class="coef" id="fA">+0.000</span>·<span class="var">T</span>
+          + <span class="coef" id="fB">+0.000</span>·<span class="var">W</span>
+          + <span class="coef" id="fC">+0.00</span>·<span class="var">alt/1k</span>
+        </div>
+      </div>
+      <div class="hud-items">
+        <div class="hud-item">
+          <span class="hud-label" id="lblMAE">MAE (μg/m³)</span>
+          <div class="hud-pair">
+            <span class="hud-v1" id="v1MAE">4.52</span>
+            <span class="hud-val" id="valMAE">4.52</span>
+          </div>
+          <span class="hud-delta" id="dMAE">&Delta; 0%</span>
+        </div>
+        <div class="hud-item">
+          <span class="hud-label" id="lblR2">R&sup2;</span>
+          <div class="hud-pair">
+            <span class="hud-v1" id="v1R2">0.928</span>
+            <span class="hud-val" id="valR2">0.928</span>
+          </div>
+          <span class="hud-delta" id="dR2">&Delta; 0.000</span>
+        </div>
+        <div class="hud-item">
+          <span class="hud-label" id="lblBias">BIAS (μg/m³)</span>
+          <div class="hud-pair">
+            <span class="hud-v1" id="v1Bias">-0.41</span>
+            <span class="hud-val" id="valBias">-0.41</span>
+          </div>
+          <span class="hud-delta" id="dBias">&Delta; 0.00</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="game-body">
+      <div class="panel-wrap">
+        <div class="panel-head">
+          <span class="panel-tag v1" id="p1Tag">v1 · BARKJOHN BASELINE</span>
+          <span class="panel-sub" id="p1Sub">a·PA + b·RH + c (fixed)</span>
+        </div>
+        <div class="canvas-box"><canvas id="gc1"></canvas></div>
+      </div>
+      <div class="panel-wrap">
+        <div class="panel-head">
+          <span class="panel-tag v2" id="p2Tag">v2 · YOUR EXTENSION</span>
+          <span class="panel-sub" id="p2Sub">+ a·T + b·W + c·alt/1k</span>
+        </div>
+        <div class="canvas-box"><canvas id="gc2"></canvas></div>
+      </div>
+    </div>
+
+    <div class="status-bar">
+      <span class="status-tag" id="modeTag">HOLD-OUT · N = 30 DAYS</span>
+      <span class="status-msg" id="statusMsg">拖三个滑块, 看右图点离对角线更近; 目标 MAE ≤ 2.26 (v1 的一半)。</span>
+    </div>
+  </div>
+</div>
+
+<script>
+// ────────────────────────────────────────────────────────────
+// i18n
+// ────────────────────────────────────────────────────────────
+var LANG = 'cn';
+var I18N = {
+  brandTag:   {cn:'M40 · 实时调参',          en:'M40 · LIVE TUNING'},
+  sideTitle:  {cn:'A/B 公式调参 v2',          en:'A/B Formula Tuning v2'},
+  sideSub:    {cn:'v2 = v1 + aT + bW + c·alt/1k', en:'v2 = v1 + aT + bW + c·alt/1k'},
+  goalLabel:  {cn:'TASK',                     en:'TASK'},
+  goalText:   {cn:'在 v1 Barkjohn 基础上加温度/风速/海拔修正, 在 30 天 hold-out 上把 MAE 比 v1 降 50%。',
+               en:'Add T / wind / altitude corrections to v1 Barkjohn. On 30-day hold-out, cut MAE by 50% vs v1.'},
+  unlockLocked: {cn:'未解锁 · 公式工程师',     en:'LOCKED · FORMULA ENGINEER'},
+  unlockOpen:   {cn:'已解锁 · 公式工程师',     en:'UNLOCKED · FORMULA ENGINEER'},
+  paramsLabel:{cn:'v2 新增项',                en:'v2 EXTRA TERMS'},
+  aHint:      {cn:'范围 -0.1 .. +0.1 (°C)',   en:'range -0.1 .. +0.1 (°C)'},
+  bHint:      {cn:'范围 -0.5 .. +0.5 (m/s)',  en:'range -0.5 .. +0.5 (m/s)'},
+  cHint:      {cn:'范围 -2 .. +2 (km)',       en:'range -2 .. +2 (km)'},
+  lblMAE:     {cn:'MAE (μg/m³)',              en:'MAE (μg/m³)'},
+  lblR2:      {cn:'R²',                       en:'R²'},
+  lblBias:    {cn:'偏差 (μg/m³)',             en:'BIAS (μg/m³)'},
+  modeTag:    {cn:'HOLD-OUT · 30 天',          en:'HOLD-OUT · N = 30 DAYS'},
+  p1Tag:      {cn:'v1 · BARKJOHN 基线',        en:'v1 · BARKJOHN BASELINE'},
+  p1Sub:      {cn:'a·PA + b·RH + c (固定)',    en:'a·PA + b·RH + c (fixed)'},
+  p2Tag:      {cn:'v2 · 你的扩展',             en:'v2 · YOUR EXTENSION'},
+  p2Sub:      {cn:'+ a·T + b·W + c·alt/1k',    en:'+ a·T + b·W + c·alt/1k'},
+  msgIdle:    {cn:'拖三个滑块, 看右图点离对角线更近; 目标 MAE ≤ 2.26 (v1 的一半)。',
+               en:'Drag 3 sliders, watch right plot tighten on diagonal. Goal: MAE ≤ 2.26 (half of v1).'},
+  msgClose:   {cn:'接近 50% 降幅了, 再细调一下温度/风速。',
+               en:'Close to 50% cut — fine-tune T or wind.'},
+  msgWarm:    {cn:'MAE 已经在下降, 继续。',
+               en:'MAE is dropping — keep going.'},
+  msgWin:     {cn:'达成! v2 MAE 比 v1 降了 50% 以上, 公式工程师解锁。',
+               en:'Cleared! v2 MAE cut by 50%+ vs v1. Formula Engineer unlocked.'},
+  msgBad:     {cn:'方向错了 — v2 比 v1 还差。回想一下: 风大空气稀释, 温升通常正相关 PM。',
+               en:'Wrong direction — v2 is worse than v1. Recall: wind dilutes, warmth often correlates with PM rise.'},
+  reset:      {cn:'RESET v2 = v1',             en:'RESET v2 = v1'},
+};
+function t(k){ return (I18N[k]&&I18N[k][LANG])||(I18N[k]&&I18N[k]['en'])||k; }
+
+function refreshI18N(){
+  document.getElementById('brandTag').textContent = t('brandTag');
+  document.getElementById('sideTitle').textContent = t('sideTitle');
+  document.getElementById('sideSub').textContent = t('sideSub');
+  document.getElementById('goalLabel').textContent = t('goalLabel');
+  document.getElementById('goalText').textContent = t('goalText');
+  document.getElementById('paramsLabel').textContent = t('paramsLabel');
+  document.getElementById('aHint').textContent = t('aHint');
+  document.getElementById('bHint').textContent = t('bHint');
+  document.getElementById('cHint').textContent = t('cHint');
+  document.getElementById('lblMAE').textContent = t('lblMAE');
+  document.getElementById('lblR2').textContent  = t('lblR2');
+  document.getElementById('lblBias').textContent = t('lblBias');
+  document.getElementById('modeTag').textContent = t('modeTag');
+  document.getElementById('p1Tag').textContent = t('p1Tag');
+  document.getElementById('p1Sub').textContent = t('p1Sub');
+  document.getElementById('p2Tag').textContent = t('p2Tag');
+  document.getElementById('p2Sub').textContent = t('p2Sub');
+  document.getElementById('resetBtn').textContent = t('reset');
+  document.getElementById('langBtn').textContent = LANG.toUpperCase();
+  document.getElementById('unlockTxt').textContent =
+    document.getElementById('unlockRow').classList.contains('cleared')
+      ? t('unlockOpen') : t('unlockLocked');
+  updateStatus();
+}
+
+document.getElementById('langBtn').addEventListener('click', function(){
+  LANG = LANG === 'cn' ? 'en' : 'cn';
+  refreshI18N();
+});
+
+// ────────────────────────────────────────────────────────────
+// Hold-out data: 30 days, fields [PA, RH, T, wind, alt_m, true PM2.5]
+// True PM2.5 generated so that:
+//   v1 (Barkjohn) is decent but biased by T/wind/altitude →
+//   adding correct extra terms cuts MAE roughly in half.
+// True model used to synthesize:
+//   true = 0.524 PA - 0.086 RH + 5.75
+//          + 0.045·T     (warmer → higher PM)
+//          - 0.30·wind   (wind dilutes)
+//          + 0.80·alt/1000  (higher altitude site reads slightly higher PM)
+//          + small noise (~ N(0, 0.6))
+// So the win-region around: a ≈ +0.045, b ≈ -0.30, c ≈ +0.80.
+// ────────────────────────────────────────────────────────────
+var V1 = { a: 0.524, b: -0.0862, c: 5.75 };  // Barkjohn (固定基线)
+
+// 30 hold-out 样本
+var SAMPLES = [
+  // PA,    RH,   T,    wind, alt(m),  true PM2.5
+  [12.0,    35,   28,   3.2,  120,     9.5],
+  [18.5,    42,   22,   1.8,  150,    11.4],
+  [25.0,    50,   18,   2.5,  300,    13.7],
+  [32.0,    55,   30,   1.2,   80,    18.3],
+  [40.0,    58,   25,   0.8,  500,    22.8],
+  [48.0,    62,   33,   4.0,  220,    24.6],
+  [55.0,    65,   20,   2.0,  900,    30.2],
+  [62.0,    68,   28,   3.5,  150,    31.4],
+  [72.0,    70,   35,   1.5,  300,    39.4],
+  [85.0,    72,   24,   2.8,  650,    44.1],
+  [96.0,    74,   31,   0.5,  100,    51.2],
+  [110.0,   76,   18,   5.0,  400,    54.2],
+  [125.0,   78,   29,   2.2,  800,    65.6],
+  [142.0,   80,   34,   1.0,  200,    74.7],
+  [160.0,   82,   22,   3.8,  550,    79.4],
+  [180.0,   84,   27,   1.6,  300,    91.4],
+  [200.0,   86,   30,   2.6,  150,   100.6],
+  [220.0,   88,   19,   4.2,  700,   109.4],
+  [240.0,   90,   33,   0.7,  450,   122.7],
+  [8.0,     28,   26,   2.0,  110,     7.4],
+  [15.0,    38,   31,   1.5,   90,    11.0],
+  [22.0,    45,   17,   3.0,  600,    12.7],
+  [30.0,    52,   29,   1.8,  250,    16.7],
+  [45.0,    60,   36,   2.5,  300,    24.6],
+  [60.0,    66,   23,   3.6,  550,    31.0],
+  [78.0,    71,   28,   2.0,  400,    40.7],
+  [100.0,   75,   34,   1.0,  150,    52.7],
+  [135.0,   79,   21,   4.5,  900,    68.2],
+  [170.0,   83,   30,   2.0,  500,    86.7],
+  [210.0,   87,   25,   3.0,  350,   105.3],
+];
+
+// ────────────────────────────────────────────────────────────
+// Model
+// ────────────────────────────────────────────────────────────
+function predV1(s){
+  return V1.a * s[0] + V1.b * s[1] + V1.c;
+}
+function predV2(s, aT, bW, cA){
+  return predV1(s) + aT * s[2] + bW * s[3] + cA * (s[4] / 1000);
+}
+function computeStats(predFn){
+  var n = SAMPLES.length;
+  var sumAbs = 0, sumTrue = 0, sumResid = 0;
+  for (var i = 0; i < n; i++) sumTrue += SAMPLES[i][5];
+  var meanTrue = sumTrue / n;
+  var ssRes = 0, ssTot = 0;
+  for (var j = 0; j < n; j++) {
+    var pred = predFn(SAMPLES[j]);
+    var tru  = SAMPLES[j][5];
+    var resid = tru - pred;
+    ssRes += resid * resid;
+    ssTot += (tru - meanTrue) * (tru - meanTrue);
+    sumAbs += Math.abs(resid);
+    sumResid += (pred - tru);
+  }
+  return {
+    r2:   1 - ssRes / Math.max(1e-9, ssTot),
+    mae:  sumAbs / n,
+    bias: sumResid / n,
+  };
+}
+
+// v1 baseline 算一次, 不随滑块变
+var V1_STATS = computeStats(predV1);
+
+// ────────────────────────────────────────────────────────────
+// State
+// ────────────────────────────────────────────────────────────
+var paramState = { aT: 0, bW: 0, cA: 0 };
+var rotPhase = 0;
+var hasShownWin = false;
+
+// ────────────────────────────────────────────────────────────
+// Canvas drawing
+// ────────────────────────────────────────────────────────────
+var canvas1 = document.getElementById('gc1');
+var canvas2 = document.getElementById('gc2');
+var ctx1 = canvas1.getContext('2d');
+var ctx2 = canvas2.getContext('2d');
+var DPR = Math.max(1, window.devicePixelRatio || 1);
+
+function resizeOne(c){
+  var rect = c.getBoundingClientRect();
+  c.width  = Math.max(100, Math.floor(rect.width * DPR));
+  c.height = Math.max(100, Math.floor(rect.height * DPR));
+}
+function resizeAll(){ resizeOne(canvas1); resizeOne(canvas2); }
+resizeAll();
+window.addEventListener('resize', resizeAll);
+
+function getCssVar(name){
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+}
+
+function drawScatter(ctx, canvasEl, predFn, isV2){
+  var W = canvasEl.width, H = canvasEl.height;
+  ctx.clearRect(0, 0, W, H);
+
+  // ── Background gradient ──
+  var bg = ctx.createLinearGradient(0, 0, 0, H);
+  bg.addColorStop(0, getCssVar('--bg-0') || '#0a0d1e');
+  bg.addColorStop(1, getCssVar('--bg-1') || '#11142b');
+  ctx.fillStyle = bg;
+  ctx.fillRect(0, 0, W, H);
+
+  // ── Plot area ──
+  var ml = 56 * DPR, mr = 14 * DPR, mt = 18 * DPR, mb = 38 * DPR;
+  var pw = W - ml - mr, ph = H - mt - mb;
+  var side = Math.min(pw, ph);
+  var px = ml + (pw - side) / 2;
+  var py = mt + (ph - side) / 2;
+  var X_MAX = 140, Y_MAX = 140;
+
+  function sx(v){ return px + (v / X_MAX) * side; }
+  function sy(v){ return py + side - (v / Y_MAX) * side; }
+
+  // ── Grid ──
+  ctx.strokeStyle = getCssVar('--line') || 'rgba(120,140,200,0.25)';
+  ctx.lineWidth = 1 * DPR;
+  ctx.font = (9 * DPR) + 'px JetBrains Mono, monospace';
+  ctx.fillStyle = getCssVar('--fg-mute') || '#777a99';
+  for (var v = 0; v <= X_MAX; v += 20) {
+    var x = sx(v), y = sy(v);
+    ctx.beginPath(); ctx.moveTo(x, py); ctx.lineTo(x, py + side); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(px, y); ctx.lineTo(px + side, y); ctx.stroke();
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    ctx.fillText(String(v), x, py + side + 3 * DPR);
+    ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+    ctx.fillText(String(v), px - 5 * DPR, y);
+  }
+
+  // ── Axis frame ──
+  ctx.strokeStyle = getCssVar('--line-strong') || 'rgba(140,160,220,0.5)';
+  ctx.lineWidth = 1.5 * DPR;
+  ctx.beginPath();
+  ctx.moveTo(px, py); ctx.lineTo(px, py + side); ctx.lineTo(px + side, py + side);
+  ctx.stroke();
+
+  // ── y = x diagonal (target) ──
+  var qed = getCssVar('--qed') || '#e8c45c';
+  ctx.strokeStyle = qed;
+  ctx.globalAlpha = 0.55;
+  ctx.lineWidth = 1.5 * DPR;
+  ctx.setLineDash([6 * DPR, 5 * DPR]);
+  ctx.beginPath();
+  ctx.moveTo(sx(0), sy(0));
+  ctx.lineTo(sx(X_MAX), sy(Y_MAX));
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.globalAlpha = 1;
+
+  // ── Axis titles ──
+  ctx.fillStyle = getCssVar('--fg-dim') || '#b8c0d8';
+  ctx.font = 'bold ' + (10 * DPR) + 'px JetBrains Mono, monospace';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+  ctx.fillText((LANG === 'cn' ? '真实 PM2.5' : 'TRUE PM2.5'),
+               px + side / 2, py + side + 18 * DPR);
+  ctx.save();
+  ctx.translate(px - 42 * DPR, py + side / 2);
+  ctx.rotate(-Math.PI / 2);
+  ctx.fillText((LANG === 'cn' ? (isV2 ? 'v2 预测' : 'v1 预测') : (isV2 ? 'v2 PRED' : 'v1 PRED')),
+               0, 0);
+  ctx.restore();
+
+  // y=x label
+  ctx.fillStyle = qed;
+  ctx.font = (9 * DPR) + 'px JetBrains Mono, monospace';
+  ctx.textAlign = 'left'; ctx.textBaseline = 'bottom';
+  ctx.fillText('y = x', sx(X_MAX) - 38 * DPR, sy(X_MAX) - 5 * DPR);
+
+  // ── Points ──
+  var axis = getCssVar('--axis') || '#5fa8ff';
+  var proof = getCssVar('--proof') || '#3b6dd4';
+
+  for (var i = 0; i < SAMPLES.length; i++) {
+    var s = SAMPLES[i];
+    var tru = s[5];
+    var pred = predFn(s);
+    var resid = pred - tru;
+    var absR = Math.abs(resid);
+
+    var trcl = Math.max(0, Math.min(X_MAX, tru));
+    var prcl = Math.max(-10, Math.min(Y_MAX + 10, pred));
+
+    var cx = sx(trcl);
+    var cy = sy(prcl);
+
+    var col;
+    if (absR < 2) col = qed;
+    else if (absR < 5) col = axis;
+    else col = proof;
+
+    // residual line from y=x → point
+    ctx.strokeStyle = col;
+    ctx.globalAlpha = 0.32;
+    ctx.lineWidth = 1 * DPR;
+    ctx.beginPath();
+    ctx.moveTo(sx(trcl), sy(trcl));
+    ctx.lineTo(cx, cy);
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+
+    // halo
+    ctx.fillStyle = col;
+    ctx.globalAlpha = 0.18;
+    ctx.beginPath(); ctx.arc(cx, cy, 6.5 * DPR, 0, Math.PI * 2); ctx.fill();
+    ctx.globalAlpha = 1;
+
+    // solid core
+    ctx.fillStyle = col;
+    ctx.beginPath(); ctx.arc(cx, cy, 3 * DPR, 0, Math.PI * 2); ctx.fill();
+
+    // dark outline
+    ctx.strokeStyle = getCssVar('--bg-0') || '#0a0d1e';
+    ctx.lineWidth = 0.8 * DPR;
+    ctx.stroke();
+  }
+
+  // ── Legend top-right ──
+  var lx = px + side - 88 * DPR;
+  var ly = py + 6 * DPR;
+  ctx.font = (8.5 * DPR) + 'px JetBrains Mono, monospace';
+  ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+  drawLegendDot(ctx, lx, ly + 5 * DPR, qed);
+  ctx.fillStyle = getCssVar('--fg-dim') || '#b8c0d8';
+  ctx.fillText((LANG === 'cn' ? '|err|<2' : '|err|<2'), lx + 11 * DPR, ly + 5 * DPR);
+  drawLegendDot(ctx, lx, ly + 19 * DPR, axis);
+  ctx.fillStyle = getCssVar('--fg-dim') || '#b8c0d8';
+  ctx.fillText((LANG === 'cn' ? '|err|<5' : '|err|<5'), lx + 11 * DPR, ly + 19 * DPR);
+  drawLegendDot(ctx, lx, ly + 33 * DPR, proof);
+  ctx.fillStyle = getCssVar('--fg-dim') || '#b8c0d8';
+  ctx.fillText((LANG === 'cn' ? '|err|≥5' : '|err|≥5'), lx + 11 * DPR, ly + 33 * DPR);
+
+  // version stamp bottom-right (inside plot)
+  ctx.font = 'bold ' + (10 * DPR) + 'px JetBrains Mono, monospace';
+  ctx.fillStyle = isV2 ? qed : getCssVar('--fg-mute');
+  ctx.textAlign = 'right'; ctx.textBaseline = 'bottom';
+  ctx.fillText(isV2 ? 'v2' : 'v1', px + side - 6 * DPR, py + side - 4 * DPR);
+}
+
+function drawLegendDot(ctx, x, y, color){
+  ctx.fillStyle = color;
+  ctx.beginPath(); ctx.arc(x, y, 3 * DPR, 0, Math.PI * 2); ctx.fill();
+}
+
+// ────────────────────────────────────────────────────────────
+// HUD + status
+// ────────────────────────────────────────────────────────────
+function fmtSigned(x, d){
+  if (!isFinite(x)) return '—';
+  return (x >= 0 ? '+' : '') + x.toFixed(d);
+}
+
+function updateHUD(){
+  var aT = paramState.aT, bW = paramState.bW, cA = paramState.cA;
+  function v2Pred(s){ return predV2(s, aT, bW, cA); }
+  var v2 = computeStats(v2Pred);
+
+  // v1 baseline (static)
+  document.getElementById('v1MAE').textContent  = V1_STATS.mae.toFixed(2);
+  document.getElementById('v1R2').textContent   = V1_STATS.r2.toFixed(3);
+  document.getElementById('v1Bias').textContent = V1_STATS.bias.toFixed(2);
+
+  // v2 current
+  var maeEl = document.getElementById('valMAE');
+  var r2El  = document.getElementById('valR2');
+  var biEl  = document.getElementById('valBias');
+  maeEl.textContent = v2.mae.toFixed(2);
+  r2El.textContent  = v2.r2.toFixed(3);
+  biEl.textContent  = v2.bias.toFixed(2);
+
+  maeEl.classList.remove('good','bad');
+  r2El.classList.remove('good','bad');
+  biEl.classList.remove('good','bad');
+
+  // win threshold: MAE ≤ 50% of v1
+  var winMAE = V1_STATS.mae * 0.5;
+  if (v2.mae <= winMAE) maeEl.classList.add('good');
+  else if (v2.mae > V1_STATS.mae * 1.1) maeEl.classList.add('bad');
+
+  if (v2.r2 > V1_STATS.r2 + 0.01) r2El.classList.add('good');
+  else if (v2.r2 < V1_STATS.r2 - 0.05) r2El.classList.add('bad');
+
+  if (Math.abs(v2.bias) < Math.abs(V1_STATS.bias) - 0.1) biEl.classList.add('good');
+  else if (Math.abs(v2.bias) > Math.abs(V1_STATS.bias) + 0.3) biEl.classList.add('bad');
+
+  // delta tags
+  var dMaePct = (v2.mae - V1_STATS.mae) / V1_STATS.mae * 100;
+  var dMaeEl = document.getElementById('dMAE');
+  dMaeEl.textContent = (LANG === 'cn' ? '相比 v1 ' : 'vs v1 ') + (dMaePct >= 0 ? '+' : '') + dMaePct.toFixed(0) + '%';
+  dMaeEl.classList.remove('good','bad');
+  if (dMaePct <= -50) dMaeEl.classList.add('good');
+  else if (dMaePct > 10) dMaeEl.classList.add('bad');
+
+  var dR2 = v2.r2 - V1_STATS.r2;
+  var dR2El = document.getElementById('dR2');
+  dR2El.textContent = (LANG === 'cn' ? 'Δ ' : 'Δ ') + (dR2 >= 0 ? '+' : '') + dR2.toFixed(3);
+  dR2El.classList.remove('good','bad');
+  if (dR2 > 0.01) dR2El.classList.add('good');
+  else if (dR2 < -0.02) dR2El.classList.add('bad');
+
+  var dBi = v2.bias - V1_STATS.bias;
+  var dBiEl = document.getElementById('dBias');
+  dBiEl.textContent = (LANG === 'cn' ? 'Δ ' : 'Δ ') + (dBi >= 0 ? '+' : '') + dBi.toFixed(2);
+  dBiEl.classList.remove('good','bad');
+  if (Math.abs(v2.bias) < Math.abs(V1_STATS.bias) - 0.1) dBiEl.classList.add('good');
+
+  // formula display
+  document.getElementById('fA').textContent = fmtSigned(aT, 3);
+  document.getElementById('fB').textContent = fmtSigned(bW, 3);
+  document.getElementById('fC').textContent = fmtSigned(cA, 2);
+
+  return v2;
+}
+
+function updateStatus(){
+  var aT = paramState.aT, bW = paramState.bW, cA = paramState.cA;
+  function v2Pred(s){ return predV2(s, aT, bW, cA); }
+  var v2 = computeStats(v2Pred);
+
+  var msg = document.getElementById('statusMsg');
+  msg.classList.remove('win','warn');
+
+  var winMAE = V1_STATS.mae * 0.5;
+  var unlockRow = document.getElementById('unlockRow');
+  var unlockTxt = document.getElementById('unlockTxt');
+
+  if (v2.mae <= winMAE) {
+    msg.textContent = t('msgWin');
+    msg.classList.add('win');
+    if (!unlockRow.classList.contains('cleared')) {
+      unlockRow.classList.add('cleared');
+    }
+    unlockTxt.textContent = t('unlockOpen');
+    if (!hasShownWin) {
+      hasShownWin = true;
+      flashGold();
+    }
+  } else if (v2.mae > V1_STATS.mae * 1.05) {
+    msg.textContent = t('msgBad');
+    msg.classList.add('warn');
+    unlockRow.classList.remove('cleared');
+    unlockTxt.textContent = t('unlockLocked');
+    hasShownWin = false;
+  } else if (v2.mae <= V1_STATS.mae * 0.7) {
+    msg.textContent = t('msgClose');
+    unlockRow.classList.remove('cleared');
+    unlockTxt.textContent = t('unlockLocked');
+    hasShownWin = false;
+  } else if (v2.mae < V1_STATS.mae * 0.95) {
+    msg.textContent = t('msgWarm');
+    unlockRow.classList.remove('cleared');
+    unlockTxt.textContent = t('unlockLocked');
+    hasShownWin = false;
+  } else {
+    msg.textContent = t('msgIdle');
+    unlockRow.classList.remove('cleared');
+    unlockTxt.textContent = t('unlockLocked');
+    hasShownWin = false;
+  }
+}
+
+// ────────────────────────────────────────────────────────────
+// Gold flash overlay (--gold key moment)
+// ────────────────────────────────────────────────────────────
+var goldFlashAlpha = 0;
+function flashGold(){ goldFlashAlpha = 1; }
+
+function drawGoldOverlay(ctx, c){
+  if (goldFlashAlpha <= 0.001) return;
+  var W = c.width, H = c.height;
+  ctx.save();
+  ctx.globalAlpha = goldFlashAlpha * 0.18;
+  var rg = ctx.createRadialGradient(W * 0.5, H * 0.45, 0, W * 0.5, H * 0.45, Math.max(W, H) * 0.6);
+  rg.addColorStop(0, getCssVar('--qed') || '#e8c45c');
+  rg.addColorStop(1, 'transparent');
+  ctx.fillStyle = rg;
+  ctx.fillRect(0, 0, W, H);
+  ctx.restore();
+}
+
+// ────────────────────────────────────────────────────────────
+// Mascot rotation + equation flash
+// ────────────────────────────────────────────────────────────
+var EQ_LABELS = ['a·T', 'b·W', 'c·alt', 'v1+v2', 'MAE-50', 'fit'];
+function tickMascot(){
+  rotPhase += 0.02;
+  var ang = Math.sin(rotPhase) * 4;
+  var m = document.getElementById('mascot');
+  if (m) m.style.transform = 'rotate(' + ang.toFixed(2) + 'deg)';
+  var idx = Math.floor(rotPhase / 1.2) % EQ_LABELS.length;
+  var eqEl = document.getElementById('mascotEq');
+  if (eqEl) eqEl.textContent = EQ_LABELS[idx];
+}
+
+// ────────────────────────────────────────────────────────────
+// Main loop
+// ────────────────────────────────────────────────────────────
+function loop(){
+  resizeAll();
+  drawScatter(ctx1, canvas1, predV1, false);
+  drawScatter(ctx2, canvas2, function(s){
+    return predV2(s, paramState.aT, paramState.bW, paramState.cA);
+  }, true);
+  drawGoldOverlay(ctx2, canvas2);
+  goldFlashAlpha *= 0.94;
+  tickMascot();
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+
+// ────────────────────────────────────────────────────────────
+// Slider events
+// ────────────────────────────────────────────────────────────
+function onSlider(){
+  paramState.aT = parseFloat(document.getElementById('sliderA').value);
+  paramState.bW = parseFloat(document.getElementById('sliderB').value);
+  paramState.cA = parseFloat(document.getElementById('sliderC').value);
+  document.getElementById('aVal').textContent = fmtSigned(paramState.aT, 3);
+  document.getElementById('bVal').textContent = fmtSigned(paramState.bW, 3);
+  document.getElementById('cVal').textContent = fmtSigned(paramState.cA, 2);
+  updateHUD();
+  updateStatus();
+}
+document.getElementById('sliderA').addEventListener('input', onSlider);
+document.getElementById('sliderB').addEventListener('input', onSlider);
+document.getElementById('sliderC').addEventListener('input', onSlider);
+
+document.getElementById('resetBtn').addEventListener('click', function(){
+  document.getElementById('sliderA').value = 0;
+  document.getElementById('sliderB').value = 0;
+  document.getElementById('sliderC').value = 0;
+  hasShownWin = false;
+  document.getElementById('unlockRow').classList.remove('cleared');
+  onSlider();
+});
+
+// init
+updateHUD();
+updateStatus();
+refreshI18N();
+</script>
+</body>
+</html>

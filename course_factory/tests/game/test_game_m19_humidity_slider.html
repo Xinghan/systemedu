@@ -1,0 +1,944 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>湿度滑块 — PMS 校正阈值 / Humidity Slider — PMS Calibration Threshold (M19)</title>
+<style>
+  /* ============== Layer 1 — Deep-space canvas (shared across 26 subjects) ============== */
+  :root{
+    --bg-0: oklch(0.14 0.035 265);
+    --bg-1: oklch(0.18 0.04 265);
+    --bg-2: oklch(0.22 0.045 265);
+    --bg-3: oklch(0.28 0.05 265);
+    --line: oklch(0.35 0.05 265 / 0.35);
+    --line-strong: oklch(0.55 0.08 265 / 0.55);
+
+    --fg:      oklch(0.96 0.01 265);
+    --fg-dim:  oklch(0.75 0.02 265);
+    --fg-mute: oklch(0.55 0.03 265);
+    --gold:    oklch(0.85 0.14 85);
+
+    /* Layer 2 — chem signature accent (lime) */
+    --chem: oklch(0.82 0.17 125);
+
+    /* Layer 3 — chem 5-color palette (themes.js id=chem, mascot Ion) */
+    --CATALYST: oklch(0.82 0.17 125);    /* bright lime — dry particle / safe */
+    --BOND:     oklch(0.62 0.16 125);    /* deep bond — light swollen */
+    --DEEP:     oklch(0.35 0.10 130);    /* deep moss — vapor halo */
+    --REACTION: oklch(0.95 0.08 120);    /* pale reaction — water shell */
+    --YIELD:    oklch(0.85 0.14 85);     /* gold — threshold / yield */
+  }
+
+  *{ box-sizing:border-box; margin:0; padding:0; }
+  html, body{
+    width:100%; height:100vh; overflow:hidden;
+    background:var(--bg-0); color:var(--fg);
+    font-family:'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    letter-spacing:0.02em;
+  }
+
+  /* ============== Layout ============== */
+  .stage-wrap{ display:flex; flex-direction:row; width:100%; height:100vh; }
+
+  .game-sidebar{
+    width:200px; flex-shrink:0;
+    background:var(--bg-1);
+    border-right:1px solid var(--line);
+    padding:14px 12px;
+    display:flex; flex-direction:column; gap:11px;
+    overflow-y:auto;
+  }
+
+  .game-main{
+    flex:1; display:flex; flex-direction:column;
+    position:relative; overflow:hidden;
+    background:var(--bg-0);
+  }
+
+  /* ============== Sidebar ============== */
+  .sb-brand{
+    font-size:12px; font-weight:700; color:var(--chem);
+    line-height:1.35;
+    border-bottom:1px solid var(--line);
+    padding-bottom:9px; letter-spacing:0.04em;
+  }
+  .sb-brand .sub{
+    display:block; font-size:9px; color:var(--fg-dim);
+    margin-top:4px; letter-spacing:0.16em; font-weight:400;
+  }
+
+  .sb-mascot{
+    background:var(--bg-2);
+    border:1px solid var(--line);
+    padding:8px;
+    box-shadow:3px 3px 0 var(--bg-0);
+  }
+  .sb-mascot svg{ width:100%; height:64px; display:block; }
+  .sb-mascot .mascot-name{
+    font-size:9px; color:var(--chem);
+    text-align:center; margin-top:5px;
+    letter-spacing:0.22em;
+  }
+
+  /* slider block */
+  .slider-block{
+    background:var(--bg-2);
+    border:1px solid var(--line);
+    padding:9px 10px;
+    box-shadow:3px 3px 0 var(--bg-0);
+    display:flex; flex-direction:column; gap:5px;
+  }
+  .slider-block .sb-label{
+    font-size:9px; color:var(--chem);
+    letter-spacing:0.16em;
+  }
+  .slider-block .slider-val{
+    font-size:18px; color:var(--fg); font-weight:700;
+  }
+  .slider-block .slider-val .unit{
+    font-size:10px; color:var(--fg-mute);
+    margin-left:3px; font-weight:400;
+  }
+  input[type=range]{
+    width:100%; -webkit-appearance:none; appearance:none;
+    height:4px; background:var(--bg-3);
+    outline:none; border-radius:0;
+  }
+  input[type=range]::-webkit-slider-thumb{
+    -webkit-appearance:none; appearance:none;
+    width:14px; height:14px;
+    background:var(--chem);
+    border:2px solid var(--bg-0);
+    cursor:pointer; border-radius:0;
+  }
+  input[type=range]::-moz-range-thumb{
+    width:14px; height:14px;
+    background:var(--chem);
+    border:2px solid var(--bg-0);
+    cursor:pointer; border-radius:0;
+  }
+
+  /* preset row */
+  .preset-row{
+    display:grid; grid-template-columns:1fr 1fr 1fr; gap:4px;
+  }
+  .preset-btn{
+    background:var(--bg-2); color:var(--fg-dim);
+    border:1px solid var(--line);
+    padding:5px 3px;
+    font-family:inherit; font-size:9px;
+    cursor:pointer; letter-spacing:0.05em;
+    border-radius:0;
+    box-shadow:2px 2px 0 var(--bg-0);
+  }
+  .preset-btn:hover{ background:var(--bg-3); color:var(--fg); }
+  .preset-btn.active{
+    background:var(--chem); color:var(--bg-0);
+    border-color:var(--chem);
+  }
+
+  /* task checklist */
+  .sb-section{ display:flex; flex-direction:column; gap:5px; }
+  .sb-section h4{
+    font-size:9px; font-weight:700; color:var(--gold);
+    text-transform:uppercase; letter-spacing:0.18em;
+  }
+  .task-list{ display:flex; flex-direction:column; gap:4px; }
+  .task-item{
+    display:flex; gap:6px; align-items:flex-start;
+    font-size:10px; color:var(--fg-dim);
+    line-height:1.4; padding:5px 6px;
+    background:var(--bg-2);
+    border:1px solid var(--line);
+    box-shadow:2px 2px 0 var(--bg-0);
+    transition:all .15s;
+  }
+  .task-item.done{
+    background:var(--bg-2); color:var(--fg);
+    border-color:var(--chem);
+  }
+  .task-item.done .task-mark{
+    background:var(--chem); border-color:var(--chem); color:var(--bg-0);
+  }
+  .task-item.gold.done{ border-color:var(--gold); }
+  .task-item.gold.done .task-mark{ background:var(--gold); border-color:var(--gold); }
+  .task-mark{
+    flex-shrink:0; width:14px; height:14px;
+    border:1px solid var(--line-strong);
+    background:var(--bg-3);
+    display:flex; align-items:center; justify-content:center;
+    font-size:9px; font-weight:700;
+    font-family:'JetBrains Mono', monospace;
+  }
+  .task-txt{ flex:1; }
+
+  .guide-list{ padding-left:13px; }
+  .guide-list li{
+    font-size:10px; color:var(--fg-dim);
+    line-height:1.5;
+    list-style:disc; list-style-position:outside;
+  }
+
+  .sb-bottom{ margin-top:auto; display:flex; flex-direction:column; gap:7px; }
+
+  .lang-btn{
+    background:var(--bg-2); color:var(--chem);
+    border:1px solid var(--chem);
+    padding:7px 10px;
+    font-family:inherit; font-size:10px;
+    cursor:pointer; letter-spacing:0.16em;
+    border-radius:0;
+    box-shadow:3px 3px 0 var(--bg-0);
+  }
+  .lang-btn:hover{ background:var(--chem); color:var(--bg-0); }
+  .lang-btn:active{ box-shadow:1px 1px 0 var(--bg-0); transform:translate(2px,2px); }
+
+  /* ============== Main stage ============== */
+  .stage{
+    flex:1; display:flex; flex-direction:column;
+    position:relative; overflow:hidden;
+  }
+  .stage svg.scene{
+    width:100%; height:100%; display:block;
+  }
+
+  /* HUD top-right */
+  .hud{
+    position:absolute; top:14px; right:18px;
+    background:var(--bg-1);
+    border:1px solid var(--line-strong);
+    padding:10px 14px;
+    box-shadow:3px 3px 0 var(--bg-0);
+    z-index:10;
+    display:flex; flex-direction:column; gap:5px;
+    min-width:178px;
+  }
+  .hud .row{
+    display:flex; justify-content:space-between;
+    gap:12px; align-items:baseline;
+  }
+  .hud .label{
+    font-size:9px; color:var(--gold);
+    letter-spacing:0.16em; text-transform:uppercase;
+  }
+  .hud .value{
+    font-size:13px; color:var(--fg); font-weight:700;
+  }
+  .hud .value.chem{ color:var(--chem); }
+  .hud .value.gold{ color:var(--gold); }
+
+  /* Zone titles inside stage SVG */
+  .zone-title{
+    font-family:'JetBrains Mono', monospace;
+    font-size:11px;
+    fill:var(--fg-dim);
+    letter-spacing:0.14em;
+    text-transform:uppercase;
+  }
+  .zone-sub{
+    font-family:'JetBrains Mono', monospace;
+    font-size:9px;
+    fill:var(--fg-mute);
+    letter-spacing:0.08em;
+  }
+  .readout-num{
+    font-family:'JetBrains Mono', monospace;
+    font-weight:700;
+  }
+
+  /* threshold flash badge bottom-right */
+  .threshold-chip{
+    position:absolute; bottom:16px; right:18px;
+    background:var(--bg-1);
+    border:1px solid var(--line);
+    padding:8px 12px;
+    box-shadow:3px 3px 0 var(--bg-0);
+    display:flex; flex-direction:column; gap:4px;
+    z-index:10; min-width:178px;
+  }
+  .threshold-chip .label{
+    font-size:9px; color:var(--gold);
+    letter-spacing:0.16em; text-transform:uppercase;
+  }
+  .threshold-chip .ratio{
+    font-size:18px; color:var(--fg); font-weight:700;
+    font-family:'JetBrains Mono', monospace;
+  }
+  .threshold-chip .ratio.warn{ color:var(--gold); }
+  .threshold-chip .badge{
+    font-size:10px; color:var(--fg-mute);
+    letter-spacing:0.1em;
+  }
+  .threshold-chip .badge.crossed{ color:var(--gold); font-weight:700; }
+
+  /* Subtitle bar bottom center */
+  .subbar{
+    position:absolute; left:50%; bottom:16px;
+    transform:translateX(-50%);
+    background:var(--bg-1);
+    border:1px solid var(--line);
+    padding:9px 16px;
+    box-shadow:3px 3px 0 var(--bg-0);
+    max-width:52%; z-index:5;
+  }
+  .subbar .sub-zh{
+    font-size:12px; color:var(--fg); line-height:1.45;
+  }
+  .subbar .sub-en{
+    font-size:10px; color:var(--fg-dim);
+    line-height:1.4; margin-top:3px;
+    letter-spacing:0.04em;
+  }
+</style>
+</head>
+<body>
+<div class="stage-wrap">
+
+  <!-- ============= LEFT SIDEBAR ============= -->
+  <aside class="game-sidebar">
+    <div class="sb-brand" data-i18n-zh="湿度滑块 · PMS 偏差" data-i18n-en="HUMIDITY SLIDER · PMS BIAS">
+      湿度滑块 · PMS 偏差
+      <span class="sub">M19 · Live Tuning</span>
+    </div>
+
+    <!-- mascot Ion (themes.js chem) -->
+    <div class="sb-mascot">
+      <svg viewBox="0 0 100 64" xmlns="http://www.w3.org/2000/svg">
+        <!-- Ion: small atom-cluster with rings -->
+        <circle cx="50" cy="32" r="20" fill="var(--DEEP)" opacity="0.35"/>
+        <circle cx="50" cy="32" r="13" fill="var(--BOND)" opacity="0.7"/>
+        <!-- electron rings -->
+        <ellipse cx="50" cy="32" rx="22" ry="6" fill="none" stroke="var(--REACTION)" stroke-width="1.2" opacity="0.7"/>
+        <ellipse cx="50" cy="32" rx="22" ry="6" fill="none" stroke="var(--CATALYST)" stroke-width="1.1" opacity="0.75" transform="rotate(60 50 32)"/>
+        <ellipse cx="50" cy="32" rx="22" ry="6" fill="none" stroke="var(--YIELD)" stroke-width="1" opacity="0.6" transform="rotate(-60 50 32)"/>
+        <!-- atoms on rings -->
+        <circle cx="72" cy="32" r="2" fill="var(--REACTION)"/>
+        <circle cx="28" cy="32" r="2" fill="var(--CATALYST)"/>
+        <circle cx="61" cy="13" r="2" fill="var(--YIELD)"/>
+        <circle cx="39" cy="51" r="2" fill="var(--YIELD)"/>
+        <!-- nucleus -->
+        <circle cx="50" cy="32" r="4.5" fill="var(--CATALYST)"/>
+        <!-- eye -->
+        <circle cx="48.5" cy="31" r="0.8" fill="var(--bg-0)"/>
+      </svg>
+      <div class="mascot-name">ION</div>
+    </div>
+
+    <!-- RH slider -->
+    <div class="slider-block">
+      <div class="sb-label" data-i18n-zh="相对湿度 RH" data-i18n-en="REL. HUMIDITY">相对湿度 RH</div>
+      <div class="slider-val">
+        <span id="rhVal">60</span><span class="unit">%</span>
+      </div>
+      <input id="rhSlider" type="range" min="20" max="100" step="1" value="60">
+      <div style="display:flex; justify-content:space-between; font-size:8px; color:var(--fg-mute); letter-spacing:0.08em;">
+        <span>20</span><span>100 %</span>
+      </div>
+    </div>
+
+    <!-- presets -->
+    <div class="sb-section">
+      <h4 data-i18n-zh="预设档" data-i18n-en="PRESETS">预设档</h4>
+      <div class="preset-row">
+        <button class="preset-btn" data-preset="30" type="button">30%</button>
+        <button class="preset-btn" data-preset="50" type="button">50%</button>
+        <button class="preset-btn" data-preset="70" type="button">70%</button>
+        <button class="preset-btn" data-preset="85" type="button">85%</button>
+        <button class="preset-btn" data-preset="92" type="button">92%</button>
+        <button class="preset-btn" data-preset="98" type="button">98%</button>
+      </div>
+    </div>
+
+    <!-- Task list -->
+    <div class="sb-section">
+      <h4 data-i18n-zh="校正任务" data-i18n-en="CALIBRATION TASKS">校正任务</h4>
+      <div class="task-list" id="taskList">
+        <div class="task-item" data-task="dry">
+          <span class="task-mark">1</span>
+          <span class="task-txt" data-i18n-zh="试 RH&lt;40 干态" data-i18n-en="Try RH&lt;40 dry">试 RH&lt;40 干态</span>
+        </div>
+        <div class="task-item" data-task="mid">
+          <span class="task-mark">2</span>
+          <span class="task-txt" data-i18n-zh="试 40-70 中湿" data-i18n-en="Try 40-70 mid">试 40-70 中湿</span>
+        </div>
+        <div class="task-item" data-task="high">
+          <span class="task-mark">3</span>
+          <span class="task-txt" data-i18n-zh="试 70-90 高湿" data-i18n-en="Try 70-90 high">试 70-90 高湿</span>
+        </div>
+        <div class="task-item gold" data-task="cross">
+          <span class="task-mark">G</span>
+          <span class="task-txt" data-i18n-zh="找 PMS≥1.5×真值 临界 RH" data-i18n-en="Find PMS&ge;1.5x true RH">找 PMS≥1.5×真值 临界 RH</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- guide -->
+    <div class="sb-section">
+      <h4 data-i18n-zh="原理速记" data-i18n-en="HOW IT WORKS">原理速记</h4>
+      <ul class="guide-list">
+        <li data-i18n-zh="湿度高 颗粒吸水变大" data-i18n-en="High RH grows particles">湿度高 颗粒吸水变大</li>
+        <li data-i18n-zh="PMS 测散射 偏读高" data-i18n-en="PMS reads scattering high">PMS 测散射 偏读高</li>
+        <li data-i18n-zh="GF=(1-RH/100)^-0.2" data-i18n-en="GF=(1-RH/100)^-0.2">GF=(1-RH/100)^-0.2</li>
+      </ul>
+    </div>
+
+    <div class="sb-bottom">
+      <button id="langBtn" class="lang-btn" type="button">EN / 中文</button>
+    </div>
+  </aside>
+
+  <!-- ============= MAIN STAGE ============= -->
+  <main class="game-main">
+    <div class="stage">
+
+      <!-- Scene SVG: three zones (particle pool / scattering meter / dual readout) -->
+      <svg class="scene" id="scene" viewBox="0 0 1200 720" preserveAspectRatio="xMidYMid meet">
+        <defs>
+          <linearGradient id="poolG" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="var(--bg-2)"/>
+            <stop offset="1" stop-color="var(--bg-1)"/>
+          </linearGradient>
+          <linearGradient id="laserG" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0" stop-color="var(--chem)" stop-opacity="0"/>
+            <stop offset="0.5" stop-color="var(--chem)" stop-opacity="0.85"/>
+            <stop offset="1" stop-color="var(--REACTION)" stop-opacity="0"/>
+          </linearGradient>
+          <radialGradient id="haloG" cx="0.5" cy="0.5" r="0.5">
+            <stop offset="0" stop-color="var(--REACTION)" stop-opacity="0.55"/>
+            <stop offset="1" stop-color="var(--REACTION)" stop-opacity="0"/>
+          </radialGradient>
+        </defs>
+
+        <!-- ============== Zone 1: particle pool (LEFT) ============== -->
+        <g id="poolZone">
+          <rect x="40" y="60" width="380" height="560" rx="2"
+                fill="url(#poolG)" stroke="var(--line-strong)" stroke-width="1.5"/>
+          <text class="zone-title" x="60" y="92" data-i18n-zh="颗粒池 · PARTICLE POOL" data-i18n-en="PARTICLE POOL · 颗粒池">PARTICLE POOL · 颗粒池</text>
+          <text class="zone-sub" x="60" y="112" data-i18n-zh="10 颗 PM2.5 · 水汽中" data-i18n-en="10 PM2.5 · in vapor">10 PM2.5 · 水汽中</text>
+
+          <!-- vapor haze layer driven by RH -->
+          <rect id="vaporHaze" x="42" y="62" width="376" height="556"
+                fill="var(--DEEP)" opacity="0.05"/>
+
+          <!-- particles drawn dynamically -->
+          <g id="particles"></g>
+
+          <!-- legend at bottom of pool -->
+          <g transform="translate(60, 580)">
+            <circle cx="6" cy="0" r="5" fill="var(--CATALYST)"/>
+            <text x="18" y="4" class="zone-sub" data-i18n-zh="干态 D=2.5 μm" data-i18n-en="dry D=2.5 μm">干态 D=2.5 μm</text>
+            <circle cx="6" cy="22" r="8.5" fill="var(--BOND)"/>
+            <circle cx="6" cy="22" r="13" fill="url(#haloG)"/>
+            <text x="22" y="26" class="zone-sub" data-i18n-zh="湿胀 D=D0·GF" data-i18n-en="wet D=D0·GF">湿胀 D=D0·GF</text>
+          </g>
+        </g>
+
+        <!-- ============== Zone 2: PMS scattering bar (CENTER) ============== -->
+        <g id="scatterZone">
+          <rect x="450" y="60" width="280" height="560" rx="2"
+                fill="url(#poolG)" stroke="var(--line-strong)" stroke-width="1.5"/>
+          <text class="zone-title" x="470" y="92" data-i18n-zh="PMS 激光散射" data-i18n-en="PMS LASER SCATTERING">PMS 激光散射</text>
+          <text class="zone-sub" x="470" y="112" data-i18n-zh="强度 ~ D⁶ · 累加" data-i18n-en="intensity ~ D⁶ · sum">强度 ~ D⁶ · 累加</text>
+
+          <!-- laser beam horizontal across the middle, pulsing -->
+          <rect id="laserBeam" x="450" y="358" width="280" height="4"
+                fill="url(#laserG)" opacity="0.85"/>
+          <text class="zone-sub" x="470" y="350" data-i18n-zh="laser 685 nm" data-i18n-en="laser 685 nm">laser 685 nm</text>
+
+          <!-- detector icon right side -->
+          <g transform="translate(700, 360)">
+            <rect x="-12" y="-12" width="24" height="24" fill="var(--bg-3)" stroke="var(--line-strong)" stroke-width="1"/>
+            <circle id="detectorLED" cx="0" cy="0" r="6" fill="var(--chem)" opacity="0.4"/>
+            <text class="zone-sub" x="0" y="32" text-anchor="middle">DET</text>
+          </g>
+
+          <!-- scattering particles flying through beam -->
+          <g id="scatterParticles"></g>
+
+          <!-- intensity bar (vertical) -->
+          <g transform="translate(490, 440)">
+            <text class="zone-sub" x="0" y="-6" data-i18n-zh="散射强度" data-i18n-en="scatter intensity">散射强度</text>
+            <rect x="0" y="0" width="200" height="22" fill="var(--bg-3)" stroke="var(--line)" stroke-width="1"/>
+            <rect id="intensityFill" x="1" y="1" width="40" height="20" fill="var(--chem)"/>
+            <text id="intensityVal" class="readout-num" x="210" y="16" font-size="13" fill="var(--fg)">0.30</text>
+          </g>
+
+          <!-- D growth bar -->
+          <g transform="translate(490, 490)">
+            <text class="zone-sub" x="0" y="-6" data-i18n-zh="平均直径 D" data-i18n-en="mean diameter D">平均直径 D</text>
+            <rect x="0" y="0" width="200" height="22" fill="var(--bg-3)" stroke="var(--line)" stroke-width="1"/>
+            <rect id="diameterFill" x="1" y="1" width="60" height="20" fill="var(--BOND)"/>
+            <text id="diameterVal" class="readout-num" x="210" y="16" font-size="13" fill="var(--fg)">2.50</text>
+            <text class="zone-sub" x="245" y="16">μm</text>
+          </g>
+
+          <!-- vapor / water shell ratio -->
+          <g transform="translate(490, 540)">
+            <text class="zone-sub" x="0" y="-6" data-i18n-zh="增长因子 GF" data-i18n-en="growth factor GF">增长因子 GF</text>
+            <rect x="0" y="0" width="200" height="22" fill="var(--bg-3)" stroke="var(--line)" stroke-width="1"/>
+            <rect id="gfFill" x="1" y="1" width="50" height="20" fill="var(--REACTION)"/>
+            <text id="gfVal" class="readout-num" x="210" y="16" font-size="13" fill="var(--fg)">1.05</text>
+          </g>
+        </g>
+
+        <!-- ============== Zone 3: dual readout TRUE vs PMS (RIGHT) ============== -->
+        <g id="readoutZone">
+          <rect x="760" y="60" width="400" height="560" rx="2"
+                fill="url(#poolG)" stroke="var(--line-strong)" stroke-width="1.5"/>
+          <text class="zone-title" x="780" y="92" data-i18n-zh="真实 vs PMS 读数" data-i18n-en="TRUE vs PMS READOUT">TRUE vs PMS 读数</text>
+          <text class="zone-sub" x="780" y="112" data-i18n-zh="干气溶胶质量 50 μg/m³" data-i18n-en="dry aerosol 50 μg/m³">干气溶胶质量 50 μg/m³</text>
+
+          <!-- True column (left bar) -->
+          <g transform="translate(820, 150)">
+            <text class="zone-sub" x="0" y="0" data-i18n-zh="真实 TRUE" data-i18n-en="TRUE">真实 TRUE</text>
+            <rect x="0" y="14" width="60" height="380" fill="var(--bg-3)" stroke="var(--line-strong)" stroke-width="1"/>
+            <!-- fill (true is constant) -->
+            <rect id="trueFill" x="1" y="280" width="58" height="113" fill="var(--CATALYST)"/>
+            <text id="trueVal" class="readout-num" x="30" y="416" text-anchor="middle" font-size="16" fill="var(--CATALYST)">50</text>
+            <text class="zone-sub" x="30" y="434" text-anchor="middle">μg/m³</text>
+          </g>
+
+          <!-- PMS column (right bar) -->
+          <g transform="translate(960, 150)">
+            <text class="zone-sub" x="0" y="0" data-i18n-zh="PMS 读数" data-i18n-en="PMS READING">PMS 读数</text>
+            <rect x="0" y="14" width="60" height="380" fill="var(--bg-3)" stroke="var(--line-strong)" stroke-width="1"/>
+            <rect id="pmsFill" x="1" y="280" width="58" height="113" fill="var(--BOND)"/>
+            <!-- threshold line at 1.5x = 75 μg/m³ → 280 - (75-50)/200*380 = 232.5 -->
+            <line id="thrLine" x1="-8" y1="232.5" x2="68" y2="232.5"
+                  stroke="var(--gold)" stroke-width="1.5" stroke-dasharray="5 3"/>
+            <text class="zone-sub" x="74" y="236" fill="var(--gold)" data-i18n-zh="1.5x 阈值" data-i18n-en="1.5x THRESHOLD">1.5x 阈值</text>
+            <text id="pmsVal" class="readout-num" x="30" y="416" text-anchor="middle" font-size="16" fill="var(--BOND)">52</text>
+            <text class="zone-sub" x="30" y="434" text-anchor="middle">μg/m³</text>
+          </g>
+
+          <!-- scale labels on the side -->
+          <g transform="translate(810, 164)">
+            <text class="zone-sub" x="0" y="0" text-anchor="end">200</text>
+            <text class="zone-sub" x="0" y="95" text-anchor="end">150</text>
+            <text class="zone-sub" x="0" y="190" text-anchor="end">100</text>
+            <text class="zone-sub" x="0" y="285" text-anchor="end">50</text>
+            <text class="zone-sub" x="0" y="380" text-anchor="end">0</text>
+          </g>
+
+          <!-- ratio big number bottom -->
+          <g transform="translate(960, 510)">
+            <text class="zone-sub" x="0" y="0" data-i18n-zh="PMS/真实 比值" data-i18n-en="PMS/TRUE RATIO">PMS/真实 比值</text>
+            <text id="ratioBig" class="readout-num" x="0" y="36" font-size="32" fill="var(--fg)">1.04</text>
+            <text class="zone-sub" x="0" y="56" data-i18n-zh="x 倍" data-i18n-en="x times">x 倍</text>
+          </g>
+
+          <!-- arrow from PMS bar to ratio -->
+          <path d="M 1000 410 Q 1010 470 990 510" stroke="var(--line)" stroke-width="1" fill="none" stroke-dasharray="3 3"/>
+        </g>
+      </svg>
+
+      <!-- HUD top-right -->
+      <div class="hud">
+        <div class="row">
+          <span class="label" data-i18n-zh="湿度" data-i18n-en="RH">湿度</span>
+          <span class="value chem"><span id="hudRH">60</span> %</span>
+        </div>
+        <div class="row">
+          <span class="label" data-i18n-zh="平均粒径" data-i18n-en="Mean D">平均粒径</span>
+          <span class="value"><span id="hudD">2.62</span> μm</span>
+        </div>
+        <div class="row">
+          <span class="label" data-i18n-zh="PMS 偏差" data-i18n-en="PMS bias">PMS 偏差</span>
+          <span class="value gold" id="hudBias">+4%</span>
+        </div>
+      </div>
+
+      <!-- Threshold chip bottom-right -->
+      <div class="threshold-chip">
+        <span class="label" data-i18n-zh="校正阈值进度" data-i18n-en="CALIBRATION THRESHOLD">校正阈值进度</span>
+        <span id="ratioMain" class="ratio">1.04x</span>
+        <span id="thrBadge" class="badge" data-i18n-zh="尚未达到 1.5x" data-i18n-en="not yet at 1.5x">尚未达到 1.5x</span>
+      </div>
+
+      <!-- Subtitle bar bottom-center -->
+      <div class="subbar">
+        <div class="sub-zh" id="subZh">RH 60%，颗粒只吸了一点点水，PMS 读数和真实质量几乎一致。</div>
+        <div class="sub-en" id="subEn">At 60% RH, particles barely take up water; PMS reading is close to the true dry mass.</div>
+      </div>
+
+    </div>
+  </main>
+</div>
+
+<script>
+(function(){
+  'use strict';
+
+  // ----- i18n -----
+  var locInfo = 'zh';
+  var langBtn = document.getElementById('langBtn');
+
+  function refreshI18N(){
+    var nodes = document.querySelectorAll('[data-i18n-zh]');
+    for (var i = 0; i < nodes.length; i++){
+      var el = nodes[i];
+      if (el.classList.contains('sb-brand')) continue;
+      var zh = el.getAttribute('data-i18n-zh');
+      var en = el.getAttribute('data-i18n-en');
+      var txt = (locInfo === 'zh') ? zh : en;
+      // skip if there are nested .sub spans (handled separately)
+      if (el.querySelector('.sub') || el.querySelector('.unit')) continue;
+      if (el.tagName === 'text' || el.tagName === 'TEXT'){
+        el.textContent = txt;
+      } else {
+        el.textContent = txt;
+      }
+    }
+    // sb-brand
+    var brand = document.querySelector('.sb-brand');
+    if (brand && brand.firstChild){
+      brand.firstChild.nodeValue = (locInfo === 'zh' ? '湿度滑块 · PMS 偏差' : 'HUMIDITY SLIDER · PMS BIAS');
+    }
+    document.getElementById('subZh').textContent = currentSubZh();
+    document.getElementById('subEn').textContent = currentSubEn();
+    updateBadgeI18N();
+    document.getElementById('hudBias').textContent = formatBias(currentBias);
+  }
+
+  langBtn.addEventListener('click', function(){
+    locInfo = (locInfo === 'zh') ? 'en' : 'zh';
+    refreshI18N();
+  });
+
+  // ----- physics model -----
+  // GF (growth factor) for ammonium-sulfate-like aerosol:
+  // GF = (1 - RH/100)^(-0.2)  for RH < 100; clamp RH to 95 to avoid blowup
+  // Particle DRY diameter D0 = 2.5 μm.
+  // Wet diameter D = D0 * GF.
+  // PMS reads scattering ~ D^6 in Rayleigh-Mie crossover region for sub-micron part,
+  // but mass overestimate driven by water uptake (volume ~ GF^3) is the dominant
+  // observable effect → PMS_reading = TRUE_dry * GF^3  (using mass ratio)
+  // At RH=85: GF ~ 1.476, GF^3 ~ 3.21 (over-reads ~3x in extreme cases) — clamp to 2.6x for realism.
+  var D0 = 2.5;
+  var TRUE_MASS = 50; // μg/m³ constant dry aerosol
+
+  function growthFactor(rh){
+    var rhClamp = Math.min(rh, 95);
+    var dry = 1 - rhClamp / 100;
+    if (dry <= 0.001) dry = 0.001;
+    return Math.pow(dry, -0.2);
+  }
+
+  function pmsReading(rh){
+    var gf = growthFactor(rh);
+    // mass overestimate due to absorbed water volume
+    var ratio = Math.pow(gf, 3);
+    // realistic clamp: PMS cap ~3.5x
+    if (ratio > 3.5) ratio = 3.5;
+    return TRUE_MASS * ratio;
+  }
+
+  // intensity ~ scattering * particle count; normalize so 0 RH ~ 0.3, 95 RH ~ 1.0
+  function scatterIntensity(rh){
+    var gf = growthFactor(rh);
+    var i = 0.25 + Math.pow(gf, 2.0) * 0.18;
+    return Math.min(1.0, i);
+  }
+
+  // ----- state -----
+  var currentRH = 60;
+  var currentGF = 1;
+  var currentD = D0;
+  var currentPMS = TRUE_MASS;
+  var currentRatio = 1.0;
+  var currentBias = 0;
+  var triedBands = {}; // 'dry' | 'mid' | 'high'
+  var thresholdHit = false;
+
+  // ----- particle pool drawing (10 PM2.5 particles in left zone) -----
+  var poolParticles = [];
+  var poolGroup = document.getElementById('particles');
+  var POOL_BBOX = { x: 60, y: 150, w: 340, h: 400 };
+
+  (function initPool(){
+    for (var i = 0; i < 10; i++){
+      // base x,y inside POOL_BBOX
+      var bx = POOL_BBOX.x + 30 + Math.random() * (POOL_BBOX.w - 60);
+      var by = POOL_BBOX.y + 40 + Math.random() * (POOL_BBOX.h - 80);
+      // halo (water shell)
+      var halo = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+      halo.setAttribute('cx', bx);
+      halo.setAttribute('cy', by);
+      halo.setAttribute('r', 6);
+      halo.setAttribute('fill', 'url(#haloG)');
+      halo.setAttribute('opacity', '0.2');
+      poolGroup.appendChild(halo);
+      // core particle
+      var core = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+      core.setAttribute('cx', bx);
+      core.setAttribute('cy', by);
+      core.setAttribute('r', 5);
+      core.setAttribute('fill', 'var(--CATALYST)');
+      core.setAttribute('stroke', 'var(--bg-0)');
+      core.setAttribute('stroke-width', '0.6');
+      poolGroup.appendChild(core);
+      poolParticles.push({
+        x: bx, y: by,
+        vx: (Math.random() - 0.5) * 0.18,
+        vy: (Math.random() - 0.5) * 0.18,
+        halo: halo, core: core,
+      });
+    }
+  })();
+
+  // ----- scattering particles (small dots traversing the laser beam) -----
+  var scatterArr = [];
+  var scatterGroup = document.getElementById('scatterParticles');
+  var SCAT_X_MIN = 460, SCAT_X_MAX = 720;
+  var SCAT_Y_MIN = 320, SCAT_Y_MAX = 400;
+
+  function spawnScatter(){
+    var sp = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+    var startX = SCAT_X_MIN + Math.random() * (SCAT_X_MAX - SCAT_X_MIN);
+    var startY = SCAT_Y_MIN + Math.random() * (SCAT_Y_MAX - SCAT_Y_MIN);
+    sp.setAttribute('cx', startX);
+    sp.setAttribute('cy', startY);
+    sp.setAttribute('r', 2 + Math.random() * 2);
+    sp.setAttribute('fill', 'var(--REACTION)');
+    sp.setAttribute('opacity', '0.85');
+    scatterGroup.appendChild(sp);
+    scatterArr.push({
+      el: sp, x: startX, y: startY,
+      vx: 0.6 + Math.random() * 0.4,
+      vy: (Math.random() - 0.5) * 0.3,
+      life: 0,
+    });
+  }
+
+  // animation loop
+  var lastT = 0;
+  var spawnAcc = 0;
+  function tick(now){
+    var dt = (lastT ? now - lastT : 16);
+    lastT = now;
+
+    // pool particles drift inside bbox; size depends on currentGF
+    var dispD = currentD; // wet diameter μm → visual radius scale
+    var coreR = 4 + (D0 - 0) * 0;            // dry core 4-5 px
+    var wetR = 4 + (dispD - D0) * 4 + 1;     // wet halo larger
+    if (wetR < 5) wetR = 5;
+    var dryCoreR = 4;
+    for (var i = 0; i < poolParticles.length; i++){
+      var p = poolParticles[i];
+      p.x += p.vx * dt * 0.06;
+      p.y += p.vy * dt * 0.06;
+      if (p.x < POOL_BBOX.x + 10 || p.x > POOL_BBOX.x + POOL_BBOX.w - 10) p.vx *= -1;
+      if (p.y < POOL_BBOX.y + 10 || p.y > POOL_BBOX.y + POOL_BBOX.h - 10) p.vy *= -1;
+      p.core.setAttribute('cx', p.x);
+      p.core.setAttribute('cy', p.y);
+      p.core.setAttribute('r', dryCoreR);
+      // wet shell only visible when GF > 1.02
+      p.halo.setAttribute('cx', p.x);
+      p.halo.setAttribute('cy', p.y);
+      var haloR = Math.max(dryCoreR + 1, wetR + (currentGF - 1) * 6);
+      p.halo.setAttribute('r', haloR);
+      p.halo.setAttribute('opacity', Math.min(0.85, (currentGF - 1) * 2 + 0.05));
+      // tint core toward BOND when wet
+      var t = Math.min(1, (currentGF - 1) * 1.5);
+      if (t > 0.5) p.core.setAttribute('fill', 'var(--BOND)');
+      else p.core.setAttribute('fill', 'var(--CATALYST)');
+    }
+
+    // vapor haze
+    var hazeOp = 0.04 + currentRH / 100 * 0.18;
+    document.getElementById('vaporHaze').setAttribute('opacity', hazeOp.toFixed(3));
+
+    // scatter particles spawn rate scales with intensity
+    var intensity = scatterIntensity(currentRH);
+    spawnAcc += dt;
+    var spawnInterval = Math.max(35, 250 - intensity * 180);
+    while (spawnAcc > spawnInterval){
+      spawnScatter();
+      spawnAcc -= spawnInterval;
+    }
+    // update scatter particles
+    for (var j = scatterArr.length - 1; j >= 0; j--){
+      var s = scatterArr[j];
+      s.x += s.vx * dt * 0.08;
+      s.y += s.vy * dt * 0.08;
+      s.life += dt;
+      s.el.setAttribute('cx', s.x);
+      s.el.setAttribute('cy', s.y);
+      if (s.x > SCAT_X_MAX + 8 || s.life > 4500){
+        // brief LED flash when crossing detector
+        if (s.x > 700){
+          document.getElementById('detectorLED').setAttribute('opacity', '0.95');
+          setTimeout(function(){
+            var led = document.getElementById('detectorLED');
+            if (led) led.setAttribute('opacity', '0.4');
+          }, 80);
+        }
+        s.el.parentNode && s.el.parentNode.removeChild(s.el);
+        scatterArr.splice(j, 1);
+      }
+    }
+
+    // pulse laser beam
+    var beam = document.getElementById('laserBeam');
+    var pulse = 0.65 + Math.sin(now / 220) * 0.2 + intensity * 0.15;
+    beam.setAttribute('opacity', Math.min(1, pulse).toFixed(3));
+
+    requestAnimationFrame(tick);
+  }
+  requestAnimationFrame(tick);
+
+  // ----- task helpers -----
+  function rhBand(rh){
+    if (rh < 40) return 'dry';
+    if (rh < 70) return 'mid';
+    return 'high';
+  }
+
+  function updateTasks(){
+    var tasks = document.querySelectorAll('#taskList .task-item');
+    for (var i = 0; i < tasks.length; i++){
+      var key = tasks[i].getAttribute('data-task');
+      if (key === 'cross'){
+        if (thresholdHit) tasks[i].classList.add('done');
+      } else {
+        if (triedBands[key]) tasks[i].classList.add('done');
+      }
+    }
+  }
+
+  // ----- subtitle text -----
+  function currentSubZh(){
+    var rh = currentRH;
+    var r = currentRatio;
+    if (rh < 40) return 'RH ' + rh + '%，颗粒近乎干态，PMS 与真实质量几乎一致（比值 ' + r.toFixed(2) + '×）。';
+    if (rh < 70) return 'RH ' + rh + '%，颗粒只吸了一点点水，PMS 略偏高（比值 ' + r.toFixed(2) + '×）。';
+    if (rh < 85) return 'RH ' + rh + '%，颗粒开始明显吸水变大，PMS 已经偏读（比值 ' + r.toFixed(2) + '×）。';
+    if (rh < 92) return 'RH ' + rh + '%，水汽吸附剧烈，PMS 偏读越过 1.5×，必须做湿度校正。';
+    return 'RH ' + rh + '%，接近饱和，颗粒变成液滴，PMS 大幅偏读（比值 ' + r.toFixed(2) + '×）。';
+  }
+  function currentSubEn(){
+    var rh = currentRH;
+    var r = currentRatio;
+    if (rh < 40) return 'RH ' + rh + '%, particles nearly dry; PMS matches true mass closely (ratio ' + r.toFixed(2) + 'x).';
+    if (rh < 70) return 'RH ' + rh + '%, particles take up little water; PMS slightly high (ratio ' + r.toFixed(2) + 'x).';
+    if (rh < 85) return 'RH ' + rh + '%, particles swell noticeably; PMS over-reads (ratio ' + r.toFixed(2) + 'x).';
+    if (rh < 92) return 'RH ' + rh + '%, intense water uptake; PMS crosses 1.5x — humidity correction required.';
+    return 'RH ' + rh + '%, near saturation, particles act like droplets; PMS over-reads heavily (ratio ' + r.toFixed(2) + 'x).';
+  }
+
+  function formatBias(b){
+    var s = (b >= 0 ? '+' : '') + Math.round(b) + '%';
+    return s;
+  }
+
+  function updateBadgeI18N(){
+    var badge = document.getElementById('thrBadge');
+    if (thresholdHit){
+      badge.textContent = (locInfo === 'zh') ? '已找到校正阈值 RH≈' + (currentRH) + '%' : 'Threshold found at RH≈' + currentRH + '%';
+      badge.classList.add('crossed');
+    } else {
+      badge.textContent = (locInfo === 'zh') ? '尚未达到 1.5x' : 'not yet at 1.5x';
+      badge.classList.remove('crossed');
+    }
+  }
+
+  // ----- apply RH -----
+  function applyRH(rh){
+    currentRH = rh;
+    currentGF = growthFactor(rh);
+    currentD = D0 * currentGF;
+    currentPMS = pmsReading(rh);
+    currentRatio = currentPMS / TRUE_MASS;
+    currentBias = (currentRatio - 1) * 100;
+
+    // sidebar
+    document.getElementById('rhVal').textContent = rh;
+    document.getElementById('hudRH').textContent = rh;
+    document.getElementById('hudD').textContent = currentD.toFixed(2);
+    document.getElementById('hudBias').textContent = formatBias(currentBias);
+
+    // intensity bar (max width 198 inside 200 frame)
+    var intensity = scatterIntensity(rh);
+    document.getElementById('intensityFill').setAttribute('width', Math.max(2, intensity * 198));
+    document.getElementById('intensityVal').textContent = intensity.toFixed(2);
+
+    // diameter bar: D in range D0(2.5) .. D0*~2.8 (≈7); map to 198 px max at D=5.5
+    var dW = Math.max(2, Math.min(198, (currentD - 1.5) / 4.5 * 198));
+    document.getElementById('diameterFill').setAttribute('width', dW);
+    document.getElementById('diameterVal').textContent = currentD.toFixed(2);
+
+    // GF bar: GF in range 1 .. ~2.2; map to 198 px at GF=2.4
+    var gfW = Math.max(2, Math.min(198, (currentGF - 0.9) / 1.5 * 198));
+    document.getElementById('gfFill').setAttribute('width', gfW);
+    document.getElementById('gfVal').textContent = currentGF.toFixed(2);
+
+    // true bar fill (constant; visualize 50 μg/m³ on a 0-200 scale, 380px tall)
+    // y_top = 14 + (200-mass)/200 * 380; height = 380 - (y_top - 14)
+    var trueY = 14 + (200 - 50) / 200 * 380;
+    var trueH = 14 + 380 - trueY;
+    document.getElementById('trueFill').setAttribute('y', trueY);
+    document.getElementById('trueFill').setAttribute('height', trueH);
+
+    // PMS bar fill (variable; cap at 200)
+    var pmsClamp = Math.min(200, currentPMS);
+    var pmsY = 14 + (200 - pmsClamp) / 200 * 380;
+    var pmsH = 14 + 380 - pmsY;
+    document.getElementById('pmsFill').setAttribute('y', pmsY);
+    document.getElementById('pmsFill').setAttribute('height', pmsH);
+
+    // color: BOND default, YIELD when crossed threshold
+    var crossed = currentRatio >= 1.5;
+    document.getElementById('pmsFill').setAttribute('fill', crossed ? 'var(--YIELD)' : 'var(--BOND)');
+    document.getElementById('pmsVal').setAttribute('fill', crossed ? 'var(--YIELD)' : 'var(--BOND)');
+    document.getElementById('pmsVal').textContent = Math.round(currentPMS);
+    document.getElementById('trueVal').textContent = '50';
+
+    // ratio numbers
+    document.getElementById('ratioBig').textContent = currentRatio.toFixed(2) + 'x';
+    document.getElementById('ratioBig').setAttribute('fill', crossed ? 'var(--gold)' : 'var(--fg)');
+    document.getElementById('ratioMain').textContent = currentRatio.toFixed(2) + 'x';
+    document.getElementById('ratioMain').classList.toggle('warn', crossed);
+
+    // tasks
+    var band = rhBand(rh);
+    triedBands[band] = true;
+    if (crossed) thresholdHit = true;
+    updateTasks();
+    updateBadgeI18N();
+
+    // subtitle
+    document.getElementById('subZh').textContent = currentSubZh();
+    document.getElementById('subEn').textContent = currentSubEn();
+
+    // active preset
+    var presets = document.querySelectorAll('.preset-btn');
+    for (var p = 0; p < presets.length; p++){
+      var pv = parseFloat(presets[p].getAttribute('data-preset'));
+      if (pv === rh) presets[p].classList.add('active');
+      else presets[p].classList.remove('active');
+    }
+  }
+
+  // ----- slider + presets binding -----
+  var slider = document.getElementById('rhSlider');
+  slider.addEventListener('input', function(e){
+    var v = parseInt(e.target.value, 10);
+    applyRH(v);
+  });
+
+  var presetBtns = document.querySelectorAll('.preset-btn');
+  for (var i = 0; i < presetBtns.length; i++){
+    presetBtns[i].addEventListener('click', function(e){
+      var v = parseInt(e.currentTarget.getAttribute('data-preset'), 10);
+      slider.value = v;
+      applyRH(v);
+    });
+  }
+
+  // initial
+  applyRH(60);
+})();
+</script>
+</body>
+</html>

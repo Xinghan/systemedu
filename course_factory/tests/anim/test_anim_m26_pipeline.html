@@ -1,0 +1,1379 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>M26 — Pipeline: correct.py + nowcast.py + aqi.py</title>
+<style>
+  /* F2 第 1 层 — 共享深空底 (theme_style/styles.css L8-21) */
+  :root{
+    --bg-0: oklch(0.14 0.035 265);
+    --bg-1: oklch(0.18 0.04 265);
+    --bg-2: oklch(0.22 0.045 265);
+    --bg-3: oklch(0.28 0.05 265);
+    --line: oklch(0.35 0.05 265 / 0.35);
+    --line-strong: oklch(0.55 0.08 265 / 0.55);
+    --fg: oklch(0.96 0.01 265);
+    --fg-dim: oklch(0.75 0.02 265);
+    --fg-mute: oklch(0.55 0.03 265);
+    --gold: oklch(0.85 0.14 85);
+
+    /* F2 第 2 层 — cs accent (cyan) */
+    --cs: oklch(0.75 0.17 200);
+    --cs-dim: oklch(0.55 0.16 200);
+
+    /* F2 第 3 层 — cs 5 色 palette (themes.js cs: SIGNAL/CORE/DEPTH/FLASH/QUERY) */
+    --SIGNAL:  oklch(0.75 0.17 200);  /* cs accent — correct.py 主色 + import 关键字 */
+    --CORE:    oklch(0.55 0.16 200);  /* 中 cyan — nowcast.py 主色 */
+    --DEPTH:   oklch(0.35 0.10 210);  /* 深 cyan — module 卡片底 / pipe 暗段 */
+    --FLASH:   oklch(0.92 0.08 190);  /* 近白 cyan — 数据流 packet / def 关键字 */
+    --QUERY:   oklch(0.85 0.14 85);   /* 金色 — aqi.py 主色 / AQI 结果 / key moment */
+
+    /* 三个 module 颜色直名 (sub-palette) */
+    --mod-correct: var(--SIGNAL);
+    --mod-nowcast: var(--FLASH);
+    --mod-aqi:     var(--QUERY);
+  }
+
+  *{box-sizing:border-box;margin:0;padding:0;}
+  html,body{height:100%;overflow:hidden;}
+  body{
+    background: var(--bg-0);
+    color: var(--fg);
+    font-family: 'Inter','Noto Sans SC',-apple-system,BlinkMacSystemFont,sans-serif;
+    display: flex;
+    height: 100vh;
+  }
+
+  /* 200px sidebar */
+  .sidebar{
+    width: 200px;
+    flex-shrink: 0;
+    background: var(--bg-1);
+    border-right: 1px solid var(--line);
+    padding: 16px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .brand{
+    border-bottom: 1px solid var(--line);
+    padding-bottom: 10px;
+    margin-bottom: 4px;
+  }
+  .brand .badge{
+    display: inline-block;
+    font-family: 'JetBrains Mono',ui-monospace,monospace;
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    color: var(--SIGNAL);
+    background: var(--bg-2);
+    padding: 3px 7px;
+    border: 1px solid var(--line);
+    box-shadow: 2px 2px 0 var(--bg-0);
+    margin-bottom: 6px;
+  }
+  .brand h1{
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--fg);
+    line-height: 1.3;
+  }
+  .brand .sub{
+    font-size: 10px;
+    color: var(--fg-mute);
+    margin-top: 4px;
+    font-family: 'JetBrains Mono',ui-monospace,monospace;
+    letter-spacing: 0.04em;
+  }
+  .mascot-box{
+    background: var(--bg-2);
+    border: 1px solid var(--line);
+    box-shadow: 3px 3px 0 var(--bg-0);
+    padding: 10px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .mascot-box .label{
+    font-family: 'JetBrains Mono',ui-monospace,monospace;
+    font-size: 9px;
+    color: var(--fg-dim);
+    letter-spacing: 0.08em;
+  }
+  .mascot-box .name{
+    font-size: 11px;
+    color: var(--fg);
+    font-weight: 600;
+    margin-top: 2px;
+  }
+  .guide{ display: flex; flex-direction: column; gap: 8px; }
+  .guide-item{
+    font-size: 11px;
+    line-height: 1.45;
+    color: var(--fg-dim);
+    padding-left: 9px;
+    border-left: 2px solid var(--SIGNAL);
+    padding-top: 2px;
+    padding-bottom: 2px;
+  }
+  .guide-item .num{
+    font-family: 'JetBrains Mono',ui-monospace,monospace;
+    color: var(--SIGNAL);
+    font-weight: 700;
+    margin-right: 4px;
+  }
+  .sidebar .spacer{ flex: 1; }
+  .lang-btn{
+    background: var(--bg-2);
+    border: 1px solid var(--line-strong);
+    box-shadow: 2px 2px 0 var(--bg-0);
+    color: var(--fg);
+    font-family: 'JetBrains Mono',ui-monospace,monospace;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    padding: 7px 10px;
+    cursor: pointer;
+    width: 100%;
+  }
+  .lang-btn:hover{ border-color: var(--SIGNAL); color: var(--SIGNAL); }
+  .lang-btn:active{ transform: translate(2px, 2px); box-shadow: none; }
+
+  .main{
+    flex: 1;
+    position: relative;
+    overflow: hidden;
+    background: var(--bg-0);
+  }
+  #stage{
+    width: 100%;
+    height: 100%;
+    display: block;
+  }
+
+  .hud{
+    position: absolute;
+    top: 18px;
+    right: 18px;
+    background: var(--bg-2);
+    border: 1px solid var(--line);
+    box-shadow: 3px 3px 0 var(--bg-0);
+    padding: 10px 14px;
+    font-family: 'JetBrains Mono',ui-monospace,monospace;
+    min-width: 270px;
+  }
+  .hud .row{
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 14px;
+    font-size: 11px;
+    line-height: 1.6;
+  }
+  .hud .label{ color: var(--fg-mute); letter-spacing: 0.06em; }
+  .hud .value{ color: var(--fg); font-weight: 700; }
+  .hud .value.cs{ color: var(--SIGNAL); }
+  .hud .value.now{ color: var(--FLASH); }
+  .hud .value.aqi{ color: var(--QUERY); }
+  .hud .value.gold{ color: var(--gold); }
+  .hud .sep{
+    height: 1px;
+    background: var(--line);
+    margin: 6px 0;
+  }
+
+  .subtitle{
+    position: absolute;
+    left: 50%;
+    bottom: 28px;
+    transform: translateX(-50%);
+    text-align: center;
+    max-width: 80%;
+    pointer-events: none;
+  }
+  .subtitle .cn{
+    font-size: 17px;
+    font-weight: 700;
+    color: var(--fg);
+    letter-spacing: 0.01em;
+  }
+  .subtitle .en{
+    font-size: 12px;
+    color: var(--fg-mute);
+    margin-top: 4px;
+    font-style: italic;
+    font-family: 'JetBrains Mono',ui-monospace,monospace;
+    letter-spacing: 0.03em;
+  }
+
+  .frame-progress{
+    position: absolute;
+    left: 24px;
+    bottom: 28px;
+    display: flex;
+    gap: 6px;
+    align-items: center;
+  }
+  .chip{
+    width: 24px;
+    height: 6px;
+    background: var(--bg-2);
+    border: 1px solid var(--line);
+  }
+  .chip.active{
+    background: var(--SIGNAL);
+    border-color: var(--SIGNAL);
+  }
+  .chip.done{
+    background: var(--cs-dim);
+    border-color: var(--cs-dim);
+  }
+  .frame-progress .stepname{
+    font-family: 'JetBrains Mono',ui-monospace,monospace;
+    font-size: 10px;
+    color: var(--fg-dim);
+    margin-left: 8px;
+    letter-spacing: 0.08em;
+  }
+
+  .flash{
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-family: 'JetBrains Mono',ui-monospace,monospace;
+    font-size: 26px;
+    font-weight: 800;
+    color: var(--gold);
+    letter-spacing: 0.18em;
+    opacity: 0;
+    pointer-events: none;
+    text-shadow: 0 0 24px var(--gold);
+    text-align: center;
+  }
+  .flash.on{ opacity: 1; }
+  .flash .small{
+    display: block;
+    text-align: center;
+    font-size: 11px;
+    color: var(--fg-dim);
+    letter-spacing: 0.08em;
+    margin-top: 8px;
+    text-shadow: none;
+    font-weight: 400;
+  }
+</style>
+</head>
+<body>
+  <aside class="sidebar">
+    <div class="brand">
+      <span class="badge" id="badgeMod">MOD-M26 / CS</span>
+      <h1 id="brandH1">Pipeline: correct + nowcast + aqi</h1>
+      <div class="sub" id="brandSub">raw -> corrected -> nowcast -> AQI</div>
+    </div>
+
+    <div class="mascot-box">
+      <svg width="42" height="42" viewBox="0 0 60 60" aria-hidden="true">
+        <!-- Bit mascot — 三层方块代表 3 个 module (correct/nowcast/aqi) -->
+        <rect x="10" y="38" width="14" height="14" fill="var(--SIGNAL)" opacity="0.85"/>
+        <rect x="23" y="26" width="14" height="14" fill="var(--FLASH)" opacity="0.85"/>
+        <rect x="36" y="14" width="14" height="14" fill="var(--QUERY)" opacity="0.9"/>
+        <line x1="17" y1="38" x2="30" y2="26" stroke="var(--CORE)" stroke-width="1.6"/>
+        <line x1="30" y1="26" x2="43" y2="14" stroke="var(--CORE)" stroke-width="1.6"/>
+        <circle cx="17" cy="38" r="1.6" fill="var(--bg-0)"/>
+        <circle cx="30" cy="26" r="1.6" fill="var(--bg-0)"/>
+        <circle cx="43" cy="14" r="1.6" fill="var(--bg-0)"/>
+      </svg>
+      <div>
+        <div class="label">MASCOT</div>
+        <div class="name" id="mascotName">Bit · 比特</div>
+      </div>
+    </div>
+
+    <div class="guide">
+      <div class="guide-item" id="g1"><span class="num">01</span><span class="gtxt">每个公式包一个 def, 独立文件独立测</span></div>
+      <div class="guide-item" id="g2"><span class="num">02</span><span class="gtxt">main 用 import 把三个函数串成一条 pipe</span></div>
+      <div class="guide-item" id="g3"><span class="num">03</span><span class="gtxt">改一个 module 只动那一处, 不破其他</span></div>
+    </div>
+
+    <div class="spacer"></div>
+    <button id="langBtn" class="lang-btn" type="button">CN / EN</button>
+  </aside>
+
+  <main class="main">
+    <svg id="stage" viewBox="0 0 1080 720" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg"></svg>
+
+    <div class="hud">
+      <div class="row"><span class="label" id="hudL1">FRAME</span><span class="value cs" id="hudV1">1 / 5</span></div>
+      <div class="row"><span class="label" id="hudL2">STAGE</span><span class="value" id="hudV2">Raw mess</span></div>
+      <div class="sep"></div>
+      <div class="row"><span class="label" id="hudL3">raw PM2.5</span><span class="value" id="hudV3">-- ug/m3</span></div>
+      <div class="row"><span class="label" id="hudL4">corrected</span><span class="value cs" id="hudV4">--</span></div>
+      <div class="row"><span class="label" id="hudL5">NowCast</span><span class="value now" id="hudV5">--</span></div>
+      <div class="row"><span class="label" id="hudL6">AQI</span><span class="value aqi" id="hudV6">--</span></div>
+    </div>
+
+    <div class="subtitle">
+      <div class="cn" id="subCn">12 个 raw 读数 + RH 全堆在一起, 公式各算各的</div>
+      <div class="en" id="subEn">12 raw readings + RH all tangled — formulas computed inline, messy</div>
+    </div>
+
+    <div class="frame-progress">
+      <div class="chip" id="chip0"></div>
+      <div class="chip" id="chip1"></div>
+      <div class="chip" id="chip2"></div>
+      <div class="chip" id="chip3"></div>
+      <div class="chip" id="chip4"></div>
+      <span class="stepname" id="stepName">01 · RAW MESS</span>
+    </div>
+
+    <div class="flash" id="flash">
+      PIPELINE
+      <span class="small" id="flashSub">3 行 vs 50 行 — 模块化让你能复用 + 改公式不破其他</span>
+    </div>
+  </main>
+
+<script>
+(function(){
+  "use strict";
+
+  // ====== i18n ======
+  var LANG = 'cn';
+  var I18N = {
+    badgeMod:   { cn: 'MOD-M26 / CS', en: 'MOD-M26 / CS' },
+    brandH1:    { cn: 'Pipeline: correct + nowcast + aqi',
+                  en: 'Pipeline: correct + nowcast + aqi' },
+    brandSub:   { cn: 'raw -> corrected -> nowcast -> AQI',
+                  en: 'raw -> corrected -> nowcast -> AQI' },
+    mascotName: { cn: 'Bit · 比特', en: 'Bit · the cubic sprite' },
+    g1: { cn: '每个公式包一个 def, 独立文件独立测',
+          en: 'One def per formula, own file, own test' },
+    g2: { cn: 'main 用 import 把三个函数串成一条 pipe',
+          en: 'main imports the three funcs and pipes them' },
+    g3: { cn: '改一个 module 只动那一处, 不破其他',
+          en: 'Edit one module — others stay untouched' },
+    hudL1: { cn: '帧',         en: 'FRAME' },
+    hudL2: { cn: '阶段',       en: 'STAGE' },
+    hudL3: { cn: 'raw PM2.5',  en: 'raw PM2.5' },
+    hudL4: { cn: 'corrected',  en: 'corrected' },
+    hudL5: { cn: 'NowCast',    en: 'NowCast' },
+    hudL6: { cn: 'AQI',        en: 'AQI' },
+    btnLang: { cn: 'CN / EN', en: 'CN / EN' }
+  };
+
+  // ====== 数据 — 一段 12h PM2.5 raw + RH ======
+  // 索引 0 = 最近小时, 11 = 11h 前 (单位 ug/m3, raw PMS5003 cf=1)
+  var RAW_PM   = [62, 58, 50, 44, 38, 34, 30, 28, 26, 25, 24, 24];
+  var RH       = 60;  // percent — Barkjohn 校正用
+
+  // Barkjohn 校正 (M20): corrected = 0.524 * raw - 0.0862 * RH + 5.75
+  function correct(raw, rh){
+    return 0.524 * raw - 0.0862 * rh + 5.75;
+  }
+
+  // NowCast (M25): w = clamp(c_min/c_max, 0.5, 1); weighted avg with w^i decay
+  function nowCast(arr){
+    var mn = arr[0], mx = arr[0];
+    for (var k = 1; k < arr.length; k++){
+      if (arr[k] < mn) mn = arr[k];
+      if (arr[k] > mx) mx = arr[k];
+    }
+    var w = mx > 0 ? (mn / mx) : 1;
+    if (w < 0.5) w = 0.5;
+    var num = 0, den = 0;
+    for (var i = 0; i < arr.length; i++){
+      var coef = Math.pow(w, i);
+      num += coef * arr[i];
+      den += coef;
+    }
+    return den > 0 ? (num / den) : 0;
+  }
+
+  // PM2.5 -> AQI piecewise (EPA breakpoints, simplified for 0-150.4)
+  function pmToAqi(c){
+    var bp = [
+      {cLo: 0,    cHi: 12.0,  iLo: 0,   iHi: 50},
+      {cLo: 12.1, cHi: 35.4,  iLo: 51,  iHi: 100},
+      {cLo: 35.5, cHi: 55.4,  iLo: 101, iHi: 150},
+      {cLo: 55.5, cHi: 150.4, iLo: 151, iHi: 200},
+      {cLo: 150.5,cHi: 250.4, iLo: 201, iHi: 300},
+      {cLo: 250.5,cHi: 500.4, iLo: 301, iHi: 500}
+    ];
+    for (var i = 0; i < bp.length; i++){
+      var b = bp[i];
+      if (c >= b.cLo && c <= b.cHi){
+        return Math.round((b.iHi - b.iLo) / (b.cHi - b.cLo) * (c - b.cLo) + b.iLo);
+      }
+    }
+    return c < 0 ? 0 : 500;
+  }
+
+  // Pre-compute pipeline result (used in F4/F5)
+  var CORRECTED = RAW_PM.map(function(v){ return correct(v, RH); });
+  var NOWCAST_V = nowCast(CORRECTED);
+  var AQI_V     = pmToAqi(NOWCAST_V);
+
+  // ====== 5 帧故事 ======
+  var FRAME_MS = 6500;
+  var FRAMES = [
+    {
+      id: 'raw',
+      stepName: '01 · RAW MESS',
+      hudStage: { cn: '原始数据 + RH', en: 'Raw + RH tangled' },
+      subCn: '12 个 raw 读数 + RH 全堆在一起, 公式都内联在 main 里, 改一处怕碰另一处',
+      subEn: '12 raw readings + RH all inline — change one place, fear breaking another'
+    },
+    {
+      id: 'split',
+      stepName: '02 · SPLIT MODULES',
+      hudStage: { cn: '拆 2 个 module', en: 'Split into 2 modules' },
+      subCn: 'correct.py 实现 Barkjohn; nowcast.py 实现 NowCast; 各自有 test_correct/test_nowcast',
+      subEn: 'correct.py = Barkjohn; nowcast.py = NowCast; each ships its own test file'
+    },
+    {
+      id: 'pipe',
+      stepName: '03 · MAIN PIPE',
+      hudStage: { cn: 'main.py 串 pipeline', en: 'main.py chains pipeline' },
+      subCn: 'main.py 用 import 把 3 个函数串成 raw -> corrected -> nowcast -> AQI 一条流',
+      subEn: 'main.py imports 3 funcs and chains: raw -> corrected -> nowcast -> AQI'
+    },
+    {
+      id: 'run',
+      stepName: '04 · RUN PIPE',
+      hudStage: { cn: '跑一次完整 pipeline', en: 'Run full pipeline once' },
+      subCn: '12 raw + RH=60 流过 3 段管子 — corrected 12 个 -> NowCast=' + NOWCAST_V.toFixed(1) + ' -> AQI=' + AQI_V,
+      subEn: '12 raw + RH=60 flows through — corrected x12 -> NowCast=' + NOWCAST_V.toFixed(1) + ' -> AQI=' + AQI_V
+    },
+    {
+      id: 'compare',
+      stepName: '05 · PIPELINE WINS',
+      hudStage: { cn: '对比手算', en: 'Vs hand-rolled' },
+      subCn: 'pipeline 3 行 vs 旧手算 50 行 — 模块化让你能复用 + 改公式不破其他',
+      subEn: 'pipeline 3 lines vs hand-rolled 50 — modular = reuse + edit-safe'
+    }
+  ];
+
+  // ====== State ======
+  var currentFrame = 0;
+  var frameStartTs = 0;
+  var rafId = null;
+  var stage = document.getElementById('stage');
+  var SVGNS = 'http://www.w3.org/2000/svg';
+
+  // ====== Utility ======
+  function el(name, attrs, parent){
+    var n = document.createElementNS(SVGNS, name);
+    if (attrs){
+      for (var k in attrs){
+        if (Object.prototype.hasOwnProperty.call(attrs, k)){
+          n.setAttribute(k, attrs[k]);
+        }
+      }
+    }
+    if (parent) parent.appendChild(n);
+    return n;
+  }
+  function clearStage(){ while(stage.firstChild) stage.removeChild(stage.firstChild); }
+  function t(key){
+    if (!I18N[key]) return key;
+    return I18N[key][LANG] || I18N[key].en || key;
+  }
+  function lerp(a, b, p){ return a + (b - a) * p; }
+  function easeInOut(x){ return x < 0.5 ? 2*x*x : 1 - Math.pow(-2*x + 2, 2)/2; }
+  function clamp(x, lo, hi){ return x < lo ? lo : (x > hi ? hi : x); }
+  function fmt(n, d){ d = (d===undefined) ? 1 : d; return Number(n).toFixed(d); }
+
+  // ====== Drawing helpers ======
+  function drawBgGrid(){
+    var g = el('g', { opacity: '0.18' }, stage);
+    for (var x = 0; x <= 1080; x += 60){
+      el('line', { x1: x, y1: 0, x2: x, y2: 720, stroke: 'var(--line)', 'stroke-width': '0.5' }, g);
+    }
+    for (var y = 0; y <= 720; y += 60){
+      el('line', { x1: 0, y1: y, x2: 1080, y2: y, stroke: 'var(--line)', 'stroke-width': '0.5' }, g);
+    }
+    var defs = el('defs', null, stage);
+    var rg = el('radialGradient', { id: 'centerGlow', cx: '50%', cy: '45%', r: '60%' }, defs);
+    el('stop', { offset: '0%', 'stop-color': 'var(--SIGNAL)', 'stop-opacity': '0.06' }, rg);
+    el('stop', { offset: '100%', 'stop-color': 'var(--bg-0)', 'stop-opacity': '0' }, rg);
+    el('rect', { x: 0, y: 0, width: 1080, height: 720, fill: 'url(#centerGlow)' }, stage);
+  }
+
+  function drawStepChain(activeIdx){
+    var labels = [
+      { cn: 'Raw',     en: 'Raw' },
+      { cn: '拆 mod',  en: 'Split' },
+      { cn: '串 pipe', en: 'Pipe' },
+      { cn: '跑',      en: 'Run' },
+      { cn: 'WIN',     en: 'Win' }
+    ];
+    var y = 660;
+    var startX = 110;
+    var gap = (1080 - 220) / 4;
+    var g = el('g', null, stage);
+    for (var i = 0; i < 5; i++){
+      var cx = startX + gap * i;
+      var on = i <= activeIdx;
+      var ringColor = on ? 'var(--SIGNAL)' : 'var(--line)';
+      var fillColor = on ? 'var(--bg-2)' : 'var(--bg-1)';
+      var textColor = on ? 'var(--fg)' : 'var(--fg-mute)';
+      el('rect', {
+        x: cx - 44, y: y - 16, width: 88, height: 32,
+        fill: fillColor, stroke: ringColor, 'stroke-width': on ? '1.6' : '1', rx: '2'
+      }, g);
+      var tx = el('text', {
+        x: cx, y: y + 4, fill: textColor,
+        'font-family': "'Inter','Noto Sans SC',sans-serif",
+        'font-size': '12', 'font-weight': on ? '700' : '500',
+        'text-anchor': 'middle'
+      }, g);
+      tx.textContent = labels[i][LANG] || labels[i].en;
+      var ix = el('text', {
+        x: cx, y: y - 22, fill: on ? 'var(--SIGNAL)' : 'var(--fg-mute)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '9', 'text-anchor': 'middle', 'letter-spacing': '0.1em'
+      }, g);
+      ix.textContent = '0' + (i+1);
+      if (i < 4){
+        var x1 = cx + 44;
+        var x2 = cx + gap - 44;
+        var connColor = (on && (i+1) <= activeIdx) ? 'var(--SIGNAL)' : 'var(--line)';
+        el('line', {
+          x1: x1, y1: y, x2: x2 - 6, y2: y,
+          stroke: connColor, 'stroke-width': '1.2'
+        }, g);
+        el('polygon', {
+          points: (x2-6)+','+(y-4)+' '+(x2)+','+y+' '+(x2-6)+','+(y+4),
+          fill: connColor
+        }, g);
+      }
+    }
+  }
+
+  // Bit mascot — 三层方块 (correct/nowcast/aqi), 旋转/上升表"组合"
+  function drawBitMascot(g, t01){
+    // t01 0..1, 用来 wiggle
+    var sway = Math.sin(t01 * Math.PI * 2) * 2;
+    el('rect', { x: -22, y: 10 + sway, width: 18, height: 18,
+                 fill: 'var(--mod-correct)', opacity: 0.85, stroke: 'var(--bg-0)', 'stroke-width': '1' }, g);
+    el('rect', { x: -6, y: -4, width: 18, height: 18,
+                 fill: 'var(--mod-nowcast)', opacity: 0.9, stroke: 'var(--bg-0)', 'stroke-width': '1' }, g);
+    el('rect', { x: 10, y: -18 - sway, width: 18, height: 18,
+                 fill: 'var(--mod-aqi)', opacity: 0.95, stroke: 'var(--bg-0)', 'stroke-width': '1' }, g);
+    // 连线
+    el('line', { x1: -4, y1: 19 + sway, x2: 3, y2: 5, stroke: 'var(--CORE)', 'stroke-width': '1.4' }, g);
+    el('line', { x1: 12, y1: 5, x2: 19, y2: -9 - sway, stroke: 'var(--CORE)', 'stroke-width': '1.4' }, g);
+    var lab = el('text', {
+      x: 3, y: 52, fill: 'var(--fg-dim)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '10', 'text-anchor': 'middle', 'letter-spacing': '0.1em'
+    }, g);
+    lab.textContent = LANG === 'cn' ? 'Bit · 3 mod' : 'Bit · 3 mods';
+  }
+
+  // 数据流 packet (FLASH 小方块沿路径流动)
+  function drawPacket(cx, cy, opacity){
+    el('rect', { x: cx - 4, y: cy - 4, width: 8, height: 8,
+                 fill: 'var(--FLASH)', opacity: opacity,
+                 stroke: 'var(--bg-0)', 'stroke-width': '0.5' }, stage);
+  }
+
+  // ====== Frame 1 — RAW MESS ======
+  // 一坨 raw 数据 + RH 在画布中央杂乱浮动, 公式以"内联"形式贴在一段红线代码块上
+  function drawFrame1(p){
+    drawBgGrid();
+    drawStepChain(0);
+
+    var ttl = el('text', {
+      x: 540, y: 70, fill: 'var(--SIGNAL)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '14', 'text-anchor': 'middle', 'letter-spacing': '0.14em', 'font-weight': '700'
+    }, stage);
+    ttl.textContent = LANG === 'cn'
+      ? '没拆 module 之前: raw + 公式全堆在 main 里'
+      : 'Before split: raw + formulas all jammed in main';
+
+    // 左侧 — 一坨乱排的 raw 数字 + RH 标签 漂浮
+    var dataG = el('g', { transform: 'translate(80, 110)' }, stage);
+    el('rect', { x: 0, y: 0, width: 420, height: 360,
+                 fill: 'var(--bg-1)', stroke: 'var(--line)', 'stroke-width': '1', rx: '3' }, dataG);
+    var dtl = el('text', {
+      x: 12, y: 22, fill: 'var(--fg-mute)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '10', 'letter-spacing': '0.1em'
+    }, dataG);
+    dtl.textContent = '# raw PM + RH (tangled)';
+
+    // 乱排 — 不规则位置漂入
+    for (var i = 0; i < RAW_PM.length; i++){
+      var col = i % 4;
+      var row = Math.floor(i / 4);
+      var jitterX = Math.sin((i + p * 3) * 1.7) * 6;
+      var jitterY = Math.cos((i + p * 2.5) * 1.4) * 4;
+      var apIn = clamp(p * 1.5 - i * 0.04, 0, 1);
+      var bx = 30 + col * 95 + jitterX;
+      var by = 60 + row * 80 + jitterY;
+      el('rect', { x: bx - 26, y: by - 18, width: 52, height: 32,
+                   fill: 'var(--bg-2)', stroke: 'var(--SIGNAL)', 'stroke-width': '0.8',
+                   opacity: 0.45 * apIn, rx: '2' }, dataG);
+      var nt = el('text', {
+        x: bx, y: by + 5, fill: 'var(--SIGNAL)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '13', 'text-anchor': 'middle', 'font-weight': '700',
+        opacity: apIn
+      }, dataG);
+      nt.textContent = RAW_PM[i];
+    }
+    // RH 标签
+    var rhAp = clamp(p * 2 - 0.4, 0, 1);
+    el('rect', { x: 280, y: 320, width: 100, height: 30,
+                 fill: 'var(--bg-3)', stroke: 'var(--QUERY)', 'stroke-width': '1.2',
+                 opacity: rhAp, rx: '2' }, dataG);
+    var rhTx = el('text', {
+      x: 330, y: 340, fill: 'var(--QUERY)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '12', 'text-anchor': 'middle', 'font-weight': '700',
+      opacity: rhAp
+    }, dataG);
+    rhTx.textContent = 'RH = 60';
+
+    // 右侧 — main.py 内联公式 (红框警告)
+    var codeAp = clamp((p - 0.25) / 0.45, 0, 1);
+    var codeG = el('g', { transform: 'translate(540, 110)', opacity: codeAp }, stage);
+    el('rect', { x: 0, y: 0, width: 440, height: 360,
+                 fill: 'var(--bg-1)', stroke: 'oklch(0.66 0.20 25)', 'stroke-width': '1.6', rx: '3' }, codeG);
+    var ch = el('text', {
+      x: 12, y: 22, fill: 'oklch(0.66 0.20 25)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '11', 'letter-spacing': '0.08em', 'font-weight': '700'
+    }, codeG);
+    ch.textContent = '# main.py  (everything inline — bad)';
+
+    var codeLines = [
+      ['for ', 'raw ', 'in ', 'data:'],
+      ['    corrected = 0.524*raw - 0.0862*60 + 5.75'],
+      ['    # ... and now NowCast inline ...'],
+      ['    mn, mx = min(buf), max(buf)'],
+      ['    w = mn / mx'],
+      ['    if w < 0.5: w = 0.5'],
+      ['    num, den = 0, 0'],
+      ['    for i, c in enumerate(buf):'],
+      ['        num += w**i * c'],
+      ['        den += w**i'],
+      ['    nowcast = num / den'],
+      ['    # ... then AQI breakpoints inline too ...'],
+      ['    aqi = ... 50 more lines ...']
+    ];
+    for (var ci = 0; ci < codeLines.length; ci++){
+      var y0 = 50 + ci * 22;
+      var ln = el('text', {
+        x: 16, y: y0, fill: 'var(--fg-dim)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '11.5'
+      }, codeG);
+      var content = Array.isArray(codeLines[ci][0]) ? codeLines[ci].join('') : codeLines[ci].join(' ');
+      // simple syntax tint: highlight 'for', '#'
+      ln.textContent = content;
+      if (content.trim().indexOf('#') === 0){
+        ln.setAttribute('fill', 'var(--fg-mute)');
+      } else if (content.indexOf('for ') === 0 || content.indexOf('    for ') === 0){
+        ln.setAttribute('fill', 'var(--SIGNAL)');
+      }
+    }
+
+    // 警告 stamp
+    if (p > 0.7){
+      var wp = clamp((p - 0.7) / 0.25, 0, 1);
+      var wg = el('g', { transform: 'translate(900, 80) rotate(-12)', opacity: wp }, stage);
+      el('rect', { x: -60, y: -16, width: 120, height: 32,
+                   fill: 'none', stroke: 'oklch(0.66 0.20 25)', 'stroke-width': '2.4', rx: '2' }, wg);
+      var wt = el('text', {
+        x: 0, y: 6, fill: 'oklch(0.66 0.20 25)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '14', 'text-anchor': 'middle', 'font-weight': '800', 'letter-spacing': '0.18em'
+      }, wg);
+      wt.textContent = LANG === 'cn' ? '一团乱' : 'TANGLED';
+    }
+
+    // Bit mascot 在底部
+    var mg = el('g', { transform: 'translate(110, 560)' }, stage);
+    drawBitMascot(mg, p);
+
+    // HUD
+    document.getElementById('hudV3').textContent = RAW_PM[0] + ' ug/m3';
+    document.getElementById('hudV4').textContent = '--';
+    document.getElementById('hudV5').textContent = '--';
+    document.getElementById('hudV6').textContent = '--';
+  }
+
+  // ====== Frame 2 — SPLIT MODULES ======
+  // 把"一坨"拆成 2 个 module 卡片: correct.py (SIGNAL 边) + nowcast.py (FLASH 边)
+  // 每个 module 下面挂 test_xxx.py 小绿条
+  function drawFrame2(p){
+    drawBgGrid();
+    drawStepChain(1);
+
+    var ttl = el('text', {
+      x: 540, y: 60, fill: 'var(--SIGNAL)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '14', 'text-anchor': 'middle', 'letter-spacing': '0.14em', 'font-weight': '700'
+    }, stage);
+    ttl.textContent = LANG === 'cn'
+      ? '把公式各自包一个 def, 放进自己的文件'
+      : 'Wrap each formula in its own def, in its own file';
+
+    // module card helper — 直接画
+    function moduleCard(ox, oy, w, h, fname, color, header, lines, testName, revealP){
+      var g = el('g', { transform: 'translate(' + ox + ',' + oy + ')', opacity: revealP }, stage);
+      // card
+      el('rect', { x: 0, y: 0, width: w, height: h,
+                   fill: 'var(--bg-1)', stroke: color, 'stroke-width': '1.8', rx: '3' }, g);
+      // top tab — 文件名
+      el('rect', { x: 0, y: -22, width: 170, height: 22,
+                   fill: color, opacity: 0.95 }, g);
+      var ft = el('text', {
+        x: 12, y: -6, fill: 'var(--bg-0)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '11', 'font-weight': '800', 'letter-spacing': '0.08em'
+      }, g);
+      ft.textContent = fname;
+      // header comment
+      var hd = el('text', {
+        x: 14, y: 22, fill: 'var(--fg-mute)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '10.5', 'letter-spacing': '0.05em'
+      }, g);
+      hd.textContent = header;
+      // code lines (i 控制逐行揭示)
+      for (var li = 0; li < lines.length; li++){
+        var lp = clamp(revealP * lines.length - li * 0.5, 0, 1);
+        var y0 = 44 + li * 22;
+        var lt = el('text', {
+          x: 16, y: y0, fill: 'var(--fg)',
+          'font-family': "'JetBrains Mono',ui-monospace,monospace",
+          'font-size': '12', opacity: lp
+        }, g);
+        lt.textContent = lines[li];
+        // 关键字 'def' 着 FLASH 色; 'return' 着 SIGNAL 色
+        if (lines[li].trim().indexOf('def ') === 0){
+          lt.setAttribute('fill', 'var(--FLASH)');
+        } else if (lines[li].trim().indexOf('return') === 0){
+          lt.setAttribute('fill', color);
+          lt.setAttribute('font-weight', '700');
+        } else if (lines[li].trim().indexOf('#') === 0){
+          lt.setAttribute('fill', 'var(--fg-mute)');
+        }
+      }
+      // 底部 test 标签
+      var tp = clamp((revealP - 0.6) / 0.3, 0, 1);
+      el('rect', { x: 14, y: h - 36, width: w - 28, height: 26,
+                   fill: 'var(--bg-2)', stroke: 'var(--gold)', 'stroke-width': '1.2',
+                   opacity: tp, rx: '2' }, g);
+      var tt = el('text', {
+        x: w / 2, y: h - 18, fill: 'var(--gold)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '11', 'text-anchor': 'middle', 'font-weight': '700', opacity: tp
+      }, g);
+      tt.textContent = testName + '  (passed)';
+    }
+
+    // correct.py 左
+    moduleCard(80, 130, 430, 220, 'correct.py', 'var(--mod-correct)',
+      '# Barkjohn 校正 (M20)',
+      [
+        'def correct(raw, rh):',
+        '    return 0.524 * raw \\',
+        '         - 0.0862 * rh \\',
+        '         + 5.75'
+      ],
+      'test_correct.py', clamp(p * 1.4, 0, 1));
+
+    // nowcast.py 右
+    moduleCard(570, 130, 430, 220, 'nowcast.py', 'var(--mod-nowcast)',
+      '# EPA NowCast (M25)',
+      [
+        'def nowcast(buf):',
+        '    w = max(min(buf)/max(buf), 0.5)',
+        '    nm = sum(w**i*c for i,c in enumerate(buf))',
+        '    return nm / sum(w**i for i in range(len(buf)))'
+      ],
+      'test_nowcast.py', clamp((p - 0.15) * 1.5, 0, 1));
+
+    // 中间一根连接线 (表"独立 — 还没串起来")
+    if (p > 0.55){
+      var sep = clamp((p - 0.55) / 0.3, 0, 1);
+      var sg = el('g', { opacity: sep }, stage);
+      el('line', { x1: 510, y1: 240, x2: 570, y2: 240,
+                   stroke: 'var(--fg-mute)', 'stroke-width': '1', 'stroke-dasharray': '4 4' }, sg);
+      var st = el('text', {
+        x: 540, y: 232, fill: 'var(--fg-mute)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '9', 'text-anchor': 'middle', 'letter-spacing': '0.1em'
+      }, sg);
+      st.textContent = LANG === 'cn' ? '还没串' : 'not yet wired';
+    }
+
+    // 底部 callout
+    if (p > 0.7){
+      var bp2 = clamp((p - 0.7) / 0.25, 0, 1);
+      var bgr = el('g', { transform: 'translate(540, 420)', opacity: bp2 }, stage);
+      el('rect', { x: -300, y: -22, width: 600, height: 46,
+                   fill: 'var(--bg-2)', stroke: 'var(--SIGNAL)', 'stroke-width': '1.4', rx: '3' }, bgr);
+      var bt = el('text', {
+        x: 0, y: 7, fill: 'var(--fg)',
+        'font-family': "'Inter','Noto Sans SC',sans-serif",
+        'font-size': '13', 'text-anchor': 'middle', 'font-weight': '600'
+      }, bgr);
+      bt.textContent = LANG === 'cn'
+        ? '每个 module 独立测 — correct 改了不影响 nowcast'
+        : 'each module tested alone — editing correct does not break nowcast';
+    }
+
+    // Bit
+    var mg = el('g', { transform: 'translate(110, 560)' }, stage);
+    drawBitMascot(mg, p);
+
+    // HUD
+    document.getElementById('hudV3').textContent = RAW_PM[0] + ' ug/m3';
+    document.getElementById('hudV4').textContent = LANG === 'cn' ? '函数已定义' : 'def ready';
+    document.getElementById('hudV5').textContent = LANG === 'cn' ? '函数已定义' : 'def ready';
+    document.getElementById('hudV6').textContent = '--';
+  }
+
+  // ====== Frame 3 — MAIN PIPE ======
+  // main.py 三行 import + pipeline = correct -> nowcast -> aqi 三段管子
+  function drawFrame3(p){
+    drawBgGrid();
+    drawStepChain(2);
+
+    var ttl = el('text', {
+      x: 540, y: 56, fill: 'var(--SIGNAL)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '14', 'text-anchor': 'middle', 'letter-spacing': '0.14em', 'font-weight': '700'
+    }, stage);
+    ttl.textContent = LANG === 'cn'
+      ? 'main.py = import + 一条 pipeline'
+      : 'main.py = import + one pipeline';
+
+    // import 块
+    var impP = clamp(p * 1.5, 0, 1);
+    var impG = el('g', { transform: 'translate(80, 90)', opacity: impP }, stage);
+    el('rect', { x: 0, y: 0, width: 920, height: 100,
+                 fill: 'var(--bg-1)', stroke: 'var(--CORE)', 'stroke-width': '1.4', rx: '3' }, impG);
+    var imh = el('text', {
+      x: 14, y: 22, fill: 'var(--fg-mute)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '10.5', 'letter-spacing': '0.06em'
+    }, impG);
+    imh.textContent = '# main.py';
+
+    var imports = [
+      { kw: 'from ', mod: 'correct',  imp: '  import correct',   col: 'var(--mod-correct)' },
+      { kw: 'from ', mod: 'nowcast',  imp: '  import nowcast',   col: 'var(--mod-nowcast)' },
+      { kw: 'from ', mod: 'aqi',      imp: '      import pm_to_aqi', col: 'var(--mod-aqi)' }
+    ];
+    for (var ii = 0; ii < imports.length; ii++){
+      var ip = clamp(impP * 3 - ii, 0, 1);
+      var y0 = 44 + ii * 18;
+      // from
+      var k1 = el('text', {
+        x: 18, y: y0, fill: 'var(--PROOF, var(--CORE))',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '12', 'font-weight': '700', opacity: ip
+      }, impG);
+      k1.setAttribute('fill', 'var(--CORE)');
+      k1.textContent = imports[ii].kw;
+      // module
+      var k2 = el('text', {
+        x: 60, y: y0, fill: imports[ii].col,
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '12', 'font-weight': '800', opacity: ip
+      }, impG);
+      k2.textContent = imports[ii].mod;
+      // import xxx
+      var k3 = el('text', {
+        x: 140, y: y0, fill: 'var(--fg)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '12', opacity: ip
+      }, impG);
+      k3.textContent = imports[ii].imp;
+    }
+
+    // pipeline = ... 一行
+    var plP = clamp((p - 0.35) / 0.25, 0, 1);
+    var pl = el('text', {
+      x: 90, y: 232, fill: 'var(--QUERY)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '14', 'font-weight': '800', opacity: plP
+    }, stage);
+    pl.textContent = 'pipeline = lambda raw, rh: pm_to_aqi(nowcast([correct(r, rh) for r in raw]))';
+
+    // 三段管子 — 从左到右
+    var pipeAp = clamp((p - 0.45) / 0.35, 0, 1);
+    if (pipeAp > 0){
+      drawPipeChain(80, 320, 920, 140, pipeAp, false);
+    }
+
+    // 底部 callout
+    if (p > 0.78){
+      var bp3 = clamp((p - 0.78) / 0.18, 0, 1);
+      var bg = el('g', { transform: 'translate(540, 510)', opacity: bp3 }, stage);
+      el('rect', { x: -320, y: -20, width: 640, height: 44,
+                   fill: 'var(--bg-2)', stroke: 'var(--QUERY)', 'stroke-width': '1.6', rx: '3' }, bg);
+      var bt = el('text', {
+        x: 0, y: 8, fill: 'var(--QUERY)',
+        'font-family': "'Inter','Noto Sans SC',sans-serif",
+        'font-size': '13', 'text-anchor': 'middle', 'font-weight': '700'
+      }, bg);
+      bt.textContent = LANG === 'cn'
+        ? 'pipeline 一条线 — 3 个函数顺序串成 raw -> AQI'
+        : 'pipeline one-liner — 3 funcs chained: raw -> AQI';
+    }
+
+    // Bit
+    var mg = el('g', { transform: 'translate(110, 590)' }, stage);
+    drawBitMascot(mg, p);
+
+    // HUD
+    document.getElementById('hudV3').textContent = RAW_PM[0] + ' ug/m3';
+    document.getElementById('hudV4').textContent = LANG === 'cn' ? '已串入 pipe' : 'wired';
+    document.getElementById('hudV5').textContent = LANG === 'cn' ? '已串入 pipe' : 'wired';
+    document.getElementById('hudV6').textContent = LANG === 'cn' ? '待运行' : 'pending';
+  }
+
+  // 三段管子 — correct / nowcast / aqi, 中间数据 packet 流动
+  // showValues=true 时显示运行结果数字
+  function drawPipeChain(ox, oy, w, h, p, showValues){
+    var modW = (w - 60) / 3;   // 每段宽
+    var gap = 20;              // 段间 gap (用来画箭头)
+    var yMid = oy + h / 2;
+    var mods = [
+      { name: 'correct.py',  col: 'var(--mod-correct)', label: LANG==='cn'?'Barkjohn 校正':'Barkjohn correct' },
+      { name: 'nowcast.py',  col: 'var(--mod-nowcast)', label: LANG==='cn'?'NowCast 加权':'NowCast wavg' },
+      { name: 'aqi.py',      col: 'var(--mod-aqi)',     label: LANG==='cn'?'PM -> AQI':'PM -> AQI' }
+    ];
+    for (var i = 0; i < 3; i++){
+      var bx = ox + i * (modW + gap);
+      var bp = clamp(p * 3 - i * 0.6, 0, 1);
+      // 卡片
+      el('rect', { x: bx, y: oy, width: modW, height: h,
+                   fill: 'var(--bg-1)', stroke: mods[i].col, 'stroke-width': '2',
+                   opacity: bp, rx: '4' }, stage);
+      // 顶部 tab
+      el('rect', { x: bx, y: oy - 22, width: 130, height: 22,
+                   fill: mods[i].col, opacity: 0.95 * bp }, stage);
+      var tab = el('text', {
+        x: bx + 10, y: oy - 7, fill: 'var(--bg-0)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '11', 'font-weight': '800', 'letter-spacing': '0.08em',
+        opacity: bp
+      }, stage);
+      tab.textContent = mods[i].name;
+      // 中部 label
+      var lab = el('text', {
+        x: bx + modW/2, y: yMid - 8, fill: 'var(--fg)',
+        'font-family': "'Inter','Noto Sans SC',sans-serif",
+        'font-size': '13', 'text-anchor': 'middle', 'font-weight': '700', opacity: bp
+      }, stage);
+      lab.textContent = mods[i].label;
+      // 函数签名
+      var sig = el('text', {
+        x: bx + modW/2, y: yMid + 14, fill: mods[i].col,
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '11', 'text-anchor': 'middle', opacity: bp
+      }, stage);
+      var sigs = ['correct(raw, rh)', 'nowcast(buf)', 'pm_to_aqi(c)'];
+      sig.textContent = sigs[i];
+
+      // 段间箭头 (前段完成后亮)
+      if (i < 2){
+        var arrAp = clamp(p * 3 - (i + 0.5) * 0.6, 0, 1);
+        var ax1 = bx + modW + 2;
+        var ax2 = bx + modW + gap - 4;
+        el('line', { x1: ax1, y1: yMid, x2: ax2 - 6, y2: yMid,
+                     stroke: 'var(--FLASH)', 'stroke-width': '2', opacity: arrAp }, stage);
+        el('polygon', {
+          points: (ax2-6)+','+(yMid-5)+' '+ax2+','+yMid+' '+(ax2-6)+','+(yMid+5),
+          fill: 'var(--FLASH)', opacity: arrAp
+        }, stage);
+      }
+    }
+
+    // 入口 / 出口 label
+    var inLab = el('text', {
+      x: ox - 6, y: yMid + 4, fill: 'var(--fg-dim)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '11', 'text-anchor': 'end', opacity: clamp(p * 2, 0, 1)
+    }, stage);
+    inLab.textContent = LANG === 'cn' ? 'raw + RH ->' : 'raw + RH ->';
+    var outLab = el('text', {
+      x: ox + w + 6, y: yMid + 4, fill: 'var(--QUERY)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '12', 'text-anchor': 'start', 'font-weight': '700',
+      opacity: clamp(p * 2 - 1, 0, 1)
+    }, stage);
+    outLab.textContent = LANG === 'cn' ? '-> AQI' : '-> AQI';
+
+    if (showValues){
+      // 段间数字标签 + 流动 packet
+      // 段间数据: corrected, nowcast, aqi
+      var midVals = [
+        { txt: LANG==='cn' ? 'corrected 12 个' : 'corrected x12',
+          x: ox + modW + gap/2, val2: 'avg=' + fmt(CORRECTED.reduce(function(s,v){return s+v;},0)/CORRECTED.length, 1) },
+        { txt: 'NowCast = ' + fmt(NOWCAST_V, 1),
+          x: ox + 2*modW + 1.5*gap, val2: 'ug/m3' }
+      ];
+      for (var v = 0; v < midVals.length; v++){
+        var vAp = clamp(p * 1.5 - 0.5 - v * 0.2, 0, 1);
+        var vg = el('g', { opacity: vAp }, stage);
+        el('rect', { x: midVals[v].x - 70, y: oy - 50, width: 140, height: 34,
+                     fill: 'var(--bg-2)', stroke: 'var(--FLASH)', 'stroke-width': '1.2', rx: '2' }, vg);
+        var vt = el('text', {
+          x: midVals[v].x, y: oy - 36, fill: 'var(--FLASH)',
+          'font-family': "'JetBrains Mono',ui-monospace,monospace",
+          'font-size': '11', 'text-anchor': 'middle', 'font-weight': '700'
+        }, vg);
+        vt.textContent = midVals[v].txt;
+        var vt2 = el('text', {
+          x: midVals[v].x, y: oy - 22, fill: 'var(--fg-mute)',
+          'font-family': "'JetBrains Mono',ui-monospace,monospace",
+          'font-size': '10', 'text-anchor': 'middle'
+        }, vg);
+        vt2.textContent = midVals[v].val2;
+      }
+      // 流动 packet — sine 沿 x 轴扫
+      var sweep = (p * 2) % 1;
+      var packetX = ox + 10 + sweep * (w - 20);
+      drawPacket(packetX, yMid, 0.9);
+      drawPacket(packetX - 24, yMid, 0.5);
+      drawPacket(packetX - 48, yMid, 0.25);
+    }
+  }
+
+  // ====== Frame 4 — RUN PIPE ======
+  // 实际跑一次 pipeline: 12 raw + RH 流入, 数字 packet 沿 pipe 流动, 输出 AQI
+  function drawFrame4(p){
+    drawBgGrid();
+    drawStepChain(3);
+
+    var ttl = el('text', {
+      x: 540, y: 56, fill: 'var(--SIGNAL)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '14', 'text-anchor': 'middle', 'letter-spacing': '0.14em', 'font-weight': '700'
+    }, stage);
+    ttl.textContent = LANG === 'cn'
+      ? 'pipeline(raw=[62, 58, 50, ...], rh=60)  -- 一次跑通'
+      : 'pipeline(raw=[62, 58, 50, ...], rh=60)  -- one run';
+
+    // 输入 panel — 左
+    var inP = clamp(p * 1.6, 0, 1);
+    var inG = el('g', { transform: 'translate(60, 130)', opacity: inP }, stage);
+    el('rect', { x: 0, y: 0, width: 200, height: 130,
+                 fill: 'var(--bg-1)', stroke: 'var(--SIGNAL)', 'stroke-width': '1.4', rx: '3' }, inG);
+    var inT = el('text', {
+      x: 100, y: 22, fill: 'var(--SIGNAL)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '11', 'text-anchor': 'middle', 'font-weight': '700', 'letter-spacing': '0.08em'
+    }, inG);
+    inT.textContent = 'INPUT';
+    var inV1 = el('text', {
+      x: 100, y: 56, fill: 'var(--fg)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '12', 'text-anchor': 'middle', 'font-weight': '700'
+    }, inG);
+    inV1.textContent = 'raw[12] (62..24)';
+    var inV2 = el('text', {
+      x: 100, y: 80, fill: 'var(--fg-dim)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '11', 'text-anchor': 'middle'
+    }, inG);
+    inV2.textContent = 'avg = ' + fmt(RAW_PM.reduce(function(s,v){return s+v;},0)/RAW_PM.length, 1);
+    var inV3 = el('text', {
+      x: 100, y: 108, fill: 'var(--QUERY)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '13', 'text-anchor': 'middle', 'font-weight': '700'
+    }, inG);
+    inV3.textContent = 'RH = 60';
+
+    // pipeline 三段管子 + 数字流 + 结果
+    var pipeP = clamp((p - 0.15) / 0.7, 0, 1);
+    drawPipeChain(290, 170, 680, 130, pipeP, true);
+
+    // 输出 — 右端 AQI 大字
+    var outP = clamp((p - 0.7) / 0.25, 0, 1);
+    var outG = el('g', { transform: 'translate(540, 410)', opacity: outP }, stage);
+    el('rect', { x: -200, y: -40, width: 400, height: 110,
+                 fill: 'var(--bg-2)', stroke: 'var(--QUERY)', 'stroke-width': '2.4', rx: '4' }, outG);
+    var ot = el('text', {
+      x: 0, y: -16, fill: 'var(--fg-mute)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '11', 'text-anchor': 'middle', 'letter-spacing': '0.1em'
+    }, outG);
+    ot.textContent = 'PIPELINE OUTPUT';
+    var oa = el('text', {
+      x: 0, y: 30, fill: 'var(--QUERY)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '48', 'text-anchor': 'middle', 'font-weight': '800', 'letter-spacing': '0.08em'
+    }, outG);
+    oa.textContent = 'AQI = ' + AQI_V;
+    var oc = el('text', {
+      x: 0, y: 58, fill: 'var(--fg-dim)',
+      'font-family': "'Inter','Noto Sans SC',sans-serif",
+      'font-size': '12', 'text-anchor': 'middle'
+    }, outG);
+    oc.textContent = LANG === 'cn'
+      ? '(category: 中度污染, sensitive groups affected)'
+      : '(category: Unhealthy for Sensitive Groups)';
+
+    // Bit
+    var mg = el('g', { transform: 'translate(110, 590)' }, stage);
+    drawBitMascot(mg, p);
+
+    // HUD
+    document.getElementById('hudV3').textContent = RAW_PM[0] + ' ug/m3';
+    document.getElementById('hudV4').textContent = fmt(CORRECTED[0], 1) + ' ug/m3';
+    document.getElementById('hudV5').textContent = fmt(NOWCAST_V, 1) + ' ug/m3';
+    document.getElementById('hudV6').textContent = String(AQI_V);
+  }
+
+  // ====== Frame 5 — COMPARE (3 行 vs 50 行) + gold ======
+  function drawFrame5(p){
+    drawBgGrid();
+    drawStepChain(4);
+
+    var ttl = el('text', {
+      x: 540, y: 56, fill: 'var(--QUERY)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '14', 'text-anchor': 'middle', 'letter-spacing': '0.14em', 'font-weight': '700'
+    }, stage);
+    ttl.textContent = LANG === 'cn'
+      ? '同样的数据, 两种写法对比'
+      : 'Same data, two ways to write';
+
+    // 左 — 旧手算 50 行 (灰色, 高瘦)
+    var oldP = clamp(p * 1.6, 0, 1);
+    var oldG = el('g', { transform: 'translate(80, 100)', opacity: oldP }, stage);
+    el('rect', { x: 0, y: 0, width: 420, height: 420,
+                 fill: 'var(--bg-1)', stroke: 'var(--fg-mute)', 'stroke-width': '1.4', rx: '3' }, oldG);
+    el('rect', { x: 0, y: -22, width: 200, height: 22,
+                 fill: 'var(--fg-mute)' }, oldG);
+    var oh = el('text', {
+      x: 12, y: -6, fill: 'var(--bg-0)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '11', 'font-weight': '800', 'letter-spacing': '0.08em'
+    }, oldG);
+    oh.textContent = LANG === 'cn' ? 'OLD · 手算 main.py' : 'OLD · hand-rolled main.py';
+    // 50 行示意 — 画一堆短灰线代表代码行
+    for (var li = 0; li < 50; li++){
+      var lw = 280 - (li % 7) * 18;
+      var ly = 16 + li * 7;
+      el('rect', { x: 16, y: ly, width: lw, height: 4,
+                   fill: 'var(--fg-mute)', opacity: 0.55 }, oldG);
+    }
+    var olc = el('text', {
+      x: 210, y: 390, fill: 'var(--fg-mute)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '14', 'text-anchor': 'middle', 'font-weight': '700'
+    }, oldG);
+    olc.textContent = '~50 lines, 1 file';
+    var olc2 = el('text', {
+      x: 210, y: 408, fill: 'var(--fg-dim)',
+      'font-family': "'Inter','Noto Sans SC',sans-serif",
+      'font-size': '11', 'text-anchor': 'middle', 'font-style': 'italic'
+    }, oldG);
+    olc2.textContent = LANG === 'cn' ? '改一处碰一片' : 'touch one, break others';
+
+    // 右 — 新 pipeline 3 行 (cyan 亮色, 矮宽)
+    var newP = clamp((p - 0.15) / 0.45, 0, 1);
+    var newG = el('g', { transform: 'translate(580, 100)', opacity: newP }, stage);
+    el('rect', { x: 0, y: 0, width: 420, height: 420,
+                 fill: 'var(--bg-1)', stroke: 'var(--QUERY)', 'stroke-width': '1.8', rx: '3' }, newG);
+    el('rect', { x: 0, y: -22, width: 240, height: 22,
+                 fill: 'var(--QUERY)' }, newG);
+    var nh = el('text', {
+      x: 12, y: -6, fill: 'var(--bg-0)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '11', 'font-weight': '800', 'letter-spacing': '0.08em'
+    }, newG);
+    nh.textContent = LANG === 'cn' ? 'NEW · pipeline main.py' : 'NEW · pipeline main.py';
+    // 4 行实代码
+    var newLines = [
+      { txt: 'from correct  import correct',   col: 'var(--mod-correct)' },
+      { txt: 'from nowcast  import nowcast',   col: 'var(--mod-nowcast)' },
+      { txt: 'from aqi      import pm_to_aqi', col: 'var(--mod-aqi)' },
+      { txt: '',                                col: 'var(--fg)' },
+      { txt: 'aqi = pm_to_aqi(',                col: 'var(--QUERY)' },
+      { txt: '  nowcast([',                     col: 'var(--FLASH)' },
+      { txt: '    correct(r, RH) for r in raw', col: 'var(--SIGNAL)' },
+      { txt: '  ])',                            col: 'var(--FLASH)' },
+      { txt: ')',                               col: 'var(--QUERY)' }
+    ];
+    for (var li2 = 0; li2 < newLines.length; li2++){
+      var lp = clamp(newP * newLines.length - li2 * 0.5, 0, 1);
+      var ly2 = 32 + li2 * 24;
+      var lt = el('text', {
+        x: 22, y: ly2, fill: newLines[li2].col,
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '13', 'font-weight': '700', opacity: lp
+      }, newG);
+      lt.textContent = newLines[li2].txt;
+    }
+    var nlc = el('text', {
+      x: 210, y: 350, fill: 'var(--QUERY)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '14', 'text-anchor': 'middle', 'font-weight': '700'
+    }, newG);
+    nlc.textContent = '3 imports + 1 expression';
+    var nlc2 = el('text', {
+      x: 210, y: 372, fill: 'var(--fg-dim)',
+      'font-family': "'Inter','Noto Sans SC',sans-serif",
+      'font-size': '11', 'text-anchor': 'middle', 'font-style': 'italic'
+    }, newG);
+    nlc2.textContent = LANG === 'cn' ? '改公式只动那个 module' : 'edit one module = surgical';
+
+    // 中间 vs 标签
+    if (p > 0.45){
+      var vp = clamp((p - 0.45) / 0.2, 0, 1);
+      var vsG = el('g', { transform: 'translate(540, 280)', opacity: vp }, stage);
+      el('circle', { cx: 0, cy: 0, r: 28, fill: 'var(--bg-3)',
+                     stroke: 'var(--gold)', 'stroke-width': '2' }, vsG);
+      var vst = el('text', {
+        x: 0, y: 6, fill: 'var(--gold)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '16', 'text-anchor': 'middle', 'font-weight': '800'
+      }, vsG);
+      vst.textContent = 'vs';
+    }
+
+    // 底部 gold 总结条
+    if (p > 0.6){
+      var gp = clamp((p - 0.6) / 0.35, 0, 1);
+      var gg = el('g', { transform: 'translate(540, 580)', opacity: gp }, stage);
+      el('rect', { x: -400, y: -28, width: 800, height: 60,
+                   fill: 'var(--bg-2)', stroke: 'var(--gold)', 'stroke-width': '2.2', rx: '4' }, gg);
+      var gt1 = el('text', {
+        x: 0, y: -4, fill: 'var(--gold)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '14', 'text-anchor': 'middle', 'font-weight': '800', 'letter-spacing': '0.1em'
+      }, gg);
+      gt1.textContent = 'MODULAR PIPELINE';
+      var gt2 = el('text', {
+        x: 0, y: 18, fill: 'var(--fg)',
+        'font-family': "'Inter','Noto Sans SC',sans-serif",
+        'font-size': '13', 'text-anchor': 'middle', 'font-weight': '600'
+      }, gg);
+      gt2.textContent = LANG === 'cn'
+        ? '模块化让你能复用每段公式 + 改一处不破其他'
+        : 'modular = reuse each formula + edit one without breaking others';
+    }
+
+    // HUD
+    document.getElementById('hudV3').textContent = RAW_PM[0] + ' ug/m3';
+    document.getElementById('hudV4').textContent = fmt(CORRECTED[0], 1) + ' ug/m3';
+    document.getElementById('hudV5').textContent = fmt(NOWCAST_V, 1) + ' ug/m3';
+    document.getElementById('hudV6').textContent = String(AQI_V);
+  }
+
+  // ====== Frame router ======
+  function renderFrame(idx, p){
+    clearStage();
+    if (idx === 0) drawFrame1(p);
+    else if (idx === 1) drawFrame2(p);
+    else if (idx === 2) drawFrame3(p);
+    else if (idx === 3) drawFrame4(p);
+    else drawFrame5(p);
+  }
+
+  // ====== Subtitle + HUD + chips ======
+  function refreshSubtitle(){
+    var f = FRAMES[currentFrame];
+    document.getElementById('subCn').textContent = LANG === 'cn' ? f.subCn : f.subEn;
+    document.getElementById('subEn').textContent = LANG === 'cn' ? f.subEn : f.subCn;
+  }
+  function refreshHudStage(){
+    var f = FRAMES[currentFrame];
+    document.getElementById('hudV1').textContent = (currentFrame + 1) + ' / 5';
+    document.getElementById('hudV2').textContent = LANG === 'cn' ? f.hudStage.cn : f.hudStage.en;
+  }
+  function refreshChips(){
+    for (var i = 0; i < 5; i++){
+      var c = document.getElementById('chip' + i);
+      c.classList.remove('active', 'done');
+      if (i < currentFrame) c.classList.add('done');
+      else if (i === currentFrame) c.classList.add('active');
+    }
+    document.getElementById('stepName').textContent = FRAMES[currentFrame].stepName;
+  }
+
+  // ====== rAF loop ======
+  function tick(now){
+    if (!frameStartTs) frameStartTs = now;
+    var elapsed = now - frameStartTs;
+    var p = clamp(elapsed / FRAME_MS, 0, 1);
+    renderFrame(currentFrame, p);
+
+    // F5 末尾闪 PIPELINE
+    var flash = document.getElementById('flash');
+    if (currentFrame === 4 && p > 0.85){
+      flash.classList.add('on');
+    } else {
+      flash.classList.remove('on');
+    }
+
+    if (elapsed >= FRAME_MS){
+      currentFrame = (currentFrame + 1) % FRAMES.length;
+      frameStartTs = now;
+      refreshSubtitle();
+      refreshHudStage();
+      refreshChips();
+    }
+    rafId = requestAnimationFrame(tick);
+  }
+
+  // ====== i18n refresh ======
+  function refreshI18N(){
+    // sidebar
+    document.getElementById('badgeMod').textContent = t('badgeMod');
+    document.getElementById('brandH1').textContent = t('brandH1');
+    document.getElementById('brandSub').textContent = t('brandSub');
+    document.getElementById('mascotName').textContent = t('mascotName');
+    var g1 = document.querySelector('#g1 .gtxt');
+    var g2 = document.querySelector('#g2 .gtxt');
+    var g3 = document.querySelector('#g3 .gtxt');
+    if (g1) g1.textContent = t('g1');
+    if (g2) g2.textContent = t('g2');
+    if (g3) g3.textContent = t('g3');
+    // HUD labels
+    document.getElementById('hudL1').textContent = t('hudL1');
+    document.getElementById('hudL2').textContent = t('hudL2');
+    document.getElementById('hudL3').textContent = t('hudL3');
+    document.getElementById('hudL4').textContent = t('hudL4');
+    document.getElementById('hudL5').textContent = t('hudL5');
+    document.getElementById('hudL6').textContent = t('hudL6');
+    document.getElementById('langBtn').textContent = t('btnLang');
+    // flash subtitle
+    var fs = document.getElementById('flashSub');
+    if (fs){
+      fs.textContent = LANG === 'cn'
+        ? '3 行 vs 50 行 — 模块化让你能复用 + 改公式不破其他'
+        : '3 lines vs 50 — modular = reuse + edit-safe';
+    }
+    refreshSubtitle();
+    refreshHudStage();
+    refreshChips();
+  }
+
+  // ====== bootstrap ======
+  document.getElementById('langBtn').addEventListener('click', function(){
+    LANG = LANG === 'cn' ? 'en' : 'cn';
+    refreshI18N();
+  });
+
+  refreshI18N();
+  refreshChips();
+  rafId = requestAnimationFrame(tick);
+})();
+</script>
+</body>
+</html>
