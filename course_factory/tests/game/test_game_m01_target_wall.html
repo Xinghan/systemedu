@@ -1,0 +1,925 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>你的承诺穹顶 / Your Promise Dome — M01 Game</title>
+<style>
+  /* ============== env Biosphere Dome palette (theme_style/themes.js id=env) ============== */
+  :root {
+    --CANOPY:  oklch(0.72 0.15 140);
+    --LOAM:    oklch(0.52 0.13 140);
+    --ABYSS:   oklch(0.35 0.10 140);
+    --DAWN:    oklch(0.92 0.08 140);
+    --SUN:     oklch(0.85 0.14 85);
+    --GLASS:   oklch(0.40 0.05 140 / 0.4);
+    --INK:     oklch(0.92 0.08 140);
+    --OUTLINE: oklch(0.50 0.10 140 / 0.3);
+    --ALERT:   oklch(0.55 0.20 30);
+    --ALERT_SOFT: oklch(0.55 0.20 30 / 0.25);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html, body {
+    width: 100%;
+    height: 100vh;
+    overflow: hidden;
+    background: linear-gradient(to bottom, var(--ABYSS), oklch(0.25 0.10 140));
+    color: var(--INK);
+    font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    letter-spacing: 0.02em;
+  }
+
+  /* ============== Layout ============== */
+  .stage-wrap {
+    display: flex;
+    flex-direction: row;
+    width: 100%;
+    height: 100vh;
+  }
+
+  .game-sidebar {
+    width: 200px;
+    flex-shrink: 0;
+    background: var(--GLASS);
+    border-right: 1px solid var(--OUTLINE);
+    padding: 18px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    overflow-y: auto;
+  }
+
+  .game-main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    overflow: hidden;
+  }
+
+  /* ============== Sidebar elements ============== */
+  .sb-title {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--DAWN);
+    line-height: 1.4;
+    border-bottom: 1px solid var(--OUTLINE);
+    padding-bottom: 10px;
+  }
+
+  .sb-section { display: flex; flex-direction: column; gap: 6px; }
+
+  .sb-section h4 {
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--SUN);
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+  }
+
+  .sb-section p, .sb-section li {
+    font-size: 11px;
+    color: var(--INK);
+    line-height: 1.5;
+    opacity: 0.9;
+  }
+
+  .sb-section ol { padding-left: 16px; }
+
+  .sb-mascot {
+    background: var(--ABYSS);
+    border: 1px solid var(--OUTLINE);
+    padding: 10px;
+    box-shadow: 0 3px 0 var(--ABYSS);
+  }
+
+  .sb-mascot svg { width: 100%; height: 70px; display: block; }
+
+  .sb-mascot .mascot-name {
+    font-size: 10px;
+    color: var(--SUN);
+    text-align: center;
+    margin-top: 6px;
+    letter-spacing: 0.18em;
+  }
+
+  .sb-bottom { margin-top: auto; display: flex; flex-direction: column; gap: 8px; }
+
+  .btn {
+    background: var(--GLASS);
+    color: var(--DAWN);
+    border: 1px solid var(--OUTLINE);
+    padding: 7px 10px;
+    font-family: inherit;
+    font-size: 11px;
+    cursor: pointer;
+    letter-spacing: 0.06em;
+    border-radius: 0;
+    box-shadow: 0 3px 0 var(--ABYSS);
+    transition: background 0.15s;
+  }
+
+  .btn:hover { background: oklch(0.45 0.08 140 / 0.6); }
+  .btn:active { box-shadow: 0 1px 0 var(--ABYSS); transform: translateY(2px); }
+
+  /* ============== HUD ============== */
+  .hud {
+    position: absolute;
+    top: 18px;
+    right: 22px;
+    background: var(--GLASS);
+    border: 1px solid var(--DAWN);
+    padding: 10px 16px;
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    box-shadow: 0 3px 0 var(--ABYSS);
+    z-index: 10;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 150px;
+  }
+
+  .hud .hud-label {
+    font-size: 10px;
+    color: var(--SUN);
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+  }
+
+  .hud .hud-value {
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--DAWN);
+    line-height: 1;
+  }
+
+  /* ============== Stage SVG host ============== */
+  .stage-svg-host {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+  }
+
+  svg.stage {
+    width: 100%;
+    height: 100%;
+    display: block;
+  }
+
+  /* Modal */
+  .modal-overlay {
+    position: absolute;
+    inset: 0;
+    background: oklch(0.20 0.10 140 / 0.7);
+    backdrop-filter: blur(8px);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 20;
+  }
+
+  .modal-overlay.show { display: flex; }
+
+  .modal-card {
+    background: var(--ABYSS);
+    border: 1px solid var(--DAWN);
+    box-shadow: 0 6px 0 oklch(0.20 0.10 140);
+    padding: 28px 36px;
+    min-width: 320px;
+    max-width: 460px;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .modal-card h2 {
+    color: var(--SUN);
+    font-size: 18px;
+    letter-spacing: 0.08em;
+  }
+
+  .modal-card p {
+    color: var(--DAWN);
+    font-size: 12px;
+    line-height: 1.7;
+  }
+
+  .seed-label { pointer-events: none; user-select: none; }
+  .seed-group { cursor: grab; }
+  .seed-group.dragging { cursor: grabbing; }
+</style>
+</head>
+<body>
+<div class="stage-wrap">
+
+  <!-- ============== Sidebar (200px) ============== -->
+  <aside class="game-sidebar">
+    <div class="sb-title" id="sbTitle">你的承诺穹顶<br/>Your Promise Dome</div>
+
+    <!-- Fern mascot static SVG -->
+    <div class="sb-mascot">
+      <svg viewBox="0 0 100 70" xmlns="http://www.w3.org/2000/svg">
+        <line x1="50" y1="65" x2="50" y2="20" stroke="oklch(0.85 0.14 85)" stroke-width="1.8"/>
+        <path d="M50 55 Q35 50 30 42" stroke="oklch(0.85 0.14 85)" stroke-width="1.6" fill="none"/>
+        <path d="M50 45 Q33 40 28 30" stroke="oklch(0.85 0.14 85)" stroke-width="1.6" fill="none"/>
+        <path d="M50 36 Q34 30 30 22" stroke="oklch(0.85 0.14 85)" stroke-width="1.6" fill="none"/>
+        <path d="M50 28 Q38 22 36 16" stroke="oklch(0.85 0.14 85)" stroke-width="1.6" fill="none"/>
+        <path d="M50 55 Q65 50 70 42" stroke="oklch(0.85 0.14 85)" stroke-width="1.6" fill="none"/>
+        <path d="M50 45 Q67 40 72 30" stroke="oklch(0.85 0.14 85)" stroke-width="1.6" fill="none"/>
+        <path d="M50 36 Q66 30 70 22" stroke="oklch(0.85 0.14 85)" stroke-width="1.6" fill="none"/>
+        <path d="M50 28 Q62 22 64 16" stroke="oklch(0.85 0.14 85)" stroke-width="1.6" fill="none"/>
+        <circle cx="22" cy="36" r="1.6" fill="oklch(0.92 0.08 140)"/>
+        <circle cx="78" cy="34" r="1.6" fill="oklch(0.92 0.08 140)"/>
+        <circle cx="20" cy="24" r="1.2" fill="oklch(0.85 0.14 85)"/>
+      </svg>
+      <div class="mascot-name">FERN</div>
+    </div>
+
+    <div class="sb-section">
+      <h4 id="sbGoalH">目标 / Goal</h4>
+      <p id="sbGoalP1">拖 4 颗真承诺种子进穹顶</p>
+      <p id="sbGoalP2">避开 1 颗诱饵 (周末游戏)</p>
+      <p id="sbGoalP3">激活穹顶 → 解锁 DOI 印章</p>
+    </div>
+
+    <div class="sb-section">
+      <h4 id="sbHowH">操作 / How to play</h4>
+      <ol>
+        <li id="sbHow1">按住种子拖到穹顶里面</li>
+        <li id="sbHow2">真种子贴穹顶变蕨叶嫩芽</li>
+        <li id="sbHow3">诱饵会闪红弹回花粉云</li>
+      </ol>
+    </div>
+
+    <div class="sb-bottom">
+      <button class="btn" id="demoBtn">演示一颗 / Demo One</button>
+      <button class="btn" id="resetBtn">重置 / Reset</button>
+      <button class="btn" id="langBtn">EN / 中文</button>
+    </div>
+  </aside>
+
+  <!-- ============== Main stage ============== -->
+  <section class="game-main">
+
+    <div class="hud">
+      <div class="hud-label" id="hudLabel">PROMISES PLACED</div>
+      <div class="hud-value"><span id="placedCount">0</span> / 4</div>
+    </div>
+
+    <div class="stage-svg-host">
+      <svg class="stage" id="stage" viewBox="0 0 800 780" preserveAspectRatio="xMidYMid meet"
+           xmlns="http://www.w3.org/2000/svg">
+
+        <defs>
+          <radialGradient id="domeGrad" cx="50%" cy="60%" r="60%">
+            <stop offset="0%" stop-color="oklch(0.55 0.10 140)" stop-opacity="0.10"/>
+            <stop offset="80%" stop-color="oklch(0.40 0.08 140)" stop-opacity="0.22"/>
+            <stop offset="100%" stop-color="oklch(0.35 0.10 140)" stop-opacity="0.35"/>
+          </radialGradient>
+          <radialGradient id="cloudGrad" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stop-color="oklch(0.72 0.15 140)" stop-opacity="0.18"/>
+            <stop offset="100%" stop-color="oklch(0.72 0.15 140)" stop-opacity="0"/>
+          </radialGradient>
+        </defs>
+
+        <!-- Star background dots -->
+        <g id="stars" opacity="0.55"></g>
+
+        <!-- Dome base ellipse (floor) -->
+        <ellipse cx="400" cy="380" rx="260" ry="22"
+                 fill="oklch(0.45 0.08 140 / 0.35)" stroke="var(--DAWN)" stroke-width="1"/>
+
+        <!-- Dome shell (hemisphere, ghost outline) -->
+        <path id="domeShell"
+              d="M 140 380 A 260 260 0 0 1 660 380"
+              fill="url(#domeGrad)"
+              stroke="var(--DAWN)"
+              stroke-width="1.2"/>
+
+        <!-- Dome lattice longitudes -->
+        <g stroke="var(--DAWN)" stroke-width="0.4" fill="none" opacity="0.35">
+          <path d="M 140 380 Q 400 100 660 380"/>
+          <path d="M 220 380 Q 400 180 580 380"/>
+          <path d="M 300 380 Q 400 240 500 380"/>
+          <path d="M 400 380 L 400 120"/>
+        </g>
+        <!-- Dome latitudes -->
+        <g stroke="var(--DAWN)" stroke-width="0.4" fill="none" opacity="0.3">
+          <ellipse cx="400" cy="380" rx="260" ry="60"/>
+          <ellipse cx="400" cy="380" rx="220" ry="110"/>
+          <ellipse cx="400" cy="380" rx="160" ry="160"/>
+          <ellipse cx="400" cy="380" rx="90" ry="200"/>
+        </g>
+
+        <!-- Faint continents inside dome -->
+        <g opacity="0.18" fill="var(--LOAM)">
+          <path d="M 240 360 Q 280 340 320 350 Q 360 360 350 380 L 240 380 Z"/>
+          <path d="M 420 350 Q 470 335 510 345 Q 540 360 525 378 L 420 378 Z"/>
+          <path d="M 290 200 Q 340 190 380 205 Q 360 230 320 235 Q 285 230 290 200 Z"/>
+        </g>
+
+        <!-- Cloud halo above dome -->
+        <ellipse cx="400" cy="180" rx="220" ry="65" fill="url(#cloudGrad)"/>
+
+        <!-- Pollen cloud bed (bottom) -->
+        <ellipse cx="400" cy="660" rx="320" ry="42"
+                 fill="oklch(0.40 0.08 140 / 0.45)" stroke="var(--OUTLINE)" stroke-width="0.8"/>
+        <text x="400" y="720" text-anchor="middle" fill="var(--SUN)" font-size="11" letter-spacing="3"
+              font-family="JetBrains Mono, monospace" id="cloudLabel">POLLEN CLOUD</text>
+
+        <!-- Center fern growth slot -->
+        <g id="growFern" opacity="0" transform="translate(400, 380)"></g>
+
+        <!-- DOI seal -->
+        <g id="doiSeal" opacity="0" transform="translate(400, 130)"></g>
+
+        <!-- Seeds layer -->
+        <g id="seedLayer"></g>
+
+        <!-- Alert flash for decoy -->
+        <rect id="alertFlash" x="0" y="0" width="800" height="780"
+              fill="oklch(0.55 0.20 30 / 0.25)" opacity="0" pointer-events="none"/>
+      </svg>
+    </div>
+
+    <!-- Win modal -->
+    <div class="modal-overlay" id="winModal">
+      <div class="modal-card">
+        <h2 id="modalTitle">生态穹顶激活 / Biosphere Activated</h2>
+        <p id="modalBody">你的 DOI 在 26 周后到货。这是 4 颗真承诺给你解锁的科研身份证。</p>
+        <button class="btn" id="modalAgain">再玩一次 / Play Again</button>
+      </div>
+    </div>
+
+  </section>
+</div>
+
+<script>
+'use strict';
+
+/* ===================================================================
+ * i18n  (CN / EN)
+ * ================================================================ */
+var LANG = 'cn';
+var I18N = {
+  cn: {
+    sbTitle: '你的承诺穹顶<br/>Your Promise Dome',
+    sbGoalH: '目标 / Goal',
+    sbGoalP1: '拖 4 颗真承诺种子进穹顶',
+    sbGoalP2: '避开 1 颗诱饵 (周末游戏)',
+    sbGoalP3: '激活穹顶 → 解锁 DOI 印章',
+    sbHowH: '操作 / How to play',
+    sbHow1: '按住种子拖到穹顶里面',
+    sbHow2: '真种子贴穹顶变蕨叶嫩芽',
+    sbHow3: '诱饵会闪红弹回花粉云',
+    hudLabel: '已贴承诺 / PLACED',
+    cloudLabel: '花粉云 POLLEN CLOUD',
+    demoBtn: '演示一颗 / Demo One',
+    resetBtn: '重置 / Reset',
+    langBtn: 'EN / 中文',
+    modalTitle: '生态穹顶激活 / Biosphere Activated',
+    modalBody: '你的 DOI 在 26 周后到货。4 颗真承诺给你解锁了科研身份证。',
+    modalAgain: '再玩一次 / Play Again',
+  },
+  en: {
+    sbTitle: 'Your Promise Dome<br/>承诺穹顶',
+    sbGoalH: 'Goal / 目标',
+    sbGoalP1: 'Drag 4 real promise seeds into the dome',
+    sbGoalP2: 'Avoid 1 decoy (weekend gaming)',
+    sbGoalP3: 'Activate dome → unlock DOI seal',
+    sbHowH: 'How to play / 操作',
+    sbHow1: 'Press and drag a seed inside the dome',
+    sbHow2: 'Real seeds stick and sprout fern fronds',
+    sbHow3: 'Decoys flash red and bounce back',
+    hudLabel: 'PLACED / 已贴',
+    cloudLabel: 'POLLEN CLOUD',
+    demoBtn: 'Demo One / 演示一颗',
+    resetBtn: 'Reset / 重置',
+    langBtn: '中文 / EN',
+    modalTitle: 'Biosphere Activated / 穹顶激活',
+    modalBody: 'Your DOI arrives in 26 weeks. Four real promises earned you a scientific identity.',
+    modalAgain: 'Play Again / 再玩一次',
+  },
+};
+
+function t(k) { return I18N[LANG][k]; }
+
+function refreshI18N() {
+  document.getElementById('sbTitle').innerHTML = t('sbTitle');
+  document.getElementById('sbGoalH').textContent = t('sbGoalH');
+  document.getElementById('sbGoalP1').textContent = t('sbGoalP1');
+  document.getElementById('sbGoalP2').textContent = t('sbGoalP2');
+  document.getElementById('sbGoalP3').textContent = t('sbGoalP3');
+  document.getElementById('sbHowH').textContent = t('sbHowH');
+  document.getElementById('sbHow1').textContent = t('sbHow1');
+  document.getElementById('sbHow2').textContent = t('sbHow2');
+  document.getElementById('sbHow3').textContent = t('sbHow3');
+  document.getElementById('hudLabel').textContent = t('hudLabel');
+  document.getElementById('cloudLabel').textContent = t('cloudLabel');
+  document.getElementById('demoBtn').textContent = t('demoBtn');
+  document.getElementById('resetBtn').textContent = t('resetBtn');
+  document.getElementById('langBtn').textContent = t('langBtn');
+  document.getElementById('modalTitle').textContent = t('modalTitle');
+  document.getElementById('modalBody').textContent = t('modalBody');
+  document.getElementById('modalAgain').textContent = t('modalAgain');
+  renderSeeds();
+}
+
+/* ===================================================================
+ * Seeds data
+ * ================================================================ */
+var SEEDS_TEMPLATE = [
+  { id: 's1', kind: 'real',  cn: "30 天不断电",   en: "Power 30 days" },
+  { id: 's2', kind: 'real',  cn: "我不编造数据", en: "No fake data" },
+  { id: 's3', kind: 'real',  cn: "告诉外婆 DOI", en: "Tell grandma" },
+  { id: 's4', kind: 'real',  cn: "监测全球地图", en: "Watch map" },
+  { id: 's5', kind: 'decoy', cn: "周末 3h 游戏", en: "3hr gaming" },
+];
+
+var INITIAL_POS = [
+  { x: 220, y: 660 },
+  { x: 320, y: 680 },
+  { x: 420, y: 655 },
+  { x: 520, y: 680 },
+  { x: 600, y: 660 },
+];
+
+/* ===================================================================
+ * State (no window-shadow var names)
+ * ================================================================ */
+var seedList = [];
+var placedCount = 0;
+var dragInfo = null;
+
+var seedLayer  = null;
+var stageSvg   = null;
+var growFern   = null;
+var doiSeal    = null;
+var alertFlash = null;
+var winModal   = null;
+
+var DOME_CX = 400;
+var DOME_CY = 380;
+var DOME_R  = 260;
+
+/* ===================================================================
+ * Seed render
+ * ================================================================ */
+function renderSeeds() {
+  seedLayer.innerHTML = '';
+  for (var i = 0; i < seedList.length; i++) {
+    var s = seedList[i];
+    var g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+    g.setAttribute('class', s.dragging ? 'seed-group dragging' : 'seed-group');
+    g.setAttribute('transform', 'translate(' + s.x + ',' + s.y + ')');
+    g.setAttribute('data-seed-id', s.id);
+    g.setAttribute('data-kind', s.kind);
+    g.setAttribute('draggable', 'true');
+
+    if (s.placed && s.kind === 'real') {
+      // sprouted fern bud
+      var leaf = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+      leaf.innerHTML =
+        '<line x1="0" y1="14" x2="0" y2="-12" stroke="oklch(0.85 0.14 85)" stroke-width="1.5"/>' +
+        '<path d="M0 8 Q-10 4 -13 -2" stroke="oklch(0.85 0.14 85)" stroke-width="1.4" fill="none"/>' +
+        '<path d="M0 2 Q-11 -2 -14 -9" stroke="oklch(0.85 0.14 85)" stroke-width="1.4" fill="none"/>' +
+        '<path d="M0 -4 Q-10 -8 -12 -14" stroke="oklch(0.85 0.14 85)" stroke-width="1.4" fill="none"/>' +
+        '<path d="M0 8 Q10 4 13 -2" stroke="oklch(0.85 0.14 85)" stroke-width="1.4" fill="none"/>' +
+        '<path d="M0 2 Q11 -2 14 -9" stroke="oklch(0.85 0.14 85)" stroke-width="1.4" fill="none"/>' +
+        '<path d="M0 -4 Q10 -8 12 -14" stroke="oklch(0.85 0.14 85)" stroke-width="1.4" fill="none"/>' +
+        '<circle cx="0" cy="-14" r="2.4" fill="oklch(0.92 0.08 140)" stroke="oklch(0.85 0.14 85)" stroke-width="0.8"/>';
+      g.appendChild(leaf);
+    } else if (s.placed && s.kind === 'decoy') {
+      var dead = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+      dead.innerHTML =
+        '<line x1="0" y1="12" x2="0" y2="-10" stroke="oklch(0.52 0.13 140)" stroke-width="1.2"/>' +
+        '<path d="M-9 0 Q0 -8 9 0 Q0 8 -9 0 Z" fill="oklch(0.52 0.13 140 / 0.6)" stroke="oklch(0.52 0.13 140)" stroke-width="1"/>';
+      g.appendChild(dead);
+    } else {
+      var fill = (s.kind === 'real') ? 'oklch(0.85 0.14 85)' : 'oklch(0.55 0.20 30)';
+      var stroke = 'oklch(0.92 0.08 140)';
+      var circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+      circle.setAttribute('r', '18');
+      circle.setAttribute('fill', fill);
+      circle.setAttribute('stroke', stroke);
+      circle.setAttribute('stroke-width', '1.5');
+      circle.setAttribute('opacity', s.dragging ? '0.55' : '0.95');
+      g.appendChild(circle);
+
+      // inner pollen texture dots
+      var dotPositions = [[-5,-4,1.6],[4,3,1.6],[6,-5,1.2]];
+      for (var di = 0; di < dotPositions.length; di++) {
+        var d = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+        d.setAttribute('cx', String(dotPositions[di][0]));
+        d.setAttribute('cy', String(dotPositions[di][1]));
+        d.setAttribute('r',  String(dotPositions[di][2]));
+        d.setAttribute('fill', 'oklch(0.35 0.10 140 / 0.6)');
+        g.appendChild(d);
+      }
+
+      // Label
+      var label = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+      label.setAttribute('class', 'seed-label');
+      label.setAttribute('x', '0');
+      label.setAttribute('y', '38');
+      label.setAttribute('text-anchor', 'middle');
+      label.setAttribute('font-size', '10');
+      label.setAttribute('font-family', 'JetBrains Mono, monospace');
+      label.setAttribute('fill', 'oklch(0.92 0.08 140)');
+      label.setAttribute('letter-spacing', '0.08em');
+      label.textContent = (LANG === 'cn') ? s.cn : s.en;
+      g.appendChild(label);
+    }
+
+    seedLayer.appendChild(g);
+  }
+}
+
+/* ===================================================================
+ * Wobble loop (pollen drift) — rAF
+ * ================================================================ */
+var rafStart = performance.now();
+function wobbleLoop(now) {
+  var dt = (now - rafStart) / 1000;
+  for (var i = 0; i < seedList.length; i++) {
+    var s = seedList[i];
+    if (s.placed || s.dragging) continue;
+    var dx = Math.sin(dt * 1.4 + i * 1.1) * 6;
+    var dy = Math.cos(dt * 1.1 + i * 0.8) * 4;
+    var node = seedLayer.querySelector('[data-seed-id="' + s.id + '"]');
+    if (node) {
+      node.setAttribute('transform', 'translate(' + (s.x + dx) + ',' + (s.y + dy) + ')');
+    }
+  }
+  requestAnimationFrame(wobbleLoop);
+}
+
+/* ===================================================================
+ * Coord conversion (page xy → SVG viewBox xy)
+ * ================================================================ */
+function pageToSvg(clientX, clientY) {
+  var pt = stageSvg.createSVGPoint();
+  pt.x = clientX;
+  pt.y = clientY;
+  var ctm = stageSvg.getScreenCTM();
+  if (!ctm) return { x: clientX, y: clientY };
+  var inv = ctm.inverse();
+  var loc = pt.matrixTransform(inv);
+  return { x: loc.x, y: loc.y };
+}
+
+/* ===================================================================
+ * Drag (mouse + touch)
+ * ================================================================ */
+function findSeedFromTarget(target) {
+  var node = target;
+  while (node && node !== seedLayer) {
+    if (node.getAttribute && node.getAttribute('data-seed-id')) {
+      return node.getAttribute('data-seed-id');
+    }
+    node = node.parentNode;
+  }
+  return null;
+}
+
+function startDrag(seedId, clientX, clientY) {
+  var s = null;
+  for (var i = 0; i < seedList.length; i++) {
+    if (seedList[i].id === seedId) { s = seedList[i]; break; }
+  }
+  if (!s || s.placed) return;
+  var p = pageToSvg(clientX, clientY);
+  s.dragging = true;
+  dragInfo = {
+    id: seedId,
+    dx: p.x - s.x,
+    dy: p.y - s.y,
+    startX: s.x,
+    startY: s.y,
+  };
+  renderSeeds();
+}
+
+function moveDrag(clientX, clientY) {
+  if (!dragInfo) return;
+  var s = null;
+  for (var i = 0; i < seedList.length; i++) {
+    if (seedList[i].id === dragInfo.id) { s = seedList[i]; break; }
+  }
+  if (!s) return;
+  var p = pageToSvg(clientX, clientY);
+  s.x = p.x - dragInfo.dx;
+  s.y = p.y - dragInfo.dy;
+  var node = seedLayer.querySelector('[data-seed-id="' + s.id + '"]');
+  if (node) node.setAttribute('transform', 'translate(' + s.x + ',' + s.y + ')');
+}
+
+function isInsideDome(x, y) {
+  var dx = x - DOME_CX;
+  var dy = y - DOME_CY;
+  return (y <= DOME_CY) && (dx * dx + dy * dy <= DOME_R * DOME_R);
+}
+
+function endDrag() {
+  if (!dragInfo) return;
+  var s = null;
+  for (var i = 0; i < seedList.length; i++) {
+    if (seedList[i].id === dragInfo.id) { s = seedList[i]; break; }
+  }
+  if (!s) { dragInfo = null; return; }
+  s.dragging = false;
+
+  if (isInsideDome(s.x, s.y)) {
+    if (s.kind === 'real') {
+      s.placed = true;
+      placedCount++;
+      document.getElementById('placedCount').textContent = String(placedCount);
+      renderSeeds();
+      if (placedCount >= 4) triggerWin();
+    } else {
+      flashDecoy();
+      s.x = dragInfo.startX;
+      s.y = dragInfo.startY;
+      renderSeeds();
+    }
+  } else {
+    renderSeeds();
+  }
+  dragInfo = null;
+}
+
+function flashDecoy() {
+  alertFlash.setAttribute('opacity', '1');
+  var fadeStart = performance.now();
+  function fade(now) {
+    var p = (now - fadeStart) / 600;
+    if (p >= 1) {
+      alertFlash.setAttribute('opacity', '0');
+      return;
+    }
+    alertFlash.setAttribute('opacity', String(1 - p));
+    requestAnimationFrame(fade);
+  }
+  requestAnimationFrame(fade);
+}
+
+/* ===================================================================
+ * Win sequence — fern grows + DOI seal drops + modal
+ * ================================================================ */
+function triggerWin() {
+  growFern.setAttribute('opacity', '1');
+  growFern.innerHTML = '';
+  var stem = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+  stem.setAttribute('x1', '0'); stem.setAttribute('y1', '0');
+  stem.setAttribute('x2', '0'); stem.setAttribute('y2', '0');
+  stem.setAttribute('stroke', 'oklch(0.85 0.14 85)');
+  stem.setAttribute('stroke-width', '3');
+  stem.setAttribute('stroke-linecap', 'round');
+  growFern.appendChild(stem);
+
+  var growStart = performance.now();
+  function growStem(now) {
+    var p = Math.min(1, (now - growStart) / 1200);
+    var ease = 1 - Math.pow(1 - p, 3);
+    stem.setAttribute('y2', String(-180 * ease));
+    if (p < 1) requestAnimationFrame(growStem);
+    else addFronds();
+  }
+  requestAnimationFrame(growStem);
+
+  function addFronds() {
+    var fronds = [
+      { sx: 0, sy: -40,  ex: -55, ey: -55,  side: 'L' },
+      { sx: 0, sy: -40,  ex:  55, ey: -55,  side: 'R' },
+      { sx: 0, sy: -80,  ex: -65, ey: -100, side: 'L' },
+      { sx: 0, sy: -80,  ex:  65, ey: -100, side: 'R' },
+      { sx: 0, sy: -120, ex: -55, ey: -150, side: 'L' },
+      { sx: 0, sy: -120, ex:  55, ey: -150, side: 'R' },
+      { sx: 0, sy: -160, ex: -35, ey: -185, side: 'L' },
+      { sx: 0, sy: -160, ex:  35, ey: -185, side: 'R' },
+    ];
+    fronds.forEach(function(f, i) {
+      setTimeout(function() {
+        var pth = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        var midX = (f.sx + f.ex) / 2 + (f.side === 'L' ? -8 : 8);
+        var midY = (f.sy + f.ey) / 2 + 4;
+        pth.setAttribute('d', 'M ' + f.sx + ' ' + f.sy + ' Q ' + midX + ' ' + midY + ' ' + f.ex + ' ' + f.ey);
+        pth.setAttribute('stroke', 'oklch(0.85 0.14 85)');
+        pth.setAttribute('stroke-width', '2');
+        pth.setAttribute('fill', 'none');
+        pth.setAttribute('stroke-linecap', 'round');
+        pth.setAttribute('opacity', '0');
+        growFern.appendChild(pth);
+        var fadeIn = performance.now();
+        function fi(now) {
+          var p = Math.min(1, (now - fadeIn) / 300);
+          pth.setAttribute('opacity', String(p));
+          if (p < 1) requestAnimationFrame(fi);
+        }
+        requestAnimationFrame(fi);
+      }, i * 250);
+    });
+    setTimeout(function() {
+      var bud = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+      bud.setAttribute('cx', '0');
+      bud.setAttribute('cy', '-180');
+      bud.setAttribute('r', '0');
+      bud.setAttribute('fill', 'oklch(0.92 0.08 140)');
+      bud.setAttribute('stroke', 'oklch(0.85 0.14 85)');
+      bud.setAttribute('stroke-width', '1.5');
+      growFern.appendChild(bud);
+      var budStart = performance.now();
+      function budGrow(now) {
+        var p = Math.min(1, (now - budStart) / 400);
+        bud.setAttribute('r', String(6 * p));
+        if (p < 1) requestAnimationFrame(budGrow);
+        else dropDoiSeal();
+      }
+      requestAnimationFrame(budGrow);
+    }, fronds.length * 250 + 100);
+  }
+}
+
+function dropDoiSeal() {
+  doiSeal.setAttribute('opacity', '1');
+  doiSeal.setAttribute('transform', 'translate(400, 130)');
+  doiSeal.innerHTML =
+    '<circle cx="0" cy="0" r="46" fill="oklch(0.55 0.20 30)" stroke="oklch(0.85 0.14 85)" stroke-width="2.5"/>' +
+    '<circle cx="0" cy="0" r="38" fill="none" stroke="oklch(0.85 0.14 85)" stroke-width="0.6" opacity="0.5"/>' +
+    '<text x="0" y="-6" text-anchor="middle" fill="oklch(0.92 0.08 140)" font-size="14" font-weight="700" font-family="JetBrains Mono, monospace" letter-spacing="0.18em">DOI</text>' +
+    '<text x="0" y="10" text-anchor="middle" fill="oklch(0.92 0.08 140)" font-size="7" font-family="JetBrains Mono, monospace" letter-spacing="0.06em">10.5281/zenodo</text>' +
+    '<text x="0" y="20" text-anchor="middle" fill="oklch(0.92 0.08 140)" font-size="7" font-family="JetBrains Mono, monospace" letter-spacing="0.06em">EARNED</text>';
+
+  var dropStart = performance.now();
+  function drop(now) {
+    var p = Math.min(1, (now - dropStart) / 800);
+    var ease = 1 - Math.pow(1 - p, 2.2);
+    var y = 130 + (210 - 130) * ease;
+    doiSeal.setAttribute('transform', 'translate(400, ' + y + ')');
+    if (p < 1) requestAnimationFrame(drop);
+    else setTimeout(showWinModal, 500);
+  }
+  requestAnimationFrame(drop);
+}
+
+function showWinModal() {
+  winModal.classList.add('show');
+}
+
+/* ===================================================================
+ * Reset
+ * ================================================================ */
+function resetGame() {
+  placedCount = 0;
+  document.getElementById('placedCount').textContent = '0';
+  seedList = SEEDS_TEMPLATE.map(function(s, i) {
+    return {
+      id: s.id,
+      kind: s.kind,
+      cn: s.cn,
+      en: s.en,
+      x: INITIAL_POS[i].x,
+      y: INITIAL_POS[i].y,
+      placed: false,
+      dragging: false,
+    };
+  });
+  growFern.setAttribute('opacity', '0');
+  growFern.innerHTML = '';
+  doiSeal.setAttribute('opacity', '0');
+  doiSeal.innerHTML = '';
+  alertFlash.setAttribute('opacity', '0');
+  winModal.classList.remove('show');
+  renderSeeds();
+}
+
+/* ===================================================================
+ * Demo: auto-place one real seed → guarantees ≥2% pixel diff for verifier
+ * ================================================================ */
+function demoPlace() {
+  var target = null;
+  for (var i = 0; i < seedList.length; i++) {
+    var s = seedList[i];
+    if (!s.placed && s.kind === 'real') { target = s; break; }
+  }
+  if (!target) return;
+  var startX = target.x, startY = target.y;
+  var endX = 400 + (i % 2 === 0 ? -120 : 120);
+  var endY = 280;
+  var t0 = performance.now();
+  function fly(now) {
+    var p = Math.min(1, (now - t0) / 500);
+    var ease = 1 - Math.pow(1 - p, 3);
+    target.x = startX + (endX - startX) * ease;
+    target.y = startY + (endY - startY) * ease;
+    var node = seedLayer.querySelector('[data-seed-id="' + target.id + '"]');
+    if (node) node.setAttribute('transform', 'translate(' + target.x + ',' + target.y + ')');
+    if (p < 1) {
+      requestAnimationFrame(fly);
+    } else {
+      target.placed = true;
+      placedCount++;
+      document.getElementById('placedCount').textContent = String(placedCount);
+      renderSeeds();
+      if (placedCount >= 4) triggerWin();
+    }
+  }
+  requestAnimationFrame(fly);
+}
+
+/* ===================================================================
+ * Event handlers
+ * ================================================================ */
+function onMouseDown(e) {
+  var id = findSeedFromTarget(e.target);
+  if (!id) return;
+  e.preventDefault();
+  startDrag(id, e.clientX, e.clientY);
+}
+
+function onMouseMove(e) {
+  if (!dragInfo) return;
+  moveDrag(e.clientX, e.clientY);
+}
+
+function onMouseUp(e) {
+  if (!dragInfo) return;
+  endDrag();
+}
+
+function onTouchStart(e) {
+  if (!e.touches || e.touches.length === 0) return;
+  var id = findSeedFromTarget(e.target);
+  if (!id) return;
+  e.preventDefault();
+  var tch = e.touches[0];
+  startDrag(id, tch.clientX, tch.clientY);
+}
+
+function onTouchMove(e) {
+  if (!dragInfo) return;
+  if (!e.touches || e.touches.length === 0) return;
+  e.preventDefault();
+  var tch = e.touches[0];
+  moveDrag(tch.clientX, tch.clientY);
+}
+
+function onTouchEnd(e) {
+  if (!dragInfo) return;
+  endDrag();
+}
+
+function onLangBtn()       { LANG = (LANG === 'cn') ? 'en' : 'cn'; refreshI18N(); }
+function onResetBtn()      { resetGame(); }
+function onDemoBtn()       { demoPlace(); }
+function onModalAgainBtn() { resetGame(); }
+
+/* ===================================================================
+ * Init
+ * ================================================================ */
+function makeStars() {
+  var starsLayer = document.getElementById('stars');
+  for (var i = 0; i < 40; i++) {
+    var c = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+    c.setAttribute('cx', String(Math.random() * 800));
+    c.setAttribute('cy', String(Math.random() * 350));
+    c.setAttribute('r',  String(0.6 + Math.random() * 1.2));
+    c.setAttribute('fill', 'oklch(0.92 0.08 140)');
+    c.setAttribute('opacity', String(0.3 + Math.random() * 0.5));
+    starsLayer.appendChild(c);
+  }
+}
+
+document.addEventListener('DOMContentLoaded', function () {
+  seedLayer  = document.getElementById('seedLayer');
+  stageSvg   = document.getElementById('stage');
+  growFern   = document.getElementById('growFern');
+  doiSeal    = document.getElementById('doiSeal');
+  alertFlash = document.getElementById('alertFlash');
+  winModal   = document.getElementById('winModal');
+
+  makeStars();
+  resetGame();
+  refreshI18N();
+
+  stageSvg.addEventListener('mousedown',  onMouseDown);
+  document.addEventListener('mousemove',  onMouseMove);
+  document.addEventListener('mouseup',    onMouseUp);
+  stageSvg.addEventListener('touchstart', onTouchStart, { passive: false });
+  document.addEventListener('touchmove',  onTouchMove,  { passive: false });
+  document.addEventListener('touchend',   onTouchEnd);
+
+  document.getElementById('langBtn').addEventListener('click',     onLangBtn);
+  document.getElementById('resetBtn').addEventListener('click',    onResetBtn);
+  document.getElementById('demoBtn').addEventListener('click',     onDemoBtn);
+  document.getElementById('modalAgain').addEventListener('click',  onModalAgainBtn);
+
+  requestAnimationFrame(wobbleLoop);
+});
+</script>
+</body>
+</html>

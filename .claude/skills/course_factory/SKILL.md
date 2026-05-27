@@ -28,6 +28,383 @@ description: Generate rich-media course content (animation, game, theory, exerci
 
 ---
 
+## ⛔ 强制执行命令 (FORBIDDEN TO SKIP) — 全流程钢印, 任何 session 任何 Claude 不得跳过
+
+> **本节是 2026-05 purpleair M01-M18 第一次生成时累计 100+ 小时返工沉淀的硬规则**.
+> 历史 Claude 系统性跳了下面**整套流程的多个步骤**, 导致 36 个 HTML 全部需要返工.
+> **未来任何 session, 任何 Claude, 看到这段时必须把下面整套从 Step 0 到 Step 7 + 所有 7 闸门完整执行, 不准"图省事"、不准"我觉得本节不需要"、不准"先写盘后面再补"**.
+> **每一步执行后必须在 chat 输出"Step X 完成 → 产物: Y"的明确确认**, 跳任一步 = 本节作废重做.
+
+### 总原则: 12 步 + 7 闸门 + 9 类富媒体 — 一条不准跳
+
+**单 knode 生成 12 步顺序 (硬约束)**:
+
+```
+Step 0    加载 knode 上下文
+Step 0.5  Tavily 外部研究 (web + youtube 双查)
+Step 0.7  LabXchange 匹配 (本地搜 1467 pathway, 必须人工对口选择, 不允许不审就用 fallback)
+Step 1    plan_markdown (按 generation_guide.expected_lengths.plan_chars ±20% 容差)
+Step 1.5  theories (按 n_theories + K1/K3 字数, K1 必须零希腊字母零等号, 先讲概念再关联项目)
+Step 2    9 类富媒体逐条 debate (theory/animation/game/hands_on_kit/image/diagram/youtube/labxchange/3d_object)
+Step 2.5  Ideation Divergence (每个 anim/game 给 3 个跨 Pattern 候选)
+Step 2.6  Creativity Gate (Subtract/Replay/Surprise/Aha 四问全过)
+Step 3    Ideas 详细描述 (含 hands_on_ref/acceptance_ref 原文匹配)
+Step 4    Debate 决策 (留/拒/revise)
+Step 5    实现 (anim HTML / game HTML / exercise JSON / 3D HTML)
+Step 5.5  7 道闸门 a/b/c/d/e/f/g 全 PASS  ⛔ 任一跳 = 重做
+Step 6    make_course_content + preflight_v41 + save_knode_to_workspace
+Step 6.5  Claude 手写 assignment.md (按 handson_difficulty 决定深度)
+Step 6.6  Claude 按 ##/### 分段手写 audio_scripts (每段 150-300 字, finalize_audio_scripts 校验)
+Step 6.7  Claude 按 slide_gen.md schema 手写 slides (10-12 张, finalize_slides 校验)
+```
+
+### F1. 必须 7 道闸门全跑 — Step 5.5 a/b/c/d/e/f/g
+
+每节写盘前必须 chat 明确输出: "Step 5.5 全部 PASS, 详情: 5.5a ✓ / 5.5b ✓ exit 0 / 5.5c ✓ 科学一致 / 5.5d ✓ K1 等级 / 5.5e ✓ 游戏性 / 5.5f ✓ 0 文字重叠 / 5.5g ✓ 美学合规".
+
+| 闸门 | 内容 | 跳过条件 |
+|---|---|---|
+| **5.5a code review** | 事件绑定 (无 onclick="" 全 addEventListener) / Canvas 时序 (无写死像素硬上限) / flex 布局 (无 calc(100vh)) / rAF (无 setInterval) / 无 window 同名顶层变量 / 无 emoji | **不准跳** |
+| **5.5b browser verify** | `node validate/verify/animation.mjs` 或 `game.mjs` 双模式 standalone + iframe 全 PASS exit 0 | **不准跳** |
+| **5.5c 科学一致性 Agent** | 物理数值真实 (例烙铁 350°C 不是 100°C) / 方向因果 (推力向右物体不能向左) / 比例合理 (大颗粒视觉应大于小颗粒) / 文字描述跟视觉一致 / 单位正确 — 必须**dispatch 独立 agent** 看 HTML 加 prompt 含本节物理事实清单, 输出 verdict pass/fail | **不准跳** (理论纯方法论节才允许跳, 但必须 chat 写明跳理由) |
+| **5.5d theory 等级评审 Agent** | 对每个 theory 的 K1 / K3 跑独立 agent, 验等级匹配 + 学习材料完整性 + 推导严谨 + 例子类比, verdict=revise 是硬阻断必须重写直到 pass | **不准跳** (只有 theory 完全没 level_bodies 时允许跳, 但只要有 theory 必须跑) |
+| **5.5e 游戏性美观 Agent** | anim 真在动 (帧切换 anim-diff ≥ 2%, 但不是单帧只切语言) / game 真互动 (拖滑块按钮触发 ≥ 2% 像素变化, 非 quiz) / 视觉舒服 (色块对比 + 留白合理) / 交互流畅 (响应延迟 < 200ms) | **不准跳** |
+| **5.5f 文字重叠 (像素级 Playwright + 视觉 agent)** | 用 Playwright 在 t=2s/8s/15s/25s 至少 4 帧截图 (anim) 或初始 + 交互后 2 帧 (game), 跑视觉 agent 审查"≥ 2 对文字 / 文字与图形重叠". **verify/animation.mjs 不查像素重叠, 必须独立跑**. 任 ≥ 1 对重叠 = 修 anim/game 重跑直到 0 对 | **不准跳** |
+| **5.5g 美学审查 Agent** | 对照 `theme_style/themes.js` 26 风格 + `animation_game_design/<style_key>/DESIGN.md` (anim/game) 或 `AESTHETIC.md` 米黄手册 (3D object). prompt 必须明确 "本节是 anim/game 用 theme_style 26 / 还是 3D 用 AESTHETIC.md", **只审对应规范** | **不准跳** |
+
+### F2. theme_style 26 套学科风格 — 严格按原稿设计意图, 不准自由发挥
+
+**前提: 这是 anim/game 视觉的最高权威, 看原稿 `theme_style/styles.css` line 6-57 + `theme_style/themes.js` 每套定义.**
+
+**根基原则 (原稿 line 7 钉死)**: *"Base — deep space canvas shared across all subjects"*. 26 套**共享同一套深空背景**, palette 只是学科**元素强调色**, 不是替换背景。
+
+#### F2.1 三层颜色分工 (anim/game 必须严格分层, 不准混用)
+
+| 层 | 变量来源 | 用途 | 来自 |
+|---|---|---|---|
+| **共享深空底** | `--bg-0/-1/-2/-3` (oklch 0.14-0.28 hue 265, 深蓝紫) | body 主背景 / 卡片底 / 分区底 — **26 套全用同一套, 不换** | `theme_style/styles.css` line 8-11 |
+| **共享文字 + gold 高亮** | `--fg / --fg-dim / --fg-mute / --gold` | 浅色文字 / 通用发现高亮 — **26 套全用同一套** | line 15-21 |
+| **学科 signature 单色 accent** | `--<style_id>` (例 `--env: oklch(0.72 0.15 140)` forest-green) | 按钮 / 数据线 / 边框 / 标签 / 卡片高亮的**单色 accent** | line 23-51 |
+| **学科 5 色 palette** (themes.js 给的 CANOPY/LOAM/ABYSS/DAWN/SUN 等) | 该学科的扩展色板 | mascot 配色 + 场景插画 + 多色数据可视化 (例 5 类粒子用 5 色) | `themes.js` palette: [...] |
+
+#### F2.2 选 style_key 流程
+
+1. **看节点学科** → 从 26 套选 1 个 (按 F7 规则, 按节点内容不是项目大类)
+2. **必读原稿**: 打开 `theme_style/themes.js` 该套定义 (id/palette/mascot/props/tagline) + `theme_style/styles.css` line 23-51 找到 `--<style_id>` accent oklch 值
+3. **必读 (如有)**: `animation_game_design/<style_key>/DESIGN.md` 看原稿是怎么实际呈现这个学科的场景的
+4. anim/game HTML 必须:
+   - **body 背景**: `var(--bg-0)` (深蓝紫, 跟所有 26 套统一), 允许局部用 `--bg-1/-2/-3` 做分区
+   - **学科识别**: `--<style_id>` 用在主 accent 元素 (例 env 节点 button border + active state 用 `oklch(0.72 0.15 140)` forest-green)
+   - **5 色 palette**: 限定在 mascot SVG / 学科插画 / 多类数据可视化 (例 5 种粒子用 5 色), **不准把 ABYSS 拉去当 body 背景, 不准把 CANOPY 拉去当卡片底**
+   - **文字**: `--fg` 浅白主字 + `--fg-dim` 副字 (因为底是深空), **禁用 ink 黑字**
+   - **金色高亮**: `--gold` 用在重要发现/印章/key moment
+
+#### F2.3 反例 (历史 bug, 不要再犯)
+
+- ❌ 把 env palette ABYSS (0.35 0.10 140) 当 body 背景, 导致整页深绿穹顶 (用户原话: 太丑) — 应该 body 用 `--bg-0` 深蓝紫, ABYSS 只能在 mascot 蕨叶 SVG 里
+- ❌ 创造自己的 `--SIGNAL --CORE --DEPTH` 通用命名替代该学科原 palette 命名 (CANOPY/LOAM/ABYSS 等); 命名必须**严格沿用** themes.js palette[].name
+- ❌ 把 5 色全用在 body/card/border/accent 四处, 没分层 → 视觉一团绿/红/紫
+- ❌ 退化成 AESTHETIC.md 8 学科 hex 米黄风 (`#f3ecdc` 米黄底 + 黑描边). **AESTHETIC.md 是 3D object 米黄手册风专项, 不是 anim/game**
+- ❌ 误读"oklch 26 色已废弃" — 那是指 `animation_runtime.js` 旧 10 套深色 PALETTES 废弃
+
+#### F2.4 anim/game agent prompt 必含项 (硬约束)
+
+- prompt 第一段必须粘**该 style 在 themes.js 的完整定义** (palette 5 色 + mascot + props + tagline)
+- prompt 必须列**三层颜色分工表** (F2.1 那个表)
+- prompt 必须明确告诉 agent: "body 用 `--bg-0`, accent 用 `--<style_id>`, palette 5 色限在 mascot+插画"
+- agent 输出后, chat 必须明确报: "body 背景 = ___, accent = ___, 5 色用在哪 = ___"
+
+### F3. 3D object — should_generate_3d_object() 强制调用, 不准主观跳
+
+Step 2 富媒体 debate 中, **必须**调用 `course_factory.factory.should_generate_3d_object(knode)`, 拿返回 `{should_generate, reason, object_name_hint}` 决策.
+
+**禁止**:
+- ❌ 主观判断"理论节不需要 3D" 把硬件节点也 reject
+- ❌ 不调用 `should_generate_3d_object()` 直接拍板 reject
+
+**执行检查**:
+- 每节 chat 必须输出: "调用 should_generate_3d_object(knode) → should=True/False, reason=___, object_name_hint=___"
+- should=True 时**必须**生成 3D HTML, 走 5.5g 美学闸门 (米黄 + EdgesGeometry 黑描边 + L0/L1/L2 三层下钻), 不准 reject
+
+**反例 (历史 purpleair 漏做 3D 清单)**:
+- M10 (PMS5003 接线) — 应做 PMS5003 3D
+- M11 (BME280 I2C) — 应做 BME280 3D
+- M14 (PMS7003 + MQ-135 + ADS1115) — 至少 PMS7003 3D
+- M15 (IP65 防水盒 + PTFE 膜) — 应做盒子剖视 3D
+- M16 (户外节点整机) — 应做节点完整 3D
+- M17 (PMS5003 拆解讲 Mie) — **本节核心讲拆解, 绝对应有 PMS5003 内部 3D**
+
+### F4. 9 类富媒体 — 每节必须 8 类逐条 debate (含 3D), 任一漏想 = 不合格
+
+#### F4.0 节点性质判定 (新, 决定 animation 是否做 + 什么形式) ⚠️ 必先做
+
+**Step 2 第一步**先判定这个 knode 属于哪类, 这决定 animation 该做什么形式 (或不做):
+
+| 节点性质 | 特征 | animation 形式 | game 形式 |
+|---|---|---|---|
+| **A. 现象类** | 看得见的物理/化学/生物过程, 有时间维度的现象变化 (PM2.5 散射光 / 蚂蚁路径 / 神经放电 / 化学反应 / 信号叠加) | **autoplay 多帧动画** (标准 animation) | 互动模拟/建造 |
+| **B. 机制类** | 看不见但有因果链的过程 (算法步骤 / 数学推导 / 数据流 / 电路工作原理) | **autoplay 多帧动画 + 步骤暂停** (rich/ceremonial) | 拼装/调参/可视化 |
+| **C. 总览类** | 项目路线图 / 仪式 / 介绍人物 / 阅读论文 / 安全条款 / 选型决策 — **没有"过程"可看** | **静态信息图** (一屏看完, SVG, **禁用 autoplay 推进 + 禁用时间轴 + 禁用帧切换**, 仍归 `animation` kind 但 type="static_infographic") | 互动选择/承诺/检查表 |
+| **D. 纯文本类** | 纯反思/讨论/家访/采访 | **不做 animation** (跳过, F4 显式 reject 写理由) | 选做 (有真互动才做) |
+
+**判定原则**: knode.core_question 描述的是 "发生了什么 / 怎么变化的" → A/B 类; 描述的是 "我要做什么 / 这是什么" → C/D 类. 拿不准 → 拿 5 帧测试: 如果不能写出 5 帧画面之间有清晰的"变化", 就是 C/D 类.
+
+**C 类静态信息图硬约束** (违反 = 不合格):
+- 禁用任何 `setInterval` / `requestAnimationFrame` 的帧推进
+- 禁用 `subCues` / `frameIds` / 帧切换函数 `showFrame()`
+- 允许的"动态": hover 高亮 + click 弹明细 + CSS transition (不能驱动叙事推进); 允许 1-2 个温和 CSS `@keyframes` 局部呼吸 (印章脉冲) 但不能驱动叙事
+- HUD 只显示静态信息 (项目名 / 当前 stage 标记), 不显示 Week 计数器
+- 仍 200px sidebar, 仍 i18n CN/EN
+- **palette 不用 theme_style 26 套** (那是 A/B 类学科 anim/game 用的, 深空底 + 学科 accent). C 类用 **Industrial Atelier UI style** (跟 student-web 一致, 见下 F4.0.1)
+- agent prompt 必须写 `static_infographic = true` 让 sub-agent 知道不做 autoplay
+
+#### F4.0.1 C 类 Industrial Atelier palette (硬约束, 复制到 anim/infographic agent prompt)
+
+来源 `packages/student-web/src/app/globals.css` line 11-66. C 类 anim 必须严格按这套, 不准回到 26 套学科 palette, 不准创造新色。
+
+```css
+:root {
+  /* Surfaces — Claude warm cream */
+  --paper:    #FAF9F5;   /* body 主背景 */
+  --paper-2:  #F1EDDF;   /* 次背景, 分区 */
+  --card:     #FFFFFF;   /* 卡片 */
+  --ink:      #191814;   /* 主文字 (注意: C 类用黑墨字, 不像 A/B 用浅白字) */
+  --ink-2:    #2B2924;
+  --sub:      #6B6557;   /* 副文字 */
+  --sub-2:    #9D978A;
+  --border:   #EBE5D6;   /* 1px hairline */
+  --border-2: #D9D1BD;
+  --hairline: #F2EDE0;
+
+  /* Primary — Claude coral (强调色, 只用在 key moment) */
+  --primary:      #D97757;
+  --primary-ink:  #9A4A2E;
+  --primary-soft: #F8EDE5;
+  --primary-line: #ECCFB8;
+
+  /* Domain accent (可选, 按项目领域选 1 个用在 stage hover/info tag): */
+  --climate:    #527B95;   --climate-soft: #DEE5EC;
+  --aerospace:  #B85A33;   --aerospace-soft:#F2DDD0;
+  --bio:        #A67B5B;   --bio-soft:     #EFE2D2;
+  --robotics:   #7C4569;   --robotics-soft:#E9DBE3;
+  --computing:  #C04E68;   --computing-soft:#F4DDE3;
+  --materials:  #8C7B3F;   --materials-soft:#EAE3CC;
+  --energy:     #C89B3C;   --energy-soft:  #F2E6C9;
+
+  /* Shadow (用软阴影, 不要 3px offset 实色 — 那是 A/B 学科风格) */
+  --shadow-sm: 0 1px 2px 0 rgba(25,24,20,.04);
+  --shadow:    0 1px 3px 0 rgba(25,24,20,.06), 0 1px 2px -1px rgba(25,24,20,.04);
+  --shadow-md: 0 4px 8px -2px rgba(25,24,20,.06), 0 2px 4px -2px rgba(25,24,20,.04);
+  --shadow-lg: 0 12px 24px -6px rgba(25,24,20,.1), 0 4px 8px -4px rgba(25,24,20,.05);
+}
+```
+
+**C 类视觉规范**:
+- body 背景 `--paper` warm cream, **不要深空 / oklch 渐变 / 深绿穹顶**
+- 卡片 `--card` 白底 + `--border` hairline + `--shadow-sm` 软阴影
+- `--primary` coral 只用在 **2-3 处 key moment** (例 DOI 印章 + 当前位置 + active stage), 不要满屏 coral
+- 1 个 domain accent (按项目领域: 空气/气候 → climate; 机器人 → robotics; 等) 用在 stage hover/info tag, 不要混用多个
+- 文字用黑墨 `--ink` 大字 + `--sub` 灰副字, **禁用白字** (因为底是 cream 不是深空)
+- 字体: 中文 PingFang SC / Inter / Noto Sans SC; 数字/英文/HUD 用 JetBrains Mono
+- **禁用学科 mascot** (Fern 蕨叶 / Nova 神经球 / Cloud 云朵 等), C 类用抽象 SVG 装饰 (邮票框 / 纸飞机 / 归档徽记)
+- box-shadow 用软阴影 (有 blur OK), **不要 3px offset 实色** (那是 A/B 学科风)
+
+#### F4.1 9 类逐条 debate
+
+Step 2 中**必须**对下面 9 类逐条说"keep / reject 理由":
+
+1. **theory** (≥ 2 个, 纯方法论节允许 0 但需写理由)
+2. **animation** — **先做 F4.0 判定**, 是 C 类则 type="static_infographic" + no-autoplay; 是 D 类则 reject; 是 A/B 类按 anim_complexity 决定 simple/standard/rich/ceremonial
+3. **game** (按 game_complexity 同理, **禁退化 quiz 必须真交互**)
+4. **hands_on_kit** (元器件优先中国产, 价格指引 < 50/正常 / 50-200/正常 / 200-500/需说明 / 500-2000/需提供 < 500 替代 / > 2000/必须 < 500 替代)
+5. **image** (真实 CC-BY/CC0 照片, 必须 source_url + license)
+6. **diagram** (HTML/SVG 静态示意图, 比 anim 成本低)
+7. **youtube** (research_knode 必须调, web_query/youtube_query 必须英文精准)
+8. **labxchange** (search_labxchange 必须调, **必须人工审 keyword 选对口 pathway**, 不允许 fallback 不审就用)
+9. **3d_object** (should_generate_3d_object 决策)
+
+每节 chat 必须列出 9 类各自 keep/reject 决策 + F4.0 节点性质判定, **任一漏想 = 不合格**.
+
+### F5. 字数 + 占位符 + 引用 — 硬约束, preflight 拦不下的也要自查
+
+| 检查项 | 硬约束 |
+|---|---|
+| **plan_chars** | 严格落在 `generation_guide.expected_lengths.plan_chars` 的 **±20% 容差**. 超出必须重写 |
+| **K1 字数** | 同上 ±20% 容差, K1 必须**零希腊字母** (μ/λ/σ/ρ/π/θ/Δ 全部替换中文) 必须**零代码等号** (例 `pm25 = 38` 改 "pm25 装一个数 38") 必须**先讲概念再关联项目** |
+| **K3 字数** | 同上, K3 允许公式 + 希腊字母, 但必须解释每个符号 |
+| **n_theories** | 严格按 `generation_guide.expected_lengths.n_theories[min, max]` 范围. deep theory 节通常 [2, 2] 必须 2 个 |
+| **core_question 原文匹配** | plan 必须包含 knode.core_question **逐字匹配** (含全/半角问号 ? vs ？ — 历史 M01/M02/M08 都因这个 fail) |
+| **acceptance_ref / hands_on_ref** | 每个 anim/game/exercise 必须填, 且能在 knode.acceptance_standard / hands_on_components / acceptance_artifacts.title 找到**原文匹配** (含末尾句号) |
+| **[[IDEA:xxx]] / [[THEORY:xxx]] 占位符** | 在 plan_markdown 中插对位置, 占位符 ID 必须跟 ideas / theories 真实 ID 一致, finalize_slides 会自动 normalize 但 plan 必须先有 |
+| **assignment 字数** | 严格按 `generation_guide.expected_lengths.assignment_chars` ±20% |
+| **audio_scripts** | 按 ##/### 分段, 每段 150-300 字, 必含设问 + 生活类比 + 课堂用语, 跨段衔接, finalize_audio_scripts errs 必看 |
+| **slides** | 10-12 张, intro + bullet×2-3 + theory×N (每 theory 一张) + animation×N + game×N + image/videos/labxchange/diagram 聚合 + outro, 每张 audio_script ≥ 30 字 + inline_svg 非占位 (非单 circle), finalize_slides errs 必看 |
+| **research dict 结构** | research_knode() 返回 `{"web_results", "youtube_results"}` (带 `_results` 后缀!), 直接传 make_course_content(research=...), 不要手动包装成 `{"web", "youtube"}` |
+| **labxchange 不预合并 plan** | plan_markdown 中**不准**手写 "## 推荐互动资源" 段, 让 make_course_content(labxchange_results=lx) 自动追加. 手写 + 自动 = 重复段 |
+
+### F6. anim/game 视觉硬约束 (历史 35+ feedback memory 沉淀)
+
+**anim 必守**:
+- 一个 animation = **一个概念** (多帧是递进, 不是并列多概念)
+- 不是 PPT 翻页, 是单一场景里连续动作演示 (主体一直在中央, 变化来自 CSS transition / rAF)
+- 必须用 `animation_runtime.js` skeleton + runtime 模板 (不手写独立 HTML, 见 `course_factory/tests/anim/test_anim_runtime_demo.html`)
+- 必须**单一品牌风格 = 26 风格之一** + 帧间过渡用共享元素 lerp 500ms easeInOut
+- 必须**i18n CN/EN 双语**, lang-btn 在 `.sidebar` (200px 左栏内, runtime 内置), 不准 `position:fixed` 浮 canvas 上
+- 必须**guide 在 .sidebar 始终可见**, 不折叠不挤压 canvas
+- 必须**真物理参数** (涉及数值用真实工程值, 不编造)
+- 必须**视觉与物理坐标分离** (镜头跟随 / 比例尺自适应, 屏幕数字与位置永远一致)
+- 必须**自动播放**, 30s cycle + 5s hold, 不能等点击开始
+- **禁** `setInterval` (用 rAF), 禁 `position:fixed` 浮 canvas 上的 lang-btn / guide
+
+**game 必守**:
+- 必须**真互动** (滑块/拖拽/键盘/鼠标实时操纵, 不是输入数字+确认 = quiz 退化)
+- 必须**优先 Pattern 1-10** (sandbox / build&test / causal chain / resource / detective / live tuning / strategy map / visual programming / experimental design / role-play), **禁 Pattern X 分类匹配** (除非知识点本质就是"识别 N 个类别")
+- 必须**.game-sidebar 200px** 左栏 (含 #langBtn + ≥ 1 滑块或 checkbox + 操作说明), 不准 `position:fixed`
+- 必须**canvas 父容器 display:flex + flex-direction:column** (避免 iframe 中 canvas height=0)
+- **禁 window 同名顶层变量** (history/location/name/status/origin/parent/top/self/length/event/closed/opener/frames — 用 stateGame/playerName/coord 替代)
+- **禁 canvas 写死像素硬上限** (`<canvas width="160">` 或 `Math.min(..., 480)`), 用 `getBoundingClientRect()` 读父容器实际尺寸 + `Math.min(availW, availH)` 不加上限
+- **禁退化 quiz** (game 必须操纵动态系统, 不是判断题变装)
+- 必须**严格按 detail_plan 的 layout_zones 分区** (控件/主舞台/HUD/字幕各自独立不重叠)
+- 必须**严格按 detail_plan 的 directional_rules** (推力向右物体不能向左动)
+
+### F7. theme_style 26 风格选用 — 必须按节点本身学科, 不准按项目大类一刀切
+
+每节按**节点本身学科内容**选 style_key, 不按项目大类:
+- 例: project=Climate, 节点讲"PMS5003 激光散射" → 选 **phys** / **opt** (光学), 不选 climate
+- 节点讲 "AQI 分段线性映射" → 选 **math**
+- 节点讲 "颗粒物来源 / 大气" → 选 **earth** / **climate**
+- 节点讲 "焊接安全 + 万用表" → 选 **mech** / **electronics**
+- 节点讲 "I2C 主从总线" → 选 **cs**
+- 节点讲 "户外安装仪式" → 选 **civil** / **industrial**
+- 节点讲 "Mie 散射" → 选 **opt** / **phys**
+- 节点讲 "PMS 内部拆解" → 选 **electronics** / **opt**
+
+**禁** 把项目大类 (climate/biotech 等) 套到全部节点.
+
+### F8. parallelism + sequencing — Step 5 才能并行, Step 1-4 必须串行
+
+**严格按这个并行/串行规则**:
+
+| Step | 并行/串行 | 理由 |
+|---|---|---|
+| Step 0-0.7 | 顺序 | research 依赖 ctx |
+| Step 1 plan | 串行 | 一个人写 |
+| Step 1.5 theories | 串行 | 一个人写 |
+| Step 2-2.6 ideation | 串行 | 创意需要前后一致 |
+| Step 3 详细描述 | 串行 | 一个人写 |
+| Step 4 debate | 串行 | 决策需要全局视角 |
+| **Step 5 实现 anim/game/3D** | **可并行 (启 3 个 agent)** | 各自独立 HTML |
+| Step 5.5 闸门 | 串行 (b 必须先过, c-g 可并行) | b 是基础, c-g 可同时审 |
+| Step 6-6.7 | 串行 | 一致性 |
+
+### F9. 跑 anim/game/3D agent 时的 prompt 必含项 (硬约束)
+
+agent prompt 必须包含:
+
+1. **输出绝对路径** (`/Users/.../course_factory/tests/anim/test_anim_<mid>_<topic>.html`)
+2. **节学科 + style_key** (从 26 套选, 例 "style_key = subatomic_matrix")
+3. **完整 oklch palette** (5 色 + 命名, 复制自 themes.js 对应 style)
+4. **mascot + props + typeSample** (从 themes.js 抄)
+5. **必读参考文件路径** (`animation_game_design/<style_key>/DESIGN.md` + `code.html`)
+6. **F6 anim/game 视觉硬约束** (复述一遍, 不能 agent 自己 forget)
+7. **detail_plan 完整** (含 scientific_concept / process_to_show / directional_rules / layout_zones / frame_count / beats / asset_plan / user_guide / win_condition)
+8. **验证命令** (`node validate/verify/animation.mjs <path> --out <out>`) exit 0 必达
+9. **完成报告格式**: 行数 / verify exit / 截图路径 / style_key 实际使用 / palette 实际 CSS 变量名
+
+**禁** 给 agent 极简 prompt 让它自由发挥风格. 历史 M01-M18 都因 prompt 没强约束 style_key, agent 默认套米黄.
+
+### F10. 写盘前最后 chat 输出检查 (硬约束)
+
+每节 finalize_knode.py 跑前 chat 必须明确按下面格式确认全部 12 步 + 7 闸门 PASS:
+
+```
+=== M__ 写盘前自检 ===
+[✓] Step 0    ctx 已加载
+[✓] Step 0.5  Tavily research (web=N yt=N)
+[✓] Step 0.7  LabXchange (3 条人工对口)
+[✓] Step 1    plan_markdown ____字 (预算 N-M ±20%)
+[✓] Step 1.5  theories N 个 (K1 ____字 K3 ____字 各零希腊字母)
+[✓] Step 2    9 类富媒体 debate (theory:keep N / anim:keep / game:keep / kit:?/img:?/diag:?/yt:?/lx:keep / 3d:should=True/False)
+[✓] Step 2.5  ideation divergence (anim 3 候选 / game 3 候选)
+[✓] Step 2.6  creativity gate (subtract/replay/surprise/aha 全过)
+[✓] Step 3    ideas 详细描述 (含 hands_on_ref/acceptance_ref 原文匹配)
+[✓] Step 4    debate 决策 (留 / 弃)
+[✓] Step 5    实现 — anim ___行 style_key=___ / game ___行 style_key=___ / 3D ___行 (如有)
+[✓] Step 5.5a code review (无 onclick / 无 window 同名顶层 / 无 emoji / canvas 无硬上限)
+[✓] Step 5.5b browser verify (anim exit 0 standalone+iframe / game exit 0 standalone+iframe / 3D exit 0)
+[✓] Step 5.5c 科学一致性 (agent verdict=pass)
+[✓] Step 5.5d theory 等级 (K1 verdict=pass / K3 verdict=pass)
+[✓] Step 5.5e 游戏性美观 (agent verdict=pass)
+[✓] Step 5.5f 文字重叠 (Playwright 4 帧截图 + agent 视觉审 = 0 对重叠)
+[✓] Step 5.5g 美学审查 (theme_style 26 套 verdict=pass / 或 AESTHETIC.md 米黄 verdict=pass)
+[✓] Step 6.0  preflight_v41 通过 (core_question 原文匹配, acceptance_ref 原文匹配)
+[✓] Step 6.5  assignment.md ____字 (预算 ±20%)
+[✓] Step 6.6  audio_scripts 6 段 (各 150-300 字 finalize errs=0)
+[✓] Step 6.7  slides 10-12 张 (intro/bullet/theory×N/anim×N/game×N/labxchange/outro, finalize errs=0)
+=== 全部 PASS, 进入 finalize_knode.py 写盘 ===
+```
+
+**任何一条不 PASS 不准进 Step 6 写盘**. 历史 M01-M18 全部跳过了 5.5c/e/f 三大闸门, 部分跳过 5.5d/g, 这导致 36 HTML 全部需要返工. **F10 是防 skip 的最后防线**.
+
+---
+
+**总结**: F1-F10 是 2026-05 purpleair M01-M18 第一次生成累计 100+ 小时返工沉淀的全部教训. **未来任何 Claude 任何 session 必须严格执行, 跳任意一条 = 本节作废重做**. 历史已证明: 跳一闸门要返工 10 倍时间.
+
+### ⚙️ 机器级强制: 质检员脚本 `qc_gatekeeper.py`
+
+**Step 6 写盘前必须先跑质检员脚本** (替代 chat self-check, 把 F1-F10 钉到机器级):
+
+```bash
+cd /Users/xinghan/Dev/systemedu
+source .venv/bin/activate
+python3 -m course_factory.qc.qc_gatekeeper <slug> <module_id>
+# exit 0 才允许写盘; exit 1 = 拒绝, 必须修后重跑
+```
+
+10 个 check 对应 F1-F10:
+
+| Check | 内容 | F |
+|---|---|---|
+| C1 | browser verify exit 0 (anim+game+3D) | F1 5.5b |
+| C2 | code review 静态扫 (无 onclick / emoji / window 同名 / canvas 硬上限 / blur shadow / position:fixed lang-btn / 必有 JetBrains Mono) | F1 5.5a + F6 |
+| C3 | **26 风格使用** (:root 必含 `--SIGNAL/--CORE/--DEPTH/--FLASH/--QUERY` 等 oklch 命名, **不准全用米黄 `--paper/--ink/--accent`**) | **F2 + F7** |
+| C4 | `should_generate_3d_object()` 决策一致 (True 时必须有 3D HTML) | F3 |
+| C5 | 字数 + 占位符 + K1 零希腊字母零等号 + core_question 原文匹配 | F5 |
+| C6 | theory K1 完整 (≥ 1 h3 + 含'想象/比如/类比') | F5 |
+| C7 | 富媒体 9 类 (anim+game+exercise 必有) + theory n 按 depth | F4 |
+| C8 | audio_scripts 每段 100-400 字 (容差) | F5 |
+| C9 | slides intro/outro 必有 + audio_script ≥ 30 字 + inline_svg 非占位 | F5 |
+| C10 | F10 自检模板存在 (`content-workspace/_review/<mid>_qc_checklist.txt` 含全 [✓]) | F10 |
+
+**finalize_knode.py 写盘前必须**:
+
+```python
+# 在 finalize_knode.py 顶部加:
+import subprocess
+qc = subprocess.run(["python3", "-m", "course_factory.qc.qc_gatekeeper",
+                     SLUG, mid], cwd=REPO_ROOT, capture_output=True, text=True)
+if qc.returncode != 0:
+    print("QC FAIL — 拒绝写盘:")
+    print(qc.stdout[-2000:])
+    sys.exit(1)
+```
+
+**flag** 参数:
+- `--strict` (默认): 任一 check fail = exit 1
+- `--warn-only`: 只 warn 不 exit 1 (用于审计旧节, 不阻止写盘)
+- `--skip-c10`: 跳过 C10 chat 自检 (用于自动化无 chat 时)
+- `--json-out FN`: 把 JSON 报告写文件
+
+**未来加 check**: qc_gatekeeper.py 是开放架构, 每发现一类新违规, 加一个 C 函数 → 加进 `run_all_checks()` → 自动覆盖未来所有节。这是**质检员持续进化**的入口, 而不是每次违规都改 SKILL.md 文档。
+
+**当前 (2026-05) 已知 18 节质检结果** (跑 `python3 -m course_factory.qc.qc_gatekeeper purpleair-airquality-node M__ --skip-c10 --warn-only`):
+- 全 18 节 C3 都 fail (米黄退化, 必须重做)
+- C2 部分 fail (M14/M15/M17/M18 emoji ✓ 残留)
+- C5 部分 fail (K1 等号 / 字数偏差)
+- 需 Phase B-1 重做 + B-4 修 emoji + B-2 补 3D + B-3 修 quiz game
+
+---
+
 ## 两种模式（必须先确认）
 
 **spec 023 起 course_factory 有两种输出模式，每次任务开始必须先选定**：
