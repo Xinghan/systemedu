@@ -160,6 +160,33 @@ class LastVisited(Base):
 
 
 # ---------------------------------------------------------------------------
+# spec 036: 用户级 knode 完成状态 (per-user, toggle 可撤销)
+# ---------------------------------------------------------------------------
+
+class UserKnodeComplete(Base):
+    """用户标记某 knode 已学完. 可 toggle (撤销 = 删行).
+
+    跨 library_version 保留 — 项目升级新版后, 老完成记录仍计 (聚合时复用).
+    """
+
+    __tablename__ = "user_knode_complete"
+    __table_args__ = (
+        UniqueConstraint(
+            "user_id", "project_slug", "knode_id",
+            name="uq_user_knode_complete",
+        ),
+        Index("ix_user_knode_complete_user_slug", "user_id", "project_slug"),
+    )
+
+    id = Column(String(36), primary_key=True, default=_uuid)
+    user_id = Column(String(36), ForeignKey("users.id"), index=True, nullable=False)
+    project_slug = Column(String(128), nullable=False)
+    knode_id = Column(String(64), nullable=False)
+    library_version = Column(String(64), nullable=True)
+    completed_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+# ---------------------------------------------------------------------------
 # spec 028: AI 助教 chat session + message
 # ---------------------------------------------------------------------------
 

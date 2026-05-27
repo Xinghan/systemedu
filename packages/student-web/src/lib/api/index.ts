@@ -138,6 +138,42 @@ export interface ProjectKnowledgeTree {
   missing_concepts: MissingConceptEntry[]
 }
 
+// spec 036: 用户级聚合 (多项目来源)
+export interface UserLitNodeEntry {
+  node_id: string
+  lit_by_projects: Array<{ slug: string; lit_by_knodes: string[] }>
+}
+
+export interface SubjectSummary {
+  subject_id: string
+  subject_name_zh: string
+  color: string
+  lit_count: number
+  total_count: number
+  percent: number
+}
+
+export interface UserKnowledgeTreeResponse {
+  user_id: string
+  lit_nodes: UserLitNodeEntry[]
+  subjects_summary: SubjectSummary[]
+  total_lit: number
+  total_platform_nodes: number
+}
+
+export interface ProjectRecommendation {
+  slug: string
+  title_zh: string
+  cover_image_path: string | null
+  difficulty: number | null
+  new_nodes_count: number
+  new_nodes_subjects: Record<string, number>
+}
+
+export interface RecommendationsResponse {
+  recommendations: ProjectRecommendation[]
+}
+
 export const library = {
   listProjects: () => api.get<LibraryProjectSummary[]>("/api/library/projects"),
   getProject: (slug: string) =>
@@ -164,6 +200,30 @@ export const library = {
   // 公开封面图 (无需登录/pull); 后端从 manifest.cover_image_path 透传
   coverUrl: (slug: string) =>
     `${STUDENT_API_URL}/api/library/projects/${encodeURIComponent(slug)}/cover`,
+}
+
+// ---------------------------------------------------------------------------
+// spec 036: knode 完成 + 用户级知识树 + 推荐
+// ---------------------------------------------------------------------------
+
+export const myKnodes = {
+  toggleComplete: (slug: string, knodeId: string,
+                   action: "toggle" | "complete" | "incomplete" = "toggle",
+                   libraryVersion?: string) =>
+    api.post<{ slug: string; knode_id: string; completed: boolean }>(
+      `/api/my/knodes/${encodeURIComponent(slug)}/${encodeURIComponent(knodeId)}/complete`,
+      { action, library_version: libraryVersion },
+    ),
+  getCompleteStatus: (slug: string) =>
+    api.get<{ slug: string; completed_knode_ids: string[] }>(
+      `/api/my/knodes/${encodeURIComponent(slug)}/complete-status`,
+    ),
+}
+
+export const userKnowledgeTree = {
+  get: () => api.get<UserKnowledgeTreeResponse>(`/api/user/knowledge-tree`),
+  recommendations: (limit = 3) =>
+    api.get<RecommendationsResponse>(`/api/user/recommendations?limit=${limit}`),
 }
 
 // ---------------------------------------------------------------------------

@@ -17,6 +17,8 @@ import type {
   PlatformTreeNode,
   ProjectKnowledgeTree,
   PlatformTree,
+  UserKnowledgeTreeResponse,
+  UserLitNodeEntry,
 } from "@/lib/api"
 
 const DEPTH_ORDER: DepthLevel[] = ["K1", "K3", "K5", "K7", "K9", "K11", "K13"]
@@ -31,23 +33,70 @@ const DEPTH_LABEL: Record<DepthLevel, string> = {
   K13: "本科",
 }
 
-interface Props {
-  platformTree: PlatformTree
-  projectTree: ProjectKnowledgeTree
-  onNodeClick?: (knodeId: string) => void
+// Unified internal lit info shape (兼容 project + user 两种数据)
+interface UnifiedLitInfo {
+  /** project mode: ["M05", ...]  /  user mode: ["purpleair·M05", "ai-ant·M12", ...] */
+  sources: string[]
+  /** 详细信息字符串, hover/click 显示 */
+  detail: string
 }
 
-export function KnowledgeTreeView({ platformTree, projectTree, onNodeClick }: Props) {
+interface Props {
+  platformTree: PlatformTree
+  /** project mode: 项目级数据 */
+  projectTree?: ProjectKnowledgeTree
+  /** user mode: 用户级聚合数据 */
+  userTree?: UserKnowledgeTreeResponse
+  mode?: "project" | "user"
+  onNodeClick?: (knodeId: string, slug?: string) => void
+}
+
+export function KnowledgeTreeView({
+  platformTree,
+  projectTree,
+  userTree,
+  mode = "project",
+  onNodeClick,
+}: Props) {
+  // 统一构造 litByNodeId map
   const litByNodeId = useMemo(() => {
-    const map = new Map<string, LitNodeEntry>()
-    for (const n of projectTree.lit_nodes) {
-      map.set(n.node_id, n)
+    const map = new Map<string, UnifiedLitInfo>()
+    if (mode === "user" && userTree) {
+      for (const n of userTree.lit_nodes) {
+        const sources = n.lit_by_projects.flatMap((p) =>
+          p.lit_by_knodes.map((k) => `${p.slug}·${k}`),
+        )
+        const detail = n.lit_by_projects
+          .map((p) => `${p.slug} ${p.lit_by_knodes.join(",")}`)
+          .join(" · ")
+        map.set(n.node_id, { sources, detail })
+      }
+    } else if (projectTree) {
+      for (const n of projectTree.lit_nodes) {
+        map.set(n.node_id, {
+          sources: n.lit_by,
+          detail: `${n.lit_by.join(", ")} · ${n.reason}`,
+        })
+      }
     }
     return map
-  }, [projectTree.lit_nodes])
+  }, [mode, projectTree, userTree])
 
-  // 学科 chip 显示: id, name_zh, lit_count, total_count
+  // 学科 chip
   const subjectChips = useMemo(() => {
+    if (mode === "user" && userTree) {
+      return userTree.subjects_summary
+        .filter((s) => s.lit_count > 0)  // 只显示有点亮的学科
+        .map((s) => ({
+          id: s.subject_id,
+          name_zh: s.subject_name_zh,
+          lit: s.lit_count,
+          total: s.total_count,
+          color: s.color,
+        }))
+        .sort((a, b) => b.lit - a.lit)
+    }
+    if (!projectTree) return []
     return projectTree.subjects_used
       .map((sid) => {
         const s = platformTree.subjects.find((x) => x.id === sid)
@@ -57,7 +106,7 @@ export function KnowledgeTreeView({ platformTree, projectTree, onNodeClick }: Pr
       })
       .filter((x): x is { id: string; name_zh: string; lit: number; total: number; color: string } => x !== null)
       .sort((a, b) => b.lit - a.lit)
-  }, [projectTree.subjects_used, platformTree.subjects, litByNodeId])
+  }, [mode, projectTree, userTree, platformTree.subjects, litByNodeId])
 
   const [activeSubject, setActiveSubject] = useState<string>(
     subjectChips[0]?.id || "",
@@ -68,10 +117,13 @@ export function KnowledgeTreeView({ platformTree, projectTree, onNodeClick }: Pr
     [platformTree.subjects, activeSubject],
   )
 
-  if (projectTree.lit_nodes.length === 0) {
+  const hasAnyLit = (mode === "user" ? userTree?.lit_nodes : projectTree?.lit_nodes)?.length || 0
+  if (hasAnyLit === 0) {
     return (
       <div className="rounded-2xl border border-[var(--border)] bg-[var(--card)] p-8 text-center">
-        <p className="text-[var(--sub)]">本项目还未跑知识树映射。请稍后再来。</p>
+        <p className="text-[var(--sub)]">
+          {mode === "user" ? "你还没有完成任何 knode, 完成后再来看你的知识图谱。" : "本项目还未跑知识树映射。请稍后再来。"}
+        </p>
       </div>
     )
   }
@@ -125,8 +177,8 @@ export function KnowledgeTreeView({ platformTree, projectTree, onNodeClick }: Pr
 
 interface SubjectTreeProps {
   subject: PlatformSubject
-  litByNodeId: Map<string, LitNodeEntry>
-  onNodeClick?: (knodeId: string) => void
+  litByNodeId: Map<string, UnifiedLitInfo>
+  onNodeClick?: (knodeId: string, slug?: string) => void
 }
 
 function SubjectTreeSvg({ subject, litByNodeId, onNodeClick }: SubjectTreeProps) {
@@ -221,7 +273,16 @@ function SubjectTreeSvg({ subject, litByNodeId, onNodeClick }: SubjectTreeProps)
               onMouseEnter={() => setHovered(n.id)}
               onMouseLeave={() => setHovered(null)}
               onClick={() => {
-                if (lit && lit.lit_by[0] && onNodeClick) onNodeClick(lit.lit_by[0])
+                if (lit && lit.sources[0] && onNodeClick) {
+                  // user mode: "purpleair·M05" → 拆 slug + knodeId
+                  const src = lit.sources[0]
+                  if (src.includes("·")) {
+                    const [slug, knodeId] = src.split("·")
+                    onNodeClick(knodeId, slug)
+                  } else {
+                    onNodeClick(src)
+                  }
+                }
               }}
               style={{ cursor: isLit ? "pointer" : "default" }}
             >
@@ -261,8 +322,10 @@ function SubjectTreeSvg({ subject, litByNodeId, onNodeClick }: SubjectTreeProps)
           if (!n || !pos) return null
           const lit = litByNodeId.get(n.id)
           const tipText = lit
-            ? `本项目 ${lit.lit_by.join(", ")} 教了`
-            : "本项目未涉及"
+            ? lit.sources.length > 1
+              ? `在 ${lit.sources.slice(0, 3).join(" / ")} 学过`
+              : `在 ${lit.sources[0]} 学过`
+            : "未涉及"
           const tipY = pos.y - 8
           return (
             <g style={{ pointerEvents: "none" }}>
@@ -302,7 +365,7 @@ function SubjectTreeSvg({ subject, litByNodeId, onNodeClick }: SubjectTreeProps)
             <p className="mt-1 text-xs text-[var(--sub)]">{n.description}</p>
             {lit && (
               <p className="mt-2 text-xs text-[var(--primary-ink)]">
-                教这个的节: {lit.lit_by.join(", ")} · {lit.reason}
+                {lit.detail}
               </p>
             )}
           </div>

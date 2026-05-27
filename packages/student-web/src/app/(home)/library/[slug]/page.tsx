@@ -25,6 +25,7 @@ import {
 import {
   library,
   myProjects,
+  myKnodes,
   type FinalOutcome,
   type FinalOutcomeKind,
   type LibraryProjectSummary,
@@ -129,6 +130,8 @@ export default function ProjectHome() {
   const [loading, setLoading] = useState(true)
   const [pulling, setPulling] = useState(false)
   const [treeOpen, setTreeOpen] = useState(false)
+  // spec 036: 用户完成 knode 列表 (用于 Curriculum 显示勾)
+  const [completedKnodeIds, setCompletedKnodeIds] = useState<string[]>([])
 
   useEffect(() => {
     hydrate()
@@ -154,6 +157,13 @@ export default function ProjectHome() {
             }
           } catch {
             /* ignore */
+          }
+          // spec 036: 拉取本项目已完成 knode 列表
+          try {
+            const status = await myKnodes.getCompleteStatus(slug)
+            setCompletedKnodeIds(status.completed_knode_ids)
+          } catch {
+            /* ignore — 老 user 没数据 */
           }
         }
       } catch (err) {
@@ -676,6 +686,7 @@ export default function ProjectHome() {
               orderedModules={modules}
               lastModuleId={lastModuleId}
               pulled={pulled}
+              completedKnodeIds={completedKnodeIds}
             />
           )}
         </Block>
@@ -937,6 +948,7 @@ function Curriculum({
   orderedModules,
   lastModuleId,
   pulled,
+  completedKnodeIds = [],
 }: {
   slug: string
   stages: Stage[]
@@ -944,7 +956,9 @@ function Curriculum({
   orderedModules: Module[]
   lastModuleId: string | null
   pulled: boolean
+  completedKnodeIds?: string[]
 }) {
+  const completedSet = new Set(completedKnodeIds)
   const [open, setOpen] = useState<Record<string, boolean>>(() => {
     // 默认展开包含 current module 的 stage
     if (!lastModuleId) {
@@ -1040,7 +1054,9 @@ function Curriculum({
                   const modIdx = orderedModules.findIndex(
                     (x) => x.module_id === m.module_id,
                   )
-                  const status = moduleStatus(modIdx, lastModuleId, orderedModules)
+                  let status = moduleStatus(modIdx, lastModuleId, orderedModules)
+                  // spec 036: 用户已 mark complete → 强制 done
+                  if (completedSet.has(m.module_id)) status = "done"
                   const clickable = pulled
                   const inner = (
                     <div

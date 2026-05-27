@@ -3,9 +3,10 @@
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
-import { ChevronRight, Lock, Sparkles, Trash2 } from "lucide-react"
+import { ChevronRight, Lock, Sparkles, Trash2, Network } from "lucide-react"
 import { memory, type MemoryFact } from "@/lib/api"
 import { useAuthStore } from "@/lib/stores/auth-store"
+import { UserKnowledgeTreeView } from "@/components/learning/UserKnowledgeTreeView"
 
 const CATEGORY_LABEL: Record<string, string> = {
   interest: "兴趣",
@@ -23,6 +24,8 @@ export default function MemoryPage() {
   const [byCategory, setByCategory] = useState<Record<string, MemoryFact[]>>({})
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
+  // spec 036: tab switch
+  const [activeTab, setActiveTab] = useState<"memory" | "knowledge">("memory")
 
   useEffect(() => { hydrate() }, [hydrate])
   useEffect(() => {
@@ -67,15 +70,53 @@ export default function MemoryPage() {
         <span style={{ color: "var(--ink-2)" }}>Memory</span>
       </div>
 
-      <header style={{ marginTop: 18, marginBottom: 28 }}>
-        <div className="eyebrow"><span className="dot" /> what AI remembers about you</div>
-        <h1 className="h1" style={{ marginTop: 8 }}>我的记忆</h1>
+      <header style={{ marginTop: 18, marginBottom: 20 }}>
+        <div className="eyebrow"><span className="dot" /> {activeTab === "memory" ? "what AI remembers about you" : "your knowledge map"}</div>
+        <h1 className="h1" style={{ marginTop: 8 }}>{activeTab === "memory" ? "我的记忆" : "我的知识图谱"}</h1>
         <p className="sub" style={{ marginTop: 6 }}>
-          AI 导师记住了关于你的 {total} 条事实, 用于个性化回答 · 仅你可见 · 可随时删除
+          {activeTab === "memory"
+            ? `AI 导师记住了关于你的 ${total} 条事实, 用于个性化回答 · 仅你可见 · 可随时删除`
+            : "你完成的每个 knode 会点亮平台理论知识树上对应的节点, 跨项目自动聚合"}
         </p>
       </header>
 
-      {loading ? (
+      {/* spec 036: Tab switcher */}
+      <div style={{ display: "flex", gap: 6, marginBottom: 26, borderBottom: "1px solid var(--border)" }}>
+        <button
+          type="button"
+          onClick={() => setActiveTab("memory")}
+          style={{
+            background: "none", border: "none", cursor: "pointer",
+            padding: "10px 18px", fontSize: 14, fontWeight: 500,
+            color: activeTab === "memory" ? "var(--ink)" : "var(--sub)",
+            borderBottom: activeTab === "memory" ? "2px solid var(--primary)" : "2px solid transparent",
+            display: "inline-flex", alignItems: "center", gap: 6,
+            marginBottom: -1,
+          }}
+        >
+          <Sparkles size={14} strokeWidth={1.7} />
+          Memory
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab("knowledge")}
+          style={{
+            background: "none", border: "none", cursor: "pointer",
+            padding: "10px 18px", fontSize: 14, fontWeight: 500,
+            color: activeTab === "knowledge" ? "var(--ink)" : "var(--sub)",
+            borderBottom: activeTab === "knowledge" ? "2px solid var(--primary)" : "2px solid transparent",
+            display: "inline-flex", alignItems: "center", gap: 6,
+            marginBottom: -1,
+          }}
+        >
+          <Network size={14} strokeWidth={1.7} />
+          知识图谱
+        </button>
+      </div>
+
+      {activeTab === "knowledge" ? (
+        <UserKnowledgeTreeView />
+      ) : loading ? (
         <div className="card-elevated" style={{ padding: 56, textAlign: "center", color: "var(--sub)" }}>
           加载中...
         </div>

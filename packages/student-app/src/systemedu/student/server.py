@@ -28,6 +28,7 @@ from starlette.responses import JSONResponse
 
 from .auth.routes import ROUTES as _auth_routes
 from .catalog.routes import ROUTES as _catalog_routes
+from .catalog.user_lit_routes import ROUTES as _user_lit_routes
 from .chat import ROUTES as _chat_routes
 from .chat import preload_graph as _preload_tutor, shutdown_graph as _shutdown_tutor
 from .db import init_db
@@ -62,6 +63,7 @@ def create_app() -> Starlette:
         *_auth_routes,
         *_lib_routes,
         *_catalog_routes,
+        *_user_lit_routes,
         *_chat_routes,
     ]
 

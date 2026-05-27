@@ -23,6 +23,7 @@ import { useAuthStore } from "@/lib/stores/auth-store"
 import { CourseContentView } from "@/components/learning/course-content-view"
 import { ChatPanel } from "@/components/chat/chat-panel"
 import { KnowledgeTreeModal } from "@/components/learning/knowledge-tree-modal"
+import { KnodeCompleteButton } from "@/components/learning/KnodeCompleteButton"
 import type { KnodeInfo } from "@/lib/types/api"
 
 interface ProjectTreeModule {
@@ -496,18 +497,8 @@ export default function LearnPage() {
             >
               <Network size={13} strokeWidth={1.5} /> Tree
             </button>
-            <button
-              type="button"
-              className="btn btn-violet btn-sm"
-              onClick={() => {
-                myProjects
-                  .setProgress(slug, moduleId)
-                  .then(() => toast.success(`${moduleId} 已标记完成`))
-                  .catch(() => toast.error("标记失败"))
-              }}
-            >
-              <Check size={13} strokeWidth={1.5} /> Mark complete
-            </button>
+            {/* spec 036: 标记完成 toggle (会同步点亮 platform 知识树节点) */}
+            <KnodeCompleteButton slug={slug} knodeId={moduleId} />
           </div>
         </div>
 
