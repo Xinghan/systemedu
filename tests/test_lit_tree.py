@@ -123,3 +123,19 @@ def test_response_strips_markdown_fences(mock_workspace):
     with patch.object(lit_tree, "get_llm", return_value=fake_llm):
         result = lit_tree.lit_project("test-proj", dry_run=True)
     assert result == {"lit_nodes": [], "missing_concepts": []}
+
+
+def test_response_extracts_inner_json_block(mock_workspace):
+    """LLM 在 JSON 前后加废话也能解析出来."""
+    fake_response = MagicMock()
+    fake_response.content = (
+        "好的, 这是我的分析:\n"
+        + json.dumps({"lit_nodes": [], "missing_concepts": []})
+        + "\n\n以上是结果."
+    )
+    fake_llm = MagicMock()
+    fake_llm.invoke.return_value = fake_response
+
+    with patch.object(lit_tree, "get_llm", return_value=fake_llm):
+        result = lit_tree.lit_project("test-proj", dry_run=True)
+    assert result == {"lit_nodes": [], "missing_concepts": []}

@@ -84,8 +84,11 @@ def _load_project_corpus(slug: str) -> str:
     return "\n".join(parts)
 
 
-def _run_agent(corpus: str, platform_tree_json: str, provider: str = "claude") -> dict:
-    """跑 lit-mapper agent, 返回解析后的 JSON dict."""
+def _run_agent(corpus: str, platform_tree_json: str, provider: str = "claude") -> tuple[dict, str]:
+    """跑 lit-mapper agent, 返回 (解析后的 dict, raw 文本备份).
+
+    raw 文本可以让调用方写到 _review/ 让用户在解析失败时手工 audit.
+    """
     system_prompt = PROMPT_PATH.read_text(encoding="utf-8")
 
     user_msg = (
@@ -103,14 +106,24 @@ def _run_agent(corpus: str, platform_tree_json: str, provider: str = "claude") -
     ])
     text = response.content if hasattr(response, "content") else str(response)
 
+    raw = text  # 备份
     # 容错: 去掉 markdown ```json 包裹
     text = text.strip()
     if text.startswith("```"):
-        # 去 ```json ... ```
-        lines = text.split("\n")
-        text = "\n".join(lines[1:-1] if lines[-1].strip() == "```" else lines[1:])
+        import re
+        text = re.sub(r"^```(?:json)?\n", "", text)
+        text = re.sub(r"\n```\s*$", "", text)
 
-    return json.loads(text)
+    # 容错 2: 找 outer {...} 块 (LLM 可能在 JSON 前后加废话)
+    try:
+        return json.loads(text), raw
+    except json.JSONDecodeError:
+        import re
+        # 取第一个 { 到最后一个 } 之间
+        m = re.search(r"\{.*\}", text, re.DOTALL)
+        if m:
+            return json.loads(m.group(0)), raw
+        raise
 
 
 def lit_project(slug: str, provider: str = "claude", dry_run: bool = False) -> dict:
@@ -125,7 +138,17 @@ def lit_project(slug: str, provider: str = "claude", dry_run: bool = False) -> d
     print(f"[lit_tree] platform tree: {platform_tree.total_node_count()} nodes")
 
     print(f"[lit_tree] dispatching agent (provider={provider})...")
-    result = _run_agent(corpus, platform_tree_json, provider=provider)
+    # 备份 raw 到 _review/ 以便 audit (即使解析成功也存)
+    try:
+        result, raw = _run_agent(corpus, platform_tree_json, provider=provider)
+    except Exception as e:
+        # 解析失败也要把 raw 存下来给用户看
+        raise
+    # 写 raw 备份
+    raw_path = WORKSPACE / "_review" / f"{slug}_lit_tree_raw.txt"
+    raw_path.parent.mkdir(parents=True, exist_ok=True)
+    raw_path.write_text(raw, encoding="utf-8")
+    print(f"[lit_tree] raw response → {raw_path}")
 
     lit_nodes = result.get("lit_nodes", [])
     missing = result.get("missing_concepts", [])

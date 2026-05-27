@@ -1,6 +1,6 @@
 # 035-learner-qc-and-theory-tree
 
-**Status**: spec (2026-05-27)
+**Status**: shipped (2026-05-27) — 平台知识树 425 节点 + lit_tree CLI + library API + 前端 §04 Knowledge Tree tab 全部上线. purpleair v0.13.1 已 publish, 8 学科 30 lit_nodes 验证通过. learner_qc CLI 已实现但未在 purpleair 实跑 (需 5-10 min LLM 调用, 留给后续 audit)
 **Owner**: Xinghan Cui
 **Created**: 2026-05-27
 
