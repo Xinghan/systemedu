@@ -93,6 +93,51 @@ export interface LibraryKnodeContent {
   version?: string
 }
 
+// spec 035: 平台知识树
+export type DepthLevel = "K1" | "K3" | "K5" | "K7" | "K9" | "K11" | "K13"
+
+export interface PlatformTreeNode {
+  id: string
+  name_zh: string
+  name_en: string
+  depth_level: DepthLevel
+  prerequisites: string[]
+  description: string
+}
+
+export interface PlatformSubject {
+  id: string
+  name_zh: string
+  name_en: string
+  color: string
+  nodes: PlatformTreeNode[]
+}
+
+export interface PlatformTree {
+  schema_version: string
+  subjects: PlatformSubject[]
+}
+
+export interface LitNodeEntry {
+  node_id: string
+  lit_by: string[]
+  reason: string
+}
+
+export interface MissingConceptEntry {
+  concept: string
+  first_seen: string
+  suggested_subject?: string | null
+  note?: string
+}
+
+export interface ProjectKnowledgeTree {
+  slug: string
+  lit_nodes: LitNodeEntry[]
+  subjects_used: string[]
+  missing_concepts: MissingConceptEntry[]
+}
+
 export const library = {
   listProjects: () => api.get<LibraryProjectSummary[]>("/api/library/projects"),
   getProject: (slug: string) =>
@@ -107,6 +152,13 @@ export const library = {
     api.get<LibraryKnodeContent>(
       `/api/library/projects/${encodeURIComponent(slug)}/knodes/${encodeURIComponent(knodeId)}`,
     ),
+  // spec 035: 项目知识树点亮 + 全平台树
+  getProjectKnowledgeTree: (slug: string) =>
+    api.get<ProjectKnowledgeTree>(
+      `/api/library/projects/${encodeURIComponent(slug)}/knowledge-tree`,
+    ),
+  getPlatformKnowledgeTree: () =>
+    api.get<PlatformTree>(`/api/library/platform/knowledge-tree`),
   fileUrl: (slug: string, path: string) =>
     `${STUDENT_API_URL}/api/library/projects/${encodeURIComponent(slug)}/files/${path}`,
   // 公开封面图 (无需登录/pull); 后端从 manifest.cover_image_path 透传

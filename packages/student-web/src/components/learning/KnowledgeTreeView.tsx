@@ -1,0 +1,313 @@
+"use client"
+
+/**
+ * spec 035: 项目知识树视图.
+ *
+ * 一次只看 1 棵学科子树 (顶部 chip 切换). 默认选点亮最多的学科.
+ * 节点按 depth_level (K1-K13) 横向分层, 同 level 节点纵向排.
+ * 点亮节点 coral 实色 + 未点亮 hairline 灰. hover 显示 "本项目 M_X 教了这个".
+ */
+
+import { useMemo, useState } from "react"
+
+import type {
+  DepthLevel,
+  LitNodeEntry,
+  PlatformSubject,
+  PlatformTreeNode,
+  ProjectKnowledgeTree,
+  PlatformTree,
+} from "@/lib/api"
+
+const DEPTH_ORDER: DepthLevel[] = ["K1", "K3", "K5", "K7", "K9", "K11", "K13"]
+
+const DEPTH_LABEL: Record<DepthLevel, string> = {
+  K1: "小1-2",
+  K3: "小3-4",
+  K5: "小5-6",
+  K7: "初1-2",
+  K9: "初3-高1",
+  K11: "高2-高3",
+  K13: "本科",
+}
+
+interface Props {
+  platformTree: PlatformTree
+  projectTree: ProjectKnowledgeTree
+  onNodeClick?: (knodeId: string) => void
+}
+
+export function KnowledgeTreeView({ platformTree, projectTree, onNodeClick }: Props) {
+  const litByNodeId = useMemo(() => {
+    const map = new Map<string, LitNodeEntry>()
+    for (const n of projectTree.lit_nodes) {
+      map.set(n.node_id, n)
+    }
+    return map
+  }, [projectTree.lit_nodes])
+
+  // 学科 chip 显示: id, name_zh, lit_count, total_count
+  const subjectChips = useMemo(() => {
+    return projectTree.subjects_used
+      .map((sid) => {
+        const s = platformTree.subjects.find((x) => x.id === sid)
+        if (!s) return null
+        const litCount = s.nodes.filter((n) => litByNodeId.has(n.id)).length
+        return { id: sid, name_zh: s.name_zh, lit: litCount, total: s.nodes.length, color: s.color }
+      })
+      .filter((x): x is { id: string; name_zh: string; lit: number; total: number; color: string } => x !== null)
+      .sort((a, b) => b.lit - a.lit)
+  }, [projectTree.subjects_used, platformTree.subjects, litByNodeId])
+
+  const [activeSubject, setActiveSubject] = useState<string>(
+    subjectChips[0]?.id || "",
+  )
+
+  const activeSubjectData = useMemo(
+    () => platformTree.subjects.find((s) => s.id === activeSubject) || null,
+    [platformTree.subjects, activeSubject],
+  )
+
+  if (projectTree.lit_nodes.length === 0) {
+    return (
+      <div className="rounded-2xl border border-[var(--border)] bg-[var(--card)] p-8 text-center">
+        <p className="text-[var(--sub)]">本项目还未跑知识树映射。请稍后再来。</p>
+      </div>
+    )
+  }
+
+  if (!activeSubjectData) {
+    return (
+      <div className="rounded-2xl border border-[var(--border)] bg-[var(--card)] p-8 text-center">
+        <p className="text-[var(--sub)]">未找到学科数据。</p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="flex flex-col gap-4">
+      {/* Chips: 学科切换 */}
+      <div className="flex flex-wrap gap-2">
+        {subjectChips.map((s) => {
+          const active = s.id === activeSubject
+          return (
+            <button
+              key={s.id}
+              onClick={() => setActiveSubject(s.id)}
+              className={`flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-medium transition-all ${
+                active
+                  ? "border-[var(--primary)] bg-[var(--primary-soft)] text-[var(--primary-ink)]"
+                  : "border-[var(--border)] bg-[var(--card)] text-[var(--ink)] hover:border-[var(--border-2)]"
+              }`}
+            >
+              <span
+                className="h-2 w-2 rounded-full"
+                style={{ backgroundColor: s.color }}
+              />
+              <span>{s.name_zh}</span>
+              <span className="text-xs text-[var(--sub)]">
+                {s.lit}/{s.total}
+              </span>
+            </button>
+          )
+        })}
+      </div>
+
+      {/* 子树 SVG */}
+      <SubjectTreeSvg
+        subject={activeSubjectData}
+        litByNodeId={litByNodeId}
+        onNodeClick={onNodeClick}
+      />
+    </div>
+  )
+}
+
+interface SubjectTreeProps {
+  subject: PlatformSubject
+  litByNodeId: Map<string, LitNodeEntry>
+  onNodeClick?: (knodeId: string) => void
+}
+
+function SubjectTreeSvg({ subject, litByNodeId, onNodeClick }: SubjectTreeProps) {
+  // 按 depth_level 分组
+  const nodesByDepth = useMemo(() => {
+    const map = new Map<DepthLevel, PlatformTreeNode[]>()
+    for (const d of DEPTH_ORDER) map.set(d, [])
+    for (const n of subject.nodes) {
+      map.get(n.depth_level)?.push(n)
+    }
+    return map
+  }, [subject.nodes])
+
+  // 列宽 200px, 行高 50px, 节点 box 160x32
+  const COL_WIDTH = 220
+  const ROW_HEIGHT = 56
+  const NODE_W = 180
+  const NODE_H = 38
+  const PAD = 24
+
+  // 计算每列起始位置
+  const cols = DEPTH_ORDER.filter((d) => (nodesByDepth.get(d)?.length || 0) > 0)
+  const maxRows = Math.max(...cols.map((d) => nodesByDepth.get(d)?.length || 0), 1)
+  const width = PAD * 2 + cols.length * COL_WIDTH
+  const height = PAD * 2 + maxRows * ROW_HEIGHT + 30
+
+  // 节点位置 lookup
+  const positions = useMemo(() => {
+    const map = new Map<string, { x: number; y: number }>()
+    cols.forEach((d, colIdx) => {
+      const nodes = nodesByDepth.get(d) || []
+      const colX = PAD + colIdx * COL_WIDTH
+      // 居中纵向
+      const startY = PAD + 30 + (maxRows - nodes.length) * (ROW_HEIGHT / 2)
+      nodes.forEach((n, rowIdx) => {
+        map.set(n.id, { x: colX + (COL_WIDTH - NODE_W) / 2, y: startY + rowIdx * ROW_HEIGHT })
+      })
+    })
+    return map
+  }, [cols, nodesByDepth, maxRows])
+
+  const [hovered, setHovered] = useState<string | null>(null)
+
+  return (
+    <div className="overflow-x-auto rounded-2xl border border-[var(--border)] bg-[var(--card)] p-2">
+      <svg width={width} height={height} className="block">
+        {/* 列标题 (depth_level) */}
+        {cols.map((d, idx) => (
+          <text
+            key={d}
+            x={PAD + idx * COL_WIDTH + COL_WIDTH / 2}
+            y={PAD + 14}
+            textAnchor="middle"
+            className="fill-[var(--sub)] font-mono"
+            style={{ fontSize: 11, fontWeight: 600 }}
+          >
+            {DEPTH_LABEL[d]}
+          </text>
+        ))}
+
+        {/* prereq 连线 */}
+        {subject.nodes.map((n) =>
+          n.prerequisites.map((pid) => {
+            const from = positions.get(pid)
+            const to = positions.get(n.id)
+            if (!from || !to) return null
+            return (
+              <line
+                key={`${pid}-${n.id}`}
+                x1={from.x + NODE_W}
+                y1={from.y + NODE_H / 2}
+                x2={to.x}
+                y2={to.y + NODE_H / 2}
+                stroke="var(--border-2)"
+                strokeWidth={1}
+                strokeDasharray="3 3"
+              />
+            )
+          }),
+        )}
+
+        {/* 节点 */}
+        {subject.nodes.map((n) => {
+          const pos = positions.get(n.id)
+          if (!pos) return null
+          const lit = litByNodeId.get(n.id)
+          const isLit = !!lit
+          const isHovered = hovered === n.id
+          return (
+            <g
+              key={n.id}
+              onMouseEnter={() => setHovered(n.id)}
+              onMouseLeave={() => setHovered(null)}
+              onClick={() => {
+                if (lit && lit.lit_by[0] && onNodeClick) onNodeClick(lit.lit_by[0])
+              }}
+              style={{ cursor: isLit ? "pointer" : "default" }}
+            >
+              <rect
+                x={pos.x}
+                y={pos.y}
+                width={NODE_W}
+                height={NODE_H}
+                rx={6}
+                fill={isLit ? "var(--primary)" : "var(--paper-2)"}
+                stroke={
+                  isHovered
+                    ? "var(--primary-ink)"
+                    : isLit
+                      ? "var(--primary-ink)"
+                      : "var(--border)"
+                }
+                strokeWidth={isHovered ? 2 : 1}
+              />
+              <text
+                x={pos.x + NODE_W / 2}
+                y={pos.y + NODE_H / 2 + 4}
+                textAnchor="middle"
+                fill={isLit ? "#FFFFFF" : "var(--sub)"}
+                style={{ fontSize: 12, fontWeight: 500, pointerEvents: "none" }}
+              >
+                {n.name_zh}
+              </text>
+            </g>
+          )
+        })}
+
+        {/* tooltip (hover) */}
+        {hovered && (() => {
+          const n = subject.nodes.find((x) => x.id === hovered)
+          const pos = positions.get(hovered)
+          if (!n || !pos) return null
+          const lit = litByNodeId.get(n.id)
+          const tipText = lit
+            ? `本项目 ${lit.lit_by.join(", ")} 教了`
+            : "本项目未涉及"
+          const tipY = pos.y - 8
+          return (
+            <g style={{ pointerEvents: "none" }}>
+              <rect
+                x={pos.x}
+                y={tipY - 18}
+                width={Math.max(120, tipText.length * 11)}
+                height={22}
+                rx={4}
+                fill="var(--ink)"
+                opacity={0.92}
+              />
+              <text
+                x={pos.x + 8}
+                y={tipY - 4}
+                fill="#FFFFFF"
+                style={{ fontSize: 11 }}
+              >
+                {tipText}
+              </text>
+            </g>
+          )
+        })()}
+      </svg>
+
+      {/* 节点详情 (固定底部, 显示 hover/focus 节点信息) */}
+      {hovered && (() => {
+        const n = subject.nodes.find((x) => x.id === hovered)
+        if (!n) return null
+        const lit = litByNodeId.get(n.id)
+        return (
+          <div className="mt-2 rounded-xl border border-[var(--border)] bg-[var(--paper-2)] p-3 text-sm">
+            <div className="flex items-baseline gap-2">
+              <span className="font-semibold text-[var(--ink)]">{n.name_zh}</span>
+              <span className="text-xs text-[var(--sub)]">{n.name_en} · {DEPTH_LABEL[n.depth_level]}</span>
+            </div>
+            <p className="mt-1 text-xs text-[var(--sub)]">{n.description}</p>
+            {lit && (
+              <p className="mt-2 text-xs text-[var(--primary-ink)]">
+                教这个的节: {lit.lit_by.join(", ")} · {lit.reason}
+              </p>
+            )}
+          </div>
+        )
+      })()}
+    </div>
+  )
+}

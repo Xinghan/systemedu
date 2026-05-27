@@ -309,6 +309,22 @@ class AsyncLibraryClient:
         _raise_for_status(r)
         return r.json()
 
+    async def get_project_knowledge_tree(self, slug: str) -> dict:
+        """spec 035: 项目级知识树点亮 (lit_nodes + subjects_used + missing_concepts)."""
+        r = await self._client.get(
+            _build_path(self.base_url, "v1", "projects", slug, "knowledge-tree")
+        )
+        _raise_for_status(r)
+        return r.json()
+
+    async def get_platform_knowledge_tree(self) -> dict:
+        """spec 035: 全平台学科理论知识树 (11 学科 ~425 节点)."""
+        r = await self._client.get(
+            _build_path(self.base_url, "v1", "platform", "knowledge-tree")
+        )
+        _raise_for_status(r)
+        return r.json()
+
     async def get_blueprint(self, slug: str, lang: str = "zh-CN") -> dict:
         r = await self._client.get(
             _build_path(self.base_url, "v1", "projects", slug, "blueprint"),

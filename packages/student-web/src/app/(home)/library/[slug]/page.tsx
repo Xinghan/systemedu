@@ -31,6 +31,8 @@ import {
 } from "@/lib/api"
 import { useAuthStore } from "@/lib/stores/auth-store"
 import { KnowledgeTreeModal } from "@/components/learning/knowledge-tree-modal"
+import { KnowledgeTreeView } from "@/components/learning/KnowledgeTreeView"
+import type { PlatformTree, ProjectKnowledgeTree } from "@/lib/api"
 
 type Stage = { stage_id: string; title: string; stage_goal?: string }
 type Module = {
@@ -661,7 +663,6 @@ export default function ProjectHome() {
         <Block
           n="03"
           t={`Curriculum · ${stages.length} stages · ${modules.length} modules`}
-          last
         >
           {stages.length === 0 ? (
             <p className="body" style={{ color: "var(--sub)" }}>
@@ -677,6 +678,11 @@ export default function ProjectHome() {
               pulled={pulled}
             />
           )}
+        </Block>
+
+        {/* §04 Knowledge Tree (spec 035) */}
+        <Block n="04" t="Knowledge Tree · 本项目点亮的平台知识点" last>
+          <KnowledgeTreeSection slug={slug} />
         </Block>
       </div>
 
@@ -1131,3 +1137,72 @@ function Curriculum({
   )
 }
 
+// ──────────────────────────────────────────────────────────────────────────
+// spec 035: Knowledge Tree Section
+// ──────────────────────────────────────────────────────────────────────────
+
+function KnowledgeTreeSection({ slug }: { slug: string }) {
+  const router = useRouter()
+  const [platformTree, setPlatformTree] = useState<PlatformTree | null>(null)
+  const [projectTree, setProjectTree] = useState<ProjectKnowledgeTree | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [err, setErr] = useState<string | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    setLoading(true)
+    Promise.all([
+      library.getPlatformKnowledgeTree(),
+      library.getProjectKnowledgeTree(slug),
+    ])
+      .then(([p, proj]) => {
+        if (cancelled) return
+        setPlatformTree(p)
+        setProjectTree(proj)
+        setErr(null)
+      })
+      .catch((e: unknown) => {
+        if (cancelled) return
+        const msg = e instanceof Error ? e.message : "无法加载知识树"
+        setErr(msg)
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [slug])
+
+  if (loading) {
+    return (
+      <p className="body" style={{ color: "var(--sub)" }}>
+        正在加载平台知识树...
+      </p>
+    )
+  }
+  if (err) {
+    return (
+      <p className="body" style={{ color: "var(--sub)" }}>
+        {err}
+      </p>
+    )
+  }
+  if (!platformTree || !projectTree) {
+    return null
+  }
+  if (projectTree.lit_nodes.length === 0) {
+    return (
+      <p className="body" style={{ color: "var(--sub)" }}>
+        本项目还未跑知识树映射 (lit_tree CLI 未运行过). 内容作者跑后再回来。
+      </p>
+    )
+  }
+  return (
+    <KnowledgeTreeView
+      platformTree={platformTree}
+      projectTree={projectTree}
+      onNodeClick={(knodeId) => router.push(`/library/${slug}/${knodeId}`)}
+    />
+  )
+}

@@ -94,6 +94,64 @@ def get_tree(slug: str) -> dict:
         db.close()
 
 
+@router.get("/projects/{slug}/knowledge-tree")
+def get_project_knowledge_tree(slug: str) -> dict:
+    """spec 035: 本项目的平台知识树点亮 (lit_nodes + subjects_used + missing_concepts).
+
+    返回:
+      - lit_nodes: 本项目教过的平台节点 [{node_id, lit_by, reason}, ...]
+      - subjects_used: 本项目涉及的学科 ID 列表 (有 lit_node 的)
+      - missing_concepts: 本项目涉及但平台树没有的概念
+    """
+    db = get_session()
+    try:
+        p = db.query(Project).filter_by(slug=slug, status=ProjectStatus.published).first()
+        if not p:
+            raise HTTPException(status_code=404, detail="project not found")
+        m = p.manifest_json or {}
+        lit_nodes = m.get("lit_nodes", [])
+        missing = m.get("missing_concepts", [])
+        # subjects_used = lit_nodes 的 node_id 前缀 (subject.<...>) 去重
+        subjects_used = sorted({nid.split(".", 1)[0]
+                                for n in lit_nodes
+                                if (nid := n.get("node_id"))})
+        return {
+            "slug": slug,
+            "lit_nodes": lit_nodes,
+            "subjects_used": subjects_used,
+            "missing_concepts": missing,
+        }
+    finally:
+        db.close()
+
+
+# spec 035: 全平台树缓存 (模块级单例, 不依赖 admin/upload)
+_PLATFORM_TREE_CACHE: dict | None = None
+
+
+def _platform_tree_path() -> Path:
+    """找 platform_tree.json — 优先 course_factory 源 (开发模式), 退回 PROJECTS_MEDIA_DIR/_platform/ (生产)."""
+    # 开发模式: 直接从仓库读
+    repo_path = Path(__file__).resolve().parents[5] / "course_factory" / "knowledge_tree" / "platform_tree.json"
+    if repo_path.exists():
+        return repo_path
+    # 生产模式: 把 platform_tree.json 拷到 PROJECTS_MEDIA_DIR/_platform/
+    fallback = PROJECTS_MEDIA_DIR / "_platform" / "platform_tree.json"
+    return fallback
+
+
+@router.get("/platform/knowledge-tree")
+def get_platform_knowledge_tree() -> dict:
+    """spec 035: 全平台学科理论知识树 (11 学科 ~425 节点 baseline)."""
+    global _PLATFORM_TREE_CACHE
+    if _PLATFORM_TREE_CACHE is None:
+        path = _platform_tree_path()
+        if not path.exists():
+            raise HTTPException(status_code=503, detail=f"platform_tree.json not found at {path}")
+        _PLATFORM_TREE_CACHE = json.loads(path.read_text(encoding="utf-8"))
+    return _PLATFORM_TREE_CACHE
+
+
 @router.get("/projects/{slug}/blueprint")
 def get_blueprint(slug: str, lang: str = Query("zh-CN")):
     """读 blueprint/README.md or README.zh.md."""

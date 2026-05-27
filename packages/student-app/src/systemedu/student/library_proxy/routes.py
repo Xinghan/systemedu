@@ -68,6 +68,30 @@ async def api_library_tree(request: Request) -> JSONResponse:
         return _lib_error_response(e)
 
 
+async def api_library_project_knowledge_tree(request: Request) -> JSONResponse:
+    """spec 035: 本项目知识点亮 (lit_nodes + subjects_used + missing_concepts)."""
+    slug = request.path_params["slug"]
+    try:
+        data = await get_library_client().get_project_knowledge_tree(slug)
+        return JSONResponse(data)
+    except Exception as e:
+        return _lib_error_response(e)
+
+
+_PLATFORM_TREE_CACHE: dict | None = None
+
+
+async def api_library_platform_knowledge_tree(request: Request) -> JSONResponse:
+    """spec 035: 全平台学科理论知识树 (缓存模块级单例, 内容静态)."""
+    global _PLATFORM_TREE_CACHE
+    if _PLATFORM_TREE_CACHE is None:
+        try:
+            _PLATFORM_TREE_CACHE = await get_library_client().get_platform_knowledge_tree()
+        except Exception as e:
+            return _lib_error_response(e)
+    return JSONResponse(_PLATFORM_TREE_CACHE)
+
+
 async def api_library_blueprint(request: Request) -> JSONResponse:
     slug = request.path_params["slug"]
     lang = request.query_params.get("lang", "zh-CN")
@@ -181,6 +205,16 @@ ROUTES = [
     Route("/api/library/projects", api_library_list, methods=["GET"]),
     Route("/api/library/projects/{slug}", api_library_get, methods=["GET"]),
     Route("/api/library/projects/{slug}/tree", api_library_tree, methods=["GET"]),
+    Route(
+        "/api/library/projects/{slug}/knowledge-tree",
+        api_library_project_knowledge_tree,
+        methods=["GET"],
+    ),
+    Route(
+        "/api/library/platform/knowledge-tree",
+        api_library_platform_knowledge_tree,
+        methods=["GET"],
+    ),
     Route(
         "/api/library/projects/{slug}/blueprint", api_library_blueprint, methods=["GET"]
     ),

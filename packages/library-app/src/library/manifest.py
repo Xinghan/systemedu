@@ -47,6 +47,25 @@ class KnodeEntry(BaseModel):
     knode_dir: str = ""               # "knodes/M01-w1-xxx"
 
 
+class LitNodeEntry(BaseModel):
+    """spec 035: 项目级知识点亮 — 本项目教过的平台知识树节点."""
+    node_id: str                      # platform_tree node id, 例 "math.algebra.piecewise_func"
+    lit_by: list[str] = Field(default_factory=list)  # 哪些 knode (M01/M05/...) 教了
+    reason: str = ""                  # agent 给的命中理由 (含原文引用)
+
+    model_config = ConfigDict(extra="ignore")
+
+
+class MissingConceptEntry(BaseModel):
+    """spec 035: 本项目涉及但平台树没有的概念 (作者下版迭代用)."""
+    concept: str
+    first_seen: str = ""              # module_id
+    suggested_subject: str | None = None
+    note: str = ""
+
+    model_config = ConfigDict(extra="ignore")
+
+
 class Manifest(BaseModel):
     """完整 manifest.json schema."""
     schema_version: str = "1.0"
@@ -67,6 +86,10 @@ class Manifest(BaseModel):
     tags: list[str] = Field(default_factory=list)
     created_at: str | None = None
     updated_at: str | None = None
+
+    # spec 035: 项目级知识点亮 (向后兼容, 老 manifest 缺这两字段 = 空 list)
+    lit_nodes: list[LitNodeEntry] = Field(default_factory=list)
+    missing_concepts: list[MissingConceptEntry] = Field(default_factory=list)
 
     model_config = ConfigDict(extra="ignore")
 
