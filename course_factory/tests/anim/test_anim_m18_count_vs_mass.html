@@ -1,0 +1,1109 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>M18 — 颗粒计数 vs 质量浓度: PMS 黑盒里藏着什么换算</title>
+<style>
+  /* ========== F2 第 1 层 — 共享深空底 (theme_style/styles.css L8-21) ========== */
+  :root{
+    --bg-0: oklch(0.14 0.035 265);
+    --bg-1: oklch(0.18 0.04 265);
+    --bg-2: oklch(0.22 0.045 265);
+    --bg-3: oklch(0.28 0.05 265);
+    --line: oklch(0.35 0.05 265 / 0.35);
+    --line-strong: oklch(0.55 0.08 265 / 0.55);
+    --fg:      oklch(0.96 0.01 265);
+    --fg-dim:  oklch(0.75 0.02 265);
+    --fg-mute: oklch(0.55 0.03 265);
+    --gold:    oklch(0.85 0.14 85);
+
+    /* ========== F2 第 2 层 — math accent (electric blue) ========== */
+    --math:     oklch(0.72 0.17 245);
+    --math-dim: oklch(0.52 0.16 245);
+
+    /* ========== F2 第 3 层 — math 5 色 palette (themes.js id:'math') ========== */
+    --AXIS:     oklch(0.72 0.17 245);   /* electric blue 主轴 / mascot 主体 / 公式高亮 */
+    --PROOF:    oklch(0.52 0.16 245);   /* 中等 blue — 推导连线 / 流程箭头 */
+    --SHADOW:   oklch(0.35 0.10 245);   /* 深 blue — 未激活粒子 / 黑盒底纹 */
+    --SOLUTION: oklch(0.92 0.08 240);   /* 近白 blue — 数字光晕 / 高亮粒子 */
+    --QED:      oklch(0.85 0.14 85);    /* 金色 — 看穿黑盒 / key moment */
+
+    /* 5 种粒径分色 (PM0.3 / PM0.5 / PM1.0 / PM2.5 / PM10) — math palette 延展 */
+    --p030: oklch(0.92 0.08 240);       /* SOLUTION 近白 — 最细 */
+    --p050: oklch(0.78 0.14 245);       /* 浅 blue */
+    --p100: oklch(0.66 0.18 248);       /* 中 blue */
+    --p250: oklch(0.52 0.18 252);       /* 深 blue */
+    --p1000:oklch(0.38 0.14 255);       /* 最深 blue */
+  }
+
+  *{box-sizing:border-box;margin:0;padding:0;}
+  html,body{height:100%;overflow:hidden;}
+  body{
+    background: var(--bg-0);
+    color: var(--fg);
+    font-family: 'Inter','Noto Sans SC',-apple-system,BlinkMacSystemFont,sans-serif;
+    display: flex;
+    height: 100vh;
+  }
+
+  /* ========== 200px 左侧 sidebar ========== */
+  .sidebar{
+    width: 200px;
+    flex-shrink: 0;
+    background: var(--bg-1);
+    border-right: 1px solid var(--line);
+    padding: 16px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .brand{
+    border-bottom: 1px solid var(--line);
+    padding-bottom: 10px;
+    margin-bottom: 4px;
+  }
+  .brand .badge{
+    display: inline-block;
+    font-family: 'JetBrains Mono',ui-monospace,monospace;
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    color: var(--math);
+    background: var(--bg-2);
+    padding: 3px 7px;
+    border: 1px solid var(--line);
+    box-shadow: 2px 2px 0 var(--bg-0);
+    margin-bottom: 6px;
+  }
+  .brand h1{
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--fg);
+    line-height: 1.3;
+  }
+  .brand .sub{
+    font-size: 10px;
+    color: var(--fg-mute);
+    margin-top: 4px;
+    font-family: 'JetBrains Mono',ui-monospace,monospace;
+    letter-spacing: 0.04em;
+  }
+
+  /* Pi mascot */
+  .mascot-box{
+    background: var(--bg-2);
+    border: 1px solid var(--line);
+    box-shadow: 3px 3px 0 var(--bg-0);
+    padding: 10px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .mascot-box .label{
+    font-family: 'JetBrains Mono',ui-monospace,monospace;
+    font-size: 9px;
+    color: var(--fg-dim);
+    letter-spacing: 0.08em;
+  }
+  .mascot-box .name{
+    font-size: 11px;
+    color: var(--fg);
+    font-weight: 600;
+    margin-top: 2px;
+  }
+
+  /* Guide 3 条 */
+  .guide{
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .guide-item{
+    font-size: 11px;
+    line-height: 1.45;
+    color: var(--fg-dim);
+    padding-left: 9px;
+    border-left: 2px solid var(--math);
+    padding-top: 2px;
+    padding-bottom: 2px;
+  }
+  .guide-item .num{
+    font-family: 'JetBrains Mono',ui-monospace,monospace;
+    color: var(--math);
+    font-weight: 700;
+    margin-right: 4px;
+  }
+
+  .sidebar .spacer{flex: 1;}
+
+  .lang-btn{
+    background: var(--bg-2);
+    border: 1px solid var(--line-strong);
+    box-shadow: 2px 2px 0 var(--bg-0);
+    color: var(--fg);
+    font-family: 'JetBrains Mono',ui-monospace,monospace;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    padding: 7px 10px;
+    cursor: pointer;
+    width: 100%;
+  }
+  .lang-btn:hover{
+    border-color: var(--math);
+    color: var(--math);
+  }
+  .lang-btn:active{
+    transform: translate(2px, 2px);
+    box-shadow: none;
+  }
+
+  /* ========== Main stage ========== */
+  .main{
+    flex: 1;
+    position: relative;
+    overflow: hidden;
+    background: var(--bg-0);
+  }
+  #stage{
+    width: 100%;
+    height: 100%;
+    display: block;
+  }
+
+  /* HUD 右上 */
+  .hud{
+    position: absolute;
+    top: 18px;
+    right: 18px;
+    background: var(--bg-2);
+    border: 1px solid var(--line);
+    box-shadow: 3px 3px 0 var(--bg-0);
+    padding: 10px 14px;
+    font-family: 'JetBrains Mono',ui-monospace,monospace;
+    min-width: 250px;
+  }
+  .hud .row{
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 14px;
+    font-size: 11px;
+    line-height: 1.6;
+  }
+  .hud .label{color: var(--fg-mute); letter-spacing: 0.06em;}
+  .hud .value{color: var(--fg); font-weight: 700;}
+  .hud .value.accent{color: var(--math);}
+  .hud .value.gold{color: var(--gold);}
+  .hud .sep{
+    height: 1px;
+    background: var(--line);
+    margin: 6px 0;
+  }
+
+  /* Subtitle 底部 */
+  .subtitle{
+    position: absolute;
+    left: 50%;
+    bottom: 32px;
+    transform: translateX(-50%);
+    text-align: center;
+    max-width: 80%;
+    pointer-events: none;
+  }
+  .subtitle .cn{
+    font-size: 17px;
+    font-weight: 700;
+    color: var(--fg);
+    letter-spacing: 0.01em;
+  }
+  .subtitle .en{
+    font-size: 12px;
+    color: var(--fg-mute);
+    margin-top: 4px;
+    font-style: italic;
+    font-family: 'JetBrains Mono',ui-monospace,monospace;
+    letter-spacing: 0.03em;
+  }
+
+  /* Frame chip 左下 */
+  .frame-progress{
+    position: absolute;
+    left: 24px;
+    bottom: 28px;
+    display: flex;
+    gap: 6px;
+    align-items: center;
+  }
+  .chip{
+    width: 24px;
+    height: 6px;
+    background: var(--bg-2);
+    border: 1px solid var(--line);
+  }
+  .chip.active{
+    background: var(--math);
+    border-color: var(--math);
+  }
+  .chip.done{
+    background: var(--math-dim);
+    border-color: var(--math-dim);
+  }
+  .frame-progress .stepname{
+    font-family: 'JetBrains Mono',ui-monospace,monospace;
+    font-size: 10px;
+    color: var(--fg-dim);
+    margin-left: 8px;
+    letter-spacing: 0.08em;
+  }
+
+  /* QED gold flash overlay (key moment in F5) */
+  .flash{
+    position: absolute;
+    top: 46%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-family: 'JetBrains Mono',ui-monospace,monospace;
+    font-size: 28px;
+    font-weight: 800;
+    color: var(--gold);
+    letter-spacing: 0.18em;
+    opacity: 0;
+    pointer-events: none;
+    text-shadow: 0 0 24px var(--gold);
+    text-align: center;
+    transition: opacity 0.3s;
+  }
+  .flash.on{ opacity: 1; }
+  .flash .small{
+    display: block;
+    text-align: center;
+    font-size: 11px;
+    color: var(--fg-dim);
+    letter-spacing: 0.08em;
+    margin-top: 8px;
+    text-shadow: none;
+    font-weight: 400;
+  }
+</style>
+</head>
+<body>
+  <aside class="sidebar">
+    <div class="brand">
+      <span class="badge" id="badgeMod">MOD-M18 / MATH</span>
+      <h1 id="brandH1">颗粒计数 vs 质量浓度</h1>
+      <div class="sub" id="brandSub">count -&gt; mass = ?</div>
+    </div>
+
+    <div class="mascot-box">
+      <svg width="42" height="42" viewBox="0 0 60 60" aria-hidden="true">
+        <!-- Pi mascot: 旋转的正四面体, 翻面亮公式 (themes.js math) -->
+        <polygon points="30,12 14,46 46,46" fill="var(--SHADOW)" opacity="0.55"/>
+        <polygon points="30,12 18,42 42,42" fill="none" stroke="var(--AXIS)" stroke-width="1.6" stroke-linejoin="round"/>
+        <polygon points="30,18 22,40 38,40" fill="var(--PROOF)" opacity="0.45"/>
+        <circle cx="30" cy="12" r="1.8" fill="var(--SOLUTION)"/>
+        <circle cx="18" cy="42" r="1.8" fill="var(--SOLUTION)"/>
+        <circle cx="42" cy="42" r="1.8" fill="var(--SOLUTION)"/>
+        <text x="30" y="34" fill="var(--QED)" font-family="'JetBrains Mono',monospace" font-size="8" text-anchor="middle" font-weight="700">m=Vp</text>
+      </svg>
+      <div>
+        <div class="label">MASCOT</div>
+        <div class="name" id="mascotName">Pi · 派</div>
+      </div>
+    </div>
+
+    <div class="guide">
+      <div class="guide-item" id="g1"><span class="num">01</span><span class="gtxt">PMS 真正测的: 一颗一颗 数 (count)</span></div>
+      <div class="guide-item" id="g2"><span class="num">02</span><span class="gtxt">质量浓度: 体积 x 密度 / 采样体积</span></div>
+      <div class="guide-item" id="g3"><span class="num">03</span><span class="gtxt">ASIC 替你做换算, 输出 ug/m3</span></div>
+    </div>
+
+    <div class="spacer"></div>
+    <button id="langBtn" class="lang-btn" type="button">CN / EN</button>
+  </aside>
+
+  <main class="main">
+    <svg id="stage" viewBox="0 0 1080 720" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg"></svg>
+
+    <div class="hud">
+      <div class="row"><span class="label" id="hudL1">FRAME</span><span class="value accent" id="hudV1">1 / 5</span></div>
+      <div class="row"><span class="label" id="hudL2">STAGE</span><span class="value" id="hudV2">Count</span></div>
+      <div class="sep"></div>
+      <div class="row"><span class="label" id="hudL3">COUNT</span><span class="value" id="hudV3">0</span></div>
+      <div class="row"><span class="label" id="hudL4">MASS</span><span class="value gold" id="hudV4">?</span></div>
+    </div>
+
+    <div class="subtitle">
+      <div class="cn" id="subCn">PMS 一颗一颗在数 — 这数字是颗粒个数, 还是质量浓度?</div>
+      <div class="en" id="subEn">PMS counts particles one by one — is the number a count or a mass?</div>
+    </div>
+
+    <div class="frame-progress">
+      <div class="chip" id="chip0"></div>
+      <div class="chip" id="chip1"></div>
+      <div class="chip" id="chip2"></div>
+      <div class="chip" id="chip3"></div>
+      <div class="chip" id="chip4"></div>
+      <span class="stepname" id="stepName">01 · COUNT</span>
+    </div>
+
+    <div class="flash" id="flash">
+      QED
+      <span class="small" id="flashSub">PM2.5 = 38 ug/m3 — 你看穿了 PMS 的黑盒</span>
+    </div>
+  </main>
+
+<script>
+(function(){
+  "use strict";
+
+  // ====== i18n ======
+  var LANG = 'cn';
+  var I18N = {
+    badgeMod:   { cn: 'MOD-M18 / MATH', en: 'MOD-M18 / MATH' },
+    brandH1:    { cn: '颗粒计数 vs 质量浓度', en: 'Particle Count vs Mass Concentration' },
+    brandSub:   { cn: 'count -> mass = ?', en: 'count -> mass = ?' },
+    mascotName: { cn: 'Pi · 派',          en: 'Pi · the tetrahedron' },
+    g1: { cn: 'PMS 真正测的: 一颗一颗数 (count)',
+          en: 'PMS actually measures: count per particle' },
+    g2: { cn: '质量浓度: 体积 x 密度 / 采样体积',
+          en: 'Mass conc.: volume x density / sample volume' },
+    g3: { cn: 'ASIC 替你做换算, 输出 ug/m3',
+          en: 'ASIC does the math, outputs ug/m3' },
+    hudL1: { cn: '帧',      en: 'FRAME' },
+    hudL2: { cn: '阶段',    en: 'STAGE' },
+    hudL3: { cn: '计数',    en: 'COUNT' },
+    hudL4: { cn: '质量',    en: 'MASS' },
+    btnLang: { cn: 'CN / EN', en: 'CN / EN' }
+  };
+
+  // ====== 粒径定义 (math 5 色对应) ======
+  // r = 半径 (px 视觉, 不是物理), d_um = 物理直径 (um), col = palette
+  var PARTICLE_KINDS = [
+    { id:'p030', d_um:0.3, r:2.2,  col:'var(--p030)',  label:'PM0.3' },
+    { id:'p050', d_um:0.5, r:3.0,  col:'var(--p050)',  label:'PM0.5' },
+    { id:'p100', d_um:1.0, r:4.2,  col:'var(--p100)',  label:'PM1.0' },
+    { id:'p250', d_um:2.5, r:7.5,  col:'var(--p250)',  label:'PM2.5' },
+    { id:'p1000',d_um:10,  r:14,   col:'var(--p1000)', label:'PM10'  }
+  ];
+
+  // ====== 5 帧故事 ======
+  var FRAME_MS = 6000;
+  var FRAMES = [
+    {
+      id: 'count',
+      stepName: '01 · COUNT',
+      hudStage: { cn: '只数颗数',  en: 'Counting only' },
+      hudCount: '100',
+      hudMass:  '? ug',
+      subCn: 'PMS 一颗一颗在数 — 这数字是颗粒个数, 还是质量浓度?',
+      subEn: 'PMS counts particle by particle — is the number a count or a mass?'
+    },
+    {
+      id: 'size',
+      stepName: '02 · SIZE-MATTERS',
+      hudStage: { cn: '同 100 颗, 质量天差地别', en: 'Same 100, different mass' },
+      hudCount: '100  vs  100',
+      hudMass:  'x 125',
+      subCn: 'A 组 100 颗 PM0.5, B 组 100 颗 PM2.5 — B 组体积是 A 组的 125 倍 (5 cubed)',
+      subEn: 'A: 100 PM0.5 vs B: 100 PM2.5 — B has 125x the volume (5 cubed)'
+    },
+    {
+      id: 'mass',
+      stepName: '03 · MASS-FORMULA',
+      hudStage: { cn: '换算公式',  en: 'Mass formula' },
+      hudCount: 'N counts',
+      hudMass:  'SUM ( V x rho )',
+      subCn: 'm = SUM ( pi/6 x d^3 x rho ) — 颗数 + 粒径假设 + 密度 = 质量',
+      subEn: 'm = SUM ( pi/6 x d^3 x rho ) — count + size assumption + density = mass'
+    },
+    {
+      id: 'blackbox',
+      stepName: '04 · BLACK-BOX',
+      hudStage: { cn: 'ASIC 替你算',en: 'ASIC does it' },
+      hudCount: 'raw counts',
+      hudMass:  'estimated',
+      subCn: 'PMS 里的 ASIC 默默替你做: counts -> 平均粒径假设 -> rho=1.65 g/cm3 -> ug/m3',
+      subEn: 'ASIC silently does: counts -> mean-size guess -> rho=1.65 -> ug/m3'
+    },
+    {
+      id: 'reveal',
+      stepName: '05 · REVEAL',
+      hudStage: { cn: '看穿黑盒',  en: 'See through' },
+      hudCount: '~280 cts',
+      hudMass:  '38 ug/m3',
+      subCn: 'PM2.5 = 38 ug/m3 — 这是 估算质量, 不是颗粒个数; 你刚看穿 PMS 的黑盒',
+      subEn: 'PM2.5 = 38 ug/m3 — an ESTIMATED mass, not a raw count; you saw through the box'
+    }
+  ];
+
+  // ====== State ======
+  var currentFrame = 0;
+  var frameStartTs = 0;
+  var rafId = null;
+  var stage = document.getElementById('stage');
+  var SVGNS = 'http://www.w3.org/2000/svg';
+
+  // ====== Utility ======
+  function el(name, attrs, parent){
+    var n = document.createElementNS(SVGNS, name);
+    if (attrs){
+      for (var k in attrs){
+        if (Object.prototype.hasOwnProperty.call(attrs, k)){
+          n.setAttribute(k, attrs[k]);
+        }
+      }
+    }
+    if (parent) parent.appendChild(n);
+    return n;
+  }
+  function clearStage(){ while(stage.firstChild) stage.removeChild(stage.firstChild); }
+  function tr(key){
+    if (!I18N[key]) return key;
+    return I18N[key][LANG] || I18N[key].en || key;
+  }
+  function lerp(a, b, p){ return a + (b - a) * p; }
+  function easeInOut(x){ return x < 0.5 ? 2*x*x : 1 - Math.pow(-2*x + 2, 2)/2; }
+  function easeOut(x){ return 1 - Math.pow(1 - x, 3); }
+  function clamp(x, lo, hi){ return x < lo ? lo : (x > hi ? hi : x); }
+
+  // ====== 通用背景 grid + glow ======
+  function drawBgGrid(){
+    var g = el('g', { opacity: '0.18' }, stage);
+    for (var x = 0; x <= 1080; x += 60){
+      el('line', { x1: x, y1: 0, x2: x, y2: 720, stroke: 'var(--line)', 'stroke-width': '0.5' }, g);
+    }
+    for (var y = 0; y <= 720; y += 60){
+      el('line', { x1: 0, y1: y, x2: 1080, y2: y, stroke: 'var(--line)', 'stroke-width': '0.5' }, g);
+    }
+    var defs = el('defs', null, stage);
+    var rg = el('radialGradient', { id: 'centerGlow', cx: '50%', cy: '45%', r: '60%' }, defs);
+    el('stop', { offset: '0%', 'stop-color': 'var(--math)', 'stop-opacity': '0.06' }, rg);
+    el('stop', { offset: '100%', 'stop-color': 'var(--bg-0)', 'stop-opacity': '0' }, rg);
+    el('rect', { x: 0, y: 0, width: 1080, height: 720, fill: 'url(#centerGlow)' }, stage);
+  }
+
+  // ====== 5 帧 step chain ======
+  function drawStepChain(activeIdx){
+    var labels = [
+      { cn: '数颗数',   en: 'Count' },
+      { cn: '粒径差',   en: 'Size' },
+      { cn: '质量公式', en: 'Mass' },
+      { cn: '黑盒',     en: 'Black-box' },
+      { cn: '看穿',     en: 'Reveal' }
+    ];
+    var y = 660;
+    var startX = 110;
+    var gap = (1080 - 220) / 4;
+    var g = el('g', null, stage);
+    for (var i = 0; i < 5; i++){
+      var cx = startX + gap * i;
+      var on = i <= activeIdx;
+      var ringColor = on ? 'var(--math)' : 'var(--line)';
+      var fillColor = on ? 'var(--bg-2)' : 'var(--bg-1)';
+      var textColor = on ? 'var(--fg)' : 'var(--fg-mute)';
+      el('rect', {
+        x: cx - 44, y: y - 16, width: 88, height: 32,
+        fill: fillColor, stroke: ringColor, 'stroke-width': on ? '1.6' : '1', rx: '2'
+      }, g);
+      var tx = el('text', {
+        x: cx, y: y + 4, fill: textColor,
+        'font-family': "'Inter','Noto Sans SC',sans-serif",
+        'font-size': '12', 'font-weight': on ? '700' : '500',
+        'text-anchor': 'middle'
+      }, g);
+      tx.textContent = labels[i][LANG] || labels[i].en;
+      var ix = el('text', {
+        x: cx, y: y - 22, fill: on ? 'var(--math)' : 'var(--fg-mute)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '9', 'text-anchor': 'middle', 'letter-spacing': '0.1em'
+      }, g);
+      ix.textContent = '0' + (i+1);
+      if (i < 4){
+        var x1 = cx + 44;
+        var x2 = cx + gap - 44;
+        var connColor = (on && (i+1) <= activeIdx) ? 'var(--math)' : 'var(--line)';
+        el('line', {
+          x1: x1, y1: y, x2: x2 - 6, y2: y,
+          stroke: connColor, 'stroke-width': '1.2'
+        }, g);
+        el('polygon', {
+          points: (x2-6)+','+(y-4)+' '+(x2)+','+y+' '+(x2-6)+','+(y+4),
+          fill: connColor
+        }, g);
+      }
+    }
+  }
+
+  // ====== Pi mascot ======
+  function drawPiMascot(g, rot, glow){
+    el('circle', { cx: 0, cy: 0, r: 36, fill: 'none', stroke: 'var(--AXIS)', 'stroke-width': '0.8',
+                   'stroke-dasharray': '3 5', opacity: '0.5',
+                   transform: 'rotate(' + (rot * 30 % 360) + ')' }, g);
+    el('polygon', { points: '0,-22 -20,16 20,16', fill: 'var(--SHADOW)', opacity: '0.55' }, g);
+    el('polygon', { points: '0,-22 -16,14 16,14', fill: 'none', stroke: 'var(--AXIS)',
+                    'stroke-width': '1.6', 'stroke-linejoin': 'round' }, g);
+    el('polygon', { points: '0,-14 -10,10 10,10', fill: 'var(--PROOF)', opacity: '0.5' }, g);
+    el('circle', { cx: 0, cy: -22, r: 2, fill: 'var(--SOLUTION)' }, g);
+    el('circle', { cx: -16, cy: 14, r: 2, fill: 'var(--SOLUTION)' }, g);
+    el('circle', { cx: 16, cy: 14, r: 2, fill: 'var(--SOLUTION)' }, g);
+    var eqTx = el('text', {
+      x: 0, y: 4, fill: 'var(--QED)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': glow ? '11' : '8', 'text-anchor': 'middle', 'font-weight': '700'
+    }, g);
+    eqTx.textContent = glow ? 'QED' : 'm=Vp';
+    var lab = el('text', {
+      x: 0, y: 50, fill: 'var(--fg-dim)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '10', 'text-anchor': 'middle', 'letter-spacing': '0.1em'
+    }, g);
+    lab.textContent = glow
+      ? (LANG === 'cn' ? 'Pi · 看穿了' : 'Pi · saw through')
+      : (LANG === 'cn' ? 'Pi · 思考中' : 'Pi · thinking');
+  }
+
+  // ===================================================================
+  // Frame 1 — COUNT
+  // 一团粒子从左向右飘过 PMS 计数器, 计数器每"打钩"一颗 count+1
+  // 但屏幕中央打出一个金色"?"质问: 这数字是个数 还是 质量?
+  // ===================================================================
+  function drawFrame1(p){
+    drawBgGrid();
+    drawStepChain(0);
+
+    // PMS 计数器 (右侧)
+    var sensorX = 820, sensorY = 280;
+    var sg = el('g', { transform: 'translate('+sensorX+','+sensorY+')' }, stage);
+    el('rect', { x: -85, y: -55, width: 170, height: 110,
+                 fill: 'var(--bg-2)', stroke: 'var(--math)', 'stroke-width': '1.6', rx: '4' }, sg);
+    var slabel = el('text', { x: 0, y: -34, fill: 'var(--fg-mute)',
+                  'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                  'font-size': '10', 'text-anchor': 'middle', 'letter-spacing': '0.14em' }, sg);
+    slabel.textContent = 'PMS5003';
+    // 计数 = 0..100 跟着 p
+    var counted = Math.floor(easeInOut(clamp(p, 0, 1)) * 100);
+    var cval = el('text', { x: 0, y: 18, fill: 'var(--math)',
+                  'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                  'font-size': '44', 'text-anchor': 'middle', 'font-weight': '700' }, sg);
+    cval.textContent = counted;
+    var cunit = el('text', { x: 0, y: 40, fill: 'var(--fg-dim)',
+                  'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                  'font-size': '11', 'text-anchor': 'middle' }, sg);
+    cunit.textContent = LANG === 'cn' ? 'counts (颗)' : 'counts';
+
+    // 入风口 — 在 sensor 左边一道开槽
+    el('rect', { x: -94, y: -8, width: 8, height: 16,
+                 fill: 'var(--bg-0)', stroke: 'var(--line-strong)', 'stroke-width': '1' }, sg);
+
+    // 一群粒子从左向右飘 (大小随机, 但都被一颗一颗数)
+    // 用 p 时间来控制粒子向右流动
+    var pgroup = el('g', null, stage);
+    var N = 24;
+    for (var i = 0; i < N; i++){
+      var lane = (i % 5);
+      var ki = PARTICLE_KINDS[lane];
+      // 每颗在自己的时间窗内 (按 i 错开)
+      var pi = ((p * 2.0) + i / N) % 1.0;
+      var px = lerp(160, sensorX - 100, pi);
+      var py = 210 + lane * 32 + Math.sin(p * 6.28 + i * 0.7) * 6;
+      // 在 sensor 入口前一截高亮 (被数到的瞬间)
+      var nearSensor = px > sensorX - 160 && px < sensorX - 88;
+      var fillCol = nearSensor ? 'var(--SOLUTION)' : ki.col;
+      var opc = pi < 0.05 ? pi / 0.05 : (pi > 0.95 ? (1 - pi)/0.05 : 1);
+      el('circle', { cx: px, cy: py, r: ki.r, fill: fillCol, opacity: opc * 0.95 }, pgroup);
+      if (nearSensor){
+        el('circle', { cx: px, cy: py, r: ki.r + 4, fill: 'none',
+                       stroke: 'var(--SOLUTION)', 'stroke-width': '0.6', opacity: opc * 0.5 }, pgroup);
+      }
+    }
+
+    // 风向标
+    el('text', { x: 200, y: 188, fill: 'var(--fg-mute)',
+                'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                'font-size': '10', 'letter-spacing': '0.12em' }, stage)
+      .textContent = LANG === 'cn' ? 'AIRFLOW ->' : 'AIRFLOW ->';
+
+    // 中央质问 (金色 ?)
+    var qAlpha = clamp((p - 0.3) / 0.4, 0, 1);
+    var qg = el('g', { opacity: qAlpha, transform: 'translate(420, 130)' }, stage);
+    el('rect', { x: -200, y: -28, width: 400, height: 56,
+                 fill: 'var(--bg-1)', stroke: 'var(--gold)', 'stroke-width': '1.5', rx: '4' }, qg);
+    var qt = el('text', { x: 0, y: 8, fill: 'var(--gold)',
+                'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                'font-size': '15', 'text-anchor': 'middle', 'font-weight': '700',
+                'letter-spacing': '0.06em' }, qg);
+    qt.textContent = LANG === 'cn' ? '?  这数字到底是 颗粒个数  还是  质量浓度  ?'
+                                   : '?  Is this a particle COUNT  or  a MASS  ?';
+
+    // Pi mascot
+    var mg = el('g', { transform: 'translate(110, 540)' }, stage);
+    drawPiMascot(mg, p * 4, false);
+  }
+
+  // ===================================================================
+  // Frame 2 — SIZE MATTERS (100 颗 PM0.5  vs  100 颗 PM2.5, 体积 x125)
+  // ===================================================================
+  function drawFrame2(p){
+    drawBgGrid();
+    drawStepChain(1);
+
+    var ttl = el('text', { x: 540, y: 95, fill: 'var(--math)',
+                  'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                  'font-size': '14', 'text-anchor': 'middle', 'letter-spacing': '0.14em', 'font-weight': '700' }, stage);
+    ttl.textContent = LANG === 'cn' ? '同样 100 颗, 质量却天差地别' : 'Same 100 count, very different mass';
+
+    // 左卡片: 100 颗 PM0.5
+    drawBatchCard(220, 280, '100', 'PM0.5', 'var(--p050)', '0.5 um', p, false);
+    // 右卡片: 100 颗 PM2.5
+    drawBatchCard(820, 280, '100', 'PM2.5', 'var(--p250)', '2.5 um', p, false);
+
+    // 中央对比箭头 + ×125
+    var ratioAlpha = clamp((p - 0.4) / 0.3, 0, 1);
+    var rg = el('g', { opacity: ratioAlpha, transform: 'translate(520, 280)' }, stage);
+    el('line', { x1: -90, y1: 0, x2: 90, y2: 0, stroke: 'var(--PROOF)', 'stroke-width': '2' }, rg);
+    el('polygon', { points: '90,-6 102,0 90,6', fill: 'var(--PROOF)' }, rg);
+    el('polygon', { points: '-90,-6 -102,0 -90,6', fill: 'var(--PROOF)' }, rg);
+    el('rect', { x: -52, y: -28, width: 104, height: 36, rx: '3',
+                 fill: 'var(--bg-2)', stroke: 'var(--gold)', 'stroke-width': '1.5' }, rg);
+    var rtx = el('text', { x: 0, y: -6, fill: 'var(--gold)',
+                  'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                  'font-size': '15', 'text-anchor': 'middle', 'font-weight': '700' }, rg);
+    rtx.textContent = 'V_B = 125 x V_A';
+    var rsub = el('text', { x: 0, y: 24, fill: 'var(--fg-dim)',
+                  'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                  'font-size': '10', 'text-anchor': 'middle' }, rg);
+    rsub.textContent = '(2.5 / 0.5)^3 = 5^3 = 125';
+
+    // 下方质量条形对比
+    var barAlpha = clamp((p - 0.55) / 0.35, 0, 1);
+    var bg = el('g', { opacity: barAlpha, transform: 'translate(540, 470)' }, stage);
+    el('text', { x: 0, y: -8, fill: 'var(--fg-mute)',
+                'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                'font-size': '11', 'text-anchor': 'middle', 'letter-spacing': '0.1em' }, bg)
+      .textContent = LANG === 'cn' ? '估算质量 (相对比例)' : 'Estimated mass (relative)';
+    // A 组 bar (PM0.5, 短)
+    var aW = 6;
+    el('rect', { x: -320, y: 10, width: aW, height: 22, fill: 'var(--p050)' }, bg);
+    el('text', { x: -320 + aW + 8, y: 26, fill: 'var(--p050)',
+                'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                'font-size': '11' }, bg)
+      .textContent = 'A: 100 PM0.5 -> ~1 unit';
+    // B 组 bar (PM2.5, 长 x 125, 用 360 = 视觉缩到 0.36x125 看得见但不爆框)
+    var bW = 0.36 * 125 * easeOut(barAlpha);
+    el('rect', { x: -320, y: 42, width: bW, height: 22, fill: 'var(--p250)' }, bg);
+    el('text', { x: -320 + Math.min(bW, 240) + 8, y: 58, fill: 'var(--p250)',
+                'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                'font-size': '11' }, bg)
+      .textContent = 'B: 100 PM2.5 -> ~125 units';
+
+    // Pi mascot
+    var mg = el('g', { transform: 'translate(110, 540)' }, stage);
+    drawPiMascot(mg, p * 4, false);
+  }
+
+  function drawBatchCard(cx, cy, countLabel, kindLabel, color, dLabel, p, _){
+    var g = el('g', { transform: 'translate('+cx+','+cy+')' }, stage);
+    el('rect', { x: -130, y: -110, width: 260, height: 220, rx: '4',
+                 fill: 'var(--bg-1)', stroke: 'var(--line-strong)', 'stroke-width': '1' }, g);
+    var lab = el('text', { x: 0, y: -88, fill: color,
+                  'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                  'font-size': '11', 'text-anchor': 'middle', 'letter-spacing': '0.14em', 'font-weight': '700' }, g);
+    lab.textContent = countLabel + ' x ' + kindLabel + ' (d=' + dLabel + ')';
+    // 颗粒云 — 10x10 网格 = 100 颗
+    var revealCount = Math.floor(easeInOut(clamp((p - 0.05) / 0.35, 0, 1)) * 100);
+    // 半径按粒径 (PM0.5 -> r=3, PM2.5 -> r=7.5)
+    var r = (kindLabel === 'PM2.5') ? 6 : 2.2;
+    var grid = 10;
+    var step = 22;
+    var gx0 = -((grid - 1) * step) / 2;
+    var gy0 = -50;
+    for (var i = 0; i < revealCount; i++){
+      var row = Math.floor(i / grid);
+      var col = i % grid;
+      el('circle', { cx: gx0 + col * step, cy: gy0 + row * step, r: r, fill: color, opacity: 0.85 }, g);
+    }
+    // 计数下方
+    var ct = el('text', { x: 0, y: 130, fill: 'var(--fg)',
+                  'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                  'font-size': '13', 'text-anchor': 'middle', 'font-weight': '700' }, g);
+    ct.textContent = (LANG === 'cn' ? '计数 ' : 'count ') + revealCount + ' / 100';
+  }
+
+  // ===================================================================
+  // Frame 3 — MASS FORMULA
+  // 公式: m_total = SUM_i ( pi/6 x d_i^3 ) x rho / V_sample
+  // 一颗一颗代入 (5 粒径, 每个出一行 v_i = pi/6 x d^3, 累加)
+  // ===================================================================
+  function drawFrame3(p){
+    drawBgGrid();
+    drawStepChain(2);
+
+    var ttl = el('text', { x: 540, y: 90, fill: 'var(--math)',
+                  'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                  'font-size': '14', 'text-anchor': 'middle', 'letter-spacing': '0.14em', 'font-weight': '700' }, stage);
+    ttl.textContent = LANG === 'cn' ? '从颗数到质量 — 公式登场' : 'From count to mass — the formula';
+
+    // 主公式卡 (居中上方)
+    var fxA = clamp(p / 0.35, 0, 1);
+    var fg = el('g', { opacity: fxA, transform: 'translate(540, 180)' }, stage);
+    el('rect', { x: -370, y: -38, width: 740, height: 76, rx: '4',
+                 fill: 'var(--bg-2)', stroke: 'var(--math)', 'stroke-width': '1.6' }, fg);
+    var fxt = el('text', { x: 0, y: 4, fill: 'var(--AXIS)',
+                  'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                  'font-size': '20', 'text-anchor': 'middle', 'font-weight': '700',
+                  'letter-spacing': '0.04em' }, fg);
+    fxt.textContent = 'm_total  =  SUM_i ( pi/6 x d_i^3 ) x rho   /   V_sample';
+    var fxsub = el('text', { x: 0, y: 26, fill: 'var(--fg-dim)',
+                    'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                    'font-size': '10', 'text-anchor': 'middle', 'letter-spacing': '0.06em' }, fg);
+    fxsub.textContent = LANG === 'cn'
+      ? '质量 = 每颗体积 (pi/6 x 直径^3) 加总 x 密度 / 采样体积'
+      : 'mass = sum of per-particle volumes x density / sample volume';
+
+    // 5 粒径分项代入 (左侧表)
+    var tableA = clamp((p - 0.25) / 0.45, 0, 1);
+    var tg = el('g', { opacity: tableA, transform: 'translate(120, 280)' }, stage);
+    var th = el('text', { x: 0, y: 0, fill: 'var(--fg-mute)',
+                  'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                  'font-size': '10', 'letter-spacing': '0.1em' }, tg);
+    th.textContent = LANG === 'cn'
+      ? '粒径  N(假设)  v_i = pi/6 x d^3 (um^3)'
+      : 'size   N(assumed)  v_i = pi/6 x d^3 (um^3)';
+    el('line', { x1: -8, y1: 8, x2: 460, y2: 8, stroke: 'var(--line)', 'stroke-width': '0.8' }, tg);
+
+    // 假设的粒径分布 (示意, 不是真实 PMS)
+    var demoRows = [
+      { kind: PARTICLE_KINDS[0], n: 120 },   // PM0.3 多
+      { kind: PARTICLE_KINDS[1], n: 80  },
+      { kind: PARTICLE_KINDS[2], n: 50  },
+      { kind: PARTICLE_KINDS[3], n: 24  },   // PM2.5 少
+      { kind: PARTICLE_KINDS[4], n: 6   }    // PM10 更少
+    ];
+    var sumV = 0;
+    demoRows.forEach(function(row, i){
+      var rowA = clamp((p - 0.3 - i*0.05) / 0.25, 0, 1);
+      var yy = 32 + i * 30;
+      var rg = el('g', { opacity: rowA }, tg);
+      // 粒径点
+      el('circle', { cx: 8, cy: yy - 5, r: row.kind.r * 0.7,
+                     fill: row.kind.col, opacity: 0.95 }, rg);
+      el('text', { x: 30, y: yy, fill: 'var(--fg)',
+                  'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                  'font-size': '11' }, rg).textContent = row.kind.label;
+      el('text', { x: 130, y: yy, fill: 'var(--fg)',
+                  'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                  'font-size': '11' }, rg).textContent = 'N=' + row.n;
+      // v_i = pi/6 * d^3
+      var vi = Math.PI / 6 * Math.pow(row.kind.d_um, 3);
+      var contrib = vi * row.n;
+      sumV += contrib;
+      el('text', { x: 220, y: yy, fill: 'var(--AXIS)',
+                  'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                  'font-size': '11', 'font-weight': '700' }, rg).textContent =
+          'v=' + vi.toFixed(3);
+      el('text', { x: 340, y: yy, fill: 'var(--SOLUTION)',
+                  'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                  'font-size': '11' }, rg).textContent = 'N x v=' + contrib.toFixed(2);
+    });
+    // 总和高亮
+    var sumA = clamp((p - 0.7) / 0.2, 0, 1);
+    var sg2 = el('g', { opacity: sumA, transform: 'translate(0, 200)' }, tg);
+    el('line', { x1: 200, y1: 0, x2: 460, y2: 0, stroke: 'var(--gold)', 'stroke-width': '1' }, sg2);
+    el('text', { x: 220, y: 22, fill: 'var(--fg)',
+                'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                'font-size': '12' }, sg2).textContent = 'SUM v_i =';
+    el('text', { x: 340, y: 22, fill: 'var(--QED)',
+                'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                'font-size': '13', 'font-weight': '700' }, sg2)
+      .textContent = sumV.toFixed(2) + ' um^3';
+
+    // 右侧: 乘以密度 + 除以采样体积 = ug/m3
+    var rsltA = clamp((p - 0.8) / 0.15, 0, 1);
+    var rs = el('g', { opacity: rsltA, transform: 'translate(800, 300)' }, stage);
+    el('rect', { x: -130, y: -38, width: 260, height: 200, rx: '4',
+                 fill: 'var(--bg-1)', stroke: 'var(--PROOF)', 'stroke-width': '1.4' }, rs);
+    el('text', { x: 0, y: -16, fill: 'var(--fg-mute)',
+                'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                'font-size': '10', 'text-anchor': 'middle', 'letter-spacing': '0.12em' }, rs)
+      .textContent = LANG === 'cn' ? '换算到 ug/m3' : 'convert to ug/m3';
+    var lines = [
+      'SUM v = ' + sumV.toFixed(2) + ' um^3',
+      'rho = 1.65 g/cm^3',
+      'V_sample = 0.1 L (PMS)',
+      '-> mass = ' + ((sumV * 1.65) / 1e6 * 1e6).toFixed(2) + ' ug',
+      'conc = mass / V_sample',
+      '     ~  ug/m3'
+    ];
+    lines.forEach(function(ln, i){
+      el('text', { x: -110, y: 12 + i * 22, fill: i === 5 ? 'var(--QED)' : 'var(--fg)',
+                  'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                  'font-size': '11', 'font-weight': i === 5 ? '700' : '400' }, rs)
+        .textContent = ln;
+    });
+
+    // Pi mascot
+    var mg = el('g', { transform: 'translate(110, 540)' }, stage);
+    drawPiMascot(mg, p * 4, false);
+  }
+
+  // ===================================================================
+  // Frame 4 — BLACK BOX (拆开 PMS 看 ASIC 流水线)
+  // counts -> 平均粒径假设 -> rho -> ug/m3
+  // ===================================================================
+  function drawFrame4(p){
+    drawBgGrid();
+    drawStepChain(3);
+
+    var ttl = el('text', { x: 540, y: 90, fill: 'var(--math)',
+                  'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                  'font-size': '14', 'text-anchor': 'middle', 'letter-spacing': '0.14em', 'font-weight': '700' }, stage);
+    ttl.textContent = LANG === 'cn' ? 'PMS 黑盒里, ASIC 替你算了' : 'Inside the PMS black-box, an ASIC does the math';
+
+    // PMS 外壳 (拆开后, 左半边是外壳, 右侧露出内部芯片)
+    var openA = clamp(p / 0.25, 0, 1);
+    var hg = el('g', { transform: 'translate(540, 340)' }, stage);
+    // 外壳轮廓 (左半向左滑出)
+    var slideX = -130 - openA * 80;
+    el('rect', { x: slideX, y: -120, width: 130, height: 240, rx: '4',
+                 fill: 'var(--bg-2)', stroke: 'var(--line-strong)', 'stroke-width': '1.2' }, hg);
+    el('text', { x: slideX + 65, y: -90, fill: 'var(--fg-mute)',
+                'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                'font-size': '10', 'text-anchor': 'middle', 'letter-spacing': '0.14em' }, hg)
+      .textContent = 'PMS5003';
+    // 风扇 + 激光腔示意
+    el('circle', { cx: slideX + 65, cy: -30, r: 22, fill: 'none',
+                   stroke: 'var(--AXIS)', 'stroke-width': '1', opacity: '0.7' }, hg);
+    el('text', { x: slideX + 65, y: -25, fill: 'var(--fg-dim)',
+                'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                'font-size': '9', 'text-anchor': 'middle' }, hg).textContent = 'FAN';
+    el('rect', { x: slideX + 25, y: 20, width: 80, height: 18,
+                 fill: 'var(--SHADOW)', stroke: 'var(--AXIS)', 'stroke-width': '0.8' }, hg);
+    el('text', { x: slideX + 65, y: 32, fill: 'var(--AXIS)',
+                'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                'font-size': '9', 'text-anchor': 'middle' }, hg).textContent = 'LASER 650nm';
+
+    // 内部 ASIC 流水线 (右侧暴露)
+    var pipeA = clamp((p - 0.2) / 0.45, 0, 1);
+    var pg = el('g', { opacity: pipeA, transform: 'translate(20, -100)' }, hg);
+    // 一个大方框 — 内部
+    el('rect', { x: -20, y: -10, width: 540, height: 220, rx: '4',
+                 fill: 'var(--bg-1)', stroke: 'var(--math)', 'stroke-width': '1.6',
+                 'stroke-dasharray': '6 4' }, pg);
+    el('text', { x: 250, y: 8, fill: 'var(--math)',
+                'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                'font-size': '10', 'text-anchor': 'middle', 'letter-spacing': '0.14em' }, pg)
+      .textContent = LANG === 'cn' ? 'ASIC 内部流水线' : 'ASIC INTERNAL PIPELINE';
+
+    // 4 个流水线方框
+    var stages = [
+      { lab:'COUNT',       cn:'数颗数',      val:'cps' },
+      { lab:'SIZE-BIN',    cn:'按散射强度分粒径',val:'d_um' },
+      { lab:'rho ASSUME',  cn:'假设密度 rho=1.65', val:'g/cm3' },
+      { lab:'OUTPUT',      cn:'输出 ug/m3',  val:'mass' }
+    ];
+    var sX0 = 0, sY = 70, sW = 110, sGap = 16;
+    var stagesActiveTill = Math.floor(easeOut(clamp((p - 0.3) / 0.55, 0, 1)) * 4.4);
+    stages.forEach(function(s, i){
+      var x = sX0 + i * (sW + sGap);
+      var on = i <= stagesActiveTill;
+      var ringCol = on ? 'var(--math)' : 'var(--line)';
+      var fillCol = on ? 'var(--bg-3)' : 'var(--bg-2)';
+      el('rect', { x: x, y: sY, width: sW, height: 70, rx: '3',
+                   fill: fillCol, stroke: ringCol, 'stroke-width': on ? '1.6' : '1' }, pg);
+      el('text', { x: x + sW/2, y: sY + 22, fill: on ? 'var(--SOLUTION)' : 'var(--fg-mute)',
+                  'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                  'font-size': '11', 'text-anchor': 'middle', 'font-weight': '700' }, pg)
+        .textContent = s.lab;
+      el('text', { x: x + sW/2, y: sY + 40, fill: on ? 'var(--fg-dim)' : 'var(--fg-mute)',
+                  'font-family': "'Inter','Noto Sans SC',sans-serif",
+                  'font-size': '10', 'text-anchor': 'middle' }, pg)
+        .textContent = LANG === 'cn' ? s.cn : s.lab.toLowerCase();
+      el('text', { x: x + sW/2, y: sY + 58, fill: on ? 'var(--math)' : 'var(--fg-mute)',
+                  'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                  'font-size': '9', 'text-anchor': 'middle' }, pg)
+        .textContent = s.val;
+      if (i < 3){
+        var arrowX = x + sW + 2;
+        var aCol = (i + 1 <= stagesActiveTill) ? 'var(--math)' : 'var(--line)';
+        el('line', { x1: arrowX, y1: sY + 35, x2: arrowX + sGap - 4, y2: sY + 35,
+                     stroke: aCol, 'stroke-width': '1.4' }, pg);
+        el('polygon', { points: (arrowX + sGap - 4)+','+(sY+31)+' '+(arrowX + sGap)+','+(sY+35)+' '+(arrowX + sGap - 4)+','+(sY+39),
+                        fill: aCol }, pg);
+      }
+    });
+
+    // 流水线下方注释
+    el('text', { x: 250, y: 175, fill: 'var(--fg-dim)',
+                'font-family': "'Inter','Noto Sans SC',sans-serif",
+                'font-size': '11', 'text-anchor': 'middle' }, pg)
+      .textContent = LANG === 'cn'
+        ? '硬件已经替你做了"颗数 -> 质量"的换算 (固定密度假设)'
+        : 'Hardware already does count-to-mass for you (with a fixed density guess)';
+
+    // gold annotation: 关键假设
+    var annA = clamp((p - 0.65) / 0.25, 0, 1);
+    var ag = el('g', { opacity: annA, transform: 'translate(540, 540)' }, stage);
+    el('rect', { x: -260, y: -22, width: 520, height: 44, rx: '3',
+                 fill: 'var(--bg-2)', stroke: 'var(--gold)', 'stroke-width': '1.4' }, ag);
+    el('text', { x: 0, y: 6, fill: 'var(--gold)',
+                'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                'font-size': '12', 'text-anchor': 'middle', 'font-weight': '700' }, ag)
+      .textContent = LANG === 'cn'
+        ? '关键: 密度 rho 是假设值 (硫酸铵 1.65) — 不同污染物会偏'
+        : 'KEY: rho is assumed (ammonium sulfate 1.65) — varies by pollutant';
+
+    // Pi mascot
+    var mg = el('g', { transform: 'translate(110, 560)' }, stage);
+    drawPiMascot(mg, p * 4, false);
+  }
+
+  // ===================================================================
+  // Frame 5 — REVEAL: 看穿黑盒
+  // 输出 PM2.5 = 38 ug/m3 + 旁注 + QED gold flash key moment
+  // ===================================================================
+  function drawFrame5(p){
+    drawBgGrid();
+    drawStepChain(4);
+
+    // 中央: 大数字 38 ug/m3
+    var nA = clamp(p / 0.25, 0, 1);
+    var ng = el('g', { opacity: nA, transform: 'translate(540, 280)' }, stage);
+    el('rect', { x: -240, y: -90, width: 480, height: 180, rx: '4',
+                 fill: 'var(--bg-2)', stroke: 'var(--QED)', 'stroke-width': '2' }, ng);
+    el('text', { x: 0, y: -52, fill: 'var(--fg-mute)',
+                'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                'font-size': '12', 'text-anchor': 'middle', 'letter-spacing': '0.16em' }, ng)
+      .textContent = 'PMS5003  OUTPUT';
+    // 数字渐增 0 -> 38
+    var num = Math.floor(easeOut(clamp(p / 0.5, 0, 1)) * 38);
+    el('text', { x: 0, y: 20, fill: 'var(--QED)',
+                'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                'font-size': '76', 'text-anchor': 'middle', 'font-weight': '700' }, ng)
+      .textContent = num;
+    el('text', { x: 0, y: 56, fill: 'var(--fg-dim)',
+                'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                'font-size': '16', 'text-anchor': 'middle' }, ng).textContent = 'ug / m3  (PM2.5)';
+
+    // 旁注: 这是估算质量, 不是颗粒个数
+    var noteA = clamp((p - 0.3) / 0.3, 0, 1);
+    var noteG = el('g', { opacity: noteA, transform: 'translate(540, 460)' }, stage);
+    el('rect', { x: -340, y: -32, width: 680, height: 64, rx: '4',
+                 fill: 'var(--bg-1)', stroke: 'var(--math)', 'stroke-width': '1.2' }, noteG);
+    el('text', { x: 0, y: -6, fill: 'var(--SOLUTION)',
+                'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                'font-size': '14', 'text-anchor': 'middle', 'font-weight': '700' }, noteG)
+      .textContent = LANG === 'cn'
+        ? '这是 估算质量浓度 (ug/m3), 不是颗粒个数 (counts)'
+        : 'This is an ESTIMATED MASS concentration (ug/m3), not a particle COUNT';
+    el('text', { x: 0, y: 18, fill: 'var(--fg-dim)',
+                'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                'font-size': '11', 'text-anchor': 'middle', 'letter-spacing': '0.06em' }, noteG)
+      .textContent = LANG === 'cn'
+        ? 'counts -> 粒径假设 -> rho=1.65 g/cm^3 -> ug/m3 (ASIC 替你做)'
+        : 'counts -> size guess -> rho=1.65 -> ug/m3 (ASIC does the math)';
+
+    // gold flash overlay (key moment)
+    var flash = document.getElementById('flash');
+    if (p > 0.55 && p < 0.92){
+      flash.classList.add('on');
+    } else {
+      flash.classList.remove('on');
+    }
+
+    // 印章: 你看穿了黑盒
+    var sealA = clamp((p - 0.7) / 0.2, 0, 1);
+    var sg = el('g', { opacity: sealA, transform: 'translate(540, 580)' }, stage);
+    el('rect', { x: -220, y: -22, width: 440, height: 44, rx: '3',
+                 fill: 'var(--bg-2)', stroke: 'var(--QED)', 'stroke-width': '2' }, sg);
+    el('text', { x: 0, y: 6, fill: 'var(--QED)',
+                'font-family': "'JetBrains Mono',ui-monospace,monospace",
+                'font-size': '13', 'text-anchor': 'middle', 'letter-spacing': '0.1em', 'font-weight': '700' }, sg)
+      .textContent = LANG === 'cn' ? '你刚看穿了 PMS 的黑盒' : 'You just saw through the PMS black-box';
+
+    // Pi mascot (QED 模式)
+    var mg = el('g', { transform: 'translate(110, 560)' }, stage);
+    drawPiMascot(mg, p * 4, true);
+  }
+
+  // ====== Frame dispatcher ======
+  function drawFrame(idx, pp){
+    clearStage();
+    if (idx !== 4){
+      document.getElementById('flash').classList.remove('on');
+    }
+    if (idx === 0) drawFrame1(pp);
+    else if (idx === 1) drawFrame2(pp);
+    else if (idx === 2) drawFrame3(pp);
+    else if (idx === 3) drawFrame4(pp);
+    else if (idx === 4) drawFrame5(pp);
+  }
+
+  function updateUI(idx){
+    var f = FRAMES[idx];
+    document.getElementById('hudV1').textContent = (idx+1) + ' / 5';
+    document.getElementById('hudV2').textContent = f.hudStage[LANG] || f.hudStage.en;
+    document.getElementById('hudV3').textContent = f.hudCount;
+    document.getElementById('hudV4').textContent = f.hudMass;
+    document.getElementById('subCn').textContent = LANG === 'cn' ? f.subCn : f.subEn;
+    document.getElementById('subEn').textContent = LANG === 'cn' ? f.subEn : f.subCn;
+    document.getElementById('stepName').textContent = f.stepName;
+    for (var i = 0; i < 5; i++){
+      var c = document.getElementById('chip' + i);
+      c.classList.remove('active', 'done');
+      if (i < idx) c.classList.add('done');
+      else if (i === idx) c.classList.add('active');
+    }
+  }
+
+  function updateI18N(){
+    document.getElementById('badgeMod').textContent = tr('badgeMod');
+    document.getElementById('brandH1').textContent = tr('brandH1');
+    document.getElementById('brandSub').textContent = tr('brandSub');
+    document.getElementById('mascotName').textContent = tr('mascotName');
+    document.querySelector('#g1 .gtxt').textContent = tr('g1');
+    document.querySelector('#g2 .gtxt').textContent = tr('g2');
+    document.querySelector('#g3 .gtxt').textContent = tr('g3');
+    document.getElementById('hudL1').textContent = tr('hudL1');
+    document.getElementById('hudL2').textContent = tr('hudL2');
+    document.getElementById('hudL3').textContent = tr('hudL3');
+    document.getElementById('hudL4').textContent = tr('hudL4');
+    document.getElementById('langBtn').textContent = tr('btnLang');
+    document.getElementById('flashSub').textContent = LANG === 'cn'
+      ? 'PM2.5 = 38 ug/m3 — 你看穿了 PMS 的黑盒'
+      : 'PM2.5 = 38 ug/m3 — you saw through the PMS black-box';
+  }
+
+  function tick(ts){
+    if (!frameStartTs) frameStartTs = ts;
+    var elapsed = ts - frameStartTs;
+    if (elapsed >= FRAME_MS){
+      currentFrame = (currentFrame + 1) % 5;
+      frameStartTs = ts;
+      updateUI(currentFrame);
+      elapsed = 0;
+    }
+    var pp = elapsed / FRAME_MS;
+    drawFrame(currentFrame, pp);
+    rafId = requestAnimationFrame(tick);
+  }
+
+  function start(){
+    updateI18N();
+    updateUI(currentFrame);
+    frameStartTs = 0;
+    if (rafId) cancelAnimationFrame(rafId);
+    rafId = requestAnimationFrame(tick);
+  }
+
+  document.getElementById('langBtn').addEventListener('click', function(){
+    LANG = (LANG === 'cn') ? 'en' : 'cn';
+    updateI18N();
+    updateUI(currentFrame);
+  });
+
+  start();
+})();
+</script>
+</body>
+</html>

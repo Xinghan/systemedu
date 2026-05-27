@@ -1,0 +1,1299 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>M06 终端探险 — 把数据搬进 logs / Terminal Explorer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Noto+Sans+SC:wght@400;700&family=Inter:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  /* Industrial Atelier — C 类 warm cream + Claude coral + computing accent */
+  :root{
+    --paper:    #FAF9F5;
+    --paper-2:  #F1EDDF;
+    --card:     #FFFFFF;
+    --ink:      #191814;
+    --ink-2:    #2B2924;
+    --sub:      #6B6557;
+    --sub-2:    #9D978A;
+    --border:   #EBE5D6;
+    --border-2: #D9D1BD;
+    --hairline: #F2EDE0;
+
+    --primary:      #D97757;
+    --primary-ink:  #9A4A2E;
+    --primary-soft: #F8EDE5;
+    --primary-line: #ECCFB8;
+
+    --computing:    #C04E68;
+    --computing-soft:#F4DDE3;
+
+    --shadow-sm: 0 1px 2px 0 rgba(25,24,20,.04);
+    --shadow:    0 1px 3px 0 rgba(25,24,20,.06), 0 1px 2px -1px rgba(25,24,20,.04);
+    --shadow-md: 0 4px 8px -2px rgba(25,24,20,.06), 0 2px 4px -2px rgba(25,24,20,.04);
+    --shadow-lg: 0 12px 24px -6px rgba(25,24,20,.1), 0 4px 8px -4px rgba(25,24,20,.05);
+
+    /* 终端语义豁免 — 仅 .terminal 内部使用 */
+    --term-bg:    #15131C;
+    --term-bg-2:  #1E1A28;
+    --term-fg:    #ECE5D8;
+    --term-prompt:#C04E68;
+    --term-path:  #B8A5DB;
+    --term-dim:   #8A8295;
+    --term-warn:  #D9B85C;
+    --term-err:   #E26F6F;
+    --term-ok:    #9AC58B;
+  }
+
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;height:100%;}
+  body{
+    overflow:hidden;
+    height:100vh;
+    background:var(--paper);
+    font-family:'Noto Sans SC','Inter',sans-serif;
+    color:var(--ink);
+    font-size:14px;
+    line-height:1.5;
+  }
+  .mono{font-family:'JetBrains Mono',monospace;}
+  h1,h2,h3{margin:0;font-family:'Inter','Noto Sans SC',sans-serif;}
+
+  /* ============== 布局 ============== */
+  .root{display:flex;height:100vh;width:100vw;}
+
+  /* sidebar 200px */
+  .game-sidebar{
+    width:200px;
+    flex-shrink:0;
+    background:var(--paper-2);
+    border-right:1px solid var(--border);
+    display:flex;
+    flex-direction:column;
+    padding:16px 14px;
+    gap:10px;
+    overflow-y:auto;
+  }
+  .brand{
+    display:flex;flex-direction:column;gap:2px;
+    padding-bottom:10px;
+    border-bottom:1px solid var(--border);
+  }
+  .brand-tag{
+    font-family:'JetBrains Mono',monospace;
+    font-size:10px;
+    letter-spacing:1.2px;
+    color:var(--computing);
+    text-transform:uppercase;
+  }
+  .brand-title{
+    font-size:15px;
+    font-weight:700;
+    color:var(--ink);
+    line-height:1.25;
+  }
+  .brand-sub{
+    font-size:11px;
+    color:var(--sub);
+    line-height:1.4;
+    margin-top:2px;
+  }
+
+  .sb-section-title{
+    font-family:'JetBrains Mono',monospace;
+    font-size:10px;
+    letter-spacing:1px;
+    color:var(--sub-2);
+    text-transform:uppercase;
+    margin:6px 0 4px 0;
+  }
+
+  /* 任务清单 (sidebar 里) */
+  .task-list{list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:6px;}
+  .task-list li{
+    display:flex;
+    align-items:flex-start;
+    gap:6px;
+    font-size:11px;
+    line-height:1.4;
+    padding:5px 7px;
+    border:1px solid transparent;
+    border-radius:4px;
+    color:var(--sub);
+    background:transparent;
+  }
+  .task-list li.active{
+    background:var(--computing-soft);
+    border-color:var(--computing);
+    color:var(--ink);
+  }
+  .task-list li.done{
+    color:var(--sub-2);
+    background:var(--hairline);
+    border-color:var(--border);
+  }
+  .task-list li.done .t-name{
+    text-decoration:line-through;
+    text-decoration-thickness:1px;
+  }
+  .task-num{
+    font-family:'JetBrains Mono',monospace;
+    font-size:10px;
+    color:var(--computing);
+    font-weight:700;
+    flex-shrink:0;
+    margin-top:1px;
+  }
+  .task-list li.done .task-num{color:var(--sub-2);}
+  .t-name{font-weight:700;}
+
+  /* tips */
+  .tip-list{
+    list-style:none;padding:0;margin:0;
+    display:flex;flex-direction:column;gap:4px;
+  }
+  .tip-list li{
+    font-size:11px;
+    color:var(--sub);
+    line-height:1.45;
+    padding-left:8px;
+    border-left:2px solid var(--primary-line);
+  }
+
+  /* lang btn (在 sidebar 底部, 不 fixed) */
+  .lang-btn{
+    margin-top:auto;
+    border:1px solid var(--border-2);
+    background:var(--card);
+    color:var(--ink);
+    font-family:'JetBrains Mono',monospace;
+    font-size:11px;
+    padding:6px 10px;
+    cursor:pointer;
+    box-shadow:var(--shadow-sm);
+    transition:background 0.15s, transform 0.1s;
+    border-radius:4px;
+  }
+  .lang-btn:hover{background:var(--primary-soft);}
+  .lang-btn:active{transform:translateY(1px);}
+
+  /* ============== 主舞台 ============== */
+  .stage{
+    flex:1 1 0%;
+    display:flex;
+    flex-direction:column;
+    padding:16px 18px;
+    gap:12px;
+    overflow:hidden;
+    min-width:0;
+    background:var(--paper);
+  }
+
+  /* 顶部任务卡 + HUD 一行 */
+  .top-row{
+    display:flex;
+    gap:12px;
+    flex-shrink:0;
+    align-items:stretch;
+  }
+  .task-card{
+    flex:1 1 0%;
+    background:var(--card);
+    border:1px solid var(--border);
+    box-shadow:var(--shadow);
+    border-radius:8px;
+    padding:12px 16px;
+    display:flex;
+    flex-direction:column;
+    gap:3px;
+    min-width:0;
+  }
+  .task-card-num{
+    font-family:'JetBrains Mono',monospace;
+    font-size:10px;
+    letter-spacing:1px;
+    color:var(--computing);
+    text-transform:uppercase;
+    font-weight:700;
+  }
+  .task-title-cn{
+    font-size:15px;
+    font-weight:700;
+    color:var(--ink);
+    line-height:1.3;
+  }
+  .task-title-en{
+    font-family:'JetBrains Mono',monospace;
+    font-size:11px;
+    color:var(--sub);
+    line-height:1.3;
+  }
+  .task-hint{
+    font-family:'JetBrains Mono',monospace;
+    font-size:11px;
+    color:var(--primary);
+    margin-top:3px;
+    padding-left:8px;
+    border-left:2px solid var(--primary);
+  }
+  .hud{
+    width:140px;
+    flex-shrink:0;
+    background:var(--card);
+    border:1px solid var(--border);
+    box-shadow:var(--shadow);
+    border-radius:8px;
+    padding:10px 12px;
+    display:flex;
+    flex-direction:column;
+    gap:6px;
+    justify-content:center;
+  }
+  .hud-cell{display:flex;flex-direction:column;line-height:1.1;}
+  .hud-cell .lbl{
+    font-family:'JetBrains Mono',monospace;
+    font-size:9px;
+    letter-spacing:1px;
+    color:var(--sub-2);
+    text-transform:uppercase;
+  }
+  .hud-cell .val{
+    font-family:'JetBrains Mono',monospace;
+    font-size:18px;
+    font-weight:700;
+    color:var(--ink);
+    margin-top:2px;
+  }
+  .hud-cell .val .accent{color:var(--computing);}
+  .hud-cell.flash{animation:cellFlash 0.7s ease-out;}
+  @keyframes cellFlash{
+    0%{background:transparent;}
+    30%{background:var(--computing-soft);}
+    100%{background:transparent;}
+  }
+
+  /* 中部 — 终端 panel + 命令 palette 并排 */
+  .mid-row{
+    display:flex;
+    gap:12px;
+    flex:1 1 0%;
+    min-height:0;
+  }
+
+  /* 终端 panel — 唯一深色区, 嵌在 white card 里 */
+  .terminal-wrap{
+    flex:1 1 0%;
+    display:flex;
+    flex-direction:column;
+    background:var(--card);
+    border:1px solid var(--border);
+    box-shadow:var(--shadow);
+    border-radius:8px;
+    padding:10px;
+    gap:8px;
+    min-width:0;
+  }
+  .terminal-header{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    padding:0 4px 6px 4px;
+    border-bottom:1px solid var(--border);
+    flex-shrink:0;
+  }
+  .term-dot{width:10px;height:10px;border-radius:50%;}
+  .term-dot.r{background:#E26F6F;}
+  .term-dot.y{background:#D9B85C;}
+  .term-dot.g{background:#9AC58B;}
+  .term-host{
+    font-family:'JetBrains Mono',monospace;
+    font-size:11px;
+    color:var(--sub);
+    margin-left:6px;
+  }
+  .terminal{
+    flex:1 1 0%;
+    background:var(--term-bg);
+    color:var(--term-fg);
+    border:1px solid #2A2438;
+    padding:12px 14px;
+    overflow-y:auto;
+    overflow-x:hidden;
+    font-family:'JetBrains Mono',monospace;
+    font-size:12.5px;
+    line-height:1.55;
+    border-radius:6px;
+    white-space:pre-wrap;
+    word-break:break-all;
+    min-height:0;
+  }
+  .terminal::-webkit-scrollbar{width:8px;}
+  .terminal::-webkit-scrollbar-track{background:var(--term-bg-2);}
+  .terminal::-webkit-scrollbar-thumb{background:#2D2840;border-radius:4px;}
+  .term-line{margin:0;}
+  .term-prompt{color:var(--term-prompt);font-weight:700;}
+  .term-path{color:var(--term-path);}
+  .term-err{color:var(--term-err);}
+  .term-dim{color:var(--term-dim);}
+  .term-warn{color:var(--term-warn);}
+  .term-ok{color:var(--term-ok);}
+  .term-fg{color:var(--term-fg);}
+  .cursor-blink{
+    display:inline-block;
+    width:7px;height:13px;
+    background:var(--term-fg);
+    vertical-align:-2px;
+    margin-left:2px;
+    animation:blink 1s steps(2) infinite;
+  }
+  @keyframes blink{50%{opacity:0;}}
+
+  /* 输入区 (终端下方) */
+  .input-bar{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    background:var(--term-bg-2);
+    border:1px dashed #2D2840;
+    border-radius:6px;
+    padding:8px 10px;
+    flex-shrink:0;
+    transition:border-color 0.15s, background 0.15s;
+  }
+  .input-bar.drop-hot{
+    border-color:var(--computing);
+    border-style:solid;
+    background:#1A1626;
+  }
+  .input-prompt{
+    font-family:'JetBrains Mono',monospace;
+    font-size:12px;
+    color:var(--term-prompt);
+    font-weight:700;
+    white-space:nowrap;
+  }
+  .cmd-input{
+    flex:1 1 0%;
+    border:0;outline:0;
+    background:transparent;
+    font-family:'JetBrains Mono',monospace;
+    font-size:13px;
+    color:var(--term-fg);
+    padding:4px 0;
+  }
+  .cmd-input::placeholder{color:var(--term-dim);}
+  .run-btn{
+    border:1px solid var(--computing);
+    background:var(--computing);
+    color:var(--card);
+    font-family:'JetBrains Mono',monospace;
+    font-size:11px;
+    font-weight:700;
+    padding:6px 14px;
+    cursor:pointer;
+    border-radius:4px;
+    transition:background 0.15s, transform 0.1s;
+  }
+  .run-btn:hover{background:#A33B53;}
+  .run-btn:active{transform:translateY(1px);}
+
+  /* 命令 palette (右侧) */
+  .cmd-palette{
+    width:220px;
+    flex-shrink:0;
+    background:var(--card);
+    border:1px solid var(--border);
+    box-shadow:var(--shadow);
+    border-radius:8px;
+    padding:12px;
+    display:flex;
+    flex-direction:column;
+    gap:8px;
+    overflow-y:auto;
+    min-height:0;
+  }
+  .palette-title{
+    font-family:'JetBrains Mono',monospace;
+    font-size:10px;
+    letter-spacing:1px;
+    color:var(--sub-2);
+    text-transform:uppercase;
+    margin-bottom:2px;
+  }
+  .palette-hint{
+    font-size:10.5px;
+    color:var(--sub);
+    line-height:1.45;
+    padding:6px 8px;
+    background:var(--primary-soft);
+    border-left:2px solid var(--primary);
+    border-radius:0 4px 4px 0;
+    margin-bottom:4px;
+  }
+  .cmd-chip{
+    display:flex;
+    flex-direction:column;
+    gap:2px;
+    padding:8px 10px;
+    background:var(--paper-2);
+    border:1px solid var(--border-2);
+    border-radius:5px;
+    cursor:grab;
+    user-select:none;
+    transition:background 0.12s, transform 0.1s, border-color 0.12s;
+  }
+  .cmd-chip:hover{
+    background:var(--computing-soft);
+    border-color:var(--computing);
+    transform:translateY(-1px);
+  }
+  .cmd-chip:active{
+    cursor:grabbing;
+    transform:translateY(0);
+  }
+  .cmd-chip.dragging{opacity:0.4;}
+  .cmd-chip-code{
+    font-family:'JetBrains Mono',monospace;
+    font-size:12px;
+    font-weight:700;
+    color:var(--ink);
+  }
+  .cmd-chip-desc{
+    font-size:10.5px;
+    color:var(--sub);
+    line-height:1.3;
+  }
+  .cmd-chip.used{
+    opacity:0.55;
+  }
+
+  /* 完成印章 */
+  .stamp-overlay{
+    position:fixed;inset:0;
+    display:none;align-items:center;justify-content:center;
+    background:rgba(250,249,245,0.88);
+    backdrop-filter:blur(4px);
+    -webkit-backdrop-filter:blur(4px);
+    z-index:200;
+  }
+  .stamp-overlay.show{display:flex;}
+  .stamp-card{
+    background:var(--card);
+    border:1px solid var(--border);
+    box-shadow:var(--shadow-lg);
+    padding:32px 40px;
+    text-align:center;
+    border-radius:12px;
+    max-width:420px;
+    animation:stampPop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+  @keyframes stampPop{
+    0%{transform:scale(0.7);opacity:0;}
+    100%{transform:scale(1);opacity:1;}
+  }
+  .stamp-mark{
+    display:inline-block;
+    border:2.5px solid var(--computing);
+    color:var(--computing);
+    font-family:'JetBrains Mono',monospace;
+    font-size:22px;font-weight:700;
+    padding:8px 22px;
+    letter-spacing:3px;
+    transform:rotate(-3deg);
+    margin-bottom:18px;
+    border-radius:4px;
+  }
+  .stamp-msg-cn{font-size:18px;font-weight:700;color:var(--ink);margin-bottom:6px;}
+  .stamp-msg-en{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--sub);}
+  .stamp-replay{
+    margin-top:20px;
+    border:1px solid var(--primary);
+    background:var(--primary);
+    color:var(--card);
+    font-family:'JetBrains Mono',monospace;
+    font-size:12px;
+    font-weight:700;
+    padding:8px 18px;
+    cursor:pointer;
+    border-radius:6px;
+    transition:background 0.15s, transform 0.1s;
+  }
+  .stamp-replay:hover{background:var(--primary-ink);}
+  .stamp-replay:active{transform:translateY(1px);}
+
+  /* 进度细节用 SVG 圆点 */
+  .step-dots{display:flex;gap:5px;margin-top:4px;}
+  .step-dot{
+    width:9px;height:9px;
+    border-radius:50%;
+    background:var(--border-2);
+    transition:background 0.2s;
+  }
+  .step-dot.done{background:var(--computing);}
+  .step-dot.active{
+    background:var(--card);
+    border:2px solid var(--computing);
+    width:9px;height:9px;
+    box-sizing:border-box;
+  }
+</style>
+</head>
+<body>
+<div class="root">
+  <!-- ============== Sidebar 200px ============== -->
+  <aside class="game-sidebar">
+    <div class="brand">
+      <div class="brand-tag mono" id="brandTag">M06 / TERMINAL</div>
+      <div class="brand-title" id="brandTitle">终端探险</div>
+      <div class="brand-sub" id="brandSub">把传感器数据搬进 logs 文件夹</div>
+    </div>
+
+    <div class="sb-section-title" id="sbListTitle">任务清单 / Quest</div>
+    <ul class="task-list" id="taskList">
+      <li data-idx="0">
+        <span class="task-num">01</span>
+        <div>
+          <span class="t-name" data-i18n="t0n">找到 sensors 文件夹</span>
+        </div>
+      </li>
+      <li data-idx="1">
+        <span class="task-num">02</span>
+        <div>
+          <span class="t-name" data-i18n="t1n">看 readme.txt</span>
+        </div>
+      </li>
+      <li data-idx="2">
+        <span class="task-num">03</span>
+        <div>
+          <span class="t-name" data-i18n="t2n">建 logs 文件夹</span>
+        </div>
+      </li>
+      <li data-idx="3">
+        <span class="task-num">04</span>
+        <div>
+          <span class="t-name" data-i18n="t3n">复制 data.csv 到 logs</span>
+        </div>
+      </li>
+      <li data-idx="4">
+        <span class="task-num">05</span>
+        <div>
+          <span class="t-name" data-i18n="t4n">检查 logs 里有什么</span>
+        </div>
+      </li>
+    </ul>
+
+    <div class="sb-section-title" id="sbTipsTitle">操作 / How</div>
+    <ul class="tip-list">
+      <li id="tip1">从右侧拖命令到输入栏</li>
+      <li id="tip2">或直接键盘输入</li>
+      <li id="tip3">按 Enter 或点 Run 执行</li>
+    </ul>
+
+    <button id="langBtn" class="lang-btn">CN / EN</button>
+  </aside>
+
+  <!-- ============== 主舞台 ============== -->
+  <main class="stage">
+
+    <!-- 顶部任务卡 + HUD -->
+    <div class="top-row">
+      <div class="task-card">
+        <div class="task-card-num mono" id="taskNum">TASK 1 / 5</div>
+        <div class="task-title-cn" id="taskTitleCn">找到 /home/pi/sensors 文件夹</div>
+        <div class="task-title-en mono" id="taskTitleEn">Navigate into /home/pi/sensors</div>
+        <div class="task-hint mono" id="taskHint">提示: cd /home/pi/sensors</div>
+        <div class="step-dots" id="stepDots"></div>
+      </div>
+      <div class="hud">
+        <div class="hud-cell" id="cellProgress">
+          <span class="lbl" id="lblProgress">PROGRESS</span>
+          <span class="val mono"><span id="valDone" class="accent">0</span>/<span id="valTotal">5</span></span>
+        </div>
+        <div class="hud-cell">
+          <span class="lbl" id="lblCwd">CWD</span>
+          <span class="val mono" id="valCwd" style="font-size:11px;">/home/pi</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 中部 — 终端 + 命令 palette -->
+    <div class="mid-row">
+      <div class="terminal-wrap">
+        <div class="terminal-header">
+          <span class="term-dot r"></span>
+          <span class="term-dot y"></span>
+          <span class="term-dot g"></span>
+          <span class="term-host mono" id="termHost">pi@purpleair-node ~ terminal</span>
+        </div>
+        <div class="terminal" id="terminal" tabindex="0"></div>
+        <div class="input-bar" id="inputBar">
+          <span class="input-prompt mono" id="inputPrompt">pi@purpleair:~ $</span>
+          <input type="text" id="cmdInput" class="cmd-input" autocomplete="off" spellcheck="false"
+                 placeholder="拖命令到这里, 或键入再按 Enter" />
+          <button id="runBtn" class="run-btn">Run</button>
+        </div>
+      </div>
+
+      <aside class="cmd-palette">
+        <div class="palette-title" id="paletteTitle">命令 / Commands</div>
+        <div class="palette-hint" id="paletteHint">把卡片拖到下方输入栏 — 或者用键盘直接输入</div>
+
+        <div class="cmd-chip" draggable="true" data-cmd="pwd">
+          <span class="cmd-chip-code mono">pwd</span>
+          <span class="cmd-chip-desc" data-i18n="d_pwd">看当前在哪</span>
+        </div>
+        <div class="cmd-chip" draggable="true" data-cmd="ls">
+          <span class="cmd-chip-code mono">ls</span>
+          <span class="cmd-chip-desc" data-i18n="d_ls">列出当前目录</span>
+        </div>
+        <div class="cmd-chip" draggable="true" data-cmd="cd /home/pi/sensors">
+          <span class="cmd-chip-code mono">cd /home/pi/sensors</span>
+          <span class="cmd-chip-desc" data-i18n="d_cd1">进入 sensors</span>
+        </div>
+        <div class="cmd-chip" draggable="true" data-cmd="cd /home/pi">
+          <span class="cmd-chip-code mono">cd /home/pi</span>
+          <span class="cmd-chip-desc" data-i18n="d_cd2">回到 home</span>
+        </div>
+        <div class="cmd-chip" draggable="true" data-cmd="cat readme.txt">
+          <span class="cmd-chip-code mono">cat readme.txt</span>
+          <span class="cmd-chip-desc" data-i18n="d_cat">看文件内容</span>
+        </div>
+        <div class="cmd-chip" draggable="true" data-cmd="mkdir logs">
+          <span class="cmd-chip-code mono">mkdir logs</span>
+          <span class="cmd-chip-desc" data-i18n="d_mkdir">建文件夹</span>
+        </div>
+        <div class="cmd-chip" draggable="true" data-cmd="cp sensors/data.csv logs/">
+          <span class="cmd-chip-code mono">cp sensors/data.csv logs/</span>
+          <span class="cmd-chip-desc" data-i18n="d_cp">复制文件</span>
+        </div>
+        <div class="cmd-chip" draggable="true" data-cmd="ls logs">
+          <span class="cmd-chip-code mono">ls logs</span>
+          <span class="cmd-chip-desc" data-i18n="d_lslogs">看 logs 内容</span>
+        </div>
+        <div class="cmd-chip" draggable="true" data-cmd="whoami">
+          <span class="cmd-chip-code mono">whoami</span>
+          <span class="cmd-chip-desc" data-i18n="d_whoami">我是谁</span>
+        </div>
+        <div class="cmd-chip" draggable="true" data-cmd="clear">
+          <span class="cmd-chip-code mono">clear</span>
+          <span class="cmd-chip-desc" data-i18n="d_clear">清屏</span>
+        </div>
+      </aside>
+    </div>
+  </main>
+</div>
+
+<!-- 完成印章 -->
+<div class="stamp-overlay" id="stampOverlay">
+  <div class="stamp-card">
+    <div class="stamp-mark mono" id="stampMark">EXPLORER OK</div>
+    <div class="stamp-msg-cn" id="stampMsgCn">终端探险完成 — 数据已搬进 logs</div>
+    <div class="stamp-msg-en mono" id="stampMsgEn">Terminal quest complete</div>
+    <button id="replayBtn" class="stamp-replay mono">REPLAY / 再来</button>
+  </div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  /* ============== 状态 ============== */
+  var LANG = 'cn';
+
+  // 模拟文件系统
+  function freshFs(){
+    return {
+      cwd:'/home/pi',
+      tree:{
+        '/home/pi':            ['Desktop','Documents','sensors','readme.txt'],
+        '/home/pi/sensors':    ['data.csv','calib.json','last_run.log'],
+        '/home/pi/Desktop':    [],
+        '/home/pi/Documents':  ['notes.md']
+      },
+      readmeBody:[
+        '# PurpleAir Sensor Node — README',
+        '',
+        '本机是 PurpleAir 空气质量节点 #PA-1042。',
+        'sensors/ 目录每分钟会写一次 data.csv (PM2.5 / PM10 / T / RH)。',
+        '请把 data.csv 备份到 logs/ 后再做分析。',
+        '',
+        'Author: SystemEdu Atelier'
+      ]
+    };
+  }
+  var fsState = freshFs();
+
+  /* ============== 5 个任务 ============== */
+  var TASKS = [
+    {
+      id:'cd_sensors',
+      cn:'进入 /home/pi/sensors 文件夹', en:'Navigate into /home/pi/sensors',
+      hintCn:'提示: cd /home/pi/sensors', hintEn:'Hint: cd /home/pi/sensors',
+      match:function(s){ return s === 'cd /home/pi/sensors' || s === 'cd sensors'; },
+      run:function(){
+        fsState.cwd = '/home/pi/sensors';
+        return [{c:'dim', t:'(进入 /home/pi/sensors)'}];
+      }
+    },
+    {
+      id:'cat_readme',
+      cn:'查看 readme.txt 的内容', en:'Read readme.txt',
+      hintCn:'提示: 先 cd /home/pi 再 cat readme.txt', hintEn:'Hint: go to /home/pi then cat readme.txt',
+      match:function(s){
+        return s === 'cat readme.txt' || s === 'cat /home/pi/readme.txt' ||
+               s === 'cat ../readme.txt' || s === 'cat ~/readme.txt';
+      },
+      run:function(){
+        // 只有 cwd=/home/pi 或显式路径才能读到; 我们简化: 任意形式都给内容
+        var out = [];
+        for(var i=0;i<fsState.readmeBody.length;i++){
+          out.push({c:'fg', t:fsState.readmeBody[i]});
+        }
+        return out;
+      }
+    },
+    {
+      id:'mkdir_logs',
+      cn:'在 /home/pi 下创建 logs 文件夹', en:'Create a logs folder under /home/pi',
+      hintCn:'提示: 切回 /home/pi 后 mkdir logs', hintEn:'Hint: cd /home/pi then mkdir logs',
+      match:function(s){
+        return s === 'mkdir logs' || s === 'mkdir /home/pi/logs' || s === 'mkdir ./logs';
+      },
+      run:function(){
+        var dir = '/home/pi';
+        if(!fsState.tree[dir]) fsState.tree[dir] = [];
+        if(fsState.tree[dir].indexOf('logs') < 0) fsState.tree[dir].push('logs');
+        if(!fsState.tree[dir + '/logs']) fsState.tree[dir + '/logs'] = [];
+        return [{c:'ok', t:'(已创建 /home/pi/logs/)'}];
+      }
+    },
+    {
+      id:'cp_data',
+      cn:'把 sensors/data.csv 复制到 logs/', en:'Copy sensors/data.csv into logs/',
+      hintCn:'提示: cp sensors/data.csv logs/', hintEn:'Hint: cp sensors/data.csv logs/',
+      match:function(s){
+        return s === 'cp sensors/data.csv logs/' ||
+               s === 'cp sensors/data.csv logs' ||
+               s === 'cp /home/pi/sensors/data.csv /home/pi/logs/' ||
+               s === 'cp /home/pi/sensors/data.csv /home/pi/logs';
+      },
+      run:function(){
+        if(!fsState.tree['/home/pi/logs']) fsState.tree['/home/pi/logs'] = [];
+        if(fsState.tree['/home/pi/logs'].indexOf('data.csv') < 0){
+          fsState.tree['/home/pi/logs'].push('data.csv');
+        }
+        return [
+          {c:'dim', t:'sensors/data.csv -> logs/data.csv'},
+          {c:'ok',  t:'(复制完成, 4.2 KB)'}
+        ];
+      }
+    },
+    {
+      id:'ls_logs',
+      cn:'查看 logs 目录里有什么', en:'List the logs folder',
+      hintCn:'提示: ls logs', hintEn:'Hint: ls logs',
+      match:function(s){
+        return s === 'ls logs' || s === 'ls /home/pi/logs' || s === 'ls ./logs' || s === 'ls logs/';
+      },
+      run:function(){
+        var items = fsState.tree['/home/pi/logs'] || [];
+        if(!items.length) return [{c:'dim', t:'(empty / 空)'}];
+        return [{c:'fg', t: items.join('  ')}];
+      }
+    }
+  ];
+
+  /* ============== DOM 引用 ============== */
+  var termEl    = document.getElementById('terminal');
+  var inputEl   = document.getElementById('cmdInput');
+  var inputBar  = document.getElementById('inputBar');
+  var runBtn    = document.getElementById('runBtn');
+  var taskNum   = document.getElementById('taskNum');
+  var taskCn    = document.getElementById('taskTitleCn');
+  var taskEn    = document.getElementById('taskTitleEn');
+  var taskHint  = document.getElementById('taskHint');
+  var inputPromptEl = document.getElementById('inputPrompt');
+  var valDone   = document.getElementById('valDone');
+  var valTotal  = document.getElementById('valTotal');
+  var valCwd    = document.getElementById('valCwd');
+  var cellProg  = document.getElementById('cellProgress');
+  var taskListEl= document.getElementById('taskList');
+  var stepDotsEl= document.getElementById('stepDots');
+  var stampEl   = document.getElementById('stampOverlay');
+  var replayBtn = document.getElementById('replayBtn');
+  var langBtn   = document.getElementById('langBtn');
+  var chipEls   = document.querySelectorAll('.cmd-chip');
+
+  var currentTask = 0;
+  var doneCount   = 0;
+
+  valTotal.textContent = TASKS.length;
+
+  /* ============== 终端打印 ============== */
+  function escapeHtml(s){
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+  function termPrintRaw(html){
+    var div = document.createElement('div');
+    div.className = 'term-line';
+    div.innerHTML = html;
+    termEl.appendChild(div);
+    termEl.scrollTop = termEl.scrollHeight;
+  }
+  function termPrintPrompt(cmd){
+    var p = '<span class="term-prompt">pi@purpleair</span>:<span class="term-path">' +
+            escapeHtml(fsState.cwd) + '</span>$ ' + escapeHtml(cmd);
+    termPrintRaw(p);
+  }
+  function termPrintLine(c, t){
+    var cls = 'term-fg';
+    if(c === 'err')  cls = 'term-err';
+    else if(c === 'dim')  cls = 'term-dim';
+    else if(c === 'warn') cls = 'term-warn';
+    else if(c === 'ok')   cls = 'term-ok';
+    termPrintRaw('<span class="'+cls+'">' + escapeHtml(t) + '</span>');
+  }
+  function termPrintSystem(t, cls){
+    cls = cls || 'term-warn';
+    termPrintRaw('<span class="'+cls+'">' + escapeHtml(t) + '</span>');
+  }
+
+  /* ============== prompt / cwd 更新 ============== */
+  function updateCwd(){
+    inputPromptEl.textContent = 'pi@purpleair:' + fsState.cwd + ' $';
+    valCwd.textContent = fsState.cwd;
+  }
+
+  /* ============== 任务清单刷新 ============== */
+  function refreshTaskList(){
+    var lis = taskListEl.querySelectorAll('li');
+    for(var i=0; i<lis.length; i++){
+      lis[i].classList.remove('active','done');
+      if(i < doneCount) lis[i].classList.add('done');
+      else if(i === currentTask) lis[i].classList.add('active');
+    }
+    // step dots
+    stepDotsEl.innerHTML = '';
+    for(var j=0; j<TASKS.length; j++){
+      var d = document.createElement('span');
+      d.className = 'step-dot';
+      if(j < doneCount) d.classList.add('done');
+      else if(j === currentTask) d.classList.add('active');
+      stepDotsEl.appendChild(d);
+    }
+  }
+
+  /* ============== 任务卡刷新 ============== */
+  function refreshTask(){
+    if(currentTask >= TASKS.length){
+      taskNum.textContent = LANG === 'cn' ? '全部任务完成' : 'ALL DONE';
+      taskCn.textContent = LANG === 'cn'
+        ? '太棒了 — 5 个 Linux 命令任务全部完成。' : 'Great — all 5 quests cleared.';
+      taskEn.textContent = '';
+      taskHint.textContent = '';
+      valDone.textContent = doneCount;
+      refreshTaskList();
+      return;
+    }
+    var task = TASKS[currentTask];
+    taskNum.textContent = (LANG === 'cn' ? '任务 ' : 'TASK ') + (currentTask+1) + ' / ' + TASKS.length;
+    taskCn.textContent = LANG === 'cn' ? task.cn : task.en;
+    taskEn.textContent = LANG === 'cn' ? task.en : task.cn;
+    taskHint.textContent = LANG === 'cn' ? task.hintCn : task.hintEn;
+    valDone.textContent = doneCount;
+    refreshTaskList();
+  }
+
+  /* ============== builtin 命令 ============== */
+  function tryBuiltin(inp){
+    // pwd
+    if(inp === 'pwd') return [{c:'fg', t: fsState.cwd}];
+    // ls
+    if(inp === 'ls' || inp === 'ls -l' || inp === 'ls -la' || inp === 'ls -a'){
+      var items = fsState.tree[fsState.cwd] || [];
+      if(!items.length) return [{c:'dim', t:'(empty / 空)'}];
+      return [{c:'fg', t: items.join('  ')}];
+    }
+    // ls 某个路径
+    if(inp.indexOf('ls ') === 0){
+      var arg = inp.substring(3).trim();
+      var path = resolvePath(arg);
+      if(fsState.tree[path]) {
+        var its = fsState.tree[path];
+        return [{c:'fg', t: its.length ? its.join('  ') : '(empty)'}];
+      }
+      return [{c:'err', t:'ls: cannot access \''+arg+'\': No such file or directory'}];
+    }
+    // cd
+    if(inp.indexOf('cd ') === 0 || inp === 'cd'){
+      var dest = inp === 'cd' ? '/home/pi' : inp.substring(3).trim();
+      if(dest === '~' || dest === '~/') dest = '/home/pi';
+      var newp = resolvePath(dest);
+      if(fsState.tree[newp]){
+        fsState.cwd = newp;
+        updateCwd();
+        return [{c:'dim', t:'(进入 '+newp+')'}];
+      }
+      return [{c:'err', t:'cd: '+dest+': No such file or directory'}];
+    }
+    // cat
+    if(inp.indexOf('cat ') === 0){
+      var f = inp.substring(4).trim();
+      // 兼容 readme
+      if(f === 'readme.txt' || f === '/home/pi/readme.txt' ||
+         f === '../readme.txt' || f === '~/readme.txt'){
+        var out = [];
+        for(var i=0;i<fsState.readmeBody.length;i++){
+          out.push({c:'fg', t:fsState.readmeBody[i]});
+        }
+        return out;
+      }
+      // data.csv 简短示意
+      if(f.indexOf('data.csv') >= 0){
+        return [
+          {c:'fg', t:'timestamp,pm25,pm10,temp,rh'},
+          {c:'fg', t:'2026-05-27T08:00,12.4,18.7,21.3,46'},
+          {c:'fg', t:'2026-05-27T08:01,11.8,17.9,21.4,46'},
+          {c:'fg', t:'2026-05-27T08:02,13.2,19.5,21.4,45'},
+          {c:'dim', t:'... (2880 行 / lines)'}
+        ];
+      }
+      return [{c:'err', t:'cat: '+f+': No such file or directory'}];
+    }
+    // mkdir
+    if(inp.indexOf('mkdir ') === 0){
+      var dirArg = inp.substring(6).trim();
+      var p = resolvePath(dirArg);
+      var parentPath = p.substring(0, p.lastIndexOf('/')) || '/';
+      var base = p.substring(p.lastIndexOf('/')+1);
+      if(!fsState.tree[parentPath]) fsState.tree[parentPath] = [];
+      if(fsState.tree[parentPath].indexOf(base) >= 0){
+        return [{c:'err', t:'mkdir: cannot create directory \''+dirArg+'\': File exists'}];
+      }
+      fsState.tree[parentPath].push(base);
+      fsState.tree[p] = [];
+      return [{c:'ok', t:'(已创建 '+p+'/)'}];
+    }
+    // cp
+    if(inp.indexOf('cp ') === 0){
+      var rest = inp.substring(3).trim().split(/\s+/);
+      if(rest.length < 2) return [{c:'err', t:'cp: 缺少目标路径 / missing destination'}];
+      // 简化处理: 只识别 sensors/data.csv -> logs
+      return [{c:'warn', t:'(请按提示用: cp sensors/data.csv logs/)'}];
+    }
+    // 其它
+    if(inp === 'whoami') return [{c:'fg', t:'pi'}];
+    if(inp === 'date')   return [{c:'fg', t:'Wed May 27 09:00:00 CST 2026'}];
+    if(inp === 'help' || inp === '?'){
+      return [
+        {c:'warn', t:'-- 提示 / mini help --'},
+        {c:'dim',  t:'pwd  ls  cd  cat  mkdir  cp  clear'},
+        {c:'dim',  t:'看左侧任务清单, 或拖右侧命令到下方输入栏。'}
+      ];
+    }
+    if(inp === 'clear' || inp === 'cls'){
+      termEl.innerHTML = '';
+      return null;
+    }
+    return undefined;
+  }
+
+  function resolvePath(p){
+    if(!p) return fsState.cwd;
+    if(p.charAt(0) === '/') {
+      // 去末尾斜杠
+      if(p.length > 1 && p.charAt(p.length-1) === '/') p = p.substring(0, p.length-1);
+      return p;
+    }
+    if(p === '.') return fsState.cwd;
+    if(p === '..'){
+      var cwd = fsState.cwd;
+      var idx = cwd.lastIndexOf('/');
+      return idx > 0 ? cwd.substring(0, idx) : '/';
+    }
+    if(p.charAt(0) === '~') {
+      p = '/home/pi' + p.substring(1);
+      if(p.length > 1 && p.charAt(p.length-1) === '/') p = p.substring(0, p.length-1);
+      return p;
+    }
+    // 相对路径
+    if(p.length > 1 && p.charAt(p.length-1) === '/') p = p.substring(0, p.length-1);
+    return fsState.cwd + '/' + p;
+  }
+
+  /* ============== 处理命令 ============== */
+  function handleCommand(raw){
+    var inp = (raw || '').trim();
+    termPrintPrompt(raw || '');
+    if(!inp) return;
+
+    // 当前任务匹配 — 优先
+    if(currentTask < TASKS.length){
+      var task = TASKS[currentTask];
+      if(task.match(inp)){
+        var lines = task.run() || [];
+        for(var i=0; i<lines.length; i++){
+          termPrintLine(lines[i].c, lines[i].t);
+        }
+        updateCwd();
+        advanceTask();
+        return;
+      }
+    }
+
+    // 否则尝试通用 builtin
+    var built = tryBuiltin(inp);
+    if(built === null) return; // clear
+    if(Array.isArray(built)){
+      for(var j=0; j<built.length; j++) termPrintLine(built[j].c, built[j].t);
+      return;
+    }
+
+    // 未知命令
+    var head = inp.split(/\s+/)[0];
+    var KNOWN = ['pwd','ls','cd','mkdir','cat','cp','rm','sudo','whoami','date','help','clear','cls'];
+    if(KNOWN.indexOf(head) < 0){
+      termPrintLine('err', '-bash: ' + head + ': command not found');
+    } else {
+      var hintCn = currentTask < TASKS.length ? TASKS[currentTask].hintCn : '';
+      var hintEn = currentTask < TASKS.length ? TASKS[currentTask].hintEn : '';
+      termPrintLine('warn', LANG === 'cn'
+        ? '思路对, 但不是当前任务。 ' + hintCn
+        : 'Almost — not the current quest. ' + hintEn);
+    }
+  }
+
+  /* ============== 推进 ============== */
+  function advanceTask(){
+    doneCount++;
+    currentTask++;
+    valDone.textContent = doneCount;
+    cellProg.classList.remove('flash');
+    void cellProg.offsetWidth;
+    cellProg.classList.add('flash');
+    refreshTaskList();
+
+    // 标记 palette 里"用过"的卡
+    markUsedChips();
+
+    if(currentTask >= TASKS.length){
+      termPrintSystem('');
+      termPrintSystem('=== 5 / 5 任务完成 - data.csv 已搬进 logs ===', 'term-ok');
+      refreshTask();
+      setTimeout(showStamp, 450);
+      return;
+    }
+    refreshTask();
+    termPrintSystem(LANG === 'cn'
+      ? '-> 下一任务: ' + TASKS[currentTask].cn
+      : '-> Next quest: ' + TASKS[currentTask].en);
+  }
+
+  function markUsedChips(){
+    // 简化: 一旦做了某任务, 与之相关的 chip 加 .used
+    var usedCmds = [];
+    if(doneCount >= 1) usedCmds.push('cd /home/pi/sensors');
+    if(doneCount >= 2) usedCmds.push('cat readme.txt');
+    if(doneCount >= 3) usedCmds.push('mkdir logs');
+    if(doneCount >= 4) usedCmds.push('cp sensors/data.csv logs/');
+    if(doneCount >= 5) usedCmds.push('ls logs');
+    for(var i=0; i<chipEls.length; i++){
+      var c = chipEls[i].getAttribute('data-cmd');
+      if(usedCmds.indexOf(c) >= 0) chipEls[i].classList.add('used');
+      else chipEls[i].classList.remove('used');
+    }
+  }
+
+  /* ============== 完成印章 ============== */
+  function showStamp(){
+    stampEl.classList.add('show');
+  }
+  function hideStamp(){
+    stampEl.classList.remove('show');
+  }
+  replayBtn.addEventListener('click', function(){
+    doneCount = 0;
+    currentTask = 0;
+    fsState = freshFs();
+    termEl.innerHTML = '';
+    bootMessages();
+    refreshTask();
+    updateCwd();
+    markUsedChips();
+    hideStamp();
+    inputEl.focus();
+  });
+
+  /* ============== 输入提交 ============== */
+  function submitCmd(){
+    var raw = inputEl.value;
+    inputEl.value = '';
+    handleCommand(raw);
+  }
+  inputEl.addEventListener('keydown', function(e){
+    if(e.key === 'Enter'){
+      e.preventDefault();
+      submitCmd();
+    }
+  });
+  runBtn.addEventListener('click', function(){
+    // 输入框空 → 自动塞当前任务示例, 便于 verify 触发可见变化 + 引导
+    if(!inputEl.value.trim() && currentTask < TASKS.length){
+      var task = TASKS[currentTask];
+      var sample = '';
+      if(task.id === 'cd_sensors') sample = 'cd /home/pi/sensors';
+      else if(task.id === 'cat_readme') sample = 'cat readme.txt';
+      else if(task.id === 'mkdir_logs') sample = 'mkdir logs';
+      else if(task.id === 'cp_data') sample = 'cp sensors/data.csv logs/';
+      else if(task.id === 'ls_logs') sample = 'ls logs';
+      inputEl.value = sample;
+    }
+    submitCmd();
+    inputEl.focus();
+  });
+  termEl.addEventListener('click', function(){ inputEl.focus(); });
+
+  /* ============== 拖拽 ============== */
+  for(var ci=0; ci<chipEls.length; ci++){
+    (function(chip){
+      chip.addEventListener('dragstart', function(e){
+        chip.classList.add('dragging');
+        var cmd = chip.getAttribute('data-cmd') || '';
+        try{
+          e.dataTransfer.setData('text/plain', cmd);
+          e.dataTransfer.effectAllowed = 'copy';
+        }catch(err){}
+      });
+      chip.addEventListener('dragend', function(){
+        chip.classList.remove('dragging');
+        inputBar.classList.remove('drop-hot');
+      });
+      // 点击也能填进去 (无障碍 fallback)
+      chip.addEventListener('click', function(){
+        inputEl.value = chip.getAttribute('data-cmd') || '';
+        inputEl.focus();
+      });
+    })(chipEls[ci]);
+  }
+  inputBar.addEventListener('dragenter', function(e){
+    e.preventDefault();
+    inputBar.classList.add('drop-hot');
+  });
+  inputBar.addEventListener('dragover', function(e){
+    e.preventDefault();
+    try{ e.dataTransfer.dropEffect = 'copy'; }catch(err){}
+    inputBar.classList.add('drop-hot');
+  });
+  inputBar.addEventListener('dragleave', function(e){
+    // 只在真正离开外框时移除
+    if(e.target === inputBar) inputBar.classList.remove('drop-hot');
+  });
+  inputBar.addEventListener('drop', function(e){
+    e.preventDefault();
+    inputBar.classList.remove('drop-hot');
+    var cmd = '';
+    try{ cmd = e.dataTransfer.getData('text/plain') || ''; }catch(err){}
+    if(cmd){
+      inputEl.value = cmd;
+      inputEl.focus();
+    }
+  });
+
+  /* ============== 启动消息 ============== */
+  function bootMessages(){
+    termPrintRaw('<span class="term-warn">PurpleAir Node — Raspberry Pi OS (bookworm)</span>');
+    termPrintRaw('<span class="term-dim">设备 ID: PA-1042  |  uptime: 02:14:36</span>');
+    termPrintRaw('<span class="term-dim">把右侧命令拖到输入栏, 或键入 help 看小抄。</span>');
+    termPrintRaw('');
+  }
+
+  /* ============== i18n ============== */
+  var I18N = {
+    brandTag:   {cn:'M06 / TERMINAL', en:'M06 / TERMINAL'},
+    brandTitle: {cn:'终端探险', en:'Terminal Explorer'},
+    brandSub:   {cn:'把传感器数据搬进 logs 文件夹',
+                 en:'Move sensor data into the logs folder'},
+    sbListTitle:{cn:'任务清单 / Quest', en:'Quest / 任务清单'},
+    sbTipsTitle:{cn:'操作 / How', en:'How / 操作'},
+    tip1: {cn:'从右侧拖命令到输入栏', en:'Drag a command into the input bar'},
+    tip2: {cn:'或直接键盘输入',       en:'Or just type a command'},
+    tip3: {cn:'按 Enter 或点 Run 执行', en:'Press Enter or hit Run'},
+    lblProgress:{cn:'进度', en:'Progress'},
+    lblCwd:     {cn:'当前位置', en:'CWD'},
+    paletteTitle:{cn:'命令 / Commands', en:'Commands / 命令'},
+    paletteHint: {cn:'把卡片拖到下方输入栏 — 或者用键盘直接输入',
+                  en:'Drag a card into the input bar below — or just type.'},
+    t0n:{cn:'找到 sensors 文件夹', en:'Find sensors folder'},
+    t1n:{cn:'看 readme.txt',       en:'Read readme.txt'},
+    t2n:{cn:'建 logs 文件夹',       en:'Create logs folder'},
+    t3n:{cn:'复制 data.csv 到 logs', en:'Copy data.csv to logs'},
+    t4n:{cn:'检查 logs 里有什么',     en:'Inspect the logs folder'},
+    d_pwd:   {cn:'看当前在哪',         en:'Where am I?'},
+    d_ls:    {cn:'列出当前目录',       en:'List current dir'},
+    d_cd1:   {cn:'进入 sensors',       en:'Go to sensors'},
+    d_cd2:   {cn:'回到 home',          en:'Back to home'},
+    d_cat:   {cn:'看文件内容',         en:'Show file'},
+    d_mkdir: {cn:'建文件夹',           en:'Make folder'},
+    d_cp:    {cn:'复制文件',           en:'Copy file'},
+    d_lslogs:{cn:'看 logs 内容',       en:'List logs'},
+    d_whoami:{cn:'我是谁',             en:'Who am I'},
+    d_clear: {cn:'清屏',               en:'Clear screen'},
+    placeholder:{cn:'拖命令到这里, 或键入再按 Enter',
+                 en:'Drop a command here, or type & press Enter'},
+    runBtn:    {cn:'执行', en:'Run'},
+    langBtn:   {cn:'CN / EN', en:'EN / CN'},
+    termHost:  {cn:'pi@purpleair-node ~ terminal',
+                en:'pi@purpleair-node ~ terminal'},
+    stampMark: {cn:'EXPLORER OK', en:'EXPLORER OK'},
+    stampMsgCn:{cn:'终端探险完成 — 数据已搬进 logs',
+                en:'Terminal quest complete — data moved to logs'},
+    stampMsgEn:{cn:'Terminal quest complete',
+                en:'5 / 5 Linux commands cleared'},
+    replayBtn: {cn:'REPLAY / 再来', en:'REPLAY / 再来'}
+  };
+  function tr(k){ return (I18N[k] && I18N[k][LANG]) || (I18N[k] && I18N[k].en) || k; }
+  function refreshI18N(){
+    document.getElementById('brandTag').textContent   = tr('brandTag');
+    document.getElementById('brandTitle').textContent = tr('brandTitle');
+    document.getElementById('brandSub').textContent   = tr('brandSub');
+    document.getElementById('sbListTitle').textContent= tr('sbListTitle');
+    document.getElementById('sbTipsTitle').textContent= tr('sbTipsTitle');
+    document.getElementById('tip1').textContent = tr('tip1');
+    document.getElementById('tip2').textContent = tr('tip2');
+    document.getElementById('tip3').textContent = tr('tip3');
+    document.getElementById('lblProgress').textContent = tr('lblProgress');
+    document.getElementById('lblCwd').textContent      = tr('lblCwd');
+    document.getElementById('paletteTitle').textContent= tr('paletteTitle');
+    document.getElementById('paletteHint').textContent = tr('paletteHint');
+    document.getElementById('termHost').textContent    = tr('termHost');
+    // 任务清单 & chip 描述
+    var i18nEls = document.querySelectorAll('[data-i18n]');
+    for(var i=0; i<i18nEls.length; i++){
+      var key = i18nEls[i].getAttribute('data-i18n');
+      i18nEls[i].textContent = tr(key);
+    }
+    inputEl.setAttribute('placeholder', tr('placeholder'));
+    runBtn.textContent = tr('runBtn');
+    langBtn.textContent= tr('langBtn');
+    document.getElementById('stampMark').textContent   = tr('stampMark');
+    document.getElementById('stampMsgCn').textContent  = tr('stampMsgCn');
+    document.getElementById('stampMsgEn').textContent  = tr('stampMsgEn');
+    replayBtn.textContent = tr('replayBtn');
+    refreshTask();
+  }
+  langBtn.addEventListener('click', function(){
+    LANG = (LANG === 'cn') ? 'en' : 'cn';
+    refreshI18N();
+  });
+
+  /* ============== init ============== */
+  bootMessages();
+  updateCwd();
+  refreshTask();
+  markUsedChips();
+  setTimeout(function(){ inputEl.focus(); }, 100);
+})();
+</script>
+</body>
+</html>

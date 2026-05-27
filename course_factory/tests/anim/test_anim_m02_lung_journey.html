@@ -1,0 +1,858 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PM2.5 进肺之旅</title>
+<style>
+  :root{
+    /* 第 1 层 — 共享深空底 (所有 26 套统一) */
+    --bg-0: oklch(0.14 0.035 265);
+    --bg-1: oklch(0.18 0.04 265);
+    --bg-2: oklch(0.22 0.045 265);
+    --bg-3: oklch(0.28 0.05 265);
+    --line: oklch(0.35 0.05 265 / 0.35);
+    --line-strong: oklch(0.55 0.08 265 / 0.55);
+    --fg:      oklch(0.96 0.01 265);
+    --fg-dim:  oklch(0.75 0.02 265);
+    --fg-mute: oklch(0.55 0.03 265);
+    --gold:    oklch(0.85 0.14 85);
+
+    /* 第 2 层 — bio 学科 accent */
+    --accent: oklch(0.75 0.17 155);
+
+    /* 第 3 层 — bio 5 色 palette (Helix Garden) */
+    --life:    oklch(0.75 0.17 155);
+    --moss:    oklch(0.55 0.16 155);
+    --shadow:  oklch(0.35 0.10 160);
+    --bloom:   oklch(0.92 0.08 150);
+    --mutate:  oklch(0.85 0.14 85);
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    height:100vh;overflow:hidden;background:var(--bg-0);color:var(--fg);
+    font-family:'Inter','Noto Sans SC',system-ui,sans-serif;
+    display:flex;
+  }
+  .sidebar{
+    width:200px;flex-shrink:0;height:100vh;
+    background:var(--bg-1);border-right:1px solid var(--line);
+    padding:18px 16px;display:flex;flex-direction:column;gap:14px;
+  }
+  .brand{font-size:11px;letter-spacing:0.14em;color:var(--fg-mute);
+         font-family:'JetBrains Mono',monospace;}
+  .brand b{color:var(--accent);}
+  .title{font-size:16px;font-weight:700;color:var(--fg);line-height:1.35;}
+  .subtitle{font-size:11px;color:var(--fg-dim);line-height:1.5;font-style:italic;}
+  .mascot-wrap{display:flex;justify-content:center;padding:6px 0;}
+  .guide{display:flex;flex-direction:column;gap:8px;}
+  .guide-li{
+    font-size:11px;color:var(--fg-dim);line-height:1.5;
+    padding:6px 8px;border-left:2px solid var(--accent);
+    background:var(--bg-2);
+  }
+  .lang-btn{
+    margin-top:auto;
+    font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;
+    padding:8px 12px;background:var(--bg-2);color:var(--fg);
+    border:1px solid var(--line-strong);cursor:pointer;
+    box-shadow:3px 3px 0 var(--bg-0);
+  }
+  .lang-btn:active{transform:translate(2px,2px);box-shadow:none;}
+
+  main{flex:1;height:100vh;position:relative;overflow:hidden;}
+  canvas#stage{position:absolute;inset:0;width:100%;height:100%;display:block;}
+  .hud{
+    position:absolute;top:14px;right:14px;
+    background:oklch(0.18 0.04 265 / 0.78);backdrop-filter:blur(6px);
+    border:1px solid var(--line-strong);box-shadow:3px 3px 0 var(--bg-0);
+    padding:10px 14px;font-family:'JetBrains Mono',monospace;
+    font-size:11px;min-width:170px;
+  }
+  .hud-ttl{font-size:10px;letter-spacing:0.12em;color:var(--accent);
+           font-weight:700;margin-bottom:4px;}
+  .hud-frame{font-size:18px;font-weight:700;color:var(--fg);}
+  .hud-stage{color:var(--fg-dim);margin-top:3px;font-size:11px;}
+  .hud-val{color:var(--gold);margin-top:5px;font-size:11px;}
+
+  .subtitles{
+    position:absolute;left:50%;bottom:22px;transform:translateX(-50%);
+    text-align:center;max-width:78%;
+    pointer-events:none;
+  }
+  .sub-zh{font-size:18px;font-weight:700;color:var(--fg);line-height:1.4;}
+  .sub-en{font-size:12px;font-style:italic;color:var(--fg-mute);margin-top:4px;}
+  .sub-zh.gold{color:var(--gold);}
+</style>
+</head>
+<body>
+  <aside class="sidebar">
+    <div class="brand"><b>BIO-02</b> / HELIX GARDEN</div>
+    <div class="title" id="ttl">PM2.5 进肺之旅</div>
+    <div class="subtitle" id="subtitle">看不见的颗粒, 走过我们的呼吸道.</div>
+
+    <div class="mascot-wrap">
+      <svg width="78" height="84" viewBox="0 0 78 84" aria-label="Sprout mascot">
+        <defs>
+          <radialGradient id="sproutGlow" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stop-color="oklch(0.92 0.08 150)" stop-opacity="0.95"/>
+            <stop offset="60%" stop-color="oklch(0.75 0.17 155)" stop-opacity="0.65"/>
+            <stop offset="100%" stop-color="oklch(0.55 0.16 155)" stop-opacity="0"/>
+          </radialGradient>
+        </defs>
+        <ellipse cx="39" cy="40" rx="22" ry="26" fill="url(#sproutGlow)"
+                 stroke="oklch(0.75 0.17 155)" stroke-width="1.5" opacity="0.9"/>
+        <path d="M30 26 Q39 32 48 26 Q39 38 30 44 Q39 50 48 44 Q39 56 30 62"
+              fill="none" stroke="oklch(0.92 0.08 150)" stroke-width="2" stroke-linecap="round"/>
+        <path d="M48 26 Q39 32 30 26 Q39 38 48 44 Q39 50 30 44 Q39 56 48 62"
+              fill="none" stroke="oklch(0.75 0.17 155)" stroke-width="2" stroke-linecap="round"/>
+        <path d="M39 66 Q34 74 39 80 Q44 74 39 66" fill="oklch(0.55 0.16 155)" opacity="0.7"/>
+        <circle cx="39" cy="40" r="3" fill="oklch(0.92 0.08 150)">
+          <animate attributeName="r" values="2.5;4;2.5" dur="2.4s" repeatCount="indefinite"/>
+        </circle>
+        <text x="39" y="9" text-anchor="middle" font-family="JetBrains Mono,monospace"
+              font-size="8" fill="oklch(0.55 0.03 265)" letter-spacing="1">SPROUT</text>
+      </svg>
+    </div>
+
+    <div class="guide">
+      <div class="guide-li" id="g1">PM2.5 比头发细 28 倍</div>
+      <div class="guide-li" id="g2">小到能钻进肺泡</div>
+      <div class="guide-li" id="g3">长期吸入 长出慢性病</div>
+    </div>
+
+    <button id="langBtn" class="lang-btn">CN / EN</button>
+  </aside>
+
+  <main>
+    <canvas id="stage"></canvas>
+    <div class="hud">
+      <div class="hud-ttl" id="hudTtl">FRAME</div>
+      <div class="hud-frame" id="hudFrame">1 / 5</div>
+      <div class="hud-stage" id="hudStage">SCALE COMPARE</div>
+      <div class="hud-val" id="hudVal">hair d = 70 um</div>
+    </div>
+    <div class="subtitles">
+      <div class="sub-zh" id="subZh">头发丝有多粗? PM2.5 又有多小?</div>
+      <div class="sub-en" id="subEn">How thick is a hair vs how tiny is PM2.5?</div>
+    </div>
+  </main>
+
+<script>
+(function(){
+  "use strict";
+
+  var LANG = 'cn';
+  var I18N = {
+    ttl: {cn:'PM2.5 进肺之旅', en:'PM2.5 Journey Into Lungs'},
+    subtitle: {cn:'看不见的颗粒, 走过我们的呼吸道.',
+               en:'Invisible particles travel through our airways.'},
+    g1: {cn:'PM2.5 比头发细 28 倍', en:'PM2.5 is 28x thinner than hair'},
+    g2: {cn:'小到能钻进肺泡',       en:'Small enough to reach alveoli'},
+    g3: {cn:'长期吸入 长出慢性病',   en:'Long exposure brings chronic disease'},
+    hudTtl: {cn:'画面', en:'FRAME'},
+    stages: {
+      cn:['尺度对比','鼻腔入口','气管支气管','抵达肺泡','长期损伤'],
+      en:['SCALE COMPARE','NASAL CAVITY','BRONCHI','ALVEOLI','LONG-TERM']
+    },
+    hudVals: {
+      cn:['头发 70 微米','大颗粒被鼻毛拦截','支气管直径 1 毫米','肺泡 0.2 毫米','5 年慢性炎症'],
+      en:['hair = 70 um','big stopped by nose hair','bronchi ~ 1 mm','alveoli ~ 0.2 mm','5 yr inflammation']
+    },
+    subs: {
+      cn:[
+        '比一比: 头发 70 微米, PM2.5 只有 2.5 微米, 28 倍的差距.',
+        '鼻毛像滤网: PM10 被挡住, PM2.5 太小, 直接穿过.',
+        '气管越分越细, PM2.5 跟着气流一路向下.',
+        '抵达肺泡, 这是氧气进血的地方, 颗粒卡在了壁上.',
+        '日积月累, 肺泡壁发炎, PM2.5 长出慢性病.'
+      ],
+      en:[
+        'Compare: hair = 70um, PM2.5 = 2.5um, a 28x gap.',
+        'Nose hair filters PM10, but PM2.5 slips through.',
+        'Airways branch finer; PM2.5 rides the airflow downward.',
+        'Reaching the alveoli, where oxygen meets blood. Particles stick.',
+        'Years of exposure: inflamed alveoli. PM2.5 leads to chronic disease.'
+      ]
+    }
+  };
+  function t(k){return (I18N[k]&&I18N[k][LANG])||(I18N[k]&&I18N[k].en)||k;}
+
+  // 5 颗粒尺度数据 (um), 按 bio 5 色 palette 分色
+  var PARTICLES = [
+    {name:'HAIR',  d:70,  color:'--moss',   label:{cn:'头发 70 um',   en:'Hair 70 um'}},
+    {name:'PM10',  d:10,  color:'--life',   label:{cn:'PM10 10 um',   en:'PM10 10 um'}},
+    {name:'PM2.5', d:2.5, color:'--mutate', label:{cn:'PM2.5 2.5 um', en:'PM2.5 2.5 um'}, hi:true},
+    {name:'PM1.0', d:1,   color:'--bloom',  label:{cn:'PM1.0 1 um',   en:'PM1.0 1 um'}},
+    {name:'PM0.3', d:0.3, color:'--shadow', label:{cn:'PM0.3 0.3 um', en:'PM0.3 0.3 um'}}
+  ];
+
+  var canvas = document.getElementById('stage');
+  var ctx = canvas.getContext('2d');
+  var W = 0, H = 0, DPR = Math.min(window.devicePixelRatio || 1, 2);
+
+  function resize(){
+    var main = canvas.parentElement;
+    var r = main.getBoundingClientRect();
+    if (r.width < 2 || r.height < 2) return;
+    W = r.width; H = r.height;
+    canvas.width = W * DPR; canvas.height = H * DPR;
+    canvas.style.width = W + 'px'; canvas.style.height = H + 'px';
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  }
+  window.addEventListener('resize', resize);
+  setTimeout(resize, 60);
+  setTimeout(resize, 400);
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(resize);
+
+  var CSSV = function(v){
+    return getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+  };
+
+  // ---- 时间轴 ----
+  var FRAME_DUR = 6500;
+  var TOTAL_FRAMES = 5;
+  var CYCLE = FRAME_DUR * TOTAL_FRAMES;
+  var startT = null;
+  var lastFrameShown = -1;
+
+  function frameProgress(now){
+    if (startT === null) startT = now;
+    var el = (now - startT) % CYCLE;
+    var idx = Math.floor(el / FRAME_DUR);
+    var u   = (el - idx * FRAME_DUR) / FRAME_DUR;
+    return {idx: idx, u: u, t: now};
+  }
+
+  function easeIO(u){return u<0.5?2*u*u:1-Math.pow(-2*u+2,2)/2;}
+  function lerp(a,b,u){return a+(b-a)*u;}
+
+  // ---- 飘动颗粒池 (F2-F4 共用) ----
+  var DRIFTS = [];
+  function initDrifts(){
+    DRIFTS = [];
+    for (var i = 0; i < 18; i++){
+      DRIFTS.push({
+        seed: i * 0.83,
+        sz: 2 + (i%4) * 0.5,
+        kind: (i % 3 === 0) ? 'pm10' : 'pm25',
+        yOff: ((i % 7) - 3) * 0.18
+      });
+    }
+  }
+  initDrifts();
+
+  // ============== 帧 1: 尺度对比 ==============
+  function drawFrame1(u){
+    var baseY = H * 0.58;
+    var pad = 60;
+
+    // 标题
+    ctx.fillStyle = CSSV('--fg');
+    ctx.font = "700 22px 'Inter','Noto Sans SC',sans-serif";
+    ctx.textAlign = 'center';
+    var ttl = LANG==='cn' ? '尺度对比 - 颗粒到底有多小?' : 'Scale Compare - How tiny are particles?';
+    ctx.fillText(ttl, W/2, H*0.18);
+
+    // 头发: 横躺粗圆柱 (代表 70um, 画面上 88px 直径)
+    var hairX = pad + 80;
+    var hairW = W * 0.26;
+    var hairD = 88;
+    var hairAlpha = Math.min(1, u / 0.15);
+    ctx.globalAlpha = hairAlpha;
+    ctx.fillStyle = CSSV('--moss');
+    ctx.strokeStyle = CSSV('--life');
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.arc(hairX,         baseY, hairD/2, Math.PI*0.5, Math.PI*1.5);
+    ctx.lineTo(hairX + hairW, baseY - hairD/2);
+    ctx.arc(hairX + hairW, baseY, hairD/2, Math.PI*1.5, Math.PI*0.5);
+    ctx.closePath();
+    ctx.fill(); ctx.stroke();
+    // 头发纹理
+    ctx.strokeStyle = 'oklch(0.92 0.08 150 / 0.30)';
+    ctx.lineWidth = 1;
+    for (var s = 0; s < 4; s++){
+      var ty = baseY - hairD*0.30 + s * hairD*0.20;
+      ctx.beginPath();
+      ctx.moveTo(hairX,         ty);
+      ctx.lineTo(hairX + hairW, ty);
+      ctx.stroke();
+    }
+    // 标签
+    ctx.fillStyle = CSSV('--fg-dim');
+    ctx.font = "600 13px 'Inter','Noto Sans SC',sans-serif";
+    ctx.textAlign = 'center';
+    ctx.fillText(LANG==='cn'?'一根头发  d = 70 um':'A hair  d = 70 um',
+                 hairX + hairW/2, baseY + hairD/2 + 22);
+    ctx.globalAlpha = 1;
+
+    // 右侧 4 个颗粒按真实比例画 (1um = 88/70 px)
+    var rightX0 = hairX + hairW + 100;
+    var rightW = W - rightX0 - 50;
+    if (rightW < 240) rightW = 240;
+    var slotW = rightW / 4;
+    for (var i = 1; i < PARTICLES.length; i++){
+      var p = PARTICLES[i];
+      var px = rightX0 + (i - 1) * slotW + slotW * 0.5;
+      var py = baseY;
+      var dpx = Math.max(2.6, p.d * (88 / 70));
+      var appearU = Math.min(1, Math.max(0, (u - 0.12 - (i-1)*0.08) / 0.18));
+      if (appearU <= 0) continue;
+      ctx.globalAlpha = appearU;
+      // PM2.5 高亮
+      if (p.hi && u > 0.55){
+        var pulse = 0.5 + 0.5*Math.sin((u - 0.55) * 14);
+        ctx.strokeStyle = CSSV('--gold');
+        ctx.globalAlpha = appearU * (0.45 + 0.55*pulse);
+        ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.arc(px, py, Math.max(dpx*2.2, 14) + 6, 0, Math.PI*2); ctx.stroke();
+        ctx.globalAlpha = appearU;
+      }
+      ctx.fillStyle = CSSV(p.color);
+      ctx.beginPath(); ctx.arc(px, py, dpx, 0, Math.PI*2); ctx.fill();
+      // 标签
+      ctx.fillStyle = p.hi ? CSSV('--gold') : CSSV('--fg-dim');
+      ctx.font = (p.hi ? "700 " : "600 ") + "12px 'JetBrains Mono',monospace";
+      ctx.textAlign = 'center';
+      ctx.fillText(p.label[LANG]||p.label.en, px, py + 48);
+      ctx.globalAlpha = 1;
+    }
+
+    // key insight 文字
+    if (u > 0.7){
+      ctx.fillStyle = CSSV('--gold');
+      ctx.font = "700 14px 'Inter','Noto Sans SC',sans-serif";
+      ctx.textAlign = 'center';
+      ctx.globalAlpha = Math.min(1, (u - 0.7) / 0.15);
+      ctx.fillText(LANG==='cn' ? 'PM2.5 比头发细 28 倍' : 'PM2.5 is 28x thinner than hair',
+                   W/2, H * 0.82);
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  // ============== 帧 2: 鼻腔入口 ==============
+  function drawFrame2(u, now){
+    var cx = W*0.5, cy = H*0.55;
+    var openX = W*0.16;
+    var endX  = W*0.86;
+
+    // 鼻腔通道横切
+    ctx.fillStyle = 'oklch(0.20 0.05 265 / 0.9)';
+    ctx.strokeStyle = CSSV('--moss');
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(openX, cy - 80);
+    ctx.bezierCurveTo(W*0.35, cy-130, W*0.6, cy-110, endX, cy-70);
+    ctx.lineTo(endX, cy + 70);
+    ctx.bezierCurveTo(W*0.6, cy+110, W*0.35, cy+130, openX, cy+80);
+    ctx.closePath();
+    ctx.fill(); ctx.stroke();
+
+    // 内壁高亮
+    ctx.strokeStyle = CSSV('--life');
+    ctx.lineWidth = 1.2;
+    ctx.globalAlpha = 0.55;
+    ctx.beginPath();
+    ctx.moveTo(openX+10, cy-65);
+    ctx.bezierCurveTo(W*0.35, cy-110, W*0.6, cy-90, endX-15, cy-55);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(openX+10, cy+65);
+    ctx.bezierCurveTo(W*0.35, cy+110, W*0.6, cy+90, endX-15, cy+55);
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+
+    // 鼻毛 (左 1/3 区, LIFE 绿短线 + 摆动)
+    ctx.strokeStyle = CSSV('--life');
+    ctx.lineWidth = 1.6;
+    for (var i = 0; i < 14; i++){
+      var hx = lerp(openX + 24, W*0.42, i / 14);
+      var sway = Math.sin(now/300 + i*0.6) * 3;
+      // 上鼻毛
+      var yTop = cy - 65 + Math.sin(i*0.7)*6;
+      ctx.beginPath();
+      ctx.moveTo(hx, yTop);
+      ctx.lineTo(hx + sway, yTop + 14);
+      ctx.stroke();
+      // 下鼻毛
+      var yBot = cy + 65 + Math.sin(i*1.1)*6;
+      ctx.beginPath();
+      ctx.moveTo(hx, yBot);
+      ctx.lineTo(hx + sway, yBot - 14);
+      ctx.stroke();
+    }
+
+    // 颗粒: PM10 卡在鼻毛区, PM2.5 穿过
+    var stopBoundary = W*0.42;
+    for (var k = 0; k < DRIFTS.length; k++){
+      var d = DRIFTS[k];
+      var t0 = (u * 1.2 + k * 0.07) % 1.0;
+      var xpos = lerp(openX - 24, endX + 30, t0);
+      var yMid = cy + d.yOff * 40 + Math.sin(now/280 + d.seed) * 14;
+      if (d.kind === 'pm10'){
+        if (xpos > stopBoundary){
+          xpos = stopBoundary - 6 + Math.sin(now/180 + d.seed)*4;
+          yMid = yMid + Math.sin(now/220 + d.seed*2)*4;
+        }
+        ctx.fillStyle = CSSV('--life');
+        ctx.beginPath(); ctx.arc(xpos, yMid, d.sz + 1.6, 0, Math.PI*2); ctx.fill();
+        ctx.strokeStyle = CSSV('--moss');
+        ctx.lineWidth = 1; ctx.stroke();
+      } else {
+        ctx.fillStyle = CSSV('--mutate');
+        ctx.beginPath(); ctx.arc(xpos, yMid, d.sz, 0, Math.PI*2); ctx.fill();
+        // 拖尾
+        ctx.globalAlpha = 0.35;
+        ctx.beginPath(); ctx.arc(xpos - 8, yMid + 1, d.sz*0.7, 0, Math.PI*2); ctx.fill();
+        ctx.globalAlpha = 1;
+      }
+    }
+
+    // 标签
+    ctx.fillStyle = CSSV('--life');
+    ctx.font = "600 12px 'JetBrains Mono',monospace";
+    ctx.textAlign = 'left';
+    ctx.fillText(LANG==='cn'?'鼻毛 拦大颗粒':'NOSE HAIR (blocks big)', openX - 6, cy - 100);
+    ctx.fillStyle = CSSV('--gold');
+    ctx.textAlign = 'right';
+    ctx.fillText(LANG==='cn'?'PM2.5 穿过':'PM2.5 passes', endX, cy - 100);
+
+    // 入口箭头
+    ctx.strokeStyle = CSSV('--fg-mute');
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(openX-52, cy); ctx.lineTo(openX-12, cy);
+    ctx.moveTo(openX-22, cy-6); ctx.lineTo(openX-12, cy); ctx.lineTo(openX-22, cy+6);
+    ctx.stroke();
+    ctx.fillStyle = CSSV('--fg-mute');
+    ctx.textAlign = 'left';
+    ctx.font = "600 11px 'JetBrains Mono',monospace";
+    ctx.fillText(LANG==='cn'?'吸气':'BREATH', openX-58, cy - 12);
+  }
+
+  // ============== 帧 3: 气管支气管 (分形树) ==============
+  function drawTreeBranch(x, y, len, ang, depth){
+    if (depth <= 0) return;
+    var x2 = x + Math.cos(ang) * len;
+    var y2 = y + Math.sin(ang) * len;
+    ctx.lineWidth = 1.5 + depth * 1.4;
+    ctx.strokeStyle = depth >= 4 ? CSSV('--moss') : CSSV('--life');
+    ctx.globalAlpha = 0.88;
+    ctx.beginPath(); ctx.moveTo(x,y); ctx.lineTo(x2,y2); ctx.stroke();
+    // 内壁微亮
+    ctx.lineWidth = Math.max(0.5, depth * 0.5);
+    ctx.strokeStyle = CSSV('--bloom');
+    ctx.globalAlpha = 0.20;
+    ctx.beginPath(); ctx.moveTo(x,y); ctx.lineTo(x2,y2); ctx.stroke();
+    ctx.globalAlpha = 1;
+    drawTreeBranch(x2, y2, len*0.72, ang - 0.45, depth-1);
+    drawTreeBranch(x2, y2, len*0.72, ang + 0.45, depth-1);
+  }
+
+  function drawFrame3(u, now){
+    var rootX = W*0.5, rootY = H*0.14;
+    var trunkH = H * 0.22;
+    // 主气管 (trachea)
+    ctx.strokeStyle = CSSV('--moss');
+    ctx.lineWidth = 14;
+    ctx.beginPath(); ctx.moveTo(rootX, rootY); ctx.lineTo(rootX, rootY + trunkH); ctx.stroke();
+    ctx.strokeStyle = CSSV('--bloom');
+    ctx.globalAlpha = 0.25;
+    ctx.lineWidth = 5;
+    ctx.beginPath(); ctx.moveTo(rootX, rootY); ctx.lineTo(rootX, rootY + trunkH); ctx.stroke();
+    ctx.globalAlpha = 1;
+    // 分叉
+    var branchLen = H * 0.16;
+    drawTreeBranch(rootX, rootY + trunkH, branchLen, Math.PI*0.65, 5);
+    drawTreeBranch(rootX, rootY + trunkH, branchLen, Math.PI*0.35, 5);
+
+    // PM2.5 颗粒沿主气管下行 + 进分支
+    for (var k = 0; k < DRIFTS.length; k++){
+      var d = DRIFTS[k];
+      if (d.kind !== 'pm25') continue;
+      var phase = (u * 1.05 + k * 0.07) % 1.0;
+      var px, py;
+      if (phase < 0.40){
+        px = rootX + Math.sin(now/210 + d.seed)*3;
+        py = rootY + (phase / 0.40) * trunkH;
+      } else {
+        var go = (phase - 0.40) / 0.60;
+        var side = (k % 2 === 0) ? -1 : 1;
+        var endXp = rootX + side * (W * (0.18 + (k%4)*0.02));
+        var endYp = rootY + trunkH + H * (0.32 + (k%3)*0.04);
+        px = lerp(rootX, endXp, go) + Math.sin(now/250 + d.seed)*2;
+        py = lerp(rootY + trunkH, endYp, go);
+      }
+      ctx.fillStyle = CSSV('--mutate');
+      ctx.beginPath(); ctx.arc(px, py, d.sz*0.95, 0, Math.PI*2); ctx.fill();
+      // 微 halo
+      ctx.globalAlpha = 0.30;
+      ctx.beginPath(); ctx.arc(px, py, d.sz*1.8, 0, Math.PI*2); ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+
+    // 解剖标注
+    ctx.fillStyle = CSSV('--fg-dim');
+    ctx.font = "600 11px 'JetBrains Mono',monospace";
+    ctx.textAlign = 'left';
+    ctx.fillText(LANG==='cn'?'气管 ~ 15 mm':'TRACHEA ~ 15 mm',     rootX + 22, rootY + trunkH*0.45);
+    ctx.fillText(LANG==='cn'?'支气管 ~ 5 mm':'BRONCHI ~ 5 mm',     rootX + W*0.16, rootY + trunkH + 30);
+    ctx.fillText(LANG==='cn'?'细支气管 ~ 1 mm':'BRONCHIOLE ~ 1 mm', rootX - W*0.30, rootY + trunkH + H*0.32);
+    ctx.fillStyle = CSSV('--gold');
+    ctx.textAlign = 'left';
+    ctx.fillText(LANG==='cn'?'PM2.5 跟气流继续向下':'PM2.5 rides the airflow down',
+                 W*0.04, H*0.92);
+  }
+
+  // ============== 帧 4: 抵达肺泡 + 毛细血管 ==============
+  function drawFrame4(u, now){
+    var supplyX = W*0.18, supplyY = H*0.5;
+    // 末端供气支
+    ctx.strokeStyle = CSSV('--moss');
+    ctx.lineWidth = 9;
+    ctx.beginPath();
+    ctx.moveTo(supplyX, supplyY - 60);
+    ctx.lineTo(supplyX + 30, supplyY - 18);
+    ctx.lineTo(supplyX + 80, supplyY);
+    ctx.lineTo(supplyX + 130, supplyY);
+    ctx.stroke();
+    ctx.strokeStyle = CSSV('--bloom');
+    ctx.globalAlpha = 0.30;
+    ctx.lineWidth = 3;
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+
+    // 肺泡簇布局
+    var clusterCX = W*0.55, clusterCY = H*0.52;
+    var ALV = [];
+    var ringR = 90;
+    for (var i = 0; i < 8; i++){
+      var ang = (i / 8) * Math.PI*2;
+      var ar = 40 + (i%2)*5;
+      ALV.push({x:clusterCX + Math.cos(ang)*ringR, y:clusterCY + Math.sin(ang)*ringR, r:ar});
+    }
+    ALV.push({x:clusterCX, y:clusterCY, r:50});
+
+    // 毛细血管 (偏红弧线)
+    ctx.strokeStyle = 'oklch(0.55 0.18 25 / 0.65)';
+    ctx.lineWidth = 1.3;
+    for (var c = 0; c < ALV.length; c++){
+      var a = ALV[c];
+      for (var w = 0; w < 6; w++){
+        var aa = w / 6 * Math.PI * 2 + now/2200;
+        ctx.beginPath();
+        ctx.arc(a.x, a.y, a.r + 4, aa, aa + Math.PI*0.40);
+        ctx.stroke();
+      }
+    }
+
+    // 肺泡本体
+    for (var c2 = 0; c2 < ALV.length; c2++){
+      var aa2 = ALV[c2];
+      ctx.fillStyle = 'oklch(0.30 0.07 160 / 0.72)';
+      ctx.strokeStyle = CSSV('--life');
+      ctx.lineWidth = 1.6;
+      ctx.beginPath(); ctx.arc(aa2.x, aa2.y, aa2.r, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+      // 内部高光
+      ctx.fillStyle = 'oklch(0.45 0.10 160 / 0.32)';
+      ctx.beginPath(); ctx.arc(aa2.x - aa2.r*0.3, aa2.y - aa2.r*0.3, aa2.r*0.4, 0, Math.PI*2); ctx.fill();
+    }
+
+    // PM2.5 飘入 + 卡在肺泡壁
+    for (var k = 0; k < DRIFTS.length; k++){
+      var d = DRIFTS[k];
+      if (d.kind !== 'pm25') continue;
+      var target = ALV[k % ALV.length];
+      var stickAng = (k * 0.41) % (Math.PI*2);
+      var stickX = target.x + Math.cos(stickAng) * target.r;
+      var stickY = target.y + Math.sin(stickAng) * target.r;
+      var phase = ((u * 1.25 + k * 0.06) % 1.0);
+      var startX = supplyX + 130;
+      var startY = supplyY;
+      var px = lerp(startX, stickX, phase);
+      var py = lerp(startY, stickY, phase) + Math.sin(now/300 + d.seed)*4 * (1-phase);
+      if (phase > 0.95){
+        ctx.fillStyle = CSSV('--shadow');
+        ctx.beginPath(); ctx.arc(stickX, stickY, d.sz*1.1, 0, Math.PI*2); ctx.fill();
+      } else {
+        ctx.fillStyle = CSSV('--mutate');
+        ctx.beginPath(); ctx.arc(px, py, d.sz, 0, Math.PI*2); ctx.fill();
+      }
+    }
+
+    // 已沉积颗粒 (静态点缀, 每个肺泡几个)
+    ctx.fillStyle = CSSV('--shadow');
+    for (var i2 = 0; i2 < ALV.length; i2++){
+      var a2 = ALV[i2];
+      for (var j = 0; j < 3; j++){
+        var ang3 = j * 1.7 + i2 * 0.5;
+        ctx.beginPath();
+        ctx.arc(a2.x + Math.cos(ang3)*a2.r, a2.y + Math.sin(ang3)*a2.r, 2.4, 0, Math.PI*2);
+        ctx.fill();
+      }
+    }
+
+    // 标注
+    ctx.fillStyle = CSSV('--fg-dim');
+    ctx.font = "600 12px 'JetBrains Mono',monospace";
+    ctx.textAlign = 'left';
+    var labelX = clusterCX + ringR + 50;
+    ctx.fillText(LANG==='cn'?'肺泡 ~ 0.2 mm':'ALVEOLI ~ 0.2 mm', labelX, clusterCY - 70);
+    ctx.fillText(LANG==='cn'?'毛细血管 (O2 交换)':'CAPILLARIES (O2 exchange)', labelX, clusterCY - 50);
+    ctx.fillStyle = CSSV('--gold');
+    ctx.fillText(LANG==='cn'?'颗粒卡在肺泡壁':'particles stuck on walls', labelX, clusterCY - 30);
+
+    // 供气端标签
+    ctx.fillStyle = CSSV('--fg-mute');
+    ctx.textAlign = 'left';
+    ctx.fillText(LANG==='cn'?'吸气进入':'AIR IN', supplyX - 6, supplyY - 70);
+  }
+
+  // ============== 帧 5: 长期损伤 (时间快进 + 炎症扩散) ==============
+  function drawFrame5(u, now){
+    var phases = [
+      {label:{cn:'第 1 天', en:'Day 1'},   u0:0.00, infl:0.05},
+      {label:{cn:'第 1 月', en:'Month 1'}, u0:0.22, infl:0.30},
+      {label:{cn:'第 1 年', en:'Year 1'},  u0:0.48, infl:0.60},
+      {label:{cn:'第 5 年', en:'Year 5'},  u0:0.74, infl:0.95}
+    ];
+    // 平滑插值炎症等级
+    var curIdx = 0;
+    for (var i = phases.length - 1; i >= 0; i--){
+      if (u >= phases[i].u0){ curIdx = i; break; }
+    }
+    var infl;
+    if (curIdx === phases.length - 1){
+      infl = phases[curIdx].infl;
+    } else {
+      var span = phases[curIdx+1].u0 - phases[curIdx].u0;
+      var localU = (u - phases[curIdx].u0) / span;
+      infl = lerp(phases[curIdx].infl, phases[curIdx+1].infl,
+                  easeIO(Math.max(0, Math.min(1, localU))));
+    }
+
+    var cx = W*0.5, cy = H*0.5, R = Math.min(180, Math.min(W,H)*0.24);
+
+    // 毛细血管
+    ctx.strokeStyle = 'oklch(0.55 0.18 25 / 0.65)';
+    ctx.lineWidth = 1.8;
+    for (var w = 0; w < 14; w++){
+      var aa = w / 14 * Math.PI*2 + now/3000;
+      ctx.beginPath();
+      ctx.arc(cx, cy, R + 14, aa, aa + Math.PI*0.50);
+      ctx.stroke();
+    }
+
+    // 肺泡本体 (随炎症变红)
+    var inflClamp = Math.max(0, Math.min(1, infl));
+    var fillL = lerp(0.30, 0.45, inflClamp);
+    var fillC = lerp(0.07, 0.16, inflClamp);
+    var fillH = lerp(160, 25, inflClamp);
+    var fillAlpha = 0.75;
+    ctx.fillStyle = 'oklch(' + fillL.toFixed(3) + ' ' + fillC.toFixed(3) + ' ' +
+                    fillH.toFixed(1) + ' / ' + fillAlpha.toFixed(2) + ')';
+    ctx.strokeStyle = inflClamp > 0.4 ? CSSV('--gold') : CSSV('--life');
+    ctx.lineWidth = 2.5;
+    ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+
+    // 颗粒沉积 (越后期越多)
+    var nDots = Math.floor(inflClamp * 90);
+    ctx.fillStyle = CSSV('--shadow');
+    for (var d = 0; d < nDots; d++){
+      var ang = d * 0.61;
+      var rr = R * (0.55 + (d%5)*0.07);
+      var px = cx + Math.cos(ang) * rr;
+      var py = cy + Math.sin(ang) * rr;
+      ctx.beginPath(); ctx.arc(px, py, 1.8 + (d%3)*0.6, 0, Math.PI*2); ctx.fill();
+    }
+
+    // 炎症泡泡
+    if (inflClamp > 0.30){
+      var nInfl = Math.floor(inflClamp * 16);
+      for (var ii = 0; ii < nInfl; ii++){
+        var ang2 = ii * 0.71;
+        var rr2 = R * 0.42 * (0.45 + (ii%4)*0.18);
+        var pulse = 0.6 + 0.4*Math.sin(now/360 + ii);
+        ctx.fillStyle = 'oklch(0.65 0.18 25 / ' + (0.40 * pulse).toFixed(2) + ')';
+        ctx.beginPath();
+        ctx.arc(cx + Math.cos(ang2)*rr2, cy + Math.sin(ang2)*rr2,
+                4 + pulse*3, 0, Math.PI*2);
+        ctx.fill();
+      }
+    }
+
+    // 时间 HUD (大字)
+    ctx.fillStyle = CSSV('--gold');
+    ctx.font = "700 38px 'JetBrains Mono',monospace";
+    ctx.textAlign = 'left';
+    ctx.fillText(phases[curIdx].label[LANG] || phases[curIdx].label.en, 60, H*0.20);
+
+    // 炎症等级条
+    var barX = 60, barY = H*0.24, barW = 240, barH = 10;
+    ctx.fillStyle = CSSV('--bg-2');
+    ctx.fillRect(barX, barY, barW, barH);
+    ctx.fillStyle = CSSV('--gold');
+    ctx.fillRect(barX, barY, barW * inflClamp, barH);
+    ctx.strokeStyle = CSSV('--line-strong');
+    ctx.lineWidth = 1;
+    ctx.strokeRect(barX, barY, barW, barH);
+    ctx.fillStyle = CSSV('--fg-dim');
+    ctx.font = "600 11px 'JetBrains Mono',monospace";
+    ctx.fillText((LANG==='cn'?'炎症等级 ':'INFLAMMATION ') +
+                 Math.round(inflClamp*100) + '%',
+                 barX, barY + 26);
+
+    // 时间轴标签 (四节点)
+    ctx.font = "600 10px 'JetBrains Mono',monospace";
+    for (var pi = 0; pi < phases.length; pi++){
+      var px2 = barX + barW * phases[pi].u0 / phases[phases.length-1].u0;
+      ctx.fillStyle = (pi <= curIdx) ? CSSV('--gold') : CSSV('--fg-mute');
+      ctx.fillText(phases[pi].label[LANG] || phases[pi].label.en, px2, barY + 44);
+    }
+
+    // F5 key moment: gold "PM2.5 → 慢性疾病"
+    if (u > 0.55){
+      var fadeIn = Math.min(1, (u - 0.55) / 0.20);
+      ctx.globalAlpha = fadeIn;
+      ctx.fillStyle = CSSV('--gold');
+      ctx.font = "700 28px 'Inter','Noto Sans SC',sans-serif";
+      ctx.textAlign = 'center';
+      var keyText = LANG==='cn' ? 'PM2.5    长出    慢性疾病'
+                                : 'PM2.5    leads to    Chronic Disease';
+      ctx.fillText(keyText, W*0.5, H*0.86);
+      // 关键发现框
+      ctx.strokeStyle = CSSV('--gold');
+      ctx.lineWidth = 2;
+      var bw = 460, bh = 52;
+      ctx.strokeRect(W*0.5 - bw/2, H*0.86 - 36, bw, bh);
+      // 4 个角的 corner mark
+      var corner = 10;
+      ctx.lineWidth = 3;
+      var bx = W*0.5 - bw/2, by = H*0.86 - 36;
+      ctx.beginPath(); ctx.moveTo(bx, by+corner); ctx.lineTo(bx, by); ctx.lineTo(bx+corner, by); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(bx+bw-corner, by); ctx.lineTo(bx+bw, by); ctx.lineTo(bx+bw, by+corner); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(bx, by+bh-corner); ctx.lineTo(bx, by+bh); ctx.lineTo(bx+corner, by+bh); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(bx+bw-corner, by+bh); ctx.lineTo(bx+bw, by+bh); ctx.lineTo(bx+bw, by+bh-corner); ctx.stroke();
+      ctx.globalAlpha = 1;
+    }
+
+    // 旁观 Sprout (右下小图, 随炎症加深而淡化, 表达"悲伤")
+    drawSproutSmall(W*0.86, H*0.78, 0.85, inflClamp);
+  }
+
+  // Sprout 在画布上的小绘制
+  function drawSproutSmall(x, y, scale, sad){
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.scale(scale, scale);
+    var fade = sad > 0.4 ? 0.55 : 0.9;
+    ctx.globalAlpha = fade;
+    ctx.fillStyle = CSSV('--life');
+    ctx.strokeStyle = CSSV('--life');
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.ellipse(0, 0, 22, 26, 0, 0, Math.PI*2);
+    ctx.fill(); ctx.stroke();
+    // helix
+    ctx.strokeStyle = CSSV('--bloom');
+    ctx.lineWidth = 2;
+    ctx.globalAlpha = fade * 0.8;
+    ctx.beginPath();
+    var first = true;
+    for (var tt = -1; tt <= 1; tt += 0.05){
+      var hpx = Math.sin(tt*Math.PI*1.5) * 10;
+      var hpy = tt * 22;
+      if (first){ ctx.moveTo(hpx, hpy); first = false; }
+      else      { ctx.lineTo(hpx, hpy); }
+    }
+    ctx.stroke();
+    // 眼
+    ctx.fillStyle = CSSV('--bloom');
+    ctx.globalAlpha = fade;
+    ctx.beginPath(); ctx.arc(0, -2, 3, 0, Math.PI*2); ctx.fill();
+    // 标签
+    ctx.globalAlpha = fade;
+    ctx.fillStyle = CSSV('--fg-mute');
+    ctx.font = "600 9px 'JetBrains Mono',monospace";
+    ctx.textAlign = 'center';
+    ctx.fillText('SPROUT', 0, 42);
+    ctx.globalAlpha = 1;
+    ctx.restore();
+  }
+
+  // ---- 帧切换淡入淡出 ----
+  function frameAlpha(u){
+    if (u > 0.90) return Math.max(0, 1 - (u - 0.90) / 0.10);
+    if (u < 0.06) return u / 0.06;
+    return 1;
+  }
+
+  function draw(now){
+    if (!W || !H){
+      requestAnimationFrame(draw);
+      return;
+    }
+    var fp = frameProgress(now);
+
+    // 背景
+    ctx.fillStyle = CSSV('--bg-0');
+    ctx.fillRect(0, 0, W, H);
+
+    // 网格底纹
+    ctx.strokeStyle = CSSV('--line');
+    ctx.lineWidth = 1;
+    for (var gx = 40; gx < W; gx += 60){
+      ctx.beginPath(); ctx.moveTo(gx, 0); ctx.lineTo(gx, H); ctx.stroke();
+    }
+    for (var gy = 40; gy < H; gy += 60){
+      ctx.beginPath(); ctx.moveTo(0, gy); ctx.lineTo(W, gy); ctx.stroke();
+    }
+
+    ctx.globalAlpha = frameAlpha(fp.u);
+    if      (fp.idx === 0) drawFrame1(fp.u);
+    else if (fp.idx === 1) drawFrame2(fp.u, now);
+    else if (fp.idx === 2) drawFrame3(fp.u, now);
+    else if (fp.idx === 3) drawFrame4(fp.u, now);
+    else                   drawFrame5(fp.u, now);
+    ctx.globalAlpha = 1;
+
+    // HUD + 字幕 — 帧切换时更新
+    if (fp.idx !== lastFrameShown){
+      lastFrameShown = fp.idx;
+      document.getElementById('hudFrame').textContent = (fp.idx + 1) + ' / 5';
+      document.getElementById('hudStage').textContent = I18N.stages[LANG][fp.idx];
+      document.getElementById('hudVal').textContent   = I18N.hudVals[LANG][fp.idx];
+      document.getElementById('subZh').textContent    = I18N.subs[LANG][fp.idx];
+      document.getElementById('subEn').textContent    = I18N.subs.en[fp.idx];
+      var subZhEl = document.getElementById('subZh');
+      if (fp.idx === 4) subZhEl.classList.add('gold');
+      else subZhEl.classList.remove('gold');
+    }
+
+    requestAnimationFrame(draw);
+  }
+
+  function refreshI18N(){
+    document.getElementById('ttl').textContent      = t('ttl');
+    document.getElementById('subtitle').textContent = t('subtitle');
+    document.getElementById('g1').textContent = t('g1');
+    document.getElementById('g2').textContent = t('g2');
+    document.getElementById('g3').textContent = t('g3');
+    document.getElementById('hudTtl').textContent = t('hudTtl');
+    lastFrameShown = -1;
+  }
+
+  document.getElementById('langBtn').addEventListener('click', function(){
+    LANG = (LANG === 'cn') ? 'en' : 'cn';
+    this.textContent = LANG === 'cn' ? 'CN / EN' : 'EN / CN';
+    refreshI18N();
+  });
+
+  resize();
+  requestAnimationFrame(draw);
+})();
+</script>
+</body>
+</html>

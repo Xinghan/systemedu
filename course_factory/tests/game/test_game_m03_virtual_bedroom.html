@@ -1,0 +1,897 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>M03 虚拟卧室 PM2.5 沙盒</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+SC:wght@400;500;700&family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    /* Industrial Atelier — Claude warm cream */
+    --paper:#FAF9F5;
+    --paper-2:#F1EDDF;
+    --card:#FFFFFF;
+    --ink:#191814;
+    --ink-2:#2B2924;
+    --sub:#6B6557;
+    --sub-2:#9D978A;
+    --border:#EBE5D6;
+    --border-2:#D9D1BD;
+    --hairline:#F2EDE0;
+
+    /* Primary — Claude coral */
+    --primary:#D97757;
+    --primary-ink:#9A4A2E;
+    --primary-soft:#F8EDE5;
+    --primary-line:#ECCFB8;
+
+    /* Domain accent — climate */
+    --climate:#527B95;
+    --climate-soft:#DEE5EC;
+
+    --shadow-sm:0 1px 2px 0 rgba(25,24,20,.04);
+    --shadow:0 1px 3px 0 rgba(25,24,20,.06),0 1px 2px -1px rgba(25,24,20,.04);
+    --shadow-md:0 4px 8px -2px rgba(25,24,20,.06),0 2px 4px -2px rgba(25,24,20,.04);
+    --shadow-lg:0 12px 24px -6px rgba(25,24,20,.1),0 4px 8px -4px rgba(25,24,20,.05);
+  }
+
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    height:100vh;width:100vw;overflow:hidden;
+    background:var(--paper);
+    color:var(--ink);
+    font-family:'Noto Sans SC','Inter',sans-serif;
+    font-size:14px;
+  }
+  .mono{font-family:'JetBrains Mono',monospace;}
+
+  .app{display:flex;flex-direction:row;width:100vw;height:100vh;}
+
+  /* ====== 左 sidebar 200px ====== */
+  .game-sidebar{
+    width:200px;flex-shrink:0;
+    background:var(--paper-2);
+    border-right:1px solid var(--border);
+    display:flex;flex-direction:column;
+    padding:18px 14px;gap:14px;
+    overflow-y:auto;
+  }
+  .brand{display:flex;flex-direction:column;gap:2px;border-bottom:1px solid var(--border);padding-bottom:12px;}
+  .brand .mod{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--sub);letter-spacing:1.5px;}
+  .brand .title{font-size:16px;font-weight:700;color:var(--ink);line-height:1.3;}
+  .brand .sub{font-size:11px;color:var(--sub);margin-top:2px;}
+
+  .section-label{
+    font-family:'JetBrains Mono',monospace;
+    font-size:10px;color:var(--sub-2);
+    letter-spacing:1.5px;text-transform:uppercase;
+    margin-bottom:4px;
+  }
+
+  /* checkbox 控件 */
+  .ctrl-list{display:flex;flex-direction:column;gap:6px;}
+  .ctrl{
+    display:flex;align-items:center;gap:8px;
+    padding:7px 9px;
+    background:var(--card);
+    border:1px solid var(--border);
+    border-radius:6px;
+    cursor:pointer;
+    transition:all 0.15s ease;
+    user-select:none;
+  }
+  .ctrl:hover{border-color:var(--border-2);background:#FBFAF6;}
+  .ctrl.active{
+    background:var(--climate-soft);
+    border-color:var(--climate);
+  }
+  .ctrl .box{
+    width:14px;height:14px;flex-shrink:0;
+    border:1.5px solid var(--sub-2);
+    border-radius:3px;
+    display:flex;align-items:center;justify-content:center;
+    background:var(--card);
+  }
+  .ctrl.active .box{
+    background:var(--climate);
+    border-color:var(--climate);
+  }
+  .ctrl.active .box::after{
+    content:"";display:block;
+    width:6px;height:6px;background:var(--card);border-radius:1px;
+  }
+  .ctrl .label{font-size:12px;color:var(--ink);font-weight:500;}
+  .ctrl .delta{
+    margin-left:auto;
+    font-family:'JetBrains Mono',monospace;
+    font-size:10px;color:var(--sub);
+  }
+  .ctrl.active .delta{color:var(--primary-ink);font-weight:700;}
+
+  /* time radio */
+  .time-row{display:flex;gap:4px;}
+  .time-btn{
+    flex:1;padding:6px 4px;
+    background:var(--card);border:1px solid var(--border);
+    border-radius:6px;cursor:pointer;
+    font-family:'JetBrains Mono',monospace;font-size:10px;
+    color:var(--sub);text-align:center;
+    transition:all 0.15s;
+  }
+  .time-btn.active{background:var(--ink);color:var(--paper);border-color:var(--ink);}
+  .time-btn:hover:not(.active){border-color:var(--border-2);}
+
+  /* slider */
+  .slider-wrap{display:flex;flex-direction:column;gap:6px;}
+  .slider-label{display:flex;justify-content:space-between;font-size:11px;color:var(--sub);}
+  .slider-label .val{font-family:'JetBrains Mono',monospace;color:var(--ink);font-weight:700;}
+  input[type=range]{
+    -webkit-appearance:none;appearance:none;
+    width:100%;height:4px;
+    background:var(--border);
+    border-radius:2px;outline:none;
+  }
+  input[type=range]::-webkit-slider-thumb{
+    -webkit-appearance:none;appearance:none;
+    width:14px;height:14px;
+    background:var(--primary);
+    border-radius:50%;
+    cursor:pointer;
+    border:2px solid var(--card);
+    box-shadow:var(--shadow-sm);
+  }
+  input[type=range]::-moz-range-thumb{
+    width:14px;height:14px;
+    background:var(--primary);
+    border-radius:50%;
+    cursor:pointer;
+    border:2px solid var(--card);
+  }
+
+  /* guide */
+  .guide{
+    font-size:11px;color:var(--sub);line-height:1.5;
+    padding:10px;background:var(--card);
+    border:1px solid var(--border);border-radius:6px;
+  }
+  .guide ul{margin:4px 0 0 0;padding-left:14px;}
+  .guide li{margin-bottom:3px;}
+
+  /* reset + lang at bottom */
+  .sidebar-bottom{margin-top:auto;display:flex;flex-direction:column;gap:8px;}
+  .reset-btn,.lang-btn{
+    padding:8px;border-radius:6px;
+    background:var(--card);border:1px solid var(--border);
+    font-family:'JetBrains Mono',monospace;font-size:11px;
+    color:var(--ink);cursor:pointer;
+    transition:all 0.15s;
+    text-align:center;font-weight:500;
+  }
+  .reset-btn:hover,.lang-btn:hover{background:var(--primary-soft);border-color:var(--primary-line);color:var(--primary-ink);}
+
+  /* ====== 右 main ====== */
+  .game-main{
+    flex:1;display:flex;flex-direction:column;
+    position:relative;
+    background:var(--paper);
+    min-width:0;min-height:0;
+  }
+  .stage{
+    flex:1;display:flex;flex-direction:column;
+    position:relative;
+    padding:20px 24px;
+    min-height:0;
+  }
+  .stage-header{
+    display:flex;justify-content:space-between;align-items:flex-start;
+    margin-bottom:12px;flex-shrink:0;
+  }
+  .stage-title{font-size:18px;font-weight:700;color:var(--ink);}
+  .stage-sub{font-size:12px;color:var(--sub);margin-top:2px;}
+
+  .canvas-wrap{
+    flex:1;
+    display:flex;flex-direction:column;
+    position:relative;
+    background:var(--card);
+    border:1px solid var(--border);
+    border-radius:10px;
+    box-shadow:var(--shadow-sm);
+    min-height:0;
+    overflow:hidden;
+  }
+  canvas{display:block;width:100%;height:100%;}
+
+  /* HUD 模拟值卡 (右上) */
+  .hud-pm{
+    position:absolute;top:18px;right:18px;
+    background:var(--card);
+    border:1px solid var(--border);
+    border-radius:10px;
+    box-shadow:var(--shadow-md);
+    padding:14px 18px;
+    min-width:180px;
+    z-index:5;
+  }
+  .hud-pm .lbl{font-size:11px;color:var(--sub);letter-spacing:1px;font-family:'JetBrains Mono',monospace;}
+  .hud-pm .val{
+    font-family:'JetBrains Mono',monospace;
+    font-size:38px;font-weight:700;color:var(--ink);
+    line-height:1.1;margin-top:4px;
+    transition:color 0.3s;
+  }
+  .hud-pm .val.warn{color:var(--primary);}
+  .hud-pm .val.danger{color:var(--primary-ink);}
+  .hud-pm .unit{font-size:12px;color:var(--sub);margin-left:4px;font-family:'JetBrains Mono',monospace;}
+  .hud-pm .level{
+    margin-top:8px;
+    font-size:11px;color:var(--sub);
+    display:flex;align-items:center;gap:6px;
+  }
+  .hud-pm .level .dot{
+    width:8px;height:8px;border-radius:50%;
+    background:var(--climate);
+  }
+  .hud-pm.warn .dot{background:var(--primary);}
+  .hud-pm.danger .dot{background:var(--primary-ink);}
+  .hud-pm .bar{
+    margin-top:8px;
+    height:4px;border-radius:2px;
+    background:var(--border);overflow:hidden;
+    position:relative;
+  }
+  .hud-pm .bar-fill{
+    height:100%;
+    background:var(--climate);
+    border-radius:2px;
+    transition:width 0.4s ease, background 0.3s;
+  }
+  .hud-pm.warn .bar-fill{background:var(--primary);}
+  .hud-pm.danger .bar-fill{background:var(--primary-ink);}
+
+  /* HUD 配方解锁 (右下) */
+  .hud-recipe{
+    position:absolute;bottom:18px;right:18px;
+    background:var(--card);
+    border:1px solid var(--border);
+    border-radius:10px;
+    box-shadow:var(--shadow-md);
+    padding:12px 14px;
+    min-width:200px;
+    z-index:5;
+  }
+  .hud-recipe .lbl{font-size:11px;color:var(--sub);letter-spacing:1px;font-family:'JetBrains Mono',monospace;}
+  .hud-recipe .progress{
+    margin-top:6px;
+    font-family:'JetBrains Mono',monospace;
+    font-size:14px;font-weight:700;color:var(--ink);
+  }
+  .hud-recipe .progress .total{color:var(--sub);}
+  .recipe-list{margin-top:6px;display:flex;flex-direction:column;gap:3px;}
+  .recipe-item{
+    display:flex;align-items:center;gap:6px;
+    font-size:10px;color:var(--sub);
+    font-family:'JetBrains Mono',monospace;
+  }
+  .recipe-item .tick{
+    width:10px;height:10px;border-radius:3px;
+    border:1px solid var(--border-2);
+    background:var(--card);
+    display:flex;align-items:center;justify-content:center;
+    flex-shrink:0;
+  }
+  .recipe-item.done .tick{background:var(--climate);border-color:var(--climate);}
+  .recipe-item.done .tick::after{
+    content:"";width:4px;height:4px;background:var(--card);border-radius:1px;
+  }
+  .recipe-item.done{color:var(--ink);}
+
+  /* 当前 time tint overlay (动态) */
+  .time-tint{
+    position:absolute;inset:0;
+    pointer-events:none;
+    transition:background 0.6s ease;
+    border-radius:10px;
+  }
+
+  /* 阈值标识 (canvas overlay) */
+  .threshold-tag{
+    position:absolute;top:18px;left:18px;
+    font-family:'JetBrains Mono',monospace;
+    font-size:11px;color:var(--sub);
+    background:var(--card);
+    border:1px solid var(--border);
+    border-radius:6px;
+    padding:6px 10px;
+    z-index:5;
+  }
+  .threshold-tag .num{color:var(--primary-ink);font-weight:700;}
+
+  /* footer hint */
+  .footer-hint{
+    margin-top:8px;flex-shrink:0;
+    font-size:11px;color:var(--sub);
+    text-align:center;
+    font-family:'JetBrains Mono',monospace;
+    letter-spacing:0.5px;
+  }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- ========== Sidebar ========== -->
+  <aside class="game-sidebar">
+    <div class="brand">
+      <div class="mod">MODULE M03</div>
+      <div class="title" data-cn="虚拟卧室" data-en="Virtual Bedroom">虚拟卧室</div>
+      <div class="sub mono" data-cn="PM2.5 沙盒模拟" data-en="PM2.5 Sandbox">PM2.5 沙盒模拟</div>
+    </div>
+
+    <div>
+      <div class="section-label" data-cn="室内行为" data-en="ACTIONS">室内行为</div>
+      <div class="ctrl-list">
+        <div class="ctrl" data-key="open_window">
+          <div class="box"></div>
+          <div class="label" data-cn="开窗通风" data-en="Open window">开窗通风</div>
+          <div class="delta mono">±</div>
+        </div>
+        <div class="ctrl" data-key="close_window">
+          <div class="box"></div>
+          <div class="label" data-cn="紧闭门窗" data-en="Seal room">紧闭门窗</div>
+          <div class="delta mono">−</div>
+        </div>
+        <div class="ctrl" data-key="incense">
+          <div class="box"></div>
+          <div class="label" data-cn="点燃熏香" data-en="Burn incense">点燃熏香</div>
+          <div class="delta mono">+</div>
+        </div>
+        <div class="ctrl" data-key="smoke">
+          <div class="box"></div>
+          <div class="label" data-cn="室内抽烟" data-en="Indoor smoke">室内抽烟</div>
+          <div class="delta mono">+</div>
+        </div>
+        <div class="ctrl" data-key="purifier">
+          <div class="box"></div>
+          <div class="label" data-cn="开净化器" data-en="Purifier on">开净化器</div>
+          <div class="delta mono">−</div>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="section-label" data-cn="时段" data-en="TIME">时段</div>
+      <div class="time-row">
+        <div class="time-btn active" data-time="morning" data-cn="早" data-en="AM">早</div>
+        <div class="time-btn" data-time="evening" data-cn="晚" data-en="PM">晚</div>
+        <div class="time-btn" data-time="night" data-cn="夜" data-en="NT">夜</div>
+      </div>
+    </div>
+
+    <div class="slider-wrap">
+      <div class="slider-label">
+        <span data-cn="室外 PM2.5" data-en="Outdoor PM2.5">室外 PM2.5</span>
+        <span class="val mono"><span id="outdoorVal">60</span> µg</span>
+      </div>
+      <input type="range" id="outdoorSlider" min="10" max="200" value="60" step="5">
+    </div>
+
+    <div class="guide">
+      <div data-cn="操作说明" data-en="How to play" style="font-weight:700;color:var(--ink);">操作说明</div>
+      <ul>
+        <li data-cn="点选左侧行为切换室内源" data-en="Toggle actions to change sources">点选左侧行为切换室内源</li>
+        <li data-cn="拖动滑块调节户外底值" data-en="Drag slider for outdoor base">拖动滑块调节户外底值</li>
+        <li data-cn="凑出 5 种配方解锁" data-en="Discover 5 recipes">凑出 5 种配方解锁</li>
+      </ul>
+    </div>
+
+    <div class="sidebar-bottom">
+      <button class="reset-btn" id="resetBtn" data-cn="重置房间" data-en="Reset room">重置房间</button>
+      <button class="lang-btn" id="langBtn">EN / 中</button>
+    </div>
+  </aside>
+
+  <!-- ========== Main ========== -->
+  <main class="game-main">
+    <div class="stage">
+      <div class="stage-header">
+        <div>
+          <div class="stage-title" data-cn="俯视卧室 · 实时 PM2.5 模拟" data-en="Bedroom Top-View · Live PM2.5">俯视卧室 · 实时 PM2.5 模拟</div>
+          <div class="stage-sub mono" data-cn="改变行为, 观察粒子密度与浓度数字" data-en="Change actions, watch particles and PM values">改变行为, 观察粒子密度与浓度数字</div>
+        </div>
+      </div>
+
+      <div class="canvas-wrap" id="canvasWrap">
+        <canvas id="bedroom"></canvas>
+        <div class="time-tint" id="timeTint"></div>
+
+        <div class="threshold-tag">
+          <span data-cn="阈值" data-en="Threshold">阈值</span>
+          <span class="num mono">PM2.5 &gt; 75</span>
+          <span data-cn="不健康" data-en="Unhealthy">不健康</span>
+        </div>
+
+        <div class="hud-pm" id="hudPm">
+          <div class="lbl">INDOOR PM2.5</div>
+          <div><span class="val mono" id="pmValue">38</span><span class="unit">µg/m³</span></div>
+          <div class="level">
+            <span class="dot"></span>
+            <span id="levelTxt" data-cn="良好" data-en="Good">良好</span>
+          </div>
+          <div class="bar"><div class="bar-fill" id="barFill" style="width:25%;"></div></div>
+        </div>
+
+        <div class="hud-recipe" id="hudRecipe">
+          <div class="lbl">RECIPES UNLOCKED</div>
+          <div class="progress mono"><span id="recipeCount">0</span><span class="total">/5</span></div>
+          <div class="recipe-list" id="recipeList">
+            <div class="recipe-item" data-id="fresh"><span class="tick"></span><span data-cn="清新通风" data-en="Fresh air">清新通风</span></div>
+            <div class="recipe-item" data-id="sealed"><span class="tick"></span><span data-cn="密闭防尘" data-en="Sealed shield">密闭防尘</span></div>
+            <div class="recipe-item" data-id="hazard"><span class="tick"></span><span data-cn="污染重灾" data-en="Hazard load">污染重灾</span></div>
+            <div class="recipe-item" data-id="purify"><span class="tick"></span><span data-cn="净化救援" data-en="Purify rescue">净化救援</span></div>
+            <div class="recipe-item" data-id="night"><span class="tick"></span><span data-cn="夜间静养" data-en="Night calm">夜间静养</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="footer-hint" data-cn="所有控件实时联动 · 数据非真实测量, 仅用于教学" data-en="Live coupling · Educational simulation, not real measurement">
+        所有控件实时联动 · 数据非真实测量, 仅用于教学
+      </div>
+    </div>
+  </main>
+</div>
+
+<script>
+(function(){
+  'use strict';
+
+  // ===== state (避免 window 同名顶层 var) =====
+  var bedroomState = {
+    actions: {
+      open_window:false, close_window:false,
+      incense:false, smoke:false, purifier:false
+    },
+    timeOfDay: 'morning',
+    outdoor: 60,
+    pm: 38,
+    recipes: {fresh:false, sealed:false, hazard:false, purify:false, night:false},
+    lang: 'cn'
+  };
+
+  // ===== i18n =====
+  var langBtn = document.getElementById('langBtn');
+  function applyLang(){
+    var nodes = document.querySelectorAll('[data-cn]');
+    for (var i=0;i<nodes.length;i++){
+      var n = nodes[i];
+      var t = bedroomState.lang === 'cn' ? n.getAttribute('data-cn') : n.getAttribute('data-en');
+      if (t !== null) n.textContent = t;
+    }
+    langBtn.textContent = bedroomState.lang === 'cn' ? 'EN / 中' : '中 / EN';
+  }
+  langBtn.addEventListener('click', function(){
+    bedroomState.lang = bedroomState.lang === 'cn' ? 'en' : 'cn';
+    applyLang();
+    renderHUD();
+  });
+
+  // ===== checkbox 控件 =====
+  var ctrls = document.querySelectorAll('.ctrl');
+  for (var i=0;i<ctrls.length;i++){
+    (function(el){
+      el.addEventListener('click', function(){
+        var k = el.getAttribute('data-key');
+        bedroomState.actions[k] = !bedroomState.actions[k];
+        // 互斥: 开窗 vs 紧闭门窗
+        if (k === 'open_window' && bedroomState.actions.open_window) {
+          bedroomState.actions.close_window = false;
+        }
+        if (k === 'close_window' && bedroomState.actions.close_window) {
+          bedroomState.actions.open_window = false;
+        }
+        syncCtrlClass();
+        recompute();
+      });
+    })(ctrls[i]);
+  }
+  function syncCtrlClass(){
+    var nodes = document.querySelectorAll('.ctrl');
+    for (var i=0;i<nodes.length;i++){
+      var k = nodes[i].getAttribute('data-key');
+      if (bedroomState.actions[k]) nodes[i].classList.add('active');
+      else nodes[i].classList.remove('active');
+    }
+  }
+
+  // ===== time radio =====
+  var timeBtns = document.querySelectorAll('.time-btn');
+  for (var j=0;j<timeBtns.length;j++){
+    (function(el){
+      el.addEventListener('click', function(){
+        bedroomState.timeOfDay = el.getAttribute('data-time');
+        for (var m=0;m<timeBtns.length;m++) timeBtns[m].classList.remove('active');
+        el.classList.add('active');
+        recompute();
+      });
+    })(timeBtns[j]);
+  }
+
+  // ===== slider =====
+  var outdoorSlider = document.getElementById('outdoorSlider');
+  var outdoorVal = document.getElementById('outdoorVal');
+  outdoorSlider.addEventListener('input', function(){
+    bedroomState.outdoor = parseInt(outdoorSlider.value, 10);
+    outdoorVal.textContent = bedroomState.outdoor;
+    recompute();
+  });
+
+  // ===== reset =====
+  document.getElementById('resetBtn').addEventListener('click', function(){
+    var keys = Object.keys(bedroomState.actions);
+    for (var k=0;k<keys.length;k++) bedroomState.actions[keys[k]] = false;
+    bedroomState.timeOfDay = 'morning';
+    bedroomState.outdoor = 60;
+    outdoorSlider.value = 60;
+    outdoorVal.textContent = 60;
+    for (var m=0;m<timeBtns.length;m++){
+      if (timeBtns[m].getAttribute('data-time') === 'morning') timeBtns[m].classList.add('active');
+      else timeBtns[m].classList.remove('active');
+    }
+    syncCtrlClass();
+    recompute();
+  });
+
+  // ===== 模型: 计算室内 PM2.5 =====
+  function computePM(){
+    var s = bedroomState;
+    var outdoor = s.outdoor;
+    var infil = 0.35;
+    if (s.actions.open_window) infil = 0.85;
+    if (s.actions.close_window) infil = 0.10;
+    var base = outdoor * infil;
+
+    var indoor = 0;
+    if (s.actions.incense) indoor += 60;
+    if (s.actions.smoke) indoor += 110;
+
+    var pm = base + indoor;
+
+    if (s.actions.purifier) pm *= 0.35;
+
+    if (s.timeOfDay === 'evening') pm *= 1.15;
+    if (s.timeOfDay === 'night') pm *= 0.90;
+
+    pm = Math.max(2, Math.round(pm));
+    return pm;
+  }
+
+  // ===== 配方判定 =====
+  function checkRecipes(){
+    var s = bedroomState, a = s.actions;
+    if (a.open_window && s.outdoor < 50 && !a.incense && !a.smoke) s.recipes.fresh = true;
+    if (a.close_window && s.outdoor > 100 && !a.incense && !a.smoke) s.recipes.sealed = true;
+    if (a.incense && a.smoke && a.close_window) s.recipes.hazard = true;
+    if (a.purifier && (a.incense || a.smoke)) s.recipes.purify = true;
+    if (s.timeOfDay === 'night' && a.purifier && a.close_window && !a.incense && !a.smoke) s.recipes.night = true;
+
+    var done = 0;
+    var keys = Object.keys(s.recipes);
+    for (var i=0;i<keys.length;i++) if (s.recipes[keys[i]]) done++;
+    return done;
+  }
+
+  // ===== 渲染 HUD =====
+  function renderHUD(){
+    var pm = bedroomState.pm;
+    var pmEl = document.getElementById('pmValue');
+    var hud = document.getElementById('hudPm');
+    var levelTxt = document.getElementById('levelTxt');
+    var bar = document.getElementById('barFill');
+
+    pmEl.textContent = pm;
+    pmEl.classList.remove('warn','danger');
+    hud.classList.remove('warn','danger');
+
+    var labelCn, labelEn, pct;
+    if (pm < 35){
+      labelCn = '良好'; labelEn = 'Good';
+      pct = Math.min(30, pm/35*30);
+    } else if (pm < 75){
+      labelCn = '中等'; labelEn = 'Moderate';
+      pct = 30 + (pm-35)/40*30;
+      pmEl.classList.add('warn');
+      hud.classList.add('warn');
+    } else if (pm < 150){
+      labelCn = '不健康'; labelEn = 'Unhealthy';
+      pct = 60 + (pm-75)/75*30;
+      pmEl.classList.add('danger');
+      hud.classList.add('danger');
+    } else {
+      labelCn = '重度污染'; labelEn = 'Hazardous';
+      pct = Math.min(100, 90 + (pm-150)/50*10);
+      pmEl.classList.add('danger');
+      hud.classList.add('danger');
+    }
+    levelTxt.setAttribute('data-cn', labelCn);
+    levelTxt.setAttribute('data-en', labelEn);
+    levelTxt.textContent = bedroomState.lang === 'cn' ? labelCn : labelEn;
+    bar.style.width = pct + '%';
+
+    // 配方
+    var done = checkRecipes();
+    document.getElementById('recipeCount').textContent = done;
+    var items = document.querySelectorAll('.recipe-item');
+    for (var i=0;i<items.length;i++){
+      var id = items[i].getAttribute('data-id');
+      if (bedroomState.recipes[id]) items[i].classList.add('done');
+    }
+
+    // 时段 tint
+    var tint = document.getElementById('timeTint');
+    if (bedroomState.timeOfDay === 'morning') tint.style.background = 'linear-gradient(135deg, rgba(255,238,200,0.10), rgba(255,255,255,0))';
+    else if (bedroomState.timeOfDay === 'evening') tint.style.background = 'linear-gradient(135deg, rgba(217,119,87,0.10), rgba(82,123,149,0.05))';
+    else tint.style.background = 'linear-gradient(135deg, rgba(40,52,70,0.18), rgba(82,123,149,0.10))';
+  }
+
+  // ===== Canvas 卧室俯视渲染 =====
+  var canvas = document.getElementById('bedroom');
+  var ctxC = canvas.getContext('2d');
+  var wrap = document.getElementById('canvasWrap');
+  var dpr = Math.min(window.devicePixelRatio || 1, 2);
+
+  function resizeCanvas(){
+    var rect = wrap.getBoundingClientRect();
+    var W = Math.max(300, rect.width);
+    var H = Math.max(200, rect.height);
+    canvas.width = Math.floor(W * dpr);
+    canvas.height = Math.floor(H * dpr);
+    canvas.style.width = W + 'px';
+    canvas.style.height = H + 'px';
+    ctxC.setTransform(dpr,0,0,dpr,0,0);
+  }
+  window.addEventListener('resize', function(){ resizeCanvas(); renderRoom(); });
+
+  function drawRoom(W, H){
+    var pad = 30;
+    var roomX = pad, roomY = pad;
+    var roomW = W - pad*2, roomH = H - pad*2;
+
+    // 房间地板
+    ctxC.fillStyle = '#F5F1E5';
+    ctxC.fillRect(roomX, roomY, roomW, roomH);
+
+    // 墙体
+    ctxC.strokeStyle = '#2B2924';
+    ctxC.lineWidth = 2.5;
+    ctxC.strokeRect(roomX, roomY, roomW, roomH);
+
+    // 窗户 (上墙)
+    var winW = roomW * 0.32;
+    var winX = roomX + (roomW - winW) / 2;
+    var winY = roomY;
+    ctxC.fillStyle = bedroomState.actions.open_window ? '#DEE5EC' : (bedroomState.actions.close_window ? '#6B6557' : '#A8B8C5');
+    ctxC.fillRect(winX, winY-3, winW, 6);
+    ctxC.strokeStyle = '#191814';
+    ctxC.lineWidth = 1.5;
+    ctxC.strokeRect(winX, winY-3, winW, 6);
+    ctxC.beginPath();
+    ctxC.moveTo(winX + winW/2, winY-3);
+    ctxC.lineTo(winX + winW/2, winY+3);
+    ctxC.stroke();
+
+    // 门
+    var doorH = roomH * 0.22;
+    var doorY = roomY + roomH - doorH - 20;
+    ctxC.fillStyle = '#E8DEC8';
+    ctxC.fillRect(roomX + roomW - 3, doorY, 6, doorH);
+    ctxC.strokeStyle = '#191814';
+    ctxC.strokeRect(roomX + roomW - 3, doorY, 6, doorH);
+
+    // === 家具 ===
+    // 床
+    var bedX = roomX + 24;
+    var bedY = roomY + roomH * 0.5 - 30;
+    var bedW = roomW * 0.35;
+    var bedH = roomH * 0.32;
+    ctxC.fillStyle = '#FFFFFF';
+    ctxC.strokeStyle = '#191814';
+    ctxC.lineWidth = 1.5;
+    ctxC.fillRect(bedX, bedY, bedW, bedH);
+    ctxC.strokeRect(bedX, bedY, bedW, bedH);
+    ctxC.fillStyle = '#D9D1BD';
+    ctxC.fillRect(bedX, bedY, bedW, 12);
+    ctxC.strokeRect(bedX, bedY, bedW, 12);
+    ctxC.fillStyle = '#F8EDE5';
+    ctxC.fillRect(bedX + 8, bedY + 16, bedW * 0.35, 14);
+    ctxC.strokeRect(bedX + 8, bedY + 16, bedW * 0.35, 14);
+    ctxC.fillStyle = '#6B6557';
+    ctxC.font = "10px 'JetBrains Mono', monospace";
+    ctxC.textAlign = 'center';
+    ctxC.fillText('BED', bedX + bedW/2, bedY + bedH/2 + 12);
+
+    // 桌
+    var deskX = roomX + roomW * 0.62;
+    var deskY = roomY + 24;
+    var deskW = roomW * 0.25;
+    var deskH = 28;
+    ctxC.fillStyle = '#EAE3CC';
+    ctxC.fillRect(deskX, deskY, deskW, deskH);
+    ctxC.strokeRect(deskX, deskY, deskW, deskH);
+    ctxC.fillStyle = '#6B6557';
+    ctxC.fillText('DESK', deskX + deskW/2, deskY + 18);
+
+    // 净化器 (右下)
+    var purX = roomX + roomW - 70;
+    var purY = roomY + roomH - 70;
+    var purW = 30, purH = 40;
+    ctxC.fillStyle = bedroomState.actions.purifier ? '#527B95' : '#FFFFFF';
+    ctxC.strokeStyle = '#191814';
+    ctxC.lineWidth = 1.5;
+    ctxC.fillRect(purX, purY, purW, purH);
+    ctxC.strokeRect(purX, purY, purW, purH);
+    ctxC.strokeStyle = bedroomState.actions.purifier ? '#DEE5EC' : '#9D978A';
+    ctxC.lineWidth = 1;
+    for (var g=0; g<3; g++){
+      ctxC.beginPath();
+      ctxC.moveTo(purX + 4, purY + 8 + g*8);
+      ctxC.lineTo(purX + purW - 4, purY + 8 + g*8);
+      ctxC.stroke();
+    }
+    ctxC.fillStyle = bedroomState.actions.purifier ? '#FAF9F5' : '#6B6557';
+    ctxC.font = "9px 'JetBrains Mono', monospace";
+    ctxC.textAlign = 'center';
+    ctxC.fillText('AIR', purX + purW/2, purY + purH + 11);
+    // 扇圈
+    if (bedroomState.actions.purifier){
+      ctxC.strokeStyle = '#527B95';
+      ctxC.lineWidth = 1.5;
+      ctxC.globalAlpha = 0.4;
+      ctxC.beginPath();
+      ctxC.arc(purX + purW/2, purY + purH/2, 22, 0, Math.PI*2);
+      ctxC.stroke();
+      ctxC.beginPath();
+      ctxC.arc(purX + purW/2, purY + purH/2, 32, 0, Math.PI*2);
+      ctxC.stroke();
+      ctxC.globalAlpha = 1;
+    }
+
+    // 香炉 (桌上)
+    if (bedroomState.actions.incense){
+      var inX = deskX + deskW * 0.2;
+      var inY = deskY + 8;
+      ctxC.fillStyle = '#9A4A2E';
+      ctxC.beginPath();
+      ctxC.arc(inX, inY, 5, 0, Math.PI*2);
+      ctxC.fill();
+      ctxC.strokeStyle = '#191814';
+      ctxC.stroke();
+      ctxC.strokeStyle = '#9D978A';
+      ctxC.lineWidth = 1.2;
+      ctxC.globalAlpha = 0.7;
+      ctxC.beginPath();
+      ctxC.moveTo(inX, inY - 5);
+      ctxC.bezierCurveTo(inX-6, inY-15, inX+6, inY-25, inX, inY-35);
+      ctxC.stroke();
+      ctxC.globalAlpha = 1;
+    }
+
+    // 烟灰缸 (床头柜上)
+    if (bedroomState.actions.smoke){
+      var smX = bedX + bedW + 18;
+      var smY = bedY + bedH * 0.4;
+      ctxC.fillStyle = '#2B2924';
+      ctxC.beginPath();
+      ctxC.arc(smX, smY, 6, 0, Math.PI*2);
+      ctxC.fill();
+      ctxC.strokeStyle = '#6B6557';
+      ctxC.lineWidth = 1.4;
+      ctxC.globalAlpha = 0.6;
+      ctxC.beginPath();
+      ctxC.moveTo(smX, smY - 6);
+      ctxC.bezierCurveTo(smX-8, smY-18, smX+8, smY-30, smX-2, smY-42);
+      ctxC.stroke();
+      ctxC.globalAlpha = 1;
+    }
+
+    // 窗状态标签
+    ctxC.fillStyle = '#6B6557';
+    ctxC.font = "10px 'JetBrains Mono', monospace";
+    ctxC.textAlign = 'center';
+    var winLabel;
+    if (bedroomState.actions.open_window) winLabel = bedroomState.lang==='cn'?'窗开':'OPEN';
+    else if (bedroomState.actions.close_window) winLabel = bedroomState.lang==='cn'?'窗闭':'SEAL';
+    else winLabel = bedroomState.lang==='cn'?'半开':'AJAR';
+    ctxC.fillText(winLabel, winX + winW/2, winY - 8);
+  }
+
+  function drawParticles(W, H){
+    var pm = bedroomState.pm;
+    var count = Math.min(220, Math.max(8, Math.round(pm * 1.4)));
+
+    var pad = 32;
+    var rngSeed = pm * 31 + (bedroomState.timeOfDay.length * 7) +
+                  (bedroomState.actions.open_window?1:0)*11 +
+                  (bedroomState.actions.close_window?1:0)*13 +
+                  (bedroomState.actions.incense?1:0)*17 +
+                  (bedroomState.actions.smoke?1:0)*19 +
+                  (bedroomState.actions.purifier?1:0)*23 +
+                  bedroomState.outdoor;
+    function rand(i){
+      var x = Math.sin(rngSeed * 12.9898 + i * 78.233) * 43758.5453;
+      return x - Math.floor(x);
+    }
+
+    var color;
+    if (pm < 35) color = 'rgba(82,123,149,0.55)';
+    else if (pm < 75) color = 'rgba(217,119,87,0.55)';
+    else if (pm < 150) color = 'rgba(154,74,46,0.65)';
+    else color = 'rgba(43,41,36,0.70)';
+
+    ctxC.fillStyle = color;
+    for (var i=0;i<count;i++){
+      var rx = rand(i*2);
+      var ry = rand(i*2+1);
+      var x = pad + rx * (W - pad*2);
+      var y = pad + ry * (H - pad*2);
+      var r = 1 + rand(i*2+5) * 1.8;
+      if (pm > 100) r += 0.6;
+      ctxC.beginPath();
+      ctxC.arc(x, y, r, 0, Math.PI*2);
+      ctxC.fill();
+    }
+
+    // 净化器留白圈
+    if (bedroomState.actions.purifier){
+      var pad2 = 30;
+      var roomW2 = W - pad2*2, roomH2 = H - pad2*2;
+      var purCx = pad2 + roomW2 - 70 + 15;
+      var purCy = pad2 + roomH2 - 70 + 20;
+      ctxC.save();
+      ctxC.globalCompositeOperation = 'destination-out';
+      ctxC.beginPath();
+      ctxC.arc(purCx, purCy, 60, 0, Math.PI*2);
+      ctxC.fill();
+      ctxC.restore();
+    }
+  }
+
+  function renderRoom(){
+    var rect = wrap.getBoundingClientRect();
+    var W = rect.width, H = rect.height;
+    ctxC.clearRect(0,0,W,H);
+
+    var bg;
+    if (bedroomState.timeOfDay === 'morning') bg = '#FAF9F5';
+    else if (bedroomState.timeOfDay === 'evening') bg = '#F4ECDF';
+    else bg = '#E6E2D6';
+    ctxC.fillStyle = bg;
+    ctxC.fillRect(0,0,W,H);
+
+    drawRoom(W, H);
+    drawParticles(W, H);
+  }
+
+  function recompute(){
+    bedroomState.pm = computePM();
+    renderHUD();
+    renderRoom();
+  }
+
+  function init(){
+    resizeCanvas();
+    syncCtrlClass();
+    recompute();
+    applyLang();
+  }
+  if (document.readyState === 'complete' || document.readyState === 'interactive'){
+    setTimeout(init, 30);
+  } else {
+    document.addEventListener('DOMContentLoaded', init);
+  }
+})();
+</script>
+</body>
+</html>

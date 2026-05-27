@@ -1,0 +1,702 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>M06 · 第一次 SSH 进树莓派 + 10 个 Linux 命令</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+SC:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --paper:    #FAF9F5;
+    --paper-2:  #F1EDDF;
+    --card:     #FFFFFF;
+    --ink:      #191814;
+    --ink-2:    #2B2924;
+    --sub:      #6B6557;
+    --sub-2:    #9D978A;
+    --border:   #EBE5D6;
+    --border-2: #D9D1BD;
+    --hairline: #F2EDE0;
+
+    --primary:      #D97757;
+    --primary-ink:  #9A4A2E;
+    --primary-soft: #F8EDE5;
+    --primary-line: #ECCFB8;
+
+    --computing:      #C04E68;
+    --computing-soft: #F4DDE3;
+
+    --shadow-sm: 0 1px 2px 0 rgba(25,24,20,.04);
+    --shadow:    0 1px 3px 0 rgba(25,24,20,.06), 0 1px 2px -1px rgba(25,24,20,.04);
+    --shadow-md: 0 4px 8px -2px rgba(25,24,20,.06), 0 2px 4px -2px rgba(25,24,20,.04);
+    --shadow-lg: 0 12px 24px -6px rgba(25,24,20,.1), 0 4px 8px -4px rgba(25,24,20,.05);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    height: 100vh; overflow: hidden;
+    background: var(--paper); color: var(--ink);
+    font-family: 'Inter', 'Noto Sans SC', 'PingFang SC', sans-serif;
+    font-size: 14px; line-height: 1.5;
+    display: flex;
+  }
+  .mono { font-family: 'JetBrains Mono', monospace; }
+
+  /* ============ Sidebar 200px ============ */
+  .sidebar {
+    width: 200px; flex-shrink: 0; height: 100vh;
+    background: var(--paper-2);
+    border-right: 1px solid var(--border);
+    display: flex; flex-direction: column;
+    padding: 22px 18px 18px;
+  }
+  .brand-row { display: flex; align-items: center; gap: 8px; margin-bottom: 18px; }
+  .brand-dot {
+    width: 10px; height: 10px; border-radius: 50%;
+    background: var(--primary);
+    box-shadow: 0 0 0 4px var(--primary-soft);
+    animation: pulse 2.4s ease-in-out infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { box-shadow: 0 0 0 4px var(--primary-soft); }
+    50%      { box-shadow: 0 0 0 6px var(--primary-soft); }
+  }
+  .brand-tag {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; letter-spacing: 0.08em;
+    color: var(--sub); font-weight: 600;
+  }
+  .brand-title {
+    font-size: 15px; font-weight: 700; color: var(--ink);
+    line-height: 1.35; margin-bottom: 4px;
+  }
+  .brand-sub {
+    font-size: 11px; color: var(--sub); line-height: 1.5;
+    font-family: 'JetBrains Mono', monospace;
+  }
+  .guide-h {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px; letter-spacing: 0.12em;
+    color: var(--sub-2); margin: 24px 0 8px;
+    text-transform: uppercase;
+  }
+  .guide-list { list-style: none; padding: 0; margin: 0; }
+  .guide-list li {
+    font-size: 12px; color: var(--ink-2); line-height: 1.55;
+    padding: 8px 0 8px 12px;
+    border-left: 2px solid var(--border-2);
+    margin-bottom: 4px;
+  }
+  .guide-list li .num {
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--primary-ink); font-weight: 600;
+    font-size: 10px; margin-right: 6px;
+  }
+  .guide-list li .en {
+    display: block; font-family: 'JetBrains Mono', monospace;
+    font-size: 10px; color: var(--sub-2); margin-top: 2px;
+  }
+  .lang-btn {
+    margin-top: auto;
+    border: 1px solid var(--border-2);
+    background: var(--card);
+    color: var(--ink); cursor: pointer;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; font-weight: 600;
+    padding: 9px 12px; border-radius: 6px;
+    transition: all 180ms ease;
+    letter-spacing: 0.06em;
+  }
+  .lang-btn:hover {
+    border-color: var(--primary-line);
+    background: var(--primary-soft);
+    color: var(--primary-ink);
+  }
+
+  /* ============ Main ============ */
+  .main {
+    flex: 1; height: 100vh; overflow-y: auto;
+    padding: 26px 32px 26px;
+    display: flex; flex-direction: column; gap: 18px;
+  }
+  .section-tag {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px; letter-spacing: 0.12em;
+    color: var(--sub); text-transform: uppercase;
+  }
+  .section-tag .bar {
+    width: 18px; height: 1px; background: var(--border-2);
+  }
+
+  /* ----- Top: SSH flow ----- */
+  .flow-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    box-shadow: var(--shadow-sm);
+    padding: 18px 22px;
+  }
+  .flow-head {
+    display: flex; justify-content: space-between; align-items: flex-start;
+    margin-bottom: 14px; gap: 16px;
+  }
+  .flow-title {
+    font-size: 17px; font-weight: 700; color: var(--ink);
+    line-height: 1.3;
+  }
+  .flow-title .accent { color: var(--primary-ink); }
+  .flow-tagline {
+    font-size: 12px; color: var(--sub); margin-top: 4px;
+    font-family: 'JetBrains Mono', monospace;
+  }
+  .flow-badge {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px; font-weight: 600;
+    padding: 4px 10px; border-radius: 999px;
+    background: var(--computing-soft); color: var(--computing);
+    border: 1px solid var(--computing); border-color: rgba(192,78,104,.3);
+    letter-spacing: 0.08em; white-space: nowrap;
+    align-self: center;
+  }
+  .flow-svg-wrap {
+    display: flex; align-items: center; justify-content: center;
+    padding: 4px 0 2px;
+  }
+  .flow-svg { width: 100%; max-width: 880px; height: 140px; display: block; }
+
+  .flow-foot {
+    text-align: center; font-size: 13px;
+    color: var(--ink-2); margin-top: 8px; font-weight: 500;
+  }
+  .flow-foot .en {
+    display: block; font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; color: var(--sub-2); margin-top: 3px; font-weight: 400;
+  }
+
+  /* ----- Middle: 10 cmd cards ----- */
+  .cmd-section { display: flex; flex-direction: column; gap: 10px; }
+  .cmd-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+  .cmd-head h2 {
+    font-size: 15px; font-weight: 700; color: var(--ink); margin: 0;
+  }
+  .cmd-head .sub {
+    font-size: 11px; color: var(--sub); font-family: 'JetBrains Mono', monospace;
+  }
+  .cmd-grid {
+    display: grid; grid-template-columns: repeat(5, 1fr);
+    gap: 10px;
+  }
+  .cmd-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 12px 10px;
+    box-shadow: var(--shadow-sm);
+    cursor: default;
+    display: flex; flex-direction: column; gap: 6px;
+    transition: border-color 200ms ease, box-shadow 200ms ease, transform 200ms ease;
+    position: relative;
+    min-height: 132px;
+  }
+  .cmd-card:hover {
+    border-color: var(--computing);
+    box-shadow: var(--shadow-md);
+    transform: translateY(-1px);
+  }
+  .cmd-card:hover .cmd-detail { opacity: 1; max-height: 60px; }
+  .cmd-row1 { display: flex; align-items: center; justify-content: space-between; }
+  .cmd-name {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 16px; font-weight: 700;
+    color: var(--computing);
+    letter-spacing: 0.02em;
+  }
+  .cmd-tag {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px; padding: 2px 6px; border-radius: 3px;
+    background: var(--computing-soft); color: var(--computing);
+    letter-spacing: 0.06em;
+  }
+  .cmd-desc {
+    font-size: 12px; color: var(--ink-2); line-height: 1.45;
+    font-weight: 500;
+  }
+  .cmd-demo {
+    background: var(--paper-2);
+    border: 1px solid var(--hairline);
+    border-radius: 4px;
+    padding: 5px 8px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; color: var(--ink);
+    line-height: 1.4;
+    overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+  }
+  .cmd-demo .prompt { color: var(--primary-ink); }
+  .cmd-demo .out    { color: var(--sub); }
+  .cmd-detail {
+    font-size: 11px; color: var(--sub);
+    line-height: 1.4; margin-top: 2px;
+    opacity: 0; max-height: 0; overflow: hidden;
+    transition: opacity 220ms ease, max-height 220ms ease;
+  }
+
+  /* ----- Bottom: 3 promises ----- */
+  .promise-section { display: flex; flex-direction: column; gap: 10px; }
+  .promise-grid {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px;
+  }
+  .promise-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px 16px;
+    box-shadow: var(--shadow-sm);
+    display: flex; gap: 14px; align-items: flex-start;
+    transition: border-color 200ms ease, background 200ms ease;
+  }
+  .promise-card.active {
+    border-color: var(--primary);
+    background: var(--primary-soft);
+  }
+  .promise-card.active .promise-num {
+    color: var(--primary-ink);
+  }
+  .promise-num {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 22px; font-weight: 700;
+    color: var(--sub-2);
+    line-height: 1; min-width: 32px;
+  }
+  .promise-body { flex: 1; }
+  .promise-title {
+    font-size: 13px; font-weight: 700; color: var(--ink);
+    margin-bottom: 4px; line-height: 1.35;
+  }
+  .promise-sub {
+    font-size: 11px; color: var(--sub); line-height: 1.5;
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  /* SVG flow inner */
+  .node-box { fill: var(--card); stroke: var(--border-2); stroke-width: 1.2; }
+  .node-screen { fill: var(--paper-2); stroke: var(--border-2); stroke-width: 1; }
+  .pi-pcb { fill: #DDE7DA; stroke: var(--border-2); stroke-width: 1; }
+  .pi-chip { fill: var(--ink-2); }
+  .pi-pin  { fill: var(--sub-2); }
+  .wifi-arc { fill: none; stroke: var(--sub-2); stroke-width: 1.4; stroke-linecap: round; }
+  .wifi-arc.live { stroke: var(--primary); }
+  .label-box {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px; fill: var(--sub);
+  }
+  .label-name {
+    font-family: 'Inter', 'Noto Sans SC', sans-serif;
+    font-size: 11px; fill: var(--ink); font-weight: 600;
+  }
+  .laptop-cursor {
+    fill: var(--primary);
+    animation: blink 1.4s steps(2) infinite;
+  }
+  @keyframes blink {
+    0%, 50%   { opacity: 1; }
+    51%, 100% { opacity: 0.25; }
+  }
+</style>
+</head>
+<body>
+
+<aside class="sidebar">
+  <div class="brand-row">
+    <span class="brand-dot"></span>
+    <span class="brand-tag" id="brandTag">M06 · OVERVIEW</span>
+  </div>
+  <div class="brand-title" id="brandTitle">第一次 SSH 进树莓派</div>
+  <div class="brand-sub" id="brandSub">SSH + 10 Linux commands</div>
+
+  <div class="guide-h" id="guideH">怎么看这张图</div>
+  <ul class="guide-list">
+    <li id="g1"><span class="num">01</span>顺着上方 SSH 流程看清"笔记本→Pi"路径<span class="en">Trace the SSH path on top</span></li>
+    <li id="g2"><span class="num">02</span>悬停 10 张命令卡看用法和例子<span class="en">Hover the 10 command cards</span></li>
+    <li id="g3"><span class="num">03</span>底部三承诺今晚就要做掉<span class="en">Three promises for tonight</span></li>
+  </ul>
+
+  <button class="lang-btn" id="langBtn" type="button">中文 / EN</button>
+</aside>
+
+<main class="main">
+
+  <!-- ========= 顶部 SSH 流程 ========= -->
+  <section>
+    <div class="section-tag"><span class="bar"></span><span id="t1">A · 30 秒看清 SSH 是什么</span></div>
+    <div class="flow-card" style="margin-top:8px">
+      <div class="flow-head">
+        <div>
+          <div class="flow-title" id="flowTitle">命令行不可怕, 它就是<span class="accent">给电脑下命令</span></div>
+          <div class="flow-tagline" id="flowTagline">terminal is just a place to talk to the computer</div>
+        </div>
+        <span class="flow-badge" id="flowBadge">SSH · PORT 22</span>
+      </div>
+
+      <div class="flow-svg-wrap">
+        <svg class="flow-svg" viewBox="0 0 880 140" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg">
+          <!-- Laptop -->
+          <g transform="translate(40,20)">
+            <!-- screen -->
+            <rect class="node-box" x="0" y="0" width="170" height="90" rx="6"/>
+            <rect class="node-screen" x="10" y="10" width="150" height="62" rx="3"/>
+            <!-- screen lines (terminal) -->
+            <rect x="18" y="18" width="42" height="3" fill="#9D978A" rx="1"/>
+            <rect x="18" y="26" width="80" height="3" fill="#9D978A" rx="1"/>
+            <rect x="18" y="34" width="60" height="3" fill="#9D978A" rx="1"/>
+            <text x="18" y="50" font-family="JetBrains Mono" font-size="8" fill="#9A4A2E">$ ssh pi@</text>
+            <rect class="laptop-cursor" x="56" y="44" width="5" height="8"/>
+            <!-- base -->
+            <path d="M-10 90 L180 90 L172 100 L-2 100 Z" fill="#F1EDDF" stroke="#D9D1BD" stroke-width="1.2"/>
+            <text x="85" y="118" text-anchor="middle" class="label-name" id="nodeLaptop">你的笔记本</text>
+          </g>
+
+          <!-- WiFi cloud center -->
+          <g transform="translate(370,30)">
+            <ellipse cx="70" cy="40" rx="68" ry="32" fill="#FAF9F5" stroke="#D9D1BD" stroke-width="1.2"/>
+            <text x="70" y="34" text-anchor="middle" class="label-name">WiFi</text>
+            <text x="70" y="48" text-anchor="middle" class="label-box">同一个无线网</text>
+            <text x="70" y="60" text-anchor="middle" class="label-box" style="fill:#9D978A">same SSID</text>
+
+            <!-- left wifi arcs (laptop side) -->
+            <path class="wifi-arc live" d="M -28 36 Q -18 30 -8 36"/>
+            <path class="wifi-arc live" d="M -34 30 Q -18 20 -2 30"/>
+            <path class="wifi-arc live" d="M -40 24 Q -18 10 4 24"/>
+
+            <!-- right wifi arcs (pi side) -->
+            <path class="wifi-arc live" d="M 148 36 Q 158 30 168 36"/>
+            <path class="wifi-arc live" d="M 142 30 Q 158 20 174 30"/>
+            <path class="wifi-arc live" d="M 136 24 Q 158 10 180 24"/>
+          </g>
+
+          <!-- Pi Zero -->
+          <g transform="translate(670,28)">
+            <rect class="pi-pcb" x="0" y="0" width="170" height="80" rx="4"/>
+            <!-- chip -->
+            <rect class="pi-chip" x="62" y="22" width="46" height="36" rx="2"/>
+            <text x="85" y="44" text-anchor="middle" font-family="JetBrains Mono" font-size="8" fill="#F1EDDF">Pi Zero</text>
+            <!-- gpio pins -->
+            <g class="pi-pin">
+              <rect x="12" y="6" width="4" height="4" rx="0.5"/>
+              <rect x="20" y="6" width="4" height="4" rx="0.5"/>
+              <rect x="28" y="6" width="4" height="4" rx="0.5"/>
+              <rect x="36" y="6" width="4" height="4" rx="0.5"/>
+              <rect x="44" y="6" width="4" height="4" rx="0.5"/>
+            </g>
+            <!-- usb / sd ports -->
+            <rect x="120" y="14" width="32" height="10" fill="#9D978A"/>
+            <rect x="120" y="32" width="32" height="8"  fill="#9D978A"/>
+            <rect x="120" y="50" width="20" height="6"  fill="#9D978A"/>
+            <!-- LED -->
+            <circle cx="22" cy="68" r="3" fill="#D97757"/>
+            <text x="85" y="100" text-anchor="middle" class="label-name" id="nodePi">树莓派 Pi Zero</text>
+          </g>
+
+          <!-- Port label on tunnel -->
+          <text x="440" y="92" text-anchor="middle" class="label-box" id="tunnelLabel">加密通道 · encrypted tunnel · 22</text>
+        </svg>
+      </div>
+
+      <div class="flow-foot">
+        <span id="flowFoot1">命令行 = 一个让你给 Pi 打字、它老老实实回答的窗口</span>
+        <span class="en" id="flowFoot2">Command line = a window where you type, the Pi answers</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========= 中部 10 个 Linux 命令 ========= -->
+  <section class="cmd-section">
+    <div class="cmd-head">
+      <div>
+        <div class="section-tag"><span class="bar"></span><span id="t2">B · 10 个 Linux 命令清单</span></div>
+        <h2 style="margin-top:6px" id="cmdH">今天先把这 10 个用熟, 别的以后再说</h2>
+      </div>
+      <span class="sub" id="cmdHEn">10 commands · keep them in your head</span>
+    </div>
+
+    <div class="cmd-grid">
+
+      <div class="cmd-card">
+        <div class="cmd-row1">
+          <span class="cmd-name">pwd</span>
+          <span class="cmd-tag">WHERE</span>
+        </div>
+        <div class="cmd-desc" data-i="pwd-desc">我现在在哪个文件夹</div>
+        <div class="cmd-demo"><span class="prompt">pi@pi:~ $</span> pwd
+<span class="out">/home/pi</span></div>
+        <div class="cmd-detail" data-i="pwd-det">迷路时第一条命令: print working directory</div>
+      </div>
+
+      <div class="cmd-card">
+        <div class="cmd-row1">
+          <span class="cmd-name">ls</span>
+          <span class="cmd-tag">LOOK</span>
+        </div>
+        <div class="cmd-desc" data-i="ls-desc">看这个文件夹里有什么</div>
+        <div class="cmd-demo"><span class="prompt">$</span> ls
+<span class="out">Desktop  sensor.py  log.txt</span></div>
+        <div class="cmd-detail" data-i="ls-det">加 -l 看详情, 加 -a 看隐藏文件</div>
+      </div>
+
+      <div class="cmd-card">
+        <div class="cmd-row1">
+          <span class="cmd-name">cd</span>
+          <span class="cmd-tag">ENTER</span>
+        </div>
+        <div class="cmd-desc" data-i="cd-desc">进入某个文件夹</div>
+        <div class="cmd-demo"><span class="prompt">$</span> cd Desktop
+<span class="out">pi@pi:~/Desktop $</span></div>
+        <div class="cmd-detail" data-i="cd-det">cd .. 回上一层, cd ~ 回家</div>
+      </div>
+
+      <div class="cmd-card">
+        <div class="cmd-row1">
+          <span class="cmd-name">mkdir</span>
+          <span class="cmd-tag">NEW</span>
+        </div>
+        <div class="cmd-desc" data-i="mkdir-desc">新建一个文件夹</div>
+        <div class="cmd-demo"><span class="prompt">$</span> mkdir purpleair
+<span class="out"></span></div>
+        <div class="cmd-detail" data-i="mkdir-det">"make directory", 项目第一步建工作目录</div>
+      </div>
+
+      <div class="cmd-card">
+        <div class="cmd-row1">
+          <span class="cmd-name">cat</span>
+          <span class="cmd-tag">READ</span>
+        </div>
+        <div class="cmd-desc" data-i="cat-desc">把文件内容打印出来</div>
+        <div class="cmd-demo"><span class="prompt">$</span> cat log.txt
+<span class="out">2026-05-27 ok</span></div>
+        <div class="cmd-detail" data-i="cat-det">小文件直接看; 大文件用 less / tail</div>
+      </div>
+
+      <div class="cmd-card">
+        <div class="cmd-row1">
+          <span class="cmd-name">nano</span>
+          <span class="cmd-tag">EDIT</span>
+        </div>
+        <div class="cmd-desc" data-i="nano-desc">在终端里直接改文件</div>
+        <div class="cmd-demo"><span class="prompt">$</span> nano sensor.py
+<span class="out">[ Ctrl+O 存, Ctrl+X 退 ]</span></div>
+        <div class="cmd-detail" data-i="nano-det">最友好的命令行编辑器, 别用 vim 暂时</div>
+      </div>
+
+      <div class="cmd-card">
+        <div class="cmd-row1">
+          <span class="cmd-name">rm</span>
+          <span class="cmd-tag">DELETE</span>
+        </div>
+        <div class="cmd-desc" data-i="rm-desc">删除文件 (没有回收站!)</div>
+        <div class="cmd-demo"><span class="prompt">$</span> rm old.log
+<span class="out"></span></div>
+        <div class="cmd-detail" data-i="rm-det">rm -rf 是核武器, 三思再敲</div>
+      </div>
+
+      <div class="cmd-card">
+        <div class="cmd-row1">
+          <span class="cmd-name">cp</span>
+          <span class="cmd-tag">COPY</span>
+        </div>
+        <div class="cmd-desc" data-i="cp-desc">复制一份文件</div>
+        <div class="cmd-demo"><span class="prompt">$</span> cp sensor.py sensor.bak
+<span class="out"></span></div>
+        <div class="cmd-detail" data-i="cp-det">改代码前先备份, 不怕改坏</div>
+      </div>
+
+      <div class="cmd-card">
+        <div class="cmd-row1">
+          <span class="cmd-name">mv</span>
+          <span class="cmd-tag">MOVE</span>
+        </div>
+        <div class="cmd-desc" data-i="mv-desc">改名 或 移动到别处</div>
+        <div class="cmd-demo"><span class="prompt">$</span> mv tmp.csv data/aqi.csv
+<span class="out"></span></div>
+        <div class="cmd-detail" data-i="mv-det">同时管"重命名"和"挪窝"两件事</div>
+      </div>
+
+      <div class="cmd-card">
+        <div class="cmd-row1">
+          <span class="cmd-name">sudo</span>
+          <span class="cmd-tag">ADMIN</span>
+        </div>
+        <div class="cmd-desc" data-i="sudo-desc">以管理员身份执行</div>
+        <div class="cmd-demo"><span class="prompt">$</span> sudo apt update
+<span class="out">[sudo] password:</span></div>
+        <div class="cmd-detail" data-i="sudo-det">装软件 / 改系统时要前缀 sudo</div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ========= 底部三承诺墙 ========= -->
+  <section class="promise-section">
+    <div class="section-tag"><span class="bar"></span><span id="t3">C · 今晚的三承诺</span></div>
+    <div class="promise-grid">
+      <div class="promise-card active">
+        <span class="promise-num">01</span>
+        <div class="promise-body">
+          <div class="promise-title" id="p1t">今天 SSH 一次连上 Pi</div>
+          <div class="promise-sub" id="p1s">ssh pi@&lt;ip&gt; · see the pi@ prompt</div>
+        </div>
+      </div>
+      <div class="promise-card">
+        <span class="promise-num">02</span>
+        <div class="promise-body">
+          <div class="promise-title" id="p2t">把这 10 条命令各跑一次</div>
+          <div class="promise-sub" id="p2s">run all 10 commands once</div>
+        </div>
+      </div>
+      <div class="promise-card">
+        <span class="promise-num">03</span>
+        <div class="promise-body">
+          <div class="promise-title" id="p3t">把 /home 截图发家庭群</div>
+          <div class="promise-sub" id="p3s">screenshot /home → family chat</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<script>
+(function(){
+  "use strict";
+
+  var LANG = 'cn';
+
+  var I18N = {
+    brandTag:   { cn: 'M06 · 总览',                en: 'M06 · OVERVIEW' },
+    brandTitle: { cn: '第一次 SSH 进树莓派',       en: 'First SSH into the Pi' },
+    brandSub:   { cn: 'SSH + 10 条 Linux 命令',    en: 'SSH + 10 Linux commands' },
+    guideH:     { cn: '怎么看这张图',              en: 'HOW TO READ' },
+    g1: {
+      cn: '<span class="num">01</span>顺着上方 SSH 流程看清"笔记本→Pi"路径<span class="en">Trace the SSH path on top</span>',
+      en: '<span class="num">01</span>Trace the SSH path: laptop → Pi<span class="en">从上方流程开始</span>'
+    },
+    g2: {
+      cn: '<span class="num">02</span>悬停 10 张命令卡看用法和例子<span class="en">Hover the 10 command cards</span>',
+      en: '<span class="num">02</span>Hover the 10 command cards<span class="en">悬停 10 张命令卡</span>'
+    },
+    g3: {
+      cn: '<span class="num">03</span>底部三承诺今晚就要做掉<span class="en">Three promises for tonight</span>',
+      en: '<span class="num">03</span>Three promises before bed tonight<span class="en">底部三承诺</span>'
+    },
+
+    t1: { cn: 'A · 30 秒看清 SSH 是什么', en: 'A · WHAT IS SSH IN 30 SEC' },
+    t2: { cn: 'B · 10 个 Linux 命令清单', en: 'B · 10 LINUX COMMANDS' },
+    t3: { cn: 'C · 今晚的三承诺',         en: 'C · TONIGHT — 3 PROMISES' },
+
+    flowTitle:   { cn: '命令行不可怕, 它就是<span class="accent">给电脑下命令</span>',
+                   en: 'No fear of the shell — it just <span class="accent">talks to the computer</span>' },
+    flowTagline: { cn: '终端 = 你打字, 电脑老老实实回答',
+                   en: 'terminal = you type, the computer answers' },
+    flowBadge:   { cn: 'SSH · 端口 22', en: 'SSH · PORT 22' },
+    nodeLaptop:  { cn: '你的笔记本',    en: 'Your laptop' },
+    nodePi:      { cn: '树莓派 Pi Zero',en: 'Raspberry Pi Zero' },
+    tunnelLabel: { cn: '加密通道 · 端口 22', en: 'encrypted tunnel · port 22' },
+    flowFoot1:   { cn: '命令行 = 一个让你给 Pi 打字、它老老实实回答的窗口',
+                   en: 'Command line = a window where you type, the Pi answers' },
+    flowFoot2:   { cn: 'You type, the Pi answers — thats all.',
+                   en: '你打, Pi 答. 就这样.' },
+
+    cmdH:   { cn: '今天先把这 10 个用熟, 别的以后再说', en: 'Master these 10 first; the rest can wait' },
+    cmdHEn: { cn: '10 commands · keep them in your head', en: '10 commands · keep them in your head' },
+
+    'pwd-desc':   { cn: '我现在在哪个文件夹',         en: 'Which folder am I in?' },
+    'pwd-det':    { cn: '迷路时第一条命令: print working directory', en: 'Lost? print working directory' },
+    'ls-desc':    { cn: '看这个文件夹里有什么',       en: 'List what is in here' },
+    'ls-det':     { cn: '加 -l 看详情, 加 -a 看隐藏文件', en: '-l for details, -a for hidden' },
+    'cd-desc':    { cn: '进入某个文件夹',             en: 'Enter a folder' },
+    'cd-det':     { cn: 'cd .. 回上一层, cd ~ 回家',  en: 'cd .. up · cd ~ home' },
+    'mkdir-desc': { cn: '新建一个文件夹',             en: 'Make a new folder' },
+    'mkdir-det':  { cn: 'make directory, 项目第一步建工作目录', en: 'project step 1: workspace folder' },
+    'cat-desc':   { cn: '把文件内容打印出来',         en: 'Print the file content' },
+    'cat-det':    { cn: '小文件直接看; 大文件用 less / tail', en: 'small files only; big → less/tail' },
+    'nano-desc':  { cn: '在终端里直接改文件',         en: 'Edit a file in the terminal' },
+    'nano-det':   { cn: '最友好的命令行编辑器, 别用 vim 暂时', en: 'friendliest editor — skip vim for now' },
+    'rm-desc':    { cn: '删除文件 (没有回收站!)',     en: 'Delete a file (no trash!)' },
+    'rm-det':     { cn: 'rm -rf 是核武器, 三思再敲',  en: 'rm -rf is nuclear — think twice' },
+    'cp-desc':    { cn: '复制一份文件',               en: 'Copy a file' },
+    'cp-det':     { cn: '改代码前先备份, 不怕改坏',   en: 'Back up before editing — safety first' },
+    'mv-desc':    { cn: '改名 或 移动到别处',         en: 'Rename or move' },
+    'mv-det':     { cn: '同时管"重命名"和"挪窝"两件事', en: 'rename + move in one command' },
+    'sudo-desc':  { cn: '以管理员身份执行',           en: 'Run as administrator' },
+    'sudo-det':   { cn: '装软件 / 改系统时要前缀 sudo', en: 'install / system → prefix sudo' },
+
+    p1t: { cn: '今天 SSH 一次连上 Pi',           en: 'SSH into the Pi once today' },
+    p1s: { cn: 'ssh pi@&lt;ip&gt; · 看到 pi@ 提示符',   en: 'ssh pi@&lt;ip&gt; · see the pi@ prompt' },
+    p2t: { cn: '把这 10 条命令各跑一次',         en: 'Run all 10 commands once' },
+    p2s: { cn: 'pwd → ls → cd → ... → sudo',    en: 'pwd → ls → cd → ... → sudo' },
+    p3t: { cn: '把 /home 截图发家庭群',          en: 'Screenshot /home → family chat' },
+    p3s: { cn: 'ls -l /home · 截图 · 发出去',   en: 'ls -l /home · screenshot · send' }
+  };
+
+  function setText(id, html) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    el.innerHTML = html;
+  }
+
+  function apply() {
+    // sidebar
+    setText('brandTag',   I18N.brandTag[LANG]);
+    setText('brandTitle', I18N.brandTitle[LANG]);
+    setText('brandSub',   I18N.brandSub[LANG]);
+    setText('guideH',     I18N.guideH[LANG]);
+    setText('g1',         I18N.g1[LANG]);
+    setText('g2',         I18N.g2[LANG]);
+    setText('g3',         I18N.g3[LANG]);
+
+    // sections
+    setText('t1', I18N.t1[LANG]);
+    setText('t2', I18N.t2[LANG]);
+    setText('t3', I18N.t3[LANG]);
+
+    // flow
+    setText('flowTitle',   I18N.flowTitle[LANG]);
+    setText('flowTagline', I18N.flowTagline[LANG]);
+    setText('flowBadge',   I18N.flowBadge[LANG]);
+    setText('flowFoot1',   I18N.flowFoot1[LANG]);
+    setText('flowFoot2',   I18N.flowFoot2[LANG]);
+
+    var nlp = document.getElementById('nodeLaptop'); if (nlp) nlp.textContent = I18N.nodeLaptop[LANG];
+    var npi = document.getElementById('nodePi');     if (npi) npi.textContent = I18N.nodePi[LANG];
+    var ntn = document.getElementById('tunnelLabel');if (ntn) ntn.textContent = I18N.tunnelLabel[LANG];
+
+    // cmd cards
+    var cards = document.querySelectorAll('[data-i]');
+    for (var i = 0; i < cards.length; i++) {
+      var k = cards[i].getAttribute('data-i');
+      if (I18N[k]) cards[i].textContent = I18N[k][LANG];
+    }
+
+    // section header
+    setText('cmdH',   I18N.cmdH[LANG]);
+    setText('cmdHEn', I18N.cmdHEn[LANG]);
+
+    // promises
+    setText('p1t', I18N.p1t[LANG]); setText('p1s', I18N.p1s[LANG]);
+    setText('p2t', I18N.p2t[LANG]); setText('p2s', I18N.p2s[LANG]);
+    setText('p3t', I18N.p3t[LANG]); setText('p3s', I18N.p3s[LANG]);
+
+    // html lang attr
+    document.documentElement.setAttribute('lang', LANG === 'cn' ? 'zh-CN' : 'en');
+  }
+
+  document.getElementById('langBtn').addEventListener('click', function () {
+    LANG = (LANG === 'cn') ? 'en' : 'cn';
+    apply();
+  });
+
+  // initial apply (keeps EN/CN exactly synced with current DOM defaults)
+  apply();
+})();
+</script>
+</body>
+</html>

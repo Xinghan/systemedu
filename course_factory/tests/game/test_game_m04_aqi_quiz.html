@@ -1,0 +1,1114 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<title>M04 — AQI 侦探 · 找最佳时段</title>
+<style>
+  /* ---------- Industrial Atelier palette (C 类 + climate accent) ---------- */
+  :root {
+    --paper:    #FAF9F5;
+    --paper-2:  #F1EDDF;
+    --card:     #FFFFFF;
+    --ink:      #191814;
+    --ink-2:    #2B2924;
+    --sub:      #6B6557;
+    --sub-2:    #9D978A;
+    --border:   #EBE5D6;
+    --border-2: #D9D1BD;
+    --hairline: #F2EDE0;
+
+    --primary:      #D97757;
+    --primary-ink:  #9A4A2E;
+    --primary-soft: #F8EDE5;
+    --primary-line: #ECCFB8;
+
+    --climate:      #527B95;
+    --climate-soft: #DEE5EC;
+
+    /* AQI 六色等级 (真实美国 EPA 配色, opacity 用在背景带) */
+    --aqi-good:    #00E400;
+    --aqi-mod:     #FFFF00;
+    --aqi-sens:    #FF7E00;
+    --aqi-bad:     #FF0000;
+    --aqi-vbad:    #99004C;
+    --aqi-hazard:  #7E0023;
+
+    --shadow-sm: 0 1px 2px 0 rgba(25,24,20,.04);
+    --shadow:    0 1px 3px 0 rgba(25,24,20,.06), 0 1px 2px -1px rgba(25,24,20,.04);
+    --shadow-md: 0 4px 8px -2px rgba(25,24,20,.06), 0 2px 4px -2px rgba(25,24,20,.04);
+    --shadow-lg: 0 12px 24px -6px rgba(25,24,20,.10), 0 4px 8px -4px rgba(25,24,20,.05);
+
+    --font-cn: "PingFang SC", "Noto Sans SC", "Inter", system-ui, sans-serif;
+    --font-mono: "JetBrains Mono", "SF Mono", "Menlo", "Consolas", monospace;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; height: 100%; }
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--font-cn);
+    overflow: hidden;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ---------- root layout ---------- */
+  .stage {
+    display: flex;
+    height: 100vh;
+    width: 100vw;
+  }
+
+  /* ---------- sidebar ---------- */
+  .game-sidebar {
+    width: 200px;
+    min-width: 200px;
+    background: var(--paper-2);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    padding: 22px 18px;
+    gap: 16px;
+  }
+  .brand {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .brand-tag {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    color: var(--primary-ink);
+    text-transform: uppercase;
+  }
+  .brand-name {
+    font-size: 17px;
+    font-weight: 600;
+    color: var(--ink);
+    line-height: 1.25;
+  }
+  .brand-sub {
+    font-size: 12px;
+    color: var(--sub);
+    line-height: 1.5;
+  }
+
+  .task-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 14px 12px;
+    box-shadow: var(--shadow-sm);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .task-card-label {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 0.16em;
+    color: var(--sub);
+    text-transform: uppercase;
+  }
+  .task-card-title {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--ink);
+    line-height: 1.3;
+  }
+  .task-card-rule {
+    font-size: 11.5px;
+    color: var(--sub);
+    line-height: 1.5;
+  }
+  .task-card-rule b {
+    color: var(--primary-ink);
+    font-weight: 600;
+  }
+
+  .guide {
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+    margin-top: 4px;
+  }
+  .guide-title {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 0.16em;
+    color: var(--sub);
+    text-transform: uppercase;
+  }
+  .guide-row {
+    font-size: 11.5px;
+    color: var(--ink-2);
+    line-height: 1.45;
+    display: flex;
+    gap: 8px;
+  }
+  .guide-row .k {
+    font-family: var(--font-mono);
+    color: var(--primary-ink);
+    min-width: 38px;
+    flex-shrink: 0;
+  }
+
+  .lang-btn {
+    margin-top: auto;
+    align-self: flex-start;
+    background: var(--card);
+    border: 1px solid var(--border-2);
+    color: var(--ink);
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    cursor: pointer;
+    transition: background 180ms ease, border-color 180ms ease;
+  }
+  .lang-btn:hover {
+    background: var(--primary-soft);
+    border-color: var(--primary-line);
+    color: var(--primary-ink);
+  }
+
+  /* ---------- main ---------- */
+  .game-main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    padding: 24px 32px 26px;
+    gap: 18px;
+    min-width: 0;
+    background: var(--paper);
+  }
+
+  /* HUD */
+  .hud {
+    display: flex;
+    gap: 16px;
+    align-items: stretch;
+  }
+  .hud-card {
+    flex: 1;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    box-shadow: var(--shadow-sm);
+  }
+  .hud-card .label {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 0.16em;
+    color: var(--sub);
+    text-transform: uppercase;
+  }
+  .hud-card .value {
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--ink);
+    font-family: var(--font-mono);
+  }
+  .hud-card .value-cn {
+    font-family: var(--font-cn);
+    font-size: 16px;
+  }
+  .hud-card.day-card .value {
+    color: var(--climate);
+  }
+  .hud-card.streak-card .value {
+    color: var(--primary);
+  }
+  .hud-card.task-cur .value {
+    color: var(--ink);
+  }
+
+  .progress-row {
+    display: flex;
+    gap: 6px;
+    margin-top: 4px;
+  }
+  .pdot {
+    width: 18px;
+    height: 6px;
+    background: var(--border-2);
+    border-radius: 3px;
+    transition: background 240ms ease;
+  }
+  .pdot.done { background: var(--primary); }
+  .pdot.cur  { background: var(--climate); }
+
+  /* stage area */
+  .stage-card {
+    flex: 1;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 18px 22px 14px;
+    box-shadow: var(--shadow-md);
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    min-height: 0;
+  }
+  .stage-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+  }
+  .stage-title {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--ink);
+  }
+  .stage-hint {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--sub);
+    letter-spacing: 0.04em;
+  }
+
+  .svg-wrap {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    background: var(--paper);
+    border: 1px solid var(--hairline);
+    border-radius: 10px;
+    padding: 8px 10px 4px;
+  }
+  svg.timeline {
+    width: 100%;
+    height: 100%;
+    display: block;
+    cursor: ew-resize;
+  }
+
+  /* info row */
+  .info-row {
+    display: grid;
+    grid-template-columns: 1.2fr 1.4fr 1fr;
+    gap: 12px;
+  }
+  .info-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px 14px;
+    box-shadow: var(--shadow-sm);
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .info-card .label {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 0.16em;
+    color: var(--sub);
+    text-transform: uppercase;
+  }
+  .info-card .value {
+    font-size: 22px;
+    font-weight: 600;
+    color: var(--ink);
+    font-family: var(--font-mono);
+    line-height: 1.1;
+  }
+  .info-card .sub {
+    font-size: 12px;
+    color: var(--sub);
+    font-family: var(--font-cn);
+  }
+  .info-card.value-aqi .value {
+    color: var(--climate);
+  }
+  .info-card.scene .value {
+    font-size: 16px;
+    font-family: var(--font-cn);
+    color: var(--ink);
+  }
+  .info-card.scene .sub {
+    color: var(--sub);
+    line-height: 1.5;
+  }
+  .info-card.verdict .value {
+    font-size: 16px;
+    font-family: var(--font-cn);
+    color: var(--sub);
+  }
+  .info-card.verdict.match .value {
+    color: var(--primary);
+  }
+  .info-card.verdict.match {
+    background: var(--primary-soft);
+    border-color: var(--primary-line);
+  }
+
+  /* action bar */
+  .action-bar {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    justify-content: flex-end;
+  }
+  .btn {
+    background: var(--card);
+    border: 1px solid var(--border-2);
+    color: var(--ink);
+    padding: 9px 18px;
+    border-radius: 8px;
+    font-family: var(--font-cn);
+    font-size: 13px;
+    cursor: pointer;
+    transition: background 180ms ease, border-color 180ms ease, color 180ms ease;
+  }
+  .btn:hover {
+    background: var(--paper-2);
+    border-color: var(--border-2);
+  }
+  .btn-primary {
+    background: var(--primary);
+    border-color: var(--primary);
+    color: var(--card);
+  }
+  .btn-primary:hover {
+    background: var(--primary-ink);
+    border-color: var(--primary-ink);
+    color: var(--card);
+  }
+  .btn:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+
+  /* completion banner */
+  .banner {
+    position: fixed;
+    inset: 0;
+    background: rgba(25, 24, 20, 0.42);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 30;
+  }
+  .banner.show { display: flex; }
+  .banner-card {
+    background: var(--card);
+    border-radius: 14px;
+    padding: 32px 40px;
+    max-width: 460px;
+    box-shadow: var(--shadow-lg);
+    text-align: center;
+    border: 1px solid var(--border);
+  }
+  .banner-card h2 {
+    margin: 0 0 10px;
+    color: var(--primary-ink);
+    font-size: 22px;
+  }
+  .banner-card p {
+    margin: 0 0 18px;
+    color: var(--sub);
+    font-size: 13px;
+    line-height: 1.6;
+  }
+
+  /* subtle pulse on coral marker when matched */
+  @keyframes pulse-coral {
+    0%, 100% { opacity: 1; }
+    50%      { opacity: 0.55; }
+  }
+  .pulse { animation: pulse-coral 1.4s ease-in-out infinite; }
+
+</style>
+</head>
+<body>
+
+<div class="stage">
+
+  <!-- ============ SIDEBAR ============ -->
+  <aside class="game-sidebar">
+    <div class="brand">
+      <div class="brand-tag" data-cn="M04 · 任务" data-en="M04 · MISSION">M04 · 任务</div>
+      <div class="brand-name" data-cn="AQI 侦探" data-en="AQI Detective">AQI 侦探</div>
+      <div class="brand-sub" data-cn="找一天里的最佳活动时段" data-en="Find best activity window in 24h">找一天里的最佳活动时段</div>
+    </div>
+
+    <div class="task-card" id="sidebarTaskCard">
+      <span class="task-card-label" data-cn="今日任务" data-en="TODAY">今日任务</span>
+      <span class="task-card-title" id="sidebarTaskTitle">带孩子散步</span>
+      <span class="task-card-rule" id="sidebarTaskRule"></span>
+    </div>
+
+    <div class="guide">
+      <span class="guide-title" data-cn="操作" data-en="HOW TO">操作</span>
+      <div class="guide-row">
+        <span class="k">DRAG</span>
+        <span data-cn="拖动时间游标" data-en="Drag time cursor">拖动时间游标</span>
+      </div>
+      <div class="guide-row">
+        <span class="k">READ</span>
+        <span data-cn="看 PM2.5 值与场景" data-en="Read PM2.5 + scene">看 PM2.5 值与场景</span>
+      </div>
+      <div class="guide-row">
+        <span class="k">LOCK</span>
+        <span data-cn="对了再按确认" data-en="Confirm when matched">对了再按确认</span>
+      </div>
+    </div>
+
+    <button class="lang-btn" id="langBtn" type="button">EN</button>
+  </aside>
+
+  <!-- ============ MAIN ============ -->
+  <main class="game-main">
+
+    <!-- HUD -->
+    <div class="hud">
+      <div class="hud-card day-card">
+        <span class="label" data-cn="第几天" data-en="DAY">第几天</span>
+        <span class="value" id="hudDay">Day 1 / 5</span>
+      </div>
+      <div class="hud-card task-cur">
+        <span class="label" data-cn="当前任务" data-en="TASK">当前任务</span>
+        <span class="value value-cn" id="hudTask">带孩子散步</span>
+      </div>
+      <div class="hud-card streak-card">
+        <span class="label" data-cn="今日进度" data-en="TODAY">今日进度</span>
+        <div class="progress-row" id="dayDots">
+          <div class="pdot cur"></div>
+          <div class="pdot"></div>
+          <div class="pdot"></div>
+        </div>
+      </div>
+      <div class="hud-card">
+        <span class="label" data-cn="连续天数" data-en="STREAK">连续天数</span>
+        <span class="value" id="hudStreak">0 / 5</span>
+      </div>
+    </div>
+
+    <!-- Stage: SVG timeline -->
+    <div class="stage-card">
+      <div class="stage-head">
+        <span class="stage-title" id="stageTitle" data-cn="24 小时 PM2.5 时间序列" data-en="24-Hour PM2.5 Time Series">24 小时 PM2.5 时间序列</span>
+        <span class="stage-hint" id="stageHint">drag cursor · ug/m3</span>
+      </div>
+      <div class="svg-wrap">
+        <svg class="timeline" id="tl" viewBox="0 0 1000 360" preserveAspectRatio="none">
+          <!-- AQI 六色背景带 (opacity 0.30) -->
+          <defs>
+            <clipPath id="plotClip">
+              <rect x="50" y="20" width="920" height="280" />
+            </clipPath>
+          </defs>
+
+          <g id="aqiBands" clip-path="url(#plotClip)"></g>
+
+          <!-- 网格 -->
+          <g id="grid" stroke="#EBE5D6" stroke-width="1"></g>
+
+          <!-- 折线 -->
+          <path id="pmLine" fill="none" stroke="#527B95" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"></path>
+
+          <!-- 折线下浅填充 -->
+          <path id="pmFill" fill="#DEE5EC" opacity="0.45"></path>
+
+          <!-- x 轴标签 -->
+          <g id="xLabels" font-family="JetBrains Mono, monospace" font-size="11" fill="#6B6557"></g>
+          <!-- y 轴标签 -->
+          <g id="yLabels" font-family="JetBrains Mono, monospace" font-size="11" fill="#6B6557"></g>
+
+          <!-- 标题 -->
+          <text x="60" y="335" font-family="JetBrains Mono, monospace" font-size="11" fill="#6B6557" id="xAxisTitle">hour of day (0 — 24)</text>
+          <text x="60" y="355" font-family="PingFang SC, sans-serif" font-size="11" fill="#9D978A" id="yAxisTitle">y: PM2.5  ug/m3  (color band = AQI level)</text>
+
+          <!-- 游标 + marker -->
+          <line id="cursor" x1="200" x2="200" y1="20" y2="300" stroke="#D97757" stroke-width="2.2" stroke-dasharray="0"></line>
+          <circle id="marker" cx="200" cy="200" r="8" fill="#D97757" stroke="#FFFFFF" stroke-width="2.5"></circle>
+          <text id="markerLabel" x="200" y="14" font-family="JetBrains Mono, monospace" font-size="12" fill="#9A4A2E" text-anchor="middle">08:00</text>
+        </svg>
+      </div>
+    </div>
+
+    <!-- info row -->
+    <div class="info-row">
+      <div class="info-card value-aqi" id="infoAqi">
+        <span class="label" data-cn="此刻 PM2.5" data-en="PM2.5 NOW">此刻 PM2.5</span>
+        <span class="value" id="aqiNum">— ug/m3</span>
+        <span class="sub" id="aqiLevel">—</span>
+      </div>
+      <div class="info-card scene" id="infoScene">
+        <span class="label" data-cn="此刻外面" data-en="OUTSIDE NOW">此刻外面</span>
+        <span class="value" id="sceneTitle">—</span>
+        <span class="sub" id="sceneDesc">—</span>
+      </div>
+      <div class="info-card verdict" id="infoVerdict">
+        <span class="label" data-cn="任务匹配" data-en="MATCH">任务匹配</span>
+        <span class="value" id="verdictText" data-cn="拖一下游标看看" data-en="Drag cursor to scan">拖一下游标看看</span>
+        <span class="sub" id="verdictHint" data-cn="目标: 满足规则" data-en="Goal: meet the rule">目标: 满足规则</span>
+      </div>
+    </div>
+
+    <!-- actions -->
+    <div class="action-bar">
+      <button class="btn" id="resetBtn" type="button" data-cn="重新开始" data-en="Reset">重新开始</button>
+      <button class="btn btn-primary" id="lockBtn" type="button" data-cn="确认这个时段" data-en="Lock this time">确认这个时段</button>
+    </div>
+
+  </main>
+
+</div>
+
+<!-- completion banner -->
+<div class="banner" id="banner">
+  <div class="banner-card">
+    <h2 id="bannerTitle" data-cn="侦探任务完成" data-en="Detective mission complete">侦探任务完成</h2>
+    <p id="bannerText" data-cn="你连续 5 天找到了每个任务的最佳时段。学会看 24h 曲线 + 6 色 AQI 等级,这就是 PurpleAir 给你的真本事。" data-en="You found the right time window for every task across 5 days. Reading 24h curves + 6 AQI bands — that is the real skill PurpleAir gives you.">你连续 5 天找到了每个任务的最佳时段。学会看 24h 曲线 + 6 色 AQI 等级,这就是 PurpleAir 给你的真本事。</p>
+    <button class="btn btn-primary" id="bannerBtn" type="button" data-cn="再来一轮" data-en="Play again">再来一轮</button>
+  </div>
+</div>
+
+<script>
+"use strict";
+
+// =================================================================
+// i18n
+// =================================================================
+const gameState = {
+  lang: "cn",
+  dayIdx: 0,
+  taskIdx: 0,
+  streak: 0,
+  cursorHour: 8.0,
+  matchedThisTask: false,
+  finished: false,
+};
+
+const L = {
+  scene: {
+    cn: [
+      { range: [0, 5],   t: "凌晨深夜",  d: "街上几乎没人,空气还没扰动起来"},
+      { range: [5, 7],   t: "天蒙蒙亮",  d: "早班车开始上路,路边一层薄烟"},
+      { range: [7, 9.5], t: "早高峰",    d: "上班车流挤满主干道,排队怠速"},
+      { range: [9.5,11], t: "上午",      d: "车流退下,阳光把烟搅散了"},
+      { range: [11,13.5],t: "午间",      d: "餐馆排油烟,工地午休"},
+      { range: [13.5,16],t: "下午",      d: "风稍微起,空气最清爽"},
+      { range: [16,19],  t: "晚高峰",    d: "下班大军 + 接娃 + 物流,堵到爆"},
+      { range: [19,22],  t: "夜市",      d: "烧烤摊冒烟,夜市人头攒动"},
+      { range: [22,24],  t: "深夜",      d: "城市慢下来,只剩零星出租车"},
+    ],
+    en: [
+      { range: [0, 5],   t: "Late night",    d: "Streets nearly empty, air undisturbed"},
+      { range: [5, 7],   t: "Pre-dawn",      d: "First buses roll, thin haze on edges"},
+      { range: [7, 9.5], t: "Morning rush",  d: "Commute jam, idling cars everywhere"},
+      { range: [9.5,11], t: "Late morning",  d: "Traffic eases, sun stirs the air"},
+      { range: [11,13.5],t: "Midday",        d: "Restaurant vents, construction lunch"},
+      { range: [13.5,16],t: "Afternoon",     d: "Breeze picks up, freshest air"},
+      { range: [16,19],  t: "Evening rush",  d: "Commute + pickups + delivery jam"},
+      { range: [19,22],  t: "Night market",  d: "BBQ smoke, crowded streets"},
+      { range: [22,24],  t: "Late evening",  d: "City slows, only stray cabs"},
+    ],
+  },
+  aqiLabels: {
+    cn: ["优","良","对敏感人群不健康","不健康","非常不健康","危害"],
+    en: ["Good","Moderate","Unhealthy (sensitive)","Unhealthy","Very unhealthy","Hazardous"],
+  },
+  verdictMatch:    { cn: "满足规则 · 这就是最佳时段", en: "Matches rule · best window" },
+  verdictNoTask:   { cn: "拖一下游标看看",            en: "Drag cursor to scan" },
+  verdictWrongAqi: { cn: "PM2.5 还太高,继续找",      en: "PM2.5 still too high, keep scanning" },
+  verdictWrongHour:{ cn: "这个时段不合规则",          en: "Wrong hour window" },
+  hudDay:    { cn: (d) => `Day ${d} / 5`,     en: (d) => `Day ${d} / 5` },
+  hudStreak: { cn: (s) => `${s} / 5`,         en: (s) => `${s} / 5` },
+  bannerOK:    { cn: "已锁定 · 进入下一题", en: "Locked · next task" },
+  bannerWrong: { cn: "还不够好 · 再找找",    en: "Not yet · keep looking" },
+};
+
+// =================================================================
+// 任务定义 (5 天 x 3 任务 = 15 关; 每天 PM2.5 曲线不同)
+// 每个任务规则: 时段窗口 + PM2.5 上限
+// =================================================================
+const TASKS = [
+  // day 1: 普通工作日 — 经典双峰
+  {
+    profile: "weekday_classic",
+    tasks: [
+      { id:"walk", cn:"带孩子散步",       en:"Walk with kid",         rule:{ hours:[9, 17], max:35  }, ruleCn:"白天 9-17 时, PM2.5 ≤ 35", ruleEn:"Day 9-17h, PM2.5 ≤ 35" },
+      { id:"run",  cn:"室外慢跑",         en:"Outdoor run",           rule:{ hours:[5, 16], max:20  }, ruleCn:"5-16 时, PM2.5 ≤ 20",     ruleEn:"5-16h, PM2.5 ≤ 20"     },
+      { id:"bbq",  cn:"户外烧烤",         en:"Outdoor BBQ",           rule:{ hours:[12,21], max:55  }, ruleCn:"12-21 时, PM2.5 ≤ 55",   ruleEn:"12-21h, PM2.5 ≤ 55"    },
+    ]
+  },
+  // day 2: 周末 — 中午峰值弱, 夜市强
+  {
+    profile: "weekend_market",
+    tasks: [
+      { id:"walk", cn:"带孩子散步",       en:"Walk with kid",         rule:{ hours:[9, 17], max:35  }, ruleCn:"白天 9-17 时, PM2.5 ≤ 35", ruleEn:"Day 9-17h, PM2.5 ≤ 35" },
+      { id:"bike", cn:"骑车去公园",       en:"Bike to park",          rule:{ hours:[6, 18], max:25  }, ruleCn:"6-18 时, PM2.5 ≤ 25",     ruleEn:"6-18h, PM2.5 ≤ 25"     },
+      { id:"win",  cn:"开窗通风 30 分钟", en:"Open windows 30 min",   rule:{ hours:[10,18], max:30  }, ruleCn:"10-18 时, PM2.5 ≤ 30",    ruleEn:"10-18h, PM2.5 ≤ 30"    },
+    ]
+  },
+  // day 3: 雾霾天 — 整体偏高, 唯独午后短暂下降
+  {
+    profile: "haze",
+    tasks: [
+      { id:"win",  cn:"开窗通风 30 分钟", en:"Open windows 30 min",   rule:{ hours:[10,18], max:55  }, ruleCn:"10-18 时, PM2.5 ≤ 55",    ruleEn:"10-18h, PM2.5 ≤ 55"    },
+      { id:"walk", cn:"带孩子散步",       en:"Walk with kid",         rule:{ hours:[9, 17], max:55  }, ruleCn:"白天 9-17 时, PM2.5 ≤ 55", ruleEn:"Day 9-17h, PM2.5 ≤ 55" },
+      { id:"mask", cn:"判断是否需戴口罩出门", en:"Decide on mask",     rule:{ hours:[6, 22], max:80  }, ruleCn:"6-22 时, PM2.5 ≤ 80 才可不戴", ruleEn:"6-22h, PM2.5 ≤ 80 to skip mask" },
+    ]
+  },
+  // day 4: 大风天 — 整体低, 唯独凌晨刮起扬尘
+  {
+    profile: "windy",
+    tasks: [
+      { id:"run",  cn:"室外慢跑",         en:"Outdoor run",           rule:{ hours:[5, 16], max:20  }, ruleCn:"5-16 时, PM2.5 ≤ 20",     ruleEn:"5-16h, PM2.5 ≤ 20"     },
+      { id:"bike", cn:"骑车去公园",       en:"Bike to park",          rule:{ hours:[6, 18], max:25  }, ruleCn:"6-18 时, PM2.5 ≤ 25",     ruleEn:"6-18h, PM2.5 ≤ 25"     },
+      { id:"bbq",  cn:"户外烧烤",         en:"Outdoor BBQ",           rule:{ hours:[12,21], max:35  }, ruleCn:"12-21 时, PM2.5 ≤ 35",   ruleEn:"12-21h, PM2.5 ≤ 35"    },
+    ]
+  },
+  // day 5: 烟花夜 — 白天好夜里炸
+  {
+    profile: "fireworks",
+    tasks: [
+      { id:"walk", cn:"带孩子散步",       en:"Walk with kid",         rule:{ hours:[9, 17], max:35  }, ruleCn:"白天 9-17 时, PM2.5 ≤ 35", ruleEn:"Day 9-17h, PM2.5 ≤ 35" },
+      { id:"win",  cn:"开窗通风 30 分钟", en:"Open windows 30 min",   rule:{ hours:[10,18], max:30  }, ruleCn:"10-18 时, PM2.5 ≤ 30",    ruleEn:"10-18h, PM2.5 ≤ 30"    },
+      { id:"mask", cn:"判断是否需戴口罩出门", en:"Decide on mask",     rule:{ hours:[19,24], max:60  }, ruleCn:"夜里 19-24 时, PM2.5 ≤ 60 才可不戴", ruleEn:"Night 19-24h, PM2.5 ≤ 60 to skip mask" },
+    ]
+  },
+];
+
+// =================================================================
+// PM2.5 24h 时间序列生成 (按 profile)
+// 输出 25 点 (0..24 整点), 单位 ug/m3
+// =================================================================
+function buildSeries(profile) {
+  const arr = new Array(25);
+  for (let h = 0; h <= 24; h++) {
+    let v = 0;
+    switch (profile) {
+      case "weekday_classic":
+        // 双峰 早8 晚18
+        v = 18
+          + 28 * Math.exp(-Math.pow((h - 8.0) / 1.6, 2))
+          + 34 * Math.exp(-Math.pow((h - 18.5) / 1.8, 2))
+          + 6  * Math.exp(-Math.pow((h - 12.5) / 1.4, 2))
+          + (h < 5 ? 8 : 0)
+          + (h > 22 ? 4 : 0);
+        break;
+      case "weekend_market":
+        // 早峰弱, 中午平, 夜市 (20-22) 强
+        v = 14
+          + 14 * Math.exp(-Math.pow((h - 9.0) / 1.5, 2))
+          + 10 * Math.exp(-Math.pow((h - 13.0) / 2.0, 2))
+          + 42 * Math.exp(-Math.pow((h - 21.0) / 1.3, 2))
+          + (h < 5 ? 6 : 0);
+        break;
+      case "haze":
+        // 整体偏高 (基线 75), 只有 14-15 短暂下降
+        v = 80
+          + 25 * Math.exp(-Math.pow((h - 8.0) / 1.7, 2))
+          + 30 * Math.exp(-Math.pow((h - 18.5) / 1.7, 2))
+          - 35 * Math.exp(-Math.pow((h - 14.5) / 1.2, 2));
+        break;
+      case "windy":
+        // 整体低 (基线 10), 凌晨 2-4 扬尘短峰
+        v = 10
+          + 38 * Math.exp(-Math.pow((h - 3.0) / 1.0, 2))
+          + 6  * Math.exp(-Math.pow((h - 8.0) / 1.5, 2))
+          + 5  * Math.exp(-Math.pow((h - 18.0) / 1.5, 2));
+        break;
+      case "fireworks":
+        // 白天平静, 22 点炸到极高
+        v = 16
+          + 10 * Math.exp(-Math.pow((h - 8.0) / 1.7, 2))
+          + 18 * Math.exp(-Math.pow((h - 18.5) / 1.6, 2))
+          + 120 * Math.exp(-Math.pow((h - 22.0) / 0.9, 2));
+        break;
+      default:
+        v = 30;
+    }
+    arr[h] = Math.max(2, v);
+  }
+  return arr;
+}
+
+// 线性插值 (h 可以是浮点小时)
+function sampleSeries(series, h) {
+  const hc = Math.max(0, Math.min(24, h));
+  const i0 = Math.floor(hc);
+  const i1 = Math.min(24, i0 + 1);
+  const f = hc - i0;
+  return series[i0] * (1 - f) + series[i1] * f;
+}
+
+// PM2.5 to AQI level index (0..5)
+const AQI_BANDS = [
+  { max: 12,  color: "#00E400" }, // good
+  { max: 35,  color: "#FFFF00" }, // moderate
+  { max: 55,  color: "#FF7E00" }, // sens
+  { max: 150, color: "#FF0000" }, // bad
+  { max: 250, color: "#99004C" }, // vbad
+  { max: 999, color: "#7E0023" }, // hazard
+];
+function aqiIndex(pm) {
+  for (let i = 0; i < AQI_BANDS.length; i++) {
+    if (pm <= AQI_BANDS[i].max) return i;
+  }
+  return 5;
+}
+
+// =================================================================
+// 渲染时间序列 SVG
+// =================================================================
+const svg = document.getElementById("tl");
+const PLOT = { x0: 50, x1: 970, y0: 20, y1: 300, ymax: 160 };
+
+function hourToX(h)  { return PLOT.x0 + (PLOT.x1 - PLOT.x0) * (h / 24); }
+function pmToY(pm)   { return PLOT.y1 - (PLOT.y1 - PLOT.y0) * Math.min(1, pm / PLOT.ymax); }
+function xToHour(x)  { return Math.max(0, Math.min(24, (x - PLOT.x0) / (PLOT.x1 - PLOT.x0) * 24)); }
+
+function renderAqiBands() {
+  const g = document.getElementById("aqiBands");
+  g.innerHTML = "";
+  // 把每个 AQI band 在 plot 区画一条横带 (从 prev.max -> this.max)
+  let prev = 0;
+  AQI_BANDS.forEach((b) => {
+    const yTop    = pmToY(Math.min(PLOT.ymax, b.max));
+    const yBot    = pmToY(prev);
+    const yPlot   = Math.min(yTop, yBot);
+    const hPlot   = Math.abs(yBot - yTop);
+    if (hPlot < 0.5) { prev = b.max; return; }
+    const r = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+    r.setAttribute("x", PLOT.x0);
+    r.setAttribute("y", yPlot);
+    r.setAttribute("width", PLOT.x1 - PLOT.x0);
+    r.setAttribute("height", hPlot);
+    r.setAttribute("fill", b.color);
+    r.setAttribute("opacity", "0.20");
+    g.appendChild(r);
+    prev = b.max;
+  });
+}
+
+function renderGrid() {
+  const g = document.getElementById("grid");
+  g.innerHTML = "";
+  // 竖线 每 3 小时
+  for (let h = 0; h <= 24; h += 3) {
+    const x = hourToX(h);
+    const l = document.createElementNS("http://www.w3.org/2000/svg", "line");
+    l.setAttribute("x1", x); l.setAttribute("x2", x);
+    l.setAttribute("y1", PLOT.y0); l.setAttribute("y2", PLOT.y1);
+    l.setAttribute("stroke-width", h % 6 === 0 ? 1.2 : 0.7);
+    l.setAttribute("opacity", h % 6 === 0 ? 0.55 : 0.35);
+    g.appendChild(l);
+  }
+  // 横线 0/35/55/150
+  [0, 35, 55, 150].forEach((pm) => {
+    const y = pmToY(pm);
+    if (y < PLOT.y0 || y > PLOT.y1) return;
+    const l = document.createElementNS("http://www.w3.org/2000/svg", "line");
+    l.setAttribute("x1", PLOT.x0); l.setAttribute("x2", PLOT.x1);
+    l.setAttribute("y1", y);       l.setAttribute("y2", y);
+    l.setAttribute("stroke-width", "0.7");
+    l.setAttribute("opacity", "0.45");
+    g.appendChild(l);
+  });
+}
+
+function renderLabels() {
+  const xg = document.getElementById("xLabels");
+  const yg = document.getElementById("yLabels");
+  xg.innerHTML = ""; yg.innerHTML = "";
+  for (let h = 0; h <= 24; h += 3) {
+    const t = document.createElementNS("http://www.w3.org/2000/svg", "text");
+    t.setAttribute("x", hourToX(h));
+    t.setAttribute("y", PLOT.y1 + 16);
+    t.setAttribute("text-anchor", "middle");
+    t.textContent = `${h}:00`;
+    xg.appendChild(t);
+  }
+  [0, 35, 55, 150].forEach((pm) => {
+    const y = pmToY(pm);
+    if (y < PLOT.y0 || y > PLOT.y1 + 1) return;
+    const t = document.createElementNS("http://www.w3.org/2000/svg", "text");
+    t.setAttribute("x", PLOT.x0 - 6);
+    t.setAttribute("y", y + 4);
+    t.setAttribute("text-anchor", "end");
+    t.textContent = pm;
+    yg.appendChild(t);
+  });
+}
+
+function renderSeriesPath(series) {
+  let d = "";
+  for (let h = 0; h <= 24; h++) {
+    const x = hourToX(h);
+    const y = pmToY(series[h]);
+    d += (h === 0 ? "M" : "L") + x.toFixed(1) + " " + y.toFixed(1) + " ";
+  }
+  document.getElementById("pmLine").setAttribute("d", d);
+
+  // fill area below line
+  let f = "M" + hourToX(0) + " " + PLOT.y1 + " ";
+  for (let h = 0; h <= 24; h++) {
+    f += "L" + hourToX(h).toFixed(1) + " " + pmToY(series[h]).toFixed(1) + " ";
+  }
+  f += "L" + hourToX(24) + " " + PLOT.y1 + " Z";
+  document.getElementById("pmFill").setAttribute("d", f);
+}
+
+// =================================================================
+// 游标拖动逻辑 (mouse + touch)
+// =================================================================
+function setCursorHour(h, series) {
+  gameState.cursorHour = h;
+  const x = hourToX(h);
+  const pm = sampleSeries(series, h);
+  const y = pmToY(pm);
+  document.getElementById("cursor").setAttribute("x1", x);
+  document.getElementById("cursor").setAttribute("x2", x);
+  document.getElementById("marker").setAttribute("cx", x);
+  document.getElementById("marker").setAttribute("cy", y);
+  const hh = Math.floor(h);
+  const mm = Math.floor((h - hh) * 60);
+  const tStr = `${hh.toString().padStart(2,"0")}:${mm.toString().padStart(2,"0")}`;
+  document.getElementById("markerLabel").setAttribute("x", x);
+  document.getElementById("markerLabel").textContent = tStr;
+
+  // 更新 info row
+  updateInfoRow(pm, h);
+}
+
+function attachCursorDrag(getSeries) {
+  let dragging = false;
+
+  function pickFromEvent(ev) {
+    const rect = svg.getBoundingClientRect();
+    const clientX = ev.touches ? ev.touches[0].clientX : ev.clientX;
+    // svg viewBox 0..1000 maps to rect.width
+    const svgX = (clientX - rect.left) * (1000 / rect.width);
+    return xToHour(svgX);
+  }
+
+  svg.addEventListener("mousedown", (ev) => {
+    dragging = true;
+    setCursorHour(pickFromEvent(ev), getSeries());
+    ev.preventDefault();
+  });
+  window.addEventListener("mousemove", (ev) => {
+    if (!dragging) return;
+    setCursorHour(pickFromEvent(ev), getSeries());
+  });
+  window.addEventListener("mouseup", () => { dragging = false; });
+
+  svg.addEventListener("touchstart", (ev) => {
+    dragging = true;
+    setCursorHour(pickFromEvent(ev), getSeries());
+    ev.preventDefault();
+  }, { passive: false });
+  svg.addEventListener("touchmove", (ev) => {
+    if (!dragging) return;
+    setCursorHour(pickFromEvent(ev), getSeries());
+    ev.preventDefault();
+  }, { passive: false });
+  svg.addEventListener("touchend", () => { dragging = false; });
+}
+
+// =================================================================
+// 场景查询
+// =================================================================
+function sceneAt(h) {
+  const list = L.scene[gameState.lang];
+  for (const s of list) {
+    if (h >= s.range[0] && h < s.range[1]) return s;
+  }
+  return list[list.length - 1];
+}
+
+// =================================================================
+// info row update
+// =================================================================
+let currentSeries = null;
+
+function currentTask() {
+  return TASKS[gameState.dayIdx].tasks[gameState.taskIdx];
+}
+
+function checkMatch(pm, h) {
+  const task = currentTask();
+  const inHour = (h >= task.rule.hours[0] && h <= task.rule.hours[1]);
+  const inAqi  = (pm <= task.rule.max);
+  return { inHour, inAqi, ok: inHour && inAqi };
+}
+
+function updateInfoRow(pm, h) {
+  const aqiIdx = aqiIndex(pm);
+  const aqiLabel = L.aqiLabels[gameState.lang][aqiIdx];
+  document.getElementById("aqiNum").textContent = pm.toFixed(0) + "  ug/m3";
+  document.getElementById("aqiLevel").textContent = aqiLabel;
+  document.getElementById("infoAqi").style.borderColor = AQI_BANDS[aqiIdx].color;
+
+  const sc = sceneAt(h);
+  document.getElementById("sceneTitle").textContent = sc.t;
+  document.getElementById("sceneDesc").textContent = sc.d;
+
+  const m = checkMatch(pm, h);
+  const card = document.getElementById("infoVerdict");
+  const marker = document.getElementById("marker");
+  if (m.ok) {
+    card.classList.add("match");
+    marker.classList.add("pulse");
+    marker.setAttribute("r", "10");
+    document.getElementById("verdictText").textContent = L.verdictMatch[gameState.lang];
+    document.getElementById("verdictHint").textContent = currentTask()[gameState.lang === "cn" ? "ruleCn" : "ruleEn"];
+    gameState.matchedThisTask = true;
+  } else {
+    card.classList.remove("match");
+    marker.classList.remove("pulse");
+    marker.setAttribute("r", "8");
+    if (!m.inHour) {
+      document.getElementById("verdictText").textContent = L.verdictWrongHour[gameState.lang];
+    } else if (!m.inAqi) {
+      document.getElementById("verdictText").textContent = L.verdictWrongAqi[gameState.lang];
+    } else {
+      document.getElementById("verdictText").textContent = L.verdictNoTask[gameState.lang];
+    }
+    document.getElementById("verdictHint").textContent = currentTask()[gameState.lang === "cn" ? "ruleCn" : "ruleEn"];
+    gameState.matchedThisTask = false;
+  }
+}
+
+// =================================================================
+// 关卡推进
+// =================================================================
+function refreshSidebar() {
+  const t = currentTask();
+  document.getElementById("sidebarTaskTitle").textContent = gameState.lang === "cn" ? t.cn : t.en;
+  document.getElementById("sidebarTaskRule").innerHTML = "<b>" + (gameState.lang === "cn" ? "规则:" : "Rule:") + "</b> " + (gameState.lang === "cn" ? t.ruleCn : t.ruleEn);
+  document.getElementById("hudTask").textContent = gameState.lang === "cn" ? t.cn : t.en;
+}
+
+function refreshHud() {
+  document.getElementById("hudDay").textContent    = L.hudDay[gameState.lang](gameState.dayIdx + 1);
+  document.getElementById("hudStreak").textContent = L.hudStreak[gameState.lang](gameState.streak);
+  // dots
+  const dots = document.querySelectorAll("#dayDots .pdot");
+  dots.forEach((d, i) => {
+    d.classList.remove("done", "cur");
+    if (i < gameState.taskIdx) d.classList.add("done");
+    else if (i === gameState.taskIdx) d.classList.add("cur");
+  });
+}
+
+function loadDay() {
+  const profile = TASKS[gameState.dayIdx].profile;
+  currentSeries = buildSeries(profile);
+  renderAqiBands();
+  renderGrid();
+  renderLabels();
+  renderSeriesPath(currentSeries);
+  // 重置游标到 8:00
+  setCursorHour(8.0, currentSeries);
+  refreshSidebar();
+  refreshHud();
+}
+
+function nextTask() {
+  if (gameState.taskIdx < 2) {
+    gameState.taskIdx += 1;
+    refreshSidebar();
+    refreshHud();
+    setCursorHour(8.0, currentSeries);
+  } else {
+    // 一天结束 — 三个任务都过了 → streak+1, 下一天
+    gameState.streak += 1;
+    gameState.taskIdx = 0;
+    if (gameState.dayIdx < TASKS.length - 1) {
+      gameState.dayIdx += 1;
+      loadDay();
+    } else {
+      // 全部 5 天通关
+      gameState.finished = true;
+      document.getElementById("banner").classList.add("show");
+      refreshHud();
+    }
+  }
+}
+
+// =================================================================
+// 锁定按钮
+// =================================================================
+const lockBtn = document.getElementById("lockBtn");
+lockBtn.addEventListener("click", () => {
+  if (gameState.finished) return;
+  const pm = sampleSeries(currentSeries, gameState.cursorHour);
+  const m = checkMatch(pm, gameState.cursorHour);
+  if (m.ok) {
+    // 短暂高亮再切下一关
+    lockBtn.disabled = true;
+    setTimeout(() => {
+      nextTask();
+      lockBtn.disabled = false;
+    }, 700);
+  } else {
+    // shake hint
+    document.getElementById("verdictText").textContent = L.bannerWrong[gameState.lang];
+    lockBtn.animate(
+      [{ transform: "translateX(0)" }, { transform: "translateX(-6px)" }, { transform: "translateX(6px)" }, { transform: "translateX(0)" }],
+      { duration: 320 }
+    );
+  }
+});
+
+// reset
+document.getElementById("resetBtn").addEventListener("click", () => {
+  gameState.dayIdx = 0;
+  gameState.taskIdx = 0;
+  gameState.streak = 0;
+  gameState.finished = false;
+  document.getElementById("banner").classList.remove("show");
+  loadDay();
+});
+document.getElementById("bannerBtn").addEventListener("click", () => {
+  gameState.dayIdx = 0;
+  gameState.taskIdx = 0;
+  gameState.streak = 0;
+  gameState.finished = false;
+  document.getElementById("banner").classList.remove("show");
+  loadDay();
+});
+
+// =================================================================
+// 语言切换
+// =================================================================
+function applyLang() {
+  document.documentElement.lang = gameState.lang === "cn" ? "zh-CN" : "en";
+  document.querySelectorAll("[data-cn]").forEach((el) => {
+    const txt = gameState.lang === "cn" ? el.getAttribute("data-cn") : el.getAttribute("data-en");
+    if (txt) el.textContent = txt;
+  });
+  document.getElementById("langBtn").textContent = gameState.lang === "cn" ? "EN" : "中文";
+  refreshSidebar();
+  refreshHud();
+  // 触发 info row 重算文案
+  if (currentSeries) setCursorHour(gameState.cursorHour, currentSeries);
+}
+document.getElementById("langBtn").addEventListener("click", () => {
+  gameState.lang = gameState.lang === "cn" ? "en" : "cn";
+  applyLang();
+});
+
+// =================================================================
+// boot
+// =================================================================
+attachCursorDrag(() => currentSeries);
+loadDay();
+
+</script>
+</body>
+</html>

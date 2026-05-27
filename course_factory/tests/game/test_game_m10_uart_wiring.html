@@ -1,0 +1,1085 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>M10 PMS5003 UART 接线 — Build & Test</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=Inter:wght@400;500;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    /* 第 1 层 — 共享深空底 */
+    --bg-0: oklch(0.14 0.035 265);
+    --bg-1: oklch(0.18 0.04 265);
+    --bg-2: oklch(0.22 0.045 265);
+    --bg-3: oklch(0.28 0.05 265);
+    --line: oklch(0.35 0.05 265 / 0.35);
+    --line-strong: oklch(0.55 0.08 265 / 0.55);
+    --fg:      oklch(0.96 0.01 265);
+    --fg-dim:  oklch(0.75 0.02 265);
+    --fg-mute: oklch(0.55 0.03 265);
+    --gold:    oklch(0.85 0.14 85);
+
+    /* 第 2 层 — elec accent (indigo-purple 275) */
+    --elec: oklch(0.72 0.17 275);
+
+    /* 第 3 层 — elec 5 色 palette + 杜邦线 4 色 */
+    --current: oklch(0.72 0.17 275);    /* CURRENT */
+    --trace:   oklch(0.52 0.16 275);    /* TRACE */
+    --board:   oklch(0.35 0.10 275);    /* BOARD - Pi PCB 绿 */
+    --pulse:   oklch(0.92 0.08 275);    /* PULSE - 高亮文字 */
+    --relay:   oklch(0.85 0.14 85);     /* RELAY = gold */
+
+    /* 杜邦线 4 色 (限定用法: 4 类元素多色 token) */
+    --wire-vcc: oklch(0.65 0.22 30);    /* 红 - VCC */
+    --wire-gnd: oklch(0.30 0.02 265);   /* 黑 - GND */
+    --wire-tx:  oklch(0.75 0.20 145);   /* 绿 - TX */
+    --wire-rx:  oklch(0.85 0.18 95);    /* 黄 - RX */
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  html,body{
+    width:100%; height:100vh; overflow:hidden;
+    background:var(--bg-0); color:var(--fg);
+    font-family:'Noto Sans SC','Inter',sans-serif;
+    font-size:14px;
+  }
+  .mono{font-family:'JetBrains Mono',ui-monospace,monospace;}
+
+  .app{display:flex; flex-direction:row; width:100vw; height:100vh;}
+
+  /* ========== Sidebar 200px ========== */
+  .game-sidebar{
+    width:200px; flex-shrink:0; height:100vh;
+    background:var(--bg-1);
+    border-right:1.5px solid var(--line);
+    display:flex; flex-direction:column;
+    padding:14px 12px; gap:10px;
+    overflow:hidden;
+  }
+  .brand{
+    font-family:'JetBrains Mono',monospace;
+    font-size:10px; font-weight:700;
+    color:var(--elec); letter-spacing:0.12em;
+    padding-bottom:8px; border-bottom:1.5px solid var(--line);
+  }
+  .brand .mascot{
+    display:block; margin-bottom:6px;
+  }
+  .ttl{
+    font-size:14px; font-weight:700;
+    color:var(--fg); line-height:1.35;
+    margin-top:2px;
+  }
+  .sub{
+    font-size:11px; color:var(--fg-dim); line-height:1.45;
+    margin-top:-2px;
+  }
+
+  .sec-title{
+    font-family:'JetBrains Mono',monospace;
+    font-size:9px; font-weight:700;
+    color:var(--fg-mute); letter-spacing:0.14em;
+    text-transform:uppercase; margin-top:6px;
+  }
+
+  .wire-list{display:flex; flex-direction:column; gap:5px;}
+  .wire-item{
+    display:flex; align-items:center; gap:8px;
+    padding:5px 7px;
+    background:var(--bg-2);
+    border:1.5px solid var(--line);
+    box-shadow:2px 2px 0 var(--bg-0);
+    font-size:10.5px; color:var(--fg-dim);
+    font-family:'JetBrains Mono',monospace;
+    transition:background 0.15s, border-color 0.15s, color 0.15s;
+  }
+  .wire-item.done{
+    background:color-mix(in oklch, var(--relay) 18%, var(--bg-2));
+    border-color:var(--relay);
+    color:var(--fg);
+  }
+  .wire-swatch{
+    flex-shrink:0; width:12px; height:12px;
+    border:1.5px solid var(--bg-0);
+  }
+  .wire-name{flex:1; letter-spacing:0.06em;}
+  .wire-mark{
+    flex-shrink:0; font-size:10px; color:var(--relay); font-weight:700;
+    opacity:0;
+  }
+  .wire-item.done .wire-mark{opacity:1;}
+
+  .progress-block{
+    background:var(--bg-2);
+    border:1.5px solid var(--line);
+    box-shadow:2px 2px 0 var(--bg-0);
+    padding:6px 8px;
+    font-family:'JetBrains Mono',monospace;
+    font-size:10px; color:var(--fg-dim);
+    line-height:1.5;
+  }
+  .progress-block .val{color:var(--elec); font-weight:700;}
+  .progress-block .val-gold{color:var(--relay); font-weight:700;}
+
+  .slider-block label{
+    display:block; font-size:10.5px; color:var(--fg-dim);
+    font-family:'JetBrains Mono',monospace; margin-bottom:4px;
+  }
+  .slider-block label .num{color:var(--elec); font-weight:700;}
+  input[type=range]{
+    width:100%; accent-color:var(--elec);
+    height:18px;
+  }
+
+  .lang-btn{
+    margin-top:auto;
+    font-family:'JetBrains Mono',monospace;
+    font-size:11px; font-weight:700;
+    padding:7px 10px; cursor:pointer;
+    border:1.5px solid var(--line-strong);
+    background:var(--bg-2);
+    box-shadow:2px 2px 0 var(--bg-0);
+    color:var(--fg);
+    letter-spacing:0.1em;
+  }
+  .lang-btn:hover{border-color:var(--elec); color:var(--elec);}
+  .lang-btn:active{transform:translate(2px,2px); box-shadow:none;}
+
+  /* ========== Main stage ========== */
+  .game-main{
+    flex:1 1 0%; height:100vh;
+    display:flex; flex-direction:column;
+    padding:14px 18px 14px 18px;
+    gap:10px; overflow:hidden;
+    position:relative;
+    min-width:0;
+  }
+  .hud{
+    position:absolute; top:14px; right:18px;
+    background:var(--bg-1);
+    border:1.5px solid var(--line-strong);
+    box-shadow:3px 3px 0 var(--bg-0);
+    padding:7px 12px;
+    font-family:'JetBrains Mono',monospace;
+    font-size:11px; color:var(--fg);
+    z-index:6; min-width:170px;
+  }
+  .hud .lbl{color:var(--fg-mute); letter-spacing:0.1em;}
+  .hud .val{color:var(--elec); font-weight:700;}
+  .hud .val-ok{color:var(--relay); font-weight:700;}
+
+  /* canvas 父链 flex column */
+  .stage-area{
+    flex:1 1 0%;
+    display:flex; flex-direction:column;
+    min-height:0;
+  }
+  .stage-wrap{
+    flex:1 1 0%; min-height:0;
+    background:var(--bg-1);
+    border:1.5px solid var(--line);
+    box-shadow:3px 3px 0 var(--bg-0);
+    position:relative;
+    overflow:hidden;
+  }
+  #stage{
+    display:block;
+    width:100%; height:100%;
+  }
+
+  .ctrl-bar{
+    flex-shrink:0;
+    display:flex; align-items:stretch; gap:10px;
+    height:120px;
+  }
+  .btn-block{
+    flex-shrink:0; width:200px;
+    display:flex; flex-direction:column; gap:6px;
+  }
+  .btn{
+    font-family:'JetBrains Mono',monospace;
+    font-size:12px; font-weight:700;
+    padding:10px 12px; cursor:pointer;
+    border:1.5px solid var(--line-strong);
+    background:var(--bg-2);
+    box-shadow:3px 3px 0 var(--bg-0);
+    color:var(--fg);
+    letter-spacing:0.08em;
+    text-align:center;
+    transition:background 0.15s, color 0.15s;
+  }
+  .btn:hover:not(:disabled){background:var(--bg-3); color:var(--elec);}
+  .btn:active:not(:disabled){transform:translate(2px,2px); box-shadow:none;}
+  .btn:disabled{opacity:0.42; cursor:not-allowed;}
+  .btn-start{
+    background:color-mix(in oklch, var(--elec) 18%, var(--bg-2));
+    border-color:var(--elec); color:var(--pulse);
+    flex:1;
+    font-size:13px;
+  }
+  .btn-start:hover:not(:disabled){
+    background:color-mix(in oklch, var(--elec) 32%, var(--bg-2));
+    color:var(--fg);
+  }
+  .btn-reset{
+    font-size:11px; padding:6px 10px;
+    background:var(--bg-2);
+  }
+
+  .terminal{
+    flex:1 1 0%; min-width:0;
+    background:var(--bg-0);
+    border:1.5px solid var(--line-strong);
+    box-shadow:3px 3px 0 var(--bg-1);
+    padding:8px 10px;
+    font-family:'JetBrains Mono',monospace;
+    font-size:11px; line-height:1.5;
+    color:var(--fg-dim);
+    overflow:hidden;
+    position:relative;
+    display:flex; flex-direction:column;
+  }
+  .term-header{
+    flex-shrink:0;
+    display:flex; align-items:center; justify-content:space-between;
+    padding-bottom:5px; margin-bottom:5px;
+    border-bottom:1px solid var(--line);
+    font-size:10px; color:var(--fg-mute);
+    letter-spacing:0.12em;
+  }
+  .term-header .led{
+    display:inline-block; width:8px; height:8px;
+    background:var(--bg-3); margin-right:6px;
+    vertical-align:middle;
+  }
+  .term-header.live .led{background:var(--relay);}
+  .term-body{
+    flex:1 1 0%; min-height:0;
+    overflow-y:auto; overflow-x:hidden;
+    white-space:pre-wrap; word-break:break-all;
+  }
+  .term-body .row{display:block;}
+  .term-body .row.dim{color:var(--fg-mute);}
+  .term-body .row.ok{color:var(--relay);}
+  .term-body .row.err{color:var(--wire-vcc);}
+  .term-body .row.data{color:var(--pulse);}
+  .term-body .row.highlight{
+    background:color-mix(in oklch, var(--relay) 22%, transparent);
+    color:var(--fg);
+    padding:1px 4px;
+    font-weight:700;
+  }
+
+  /* SVG cursor 反馈 */
+  #stage .pin{cursor:grab;}
+  #stage .pin.dragging{cursor:grabbing;}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="game-sidebar">
+    <div class="brand">
+      <svg class="mascot" width="42" height="42" viewBox="0 0 42 42" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <!-- Volt — 闪电碎片 mascot -->
+        <path d="M22 4 L10 24 L19 24 L16 38 L30 17 L20 17 Z"
+              fill="oklch(0.72 0.17 275)" stroke="oklch(0.92 0.08 275)" stroke-width="1.2" stroke-linejoin="round"/>
+        <circle cx="13" cy="8" r="1.4" fill="oklch(0.85 0.14 85)"/>
+        <circle cx="33" cy="32" r="1.2" fill="oklch(0.92 0.08 275)"/>
+      </svg>
+      <span id="brandTxt">ELC-12 / VOLT</span>
+    </div>
+    <h1 class="ttl" id="ttl">PMS5003 → Pi 接线</h1>
+    <p class="sub" id="sub">4 根杜邦线接对针脚, TX/RX 必须交叉; 启动测试看终端有没有 32 字节数据帧。</p>
+
+    <div class="sec-title" id="wiresTitle">4 WIRES</div>
+    <div class="wire-list" id="wireList">
+      <div class="wire-item" data-wire="vcc">
+        <span class="wire-swatch" style="background:var(--wire-vcc)"></span>
+        <span class="wire-name">VCC <span style="color:var(--fg-mute)">→</span> 5V</span>
+        <span class="wire-mark">OK</span>
+      </div>
+      <div class="wire-item" data-wire="gnd">
+        <span class="wire-swatch" style="background:var(--wire-gnd); border-color:var(--line-strong)"></span>
+        <span class="wire-name">GND <span style="color:var(--fg-mute)">→</span> GND</span>
+        <span class="wire-mark">OK</span>
+      </div>
+      <div class="wire-item" data-wire="tx">
+        <span class="wire-swatch" style="background:var(--wire-tx)"></span>
+        <span class="wire-name">TX <span style="color:var(--fg-mute)">→</span> RXD</span>
+        <span class="wire-mark">OK</span>
+      </div>
+      <div class="wire-item" data-wire="rx">
+        <span class="wire-swatch" style="background:var(--wire-rx)"></span>
+        <span class="wire-name">RX <span style="color:var(--fg-mute)">→</span> TXD</span>
+        <span class="wire-mark">OK</span>
+      </div>
+    </div>
+
+    <div class="sec-title" id="progTitle">PROGRESS</div>
+    <div class="progress-block">
+      <div><span id="progConn">已连</span>: <span class="val" id="progConnVal">0 / 4</span></div>
+      <div><span id="progCross">交叉</span>: <span class="val" id="progCrossVal">未检</span></div>
+      <div><span id="progFrame">数据帧</span>: <span class="val-gold" id="progFrameVal">0</span></div>
+    </div>
+
+    <div class="sec-title" id="baudTitle">UART BAUD</div>
+    <div class="slider-block">
+      <label id="baudLbl">baud = <span class="num" id="baudVal">9600</span></label>
+      <input id="baudSlider" type="range" min="0" max="4" value="0" step="1">
+    </div>
+
+    <button id="langBtn" class="lang-btn">CN / EN</button>
+  </aside>
+
+  <main class="game-main">
+    <div class="hud">
+      <div><span class="lbl" id="hudL1">DEVICE</span> <span class="val mono" id="hudV1">PMS5003</span></div>
+      <div style="margin-top:3px"><span class="lbl" id="hudL2">STATUS</span> <span class="val mono" id="hudV2">OFFLINE</span></div>
+    </div>
+
+    <div class="stage-area">
+      <div class="stage-wrap">
+        <svg id="stage" viewBox="0 0 1080 540" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg"></svg>
+      </div>
+    </div>
+
+    <div class="ctrl-bar">
+      <div class="btn-block">
+        <button id="btnStart" class="btn btn-start" disabled>启动测试</button>
+        <button id="btnReset" class="btn btn-reset">重置接线</button>
+      </div>
+      <div class="terminal" id="terminal">
+        <div class="term-header" id="termHeader">
+          <span><span class="led"></span><span id="termTitle">/dev/ttyAMA0 — UART RX</span></span>
+          <span class="mono" id="termClock">--:--:--</span>
+        </div>
+        <div class="term-body" id="termBody"><div class="row dim" id="termBoot">$ python3 read_pms.py  # 等待启动测试...</div></div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  // ============ State ============
+  var LANG = 'cn';
+  var BAUD_OPTIONS = [4800, 7200, 9600, 19200, 38400];
+  var baudIdx = 0;
+  var running = false;
+  var frameCount = 0;
+  var animTimer = null;
+  var clockTimer = null;
+
+  // 拖线状态: 每根线 from(PMS pin id) -> to(Pi pin id); null = 未接
+  // 杜邦线 4 色 (key)
+  var WIRES = {
+    vcc: { color:'wire-vcc', cssVar:'--wire-vcc', from:'pms_vcc', correct:'pi_5v',  cur:null },
+    gnd: { color:'wire-gnd', cssVar:'--wire-gnd', from:'pms_gnd', correct:'pi_gnd', cur:null },
+    tx:  { color:'wire-tx',  cssVar:'--wire-tx',  from:'pms_tx',  correct:'pi_rxd', cur:null },
+    rx:  { color:'wire-rx',  cssVar:'--wire-rx',  from:'pms_rx',  correct:'pi_txd', cur:null }
+  };
+
+  // PMS5003 4 pin (左侧), Pi GPIO 6 pin 简化 (右侧)
+  // 坐标在 svg viewBox 1080x540 内
+  var PMS_PINS = [
+    { id:'pms_vcc', label:'VCC', wire:'vcc',  x:340, y:165 },
+    { id:'pms_gnd', label:'GND', wire:'gnd',  x:340, y:225 },
+    { id:'pms_tx',  label:'TX',  wire:'tx',   x:340, y:300 },
+    { id:'pms_rx',  label:'RX',  wire:'rx',   x:340, y:360 }
+  ];
+  var PI_PINS = [
+    { id:'pi_5v',  label:'5V',          gpio:'PIN 2', y:130 },
+    { id:'pi_gnd', label:'GND',         gpio:'PIN 6', y:185 },
+    { id:'pi_txd', label:'TXD (GPIO14)', gpio:'PIN 8',  y:240 },
+    { id:'pi_rxd', label:'RXD (GPIO15)', gpio:'PIN 10', y:295 },
+    { id:'pi_g4',  label:'GPIO 4',       gpio:'PIN 7',  y:350 },
+    { id:'pi_g17', label:'GPIO 17',      gpio:'PIN 11', y:405 }
+  ];
+  var PI_X = 760;
+
+  // ============ i18n ============
+  var I18N = {
+    brandTxt:{cn:'ELC-12 / VOLT', en:'ELC-12 / VOLT'},
+    ttl:{cn:'PMS5003 → Pi 接线', en:'PMS5003 → Pi Wiring'},
+    sub:{cn:'4 根杜邦线接对针脚, TX/RX 必须交叉; 启动测试看终端有没有 32 字节数据帧。',
+         en:'Wire 4 dupont lines, TX/RX must cross; start test to see 32-byte frames.'},
+    wiresTitle:{cn:'四根线', en:'4 WIRES'},
+    progTitle:{cn:'进度', en:'PROGRESS'},
+    baudTitle:{cn:'波特率', en:'UART BAUD'},
+    progConn:{cn:'已连', en:'wired'},
+    progCross:{cn:'交叉', en:'cross'},
+    progFrame:{cn:'数据帧', en:'frames'},
+    baudLbl:{cn:'波特率 = ', en:'baud = '},
+    btnStart:{cn:'启动测试', en:'START TEST'},
+    btnReset:{cn:'重置接线', en:'RESET WIRES'},
+    btnStartRun:{cn:'运行中...', en:'RUNNING...'},
+    hudL1:{cn:'设备', en:'DEVICE'},
+    hudL2:{cn:'状态', en:'STATUS'},
+    statusOffline:{cn:'离线', en:'OFFLINE'},
+    statusReady:{cn:'就绪', en:'READY'},
+    statusLive:{cn:'有数据', en:'LIVE'},
+    statusErr:{cn:'无数据', en:'NO DATA'},
+    crossUnknown:{cn:'未检', en:'?'},
+    crossOk:{cn:'OK', en:'OK'},
+    crossBad:{cn:'反向', en:'wrong'},
+    termTitle:{cn:'/dev/ttyAMA0 — UART RX', en:'/dev/ttyAMA0 — UART RX'},
+    termBoot:{cn:'$ python3 read_pms.py  # 等待启动测试...',
+              en:'$ python3 read_pms.py  # waiting for test...'},
+    bootRun:{cn:'$ python3 read_pms.py', en:'$ python3 read_pms.py'},
+    waitFrame:{cn:'opening /dev/ttyAMA0 @ ', en:'opening /dev/ttyAMA0 @ '},
+    noData:{cn:'TimeoutError: no bytes within 3.0s — check TX/RX 是否交叉',
+            en:'TimeoutError: no bytes within 3.0s — check TX/RX crossing'},
+    noDataHint:{cn:'  hint: PMS5003 TX 必须接 Pi RXD (GPIO15), 反了就一直 0 字节',
+                en:'  hint: PMS5003 TX MUST go to Pi RXD (GPIO15), not TXD'},
+    badBaud:{cn:'WARN: 接收到帧头但校验失败 — baud 不是 9600',
+             en:'WARN: framing error — baud must be 9600'},
+    frameHdr:{cn:'frame ', en:'frame '},
+    frameOk:{cn:'  -> PM2.5 = ', en:'  -> PM2.5 = '},
+    frameOkUnit:{cn:' μg/m³  [ok]', en:' μg/m³  [ok]'},
+    firstFrame:{cn:'>> FIRST REAL READING <<', en:'>> FIRST REAL READING <<'},
+    sidebarVcc:{cn:'VCC 红 → 5V', en:'VCC red → 5V'},
+    sidebarGnd:{cn:'GND 黑 → GND', en:'GND black → GND'},
+    sidebarTx:{cn:'TX 绿 → RXD (交叉!)', en:'TX green → RXD (cross!)'},
+    sidebarRx:{cn:'RX 黄 → TXD (交叉!)', en:'RX yellow → TXD (cross!)'},
+    pmsLabel:{cn:'PMS5003 — 颗粒物传感器', en:'PMS5003 — particle sensor'},
+    piLabel:{cn:'Raspberry Pi GPIO', en:'Raspberry Pi GPIO'},
+    hintDrag:{cn:'按住传感器针脚拖到右侧 Pi 针脚',
+              en:'drag sensor pin to a matching Pi pin'}
+  };
+
+  function t(key){ return (I18N[key] && I18N[key][LANG]) || key; }
+
+  function setText(id, key){
+    var el = document.getElementById(id);
+    if (el) el.textContent = t(key);
+  }
+
+  function refreshI18N(){
+    setText('brandTxt','brandTxt');
+    setText('ttl','ttl');
+    setText('sub','sub');
+    setText('wiresTitle','wiresTitle');
+    setText('progTitle','progTitle');
+    setText('baudTitle','baudTitle');
+    setText('progConn','progConn');
+    setText('progCross','progCross');
+    setText('progFrame','progFrame');
+    setText('hudL1','hudL1');
+    setText('hudL2','hudL2');
+    setText('termTitle','termTitle');
+    // 更新 4 线侧栏 label (中英)
+    var ws = {vcc:'sidebarVcc', gnd:'sidebarGnd', tx:'sidebarTx', rx:'sidebarRx'};
+    Object.keys(ws).forEach(function(w){
+      var item = document.querySelector('[data-wire="'+w+'"] .wire-name');
+      if (item) item.innerHTML = t(ws[w]);
+    });
+    document.getElementById('baudLbl').innerHTML =
+      t('baudLbl') + '<span class="num" id="baudVal">' + BAUD_OPTIONS[baudIdx] + '</span>';
+    document.getElementById('btnStart').textContent = running ? t('btnStartRun') : t('btnStart');
+    document.getElementById('btnReset').textContent = t('btnReset');
+    updateHud();
+    updateProgress();
+    renderStaticLabels();
+    var boot = document.getElementById('termBoot');
+    if (boot) boot.textContent = t('termBoot');
+  }
+
+  // ============ SVG render ============
+  var stage = document.getElementById('stage');
+  var NS = 'http://www.w3.org/2000/svg';
+
+  function el(tag, attrs){
+    var n = document.createElementNS(NS, tag);
+    if (attrs) for (var k in attrs) n.setAttribute(k, attrs[k]);
+    return n;
+  }
+
+  function clearStage(){
+    while(stage.firstChild) stage.removeChild(stage.firstChild);
+  }
+
+  function colorFor(wireKey){
+    return getComputedStyle(document.documentElement).getPropertyValue(WIRES[wireKey].cssVar).trim() || '#888';
+  }
+
+  function renderStaticLabels(){
+    // 由 renderAll 调用; 这里仅在 i18n 切换时主动调
+    renderAll();
+  }
+
+  function renderAll(){
+    clearStage();
+
+    // 背景网格 (subtle deep-space grid)
+    var grid = el('g', {opacity:'0.18'});
+    for (var i=0; i<11; i++){
+      grid.appendChild(el('line', {
+        x1: i*108, y1:0, x2:i*108, y2:540,
+        stroke:'var(--line)', 'stroke-width':'0.5'
+      }));
+    }
+    for (var j=0; j<6; j++){
+      grid.appendChild(el('line', {
+        x1:0, y1:j*108, x2:1080, y2:j*108,
+        stroke:'var(--line)', 'stroke-width':'0.5'
+      }));
+    }
+    stage.appendChild(grid);
+
+    // ===== PMS5003 (左) =====
+    var pmsBoxX = 130, pmsBoxY = 110, pmsBoxW = 230, pmsBoxH = 320;
+    // 外壳 蓝灰
+    stage.appendChild(el('rect', {
+      x:pmsBoxX, y:pmsBoxY, width:pmsBoxW, height:pmsBoxH, rx:'6',
+      fill:'var(--bg-3)', stroke:'var(--line-strong)', 'stroke-width':'1.5'
+    }));
+    // 进风口圆
+    stage.appendChild(el('circle', {
+      cx:pmsBoxX+70, cy:pmsBoxY+90, r:'42',
+      fill:'var(--bg-2)', stroke:'var(--line-strong)', 'stroke-width':'1.2'
+    }));
+    stage.appendChild(el('circle', {
+      cx:pmsBoxX+70, cy:pmsBoxY+90, r:'28',
+      fill:'none', stroke:'var(--line)', 'stroke-width':'0.8'
+    }));
+    stage.appendChild(el('circle', {
+      cx:pmsBoxX+70, cy:pmsBoxY+90, r:'14',
+      fill:'none', stroke:'var(--elec)', 'stroke-width':'1', opacity:'0.6'
+    }));
+    // 激光腔小窗
+    stage.appendChild(el('rect', {
+      x:pmsBoxX+150, y:pmsBoxY+50, width:60, height:30, rx:'2',
+      fill:'var(--bg-1)', stroke:'var(--elec)', 'stroke-width':'1'
+    }));
+    var laserTxt = el('text', {
+      x:pmsBoxX+180, y:pmsBoxY+70, 'text-anchor':'middle',
+      'font-family':'JetBrains Mono,monospace', 'font-size':'9',
+      fill:'var(--elec)', 'font-weight':'700'
+    });
+    laserTxt.textContent = 'LASER';
+    stage.appendChild(laserTxt);
+
+    // 标签 PMS5003
+    var pmsLbl = el('text', {
+      x:pmsBoxX+pmsBoxW/2, y:pmsBoxY-12, 'text-anchor':'middle',
+      'font-family':'JetBrains Mono,monospace', 'font-size':'13',
+      fill:'var(--fg)', 'font-weight':'700'
+    });
+    pmsLbl.textContent = t('pmsLabel');
+    stage.appendChild(pmsLbl);
+
+    // PMS 接线柱 (4 个 pin 在右边出线区)
+    PMS_PINS.forEach(function(p){
+      // 针脚 housing
+      stage.appendChild(el('rect', {
+        x:p.x-22, y:p.y-12, width:18, height:24, rx:'1',
+        fill:'var(--bg-1)', stroke:'var(--line-strong)', 'stroke-width':'1'
+      }));
+      // pin point
+      var pin = el('circle', {
+        cx:p.x, cy:p.y, r:'10',
+        fill:'var(--bg-2)',
+        stroke: colorFor(p.wire),
+        'stroke-width':'2.5',
+        'class':'pin',
+        'data-pin':p.id,
+        'data-side':'pms',
+        'data-wire':p.wire
+      });
+      stage.appendChild(pin);
+      // label
+      var lbl = el('text', {
+        x:p.x-30, y:p.y+4, 'text-anchor':'end',
+        'font-family':'JetBrains Mono,monospace', 'font-size':'11',
+        fill: colorFor(p.wire), 'font-weight':'700'
+      });
+      lbl.textContent = p.label;
+      stage.appendChild(lbl);
+    });
+
+    // ===== Pi GPIO 右侧 =====
+    var piBoxX = PI_X-10, piBoxY = 95, piBoxW = 200, piBoxH = 350;
+    // Pi 板 PCB 深绿底
+    stage.appendChild(el('rect', {
+      x:piBoxX, y:piBoxY, width:piBoxW, height:piBoxH, rx:'4',
+      fill:'var(--board)', stroke:'var(--line-strong)', 'stroke-width':'1.5'
+    }));
+    // SoC 方块
+    stage.appendChild(el('rect', {
+      x:piBoxX+90, y:piBoxY+220, width:80, height:80, rx:'2',
+      fill:'var(--bg-1)', stroke:'var(--elec)', 'stroke-width':'1'
+    }));
+    var socTxt = el('text', {
+      x:piBoxX+130, y:piBoxY+265, 'text-anchor':'middle',
+      'font-family':'JetBrains Mono,monospace', 'font-size':'11',
+      fill:'var(--elec)', 'font-weight':'700'
+    });
+    socTxt.textContent = 'BCM2711';
+    stage.appendChild(socTxt);
+
+    // GPIO 标签
+    var piLbl = el('text', {
+      x:piBoxX+piBoxW/2, y:piBoxY-12, 'text-anchor':'middle',
+      'font-family':'JetBrains Mono,monospace', 'font-size':'13',
+      fill:'var(--fg)', 'font-weight':'700'
+    });
+    piLbl.textContent = t('piLabel');
+    stage.appendChild(piLbl);
+
+    // Pi pin header (单排, 简化)
+    PI_PINS.forEach(function(p){
+      // header housing
+      stage.appendChild(el('rect', {
+        x:PI_X-2, y:p.y-12, width:24, height:24, rx:'1',
+        fill:'var(--bg-0)', stroke:'var(--line-strong)', 'stroke-width':'1'
+      }));
+      // pin metal
+      var pinColor = 'var(--fg-mute)';
+      // 给目标针指示色 (淡)
+      Object.keys(WIRES).forEach(function(wk){
+        if (WIRES[wk].correct === p.id) pinColor = colorFor(wk);
+      });
+      stage.appendChild(el('circle', {
+        cx:PI_X+10, cy:p.y, r:'9',
+        fill:'var(--bg-2)',
+        stroke: pinColor,
+        'stroke-width':'2',
+        'class':'pin',
+        'data-pin':p.id,
+        'data-side':'pi'
+      }));
+      // gpio number left of pin
+      var gpioTxt = el('text', {
+        x:PI_X-8, y:p.y+4, 'text-anchor':'end',
+        'font-family':'JetBrains Mono,monospace', 'font-size':'9',
+        fill:'var(--fg-mute)'
+      });
+      gpioTxt.textContent = p.gpio;
+      stage.appendChild(gpioTxt);
+      // label right of pin
+      var pinLbl = el('text', {
+        x:PI_X+24, y:p.y+4,
+        'font-family':'JetBrains Mono,monospace', 'font-size':'10',
+        fill: pinColor, 'font-weight':'700'
+      });
+      pinLbl.textContent = p.label;
+      stage.appendChild(pinLbl);
+    });
+
+    // ===== 拖线区中间提示 =====
+    var hintTxt = el('text', {
+      x:540, y:500, 'text-anchor':'middle',
+      'font-family':'JetBrains Mono,monospace', 'font-size':'11',
+      fill:'var(--fg-mute)', 'letter-spacing':'2'
+    });
+    hintTxt.textContent = t('hintDrag');
+    stage.appendChild(hintTxt);
+
+    // ===== 中间 UART baud 大字显示 (滑块联动 + 大像素差) =====
+    var baudBox = el('rect', {
+      x:475, y:60, width:130, height:38, rx:'2',
+      fill:'var(--bg-2)', stroke:'var(--line-strong)', 'stroke-width':'1.2'
+    });
+    stage.appendChild(baudBox);
+    var baudLab = el('text', {
+      x:540, y:76, 'text-anchor':'middle',
+      'font-family':'JetBrains Mono,monospace', 'font-size':'9',
+      fill:'var(--fg-mute)', 'letter-spacing':'2'
+    });
+    baudLab.textContent = 'UART BAUD';
+    stage.appendChild(baudLab);
+    var baudCurrent = BAUD_OPTIONS[baudIdx];
+    var baudColor = (baudCurrent === 9600) ? 'var(--relay)' : 'var(--wire-vcc)';
+    var baudNum = el('text', {
+      x:540, y:93, 'text-anchor':'middle',
+      'font-family':'JetBrains Mono,monospace', 'font-size':'15',
+      fill: baudColor, 'font-weight':'700',
+      'id':'svgBaudNum'
+    });
+    baudNum.textContent = baudCurrent + ' bps';
+    stage.appendChild(baudNum);
+
+    // baud 选项标尺 (5 个 tick, 当前高亮)
+    for (var bi=0; bi<5; bi++){
+      var bx = 220 + bi*155;
+      var active = (bi === baudIdx);
+      var bg = active ? 'var(--elec)' : 'var(--bg-2)';
+      stage.appendChild(el('rect', {
+        x:bx-32, y:528, width:64, height:8, rx:'1',
+        fill:bg, stroke:'var(--line)', 'stroke-width':'0.5',
+        opacity: active ? '1' : '0.45'
+      }));
+    }
+
+    // ===== 已接的线 =====
+    Object.keys(WIRES).forEach(function(wk){
+      var w = WIRES[wk];
+      if (w.cur){
+        drawWire(wk, w.cur);
+      }
+    });
+
+    // 重新绑定拖拽
+    bindPinDrag();
+  }
+
+  // ===== 拖线渲染 =====
+  function findPin(id){
+    var allPms = PMS_PINS.find(function(p){ return p.id===id; });
+    if (allPms) return { x:allPms.x, y:allPms.y };
+    var allPi = PI_PINS.find(function(p){ return p.id===id; });
+    if (allPi) return { x:PI_X+10, y:allPi.y };
+    return null;
+  }
+
+  function drawWire(wireKey, toPinId){
+    var w = WIRES[wireKey];
+    var a = findPin(w.from);
+    var b = findPin(toPinId);
+    if (!a || !b) return;
+    // 平滑 cubic
+    var mx = (a.x+b.x)/2;
+    var d = 'M '+a.x+' '+a.y+' C '+mx+' '+a.y+', '+mx+' '+b.y+', '+b.x+' '+b.y;
+    var path = el('path', {
+      d:d, fill:'none',
+      stroke: colorFor(wireKey),
+      'stroke-width':'3',
+      'stroke-linecap':'round',
+      'class':'wire-path',
+      'data-wire':wireKey
+    });
+    stage.appendChild(path);
+  }
+
+  // ===== 拖拽 =====
+  var dragState = null;
+  var ghostPath = null;
+
+  function svgPoint(evt){
+    var pt = stage.createSVGPoint();
+    pt.x = evt.clientX; pt.y = evt.clientY;
+    var ctm = stage.getScreenCTM();
+    if (!ctm) return {x:0, y:0};
+    var p = pt.matrixTransform(ctm.inverse());
+    return {x:p.x, y:p.y};
+  }
+
+  function startDrag(pinEl, evt){
+    var pinId = pinEl.getAttribute('data-pin');
+    var side = pinEl.getAttribute('data-side');
+    if (side !== 'pms') return; // 只允许从 PMS 拖
+    var wireKey = pinEl.getAttribute('data-wire');
+    // 重置该线现有连接
+    WIRES[wireKey].cur = null;
+    renderAll();
+
+    var startPin = findPin(pinId);
+    var p = svgPoint(evt);
+    dragState = { wireKey:wireKey, fromId:pinId, startX:startPin.x, startY:startPin.y };
+    ghostPath = el('path', {
+      d:'M '+startPin.x+' '+startPin.y+' L '+p.x+' '+p.y,
+      stroke: colorFor(wireKey),
+      'stroke-width':'2.5',
+      'stroke-dasharray':'6 4',
+      fill:'none',
+      'pointer-events':'none',
+      opacity:'0.85'
+    });
+    stage.appendChild(ghostPath);
+    evt.preventDefault();
+  }
+
+  function moveDrag(evt){
+    if (!dragState || !ghostPath) return;
+    var p = svgPoint(evt);
+    ghostPath.setAttribute('d', 'M '+dragState.startX+' '+dragState.startY+' L '+p.x+' '+p.y);
+  }
+
+  function endDrag(evt){
+    if (!dragState) return;
+    var p = svgPoint(evt);
+    // 找最近的 Pi pin
+    var hit = null, best = 32;
+    PI_PINS.forEach(function(pp){
+      var dx = (PI_X+10) - p.x;
+      var dy = pp.y - p.y;
+      var d = Math.sqrt(dx*dx + dy*dy);
+      if (d < best){ best = d; hit = pp; }
+    });
+    if (ghostPath && ghostPath.parentNode) ghostPath.parentNode.removeChild(ghostPath);
+    ghostPath = null;
+
+    if (hit){
+      // 检查 Pi pin 是不是已经被其他线占用 — 占用就替换 (释放之前那根)
+      Object.keys(WIRES).forEach(function(wk){
+        if (wk !== dragState.wireKey && WIRES[wk].cur === hit.id){
+          WIRES[wk].cur = null;
+        }
+      });
+      WIRES[dragState.wireKey].cur = hit.id;
+    }
+    dragState = null;
+    renderAll();
+    updateProgress();
+    updateHud();
+    updateSidebarMarks();
+    updateStartBtn();
+  }
+
+  function bindPinDrag(){
+    var pins = stage.querySelectorAll('.pin[data-side="pms"]');
+    pins.forEach(function(p){
+      p.addEventListener('mousedown', function(e){ startDrag(p, e); });
+      // touch
+      p.addEventListener('touchstart', function(e){
+        if (!e.touches.length) return;
+        var t = e.touches[0];
+        startDrag(p, {clientX:t.clientX, clientY:t.clientY, preventDefault:function(){e.preventDefault();}});
+      }, {passive:false});
+    });
+  }
+
+  document.addEventListener('mousemove', moveDrag);
+  document.addEventListener('mouseup', endDrag);
+  document.addEventListener('touchmove', function(e){
+    if (!dragState) return;
+    if (!e.touches.length) return;
+    var t = e.touches[0];
+    moveDrag({clientX:t.clientX, clientY:t.clientY});
+    e.preventDefault();
+  }, {passive:false});
+  document.addEventListener('touchend', function(e){
+    if (!dragState) return;
+    var t = (e.changedTouches && e.changedTouches[0]) || {clientX:0, clientY:0};
+    endDrag({clientX:t.clientX, clientY:t.clientY});
+  });
+
+  // ============ UI update ============
+  function connectedCount(){
+    var n = 0;
+    Object.keys(WIRES).forEach(function(k){ if (WIRES[k].cur) n++; });
+    return n;
+  }
+
+  function isAllCorrect(){
+    return Object.keys(WIRES).every(function(k){
+      return WIRES[k].cur === WIRES[k].correct;
+    });
+  }
+
+  function crossingState(){
+    // 检查 TX/RX 是否交叉正确
+    var txOk = WIRES.tx.cur === 'pi_rxd';
+    var rxOk = WIRES.rx.cur === 'pi_txd';
+    var txWrong = WIRES.tx.cur === 'pi_txd';
+    var rxWrong = WIRES.rx.cur === 'pi_rxd';
+    if (!WIRES.tx.cur || !WIRES.rx.cur) return 'unknown';
+    if (txOk && rxOk) return 'ok';
+    if (txWrong || rxWrong) return 'bad';
+    return 'unknown';
+  }
+
+  function updateProgress(){
+    document.getElementById('progConnVal').textContent = connectedCount() + ' / 4';
+    var cs = crossingState();
+    var el2 = document.getElementById('progCrossVal');
+    if (cs === 'unknown'){ el2.textContent = t('crossUnknown'); el2.style.color = ''; }
+    else if (cs === 'ok'){ el2.textContent = t('crossOk'); el2.style.color = 'var(--relay)'; }
+    else { el2.textContent = t('crossBad'); el2.style.color = 'var(--wire-vcc)'; }
+    document.getElementById('progFrameVal').textContent = frameCount.toString();
+  }
+
+  function updateSidebarMarks(){
+    Object.keys(WIRES).forEach(function(wk){
+      var item = document.querySelector('[data-wire="'+wk+'"]');
+      if (!item) return;
+      if (WIRES[wk].cur === WIRES[wk].correct) item.classList.add('done');
+      else item.classList.remove('done');
+    });
+  }
+
+  function updateHud(){
+    var v2 = document.getElementById('hudV2');
+    if (running){
+      v2.textContent = (frameCount>0) ? t('statusLive') : t('statusErr');
+      v2.className = (frameCount>0) ? 'val-ok mono' : 'val mono';
+      if (frameCount>0) v2.style.color = 'var(--relay)';
+      else v2.style.color = 'var(--wire-vcc)';
+    } else {
+      if (isAllCorrect() && BAUD_OPTIONS[baudIdx]===9600){
+        v2.textContent = t('statusReady'); v2.style.color = 'var(--elec)';
+      } else {
+        v2.textContent = t('statusOffline'); v2.style.color = 'var(--fg-mute)';
+      }
+    }
+  }
+
+  function updateStartBtn(){
+    var btn = document.getElementById('btnStart');
+    var canStart = connectedCount() === 4;
+    btn.disabled = !canStart || running;
+  }
+
+  // ============ Terminal ============
+  var termBody = document.getElementById('termBody');
+  var termHeader = document.getElementById('termHeader');
+
+  function termClear(){
+    termBody.innerHTML = '';
+  }
+  function termWrite(txt, cls){
+    var row = document.createElement('div');
+    row.className = 'row ' + (cls||'');
+    row.textContent = txt;
+    termBody.appendChild(row);
+    termBody.scrollTop = termBody.scrollHeight;
+    return row;
+  }
+
+  function startClock(){
+    if (clockTimer) clearInterval(clockTimer);
+    var ck = document.getElementById('termClock');
+    var update = function(){
+      var d = new Date();
+      var hh = String(d.getHours()).padStart(2,'0');
+      var mm = String(d.getMinutes()).padStart(2,'0');
+      var ss = String(d.getSeconds()).padStart(2,'0');
+      ck.textContent = hh+':'+mm+':'+ss;
+    };
+    update();
+    clockTimer = setInterval(update, 1000);
+  }
+
+  // ============ 启动测试 ============
+  function startTest(){
+    if (running) return;
+    running = true;
+    frameCount = 0;
+    termClear();
+    termHeader.classList.remove('live');
+    startClock();
+    updateStartBtn();
+    document.getElementById('btnStart').textContent = t('btnStartRun');
+    updateHud();
+
+    termWrite(t('bootRun'), 'dim');
+    var baud = BAUD_OPTIONS[baudIdx];
+    termWrite(t('waitFrame') + baud + ' baud  (8N1)', 'dim');
+
+    var correct = isAllCorrect();
+    var baudOk = (baud === 9600);
+    var cross = crossingState();
+
+    var delay = 900;
+    if (!correct){
+      // 失败分支: TX/RX 反 / 缺线
+      setTimeout(function(){
+        termWrite('. . . . . . . . . . . . . . . . . . . .', 'dim');
+        setTimeout(function(){
+          termWrite(t('noData'), 'err');
+          termWrite(t('noDataHint'), 'dim');
+          finishTest(false);
+        }, 1400);
+      }, delay);
+    } else if (!baudOk){
+      // 接线对但 baud 错: 帧头出现但校验失败
+      setTimeout(function(){
+        termWrite('rx: 42 4D ?? ?? ?? ?? ?? ?? ...', 'data');
+        setTimeout(function(){
+          termWrite(t('badBaud'), 'err');
+          finishTest(false);
+        }, 1200);
+      }, delay);
+    } else {
+      // 成功分支: 流出数据帧
+      streamFrames();
+    }
+  }
+
+  function streamFrames(){
+    var i = 0;
+    var total = 6;
+    function pushOne(){
+      i++;
+      var pm = 8 + Math.floor(Math.random()*22); // PM2.5 = 8-29
+      var b6 = pm.toString(16).toUpperCase().padStart(2,'0');
+      var hex = '42 4D 00 1C 00 0A 00 ' + b6 + ' 00 18 ... [32B]';
+      termWrite(t('frameHdr') + i + ': ' + hex, 'data');
+      var okRow = termWrite(t('frameOk') + pm + t('frameOkUnit'), 'ok');
+      if (i === 1){
+        // 第 1 条 gold 高亮 (key moment)
+        termWrite(t('firstFrame'), 'highlight');
+      }
+      frameCount = i;
+      updateProgress();
+      updateHud();
+      termHeader.classList.add('live');
+      if (i < total){
+        animTimer = setTimeout(pushOne, 800);
+      } else {
+        animTimer = setTimeout(function(){
+          finishTest(true);
+        }, 1000);
+      }
+    }
+    animTimer = setTimeout(pushOne, 700);
+  }
+
+  function finishTest(success){
+    running = false;
+    if (animTimer){ clearTimeout(animTimer); animTimer = null; }
+    document.getElementById('btnStart').textContent = t('btnStart');
+    updateStartBtn();
+    updateHud();
+  }
+
+  // ============ Reset ============
+  function resetWires(){
+    if (animTimer){ clearTimeout(animTimer); animTimer = null; }
+    if (clockTimer){ clearInterval(clockTimer); clockTimer = null; }
+    Object.keys(WIRES).forEach(function(k){ WIRES[k].cur = null; });
+    running = false;
+    frameCount = 0;
+    termClear();
+    termWrite(t('termBoot'), 'dim');
+    termHeader.classList.remove('live');
+    document.getElementById('termClock').textContent = '--:--:--';
+    document.getElementById('btnStart').textContent = t('btnStart');
+    renderAll();
+    updateProgress();
+    updateHud();
+    updateSidebarMarks();
+    updateStartBtn();
+  }
+
+  // ============ Baud slider ============
+  document.getElementById('baudSlider').addEventListener('input', function(e){
+    baudIdx = parseInt(e.target.value, 10);
+    document.getElementById('baudVal').textContent = BAUD_OPTIONS[baudIdx];
+    renderAll();
+    updateHud();
+  });
+
+  // ============ Buttons ============
+  document.getElementById('btnStart').addEventListener('click', startTest);
+  document.getElementById('btnReset').addEventListener('click', resetWires);
+  document.getElementById('langBtn').addEventListener('click', function(){
+    LANG = (LANG === 'cn') ? 'en' : 'cn';
+    refreshI18N();
+  });
+
+  // ============ Init ============
+  window.addEventListener('resize', function(){
+    // svg 用 viewBox 自适应, 不需要重画, 仅在 i18n 时重画
+  });
+
+  refreshI18N();
+  renderAll();
+  updateProgress();
+  updateHud();
+  updateStartBtn();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,875 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<title>M18 · Mass Estimate Sandbox — Geometry Void</title>
+<style>
+  :root{
+    /* Layer 1 — shared deep space canvas (anim/game 共通) */
+    --bg-0: oklch(0.14 0.035 265);
+    --bg-1: oklch(0.18 0.04 265);
+    --bg-2: oklch(0.22 0.045 265);
+    --bg-3: oklch(0.28 0.05 265);
+    --line: oklch(0.35 0.05 265 / 0.35);
+    --line-strong: oklch(0.55 0.08 265 / 0.55);
+    --fg:      oklch(0.96 0.01 265);
+    --fg-dim:  oklch(0.75 0.02 265);
+    --fg-mute: oklch(0.55 0.03 265);
+    --gold:    oklch(0.85 0.14 85);
+
+    /* Layer 2 — math signature accent (MTH-06) */
+    --math: oklch(0.72 0.17 245);
+
+    /* Layer 3 — math 5-color palette (themes.js MTH-06)
+       AXIS / PROOF / SHADOW / SOLUTION / QED  分别给 5 个尺寸槽 */
+    --AXIS:     oklch(0.72 0.17 245);
+    --PROOF:    oklch(0.52 0.16 245);
+    --SHADOW:   oklch(0.35 0.10 245);
+    --SOLUTION: oklch(0.92 0.08 240);
+    --QED:      oklch(0.85 0.14 85);
+
+    /* PM 5 尺寸专属色 (从 math palette + 渐进 hue 偏移, 保留 math 系) */
+    --pm03: oklch(0.78 0.13 215);   /* sky cyan, 最细 */
+    --pm05: oklch(0.72 0.17 245);   /* AXIS electric blue */
+    --pm10: oklch(0.52 0.16 245);   /* PROOF mid blue */
+    --pm25: oklch(0.62 0.18 290);   /* deeper violet */
+    --pmA:  oklch(0.55 0.18 320);   /* magenta-violet, 最粗 */
+
+    /* AQI 6 band 颜色条 (右侧浓度等级条用) */
+    --aqi-good:   oklch(0.78 0.16 145);
+    --aqi-mod:    oklch(0.85 0.16 95);
+    --aqi-usg:    oklch(0.80 0.16 55);
+    --aqi-bad:    oklch(0.72 0.18 25);
+    --aqi-vbad:   oklch(0.55 0.18 350);
+    --aqi-haz:    oklch(0.45 0.16 15);
+  }
+
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{
+    height:100%;width:100%;
+    font-family:'Inter','PingFang SC',sans-serif;
+    color:var(--fg);background:var(--bg-0);overflow:hidden
+  }
+
+  .stage{display:flex;flex-direction:row;height:100vh;width:100vw}
+
+  /* ---------- 200px sidebar ---------- */
+  .game-sidebar{
+    width:200px;flex:0 0 200px;
+    background:var(--bg-1);border-right:1px solid var(--line);
+    display:flex;flex-direction:column;padding:16px 12px;gap:12px;
+    overflow-y:auto;
+  }
+  .brand{
+    display:flex;flex-direction:column;gap:2px;
+    border-bottom:1px solid var(--line);padding-bottom:8px;
+  }
+  .brand .code{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--fg-mute);letter-spacing:1.2px}
+  .brand .title{font-size:14px;color:var(--fg);font-weight:600}
+  .brand .sub{font-size:11px;color:var(--fg-dim);margin-top:2px}
+
+  .mascot{
+    width:100%;height:88px;display:flex;align-items:center;justify-content:center;
+    background:var(--bg-2);border:1px solid var(--line);
+  }
+  .mascot svg{width:100%;height:100%}
+
+  .task-box{
+    background:var(--bg-2);border:1px solid var(--line);
+    padding:8px 10px;display:flex;flex-direction:column;gap:6px;
+  }
+  .task-title{
+    font-family:'JetBrains Mono',monospace;font-size:9.5px;
+    color:var(--AXIS);letter-spacing:1.2px;
+  }
+  .task-list{display:flex;flex-direction:column;gap:4px}
+  .task-row{
+    display:flex;align-items:flex-start;gap:6px;
+    font-size:10.5px;color:var(--fg-dim);line-height:1.45;
+    padding:5px 6px;background:var(--bg-1);border:1px solid var(--line);
+    cursor:pointer;transition:all .15s;
+  }
+  .task-row:hover{background:var(--bg-3);color:var(--fg)}
+  .task-row.active{
+    background:var(--bg-3);border-color:var(--AXIS);
+    color:var(--fg);box-shadow:3px 3px 0 var(--bg-0);
+  }
+  .task-row.done{
+    border-color:var(--QED);
+  }
+  .task-row.done .task-mark{color:var(--QED)}
+  .task-mark{
+    width:14px;flex:0 0 14px;
+    font-family:'JetBrains Mono',monospace;font-size:10px;
+    color:var(--fg-mute);
+  }
+  .task-row.active .task-mark{color:var(--AXIS)}
+  .task-text{flex:1}
+
+  .hud-box{
+    background:var(--bg-2);border:1px solid var(--line);
+    padding:8px 10px;display:flex;flex-direction:column;gap:6px;
+  }
+  .hud-row{display:flex;justify-content:space-between;align-items:baseline}
+  .hud-lbl{
+    font-family:'JetBrains Mono',monospace;font-size:9.5px;
+    color:var(--fg-mute);letter-spacing:1.1px;
+  }
+  .hud-val{
+    font-family:'JetBrains Mono',monospace;font-size:14px;
+    color:var(--AXIS);font-weight:600;
+  }
+  .hud-val.gold{color:var(--QED)}
+
+  .guide{
+    background:var(--bg-2);border:1px solid var(--line);
+    padding:8px 10px;display:flex;flex-direction:column;gap:4px;
+  }
+  .guide-title{
+    font-family:'JetBrains Mono',monospace;font-size:9.5px;
+    color:var(--AXIS);letter-spacing:1.2px;
+  }
+  .guide-line{font-size:10.5px;color:var(--fg-dim);line-height:1.45}
+
+  .sidebar-spacer{flex:1}
+
+  .lang-btn{
+    width:100%;padding:8px 10px;background:var(--bg-3);
+    color:var(--fg);border:1px solid var(--line-strong);
+    font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:1.5px;
+    cursor:pointer;box-shadow:3px 3px 0 var(--bg-0);
+  }
+  .lang-btn:hover{background:var(--PROOF);color:var(--SOLUTION)}
+
+  /* ---------- main ---------- */
+  .game-main{
+    flex:1;display:flex;flex-direction:column;background:var(--bg-0);min-width:0;
+  }
+  .main-header{
+    height:46px;border-bottom:1px solid var(--line);
+    display:flex;align-items:center;justify-content:space-between;
+    padding:0 18px;background:var(--bg-1);flex-shrink:0;
+  }
+  .header-left{
+    font-family:'JetBrains Mono',monospace;font-size:11px;
+    color:var(--fg-dim);letter-spacing:1.4px;
+  }
+  .header-right{
+    display:flex;gap:14px;font-family:'JetBrains Mono',monospace;font-size:11px;
+  }
+  .header-cell{display:flex;flex-direction:column;align-items:flex-end}
+  .header-cell .label{font-size:9px;color:var(--fg-mute);letter-spacing:1px}
+  .header-cell .val{color:var(--AXIS);font-size:13px;font-weight:600}
+
+  /* main grid: 左 sliders 区, 右 公式 + 大读数 + AQI 条 */
+  .main-body{
+    flex:1;display:flex;flex-direction:row;min-height:0;
+  }
+  .pane-left{
+    flex:1.35;display:flex;flex-direction:column;
+    border-right:1px solid var(--line);min-width:0;
+  }
+  .pane-right{
+    flex:1;display:flex;flex-direction:column;min-width:0;
+  }
+
+  .pane-title{
+    padding:10px 16px;font-family:'JetBrains Mono',monospace;font-size:11px;
+    color:var(--AXIS);letter-spacing:1.4px;
+    border-bottom:1px solid var(--line);background:var(--bg-1);
+    flex-shrink:0;
+  }
+
+  /* sliders panel */
+  .sliders-body{
+    flex:1;display:flex;flex-direction:column;padding:14px 16px;gap:10px;
+    overflow:auto;
+  }
+  .slot{
+    display:grid;grid-template-columns:74px 1fr 100px;gap:10px;align-items:center;
+    background:var(--bg-1);border:1px solid var(--line);padding:9px 11px;
+  }
+  .slot.hover{box-shadow:3px 3px 0 var(--bg-0);transform:translate(-1px,-1px)}
+  .slot-meta{display:flex;flex-direction:column;gap:2px}
+  .slot-name{
+    font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:700;
+    letter-spacing:.5px;
+  }
+  .slot-mass{
+    font-family:'JetBrains Mono',monospace;font-size:9px;
+    color:var(--fg-mute);letter-spacing:.5px;
+  }
+  .slot-track{display:flex;flex-direction:column;gap:4px}
+  .slot-bar-wrap{
+    position:relative;height:14px;background:var(--bg-2);
+    border:1px solid var(--line);overflow:hidden;
+  }
+  .slot-bar{
+    position:absolute;left:0;top:0;bottom:0;width:0%;
+    transition:width .15s;
+  }
+  .slot input[type=range]{
+    -webkit-appearance:none;appearance:none;width:100%;height:5px;
+    background:var(--bg-3);border:1px solid var(--line);outline:none;cursor:pointer;
+  }
+  .slot input[type=range]::-webkit-slider-thumb{
+    -webkit-appearance:none;appearance:none;width:12px;height:18px;
+    background:var(--SOLUTION);border:2px solid var(--bg-0);
+    box-shadow:2px 2px 0 var(--bg-0);cursor:grab;
+  }
+  .slot input[type=range]::-moz-range-thumb{
+    width:12px;height:18px;background:var(--SOLUTION);
+    border:2px solid var(--bg-0);box-shadow:2px 2px 0 var(--bg-0);cursor:grab;
+  }
+  .slot-readout{
+    display:flex;flex-direction:column;align-items:flex-end;
+    font-family:'JetBrains Mono',monospace;
+  }
+  .slot-count{font-size:14px;color:var(--fg);font-weight:700}
+  .slot-contrib{font-size:10px;color:var(--AXIS)}
+
+  /* slot accent borders by size */
+  .slot[data-size="pm03"] .slot-name{color:var(--pm03)}
+  .slot[data-size="pm03"] .slot-bar{background:var(--pm03)}
+  .slot[data-size="pm05"] .slot-name{color:var(--pm05)}
+  .slot[data-size="pm05"] .slot-bar{background:var(--pm05)}
+  .slot[data-size="pm10"] .slot-name{color:var(--pm10)}
+  .slot[data-size="pm10"] .slot-bar{background:var(--pm10)}
+  .slot[data-size="pm25"] .slot-name{color:var(--pm25)}
+  .slot[data-size="pm25"] .slot-bar{background:var(--pm25)}
+  .slot[data-size="pmA"]  .slot-name{color:var(--pmA)}
+  .slot[data-size="pmA"]  .slot-bar{background:var(--pmA)}
+
+  /* sliders footer: composition canvas */
+  .compose-wrap{
+    border-top:1px solid var(--line);background:var(--bg-1);
+    padding:10px 16px;display:flex;flex-direction:column;gap:6px;flex-shrink:0;
+  }
+  .compose-title{
+    font-family:'JetBrains Mono',monospace;font-size:10px;
+    color:var(--fg-mute);letter-spacing:1.2px;
+  }
+  .stack-bar{
+    height:18px;width:100%;background:var(--bg-2);border:1px solid var(--line);
+    display:flex;overflow:hidden;
+  }
+  .stack-seg{height:100%;transition:width .2s}
+  .stack-legend{
+    display:flex;gap:10px;flex-wrap:wrap;
+    font-family:'JetBrains Mono',monospace;font-size:9.5px;color:var(--fg-dim);
+  }
+  .stack-legend .pct{color:var(--fg)}
+
+  /* right: formula + big readout + AQI band */
+  .formula-card{
+    margin:14px 16px 6px 16px;background:var(--bg-2);border:1px solid var(--line);
+    padding:12px;font-family:'JetBrains Mono',monospace;font-size:12px;
+    color:var(--fg-dim);line-height:1.65;flex-shrink:0;
+  }
+  .formula-card .head{
+    color:var(--fg-mute);font-size:9.5px;letter-spacing:1.2px;margin-bottom:6px;
+  }
+  .formula-card .eq{color:var(--fg);font-size:13px}
+  .formula-card .var{color:var(--AXIS)}
+  .formula-card .num{color:var(--SOLUTION)}
+  .formula-card .qed{color:var(--QED)}
+
+  .big-readout-wrap{
+    display:flex;flex-direction:column;align-items:center;
+    padding:12px 16px 6px 16px;gap:4px;
+  }
+  .big-readout{
+    font-family:'JetBrains Mono',monospace;font-size:58px;font-weight:700;
+    color:var(--AXIS);line-height:1;letter-spacing:-2px;
+  }
+  .big-readout.gold{color:var(--QED)}
+  .big-unit{
+    font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--fg-mute);
+    letter-spacing:1.4px;
+  }
+  .big-count{
+    font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--fg-dim);
+    margin-top:2px;
+  }
+
+  .band-strip-wrap{
+    margin:6px 16px 12px 16px;display:flex;flex-direction:column;gap:5px;
+    overflow:auto;
+  }
+  .band-strip{
+    position:relative;height:18px;width:100%;
+    display:flex;border:1px solid var(--line);
+  }
+  .band-seg{
+    flex:1;display:flex;align-items:center;justify-content:center;
+    font-family:'JetBrains Mono',monospace;font-size:8.5px;color:var(--bg-0);
+    font-weight:700;letter-spacing:.5px;
+  }
+  .band-marker{
+    position:absolute;top:-3px;bottom:-3px;width:3px;
+    background:var(--QED);box-shadow:0 0 0 1px var(--bg-0);
+    transition:left .25s;
+  }
+  .band-rows{display:flex;flex-direction:column;gap:3px;margin-top:4px}
+  .band-row{
+    display:grid;grid-template-columns:14px 1fr auto;gap:8px;align-items:center;
+    padding:4px 8px;background:var(--bg-2);border:1px solid var(--line);
+    font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--fg-mute);
+    transition:all .15s;
+  }
+  .band-row.active{
+    background:var(--bg-3);border-color:var(--AXIS);color:var(--fg);
+    box-shadow:3px 3px 0 var(--bg-0);
+  }
+  .band-swatch{width:14px;height:14px;border:1px solid var(--line)}
+  .band-range{font-size:9px;color:var(--fg-mute)}
+  .band-row.active .band-range{color:var(--AXIS)}
+
+  /* milestone toast */
+  .milestone{
+    position:absolute;left:50%;top:54px;transform:translateX(-50%) translateY(-20px);
+    background:var(--QED);color:var(--bg-0);
+    font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:700;
+    padding:10px 22px;letter-spacing:1.4px;
+    box-shadow:4px 4px 0 var(--bg-0);
+    opacity:0;transition:all .35s;pointer-events:none;z-index:20;
+  }
+  .milestone.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+  /* task action btns */
+  .task-actions{display:flex;gap:6px;margin-top:6px}
+  .task-btn{
+    flex:1;padding:6px 8px;background:var(--bg-3);color:var(--fg);
+    border:1px solid var(--line-strong);
+    font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:1px;
+    cursor:pointer;box-shadow:2px 2px 0 var(--bg-0);
+  }
+  .task-btn:hover{background:var(--PROOF);color:var(--SOLUTION)}
+
+</style>
+</head>
+<body>
+  <div class="stage">
+    <!-- ============ Sidebar ============ -->
+    <aside class="game-sidebar">
+      <div class="brand">
+        <span class="code">MTH-06 · M18</span>
+        <span class="title" data-i18n-cn="计数 → 质量浓度" data-i18n-en="Count → Mass Density">计数 → 质量浓度</span>
+        <span class="sub" data-i18n-cn="非线性: 1 颗 PM10 ≈ 37000 颗 PM0.3" data-i18n-en="Non-linear: 1 PM10 ≈ 37000 PM0.3">非线性: 1 颗 PM10 ≈ 37000 颗 PM0.3</span>
+      </div>
+
+      <div class="mascot" aria-label="Pi mascot">
+        <!-- Pi — rotating tetrahedron mascot (math theme MTH-06) -->
+        <svg viewBox="0 0 160 96" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <linearGradient id="piGrad" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0%" stop-color="var(--AXIS)"/>
+              <stop offset="100%" stop-color="var(--PROOF)"/>
+            </linearGradient>
+          </defs>
+          <g id="piMascot" transform="translate(80 48)">
+            <polygon points="0,-30 28,16 -28,16" fill="url(#piGrad)" stroke="var(--SOLUTION)" stroke-width="1"/>
+            <polygon points="0,-30 28,16 0,4" fill="var(--PROOF)" opacity=".75" stroke="var(--SOLUTION)" stroke-width="0.7"/>
+            <polygon points="0,-30 -28,16 0,4" fill="var(--SHADOW)" opacity=".8" stroke="var(--SOLUTION)" stroke-width="0.7"/>
+            <text x="0" y="6" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="11" fill="var(--SOLUTION)" font-weight="700">m=ρV</text>
+          </g>
+        </svg>
+      </div>
+
+      <div class="task-box">
+        <div class="task-title" data-i18n-cn="3 个任务" data-i18n-en="3 TASKS">3 个任务</div>
+        <div class="task-list" id="taskList">
+          <div class="task-row active" data-task="A">
+            <span class="task-mark">[A]</span>
+            <span class="task-text" data-i18n-cn="用最少粒子拼出 35 μg/m³" data-i18n-en="Reach 35 μg/m³ with fewest particles">用最少粒子拼出 35 μg/m³</span>
+          </div>
+          <div class="task-row" data-task="B">
+            <span class="task-mark">[B]</span>
+            <span class="task-text" data-i18n-cn="给出 3 种不同配比都达 35" data-i18n-en="Find 3 different recipes for 35">给出 3 种不同配比都达 35</span>
+          </div>
+          <div class="task-row" data-task="C">
+            <span class="task-mark">[C]</span>
+            <span class="task-text" data-i18n-cn="1000 颗 PM0.3 vs 10 颗 PM10, 谁重?" data-i18n-en="1000 PM0.3 vs 10 PM10, which weighs more?">1000 颗 PM0.3 vs 10 颗 PM10, 谁重?</span>
+          </div>
+        </div>
+        <div class="task-actions">
+          <button id="presetA" class="task-btn" type="button" data-i18n-cn="A 预设" data-i18n-en="A preset">A 预设</button>
+          <button id="presetC" class="task-btn" type="button" data-i18n-cn="C 对照" data-i18n-en="C compare">C 对照</button>
+          <button id="resetAll" class="task-btn" type="button" data-i18n-cn="清零" data-i18n-en="Reset">清零</button>
+        </div>
+      </div>
+
+      <div class="hud-box">
+        <div class="hud-row">
+          <span class="hud-lbl" data-i18n-cn="总粒子" data-i18n-en="N total">总粒子</span>
+          <span class="hud-val" id="hudNtot">0</span>
+        </div>
+        <div class="hud-row">
+          <span class="hud-lbl">μg/m³</span>
+          <span class="hud-val" id="hudMass">0.00</span>
+        </div>
+        <div class="hud-row">
+          <span class="hud-lbl" data-i18n-cn="等级" data-i18n-en="Band">等级</span>
+          <span class="hud-val" id="hudBand">GOOD</span>
+        </div>
+      </div>
+
+      <div class="guide">
+        <div class="guide-title" data-i18n-cn="操作" data-i18n-en="HOW">操作</div>
+        <div class="guide-line" data-i18n-cn="1 · 拖 5 个尺寸槽滑块 (0-1000 颗)" data-i18n-en="1 · Drag 5 size sliders (0-1000)">1 · 拖 5 个尺寸槽滑块 (0-1000 颗)</div>
+        <div class="guide-line" data-i18n-cn="2 · 实时算: 浓度 = Σ 个数 × 单颗质量" data-i18n-en="2 · Live calc: density = sum count × mass">2 · 实时算: 浓度 = Σ 个数 × 单颗质量</div>
+        <div class="guide-line" data-i18n-cn="3 · 看右侧 AQI 条标位置" data-i18n-en="3 · Watch the AQI band marker">3 · 看右侧 AQI 条标位置</div>
+      </div>
+
+      <div class="sidebar-spacer"></div>
+
+      <button id="langBtn" class="lang-btn" type="button">EN / 中文</button>
+    </aside>
+
+    <!-- ============ Main ============ -->
+    <main class="game-main" style="position:relative">
+      <header class="main-header">
+        <div class="header-left" data-i18n-cn="M18 · 沙盒: 个数 vs 质量浓度" data-i18n-en="M18 · Sandbox: Count vs Mass Density">M18 · 沙盒: 个数 vs 质量浓度</div>
+        <div class="header-right">
+          <div class="header-cell">
+            <span class="label">SUM_N</span>
+            <span class="val" id="hN">0</span>
+          </div>
+          <div class="header-cell">
+            <span class="label">MASS</span>
+            <span class="val" id="hMass">0.00</span>
+          </div>
+          <div class="header-cell">
+            <span class="label">TASK</span>
+            <span class="val" id="hTask">A</span>
+          </div>
+        </div>
+      </header>
+
+      <div class="main-body">
+        <!-- LEFT: 5 sliders + composition stack -->
+        <section class="pane-left">
+          <div class="pane-title" data-i18n-cn="左 · 5 个尺寸槽 (调粒子个数)" data-i18n-en="Left · 5 size slots (set particle count)">左 · 5 个尺寸槽 (调粒子个数)</div>
+          <div class="sliders-body" id="slidersBody">
+            <!-- slots injected -->
+          </div>
+          <div class="compose-wrap">
+            <div class="compose-title" data-i18n-cn="质量贡献堆叠 (% 占当前总质量)" data-i18n-en="Mass contribution stack (% of total)">质量贡献堆叠 (% 占当前总质量)</div>
+            <div class="stack-bar" id="stackBar"></div>
+            <div class="stack-legend" id="stackLegend"></div>
+          </div>
+        </section>
+
+        <!-- RIGHT: formula + bignum + AQI band -->
+        <section class="pane-right">
+          <div class="pane-title" data-i18n-cn="右 · 公式 + 等级 + 任务" data-i18n-en="Right · Formula + Band + Task">右 · 公式 + 等级 + 任务</div>
+
+          <div class="formula-card">
+            <div class="head" data-i18n-cn="主公式" data-i18n-en="Master formula">主公式</div>
+            <div class="eq">
+              <span class="var">C</span> = ( <span class="num">N₁·m₁</span> + <span class="num">N₂·m₂</span> + … ) / <span class="var">V</span>
+            </div>
+            <div style="font-size:10.5px;margin-top:6px">
+              <span class="var">V</span> = 0.0001 m³  (0.1 L sample)
+            </div>
+            <div style="font-size:10.5px">
+              <span data-i18n-cn="单颗质量" data-i18n-en="per-particle mass">单颗质量</span> m = ρ · (π/6) · d³,  ρ = 1.65 g/cm³
+            </div>
+            <div id="formulaSub" style="font-size:11px;margin-top:8px;color:var(--fg)">
+              <span data-i18n-cn="当前代入" data-i18n-en="Substituted">当前代入</span>:
+              <span class="num" id="fSub">0 + 0 + 0 + 0 + 0 = 0.00</span> μg/m³
+            </div>
+          </div>
+
+          <div class="big-readout-wrap">
+            <div class="big-readout" id="bigMass">0.00</div>
+            <div class="big-unit">μg/m³ · PM mass density</div>
+            <div class="big-count">
+              N<sub>total</sub> = <span id="bigN">0</span> ·
+              <span id="bigTaskState" data-i18n-cn="任务 A 待达" data-i18n-en="Task A pending">任务 A 待达</span>
+            </div>
+          </div>
+
+          <div class="band-strip-wrap">
+            <div class="band-strip" id="bandStrip">
+              <div class="band-seg" style="background:var(--aqi-good)">GOOD</div>
+              <div class="band-seg" style="background:var(--aqi-mod)">MOD</div>
+              <div class="band-seg" style="background:var(--aqi-usg)">USG</div>
+              <div class="band-seg" style="background:var(--aqi-bad)">BAD</div>
+              <div class="band-seg" style="background:var(--aqi-vbad)">VBAD</div>
+              <div class="band-seg" style="background:var(--aqi-haz)">HAZ</div>
+              <div class="band-marker" id="bandMarker" style="left:0%"></div>
+            </div>
+            <div class="band-rows" id="bandRows">
+              <!-- rows injected -->
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <div id="milestone" class="milestone" data-i18n-cn="解锁 · 质量浓度直觉建立" data-i18n-en="Unlocked · Mass density intuition">解锁 · 质量浓度直觉建立</div>
+    </main>
+  </div>
+
+<script>
+(function(){
+  'use strict';
+
+  // --------------------------------------------------------------
+  // 5 个 PM 尺寸: id, 名称, 直径 μm, 单颗质量 pg (= 10⁻⁶ μg)
+  //   m = ρ · (π/6) · d³,  ρ = 1.65 g/cm³ = 1.65 pg/μm³
+  //   PM0.3: 0.023 pg
+  //   PM0.5: 0.108 pg
+  //   PM1.0: 0.865 pg
+  //   PM2.5: 13.5 pg
+  //   PM10 : 864  pg
+  // 采样体积 V = 0.0001 m³ (0.1 L), 单位换算: pg / m³ × 10⁻⁶ = μg/m³
+  // 等价: μg/m³ = sum(count × mass_pg) × 0.01
+  // --------------------------------------------------------------
+  var SIZES = [
+    { id:'pm03', name:'PM0.3', d:0.3, mass_pg: 0.023 },
+    { id:'pm05', name:'PM0.5', d:0.5, mass_pg: 0.108 },
+    { id:'pm10', name:'PM1.0', d:1.0, mass_pg: 0.865 },
+    { id:'pm25', name:'PM2.5', d:2.5, mass_pg: 13.5  },
+    { id:'pmA',  name:'PM10',  d:10.0,mass_pg: 864   }
+  ];
+  var SLIDER_MAX = 1000;
+  var SAMPLE_FACTOR = 0.01;   // count*mass_pg*factor -> μg/m³
+
+  // AQI bands (PM2.5 EPA 24-hr)
+  var BANDS = [
+    [0.0,  12.0,   0,  50,  'GOOD', '良好',     'Good',                  '--aqi-good'],
+    [12.1, 35.4,  51, 100,  'MOD',  '中等',     'Moderate',              '--aqi-mod'],
+    [35.5, 55.4, 101, 150,  'USG',  '敏感人群', 'Unhealthy (Sens.)',     '--aqi-usg'],
+    [55.5,150.4, 151, 200,  'BAD',  '不健康',   'Unhealthy',             '--aqi-bad'],
+    [150.5,250.4,201, 300,  'VBAD', '很不健康', 'Very Unhealthy',        '--aqi-vbad'],
+    [250.5,500.4,301, 500,  'HAZ',  '危险',     'Hazardous',             '--aqi-haz']
+  ];
+
+  // --------------- state (no window-shadow names) ---------------
+  var stateGame = {
+    counts: [0, 0, 0, 0, 0],
+    lang: 'cn',
+    activeTask: 'A',
+    taskDone: { A:false, B:false, C:false },
+    bRecipes: [],          // 已记录的 task-B 配比 hash
+    milestoneFired: false
+  };
+
+  // ------------------------- DOM refs ---------------------------
+  var slidersBody = document.getElementById('slidersBody');
+  var stackBar    = document.getElementById('stackBar');
+  var stackLegend = document.getElementById('stackLegend');
+  var fSub        = document.getElementById('fSub');
+  var bigMass     = document.getElementById('bigMass');
+  var bigN        = document.getElementById('bigN');
+  var bigTaskState= document.getElementById('bigTaskState');
+  var bandMarker  = document.getElementById('bandMarker');
+  var bandRows    = document.getElementById('bandRows');
+  var hudNtot     = document.getElementById('hudNtot');
+  var hudMass     = document.getElementById('hudMass');
+  var hudBand     = document.getElementById('hudBand');
+  var hN          = document.getElementById('hN');
+  var hMass       = document.getElementById('hMass');
+  var hTask       = document.getElementById('hTask');
+  var milestone   = document.getElementById('milestone');
+  var langBtn     = document.getElementById('langBtn');
+  var presetA     = document.getElementById('presetA');
+  var presetC     = document.getElementById('presetC');
+  var resetAll    = document.getElementById('resetAll');
+  var taskList    = document.getElementById('taskList');
+
+  // ------------------------ build slots -------------------------
+  function buildSlots(){
+    var html = '';
+    for (var i = 0; i < SIZES.length; i++){
+      var s = SIZES[i];
+      html +=
+        '<div class="slot" data-idx="'+i+'" data-size="'+s.id+'">'
+        + '<div class="slot-meta">'
+        +   '<span class="slot-name">'+s.name+'</span>'
+        +   '<span class="slot-mass">'+s.mass_pg+' pg/颗</span>'
+        + '</div>'
+        + '<div class="slot-track">'
+        +   '<div class="slot-bar-wrap"><div class="slot-bar" id="bar'+i+'"></div></div>'
+        +   '<input type="range" min="0" max="'+SLIDER_MAX+'" step="1" value="0" id="r'+i+'" aria-label="'+s.name+' count"/>'
+        + '</div>'
+        + '<div class="slot-readout">'
+        +   '<span class="slot-count" id="c'+i+'">0</span>'
+        +   '<span class="slot-contrib" id="ct'+i+'">+0.00</span>'
+        + '</div>'
+        + '</div>';
+    }
+    slidersBody.innerHTML = html;
+
+    for (var j = 0; j < SIZES.length; j++){
+      (function(idx){
+        var inp = document.getElementById('r'+idx);
+        inp.addEventListener('input', function(){
+          stateGame.counts[idx] = parseInt(inp.value, 10) || 0;
+          update();
+        });
+      })(j);
+    }
+  }
+
+  // ----------------------- band helpers ------------------------
+  function buildBandRows(){
+    var html = '';
+    for (var i = 0; i < BANDS.length; i++){
+      var b = BANDS[i];
+      html += '<div class="band-row" data-idx="'+i+'">'
+            +   '<div class="band-swatch" style="background:var('+b[7]+')"></div>'
+            +   '<div><span data-i18n-cn="'+b[5]+'" data-i18n-en="'+b[6]+'">'+b[5]+'</span></div>'
+            +   '<div class="band-range">'+b[0].toFixed(1)+'–'+b[1].toFixed(1)+' μg/m³</div>'
+            + '</div>';
+    }
+    bandRows.innerHTML = html;
+  }
+
+  function findBandIdx(c){
+    if (c <= 0) return 0;
+    if (c <= BANDS[0][1]) return 0;
+    for (var i = 0; i < BANDS.length; i++){
+      if (c >= BANDS[i][0] && c <= BANDS[i][1]) return i;
+    }
+    return BANDS.length - 1;
+  }
+
+  // ------------------------ compute ----------------------------
+  function calc(){
+    var contribs = [];
+    var total = 0;
+    var ntot = 0;
+    for (var i = 0; i < SIZES.length; i++){
+      var n = stateGame.counts[i];
+      var pg = n * SIZES[i].mass_pg;
+      var ug = pg * SAMPLE_FACTOR;  // μg/m³
+      contribs.push(ug);
+      total += ug;
+      ntot += n;
+    }
+    return { contribs: contribs, total: total, ntot: ntot };
+  }
+
+  // ------------------------ task check -------------------------
+  function checkTasks(res){
+    var TARGET = 35.0;
+    // A: reach 35 ± 1.5 with at most 600 particles
+    if (!stateGame.taskDone.A){
+      if (Math.abs(res.total - TARGET) <= 1.5 && res.ntot > 0 && res.ntot <= 600){
+        stateGame.taskDone.A = true;
+        flashMilestoneIfAll();
+      }
+    }
+    // B: hit 35 ±2 with 3 distinct recipes (by signature: which slots are >0)
+    if (res.total >= TARGET - 2 && res.total <= TARGET + 2 && res.ntot > 0){
+      var sig = '';
+      for (var i = 0; i < SIZES.length; i++){
+        sig += (stateGame.counts[i] > 0 ? '1' : '0');
+      }
+      // require recipe to differ in active-slot pattern
+      var exists = false;
+      for (var j = 0; j < stateGame.bRecipes.length; j++){
+        if (stateGame.bRecipes[j] === sig){ exists = true; break; }
+      }
+      if (!exists){
+        stateGame.bRecipes.push(sig);
+        if (stateGame.bRecipes.length >= 3 && !stateGame.taskDone.B){
+          stateGame.taskDone.B = true;
+          flashMilestoneIfAll();
+        }
+      }
+    }
+    // C: user has explored both extremes recently — done when preset C used + slider not all zero
+    // (handled by presetC button setting C done)
+  }
+
+  function flashMilestoneIfAll(){
+    if (stateGame.taskDone.A && stateGame.taskDone.B && stateGame.taskDone.C
+        && !stateGame.milestoneFired){
+      stateGame.milestoneFired = true;
+      bigMass.classList.add('gold');
+      milestone.classList.add('show');
+      setTimeout(function(){ bigMass.classList.remove('gold'); }, 1800);
+      setTimeout(function(){ milestone.classList.remove('show'); }, 3200);
+    }
+  }
+
+  function updateTaskRows(){
+    var rows = taskList.querySelectorAll('.task-row');
+    for (var i = 0; i < rows.length; i++){
+      var t = rows[i].getAttribute('data-task');
+      rows[i].classList.toggle('active', t === stateGame.activeTask);
+      rows[i].classList.toggle('done', !!stateGame.taskDone[t]);
+      var mark = rows[i].querySelector('.task-mark');
+      mark.textContent = stateGame.taskDone[t]
+        ? '[QED]'
+        : ('[' + t + ']');
+    }
+  }
+
+  // ------------------------ render -----------------------------
+  function update(){
+    var res = calc();
+
+    // slot readouts + bars
+    for (var i = 0; i < SIZES.length; i++){
+      var inp = document.getElementById('r'+i);
+      var cnt = document.getElementById('c'+i);
+      var ct  = document.getElementById('ct'+i);
+      var bar = document.getElementById('bar'+i);
+      var n = stateGame.counts[i];
+      inp.value = n;
+      cnt.textContent = n;
+      ct.textContent = '+' + res.contribs[i].toFixed(2);
+      var pct = (n / SLIDER_MAX) * 100;
+      bar.style.width = pct.toFixed(1) + '%';
+    }
+
+    // stack bar
+    if (res.total > 0){
+      var segHtml = '';
+      var legHtml = '';
+      for (var i2 = 0; i2 < SIZES.length; i2++){
+        var p = (res.contribs[i2] / res.total) * 100;
+        if (p > 0){
+          segHtml += '<div class="stack-seg" style="width:'+p.toFixed(2)+'%;background:var(--'+SIZES[i2].id+');"></div>';
+          legHtml += '<span>'+SIZES[i2].name+' <span class="pct">'+p.toFixed(1)+'%</span></span>';
+        }
+      }
+      stackBar.innerHTML = segHtml;
+      stackLegend.innerHTML = legHtml;
+    } else {
+      stackBar.innerHTML = '';
+      stackLegend.innerHTML = '<span data-i18n-cn="(尚无粒子)" data-i18n-en="(no particles)">(尚无粒子)</span>';
+    }
+
+    // formula substitution
+    var parts = [];
+    for (var k = 0; k < SIZES.length; k++){
+      parts.push(res.contribs[k].toFixed(2));
+    }
+    fSub.textContent = parts.join(' + ') + ' = ' + res.total.toFixed(2);
+
+    // big readout
+    bigMass.textContent = res.total.toFixed(2);
+    bigN.textContent = res.ntot;
+
+    // header HUD
+    hN.textContent = res.ntot;
+    hMass.textContent = res.total.toFixed(2);
+    hTask.textContent = stateGame.activeTask;
+
+    // sidebar HUD
+    hudNtot.textContent = res.ntot;
+    hudMass.textContent = res.total.toFixed(2);
+
+    // band marker (log-scale-ish: clamp 0-500)
+    var clampedC = Math.min(res.total, 500);
+    // segments are equal width by AQI piecewise visual — for simplicity use linear by C
+    var pctX = (clampedC / 500) * 100;
+    bandMarker.style.left = pctX.toFixed(2) + '%';
+
+    var bIdx = findBandIdx(res.total);
+    var b = BANDS[bIdx];
+    hudBand.textContent = b[4];
+
+    var rows = bandRows.querySelectorAll('.band-row');
+    for (var r = 0; r < rows.length; r++){
+      rows[r].classList.toggle('active', r === bIdx);
+    }
+
+    // task state label
+    var stateText = '';
+    var st = stateGame.activeTask;
+    if (st === 'A'){
+      var diffA = Math.abs(res.total - 35);
+      stateText = stateGame.taskDone.A
+        ? (stateGame.lang==='cn'?'任务 A 已达 (用 '+res.ntot+' 颗)':'Task A done ('+res.ntot+' particles)')
+        : (stateGame.lang==='cn'?'任务 A 差 '+diffA.toFixed(1)+' μg/m³':'Task A diff '+diffA.toFixed(1));
+    } else if (st === 'B'){
+      stateText = stateGame.lang==='cn'
+        ? ('任务 B 已记 '+stateGame.bRecipes.length+'/3 种配比')
+        : ('Task B recipes '+stateGame.bRecipes.length+'/3');
+    } else {
+      var c1k_03 = SIZES[0].mass_pg * 1000 * SAMPLE_FACTOR;
+      var c10_10 = SIZES[4].mass_pg * 10   * SAMPLE_FACTOR;
+      stateText = stateGame.lang==='cn'
+        ? ('1000 颗 PM0.3 = '+c1k_03.toFixed(2)+' vs 10 颗 PM10 = '+c10_10.toFixed(2))
+        : ('1000 PM0.3 = '+c1k_03.toFixed(2)+' vs 10 PM10 = '+c10_10.toFixed(2));
+    }
+    bigTaskState.textContent = stateText;
+
+    // check tasks
+    checkTasks(res);
+    updateTaskRows();
+  }
+
+  // ---------------------- presets / actions --------------------
+  function applyPreset(arr){
+    for (var i = 0; i < SIZES.length; i++){
+      stateGame.counts[i] = arr[i] || 0;
+    }
+    update();
+  }
+  presetA.addEventListener('click', function(){
+    // minimal particles for 35: use PM10 — 35/(864*0.01)=4.05, so 4 PM10
+    applyPreset([0,0,0,0,4]);
+    stateGame.activeTask = 'A';
+    update();
+  });
+  presetC.addEventListener('click', function(){
+    applyPreset([1000,0,0,0,10]);
+    stateGame.activeTask = 'C';
+    stateGame.taskDone.C = true;
+    flashMilestoneIfAll();
+    update();
+  });
+  resetAll.addEventListener('click', function(){
+    applyPreset([0,0,0,0,0]);
+  });
+
+  // task row click
+  taskList.addEventListener('click', function(ev){
+    var row = ev.target.closest('.task-row');
+    if (!row) return;
+    stateGame.activeTask = row.getAttribute('data-task');
+    update();
+  });
+
+  // ----------------------- i18n --------------------------------
+  function refreshI18N(){
+    var nodes = document.querySelectorAll('[data-i18n-cn]');
+    for (var i = 0; i < nodes.length; i++){
+      var el = nodes[i];
+      var cn = el.getAttribute('data-i18n-cn');
+      var en = el.getAttribute('data-i18n-en');
+      el.textContent = stateGame.lang === 'cn' ? cn : en;
+    }
+    document.documentElement.lang = stateGame.lang === 'cn' ? 'zh-CN' : 'en';
+    update();
+  }
+  langBtn.addEventListener('click', function(){
+    stateGame.lang = stateGame.lang === 'cn' ? 'en' : 'cn';
+    refreshI18N();
+  });
+
+  // ---------------------- mascot rotate ------------------------
+  var piMascot = document.getElementById('piMascot');
+  var rot = 0;
+  function tick(){
+    rot += 0.35;
+    if (piMascot) piMascot.setAttribute('transform', 'translate(80 48) rotate(' + rot + ')');
+    requestAnimationFrame(tick);
+  }
+  requestAnimationFrame(tick);
+
+  // ------------------------- init ------------------------------
+  buildSlots();
+  buildBandRows();
+  refreshI18N();
+})();
+</script>
+</body>
+</html>

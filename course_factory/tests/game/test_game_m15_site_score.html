@@ -1,0 +1,1051 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>阳台选址打分 — 五维评估你的传感器位</title>
+<style>
+  :root{
+    /* Surfaces — Claude warm cream */
+    --paper:    #FAF9F5;
+    --paper-2:  #F1EDDF;
+    --card:     #FFFFFF;
+    --ink:      #191814;
+    --ink-2:    #2B2924;
+    --sub:      #6B6557;
+    --sub-2:    #9D978A;
+    --border:   #EBE5D6;
+    --border-2: #D9D1BD;
+    --hairline: #F2EDE0;
+
+    /* Primary — Claude coral */
+    --primary:      #D97757;
+    --primary-ink:  #9A4A2E;
+    --primary-soft: #F8EDE5;
+    --primary-line: #ECCFB8;
+
+    /* Domain accent — materials */
+    --accent:       #8C7B3F;
+    --accent-soft:  #EAE3CC;
+    --accent-line:  #D6CBA1;
+
+    /* States */
+    --safe:    #6F8B5C;
+    --safe-soft:#E3ECDB;
+    --warn:    #B0593F;
+    --warn-soft:#F3DDD2;
+    --dim:     #9D978A;
+
+    /* Shadows (soft, with blur) */
+    --shadow-sm: 0 1px 2px 0 rgba(25,24,20,.04);
+    --shadow:    0 1px 3px 0 rgba(25,24,20,.06), 0 1px 2px -1px rgba(25,24,20,.04);
+    --shadow-md: 0 4px 8px -2px rgba(25,24,20,.06), 0 2px 4px -2px rgba(25,24,20,.04);
+    --shadow-lg: 0 12px 24px -6px rgba(25,24,20,.1), 0 4px 8px -4px rgba(25,24,20,.05);
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    height:100vh;width:100vw;overflow:hidden;
+    background:var(--paper);color:var(--ink);
+    font-family:'Inter','PingFang SC','Noto Sans SC',sans-serif;
+    display:flex;
+  }
+  .mono{font-family:'JetBrains Mono','Menlo',monospace;}
+
+  /* ---------------- Sidebar 200px ---------------- */
+  .game-sidebar{
+    width:200px;flex-shrink:0;
+    background:var(--paper-2);
+    border-right:1px solid var(--border);
+    display:flex;flex-direction:column;
+    padding:18px 14px;gap:14px;
+    overflow-y:auto;
+  }
+  .brand{display:flex;flex-direction:column;gap:4px;}
+  .brand-tag{
+    font-family:'JetBrains Mono',monospace;
+    font-size:10px;letter-spacing:.16em;
+    color:var(--accent);font-weight:700;
+  }
+  .brand-name{
+    font-size:14px;font-weight:700;color:var(--ink);
+    line-height:1.35;
+  }
+
+  .side-block{
+    background:var(--card);border:1px solid var(--border);
+    border-radius:8px;padding:10px 12px;
+    display:flex;flex-direction:column;gap:6px;
+  }
+  .side-label{
+    font-size:10px;letter-spacing:.12em;color:var(--sub);
+    font-family:'JetBrains Mono',monospace;font-weight:700;
+    text-transform:uppercase;
+  }
+  .side-current{
+    font-size:13px;font-weight:700;color:var(--ink);
+    line-height:1.35;
+  }
+  .side-current-sub{font-size:11px;color:var(--sub);}
+
+  .crit-list{
+    display:flex;flex-direction:column;gap:6px;
+  }
+  .crit-row{
+    display:flex;align-items:center;justify-content:space-between;
+    font-size:11px;color:var(--ink-2);
+  }
+  .crit-name{flex:1;}
+  .crit-stars{
+    font-family:'JetBrains Mono',monospace;
+    font-size:11px;color:var(--accent);font-weight:700;
+    letter-spacing:.05em;
+  }
+  .crit-stars.empty{color:var(--sub-2);}
+
+  .guide{
+    display:flex;flex-direction:column;gap:5px;
+    font-size:11px;color:var(--sub);line-height:1.5;
+  }
+  .guide-li{padding-left:9px;border-left:2px solid var(--accent);}
+
+  .lang-btn{
+    margin-top:auto;
+    border:1px solid var(--border-2);background:var(--card);
+    color:var(--ink-2);font-size:11px;font-weight:600;
+    padding:8px 12px;border-radius:6px;cursor:pointer;
+    font-family:'JetBrains Mono',monospace;letter-spacing:.05em;
+    transition:background 200ms;
+  }
+  .lang-btn:hover{background:var(--paper);}
+
+  /* ---------------- Main ---------------- */
+  .game-main{
+    flex:1;display:flex;flex-direction:column;
+    padding:24px 32px 22px;overflow:hidden;min-width:0;
+    gap:18px;
+  }
+  .scene-header{
+    display:flex;align-items:flex-end;justify-content:space-between;
+    padding-bottom:10px;border-bottom:1px solid var(--hairline);
+  }
+  .scene-title-block{display:flex;flex-direction:column;gap:4px;max-width:70%;}
+  .scene-num{
+    font-size:10px;letter-spacing:.18em;color:var(--accent);font-weight:700;
+    text-transform:uppercase;font-family:'JetBrains Mono',monospace;
+  }
+  .scene-title{font-size:20px;font-weight:700;color:var(--ink);line-height:1.3;}
+  .scene-sub{font-size:12px;color:var(--sub);margin-top:2px;}
+  .scene-counter{
+    font-family:'JetBrains Mono',monospace;font-size:12px;
+    color:var(--sub);padding:5px 10px;background:var(--card);
+    border:1px solid var(--border);border-radius:6px;
+  }
+
+  .stage-grid{
+    flex:1;display:grid;grid-template-columns:1.05fr 0.95fr;gap:18px;
+    overflow:hidden;min-height:0;
+  }
+
+  /* ---------------- Candidate card (left big) ---------------- */
+  .cand-card{
+    background:var(--card);border:1px solid var(--border);
+    border-radius:12px;box-shadow:var(--shadow-sm);
+    padding:18px 20px;display:flex;flex-direction:column;gap:12px;
+    overflow:hidden;min-height:0;
+  }
+  .cand-head{
+    display:flex;align-items:center;justify-content:space-between;
+  }
+  .cand-tag{
+    display:inline-block;font-size:10px;letter-spacing:.14em;font-weight:700;
+    color:var(--accent);background:var(--accent-soft);padding:3px 8px;border-radius:4px;
+    text-transform:uppercase;font-family:'JetBrains Mono',monospace;
+  }
+  .cand-name{font-size:18px;font-weight:700;color:var(--ink);}
+  .cand-illu{
+    flex:1;min-height:0;background:var(--paper-2);
+    border-radius:10px;border:1px solid var(--hairline);
+    display:flex;align-items:center;justify-content:center;
+    overflow:hidden;
+  }
+  .cand-illu svg{width:100%;height:100%;display:block;}
+
+  .cand-nav{
+    display:flex;align-items:center;justify-content:space-between;gap:10px;
+  }
+  .nav-btn{
+    background:var(--card);border:1.5px solid var(--border-2);
+    color:var(--ink-2);font-size:12px;font-weight:600;
+    padding:7px 12px;border-radius:6px;cursor:pointer;
+    font-family:inherit;
+    transition:border-color 180ms, background 180ms;
+  }
+  .nav-btn:hover{border-color:var(--accent);background:var(--paper);}
+  .nav-btn:disabled{opacity:.45;cursor:not-allowed;}
+  .cand-dots{display:flex;gap:6px;}
+  .cand-dot{
+    width:10px;height:10px;border-radius:50%;
+    border:1.5px solid var(--border-2);background:var(--card);cursor:pointer;
+    transition:border-color 180ms, background 180ms;
+  }
+  .cand-dot.active{border-color:var(--primary);background:var(--primary-soft);}
+  .cand-dot.scored{border-color:var(--safe);background:var(--safe-soft);}
+  .cand-dot.active.scored{border-color:var(--primary);background:var(--primary-soft);}
+
+  /* ---------------- Right column ---------------- */
+  .right-col{
+    display:flex;flex-direction:column;gap:14px;overflow:hidden;min-height:0;
+  }
+
+  .score-panel{
+    background:var(--card);border:1px solid var(--border);
+    border-radius:12px;box-shadow:var(--shadow-sm);
+    padding:16px 18px;display:flex;flex-direction:column;gap:10px;
+  }
+  .panel-title{
+    font-size:13px;font-weight:700;color:var(--ink);
+    display:flex;align-items:center;gap:8px;
+  }
+  .panel-sub{font-size:11px;color:var(--sub);font-weight:500;}
+
+  .crit-grid{display:flex;flex-direction:column;gap:8px;}
+  .crit-item{
+    display:grid;grid-template-columns:90px 1fr 40px;align-items:center;gap:10px;
+  }
+  .crit-item-label{
+    font-size:12px;color:var(--ink-2);font-weight:600;line-height:1.25;
+  }
+  .crit-item-hint{font-size:10px;color:var(--sub);}
+  .star-row{
+    display:flex;gap:4px;
+  }
+  .star-btn{
+    width:24px;height:24px;border:1.5px solid var(--border-2);
+    background:var(--card);border-radius:5px;cursor:pointer;
+    display:flex;align-items:center;justify-content:center;
+    transition:border-color 150ms, background 150ms, transform 100ms;
+    padding:0;
+  }
+  .star-btn:hover{border-color:var(--accent);transform:translateY(-1px);}
+  .star-btn .star-shape{
+    width:14px;height:14px;display:block;
+  }
+  .star-btn.filled{background:var(--accent-soft);border-color:var(--accent);}
+  .crit-item-val{
+    font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:700;
+    color:var(--accent);text-align:right;
+  }
+  .crit-item-val.zero{color:var(--sub-2);}
+
+  .total-row{
+    margin-top:6px;padding-top:10px;border-top:1px solid var(--hairline);
+    display:flex;align-items:center;justify-content:space-between;gap:10px;
+  }
+  .total-label{font-size:12px;color:var(--sub);}
+  .total-val{
+    font-family:'JetBrains Mono',monospace;font-size:22px;font-weight:700;
+    color:var(--primary-ink);
+  }
+  .total-max{font-size:11px;color:var(--sub-2);margin-left:4px;}
+
+  /* ---------------- Ranking panel ---------------- */
+  .rank-panel{
+    background:var(--card);border:1px solid var(--border);
+    border-radius:12px;box-shadow:var(--shadow-sm);
+    padding:14px 16px;display:flex;flex-direction:column;gap:8px;
+    overflow:hidden;min-height:0;flex:1;
+  }
+  .rank-head{
+    display:flex;align-items:center;justify-content:space-between;
+  }
+  .rank-list{
+    display:flex;flex-direction:column;gap:6px;
+    overflow-y:auto;min-height:0;
+  }
+  .rank-row{
+    display:grid;grid-template-columns:24px 1fr 56px 60px;align-items:center;gap:10px;
+    padding:7px 10px;
+    background:var(--paper);border:1px solid var(--hairline);border-radius:7px;
+    transition:border-color 180ms, background 180ms;
+    cursor:pointer;
+  }
+  .rank-row:hover{border-color:var(--accent-line);background:var(--accent-soft);}
+  .rank-row.pending{opacity:.55;cursor:default;}
+  .rank-row.pending:hover{border-color:var(--hairline);background:var(--paper);}
+  .rank-row.is-pick{
+    border-color:var(--primary);background:var(--primary-soft);
+  }
+  .rank-row.is-best{
+    border-color:var(--accent);background:var(--accent-soft);
+  }
+  .rank-rank{
+    font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:700;
+    color:var(--accent);
+  }
+  .rank-name{font-size:12.5px;color:var(--ink-2);font-weight:600;line-height:1.3;}
+  .rank-bar-wrap{
+    height:6px;background:var(--border);border-radius:3px;overflow:hidden;
+  }
+  .rank-bar-fill{
+    height:100%;background:var(--accent);border-radius:3px;
+    transition:width 260ms ease;
+  }
+  .rank-row.is-pick .rank-bar-fill{background:var(--primary);}
+  .rank-score{
+    font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:700;
+    color:var(--ink);text-align:right;
+  }
+  .rank-score.pending{color:var(--sub-2);}
+
+  /* ---------------- Decide bar ---------------- */
+  .decide-bar{
+    display:flex;align-items:center;justify-content:space-between;gap:14px;
+    background:var(--paper-2);border:1px solid var(--border);
+    border-radius:10px;padding:12px 16px;
+  }
+  .decide-text{
+    font-size:12.5px;color:var(--ink-2);line-height:1.45;flex:1;
+  }
+  .decide-text strong{color:var(--accent);}
+  .decide-actions{display:flex;gap:8px;}
+  .pick-btn{
+    background:var(--primary);color:#FFFFFF;border:none;border-radius:7px;
+    padding:9px 16px;font-size:12.5px;font-weight:600;cursor:pointer;
+    font-family:inherit;letter-spacing:.03em;
+    transition:background 200ms;
+  }
+  .pick-btn:hover{background:var(--primary-ink);}
+  .pick-btn:disabled{
+    background:var(--border-2);color:var(--sub);cursor:not-allowed;
+  }
+  .reset-btn{
+    background:var(--card);color:var(--ink-2);border:1.5px solid var(--border-2);
+    border-radius:7px;padding:9px 14px;font-size:12px;font-weight:600;cursor:pointer;
+    font-family:inherit;transition:border-color 180ms;
+  }
+  .reset-btn:hover{border-color:var(--accent);}
+
+  /* ---------------- Badge overlay ---------------- */
+  .badge-overlay{
+    position:absolute;inset:0;display:none;
+    align-items:center;justify-content:center;
+    background:rgba(25,24,20,.42);
+    backdrop-filter:blur(4px);
+    z-index:50;
+  }
+  .badge-overlay.show{display:flex;}
+  .badge-modal{
+    width:min(420px, 86vw);
+    background:var(--card);border:1px solid var(--border);
+    border-radius:14px;box-shadow:var(--shadow-lg);
+    padding:28px 28px 22px;text-align:center;
+    display:flex;flex-direction:column;align-items:center;gap:12px;
+  }
+  .badge-medal{
+    width:88px;height:88px;border-radius:50%;
+    background:var(--primary-soft);border:3px solid var(--primary);
+    display:flex;align-items:center;justify-content:center;
+    box-shadow:var(--shadow-md);
+    animation:badgePulse 2.4s ease-in-out infinite;
+  }
+  @keyframes badgePulse{
+    0%,100%{transform:scale(1);}
+    50%{transform:scale(1.04);}
+  }
+  .badge-title{font-size:18px;font-weight:700;color:var(--ink);}
+  .badge-pick{
+    font-size:13px;color:var(--accent);font-weight:700;
+    font-family:'JetBrains Mono',monospace;letter-spacing:.05em;
+  }
+  .badge-sub{
+    font-size:12.5px;color:var(--sub-2);line-height:1.55;max-width:340px;
+  }
+  .badge-close{
+    margin-top:8px;background:var(--card);color:var(--ink-2);
+    border:1.5px solid var(--border-2);border-radius:7px;
+    padding:8px 18px;font-size:12px;font-weight:600;cursor:pointer;
+    font-family:inherit;transition:border-color 180ms;
+  }
+  .badge-close:hover{border-color:var(--accent);}
+
+  /* main is positioned relative so overlay sits inside */
+  .game-main{position:relative;}
+</style>
+</head>
+<body>
+
+<aside class="game-sidebar">
+  <div class="brand">
+    <div class="brand-tag" id="brandTag">MATERIALS / M15</div>
+    <div class="brand-name" id="brandName">阳台选址打分<br/>5 维评估</div>
+  </div>
+
+  <div class="side-block">
+    <div class="side-label" id="curLabel">CURRENT</div>
+    <div class="side-current" id="curName">候选 1</div>
+    <div class="side-current-sub" id="curHint">给 5 个维度打 1-5 星</div>
+  </div>
+
+  <div class="side-block">
+    <div class="side-label" id="scoredLabel">SCORED</div>
+    <ul class="crit-list" id="sideScoredList"></ul>
+  </div>
+
+  <ul class="guide">
+    <li class="guide-li" id="g1">逐个位置打分</li>
+    <li class="guide-li" id="g2">5 维 = 5 个星</li>
+    <li class="guide-li" id="g3">看排行选最佳</li>
+  </ul>
+
+  <button class="lang-btn" id="langBtn">中 / EN</button>
+</aside>
+
+<main class="game-main" id="gameMain">
+
+  <div class="scene-header">
+    <div class="scene-title-block">
+      <div class="scene-num" id="sceneNum">SITE 01 / 05</div>
+      <div class="scene-title" id="sceneTitle">候选位置评估</div>
+      <div class="scene-sub" id="sceneSub">用 5 个维度的星级，给每个位置一个综合分</div>
+    </div>
+    <div class="scene-counter" id="scoredCounter">scored 0 / 5</div>
+  </div>
+
+  <div class="stage-grid">
+
+    <!-- ============== Candidate card (left) ============== -->
+    <section class="cand-card">
+      <div class="cand-head">
+        <span class="cand-tag" id="candTag">SITE</span>
+        <span class="cand-name" id="candName">阳台一角</span>
+      </div>
+      <div class="cand-illu" id="candIllu"></div>
+      <div class="cand-nav">
+        <button class="nav-btn" id="prevBtn" type="button">上一个</button>
+        <div class="cand-dots" id="candDots"></div>
+        <button class="nav-btn" id="nextBtn" type="button">下一个</button>
+      </div>
+    </section>
+
+    <!-- ============== Right column ============== -->
+    <div class="right-col">
+
+      <!-- Score panel -->
+      <section class="score-panel">
+        <div class="panel-title">
+          <span id="scoreTitle">给这个位置打分</span>
+          <span class="panel-sub" id="scoreSub">1 星差 · 5 星满分</span>
+        </div>
+        <div class="crit-grid" id="critGrid"></div>
+        <div class="total-row">
+          <span class="total-label" id="totalLabel">综合得分</span>
+          <span>
+            <span class="total-val mono" id="totalVal">0</span>
+            <span class="total-max">/ 25</span>
+          </span>
+        </div>
+      </section>
+
+      <!-- Ranking panel -->
+      <section class="rank-panel">
+        <div class="rank-head">
+          <span class="panel-title" id="rankTitle">5 个位置综合排行</span>
+          <span class="panel-sub" id="rankSub">每打完一个就更新</span>
+        </div>
+        <div class="rank-list" id="rankList"></div>
+      </section>
+
+      <!-- Decide bar -->
+      <div class="decide-bar">
+        <div class="decide-text" id="decideText">完成全部 5 个位置评分后，挑出你最终想装的那个位置。</div>
+        <div class="decide-actions">
+          <button class="reset-btn" id="resetBtn" type="button">重置</button>
+          <button class="pick-btn" id="pickBtn" type="button" disabled>我选这个</button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ============== Badge overlay ============== -->
+  <div class="badge-overlay" id="badgeOverlay">
+    <div class="badge-modal">
+      <div class="badge-medal">
+        <svg viewBox="0 0 64 64" width="48" height="48" fill="none" aria-hidden="true">
+          <path d="M32 6 L54 14 L54 30 C54 44 44 54 32 58 C20 54 10 44 10 30 L10 14 Z"
+                stroke="#D97757" stroke-width="3" fill="#F8EDE5"/>
+          <path d="M22 32 L29 39 L43 24" stroke="#D97757" stroke-width="3.5"
+                stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+        </svg>
+      </div>
+      <div class="badge-title" id="badgeTitle">徽章解锁：我做了 5 维评估</div>
+      <div class="badge-pick" id="badgePick">你最终选了：阳台一角</div>
+      <div class="badge-sub" id="badgeSub">5 个位置 × 5 个维度 = 25 次打分，你已经把"凭感觉装"换成了"按指标决定"，这就是工程师的选址流程。</div>
+      <button class="badge-close" id="badgeClose" type="button">回到打分</button>
+    </div>
+  </div>
+
+</main>
+
+<script>
+(function(){
+  "use strict";
+
+  // ============= i18n =============
+  var langMode = 'cn';
+  var I18N = {
+    brandTag:    { cn:'MATERIALS / M15', en:'MATERIALS / M15' },
+    brandName:   { cn:'阳台选址打分<br/>5 维评估', en:'Site Score<br/>5-dim Eval' },
+    curLabel:    { cn:'CURRENT', en:'CURRENT' },
+    curHint:     { cn:'给 5 个维度打 1-5 星', en:'Rate 5 dims, 1-5 stars' },
+    scoredLabel: { cn:'SCORED', en:'SCORED' },
+    g1:          { cn:'逐个位置打分', en:'Score each site' },
+    g2:          { cn:'5 维 = 5 个星', en:'5 dims = 5 stars' },
+    g3:          { cn:'看排行选最佳', en:'Pick from ranking' },
+    sceneTitle:  { cn:'候选位置评估', en:'Candidate site rating' },
+    sceneSub:    { cn:'用 5 个维度的星级，给每个位置一个综合分', en:'Use 5 dimensions to score each site' },
+    scoredCounter:{ cn:'scored {n} / 5', en:'scored {n} / 5' },
+    siteNum:     { cn:'SITE {i} / 05', en:'SITE {i} / 05' },
+    candTag:     { cn:'SITE', en:'SITE' },
+    scoreTitle:  { cn:'给这个位置打分', en:'Score this site' },
+    scoreSub:    { cn:'1 星差 · 5 星满分', en:'1=bad · 5=ideal' },
+    totalLabel:  { cn:'综合得分', en:'Total score' },
+    rankTitle:   { cn:'5 个位置综合排行', en:'Site ranking' },
+    rankSub:     { cn:'每打完一个就更新', en:'Updates as you score' },
+    decidePre:   { cn:'完成全部 5 个位置评分后，挑出你最终想装的那个位置。', en:'After scoring all 5 sites, pick your final spot.' },
+    decideMid:   { cn:'还差 {n} 个位置没打分。', en:'{n} site(s) left to score.' },
+    decideDone:  { cn:'打分完成。系统推荐 <strong>{best}</strong>（{s} 分）。点你自己选的位置 → 我选这个。', en:'Done. Recommended: <strong>{best}</strong> ({s} pts). Click your pick → I choose this.' },
+    reset:       { cn:'重置', en:'Reset' },
+    pick:        { cn:'我选这个', en:'I choose this' },
+    prev:        { cn:'上一个', en:'Prev' },
+    next:        { cn:'下一个', en:'Next' },
+    badgeTitle:  { cn:'徽章解锁：我做了 5 维评估', en:'Badge: I ran a 5-dim eval' },
+    badgePick:   { cn:'你最终选了：{name}', en:'Your pick: {name}' },
+    badgeSub:    { cn:'5 个位置 × 5 个维度 = 25 次打分，你已经把"凭感觉装"换成了"按指标决定"，这就是工程师的选址流程。', en:'5 sites × 5 dims = 25 ratings. You replaced "vibes" with metrics — that is engineering site selection.' },
+    badgeClose:  { cn:'回到打分', en:'Back to scoring' }
+  };
+
+  var SITES = [
+    {
+      id:'balcony',
+      name:{ cn:'阳台一角', en:'Balcony corner' },
+      ideal:{ height:5, heat:5, vent:5, safe:4, reach:5 } // teacher reference
+    },
+    {
+      id:'kitchen',
+      name:{ cn:'厨房外墙', en:'Kitchen outer wall' },
+      ideal:{ height:4, heat:1, vent:3, safe:3, reach:3 }
+    },
+    {
+      id:'window',
+      name:{ cn:'客厅窗台', en:'Living-room sill' },
+      ideal:{ height:3, heat:4, vent:3, safe:3, reach:5 }
+    },
+    {
+      id:'ac',
+      name:{ cn:'空调外机旁', en:'Next to AC unit' },
+      ideal:{ height:4, heat:1, vent:4, safe:2, reach:2 }
+    },
+    {
+      id:'roof',
+      name:{ cn:'屋顶角落', en:'Rooftop corner' },
+      ideal:{ height:5, heat:5, vent:5, safe:3, reach:1 }
+    }
+  ];
+
+  var CRITS = [
+    {
+      id:'height',
+      name:{ cn:'高度', en:'Height' },
+      hint:{ cn:'1.5-3m 满分', en:'1.5-3m = 5' }
+    },
+    {
+      id:'heat',
+      name:{ cn:'避热源', en:'Heat avoid' },
+      hint:{ cn:'远厨房/空调', en:'far from kitchen/AC' }
+    },
+    {
+      id:'vent',
+      name:{ cn:'通风', en:'Ventilation' },
+      hint:{ cn:'开阔满分', en:'open = 5' }
+    },
+    {
+      id:'safe',
+      name:{ cn:'安全', en:'Safety' },
+      hint:{ cn:'不掉落/动物', en:'no falls/pets' }
+    },
+    {
+      id:'reach',
+      name:{ cn:'可达性', en:'Reachable' },
+      hint:{ cn:'你能维护', en:'you can service' }
+    }
+  ];
+
+  // ============= state =============
+  var currentSite = 0;
+  // scores[siteId] = { critId: 0..5 }
+  var scores = {};
+  SITES.forEach(function(s){
+    scores[s.id] = {};
+    CRITS.forEach(function(c){ scores[s.id][c.id] = 0; });
+  });
+  var userPick = null;     // siteId
+  var badgeShown = false;
+
+  // ============= helpers =============
+  function t(k, vars){
+    var s = (I18N[k] && I18N[k][langMode]) || (I18N[k] && I18N[k].en) || k;
+    if (vars){
+      Object.keys(vars).forEach(function(vk){
+        s = s.split('{'+vk+'}').join(vars[vk]);
+      });
+    }
+    return s;
+  }
+  function siteName(s){ return s.name[langMode] || s.name.en; }
+  function critName(c){ return c.name[langMode] || c.name.en; }
+  function critHint(c){ return c.hint[langMode] || c.hint.en; }
+
+  function siteTotal(siteId){
+    var sc = scores[siteId], sum = 0;
+    CRITS.forEach(function(c){ sum += (sc[c.id]||0); });
+    return sum;
+  }
+  function siteScored(siteId){
+    var sc = scores[siteId];
+    return CRITS.every(function(c){ return (sc[c.id]||0) > 0; });
+  }
+  function allDone(){
+    return SITES.every(function(s){ return siteScored(s.id); });
+  }
+  function countScored(){
+    var n = 0;
+    SITES.forEach(function(s){ if (siteScored(s.id)) n++; });
+    return n;
+  }
+  function bestSite(){
+    // pick highest total among fully scored sites; tie -> first by SITES order
+    var best = null, bestVal = -1;
+    SITES.forEach(function(s){
+      if (!siteScored(s.id)) return;
+      var v = siteTotal(s.id);
+      if (v > bestVal){ bestVal = v; best = s; }
+    });
+    return best;
+  }
+
+  // ============= SVG illustrations (5 sites) =============
+  // C-class: warm cream + Industrial Atelier; uses --paper-2 / --accent / --primary
+  function illuFor(siteId){
+    var P = '#FAF9F5', P2 = '#F1EDDF', INK = '#191814', SUB = '#6B6557';
+    var BORDER = '#D9D1BD', ACCENT = '#8C7B3F', ACC_SOFT='#EAE3CC';
+    var CORAL = '#D97757', CORAL_SOFT='#F8EDE5';
+    var SENSOR_BOX = '<g><rect x="-12" y="-9" width="24" height="18" rx="3" fill="'+CORAL_SOFT+'" stroke="'+CORAL+'" stroke-width="1.5"/>'+
+      '<circle cx="0" cy="0" r="3" fill="'+CORAL+'"/>'+
+      '<rect x="-8" y="6" width="4" height="2" fill="'+CORAL+'" opacity=".55"/>'+
+      '<rect x="-2" y="6" width="4" height="2" fill="'+CORAL+'" opacity=".55"/>'+
+      '<rect x="4" y="6" width="4" height="2" fill="'+CORAL+'" opacity=".55"/></g>';
+
+    var common = '<defs><style>.sk{fill:'+P2+';stroke:'+BORDER+';stroke-width:1.2}.lbl{font:600 11px JetBrains Mono,monospace;fill:'+SUB+'}.tip{font:700 11px Inter,sans-serif;fill:'+ACCENT+'}</style></defs>'+
+      '<rect x="0" y="0" width="400" height="260" fill="'+P+'"/>';
+
+    if (siteId==='balcony'){
+      return '<svg viewBox="0 0 400 260" xmlns="http://www.w3.org/2000/svg">'+common+
+        // building wall left
+        '<rect x="20" y="40" width="60" height="200" class="sk"/>'+
+        // balcony floor
+        '<rect x="20" y="200" width="320" height="14" fill="'+ACC_SOFT+'" stroke="'+BORDER+'"/>'+
+        // balcony railing
+        '<line x1="20" y1="200" x2="340" y2="200" stroke="'+ACCENT+'" stroke-width="1.5"/>'+
+        '<g stroke="'+ACCENT+'" stroke-width="1.2">'+
+          '<line x1="60" y1="200" x2="60" y2="130"/>'+
+          '<line x1="100" y1="200" x2="100" y2="130"/>'+
+          '<line x1="140" y1="200" x2="140" y2="130"/>'+
+          '<line x1="180" y1="200" x2="180" y2="130"/>'+
+          '<line x1="220" y1="200" x2="220" y2="130"/>'+
+          '<line x1="260" y1="200" x2="260" y2="130"/>'+
+          '<line x1="300" y1="200" x2="300" y2="130"/>'+
+          '<line x1="340" y1="200" x2="340" y2="130"/>'+
+          '<line x1="20" y1="130" x2="340" y2="130"/>'+
+        '</g>'+
+        // sky
+        '<text x="320" y="40" text-anchor="end" class="lbl">OPEN SKY</text>'+
+        // sensor mounted on corner railing
+        '<g transform="translate(310,155)">'+SENSOR_BOX+'</g>'+
+        '<line x1="296" y1="155" x2="262" y2="142" stroke="'+ACCENT+'" stroke-width="1.2" stroke-dasharray="3 3"/>'+
+        '<text x="200" y="244" text-anchor="middle" class="lbl">BALCONY · CORNER · 2.2 m</text>'+
+        '<text x="310" y="120" text-anchor="middle" class="tip">openair</text>'+
+      '</svg>';
+    }
+    if (siteId==='kitchen'){
+      return '<svg viewBox="0 0 400 260" xmlns="http://www.w3.org/2000/svg">'+common+
+        // wall
+        '<rect x="20" y="20" width="360" height="220" class="sk"/>'+
+        // window
+        '<rect x="220" y="60" width="120" height="80" fill="'+P+'" stroke="'+BORDER+'" stroke-width="1.5"/>'+
+        '<line x1="280" y1="60" x2="280" y2="140" stroke="'+BORDER+'"/>'+
+        '<line x1="220" y1="100" x2="340" y2="100" stroke="'+BORDER+'"/>'+
+        // stove inside
+        '<rect x="60" y="170" width="120" height="50" fill="'+ACC_SOFT+'" stroke="'+ACCENT+'"/>'+
+        '<circle cx="90" cy="195" r="10" fill="#B0593F" opacity=".55"/>'+
+        '<circle cx="130" cy="195" r="10" fill="#B0593F" opacity=".55"/>'+
+        '<circle cx="170" cy="195" r="10" fill="#B0593F" opacity=".4"/>'+
+        // smoke / heat waves
+        '<g stroke="#B0593F" stroke-width="1.2" fill="none" opacity=".55">'+
+          '<path d="M90 170 Q86 155 92 145 Q98 135 90 125"/>'+
+          '<path d="M130 170 Q126 155 132 145 Q138 135 130 125"/>'+
+        '</g>'+
+        // sensor on outer wall (top right of window)
+        '<g transform="translate(340,55)">'+SENSOR_BOX+'</g>'+
+        '<text x="340" y="35" text-anchor="end" class="lbl">OUTER WALL</text>'+
+        '<text x="120" y="240" text-anchor="middle" class="lbl">STOVE INSIDE · HOT AIR LEAKS</text>'+
+        '<text x="338" y="170" text-anchor="end" class="tip">heat risk</text>'+
+      '</svg>';
+    }
+    if (siteId==='window'){
+      return '<svg viewBox="0 0 400 260" xmlns="http://www.w3.org/2000/svg">'+common+
+        // interior wall
+        '<rect x="20" y="20" width="360" height="220" class="sk"/>'+
+        // big window in middle
+        '<rect x="80" y="50" width="240" height="140" fill="'+P+'" stroke="'+BORDER+'" stroke-width="1.5"/>'+
+        '<line x1="200" y1="50" x2="200" y2="190" stroke="'+BORDER+'"/>'+
+        '<line x1="80" y1="120" x2="320" y2="120" stroke="'+BORDER+'"/>'+
+        // sill
+        '<rect x="78" y="190" width="244" height="16" fill="'+ACC_SOFT+'" stroke="'+ACCENT+'"/>'+
+        // sensor on sill
+        '<g transform="translate(200,182)">'+SENSOR_BOX+'</g>'+
+        // tree outside (open-ish but partial)
+        '<g transform="translate(330,150)" stroke="'+ACCENT+'" stroke-width="1.2" fill="'+ACC_SOFT+'">'+
+          '<rect x="-3" y="0" width="6" height="40"/>'+
+          '<circle cx="0" cy="-6" r="22"/>'+
+        '</g>'+
+        '<text x="100" y="40" class="lbl">LIVING ROOM</text>'+
+        '<text x="320" y="40" text-anchor="end" class="lbl">WINDOW · 1.2 m</text>'+
+        '<text x="200" y="232" text-anchor="middle" class="lbl">SILL · INDOOR-AIR MIX</text>'+
+        '<text x="200" y="172" text-anchor="middle" class="tip">indoor mix</text>'+
+      '</svg>';
+    }
+    if (siteId==='ac'){
+      return '<svg viewBox="0 0 400 260" xmlns="http://www.w3.org/2000/svg">'+common+
+        // outer wall
+        '<rect x="20" y="20" width="360" height="220" class="sk"/>'+
+        // AC unit
+        '<rect x="120" y="120" width="160" height="80" fill="'+ACC_SOFT+'" stroke="'+ACCENT+'" stroke-width="1.5"/>'+
+        '<circle cx="200" cy="160" r="26" fill="'+P2+'" stroke="'+ACCENT+'"/>'+
+        '<g stroke="'+ACCENT+'" stroke-width="1.2" fill="none">'+
+          '<line x1="200" y1="134" x2="200" y2="186"/>'+
+          '<line x1="174" y1="160" x2="226" y2="160"/>'+
+          '<line x1="182" y1="142" x2="218" y2="178"/>'+
+          '<line x1="218" y1="142" x2="182" y2="178"/>'+
+        '</g>'+
+        '<rect x="120" y="200" width="160" height="6" fill="'+ACCENT+'" opacity=".6"/>'+
+        // hot exhaust waves
+        '<g stroke="#B0593F" stroke-width="1.2" fill="none" opacity=".6">'+
+          '<path d="M150 120 Q146 100 154 88"/>'+
+          '<path d="M200 120 Q196 100 204 88"/>'+
+          '<path d="M250 120 Q246 100 254 88"/>'+
+        '</g>'+
+        // sensor right next to AC
+        '<g transform="translate(310,160)">'+SENSOR_BOX+'</g>'+
+        '<line x1="296" y1="160" x2="284" y2="160" stroke="'+ACCENT+'" stroke-width="1.2" stroke-dasharray="3 3"/>'+
+        '<text x="200" y="60" text-anchor="middle" class="lbl">AC OUTDOOR UNIT</text>'+
+        '<text x="200" y="232" text-anchor="middle" class="lbl">HOT EXHAUST · CONFOUND</text>'+
+        '<text x="310" y="148" text-anchor="middle" class="tip">too close</text>'+
+      '</svg>';
+    }
+    if (siteId==='roof'){
+      return '<svg viewBox="0 0 400 260" xmlns="http://www.w3.org/2000/svg">'+common+
+        // sky band
+        '<rect x="0" y="0" width="400" height="160" fill="'+P+'"/>'+
+        // building silhouette
+        '<rect x="40" y="160" width="320" height="80" class="sk"/>'+
+        // roof edge
+        '<polygon points="40,160 360,160 360,150 40,150" fill="'+ACCENT+'" opacity=".75"/>'+
+        // chimney little
+        '<rect x="80" y="120" width="22" height="30" fill="'+P2+'" stroke="'+BORDER+'"/>'+
+        // sensor on roof corner with pole
+        '<line x1="330" y1="150" x2="330" y2="100" stroke="'+ACCENT+'" stroke-width="1.5"/>'+
+        '<g transform="translate(330,92)">'+SENSOR_BOX+'</g>'+
+        // sun lines
+        '<g stroke="'+ACCENT+'" stroke-width="1" opacity=".55">'+
+          '<line x1="120" y1="40" x2="140" y2="60"/>'+
+          '<line x1="180" y1="40" x2="180" y2="68"/>'+
+          '<line x1="240" y1="40" x2="220" y2="60"/>'+
+        '</g>'+
+        // ladder hint
+        '<g stroke="'+SUB+'" stroke-width="1" stroke-dasharray="4 4">'+
+          '<line x1="200" y1="240" x2="200" y2="160"/>'+
+        '</g>'+
+        '<text x="200" y="32" text-anchor="middle" class="lbl">ROOFTOP · MAX OPEN</text>'+
+        '<text x="200" y="236" text-anchor="middle" class="lbl">HARD TO REACH FOR SERVICE</text>'+
+        '<text x="330" y="82" text-anchor="middle" class="tip">far reach</text>'+
+      '</svg>';
+    }
+    return '<svg viewBox="0 0 400 260" xmlns="http://www.w3.org/2000/svg">'+common+'</svg>';
+  }
+
+  // small star svg
+  var STAR_PATH = 'M7 0.7 L8.85 4.95 L13.4 5.45 L9.95 8.55 L10.9 13.05 L7 10.75 L3.1 13.05 L4.05 8.55 L0.6 5.45 L5.15 4.95 Z';
+  function starSvg(filled){
+    var fill = filled ? '#8C7B3F' : '#FFFFFF';
+    var stroke = filled ? '#8C7B3F' : '#D9D1BD';
+    return '<svg class="star-shape" viewBox="0 0 14 14" xmlns="http://www.w3.org/2000/svg">'+
+      '<path d="'+STAR_PATH+'" fill="'+fill+'" stroke="'+stroke+'" stroke-width="1" stroke-linejoin="round"/>'+
+    '</svg>';
+  }
+
+  // ============= DOM refs =============
+  var elCandTag      = document.getElementById('candTag');
+  var elCandName     = document.getElementById('candName');
+  var elCandIllu     = document.getElementById('candIllu');
+  var elCandDots     = document.getElementById('candDots');
+  var elPrev         = document.getElementById('prevBtn');
+  var elNext         = document.getElementById('nextBtn');
+  var elSceneNum     = document.getElementById('sceneNum');
+  var elSceneTitle   = document.getElementById('sceneTitle');
+  var elSceneSub     = document.getElementById('sceneSub');
+  var elScoredCounter= document.getElementById('scoredCounter');
+  var elCritGrid     = document.getElementById('critGrid');
+  var elTotalVal     = document.getElementById('totalVal');
+  var elTotalLabel   = document.getElementById('totalLabel');
+  var elRankList     = document.getElementById('rankList');
+  var elRankTitle    = document.getElementById('rankTitle');
+  var elRankSub      = document.getElementById('rankSub');
+  var elScoreTitle   = document.getElementById('scoreTitle');
+  var elScoreSub     = document.getElementById('scoreSub');
+  var elDecideText   = document.getElementById('decideText');
+  var elResetBtn     = document.getElementById('resetBtn');
+  var elPickBtn      = document.getElementById('pickBtn');
+  var elCurName      = document.getElementById('curName');
+  var elCurHint      = document.getElementById('curHint');
+  var elCurLabel     = document.getElementById('curLabel');
+  var elScoredLabel  = document.getElementById('scoredLabel');
+  var elSideScored   = document.getElementById('sideScoredList');
+  var elBadgeOverlay = document.getElementById('badgeOverlay');
+  var elBadgeTitle   = document.getElementById('badgeTitle');
+  var elBadgePick    = document.getElementById('badgePick');
+  var elBadgeSub     = document.getElementById('badgeSub');
+  var elBadgeClose   = document.getElementById('badgeClose');
+  var elBrandTag     = document.getElementById('brandTag');
+  var elBrandName    = document.getElementById('brandName');
+  var elLangBtn      = document.getElementById('langBtn');
+  var elG1           = document.getElementById('g1');
+  var elG2           = document.getElementById('g2');
+  var elG3           = document.getElementById('g3');
+
+  // ============= render =============
+  function renderCandidate(){
+    var site = SITES[currentSite];
+    elCandName.textContent = siteName(site);
+    elCandTag.textContent  = t('candTag');
+    elCandIllu.innerHTML   = illuFor(site.id);
+    elSceneNum.textContent = t('siteNum', { i: String(currentSite+1).padStart(2,'0') });
+
+    // dots
+    var dotsHtml = '';
+    for (var i=0;i<SITES.length;i++){
+      var cls = 'cand-dot';
+      if (i===currentSite) cls += ' active';
+      if (siteScored(SITES[i].id)) cls += ' scored';
+      dotsHtml += '<button class="'+cls+'" type="button" data-i="'+i+'" aria-label="site '+(i+1)+'"></button>';
+    }
+    elCandDots.innerHTML = dotsHtml;
+    Array.prototype.forEach.call(elCandDots.querySelectorAll('.cand-dot'), function(d){
+      d.addEventListener('click', function(){
+        currentSite = parseInt(d.getAttribute('data-i'), 10);
+        renderAll();
+      });
+    });
+
+    elPrev.disabled = (currentSite===0);
+    elNext.disabled = (currentSite===SITES.length-1);
+
+    // sidebar current
+    elCurName.textContent = siteName(site);
+  }
+
+  function renderCritGrid(){
+    var site = SITES[currentSite];
+    var sc = scores[site.id];
+    var html = '';
+    CRITS.forEach(function(c){
+      var v = sc[c.id]||0;
+      var starsHtml = '';
+      for (var i=1;i<=5;i++){
+        starsHtml += '<button class="star-btn'+(i<=v?' filled':'')+'" type="button" data-c="'+c.id+'" data-v="'+i+'" aria-label="'+critName(c)+' '+i+'">'+starSvg(i<=v)+'</button>';
+      }
+      var valCls = v===0 ? 'crit-item-val zero mono' : 'crit-item-val mono';
+      html += '<div class="crit-item">'+
+        '<div class="crit-item-label">'+critName(c)+'<div class="crit-item-hint">'+critHint(c)+'</div></div>'+
+        '<div class="star-row">'+starsHtml+'</div>'+
+        '<div class="'+valCls+'">'+v+'</div>'+
+      '</div>';
+    });
+    elCritGrid.innerHTML = html;
+    Array.prototype.forEach.call(elCritGrid.querySelectorAll('.star-btn'), function(b){
+      b.addEventListener('click', function(){
+        var cid = b.getAttribute('data-c');
+        var v = parseInt(b.getAttribute('data-v'), 10);
+        scores[SITES[currentSite].id][cid] = v;
+        renderAll();
+      });
+    });
+  }
+
+  function renderRanking(){
+    // build list sorted by total desc, but pending sites appear after scored ones (lowest)
+    var rows = SITES.map(function(s){
+      return {
+        id:s.id, name:siteName(s),
+        total: siteTotal(s.id),
+        done: siteScored(s.id)
+      };
+    });
+    // sort: done first by total desc, pending after by SITES order
+    rows.sort(function(a,b){
+      if (a.done && b.done) return b.total - a.total;
+      if (a.done && !b.done) return -1;
+      if (!a.done && b.done) return 1;
+      return 0;
+    });
+    var best = bestSite();
+    var html = '';
+    rows.forEach(function(r, idx){
+      var cls = 'rank-row';
+      if (!r.done) cls += ' pending';
+      if (best && r.id===best.id && r.done) cls += ' is-best';
+      if (userPick && r.id===userPick) cls += ' is-pick';
+      var pct = r.done ? Math.round((r.total/25)*100) : 0;
+      var scoreText = r.done ? (r.total+' / 25') : '—';
+      var scoreCls = r.done ? 'rank-score mono' : 'rank-score pending mono';
+      html += '<div class="'+cls+'" data-id="'+r.id+'">'+
+        '<div class="rank-rank">'+(idx+1)+'</div>'+
+        '<div class="rank-name">'+r.name+'</div>'+
+        '<div class="rank-bar-wrap"><div class="rank-bar-fill" style="width:'+pct+'%"></div></div>'+
+        '<div class="'+scoreCls+'">'+scoreText+'</div>'+
+      '</div>';
+    });
+    elRankList.innerHTML = html;
+    Array.prototype.forEach.call(elRankList.querySelectorAll('.rank-row'), function(row){
+      row.addEventListener('click', function(){
+        var id = row.getAttribute('data-id');
+        // jump to that site card AND, if all done, mark as user pick (preview only)
+        var idx = -1;
+        for (var i=0;i<SITES.length;i++){ if (SITES[i].id===id){ idx=i; break; } }
+        if (idx>=0){ currentSite = idx; }
+        if (allDone()) userPick = id;
+        renderAll();
+      });
+    });
+  }
+
+  function renderDecide(){
+    var n = countScored();
+    if (n < SITES.length){
+      var left = SITES.length - n;
+      var msg = (n===0) ? t('decidePre') : t('decideMid', { n: left });
+      elDecideText.innerHTML = msg;
+      elPickBtn.disabled = true;
+    } else {
+      var best = bestSite();
+      elDecideText.innerHTML = t('decideDone', { best: siteName(best), s: best ? siteTotal(best.id) : 0 });
+      elPickBtn.disabled = !userPick;
+    }
+  }
+
+  function renderSidebarScored(){
+    var html = '';
+    SITES.forEach(function(s, i){
+      var done = siteScored(s.id);
+      var n = siteTotal(s.id);
+      var label = (i+1)+'. '+siteName(s);
+      var stars = done ? (n+'/25') : '— / 25';
+      var cls = done ? 'crit-stars' : 'crit-stars empty';
+      html += '<li class="crit-row"><span class="crit-name">'+label+'</span><span class="'+cls+'">'+stars+'</span></li>';
+    });
+    elSideScored.innerHTML = html;
+  }
+
+  function renderTotal(){
+    var site = SITES[currentSite];
+    elTotalVal.textContent = siteTotal(site.id);
+  }
+
+  function renderI18n(){
+    elBrandTag.textContent = t('brandTag');
+    elBrandName.innerHTML  = t('brandName');
+    elCurLabel.textContent = t('curLabel');
+    elCurHint.textContent  = t('curHint');
+    elScoredLabel.textContent = t('scoredLabel');
+    elG1.textContent = t('g1');
+    elG2.textContent = t('g2');
+    elG3.textContent = t('g3');
+    elLangBtn.textContent = (langMode==='cn') ? '中 / EN' : 'EN / 中';
+    elSceneTitle.textContent = t('sceneTitle');
+    elSceneSub.textContent   = t('sceneSub');
+    elScoredCounter.textContent = t('scoredCounter', { n: countScored() });
+    elScoreTitle.textContent = t('scoreTitle');
+    elScoreSub.textContent   = t('scoreSub');
+    elTotalLabel.textContent = t('totalLabel');
+    elRankTitle.textContent  = t('rankTitle');
+    elRankSub.textContent    = t('rankSub');
+    elResetBtn.textContent   = t('reset');
+    elPickBtn.textContent    = t('pick');
+    elPrev.textContent       = t('prev');
+    elNext.textContent       = t('next');
+    elBadgeClose.textContent = t('badgeClose');
+  }
+
+  function renderAll(){
+    renderI18n();
+    renderCandidate();
+    renderCritGrid();
+    renderTotal();
+    renderRanking();
+    renderSidebarScored();
+    renderDecide();
+  }
+
+  // ============= events =============
+  elPrev.addEventListener('click', function(){
+    if (currentSite>0){ currentSite--; renderAll(); }
+  });
+  elNext.addEventListener('click', function(){
+    if (currentSite<SITES.length-1){ currentSite++; renderAll(); }
+  });
+  elResetBtn.addEventListener('click', function(){
+    SITES.forEach(function(s){
+      CRITS.forEach(function(c){ scores[s.id][c.id] = 0; });
+    });
+    userPick = null;
+    badgeShown = false;
+    currentSite = 0;
+    elBadgeOverlay.classList.remove('show');
+    renderAll();
+  });
+  elPickBtn.addEventListener('click', function(){
+    if (!allDone() || !userPick) return;
+    var pickedSite = null;
+    for (var i=0;i<SITES.length;i++){ if (SITES[i].id===userPick){ pickedSite = SITES[i]; break; } }
+    if (!pickedSite) return;
+    elBadgeTitle.textContent = t('badgeTitle');
+    elBadgePick.textContent  = t('badgePick', { name: siteName(pickedSite) });
+    elBadgeSub.textContent   = t('badgeSub');
+    elBadgeOverlay.classList.add('show');
+    badgeShown = true;
+  });
+  elBadgeClose.addEventListener('click', function(){
+    elBadgeOverlay.classList.remove('show');
+  });
+  elLangBtn.addEventListener('click', function(){
+    langMode = (langMode==='cn') ? 'en' : 'cn';
+    renderAll();
+  });
+
+  // boot
+  renderAll();
+})();
+</script>
+</body>
+</html>

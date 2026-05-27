@@ -1,0 +1,1441 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>M13 - 24h 空气浓度时间序列</title>
+<style>
+  /* F2 layer 1 - shared deep space (theme_style/styles.css L8-21) */
+  :root{
+    --bg-0: oklch(0.14 0.035 265);
+    --bg-1: oklch(0.18 0.04 265);
+    --bg-2: oklch(0.22 0.045 265);
+    --bg-3: oklch(0.28 0.05 265);
+    --line: oklch(0.35 0.05 265 / 0.35);
+    --line-strong: oklch(0.55 0.08 265 / 0.55);
+    --fg: oklch(0.96 0.01 265);
+    --fg-dim: oklch(0.75 0.02 265);
+    --fg-mute: oklch(0.55 0.03 265);
+    --gold: oklch(0.85 0.14 85);
+
+    /* F2 layer 2 - meteo accent (cloud-blue) */
+    --meteo: oklch(0.82 0.10 245);
+    --meteo-dim: oklch(0.62 0.10 245);
+
+    /* F2 layer 3 - meteo 5-color palette (themes.js meteo: CIRRUS / FRONT / STORM / MIST / SUNLIGHT) */
+    --CIRRUS:   oklch(0.82 0.10 245); /* 浅蓝 - 平静时段 + Cloud mascot 主体 */
+    --FRONT:    oklch(0.62 0.13 245); /* 中蓝 - 早高峰峰区染色 + mascot 阴影 */
+    --STORM:    oklch(0.38 0.10 245); /* 深蓝 - 晚高峰最差时段染色 + 闪电眼底色 */
+    --MIST:     oklch(0.95 0.05 245); /* 近白 - mascot 高光 + 平静字幕 */
+    --SUNLIGHT: oklch(0.85 0.14 85);  /* 金 - 最差时段 key moment + 完整曲线浮现 */
+
+    /* AQI official 6-tier (EPA physical fact, used in Y-axis color band) */
+    --aqi-good:    oklch(0.78 0.16 145);   /* 绿: Good 0-50 */
+    --aqi-mod:     oklch(0.85 0.16 95);    /* 黄: Moderate 51-100 */
+    --aqi-usg:     oklch(0.74 0.17 50);    /* 橙: USG 101-150 */
+    --aqi-unhc:    oklch(0.66 0.20 25);    /* 红: Unhealthy 151-200 */
+    --aqi-veryunhc:oklch(0.50 0.18 320);   /* 紫: Very Unhealthy 201-300 */
+    --aqi-haz:     oklch(0.40 0.14 15);    /* 暗红: Hazardous 301+ */
+  }
+
+  *{box-sizing:border-box;margin:0;padding:0;}
+  html,body{height:100%;overflow:hidden;}
+  body{
+    background: var(--bg-0);
+    color: var(--fg);
+    font-family: 'Inter','Noto Sans SC',-apple-system,BlinkMacSystemFont,sans-serif;
+    display: flex;
+    height: 100vh;
+  }
+
+  /* 200px sidebar */
+  .sidebar{
+    width: 200px;
+    flex-shrink: 0;
+    background: var(--bg-1);
+    border-right: 1px solid var(--line);
+    padding: 16px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .brand{
+    border-bottom: 1px solid var(--line);
+    padding-bottom: 10px;
+    margin-bottom: 4px;
+  }
+  .brand .badge{
+    display: inline-block;
+    font-family: 'JetBrains Mono',ui-monospace,monospace;
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    color: var(--meteo);
+    background: var(--bg-2);
+    padding: 3px 7px;
+    border: 1px solid var(--line);
+    box-shadow: 2px 2px 0 var(--bg-0);
+    margin-bottom: 6px;
+  }
+  .brand h1{
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--fg);
+    line-height: 1.3;
+  }
+  .brand .sub{
+    font-size: 10px;
+    color: var(--fg-mute);
+    margin-top: 4px;
+    font-family: 'JetBrains Mono',ui-monospace,monospace;
+    letter-spacing: 0.04em;
+  }
+
+  /* Cloud mascot in sidebar top */
+  .mascot-box{
+    background: var(--bg-2);
+    border: 1px solid var(--line);
+    box-shadow: 3px 3px 0 var(--bg-0);
+    padding: 10px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .mascot-box .label{
+    font-family: 'JetBrains Mono',ui-monospace,monospace;
+    font-size: 9px;
+    color: var(--fg-dim);
+    letter-spacing: 0.08em;
+  }
+  .mascot-box .name{
+    font-size: 11px;
+    color: var(--fg);
+    font-weight: 600;
+    margin-top: 2px;
+  }
+
+  /* Guide 3 items */
+  .guide{
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .guide-item{
+    font-size: 11px;
+    line-height: 1.45;
+    color: var(--fg-dim);
+    padding-left: 9px;
+    border-left: 2px solid var(--meteo);
+    padding-top: 2px;
+    padding-bottom: 2px;
+  }
+  .guide-item .num{
+    font-family: 'JetBrains Mono',ui-monospace,monospace;
+    color: var(--meteo);
+    font-weight: 700;
+    margin-right: 4px;
+  }
+
+  .sidebar .spacer{flex: 1;}
+
+  .lang-btn{
+    background: var(--bg-2);
+    border: 1px solid var(--line-strong);
+    box-shadow: 2px 2px 0 var(--bg-0);
+    color: var(--fg);
+    font-family: 'JetBrains Mono',ui-monospace,monospace;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    padding: 7px 10px;
+    cursor: pointer;
+    width: 100%;
+  }
+  .lang-btn:hover{
+    border-color: var(--meteo);
+    color: var(--meteo);
+  }
+  .lang-btn:active{
+    transform: translate(2px, 2px);
+    box-shadow: none;
+  }
+
+  /* Main stage */
+  .main{
+    flex: 1;
+    position: relative;
+    overflow: hidden;
+    background: var(--bg-0);
+  }
+  #stage{
+    width: 100%;
+    height: 100%;
+    display: block;
+  }
+
+  /* HUD top-right */
+  .hud{
+    position: absolute;
+    top: 18px;
+    right: 18px;
+    background: var(--bg-2);
+    border: 1px solid var(--line);
+    box-shadow: 3px 3px 0 var(--bg-0);
+    padding: 10px 14px;
+    font-family: 'JetBrains Mono',ui-monospace,monospace;
+    min-width: 240px;
+  }
+  .hud .row{
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 14px;
+    font-size: 11px;
+    line-height: 1.6;
+  }
+  .hud .label{color: var(--fg-mute); letter-spacing: 0.06em;}
+  .hud .value{color: var(--fg); font-weight: 700;}
+  .hud .value.accent{color: var(--meteo);}
+  .hud .value.gold{color: var(--gold);}
+  .hud .sep{
+    height: 1px;
+    background: var(--line);
+    margin: 6px 0;
+  }
+
+  /* Subtitle bottom */
+  .subtitle{
+    position: absolute;
+    left: 50%;
+    bottom: 28px;
+    transform: translateX(-50%);
+    text-align: center;
+    max-width: 80%;
+    pointer-events: none;
+  }
+  .subtitle .cn{
+    font-size: 17px;
+    font-weight: 700;
+    color: var(--fg);
+    letter-spacing: 0.01em;
+  }
+  .subtitle .en{
+    font-size: 12px;
+    color: var(--fg-mute);
+    margin-top: 4px;
+    font-style: italic;
+    font-family: 'JetBrains Mono',ui-monospace,monospace;
+    letter-spacing: 0.03em;
+  }
+
+  /* Frame chips bottom-left */
+  .frame-progress{
+    position: absolute;
+    left: 24px;
+    bottom: 28px;
+    display: flex;
+    gap: 6px;
+    align-items: center;
+  }
+  .chip{
+    width: 24px;
+    height: 6px;
+    background: var(--bg-2);
+    border: 1px solid var(--line);
+  }
+  .chip.active{
+    background: var(--meteo);
+    border-color: var(--meteo);
+  }
+  .chip.done{
+    background: var(--meteo-dim);
+    border-color: var(--meteo-dim);
+  }
+  .frame-progress .stepname{
+    font-family: 'JetBrains Mono',ui-monospace,monospace;
+    font-size: 10px;
+    color: var(--fg-dim);
+    margin-left: 8px;
+    letter-spacing: 0.08em;
+  }
+
+  /* key moment flash overlay */
+  .flash{
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-family: 'JetBrains Mono',ui-monospace,monospace;
+    font-size: 28px;
+    font-weight: 800;
+    color: var(--gold);
+    letter-spacing: 0.18em;
+    opacity: 0;
+    pointer-events: none;
+    text-shadow: 0 0 24px var(--gold);
+    text-align: center;
+  }
+  .flash.on{ opacity: 1; }
+  .flash .small{
+    display: block;
+    text-align: center;
+    font-size: 11px;
+    color: var(--fg-dim);
+    letter-spacing: 0.08em;
+    margin-top: 8px;
+    text-shadow: none;
+    font-weight: 400;
+  }
+</style>
+</head>
+<body>
+  <aside class="sidebar">
+    <div class="brand">
+      <span class="badge" id="badgeMod">MOD-M13 / METEO</span>
+      <h1 id="brandH1">24h 空气浓度时间序列</h1>
+      <div class="sub" id="brandSub">PM2.5 over 24 hours</div>
+    </div>
+
+    <div class="mascot-box">
+      <svg width="48" height="48" viewBox="0 0 60 60" aria-hidden="true">
+        <!-- Cloud mascot - rounded nimbus, lightning eyes, gold sparkle (themes.js meteo) -->
+        <!-- shadow body STORM -->
+        <ellipse cx="32" cy="38" rx="22" ry="11" fill="var(--STORM)" opacity="0.5"/>
+        <!-- main body CIRRUS -->
+        <circle cx="20" cy="32" r="11" fill="var(--CIRRUS)"/>
+        <circle cx="34" cy="28" r="14" fill="var(--CIRRUS)"/>
+        <circle cx="46" cy="34" r="9"  fill="var(--CIRRUS)"/>
+        <ellipse cx="32" cy="40" rx="22" ry="6" fill="var(--CIRRUS)"/>
+        <!-- highlight MIST -->
+        <circle cx="26" cy="26" r="4" fill="var(--MIST)" opacity="0.65"/>
+        <!-- lightning eyes FRONT base + SUNLIGHT bolt -->
+        <circle cx="28" cy="34" r="2.2" fill="var(--FRONT)"/>
+        <circle cx="40" cy="34" r="2.2" fill="var(--FRONT)"/>
+        <polygon points="28,30 26,34 28,34 27,38 30,34 28,34" fill="var(--SUNLIGHT)"/>
+        <polygon points="40,30 38,34 40,34 39,38 42,34 40,34" fill="var(--SUNLIGHT)"/>
+        <!-- gold sparkle when calm -->
+        <circle cx="14" cy="46" r="1.4" fill="var(--SUNLIGHT)"/>
+        <circle cx="50" cy="48" r="1.2" fill="var(--SUNLIGHT)"/>
+      </svg>
+      <div>
+        <div class="label">MASCOT</div>
+        <div class="name" id="mascotName">Cloud · 云仔</div>
+      </div>
+    </div>
+
+    <div class="guide">
+      <div class="guide-item" id="g1"><span class="num">01</span><span class="gtxt">一天里 PM2.5 不是平的, 会随活动起伏</span></div>
+      <div class="guide-item" id="g2"><span class="num">02</span><span class="gtxt">早高峰 / 中午做饭 / 晚高峰是三大峰</span></div>
+      <div class="guide-item" id="g3"><span class="num">03</span><span class="gtxt">画 24h 折线图就能一眼看到最差时段</span></div>
+    </div>
+
+    <div class="spacer"></div>
+    <button id="langBtn" class="lang-btn" type="button">CN / EN</button>
+  </aside>
+
+  <main class="main">
+    <svg id="stage" viewBox="0 0 1080 720" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg"></svg>
+
+    <div class="hud">
+      <div class="row"><span class="label" id="hudL1">FRAME</span><span class="value accent" id="hudV1">1 / 5</span></div>
+      <div class="row"><span class="label" id="hudL2">STAGE</span><span class="value" id="hudV2">Pre-dawn</span></div>
+      <div class="sep"></div>
+      <div class="row"><span class="label" id="hudL3">HOUR</span><span class="value" id="hudV3">02 : 00</span></div>
+      <div class="row"><span class="label" id="hudL4">PM2.5</span><span class="value gold" id="hudV4">8 ug/m3</span></div>
+    </div>
+
+    <div class="subtitle">
+      <div class="cn" id="subCn">凌晨, 家里很安静 - PM2.5 才 8 微克, 一切都是绿</div>
+      <div class="en" id="subEn">Pre-dawn calm - PM2.5 only 8 ug/m3, all green</div>
+    </div>
+
+    <div class="frame-progress">
+      <div class="chip" id="chip0"></div>
+      <div class="chip" id="chip1"></div>
+      <div class="chip" id="chip2"></div>
+      <div class="chip" id="chip3"></div>
+      <div class="chip" id="chip4"></div>
+      <span class="stepname" id="stepName">01 · PRE-DAWN</span>
+    </div>
+
+    <div class="flash" id="flash">
+      PEAK
+      <span class="small" id="flashSub">晚高峰 19:00, PM2.5 冲到 95 - 这是一天最差时段</span>
+    </div>
+  </main>
+
+<script>
+(function(){
+  "use strict";
+
+  // ====== i18n ======
+  var LANG = 'cn';
+  var I18N = {
+    badgeMod:   { cn: 'MOD-M13 / METEO', en: 'MOD-M13 / METEO' },
+    brandH1:    { cn: '24h 空气浓度时间序列', en: '24h PM2.5 Time Series' },
+    brandSub:   { cn: 'PM2.5 一天起伏地图', en: 'PM2.5 over 24 hours' },
+    mascotName: { cn: 'Cloud · 云仔', en: 'Cloud · the nimbus' },
+    g1: { cn: '一天里 PM2.5 不是平的, 会随活动起伏',
+          en: 'PM2.5 is not flat - it rises and falls with daily activity' },
+    g2: { cn: '早高峰 / 中午做饭 / 晚高峰是三大峰',
+          en: 'Morning rush / cooking / evening rush form three peaks' },
+    g3: { cn: '画 24h 折线图就能一眼看到最差时段',
+          en: 'A 24h line chart shows the worst hour at a glance' },
+    hudL1: { cn: '帧',     en: 'FRAME' },
+    hudL2: { cn: '时段',   en: 'STAGE' },
+    hudL3: { cn: '时刻',   en: 'HOUR' },
+    hudL4: { cn: 'PM2.5',  en: 'PM2.5' },
+    btnLang: { cn: 'CN / EN', en: 'CN / EN' }
+  };
+
+  // ====== 24h synthetic PM2.5 timeline (hour -> ug/m3) - 每小时一个点 ======
+  // 三峰: 早高峰 07-09, 中午做饭 12-14, 晚高峰 17-20 (含晚饭 + 夜市)
+  var SERIES = [
+    {h: 0,  v: 9 }, {h: 1,  v: 8 }, {h: 2,  v: 8 }, {h: 3,  v: 7 },
+    {h: 4,  v: 7 }, {h: 5,  v: 9 }, {h: 6,  v: 14},
+    {h: 7,  v: 28}, {h: 8,  v: 42}, {h: 9,  v: 36}, {h:10,  v: 22}, {h:11,  v: 24},
+    {h:12,  v: 48}, {h:13,  v: 55}, {h:14,  v: 38},
+    {h:15,  v: 26}, {h:16,  v: 30},
+    {h:17,  v: 58}, {h:18,  v: 82}, {h:19,  v: 95}, {h:20,  v: 78},
+    {h:21,  v: 45}, {h:22,  v: 22}, {h:23,  v: 14}
+  ];
+  // peak times
+  var PEAKS = [
+    {h: 8,  v: 42, key: 'morning', cn: '早高峰', en: 'morning rush'},
+    {h:13,  v: 55, key: 'cooking', cn: '中午做饭', en: 'cooking'},
+    {h:19,  v: 95, key: 'evening', cn: '晚高峰 + 晚饭', en: 'evening rush + dinner'}
+  ];
+
+  // AQI tier boundaries (PM2.5 24h breakpoints)
+  function aqiColor(v){
+    if (v <= 12.0)  return 'var(--aqi-good)';
+    if (v <= 35.4)  return 'var(--aqi-mod)';
+    if (v <= 55.4)  return 'var(--aqi-usg)';
+    if (v <= 150.4) return 'var(--aqi-unhc)';
+    if (v <= 250.4) return 'var(--aqi-veryunhc)';
+    return 'var(--aqi-haz)';
+  }
+
+  // ====== 5-frame story ======
+  var FRAME_MS = 6000;
+  var FRAMES = [
+    {
+      id: 'predawn',
+      stepName: '01 · PRE-DAWN',
+      hudStage: { cn: '凌晨 0-6 时', en: 'Pre-dawn 0-6h' },
+      hudHour:  '02 : 00',
+      hudPM:    '8 ug/m3',
+      subCn: '凌晨, 家里很安静 - PM2.5 才 8 微克, 一切都是绿',
+      subEn: 'Pre-dawn calm - PM2.5 only 8 ug/m3, all green'
+    },
+    {
+      id: 'morning',
+      stepName: '02 · MORNING',
+      hudStage: { cn: '早高峰 7-9 时', en: 'Morning rush 7-9h' },
+      hudHour:  '08 : 00',
+      hudPM:    '42 ug/m3',
+      subCn: '楼下车流出来了 - PM2.5 升到 42, 跑到黄色档, 这是第一个峰',
+      subEn: 'Traffic builds up - PM2.5 climbs to 42, into yellow - the first peak'
+    },
+    {
+      id: 'cooking',
+      stepName: '03 · COOKING',
+      hudStage: { cn: '中午做饭 12-14 时', en: 'Cooking 12-14h' },
+      hudHour:  '13 : 00',
+      hudPM:    '55 ug/m3',
+      subCn: '中午厨房开火, 油烟出来了 - PM2.5 推到 55, 这是室内源',
+      subEn: 'Kitchen fires up, oil smoke rises - PM2.5 pushes to 55, an indoor source'
+    },
+    {
+      id: 'evening',
+      stepName: '04 · EVENING',
+      hudStage: { cn: '晚高峰 17-20 时', en: 'Evening rush 17-20h' },
+      hudHour:  '19 : 00',
+      hudPM:    '95 ug/m3',
+      subCn: '晚高峰 + 晚饭 + 夜市 - PM2.5 冲到 95, 跑进橙色 USG - 这是一天最差',
+      subEn: 'Rush + dinner + night market - PM2.5 hits 95, into orange USG - the worst hour'
+    },
+    {
+      id: 'panorama',
+      stepName: '05 · 24h FULL',
+      hudStage: { cn: '完整 24h 全貌', en: 'Full 24h panorama' },
+      hudHour:  '24 / 24',
+      hudPM:    '3 peaks',
+      subCn: '一天 24h 折线浮现 - 三个峰对应三件事, PM2.5 跟着生活节奏起伏',
+      subEn: '24h curve emerges - 3 peaks for 3 events, PM2.5 follows daily rhythm'
+    }
+  ];
+
+  // ====== state ======
+  var currentFrame = 0;
+  var frameStartTs = 0;
+  var rafId = null;
+  var stage = document.getElementById('stage');
+  var SVGNS = 'http://www.w3.org/2000/svg';
+
+  // ====== util ======
+  function el(name, attrs, parent){
+    var n = document.createElementNS(SVGNS, name);
+    if (attrs){
+      for (var k in attrs){
+        if (Object.prototype.hasOwnProperty.call(attrs, k)){
+          n.setAttribute(k, attrs[k]);
+        }
+      }
+    }
+    if (parent) parent.appendChild(n);
+    return n;
+  }
+  function clearStage(){ while(stage.firstChild) stage.removeChild(stage.firstChild); }
+  function t(key){
+    if (!I18N[key]) return key;
+    return I18N[key][LANG] || I18N[key].en || key;
+  }
+  function lerp(a, b, p){ return a + (b - a) * p; }
+  function easeInOut(x){ return x < 0.5 ? 2*x*x : 1 - Math.pow(-2*x + 2, 2)/2; }
+  function clamp(x, lo, hi){ return x < lo ? lo : (x > hi ? hi : x); }
+
+  // ====== shared drawing helpers ======
+  function drawBgGrid(){
+    var g = el('g', { opacity: '0.16' }, stage);
+    for (var x = 0; x <= 1080; x += 60){
+      el('line', { x1: x, y1: 0, x2: x, y2: 720, stroke: 'var(--line)', 'stroke-width': '0.5' }, g);
+    }
+    for (var y = 0; y <= 720; y += 60){
+      el('line', { x1: 0, y1: y, x2: 1080, y2: y, stroke: 'var(--line)', 'stroke-width': '0.5' }, g);
+    }
+    var defs = el('defs', null, stage);
+    var rg = el('radialGradient', { id: 'centerGlow', cx: '50%', cy: '45%', r: '60%' }, defs);
+    el('stop', { offset: '0%', 'stop-color': 'var(--meteo)', 'stop-opacity': '0.05' }, rg);
+    el('stop', { offset: '100%', 'stop-color': 'var(--bg-0)', 'stop-opacity': '0' }, rg);
+    el('rect', { x: 0, y: 0, width: 1080, height: 720, fill: 'url(#centerGlow)' }, stage);
+  }
+
+  // 5-step chain bottom
+  function drawStepChain(activeIdx){
+    var labels = [
+      { cn: '凌晨',   en: 'Pre-dawn' },
+      { cn: '早高峰', en: 'Morning' },
+      { cn: '做饭',   en: 'Cooking' },
+      { cn: '晚高峰', en: 'Evening' },
+      { cn: '全貌',   en: '24h Full' }
+    ];
+    var y = 640;
+    var startX = 110;
+    var gap = (1080 - 220) / 4;
+    var g = el('g', null, stage);
+    for (var i = 0; i < 5; i++){
+      var cx = startX + gap * i;
+      var on = i <= activeIdx;
+      var ringColor = on ? 'var(--meteo)' : 'var(--line)';
+      var fillColor = on ? 'var(--bg-2)' : 'var(--bg-1)';
+      var textColor = on ? 'var(--fg)' : 'var(--fg-mute)';
+      el('rect', {
+        x: cx - 48, y: y - 16, width: 96, height: 32,
+        fill: fillColor, stroke: ringColor, 'stroke-width': on ? '1.6' : '1', rx: '2'
+      }, g);
+      var tx = el('text', {
+        x: cx, y: y + 4, fill: textColor,
+        'font-family': "'Inter','Noto Sans SC',sans-serif",
+        'font-size': '12', 'font-weight': on ? '700' : '500',
+        'text-anchor': 'middle'
+      }, g);
+      tx.textContent = labels[i][LANG] || labels[i].en;
+      var ix = el('text', {
+        x: cx, y: y - 22, fill: on ? 'var(--meteo)' : 'var(--fg-mute)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '9', 'text-anchor': 'middle', 'letter-spacing': '0.1em'
+      }, g);
+      ix.textContent = '0' + (i+1);
+      if (i < 4){
+        var x1 = cx + 48;
+        var x2 = cx + gap - 48;
+        var connColor = (on && (i+1) <= activeIdx) ? 'var(--meteo)' : 'var(--line)';
+        el('line', {
+          x1: x1, y1: y, x2: x2 - 6, y2: y,
+          stroke: connColor, 'stroke-width': '1.2'
+        }, g);
+        el('polygon', {
+          points: (x2-6)+','+(y-4)+' '+(x2)+','+y+' '+(x2-6)+','+(y+4),
+          fill: connColor
+        }, g);
+      }
+    }
+  }
+
+  // Cloud mascot - drift + lightning eyes pulse
+  function drawCloudMascot(g, pulse, peakMode){
+    // shadow STORM
+    el('ellipse', { cx: 0, cy: 18, rx: 36, ry: 8, fill: 'var(--STORM)', opacity: '0.45' }, g);
+    // body CIRRUS - 3 puffs
+    el('circle', { cx: -16, cy: 4,  r: 16, fill: 'var(--CIRRUS)' }, g);
+    el('circle', { cx: 8,   cy: -4, r: 22, fill: 'var(--CIRRUS)' }, g);
+    el('circle', { cx: 28,  cy: 6,  r: 14, fill: 'var(--CIRRUS)' }, g);
+    el('ellipse', { cx: 6, cy: 14, rx: 34, ry: 8, fill: 'var(--CIRRUS)' }, g);
+    // MIST highlight
+    el('circle', { cx: -2, cy: -8, r: 6, fill: 'var(--MIST)', opacity: '0.6' }, g);
+    // eyes - FRONT base, SUNLIGHT bolt
+    var eyeAlpha = peakMode ? (0.6 + 0.4*Math.sin(pulse*6)) : 0.85;
+    el('circle', { cx: -2, cy: 4, r: 3.4, fill: 'var(--FRONT)', opacity: eyeAlpha }, g);
+    el('circle', { cx: 16, cy: 4, r: 3.4, fill: 'var(--FRONT)', opacity: eyeAlpha }, g);
+    if (peakMode && Math.sin(pulse*6) > 0.2){
+      el('polygon', { points: '-2,-2 -5,4 -2,4 -3,10 0,4 -2,4', fill: 'var(--SUNLIGHT)' }, g);
+      el('polygon', { points: '16,-2 13,4 16,4 15,10 18,4 16,4', fill: 'var(--SUNLIGHT)' }, g);
+    } else {
+      el('circle', { cx: -2, cy: 4, r: 1.2, fill: 'var(--MIST)' }, g);
+      el('circle', { cx: 16, cy: 4, r: 1.2, fill: 'var(--MIST)' }, g);
+    }
+    // sparkle when calm
+    if (!peakMode){
+      var sx = Math.sin(pulse*3);
+      el('circle', { cx: -32, cy: 24, r: 1.4 + Math.abs(sx)*0.6, fill: 'var(--SUNLIGHT)', opacity: 0.7 }, g);
+      el('circle', { cx: 40,  cy: 22, r: 1.2 + Math.abs(sx)*0.6, fill: 'var(--SUNLIGHT)', opacity: 0.7 }, g);
+    }
+  }
+
+  // ============================================================
+  // Frame 1 - PRE-DAWN (0-6h, indoor calm, PM2.5 ~8)
+  // ============================================================
+  function drawFrame1(p){
+    drawBgGrid();
+    drawStepChain(0);
+
+    // title
+    var ttl = el('text', {
+      x: 540, y: 60, fill: 'var(--meteo)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '14', 'text-anchor': 'middle', 'letter-spacing': '0.14em', 'font-weight': '700'
+    }, stage);
+    ttl.textContent = LANG === 'cn'
+      ? '凌晨 0-6 时 - 室内静谧, PM2.5 在绿色 Good 区'
+      : 'Pre-dawn 0-6h - indoor calm, PM2.5 in Good (green) zone';
+
+    // left: 24h analog clock dial, hand rotates 0h -> 6h
+    var clockCx = 280, clockCy = 360, clockR = 130;
+    el('circle', { cx: clockCx, cy: clockCy, r: clockR, fill: 'var(--bg-2)',
+                   stroke: 'var(--line-strong)', 'stroke-width': '1.4' }, stage);
+    el('circle', { cx: clockCx, cy: clockCy, r: clockR - 10, fill: 'none',
+                   stroke: 'var(--line)', 'stroke-width': '0.6', 'stroke-dasharray': '2 4' }, stage);
+    // 24 ticks
+    for (var hh = 0; hh < 24; hh++){
+      var ang = (hh / 24) * Math.PI * 2 - Math.PI / 2;
+      var r1 = clockR - 4;
+      var r2 = clockR - (hh % 6 === 0 ? 18 : 11);
+      var tx1 = clockCx + Math.cos(ang) * r1;
+      var ty1 = clockCy + Math.sin(ang) * r1;
+      var tx2 = clockCx + Math.cos(ang) * r2;
+      var ty2 = clockCy + Math.sin(ang) * r2;
+      el('line', { x1: tx1, y1: ty1, x2: tx2, y2: ty2,
+                   stroke: 'var(--meteo)', 'stroke-width': hh % 6 === 0 ? '1.6' : '0.8',
+                   opacity: hh % 6 === 0 ? '0.9' : '0.5' }, stage);
+      if (hh % 6 === 0){
+        var lblR = clockR - 32;
+        var lx = clockCx + Math.cos(ang) * lblR;
+        var ly = clockCy + Math.sin(ang) * lblR + 4;
+        var lt = el('text', {
+          x: lx, y: ly, fill: 'var(--fg-dim)',
+          'font-family': "'JetBrains Mono',ui-monospace,monospace",
+          'font-size': '11', 'text-anchor': 'middle', 'font-weight': '700'
+        }, stage);
+        lt.textContent = (hh < 10 ? '0' : '') + hh;
+      }
+    }
+    // hand: animate from 0h to 6h across frame
+    var handHour = lerp(0, 6, easeInOut(p));
+    var handAng = (handHour / 24) * Math.PI * 2 - Math.PI / 2;
+    var handLen = clockR - 28;
+    var hx = clockCx + Math.cos(handAng) * handLen;
+    var hy = clockCy + Math.sin(handAng) * handLen;
+    el('line', { x1: clockCx, y1: clockCy, x2: hx, y2: hy,
+                 stroke: 'var(--SUNLIGHT)', 'stroke-width': '2.4',
+                 'stroke-linecap': 'round' }, stage);
+    el('circle', { cx: clockCx, cy: clockCy, r: 5,
+                   fill: 'var(--meteo)', stroke: 'var(--SUNLIGHT)', 'stroke-width': '1.4' }, stage);
+    // dial center label
+    var ct = el('text', {
+      x: clockCx, y: clockCy + clockR + 26, fill: 'var(--fg-dim)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '11', 'text-anchor': 'middle', 'letter-spacing': '0.16em'
+    }, stage);
+    ct.textContent = LANG === 'cn' ? '24h 时钟 - 现在走到 ' : '24h dial - now at ';
+    var ct2 = el('text', {
+      x: clockCx, y: clockCy + clockR + 44, fill: 'var(--SUNLIGHT)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '20', 'text-anchor': 'middle', 'font-weight': '700'
+    }, stage);
+    ct2.textContent = (handHour < 10 ? '0' : '') + handHour.toFixed(0) + ' : 00';
+
+    // right: cozy indoor scene (bed + lamp), PM2.5 reading low
+    var sceneX = 680, sceneY = 220;
+    el('rect', { x: sceneX - 140, y: sceneY - 60, width: 280, height: 280,
+                 fill: 'var(--bg-1)', stroke: 'var(--line)', 'stroke-width': '1', rx: '4' }, stage);
+    // window with night sky
+    el('rect', { x: sceneX - 120, y: sceneY - 40, width: 100, height: 70,
+                 fill: 'var(--STORM)', stroke: 'var(--FRONT)', 'stroke-width': '1' }, stage);
+    el('line', { x1: sceneX - 70, y1: sceneY - 40, x2: sceneX - 70, y2: sceneY + 30,
+                 stroke: 'var(--FRONT)', 'stroke-width': '1' }, stage);
+    el('line', { x1: sceneX - 120, y1: sceneY - 5, x2: sceneX - 20, y2: sceneY - 5,
+                 stroke: 'var(--FRONT)', 'stroke-width': '1' }, stage);
+    // stars - twinkle by p
+    for (var s = 0; s < 6; s++){
+      var sx = sceneX - 110 + (s * 16 % 90);
+      var sy = sceneY - 30 + ((s * 13) % 50);
+      var sa = 0.5 + 0.4 * Math.sin(p * 6 + s * 1.3);
+      el('circle', { cx: sx, cy: sy, r: 1.2, fill: 'var(--MIST)', opacity: sa }, stage);
+    }
+    // crescent moon
+    el('circle', { cx: sceneX - 40, cy: sceneY - 22, r: 9, fill: 'var(--MIST)', opacity: '0.85' }, stage);
+    el('circle', { cx: sceneX - 36, cy: sceneY - 26, r: 8, fill: 'var(--STORM)' }, stage);
+
+    // bed
+    el('rect', { x: sceneX - 100, y: sceneY + 120, width: 220, height: 40,
+                 fill: 'var(--FRONT)', opacity: '0.7' }, stage);
+    el('rect', { x: sceneX - 90,  y: sceneY + 100, width: 200, height: 24,
+                 fill: 'var(--MIST)', opacity: '0.85' }, stage);
+    el('rect', { x: sceneX - 80,  y: sceneY + 84,  width: 60, height: 18,
+                 fill: 'var(--CIRRUS)' }, stage);
+
+    // sensor mini-card showing low PM
+    var card = el('g', { transform: 'translate(' + (sceneX + 100) + ',' + (sceneY + 20) + ')' }, stage);
+    el('rect', { x: -36, y: -34, width: 72, height: 60,
+                 fill: 'var(--bg-3)', stroke: 'var(--meteo)', 'stroke-width': '1.4', rx: '3' }, card);
+    var clbl = el('text', {
+      x: 0, y: -18, fill: 'var(--fg-mute)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '8', 'text-anchor': 'middle', 'letter-spacing': '0.1em'
+    }, card);
+    clbl.textContent = 'PM2.5';
+    var pmVal = Math.round(lerp(7, 9, p));
+    var cval = el('text', {
+      x: 0, y: 6, fill: 'var(--aqi-good)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '22', 'text-anchor': 'middle', 'font-weight': '700'
+    }, card);
+    cval.textContent = String(pmVal);
+    var cu = el('text', {
+      x: 0, y: 20, fill: 'var(--fg-dim)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '8', 'text-anchor': 'middle'
+    }, card);
+    cu.textContent = 'ug/m3';
+
+    // tiny mascot drifting calmly
+    var driftX = lerp(180, 200, Math.sin(p * 2));
+    var mg = el('g', { transform: 'translate(' + driftX + ', 540)' }, stage);
+    drawCloudMascot(mg, p * 2, false);
+
+    // AQI band label
+    var ab = el('g', { transform: 'translate(280, 540)' }, stage);
+    el('rect', { x: -60, y: -14, width: 120, height: 28,
+                 fill: 'var(--aqi-good)', opacity: '0.25', stroke: 'var(--aqi-good)', 'stroke-width': '1.4' }, ab);
+    var abt = el('text', {
+      x: 0, y: 5, fill: 'var(--aqi-good)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '12', 'text-anchor': 'middle', 'font-weight': '700', 'letter-spacing': '0.12em'
+    }, ab);
+    abt.textContent = LANG === 'cn' ? 'AQI = GOOD' : 'AQI = GOOD';
+  }
+
+  // ============================================================
+  // Frame 2 - MORNING RUSH (7-9h, cars build, PM2.5 climbs to 42)
+  // ============================================================
+  function drawFrame2(p){
+    drawBgGrid();
+    drawStepChain(1);
+
+    var ttl = el('text', {
+      x: 540, y: 60, fill: 'var(--meteo)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '14', 'text-anchor': 'middle', 'letter-spacing': '0.14em', 'font-weight': '700'
+    }, stage);
+    ttl.textContent = LANG === 'cn'
+      ? '早高峰 7-9 时 - 车流出来了, PM2.5 第一峰浮现'
+      : 'Morning rush 7-9h - traffic builds, PM2.5 first peak emerges';
+
+    // left: street with moving cars (particles + cars)
+    var streetX = 100, streetY = 360, streetW = 460, streetH = 140;
+    el('rect', { x: streetX, y: streetY, width: streetW, height: streetH,
+                 fill: 'var(--bg-2)', stroke: 'var(--line)', 'stroke-width': '1' }, stage);
+    // lane stripes
+    for (var st = 0; st < 10; st++){
+      var sox = ((p * 600 + st * 50) % (streetW + 40)) - 20;
+      el('rect', { x: streetX + sox, y: streetY + streetH/2 - 2,
+                   width: 24, height: 4, fill: 'var(--MIST)', opacity: '0.4' }, stage);
+    }
+    // 3 cars moving left -> right
+    var carColors = ['var(--FRONT)', 'var(--CIRRUS)', 'var(--STORM)'];
+    for (var c = 0; c < 3; c++){
+      var carX = ((p * 300 + c * 160) % (streetW + 120)) - 80;
+      var carY = streetY + 20 + (c % 2) * 60;
+      var cg = el('g', { transform: 'translate(' + (streetX + carX) + ',' + carY + ')' }, stage);
+      el('rect', { x: 0, y: 8, width: 50, height: 18, fill: carColors[c], rx: '2' }, cg);
+      el('rect', { x: 8, y: -2, width: 36, height: 14, fill: carColors[c], opacity: '0.7', rx: '2' }, cg);
+      el('circle', { cx: 10, cy: 28, r: 4, fill: 'var(--STORM)' }, cg);
+      el('circle', { cx: 42, cy: 28, r: 4, fill: 'var(--STORM)' }, cg);
+      // exhaust particles - FRONT to fade
+      for (var ep = 0; ep < 5; ep++){
+        var epx = -8 - ep * 6;
+        var epy = 16 + Math.sin(p * 8 + ep) * 4;
+        el('circle', { cx: epx, cy: epy, r: 2 + ep * 0.4,
+                       fill: 'var(--FRONT)', opacity: 0.5 - ep * 0.08 }, cg);
+      }
+    }
+    // floating PM particles rising over street
+    var pn = 30;
+    for (var pp_ = 0; pp_ < pn; pp_++){
+      var ppx = streetX + (((pp_ * 37) % streetW) + p * 80) % streetW;
+      var ppy = streetY - ((pp_ * 17 + p * 200) % 180);
+      var ppa = 0.3 + 0.5 * (1 - Math.abs(ppy - streetY) / 200);
+      el('circle', { cx: ppx, cy: ppy, r: 1.6,
+                     fill: 'var(--FRONT)', opacity: ppa }, stage);
+    }
+    var stTxt = el('text', {
+      x: streetX + streetW/2, y: streetY + streetH + 22, fill: 'var(--fg-dim)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '11', 'text-anchor': 'middle', 'letter-spacing': '0.1em'
+    }, stage);
+    stTxt.textContent = LANG === 'cn' ? '楼下马路 - 上班车流' : 'Street below - commuter traffic';
+
+    // right: 24h chart, only 0-9h drawn so far (first peak appears)
+    var chartX = 640, chartY = 480;
+    var chartW = 380, chartH = 220;
+    drawPartialChart(chartX, chartY, chartW, chartH, 9, p, 'peak1');
+
+    // mascot eyes flicker as PM rises
+    var mg = el('g', { transform: 'translate(160, 580)' }, stage);
+    drawCloudMascot(mg, p * 3, false);
+
+    // AQI band moderate
+    var ab = el('g', { transform: 'translate(360, 580)' }, stage);
+    el('rect', { x: -70, y: -14, width: 140, height: 28,
+                 fill: 'var(--aqi-mod)', opacity: '0.28', stroke: 'var(--aqi-mod)', 'stroke-width': '1.4' }, ab);
+    var abt = el('text', {
+      x: 0, y: 5, fill: 'var(--aqi-mod)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '12', 'text-anchor': 'middle', 'font-weight': '700', 'letter-spacing': '0.12em'
+    }, ab);
+    abt.textContent = LANG === 'cn' ? 'AQI = MODERATE' : 'AQI = MODERATE';
+
+    // PM reading card
+    var pmNow = Math.round(lerp(14, 42, easeInOut(p)));
+    drawPMCard(stage, 360, 130, pmNow, LANG === 'cn' ? '8 : 00 楼下街' : '08:00 street');
+  }
+
+  // ============================================================
+  // Frame 3 - COOKING (12-14h, kitchen indoor source, PM2.5 -> 55)
+  // ============================================================
+  function drawFrame3(p){
+    drawBgGrid();
+    drawStepChain(2);
+
+    var ttl = el('text', {
+      x: 540, y: 60, fill: 'var(--meteo)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '14', 'text-anchor': 'middle', 'letter-spacing': '0.14em', 'font-weight': '700'
+    }, stage);
+    ttl.textContent = LANG === 'cn'
+      ? '中午 12-14 时 - 厨房做饭, 油烟是室内源, PM2.5 第二峰'
+      : 'Noon 12-14h - kitchen cooking, oil smoke is indoor source, second peak';
+
+    // left: kitchen scene with stove + wok + smoke
+    var kX = 280, kY = 380;
+    // counter
+    el('rect', { x: kX - 160, y: kY + 40, width: 320, height: 100,
+                 fill: 'var(--bg-2)', stroke: 'var(--line)', 'stroke-width': '1' }, stage);
+    // stove
+    el('rect', { x: kX - 80, y: kY + 10, width: 160, height: 50,
+                 fill: 'var(--STORM)', stroke: 'var(--FRONT)', 'stroke-width': '1.2' }, stage);
+    el('circle', { cx: kX - 30, cy: kY + 35, r: 16,
+                   fill: 'var(--bg-3)', stroke: 'var(--SUNLIGHT)', 'stroke-width': '1.4' }, stage);
+    el('circle', { cx: kX + 30, cy: kY + 35, r: 16,
+                   fill: 'var(--bg-3)', stroke: 'var(--FRONT)', 'stroke-width': '1.4' }, stage);
+    // wok
+    el('ellipse', { cx: kX - 30, cy: kY + 18, rx: 28, ry: 8,
+                    fill: 'var(--STORM)', stroke: 'var(--FRONT)', 'stroke-width': '1.4' }, stage);
+    el('ellipse', { cx: kX - 30, cy: kY + 14, rx: 22, ry: 5,
+                    fill: 'var(--FRONT)', opacity: '0.6' }, stage);
+    // flame under wok - SUNLIGHT
+    var flameAlpha = 0.6 + 0.3 * Math.sin(p * 12);
+    el('polygon', {
+      points: (kX-44)+','+(kY+34)+' '+(kX-30)+','+(kY+18)+' '+(kX-16)+','+(kY+34),
+      fill: 'var(--SUNLIGHT)', opacity: flameAlpha
+    }, stage);
+    el('polygon', {
+      points: (kX-36)+','+(kY+32)+' '+(kX-30)+','+(kY+22)+' '+(kX-24)+','+(kY+32),
+      fill: 'var(--FRONT)', opacity: 0.7
+    }, stage);
+
+    // rising oil smoke - FRONT to CIRRUS, particles rise
+    var smokeN = 40;
+    for (var sm = 0; sm < smokeN; sm++){
+      var phase = (p * 0.8 + sm / smokeN) % 1;
+      var sx = kX - 30 + Math.sin(phase * 6 + sm) * 30;
+      var sy = kY + 10 - phase * 260;
+      var sr = 3 + phase * 8;
+      var sa = (1 - phase) * 0.6;
+      var sc = phase < 0.4 ? 'var(--FRONT)' : (phase < 0.75 ? 'var(--CIRRUS)' : 'var(--MIST)');
+      el('circle', { cx: sx, cy: sy, r: sr, fill: sc, opacity: sa }, stage);
+    }
+
+    // range hood absent label (why it rises in room)
+    var hoodLbl = el('text', {
+      x: kX, y: kY - 220, fill: 'var(--fg-dim)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '11', 'text-anchor': 'middle', 'letter-spacing': '0.06em'
+    }, stage);
+    hoodLbl.textContent = LANG === 'cn'
+      ? '油烟里都是亚微米颗粒 - 室内 PM2.5 直冲'
+      : 'Oil smoke = sub-micron particles - indoor PM2.5 spikes';
+
+    // right: 24h chart with 0-14h drawn (showing first peak + second)
+    var chartX = 640, chartY = 480;
+    var chartW = 380, chartH = 220;
+    drawPartialChart(chartX, chartY, chartW, chartH, 14, p, 'peak2');
+
+    // mascot - eyes flicker faintly (concern)
+    var mg = el('g', { transform: 'translate(160, 580)' }, stage);
+    drawCloudMascot(mg, p * 4, false);
+
+    // AQI mod label (PM=55 lands on USG boundary)
+    var ab = el('g', { transform: 'translate(360, 580)' }, stage);
+    el('rect', { x: -78, y: -14, width: 156, height: 28,
+                 fill: 'var(--aqi-usg)', opacity: '0.28', stroke: 'var(--aqi-usg)', 'stroke-width': '1.4' }, ab);
+    var abt = el('text', {
+      x: 0, y: 5, fill: 'var(--aqi-usg)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '12', 'text-anchor': 'middle', 'font-weight': '700', 'letter-spacing': '0.12em'
+    }, ab);
+    abt.textContent = LANG === 'cn' ? 'AQI -> USG 边界' : 'AQI -> USG edge';
+
+    // indoor source tag
+    var tag = el('g', { transform: 'translate(' + (kX + 120) + ', ' + (kY - 80) + ')' }, stage);
+    el('rect', { x: -56, y: -12, width: 112, height: 24,
+                 fill: 'var(--bg-2)', stroke: 'var(--SUNLIGHT)', 'stroke-width': '1.4', rx: '2' }, tag);
+    var tgt = el('text', {
+      x: 0, y: 4, fill: 'var(--SUNLIGHT)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '10', 'text-anchor': 'middle', 'font-weight': '700', 'letter-spacing': '0.12em'
+    }, tag);
+    tgt.textContent = LANG === 'cn' ? '室内源 INDOOR' : 'INDOOR SOURCE';
+
+    var pmNow = Math.round(lerp(24, 55, easeInOut(p)));
+    drawPMCard(stage, 360, 130, pmNow, LANG === 'cn' ? '13 : 00 厨房' : '13:00 kitchen');
+  }
+
+  // ============================================================
+  // Frame 4 - EVENING RUSH (17-20h, biggest peak PM=95, gold)
+  // ============================================================
+  function drawFrame4(p){
+    drawBgGrid();
+    drawStepChain(3);
+
+    var ttl = el('text', {
+      x: 540, y: 60, fill: 'var(--meteo)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '14', 'text-anchor': 'middle', 'letter-spacing': '0.14em', 'font-weight': '700'
+    }, stage);
+    ttl.textContent = LANG === 'cn'
+      ? '晚高峰 17-20 时 - 车流 + 晚饭 + 夜市, 一天最差'
+      : 'Evening rush 17-20h - traffic + dinner + night market, worst hour';
+
+    // left: composite scene - busy street with red taillights + dinner wok + night market lanterns
+    // STORM dark background tint for evening
+    el('rect', { x: 60, y: 100, width: 520, height: 460,
+                 fill: 'var(--STORM)', opacity: '0.18', rx: '4' }, stage);
+    // dense cars with red taillights
+    var carN = 6;
+    for (var c = 0; c < carN; c++){
+      var lane = c % 2;
+      var cx = 90 + ((p * 220 + c * 90) % 480);
+      var cy = 240 + lane * 50;
+      var cg = el('g', { transform: 'translate(' + cx + ',' + cy + ')' }, stage);
+      el('rect', { x: 0, y: 8, width: 42, height: 16, fill: 'var(--FRONT)', rx: '2' }, cg);
+      el('rect', { x: 6, y: -2, width: 30, height: 12, fill: 'var(--FRONT)', opacity: '0.7' }, cg);
+      // taillights orange
+      el('circle', { cx: 0, cy: 14, r: 3, fill: 'var(--aqi-usg)' }, cg);
+      el('circle', { cx: 0, cy: 14, r: 5, fill: 'var(--aqi-usg)', opacity: 0.4 }, cg);
+      el('circle', { cx: 8, cy: 26, r: 3, fill: 'var(--STORM)' }, cg);
+      el('circle', { cx: 36, cy: 26, r: 3, fill: 'var(--STORM)' }, cg);
+      // heavy exhaust - FRONT to STORM
+      for (var ep = 0; ep < 6; ep++){
+        var epx = -6 - ep * 5;
+        var epy = 14 + Math.sin(p * 10 + ep) * 5;
+        el('circle', { cx: epx, cy: epy, r: 2 + ep * 0.6,
+                       fill: 'var(--STORM)', opacity: 0.55 - ep * 0.06 }, cg);
+      }
+    }
+    // night market lanterns (right side)
+    for (var lt = 0; lt < 5; lt++){
+      var lx = 460 + (lt - 2) * 28;
+      var ly = 180 + Math.sin(p * 3 + lt) * 6;
+      el('line', { x1: lx, y1: 140, x2: lx, y2: ly - 12,
+                   stroke: 'var(--FRONT)', 'stroke-width': '0.8' }, stage);
+      el('circle', { cx: lx, cy: ly, r: 10,
+                     fill: 'var(--aqi-usg)', opacity: 0.75 }, stage);
+      el('circle', { cx: lx, cy: ly, r: 14,
+                     fill: 'var(--SUNLIGHT)', opacity: 0.25 }, stage);
+    }
+    // dense floating PM particles - mostly STORM with FRONT
+    var pn = 80;
+    for (var pp_ = 0; pp_ < pn; pp_++){
+      var ppx = 70 + ((pp_ * 41 + p * 100) % 500);
+      var ppy = 120 + ((pp_ * 23 + p * 160) % 380);
+      var ppa = 0.4 + 0.4 * Math.sin(p * 4 + pp_);
+      var ppc = pp_ % 3 === 0 ? 'var(--FRONT)' : 'var(--STORM)';
+      el('circle', { cx: ppx, cy: ppy, r: 1.8, fill: ppc, opacity: ppa }, stage);
+    }
+
+    // scene label
+    var stxt = el('text', {
+      x: 320, y: 110, fill: 'var(--SUNLIGHT)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '12', 'text-anchor': 'middle', 'font-weight': '700', 'letter-spacing': '0.12em'
+    }, stage);
+    stxt.textContent = LANG === 'cn'
+      ? '车流 + 油烟 + 夜市同时叠加'
+      : 'Traffic + smoke + night market stack';
+
+    // GOLD halo over chart peak area
+    var haloAlpha = 0.3 + 0.3 * Math.sin(p * 5);
+    el('circle', { cx: 850, cy: 360, r: 100,
+                   fill: 'var(--SUNLIGHT)', opacity: haloAlpha * 0.15 }, stage);
+
+    // right: 24h chart with 0-20h drawn, peak3 highlighted with GOLD
+    var chartX = 640, chartY = 480;
+    var chartW = 380, chartH = 220;
+    drawPartialChart(chartX, chartY, chartW, chartH, 20, p, 'peak3');
+
+    // mascot - peak mode, lightning eyes pulse
+    var mg = el('g', { transform: 'translate(160, 580)' }, stage);
+    drawCloudMascot(mg, p * 6, true);
+
+    // AQI USG strong
+    var ab = el('g', { transform: 'translate(360, 580)' }, stage);
+    el('rect', { x: -78, y: -14, width: 156, height: 28,
+                 fill: 'var(--aqi-usg)', opacity: '0.4', stroke: 'var(--SUNLIGHT)', 'stroke-width': '1.8' }, ab);
+    var abt = el('text', {
+      x: 0, y: 5, fill: 'var(--SUNLIGHT)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '12', 'text-anchor': 'middle', 'font-weight': '700', 'letter-spacing': '0.12em'
+    }, ab);
+    abt.textContent = LANG === 'cn' ? 'AQI = USG - 最差' : 'AQI = USG - WORST';
+
+    var pmNow = Math.round(lerp(58, 95, easeInOut(p)));
+    drawPMCard(stage, 360, 130, pmNow, LANG === 'cn' ? '19 : 00 户外' : '19:00 outdoor');
+
+    // flash overlay (key moment)
+    var flash = document.getElementById('flash');
+    if (p > 0.55 && p < 0.92){
+      flash.classList.add('on');
+    } else {
+      flash.classList.remove('on');
+    }
+  }
+
+  // ============================================================
+  // Frame 5 - 24h FULL PANORAMA (entire curve emerges, 3 peaks annotated)
+  // ============================================================
+  function drawFrame5(p){
+    drawBgGrid();
+    drawStepChain(4);
+
+    var ttl = el('text', {
+      x: 540, y: 56, fill: 'var(--meteo)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '14', 'text-anchor': 'middle', 'letter-spacing': '0.14em', 'font-weight': '700'
+    }, stage);
+    ttl.textContent = LANG === 'cn'
+      ? '完整 24h 折线 - 三个峰对应三件事, PM2.5 跟生活节奏同步'
+      : 'Full 24h curve - 3 peaks for 3 events, PM2.5 follows daily rhythm';
+
+    // big chart in main area
+    var chartX = 100, chartY = 540;
+    var chartW = 880, chartH = 380;
+    drawFullChart(chartX, chartY, chartW, chartH, p);
+
+    // mascot bottom-right, calm + gold sparkle
+    var mg = el('g', { transform: 'translate(1000, 540)' }, stage);
+    drawCloudMascot(mg, p * 3, false);
+
+    // gold seal "你画出一张 24h 时序图"
+    var sealAlpha = clamp((p - 0.6) / 0.25, 0, 1);
+    if (sealAlpha > 0){
+      var sg = el('g', { opacity: sealAlpha, transform: 'translate(540, 600)' }, stage);
+      el('rect', { x: -240, y: -22, width: 480, height: 44,
+                   fill: 'var(--bg-2)', stroke: 'var(--SUNLIGHT)', 'stroke-width': '2', rx: '3' }, sg);
+      var st = el('text', {
+        x: 0, y: 6, fill: 'var(--SUNLIGHT)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '13', 'text-anchor': 'middle', 'letter-spacing': '0.1em', 'font-weight': '700'
+      }, sg);
+      st.textContent = LANG === 'cn'
+        ? '你画出了我们家一天的 PM2.5 时序图'
+        : 'You just drew a 24h PM2.5 time series';
+    }
+
+    // flash gold flash
+    var flash = document.getElementById('flash');
+    if (p > 0.42 && p < 0.85){
+      flash.classList.add('on');
+      document.getElementById('flashSub').textContent = LANG === 'cn'
+        ? '24h 折线浮现 - 一眼看清最差时段'
+        : 'Curve reveals - see the worst hour at a glance';
+    } else {
+      flash.classList.remove('on');
+    }
+  }
+
+  // ============================================================
+  // Chart helpers
+  // ============================================================
+  function chartCoords(chartX, chartY, chartW, chartH){
+    var hMax = 24;
+    var vMax = 110;
+    return {
+      hToX: function(h){ return chartX + (h / hMax) * chartW; },
+      vToY: function(v){ return chartY - (v / vMax) * chartH; },
+      chartX: chartX, chartY: chartY, chartW: chartW, chartH: chartH,
+      hMax: hMax, vMax: vMax
+    };
+  }
+
+  // small AQI band overlay on Y axis
+  function drawAqiBands(coords){
+    var bands = [
+      { lo: 0,    hi: 12.0,  c: 'var(--aqi-good)',     op: 0.10 },
+      { lo: 12.0, hi: 35.4,  c: 'var(--aqi-mod)',      op: 0.10 },
+      { lo: 35.4, hi: 55.4,  c: 'var(--aqi-usg)',      op: 0.10 },
+      { lo: 55.4, hi: coords.vMax, c: 'var(--aqi-unhc)', op: 0.10 }
+    ];
+    bands.forEach(function(b){
+      var y1 = coords.vToY(b.hi);
+      var y2 = coords.vToY(b.lo);
+      el('rect', {
+        x: coords.chartX, y: y1, width: coords.chartW, height: Math.max(0, y2 - y1),
+        fill: b.c, opacity: b.op
+      }, stage);
+    });
+  }
+
+  function drawChartAxes(coords){
+    // X axis
+    el('line', { x1: coords.chartX, y1: coords.chartY, x2: coords.chartX + coords.chartW, y2: coords.chartY,
+                 stroke: 'var(--meteo)', 'stroke-width': '1.4' }, stage);
+    el('polygon', {
+      points: (coords.chartX + coords.chartW + 8) + ',' + coords.chartY + ' ' +
+              (coords.chartX + coords.chartW + 2) + ',' + (coords.chartY - 4) + ' ' +
+              (coords.chartX + coords.chartW + 2) + ',' + (coords.chartY + 4),
+      fill: 'var(--meteo)'
+    }, stage);
+    // Y axis
+    el('line', { x1: coords.chartX, y1: coords.chartY, x2: coords.chartX, y2: coords.chartY - coords.chartH - 8,
+                 stroke: 'var(--meteo)', 'stroke-width': '1.4' }, stage);
+    el('polygon', {
+      points: coords.chartX + ',' + (coords.chartY - coords.chartH - 12) + ' ' +
+              (coords.chartX - 4) + ',' + (coords.chartY - coords.chartH - 6) + ' ' +
+              (coords.chartX + 4) + ',' + (coords.chartY - coords.chartH - 6),
+      fill: 'var(--meteo)'
+    }, stage);
+    // X ticks - every 4h
+    for (var h = 0; h <= coords.hMax; h += 4){
+      var hx = coords.hToX(h);
+      el('line', { x1: hx, y1: coords.chartY, x2: hx, y2: coords.chartY + 5,
+                   stroke: 'var(--meteo)', 'stroke-width': '0.8' }, stage);
+      var hl = el('text', {
+        x: hx, y: coords.chartY + 20, fill: 'var(--fg-mute)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '10', 'text-anchor': 'middle'
+      }, stage);
+      hl.textContent = (h < 10 ? '0' : '') + h + 'h';
+    }
+    // Y ticks
+    [0, 25, 50, 75, 100].forEach(function(v){
+      var yy = coords.vToY(v);
+      el('line', { x1: coords.chartX - 5, y1: yy, x2: coords.chartX, y2: yy,
+                   stroke: 'var(--meteo)', 'stroke-width': '0.8' }, stage);
+      var vl = el('text', {
+        x: coords.chartX - 10, y: yy + 4, fill: 'var(--fg-mute)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '10', 'text-anchor': 'end'
+      }, stage);
+      vl.textContent = String(v);
+    });
+    // unit
+    var unit = el('text', {
+      x: coords.chartX - 10, y: coords.chartY - coords.chartH - 14, fill: 'var(--fg-dim)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '10', 'text-anchor': 'end'
+    }, stage);
+    unit.textContent = 'PM2.5 ug/m3';
+  }
+
+  // partial chart up to maxH hour, with current peak emphasis
+  function drawPartialChart(chartX, chartY, chartW, chartH, maxH, p, emphasis){
+    var coords = chartCoords(chartX, chartY, chartW, chartH);
+    // chart background
+    el('rect', { x: chartX - 8, y: chartY - chartH - 24, width: chartW + 28, height: chartH + 56,
+                 fill: 'var(--bg-1)', stroke: 'var(--line)', 'stroke-width': '1', rx: '3' }, stage);
+    drawAqiBands(coords);
+    drawChartAxes(coords);
+
+    // line from h=0 to current animated draw position
+    var drawTo = Math.min(maxH, lerp(0, maxH, easeInOut(p)));
+    var pts = [];
+    SERIES.forEach(function(pt){
+      if (pt.h <= drawTo){
+        pts.push(coords.hToX(pt.h) + ',' + coords.vToY(pt.v));
+      }
+    });
+    if (pts.length >= 2){
+      el('polyline', {
+        points: pts.join(' '),
+        fill: 'none', stroke: 'var(--meteo)', 'stroke-width': '2.2', 'stroke-linejoin': 'round'
+      }, stage);
+    }
+
+    // dots up to drawTo
+    SERIES.forEach(function(pt){
+      if (pt.h <= drawTo){
+        var inPeak = (emphasis === 'peak1' && pt.h >= 7 && pt.h <= 9) ||
+                     (emphasis === 'peak2' && pt.h >= 12 && pt.h <= 14) ||
+                     (emphasis === 'peak3' && pt.h >= 17 && pt.h <= 20);
+        el('circle', {
+          cx: coords.hToX(pt.h), cy: coords.vToY(pt.v),
+          r: inPeak ? 3.6 : 2.2,
+          fill: inPeak ? 'var(--SUNLIGHT)' : 'var(--CIRRUS)',
+          stroke: inPeak ? 'var(--SUNLIGHT)' : 'none',
+          'stroke-width': inPeak ? 1.5 : 0
+        }, stage);
+      }
+    });
+
+    // peak label on emphasis peak
+    var peak = PEAKS.find(function(pk){ return pk.key === emphasis.replace('peak1','morning').replace('peak2','cooking').replace('peak3','evening'); });
+    if (peak && drawTo >= peak.h){
+      var px = coords.hToX(peak.h);
+      var py = coords.vToY(peak.v);
+      el('line', { x1: px, y1: py - 8, x2: px, y2: py - 36,
+                   stroke: 'var(--SUNLIGHT)', 'stroke-width': '1.2', 'stroke-dasharray': '3 2' }, stage);
+      var lbg = el('rect', { x: px - 60, y: py - 64, width: 120, height: 24,
+                             fill: 'var(--bg-2)', stroke: 'var(--SUNLIGHT)', 'stroke-width': '1.2', rx: '2' }, stage);
+      var ltx = el('text', {
+        x: px, y: py - 48, fill: 'var(--SUNLIGHT)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '10', 'text-anchor': 'middle', 'font-weight': '700'
+      }, stage);
+      ltx.textContent = (LANG === 'cn' ? peak.cn : peak.en) + ' ' + peak.v;
+    }
+  }
+
+  // full chart F5
+  function drawFullChart(chartX, chartY, chartW, chartH, p){
+    var coords = chartCoords(chartX, chartY, chartW, chartH);
+    // chart background
+    el('rect', { x: chartX - 16, y: chartY - chartH - 28, width: chartW + 50, height: chartH + 64,
+                 fill: 'var(--bg-1)', stroke: 'var(--line-strong)', 'stroke-width': '1.2', rx: '4' }, stage);
+    drawAqiBands(coords);
+    drawChartAxes(coords);
+
+    // animated draw: line emerges fully over first 60% of frame
+    var drawProgress = clamp(p / 0.55, 0, 1);
+    var drawTo = lerp(0, 23, drawProgress);
+    var pts = [];
+    SERIES.forEach(function(pt){
+      if (pt.h <= drawTo){
+        pts.push(coords.hToX(pt.h) + ',' + coords.vToY(pt.v));
+      }
+    });
+    if (pts.length >= 2){
+      el('polyline', {
+        points: pts.join(' '),
+        fill: 'none', stroke: 'var(--meteo)', 'stroke-width': '2.6', 'stroke-linejoin': 'round',
+        'stroke-linecap': 'round'
+      }, stage);
+    }
+
+    // area under curve - fade in
+    if (drawProgress > 0.5){
+      var areaAlpha = clamp((drawProgress - 0.5) / 0.4, 0, 1) * 0.18;
+      var apts = [coords.hToX(0) + ',' + coords.chartY];
+      SERIES.forEach(function(pt){
+        if (pt.h <= drawTo){
+          apts.push(coords.hToX(pt.h) + ',' + coords.vToY(pt.v));
+        }
+      });
+      apts.push(coords.hToX(drawTo) + ',' + coords.chartY);
+      el('polygon', { points: apts.join(' '), fill: 'var(--meteo)', opacity: areaAlpha }, stage);
+    }
+
+    // all points
+    SERIES.forEach(function(pt){
+      if (pt.h <= drawTo){
+        var color = aqiColor(pt.v);
+        el('circle', { cx: coords.hToX(pt.h), cy: coords.vToY(pt.v), r: 2.4,
+                       fill: color }, stage);
+      }
+    });
+
+    // peak callouts after p > 0.55
+    if (p > 0.55){
+      var calloutAlpha = clamp((p - 0.55) / 0.25, 0, 1);
+      PEAKS.forEach(function(pk, pi){
+        if (drawTo < pk.h) return;
+        var px = coords.hToX(pk.h);
+        var py = coords.vToY(pk.v);
+        // dashed line down
+        el('line', { x1: px, y1: py - 6, x2: px, y2: py - 56,
+                     stroke: 'var(--SUNLIGHT)', 'stroke-width': '1.2',
+                     'stroke-dasharray': '3 2', opacity: calloutAlpha }, stage);
+        // callout box
+        var boxW = 130;
+        var boxX = px - boxW/2;
+        // keep within chart
+        if (boxX < chartX) boxX = chartX;
+        if (boxX + boxW > chartX + chartW) boxX = chartX + chartW - boxW;
+        var boxY = py - 90;
+        el('rect', { x: boxX, y: boxY, width: boxW, height: 36,
+                     fill: 'var(--bg-2)', stroke: 'var(--SUNLIGHT)',
+                     'stroke-width': '1.4', rx: '2', opacity: calloutAlpha }, stage);
+        var lt = el('text', {
+          x: boxX + boxW/2, y: boxY + 16, fill: 'var(--SUNLIGHT)',
+          'font-family': "'JetBrains Mono',ui-monospace,monospace",
+          'font-size': '10', 'text-anchor': 'middle', 'font-weight': '700',
+          opacity: calloutAlpha
+        }, stage);
+        lt.textContent = (pk.h < 10 ? '0' : '') + pk.h + ':00';
+        var lt2 = el('text', {
+          x: boxX + boxW/2, y: boxY + 30, fill: 'var(--fg)',
+          'font-family': "'Inter','Noto Sans SC',sans-serif",
+          'font-size': '11', 'text-anchor': 'middle',
+          opacity: calloutAlpha
+        }, stage);
+        lt2.textContent = (LANG === 'cn' ? pk.cn : pk.en) + ' / PM2.5 ' + pk.v;
+        // emphasize peak point
+        el('circle', { cx: px, cy: py, r: 6,
+                       fill: 'none', stroke: 'var(--SUNLIGHT)',
+                       'stroke-width': '2', opacity: calloutAlpha }, stage);
+        el('circle', { cx: px, cy: py, r: 11,
+                       fill: 'var(--SUNLIGHT)', opacity: calloutAlpha * 0.18 }, stage);
+      });
+    }
+
+    // bottom annotation - worst hour
+    if (p > 0.72){
+      var worstAlpha = clamp((p - 0.72) / 0.2, 0, 1);
+      var worstG = el('g', { opacity: worstAlpha, transform: 'translate(540, ' + (chartY + 60) + ')' }, stage);
+      el('rect', { x: -180, y: -14, width: 360, height: 28,
+                   fill: 'var(--bg-2)', stroke: 'var(--SUNLIGHT)', 'stroke-width': '1.4', rx: '2' }, worstG);
+      var wt = el('text', {
+        x: 0, y: 5, fill: 'var(--SUNLIGHT)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '11', 'text-anchor': 'middle', 'letter-spacing': '0.1em', 'font-weight': '700'
+      }, worstG);
+      wt.textContent = LANG === 'cn'
+        ? '最差时段 19 : 00 - PM2.5 = 95 (USG 橙)'
+        : 'Worst hour 19:00 - PM2.5 = 95 (USG orange)';
+    }
+  }
+
+  // PM card helper (reusable across F2-F4)
+  function drawPMCard(parent, cx, cy, val, caption){
+    var card = el('g', { transform: 'translate(' + cx + ',' + cy + ')' }, parent);
+    el('rect', { x: -76, y: -42, width: 152, height: 84,
+                 fill: 'var(--bg-3)', stroke: 'var(--SUNLIGHT)', 'stroke-width': '1.6',
+                 rx: '3' }, card);
+    var cap = el('text', {
+      x: 0, y: -22, fill: 'var(--fg-mute)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '10', 'text-anchor': 'middle', 'letter-spacing': '0.1em'
+    }, card);
+    cap.textContent = caption;
+    var v = el('text', {
+      x: 0, y: 12, fill: aqiColor(val),
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '34', 'text-anchor': 'middle', 'font-weight': '700'
+    }, card);
+    v.textContent = String(val);
+    var u = el('text', {
+      x: 0, y: 30, fill: 'var(--fg-dim)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '9', 'text-anchor': 'middle'
+    }, card);
+    u.textContent = 'ug/m3 PM2.5';
+  }
+
+  // ====== Frame dispatcher ======
+  function drawFrame(idx, pp){
+    clearStage();
+    if (idx !== 3 && idx !== 4){
+      document.getElementById('flash').classList.remove('on');
+    }
+    if (idx === 0) drawFrame1(pp);
+    else if (idx === 1) drawFrame2(pp);
+    else if (idx === 2) drawFrame3(pp);
+    else if (idx === 3) drawFrame4(pp);
+    else if (idx === 4) drawFrame5(pp);
+  }
+
+  function updateUI(idx){
+    var f = FRAMES[idx];
+    document.getElementById('hudV1').textContent = (idx+1) + ' / 5';
+    document.getElementById('hudV2').textContent = f.hudStage[LANG] || f.hudStage.en;
+    document.getElementById('hudV3').textContent = f.hudHour;
+    document.getElementById('hudV4').textContent = f.hudPM;
+    document.getElementById('subCn').textContent = LANG === 'cn' ? f.subCn : f.subEn;
+    document.getElementById('subEn').textContent = LANG === 'cn' ? f.subEn : f.subCn;
+    document.getElementById('stepName').textContent = f.stepName;
+    for (var i = 0; i < 5; i++){
+      var c = document.getElementById('chip' + i);
+      c.classList.remove('active', 'done');
+      if (i < idx) c.classList.add('done');
+      else if (i === idx) c.classList.add('active');
+    }
+  }
+
+  function updateI18N(){
+    document.getElementById('badgeMod').textContent = t('badgeMod');
+    document.getElementById('brandH1').textContent = t('brandH1');
+    document.getElementById('brandSub').textContent = t('brandSub');
+    document.getElementById('mascotName').textContent = t('mascotName');
+    document.querySelector('#g1 .gtxt').textContent = t('g1');
+    document.querySelector('#g2 .gtxt').textContent = t('g2');
+    document.querySelector('#g3 .gtxt').textContent = t('g3');
+    document.getElementById('hudL1').textContent = t('hudL1');
+    document.getElementById('hudL2').textContent = t('hudL2');
+    document.getElementById('hudL3').textContent = t('hudL3');
+    document.getElementById('hudL4').textContent = t('hudL4');
+    document.getElementById('langBtn').textContent = t('btnLang');
+  }
+
+  function tick(ts){
+    if (!frameStartTs) frameStartTs = ts;
+    var elapsed = ts - frameStartTs;
+    if (elapsed >= FRAME_MS){
+      currentFrame = (currentFrame + 1) % 5;
+      frameStartTs = ts;
+      updateUI(currentFrame);
+      elapsed = 0;
+    }
+    var pp = elapsed / FRAME_MS;
+    drawFrame(currentFrame, pp);
+    rafId = requestAnimationFrame(tick);
+  }
+
+  function start(){
+    updateI18N();
+    updateUI(currentFrame);
+    frameStartTs = 0;
+    if (rafId) cancelAnimationFrame(rafId);
+    rafId = requestAnimationFrame(tick);
+  }
+
+  document.getElementById('langBtn').addEventListener('click', function(){
+    LANG = (LANG === 'cn') ? 'en' : 'cn';
+    updateI18N();
+    updateUI(currentFrame);
+  });
+
+  start();
+})();
+</script>
+</body>
+</html>

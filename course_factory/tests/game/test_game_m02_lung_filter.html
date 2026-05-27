@@ -1,0 +1,919 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>颗粒进肺调参台 / PM2.5 Lung Tuning — M02 Game</title>
+<style>
+  /* ============== Layer 1 — Deep-space canvas (shared across 26 subjects) ============== */
+  :root {
+    --bg-0: oklch(0.14 0.035 265);
+    --bg-1: oklch(0.18 0.04 265);
+    --bg-2: oklch(0.22 0.045 265);
+    --bg-3: oklch(0.28 0.05 265);
+    --line: oklch(0.35 0.05 265 / 0.35);
+    --line-strong: oklch(0.55 0.08 265 / 0.55);
+
+    --fg:      oklch(0.96 0.01 265);
+    --fg-dim:  oklch(0.75 0.02 265);
+    --fg-mute: oklch(0.55 0.03 265);
+    --gold:    oklch(0.85 0.14 85);
+
+    /* Layer 2 — bio signature accent (emerald) */
+    --bio: oklch(0.75 0.17 155);
+
+    /* Layer 3 — bio 5-color palette (themes.js id=bio, mascot Sprout) */
+    --LIFE:    oklch(0.75 0.17 155);   /* bright emerald */
+    --MOSS:    oklch(0.55 0.16 155);   /* deep moss */
+    --SHADOW:  oklch(0.35 0.10 160);   /* shadow green */
+    --BLOOM:   oklch(0.92 0.08 150);   /* pale bloom */
+    --MUTATE:  oklch(0.85 0.14 85);    /* gold (warning) */
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html, body {
+    width: 100%;
+    height: 100vh;
+    overflow: hidden;
+    background: var(--bg-0);
+    color: var(--fg);
+    font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    letter-spacing: 0.02em;
+  }
+
+  /* ============== Layout — sidebar + main ============== */
+  .stage-wrap {
+    display: flex;
+    flex-direction: row;
+    width: 100%;
+    height: 100vh;
+  }
+
+  .game-sidebar {
+    width: 200px;
+    flex-shrink: 0;
+    background: var(--bg-1);
+    border-right: 1px solid var(--line);
+    padding: 16px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    overflow-y: auto;
+  }
+
+  .game-main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    overflow: hidden;
+    background: var(--bg-0);
+  }
+
+  /* ============== Sidebar ============== */
+  .sb-brand {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--bio);
+    line-height: 1.35;
+    border-bottom: 1px solid var(--line);
+    padding-bottom: 10px;
+    letter-spacing: 0.04em;
+  }
+  .sb-brand .sub {
+    display: block;
+    font-size: 10px;
+    color: var(--fg-dim);
+    margin-top: 4px;
+    letter-spacing: 0.14em;
+    font-weight: 400;
+  }
+
+  .sb-mascot {
+    background: var(--bg-2);
+    border: 1px solid var(--line);
+    padding: 10px;
+    box-shadow: 3px 3px 0 var(--bg-0);
+  }
+  .sb-mascot svg { width: 100%; height: 78px; display: block; }
+  .sb-mascot .mascot-name {
+    font-size: 9px;
+    color: var(--bio);
+    text-align: center;
+    margin-top: 6px;
+    letter-spacing: 0.2em;
+  }
+
+  .sb-section { display: flex; flex-direction: column; gap: 6px; }
+  .sb-section h4 {
+    font-size: 9px;
+    font-weight: 700;
+    color: var(--gold);
+    text-transform: uppercase;
+    letter-spacing: 0.16em;
+  }
+  .sb-section p, .sb-section li {
+    font-size: 11px;
+    color: var(--fg-dim);
+    line-height: 1.5;
+  }
+  .sb-section ol { padding-left: 14px; }
+
+  /* slider control inside sidebar */
+  .slider-block {
+    background: var(--bg-2);
+    border: 1px solid var(--line);
+    padding: 10px;
+    box-shadow: 3px 3px 0 var(--bg-0);
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .slider-block .sb-label {
+    font-size: 10px;
+    color: var(--bio);
+    letter-spacing: 0.12em;
+  }
+  .slider-block .slider-val {
+    font-size: 18px;
+    color: var(--fg);
+    font-weight: 700;
+  }
+  .slider-block .slider-val .unit {
+    font-size: 11px;
+    color: var(--fg-mute);
+    margin-left: 3px;
+    font-weight: 400;
+  }
+  input[type=range] {
+    width: 100%;
+    -webkit-appearance: none;
+    appearance: none;
+    height: 4px;
+    background: var(--bg-3);
+    outline: none;
+    border-radius: 0;
+  }
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 14px;
+    height: 14px;
+    background: var(--bio);
+    border: 2px solid var(--bg-0);
+    cursor: pointer;
+    border-radius: 0;
+  }
+  input[type=range]::-moz-range-thumb {
+    width: 14px;
+    height: 14px;
+    background: var(--bio);
+    border: 2px solid var(--bg-0);
+    cursor: pointer;
+    border-radius: 0;
+  }
+
+  /* preset buttons row */
+  .preset-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 4px;
+  }
+  .preset-btn {
+    background: var(--bg-2);
+    color: var(--fg-dim);
+    border: 1px solid var(--line);
+    padding: 5px 4px;
+    font-family: inherit;
+    font-size: 9px;
+    cursor: pointer;
+    letter-spacing: 0.04em;
+    border-radius: 0;
+    box-shadow: 2px 2px 0 var(--bg-0);
+  }
+  .preset-btn:hover { background: var(--bg-3); color: var(--fg); }
+  .preset-btn.active {
+    background: var(--bio);
+    color: var(--bg-0);
+    border-color: var(--bio);
+  }
+
+  .sb-bottom { margin-top: auto; display: flex; flex-direction: column; gap: 8px; }
+
+  .lang-btn {
+    background: var(--bg-2);
+    color: var(--bio);
+    border: 1px solid var(--bio);
+    padding: 7px 10px;
+    font-family: inherit;
+    font-size: 10px;
+    cursor: pointer;
+    letter-spacing: 0.16em;
+    border-radius: 0;
+    box-shadow: 3px 3px 0 var(--bg-0);
+  }
+  .lang-btn:hover { background: var(--bio); color: var(--bg-0); }
+  .lang-btn:active { box-shadow: 1px 1px 0 var(--bg-0); transform: translate(2px, 2px); }
+
+  /* ============== HUD ============== */
+  .hud {
+    position: absolute;
+    top: 18px;
+    right: 22px;
+    background: var(--bg-1);
+    border: 1px solid var(--line-strong);
+    padding: 12px 16px;
+    box-shadow: 3px 3px 0 var(--bg-0);
+    z-index: 10;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 200px;
+  }
+  .hud .row { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; }
+  .hud .label {
+    font-size: 9px;
+    color: var(--gold);
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+  }
+  .hud .value {
+    font-size: 13px;
+    color: var(--fg);
+    font-weight: 700;
+  }
+  .hud .value.bio { color: var(--bio); }
+  .hud .value.gold { color: var(--gold); }
+  .hud .risk-bar {
+    width: 100%;
+    height: 6px;
+    background: var(--bg-3);
+    margin-top: 4px;
+    position: relative;
+    overflow: hidden;
+  }
+  .hud .risk-bar .fill {
+    height: 100%;
+    background: var(--bio);
+    width: 20%;
+    transition: width 0.3s, background 0.3s;
+  }
+
+  /* progress / unlock chip */
+  .unlock {
+    position: absolute;
+    bottom: 22px;
+    right: 22px;
+    background: var(--bg-1);
+    border: 1px solid var(--line);
+    padding: 9px 14px;
+    box-shadow: 3px 3px 0 var(--bg-0);
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    z-index: 10;
+    min-width: 180px;
+  }
+  .unlock .label {
+    font-size: 9px;
+    color: var(--gold);
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+  }
+  .unlock .dots { display: flex; gap: 4px; }
+  .unlock .dot {
+    width: 14px;
+    height: 14px;
+    background: var(--bg-3);
+    border: 1px solid var(--line);
+  }
+  .unlock .dot.hit { background: var(--bio); border-color: var(--bio); }
+  .unlock .badge {
+    font-size: 10px;
+    color: var(--fg-mute);
+    letter-spacing: 0.1em;
+  }
+  .unlock .badge.done { color: var(--gold); }
+
+  /* Stage SVG container */
+  .stage {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    overflow: hidden;
+  }
+  .stage svg.scene {
+    width: 100%;
+    height: 100%;
+    display: block;
+  }
+
+  /* Subtitle bar bottom */
+  .subbar {
+    position: absolute;
+    left: 50%;
+    bottom: 22px;
+    transform: translateX(-50%);
+    background: var(--bg-1);
+    border: 1px solid var(--line);
+    padding: 9px 18px;
+    box-shadow: 3px 3px 0 var(--bg-0);
+    max-width: 60%;
+    z-index: 5;
+  }
+  .subbar .sub-zh {
+    font-size: 12px;
+    color: var(--fg);
+    line-height: 1.5;
+  }
+  .subbar .sub-en {
+    font-size: 10px;
+    color: var(--fg-dim);
+    line-height: 1.45;
+    margin-top: 3px;
+    letter-spacing: 0.04em;
+  }
+
+  /* zone-label highlight pulses (driven by JS) */
+  .zone-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    fill: var(--fg-mute);
+    letter-spacing: 0.08em;
+  }
+  .zone-label.active { fill: var(--bio); }
+  .zone-label.lung-alarm { fill: var(--gold); }
+
+  .zone-band { transition: opacity 0.4s; }
+  .zone-band.active { opacity: 1; }
+
+  /* legend right column inside stage */
+  .legend {
+    position: absolute;
+    left: 16px;
+    top: 16px;
+    background: var(--bg-1);
+    border: 1px solid var(--line);
+    padding: 10px 12px;
+    box-shadow: 3px 3px 0 var(--bg-0);
+    z-index: 5;
+    min-width: 200px;
+  }
+  .legend h5 {
+    font-size: 9px;
+    color: var(--gold);
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    margin-bottom: 6px;
+  }
+  .legend .row {
+    display: grid;
+    grid-template-columns: 16px 1fr auto;
+    gap: 8px;
+    align-items: center;
+    margin: 3px 0;
+  }
+  .legend .chip { width: 12px; height: 12px; border: 1px solid var(--line); }
+  .legend .name { font-size: 10px; color: var(--fg-dim); }
+  .legend .rng { font-size: 9px; color: var(--fg-mute); letter-spacing: 0.04em; }
+  .legend .row.cur .name { color: var(--bio); font-weight: 700; }
+</style>
+</head>
+<body>
+<div class="stage-wrap">
+  <!-- ============= LEFT SIDEBAR ============= -->
+  <aside class="game-sidebar">
+    <div class="sb-brand" data-i18n-zh="颗粒进肺调参台" data-i18n-en="LUNG TUNING TABLE">
+      颗粒进肺调参台
+      <span class="sub" data-i18n-zh="M02 · Live Tuning" data-i18n-en="M02 · Live Tuning">M02 · Live Tuning</span>
+    </div>
+
+    <!-- mascot Sprout (themes.js bio) -->
+    <div class="sb-mascot">
+      <svg viewBox="0 0 100 70" xmlns="http://www.w3.org/2000/svg">
+        <!-- Sprout: translucent tadpole with glowing helix core -->
+        <ellipse cx="48" cy="42" rx="28" ry="18" fill="var(--MOSS)" opacity="0.45"/>
+        <ellipse cx="48" cy="42" rx="20" ry="12" fill="var(--LIFE)" opacity="0.7"/>
+        <!-- helix core -->
+        <path d="M40 36 Q48 30 56 36 Q48 42 40 48 Q48 54 56 48" stroke="var(--BLOOM)" stroke-width="1.5" fill="none"/>
+        <path d="M40 48 Q48 42 56 48" stroke="var(--MUTATE)" stroke-width="1.2" fill="none" opacity="0.85"/>
+        <circle cx="48" cy="42" r="2.5" fill="var(--MUTATE)"/>
+        <!-- tail -->
+        <path d="M76 42 Q86 38 92 32" stroke="var(--LIFE)" stroke-width="2" fill="none" opacity="0.7"/>
+        <path d="M76 42 Q86 46 92 52" stroke="var(--MOSS)" stroke-width="1.5" fill="none" opacity="0.5"/>
+        <!-- eye -->
+        <circle cx="36" cy="40" r="1.8" fill="var(--bg-0)"/>
+        <circle cx="36.5" cy="39.5" r="0.6" fill="var(--BLOOM)"/>
+      </svg>
+      <div class="mascot-name">SPROUT</div>
+    </div>
+
+    <!-- slider: particle diameter -->
+    <div class="slider-block">
+      <div class="sb-label" data-i18n-zh="颗粒直径" data-i18n-en="PARTICLE DIAMETER">颗粒直径</div>
+      <div class="slider-val">
+        <span id="diaVal">2.5</span><span class="unit">μm</span>
+      </div>
+      <input id="diaSlider" type="range" min="0.1" max="50" step="0.1" value="2.5">
+      <div style="display:flex; justify-content:space-between; font-size:8px; color:var(--fg-mute); letter-spacing:0.08em;">
+        <span>0.1</span><span>50 μm</span>
+      </div>
+    </div>
+
+    <!-- preset shortcuts -->
+    <div class="sb-section">
+      <h4 data-i18n-zh="预设档位" data-i18n-en="PRESETS">预设档位</h4>
+      <div class="preset-row">
+        <button class="preset-btn" data-preset="0.2" data-i18n-zh="超细 0.2" data-i18n-en="UF 0.2">超细 0.2</button>
+        <button class="preset-btn" data-preset="1.0" data-i18n-zh="PM1 1.0" data-i18n-en="PM1 1.0">PM1 1.0</button>
+        <button class="preset-btn" data-preset="2.5" data-i18n-zh="PM2.5" data-i18n-en="PM2.5">PM2.5</button>
+        <button class="preset-btn" data-preset="7" data-i18n-zh="PM7" data-i18n-en="PM7">PM7</button>
+        <button class="preset-btn" data-preset="15" data-i18n-zh="PM15" data-i18n-en="PM15">PM15</button>
+        <button class="preset-btn" data-preset="30" data-i18n-zh="花粉 30" data-i18n-en="Pollen 30">花粉 30</button>
+      </div>
+    </div>
+
+    <div class="sb-section">
+      <h4 data-i18n-zh="操作说明" data-i18n-en="HOW TO PLAY">操作说明</h4>
+      <ol>
+        <li data-i18n-zh="拖动滑块调粒径" data-i18n-en="Drag slider to set size">拖动滑块调粒径</li>
+        <li data-i18n-zh="看颗粒沿气道下落" data-i18n-en="Watch fall path">看颗粒沿气道下落</li>
+        <li data-i18n-zh="≥5 档位解锁" data-i18n-en="Unlock at 5 sizes">≥5 档位解锁</li>
+      </ol>
+    </div>
+
+    <div class="sb-bottom">
+      <button id="langBtn" class="lang-btn">EN / 中文</button>
+    </div>
+  </aside>
+
+  <!-- ============= MAIN STAGE ============= -->
+  <main class="game-main">
+    <div class="stage" id="stage">
+      <!-- Risk legend overlay -->
+      <div class="legend" id="legend">
+        <h5 data-i18n-zh="停留分区 · 风险" data-i18n-en="DEPOSIT ZONES · RISK">停留分区 · 风险</h5>
+        <div class="row" data-zone="nose">
+          <div class="chip" style="background:var(--BLOOM)"></div>
+          <div class="name" data-i18n-zh="鼻腔拦截" data-i18n-en="Nasal trap">鼻腔拦截</div>
+          <div class="rng">&gt;10</div>
+        </div>
+        <div class="row" data-zone="bronchi">
+          <div class="chip" style="background:var(--LIFE)"></div>
+          <div class="name" data-i18n-zh="大支气管" data-i18n-en="Main bronchi">大支气管</div>
+          <div class="rng">5-10</div>
+        </div>
+        <div class="row" data-zone="bronchiole">
+          <div class="chip" style="background:var(--MOSS)"></div>
+          <div class="name" data-i18n-zh="细支气管" data-i18n-en="Bronchiole">细支气管</div>
+          <div class="rng">2.5-5</div>
+        </div>
+        <div class="row" data-zone="alveoli">
+          <div class="chip" style="background:var(--MUTATE)"></div>
+          <div class="name" data-i18n-zh="肺泡 ALARM" data-i18n-en="Alveoli ALARM">肺泡 ALARM</div>
+          <div class="rng">0.3-2.5</div>
+        </div>
+        <div class="row" data-zone="exhale">
+          <div class="chip" style="background:var(--SHADOW)"></div>
+          <div class="name" data-i18n-zh="部分排出" data-i18n-en="Exhaled out">部分排出</div>
+          <div class="rng">&lt;0.3</div>
+        </div>
+      </div>
+
+      <!-- Scene SVG -->
+      <svg class="scene" id="scene" viewBox="0 0 1000 700" preserveAspectRatio="xMidYMid meet">
+        <defs>
+          <linearGradient id="airwayG" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="var(--bg-2)"/>
+            <stop offset="1" stop-color="var(--bg-1)"/>
+          </linearGradient>
+          <linearGradient id="alveoliG" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="oklch(0.30 0.06 155 / 0.3)"/>
+            <stop offset="1" stop-color="oklch(0.30 0.10 85 / 0.45)"/>
+          </linearGradient>
+        </defs>
+
+        <!-- ============ Airway cross-section ============ -->
+        <!-- Nasal cavity zone (y 60-150) -->
+        <path d="M 460 60 L 540 60 L 560 120 L 540 150 L 460 150 L 440 120 Z"
+              fill="url(#airwayG)" stroke="var(--line-strong)" stroke-width="1.5"/>
+        <text class="zone-label" id="lbl-nose" x="580" y="110" data-i18n-zh="鼻腔  Nose" data-i18n-en="Nose">Nose · 鼻腔</text>
+
+        <!-- Trachea (y 150-260) -->
+        <path d="M 470 150 L 530 150 L 528 260 L 472 260 Z"
+              fill="url(#airwayG)" stroke="var(--line-strong)" stroke-width="1.5"/>
+        <text class="zone-label" x="556" y="210" data-i18n-zh="气管 Trachea" data-i18n-en="Trachea">Trachea · 气管</text>
+
+        <!-- Main bronchi split (y 260-360) -->
+        <path d="M 472 260 L 528 260 L 590 360 L 560 370 L 500 290 L 440 370 L 410 360 Z"
+              fill="url(#airwayG)" stroke="var(--line-strong)" stroke-width="1.5"/>
+        <text class="zone-label" id="lbl-bronchi" x="610" y="335" data-i18n-zh="大支气管 Bronchi" data-i18n-en="Main bronchi">Main bronchi · 大支气管</text>
+
+        <!-- Bronchioles (left + right, y 360-490) -->
+        <g stroke="var(--line-strong)" stroke-width="1.2" fill="url(#airwayG)">
+          <path d="M 410 360 L 440 370 L 420 470 L 360 490 L 340 470 L 320 490 L 300 460 L 280 480 L 270 460 L 290 410 Z"/>
+          <path d="M 590 360 L 560 370 L 580 470 L 640 490 L 660 470 L 680 490 L 700 460 L 720 480 L 730 460 L 710 410 Z"/>
+        </g>
+        <text class="zone-label" id="lbl-bronchiole" x="146" y="430" data-i18n-zh="细支气管 Bronchiole" data-i18n-en="Bronchiole">Bronchiole · 细支气管</text>
+
+        <!-- Alveoli grid (y 490-640) gold-tinted -->
+        <g id="alveoliGrp">
+          <rect x="240" y="490" width="520" height="150" fill="url(#alveoliG)" stroke="var(--line)"/>
+          <!-- cluster of small circles representing alveoli sacs -->
+        </g>
+        <text class="zone-label lung-alarm" id="lbl-alveoli" x="780" y="570" data-i18n-zh="肺泡 Alveoli (ALARM)" data-i18n-en="Alveoli (ALARM)">Alveoli · 肺泡 (ALARM)</text>
+
+        <!-- exhale arrow up-right -->
+        <g id="exhaleGrp" opacity="0.7">
+          <path d="M 530 60 L 600 30 L 595 38 L 605 32 L 600 30 L 600 24"
+                stroke="var(--SHADOW)" stroke-width="1.5" fill="none"/>
+          <text class="zone-label" id="lbl-exhale" x="612" y="40" data-i18n-zh="部分排出 Exhaled" data-i18n-en="Exhaled out">Exhaled · 部分排出</text>
+        </g>
+
+        <!-- alveoli sacs cluster (drawn dynamically) -->
+        <g id="sacs"></g>
+
+        <!-- moving particles layer -->
+        <g id="particles"></g>
+
+        <!-- current-zone outline highlight rect -->
+        <rect id="zoneHL" x="0" y="0" width="0" height="0" fill="none" stroke="var(--bio)" stroke-width="2" stroke-dasharray="6 4" opacity="0"/>
+      </svg>
+
+      <!-- HUD top right -->
+      <div class="hud">
+        <div class="row">
+          <span class="label" data-i18n-zh="粒径" data-i18n-en="Diameter">粒径</span>
+          <span class="value bio"><span id="hudDia">2.5</span> μm</span>
+        </div>
+        <div class="row">
+          <span class="label" data-i18n-zh="停留" data-i18n-en="Deposit">停留</span>
+          <span class="value" id="hudZone" data-i18n-zh="肺泡" data-i18n-en="Alveoli">肺泡</span>
+        </div>
+        <div class="row">
+          <span class="label" data-i18n-zh="风险等级" data-i18n-en="Risk">风险等级</span>
+          <span class="value gold" id="hudRisk">HIGH</span>
+        </div>
+        <div class="risk-bar">
+          <div class="fill" id="riskFill"></div>
+        </div>
+      </div>
+
+      <!-- Unlock chip bottom right -->
+      <div class="unlock">
+        <span class="label" data-i18n-zh="试过的档位" data-i18n-en="Sizes tried">试过的档位</span>
+        <div class="dots" id="dots">
+          <div class="dot"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div>
+        </div>
+        <span class="badge" id="unlockBadge" data-i18n-zh="还差 5 档" data-i18n-en="5 to go">还差 5 档</span>
+      </div>
+
+      <!-- Subtitle bar bottom center -->
+      <div class="subbar">
+        <div class="sub-zh" id="subZh">PM2.5 直径 ≤ 2.5 μm，绕过黏膜直达肺泡，能进入血液——这是危险等级最高的档位。</div>
+        <div class="sub-en" id="subEn">PM2.5 (≤ 2.5 μm) bypasses mucus and reaches alveoli, entering blood — the most dangerous size band.</div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script>
+(function(){
+  'use strict';
+
+  // ----- i18n state (avoid window-shadow names: use loc instead of name/status/etc.) -----
+  var loc = 'zh';
+  var langBtn = document.getElementById('langBtn');
+
+  function refreshI18N() {
+    var nodes = document.querySelectorAll('[data-i18n-zh]');
+    for (var i = 0; i < nodes.length; i++) {
+      var el = nodes[i];
+      var zh = el.getAttribute('data-i18n-zh');
+      var en = el.getAttribute('data-i18n-en');
+      var txt = (loc === 'zh') ? zh : en;
+      // keep first child structure if span.sub or span.unit exists
+      var subSpan = el.querySelector('.sub');
+      var unitSpan = el.querySelector('.unit');
+      if (subSpan || unitSpan) continue; // handled separately
+      // for sb-brand: don't overwrite (it contains span.sub child)
+      if (el.classList.contains('sb-brand')) continue;
+      // safe: just replace text
+      el.firstChild && el.firstChild.nodeValue ? el.firstChild.nodeValue = txt : el.textContent = txt;
+    }
+    // sb-brand main text (preserve .sub child)
+    var brand = document.querySelector('.sb-brand');
+    if (brand && brand.firstChild) {
+      brand.firstChild.nodeValue = (loc === 'zh' ? '颗粒进肺调参台' : 'LUNG TUNING TABLE');
+    }
+    var brandSub = brand.querySelector('.sub');
+    if (brandSub) brandSub.textContent = (loc === 'zh' ? 'M02 · Live Tuning' : 'M02 · Live Tuning');
+
+    // subtitle bar
+    document.getElementById('subZh').textContent = currentSubZh();
+    document.getElementById('subEn').textContent = currentSubEn();
+
+    // hud zone label
+    document.getElementById('hudZone').textContent = (loc === 'zh' ? zoneZh(currentZone) : zoneEn(currentZone));
+
+    // unlock badge
+    updateUnlockBadge();
+  }
+
+  langBtn.addEventListener('click', function() {
+    loc = (loc === 'zh') ? 'en' : 'zh';
+    refreshI18N();
+  });
+
+  // ----- zone model -----
+  // bands: [maxDia, key, label_zh, label_en, color_css, riskPct, riskWord_zh, riskWord_en]
+  var BANDS = [
+    { max: 0.3,   key: 'exhale',     zh: '部分排出',  en: 'Exhaled',     col: 'var(--SHADOW)', risk: 30, rZh: 'LOW',  rEn: 'LOW' },
+    { max: 2.5,   key: 'alveoli',    zh: '肺泡',      en: 'Alveoli',     col: 'var(--MUTATE)', risk: 95, rZh: 'HIGH', rEn: 'HIGH' },
+    { max: 5,     key: 'bronchiole', zh: '细支气管',  en: 'Bronchiole',  col: 'var(--MOSS)',   risk: 65, rZh: 'MED',  rEn: 'MED' },
+    { max: 10,    key: 'bronchi',    zh: '大支气管',  en: 'Main bronchi',col: 'var(--LIFE)',   risk: 45, rZh: 'MED-LOW', rEn: 'MED-LOW' },
+    { max: 9999,  key: 'nose',       zh: '鼻腔拦截',  en: 'Nasal trap',  col: 'var(--BLOOM)',  risk: 15, rZh: 'LOW',  rEn: 'LOW' },
+  ];
+
+  function bandForDia(d) {
+    for (var i = 0; i < BANDS.length; i++) {
+      if (d <= BANDS[i].max) return BANDS[i];
+    }
+    return BANDS[BANDS.length - 1];
+  }
+
+  function zoneZh(k) {
+    for (var i = 0; i < BANDS.length; i++) if (BANDS[i].key === k) return BANDS[i].zh;
+    return '-';
+  }
+  function zoneEn(k) {
+    for (var i = 0; i < BANDS.length; i++) if (BANDS[i].key === k) return BANDS[i].en;
+    return '-';
+  }
+
+  // map zone key to a target Y in SVG (where the particle ends up)
+  var ZONE_Y = {
+    nose: 110,
+    bronchi: 320,
+    bronchiole: 440,
+    alveoli: 560,
+    exhale: 50,
+  };
+
+  // zone bbox highlight rect coords
+  var ZONE_BOX = {
+    nose:        { x: 430, y: 55,  w: 140, h: 100 },
+    bronchi:     { x: 395, y: 255, w: 210, h: 120 },
+    bronchiole:  { x: 260, y: 360, w: 480, h: 130 },
+    alveoli:     { x: 235, y: 485, w: 530, h: 160 },
+    exhale:      { x: 520, y: 18,  w: 120, h: 50 },
+  };
+
+  // ----- subtitle text per zone -----
+  function currentSubZh() {
+    var b = bandForDia(currentDia);
+    if (b.key === 'alveoli') return 'PM2.5 直径 ≤ 2.5 μm，绕过黏膜直达肺泡，能进入血液——这是危险等级最高的档位。';
+    if (b.key === 'bronchiole') return '直径 2.5-5 μm 的颗粒在细支气管沉积，咳嗽和支气管炎风险升高。';
+    if (b.key === 'bronchi') return '5-10 μm 的颗粒被大支气管的纤毛拦截，多数能随痰排出。';
+    if (b.key === 'nose') return '大于 10 μm 的颗粒（花粉/沙尘）被鼻毛和黏液在鼻腔阻挡。';
+    if (b.key === 'exhale') return '小于 0.3 μm 的超细颗粒做布朗运动，部分能随呼气排出。';
+    return '-';
+  }
+  function currentSubEn() {
+    var b = bandForDia(currentDia);
+    if (b.key === 'alveoli') return 'PM2.5 (≤ 2.5 μm) bypasses mucus and reaches alveoli, entering blood — the most dangerous size band.';
+    if (b.key === 'bronchiole') return '2.5-5 μm particles deposit in bronchioles, raising cough and bronchitis risk.';
+    if (b.key === 'bronchi') return '5-10 μm particles are caught by cilia in main bronchi and cleared via mucus.';
+    if (b.key === 'nose') return 'Particles > 10 μm (pollen / dust) are blocked in the nasal cavity by hairs and mucus.';
+    if (b.key === 'exhale') return 'Ultra-fine particles < 0.3 μm undergo Brownian motion and partly exhale back out.';
+    return '-';
+  }
+
+  // ----- particles & animation -----
+  var particles = []; // {el, x, y, targetY, vy, drift, settled, born, size}
+  var particlesGrp = document.getElementById('particles');
+  var sacsGrp = document.getElementById('sacs');
+  var zoneHL = document.getElementById('zoneHL');
+  var currentDia = 2.5;
+  var currentZone = 'alveoli';
+  var triedBuckets = {}; // unique bands tried
+
+  // Draw alveoli sacs (small cluster of circles inside alveoli rect)
+  (function drawSacs(){
+    var cols = 18, rows = 5;
+    var x0 = 250, y0 = 500, dx = 28, dy = 26;
+    for (var r = 0; r < rows; r++) {
+      for (var c = 0; c < cols; c++) {
+        var cx = x0 + c * dx + (r % 2 ? 14 : 0);
+        var cy = y0 + r * dy;
+        var circ = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+        circ.setAttribute('cx', cx);
+        circ.setAttribute('cy', cy);
+        circ.setAttribute('r', 7);
+        circ.setAttribute('fill', 'oklch(0.32 0.05 155 / 0.4)');
+        circ.setAttribute('stroke', 'var(--line)');
+        circ.setAttribute('stroke-width', '0.6');
+        sacsGrp.appendChild(circ);
+      }
+    }
+  })();
+
+  function spawnParticle() {
+    var band = bandForDia(currentDia);
+    var sz = Math.max(2.2, Math.min(14, Math.log10(currentDia + 1) * 6 + 2));
+    var startX = 480 + (Math.random() - 0.5) * 60;
+    var startY = 20;
+    var tgtY = ZONE_Y[band.key];
+
+    var el = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+    el.setAttribute('cx', startX);
+    el.setAttribute('cy', startY);
+    el.setAttribute('r', sz);
+    el.setAttribute('fill', band.col);
+    el.setAttribute('opacity', '0.92');
+    el.setAttribute('stroke', 'var(--bg-0)');
+    el.setAttribute('stroke-width', '0.8');
+    particlesGrp.appendChild(el);
+
+    // for exhale, particle goes up after entering briefly
+    var p = {
+      el: el, x: startX, y: startY,
+      vy: 1.4 + Math.random() * 0.6,
+      drift: (Math.random() - 0.5) * 0.4,
+      targetY: tgtY,
+      zoneKey: band.key,
+      settled: false,
+      born: performance.now(),
+      size: sz,
+      brownian: (band.key === 'exhale'),
+      reachedTime: 0,
+    };
+    particles.push(p);
+  }
+
+  function stepParticles(dt) {
+    for (var i = particles.length - 1; i >= 0; i--) {
+      var p = particles[i];
+      if (!p.settled) {
+        // For exhale: descend briefly then ascend
+        if (p.brownian) {
+          if (p.y < 60) {
+            p.y += p.vy * dt * 0.06;
+            p.x += p.drift * dt * 0.06;
+          } else {
+            p.settled = true;
+            p.reachedTime = performance.now();
+          }
+        } else {
+          p.y += p.vy * dt * 0.06;
+          p.x += p.drift * dt * 0.06;
+          // narrow horizontally as we pass into bronchi
+          if (p.y > 300 && p.y < 380) {
+            // bias to splitting path
+            p.x += (p.x > 500 ? 0.15 : -0.15) * dt * 0.06;
+          }
+          if (p.y >= p.targetY) {
+            p.y = p.targetY;
+            p.settled = true;
+            p.reachedTime = performance.now();
+          }
+        }
+        p.el.setAttribute('cx', p.x);
+        p.el.setAttribute('cy', p.y);
+      } else {
+        // exhale: ascend and fade
+        if (p.brownian) {
+          p.y -= 0.6 * dt * 0.06;
+          p.x += 0.3 * dt * 0.06;
+          p.el.setAttribute('cx', p.x);
+          p.el.setAttribute('cy', p.y);
+          var op = parseFloat(p.el.getAttribute('opacity'));
+          p.el.setAttribute('opacity', Math.max(0, op - 0.005 * dt * 0.06));
+          if (p.y < -10 || op <= 0.05) {
+            p.el.parentNode && p.el.parentNode.removeChild(p.el);
+            particles.splice(i, 1);
+          }
+        } else {
+          // fade out settled particles after 2.6s
+          var age = performance.now() - p.reachedTime;
+          if (age > 2600) {
+            var opacity = Math.max(0, 0.92 - (age - 2600) / 900);
+            p.el.setAttribute('opacity', opacity);
+            if (opacity <= 0) {
+              p.el.parentNode && p.el.parentNode.removeChild(p.el);
+              particles.splice(i, 1);
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // spawn loop — paced based on current size
+  var lastSpawn = 0;
+  function tick(now) {
+    var dt = now - (tick._last || now);
+    tick._last = now;
+    if (now - lastSpawn > 600) {
+      spawnParticle();
+      lastSpawn = now;
+    }
+    stepParticles(dt);
+    requestAnimationFrame(tick);
+  }
+  requestAnimationFrame(tick);
+
+  // ----- HUD + zone highlight + risk update -----
+  function applyDia(d) {
+    currentDia = d;
+    var band = bandForDia(d);
+    currentZone = band.key;
+
+    document.getElementById('diaVal').textContent = d.toFixed(d < 1 ? 2 : 1);
+    document.getElementById('hudDia').textContent = d.toFixed(d < 1 ? 2 : 1);
+    document.getElementById('hudZone').textContent = (loc === 'zh' ? band.zh : band.en);
+    document.getElementById('hudRisk').textContent = (loc === 'zh' ? band.rZh : band.rEn);
+
+    var riskFill = document.getElementById('riskFill');
+    riskFill.style.width = band.risk + '%';
+    riskFill.style.background = (band.key === 'alveoli') ? 'var(--MUTATE)' : 'var(--bio)';
+
+    // highlight zone box
+    var box = ZONE_BOX[band.key];
+    if (box) {
+      zoneHL.setAttribute('x', box.x);
+      zoneHL.setAttribute('y', box.y);
+      zoneHL.setAttribute('width', box.w);
+      zoneHL.setAttribute('height', box.h);
+      zoneHL.setAttribute('stroke', band.key === 'alveoli' ? 'var(--MUTATE)' : 'var(--bio)');
+      zoneHL.setAttribute('opacity', '1');
+    }
+
+    // update legend rows: mark current
+    var legendRows = document.querySelectorAll('#legend .row');
+    for (var i = 0; i < legendRows.length; i++) {
+      var row = legendRows[i];
+      if (row.getAttribute('data-zone') === band.key) row.classList.add('cur');
+      else row.classList.remove('cur');
+    }
+
+    // subtitle
+    document.getElementById('subZh').textContent = currentSubZh();
+    document.getElementById('subEn').textContent = currentSubEn();
+
+    // unlock tracking
+    triedBuckets[band.key] = true;
+    var hit = Object.keys(triedBuckets).length;
+    var dots = document.querySelectorAll('#dots .dot');
+    for (var j = 0; j < dots.length; j++) {
+      if (j < hit) dots[j].classList.add('hit');
+      else dots[j].classList.remove('hit');
+    }
+    updateUnlockBadge();
+
+    // preset button active state
+    var presets = document.querySelectorAll('.preset-btn');
+    for (var k = 0; k < presets.length; k++) {
+      var pv = parseFloat(presets[k].getAttribute('data-preset'));
+      if (Math.abs(pv - d) < 0.01) presets[k].classList.add('active');
+      else presets[k].classList.remove('active');
+    }
+  }
+
+  function updateUnlockBadge() {
+    var hit = Object.keys(triedBuckets).length;
+    var badge = document.getElementById('unlockBadge');
+    if (hit >= 5) {
+      badge.textContent = (loc === 'zh' ? '解锁！五区已通' : 'UNLOCKED · all 5');
+      badge.classList.add('done');
+    } else {
+      var left = 5 - hit;
+      badge.textContent = (loc === 'zh' ? ('还差 ' + left + ' 档') : (left + ' to go'));
+      badge.classList.remove('done');
+    }
+  }
+
+  // ----- slider + presets binding -----
+  var slider = document.getElementById('diaSlider');
+  slider.addEventListener('input', function(e) {
+    var v = parseFloat(e.target.value);
+    applyDia(v);
+  });
+
+  var presets = document.querySelectorAll('.preset-btn');
+  for (var i = 0; i < presets.length; i++) {
+    presets[i].addEventListener('click', function(e) {
+      var v = parseFloat(e.currentTarget.getAttribute('data-preset'));
+      slider.value = v;
+      applyDia(v);
+    });
+  }
+
+  // initial
+  applyDia(2.5);
+
+})();
+</script>
+</body>
+</html>

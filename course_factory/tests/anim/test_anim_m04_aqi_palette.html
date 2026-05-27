@@ -1,0 +1,765 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>M04 · 看懂 AQI 6 级颜色等级</title>
+<style>
+  :root {
+    /* Surfaces — Claude warm cream */
+    --paper:    #FAF9F5;
+    --paper-2:  #F1EDDF;
+    --card:     #FFFFFF;
+    --ink:      #191814;
+    --ink-2:    #2B2924;
+    --sub:      #6B6557;
+    --sub-2:    #9D978A;
+    --border:   #EBE5D6;
+    --border-2: #D9D1BD;
+    --hairline: #F2EDE0;
+
+    /* Primary — Claude coral */
+    --primary:      #D97757;
+    --primary-ink:  #9A4A2E;
+    --primary-soft: #F8EDE5;
+    --primary-line: #ECCFB8;
+
+    /* Domain accent — climate */
+    --climate:      #527B95;
+    --climate-soft: #DEE5EC;
+
+    /* AQI real colors — 只用在 16px 色带 */
+    --aqi-good:   #00E400;
+    --aqi-mod:    #FFFF00;
+    --aqi-usg:    #FF7E00;
+    --aqi-unh:    #FF0000;
+    --aqi-vunh:   #8F3F97;
+    --aqi-haz:    #7E0023;
+
+    --shadow-sm: 0 1px 2px 0 rgba(25,24,20,.04);
+    --shadow:    0 1px 3px 0 rgba(25,24,20,.06), 0 1px 2px -1px rgba(25,24,20,.04);
+    --shadow-md: 0 4px 8px -2px rgba(25,24,20,.06), 0 2px 4px -2px rgba(25,24,20,.04);
+    --shadow-lg: 0 12px 24px -6px rgba(25,24,20,.1), 0 4px 8px -4px rgba(25,24,20,.05);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    font-family: "PingFang SC", "Noto Sans SC", Inter, system-ui, sans-serif;
+    background: var(--paper);
+    color: var(--ink);
+    overflow: hidden;
+  }
+  .mono { font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace; }
+
+  .app {
+    display: flex;
+    width: 100vw;
+    height: 100vh;
+  }
+
+  /* ============ Sidebar ============ */
+  .sidebar {
+    width: 200px;
+    flex: 0 0 200px;
+    background: var(--paper-2);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    padding: 24px 18px;
+    gap: 20px;
+  }
+  .brand {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--border);
+  }
+  .brand-dot {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: var(--primary);
+    box-shadow: 0 0 0 4px var(--primary-soft);
+    animation: dotPulse 3.2s ease-in-out infinite;
+  }
+  @keyframes dotPulse {
+    0%, 100% { box-shadow: 0 0 0 4px var(--primary-soft); }
+    50%      { box-shadow: 0 0 0 7px var(--primary-soft); }
+  }
+  .brand-title { font-size: 14px; font-weight: 600; color: var(--ink); margin-top: 8px; }
+  .brand-sub   { font-size: 11px; color: var(--sub); letter-spacing: .04em; }
+
+  .guide {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .guide-label {
+    font-size: 10px;
+    color: var(--sub-2);
+    letter-spacing: .12em;
+    text-transform: uppercase;
+  }
+  .guide-item {
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+    font-size: 12px;
+    color: var(--ink-2);
+    line-height: 1.5;
+  }
+  .guide-num {
+    flex: 0 0 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: var(--card);
+    border: 1px solid var(--border-2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--primary-ink);
+  }
+
+  .lang-btn {
+    margin-top: auto;
+    align-self: flex-start;
+    padding: 6px 12px;
+    background: var(--card);
+    border: 1px solid var(--border-2);
+    border-radius: 14px;
+    font-size: 11px;
+    color: var(--ink-2);
+    cursor: pointer;
+    font-family: inherit;
+    letter-spacing: .06em;
+    transition: all .2s ease;
+  }
+  .lang-btn:hover {
+    border-color: var(--primary);
+    color: var(--primary-ink);
+    background: var(--primary-soft);
+  }
+
+  /* ============ Main ============ */
+  .main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    padding: 32px 40px 28px;
+    gap: 22px;
+    overflow: hidden;
+  }
+
+  .header {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .header-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 11px;
+    letter-spacing: .14em;
+    color: var(--climate);
+    text-transform: uppercase;
+    font-weight: 600;
+  }
+  .header-tag::before {
+    content: "";
+    width: 24px;
+    height: 1px;
+    background: var(--climate);
+  }
+  .header-title {
+    font-size: 28px;
+    font-weight: 700;
+    color: var(--ink);
+    letter-spacing: -.01em;
+  }
+  .header-sub {
+    font-size: 14px;
+    color: var(--sub);
+    line-height: 1.5;
+    max-width: 720px;
+  }
+
+  /* ============ AQI Grid ============ */
+  .grid {
+    flex: 1;
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 14px;
+    min-height: 0;
+  }
+
+  .card {
+    position: relative;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    box-shadow: var(--shadow-sm);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    cursor: pointer;
+    transition:
+      transform .25s ease,
+      box-shadow .25s ease,
+      border-color .25s ease;
+  }
+  .card:hover {
+    transform: translateY(-4px);
+    box-shadow: var(--shadow-lg);
+    border-color: var(--climate);
+  }
+
+  /* 顶部 16px 真色带 — AQI 唯一允许的真彩色处 */
+  .band {
+    height: 16px;
+    width: 100%;
+    flex: 0 0 16px;
+  }
+  .card[data-level="good"]  .band { background: var(--aqi-good); }
+  .card[data-level="mod"]   .band { background: var(--aqi-mod); }
+  .card[data-level="usg"]   .band { background: var(--aqi-usg); }
+  .card[data-level="unh"]   .band { background: var(--aqi-unh); }
+  .card[data-level="vunh"]  .band { background: var(--aqi-vunh); }
+  .card[data-level="haz"]   .band { background: var(--aqi-haz); }
+
+  .card-body {
+    padding: 16px 14px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    flex: 1;
+    min-height: 0;
+  }
+
+  .range {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--ink);
+    letter-spacing: -.01em;
+  }
+  .range-unit {
+    font-size: 10px;
+    color: var(--sub-2);
+    margin-left: 4px;
+    font-weight: 500;
+    letter-spacing: .08em;
+  }
+  .level-cn {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--ink);
+  }
+  .level-en {
+    font-size: 10.5px;
+    color: var(--sub);
+    letter-spacing: .04em;
+    margin-top: -2px;
+  }
+
+  .divider {
+    height: 1px;
+    background: var(--hairline);
+    margin: 4px 0 2px;
+  }
+
+  .detail {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    max-height: 0;
+    opacity: 0;
+    overflow: hidden;
+    transition:
+      max-height .3s ease,
+      opacity .25s ease .05s;
+  }
+  .card:hover .detail {
+    max-height: 320px;
+    opacity: 1;
+  }
+
+  .row {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .row-label {
+    font-size: 9.5px;
+    color: var(--sub-2);
+    letter-spacing: .14em;
+    text-transform: uppercase;
+    font-weight: 600;
+  }
+  .row-text {
+    font-size: 11.5px;
+    color: var(--ink-2);
+    line-height: 1.45;
+  }
+  .row-text.mono { font-size: 11px; color: var(--ink); }
+
+  /* 默认状态简要描述 (无 hover 也看见关键信息) */
+  .summary {
+    font-size: 11px;
+    color: var(--sub);
+    line-height: 1.4;
+    transition: opacity .25s ease;
+  }
+  .card:hover .summary { opacity: 0; max-height: 0; margin: 0; }
+
+  /* ============ Footer: tip + 三承诺 ============ */
+  .footer {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 24px;
+    align-items: stretch;
+  }
+
+  .tip {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--climate);
+    border-radius: 10px;
+    padding: 14px 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .tip-label {
+    font-size: 10px;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+    color: var(--climate);
+    font-weight: 700;
+  }
+  .tip-text {
+    font-size: 12.5px;
+    color: var(--ink-2);
+    line-height: 1.55;
+  }
+
+  .pledges {
+    display: flex;
+    gap: 10px;
+  }
+  .pledge {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 130px;
+    transition: border-color .25s ease, transform .25s ease;
+  }
+  .pledge:hover {
+    border-color: var(--primary);
+    transform: translateY(-2px);
+  }
+  .pledge-icon {
+    width: 22px;
+    height: 22px;
+    border-radius: 6px;
+    background: var(--primary-soft);
+    border: 1px solid var(--primary-line);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .pledge-icon svg { width: 12px; height: 12px; }
+  .pledge-num {
+    font-size: 10px;
+    color: var(--primary-ink);
+    letter-spacing: .12em;
+    font-weight: 700;
+  }
+  .pledge-text {
+    font-size: 12px;
+    color: var(--ink);
+    font-weight: 600;
+    line-height: 1.35;
+  }
+
+  /* i18n — CN/EN 切换 */
+  [data-lang] { display: none; }
+  body[data-active-lang="cn"] [data-lang="cn"] { display: inline; }
+  body[data-active-lang="en"] [data-lang="en"] { display: inline; }
+</style>
+</head>
+<body data-active-lang="cn">
+
+<div class="app">
+  <!-- ============ Sidebar ============ -->
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-dot"></div>
+      <div class="brand-title">
+        <span data-lang="cn">空气质量监测站</span>
+        <span data-lang="en">Air Quality Node</span>
+      </div>
+      <div class="brand-sub mono">M04 · AQI PALETTE</div>
+    </div>
+
+    <div class="guide">
+      <div class="guide-label" data-lang="cn">阅读指引</div>
+      <div class="guide-label" data-lang="en">How to read</div>
+
+      <div class="guide-item">
+        <span class="guide-num mono">1</span>
+        <span data-lang="cn">每张卡片对应一个 AQI 等级</span>
+        <span data-lang="en">Each card is one AQI level</span>
+      </div>
+      <div class="guide-item">
+        <span class="guide-num mono">2</span>
+        <span data-lang="cn">顶部色带 = 该等级真实颜色</span>
+        <span data-lang="en">Top band = official AQI color</span>
+      </div>
+      <div class="guide-item">
+        <span class="guide-num mono">3</span>
+        <span data-lang="cn">悬停卡片查看 PM2.5 与建议</span>
+        <span data-lang="en">Hover for PM2.5 &amp; advice</span>
+      </div>
+    </div>
+
+    <button class="lang-btn mono" id="langBtn" type="button">
+      <span data-lang="cn">EN</span>
+      <span data-lang="en">中文</span>
+    </button>
+  </aside>
+
+  <!-- ============ Main ============ -->
+  <main class="main">
+    <header class="header">
+      <div class="header-tag mono">
+        <span data-lang="cn">COLOR LITERACY · 颜色识读</span>
+        <span data-lang="en">COLOR LITERACY</span>
+      </div>
+      <h1 class="header-title">
+        <span data-lang="cn">看懂 AQI 6 级颜色等级</span>
+        <span data-lang="en">Read the 6 AQI color levels</span>
+      </h1>
+      <p class="header-sub">
+        <span data-lang="cn">AQI 6 级颜色是世界通用的空气健康语言 —— 看一眼颜色,你就知道今天能不能跑步、要不要戴口罩、家里老人小孩要不要待在屋里。</span>
+        <span data-lang="en">The 6 AQI colors are the world's shared health language for air — a single glance tells you whether to run outside, mask up, or keep elders and kids indoors.</span>
+      </p>
+    </header>
+
+    <!-- ============ 6 张卡片 ============ -->
+    <section class="grid">
+
+      <!-- Good 0-50 -->
+      <article class="card" data-level="good">
+        <div class="band"></div>
+        <div class="card-body">
+          <div class="range mono">0–50 <span class="range-unit">AQI</span></div>
+          <div class="level-cn">
+            <span data-lang="cn">优 Good</span>
+            <span data-lang="en">Good</span>
+          </div>
+          <div class="level-en mono">Class 1 · Green</div>
+          <div class="divider"></div>
+          <div class="summary">
+            <span data-lang="cn">空气清新,所有人都可放心户外活动。</span>
+            <span data-lang="en">Fresh air — outdoor activity safe for all.</span>
+          </div>
+          <div class="detail">
+            <div class="row">
+              <span class="row-label">PM2.5</span>
+              <span class="row-text mono">0–12.0 μg/m³</span>
+            </div>
+            <div class="row">
+              <span class="row-label" data-lang="cn">建议</span>
+              <span class="row-label" data-lang="en">Advice</span>
+              <span class="row-text">
+                <span data-lang="cn">放心跑步、骑车、户外野餐。</span>
+                <span data-lang="en">Run, bike, picnic — go outside.</span>
+              </span>
+            </div>
+            <div class="row">
+              <span class="row-label" data-lang="cn">谁要小心</span>
+              <span class="row-label" data-lang="en">Watch out</span>
+              <span class="row-text">
+                <span data-lang="cn">无需特别注意。</span>
+                <span data-lang="en">No one — air is clean.</span>
+              </span>
+            </div>
+          </div>
+        </div>
+      </article>
+
+      <!-- Moderate 51-100 -->
+      <article class="card" data-level="mod">
+        <div class="band"></div>
+        <div class="card-body">
+          <div class="range mono">51–100 <span class="range-unit">AQI</span></div>
+          <div class="level-cn">
+            <span data-lang="cn">良 Moderate</span>
+            <span data-lang="en">Moderate</span>
+          </div>
+          <div class="level-en mono">Class 2 · Yellow</div>
+          <div class="divider"></div>
+          <div class="summary">
+            <span data-lang="cn">大部分人 OK,极少数敏感人群需留意。</span>
+            <span data-lang="en">OK for most; very sensitive folk take note.</span>
+          </div>
+          <div class="detail">
+            <div class="row">
+              <span class="row-label">PM2.5</span>
+              <span class="row-text mono">12.1–35.4 μg/m³</span>
+            </div>
+            <div class="row">
+              <span class="row-label" data-lang="cn">建议</span>
+              <span class="row-label" data-lang="en">Advice</span>
+              <span class="row-text">
+                <span data-lang="cn">正常户外活动,长时间剧烈运动稍留意。</span>
+                <span data-lang="en">Outdoor OK; ease up on heavy exertion.</span>
+              </span>
+            </div>
+            <div class="row">
+              <span class="row-label" data-lang="cn">谁要小心</span>
+              <span class="row-label" data-lang="en">Watch out</span>
+              <span class="row-text">
+                <span data-lang="cn">极少数对空气特别敏感的人。</span>
+                <span data-lang="en">Unusually sensitive individuals.</span>
+              </span>
+            </div>
+          </div>
+        </div>
+      </article>
+
+      <!-- USG 101-150 -->
+      <article class="card" data-level="usg">
+        <div class="band"></div>
+        <div class="card-body">
+          <div class="range mono">101–150 <span class="range-unit">AQI</span></div>
+          <div class="level-cn">
+            <span data-lang="cn">敏感人群不健康</span>
+            <span data-lang="en">USG</span>
+          </div>
+          <div class="level-en mono">Class 3 · Orange</div>
+          <div class="divider"></div>
+          <div class="summary">
+            <span data-lang="cn">老人、孩子、哮喘人群应减少户外。</span>
+            <span data-lang="en">Elders, kids, asthma — cut outdoor time.</span>
+          </div>
+          <div class="detail">
+            <div class="row">
+              <span class="row-label">PM2.5</span>
+              <span class="row-text mono">35.5–55.4 μg/m³</span>
+            </div>
+            <div class="row">
+              <span class="row-label" data-lang="cn">建议</span>
+              <span class="row-label" data-lang="en">Advice</span>
+              <span class="row-text">
+                <span data-lang="cn">敏感人群避免长时间户外剧烈运动。</span>
+                <span data-lang="en">Sensitive groups skip outdoor exertion.</span>
+              </span>
+            </div>
+            <div class="row">
+              <span class="row-label" data-lang="cn">谁要小心</span>
+              <span class="row-label" data-lang="en">Watch out</span>
+              <span class="row-text">
+                <span data-lang="cn">老人、儿童、孕妇、哮喘 / 心脏病患者。</span>
+                <span data-lang="en">Elders, kids, pregnant, asthma &amp; heart patients.</span>
+              </span>
+            </div>
+          </div>
+        </div>
+      </article>
+
+      <!-- Unhealthy 151-200 -->
+      <article class="card" data-level="unh">
+        <div class="band"></div>
+        <div class="card-body">
+          <div class="range mono">151–200 <span class="range-unit">AQI</span></div>
+          <div class="level-cn">
+            <span data-lang="cn">不健康 Unhealthy</span>
+            <span data-lang="en">Unhealthy</span>
+          </div>
+          <div class="level-en mono">Class 4 · Red</div>
+          <div class="divider"></div>
+          <div class="summary">
+            <span data-lang="cn">所有人都会感觉到影响,户外戴口罩。</span>
+            <span data-lang="en">Everyone may feel effects — mask up outside.</span>
+          </div>
+          <div class="detail">
+            <div class="row">
+              <span class="row-label">PM2.5</span>
+              <span class="row-text mono">55.5–150.4 μg/m³</span>
+            </div>
+            <div class="row">
+              <span class="row-label" data-lang="cn">建议</span>
+              <span class="row-label" data-lang="en">Advice</span>
+              <span class="row-text">
+                <span data-lang="cn">减少户外、关窗、开净化器、戴 N95。</span>
+                <span data-lang="en">Stay in, close windows, purifier on, wear N95.</span>
+              </span>
+            </div>
+            <div class="row">
+              <span class="row-label" data-lang="cn">谁要小心</span>
+              <span class="row-label" data-lang="en">Watch out</span>
+              <span class="row-text">
+                <span data-lang="cn">所有人,敏感人群尤其要避免外出。</span>
+                <span data-lang="en">Everyone; sensitive groups stay inside.</span>
+              </span>
+            </div>
+          </div>
+        </div>
+      </article>
+
+      <!-- Very Unhealthy 201-300 -->
+      <article class="card" data-level="vunh">
+        <div class="band"></div>
+        <div class="card-body">
+          <div class="range mono">201–300 <span class="range-unit">AQI</span></div>
+          <div class="level-cn">
+            <span data-lang="cn">非常不健康</span>
+            <span data-lang="en">Very Unhealthy</span>
+          </div>
+          <div class="level-en mono">Class 5 · Purple</div>
+          <div class="divider"></div>
+          <div class="summary">
+            <span data-lang="cn">健康警告,所有人尽量不出门。</span>
+            <span data-lang="en">Health warning — all stay indoors.</span>
+          </div>
+          <div class="detail">
+            <div class="row">
+              <span class="row-label">PM2.5</span>
+              <span class="row-text mono">150.5–250.4 μg/m³</span>
+            </div>
+            <div class="row">
+              <span class="row-label" data-lang="cn">建议</span>
+              <span class="row-label" data-lang="en">Advice</span>
+              <span class="row-text">
+                <span data-lang="cn">取消户外活动,室内净化器全开。</span>
+                <span data-lang="en">Cancel outdoor plans; purifier on full.</span>
+              </span>
+            </div>
+            <div class="row">
+              <span class="row-label" data-lang="cn">谁要小心</span>
+              <span class="row-label" data-lang="en">Watch out</span>
+              <span class="row-text">
+                <span data-lang="cn">所有人,呼吸不适尽快就医。</span>
+                <span data-lang="en">Everyone — see a doctor if symptoms appear.</span>
+              </span>
+            </div>
+          </div>
+        </div>
+      </article>
+
+      <!-- Hazardous 301+ -->
+      <article class="card" data-level="haz">
+        <div class="band"></div>
+        <div class="card-body">
+          <div class="range mono">301+ <span class="range-unit">AQI</span></div>
+          <div class="level-cn">
+            <span data-lang="cn">危险 Hazardous</span>
+            <span data-lang="en">Hazardous</span>
+          </div>
+          <div class="level-en mono">Class 6 · Maroon</div>
+          <div class="divider"></div>
+          <div class="summary">
+            <span data-lang="cn">紧急状态,严重影响所有人健康。</span>
+            <span data-lang="en">Emergency — serious risk for everyone.</span>
+          </div>
+          <div class="detail">
+            <div class="row">
+              <span class="row-label">PM2.5</span>
+              <span class="row-text mono">&gt; 250.5 μg/m³</span>
+            </div>
+            <div class="row">
+              <span class="row-label" data-lang="cn">建议</span>
+              <span class="row-label" data-lang="en">Advice</span>
+              <span class="row-text">
+                <span data-lang="cn">闭门窗、净化器满转、N95、就医。</span>
+                <span data-lang="en">Seal windows, purifier max, N95, seek care.</span>
+              </span>
+            </div>
+            <div class="row">
+              <span class="row-label" data-lang="cn">谁要小心</span>
+              <span class="row-label" data-lang="en">Watch out</span>
+              <span class="row-text">
+                <span data-lang="cn">全部人群,儿童与心肺病人尤其危险。</span>
+                <span data-lang="en">All; kids &amp; heart/lung patients at acute risk.</span>
+              </span>
+            </div>
+          </div>
+        </div>
+      </article>
+
+    </section>
+
+    <!-- ============ Footer ============ -->
+    <footer class="footer">
+      <div class="tip">
+        <div class="tip-label mono">
+          <span data-lang="cn">小贴士 · COLOR TIP</span>
+          <span data-lang="en">COLOR TIP</span>
+        </div>
+        <div class="tip-text">
+          <span data-lang="cn">记住一条简单规则: <strong>绿黄随意,橙红当心,紫褐别出门</strong>。颜色越深,空气越脏,身体承受越大,行动就越要保守。</span>
+          <span data-lang="en">One simple rule: <strong>green / yellow free, orange / red careful, purple / maroon stay home</strong>. Darker color = dirtier air = more conservative action.</span>
+        </div>
+      </div>
+
+      <div class="pledges">
+        <div class="pledge">
+          <div class="pledge-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#9A4A2E" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+          </div>
+          <div class="pledge-num mono">PLEDGE 01</div>
+          <div class="pledge-text">
+            <span data-lang="cn">今天就查一次<br/>本地 AQI</span>
+            <span data-lang="en">Check local AQI<br/>today</span>
+          </div>
+        </div>
+
+        <div class="pledge">
+          <div class="pledge-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#9A4A2E" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v7a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-7"/><path d="M16 6l-4-4-4 4"/><path d="M12 2v14"/></svg>
+          </div>
+          <div class="pledge-num mono">PLEDGE 02</div>
+          <div class="pledge-text">
+            <span data-lang="cn">转发这张颜色表<br/>给家人</span>
+            <span data-lang="en">Share this chart<br/>with family</span>
+          </div>
+        </div>
+
+        <div class="pledge">
+          <div class="pledge-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#9A4A2E" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="4" width="14" height="16" rx="2"/><path d="M9 9h6M9 13h6M9 17h3"/></svg>
+          </div>
+          <div class="pledge-num mono">PLEDGE 03</div>
+          <div class="pledge-text">
+            <span data-lang="cn">红 / 紫 / 褐天<br/>开净化器</span>
+            <span data-lang="en">Run purifier on<br/>red / purple days</span>
+          </div>
+        </div>
+      </div>
+    </footer>
+  </main>
+</div>
+
+<script>
+  (function () {
+    var langBtn = document.getElementById('langBtn');
+    if (langBtn) {
+      langBtn.addEventListener('click', function () {
+        var cur = document.body.getAttribute('data-active-lang') || 'cn';
+        document.body.setAttribute('data-active-lang', cur === 'cn' ? 'en' : 'cn');
+      });
+    }
+  })();
+</script>
+
+</body>
+</html>

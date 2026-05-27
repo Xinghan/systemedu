@@ -1,0 +1,864 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<title>M11 · I2C 多设备总线 — Causal Chain</title>
+<style>
+  :root{
+    /* Layer 1 — shared deep space canvas (26 subjects unified) */
+    --bg-0: oklch(0.14 0.035 265);
+    --bg-1: oklch(0.18 0.04 265);
+    --bg-2: oklch(0.22 0.045 265);
+    --bg-3: oklch(0.28 0.05 265);
+    --line: oklch(0.35 0.05 265 / 0.35);
+    --line-strong: oklch(0.55 0.08 265 / 0.55);
+    --fg:      oklch(0.96 0.01 265);
+    --fg-dim:  oklch(0.75 0.02 265);
+    --fg-mute: oklch(0.55 0.03 265);
+    --gold:    oklch(0.85 0.14 85);
+
+    /* Layer 2 — cs signature accent (cyan) */
+    --cs: oklch(0.75 0.17 200);
+
+    /* Layer 3 — cs 5-color palette (themes.js CS-01) */
+    --SIGNAL: oklch(0.75 0.17 200);
+    --CORE:   oklch(0.55 0.16 200);
+    --DEPTH:  oklch(0.35 0.10 210);
+    --FLASH:  oklch(0.92 0.08 190);
+    --QUERY:  oklch(0.85 0.14 85);
+
+    /* Devices use the 5-color palette as per F2 layer-3 rule */
+    --dev-bme:    var(--SIGNAL); /* BME280 — sky cyan */
+    --dev-oled:   var(--FLASH);  /* OLED — bright */
+    --dev-eeprom: var(--CORE);   /* EEPROM — deep teal */
+    --dev-bad:    var(--QUERY);  /* counterfeit — gold-amber warning */
+    --dev-master: var(--cs);     /* Master highlight */
+  }
+
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{
+    height:100%;width:100%;
+    font-family:'Inter','PingFang SC',sans-serif;
+    color:var(--fg);background:var(--bg-0);overflow:hidden;
+  }
+  .mono{font-family:'JetBrains Mono',ui-monospace,'SF Mono',Consolas,monospace}
+
+  .stage{display:flex;flex-direction:row;height:100vh;width:100vw}
+
+  /* ---------- 200px sidebar ---------- */
+  .game-sidebar{
+    width:200px;flex:0 0 200px;
+    background:var(--bg-1);border-right:1px solid var(--line);
+    display:flex;flex-direction:column;padding:14px 12px;gap:10px;
+    overflow:hidden;
+  }
+  .brand{
+    display:flex;flex-direction:column;gap:2px;
+    border-bottom:1px solid var(--line);padding-bottom:8px;
+  }
+  .brand .code{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--fg-mute);letter-spacing:1.2px}
+  .brand .title{font-size:13px;color:var(--fg);font-weight:600}
+  .brand .sub{font-size:10px;color:var(--fg-dim);margin-top:2px}
+
+  .mascot{
+    width:100%;height:78px;display:flex;align-items:center;justify-content:center;
+    background:var(--bg-2);border:1px solid var(--line);
+  }
+  .mascot svg{width:100%;height:100%}
+
+  .task-list{
+    background:var(--bg-2);border:1px solid var(--line);
+    padding:8px;display:flex;flex-direction:column;gap:6px;
+  }
+  .task-title{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--SIGNAL);letter-spacing:1px}
+  .task-item{
+    font-size:10.5px;color:var(--fg-dim);line-height:1.4;
+    padding:5px 7px;border:1px solid var(--line);
+    display:flex;justify-content:space-between;align-items:center;gap:4px;
+  }
+  .task-item.active{border-color:var(--SIGNAL);background:var(--bg-3);color:var(--fg)}
+  .task-item.done{border-color:var(--gold);background:rgba(0,0,0,0);color:var(--gold)}
+  .task-item .badge{
+    font-family:'JetBrains Mono',monospace;font-size:8.5px;padding:1px 4px;
+    border:1px solid currentColor;
+  }
+
+  .bus-state{
+    background:var(--bg-2);border:1px solid var(--line);
+    padding:8px;display:flex;flex-direction:column;gap:5px;
+  }
+  .bus-state-title{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--SIGNAL);letter-spacing:1px}
+  .bus-row{
+    display:flex;justify-content:space-between;align-items:center;
+    font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--fg-dim);
+  }
+  .bus-row .v{color:var(--FLASH)}
+  .bus-row .v.warn{color:var(--QUERY)}
+  .bus-row .v.ok{color:var(--gold)}
+
+  .guide{
+    background:var(--bg-2);border:1px solid var(--line);
+    padding:8px;display:flex;flex-direction:column;gap:4px;
+  }
+  .guide-title{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--SIGNAL);letter-spacing:1px}
+  .guide-line{font-size:10px;color:var(--fg-dim);line-height:1.4}
+
+  .lang-btn{
+    margin-top:auto;
+    background:var(--bg-2);color:var(--fg);
+    border:1px solid var(--line-strong);
+    padding:6px 8px;font-size:10.5px;cursor:pointer;
+    font-family:'JetBrains Mono',monospace;letter-spacing:.5px;
+    box-shadow:2px 2px 0 var(--bg-0);
+  }
+  .lang-btn:hover{transform:translate(-1px,-1px);box-shadow:3px 3px 0 var(--bg-0)}
+  .lang-btn:active{transform:translate(1px,1px);box-shadow:1px 1px 0 var(--bg-0)}
+
+  /* ---------- main stage ---------- */
+  .main{
+    flex:1;display:flex;flex-direction:column;min-width:0;height:100vh;
+    background:var(--bg-0);padding:14px 18px;gap:12px;
+  }
+
+  /* HUD */
+  .hud-bar{
+    display:flex;justify-content:space-between;align-items:center;
+    padding-bottom:6px;border-bottom:1px solid var(--line);flex-shrink:0;
+  }
+  .hud-title{font-size:14px;color:var(--fg);font-weight:600}
+  .hud-right{
+    display:flex;gap:10px;align-items:center;
+    font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--fg-dim);
+  }
+  .hud-pill{padding:3px 8px;border:1px solid var(--line-strong);color:var(--SIGNAL)}
+  .hud-pill.gold{border-color:var(--gold);color:var(--gold)}
+
+  /* bus diagram canvas-area */
+  .bus-stage{
+    flex:0 0 auto;height:280px;
+    background:var(--bg-1);border:1px solid var(--line);
+    position:relative;overflow:hidden;
+  }
+  .bus-stage svg{position:absolute;inset:0;width:100%;height:100%}
+
+  /* control row */
+  .control-row{
+    flex:0 0 auto;display:flex;gap:12px;align-items:stretch;
+  }
+  .control-card{
+    background:var(--bg-1);border:1px solid var(--line);
+    padding:10px 12px;display:flex;flex-direction:column;gap:8px;
+    min-width:0;
+  }
+  .control-card .head{
+    font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--SIGNAL);
+    letter-spacing:1px;padding-bottom:4px;border-bottom:1px solid var(--line);
+  }
+  .addr-grid{
+    display:grid;grid-template-columns:repeat(4, 1fr);gap:6px;
+  }
+  .addr-btn{
+    padding:8px 10px;font-family:'JetBrains Mono',monospace;font-size:13px;
+    background:var(--bg-2);color:var(--fg);border:1.5px solid var(--line-strong);
+    cursor:pointer;text-align:center;letter-spacing:.5px;
+    box-shadow:2px 2px 0 var(--bg-0);
+  }
+  .addr-btn:hover{transform:translate(-1px,-1px);box-shadow:3px 3px 0 var(--bg-0);border-color:var(--cs)}
+  .addr-btn:active{transform:translate(1px,1px);box-shadow:1px 1px 0 var(--bg-0)}
+  .addr-btn .addr-label{font-size:9px;color:var(--fg-mute);display:block;margin-top:2px;letter-spacing:0}
+
+  .device-ctrls{
+    display:flex;flex-direction:column;gap:6px;
+    flex:1;min-width:0;
+  }
+  .dev-toggle{
+    display:flex;align-items:center;justify-content:space-between;
+    padding:6px 8px;border:1px solid var(--line);
+    font-family:'JetBrains Mono',monospace;font-size:11px;
+    background:var(--bg-2);
+  }
+  .dev-toggle .nm{display:flex;align-items:center;gap:6px;color:var(--fg)}
+  .dev-toggle .dot{width:8px;height:8px;display:inline-block}
+  .dev-toggle button{
+    font-family:'JetBrains Mono',monospace;font-size:10px;
+    padding:3px 7px;background:var(--bg-3);color:var(--fg);
+    border:1px solid var(--line-strong);cursor:pointer;
+  }
+  .dev-toggle button:hover{border-color:var(--QUERY);color:var(--QUERY)}
+  .dev-toggle.removed{opacity:.45}
+  .dev-toggle.removed button{color:var(--gold);border-color:var(--gold)}
+
+  /* log */
+  .log-card{
+    flex:1;min-height:0;display:flex;flex-direction:column;
+    background:var(--bg-1);border:1px solid var(--line);overflow:hidden;
+  }
+  .log-card .head{
+    font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--SIGNAL);
+    letter-spacing:1px;padding:8px 12px;border-bottom:1px solid var(--line);
+    display:flex;justify-content:space-between;align-items:center;
+    flex-shrink:0;
+  }
+  .log-card .head .pill{font-size:9px;color:var(--fg-mute);border:1px solid var(--line);padding:1px 5px}
+  .log-area{
+    flex:1;min-height:0;background:#000;
+    padding:8px 12px;overflow-y:auto;
+    font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--FLASH);
+    line-height:1.55;white-space:pre-wrap;
+  }
+  .log-area .ln-master{color:var(--cs)}
+  .log-area .ln-ack{color:var(--FLASH)}
+  .log-area .ln-nack{color:var(--fg-mute)}
+  .log-area .ln-err{color:var(--QUERY)}
+  .log-area .ln-ok{color:var(--gold)}
+  .log-area .ln-data{color:var(--FLASH)}
+
+  /* device data card */
+  .data-card{
+    display:flex;flex-direction:column;gap:5px;
+    padding:8px;border:1px solid var(--line);background:var(--bg-2);
+    font-family:'JetBrains Mono',monospace;font-size:11px;
+    min-width:170px;
+  }
+  .data-card .nm{color:var(--SIGNAL);font-size:10px;letter-spacing:.8px}
+  .data-card .v{color:var(--fg-dim)}
+  .data-card .v.set{color:var(--gold)}
+
+  .floating-toast{
+    position:absolute;top:18px;left:50%;transform:translateX(-50%);
+    padding:8px 16px;background:var(--bg-2);border:1.5px solid var(--gold);
+    color:var(--gold);font-family:'JetBrains Mono',monospace;font-size:12px;
+    box-shadow:3px 3px 0 var(--bg-0);z-index:50;pointer-events:none;
+    opacity:0;transition:opacity .25s;
+  }
+  .floating-toast.show{opacity:1}
+
+  ::-webkit-scrollbar{width:8px;height:8px}
+  ::-webkit-scrollbar-track{background:var(--bg-1)}
+  ::-webkit-scrollbar-thumb{background:var(--bg-3);border:1px solid var(--line)}
+
+  /* bus diagram styles (SVG) */
+  .sda-line, .scl-line { stroke: var(--line-strong); stroke-width: 1.5; fill:none }
+  .sda-line.active { stroke: var(--cs); stroke-width: 2.2 }
+  .scl-line.active { stroke: var(--FLASH); stroke-width: 2.2; stroke-dasharray: 4 3 }
+  .device-box rect { stroke-width: 1.4 }
+  .device-box.removed { opacity: .35 }
+  .device-box.active rect { stroke-width: 2.5 }
+  .device-label { font-family:'JetBrains Mono',monospace; font-size:11px; fill: var(--fg) }
+  .device-addr  { font-family:'JetBrains Mono',monospace; font-size:10px; fill: var(--fg-mute) }
+  .pi-master rect { fill: var(--bg-3); stroke: var(--cs); stroke-width: 2 }
+  .pi-master text { font-family:'JetBrains Mono',monospace; fill: var(--cs) }
+
+  .pulse-dot {
+    fill: var(--gold);
+    filter: drop-shadow(0 0 4px var(--gold));
+  }
+</style>
+</head>
+<body>
+
+<div class="stage">
+
+  <!-- ============== 200px sidebar ============== -->
+  <aside class="game-sidebar">
+    <div class="brand">
+      <div class="code mono">CS-01 · M11</div>
+      <div class="title" id="brandTitle">I2C 多设备总线</div>
+      <div class="sub" id="brandSub">派发地址 看应答 解冲突</div>
+    </div>
+
+    <!-- Bit mascot — levitating cubic sprite -->
+    <div class="mascot" aria-label="Bit mascot">
+      <svg viewBox="0 0 172 78" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <linearGradient id="bitFace" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stop-color="oklch(0.92 0.08 190)"/>
+            <stop offset="100%" stop-color="oklch(0.55 0.16 200)"/>
+          </linearGradient>
+        </defs>
+        <!-- floor grid (memory floor) -->
+        <g stroke="oklch(0.35 0.05 265 / 0.55)" stroke-width="0.6">
+          <line x1="20" y1="66" x2="152" y2="66"/>
+          <line x1="34" y1="72" x2="138" y2="72"/>
+        </g>
+        <!-- cubic Bit body -->
+        <g transform="translate(86 36)">
+          <ellipse cx="0" cy="28" rx="22" ry="3.2" fill="oklch(0.18 0.04 265)" opacity="0.85"/>
+          <polygon points="-20,-16 0,-24 20,-16 0,-8" fill="oklch(0.85 0.16 200)" stroke="oklch(0.14 0.035 265)" stroke-width="1.4"/>
+          <polygon points="-20,-16 -20,12 0,20 0,-8" fill="url(#bitFace)" stroke="oklch(0.14 0.035 265)" stroke-width="1.4"/>
+          <polygon points="20,-16 20,12 0,20 0,-8" fill="oklch(0.35 0.10 210)" stroke="oklch(0.14 0.035 265)" stroke-width="1.4"/>
+          <rect x="-13" y="-2" width="4" height="4" fill="oklch(0.85 0.14 85)"/>
+          <rect x="-5"  y="2"  width="4" height="4" fill="oklch(0.85 0.14 85)"/>
+          <rect x="6"   y="-1" width="4" height="4" fill="oklch(0.85 0.14 85)"/>
+        </g>
+        <g fill="oklch(0.85 0.14 85)">
+          <rect x="20" y="20" width="3" height="3"/>
+          <rect x="150" y="28" width="3" height="3"/>
+          <rect x="28" y="44" width="2" height="2"/>
+        </g>
+      </svg>
+    </div>
+
+    <div class="task-list" id="taskList">
+      <div class="task-title mono" id="taskHead">MISSIONS · 3 设备</div>
+      <div class="task-item active mono" data-task="bme">
+        <span id="tBmeName">读 BME280</span><span class="badge" id="tBmeBadge">--</span>
+      </div>
+      <div class="task-item mono" data-task="oled">
+        <span id="tOledName">读 OLED 屏</span><span class="badge" id="tOledBadge">--</span>
+      </div>
+      <div class="task-item mono" data-task="eeprom">
+        <span id="tEepromName">读 EEPROM</span><span class="badge" id="tEepromBadge">--</span>
+      </div>
+    </div>
+
+    <div class="bus-state">
+      <div class="bus-state-title mono" id="busHead">BUS STATE</div>
+      <div class="bus-row"><span>SDA</span><span class="v" id="sdaState">IDLE</span></div>
+      <div class="bus-row"><span>SCL</span><span class="v" id="sclState">100k</span></div>
+      <div class="bus-row"><span id="connLabel">connected</span><span class="v" id="connCount">4</span></div>
+      <div class="bus-row"><span id="conflictLabel">conflict</span><span class="v warn" id="conflictState">YES</span></div>
+    </div>
+
+    <div class="guide">
+      <div class="guide-title mono" id="guideHead">HOW</div>
+      <div class="guide-line" id="g1">· 点地址 = Master 喊它</div>
+      <div class="guide-line" id="g2">· 0x76 有冲突 先拔掉</div>
+      <div class="guide-line" id="g3">· 3 设备全读 = 通关</div>
+    </div>
+
+    <button class="lang-btn" id="langBtn">中文 / EN</button>
+  </aside>
+
+  <!-- ============== main stage ============== -->
+  <main class="main">
+
+    <div class="hud-bar">
+      <div class="hud-title" id="hudTitle">I2C 总线诊所</div>
+      <div class="hud-right">
+        <span class="hud-pill mono" id="stepPill">STEPS 0</span>
+        <span class="hud-pill mono" id="readPill">READ 0/3</span>
+        <span class="hud-pill gold mono" id="statePill">IN PROGRESS</span>
+      </div>
+    </div>
+
+    <!-- bus diagram -->
+    <section class="bus-stage" id="busStage">
+      <svg viewBox="0 0 800 280" preserveAspectRatio="xMidYMid meet" id="busSvg">
+        <!-- Pi Master node (left) -->
+        <g class="pi-master" transform="translate(40 100)">
+          <rect x="0" y="0" width="120" height="80" rx="4"/>
+          <text x="60" y="34" text-anchor="middle" font-size="13" font-weight="700">Pi MASTER</text>
+          <text x="60" y="52" text-anchor="middle" font-size="10" fill="var(--fg-dim)">SDA · SCL</text>
+          <text x="60" y="68" text-anchor="middle" font-size="9" fill="var(--fg-mute)">100 kHz</text>
+        </g>
+
+        <!-- horizontal bus lines (SDA top, SCL bottom) -->
+        <line class="sda-line" id="sdaWire" x1="160" y1="120" x2="760" y2="120"/>
+        <line class="scl-line" id="sclWire" x1="160" y1="160" x2="760" y2="160"/>
+
+        <!-- bus labels -->
+        <text x="170" y="115" font-size="9" fill="var(--fg-mute)" font-family="JetBrains Mono,monospace">SDA</text>
+        <text x="170" y="175" font-size="9" fill="var(--fg-mute)" font-family="JetBrains Mono,monospace">SCL</text>
+
+        <!-- pull-up resistors visualization -->
+        <g transform="translate(155 50)">
+          <line x1="0" y1="0" x2="0" y2="70" stroke="var(--line)" stroke-width="1"/>
+          <text x="-12" y="10" font-size="8" fill="var(--fg-mute)" font-family="JetBrains Mono,monospace">+3V3</text>
+          <rect x="-5" y="20" width="10" height="14" fill="var(--bg-2)" stroke="var(--line-strong)"/>
+          <text x="14" y="32" font-size="8" fill="var(--fg-mute)" font-family="JetBrains Mono,monospace">4.7k</text>
+        </g>
+
+        <!-- Device stubs (4 devices) -->
+        <!-- each device hangs off the bus with a short stub -->
+
+        <!-- Device 1: BME280 @ 0x76 -->
+        <g class="device-box" id="dev-bme" transform="translate(220 30)">
+          <line x1="50" y1="60" x2="50" y2="90" stroke="var(--line-strong)" stroke-width="1.2"/>
+          <rect x="0" y="0" width="100" height="60" rx="3" fill="var(--bg-2)" stroke="var(--dev-bme)"/>
+          <text class="device-label" x="50" y="20" text-anchor="middle">BME280</text>
+          <text class="device-addr"  x="50" y="36" text-anchor="middle">0x76</text>
+          <text class="device-addr"  x="50" y="50" text-anchor="middle" fill="var(--dev-bme)">T H P</text>
+        </g>
+
+        <!-- Device 2: OLED @ 0x3C -->
+        <g class="device-box" id="dev-oled" transform="translate(360 30)">
+          <line x1="50" y1="60" x2="50" y2="90" stroke="var(--line-strong)" stroke-width="1.2"/>
+          <rect x="0" y="0" width="100" height="60" rx="3" fill="var(--bg-2)" stroke="var(--dev-oled)"/>
+          <text class="device-label" x="50" y="20" text-anchor="middle">OLED 128x64</text>
+          <text class="device-addr"  x="50" y="36" text-anchor="middle">0x3C</text>
+          <text class="device-addr"  x="50" y="50" text-anchor="middle" fill="var(--dev-oled)">display</text>
+        </g>
+
+        <!-- Device 3: EEPROM @ 0x50 -->
+        <g class="device-box" id="dev-eeprom" transform="translate(500 30)">
+          <line x1="50" y1="60" x2="50" y2="90" stroke="var(--line-strong)" stroke-width="1.2"/>
+          <rect x="0" y="0" width="100" height="60" rx="3" fill="var(--bg-2)" stroke="var(--dev-eeprom)"/>
+          <text class="device-label" x="50" y="20" text-anchor="middle">EEPROM</text>
+          <text class="device-addr"  x="50" y="36" text-anchor="middle">0x50</text>
+          <text class="device-addr"  x="50" y="50" text-anchor="middle" fill="var(--dev-eeprom)">storage</text>
+        </g>
+
+        <!-- Device 4: Counterfeit conflicting BME @ 0x76 (BAD) -->
+        <g class="device-box" id="dev-bad" transform="translate(640 30)">
+          <line x1="50" y1="60" x2="50" y2="90" stroke="var(--line-strong)" stroke-width="1.2"/>
+          <rect x="0" y="0" width="100" height="60" rx="3" fill="var(--bg-2)" stroke="var(--dev-bad)" stroke-dasharray="4 3"/>
+          <text class="device-label" x="50" y="20" text-anchor="middle" fill="var(--dev-bad)">CLONE</text>
+          <text class="device-addr"  x="50" y="36" text-anchor="middle" fill="var(--dev-bad)">0x76</text>
+          <text class="device-addr"  x="50" y="50" text-anchor="middle" fill="var(--dev-bad)">conflict</text>
+        </g>
+
+        <!-- pulse dot for signal animation -->
+        <circle class="pulse-dot" id="pulseDot" r="0" cx="160" cy="120"/>
+
+        <!-- ground rail -->
+        <line x1="160" y1="240" x2="760" y2="240" stroke="var(--line)" stroke-width="0.8" stroke-dasharray="2 2"/>
+        <text x="170" y="252" font-size="8" fill="var(--fg-mute)" font-family="JetBrains Mono,monospace">GND</text>
+
+      </svg>
+    </section>
+
+    <!-- control row: address dispatcher + device controls + data readouts -->
+    <section class="control-row">
+
+      <div class="control-card" style="flex: 1.1">
+        <div class="head mono" id="ctrlHead">SEND ADDRESS · 主机派发地址</div>
+        <div class="addr-grid">
+          <button class="addr-btn mono" data-addr="0x76" id="btnAddr76">
+            0x76
+            <span class="addr-label" id="lbl76">BME280?</span>
+          </button>
+          <button class="addr-btn mono" data-addr="0x3C" id="btnAddr3c">
+            0x3C
+            <span class="addr-label" id="lbl3c">OLED?</span>
+          </button>
+          <button class="addr-btn mono" data-addr="0x50" id="btnAddr50">
+            0x50
+            <span class="addr-label" id="lbl50">EEPROM?</span>
+          </button>
+          <button class="addr-btn mono" data-addr="0x12" id="btnAddr12">
+            0x12
+            <span class="addr-label" id="lbl12">空地址?</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="control-card" style="flex: 1">
+        <div class="head mono" id="devHead">DEVICES · 设备开关</div>
+        <div class="device-ctrls" id="deviceCtrls">
+          <div class="dev-toggle" data-dev="bme">
+            <span class="nm"><span class="dot" style="background:var(--dev-bme)"></span>BME280 (0x76)</span>
+            <button data-act="toggle" data-dev="bme" id="tgBmeBtn">DETACH</button>
+          </div>
+          <div class="dev-toggle" data-dev="oled">
+            <span class="nm"><span class="dot" style="background:var(--dev-oled)"></span>OLED (0x3C)</span>
+            <button data-act="toggle" data-dev="oled" id="tgOledBtn">DETACH</button>
+          </div>
+          <div class="dev-toggle" data-dev="eeprom">
+            <span class="nm"><span class="dot" style="background:var(--dev-eeprom)"></span>EEPROM (0x50)</span>
+            <button data-act="toggle" data-dev="eeprom" id="tgEepromBtn">DETACH</button>
+          </div>
+          <div class="dev-toggle" data-dev="bad">
+            <span class="nm"><span class="dot" style="background:var(--dev-bad)"></span>CLONE (0x76)</span>
+            <button data-act="toggle" data-dev="bad" id="tgBadBtn">DETACH</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="data-card" id="dataCard">
+        <div class="nm" id="dataHead">DEVICE BUFFERS</div>
+        <div class="v" id="dataBme">BME280 -- T:--, H:--, P:--</div>
+        <div class="v" id="dataOled">OLED   -- screen:--</div>
+        <div class="v" id="dataEeprom">EEPROM -- bytes:--</div>
+      </div>
+
+    </section>
+
+    <!-- log -->
+    <section class="log-card">
+      <div class="head mono">
+        <span id="logHead">BUS LOG · SDA/SCL trace</span>
+        <span class="pill mono" id="logPill">idle</span>
+      </div>
+      <div class="log-area mono" id="logArea"></div>
+    </section>
+
+  </main>
+
+  <div class="floating-toast mono" id="toast">DEVICE READ</div>
+</div>
+
+<script>
+"use strict";
+
+// ============ i18n ============
+var LANG = 'cn';
+var I18N = {
+  brandTitle:{cn:'I2C 多设备总线',en:'I2C Multi-Device Bus'},
+  brandSub:{cn:'派发地址 看应答 解冲突',en:'Dispatch addr, watch ACK, fix conflict'},
+  taskHead:{cn:'任务 · 3 设备',en:'MISSIONS · 3 devices'},
+  tBmeName:{cn:'读 BME280',en:'Read BME280'},
+  tOledName:{cn:'读 OLED 屏',en:'Read OLED display'},
+  tEepromName:{cn:'读 EEPROM',en:'Read EEPROM'},
+  busHead:{cn:'总线状态',en:'BUS STATE'},
+  connLabel:{cn:'connected',en:'connected'},
+  conflictLabel:{cn:'conflict',en:'conflict'},
+  guideHead:{cn:'操作',en:'HOW'},
+  g1:{cn:'· 点地址 = Master 喊它',en:'· Click addr = Master calls it'},
+  g2:{cn:'· 0x76 有冲突 先拔掉',en:'· 0x76 conflicts, detach first'},
+  g3:{cn:'· 3 设备全读 = 通关',en:'· Read all 3 = clear'},
+  hudTitle:{cn:'I2C 总线诊所',en:'I2C Bus Clinic'},
+  ctrlHead:{cn:'派发地址 · SEND ADDR',en:'SEND ADDRESS'},
+  devHead:{cn:'设备开关 · DEVICES',en:'DEVICES'},
+  dataHead:{cn:'设备数据缓冲',en:'DEVICE BUFFERS'},
+  logHead:{cn:'总线日志',en:'BUS LOG'},
+  lbl76:{cn:'BME280?',en:'BME280?'},
+  lbl3c:{cn:'OLED?',en:'OLED?'},
+  lbl50:{cn:'EEPROM?',en:'EEPROM?'},
+  lbl12:{cn:'空地址?',en:'empty?'}
+};
+function refreshI18N(){
+  document.documentElement.lang = (LANG==='cn'?'zh-CN':'en');
+  for (var k in I18N){
+    var el = document.getElementById(k);
+    if (el) el.textContent = I18N[k][LANG];
+  }
+  renderDeviceCtrls();
+  renderTaskList();
+  renderDataCard();
+}
+
+// ============ state ============
+var stateGame = {
+  devices: {
+    bme:    {present:true, addr:'0x76', kind:'sensor',  read:false,
+             nameCn:'BME280', nameEn:'BME280',
+             data:{tCn:'温 26.4 C', tEn:'T 26.4 C', hCn:'湿 58%', hEn:'H 58%', pCn:'压 1013 hPa', pEn:'P 1013 hPa'}},
+    oled:   {present:true, addr:'0x3C', kind:'display', read:false,
+             nameCn:'OLED 128x64', nameEn:'OLED 128x64',
+             data:{cn:'屏可写 128x64', en:'screen ready 128x64'}},
+    eeprom: {present:true, addr:'0x50', kind:'storage', read:false,
+             nameCn:'EEPROM', nameEn:'EEPROM',
+             data:{cn:'读出 12 字节: PURPLEAIR_v2', en:'12 bytes: PURPLEAIR_v2'}},
+    bad:    {present:true, addr:'0x76', kind:'counterfeit', read:false,
+             nameCn:'山寨克隆', nameEn:'Counterfeit clone'}
+  },
+  steps: 0,
+  reads: 0,
+  currentTask: 'bme',
+  done: false
+};
+
+// ============ DOM cache ============
+var $ = function(id){return document.getElementById(id);};
+
+// ============ device toggles ============
+function renderDeviceCtrls(){
+  Object.keys(stateGame.devices).forEach(function(key){
+    var dev = stateGame.devices[key];
+    var row = document.querySelector('.dev-toggle[data-dev="'+key+'"]');
+    if (!row) return;
+    if (dev.present){
+      row.classList.remove('removed');
+      var btn = row.querySelector('button');
+      if (btn) btn.textContent = (LANG==='cn'?'拔掉':'DETACH');
+    } else {
+      row.classList.add('removed');
+      var btn2 = row.querySelector('button');
+      if (btn2) btn2.textContent = (LANG==='cn'?'装回':'ATTACH');
+    }
+  });
+  // svg device boxes
+  ['bme','oled','eeprom','bad'].forEach(function(k){
+    var g = document.getElementById('dev-'+k);
+    if (!g) return;
+    g.classList.toggle('removed', !stateGame.devices[k].present);
+  });
+  // bus state
+  var conn = 0;
+  Object.keys(stateGame.devices).forEach(function(k){ if (stateGame.devices[k].present) conn++; });
+  $('connCount').textContent = String(conn);
+  // conflict detect
+  var conflict = stateGame.devices.bme.present && stateGame.devices.bad.present;
+  var cstate = $('conflictState');
+  cstate.classList.remove('warn');
+  if (conflict){
+    cstate.textContent = (LANG==='cn'?'有 YES':'YES');
+    cstate.classList.add('warn');
+  } else {
+    cstate.textContent = (LANG==='cn'?'无 NO':'NO');
+    cstate.style.color = 'var(--gold)';
+  }
+  if (conflict) cstate.style.color = '';
+}
+
+// ============ task list rendering ============
+function renderTaskList(){
+  ['bme','oled','eeprom'].forEach(function(k){
+    var item = document.querySelector('.task-item[data-task="'+k+'"]');
+    if (!item) return;
+    var done = stateGame.devices[k].read;
+    item.classList.toggle('done', done);
+    item.classList.toggle('active', !done && stateGame.currentTask===k);
+    var badge = item.querySelector('.badge');
+    badge.textContent = done ? 'OK' : (stateGame.currentTask===k ? 'NOW' : '--');
+  });
+  $('readPill').textContent = 'READ ' + stateGame.reads + '/3';
+  $('stepPill').textContent = 'STEPS ' + stateGame.steps;
+  if (stateGame.done){
+    $('statePill').textContent = (LANG==='cn'?'通关 CLEAR':'CLEAR');
+  } else {
+    $('statePill').textContent = (LANG==='cn'?'进行中':'IN PROGRESS');
+  }
+}
+
+// ============ data card rendering ============
+function renderDataCard(){
+  var bme = stateGame.devices.bme;
+  var oled = stateGame.devices.oled;
+  var eeprom = stateGame.devices.eeprom;
+  function txt(dev, fmt){
+    if (!dev.read) return (LANG==='cn'?'未读取':'-- not read');
+    return fmt(dev);
+  }
+  var bmeEl = $('dataBme');
+  bmeEl.textContent = 'BME280  ' + txt(bme, function(d){
+    return LANG==='cn'
+      ? (d.data.tCn+'  '+d.data.hCn+'  '+d.data.pCn)
+      : (d.data.tEn+'  '+d.data.hEn+'  '+d.data.pEn);
+  });
+  bmeEl.classList.toggle('set', bme.read);
+  var oledEl = $('dataOled');
+  oledEl.textContent = 'OLED    ' + txt(oled, function(d){
+    return LANG==='cn' ? d.data.cn : d.data.en;
+  });
+  oledEl.classList.toggle('set', oled.read);
+  var eepEl = $('dataEeprom');
+  eepEl.textContent = 'EEPROM  ' + txt(eeprom, function(d){
+    return LANG==='cn' ? d.data.cn : d.data.en;
+  });
+  eepEl.classList.toggle('set', eeprom.read);
+}
+
+// ============ log ============
+function logLine(msg, cls){
+  var box = $('logArea');
+  var span = document.createElement('span');
+  if (cls) span.className = cls;
+  span.textContent = msg + '\n';
+  box.appendChild(span);
+  box.scrollTop = box.scrollHeight;
+}
+
+// ============ bus signal animation ============
+function flashBus(targetX){
+  var sda = $('sdaWire');
+  var scl = $('sclWire');
+  sda.classList.add('active');
+  scl.classList.add('active');
+  var dot = $('pulseDot');
+  dot.setAttribute('r', '5');
+  dot.setAttribute('cx', '160');
+  var start = performance.now();
+  var dur = 600;
+  function tick(now){
+    var t = Math.min(1, (now - start) / dur);
+    var x = 160 + (targetX - 160) * t;
+    dot.setAttribute('cx', String(x));
+    if (t < 1){
+      requestAnimationFrame(tick);
+    } else {
+      setTimeout(function(){
+        dot.setAttribute('r', '0');
+        sda.classList.remove('active');
+        scl.classList.remove('active');
+      }, 350);
+    }
+  }
+  requestAnimationFrame(tick);
+  // sda state text
+  $('sdaState').textContent = 'BUSY';
+  setTimeout(function(){ $('sdaState').textContent = 'IDLE'; }, dur + 400);
+}
+
+function highlightDevice(key, ok){
+  var g = document.getElementById('dev-'+key);
+  if (!g) return;
+  g.classList.add('active');
+  var rect = g.querySelector('rect');
+  if (rect && ok){
+    var prev = rect.getAttribute('stroke');
+    rect.setAttribute('stroke', 'var(--gold)');
+    setTimeout(function(){ rect.setAttribute('stroke', prev); g.classList.remove('active'); }, 800);
+  } else if (rect){
+    rect.setAttribute('stroke', 'var(--QUERY)');
+    setTimeout(function(){ rect.setAttribute('stroke', 'var(--dev-bad)'); g.classList.remove('active'); }, 800);
+  }
+}
+
+// ============ I2C send simulation ============
+// position table (x of stub on bus)
+var DEV_X = { bme:270, oled:410, eeprom:550, bad:690 };
+
+function sendAddress(addr){
+  stateGame.steps++;
+  $('logPill').textContent = 'send';
+  logLine('Master> START ' + addr + ' WRITE', 'ln-master');
+
+  // find which devices respond on this addr
+  var responders = [];
+  Object.keys(stateGame.devices).forEach(function(k){
+    var d = stateGame.devices[k];
+    if (d.present && d.addr === addr) responders.push(k);
+  });
+
+  // animate pulse to first responder midpoint (or bus end if none)
+  var avgX;
+  if (responders.length===0){
+    avgX = 740;
+  } else {
+    var sum = 0;
+    responders.forEach(function(k){ sum += DEV_X[k]; });
+    avgX = sum / responders.length;
+  }
+  flashBus(avgX);
+
+  setTimeout(function(){
+    if (responders.length === 0){
+      logLine('  bus> NACK · no device at ' + addr, 'ln-nack');
+      $('logPill').textContent = 'nack';
+    } else if (responders.length === 1){
+      var k = responders[0];
+      var d = stateGame.devices[k];
+      highlightDevice(k, true);
+      logLine('  ' + (LANG==='cn'?'设备':'device') + '@' + addr + '> ACK', 'ln-ack');
+      // perform read
+      readDeviceData(k);
+    } else {
+      // collision!
+      responders.forEach(function(k){ highlightDevice(k, false); });
+      logLine('  bus> ACK ACK (' + responders.length + ' devices!)', 'ln-err');
+      logLine('  ' + (LANG==='cn'?'数据冲突! 两设备同时占据 SDA, 字节乱了':'COLLISION! both pull SDA, bytes corrupt'), 'ln-err');
+      logLine('  ' + (LANG==='cn'?'读出: 0x?? 0x?? 0x?? 校验失败':'read: 0x?? 0x?? 0x?? CRC FAIL'), 'ln-err');
+      $('logPill').textContent = 'collision';
+      // show toast hint
+      showToast(LANG==='cn'?'冲突! 拔掉 CLONE 再试':'CONFLICT! detach CLONE first');
+    }
+    renderTaskList();
+    renderDataCard();
+    renderDeviceCtrls();
+  }, 700);
+}
+
+function readDeviceData(key){
+  var dev = stateGame.devices[key];
+  if (!dev) return;
+  if (key === 'bme'){
+    logLine('  > READ 6 bytes: 1A 70 04 A8 0F E1', 'ln-data');
+    logLine('  > parse: ' + dev.data.tCn + '  ' + dev.data.hCn + '  ' + dev.data.pCn, 'ln-data');
+  } else if (key === 'oled'){
+    logLine('  > WRITE init seq (0xAE 0xD5 ...): ' + dev.data.en, 'ln-data');
+  } else if (key === 'eeprom'){
+    logLine('  > READ 12 bytes: 50 55 52 50 4C 45 41 49 52 5F 76 32', 'ln-data');
+    logLine('  > ascii: PURPLEAIR_v2', 'ln-data');
+  } else {
+    return; // bad solo read shouldn't happen (no addr match alone)
+  }
+  if (!dev.read){
+    dev.read = true;
+    stateGame.reads++;
+    logLine('  > [task done] ' + (LANG==='cn'?'已读取':'device read'), 'ln-ok');
+    showToast((LANG==='cn'?'读取成功 · ':'READ OK · ') + (LANG==='cn'?dev.nameCn:dev.nameEn));
+    // advance task
+    advanceTask();
+  }
+  $('logPill').textContent = 'ok';
+}
+
+function advanceTask(){
+  var order = ['bme','oled','eeprom'];
+  for (var i=0;i<order.length;i++){
+    if (!stateGame.devices[order[i]].read){
+      stateGame.currentTask = order[i];
+      break;
+    }
+  }
+  if (stateGame.reads >= 3){
+    stateGame.done = true;
+    logLine('========== ' + (LANG==='cn'?'通关 · 3 设备全部读出':'CLEAR · all 3 devices read') + ' ==========', 'ln-ok');
+    showToast(LANG==='cn'?'通关! 总线诊所完成':'CLEAR! Bus clinic done');
+  }
+}
+
+function toggleDevice(key){
+  var dev = stateGame.devices[key];
+  if (!dev) return;
+  dev.present = !dev.present;
+  stateGame.steps++;
+  logLine((dev.present ? '+ ' : '- ') + 'physical ' + (dev.present ? (LANG==='cn'?'装回':'attach') : (LANG==='cn'?'拔掉':'detach')) + ' ' + key.toUpperCase() + ' @' + dev.addr,
+          dev.present ? 'ln-master' : 'ln-ok');
+  renderDeviceCtrls();
+  renderTaskList();
+}
+
+function showToast(msg){
+  var t = $('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(function(){t.classList.remove('show');}, 1700);
+}
+
+// ============ scenario seed: log a hint at start ============
+function seedLog(){
+  logLine('# ' + (LANG==='cn'?'i2cdetect -y 1 (扫描总线)':'i2cdetect -y 1 (scan bus)'), 'ln-master');
+  logLine('  ' + (LANG==='cn'?'发现 0x3C, 0x50, 0x76 三个地址':'found 0x3C, 0x50, 0x76'), 'ln-ack');
+  logLine('  ' + (LANG==='cn'?'警告: 0x76 实际挂着 2 个设备 (BME280 + CLONE)':'WARN: 0x76 has 2 devices (BME280 + CLONE)'), 'ln-err');
+  logLine('  ' + (LANG==='cn'?'目标: 读出 BME280 / OLED / EEPROM 三个真设备':'goal: read BME280 / OLED / EEPROM'), 'ln-data');
+  logLine('', '');
+}
+
+// ============ init ============
+document.addEventListener('DOMContentLoaded', function(){
+  // address dispatch buttons
+  document.querySelectorAll('.addr-btn').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      var addr = btn.dataset.addr;
+      sendAddress(addr);
+    });
+  });
+
+  // device toggle buttons
+  document.querySelectorAll('.dev-toggle button[data-act="toggle"]').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      var key = btn.dataset.dev;
+      toggleDevice(key);
+    });
+  });
+
+  // task list click — set current focus (does not modify devices)
+  document.querySelectorAll('#taskList .task-item').forEach(function(el){
+    el.addEventListener('click', function(){
+      var k = el.dataset.task;
+      if (!stateGame.devices[k].read){
+        stateGame.currentTask = k;
+        renderTaskList();
+      }
+    });
+  });
+
+  // language
+  $('langBtn').addEventListener('click', function(){
+    LANG = (LANG==='cn'?'en':'cn');
+    refreshI18N();
+  });
+
+  // initial paint
+  renderDeviceCtrls();
+  renderTaskList();
+  renderDataCard();
+  seedLog();
+  refreshI18N();
+});
+</script>
+</body>
+</html>

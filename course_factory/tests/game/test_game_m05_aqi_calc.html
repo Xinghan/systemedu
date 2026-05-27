@@ -1,0 +1,670 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<title>M05 · AQI Live Tuning — Geometry Void</title>
+<style>
+  :root{
+    /* Layer 1 — shared deep space canvas */
+    --bg-0: oklch(0.14 0.035 265);
+    --bg-1: oklch(0.18 0.04 265);
+    --bg-2: oklch(0.22 0.045 265);
+    --bg-3: oklch(0.28 0.05 265);
+    --line: oklch(0.35 0.05 265 / 0.35);
+    --line-strong: oklch(0.55 0.08 265 / 0.55);
+    --fg:      oklch(0.96 0.01 265);
+    --fg-dim:  oklch(0.75 0.02 265);
+    --fg-mute: oklch(0.55 0.03 265);
+    --gold:    oklch(0.85 0.14 85);
+
+    /* Layer 2 — math signature accent */
+    --math: oklch(0.72 0.17 245);
+
+    /* Layer 3 — math 5-color palette (themes.js MTH-06) */
+    --AXIS:     oklch(0.72 0.17 245);
+    --PROOF:    oklch(0.52 0.16 245);
+    --SHADOW:   oklch(0.35 0.10 245);
+    --SOLUTION: oklch(0.92 0.08 240);
+    --QED:      oklch(0.85 0.14 85);
+
+    /* AQI 6-band colors (US EPA standard, kept harmonic with deep-space) */
+    --aqi-good:   oklch(0.78 0.16 145);
+    --aqi-mod:    oklch(0.85 0.16 95);
+    --aqi-usg:    oklch(0.80 0.16 55);
+    --aqi-bad:    oklch(0.72 0.18 25);
+    --aqi-vbad:   oklch(0.55 0.18 350);
+    --aqi-haz:    oklch(0.45 0.16 15);
+  }
+
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%;width:100%;font-family:'Inter','PingFang SC',sans-serif;color:var(--fg);background:var(--bg-0);overflow:hidden}
+
+  .stage{
+    display:flex;flex-direction:row;height:100vh;width:100vw;
+  }
+
+  /* ---------- 200px sidebar ---------- */
+  .game-sidebar{
+    width:200px;flex:0 0 200px;
+    background:var(--bg-1);
+    border-right:1px solid var(--line);
+    display:flex;flex-direction:column;
+    padding:18px 14px;gap:14px;
+  }
+  .brand{
+    display:flex;flex-direction:column;gap:2px;
+    border-bottom:1px solid var(--line);padding-bottom:10px;
+  }
+  .brand .code{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--fg-mute);letter-spacing:1.2px}
+  .brand .title{font-size:14px;color:var(--fg);font-weight:600}
+  .brand .sub{font-size:11px;color:var(--fg-dim);margin-top:2px}
+
+  .mascot{
+    width:172px;height:96px;display:flex;align-items:center;justify-content:center;
+    background:var(--bg-2);border:1px solid var(--line);
+  }
+  .mascot svg{width:100%;height:100%}
+
+  .guide{
+    background:var(--bg-2);border:1px solid var(--line);
+    padding:10px;display:flex;flex-direction:column;gap:6px;
+  }
+  .guide-title{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--AXIS);letter-spacing:1px}
+  .guide-line{font-size:11px;color:var(--fg-dim);line-height:1.45}
+
+  .slider-block{
+    background:var(--bg-2);border:1px solid var(--line);padding:10px;
+    display:flex;flex-direction:column;gap:8px;
+  }
+  .slider-label{
+    display:flex;justify-content:space-between;align-items:baseline;
+    font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--fg-dim);
+  }
+  .slider-label .val{color:var(--AXIS);font-size:13px;font-weight:600}
+  input[type=range].pm-slider{
+    -webkit-appearance:none;appearance:none;width:100%;height:6px;
+    background:linear-gradient(90deg,
+      var(--aqi-good) 0% 10%,
+      var(--aqi-mod) 10% 24%,
+      var(--aqi-usg) 24% 36%,
+      var(--aqi-bad) 36% 60%,
+      var(--aqi-vbad) 60% 80%,
+      var(--aqi-haz) 80% 100%
+    );
+    border:1px solid var(--line);outline:none;cursor:pointer;
+  }
+  input[type=range].pm-slider::-webkit-slider-thumb{
+    -webkit-appearance:none;appearance:none;
+    width:14px;height:18px;background:var(--SOLUTION);
+    border:2px solid var(--bg-0);box-shadow:2px 2px 0 var(--bg-0);
+    cursor:grab;
+  }
+  input[type=range].pm-slider::-moz-range-thumb{
+    width:14px;height:18px;background:var(--SOLUTION);
+    border:2px solid var(--bg-0);box-shadow:2px 2px 0 var(--bg-0);
+    cursor:grab;
+  }
+
+  .progress-block{
+    background:var(--bg-2);border:1px solid var(--line);padding:10px;
+    display:flex;flex-direction:column;gap:6px;
+  }
+  .progress-title{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--fg-dim);letter-spacing:1px}
+  .progress-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:3px}
+  .progress-cell{
+    height:8px;background:var(--bg-3);border:1px solid var(--line);
+    transition:background .2s;
+  }
+  .progress-cell.hit{background:var(--QED);border-color:var(--QED)}
+  .progress-text{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--fg-mute)}
+
+  .sidebar-spacer{flex:1}
+
+  .lang-btn{
+    width:100%;padding:8px 10px;background:var(--bg-3);
+    color:var(--fg);border:1px solid var(--line-strong);
+    font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:1px;
+    cursor:pointer;box-shadow:3px 3px 0 var(--bg-0);
+  }
+  .lang-btn:hover{background:var(--PROOF);color:var(--SOLUTION)}
+
+  /* ---------- main 三栏 ---------- */
+  .game-main{
+    flex:1;display:flex;flex-direction:column;
+    background:var(--bg-0);
+  }
+  .main-header{
+    height:48px;border-bottom:1px solid var(--line);
+    display:flex;align-items:center;justify-content:space-between;
+    padding:0 20px;background:var(--bg-1);
+  }
+  .header-left{
+    font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--fg-dim);letter-spacing:1.5px;
+  }
+  .header-right{
+    display:flex;gap:14px;font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--fg-mute);
+  }
+  .hud-cell{display:flex;flex-direction:column;align-items:flex-end}
+  .hud-cell .label{font-size:9px;color:var(--fg-mute);letter-spacing:1px}
+  .hud-cell .val{color:var(--AXIS);font-size:13px;font-weight:600}
+
+  .three-pane{
+    flex:1;display:flex;flex-direction:row;min-height:0;
+  }
+
+  /* Left pane — piecewise chart */
+  .pane-chart{
+    flex:1.4;display:flex;flex-direction:column;
+    border-right:1px solid var(--line);min-width:0;
+  }
+  .pane-title{
+    padding:10px 18px;font-family:'JetBrains Mono',monospace;font-size:11px;
+    color:var(--AXIS);letter-spacing:1.5px;
+    border-bottom:1px solid var(--line);background:var(--bg-1);
+  }
+  .pane-body{flex:1;display:flex;flex-direction:column;min-height:0;padding:14px}
+  #chartCanvas{flex:1;width:100%;background:var(--bg-1);border:1px solid var(--line)}
+
+  /* Mid+right — stacked column */
+  .pane-right-col{
+    flex:1;display:flex;flex-direction:column;min-width:0;
+  }
+  .pane-formula{
+    flex:1;display:flex;flex-direction:column;
+    border-bottom:1px solid var(--line);min-height:0;
+  }
+  .formula-body{
+    flex:1;padding:18px;display:flex;flex-direction:column;gap:14px;
+    overflow:auto;
+  }
+  .formula-line{
+    font-family:'JetBrains Mono',monospace;font-size:13px;
+    color:var(--fg-dim);line-height:1.6;letter-spacing:.3px;
+  }
+  .formula-line .var{color:var(--AXIS)}
+  .formula-line .num{color:var(--SOLUTION)}
+  .formula-line .accent{color:var(--QED)}
+  .formula-master{
+    font-family:'JetBrains Mono',monospace;font-size:12px;
+    color:var(--fg);background:var(--bg-2);border:1px solid var(--line);
+    padding:12px;line-height:1.7;letter-spacing:.2px;
+  }
+  .formula-master .accent{color:var(--QED)}
+  .formula-master .var{color:var(--AXIS)}
+  .formula-step{
+    font-family:'JetBrains Mono',monospace;font-size:11px;
+    color:var(--fg-dim);line-height:1.55;
+  }
+  .formula-step .num{color:var(--SOLUTION);font-weight:600}
+  .formula-step .lbl{color:var(--fg-mute)}
+
+  .pane-result{
+    flex:1;display:flex;flex-direction:column;min-height:0;
+  }
+  .result-body{
+    flex:1;padding:16px;display:flex;flex-direction:column;gap:10px;
+    align-items:center;justify-content:flex-start;
+  }
+  .aqi-bignum{
+    font-family:'JetBrains Mono',monospace;font-size:64px;font-weight:700;
+    color:var(--AXIS);line-height:1;letter-spacing:-2px;
+  }
+  .aqi-bignum.gold{color:var(--QED)}
+  .aqi-band-label{
+    font-family:'JetBrains Mono',monospace;font-size:12px;
+    color:var(--fg-dim);letter-spacing:1.5px;
+  }
+  .band-grid{
+    width:100%;display:flex;flex-direction:column;gap:4px;margin-top:6px;
+  }
+  .band-row{
+    display:grid;grid-template-columns:14px 1fr auto;gap:8px;align-items:center;
+    padding:5px 8px;background:var(--bg-2);border:1px solid var(--line);
+    font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--fg-mute);
+    transition:all .15s;
+  }
+  .band-row.active{
+    background:var(--bg-3);border-color:var(--AXIS);color:var(--fg);
+    box-shadow:3px 3px 0 var(--bg-0);
+  }
+  .band-swatch{width:14px;height:14px;border:1px solid var(--line)}
+  .band-name-cn{font-size:10px}
+  .band-range{font-size:9px;color:var(--fg-mute)}
+  .band-row.active .band-range{color:var(--AXIS)}
+
+  /* milestone toast */
+  .milestone{
+    position:absolute;left:50%;top:60px;transform:translateX(-50%) translateY(-20px);
+    background:var(--QED);color:var(--bg-0);
+    font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:700;
+    padding:10px 22px;letter-spacing:1.5px;
+    box-shadow:4px 4px 0 var(--bg-0);
+    opacity:0;transition:all .35s;pointer-events:none;
+  }
+  .milestone.show{opacity:1;transform:translateX(-50%) translateY(0)}
+</style>
+</head>
+<body>
+  <div class="stage">
+    <!-- ============ Sidebar ============ -->
+    <aside class="game-sidebar">
+      <div class="brand">
+        <span class="code">MTH-06 · M05</span>
+        <span class="title" data-i18n-cn="AQI 实时调参" data-i18n-en="AQI Live Tuning">AQI 实时调参</span>
+        <span class="sub" data-i18n-cn="分段线性函数" data-i18n-en="Piecewise linear">分段线性函数</span>
+      </div>
+
+      <div class="mascot" aria-label="Pi mascot">
+        <!-- Pi — rotating tetrahedron mascot (math theme) -->
+        <svg viewBox="0 0 160 96" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <linearGradient id="piGrad" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0%" stop-color="var(--AXIS)"/>
+              <stop offset="100%" stop-color="var(--PROOF)"/>
+            </linearGradient>
+          </defs>
+          <g id="piMascot" transform="translate(80 48)">
+            <polygon points="0,-30 28,16 -28,16" fill="url(#piGrad)" stroke="var(--SOLUTION)" stroke-width="1"/>
+            <polygon points="0,-30 28,16 0,4" fill="var(--PROOF)" opacity=".75" stroke="var(--SOLUTION)" stroke-width="0.7"/>
+            <polygon points="0,-30 -28,16 0,4" fill="var(--SHADOW)" opacity=".8" stroke="var(--SOLUTION)" stroke-width="0.7"/>
+            <text x="0" y="6" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="14" fill="var(--SOLUTION)" font-weight="700">f(C)</text>
+          </g>
+        </svg>
+      </div>
+
+      <div class="guide">
+        <div class="guide-title">HOW TO PLAY</div>
+        <div class="guide-line" data-i18n-cn="1 · 拖滑块改变 PM2.5" data-i18n-en="1 · Drag slider to set PM2.5">1 · 拖滑块改变 PM2.5</div>
+        <div class="guide-line" data-i18n-cn="2 · 观察公式各项变化" data-i18n-en="2 · Watch the formula update">2 · 观察公式各项变化</div>
+        <div class="guide-line" data-i18n-cn="3 · 拉过 6 段解锁分段函数" data-i18n-en="3 · Cover all 6 bands to unlock">3 · 拉过 6 段解锁分段函数</div>
+      </div>
+
+      <div class="slider-block">
+        <div class="slider-label">
+          <span data-i18n-cn="PM2.5 浓度" data-i18n-en="PM2.5">PM2.5 浓度</span>
+          <span class="val"><span id="pmReadout">12.0</span> μg/m³</span>
+        </div>
+        <input type="range" min="0" max="500" step="0.5" value="12" id="pmSlider" class="pm-slider" aria-label="PM2.5 concentration" />
+        <div class="slider-label" style="font-size:9px">
+          <span>0</span><span>100</span><span>250</span><span>500</span>
+        </div>
+      </div>
+
+      <div class="progress-block">
+        <div class="progress-title" data-i18n-cn="探索进度" data-i18n-en="EXPLORED">探索进度</div>
+        <div class="progress-grid" id="progressGrid">
+          <div class="progress-cell" data-band="0"></div>
+          <div class="progress-cell" data-band="1"></div>
+          <div class="progress-cell" data-band="2"></div>
+          <div class="progress-cell" data-band="3"></div>
+          <div class="progress-cell" data-band="4"></div>
+          <div class="progress-cell" data-band="5"></div>
+        </div>
+        <div class="progress-text"><span id="progressCount">0</span> / 6 <span data-i18n-cn="段已覆盖" data-i18n-en="bands covered">段已覆盖</span></div>
+      </div>
+
+      <div class="sidebar-spacer"></div>
+
+      <button id="langBtn" class="lang-btn" type="button">EN / 中文</button>
+    </aside>
+
+    <!-- ============ Main ============ -->
+    <main class="game-main">
+      <header class="main-header">
+        <div class="header-left" data-i18n-cn="M05 · 分段线性 AQI 公式" data-i18n-en="M05 · Piecewise Linear AQI">M05 · 分段线性 AQI 公式</div>
+        <div class="header-right">
+          <div class="hud-cell">
+            <span class="label">C</span>
+            <span class="val" id="hudC">12.0</span>
+          </div>
+          <div class="hud-cell">
+            <span class="label">BAND</span>
+            <span class="val" id="hudBand">GOOD</span>
+          </div>
+          <div class="hud-cell">
+            <span class="label">AQI</span>
+            <span class="val" id="hudAqi">50</span>
+          </div>
+        </div>
+      </header>
+
+      <div class="three-pane">
+        <!-- Left: piecewise chart -->
+        <section class="pane-chart">
+          <div class="pane-title" data-i18n-cn="左 · 分段函数曲线" data-i18n-en="Left · Piecewise curve">左 · 分段函数曲线</div>
+          <div class="pane-body">
+            <canvas id="chartCanvas"></canvas>
+          </div>
+        </section>
+
+        <!-- Right column: formula + result -->
+        <div class="pane-right-col">
+          <section class="pane-formula">
+            <div class="pane-title" data-i18n-cn="中 · 实时代入公式" data-i18n-en="Mid · Live formula">中 · 实时代入公式</div>
+            <div class="formula-body">
+              <div class="formula-master">
+                <span data-i18n-cn="主公式" data-i18n-en="Master">主公式</span><br/>
+                AQI = <span class="accent">(AQI_hi − AQI_lo) / (C_hi − C_lo)</span> × (<span class="var">C</span> − C_lo) + AQI_lo
+              </div>
+              <div class="formula-step"><span class="lbl" data-i18n-cn="当前段" data-i18n-en="Current band">当前段</span>: <span id="fStepBand" class="num">GOOD (0 – 12)</span></div>
+              <div class="formula-step"><span class="lbl">C_lo / C_hi</span>: <span class="num" id="fCLo">0.0</span> / <span class="num" id="fCHi">12.0</span></div>
+              <div class="formula-step"><span class="lbl">AQI_lo / AQI_hi</span>: <span class="num" id="fALo">0</span> / <span class="num" id="fAHi">50</span></div>
+              <div class="formula-step"><span class="lbl" data-i18n-cn="斜率 (AQI_hi−AQI_lo)/(C_hi−C_lo)" data-i18n-en="Slope">斜率</span> = <span class="num" id="fSlope">4.166</span></div>
+              <div class="formula-step"><span class="lbl">C − C_lo</span> = <span class="num" id="fDelta">12.0</span></div>
+              <div class="formula-step"><span class="lbl" data-i18n-cn="代入" data-i18n-en="Substitute">代入</span>: AQI = <span class="num" id="fSlope2">4.166</span> × <span class="num" id="fDelta2">12.0</span> + <span class="num" id="fALo2">0</span> = <span class="num" id="fAqi">50</span></div>
+            </div>
+          </section>
+
+          <section class="pane-result">
+            <div class="pane-title" data-i18n-cn="右 · 当前 AQI 等级" data-i18n-en="Right · AQI band">右 · 当前 AQI 等级</div>
+            <div class="result-body">
+              <div class="aqi-bignum" id="bigAqi">50</div>
+              <div class="aqi-band-label" id="bigBandLabel">GOOD · 良好</div>
+              <div class="band-grid" id="bandGrid">
+                <!-- band rows injected by JS -->
+              </div>
+            </div>
+          </section>
+        </div>
+      </div>
+
+      <div id="milestone" class="milestone" data-i18n-cn="解锁 · 我懂了分段函数" data-i18n-en="Unlocked · Piecewise mastered">解锁 · 我懂了分段函数</div>
+    </main>
+  </div>
+
+<script>
+(function(){
+  'use strict';
+
+  // ----- AQI piecewise breakpoints (US EPA, PM2.5 24-hr) -----
+  // [C_lo, C_hi, AQI_lo, AQI_hi, key, cn, en, colorVar]
+  var BANDS = [
+    [0.0,  12.0,   0,  50,  'GOOD',  '良好',     'Good',                       '--aqi-good'],
+    [12.1, 35.4,  51, 100,  'MOD',   '中等',     'Moderate',                   '--aqi-mod'],
+    [35.5, 55.4, 101, 150,  'USG',   '敏感人群', 'Unhealthy (Sensitive)',      '--aqi-usg'],
+    [55.5,150.4, 151, 200,  'BAD',   '不健康',   'Unhealthy',                  '--aqi-bad'],
+    [150.5,250.4,201, 300,  'VBAD',  '很不健康', 'Very Unhealthy',             '--aqi-vbad'],
+    [250.5,500.4,301, 500,  'HAZ',   '危险',     'Hazardous',                  '--aqi-haz']
+  ];
+
+  // ----- state (no window-shadow names) -----
+  var stateGame = {
+    pm: 12.0,
+    lang: 'cn',
+    visited: [false,false,false,false,false,false],
+    milestoneFired: false
+  };
+
+  // ----- DOM refs -----
+  var pmSlider = document.getElementById('pmSlider');
+  var pmReadout = document.getElementById('pmReadout');
+  var chartCanvas = document.getElementById('chartCanvas');
+  var ctx = chartCanvas.getContext('2d');
+
+  var hudC = document.getElementById('hudC');
+  var hudBand = document.getElementById('hudBand');
+  var hudAqi = document.getElementById('hudAqi');
+
+  var fStepBand = document.getElementById('fStepBand');
+  var fCLo = document.getElementById('fCLo');
+  var fCHi = document.getElementById('fCHi');
+  var fALo = document.getElementById('fALo');
+  var fAHi = document.getElementById('fAHi');
+  var fSlope = document.getElementById('fSlope');
+  var fDelta = document.getElementById('fDelta');
+  var fSlope2 = document.getElementById('fSlope2');
+  var fDelta2 = document.getElementById('fDelta2');
+  var fALo2 = document.getElementById('fALo2');
+  var fAqi = document.getElementById('fAqi');
+
+  var bigAqi = document.getElementById('bigAqi');
+  var bigBandLabel = document.getElementById('bigBandLabel');
+  var bandGrid = document.getElementById('bandGrid');
+  var progressGrid = document.getElementById('progressGrid');
+  var progressCount = document.getElementById('progressCount');
+  var milestone = document.getElementById('milestone');
+  var langBtn = document.getElementById('langBtn');
+
+  // ----- Build band rows -----
+  function buildBandRows(){
+    var html = '';
+    for (var i = 0; i < BANDS.length; i++){
+      var b = BANDS[i];
+      html += '<div class="band-row" data-idx="'+i+'">'
+            +   '<div class="band-swatch" style="background:var('+b[7]+')"></div>'
+            +   '<div><span class="band-name-cn" data-i18n-cn="'+b[5]+'" data-i18n-en="'+b[6]+'">'+b[5]+'</span></div>'
+            +   '<div class="band-range">'+b[0].toFixed(1)+'–'+b[1].toFixed(1)+' | AQI '+b[2]+'–'+b[3]+'</div>'
+            + '</div>';
+    }
+    bandGrid.innerHTML = html;
+  }
+  buildBandRows();
+
+  function findBandIdx(c){
+    if (c <= BANDS[0][1]) return 0;
+    for (var i = 0; i < BANDS.length; i++){
+      if (c >= BANDS[i][0] && c <= BANDS[i][1]) return i;
+    }
+    return BANDS.length - 1;
+  }
+
+  function computeAQI(c){
+    var idx = findBandIdx(c);
+    var b = BANDS[idx];
+    var cLo = b[0], cHi = b[1], aLo = b[2], aHi = b[3];
+    var slope = (aHi - aLo) / (cHi - cLo);
+    var delta = c - cLo;
+    var aqi = slope * delta + aLo;
+    return {idx: idx, aqi: Math.round(aqi), slope: slope, delta: delta, cLo: cLo, cHi: cHi, aLo: aLo, aHi: aHi};
+  }
+
+  // ----- chart drawing -----
+  function resizeCanvas(){
+    var rect = chartCanvas.getBoundingClientRect();
+    var dpr = window.devicePixelRatio || 1;
+    chartCanvas.width = Math.max(200, Math.floor(rect.width * dpr));
+    chartCanvas.height = Math.max(160, Math.floor(rect.height * dpr));
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+  }
+
+  function drawChart(){
+    var rect = chartCanvas.getBoundingClientRect();
+    var W = rect.width, H = rect.height;
+    ctx.clearRect(0,0,W,H);
+
+    var padL = 56, padR = 18, padT = 18, padB = 36;
+    var plotW = W - padL - padR;
+    var plotH = H - padT - padB;
+
+    // x: PM2.5 0..500 (use log-friendly piecewise but linear by C for simplicity)
+    var maxC = 500;
+    var maxA = 500;
+    function xToPx(c){ return padL + (c / maxC) * plotW; }
+    function yToPx(a){ return padT + plotH - (a / maxA) * plotH; }
+
+    // grid
+    ctx.strokeStyle = 'oklch(0.30 0.04 265 / 0.55)';
+    ctx.lineWidth = 1;
+    ctx.font = "10px 'JetBrains Mono',monospace";
+    ctx.fillStyle = 'oklch(0.55 0.03 265)';
+    var xTicks = [0,50,100,150,200,250,300,350,400,500];
+    for (var ti = 0; ti < xTicks.length; ti++){
+      var xt = xTicks[ti];
+      var px = xToPx(xt);
+      ctx.beginPath(); ctx.moveTo(px, padT); ctx.lineTo(px, padT+plotH); ctx.stroke();
+      ctx.fillText(String(xt), px-7, padT+plotH+14);
+    }
+    var yTicks = [0,50,100,150,200,300,500];
+    for (var yi = 0; yi < yTicks.length; yi++){
+      var yt = yTicks[yi];
+      var py = yToPx(yt);
+      ctx.beginPath(); ctx.moveTo(padL, py); ctx.lineTo(padL+plotW, py); ctx.stroke();
+      ctx.fillText(String(yt), padL-30, py+3);
+    }
+
+    // axis labels
+    ctx.fillStyle = 'oklch(0.75 0.02 265)';
+    ctx.font = "11px 'JetBrains Mono',monospace";
+    ctx.fillText('PM2.5 (μg/m³)', padL+plotW/2-50, H-8);
+    ctx.save();
+    ctx.translate(14, padT+plotH/2+22);
+    ctx.rotate(-Math.PI/2);
+    ctx.fillText('AQI', 0, 0);
+    ctx.restore();
+
+    // 6 segments with different colors
+    var colorVars = ['--aqi-good','--aqi-mod','--aqi-usg','--aqi-bad','--aqi-vbad','--aqi-haz'];
+    var cssCol = function(v){ return getComputedStyle(document.documentElement).getPropertyValue(v).trim(); };
+
+    for (var i = 0; i < BANDS.length; i++){
+      var b = BANDS[i];
+      ctx.strokeStyle = cssCol(colorVars[i]);
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(xToPx(b[0]), yToPx(b[2]));
+      ctx.lineTo(xToPx(b[1]), yToPx(b[3]));
+      ctx.stroke();
+
+      // breakpoint dots
+      ctx.fillStyle = cssCol(colorVars[i]);
+      ctx.beginPath(); ctx.arc(xToPx(b[0]), yToPx(b[2]), 3, 0, Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.arc(xToPx(b[1]), yToPx(b[3]), 3, 0, Math.PI*2); ctx.fill();
+    }
+
+    // marker for current PM
+    var c = stateGame.pm;
+    var info = computeAQI(c);
+    var mx = xToPx(c);
+    var my = yToPx(info.aqi);
+
+    // vertical guide
+    ctx.strokeStyle = 'oklch(0.72 0.17 245 / 0.55)';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([4,4]);
+    ctx.beginPath(); ctx.moveTo(mx, padT); ctx.lineTo(mx, padT+plotH); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(padL, my); ctx.lineTo(padL+plotW, my); ctx.stroke();
+    ctx.setLineDash([]);
+
+    // marker dot
+    ctx.fillStyle = cssCol('--SOLUTION');
+    ctx.beginPath(); ctx.arc(mx, my, 6, 0, Math.PI*2); ctx.fill();
+    ctx.strokeStyle = cssCol('--AXIS');
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    // marker label
+    ctx.fillStyle = cssCol('--AXIS');
+    ctx.font = "11px 'JetBrains Mono',monospace";
+    var lbl = 'C=' + c.toFixed(1) + ' → AQI=' + info.aqi;
+    ctx.fillText(lbl, Math.min(mx+10, W-padR-110), Math.max(my-10, padT+12));
+  }
+
+  // ----- update all readouts -----
+  function update(){
+    var c = stateGame.pm;
+    var info = computeAQI(c);
+    var b = BANDS[info.idx];
+
+    pmReadout.textContent = c.toFixed(1);
+    hudC.textContent = c.toFixed(1);
+    hudBand.textContent = b[4];
+    hudAqi.textContent = info.aqi;
+
+    fStepBand.textContent = b[4] + ' (' + b[0].toFixed(1) + ' – ' + b[1].toFixed(1) + ')';
+    fCLo.textContent = info.cLo.toFixed(1);
+    fCHi.textContent = info.cHi.toFixed(1);
+    fALo.textContent = info.aLo;
+    fAHi.textContent = info.aHi;
+    fSlope.textContent = info.slope.toFixed(3);
+    fSlope2.textContent = info.slope.toFixed(3);
+    fDelta.textContent = info.delta.toFixed(2);
+    fDelta2.textContent = info.delta.toFixed(2);
+    fALo2.textContent = info.aLo;
+    fAqi.textContent = info.aqi;
+
+    bigAqi.textContent = info.aqi;
+    bigBandLabel.textContent = stateGame.lang === 'cn'
+      ? (b[4] + ' · ' + b[5])
+      : (b[4] + ' · ' + b[6]);
+
+    // band rows active state
+    var rows = bandGrid.querySelectorAll('.band-row');
+    for (var i = 0; i < rows.length; i++){
+      if (i === info.idx) rows[i].classList.add('active');
+      else rows[i].classList.remove('active');
+    }
+
+    // visited tracking
+    if (!stateGame.visited[info.idx]){
+      stateGame.visited[info.idx] = true;
+      var cells = progressGrid.querySelectorAll('.progress-cell');
+      cells[info.idx].classList.add('hit');
+      var count = 0;
+      for (var j = 0; j < stateGame.visited.length; j++) if (stateGame.visited[j]) count++;
+      progressCount.textContent = count;
+      if (count === 6 && !stateGame.milestoneFired){
+        stateGame.milestoneFired = true;
+        bigAqi.classList.add('gold');
+        milestone.classList.add('show');
+        setTimeout(function(){ bigAqi.classList.remove('gold'); }, 1800);
+        setTimeout(function(){ milestone.classList.remove('show'); }, 3200);
+      }
+    }
+
+    drawChart();
+  }
+
+  // ----- i18n -----
+  function refreshI18N(){
+    var nodes = document.querySelectorAll('[data-i18n-cn]');
+    for (var i = 0; i < nodes.length; i++){
+      var el = nodes[i];
+      var cn = el.getAttribute('data-i18n-cn');
+      var en = el.getAttribute('data-i18n-en');
+      el.textContent = stateGame.lang === 'cn' ? cn : en;
+    }
+    document.documentElement.lang = stateGame.lang === 'cn' ? 'zh-CN' : 'en';
+    update();
+  }
+
+  // ----- event listeners -----
+  pmSlider.addEventListener('input', function(){
+    stateGame.pm = parseFloat(pmSlider.value);
+    update();
+  });
+  pmSlider.addEventListener('change', function(){
+    stateGame.pm = parseFloat(pmSlider.value);
+    update();
+  });
+
+  langBtn.addEventListener('click', function(){
+    stateGame.lang = stateGame.lang === 'cn' ? 'en' : 'cn';
+    refreshI18N();
+  });
+
+  // resize
+  function onResize(){
+    resizeCanvas();
+    drawChart();
+  }
+  window.addEventListener('resize', onResize);
+
+  // tetrahedron mascot slow rotation
+  var piMascot = document.getElementById('piMascot');
+  var rot = 0;
+  function tick(){
+    rot += 0.4;
+    if (piMascot) piMascot.setAttribute('transform', 'translate(80 48) rotate(' + rot + ')');
+    requestAnimationFrame(tick);
+  }
+  requestAnimationFrame(tick);
+
+  // init
+  resizeCanvas();
+  refreshI18N();
+  // ensure chart drawn once container settles
+  setTimeout(onResize, 50);
+})();
+</script>
+</body>
+</html>

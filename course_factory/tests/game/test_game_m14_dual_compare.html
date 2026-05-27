@@ -1,0 +1,1063 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>M14 · 冗余传感器对照 — 哪台设备坏了？</title>
+<style>
+  :root{
+    /* Surfaces — Claude warm cream */
+    --paper:    #FAF9F5;
+    --paper-2:  #F1EDDF;
+    --card:     #FFFFFF;
+    --ink:      #191814;
+    --ink-2:    #2B2924;
+    --sub:      #6B6557;
+    --sub-2:    #9D978A;
+    --border:   #EBE5D6;
+    --border-2: #D9D1BD;
+    --hairline: #F2EDE0;
+
+    /* Primary — Claude coral */
+    --primary:      #D97757;
+    --primary-ink:  #9A4A2E;
+    --primary-soft: #F8EDE5;
+    --primary-line: #ECCFB8;
+
+    /* Domain accent — aerospace */
+    --accent:       #B85A33;
+    --accent-soft:  #F2DDD0;
+
+    /* States */
+    --safe:     #6F8B5C;
+    --safe-soft:#E3ECDB;
+    --warn:     #B0593F;
+    --warn-soft:#F3DDD2;
+
+    /* Two-sensor line colors (区分 5003 vs 7003) */
+    --line-5003: #527B95;  /* climate blue */
+    --line-7003: #B85A33;  /* aerospace orange */
+    --line-5003-soft: #DEE5EC;
+    --line-7003-soft: #F2DDD0;
+
+    /* Shadows */
+    --shadow-sm: 0 1px 2px 0 rgba(25,24,20,.04);
+    --shadow:    0 1px 3px 0 rgba(25,24,20,.06), 0 1px 2px -1px rgba(25,24,20,.04);
+    --shadow-md: 0 4px 8px -2px rgba(25,24,20,.06), 0 2px 4px -2px rgba(25,24,20,.04);
+    --shadow-lg: 0 12px 24px -6px rgba(25,24,20,.1), 0 4px 8px -4px rgba(25,24,20,.05);
+  }
+
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    height:100vh;width:100vw;overflow:hidden;
+    background:var(--paper);color:var(--ink);
+    font-family:'Inter','PingFang SC','Noto Sans SC',sans-serif;
+    display:flex;
+  }
+  .mono{font-family:'JetBrains Mono','Menlo',monospace;}
+
+  /* ---------------- 200px sidebar ---------------- */
+  .game-sidebar{
+    width:200px;flex-shrink:0;
+    background:var(--paper-2);
+    border-right:1px solid var(--border);
+    display:flex;flex-direction:column;
+    padding:20px 16px;gap:18px;
+  }
+  .brand{display:flex;flex-direction:column;gap:4px;}
+  .brand-tag{font-size:10px;letter-spacing:.16em;color:var(--accent);font-weight:600;font-family:'JetBrains Mono',monospace;}
+  .brand-name{font-size:15px;font-weight:700;color:var(--ink);line-height:1.3;}
+
+  .progress-block{display:flex;flex-direction:column;gap:8px;}
+  .progress-label{font-size:11px;color:var(--sub);letter-spacing:.05em;}
+  .progress-track{height:6px;background:var(--border);border-radius:3px;overflow:hidden;}
+  .progress-fill{height:100%;background:var(--primary);width:0%;transition:width 300ms ease;}
+  .progress-dots{display:flex;gap:6px;}
+  .pd{
+    width:22px;height:22px;border-radius:50%;
+    border:1.5px solid var(--border-2);background:var(--card);
+    display:flex;align-items:center;justify-content:center;
+    font-size:10px;font-weight:700;color:var(--sub-2);
+    font-family:'JetBrains Mono',monospace;
+  }
+  .pd.active{border-color:var(--primary);background:var(--primary-soft);color:var(--primary-ink);}
+  .pd.done{border-color:var(--safe);background:var(--safe-soft);color:var(--safe);}
+  .pd.miss{border-color:var(--warn);background:var(--warn-soft);color:var(--warn);}
+
+  .legend-block{
+    background:var(--card);border:1px solid var(--border);
+    border-radius:8px;padding:10px 12px;
+    display:flex;flex-direction:column;gap:6px;
+  }
+  .legend-title{
+    font-size:10px;letter-spacing:.14em;color:var(--sub);
+    font-family:'JetBrains Mono',monospace;font-weight:700;
+  }
+  .legend-row{display:flex;align-items:center;gap:8px;font-size:11px;color:var(--ink-2);}
+  .legend-sw{width:18px;height:3px;border-radius:1.5px;flex-shrink:0;}
+
+  .guide{display:flex;flex-direction:column;gap:6px;font-size:11px;color:var(--sub);line-height:1.5;list-style:none;padding:0;margin:0;}
+  .guide-li{padding-left:10px;border-left:2px solid var(--accent);}
+
+  .lang-btn{
+    margin-top:auto;
+    border:1px solid var(--border-2);background:var(--card);
+    color:var(--ink-2);font-size:11px;font-weight:600;
+    padding:8px 12px;border-radius:6px;cursor:pointer;
+    font-family:'JetBrains Mono',monospace;letter-spacing:.05em;
+    transition:background 200ms;
+  }
+  .lang-btn:hover{background:var(--paper);}
+
+  /* ---------------- Main stage ---------------- */
+  .game-main{
+    flex:1;display:flex;flex-direction:column;
+    padding:24px 32px;overflow:hidden;min-width:0;
+  }
+
+  .scene-header{
+    display:flex;align-items:flex-end;justify-content:space-between;
+    padding-bottom:12px;border-bottom:1px solid var(--hairline);margin-bottom:16px;
+  }
+  .scene-title-block{display:flex;flex-direction:column;gap:4px;max-width:75%;}
+  .scene-num{
+    font-size:11px;letter-spacing:.18em;color:var(--accent);font-weight:700;
+    text-transform:uppercase;font-family:'JetBrains Mono',monospace;
+  }
+  .scene-title{font-size:20px;font-weight:700;color:var(--ink);line-height:1.3;}
+  .scene-sub{font-size:12.5px;color:var(--sub);line-height:1.5;margin-top:2px;}
+  .scene-counter{
+    font-family:'JetBrains Mono',monospace;font-size:13px;
+    color:var(--sub);padding:6px 12px;background:var(--card);
+    border:1px solid var(--border);border-radius:6px;flex-shrink:0;
+  }
+
+  /* The scrollable game stage */
+  .scene-stage{
+    flex:1;display:flex;flex-direction:column;gap:14px;overflow-y:auto;min-height:0;
+    padding-right:6px;
+  }
+
+  /* SVG dual-line chart card */
+  .chart-card{
+    background:var(--card);border:1px solid var(--border);
+    border-radius:12px;box-shadow:var(--shadow-sm);
+    padding:16px 18px;display:flex;flex-direction:column;gap:8px;
+    flex-shrink:0;
+  }
+  .chart-meta{
+    display:flex;align-items:center;justify-content:space-between;
+    font-size:11px;color:var(--sub);
+    font-family:'JetBrains Mono',monospace;letter-spacing:.06em;
+  }
+  .chart-meta .unit{color:var(--sub-2);}
+  .chart-wrap{
+    width:100%;height:220px;position:relative;
+  }
+  .chart-wrap svg{width:100%;height:100%;display:block;}
+
+  /* Options row */
+  .options-title{
+    font-size:11px;color:var(--sub);letter-spacing:.14em;
+    font-family:'JetBrains Mono',monospace;font-weight:700;
+    margin:4px 0 0 2px;
+  }
+  .options{
+    display:grid;grid-template-columns:1fr 1fr;gap:12px;
+  }
+  .option-btn{
+    background:var(--card);border:1.5px solid var(--border-2);
+    border-radius:10px;padding:14px 16px;
+    cursor:pointer;text-align:left;font-family:inherit;
+    transition:border-color 200ms, transform 150ms, box-shadow 200ms, background 200ms;
+    display:flex;flex-direction:column;gap:4px;min-height:74px;
+  }
+  .option-btn:hover:not(:disabled){border-color:var(--accent);box-shadow:var(--shadow);}
+  .option-btn:disabled{cursor:default;}
+  .option-key{
+    font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.16em;
+    color:var(--sub);font-weight:700;
+  }
+  .option-text{font-size:13.5px;color:var(--ink-2);font-weight:600;line-height:1.45;}
+  .option-btn.picked-correct{
+    border-color:var(--primary);background:var(--primary-soft);
+  }
+  .option-btn.picked-correct .option-key{color:var(--primary-ink);}
+  .option-btn.picked-correct .option-text{color:var(--primary-ink);}
+  .option-btn.picked-wrong{
+    border-color:var(--warn);background:var(--warn-soft);
+  }
+  .option-btn.picked-wrong .option-key{color:var(--warn);}
+  .option-btn.dimmed{opacity:.45;}
+
+  /* Feedback */
+  .feedback{
+    background:var(--card);border-radius:12px;
+    border:1px solid var(--border);box-shadow:var(--shadow-sm);
+    padding:16px 20px;display:none;
+    border-left:4px solid var(--primary);
+  }
+  .feedback.show{display:block;}
+  .feedback.is-wrong{border-left-color:var(--warn);}
+  .fb-head{
+    display:flex;align-items:center;gap:10px;margin-bottom:8px;
+  }
+  .fb-badge{
+    font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.14em;
+    font-weight:700;padding:3px 8px;border-radius:4px;text-transform:uppercase;
+    background:var(--primary-soft);color:var(--primary-ink);
+  }
+  .feedback.is-wrong .fb-badge{background:var(--warn-soft);color:var(--warn);}
+  .fb-title{font-size:14px;font-weight:700;color:var(--ink);}
+  .fb-body{font-size:13px;line-height:1.65;color:var(--ink-2);}
+  .fb-clue{
+    margin-top:10px;padding:10px 12px;background:var(--paper-2);
+    border-radius:6px;border-left:3px solid var(--accent);
+    font-size:12px;color:var(--sub);line-height:1.55;
+  }
+  .fb-clue strong{color:var(--accent);font-weight:700;}
+  .fb-next{
+    margin-top:12px;display:flex;justify-content:flex-end;
+  }
+  .next-btn{
+    background:var(--primary);color:#fff;border:none;border-radius:6px;
+    padding:9px 18px;font-size:13px;font-weight:600;cursor:pointer;
+    font-family:inherit;letter-spacing:.04em;
+    transition:background 200ms;
+  }
+  .next-btn:hover{background:var(--primary-ink);}
+
+  /* Reward */
+  .reward-screen{
+    display:none;flex-direction:column;align-items:center;justify-content:center;
+    flex:1;text-align:center;gap:16px;padding:40px;
+  }
+  .reward-screen.show{display:flex;}
+  .badge{
+    width:130px;height:130px;border-radius:50%;
+    background:var(--primary-soft);border:3px solid var(--primary);
+    display:flex;align-items:center;justify-content:center;
+    box-shadow:var(--shadow-md);
+    animation:badgePulse 2.4s ease-in-out infinite;
+  }
+  @keyframes badgePulse{
+    0%,100%{transform:scale(1);}
+    50%{transform:scale(1.04);}
+  }
+  .reward-title{font-size:22px;font-weight:700;color:var(--ink);}
+  .reward-sub{font-size:13.5px;color:var(--sub);max-width:520px;line-height:1.65;}
+  .reward-stats{
+    display:flex;gap:32px;margin-top:8px;
+    font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--sub);
+  }
+  .reward-stat-val{color:var(--accent);font-size:22px;font-weight:700;}
+  .restart-btn{
+    margin-top:8px;background:var(--card);color:var(--ink-2);
+    border:1.5px solid var(--border-2);border-radius:8px;
+    padding:10px 22px;font-size:13px;font-weight:600;cursor:pointer;
+    font-family:inherit;transition:border-color 200ms;
+  }
+  .restart-btn:hover{border-color:var(--accent);}
+</style>
+</head>
+<body>
+  <aside class="game-sidebar">
+    <div class="brand">
+      <div class="brand-tag" id="brandTag">AEROSPACE · M14</div>
+      <div class="brand-name" id="brandName">冗余传感器侦探<br/>哪台坏了？</div>
+    </div>
+
+    <div class="progress-block">
+      <div class="progress-label" id="progLabel">侦查进度</div>
+      <div class="progress-track"><div class="progress-fill" id="progFill"></div></div>
+      <div class="progress-dots" id="progDots"></div>
+    </div>
+
+    <div class="legend-block">
+      <div class="legend-title" id="legendTitle">SENSORS</div>
+      <div class="legend-row">
+        <span class="legend-sw" style="background:var(--line-5003);"></span>
+        <span class="mono">PMS5003</span>
+      </div>
+      <div class="legend-row">
+        <span class="legend-sw" style="background:var(--line-7003);"></span>
+        <span class="mono">PMS7003</span>
+      </div>
+    </div>
+
+    <ul class="guide">
+      <li class="guide-li" id="g1">先盯曲线再判定</li>
+      <li class="guide-li" id="g2">对比偏差与趋势</li>
+      <li class="guide-li" id="g3">5 组全对得徽章</li>
+    </ul>
+
+    <button class="lang-btn" id="langBtn" type="button">中 / EN</button>
+  </aside>
+
+  <main class="game-main" id="gameMain">
+    <div class="scene-header" id="sceneHeader">
+      <div class="scene-title-block">
+        <div class="scene-num" id="sceneNum">CASE 01</div>
+        <div class="scene-title" id="sceneTitle">案件一</div>
+        <div class="scene-sub" id="sceneSub"></div>
+      </div>
+      <div class="scene-counter" id="sceneCounter">01 / 05</div>
+    </div>
+
+    <div class="scene-stage" id="sceneStage">
+      <div class="chart-card">
+        <div class="chart-meta">
+          <span id="chartUnit">PM2.5 · μg/m³  ·  24h</span>
+          <span class="unit" id="chartHint">两台设备同一阳台并排 24 小时</span>
+        </div>
+        <div class="chart-wrap">
+          <svg id="dualChart" viewBox="0 0 720 220" preserveAspectRatio="none">
+            <!-- chart axes + lines drawn by JS -->
+          </svg>
+        </div>
+      </div>
+
+      <div class="options-title" id="optionsTitle">你的判定 · pick a verdict</div>
+      <div class="options" id="optionsGrid">
+        <button class="option-btn" data-key="A" type="button">
+          <span class="option-key">VERDICT A</span>
+          <span class="option-text" data-text="A"></span>
+        </button>
+        <button class="option-btn" data-key="B" type="button">
+          <span class="option-key">VERDICT B</span>
+          <span class="option-text" data-text="B"></span>
+        </button>
+        <button class="option-btn" data-key="C" type="button">
+          <span class="option-key">VERDICT C</span>
+          <span class="option-text" data-text="C"></span>
+        </button>
+        <button class="option-btn" data-key="D" type="button">
+          <span class="option-key">VERDICT D</span>
+          <span class="option-text" data-text="D"></span>
+        </button>
+      </div>
+
+      <div class="feedback" id="feedback">
+        <div class="fb-head">
+          <span class="fb-badge" id="fbBadge">VERDICT</span>
+          <span class="fb-title" id="fbTitle"></span>
+        </div>
+        <div class="fb-body" id="fbBody"></div>
+        <div class="fb-clue" id="fbClue"></div>
+        <div class="fb-next">
+          <button class="next-btn" id="nextBtn" type="button">下一组</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="reward-screen" id="rewardScreen">
+      <div class="badge">
+        <svg viewBox="0 0 64 64" style="width:62%;height:62%" fill="none">
+          <circle cx="22" cy="32" r="11" stroke="#B85A33" stroke-width="3" fill="#F2DDD0"/>
+          <circle cx="42" cy="32" r="11" stroke="#D97757" stroke-width="3" fill="#F8EDE5"/>
+          <path d="M22 32 L42 32" stroke="#9A4A2E" stroke-width="2" stroke-dasharray="2 2"/>
+        </svg>
+      </div>
+      <div class="reward-title" id="rewardTitle">冗余思维徽章</div>
+      <div class="reward-sub" id="rewardSub">你已经会用两台设备互相印证读数 — 这就是工程师对付传感器故障的第一道防线。</div>
+      <div class="reward-stats">
+        <div>
+          <div class="reward-stat-val" id="statCorrect">0</div>
+          <div id="statCorrectLbl">首次判对</div>
+        </div>
+        <div>
+          <div class="reward-stat-val" id="statTotal">5</div>
+          <div id="statTotalLbl">案件总数</div>
+        </div>
+      </div>
+      <button class="restart-btn" id="restartBtn" type="button">再来一轮</button>
+    </div>
+  </main>
+
+<script>
+(function(){
+  "use strict";
+
+  // ============================================================
+  // i18n strings
+  // ============================================================
+  var LANG = 'cn';
+  var STR = {
+    brandTag:   { cn:'AEROSPACE · M14', en:'AEROSPACE · M14' },
+    brandName:  { cn:'冗余传感器侦探<br/>哪台坏了？', en:'Redundant Sensor Detective<br/>Which one failed?' },
+    progLabel:  { cn:'侦查进度', en:'CASE PROGRESS' },
+    legendTitle:{ cn:'SENSORS', en:'SENSORS' },
+    g1: { cn:'先盯曲线再判定', en:'Read curves before deciding' },
+    g2: { cn:'对比偏差与趋势', en:'Compare offset and trend' },
+    g3: { cn:'5 组全对得徽章', en:'5/5 unlocks the badge' },
+    langToggle: { cn:'中 / EN', en:'EN / 中' },
+    optionsTitle:{ cn:'你的判定 · 选一个最合理的解释', en:'YOUR VERDICT · pick the best explanation' },
+    chartHint:  { cn:'两台设备同一阳台并排 24 小时', en:'Two units side-by-side on the same balcony · 24h' },
+    chartUnit:  { cn:'PM2.5 · μg/m³ · 24h', en:'PM2.5 · μg/m³ · 24h' },
+    nextBtn:    { cn:'下一组', en:'Next case' },
+    finishBtn:  { cn:'查看徽章', en:'See badge' },
+    rewardTitle:{ cn:'冗余思维徽章', en:'Redundancy Mindset Badge' },
+    rewardSub:  { cn:'你已经会用两台设备互相印证读数 — 这就是工程师对付传感器故障的第一道防线。',
+                  en:'You now use two devices to cross-check readings — engineers’ first line of defense against sensor failure.' },
+    rewardAlmost:{ cn:'答对 {ok}/5。再玩一轮看看那 {miss} 组的曲线特征。',
+                   en:'You got {ok}/5 first try. Replay to nail the {miss} you missed.' },
+    statCorrectLbl:{ cn:'首次判对', en:'First-try correct' },
+    statTotalLbl:  { cn:'案件总数', en:'Total cases' },
+    restartBtn: { cn:'再来一轮', en:'Replay' },
+    caseLabelCn:'案件 0', caseLabelEn:'CASE 0',
+    badgeCorrect:{ cn:'判定 · 正确', en:'VERDICT · CORRECT' },
+    badgeWrong:  { cn:'判定 · 待复盘', en:'VERDICT · MISSED' }
+  };
+
+  function t(k){ return STR[k] ? STR[k][LANG] : k; }
+  function pick(o){ return o && o[LANG] != null ? o[LANG] : ''; }
+
+  // ============================================================
+  // 5 cases — each is 24h x 24pts, two sensors
+  // 数据由确定性公式生成 (无 Math.random 重新洗牌, 每次进入数值一致, 但有 seed 抖动)
+  // ============================================================
+  function seedRand(seed){
+    var s = seed;
+    return function(){
+      s = (s * 9301 + 49297) % 233280;
+      return s / 233280;
+    };
+  }
+
+  // 基础白天活动曲线 (PM2.5 早晚高峰)
+  function baseCurve(rng){
+    var arr = [];
+    for(var h=0; h<24; h++){
+      // 双峰: 7-9 am 通勤 + 18-20 pm 做饭, 凌晨低
+      var morning = 18 * Math.exp(-Math.pow(h-8, 2)/8);
+      var evening = 22 * Math.exp(-Math.pow(h-19, 2)/6);
+      var baseLine = 12 + morning + evening;
+      var noise = (rng()-0.5) * 3;
+      arr.push(Math.max(2, baseLine + noise));
+    }
+    return arr;
+  }
+
+  // Case 1 — 健康: 两条几乎吻合 (差异 < 3 μg/m³)
+  function case1(){
+    var rng = seedRand(101);
+    var a = baseCurve(rng);
+    var rng2 = seedRand(202);
+    var b = a.map(function(v){ return v + (rng2()-0.5)*2.4; });
+    return { s5003:a, s7003:b };
+  }
+  // Case 2 — 5003 系统偏高 (积灰): 整体 +35%
+  function case2(){
+    var rng = seedRand(303);
+    var b = baseCurve(rng);
+    var rng2 = seedRand(404);
+    var a = b.map(function(v){ return v * 1.35 + 6 + (rng2()-0.5)*2; });
+    return { s5003:a, s7003:b };
+  }
+  // Case 3 — 7003 系统偏低且变迟钝: 缩到 0.55 + 平滑
+  function case3(){
+    var rng = seedRand(505);
+    var a = baseCurve(rng);
+    var b = a.map(function(v){ return v * 0.55 - 2; });
+    // smoothing 模拟卡死
+    for(var k=0;k<2;k++){
+      var nb = b.slice();
+      for(var i=1;i<b.length-1;i++){
+        nb[i] = (b[i-1] + b[i]*2 + b[i+1]) / 4;
+      }
+      b = nb;
+    }
+    return { s5003:a, s7003:b.map(function(v){ return Math.max(1, v); }) };
+  }
+  // Case 4 — 两条同步飙升 (火灾/沙尘): 中段乘 4-6x, 两条仍吻合
+  function case4(){
+    var rng = seedRand(606);
+    var base = baseCurve(rng);
+    var a = base.map(function(v, h){
+      var spike = (h>=12 && h<=17) ? Math.exp(-Math.pow(h-14.5, 2)/4) * 180 : 0;
+      return v + spike;
+    });
+    var rng2 = seedRand(707);
+    var b = a.map(function(v){ return v + (rng2()-0.5)*4; });
+    return { s5003:a, s7003:b };
+  }
+  // Case 5 — 接线松动: 大部分时段吻合, 但某段时间 7003 闪断 → 跳到 0 附近 / 突跳
+  function case5(){
+    var rng = seedRand(808);
+    var a = baseCurve(rng);
+    var b = a.slice();
+    // 9-13 点 7003 数据卡住在 4 μg/m³ 然后 14 点闪断
+    for(var i=9;i<=13;i++){ b[i] = 3 + (i%2)*1.5; }
+    b[14] = 0.5; // dropout
+    b[15] = a[15] + 22; // 复位时尖峰
+    return { s5003:a, s7003:b };
+  }
+
+  var CASES = [
+    {
+      data: case1(),
+      title: { cn:'平常的周三', en:'An ordinary Wednesday' },
+      sub:   { cn:'两台传感器在阳台上跑了 24 小时，外面没什么异常。先看曲线再做判断。',
+               en:'Both sensors ran 24h on the balcony. Nothing unusual outside. Read the curves first.' },
+      options:{
+        A:{ cn:'两条曲线几乎贴在一起 → 设备健康', en:'Curves track each other → both healthy', correct:true },
+        B:{ cn:'5003 偏高 → 5003 进灰需要清理',   en:'5003 reads higher → 5003 needs cleaning', correct:false },
+        C:{ cn:'7003 偏低 → 7003 故障',           en:'7003 reads low → 7003 faulty', correct:false },
+        D:{ cn:'两条一起飙 → 外界环境异常',         en:'Both spike → ambient anomaly', correct:false }
+      },
+      correctVerdict:'A',
+      rationale:{
+        A:{ cn:'两条曲线全程偏差 < 3 μg/m³，趋势、峰值、相位都同步 — 这正是冗余设备应该给出的结果：互相印证就是"健康"。'+
+              '记住：冗余的最大价值不是"出问题再修"，而是"平时让你敢相信数据"。',
+            en:'Both curves stay within 3 μg/m³ of each other across all 24h, same peaks, same phase. That is exactly what redundant sensors are supposed to produce — mutual confirmation = trusted data.' },
+        B:{ cn:'两条其实贴得很紧。如果只是早晚高峰时 5003 稍高 1-2 μg/m³，那是噪声不是故障。"积灰" 会让 5003 系统性偏高 30% 以上、且整天都偏。',
+            en:'Look again — the gap is 1-2 μg/m³, well within noise. "Dust buildup" would push 5003 ~30%+ higher all day, not just at peaks.' },
+        C:{ cn:'7003 也没真的偏低。两条都在合理的早晚双峰之间走，偏差小到肉眼难分。"故障" 的偏低会一整天都明显矮一截。',
+            en:'7003 is not really lower — both follow the same morning/evening peaks within noise. A real fault would show a persistent gap, not a 1 μg/m³ jitter.' },
+        D:{ cn:'看 Y 轴上限 — 这组数据峰值才 ~50 μg/m³，正常活动水平。"环境异常" 会让两条同时飙到 150+，曲线会戏剧性得多。',
+            en:'Check the Y axis — peaks here are ~50 μg/m³, normal indoor activity. A real ambient event pushes both above 150+ with dramatic spikes.' }
+      },
+      clue:{ cn:'<strong>冗余规则 1 · </strong>两台贴合 = 数据可信。这才是 "正常" 该有的样子。',
+             en:'<strong>Redundancy rule 1 · </strong>Curves agree = data is trustworthy. Memorize this baseline.' }
+    },
+    {
+      data: case2(),
+      title: { cn:'5003 用了两年了', en:'The 5003 has been running for two years' },
+      sub:   { cn:'这台 PMS5003 已经用了 24 个月没拆过外壳，今天读数让你皱了眉。',
+               en:'This PMS5003 has run for 24 months without cleaning. Today’s readings raised your eyebrows.' },
+      options:{
+        A:{ cn:'两条曲线几乎贴在一起 → 设备健康', en:'Curves track → both healthy', correct:false },
+        B:{ cn:'5003 整天偏高一截 → 5003 进灰应清洁', en:'5003 sits higher all day → 5003 fouled, clean it', correct:true },
+        C:{ cn:'7003 偏低 → 7003 校准漂移',           en:'7003 reads low → 7003 calibration drift', correct:false },
+        D:{ cn:'两条一起飙 → 外界环境异常',           en:'Both spike → ambient anomaly', correct:false }
+      },
+      correctVerdict:'B',
+      rationale:{
+        A:{ cn:'两条全天都隔着一段距离 — 不是 "贴合"。趋势虽然平行，但 5003 整体高出 30-40%，这是系统性偏差，不是噪声。',
+            en:'They run parallel but separated all day — that’s not "agreeing", it’s a systematic offset of 30-40%. Noise alone cannot do that.' },
+        B:{ cn:'对的。两条趋势平行 (说明环境一致)，但 5003 整体高出 30-40% — 这是激光腔体积灰的典型签名：散射光增多 → 读数虚高。'+
+              '维护动作：拔电源 → 拆外壳吹气 → 重测，看是否回落到 7003 附近。',
+            en:'Correct. Curves are parallel (same environment) but 5003 is offset +30-40% — classic laser chamber fouling: extra scattering inflates the count. Action: power down, clear with air, retest until 5003 returns near 7003.' },
+        C:{ cn:'7003 反而是"对的那台"参考。注意趋势：两条形状一致，差的是"高度"。如果是 7003 漂移，你需要别的参考来证明。'+
+              '在两台之间，先怀疑老旧的、用得久的、长期没维护的那台。',
+            en:'7003 is actually the reference here — both have identical shape, only the offset differs. To blame 7003 you would need a third reference. Always suspect the older, longer-running, unmaintained unit first.' },
+        D:{ cn:'峰值才 70-80，没到环境异常的级别 (那种会把两条同时拉到 150-300)。这里只有 5003 高，7003 没跟上。',
+            en:'Peaks top out at 70-80 — far below the 150-300 range of a real ambient event. Only 5003 is elevated; 7003 stays put.' }
+      },
+      clue:{ cn:'<strong>冗余规则 2 · </strong>趋势同形 + 高度不同 = 系统性偏差，先怀疑久未清洁的那台。',
+             en:'<strong>Redundancy rule 2 · </strong>Same shape, different height = systematic offset. Suspect the unmaintained unit first.' }
+    },
+    {
+      data: case3(),
+      title: { cn:'7003 越来越闷', en:'The 7003 feels sluggish' },
+      sub:   { cn:'这台 PMS7003 最近读数总是平淡淡的，像睡着了。',
+               en:'The 7003 has been giving suspiciously flat readings lately, as if asleep.' },
+      options:{
+        A:{ cn:'5003 突然漂高 → 5003 故障', en:'5003 jumped high → 5003 faulty', correct:false },
+        B:{ cn:'7003 又低又平 → 7003 进气堵塞或风扇坏', en:'7003 runs low and flat → 7003 inlet blocked or fan dead', correct:true },
+        C:{ cn:'两条都准 → 早晚高峰不存在', en:'Both correct → no real peaks today', correct:false },
+        D:{ cn:'两条一起飙 → 外界环境异常',  en:'Both spike → ambient anomaly', correct:false }
+      },
+      correctVerdict:'B',
+      rationale:{
+        A:{ cn:'5003 走的是正常早晚双峰形状，量级也合理 — 它没毛病。问题是 7003 太"平"了：早晚峰几乎被磨平。',
+            en:'5003 shows the normal double-peak shape with reasonable magnitude — it’s fine. The problem is how *flat* 7003 looks — peaks are nearly erased.' },
+        B:{ cn:'对的。注意 7003 不只是偏低 — 它的"形状"也变了：峰被压扁、跟随变慢。'+
+              '这是进气口被棉絮/油烟堵住、或者内部风扇转速下降的签名 — 颗粒进不去 / 进得慢，读数就既低又迟钝。'+
+              '动作：吹一下进气口 / 听风扇声 / 换新机对照。',
+            en:'Correct. 7003 is not just low — its *shape* changed too: peaks flattened, response sluggish. That signature points to a clogged inlet (fluff, oil mist) or a weak fan — particles cannot enter at normal rate. Action: blow out the inlet, listen for the fan, swap to a fresh unit to confirm.' },
+        C:{ cn:'5003 明明显示出清晰的早晚峰 — 真没有 "高峰不存在" 这回事。两台数据的形状不同恰恰说明有一台错了。',
+            en:'5003 shows clear morning + evening peaks — peaks definitely exist. Different shapes between two co-located sensors *prove* at least one is wrong.' },
+        D:{ cn:'两条没有 "一起" — 5003 在跳，7003 像没事一样。环境事件应该让两条同步抬升。',
+            en:'They are *not* moving together — 5003 jumps while 7003 stays calm. A real ambient event lifts both in sync.' }
+      },
+      clue:{ cn:'<strong>冗余规则 3 · </strong>不只看"高低"，还要看"形状"。被压扁的曲线 = 响应变慢的传感器。',
+             en:'<strong>Redundancy rule 3 · </strong>Look at *shape*, not just height. A flattened curve = a sluggish sensor.' }
+    },
+    {
+      data: case4(),
+      title: { cn:'午后突然变天', en:'Something happened around noon' },
+      sub:   { cn:'下午 12 点到 17 点两条曲线一起冲上去了，远超平时的早晚高峰。',
+               en:'From noon to 5pm both curves shot up well past the usual peaks.' },
+      options:{
+        A:{ cn:'两条同步冲高 → 外界发生环境事件（火灾/沙尘/工地）',
+            en:'Both spike together → ambient event (fire / dust / construction)', correct:true },
+        B:{ cn:'5003 飙高 → 5003 故障误报',   en:'5003 spiking → 5003 false alarm', correct:false },
+        C:{ cn:'7003 飙高 → 7003 故障误报',   en:'7003 spiking → 7003 false alarm', correct:false },
+        D:{ cn:'两条都坏 → 整套传感器全报废', en:'Both broken → trash both units', correct:false }
+      },
+      correctVerdict:'A',
+      rationale:{
+        A:{ cn:'对的。两条**同时、同形、同幅**冲到 150-200 μg/m³，这是设备故障无法伪造的形态 — 故障通常只波及一台。'+
+              '当冗余设备都说"很高"，最可能是外界真的发生了事 — 可能附近烧秸秆、工地扬尘、午饭做菜油烟。'+
+              '动作：打开窗户看 / 查户外公布 AQI / 拍照记录时段。',
+            en:'Correct. Both spike to 150-200 μg/m³ **at the same time, same shape, same magnitude** — that is impossible to fake with a sensor fault, which usually hits only one unit. When redundant sensors agree on "high", the world really is high. Action: look out the window, check the local public AQI, log the time window.' },
+        B:{ cn:'7003 也跟着同步飙了。单台故障不会传染给另一台 — 如果只是 5003 误报，7003 应该还在平静的 30 上下。',
+            en:'7003 spiked in lockstep. A fault cannot propagate from one unit to another. If only 5003 misfired, 7003 would still sit calmly near 30.' },
+        C:{ cn:'同理，5003 也飙了 — 两台同步几乎不可能同时坏成完全一致的样子。',
+            en:'Same logic — 5003 also spiked. Two independent units cannot fail into the exact same waveform by chance.' },
+        D:{ cn:'两台同时坏成"完全同步"的概率近乎零。冗余设计就是为了排除这种联想 — 同步上行 = 信任数据。',
+            en:'The probability of two units failing into *identical* shapes is essentially zero. The whole point of redundancy is to rule this out — synchronized rise = trust the data.' }
+      },
+      clue:{ cn:'<strong>冗余规则 4 · </strong>两条完全同步上行 = 外界真的有事，不是故障。',
+             en:'<strong>Redundancy rule 4 · </strong>Both curves rising in sync = the world changed, not the sensors.' }
+    },
+    {
+      data: case5(),
+      title: { cn:'上午 9 点之后 7003 变得很奇怪', en:'After 9am the 7003 went weird' },
+      sub:   { cn:'5003 一直正常，7003 早上还好好的，9 点后突然卡住，14 点又跳一下 — 你昨天刚动过这台的接线。',
+               en:'5003 stays steady. 7003 was fine then froze around 9am and flickered at 2pm. You jiggled its wiring yesterday.' },
+      options:{
+        A:{ cn:'5003 漂移 → 5003 故障',                 en:'5003 drifted → 5003 fault', correct:false },
+        B:{ cn:'7003 积灰 → 整体偏高',                   en:'7003 fouled → reads high', correct:false },
+        C:{ cn:'7003 中段卡死又突跳 → 接线松动/接触不良',
+            en:'7003 frozen then jumped → loose wiring / bad contact', correct:true },
+        D:{ cn:'两条都飙 → 外界环境异常',                en:'Both spike → ambient event', correct:false }
+      },
+      correctVerdict:'C',
+      rationale:{
+        A:{ cn:'5003 一整天都跟着正常的早晚峰走，量级合理。问题在 7003 — 它早上正常，9 点后突然变成一条卡住的小直线。',
+            en:'5003 follows the normal day pattern with reasonable magnitude. The anomaly is on 7003 — fine until 9am, then it flatlines.' },
+        B:{ cn:'积灰是"整天系统性偏高 + 趋势仍跟随"。这里完全相反 — 7003 早上跟得很好，是中段才"卡"。'+
+              '这种"部分时段故障"的特征指向接触/连接问题，不是缓慢污染。',
+            en:'Fouling looks like *all-day high + trend still tracks*. Here it is the opposite — 7003 tracked fine in the morning, then *intermittently* failed. That points to contact problems, not slow contamination.' },
+        C:{ cn:'对的，关键三个线索：'+
+              '(1) 9-13 点 7003 数据像被钉在原地 — 串口断了，固件返回上次缓存值或固定数字；'+
+              '(2) 14 点出现一个不真实的尖峰 — 接线一瞬间恢复，缓冲被冲出；'+
+              '(3) 5003 一直没事 — 排除"环境"。'+
+              '动作：重新插拔 7003 的 TX/RX/VCC/GND 四根线 + 拧紧 → 用万用表通断档检查每根。',
+            en:'Correct. Three clues: (1) 9-13h the 7003 line is *pinned* — serial dropped, firmware returned the last cached/default value; (2) 14h shows an impossible spike — wires reconnected and the buffer flushed; (3) 5003 stayed normal — rules out ambient. Action: reseat TX/RX/VCC/GND on the 7003, tighten, then ring out each wire with a multimeter.' },
+        D:{ cn:'5003 没飙 — 它走的是平淡的日常曲线。"两条都飙"的前提不存在。',
+            en:'5003 never spiked — it stayed on a quiet daily curve. The "both spike" premise doesn’t hold.' }
+      },
+      clue:{ cn:'<strong>冗余规则 5 · </strong>卡平 + 突跳 + 只有一台 = 物理连接问题，不是传感器本体坏。',
+             en:'<strong>Redundancy rule 5 · </strong>Flat patch + sudden spike + single sensor only = wiring / contact issue, not a dead sensor.' }
+    }
+  ];
+
+  // ============================================================
+  // SVG chart renderer
+  // ============================================================
+  var W = 720, H = 220;
+  var PAD = { l:48, r:18, t:16, b:32 };
+  var plotW = W - PAD.l - PAD.r;
+  var plotH = H - PAD.t - PAD.b;
+
+  function buildChart(data){
+    var all5 = data.s5003, all7 = data.s7003;
+    var maxV = 0;
+    for(var i=0;i<24;i++){
+      if(all5[i] > maxV) maxV = all5[i];
+      if(all7[i] > maxV) maxV = all7[i];
+    }
+    // round up
+    var yMax = Math.ceil(maxV / 50) * 50;
+    if(yMax < 50) yMax = 50;
+
+    var svgNS = 'http://www.w3.org/2000/svg';
+    var svg = document.getElementById('dualChart');
+    while(svg.firstChild) svg.removeChild(svg.firstChild);
+
+    // grid + Y axis labels (0, mid, max)
+    var yTicks = 4;
+    for(var t=0; t<=yTicks; t++){
+      var yVal = yMax * (1 - t / yTicks);
+      var y = PAD.t + plotH * (t / yTicks);
+      var line = document.createElementNS(svgNS, 'line');
+      line.setAttribute('x1', PAD.l);
+      line.setAttribute('x2', PAD.l + plotW);
+      line.setAttribute('y1', y);
+      line.setAttribute('y2', y);
+      line.setAttribute('stroke', '#EBE5D6');
+      line.setAttribute('stroke-width', '1');
+      if(t === yTicks){
+        line.setAttribute('stroke', '#D9D1BD');
+      }
+      svg.appendChild(line);
+
+      var lbl = document.createElementNS(svgNS, 'text');
+      lbl.setAttribute('x', PAD.l - 8);
+      lbl.setAttribute('y', y + 4);
+      lbl.setAttribute('text-anchor', 'end');
+      lbl.setAttribute('font-family', 'JetBrains Mono,monospace');
+      lbl.setAttribute('font-size', '10');
+      lbl.setAttribute('fill', '#9D978A');
+      lbl.textContent = Math.round(yVal);
+      svg.appendChild(lbl);
+    }
+
+    // X axis hour labels (0, 6, 12, 18, 23)
+    var xLabels = [0, 6, 12, 18, 23];
+    for(var xi=0; xi<xLabels.length; xi++){
+      var h = xLabels[xi];
+      var x = PAD.l + (plotW * (h / 23));
+      var xt = document.createElementNS(svgNS, 'text');
+      xt.setAttribute('x', x);
+      xt.setAttribute('y', PAD.t + plotH + 18);
+      xt.setAttribute('text-anchor', 'middle');
+      xt.setAttribute('font-family', 'JetBrains Mono,monospace');
+      xt.setAttribute('font-size', '10');
+      xt.setAttribute('fill', '#9D978A');
+      xt.textContent = (h < 10 ? '0' + h : h) + ':00';
+      svg.appendChild(xt);
+    }
+
+    // axis labels
+    var ylabel = document.createElementNS(svgNS, 'text');
+    ylabel.setAttribute('x', 12);
+    ylabel.setAttribute('y', PAD.t + plotH / 2);
+    ylabel.setAttribute('transform', 'rotate(-90 12 ' + (PAD.t + plotH/2) + ')');
+    ylabel.setAttribute('text-anchor', 'middle');
+    ylabel.setAttribute('font-family', 'JetBrains Mono,monospace');
+    ylabel.setAttribute('font-size', '10');
+    ylabel.setAttribute('fill', '#6B6557');
+    ylabel.textContent = 'μg/m³';
+    svg.appendChild(ylabel);
+
+    // build path strings
+    function pathFor(arr){
+      var d = '';
+      for(var i=0;i<arr.length;i++){
+        var x = PAD.l + plotW * (i / 23);
+        var y = PAD.t + plotH * (1 - arr[i] / yMax);
+        d += (i === 0 ? 'M' : 'L') + x.toFixed(1) + ' ' + y.toFixed(1) + ' ';
+      }
+      return d;
+    }
+
+    // PMS5003 line (blue, drawn first)
+    var p5 = document.createElementNS(svgNS, 'path');
+    p5.setAttribute('d', pathFor(all5));
+    p5.setAttribute('stroke', '#527B95');
+    p5.setAttribute('stroke-width', '2.4');
+    p5.setAttribute('fill', 'none');
+    p5.setAttribute('stroke-linecap', 'round');
+    p5.setAttribute('stroke-linejoin', 'round');
+    svg.appendChild(p5);
+
+    // PMS7003 line (orange, drawn second, slightly transparent so overlap is visible)
+    var p7 = document.createElementNS(svgNS, 'path');
+    p7.setAttribute('d', pathFor(all7));
+    p7.setAttribute('stroke', '#B85A33');
+    p7.setAttribute('stroke-width', '2.4');
+    p7.setAttribute('fill', 'none');
+    p7.setAttribute('stroke-linecap', 'round');
+    p7.setAttribute('stroke-linejoin', 'round');
+    p7.setAttribute('opacity', '0.92');
+    svg.appendChild(p7);
+
+    // dots for each hour (small)
+    function addDots(arr, color){
+      for(var i=0;i<arr.length;i++){
+        var x = PAD.l + plotW * (i / 23);
+        var y = PAD.t + plotH * (1 - arr[i] / yMax);
+        var c = document.createElementNS(svgNS, 'circle');
+        c.setAttribute('cx', x);
+        c.setAttribute('cy', y);
+        c.setAttribute('r', '1.8');
+        c.setAttribute('fill', color);
+        svg.appendChild(c);
+      }
+    }
+    addDots(all5, '#527B95');
+    addDots(all7, '#B85A33');
+
+    // inline mini-legend (top-right)
+    var lg5 = document.createElementNS(svgNS, 'g');
+    lg5.setAttribute('transform', 'translate(' + (PAD.l + plotW - 160) + ',' + (PAD.t + 4) + ')');
+    var rect5 = document.createElementNS(svgNS, 'rect');
+    rect5.setAttribute('x', 0); rect5.setAttribute('y', -8);
+    rect5.setAttribute('width', 160); rect5.setAttribute('height', 22);
+    rect5.setAttribute('fill', '#FFFFFF'); rect5.setAttribute('opacity', '0.85');
+    rect5.setAttribute('rx', '4'); rect5.setAttribute('stroke', '#EBE5D6');
+    lg5.appendChild(rect5);
+
+    var sw1 = document.createElementNS(svgNS, 'rect');
+    sw1.setAttribute('x', 6); sw1.setAttribute('y', -1);
+    sw1.setAttribute('width', 14); sw1.setAttribute('height', 3);
+    sw1.setAttribute('fill', '#527B95');
+    lg5.appendChild(sw1);
+    var lbl1 = document.createElementNS(svgNS, 'text');
+    lbl1.setAttribute('x', 24); lbl1.setAttribute('y', 4);
+    lbl1.setAttribute('font-family', 'JetBrains Mono,monospace');
+    lbl1.setAttribute('font-size', '10'); lbl1.setAttribute('fill', '#2B2924');
+    lbl1.textContent = 'PMS5003';
+    lg5.appendChild(lbl1);
+
+    var sw2 = document.createElementNS(svgNS, 'rect');
+    sw2.setAttribute('x', 86); sw2.setAttribute('y', -1);
+    sw2.setAttribute('width', 14); sw2.setAttribute('height', 3);
+    sw2.setAttribute('fill', '#B85A33');
+    lg5.appendChild(sw2);
+    var lbl2 = document.createElementNS(svgNS, 'text');
+    lbl2.setAttribute('x', 104); lbl2.setAttribute('y', 4);
+    lbl2.setAttribute('font-family', 'JetBrains Mono,monospace');
+    lbl2.setAttribute('font-size', '10'); lbl2.setAttribute('fill', '#2B2924');
+    lbl2.textContent = 'PMS7003';
+    lg5.appendChild(lbl2);
+
+    svg.appendChild(lg5);
+  }
+
+  // ============================================================
+  // Game state + DOM
+  // ============================================================
+  var caseIdx = 0;
+  var caseAnswered = false;
+  var lastPicked = null;
+  var firstTryCorrect = 0;
+
+  var dom = {
+    brandTag:    document.getElementById('brandTag'),
+    brandName:   document.getElementById('brandName'),
+    progLabel:   document.getElementById('progLabel'),
+    progFill:    document.getElementById('progFill'),
+    progDots:    document.getElementById('progDots'),
+    legendTitle: document.getElementById('legendTitle'),
+    g1: document.getElementById('g1'),
+    g2: document.getElementById('g2'),
+    g3: document.getElementById('g3'),
+    langBtn:     document.getElementById('langBtn'),
+    sceneNum:    document.getElementById('sceneNum'),
+    sceneTitle:  document.getElementById('sceneTitle'),
+    sceneSub:    document.getElementById('sceneSub'),
+    sceneCounter:document.getElementById('sceneCounter'),
+    sceneHeader: document.getElementById('sceneHeader'),
+    sceneStage:  document.getElementById('sceneStage'),
+    chartUnit:   document.getElementById('chartUnit'),
+    chartHint:   document.getElementById('chartHint'),
+    optionsTitle:document.getElementById('optionsTitle'),
+    optionsGrid: document.getElementById('optionsGrid'),
+    feedback:    document.getElementById('feedback'),
+    fbBadge:     document.getElementById('fbBadge'),
+    fbTitle:     document.getElementById('fbTitle'),
+    fbBody:      document.getElementById('fbBody'),
+    fbClue:      document.getElementById('fbClue'),
+    nextBtn:     document.getElementById('nextBtn'),
+    rewardScreen:document.getElementById('rewardScreen'),
+    rewardTitle: document.getElementById('rewardTitle'),
+    rewardSub:   document.getElementById('rewardSub'),
+    statCorrect: document.getElementById('statCorrect'),
+    statTotal:   document.getElementById('statTotal'),
+    statCorrectLbl:document.getElementById('statCorrectLbl'),
+    statTotalLbl:  document.getElementById('statTotalLbl'),
+    restartBtn:  document.getElementById('restartBtn')
+  };
+
+  function applyStaticI18N(){
+    dom.brandTag.textContent = t('brandTag');
+    dom.brandName.innerHTML = t('brandName');
+    dom.progLabel.textContent = t('progLabel');
+    dom.legendTitle.textContent = t('legendTitle');
+    dom.g1.textContent = t('g1');
+    dom.g2.textContent = t('g2');
+    dom.g3.textContent = t('g3');
+    dom.langBtn.textContent = t('langToggle');
+    dom.optionsTitle.textContent = t('optionsTitle');
+    dom.chartUnit.textContent = t('chartUnit');
+    dom.chartHint.textContent = t('chartHint');
+    dom.statCorrectLbl.textContent = t('statCorrectLbl');
+    dom.statTotalLbl.textContent = t('statTotalLbl');
+    dom.restartBtn.textContent = t('restartBtn');
+  }
+
+  function renderProgressDots(){
+    dom.progDots.innerHTML = '';
+    for(var i=0;i<CASES.length;i++){
+      var d = document.createElement('div');
+      d.className = 'pd';
+      d.textContent = (i+1);
+      if(i < caseIdx) d.classList.add('done');
+      else if(i === caseIdx) d.classList.add('active');
+      dom.progDots.appendChild(d);
+    }
+    var pct = Math.round((caseIdx / CASES.length) * 100);
+    dom.progFill.style.width = pct + '%';
+  }
+
+  function renderCase(){
+    if(caseIdx >= CASES.length){
+      showReward();
+      return;
+    }
+    var c = CASES[caseIdx];
+    caseAnswered = false;
+    lastPicked = null;
+
+    var labelPrefix = (LANG === 'cn') ? STR.caseLabelCn : STR.caseLabelEn;
+    dom.sceneNum.textContent = labelPrefix + (caseIdx + 1);
+    dom.sceneTitle.textContent = pick(c.title);
+    dom.sceneSub.textContent = pick(c.sub);
+    dom.sceneCounter.textContent = '0' + (caseIdx + 1) + ' / 0' + CASES.length;
+
+    // options text
+    var optBtns = dom.optionsGrid.querySelectorAll('.option-btn');
+    var keys = ['A','B','C','D'];
+    for(var i=0;i<optBtns.length;i++){
+      var k = keys[i];
+      var span = optBtns[i].querySelector('[data-text]');
+      span.textContent = pick(c.options[k]);
+      optBtns[i].disabled = false;
+      optBtns[i].classList.remove('picked-correct','picked-wrong','dimmed');
+    }
+
+    dom.feedback.classList.remove('show','is-wrong');
+    buildChart(c.data);
+    renderProgressDots();
+  }
+
+  function pickVerdict(which){
+    if(caseAnswered) return;
+    caseAnswered = true;
+    lastPicked = which;
+    var c = CASES[caseIdx];
+    var isCorrect = (which === c.correctVerdict);
+    if(isCorrect) firstTryCorrect++;
+
+    var optBtns = dom.optionsGrid.querySelectorAll('.option-btn');
+    var keys = ['A','B','C','D'];
+    for(var i=0;i<optBtns.length;i++){
+      var k = keys[i];
+      optBtns[i].disabled = true;
+      if(k === c.correctVerdict){
+        optBtns[i].classList.add('picked-correct');
+      }else if(k === which){
+        optBtns[i].classList.add('picked-wrong');
+      }else{
+        optBtns[i].classList.add('dimmed');
+      }
+    }
+
+    showFeedback(isCorrect, c, which);
+
+    var dots = dom.progDots.querySelectorAll('.pd');
+    if(dots[caseIdx]){
+      dots[caseIdx].classList.remove('active');
+      dots[caseIdx].classList.add(isCorrect ? 'done' : 'miss');
+    }
+  }
+
+  function showFeedback(isCorrect, c, picked){
+    dom.feedback.classList.remove('is-wrong');
+    if(!isCorrect) dom.feedback.classList.add('is-wrong');
+    dom.fbBadge.textContent = isCorrect ? t('badgeCorrect') : t('badgeWrong');
+    dom.fbTitle.textContent = pick(c.options[c.correctVerdict])
+      + ' · ' + (LANG === 'cn' ? '正解' : 'correct verdict');
+    dom.fbBody.textContent = pick(c.rationale[picked]);
+    dom.fbClue.innerHTML = pick(c.clue);
+
+    if(caseIdx === CASES.length - 1){
+      dom.nextBtn.textContent = t('finishBtn');
+    }else{
+      dom.nextBtn.textContent = t('nextBtn');
+    }
+    dom.feedback.classList.add('show');
+
+    setTimeout(function(){
+      dom.feedback.scrollIntoView({ behavior:'smooth', block:'end' });
+    }, 100);
+  }
+
+  function nextCase(){
+    caseIdx++;
+    if(caseIdx >= CASES.length){
+      showReward();
+    }else{
+      renderCase();
+    }
+  }
+
+  function showReward(){
+    dom.sceneHeader.style.display = 'none';
+    dom.sceneStage.style.display = 'none';
+    dom.rewardScreen.classList.add('show');
+    dom.statCorrect.textContent = firstTryCorrect;
+    dom.statTotal.textContent = CASES.length;
+    dom.rewardTitle.textContent = t('rewardTitle');
+    var wrong = CASES.length - firstTryCorrect;
+    if(wrong === 0){
+      dom.rewardSub.textContent = t('rewardSub');
+    }else{
+      dom.rewardSub.textContent = t('rewardAlmost')
+        .replace('{ok}', firstTryCorrect)
+        .replace('{miss}', wrong);
+    }
+    caseIdx = CASES.length;
+    renderProgressDots();
+  }
+
+  function restart(){
+    caseIdx = 0;
+    firstTryCorrect = 0;
+    caseAnswered = false;
+    dom.sceneHeader.style.display = '';
+    dom.sceneStage.style.display = '';
+    dom.rewardScreen.classList.remove('show');
+    renderCase();
+  }
+
+  function toggleLang(){
+    LANG = (LANG === 'cn') ? 'en' : 'cn';
+    applyStaticI18N();
+    if(dom.rewardScreen.classList.contains('show')){
+      dom.rewardTitle.textContent = t('rewardTitle');
+      var wrong = CASES.length - firstTryCorrect;
+      if(wrong === 0){
+        dom.rewardSub.textContent = t('rewardSub');
+      }else{
+        dom.rewardSub.textContent = t('rewardAlmost')
+          .replace('{ok}', firstTryCorrect)
+          .replace('{miss}', wrong);
+      }
+    }else{
+      // re-render case + restore answered state
+      var savedAnswered = caseAnswered;
+      var savedPicked = lastPicked;
+      var c = CASES[caseIdx];
+      renderCase();
+      if(savedAnswered){
+        var optBtns = dom.optionsGrid.querySelectorAll('.option-btn');
+        var keys = ['A','B','C','D'];
+        for(var i=0;i<optBtns.length;i++){
+          var k = keys[i];
+          optBtns[i].disabled = true;
+          if(k === c.correctVerdict){
+            optBtns[i].classList.add('picked-correct');
+          }else if(k === savedPicked){
+            optBtns[i].classList.add('picked-wrong');
+          }else{
+            optBtns[i].classList.add('dimmed');
+          }
+        }
+        caseAnswered = true;
+        lastPicked = savedPicked;
+        showFeedback(savedPicked === c.correctVerdict, c, savedPicked);
+      }
+    }
+  }
+
+  // ============================================================
+  // wire up
+  // ============================================================
+  var optBtns = dom.optionsGrid.querySelectorAll('.option-btn');
+  for(var i=0;i<optBtns.length;i++){
+    (function(btn){
+      btn.addEventListener('click', function(){
+        pickVerdict(btn.getAttribute('data-key'));
+      });
+    })(optBtns[i]);
+  }
+  dom.nextBtn.addEventListener('click', nextCase);
+  dom.restartBtn.addEventListener('click', restart);
+  dom.langBtn.addEventListener('click', toggleLang);
+
+  // ============================================================
+  // init
+  // ============================================================
+  applyStaticI18N();
+  renderCase();
+})();
+</script>
+</body>
+</html>

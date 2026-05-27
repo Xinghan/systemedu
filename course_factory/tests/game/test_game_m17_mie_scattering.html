@@ -1,0 +1,1209 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>M17 — PMS5003 Mie 散射调参台</title>
+<style>
+  /* ============ F2 L1 共享深空底 ============ */
+  :root{
+    --bg-0: oklch(0.14 0.035 265);
+    --bg-1: oklch(0.18 0.04 265);
+    --bg-2: oklch(0.22 0.045 265);
+    --bg-3: oklch(0.28 0.05 265);
+    --line: oklch(0.35 0.05 265 / 0.35);
+    --line-strong: oklch(0.55 0.08 265 / 0.55);
+    --fg: oklch(0.96 0.01 265);
+    --fg-dim: oklch(0.75 0.02 265);
+    --fg-mute: oklch(0.55 0.03 265);
+    --gold: oklch(0.85 0.14 85);
+
+    /* F2 L2 — phys accent (sky-teal) */
+    --phys: oklch(0.78 0.13 215);
+    --phys-dim: oklch(0.55 0.13 215);
+
+    /* F2 L3 — phys 5 色 palette */
+    --FIELD:    oklch(0.78 0.13 215); /* sky-teal 主 — Echo + PM10 颗粒 */
+    --WAVE:     oklch(0.55 0.13 215); /* 中等 teal — PM2.5 颗粒 */
+    --MASS:     oklch(0.35 0.10 215); /* 深 teal — PM1.0 颗粒 */
+    --PHOTON:   oklch(0.92 0.08 215); /* 近白 teal — PM0.3 颗粒 */
+    --CONSTANT: oklch(0.85 0.14 85);  /* 金 — RESONANCE 时刻 */
+
+    /* 激光红光 (650nm 默认) — 物理事实辅色, 跟着波长滑块变 */
+    --laser: oklch(0.65 0.20 25);
+  }
+
+  *{box-sizing:border-box;margin:0;padding:0;}
+  html,body{height:100%;overflow:hidden;}
+  body{
+    background: var(--bg-0);
+    color: var(--fg);
+    font-family: 'Inter','Noto Sans SC',-apple-system,BlinkMacSystemFont,sans-serif;
+    display: flex;
+    height: 100vh;
+  }
+  .mono{font-family:'JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,monospace;}
+
+  /* ============ 200px Sidebar ============ */
+  .game-sidebar{
+    width:200px;flex-shrink:0;
+    background:var(--bg-1);
+    border-right:1px solid var(--line);
+    padding:14px 12px;
+    display:flex;flex-direction:column;gap:12px;
+    overflow-y:auto;
+  }
+  .brand{
+    border-bottom:1px solid var(--line);
+    padding-bottom:10px;
+  }
+  .brand .badge{
+    display:inline-block;
+    font-family:'JetBrains Mono',ui-monospace,monospace;
+    font-size:9px;letter-spacing:0.14em;
+    color:var(--phys);
+    background:var(--bg-2);
+    padding:3px 6px;
+    border:1px solid var(--line);
+    box-shadow:2px 2px 0 var(--bg-0);
+    margin-bottom:7px;
+  }
+  .brand h1{
+    font-size:13px;font-weight:700;line-height:1.3;color:var(--fg);
+  }
+  .brand .sub{
+    font-size:10px;color:var(--fg-mute);margin-top:4px;
+    font-family:'JetBrains Mono',ui-monospace,monospace;
+    letter-spacing:0.04em;
+  }
+
+  /* Echo mascot */
+  .mascot-box{
+    background:var(--bg-2);
+    border:1px solid var(--line);
+    box-shadow:3px 3px 0 var(--bg-0);
+    padding:9px;
+    display:flex;align-items:center;gap:8px;
+  }
+  .mascot-svg{width:36px;height:36px;flex-shrink:0;}
+  .mascot-text .label{
+    font-family:'JetBrains Mono',ui-monospace,monospace;
+    font-size:8px;color:var(--fg-mute);letter-spacing:0.1em;
+  }
+  .mascot-text .name{
+    font-size:11px;color:var(--fg);font-weight:700;margin-top:2px;
+  }
+  .mascot-text .role{
+    font-size:9px;color:var(--fg-dim);margin-top:1px;
+  }
+
+  /* 控件块 */
+  .ctrl{
+    background:var(--bg-2);
+    border:1px solid var(--line);
+    box-shadow:3px 3px 0 var(--bg-0);
+    padding:10px 9px;
+  }
+  .ctrl-label{
+    font-family:'JetBrains Mono',ui-monospace,monospace;
+    font-size:9px;color:var(--fg-dim);
+    letter-spacing:0.08em;
+    display:flex;justify-content:space-between;align-items:baseline;
+    margin-bottom:6px;
+  }
+  .ctrl-value{
+    color:var(--phys);font-weight:700;font-size:11px;
+  }
+  input[type=range]{
+    width:100%;
+    -webkit-appearance:none;appearance:none;
+    background:transparent;
+    height:18px;
+    cursor:pointer;
+  }
+  input[type=range]::-webkit-slider-runnable-track{
+    height:4px;
+    background:linear-gradient(to right, var(--phys-dim), var(--phys));
+    border:1px solid var(--line-strong);
+  }
+  input[type=range]::-moz-range-track{
+    height:4px;
+    background:linear-gradient(to right, var(--phys-dim), var(--phys));
+    border:1px solid var(--line-strong);
+  }
+  input[type=range]::-webkit-slider-thumb{
+    -webkit-appearance:none;appearance:none;
+    width:14px;height:14px;
+    background:var(--phys);
+    border:1px solid var(--bg-0);
+    box-shadow:2px 2px 0 var(--bg-0);
+    margin-top:-6px;
+    cursor:pointer;
+  }
+  input[type=range]::-moz-range-thumb{
+    width:14px;height:14px;
+    background:var(--phys);
+    border:1px solid var(--bg-0);
+    box-shadow:2px 2px 0 var(--bg-0);
+    cursor:pointer;
+  }
+  .ctrl-hint{
+    font-family:'JetBrains Mono',ui-monospace,monospace;
+    font-size:8px;color:var(--fg-mute);
+    display:flex;justify-content:space-between;
+    margin-top:3px;
+    letter-spacing:0.04em;
+  }
+
+  /* 任务清单 */
+  .task-list{
+    background:var(--bg-2);
+    border:1px solid var(--line);
+    box-shadow:3px 3px 0 var(--bg-0);
+    padding:9px;
+  }
+  .task-title{
+    font-family:'JetBrains Mono',ui-monospace,monospace;
+    font-size:9px;color:var(--fg-dim);letter-spacing:0.1em;
+    margin-bottom:6px;
+  }
+  .task-item{
+    display:flex;align-items:flex-start;gap:6px;
+    font-size:10px;line-height:1.4;color:var(--fg-dim);
+    padding:3px 0;
+  }
+  .task-item.done{color:var(--gold);}
+  .task-mark{
+    flex-shrink:0;width:12px;height:12px;
+    border:1px solid var(--line-strong);
+    margin-top:1px;
+    display:flex;align-items:center;justify-content:center;
+    font-family:'JetBrains Mono',ui-monospace,monospace;
+    font-size:9px;font-weight:700;
+  }
+  .task-item.done .task-mark{
+    background:var(--gold);color:var(--bg-0);border-color:var(--gold);
+  }
+  .task-item.done .task-mark::after{content:"X";}
+
+  /* lang-btn */
+  .lang-btn{
+    margin-top:auto;
+    padding:7px 10px;
+    background:var(--bg-2);
+    color:var(--fg);
+    border:1px solid var(--line-strong);
+    box-shadow:3px 3px 0 var(--bg-0);
+    font-family:'JetBrains Mono',ui-monospace,monospace;
+    font-size:11px;font-weight:700;letter-spacing:0.1em;
+    cursor:pointer;
+    transition:transform .08s;
+  }
+  .lang-btn:active{transform:translate(1px,1px);box-shadow:2px 2px 0 var(--bg-0);}
+
+  /* ============ Main stage ============ */
+  .game-main{
+    flex:1;
+    display:flex;flex-direction:column;
+    padding:14px 16px 12px 16px;gap:10px;
+    overflow:hidden;
+    min-width:0;
+  }
+
+  /* HUD */
+  .hud{
+    display:grid;
+    grid-template-columns: 1fr 1fr 1fr 1fr;
+    gap:10px;
+    flex-shrink:0;
+  }
+  .hud-cell{
+    background:var(--bg-1);
+    border:1px solid var(--line);
+    box-shadow:3px 3px 0 var(--bg-0);
+    padding:8px 12px;
+    display:flex;flex-direction:column;gap:2px;
+  }
+  .hud-key{
+    font-family:'JetBrains Mono',ui-monospace,monospace;
+    font-size:9px;letter-spacing:0.12em;color:var(--fg-mute);
+  }
+  .hud-val{
+    font-family:'JetBrains Mono',ui-monospace,monospace;
+    font-size:18px;font-weight:700;color:var(--phys);
+    line-height:1.1;
+  }
+  .hud-cell.hot .hud-val{color:var(--gold);}
+  .hud-cell .hud-sub{
+    font-family:'JetBrains Mono',ui-monospace,monospace;
+    font-size:9px;color:var(--fg-dim);letter-spacing:0.06em;
+  }
+
+  /* 中部: 腔室 + 强度条 */
+  .stage-row{
+    flex:1;
+    display:flex;
+    gap:10px;
+    min-height:0;
+  }
+  .chamber-wrap{
+    flex:1;
+    background:var(--bg-1);
+    border:1px solid var(--line);
+    box-shadow:3px 3px 0 var(--bg-0);
+    padding:10px;
+    display:flex;flex-direction:column;
+    min-width:0;
+    position:relative;
+  }
+  .chamber-title{
+    font-family:'JetBrains Mono',ui-monospace,monospace;
+    font-size:10px;color:var(--fg-dim);letter-spacing:0.08em;
+    margin-bottom:6px;
+    display:flex;justify-content:space-between;align-items:center;
+  }
+  .chamber-title .regime{
+    color:var(--phys);font-weight:700;
+  }
+  .chamber-title .regime.gold{color:var(--gold);}
+  .chamber-canvas-wrap{
+    flex:1;
+    display:flex;flex-direction:column;
+    min-height:0;
+    background:var(--bg-0);
+    border:1px solid var(--line);
+    position:relative;
+    overflow:hidden;
+  }
+  #chamberCanvas{
+    flex:1;
+    width:100%;
+    display:block;
+  }
+  .resonance-flash{
+    position:absolute;
+    top:50%;left:50%;
+    transform:translate(-50%,-50%);
+    font-family:'JetBrains Mono',ui-monospace,monospace;
+    font-size:28px;font-weight:700;
+    color:var(--gold);
+    letter-spacing:0.2em;
+    text-shadow:0 0 12px var(--gold);
+    pointer-events:none;
+    opacity:0;
+    transition:opacity .25s;
+  }
+  .resonance-flash.on{opacity:1;}
+
+  /* 散射强度条 */
+  .intensity-wrap{
+    width:90px;flex-shrink:0;
+    background:var(--bg-1);
+    border:1px solid var(--line);
+    box-shadow:3px 3px 0 var(--bg-0);
+    padding:10px 8px;
+    display:flex;flex-direction:column;
+    align-items:center;
+    gap:6px;
+  }
+  .intensity-label{
+    font-family:'JetBrains Mono',ui-monospace,monospace;
+    font-size:9px;letter-spacing:0.1em;color:var(--fg-dim);
+    text-align:center;line-height:1.3;
+  }
+  .intensity-bar-outer{
+    flex:1;
+    width:24px;
+    background:var(--bg-3);
+    border:1px solid var(--line-strong);
+    position:relative;
+    overflow:hidden;
+  }
+  .intensity-bar-fill{
+    position:absolute;
+    bottom:0;left:0;right:0;
+    background:linear-gradient(to top, var(--phys-dim), var(--phys));
+    height:5%;
+    transition:height .15s ease-out, background .2s;
+  }
+  .intensity-bar-fill.gold{
+    background:linear-gradient(to top, var(--phys), var(--gold));
+  }
+  .intensity-val{
+    font-family:'JetBrains Mono',ui-monospace,monospace;
+    font-size:13px;font-weight:700;color:var(--phys);
+  }
+  .intensity-val.gold{color:var(--gold);}
+  .intensity-unit{
+    font-family:'JetBrains Mono',ui-monospace,monospace;
+    font-size:9px;color:var(--fg-mute);
+  }
+
+  /* 底部曲线 */
+  .curve-wrap{
+    height:160px;flex-shrink:0;
+    background:var(--bg-1);
+    border:1px solid var(--line);
+    box-shadow:3px 3px 0 var(--bg-0);
+    padding:8px 10px;
+    display:flex;flex-direction:column;
+  }
+  .curve-title{
+    font-family:'JetBrains Mono',ui-monospace,monospace;
+    font-size:10px;color:var(--fg-dim);letter-spacing:0.08em;
+    display:flex;justify-content:space-between;
+    margin-bottom:4px;
+  }
+  .curve-canvas-wrap{
+    flex:1;
+    display:flex;flex-direction:column;
+    min-height:0;
+    background:var(--bg-0);
+    border:1px solid var(--line);
+    position:relative;
+  }
+  #curveCanvas{
+    flex:1;width:100%;display:block;
+  }
+
+  /* legend */
+  .legend{
+    display:flex;gap:12px;align-items:center;
+    font-family:'JetBrains Mono',ui-monospace,monospace;
+    font-size:9px;color:var(--fg-dim);
+  }
+  .legend-item{display:flex;align-items:center;gap:4px;}
+  .legend-dot{width:8px;height:8px;border:1px solid var(--line-strong);}
+
+</style>
+</head>
+<body>
+
+<aside class="game-sidebar">
+  <div class="brand">
+    <div class="badge mono">PHY-09 / M17</div>
+    <h1 data-i18n-key="brandTitle">PMS5003 散射调参台</h1>
+    <div class="sub mono">Force Observatory</div>
+  </div>
+
+  <div class="mascot-box">
+    <svg class="mascot-svg" viewBox="0 0 36 36" aria-hidden="true">
+      <!-- Echo tuning-fork + halo -->
+      <circle cx="18" cy="18" r="14" fill="none" stroke="var(--PHOTON)" stroke-width="0.8" opacity="0.5"/>
+      <circle cx="18" cy="18" r="10" fill="none" stroke="var(--WAVE)" stroke-width="0.8" opacity="0.7"/>
+      <path d="M14 8 V22 Q14 26 18 26 Q22 26 22 22 V8" fill="none" stroke="var(--FIELD)" stroke-width="2" stroke-linecap="round"/>
+      <line x1="18" y1="26" x2="18" y2="30" stroke="var(--FIELD)" stroke-width="2"/>
+      <circle cx="18" cy="18" r="1.6" fill="var(--CONSTANT)"/>
+    </svg>
+    <div class="mascot-text">
+      <div class="label mono">MASCOT</div>
+      <div class="name">Echo</div>
+      <div class="role">tuning-fork</div>
+    </div>
+  </div>
+
+  <div class="ctrl">
+    <div class="ctrl-label">
+      <span data-i18n-key="ctrlSize">颗粒大小 d</span>
+      <span class="ctrl-value mono" id="sizeVal">2.50</span>
+    </div>
+    <input type="range" id="sizeSlider" min="0.1" max="50" step="0.1" value="2.5" aria-label="particle size">
+    <div class="ctrl-hint">
+      <span>0.1 μm</span><span>50 μm</span>
+    </div>
+  </div>
+
+  <div class="ctrl">
+    <div class="ctrl-label">
+      <span data-i18n-key="ctrlWave">激光波长 λ</span>
+      <span class="ctrl-value mono" id="waveVal">650</span>
+    </div>
+    <input type="range" id="waveSlider" min="400" max="700" step="5" value="650" aria-label="laser wavelength">
+    <div class="ctrl-hint">
+      <span>400 nm</span><span>700 nm</span>
+    </div>
+  </div>
+
+  <div class="ctrl">
+    <div class="ctrl-label">
+      <span data-i18n-key="ctrlDensity">颗粒密度 n</span>
+      <span class="ctrl-value mono" id="densVal">40</span>
+    </div>
+    <input type="range" id="densSlider" min="5" max="120" step="1" value="40" aria-label="particle density">
+    <div class="ctrl-hint">
+      <span data-i18n-key="ctrlDensSparse">稀</span>
+      <span data-i18n-key="ctrlDensDense">密</span>
+    </div>
+  </div>
+
+  <div class="task-list">
+    <div class="task-title mono" data-i18n-key="taskTitle">任务 OBJECTIVES</div>
+    <div class="task-item" id="task1">
+      <div class="task-mark mono">1</div>
+      <div data-i18n-key="task1Text">用 650nm 激光找出散射峰</div>
+    </div>
+    <div class="task-item" id="task2">
+      <div class="task-mark mono">2</div>
+      <div data-i18n-key="task2Text">把 d 拨到 50μm 看几何光学</div>
+    </div>
+    <div class="task-item" id="task3">
+      <div class="task-mark mono">3</div>
+      <div data-i18n-key="task3Text">把 d 拨到 0.1μm 看 Rayleigh</div>
+    </div>
+  </div>
+
+  <button id="langBtn" class="lang-btn" type="button">EN</button>
+</aside>
+
+<main class="game-main">
+
+  <div class="hud">
+    <div class="hud-cell">
+      <span class="hud-key" data-i18n-key="hudSize">PARTICLE d</span>
+      <span class="hud-val mono" id="hudSize">2.50</span>
+      <span class="hud-sub mono">μm</span>
+    </div>
+    <div class="hud-cell">
+      <span class="hud-key" data-i18n-key="hudWave">LASER λ</span>
+      <span class="hud-val mono" id="hudWave">650</span>
+      <span class="hud-sub mono">nm = 0.65 μm</span>
+    </div>
+    <div class="hud-cell">
+      <span class="hud-key" data-i18n-key="hudX">SIZE PARAM x</span>
+      <span class="hud-val mono" id="hudX">12.1</span>
+      <span class="hud-sub mono">x = pi*d/λ</span>
+    </div>
+    <div class="hud-cell" id="hudIntCell">
+      <span class="hud-key" data-i18n-key="hudI">INTENSITY I</span>
+      <span class="hud-val mono" id="hudI">0.42</span>
+      <span class="hud-sub mono" id="hudRegime">geometric</span>
+    </div>
+  </div>
+
+  <div class="stage-row">
+    <div class="chamber-wrap">
+      <div class="chamber-title">
+        <span data-i18n-key="chamberLabel">PMS5003 散射腔 SCATTERING CHAMBER</span>
+        <span class="regime mono" id="regimeTag">GEOMETRIC</span>
+      </div>
+      <div class="chamber-canvas-wrap">
+        <canvas id="chamberCanvas"></canvas>
+        <div class="resonance-flash mono" id="resonanceFlash">RESONANCE</div>
+      </div>
+    </div>
+
+    <div class="intensity-wrap">
+      <div class="intensity-label mono" data-i18n-key="intensityLabel">SCATTER<br>STRENGTH</div>
+      <div class="intensity-bar-outer">
+        <div class="intensity-bar-fill" id="intensityBar"></div>
+      </div>
+      <div class="intensity-val mono" id="intensityVal">0.05</div>
+      <div class="intensity-unit mono">norm.</div>
+    </div>
+  </div>
+
+  <div class="curve-wrap">
+    <div class="curve-title">
+      <span data-i18n-key="curveLabel">散射强度 vs 颗粒大小 (当前 λ)</span>
+      <div class="legend">
+        <div class="legend-item">
+          <div class="legend-dot" style="background:var(--PHOTON);"></div>
+          <span>PM0.3</span>
+        </div>
+        <div class="legend-item">
+          <div class="legend-dot" style="background:var(--MASS);"></div>
+          <span>PM1.0</span>
+        </div>
+        <div class="legend-item">
+          <div class="legend-dot" style="background:var(--WAVE);"></div>
+          <span>PM2.5</span>
+        </div>
+        <div class="legend-item">
+          <div class="legend-dot" style="background:var(--FIELD);"></div>
+          <span>PM10</span>
+        </div>
+        <div class="legend-item">
+          <div class="legend-dot" style="background:var(--CONSTANT);"></div>
+          <span data-i18n-key="legendNow">当前</span>
+        </div>
+      </div>
+    </div>
+    <div class="curve-canvas-wrap">
+      <canvas id="curveCanvas"></canvas>
+    </div>
+  </div>
+
+</main>
+
+<script>
+(function(){
+  'use strict';
+
+  // ---------- i18n ----------
+  var I18N = {
+    cn: {
+      brandTitle: 'PMS5003 散射调参台',
+      ctrlSize: '颗粒大小 d',
+      ctrlWave: '激光波长 λ',
+      ctrlDensity: '颗粒密度 n',
+      ctrlDensSparse: '稀',
+      ctrlDensDense: '密',
+      taskTitle: '任务',
+      task1Text: '用 650nm 激光找出散射峰 (d ≈ ?)',
+      task2Text: '把 d 拨到 50μm 看几何光学',
+      task3Text: '把 d 拨到 0.1μm 看 Rayleigh',
+      hudSize: '颗粒 d',
+      hudWave: '激光 λ',
+      hudX: '尺寸参数 x',
+      hudI: '散射强度 I',
+      chamberLabel: 'PMS5003 散射腔',
+      intensityLabel: '散射<br>强度',
+      curveLabel: '散射强度 vs 颗粒大小 (当前 λ)',
+      legendNow: '当前',
+      regimeRayleigh: 'RAYLEIGH (d<<λ)',
+      regimeMie: 'MIE 共振',
+      regimeGeom: '几何光学 (d>>λ)',
+    },
+    en: {
+      brandTitle: 'PMS5003 Scattering Tuner',
+      ctrlSize: 'Particle size d',
+      ctrlWave: 'Laser λ',
+      ctrlDensity: 'Density n',
+      ctrlDensSparse: 'low',
+      ctrlDensDense: 'high',
+      taskTitle: 'OBJECTIVES',
+      task1Text: 'With 650nm laser, find the scatter peak (d ≈ ?)',
+      task2Text: 'Push d to 50μm — geometric optics',
+      task3Text: 'Pull d to 0.1μm — Rayleigh regime',
+      hudSize: 'PARTICLE d',
+      hudWave: 'LASER λ',
+      hudX: 'SIZE PARAM x',
+      hudI: 'INTENSITY I',
+      chamberLabel: 'PMS5003 SCATTERING CHAMBER',
+      intensityLabel: 'SCATTER<br>STRENGTH',
+      curveLabel: 'Intensity vs particle size (current λ)',
+      legendNow: 'now',
+      regimeRayleigh: 'RAYLEIGH (d<<λ)',
+      regimeMie: 'MIE RESONANCE',
+      regimeGeom: 'GEOMETRIC (d>>λ)',
+    }
+  };
+  var langState = 'cn';
+
+  function refreshI18N(){
+    var dict = I18N[langState];
+    var nodes = document.querySelectorAll('[data-i18n-key]');
+    for(var i=0;i<nodes.length;i++){
+      var k = nodes[i].getAttribute('data-i18n-key');
+      if(dict[k]!=null) nodes[i].innerHTML = dict[k];
+    }
+    document.documentElement.setAttribute('lang', langState==='cn'?'zh-CN':'en');
+    document.getElementById('langBtn').textContent = langState==='cn' ? 'EN' : '中';
+  }
+
+  document.getElementById('langBtn').addEventListener('click', function(){
+    langState = (langState==='cn') ? 'en' : 'cn';
+    refreshI18N();
+  });
+
+  // ---------- state ----------
+  var stateGame = {
+    d: 2.5,     // 颗粒直径 μm
+    lambdaNm: 650,
+    density: 40,
+    intensity: 0,
+    x: 0,
+    regime: 'geom', // rayleigh / mie / geom
+    resonant: false,
+    tasksDone: { t1:false, t2:false, t3:false },
+    foundPeakD: null,
+    peakAt650Min: 0.5,   // PM0.5-PM2.5 区间
+    peakAt650Max: 2.5,
+  };
+
+  // particles for chamber animation
+  var particles = [];
+
+  function rebuildParticles(){
+    var n = Math.round(stateGame.density);
+    particles = [];
+    for(var i=0;i<n;i++){
+      particles.push({
+        x: Math.random(),
+        y: Math.random(),
+        vx: (Math.random()-0.5)*0.0008,
+        vy: (Math.random()-0.5)*0.0008,
+        phase: Math.random()*Math.PI*2,
+      });
+    }
+  }
+  rebuildParticles();
+
+  // ---------- physics ----------
+  // 简化 Mie 模型 (定性, 用于教学可视化, 不是 BHmie 精确解):
+  //   x = pi*d/λ
+  //   Q_sca(x) — 散射效率 (无量纲):
+  //     x < 0.3  (Rayleigh): Q ≈ (8/3) * x^4    -> 随 x^4 上升
+  //     0.3<=x<=10 (Mie):    Q ≈ 2 + sin-like ripple around 2-4, peak ~3.5 near x≈2
+  //     x > 10 (Geom):       Q ≈ 2 平台
+  //   截面 sigma = Q * pi*(d/2)^2
+  //   单颗粒散射通量 ∝ sigma; 总强度 ∝ n_density * sigma
+  function sizeParam(d_um, lambda_nm){
+    var lambda_um = lambda_nm / 1000;
+    return Math.PI * d_um / lambda_um;
+  }
+
+  function scatteringEfficiency(x){
+    if(x <= 0) return 0;
+    if(x < 0.3){
+      return (8/3) * Math.pow(x, 4);
+    } else if(x < 10){
+      // Mie 区: 主峰 + 振荡
+      // 用一个平滑过渡: 基线从 Rayleigh 末端到 2, 叠一个共振峰
+      var base = 2.0;
+      var rayleighTail = (8/3) * Math.pow(0.3, 4); // = 0.0216
+      // 平滑插值 (x in [0.3, 1.5]): base 从 rayleighTail 升到 base
+      var ramp;
+      if(x < 1.5){
+        var t = (x - 0.3) / (1.5 - 0.3);
+        ramp = rayleighTail + (base - rayleighTail) * t;
+      } else {
+        ramp = base;
+      }
+      // 共振峰: 峰在 x≈2, 高 ~1.5, 宽 ~1.2
+      var peak = 1.6 * Math.exp(-Math.pow((x - 2.0)/1.0, 2));
+      // 次振荡 (Mie 区典型)
+      var ripple = 0.25 * Math.cos((x - 2) * 1.4) * Math.exp(-Math.pow((x-5)/4,2));
+      return Math.max(0, ramp + peak + ripple);
+    } else {
+      // 几何光学平台
+      return 2.0;
+    }
+  }
+
+  function computeIntensity(d_um, lambda_nm, density){
+    var x = sizeParam(d_um, lambda_nm);
+    var Q = scatteringEfficiency(x);
+    // 单颗粒散射截面 ∝ Q * d^2 (geometric cross section ∝ d^2)
+    var sigma = Q * d_um * d_um; // 任意单位
+    // 总通量 ∝ density * sigma; 归一化到 0..1 (大致)
+    var raw = density * sigma;
+    // 用 log 压缩, 让画面在 PM0.5 - PM10 间都能看到差异
+    var norm = 1 - Math.exp(-raw / 800);
+    return { x: x, Q: Q, sigma: sigma, intensity: norm };
+  }
+
+  function classifyRegime(x){
+    if(x < 0.3) return 'rayleigh';
+    if(x <= 10) return 'mie';
+    return 'geom';
+  }
+
+  // ---------- chamber rendering ----------
+  var chamberCanvas = document.getElementById('chamberCanvas');
+  var chamberCtx = chamberCanvas.getContext('2d');
+  var curveCanvas = document.getElementById('curveCanvas');
+  var curveCtx = curveCanvas.getContext('2d');
+
+  function resizeCanvas(canvas){
+    var rect = canvas.getBoundingClientRect();
+    var dpr = window.devicePixelRatio || 1;
+    canvas.width = Math.max(2, Math.floor(rect.width * dpr));
+    canvas.height = Math.max(2, Math.floor(rect.height * dpr));
+    var ctx = canvas.getContext('2d');
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    return { w: rect.width, h: rect.height };
+  }
+
+  // wavelength (nm) -> approx visible color (oklch hue degrees)
+  function laserColor(lambda_nm){
+    // 400 violet, 500 cyan-green, 600 yellow, 650 red, 700 deep red
+    var hue;
+    if(lambda_nm < 440)      hue = 300;       // violet
+    else if(lambda_nm < 490) hue = 260;       // blue
+    else if(lambda_nm < 520) hue = 200;       // cyan
+    else if(lambda_nm < 570) hue = 140;       // green
+    else if(lambda_nm < 590) hue = 100;       // yellow
+    else if(lambda_nm < 620) hue = 60;        // orange
+    else                     hue = 25;        // red
+    return 'oklch(0.7 0.22 ' + hue + ')';
+  }
+  function laserColorAlpha(lambda_nm, alpha){
+    var c = laserColor(lambda_nm).replace(')', ' / ' + alpha + ')');
+    return c;
+  }
+
+  // particle color tier by size (PM tier)
+  function particleColor(d_um){
+    if(d_um < 0.5) return getComputedStyle(document.documentElement).getPropertyValue('--PHOTON').trim();
+    if(d_um < 1.5) return getComputedStyle(document.documentElement).getPropertyValue('--MASS').trim();
+    if(d_um < 3)   return getComputedStyle(document.documentElement).getPropertyValue('--WAVE').trim();
+    return getComputedStyle(document.documentElement).getPropertyValue('--FIELD').trim();
+  }
+
+  function particleRadius(d_um, baseHeight){
+    // logarithmic mapping 0.1..50 μm -> 1.2..18 px (relative to chamber height)
+    var minR = Math.max(1.2, baseHeight * 0.005);
+    var maxR = Math.max(6, baseHeight * 0.06);
+    var t = Math.log10(Math.max(0.1, d_um) / 0.1) / Math.log10(50 / 0.1);
+    return minR + (maxR - minR) * t;
+  }
+
+  var t0 = performance.now();
+
+  function drawChamber(){
+    var sz = resizeCanvas(chamberCanvas);
+    var w = sz.w, h = sz.h;
+    var ctx = chamberCtx;
+    ctx.clearRect(0,0,w,h);
+
+    // 腔室边框 (PMS5003 内部腔)
+    var pad = 18;
+    var cx = pad, cy = pad;
+    var cw = w - pad*2, ch = h - pad*2;
+    ctx.strokeStyle = 'oklch(0.45 0.05 265 / 0.8)';
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(cx, cy, cw, ch);
+
+    // 顶/底刻度
+    ctx.fillStyle = 'oklch(0.55 0.03 265)';
+    ctx.font = '9px "JetBrains Mono", monospace';
+    ctx.textBaseline = 'top';
+    ctx.fillText('PMS5003 CHAMBER  ' + Math.round(cw) + 'x' + Math.round(ch) + ' (scaled)', cx + 4, cy + 4);
+
+    // 激光器 (左下) → 颗粒云中心 → 光阱 (右上)
+    var laserStart = { x: cx + 8, y: cy + ch - 18 };
+    var laserEnd = { x: cx + cw - 8, y: cy + 18 };
+
+    // 激光器盒
+    ctx.fillStyle = 'oklch(0.28 0.05 265)';
+    ctx.fillRect(laserStart.x - 14, laserStart.y - 8, 18, 16);
+    ctx.strokeStyle = 'oklch(0.55 0.08 265)';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(laserStart.x - 14, laserStart.y - 8, 18, 16);
+    ctx.fillStyle = 'oklch(0.75 0.02 265)';
+    ctx.font = '8px "JetBrains Mono", monospace';
+    ctx.fillText('LD', laserStart.x - 12, laserStart.y - 5);
+
+    // 光阱
+    ctx.fillStyle = 'oklch(0.28 0.05 265)';
+    ctx.fillRect(laserEnd.x - 4, laserEnd.y - 8, 18, 16);
+    ctx.strokeStyle = 'oklch(0.55 0.08 265)';
+    ctx.strokeRect(laserEnd.x - 4, laserEnd.y - 8, 18, 16);
+    ctx.fillStyle = 'oklch(0.75 0.02 265)';
+    ctx.font = '8px "JetBrains Mono", monospace';
+    ctx.fillText('TRAP', laserEnd.x - 2, laserEnd.y - 5);
+
+    // 激光束 (颜色随波长)
+    var laserC = laserColor(stateGame.lambdaNm);
+    var laserCglow = laserColorAlpha(stateGame.lambdaNm, 0.22);
+    var dx = laserEnd.x - laserStart.x;
+    var dy = laserEnd.y - laserStart.y;
+    var len = Math.sqrt(dx*dx + dy*dy);
+    var ux = dx/len, uy = dy/len;
+    var nx = -uy, ny = ux; // 垂直法向
+
+    // 光束 glow
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(laserStart.x + nx*7, laserStart.y + ny*7);
+    ctx.lineTo(laserEnd.x + nx*7, laserEnd.y + ny*7);
+    ctx.lineTo(laserEnd.x - nx*7, laserEnd.y - ny*7);
+    ctx.lineTo(laserStart.x - nx*7, laserStart.y - ny*7);
+    ctx.closePath();
+    ctx.fillStyle = laserCglow;
+    ctx.fill();
+    ctx.restore();
+
+    // 光束主线
+    ctx.beginPath();
+    ctx.moveTo(laserStart.x, laserStart.y);
+    ctx.lineTo(laserEnd.x, laserEnd.y);
+    ctx.strokeStyle = laserC;
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    // 颗粒云 + 散射事件
+    var elapsed = (performance.now() - t0) / 1000;
+    var pRadius = particleRadius(stateGame.d, ch);
+    var pColor = particleColor(stateGame.d);
+    var Iscale = stateGame.intensity; // 0..1
+
+    // 检测器位置 (90 度方向, 用于侧向散射)
+    var detectorX = cx + cw * 0.5;
+    var detectorY = cy + 10;
+
+    // photodiode label
+    ctx.fillStyle = 'oklch(0.55 0.03 265)';
+    ctx.font = '8px "JetBrains Mono", monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('PHOTODIODE 90deg', detectorX, cy + 22);
+    ctx.textAlign = 'left';
+    // photodiode 图标
+    ctx.fillStyle = 'oklch(0.32 0.06 265)';
+    ctx.fillRect(detectorX - 9, cy + 4, 18, 6);
+    ctx.strokeStyle = 'oklch(0.55 0.08 265)';
+    ctx.strokeRect(detectorX - 9, cy + 4, 18, 6);
+
+    // 更新 + 画颗粒
+    for(var i=0;i<particles.length;i++){
+      var p = particles[i];
+      p.x += p.vx;
+      p.y += p.vy;
+      if(p.x < 0.05 || p.x > 0.95){ p.vx *= -1; p.x = Math.max(0.05, Math.min(0.95, p.x)); }
+      if(p.y < 0.05 || p.y > 0.95){ p.vy *= -1; p.y = Math.max(0.05, Math.min(0.95, p.y)); }
+      var px = cx + p.x * cw;
+      var py = cy + p.y * ch;
+
+      // 颗粒距离激光束中心的距离 (点到线段距离)
+      // 用投影 t
+      var apx = px - laserStart.x;
+      var apy = py - laserStart.y;
+      var tProj = (apx*ux + apy*uy);
+      tProj = Math.max(0, Math.min(len, tProj));
+      var foot = { x: laserStart.x + ux*tProj, y: laserStart.y + uy*tProj };
+      var dxp = px - foot.x;
+      var dyp = py - foot.y;
+      var distToBeam = Math.sqrt(dxp*dxp + dyp*dyp);
+
+      // 颗粒
+      ctx.beginPath();
+      ctx.arc(px, py, pRadius, 0, Math.PI*2);
+      ctx.fillStyle = pColor;
+      ctx.globalAlpha = 0.85;
+      ctx.fill();
+      ctx.globalAlpha = 1;
+
+      // 在光束内 (距离 < 7) → 触发散射
+      if(distToBeam < 7 && Iscale > 0.02){
+        // 散射光: 颗粒发射多向光, 强度跟 Iscale 走
+        var rays = 6;
+        var raySpan = (stateGame.regime === 'rayleigh') ? Math.PI*2 : Math.PI*1.4;
+        var rayBase = -Math.PI/2; // 朝上为主 (90度散射)
+        for(var r=0;r<rays;r++){
+          var ang = rayBase + (raySpan/(rays-1)) * (r - (rays-1)/2) + Math.sin(elapsed*3 + p.phase + r)*0.1;
+          var rl = pRadius + 6 + Iscale * 30;
+          var ex = px + Math.cos(ang) * rl;
+          var ey = py + Math.sin(ang) * rl;
+          ctx.beginPath();
+          ctx.moveTo(px, py);
+          ctx.lineTo(ex, ey);
+          ctx.strokeStyle = laserColorAlpha(stateGame.lambdaNm, 0.18 + 0.5*Iscale);
+          ctx.lineWidth = 1;
+          ctx.stroke();
+        }
+        // 颗粒高亮
+        ctx.beginPath();
+        ctx.arc(px, py, pRadius*1.4, 0, Math.PI*2);
+        ctx.strokeStyle = laserColorAlpha(stateGame.lambdaNm, 0.5 + 0.4*Iscale);
+        ctx.lineWidth = 0.8;
+        ctx.stroke();
+
+        // 偶发: 朝 photodiode 发一束 (低概率)
+        if(stateGame.intensity > 0.1 && Math.random() < 0.04){
+          ctx.beginPath();
+          ctx.moveTo(px, py);
+          ctx.lineTo(detectorX + (Math.random()-0.5)*8, detectorY);
+          ctx.strokeStyle = stateGame.resonant
+            ? 'oklch(0.85 0.14 85 / 0.7)'
+            : laserColorAlpha(stateGame.lambdaNm, 0.45);
+          ctx.lineWidth = 1.1;
+          ctx.stroke();
+        }
+      }
+    }
+
+    // 几何光学模式 → 给大颗粒画阴影 (颗粒挡住光束)
+    if(stateGame.regime === 'geom' && pRadius > 6){
+      // 直射光线被颗粒挡住的视觉提示: 画一个朝光阱的暗斑
+      ctx.fillStyle = 'oklch(0.10 0.02 265 / 0.4)';
+      ctx.font = '9px "JetBrains Mono", monospace';
+      ctx.fillText('large particles cast shadows -> reflection > scattering', cx + 4, cy + ch - 14);
+    }
+    // Rayleigh 模式 → 提示
+    if(stateGame.regime === 'rayleigh'){
+      ctx.fillStyle = 'oklch(0.55 0.03 265)';
+      ctx.font = '9px "JetBrains Mono", monospace';
+      ctx.fillText('tiny particles, weak omni-directional glow', cx + 4, cy + ch - 14);
+    }
+    // Mie 模式 → 提示
+    if(stateGame.regime === 'mie'){
+      ctx.fillStyle = stateGame.resonant ? 'oklch(0.85 0.14 85)' : 'oklch(0.78 0.13 215)';
+      ctx.font = '9px "JetBrains Mono", monospace';
+      ctx.fillText('forward-biased scatter lobe — PMS5003 sweet spot', cx + 4, cy + ch - 14);
+    }
+  }
+
+  // ---------- curve rendering ----------
+  function drawCurve(){
+    var sz = resizeCanvas(curveCanvas);
+    var w = sz.w, h = sz.h;
+    var ctx = curveCtx;
+    ctx.clearRect(0,0,w,h);
+
+    var padL = 36, padR = 8, padT = 6, padB = 18;
+    var plotW = w - padL - padR;
+    var plotH = h - padT - padB;
+
+    // 轴
+    ctx.strokeStyle = 'oklch(0.45 0.05 265 / 0.6)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(padL, padT);
+    ctx.lineTo(padL, padT + plotH);
+    ctx.lineTo(padL + plotW, padT + plotH);
+    ctx.stroke();
+
+    // x 轴 log: d from 0.1 to 50 μm
+    var dMin = 0.1, dMax = 50;
+    var logMin = Math.log10(dMin), logMax = Math.log10(dMax);
+    function xToPx(d){
+      var t = (Math.log10(d) - logMin) / (logMax - logMin);
+      return padL + t * plotW;
+    }
+    function yToPx(I){
+      // I in 0..1
+      return padT + plotH * (1 - I);
+    }
+
+    // x 刻度 PM 标
+    var ticks = [
+      { d: 0.3, label: 'PM0.3' },
+      { d: 1, label: 'PM1' },
+      { d: 2.5, label: 'PM2.5' },
+      { d: 10, label: 'PM10' },
+      { d: 50, label: '50' },
+    ];
+    ctx.fillStyle = 'oklch(0.55 0.03 265)';
+    ctx.font = '8px "JetBrains Mono", monospace';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    for(var ti=0;ti<ticks.length;ti++){
+      var tx = xToPx(ticks[ti].d);
+      ctx.beginPath();
+      ctx.moveTo(tx, padT + plotH);
+      ctx.lineTo(tx, padT + plotH + 3);
+      ctx.strokeStyle = 'oklch(0.45 0.05 265 / 0.6)';
+      ctx.stroke();
+      ctx.fillStyle = 'oklch(0.55 0.03 265)';
+      ctx.fillText(ticks[ti].label, tx, padT + plotH + 4);
+    }
+    ctx.textAlign = 'left';
+    ctx.fillStyle = 'oklch(0.55 0.03 265)';
+    ctx.fillText('d (μm, log)', padL + plotW - 60, padT + plotH + 4);
+
+    // y 刻度
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'middle';
+    for(var yi=0;yi<=4;yi++){
+      var yv = yi/4;
+      var py = yToPx(yv);
+      ctx.beginPath();
+      ctx.moveTo(padL - 3, py);
+      ctx.lineTo(padL, py);
+      ctx.strokeStyle = 'oklch(0.45 0.05 265 / 0.6)';
+      ctx.stroke();
+      ctx.fillStyle = 'oklch(0.55 0.03 265)';
+      ctx.fillText(yv.toFixed(2), padL - 5, py);
+    }
+    ctx.save();
+    ctx.translate(10, padT + plotH/2);
+    ctx.rotate(-Math.PI/2);
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = 'oklch(0.55 0.03 265)';
+    ctx.fillText('Intensity (norm)', 0, 0);
+    ctx.restore();
+
+    // 曲线 (当前 λ + density)
+    ctx.beginPath();
+    var steps = 120;
+    var maxI = 0;
+    var peakD = dMin;
+    var pts = [];
+    for(var si=0;si<=steps;si++){
+      var lt = si/steps;
+      var d = Math.pow(10, logMin + lt * (logMax - logMin));
+      var r = computeIntensity(d, stateGame.lambdaNm, stateGame.density);
+      pts.push({ d: d, I: r.intensity });
+      if(r.intensity > maxI){ maxI = r.intensity; peakD = d; }
+    }
+    // 绘制
+    for(var pi=0;pi<pts.length;pi++){
+      var pp = pts[pi];
+      var X = xToPx(pp.d);
+      var Y = yToPx(pp.I);
+      if(pi===0) ctx.moveTo(X, Y); else ctx.lineTo(X, Y);
+    }
+    ctx.strokeStyle = laserColor(stateGame.lambdaNm);
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+
+    // 填充下方
+    ctx.lineTo(xToPx(dMax), yToPx(0));
+    ctx.lineTo(xToPx(dMin), yToPx(0));
+    ctx.closePath();
+    ctx.fillStyle = laserColorAlpha(stateGame.lambdaNm, 0.12);
+    ctx.fill();
+
+    // 峰位标线
+    var pkX = xToPx(peakD);
+    ctx.beginPath();
+    ctx.moveTo(pkX, padT);
+    ctx.lineTo(pkX, padT + plotH);
+    ctx.strokeStyle = 'oklch(0.85 0.14 85 / 0.4)';
+    ctx.setLineDash([3,3]);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = 'oklch(0.85 0.14 85)';
+    ctx.font = '9px "JetBrains Mono", monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('peak d=' + peakD.toFixed(2) + 'μm', pkX, padT + 2);
+
+    // 当前 d 标点
+    var curX = xToPx(stateGame.d);
+    var curY = yToPx(stateGame.intensity);
+    ctx.beginPath();
+    ctx.arc(curX, curY, 5, 0, Math.PI*2);
+    ctx.fillStyle = 'oklch(0.85 0.14 85)';
+    ctx.fill();
+    ctx.strokeStyle = 'oklch(0.14 0.035 265)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    // 共振区 (PM0.5..PM2.5 在 650nm)
+    if(Math.abs(stateGame.lambdaNm - 650) < 30){
+      var bandX1 = xToPx(stateGame.peakAt650Min);
+      var bandX2 = xToPx(stateGame.peakAt650Max);
+      ctx.fillStyle = 'oklch(0.85 0.14 85 / 0.08)';
+      ctx.fillRect(bandX1, padT, bandX2 - bandX1, plotH);
+    }
+  }
+
+  // ---------- update loop ----------
+  function recompute(){
+    var r = computeIntensity(stateGame.d, stateGame.lambdaNm, stateGame.density);
+    stateGame.x = r.x;
+    stateGame.intensity = r.intensity;
+    stateGame.regime = classifyRegime(r.x);
+
+    // RESONANCE: 在 Mie 区 且 强度 > 0.55 且 d 在峰带内 (650nm 下 0.5-2.5 μm)
+    var inMie = (stateGame.regime === 'mie');
+    var peakBand = (stateGame.d >= 0.5 && stateGame.d <= 4) && (stateGame.lambdaNm >= 580);
+    var strong = stateGame.intensity > 0.55;
+    stateGame.resonant = inMie && peakBand && strong;
+
+    // HUD
+    document.getElementById('hudSize').textContent = stateGame.d.toFixed(2);
+    document.getElementById('hudWave').textContent = String(Math.round(stateGame.lambdaNm));
+    document.getElementById('hudX').textContent = stateGame.x.toFixed(2);
+    document.getElementById('hudI').textContent = stateGame.intensity.toFixed(2);
+
+    var regimeText, regimeTagText, regimeClass;
+    if(stateGame.regime === 'rayleigh'){
+      regimeText = I18N[langState].regimeRayleigh;
+      regimeTagText = 'RAYLEIGH';
+      regimeClass = '';
+    } else if(stateGame.regime === 'mie'){
+      regimeText = I18N[langState].regimeMie;
+      regimeTagText = stateGame.resonant ? 'RESONANCE' : 'MIE';
+      regimeClass = stateGame.resonant ? 'gold' : '';
+    } else {
+      regimeText = I18N[langState].regimeGeom;
+      regimeTagText = 'GEOMETRIC';
+      regimeClass = '';
+    }
+    document.getElementById('hudRegime').textContent = stateGame.regime;
+    var regimeTag = document.getElementById('regimeTag');
+    regimeTag.textContent = regimeTagText;
+    regimeTag.className = 'regime mono' + (regimeClass ? ' ' + regimeClass : '');
+
+    // intensity bar
+    var bar = document.getElementById('intensityBar');
+    var val = document.getElementById('intensityVal');
+    var hudCell = document.getElementById('hudIntCell');
+    var pct = Math.max(2, Math.round(stateGame.intensity * 100));
+    bar.style.height = pct + '%';
+    val.textContent = stateGame.intensity.toFixed(2);
+    if(stateGame.resonant){
+      bar.classList.add('gold');
+      val.classList.add('gold');
+      hudCell.classList.add('hot');
+    } else {
+      bar.classList.remove('gold');
+      val.classList.remove('gold');
+      hudCell.classList.remove('hot');
+    }
+
+    // resonance flash
+    var flash = document.getElementById('resonanceFlash');
+    if(stateGame.resonant){
+      flash.classList.add('on');
+    } else {
+      flash.classList.remove('on');
+    }
+
+    // ---------- tasks ----------
+    // task1: 650nm 下找到峰 — d 在 0.5..2.5 μm 且 |λ-650|<30 且 resonant
+    if(!stateGame.tasksDone.t1){
+      if(stateGame.resonant && Math.abs(stateGame.lambdaNm - 650) < 30
+         && stateGame.d >= stateGame.peakAt650Min && stateGame.d <= stateGame.peakAt650Max){
+        stateGame.tasksDone.t1 = true;
+        stateGame.foundPeakD = stateGame.d;
+        document.getElementById('task1').classList.add('done');
+      }
+    }
+    // task2: d >= 45 μm
+    if(!stateGame.tasksDone.t2 && stateGame.d >= 45){
+      stateGame.tasksDone.t2 = true;
+      document.getElementById('task2').classList.add('done');
+    }
+    // task3: d <= 0.15 μm
+    if(!stateGame.tasksDone.t3 && stateGame.d <= 0.15){
+      stateGame.tasksDone.t3 = true;
+      document.getElementById('task3').classList.add('done');
+    }
+  }
+
+  // ---------- slider wiring ----------
+  var sizeSlider = document.getElementById('sizeSlider');
+  var waveSlider = document.getElementById('waveSlider');
+  var densSlider = document.getElementById('densSlider');
+
+  sizeSlider.addEventListener('input', function(){
+    stateGame.d = parseFloat(sizeSlider.value);
+    document.getElementById('sizeVal').textContent = stateGame.d.toFixed(2);
+    recompute();
+  });
+  waveSlider.addEventListener('input', function(){
+    stateGame.lambdaNm = parseFloat(waveSlider.value);
+    document.getElementById('waveVal').textContent = Math.round(stateGame.lambdaNm);
+    recompute();
+  });
+  densSlider.addEventListener('input', function(){
+    stateGame.density = parseFloat(densSlider.value);
+    document.getElementById('densVal').textContent = Math.round(stateGame.density);
+    rebuildParticles();
+    recompute();
+  });
+
+  // ---------- main rAF loop ----------
+  function tick(){
+    drawChamber();
+    drawCurve();
+    requestAnimationFrame(tick);
+  }
+
+  window.addEventListener('resize', function(){
+    // 触发下一帧 resize
+  });
+
+  // init
+  refreshI18N();
+  recompute();
+  requestAnimationFrame(tick);
+
+})();
+</script>
+</body>
+</html>

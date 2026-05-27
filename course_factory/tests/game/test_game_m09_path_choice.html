@@ -1,0 +1,885 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>焊接还是免焊？你来决定</title>
+<style>
+  :root{
+    /* Surfaces — Claude warm cream */
+    --paper:    #FAF9F5;
+    --paper-2:  #F1EDDF;
+    --card:     #FFFFFF;
+    --ink:      #191814;
+    --ink-2:    #2B2924;
+    --sub:      #6B6557;
+    --sub-2:    #9D978A;
+    --border:   #EBE5D6;
+    --border-2: #D9D1BD;
+    --hairline: #F2EDE0;
+
+    /* Primary — Claude coral */
+    --primary:      #D97757;
+    --primary-ink:  #9A4A2E;
+    --primary-soft: #F8EDE5;
+    --primary-line: #ECCFB8;
+
+    /* Domain accent — aerospace */
+    --accent:       #B85A33;
+    --accent-soft:  #F2DDD0;
+
+    /* States */
+    --safe:    #6F8B5C;
+    --safe-soft:#E3ECDB;
+    --warn:    #B0593F;
+    --warn-soft:#F3DDD2;
+
+    /* Shadows */
+    --shadow-sm: 0 1px 2px 0 rgba(25,24,20,.04);
+    --shadow:    0 1px 3px 0 rgba(25,24,20,.06), 0 1px 2px -1px rgba(25,24,20,.04);
+    --shadow-md: 0 4px 8px -2px rgba(25,24,20,.06), 0 2px 4px -2px rgba(25,24,20,.04);
+    --shadow-lg: 0 12px 24px -6px rgba(25,24,20,.1), 0 4px 8px -4px rgba(25,24,20,.05);
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    height:100vh;width:100vw;overflow:hidden;
+    background:var(--paper);color:var(--ink);
+    font-family:'Inter','PingFang SC','Noto Sans SC',sans-serif;
+    display:flex;
+  }
+  .mono{font-family:'JetBrains Mono','Menlo',monospace;}
+
+  /* Sidebar — 200px left */
+  .game-sidebar{
+    width:200px;flex-shrink:0;
+    background:var(--paper-2);
+    border-right:1px solid var(--border);
+    display:flex;flex-direction:column;
+    padding:20px 16px;gap:18px;
+  }
+  .brand{display:flex;flex-direction:column;gap:4px;}
+  .brand-tag{font-size:10px;letter-spacing:.16em;color:var(--accent);font-weight:600;}
+  .brand-name{font-size:15px;font-weight:700;color:var(--ink);line-height:1.3;}
+  .progress-block{display:flex;flex-direction:column;gap:8px;}
+  .progress-label{font-size:11px;color:var(--sub);letter-spacing:.05em;}
+  .progress-track{height:6px;background:var(--border);border-radius:3px;overflow:hidden;}
+  .progress-fill{height:100%;background:var(--primary);width:0%;transition:width 300ms ease;}
+  .progress-dots{display:flex;gap:6px;}
+  .pd{width:18px;height:18px;border-radius:50%;border:1.5px solid var(--border-2);background:var(--card);
+      display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:600;color:var(--sub-2);}
+  .pd.active{border-color:var(--primary);background:var(--primary-soft);color:var(--primary-ink);}
+  .pd.done{border-color:var(--safe);background:var(--safe-soft);color:var(--safe);}
+  .pd.miss{border-color:var(--warn);background:var(--warn-soft);color:var(--warn);}
+
+  .guide{display:flex;flex-direction:column;gap:6px;font-size:11px;color:var(--sub);line-height:1.5;}
+  .guide-li{padding-left:10px;border-left:2px solid var(--accent);}
+  .lang-btn{
+    margin-top:auto;
+    border:1px solid var(--border-2);background:var(--card);
+    color:var(--ink-2);font-size:11px;font-weight:600;
+    padding:8px 12px;border-radius:6px;cursor:pointer;
+    font-family:'JetBrains Mono',monospace;letter-spacing:.05em;
+    transition:background 200ms;
+  }
+  .lang-btn:hover{background:var(--paper);}
+
+  /* Main */
+  .game-main{
+    flex:1;display:flex;flex-direction:column;
+    padding:32px 40px;overflow:hidden;min-width:0;
+  }
+  .scene-header{
+    display:flex;align-items:flex-end;justify-content:space-between;
+    padding-bottom:12px;border-bottom:1px solid var(--hairline);margin-bottom:20px;
+  }
+  .scene-title-block{display:flex;flex-direction:column;gap:6px;max-width:70%;}
+  .scene-num{
+    font-size:11px;letter-spacing:.18em;color:var(--accent);font-weight:700;
+    text-transform:uppercase;font-family:'JetBrains Mono',monospace;
+  }
+  .scene-title{font-size:22px;font-weight:700;color:var(--ink);line-height:1.3;}
+  .scene-counter{
+    font-family:'JetBrains Mono',monospace;font-size:13px;
+    color:var(--sub);padding:6px 12px;background:var(--card);
+    border:1px solid var(--border);border-radius:6px;
+  }
+
+  /* Scene card */
+  .scene-stage{
+    flex:1;display:flex;flex-direction:column;gap:18px;overflow-y:auto;min-height:0;
+  }
+  .scenario-card{
+    background:var(--card);border:1px solid var(--border);
+    border-radius:12px;box-shadow:var(--shadow-sm);
+    padding:22px 24px;display:flex;gap:22px;align-items:flex-start;
+  }
+  .scenario-illu{
+    flex-shrink:0;width:120px;height:120px;border-radius:10px;
+    background:var(--accent-soft);display:flex;align-items:center;justify-content:center;
+  }
+  .scenario-text{flex:1;min-width:0;}
+  .scenario-tag{
+    display:inline-block;font-size:10px;letter-spacing:.14em;font-weight:700;
+    color:var(--accent);background:var(--accent-soft);padding:3px 8px;border-radius:4px;
+    text-transform:uppercase;font-family:'JetBrains Mono',monospace;margin-bottom:8px;
+  }
+  .scenario-body{font-size:16px;line-height:1.65;color:var(--ink-2);}
+  .scenario-prompt{
+    font-size:13px;color:var(--sub);margin-top:10px;font-style:italic;
+  }
+
+  /* Options */
+  .options{display:flex;gap:14px;flex-wrap:wrap;}
+  .option-btn{
+    flex:1;min-width:280px;
+    background:var(--card);border:1.5px solid var(--border-2);
+    border-radius:10px;padding:16px 18px;
+    cursor:pointer;text-align:left;font-family:inherit;
+    transition:border-color 200ms, transform 150ms, box-shadow 200ms;
+    display:flex;flex-direction:column;gap:6px;
+  }
+  .option-btn:hover{border-color:var(--accent);box-shadow:var(--shadow);}
+  .option-btn:disabled{cursor:default;opacity:.8;}
+  .option-btn:disabled:hover{box-shadow:none;}
+  .option-key{
+    font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.16em;
+    color:var(--sub);font-weight:700;
+  }
+  .option-text{font-size:15px;color:var(--ink-2);font-weight:600;line-height:1.5;}
+  .option-btn.picked-correct{
+    border-color:var(--primary);background:var(--primary-soft);
+  }
+  .option-btn.picked-correct .option-key{color:var(--primary-ink);}
+  .option-btn.picked-correct .option-text{color:var(--primary-ink);}
+  .option-btn.picked-wrong{
+    border-color:var(--warn);background:var(--warn-soft);
+  }
+  .option-btn.picked-wrong .option-key{color:var(--warn);}
+  .option-btn.dimmed{opacity:.45;}
+
+  /* Feedback */
+  .feedback{
+    background:var(--card);border-radius:12px;
+    border:1px solid var(--border);box-shadow:var(--shadow-sm);
+    padding:18px 22px;display:none;
+    border-left:4px solid var(--primary);
+  }
+  .feedback.show{display:block;}
+  .feedback.is-wrong{border-left-color:var(--warn);}
+  .fb-head{
+    display:flex;align-items:center;gap:10px;margin-bottom:10px;
+  }
+  .fb-badge{
+    font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.14em;
+    font-weight:700;padding:3px 8px;border-radius:4px;text-transform:uppercase;
+    background:var(--primary-soft);color:var(--primary-ink);
+  }
+  .feedback.is-wrong .fb-badge{background:var(--warn-soft);color:var(--warn);}
+  .fb-title{font-size:14px;font-weight:700;color:var(--ink);}
+  .fb-body{font-size:13.5px;line-height:1.65;color:var(--ink-2);}
+  .fb-safety{
+    margin-top:12px;padding:10px 12px;background:var(--paper-2);
+    border-radius:6px;border-left:3px solid var(--accent);
+    font-size:12.5px;color:var(--sub);line-height:1.55;
+  }
+  .fb-safety strong{color:var(--accent);font-weight:700;}
+  .fb-next{
+    margin-top:14px;display:flex;justify-content:flex-end;
+  }
+  .next-btn{
+    background:var(--primary);color:#fff;border:none;border-radius:6px;
+    padding:9px 18px;font-size:13px;font-weight:600;cursor:pointer;
+    font-family:inherit;letter-spacing:.04em;
+    transition:background 200ms;
+  }
+  .next-btn:hover{background:var(--primary-ink);}
+
+  /* Gold key */
+  .gold-key{
+    position:relative;
+    background:linear-gradient(180deg, var(--primary-soft) 0%, var(--card) 100%);
+  }
+  .gold-key::before{
+    content:'';position:absolute;top:0;left:0;right:0;height:3px;
+    background:var(--primary);border-radius:12px 12px 0 0;
+  }
+
+  /* Final reward */
+  .reward-screen{
+    display:none;flex-direction:column;align-items:center;justify-content:center;
+    flex:1;text-align:center;gap:18px;padding:40px;
+  }
+  .reward-screen.show{display:flex;}
+  .badge{
+    width:120px;height:120px;border-radius:50%;
+    background:var(--primary-soft);border:3px solid var(--primary);
+    display:flex;align-items:center;justify-content:center;
+    box-shadow:var(--shadow-md);
+    animation:badgePulse 2.4s ease-in-out infinite;
+  }
+  @keyframes badgePulse{
+    0%,100%{transform:scale(1);}
+    50%{transform:scale(1.04);}
+  }
+  .reward-title{font-size:24px;font-weight:700;color:var(--ink);}
+  .reward-sub{font-size:14px;color:var(--sub);max-width:480px;line-height:1.65;}
+  .reward-stats{
+    display:flex;gap:24px;margin-top:8px;
+    font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--sub);
+  }
+  .reward-stat-val{color:var(--accent);font-size:22px;font-weight:700;}
+  .restart-btn{
+    margin-top:12px;background:var(--card);color:var(--ink-2);
+    border:1.5px solid var(--border-2);border-radius:8px;
+    padding:10px 22px;font-size:13px;font-weight:600;cursor:pointer;
+    font-family:inherit;transition:border-color 200ms;
+  }
+  .restart-btn:hover{border-color:var(--accent);}
+
+  /* SVG safety icon */
+  .safety-icon{width:50%;height:50%;}
+</style>
+</head>
+<body>
+  <aside class="game-sidebar">
+    <div class="brand">
+      <div class="brand-tag" id="brandTag">AEROSPACE · M09</div>
+      <div class="brand-name" id="brandName">焊接 vs 免焊接<br/>路径决策</div>
+    </div>
+
+    <div class="progress-block">
+      <div class="progress-label" id="progLabel">完成进度</div>
+      <div class="progress-track"><div class="progress-fill" id="progFill"></div></div>
+      <div class="progress-dots" id="progDots"></div>
+    </div>
+
+    <ul class="guide">
+      <li class="guide-li" id="g1">读情境再选项</li>
+      <li class="guide-li" id="g2">看反馈学安全</li>
+      <li class="guide-li" id="g3">5 关全过解锁</li>
+    </ul>
+
+    <button class="lang-btn" id="langBtn">中 / EN</button>
+  </aside>
+
+  <main class="game-main" id="gameMain">
+    <div class="scene-header" id="sceneHeader">
+      <div class="scene-title-block">
+        <div class="scene-num" id="sceneNum">SCENE 01</div>
+        <div class="scene-title" id="sceneTitle">情境一</div>
+      </div>
+      <div class="scene-counter" id="sceneCounter">01 / 05</div>
+    </div>
+
+    <div class="scene-stage" id="sceneStage">
+      <div class="scenario-card" id="scenarioCard">
+        <div class="scenario-illu" id="scenarioIllu"></div>
+        <div class="scenario-text">
+          <span class="scenario-tag" id="scenarioTag">SITUATION</span>
+          <div class="scenario-body" id="scenarioBody"></div>
+          <div class="scenario-prompt" id="scenarioPrompt"></div>
+        </div>
+      </div>
+
+      <div class="options">
+        <button class="option-btn" id="optA" type="button">
+          <span class="option-key">OPTION A</span>
+          <span class="option-text" id="optAText"></span>
+        </button>
+        <button class="option-btn" id="optB" type="button">
+          <span class="option-key">OPTION B</span>
+          <span class="option-text" id="optBText"></span>
+        </button>
+      </div>
+
+      <div class="feedback" id="feedback">
+        <div class="fb-head">
+          <span class="fb-badge" id="fbBadge">RATIONALE</span>
+          <span class="fb-title" id="fbTitle"></span>
+        </div>
+        <div class="fb-body" id="fbBody"></div>
+        <div class="fb-safety" id="fbSafety"></div>
+        <div class="fb-next">
+          <button class="next-btn" id="nextBtn" type="button">下一个情境</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="reward-screen" id="rewardScreen">
+      <div class="badge">
+        <svg class="safety-icon" viewBox="0 0 64 64" fill="none">
+          <path d="M32 6 L54 14 L54 30 C54 44 44 54 32 58 C20 54 10 44 10 30 L10 14 Z"
+                stroke="#D97757" stroke-width="3" fill="#F8EDE5"/>
+          <path d="M22 32 L29 39 L43 24" stroke="#D97757" stroke-width="3.5"
+                stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+        </svg>
+      </div>
+      <div class="reward-title" id="rewardTitle">我会做安全决策</div>
+      <div class="reward-sub" id="rewardSub">五个情境都做出了合理选择 — 你已经掌握了在焊接和免焊路径之间权衡安全、时间与可行性的能力。</div>
+      <div class="reward-stats">
+        <div>
+          <div class="reward-stat-val" id="statCorrect">5</div>
+          <div id="statCorrectLbl">首选正确</div>
+        </div>
+        <div>
+          <div class="reward-stat-val" id="statTotal">5</div>
+          <div id="statTotalLbl">情境总数</div>
+        </div>
+      </div>
+      <button class="restart-btn" id="restartBtn" type="button">再玩一次</button>
+    </div>
+  </main>
+
+<script>
+(function(){
+  "use strict";
+
+  // ---- 5 个情境 ----
+  var SCENES = [
+    {
+      title: { cn:'周末无人陪同', en:'No supervisor this weekend' },
+      tag:   { cn:'TIME / SAFETY', en:'TIME / SAFETY' },
+      body: {
+        cn:'你妈周末要加班，没人能陪你焊接。你这个周末想动手把 PMS5003 接到 ESP32 上做完。',
+        en:'Your mom works this weekend — no adult to supervise. You still want to wire the PMS5003 to the ESP32.'
+      },
+      prompt: { cn:'两种选择，挑一个：', en:'Two options — pick one:' },
+      options: [
+        { key:'A', text:{ cn:'还是开烙铁焊，自己小心点就行', en:'Fire up the iron anyway, just be careful' }, correct:false },
+        { key:'B', text:{ cn:'改用免焊杜邦线先把电路跑通，焊接等下周', en:'Use jumper wires this weekend, save soldering for next week' }, correct:true }
+      ],
+      illu: 'iron',
+      rationale: {
+        correct: {
+          title: { cn:'好决策', en:'Good call' },
+          body: {
+            cn:'烙铁尖端 350°C 以上，一旦碰到皮肤 / 桌面塑料就是烫伤 / 火灾级别的事故。免焊杜邦线 5 分钟就能搭好电路，先把软件跑通；焊接是为了"长期稳定"，不是为了"今天必须焊"。',
+            en:'A soldering tip runs above 350°C — one slip burns skin or melts plastic. Jumper wires get you running in 5 minutes; soldering is for long-term stability, not "must do today".'
+          },
+          safety: {
+            cn:'<strong>安全要点 · </strong>烙铁通电 = 必须有成年人在 5 米内 + 通风良好 + 防火垫。',
+            en:'<strong>Safety · </strong>Powered iron = adult within 5m + ventilation + heat mat. Always.'
+          }
+        },
+        wrong: {
+          title: { cn:'再想想', en:'Reconsider' },
+          body: {
+            cn:'独自焊接是被明确禁止的，不是"小心点就行"的问题。烙铁烫到自己短期红肿，碰到桌面塑料/纸/窗帘可能起火。"今天必须焊"几乎从来不是真的。',
+            en:'Soldering alone is not allowed — it is not a "be careful" issue. The tip can ignite plastic, paper or curtains. "Must do today" is almost never actually true.'
+          },
+          safety: {
+            cn:'<strong>安全要点 · </strong>免焊路径完全可以先把电路逻辑跑通，焊接随时可以补做。',
+            en:'<strong>Safety · </strong>The breadboard path proves the logic; soldering can always wait.'
+          }
+        }
+      }
+    },
+    {
+      title: { cn:'测 PMS5003 的 GND 是否真通', en:'Verify the PMS5003 GND continuity' },
+      tag:   { cn:'TOOL CHOICE', en:'TOOL CHOICE' },
+      body: {
+        cn:'你想确认 PMS5003 模块的 GND 引脚到电源负极是不是真连通。手边有万用表、鳄鱼夹和杜邦线。',
+        en:'You want to confirm the PMS5003 GND pin is truly connected to the supply ground. You have a multimeter, alligator clips, and jumper wires.'
+      },
+      prompt: { cn:'怎么测最稳？', en:'Most reliable way?' },
+      options: [
+        { key:'A', text:{ cn:'万用表两根表笔直接夹住测试点测通断', en:'Use the multimeter probes directly on the test points (continuity mode)' }, correct:true },
+        { key:'B', text:{ cn:'用鳄鱼夹把测试点接到 LED 上看亮不亮', en:'Hook the points to an LED with alligator clips, see if it lights' }, correct:false }
+      ],
+      illu: 'multimeter',
+      rationale: {
+        correct: {
+          title: { cn:'对路', en:'Right tool' },
+          body: {
+            cn:'万用表通断档专门干这事：会发出蜂鸣告诉你"通了"，电阻 < 几欧才报通。不需要外加电源，不会误烧任何东西。LED 法需要限流电阻，还分极性，麻烦且不准。',
+            en:'Continuity mode beeps when resistance is below a few ohms — designed for exactly this. No external power, nothing burns. LED tests need a resistor, mind polarity, and are inaccurate.'
+          },
+          safety: {
+            cn:'<strong>安全要点 · </strong>通断档前先确认电路已断电；带电测通断会损坏表，严重时炸表笔。',
+            en:'<strong>Safety · </strong>De-energize first. Continuity test on a live circuit damages the meter or worse.'
+          }
+        },
+        wrong: {
+          title: { cn:'选错工具', en:'Wrong tool' },
+          body: {
+            cn:'LED 亮 / 不亮取决于电压方向 + 限流电阻 + LED 健康度，三个变量混在一起，"不亮" 不能证明"不通"。万用表 30 秒就给确定答案。',
+            en:'LED brightness depends on voltage, current-limit resistor, and the LED itself — three variables conflated. "Not lit" does not mean "not connected". The meter gives a definite answer in 30 seconds.'
+          },
+          safety: {
+            cn:'<strong>安全要点 · </strong>选工具的原则：能用专用工具 (万用表) 就不要用替代品 (LED)。',
+            en:'<strong>Safety · </strong>Rule of thumb — prefer the purpose-built tool (meter) over a workaround (LED).'
+          }
+        }
+      }
+    },
+    {
+      title: { cn:'烙铁掉桌上了', en:'The hot iron just dropped' },
+      tag:   { cn:'GOLD KEY · EMERGENCY', en:'GOLD KEY · EMERGENCY' },
+      body: {
+        cn:'焊接时你手抖了一下，烙铁从支架上掉到桌面，正以 380°C 的温度烫向桌面塑料垫。烙铁线还连着电。',
+        en:'Your hand twitched and the iron slipped off its stand onto the plastic desk mat — still powered, still at 380°C.'
+      },
+      prompt: { cn:'下一秒你该做什么？', en:'What do you do next?' },
+      options: [
+        { key:'A', text:{ cn:'立刻用手把烙铁抓回支架', en:'Grab the iron by hand and put it back on the stand' }, correct:false },
+        { key:'B', text:{ cn:'先拔电源，再用钳子把烙铁夹回支架', en:'Yank the power first, then use pliers to lift it back onto the stand' }, correct:true }
+      ],
+      illu: 'fire',
+      goldKey: true,
+      rationale: {
+        correct: {
+          title: { cn:'金钥匙时刻 · 正解', en:'Gold key moment · Correct' },
+          body: {
+            cn:'断电 → 用工具，不用手 — 这是所有热源应急的不变顺序。380°C 接触皮肤 0.5 秒就是三度烫伤。即使是手柄，慌乱中也可能抓到金属杆。拔电源后烙铁会在 60 秒内降到不易引燃的温度。',
+            en:'Cut power first, then use a tool — never your hand. 380°C burns through skin in half a second. In panic you may grab the metal shaft instead of the handle. Once unplugged, the tip cools below ignition risk within 60 seconds.'
+          },
+          safety: {
+            cn:'<strong>安全要点 · </strong>焊接工位标配 = 电源排上的物理开关 + 旁边一把金属钳。两样齐备才能开烙铁。',
+            en:'<strong>Safety · </strong>A solder station needs a physical kill switch on the strip + metal pliers next to it. No iron without both.'
+          }
+        },
+        wrong: {
+          title: { cn:'差一点出事', en:'Almost a real injury' },
+          body: {
+            cn:'空手抓烙铁是焊接事故里最高频的一种。即使握住手柄，惯性会让另一端的金属杆扫过你的手腕。正确做法：先断电再用工具。慢一秒不会让桌子烧穿，但赤手抓会让你疼一周。',
+            en:'Bare-handed grabs are the most common solder injury. Even on the handle, the hot shaft can swing across your wrist. Always cut power, then use a tool. One extra second will not burn through the desk; bare hands will hurt for a week.'
+          },
+          safety: {
+            cn:'<strong>安全要点 · </strong>桌上提前准备金属钳 / 防火垫，遇事不靠"反应快"，靠"流程对"。',
+            en:'<strong>Safety · </strong>Keep pliers and a heat mat in arm reach. In emergencies trust the protocol, not your reflex.'
+          }
+        }
+      }
+    },
+    {
+      title: { cn:'万用表读到 220V 交流', en:'Multimeter reads 220V AC' },
+      tag:   { cn:'CONFIG CHECK', en:'CONFIG CHECK' },
+      body: {
+        cn:'你只是想测一块 9V 电池，但万用表屏幕跳出 "220V AC"。表笔已经接在电池两端。',
+        en:'You only want to measure a 9V battery, but the meter shows "220V AC". The probes are already on the battery.'
+      },
+      prompt: { cn:'你认为这意味着什么？', en:'What does this mean?' },
+      options: [
+        { key:'A', text:{ cn:'电池一定坏了，赶紧再测一次确认', en:'The battery is broken, measure again to confirm' }, correct:false },
+        { key:'B', text:{ cn:'档位选错了 (停在 AC)，先拔表笔切到 DC 再测', en:'The dial is on AC — unplug the probes, switch to DC, then retest' }, correct:true }
+      ],
+      illu: 'dial',
+      rationale: {
+        correct: {
+          title: { cn:'读对了线索', en:'Read the clue right' },
+          body: {
+            cn:'9V 电池是直流 (DC)，万用表停在 AC 档读出来的数字毫无物理意义，可能是 0 也可能是 220 — 因为表在"假装家用插座"。先拔表笔再切档位是好习惯：带表笔切档可能短路。',
+            en:'A 9V battery is DC. A reading taken on AC is meaningless — could be 0, could be 220 — because the meter is pretending to be at a wall socket. Always unplug the probes before turning the dial; rotating with probes seated risks shorts.'
+          },
+          safety: {
+            cn:'<strong>安全要点 · </strong>万用表三段确认：档位 → 红表笔孔 (VΩ vs 10A) → 量程。不确认就不接表笔。',
+            en:'<strong>Safety · </strong>Three-check the meter — mode, red probe socket (VΩ vs 10A), range — before touching probes to anything.'
+          }
+        },
+        wrong: {
+          title: { cn:'怪错了对象', en:'Blamed the wrong thing' },
+          body: {
+            cn:'电池没问题，是仪器档位错。"再测一次"在 AC 档读永远是错的。先想"我档位对吗？"再换档，比反复测有效一百倍。',
+            en:'The battery is fine — the meter mode is wrong. Re-reading on AC will always be wrong. Ask "is my dial right?" before retrying anything.'
+          },
+          safety: {
+            cn:'<strong>安全要点 · </strong>数字反常 → 先怀疑仪器配置，再怀疑被测物。配置错误是初学者第一坑。',
+            en:'<strong>Safety · </strong>Weird reading → suspect the meter setup first, the target second. Misconfiguration is the #1 beginner pitfall.'
+          }
+        }
+      }
+    },
+    {
+      title: { cn:'全免焊路线怎么接 PMS5003', en:'All-jumper route for the PMS5003' },
+      tag:   { cn:'FINAL · CONNECTION', en:'FINAL · CONNECTION' },
+      body: {
+        cn:'你最终决定走全免焊路线 (周末没人陪)。PMS5003 用的是 1.25mm 间距母排针，你的杜邦线是 2.54mm 公头。',
+        en:'You commit to the all-jumper route (no adult this weekend). The PMS5003 ships with a 1.25mm pitch header — your jumpers are 2.54mm male tips.'
+      },
+      prompt: { cn:'连接方案？', en:'How do you connect?' },
+      options: [
+        { key:'A', text:{ cn:'买一根 PH1.25 转杜邦的转接线，干净对接', en:'Buy a PH1.25-to-Dupont adapter cable for a clean mate' }, correct:true },
+        { key:'B', text:{ cn:'用锡纸缠紧杜邦头硬塞进母排针', en:'Wrap foil around the jumper tips and force-fit them into the header' }, correct:false }
+      ],
+      illu: 'connector',
+      rationale: {
+        correct: {
+          title: { cn:'对症下药', en:'Right fix' },
+          body: {
+            cn:'PH1.25 转杜邦的转接线在购物平台 5 块钱一根，PMS5003 / 大部分激光雷达 / OLED 模块都用得上。一次买好长期省心。物理对位的事情用物理对位的器件解决，永远比"凑合"稳。',
+            en:'A PH1.25-to-Dupont cable is a few dollars and works on most PMS / LIDAR / OLED modules. Buy once, never struggle. Match physical interfaces with physical adapters — always more reliable than "good enough".'
+          },
+          safety: {
+            cn:'<strong>安全要点 · </strong>免焊不等于"乱接也行" — 接触不良 = 信号忽断忽连 = 数据全废 + 元件可能反复上电烧坏。',
+            en:'<strong>Safety · </strong>Solderless does not mean sloppy. Loose contacts = flapping signals = corrupted data + possible damage from intermittent power.'
+          }
+        },
+        wrong: {
+          title: { cn:'危险捷径', en:'Dangerous shortcut' },
+          body: {
+            cn:'锡纸是导体但极不可控：直径不均会撑坏母排针，掉渣会短路相邻引脚 — VCC 短到 GND 直接烧主控板。"硬塞"的代价远高于一根 5 块钱的转接线。',
+            en:'Foil conducts but unpredictably — it deforms the header, sheds debris, and can short adjacent pins (VCC to GND will fry your MCU). A 5-dollar cable is far cheaper than a dead board.'
+          },
+          safety: {
+            cn:'<strong>安全要点 · </strong>免焊路径的纪律：接口不匹配 → 买转接，不要凑合。烧元件比延迟一天贵 50 倍。',
+            en:'<strong>Safety · </strong>Solderless discipline — mismatched connectors require adapters, never shortcuts. A burnt module costs 50× a day of patience.'
+          }
+        }
+      }
+    }
+  ];
+
+  // ---- i18n strings ----
+  var I18N = {
+    brandTag:    { cn:'AEROSPACE · M09', en:'AEROSPACE · M09' },
+    brandName:   { cn:'焊接 vs 免焊接<br/>路径决策', en:'Solder vs<br/>Solderless' },
+    progLabel:   { cn:'完成进度', en:'Progress' },
+    g1:          { cn:'读情境再选项', en:'Read scene before choosing' },
+    g2:          { cn:'看反馈学安全', en:'Read feedback for safety' },
+    g3:          { cn:'5 关全过解锁', en:'Clear 5 scenes to unlock' },
+    sceneNum:    { cn:'情境', en:'SCENE' },
+    counter:     { cn:'/ 共 5 题', en:'/ 5 total' },
+    nextBtn:     { cn:'下一个情境', en:'Next scenario' },
+    finishBtn:   { cn:'查看徽章', en:'See badge' },
+    rewardTitle: { cn:'我会做安全决策', en:'I make safe decisions' },
+    rewardSub:   { cn:'五个情境都做出了合理选择 — 你已经掌握了在焊接和免焊路径之间权衡安全、时间与可行性的能力。',
+                    en:'You navigated all five — you can now weigh safety, time, and feasibility between soldering and solderless paths.' },
+    statCorrectLbl: { cn:'首选正确', en:'First-try correct' },
+    statTotalLbl:   { cn:'情境总数', en:'Total scenes' },
+    restartBtn:  { cn:'再玩一次', en:'Play again' },
+    langToggle:  { cn:'中 / EN', en:'EN / 中' },
+    badgeAlmost: { cn:'你完成了，但有 {wrong} 个先选错了 — 看看反馈再来一遍会更稳。',
+                    en:'You finished, but missed {wrong} on first try. Replay after reading the feedback.' }
+  };
+
+  var LANG = 'cn';
+  var sceneIdx = 0;
+  var firstTryCorrect = 0;
+  var sceneAnswered = false;
+  var lastWasCorrect = false;
+
+  function t(key){
+    var entry = I18N[key];
+    if(!entry) return key;
+    return entry[LANG] || entry.en || key;
+  }
+
+  function pickText(obj){
+    return (obj && (obj[LANG] || obj.en)) || '';
+  }
+
+  // ---- illustrations (inline SVG) ----
+  function illuSvg(kind){
+    var common = 'stroke="#B85A33" stroke-width="2.4" fill="none" stroke-linecap="round" stroke-linejoin="round"';
+    switch(kind){
+      case 'iron': // 烙铁
+        return '<svg viewBox="0 0 64 64" class="safety-icon" style="width:70%;height:70%">'+
+          '<path d="M14 50 L26 38 L42 22 L52 18 L48 28 L32 44 L20 56 Z" '+common+'/>'+
+          '<path d="M22 50 L28 56" '+common+'/>'+
+          '<circle cx="49" cy="22" r="3" fill="#D97757" stroke="none"/>'+
+          '<path d="M16 56 L8 56" stroke="#B85A33" stroke-width="2.4" stroke-linecap="round"/>'+
+          '</svg>';
+      case 'multimeter': // 万用表
+        return '<svg viewBox="0 0 64 64" class="safety-icon" style="width:70%;height:70%">'+
+          '<rect x="10" y="12" width="44" height="34" rx="3" '+common+'/>'+
+          '<rect x="14" y="16" width="36" height="10" rx="1.5" fill="#F8EDE5" stroke="#B85A33" stroke-width="1.5"/>'+
+          '<text x="32" y="24" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="7" fill="#B85A33" font-weight="700">9.0V</text>'+
+          '<circle cx="22" cy="36" r="3" fill="#D97757" stroke="none"/>'+
+          '<circle cx="32" cy="36" r="3" '+common+'/>'+
+          '<circle cx="42" cy="36" r="3" '+common+'/>'+
+          '<path d="M20 50 L20 56 M44 50 L44 56" '+common+'/>'+
+          '</svg>';
+      case 'fire': // 火警
+        return '<svg viewBox="0 0 64 64" class="safety-icon" style="width:70%;height:70%">'+
+          '<path d="M32 54 C20 54 14 46 14 38 C14 30 22 26 22 18 C26 22 28 26 28 30 C32 22 32 14 30 8 C40 14 46 24 46 32 C50 30 52 28 52 24 C54 30 50 54 32 54 Z" '+
+          'stroke="#B85A33" stroke-width="2.4" fill="#F2DDD0" stroke-linejoin="round"/>'+
+          '<path d="M32 48 C26 48 24 44 24 40 C28 42 30 38 30 34 C34 38 36 42 36 44 C38 42 39 40 39 38 C40 42 38 48 32 48 Z" '+
+          'fill="#D97757" stroke="none"/>'+
+          '</svg>';
+      case 'dial': // 旋钮档位
+        return '<svg viewBox="0 0 64 64" class="safety-icon" style="width:70%;height:70%">'+
+          '<circle cx="32" cy="32" r="20" '+common+'/>'+
+          '<circle cx="32" cy="32" r="3" fill="#B85A33" stroke="none"/>'+
+          '<path d="M32 32 L32 18" stroke="#D97757" stroke-width="3" stroke-linecap="round"/>'+
+          '<text x="32" y="14" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="6" fill="#9A4A2E" font-weight="700">AC</text>'+
+          '<text x="50" y="34" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="6" fill="#6B6557" font-weight="700">Ω</text>'+
+          '<text x="32" y="56" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="6" fill="#6B6557" font-weight="700">DC</text>'+
+          '<text x="14" y="34" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="6" fill="#6B6557" font-weight="700">A</text>'+
+          '</svg>';
+      case 'connector': // 接插件
+        return '<svg viewBox="0 0 64 64" class="safety-icon" style="width:70%;height:70%">'+
+          '<rect x="8" y="26" width="20" height="12" rx="1.5" '+common+'/>'+
+          '<path d="M14 32 L18 32 M22 32 L26 32" '+common+'/>'+
+          '<rect x="36" y="22" width="20" height="20" rx="2" '+common+'/>'+
+          '<circle cx="42" cy="28" r="1.5" fill="#D97757" stroke="none"/>'+
+          '<circle cx="46" cy="28" r="1.5" fill="#D97757" stroke="none"/>'+
+          '<circle cx="50" cy="28" r="1.5" fill="#D97757" stroke="none"/>'+
+          '<circle cx="42" cy="36" r="1.5" fill="#D97757" stroke="none"/>'+
+          '<circle cx="46" cy="36" r="1.5" fill="#D97757" stroke="none"/>'+
+          '<circle cx="50" cy="36" r="1.5" fill="#D97757" stroke="none"/>'+
+          '<path d="M28 32 L36 32" stroke="#B85A33" stroke-width="2.4" stroke-dasharray="2 2"/>'+
+          '</svg>';
+      default:
+        return '<svg viewBox="0 0 64 64" class="safety-icon"><circle cx="32" cy="32" r="20" '+common+'/></svg>';
+    }
+  }
+
+  // ---- DOM refs ----
+  var dom = {
+    brandTag:   document.getElementById('brandTag'),
+    brandName:  document.getElementById('brandName'),
+    progLabel:  document.getElementById('progLabel'),
+    progFill:   document.getElementById('progFill'),
+    progDots:   document.getElementById('progDots'),
+    g1: document.getElementById('g1'),
+    g2: document.getElementById('g2'),
+    g3: document.getElementById('g3'),
+    langBtn:    document.getElementById('langBtn'),
+    sceneNum:   document.getElementById('sceneNum'),
+    sceneTitle: document.getElementById('sceneTitle'),
+    sceneCounter: document.getElementById('sceneCounter'),
+    scenarioCard:document.getElementById('scenarioCard'),
+    scenarioIllu:document.getElementById('scenarioIllu'),
+    scenarioTag: document.getElementById('scenarioTag'),
+    scenarioBody:document.getElementById('scenarioBody'),
+    scenarioPrompt:document.getElementById('scenarioPrompt'),
+    optA:       document.getElementById('optA'),
+    optB:       document.getElementById('optB'),
+    optAText:   document.getElementById('optAText'),
+    optBText:   document.getElementById('optBText'),
+    feedback:   document.getElementById('feedback'),
+    fbBadge:    document.getElementById('fbBadge'),
+    fbTitle:    document.getElementById('fbTitle'),
+    fbBody:     document.getElementById('fbBody'),
+    fbSafety:   document.getElementById('fbSafety'),
+    nextBtn:    document.getElementById('nextBtn'),
+    sceneStage: document.getElementById('sceneStage'),
+    sceneHeader:document.getElementById('sceneHeader'),
+    rewardScreen:document.getElementById('rewardScreen'),
+    rewardTitle:document.getElementById('rewardTitle'),
+    rewardSub:  document.getElementById('rewardSub'),
+    statCorrect:document.getElementById('statCorrect'),
+    statTotal:  document.getElementById('statTotal'),
+    statCorrectLbl:document.getElementById('statCorrectLbl'),
+    statTotalLbl:  document.getElementById('statTotalLbl'),
+    restartBtn: document.getElementById('restartBtn')
+  };
+
+  function renderProgressDots(){
+    dom.progDots.innerHTML = '';
+    for(var i=0;i<SCENES.length;i++){
+      var d = document.createElement('div');
+      d.className = 'pd';
+      d.textContent = (i+1);
+      if(i < sceneIdx) d.classList.add('done');
+      else if(i === sceneIdx) d.classList.add('active');
+      dom.progDots.appendChild(d);
+    }
+    var pct = Math.round((sceneIdx / SCENES.length) * 100);
+    dom.progFill.style.width = pct + '%';
+  }
+
+  function applyStaticI18N(){
+    dom.brandTag.textContent = t('brandTag');
+    dom.brandName.innerHTML = t('brandName');
+    dom.progLabel.textContent = t('progLabel');
+    dom.g1.textContent = t('g1');
+    dom.g2.textContent = t('g2');
+    dom.g3.textContent = t('g3');
+    dom.langBtn.textContent = t('langToggle');
+    dom.statCorrectLbl.textContent = t('statCorrectLbl');
+    dom.statTotalLbl.textContent = t('statTotalLbl');
+    dom.restartBtn.textContent = t('restartBtn');
+  }
+
+  function renderScene(){
+    if(sceneIdx >= SCENES.length){
+      showReward();
+      return;
+    }
+    var s = SCENES[sceneIdx];
+    sceneAnswered = false;
+
+    // header
+    dom.sceneNum.textContent = (LANG==='cn' ? '情境 0' : 'SCENE 0') + (sceneIdx+1);
+    dom.sceneTitle.textContent = pickText(s.title);
+    dom.sceneCounter.textContent = '0' + (sceneIdx+1) + ' / 0' + SCENES.length;
+
+    // scenario
+    dom.scenarioTag.textContent = pickText(s.tag);
+    dom.scenarioBody.textContent = pickText(s.body);
+    dom.scenarioPrompt.textContent = pickText(s.prompt);
+    dom.scenarioIllu.innerHTML = illuSvg(s.illu);
+
+    // gold-key styling for scene 3
+    if(s.goldKey){
+      dom.scenarioCard.classList.add('gold-key');
+    }else{
+      dom.scenarioCard.classList.remove('gold-key');
+    }
+
+    // options
+    dom.optAText.textContent = pickText(s.options[0].text);
+    dom.optBText.textContent = pickText(s.options[1].text);
+    dom.optA.disabled = false;
+    dom.optB.disabled = false;
+    dom.optA.classList.remove('picked-correct','picked-wrong','dimmed');
+    dom.optB.classList.remove('picked-correct','picked-wrong','dimmed');
+
+    // hide feedback
+    dom.feedback.classList.remove('show','is-wrong');
+
+    renderProgressDots();
+  }
+
+  function pickOption(which){
+    if(sceneAnswered) return;
+    sceneAnswered = true;
+    var s = SCENES[sceneIdx];
+    var chosen = (which === 'A') ? s.options[0] : s.options[1];
+    var btnPicked = (which === 'A') ? dom.optA : dom.optB;
+    var btnOther  = (which === 'A') ? dom.optB : dom.optA;
+
+    var isCorrect = chosen.correct;
+    lastWasCorrect = isCorrect;
+    if(isCorrect) firstTryCorrect++;
+
+    btnPicked.classList.add(isCorrect ? 'picked-correct' : 'picked-wrong');
+    btnOther.classList.add('dimmed');
+    // if wrong, also mark the actually correct one with subtle highlight
+    if(!isCorrect){
+      var correctIdx = s.options[0].correct ? 0 : 1;
+      var correctBtn = (correctIdx === 0) ? dom.optA : dom.optB;
+      correctBtn.classList.remove('dimmed');
+      correctBtn.classList.add('picked-correct');
+    }
+    dom.optA.disabled = true;
+    dom.optB.disabled = true;
+
+    showFeedback(isCorrect, s);
+
+    // update progress dot (mark this scene as done/miss in real time)
+    var dots = dom.progDots.querySelectorAll('.pd');
+    if(dots[sceneIdx]){
+      dots[sceneIdx].classList.remove('active');
+      dots[sceneIdx].classList.add(isCorrect ? 'done' : 'miss');
+    }
+  }
+
+  function showFeedback(isCorrect, s){
+    var r = isCorrect ? s.rationale.correct : s.rationale.wrong;
+    dom.feedback.classList.remove('is-wrong');
+    if(!isCorrect) dom.feedback.classList.add('is-wrong');
+    dom.fbBadge.textContent = isCorrect
+      ? (LANG==='cn' ? '理由 · 正确' : 'RATIONALE · CORRECT')
+      : (LANG==='cn' ? '理由 · 误判'  : 'RATIONALE · MISS');
+    dom.fbTitle.textContent = pickText(r.title);
+    dom.fbBody.textContent  = pickText(r.body);
+    dom.fbSafety.innerHTML  = pickText(r.safety);
+
+    if(sceneIdx === SCENES.length - 1){
+      dom.nextBtn.textContent = t('finishBtn');
+    }else{
+      dom.nextBtn.textContent = t('nextBtn');
+    }
+
+    dom.feedback.classList.add('show');
+    // scroll feedback into view inside the scene-stage
+    setTimeout(function(){
+      dom.feedback.scrollIntoView({ behavior:'smooth', block:'end' });
+    }, 100);
+  }
+
+  function nextScene(){
+    sceneIdx++;
+    if(sceneIdx >= SCENES.length){
+      showReward();
+    }else{
+      renderScene();
+    }
+  }
+
+  function showReward(){
+    dom.sceneHeader.style.display = 'none';
+    dom.sceneStage.style.display = 'none';
+    dom.rewardScreen.classList.add('show');
+    dom.statCorrect.textContent = firstTryCorrect;
+    dom.statTotal.textContent = SCENES.length;
+    dom.rewardTitle.textContent = t('rewardTitle');
+    var wrongCount = SCENES.length - firstTryCorrect;
+    if(wrongCount === 0){
+      dom.rewardSub.textContent = t('rewardSub');
+    }else{
+      var msg = t('badgeAlmost').replace('{wrong}', wrongCount);
+      dom.rewardSub.textContent = msg;
+    }
+    // update sidebar progress to 100%
+    sceneIdx = SCENES.length;
+    renderProgressDots();
+  }
+
+  function restart(){
+    sceneIdx = 0;
+    firstTryCorrect = 0;
+    sceneAnswered = false;
+    dom.sceneHeader.style.display = '';
+    dom.sceneStage.style.display = '';
+    dom.rewardScreen.classList.remove('show');
+    renderScene();
+  }
+
+  function toggleLang(){
+    LANG = (LANG === 'cn') ? 'en' : 'cn';
+    applyStaticI18N();
+    if(dom.rewardScreen.classList.contains('show')){
+      // re-render reward
+      dom.rewardTitle.textContent = t('rewardTitle');
+      var wrongCount = SCENES.length - firstTryCorrect;
+      if(wrongCount === 0){
+        dom.rewardSub.textContent = t('rewardSub');
+      }else{
+        dom.rewardSub.textContent = t('badgeAlmost').replace('{wrong}', wrongCount);
+      }
+    }else{
+      // re-render current scene, preserve answered state
+      var savedAnswered = sceneAnswered;
+      var savedCorrect = lastWasCorrect;
+      renderScene();
+      // if was answered, re-show feedback
+      if(savedAnswered){
+        var s = SCENES[sceneIdx];
+        var btnA = dom.optA, btnB = dom.optB;
+        var correctIdx = s.options[0].correct ? 0 : 1;
+        // we don't know which user clicked; only mark correct option highlighted
+        var correctBtn = (correctIdx === 0) ? btnA : btnB;
+        var wrongBtn = (correctIdx === 0) ? btnB : btnA;
+        if(savedCorrect){
+          correctBtn.classList.add('picked-correct');
+          wrongBtn.classList.add('dimmed');
+        }else{
+          correctBtn.classList.add('picked-correct');
+          wrongBtn.classList.add('picked-wrong');
+        }
+        btnA.disabled = true;
+        btnB.disabled = true;
+        sceneAnswered = true;
+        showFeedback(savedCorrect, s);
+      }
+    }
+  }
+
+  // ---- wire up ----
+  dom.optA.addEventListener('click', function(){ pickOption('A'); });
+  dom.optB.addEventListener('click', function(){ pickOption('B'); });
+  dom.nextBtn.addEventListener('click', nextScene);
+  dom.restartBtn.addEventListener('click', restart);
+  dom.langBtn.addEventListener('click', toggleLang);
+
+  // ---- init ----
+  applyStaticI18N();
+  renderScene();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,838 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>M07 · 装好 Pi Zero 系统 + 配置 WiFi/NTP — 7 步流程</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&family=Noto+Sans+SC:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    /* Industrial Atelier — Claude warm cream + coral */
+    --paper:     #FAF9F5;
+    --paper-2:   #F1EDDF;
+    --card:      #FFFFFF;
+    --ink:       #191814;
+    --ink-2:     #2B2924;
+    --sub:       #6B6557;
+    --sub-2:     #9D978A;
+    --border:    #EBE5D6;
+    --border-2:  #D9D1BD;
+    --hairline:  #F2EDE0;
+
+    --primary:      #D97757;
+    --primary-ink:  #9A4A2E;
+    --primary-soft: #F8EDE5;
+    --primary-line: #ECCFB8;
+
+    /* domain accent — computing */
+    --computing:      #C04E68;
+    --computing-soft: #F4DDE3;
+    --computing-line: #E3B8C4;
+    --computing-ink:  #7A2D40;
+
+    --warn:           #B57735;
+    --warn-soft:      #F3E5D0;
+    --warn-line:      #E5C99A;
+
+    --shadow-sm: 0 1px 2px 0 rgba(25,24,20,.04);
+    --shadow:    0 1px 3px 0 rgba(25,24,20,.06), 0 1px 2px -1px rgba(25,24,20,.04);
+    --shadow-md: 0 4px 8px -2px rgba(25,24,20,.06), 0 2px 4px -2px rgba(25,24,20,.04);
+    --shadow-lg: 0 12px 24px -6px rgba(25,24,20,.1), 0 4px 8px -4px rgba(25,24,20,.05);
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    height:100vh;overflow:hidden;
+    background:var(--paper);
+    color:var(--ink);
+    font-family:'Inter','PingFang SC','Noto Sans SC',system-ui,sans-serif;
+    display:flex;
+    -webkit-font-smoothing:antialiased;
+    text-rendering:optimizeLegibility;
+  }
+  .mono{font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,monospace;}
+
+  /* ---------- Sidebar ---------- */
+  .sidebar{
+    width:200px;flex-shrink:0;height:100vh;
+    background:var(--card);
+    border-right:1px solid var(--border);
+    display:flex;flex-direction:column;
+    padding:20px 16px;gap:16px;
+  }
+  .brand{
+    font-size:13px;font-weight:700;letter-spacing:0.02em;color:var(--ink);
+    padding-bottom:14px;border-bottom:1px solid var(--hairline);
+  }
+  .brand-sub{
+    display:block;margin-top:6px;font-size:11px;font-weight:500;
+    color:var(--sub);letter-spacing:0;
+  }
+  .deco{
+    width:100%;height:104px;
+    background:var(--paper-2);
+    border:1px solid var(--border);
+    border-radius:8px;
+    display:flex;align-items:center;justify-content:center;
+    box-shadow:var(--shadow-sm);
+  }
+  .deco svg{width:84px;height:84px;}
+  .guide{display:flex;flex-direction:column;gap:10px;margin-top:4px;}
+  .guide-li{
+    font-size:11.5px;line-height:1.5;
+    color:var(--sub);
+    padding:2px 0 2px 10px;
+    border-left:2px solid var(--border-2);
+  }
+  .guide-li.hl{border-left-color:var(--primary);color:var(--ink-2);}
+  .lang-btn{
+    margin-top:auto;
+    font-family:'JetBrains Mono',monospace;
+    font-size:11px;font-weight:600;letter-spacing:0.06em;
+    padding:8px 12px;cursor:pointer;
+    background:var(--card);color:var(--ink);
+    border:1px solid var(--border-2);
+    border-radius:6px;
+    transition:background 120ms ease, border-color 120ms ease;
+  }
+  .lang-btn:hover{background:var(--paper-2);border-color:var(--primary-line);}
+  .lang-btn:active{background:var(--primary-soft);}
+
+  /* ---------- Main ---------- */
+  .main{
+    flex:1;height:100vh;overflow:hidden;
+    display:grid;
+    grid-template-rows: minmax(96px, 13%) 1fr minmax(118px, 22%);
+    padding:18px 24px;gap:12px;position:relative;
+    background:var(--paper);
+  }
+
+  /* === HERO 标题 === */
+  .hero{
+    display:flex;align-items:center;gap:20px;
+    padding:14px 20px;
+    background:var(--card);
+    border:1px solid var(--border);
+    border-radius:10px;
+    box-shadow:var(--shadow-sm);
+    position:relative;
+  }
+  .hero-stamp{
+    flex-shrink:0;
+    width:78px;height:78px;
+    border:3px double var(--computing);
+    color:var(--computing);
+    background:var(--computing-soft);
+    border-radius:8px;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;
+    font-family:'JetBrains Mono',monospace;
+    box-shadow:var(--shadow);
+    animation:stamp-pulse 2.8s ease-in-out infinite;
+  }
+  .hero-stamp .big{font-size:22px;font-weight:700;line-height:1;color:var(--computing-ink);letter-spacing:0.04em;}
+  .hero-stamp .tag{font-size:8.5px;font-weight:600;margin-top:5px;letter-spacing:0.14em;color:var(--computing);}
+  @keyframes stamp-pulse{
+    0%,100%{transform:scale(1);box-shadow:0 1px 3px 0 rgba(192,78,104,.16), 0 1px 2px -1px rgba(192,78,104,.12);}
+    50%   {transform:scale(1.035);box-shadow:0 4px 14px -2px rgba(192,78,104,.26), 0 2px 6px -2px rgba(192,78,104,.16);}
+  }
+  .hero-text{flex:1;min-width:0;}
+  .hero-text .title{font-size:18px;font-weight:700;color:var(--ink);margin-bottom:4px;letter-spacing:-0.01em;}
+  .hero-text .title-en{font-size:11.5px;font-style:italic;color:var(--sub-2);margin-bottom:8px;letter-spacing:0.01em;}
+  .hero-meta{display:flex;gap:10px;flex-wrap:wrap;}
+  .badge{
+    font-family:'JetBrains Mono',monospace;font-size:10.5px;font-weight:600;
+    padding:4px 10px;border-radius:4px;letter-spacing:0.04em;
+    background:var(--paper-2);color:var(--sub);border:1px solid var(--border);
+  }
+  .badge.eta{background:var(--primary-soft);color:var(--primary-ink);border-color:var(--primary-line);}
+  .badge.tag{background:var(--computing-soft);color:var(--computing-ink);border-color:var(--computing-line);}
+  .badge.diff{background:var(--warn-soft);color:var(--warn);border-color:var(--warn-line);}
+
+  /* === TIMELINE === */
+  .timeline-section{
+    position:relative;
+    background:var(--card);
+    border:1px solid var(--border);
+    border-radius:10px;
+    box-shadow:var(--shadow-sm);
+    padding:12px 20px 14px;
+    display:flex;flex-direction:column;gap:6px;min-height:0;
+  }
+  .timeline-head{display:flex;align-items:baseline;justify-content:space-between;padding-bottom:6px;border-bottom:1px solid var(--hairline);}
+  .timeline-head .ttl{font-size:13.5px;font-weight:700;color:var(--ink);letter-spacing:-0.01em;}
+  .timeline-head .hint{font-size:11px;color:var(--sub);font-family:'JetBrains Mono',monospace;}
+  .timeline-head .hint .pin{color:var(--computing);font-weight:700;}
+
+  .timeline-body{
+    flex:1;min-height:0;overflow-y:auto;
+    padding:4px 0 4px 0;position:relative;
+  }
+  .timeline-body::-webkit-scrollbar{width:6px;}
+  .timeline-body::-webkit-scrollbar-track{background:transparent;}
+  .timeline-body::-webkit-scrollbar-thumb{background:var(--border-2);border-radius:3px;}
+
+  .axis-v{
+    position:absolute;left:31px;top:6px;bottom:6px;
+    width:0;border-left:1px dashed var(--border-2);
+    z-index:1;
+  }
+
+  .steps{display:flex;flex-direction:column;gap:6px;position:relative;z-index:2;}
+  .step{
+    display:grid;grid-template-columns:54px 1fr;gap:14px;align-items:start;
+    padding:4px 4px 4px 4px;
+    cursor:pointer;outline:none;
+    border-radius:8px;
+    transition:background 180ms ease;
+  }
+  .step:hover{background:var(--paper-2);}
+  .step:focus-visible{background:var(--paper-2);outline:1px dashed var(--computing-line);outline-offset:-2px;}
+
+  .step-num{
+    display:flex;align-items:flex-start;justify-content:center;padding-top:4px;
+  }
+  .stamp-mini{
+    width:46px;height:46px;
+    border-radius:8px;
+    background:var(--paper);
+    border:1.5px solid var(--border-2);
+    color:var(--sub);
+    display:flex;flex-direction:column;align-items:center;justify-content:center;
+    font-family:'JetBrains Mono',monospace;
+    transition:background 200ms ease, border-color 200ms ease, color 200ms ease, transform 200ms ease;
+  }
+  .stamp-mini .n{font-size:18px;font-weight:700;line-height:1;}
+  .stamp-mini .lbl{font-size:7.5px;font-weight:700;margin-top:2px;letter-spacing:0.1em;opacity:0.8;}
+  .step:hover .stamp-mini, .step:focus-visible .stamp-mini{
+    background:var(--computing-soft);border-color:var(--computing-line);color:var(--computing-ink);
+    transform:translateY(-1px);
+  }
+  .step.active .stamp-mini{
+    background:var(--primary-soft);border-color:var(--primary);color:var(--primary-ink);
+    transform:translateY(-1px);
+    box-shadow:var(--shadow);
+  }
+
+  .step-right{display:flex;flex-direction:column;gap:8px;min-width:0;}
+  .step-card{
+    background:var(--card);
+    border:1px solid var(--border);
+    border-radius:8px;
+    padding:10px 14px;
+    transition:border-color 200ms ease, box-shadow 200ms ease, background 200ms ease;
+    display:flex;flex-direction:column;gap:4px;
+  }
+  .step:hover .step-card{border-color:var(--computing-line);box-shadow:var(--shadow);}
+  .step.active .step-card{border-color:var(--primary-line);box-shadow:var(--shadow-md);background:var(--primary-soft);}
+
+  .step-headline{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;}
+  .step-title{font-size:13.5px;font-weight:700;color:var(--ink);letter-spacing:-0.005em;}
+  .step-eta{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--sub-2);letter-spacing:0.04em;}
+  .step-one{font-size:11.5px;line-height:1.5;color:var(--sub);}
+  .step-one-en{font-size:10px;font-style:italic;color:var(--sub-2);line-height:1.4;}
+
+  .detail-pop{
+    padding:10px 14px;
+    background:var(--card);
+    border:1px solid var(--computing-line);
+    border-radius:8px;
+    box-shadow:var(--shadow);
+    display:none;
+    flex-direction:column;gap:8px;
+  }
+  .step.active .detail-pop{display:flex;}
+  .dp-block{display:flex;flex-direction:column;gap:4px;}
+  .dp-lbl{
+    font-family:'JetBrains Mono',monospace;font-size:9.5px;font-weight:700;
+    color:var(--sub);letter-spacing:0.08em;text-transform:uppercase;
+  }
+  .dp-cmd-ttl{font-size:10px;font-style:italic;color:var(--sub-2);line-height:1.4;}
+  .dp-cmd{
+    font-family:'JetBrains Mono',monospace;font-size:11.5px;line-height:1.55;
+    background:var(--paper-2);color:var(--ink);
+    padding:8px 10px;border-radius:6px;border:1px solid var(--border);
+    white-space:pre-wrap;word-break:break-word;
+    max-height:220px;overflow-y:auto;
+  }
+  .dp-cmd::-webkit-scrollbar{width:5px;}
+  .dp-cmd::-webkit-scrollbar-thumb{background:var(--border-2);border-radius:3px;}
+  .dp-pit{
+    font-size:11px;line-height:1.55;color:var(--warn);
+    padding:6px 10px;background:var(--warn-soft);border-left:3px solid var(--warn);
+    border-radius:4px;
+  }
+  .dp-pit .pit-lbl{font-weight:700;margin-right:6px;letter-spacing:0.04em;}
+
+  /* === 底部 UNLOCK + VOWS === */
+  .footer-grid{display:grid;grid-template-columns:1.05fr 1.45fr;gap:14px;min-height:0;}
+
+  .unlock{
+    padding:12px 16px;
+    background:var(--card);
+    border:1px solid var(--border);
+    border-radius:8px;
+    box-shadow:var(--shadow-sm);
+    display:flex;flex-direction:column;gap:8px;
+  }
+  .unlock-head{
+    display:flex;align-items:center;gap:8px;padding-bottom:6px;border-bottom:1px solid var(--hairline);
+  }
+  .unlock-head .icon{
+    width:22px;height:22px;border-radius:5px;
+    background:var(--computing-soft);color:var(--computing);
+    display:flex;align-items:center;justify-content:center;
+    border:1px solid var(--computing-line);
+  }
+  .unlock-head .icon svg{width:13px;height:13px;}
+  .unlock-head .ttl{font-size:12.5px;font-weight:700;color:var(--ink);letter-spacing:-0.005em;}
+  .unlock-head .ttl-en{font-size:9.5px;font-style:italic;color:var(--sub-2);margin-left:auto;}
+  .unlock-list{display:flex;flex-direction:column;gap:6px;}
+  .unlock-item{
+    display:flex;align-items:flex-start;gap:8px;
+    font-size:11.5px;line-height:1.5;color:var(--ink-2);
+  }
+  .unlock-item .dot{
+    flex-shrink:0;width:14px;height:14px;border-radius:4px;
+    background:var(--primary-soft);color:var(--primary);
+    display:flex;align-items:center;justify-content:center;
+    border:1px solid var(--primary-line);
+    margin-top:1px;
+  }
+  .unlock-item .dot svg{width:8px;height:8px;}
+  .unlock-item .txt-en{display:block;font-size:9.5px;font-style:italic;color:var(--sub-2);margin-top:2px;line-height:1.4;}
+
+  .vows{display:grid;grid-template-rows:auto 1fr;gap:8px;min-height:0;}
+  .vows-head{
+    display:flex;align-items:center;gap:8px;
+    font-size:11px;font-weight:700;color:var(--sub);letter-spacing:0.06em;
+    font-family:'JetBrains Mono',monospace;text-transform:uppercase;
+  }
+  .vows-head::before{
+    content:"";flex:0 0 14px;height:1px;background:var(--border-2);
+  }
+  .vows-head::after{
+    content:"";flex:1;height:1px;background:var(--border-2);
+  }
+  .vows-row{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;}
+  .vow{
+    padding:10px 12px;
+    background:var(--card);
+    border:1px solid var(--border);
+    border-radius:8px;
+    box-shadow:var(--shadow-sm);
+    cursor:pointer;outline:none;
+    transition:transform 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
+    display:flex;gap:10px;align-items:flex-start;
+  }
+  .vow:hover{border-color:var(--primary-line);box-shadow:var(--shadow);}
+  .vow.tap{transform:scale(1.02);border-color:var(--primary);box-shadow:var(--shadow-md);}
+  .vow .vmark{
+    flex-shrink:0;width:28px;height:28px;
+    border-radius:6px;background:var(--paper-2);border:1px solid var(--border);
+    display:flex;align-items:center;justify-content:center;color:var(--sub);
+  }
+  .vow .vmark svg{width:15px;height:15px;}
+  .vow:hover .vmark, .vow.tap .vmark{background:var(--primary-soft);border-color:var(--primary-line);color:var(--primary);}
+  .vow .vtxt{flex:1;min-width:0;}
+  .vow .vnum{font-family:'JetBrains Mono',monospace;font-size:9px;font-weight:700;color:var(--sub-2);letter-spacing:0.1em;margin-bottom:4px;}
+  .vow .vline{font-size:11.5px;line-height:1.45;color:var(--ink);font-weight:500;}
+  .vow .vline-en{font-size:9.5px;font-style:italic;color:var(--sub-2);margin-top:3px;line-height:1.4;}
+</style>
+</head>
+<body>
+  <aside class="sidebar">
+    <div class="brand">
+      <span id="brandMain">PurpleAir Node</span>
+      <span class="brand-sub" id="brandSub">M07 · 装机 7 步</span>
+    </div>
+    <div class="deco" aria-hidden="true">
+      <svg viewBox="0 0 100 100" fill="none" stroke="currentColor" stroke-width="1.4" style="color:var(--sub);">
+        <rect x="20" y="18" width="26" height="36" rx="2" fill="var(--computing-soft)" stroke="var(--computing-line)" stroke-width="1.2"/>
+        <line x1="25" y1="22" x2="25" y2="28" stroke="var(--computing)" stroke-width="1"/>
+        <line x1="29" y1="22" x2="29" y2="28" stroke="var(--computing)" stroke-width="1"/>
+        <line x1="33" y1="22" x2="33" y2="28" stroke="var(--computing)" stroke-width="1"/>
+        <line x1="37" y1="22" x2="37" y2="28" stroke="var(--computing)" stroke-width="1"/>
+        <line x1="41" y1="22" x2="41" y2="28" stroke="var(--computing)" stroke-width="1"/>
+        <text x="33" y="44" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="7" font-weight="700" fill="var(--computing-ink)" stroke="none">SD</text>
+        <path d="M50 36 L62 36" stroke="var(--primary)" stroke-width="1.4" stroke-linecap="round"/>
+        <path d="M58 32 L62 36 L58 40" stroke="var(--primary)" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+        <rect x="64" y="28" width="22" height="16" rx="1.5" fill="var(--paper-2)" stroke="var(--sub-2)" stroke-width="1"/>
+        <circle cx="69" cy="33" r="1.2" fill="var(--primary)"/>
+        <circle cx="74" cy="33" r="1.2" fill="var(--computing)"/>
+        <circle cx="79" cy="33" r="1.2" fill="var(--sub)"/>
+        <line x1="68" y1="39" x2="84" y2="39" stroke="var(--border-2)" stroke-width="0.8"/>
+        <path d="M40 78 Q60 60 80 78" stroke="var(--primary)" stroke-width="1.4" fill="none" stroke-linecap="round"/>
+        <path d="M48 80 Q60 68 72 80" stroke="var(--primary)" stroke-width="1.2" fill="none" stroke-linecap="round"/>
+        <circle cx="60" cy="82" r="1.6" fill="var(--primary)"/>
+      </svg>
+    </div>
+    <div class="guide">
+      <div class="guide-li hl" id="g1">点击任一步骤展开具体命令</div>
+      <div class="guide-li" id="g2">每步看「易踩坑」一栏避开常见错误</div>
+      <div class="guide-li" id="g3">珊瑚色编号 = 正在展开的步骤</div>
+    </div>
+    <button class="lang-btn" id="langBtn" type="button">CN / EN</button>
+  </aside>
+
+  <main class="main">
+    <section class="hero">
+      <div class="hero-stamp" aria-hidden="true">
+        <div class="big">PI 0</div>
+        <div class="tag">BOOT · 7 STEPS</div>
+      </div>
+      <div class="hero-text">
+        <div class="title" id="heroTitle">从空 SD 卡到联网 Pi Zero · 共 7 步</div>
+        <div class="title-en" id="heroTitleEn">From blank SD card to a networked Pi Zero — 7 steps total</div>
+        <div class="hero-meta">
+          <span class="badge eta mono" id="badgeEta">总耗时 ~ 30 min</span>
+          <span class="badge tag mono" id="badgeTag">M07 · 装机配置</span>
+          <span class="badge diff mono" id="badgeDiff">难度 · 跟做即可</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="timeline-section">
+      <div class="timeline-head">
+        <div class="ttl" id="tlTtl">7 步 · 装机 + 联网 + 时间同步</div>
+        <div class="hint mono" id="tlHint"><span class="pin">点击展开</span> · click to expand</div>
+      </div>
+      <div class="timeline-body">
+        <div class="axis-v" aria-hidden="true"></div>
+        <div class="steps" id="steps"></div>
+      </div>
+    </section>
+
+    <section class="footer-grid">
+      <div class="unlock">
+        <div class="unlock-head">
+          <span class="icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="11" width="18" height="10" rx="2"/>
+              <path d="M7 11V7a5 5 0 0 1 10 0"/>
+            </svg>
+          </span>
+          <span class="ttl" id="ulTtl">你完成后能解锁什么</span>
+          <span class="ttl-en" id="ulTtlEn">What you unlock after M07</span>
+        </div>
+        <div class="unlock-list">
+          <div class="unlock-item">
+            <span class="dot" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M5 13l4 4L19 7"/></svg>
+            </span>
+            <span><span id="ul1">一台 7x24 联网的 Pi Zero, 在同一 WiFi 下随时 SSH 可登。</span>
+              <span class="txt-en" id="ul1en">A 7x24 networked Pi Zero, reachable via SSH on the same WiFi.</span>
+            </span>
+          </div>
+          <div class="unlock-item">
+            <span class="dot" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M5 13l4 4L19 7"/></svg>
+            </span>
+            <span><span id="ul2">系统时间自动同步, 后续传感器读数能对得上真实时刻。</span>
+              <span class="txt-en" id="ul2en">Auto NTP-synced clock — sensor readings carry real timestamps.</span>
+            </span>
+          </div>
+          <div class="unlock-item">
+            <span class="dot" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M5 13l4 4L19 7"/></svg>
+            </span>
+            <span><span id="ul3">I2C 和串口已开, 下一节就能直接接 PM2.5 传感器。</span>
+              <span class="txt-en" id="ul3en">I2C and serial enabled — next module wires the PM2.5 sensor.</span>
+            </span>
+          </div>
+        </div>
+      </div>
+      <div class="vows">
+        <div class="vows-head" id="vowsHead">VOW WALL · 三承诺</div>
+        <div class="vows-row">
+          <div class="vow" data-vow="1" tabindex="0" role="button">
+            <div class="vmark" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="4" y="4" width="16" height="16" rx="2"/>
+                <path d="M9 10h6M9 14h4"/>
+              </svg>
+            </div>
+            <div class="vtxt">
+              <div class="vnum mono">VOW · 01</div>
+              <div class="vline" id="vow1">我会跑完 raspi-config 三项: I2C / Serial / 时区。</div>
+              <div class="vline-en" id="vow1en">I will run raspi-config and enable I2C, Serial, Timezone.</div>
+            </div>
+          </div>
+          <div class="vow" data-vow="2" tabindex="0" role="button">
+            <div class="vmark" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="9"/>
+                <path d="M12 7v5l3 2"/>
+              </svg>
+            </div>
+            <div class="vtxt">
+              <div class="vnum mono">VOW · 02</div>
+              <div class="vline" id="vow2">我会确认 ntp 跑起来 (timedatectl 显示 active)。</div>
+              <div class="vline-en" id="vow2en">I will verify ntp is active via timedatectl.</div>
+            </div>
+          </div>
+          <div class="vow" data-vow="3" tabindex="0" role="button">
+            <div class="vmark" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="3" y="5" width="18" height="14" rx="2"/>
+                <circle cx="12" cy="12" r="3.5"/>
+                <path d="M8 5l1.5-2h5L16 5"/>
+              </svg>
+            </div>
+            <div class="vtxt">
+              <div class="vnum mono">VOW · 03</div>
+              <div class="vline" id="vow3">我会截图 hostname + date 发到家庭群证明它活了。</div>
+              <div class="vline-en" id="vow3en">I will screenshot hostname + date to family chat as proof.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+<script>
+(function(){
+  "use strict";
+
+  var LANG = 'cn';
+
+  var STEPS = [
+    {
+      id:1,
+      ttl:{cn:'下载 Raspberry Pi Imager',     en:'Download Raspberry Pi Imager'},
+      eta:{cn:'~ 3 min',                       en:'~ 3 min'},
+      one:{cn:'去官网拿到烧录工具, 别用第三方乱七八糟的镜像工具。',
+           en:'Grab the official imager — avoid sketchy third-party tools.'},
+      cmdLbl:{cn:'打开浏览器输入', en:'In your browser'},
+      cmd:'https://www.raspberrypi.com/software/\n# Windows / macOS / Ubuntu 都有官方安装包\n# 大小约 60 MB, 下完双击安装',
+      pit:{cn:'别下汉化破解版, 第三方魔改包常常埋后门或不能识别 SD 卡。',
+           en:'Don’t use cracked or repackaged versions — many ship malware or break SD detection.'}
+    },
+    {
+      id:2,
+      ttl:{cn:'烧 Raspberry Pi OS Lite 到 SD 卡',  en:'Flash Raspberry Pi OS Lite to SD card'},
+      eta:{cn:'~ 6 min',                            en:'~ 6 min'},
+      one:{cn:'选 64-bit Lite (没桌面), Pi Zero 跑全图形会卡死。',
+           en:'Pick 64-bit Lite (no desktop) — Pi Zero chokes on the full GUI.'},
+      cmdLbl:{cn:'Imager 内顺序点击', en:'Inside Imager'},
+      cmd:'CHOOSE DEVICE   ->  Raspberry Pi Zero 2 W\nCHOOSE OS       ->  Raspberry Pi OS Lite (64-bit)\nCHOOSE STORAGE  ->  /dev/diskN (SD card)\nNEXT  ->  EDIT SETTINGS  ->  填:\n    hostname  =  airnode01\n    username  =  pi\n    password  =  自己设一个\nWRITE  ->  等 ~5 min 烧完 + 校验',
+      pit:{cn:'选错盘 = 抹掉硬盘! 烧前确认 SD 卡容量 (16-32GB), 不是你的备份盘。',
+           en:'Wrong disk = wipes your hard drive. Verify SD size (16-32GB) is the correct device.'}
+    },
+    {
+      id:3,
+      ttl:{cn:'boot 分区放 ssh + wpa_supplicant.conf',  en:'Drop ssh + wpa_supplicant.conf into boot'},
+      eta:{cn:'~ 4 min',                                  en:'~ 4 min'},
+      one:{cn:'开机自动启 SSH 并连 WiFi, 不用插键盘显示器 (无头装机)。',
+           en:'Auto-enable SSH and join WiFi at first boot — fully headless setup.'},
+      cmdLbl:{cn:'SD 卡 boot 分区里建两个文件', en:'In SD card boot partition, create:'},
+      cmd:'# 文件 1: ssh  (空文件, 没有后缀)\n$ touch /Volumes/boot/ssh\n\n# 文件 2: wpa_supplicant.conf\ncountry=CN\nctrl_interface=DIR=/var/run/wpa_supplicant GROUP=netdev\nupdate_config=1\nnetwork={\n    ssid="YOUR_WIFI_NAME"\n    psk="YOUR_WIFI_PASSWORD"\n    key_mgmt=WPA-PSK\n}',
+      pit:{cn:'WiFi 名称区分大小写, 而且 Pi Zero 只支持 2.4G WiFi, 5G WiFi 连不上。',
+           en:'SSID is case-sensitive. Pi Zero supports 2.4 GHz only — 5 GHz will not connect.'}
+    },
+    {
+      id:4,
+      ttl:{cn:'SD 卡插 Pi, 接电源开机 (等 1 分钟)', en:'Insert SD, power on Pi (wait ~1 min)'},
+      eta:{cn:'~ 2 min',                en:'~ 2 min'},
+      one:{cn:'插好 SD 卡, 用 1A 以上的 USB 电源线接 PWR 口, 等绿灯停止狂闪。',
+           en:'Insert SD, plug a 1A+ USB cable into the PWR port, wait for green LED to settle.'},
+      cmdLbl:{cn:'物理操作步骤', en:'Physical setup'},
+      cmd:'1. Pi Zero 翻到背面, SD 卡金手指朝主板插进去\n2. USB 线一头插 PWR 口 (不是 USB 口!)\n3. 另一头接充电头 (5V / 1A 以上)\n4. 绿色 ACT 灯先狂闪 30s, 后变成偶尔闪一下 = 启动完成\n5. 第一次开机会自动扩展分区, 多给它 60 秒',
+      pit:{cn:'Pi Zero 有两个 micro USB 口: PWR 是电源口, USB 是数据口。插错口不通电。',
+           en:'Pi Zero has two micro-USB ports. PWR = power, USB = data. Wrong port = no boot.'}
+    },
+    {
+      id:5,
+      ttl:{cn:'从笔记本 SSH 连上 Pi', en:'SSH from laptop into the Pi'},
+      eta:{cn:'~ 3 min',              en:'~ 3 min'},
+      one:{cn:'笔记本和 Pi 必须在同一个 WiFi, 用 raspberrypi.local 当地址直接连。',
+           en:'Laptop and Pi must share WiFi; ssh into raspberrypi.local — mDNS handles the IP.'},
+      cmdLbl:{cn:'笔记本终端里跑', en:'On your laptop terminal'},
+      cmd:'$ ssh pi@raspberrypi.local\n# 第一次会问 The authenticity of host ... yes/no\n# 输 yes 回车\n# 然后输 Step 2 设置的密码\n# 成功后提示符变成:\npi@airnode01:~ $',
+      pit:{cn:'连不上 = 八成 WiFi 没连上。回 Step 3 检查 wpa_supplicant.conf 名称密码写对了没。',
+           en:'Cannot connect? 90% chance WiFi failed. Re-check wpa_supplicant.conf from Step 3.'}
+    },
+    {
+      id:6,
+      ttl:{cn:'raspi-config 启用 I2C / Serial / 时区', en:'raspi-config: enable I2C / Serial / Timezone'},
+      eta:{cn:'~ 6 min',                                 en:'~ 6 min'},
+      one:{cn:'打开传感器要用的两个总线, 顺手把时区调成 Asia/Shanghai。',
+           en:'Turn on the two buses sensors need; set timezone to Asia/Shanghai.'},
+      cmdLbl:{cn:'Pi 终端里跑', en:'Inside the Pi SSH session'},
+      cmd:'$ sudo raspi-config\n\n# 方向键依次选:\n3 Interface Options  ->  I5 I2C            ->  <Yes>\n3 Interface Options  ->  I6 Serial Port    ->  login? <No>\n                                              hardware? <Yes>\n5 Localisation       ->  L2 Timezone       ->  Asia / Shanghai\n\n# 最后 <Finish>, 选 <Yes> 重启',
+      pit:{cn:'Serial 那项有两问: 串口 login shell 选 No, 硬件串口选 Yes。问反了传感器读不出来。',
+           en:'Serial asks twice: login shell = No, hardware = Yes. Reverse it and sensors will fail.'}
+    },
+    {
+      id:7,
+      ttl:{cn:'apt update + 装 ntp 让时间自动同步', en:'apt update + install ntp for auto sync'},
+      eta:{cn:'~ 6 min',                              en:'~ 6 min'},
+      one:{cn:'升级软件包索引, 装 ntp, timedatectl 看到 synchronized: yes 才算完。',
+           en:'Refresh apt, install ntp, confirm timedatectl reports synchronized: yes.'},
+      cmdLbl:{cn:'Pi 终端里跑', en:'Inside the Pi SSH session'},
+      cmd:'$ sudo apt update\n$ sudo apt install -y ntp\n$ sudo systemctl enable ntp\n$ sudo systemctl start ntp\n\n# 验证:\n$ timedatectl\n   System clock synchronized: yes\n   NTP service: active\n$ date\n   Tue May 27 14:32:10 CST 2026',
+      pit:{cn:'Pi Zero 没有 RTC 电池, 断电后时间会重置。所以 ntp 必须开机自动起 (enable)。',
+           en:'Pi Zero has no RTC battery — time resets on power loss. ntp must auto-start on boot.'}
+    }
+  ];
+
+  var I18N = {
+    brandMain: {cn:'PurpleAir Node',                en:'PurpleAir Node'},
+    brandSub:  {cn:'M07 · 装机 7 步',                en:'M07 · 7-Step Boot'},
+    g1:        {cn:'点击任一步骤展开具体命令',         en:'Click any step to expand commands'},
+    g2:        {cn:'每步看「易踩坑」一栏避开常见错误', en:'Read the pitfall row to dodge common mistakes'},
+    g3:        {cn:'珊瑚色编号 = 正在展开的步骤',     en:'Coral number = currently expanded step'},
+    heroTitle: {cn:'从空 SD 卡到联网 Pi Zero · 共 7 步',
+                en:'From blank SD card to a networked Pi Zero — 7 steps total'},
+    heroTitleEn:{cn:'From blank SD card to a networked Pi Zero — 7 steps total',
+                en:'装机, 配 WiFi, 同步时间, 一气呵成。'},
+    badgeEta:  {cn:'总耗时 ~ 30 min',                en:'TOTAL ~ 30 min'},
+    badgeTag:  {cn:'M07 · 装机配置',                 en:'M07 · Setup'},
+    badgeDiff: {cn:'难度 · 跟做即可',                en:'Difficulty · follow-along'},
+    tlTtl:     {cn:'7 步 · 装机 + 联网 + 时间同步',  en:'7 Steps · Boot + Network + Time Sync'},
+    ulTtl:     {cn:'你完成后能解锁什么',             en:'What you unlock after M07'},
+    ulTtlEn:   {cn:'What you unlock after M07',      en:'解锁 3 项能力'},
+    ul1:       {cn:'一台 7x24 联网的 Pi Zero, 在同一 WiFi 下随时 SSH 可登。',
+                en:'A 7x24 networked Pi Zero, reachable via SSH on the same WiFi.'},
+    ul1en:     {cn:'A 7x24 networked Pi Zero, reachable via SSH on the same WiFi.',
+                en:'Always-on, always-reachable.'},
+    ul2:       {cn:'系统时间自动同步, 后续传感器读数能对得上真实时刻。',
+                en:'Auto NTP-synced clock — sensor readings carry real timestamps.'},
+    ul2en:     {cn:'Auto NTP-synced clock — sensor readings carry real timestamps.',
+                en:'Real time on every measurement.'},
+    ul3:       {cn:'I2C 和串口已开, 下一节就能直接接 PM2.5 传感器。',
+                en:'I2C and serial enabled — next module wires the PM2.5 sensor.'},
+    ul3en:     {cn:'I2C and serial enabled — next module wires the PM2.5 sensor.',
+                en:'Ready for the sensor chapter.'},
+    vowsHead:  {cn:'VOW WALL · 三承诺',              en:'VOW WALL · 3 PROMISES'},
+    vow1:      {cn:'我会跑完 raspi-config 三项: I2C / Serial / 时区。',
+                en:'I will run raspi-config and enable I2C, Serial, Timezone.'},
+    vow1en:    {cn:'I will run raspi-config and enable I2C, Serial, Timezone.',
+                en:'No skipping configuration.'},
+    vow2:      {cn:'我会确认 ntp 跑起来 (timedatectl 显示 active)。',
+                en:'I will verify ntp is active via timedatectl.'},
+    vow2en:    {cn:'I will verify ntp is active via timedatectl.',
+                en:'Proof, not assumption.'},
+    vow3:      {cn:'我会截图 hostname + date 发到家庭群证明它活了。',
+                en:'I will screenshot hostname + date to family chat as proof.'},
+    vow3en:    {cn:'I will screenshot hostname + date to family chat as proof.',
+                en:'Public commitment fuels follow-through.'},
+    tlHintPin: {cn:'点击展开',                       en:'Click to expand'},
+    tlHintTail:{cn:' · click to expand',             en:''},
+    langBtn:   {cn:'CN / EN',                        en:'EN / CN'},
+    sCmdLbl:   {cn:'命令',                           en:'COMMAND'},
+    sPitLbl:   {cn:'易踩坑',                          en:'PITFALL'}
+  };
+
+  function $(id){return document.getElementById(id);}
+
+  function applyText(key, el){
+    if(!el || !I18N[key]) return;
+    var v = I18N[key][LANG];
+    if(v != null) el.textContent = v;
+  }
+
+  function renderSteps(){
+    var host = $('steps');
+    host.innerHTML = '';
+    STEPS.forEach(function(s){
+      var row = document.createElement('div');
+      row.className = 'step';
+      row.setAttribute('data-id', String(s.id));
+      row.setAttribute('tabindex', '0');
+      row.setAttribute('role', 'button');
+      row.setAttribute('aria-label', 'Step ' + s.id);
+
+      var num = document.createElement('div');
+      num.className = 'step-num';
+      var stamp = document.createElement('div');
+      stamp.className = 'stamp-mini';
+      var nEl = document.createElement('div');
+      nEl.className = 'n';
+      nEl.textContent = String(s.id).padStart(2, '0');
+      var lblEl = document.createElement('div');
+      lblEl.className = 'lbl';
+      lblEl.textContent = 'STEP';
+      stamp.appendChild(nEl);
+      stamp.appendChild(lblEl);
+      num.appendChild(stamp);
+
+      var rightCol = document.createElement('div');
+      rightCol.className = 'step-right';
+
+      var card = document.createElement('div');
+      card.className = 'step-card';
+      var head = document.createElement('div');
+      head.className = 'step-headline';
+      var ttl = document.createElement('div');
+      ttl.className = 'step-title';
+      ttl.setAttribute('data-bind', 'ttl');
+      head.appendChild(ttl);
+      var eta = document.createElement('div');
+      eta.className = 'step-eta mono';
+      eta.setAttribute('data-bind', 'eta');
+      head.appendChild(eta);
+      card.appendChild(head);
+      var one = document.createElement('div');
+      one.className = 'step-one';
+      one.setAttribute('data-bind', 'one');
+      card.appendChild(one);
+
+      var pop = document.createElement('div');
+      pop.className = 'detail-pop';
+      var b1 = document.createElement('div');
+      b1.className = 'dp-block';
+      var b1l = document.createElement('div');
+      b1l.className = 'dp-lbl';
+      b1l.setAttribute('data-bind', 'sCmdLbl');
+      var b1cTtl = document.createElement('div');
+      b1cTtl.className = 'dp-cmd-ttl';
+      b1cTtl.setAttribute('data-bind', 'cmdLbl');
+      var b1c = document.createElement('div');
+      b1c.className = 'dp-cmd';
+      b1c.setAttribute('data-bind', 'cmd');
+      b1.appendChild(b1l);
+      b1.appendChild(b1cTtl);
+      b1.appendChild(b1c);
+
+      var b2 = document.createElement('div');
+      b2.className = 'dp-pit';
+      var b2l = document.createElement('span');
+      b2l.className = 'pit-lbl';
+      b2l.setAttribute('data-bind', 'sPitLbl');
+      var b2t = document.createElement('span');
+      b2t.setAttribute('data-bind', 'pit');
+      b2.appendChild(b2l);
+      b2.appendChild(document.createTextNode(' · '));
+      b2.appendChild(b2t);
+
+      pop.appendChild(b1);
+      pop.appendChild(b2);
+
+      rightCol.appendChild(card);
+      rightCol.appendChild(pop);
+
+      row.appendChild(num);
+      row.appendChild(rightCol);
+      host.appendChild(row);
+    });
+    bindSteps();
+    applyStepLang();
+  }
+
+  function applyStepLang(){
+    var rows = document.querySelectorAll('.step');
+    rows.forEach(function(row){
+      var id = parseInt(row.getAttribute('data-id'), 10);
+      var s = STEPS[id - 1];
+      if(!s) return;
+      var ttl = row.querySelector('[data-bind="ttl"]');
+      var eta = row.querySelector('[data-bind="eta"]');
+      var one = row.querySelector('[data-bind="one"]');
+      var cmdLbl = row.querySelector('[data-bind="cmdLbl"]');
+      var cmd = row.querySelector('[data-bind="cmd"]');
+      var sCmdLbl = row.querySelector('[data-bind="sCmdLbl"]');
+      var sPitLbl = row.querySelector('[data-bind="sPitLbl"]');
+      var pit = row.querySelector('[data-bind="pit"]');
+      if(ttl)    ttl.textContent    = s.ttl[LANG];
+      if(eta)    eta.textContent    = s.eta[LANG];
+      if(one)    one.textContent    = s.one[LANG];
+      if(cmdLbl) cmdLbl.textContent = s.cmdLbl[LANG];
+      if(cmd)    cmd.textContent    = s.cmd;
+      if(sCmdLbl) sCmdLbl.textContent = I18N.sCmdLbl[LANG];
+      if(sPitLbl) sPitLbl.textContent = I18N.sPitLbl[LANG];
+      if(pit)    pit.textContent    = s.pit[LANG];
+    });
+  }
+
+  function bindSteps(){
+    var rows = document.querySelectorAll('.step');
+    rows.forEach(function(row){
+      row.addEventListener('click', function(ev){
+        ev.stopPropagation();
+        var wasActive = row.classList.contains('active');
+        rows.forEach(function(r){r.classList.remove('active');});
+        if(!wasActive){
+          row.classList.add('active');
+        }
+      });
+      row.addEventListener('keydown', function(ev){
+        if(ev.key === 'Enter' || ev.key === ' '){
+          ev.preventDefault();
+          row.click();
+        }
+      });
+    });
+  }
+
+  function applyLang(){
+    applyText('brandMain', $('brandMain'));
+    applyText('brandSub', $('brandSub'));
+    applyText('g1', $('g1'));
+    applyText('g2', $('g2'));
+    applyText('g3', $('g3'));
+    applyText('heroTitle', $('heroTitle'));
+    applyText('heroTitleEn', $('heroTitleEn'));
+    applyText('badgeEta', $('badgeEta'));
+    applyText('badgeTag', $('badgeTag'));
+    applyText('badgeDiff', $('badgeDiff'));
+    applyText('tlTtl', $('tlTtl'));
+    applyText('ulTtl', $('ulTtl'));
+    applyText('ulTtlEn', $('ulTtlEn'));
+    applyText('ul1', $('ul1'));
+    applyText('ul1en', $('ul1en'));
+    applyText('ul2', $('ul2'));
+    applyText('ul2en', $('ul2en'));
+    applyText('ul3', $('ul3'));
+    applyText('ul3en', $('ul3en'));
+    applyText('vowsHead', $('vowsHead'));
+    applyText('vow1', $('vow1'));
+    applyText('vow1en', $('vow1en'));
+    applyText('vow2', $('vow2'));
+    applyText('vow2en', $('vow2en'));
+    applyText('vow3', $('vow3'));
+    applyText('vow3en', $('vow3en'));
+    $('langBtn').textContent = I18N.langBtn[LANG];
+
+    var hint = $('tlHint');
+    hint.innerHTML = '';
+    var span = document.createElement('span');
+    span.className = 'pin';
+    span.textContent = I18N.tlHintPin[LANG];
+    hint.appendChild(span);
+    var t = document.createTextNode(I18N.tlHintTail[LANG]);
+    hint.appendChild(t);
+
+    applyStepLang();
+  }
+
+  var vowEls = document.querySelectorAll('.vow');
+  vowEls.forEach(function(v){
+    v.addEventListener('click', function(ev){
+      ev.stopPropagation();
+      v.classList.add('tap');
+      setTimeout(function(){ v.classList.remove('tap'); }, 220);
+    });
+    v.addEventListener('keydown', function(ev){
+      if(ev.key === 'Enter' || ev.key === ' '){ ev.preventDefault(); v.click(); }
+    });
+  });
+
+  $('langBtn').addEventListener('click', function(ev){
+    ev.stopPropagation();
+    LANG = (LANG === 'cn') ? 'en' : 'cn';
+    applyLang();
+  });
+
+  document.addEventListener('click', function(){
+    var rows = document.querySelectorAll('.step.active');
+    rows.forEach(function(r){r.classList.remove('active');});
+  });
+
+  renderSteps();
+  applyLang();
+})();
+</script>
+</body>
+</html>

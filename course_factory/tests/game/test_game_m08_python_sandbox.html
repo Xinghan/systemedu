@@ -1,0 +1,1077 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<title>M08 · Python Sandbox — Block Programming</title>
+<style>
+  :root{
+    /* Layer 1 — shared deep space canvas (26 subjects unified) */
+    --bg-0: oklch(0.14 0.035 265);
+    --bg-1: oklch(0.18 0.04 265);
+    --bg-2: oklch(0.22 0.045 265);
+    --bg-3: oklch(0.28 0.05 265);
+    --line: oklch(0.35 0.05 265 / 0.35);
+    --line-strong: oklch(0.55 0.08 265 / 0.55);
+    --fg:      oklch(0.96 0.01 265);
+    --fg-dim:  oklch(0.75 0.02 265);
+    --fg-mute: oklch(0.55 0.03 265);
+    --gold:    oklch(0.85 0.14 85);
+
+    /* Layer 2 — cs signature accent (cyan) */
+    --cs: oklch(0.75 0.17 200);
+
+    /* Layer 3 — cs 5-color palette (themes.js CS-01) */
+    --SIGNAL: oklch(0.75 0.17 200);
+    --CORE:   oklch(0.55 0.16 200);
+    --DEPTH:  oklch(0.35 0.10 210);
+    --FLASH:  oklch(0.92 0.08 190);
+    --QUERY:  oklch(0.85 0.14 85);
+  }
+
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{
+    height:100%;width:100%;
+    font-family:'Inter','PingFang SC',sans-serif;
+    color:var(--fg);background:var(--bg-0);overflow:hidden;
+  }
+  .mono{font-family:'JetBrains Mono',ui-monospace,'SF Mono',Consolas,monospace}
+
+  .stage{display:flex;flex-direction:row;height:100vh;width:100vw}
+
+  /* ---------- 200px sidebar ---------- */
+  .game-sidebar{
+    width:200px;flex:0 0 200px;
+    background:var(--bg-1);border-right:1px solid var(--line);
+    display:flex;flex-direction:column;padding:14px 12px;gap:12px;
+    overflow:hidden;
+  }
+  .brand{
+    display:flex;flex-direction:column;gap:2px;
+    border-bottom:1px solid var(--line);padding-bottom:8px;
+  }
+  .brand .code{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--fg-mute);letter-spacing:1.2px}
+  .brand .title{font-size:13px;color:var(--fg);font-weight:600}
+  .brand .sub{font-size:10px;color:var(--fg-dim);margin-top:2px}
+
+  .mascot{
+    width:100%;height:78px;display:flex;align-items:center;justify-content:center;
+    background:var(--bg-2);border:1px solid var(--line);
+  }
+  .mascot svg{width:100%;height:100%}
+
+  .task-list{
+    background:var(--bg-2);border:1px solid var(--line);
+    padding:8px;display:flex;flex-direction:column;gap:6px;
+  }
+  .task-title{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--SIGNAL);letter-spacing:1px}
+  .task-item{
+    font-size:10.5px;color:var(--fg-dim);line-height:1.4;
+    padding:5px 7px;border:1px solid var(--line);
+    display:flex;justify-content:space-between;align-items:center;gap:4px;
+  }
+  .task-item.active{border-color:var(--SIGNAL);background:var(--bg-3);color:var(--fg)}
+  .task-item.done{border-color:var(--gold);background:rgba(0,0,0,0);color:var(--gold)}
+  .task-item .badge{
+    font-family:'JetBrains Mono',monospace;font-size:8.5px;padding:1px 4px;
+    border:1px solid currentColor;
+  }
+
+  .guide{
+    background:var(--bg-2);border:1px solid var(--line);
+    padding:8px;display:flex;flex-direction:column;gap:4px;
+  }
+  .guide-title{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--SIGNAL);letter-spacing:1px}
+  .guide-line{font-size:10px;color:var(--fg-dim);line-height:1.4}
+
+  .lang-btn{
+    margin-top:auto;
+    background:var(--bg-2);color:var(--fg);
+    border:1px solid var(--line-strong);
+    padding:6px 8px;font-size:10.5px;cursor:pointer;
+    font-family:'JetBrains Mono',monospace;letter-spacing:.5px;
+    box-shadow:2px 2px 0 var(--bg-0);
+    transition:transform .08s,box-shadow .08s;
+  }
+  .lang-btn:hover{transform:translate(-1px,-1px);box-shadow:3px 3px 0 var(--bg-0)}
+  .lang-btn:active{transform:translate(1px,1px);box-shadow:1px 1px 0 var(--bg-0)}
+
+  /* ---------- main stage (3 columns) ---------- */
+  .main{
+    flex:1;display:flex;flex-direction:row;min-width:0;height:100vh;
+    background:var(--bg-0);
+  }
+
+  /* col A — block library */
+  .lib{
+    width:230px;flex:0 0 230px;background:var(--bg-1);
+    border-right:1px solid var(--line);
+    display:flex;flex-direction:column;padding:12px 10px;gap:8px;overflow-y:auto;
+  }
+  .lib-head{
+    font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--SIGNAL);
+    letter-spacing:1px;padding-bottom:4px;border-bottom:1px solid var(--line);
+  }
+  .lib-group{display:flex;flex-direction:column;gap:5px}
+  .lib-group-title{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--fg-mute);letter-spacing:.8px}
+
+  /* code block visual (palette-coded by category) */
+  .blk{
+    display:inline-flex;align-items:center;gap:4px;padding:6px 10px;
+    font-family:'JetBrains Mono',monospace;font-size:11.5px;
+    background:var(--bg-2);border:1.5px solid var(--line-strong);
+    cursor:grab;user-select:none;color:var(--fg);
+    transition:transform .08s,box-shadow .08s;
+    box-shadow:2px 2px 0 var(--bg-0);
+    white-space:nowrap;
+  }
+  .blk:hover{transform:translate(-1px,-1px);box-shadow:3px 3px 0 var(--bg-0)}
+  .blk.var-blk   {border-color:var(--SIGNAL);color:var(--SIGNAL)}
+  .blk.lit-blk   {border-color:var(--FLASH); color:var(--FLASH)}
+  .blk.op-blk    {border-color:var(--CORE);  color:var(--FLASH);background:var(--DEPTH)}
+  .blk.ctrl-blk  {border-color:var(--DEPTH); color:var(--FLASH);background:rgba(53,72,120,.35)}
+  .blk.out-blk   {border-color:var(--cs);    color:var(--bg-0);background:var(--cs)}
+  .blk.fn-blk    {border-color:var(--QUERY); color:var(--QUERY)}
+  .blk.dragging{opacity:.55;cursor:grabbing}
+
+  .lib-row{display:flex;flex-wrap:wrap;gap:5px}
+
+  /* col B — canvas (slot composer) */
+  .canvas-wrap{
+    flex:1;min-width:0;display:flex;flex-direction:column;
+    background:var(--bg-0);padding:12px 14px;gap:10px;
+  }
+  .canvas-head{
+    display:flex;justify-content:space-between;align-items:center;
+    padding-bottom:6px;border-bottom:1px solid var(--line);
+  }
+  .canvas-title{font-size:13px;color:var(--fg);font-weight:600}
+  .canvas-task{
+    font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--SIGNAL);
+    padding:3px 8px;border:1px solid var(--SIGNAL);
+  }
+  .canvas-area{
+    flex:1;min-height:0;display:flex;flex-direction:column;
+    background:var(--bg-1);border:1px dashed var(--line-strong);
+    padding:14px;overflow:auto;gap:8px;
+  }
+  .canvas-area.drop-hot{background:var(--bg-2);border-color:var(--SIGNAL)}
+
+  /* a line of blocks inside the canvas = a statement */
+  .stmt{
+    display:flex;align-items:center;gap:6px;flex-wrap:wrap;
+    padding:5px 8px;border:1px dashed var(--line);
+    min-height:38px;
+    background:rgba(0,0,0,.15);
+  }
+  .stmt .stmt-tag{
+    font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--fg-mute);
+    letter-spacing:.5px;padding:0 4px;
+  }
+  .stmt.indent{margin-left:38px;border-left:2px solid var(--CORE)}
+  .stmt.indent2{margin-left:76px;border-left:2px solid var(--QUERY)}
+
+  .stmt-blk{
+    display:inline-flex;align-items:center;gap:4px;padding:5px 9px;
+    font-family:'JetBrains Mono',monospace;font-size:11.5px;
+    background:var(--bg-2);border:1.5px solid var(--line-strong);
+    color:var(--fg);box-shadow:2px 2px 0 var(--bg-0);
+    position:relative;
+  }
+  .stmt-blk.var-blk   {border-color:var(--SIGNAL);color:var(--SIGNAL)}
+  .stmt-blk.lit-blk   {border-color:var(--FLASH); color:var(--FLASH)}
+  .stmt-blk.op-blk    {border-color:var(--CORE);  color:var(--FLASH);background:var(--DEPTH)}
+  .stmt-blk.ctrl-blk  {border-color:var(--DEPTH); color:var(--FLASH);background:rgba(53,72,120,.35)}
+  .stmt-blk.out-blk   {border-color:var(--cs);    color:var(--bg-0);background:var(--cs)}
+  .stmt-blk.fn-blk    {border-color:var(--QUERY); color:var(--QUERY)}
+  .stmt-blk .x{
+    display:inline-flex;align-items:center;justify-content:center;
+    width:14px;height:14px;border:1px solid currentColor;
+    margin-left:4px;font-size:10px;cursor:pointer;background:transparent;
+    color:inherit;font-family:inherit;
+  }
+
+  .control-bar{
+    display:flex;gap:8px;align-items:center;flex-shrink:0;
+  }
+  .btn{
+    padding:8px 14px;font-family:'JetBrains Mono',monospace;font-size:11px;
+    background:var(--bg-2);color:var(--fg);border:1.5px solid var(--line-strong);
+    cursor:pointer;box-shadow:2px 2px 0 var(--bg-0);letter-spacing:.5px;
+    transition:transform .08s,box-shadow .08s;
+  }
+  .btn:hover{transform:translate(-1px,-1px);box-shadow:3px 3px 0 var(--bg-0)}
+  .btn:active{transform:translate(1px,1px);box-shadow:1px 1px 0 var(--bg-0)}
+  .btn.primary{
+    background:var(--cs);color:var(--bg-0);border-color:var(--cs);font-weight:700;
+  }
+  .btn.ghost{background:transparent;color:var(--fg-dim);border-color:var(--line)}
+
+  /* col C — stdout */
+  .stdout-wrap{
+    width:280px;flex:0 0 280px;background:var(--bg-1);
+    border-left:1px solid var(--line);
+    display:flex;flex-direction:column;padding:12px 10px;gap:8px;
+  }
+  .stdout-head{
+    font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--SIGNAL);
+    letter-spacing:1px;padding-bottom:4px;border-bottom:1px solid var(--line);
+    display:flex;justify-content:space-between;
+  }
+  .stdout-head .pill{font-size:9px;color:var(--fg-mute);border:1px solid var(--line);padding:1px 5px}
+  .stdout{
+    flex:1;min-height:0;background:#000;border:1px solid var(--line);
+    padding:10px;overflow-y:auto;
+    font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--FLASH);
+    line-height:1.55;white-space:pre-wrap;
+  }
+  .stdout .line-hi{color:var(--cs)}
+  .stdout .line-err{color:var(--QUERY)}
+  .stdout .line-ok{color:var(--gold)}
+  .stdout .cursor{display:inline-block;width:7px;height:13px;background:var(--cs);
+    vertical-align:middle;margin-left:2px;animation:blink 1s steps(2) infinite}
+  @keyframes blink{50%{opacity:0}}
+
+  .verdict{
+    padding:8px;border:1px solid var(--line);background:var(--bg-2);
+    font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--fg-dim);
+    line-height:1.5;
+  }
+  .verdict.pass{border-color:var(--gold);color:var(--gold);background:rgba(0,0,0,.2)}
+  .verdict.fail{border-color:var(--QUERY);color:var(--QUERY)}
+
+  .floating-toast{
+    position:absolute;top:18px;left:50%;transform:translateX(-50%);
+    padding:8px 16px;background:var(--bg-2);border:1.5px solid var(--gold);
+    color:var(--gold);font-family:'JetBrains Mono',monospace;font-size:12px;
+    box-shadow:3px 3px 0 var(--bg-0);z-index:50;pointer-events:none;
+    opacity:0;transition:opacity .25s;
+  }
+  .floating-toast.show{opacity:1}
+
+  ::-webkit-scrollbar{width:8px;height:8px}
+  ::-webkit-scrollbar-track{background:var(--bg-1)}
+  ::-webkit-scrollbar-thumb{background:var(--bg-3);border:1px solid var(--line)}
+</style>
+</head>
+<body>
+
+<div class="stage">
+
+  <!-- ============== 200px sidebar ============== -->
+  <aside class="game-sidebar">
+    <div class="brand">
+      <div class="code mono">CS-01 · M08</div>
+      <div class="title" id="brandTitle">Python 沙盒</div>
+      <div class="sub" id="brandSub">拖块写代码, 看输出</div>
+    </div>
+
+    <!-- Bit mascot — levitating cubic sprite -->
+    <div class="mascot" aria-label="Bit mascot">
+      <svg viewBox="0 0 172 78" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <linearGradient id="bitFace" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stop-color="oklch(0.92 0.08 190)"/>
+            <stop offset="100%" stop-color="oklch(0.55 0.16 200)"/>
+          </linearGradient>
+        </defs>
+        <!-- floor grid (memory floor) -->
+        <g stroke="oklch(0.35 0.05 265 / 0.55)" stroke-width="0.6">
+          <line x1="20" y1="66" x2="152" y2="66"/>
+          <line x1="34" y1="72" x2="138" y2="72"/>
+        </g>
+        <!-- cubic Bit body, slightly hovering -->
+        <g transform="translate(86 36)">
+          <!-- shadow -->
+          <ellipse cx="0" cy="28" rx="22" ry="3.2" fill="oklch(0.18 0.04 265)" opacity="0.85"/>
+          <!-- top face -->
+          <polygon points="-20,-16 0,-24 20,-16 0,-8" fill="oklch(0.85 0.16 200)" stroke="oklch(0.14 0.035 265)" stroke-width="1.4"/>
+          <!-- left face -->
+          <polygon points="-20,-16 -20,12 0,20 0,-8" fill="url(#bitFace)" stroke="oklch(0.14 0.035 265)" stroke-width="1.4"/>
+          <!-- right face -->
+          <polygon points="20,-16 20,12 0,20 0,-8" fill="oklch(0.35 0.10 210)" stroke="oklch(0.14 0.035 265)" stroke-width="1.4"/>
+          <!-- pixel eyes -->
+          <rect x="-13" y="-2" width="4" height="4" fill="oklch(0.85 0.14 85)"/>
+          <rect x="-5"  y="2"  width="4" height="4" fill="oklch(0.85 0.14 85)"/>
+          <rect x="6"   y="-1" width="4" height="4" fill="oklch(0.85 0.14 85)"/>
+        </g>
+        <!-- packet sparks -->
+        <g fill="oklch(0.85 0.14 85)">
+          <rect x="20" y="20" width="3" height="3"/>
+          <rect x="150" y="28" width="3" height="3"/>
+          <rect x="28" y="44" width="2" height="2"/>
+        </g>
+      </svg>
+    </div>
+
+    <div class="task-list" id="taskList">
+      <div class="task-title mono" id="taskHead">MISSIONS</div>
+      <div class="task-item active mono" data-task="0">
+        <span id="t0name">T1 · if 判断</span><span class="badge" id="t0badge">--</span>
+      </div>
+      <div class="task-item mono" data-task="1">
+        <span id="t1name">T2 · for 循环</span><span class="badge" id="t1badge">--</span>
+      </div>
+      <div class="task-item mono" data-task="2">
+        <span id="t2name">T3 · def 函数</span><span class="badge" id="t2badge">--</span>
+      </div>
+    </div>
+
+    <div class="guide">
+      <div class="guide-title mono" id="guideHead">HOW</div>
+      <div class="guide-line" id="g1">· 从左侧拖块到中间画布</div>
+      <div class="guide-line" id="g2">· 同行 = 一条语句</div>
+      <div class="guide-line" id="g3">· 点 Run 真的执行</div>
+    </div>
+
+    <button class="lang-btn" id="langBtn">中文 / EN</button>
+  </aside>
+
+  <!-- ============== main stage ============== -->
+  <main class="main">
+
+    <!-- col A: block library -->
+    <section class="lib" id="lib">
+      <div class="lib-head mono" id="libHead">BLOCK LIBRARY</div>
+
+      <div class="lib-group">
+        <div class="lib-group-title mono" id="grpVar">变量 · variable</div>
+        <div class="lib-row" id="rowVar"></div>
+      </div>
+      <div class="lib-group">
+        <div class="lib-group-title mono" id="grpLit">字面量 · literal</div>
+        <div class="lib-row" id="rowLit"></div>
+      </div>
+      <div class="lib-group">
+        <div class="lib-group-title mono" id="grpOp">运算符 · operator</div>
+        <div class="lib-row" id="rowOp"></div>
+      </div>
+      <div class="lib-group">
+        <div class="lib-group-title mono" id="grpCtrl">控制流 · control</div>
+        <div class="lib-row" id="rowCtrl"></div>
+      </div>
+      <div class="lib-group">
+        <div class="lib-group-title mono" id="grpOut">输出 · print</div>
+        <div class="lib-row" id="rowOut"></div>
+      </div>
+      <div class="lib-group">
+        <div class="lib-group-title mono" id="grpFn">函数 · def/return</div>
+        <div class="lib-row" id="rowFn"></div>
+      </div>
+    </section>
+
+    <!-- col B: canvas (slot composer) -->
+    <section class="canvas-wrap">
+      <div class="canvas-head">
+        <div class="canvas-title" id="canvasTitle">代码画布</div>
+        <div class="canvas-task mono" id="canvasTask">T1 · if 判断</div>
+      </div>
+
+      <div class="canvas-area" id="canvas" tabindex="0">
+        <!-- statements injected by JS, each .stmt holds dragged blocks -->
+      </div>
+
+      <div class="control-bar">
+        <button class="btn primary mono" id="btnRun">Run &gt; 运行</button>
+        <button class="btn mono" id="btnAddLine">+ 新语句</button>
+        <button class="btn mono" id="btnIndent">↳ 缩进</button>
+        <button class="btn ghost mono" id="btnClear">清空</button>
+        <button class="btn ghost mono" id="btnHint">示范</button>
+      </div>
+    </section>
+
+    <!-- col C: stdout -->
+    <aside class="stdout-wrap">
+      <div class="stdout-head mono">
+        <span id="stdoutHead">STDOUT · python3</span>
+        <span class="pill" id="stdoutPill">idle</span>
+      </div>
+      <div class="stdout" id="stdout"></div>
+      <div class="verdict mono" id="verdict">等待运行 / waiting</div>
+    </aside>
+
+  </main>
+
+  <div class="floating-toast mono" id="toast">TASK COMPLETE</div>
+</div>
+
+<script>
+"use strict";
+
+// ============ i18n ============
+var LANG = 'cn';
+var I18N = {
+  brandTitle:{cn:'Python 沙盒',en:'Python Sandbox'},
+  brandSub:{cn:'拖块写代码, 看输出',en:'Drag blocks, see output'},
+  taskHead:{cn:'任务 MISSIONS',en:'MISSIONS'},
+  t0name:{cn:'T1 · if 判断',en:'T1 · if branch'},
+  t1name:{cn:'T2 · for 循环',en:'T2 · for loop'},
+  t2name:{cn:'T3 · def 函数',en:'T3 · def function'},
+  guideHead:{cn:'操作 HOW',en:'HOW TO PLAY'},
+  g1:{cn:'· 从左侧拖块到中间画布',en:'· Drag blocks from left to canvas'},
+  g2:{cn:'· 同行 = 一条语句',en:'· Same row = one statement'},
+  g3:{cn:'· 点 Run 真的执行',en:'· Hit Run to execute'},
+  libHead:{cn:'块库 BLOCK LIBRARY',en:'BLOCK LIBRARY'},
+  grpVar:{cn:'变量 · variable',en:'variable'},
+  grpLit:{cn:'字面量 · literal',en:'literal'},
+  grpOp:{cn:'运算符 · operator',en:'operator'},
+  grpCtrl:{cn:'控制流 · control',en:'control flow'},
+  grpOut:{cn:'输出 · print',en:'print / output'},
+  grpFn:{cn:'函数 · def/return',en:'def / return'},
+  canvasTitle:{cn:'代码画布',en:'Code Canvas'},
+  btnRun:{cn:'Run > 运行',en:'Run > execute'},
+  btnAddLine:{cn:'+ 新语句',en:'+ new line'},
+  btnIndent:{cn:'↳ 缩进',en:'indent'},
+  btnClear:{cn:'清空',en:'clear'},
+  btnHint:{cn:'示范',en:'demo'},
+  stdoutHead:{cn:'STDOUT · python3',en:'STDOUT · python3'},
+  waitVerdict:{cn:'等待运行 / waiting',en:'waiting for Run'},
+  taskDone:{cn:'TASK COMPLETE',en:'TASK COMPLETE'},
+  errEmpty:{cn:'画布是空的, 先拖几个块',en:'canvas empty, drag some blocks'},
+  errSyntax:{cn:'语法错: 块顺序不对',en:'syntax: block order invalid'},
+  passLine:{cn:'通过 / PASS',en:'PASS / 通过'},
+  failLine:{cn:'未达标 / NOT YET',en:'NOT YET / 未达标'}
+};
+function refreshI18N(){
+  document.documentElement.lang = (LANG==='cn'?'zh-CN':'en');
+  for (var k in I18N){
+    var el = document.getElementById(k);
+    if (el) el.textContent = I18N[k][LANG];
+  }
+  // task badges/missions text update
+  document.getElementById('canvasTask').textContent =
+    I18N['t'+stateGame.curTask+'name'][LANG];
+  document.getElementById('toast').textContent = I18N.taskDone[LANG];
+  renderVerdict();
+}
+
+// ============ block factories ============
+// six categories, each block has {category, text, kind}
+function blockSpec(){
+  return [
+    {grp:'rowVar',  cls:'var-blk',  kind:'var',  text:'pm'},
+    {grp:'rowVar',  cls:'var-blk',  kind:'var',  text:'x'},
+    {grp:'rowVar',  cls:'var-blk',  kind:'var',  text:'data'},
+
+    {grp:'rowLit',  cls:'lit-blk',  kind:'lit',  text:'35'},
+    {grp:'rowLit',  cls:'lit-blk',  kind:'lit',  text:'38'},
+    {grp:'rowLit',  cls:'lit-blk',  kind:'lit',  text:'42'},
+    {grp:'rowLit',  cls:'lit-blk',  kind:'lit',  text:'51'},
+    {grp:'rowLit',  cls:'lit-blk',  kind:'lit',  text:'75'},
+    {grp:'rowLit',  cls:'lit-blk',  kind:'lit',  text:'[38,42,51]'},
+    {grp:'rowLit',  cls:'lit-blk',  kind:'lit',  text:'"戴口罩"'},
+    {grp:'rowLit',  cls:'lit-blk',  kind:'lit',  text:'"安全"'},
+
+    {grp:'rowOp',   cls:'op-blk',   kind:'op',   text:'='},
+    {grp:'rowOp',   cls:'op-blk',   kind:'op',   text:'>'},
+    {grp:'rowOp',   cls:'op-blk',   kind:'op',   text:'<'},
+    {grp:'rowOp',   cls:'op-blk',   kind:'op',   text:'=='},
+
+    {grp:'rowCtrl', cls:'ctrl-blk', kind:'ctrl', text:'if'},
+    {grp:'rowCtrl', cls:'ctrl-blk', kind:'ctrl', text:'else'},
+    {grp:'rowCtrl', cls:'ctrl-blk', kind:'ctrl', text:'for'},
+    {grp:'rowCtrl', cls:'ctrl-blk', kind:'ctrl', text:'in'},
+    {grp:'rowCtrl', cls:'ctrl-blk', kind:'ctrl', text:':'},
+
+    {grp:'rowOut',  cls:'out-blk',  kind:'out',  text:'print'},
+    {grp:'rowOut',  cls:'out-blk',  kind:'out',  text:'('},
+    {grp:'rowOut',  cls:'out-blk',  kind:'out',  text:')'},
+
+    {grp:'rowFn',   cls:'fn-blk',   kind:'fn',   text:'def'},
+    {grp:'rowFn',   cls:'fn-blk',   kind:'fn',   text:'is_unhealthy'},
+    {grp:'rowFn',   cls:'fn-blk',   kind:'fn',   text:'return'}
+  ];
+}
+
+// ============ state ============
+var stateGame = {
+  curTask: 0,
+  cleared: [false, false, false],
+  draggingFromLib: null,   // block spec being dragged from library
+  draggingFromStmt: null,  // {stmtIdx, blkEl} when re-dragging inside canvas
+  stmts: []                // array of {indent:0|1|2, blocks:[{text,kind,cls}]}
+};
+
+// ============ DOM build ============
+function buildLib(){
+  var spec = blockSpec();
+  // clear rows
+  ['rowVar','rowLit','rowOp','rowCtrl','rowOut','rowFn'].forEach(function(id){
+    document.getElementById(id).innerHTML='';
+  });
+  spec.forEach(function(s){
+    var b = document.createElement('div');
+    b.className = 'blk '+s.cls;
+    b.textContent = s.text;
+    b.setAttribute('draggable','true');
+    b.dataset.kind = s.kind;
+    b.dataset.cls = s.cls;
+    b.addEventListener('dragstart', function(ev){
+      stateGame.draggingFromLib = {text:s.text, kind:s.kind, cls:s.cls};
+      stateGame.draggingFromStmt = null;
+      b.classList.add('dragging');
+      // dragImage standard, also set effectAllowed
+      try { ev.dataTransfer.setData('text/plain', s.text); } catch(e){}
+      ev.dataTransfer.effectAllowed = 'copy';
+    });
+    b.addEventListener('dragend', function(){
+      b.classList.remove('dragging');
+    });
+    document.getElementById(s.grp).appendChild(b);
+  });
+}
+
+function makeStmt(indent){
+  var s = {indent:indent||0, blocks:[]};
+  stateGame.stmts.push(s);
+  renderCanvas();
+  return s;
+}
+
+function renderCanvas(){
+  var canvas = document.getElementById('canvas');
+  canvas.innerHTML='';
+  if (stateGame.stmts.length===0){
+    var hint = document.createElement('div');
+    hint.className='mono';
+    hint.style.cssText='color:var(--fg-mute);font-size:11px;padding:18px;text-align:center;border:1px dashed var(--line)';
+    hint.textContent = (LANG==='cn'?'从左侧拖块到这里, 或点 + 新语句':'Drag blocks here, or hit + new line');
+    canvas.appendChild(hint);
+  }
+  stateGame.stmts.forEach(function(stmt, idx){
+    var row = document.createElement('div');
+    row.className = 'stmt'+(stmt.indent===1?' indent':stmt.indent===2?' indent2':'');
+    row.dataset.stmtIdx = idx;
+    var tag = document.createElement('span');
+    tag.className='stmt-tag mono';
+    tag.textContent = (idx+1).toString().padStart(2,'0');
+    row.appendChild(tag);
+
+    stmt.blocks.forEach(function(blk, bidx){
+      var el = document.createElement('span');
+      el.className = 'stmt-blk '+blk.cls;
+      el.textContent = blk.text;
+      var x = document.createElement('button');
+      x.className = 'x mono';
+      x.textContent = 'x';
+      x.title = 'remove';
+      x.addEventListener('click', function(ev){
+        ev.stopPropagation();
+        stmt.blocks.splice(bidx,1);
+        renderCanvas();
+      });
+      el.appendChild(x);
+      row.appendChild(el);
+    });
+
+    // drop target on each stmt row
+    row.addEventListener('dragover', function(ev){
+      ev.preventDefault();
+      ev.dataTransfer.dropEffect = 'copy';
+      row.style.background = 'var(--bg-3)';
+    });
+    row.addEventListener('dragleave', function(){
+      row.style.background = '';
+    });
+    row.addEventListener('drop', function(ev){
+      ev.preventDefault();
+      row.style.background = '';
+      var dragged = stateGame.draggingFromLib;
+      if (!dragged) return;
+      stmt.blocks.push({text:dragged.text, kind:dragged.kind, cls:dragged.cls});
+      stateGame.draggingFromLib = null;
+      renderCanvas();
+    });
+
+    canvas.appendChild(row);
+  });
+}
+
+// drop on canvas root → new statement with that block
+document.addEventListener('DOMContentLoaded', function(){
+  buildLib();
+  var canvas = document.getElementById('canvas');
+  canvas.addEventListener('dragover', function(ev){
+    ev.preventDefault();
+    ev.dataTransfer.dropEffect = 'copy';
+    canvas.classList.add('drop-hot');
+  });
+  canvas.addEventListener('dragleave', function(ev){
+    if (ev.target===canvas) canvas.classList.remove('drop-hot');
+  });
+  canvas.addEventListener('drop', function(ev){
+    ev.preventDefault();
+    canvas.classList.remove('drop-hot');
+    var dragged = stateGame.draggingFromLib;
+    if (!dragged) return;
+    // if drop target is a .stmt row, the row handler already took it
+    if (ev.target.closest('.stmt')) return;
+    var s = {indent:0, blocks:[{text:dragged.text, kind:dragged.kind, cls:dragged.cls}]};
+    stateGame.stmts.push(s);
+    stateGame.draggingFromLib = null;
+    renderCanvas();
+  });
+
+  // buttons
+  document.getElementById('btnAddLine').addEventListener('click', function(){
+    makeStmt(0);
+  });
+  document.getElementById('btnIndent').addEventListener('click', function(){
+    if (stateGame.stmts.length===0) return;
+    var last = stateGame.stmts[stateGame.stmts.length-1];
+    last.indent = (last.indent+1) % 3;
+    renderCanvas();
+  });
+  document.getElementById('btnClear').addEventListener('click', function(){
+    stateGame.stmts = [];
+    renderCanvas();
+    setStdout('', 'idle');
+    setVerdict('wait');
+  });
+  document.getElementById('btnRun').addEventListener('click', runProgram);
+  document.getElementById('btnHint').addEventListener('click', loadDemo);
+  document.getElementById('langBtn').addEventListener('click', function(){
+    LANG = (LANG==='cn'?'en':'cn');
+    refreshI18N();
+    renderCanvas();
+  });
+
+  // task switch
+  document.querySelectorAll('#taskList .task-item').forEach(function(el){
+    el.addEventListener('click', function(){
+      stateGame.curTask = parseInt(el.dataset.task,10);
+      updateTaskUI();
+      // clear canvas on task switch for clarity
+      stateGame.stmts = [];
+      renderCanvas();
+      setStdout('', 'idle');
+      setVerdict('wait');
+    });
+  });
+
+  // seed: one empty stmt
+  makeStmt(0);
+  updateTaskUI();
+  refreshI18N();
+});
+
+function updateTaskUI(){
+  document.querySelectorAll('#taskList .task-item').forEach(function(el){
+    var i = parseInt(el.dataset.task,10);
+    el.classList.toggle('active', i===stateGame.curTask);
+    el.classList.toggle('done', stateGame.cleared[i]);
+    var badge = el.querySelector('.badge');
+    badge.textContent = stateGame.cleared[i] ? 'OK' : (i===stateGame.curTask?'NOW':'--');
+  });
+  document.getElementById('canvasTask').textContent =
+    I18N['t'+stateGame.curTask+'name'][LANG];
+}
+
+// ============ stdout/verdict ============
+function setStdout(text, status){
+  var box = document.getElementById('stdout');
+  box.textContent = text || '';
+  var cursor = document.createElement('span');
+  cursor.className='cursor';
+  box.appendChild(cursor);
+  document.getElementById('stdoutPill').textContent = status || 'idle';
+}
+function appendStdout(text, cls){
+  var box = document.getElementById('stdout');
+  // remove existing cursor
+  var c = box.querySelector('.cursor');
+  if (c) c.remove();
+  var line = document.createElement('span');
+  if (cls) line.className = cls;
+  line.textContent = text + '\n';
+  box.appendChild(line);
+  // re-add cursor
+  var nc = document.createElement('span');
+  nc.className='cursor';
+  box.appendChild(nc);
+  box.scrollTop = box.scrollHeight;
+}
+function setVerdict(state, extraCn, extraEn){
+  var el = document.getElementById('verdict');
+  el.classList.remove('pass','fail');
+  if (state==='wait'){
+    el.textContent = I18N.waitVerdict[LANG];
+  } else if (state==='pass'){
+    el.classList.add('pass');
+    el.textContent = (LANG==='cn' ? '通过 · '+(extraCn||'') : 'PASS · '+(extraEn||''));
+  } else if (state==='fail'){
+    el.classList.add('fail');
+    el.textContent = (LANG==='cn' ? '未达标 · '+(extraCn||'') : 'NOT YET · '+(extraEn||''));
+  }
+}
+function renderVerdict(){
+  // re-translate based on last state — simplified: keep wait if cleared not changed
+  if (stateGame.cleared[stateGame.curTask]) setVerdict('pass','','');
+  else setVerdict('wait');
+}
+
+// ============ Python-ish mini interpreter ============
+// We don't run real CPython. We parse the block sequence into AST-lite
+// then execute it in a sandbox. Supports: assignment, comparison, if/else,
+// for-in (list literal only), def (single-arg), return, print.
+function tokensFromStmt(stmt){
+  return stmt.blocks.map(function(b){return b;});
+}
+
+function execProgram(){
+  // Build structured program from indents.
+  // structure: list of "node" {kind: 'line'|'block', stmt, body:[...]}
+  // We use a simple stack by indent level.
+  var nodes = [];
+  var stack = [{children:nodes, indent:-1}];
+  stateGame.stmts.forEach(function(s){
+    // pop until parent indent < current
+    while (stack.length>1 && stack[stack.length-1].indent >= s.indent){
+      stack.pop();
+    }
+    var n = {indent:s.indent, blocks:s.blocks.slice(), children:[]};
+    stack[stack.length-1].children.push(n);
+    stack.push({children:n.children, indent:s.indent, owner:n});
+  });
+
+  // env
+  var env = Object.create(null);
+  var output = [];
+  function pushOut(v){
+    // python-ish repr
+    if (typeof v==='string') output.push(v);
+    else if (typeof v==='boolean') output.push(v?'True':'False');
+    else if (v===null||v===undefined) output.push('None');
+    else if (Array.isArray(v)) output.push('['+v.join(', ')+']');
+    else output.push(String(v));
+  }
+
+  function tokText(b){return b.text;}
+  function tokIsNum(t){return /^-?\d+(\.\d+)?$/.test(t);}
+  function tokIsStr(t){return /^".*"$|^'.*'$/.test(t);}
+  function tokIsList(t){return /^\[.*\]$/.test(t);}
+  function parseLiteral(t){
+    if (tokIsNum(t)) return parseFloat(t);
+    if (tokIsStr(t)) return t.slice(1,-1);
+    if (tokIsList(t)){
+      var inner = t.slice(1,-1).trim();
+      if (!inner) return [];
+      return inner.split(',').map(function(s){
+        s = s.trim();
+        if (tokIsNum(s)) return parseFloat(s);
+        if (tokIsStr(s)) return s.slice(1,-1);
+        return s;
+      });
+    }
+    return null;
+  }
+
+  function evalExpr(toks, localEnv){
+    // strip surrounding parens
+    while (toks.length>=2 && toks[0].text==='(' && toks[toks.length-1].text===')'){
+      toks = toks.slice(1,-1);
+    }
+    if (toks.length===0) throw new Error('empty expr');
+    if (toks.length===1){
+      var t = toks[0].text;
+      if (tokIsNum(t)) return parseFloat(t);
+      if (tokIsStr(t)) return t.slice(1,-1);
+      if (tokIsList(t)) return parseLiteral(t);
+      // variable lookup
+      if (Object.prototype.hasOwnProperty.call(localEnv,t)) return localEnv[t];
+      if (Object.prototype.hasOwnProperty.call(env,t)) return env[t];
+      throw new Error("NameError: name '"+t+"' is not defined");
+    }
+    // comparison: lhs op rhs
+    var opIdx = -1;
+    for (var i=0;i<toks.length;i++){
+      if (toks[i].kind==='op' && (toks[i].text==='>'||toks[i].text==='<'||toks[i].text==='==')){
+        opIdx = i; break;
+      }
+    }
+    if (opIdx>=0){
+      var lhs = evalExpr(toks.slice(0,opIdx), localEnv);
+      var rhs = evalExpr(toks.slice(opIdx+1), localEnv);
+      var op = toks[opIdx].text;
+      if (op==='>') return lhs>rhs;
+      if (op==='<') return lhs<rhs;
+      if (op==='==') return lhs===rhs;
+    }
+    throw new Error('SyntaxError: cannot parse expression');
+  }
+
+  // function table
+  var fns = Object.create(null);
+
+  function runNode(node, localEnv){
+    var toks = node.blocks;
+    if (toks.length===0) return;
+    var first = toks[0];
+    // def NAME ( ARG ) :
+    if (first.kind==='fn' && first.text==='def'){
+      // pattern: def name ( arg ) :
+      var name = toks[1] && toks[1].text;
+      // collect arg between ( ... )
+      var lp = toks.findIndex(function(b){return b.text==='(';});
+      var rp = toks.findIndex(function(b){return b.text===')';});
+      var argName = null;
+      if (lp>=0 && rp>lp && rp-lp>1){
+        argName = toks[lp+1].text;
+      }
+      fns[name] = {arg:argName, body:node.children};
+      return;
+    }
+    // return EXPR
+    if (first.kind==='fn' && first.text==='return'){
+      var val = evalExpr(toks.slice(1), localEnv);
+      throw {__return:true, value:val};
+    }
+    // if EXPR :
+    if (first.kind==='ctrl' && first.text==='if'){
+      // strip trailing :
+      var body = toks.slice(1);
+      if (body.length && body[body.length-1].text===':') body = body.slice(0,-1);
+      var cond = evalExpr(body, localEnv);
+      if (cond){
+        node.children.forEach(function(c){runNode(c, localEnv);});
+      } else if (node.elseNode){
+        node.elseNode.children.forEach(function(c){runNode(c, localEnv);});
+      }
+      return;
+    }
+    // else :
+    if (first.kind==='ctrl' && first.text==='else'){
+      // handled via if pairing — pass
+      return;
+    }
+    // for VAR in EXPR :
+    if (first.kind==='ctrl' && first.text==='for'){
+      var varName = toks[1] && toks[1].text;
+      var inIdx = toks.findIndex(function(b){return b.text==='in';});
+      var rest = toks.slice(inIdx+1);
+      if (rest.length && rest[rest.length-1].text===':') rest = rest.slice(0,-1);
+      var iter = evalExpr(rest, localEnv);
+      if (!Array.isArray(iter)) throw new Error("TypeError: not iterable");
+      iter.forEach(function(v){
+        localEnv[varName] = v;
+        node.children.forEach(function(c){runNode(c, localEnv);});
+      });
+      return;
+    }
+    // assignment: VAR = EXPR
+    if (toks.length>=3 && toks[0].kind==='var' && toks[1].kind==='op' && toks[1].text==='='){
+      var rhsVal = evalExpr(toks.slice(2), localEnv);
+      localEnv[toks[0].text] = rhsVal;
+      return;
+    }
+    // print ( EXPR )
+    if (first.kind==='out' && first.text==='print'){
+      // body inside ( )
+      var lp2 = toks.findIndex(function(b){return b.text==='(';});
+      var rp2 = -1;
+      for (var k=toks.length-1;k>=0;k--){ if (toks[k].text===')') {rp2=k;break;} }
+      if (lp2<0 || rp2<0 || rp2<=lp2+1){
+        throw new Error('SyntaxError: print needs (...)');
+      }
+      var inner = toks.slice(lp2+1, rp2);
+      // could be a function call e.g. is_unhealthy ( pm )
+      if (inner.length && inner[0].kind==='fn' && fns[inner[0].text]){
+        var fnName = inner[0].text;
+        var alp = inner.findIndex(function(b){return b.text==='(';});
+        var arp = -1;
+        for (var k2=inner.length-1;k2>=0;k2--){ if (inner[k2].text===')'){arp=k2;break;} }
+        var argToks = (alp>=0 && arp>alp) ? inner.slice(alp+1, arp) : [];
+        var argVal = argToks.length ? evalExpr(argToks, localEnv) : null;
+        var fn = fns[fnName];
+        var fnEnv = Object.create(null);
+        if (fn.arg) fnEnv[fn.arg] = argVal;
+        try {
+          fn.body.forEach(function(c){runNode(c, fnEnv);});
+          pushOut(null);
+        } catch(e){
+          if (e && e.__return){ pushOut(e.value); }
+          else throw e;
+        }
+        return;
+      }
+      var val2 = evalExpr(inner, localEnv);
+      pushOut(val2);
+      return;
+    }
+    // bare function call?
+    if (first.kind==='fn' && fns[first.text]){
+      var fn2 = fns[first.text];
+      var alp2 = toks.findIndex(function(b){return b.text==='(';});
+      var arp2 = -1;
+      for (var k3=toks.length-1;k3>=0;k3--){ if (toks[k3].text===')'){arp2=k3;break;} }
+      var aTok = (alp2>=0 && arp2>alp2) ? toks.slice(alp2+1,arp2) : [];
+      var aVal = aTok.length ? evalExpr(aTok, localEnv) : null;
+      var fnEnv2 = Object.create(null);
+      if (fn2.arg) fnEnv2[fn2.arg] = aVal;
+      try { fn2.body.forEach(function(c){runNode(c, fnEnv2);}); }
+      catch(e){ if (!(e && e.__return)) throw e; }
+      return;
+    }
+    throw new Error('SyntaxError: line '+(toks.map(function(b){return b.text;}).join(' '))+' not recognized');
+  }
+
+  // pair if with else (if 后紧跟 indent 相同的 else, 取为 elseNode)
+  function pairElse(list){
+    for (var i=0;i<list.length;i++){
+      var n = list[i];
+      pairElse(n.children);
+      if (n.blocks[0] && n.blocks[0].text==='if' && list[i+1]
+          && list[i+1].blocks[0] && list[i+1].blocks[0].text==='else'){
+        n.elseNode = list[i+1];
+      }
+    }
+  }
+  pairElse(nodes);
+
+  // env starts with seeded pm based on task (so 玩家不写 pm=42 也能演示)
+  env['pm'] = 42;
+
+  try {
+    nodes.forEach(function(n){runNode(n, env);});
+  } catch(e){
+    if (e && e.__return){ /* top-level return ignored */ }
+    else throw e;
+  }
+  return output;
+}
+
+function runProgram(){
+  if (stateGame.stmts.length===0 || stateGame.stmts.every(function(s){return s.blocks.length===0;})){
+    setStdout('', 'idle');
+    appendStdout('# '+I18N.errEmpty[LANG], 'line-err');
+    setVerdict('fail', I18N.errEmpty.cn, I18N.errEmpty.en);
+    return;
+  }
+  setStdout('', 'run');
+  appendStdout('$ python3 sandbox.py', 'line-hi');
+  var out = [];
+  try {
+    out = execProgram();
+    out.forEach(function(line){appendStdout(line);});
+    appendStdout('# exit 0', 'line-ok');
+  } catch(e){
+    appendStdout('Traceback (sandbox)', 'line-err');
+    appendStdout('  '+ (e && e.message ? e.message : String(e)), 'line-err');
+    setVerdict('fail', '运行出错', 'runtime error');
+    document.getElementById('stdoutPill').textContent='err';
+    return;
+  }
+  document.getElementById('stdoutPill').textContent='done';
+
+  // check task
+  var ok = checkTask(stateGame.curTask, out);
+  if (ok){
+    stateGame.cleared[stateGame.curTask] = true;
+    setVerdict('pass', '本关达成', 'task done');
+    showToast();
+    updateTaskUI();
+  } else {
+    setVerdict('fail', '输出未达标', 'output mismatch');
+  }
+}
+
+function checkTask(t, out){
+  if (t===0){
+    // T1: if pm > 35 print "戴口罩"  → output contains "戴口罩"
+    return out.length>=1 && out.indexOf('戴口罩')>=0;
+  }
+  if (t===1){
+    // T2: for over [38,42,51], each > 35 → print "戴口罩" three times
+    var n = out.filter(function(x){return x==='戴口罩';}).length;
+    return n>=3;
+  }
+  if (t===2){
+    // T3: define is_unhealthy(pm) returning pm>35; print(is_unhealthy(42)) → True
+    return out.indexOf('True')>=0;
+  }
+  return false;
+}
+
+function showToast(){
+  var t = document.getElementById('toast');
+  t.classList.add('show');
+  setTimeout(function(){t.classList.remove('show');}, 1500);
+}
+
+// ============ demo loader (示范) ============
+function loadDemo(){
+  stateGame.stmts = [];
+  if (stateGame.curTask===0){
+    // pm = 42  ;  if pm > 35 :  ;     print ( "戴口罩" )
+    pushStmt(0, [
+      {kind:'var',cls:'var-blk',text:'pm'},
+      {kind:'op',cls:'op-blk',text:'='},
+      {kind:'lit',cls:'lit-blk',text:'42'}
+    ]);
+    pushStmt(0, [
+      {kind:'ctrl',cls:'ctrl-blk',text:'if'},
+      {kind:'var',cls:'var-blk',text:'pm'},
+      {kind:'op',cls:'op-blk',text:'>'},
+      {kind:'lit',cls:'lit-blk',text:'35'},
+      {kind:'ctrl',cls:'ctrl-blk',text:':'}
+    ]);
+    pushStmt(1, [
+      {kind:'out',cls:'out-blk',text:'print'},
+      {kind:'out',cls:'out-blk',text:'('},
+      {kind:'lit',cls:'lit-blk',text:'"戴口罩"'},
+      {kind:'out',cls:'out-blk',text:')'}
+    ]);
+  } else if (stateGame.curTask===1){
+    pushStmt(0, [
+      {kind:'ctrl',cls:'ctrl-blk',text:'for'},
+      {kind:'var',cls:'var-blk',text:'x'},
+      {kind:'ctrl',cls:'ctrl-blk',text:'in'},
+      {kind:'lit',cls:'lit-blk',text:'[38,42,51]'},
+      {kind:'ctrl',cls:'ctrl-blk',text:':'}
+    ]);
+    pushStmt(1, [
+      {kind:'ctrl',cls:'ctrl-blk',text:'if'},
+      {kind:'var',cls:'var-blk',text:'x'},
+      {kind:'op',cls:'op-blk',text:'>'},
+      {kind:'lit',cls:'lit-blk',text:'35'},
+      {kind:'ctrl',cls:'ctrl-blk',text:':'}
+    ]);
+    pushStmt(2, [
+      {kind:'out',cls:'out-blk',text:'print'},
+      {kind:'out',cls:'out-blk',text:'('},
+      {kind:'lit',cls:'lit-blk',text:'"戴口罩"'},
+      {kind:'out',cls:'out-blk',text:')'}
+    ]);
+  } else {
+    pushStmt(0, [
+      {kind:'fn',cls:'fn-blk',text:'def'},
+      {kind:'fn',cls:'fn-blk',text:'is_unhealthy'},
+      {kind:'out',cls:'out-blk',text:'('},
+      {kind:'var',cls:'var-blk',text:'pm'},
+      {kind:'out',cls:'out-blk',text:')'},
+      {kind:'ctrl',cls:'ctrl-blk',text:':'}
+    ]);
+    pushStmt(1, [
+      {kind:'fn',cls:'fn-blk',text:'return'},
+      {kind:'var',cls:'var-blk',text:'pm'},
+      {kind:'op',cls:'op-blk',text:'>'},
+      {kind:'lit',cls:'lit-blk',text:'35'}
+    ]);
+    pushStmt(0, [
+      {kind:'out',cls:'out-blk',text:'print'},
+      {kind:'out',cls:'out-blk',text:'('},
+      {kind:'fn',cls:'fn-blk',text:'is_unhealthy'},
+      {kind:'out',cls:'out-blk',text:'('},
+      {kind:'lit',cls:'lit-blk',text:'42'},
+      {kind:'out',cls:'out-blk',text:')'},
+      {kind:'out',cls:'out-blk',text:')'}
+    ]);
+  }
+  renderCanvas();
+}
+function pushStmt(indent, blocks){
+  stateGame.stmts.push({indent:indent, blocks:blocks});
+}
+
+</script>
+</body>
+</html>

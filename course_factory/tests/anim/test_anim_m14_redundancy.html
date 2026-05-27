@@ -1,0 +1,831 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>冗余传感 — 加备份 PMS7003 + MQ-135 为啥要冗余</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&family=Noto+Sans+SC:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    /* Industrial Atelier — Claude warm cream + coral */
+    --paper:     #FAF9F5;
+    --paper-2:   #F1EDDF;
+    --card:      #FFFFFF;
+    --ink:       #191814;
+    --ink-2:     #2B2924;
+    --sub:       #6B6557;
+    --sub-2:     #9D978A;
+    --border:    #EBE5D6;
+    --border-2:  #D9D1BD;
+    --hairline:  #F2EDE0;
+
+    --primary:       #D97757;
+    --primary-ink:   #9A4A2E;
+    --primary-soft:  #F8EDE5;
+    --primary-line:  #ECCFB8;
+
+    /* domain accent: aerospace 工业冗余暖橘 */
+    --aerospace:      #B85A33;
+    --aerospace-soft: #F2DDD0;
+    --aerospace-line: #E2BFA8;
+    --aerospace-ink:  #6F3219;
+
+    --shadow-sm: 0 1px 2px 0 rgba(25,24,20,.04);
+    --shadow:    0 1px 3px 0 rgba(25,24,20,.06), 0 1px 2px -1px rgba(25,24,20,.04);
+    --shadow-md: 0 4px 8px -2px rgba(25,24,20,.06), 0 2px 4px -2px rgba(25,24,20,.04);
+    --shadow-lg: 0 12px 24px -6px rgba(25,24,20,.1), 0 4px 8px -4px rgba(25,24,20,.05);
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    height:100vh;overflow:hidden;
+    background:var(--paper);
+    color:var(--ink);
+    font-family:'Inter','PingFang SC','Noto Sans SC',system-ui,sans-serif;
+    display:flex;
+    -webkit-font-smoothing:antialiased;
+    text-rendering:optimizeLegibility;
+  }
+  .mono{font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,monospace;}
+
+  /* ---------- Sidebar ---------- */
+  .sidebar{
+    width:200px;flex-shrink:0;height:100vh;
+    background:var(--card);
+    border-right:1px solid var(--border);
+    display:flex;flex-direction:column;
+    padding:20px 16px;gap:14px;
+  }
+  .brand{
+    font-size:13px;font-weight:700;letter-spacing:0.02em;color:var(--ink);
+    padding-bottom:12px;border-bottom:1px solid var(--hairline);
+  }
+  .brand-sub{
+    display:block;margin-top:6px;font-size:11px;font-weight:500;
+    color:var(--sub);letter-spacing:0;
+  }
+  .deco{
+    width:100%;height:100px;
+    background:var(--paper-2);
+    border:1px solid var(--border);
+    border-radius:8px;
+    display:flex;align-items:center;justify-content:center;
+    box-shadow:var(--shadow-sm);
+  }
+  .deco svg{width:84px;height:84px;}
+  .guide{display:flex;flex-direction:column;gap:10px;margin-top:2px;}
+  .guide-li{
+    font-size:11.5px;line-height:1.5;
+    color:var(--sub);
+    padding:2px 0 2px 10px;
+    border-left:2px solid var(--border-2);
+  }
+  .guide-li.hl{border-left-color:var(--primary);color:var(--ink-2);}
+  .lang-btn{
+    margin-top:auto;
+    font-family:'JetBrains Mono',monospace;
+    font-size:11px;font-weight:600;letter-spacing:0.06em;
+    padding:8px 12px;cursor:pointer;
+    background:var(--card);color:var(--ink);
+    border:1px solid var(--border-2);
+    border-radius:6px;
+    transition:background 120ms ease, border-color 120ms ease;
+  }
+  .lang-btn:hover{background:var(--paper-2);border-color:var(--primary-line);}
+  .lang-btn:active{background:var(--primary-soft);}
+
+  /* ---------- Main ---------- */
+  .main{
+    flex:1;height:100vh;overflow:hidden;
+    display:grid;
+    grid-template-rows: minmax(82px, 11%) minmax(220px, 36%) 1fr minmax(110px, 19%);
+    padding:18px 24px;gap:12px;position:relative;
+    background:var(--paper);
+  }
+
+  /* === 顶部 Title 卡 === */
+  .topcard{
+    display:flex;align-items:center;gap:18px;
+    padding:12px 20px;
+    background:var(--card);
+    border:1px solid var(--border);
+    border-radius:10px;
+    box-shadow:var(--shadow-sm);
+    position:relative;
+  }
+  .topcard .badge{
+    flex-shrink:0;
+    width:60px;height:60px;
+    background:var(--aerospace-soft);
+    border:1.5px solid var(--aerospace-line);
+    border-radius:8px;
+    display:flex;align-items:center;justify-content:center;
+    color:var(--aerospace-ink);
+    box-shadow:var(--shadow-sm);
+  }
+  .topcard .badge svg{width:32px;height:32px;}
+  .topcard .ttext{flex:1;min-width:0;}
+  .topcard .ttext .ttl{
+    font-size:18px;font-weight:700;color:var(--ink);letter-spacing:-0.01em;
+    margin-bottom:4px;
+  }
+  .topcard .ttext .lead{
+    font-size:12.5px;line-height:1.55;color:var(--sub);
+  }
+  .topcard .ttext .lead .em{color:var(--aerospace);font-weight:700;}
+  .topcard .ttext .lead-en{
+    font-size:10.5px;font-style:italic;color:var(--sub-2);margin-top:3px;
+  }
+
+  /* === 中部 三传感器卡片 === */
+  .sensors-wrap{
+    display:flex;flex-direction:column;gap:8px;min-height:0;
+  }
+  .sec-head{
+    display:flex;align-items:baseline;justify-content:space-between;
+    padding:0 2px;
+  }
+  .sec-head .h-ttl{font-size:13px;font-weight:700;color:var(--ink);letter-spacing:-0.01em;}
+  .sec-head .h-hint{font-size:10.5px;color:var(--sub);font-family:'JetBrains Mono',monospace;}
+  .sensors{
+    flex:1;display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;min-height:0;
+  }
+  .scard{
+    background:var(--card);
+    border:1px solid var(--border);
+    border-radius:10px;
+    padding:14px 14px 12px;
+    display:flex;flex-direction:column;gap:8px;
+    cursor:pointer;outline:none;position:relative;
+    box-shadow:var(--shadow-sm);
+    transition:transform 200ms ease, border-color 200ms ease, box-shadow 200ms ease;
+    min-width:0;
+  }
+  .scard:hover, .scard:focus-visible{
+    transform:translateY(-2px);
+    border-color:var(--aerospace-line);
+    box-shadow:var(--shadow-md);
+  }
+  .scard.tap{
+    border-color:var(--aerospace);
+    box-shadow:var(--shadow-md);
+  }
+  .scard.primary-sensor{
+    border-color:var(--primary-line);
+  }
+  .scard.primary-sensor::before{
+    content:"";
+    position:absolute;top:-1px;left:14px;right:14px;height:2px;
+    background:var(--primary);border-radius:2px;
+  }
+  .scard-head{display:flex;align-items:flex-start;gap:10px;}
+  .scard-img{
+    flex-shrink:0;
+    width:64px;height:64px;
+    background:var(--paper-2);
+    border:1px solid var(--border);
+    border-radius:6px;
+    display:flex;align-items:center;justify-content:center;
+    padding:6px;
+  }
+  .scard-img svg{width:100%;height:100%;}
+  .scard-id{flex:1;min-width:0;}
+  .scard-id .model{
+    font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:700;
+    color:var(--ink);letter-spacing:0.04em;
+  }
+  .scard-id .role{
+    font-size:11px;color:var(--sub);margin-top:2px;line-height:1.35;
+  }
+  .scard-id .tag{
+    display:inline-block;margin-top:5px;
+    font-family:'JetBrains Mono',monospace;font-size:9px;font-weight:700;
+    padding:2px 6px;border-radius:3px;letter-spacing:0.06em;
+    background:var(--paper-2);color:var(--sub);border:1px solid var(--border);
+  }
+  .scard.primary-sensor .scard-id .tag{
+    background:var(--primary-soft);color:var(--primary-ink);border-color:var(--primary-line);
+  }
+  .scard.backup-sensor .scard-id .tag{
+    background:var(--aerospace-soft);color:var(--aerospace-ink);border-color:var(--aerospace-line);
+  }
+  .scard.gas-sensor .scard-id .tag{
+    background:var(--paper-2);color:var(--ink-2);border-color:var(--border-2);
+  }
+  .scard-row{
+    display:flex;align-items:flex-start;gap:8px;
+    font-size:11px;line-height:1.45;color:var(--ink-2);
+  }
+  .scard-row .lbl{
+    flex-shrink:0;
+    font-family:'JetBrains Mono',monospace;font-size:9.5px;font-weight:700;
+    color:var(--sub-2);letter-spacing:0.04em;text-transform:uppercase;
+    width:38px;
+    padding-top:1px;
+  }
+  .scard-price{
+    margin-top:auto;
+    display:flex;align-items:baseline;justify-content:space-between;
+    padding-top:8px;border-top:1px solid var(--hairline);
+  }
+  .scard-price .pnum{
+    font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:700;
+    color:var(--aerospace-ink);letter-spacing:-0.01em;
+  }
+  .scard-price .punit{font-size:10px;color:var(--sub);margin-left:2px;}
+  .scard-price .pnote{font-size:10px;color:var(--sub-2);}
+  .scard-detail{
+    position:absolute;left:10px;right:10px;top:100%;margin-top:6px;
+    padding:10px 12px;
+    background:var(--ink);color:var(--paper);
+    border-radius:7px;
+    box-shadow:var(--shadow-lg);
+    opacity:0;pointer-events:none;
+    transition:opacity 200ms ease;
+    font-size:11px;line-height:1.5;
+    z-index:6;
+  }
+  .scard-detail .dpara{margin:0 0 5px 0;}
+  .scard-detail .dpara:last-child{margin-bottom:0;}
+  .scard-detail .dpara .dkey{color:var(--primary-line);font-weight:700;margin-right:5px;font-family:'JetBrains Mono',monospace;font-size:10px;}
+  .scard.tap .scard-detail{opacity:1;pointer-events:auto;}
+  .scard:hover .scard-detail{opacity:1;}
+  .scard-detail::before{
+    content:"";position:absolute;left:20px;top:-5px;
+    border:5px solid transparent;border-bottom-color:var(--ink);border-top:0;
+  }
+
+  /* === 下部 双盲对照图 === */
+  .compare{
+    background:var(--card);
+    border:1px solid var(--border);
+    border-radius:10px;
+    padding:14px 18px 12px;
+    display:flex;flex-direction:column;gap:8px;
+    box-shadow:var(--shadow-sm);
+    min-height:0;
+  }
+  .compare-svg{
+    flex:1;width:100%;min-height:0;
+  }
+  .compare-legend{
+    display:flex;gap:18px;flex-wrap:wrap;
+    font-size:11px;color:var(--sub);
+    padding-top:2px;
+  }
+  .compare-legend .lg{display:flex;align-items:center;gap:6px;}
+  .compare-legend .lg .swatch{
+    width:18px;height:3px;border-radius:2px;
+  }
+  .compare-legend .lg .swatch.dot{
+    width:10px;height:10px;border-radius:50%;
+  }
+  .compare-legend .lg .swatch.dash{
+    background:transparent;
+    border-top:2px dashed currentColor;
+    width:18px;height:0;
+  }
+
+  /* === 底部 三承诺 === */
+  .vows{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;}
+  .vow{
+    padding:11px 14px;
+    background:var(--card);
+    border:1px solid var(--border);
+    border-radius:8px;
+    box-shadow:var(--shadow-sm);
+    cursor:pointer;outline:none;
+    transition:transform 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
+    display:flex;gap:11px;align-items:flex-start;
+    position:relative;
+  }
+  .vow:hover{border-color:var(--aerospace-line);box-shadow:var(--shadow);}
+  .vow.tap{transform:scale(1.02);border-color:var(--aerospace);box-shadow:var(--shadow-md);}
+  .vow .vmark{
+    flex-shrink:0;width:30px;height:30px;
+    border-radius:6px;
+    background:var(--paper-2);
+    border:1px solid var(--border);
+    display:flex;align-items:center;justify-content:center;
+    color:var(--sub);
+  }
+  .vow .vmark svg{width:17px;height:17px;}
+  .vow:hover .vmark, .vow.tap .vmark{background:var(--aerospace-soft);border-color:var(--aerospace-line);color:var(--aerospace);}
+  .vow .vtxt{flex:1;min-width:0;}
+  .vow .vnum{
+    font-family:'JetBrains Mono',monospace;font-size:9.5px;font-weight:700;
+    color:var(--sub-2);letter-spacing:0.1em;margin-bottom:4px;
+  }
+  .vow .vline{font-size:12.5px;line-height:1.45;color:var(--ink);font-weight:500;letter-spacing:-0.005em;}
+  .vow .vline-en{font-size:10px;font-style:italic;color:var(--sub-2);margin-top:4px;line-height:1.4;}
+
+  /* === 当前位置心跳 (柔和) === */
+  .pulse-dot{
+    animation:pulse-dot 2.2s ease-in-out infinite;
+    transform-origin:center;
+  }
+  @keyframes pulse-dot{
+    0%,100%{opacity:1;}
+    50%{opacity:0.55;}
+  }
+</style>
+</head>
+<body>
+  <aside class="sidebar">
+    <div class="brand">
+      <span id="brandMain">PurpleAir Node</span>
+      <span class="brand-sub" id="brandSub">M14 · 冗余传感器</span>
+    </div>
+    <div class="deco" aria-hidden="true">
+      <!-- 装饰: 两块芯片 + 比较符号 -->
+      <svg viewBox="0 0 100 100" fill="none" stroke="currentColor" stroke-width="1.5" style="color:var(--sub);">
+        <!-- 左芯片 -->
+        <rect x="14" y="22" width="30" height="38" rx="2" fill="var(--card)" stroke="var(--border-2)"/>
+        <rect x="18" y="26" width="22" height="22" fill="var(--paper-2)" stroke="var(--border-2)" stroke-width="0.8"/>
+        <line x1="20" y1="52" x2="20" y2="58" stroke="var(--sub-2)" stroke-width="0.8"/>
+        <line x1="26" y1="52" x2="26" y2="58" stroke="var(--sub-2)" stroke-width="0.8"/>
+        <line x1="32" y1="52" x2="32" y2="58" stroke="var(--sub-2)" stroke-width="0.8"/>
+        <line x1="38" y1="52" x2="38" y2="58" stroke="var(--sub-2)" stroke-width="0.8"/>
+        <text x="29" y="42" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="9" font-weight="700" fill="var(--primary)" stroke="none">A</text>
+        <!-- 右芯片 -->
+        <rect x="56" y="22" width="30" height="38" rx="2" fill="var(--card)" stroke="var(--aerospace-line)"/>
+        <rect x="60" y="26" width="22" height="22" fill="var(--aerospace-soft)" stroke="var(--aerospace-line)" stroke-width="0.8"/>
+        <line x1="62" y1="52" x2="62" y2="58" stroke="var(--sub-2)" stroke-width="0.8"/>
+        <line x1="68" y1="52" x2="68" y2="58" stroke="var(--sub-2)" stroke-width="0.8"/>
+        <line x1="74" y1="52" x2="74" y2="58" stroke="var(--sub-2)" stroke-width="0.8"/>
+        <line x1="80" y1="52" x2="80" y2="58" stroke="var(--sub-2)" stroke-width="0.8"/>
+        <text x="71" y="42" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="9" font-weight="700" fill="var(--aerospace)" stroke="none">B</text>
+        <!-- 中间约等号 -->
+        <line x1="46" y1="38" x2="54" y2="38" stroke="var(--aerospace)" stroke-width="1.6"/>
+        <line x1="46" y1="44" x2="54" y2="44" stroke="var(--aerospace)" stroke-width="1.6"/>
+        <!-- 底部对照 text -->
+        <text x="50" y="78" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="8" font-weight="700" fill="var(--sub)" stroke="none">A vs B</text>
+      </svg>
+    </div>
+    <div class="guide">
+      <div class="guide-li hl" id="g1">悬停三块卡片，看选型细节</div>
+      <div class="guide-li" id="g2">点击卡片锁定查看，再点取消</div>
+      <div class="guide-li" id="g3">下方曲线 = 两条 PMS 互校原理</div>
+    </div>
+    <button class="lang-btn" id="langBtn" type="button">CN / EN</button>
+  </aside>
+
+  <main class="main">
+    <!-- 顶部 Title -->
+    <section class="topcard">
+      <div class="badge" aria-hidden="true">
+        <!-- 双盾牌叠加 = 冗余/备份 -->
+        <svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M10 6 L18 4 L18 16 C18 20 15 22 11 24 C7 22 4 20 4 16 L4 8 Z" fill="var(--paper)" />
+          <path d="M22 8 L30 6 L30 18 C30 22 27 24 23 26 C19 24 16 22 16 18 L16 10 Z" fill="var(--aerospace-soft)" />
+        </svg>
+      </div>
+      <div class="ttext">
+        <div class="ttl" id="topTtl">为什么要装"两块半"传感器</div>
+        <div class="lead" id="topLead">工业级靠 <span class="em">"两块比一对"</span> 减少误判 — 一块测不准没人知道，两块吻合才敢信。</div>
+        <div class="lead-en" id="topLeadEn">Industrial-grade trust comes from "two compared as a pair" — one sensor lies in silence; two agreeing is your only proof.</div>
+      </div>
+    </section>
+
+    <!-- 中部 三传感器卡 -->
+    <section class="sensors-wrap">
+      <div class="sec-head">
+        <div class="h-ttl" id="ssTtl">三块传感器 · 各司其职</div>
+        <div class="h-hint mono" id="ssHint">PMS5003 + PMS7003 + MQ-135</div>
+      </div>
+      <div class="sensors">
+        <!-- PMS5003 -->
+        <div class="scard primary-sensor" data-key="pms5003" tabindex="0" role="button" aria-label="PMS5003 主传感器">
+          <div class="scard-head">
+            <div class="scard-img" aria-hidden="true">
+              <!-- PMS5003 实物示意: 长方形塑料壳 + 进风孔 + 排针 -->
+              <svg viewBox="0 0 64 64" fill="none">
+                <rect x="6" y="14" width="52" height="34" rx="2" fill="var(--paper-2)" stroke="var(--border-2)" stroke-width="1.2"/>
+                <rect x="10" y="18" width="14" height="14" rx="1" fill="var(--card)" stroke="var(--border-2)" stroke-width="0.8"/>
+                <circle cx="17" cy="25" r="3" fill="var(--primary-soft)" stroke="var(--primary)" stroke-width="0.8"/>
+                <line x1="30" y1="20" x2="54" y2="20" stroke="var(--sub-2)" stroke-width="0.5"/>
+                <line x1="30" y1="24" x2="54" y2="24" stroke="var(--sub-2)" stroke-width="0.5"/>
+                <line x1="30" y1="28" x2="50" y2="28" stroke="var(--sub-2)" stroke-width="0.5"/>
+                <text x="42" y="42" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="6" font-weight="700" fill="var(--sub)">PMS5003</text>
+                <!-- 排针 -->
+                <line x1="14" y1="48" x2="14" y2="54" stroke="var(--sub)" stroke-width="1"/>
+                <line x1="20" y1="48" x2="20" y2="54" stroke="var(--sub)" stroke-width="1"/>
+                <line x1="26" y1="48" x2="26" y2="54" stroke="var(--sub)" stroke-width="1"/>
+                <line x1="32" y1="48" x2="32" y2="54" stroke="var(--sub)" stroke-width="1"/>
+                <line x1="38" y1="48" x2="38" y2="54" stroke="var(--sub)" stroke-width="1"/>
+                <line x1="44" y1="48" x2="44" y2="54" stroke="var(--sub)" stroke-width="1"/>
+                <line x1="50" y1="48" x2="50" y2="54" stroke="var(--sub)" stroke-width="1"/>
+              </svg>
+            </div>
+            <div class="scard-id">
+              <div class="model">PMS5003</div>
+              <div class="role" id="r5003">颗粒物主传感器</div>
+              <span class="tag mono" id="t5003">PRIMARY · A</span>
+            </div>
+          </div>
+          <div class="scard-row"><span class="lbl">测</span><span id="m5003">PM1 / PM2.5 / PM10 (μg/m³)</span></div>
+          <div class="scard-row"><span class="lbl">优</span><span id="p5003">业界事实标准，社区库丰富</span></div>
+          <div class="scard-row"><span class="lbl">弱</span><span id="w5003">高湿 (&gt;85%RH) 会偏高 15-30%</span></div>
+          <div class="scard-price">
+            <div><span class="pnum mono">¥85</span><span class="punit">/ 块</span></div>
+            <div class="pnote" id="n5003">主路在线 24/7</div>
+          </div>
+          <div class="scard-detail" aria-hidden="true">
+            <div class="dpara"><span class="dkey mono">PRINCIPLE</span><span id="d5003a">激光散射 (Mie 散射): 颗粒穿过激光束散射出脉冲，统计脉冲数算颗粒浓度。</span></div>
+            <div class="dpara"><span class="dkey mono">WHY HERE</span><span id="d5003b">作为主路, 数据为准。便宜量大，坏了 5 分钟换新。</span></div>
+          </div>
+        </div>
+
+        <!-- PMS7003 -->
+        <div class="scard backup-sensor" data-key="pms7003" tabindex="0" role="button" aria-label="PMS7003 备份传感器">
+          <div class="scard-head">
+            <div class="scard-img" aria-hidden="true">
+              <!-- PMS7003: 更小一些, 不同进风孔位置 -->
+              <svg viewBox="0 0 64 64" fill="none">
+                <rect x="8" y="18" width="48" height="30" rx="2" fill="var(--aerospace-soft)" stroke="var(--aerospace-line)" stroke-width="1.2"/>
+                <rect x="12" y="22" width="12" height="12" rx="1" fill="var(--card)" stroke="var(--aerospace-line)" stroke-width="0.8"/>
+                <circle cx="18" cy="28" r="3" fill="var(--aerospace-soft)" stroke="var(--aerospace)" stroke-width="0.8"/>
+                <line x1="28" y1="24" x2="52" y2="24" stroke="var(--sub-2)" stroke-width="0.5"/>
+                <line x1="28" y1="28" x2="52" y2="28" stroke="var(--sub-2)" stroke-width="0.5"/>
+                <line x1="28" y1="32" x2="48" y2="32" stroke="var(--sub-2)" stroke-width="0.5"/>
+                <text x="40" y="42" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="6" font-weight="700" fill="var(--aerospace-ink)">PMS7003</text>
+                <!-- 排针 -->
+                <line x1="16" y1="48" x2="16" y2="54" stroke="var(--sub)" stroke-width="1"/>
+                <line x1="22" y1="48" x2="22" y2="54" stroke="var(--sub)" stroke-width="1"/>
+                <line x1="28" y1="48" x2="28" y2="54" stroke="var(--sub)" stroke-width="1"/>
+                <line x1="34" y1="48" x2="34" y2="54" stroke="var(--sub)" stroke-width="1"/>
+                <line x1="40" y1="48" x2="40" y2="54" stroke="var(--sub)" stroke-width="1"/>
+                <line x1="46" y1="48" x2="46" y2="54" stroke="var(--sub)" stroke-width="1"/>
+              </svg>
+            </div>
+            <div class="scard-id">
+              <div class="model">PMS7003</div>
+              <div class="role" id="r7003">颗粒物备份传感器</div>
+              <span class="tag mono" id="t7003">BACKUP · B</span>
+            </div>
+          </div>
+          <div class="scard-row"><span class="lbl">测</span><span id="m7003">PM1 / PM2.5 / PM10 (μg/m³)</span></div>
+          <div class="scard-row"><span class="lbl">优</span><span id="p7003">更紧凑 (48×37mm)，独立批次</span></div>
+          <div class="scard-row"><span class="lbl">弱</span><span id="w7003">激光寿命 ~3 年同 5003</span></div>
+          <div class="scard-price">
+            <div><span class="pnum mono">¥98</span><span class="punit">/ 块</span></div>
+            <div class="pnote" id="n7003">互校在线 24/7</div>
+          </div>
+          <div class="scard-detail" aria-hidden="true">
+            <div class="dpara"><span class="dkey mono">PRINCIPLE</span><span id="d7003a">同样激光散射，但不同代次 + 不同批次 — 即使工艺缺陷不会同时出现。</span></div>
+            <div class="dpara"><span class="dkey mono">WHY HERE</span><span id="d7003b">不同型号 + 不同批次 = 独立故障源。主路飘了，备路立刻揭穿。</span></div>
+          </div>
+        </div>
+
+        <!-- MQ-135 -->
+        <div class="scard gas-sensor" data-key="mq135" tabindex="0" role="button" aria-label="MQ-135 气体传感器">
+          <div class="scard-head">
+            <div class="scard-img" aria-hidden="true">
+              <!-- MQ-135: 金属圆筒 + 网罩 + 引脚 -->
+              <svg viewBox="0 0 64 64" fill="none">
+                <!-- 底座 PCB -->
+                <rect x="14" y="42" width="36" height="6" fill="var(--paper-2)" stroke="var(--border-2)" stroke-width="0.8"/>
+                <!-- 金属圆筒 -->
+                <circle cx="32" cy="28" r="16" fill="var(--paper-2)" stroke="var(--sub)" stroke-width="1.2"/>
+                <!-- 网罩纹理 -->
+                <line x1="20" y1="22" x2="44" y2="22" stroke="var(--sub-2)" stroke-width="0.5"/>
+                <line x1="20" y1="26" x2="44" y2="26" stroke="var(--sub-2)" stroke-width="0.5"/>
+                <line x1="20" y1="30" x2="44" y2="30" stroke="var(--sub-2)" stroke-width="0.5"/>
+                <line x1="20" y1="34" x2="44" y2="34" stroke="var(--sub-2)" stroke-width="0.5"/>
+                <line x1="26" y1="14" x2="26" y2="42" stroke="var(--sub-2)" stroke-width="0.5"/>
+                <line x1="32" y1="14" x2="32" y2="42" stroke="var(--sub-2)" stroke-width="0.5"/>
+                <line x1="38" y1="14" x2="38" y2="42" stroke="var(--sub-2)" stroke-width="0.5"/>
+                <!-- 中心标 -->
+                <text x="32" y="30" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="6" font-weight="700" fill="var(--ink-2)">MQ-135</text>
+                <!-- 引脚 -->
+                <line x1="20" y1="48" x2="20" y2="54" stroke="var(--sub)" stroke-width="1"/>
+                <line x1="28" y1="48" x2="28" y2="54" stroke="var(--sub)" stroke-width="1"/>
+                <line x1="36" y1="48" x2="36" y2="54" stroke="var(--sub)" stroke-width="1"/>
+                <line x1="44" y1="48" x2="44" y2="54" stroke="var(--sub)" stroke-width="1"/>
+              </svg>
+            </div>
+            <div class="scard-id">
+              <div class="model">MQ-135</div>
+              <div class="role" id="rmq">气体传感器</div>
+              <span class="tag mono" id="tmq">GAS · 异维度</span>
+            </div>
+          </div>
+          <div class="scard-row"><span class="lbl">测</span><span id="mmq">NH₃ / NOx / 苯 / 烟 / CO₂ (ppm 估)</span></div>
+          <div class="scard-row"><span class="lbl">优</span><span id="pmq">不同物理量, 与 PMS 完全独立</span></div>
+          <div class="scard-row"><span class="lbl">弱</span><span id="wmq">需 24h 预热，绝对值仅作趋势</span></div>
+          <div class="scard-price">
+            <div><span class="pnum mono">¥18</span><span class="punit">/ 块</span></div>
+            <div class="pnote" id="nmq">异维度交叉验证</div>
+          </div>
+          <div class="scard-detail" aria-hidden="true">
+            <div class="dpara"><span class="dkey mono">PRINCIPLE</span><span id="dmqa">金属氧化物半导体 (SnO₂) 表面气体吸附改变电阻 — 跟 PMS 是完全不同的物理。</span></div>
+            <div class="dpara"><span class="dkey mono">WHY HERE</span><span id="dmqb">PMS 全飘也可能 MQ-135 还正常 — 不同维度的"第三只眼"。</span></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 下部 双盲对照原理图 -->
+    <section class="compare">
+      <div class="sec-head">
+        <div class="h-ttl" id="cmpTtl">双盲对照原理 · 24 小时同地同时</div>
+        <div class="h-hint mono" id="cmpHint">PMS A 吻合 PMS B → 可信 | A 偏离 B → 报警</div>
+      </div>
+      <svg class="compare-svg" id="cmpSvg" viewBox="0 0 720 200" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg">
+        <!-- 网格 -->
+        <g stroke="var(--hairline)" stroke-width="1">
+          <line x1="50" y1="30" x2="700" y2="30"/>
+          <line x1="50" y1="70" x2="700" y2="70"/>
+          <line x1="50" y1="110" x2="700" y2="110"/>
+          <line x1="50" y1="150" x2="700" y2="150"/>
+        </g>
+        <!-- 轴 -->
+        <line x1="50" y1="20" x2="50" y2="170" stroke="var(--border-2)" stroke-width="1"/>
+        <line x1="50" y1="170" x2="700" y2="170" stroke="var(--border-2)" stroke-width="1"/>
+        <!-- Y 轴左 (PMS) -->
+        <text x="42" y="32" text-anchor="end" font-family="JetBrains Mono, monospace" font-size="9" fill="var(--sub)">80</text>
+        <text x="42" y="72" text-anchor="end" font-family="JetBrains Mono, monospace" font-size="9" fill="var(--sub)">60</text>
+        <text x="42" y="112" text-anchor="end" font-family="JetBrains Mono, monospace" font-size="9" fill="var(--sub)">40</text>
+        <text x="42" y="152" text-anchor="end" font-family="JetBrains Mono, monospace" font-size="9" fill="var(--sub)">20</text>
+        <text x="20" y="100" text-anchor="middle" font-family="Inter, sans-serif" font-size="9" font-weight="700" fill="var(--sub)" transform="rotate(-90, 20, 100)">PM2.5 μg/m³</text>
+        <!-- X 轴时间 -->
+        <text x="50" y="186" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="9" fill="var(--sub)">00</text>
+        <text x="158" y="186" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="9" fill="var(--sub)">04</text>
+        <text x="266" y="186" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="9" fill="var(--sub)">08</text>
+        <text x="375" y="186" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="9" fill="var(--sub)">12</text>
+        <text x="483" y="186" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="9" fill="var(--sub)">16</text>
+        <text x="591" y="186" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="9" fill="var(--sub)">20</text>
+        <text x="700" y="186" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="9" fill="var(--sub)">24h</text>
+
+        <!-- PMS5003 折线 (主, coral) — 24h 浓度走势, 早 8 点上升, 中午高峰, 晚 20 点回落 -->
+        <polyline
+          points="50,135 80,132 110,128 140,124 170,118 200,110 230,98 260,85 290,75 320,68 350,62 380,58 410,55 440,58 470,64 500,72 530,82 560,94 590,108 620,120 650,128 680,134 700,138"
+          fill="none" stroke="#D97757" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+        <!-- PMS7003 折线 (备份, aerospace) — 跟 5003 几乎吻合，仅微小差异 -->
+        <polyline
+          points="50,138 80,134 110,131 140,127 170,121 200,113 230,100 260,87 290,77 320,71 350,64 380,60 410,58 440,60 470,67 500,75 530,84 560,96 590,111 620,122 650,130 680,136 700,140"
+          fill="none" stroke="#B85A33" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="4 3"/>
+
+        <!-- MQ-135 气体 (异维度, sub 灰虚) — 不同走势 (中午通风弱时 NH3 ppm 略升) -->
+        <polyline
+          points="50,148 80,148 110,146 140,144 170,142 200,138 230,133 260,128 290,123 320,118 350,116 380,114 410,116 440,118 470,122 500,128 530,134 560,138 590,142 620,144 650,146 680,148 700,148"
+          fill="none" stroke="#6B6557" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="2 4"/>
+
+        <!-- 标注: "两条吻合 = 可信" 在中午高峰处 -->
+        <g transform="translate(380, 50)">
+          <rect x="-58" y="-12" width="116" height="22" rx="4" fill="var(--primary-soft)" stroke="var(--primary)" stroke-width="1"/>
+          <text x="0" y="3" text-anchor="middle" font-family="Inter, sans-serif" font-size="10" font-weight="700" fill="var(--primary-ink)" id="okLbl">两条吻合 = 可信</text>
+          <line x1="0" y1="11" x2="0" y2="22" stroke="var(--primary)" stroke-width="1"/>
+          <circle cx="0" cy="60" r="3.5" fill="#D97757" class="pulse-dot"/>
+        </g>
+
+        <!-- 标注: "若 A 偏离 B = 报警" 假设场景, 在右侧用透明虚线示意 -->
+        <g transform="translate(620, 92)">
+          <rect x="-68" y="-12" width="132" height="22" rx="4" fill="var(--aerospace-soft)" stroke="var(--aerospace)" stroke-width="1"/>
+          <text x="0" y="3" text-anchor="middle" font-family="Inter, sans-serif" font-size="10" font-weight="700" fill="var(--aerospace-ink)" id="alertLbl">A 偏离 B = 报警</text>
+          <!-- 一条虚拟的"如果 A 飘了"的灰点线, 不连贯 -->
+          <line x1="-35" y1="14" x2="-35" y2="38" stroke="var(--aerospace)" stroke-width="1" stroke-dasharray="2 2"/>
+          <circle cx="-35" cy="42" r="3.5" fill="none" stroke="var(--aerospace)" stroke-width="1.4" stroke-dasharray="2 2"/>
+        </g>
+
+        <!-- 标题侧 caption -->
+        <text x="60" y="20" font-family="JetBrains Mono, monospace" font-size="9" font-weight="700" fill="var(--sub)" id="capLeft">同地 · 同时 · 独立读数</text>
+      </svg>
+      <div class="compare-legend">
+        <div class="lg" style="color:#9A4A2E"><span class="swatch" style="background:#D97757"></span><span id="lg1">PMS5003 (主 A)</span></div>
+        <div class="lg" style="color:var(--aerospace-ink)"><span class="swatch dash" style="color:#B85A33"></span><span id="lg2">PMS7003 (备 B, 互校)</span></div>
+        <div class="lg" style="color:var(--sub)"><span class="swatch dash" style="color:#6B6557"></span><span id="lg3">MQ-135 (异维度 · 气体)</span></div>
+      </div>
+    </section>
+
+    <!-- 底部 三承诺 -->
+    <section class="vows">
+      <div class="vow" data-vow="1" tabindex="0" role="button">
+        <div class="vmark" aria-hidden="true">
+          <!-- 双笔记本 icon -->
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="4" width="11" height="14" rx="1"/>
+            <rect x="10" y="6" width="11" height="14" rx="1"/>
+            <line x1="6" y1="8" x2="11" y2="8"/>
+            <line x1="6" y1="11" x2="11" y2="11"/>
+          </svg>
+        </div>
+        <div class="vtxt">
+          <div class="vnum mono">VOW · 01</div>
+          <div class="vline" id="vow1">我会同时记两份数 — 主路 + 备路一齐写盘。</div>
+          <div class="vline-en" id="vow1en">I will log both streams — primary and backup written to disk together.</div>
+        </div>
+      </div>
+      <div class="vow" data-vow="2" tabindex="0" role="button">
+        <div class="vmark" aria-hidden="true">
+          <!-- 双折线对比 icon -->
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 18 L7 12 L11 14 L15 9 L21 11"/>
+            <path d="M3 20 L7 14 L11 16 L15 11 L21 13" stroke-dasharray="2 2"/>
+          </svg>
+        </div>
+        <div class="vtxt">
+          <div class="vnum mono">VOW · 02</div>
+          <div class="vline" id="vow2">我会每分钟比较两条线 — 差&gt;20% 就标"可疑"。</div>
+          <div class="vline-en" id="vow2en">I will compare the two curves each minute — flag suspect when diff &gt; 20%.</div>
+        </div>
+      </div>
+      <div class="vow" data-vow="3" tabindex="0" role="button">
+        <div class="vmark" aria-hidden="true">
+          <!-- 单独设备 + 红 X icon -->
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="5" y="6" width="14" height="10" rx="1"/>
+            <line x1="3" y1="20" x2="21" y2="20"/>
+            <line x1="9" y1="9" x2="15" y2="13"/>
+            <line x1="15" y1="9" x2="9" y2="13"/>
+          </svg>
+        </div>
+        <div class="vtxt">
+          <div class="vnum mono">VOW · 03</div>
+          <div class="vline" id="vow3">我永不偏信单一设备 — 报告必须写"两块都说"。</div>
+          <div class="vline-en" id="vow3en">I will never trust a single device — reports must say "both sensors agree".</div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+<script>
+(function(){
+  "use strict";
+
+  var LANG = 'cn';
+
+  var I18N = {
+    brandMain:{cn:'PurpleAir Node',                  en:'PurpleAir Node'},
+    brandSub: {cn:'M14 · 冗余传感器',                en:'M14 · Redundant Sensors'},
+    g1:       {cn:'悬停三块卡片，看选型细节',         en:'Hover a card to see selection details'},
+    g2:       {cn:'点击卡片锁定查看，再点取消',       en:'Click to pin; click again to clear'},
+    g3:       {cn:'下方曲线 = 两条 PMS 互校原理',     en:'Curves below show two-PMS cross-check'},
+
+    topTtl:   {cn:'为什么要装"两块半"传感器',         en:'Why install "two-and-a-half" sensors?'},
+    topLead:  {cn:'工业级靠 "两块比一对" 减少误判 — 一块测不准没人知道，两块吻合才敢信。',
+               en:'Industrial-grade trust comes from "two compared as a pair" — one sensor lies silently; two agreeing is your only proof.'},
+    topLeadEn:{cn:'Industrial-grade trust comes from "two compared as a pair" — one sensor lies in silence; two agreeing is your only proof.',
+               en:'One sensor lies in silence — only two in agreement can be trusted.'},
+
+    ssTtl:    {cn:'三块传感器 · 各司其职',            en:'Three Sensors · Each with a Role'},
+    ssHint:   {cn:'PMS5003 + PMS7003 + MQ-135',      en:'PMS5003 + PMS7003 + MQ-135'},
+
+    r5003:    {cn:'颗粒物主传感器',                   en:'Particulate · Primary'},
+    t5003:    {cn:'PRIMARY · A',                      en:'PRIMARY · A'},
+    m5003:    {cn:'PM1 / PM2.5 / PM10 (μg/m³)',       en:'PM1 / PM2.5 / PM10 (μg/m³)'},
+    p5003:    {cn:'业界事实标准，社区库丰富',          en:'De facto standard, rich libraries'},
+    w5003:    {cn:'高湿 (>85%RH) 会偏高 15-30%',       en:'High humidity (>85%RH) inflates by 15-30%'},
+    n5003:    {cn:'主路在线 24/7',                    en:'Main path · 24/7'},
+    d5003a:   {cn:'激光散射 (Mie 散射): 颗粒穿过激光束散射出脉冲，统计脉冲数算颗粒浓度。',
+               en:'Laser scattering (Mie): particles cross a laser beam and scatter pulses; pulse count gives concentration.'},
+    d5003b:   {cn:'作为主路, 数据为准。便宜量大，坏了 5 分钟换新。',
+               en:'Main path of record. Cheap and ubiquitous — replaceable in 5 minutes.'},
+
+    r7003:    {cn:'颗粒物备份传感器',                 en:'Particulate · Backup'},
+    t7003:    {cn:'BACKUP · B',                       en:'BACKUP · B'},
+    m7003:    {cn:'PM1 / PM2.5 / PM10 (μg/m³)',       en:'PM1 / PM2.5 / PM10 (μg/m³)'},
+    p7003:    {cn:'更紧凑 (48×37mm)，独立批次',        en:'More compact (48×37mm), independent batch'},
+    w7003:    {cn:'激光寿命 ~3 年同 5003',              en:'Laser lifespan ~3 yrs, same as 5003'},
+    n7003:    {cn:'互校在线 24/7',                    en:'Cross-check · 24/7'},
+    d7003a:   {cn:'同样激光散射，但不同代次 + 不同批次 — 即使工艺缺陷不会同时出现。',
+               en:'Same laser-scattering principle but different generation + batch — manufacturing flaws will not coincide.'},
+    d7003b:   {cn:'不同型号 + 不同批次 = 独立故障源。主路飘了，备路立刻揭穿。',
+               en:'Different model + batch = independent failure source. When main drifts, backup exposes it.'},
+
+    rmq:      {cn:'气体传感器',                       en:'Gas sensor'},
+    tmq:      {cn:'GAS · 异维度',                     en:'GAS · cross-domain'},
+    mmq:      {cn:'NH₃ / NOx / 苯 / 烟 / CO₂ (ppm 估)', en:'NH₃ / NOx / benzene / smoke / CO₂ (ppm est.)'},
+    pmq:      {cn:'不同物理量, 与 PMS 完全独立',        en:'Different physical quantity, fully independent of PMS'},
+    wmq:      {cn:'需 24h 预热，绝对值仅作趋势',        en:'Needs 24h warm-up; absolute values are trend-only'},
+    nmq:      {cn:'异维度交叉验证',                   en:'Cross-domain verification'},
+    dmqa:     {cn:'金属氧化物半导体 (SnO₂) 表面气体吸附改变电阻 — 跟 PMS 是完全不同的物理。',
+               en:'Metal-oxide semiconductor (SnO₂): adsorbed gases change resistance — physics totally different from PMS.'},
+    dmqb:     {cn:'PMS 全飘也可能 MQ-135 还正常 — 不同维度的"第三只眼"。',
+               en:'Even if both PMS drift together, MQ-135 may still be sane — a "third eye" in another dimension.'},
+
+    cmpTtl:   {cn:'双盲对照原理 · 24 小时同地同时',    en:'Double-blind cross-check · 24h, same place, same time'},
+    cmpHint:  {cn:'PMS A 吻合 PMS B → 可信 | A 偏离 B → 报警',
+               en:'PMS A agrees with PMS B → trusted | A diverges from B → alert'},
+    okLbl:    {cn:'两条吻合 = 可信',                   en:'Both agree = trusted'},
+    alertLbl: {cn:'A 偏离 B = 报警',                   en:'A diverges from B = alert'},
+    capLeft:  {cn:'同地 · 同时 · 独立读数',             en:'Same place · Same time · Independent reads'},
+
+    lg1:      {cn:'PMS5003 (主 A)',                   en:'PMS5003 (main A)'},
+    lg2:      {cn:'PMS7003 (备 B, 互校)',              en:'PMS7003 (backup B, cross-check)'},
+    lg3:      {cn:'MQ-135 (异维度 · 气体)',             en:'MQ-135 (cross-domain · gas)'},
+
+    vow1:     {cn:'我会同时记两份数 — 主路 + 备路一齐写盘。',
+               en:'I will log both streams — primary and backup written to disk together.'},
+    vow1en:   {cn:'I will log both streams — primary and backup written to disk together.',
+               en:'Two parallel CSV columns; never overwrite one with the other.'},
+    vow2:     {cn:'我会每分钟比较两条线 — 差>20% 就标"可疑"。',
+               en:'I will compare the two curves each minute — flag suspect when diff >20%.'},
+    vow2en:   {cn:'I will compare the two curves each minute — flag suspect when diff >20%.',
+               en:'A simple running-diff check, run automatically every loop.'},
+    vow3:     {cn:'我永不偏信单一设备 — 报告必须写"两块都说"。',
+               en:'I will never trust a single device — reports must say "both sensors agree".'},
+    vow3en:   {cn:'I will never trust a single device — reports must say "both sensors agree".',
+               en:'Treat a lone reading as a hypothesis, never as a fact.'},
+
+    langBtn:  {cn:'CN / EN',                           en:'EN / CN'}
+  };
+
+  function $(id){return document.getElementById(id);}
+  function $$(sel){return document.querySelectorAll(sel);}
+
+  function setText(key, el){
+    if(!el || !I18N[key]) return;
+    var v = I18N[key][LANG];
+    if(v != null) el.textContent = v;
+  }
+
+  function applyLang(){
+    var ids = [
+      'brandMain','brandSub','g1','g2','g3',
+      'topTtl','topLead','topLeadEn',
+      'ssTtl','ssHint',
+      'r5003','t5003','m5003','p5003','w5003','n5003','d5003a','d5003b',
+      'r7003','t7003','m7003','p7003','w7003','n7003','d7003a','d7003b',
+      'rmq','tmq','mmq','pmq','wmq','nmq','dmqa','dmqb',
+      'cmpTtl','cmpHint','okLbl','alertLbl','capLeft',
+      'lg1','lg2','lg3',
+      'vow1','vow1en','vow2','vow2en','vow3','vow3en'
+    ];
+    ids.forEach(function(id){ setText(id, $(id)); });
+    $('langBtn').textContent = I18N.langBtn[LANG];
+
+    // top.lead 含强调段, 需保留 .em span
+    var lead = $('topLead');
+    if(lead){
+      lead.innerHTML = '';
+      var raw = I18N.topLead[LANG];
+      // 把第一个 "两块比一对" / "two compared as a pair" 包成 .em
+      var emText = LANG === 'cn' ? '"两块比一对"' : '"two compared as a pair"';
+      var idx = raw.indexOf(emText);
+      if(idx >= 0){
+        lead.appendChild(document.createTextNode(raw.slice(0, idx)));
+        var span = document.createElement('span');
+        span.className = 'em';
+        span.textContent = emText;
+        lead.appendChild(span);
+        lead.appendChild(document.createTextNode(raw.slice(idx + emText.length)));
+      }else{
+        lead.textContent = raw;
+      }
+    }
+  }
+
+  // ---- Sensor cards: hover + click pin ----
+  var cardEls = $$('.scard');
+  var pinnedCard = null;
+
+  cardEls.forEach(function(el){
+    el.addEventListener('click', function(){
+      if(pinnedCard === el){
+        el.classList.remove('tap');
+        pinnedCard = null;
+      }else{
+        cardEls.forEach(function(c){ c.classList.remove('tap'); });
+        el.classList.add('tap');
+        pinnedCard = el;
+      }
+    });
+    el.addEventListener('keydown', function(e){
+      if(e.key === 'Enter' || e.key === ' '){
+        e.preventDefault();
+        el.click();
+      }
+    });
+  });
+
+  // ---- Vow cards: click toggle highlight ----
+  var vowEls = $$('.vow');
+  vowEls.forEach(function(el){
+    el.addEventListener('click', function(){
+      var was = el.classList.contains('tap');
+      vowEls.forEach(function(v){ v.classList.remove('tap'); });
+      if(!was) el.classList.add('tap');
+    });
+    el.addEventListener('keydown', function(e){
+      if(e.key === 'Enter' || e.key === ' '){
+        e.preventDefault();
+        el.click();
+      }
+    });
+  });
+
+  // ---- Lang toggle ----
+  $('langBtn').addEventListener('click', function(){
+    LANG = (LANG === 'cn') ? 'en' : 'cn';
+    applyLang();
+  });
+
+  // ---- Init ----
+  applyLang();
+})();
+</script>
+</body>
+</html>

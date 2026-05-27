@@ -1,0 +1,731 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<title>M12 · Plot Builder — Live Tuning</title>
+<style>
+  :root{
+    /* Layer 1 — shared deep space (26 subjects unified) */
+    --bg-0: oklch(0.14 0.035 265);
+    --bg-1: oklch(0.18 0.04 265);
+    --bg-2: oklch(0.22 0.045 265);
+    --bg-3: oklch(0.28 0.05 265);
+    --line: oklch(0.35 0.05 265 / 0.35);
+    --line-strong: oklch(0.55 0.08 265 / 0.55);
+    --fg:      oklch(0.96 0.01 265);
+    --fg-dim:  oklch(0.75 0.02 265);
+    --fg-mute: oklch(0.55 0.03 265);
+    --gold:    oklch(0.85 0.14 85);
+
+    /* Layer 2 — math signature accent (electric blue) */
+    --math: oklch(0.72 0.17 245);
+
+    /* Layer 3 — math 5-color palette (themes.js MTH-06: AXIS PROOF SHADOW SOLUTION QED) */
+    --AXIS:     oklch(0.72 0.17 245);
+    --PROOF:    oklch(0.52 0.16 245);
+    --SHADOW:   oklch(0.35 0.10 245);
+    --SOLUTION: oklch(0.92 0.08 240);
+    --QED:      oklch(0.85 0.14 85);
+  }
+
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{
+    height:100%;width:100%;
+    font-family:'Inter','PingFang SC',sans-serif;
+    color:var(--fg);background:var(--bg-0);overflow:hidden;
+  }
+  .mono{font-family:'JetBrains Mono',ui-monospace,'SF Mono',Consolas,monospace}
+
+  .stage{display:flex;flex-direction:row;height:100vh;width:100vw}
+
+  /* ---------- 200px sidebar ---------- */
+  .game-sidebar{
+    width:200px;flex:0 0 200px;
+    background:var(--bg-1);border-right:1px solid var(--line);
+    display:flex;flex-direction:column;padding:12px 11px;gap:10px;
+    overflow-y:auto;
+  }
+  .brand{
+    display:flex;flex-direction:column;gap:2px;
+    border-bottom:1px solid var(--line);padding-bottom:8px;
+  }
+  .brand .code{font-family:'JetBrains Mono',monospace;font-size:9.5px;color:var(--fg-mute);letter-spacing:1.2px}
+  .brand .title{font-size:12.5px;color:var(--fg);font-weight:600}
+  .brand .sub{font-size:9.5px;color:var(--fg-dim);margin-top:2px}
+
+  .mascot{
+    width:100%;height:70px;display:flex;align-items:center;justify-content:center;
+    background:var(--bg-2);border:1px solid var(--line);
+  }
+  .mascot svg{width:100%;height:100%}
+
+  .panel{
+    background:var(--bg-2);border:1px solid var(--line);
+    padding:7px 8px;display:flex;flex-direction:column;gap:5px;
+  }
+  .panel-title{
+    font-family:'JetBrains Mono',monospace;font-size:9px;
+    color:var(--AXIS);letter-spacing:1px;
+  }
+  .row{display:flex;flex-wrap:wrap;gap:4px}
+  .pill{
+    font-family:'JetBrains Mono',monospace;font-size:9.5px;
+    padding:3px 6px;border:1px solid var(--line-strong);
+    color:var(--fg-dim);background:var(--bg-1);cursor:pointer;
+    transition:transform .08s,box-shadow .08s,color .08s,border-color .08s;
+    box-shadow:2px 2px 0 var(--bg-0);
+  }
+  .pill:hover{transform:translate(-1px,-1px);box-shadow:3px 3px 0 var(--bg-0)}
+  .pill.active{
+    border-color:var(--AXIS);color:var(--bg-0);background:var(--AXIS);
+  }
+  .pill.col-pm25.active{background:var(--AXIS);border-color:var(--AXIS)}
+  .pill.col-pm10.active{background:var(--PROOF);border-color:var(--PROOF);color:var(--fg)}
+  .pill.col-temp.active{background:var(--SOLUTION);border-color:var(--SOLUTION);color:var(--bg-0)}
+  .pill.col-hum.active{background:var(--QED);border-color:var(--QED);color:var(--bg-0)}
+
+  .swatch{
+    width:18px;height:18px;border:1.5px solid var(--line-strong);cursor:pointer;
+    box-shadow:1px 1px 0 var(--bg-0);
+  }
+  .swatch.active{outline:2px solid var(--fg);outline-offset:1px}
+
+  .check{
+    display:flex;align-items:center;gap:5px;font-size:10px;color:var(--fg-dim);
+    cursor:pointer;user-select:none;
+  }
+  .check .box{
+    width:12px;height:12px;border:1.5px solid var(--line-strong);
+    background:var(--bg-1);display:inline-flex;align-items:center;justify-content:center;
+    font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--AXIS);
+  }
+  .check.on .box{background:var(--AXIS);border-color:var(--AXIS);color:var(--bg-0)}
+  .check.on{color:var(--fg)}
+
+  .task-list{
+    background:var(--bg-2);border:1px solid var(--line);
+    padding:7px 8px;display:flex;flex-direction:column;gap:5px;
+  }
+  .task-title{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--AXIS);letter-spacing:1px}
+  .task-item{
+    font-size:9.5px;color:var(--fg-dim);line-height:1.35;
+    padding:5px 6px;border:1px solid var(--line);
+    display:flex;justify-content:space-between;align-items:flex-start;gap:4px;
+  }
+  .task-item .badge{
+    font-family:'JetBrains Mono',monospace;font-size:8px;padding:1px 4px;
+    border:1px solid currentColor;flex-shrink:0;
+  }
+  .task-item.done{border-color:var(--gold);color:var(--gold)}
+
+  .lang-btn{
+    margin-top:auto;
+    background:var(--bg-2);color:var(--fg);
+    border:1px solid var(--line-strong);
+    padding:6px 8px;font-size:10px;cursor:pointer;
+    font-family:'JetBrains Mono',monospace;letter-spacing:.5px;
+    box-shadow:2px 2px 0 var(--bg-0);
+    transition:transform .08s,box-shadow .08s;
+  }
+  .lang-btn:hover{transform:translate(-1px,-1px);box-shadow:3px 3px 0 var(--bg-0)}
+  .lang-btn:active{transform:translate(1px,1px);box-shadow:1px 1px 0 var(--bg-0)}
+
+  /* ---------- main stage ---------- */
+  .main{
+    flex:1;display:flex;flex-direction:column;min-width:0;height:100vh;
+    background:var(--bg-0);padding:14px 16px;gap:10px;
+  }
+  .hud{
+    display:flex;justify-content:space-between;align-items:center;
+    padding-bottom:8px;border-bottom:1px solid var(--line);
+    flex-shrink:0;
+  }
+  .hud-left{display:flex;flex-direction:column;gap:2px}
+  .hud-title{font-size:13.5px;color:var(--fg);font-weight:600}
+  .hud-sub{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--fg-mute);letter-spacing:.6px}
+  .hud-right{
+    display:flex;gap:14px;font-family:'JetBrains Mono',monospace;font-size:10.5px;
+    color:var(--fg-dim);
+  }
+  .hud-right .kv .k{color:var(--fg-mute);margin-right:4px}
+  .hud-right .kv .v{color:var(--AXIS)}
+
+  .canvas-wrap{
+    flex:1;min-height:0;display:flex;flex-direction:column;
+    background:var(--bg-1);border:1px solid var(--line);
+    position:relative;
+  }
+  canvas#plot{display:block;width:100%;height:100%}
+
+  .toast{
+    position:absolute;left:50%;top:14px;transform:translateX(-50%);
+    background:var(--bg-2);color:var(--gold);
+    border:1px solid var(--gold);padding:6px 12px;
+    font-family:'JetBrains Mono',monospace;font-size:10.5px;letter-spacing:.5px;
+    box-shadow:3px 3px 0 var(--bg-0);
+    opacity:0;transition:opacity .25s;pointer-events:none;
+    white-space:nowrap;
+  }
+  .toast.show{opacity:1}
+
+  .footer-strip{
+    display:flex;justify-content:space-between;align-items:center;
+    font-family:'JetBrains Mono',monospace;font-size:9.5px;
+    color:var(--fg-mute);letter-spacing:.6px;flex-shrink:0;
+    padding-top:4px;
+  }
+  .legend-strip{display:flex;gap:14px;align-items:center}
+  .legend-item{display:flex;align-items:center;gap:5px;color:var(--fg-dim);font-size:10px}
+  .legend-item .sw{width:14px;height:3px}
+
+</style>
+</head>
+<body>
+<div class="stage">
+  <!-- ============ SIDEBAR ============ -->
+  <aside class="game-sidebar">
+    <div class="brand">
+      <div class="code">M12 · MTH-06</div>
+      <div class="title" id="brandTitle">Plot Builder</div>
+      <div class="sub" id="brandSub">实时调参 · 几何之境</div>
+    </div>
+
+    <!-- mascot Pi: rotating tetrahedron -->
+    <div class="mascot" aria-hidden="true">
+      <svg viewBox="0 0 200 80">
+        <defs>
+          <linearGradient id="pi-grad" x1="0" x2="1" y1="0" y2="1">
+            <stop offset="0" stop-color="oklch(0.72 0.17 245)"/>
+            <stop offset="1" stop-color="oklch(0.52 0.16 245)"/>
+          </linearGradient>
+        </defs>
+        <g transform="translate(100,40)">
+          <!-- tetrahedron faces -->
+          <polygon points="-22,-18 22,-18 0,-26" fill="oklch(0.92 0.08 240)" stroke="oklch(0.96 0.01 265)" stroke-width="1"/>
+          <polygon points="-22,-18 0,22 22,-18" fill="url(#pi-grad)" stroke="oklch(0.96 0.01 265)" stroke-width="1"/>
+          <polygon points="-22,-18 0,22 -10,4" fill="oklch(0.35 0.10 245)" stroke="oklch(0.96 0.01 265)" stroke-width="1" opacity="0.85"/>
+          <polygon points="22,-18 0,22 10,4" fill="oklch(0.52 0.16 245)" stroke="oklch(0.96 0.01 265)" stroke-width="1" opacity="0.9"/>
+          <text x="0" y="2" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="11" fill="oklch(0.85 0.14 85)" font-weight="700">Pi</text>
+        </g>
+        <text x="100" y="72" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="9" fill="oklch(0.75 0.02 265)" letter-spacing="1">PI · MTH-06</text>
+      </svg>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title" data-i18n="x_axis">X AXIS</div>
+      <div class="row" id="xaxis-row">
+        <button class="pill active" data-x="timestamp" data-i18n="x_ts">timestamp</button>
+        <button class="pill" data-x="index" data-i18n="x_idx">index</button>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title" data-i18n="y_axis">Y SERIES</div>
+      <div class="row" id="yseries-row">
+        <button class="pill col-pm25 active" data-y="pm25">pm2.5</button>
+        <button class="pill col-pm10" data-y="pm10">pm10</button>
+        <button class="pill col-temp" data-y="temp">temp</button>
+        <button class="pill col-hum" data-y="hum">hum</button>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title" data-i18n="kind">PLOT KIND</div>
+      <div class="row" id="kind-row">
+        <button class="pill active" data-kind="line" data-i18n="line">line</button>
+        <button class="pill" data-kind="scatter" data-i18n="scatter">scatter</button>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title" data-i18n="accent">ACCENT</div>
+      <div class="row" id="accent-row">
+        <div class="swatch active" data-color="AXIS" style="background:var(--AXIS)" title="AXIS"></div>
+        <div class="swatch" data-color="PROOF" style="background:var(--PROOF)" title="PROOF"></div>
+        <div class="swatch" data-color="SOLUTION" style="background:var(--SOLUTION)" title="SOLUTION"></div>
+        <div class="swatch" data-color="QED" style="background:var(--QED)" title="QED"></div>
+        <div class="swatch" data-color="SHADOW" style="background:var(--SHADOW)" title="SHADOW"></div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title" data-i18n="opts">OPTIONS</div>
+      <div class="check on" data-opt="grid"><span class="box">X</span><span data-i18n="opt_grid">show grid</span></div>
+      <div class="check on" data-opt="legend"><span class="box">X</span><span data-i18n="opt_legend">show legend</span></div>
+      <div class="check on" data-opt="title"><span class="box">X</span><span data-i18n="opt_title">show title</span></div>
+    </div>
+
+    <div class="task-list">
+      <div class="task-title" data-i18n="tasks">TASKS</div>
+      <div class="task-item" id="task-0">
+        <span data-i18n="task0">画 24h pm2.5 折线</span>
+        <span class="badge mono">01</span>
+      </div>
+      <div class="task-item" id="task-1">
+        <span data-i18n="task1">pm2.5 vs pm10 散点</span>
+        <span class="badge mono">02</span>
+      </div>
+      <div class="task-item" id="task-2">
+        <span data-i18n="task2">4 列同框叠加</span>
+        <span class="badge mono">03</span>
+      </div>
+    </div>
+
+    <button class="lang-btn" id="langBtn">中 / EN</button>
+  </aside>
+
+  <!-- ============ MAIN ============ -->
+  <main class="main">
+    <div class="hud">
+      <div class="hud-left">
+        <div class="hud-title" id="hudTitle">实时调参 · Plot Builder</div>
+        <div class="hud-sub" data-i18n="hudsub">改 sidebar 控件 → canvas 重绘 · 完成 3 任务解锁</div>
+      </div>
+      <div class="hud-right">
+        <div class="kv"><span class="k">x:</span><span class="v" id="hud-x">timestamp</span></div>
+        <div class="kv"><span class="k">y:</span><span class="v" id="hud-y">pm25</span></div>
+        <div class="kv"><span class="k">kind:</span><span class="v" id="hud-kind">line</span></div>
+        <div class="kv"><span class="k">color:</span><span class="v" id="hud-color">AXIS</span></div>
+      </div>
+    </div>
+
+    <div class="canvas-wrap">
+      <canvas id="plot"></canvas>
+      <div class="toast" id="toast"></div>
+    </div>
+
+    <div class="footer-strip">
+      <div class="legend-strip" id="legendStrip"></div>
+      <div id="footRight">24 rows · sim sensor csv</div>
+    </div>
+  </main>
+</div>
+
+<script>
+/* ---------- i18n ---------- */
+var I18N = {
+  cn: {
+    brandTitle:'图表构建器', brandSub:'实时调参 · 几何之境',
+    x_axis:'X 轴', y_axis:'Y 序列', kind:'图形',
+    accent:'强调色', opts:'选项', tasks:'任务',
+    x_ts:'时间戳', x_idx:'行索引',
+    line:'折线', scatter:'散点',
+    opt_grid:'显示网格', opt_legend:'显示图例', opt_title:'显示标题',
+    task0:'画 24h pm2.5 折线', task1:'pm2.5 vs pm10 散点', task2:'4 列同框叠加',
+    hudTitle:'实时调参 · 图表构建器',
+    hudsub:'改 sidebar 控件 → canvas 重绘 · 完成 3 任务解锁',
+    toast0:'任务 1 完成 · pm2.5 时间序列', toast1:'任务 2 完成 · 双列散点',
+    toast2:'任务 3 完成 · 4 列叠加 — 全通关', langBtnText:'中 / EN',
+    foot:' 行 · 模拟传感器 csv'
+  },
+  en: {
+    brandTitle:'Plot Builder', brandSub:'live tuning · geometry void',
+    x_axis:'X AXIS', y_axis:'Y SERIES', kind:'PLOT KIND',
+    accent:'ACCENT', opts:'OPTIONS', tasks:'TASKS',
+    x_ts:'timestamp', x_idx:'index',
+    line:'line', scatter:'scatter',
+    opt_grid:'show grid', opt_legend:'show legend', opt_title:'show title',
+    task0:'plot 24h pm2.5 as line', task1:'pm2.5 vs pm10 scatter', task2:'overlay all 4 series',
+    hudTitle:'Live tuning · Plot Builder',
+    hudsub:'tweak sidebar -> canvas redraws · finish 3 tasks',
+    toast0:'task 1 cleared · pm2.5 time series', toast1:'task 2 cleared · 2-col scatter',
+    toast2:'task 3 cleared · 4-col overlay — all done', langBtnText:'EN / 中',
+    foot:' rows · sim sensor csv'
+  }
+};
+var LANG = 'cn';
+
+function applyI18N(){
+  var t = I18N[LANG];
+  document.querySelectorAll('[data-i18n]').forEach(function(el){
+    var k = el.getAttribute('data-i18n');
+    if(t[k]!==undefined) el.textContent = t[k];
+  });
+  document.getElementById('brandTitle').textContent = t.brandTitle;
+  document.getElementById('brandSub').textContent = t.brandSub;
+  document.getElementById('hudTitle').textContent = t.hudTitle;
+  document.getElementById('langBtn').textContent = t.langBtnText;
+  document.getElementById('footRight').textContent = DATA.length + t.foot;
+  updateHUD();
+  drawPlot();
+}
+
+/* ---------- DATA (24h simulated csv) ---------- */
+var DATA = (function(){
+  var rows = [];
+  for(var i=0;i<24;i++){
+    // pm2.5: morning peak around 8, evening peak around 19
+    var pm25 = 22 + 18*Math.exp(-Math.pow((i-8)/3,2)) + 14*Math.exp(-Math.pow((i-19)/3,2)) + (Math.sin(i*0.7)*3);
+    var pm10 = pm25*1.55 + 8 + Math.cos(i*0.9)*4;
+    var temp = 14 + 8*Math.sin((i-7)/24*Math.PI*2) + Math.sin(i*0.5)*0.5;
+    var hum  = 78 - 22*Math.sin((i-9)/24*Math.PI*2) + Math.cos(i*0.6)*2;
+    rows.push({
+      ts: (i<10?'0':'')+i+':00',
+      idx: i,
+      pm25: +pm25.toFixed(1),
+      pm10: +pm10.toFixed(1),
+      temp: +temp.toFixed(1),
+      hum:  +hum.toFixed(1)
+    });
+  }
+  return rows;
+})();
+
+/* ---------- STATE ---------- */
+var stateGame = {
+  xField: 'timestamp',   // timestamp | index
+  ySeries: ['pm25'],     // multi
+  kind: 'line',          // line | scatter
+  accent: 'AXIS',        // primary color when single-series
+  opts: {grid:true, legend:true, title:true},
+  tasks: [false,false,false]
+};
+
+/* color map: palette name -> oklch value */
+var COLOR = {
+  AXIS:     getComputedStyle(document.documentElement).getPropertyValue('--AXIS').trim() || 'oklch(0.72 0.17 245)',
+  PROOF:    getComputedStyle(document.documentElement).getPropertyValue('--PROOF').trim() || 'oklch(0.52 0.16 245)',
+  SHADOW:   getComputedStyle(document.documentElement).getPropertyValue('--SHADOW').trim() || 'oklch(0.35 0.10 245)',
+  SOLUTION: getComputedStyle(document.documentElement).getPropertyValue('--SOLUTION').trim() || 'oklch(0.92 0.08 240)',
+  QED:      getComputedStyle(document.documentElement).getPropertyValue('--QED').trim() || 'oklch(0.85 0.14 85)'
+};
+/* per-series fixed color (math 5-color palette split across 4 vars) */
+var SERIES_COLOR = {
+  pm25: 'AXIS',
+  pm10: 'PROOF',
+  temp: 'SOLUTION',
+  hum:  'QED'
+};
+var SERIES_LABEL = {pm25:'pm2.5 ug/m3', pm10:'pm10 ug/m3', temp:'temp C', hum:'humidity %'};
+
+/* ---------- CANVAS ---------- */
+var canvas = document.getElementById('plot');
+var ctx = canvas.getContext('2d');
+var W=0,H=0,DPR=1;
+
+function resizeCanvas(){
+  var r = canvas.parentElement.getBoundingClientRect();
+  if(r.width<2 || r.height<2) return;
+  DPR = window.devicePixelRatio || 1;
+  canvas.width = Math.round(r.width*DPR);
+  canvas.height = Math.round(r.height*DPR);
+  canvas.style.width = r.width+'px';
+  canvas.style.height = r.height+'px';
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  W = r.width; H = r.height;
+  drawPlot();
+}
+window.addEventListener('resize', resizeCanvas);
+
+function getRange(field){
+  var vals = DATA.map(function(r){return r[field];});
+  var lo = Math.min.apply(null,vals);
+  var hi = Math.max.apply(null,vals);
+  if(hi-lo<1e-6){hi=lo+1;}
+  // pad 6%
+  var pad = (hi-lo)*0.08;
+  return {lo: lo-pad, hi: hi+pad};
+}
+
+function drawPlot(){
+  if(!W||!H) return;
+  // bg
+  ctx.fillStyle = 'oklch(0.18 0.04 265)';
+  ctx.fillRect(0,0,W,H);
+
+  var padL=64, padR= stateGame.opts.legend ? 150 : 28, padT= stateGame.opts.title ? 44 : 18, padB=44;
+  var pw = W-padL-padR, ph = H-padT-padB;
+  if(pw<60||ph<60) return;
+
+  // title
+  if(stateGame.opts.title){
+    ctx.fillStyle = 'oklch(0.96 0.01 265)';
+    ctx.font = "600 13.5px 'Inter', sans-serif";
+    ctx.textAlign='left';
+    var t = LANG==='cn'
+      ? 'matplotlib 输出 · ' + stateGame.ySeries.join(' + ') + ' vs ' + stateGame.xField
+      : 'matplotlib output — ' + stateGame.ySeries.join(' + ') + ' vs ' + stateGame.xField;
+    ctx.fillText(t, padL, padT-16);
+  }
+
+  // collapse Y range across all selected series (normalize each independently so multi-overlay readable)
+  // -> Use independent normalization: each series maps lo..hi to plot area
+  var ranges = {};
+  stateGame.ySeries.forEach(function(s){ ranges[s] = getRange(s); });
+
+  // grid
+  if(stateGame.opts.grid){
+    ctx.strokeStyle = 'oklch(0.35 0.05 265 / 0.35)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    for(var gi=0; gi<=5; gi++){
+      var gy = padT + gi*ph/5;
+      ctx.moveTo(padL, gy); ctx.lineTo(padL+pw, gy);
+    }
+    for(var gj=0; gj<=6; gj++){
+      var gx = padL + gj*pw/6;
+      ctx.moveTo(gx, padT); ctx.lineTo(gx, padT+ph);
+    }
+    ctx.stroke();
+  }
+
+  // axes
+  ctx.strokeStyle = 'oklch(0.72 0.17 245)';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(padL, padT); ctx.lineTo(padL, padT+ph); ctx.lineTo(padL+pw, padT+ph);
+  ctx.stroke();
+
+  // x ticks
+  ctx.fillStyle = 'oklch(0.75 0.02 265)';
+  ctx.font = "10px 'JetBrains Mono', monospace";
+  ctx.textAlign='center';
+  var nTicks = 6;
+  for(var xi=0; xi<=nTicks; xi++){
+    var ratio = xi/nTicks;
+    var rowIdx = Math.round(ratio*(DATA.length-1));
+    var label = stateGame.xField==='timestamp' ? DATA[rowIdx].ts : String(rowIdx);
+    var xpx = padL + ratio*pw;
+    ctx.fillText(label, xpx, padT+ph+15);
+    // tick mark
+    ctx.strokeStyle = 'oklch(0.55 0.08 265 / 0.55)';
+    ctx.beginPath(); ctx.moveTo(xpx, padT+ph); ctx.lineTo(xpx, padT+ph+4); ctx.stroke();
+  }
+  // x axis label
+  ctx.fillStyle = 'oklch(0.96 0.01 265)';
+  ctx.font = "11px 'JetBrains Mono', monospace";
+  ctx.fillText(stateGame.xField, padL+pw/2, padT+ph+34);
+
+  // y ticks — use first selected series scale for the axis labels
+  // (multi-series: each normalized independently; axis shows first)
+  var primary = stateGame.ySeries[0] || 'pm25';
+  var rg = ranges[primary];
+  ctx.textAlign='right';
+  ctx.font = "10px 'JetBrains Mono', monospace";
+  for(var yi=0; yi<=5; yi++){
+    var v = rg.hi - (yi/5)*(rg.hi-rg.lo);
+    var ypx = padT + yi*ph/5;
+    ctx.fillStyle = 'oklch(0.75 0.02 265)';
+    ctx.fillText(v.toFixed(1), padL-8, ypx+3);
+    ctx.strokeStyle = 'oklch(0.55 0.08 265 / 0.55)';
+    ctx.beginPath(); ctx.moveTo(padL-4, ypx); ctx.lineTo(padL, ypx); ctx.stroke();
+  }
+  // y axis label (primary series unit)
+  ctx.save();
+  ctx.translate(18, padT+ph/2);
+  ctx.rotate(-Math.PI/2);
+  ctx.textAlign='center';
+  ctx.fillStyle = 'oklch(0.96 0.01 265)';
+  ctx.font = "11px 'JetBrains Mono', monospace";
+  ctx.fillText(SERIES_LABEL[primary], 0, 0);
+  ctx.restore();
+
+  // ---------- draw each selected series ----------
+  stateGame.ySeries.forEach(function(field, sIdx){
+    var col;
+    if(stateGame.ySeries.length === 1){
+      col = COLOR[stateGame.accent];
+    } else {
+      col = COLOR[SERIES_COLOR[field]];
+    }
+    var r = ranges[field];
+    var pts = DATA.map(function(row, i){
+      var xRatio = i/(DATA.length-1);
+      var xpx = padL + xRatio*pw;
+      var yRatio = (row[field]-r.lo)/(r.hi-r.lo);
+      var ypx = padT + (1-yRatio)*ph;
+      return {x:xpx, y:ypx, v:row[field]};
+    });
+
+    if(stateGame.kind==='line'){
+      ctx.strokeStyle = col;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      pts.forEach(function(p,i){ if(i===0) ctx.moveTo(p.x,p.y); else ctx.lineTo(p.x,p.y); });
+      ctx.stroke();
+      // dot accents
+      pts.forEach(function(p){
+        ctx.fillStyle = col;
+        ctx.beginPath(); ctx.arc(p.x,p.y,2.4,0,Math.PI*2); ctx.fill();
+      });
+    } else {
+      // scatter
+      pts.forEach(function(p){
+        ctx.fillStyle = col;
+        ctx.beginPath(); ctx.arc(p.x,p.y,4.2,0,Math.PI*2); ctx.fill();
+        ctx.strokeStyle = 'oklch(0.14 0.035 265)';
+        ctx.lineWidth = 1.2;
+        ctx.stroke();
+      });
+    }
+  });
+
+  // legend (inside main canvas, right edge)
+  if(stateGame.opts.legend){
+    var lx = padL+pw+18, ly = padT+8;
+    ctx.font = "10.5px 'JetBrains Mono', monospace";
+    ctx.textAlign='left';
+    stateGame.ySeries.forEach(function(field, sIdx){
+      var col = stateGame.ySeries.length===1
+        ? COLOR[stateGame.accent]
+        : COLOR[SERIES_COLOR[field]];
+      ctx.fillStyle = col;
+      ctx.fillRect(lx, ly+sIdx*20-6, 16, 3);
+      ctx.fillStyle = 'oklch(0.96 0.01 265)';
+      ctx.fillText(field, lx+22, ly+sIdx*20);
+    });
+  }
+
+  // outer legend strip (footer)
+  drawLegendStrip();
+}
+
+function drawLegendStrip(){
+  var strip = document.getElementById('legendStrip');
+  strip.innerHTML = '';
+  stateGame.ySeries.forEach(function(field){
+    var col = stateGame.ySeries.length===1
+      ? COLOR[stateGame.accent]
+      : COLOR[SERIES_COLOR[field]];
+    var item = document.createElement('div');
+    item.className = 'legend-item';
+    var sw = document.createElement('span');
+    sw.className = 'sw';
+    sw.style.background = col;
+    var lab = document.createElement('span');
+    lab.textContent = field + ' · ' + (stateGame.kind);
+    item.appendChild(sw); item.appendChild(lab);
+    strip.appendChild(item);
+  });
+}
+
+/* ---------- INTERACTION ---------- */
+function updateHUD(){
+  document.getElementById('hud-x').textContent = stateGame.xField;
+  document.getElementById('hud-y').textContent = stateGame.ySeries.join('+');
+  document.getElementById('hud-kind').textContent = stateGame.kind;
+  document.getElementById('hud-color').textContent = stateGame.ySeries.length>1 ? 'multi' : stateGame.accent;
+}
+
+/* X axis pills */
+document.querySelectorAll('#xaxis-row .pill').forEach(function(p){
+  p.addEventListener('click', function(){
+    document.querySelectorAll('#xaxis-row .pill').forEach(function(q){q.classList.remove('active');});
+    p.classList.add('active');
+    stateGame.xField = p.getAttribute('data-x');
+    updateHUD(); drawPlot(); checkTasks();
+  });
+});
+
+/* Y series pills (multi-select) */
+document.querySelectorAll('#yseries-row .pill').forEach(function(p){
+  p.addEventListener('click', function(){
+    var f = p.getAttribute('data-y');
+    var i = stateGame.ySeries.indexOf(f);
+    if(i>=0){
+      if(stateGame.ySeries.length>1){
+        stateGame.ySeries.splice(i,1);
+        p.classList.remove('active');
+      }
+    } else {
+      stateGame.ySeries.push(f);
+      p.classList.add('active');
+    }
+    updateHUD(); drawPlot(); checkTasks();
+  });
+});
+
+/* kind pills */
+document.querySelectorAll('#kind-row .pill').forEach(function(p){
+  p.addEventListener('click', function(){
+    document.querySelectorAll('#kind-row .pill').forEach(function(q){q.classList.remove('active');});
+    p.classList.add('active');
+    stateGame.kind = p.getAttribute('data-kind');
+    updateHUD(); drawPlot(); checkTasks();
+  });
+});
+
+/* accent swatches */
+document.querySelectorAll('#accent-row .swatch').forEach(function(s){
+  s.addEventListener('click', function(){
+    document.querySelectorAll('#accent-row .swatch').forEach(function(q){q.classList.remove('active');});
+    s.classList.add('active');
+    stateGame.accent = s.getAttribute('data-color');
+    updateHUD(); drawPlot();
+  });
+});
+
+/* options checkboxes */
+document.querySelectorAll('.check').forEach(function(c){
+  c.addEventListener('click', function(){
+    var key = c.getAttribute('data-opt');
+    stateGame.opts[key] = !stateGame.opts[key];
+    if(stateGame.opts[key]){
+      c.classList.add('on');
+      c.querySelector('.box').textContent = 'X';
+    } else {
+      c.classList.remove('on');
+      c.querySelector('.box').textContent = '';
+    }
+    drawPlot();
+  });
+});
+
+/* lang btn */
+document.getElementById('langBtn').addEventListener('click', function(){
+  LANG = LANG==='cn' ? 'en' : 'cn';
+  applyI18N();
+});
+
+/* ---------- TASKS ---------- */
+function flashToast(msg){
+  var t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(function(){ t.classList.remove('show'); }, 2400);
+}
+
+function checkTasks(){
+  var t = I18N[LANG];
+  // task 0: line + pm25 only + x=timestamp
+  if(!stateGame.tasks[0]
+     && stateGame.kind==='line'
+     && stateGame.ySeries.length===1
+     && stateGame.ySeries[0]==='pm25'
+     && stateGame.xField==='timestamp'){
+    stateGame.tasks[0] = true;
+    document.getElementById('task-0').classList.add('done');
+    flashToast(t.toast0);
+  }
+  // task 1: scatter + pm25 + pm10 (no others)
+  if(!stateGame.tasks[1]
+     && stateGame.kind==='scatter'
+     && stateGame.ySeries.length===2
+     && stateGame.ySeries.indexOf('pm25')>=0
+     && stateGame.ySeries.indexOf('pm10')>=0){
+    stateGame.tasks[1] = true;
+    document.getElementById('task-1').classList.add('done');
+    flashToast(t.toast1);
+  }
+  // task 2: all 4 series selected
+  if(!stateGame.tasks[2] && stateGame.ySeries.length===4){
+    stateGame.tasks[2] = true;
+    document.getElementById('task-2').classList.add('done');
+    flashToast(t.toast2);
+  }
+}
+
+/* ---------- INIT ---------- */
+function init(){
+  resizeCanvas();
+  applyI18N();
+  setTimeout(resizeCanvas, 80);
+  setTimeout(resizeCanvas, 240);
+  setTimeout(resizeCanvas, 700);
+}
+document.fonts && document.fonts.ready && document.fonts.ready.then(resizeCanvas);
+window.addEventListener('load', init);
+init();
+</script>
+</body>
+</html>

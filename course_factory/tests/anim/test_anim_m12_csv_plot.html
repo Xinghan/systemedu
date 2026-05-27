@@ -1,0 +1,1290 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>M12 — CSV 记录 + matplotlib 第一张图</title>
+<style>
+  /* F2 第 1 层 — 共享深空底 (theme_style/styles.css L8-21) */
+  :root{
+    --bg-0: oklch(0.14 0.035 265);
+    --bg-1: oklch(0.18 0.04 265);
+    --bg-2: oklch(0.22 0.045 265);
+    --bg-3: oklch(0.28 0.05 265);
+    --line: oklch(0.35 0.05 265 / 0.35);
+    --line-strong: oklch(0.55 0.08 265 / 0.55);
+    --fg: oklch(0.96 0.01 265);
+    --fg-dim: oklch(0.75 0.02 265);
+    --fg-mute: oklch(0.55 0.03 265);
+    --gold: oklch(0.85 0.14 85);
+
+    /* F2 第 2 层 — math accent (electric blue) */
+    --math: oklch(0.72 0.17 245);
+    --math-dim: oklch(0.52 0.16 245);
+
+    /* F2 第 3 层 — math 5 色 palette (themes.js math: AXIS/PROOF/SHADOW/SOLUTION/QED) */
+    --AXIS:     oklch(0.72 0.17 245); /* 主 electric blue: 坐标轴 / mascot 主体 / CSV 列 1 timestamp */
+    --PROOF:    oklch(0.52 0.16 245); /* 深 blue: 推导连线 / CSV 列 2 pm25 */
+    --SHADOW:   oklch(0.35 0.10 245); /* 极深 blue: 卡片底纹 / CSV 列 3 pm10 */
+    --SOLUTION: oklch(0.92 0.08 240); /* 近白 blue: 数据点高光 / CSV 列 4 temp */
+    --QED:      oklch(0.85 0.14 85);  /* gold: F5 key moment / CSV 列 5 hum (热感) */
+
+    /* terminal 编辑器配色 (来自 deep-space, 用于 F1 终端窗) */
+    --term-bg: oklch(0.10 0.025 265);
+    --term-fg: oklch(0.88 0.03 145);   /* 绿字 (终端约定, 非 palette) */
+    --term-prompt: var(--math);
+  }
+
+  *{box-sizing:border-box;margin:0;padding:0;}
+  html,body{height:100%;overflow:hidden;}
+  body{
+    background: var(--bg-0);
+    color: var(--fg);
+    font-family: 'Inter','Noto Sans SC',-apple-system,BlinkMacSystemFont,sans-serif;
+    display: flex;
+    height: 100vh;
+  }
+
+  /* 200px 左侧 sidebar */
+  .sidebar{
+    width: 200px;
+    flex-shrink: 0;
+    background: var(--bg-1);
+    border-right: 1px solid var(--line);
+    padding: 16px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .brand{
+    border-bottom: 1px solid var(--line);
+    padding-bottom: 10px;
+    margin-bottom: 4px;
+  }
+  .brand .badge{
+    display: inline-block;
+    font-family: 'JetBrains Mono',ui-monospace,monospace;
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    color: var(--math);
+    background: var(--bg-2);
+    padding: 3px 7px;
+    border: 1px solid var(--line);
+    box-shadow: 2px 2px 0 var(--bg-0);
+    margin-bottom: 6px;
+  }
+  .brand h1{
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--fg);
+    line-height: 1.3;
+  }
+  .brand .sub{
+    font-size: 10px;
+    color: var(--fg-mute);
+    margin-top: 4px;
+    font-family: 'JetBrains Mono',ui-monospace,monospace;
+    letter-spacing: 0.04em;
+  }
+
+  /* Pi mascot 在 sidebar */
+  .mascot-box{
+    background: var(--bg-2);
+    border: 1px solid var(--line);
+    box-shadow: 3px 3px 0 var(--bg-0);
+    padding: 10px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .mascot-box .label{
+    font-family: 'JetBrains Mono',ui-monospace,monospace;
+    font-size: 9px;
+    color: var(--fg-dim);
+    letter-spacing: 0.08em;
+  }
+  .mascot-box .name{
+    font-size: 11px;
+    color: var(--fg);
+    font-weight: 600;
+    margin-top: 2px;
+  }
+
+  /* Guide 3 条 */
+  .guide{
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .guide-item{
+    font-size: 11px;
+    line-height: 1.45;
+    color: var(--fg-dim);
+    padding-left: 9px;
+    border-left: 2px solid var(--math);
+    padding-top: 2px;
+    padding-bottom: 2px;
+  }
+  .guide-item .num{
+    font-family: 'JetBrains Mono',ui-monospace,monospace;
+    color: var(--math);
+    font-weight: 700;
+    margin-right: 4px;
+  }
+
+  .sidebar .spacer{flex: 1;}
+
+  .lang-btn{
+    background: var(--bg-2);
+    border: 1px solid var(--line-strong);
+    box-shadow: 2px 2px 0 var(--bg-0);
+    color: var(--fg);
+    font-family: 'JetBrains Mono',ui-monospace,monospace;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    padding: 7px 10px;
+    cursor: pointer;
+    width: 100%;
+  }
+  .lang-btn:hover{
+    border-color: var(--math);
+    color: var(--math);
+  }
+  .lang-btn:active{
+    transform: translate(2px, 2px);
+    box-shadow: none;
+  }
+
+  /* Main stage */
+  .main{
+    flex: 1;
+    position: relative;
+    overflow: hidden;
+    background: var(--bg-0);
+  }
+  #stage{
+    width: 100%;
+    height: 100%;
+    display: block;
+  }
+
+  /* HUD 右上 */
+  .hud{
+    position: absolute;
+    top: 18px;
+    right: 18px;
+    background: var(--bg-2);
+    border: 1px solid var(--line);
+    box-shadow: 3px 3px 0 var(--bg-0);
+    padding: 10px 14px;
+    font-family: 'JetBrains Mono',ui-monospace,monospace;
+    min-width: 244px;
+  }
+  .hud .row{
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 14px;
+    font-size: 11px;
+    line-height: 1.6;
+  }
+  .hud .label{color: var(--fg-mute); letter-spacing: 0.06em;}
+  .hud .value{color: var(--fg); font-weight: 700;}
+  .hud .value.accent{color: var(--math);}
+  .hud .value.gold{color: var(--gold);}
+  .hud .sep{
+    height: 1px;
+    background: var(--line);
+    margin: 6px 0;
+  }
+
+  /* Subtitle 底部 */
+  .subtitle{
+    position: absolute;
+    left: 50%;
+    bottom: 28px;
+    transform: translateX(-50%);
+    text-align: center;
+    max-width: 80%;
+    pointer-events: none;
+  }
+  .subtitle .cn{
+    font-size: 17px;
+    font-weight: 700;
+    color: var(--fg);
+    letter-spacing: 0.01em;
+  }
+  .subtitle .en{
+    font-size: 12px;
+    color: var(--fg-mute);
+    margin-top: 4px;
+    font-style: italic;
+    font-family: 'JetBrains Mono',ui-monospace,monospace;
+    letter-spacing: 0.03em;
+  }
+
+  /* Frame chip 左下 — 5 步进度 */
+  .frame-progress{
+    position: absolute;
+    left: 24px;
+    bottom: 28px;
+    display: flex;
+    gap: 6px;
+    align-items: center;
+  }
+  .chip{
+    width: 24px;
+    height: 6px;
+    background: var(--bg-2);
+    border: 1px solid var(--line);
+  }
+  .chip.active{
+    background: var(--math);
+    border-color: var(--math);
+  }
+  .chip.done{
+    background: var(--math-dim);
+    border-color: var(--math-dim);
+  }
+  .frame-progress .stepname{
+    font-family: 'JetBrains Mono',ui-monospace,monospace;
+    font-size: 10px;
+    color: var(--fg-dim);
+    margin-left: 8px;
+    letter-spacing: 0.08em;
+  }
+
+  /* Key moment flash overlay (F5 用) */
+  .flash{
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-family: 'JetBrains Mono',ui-monospace,monospace;
+    font-size: 26px;
+    font-weight: 800;
+    color: var(--gold);
+    letter-spacing: 0.18em;
+    opacity: 0;
+    pointer-events: none;
+    text-shadow: 0 0 24px var(--gold);
+    text-align: center;
+  }
+  .flash.on{ opacity: 1; }
+  .flash .small{
+    display: block;
+    text-align: center;
+    font-size: 11px;
+    color: var(--fg-dim);
+    letter-spacing: 0.08em;
+    margin-top: 8px;
+    text-shadow: none;
+    font-weight: 400;
+  }
+</style>
+</head>
+<body>
+  <aside class="sidebar">
+    <div class="brand">
+      <span class="badge" id="badgeMod">MOD-M12 / MATH</span>
+      <h1 id="brandH1">数字 -> CSV -> 第一张图</h1>
+      <div class="sub" id="brandSub">terminal -> csv -> matplotlib</div>
+    </div>
+
+    <div class="mascot-box">
+      <svg width="42" height="42" viewBox="0 0 60 60" aria-hidden="true">
+        <!-- Pi · 四面体, themes.js math mascot -->
+        <polygon points="30,12 14,46 46,46" fill="var(--SHADOW)" opacity="0.55"/>
+        <polygon points="30,12 18,42 42,42" fill="none" stroke="var(--AXIS)" stroke-width="1.6" stroke-linejoin="round"/>
+        <polygon points="30,18 22,40 38,40" fill="var(--PROOF)" opacity="0.45"/>
+        <circle cx="30" cy="12" r="1.8" fill="var(--SOLUTION)"/>
+        <circle cx="18" cy="42" r="1.8" fill="var(--SOLUTION)"/>
+        <circle cx="42" cy="42" r="1.8" fill="var(--SOLUTION)"/>
+        <text x="30" y="34" fill="var(--QED)" font-family="'JetBrains Mono',monospace" font-size="9" text-anchor="middle" font-weight="700">plot()</text>
+      </svg>
+      <div>
+        <div class="label">MASCOT</div>
+        <div class="name" id="mascotName">Pi · 派</div>
+      </div>
+    </div>
+
+    <div class="guide">
+      <div class="guide-item" id="g1"><span class="num">01</span><span class="gtxt">终端打印只能看一眼, 不能回看不能画</span></div>
+      <div class="guide-item" id="g2"><span class="num">02</span><span class="gtxt">csv.writer 把每分钟一行落进 CSV 文件</span></div>
+      <div class="guide-item" id="g3"><span class="num">03</span><span class="gtxt">matplotlib 读 CSV, plt.plot 画第一张图</span></div>
+    </div>
+
+    <div class="spacer"></div>
+    <button id="langBtn" class="lang-btn" type="button">CN / EN</button>
+  </aside>
+
+  <main class="main">
+    <svg id="stage" viewBox="0 0 1080 720" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg"></svg>
+
+    <div class="hud">
+      <div class="row"><span class="label" id="hudL1">FRAME</span><span class="value accent" id="hudV1">1 / 5</span></div>
+      <div class="row"><span class="label" id="hudL2">STAGE</span><span class="value" id="hudV2">Terminal blur</span></div>
+      <div class="sep"></div>
+      <div class="row"><span class="label" id="hudL3">ROWS</span><span class="value" id="hudV3">0 in CSV</span></div>
+      <div class="row"><span class="label" id="hudL4">PLOT</span><span class="value gold" id="hudV4">-- not yet --</span></div>
+    </div>
+
+    <div class="subtitle">
+      <div class="cn" id="subCn">数字一直在终端滚, 我都看花了</div>
+      <div class="en" id="subEn">Numbers keep scrolling in the terminal — my eyes blur</div>
+    </div>
+
+    <div class="frame-progress">
+      <div class="chip" id="chip0"></div>
+      <div class="chip" id="chip1"></div>
+      <div class="chip" id="chip2"></div>
+      <div class="chip" id="chip3"></div>
+      <div class="chip" id="chip4"></div>
+      <span class="stepname" id="stepName">01 · TERMINAL</span>
+    </div>
+
+    <div class="flash" id="flash">
+      FIRST CHART
+      <span class="small" id="flashSub">一堆数, 第一次变成一张图</span>
+    </div>
+  </main>
+
+<script>
+(function(){
+  "use strict";
+
+  // ====== i18n ======
+  var LANG = 'cn';
+  var I18N = {
+    badgeMod:   { cn: 'MOD-M12 / MATH', en: 'MOD-M12 / MATH' },
+    brandH1:    { cn: '数字 -> CSV -> 第一张图', en: 'Numbers -> CSV -> First Chart' },
+    brandSub:   { cn: 'terminal -> csv -> matplotlib', en: 'terminal -> csv -> matplotlib' },
+    mascotName: { cn: 'Pi · 派', en: 'Pi · the tetrahedron' },
+    g1: { cn: '终端打印只能看一眼, 不能回看不能画',
+          en: 'Terminal print is one-shot — no replay, no chart' },
+    g2: { cn: 'csv.writer 把每分钟一行落进 CSV 文件',
+          en: 'csv.writer appends one row per minute to a CSV file' },
+    g3: { cn: 'matplotlib 读 CSV, plt.plot 画第一张图',
+          en: 'matplotlib reads CSV, plt.plot draws the first chart' },
+    hudL1: { cn: '帧',   en: 'FRAME' },
+    hudL2: { cn: '阶段', en: 'STAGE' },
+    hudL3: { cn: '行数', en: 'ROWS' },
+    hudL4: { cn: '图',   en: 'PLOT' },
+    btnLang: { cn: 'CN / EN', en: 'CN / EN' }
+  };
+
+  // ====== 5 帧故事配置 ======
+  var FRAME_MS = 6000;
+  var FRAMES = [
+    {
+      stepName: '01 · TERMINAL',
+      hudStage: { cn: '终端看花',  en: 'Terminal blur' },
+      hudRows:  { cn: '0 行 (没存)', en: '0 rows (not saved)' },
+      hudPlot:  { cn: '-- 没有 --', en: '-- not yet --' },
+      subCn: '数字一直在终端滚, 我都看花了',
+      subEn: 'Numbers keep scrolling in terminal — my eyes blur'
+    },
+    {
+      stepName: '02 · CSV.WRITE',
+      hudStage: { cn: '写进 CSV',  en: 'Write into CSV' },
+      hudRows:  { cn: '+ 每分钟 1 行', en: '+ 1 row / min' },
+      hudPlot:  { cn: '-- 还没画 --', en: '-- not drawn --' },
+      subCn: 'csv.writer.writerow 一行一行落进文件 — 数据有了家',
+      subEn: 'csv.writer.writerow appends row by row — data has a home now'
+    },
+    {
+      stepName: '03 · CSV.TABLE',
+      hudStage: { cn: 'CSV 长这样', en: 'CSV looks like this' },
+      hudRows:  { cn: '6 行 x 5 列', en: '6 rows x 5 cols' },
+      hudPlot:  { cn: '-- 还没画 --', en: '-- not drawn --' },
+      subCn: '5 列: timestamp / pm25 / pm10 / temp / hum — 时间戳是命脉',
+      subEn: '5 cols: timestamp / pm25 / pm10 / temp / hum — timestamp is the spine'
+    },
+    {
+      stepName: '04 · PLT.PLOT',
+      hudStage: { cn: '点跳进坐标系', en: 'Dots land on axes' },
+      hudRows:  { cn: '24 行读出',    en: '24 rows loaded' },
+      hudPlot:  { cn: '画线中...',    en: 'plotting...' },
+      subCn: 'plt.plot(timestamps, pm25) — 24 个数据点逐个跳到 axes',
+      subEn: 'plt.plot(timestamps, pm25) — 24 data points hop onto the axes'
+    },
+    {
+      stepName: '05 · FIRST PLOT',
+      hudStage: { cn: '第一张图', en: 'First chart' },
+      hudRows:  { cn: '24 行',    en: '24 rows' },
+      hudPlot:  { cn: 'pm25_24h.png', en: 'pm25_24h.png' },
+      subCn: '第一张图出来了 — 早高峰 + 晚高峰一目了然',
+      subEn: 'First chart appears — morning + evening peaks at a glance'
+    }
+  ];
+
+  // ====== State ======
+  var currentFrame = 0;
+  var frameStartTs = 0;
+  var rafId = null;
+  var stage = document.getElementById('stage');
+  var SVGNS = 'http://www.w3.org/2000/svg';
+
+  // ====== Utility ======
+  function el(name, attrs, parent){
+    var n = document.createElementNS(SVGNS, name);
+    if (attrs){
+      for (var k in attrs){
+        if (Object.prototype.hasOwnProperty.call(attrs, k)){
+          n.setAttribute(k, attrs[k]);
+        }
+      }
+    }
+    if (parent) parent.appendChild(n);
+    return n;
+  }
+  function clearStage(){ while(stage.firstChild) stage.removeChild(stage.firstChild); }
+  function tr(key){
+    if (!I18N[key]) return key;
+    return I18N[key][LANG] || I18N[key].en || key;
+  }
+  function lerp(a, b, p){ return a + (b - a) * p; }
+  function easeInOut(x){ return x < 0.5 ? 2*x*x : 1 - Math.pow(-2*x + 2, 2)/2; }
+  function clamp(x, lo, hi){ return x < lo ? lo : (x > hi ? hi : x); }
+
+  // ====== 数据 (确定性, 24h PM2.5 节奏: 早晚高峰) ======
+  function pmFor(h){
+    var base;
+    if (h>=7 && h<=9)        base = 56 + (h-7)*4;     // 早高峰 56/60/64
+    else if (h>=11 && h<=13) base = 46;               // 午饭
+    else if (h>=17 && h<=20) base = 62 + (20-h)*3;    // 晚高峰
+    else if (h>=22 || h<=5)  base = 22;               // 夜间
+    else                     base = 34;
+    return base + (h % 3) * 1.5;
+  }
+
+  // ====== 背景: 深空底 + 网格 ======
+  function drawBgGrid(){
+    var g = el('g', { opacity: '0.18' }, stage);
+    for (var x = 0; x <= 1080; x += 60){
+      el('line', { x1: x, y1: 0, x2: x, y2: 720, stroke: 'var(--line)', 'stroke-width': '0.5' }, g);
+    }
+    for (var y = 0; y <= 720; y += 60){
+      el('line', { x1: 0, y1: y, x2: 1080, y2: y, stroke: 'var(--line)', 'stroke-width': '0.5' }, g);
+    }
+    var defs = el('defs', null, stage);
+    var rg = el('radialGradient', { id: 'centerGlow', cx: '50%', cy: '45%', r: '60%' }, defs);
+    el('stop', { offset: '0%', 'stop-color': 'var(--math)', 'stop-opacity': '0.06' }, rg);
+    el('stop', { offset: '100%', 'stop-color': 'var(--bg-0)', 'stop-opacity': '0' }, rg);
+    el('rect', { x: 0, y: 0, width: 1080, height: 720, fill: 'url(#centerGlow)' }, stage);
+  }
+
+  // ====== 步骤链 (5 步) ======
+  function drawStepChain(activeIdx){
+    var labels = [
+      { cn: '终端',  en: 'Terminal' },
+      { cn: '写盘',  en: 'CSV write' },
+      { cn: '表格',  en: 'Table' },
+      { cn: '画线',  en: 'plt.plot' },
+      { cn: '第一图', en: 'Chart' }
+    ];
+    var y = 645;
+    var startX = 130;
+    var gap = (1080 - 260) / 4;
+    var g = el('g', null, stage);
+    for (var i = 0; i < 5; i++){
+      var cx = startX + gap * i;
+      var on = i <= activeIdx;
+      var ringColor = on ? 'var(--math)' : 'var(--line)';
+      var fillColor = on ? 'var(--bg-2)' : 'var(--bg-1)';
+      var textColor = on ? 'var(--fg)' : 'var(--fg-mute)';
+      el('rect', {
+        x: cx - 50, y: y - 16, width: 100, height: 32,
+        fill: fillColor, stroke: ringColor, 'stroke-width': on ? '1.6' : '1', rx: '2'
+      }, g);
+      var tx = el('text', {
+        x: cx, y: y + 5, fill: textColor,
+        'font-family': "'Inter','Noto Sans SC',sans-serif",
+        'font-size': '12', 'font-weight': on ? '700' : '500',
+        'text-anchor': 'middle'
+      }, g);
+      tx.textContent = labels[i][LANG] || labels[i].en;
+      var ix = el('text', {
+        x: cx, y: y - 22, fill: on ? 'var(--math)' : 'var(--fg-mute)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '9', 'text-anchor': 'middle', 'letter-spacing': '0.1em'
+      }, g);
+      ix.textContent = '0' + (i+1);
+      if (i < 4){
+        var x1 = cx + 50;
+        var x2 = cx + gap - 50;
+        var connColor = ((i+1) <= activeIdx) ? 'var(--math)' : 'var(--line)';
+        el('line', {
+          x1: x1, y1: y, x2: x2 - 6, y2: y,
+          stroke: connColor, 'stroke-width': '1.2'
+        }, g);
+        el('polygon', {
+          points: (x2-6)+','+(y-4)+' '+(x2)+','+y+' '+(x2-6)+','+(y+4),
+          fill: connColor
+        }, g);
+      }
+    }
+  }
+
+  // ====== Terminal 窗口 helper ======
+  function drawTerminal(x, y, w, h, title){
+    var g = el('g', { transform: 'translate(' + x + ',' + y + ')' }, stage);
+    el('rect', { x: 0, y: 0, width: w, height: h, fill: 'var(--term-bg)',
+                 stroke: 'var(--line-strong)', 'stroke-width': '1.4', rx: '3' }, g);
+    el('rect', { x: 0, y: 0, width: w, height: 26, fill: 'var(--bg-3)',
+                 stroke: 'var(--line)', 'stroke-width': '1' }, g);
+    el('circle', { cx: 12, cy: 13, r: 4, fill: 'oklch(0.55 0.16 25)' }, g);
+    el('circle', { cx: 26, cy: 13, r: 4, fill: 'oklch(0.72 0.15 75)' }, g);
+    el('circle', { cx: 40, cy: 13, r: 4, fill: 'oklch(0.65 0.16 145)' }, g);
+    var tt = el('text', { x: w/2, y: 17, fill: 'var(--fg-dim)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '10', 'text-anchor': 'middle', 'letter-spacing': '0.08em' }, g);
+    tt.textContent = title;
+    return g;
+  }
+
+  // ====== FRAME 1 — 终端滚动数字, 学生看花 ======
+  function drawFrame1(p){
+    drawBgGrid();
+
+    // 中间大终端窗 (滚动数字)
+    var tg = drawTerminal(220, 100, 540, 420, 'pi@raspberrypi: ~ $ python sensor_print.py');
+
+    // 滚动数字 — 根据 p 决定滚到第几行
+    var totalLines = 28;
+    var scrolled = Math.floor(p * 22) + 6; // 至少 6 行已显示
+    var startLine = Math.max(0, scrolled - totalLines);
+
+    var rowH = 14;
+    var rowY0 = 38;
+    // 生成 32 行确定性数据
+    var allLines = [];
+    for (var k = 0; k < 60; k++){
+      var pm = 36 + ((k * 7) % 18);
+      var pm10 = 50 + ((k * 5) % 22);
+      var tp = (23.5 + ((k * 3) % 20) * 0.1).toFixed(1);
+      var hm = 54 + ((k * 4) % 12);
+      allLines.push('PM2.5=' + pm + '  PM10=' + pm10 + '  temp=' + tp + '  hum=' + hm);
+    }
+
+    for (var i = 0; i < totalLines; i++){
+      var lineIdx = startLine + i;
+      if (lineIdx >= allLines.length) break;
+      var yy = rowY0 + i * rowH;
+      // 渐入: 越靠上越淡 (滚动幻觉) + 最后 3 行更亮 (新的)
+      var op;
+      if (i < 3) op = 0.25 + i * 0.2;
+      else if (i > totalLines - 3) op = 1.0;
+      else op = 0.85;
+      var fillC = (i === totalLines - 1) ? 'var(--SOLUTION)' : 'var(--term-fg)';
+      var ln = el('text', { x: 14, y: yy, fill: fillC, opacity: String(op),
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '11' }, tg);
+      ln.textContent = allLines[lineIdx];
+    }
+
+    // 光标 (闪烁: p 影响 opacity)
+    var curY = rowY0 + (totalLines - 1) * rowH + 16;
+    var prompt = el('text', { x: 14, y: curY, fill: 'var(--term-prompt)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '12', 'font-weight': '700' }, tg);
+    prompt.textContent = '$ _';
+    var blink = (Math.sin(p * 24) > 0) ? 1 : 0.2;
+    el('rect', { x: 32, y: curY - 10, width: 8, height: 12,
+      fill: 'var(--term-prompt)', opacity: String(blink) }, tg);
+
+    // 右上角红色"看花了"气泡
+    var blurAlpha = clamp((p - 0.2) / 0.3, 0, 1);
+    var bg = el('g', { transform: 'translate(820, 160)', opacity: String(blurAlpha) }, stage);
+    el('rect', { x: -90, y: -28, width: 180, height: 56, fill: 'var(--bg-2)',
+                 stroke: 'oklch(0.65 0.18 25)', 'stroke-width': '1.8', rx: '3' }, bg);
+    el('polygon', { points: '-90,-8 -100,0 -90,8',
+                    fill: 'var(--bg-2)', stroke: 'oklch(0.65 0.18 25)', 'stroke-width': '1.8' }, bg);
+    var blurLab = el('text', { x: 0, y: -6, fill: 'oklch(0.78 0.16 25)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '14', 'text-anchor': 'middle', 'font-weight': '700' }, bg);
+    blurLab.textContent = LANG === 'cn' ? '看花了' : 'eyes blur';
+    var blurSub = el('text', { x: 0, y: 14, fill: 'var(--fg-mute)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '10', 'text-anchor': 'middle' }, bg);
+    blurSub.textContent = LANG === 'cn' ? '存不下来, 画不出图' : 'no save, no chart';
+
+    // 散落数字 (悬浮在终端外, 暗示信息过载) — 跟 p 漂浮
+    var floats = [
+      { x: 130, y: 170, s: '38' },
+      { x: 150, y: 260, s: '24.3' },
+      { x: 90,  y: 380, s: '58' },
+      { x: 820, y: 360, s: '1013' },
+      { x: 880, y: 470, s: '41' }
+    ];
+    for (var ff = 0; ff < floats.length; ff++){
+      var fo = floats[ff];
+      var dy = Math.sin((p * 4) + ff) * 6;
+      var ftx = el('text', { x: fo.x, y: fo.y + dy,
+        fill: 'var(--fg-mute)', opacity: '0.55',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '15', 'font-weight': '700' }, stage);
+      ftx.textContent = fo.s;
+    }
+
+    // 标题
+    var ttl = el('text', { x: 540, y: 70, fill: 'var(--math)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '14', 'text-anchor': 'middle', 'letter-spacing': '0.14em', 'font-weight': '700' }, stage);
+    ttl.textContent = LANG === 'cn' ? '终端: 数字一直在打, 但回不去' : 'Terminal: numbers keep printing, but cannot replay';
+
+    drawStepChain(0);
+  }
+
+  // ====== FRAME 2 — csv.writer 写入, 一行行从代码飞进 CSV ======
+  function drawFrame2(p){
+    drawBgGrid();
+
+    // 左: 代码块 (Python csv.writer)
+    var codeG = el('g', { transform: 'translate(80, 110)' }, stage);
+    el('rect', { x: 0, y: 0, width: 400, height: 380, fill: 'var(--bg-1)',
+                 stroke: 'var(--line-strong)', 'stroke-width': '1.2', rx: '3' }, codeG);
+    el('rect', { x: 0, y: 0, width: 400, height: 26, fill: 'var(--bg-3)',
+                 stroke: 'var(--line)', 'stroke-width': '1' }, codeG);
+    var ctt = el('text', { x: 200, y: 17, fill: 'var(--fg-dim)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '10', 'text-anchor': 'middle', 'letter-spacing': '0.08em' }, codeG);
+    ctt.textContent = 'sensor_log.py';
+
+    var codeLines = [
+      { t: 'import csv, datetime',          c: 'var(--math)',    indent: 14 },
+      { t: '',                              c: 'var(--fg)',      indent: 14 },
+      { t: "with open('sensor_log.csv',",   c: 'var(--fg)',      indent: 14 },
+      { t: "          'a', newline='') as f:", c: 'var(--fg)',   indent: 14 },
+      { t: '    w = csv.writer(f)',         c: 'var(--PROOF)',   indent: 14 },
+      { t: '    while True:',               c: 'var(--fg)',      indent: 14 },
+      { t: '        ts = datetime.now()',   c: 'var(--fg-dim)',  indent: 14 },
+      { t: '        pm25 = read_pms()',     c: 'var(--fg-dim)',  indent: 14 },
+      { t: '        w.writerow([',          c: 'var(--QED)',     indent: 14, hl: true },
+      { t: '            ts, pm25, pm10,',   c: 'var(--QED)',     indent: 14, hl: true },
+      { t: '            temp, hum])',       c: 'var(--QED)',     indent: 14, hl: true },
+      { t: '        sleep(60)',             c: 'var(--fg-dim)',  indent: 14 }
+    ];
+
+    for (var ci = 0; ci < codeLines.length; ci++){
+      var ln = codeLines[ci];
+      var y = 56 + ci * 22;
+      if (ln.hl){
+        // writerow 行高亮一下背景 (按 p 节拍闪)
+        var hlAlpha = 0.12 + 0.18 * Math.abs(Math.sin(p * 6));
+        el('rect', { x: 4, y: y - 14, width: 392, height: 20,
+                     fill: 'var(--math)', opacity: String(hlAlpha) }, codeG);
+      }
+      var tx = el('text', { x: ln.indent, y: y, fill: ln.c,
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '12' }, codeG);
+      tx.textContent = ln.t;
+    }
+
+    // 中间: 飞行数据包 (每隔 0.2 个 p 一个, 从代码飞向 csv)
+    var flowG = el('g', null, stage);
+    var nPackets = 5;
+    for (var pk = 0; pk < nPackets; pk++){
+      var t = ((p * 2) + pk / nPackets) % 1; // 0..1 各自独立
+      var sx = 500;
+      var sy = 320;
+      var ex = 720;
+      var ey = lerp(180, 480, pk / (nPackets - 1));
+      var cx_p = lerp(sx, ex, t);
+      var cy_p = lerp(sy, ey, easeInOut(t));
+      var alpha = (t < 0.85) ? 0.85 : (1 - (t - 0.85) / 0.15) * 0.85;
+      // 一个小数据包: [ts, pm, pm, t, h]
+      var pg = el('g', { transform: 'translate(' + cx_p + ',' + cy_p + ')', opacity: String(alpha) }, flowG);
+      el('rect', { x: -38, y: -10, width: 76, height: 20, fill: 'var(--bg-2)',
+                   stroke: 'var(--math)', 'stroke-width': '1.2', rx: '2' }, pg);
+      var ptx = el('text', { x: 0, y: 4, fill: 'var(--math)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '9', 'text-anchor': 'middle' }, pg);
+      ptx.textContent = '[ts, pm, ...]';
+    }
+
+    // 引导箭头 (整体路径标注)
+    var arrG = el('g', null, stage);
+    el('path', { d: 'M 500 300 Q 600 280 720 350', fill: 'none',
+                 stroke: 'var(--PROOF)', 'stroke-width': '1.6',
+                 'stroke-dasharray': '5 4', opacity: '0.55' }, arrG);
+    var arrLab = el('text', { x: 610, y: 270, fill: 'var(--PROOF)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '11', 'text-anchor': 'middle', 'letter-spacing': '0.08em' }, arrG);
+    arrLab.textContent = LANG === 'cn' ? 'writerow -> 追加到末尾' : 'writerow -> append at end';
+
+    // 右: CSV 文件图标 + 长大效果 (行数随 p 增长)
+    var fileG = el('g', { transform: 'translate(720, 130)' }, stage);
+    el('path', { d: 'M 8 8 L 8 410 L 280 410 L 280 60 L 228 8 Z',
+                 fill: 'var(--bg-3)', opacity: '0.7' }, fileG);
+    el('path', { d: 'M 0 0 L 0 402 L 272 402 L 272 52 L 220 0 Z',
+                 fill: 'var(--bg-1)', stroke: 'var(--math)', 'stroke-width': '1.8' }, fileG);
+    el('path', { d: 'M 220 0 L 220 52 L 272 52', fill: 'var(--bg-2)',
+                 stroke: 'var(--math)', 'stroke-width': '1.8' }, fileG);
+    // .csv 标签
+    el('rect', { x: 14, y: 16, width: 58, height: 22, fill: 'var(--math)' }, fileG);
+    var csvLab = el('text', { x: 43, y: 32, fill: 'var(--bg-0)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '12', 'text-anchor': 'middle', 'font-weight': '700' }, fileG);
+    csvLab.textContent = '.csv';
+    var fn = el('text', { x: 82, y: 32, fill: 'var(--fg)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '11', 'font-weight': '700' }, fileG);
+    fn.textContent = 'sensor_log.csv';
+
+    // 文件内行预览 (写入越来越多)
+    var maxRows = 14;
+    var written = Math.min(maxRows, Math.floor(p * (maxRows + 2)));
+    for (var r = 0; r < maxRows; r++){
+      var ry = 64 + r * 22;
+      var on = r < written;
+      el('rect', { x: 14, y: ry, width: 244, height: 18,
+        fill: r % 2 === 0 ? 'var(--bg-2)' : 'var(--bg-1)',
+        opacity: on ? '1' : '0.2' }, fileG);
+      if (on){
+        // 浅色填充, 模拟数据
+        var rtx = el('text', { x: 20, y: ry + 13,
+          fill: r === written - 1 ? 'var(--SOLUTION)' : 'var(--fg-dim)',
+          'font-family': "'JetBrains Mono',ui-monospace,monospace",
+          'font-size': '9' }, fileG);
+        var hh = (14 + r) % 24;
+        var pm = 36 + ((r * 5) % 16);
+        rtx.textContent = '2026-05-27T' + (hh < 10 ? '0' : '') + hh + ':' + ((r * 4) % 60 < 10 ? '0' : '') + ((r * 4) % 60) + ':00,' + pm + ',52,24.4,57';
+      }
+    }
+    // 行数计数器
+    var cnt = el('text', { x: 136, y: 388, fill: 'var(--math)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '11', 'text-anchor': 'middle', 'font-weight': '700' }, fileG);
+    cnt.textContent = written + ' rows';
+
+    // 标题
+    var ttl2 = el('text', { x: 540, y: 70, fill: 'var(--math)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '14', 'text-anchor': 'middle', 'letter-spacing': '0.14em', 'font-weight': '700' }, stage);
+    ttl2.textContent = LANG === 'cn' ? 'csv.writer.writerow — 每行一次采样' : 'csv.writer.writerow — 1 row per sample';
+
+    drawStepChain(1);
+  }
+
+  // ====== FRAME 3 — CSV 文件展开成 5 列分色表格 ======
+  function drawFrame3(p){
+    drawBgGrid();
+
+    var tg = el('g', { transform: 'translate(150, 120)' }, stage);
+    // 表卡片
+    el('rect', { x: 0, y: 0, width: 780, height: 420, fill: 'var(--bg-1)',
+                 stroke: 'var(--math)', 'stroke-width': '1.8', rx: '3' }, tg);
+    el('rect', { x: 0, y: 0, width: 780, height: 30, fill: 'var(--bg-3)',
+                 stroke: 'var(--line)', 'stroke-width': '1' }, tg);
+    var ftt = el('text', { x: 16, y: 20, fill: 'var(--fg)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '11', 'font-weight': '700' }, tg);
+    ftt.textContent = 'sensor_log.csv  ·  6 of 1440 rows';
+
+    // 5 列定义 + 各自分色 (math palette 5 色)
+    var cols = [
+      { key: 'timestamp', cn: 'timestamp',  en: 'timestamp', color: 'var(--AXIS)',     w: 240 },
+      { key: 'pm25',      cn: 'pm25',       en: 'pm25',      color: 'var(--PROOF)',    w: 90 },
+      { key: 'pm10',      cn: 'pm10',       en: 'pm10',      color: 'var(--SHADOW)',   w: 90 },
+      { key: 'temp',      cn: 'temp',       en: 'temp',      color: 'var(--SOLUTION)', w: 90 },
+      { key: 'hum',       cn: 'hum',        en: 'hum',       color: 'var(--QED)',      w: 90 }
+    ];
+    var rows = [
+      ['2026-05-27T07:00:00', 38, 52, 24.3, 58],
+      ['2026-05-27T08:00:00', 60, 78, 24.6, 57],
+      ['2026-05-27T09:00:00', 64, 82, 24.8, 56],
+      ['2026-05-27T12:00:00', 48, 64, 26.1, 53],
+      ['2026-05-27T17:00:00', 56, 73, 25.4, 55],
+      ['2026-05-27T19:00:00', 68, 86, 24.9, 56]
+    ];
+
+    // header row — 每列一个底色 (palette 5 色)
+    var x0 = 14;
+    var hy = 40;
+    var hh = 38;
+    var cx = x0;
+    for (var c = 0; c < cols.length; c++){
+      var col = cols[c];
+      el('rect', { x: cx, y: hy, width: col.w, height: hh,
+        fill: col.color, opacity: '0.22',
+        stroke: col.color, 'stroke-width': '1.4' }, tg);
+      var cht = el('text', { x: cx + col.w/2, y: hy + 18, fill: col.color,
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '13', 'text-anchor': 'middle', 'font-weight': '700', 'letter-spacing': '0.06em' }, tg);
+      cht.textContent = col[LANG] || col.en;
+      var idx = el('text', { x: cx + col.w/2, y: hy + 32, fill: 'var(--fg-mute)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '9', 'text-anchor': 'middle' }, tg);
+      idx.textContent = '[' + c + ']';
+      cx += col.w;
+    }
+
+    // 数据行 (随 p 逐行出现)
+    var visRows = Math.min(rows.length, Math.floor(p * 8) + 1);
+    for (var r = 0; r < rows.length; r++){
+      var visible = r < visRows;
+      var ry = hy + hh + r * 36;
+      // 行底 (斑马纹)
+      el('rect', { x: x0, y: ry, width: 600, height: 34,
+        fill: r % 2 === 0 ? 'var(--bg-2)' : 'var(--bg-1)',
+        opacity: visible ? '0.7' : '0.18' }, tg);
+      // 每格写值
+      var cellX = x0;
+      for (var c2 = 0; c2 < cols.length; c2++){
+        var val = rows[r][c2];
+        var cellTxt = el('text', { x: cellX + cols[c2].w/2, y: ry + 21,
+          fill: visible ? cols[c2].color : 'var(--fg-mute)',
+          opacity: visible ? '1' : '0.3',
+          'font-family': "'JetBrains Mono',ui-monospace,monospace",
+          'font-size': '12', 'text-anchor': 'middle', 'font-weight': c2 === 0 ? '500' : '700' }, tg);
+        cellTxt.textContent = String(val);
+        cellX += cols[c2].w;
+      }
+    }
+
+    // 时间戳 spine 注释 (左侧大括号 + 注解)
+    var annoY = hy + hh + 12;
+    var annoY2 = hy + hh + rows.length * 36 - 12;
+    el('path', { d: 'M ' + x0 + ' ' + annoY + ' L ' + (x0 - 8) + ' ' + annoY +
+                    ' L ' + (x0 - 8) + ' ' + annoY2 + ' L ' + x0 + ' ' + annoY2,
+                 fill: 'none', stroke: 'var(--AXIS)', 'stroke-width': '1.4' }, tg);
+    var aTxt = el('text', { x: x0 - 14, y: (annoY + annoY2) / 2,
+      fill: 'var(--AXIS)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '10', 'text-anchor': 'end' }, tg);
+    aTxt.textContent = LANG === 'cn' ? '时间戳 = 数据脊梁' : 'timestamp = spine';
+
+    // 右侧 callout: matplotlib 即将读
+    var coG = el('g', { transform: 'translate(630, 80)' }, tg);
+    el('rect', { x: 0, y: 0, width: 140, height: 320,
+                 fill: 'var(--bg-2)', stroke: 'var(--math)', 'stroke-width': '1.2', rx: '3' }, coG);
+    var coTtl = el('text', { x: 70, y: 22, fill: 'var(--math)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '11', 'text-anchor': 'middle', 'letter-spacing': '0.08em', 'font-weight': '700' }, coG);
+    coTtl.textContent = LANG === 'cn' ? '下一步' : 'next';
+    var coLines = [
+      'import',
+      '  pandas as pd',
+      '',
+      'df = pd.read_csv(',
+      "  'sensor_log.csv')",
+      '',
+      'print(df.shape)',
+      '# (1440, 5)'
+    ];
+    for (var clc = 0; clc < coLines.length; clc++){
+      var coTx = el('text', { x: 8, y: 50 + clc * 18,
+        fill: clc === 6 || clc === 7 ? 'var(--QED)' : 'var(--fg-dim)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '10' }, coG);
+      coTx.textContent = coLines[clc];
+    }
+
+    // 标题
+    var ttl3 = el('text', { x: 540, y: 70, fill: 'var(--math)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '14', 'text-anchor': 'middle', 'letter-spacing': '0.14em', 'font-weight': '700' }, stage);
+    ttl3.textContent = LANG === 'cn' ? 'CSV 长这样: 5 列, 时间戳是脊梁' : 'CSV layout: 5 cols, timestamp is the spine';
+
+    drawStepChain(2);
+  }
+
+  // ====== FRAME 4 — matplotlib.plot 24 点跳入坐标系 ======
+  function drawFrame4(p){
+    drawBgGrid();
+
+    // 左: 代码片 (mpl 3 行)
+    var codeG = el('g', { transform: 'translate(70, 150)' }, stage);
+    el('rect', { x: 0, y: 0, width: 270, height: 200, fill: 'var(--bg-1)',
+                 stroke: 'var(--line-strong)', 'stroke-width': '1.2', rx: '3' }, codeG);
+    el('rect', { x: 0, y: 0, width: 270, height: 26, fill: 'var(--bg-3)',
+                 stroke: 'var(--line)', 'stroke-width': '1' }, codeG);
+    var ctt = el('text', { x: 135, y: 17, fill: 'var(--fg-dim)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '10', 'text-anchor': 'middle' }, codeG);
+    ctt.textContent = 'plot_pm25.py';
+    var mplLines = [
+      { t: 'import matplotlib', c: 'var(--math)' },
+      { t: 'import pandas as pd', c: 'var(--math)' },
+      { t: '', c: '' },
+      { t: "df = pd.read_csv('...')", c: 'var(--PROOF)' },
+      { t: 'plt.plot(', c: 'var(--QED)' },
+      { t: '  df.timestamp,', c: 'var(--AXIS)' },
+      { t: '  df.pm25)', c: 'var(--PROOF)' },
+      { t: 'plt.show()', c: 'var(--QED)' }
+    ];
+    for (var mi = 0; mi < mplLines.length; mi++){
+      var ml = mplLines[mi];
+      if (!ml.t) continue;
+      var mtx = el('text', { x: 14, y: 46 + mi * 19, fill: ml.c,
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '12', 'font-weight': (ml.c === 'var(--QED)' ? '700' : '500') }, codeG);
+      mtx.textContent = ml.t;
+    }
+
+    // 右: 大坐标系 (matplotlib figure) — 24 点逐个跳入
+    var axL = 410, axR = 1000, axT = 130, axB = 460;
+    var figG = el('g', null, stage);
+
+    // 图卡片
+    el('rect', { x: 380, y: 100, width: 660, height: 410,
+                 fill: 'var(--bg-1)', stroke: 'var(--math)', 'stroke-width': '1.6', rx: '3' }, figG);
+    var figTtl = el('text', { x: 710, y: 122, fill: 'var(--fg-dim)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '11', 'text-anchor': 'middle' }, figG);
+    figTtl.textContent = 'matplotlib · Figure 1';
+
+    // grid (mpl 风格)
+    for (var gy = 1; gy <= 4; gy++){
+      var gyv = axT + (axB - axT) * gy / 5;
+      el('line', { x1: axL, y1: gyv, x2: axR, y2: gyv,
+        stroke: 'var(--line)', 'stroke-width': '0.5', 'stroke-dasharray': '2 4' }, figG);
+    }
+    for (var gx = 1; gx <= 5; gx++){
+      var gxv = axL + (axR - axL) * gx / 6;
+      el('line', { x1: gxv, y1: axT, x2: gxv, y2: axB,
+        stroke: 'var(--line)', 'stroke-width': '0.5', 'stroke-dasharray': '2 4' }, figG);
+    }
+    // axes spine (math accent — F2 第 2 层)
+    el('line', { x1: axL, y1: axT, x2: axL, y2: axB,
+      stroke: 'var(--math)', 'stroke-width': '2' }, figG);
+    el('line', { x1: axL, y1: axB, x2: axR, y2: axB,
+      stroke: 'var(--math)', 'stroke-width': '2' }, figG);
+    // Y 刻度
+    var yTicks = [0, 20, 40, 60, 80];
+    for (var yt = 0; yt < yTicks.length; yt++){
+      var yp = axB - (axB - axT) * yt / (yTicks.length - 1);
+      el('line', { x1: axL - 5, y1: yp, x2: axL, y2: yp,
+        stroke: 'var(--math)', 'stroke-width': '1.2' }, figG);
+      var ytt = el('text', { x: axL - 10, y: yp + 4, fill: 'var(--fg-dim)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '10', 'text-anchor': 'end' }, figG);
+      ytt.textContent = String(yTicks[yt]);
+    }
+    // X 刻度
+    var xLab = ['00', '06', '12', '18', '24'];
+    for (var xt = 0; xt < xLab.length; xt++){
+      var xp = axL + (axR - axL) * xt / (xLab.length - 1);
+      el('line', { x1: xp, y1: axB, x2: xp, y2: axB + 5,
+        stroke: 'var(--math)', 'stroke-width': '1.2' }, figG);
+      var xtt = el('text', { x: xp, y: axB + 18, fill: 'var(--fg-dim)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '10', 'text-anchor': 'middle' }, figG);
+      xtt.textContent = xLab[xt];
+    }
+    // 轴标签
+    var ylab = el('text', { x: axL - 36, y: (axT + axB) / 2, fill: 'var(--AXIS)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '11', 'text-anchor': 'middle', 'font-weight': '700' }, figG);
+    ylab.textContent = 'PM2.5';
+    var ylab2 = el('text', { x: axL - 36, y: (axT + axB) / 2 + 14, fill: 'var(--fg-mute)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '9', 'text-anchor': 'middle' }, figG);
+    ylab2.textContent = 'ug/m3';
+    var xlab = el('text', { x: (axL + axR) / 2, y: axB + 40, fill: 'var(--AXIS)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '11', 'text-anchor': 'middle', 'font-weight': '700' }, figG);
+    xlab.textContent = LANG === 'cn' ? 'time (24h)' : 'time (24h)';
+
+    // 24 个数据点逐个跳入 — 按 p 决定多少个已落地
+    var pts = [];
+    for (var hh = 0; hh <= 23; hh++){
+      var px = axL + (axR - axL) * hh / 23;
+      var pv = pmFor(hh);
+      var py = axB - (axB - axT) * pv / 80;
+      pts.push([px, py, hh, pv]);
+    }
+    var landed = Math.min(24, Math.floor(p * 28));
+    // 落地后, 折线一起连接已落地的点
+    if (landed >= 2){
+      var pathD = 'M ' + pts[0][0] + ' ' + pts[0][1];
+      for (var pi = 1; pi < landed; pi++){
+        pathD += ' L ' + pts[pi][0] + ' ' + pts[pi][1];
+      }
+      el('path', { d: pathD, fill: 'none', stroke: 'var(--PROOF)',
+        'stroke-width': '2.4', 'stroke-linecap': 'round', 'stroke-linejoin': 'round',
+        opacity: '0.9' }, figG);
+    }
+    // 已落地点 + 正在下落的点
+    for (var pp_ = 0; pp_ < pts.length; pp_++){
+      if (pp_ < landed){
+        el('circle', { cx: pts[pp_][0], cy: pts[pp_][1], r: 3.4,
+          fill: 'var(--SOLUTION)', stroke: 'var(--AXIS)', 'stroke-width': '1.5' }, figG);
+      } else if (pp_ === landed){
+        // 正在下落 — 从顶 axT - 30 落到目标
+        var fall = ((p * 28) - landed); // 0..1
+        var fy = lerp(axT - 30, pts[pp_][1], easeInOut(fall));
+        el('line', { x1: pts[pp_][0], y1: axT - 30, x2: pts[pp_][0], y2: fy,
+          stroke: 'var(--QED)', 'stroke-width': '1', 'stroke-dasharray': '2 3', opacity: '0.6' }, figG);
+        el('circle', { cx: pts[pp_][0], cy: fy, r: 5,
+          fill: 'var(--QED)', opacity: '0.9' }, figG);
+      }
+    }
+
+    // landed 计数 (mpl HUD)
+    var hudT = el('text', { x: 1020, y: 144, fill: 'var(--QED)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '11', 'text-anchor': 'end', 'font-weight': '700' }, figG);
+    hudT.textContent = landed + ' / 24 points';
+
+    // 标题
+    var ttl4 = el('text', { x: 540, y: 70, fill: 'var(--math)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '14', 'text-anchor': 'middle', 'letter-spacing': '0.14em', 'font-weight': '700' }, stage);
+    ttl4.textContent = LANG === 'cn' ? 'plt.plot(timestamp, pm25) — 数据点逐个跳上 axes' : 'plt.plot(timestamp, pm25) — data hops onto axes';
+
+    drawStepChain(3);
+  }
+
+  // ====== FRAME 5 — 第一张图完成 + key moment 金光 ======
+  function drawFrame5(p){
+    drawBgGrid();
+
+    // 大图卡片 (gold 边)
+    var figG = el('g', null, stage);
+    var alpha = clamp(p / 0.15, 0, 1);
+    el('rect', { x: 110, y: 100, width: 820, height: 440,
+                 fill: 'var(--bg-1)', stroke: 'var(--QED)', 'stroke-width': '2.4', rx: '3',
+                 opacity: String(alpha) }, figG);
+    // 金光 outer glow
+    var glow = 0.15 + 0.25 * Math.abs(Math.sin(p * 4));
+    el('rect', { x: 100, y: 90, width: 840, height: 460,
+                 fill: 'none', stroke: 'var(--QED)', 'stroke-width': '1.2', rx: '5',
+                 opacity: String(glow) }, figG);
+
+    var figTtl = el('text', { x: 130, y: 124, fill: 'var(--QED)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '12', 'font-weight': '700' }, figG);
+    figTtl.textContent = 'pm25_24h.png';
+    var saved = el('text', { x: 910, y: 124, fill: 'var(--fg-dim)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '10', 'text-anchor': 'end' }, figG);
+    saved.textContent = LANG === 'cn' ? 'saved · matplotlib.savefig' : 'saved · matplotlib.savefig';
+
+    var axL = 160, axR = 880, axT = 150, axB = 480;
+
+    // grid
+    for (var gy = 1; gy <= 4; gy++){
+      var gyv = axT + (axB - axT) * gy / 5;
+      el('line', { x1: axL, y1: gyv, x2: axR, y2: gyv,
+        stroke: 'var(--line)', 'stroke-width': '0.5', 'stroke-dasharray': '2 4' }, figG);
+    }
+    for (var gx = 1; gx <= 5; gx++){
+      var gxv = axL + (axR - axL) * gx / 6;
+      el('line', { x1: gxv, y1: axT, x2: gxv, y2: axB,
+        stroke: 'var(--line)', 'stroke-width': '0.5', 'stroke-dasharray': '2 4' }, figG);
+    }
+    // axes (math)
+    el('line', { x1: axL, y1: axT, x2: axL, y2: axB,
+      stroke: 'var(--math)', 'stroke-width': '2' }, figG);
+    el('line', { x1: axL, y1: axB, x2: axR, y2: axB,
+      stroke: 'var(--math)', 'stroke-width': '2' }, figG);
+
+    // Y 刻度
+    var yT = [0, 20, 40, 60, 80];
+    for (var yt = 0; yt < yT.length; yt++){
+      var yp = axB - (axB - axT) * yt / (yT.length - 1);
+      el('line', { x1: axL - 5, y1: yp, x2: axL, y2: yp,
+        stroke: 'var(--math)', 'stroke-width': '1.2' }, figG);
+      var ytt = el('text', { x: axL - 10, y: yp + 4, fill: 'var(--fg-dim)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '10', 'text-anchor': 'end' }, figG);
+      ytt.textContent = String(yT[yt]);
+    }
+    // X 刻度
+    var xL = ['00:00', '06:00', '12:00', '18:00', '24:00'];
+    for (var xt = 0; xt < xL.length; xt++){
+      var xp = axL + (axR - axL) * xt / (xL.length - 1);
+      el('line', { x1: xp, y1: axB, x2: xp, y2: axB + 5,
+        stroke: 'var(--math)', 'stroke-width': '1.2' }, figG);
+      var xtt = el('text', { x: xp, y: axB + 18, fill: 'var(--fg-dim)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '10', 'text-anchor': 'middle' }, figG);
+      xtt.textContent = xL[xt];
+    }
+    // 轴标签
+    var ylab = el('text', { x: axL - 44, y: (axT + axB) / 2 - 6, fill: 'var(--AXIS)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '12', 'text-anchor': 'middle', 'font-weight': '700' }, figG);
+    ylab.textContent = 'PM2.5';
+    var ylab2 = el('text', { x: axL - 44, y: (axT + axB) / 2 + 10, fill: 'var(--fg-dim)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '10', 'text-anchor': 'middle' }, figG);
+    ylab2.textContent = '(ug/m3)';
+    var xlab = el('text', { x: (axL + axR) / 2, y: axB + 40, fill: 'var(--AXIS)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '12', 'text-anchor': 'middle', 'font-weight': '700' }, figG);
+    xlab.textContent = LANG === 'cn' ? '时间 (24h)' : 'time (24h)';
+
+    // 24 点 + 完整折线
+    var pts = [];
+    for (var hh = 0; hh <= 23; hh++){
+      var px = axL + (axR - axL) * hh / 23;
+      var pv = pmFor(hh);
+      var py = axB - (axB - axT) * pv / 80;
+      pts.push([px, py, hh, pv]);
+    }
+    // 面积 (淡 PROOF)
+    var areaD = 'M ' + pts[0][0] + ' ' + axB;
+    for (var ai = 0; ai < pts.length; ai++){
+      areaD += ' L ' + pts[ai][0] + ' ' + pts[ai][1];
+    }
+    areaD += ' L ' + pts[pts.length - 1][0] + ' ' + axB + ' Z';
+    el('path', { d: areaD, fill: 'var(--PROOF)', opacity: '0.16' }, figG);
+    // 主线 (math)
+    var pathD = 'M ' + pts[0][0] + ' ' + pts[0][1];
+    for (var pi = 1; pi < pts.length; pi++){
+      pathD += ' L ' + pts[pi][0] + ' ' + pts[pi][1];
+    }
+    el('path', { d: pathD, fill: 'none', stroke: 'var(--math)',
+      'stroke-width': '2.8', 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }, figG);
+    // 全部点 markers
+    for (var pp_ = 0; pp_ < pts.length; pp_++){
+      el('circle', { cx: pts[pp_][0], cy: pts[pp_][1], r: 3,
+        fill: 'var(--SOLUTION)', stroke: 'var(--AXIS)', 'stroke-width': '1.4' }, figG);
+    }
+
+    // 早高峰 + 晚高峰 注释 (gold 圈)
+    function annotate(hr, labelCn, labelEn, dy){
+      var pt = pts[hr];
+      el('circle', { cx: pt[0], cy: pt[1], r: 9,
+        fill: 'none', stroke: 'var(--QED)', 'stroke-width': '2' }, figG);
+      // pulse
+      var r2 = 12 + 6 * Math.abs(Math.sin(p * 6));
+      el('circle', { cx: pt[0], cy: pt[1], r: r2,
+        fill: 'none', stroke: 'var(--QED)', 'stroke-width': '1', opacity: '0.45' }, figG);
+      var lx = pt[0], ly = pt[1] + dy;
+      el('rect', { x: lx - 50, y: ly - 14, width: 100, height: 22,
+        fill: 'var(--bg-2)', stroke: 'var(--QED)', 'stroke-width': '1.2' }, figG);
+      var ltx = el('text', { x: lx, y: ly + 2, fill: 'var(--QED)',
+        'font-family': "'JetBrains Mono',ui-monospace,monospace",
+        'font-size': '11', 'text-anchor': 'middle', 'font-weight': '700' }, figG);
+      ltx.textContent = LANG === 'cn' ? labelCn : labelEn;
+    }
+    annotate(8,  '早高峰', 'morning peak', -38);
+    annotate(18, '晚高峰', 'evening peak', -38);
+
+    // 右侧 "你看见了" 卡片
+    var seeG = el('g', { transform: 'translate(960, 200)' }, stage);
+    el('rect', { x: -90, y: 0, width: 180, height: 200,
+      fill: 'var(--bg-2)', stroke: 'var(--QED)', 'stroke-width': '2', rx: '3' }, seeG);
+    // 眼睛图标 (简画)
+    el('path', { d: 'M -55 50 Q 0 18 55 50 Q 0 82 -55 50 Z',
+      fill: 'var(--bg-1)', stroke: 'var(--QED)', 'stroke-width': '1.6' }, seeG);
+    el('circle', { cx: 0, cy: 50, r: 16,
+      fill: 'var(--AXIS)', stroke: 'var(--QED)', 'stroke-width': '1.4' }, seeG);
+    el('circle', { cx: 0, cy: 50, r: 6, fill: 'var(--bg-0)' }, seeG);
+    el('circle', { cx: 5, cy: 46, r: 2.2, fill: 'var(--SOLUTION)' }, seeG);
+
+    var s1 = el('text', { x: 0, y: 110, fill: 'var(--fg)',
+      'font-family': "'Inter','Noto Sans SC',sans-serif",
+      'font-size': '13', 'text-anchor': 'middle', 'font-weight': '700' }, seeG);
+    s1.textContent = LANG === 'cn' ? '第一次' : 'first time';
+    var s2 = el('text', { x: 0, y: 132, fill: 'var(--fg)',
+      'font-family': "'Inter','Noto Sans SC',sans-serif",
+      'font-size': '13', 'text-anchor': 'middle', 'font-weight': '700' }, seeG);
+    s2.textContent = LANG === 'cn' ? '从数据里' : 'you see';
+    var s3 = el('text', { x: 0, y: 158, fill: 'var(--QED)',
+      'font-family': "'Inter','Noto Sans SC',sans-serif",
+      'font-size': '14', 'text-anchor': 'middle', 'font-weight': '800' }, seeG);
+    s3.textContent = LANG === 'cn' ? '看到节奏' : 'the rhythm';
+    var s4 = el('text', { x: 0, y: 184, fill: 'var(--fg-dim)',
+      'font-family': "'JetBrains Mono',ui-monospace,monospace",
+      'font-size': '9', 'text-anchor': 'middle', 'letter-spacing': '0.08em' }, seeG);
+    s4.textContent = LANG === 'cn' ? 'data viz · M12' : 'data viz · M12';
+
+    // key moment flash
+    var flash = document.getElementById('flash');
+    if (p > 0.25 && p < 0.85){
+      flash.classList.add('on');
+    } else {
+      flash.classList.remove('on');
+    }
+
+    drawStepChain(4);
+  }
+
+  // ====== Frame dispatcher ======
+  function drawFrame(idx, pp){
+    clearStage();
+    if (idx !== 4){
+      var fl = document.getElementById('flash');
+      if (fl) fl.classList.remove('on');
+    }
+    if (idx === 0) drawFrame1(pp);
+    else if (idx === 1) drawFrame2(pp);
+    else if (idx === 2) drawFrame3(pp);
+    else if (idx === 3) drawFrame4(pp);
+    else if (idx === 4) drawFrame5(pp);
+  }
+
+  function updateUI(idx){
+    var f = FRAMES[idx];
+    document.getElementById('hudV1').textContent = (idx + 1) + ' / 5';
+    document.getElementById('hudV2').textContent = f.hudStage[LANG] || f.hudStage.en;
+    document.getElementById('hudV3').textContent = f.hudRows[LANG] || f.hudRows.en;
+    document.getElementById('hudV4').textContent = f.hudPlot[LANG] || f.hudPlot.en;
+    document.getElementById('subCn').textContent = LANG === 'cn' ? f.subCn : f.subEn;
+    document.getElementById('subEn').textContent = LANG === 'cn' ? f.subEn : f.subCn;
+    document.getElementById('stepName').textContent = f.stepName;
+    for (var i = 0; i < 5; i++){
+      var c = document.getElementById('chip' + i);
+      c.classList.remove('active', 'done');
+      if (i < idx) c.classList.add('done');
+      else if (i === idx) c.classList.add('active');
+    }
+  }
+
+  function updateI18N(){
+    document.getElementById('badgeMod').textContent = tr('badgeMod');
+    document.getElementById('brandH1').textContent = tr('brandH1');
+    document.getElementById('brandSub').textContent = tr('brandSub');
+    document.getElementById('mascotName').textContent = tr('mascotName');
+    document.querySelector('#g1 .gtxt').textContent = tr('g1');
+    document.querySelector('#g2 .gtxt').textContent = tr('g2');
+    document.querySelector('#g3 .gtxt').textContent = tr('g3');
+    document.getElementById('hudL1').textContent = tr('hudL1');
+    document.getElementById('hudL2').textContent = tr('hudL2');
+    document.getElementById('hudL3').textContent = tr('hudL3');
+    document.getElementById('hudL4').textContent = tr('hudL4');
+    document.getElementById('langBtn').textContent = tr('btnLang');
+    document.getElementById('flashSub').textContent = LANG === 'cn'
+      ? '一堆数, 第一次变成一张图'
+      : 'a pile of numbers — first time, a chart';
+  }
+
+  function tick(ts){
+    if (!frameStartTs) frameStartTs = ts;
+    var elapsed = ts - frameStartTs;
+    if (elapsed >= FRAME_MS){
+      currentFrame = (currentFrame + 1) % 5;
+      frameStartTs = ts;
+      updateUI(currentFrame);
+      elapsed = 0;
+    }
+    var pp = elapsed / FRAME_MS;
+    drawFrame(currentFrame, pp);
+    rafId = requestAnimationFrame(tick);
+  }
+
+  function start(){
+    updateI18N();
+    updateUI(currentFrame);
+    frameStartTs = 0;
+    if (rafId) cancelAnimationFrame(rafId);
+    rafId = requestAnimationFrame(tick);
+  }
+
+  document.getElementById('langBtn').addEventListener('click', function(){
+    LANG = (LANG === 'cn') ? 'en' : 'cn';
+    updateI18N();
+    updateUI(currentFrame);
+  });
+
+  start();
+})();
+</script>
+</body>
+</html>
