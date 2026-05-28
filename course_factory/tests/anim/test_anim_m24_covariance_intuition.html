@@ -1,0 +1,653 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>协方差直觉 — 散点倾斜方向</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;700&family=Inter:wght@400;600;800&family=JetBrains+Mono:wght@400;600;700&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    /* Layer 1 — shared deep-space canvas (all 26 subjects, fixed) */
+    --bg-0: oklch(0.14 0.035 265);
+    --bg-1: oklch(0.18 0.04 265);
+    --bg-2: oklch(0.22 0.045 265);
+    --bg-3: oklch(0.28 0.05 265);
+    --line: oklch(0.35 0.05 265 / 0.35);
+    --line-strong: oklch(0.55 0.08 265 / 0.55);
+    --fg: oklch(0.96 0.01 265);
+    --fg-dim: oklch(0.75 0.02 265);
+    --fg-mute: oklch(0.55 0.03 265);
+    --gold: oklch(0.85 0.14 85);
+    /* Layer 2 — math signature accent (electric blue) */
+    --accent: oklch(0.72 0.17 245);
+    /* Layer 3 — math 5-color palette (themes.js id:'math') */
+    --axis:     oklch(0.72 0.17 245);   /* AXIS — coordinate axes / C3 channel */
+    --proof:    oklch(0.52 0.16 245);   /* PROOF — C4 channel / secondary dots */
+    --shadow:   oklch(0.35 0.10 245);   /* SHADOW — grid / faint structure */
+    --solution: oklch(0.92 0.08 240);   /* SOLUTION — highlight dots / pair link */
+    --qed:      oklch(0.85 0.14 85);    /* QED — key insight (== gold) */
+  }
+  html,body{margin:0;padding:0;height:100vh;width:100%;overflow:hidden;
+    background:var(--bg-0);font-family:'Noto Sans SC','Inter',sans-serif;color:var(--fg);}
+  .wrapper{display:flex;flex-direction:row;height:100vh;overflow:hidden;}
+  /* ── Sidebar (200px) ── */
+  .sidebar{width:200px;min-width:200px;max-width:200px;flex-shrink:0;
+    display:flex;flex-direction:column;gap:10px;padding:14px 12px;
+    background:var(--bg-1);border-right:1px solid var(--line);overflow-y:auto;}
+  .brand{display:flex;align-items:center;gap:8px;}
+  .mascot{flex-shrink:0;}
+  .sidebar h1{font-family:'Space Grotesk','Inter',sans-serif;font-size:13px;font-weight:700;
+    line-height:1.3;color:var(--accent);letter-spacing:0.02em;}
+  .sidebar .code{font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:0.14em;
+    color:var(--fg-mute);text-transform:uppercase;}
+  .intro{font-size:11px;line-height:1.55;color:var(--fg-dim);}
+  .intro .en{font-style:italic;font-size:10px;color:var(--fg-mute);margin-top:4px;}
+  .guide-label{font-family:'JetBrains Mono',monospace;font-size:9px;font-weight:700;
+    letter-spacing:0.14em;text-transform:uppercase;color:var(--accent);margin-top:4px;}
+  .guide{list-style:none;padding:0;margin:0;font-size:11px;line-height:1.6;color:var(--fg-dim);}
+  .guide li{margin-bottom:2px;}
+  .lang-btn{margin-top:auto;align-self:flex-start;font-family:'JetBrains Mono',monospace;
+    font-size:10px;font-weight:700;letter-spacing:0.1em;padding:5px 12px;cursor:pointer;
+    color:var(--accent);background:transparent;border:1px solid var(--line-strong);
+    box-shadow:3px 3px 0 var(--bg-0);transition:transform .1s;}
+  .lang-btn:hover{transform:translate(-1px,-1px);}
+  .lang-btn:active{transform:translate(1px,1px);box-shadow:1px 1px 0 var(--bg-0);}
+  /* ── Main stage ── */
+  .stage{flex:1;min-width:0;position:relative;overflow:hidden;}
+  canvas{position:absolute;inset:0;width:100%;height:100%;display:block;}
+  .hud{position:absolute;top:16px;right:16px;background:oklch(0.18 0.04 265 / 0.85);
+    border:1px solid var(--line-strong);padding:9px 13px;font-family:'JetBrains Mono',monospace;
+    font-size:11px;box-shadow:3px 3px 0 var(--bg-0);min-width:172px;}
+  .hud-row{display:flex;justify-content:space-between;gap:14px;line-height:1.7;}
+  .hud-lbl{color:var(--fg-mute);font-size:7px;letter-spacing:0.14em;text-transform:uppercase;
+    align-self:center;}
+  .hud-val{color:var(--accent);font-weight:700;}
+  .sub{position:absolute;bottom:22px;left:50%;transform:translateX(-50%);
+    text-align:center;width:86%;pointer-events:none;}
+  .sub-zh{font-size:19px;font-weight:700;color:var(--fg);
+    background:oklch(0.18 0.04 265 / 0.85);padding:7px 18px;display:inline-block;
+    border:1px solid var(--line-strong);box-shadow:3px 3px 0 var(--bg-0);}
+  .sub-en{font-size:12px;font-style:italic;color:var(--fg-dim);margin-top:5px;}
+</style>
+</head>
+<body>
+<div class="wrapper">
+
+<aside class="sidebar">
+  <div class="brand">
+    <!-- mascot: Pi — rotating tetrahedron, math signature -->
+    <svg class="mascot" width="30" height="30" viewBox="0 0 40 40" aria-hidden="true">
+      <polygon points="20,5 35,30 5,30" fill="none" stroke="var(--accent)" stroke-width="1.6"/>
+      <polygon points="20,5 35,30 20,22" fill="var(--proof)" opacity="0.55"/>
+      <polygon points="20,5 5,30 20,22" fill="var(--axis)" opacity="0.35"/>
+      <circle cx="20" cy="22" r="2.4" fill="var(--solution)"/>
+      <text x="20" y="20" text-anchor="middle" font-family="JetBrains Mono,monospace"
+            font-size="8" fill="var(--qed)">Pi</text>
+    </svg>
+    <div>
+      <h1 id="title">协方差直觉</h1>
+      <div class="code">EEG · M24 · COV</div>
+    </div>
+  </div>
+
+  <div class="intro" id="intro">
+    <span id="introZh">两个电极一个抖的时候, 另一个会不会跟着抖? 把每个时刻的 (C3, C4) 画成散点, 倾斜方向就是答案。</span>
+    <div class="en" id="introEn">Plot each instant as a (C3, C4) dot — the tilt direction is the relationship.</div>
+  </div>
+
+  <div class="guide-label" id="guideLabel">观察重点</div>
+  <ul class="guide" id="guide"></ul>
+
+  <button class="lang-btn" id="langBtn">中 / EN</button>
+</aside>
+
+<main class="stage">
+  <canvas id="c"></canvas>
+  <div class="hud">
+    <div class="hud-row"><span class="hud-lbl" id="hudL1">frame</span><span class="hud-val" id="hudV1">1/5</span></div>
+    <div class="hud-row"><span class="hud-lbl" id="hudL2">cov C3,C4</span><span class="hud-val" id="hudV2">--</span></div>
+    <div class="hud-row"><span class="hud-lbl" id="hudL3">tilt</span><span class="hud-val" id="hudV3">--</span></div>
+    <div class="hud-row"><span class="hud-lbl" id="hudL4">stage</span><span class="hud-val" id="hudV4">--</span></div>
+  </div>
+  <div class="sub">
+    <div class="sub-zh" id="subZh"></div>
+    <div class="sub-en" id="subEn"></div>
+  </div>
+</main>
+
+</div>
+
+<script>
+'use strict';
+
+// ====================== Palette (resolved oklch) ======================
+var P = {
+  bg0:'oklch(0.14 0.035 265)', bg2:'oklch(0.22 0.045 265)',
+  line:'oklch(0.35 0.05 265 / 0.35)', lineStrong:'oklch(0.55 0.08 265 / 0.55)',
+  fg:'oklch(0.96 0.01 265)', fgDim:'oklch(0.75 0.02 265)', fgMute:'oklch(0.55 0.03 265)',
+  accent:'oklch(0.72 0.17 245)',
+  axis:'oklch(0.72 0.17 245)', proof:'oklch(0.52 0.16 245)', shadow:'oklch(0.35 0.10 245)',
+  solution:'oklch(0.92 0.08 240)', qed:'oklch(0.85 0.14 85)',
+  c3:'oklch(0.72 0.17 245)',  // C3 channel = AXIS blue
+  c4:'oklch(0.85 0.14 85)'    // C4 channel = QED gold (distinct from C3)
+};
+
+// ====================== i18n ======================
+var LANG='cn';
+var I18N = {
+  title:{cn:'协方差直觉', en:'Covariance intuition'},
+  introZh:{cn:'两个电极一个抖的时候, 另一个会不会跟着抖? 把每个时刻的 (C3, C4) 画成散点, 倾斜方向就是答案。',
+           en:'When one electrode jitters, does the other follow? Plot each instant as a (C3, C4) dot — the tilt is the answer.'},
+  introEn:{cn:'Plot each instant as a (C3, C4) dot — the tilt direction is the relationship.',
+           en:'Covariance sign = scatter tilt direction.'},
+  guideLabel:{cn:'观察重点', en:'WATCH FOR'},
+  guide:{cn:['· (C3, C4) 配成一个点','· 点云倾斜方向','· 正 / 负 / 无 三种','· 协方差 ≠ 相关系数'],
+         en:['· (C3, C4) form one dot','· tilt of the cloud','· positive / negative / none','· covariance != correlation']},
+  hudL1:{cn:'frame', en:'frame'}, hudL2:{cn:'cov C3,C4', en:'cov C3,C4'},
+  hudL3:{cn:'tilt', en:'tilt'}, hudL4:{cn:'stage', en:'stage'},
+  // frame titles (top of stage)
+  f1t:{cn:'C3 与 C4 — 它们抖动有没有关联?', en:'C3 vs C4 — is their jitter related?'},
+  f2t:{cn:'每个时刻 (C3值, C4值) → 散点上一个点', en:'Each instant (C3, C4) → one dot on the scatter'},
+  f3t:{cn:'三种形态: 正相关 / 负相关 / 无关', en:'Three shapes: positive / negative / none'},
+  f4t:{cn:'倾斜方向 = 一起抖的方向, 越斜关系越强', en:'Tilt = the co-jitter direction; steeper = stronger'},
+  f5t:{cn:'运动想象时 C3-C4 协方差结构会变', en:'Motor imagery reshapes the C3-C4 covariance'},
+  // subtitles
+  s1zh:{cn:'看两条波形像在比赛 — 但光看波形很难说它们是不是一起动',
+        en:'Two waveforms racing — hard to tell from waves alone if they move together'},
+  s1en:{cn:'我们需要换一个看法。', en:'We need a different view.'},
+  s2zh:{cn:'同一时刻读出 C3 和 C4 两个数, 配成坐标 (C3, C4), 落成一个点',
+        en:'Read C3 and C4 at the same instant, pair them as (C3, C4), drop one dot'},
+  s2en:{cn:'横轴 = C3, 纵轴 = C4。', en:'x-axis = C3, y-axis = C4.'},
+  s3zh:{cn:'正: C3大C4也大 (右上斜) / 负: C3大C4小 (左上斜) / 无: 圆球状没方向',
+        en:'Positive: both big (up-right) / Negative: one big one small (up-left) / None: round blob'},
+  s3en:{cn:'点云的形状直接告诉你关系。', en:'The cloud shape tells the relationship.'},
+  s4zh:{cn:'倾斜方向就是协方差的符号: 右上斜 cov>0, 左上斜 cov<0, 越斜越大',
+        en:'Tilt direction is the covariance sign: up-right cov>0, up-left cov<0, steeper = larger'},
+  s4en:{cn:'协方差量化的, 正是这条倾斜。', en:'Covariance quantifies exactly this tilt.'},
+  s5zh:{cn:'散点倾斜方向, 藏着两电极一起抖的秘密',
+        en:'The tilt of the scatter hides the secret of how two electrodes jitter together'},
+  s5en:{cn:'对侧 ERD 让 C3-C4 关系改变 — 下节用公式与协方差矩阵抓住它 (→ CSP)',
+        en:'Contralateral ERD reshapes it — next: the formula & covariance matrix capture it (→ CSP)'},
+  tNone:{cn:'无', en:'none'}, tPos:{cn:'右上 +', en:'up-right +'}, tNeg:{cn:'左上 -', en:'up-left -'},
+  lblC3:{cn:'C3', en:'C3'}, lblC4:{cn:'C4', en:'C4'},
+  lblPos:{cn:'正相关 cov>0', en:'positive cov>0'},
+  lblNeg:{cn:'负相关 cov<0', en:'negative cov<0'},
+  lblZero:{cn:'无关 cov≈0', en:'none cov~0'},
+  lblPair:{cn:'同一时刻配成一个点', en:'same instant → one dot'},
+  lblNotCorr:{cn:'注意: 协方差有单位、会被幅度放大; 相关系数才是归一化的版本',
+              en:'Note: covariance carries units and scales with amplitude; correlation is its normalized cousin'},
+  lblRest:{cn:'静息: 两电极各自抖, 关系弱', en:'rest: weak coupling'},
+  lblMI:{cn:'运动想象: 对侧 ERD, 倾斜变了', en:'imagery: contralateral ERD, tilt shifts'}
+};
+function t(k){ return (I18N[k]&&I18N[k][LANG]) || (I18N[k]&&I18N[k].en) || k; }
+
+function refreshI18N(){
+  document.getElementById('title').textContent = t('title');
+  document.getElementById('introZh').textContent = t('introZh');
+  document.getElementById('introEn').textContent = t('introEn');
+  document.getElementById('guideLabel').textContent = t('guideLabel');
+  document.getElementById('guide').innerHTML = t('guide').map(function(x){return '<li>'+x+'</li>';}).join('');
+  document.getElementById('hudL1').textContent = t('hudL1');
+  document.getElementById('hudL2').textContent = t('hudL2');
+  document.getElementById('hudL3').textContent = t('hudL3');
+  document.getElementById('hudL4').textContent = t('hudL4');
+  document.getElementById('langBtn').textContent = LANG==='cn' ? '中 / EN' : 'EN / 中';
+  updateSub(curFrame);
+}
+document.getElementById('langBtn').addEventListener('click', function(){
+  LANG = LANG==='cn' ? 'en' : 'cn'; refreshI18N();
+});
+
+// ====================== Canvas ======================
+var cv = document.getElementById('c');
+var ctx = cv.getContext('2d');
+var W=0, H=0, DPR=1;
+function resize(){
+  var rect = cv.parentElement.getBoundingClientRect();
+  if(rect.width<1 || rect.height<1) return;
+  DPR = Math.min(window.devicePixelRatio||1, 2);
+  cv.width = rect.width*DPR; cv.height = rect.height*DPR;
+  cv.style.width = rect.width+'px'; cv.style.height = rect.height+'px';
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  W = rect.width; H = rect.height;
+}
+window.addEventListener('resize', resize);
+resize(); setTimeout(resize,200); setTimeout(resize,600);
+document.fonts.ready.then(function(){ resize(); });
+
+// ====================== Deterministic data ======================
+// rand in [0,1) seeded — for reproducible dot clouds
+function rnd(seed){ var x = Math.sin(seed*12.9898)*43758.5453; return x - Math.floor(x); }
+function gaussPair(seed){
+  // box-muller -> two independent standard normals
+  var u1 = rnd(seed*1.7+0.13); var u2 = rnd(seed*2.3+0.71);
+  if(u1 < 1e-4) u1 = 1e-4;
+  var r = Math.sqrt(-2*Math.log(u1));
+  return [r*Math.cos(2*Math.PI*u2), r*Math.sin(2*Math.PI*u2)];
+}
+// Build a correlated cloud: rho in [-1,1], 0 = round. Returns array of {x,y} in std units.
+function buildCloud(n, rho, seed){
+  var pts=[];
+  for(var i=0;i<n;i++){
+    var g = gaussPair(seed + i*0.37);
+    var z1 = g[0], z2 = g[1];
+    // correlate: y = rho*z1 + sqrt(1-rho^2)*z2
+    var y = rho*z1 + Math.sqrt(Math.max(0,1-rho*rho))*z2;
+    pts.push({x:z1, y:y});
+  }
+  return pts;
+}
+var N = 60;
+var cloudPos = buildCloud(N, 0.82, 3);   // positive
+var cloudNeg = buildCloud(N, -0.82, 7);  // negative
+var cloudNon = buildCloud(N, 0.02, 11);  // none (round)
+// rest vs MI clouds for F5 (mild -> stronger contralateral coupling shift)
+var cloudRest = buildCloud(N, 0.18, 17);
+var cloudMI   = buildCloud(N, -0.74, 23);
+
+// Two source waveforms for F1/F2 — C4 weakly follows C3 (positive coupling)
+function c3sig(tt){ return 0.9*Math.sin(tt*2.1) + 0.4*Math.sin(tt*5.3+0.6) + 0.25*Math.sin(tt*11.0+1.2); }
+function c4sig(tt){ return 0.62*c3sig(tt) + 0.45*Math.sin(tt*4.4+2.1) + 0.2*Math.sin(tt*9.0+0.3); }
+
+// covariance of a std-unit cloud (already standardized, so cov ~ rho)
+function covOf(pts){
+  var n=pts.length, mx=0,my=0;
+  for(var i=0;i<n;i++){ mx+=pts[i].x; my+=pts[i].y; }
+  mx/=n; my/=n;
+  var s=0;
+  for(var j=0;j<n;j++){ s += (pts[j].x-mx)*(pts[j].y-my); }
+  return s/n;
+}
+
+// ====================== Timeline ======================
+var FRAME_DUR = 7000;          // ms per frame
+var NFR = 5;
+var curFrame = 0;
+var animStart = performance.now();
+
+function updateSub(f){
+  var z=['s1zh','s2zh','s3zh','s4zh','s5zh'][f];
+  var e=['s1en','s2en','s3en','s4en','s5en'][f];
+  document.getElementById('subZh').textContent = t(z);
+  document.getElementById('subEn').textContent = t(e);
+}
+
+// ====================== Drawing helpers ======================
+function easeIO(x){ return x<0.5 ? 2*x*x : 1-Math.pow(-2*x+2,2)/2; }
+
+function frameTitle(txt){
+  ctx.fillStyle = P.fg;
+  ctx.font = "800 19px 'Space Grotesk','Inter',sans-serif";
+  ctx.textAlign = 'center';
+  ctx.fillText(txt, W/2, 38);
+}
+
+// draw a scatter axis box, return mapping fns. cx,cy center; half = half-extent px
+function scatterFrame(cx, cy, half, label){
+  ctx.save();
+  // grid
+  ctx.strokeStyle = P.line; ctx.lineWidth = 1;
+  for(var g=-2;g<=2;g++){
+    var gx = cx + g/2.6*half, gy = cy - g/2.6*half;
+    ctx.beginPath(); ctx.moveTo(gx, cy-half); ctx.lineTo(gx, cy+half); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(cx-half, gy); ctx.lineTo(cx+half, gy); ctx.stroke();
+  }
+  // axes
+  ctx.strokeStyle = P.lineStrong; ctx.lineWidth = 1.6;
+  ctx.beginPath(); ctx.moveTo(cx-half, cy); ctx.lineTo(cx+half, cy); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(cx, cy-half); ctx.lineTo(cx, cy+half); ctx.stroke();
+  // axis labels
+  ctx.fillStyle = P.c3;
+  ctx.font = "700 12px 'JetBrains Mono',monospace";
+  ctx.textAlign = 'right';
+  ctx.fillText(t('lblC3'), cx+half-2, cy+16);
+  ctx.fillStyle = P.c4;
+  ctx.textAlign = 'left';
+  ctx.fillText(t('lblC4'), cx+6, cy-half+10);
+  if(label){
+    ctx.fillStyle = P.fgDim;
+    ctx.font = "700 12px 'Inter',sans-serif";
+    ctx.textAlign='center';
+    ctx.fillText(label, cx, cy+half+22);
+  }
+  ctx.restore();
+  var sc = half/2.9;
+  return {
+    px:function(vx){ return cx + vx*sc; },
+    py:function(vy){ return cy - vy*sc; },
+    sc:sc, cx:cx, cy:cy, half:half
+  };
+}
+
+function dot(x,y,r,color,alpha){
+  ctx.save(); ctx.globalAlpha = alpha;
+  ctx.fillStyle = color;
+  ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2); ctx.fill();
+  ctx.restore();
+}
+
+// least-squares tilt line through std cloud (slope ~ rho since unit variance)
+function tiltLine(map, pts, color, alpha, lw){
+  var n=pts.length, mx=0,my=0;
+  for(var i=0;i<n;i++){ mx+=pts[i].x; my+=pts[i].y; }
+  mx/=n; my/=n;
+  var sxy=0,sxx=0;
+  for(var j=0;j<n;j++){ sxy+=(pts[j].x-mx)*(pts[j].y-my); sxx+=(pts[j].x-mx)*(pts[j].x-mx); }
+  var slope = sxx>1e-6 ? sxy/sxx : 0;
+  var ex = 2.6;
+  ctx.save(); ctx.globalAlpha = alpha;
+  ctx.strokeStyle = color; ctx.lineWidth = lw||2.5;
+  ctx.beginPath();
+  ctx.moveTo(map.px(-ex), map.py(my + slope*(-ex-mx)));
+  ctx.lineTo(map.px( ex), map.py(my + slope*( ex-mx)));
+  ctx.stroke();
+  ctx.restore();
+  return slope;
+}
+
+// mini waveform
+function waveform(x0,y0,w,h,fn,phase,color,label){
+  ctx.save();
+  ctx.fillStyle = P.bg2;
+  ctx.strokeStyle = P.line; ctx.lineWidth = 1;
+  ctx.fillRect(x0,y0,w,h); ctx.strokeRect(x0,y0,w,h);
+  ctx.strokeStyle = color; ctx.lineWidth = 1.8;
+  ctx.beginPath();
+  var midY = y0+h/2;
+  for(var i=0;i<=w-12;i++){
+    var tt = i/w*9 + phase;
+    var v = fn(tt);
+    var px = x0+6+i, py = midY - v*(h*0.32);
+    if(i===0) ctx.moveTo(px,py); else ctx.lineTo(px,py);
+  }
+  ctx.stroke();
+  ctx.fillStyle = color;
+  ctx.font = "700 11px 'JetBrains Mono',monospace";
+  ctx.textAlign='left';
+  ctx.fillText(label, x0+6, y0+15);
+  ctx.restore();
+  return midY;
+}
+
+// ====================== Frames ======================
+function drawF1(p){
+  frameTitle(t('f1t'));
+  var ww = Math.min(W*0.62, 560), x0=(W-ww)/2;
+  var phase = p*5;
+  var h = 110;
+  var y1 = H*0.30, y2 = H*0.55;
+  var m3 = waveform(x0, y1, ww, h, c3sig, phase, P.c3, 'C3');
+  var m4 = waveform(x0, y2, ww, h, c4sig, phase, P.c4, 'C4');
+
+  // moving readout cursor sweeping across both — shows they're sampled together
+  var sweep = (p*ww*0.92) % (ww-12);
+  var sx = x0+6+sweep;
+  ctx.save();
+  ctx.strokeStyle = P.solution; ctx.lineWidth = 1.4; ctx.globalAlpha=0.8;
+  ctx.setLineDash([4,4]);
+  ctx.beginPath(); ctx.moveTo(sx, y1); ctx.lineTo(sx, y2+h); ctx.stroke();
+  ctx.setLineDash([]);
+  // dots where the cursor crosses each wave
+  var tt = (sweep/ww*9)+phase;
+  var py3 = (y1+h/2) - c3sig(tt)*(h*0.32);
+  var py4 = (y2+h/2) - c4sig(tt)*(h*0.32);
+  dot(sx,py3,4.5,P.c3,1); dot(sx,py4,4.5,P.c4,1);
+  ctx.restore();
+
+  // question
+  ctx.fillStyle = P.fgDim;
+  ctx.font = "600 13px 'Inter','Noto Sans SC',sans-serif";
+  ctx.textAlign='center';
+  ctx.fillText(LANG==='cn'?'同一时刻读两个数 — 它们是一起动, 还是各管各?'
+                          :'Read both at one instant — do they move together or apart?',
+               W/2, y2+h+38);
+
+  setHud('1/5', '?', t('tNone'), LANG==='cn'?'波形':'waveform');
+}
+
+function drawF2(p){
+  frameTitle(t('f2t'));
+  // left: tiny waveforms with a moving cursor; right: scatter accumulating dots
+  var lw=Math.min(W*0.34,330), lx=W*0.06;
+  var phase=1.2;
+  var h=78;
+  var y1=H*0.30, y2=H*0.30+h+22;
+  waveform(lx, y1, lw, h, c3sig, phase, P.c3, 'C3');
+  waveform(lx, y2, lw, h, c4sig, phase, P.c4, 'C4');
+
+  // scatter on right
+  var sCx = W*0.74, sCy = H*0.52, half=Math.min(H*0.30, W*0.18);
+  var map = scatterFrame(sCx, sCy, half, t('lblPair'));
+
+  // number of dots revealed
+  var nShown = Math.floor(N * Math.min(1, p*1.25));
+  // the "current" sampling cursor on left waves
+  var idx = nShown>0 ? nShown-1 : 0;
+  var sweepFrac = nShown>0 ? (idx/N) : 0;
+  var sx = lx+6 + sweepFrac*(lw-12);
+  var tt = sweepFrac*9 + phase;
+  var py3=(y1+h/2)-c3sig(tt)*(h*0.32);
+  var py4=(y2+h/2)-c4sig(tt)*(h*0.32);
+
+  // draw accumulated dots
+  for(var i=0;i<nShown;i++){
+    var pt = cloudPos[i];
+    dot(map.px(pt.x), map.py(pt.y), 4, P.proof, 0.82);
+  }
+  // highlight the freshly-paired dot + connector
+  if(nShown>0){
+    var hp = cloudPos[idx];
+    var dx=map.px(hp.x), dy=map.py(hp.y);
+    ctx.save();
+    ctx.strokeStyle = P.solution; ctx.lineWidth=1.2; ctx.globalAlpha=0.7;
+    ctx.setLineDash([3,3]);
+    // cursor on left waves
+    ctx.beginPath(); ctx.moveTo(sx, y1); ctx.lineTo(sx, y2+h); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.restore();
+    dot(sx,py3,4,P.c3,1); dot(sx,py4,4,P.c4,1);
+    dot(dx,dy,6,P.solution,1);
+    // tiny label "(C3,C4)"
+    ctx.fillStyle=P.solution; ctx.font="600 10px 'JetBrains Mono',monospace";
+    ctx.textAlign='left';
+    ctx.fillText('(C3,C4)', dx+9, dy-7);
+  }
+
+  setHud('2/5', '+', t('tPos'), nShown+'/'+N);
+}
+
+function drawF3(p){
+  frameTitle(t('f3t'));
+  var half = Math.min(H*0.24, W*0.11);
+  var cy = H*0.50;
+  var gap = W/3;
+  var configs = [
+    {cx:gap*0.5,  cloud:cloudPos, col:P.axis,     line:P.solution, lbl:t('lblPos'), key:'+'},
+    {cx:gap*1.5,  cloud:cloudNon, col:P.fgMute,   line:P.fgMute,   lbl:t('lblZero'),key:'0'},
+    {cx:gap*2.5,  cloud:cloudNeg, col:P.proof,    line:P.qed,      lbl:t('lblNeg'), key:'-'}
+  ];
+  for(var k=0;k<3;k++){
+    var cfg=configs[k];
+    // stagger reveal: pos first, none second, neg third
+    var local = Math.min(1, Math.max(0, (p*3 - k)));
+    if(local<=0) continue;
+    var a = easeIO(local);
+    ctx.save(); ctx.globalAlpha = a;
+    var map = scatterFrame(cfg.cx, cy, half, cfg.lbl);
+    var nShown = Math.floor(N*local);
+    for(var i=0;i<nShown;i++){
+      var pt=cfg.cloud[i];
+      dot(map.px(pt.x), map.py(pt.y), 3.4, cfg.col, 0.8);
+    }
+    if(local>0.6 && cfg.key!=='0'){
+      tiltLine(map, cfg.cloud, cfg.line, (local-0.6)/0.4, 2.6);
+    }
+    if(cfg.key==='0' && local>0.6){
+      // draw a faint circle to emphasize "no direction"
+      ctx.strokeStyle=P.fgMute; ctx.globalAlpha=(local-0.6)/0.4*0.6;
+      ctx.lineWidth=1.6; ctx.setLineDash([5,4]);
+      ctx.beginPath(); ctx.arc(map.cx,map.cy,half*0.62,0,Math.PI*2); ctx.stroke();
+      ctx.setLineDash([]);
+    }
+    ctx.restore();
+  }
+  // cov sign tag
+  var covP=covOf(cloudPos).toFixed(2), covN=covOf(cloudNeg).toFixed(2);
+  setHud('3/5', '+'+covP+' / '+covN, LANG==='cn'?'三种':'three', LANG==='cn'?'对比':'compare');
+}
+
+function drawF4(p){
+  frameTitle(t('f4t'));
+  // single big scatter; tilt line rotates / strengthens; show cov sign mapping
+  var half=Math.min(H*0.30, W*0.20);
+  var sCx=W*0.40, sCy=H*0.52;
+  var map = scatterFrame(sCx, sCy, half, null);
+
+  // morph the cloud from positive toward steeper based on p (visual emphasis on tilt)
+  for(var i=0;i<N;i++){
+    var pt=cloudPos[i];
+    dot(map.px(pt.x), map.py(pt.y), 3.8, P.proof, 0.8);
+  }
+  var slope = tiltLine(map, cloudPos, P.solution, Math.min(1,p*2), 3);
+
+  // angle arc to show tilt direction
+  ctx.save();
+  ctx.strokeStyle=P.qed; ctx.lineWidth=2; ctx.globalAlpha=Math.min(1,Math.max(0,(p-0.2)*2.5));
+  var ang=Math.atan(slope);
+  ctx.beginPath(); ctx.arc(map.cx, map.cy, 40, -ang, 0, false); ctx.stroke();
+  // tilt-direction arrow
+  ctx.strokeStyle=P.qed; ctx.fillStyle=P.qed;
+  var alen=half*0.85;
+  var ax2=map.cx+Math.cos(-ang)*alen, ay2=map.cy+Math.sin(-ang)*alen;
+  ctx.lineWidth=2.4;
+  ctx.beginPath(); ctx.moveTo(map.cx,map.cy); ctx.lineTo(ax2,ay2); ctx.stroke();
+  var aa=Math.atan2(ay2-map.cy, ax2-map.cx);
+  ctx.beginPath();
+  ctx.moveTo(ax2,ay2);
+  ctx.lineTo(ax2-11*Math.cos(aa-0.4), ay2-11*Math.sin(aa-0.4));
+  ctx.lineTo(ax2-11*Math.cos(aa+0.4), ay2-11*Math.sin(aa+0.4));
+  ctx.closePath(); ctx.fill();
+  ctx.restore();
+
+  // right panel: cov sign mapping text
+  if(p>0.35){
+    var a=Math.min(1,(p-0.35)*2.5);
+    ctx.save(); ctx.globalAlpha=a;
+    var px=W*0.70, py=H*0.30, pw=Math.min(W*0.26,300);
+    ctx.fillStyle=P.bg2; ctx.strokeStyle=P.lineStrong; ctx.lineWidth=1;
+    ctx.fillRect(px,py,pw,150); ctx.strokeRect(px,py,pw,150);
+    ctx.fillStyle=P.solution; ctx.font="700 13px 'JetBrains Mono',monospace"; ctx.textAlign='left';
+    ctx.fillText('cov(C3,C4)', px+14, py+26);
+    ctx.fillStyle=P.fg; ctx.font="600 12px 'Inter','Noto Sans SC',sans-serif";
+    ctx.fillText(LANG==='cn'?'右上斜  →  cov > 0':'up-right  ->  cov > 0', px+14, py+52);
+    ctx.fillText(LANG==='cn'?'左上斜  →  cov < 0':'up-left   ->  cov < 0', px+14, py+74);
+    ctx.fillText(LANG==='cn'?'没方向  →  cov ≈ 0':'no tilt   ->  cov ~ 0', px+14, py+96);
+    ctx.fillStyle=P.qed; ctx.font="700 12px 'Inter','Noto Sans SC',sans-serif";
+    ctx.fillText(LANG==='cn'?'越斜 → |cov| 越大':'steeper -> |cov| larger', px+14, py+122);
+    ctx.restore();
+  }
+  // covariance != correlation note
+  if(p>0.6){
+    var a2=Math.min(1,(p-0.6)*3);
+    ctx.save(); ctx.globalAlpha=a2*0.92;
+    ctx.fillStyle=P.fgMute; ctx.font="italic 600 11px 'Inter','Noto Sans SC',sans-serif";
+    ctx.textAlign='center';
+    ctx.fillText(t('lblNotCorr'), W/2, H*0.50+half+34);
+    ctx.restore();
+  }
+  setHud('4/5', '+'+slope.toFixed(2), t('tPos'), LANG==='cn'?'量化':'quantify');
+}
+
+function drawF5(p){
+  frameTitle(t('f5t'));
+  // two scatters: rest (left) -> imagery (right), tilt changes
+  var half=Math.min(H*0.22, W*0.105);
+  var cy=H*0.44;
+  var mapR = scatterFrame(W*0.28, cy, half, t('lblRest'));
+  var mapM = scatterFrame(W*0.62, cy, half, t('lblMI'));
+  // rest dots
+  for(var i=0;i<N;i++){
+    var pr=cloudRest[i];
+    dot(mapR.px(pr.x), mapR.py(pr.y), 3.2, P.proof, 0.78);
+  }
+  tiltLine(mapR, cloudRest, P.axis, 0.9, 2.2);
+  // MI dots reveal
+  var nM=Math.floor(N*Math.min(1,p*1.5));
+  for(var j=0;j<nM;j++){
+    var pm=cloudMI[j];
+    dot(mapM.px(pm.x), mapM.py(pm.y), 3.2, P.proof, 0.78);
+  }
+  if(p>0.4) tiltLine(mapM, cloudMI, P.solution, Math.min(1,(p-0.4)*2.2), 2.6);
+
+  // transition arrow
+  ctx.save();
+  ctx.strokeStyle=P.fgDim; ctx.fillStyle=P.fgDim; ctx.lineWidth=2; ctx.globalAlpha=Math.min(1,p*2);
+  var ax=W*0.28+half+14, ay=cy, ax2=W*0.62-half-14;
+  ctx.beginPath(); ctx.moveTo(ax,ay); ctx.lineTo(ax2,ay); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(ax2,ay); ctx.lineTo(ax2-10,ay-5); ctx.lineTo(ax2-10,ay+5); ctx.closePath(); ctx.fill();
+  ctx.fillStyle=P.fgDim; ctx.font="600 11px 'Inter','Noto Sans SC',sans-serif"; ctx.textAlign='center';
+  ctx.fillText(LANG==='cn'?'对侧 ERD':'contralateral ERD', (ax+ax2)/2, ay-10);
+  ctx.restore();
+
+  // gold key moment banner
+  if(p>0.5){
+    var a=Math.min(1,(p-0.5)*2.5);
+    ctx.save(); ctx.globalAlpha=a;
+    var bw=Math.min(W*0.78,640), bx=W/2-bw/2, by=H*0.74, bh=52;
+    ctx.fillStyle='oklch(0.18 0.04 265 / 0.9)';
+    ctx.strokeStyle=P.qed; ctx.lineWidth=1.6;
+    ctx.fillRect(bx,by,bw,bh); ctx.strokeRect(bx,by,bw,bh);
+    // gold glow accent
+    ctx.shadowColor=P.qed; ctx.shadowBlur=14;
+    ctx.fillStyle=P.qed; ctx.font="800 16px 'Space Grotesk','Noto Sans SC',sans-serif"; ctx.textAlign='center';
+    ctx.fillText(LANG==='cn'?'散点倾斜方向, 藏着两电极一起抖的秘密'
+                            :'The scatter tilt hides how two electrodes jitter together',
+                 W/2, by+22);
+    ctx.shadowBlur=0;
+    ctx.fillStyle=P.fgDim; ctx.font="600 11px 'Inter','Noto Sans SC',sans-serif";
+    ctx.fillText(LANG==='cn'?'下节: 公式 + 协方差矩阵 → CSP':'next: the formula + covariance matrix -> CSP', W/2, by+42);
+    ctx.restore();
+  }
+  setHud('5/5', covOf(cloudMI).toFixed(2), t('tNeg'), LANG==='cn'?'变化':'shift');
+}
+
+function setHud(fr, cov, tilt, stage){
+  document.getElementById('hudV1').textContent = fr;
+  document.getElementById('hudV2').textContent = cov;
+  document.getElementById('hudV3').textContent = tilt;
+  document.getElementById('hudV4').textContent = stage;
+}
+
+// ====================== Render loop (autoplay) ======================
+function render(){
+  var now = performance.now();
+  var elapsed = now - animStart;
+  var total = FRAME_DUR*NFR;
+  var tt = elapsed % total;
+  var f = Math.floor(tt/FRAME_DUR);
+  var p = (tt % FRAME_DUR)/FRAME_DUR;
+  if(f !== curFrame){ curFrame = f; updateSub(curFrame); }
+
+  ctx.clearRect(0,0,W,H);
+  ctx.fillStyle = P.bg0; ctx.fillRect(0,0,W,H);
+  // subtle radial glow
+  var rg = ctx.createRadialGradient(W*0.5,H*0.32,0, W*0.5,H*0.32, W*0.55);
+  rg.addColorStop(0,'oklch(0.72 0.17 245 / 0.07)'); rg.addColorStop(1,'transparent');
+  ctx.fillStyle=rg; ctx.fillRect(0,0,W,H);
+
+  if(f===0) drawF1(p);
+  else if(f===1) drawF2(p);
+  else if(f===2) drawF3(p);
+  else if(f===3) drawF4(p);
+  else drawF5(p);
+
+  requestAnimationFrame(render);
+}
+
+// init
+refreshI18N();
+updateSub(0);
+requestAnimationFrame(render);
+</script>
+</body>
+</html>

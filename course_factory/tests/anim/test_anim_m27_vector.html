@@ -1,0 +1,637 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>向量视角看脑波 — 一组数 = 空间箭头</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;700&family=Inter:wght@400;600;800&family=JetBrains+Mono:wght@400;600;700&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    /* Layer 1 — shared deep-space canvas (all 26 subjects, fixed) */
+    --bg-0: oklch(0.14 0.035 265);
+    --bg-1: oklch(0.18 0.04 265);
+    --bg-2: oklch(0.22 0.045 265);
+    --bg-3: oklch(0.28 0.05 265);
+    --line: oklch(0.35 0.05 265 / 0.35);
+    --line-strong: oklch(0.55 0.08 265 / 0.55);
+    --fg: oklch(0.96 0.01 265);
+    --fg-dim: oklch(0.75 0.02 265);
+    --fg-mute: oklch(0.55 0.03 265);
+    --gold: oklch(0.85 0.14 85);
+    /* Layer 2 — math signature accent (electric blue, MTH-06) */
+    --accent: oklch(0.72 0.17 245);
+    /* Layer 3 — math 5-color palette (themes.js id:'math') */
+    --axis:     oklch(0.72 0.17 245);   /* AXIS — coordinate axes / C3 channel */
+    --proof:    oklch(0.52 0.16 245);   /* PROOF — C4 channel / secondary arrows */
+    --shadow:   oklch(0.35 0.10 245);   /* SHADOW — grid / faint structure */
+    --solution: oklch(0.92 0.08 240);   /* SOLUTION — active arrow / highlight */
+    --qed:      oklch(0.85 0.14 85);    /* QED — key insight (== gold) */
+  }
+  html,body{margin:0;padding:0;height:100vh;width:100%;overflow:hidden;
+    background:var(--bg-0);font-family:'Noto Sans SC','Inter',sans-serif;color:var(--fg);}
+  .wrapper{display:flex;flex-direction:row;height:100vh;overflow:hidden;}
+  /* ── Sidebar (200px) ── */
+  .sidebar{width:200px;min-width:200px;max-width:200px;flex-shrink:0;
+    display:flex;flex-direction:column;gap:10px;padding:14px 12px;
+    background:var(--bg-1);border-right:1px solid var(--line);overflow-y:auto;}
+  .brand{display:flex;align-items:center;gap:8px;}
+  .mascot{flex-shrink:0;}
+  .sidebar h1{font-family:'Space Grotesk','Inter',sans-serif;font-size:13px;font-weight:700;
+    line-height:1.3;color:var(--accent);letter-spacing:0.02em;}
+  .sidebar .code{font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:0.14em;
+    color:var(--fg-mute);text-transform:uppercase;}
+  .intro{font-size:11px;line-height:1.55;color:var(--fg-dim);}
+  .intro .en{font-style:italic;font-size:10px;color:var(--fg-mute);margin-top:4px;}
+  .guide-label{font-family:'JetBrains Mono',monospace;font-size:9px;font-weight:700;
+    letter-spacing:0.14em;text-transform:uppercase;color:var(--accent);margin-top:4px;}
+  .guide{list-style:none;padding:0;margin:0;font-size:11px;line-height:1.6;color:var(--fg-dim);}
+  .guide li{margin-bottom:2px;}
+  .lang-btn{margin-top:auto;align-self:flex-start;font-family:'JetBrains Mono',monospace;
+    font-size:10px;font-weight:700;letter-spacing:0.1em;padding:5px 12px;cursor:pointer;
+    color:var(--accent);background:transparent;border:1px solid var(--line-strong);
+    box-shadow:3px 3px 0 var(--bg-0);transition:transform .1s;}
+  .lang-btn:hover{transform:translate(-1px,-1px);}
+  .lang-btn:active{transform:translate(1px,1px);box-shadow:1px 1px 0 var(--bg-0);}
+  /* ── Main stage ── */
+  .stage{flex:1;min-width:0;position:relative;overflow:hidden;}
+  canvas{position:absolute;inset:0;width:100%;height:100%;display:block;}
+  .hud{position:absolute;top:16px;right:16px;background:oklch(0.18 0.04 265 / 0.85);
+    border:1px solid var(--line-strong);padding:9px 13px;font-family:'JetBrains Mono',monospace;
+    font-size:11px;box-shadow:3px 3px 0 var(--bg-0);min-width:178px;}
+  .hud-row{display:flex;justify-content:space-between;gap:14px;line-height:1.7;}
+  .hud-lbl{color:var(--fg-mute);font-size:7px;letter-spacing:0.14em;text-transform:uppercase;
+    align-self:center;}
+  .hud-val{color:var(--accent);font-weight:700;}
+  .sub{position:absolute;bottom:22px;left:50%;transform:translateX(-50%);
+    text-align:center;width:86%;pointer-events:none;}
+  .sub-zh{font-size:19px;font-weight:700;color:var(--fg);
+    background:oklch(0.18 0.04 265 / 0.85);padding:7px 18px;display:inline-block;
+    border:1px solid var(--line-strong);box-shadow:3px 3px 0 var(--bg-0);}
+  .sub-en{font-size:12px;font-style:italic;color:var(--fg-dim);margin-top:5px;}
+</style>
+</head>
+<body>
+<div class="wrapper">
+
+<aside class="sidebar">
+  <div class="brand">
+    <!-- mascot: Pi — rotating tetrahedron, math signature -->
+    <svg class="mascot" width="30" height="30" viewBox="0 0 40 40" aria-hidden="true">
+      <polygon points="20,5 35,30 5,30" fill="none" stroke="var(--accent)" stroke-width="1.6"/>
+      <polygon points="20,5 35,30 20,22" fill="var(--proof)" opacity="0.55"/>
+      <polygon points="20,5 5,30 20,22" fill="var(--axis)" opacity="0.35"/>
+      <circle cx="20" cy="22" r="2.4" fill="var(--solution)"/>
+      <text x="20" y="20" text-anchor="middle" font-family="JetBrains Mono,monospace"
+            font-size="8" fill="var(--qed)">Pi</text>
+    </svg>
+    <div>
+      <h1 id="title">向量视角看脑波</h1>
+      <div class="code">EEG · M27 · VECTOR</div>
+    </div>
+  </div>
+
+  <div class="intro" id="intro">
+    <span id="introZh">脑波不只是随时间起伏的线。某一时刻所有电极的读数, 凑成一组数 — 一组数, 就是空间里的一个箭头。</span>
+    <div class="en" id="introEn">A set of numbers at one instant is an arrow in space — a vector.</div>
+  </div>
+
+  <div class="guide-label" id="guideLabel">观察重点</div>
+  <ul class="guide" id="guide"></ul>
+
+  <button class="lang-btn" id="langBtn">中 / EN</button>
+</aside>
+
+<main class="stage">
+  <canvas id="c"></canvas>
+  <div class="hud">
+    <div class="hud-row"><span class="hud-lbl" id="hudL1">frame</span><span class="hud-val" id="hudV1">1/5</span></div>
+    <div class="hud-row"><span class="hud-lbl" id="hudL2">vector</span><span class="hud-val" id="hudV2">--</span></div>
+    <div class="hud-row"><span class="hud-lbl" id="hudL3">length</span><span class="hud-val" id="hudV3">--</span></div>
+    <div class="hud-row"><span class="hud-lbl" id="hudL4">dim</span><span class="hud-val" id="hudV4">--</span></div>
+  </div>
+  <div class="sub">
+    <div class="sub-zh" id="subZh"></div>
+    <div class="sub-en" id="subEn"></div>
+  </div>
+</main>
+
+</div>
+
+<script>
+'use strict';
+
+// ====================== Palette (resolved oklch) ======================
+var P = {
+  bg0:'oklch(0.14 0.035 265)', bg2:'oklch(0.22 0.045 265)', bg3:'oklch(0.28 0.05 265)',
+  line:'oklch(0.35 0.05 265 / 0.35)', lineStrong:'oklch(0.55 0.08 265 / 0.55)',
+  fg:'oklch(0.96 0.01 265)', fgDim:'oklch(0.75 0.02 265)', fgMute:'oklch(0.55 0.03 265)',
+  accent:'oklch(0.72 0.17 245)',
+  axis:'oklch(0.72 0.17 245)', proof:'oklch(0.52 0.16 245)', shadow:'oklch(0.35 0.10 245)',
+  solution:'oklch(0.92 0.08 240)', qed:'oklch(0.85 0.14 85)',
+  c3:'oklch(0.72 0.17 245)',  // C3 channel = AXIS blue
+  c4:'oklch(0.85 0.14 85)'    // C4 channel = QED gold (distinct from C3)
+};
+
+// ====================== i18n ======================
+var LANG='cn';
+var I18N = {
+  title:{cn:'向量视角看脑波', en:'Brainwaves as vectors'},
+  introZh:{cn:'脑波不只是随时间起伏的线。某一时刻所有电极的读数, 凑成一组数 — 一组数, 就是空间里的一个箭头。',
+           en:'Brainwaves are not just wavy lines. All electrode readings at one instant form a set of numbers — and a set of numbers is an arrow in space.'},
+  introEn:{cn:'A set of numbers at one instant is an arrow in space — a vector.',
+           en:'A set of numbers at one instant is an arrow in space — a vector.'},
+  guideLabel:{cn:'观察重点', en:'WATCH FOR'},
+  guide:{cn:['· 时域: 脑波 = 起伏的线','· 一时刻 (C3,C4) = 一个箭头','· 箭头有方向 + 长度','· 22 电极 = 22 维箭头','· 每时刻 = 高维空间一点'],
+         en:['· time view: wavy line','· one instant (C3,C4) = arrow','· arrow has direction + length','· 22 electrodes = 22D arrow','· each instant = a point in HD space']},
+  hudL1:{cn:'frame', en:'frame'}, hudL2:{cn:'vector', en:'vector'},
+  hudL3:{cn:'length', en:'length'}, hudL4:{cn:'dim', en:'dim'},
+  // frame titles (top of stage)
+  f1t:{cn:'平常我们把脑波看成随时间起伏的线 (时域视角)', en:'Usually we see a brainwave as a line rising over time (time domain)'},
+  f2t:{cn:'换个视角: 某一时刻 C3=3, C4=2 → 把 (3,2) 画成平面上一个箭头', en:'New view: at one instant C3=3, C4=2 → draw (3,2) as an arrow on the plane'},
+  f3t:{cn:'这个箭头就是向量 — 它有方向, 也有长度', en:'This arrow is a vector — it has a direction and a length'},
+  f4t:{cn:'不止 2 个电极: 22 个电极的一个时刻 = 22 个数 = 22 维空间的箭头', en:'Not just 2 electrodes: 22 electrodes at one instant = 22 numbers = an arrow in 22D'},
+  f5t:{cn:'脑波的新视角: 每个时刻都是高维空间里的一个点 / 一个箭头', en:'New view of brainwaves: every instant is a point / arrow in high-dim space'},
+  // subtitles
+  s1zh:{cn:'熟悉的画法: 横轴是时间, 纵轴是电压, 脑波就是一条上下抖的曲线',
+        en:'The familiar view: time on x, voltage on y — the brainwave is a curve that jitters up and down'},
+  s1en:{cn:'每一竖线代表一个时刻的读数。', en:'Each vertical line marks one instant of reading.'},
+  s2zh:{cn:'冻结某一时刻: 这一瞬间 C3 读到 3, C4 读到 2 — 把这两个数当成坐标 (3, 2)',
+        en:'Freeze one instant: right now C3 reads 3, C4 reads 2 — treat the pair as coordinates (3, 2)'},
+  s2en:{cn:'从原点出发, 指向 (3,2), 画一支箭头。', en:'From the origin, point to (3,2) — draw one arrow.'},
+  s3zh:{cn:'这支箭头就是向量: 方向 = 指向哪 (角度), 长度 = sqrt(C3^2 + C4^2)。不同时刻给出不同箭头',
+        en:'That arrow is a vector: direction = where it points (angle), length = sqrt(C3^2 + C4^2). Different instants give different arrows'},
+  s3en:{cn:'向量 = 有顺序的一组数 = 一支空间箭头。', en:'Vector = an ordered set of numbers = one arrow in space.'},
+  s4zh:{cn:'真实 EEG 有 22 个电极: 一个时刻读出 22 个数, 就是 22 维空间里的一支箭头 — 画不出, 但能算',
+        en:'Real EEG has 22 electrodes: one instant gives 22 numbers — an arrow in 22D space. We cannot draw it, but we can compute it'},
+  s4en:{cn:'维度 = 电极数。规则和 2 维一模一样, 只是数变多。', en:'Dimension = number of electrodes. Same rules as 2D, just more numbers.'},
+  s5zh:{cn:'于是整段脑波 = 一连串箭头在高维空间里飞 — 把信号看成空间里的箭头, 才能给它换角度',
+        en:'So a whole recording = a stream of arrows flying through high-dim space — see the signal as arrows in space, only then can you rotate the viewpoint'},
+  s5en:{cn:'下一节用一个方向去量这些箭头 (投影 → M28), 再去找最好的方向 (CSP → M29)',
+        en:'Next: measure these arrows along a direction (projection → M28), then find the best direction (CSP → M29)'},
+  // misc labels
+  lblTime:{cn:'时间 t', en:'time t'},
+  lblVolt:{cn:'电压', en:'voltage'},
+  lblFreeze:{cn:'冻结此刻', en:'freeze here'},
+  lblC3:{cn:'C3', en:'C3'}, lblC4:{cn:'C4', en:'C4'},
+  lblArrow:{cn:'(C3, C4) = (3, 2)', en:'(C3, C4) = (3, 2)'},
+  lblVec:{cn:'向量 v = (3, 2)', en:'vector v = (3, 2)'},
+  lblDir:{cn:'方向 (角度)', en:'direction (angle)'},
+  lblLen:{cn:'长度 = sqrt(3^2 + 2^2) = 3.61', en:'length = sqrt(3^2 + 2^2) = 3.61'},
+  lbl22:{cn:'v = (C1, C2, ..., C22)  →  22 维', en:'v = (C1, C2, ..., C22)  ->  22D'},
+  lblNoDraw:{cn:'22 维画不出来, 但加减、长度、角度都照算', en:'22D is undrawable, yet sum / length / angle still compute'},
+  lblFlow:{cn:'每个时刻一支箭头, 时间推进 → 箭头流', en:'one arrow per instant; time advances -> a stream of arrows'},
+  key5:{cn:'把信号看成空间里的箭头, 才能给它换角度', en:'See the signal as arrows in space — only then can you change the viewpoint'},
+  key5b:{cn:'下节: 投影 (M28) → 找最佳方向 CSP (M29)', en:'next: projection (M28) -> best direction, CSP (M29)'}
+};
+function t(k){ return (I18N[k]&&I18N[k][LANG]) || (I18N[k]&&I18N[k].en) || k; }
+
+function refreshI18N(){
+  document.getElementById('title').textContent = t('title');
+  document.getElementById('introZh').textContent = t('introZh');
+  document.getElementById('introEn').textContent = t('introEn');
+  document.getElementById('guideLabel').textContent = t('guideLabel');
+  document.getElementById('guide').innerHTML = t('guide').map(function(x){return '<li>'+x+'</li>';}).join('');
+  document.getElementById('hudL1').textContent = t('hudL1');
+  document.getElementById('hudL2').textContent = t('hudL2');
+  document.getElementById('hudL3').textContent = t('hudL3');
+  document.getElementById('hudL4').textContent = t('hudL4');
+  document.getElementById('langBtn').textContent = LANG==='cn' ? '中 / EN' : 'EN / 中';
+  updateSub(curFrame);
+}
+document.getElementById('langBtn').addEventListener('click', function(){
+  LANG = LANG==='cn' ? 'en' : 'cn'; refreshI18N();
+});
+
+// ====================== Canvas ======================
+var cv = document.getElementById('c');
+var ctx = cv.getContext('2d');
+var W=0, H=0, DPR=1;
+function resize(){
+  var rect = cv.parentElement.getBoundingClientRect();
+  if(rect.width<1 || rect.height<1) return;
+  DPR = Math.min(window.devicePixelRatio||1, 2);
+  cv.width = rect.width*DPR; cv.height = rect.height*DPR;
+  cv.style.width = rect.width+'px'; cv.style.height = rect.height+'px';
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  W = rect.width; H = rect.height;
+}
+window.addEventListener('resize', resize);
+resize(); setTimeout(resize,200); setTimeout(resize,600);
+document.fonts.ready.then(function(){ resize(); });
+
+// ====================== Signals (deterministic) ======================
+// C3 / C4 waveforms; at the chosen freeze instant, C3≈3, C4≈2 (scaled to "units")
+function c3sig(tt){ return 0.9*Math.sin(tt*2.1) + 0.4*Math.sin(tt*5.3+0.6) + 0.25*Math.sin(tt*11.0+1.2); }
+function c4sig(tt){ return 0.62*c3sig(tt) + 0.45*Math.sin(tt*4.4+2.1) + 0.2*Math.sin(tt*9.0+0.3); }
+// the instant we "freeze" — pick a tt so the pair reads pleasantly
+var FREEZE_TT = 1.32;
+// 22-channel snapshot at one instant (deterministic, varied) for F4
+function rnd(seed){ var x = Math.sin(seed*12.9898)*43758.5453; return x - Math.floor(x); }
+var CH22 = [];
+(function(){ for(var i=0;i<22;i++){ CH22.push((rnd(i*1.7+0.4)*2-1)*3.4); } })();
+
+// ====================== Timeline ======================
+var FRAME_DUR = 7000;          // ms per frame
+var NFR = 5;
+var curFrame = 0;
+var animStart = performance.now();
+
+function updateSub(f){
+  var z=['s1zh','s2zh','s3zh','s4zh','s5zh'][f];
+  var e=['s1en','s2en','s3en','s4en','s5en'][f];
+  document.getElementById('subZh').textContent = t(z);
+  document.getElementById('subEn').textContent = t(e);
+}
+
+// ====================== Drawing helpers ======================
+function easeIO(x){ return x<0.5 ? 2*x*x : 1-Math.pow(-2*x+2,2)/2; }
+function clamp01(x){ return x<0?0:(x>1?1:x); }
+
+function frameTitle(txt){
+  ctx.fillStyle = P.fg;
+  ctx.font = "800 19px 'Space Grotesk','Inter',sans-serif";
+  ctx.textAlign = 'center';
+  ctx.fillText(txt, W/2, 38);
+}
+
+// 2D axis box centered at cx,cy with half-extent px; unit = px per "1 value"
+function axes2D(cx, cy, half){
+  ctx.save();
+  // grid
+  ctx.strokeStyle = P.line; ctx.lineWidth = 1;
+  for(var g=-4;g<=4;g++){
+    var gx = cx + g/4*half, gy = cy - g/4*half;
+    ctx.beginPath(); ctx.moveTo(gx, cy-half); ctx.lineTo(gx, cy+half); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(cx-half, gy); ctx.lineTo(cx+half, gy); ctx.stroke();
+  }
+  // axes
+  ctx.strokeStyle = P.lineStrong; ctx.lineWidth = 1.6;
+  ctx.beginPath(); ctx.moveTo(cx-half, cy); ctx.lineTo(cx+half, cy); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(cx, cy-half); ctx.lineTo(cx, cy+half); ctx.stroke();
+  // axis labels
+  ctx.fillStyle = P.c3; ctx.font = "700 12px 'JetBrains Mono',monospace"; ctx.textAlign='right';
+  ctx.fillText(t('lblC3'), cx+half-2, cy+16);
+  ctx.fillStyle = P.c4; ctx.textAlign='left';
+  ctx.fillText(t('lblC4'), cx+6, cy-half+10);
+  ctx.restore();
+  var unit = half/4.4;  // value range ~ [-4.4,4.4]
+  return { px:function(vx){return cx+vx*unit;}, py:function(vy){return cy-vy*unit;},
+           unit:unit, cx:cx, cy:cy, half:half };
+}
+
+function arrow(x0,y0,x1,y1,color,lw){
+  ctx.save();
+  ctx.strokeStyle=color; ctx.fillStyle=color; ctx.lineWidth=lw||3;
+  ctx.beginPath(); ctx.moveTo(x0,y0); ctx.lineTo(x1,y1); ctx.stroke();
+  var a=Math.atan2(y1-y0, x1-x0), hl=11;
+  ctx.beginPath();
+  ctx.moveTo(x1,y1);
+  ctx.lineTo(x1-hl*Math.cos(a-0.42), y1-hl*Math.sin(a-0.42));
+  ctx.lineTo(x1-hl*Math.cos(a+0.42), y1-hl*Math.sin(a+0.42));
+  ctx.closePath(); ctx.fill();
+  ctx.restore();
+}
+
+// mini waveform box; returns the freeze-cursor x in px
+function waveform(x0,y0,w,h,fn,phase,color,label,sweepFrac){
+  ctx.save();
+  ctx.fillStyle = P.bg2; ctx.strokeStyle = P.line; ctx.lineWidth = 1;
+  ctx.fillRect(x0,y0,w,h); ctx.strokeRect(x0,y0,w,h);
+  ctx.strokeStyle = color; ctx.lineWidth = 1.8;
+  ctx.beginPath();
+  var midY=y0+h/2;
+  for(var i=0;i<=w-12;i++){
+    var tt=i/w*9+phase, v=fn(tt), px=x0+6+i, py=midY - v*(h*0.34);
+    if(i===0) ctx.moveTo(px,py); else ctx.lineTo(px,py);
+  }
+  ctx.stroke();
+  ctx.fillStyle = color; ctx.font = "700 11px 'JetBrains Mono',monospace"; ctx.textAlign='left';
+  ctx.fillText(label, x0+6, y0+15);
+  ctx.restore();
+  return x0+6 + (sweepFrac==null?0:sweepFrac)*(w-12);
+}
+
+// ====================== Frames ======================
+function drawF1(p){
+  frameTitle(t('f1t'));
+  var ww=Math.min(W*0.66, 620), x0=(W-ww)/2, h=170, y0=H*0.30;
+  var phase=p*5;
+  // running waveform (C3)
+  ctx.save();
+  ctx.fillStyle=P.bg2; ctx.strokeStyle=P.line; ctx.lineWidth=1;
+  ctx.fillRect(x0,y0,ww,h); ctx.strokeRect(x0,y0,ww,h);
+  // zero line
+  ctx.strokeStyle=P.line; ctx.lineWidth=1; ctx.setLineDash([4,4]);
+  ctx.beginPath(); ctx.moveTo(x0,y0+h/2); ctx.lineTo(x0+ww,y0+h/2); ctx.stroke();
+  ctx.setLineDash([]);
+  // wave
+  ctx.strokeStyle=P.c3; ctx.lineWidth=2;
+  ctx.beginPath();
+  var midY=y0+h/2;
+  for(var i=0;i<=ww-12;i++){
+    var tt=i/ww*9+phase, v=c3sig(tt), px=x0+6+i, py=midY - v*(h*0.34);
+    if(i===0) ctx.moveTo(px,py); else ctx.lineTo(px,py);
+  }
+  ctx.stroke();
+  ctx.restore();
+  // axis labels
+  ctx.fillStyle=P.fgDim; ctx.font="600 11px 'JetBrains Mono',monospace"; ctx.textAlign='center';
+  ctx.fillText(t('lblTime'), x0+ww/2, y0+h+22);
+  ctx.save(); ctx.translate(x0-14, y0+h/2); ctx.rotate(-Math.PI/2);
+  ctx.textAlign='center'; ctx.fillText(t('lblVolt'), 0, 0); ctx.restore();
+  ctx.fillStyle=P.c3; ctx.font="700 12px 'JetBrains Mono',monospace"; ctx.textAlign='left';
+  ctx.fillText('C3', x0+8, y0+16);
+
+  // sweeping instant marker (vertical line + dot on the wave)
+  var sweep=(p*ww*0.9)%(ww-12);
+  var sx=x0+6+sweep;
+  ctx.save();
+  ctx.strokeStyle=P.solution; ctx.globalAlpha=0.85; ctx.lineWidth=1.4; ctx.setLineDash([4,4]);
+  ctx.beginPath(); ctx.moveTo(sx,y0); ctx.lineTo(sx,y0+h); ctx.stroke(); ctx.setLineDash([]);
+  var ttc=(sweep/ww*9)+phase, vc=c3sig(ttc), pyc=midY - vc*(h*0.34);
+  ctx.fillStyle=P.solution; ctx.beginPath(); ctx.arc(sx,pyc,5,0,Math.PI*2); ctx.fill();
+  ctx.restore();
+
+  ctx.fillStyle=P.fgDim; ctx.font="600 13px 'Inter','Noto Sans SC',sans-serif"; ctx.textAlign='center';
+  ctx.fillText(LANG==='cn'?'每一竖线 = 某一时刻的电压读数 — 这是脑波最熟悉的样子'
+                          :'Each vertical line = a voltage reading at one instant — the most familiar view of a brainwave',
+               W/2, y0+h+50);
+  setHud('1/5', '--', '--', '1');
+}
+
+function drawF2(p){
+  frameTitle(t('f2t'));
+  // left: tiny C3 / C4 waves with a freeze cursor
+  var lw=Math.min(W*0.30,300), lx=W*0.06, h=92;
+  var y1=H*0.30, y2=H*0.30+h+24;
+  var frz=clamp01(p*2.4);  // cursor slides to the freeze point then holds
+  waveform(lx, y1, lw, h, c3sig, 0, P.c3, 'C3', frz);
+  waveform(lx, y2, lw, h, c4sig, 0, P.c4, 'C4', frz);
+  var sx = lx+6 + frz*(lw-12);
+  // freeze cursor across both
+  ctx.save();
+  ctx.strokeStyle=P.solution; ctx.lineWidth=1.6; ctx.setLineDash([4,4]);
+  ctx.beginPath(); ctx.moveTo(sx,y1); ctx.lineTo(sx,y2+h); ctx.stroke(); ctx.setLineDash([]);
+  // read values at this instant (map to displayed 3 and 2)
+  var ttc = frz*9*0 + FREEZE_TT;
+  var c3v = c3sig(ttc), c4v = c4sig(ttc);
+  // dots on the waves
+  var py3=(y1+h/2)-c3v*(h*0.34), py4=(y2+h/2)-c4v*(h*0.34);
+  ctx.fillStyle=P.c3; ctx.beginPath(); ctx.arc(sx,py3,4.5,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle=P.c4; ctx.beginPath(); ctx.arc(sx,py4,4.5,0,Math.PI*2); ctx.fill();
+  ctx.restore();
+  // numeric readouts (snap to the teaching values 3 and 2)
+  ctx.fillStyle=P.c3; ctx.font="700 12px 'JetBrains Mono',monospace"; ctx.textAlign='left';
+  ctx.fillText('C3 = 3', sx+8, py3-6);
+  ctx.fillStyle=P.c4; ctx.fillText('C4 = 2', sx+8, py4-6);
+  ctx.fillStyle=P.fgMute; ctx.font="italic 600 10px 'Inter','Noto Sans SC',sans-serif"; ctx.textAlign='center';
+  ctx.fillText(t('lblFreeze'), lx+lw/2, y2+h+18);
+
+  // right: 2D plane, the arrow grows toward (3,2)
+  var half=Math.min(H*0.30, W*0.20), cx=W*0.70, cy=H*0.52;
+  var map=axes2D(cx, cy, half);
+  // the point (3,2) appears, then the arrow grows
+  var ga = clamp01((p-0.35)/0.5);   // arrow grow factor
+  var tx=map.px(3), ty=map.py(2);
+  // guide dashed lines from axes to the point
+  ctx.save();
+  ctx.strokeStyle=P.line; ctx.lineWidth=1; ctx.setLineDash([4,3]); ctx.globalAlpha=clamp01((p-0.2)*3);
+  ctx.beginPath(); ctx.moveTo(map.px(3),map.cy); ctx.lineTo(tx,ty); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(map.cx,map.py(2)); ctx.lineTo(tx,ty); ctx.stroke();
+  ctx.setLineDash([]); ctx.restore();
+  // ticks
+  ctx.fillStyle=P.c3; ctx.font="700 11px 'JetBrains Mono',monospace"; ctx.textAlign='center';
+  ctx.fillText('3', map.px(3), map.cy+18);
+  ctx.fillStyle=P.c4; ctx.textAlign='right';
+  ctx.fillText('2', map.cx-6, map.py(2)+4);
+  // growing arrow from origin
+  if(ga>0){
+    var ax=map.cx+(tx-map.cx)*easeIO(ga), ay=map.cy+(ty-map.cy)*easeIO(ga);
+    arrow(map.cx,map.cy,ax,ay,P.solution,3);
+  }
+  // the point
+  ctx.fillStyle=P.qed; ctx.beginPath(); ctx.arc(tx,ty,5.5,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle=P.qed; ctx.font="700 12px 'JetBrains Mono',monospace"; ctx.textAlign='left';
+  ctx.fillText(t('lblArrow'), tx+10, ty-8);
+
+  setHud('2/5', '(3, 2)', '--', '2');
+}
+
+function drawF3(p){
+  frameTitle(t('f3t'));
+  var half=Math.min(H*0.31, W*0.21), cx=W*0.40, cy=H*0.52;
+  var map=axes2D(cx, cy, half);
+  var tx=map.px(3), ty=map.py(2);
+  // the vector arrow
+  arrow(map.cx,map.cy,tx,ty,P.solution,3.4);
+  ctx.fillStyle=P.solution; ctx.font="700 12px 'JetBrains Mono',monospace"; ctx.textAlign='left';
+  ctx.fillText('v = (3, 2)', tx+10, ty-8);
+
+  // length brace along the arrow
+  var len=Math.sqrt(3*3+2*2);
+  if(p>0.2){
+    var a=clamp01((p-0.2)*2);
+    ctx.save(); ctx.globalAlpha=a;
+    // length label at arrow midpoint, offset perpendicular
+    var mxp=(map.cx+tx)/2, myp=(map.cy+ty)/2;
+    var ang=Math.atan2(ty-map.cy, tx-map.cx);
+    var ox=Math.cos(ang-Math.PI/2)*16, oy=Math.sin(ang-Math.PI/2)*16;
+    ctx.fillStyle=P.qed; ctx.font="700 12px 'JetBrains Mono',monospace"; ctx.textAlign='center';
+    ctx.fillText('|v| = '+len.toFixed(2), mxp+ox, myp+oy);
+    ctx.restore();
+  }
+  // direction angle arc
+  if(p>0.4){
+    var a2=clamp01((p-0.4)*2);
+    ctx.save(); ctx.globalAlpha=a2;
+    var ang2=Math.atan2(2,3);
+    ctx.strokeStyle=P.qed; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.arc(map.cx,map.cy,34,-ang2,0,false); ctx.stroke();
+    ctx.fillStyle=P.qed; ctx.font="700 11px 'Inter','Noto Sans SC',sans-serif"; ctx.textAlign='left';
+    ctx.fillText(t('lblDir'), map.cx+40, map.cy-8);
+    ctx.restore();
+  }
+
+  // right info panel
+  if(p>0.45){
+    var a3=clamp01((p-0.45)*2.2);
+    ctx.save(); ctx.globalAlpha=a3;
+    var bx=W*0.70, by=H*0.30, bw=Math.min(W*0.26,320), bh=176;
+    ctx.fillStyle=P.bg2; ctx.strokeStyle=P.lineStrong; ctx.lineWidth=1;
+    ctx.fillRect(bx,by,bw,bh); ctx.strokeRect(bx,by,bw,bh);
+    ctx.fillStyle=P.solution; ctx.font="700 13px 'JetBrains Mono',monospace"; ctx.textAlign='left';
+    ctx.fillText('vector v = (3, 2)', bx+14, by+26);
+    ctx.fillStyle=P.fg; ctx.font="600 12px 'Inter','Noto Sans SC',sans-serif";
+    ctx.fillText(LANG==='cn'?'方向: 指向哪个角度':'direction: which angle it points', bx+14, by+54);
+    ctx.fillText(LANG==='cn'?'长度: sqrt(3^2 + 2^2)':'length: sqrt(3^2 + 2^2)', bx+14, by+78);
+    ctx.fillStyle=P.qed; ctx.font="700 13px 'JetBrains Mono',monospace";
+    ctx.fillText('= sqrt(13) = '+len.toFixed(2), bx+14, by+102);
+    ctx.fillStyle=P.fgDim; ctx.font="italic 600 11px 'Inter','Noto Sans SC',sans-serif";
+    ctx.fillText(LANG==='cn'?'换一个时刻 → 不同的数':'another instant -> different numbers', bx+14, by+132);
+    ctx.fillText(LANG==='cn'?'→ 不同的箭头':'-> a different arrow', bx+14, by+152);
+    ctx.restore();
+  }
+  // a faint "other instant" ghost arrow to hint variation
+  if(p>0.7){
+    var a4=clamp01((p-0.7)*3)*0.5;
+    ctx.save(); ctx.globalAlpha=a4;
+    arrow(map.cx,map.cy,map.px(-1.6),map.py(2.8),P.proof,2.2);
+    ctx.restore();
+  }
+  setHud('3/5', '(3, 2)', len.toFixed(2), '2');
+}
+
+function drawF4(p){
+  frameTitle(t('f4t'));
+  // left: column of 22 channel readings (bars), each a number
+  var bx=W*0.07, by=H*0.18, bw=W*0.16, rowH=Math.min((H*0.62)/22, 20);
+  ctx.save();
+  ctx.fillStyle=P.fgDim; ctx.font="700 11px 'JetBrains Mono',monospace"; ctx.textAlign='left';
+  ctx.fillText(LANG==='cn'?'22 个电极读数':'22 electrode readings', bx, by-12);
+  var nShown=Math.floor(22*clamp01(p*1.6));
+  for(var i=0;i<nShown;i++){
+    var ry=by+i*rowH;
+    var val=CH22[i];
+    // label
+    ctx.fillStyle=P.fgMute; ctx.font="600 9px 'JetBrains Mono',monospace"; ctx.textAlign='right';
+    ctx.fillText('C'+(i+1), bx+22, ry+rowH*0.72);
+    // bar (centered)
+    var cxBar=bx+30, barW=bw-30, mid=cxBar+barW/2;
+    ctx.strokeStyle=P.line; ctx.lineWidth=1;
+    ctx.beginPath(); ctx.moveTo(mid,ry+2); ctx.lineTo(mid,ry+rowH-2); ctx.stroke();
+    var bl=(val/4)*(barW/2);
+    ctx.fillStyle=P.axis;
+    ctx.fillRect(mid, ry+rowH*0.28, bl, rowH*0.44);
+    // numeric
+    ctx.fillStyle=P.fg; ctx.font="600 9px 'JetBrains Mono',monospace"; ctx.textAlign='left';
+    ctx.fillText(val.toFixed(1), cxBar+barW+6, ry+rowH*0.72);
+  }
+  ctx.restore();
+
+  // middle: collapse into one vector notation
+  if(p>0.45){
+    var a=clamp01((p-0.45)*2.5);
+    ctx.save(); ctx.globalAlpha=a;
+    var mx=W*0.48, my=H*0.42;
+    ctx.fillStyle=P.solution; ctx.font="700 16px 'JetBrains Mono',monospace"; ctx.textAlign='center';
+    ctx.fillText(t('lbl22'), mx, my);
+    ctx.fillStyle=P.fgDim; ctx.font="600 12px 'Inter','Noto Sans SC',sans-serif";
+    ctx.fillText(LANG==='cn'?'一个时刻 = 一组 22 个数 = 22 维空间的一支箭头'
+                            :'one instant = a set of 22 numbers = one arrow in 22D space', mx, my+28);
+    ctx.restore();
+  }
+
+  // right: schematic high-dim arrow (a bundle of axes radiating) — "can't draw, but can compute"
+  if(p>0.55){
+    var a2=clamp01((p-0.55)*2.5);
+    ctx.save(); ctx.globalAlpha=a2;
+    var ox=W*0.78, oy=H*0.52, R=Math.min(H*0.18, W*0.10);
+    // radiating faint axes (many dims)
+    for(var k=0;k<11;k++){
+      var ang=(k/11)*Math.PI*2;
+      ctx.strokeStyle=P.shadow; ctx.lineWidth=1;
+      ctx.beginPath(); ctx.moveTo(ox,oy); ctx.lineTo(ox+Math.cos(ang)*R, oy+Math.sin(ang)*R); ctx.stroke();
+    }
+    // one bright "vector" arrow into the bundle
+    arrow(ox,oy, ox+Math.cos(-0.6)*R*0.9, oy+Math.sin(-0.6)*R*0.9, P.solution, 3);
+    ctx.fillStyle=P.fgMute; ctx.font="italic 600 10px 'Inter','Noto Sans SC',sans-serif"; ctx.textAlign='center';
+    ctx.fillText(t('lblNoDraw'), ox, oy+R+22);
+    ctx.restore();
+  }
+  setHud('4/5', '(C1..C22)', '||v||', '22');
+}
+
+function drawF5(p){
+  frameTitle(t('f5t'));
+  // a "high-dim" point cloud where a moving arrow visits successive instants
+  var cx=W*0.42, cy=H*0.48, R=Math.min(H*0.30, W*0.22);
+  // background faint radiating axes to suggest many dims
+  ctx.save();
+  for(var k=0;k<9;k++){
+    var ang=(k/9)*Math.PI*2;
+    ctx.strokeStyle=P.shadow; ctx.lineWidth=1; ctx.globalAlpha=0.5;
+    ctx.beginPath(); ctx.moveTo(cx,cy); ctx.lineTo(cx+Math.cos(ang)*R, cy+Math.sin(ang)*R); ctx.stroke();
+  }
+  ctx.restore();
+  // a trajectory of instant-points (each = one arrow tip), drawn as a flowing path
+  var nPts=80;
+  var pts=[];
+  for(var i=0;i<nPts;i++){
+    var tt=i*0.12;
+    var rad=R*(0.35+0.5*(0.5+0.5*Math.sin(tt*1.3)));
+    var th=tt*0.9;
+    pts.push([cx+Math.cos(th)*rad*0.9, cy+Math.sin(th)*rad*0.7]);
+  }
+  var head=Math.floor(nPts*((p*1.0)%1));
+  // trail dots
+  for(var j=0;j<nPts;j++){
+    var fade = j<=head ? 0.75 : 0.18;
+    ctx.fillStyle=P.proof; ctx.globalAlpha=fade*0.7;
+    ctx.beginPath(); ctx.arc(pts[j][0],pts[j][1],2.4,0,Math.PI*2); ctx.fill();
+  }
+  ctx.globalAlpha=1;
+  // current arrow (origin -> head point)
+  var hp=pts[head%nPts];
+  arrow(cx,cy,hp[0],hp[1],P.solution,3);
+  ctx.fillStyle=P.fgDim; ctx.font="600 11px 'Inter','Noto Sans SC',sans-serif"; ctx.textAlign='center';
+  ctx.fillText(t('lblFlow'), cx, cy+R+24);
+
+  // gold key-moment banner
+  if(p>0.45){
+    var a=clamp01((p-0.45)*2.5);
+    ctx.save(); ctx.globalAlpha=a;
+    var bw=Math.min(W*0.82,680), bbx=W/2-bw/2, by=H*0.80, bh=54;
+    ctx.fillStyle='oklch(0.18 0.04 265 / 0.9)';
+    ctx.strokeStyle=P.qed; ctx.lineWidth=1.6;
+    ctx.fillRect(bbx,by,bw,bh); ctx.strokeRect(bbx,by,bw,bh);
+    ctx.shadowColor=P.qed; ctx.shadowBlur=14;
+    ctx.fillStyle=P.qed; ctx.font="800 16px 'Space Grotesk','Noto Sans SC',sans-serif"; ctx.textAlign='center';
+    ctx.fillText(t('key5'), W/2, by+23);
+    ctx.shadowBlur=0;
+    ctx.fillStyle=P.fgDim; ctx.font="600 11px 'Inter','Noto Sans SC',sans-serif";
+    ctx.fillText(t('key5b'), W/2, by+43);
+    ctx.restore();
+  }
+  setHud('5/5', 'stream', 'flow', 'ND');
+}
+
+function setHud(fr, vec, len, dim){
+  document.getElementById('hudV1').textContent = fr;
+  document.getElementById('hudV2').textContent = vec;
+  document.getElementById('hudV3').textContent = len;
+  document.getElementById('hudV4').textContent = dim;
+}
+
+// ====================== Render loop (autoplay) ======================
+function render(){
+  var now = performance.now();
+  var elapsed = now - animStart;
+  var total = FRAME_DUR*NFR;
+  var tt = elapsed % total;
+  var f = Math.floor(tt/FRAME_DUR);
+  var p = (tt % FRAME_DUR)/FRAME_DUR;
+  if(f !== curFrame){ curFrame = f; updateSub(curFrame); }
+
+  ctx.clearRect(0,0,W,H);
+  ctx.fillStyle = P.bg0; ctx.fillRect(0,0,W,H);
+  // subtle radial glow (math electric blue)
+  var rg = ctx.createRadialGradient(W*0.5,H*0.32,0, W*0.5,H*0.32, W*0.55);
+  rg.addColorStop(0,'oklch(0.72 0.17 245 / 0.07)'); rg.addColorStop(1,'transparent');
+  ctx.fillStyle=rg; ctx.fillRect(0,0,W,H);
+
+  if(f===0) drawF1(p);
+  else if(f===1) drawF2(p);
+  else if(f===2) drawF3(p);
+  else if(f===3) drawF4(p);
+  else drawF5(p);
+
+  requestAnimationFrame(render);
+}
+
+// init
+refreshI18N();
+updateSub(0);
+requestAnimationFrame(render);
+</script>
+</body>
+</html>

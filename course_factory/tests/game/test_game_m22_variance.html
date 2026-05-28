@@ -1,0 +1,488 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>方差计算器 — 差 平方 平均</title>
+<style>
+  :root{
+    /* 第 1 层 — 共享深空底 (所有学科统一) */
+    --bg-0: oklch(0.14 0.035 265);
+    --bg-1: oklch(0.18 0.04 265);
+    --bg-2: oklch(0.22 0.045 265);
+    --bg-3: oklch(0.28 0.05 265);
+    --line: oklch(0.35 0.05 265 / 0.35);
+    --line-strong: oklch(0.55 0.08 265 / 0.55);
+    --fg: oklch(0.96 0.01 265);
+    --fg-dim: oklch(0.75 0.02 265);
+    --fg-mute: oklch(0.55 0.03 265);
+    --gold: oklch(0.85 0.14 85);
+    /* 第 2 层 — math signature accent */
+    --accent: oklch(0.72 0.17 245);
+    /* 第 3 层 — math 5 色 palette (themes.js id:math) */
+    --m-axis: oklch(0.72 0.17 245);
+    --m-proof: oklch(0.52 0.16 245);
+    --m-shadow: oklch(0.35 0.10 245);
+    --m-solution: oklch(0.92 0.08 240);
+    --m-qed: oklch(0.85 0.14 85);
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;height:100vh;overflow:hidden;
+    background:var(--bg-0);color:var(--fg);
+    font-family:'JetBrains Mono','SF Mono',ui-monospace,Menlo,Consolas,monospace;}
+  body{display:flex;}
+
+  /* ---- sidebar 200px ---- */
+  .game-sidebar{
+    width:208px;flex-shrink:0;height:100vh;
+    background:var(--bg-1);border-right:1px solid var(--line);
+    display:flex;flex-direction:column;gap:14px;padding:16px 14px;overflow-y:auto;}
+  .brand{display:flex;align-items:center;gap:9px;}
+  .brand h1{font-size:14px;font-weight:700;margin:0;line-height:1.25;color:var(--fg);}
+  .brand .code{font-size:9px;color:var(--fg-mute);letter-spacing:1px;}
+  .mascot{width:34px;height:34px;flex-shrink:0;}
+
+  .steps{display:flex;flex-direction:column;gap:7px;}
+  .step{background:var(--bg-2);border:1px solid var(--line);
+    border-left:3px solid var(--accent);padding:7px 9px;}
+  .step .n{font-size:9px;color:var(--accent);font-weight:700;letter-spacing:.5px;}
+  .step .f{font-size:12px;color:var(--fg);margin-top:2px;font-weight:600;}
+  .step .d{font-size:9.5px;color:var(--fg-dim);margin-top:2px;line-height:1.35;}
+
+  .task{background:var(--bg-2);border:1px solid var(--accent);padding:9px 10px;}
+  .task .th{font-size:10px;color:var(--accent);font-weight:700;margin-bottom:4px;letter-spacing:.5px;}
+  .task .tx{font-size:11px;color:var(--fg);line-height:1.4;}
+  .task .ti{font-size:9.5px;color:var(--fg-mute);margin-top:5px;line-height:1.35;}
+
+  .lang-btn,.btn{background:var(--bg-2);border:1px solid var(--line-strong);
+    color:var(--fg);font-family:inherit;font-size:11px;font-weight:600;
+    padding:8px 10px;cursor:pointer;box-shadow:3px 3px 0 var(--bg-0);
+    transition:transform .08s,box-shadow .08s;}
+  .lang-btn:hover,.btn:hover{transform:translate(-1px,-1px);box-shadow:4px 4px 0 var(--bg-0);}
+  .lang-btn:active,.btn:active{transform:translate(1px,1px);box-shadow:1px 1px 0 var(--bg-0);}
+  .btn-next{border-color:var(--accent);}
+  .mt-auto{margin-top:auto;}
+
+  /* ---- main ---- */
+  .game-main{flex:1;height:100vh;display:flex;flex-direction:column;
+    padding:16px;gap:12px;min-width:0;}
+  .topbar{display:flex;align-items:flex-end;justify-content:space-between;gap:14px;}
+  .topbar h2{font-size:14px;font-weight:700;margin:0;color:var(--fg);}
+  .topbar .hint{font-size:10px;color:var(--fg-mute);}
+  .hud{display:flex;gap:8px;}
+  .hud .cell{background:var(--bg-2);border:1px solid var(--line);padding:5px 11px;text-align:center;min-width:74px;}
+  .hud .lbl{font-size:9px;color:var(--fg-mute);letter-spacing:.5px;}
+  .hud .val{font-size:17px;font-weight:700;color:var(--accent);line-height:1.1;}
+  .hud .cell.varCell .val{color:var(--m-qed);}
+
+  .stage-wrap{flex:1;display:flex;flex-direction:column;min-height:0;
+    background:var(--bg-1);border:1px solid var(--line);position:relative;}
+  #stage{flex:1;width:100%;height:100%;display:block;}
+
+  .sliderbar{flex-shrink:0;background:var(--bg-1);border:1px solid var(--line);
+    padding:9px 12px;display:flex;align-items:center;gap:12px;}
+  .sliderbar .slLbl{font-size:10px;color:var(--fg-dim);white-space:nowrap;}
+  .sgrid{flex:1;display:grid;grid-template-columns:repeat(5,1fr);gap:10px;}
+  .scol{display:flex;flex-direction:column;align-items:center;gap:3px;}
+  .scol label{font-size:10px;color:var(--accent);font-weight:600;}
+  input[type=range]{width:100%;accent-color:oklch(0.72 0.17 245);cursor:pointer;}
+
+  #toast{position:absolute;top:14px;left:50%;transform:translateX(-50%);
+    background:var(--bg-3);border:1px solid var(--m-qed);color:var(--m-qed);
+    padding:8px 16px;font-size:13px;font-weight:700;display:none;z-index:30;
+    box-shadow:3px 3px 0 var(--bg-0);}
+</style>
+</head>
+<body>
+
+<aside class="game-sidebar">
+  <div class="brand">
+    <svg class="mascot" viewBox="0 0 40 40" aria-hidden="true">
+      <!-- Pi: rotating tetrahedron -->
+      <polygon points="20,5 35,31 5,31" fill="none" stroke="var(--m-axis)" stroke-width="1.6"/>
+      <polygon points="20,5 35,31 20,23" fill="var(--m-proof)" opacity="0.55"/>
+      <polygon points="20,5 5,31 20,23" fill="var(--m-shadow)" opacity="0.7"/>
+      <line x1="20" y1="5" x2="20" y2="23" stroke="var(--m-axis)" stroke-width="1.2"/>
+      <text x="20" y="20" text-anchor="middle" font-size="9" fill="var(--m-solution)"
+            font-family="Times,serif" font-style="italic">&#960;</text>
+    </svg>
+    <div>
+      <h1 id="title">方差计算器</h1>
+      <div class="code">MTH-06 · M22</div>
+    </div>
+  </div>
+
+  <div class="steps" id="steps">
+    <div class="step">
+      <div class="n" id="s1n">第 1 步 / STEP 1</div>
+      <div class="f">x&#7522; &minus; mean</div>
+      <div class="d" id="s1d">每个点到均值的差 (竖线)</div>
+    </div>
+    <div class="step">
+      <div class="n" id="s2n">第 2 步 / STEP 2</div>
+      <div class="f">(x&#7522; &minus; mean)&sup2;</div>
+      <div class="d" id="s2d">把差平方 = 方块的面积</div>
+    </div>
+    <div class="step">
+      <div class="n" id="s3n">第 3 步 / STEP 3</div>
+      <div class="f">&sigma;&sup2; = (1/n) &Sigma;</div>
+      <div class="d" id="s3d">所有方块面积之和 ÷ n</div>
+    </div>
+  </div>
+
+  <div class="task">
+    <div class="th" id="taskHead">任务 1 / 5</div>
+    <div class="tx" id="taskText">把方差调到接近 0</div>
+    <div class="ti" id="taskHint">目标 &sigma;&sup2; &le; 2</div>
+  </div>
+
+  <button class="btn btn-next" id="btnNext">下一关 / Next</button>
+  <button class="lang-btn mt-auto" id="langBtn">中 / EN</button>
+</aside>
+
+<main class="game-main">
+  <div class="topbar">
+    <div>
+      <h2 id="stageTitle">拖动脑波振幅, 看方差变化</h2>
+      <div class="hint" id="stageHint">拖圆点上下 / 拨下方滑块, 蓝竖线=差, 方块=差&sup2;</div>
+    </div>
+    <div class="hud">
+      <div class="cell"><div class="lbl" id="hMean">平均 mean</div><div class="val" id="vMean">0</div></div>
+      <div class="cell"><div class="lbl" id="hSumsq">&Sigma; 方块面积</div><div class="val" id="vSumsq">0</div></div>
+      <div class="cell varCell"><div class="lbl" id="hVar">方差 &sigma;&sup2;</div><div class="val" id="vVar">0</div></div>
+    </div>
+  </div>
+
+  <div class="stage-wrap">
+    <canvas id="stage"></canvas>
+    <div id="toast"></div>
+  </div>
+
+  <div class="sliderbar">
+    <span class="slLbl" id="slLbl">微调</span>
+    <div class="sgrid">
+      <div class="scol"><label>x&#8321;</label><input id="s0" type="range" min="5" max="95" value="22"></div>
+      <div class="scol"><label>x&#8322;</label><input id="s1" type="range" min="5" max="95" value="38"></div>
+      <div class="scol"><label>x&#8323;</label><input id="s2" type="range" min="5" max="95" value="55"></div>
+      <div class="scol"><label>x&#8324;</label><input id="s3" type="range" min="5" max="95" value="70"></div>
+      <div class="scol"><label>x&#8325;</label><input id="s4" type="range" min="5" max="95" value="86"></div>
+    </div>
+  </div>
+</main>
+
+<script>
+var LANG = 'cn';
+var I18N = {
+  title:{cn:'方差计算器', en:'Variance Calculator'},
+  s1n:{cn:'第 1 步 / STEP 1', en:'STEP 1'},
+  s1d:{cn:'每个点到均值的差 (竖线)', en:'each point minus mean (vertical)'},
+  s2n:{cn:'第 2 步 / STEP 2', en:'STEP 2'},
+  s2d:{cn:'把差平方 = 方块的面积', en:'square the diff = box area'},
+  s3n:{cn:'第 3 步 / STEP 3', en:'STEP 3'},
+  s3d:{cn:'所有方块面积之和 ÷ n', en:'sum of box areas ÷ n'},
+  stageTitle:{cn:'拖动脑波振幅, 看方差变化', en:'Drag EEG amplitudes, watch variance'},
+  stageHint:{cn:'拖圆点上下 / 拨下方滑块, 蓝竖线=差, 方块=差²',
+             en:'drag dots / use sliders. blue line=diff, box=diff²'},
+  hMean:{cn:'平均 mean', en:'mean'},
+  hSumsq:{cn:'Σ 方块面积', en:'Σ box area'},
+  hVar:{cn:'方差 σ²', en:'variance σ²'},
+  slLbl:{cn:'微调', en:'fine tune'},
+  next:{cn:'下一关 / Next', en:'Next / 下一关'},
+  cleared:{cn:'达成! 进入下一关', en:'Cleared! Next stage'},
+  master:{cn:'方差掌握者 — 全部完成!', en:'Variance Master — all cleared!'},
+  tasks:{
+    cn:[
+      {head:'任务 1 / 5: 平稳段', text:'让脑波平稳: 所有振幅几乎相等, 方差接近 0', hint:'目标 σ² ≤ 2', ok:function(v,m){return v<=2;}},
+      {head:'任务 2 / 5: 轻微起伏', text:'造一段轻微抖动的脑波, 方差落在 50 附近', hint:'目标 35 ≤ σ² ≤ 70', ok:function(v,m){return v>=35&&v<=70;}},
+      {head:'任务 3 / 5: 强抖动', text:'造强烈抖动 (有大有小), 方差超过 400', hint:'目标 σ² > 400', ok:function(v,m){return v>400;}},
+      {head:'任务 4 / 5: 居中又分散', text:'同时满足: 平均接近 50 且方差接近 200', hint:'目标 mean∈[46,54], σ²∈[170,230]', ok:function(v,m){return v>=170&&v<=230&&m>=46&&m<=54;}},
+      {head:'任务 5 / 5: 完美平稳', text:'5 个振幅完全相等, 方差归零 (合格脑波段)', hint:'目标 σ² ≤ 0.6', ok:function(v,m){return v<=0.6;}}
+    ],
+    en:[
+      {head:'TASK 1 / 5: Calm segment', text:'Make a calm EEG: all amplitudes near equal, variance ≈ 0', hint:'goal σ² ≤ 2', ok:function(v,m){return v<=2;}},
+      {head:'TASK 2 / 5: Light ripple', text:'Build a lightly jittering EEG, variance around 50', hint:'goal 35 ≤ σ² ≤ 70', ok:function(v,m){return v>=35&&v<=70;}},
+      {head:'TASK 3 / 5: Strong jitter', text:'Make strong jitter (highs and lows), variance over 400', hint:'goal σ² > 400', ok:function(v,m){return v>400;}},
+      {head:'TASK 4 / 5: Centered yet spread', text:'Both: mean near 50 AND variance near 200', hint:'goal mean∈[46,54], σ²∈[170,230]', ok:function(v,m){return v>=170&&v<=230&&m>=46&&m<=54;}},
+      {head:'TASK 5 / 5: Perfect flat', text:'5 equal amplitudes, variance zero (clean segment)', hint:'goal σ² ≤ 0.6', ok:function(v,m){return v<=0.6;}}
+    ]
+  }
+};
+function t(k){return (I18N[k]&&I18N[k][LANG])||(I18N[k]&&I18N[k].en)||k;}
+function getTasks(){return I18N.tasks[LANG];}
+
+function refreshI18N(){
+  byId('title').textContent=t('title');
+  ['s1n','s1d','s2n','s2d','s3n','s3d'].forEach(function(k){byId(k).textContent=t(k);});
+  byId('stageTitle').textContent=t('stageTitle');
+  byId('stageHint').textContent=t('stageHint');
+  byId('hMean').textContent=t('hMean');
+  byId('hSumsq').textContent=t('hSumsq');
+  byId('hVar').textContent=t('hVar');
+  byId('slLbl').textContent=t('slLbl');
+  byId('btnNext').textContent=t('next');
+  byId('langBtn').textContent=LANG==='cn'?'中 / EN':'EN / 中';
+  showTask();
+  draw();
+}
+function byId(id){return document.getElementById(id);}
+
+/* ---- state ---- */
+var amps = [22,38,55,70,86];   // 5 EEG amplitudes, value 5-95
+var taskIdx = 0;
+
+function showTask(){
+  var task = getTasks()[taskIdx];
+  if(!task){
+    byId('taskHead').textContent='';
+    byId('taskText').textContent=t('master');
+    byId('taskHint').textContent='';
+    return;
+  }
+  byId('taskHead').textContent=task.head;
+  byId('taskText').textContent=task.text;
+  byId('taskHint').innerHTML=task.hint;
+}
+
+function calc(){
+  var n=amps.length;
+  var mean=amps.reduce(function(a,b){return a+b;},0)/n;
+  var sumsq=amps.reduce(function(a,p){var d=p-mean;return a+d*d;},0);
+  return {mean:mean, sumsq:sumsq, variance:sumsq/n};
+}
+
+function update(){
+  var c=calc();
+  byId('vMean').textContent=c.mean.toFixed(1);
+  byId('vSumsq').textContent=c.sumsq.toFixed(0);
+  byId('vVar').textContent=c.variance.toFixed(1);
+  var task=getTasks()[taskIdx];
+  if(task && task.ok(c.variance,c.mean)){
+    showToast(t('cleared'));
+    clearTimeout(update._adv);
+    update._adv=setTimeout(function(){
+      if(taskIdx<getTasks().length-1){taskIdx++;}
+      else{taskIdx++; showToast(t('master'));}
+      showTask(); draw();
+    },1100);
+  }
+  draw();
+}
+
+function showToast(msg){
+  var el=byId('toast');
+  el.style.display='block';
+  el.textContent=msg;
+  clearTimeout(showToast._t);
+  showToast._t=setTimeout(function(){el.style.display='none';},1400);
+}
+
+/* sliders */
+for(var i=0;i<5;i++){
+  (function(i){
+    var sl=byId('s'+i);
+    sl.addEventListener('input',function(){amps[i]=parseFloat(sl.value);update();});
+  })(i);
+}
+byId('langBtn').addEventListener('click',function(){
+  LANG=LANG==='cn'?'en':'cn'; refreshI18N();
+});
+byId('btnNext').addEventListener('click',function(){
+  taskIdx++;
+  if(taskIdx>=getTasks().length) taskIdx=0;
+  showTask(); draw();
+});
+
+/* ---- canvas ---- */
+var canvas=byId('stage');
+var ctx=canvas.getContext('2d');
+var W=0,H=0,DPR=1;
+var dragIdx=-1;
+var padL=64, padR=24, padT=24, padB=40;
+
+function resize(){
+  var rect=canvas.parentElement.getBoundingClientRect();
+  if(rect.width<2||rect.height<2) return;
+  DPR=window.devicePixelRatio||1;
+  canvas.width=rect.width*DPR; canvas.height=rect.height*DPR;
+  canvas.style.width=rect.width+'px'; canvas.style.height=rect.height+'px';
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  W=rect.width; H=rect.height;
+  draw();
+}
+window.addEventListener('resize',resize);
+
+function plotX(i){var n=amps.length; var inner=W-padL-padR; return padL+inner*(i+0.5)/n;}
+function valToY(v){var inner=H-padT-padB; return H-padB-(v/100)*inner;}
+function yToVal(y){var inner=H-padT-padB; return Math.max(5,Math.min(95,(H-padB-y)/inner*100));}
+
+function draw(){
+  ctx.clearRect(0,0,W,H);
+  // panel bg
+  ctx.fillStyle='oklch(0.18 0.04 265)';
+  ctx.fillRect(0,0,W,H);
+
+  var c=calc();
+  var n=amps.length;
+
+  // grid + y axis ticks
+  ctx.strokeStyle='oklch(0.35 0.05 265 / 0.30)';
+  ctx.lineWidth=1;
+  ctx.fillStyle='oklch(0.55 0.03 265)';
+  ctx.font='10px JetBrains Mono, monospace';
+  ctx.textAlign='right';
+  ctx.textBaseline='middle';
+  for(var g=0;g<=100;g+=20){
+    var gy=valToY(g);
+    ctx.beginPath();ctx.moveTo(padL,gy);ctx.lineTo(W-padR,gy);ctx.stroke();
+    ctx.fillText(g, padL-8, gy);
+  }
+  // baseline axis
+  ctx.strokeStyle='oklch(0.55 0.08 265 / 0.55)';
+  ctx.lineWidth=1.4;
+  ctx.beginPath();ctx.moveTo(padL,valToY(0));ctx.lineTo(W-padR,valToY(0));ctx.stroke();
+
+  // squared-deviation area boxes (drawn first, behind lines/points)
+  // square side proportional to |diff|; area visually represents diff²
+  var maxBoxPx = Math.min((W-padL-padR)/n*0.9, H*0.42);
+  for(var i=0;i<n;i++){
+    var d=amps[i]-c.mean;
+    var ad=Math.abs(d);
+    var side=ad/100*maxBoxPx;          // px side ~ |diff|  => area ~ diff²
+    if(side<1) continue;
+    var px=plotX(i);
+    var py=valToY(amps[i]);
+    var my=valToY(c.mean);
+    // box sits between point and mean line, hugging the diff segment
+    var bx=px+8;
+    var by=Math.min(py,my);
+    var big = ad/55;
+    ctx.fillStyle = big>0.55 ? 'oklch(0.85 0.14 85 / 0.16)' : 'oklch(0.72 0.17 245 / 0.15)';
+    ctx.strokeStyle = big>0.55 ? 'oklch(0.85 0.14 85 / 0.6)' : 'oklch(0.72 0.17 245 / 0.55)';
+    ctx.lineWidth=1;
+    ctx.fillRect(bx, by, side, Math.abs(py-my));   // visual link to the diff height
+    // a true square glyph: side ~ |diff|, so area ~ diff² (the literal meaning of variance)
+    var sq=side;
+    ctx.fillStyle = big>0.55 ? 'oklch(0.85 0.14 85 / 0.22)' : 'oklch(0.72 0.17 245 / 0.20)';
+    ctx.fillRect(bx, by, sq, sq);
+    ctx.strokeRect(bx, by, sq, sq);
+    // box area label = diff²
+    if(sq>22){
+      ctx.fillStyle = big>0.55 ? 'oklch(0.85 0.14 85)' : 'oklch(0.92 0.08 240)';
+      ctx.font='9px JetBrains Mono, monospace';
+      ctx.textAlign='left';ctx.textBaseline='top';
+      ctx.fillText((d*d).toFixed(0), bx+3, by+3);
+    }
+  }
+
+  // mean line
+  var my=valToY(c.mean);
+  ctx.strokeStyle='oklch(0.92 0.08 240)';
+  ctx.lineWidth=1.8;
+  ctx.setLineDash([7,5]);
+  ctx.beginPath();ctx.moveTo(padL,my);ctx.lineTo(W-padR,my);ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle='oklch(0.92 0.08 240)';
+  ctx.font='700 11px JetBrains Mono, monospace';
+  ctx.textAlign='left';ctx.textBaseline='bottom';
+  ctx.fillText((LANG==='cn'?'平均 ':'mean ')+c.mean.toFixed(1), padL+4, my-3);
+
+  // diff verticals + points
+  for(var j=0;j<n;j++){
+    var x=plotX(j);
+    var y=valToY(amps[j]);
+    var d2=amps[j]-c.mean;
+    // diff vertical line (point -> mean)
+    ctx.strokeStyle = Math.abs(d2)/55>0.55 ? 'oklch(0.85 0.14 85 / 0.9)' : 'oklch(0.72 0.17 245 / 0.9)';
+    ctx.lineWidth=2;
+    ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x,my);ctx.stroke();
+    // diff value label
+    ctx.fillStyle=ctx.strokeStyle;
+    ctx.font='9px JetBrains Mono, monospace';
+    ctx.textAlign='center';ctx.textBaseline=d2>=0?'bottom':'top';
+    var labelY=(y+my)/2;
+    ctx.fillText((d2>=0?'+':'')+d2.toFixed(1), x-14, labelY);
+    // point
+    ctx.fillStyle = j===dragIdx ? 'oklch(0.85 0.14 85)' : 'oklch(0.72 0.17 245)';
+    ctx.strokeStyle='oklch(0.14 0.035 265)';
+    ctx.lineWidth=2;
+    ctx.beginPath();ctx.arc(x,y,10,0,Math.PI*2);ctx.fill();ctx.stroke();
+    // amplitude value inside
+    ctx.fillStyle='oklch(0.14 0.035 265)';
+    ctx.font='700 10px JetBrains Mono, monospace';
+    ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.fillText(amps[j].toFixed(0), x, y);
+    // x label below baseline
+    ctx.fillStyle='oklch(0.75 0.02 265)';
+    ctx.font='10px JetBrains Mono, monospace';
+    ctx.textBaseline='top';
+    ctx.fillText('x'+(j+1), x, valToY(0)+8);
+  }
+
+  // formula readout bottom-right
+  var fw=246, fh=58, fx=W-padR-fw, fy=H-padB-fh-6;
+  if(fx>padL){
+    ctx.fillStyle='oklch(0.22 0.045 265 / 0.92)';
+    ctx.strokeStyle='oklch(0.55 0.08 265 / 0.55)';
+    ctx.lineWidth=1;
+    ctx.fillRect(fx,fy,fw,fh);ctx.strokeRect(fx,fy,fw,fh);
+    ctx.fillStyle='oklch(0.55 0.03 265)';
+    ctx.font='9px JetBrains Mono, monospace';
+    ctx.textAlign='left';ctx.textBaseline='top';
+    ctx.fillText(LANG==='cn'?'方差 = 方块面积总和 / n':'variance = Σ box area / n', fx+10, fy+8);
+    ctx.fillStyle='oklch(0.92 0.08 240)';
+    ctx.font='italic 13px Times, serif';
+    ctx.fillText('σ² = '+c.sumsq.toFixed(0)+' / '+n, fx+10, fy+24);
+    ctx.fillStyle='oklch(0.85 0.14 85)';
+    ctx.font='800 18px JetBrains Mono, monospace';
+    ctx.fillText('= '+c.variance.toFixed(1), fx+10, fy+38);
+  }
+}
+
+/* ---- drag interaction ---- */
+function pickIdx(mx,my){
+  for(var i=0;i<amps.length;i++){
+    var x=plotX(i), y=valToY(amps[i]);
+    var dx=mx-x, dy=my-y;
+    if(dx*dx+dy*dy<260) return i;
+  }
+  return -1;
+}
+canvas.addEventListener('mousedown',function(e){
+  var r=canvas.getBoundingClientRect();
+  dragIdx=pickIdx(e.clientX-r.left, e.clientY-r.top);
+  if(dragIdx>=0) draw();
+});
+canvas.addEventListener('mousemove',function(e){
+  if(dragIdx<0) return;
+  var r=canvas.getBoundingClientRect();
+  amps[dragIdx]=yToVal(e.clientY-r.top);
+  byId('s'+dragIdx).value=amps[dragIdx];
+  update();
+});
+window.addEventListener('mouseup',function(){if(dragIdx>=0){dragIdx=-1;draw();}});
+canvas.addEventListener('touchstart',function(e){
+  if(!e.touches[0]) return;
+  var r=canvas.getBoundingClientRect();
+  var i=pickIdx(e.touches[0].clientX-r.left, e.touches[0].clientY-r.top);
+  if(i>=0){dragIdx=i; e.preventDefault(); draw();}
+},{passive:false});
+canvas.addEventListener('touchmove',function(e){
+  if(dragIdx<0||!e.touches[0]) return;
+  e.preventDefault();
+  var r=canvas.getBoundingClientRect();
+  amps[dragIdx]=yToVal(e.touches[0].clientY-r.top);
+  byId('s'+dragIdx).value=amps[dragIdx];
+  update();
+},{passive:false});
+canvas.addEventListener('touchend',function(){if(dragIdx>=0){dragIdx=-1;draw();}});
+
+/* ---- init ---- */
+resize();
+setTimeout(resize,180);
+setTimeout(resize,560);
+if(document.fonts&&document.fonts.ready){document.fonts.ready.then(resize);}
+showTask();
+update();
+</script>
+</body>
+</html>

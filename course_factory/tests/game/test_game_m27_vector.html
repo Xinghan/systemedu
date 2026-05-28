@@ -1,0 +1,602 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>向量箭头沙盒 — 一组数 = 空间一个箭头</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;700&family=Inter:wght@400;600;800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+  /* B 类深空底 (theme_style/styles.css 第 1 层) */
+  :root{
+    --bg-0: oklch(0.14 0.035 265);
+    --bg-1: oklch(0.18 0.04 265);
+    --bg-2: oklch(0.22 0.045 265);
+    --bg-3: oklch(0.28 0.05 265);
+    --line: oklch(0.35 0.05 265 / 0.35);
+    --line-strong: oklch(0.55 0.08 265 / 0.55);
+    --fg: oklch(0.96 0.01 265);
+    --fg-dim: oklch(0.75 0.02 265);
+    --fg-mute: oklch(0.55 0.03 265);
+    --gold: oklch(0.85 0.14 85);
+
+    /* 第 2 层 — math accent (electric blue) */
+    --math: oklch(0.72 0.17 245);
+    --math-dim: oklch(0.52 0.16 245);
+
+    /* 第 3 层 — math 5 色 palette (themes.js MTH-06: AXIS/PROOF/SHADOW/SOLUTION/QED) */
+    --AXIS:     oklch(0.72 0.17 245); /* electric blue 主 — 当前箭头 / 坐标轴 */
+    --PROOF:    oklch(0.52 0.16 245); /* 中 blue — 目标箭头 / C3 柱 */
+    --SHADOW:   oklch(0.35 0.10 245); /* 深 blue — 网格 / 箭头云残影 */
+    --SOLUTION: oklch(0.92 0.08 240); /* 近白 blue — 读数光晕 / C4 柱 */
+    --QED:      oklch(0.85 0.14 85);  /* 金色 — 匹配成功 / mascot 高亮 */
+  }
+
+  *{box-sizing:border-box;margin:0;padding:0;}
+  html,body{height:100%;overflow:hidden;}
+  body{
+    background: var(--bg-0);
+    color: var(--fg);
+    font-family: 'Inter','Noto Sans SC',-apple-system,BlinkMacSystemFont,sans-serif;
+    display: flex;
+    height: 100vh;
+  }
+
+  /* 200px 左侧栏 */
+  .game-sidebar{
+    width: 200px;
+    flex-shrink: 0;
+    background: var(--bg-1);
+    border-right: 1px solid var(--line);
+    padding: 14px 13px;
+    display: flex;
+    flex-direction: column;
+    gap: 11px;
+    overflow-y: auto;
+  }
+  .brand{ border-bottom: 1px solid var(--line); padding-bottom: 9px; }
+  .badge{
+    display: inline-block;
+    font-family: 'JetBrains Mono',ui-monospace,monospace;
+    font-size: 10px; letter-spacing: 0.12em;
+    color: var(--math); background: var(--bg-2);
+    padding: 3px 7px; border: 1px solid var(--line);
+    box-shadow: 2px 2px 0 var(--bg-0); margin-bottom: 7px;
+  }
+  .brand h1{ font-size: 14px; line-height: 1.35; color: var(--fg); }
+
+  /* mascot Pi — 旋转四面体 */
+  .mascot{ display:flex; align-items:center; gap:9px; }
+  .mascot svg{ width:42px; height:42px; flex-shrink:0; }
+  .mascot .mtag{ font-size:10px; color:var(--fg-mute); font-family:'JetBrains Mono',monospace; line-height:1.4; }
+  .mascot .mtag b{ color:var(--math); }
+
+  .note{
+    font-size: 11px; line-height: 1.55; color: var(--fg-dim);
+    background: var(--bg-2); border-left: 2px solid var(--math);
+    padding: 7px 9px;
+  }
+  .note b{ color: var(--SOLUTION); }
+
+  .task{
+    background: var(--bg-2); border: 1px solid var(--line);
+    box-shadow: 3px 3px 0 var(--bg-0); padding: 8px 10px;
+  }
+  .task .tlbl{ font-size:10px; letter-spacing:.08em; color:var(--QED); font-family:'JetBrains Mono',monospace; }
+  .task .ttxt{ font-size:11.5px; line-height:1.5; color:var(--fg); margin-top:4px; }
+  .task .thint{ font-size:10px; color:var(--fg-mute); margin-top:5px; line-height:1.4; }
+
+  .ctl{ display:flex; flex-direction:column; gap:5px; }
+  .ctl label{ font-size:10px; color:var(--fg-dim); font-family:'JetBrains Mono',monospace; display:flex; justify-content:space-between; }
+  .ctl label span{ color:var(--AXIS); font-weight:700; }
+  input[type=range]{ width:100%; accent-color: var(--math); height:4px; }
+
+  .toggle{
+    display:flex; align-items:center; gap:7px; font-size:11px; color:var(--fg-dim);
+    cursor:pointer; user-select:none;
+  }
+  .toggle input{ accent-color: var(--math); width:14px; height:14px; cursor:pointer; }
+
+  .btn, .lang-btn{
+    font-family:'Inter',sans-serif; font-size:11px; font-weight:600;
+    color: var(--fg); background: var(--bg-2);
+    border: 1px solid var(--line-strong);
+    box-shadow: 2px 2px 0 var(--bg-0);
+    padding: 7px 9px; cursor: pointer; transition: transform .08s, box-shadow .08s;
+  }
+  .btn:hover, .lang-btn:hover{ transform: translate(-1px,-1px); box-shadow: 3px 3px 0 var(--bg-0); }
+  .btn:active, .lang-btn:active{ transform: translate(1px,1px); box-shadow: 1px 1px 0 var(--bg-0); }
+  .lang-btn{ margin-top: auto; }
+
+  /* 主舞台 */
+  .game-main{
+    flex: 1; height: 100vh; position: relative;
+    display: flex; flex-direction: column;
+    padding: 16px; gap: 12px; min-width: 0;
+  }
+  .topbar{ display:flex; align-items:center; justify-content:space-between; gap:14px; }
+  .topbar h2{ font-size:14px; color:var(--fg); }
+  .topbar .sub{ font-size:11px; color:var(--fg-mute); font-family:'JetBrains Mono',monospace; }
+
+  /* HUD 读数条 */
+  .hud{ display:flex; gap:10px; flex-wrap:wrap; }
+  .hud .cell{
+    background: var(--bg-1); border: 1px solid var(--line);
+    box-shadow: 3px 3px 0 var(--bg-0); padding: 6px 11px;
+    min-width: 86px;
+  }
+  .hud .k{ font-size:9px; letter-spacing:.08em; color:var(--fg-mute); font-family:'JetBrains Mono',monospace; }
+  .hud .v{ font-size:17px; font-weight:700; font-family:'JetBrains Mono',monospace; color:var(--SOLUTION); margin-top:2px; }
+  .hud .v.match{ color: var(--QED); }
+
+  .stagewrap{
+    flex: 1; min-height: 0;
+    display: flex; flex-direction: column;
+    background: var(--bg-1); border: 1px solid var(--line);
+    box-shadow: 4px 4px 0 var(--bg-0); position: relative;
+  }
+  #stage{ flex:1; width:100%; height:100%; display:block; cursor: grab; }
+  #stage.dragging{ cursor: grabbing; }
+
+  .toast{
+    position:absolute; top:14px; left:50%; transform:translateX(-50%);
+    background: var(--bg-2); border:1px solid var(--QED);
+    box-shadow: 3px 3px 0 var(--bg-0);
+    color: var(--QED); font-weight:700; font-size:13px;
+    padding: 8px 16px; z-index: 20; display:none;
+    font-family:'JetBrains Mono',monospace;
+  }
+</style>
+</head>
+<body>
+
+<aside class="game-sidebar">
+  <div class="brand">
+    <span class="badge" id="badge">MTH-06 · VECTOR</span>
+    <h1 id="title">向量箭头沙盒</h1>
+  </div>
+
+  <div class="mascot">
+    <svg viewBox="0 0 48 48" id="piMascot" aria-hidden="true">
+      <!-- Pi — 旋转四面体 -->
+      <g id="piRot" transform="translate(24 24)">
+        <polygon points="0,-15 13,9 -13,9" fill="none" stroke="var(--AXIS)" stroke-width="1.6"/>
+        <polygon points="0,-15 0,7 -13,9" fill="var(--SHADOW)" opacity="0.55"/>
+        <polygon points="0,-15 0,7 13,9" fill="var(--PROOF)" opacity="0.5"/>
+        <circle cx="0" cy="0" r="2.4" fill="var(--QED)"/>
+      </g>
+    </svg>
+    <span class="mtag"><b>Pi</b><br>几何之境向导</span>
+  </div>
+
+  <div class="note" id="note">
+    一组数 <b>(C3, C4)</b> 不是两条线 — 它是空间里 <b>一个箭头</b>。拖动箭头端点, 看这组数怎样变成方向和长度。
+  </div>
+
+  <div class="task" id="taskBox">
+    <div class="tlbl" id="taskLbl">任务 1 / 3</div>
+    <div class="ttxt" id="taskTxt">把箭头拖到 长度≈5、偏向 C4 轴。</div>
+    <div class="thint" id="taskHint">提示: C4 大、C3 小, 箭头倒向横轴。</div>
+  </div>
+
+  <div class="ctl">
+    <label id="lblOpacity">云残影浓度 <span id="vOpacity">40%</span></label>
+    <input type="range" id="opacity" min="10" max="90" value="40">
+  </div>
+
+  <label class="toggle"><input type="checkbox" id="snapTog"><span id="snapLbl">网格吸附 (整数)</span></label>
+  <label class="toggle"><input type="checkbox" id="cloudTog" checked><span id="cloudLbl">显示箭头云</span></label>
+
+  <button class="btn" id="stampBtn">记下此刻 (加入云)</button>
+  <button class="btn" id="clearBtn">清空箭头云</button>
+  <button class="lang-btn" id="langBtn">中 / EN</button>
+</aside>
+
+<main class="game-main">
+  <div class="topbar">
+    <h2 id="canvasTitle">二维向量空间 — C3 轴 / C4 轴</h2>
+    <span class="sub" id="canvasSub">拖动箭头端点</span>
+  </div>
+
+  <div class="hud">
+    <div class="cell"><div class="k" id="kC3">C3 值</div><div class="v" id="vC3">2.0</div></div>
+    <div class="cell"><div class="k" id="kC4">C4 值</div><div class="v" id="vC4">3.0</div></div>
+    <div class="cell"><div class="k" id="kMag">长度 |v|</div><div class="v" id="vMag">3.61</div></div>
+    <div class="cell"><div class="k" id="kAng">方向 (deg)</div><div class="v" id="vAng">56</div></div>
+    <div class="cell"><div class="k" id="kMatch">匹配度</div><div class="v" id="vMatch">--</div></div>
+  </div>
+
+  <div class="stagewrap">
+    <canvas id="stage"></canvas>
+    <div class="toast" id="toast"></div>
+  </div>
+</main>
+
+<script>
+var LANG = 'cn';
+
+// ---- 状态 ----
+var stateVec = { c3: 2.0, c4: 3.0 };          // 当前箭头 (避免 window 同名: 不用 location/name 等)
+var cloudArrows = [];                          // 箭头云: [{c3,c4}]
+var taskIdx = 0;
+var cloudVisible = true;
+var snapOn = false;
+var cloudOpacity = 0.4;
+
+var AXIS_MAX = 8;                              // 坐标轴范围 [-8, 8] 量级
+
+var TASKS = {
+  cn: [
+    { txt:'把箭头拖到 长度≈5、偏向 C4 轴。', hint:'提示: C4 大、C3 小, 箭头倒向横轴。', target:{c3:1.5, c4:4.8} },
+    { txt:'把箭头拖到 长度≈5、偏向 C3 轴。', hint:'提示: C3 大、C4 小, 箭头立向纵轴。', target:{c3:4.8, c4:1.5} },
+    { txt:'把箭头拖到 两轴一样大 (约 45 度)。', hint:'提示: C3 与 C4 相等, 箭头走对角线。', target:{c3:3.5, c4:3.5} },
+  ],
+  en: [
+    { txt:'Drag the arrow to length≈5, leaning toward the C4 axis.', hint:'Hint: big C4, small C3 -> arrow tips toward horizontal.', target:{c3:1.5, c4:4.8} },
+    { txt:'Drag the arrow to length≈5, leaning toward the C3 axis.', hint:'Hint: big C3, small C4 -> arrow stands up vertical.', target:{c3:4.8, c4:1.5} },
+    { txt:'Drag the arrow so both axes are equal (about 45 deg).', hint:'Hint: C3 equals C4 -> arrow runs along the diagonal.', target:{c3:3.5, c4:3.5} },
+  ]
+};
+
+var I18N = {
+  badge:{ cn:'MTH-06 · VECTOR', en:'MTH-06 · VECTOR' },
+  title:{ cn:'向量箭头沙盒', en:'Vector Arrow Sandbox' },
+  note:{ cn:'一组数 <b>(C3, C4)</b> 不是两条线 — 它是空间里 <b>一个箭头</b>。拖动箭头端点, 看这组数怎样变成方向和长度。',
+         en:'A pair <b>(C3, C4)</b> is not two lines — it is <b>one arrow</b> in space. Drag the arrow tip and watch the pair become a direction and a length.' },
+  taskLbl:{ cn:'任务', en:'Task' },
+  lblOpacity:{ cn:'云残影浓度', en:'cloud opacity' },
+  snapLbl:{ cn:'网格吸附 (整数)', en:'snap to grid (int)' },
+  cloudLbl:{ cn:'显示箭头云', en:'show arrow cloud' },
+  stampBtn:{ cn:'记下此刻 (加入云)', en:'stamp this moment' },
+  clearBtn:{ cn:'清空箭头云', en:'clear cloud' },
+  canvasTitle:{ cn:'二维向量空间 — C3 轴 / C4 轴', en:'2D vector space — C3 axis / C4 axis' },
+  canvasSub:{ cn:'拖动箭头端点', en:'drag the arrow tip' },
+  kC3:{ cn:'C3 值', en:'C3 value' },
+  kC4:{ cn:'C4 值', en:'C4 value' },
+  kMag:{ cn:'长度 |v|', en:'length |v|' },
+  kAng:{ cn:'方向 (deg)', en:'angle (deg)' },
+  kMatch:{ cn:'匹配度', en:'match' },
+  matchHit:{ cn:'命中! 这组数 = 这个箭头', en:'matched! this pair = this arrow' },
+  allDone:{ cn:'三个任务全部完成 — 你已成为向量观察者', en:'all tasks done — you are now a vector observer' },
+};
+function t(k){ return (I18N[k] && I18N[k][LANG]) || (I18N[k] && I18N[k].en) || k; }
+
+function curTask(){ return TASKS[LANG][taskIdx] || null; }
+
+function refreshI18N(){
+  document.getElementById('badge').textContent = t('badge');
+  document.getElementById('title').textContent = t('title');
+  document.getElementById('note').innerHTML = t('note');
+  document.getElementById('lblOpacity').childNodes[0].nodeValue = t('lblOpacity') + ' ';
+  document.getElementById('snapLbl').textContent = t('snapLbl');
+  document.getElementById('cloudLbl').textContent = t('cloudLbl');
+  document.getElementById('stampBtn').textContent = t('stampBtn');
+  document.getElementById('clearBtn').textContent = t('clearBtn');
+  document.getElementById('canvasTitle').textContent = t('canvasTitle');
+  document.getElementById('canvasSub').textContent = t('canvasSub');
+  document.getElementById('kC3').textContent = t('kC3');
+  document.getElementById('kC4').textContent = t('kC4');
+  document.getElementById('kMag').textContent = t('kMag');
+  document.getElementById('kAng').textContent = t('kAng');
+  document.getElementById('kMatch').textContent = t('kMatch');
+  document.getElementById('langBtn').textContent = LANG==='cn' ? '中 / EN' : 'EN / 中';
+  refreshTask();
+}
+function refreshTask(){
+  var task = curTask();
+  if(!task){
+    document.getElementById('taskLbl').textContent = t('taskLbl');
+    document.getElementById('taskTxt').textContent = t('allDone');
+    document.getElementById('taskHint').textContent = '';
+    return;
+  }
+  document.getElementById('taskLbl').textContent = t('taskLbl') + ' ' + (taskIdx+1) + ' / ' + TASKS[LANG].length;
+  document.getElementById('taskTxt').textContent = task.txt;
+  document.getElementById('taskHint').textContent = task.hint;
+}
+
+// ---- 几何读数 ----
+function magOf(v){ return Math.sqrt(v.c3*v.c3 + v.c4*v.c4); }
+function angOf(v){ // 从 C3 纵轴起? 用标准: angle 相对 C4(横)轴, 0..360
+  var a = Math.atan2(v.c3, v.c4) * 180 / Math.PI;
+  if(a < 0) a += 360;
+  return a;
+}
+function matchPct(){
+  var task = curTask();
+  if(!task) return null;
+  var tg = task.target;
+  var d = Math.sqrt(Math.pow(stateVec.c3 - tg.c3, 2) + Math.pow(stateVec.c4 - tg.c4, 2));
+  // d=0 -> 100%, d>=4 -> 0%
+  var pct = Math.max(0, 100 - d * 25);
+  return Math.round(pct);
+}
+
+var matched = false;
+function updateHUD(){
+  document.getElementById('vC3').textContent = stateVec.c3.toFixed(1);
+  document.getElementById('vC4').textContent = stateVec.c4.toFixed(1);
+  document.getElementById('vMag').textContent = magOf(stateVec).toFixed(2);
+  document.getElementById('vAng').textContent = Math.round(angOf(stateVec));
+  var mEl = document.getElementById('vMatch');
+  var pct = matchPct();
+  if(pct === null){ mEl.textContent = '--'; mEl.classList.remove('match'); return; }
+  mEl.textContent = pct + '%';
+  if(pct >= 90){
+    mEl.classList.add('match');
+    if(!matched){ matched = true; onMatch(); }
+  } else {
+    mEl.classList.remove('match');
+    matched = false;
+  }
+}
+
+var toastTimer = null;
+function showToast(msg){
+  var el = document.getElementById('toast');
+  el.textContent = msg; el.style.display = 'block';
+  if(toastTimer) clearTimeout(toastTimer);
+  toastTimer = setTimeout(function(){ el.style.display = 'none'; }, 2200);
+}
+function onMatch(){
+  // 自动把命中的这一刻记入云
+  cloudArrows.push({ c3: stateVec.c3, c4: stateVec.c4 });
+  if(taskIdx < TASKS[LANG].length - 1){
+    showToast(t('matchHit'));
+    taskIdx++;
+    setTimeout(function(){ matched = false; refreshTask(); updateHUD(); draw(); }, 700);
+  } else {
+    taskIdx++;
+    showToast(t('allDone'));
+    refreshTask();
+  }
+}
+
+// ---- canvas ----
+var canvas = document.getElementById('stage');
+var ctx = canvas.getContext('2d');
+var W=0, H=0, DPR=1;
+var vOrigin = {x:0, y:0};
+var scale = 1; // px per unit
+
+function resize(){
+  var rect = canvas.parentElement.getBoundingClientRect();
+  if(rect.width < 1 || rect.height < 1) return;
+  DPR = window.devicePixelRatio || 1;
+  canvas.width = rect.width * DPR; canvas.height = rect.height * DPR;
+  canvas.style.width = rect.width + 'px'; canvas.style.height = rect.height + 'px';
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  W = rect.width; H = rect.height;
+  vOrigin.x = W/2; vOrigin.y = H/2;
+  scale = Math.min(W, H) * 0.5 / AXIS_MAX;
+  draw();
+}
+window.addEventListener('resize', resize);
+
+// 数据坐标 -> 屏幕坐标. C4 = 横轴(右正), C3 = 纵轴(上正)
+function toScreen(c3, c4){
+  return { x: vOrigin.x + c4 * scale, y: vOrigin.y - c3 * scale };
+}
+function toData(px, py){
+  return { c3: (vOrigin.y - py) / scale, c4: (px - vOrigin.x) / scale };
+}
+
+function drawArrow(x0, y0, x1, y1, color, width, alpha){
+  ctx.save();
+  ctx.globalAlpha = alpha === undefined ? 1 : alpha;
+  ctx.strokeStyle = color; ctx.fillStyle = color;
+  ctx.lineWidth = width;
+  ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(x0,y0); ctx.lineTo(x1,y1); ctx.stroke();
+  // 箭头头
+  var ang = Math.atan2(y1-y0, x1-x0);
+  var hl = 9 + width*1.5;
+  ctx.beginPath();
+  ctx.moveTo(x1, y1);
+  ctx.lineTo(x1 - hl*Math.cos(ang - 0.4), y1 - hl*Math.sin(ang - 0.4));
+  ctx.lineTo(x1 - hl*Math.cos(ang + 0.4), y1 - hl*Math.sin(ang + 0.4));
+  ctx.closePath(); ctx.fill();
+  ctx.restore();
+}
+
+function css(name){ return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
+
+function draw(){
+  if(W===0) return;
+  ctx.clearRect(0,0,W,H);
+  ctx.fillStyle = css('--bg-1'); ctx.fillRect(0,0,W,H);
+
+  var cAXIS = css('--AXIS'), cPROOF = css('--PROOF'), cSHADOW = css('--SHADOW'),
+      cSOL = css('--SOLUTION'), cQED = css('--QED'), cLine = css('--line'),
+      cFgDim = css('--fg-dim'), cFgMute = css('--fg-mute');
+
+  // 网格
+  ctx.strokeStyle = css('--bg-3'); ctx.lineWidth = 1;
+  for(var g=-AXIS_MAX; g<=AXIS_MAX; g++){
+    var sx = vOrigin.x + g*scale, sy = vOrigin.y - g*scale;
+    ctx.globalAlpha = 0.5;
+    ctx.beginPath(); ctx.moveTo(sx, 0); ctx.lineTo(sx, H); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(0, sy); ctx.lineTo(W, sy); ctx.stroke();
+  }
+  ctx.globalAlpha = 1;
+
+  // 坐标轴
+  ctx.strokeStyle = cAXIS; ctx.lineWidth = 1.6;
+  ctx.beginPath(); ctx.moveTo(0, vOrigin.y); ctx.lineTo(W, vOrigin.y); ctx.stroke(); // C4 横
+  ctx.beginPath(); ctx.moveTo(vOrigin.x, 0); ctx.lineTo(vOrigin.x, H); ctx.stroke(); // C3 纵
+  // 轴标签
+  ctx.fillStyle = cAXIS; ctx.font = "700 13px 'JetBrains Mono', monospace";
+  ctx.textAlign = 'right'; ctx.textBaseline = 'bottom';
+  ctx.fillText('C4', W-10, vOrigin.y - 8);
+  ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+  ctx.fillText('C3', vOrigin.x + 8, 8);
+  // 刻度
+  ctx.fillStyle = cFgMute; ctx.font = "10px 'JetBrains Mono', monospace";
+  ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+  for(var k=-AXIS_MAX; k<=AXIS_MAX; k+=2){
+    if(k===0) continue;
+    ctx.fillText(k, vOrigin.x + k*scale, vOrigin.y + 5);
+    ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+    ctx.fillText(k, vOrigin.x - 6, vOrigin.y - k*scale);
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+  }
+
+  // 箭头云 (历史时刻) — SHADOW 残影
+  if(cloudVisible){
+    for(var i=0; i<cloudArrows.length; i++){
+      var cv = cloudArrows[i];
+      var sp = toScreen(cv.c3, cv.c4);
+      drawArrow(vOrigin.x, vOrigin.y, sp.x, sp.y, cSHADOW, 2.4, cloudOpacity);
+    }
+  }
+
+  // 目标箭头 (虚线方式: 用 PROOF 半透明)
+  var task = curTask();
+  if(task){
+    var tp = toScreen(task.target.c3, task.target.c4);
+    ctx.save();
+    ctx.setLineDash([6,5]);
+    drawArrow(vOrigin.x, vOrigin.y, tp.x, tp.y, cPROOF, 2.2, 0.85);
+    ctx.restore();
+    ctx.fillStyle = cPROOF; ctx.font = "600 11px 'JetBrains Mono', monospace";
+    ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+    ctx.fillText(LANG==='cn'?'目标':'target', tp.x + 8, tp.y);
+  }
+
+  // 当前箭头 — AXIS 主色, 命中变 QED
+  var p = toScreen(stateVec.c3, stateVec.c4);
+  var curColor = matched ? cQED : cAXIS;
+  drawArrow(vOrigin.x, vOrigin.y, p.x, p.y, curColor, 3.4, 1);
+
+  // 端点把手 (SOLUTION 光晕)
+  ctx.beginPath(); ctx.arc(p.x, p.y, 9, 0, Math.PI*2);
+  ctx.fillStyle = cSOL; ctx.globalAlpha = 0.25; ctx.fill(); ctx.globalAlpha = 1;
+  ctx.beginPath(); ctx.arc(p.x, p.y, 5, 0, Math.PI*2);
+  ctx.fillStyle = curColor; ctx.fill();
+  ctx.strokeStyle = cSOL; ctx.lineWidth = 1.5; ctx.stroke();
+
+  // 分量投影虚线 (把箭头分解回 C3/C4 两个值)
+  ctx.save();
+  ctx.setLineDash([3,4]); ctx.lineWidth = 1.2; ctx.strokeStyle = cFgDim; ctx.globalAlpha = 0.7;
+  var px4 = toScreen(0, stateVec.c4); // C4 轴上的投影
+  var px3 = toScreen(stateVec.c3, 0); // C3 轴上的投影
+  ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(px4.x, px4.y); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(px3.x, px3.y); ctx.stroke();
+  ctx.restore();
+
+  // 端点坐标读出
+  ctx.fillStyle = cSOL; ctx.font = "700 12px 'JetBrains Mono', monospace";
+  ctx.textAlign = 'left'; ctx.textBaseline = 'bottom';
+  ctx.fillText('(' + stateVec.c3.toFixed(1) + ', ' + stateVec.c4.toFixed(1) + ')', p.x + 11, p.y - 7);
+}
+
+// ---- 时域两个柱 (在 canvas 内左下角小图: C3/C4 高度) ----
+// 已用 HUD 读数 + 投影虚线表达;另在角落画两个柱强化"一组数=两个值"
+function drawBars(){ /* 合并进 draw 的扩展见下 */ }
+
+// 把柱状图叠加进主 draw 之后调用
+var origDraw = draw;
+draw = function(){
+  origDraw();
+  if(W===0) return;
+  var cPROOF = css('--PROOF'), cSOL = css('--SOLUTION'), cFgMute = css('--fg-mute'), cLine = css('--line');
+  // 右下角时域两柱
+  var bw = 26, gap = 14, baseY = H - 24, maxBarH = Math.min(120, H*0.32);
+  var bx = W - 24 - (bw*2 + gap);
+  // 背板
+  ctx.save();
+  ctx.fillStyle = css('--bg-2'); ctx.globalAlpha = 0.9;
+  ctx.fillRect(bx - 12, baseY - maxBarH - 26, bw*2 + gap + 24, maxBarH + 42);
+  ctx.globalAlpha = 1;
+  ctx.strokeStyle = cLine; ctx.lineWidth = 1; ctx.strokeRect(bx - 12, baseY - maxBarH - 26, bw*2 + gap + 24, maxBarH + 42);
+  // 柱
+  var h3 = Math.abs(stateVec.c3)/AXIS_MAX * maxBarH;
+  var h4 = Math.abs(stateVec.c4)/AXIS_MAX * maxBarH;
+  ctx.fillStyle = cPROOF; ctx.fillRect(bx, baseY - h3, bw, h3);
+  ctx.fillStyle = cSOL; ctx.fillRect(bx + bw + gap, baseY - h4, bw, h4);
+  // 基线
+  ctx.strokeStyle = cFgMute; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(bx - 4, baseY); ctx.lineTo(bx + bw*2 + gap + 4, baseY); ctx.stroke();
+  // 标签
+  ctx.fillStyle = cFgMute; ctx.font = "9px 'JetBrains Mono', monospace";
+  ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+  ctx.fillText('C3', bx + bw/2, baseY + 4);
+  ctx.fillText('C4', bx + bw + gap + bw/2, baseY + 4);
+  ctx.fillStyle = cFgMute; ctx.textBaseline = 'bottom';
+  ctx.fillText(LANG==='cn'?'时域两值':'time bars', bx + bw + gap/2, baseY - maxBarH - 28);
+  ctx.restore();
+};
+
+// ---- 交互: 拖动箭头端点 ----
+var dragging = false;
+function evtPos(e){
+  var rect = canvas.getBoundingClientRect();
+  var cx = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left;
+  var cy = (e.touches ? e.touches[0].clientY : e.clientY) - rect.top;
+  return { x: cx, y: cy };
+}
+function applyDrag(pos){
+  var d = toData(pos.x, pos.y);
+  // 限幅
+  d.c3 = Math.max(-AXIS_MAX, Math.min(AXIS_MAX, d.c3));
+  d.c4 = Math.max(-AXIS_MAX, Math.min(AXIS_MAX, d.c4));
+  if(snapOn){ d.c3 = Math.round(d.c3); d.c4 = Math.round(d.c4); }
+  stateVec.c3 = d.c3; stateVec.c4 = d.c4;
+  updateHUD(); draw();
+}
+canvas.addEventListener('mousedown', function(e){
+  dragging = true; canvas.classList.add('dragging'); applyDrag(evtPos(e));
+});
+window.addEventListener('mousemove', function(e){ if(dragging) applyDrag(evtPos(e)); });
+window.addEventListener('mouseup', function(){ dragging = false; canvas.classList.remove('dragging'); });
+canvas.addEventListener('touchstart', function(e){ dragging = true; applyDrag(evtPos(e)); e.preventDefault(); }, {passive:false});
+canvas.addEventListener('touchmove', function(e){ if(dragging){ applyDrag(evtPos(e)); e.preventDefault(); } }, {passive:false});
+canvas.addEventListener('touchend', function(){ dragging = false; });
+
+// ---- 控件 ----
+document.getElementById('opacity').addEventListener('input', function(e){
+  cloudOpacity = parseInt(e.target.value) / 100;
+  document.getElementById('vOpacity').textContent = e.target.value + '%';
+  draw();
+});
+document.getElementById('snapTog').addEventListener('change', function(e){
+  snapOn = e.target.checked;
+  if(snapOn){ stateVec.c3 = Math.round(stateVec.c3); stateVec.c4 = Math.round(stateVec.c4); updateHUD(); }
+  draw();
+});
+document.getElementById('cloudTog').addEventListener('change', function(e){
+  cloudVisible = e.target.checked; draw();
+});
+document.getElementById('stampBtn').addEventListener('click', function(){
+  cloudArrows.push({ c3: stateVec.c3, c4: stateVec.c4 });
+  if(cloudArrows.length > 40) cloudArrows.shift();
+  draw();
+});
+document.getElementById('clearBtn').addEventListener('click', function(){
+  cloudArrows = []; draw();
+});
+document.getElementById('langBtn').addEventListener('click', function(){
+  LANG = LANG === 'cn' ? 'en' : 'cn';
+  // 切语言重排任务 (taskIdx 不变, 文案换)
+  refreshI18N(); updateHUD(); draw();
+});
+
+// mascot 旋转
+var mAngle = 0;
+function spinMascot(){
+  mAngle = (mAngle + 0.8) % 360;
+  var g = document.getElementById('piRot');
+  if(g) g.setAttribute('transform', 'translate(24 24) rotate(' + mAngle + ') scale(' + (0.92 + 0.08*Math.cos(mAngle*Math.PI/180)) + ')');
+  requestAnimationFrame(spinMascot);
+}
+requestAnimationFrame(spinMascot);
+
+// ---- init ----
+refreshI18N();
+resize();
+setTimeout(resize, 200);
+setTimeout(resize, 600);
+if(document.fonts && document.fonts.ready){ document.fonts.ready.then(resize); }
+updateHUD();
+</script>
+</body>
+</html>

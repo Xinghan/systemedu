@@ -1,0 +1,570 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CSP — 让电脑自动找最佳看脑波角度</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+  /* ---- 第 1 层: 共享深空底 (B 类硬约束, 26 套统一) ---- */
+  :root{
+    --bg-0: oklch(0.14 0.035 265);
+    --bg-1: oklch(0.18 0.04 265);
+    --bg-2: oklch(0.22 0.045 265);
+    --bg-3: oklch(0.28 0.05 265);
+    --line: oklch(0.35 0.05 265 / 0.35);
+    --line-strong: oklch(0.55 0.08 265 / 0.55);
+    --fg:      oklch(0.96 0.01 265);
+    --fg-dim:  oklch(0.75 0.02 265);
+    --fg-mute: oklch(0.55 0.03 265);
+    --gold:    oklch(0.85 0.14 85);
+    /* ---- 第 2 层: math signature accent (MTH-06 electric blue) ---- */
+    --accent: oklch(0.72 0.17 245);
+    /* ---- 第 3 层: math 5 色 palette (themes.js MTH-06, 限定用法) ---- */
+    --axis:     oklch(0.72 0.17 245);   /* AXIS — 左手类 / 主轴 */
+    --proof:    oklch(0.52 0.16 245);   /* PROOF — 推导链 */
+    --shadow:   oklch(0.35 0.10 245);   /* SHADOW — 底纹 */
+    --solution: oklch(0.92 0.08 240);   /* SOLUTION — 高亮解 */
+    --qed:      oklch(0.85 0.14 85);    /* QED — 收束印章, 同 gold */
+    --right:    oklch(0.75 0.16 15);    /* 右手类对比色 (rose, 来自 med 区分用, 非 body) */
+  }
+  html,body{margin:0;padding:0;height:100vh;overflow:hidden;background:var(--bg-0);
+    font-family:'Inter',system-ui,sans-serif;color:var(--fg);}
+  .sidebar{background:var(--bg-1);border-right:1px solid var(--line-strong);}
+  .lang-btn{background:var(--bg-2);border:1px solid var(--line-strong);color:var(--fg);
+    font-weight:600;box-shadow:3px 3px 0 var(--bg-0);transition:transform .1s,box-shadow .1s;
+    font-family:'JetBrains Mono',monospace;}
+  .lang-btn:hover{transform:translate(-1px,-1px);box-shadow:4px 4px 0 var(--bg-0);}
+  .lang-btn:active{transform:translate(1px,1px);box-shadow:1px 1px 0 var(--bg-0);}
+  .sub{position:absolute;bottom:22px;left:50%;transform:translateX(-50%);text-align:center;width:84%;pointer-events:none;}
+  .sub-zh{font-size:20px;font-weight:700;color:var(--fg);background:oklch(0.18 0.04 265 / 0.9);
+    padding:6px 18px;display:inline-block;border:1px solid var(--line-strong);}
+  .sub-en{font-size:12px;font-style:italic;color:var(--fg-dim);margin-top:4px;
+    font-family:'JetBrains Mono',monospace;}
+  .hud{position:absolute;top:16px;right:16px;background:oklch(0.18 0.04 265 / 0.92);
+    border:1px solid var(--line-strong);padding:10px 14px;font-family:'JetBrains Mono',monospace;
+    font-size:11px;box-shadow:3px 3px 0 var(--bg-0);min-width:180px;}
+  .hud-row{display:flex;justify-content:space-between;gap:12px;line-height:1.65;}
+  .hud-lbl{color:var(--fg-dim);}.hud-val{color:var(--accent);font-weight:700;}
+  .hud-val.gold{color:var(--gold);}
+</style>
+</head>
+<body class="h-screen overflow-hidden flex">
+
+<aside class="sidebar w-[200px] h-screen flex-shrink-0 flex flex-col gap-3 p-4">
+  <div class="flex items-center gap-2">
+    <!-- mascot: Pi — 旋转四面体 (MTH-06), 第 3 层 palette 用于 mascot 配色 -->
+    <svg width="34" height="34" viewBox="0 0 40 40" id="mascot">
+      <polygon points="20,5 35,30 5,30" fill="none" stroke="var(--axis)" stroke-width="1.6"/>
+      <polygon points="20,5 35,30 20,22" fill="var(--proof)" opacity="0.55"/>
+      <polygon points="20,5 20,22 5,30" fill="var(--axis)" opacity="0.35"/>
+      <line x1="20" y1="22" x2="5" y2="30" stroke="var(--solution)" stroke-width="1"/>
+      <line x1="20" y1="22" x2="35" y2="30" stroke="var(--solution)" stroke-width="1"/>
+      <circle cx="20" cy="16" r="1.8" fill="var(--qed)"/>
+    </svg>
+    <span class="text-xs font-bold tracking-wide" style="font-family:'JetBrains Mono',monospace;color:var(--fg-dim);">MTH-06 / Pi</span>
+  </div>
+  <h1 class="text-base font-bold leading-snug" id="title">CSP<br>自动找最佳角度</h1>
+  <div class="text-xs leading-relaxed" id="intro" style="color:var(--fg-dim);">
+    <p class="mb-2">手动转方向找不完。让电脑直接<b style="color:var(--accent);">解出</b>那个最能把左右手分开的角度。</p>
+    <p class="italic text-[10px]" style="color:var(--fg-mute);font-family:'JetBrains Mono',monospace;" id="intro-en">Solve, don't search.</p>
+  </div>
+  <ul class="text-xs space-y-1.5" id="watchlist" style="color:var(--fg-dim);"></ul>
+  <button id="langBtn" class="lang-btn mt-auto px-3 py-2 text-xs">CN / EN</button>
+</aside>
+
+<main class="flex-1 h-screen relative overflow-hidden">
+  <canvas id="stage" class="absolute inset-0 w-full h-full"></canvas>
+  <div class="hud">
+    <div class="hud-row"><span class="hud-lbl">frame</span><span class="hud-val" id="hScene">1/5</span></div>
+    <div class="hud-row"><span class="hud-lbl">stage</span><span class="hud-val" id="hStage">recall</span></div>
+    <div class="hud-row"><span class="hud-lbl">Var_L = w.Cov_L.w</span><span class="hud-val" id="hVarL">--</span></div>
+    <div class="hud-row"><span class="hud-lbl">Var_R = w.Cov_R.w</span><span class="hud-val" id="hVarR">--</span></div>
+    <div class="hud-row"><span class="hud-lbl">ratio (Rayleigh)</span><span class="hud-val gold" id="hRatio">--</span></div>
+  </div>
+  <div class="sub">
+    <div class="sub-zh" id="subZh">...</div>
+    <div class="sub-en" id="subEn">...</div>
+  </div>
+</main>
+
+<script>
+/* ============================================================
+   M29 CSP (Common Spatial Pattern) — B 类机制 animation
+   核心: max Rayleigh 商 (w·Cov_L·w)/(w·Cov_R·w)
+        = 广义特征值问题 Cov_L w = lambda * Cov_R w
+   公式只在配合可视化分步处出现, 用文字 + 几何, 不堆符号。
+   Sigma 一律写 Cov_L / Cov_R (避免 window 同名 & Unicode Sigma 符号)。
+============================================================ */
+var LANG='cn';
+var I18N = {
+  title:{cn:'CSP<br>自动找最佳角度', en:'CSP<br>auto-find best axis'},
+  intro_zh:{cn:'手动转方向找不完。让电脑直接<b style="color:var(--accent);">解出</b>那个最能把左右手分开的角度。',
+            en:'Too many angles to try by hand. Let the computer <b style="color:var(--accent);">solve</b> for the best one.'},
+  intro_en:{cn:'Solve, don\'t search.', en:'Solve, don\'t search.'},
+  watch:{cn:['F1 回顾: 手动转方向找不完','F2 目标: 左手方差大, 右手方差小','F3 比值 = Rayleigh 商','F4 广义特征值一步解出','F5 CSP 滤波器: 完美可分'],
+         en:['F1 recall: rotating by hand never ends','F2 goal: big Var_L, small Var_R','F3 ratio = Rayleigh quotient','F4 generalized eigenvalue solves it','F5 CSP filter: cleanly separable']},
+  s0_zh:{cn:'F1 回顾 M28: 一只手转方向, 投影方差就变 — 但方向有无穷多个, 手动试不完', en:'F1 recall: rotating the axis changes variance, but there are infinitely many angles to try'},
+  s0_en:{cn:'There must be a way to compute the best angle directly.', en:'Surely we can compute the best one directly.'},
+  s1_zh:{cn:'F2 目标: 想象左手 (蓝) 和右手 (红) 两团脑波。要一个方向 w, 投影后左手方差大、右手方差小', en:'F2 goal: find axis w so projected Var_L is large and Var_R is small'},
+  s1_en:{cn:'Two covariance clouds Cov_L and Cov_R, from M26.', en:'Two covariance clouds Cov_L and Cov_R, from M26.'},
+  s2_zh:{cn:'F3 投影方差 = w · Cov · w (用 M26 协方差算)。目标 = 最大化 比值 Var_L / Var_R = Rayleigh 商', en:'F3 projected var = w·Cov·w. Maximize ratio Var_L/Var_R = Rayleigh quotient'},
+  s2_en:{cn:'Big ratio = left spreads wide while right stays tight.', en:'Big ratio = left wide, right tight.'},
+  s3_zh:{cn:'F4 让比值最大的 w 不用搜 — 解广义特征值: Cov_L w = (lambda) Cov_R w。lambda 最大的方向就是答案', en:'F4 the maximizer solves Cov_L w = (lambda) Cov_R w — pick largest lambda'},
+  s3_en:{cn:'Generalized eigenvalue: one solve, exact best axis.', en:'Generalized eigenvalue: one solve, the exact best axis.'},
+  s4_zh:{cn:'F5 CSP 一次给出一组最优空间滤波器, 左右手投影方差天差地别 — 完美可分', en:'F5 CSP yields optimal spatial filters; left vs right cleanly separable'},
+  s4_en:{cn:'CSP: auto-find the best brainwave angle — the core of BCI.', en:'CSP: the core algorithm of a BCI.'},
+};
+var STAGE_KEY=['recall','goal','rayleigh','eigen','filter'];
+function tt(k){return (I18N[k]&&I18N[k][LANG])||(I18N[k]&&I18N[k]['en'])||k;}
+function refreshI18N(){
+  document.getElementById('title').innerHTML = tt('title');
+  document.getElementById('intro').children[0].innerHTML = tt('intro_zh');
+  document.getElementById('intro-en').textContent = tt('intro_en');
+  document.getElementById('watchlist').innerHTML = tt('watch').map(function(x){return '<li>'+x+'</li>';}).join('');
+  document.getElementById('langBtn').textContent = LANG==='cn'?'CN / EN':'EN / CN';
+  updateSubtitle(currentScene);
+}
+document.getElementById('langBtn').addEventListener('click', function(){
+  LANG = LANG==='cn'?'en':'cn'; refreshI18N();
+});
+
+/* ---------- canvas setup ---------- */
+var canvas = document.getElementById('stage');
+var cx2d = canvas.getContext('2d');
+var W=0,H=0,DPR=1;
+function resize(){
+  var rect = canvas.parentElement.getBoundingClientRect();
+  if(rect.width<1||rect.height<1) return;
+  DPR = window.devicePixelRatio||1;
+  canvas.width = rect.width*DPR; canvas.height = rect.height*DPR;
+  canvas.style.width = rect.width+'px'; canvas.style.height = rect.height+'px';
+  cx2d.setTransform(DPR,0,0,DPR,0,0);
+  W = rect.width; H = rect.height;
+}
+window.addEventListener('resize', resize);
+resize(); setTimeout(resize,200); setTimeout(resize,600);
+document.fonts.ready.then(function(){resize();});
+
+/* ---------- color constants (read from CSS vars via canvas) ---------- */
+var C_AXIS='oklch(0.72 0.17 245)';      // left / 主轴 / blue
+var C_AXIS_T='oklch(0.72 0.17 245 / 0.5)';
+var C_RIGHT='oklch(0.75 0.16 15)';       // right / rose
+var C_RIGHT_T='oklch(0.75 0.16 15 / 0.5)';
+var C_PROOF='oklch(0.52 0.16 245)';
+var C_SOL='oklch(0.92 0.08 240)';
+var C_GOLD='oklch(0.85 0.14 85)';
+var C_FG='oklch(0.96 0.01 265)';
+var C_DIM='oklch(0.75 0.02 265)';
+var C_MUTE='oklch(0.55 0.03 265)';
+var C_LINE='oklch(0.45 0.06 265 / 0.5)';
+var C_PANEL='oklch(0.18 0.04 265)';
+var C_PANEL2='oklch(0.22 0.045 265)';
+
+/* ---------- data: two covariance clouds ----------
+   left (蓝): 沿 x 方向方差大 (横向铺开)
+   right (红): 沿 y 方向方差大 (纵向铺开)
+   => 最佳投影方向 约等于 水平 (x), 此时 Var_L 远大于 Var_R   */
+function gauss(seed){
+  var u1 = (Math.sin(seed*12.9898)*43758.5453)%1; u1 = u1<0?u1+1:u1;
+  var u2 = (Math.sin(seed*78.233)*43758.5453)%1; u2 = u2<0?u2+1:u2;
+  if(u1<0.0001) u1=0.0001;
+  return Math.sqrt(-2*Math.log(u1))*Math.cos(2*Math.PI*u2);
+}
+function genCloud(sx, sy, rho, n, seed){
+  var arr = [];
+  for(var i=0;i<n;i++){
+    var z1 = gauss(seed+i*2.7), z2 = gauss(seed+i*2.7+1.3);
+    arr.push([sx*z1, sy*(rho*z1 + Math.sqrt(Math.max(0,1-rho*rho))*z2)]);
+  }
+  return arr;
+}
+var ptsL = genCloud(8.5, 2.4, 0.1, 190, 31);
+var ptsR = genCloud(2.4, 8.5, 0.1, 190, 47);
+
+function projVar(pts, theta){
+  var cw=Math.cos(theta), sw=Math.sin(theta);
+  var vals = pts.map(function(p){return p[0]*cw + p[1]*sw;});
+  var m = vals.reduce(function(a,b){return a+b;},0)/vals.length;
+  var v = vals.reduce(function(a,x){return a+(x-m)*(x-m);},0)/vals.length;
+  return {vals:vals, mean:m, var:v};
+}
+
+/* ---------- timeline ---------- */
+var currentScene = 0;
+var SCENE_DUR = 7000;
+var N_SCENE = 5;
+var animStart = performance.now();
+function updateSubtitle(s){
+  var k='s'+s;
+  document.getElementById('subZh').innerHTML = tt(k+'_zh');
+  document.getElementById('subEn').textContent = tt(k+'_en');
+  document.getElementById('hScene').textContent = (s+1)+'/'+N_SCENE;
+  document.getElementById('hStage').textContent = STAGE_KEY[s]||'';
+}
+
+/* ---------- shared draw helpers ---------- */
+function panel(px,py,pw,ph){
+  cx2d.fillStyle=C_PANEL; cx2d.strokeStyle=C_LINE; cx2d.lineWidth=1;
+  cx2d.fillRect(px,py,pw,ph); cx2d.strokeRect(px,py,pw,ph);
+}
+function frameTitle(s){
+  var titles={cn:['第 1 帧  回顾: 方向无穷多, 手动试不完','第 2 帧  目标: 左手方差大, 右手方差小','第 3 帧  比值 = Rayleigh 商','第 4 帧  广义特征值一步解出','第 5 帧  CSP 滤波器: 完美可分'],
+              en:['F1  recall: too many angles to try','F2  goal: big Var_L, small Var_R','F3  ratio = Rayleigh quotient','F4  generalized eigenvalue solves it','F5  CSP filter: cleanly separable']};
+  cx2d.fillStyle=C_FG; cx2d.font='800 18px Inter,sans-serif'; cx2d.textAlign='center';
+  cx2d.fillText(titles[LANG][s], W/2, 34);
+}
+function drawAxesXY(cx,cy,sz){
+  cx2d.strokeStyle=C_LINE; cx2d.lineWidth=1;
+  cx2d.beginPath();
+  cx2d.moveTo(cx-sz/2,cy); cx2d.lineTo(cx+sz/2,cy);
+  cx2d.moveTo(cx,cy-sz/2); cx2d.lineTo(cx,cy+sz/2);
+  cx2d.stroke();
+  cx2d.fillStyle=C_MUTE; cx2d.font='600 10px JetBrains Mono,monospace';
+  cx2d.textAlign='left';  cx2d.fillText('C3', cx+sz/2+4, cy-3);
+  cx2d.textAlign='center';cx2d.fillText('C4', cx, cy-sz/2-5);
+}
+function drawCloud(cx,cy,unit,pts,sz,color){
+  for(var i=0;i<pts.length;i++){
+    var x=cx+pts[i][0]*unit, y=cy-pts[i][1]*unit;
+    if(Math.abs(pts[i][0]*unit)>sz/2 || Math.abs(pts[i][1]*unit)>sz/2) continue;
+    cx2d.fillStyle=color;
+    cx2d.beginPath(); cx2d.arc(x,y,2.1,0,Math.PI*2); cx2d.fill();
+  }
+}
+function drawProjAxis(cx,cy,sz,theta,color){
+  var dx=Math.cos(theta)*sz*0.5, dy=-Math.sin(theta)*sz*0.5;
+  cx2d.strokeStyle=color; cx2d.lineWidth=2.5; cx2d.setLineDash([6,3]);
+  cx2d.beginPath(); cx2d.moveTo(cx-dx,cy-dy); cx2d.lineTo(cx+dx,cy+dy); cx2d.stroke();
+  cx2d.setLineDash([]);
+  cx2d.fillStyle=color;
+  var ang=Math.atan2(dy,dx);
+  cx2d.save(); cx2d.translate(cx+dx,cy+dy); cx2d.rotate(ang);
+  cx2d.beginPath(); cx2d.moveTo(0,0); cx2d.lineTo(-9,-4); cx2d.lineTo(-9,4); cx2d.closePath(); cx2d.fill();
+  cx2d.restore();
+  cx2d.fillStyle=color; cx2d.font='700 13px JetBrains Mono,monospace'; cx2d.textAlign='left';
+  cx2d.fillText('w', cx+dx+5, cy+dy-2);
+}
+function setHUD(vL,vR){
+  var eL=document.getElementById('hVarL'), eR=document.getElementById('hVarR'), eRa=document.getElementById('hRatio');
+  eL.textContent = vL==null?'--':vL.toFixed(1);
+  eR.textContent = vR==null?'--':vR.toFixed(1);
+  eRa.textContent = (vL==null||vR==null)?'--':(vL/Math.max(vR,0.01)).toFixed(2);
+}
+
+/* =================== F1: recall (M28 manual rotate) =================== */
+function drawScene0(p){
+  frameTitle(0);
+  var sz=Math.min(W*0.42,H*0.6), cx=W*0.3, cy=H*0.5;
+  panel(cx-sz/2-12,cy-sz/2-12,sz+24,sz+24);
+  drawAxesXY(cx,cy,sz);
+  var unit=sz/26;
+  drawCloud(cx,cy,unit,ptsL,sz,C_AXIS_T);
+  // manual sweeping axis — many angles, never settling
+  var theta = (Math.sin(p*Math.PI*3)*0.5+0.5)*Math.PI;  // oscillate, "trying"
+  drawProjAxis(cx,cy,sz,theta,C_SOL);
+  var vL=projVar(ptsL,theta).var;
+  cx2d.fillStyle=C_DIM; cx2d.font='600 11px Inter,sans-serif'; cx2d.textAlign='center';
+  cx2d.fillText(LANG==='cn'?'手动转方向 (来自 M28)':'rotating by hand (from M28)', cx, cy+sz/2+26);
+
+  // right: ghost angles fanning out — infinitely many
+  var fx=W*0.72, fy=H*0.46, fr=Math.min(W*0.16,H*0.3);
+  var nGhost=14;
+  for(var g=0;g<nGhost;g++){
+    var a = g/nGhost*Math.PI;
+    var alpha = (g < p*nGhost*1.2)?0.9:0.18;
+    cx2d.strokeStyle = 'oklch(0.92 0.08 240 / '+alpha*0.5+')';
+    cx2d.lineWidth=1.2;
+    cx2d.beginPath();
+    cx2d.moveTo(fx-Math.cos(a)*fr, fy+Math.sin(a)*fr);
+    cx2d.lineTo(fx+Math.cos(a)*fr, fy-Math.sin(a)*fr);
+    cx2d.stroke();
+  }
+  cx2d.fillStyle=C_FG; cx2d.font='700 13px Inter,sans-serif'; cx2d.textAlign='center';
+  cx2d.fillText(LANG==='cn'?'方向有无穷多个...':'infinitely many angles...', fx, fy-fr-16);
+
+  if(p>0.55){
+    var a=Math.min(1,(p-0.55)*3);
+    cx2d.save(); cx2d.globalAlpha=a;
+    var bx=W/2-250, by=H-92, bw=500, bh=40;
+    cx2d.fillStyle=C_PANEL2; cx2d.strokeStyle='oklch(0.55 0.08 245 / 0.6)'; cx2d.lineWidth=1.5;
+    cx2d.fillRect(bx,by,bw,bh); cx2d.strokeRect(bx,by,bw,bh);
+    cx2d.fillStyle=C_GOLD; cx2d.font='800 14px Inter,sans-serif'; cx2d.textAlign='center';
+    cx2d.fillText(LANG==='cn'?'能不能让电脑直接解出最佳角度?':'can the computer compute the best angle directly?', W/2, by+25);
+    cx2d.restore();
+  }
+  setHUD(vL,null);
+  document.getElementById('hRatio').textContent='--';
+}
+
+/* =================== F2: goal — two covariance clouds =================== */
+function drawScene1(p){
+  frameTitle(1);
+  var sz=Math.min(W*0.5,H*0.62), cx=W*0.5, cy=H*0.5;
+  panel(cx-sz/2-12,cy-sz/2-12,sz+24,sz+24);
+  drawAxesXY(cx,cy,sz);
+  var unit=sz/26;
+  // both clouds appear, L first then R
+  drawCloud(cx,cy,unit,ptsL,sz,C_AXIS_T);
+  cx2d.fillStyle=C_AXIS; cx2d.font='700 12px JetBrains Mono,monospace'; cx2d.textAlign='left';
+  cx2d.fillText(LANG==='cn'?'左手 Cov_L (横向铺开)':'left  Cov_L (wide in x)', cx-sz/2+6, cy-sz/2+14);
+  if(p>0.3){
+    var a=Math.min(1,(p-0.3)*2.2);
+    cx2d.save(); cx2d.globalAlpha=a;
+    drawCloud(cx,cy,unit,ptsR,sz,C_RIGHT_T);
+    cx2d.fillStyle=C_RIGHT; cx2d.font='700 12px JetBrains Mono,monospace'; cx2d.textAlign='left';
+    cx2d.fillText(LANG==='cn'?'右手 Cov_R (纵向铺开)':'right Cov_R (tall in y)', cx-sz/2+6, cy-sz/2+30);
+    cx2d.restore();
+  }
+  // candidate axis (horizontal) — the goal direction
+  if(p>0.6){
+    var a=Math.min(1,(p-0.6)*3);
+    cx2d.save(); cx2d.globalAlpha=a;
+    drawProjAxis(cx,cy,sz,0,C_SOL);
+    cx2d.restore();
+    var vL=projVar(ptsL,0).var, vR=projVar(ptsR,0).var;
+    setHUD(vL,vR);
+    cx2d.fillStyle=C_GOLD; cx2d.font='700 12px Inter,sans-serif'; cx2d.textAlign='center';
+    cx2d.globalAlpha=a;
+    cx2d.fillText(LANG==='cn'?'目标方向: 左手投影散得开, 右手投影挤成一团':'goal: left spreads on w, right stays tight', cx, cy+sz/2+28);
+    cx2d.globalAlpha=1;
+  } else {
+    setHUD(null,null);
+    document.getElementById('hRatio').textContent='--';
+  }
+}
+
+/* =================== F3: ratio = Rayleigh quotient =================== */
+function drawScene2(p){
+  frameTitle(2);
+  // left: clouds + sweeping axis
+  var sz=Math.min(W*0.34,H*0.58), cx=W*0.27, cy=H*0.46;
+  panel(cx-sz/2-12,cy-sz/2-12,sz+24,sz+24);
+  drawAxesXY(cx,cy,sz);
+  var unit=sz/26;
+  drawCloud(cx,cy,unit,ptsL,sz,C_AXIS_T);
+  drawCloud(cx,cy,unit,ptsR,sz,C_RIGHT_T);
+  var theta = p*Math.PI;  // sweep 0..PI
+  drawProjAxis(cx,cy,sz,theta,C_SOL);
+  var vL=projVar(ptsL,theta).var, vR=projVar(ptsR,theta).var;
+  cx2d.fillStyle=C_DIM; cx2d.font='600 10px Inter,sans-serif'; cx2d.textAlign='center';
+  cx2d.fillText(LANG==='cn'?'转 w, 同时看两类方差':'rotate w, watch both variances', cx, cy+sz/2+24);
+
+  // right: ratio curve over angle
+  var sz2=Math.min(W*0.4,H*0.5), cx2=W*0.7, cy2=H*0.48;
+  panel(cx2-sz2/2-12,cy2-sz2/2-12,sz2+24,sz2+24);
+  var ax1=cx2-sz2/2+18, ax2=cx2+sz2/2-12;
+  var ay1=cy2+sz2/2-18, ay2=cy2-sz2/2+18;
+  cx2d.strokeStyle=C_LINE; cx2d.lineWidth=1.2;
+  cx2d.beginPath();
+  cx2d.moveTo(ax1,ay1); cx2d.lineTo(ax2,ay1);
+  cx2d.moveTo(ax1,ay1); cx2d.lineTo(ax1,ay2);
+  cx2d.stroke();
+  cx2d.fillStyle=C_DIM; cx2d.font='600 10px JetBrains Mono,monospace';
+  cx2d.textAlign='right'; cx2d.fillText('ratio', ax1-3, ay2+10);
+  cx2d.textAlign='center'; cx2d.fillText('w angle', cx2, ay1+16);
+  // curve ratio = Var_L/Var_R
+  var nS=120, maxR=14;
+  cx2d.strokeStyle=C_GOLD; cx2d.lineWidth=2;
+  cx2d.beginPath();
+  var bestRatio=0, bestTh=0;
+  for(var k=0;k<=nS;k++){
+    var th=k/nS*Math.PI;
+    var r = projVar(ptsL,th).var/Math.max(projVar(ptsR,th).var,0.01);
+    if(r>bestRatio){bestRatio=r;bestTh=th;}
+    var xx=ax1+(ax2-ax1)*k/nS;
+    var yy=ay1-(Math.min(r,maxR)/maxR)*(ay1-ay2);
+    if(k===0) cx2d.moveTo(xx,yy); else cx2d.lineTo(xx,yy);
+  }
+  cx2d.stroke();
+  // current marker
+  var curR=vL/Math.max(vR,0.01);
+  var mx=ax1+(ax2-ax1)*(theta/Math.PI);
+  var my=ay1-(Math.min(curR,maxR)/maxR)*(ay1-ay2);
+  cx2d.fillStyle=C_SOL; cx2d.strokeStyle=C_PANEL; cx2d.lineWidth=1.5;
+  cx2d.beginPath(); cx2d.arc(mx,my,5,0,Math.PI*2); cx2d.fill(); cx2d.stroke();
+  cx2d.fillStyle=C_SOL; cx2d.font='700 11px JetBrains Mono,monospace'; cx2d.textAlign='left';
+  cx2d.fillText('ratio='+curR.toFixed(2), mx+8, my-2);
+
+  // formula band — words + geometry, minimal symbols
+  if(p>0.45){
+    var a=Math.min(1,(p-0.45)*3);
+    cx2d.save(); cx2d.globalAlpha=a;
+    var bx=W/2-280, by=H-96, bw=560, bh=46;
+    cx2d.fillStyle=C_PANEL2; cx2d.strokeStyle='oklch(0.55 0.08 245 / 0.6)'; cx2d.lineWidth=1.5;
+    cx2d.fillRect(bx,by,bw,bh); cx2d.strokeRect(bx,by,bw,bh);
+    cx2d.fillStyle=C_FG; cx2d.font='700 14px JetBrains Mono,monospace'; cx2d.textAlign='center';
+    cx2d.fillText('Rayleigh = (w . Cov_L . w) / (w . Cov_R . w)', W/2, by+19);
+    cx2d.fillStyle=C_DIM; cx2d.font='500 11px Inter,sans-serif';
+    cx2d.fillText(LANG==='cn'?'投影方差 = w·Cov·w  ·  目标 = 最大化这个比值':'projected var = w·Cov·w  ·  maximize this ratio', W/2, by+37);
+    cx2d.restore();
+  }
+  setHUD(vL,vR);
+}
+
+/* =================== F4: generalized eigenvalue =================== */
+function drawScene3(p){
+  frameTitle(3);
+  // left: the equation as a transform — Cov_L w aligns with Cov_R w scaled by lambda
+  var cx=W*0.28, cy=H*0.46;
+  // show two small matrix blocks Cov_L, Cov_R + vector w, snapping to eigen solution
+  cx2d.fillStyle=C_DIM; cx2d.font='600 11px Inter,sans-serif'; cx2d.textAlign='center';
+  cx2d.fillText(LANG==='cn'?'不用搜: 直接解一个方程':'no search: solve one equation', cx, cy-H*0.28);
+
+  // equation centerpiece
+  var ey=cy-30;
+  cx2d.font='800 26px JetBrains Mono,monospace'; cx2d.textAlign='center';
+  // animate emphasis: lambda glows
+  cx2d.fillStyle=C_AXIS;  cx2d.textAlign='right'; cx2d.fillText('Cov_L w', cx-6, ey);
+  cx2d.fillStyle=C_FG;    cx2d.textAlign='center'; cx2d.fillText('=', cx+30, ey);
+  var lamA = 0.5+0.5*Math.sin(p*Math.PI*4);
+  cx2d.fillStyle='oklch(0.85 0.14 85 / '+(0.6+0.4*lamA)+')'; cx2d.textAlign='left';
+  cx2d.fillText('lambda', cx+52, ey);
+  cx2d.fillStyle=C_RIGHT; cx2d.fillText('· Cov_R w', cx+52+88, ey);
+
+  cx2d.fillStyle=C_DIM; cx2d.font='600 12px Inter,sans-serif'; cx2d.textAlign='center';
+  cx2d.fillText(LANG==='cn'?'广义特征值问题 (generalized eigenvalue)':'generalized eigenvalue problem', cx+40, ey+34);
+
+  // explain lambda meaning
+  cx2d.fillStyle=C_FG; cx2d.font='600 12px Inter,sans-serif';
+  cx2d.fillText(LANG==='cn'?'lambda = 这个方向上 Var_L / Var_R 的比值':'lambda = the ratio Var_L / Var_R on this w', cx+40, ey+58);
+
+  // right: eigenvalue spectrum bars — pick the largest
+  var sz2=Math.min(W*0.38,H*0.46), bx0=W*0.7, by0=H*0.48;
+  panel(bx0-sz2/2-12,by0-sz2/2-12,sz2+24,sz2+24);
+  var nBars=6;
+  var lambdas=[6.8,3.2,1.6,1.0,0.55,0.18];
+  var baseX=bx0-sz2/2+18, baseY=by0+sz2/2-26, barW=(sz2-30)/nBars, maxL=7;
+  cx2d.strokeStyle=C_LINE; cx2d.lineWidth=1;
+  cx2d.beginPath(); cx2d.moveTo(baseX-4,baseY); cx2d.lineTo(bx0+sz2/2-12,baseY); cx2d.stroke();
+  cx2d.fillStyle=C_DIM; cx2d.font='600 10px JetBrains Mono,monospace'; cx2d.textAlign='center';
+  cx2d.fillText(LANG==='cn'?'lambda 谱 (从大到小)':'lambda spectrum', bx0, by0-sz2/2+2);
+  for(var b=0;b<nBars;b++){
+    var grow=Math.min(1,Math.max(0,(p*1.4)-(b*0.04)));
+    var h=(lambdas[b]/maxL)*(sz2-60)*grow;
+    var isBest=(b===0);
+    cx2d.fillStyle = isBest ? C_GOLD : C_PROOF;
+    cx2d.fillRect(baseX+b*barW, baseY-h, barW-6, h);
+    cx2d.fillStyle=isBest?C_GOLD:C_MUTE; cx2d.font='600 9px JetBrains Mono,monospace';
+    cx2d.fillText(lambdas[b].toFixed(1), baseX+b*barW+(barW-6)/2, baseY+12);
+  }
+  // highlight largest
+  if(p>0.5){
+    var a=Math.min(1,(p-0.5)*3);
+    cx2d.save(); cx2d.globalAlpha=a;
+    cx2d.strokeStyle=C_GOLD; cx2d.lineWidth=1.5; cx2d.setLineDash([4,3]);
+    var h0=(lambdas[0]/maxL)*(sz2-60);
+    cx2d.strokeRect(baseX-2, baseY-h0-4, barW-2, h0+8);
+    cx2d.setLineDash([]);
+    cx2d.fillStyle=C_GOLD; cx2d.font='700 11px Inter,sans-serif'; cx2d.textAlign='center';
+    cx2d.fillText(LANG==='cn'?'最大 lambda = 最佳 w':'largest lambda = best w', baseX+barW/2, baseY-h0-12);
+    cx2d.restore();
+  }
+
+  if(p>0.7){
+    var a=Math.min(1,(p-0.7)*3);
+    cx2d.save(); cx2d.globalAlpha=a;
+    var bx=W/2-270, by=H-86, bw=540, bh=38;
+    cx2d.fillStyle=C_PANEL2; cx2d.strokeStyle='oklch(0.55 0.08 245 / 0.6)'; cx2d.lineWidth=1.5;
+    cx2d.fillRect(bx,by,bw,bh); cx2d.strokeRect(bx,by,bw,bh);
+    cx2d.fillStyle=C_FG; cx2d.font='700 13px Inter,sans-serif'; cx2d.textAlign='center';
+    cx2d.fillText(LANG==='cn'?'lambda 最大的特征向量 w, 左手方差远大于右手 — 这就是答案':'eigenvector w with largest lambda: Var_L >> Var_R', W/2, by+24);
+    cx2d.restore();
+  }
+  setHUD(null,null);
+  document.getElementById('hRatio').textContent = (p>0.4)?'6.8':'--';
+}
+
+/* =================== F5: CSP filter — cleanly separable =================== */
+function drawScene4(p){
+  frameTitle(4);
+  // left: clouds + the solved best axis (green/gold)
+  var sz=Math.min(W*0.32,H*0.56), cx=W*0.27, cy=H*0.44;
+  panel(cx-sz/2-12,cy-sz/2-12,sz+24,sz+24);
+  drawAxesXY(cx,cy,sz);
+  var unit=sz/26;
+  drawCloud(cx,cy,unit,ptsL,sz,C_AXIS_T);
+  drawCloud(cx,cy,unit,ptsR,sz,C_RIGHT_T);
+  drawProjAxis(cx,cy,sz,0,C_GOLD);
+  cx2d.fillStyle=C_GOLD; cx2d.font='700 11px Inter,sans-serif'; cx2d.textAlign='center';
+  cx2d.fillText(LANG==='cn'?'CSP 解出的最优滤波器 w':'CSP optimal filter w', cx, cy+sz/2+24);
+
+  // right: two projected 1D distributions, far apart (separable)
+  var sz2=Math.min(W*0.4,H*0.5), cx2=W*0.7, cy2=H*0.44;
+  panel(cx2-sz2/2-12,cy2-sz2/2-12,sz2+24,sz2+24);
+  var projL=projVar(ptsL,0), projR=projVar(ptsR,0);
+  var axisY=cy2+sz2/2-30;
+  cx2d.strokeStyle=C_LINE; cx2d.lineWidth=1.2;
+  cx2d.beginPath(); cx2d.moveTo(cx2-sz2/2+10,axisY); cx2d.lineTo(cx2+sz2/2-10,axisY); cx2d.stroke();
+  cx2d.fillStyle=C_DIM; cx2d.font='600 10px Inter,sans-serif'; cx2d.textAlign='center';
+  cx2d.fillText(LANG==='cn'?'投影到 w 后的方差对比':'projected variance on w', cx2, cy2-sz2/2+4);
+
+  // bell-ish bars: left wide, right tight — using variance as spread width
+  function bell(proj, color, alpha){
+    var nB=26, maxRange=22, binW=(sz2-30)/nB;
+    var bins=new Array(nB).fill(0);
+    for(var k=0;k<proj.vals.length;k++){
+      var bi=Math.floor((proj.vals[k]+maxRange)/(2*maxRange)*nB);
+      if(bi>=0&&bi<nB) bins[bi]++;
+    }
+    var mx=Math.max.apply(null,bins)||1;
+    cx2d.save(); cx2d.globalAlpha=alpha;
+    for(var i=0;i<nB;i++){
+      var h=bins[i]/mx*70;
+      cx2d.fillStyle=color;
+      cx2d.fillRect(cx2-sz2/2+15+i*binW, axisY-h, binW-1.5, h);
+    }
+    cx2d.restore();
+  }
+  var aL=Math.min(1,p*2);
+  bell(projL, C_AXIS_T, aL);
+  if(p>0.25){ bell(projR, C_RIGHT_T, Math.min(1,(p-0.25)*2.2)); }
+  setHUD(projL.var, projR.var);
+  // legend
+  cx2d.fillStyle=C_AXIS; cx2d.font='700 10px JetBrains Mono,monospace'; cx2d.textAlign='left';
+  cx2d.fillText('left  Var='+projL.var.toFixed(1), cx2-sz2/2+15, cy2-sz2/2+22);
+  cx2d.fillStyle=C_RIGHT;
+  cx2d.fillText('right Var='+projR.var.toFixed(1), cx2-sz2/2+15, cy2-sz2/2+36);
+
+  // gold sealing band (key moment)
+  if(p>0.45){
+    var a=Math.min(1,(p-0.45)*2.5);
+    cx2d.save(); cx2d.globalAlpha=a;
+    var bx=W/2-330, by=H-92, bw=660, bh=48;
+    cx2d.fillStyle='oklch(0.22 0.05 90 / 0.5)'; cx2d.strokeStyle=C_GOLD; cx2d.lineWidth=2;
+    cx2d.fillRect(bx,by,bw,bh); cx2d.strokeRect(bx,by,bw,bh);
+    cx2d.fillStyle=C_GOLD; cx2d.font='800 15px Inter,sans-serif'; cx2d.textAlign='center';
+    cx2d.fillText(LANG==='cn'?'CSP: 让电脑自动找出最能区分左右手的看脑波角度 — BCI 的核心算法'
+                             :'CSP: auto-find the best brainwave angle to tell left from right — the core of a BCI',
+                  W/2, by+22);
+    cx2d.fillStyle=C_DIM; cx2d.font='500 11px Inter,sans-serif';
+    cx2d.fillText(LANG==='cn'?'解一次广义特征值, 投影方差天差地别, 完美可分 (下节 M30 可视化)'
+                             :'one eigen-solve, variances far apart, cleanly separable (next: M30)',
+                  W/2, by+39);
+    cx2d.restore();
+  }
+}
+
+/* ---------- main loop ---------- */
+function render(){
+  var now=performance.now();
+  var t1=now-animStart;
+  var total=SCENE_DUR*N_SCENE;
+  var sceneIdx=Math.floor((t1%total)/SCENE_DUR);
+  var p=((t1%total)%SCENE_DUR)/SCENE_DUR;
+  if(sceneIdx!==currentScene){ currentScene=sceneIdx; updateSubtitle(currentScene); }
+  cx2d.clearRect(0,0,W,H);
+  cx2d.fillStyle='oklch(0.14 0.035 265)'; cx2d.fillRect(0,0,W,H);
+  if(currentScene===0) drawScene0(p);
+  else if(currentScene===1) drawScene1(p);
+  else if(currentScene===2) drawScene2(p);
+  else if(currentScene===3) drawScene3(p);
+  else drawScene4(p);
+  requestAnimationFrame(render);
+}
+refreshI18N();
+updateSubtitle(0);
+requestAnimationFrame(render);
+</script>
+</body>
+</html>

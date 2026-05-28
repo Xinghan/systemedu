@@ -1,0 +1,575 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>方差 = 抖动程度</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;700&family=Inter:wght@400;600;800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  /* 第 1 层 — 共享深空底 (所有 26 套统一) */
+  --bg-0: oklch(0.14 0.035 265);
+  --bg-1: oklch(0.18 0.04 265);
+  --bg-2: oklch(0.22 0.045 265);
+  --bg-3: oklch(0.28 0.05 265);
+  --line: oklch(0.35 0.05 265 / 0.35);
+  --line-strong: oklch(0.55 0.08 265 / 0.55);
+  --fg: oklch(0.96 0.01 265);
+  --fg-dim: oklch(0.75 0.02 265);
+  --fg-mute: oklch(0.55 0.03 265);
+  --gold: oklch(0.85 0.14 85);
+  /* 第 2 层 — math signature accent (electric blue) */
+  --accent: oklch(0.72 0.17 245);
+  /* 第 3 层 — math 5 色 palette (themes.js id:math) */
+  --axis: oklch(0.72 0.17 245);
+  --proof: oklch(0.52 0.16 245);
+  --shadow: oklch(0.35 0.10 245);
+  --solution: oklch(0.92 0.08 240);
+  --qed: oklch(0.85 0.14 85);
+}
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;}
+html,body{width:100%;height:100vh;overflow:hidden;}
+body{background:var(--bg-0);color:var(--fg);font-family:'Noto Sans SC','Inter',sans-serif;display:flex;}
+/* 左侧栏 */
+.sidebar{width:200px;min-width:200px;height:100vh;flex-shrink:0;display:flex;flex-direction:column;gap:10px;
+  padding:14px 12px;background:var(--bg-1);border-right:1px solid var(--line);}
+.brand{font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;letter-spacing:0.12em;
+  text-transform:uppercase;color:var(--accent);}
+.mascot{display:flex;align-items:center;gap:8px;margin-top:2px;}
+.mascot svg{filter:drop-shadow(0 0 6px oklch(0.72 0.17 245 / 0.4));}
+.mascot .mname{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--fg-mute);letter-spacing:0.1em;}
+.s-title{font-family:'Inter','Noto Sans SC',sans-serif;font-size:15px;font-weight:800;line-height:1.3;color:var(--fg);margin-top:2px;}
+.s-sub{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--fg-mute);letter-spacing:0.08em;}
+.guide-label{font-family:'JetBrains Mono',monospace;font-size:9px;font-weight:700;letter-spacing:0.12em;
+  text-transform:uppercase;color:var(--accent);margin-top:6px;}
+.guide-content{font-size:11px;color:var(--fg-dim);line-height:1.55;}
+.guide-content li{margin-bottom:3px;list-style:none;padding-left:10px;position:relative;}
+.guide-content li::before{content:'·';position:absolute;left:0;color:var(--accent);}
+.formula-box{margin-top:auto;font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;
+  color:var(--solution);background:var(--bg-2);border:1px solid var(--line-strong);
+  box-shadow:3px 3px 0 var(--bg-0);padding:8px 10px;line-height:1.4;}
+.formula-box .small{font-size:8px;color:var(--fg-mute);font-weight:400;display:block;margin-top:3px;}
+.lang-btn{align-self:flex-start;font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:700;
+  padding:4px 10px;cursor:pointer;border:1px solid var(--line-strong);background:var(--bg-2);
+  color:var(--accent);letter-spacing:0.1em;text-transform:uppercase;
+  box-shadow:2px 2px 0 var(--bg-0);transition:transform .1s;}
+.lang-btn:hover{transform:translate(-1px,-1px);}
+.lang-btn:active{transform:translate(1px,1px);}
+/* 主舞台 */
+.main{flex:1;height:100vh;position:relative;overflow:hidden;min-width:0;}
+canvas{position:absolute;inset:0;width:100%;height:100%;display:block;}
+.hud{position:absolute;top:16px;right:16px;background:var(--bg-1);border:1px solid var(--line-strong);
+  padding:9px 13px;font-family:'JetBrains Mono',monospace;font-size:11px;box-shadow:3px 3px 0 var(--bg-0);min-width:150px;}
+.hud-row{display:flex;justify-content:space-between;gap:14px;line-height:1.7;}
+.hud-lbl{color:var(--fg-mute);text-transform:uppercase;font-size:8px;letter-spacing:0.1em;}
+.hud-val{color:var(--accent);font-weight:700;}
+.sub{position:absolute;bottom:22px;left:50%;transform:translateX(-50%);text-align:center;width:88%;pointer-events:none;}
+.sub-zh{font-size:20px;font-weight:700;color:var(--fg);background:oklch(0.18 0.04 265 / 0.9);
+  padding:6px 18px;display:inline-block;border:1px solid var(--line-strong);box-shadow:3px 3px 0 var(--bg-0);}
+.sub-en{font-size:12px;font-style:italic;color:var(--fg-dim);margin-top:5px;}
+</style>
+</head>
+<body>
+<!-- 左侧栏 -->
+<aside class="sidebar">
+  <div class="brand">MTH-06 / VARIANCE</div>
+  <div class="mascot">
+    <svg width="26" height="26" viewBox="0 0 26 26"><polygon points="13,2 24,20 2,20" fill="none" stroke="var(--accent)" stroke-width="1.5"/><polygon points="13,2 13,20 2,20" fill="oklch(0.72 0.17 245 / 0.18)"/><line x1="13" y1="2" x2="13" y2="20" stroke="var(--accent)" stroke-width="1"/></svg>
+    <span class="mname">Pi</span>
+  </div>
+  <div class="s-title" id="title">方差 = 抖动程度</div>
+  <div class="s-sub" id="subt">Variance · one number for "how shaky"</div>
+  <div class="guide-label" id="guideTitle">看这三步</div>
+  <ul class="guide-content" id="guideList"></ul>
+  <div class="formula-box">
+    <span id="fLabel">方差公式</span><br>
+    Var = mean( (x - mean)^2 )
+    <span class="small" id="fSmall">差 → 平方 → 求平均</span>
+  </div>
+  <button id="langBtn" class="lang-btn">中 / EN</button>
+</aside>
+
+<!-- 主舞台 -->
+<main class="main">
+  <canvas id="stage"></canvas>
+  <div class="hud">
+    <div class="hud-row"><span class="hud-lbl" id="hL1">scene</span><span class="hud-val" id="hScene">1/5</span></div>
+    <div class="hud-row"><span class="hud-lbl" id="hL2">step</span><span class="hud-val" id="hStep">--</span></div>
+    <div class="hud-row"><span class="hud-lbl" id="hL3">var A</span><span class="hud-val" id="hVarA">--</span></div>
+    <div class="hud-row"><span class="hud-lbl" id="hL4">var B</span><span class="hud-val" id="hVarB">--</span></div>
+  </div>
+  <div class="sub">
+    <div class="sub-zh" id="subZh"></div>
+    <div class="sub-en" id="subEn"></div>
+  </div>
+</main>
+
+<script>
+/* ============================================================
+   i18n
+   ============================================================ */
+var LANG = 'cn';
+var I18N = {
+  title:   {cn:'方差 = 抖动程度', en:'Variance = Shakiness'},
+  subt:    {cn:'Variance · 一个数说清"有多抖"', en:'One number for "how shaky"'},
+  guideTitle: {cn:'看这三步', en:'Watch 3 steps'},
+  guide:   {cn:['第一步: 算平均', '第二步: 每点减平均 = 偏差', '第三步: 偏差平方再求平均'],
+            en:['Step 1: take the mean', 'Step 2: each point minus mean = deviation', 'Step 3: square deviations, average them']},
+  fLabel:  {cn:'方差公式', en:'Variance formula'},
+  fSmall:  {cn:'差 → 平方 → 求平均', en:'subtract → square → average'},
+  hL1:{cn:'scene',en:'scene'}, hL2:{cn:'step',en:'step'}, hL3:{cn:'var A',en:'var A'}, hL4:{cn:'var B',en:'var B'},
+  // 5 帧字幕
+  s0_zh:{cn:'两段脑波: 一段平稳, 一段疯狂抖。怎么用一个数说清谁更抖?',en:'Two EEG traces: one calm, one shaky. How to say "how shaky" with one number?'},
+  s0_en:{cn:'Two EEG traces — calm vs shaky.',en:'A: steady. B: jittery. We need a single, fair number.'},
+  s1_zh:{cn:'换个例子: 两组考试分数, 平均都是 80, 可分散完全不同!',en:'Two test groups: both average 80, but spread is totally different!'},
+  s1_en:{cn:'Same mean (80), different spread.',en:'Mean alone cannot tell calm from scattered.'},
+  s2_zh:{cn:'第一步: 先算平均 (mean)。第二步: 每个点减平均 = 偏差, 有正有负。',en:'Step 1: the mean. Step 2: each point minus mean = deviation (+/-).'},
+  s2_en:{cn:'Deviation = point - mean. Some +, some -.',en:'Positive above the line, negative below.'},
+  s3_zh:{cn:'第三步: 偏差先平方 (消掉正负号, 大偏差被放大), 再求平均 = 方差!',en:'Step 3: square each deviation (kills sign, magnifies big ones), then average = variance!'},
+  s3_en:{cn:'Square → all positive, big jumps dominate.',en:'Average of squared deviations is the variance.'},
+  s4_zh:{cn:'回到脑波: 平稳段方差小, 抖动段方差大。方差 = 信号能量, 一个数说清抖动程度。',en:'Back to EEG: calm = small var, shaky = big var. Variance = signal energy, one honest number.'},
+  s4_en:{cn:'Variance is the de-meaned signal energy.',en:'One number, objective, comparable.'},
+};
+function t(k){return (I18N[k]&&I18N[k][LANG])||(I18N[k]&&I18N[k]['en'])||k;}
+function refreshI18N(){
+  document.getElementById('title').textContent = t('title');
+  document.getElementById('subt').textContent = t('subt');
+  document.getElementById('guideTitle').textContent = t('guideTitle');
+  document.getElementById('guideList').innerHTML = t('guide').map(function(x){return '<li>'+x+'</li>';}).join('');
+  document.getElementById('fLabel').textContent = t('fLabel');
+  document.getElementById('fSmall').textContent = t('fSmall');
+  document.getElementById('hL1').textContent = t('hL1');
+  document.getElementById('hL2').textContent = t('hL2');
+  document.getElementById('hL3').textContent = t('hL3');
+  document.getElementById('hL4').textContent = t('hL4');
+  document.getElementById('langBtn').textContent = LANG==='cn' ? '中 / EN' : 'EN / 中';
+  updateSubtitle(currentScene);
+}
+document.getElementById('langBtn').addEventListener('click', function(){
+  LANG = LANG==='cn' ? 'en' : 'cn';
+  refreshI18N();
+});
+
+/* ============================================================
+   palette (CSS oklch resolved to canvas-usable strings)
+   ============================================================ */
+var COL = {
+  bg0:'oklch(0.14 0.035 265)', bg1:'oklch(0.18 0.04 265)', bg2:'oklch(0.22 0.045 265)',
+  line:'oklch(0.35 0.05 265)', lineStrong:'oklch(0.55 0.08 265)',
+  fg:'oklch(0.96 0.01 265)', fgDim:'oklch(0.75 0.02 265)', fgMute:'oklch(0.55 0.03 265)',
+  gold:'oklch(0.85 0.14 85)',
+  axis:'oklch(0.72 0.17 245)',      // AXIS — electric blue, 主曲线/坐标轴
+  proof:'oklch(0.52 0.16 245)',     // PROOF — 深蓝, 平均线/分组 B
+  shadow:'oklch(0.35 0.10 245)',    // SHADOW — 网格/底纹
+  solution:'oklch(0.92 0.08 240)',  // SOLUTION — 浅蓝高亮/平方块
+  qed:'oklch(0.85 0.14 85)',        // QED — gold key moment
+};
+
+/* ============================================================
+   Canvas setup
+   ============================================================ */
+var canvas = document.getElementById('stage');
+var ctx = canvas.getContext('2d');
+var W=0, H=0, DPR=1;
+function resize(){
+  var rect = canvas.parentElement.getBoundingClientRect();
+  if(rect.width<1||rect.height<1) return;
+  DPR = window.devicePixelRatio||1;
+  canvas.width = rect.width*DPR; canvas.height = rect.height*DPR;
+  canvas.style.width = rect.width+'px'; canvas.style.height = rect.height+'px';
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  W = rect.width; H = rect.height;
+}
+window.addEventListener('resize', resize);
+resize();
+setTimeout(resize,200); setTimeout(resize,600);
+document.fonts.ready.then(resize);
+
+/* ============================================================
+   Data — fixed seeds so numbers are scientifically exact
+   ============================================================ */
+// 两段脑波 (F1, F5): calm vs shaky, 同样长度同样均值~0
+var N_EEG = 64;
+var eegCalm = [], eegShaky = [];
+(function(){
+  for(var i=0;i<N_EEG;i++){
+    var p = i/N_EEG*Math.PI*2;
+    // calm: 小幅低频
+    eegCalm.push(0.30*Math.sin(p*3) + 0.12*Math.sin(p*7+1.0));
+    // shaky: 大幅多频叠加
+    eegShaky.push(1.05*Math.sin(p*3) + 0.85*Math.sin(p*11+0.5) + 0.55*Math.sin(p*23+2.0));
+  }
+})();
+// 考试分数 (F2): 两组各 8 个, 平均都=80
+var scoresTight = [78,82,79,81,80,82,78,80];   // mean 80, 紧凑
+var scoresWide  = [55,98,62,95,100,50,88,92];  // mean ? 我们让它=80
+// 校准 wide 使其平均严格 = 80
+(function(){
+  var s=0; for(var i=0;i<scoresWide.length;i++) s+=scoresWide[i];
+  var adj = (80 - s/scoresWide.length);
+  for(var i=0;i<scoresWide.length;i++) scoresWide[i] = Math.round(scoresWide[i]+adj);
+  // 再次微调最后一个让和精确
+  var s2=0; for(var i=0;i<scoresWide.length;i++) s2+=scoresWide[i];
+  scoresWide[scoresWide.length-1] += (80*scoresWide.length - s2);
+})();
+function mean(arr){var s=0;for(var i=0;i<arr.length;i++)s+=arr[i];return s/arr.length;}
+function variance(arr){var m=mean(arr),s=0;for(var i=0;i<arr.length;i++)s+=(arr[i]-m)*(arr[i]-m);return s/arr.length;}
+var varCalm = variance(eegCalm), varShaky = variance(eegShaky);
+var meanTight = mean(scoresTight), meanWide = mean(scoresWide);
+var varTight = variance(scoresTight), varWide = variance(scoresWide);
+
+/* ============================================================
+   Scene timeline — 5 帧 autoplay
+   ============================================================ */
+var currentScene = 0;
+var SCENE_DUR = 7000;        // 7s × 5 = 35s cycle
+var animStart = performance.now();
+
+function updateSubtitle(s){
+  document.getElementById('subZh').textContent = t('s'+s+'_zh');
+  document.getElementById('subEn').textContent = t('s'+s+'_en');
+  document.getElementById('hScene').textContent = (s+1)+'/5';
+}
+
+/* ============================================================
+   Drawing helpers
+   ============================================================ */
+function clearBg(){
+  ctx.clearRect(0,0,W,H);
+  ctx.fillStyle = COL.bg0;
+  ctx.fillRect(0,0,W,H);
+  // faint grid (shadow color)
+  ctx.strokeStyle = 'oklch(0.35 0.10 265 / 0.18)';
+  ctx.lineWidth = 1;
+  var gs = 40;
+  for(var x=gs;x<W;x+=gs){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();}
+  for(var y=gs;y<H;y+=gs){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();}
+}
+function topTitle(txt){
+  ctx.fillStyle = COL.fg;
+  ctx.font = '800 17px Inter, "Noto Sans SC", sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'alphabetic';
+  ctx.fillText(txt, W/2, 38);
+}
+// 画一段脑波曲线
+function drawWave(arr, x0, y0, w, h, amp, color, alpha, drawTo){
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 2.2;
+  ctx.lineJoin = 'round';
+  ctx.beginPath();
+  var n = Math.max(2, Math.floor(arr.length*drawTo));
+  for(var i=0;i<n;i++){
+    var fx = x0 + i*(w/(arr.length-1));
+    var fy = y0 + h/2 - arr[i]*amp;
+    if(i===0) ctx.moveTo(fx,fy); else ctx.lineTo(fx,fy);
+  }
+  ctx.stroke();
+  ctx.restore();
+}
+// 圆头箭头
+function arrow(x1,y1,x2,y2,color,alpha,lw){
+  ctx.save();
+  ctx.globalAlpha = alpha; ctx.strokeStyle=color; ctx.fillStyle=color; ctx.lineWidth=lw||2.5;
+  ctx.lineCap='round';
+  ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke();
+  var a=Math.atan2(y2-y1,x2-x1);
+  ctx.beginPath();ctx.moveTo(x2,y2);
+  ctx.lineTo(x2-11*Math.cos(a-0.35),y2-11*Math.sin(a-0.35));
+  ctx.lineTo(x2-11*Math.cos(a+0.35),y2-11*Math.sin(a+0.35));
+  ctx.closePath();ctx.fill();
+  ctx.restore();
+}
+function setHUD(step,vA,vB){
+  document.getElementById('hStep').textContent = step;
+  document.getElementById('hVarA').textContent = vA;
+  document.getElementById('hVarB').textContent = vB;
+}
+
+/* ============================================================
+   F1 — 两段脑波: 平稳 vs 抖动, 怎么用一个数说清谁更抖
+   ============================================================ */
+function drawF1(p){
+  clearBg();
+  topTitle(LANG==='cn'?'两段脑波: 谁抖得更厉害?':'Two EEG traces — which is shakier?');
+  var pad = 90, w = W - pad*2;
+  var rowH = (H-150)/2;
+  var y1 = 80, y2 = 80 + rowH + 14;
+  // 上: calm
+  drawPanel(pad, y1, w, rowH, LANG==='cn'?'A · 平稳':'A · calm', COL.proof);
+  drawWave(eegCalm, pad+12, y1+8, w-24, rowH-30, rowH*0.28, COL.axis, 1, Math.min(1,p*2.2));
+  // 下: shaky
+  drawPanel(pad, y2, w, rowH, LANG==='cn'?'B · 剧烈抖动':'B · shaky', COL.proof);
+  drawWave(eegShaky, pad+12, y2+8, w-24, rowH-30, rowH*0.16, COL.axis, 1, Math.min(1,p*2.2));
+  // 中间问号 / 提问 (后半程出现)
+  if(p>0.5){
+    var qa = Math.min(1,(p-0.5)*3);
+    ctx.save();ctx.globalAlpha=qa;
+    ctx.fillStyle = COL.gold;
+    ctx.font='800 15px Inter,"Noto Sans SC",sans-serif';
+    ctx.textAlign='center';
+    ctx.fillText(LANG==='cn'?'用一个数 = 客观可比':'one number = objective & comparable', W/2, H-100);
+    ctx.restore();
+  }
+  setHUD('观察 / look', '?', '?');
+}
+function drawPanel(x,y,w,h,label,labelColor){
+  ctx.save();
+  ctx.fillStyle = COL.bg1;
+  ctx.strokeStyle = COL.lineStrong; ctx.lineWidth=1.2;
+  ctx.fillRect(x,y,w,h); ctx.strokeRect(x,y,w,h);
+  // 中线 (基线)
+  ctx.strokeStyle='oklch(0.55 0.08 265 / 0.4)'; ctx.lineWidth=1; ctx.setLineDash([4,4]);
+  ctx.beginPath();ctx.moveTo(x+12,y+h/2);ctx.lineTo(x+w-12,y+h/2);ctx.stroke();ctx.setLineDash([]);
+  ctx.fillStyle=labelColor;
+  ctx.font='700 12px JetBrains Mono, monospace';
+  ctx.textAlign='left'; ctx.textBaseline='top';
+  ctx.fillText(label, x+10, y+8);
+  ctx.restore();
+}
+
+/* ============================================================
+   F2 — 两组考试分数, 平均都 80, 分散不同 (三层分工)
+   分工: AXIS=数据点, PROOF=平均线/组B, SOLUTION=高亮, GOLD=key
+   ============================================================ */
+function drawF2(p){
+  clearBg();
+  topTitle(LANG==='cn'?'同样平均 80, 分散却完全不同':'Same mean 80 — but spread differs');
+  var pad=80, colW=(W-pad*2-40)/2;
+  var baseY = H-150, scaleY = (H-260)/(100-40); // 分数 40..100 映射高度
+  function sx(idx,x0){return x0 + 24 + idx*((colW-48)/(scoresTight.length-1));}
+  function sy(score){return baseY - (score-40)*scaleY;}
+  var groups = [
+    {x:pad,        data:scoresTight, name:(LANG==='cn'?'A 组 · 都在 78-82':'Group A · all 78-82'), col:COL.axis},
+    {x:pad+colW+40,data:scoresWide,  name:(LANG==='cn'?'B 组 · 50-100 乱跳':'Group B · 50-100 scattered'), col:COL.proof}
+  ];
+  for(var g=0;g<2;g++){
+    var G=groups[g];
+    // 平均线 80
+    var my = sy(80);
+    ctx.save();
+    ctx.strokeStyle = COL.gold; ctx.lineWidth=1.6; ctx.setLineDash([6,4]);
+    ctx.beginPath();ctx.moveTo(G.x+10,my);ctx.lineTo(G.x+colW-10,my);ctx.stroke();ctx.setLineDash([]);
+    ctx.fillStyle=COL.gold;ctx.font='700 11px JetBrains Mono,monospace';ctx.textAlign='left';ctx.textBaseline='bottom';
+    ctx.fillText('mean = 80', G.x+12, my-4);
+    ctx.restore();
+    // 组名
+    ctx.fillStyle=G.col;ctx.font='800 13px Inter,"Noto Sans SC",sans-serif';ctx.textAlign='center';ctx.textBaseline='top';
+    ctx.fillText(G.name, G.x+colW/2, 60);
+    // 数据点 (逐个出现)
+    for(var i=0;i<G.data.length;i++){
+      var appear = Math.min(1,(p*1.6 - i*0.06));
+      if(appear<=0) continue;
+      var px = sx(i,G.x), py = sy(G.data[i]);
+      // 偏差竖线 (淡)
+      ctx.save();ctx.globalAlpha=appear*0.5;
+      ctx.strokeStyle=G.col;ctx.lineWidth=1;ctx.setLineDash([2,3]);
+      ctx.beginPath();ctx.moveTo(px,my);ctx.lineTo(px,py);ctx.stroke();ctx.setLineDash([]);
+      ctx.restore();
+      // 点
+      ctx.save();ctx.globalAlpha=appear;
+      ctx.fillStyle=G.col;
+      ctx.beginPath();ctx.arc(px,py,5,0,Math.PI*2);ctx.fill();
+      ctx.fillStyle=COL.fgDim;ctx.font='600 9px JetBrains Mono,monospace';ctx.textAlign='center';ctx.textBaseline='bottom';
+      ctx.fillText(G.data[i], px, py-7);
+      ctx.restore();
+    }
+  }
+  // 提示: 平均相同, 但 B 抖
+  if(p>0.6){
+    var ta=Math.min(1,(p-0.6)*3);
+    ctx.save();ctx.globalAlpha=ta;
+    ctx.fillStyle=COL.solution;ctx.font='700 13px Inter,"Noto Sans SC",sans-serif';ctx.textAlign='center';ctx.textBaseline='alphabetic';
+    ctx.fillText(LANG==='cn'?'平均一样, 光看平均分不清! 要量"分散"':'Same mean! Mean cannot tell them apart — measure the SPREAD', W/2, H-108);
+    ctx.restore();
+  }
+  setHUD(LANG==='cn'?'对比 / mean':'mean both 80', 'mean 80', 'mean 80');
+}
+
+/* ============================================================
+   F3 — 第一步算平均, 第二步每点减平均 = 偏差 (有正有负)
+   用 B 组分数演示
+   ============================================================ */
+function drawF3(p){
+  clearBg();
+  topTitle(LANG==='cn'?'第 1 步: 平均   第 2 步: 减平均 = 偏差':'Step 1: mean   Step 2: minus mean = deviation');
+  var pad=110, w=W-pad*2;
+  var baseY = H*0.52;
+  var scaleY = (H*0.30)/60; // 分数 40..100
+  function sx(i){return pad + 20 + i*((w-40)/(scoresWide.length-1));}
+  function sy(score){return baseY - (score-80)*scaleY;} // 以 80 为中线
+  // 平均线 (粗 gold)
+  ctx.save();
+  ctx.strokeStyle=COL.gold;ctx.lineWidth=2.2;
+  ctx.beginPath();ctx.moveTo(pad,baseY);ctx.lineTo(W-pad,baseY);ctx.stroke();
+  ctx.fillStyle=COL.gold;ctx.font='700 12px JetBrains Mono,monospace';ctx.textAlign='left';ctx.textBaseline='bottom';
+  ctx.fillText('mean = 80', pad+4, baseY-5);
+  ctx.restore();
+  // 每点: 点 + 偏差箭头 (正绿向上? 用 axis/proof 区分正负)
+  for(var i=0;i<scoresWide.length;i++){
+    var appear=Math.min(1,(p*1.8 - i*0.10));
+    if(appear<=0) continue;
+    var px=sx(i), py=sy(scoresWide[i]);
+    var dev = scoresWide[i]-80;
+    var posCol = COL.axis, negCol = COL.solution; // 正用电光蓝, 负用浅蓝
+    var col = dev>=0?posCol:negCol;
+    // 偏差箭头 (从平均线指向点)
+    arrow(px,baseY,px,py,col,appear,2.4);
+    // 点
+    ctx.save();ctx.globalAlpha=appear;
+    ctx.fillStyle=col;ctx.beginPath();ctx.arc(px,py,5,0,Math.PI*2);ctx.fill();
+    // 偏差数值标签 (放在偏离侧, 避免与平均线文字重叠)
+    ctx.fillStyle=col;ctx.font='700 11px JetBrains Mono,monospace';ctx.textAlign='center';
+    var lblY = dev>=0 ? py-10 : py+18;
+    ctx.textBaseline = dev>=0?'bottom':'top';
+    ctx.fillText((dev>=0?'+':'')+dev, px, lblY);
+    ctx.restore();
+  }
+  // 说明: 偏差有正有负
+  if(p>0.55){
+    var ea=Math.min(1,(p-0.55)*3);
+    ctx.save();ctx.globalAlpha=ea;
+    ctx.fillStyle=COL.fg;ctx.font='700 13px Inter,"Noto Sans SC",sans-serif';ctx.textAlign='center';ctx.textBaseline='alphabetic';
+    ctx.fillText(LANG==='cn'?'偏差 = 每点 - 平均   有正(上)有负(下)':'deviation = point - mean   some +, some -', W/2, H-112);
+    ctx.fillStyle=COL.fgMute;ctx.font='500 11px Inter,"Noto Sans SC",sans-serif';
+    ctx.fillText(LANG==='cn'?'问题: 正负直接相加会抵消 → 加不出"抖动"':'problem: + and - cancel out if you just add them', W/2, H-94);
+    ctx.restore();
+  }
+  setHUD(LANG==='cn'?'减平均 / dev':'subtract', LANG==='cn'?'有正负':'has +/-', '--');
+}
+
+/* ============================================================
+   F4 — 第三步: 偏差平方 (消正负, 放大大偏差) → 求平均 = 方差
+   ============================================================ */
+function drawF4(p){
+  clearBg();
+  topTitle(LANG==='cn'?'第 3 步: 偏差平方 → 求平均 = 方差':'Step 3: square deviations → average = variance');
+  var pad=110, w=W-pad*2;
+  var baseY = H*0.42;
+  var scaleY = (H*0.20)/60;
+  function sx(i){return pad + 20 + i*((w-40)/(scoresWide.length-1));}
+  // 平均线
+  ctx.save();ctx.strokeStyle=COL.gold;ctx.lineWidth=1.8;ctx.globalAlpha=0.7;
+  ctx.beginPath();ctx.moveTo(pad,baseY);ctx.lineTo(W-pad,baseY);ctx.stroke();ctx.restore();
+  // 每点偏差 -> 平方块 (用面积表示 dev^2)
+  var maxSq = 0;
+  for(var i=0;i<scoresWide.length;i++){var d=scoresWide[i]-80;if(d*d>maxSq)maxSq=d*d;}
+  var sqBaseY = H*0.74;          // 平方块底部基线
+  var maxBarH = H*0.26;
+  for(var i=0;i<scoresWide.length;i++){
+    var appear=Math.min(1,(p*2.0 - i*0.08));
+    if(appear<=0) continue;
+    var px=sx(i);
+    var dev=scoresWide[i]-80;
+    var sq=dev*dev;
+    var py = baseY - dev*scaleY;
+    // 上半: 偏差点 (淡)
+    ctx.save();ctx.globalAlpha=appear*0.55;
+    ctx.fillStyle=COL.proof;ctx.beginPath();ctx.arc(px,py,4,0,Math.PI*2);ctx.fill();
+    ctx.strokeStyle=COL.proof;ctx.lineWidth=1;ctx.setLineDash([2,3]);
+    ctx.beginPath();ctx.moveTo(px,baseY);ctx.lineTo(px,py);ctx.stroke();ctx.setLineDash([]);
+    ctx.restore();
+    // 下半: 平方块 (面积 = dev^2), 高度按 sq/maxSq
+    var barH = (sq/maxSq)*maxBarH*appear;
+    var barW = 26;
+    ctx.save();ctx.globalAlpha=appear;
+    // 大偏差用 solution 浅蓝高亮, 小的用 axis
+    ctx.fillStyle = (sq/maxSq>0.5)? COL.solution : COL.axis;
+    ctx.fillRect(px-barW/2, sqBaseY-barH, barW, barH);
+    ctx.strokeStyle=COL.lineStrong;ctx.lineWidth=1;ctx.strokeRect(px-barW/2,sqBaseY-barH,barW,barH);
+    // 平方值
+    ctx.fillStyle=COL.fg;ctx.font='700 10px JetBrains Mono,monospace';ctx.textAlign='center';ctx.textBaseline='bottom';
+    if(barH>14) ctx.fillText(sq, px, sqBaseY-barH-3);
+    ctx.restore();
+  }
+  // 平方块底基线
+  ctx.save();ctx.strokeStyle=COL.lineStrong;ctx.lineWidth=1.5;
+  ctx.beginPath();ctx.moveTo(pad,sqBaseY);ctx.lineTo(W-pad,sqBaseY);ctx.stroke();ctx.restore();
+  // 标签
+  ctx.fillStyle=COL.proof;ctx.font='600 11px JetBrains Mono,monospace';ctx.textAlign='left';ctx.textBaseline='alphabetic';
+  ctx.fillText(LANG==='cn'?'偏差 (有正负)':'deviation (+/-)', pad, baseY-14);
+  ctx.fillStyle=COL.axis;ctx.fillText(LANG==='cn'?'偏差平方 (全正, 大的更大)':'deviation^2 (all +, big dominates)', pad, sqBaseY+18);
+  // key moment: 求平均 = 方差 (gold 一闪)
+  if(p>0.62){
+    var ka=Math.min(1,(p-0.62)*3);
+    ctx.save();ctx.globalAlpha=ka;
+    var bw=Math.min(440,W-60), bh=42, bx=W/2-bw/2, by=H-134;
+    ctx.fillStyle=COL.bg2;ctx.strokeStyle=COL.gold;ctx.lineWidth=1.8;
+    ctx.fillRect(bx,by,bw,bh);ctx.strokeRect(bx,by,bw,bh);
+    ctx.fillStyle=COL.gold;ctx.font='800 14px JetBrains Mono,monospace';ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.fillText('Var = mean(dev^2) = '+varWide.toFixed(0), W/2, by+bh/2);
+    ctx.restore();
+  }
+  setHUD(LANG==='cn'?'平方求平均':'square+avg', '--', 'var B = '+varWide.toFixed(0));
+}
+
+/* ============================================================
+   F5 — 回到脑波: 平稳方差小 / 抖动方差大. 方差 = 信号能量
+   ============================================================ */
+function drawF5(p){
+  clearBg();
+  topTitle(LANG==='cn'?'回到脑波: 方差大小 = 抖动程度':'Back to EEG: variance size = shakiness');
+  var pad=90, w=W-pad*2;
+  var rowH=(H-230)/2;
+  var y1=70, y2=70+rowH+14;
+  // A calm
+  drawPanel(pad,y1,w,rowH,LANG==='cn'?'A · 平稳 → 方差小':'A · calm → small var', COL.proof);
+  drawWave(eegCalm, pad+12,y1+8,w-24,rowH-30, rowH*0.28, COL.axis, 1, 1);
+  // B shaky
+  drawPanel(pad,y2,w,rowH,LANG==='cn'?'B · 抖动 → 方差大':'B · shaky → big var', COL.proof);
+  drawWave(eegShaky, pad+12,y2+8,w-24,rowH-30, rowH*0.16, COL.axis, 1, 1);
+  // 在每个面板内右上角贴 var 值 (留出 HUD 空间, 故放面板左偏右处)
+  ctx.save();
+  ctx.font='700 13px JetBrains Mono,monospace';ctx.textAlign='left';ctx.textBaseline='top';
+  ctx.fillStyle=COL.axis;
+  ctx.fillText('var = '+varCalm.toFixed(2), pad+w*0.42, y1+9);
+  ctx.fillStyle=COL.solution;
+  ctx.fillText('var = '+varShaky.toFixed(2), pad+w*0.42, y2+9);
+  ctx.restore();
+  // 比例条比较
+  var cmpY = y2+rowH+10;
+  var ratio = varShaky/varCalm;
+  ctx.save();
+  ctx.fillStyle=COL.fgDim;ctx.font='600 11px Inter,"Noto Sans SC",sans-serif';ctx.textAlign='center';ctx.textBaseline='bottom';
+  ctx.fillText(LANG==='cn'?('抖动段方差约是平稳段的 '+ratio.toFixed(1)+' 倍'):('shaky variance ~'+ratio.toFixed(1)+'x the calm one'), W/2, cmpY);
+  ctx.restore();
+  // key takeaway gold (一闪)
+  if(p>0.4){
+    var ka=Math.min(1,(p-0.4)*3)*(0.85+0.15*Math.sin(p*10));
+    ctx.save();ctx.globalAlpha=Math.min(1,ka);
+    var bw=Math.min(480,W-60),bh=42,bx=W/2-bw/2,by=H-128;
+    ctx.fillStyle=COL.bg2;ctx.strokeStyle=COL.gold;ctx.lineWidth=2;
+    ctx.fillRect(bx,by,bw,bh);ctx.strokeRect(bx,by,bw,bh);
+    ctx.fillStyle=COL.gold;ctx.font='800 14px Inter,"Noto Sans SC",sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.fillText(LANG==='cn'?'方差: 一个数说清抖动程度 (= 信号能量)':'Variance: one number for shakiness (= signal energy)', W/2, by+bh/2);
+    ctx.restore();
+  }
+  setHUD(LANG==='cn'?'方差=能量':'var=energy', varCalm.toFixed(2), varShaky.toFixed(2));
+}
+
+/* ============================================================
+   Main render loop
+   ============================================================ */
+var drawers = [drawF1, drawF2, drawF3, drawF4, drawF5];
+function render(){
+  var now = performance.now();
+  var totalT = now - animStart;
+  var cycle = SCENE_DUR*5;
+  var tt = totalT % cycle;
+  var sceneIdx = Math.floor(tt/SCENE_DUR);
+  var progress = (tt % SCENE_DUR)/SCENE_DUR;
+  if(sceneIdx !== currentScene){
+    currentScene = sceneIdx;
+    updateSubtitle(currentScene);
+  }
+  drawers[sceneIdx](progress);
+  requestAnimationFrame(render);
+}
+refreshI18N();
+updateSubtitle(0);
+requestAnimationFrame(render);
+</script>
+</body>
+</html>

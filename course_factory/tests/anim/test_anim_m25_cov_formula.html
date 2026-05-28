@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>把"一起抖"写成一个数：协方差公式</title>
+<style>
+  :root{
+    /* 第 1 层 — 共享深空底 (所有 26 套统一) */
+    --bg-0: oklch(0.14 0.035 265);
+    --bg-1: oklch(0.18 0.04 265);
+    --bg-2: oklch(0.22 0.045 265);
+    --bg-3: oklch(0.28 0.05 265);
+    --line: oklch(0.35 0.05 265 / 0.35);
+    --line-strong: oklch(0.55 0.08 265 / 0.55);
+    --fg:      oklch(0.96 0.01 265);
+    --fg-dim:  oklch(0.75 0.02 265);
+    --fg-mute: oklch(0.55 0.03 265);
+    --gold:    oklch(0.85 0.14 85);
+    /* 第 2 层 — math signature accent (electric blue) */
+    --accent: oklch(0.72 0.17 245);
+    /* 第 3 层 — math 5 色 palette (themes.js MTH-06) */
+    --p-axis:     oklch(0.72 0.17 245);  /* AXIS  -> 坐标轴 / 主链路 */
+    --p-proof:    oklch(0.52 0.16 245);  /* PROOF -> 次级结构 / 偏差箭头 */
+    --p-shadow:   oklch(0.35 0.10 245);  /* SHADOW-> 暗部 / 抵消区 */
+    --p-solution: oklch(0.92 0.08 240);  /* SOLUTION -> 推导亮点 / 公式高亮 */
+    --p-qed:      oklch(0.85 0.14 85);   /* QED -> 金色印章 / 结论 */
+    /* 语义双色: 正乘积(同向) 用 axis 蓝, 负乘积(反向) 用 coral 红 */
+    --c-pos:      oklch(0.72 0.17 245);  /* 同号 -> 正 (蓝) */
+    --c-neg:      oklch(0.70 0.18 25);   /* 异号 -> 负 (coral 红) */
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;padding:0;overflow:hidden;height:100vh;background:var(--bg-0);
+       font-family:'Noto Sans SC',system-ui,sans-serif;color:var(--fg);display:flex;}
+  .sidebar{width:200px;flex-shrink:0;height:100vh;background:var(--bg-1);
+           border-right:1.5px solid var(--line-strong);
+           display:flex;flex-direction:column;gap:14px;padding:18px 16px;}
+  .brand{font-size:11px;letter-spacing:2px;color:var(--accent);
+         font-family:'JetBrains Mono',ui-monospace,monospace;font-weight:700;}
+  .ttl{font-size:15px;font-weight:700;line-height:1.4;margin:0;}
+  .desc{font-size:11.5px;line-height:1.5;color:var(--fg-dim);}
+  .desc .en{font-style:italic;color:var(--fg-mute);margin-top:4px;display:block;}
+  .guide{list-style:none;padding:0;margin:4px 0 0;display:flex;flex-direction:column;gap:9px;}
+  .guide li{font-size:11.5px;line-height:1.4;color:var(--fg-dim);
+            border-left:3px solid var(--accent);padding-left:8px;}
+  .mascot{margin-top:6px;align-self:center;}
+  .langbtn{margin-top:auto;border:1.5px solid var(--line-strong);background:var(--bg-2);
+           color:var(--fg);box-shadow:3px 3px 0 var(--bg-0);cursor:pointer;
+           padding:7px 12px;font-size:11.5px;font-weight:700;border-radius:4px;
+           font-family:'JetBrains Mono',ui-monospace,monospace;}
+  .langbtn:active{transform:translate(3px,3px);box-shadow:none;}
+  main{flex:1;height:100vh;position:relative;overflow:hidden;}
+  #stage{display:block;position:absolute;inset:0;width:100%;height:100%;}
+  .hud{position:absolute;top:16px;right:16px;background:var(--bg-1);
+       border:1.5px solid var(--line-strong);box-shadow:3px 3px 0 var(--bg-0);
+       padding:11px 13px;font-size:11.5px;min-width:200px;border-radius:5px;
+       font-family:'JetBrains Mono',ui-monospace,monospace;}
+  .hud .ht{font-weight:700;color:var(--accent);margin-bottom:5px;font-size:12px;}
+  .hud .hrow{color:var(--fg-dim);margin-top:3px;display:flex;justify-content:space-between;gap:12px;}
+  .hud .hv{color:var(--p-qed);}
+  .caption{position:absolute;bottom:24px;left:50%;transform:translateX(-50%);
+           text-align:center;max-width:84%;}
+  .caption .cz{font-size:17px;font-weight:700;color:var(--fg);line-height:1.45;}
+  .caption .ce{font-size:12.5px;font-style:italic;color:var(--fg-mute);margin-top:3px;}
+</style>
+</head>
+<body>
+  <aside class="sidebar">
+    <div class="brand" id="brand">MTH-06 / 协方差公式</div>
+    <h1 class="ttl" id="ttl">把"一起抖"写成一个数</h1>
+    <div class="desc">
+      <span id="desc1">散点的倾斜告诉我们两个电极一起抖，现在把这种直觉变成一个精确的数 —— 协方差。</span>
+      <span class="en" id="desc2">Turn the scatter tilt into one precise number: covariance.</span>
+    </div>
+    <ul class="guide">
+      <li id="g1">先各自减掉均值，得到偏差</li>
+      <li id="g2">两个偏差相乘：同号正、异号负</li>
+      <li id="g3">所有时刻平均 = 协方差</li>
+      <li id="g4">协方差保留能量，相关只看方向</li>
+    </ul>
+    <!-- mascot: Pi — 旋转四面体 (math) -->
+    <svg class="mascot" width="62" height="62" viewBox="0 0 62 62" id="mascot">
+      <g id="piRot">
+        <polygon points="31,8 54,46 8,46" fill="none" stroke="var(--accent)" stroke-width="1.6"/>
+        <polygon points="31,8 54,46 31,34" fill="var(--accent)" opacity="0.18"/>
+        <line x1="31" y1="8" x2="31" y2="34" stroke="var(--accent)" stroke-width="1.2" opacity="0.7"/>
+        <line x1="54" y1="46" x2="31" y2="34" stroke="var(--accent)" stroke-width="1.2" opacity="0.7"/>
+        <line x1="8" y1="46" x2="31" y2="34" stroke="var(--accent)" stroke-width="1.2" opacity="0.7"/>
+        <circle cx="31" cy="34" r="2.6" fill="var(--p-qed)"/>
+      </g>
+    </svg>
+    <button class="langbtn" id="langBtn">中 / EN</button>
+  </aside>
+  <main>
+    <canvas id="stage"></canvas>
+    <div class="hud">
+      <div class="ht" id="hudTtl">Cov(X, Y)</div>
+      <div class="hrow"><span id="hudStageLbl">步骤</span> <span class="hv" id="hudStage">F1</span></div>
+      <div class="hrow"><span id="hudPosLbl">同号乘积 +</span> <span class="hv" id="hudPos">--</span></div>
+      <div class="hrow"><span id="hudNegLbl">异号乘积 -</span> <span class="hv" id="hudNeg">--</span></div>
+      <div class="hrow"><span id="hudCovLbl">协方差</span> <span class="hv" id="hudCov">--</span></div>
+    </div>
+    <div class="caption">
+      <div class="cz" id="subZh">散点会倾斜……</div>
+      <div class="ce" id="subEn">The scatter tilts...</div>
+    </div>
+  </main>
+<script>
+(function(){
+  "use strict";
+  var LANG='cn';
+
+  var I18N={
+    brand:{cn:'MTH-06 / 协方差公式',en:'MTH-06 / COVARIANCE'},
+    ttl:{cn:'把"一起抖"写成一个数',en:'Write "vary together" as one number'},
+    desc1:{cn:'散点的倾斜告诉我们两个电极一起抖，现在把这种直觉变成一个精确的数 —— 协方差。',
+           en:'The scatter tilt shows two electrodes vary together; turn that intuition into one precise number — covariance.'},
+    desc2:{cn:'Turn the scatter tilt into one precise number: covariance.',
+           en:'One number for how tightly two electrodes move together.'},
+    g1:{cn:'先各自减掉均值，得到偏差',en:'subtract each mean -> deviations'},
+    g2:{cn:'两个偏差相乘：同号正、异号负',en:'multiply deviations: same-sign +, opposite -'},
+    g3:{cn:'所有时刻平均 = 协方差',en:'average over all instants = covariance'},
+    g4:{cn:'协方差保留能量，相关只看方向',en:'cov keeps energy; correlation only direction'},
+    hudTtl:{cn:'Cov(X, Y)',en:'Cov(X, Y)'},
+    hudStageLbl:{cn:'步骤',en:'step'},
+    hudPosLbl:{cn:'同号乘积 +',en:'same-sign +'},
+    hudNegLbl:{cn:'异号乘积 -',en:'opp-sign -'},
+    hudCovLbl:{cn:'协方差',en:'covariance'},
+    stages:{
+      cn:['散点倾斜','减去均值','偏差相乘','求和取平均','保留能量'],
+      en:['scatter tilt','subtract mean','multiply','sum & average','keep energy']
+    },
+    subs:{
+      cn:['上一节我们看到：两个电极一起抖时，散点会沿对角线倾斜。可"倾斜"是一种感觉——怎么把它变成一个精确的数，让机器也能比较大小？',
+          '第一步：把每个点各自减掉自己的均值 (xi-x̄, yi-ȳ)。这样原点搬到了云团中心，每个点都变成一对带正负号的偏差。',
+          '关键一步：把同一时刻的两个偏差相乘 (xi-x̄)(yi-ȳ)。同号(都正或都负=一起往同方向偏)结果为正(蓝)；异号(一升一降)结果为负(红)。',
+          '把所有时刻的乘积加起来再除以 n，就是协方差。同向的点多 -> 蓝压过红 -> 协方差大正；反向多 -> 红压过蓝 -> 大负；杂乱无章 -> 正负相消 -> 接近 0。',
+          '协方差还把振幅"能量"留在数里：信号越强、抖得越大，协方差越大。相关把它除掉只剩方向(-1~1)。脑机要靠能量区分动作，所以用协方差。'],
+      en:['Last lesson: when two electrodes vary together, the scatter tilts along a diagonal. But "tilt" is a feeling — how do we make it one precise number a machine can compare?',
+          'Step 1: subtract each value\'s own mean (xi-x̄, yi-ȳ). The origin moves to the cloud center; every point becomes a pair of signed deviations.',
+          'Key step: multiply the two deviations at the same instant (xi-x̄)(yi-ȳ). Same sign (both +/both - = deviate the same way) gives positive (blue); opposite signs give negative (red).',
+          'Add up the products over all instants and divide by n -> covariance. More same-direction points -> blue beats red -> big positive; more opposite -> red beats blue -> big negative; scattered -> they cancel -> near 0.',
+          'Covariance also keeps the amplitude "energy" inside the number: stronger signals, bigger swings -> bigger covariance. Correlation divides that out, leaving only direction (-1..1). BCI needs energy to tell actions apart, so it uses covariance.']
+    },
+    cap1a:{cn:'散点沿对角线倾斜 = 一起抖',en:'scatter tilts diagonally = vary together'},
+    cap1b:{cn:'但"倾斜"只是感觉，要一个数',en:'but "tilt" is just a feeling -> need a number'},
+    cap2a:{cn:'各自减去均值 (xi-x̄, yi-ȳ)',en:'subtract each mean (xi-x̄, yi-ȳ)'},
+    cap2b:{cn:'每个点 = 一对带正负号的偏差',en:'each point = a pair of signed deviations'},
+    cap3:{cn:'(xi-x̄)(yi-ȳ)',en:'(xi-x̄)(yi-ȳ)'},
+    cap3pos:{cn:'同号 -> 乘积为正 (蓝)',en:'same sign -> product +  (blue)'},
+    cap3neg:{cn:'异号 -> 乘积为负 (红)',en:'opposite -> product -  (red)'},
+    cap4:{cn:'蓝多 -> 大正；红多 -> 大负；相消 -> 接近 0',en:'blue wins -> big +; red wins -> big -; cancel -> ~0'},
+    cap5cov:{cn:'协方差：保留能量(振幅)',en:'covariance: keeps energy (amplitude)'},
+    cap5cor:{cn:'相关：除掉能量，只剩方向 (-1~1)',en:'correlation: energy removed, direction only'},
+    take:{cn:'协方差 = 一个数，精确表示两电极一起抖的程度',
+          en:'Covariance = one number for how much two electrodes vary together'},
+    take2:{cn:'多个电极的协方差排成矩阵 -> 下一步 CSP',
+           en:'covariances of many electrodes -> a matrix -> next: CSP'},
+    qmean:{cn:'x̄, ȳ',en:'x̄, ȳ'}
+  };
+  function t(k){return (I18N[k]&&I18N[k][LANG])||(I18N[k]&&I18N[k].en)||k;}
+
+  function refreshI18N(){
+    document.getElementById('brand').textContent=t('brand');
+    document.getElementById('ttl').textContent=t('ttl');
+    document.getElementById('desc1').textContent=t('desc1');
+    document.getElementById('desc2').textContent=t('desc2');
+    document.getElementById('g1').textContent=t('g1');
+    document.getElementById('g2').textContent=t('g2');
+    document.getElementById('g3').textContent=t('g3');
+    document.getElementById('g4').textContent=t('g4');
+    document.getElementById('hudTtl').textContent=t('hudTtl');
+    document.getElementById('hudStageLbl').textContent=t('hudStageLbl');
+    document.getElementById('hudPosLbl').textContent=t('hudPosLbl');
+    document.getElementById('hudNegLbl').textContent=t('hudNegLbl');
+    document.getElementById('hudCovLbl').textContent=t('hudCovLbl');
+    document.getElementById('langBtn').textContent= LANG==='cn'?'中 / EN':'EN / 中';
+  }
+  document.getElementById('langBtn').addEventListener('click',function(){
+    LANG = LANG==='cn'?'en':'cn'; refreshI18N();
+  });
+
+  var canvas=document.getElementById('stage'),ctx=canvas.getContext('2d');
+  var W=0,H=0,DPR=Math.min(window.devicePixelRatio||1,2);
+  function resize(){var r=canvas.parentElement.getBoundingClientRect();if(r.width<1||r.height<1)return;
+    W=r.width;H=r.height;canvas.width=W*DPR;canvas.height=H*DPR;
+    canvas.style.width=W+'px';canvas.style.height=H+'px';ctx.setTransform(DPR,0,0,DPR,0,0);}
+  window.addEventListener('resize',resize);setTimeout(resize,200);setTimeout(resize,600);
+  if(document.fonts&&document.fonts.ready)document.fonts.ready.then(resize);
+  var C=function(v){return getComputedStyle(document.documentElement).getPropertyValue(v).trim();};
+
+  function lerp(a,b,k){return a+(b-a)*k;}
+  function clamp01(k){return k<0?0:k>1?1:k;}
+  function ease(k){k=clamp01(k);return k*k*(3-2*k);}
+
+  // ---- 数据: 一组"已去均值"的偏差点, 正协方差为主, 夹杂少量反向点 ----
+  var PTS=[
+    {dx: 1.6, dy: 1.4}, {dx: 1.1, dy: 0.7}, {dx: 0.6, dy: 1.0},
+    {dx:-1.4, dy:-1.2}, {dx:-0.9, dy:-1.5}, {dx:-1.7, dy:-0.8},
+    {dx: 1.3, dy:-0.6}, {dx:-0.7, dy: 0.9}, {dx: 0.4, dy: 0.3},
+    {dx:-0.5, dy:-0.4}, {dx: 0.9, dy: 1.2}, {dx:-1.1, dy:-0.6}
+  ];
+  var PROD=PTS.map(function(p){return p.dx*p.dy;});
+  var COV = PROD.reduce(function(a,b){return a+b;},0)/PROD.length;
+  var POSSUM = PROD.filter(function(v){return v>0;}).reduce(function(a,b){return a+b;},0);
+  var NEGSUM = PROD.filter(function(v){return v<0;}).reduce(function(a,b){return a+b;},0);
+  var NET = POSSUM+NEGSUM; // = COV*n
+
+  function px(cx,cy,sc,dx,dy){return {x:cx+dx*sc, y:cy-dy*sc};}
+
+  function drawGrid(){
+    ctx.strokeStyle=C('--line');ctx.lineWidth=1;
+    for(var gx=0;gx<W;gx+=40){ctx.beginPath();ctx.moveTo(gx,0);ctx.lineTo(gx,H);ctx.stroke();}
+    for(var gy=0;gy<H;gy+=40){ctx.beginPath();ctx.moveTo(0,gy);ctx.lineTo(W,gy);ctx.stroke();}
+  }
+  function drawAxes(cx,cy,half,xlab,ylab){
+    ctx.strokeStyle=C('--line-strong');ctx.lineWidth=1.4;
+    ctx.beginPath();ctx.moveTo(cx-half,cy);ctx.lineTo(cx+half,cy);
+    ctx.moveTo(cx,cy-half);ctx.lineTo(cx,cy+half);ctx.stroke();
+    ctx.fillStyle=C('--fg-mute');ctx.font="11px 'JetBrains Mono',monospace";
+    ctx.textAlign='right';ctx.fillText(xlab,cx+half-6,cy-7);
+    ctx.textAlign='left';ctx.fillText(ylab,cx+7,cy-half+12);
+  }
+  function setHUD(stage,pos,neg,cov){
+    document.getElementById('hudStage').textContent='F'+(stage+1);
+    document.getElementById('hudPos').textContent=pos;
+    document.getElementById('hudNeg').textContent=neg;
+    document.getElementById('hudCov').textContent=cov;
+  }
+
+  // ---------- F1: 散点倾斜 (回顾 M24) ----------
+  function drawF1(local){
+    var cx=W*0.5, cy=H*0.50, half=Math.min(W,H)*0.30, sc=half/2.4;
+    drawAxes(cx,cy,half,'X','Y');
+    ctx.fillStyle=C('--fg-dim');ctx.font="13px 'Noto Sans SC',sans-serif";ctx.textAlign='center';
+    ctx.fillText(LANG==='cn'?'X = 电极 C3 偏差     Y = 电极 C4 偏差':'X = electrode C3 dev    Y = electrode C4 dev',cx,cy+half+30);
+    var n=Math.floor(ease(local*1.4)*PTS.length);
+    for(var i=0;i<n;i++){
+      var p=px(cx,cy,sc,PTS[i].dx,PTS[i].dy);
+      ctx.fillStyle=C('--accent');ctx.globalAlpha=0.9;
+      ctx.beginPath();ctx.arc(p.x,p.y,4.5,0,Math.PI*2);ctx.fill();
+    }
+    ctx.globalAlpha=1;
+    var rev=ease((local-0.45)*2);
+    if(rev>0){
+      ctx.save();ctx.globalAlpha=rev;
+      ctx.strokeStyle=C('--p-solution');ctx.lineWidth=2.2;ctx.setLineDash([7,5]);
+      ctx.beginPath();ctx.moveTo(cx-half*0.85,cy+half*0.85);ctx.lineTo(cx+half*0.85,cy-half*0.85);ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle=C('--fg');ctx.font="700 15px 'Noto Sans SC',sans-serif";ctx.textAlign='center';
+      ctx.fillText(t('cap1a'),cx,H*0.12);
+      ctx.fillStyle=C('--gold');ctx.font="700 14px 'Noto Sans SC',sans-serif";
+      ctx.fillText(t('cap1b'),cx,H*0.12+24);
+      ctx.restore();
+    }
+    setHUD(0,'--','--','? -> 1 个数');
+  }
+
+  // ---------- F2: 减去均值 (三层分工: 点 / 偏差箭头 / 正负符号) ----------
+  function drawF2(local){
+    var cx=W*0.5, cy=H*0.50, half=Math.min(W,H)*0.30, sc=half/2.4;
+    drawAxes(cx,cy,half,'x-x̄','y-ȳ');
+    ctx.fillStyle=C('--p-solution');ctx.beginPath();ctx.arc(cx,cy,5,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle=C('--p-solution');ctx.font="700 12px 'JetBrains Mono',monospace";ctx.textAlign='left';
+    ctx.fillText('('+t('qmean')+')',cx+9,cy+16);
+    var rev=ease(local*1.5);
+    for(var i=0;i<PTS.length;i++){
+      var p=px(cx,cy,sc,PTS[i].dx,PTS[i].dy);
+      if(rev>0.15){
+        ctx.save();ctx.globalAlpha=clamp01((rev-0.15)*1.6)*0.8;
+        ctx.strokeStyle=C('--p-proof');ctx.lineWidth=1.4;
+        ctx.beginPath();ctx.moveTo(cx,cy);ctx.lineTo(p.x,p.y);ctx.stroke();
+        ctx.restore();
+      }
+      ctx.fillStyle=C('--accent');ctx.globalAlpha=0.9;
+      ctx.beginPath();ctx.arc(p.x,p.y,4.5,0,Math.PI*2);ctx.fill();
+      ctx.globalAlpha=1;
+    }
+    if(rev>0.5){
+      var ex=PTS[0]; var pe=px(cx,cy,sc,ex.dx,ex.dy);
+      ctx.save();ctx.globalAlpha=clamp01((rev-0.5)*2);
+      ctx.fillStyle=C('--c-pos');ctx.font="700 12px 'JetBrains Mono',monospace";ctx.textAlign='left';
+      ctx.fillText('xi-x̄ = +'+ex.dx.toFixed(1), pe.x+8, pe.y-6);
+      ctx.fillText('yi-ȳ = +'+ex.dy.toFixed(1), pe.x+8, pe.y+10);
+      var ng=PTS[6]; var pn=px(cx,cy,sc,ng.dx,ng.dy);
+      ctx.fillStyle=C('--c-neg');
+      ctx.fillText('xi-x̄ = +'+ng.dx.toFixed(1), pn.x+8, pn.y-6);
+      ctx.fillText('yi-ȳ = '+ng.dy.toFixed(1), pn.x+8, pn.y+10);
+      ctx.restore();
+    }
+    ctx.fillStyle=C('--fg');ctx.font="700 15px 'Noto Sans SC',sans-serif";ctx.textAlign='center';
+    ctx.fillText(t('cap2a'),cx,H*0.11);
+    ctx.fillStyle=C('--fg-dim');ctx.font="13px 'Noto Sans SC',sans-serif";
+    ctx.fillText(t('cap2b'),cx,H*0.11+22);
+    setHUD(1,'--','--','x̄, ȳ ok');
+  }
+
+  // ---------- F3: 偏差相乘 (象限着色, 同号正/异号负) ----------
+  function drawF3(local){
+    var cx=W*0.5, cy=H*0.50, half=Math.min(W,H)*0.30, sc=half/2.4;
+    var rev=ease(local*1.3);
+    if(rev>0.1){
+      ctx.save();ctx.globalAlpha=clamp01((rev-0.1)*2)*0.12;
+      ctx.fillStyle=C('--c-pos');
+      ctx.fillRect(cx,cy-half,half,half);          // Q1 (x+ y+)
+      ctx.fillRect(cx-half,cy,half,half);           // Q3 (x- y-)
+      ctx.fillStyle=C('--c-neg');
+      ctx.fillRect(cx-half,cy-half,half,half);      // Q2 (x- y+)
+      ctx.fillRect(cx,cy,half,half);                // Q4 (x+ y-)
+      ctx.restore();
+    }
+    drawAxes(cx,cy,half,'x-x̄','y-ȳ');
+    if(rev>0.2){
+      ctx.save();ctx.globalAlpha=clamp01((rev-0.2)*2);
+      ctx.font="700 26px 'JetBrains Mono',monospace";ctx.textAlign='center';
+      ctx.fillStyle=C('--c-pos');
+      ctx.fillText('+',cx+half*0.5,cy-half*0.5+9);
+      ctx.fillText('+',cx-half*0.5,cy+half*0.5+9);
+      ctx.fillStyle=C('--c-neg');
+      ctx.fillText('-',cx-half*0.5,cy-half*0.5+9);
+      ctx.fillText('-',cx+half*0.5,cy+half*0.5+9);
+      ctx.restore();
+    }
+    var nshow=Math.floor(ease(local*1.5)*PTS.length);
+    var posCnt=0,negCnt=0;
+    for(var i=0;i<nshow;i++){
+      var p=px(cx,cy,sc,PTS[i].dx,PTS[i].dy);
+      var prod=PROD[i];
+      ctx.fillStyle = prod>=0 ? C('--c-pos') : C('--c-neg');
+      var r=4+Math.min(7,Math.abs(prod)*3);
+      ctx.beginPath();ctx.arc(p.x,p.y,r,0,Math.PI*2);ctx.fill();
+      if(prod>=0)posCnt++;else negCnt++;
+    }
+    ctx.fillStyle=C('--fg');ctx.font="700 15px 'Noto Sans SC',sans-serif";ctx.textAlign='center';
+    ctx.fillText(t('cap3'),cx,H*0.10);
+    ctx.fillStyle=C('--c-pos');ctx.font="700 13px 'Noto Sans SC',sans-serif";
+    ctx.fillText(t('cap3pos'),cx-W*0.17,H*0.10+24);
+    ctx.fillStyle=C('--c-neg');
+    ctx.fillText(t('cap3neg'),cx+W*0.17,H*0.10+24);
+    setHUD(2, posCnt, negCnt, '正/负 在分');
+  }
+
+  // ---------- F4: 求和取平均 = 协方差 ----------
+  function drawF4(local){
+    var lx=W*0.30, cy=H*0.46, half=Math.min(W*0.5,H)*0.28, sc=half/2.4;
+    ctx.save();ctx.globalAlpha=0.08;
+    ctx.fillStyle=C('--c-pos');ctx.fillRect(lx,cy-half,half,half);ctx.fillRect(lx-half,cy,half,half);
+    ctx.fillStyle=C('--c-neg');ctx.fillRect(lx-half,cy-half,half,half);ctx.fillRect(lx,cy,half,half);
+    ctx.restore();
+    drawAxes(lx,cy,half,'x-x̄','y-ȳ');
+    for(var i=0;i<PTS.length;i++){
+      var p=px(lx,cy,sc,PTS[i].dx,PTS[i].dy);
+      ctx.fillStyle = PROD[i]>=0 ? C('--c-pos') : C('--c-neg');
+      var r=4+Math.min(7,Math.abs(PROD[i])*3);
+      ctx.beginPath();ctx.arc(p.x,p.y,r,0,Math.PI*2);ctx.fill();
+    }
+    // 右侧累加: 蓝条往上, 红条往下
+    var bx=W*0.74, by=cy, barW=46, scl=14;
+    ctx.strokeStyle=C('--line-strong');ctx.lineWidth=1.4;
+    ctx.beginPath();ctx.moveTo(bx-90,by);ctx.lineTo(bx+90,by);ctx.stroke();
+    var rev=ease(local*1.2);
+    var posH=POSSUM*scl*rev, negH=Math.abs(NEGSUM)*scl*rev;
+    ctx.fillStyle=C('--c-pos');ctx.fillRect(bx-barW-6,by-posH,barW,posH);
+    ctx.fillStyle=C('--c-neg');ctx.fillRect(bx+6,by,barW,negH);
+    ctx.fillStyle=C('--c-pos');ctx.font="11px 'JetBrains Mono',monospace";ctx.textAlign='center';
+    ctx.fillText('+ '+POSSUM.toFixed(1),bx-barW/2-6,by-posH-8);
+    ctx.fillStyle=C('--c-neg');
+    ctx.fillText(NEGSUM.toFixed(1),bx+barW/2+6,by+negH+16);
+    if(local>0.55){
+      var ra=ease((local-0.55)*2.2);
+      ctx.save();ctx.globalAlpha=ra;
+      var boxY=by+half+18;
+      ctx.fillStyle=C('--bg-2');ctx.strokeStyle=C('--accent');ctx.lineWidth=1.6;
+      ctx.fillRect(bx-140,boxY,280,54);ctx.strokeRect(bx-140,boxY,280,54);
+      ctx.fillStyle=C('--p-solution');ctx.font="700 13px 'JetBrains Mono',monospace";ctx.textAlign='center';
+      ctx.fillText('Cov = (1/n) SUM (xi-x̄)(yi-ȳ)',bx,boxY+22);
+      ctx.fillStyle=C('--gold');ctx.font="700 15px 'JetBrains Mono',monospace";
+      ctx.fillText('= '+NET.toFixed(1)+' / '+PTS.length+' = +'+COV.toFixed(2),bx,boxY+43);
+      ctx.restore();
+    }
+    ctx.fillStyle=C('--fg');ctx.font="700 15px 'Noto Sans SC',sans-serif";ctx.textAlign='center';
+    ctx.fillText(t('cap4'),W*0.5,H*0.10);
+    setHUD(3, '+'+POSSUM.toFixed(1), NEGSUM.toFixed(1), '+'+COV.toFixed(2));
+  }
+
+  // ---------- F5: 协方差 vs 相关 (保留能量) ----------
+  function drawF5(local){
+    var rev=ease(local*1.3);
+    var cyc=H*0.42, half=Math.min(W*0.5,H)*0.23;
+    var panels=[
+      {cx:W*0.27, amp:1.0, lbl: LANG==='cn'?'强信号 (抖得大)':'strong (big swing)', cov:'+1.6', cor:'+0.90'},
+      {cx:W*0.73, amp:0.45,lbl: LANG==='cn'?'弱信号 (抖得小)':'weak (small swing)', cov:'+0.32',cor:'+0.90'}
+    ];
+    for(var k=0;k<panels.length;k++){
+      var pa=panels[k], cx=pa.cx, sc=half/2.4;
+      drawAxes(cx,cyc,half,'X','Y');
+      for(var i=0;i<PTS.length;i++){
+        var p=px(cx,cyc,sc,PTS[i].dx*pa.amp,PTS[i].dy*pa.amp);
+        ctx.fillStyle = PROD[i]>=0 ? C('--c-pos') : C('--c-neg');
+        ctx.globalAlpha=0.9;
+        ctx.beginPath();ctx.arc(p.x,p.y,3.8,0,Math.PI*2);ctx.fill();
+      }
+      ctx.globalAlpha=1;
+      ctx.fillStyle=C('--fg');ctx.font="700 13px 'Noto Sans SC',sans-serif";ctx.textAlign='center';
+      ctx.fillText(pa.lbl,cx,cyc-half-14);
+      if(rev>0.4){
+        ctx.save();ctx.globalAlpha=clamp01((rev-0.4)*2);
+        ctx.font="600 13px 'JetBrains Mono',monospace";ctx.textAlign='center';
+        ctx.fillStyle=C('--gold');
+        ctx.fillText('Cov = '+pa.cov,cx,cyc+half+24);
+        ctx.fillStyle=C('--fg-mute');
+        ctx.fillText('Corr = '+pa.cor,cx,cyc+half+42);
+        ctx.restore();
+      }
+    }
+    if(rev>0.55){
+      ctx.save();ctx.globalAlpha=clamp01((rev-0.55)*2.2);
+      ctx.font="700 14px 'Noto Sans SC',sans-serif";ctx.textAlign='center';
+      ctx.fillStyle=C('--p-solution');
+      ctx.fillText(t('cap5cov'),W*0.27,H*0.13);
+      ctx.fillStyle=C('--fg-mute');
+      ctx.fillText(t('cap5cor'),W*0.73,H*0.13);
+      ctx.restore();
+    }
+    if(local>0.62){
+      var ga=ease((local-0.62)*2.4);
+      ctx.save();ctx.globalAlpha=ga;
+      var by=H-116, bw=Math.min(680,W*0.8), bx=W/2-bw/2;
+      ctx.fillStyle=C('--bg-2');ctx.strokeStyle=C('--gold');ctx.lineWidth=2;
+      ctx.fillRect(bx,by,bw,58);ctx.strokeRect(bx,by,bw,58);
+      ctx.fillStyle=C('--gold');ctx.font="700 16px 'Noto Sans SC',sans-serif";ctx.textAlign='center';
+      ctx.fillText(t('take'),W/2,by+24);
+      ctx.fillStyle=C('--fg-dim');ctx.font="12px 'Noto Sans SC',sans-serif";
+      ctx.fillText(t('take2'),W/2,by+45);
+      ctx.restore();
+    }
+    setHUD(4, '+'+POSSUM.toFixed(1), NEGSUM.toFixed(1), '能量保留');
+  }
+
+  var startT=null, DUR=6600, NSTAGE=5, TOTAL=NSTAGE*DUR+1400;
+  function draw(now){
+    if(startT===null)startT=now;
+    var el=now-startT; if(el>TOTAL){startT=now;el=0;}
+    var stage=Math.min(Math.floor(el/DUR),NSTAGE-1);
+    var local=(el-stage*DUR)/DUR;
+    if(!W||!H){requestAnimationFrame(draw);return;}
+    ctx.clearRect(0,0,W,H);
+    ctx.fillStyle=C('--bg-0');ctx.fillRect(0,0,W,H);
+    drawGrid();
+    var rot=document.getElementById('piRot');
+    if(rot) rot.setAttribute('transform','rotate('+((now/30)%360)+' 31 31)');
+
+    if(stage===0)drawF1(local);
+    else if(stage===1)drawF2(local);
+    else if(stage===2)drawF3(local);
+    else if(stage===3)drawF4(local);
+    else drawF5(local);
+
+    document.getElementById('subZh').textContent=I18N.subs[LANG][stage]||'';
+    document.getElementById('subEn').textContent=I18N.subs.en[stage]||'';
+    requestAnimationFrame(draw);
+  }
+  refreshI18N();
+  requestAnimationFrame(draw);
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,505 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>把所有"两两一起抖"装进一张表：协方差矩阵</title>
+<style>
+  :root{
+    /* 第 1 层 — 共享深空底 (所有 26 套统一) */
+    --bg-0: oklch(0.14 0.035 265);
+    --bg-1: oklch(0.18 0.04 265);
+    --bg-2: oklch(0.22 0.045 265);
+    --bg-3: oklch(0.28 0.05 265);
+    --line: oklch(0.35 0.05 265 / 0.35);
+    --line-strong: oklch(0.55 0.08 265 / 0.55);
+    --fg:      oklch(0.96 0.01 265);
+    --fg-dim:  oklch(0.75 0.02 265);
+    --fg-mute: oklch(0.55 0.03 265);
+    --gold:    oklch(0.85 0.14 85);
+    /* 第 2 层 — math signature accent (electric blue) */
+    --accent: oklch(0.72 0.17 245);
+    /* 第 3 层 — math 5 色 palette (themes.js MTH-06) */
+    --p-axis:     oklch(0.72 0.17 245);  /* AXIS  -> 电极轴 / 主链路 */
+    --p-proof:    oklch(0.55 0.15 265);  /* PROOF -> 次级结构 / 连线 */
+    --p-shadow:   oklch(0.32 0.08 265);  /* SHADOW-> 暗部 / 空格底 */
+    --p-solution: oklch(0.85 0.12 230);  /* SOLUTION -> 对角高亮 / 公式 */
+    --p-qed:      oklch(0.85 0.14 85);   /* QED -> 金色印章 / 结论 */
+    /* 语义双色: 正协方差 用 axis 蓝, 负协方差 用 coral 红 */
+    --c-pos:      oklch(0.72 0.17 245);  /* 正协方差 (蓝) */
+    --c-neg:      oklch(0.70 0.18 25);   /* 负协方差 (coral 红) */
+    --c-diag:     oklch(0.85 0.14 85);   /* 对角线 = 自身方差 (金) */
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;padding:0;overflow:hidden;height:100vh;background:var(--bg-0);
+       font-family:'Noto Sans SC',system-ui,sans-serif;color:var(--fg);display:flex;}
+  .sidebar{width:200px;flex-shrink:0;height:100vh;background:var(--bg-1);
+           border-right:1.5px solid var(--line-strong);
+           display:flex;flex-direction:column;gap:14px;padding:18px 16px;}
+  .brand{font-size:11px;letter-spacing:2px;color:var(--accent);
+         font-family:'JetBrains Mono',ui-monospace,monospace;font-weight:700;}
+  .ttl{font-size:15px;font-weight:700;line-height:1.4;margin:0;}
+  .desc{font-size:11.5px;line-height:1.5;color:var(--fg-dim);}
+  .desc .en{font-style:italic;color:var(--fg-mute);margin-top:4px;display:block;}
+  .guide{list-style:none;padding:0;margin:4px 0 0;display:flex;flex-direction:column;gap:9px;}
+  .guide li{font-size:11.5px;line-height:1.4;color:var(--fg-dim);
+            border-left:3px solid var(--accent);padding-left:8px;}
+  .mascot{margin-top:6px;align-self:center;}
+  .langbtn{margin-top:auto;border:1.5px solid var(--line-strong);background:var(--bg-2);
+           color:var(--fg);box-shadow:3px 3px 0 var(--bg-0);cursor:pointer;
+           padding:7px 12px;font-size:11.5px;font-weight:700;border-radius:4px;
+           font-family:'JetBrains Mono',ui-monospace,monospace;}
+  .langbtn:active{transform:translate(3px,3px);box-shadow:none;}
+  main{flex:1;height:100vh;position:relative;overflow:hidden;display:flex;flex-direction:column;}
+  #stage{display:block;position:absolute;inset:0;width:100%;height:100%;}
+  .hud{position:absolute;top:16px;right:16px;background:var(--bg-1);
+       border:1.5px solid var(--line-strong);box-shadow:3px 3px 0 var(--bg-0);
+       padding:11px 13px;font-size:11.5px;min-width:206px;border-radius:5px;
+       font-family:'JetBrains Mono',ui-monospace,monospace;}
+  .hud .ht{font-weight:700;color:var(--accent);margin-bottom:5px;font-size:12px;}
+  .hud .hrow{color:var(--fg-dim);margin-top:3px;display:flex;justify-content:space-between;gap:12px;}
+  .hud .hv{color:var(--p-qed);}
+  .caption{position:absolute;bottom:24px;left:50%;transform:translateX(-50%);
+           text-align:center;max-width:84%;}
+  .caption .cz{font-size:17px;font-weight:700;color:var(--fg);line-height:1.45;}
+  .caption .ce{font-size:12.5px;font-style:italic;color:var(--fg-mute);margin-top:3px;}
+</style>
+</head>
+<body>
+  <aside class="sidebar">
+    <div class="brand" id="brand">MTH-06 / 协方差矩阵</div>
+    <h1 class="ttl" id="ttl">所有两两关系，装进一张表</h1>
+    <div class="desc">
+      <span id="desc1">电极很多时，两两之间的协方差爆炸式增长。怎么把它们整理成一个完整、有秩序的东西？答案是协方差矩阵。</span>
+      <span class="en" id="desc2">Many electrodes -> a matrix that holds every pairwise covariance.</span>
+    </div>
+    <ul class="guide">
+      <li id="g1">每两个电极 = 一个协方差</li>
+      <li id="g2">行列都是电极，排成方表</li>
+      <li id="g3">对角线 = 各通道自身方差</li>
+      <li id="g4">矩阵对称：上三角=下三角</li>
+    </ul>
+    <!-- mascot: Pi — 旋转四面体 (math) -->
+    <svg class="mascot" width="62" height="62" viewBox="0 0 62 62" id="mascot">
+      <g id="piRot">
+        <polygon points="31,8 54,46 8,46" fill="none" stroke="var(--accent)" stroke-width="1.6"/>
+        <polygon points="31,8 54,46 31,34" fill="var(--accent)" opacity="0.18"/>
+        <line x1="31" y1="8" x2="31" y2="34" stroke="var(--accent)" stroke-width="1.2" opacity="0.7"/>
+        <line x1="54" y1="46" x2="31" y2="34" stroke="var(--accent)" stroke-width="1.2" opacity="0.7"/>
+        <line x1="8" y1="46" x2="31" y2="34" stroke="var(--accent)" stroke-width="1.2" opacity="0.7"/>
+        <circle cx="31" cy="34" r="2.6" fill="var(--p-qed)"/>
+      </g>
+    </svg>
+    <button class="langbtn" id="langBtn">中 / EN</button>
+  </aside>
+  <main>
+    <canvas id="stage"></canvas>
+    <div class="hud">
+      <div class="ht" id="hudTtl">Cov Matrix (4x4)</div>
+      <div class="hrow"><span id="hudStageLbl">步骤</span> <span class="hv" id="hudStage">F1</span></div>
+      <div class="hrow"><span id="hudPairLbl">两两组合</span> <span class="hv" id="hudPair">--</span></div>
+      <div class="hrow"><span id="hudDiagLbl">对角(自身方差)</span> <span class="hv" id="hudDiag">--</span></div>
+      <div class="hrow"><span id="hudSymLbl">对称性</span> <span class="hv" id="hudSym">--</span></div>
+    </div>
+    <div class="caption">
+      <div class="cz" id="subZh">电极很多……</div>
+      <div class="ce" id="subEn">Many electrodes...</div>
+    </div>
+  </main>
+<script>
+(function(){
+  "use strict";
+  var LANG='cn';
+
+  // 4 个电极 (EEG 国际 10-20 系统常见位)
+  var ELEC=['C3','C4','Cz','Fz'];
+  var N=ELEC.length;
+
+  // 4x4 协方差矩阵 (对称, 单位 uV^2). 对角 = 各通道自身方差.
+  // 数值为示意, 满足: 对角>0, M[i][j]=M[j][i], 对角>=|非对角| (合法协方差矩阵)
+  var COV=[
+    [ 5.2,  3.6, -1.1,  0.8],
+    [ 3.6,  4.8, -0.9,  0.6],
+    [-1.1, -0.9,  3.1,  2.2],
+    [ 0.8,  0.6,  2.2,  2.9]
+  ];
+
+  var I18N={
+    brand:{cn:'MTH-06 / 协方差矩阵',en:'MTH-06 / COV MATRIX'},
+    ttl:{cn:'所有两两关系，装进一张表',en:'Every pair, into one table'},
+    desc1:{cn:'电极很多时，两两之间的协方差爆炸式增长。怎么把它们整理成一个完整、有秩序的东西？答案是协方差矩阵。',
+           en:'Many electrodes mean an explosion of pairwise covariances. How do we organize them into one complete, ordered object? The covariance matrix.'},
+    desc2:{cn:'Many electrodes -> a matrix that holds every pairwise covariance.',
+           en:'A square table holding the covariance of every electrode pair.'},
+    g1:{cn:'每两个电极 = 一个协方差',en:'each electrode pair = one covariance'},
+    g2:{cn:'行列都是电极，排成方表',en:'rows & cols are electrodes -> square table'},
+    g3:{cn:'对角线 = 各通道自身方差',en:'diagonal = each channel\'s own variance'},
+    g4:{cn:'矩阵对称：上三角=下三角',en:'symmetric: upper = lower triangle'},
+    hudTtl:{cn:'Cov Matrix (4x4)',en:'Cov Matrix (4x4)'},
+    hudStageLbl:{cn:'步骤',en:'step'},
+    hudPairLbl:{cn:'两两组合',en:'pairs'},
+    hudDiagLbl:{cn:'对角(自身方差)',en:'diag (self-var)'},
+    hudSymLbl:{cn:'对称性',en:'symmetry'},
+    subs:{
+      cn:['上一节我们学会：任意两个电极之间，可以算出一个协方差，表示它们一起抖的程度。可是脑电有很多电极(C3/C4/Cz/Fz...)，两两组合一下子就爆炸了——4 个电极就有 6 对，64 个就有两千多对。这么多数，怎么管？',
+          '办法很优雅：把电极同时排在行和列上，做成一张方表。第 i 行第 j 列的格子，就填上 Cov(电极i, 电极j)。4 个电极 -> 一张 4x4 的表，每个格子都是一对电极的协方差。再也不乱了。',
+          '看对角线：第 i 行第 i 列填的是 Cov(电极i, 电极i)——一个电极和它自己的协方差，正是它的方差！上节学的"自身抖多大"(方差)，原来就藏在矩阵的对角线上。对角格子都是正的、最大的。',
+          '再看一个漂亮的性质：矩阵是对称的。Cov(A,B) 和 Cov(B,A) 是同一个数——A 和 B 一起抖，反过来说也一样。所以沿对角线对折，上三角和下三角完全镜像重合，只需算一半。',
+          '于是一张协方差矩阵 = 这段脑波里所有通道关系的完整指纹：对角是各自的能量，非对角是两两的协同。下一步 CSP，就是拿"想象左手"和"想象右手"两个协方差矩阵来对比，找出区分动作的方向。'],
+      en:['Last lesson: for any two electrodes we can compute one covariance — how much they vary together. But EEG has many electrodes (C3/C4/Cz/Fz...), and pairs explode fast: 4 electrodes give 6 pairs, 64 electrodes give over two thousand. How to manage them all?',
+          'The trick is elegant: put the electrodes on both the rows and the columns, forming a square table. The cell at row i, column j holds Cov(electrode_i, electrode_j). 4 electrodes -> one 4x4 table, every cell a pair\'s covariance. No more chaos.',
+          'Look at the diagonal: row i, column i holds Cov(electrode_i, electrode_i) — an electrode\'s covariance with itself, which is exactly its variance! The "how big it swings" (variance) you learned earlier lives right on the matrix diagonal. Diagonal cells are positive and largest.',
+          'Now a beautiful property: the matrix is symmetric. Cov(A,B) equals Cov(B,A) — the same number. A varying with B is the same as B varying with A. Fold along the diagonal and the upper and lower triangles mirror exactly; you only need half.',
+          'So one covariance matrix = the complete fingerprint of all channel relationships in this brainwave: diagonal is each one\'s energy, off-diagonal is pairwise coupling. Next, CSP compares two such matrices — "imagine left hand" vs "imagine right hand" — to find the direction that tells the actions apart.'],
+    },
+    cap1:{cn:'每一对电极都有一个协方差',en:'every electrode pair has a covariance'},
+    cap1b:{cn:'电极一多，组合就爆炸',en:'more electrodes -> pairs explode'},
+    cap2:{cn:'行列都放电极 -> 排成一张方表',en:'electrodes on rows & cols -> a square table'},
+    cap2b:{cn:'第 i 行 j 列 = Cov(电极i, 电极j)',en:'row i, col j = Cov(elec_i, elec_j)'},
+    cap3:{cn:'对角线 Cov(A,A) = A 的方差',en:'diagonal Cov(A,A) = variance of A'},
+    cap3b:{cn:'上节的方差，就在对角线上',en:'the variance you learned sits on the diagonal'},
+    cap4:{cn:'Cov(A,B) = Cov(B,A) -> 矩阵对称',en:'Cov(A,B) = Cov(B,A) -> symmetric'},
+    cap4b:{cn:'沿对角线对折，上下三角镜像重合',en:'fold on diagonal: triangles mirror'},
+    take:{cn:'协方差矩阵：一张表装下所有电极的一起抖',
+          en:'Cov matrix: one table holds how all electrodes vary together'},
+    take2:{cn:'下一步 CSP：对比左手/右手两个协方差矩阵',
+           en:'next CSP: compare left-hand vs right-hand cov matrices'},
+    self:{cn:'自己 x 自己',en:'self x self'},
+    diagWord:{cn:'对角',en:'diag'},
+    pairWord:{cn:'对',en:'pairs'}
+  };
+  function t(k){return (I18N[k]&&I18N[k][LANG])||(I18N[k]&&I18N[k].en)||k;}
+
+  function refreshI18N(){
+    ['brand','ttl','desc1','desc2','g1','g2','g3','g4','hudTtl',
+     'hudStageLbl','hudPairLbl','hudDiagLbl','hudSymLbl'].forEach(function(id){
+       document.getElementById(id).textContent=t(id);
+    });
+    document.getElementById('langBtn').textContent= LANG==='cn'?'中 / EN':'EN / 中';
+  }
+  document.getElementById('langBtn').addEventListener('click',function(){
+    LANG = LANG==='cn'?'en':'cn'; refreshI18N();
+  });
+
+  var canvas=document.getElementById('stage'),ctx=canvas.getContext('2d');
+  var W=0,H=0,DPR=Math.min(window.devicePixelRatio||1,2);
+  function resize(){var r=canvas.parentElement.getBoundingClientRect();if(r.width<1||r.height<1)return;
+    W=r.width;H=r.height;canvas.width=W*DPR;canvas.height=H*DPR;
+    canvas.style.width=W+'px';canvas.style.height=H+'px';ctx.setTransform(DPR,0,0,DPR,0,0);}
+  window.addEventListener('resize',resize);setTimeout(resize,200);setTimeout(resize,600);
+  if(document.fonts&&document.fonts.ready)document.fonts.ready.then(resize);
+  var C=function(v){return getComputedStyle(document.documentElement).getPropertyValue(v).trim();};
+
+  function lerp(a,b,k){return a+(b-a)*k;}
+  function clamp01(k){return k<0?0:k>1?1:k;}
+  function ease(k){k=clamp01(k);return k*k*(3-2*k);}
+
+  // 把协方差值映射成格子颜色 (正->蓝, 负->红, 对角->金), alpha 随强度
+  function cellFill(v,i,j){
+    var mag=Math.min(1,Math.abs(v)/5.2);
+    if(i===j) return {col:C('--c-diag'), a:0.30+mag*0.45};
+    return {col: v>=0?C('--c-pos'):C('--c-neg'), a:0.16+mag*0.45};
+  }
+
+  function drawGrid(){
+    ctx.strokeStyle=C('--line');ctx.lineWidth=1;
+    for(var gx=0;gx<W;gx+=40){ctx.beginPath();ctx.moveTo(gx,0);ctx.lineTo(gx,H);ctx.stroke();}
+    for(var gy=0;gy<H;gy+=40){ctx.beginPath();ctx.moveTo(0,gy);ctx.lineTo(W,gy);ctx.stroke();}
+  }
+
+  function setHUD(stage,pair,diag,sym){
+    document.getElementById('hudStage').textContent='F'+(stage+1);
+    document.getElementById('hudPair').textContent=pair;
+    document.getElementById('hudDiag').textContent=diag;
+    document.getElementById('hudSym').textContent=sym;
+  }
+
+  // 头皮上的电极散点位置 (相对舞台中心的归一化坐标, x右 y下)
+  var SCALP=[
+    {x:-0.10, y:-0.02}, // C3 (左)
+    {x: 0.10, y:-0.02}, // C4 (右)
+    {x: 0.00, y:-0.02}, // Cz (中)
+    {x: 0.00, y:-0.16}  // Fz (前)
+  ];
+
+  function drawHead(cx,cy,R){
+    ctx.strokeStyle=C('--line-strong');ctx.lineWidth=1.6;
+    ctx.beginPath();ctx.arc(cx,cy,R,0,Math.PI*2);ctx.stroke();
+    // 鼻子标记 (头顶方向)
+    ctx.beginPath();ctx.moveTo(cx-7,cy-R);ctx.lineTo(cx,cy-R-12);ctx.lineTo(cx+7,cy-R);ctx.stroke();
+  }
+  function elecPos(cx,cy,R,k){
+    return {x:cx+SCALP[k].x*R*5.0, y:cy+SCALP[k].y*R*5.0};
+  }
+
+  // ---------- F1: 多电极, 两两协方差爆炸式组合 ----------
+  function drawF1(local){
+    var cx=W*0.5, cy=H*0.46, R=Math.min(W,H)*0.16;
+    drawHead(cx,cy,R);
+    var rev=ease(local*1.25);
+    // 画两两连线 (组合数 C(4,2)=6 对), 逐条出现
+    var pairs=[];
+    for(var i=0;i<N;i++)for(var j=i+1;j<N;j++)pairs.push([i,j]);
+    var shown=Math.floor(ease(local*1.4)*pairs.length);
+    for(var pidx=0;pidx<shown;pidx++){
+      var a=elecPos(cx,cy,R,pairs[pidx][0]), b=elecPos(cx,cy,R,pairs[pidx][1]);
+      var v=COV[pairs[pidx][0]][pairs[pidx][1]];
+      ctx.save();ctx.globalAlpha=0.6;
+      ctx.strokeStyle = v>=0?C('--c-pos'):C('--c-neg');
+      ctx.lineWidth=1.4+Math.min(2.4,Math.abs(v)*0.6);
+      ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke();
+      ctx.restore();
+    }
+    // 电极结点
+    for(var k=0;k<N;k++){
+      var p=elecPos(cx,cy,R,k);
+      ctx.fillStyle=C('--accent');
+      ctx.beginPath();ctx.arc(p.x,p.y,7,0,Math.PI*2);ctx.fill();
+      ctx.fillStyle=C('--fg');ctx.font="700 12px 'JetBrains Mono',monospace";ctx.textAlign='center';
+      ctx.fillText(ELEC[k],p.x,p.y-12);
+    }
+    ctx.fillStyle=C('--fg');ctx.font="700 16px 'Noto Sans SC',sans-serif";ctx.textAlign='center';
+    ctx.fillText(t('cap1'),cx,H*0.10);
+    if(rev>0.55){
+      ctx.save();ctx.globalAlpha=clamp01((rev-0.55)*2.2);
+      ctx.fillStyle=C('--gold');ctx.font="700 14px 'Noto Sans SC',sans-serif";ctx.textAlign='center';
+      ctx.fillText(t('cap1b'),cx,H*0.10+26);
+      // 组合数提示
+      ctx.fillStyle=C('--fg-dim');ctx.font="13px 'JetBrains Mono',monospace";
+      ctx.fillText('C(4,2) = 6   |   C(64,2) = 2016',cx,cy+R+50);
+      ctx.restore();
+    }
+    setHUD(0, shown+'/'+pairs.length, '--', '--');
+  }
+
+  // 计算矩阵几何 (居中方表), 返回格子布局
+  function matLayout(){
+    var cell=Math.min(W,H)*0.135;
+    cell=Math.min(cell,108);
+    var mw=cell*N, mh=cell*N;
+    var ox=W*0.5-mw/2, oy=H*0.44-mh/2+10;
+    return {cell:cell, ox:ox, oy:oy, mw:mw, mh:mh};
+  }
+  function cellRect(L,i,j){ // i=行, j=列
+    return {x:L.ox+j*L.cell, y:L.oy+i*L.cell, w:L.cell, h:L.cell};
+  }
+  function drawLabels(L){
+    ctx.font="700 13px 'JetBrains Mono',monospace";
+    for(var k=0;k<N;k++){
+      // 列标 (上方)
+      ctx.fillStyle=C('--accent');ctx.textAlign='center';
+      ctx.fillText(ELEC[k], L.ox+k*L.cell+L.cell/2, L.oy-12);
+      // 行标 (左侧)
+      ctx.textAlign='right';
+      ctx.fillText(ELEC[k], L.ox-12, L.oy+k*L.cell+L.cell/2+5);
+    }
+  }
+  function drawCellVal(r,v,strong){
+    ctx.fillStyle = strong?C('--fg'):C('--fg-dim');
+    ctx.font=(strong?"700 ":"")+"14px 'JetBrains Mono',monospace";
+    ctx.textAlign='center';
+    ctx.fillText((v>=0?'+':'')+v.toFixed(1), r.x+r.w/2, r.y+r.h/2+5);
+  }
+
+  // ---------- F2: 排成方表 ----------
+  function drawF2(local){
+    var L=matLayout();
+    var rev=ease(local*1.2);
+    drawLabels(L);
+    var total=N*N;
+    var shown=Math.floor(ease(local*1.35)*total);
+    var cnt=0;
+    for(var i=0;i<N;i++)for(var j=0;j<N;j++){
+      var r=cellRect(L,i,j);
+      ctx.strokeStyle=C('--line-strong');ctx.lineWidth=1.2;
+      ctx.strokeRect(r.x,r.y,r.w,r.h);
+      if(cnt<shown){
+        var f=cellFill(COV[i][j],i,j);
+        ctx.save();ctx.globalAlpha=f.a;ctx.fillStyle=f.col;
+        ctx.fillRect(r.x+1,r.y+1,r.w-2,r.h-2);ctx.restore();
+        drawCellVal(r,COV[i][j],false);
+      }
+      cnt++;
+    }
+    ctx.fillStyle=C('--fg');ctx.font="700 16px 'Noto Sans SC',sans-serif";ctx.textAlign='center';
+    ctx.fillText(t('cap2'),W*0.5,H*0.10);
+    if(rev>0.45){
+      ctx.save();ctx.globalAlpha=clamp01((rev-0.45)*2);
+      // 高亮一个示例非对角格 (行0列1 = Cov(C3,C4))
+      var r=cellRect(L,0,1);
+      ctx.strokeStyle=C('--p-solution');ctx.lineWidth=2.6;
+      ctx.strokeRect(r.x+1,r.y+1,r.w-2,r.h-2);
+      ctx.fillStyle=C('--p-solution');ctx.font="700 13px 'Noto Sans SC',sans-serif";ctx.textAlign='center';
+      ctx.fillText(t('cap2b'),W*0.5,L.oy+L.mh+34);
+      ctx.restore();
+    }
+    setHUD(1, '4x4 = 16 格', '--', '--');
+  }
+
+  // ---------- F3: 对角线 = 各通道自身方差 ----------
+  function drawF3(local){
+    var L=matLayout();
+    var rev=ease(local*1.25);
+    drawLabels(L);
+    for(var i=0;i<N;i++)for(var j=0;j<N;j++){
+      var r=cellRect(L,i,j);
+      var f=cellFill(COV[i][j],i,j);
+      // 非对角暗淡, 对角随 rev 高亮跳动
+      var diag=(i===j);
+      var a=f.a*(diag?1:(1-rev*0.55));
+      ctx.save();ctx.globalAlpha=a;ctx.fillStyle=f.col;
+      ctx.fillRect(r.x+1,r.y+1,r.w-2,r.h-2);ctx.restore();
+      ctx.strokeStyle=diag?C('--c-diag'):C('--line-strong');
+      ctx.lineWidth=diag?(1.6+rev*1.6):1.2;
+      ctx.strokeRect(r.x,r.y,r.w,r.h);
+      drawCellVal(r,COV[i][j],diag);
+    }
+    // 对角脉冲光晕
+    if(rev>0.2){
+      for(var k=0;k<N;k++){
+        var rr=cellRect(L,k,k);
+        var pulse=0.5+0.5*Math.sin(local*Math.PI*4 - k*0.6);
+        ctx.save();ctx.globalAlpha=clamp01((rev-0.2)*1.6)*0.35*pulse;
+        ctx.strokeStyle=C('--gold');ctx.lineWidth=3;
+        ctx.strokeRect(rr.x-2,rr.y-2,rr.w+4,rr.h+4);ctx.restore();
+      }
+    }
+    ctx.fillStyle=C('--fg');ctx.font="700 16px 'Noto Sans SC',sans-serif";ctx.textAlign='center';
+    ctx.fillText(t('cap3'),W*0.5,H*0.10);
+    if(rev>0.5){
+      ctx.save();ctx.globalAlpha=clamp01((rev-0.5)*2);
+      ctx.fillStyle=C('--gold');ctx.font="700 13px 'Noto Sans SC',sans-serif";ctx.textAlign='center';
+      ctx.fillText(t('cap3b'),W*0.5,H*0.10+26);
+      // 对角公式条
+      var by=L.oy+L.mh+22;
+      ctx.fillStyle=C('--p-solution');ctx.font="600 13px 'JetBrains Mono',monospace";
+      ctx.fillText('Cov(C3,C3) = Var(C3) = +'+COV[0][0].toFixed(1)+' uV^2',W*0.5,by);
+      ctx.restore();
+    }
+    setHUD(2, '16 格', t('diagWord')+' = Var', '--');
+  }
+
+  // ---------- F4: 矩阵对称 上三角=下三角镜像 ----------
+  function drawF4(local){
+    var L=matLayout();
+    var rev=ease(local*1.2);
+    drawLabels(L);
+    for(var i=0;i<N;i++)for(var j=0;j<N;j++){
+      var r=cellRect(L,i,j);
+      var f=cellFill(COV[i][j],i,j);
+      ctx.save();ctx.globalAlpha=f.a;ctx.fillStyle=f.col;
+      ctx.fillRect(r.x+1,r.y+1,r.w-2,r.h-2);ctx.restore();
+      ctx.strokeStyle=(i===j)?C('--c-diag'):C('--line-strong');
+      ctx.lineWidth=(i===j)?2:1.2;
+      ctx.strokeRect(r.x,r.y,r.w,r.h);
+      drawCellVal(r,COV[i][j],i===j);
+    }
+    // 对角折线
+    ctx.strokeStyle=C('--c-diag');ctx.lineWidth=2.2;ctx.setLineDash([6,4]);
+    ctx.beginPath();ctx.moveTo(L.ox,L.oy);ctx.lineTo(L.ox+L.mw,L.oy+L.mh);ctx.stroke();
+    ctx.setLineDash([]);
+    // 镜像连线: 高亮一对对称格 (行0列2) <-> (行2列0)
+    if(rev>0.25){
+      var ru=cellRect(L,0,2), rl=cellRect(L,2,0);
+      ctx.save();ctx.globalAlpha=clamp01((rev-0.25)*2);
+      ctx.strokeStyle=C('--p-solution');ctx.lineWidth=2.6;
+      ctx.strokeRect(ru.x+1,ru.y+1,ru.w-2,ru.h-2);
+      ctx.strokeRect(rl.x+1,rl.y+1,rl.w-2,rl.h-2);
+      // 镜像弧线连接两格中心
+      var c1={x:ru.x+ru.w/2,y:ru.y+ru.h/2}, c2={x:rl.x+rl.w/2,y:rl.y+rl.h/2};
+      var mid={x:(c1.x+c2.x)/2+L.cell*0.9, y:(c1.y+c2.y)/2};
+      ctx.beginPath();ctx.moveTo(c1.x,c1.y);
+      ctx.quadraticCurveTo(mid.x,mid.y,c2.x,c2.y);
+      ctx.strokeStyle=C('--gold');ctx.lineWidth=2;ctx.stroke();
+      ctx.fillStyle=C('--gold');ctx.font="700 13px 'JetBrains Mono',monospace";ctx.textAlign='left';
+      ctx.fillText('Cov(C3,Cz) = Cov(Cz,C3) = '+(COV[0][2]>=0?'+':'')+COV[0][2].toFixed(1), mid.x+6, mid.y+4);
+      ctx.restore();
+    }
+    ctx.fillStyle=C('--fg');ctx.font="700 16px 'Noto Sans SC',sans-serif";ctx.textAlign='center';
+    ctx.fillText(t('cap4'),W*0.5,H*0.10);
+    if(rev>0.5){
+      ctx.save();ctx.globalAlpha=clamp01((rev-0.5)*2);
+      ctx.fillStyle=C('--gold');ctx.font="700 13px 'Noto Sans SC',sans-serif";ctx.textAlign='center';
+      ctx.fillText(t('cap4b'),W*0.5,H*0.10+26);
+      ctx.restore();
+    }
+    setHUD(3, '16 格', t('diagWord')+' = Var', '对称 OK');
+  }
+
+  // ---------- F5: 完整指纹 + 铺垫 CSP ----------
+  function drawF5(local){
+    var L=matLayout();
+    var rev=ease(local*1.15);
+    drawLabels(L);
+    for(var i=0;i<N;i++)for(var j=0;j<N;j++){
+      var r=cellRect(L,i,j);
+      var f=cellFill(COV[i][j],i,j);
+      ctx.save();ctx.globalAlpha=f.a;ctx.fillStyle=f.col;
+      ctx.fillRect(r.x+1,r.y+1,r.w-2,r.h-2);ctx.restore();
+      ctx.strokeStyle=(i===j)?C('--c-diag'):C('--line-strong');
+      ctx.lineWidth=(i===j)?2:1.2;
+      ctx.strokeRect(r.x,r.y,r.w,r.h);
+      drawCellVal(r,COV[i][j],i===j);
+    }
+    // 整张表外框金色脉动 = "完整指纹"
+    var pulse=0.5+0.5*Math.sin(local*Math.PI*3);
+    ctx.save();ctx.globalAlpha=0.4+pulse*0.4;
+    ctx.strokeStyle=C('--gold');ctx.lineWidth=2.4;
+    ctx.strokeRect(L.ox-5,L.oy-5,L.mw+10,L.mh+10);ctx.restore();
+
+    // 图例 (对角=能量, 非对角=协同)
+    ctx.font="12px 'Noto Sans SC',sans-serif";ctx.textAlign='left';
+    var lx=W*0.5+L.mw/2+30, ly=L.oy+8;
+    if(lx+150<W){
+      ctx.fillStyle=C('--c-diag');ctx.fillRect(lx,ly,14,14);
+      ctx.fillStyle=C('--fg-dim');ctx.fillText(LANG==='cn'?'对角 = 各自能量(方差)':'diag = own energy', lx+20, ly+12);
+      ctx.fillStyle=C('--c-pos');ctx.fillRect(lx,ly+24,14,14);
+      ctx.fillStyle=C('--fg-dim');ctx.fillText(LANG==='cn'?'非对角 = 两两协同':'off-diag = pair coupling', lx+20, ly+36);
+    }
+    ctx.fillStyle=C('--fg');ctx.font="700 16px 'Noto Sans SC',sans-serif";ctx.textAlign='center';
+    ctx.fillText(LANG==='cn'?'一张表 = 这段脑波所有通道关系的完整指纹':'one table = the full fingerprint of all channel relations',W*0.5,H*0.095);
+
+    if(local>0.5){
+      var ga=ease((local-0.5)*2.2);
+      ctx.save();ctx.globalAlpha=ga;
+      var by=H-116, bw=Math.min(700,W*0.82), bx=W/2-bw/2;
+      ctx.fillStyle=C('--bg-2');ctx.strokeStyle=C('--gold');ctx.lineWidth=2;
+      ctx.fillRect(bx,by,bw,58);ctx.strokeRect(bx,by,bw,58);
+      ctx.fillStyle=C('--gold');ctx.font="700 16px 'Noto Sans SC',sans-serif";ctx.textAlign='center';
+      ctx.fillText(t('take'),W/2,by+24);
+      ctx.fillStyle=C('--fg-dim');ctx.font="12px 'Noto Sans SC',sans-serif";
+      ctx.fillText(t('take2'),W/2,by+45);
+      ctx.restore();
+    }
+    setHUD(4, '16 格', t('diagWord')+' = Var', '对称 / 完整');
+  }
+
+  var startT=null, DUR=6600, NSTAGE=5, TOTAL=NSTAGE*DUR+1400;
+  function draw(now){
+    if(startT===null)startT=now;
+    var el=now-startT; if(el>TOTAL){startT=now;el=0;}
+    var stage=Math.min(Math.floor(el/DUR),NSTAGE-1);
+    var local=(el-stage*DUR)/DUR;
+    if(!W||!H){requestAnimationFrame(draw);return;}
+    ctx.clearRect(0,0,W,H);
+    ctx.fillStyle=C('--bg-0');ctx.fillRect(0,0,W,H);
+    drawGrid();
+    var rot=document.getElementById('piRot');
+    if(rot) rot.setAttribute('transform','rotate('+((now/30)%360)+' 31 31)');
+
+    if(stage===0)drawF1(local);
+    else if(stage===1)drawF2(local);
+    else if(stage===2)drawF3(local);
+    else if(stage===3)drawF4(local);
+    else drawF5(local);
+
+    document.getElementById('subZh').textContent=I18N.subs[LANG][stage]||'';
+    document.getElementById('subEn').textContent=I18N.subs.en[stage]||'';
+    requestAnimationFrame(draw);
+  }
+  refreshI18N();
+  requestAnimationFrame(draw);
+})();
+</script>
+</body>
+</html>

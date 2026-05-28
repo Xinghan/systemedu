@@ -1,0 +1,610 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>协方差公式建造师 — 逐项算 Cov(C3,C4)</title>
+<style>
+  /* ---- math theme (MTH-06 Geometry Void) — deep space ---- */
+  :root{
+    --bg-0:#0b0d18;            /* 深空底 */
+    --bg-1:#13162a;            /* 面板底 */
+    --bg-2:#1b1f3a;            /* 抬高面板 */
+    --accent:oklch(0.72 0.17 245);   /* AXIS — 主交互 */
+    --proof:oklch(0.52 0.16 245);    /* PROOF */
+    --shadow:oklch(0.35 0.10 245);   /* SHADOW */
+    --solution:oklch(0.92 0.08 240); /* SOLUTION — 高亮文字 */
+    --qed:oklch(0.85 0.14 85);       /* QED — 金色奖励 */
+    --pos:oklch(0.78 0.16 150);      /* 同号 正乘积 绿 */
+    --neg:oklch(0.68 0.20 25);       /* 异号 负乘积 红 */
+    --ink:#dfe3f5;
+    --ink-dim:#9aa0c4;
+    --ink-mute:#5d6592;
+    --line:#2a2f52;
+    --mono:'JetBrains Mono','SF Mono','Roboto Mono',ui-monospace,monospace;
+    --sans:'Inter','Helvetica Neue',system-ui,sans-serif;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;height:100vh;width:100vw;overflow:hidden;
+    background:var(--bg-0);color:var(--ink);font-family:var(--sans);}
+  body{display:flex;}
+
+  /* ---- sidebar 200px ---- */
+  .game-sidebar{
+    width:220px;flex-shrink:0;height:100vh;
+    background:var(--bg-1);border-right:1.5px solid var(--line);
+    display:flex;flex-direction:column;gap:14px;padding:16px 14px;}
+  .mascot-wrap{display:flex;align-items:center;gap:10px;}
+  .mascot-name{font-family:var(--mono);font-size:13px;font-weight:700;color:var(--accent);letter-spacing:.5px;}
+  .mascot-sub{font-size:10px;color:var(--ink-mute);font-family:var(--mono);}
+  h1.title{font-size:15px;font-weight:800;line-height:1.3;margin:0;color:var(--solution);}
+  .subtitle{font-size:11px;color:var(--ink-dim);line-height:1.5;margin:0;}
+
+  /* step tracker */
+  .steps{display:flex;flex-direction:column;gap:7px;margin-top:2px;}
+  .step{display:flex;align-items:center;gap:9px;padding:7px 9px;border:1.5px solid var(--line);
+    background:var(--bg-2);font-size:11px;line-height:1.3;color:var(--ink-mute);
+    transition:all .18s;border-radius:2px;}
+  .step .dot{width:18px;height:18px;flex-shrink:0;border:1.5px solid var(--ink-mute);
+    border-radius:50%;display:flex;align-items:center;justify-content:center;
+    font-family:var(--mono);font-size:10px;font-weight:700;color:var(--ink-mute);background:transparent;}
+  .step.active{border-color:var(--accent);color:var(--solution);
+    box-shadow:3px 3px 0 var(--shadow);}
+  .step.active .dot{border-color:var(--accent);color:var(--bg-0);background:var(--accent);}
+  .step.done{border-color:var(--proof);color:var(--ink-dim);}
+  .step.done .dot{border-color:var(--pos);color:var(--bg-0);background:var(--pos);}
+
+  .spacer{flex:1;}
+  .lang-btn{background:var(--bg-2);border:1.5px solid var(--accent);color:var(--accent);
+    font-family:var(--mono);font-weight:700;font-size:12px;padding:8px 10px;cursor:pointer;
+    box-shadow:2px 2px 0 var(--shadow);transition:transform .1s,box-shadow .1s;border-radius:2px;}
+  .lang-btn:hover{transform:translate(-1px,-1px);box-shadow:3px 3px 0 var(--shadow);}
+  .lang-btn:active{transform:translate(1px,1px);box-shadow:1px 1px 0 var(--shadow);}
+
+  /* ---- main ---- */
+  .game-main{flex:1;height:100vh;display:flex;flex-direction:column;
+    padding:16px 18px;gap:12px;min-width:0;overflow:hidden;}
+  .main-head{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-shrink:0;}
+  .main-head h2{margin:0;font-size:14px;font-weight:700;color:var(--solution);}
+  .main-head .hint{font-size:11px;color:var(--ink-dim);font-family:var(--mono);}
+
+  .stage-row{flex:1;display:flex;gap:14px;min-height:0;}
+  /* scatter — canvas 父 flex chain */
+  .scatter-box{flex:1.3;min-width:0;display:flex;flex-direction:column;
+    background:var(--bg-1);border:1.5px solid var(--line);position:relative;border-radius:3px;}
+  .scatter-box .box-lbl{position:absolute;top:9px;left:12px;z-index:3;
+    font-family:var(--mono);font-size:11px;font-weight:700;color:var(--accent);}
+  .scatter-box .drag-hint{position:absolute;top:9px;right:12px;z-index:3;
+    font-family:var(--mono);font-size:10px;color:var(--ink-mute);}
+  #stage{flex:1;width:100%;display:block;cursor:grab;}
+  #stage.grabbing{cursor:grabbing;}
+
+  /* compute panel */
+  .calc-box{flex:1;min-width:240px;display:flex;flex-direction:column;gap:10px;
+    background:var(--bg-1);border:1.5px solid var(--line);padding:14px;border-radius:3px;overflow-y:auto;}
+  .calc-title{font-family:var(--mono);font-size:11px;font-weight:700;color:var(--accent);
+    text-transform:uppercase;letter-spacing:1px;}
+  .formula{font-family:var(--mono);font-size:13px;color:var(--solution);
+    background:var(--bg-2);border:1.5px solid var(--line);padding:9px 11px;border-radius:2px;line-height:1.7;}
+  .formula .hl{color:var(--qed);font-weight:700;}
+  .stat-grid{display:flex;flex-direction:column;gap:6px;}
+  .stat-row{display:flex;justify-content:space-between;align-items:baseline;
+    font-family:var(--mono);font-size:12px;padding:3px 0;border-bottom:1px dashed var(--line);}
+  .stat-row .k{color:var(--ink-dim);}
+  .stat-row .v{color:var(--solution);font-weight:700;}
+  .stat-row .v.accent{color:var(--accent);}
+  .stat-row .v.gold{color:var(--qed);font-size:14px;}
+
+  /* per-point product table */
+  .ptable{display:flex;flex-direction:column;gap:3px;margin-top:2px;}
+  .prow{display:grid;grid-template-columns:24px 1fr 1fr 1fr;gap:6px;align-items:center;
+    font-family:var(--mono);font-size:10.5px;padding:3px 6px;border:1px solid var(--line);
+    background:var(--bg-2);border-radius:2px;transition:background .2s,border-color .2s;}
+  .prow .idx{color:var(--ink-mute);}
+  .prow .dx{color:var(--accent);text-align:right;}
+  .prow .dy{color:var(--proof);text-align:right;}
+  .prow .pr{font-weight:700;text-align:right;}
+  .prow.same{border-color:var(--pos);} .prow.same .pr{color:var(--pos);}
+  .prow.opp{border-color:var(--neg);}  .prow.opp .pr{color:var(--neg);}
+  .phead{color:var(--ink-mute);font-size:9.5px;}
+
+  .conclusion{font-size:11.5px;line-height:1.6;color:var(--ink-dim);
+    border-left:2.5px solid var(--accent);padding:6px 0 6px 10px;}
+  .conclusion b{color:var(--solution);}
+
+  /* control buttons row under scatter */
+  .ctrl-row{display:flex;gap:10px;flex-shrink:0;align-items:center;flex-wrap:wrap;}
+  .btn{background:var(--bg-2);border:1.5px solid var(--accent);color:var(--accent);
+    font-family:var(--mono);font-weight:700;font-size:12px;padding:9px 16px;cursor:pointer;
+    box-shadow:2px 2px 0 var(--shadow);transition:transform .1s,box-shadow .1s;border-radius:2px;}
+  .btn:hover{transform:translate(-1px,-1px);box-shadow:3px 3px 0 var(--shadow);}
+  .btn:active{transform:translate(1px,1px);box-shadow:1px 1px 0 var(--shadow);}
+  .btn.ghost{border-color:var(--line);color:var(--ink-dim);box-shadow:2px 2px 0 var(--bg-0);}
+  .btn.gold{border-color:var(--qed);color:var(--qed);}
+  .btn:disabled{opacity:.35;cursor:not-allowed;transform:none;box-shadow:2px 2px 0 var(--shadow);}
+  .stepcap{font-family:var(--mono);font-size:11px;color:var(--ink-dim);}
+  .stepcap b{color:var(--accent);}
+
+  /* badge overlay */
+  .badge{position:absolute;inset:0;z-index:20;display:none;align-items:center;justify-content:center;
+    background:rgba(11,13,24,0.86);backdrop-filter:blur(3px);}
+  .badge.show{display:flex;}
+  .badge-card{background:var(--bg-1);border:2px solid var(--qed);padding:30px 38px;text-align:center;
+    box-shadow:6px 6px 0 var(--shadow);border-radius:4px;max-width:380px;}
+  .badge-card .seal{font-family:var(--mono);font-size:46px;font-weight:800;color:var(--qed);line-height:1;}
+  .badge-card .bt{font-size:18px;font-weight:800;color:var(--solution);margin:12px 0 6px;}
+  .badge-card .bd{font-size:12px;color:var(--ink-dim);line-height:1.6;}
+</style>
+</head>
+<body>
+
+<aside class="game-sidebar">
+  <div class="mascot-wrap">
+    <!-- Pi: rotating tetrahedron -->
+    <svg width="40" height="40" viewBox="0 0 40 40" id="mascotSvg" aria-hidden="true">
+      <g id="tetra" transform="translate(20,20)">
+        <polygon points="0,-13 12,8 -12,8" fill="none" stroke="var(--accent)" stroke-width="1.6"/>
+        <polygon points="0,-13 12,8 0,4" fill="var(--proof)" opacity="0.5"/>
+        <polygon points="0,-13 -12,8 0,4" fill="var(--shadow)" opacity="0.7"/>
+        <line x1="0" y1="-13" x2="0" y2="4" stroke="var(--accent)" stroke-width="1"/>
+        <text x="0" y="2" text-anchor="middle" font-family="JetBrains Mono,monospace"
+          font-size="9" font-weight="700" fill="var(--solution)">&#960;</text>
+      </g>
+    </svg>
+    <div>
+      <div class="mascot-name">Pi</div>
+      <div class="mascot-sub">MTH-06</div>
+    </div>
+  </div>
+
+  <h1 class="title" id="title">协方差公式建造师</h1>
+  <p class="subtitle" id="subtitle">逐项亲手算出 Cov(C3,C4)，看它如何随散点倾斜而变正负。</p>
+
+  <div class="steps" id="stepTracker">
+    <div class="step" data-s="0"><span class="dot">1</span><span class="lbl" id="st0">算两列均值</span></div>
+    <div class="step" data-s="1"><span class="dot">2</span><span class="lbl" id="st1">算每点偏差</span></div>
+    <div class="step" data-s="2"><span class="dot">3</span><span class="lbl" id="st2">偏差相乘 标号</span></div>
+    <div class="step" data-s="3"><span class="dot">4</span><span class="lbl" id="st3">求和÷n 得 Cov</span></div>
+  </div>
+
+  <div class="spacer"></div>
+  <button class="lang-btn" id="langBtn">中 / EN</button>
+</aside>
+
+<main class="game-main">
+  <div class="main-head">
+    <h2 id="canvasTitle">散点图 — 拖动任意点改变布局</h2>
+    <span class="hint" id="canvasHint">每拖一下 → 公式实时重算</span>
+  </div>
+
+  <div class="stage-row">
+    <div class="scatter-box">
+      <span class="box-lbl" id="boxLbl">C3 vs C4</span>
+      <span class="drag-hint" id="dragHint">drag points</span>
+      <canvas id="stage"></canvas>
+      <div class="badge" id="badge">
+        <div class="badge-card">
+          <div class="seal" id="badgeSeal">&#960;</div>
+          <div class="bt" id="badgeTitle">协方差计算师</div>
+          <div class="bd" id="badgeDesc">你完成了一整轮逐项计算，并理解了协方差正负如何对应散点的倾斜方向。</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="calc-box">
+      <div class="calc-title" id="calcTitle">计算面板 / COMPUTE</div>
+      <div class="formula" id="formulaBox">
+        Cov = <span class="hl">&#931;</span> (C3&#7522;-C&#772;3)(C4&#7522;-C&#772;4) / n
+      </div>
+
+      <div class="stat-grid" id="statGrid">
+        <div class="stat-row"><span class="k" id="kMeanX">C&#772;3 均值</span><span class="v accent" id="vMeanX">&mdash;</span></div>
+        <div class="stat-row"><span class="k" id="kMeanY">C&#772;4 均值</span><span class="v accent" id="vMeanY">&mdash;</span></div>
+        <div class="stat-row"><span class="k" id="kSum">&#931; 乘积和</span><span class="v" id="vSum">&mdash;</span></div>
+        <div class="stat-row"><span class="k" id="kN">n 点数</span><span class="v" id="vN">6</span></div>
+        <div class="stat-row"><span class="k" id="kCov">Cov(C3,C4)</span><span class="v gold" id="vCov">&mdash;</span></div>
+      </div>
+
+      <div class="ptable" id="ptable"></div>
+      <div class="conclusion" id="conclusion"></div>
+    </div>
+  </div>
+
+  <div class="ctrl-row">
+    <button class="btn" id="btnStep">下一步 &rarr;</button>
+    <button class="btn ghost" id="btnReset">重置步骤</button>
+    <span class="stepcap" id="stepCap"></span>
+  </div>
+</main>
+
+<script>
+"use strict";
+/* ============================ i18n ============================ */
+var LANG = 'cn';
+var I18N = {
+  title:{cn:'协方差公式建造师', en:'Covariance Formula Builder'},
+  subtitle:{cn:'逐项亲手算出 Cov(C3,C4)，看它如何随散点倾斜而变正负。',
+            en:'Build Cov(C3,C4) term by term, and watch its sign follow the scatter tilt.'},
+  st0:{cn:'算两列均值', en:'Mean of each column'},
+  st1:{cn:'算每点偏差', en:'Deviation of each point'},
+  st2:{cn:'偏差相乘 标号', en:'Multiply & sign each'},
+  st3:{cn:'求和÷n 得 Cov', en:'Sum ÷ n = Cov'},
+  canvasTitle:{cn:'散点图 — 拖动任意点改变布局', en:'Scatter — drag any point to reshape'},
+  canvasHint:{cn:'每拖一下 → 公式实时重算', en:'each drag → live recompute'},
+  boxLbl:{cn:'C3 vs C4', en:'C3 vs C4'},
+  dragHint:{cn:'拖动数据点', en:'drag points'},
+  calcTitle:{cn:'计算面板 / COMPUTE', en:'COMPUTE PANEL'},
+  kMeanX:{cn:'C̅3 均值', en:'mean C3'},
+  kMeanY:{cn:'C̅4 均值', en:'mean C4'},
+  kSum:{cn:'Σ 乘积和', en:'Σ products'},
+  kN:{cn:'n 点数', en:'n points'},
+  kCov:{cn:'Cov(C3,C4)', en:'Cov(C3,C4)'},
+  badgeTitle:{cn:'协方差计算师', en:'Covariance Calculator'},
+  badgeDesc:{cn:'你完成了一整轮逐项计算，并理解了协方差正负如何对应散点的倾斜方向。',
+             en:'You completed a full term-by-term computation and grasped how the sign of covariance maps to the scatter tilt.'},
+  btnStep:{cn:'下一步 →', en:'Next step →'},
+  btnReset:{cn:'重置步骤', en:'Reset steps'},
+  btnFinish:{cn:'完成一轮', en:'Finish round'},
+  // step captions
+  cap0:{cn:'步骤 1: 点 [下一步] 算出两列均值，散点上会画出十字均值线。',
+        en:'Step 1: hit [Next] to compute both means; mean crosshair appears on the scatter.'},
+  cap1:{cn:'步骤 2: 算每个点到均值的偏差 (ΔC3, ΔC4)，散点上画出虚线。',
+        en:'Step 2: compute each point’s deviation (ΔC3, ΔC4); dashed offsets appear.'},
+  cap2:{cn:'步骤 3: 两偏差相乘。同号格子变绿(正)，异号变红(负)。',
+        en:'Step 3: multiply the two deviations. Same-sign cells turn green (+), opposite turn red (−).'},
+  cap3:{cn:'步骤 4: 求和 ÷ n = 协方差。对照散点倾斜方向核对正负。',
+        en:'Step 4: sum ÷ n = covariance. Check its sign against the scatter tilt.'},
+  capDone:{cn:'完成！拖动数据点，观察协方差如何随倾斜变正/变负。再点 [完成一轮] 领徽章。',
+           en:'Done! Drag points and watch Cov flip sign with the tilt. Hit [Finish round] for the badge.'},
+  // conclusions
+  concPos:{cn:'散点整体向<b>右上倾斜</b> → 多数点同号偏差 → 乘积多为正 → <b>Cov &gt; 0</b>。',
+           en:'Scatter tilts <b>up-right</b> → most deviations share sign → products mostly positive → <b>Cov &gt; 0</b>.'},
+  concNeg:{cn:'散点整体向<b>右下倾斜</b> → 多数点异号偏差 → 乘积多为负 → <b>Cov &lt; 0</b>。',
+           en:'Scatter tilts <b>down-right</b> → most deviations have opposite signs → products mostly negative → <b>Cov &lt; 0</b>.'},
+  concZero:{cn:'散点没有明显倾斜 → 正负乘积相互抵消 → <b>Cov ≈ 0</b>，两电极几乎不相关。',
+            en:'No clear tilt → positive and negative products cancel → <b>Cov ≈ 0</b>: the electrodes are nearly uncorrelated.'},
+};
+function t(k){ var e=I18N[k]; return e ? (e[LANG]||e.en) : k; }
+
+/* ============================ state ============================ */
+// 6 数据点, 单位 µV (C3 横, C4 纵). 初始: 明显正相关 (右上斜)
+var points = [
+  {x:-8, y:-7}, {x:-4, y:-3}, {x:-1, y:1},
+  {x:2, y:0},  {x:5, y:6},  {x:8, y:9}
+];
+var N = points.length;
+var step = -1;          // -1 = 未开始, 0..3 = 步骤完成度, 4 = 全部完成
+var dragIdx = -1;
+var rotAngle = 0;
+
+/* ---- 数学 ---- */
+function meanX(){ var s=0; for(var i=0;i<N;i++) s+=points[i].x; return s/N; }
+function meanY(){ var s=0; for(var i=0;i<N;i++) s+=points[i].y; return s/N; }
+function devs(){
+  var mx=meanX(), my=meanY(), out=[];
+  for(var i=0;i<N;i++){
+    var dx=points[i].x-mx, dy=points[i].y-my;
+    out.push({dx:dx, dy:dy, prod:dx*dy, same:(dx*dy)>=0});
+  }
+  return out;
+}
+function sumProd(){ var d=devs(), s=0; for(var i=0;i<N;i++) s+=d[i].prod; return s; }
+function cov(){ return sumProd()/N; }
+
+/* ============================ canvas ============================ */
+var canvas = document.getElementById('stage');
+var ctx = canvas.getContext('2d');
+var DPR = 1, plot = {cx:0, cy:0, scale:1};
+
+function resize(){
+  var rect = canvas.parentElement.getBoundingClientRect();
+  if(rect.width<2 || rect.height<2) return;
+  DPR = window.devicePixelRatio || 1;
+  canvas.width = rect.width*DPR;
+  canvas.height = rect.height*DPR;
+  canvas.style.width = rect.width+'px';
+  canvas.style.height = rect.height+'px';
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  draw();
+}
+window.addEventListener('resize', resize);
+
+// 数据坐标 (µV, 范围约 -12..12) -> 像素
+function toPx(p){
+  return {
+    px: plot.cx + p.x*plot.scale,
+    py: plot.cy - p.y*plot.scale
+  };
+}
+function fromPx(mx, my){
+  return {
+    x: (mx - plot.cx)/plot.scale,
+    y: -(my - plot.cy)/plot.scale
+  };
+}
+
+function draw(){
+  var W = canvas.clientWidth, H = canvas.clientHeight;
+  if(W<2||H<2) return;
+  ctx.clearRect(0,0,W,H);
+
+  var pad = 36;
+  var sz = Math.min(W, H) - pad*2;
+  plot.cx = W/2; plot.cy = H/2;
+  plot.scale = (sz/2) / 13;   // ±13 µV 映射到半边
+
+  var mx = meanX(), my = meanY();
+  var showMean = step >= 0;
+  var showDev  = step >= 1;
+  var showProd = step >= 2;
+
+  // grid
+  ctx.strokeStyle = 'rgba(42,47,82,0.55)';
+  ctx.lineWidth = 1;
+  for(var g=-12; g<=12; g+=4){
+    var gx = plot.cx + g*plot.scale;
+    var gy = plot.cy - g*plot.scale;
+    ctx.beginPath(); ctx.moveTo(gx, plot.cy-sz/2); ctx.lineTo(gx, plot.cy+sz/2); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(plot.cx-sz/2, gy); ctx.lineTo(plot.cx+sz/2, gy); ctx.stroke();
+  }
+
+  // axes (0,0)
+  ctx.strokeStyle = '#5d6592';
+  ctx.lineWidth = 1.4;
+  ctx.beginPath();
+  ctx.moveTo(plot.cx-sz/2, plot.cy); ctx.lineTo(plot.cx+sz/2, plot.cy);
+  ctx.moveTo(plot.cx, plot.cy-sz/2); ctx.lineTo(plot.cx, plot.cy+sz/2);
+  ctx.stroke();
+  ctx.fillStyle = '#9aa0c4';
+  ctx.font = '700 11px ' + cssMono();
+  ctx.textAlign = 'right';
+  ctx.fillText('C3 (µV) →', plot.cx+sz/2-2, plot.cy-7);
+  ctx.textAlign = 'left';
+  ctx.fillText('↑ C4 (µV)', plot.cx+6, plot.cy-sz/2+12);
+
+  // mean crosshair (step1+)
+  if(showMean){
+    var mpx = plot.cx + mx*plot.scale;
+    var mpy = plot.cy - my*plot.scale;
+    ctx.strokeStyle = cssVar('--accent');
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([6,4]);
+    ctx.beginPath();
+    ctx.moveTo(mpx, plot.cy-sz/2); ctx.lineTo(mpx, plot.cy+sz/2);
+    ctx.moveTo(plot.cx-sz/2, mpy); ctx.lineTo(plot.cx+sz/2, mpy);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    // mean dot
+    ctx.fillStyle = cssVar('--accent');
+    ctx.beginPath(); ctx.arc(mpx, mpy, 4, 0, Math.PI*2); ctx.fill();
+    ctx.font = '700 10px ' + cssMono();
+    ctx.textAlign = 'left';
+    ctx.fillText('(C̅3, C̅4)', mpx+8, mpy-8);
+  }
+
+  var d = devs();
+
+  // tilt line (step3+) — 主轴方向, 直观对照倾斜
+  if(showProd){
+    var sxx=0, syy=0, sxy=0;
+    for(var i=0;i<N;i++){ sxx+=d[i].dx*d[i].dx; syy+=d[i].dy*d[i].dy; sxy+=d[i].dx*d[i].dy; }
+    var theta = 0.5*Math.atan2(2*sxy, sxx - syy);
+    var mpx2 = plot.cx + mx*plot.scale, mpy2 = plot.cy - my*plot.scale;
+    var len = sz*0.42;
+    ctx.strokeStyle = cssVar('--qed');
+    ctx.lineWidth = 2;
+    ctx.globalAlpha = 0.85;
+    ctx.beginPath();
+    ctx.moveTo(mpx2 - Math.cos(theta)*len, mpy2 + Math.sin(theta)*len);
+    ctx.lineTo(mpx2 + Math.cos(theta)*len, mpy2 - Math.sin(theta)*len);
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+  }
+
+  // points + deviation offsets
+  for(var i=0;i<N;i++){
+    var pp = toPx(points[i]);
+
+    // deviation dashed lines from mean (step2+)
+    if(showDev){
+      var mpx3 = plot.cx + mx*plot.scale;
+      var mpy3 = plot.cy - my*plot.scale;
+      ctx.strokeStyle = 'rgba(154,160,196,0.4)';
+      ctx.lineWidth = 1;
+      ctx.setLineDash([3,3]);
+      ctx.beginPath();
+      ctx.moveTo(mpx3, mpy3);
+      ctx.lineTo(pp.px, mpy3);     // dx leg
+      ctx.lineTo(pp.px, pp.py);    // dy leg
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+
+    // dot color: step3+ 同号绿/异号红, 否则中性
+    var col;
+    if(showProd) col = d[i].same ? cssVar('--pos') : cssVar('--neg');
+    else col = cssVar('--solution');
+
+    // halo when dragging this point
+    if(dragIdx===i){
+      ctx.fillStyle = 'rgba(124,160,240,0.25)';
+      ctx.beginPath(); ctx.arc(pp.px, pp.py, 13, 0, Math.PI*2); ctx.fill();
+    }
+    ctx.fillStyle = col;
+    ctx.strokeStyle = cssVar('--bg-0');
+    ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.arc(pp.px, pp.py, 6, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+
+    // index label
+    ctx.fillStyle = '#9aa0c4';
+    ctx.font = '600 9px ' + cssMono();
+    ctx.textAlign = 'center';
+    ctx.fillText(String(i+1), pp.px, pp.py-10);
+  }
+}
+
+function cssVar(name){
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || '#fff';
+}
+function cssMono(){ return "JetBrains Mono, monospace"; }
+
+/* ============================ drag ============================ */
+function evtPos(e){
+  var rect = canvas.getBoundingClientRect();
+  var cx = (e.touches? e.touches[0].clientX : e.clientX) - rect.left;
+  var cy = (e.touches? e.touches[0].clientY : e.clientY) - rect.top;
+  return {mx:cx, my:cy};
+}
+function hitTest(mx, my){
+  for(var i=0;i<N;i++){
+    var pp = toPx(points[i]);
+    var dd = (pp.px-mx)*(pp.px-mx) + (pp.py-my)*(pp.py-my);
+    if(dd <= 16*16) return i;
+  }
+  return -1;
+}
+function onDown(e){
+  var p = evtPos(e);
+  dragIdx = hitTest(p.mx, p.my);
+  if(dragIdx>=0){ canvas.classList.add('grabbing'); e.preventDefault(); }
+}
+function onMove(e){
+  if(dragIdx<0) return;
+  var p = evtPos(e);
+  var dat = fromPx(p.mx, p.my);
+  // clamp to ±12
+  points[dragIdx].x = Math.max(-12, Math.min(12, dat.x));
+  points[dragIdx].y = Math.max(-12, Math.min(12, dat.y));
+  draw();
+  refreshPanel();
+  e.preventDefault();
+}
+function onUp(){
+  if(dragIdx>=0){ dragIdx=-1; canvas.classList.remove('grabbing'); draw(); }
+}
+canvas.addEventListener('mousedown', onDown);
+window.addEventListener('mousemove', onMove);
+window.addEventListener('mouseup', onUp);
+canvas.addEventListener('touchstart', onDown, {passive:false});
+canvas.addEventListener('touchmove', onMove, {passive:false});
+canvas.addEventListener('touchend', onUp);
+
+/* ============================ panel ============================ */
+function fmt(n){ return (n>=0?' ':'') + n.toFixed(1); }
+function refreshPanel(){
+  var mx=meanX(), my=meanY(), d=devs(), sp=sumProd(), c=cov();
+  var showMean = step>=0, showDev = step>=1, showProd = step>=2, showCov = step>=3;
+
+  document.getElementById('vMeanX').innerHTML = showMean ? fmt(mx) : '&mdash;';
+  document.getElementById('vMeanY').innerHTML = showMean ? fmt(my) : '&mdash;';
+  document.getElementById('vN').textContent = N;
+  document.getElementById('vSum').innerHTML  = showProd ? fmt(sp) : '&mdash;';
+  document.getElementById('vCov').innerHTML  = showCov  ? fmt(c)  : '&mdash;';
+
+  // per-point table — built from step1 (deviations), products from step2
+  var rows = '';
+  rows += '<div class="prow phead"><span class="idx">#</span><span class="dx">ΔC3</span><span class="dy">ΔC4</span><span class="pr">'+ (showProd?'Δ×Δ':'') +'</span></div>';
+  if(showDev){
+    for(var i=0;i<N;i++){
+      var cls = showProd ? (d[i].same?'same':'opp') : '';
+      var prTxt = showProd ? fmt(d[i].prod) : '·';
+      rows += '<div class="prow '+cls+'">'
+            + '<span class="idx">'+(i+1)+'</span>'
+            + '<span class="dx">'+fmt(d[i].dx)+'</span>'
+            + '<span class="dy">'+fmt(d[i].dy)+'</span>'
+            + '<span class="pr">'+prTxt+'</span></div>';
+    }
+  }
+  document.getElementById('ptable').innerHTML = rows;
+
+  // conclusion (step4)
+  var concEl = document.getElementById('conclusion');
+  if(showCov){
+    if(c > 1.2) concEl.innerHTML = t('concPos');
+    else if(c < -1.2) concEl.innerHTML = t('concNeg');
+    else concEl.innerHTML = t('concZero');
+  } else {
+    concEl.innerHTML = '';
+  }
+}
+
+/* ============================ step flow ============================ */
+function renderSteps(){
+  var nodes = document.querySelectorAll('#stepTracker .step');
+  for(var i=0;i<nodes.length;i++){
+    var s = parseInt(nodes[i].getAttribute('data-s'),10);
+    nodes[i].classList.remove('active','done');
+    if(step > s) nodes[i].classList.add('done');
+    else if(step === s) nodes[i].classList.add('active');
+  }
+}
+function renderCap(){
+  var cap = document.getElementById('stepCap');
+  var btn = document.getElementById('btnStep');
+  if(step < 0){ cap.innerHTML = '<b>步骤 1/4</b> &mdash; ' + t('cap0'); btn.textContent = t('btnStep'); btn.className='btn'; }
+  else if(step===0){ cap.innerHTML = '<b>2/4</b> &mdash; ' + t('cap1'); btn.textContent = t('btnStep'); btn.className='btn'; }
+  else if(step===1){ cap.innerHTML = '<b>3/4</b> &mdash; ' + t('cap2'); btn.textContent = t('btnStep'); btn.className='btn'; }
+  else if(step===2){ cap.innerHTML = '<b>4/4</b> &mdash; ' + t('cap3'); btn.textContent = t('btnStep'); btn.className='btn'; }
+  else if(step===3){ cap.textContent = t('capDone'); btn.textContent = t('btnFinish'); btn.className='btn gold'; }
+  else { cap.textContent = t('capDone'); btn.textContent = t('btnFinish'); btn.className='btn gold'; }
+}
+function advance(){
+  if(step < 3){ step += 1; }
+  else { showBadge(); return; }
+  if(step < 0) step = 0;
+  renderSteps(); renderCap(); refreshPanel(); draw();
+}
+function resetSteps(){
+  step = -1; dragIdx = -1;
+  document.getElementById('badge').classList.remove('show');
+  renderSteps(); renderCap(); refreshPanel(); draw();
+}
+function showBadge(){
+  step = 4;
+  document.getElementById('badge').classList.add('show');
+  renderSteps(); renderCap();
+}
+
+document.getElementById('btnStep').addEventListener('click', advance);
+document.getElementById('btnReset').addEventListener('click', resetSteps);
+document.getElementById('badge').addEventListener('click', function(){
+  document.getElementById('badge').classList.remove('show');
+});
+
+/* ============================ i18n refresh ============================ */
+function refreshI18N(){
+  var ids = ['title','subtitle','st0','st1','st2','st3','canvasTitle','canvasHint',
+             'boxLbl','dragHint','calcTitle','kMeanX','kMeanY','kSum','kN','kCov',
+             'badgeTitle','badgeDesc'];
+  for(var i=0;i<ids.length;i++){
+    var el = document.getElementById(ids[i]);
+    if(el) el.innerHTML = t(ids[i]);
+  }
+  document.getElementById('langBtn').textContent = LANG==='cn' ? '中 / EN' : 'EN / 中';
+  renderCap(); refreshPanel();
+}
+document.getElementById('langBtn').addEventListener('click', function(){
+  LANG = LANG==='cn' ? 'en' : 'cn';
+  refreshI18N();
+});
+
+/* ============================ mascot spin ============================ */
+function spinMascot(){
+  rotAngle = (rotAngle + 0.6) % 360;
+  var g = document.getElementById('tetra');
+  if(g) g.setAttribute('transform','translate(20,20) rotate('+rotAngle+')');
+  requestAnimationFrame(spinMascot);
+}
+
+/* ============================ init ============================ */
+resize();
+setTimeout(resize, 150);
+setTimeout(resize, 500);
+if(document.fonts && document.fonts.ready){ document.fonts.ready.then(resize); }
+renderSteps();
+renderCap();
+refreshPanel();
+spinMascot();
+</script>
+</body>
+</html>

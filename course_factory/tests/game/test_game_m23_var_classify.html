@@ -1,0 +1,742 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<title>M23 · 方差阈值分类器 — Geometry Void</title>
+<style>
+  :root{
+    /* Layer 1 — shared deep space canvas (all 26 subjects) */
+    --bg-0: oklch(0.14 0.035 265);
+    --bg-1: oklch(0.18 0.04 265);
+    --bg-2: oklch(0.22 0.045 265);
+    --bg-3: oklch(0.28 0.05 265);
+    --line: oklch(0.35 0.05 265 / 0.35);
+    --line-strong: oklch(0.55 0.08 265 / 0.55);
+    --fg:      oklch(0.96 0.01 265);
+    --fg-dim:  oklch(0.75 0.02 265);
+    --fg-mute: oklch(0.55 0.03 265);
+    --gold:    oklch(0.85 0.14 85);
+
+    /* Layer 2 — math signature accent */
+    --math: oklch(0.72 0.17 245);
+
+    /* Layer 3 — math 5-color palette (themes.js MTH-06) */
+    --AXIS:     oklch(0.72 0.17 245);
+    --PROOF:    oklch(0.52 0.16 245);
+    --SHADOW:   oklch(0.35 0.10 245);
+    --SOLUTION: oklch(0.92 0.08 240);
+    --QED:      oklch(0.85 0.14 85);
+
+    /* class semantics — left-hand = AXIS (blue), right-hand = QED (gold) */
+    --left:  var(--AXIS);
+    --right: var(--QED);
+  }
+
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%;width:100%;font-family:'Inter','PingFang SC',sans-serif;color:var(--fg);background:var(--bg-0);overflow:hidden}
+
+  .stage{display:flex;flex-direction:row;height:100vh;width:100vw}
+
+  /* ---------- 200px sidebar ---------- */
+  .game-sidebar{
+    width:200px;flex:0 0 200px;
+    background:var(--bg-1);
+    border-right:1px solid var(--line);
+    display:flex;flex-direction:column;
+    padding:14px 12px;gap:10px;
+    overflow-y:auto;
+  }
+  .brand{
+    display:flex;flex-direction:column;gap:2px;
+    border-bottom:1px solid var(--line);padding-bottom:8px;
+  }
+  .brand .code{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--fg-mute);letter-spacing:1.2px}
+  .brand .title{font-size:13px;color:var(--fg);font-weight:600}
+  .brand .sub{font-size:10px;color:var(--fg-dim);margin-top:2px}
+
+  .mascot{
+    width:100%;height:84px;display:flex;align-items:center;justify-content:center;
+    background:var(--bg-2);border:1px solid var(--line);
+  }
+  .mascot svg{width:100%;height:100%}
+
+  .guide{
+    background:var(--bg-2);border:1px solid var(--line);
+    padding:8px;display:flex;flex-direction:column;gap:4px;
+  }
+  .guide-title{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--math);letter-spacing:1px}
+  .guide-line{font-size:10px;color:var(--fg-dim);line-height:1.4}
+
+  /* accuracy HUD block */
+  .acc-block{
+    background:var(--bg-2);border:1px solid var(--line);padding:10px 9px;
+    display:flex;flex-direction:column;gap:6px;
+    box-shadow:3px 3px 0 var(--bg-0);
+  }
+  .acc-label{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--fg-mute);letter-spacing:1px}
+  .acc-val{
+    font-family:'JetBrains Mono',monospace;font-size:30px;font-weight:700;
+    color:var(--math);line-height:1;
+  }
+  .acc-val.win{color:var(--QED)}
+  .acc-bar-track{height:6px;background:var(--bg-0);border:1px solid var(--line);position:relative}
+  .acc-bar-fill{position:absolute;left:0;top:0;bottom:0;width:0%;background:var(--math)}
+  .acc-bar-fill.win{background:var(--QED)}
+  .acc-target{
+    position:absolute;top:-2px;bottom:-2px;left:85%;width:2px;background:var(--SOLUTION);
+  }
+  .acc-foot{
+    display:flex;justify-content:space-between;
+    font-family:'JetBrains Mono',monospace;font-size:8px;color:var(--fg-mute);
+  }
+
+  /* threshold slider — primary control */
+  .slider-block{
+    background:var(--bg-2);border:1px solid var(--line);padding:8px;
+    display:flex;flex-direction:column;gap:6px;
+  }
+  .slider-label{
+    display:flex;justify-content:space-between;align-items:baseline;
+    font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--fg-dim);
+  }
+  .slider-label .val{color:var(--math);font-size:12px;font-weight:600}
+  input[type=range].thr-slider{
+    -webkit-appearance:none;appearance:none;width:100%;height:5px;
+    background:linear-gradient(90deg, var(--left) 0%, var(--SHADOW) 50%, var(--right) 100%);
+    border:1px solid var(--line);outline:none;cursor:pointer;
+  }
+  input[type=range].thr-slider::-webkit-slider-thumb{
+    -webkit-appearance:none;appearance:none;
+    width:12px;height:18px;background:var(--SOLUTION);
+    border:2px solid var(--bg-0);box-shadow:2px 2px 0 var(--bg-0);cursor:grab;
+  }
+  input[type=range].thr-slider::-moz-range-thumb{
+    width:12px;height:18px;background:var(--SOLUTION);
+    border:2px solid var(--bg-0);box-shadow:2px 2px 0 var(--bg-0);cursor:grab;
+  }
+  .hint{font-family:'JetBrains Mono',monospace;font-size:8px;color:var(--fg-mute);line-height:1.4}
+
+  .sidebar-spacer{flex:1;min-height:6px}
+
+  .reset-btn{
+    width:100%;padding:6px 8px;background:var(--bg-2);
+    color:var(--fg-dim);border:1px solid var(--line);
+    font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:1px;cursor:pointer;
+  }
+  .reset-btn:hover{color:var(--math);border-color:var(--math)}
+  .lang-btn{
+    width:100%;padding:7px 8px;background:var(--bg-3);
+    color:var(--fg);border:1px solid var(--line-strong);
+    font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:1px;
+    cursor:pointer;box-shadow:3px 3px 0 var(--bg-0);
+  }
+  .lang-btn:hover{background:var(--PROOF);color:var(--SOLUTION)}
+
+  /* ---------- main ---------- */
+  .game-main{
+    flex:1;display:flex;flex-direction:column;
+    background:var(--bg-0);min-width:0;
+  }
+  .main-header{
+    height:46px;border-bottom:1px solid var(--line);
+    display:flex;align-items:center;justify-content:space-between;
+    padding:0 18px;background:var(--bg-1);flex:0 0 46px;
+  }
+  .header-left{
+    font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--fg-dim);letter-spacing:1.4px;
+  }
+  .header-right{display:flex;gap:16px;font-family:'JetBrains Mono',monospace}
+  .hud-cell{display:flex;flex-direction:column;align-items:flex-end}
+  .hud-cell .label{font-size:9px;color:var(--fg-mute);letter-spacing:1px}
+  .hud-cell .val{color:var(--math);font-size:13px;font-weight:600}
+  .hud-cell .val.gold{color:var(--QED)}
+
+  .main-body{
+    flex:1;display:flex;flex-direction:column;min-height:0;
+    padding:14px 18px;gap:12px;
+  }
+
+  /* number-line scatter panel — main stage */
+  .scatter-panel{
+    flex:1;display:flex;flex-direction:column;min-height:0;
+    background:var(--bg-1);border:1px solid var(--line);
+  }
+  .panel-title{
+    padding:7px 12px;font-family:'JetBrains Mono',monospace;font-size:10px;
+    color:var(--math);letter-spacing:1.2px;
+    border-bottom:1px solid var(--line);background:var(--bg-2);
+    display:flex;justify-content:space-between;align-items:center;
+  }
+  .panel-title .sub{color:var(--fg-mute);font-size:9px;letter-spacing:.6px}
+  .scatter-wrap{
+    flex:1;display:flex;flex-direction:column;min-height:0;position:relative;
+  }
+  .scatter-wrap canvas{flex:1;width:100%;display:block;cursor:ew-resize}
+
+  /* confusion-matrix + legend row */
+  .lower-row{
+    flex:0 0 auto;display:flex;flex-direction:row;gap:12px;align-items:stretch;
+  }
+  .legend-box{
+    flex:1;background:var(--bg-1);border:1px solid var(--line);
+    padding:10px 14px;display:flex;flex-direction:column;gap:7px;min-width:0;
+  }
+  .legend-label{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--fg-mute);letter-spacing:1px}
+  .legend-row{display:flex;flex-wrap:wrap;gap:14px}
+  .legend-item{display:flex;align-items:center;gap:7px;font-size:11px;color:var(--fg-dim)}
+  .legend-item .swatch{width:13px;height:13px;flex:0 0 13px;border:1px solid var(--bg-0)}
+  .legend-item .swatch.left{background:var(--left)}
+  .legend-item .swatch.right{background:var(--right)}
+  .legend-item .swatch.miss{background:transparent;border:1px solid var(--fg-mute);
+    box-shadow:inset 0 0 0 2px oklch(0.72 0.17 25)}
+  .legend-text{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--fg-dim);line-height:1.5}
+  .legend-text .hl{color:var(--SOLUTION);font-weight:600}
+
+  /* confusion matrix 2x2 */
+  .cmatrix{
+    flex:0 0 268px;background:var(--bg-1);border:1px solid var(--line);
+    padding:9px 11px;display:flex;flex-direction:column;gap:6px;
+  }
+  .cm-title{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--math);letter-spacing:1px}
+  .cm-grid{
+    display:grid;
+    grid-template-columns:54px 1fr 1fr;
+    grid-template-rows:auto 1fr 1fr;
+    gap:3px;flex:1;
+  }
+  .cm-head{
+    font-family:'JetBrains Mono',monospace;font-size:8px;color:var(--fg-mute);
+    display:flex;align-items:center;justify-content:center;text-align:center;line-height:1.2;
+  }
+  .cm-rowhead{
+    font-family:'JetBrains Mono',monospace;font-size:8px;color:var(--fg-mute);
+    display:flex;align-items:center;justify-content:flex-end;padding-right:4px;text-align:right;line-height:1.2;
+  }
+  .cm-cell{
+    background:var(--bg-2);border:1px solid var(--line);
+    display:flex;flex-direction:column;align-items:center;justify-content:center;
+    padding:6px 2px;min-height:34px;
+  }
+  .cm-cell .num{font-family:'JetBrains Mono',monospace;font-size:18px;font-weight:700;color:var(--fg)}
+  .cm-cell .tag{font-family:'JetBrains Mono',monospace;font-size:7px;color:var(--fg-mute);letter-spacing:.5px}
+  .cm-cell.correct{border-color:var(--math)}
+  .cm-cell.correct .num{color:var(--math)}
+  .cm-cell.error .num{color:oklch(0.72 0.17 25)}
+  .cm-cell.error{border-color:oklch(0.72 0.17 25 / 0.5)}
+
+  /* milestone overlay */
+  .milestone{
+    position:absolute;inset:0;display:none;
+    flex-direction:column;align-items:center;justify-content:center;gap:14px;
+    background:oklch(0.14 0.035 265 / 0.94);z-index:30;
+  }
+  .milestone.show{display:flex}
+  .milestone .badge{
+    font-family:'JetBrains Mono',monospace;font-size:20px;font-weight:700;letter-spacing:2px;
+    color:var(--QED);text-shadow:3px 3px 0 var(--bg-0);
+  }
+  .milestone .acc-shout{
+    font-family:'JetBrains Mono',monospace;font-size:42px;font-weight:700;color:var(--SOLUTION);
+  }
+  .milestone .desc{font-size:12px;color:var(--fg-dim);max-width:480px;text-align:center;line-height:1.55}
+
+  /* Pi mascot — rotating tetrahedron */
+  @keyframes piSpin{
+    0%{transform:rotate(0deg)}
+    100%{transform:rotate(360deg)}
+  }
+  #piTetra{animation:piSpin 9s linear infinite;transform-origin:center}
+</style>
+</head>
+<body>
+  <div class="stage">
+    <!-- ============ Sidebar ============ -->
+    <aside class="game-sidebar">
+      <div class="brand">
+        <span class="code">MTH-06 · M23</span>
+        <span class="title" data-i18n-cn="方差阈值分类器" data-i18n-en="Variance Threshold">方差阈值分类器</span>
+        <span class="sub" data-i18n-cn="拖阈值线分左右手" data-i18n-en="drag threshold, split L/R">拖阈值线分左右手</span>
+      </div>
+
+      <div class="mascot" aria-label="Pi mascot">
+        <!-- Pi — Geometry Void rotating tetrahedron (math theme) -->
+        <svg viewBox="0 0 160 84" xmlns="http://www.w3.org/2000/svg">
+          <g id="piTetra" transform="translate(80 42)">
+            <!-- back faces -->
+            <polygon points="0,-26 26,18 -26,18" fill="var(--PROOF)" stroke="var(--SOLUTION)" stroke-width="1"/>
+            <polygon points="0,-26 26,18 0,6" fill="var(--AXIS)" stroke="var(--SOLUTION)" stroke-width="1"/>
+            <polygon points="0,-26 -26,18 0,6" fill="var(--SHADOW)" stroke="var(--SOLUTION)" stroke-width="1"/>
+            <polygon points="-26,18 26,18 0,6" fill="var(--PROOF)" stroke="var(--SOLUTION)" stroke-width="1" opacity="0.8"/>
+            <!-- equation flash -->
+            <circle cx="0" cy="-32" r="2.2" fill="var(--QED)"/>
+          </g>
+          <text x="80" y="80" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="9" fill="var(--fg-mute)">var &gt; t ?</text>
+        </svg>
+      </div>
+
+      <div class="guide">
+        <div class="guide-title">HOW TO PLAY</div>
+        <div class="guide-line" data-i18n-cn="1 · 拖阈值线(滑块或画布)" data-i18n-en="1 · Drag threshold line">1 · 拖阈值线</div>
+        <div class="guide-line" data-i18n-cn="2 · 线右判右手 线左判左手" data-i18n-en="2 · Right of line = right hand">2 · 线右判右手</div>
+        <div class="guide-line" data-i18n-cn="3 · 准确率 > 85% 解锁" data-i18n-en="3 · Accuracy > 85% to unlock">3 · 准确率 > 85% 解锁</div>
+      </div>
+
+      <div class="acc-block">
+        <span class="acc-label" data-i18n-cn="分类准确率" data-i18n-en="ACCURACY">分类准确率</span>
+        <span class="acc-val" id="accVal">--%</span>
+        <div class="acc-bar-track">
+          <div class="acc-bar-fill" id="accFill"></div>
+          <div class="acc-target"></div>
+        </div>
+        <div class="acc-foot">
+          <span>0%</span>
+          <span style="color:var(--SOLUTION)" data-i18n-cn="目标 85" data-i18n-en="goal 85">目标 85</span>
+          <span>100%</span>
+        </div>
+      </div>
+
+      <div class="slider-block">
+        <div class="slider-label">
+          <span data-i18n-cn="阈值 t (μV²)" data-i18n-en="Threshold t (μV²)">阈值 t (μV²)</span>
+          <span class="val" id="thrReadout">25</span>
+        </div>
+        <input type="range" min="2" max="60" step="0.5" value="42" id="thrSlider" class="thr-slider" aria-label="Threshold" />
+        <div class="hint" data-i18n-cn="也可直接在数轴上拖竖线" data-i18n-en="or drag the line on the axis">也可直接在数轴上拖竖线</div>
+      </div>
+
+      <div class="sidebar-spacer"></div>
+
+      <button id="resetBtn" class="reset-btn" type="button" data-i18n-cn="重置 RESET" data-i18n-en="RESET">重置 RESET</button>
+      <button id="langBtn" class="lang-btn" type="button">EN / 中文</button>
+    </aside>
+
+    <!-- ============ Main ============ -->
+    <main class="game-main">
+      <header class="main-header">
+        <div class="header-left" data-i18n-cn="M23 · C4 方差特征 · 找最佳阈值最大化准确率" data-i18n-en="M23 · C4 variance feature · find best threshold to maximize accuracy">M23 · C4 方差特征 · 找最佳阈值最大化准确率</div>
+        <div class="header-right">
+          <div class="hud-cell">
+            <span class="label">THRESHOLD</span>
+            <span class="val" id="hudThr">42</span>
+          </div>
+          <div class="hud-cell">
+            <span class="label">BEST</span>
+            <span class="val" id="hudBest">--%</span>
+          </div>
+        </div>
+      </header>
+
+      <div class="main-body">
+        <section class="scatter-panel">
+          <div class="panel-title">
+            <span data-i18n-cn="C4 电极方差数轴 · 40 个 trial" data-i18n-en="C4 variance number line · 40 trials">C4 电极方差数轴 · 40 个 trial</span>
+            <span class="sub" data-i18n-cn="蓝=左手真值 金=右手真值" data-i18n-en="blue = left truth, gold = right truth">蓝=左手 金=右手</span>
+          </div>
+          <div class="scatter-wrap">
+            <canvas id="scatterCanvas"></canvas>
+          </div>
+        </section>
+
+        <section class="lower-row">
+          <div class="legend-box">
+            <span class="legend-label">READING THE AXIS</span>
+            <div class="legend-row">
+              <span class="legend-item"><span class="swatch left"></span><span data-i18n-cn="左手 trial (方差偏小)" data-i18n-en="left-hand (lower variance)">左手 (方差小)</span></span>
+              <span class="legend-item"><span class="swatch right"></span><span data-i18n-cn="右手 trial (方差偏大)" data-i18n-en="right-hand (higher variance)">右手 (方差大)</span></span>
+              <span class="legend-item"><span class="swatch miss"></span><span data-i18n-cn="被分错的 trial" data-i18n-en="misclassified">被分错</span></span>
+            </div>
+            <span class="legend-text" id="advice"></span>
+          </div>
+
+          <div class="cmatrix">
+            <div class="cm-title" data-i18n-cn="混淆矩阵" data-i18n-en="CONFUSION MATRIX">混淆矩阵</div>
+            <div class="cm-grid">
+              <div class="cm-head"></div>
+              <div class="cm-head" data-i18n-cn="判右手" data-i18n-en="pred R">判右手</div>
+              <div class="cm-head" data-i18n-cn="判左手" data-i18n-en="pred L">判左手</div>
+
+              <div class="cm-rowhead" data-i18n-cn="真右手" data-i18n-en="true R">真右手</div>
+              <div class="cm-cell correct" id="cmTP"><span class="num">0</span><span class="tag">TP</span></div>
+              <div class="cm-cell error" id="cmFN"><span class="num">0</span><span class="tag">FN</span></div>
+
+              <div class="cm-rowhead" data-i18n-cn="真左手" data-i18n-en="true L">真左手</div>
+              <div class="cm-cell error" id="cmFP"><span class="num">0</span><span class="tag">FP</span></div>
+              <div class="cm-cell correct" id="cmTN"><span class="num">0</span><span class="tag">TN</span></div>
+            </div>
+          </div>
+        </section>
+
+        <!-- milestone overlay -->
+        <div class="milestone" id="milestone">
+          <div class="badge" data-i18n-cn="解锁 · 特征分类器调参师" data-i18n-en="Unlocked · Feature Classifier Tuner">解锁 · 特征分类器调参师</div>
+          <div class="acc-shout" id="msAcc">88%</div>
+          <div class="desc" data-i18n-cn="你把阈值线推进了两堆 trial 的重叠区最佳点。方差越大说明 C4 电极信号波动越剧烈——右手运动想象抑制了右脑 C4 的 mu 节律(ERD)，留下更大波动。线太左会把安静的左手 trial 误判成右手，线太右会漏掉真正的右手 trial。" data-i18n-en="You pushed the line into the sweet spot inside the overlap. Larger variance means the C4 electrode swings harder: right-hand motor imagery suppresses the C4 mu rhythm (ERD), leaving bigger fluctuation. Too far left misreads quiet left-hand trials as right; too far right misses true right-hand trials.">你找到了两堆 trial 重叠区的最佳分界点。</div>
+          <button class="reset-btn" id="milestoneReset" type="button" style="width:auto;padding:8px 20px" data-i18n-cn="再调一次" data-i18n-en="Tune again">再调一次</button>
+        </div>
+      </div>
+    </main>
+  </div>
+
+<script>
+(function(){
+  'use strict';
+
+  // ---------- generate 40 trials: 20 left-hand (low var), 20 right-hand (high var) ----------
+  // deterministic pseudo-random so the puzzle is stable across reloads.
+  function pr(i){ var x = Math.sin(i*12.9898+78.233)*43758.5453; return x-Math.floor(x); }
+  // approx normal via sum of uniforms (avg of 4 -> bell-ish)
+  function gauss(seed){
+    var s = 0;
+    for (var k=0;k<4;k++){ s += pr(seed*4+k); }
+    return (s/4 - 0.5) * 2; // ~[-1,1] bell
+  }
+
+  // VAR_MIN..VAR_MAX define the number-line domain (μV²)
+  var VAR_MIN = 2, VAR_MAX = 60;
+  // two overlapping piles: left mean ~22, right mean ~38, spread overlaps in the middle.
+  var TRIALS = [];
+  (function build(){
+    var id = 1;
+    // Two overlapping piles. left mean ~24, right mean ~36. A few "crossover"
+    // trials are placed deep in the other pile's territory so NO single
+    // threshold separates them perfectly — best reachable accuracy ~90%,
+    // forcing the player to find the sweet spot that balances FP vs FN.
+    var clamp = function(v){ return Math.max(VAR_MIN+0.5, Math.min(VAR_MAX-0.5, v)); };
+    // left hand: 18 normal (low) + 2 noisy outliers pushed high
+    for (var i=0;i<18;i++){ TRIALS.push({ id:id++, truth:'left',  v:clamp(24 + gauss(i+1)*8) }); }
+    TRIALS.push({ id:id++, truth:'left', v:40 });   // tense left trial -> high var
+    TRIALS.push({ id:id++, truth:'left', v:37 });
+    // right hand: 18 normal (high) + 2 weak ERD trials that stay low
+    for (var j=0;j<18;j++){ TRIALS.push({ id:id++, truth:'right', v:clamp(36 + gauss(j+101)*8) }); }
+    TRIALS.push({ id:id++, truth:'right', v:21 });  // weak suppression -> low var
+    TRIALS.push({ id:id++, truth:'right', v:24 });
+  })();
+
+  // ---------- state (no window-shadow names) ----------
+  var stateGame = {
+    lang: 'cn',
+    thr: 42,        // current threshold μV²; >= thr -> predict right
+    best: 0,        // best accuracy reached this run
+    done: false,
+    dragging: false
+  };
+
+  // ---------- DOM ----------
+  var thrSlider   = document.getElementById('thrSlider');
+  var thrReadout  = document.getElementById('thrReadout');
+  var accVal      = document.getElementById('accVal');
+  var accFill     = document.getElementById('accFill');
+  var hudThr      = document.getElementById('hudThr');
+  var hudBest     = document.getElementById('hudBest');
+  var adviceEl    = document.getElementById('advice');
+  var resetBtn    = document.getElementById('resetBtn');
+  var langBtn     = document.getElementById('langBtn');
+  var milestone   = document.getElementById('milestone');
+  var milestoneReset = document.getElementById('milestoneReset');
+  var msAcc       = document.getElementById('msAcc');
+  var scatterCv   = document.getElementById('scatterCanvas');
+
+  var cmTP = document.getElementById('cmTP').querySelector('.num');
+  var cmFN = document.getElementById('cmFN').querySelector('.num');
+  var cmFP = document.getElementById('cmFP').querySelector('.num');
+  var cmTN = document.getElementById('cmTN').querySelector('.num');
+
+  // resolve oklch CSS vars for canvas
+  var cssCache = {};
+  function cvar(name){
+    if (cssCache[name]) return cssCache[name];
+    var v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+    cssCache[name] = v || '#888';
+    return cssCache[name];
+  }
+  function withAlpha(oklchStr, a){
+    var inner = oklchStr.replace(/^oklch\(/,'').replace(/\)$/,'').trim();
+    return 'oklch(' + inner + ' / ' + a.toFixed(3) + ')';
+  }
+
+  // ---------- confusion-matrix math ----------
+  // predict 'right' if v >= thr.  truth right = positive class.
+  function classify(){
+    var tp=0, fp=0, tn=0, fn=0;
+    for (var i=0;i<TRIALS.length;i++){
+      var t = TRIALS[i];
+      var predRight = t.v >= stateGame.thr;
+      if (t.truth === 'right'){
+        if (predRight) tp++; else fn++;
+      } else {
+        if (predRight) fp++; else tn++;
+      }
+    }
+    var acc = (tp+tn) / TRIALS.length;
+    return { tp:tp, fp:fp, tn:tn, fn:fn, acc:acc };
+  }
+
+  // ---------- canvas geometry helpers ----------
+  function fitCanvas(cv){
+    var wrap = cv.parentElement;
+    var r = wrap.getBoundingClientRect();
+    var w = Math.max(60, Math.floor(r.width));
+    var h = Math.max(60, Math.floor(r.height));
+    var dpr = window.devicePixelRatio || 1;
+    cv.width = w * dpr;
+    cv.height = h * dpr;
+    var ctx = cv.getContext('2d');
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    return { ctx: ctx, w: w, h: h };
+  }
+  // map a variance value to an x pixel inside [padL, padL+plotW]
+  function varToX(v, padL, plotW){
+    return padL + (v - VAR_MIN) / (VAR_MAX - VAR_MIN) * plotW;
+  }
+  function xToVar(x, padL, plotW){
+    return VAR_MIN + (x - padL) / plotW * (VAR_MAX - VAR_MIN);
+  }
+
+  // store last layout so pointer handlers can invert x->var
+  var lastLayout = { padL:0, plotW:1 };
+
+  // ---------- main render ----------
+  function drawScatter(){
+    var f = fitCanvas(scatterCv);
+    var ctx = f.ctx, W = f.w, H = f.h;
+    ctx.clearRect(0,0,W,H);
+
+    var padL = 30, padR = 18, padT = 26, padB = 34;
+    var plotW = W - padL - padR;
+    var axisY = H - padB;            // number line y
+    lastLayout.padL = padL; lastLayout.plotW = plotW;
+
+    var res = classify();
+
+    // ---- shaded zones: left-of-threshold predicts LEFT, right predicts RIGHT ----
+    var thrX = varToX(stateGame.thr, padL, plotW);
+    ctx.fillStyle = withAlpha(cvar('--left'), 0.06);
+    ctx.fillRect(padL, padT, thrX-padL, axisY-padT);
+    ctx.fillStyle = withAlpha(cvar('--right'), 0.06);
+    ctx.fillRect(thrX, padT, padL+plotW-thrX, axisY-padT);
+
+    // zone captions
+    ctx.font = '10px "JetBrains Mono", monospace';
+    ctx.textAlign = 'center';
+    ctx.fillStyle = withAlpha(cvar('--left'), 0.85);
+    ctx.fillText(stateGame.lang==='cn'?'判为左手':'predict LEFT', padL + (thrX-padL)/2, padT+14);
+    ctx.fillStyle = withAlpha(cvar('--right'), 0.85);
+    ctx.fillText(stateGame.lang==='cn'?'判为右手':'predict RIGHT', thrX + (padL+plotW-thrX)/2, padT+14);
+
+    // ---- number line axis ----
+    ctx.strokeStyle = cvar('--line-strong');
+    ctx.lineWidth = 1.4;
+    ctx.beginPath(); ctx.moveTo(padL, axisY); ctx.lineTo(padL+plotW, axisY); ctx.stroke();
+    // ticks
+    ctx.fillStyle = cvar('--fg-mute');
+    ctx.font = '9px "JetBrains Mono", monospace';
+    ctx.textAlign = 'center';
+    [10,20,30,40,50].forEach(function(tv){
+      var tx = varToX(tv, padL, plotW);
+      ctx.strokeStyle = cvar('--line');
+      ctx.beginPath(); ctx.moveTo(tx, axisY); ctx.lineTo(tx, axisY+4); ctx.stroke();
+      ctx.fillText(tv, tx, axisY+16);
+    });
+    ctx.textAlign = 'left';
+    ctx.fillText('var (μV²)', padL, axisY+28);
+    ctx.textAlign = 'right';
+    ctx.fillText(stateGame.lang==='cn'?'方差越大 →':'larger variance →', padL+plotW, axisY+28);
+
+    // ---- scatter dots, jittered vertically by truth so two piles separate visually ----
+    // left-hand dots sit in upper band, right-hand in lower band -> truth lanes
+    var laneLeftY  = padT + (axisY-padT)*0.30;
+    var laneRightY = padT + (axisY-padT)*0.66;
+    var laneH = (axisY-padT)*0.22;
+    var missColor = 'oklch(0.72 0.17 25)';
+
+    for (var i=0;i<TRIALS.length;i++){
+      var t = TRIALS[i];
+      var x = varToX(t.v, padL, plotW);
+      var laneY = (t.truth==='left') ? laneLeftY : laneRightY;
+      var jitter = (pr(t.id*3.7)-0.5) * laneH;
+      var y = laneY + jitter;
+
+      var predRight = t.v >= stateGame.thr;
+      var correct = (predRight && t.truth==='right') || (!predRight && t.truth==='left');
+      var base = (t.truth==='left') ? cvar('--left') : cvar('--right');
+
+      // connector stick to the axis (light)
+      ctx.strokeStyle = withAlpha(base, 0.18);
+      ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x, axisY); ctx.stroke();
+
+      // dot
+      ctx.beginPath();
+      ctx.arc(x, y, 5.5, 0, Math.PI*2);
+      ctx.fillStyle = correct ? base : withAlpha(base, 0.30);
+      ctx.fill();
+      if (!correct){
+        // misclassified ring (warn)
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = missColor;
+        ctx.beginPath(); ctx.arc(x, y, 7.5, 0, Math.PI*2); ctx.stroke();
+      } else {
+        ctx.lineWidth = 1;
+        ctx.strokeStyle = cvar('--bg-0');
+        ctx.stroke();
+      }
+    }
+
+    // lane labels
+    ctx.font = '9px "JetBrains Mono", monospace';
+    ctx.textAlign = 'left';
+    ctx.fillStyle = withAlpha(cvar('--left'), 0.9);
+    ctx.fillText(stateGame.lang==='cn'?'真·左手':'true L', padL+2, laneLeftY-laneH-2);
+    ctx.fillStyle = withAlpha(cvar('--right'), 0.9);
+    ctx.fillText(stateGame.lang==='cn'?'真·右手':'true R', padL+2, laneRightY-laneH-2);
+
+    // ---- threshold line (draggable) ----
+    ctx.strokeStyle = cvar('--SOLUTION');
+    ctx.lineWidth = 2.2;
+    ctx.setLineDash([6,4]);
+    ctx.beginPath(); ctx.moveTo(thrX, padT-6); ctx.lineTo(thrX, axisY+6); ctx.stroke();
+    ctx.setLineDash([]);
+    // handle knob at top
+    ctx.fillStyle = cvar('--SOLUTION');
+    ctx.beginPath();
+    ctx.moveTo(thrX-7, padT-6);
+    ctx.lineTo(thrX+7, padT-6);
+    ctx.lineTo(thrX, padT+4);
+    ctx.closePath(); ctx.fill();
+    // threshold label
+    ctx.fillStyle = cvar('--bg-0');
+    ctx.font = '9px "JetBrains Mono", monospace';
+    ctx.textAlign = 'center';
+    var lblY = padT - 12;
+    ctx.fillStyle = cvar('--SOLUTION');
+    ctx.fillText('t = ' + stateGame.thr.toFixed(1), thrX, padT-10);
+    ctx.textAlign = 'left';
+
+    updateReadouts(res);
+  }
+
+  // ---------- HUD + matrix readouts ----------
+  function updateReadouts(res){
+    var pct = Math.round(res.acc*100);
+    accVal.textContent = pct + '%';
+    accFill.style.width = pct + '%';
+    var win = res.acc > 0.85;
+    accVal.classList.toggle('win', win);
+    accFill.classList.toggle('win', win);
+
+    hudThr.textContent = stateGame.thr.toFixed(1);
+    thrReadout.textContent = stateGame.thr.toFixed(1);
+
+    cmTP.textContent = res.tp;
+    cmFN.textContent = res.fn;
+    cmFP.textContent = res.fp;
+    cmTN.textContent = res.tn;
+
+    if (res.acc > stateGame.best){
+      stateGame.best = res.acc;
+      hudBest.textContent = Math.round(res.acc*100) + '%';
+      hudBest.classList.toggle('gold', res.acc > 0.85);
+    }
+
+    // advice text
+    var cn = stateGame.lang==='cn';
+    var msg;
+    if (res.fp > res.fn + 1){
+      msg = cn ? '阈值偏低 → 安静的左手 trial 被误判成右手 (FP 多)，把线往右推。'
+               : 'Threshold too low → quiet left-hand trials misread as right (high FP). Push line right.';
+    } else if (res.fn > res.fp + 1){
+      msg = cn ? '阈值偏高 → 真正的右手 trial 被漏掉 (FN 多)，把线往左拉。'
+               : 'Threshold too high → true right-hand trials missed (high FN). Pull line left.';
+    } else if (res.acc > 0.85){
+      msg = cn ? '极佳! 阈值落在两堆重叠区的最佳分界点，左右误差几乎平衡。'
+               : 'Excellent! Threshold sits at the sweet spot in the overlap, errors near-balanced.';
+    } else {
+      msg = cn ? '接近了，FP 与 FN 已大致平衡，再微调几个 μV² 冲过 85%。'
+               : 'Close — FP and FN are roughly balanced; nudge a few μV² to break 85%.';
+    }
+    adviceEl.innerHTML = msg.replace(/FP|FN|85%/g, function(m){ return "<span class='hl'>"+m+"</span>"; });
+
+    // milestone
+    if (res.acc > 0.85 && !stateGame.done){
+      stateGame.done = true;
+      msAcc.textContent = pct + '%';
+      setTimeout(function(){ milestone.classList.add('show'); }, 380);
+    }
+  }
+
+  // ---------- set threshold (single source of truth) ----------
+  function setThreshold(v){
+    v = Math.max(VAR_MIN, Math.min(VAR_MAX, v));
+    stateGame.thr = Math.round(v*2)/2;   // 0.5 step
+    if (parseFloat(thrSlider.value) !== stateGame.thr) thrSlider.value = stateGame.thr;
+    drawScatter();
+  }
+
+  // ---------- pointer drag on canvas (drag the threshold line) ----------
+  function pointerVar(ev){
+    var rect = scatterCv.getBoundingClientRect();
+    var x = ev.clientX - rect.left;
+    return xToVar(x, lastLayout.padL, lastLayout.plotW);
+  }
+  scatterCv.addEventListener('pointerdown', function(ev){
+    stateGame.dragging = true;
+    try { scatterCv.setPointerCapture(ev.pointerId); } catch(e){}
+    setThreshold(pointerVar(ev));
+  });
+  scatterCv.addEventListener('pointermove', function(ev){
+    if (!stateGame.dragging) return;
+    setThreshold(pointerVar(ev));
+  });
+  scatterCv.addEventListener('pointerup', function(ev){
+    stateGame.dragging = false;
+    try { scatterCv.releasePointerCapture(ev.pointerId); } catch(e){}
+  });
+  scatterCv.addEventListener('pointercancel', function(){ stateGame.dragging = false; });
+
+  // ---------- slider ----------
+  thrSlider.addEventListener('input', function(){ setThreshold(parseFloat(thrSlider.value)); });
+  thrSlider.addEventListener('change', function(){ setThreshold(parseFloat(thrSlider.value)); });
+
+  // ---------- reset ----------
+  function resetAll(){
+    stateGame.thr = 42;
+    stateGame.best = 0;
+    stateGame.done = false;
+    thrSlider.value = 42;
+    hudBest.textContent = '--%';
+    hudBest.classList.remove('gold');
+    milestone.classList.remove('show');
+    drawScatter();
+  }
+  resetBtn.addEventListener('click', resetAll);
+  milestoneReset.addEventListener('click', resetAll);
+
+  // ---------- i18n ----------
+  function refreshI18N(){
+    var nodes = document.querySelectorAll('[data-i18n-cn]');
+    for (var i=0;i<nodes.length;i++){
+      var el = nodes[i];
+      var content = stateGame.lang==='cn' ? el.getAttribute('data-i18n-cn') : el.getAttribute('data-i18n-en');
+      if (content.indexOf('<') >= 0) el.innerHTML = content; else el.textContent = content;
+    }
+    document.documentElement.lang = stateGame.lang==='cn' ? 'zh-CN' : 'en';
+    drawScatter();
+  }
+  langBtn.addEventListener('click', function(){
+    stateGame.lang = stateGame.lang==='cn' ? 'en' : 'cn';
+    refreshI18N();
+  });
+
+  // ---------- resize ----------
+  window.addEventListener('resize', drawScatter);
+
+  // ---------- init ----------
+  refreshI18N();
+  requestAnimationFrame(function(){
+    thrSlider.value = stateGame.thr;
+    drawScatter();
+  });
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,684 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>投影 — 换个角度看信号</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;700&family=Inter:wght@400;600;800&family=JetBrains+Mono:wght@400;600;700&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    /* Layer 1 — shared deep-space canvas (all 26 subjects, fixed) */
+    --bg-0: oklch(0.14 0.035 265);
+    --bg-1: oklch(0.18 0.04 265);
+    --bg-2: oklch(0.22 0.045 265);
+    --bg-3: oklch(0.28 0.05 265);
+    --line: oklch(0.35 0.05 265 / 0.35);
+    --line-strong: oklch(0.55 0.08 265 / 0.55);
+    --fg: oklch(0.96 0.01 265);
+    --fg-dim: oklch(0.75 0.02 265);
+    --fg-mute: oklch(0.55 0.03 265);
+    --gold: oklch(0.85 0.14 85);
+    /* Layer 2 — math signature accent (electric blue) */
+    --accent: oklch(0.72 0.17 245);
+    /* Layer 3 — math 5-color palette (themes.js id:'math', MTH-06) */
+    --axis:     oklch(0.72 0.17 245);   /* AXIS — direction axis w-hat / projection axis */
+    --proof:    oklch(0.52 0.16 245);   /* PROOF — left-hand cloud / secondary */
+    --shadow:   oklch(0.35 0.10 245);   /* SHADOW — grid / drop lines */
+    --solution: oklch(0.92 0.08 240);   /* SOLUTION — shadow dots on axis / highlight */
+    --qed:      oklch(0.85 0.14 85);    /* QED — key insight (== gold) */
+  }
+  html,body{margin:0;padding:0;height:100vh;width:100%;overflow:hidden;
+    background:var(--bg-0);font-family:'Noto Sans SC','Inter',sans-serif;color:var(--fg);}
+  .wrapper{display:flex;flex-direction:row;height:100vh;overflow:hidden;}
+  /* Sidebar 200px */
+  .sidebar{width:200px;min-width:200px;max-width:200px;flex-shrink:0;
+    display:flex;flex-direction:column;gap:10px;padding:14px 12px;
+    background:var(--bg-1);border-right:1px solid var(--line);overflow-y:auto;}
+  .brand{display:flex;align-items:center;gap:8px;}
+  .mascot{flex-shrink:0;}
+  .sidebar h1{font-family:'Space Grotesk','Inter',sans-serif;font-size:13px;font-weight:700;
+    line-height:1.3;color:var(--accent);letter-spacing:0.02em;}
+  .sidebar .code{font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:0.14em;
+    color:var(--fg-mute);text-transform:uppercase;}
+  .intro{font-size:11px;line-height:1.55;color:var(--fg-dim);}
+  .intro .en{font-style:italic;font-size:10px;color:var(--fg-mute);margin-top:4px;}
+  .guide-label{font-family:'JetBrains Mono',monospace;font-size:9px;font-weight:700;
+    letter-spacing:0.14em;text-transform:uppercase;color:var(--accent);margin-top:4px;}
+  .guide{list-style:none;padding:0;margin:0;font-size:11px;line-height:1.6;color:var(--fg-dim);}
+  .guide li{margin-bottom:2px;}
+  .lang-btn{margin-top:auto;align-self:flex-start;font-family:'JetBrains Mono',monospace;
+    font-size:10px;font-weight:700;letter-spacing:0.1em;padding:5px 12px;cursor:pointer;
+    color:var(--accent);background:transparent;border:1px solid var(--line-strong);
+    box-shadow:3px 3px 0 var(--bg-0);transition:transform .1s;}
+  .lang-btn:hover{transform:translate(-1px,-1px);}
+  .lang-btn:active{transform:translate(1px,1px);box-shadow:1px 1px 0 var(--bg-0);}
+  /* Main stage */
+  .stage{flex:1;min-width:0;position:relative;overflow:hidden;}
+  canvas{position:absolute;inset:0;width:100%;height:100%;display:block;}
+  .hud{position:absolute;top:16px;right:16px;background:oklch(0.18 0.04 265 / 0.85);
+    border:1px solid var(--line-strong);padding:9px 13px;font-family:'JetBrains Mono',monospace;
+    font-size:11px;box-shadow:3px 3px 0 var(--bg-0);min-width:178px;}
+  .hud-row{display:flex;justify-content:space-between;gap:14px;line-height:1.7;}
+  .hud-lbl{color:var(--fg-mute);font-size:7px;letter-spacing:0.14em;text-transform:uppercase;
+    align-self:center;}
+  .hud-val{color:var(--accent);font-weight:700;}
+  .sub{position:absolute;bottom:22px;left:50%;transform:translateX(-50%);
+    text-align:center;width:86%;pointer-events:none;}
+  .sub-zh{font-size:19px;font-weight:700;color:var(--fg);
+    background:oklch(0.18 0.04 265 / 0.85);padding:7px 18px;display:inline-block;
+    border:1px solid var(--line-strong);box-shadow:3px 3px 0 var(--bg-0);}
+  .sub-en{font-size:12px;font-style:italic;color:var(--fg-dim);margin-top:5px;}
+</style>
+</head>
+<body>
+<div class="wrapper">
+
+<aside class="sidebar">
+  <div class="brand">
+    <!-- mascot: Pi — rotating tetrahedron, math signature -->
+    <svg class="mascot" width="30" height="30" viewBox="0 0 40 40" aria-hidden="true">
+      <polygon points="20,5 35,30 5,30" fill="none" stroke="var(--accent)" stroke-width="1.6"/>
+      <polygon points="20,5 35,30 20,22" fill="var(--proof)" opacity="0.55"/>
+      <polygon points="20,5 5,30 20,22" fill="var(--axis)" opacity="0.35"/>
+      <circle cx="20" cy="22" r="2.4" fill="var(--solution)"/>
+      <text x="20" y="20" text-anchor="middle" font-family="JetBrains Mono,monospace"
+            font-size="8" fill="var(--qed)">Pi</text>
+    </svg>
+    <div>
+      <h1 id="title">投影 · 换角度看</h1>
+      <div class="code">EEG · M28 · PROJ</div>
+    </div>
+  </div>
+
+  <div class="intro" id="intro">
+    <span id="introZh">如果换一个新角度去看这团信号, 会不会某些差异被放大? 投影 = 把每个箭头压到一根方向轴上, 看影子。</span>
+    <div class="en" id="introEn">Project the cloud onto a chosen direction; some angles enlarge the gap.</div>
+  </div>
+
+  <div class="guide-label" id="guideLabel">观察重点</div>
+  <ul class="guide" id="guide"></ul>
+
+  <button class="lang-btn" id="langBtn">中 / EN</button>
+</aside>
+
+<main class="stage">
+  <canvas id="c"></canvas>
+  <div class="hud">
+    <div class="hud-row"><span class="hud-lbl" id="hudL1">frame</span><span class="hud-val" id="hudV1">1/5</span></div>
+    <div class="hud-row"><span class="hud-lbl" id="hudL2">w-hat angle</span><span class="hud-val" id="hudV2">--</span></div>
+    <div class="hud-row"><span class="hud-lbl" id="hudL3">proj v.w</span><span class="hud-val" id="hudV3">--</span></div>
+    <div class="hud-row"><span class="hud-lbl" id="hudL4">L/R gap</span><span class="hud-val" id="hudV4">--</span></div>
+  </div>
+  <div class="sub">
+    <div class="sub-zh" id="subZh"></div>
+    <div class="sub-en" id="subEn"></div>
+  </div>
+</main>
+
+</div>
+
+<script>
+'use strict';
+
+// ====================== Palette (resolved oklch) ======================
+var P = {
+  bg0:'oklch(0.14 0.035 265)', bg2:'oklch(0.22 0.045 265)', bg3:'oklch(0.28 0.05 265)',
+  line:'oklch(0.35 0.05 265 / 0.35)', lineStrong:'oklch(0.55 0.08 265 / 0.55)',
+  fg:'oklch(0.96 0.01 265)', fgDim:'oklch(0.75 0.02 265)', fgMute:'oklch(0.55 0.03 265)',
+  accent:'oklch(0.72 0.17 245)',
+  axis:'oklch(0.72 0.17 245)', proof:'oklch(0.52 0.16 245)', shadow:'oklch(0.35 0.10 245)',
+  solution:'oklch(0.92 0.08 240)', qed:'oklch(0.85 0.14 85)',
+  left:'oklch(0.85 0.14 85)',     // left-hand class cloud = QED gold
+  right:'oklch(0.72 0.17 245)'    // right-hand class cloud = AXIS blue
+};
+
+// ====================== i18n ======================
+var LANG='cn';
+var I18N = {
+  title:{cn:'投影 · 换角度看', en:'Projection · new view'},
+  introZh:{cn:'如果换一个新角度去看这团信号, 会不会某些差异被放大? 投影 = 把每个箭头压到一根方向轴上, 看影子。',
+           en:'If we look at this cloud from a new angle, can some differences be enlarged? Projection squashes each arrow onto a direction axis — read the shadow.'},
+  introEn:{cn:'Project the cloud onto a chosen direction; some angles enlarge the gap.',
+           en:'proj = v dot w-hat = shadow length on the axis.'},
+  guideLabel:{cn:'观察重点', en:'WATCH FOR'},
+  guide:{cn:['· 选一个新方向 w-hat','· 箭头垂直落影到轴','· proj = v dot w (内积)','· 转方向, 差异忽大忽小'],
+         en:['· pick a new direction w-hat','· arrow drops onto the axis','· proj = v dot w (inner product)','· rotate: the gap grows/shrinks']},
+  hudL1:{cn:'frame', en:'frame'}, hudL2:{cn:'w-hat angle', en:'w-hat angle'},
+  hudL3:{cn:'proj v.w', en:'proj v.w'}, hudL4:{cn:'L/R gap', en:'L/R gap'},
+  // frame titles
+  f1t:{cn:'二维信号箭头云 — 现在选一个新方向 w-hat', en:'2D signal-arrow cloud — now pick a new direction w-hat'},
+  f2t:{cn:'投影: 把每个箭头垂直压到 w-hat 轴上, 得一个影子长度', en:'Project: drop each arrow perpendicular onto the w-hat axis, get a shadow length'},
+  f3t:{cn:'公式: proj = v dot w-hat (分量相乘再相加 = 影子长度)', en:'Formula: proj = v dot w-hat (component products summed = shadow length)'},
+  f4t:{cn:'换方向 w-hat, 投影后的一维信号不同 — 差异忽大忽小', en:'Rotate w-hat: the 1-D projection changes — the gap grows and shrinks'},
+  f5t:{cn:'投影 = 把高维信号压到一个方向看, 选对方向放大差异', en:'Projection = compress high-D signal onto one direction; the right one enlarges the gap'},
+  // subtitles
+  s1zh:{cn:'这团是 M27 的 (C3, C4) 箭头云 — 每个点是一个二维箭头 v',
+        en:'This is the M27 (C3, C4) arrow cloud — each point is a 2-D arrow v'},
+  s1en:{cn:'我们画一根单位向量 w-hat, 当作一个新的观察方向。',
+        en:'We draw a unit vector w-hat as a new direction to look along.'},
+  s2zh:{cn:'把每个箭头垂直落到 w-hat 轴上, 留下的影子就是投影值',
+        en:'Drop each arrow perpendicular onto the w-hat axis; the shadow left behind is the projection'},
+  s2en:{cn:'二维的一团点, 被压成了轴上的一串数。',
+        en:'A 2-D cloud becomes a string of numbers along one axis.'},
+  s3zh:{cn:'影子长度 = v dot w-hat = vx*wx + vy*wy (内积: 对应分量相乘再相加)',
+        en:'Shadow length = v dot w-hat = vx*wx + vy*wy (inner product: multiply matching parts, then add)'},
+  s3en:{cn:'因为 w-hat 是单位向量, 内积刚好等于几何上的影子长度。',
+        en:'Since w-hat is a unit vector, the inner product equals the geometric shadow length.'},
+  s4zh:{cn:'转动 w-hat 试不同方向: 某些方向左右手两团影子分得很开, 某些方向叠在一起',
+        en:'Rotate w-hat through directions: some pull the two hand-clouds far apart, some overlap them'},
+  s4en:{cn:'同一团数据, 投影方向不同, 放大的差异也不同。',
+        en:'Same data, different projection direction, different difference enlarged.'},
+  s5zh:{cn:'换个角度投影, 能放大想要的差异',
+        en:'Project from a new angle to enlarge the difference you want'},
+  s5en:{cn:'下节 M29: CSP 会自动替你找出那条让左右手差异最大的方向。',
+        en:'Next M29: CSP automatically finds the direction that maximizes the left/right gap.'},
+  // canvas labels
+  lblWhat:{cn:'w-hat (单位方向)', en:'w-hat (unit dir)'},
+  lblV:{cn:'箭头 v', en:'arrow v'},
+  lblShadow:{cn:'影子 = 投影值', en:'shadow = proj'},
+  lblPerp:{cn:'垂直落影', en:'perpendicular drop'},
+  lblDot:{cn:'内积 (dot)', en:'inner product (dot)'},
+  lblLeft:{cn:'左手 (想象左手)', en:'left hand'},
+  lblRight:{cn:'右手 (想象右手)', en:'right hand'},
+  lblAxis1D:{cn:'投影后的一维信号', en:'1-D signal after projection'},
+  lblWide:{cn:'这个方向: 左右分得开', en:'this direction: well separated'},
+  lblNarrow:{cn:'这个方向: 两团叠在一起', en:'this direction: clouds overlap'},
+  lblTake:{cn:'选对方向 = 差异最大 (CSP 要找的就是它)', en:'right direction = max gap (this is what CSP seeks)'}
+};
+function t(k){ return (I18N[k]&&I18N[k][LANG]) || (I18N[k]&&I18N[k].en) || k; }
+
+function refreshI18N(){
+  document.getElementById('title').textContent = t('title');
+  document.getElementById('introZh').textContent = t('introZh');
+  document.getElementById('introEn').textContent = t('introEn');
+  document.getElementById('guideLabel').textContent = t('guideLabel');
+  document.getElementById('guide').innerHTML = t('guide').map(function(x){return '<li>'+x+'</li>';}).join('');
+  document.getElementById('hudL1').textContent = t('hudL1');
+  document.getElementById('hudL2').textContent = t('hudL2');
+  document.getElementById('hudL3').textContent = t('hudL3');
+  document.getElementById('hudL4').textContent = t('hudL4');
+  document.getElementById('langBtn').textContent = LANG==='cn' ? '中 / EN' : 'EN / 中';
+  updateSub(curFrame);
+}
+document.getElementById('langBtn').addEventListener('click', function(){
+  LANG = LANG==='cn' ? 'en' : 'cn'; refreshI18N();
+});
+
+// ====================== Canvas ======================
+var cv = document.getElementById('c');
+var ctx = cv.getContext('2d');
+var W=0, H=0, DPR=1;
+function resize(){
+  var rect = cv.parentElement.getBoundingClientRect();
+  if(rect.width<1 || rect.height<1) return;
+  DPR = Math.min(window.devicePixelRatio||1, 2);
+  cv.width = rect.width*DPR; cv.height = rect.height*DPR;
+  cv.style.width = rect.width+'px'; cv.style.height = rect.height+'px';
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  W = rect.width; H = rect.height;
+}
+window.addEventListener('resize', resize);
+resize(); setTimeout(resize,200); setTimeout(resize,600);
+document.fonts.ready.then(function(){ resize(); });
+
+// ====================== Deterministic data ======================
+function rnd(seed){ var x = Math.sin(seed*12.9898)*43758.5453; return x - Math.floor(x); }
+function gaussPair(seed){
+  var u1 = rnd(seed*1.7+0.13); var u2 = rnd(seed*2.3+0.71);
+  if(u1 < 1e-4) u1 = 1e-4;
+  var r = Math.sqrt(-2*Math.log(u1));
+  return [r*Math.cos(2*Math.PI*u2), r*Math.sin(2*Math.PI*u2)];
+}
+// build a cloud centered at (mx,my) in std units, with anisotropy along x (signal-arrow look)
+function buildCloud(n, mx, my, sx, sy, seed){
+  var pts=[];
+  for(var i=0;i<n;i++){
+    var g = gaussPair(seed + i*0.37);
+    pts.push({x: mx + g[0]*sx, y: my + g[1]*sy});
+  }
+  return pts;
+}
+// One mixed cloud (F1-F4 generic) — a single elongated blob of 2-D signal arrows
+var CLOUD = buildCloud(46, 0.0, 0.0, 1.35, 0.65, 5);
+// Two-class clouds for F4/F5: left-hand vs right-hand, separated along a diagonal axis.
+// Left class centered up-right along direction ~63deg; right class down-left. So the
+// separation axis is the up-right diagonal; projecting onto it spreads them, onto the
+// perpendicular collapses them.
+var sepAng = 63 * Math.PI/180;       // the truly separating direction (deg)
+var sepDx = Math.cos(sepAng), sepDy = Math.sin(sepAng);
+function buildClass(n, sign, seed){
+  // mean offset 1.5 std along the separating axis; isotropic-ish spread
+  var pts=[];
+  var ox = sign*1.5*sepDx, oy = sign*1.5*sepDy;
+  for(var i=0;i<n;i++){
+    var g = gaussPair(seed + i*0.41);
+    pts.push({x: ox + g[0]*0.7, y: oy + g[1]*0.7});
+  }
+  return pts;
+}
+var CLOUD_L = buildClass(30, +1, 13);   // left hand (up-right)
+var CLOUD_R = buildClass(30, -1, 29);   // right hand (down-left)
+
+// covariance-style mean of projections, returns separation between class means along dir
+function classGap(cw){
+  var wx=cw[0], wy=cw[1];
+  var mL=0, mR=0;
+  for(var i=0;i<CLOUD_L.length;i++){ mL += CLOUD_L[i].x*wx + CLOUD_L[i].y*wy; }
+  for(var j=0;j<CLOUD_R.length;j++){ mR += CLOUD_R[j].x*wx + CLOUD_R[j].y*wy; }
+  mL/=CLOUD_L.length; mR/=CLOUD_R.length;
+  return Math.abs(mL-mR);
+}
+
+// ====================== Timeline ======================
+var FRAME_DUR = 7000;          // ms per frame -> 35s cycle for 5 frames
+var NFR = 5;
+var curFrame = 0;
+var animStart = performance.now();
+
+function updateSub(f){
+  var z=['s1zh','s2zh','s3zh','s4zh','s5zh'][f];
+  var e=['s1en','s2en','s3en','s4en','s5en'][f];
+  document.getElementById('subZh').textContent = t(z);
+  document.getElementById('subEn').textContent = t(e);
+  document.getElementById('hudV1').textContent = (f+1)+'/5';
+}
+
+// ====================== Drawing helpers ======================
+function easeIO(x){ return x<0.5 ? 2*x*x : 1-Math.pow(-2*x+2,2)/2; }
+function clamp(x,a,b){ return x<a?a:(x>b?b:x); }
+
+function frameTitle(txt){
+  ctx.fillStyle = P.fg;
+  ctx.font = "800 19px 'Space Grotesk','Inter',sans-serif";
+  ctx.textAlign = 'center';
+  ctx.fillText(txt, W/2, 38);
+}
+
+// scatter axis box + grid. cx,cy center; half px half-extent; unit = px per std unit
+function axisBox(cx, cy, half){
+  ctx.save();
+  ctx.strokeStyle = P.line; ctx.lineWidth = 1;
+  for(var g=-2;g<=2;g++){
+    var gp = g/2.4*half;
+    ctx.beginPath(); ctx.moveTo(cx+gp, cy-half); ctx.lineTo(cx+gp, cy+half); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(cx-half, cy-gp); ctx.lineTo(cx+half, cy-gp); ctx.stroke();
+  }
+  ctx.strokeStyle = P.lineStrong; ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.moveTo(cx-half, cy); ctx.lineTo(cx+half, cy); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(cx, cy-half); ctx.lineTo(cx, cy+half); ctx.stroke();
+  // axis labels (C3 / C4)
+  ctx.fillStyle = P.fgMute;
+  ctx.font = "700 11px 'JetBrains Mono',monospace";
+  ctx.textAlign='left';  ctx.fillText('C3', cx+half-22, cy-8);
+  ctx.textAlign='right'; ctx.fillText('C4', cx-8, cy-half+12);
+  ctx.restore();
+}
+
+function arrowHead(x1,y1,x2,y2,color,lw){
+  ctx.save();
+  ctx.strokeStyle=color; ctx.fillStyle=color; ctx.lineWidth=lw||2;
+  ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke();
+  var a=Math.atan2(y2-y1,x2-x1), s=9;
+  ctx.beginPath(); ctx.moveTo(x2,y2);
+  ctx.lineTo(x2-s*Math.cos(a-0.4), y2-s*Math.sin(a-0.4));
+  ctx.lineTo(x2-s*Math.cos(a+0.4), y2-s*Math.sin(a+0.4));
+  ctx.closePath(); ctx.fill();
+  ctx.restore();
+}
+
+function dot(x,y,r,color,alpha){
+  ctx.save(); ctx.globalAlpha=alpha==null?1:alpha;
+  ctx.fillStyle=color; ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2); ctx.fill();
+  ctx.restore();
+}
+
+// ====================== Frame 1: arrow cloud + new direction w-hat ======================
+function drawF1(pr){
+  frameTitle(t('f1t'));
+  var cx=W*0.46, cy=H*0.52, half=Math.min(W*0.30, H*0.34), unit=half/2.6;
+  axisBox(cx, cy, half);
+
+  // appear the cloud (each point is a 2-D arrow from origin; show as dots, a few as arrows)
+  var n = Math.floor(CLOUD.length * clamp(pr*2,0,1));
+  for(var i=0;i<n;i++){
+    var px=cx+CLOUD[i].x*unit, py=cy-CLOUD[i].y*unit;
+    dot(px,py,2.6,P.accent,0.55);
+  }
+  // a few sample arrows from origin to emphasize "each point = arrow v"
+  if(pr>0.15){
+    var aa=clamp((pr-0.15)*3,0,1);
+    var samp=[3,11,22];
+    for(var s=0;s<samp.length;s++){
+      var k=samp[s]; if(k>=n) continue;
+      var ex=cx+CLOUD[k].x*unit, ey=cy-CLOUD[k].y*unit;
+      ctx.globalAlpha=aa*0.8;
+      arrowHead(cx,cy,ex,ey,P.solution,1.6);
+      ctx.globalAlpha=1;
+    }
+    ctx.fillStyle=P.solution; ctx.font="600 11px 'Inter',sans-serif"; ctx.textAlign='left';
+    ctx.globalAlpha=aa;
+    var lx=cx+CLOUD[3].x*unit, ly=cy-CLOUD[3].y*unit;
+    ctx.fillText(t('lblV'), lx+8, ly-6);
+    ctx.globalAlpha=1;
+  }
+
+  // w-hat unit direction appears in second half, drawn as a bold accent axis
+  if(pr>0.5){
+    var wp=easeIO(clamp((pr-0.5)*2.6,0,1));
+    var ang=40*Math.PI/180;
+    var wx=Math.cos(ang), wy=Math.sin(ang);
+    var L=half*1.05*wp;
+    ctx.save();
+    ctx.strokeStyle=P.axis; ctx.lineWidth=2.4; ctx.setLineDash([7,5]);
+    ctx.beginPath(); ctx.moveTo(cx-wx*L, cy+wy*L); ctx.lineTo(cx+wx*L, cy-wy*L); ctx.stroke();
+    ctx.setLineDash([]);
+    // unit arrow w-hat (length = 1 unit)
+    arrowHead(cx, cy, cx+wx*unit, cy-wy*unit, P.qed, 3);
+    dot(cx,cy,3,P.fg,1);
+    ctx.fillStyle=P.qed; ctx.font="700 12px 'JetBrains Mono',monospace"; ctx.textAlign='left';
+    ctx.fillText('w-hat', cx+wx*unit+6, cy-wy*unit-6);
+    ctx.restore();
+  }
+
+  document.getElementById('hudV2').textContent = pr>0.5 ? '40 deg' : '--';
+  document.getElementById('hudV3').textContent = '--';
+  document.getElementById('hudV4').textContent = '--';
+}
+
+// ====================== Frame 2: perpendicular projection onto w-hat ======================
+function drawF2(pr){
+  frameTitle(t('f2t'));
+  var cx=W*0.46, cy=H*0.52, half=Math.min(W*0.30, H*0.34), unit=half/2.6;
+  axisBox(cx, cy, half);
+
+  var ang=40*Math.PI/180;
+  var wx=Math.cos(ang), wy=Math.sin(ang);   // screen y is down; we use -wy for up
+  // projection axis (full)
+  var L=half*1.05;
+  ctx.save();
+  ctx.strokeStyle=P.axis; ctx.lineWidth=2.2; ctx.setLineDash([7,5]);
+  ctx.beginPath(); ctx.moveTo(cx-wx*L, cy+wy*L); ctx.lineTo(cx+wx*L, cy-wy*L); ctx.stroke();
+  ctx.setLineDash([]);
+  arrowHead(cx, cy, cx+wx*unit, cy-wy*unit, P.qed, 3);
+  ctx.fillStyle=P.qed; ctx.font="700 12px 'JetBrains Mono',monospace"; ctx.textAlign='left';
+  ctx.fillText('w-hat', cx+wx*unit+6, cy-wy*unit-6);
+  ctx.restore();
+
+  // for each point: dot, drop-line to axis, shadow dot on axis
+  var prog=easeIO(clamp(pr*1.4,0,1));
+  for(var i=0;i<CLOUD.length;i++){
+    var vx=CLOUD[i].x, vy=CLOUD[i].y;
+    var px=cx+vx*unit, py=cy-vy*unit;
+    // scalar projection on w-hat (math coords, up positive): proj = vx*wx + vy*wy
+    var proj = vx*wx + vy*wy;
+    var sx=cx+proj*wx*unit, sy=cy-proj*wy*unit;  // foot on axis
+    // original dot
+    dot(px,py,2.6,P.proof,0.55);
+    // drop line (perpendicular) grows with prog
+    var dx=(sx-px)*prog, dy=(sy-py)*prog;
+    ctx.save(); ctx.strokeStyle=P.shadow; ctx.lineWidth=1; ctx.globalAlpha=0.7;
+    ctx.beginPath(); ctx.moveTo(px,py); ctx.lineTo(px+dx, py+dy); ctx.stroke();
+    ctx.restore();
+    // shadow dot on axis
+    if(prog>0.55){
+      dot(sx,sy,2.8,P.solution, clamp((prog-0.55)*3,0,1));
+    }
+  }
+  // label
+  if(prog>0.6){
+    var fa=clamp((prog-0.6)*3,0,1);
+    ctx.save(); ctx.globalAlpha=fa;
+    ctx.fillStyle=P.solution; ctx.font="700 12px 'Inter',sans-serif"; ctx.textAlign='center';
+    ctx.fillText(t('lblShadow'), cx+wx*half*0.78, cy-wy*half*0.78 + (wy>0?18:-12));
+    ctx.fillStyle=P.shadow; ctx.font="600 10px 'Inter',sans-serif";
+    ctx.fillText(t('lblPerp'), cx-half*0.55, cy+half*0.78);
+    ctx.restore();
+  }
+
+  document.getElementById('hudV2').textContent = '40 deg';
+  document.getElementById('hudV3').textContent = 'shadow';
+  document.getElementById('hudV4').textContent = '--';
+}
+
+// ====================== Frame 3: formula proj = v dot w-hat ======================
+function drawF3(pr){
+  frameTitle(t('f3t'));
+  var cx=W*0.30, cy=H*0.50, half=Math.min(W*0.20, H*0.30), unit=half/2.0;
+  axisBox(cx, cy, half);
+
+  var ang=40*Math.PI/180;
+  var wx=Math.cos(ang), wy=Math.sin(ang);
+  // axis + w-hat unit arrow
+  var L=half*1.05;
+  ctx.save();
+  ctx.strokeStyle=P.axis; ctx.lineWidth=2; ctx.setLineDash([6,4]);
+  ctx.beginPath(); ctx.moveTo(cx-wx*L, cy+wy*L); ctx.lineTo(cx+wx*L, cy-wy*L); ctx.stroke();
+  ctx.setLineDash([]);
+  arrowHead(cx,cy,cx+wx*unit,cy-wy*unit,P.qed,3);
+  ctx.restore();
+
+  // one chosen demo arrow v = (1.7, 0.9)
+  var vX=1.7, vY=0.9;
+  var ex=cx+vX*unit, ey=cy-vY*unit;
+  arrowHead(cx,cy,ex,ey,P.solution,2.6);
+  ctx.fillStyle=P.solution; ctx.font="700 11px 'JetBrains Mono',monospace"; ctx.textAlign='left';
+  ctx.fillText('v=(1.7, 0.9)', ex+6, ey-4);
+  ctx.fillStyle=P.qed; ctx.fillText('w-hat', cx+wx*unit+6, cy-wy*unit-6);
+
+  // projection foot + drop line + shadow
+  var proj = vX*wx + vY*wy;   // = vx*wx + vy*wy
+  var sx=cx+proj*wx*unit, sy=cy-proj*wy*unit;
+  ctx.save(); ctx.strokeStyle=P.shadow; ctx.lineWidth=1.2; ctx.setLineDash([3,3]);
+  ctx.beginPath(); ctx.moveTo(ex,ey); ctx.lineTo(sx,sy); ctx.stroke();
+  ctx.setLineDash([]); ctx.restore();
+  // shadow segment from origin to foot (the length we measure)
+  ctx.save(); ctx.strokeStyle=P.qed; ctx.lineWidth=4; ctx.globalAlpha=0.9;
+  ctx.beginPath(); ctx.moveTo(cx,cy); ctx.lineTo(sx,sy); ctx.stroke(); ctx.restore();
+  dot(sx,sy,3.4,P.qed,1);
+
+  // ---- formula panel on right ----
+  var bx=W*0.56, by=H*0.30, bw=W*0.38, bh=H*0.40;
+  ctx.save();
+  ctx.fillStyle=P.bg2; ctx.strokeStyle=P.lineStrong; ctx.lineWidth=1.4;
+  ctx.fillRect(bx,by,bw,bh); ctx.strokeRect(bx,by,bw,bh);
+  ctx.translate(3,3); ctx.fillStyle='rgba(0,0,0,0)'; ctx.restore();
+
+  ctx.save();
+  ctx.fillStyle=P.fgMute; ctx.font="700 10px 'JetBrains Mono',monospace"; ctx.textAlign='left';
+  ctx.fillText(t('lblDot'), bx+22, by+30);
+  // big formula
+  ctx.fillStyle=P.fg; ctx.font="800 26px 'JetBrains Mono',monospace";
+  ctx.fillText('proj = v . w-hat', bx+22, by+72);
+  // expansion appears with progress
+  var fa=clamp(pr*1.6,0,1);
+  ctx.globalAlpha=fa;
+  ctx.fillStyle=P.accent; ctx.font="700 19px 'JetBrains Mono',monospace";
+  ctx.fillText('= vx*wx + vy*wy', bx+22, by+114);
+  // numeric plug-in
+  if(pr>0.45){
+    var na=clamp((pr-0.45)*2.4,0,1); ctx.globalAlpha=na;
+    var wxs=wx.toFixed(2), wys=wy.toFixed(2);
+    ctx.fillStyle=P.fgDim; ctx.font="600 15px 'JetBrains Mono',monospace";
+    ctx.fillText('= 1.7*'+wxs+' + 0.9*'+wys, bx+22, by+150);
+    ctx.fillStyle=P.qed; ctx.font="800 22px 'JetBrains Mono',monospace";
+    ctx.fillText('= '+proj.toFixed(2), bx+22, by+188);
+  }
+  ctx.globalAlpha=1;
+  // note: w-hat is unit -> dot == geometric shadow length
+  ctx.fillStyle=P.fgMute; ctx.font="italic 600 11px 'Inter',sans-serif";
+  ctx.fillText(LANG==='cn'?'w-hat 是单位向量, 所以内积 = 影子长度':'w-hat is unit, so dot = shadow length', bx+22, by+bh-16);
+  ctx.restore();
+
+  document.getElementById('hudV2').textContent = '40 deg';
+  document.getElementById('hudV3').textContent = proj.toFixed(2);
+  document.getElementById('hudV4').textContent = '--';
+}
+
+// ====================== Frame 4: rotate w-hat, two-class gap grows/shrinks ======================
+function drawF4(pr){
+  frameTitle(t('f4t'));
+  var cx=W*0.38, cy=H*0.50, half=Math.min(W*0.24, H*0.32), unit=half/2.6;
+  axisBox(cx, cy, half);
+
+  // rotate w-hat from 0 to 180 deg across the frame
+  var ang = pr*Math.PI;           // 0 -> 180 deg
+  var wx=Math.cos(ang), wy=Math.sin(ang);
+  var L=half*1.08;
+
+  // two-class clouds
+  for(var i=0;i<CLOUD_L.length;i++){
+    var p=CLOUD_L[i]; dot(cx+p.x*unit, cy-p.y*unit, 2.8, P.left, 0.6);
+  }
+  for(var j=0;j<CLOUD_R.length;j++){
+    var q=CLOUD_R[j]; dot(cx+q.x*unit, cy-q.y*unit, 2.8, P.right, 0.6);
+  }
+  // class legend
+  ctx.fillStyle=P.left; ctx.font="700 10px 'Inter',sans-serif"; ctx.textAlign='left';
+  ctx.fillText(t('lblLeft'), cx-half, cy-half-8);
+  ctx.fillStyle=P.right; ctx.textAlign='right';
+  ctx.fillText(t('lblRight'), cx+half, cy-half-8);
+
+  // projection axis
+  ctx.save();
+  ctx.strokeStyle=P.axis; ctx.lineWidth=2.2; ctx.setLineDash([7,5]);
+  ctx.beginPath(); ctx.moveTo(cx-wx*L, cy+wy*L); ctx.lineTo(cx+wx*L, cy-wy*L); ctx.stroke();
+  ctx.setLineDash([]);
+  arrowHead(cx,cy,cx+wx*unit,cy-wy*unit,P.qed,3);
+  ctx.fillStyle=P.qed; ctx.font="700 11px 'JetBrains Mono',monospace"; ctx.textAlign='left';
+  ctx.fillText('w-hat', cx+wx*unit+6, cy-wy*unit-4);
+  ctx.restore();
+
+  // --- 1-D projection strip on the right: project both classes onto w-hat ---
+  var sx0=W*0.66, sy0=H*0.50, sLen=W*0.26;
+  // draw the 1-D axis
+  ctx.save();
+  ctx.strokeStyle=P.lineStrong; ctx.lineWidth=2;
+  ctx.beginPath(); ctx.moveTo(sx0, sy0); ctx.lineTo(sx0+sLen, sy0); ctx.stroke();
+  arrowHead(sx0+sLen-1, sy0, sx0+sLen, sy0, P.fgMute, 2);
+  ctx.fillStyle=P.fgMute; ctx.font="600 10px 'JetBrains Mono',monospace"; ctx.textAlign='left';
+  ctx.fillText(t('lblAxis1D'), sx0, sy0-58);
+  ctx.restore();
+
+  // project & plot histogram-ish marks. proj range ~[-3,3] -> map to strip
+  function projVal(p){ return p.x*wx + p.y*wy; }
+  function mapX(v){ return sx0 + ((v+3)/6)*sLen; }
+  var mL=0,mR=0;
+  for(var a=0;a<CLOUD_L.length;a++){ var v=projVal(CLOUD_L[a]); mL+=v; dot(mapX(v), sy0-6-(a%6)*4, 2.4, P.left, 0.8); }
+  for(var b=0;b<CLOUD_R.length;b++){ var w2=projVal(CLOUD_R[b]); mR+=w2; dot(mapX(w2), sy0+6+(b%6)*4, 2.4, P.right, 0.8); }
+  mL/=CLOUD_L.length; mR/=CLOUD_R.length;
+  // class means as ticks
+  ctx.save();
+  ctx.strokeStyle=P.left; ctx.lineWidth=2;
+  ctx.beginPath(); ctx.moveTo(mapX(mL), sy0-34); ctx.lineTo(mapX(mL), sy0-2); ctx.stroke();
+  ctx.strokeStyle=P.right; ctx.lineWidth=2;
+  ctx.beginPath(); ctx.moveTo(mapX(mR), sy0+2); ctx.lineTo(mapX(mR), sy0+34); ctx.stroke();
+  // gap bar between means
+  var gap=Math.abs(mL-mR);
+  ctx.strokeStyle=P.qed; ctx.lineWidth=2; ctx.setLineDash([4,3]);
+  ctx.beginPath(); ctx.moveTo(mapX(mL), sy0-44); ctx.lineTo(mapX(mR), sy0-44); ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle=P.qed; ctx.font="700 11px 'JetBrains Mono',monospace"; ctx.textAlign='center';
+  ctx.fillText('gap '+gap.toFixed(2), (mapX(mL)+mapX(mR))/2, sy0-50);
+  ctx.restore();
+
+  // commentary: wide vs narrow
+  ctx.fillStyle = gap>2.0 ? P.qed : (gap<0.8 ? P.fgMute : P.fgDim);
+  ctx.font="700 13px 'Inter',sans-serif"; ctx.textAlign='center';
+  var msg = gap>2.0 ? t('lblWide') : (gap<0.8 ? t('lblNarrow') : '');
+  if(msg) ctx.fillText(msg, sx0+sLen/2, sy0+72);
+
+  var degNow = Math.round(ang*180/Math.PI);
+  document.getElementById('hudV2').textContent = degNow+' deg';
+  document.getElementById('hudV3').textContent = 'L vs R';
+  document.getElementById('hudV4').textContent = gap.toFixed(2);
+}
+
+// ====================== Frame 5: takeaway (gold) ======================
+function drawF5(pr){
+  frameTitle(t('f5t'));
+  var cx=W*0.30, cy=H*0.48, half=Math.min(W*0.18, H*0.28), unit=half/2.6;
+  axisBox(cx, cy, half);
+
+  // freeze on the BEST separating direction (sepAng) — the gap is maximal
+  var wx=Math.cos(sepAng), wy=Math.sin(sepAng);
+  var L=half*1.1;
+  for(var i=0;i<CLOUD_L.length;i++){ var p=CLOUD_L[i]; dot(cx+p.x*unit, cy-p.y*unit, 2.6, P.left, 0.6); }
+  for(var j=0;j<CLOUD_R.length;j++){ var q=CLOUD_R[j]; dot(cx+q.x*unit, cy-q.y*unit, 2.6, P.right, 0.6); }
+  ctx.save();
+  ctx.strokeStyle=P.axis; ctx.lineWidth=2.2; ctx.setLineDash([7,5]);
+  ctx.beginPath(); ctx.moveTo(cx-wx*L, cy+wy*L); ctx.lineTo(cx+wx*L, cy-wy*L); ctx.stroke();
+  ctx.setLineDash([]);
+  // gold glow on best w-hat at the key moment
+  var glow = 0.5 + 0.5*Math.sin(pr*Math.PI*2);
+  ctx.shadowColor=P.qed; ctx.shadowBlur=14*glow;
+  arrowHead(cx,cy,cx+wx*unit,cy-wy*unit,P.qed,3.4);
+  ctx.shadowBlur=0;
+  ctx.fillStyle=P.qed; ctx.font="700 11px 'JetBrains Mono',monospace"; ctx.textAlign='left';
+  ctx.fillText('w-hat*', cx+wx*unit+6, cy-wy*unit-4);
+  ctx.restore();
+
+  // takeaway banner (gold), grows in
+  var ba=easeIO(clamp(pr*1.5,0,1));
+  var bx=W*0.54, by=H*0.30, bw=W*0.40, bh=H*0.40;
+  ctx.save(); ctx.globalAlpha=ba;
+  ctx.fillStyle=P.bg2; ctx.strokeStyle=P.qed; ctx.lineWidth=2;
+  ctx.fillRect(bx,by,bw,bh); ctx.strokeRect(bx,by,bw,bh);
+  ctx.fillStyle=P.qed; ctx.font="800 17px 'Space Grotesk','Inter',sans-serif"; ctx.textAlign='left';
+  wrapText(t('s5zh').length>0 ? (LANG==='cn'?'换个角度投影,':'Project from a new') : '', bx+20, by+44, bw-40, 24);
+  // headline (gold)
+  ctx.fillStyle=P.qed; ctx.font="800 19px 'Space Grotesk','Inter',sans-serif";
+  var head = LANG==='cn' ? '换个角度投影, 能放大想要的差异' : 'A new angle can enlarge the difference you want';
+  wrapText(head, bx+20, by+44, bw-40, 26);
+  // formula reminder
+  ctx.fillStyle=P.fgDim; ctx.font="600 13px 'JetBrains Mono',monospace";
+  ctx.fillText('proj = v . w-hat', bx+20, by+bh*0.55);
+  // CSP teaser
+  ctx.fillStyle=P.solution; ctx.font="600 12px 'Inter',sans-serif";
+  wrapText(t('lblTake'), bx+20, by+bh*0.55+26, bw-40, 18);
+  ctx.fillStyle=P.fgMute; ctx.font="italic 600 11px 'Inter',sans-serif";
+  wrapText(LANG==='cn'?'下节 M29: CSP 自动找出这条最佳方向':'Next M29: CSP finds this best direction automatically', bx+20, by+bh-22, bw-40, 16);
+  ctx.restore();
+
+  document.getElementById('hudV2').textContent = Math.round(sepAng*180/Math.PI)+' deg';
+  document.getElementById('hudV3').textContent = 'proj 1-D';
+  document.getElementById('hudV4').textContent = classGap([wx,wy]).toFixed(2);
+}
+
+function wrapText(text, x, y, maxW, lh){
+  var words = (''+text).split(' ');
+  var line='', yy=y;
+  for(var i=0;i<words.length;i++){
+    var test = line + words[i] + ' ';
+    if(ctx.measureText(test).width > maxW && line.length>0){
+      ctx.fillText(line.trim(), x, yy); line = words[i]+' '; yy += lh;
+    } else { line = test; }
+  }
+  ctx.fillText(line.trim(), x, yy);
+}
+
+// ====================== Render loop ======================
+function render(){
+  var now = performance.now();
+  var tt = now - animStart;
+  var idx = Math.floor((tt % (FRAME_DUR*NFR)) / FRAME_DUR);
+  var pr = ((tt % (FRAME_DUR*NFR)) % FRAME_DUR) / FRAME_DUR;
+  if(idx !== curFrame){ curFrame = idx; updateSub(curFrame); }
+
+  ctx.clearRect(0,0,W,H);
+  ctx.fillStyle = P.bg0; ctx.fillRect(0,0,W,H);
+
+  if(curFrame===0) drawF1(pr);
+  else if(curFrame===1) drawF2(pr);
+  else if(curFrame===2) drawF3(pr);
+  else if(curFrame===3) drawF4(pr);
+  else drawF5(pr);
+
+  requestAnimationFrame(render);
+}
+
+refreshI18N();
+updateSub(0);
+requestAnimationFrame(render);
+</script>
+</body>
+</html>

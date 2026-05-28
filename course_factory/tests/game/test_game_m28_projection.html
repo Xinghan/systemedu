@@ -1,0 +1,551 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>投影方向探索者</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;700&family=Inter:wght@400;600;800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+  /* 第 1 层 — 共享深空底 (B 类钉死, 禁米黄) */
+  :root{
+    --bg-0: oklch(0.14 0.035 265);
+    --bg-1: oklch(0.18 0.04 265);
+    --bg-2: oklch(0.22 0.045 265);
+    --bg-3: oklch(0.28 0.05 265);
+    --line: oklch(0.35 0.05 265 / 0.35);
+    --line-strong: oklch(0.55 0.08 265 / 0.55);
+    --fg: oklch(0.96 0.01 265);
+    --fg-dim: oklch(0.75 0.02 265);
+    --fg-mute: oklch(0.55 0.03 265);
+    --gold: oklch(0.85 0.14 85);
+    /* 第 2 层 — math signature accent (electric blue) */
+    --math: oklch(0.72 0.17 245);
+    /* 第 3 层 — MTH-06 Geometry Void 5 色 palette */
+    --axis: oklch(0.72 0.17 245);
+    --proof: oklch(0.52 0.16 245);
+    --shadow: oklch(0.35 0.10 245);
+    --solution: oklch(0.92 0.08 240);
+    --qed: oklch(0.85 0.14 85);
+    /* 两类信号 (left/right hand) — 用 palette 多色区分 */
+    --cls-left: oklch(0.68 0.18 25);   /* warm coral-red, left hand */
+    --cls-right: oklch(0.74 0.15 235); /* cool blue, right hand */
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;height:100vh;overflow:hidden;
+    background:var(--bg-0);font-family:'Noto Sans SC','Inter',sans-serif;color:var(--fg);}
+  body{display:flex;}
+  .mono{font-family:'JetBrains Mono',monospace;}
+
+  /* 200px 左侧栏 */
+  .game-sidebar{width:200px;flex-shrink:0;height:100vh;background:var(--bg-1);
+    border-right:1px solid var(--line);display:flex;flex-direction:column;gap:14px;padding:16px 14px;overflow-y:auto;}
+  .brand{font-size:15px;font-weight:800;line-height:1.3;color:var(--fg);}
+  .brand .sub{display:block;font-size:10px;font-weight:600;color:var(--math);font-family:'JetBrains Mono',monospace;margin-top:3px;letter-spacing:.5px;}
+  .goal{font-size:11.5px;line-height:1.6;color:var(--fg-dim);}
+  .goal b{color:var(--solution);}
+  .howlist{list-style:none;margin:0;padding:0;font-size:11px;line-height:1.5;color:var(--fg-mute);}
+  .howlist li{margin-bottom:5px;}
+
+  .panel{background:var(--bg-2);border:1px solid var(--line);padding:9px 10px;
+    box-shadow:3px 3px 0 var(--bg-0);}
+  .hud-row{display:flex;justify-content:space-between;align-items:baseline;gap:8px;line-height:1.7;}
+  .hud-lbl{color:var(--fg-mute);font-size:10px;font-family:'JetBrains Mono',monospace;letter-spacing:.3px;}
+  .hud-val{color:var(--math);font-weight:700;font-size:14px;font-family:'JetBrains Mono',monospace;}
+
+  .challenge{background:var(--bg-2);border:1px dashed var(--math);padding:9px 11px;}
+  .ch-title{font-weight:700;font-size:11px;color:var(--math);margin-bottom:4px;font-family:'JetBrains Mono',monospace;}
+  .ch-text{font-size:11px;line-height:1.5;color:var(--fg-dim);}
+  .ch-hint{margin-top:5px;font-size:10px;line-height:1.4;color:var(--fg-mute);}
+
+  .btn{background:var(--bg-3);border:1px solid var(--line-strong);color:var(--fg);
+    font-weight:600;font-size:11.5px;padding:8px 10px;cursor:pointer;
+    box-shadow:2px 2px 0 var(--bg-0);transition:transform .08s,box-shadow .08s;text-align:center;}
+  .btn:hover{transform:translate(-1px,-1px);box-shadow:3px 3px 0 var(--bg-0);}
+  .btn:active{transform:translate(1px,1px);box-shadow:1px 1px 0 var(--bg-0);}
+  .lang-btn{margin-top:auto;background:var(--bg-3);border:1px solid var(--line-strong);
+    color:var(--fg);font-weight:600;font-size:11.5px;padding:8px 10px;cursor:pointer;
+    box-shadow:2px 2px 0 var(--bg-0);transition:transform .08s,box-shadow .08s;
+    font-family:'JetBrains Mono',monospace;}
+  .lang-btn:hover{transform:translate(-1px,-1px);box-shadow:3px 3px 0 var(--bg-0);}
+  .lang-btn:active{transform:translate(1px,1px);box-shadow:1px 1px 0 var(--bg-0);}
+
+  /* mascot Pi — 旋转四面体 */
+  .mascot{display:flex;align-items:center;gap:8px;}
+  .mascot svg{width:40px;height:40px;flex-shrink:0;}
+  .mascot .pi-say{font-size:10px;line-height:1.4;color:var(--fg-dim);font-style:italic;}
+
+  /* 主区 */
+  .game-main{flex:1;height:100vh;display:flex;flex-direction:column;gap:12px;padding:18px;position:relative;overflow:hidden;}
+  .main-head{display:flex;align-items:center;justify-content:space-between;flex-shrink:0;}
+  .main-title{font-size:14px;font-weight:700;color:var(--fg);}
+  .main-hint{font-size:11px;color:var(--fg-dim);}
+
+  .stage-grid{flex:1;display:grid;grid-template-columns:1fr 1fr;gap:12px;min-height:0;}
+  .stage-box{background:var(--bg-1);border:1px solid var(--line);position:relative;
+    display:flex;flex-direction:column;}
+  .stage-box canvas{position:absolute;inset:0;width:100%;height:100%;}
+
+  .slider-bar{background:var(--bg-2);border:1px solid var(--line);padding:11px 14px;
+    display:flex;align-items:center;gap:14px;flex-shrink:0;box-shadow:3px 3px 0 var(--bg-0);}
+  .slider-bar .sl-lbl{font-size:12px;font-weight:700;color:var(--math);width:120px;flex-shrink:0;}
+  .slider-bar input[type=range]{flex:1;accent-color:var(--math);height:4px;}
+  .slider-bar .sl-val{font-family:'JetBrains Mono',monospace;font-size:15px;font-weight:700;
+    color:var(--math);width:64px;text-align:right;flex-shrink:0;}
+
+  .toast{position:absolute;top:18px;left:50%;transform:translateX(-50%);
+    background:var(--bg-2);border:1px solid var(--gold);color:var(--gold);
+    padding:9px 16px;font-size:13px;font-weight:700;display:none;z-index:50;
+    box-shadow:4px 4px 0 var(--bg-0);}
+</style>
+</head>
+<body>
+
+<aside class="game-sidebar">
+  <div class="brand">投影方向探索者<span class="sub">MTH-06 / EEG M28</span></div>
+
+  <div class="mascot">
+    <svg id="piMascot" viewBox="0 0 48 48" aria-hidden="true">
+      <!-- Pi — 旋转四面体, 面上闪等式 -->
+      <polygon id="piFace1" points="24,6 42,38 6,38" fill="none" stroke="var(--math)" stroke-width="1.6"/>
+      <polygon id="piFace2" points="24,6 42,38 24,28" fill="var(--proof)" opacity="0.45"/>
+      <polygon id="piFace3" points="24,6 6,38 24,28" fill="var(--shadow)" opacity="0.6"/>
+      <line x1="24" y1="6" x2="24" y2="28" stroke="var(--line-strong)" stroke-width="0.8"/>
+      <text id="piEq" x="24" y="36" text-anchor="middle" font-size="7" font-family="JetBrains Mono,monospace" fill="var(--solution)">w</text>
+    </svg>
+    <span class="pi-say" id="piSay">Pi: 转转看, 哪个方向把红蓝分得最开?</span>
+  </div>
+
+  <p class="goal" id="goal">
+    转 <b>投影方向 ŵ</b>, 把每个信号点投到这条轴上。看 <b>左手红 / 右手蓝</b> 在一维上的分布。<b>找让两类分得最开的角度!</b>
+  </p>
+
+  <ul class="howlist" id="howlist">
+    <li>· 拖角度滑块转 ŵ 轴</li>
+    <li>· 看每个点的垂足投影</li>
+    <li>· 右侧 1D 分布: 红 / 蓝</li>
+    <li>· 分离度越高 = 越分得开</li>
+    <li>· 找最佳角度解锁徽章</li>
+  </ul>
+
+  <div class="panel">
+    <div class="hud-row"><span class="hud-lbl" id="lblTheta">ANGLE</span><span class="hud-val" id="vTheta">45 deg</span></div>
+    <div class="hud-row"><span class="hud-lbl" id="lblSep">SEPARATION</span><span class="hud-val mono" id="vSep">--</span></div>
+    <div class="hud-row"><span class="hud-lbl" id="lblBest">BEST SO FAR</span><span class="hud-val mono" id="vBest" style="color:var(--gold);">--</span></div>
+  </div>
+
+  <div class="challenge">
+    <div class="ch-title" id="chTitle">挑战</div>
+    <div class="ch-text" id="chText">找让分离度 > 2.5 的角度</div>
+    <div class="ch-hint" id="chHint">提示: 红点横排, 蓝点竖排, 想想哪个方向让它们投影后错开</div>
+  </div>
+
+  <button id="btnReset" class="btn">重置 / Reset</button>
+  <button id="langBtn" class="lang-btn">中 / EN</button>
+</aside>
+
+<main class="game-main">
+  <div class="main-head">
+    <h2 class="main-title" id="canvasTitle">2D 信号点云 + 可转投影轴 ŵ</h2>
+    <span class="main-hint" id="canvasHint">拖下方滑块旋转 ŵ</span>
+  </div>
+
+  <div class="stage-grid">
+    <div class="stage-box"><canvas id="stageScatter"></canvas></div>
+    <div class="stage-box"><canvas id="stageHist"></canvas></div>
+  </div>
+
+  <div class="slider-bar">
+    <span class="sl-lbl" id="lblSlider">投影方向 ŵ 角度</span>
+    <input id="thetaSlider" type="range" min="0" max="180" value="45" step="1">
+    <span class="sl-val mono" id="sliderVal">45 deg</span>
+  </div>
+
+  <div id="toast" class="toast"></div>
+</main>
+
+<script>
+var LANG='cn';
+
+var I18N = {
+  brand:{cn:'投影方向探索者', en:'Projection Explorer'},
+  piSay:{cn:'Pi: 转转看, 哪个方向把红蓝分得最开?', en:'Pi: Spin me — which axis splits red and blue most?'},
+  goal:{cn:'转 <b>投影方向 ŵ</b>, 把每个信号点投到这条轴上。看 <b>左手红 / 右手蓝</b> 在一维上的分布。<b>找让两类分得最开的角度!</b>',
+        en:'Rotate the <b>projection axis ŵ</b>, drop each signal point onto it. Watch the <b>left-hand red / right-hand blue</b> 1D distribution. <b>Find the angle that separates them most!</b>'},
+  how:{cn:['· 拖角度滑块转 ŵ 轴','· 看每个点的垂足投影','· 右侧 1D 分布: 红 / 蓝','· 分离度越高 = 越分得开','· 找最佳角度解锁徽章'],
+       en:['· drag slider to rotate ŵ','· see each foot-of-perpendicular','· right panel: 1D red / blue','· higher separation = more split','· hit the best angle to unlock']},
+  lblTheta:{cn:'角度',en:'ANGLE'},
+  lblSep:{cn:'分离度',en:'SEPARATION'},
+  lblBest:{cn:'当前最佳',en:'BEST SO FAR'},
+  canvasTitle:{cn:'2D 信号点云 + 可转投影轴 ŵ', en:'2D signal cloud + rotatable axis ŵ'},
+  canvasHint:{cn:'拖下方滑块旋转 ŵ', en:'drag slider below to rotate ŵ'},
+  lblSlider:{cn:'投影方向 ŵ 角度', en:'projection axis ŵ angle'},
+  reset:{cn:'重置 / Reset', en:'Reset / 重置'},
+  scatterLabel:{cn:'投影到 ŵ 轴', en:'projected onto ŵ'},
+  histLeft:{cn:'左手 (红) 投影分布', en:'Left hand (red) projected'},
+  histRight:{cn:'右手 (蓝) 投影分布', en:'Right hand (blue) projected'},
+  histFoot:{cn:'两峰距离越大、越窄 = 分得越开', en:'farther + narrower peaks = better split'},
+  challenges:{
+    cn:[
+      {title:'挑战 1 / 3', text:'随便转转, 让分离度 > 1.5', hint:'先随便拖, 看分离度怎么随角度变', target:function(s){return s>1.5;}},
+      {title:'挑战 2 / 3', text:'找让分离度 > 2.8 的角度', hint:'红点沿一个方向铺开, 蓝点沿另一个, 投到正交方向才分得开', target:function(s){return s>2.8;}},
+      {title:'挑战 3 / 3', text:'逼近最佳: 分离度 > 3.4', hint:'微调到峰值, 这正是 CSP 之后要自动算的方向', target:function(s){return s>3.4;}}
+    ],
+    en:[
+      {title:'Ch 1 / 3', text:'spin around, get separation > 1.5', hint:'just drag and watch separation change with angle', target:function(s){return s>1.5;}},
+      {title:'Ch 2 / 3', text:'find an angle with separation > 2.8', hint:'red spreads one way, blue another — project orthogonally', target:function(s){return s>2.8;}},
+      {title:'Ch 3 / 3', text:'approach the best: separation > 3.4', hint:'fine-tune to the peak — this is exactly what CSP computes', target:function(s){return s>3.4;}}
+    ]
+  },
+  clearedCh:{cn:'挑战达成! 进入下一关', en:'Challenge cleared! Next up'},
+  unlock:{cn:'徽章解锁: 投影方向探索者! 这个最佳方向, 正是 CSP 要自动算的。',
+          en:'Badge unlocked: Projection Explorer! This best axis is exactly what CSP auto-computes.'},
+  newBest:{cn:'新最佳分离度!', en:'New best separation!'}
+};
+
+function t(k){return (I18N[k]&&I18N[k][LANG])||(I18N[k]&&I18N[k].en)||k;}
+
+function refreshI18N(){
+  document.querySelector('.brand').firstChild.textContent = t('brand');
+  document.getElementById('piSay').textContent = t('piSay');
+  document.getElementById('goal').innerHTML = t('goal');
+  document.getElementById('howlist').innerHTML = t('how').map(function(x){return '<li>'+x+'</li>';}).join('');
+  document.getElementById('lblTheta').textContent = t('lblTheta');
+  document.getElementById('lblSep').textContent = t('lblSep');
+  document.getElementById('lblBest').textContent = t('lblBest');
+  document.getElementById('canvasTitle').textContent = t('canvasTitle');
+  document.getElementById('canvasHint').textContent = t('canvasHint');
+  document.getElementById('lblSlider').textContent = t('lblSlider');
+  document.getElementById('btnReset').textContent = t('reset');
+  document.getElementById('langBtn').textContent = LANG==='cn'?'中 / EN':'EN / 中';
+  showChallenge();
+  drawAll();
+}
+
+document.getElementById('langBtn').addEventListener('click', function(){
+  LANG = LANG==='cn'?'en':'cn';
+  refreshI18N();
+});
+
+// --------- 数据生成 (两类沿不同方向的高斯点云) ---------
+function gauss(seed){
+  var u1 = (Math.sin(seed*12.9898)*43758.5453)%1; u1 = u1<0?u1+1:u1;
+  var u2 = (Math.sin(seed*78.233)*43758.5453)%1; u2 = u2<0?u2+1:u2;
+  if(u1<0.0001) u1=0.0001;
+  return Math.sqrt(-2*Math.log(u1))*Math.cos(2*Math.PI*u2);
+}
+// 沿 dirDeg 方向方差大 (sMain), 正交方向方差小 (sPerp)
+function genCloud(dirDeg, sMain, sPerp, n, seed){
+  var a = dirDeg*Math.PI/180, ca=Math.cos(a), sa=Math.sin(a);
+  var arr=[];
+  for(var i=0;i<n;i++){
+    var m = sMain*gauss(seed+i*2.7);
+    var p = sPerp*gauss(seed+i*2.7+1.3);
+    // 主轴 + 正交轴 合成到 xy
+    arr.push([m*ca - p*sa, m*sa + p*ca]);
+  }
+  return arr;
+}
+// 左手沿 ~20° 铺开, 右手沿 ~110° 铺开 → 最佳分离方向不是横也不是竖
+var ptsL = genCloud(20, 7.5, 1.6, 180, 31);
+var ptsR = genCloud(110, 7.5, 1.6, 180, 47);
+
+function projectVals(pts, thRad){
+  var cw=Math.cos(thRad), sw=Math.sin(thRad);
+  return pts.map(function(p){return p[0]*cw + p[1]*sw;});
+}
+function meanVar(vals){
+  var m = vals.reduce(function(a,b){return a+b;},0)/vals.length;
+  var v = vals.reduce(function(a,x){return a+(x-m)*(x-m);},0)/vals.length;
+  return {mean:m, var:v, std:Math.sqrt(v)};
+}
+// 分离度 = |均值差| / (合并标准差)  —— Fisher 风格
+function separation(thRad){
+  var vl = projectVals(ptsL, thRad), vr = projectVals(ptsR, thRad);
+  var sl = meanVar(vl), sr = meanVar(vr);
+  var pooled = Math.sqrt((sl.var + sr.var)/2) + 0.001;
+  return Math.abs(sl.mean - sr.mean)/pooled;
+}
+
+// --------- 状态 ---------
+var theta = 45;
+var bestSep = 0;
+var challengeIdx = 0;
+var unlocked = false;
+
+function getCh(){return I18N.challenges[LANG][challengeIdx];}
+function showChallenge(){
+  var ch = I18N.challenges[LANG][challengeIdx];
+  if(!ch){
+    document.getElementById('chTitle').textContent = LANG==='cn'?'全部完成':'All done';
+    document.getElementById('chText').textContent = t('unlock');
+    document.getElementById('chHint').textContent = '';
+    return;
+  }
+  document.getElementById('chTitle').textContent = ch.title;
+  document.getElementById('chText').textContent = ch.text;
+  document.getElementById('chHint').textContent = ch.hint;
+}
+
+function updateHUD(){
+  var thRad = theta*Math.PI/180;
+  var sep = separation(thRad);
+  document.getElementById('vTheta').textContent = theta+' deg';
+  document.getElementById('sliderVal').textContent = theta+' deg';
+  document.getElementById('vSep').textContent = sep.toFixed(2);
+  if(sep > bestSep + 0.001){
+    bestSep = sep;
+    document.getElementById('vBest').textContent = bestSep.toFixed(2);
+    if(bestSep > 1.0) showToast(t('newBest')+' '+bestSep.toFixed(2), 'gold');
+  }
+  // 挑战判定
+  var ch = I18N.challenges[LANG][challengeIdx];
+  if(ch && ch.target(sep)){
+    if(challengeIdx >= I18N.challenges[LANG].length-1 && !unlocked){
+      unlocked = true;
+      showToast(t('unlock'), 'gold');
+      challengeIdx++;
+      showChallenge();
+    } else if(challengeIdx < I18N.challenges[LANG].length-1){
+      showToast(t('clearedCh'), 'gold');
+      challengeIdx++;
+      showChallenge();
+    }
+  }
+  return sep;
+}
+
+function showToast(msg, kind){
+  var el = document.getElementById('toast');
+  el.style.display='block';
+  el.textContent = msg;
+  el.style.borderColor = 'var(--gold)';
+  el.style.color = 'var(--gold)';
+  clearTimeout(showToast._t);
+  showToast._t = setTimeout(function(){el.style.display='none';}, 2200);
+}
+
+document.getElementById('thetaSlider').addEventListener('input', function(e){
+  theta = parseInt(e.target.value, 10);
+  updateHUD(); drawAll();
+});
+document.getElementById('btnReset').addEventListener('click', function(){
+  theta = 45;
+  bestSep = 0; challengeIdx = 0; unlocked = false;
+  document.getElementById('thetaSlider').value = 45;
+  document.getElementById('vBest').textContent = '--';
+  showChallenge();
+  updateHUD(); drawAll();
+});
+
+// --------- 渲染 ---------
+var canvasS = document.getElementById('stageScatter');
+var canvasH = document.getElementById('stageHist');
+var ctxS = canvasS.getContext('2d');
+var ctxH = canvasH.getContext('2d');
+
+function resizeOne(canvas){
+  var rect = canvas.parentElement.getBoundingClientRect();
+  if(rect.width<1||rect.height<1) return;
+  var dpr = window.devicePixelRatio||1;
+  canvas.width = rect.width*dpr; canvas.height = rect.height*dpr;
+  canvas.style.width = rect.width+'px'; canvas.style.height = rect.height+'px';
+  canvas.getContext('2d').setTransform(dpr,0,0,dpr,0,0);
+}
+function resizeAll(){ resizeOne(canvasS); resizeOne(canvasH); drawAll(); }
+window.addEventListener('resize', resizeAll);
+
+var CLS_L = 'oklch(0.68 0.18 25)';
+var CLS_L_SOFT = 'oklch(0.68 0.18 25 / 0.42)';
+var CLS_R = 'oklch(0.74 0.15 235)';
+var CLS_R_SOFT = 'oklch(0.74 0.15 235 / 0.42)';
+var C_MATH = 'oklch(0.72 0.17 245)';
+var C_LINE = 'oklch(0.35 0.05 265 / 0.55)';
+var C_FOOT = 'oklch(0.55 0.08 265 / 0.40)';
+var C_FG = 'oklch(0.96 0.01 265)';
+var C_DIM = 'oklch(0.75 0.02 265)';
+var C_GOLD = 'oklch(0.85 0.14 85)';
+
+function drawScatter(){
+  var c = ctxS, W = canvasS.clientWidth, H = canvasS.clientHeight;
+  c.clearRect(0,0,W,H);
+  var sz = Math.min(W,H) - 48;
+  var cx = W/2, cy = H/2, unit = sz/2/16;
+  var thRad = theta*Math.PI/180;
+  var dirx = Math.cos(thRad), diry = -Math.sin(thRad); // 屏幕 y 向下
+
+  // 背景网格轴
+  c.strokeStyle = C_LINE; c.lineWidth = 1;
+  c.beginPath();
+  c.moveTo(cx-sz/2, cy); c.lineTo(cx+sz/2, cy);
+  c.moveTo(cx, cy-sz/2); c.lineTo(cx, cy+sz/2);
+  c.stroke();
+
+  // 垂足投影连线 (取每类前 28 个点, 避免太密)
+  function drawFeet(pts, soft){
+    c.strokeStyle = C_FOOT; c.lineWidth = 0.8;
+    for(var i=0;i<pts.length && i<28;i++){
+      var px = cx + pts[i][0]*unit, py = cy - pts[i][1]*unit;
+      // 投影标量 (沿 ŵ)
+      var s = pts[i][0]*Math.cos(thRad) + pts[i][1]*Math.sin(thRad);
+      var fx = cx + s*Math.cos(thRad)*unit;
+      var fy = cy - s*Math.sin(thRad)*unit;
+      c.beginPath(); c.moveTo(px,py); c.lineTo(fx,fy); c.stroke();
+    }
+  }
+  drawFeet(ptsL); drawFeet(ptsR);
+
+  // 散点
+  function drawPts(pts, soft){
+    c.fillStyle = soft;
+    for(var i=0;i<pts.length;i++){
+      var px = cx + pts[i][0]*unit, py = cy - pts[i][1]*unit;
+      if(Math.abs(pts[i][0]*unit)>sz/2 || Math.abs(pts[i][1]*unit)>sz/2) continue;
+      c.beginPath(); c.arc(px,py,2.3,0,Math.PI*2); c.fill();
+    }
+  }
+  drawPts(ptsL, CLS_L_SOFT); drawPts(ptsR, CLS_R_SOFT);
+
+  // 投影后落在 ŵ 轴上的点 (实心高亮)
+  function drawProj(pts, col){
+    c.fillStyle = col;
+    for(var i=0;i<pts.length && i<28;i++){
+      var s = pts[i][0]*Math.cos(thRad) + pts[i][1]*Math.sin(thRad);
+      var fx = cx + s*Math.cos(thRad)*unit;
+      var fy = cy - s*Math.sin(thRad)*unit;
+      c.beginPath(); c.arc(fx,fy,2.6,0,Math.PI*2); c.fill();
+    }
+  }
+  drawProj(ptsL, CLS_L); drawProj(ptsR, CLS_R);
+
+  // 投影轴 ŵ
+  var dx = Math.cos(thRad)*sz/2, dy = -Math.sin(thRad)*sz/2;
+  c.strokeStyle = C_MATH; c.lineWidth = 2.5; c.setLineDash([9,5]);
+  c.beginPath(); c.moveTo(cx-dx, cy-dy); c.lineTo(cx+dx, cy+dy); c.stroke();
+  c.setLineDash([]);
+  // 箭头
+  c.fillStyle = C_MATH;
+  var ang = Math.atan2(dy, dx);
+  c.save(); c.translate(cx+dx, cy+dy); c.rotate(ang);
+  c.beginPath(); c.moveTo(0,0); c.lineTo(-13,-5.5); c.lineTo(-13,5.5); c.closePath(); c.fill();
+  c.restore();
+  // ŵ 标签
+  c.fillStyle = C_MATH; c.font = '800 14px JetBrains Mono,monospace'; c.textAlign='left';
+  c.fillText('w (' + theta + ' deg)', cx+dx+8, cy+dy - 2);
+
+  // 类标
+  c.font = '700 11px JetBrains Mono,monospace'; c.textAlign='left';
+  c.fillStyle = CLS_L; c.fillText('LEFT', 12, 18);
+  c.fillStyle = CLS_R; c.fillText('RIGHT', 12, 34);
+}
+
+function drawHist(){
+  var c = ctxH, W = canvasH.clientWidth, H = canvasH.clientHeight;
+  c.clearRect(0,0,W,H);
+  var thRad = theta*Math.PI/180;
+  var vl = projectVals(ptsL, thRad), vr = projectVals(ptsR, thRad);
+  var sl = meanVar(vl), sr = meanVar(vr);
+
+  var range = 22, nBins = 28;
+  var padX = 20, padTop = 30;
+  var plotW = W - padX*2;
+  var binW = plotW / nBins;
+  var midY = H/2;
+  var topBase = midY - 16;     // 上半 (左手) baseline
+  var botBase = midY + 24;     // 下半 (右手) baseline
+  var maxH = (midY - padTop - 24);
+
+  function bin(vals){
+    var b = new Array(nBins).fill(0);
+    for(var k=0;k<vals.length;k++){
+      var bi = Math.floor((vals[k]+range)/(2*range)*nBins);
+      if(bi>=0 && bi<nBins) b[bi]++;
+    }
+    return b;
+  }
+  var binsL = bin(vl), binsR = bin(vr);
+  var maxB = Math.max(1, Math.max.apply(null, binsL.concat(binsR)));
+
+  // baselines
+  c.strokeStyle = C_LINE; c.lineWidth = 1.2;
+  c.beginPath();
+  c.moveTo(padX, topBase); c.lineTo(W-padX, topBase);
+  c.moveTo(padX, botBase); c.lineTo(W-padX, botBase);
+  c.stroke();
+
+  // 标题
+  c.font = '700 11px Inter,sans-serif'; c.textAlign='left';
+  c.fillStyle = CLS_L; c.fillText(t('histLeft'), padX, 16);
+  c.fillStyle = CLS_R; c.fillText(t('histRight'), padX, midY+16);
+
+  // 左手 (向上)
+  for(var i=0;i<nBins;i++){
+    var h = binsL[i]/maxB*maxH;
+    c.fillStyle = CLS_L_SOFT;
+    c.fillRect(padX + i*binW, topBase-h, binW-1, h);
+    c.strokeStyle = CLS_L; c.lineWidth = 0.6;
+    c.strokeRect(padX + i*binW, topBase-h, binW-1, h);
+  }
+  // 右手 (向下)
+  for(var i=0;i<nBins;i++){
+    var h = binsR[i]/maxB*maxH;
+    c.fillStyle = CLS_R_SOFT;
+    c.fillRect(padX + i*binW, botBase, binW-1, h);
+    c.strokeStyle = CLS_R; c.lineWidth = 0.6;
+    c.strokeRect(padX + i*binW, botBase, binW-1, h);
+  }
+
+  // 均值竖线
+  function meanX(m){return padX + (m+range)/(2*range)*plotW;}
+  var mlx = meanX(sl.mean), mrx = meanX(sr.mean);
+  c.setLineDash([4,3]); c.lineWidth = 1.4;
+  c.strokeStyle = CLS_L;
+  c.beginPath(); c.moveTo(mlx, topBase-maxH); c.lineTo(mlx, topBase); c.stroke();
+  c.strokeStyle = CLS_R;
+  c.beginPath(); c.moveTo(mrx, botBase); c.lineTo(mrx, botBase+maxH); c.stroke();
+  c.setLineDash([]);
+
+  // 分离度评级
+  var sep = separation(thRad);
+  var verdict;
+  if(sep > 3.4) verdict = (LANG==='cn'?'分得极开!':'cleanly split!');
+  else if(sep > 2.2) verdict = (LANG==='cn'?'分得不错':'good split');
+  else if(sep > 1.2) verdict = (LANG==='cn'?'有点重叠':'some overlap');
+  else verdict = (LANG==='cn'?'几乎重叠, 分不开':'overlapping, hard to split');
+
+  c.textAlign = 'center';
+  c.fillStyle = sep>2.8 ? C_GOLD : C_MATH;
+  c.font = '800 15px JetBrains Mono,monospace';
+  c.fillText('separation = '+sep.toFixed(2), W/2, H-26);
+  c.fillStyle = C_DIM; c.font = '600 11px Inter,sans-serif';
+  c.fillText(verdict, W/2, H-10);
+}
+
+function drawAll(){ drawScatter(); drawHist(); }
+
+// mascot Pi 轻微旋转 (rAF, 不影响交互, 视觉点缀)
+var piT = 0;
+function animatePi(){
+  piT += 0.012;
+  var f = document.getElementById('piMascot');
+  if(f){
+    var s = 0.92 + 0.08*Math.sin(piT);
+    f.style.transform = 'scaleX('+s.toFixed(3)+')';
+    var eq = document.getElementById('piEq');
+    if(eq){
+      var labels = ['w','dot','max','sep'];
+      eq.textContent = labels[Math.floor(piT*0.6)%labels.length];
+    }
+  }
+  requestAnimationFrame(animatePi);
+}
+
+resizeAll();
+setTimeout(resizeAll, 200);
+setTimeout(resizeAll, 600);
+if(document.fonts && document.fonts.ready){ document.fonts.ready.then(resizeAll); }
+refreshI18N();
+updateHUD();
+drawAll();
+requestAnimationFrame(animatePi);
+</script>
+</body>
+</html>

@@ -1,0 +1,910 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<title>M21 · 左右手运动想象判读 — Cortex Map</title>
+<style>
+  :root{
+    /* Layer 1 — shared deep space canvas */
+    --bg-0: oklch(0.14 0.03 25);
+    --bg-1: oklch(0.18 0.035 25);
+    --bg-2: oklch(0.22 0.04 25);
+    --bg-3: oklch(0.27 0.045 25);
+    --line: oklch(0.35 0.04 25 / 0.35);
+    --line-strong: oklch(0.52 0.06 25 / 0.55);
+    --fg:      oklch(0.96 0.01 25);
+    --fg-dim:  oklch(0.75 0.02 25);
+    --fg-mute: oklch(0.55 0.03 25);
+
+    /* Layer 2 — neuro signature accent (NRO-20) */
+    --neuro: oklch(0.75 0.17 25);
+
+    /* Layer 3 — neuro 5-color palette (themes.js NRO-20) */
+    --SYNAPTIC: oklch(0.75 0.17 25);
+    --DENDRITE: oklch(0.55 0.15 25);
+    --AXON:     oklch(0.32 0.10 25);
+    --FIRING:   oklch(0.92 0.08 25);
+    --MEMORY:   oklch(0.85 0.14 85);
+  }
+
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%;width:100%;font-family:'Inter','PingFang SC',sans-serif;color:var(--fg);background:var(--bg-0);overflow:hidden}
+
+  .stage{display:flex;flex-direction:row;height:100vh;width:100vw}
+
+  /* ---------- 200px sidebar ---------- */
+  .game-sidebar{
+    width:200px;flex:0 0 200px;
+    background:var(--bg-1);
+    border-right:1px solid var(--line);
+    display:flex;flex-direction:column;
+    padding:14px 12px;gap:10px;
+    overflow-y:auto;
+  }
+  .brand{
+    display:flex;flex-direction:column;gap:2px;
+    border-bottom:1px solid var(--line);padding-bottom:8px;
+  }
+  .brand .code{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--fg-mute);letter-spacing:1.2px}
+  .brand .title{font-size:13px;color:var(--fg);font-weight:600}
+  .brand .sub{font-size:10px;color:var(--fg-dim);margin-top:2px;line-height:1.35}
+
+  .mascot{
+    width:100%;height:78px;display:flex;align-items:center;justify-content:center;
+    background:var(--bg-2);border:1px solid var(--line);
+  }
+  .mascot svg{width:100%;height:100%}
+
+  .guide{
+    background:var(--bg-2);border:1px solid var(--line);
+    padding:8px;display:flex;flex-direction:column;gap:4px;
+  }
+  .guide-title{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--neuro);letter-spacing:1px}
+  .guide-line{font-size:10px;color:var(--fg-dim);line-height:1.4}
+
+  /* trial list (6 trials) */
+  .trial-block{display:flex;flex-direction:column;gap:6px}
+  .trial-title{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--fg-dim);letter-spacing:1px}
+  .trial-list{display:flex;flex-direction:column;gap:4px}
+  .trial-row{
+    background:var(--bg-2);border:1px solid var(--line);
+    padding:6px 8px;display:flex;align-items:center;gap:6px;
+    cursor:pointer;
+    transition:background .15s, border-color .15s;
+  }
+  .trial-row:hover{border-color:var(--neuro)}
+  .trial-row.active{background:var(--bg-3);border-color:var(--neuro);box-shadow:3px 3px 0 var(--bg-0)}
+  .trial-row .tidx{
+    font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--neuro);font-weight:600;
+    width:22px;text-align:center;
+  }
+  .trial-row .tlabel{
+    font-size:10px;color:var(--fg-dim);flex:1;line-height:1.2;
+  }
+  .trial-row.solved .tidx{color:var(--MEMORY)}
+  .trial-row.solved .tlabel{color:var(--fg)}
+  .trial-row .tmark{
+    width:10px;height:10px;border:1px solid var(--line-strong);
+  }
+  .trial-row.solved .tmark{background:var(--MEMORY);border-color:var(--MEMORY)}
+  .trial-row.wrong .tmark{background:var(--DENDRITE);border-color:var(--DENDRITE)}
+
+  /* progress */
+  .progress-block{
+    background:var(--bg-2);border:1px solid var(--line);padding:8px;
+    display:flex;flex-direction:column;gap:6px;
+  }
+  .progress-title{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--fg-dim);letter-spacing:1px}
+  .progress-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:3px}
+  .progress-cell{
+    height:6px;background:var(--bg-3);border:1px solid var(--line);
+  }
+  .progress-cell.hit{background:var(--MEMORY);border-color:var(--MEMORY)}
+  .progress-cell.miss{background:var(--DENDRITE);border-color:var(--DENDRITE)}
+  .progress-text{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--fg-mute)}
+
+  /* mu-band sensitivity slider — secondary control so verify can wiggle it */
+  .slider-block{
+    background:var(--bg-2);border:1px solid var(--line);padding:8px;
+    display:flex;flex-direction:column;gap:6px;
+  }
+  .slider-label{
+    display:flex;justify-content:space-between;align-items:baseline;
+    font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--fg-dim);
+  }
+  .slider-label .val{color:var(--neuro);font-size:12px;font-weight:600}
+  input[type=range].erd-slider{
+    -webkit-appearance:none;appearance:none;width:100%;height:5px;
+    background:linear-gradient(90deg, var(--AXON) 0%, var(--DENDRITE) 50%, var(--SYNAPTIC) 100%);
+    border:1px solid var(--line);outline:none;cursor:pointer;
+  }
+  input[type=range].erd-slider::-webkit-slider-thumb{
+    -webkit-appearance:none;appearance:none;
+    width:12px;height:16px;background:var(--MEMORY);
+    border:2px solid var(--bg-0);box-shadow:2px 2px 0 var(--bg-0);
+    cursor:grab;
+  }
+  input[type=range].erd-slider::-moz-range-thumb{
+    width:12px;height:16px;background:var(--MEMORY);
+    border:2px solid var(--bg-0);box-shadow:2px 2px 0 var(--bg-0);
+    cursor:grab;
+  }
+
+  .sidebar-spacer{flex:1;min-height:6px}
+
+  .lang-btn{
+    width:100%;padding:7px 8px;background:var(--bg-3);
+    color:var(--fg);border:1px solid var(--line-strong);
+    font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:1px;
+    cursor:pointer;box-shadow:3px 3px 0 var(--bg-0);
+  }
+  .lang-btn:hover{background:var(--DENDRITE);color:var(--FIRING)}
+
+  .reset-btn{
+    width:100%;padding:6px 8px;background:var(--bg-2);
+    color:var(--fg-dim);border:1px solid var(--line);
+    font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:1px;
+    cursor:pointer;
+  }
+  .reset-btn:hover{color:var(--neuro);border-color:var(--neuro)}
+
+  /* ---------- main ---------- */
+  .game-main{
+    flex:1;display:flex;flex-direction:column;
+    background:var(--bg-0);
+    min-width:0;
+  }
+  .main-header{
+    height:46px;border-bottom:1px solid var(--line);
+    display:flex;align-items:center;justify-content:space-between;
+    padding:0 18px;background:var(--bg-1);flex:0 0 46px;
+  }
+  .header-left{
+    font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--fg-dim);letter-spacing:1.4px;
+  }
+  .header-right{
+    display:flex;gap:14px;font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--fg-mute);
+  }
+  .hud-cell{display:flex;flex-direction:column;align-items:flex-end}
+  .hud-cell .label{font-size:9px;color:var(--fg-mute);letter-spacing:1px}
+  .hud-cell .val{color:var(--neuro);font-size:13px;font-weight:600}
+  .hud-cell .val.gold{color:var(--MEMORY)}
+
+  .main-body{
+    flex:1;display:flex;flex-direction:column;min-height:0;
+    padding:14px 18px;gap:12px;
+  }
+
+  /* waveform pane */
+  .wave-pane{
+    flex:2;display:flex;flex-direction:column;min-height:0;
+    background:var(--bg-1);border:1px solid var(--line);
+  }
+  .pane-title{
+    padding:8px 14px;font-family:'JetBrains Mono',monospace;font-size:10px;
+    color:var(--neuro);letter-spacing:1.4px;
+    border-bottom:1px solid var(--line);background:var(--bg-2);
+    display:flex;justify-content:space-between;align-items:center;
+  }
+  .pane-title .sub{color:var(--fg-mute);font-size:9px;letter-spacing:.8px}
+  .wave-body{flex:1;position:relative;display:flex;flex-direction:column;min-height:0}
+  #waveSvg{width:100%;height:100%;display:block}
+
+  /* milestone toast */
+  .milestone{
+    position:absolute;left:50%;top:50px;transform:translateX(-50%) translateY(-20px);
+    background:var(--MEMORY);color:var(--bg-0);
+    font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:700;
+    padding:10px 22px;letter-spacing:1.5px;
+    box-shadow:4px 4px 0 var(--bg-0);
+    opacity:0;transition:all .35s;pointer-events:none;z-index:20;
+  }
+  .milestone.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+  /* decision pane — 3 choice chips + trial caption + verdict */
+  .decide-pane{
+    flex:1;display:flex;flex-direction:column;min-height:0;
+    background:var(--bg-1);border:1px solid var(--line);
+  }
+  .decide-body{
+    flex:1;display:flex;flex-direction:column;gap:10px;
+    padding:12px 14px;min-height:0;
+  }
+  .trial-caption{
+    font-size:11px;color:var(--fg-dim);line-height:1.5;
+  }
+  .trial-caption .cn{color:var(--neuro);font-weight:600;font-family:'JetBrains Mono',monospace;letter-spacing:.6px}
+  .chips-row{
+    display:flex;flex-wrap:wrap;gap:8px;
+  }
+  .choice-chip{
+    background:var(--bg-2);border:1px solid var(--line-strong);
+    padding:8px 12px;cursor:pointer;
+    display:flex;flex-direction:column;gap:2px;
+    box-shadow:3px 3px 0 var(--bg-0);
+    transition:transform .12s, border-color .15s;
+    user-select:none;
+    min-width:150px;
+  }
+  .choice-chip:hover{transform:translate(-1px,-1px);box-shadow:4px 4px 0 var(--bg-0);border-color:var(--neuro)}
+  .choice-chip:active{transform:translate(1px,1px);box-shadow:1px 1px 0 var(--bg-0)}
+  .choice-chip[data-choice="left"]{border-left:3px solid var(--SYNAPTIC)}
+  .choice-chip[data-choice="right"]{border-left:3px solid var(--FIRING)}
+  .choice-chip[data-choice="unclear"]{border-left:3px solid var(--DENDRITE)}
+  .choice-chip.disabled{pointer-events:none;opacity:.5}
+  .choice-chip .cname{
+    font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:600;letter-spacing:.5px;color:var(--fg);
+  }
+  .choice-chip .cdesc{
+    font-size:9px;color:var(--fg-dim);line-height:1.3;
+  }
+  .verdict-box{
+    margin-top:auto;
+    font-size:11px;color:var(--fg-dim);line-height:1.45;min-height:38px;
+    border-top:1px dashed var(--line);padding-top:8px;
+  }
+  .verdict-box .verdict-tag{
+    display:inline-block;padding:2px 8px;
+    font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:600;letter-spacing:1px;
+    margin-right:8px;
+    border:1px solid var(--line-strong);
+  }
+  .verdict-box.right .verdict-tag{color:var(--MEMORY);border-color:var(--MEMORY);background:var(--bg-2)}
+  .verdict-box.wrong .verdict-tag{color:var(--DENDRITE);border-color:var(--DENDRITE);background:var(--bg-2)}
+  .verdict-box .verdict-text{color:var(--fg)}
+
+  .trial-nav{
+    display:flex;gap:8px;align-items:center;
+  }
+  .nav-btn{
+    padding:6px 12px;background:var(--bg-3);
+    color:var(--fg);border:1px solid var(--line-strong);
+    font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:1px;
+    cursor:pointer;box-shadow:3px 3px 0 var(--bg-0);
+  }
+  .nav-btn:hover{background:var(--DENDRITE);color:var(--FIRING)}
+  .nav-btn:disabled{opacity:.35;cursor:not-allowed}
+
+  /* dendrite mascot animation */
+  @keyframes pulse {
+    0%, 100% { opacity: 0.55; }
+    50%      { opacity: 1; }
+  }
+  #sparkGlow { animation: pulse 2.6s ease-in-out infinite; transform-origin: center; }
+</style>
+</head>
+<body>
+  <div class="stage">
+    <!-- ============ Sidebar ============ -->
+    <aside class="game-sidebar">
+      <div class="brand">
+        <span class="code">NRO-20 · M21</span>
+        <span class="title" data-i18n-cn="左右手判读" data-i18n-en="L/R Hand Decoder">左右手判读</span>
+        <span class="sub" data-i18n-cn="看 C3/C4 对侧 ERD 推想象的手" data-i18n-en="Read contralateral ERD on C3/C4">看 C3/C4 对侧 ERD 推想象的手</span>
+      </div>
+
+      <div class="mascot" aria-label="Spark mascot">
+        <svg viewBox="0 0 160 78" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <radialGradient id="sparkGrad" cx="50%" cy="50%" r="60%">
+              <stop offset="0%" stop-color="var(--FIRING)"/>
+              <stop offset="100%" stop-color="var(--SYNAPTIC)"/>
+            </radialGradient>
+          </defs>
+          <g transform="translate(80 39)">
+            <!-- dendrite branches -->
+            <line x1="0" y1="0" x2="-30" y2="-18" stroke="var(--DENDRITE)" stroke-width="1.6"/>
+            <line x1="0" y1="0" x2="30" y2="-18" stroke="var(--DENDRITE)" stroke-width="1.6"/>
+            <line x1="0" y1="0" x2="-34" y2="14" stroke="var(--DENDRITE)" stroke-width="1.6"/>
+            <line x1="0" y1="0" x2="34" y2="14" stroke="var(--DENDRITE)" stroke-width="1.6"/>
+            <line x1="0" y1="0" x2="0" y2="-26" stroke="var(--DENDRITE)" stroke-width="1.6"/>
+            <circle cx="-30" cy="-18" r="3" fill="var(--SYNAPTIC)"/>
+            <circle cx="30" cy="-18" r="3" fill="var(--SYNAPTIC)"/>
+            <circle cx="-34" cy="14" r="3" fill="var(--SYNAPTIC)"/>
+            <circle cx="34" cy="14" r="3" fill="var(--SYNAPTIC)"/>
+            <circle cx="0" cy="-26" r="3" fill="var(--SYNAPTIC)"/>
+            <g id="sparkGlow">
+              <circle cx="0" cy="0" r="11" fill="url(#sparkGrad)" stroke="var(--MEMORY)" stroke-width="1"/>
+            </g>
+          </g>
+        </svg>
+      </div>
+
+      <div class="guide">
+        <div class="guide-title">HOW TO PLAY</div>
+        <div class="guide-line" data-i18n-cn="1 · 选 trial 看 C3/C4 波形" data-i18n-en="1 · Pick trial, read C3/C4">1 · 选 trial 看 C3/C4 波形</div>
+        <div class="guide-line" data-i18n-cn="2 · 哪侧 ERD 强 → 对侧手" data-i18n-en="2 · Stronger ERD = opposite hand">2 · 哪侧 ERD 强 → 对侧手</div>
+        <div class="guide-line" data-i18n-cn="3 · 判对 6 个解锁解码员" data-i18n-en="3 · Decode 6 to unlock badge">3 · 判对 6 个解锁解码员</div>
+      </div>
+
+      <div class="trial-block">
+        <div class="trial-title" data-i18n-cn="6 个 trial · TRIALS" data-i18n-en="6 TRIALS">6 个 trial · TRIALS</div>
+        <div class="trial-list" id="trialList">
+          <div class="trial-row active" data-trial="0">
+            <span class="tidx">01</span>
+            <span class="tlabel" data-i18n-cn="想象 A" data-i18n-en="Imagery A">想象 A</span>
+            <span class="tmark"></span>
+          </div>
+          <div class="trial-row" data-trial="1">
+            <span class="tidx">02</span>
+            <span class="tlabel" data-i18n-cn="想象 B" data-i18n-en="Imagery B">想象 B</span>
+            <span class="tmark"></span>
+          </div>
+          <div class="trial-row" data-trial="2">
+            <span class="tidx">03</span>
+            <span class="tlabel" data-i18n-cn="想象 C" data-i18n-en="Imagery C">想象 C</span>
+            <span class="tmark"></span>
+          </div>
+          <div class="trial-row" data-trial="3">
+            <span class="tidx">04</span>
+            <span class="tlabel" data-i18n-cn="想象 D" data-i18n-en="Imagery D">想象 D</span>
+            <span class="tmark"></span>
+          </div>
+          <div class="trial-row" data-trial="4">
+            <span class="tidx">05</span>
+            <span class="tlabel" data-i18n-cn="想象 E" data-i18n-en="Imagery E">想象 E</span>
+            <span class="tmark"></span>
+          </div>
+          <div class="trial-row" data-trial="5">
+            <span class="tidx">06</span>
+            <span class="tlabel" data-i18n-cn="想象 F" data-i18n-en="Imagery F">想象 F</span>
+            <span class="tmark"></span>
+          </div>
+        </div>
+      </div>
+
+      <div class="progress-block">
+        <div class="progress-title" data-i18n-cn="解码进度" data-i18n-en="DECODER">解码进度</div>
+        <div class="progress-grid" id="progressGrid">
+          <div class="progress-cell" data-slot="0"></div>
+          <div class="progress-cell" data-slot="1"></div>
+          <div class="progress-cell" data-slot="2"></div>
+          <div class="progress-cell" data-slot="3"></div>
+          <div class="progress-cell" data-slot="4"></div>
+          <div class="progress-cell" data-slot="5"></div>
+        </div>
+        <div class="progress-text"><span id="progressCount">0</span> / 6 <span data-i18n-cn="对" data-i18n-en="right">对</span> · <span data-i18n-cn="目标 6" data-i18n-en="goal 6">目标 6</span></div>
+      </div>
+
+      <div class="slider-block">
+        <div class="slider-label">
+          <span data-i18n-cn="ERD 阈值 (%)" data-i18n-en="ERD threshold (%)">ERD 阈值 (%)</span>
+          <span class="val"><span id="erdReadout">35</span></span>
+        </div>
+        <input type="range" min="10" max="70" step="5" value="35" id="erdSlider" class="erd-slider" aria-label="ERD highlight threshold" />
+        <div class="slider-label" style="font-size:8px">
+          <span>10</span><span>35</span><span>70</span>
+        </div>
+      </div>
+
+      <div class="sidebar-spacer"></div>
+
+      <button id="resetBtn" class="reset-btn" type="button" data-i18n-cn="重置 RESET" data-i18n-en="RESET">重置 RESET</button>
+      <button id="langBtn" class="lang-btn" type="button">EN / 中文</button>
+    </aside>
+
+    <!-- ============ Main ============ -->
+    <main class="game-main">
+      <header class="main-header">
+        <div class="header-left" data-i18n-cn="M21 · C3/C4 双电极 mu 波 · 6 trial" data-i18n-en="M21 · C3/C4 dual mu-band · 6 trials">M21 · C3/C4 双电极 mu 波 · 6 trial</div>
+        <div class="header-right">
+          <div class="hud-cell">
+            <span class="label">TRIAL</span>
+            <span class="val"><span id="hudTrial">01</span>/06</span>
+          </div>
+          <div class="hud-cell">
+            <span class="label">C3 ERD</span>
+            <span class="val" id="hudC3">--</span>
+          </div>
+          <div class="hud-cell">
+            <span class="label">C4 ERD</span>
+            <span class="val" id="hudC4">--</span>
+          </div>
+          <div class="hud-cell">
+            <span class="label">DECODED</span>
+            <span class="val" id="hudSolved">0/6</span>
+          </div>
+        </div>
+      </header>
+
+      <div class="main-body">
+        <section class="wave-pane">
+          <div class="pane-title">
+            <span data-i18n-cn="C3 (左脑→右手) · C4 (右脑→左手)" data-i18n-en="C3 (left brain→R hand) · C4 (right brain→L hand)">C3 (左脑→右手) · C4 (右脑→左手)</span>
+            <span class="sub" data-i18n-cn="ERD = 想象时 mu 波幅塌陷" data-i18n-en="ERD = mu amplitude collapse on imagery">ERD = 想象时 mu 波幅塌陷</span>
+          </div>
+          <div class="wave-body">
+            <svg id="waveSvg" viewBox="0 0 900 360" preserveAspectRatio="xMidYMid meet"></svg>
+            <div id="milestone" class="milestone" data-i18n-cn="解锁 · 运动想象解码员" data-i18n-en="Unlocked · MI Decoder">解锁 · 运动想象解码员</div>
+          </div>
+        </section>
+
+        <section class="decide-pane">
+          <div class="pane-title">
+            <span data-i18n-cn="这个 trial 想象的是哪只手?" data-i18n-en="Which hand was imagined?">这个 trial 想象的是哪只手?</span>
+            <span class="sub" id="trialHintTag" data-i18n-cn="trial 01" data-i18n-en="trial 01">trial 01</span>
+          </div>
+          <div class="decide-body">
+            <div class="trial-caption" id="trialCaption">
+              <span class="cn" id="trialCn">想象 A</span>
+              <span id="trialDesc" data-i18n-cn="对比 C3 和 C4 在灰色想象窗内的塌陷程度" data-i18n-en="Compare C3 vs C4 collapse inside the grey imagery window">对比 C3 和 C4 在灰色想象窗内的塌陷程度</span>
+            </div>
+            <div class="chips-row" id="chipsRow">
+              <button type="button" class="choice-chip" data-choice="left">
+                <span class="cname" data-i18n-cn="想左手" data-i18n-en="Left hand">想左手</span>
+                <span class="cdesc" data-i18n-cn="C4 塌陷强 · C3 维持" data-i18n-en="C4 collapses · C3 holds">C4 塌陷强 · C3 维持</span>
+              </button>
+              <button type="button" class="choice-chip" data-choice="right">
+                <span class="cname" data-i18n-cn="想右手" data-i18n-en="Right hand">想右手</span>
+                <span class="cdesc" data-i18n-cn="C3 塌陷强 · C4 维持" data-i18n-en="C3 collapses · C4 holds">C3 塌陷强 · C4 维持</span>
+              </button>
+              <button type="button" class="choice-chip" data-choice="unclear">
+                <span class="cname" data-i18n-cn="不清楚 / 双手" data-i18n-en="Unclear / both">不清楚 / 双手</span>
+                <span class="cdesc" data-i18n-cn="双侧都塌 或 都不塌" data-i18n-en="Both collapse or neither">双侧都塌 或 都不塌</span>
+              </button>
+            </div>
+            <div class="verdict-box" id="verdictBox">
+              <span class="verdict-tag" id="verdictTag" data-i18n-cn="待判定" data-i18n-en="PENDING">待判定</span>
+              <span class="verdict-text" id="verdictText" data-i18n-cn="选一个判断提交你的解码。" data-i18n-en="Pick a choice to submit your decode.">选一个判断提交你的解码。</span>
+            </div>
+            <div class="trial-nav">
+              <button type="button" class="nav-btn" id="prevBtn" data-i18n-cn="上一个" data-i18n-en="PREV">上一个</button>
+              <button type="button" class="nav-btn" id="nextBtn" data-i18n-cn="下一个" data-i18n-en="NEXT">下一个</button>
+            </div>
+          </div>
+        </section>
+      </div>
+    </main>
+  </div>
+
+<script>
+(function(){
+  'use strict';
+
+  // ===== 6 trials =====
+  // 每个 trial: C3 + C4 两路 mu 波 (~10 Hz). erd 字段 = 想象窗内相对基线的功率抑制 %.
+  // 科学约定 (对侧支配):
+  //   C3 在左运动皮层, 控制右手 → 想右手时 C3 ERD 强.
+  //   C4 在右运动皮层, 控制左手 → 想左手时 C4 ERD 强.
+  // correct: 'left' / 'right' / 'unclear'
+  var TRIALS = [
+    {
+      id:0,
+      cnName:'想象 A', enName:'Imagery A',
+      c3erd:18, c4erd:62, correct:'left',
+      cnExplain:'C4 抑制 62%, C3 只抑制 18% — 右脑塌陷明显, 对侧是左手, 所以想象的是左手。',
+      enExplain:'C4 suppressed 62%, C3 only 18% — right hemisphere collapses, the contralateral side is the left hand, so left hand was imagined.'
+    },
+    {
+      id:1,
+      cnName:'想象 B', enName:'Imagery B',
+      c3erd:58, c4erd:20, correct:'right',
+      cnExplain:'C3 抑制 58%, C4 只抑制 20% — 左脑塌陷明显, 对侧是右手, 所以想象的是右手。',
+      enExplain:'C3 suppressed 58%, C4 only 20% — left hemisphere collapses, the contralateral side is the right hand, so right hand was imagined.'
+    },
+    {
+      id:2,
+      cnName:'想象 C', enName:'Imagery C',
+      c3erd:55, c4erd:52, correct:'unclear',
+      cnExplain:'C3 和 C4 都塌陷过半 (55% / 52%), 没有明显侧偏 — 双侧同步, 无法判定单只手, 判"不清楚"。',
+      enExplain:'Both C3 and C4 collapse over half (55% / 52%) with no lateral bias — bilateral, cannot pin one hand, so "unclear".'
+    },
+    {
+      id:3,
+      cnName:'想象 D', enName:'Imagery D',
+      c3erd:22, c4erd:66, correct:'left',
+      cnExplain:'C4 抑制 66% 远强于 C3 的 22% — 右脑主导塌陷, 对侧左手, 想左手。',
+      enExplain:'C4 suppressed 66%, far above C3 at 22% — right hemisphere dominates the collapse, contralateral left hand, left hand imagined.'
+    },
+    {
+      id:4,
+      cnName:'想象 E', enName:'Imagery E',
+      c3erd:60, c4erd:24, correct:'right',
+      cnExplain:'C3 抑制 60%, C4 维持在 24% — 左脑塌陷, 对侧右手, 想右手。',
+      enExplain:'C3 suppressed 60%, C4 holds at 24% — left hemisphere collapses, contralateral right hand, right hand imagined.'
+    },
+    {
+      id:5,
+      cnName:'想象 F', enName:'Imagery F',
+      c3erd:12, c4erd:15, correct:'unclear',
+      cnExplain:'C3 和 C4 几乎都没塌陷 (12% / 15%), mu 波保持高幅 — 想象没建立起来, 信号不可用, 判"不清楚"。',
+      enExplain:'Neither C3 nor C4 collapses (12% / 15%), mu stays high-amplitude — imagery never established, signal unusable, so "unclear".'
+    }
+  ];
+
+  // ===== state (no window-shadow names) =====
+  var stateGame = {
+    lang: 'cn',
+    activeTrial: 0,
+    erdThresh: 35,
+    answers: [null, null, null, null, null, null],
+    correctMark: [null, null, null, null, null, null],
+    milestoneFired: false
+  };
+
+  // ===== DOM refs =====
+  var svg = document.getElementById('waveSvg');
+  var erdSlider = document.getElementById('erdSlider');
+  var erdReadout = document.getElementById('erdReadout');
+  var hudTrial = document.getElementById('hudTrial');
+  var hudC3 = document.getElementById('hudC3');
+  var hudC4 = document.getElementById('hudC4');
+  var hudSolved = document.getElementById('hudSolved');
+  var progressGrid = document.getElementById('progressGrid');
+  var progressCount = document.getElementById('progressCount');
+  var milestone = document.getElementById('milestone');
+  var langBtn = document.getElementById('langBtn');
+  var resetBtn = document.getElementById('resetBtn');
+  var trialList = document.getElementById('trialList');
+  var trialRows = trialList.querySelectorAll('.trial-row');
+  var chips = document.querySelectorAll('.choice-chip');
+  var prevBtn = document.getElementById('prevBtn');
+  var nextBtn = document.getElementById('nextBtn');
+  var trialCn = document.getElementById('trialCn');
+  var trialDesc = document.getElementById('trialDesc');
+  var trialHintTag = document.getElementById('trialHintTag');
+  var verdictBox = document.getElementById('verdictBox');
+  var verdictTag = document.getElementById('verdictTag');
+  var verdictText = document.getElementById('verdictText');
+
+  // ===== SVG build =====
+  var SVG_NS = 'http://www.w3.org/2000/svg';
+  var VBW = 900, VBH = 360;
+  var PAD_L = 70, PAD_R = 24, PAD_T = 30, PAD_B = 40;
+  var plotW = VBW - PAD_L - PAD_R;
+  // two stacked lanes (C3 top, C4 bottom)
+  var laneGap = 22;
+  var laneH = (VBH - PAD_T - PAD_B - laneGap) / 2;
+
+  // imagery window: fraction 0.38..0.82 of trace = ERD applied
+  var WIN_A = 0.38, WIN_B = 0.82;
+  var SAMPLES = 200;
+  var BASE_AMP = 0.85;   // relative amplitude before suppression
+  var FREQ = 9;          // ~9 cycles across trace (mu band feel)
+
+  function elNS(name, attrs){
+    var el = document.createElementNS(SVG_NS, name);
+    if (attrs){
+      for (var k in attrs){ el.setAttribute(k, attrs[k]); }
+    }
+    return el;
+  }
+
+  // build one mu-band waveform polyline for a lane
+  // erd = suppression percent inside imagery window
+  function lanePoints(laneTop, erdPct){
+    var midY = laneTop + laneH / 2;
+    var halfH = laneH * 0.42;
+    var pts = [];
+    for (var i = 0; i < SAMPLES; i++){
+      var frac = i / (SAMPLES - 1);
+      var x = PAD_L + frac * plotW;
+      // suppression envelope: 1 outside window, (1-erd) inside window with smooth ramp
+      var supp = 1;
+      if (frac > WIN_A && frac < WIN_B){
+        supp = 1 - (erdPct / 100);
+      } else if (frac >= (WIN_A - 0.05) && frac <= WIN_A){
+        // ramp down
+        var d1 = (frac - (WIN_A - 0.05)) / 0.05;
+        supp = 1 - d1 * (erdPct / 100);
+      } else if (frac >= WIN_B && frac <= (WIN_B + 0.05)){
+        // ramp up
+        var d2 = (frac - WIN_B) / 0.05;
+        supp = (1 - (erdPct / 100)) + d2 * (erdPct / 100);
+      }
+      var amp = BASE_AMP * supp;
+      var phase = frac * FREQ * Math.PI * 2;
+      var y = midY - Math.sin(phase) * halfH * amp;
+      pts.push(x.toFixed(1) + ',' + y.toFixed(1));
+    }
+    return pts.join(' ');
+  }
+
+  function drawLane(laneTop, label, erdPct, accentVar, isWinner){
+    var midY = laneTop + laneH / 2;
+
+    // lane background
+    svg.appendChild(elNS('rect', {
+      x:PAD_L, y:laneTop, width:plotW, height:laneH,
+      fill:'oklch(0.20 0.035 25 / 0.5)', stroke:'var(--line)', 'stroke-width':1
+    }));
+
+    // imagery window shading
+    var winX1 = PAD_L + WIN_A * plotW;
+    var winX2 = PAD_L + WIN_B * plotW;
+    svg.appendChild(elNS('rect', {
+      x:winX1, y:laneTop, width:(winX2 - winX1), height:laneH,
+      fill: isWinner ? 'oklch(0.55 0.15 25 / 0.16)' : 'oklch(0.55 0.06 25 / 0.10)',
+      stroke:'none'
+    }));
+    // window edges
+    svg.appendChild(elNS('line', {
+      x1:winX1, y1:laneTop, x2:winX1, y2:laneTop+laneH,
+      stroke:'var(--line-strong)', 'stroke-width':1, 'stroke-dasharray':'3,3'
+    }));
+    svg.appendChild(elNS('line', {
+      x1:winX2, y1:laneTop, x2:winX2, y2:laneTop+laneH,
+      stroke:'var(--line-strong)', 'stroke-width':1, 'stroke-dasharray':'3,3'
+    }));
+
+    // baseline (mid)
+    svg.appendChild(elNS('line', {
+      x1:PAD_L, y1:midY, x2:PAD_L+plotW, y2:midY,
+      stroke:'oklch(0.40 0.04 25 / 0.4)', 'stroke-width':1
+    }));
+
+    // waveform
+    var poly = elNS('polyline', {
+      points: lanePoints(laneTop, erdPct),
+      fill:'none',
+      stroke: accentVar,
+      'stroke-width': 2.2,
+      'stroke-linejoin':'round'
+    });
+    svg.appendChild(poly);
+
+    // electrode label (left)
+    var lbl = elNS('text', {
+      x:PAD_L-10, y:midY-laneH/2+4,
+      'text-anchor':'end',
+      'font-family':'JetBrains Mono, monospace', 'font-size':13,
+      fill: accentVar, 'font-weight':600
+    });
+    lbl.textContent = label;
+    svg.appendChild(lbl);
+
+    // hemisphere note under label
+    var hem = elNS('text', {
+      x:PAD_L-10, y:midY-laneH/2+20,
+      'text-anchor':'end',
+      'font-family':'Inter, sans-serif', 'font-size':9,
+      fill:'var(--fg-mute)'
+    });
+    hem.textContent = label === 'C3'
+      ? (stateGame.lang === 'cn' ? '左脑' : 'L brain')
+      : (stateGame.lang === 'cn' ? '右脑' : 'R brain');
+    svg.appendChild(hem);
+
+    // ERD readout badge (right side, inside window)
+    var winMidX = (winX1 + winX2) / 2;
+    var above = stateGame.erdThresh;
+    var strong = erdPct >= above;
+    var badge = elNS('text', {
+      x:winMidX, y:laneTop+16,
+      'text-anchor':'middle',
+      'font-family':'JetBrains Mono, monospace', 'font-size':11,
+      fill: strong ? 'var(--MEMORY)' : 'var(--fg-mute)',
+      'font-weight':600
+    });
+    badge.textContent = 'ERD ' + erdPct + '%';
+    svg.appendChild(badge);
+
+    // imagery window caption (only on top lane)
+    if (laneTop === PAD_T){
+      var wt = elNS('text', {
+        x:winMidX, y:laneTop-8,
+        'text-anchor':'middle',
+        'font-family':'JetBrains Mono, monospace', 'font-size':9,
+        fill:'var(--neuro)', 'letter-spacing':1
+      });
+      wt.textContent = stateGame.lang === 'cn' ? '想象窗 IMAGERY' : 'IMAGERY WINDOW';
+      svg.appendChild(wt);
+    }
+  }
+
+  function getTrial(){ return TRIALS[stateGame.activeTrial]; }
+
+  function buildWaves(){
+    while (svg.firstChild) svg.removeChild(svg.firstChild);
+    var t = getTrial();
+
+    // C3 lane (top)
+    drawLane(PAD_T, 'C3', t.c3erd, 'var(--SYNAPTIC)', t.c3erd >= stateGame.erdThresh);
+    // C4 lane (bottom)
+    var lane2Top = PAD_T + laneH + laneGap;
+    drawLane(lane2Top, 'C4', t.c4erd, 'var(--FIRING)', t.c4erd >= stateGame.erdThresh);
+  }
+
+  // ===== HUD / progress =====
+  function solvedCount(){
+    var n = 0;
+    for (var i = 0; i < stateGame.correctMark.length; i++){
+      if (stateGame.correctMark[i] === true) n++;
+    }
+    return n;
+  }
+
+  function updateHUD(){
+    var idx = stateGame.activeTrial;
+    var t = TRIALS[idx];
+    hudTrial.textContent = (idx < 9 ? '0' : '') + (idx+1);
+    hudC3.textContent = t.c3erd + '%';
+    hudC4.textContent = t.c4erd + '%';
+
+    var s = solvedCount();
+    hudSolved.textContent = s + '/6';
+    progressCount.textContent = s;
+
+    var cells = progressGrid.querySelectorAll('.progress-cell');
+    for (var ci = 0; ci < cells.length; ci++){
+      var sid = parseInt(cells[ci].getAttribute('data-slot'), 10);
+      cells[ci].classList.remove('hit','miss');
+      if (stateGame.correctMark[sid] === true) cells[ci].classList.add('hit');
+      else if (stateGame.correctMark[sid] === false) cells[ci].classList.add('miss');
+    }
+
+    for (var cri = 0; cri < trialRows.length; cri++){
+      var tidx = parseInt(trialRows[cri].getAttribute('data-trial'), 10);
+      trialRows[cri].classList.remove('active','solved','wrong');
+      if (tidx === idx) trialRows[cri].classList.add('active');
+      if (stateGame.correctMark[tidx] === true) trialRows[cri].classList.add('solved');
+      else if (stateGame.correctMark[tidx] === false) trialRows[cri].classList.add('wrong');
+    }
+
+    if (s >= 6 && !stateGame.milestoneFired){
+      stateGame.milestoneFired = true;
+      hudSolved.classList.add('gold');
+      milestone.classList.add('show');
+      setTimeout(function(){ milestone.classList.remove('show'); }, 3500);
+    } else if (s < 6){
+      hudSolved.classList.remove('gold');
+      stateGame.milestoneFired = false;
+    }
+  }
+
+  function updateTrialHeader(){
+    var t = getTrial();
+    trialCn.textContent = stateGame.lang === 'cn' ? t.cnName : t.enName;
+    trialHintTag.textContent = stateGame.lang === 'cn'
+      ? 'trial ' + (stateGame.activeTrial < 9 ? '0' : '') + (stateGame.activeTrial+1)
+      : 'trial ' + (stateGame.activeTrial < 9 ? '0' : '') + (stateGame.activeTrial+1);
+  }
+
+  function choiceName(choiceId){
+    var dict_cn = { left:'想左手', right:'想右手', unclear:'不清楚 / 双手' };
+    var dict_en = { left:'Left hand', right:'Right hand', unclear:'Unclear / both' };
+    return stateGame.lang === 'cn' ? dict_cn[choiceId] : dict_en[choiceId];
+  }
+
+  function updateVerdict(){
+    var idx = stateGame.activeTrial;
+    var ans = stateGame.answers[idx];
+    var mark = stateGame.correctMark[idx];
+    var t = TRIALS[idx];
+
+    verdictBox.classList.remove('right','wrong');
+
+    if (ans === null){
+      verdictTag.textContent = stateGame.lang === 'cn' ? '待判定' : 'PENDING';
+      verdictText.textContent = stateGame.lang === 'cn'
+        ? '选一个判断提交你的解码。'
+        : 'Pick a choice to submit your decode.';
+      for (var k = 0; k < chips.length; k++) chips[k].classList.remove('disabled');
+      return;
+    }
+
+    for (var m = 0; m < chips.length; m++) chips[m].classList.add('disabled');
+
+    if (mark === true){
+      verdictBox.classList.add('right');
+      verdictTag.textContent = stateGame.lang === 'cn' ? '解码正确' : 'CORRECT';
+      verdictText.textContent = stateGame.lang === 'cn' ? t.cnExplain : t.enExplain;
+    } else {
+      verdictBox.classList.add('wrong');
+      verdictTag.textContent = stateGame.lang === 'cn' ? '解码不对' : 'WRONG';
+      var pickedName = choiceName(ans);
+      var correctName = choiceName(t.correct);
+      verdictText.textContent = stateGame.lang === 'cn'
+        ? '你选了 "'+pickedName+'", 真相是 "'+correctName+'"。' + t.cnExplain
+        : 'You picked "'+pickedName+'", truth is "'+correctName+'". ' + t.enExplain;
+    }
+  }
+
+  function switchTrial(newIdx){
+    if (newIdx < 0 || newIdx >= TRIALS.length) return;
+    stateGame.activeTrial = newIdx;
+    buildWaves();
+    updateHUD();
+    updateTrialHeader();
+    updateVerdict();
+    refreshNavBtns();
+  }
+
+  function refreshNavBtns(){
+    prevBtn.disabled = (stateGame.activeTrial === 0);
+    nextBtn.disabled = (stateGame.activeTrial === TRIALS.length - 1);
+  }
+
+  function pickChoice(choiceId){
+    var idx = stateGame.activeTrial;
+    if (stateGame.answers[idx] !== null) return;
+    stateGame.answers[idx] = choiceId;
+    stateGame.correctMark[idx] = (TRIALS[idx].correct === choiceId);
+    updateVerdict();
+    updateHUD();
+  }
+
+  function resetAll(){
+    stateGame.activeTrial = 0;
+    stateGame.erdThresh = 35;
+    stateGame.answers = [null, null, null, null, null, null];
+    stateGame.correctMark = [null, null, null, null, null, null];
+    stateGame.milestoneFired = false;
+    erdSlider.value = 35;
+    erdReadout.textContent = '35';
+    hudSolved.classList.remove('gold');
+    milestone.classList.remove('show');
+    buildWaves();
+    updateHUD();
+    updateTrialHeader();
+    updateVerdict();
+    refreshNavBtns();
+  }
+
+  function refreshI18N(){
+    var nodes = document.querySelectorAll('[data-i18n-cn]');
+    for (var i = 0; i < nodes.length; i++){
+      var el = nodes[i];
+      var cn = el.getAttribute('data-i18n-cn');
+      var en = el.getAttribute('data-i18n-en');
+      var content = stateGame.lang === 'cn' ? cn : en;
+      if (content.indexOf('<') >= 0) el.innerHTML = content;
+      else el.textContent = content;
+    }
+    document.documentElement.lang = stateGame.lang === 'cn' ? 'zh-CN' : 'en';
+    buildWaves();
+    updateTrialHeader();
+    updateVerdict();
+  }
+
+  // ===== event listeners =====
+  erdSlider.addEventListener('input', function(){
+    stateGame.erdThresh = parseInt(erdSlider.value, 10);
+    erdReadout.textContent = stateGame.erdThresh;
+    buildWaves();
+  });
+  erdSlider.addEventListener('change', function(){
+    stateGame.erdThresh = parseInt(erdSlider.value, 10);
+    erdReadout.textContent = stateGame.erdThresh;
+    buildWaves();
+  });
+
+  langBtn.addEventListener('click', function(){
+    stateGame.lang = stateGame.lang === 'cn' ? 'en' : 'cn';
+    refreshI18N();
+  });
+
+  resetBtn.addEventListener('click', resetAll);
+
+  prevBtn.addEventListener('click', function(){ switchTrial(stateGame.activeTrial - 1); });
+  nextBtn.addEventListener('click', function(){ switchTrial(stateGame.activeTrial + 1); });
+
+  for (var ri = 0; ri < trialRows.length; ri++){
+    (function(row){
+      row.addEventListener('click', function(){
+        var idx = parseInt(row.getAttribute('data-trial'), 10);
+        switchTrial(idx);
+      });
+    })(trialRows[ri]);
+  }
+
+  for (var ci = 0; ci < chips.length; ci++){
+    (function(chip){
+      chip.addEventListener('click', function(){
+        if (chip.classList.contains('disabled')) return;
+        var c = chip.getAttribute('data-choice');
+        pickChoice(c);
+      });
+    })(chips[ci]);
+  }
+
+  // init
+  buildWaves();
+  updateHUD();
+  updateTrialHeader();
+  updateVerdict();
+  refreshNavBtns();
+})();
+</script>
+</body>
+</html>

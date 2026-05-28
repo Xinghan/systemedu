@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CSP 找最佳方向</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;700&family=Inter:wght@400;600;800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+  /* 第 1 层 — 共享深空底 (B 类, 所有学科统一) */
+  :root{
+    --bg-0: oklch(0.14 0.035 265);
+    --bg-1: oklch(0.18 0.04 265);
+    --bg-2: oklch(0.22 0.045 265);
+    --bg-3: oklch(0.28 0.05 265);
+    --line: oklch(0.35 0.05 265 / 0.35);
+    --line-strong: oklch(0.55 0.08 265 / 0.55);
+    --fg:      oklch(0.96 0.01 265);
+    --fg-dim:  oklch(0.75 0.02 265);
+    --fg-mute: oklch(0.55 0.03 265);
+    --gold:    oklch(0.85 0.14 85);
+    /* 第 2 层 — math 学科 accent (MTH-06 electric blue) */
+    --math:  oklch(0.72 0.17 245);
+    /* 第 3 层 — MTH-06 5 色 palette */
+    --axis:     oklch(0.72 0.17 245);  /* AXIS */
+    --proof:    oklch(0.52 0.16 245);  /* PROOF */
+    --shadow:   oklch(0.35 0.10 245);  /* SHADOW */
+    --solution: oklch(0.92 0.08 240);  /* SOLUTION */
+    --qed:      oklch(0.85 0.14 85);   /* QED */
+    /* 两类信号区分色 (左手暖 / 右手 math accent) */
+    --cls-l: oklch(0.75 0.16 25);      /* left-hand, cortex coral 区分 */
+    --cls-r: var(--math);              /* right-hand, electric blue */
+  }
+  html,body{margin:0;padding:0;height:100vh;overflow:hidden;background:var(--bg-0);
+    font-family:'Noto Sans SC','Inter',sans-serif;color:var(--fg);}
+  .game-sidebar{background:var(--bg-1);border-right:1.5px solid var(--line-strong);}
+  .panel{background:var(--bg-2);border:1.5px solid var(--line);box-shadow:3px 3px 0 var(--bg-0);}
+  .lang-btn,.btn{background:var(--bg-2);border:1.5px solid var(--line-strong);color:var(--fg);
+    font-weight:600;box-shadow:2px 2px 0 var(--bg-0);transition:all .1s;cursor:pointer;}
+  .lang-btn:hover,.btn:hover{transform:translate(-1px,-1px);box-shadow:3px 3px 0 var(--bg-0);}
+  .lang-btn:active,.btn:active{transform:translate(1px,1px);box-shadow:1px 1px 0 var(--bg-0);}
+  .btn.solve{border-color:var(--axis);color:var(--solution);}
+  .hud-row{display:flex;justify-content:space-between;gap:10px;line-height:1.55;align-items:baseline;}
+  .hud-lbl{color:var(--fg-dim);font-size:11px;font-family:'JetBrains Mono',monospace;}
+  .hud-val{color:var(--axis);font-weight:700;font-size:14px;font-family:'JetBrains Mono',monospace;}
+  .ratio-big{font-family:'JetBrains Mono',monospace;font-weight:700;font-size:30px;line-height:1;
+    color:var(--solution);text-align:center;}
+  .mono{font-family:'JetBrains Mono',monospace;}
+  .challenge{background:var(--bg-2);border:1.5px dashed var(--axis);padding:8px 12px;}
+  input[type=range]{accent-color:var(--axis);}
+  .lockchip{font-size:10px;font-family:'JetBrains Mono',monospace;padding:2px 7px;
+    border:1px solid var(--line-strong);color:var(--fg-mute);}
+  .lockchip.on{border-color:var(--qed);color:var(--qed);}
+</style>
+</head>
+<body class="h-screen overflow-hidden flex">
+
+<aside class="game-sidebar w-[200px] h-screen flex-shrink-0 flex flex-col gap-3 p-3">
+  <!-- Pi mascot: rotating tetrahedron, math 5 色 -->
+  <div class="flex items-center gap-2">
+    <svg width="34" height="34" viewBox="0 0 40 40" aria-hidden="true">
+      <polygon points="20,4 36,30 4,30" fill="none" stroke="var(--axis)" stroke-width="1.6"/>
+      <polygon points="20,4 36,30 20,22" fill="var(--proof)" opacity="0.55"/>
+      <polygon points="20,4 4,30 20,22" fill="var(--shadow)" opacity="0.7"/>
+      <polygon points="4,30 36,30 20,22" fill="var(--axis)" opacity="0.35"/>
+      <circle cx="20" cy="4" r="1.8" fill="var(--solution)"/>
+      <text x="20" y="20" text-anchor="middle" font-family="JetBrains Mono,monospace"
+        font-size="7" font-weight="700" fill="var(--solution)">Pi</text>
+    </svg>
+    <h1 class="text-sm font-bold leading-tight" id="title">CSP 找最佳方向</h1>
+  </div>
+  <p class="text-xs leading-relaxed" id="goal" style="color:var(--fg-dim);">
+    转 <b style="color:var(--axis);">投影方向 w</b>, 让左手/右手两类投影的 <b>方差比 (Rayleigh 商)</b> 越大越好。逼近 CSP 自动解!
+  </p>
+
+  <!-- Rayleigh 商 大数字 HUD -->
+  <div class="panel p-2 mt-1">
+    <div class="text-[10px] mono text-center mb-1" style="color:var(--fg-dim);" id="lblRayleigh">Rayleigh 商 R(w)</div>
+    <div class="ratio-big" id="vRatio">--</div>
+    <div class="hud-row mt-2"><span class="hud-lbl" id="lblAngle">方向角 θ</span><span class="hud-val" id="vAngle">0°</span></div>
+    <div class="hud-row"><span class="hud-lbl" id="lblVarL">var 左手</span><span class="hud-val" id="vVarL" style="color:var(--cls-l);">--</span></div>
+    <div class="hud-row"><span class="hud-lbl" id="lblVarR">var 右手</span><span class="hud-val" id="vVarR" style="color:var(--cls-r);">--</span></div>
+  </div>
+
+  <!-- 最优对比 -->
+  <div class="panel p-2">
+    <div class="hud-row"><span class="hud-lbl" id="lblBest">CSP 最优 R*</span><span class="hud-val" id="vBest" style="color:var(--qed);">--</span></div>
+    <div class="hud-row"><span class="hud-lbl" id="lblPct">接近度</span><span class="hud-val" id="vPct">0%</span></div>
+    <div class="mt-1"><span class="lockchip" id="lockChip">未解锁 / locked</span></div>
+  </div>
+
+  <div class="challenge text-xs" id="challengeBox">
+    <div id="chText" style="color:var(--fg-dim);">转到接近度 &gt; 95% 即解锁 CSP 方向探索者</div>
+  </div>
+
+  <button id="btnSolve" class="btn solve px-2 py-2 text-xs">CSP 一步求解 / Solve</button>
+  <button id="btnReset" class="btn px-2 py-2 text-xs">重置 / Reset</button>
+  <button id="langBtn" class="lang-btn mt-auto px-2 py-2 text-xs">中 / EN</button>
+</aside>
+
+<main class="flex-1 h-screen relative overflow-hidden p-4 flex flex-col gap-3">
+  <div class="flex items-center justify-between">
+    <h2 class="text-sm font-bold" id="canvasTitle" style="color:var(--fg);">二维特征空间 — 转方向 w, 看两类投影方差</h2>
+    <div class="text-xs mono" id="canvasHint" style="color:var(--fg-dim);">拖下方滑块旋转 w</div>
+  </div>
+
+  <div class="flex-1 grid grid-cols-3 gap-3" style="min-height:0;">
+    <!-- 散点 + 可转 w 轴 占 2 列 -->
+    <div class="panel relative col-span-2" style="display:flex;flex-direction:column;">
+      <canvas id="stageScatter" class="absolute inset-0 w-full h-full"></canvas>
+    </div>
+    <!-- 双投影方差柱 占 1 列 -->
+    <div class="panel relative" style="display:flex;flex-direction:column;">
+      <canvas id="stageBars" class="absolute inset-0 w-full h-full"></canvas>
+    </div>
+  </div>
+
+  <!-- 旋转控件 (Pattern 6 Live Tuning 核心) -->
+  <div class="panel p-3 flex items-center gap-3" style="flex-shrink:0;">
+    <span class="text-xs font-bold w-28 mono" style="color:var(--axis);" id="lblSlider">方向角 θ</span>
+    <input id="thetaSlider" type="range" min="0" max="180" value="30" step="1" class="flex-1">
+    <span class="mono text-sm font-bold w-14 text-right" style="color:var(--axis);" id="sliderVal">30°</span>
+  </div>
+
+  <div id="toast" class="absolute top-3 left-1/2 -translate-x-1/2 panel px-4 py-2 text-sm font-bold mono"
+    style="display:none;z-index:50;color:var(--qed);"></div>
+</main>
+
+<script>
+var LANG='cn';
+var I18N = {
+  title:{cn:'CSP 找最佳方向', en:'CSP: Find Best Direction'},
+  goal:{cn:'转 <b style="color:var(--axis);">投影方向 w</b>, 让左手/右手两类投影的 <b>方差比 (Rayleigh 商)</b> 越大越好。逼近 CSP 自动解!',
+        en:'Rotate <b style="color:var(--axis);">direction w</b> to maximize the variance ratio (<b>Rayleigh quotient</b>) of left/right projections. Approach the CSP solution!'},
+  lblRayleigh:{cn:'Rayleigh 商 R(w)', en:'Rayleigh R(w)'},
+  lblAngle:{cn:'方向角 θ', en:'angle θ'},
+  lblVarL:{cn:'var 左手', en:'var left'},
+  lblVarR:{cn:'var 右手', en:'var right'},
+  lblBest:{cn:'CSP 最优 R*', en:'CSP best R*'},
+  lblPct:{cn:'接近度', en:'closeness'},
+  lockLocked:{cn:'未解锁 / locked', en:'locked'},
+  lockOn:{cn:'CSP 方向探索者 已解锁', en:'CSP Direction Explorer unlocked'},
+  challenge:{cn:'转到接近度 &gt; 95% 即解锁 CSP 方向探索者', en:'reach closeness &gt; 95% to unlock CSP Direction Explorer'},
+  challengeSolved:{cn:'已解锁! 电脑用广义特征值一步就能算出这个最优方向, 无需手动试。',
+                   en:'Unlocked! The computer finds this optimum in one step via generalized eigenvalues — no manual search.'},
+  canvasTitle:{cn:'二维特征空间 — 转方向 w, 看两类投影方差', en:'2D feature space — rotate w, watch class variances'},
+  canvasHint:{cn:'拖下方滑块旋转 w', en:'drag slider to rotate w'},
+  lblSlider:{cn:'方向角 θ', en:'angle θ'},
+  solve:{cn:'CSP 一步求解 / Solve', en:'CSP one-shot Solve'},
+  reset:{cn:'重置 / Reset', en:'Reset'},
+  toastUnlock:{cn:'解锁! R(w) 已逼近 CSP 最优', en:'Unlocked! R(w) reached CSP optimum'},
+  toastSolve:{cn:'广义特征值一步得到 θ*', en:'generalized eigenvalue gives θ*'},
+};
+function t(k){return (I18N[k]&&I18N[k][LANG])||(I18N[k]&&I18N[k]['en'])||k;}
+
+// ---- 数据生成 (确定性高斯) ----
+function gauss(seed){
+  var u1 = (Math.sin(seed*12.9898)*43758.5453)%1; u1 = u1<0?u1+1:u1;
+  var u2 = (Math.sin(seed*78.233)*43758.5453)%1; u2 = u2<0?u2+1:u2;
+  if(u1<0.0001) u1=0.0001;
+  return Math.sqrt(-2*Math.log(u1))*Math.cos(2*Math.PI*u2);
+}
+// 沿任意主轴 (angleDeg) 拉伸的椭圆点云: 主轴方差 sMaj^2, 次轴方差 sMin^2
+function genCloud(sMaj, sMin, angleDeg, n, seed){
+  var a = angleDeg*Math.PI/180, ca=Math.cos(a), sa=Math.sin(a);
+  var arr=[];
+  for(var i=0;i<n;i++){
+    var z1=gauss(seed+i*2.7), z2=gauss(seed+i*2.7+1.3);
+    var u = sMaj*z1, v = sMin*z2;       // 椭圆主/次轴坐标
+    arr.push([u*ca - v*sa, u*sa + v*ca]); // 旋到全局坐标
+  }
+  return arr;
+}
+// 左手: 沿 ~20° 方向方差大; 右手: 沿 ~110° 方向方差大 → 两类协方差结构不同
+var ptsL = genCloud(7.5, 2.2, 20, 220, 31);
+var ptsR = genCloud(7.5, 2.2, 110, 220, 47);
+
+function projectVar(pts, thetaRad){
+  var cw=Math.cos(thetaRad), sw=Math.sin(thetaRad);
+  var vals=pts.map(function(p){return p[0]*cw + p[1]*sw;});
+  var m=vals.reduce(function(a,b){return a+b;},0)/vals.length;
+  var v=vals.reduce(function(a,x){return a+(x-m)*(x-m);},0)/vals.length;
+  return {vals:vals, vr:v};
+}
+function rayleighAt(thetaDeg){
+  var r=thetaDeg*Math.PI/180;
+  var vL=projectVar(ptsL,r).vr, vR=projectVar(ptsR,r).vr;
+  return {vL:vL, vR:vR, ratio: vR>0.001 ? vL/vR : 999};
+}
+// CSP 最优: 扫描求 ratio 最大方向 (= 广义特征向量的解析效果)
+var bestTheta=0, bestRatio=-Infinity;
+(function(){
+  for(var th=0; th<180; th+=0.5){
+    var rt=rayleighAt(th).ratio;
+    if(rt>bestRatio){ bestRatio=rt; bestTheta=th; }
+  }
+})();
+
+var theta=30;
+var unlocked=false;
+
+function refreshI18N(){
+  document.getElementById('title').textContent=t('title');
+  document.getElementById('goal').innerHTML=t('goal');
+  document.getElementById('lblRayleigh').textContent=t('lblRayleigh');
+  document.getElementById('lblAngle').textContent=t('lblAngle');
+  document.getElementById('lblVarL').textContent=t('lblVarL');
+  document.getElementById('lblVarR').textContent=t('lblVarR');
+  document.getElementById('lblBest').textContent=t('lblBest');
+  document.getElementById('lblPct').textContent=t('lblPct');
+  document.getElementById('canvasTitle').textContent=t('canvasTitle');
+  document.getElementById('canvasHint').textContent=t('canvasHint');
+  document.getElementById('lblSlider').textContent=t('lblSlider');
+  document.getElementById('btnSolve').textContent=t('solve');
+  document.getElementById('btnReset').textContent=t('reset');
+  document.getElementById('langBtn').textContent= LANG==='cn'?'中 / EN':'EN / 中';
+  document.getElementById('lockChip').innerHTML = unlocked? t('lockOn') : t('lockLocked');
+  document.getElementById('lockChip').className = 'lockchip'+(unlocked?' on':'');
+  document.getElementById('chText').innerHTML = unlocked? t('challengeSolved') : t('challenge');
+}
+
+function showToast(msg){
+  var el=document.getElementById('toast');
+  el.style.display='block'; el.textContent=msg;
+  clearTimeout(showToast._t);
+  showToast._t=setTimeout(function(){el.style.display='none';}, 2200);
+}
+
+function updateHUD(){
+  var rt=rayleighAt(theta);
+  document.getElementById('vAngle').textContent=theta.toFixed(0)+'°';
+  document.getElementById('sliderVal').textContent=theta.toFixed(0)+'°';
+  document.getElementById('vVarL').textContent=rt.vL.toFixed(1);
+  document.getElementById('vVarR').textContent=rt.vR.toFixed(1);
+  document.getElementById('vRatio').textContent=rt.ratio.toFixed(2);
+  document.getElementById('vBest').textContent=bestRatio.toFixed(2);
+  // 接近度: 当前 ratio 相对最优 (取 log 域更平滑, 但直接比即可)
+  var pct = Math.max(0, Math.min(100, rt.ratio/bestRatio*100));
+  document.getElementById('vPct').textContent=pct.toFixed(0)+'%';
+  if(!unlocked && pct>=95){
+    unlocked=true;
+    showToast(t('toastUnlock'));
+    refreshI18N();
+  }
+}
+
+// ---- canvas ----
+var cScatter=document.getElementById('stageScatter');
+var cBars=document.getElementById('stageBars');
+var ctxS=cScatter.getContext('2d');
+var ctxB=cBars.getContext('2d');
+function resizeOne(canvas){
+  var rect=canvas.parentElement.getBoundingClientRect();
+  if(rect.width<1||rect.height<1) return;
+  var dpr=window.devicePixelRatio||1;
+  canvas.width=rect.width*dpr; canvas.height=rect.height*dpr;
+  canvas.style.width=rect.width+'px'; canvas.style.height=rect.height+'px';
+  canvas.getContext('2d').setTransform(dpr,0,0,dpr,0,0);
+}
+function resizeAll(){ resizeOne(cScatter); resizeOne(cBars); drawAll(); }
+window.addEventListener('resize', resizeAll);
+
+function cssVar(name){
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+}
+
+function drawScatter(){
+  var c=ctxS, W=cScatter.clientWidth, H=cScatter.clientHeight;
+  if(W<1||H<1) return;
+  c.clearRect(0,0,W,H);
+  c.fillStyle=cssVar('--bg-2'); c.fillRect(0,0,W,H);
+
+  var sz=Math.min(W,H)-50, cx=W/2, cy=H/2, unit=sz/2/16;
+  // 网格轴
+  c.strokeStyle=cssVar('--line'); c.lineWidth=1;
+  c.beginPath();
+  c.moveTo(cx-sz/2, cy); c.lineTo(cx+sz/2, cy);
+  c.moveTo(cx, cy-sz/2); c.lineTo(cx, cy+sz/2);
+  c.stroke();
+  c.fillStyle=cssVar('--fg-mute'); c.font='600 10px JetBrains Mono,monospace';
+  c.textAlign='left'; c.fillText('特征 1 / f1', cx+sz/2-58, cy-5);
+  c.textAlign='center'; c.fillText('特征 2 / f2', cx, cy-sz/2-4);
+
+  // 两类散点
+  function plot(pts, col){
+    c.fillStyle=col;
+    for(var i=0;i<pts.length;i++){
+      var x=cx+pts[i][0]*unit, y=cy-pts[i][1]*unit;
+      if(Math.abs(pts[i][0]*unit)>sz/2 || Math.abs(pts[i][1]*unit)>sz/2) continue;
+      c.beginPath(); c.arc(x,y,2.3,0,Math.PI*2); c.fill();
+    }
+  }
+  plot(ptsL, 'oklch(0.75 0.16 25 / 0.5)');
+  plot(ptsR, 'oklch(0.72 0.17 245 / 0.5)');
+
+  // 可转 w 轴 (AXIS 色, 玩家旋转的对象)
+  var r=theta*Math.PI/180;
+  var dx=Math.cos(r)*sz/2*0.92, dy=-Math.sin(r)*sz/2*0.92;
+  c.strokeStyle=cssVar('--axis'); c.lineWidth=3; c.setLineDash([9,5]);
+  c.beginPath(); c.moveTo(cx-dx, cy-dy); c.lineTo(cx+dx, cy+dy); c.stroke();
+  c.setLineDash([]);
+  // 箭头
+  c.fillStyle=cssVar('--axis');
+  var ang=Math.atan2(dy,dx);
+  c.save(); c.translate(cx+dx, cy+dy); c.rotate(ang);
+  c.beginPath(); c.moveTo(0,0); c.lineTo(-13,-6); c.lineTo(-13,6); c.closePath(); c.fill();
+  c.restore();
+  // w 标签
+  c.fillStyle=cssVar('--solution'); c.font='800 14px JetBrains Mono,monospace'; c.textAlign='left';
+  c.fillText('w', cx+dx+8, cy+dy-2);
+
+  // 图例 (左下角, 避开数据)
+  c.font='700 11px Inter,sans-serif'; c.textAlign='left';
+  c.fillStyle=cssVar('--cls-l'); c.fillText('左手 left', 12, H-26);
+  c.fillStyle=cssVar('--math'); c.fillText('右手 right', 12, H-10);
+}
+
+function drawBars(){
+  var c=ctxB, W=cBars.clientWidth, H=cBars.clientHeight;
+  if(W<1||H<1) return;
+  c.clearRect(0,0,W,H);
+  c.fillStyle=cssVar('--bg-2'); c.fillRect(0,0,W,H);
+
+  var rt=rayleighAt(theta);
+  c.fillStyle=cssVar('--fg-dim'); c.font='700 11px JetBrains Mono,monospace'; c.textAlign='center';
+  c.fillText('投影方差 / projected var', W/2, 18);
+
+  var baseY=H-58, maxH=baseY-46;
+  var maxV=Math.max(rt.vL, rt.vR, 1);
+  var bw=Math.min(58, (W-60)/2);
+  var gap=(W - bw*2)/3;
+  function bar(x, val, col, lblTop, lblBot){
+    var h=val/maxV*maxH;
+    c.fillStyle=col; c.fillRect(x, baseY-h, bw, h);
+    c.strokeStyle=cssVar('--bg-0'); c.lineWidth=1; c.strokeRect(x, baseY-h, bw, h);
+    c.fillStyle=cssVar('--fg'); c.font='700 13px JetBrains Mono,monospace'; c.textAlign='center';
+    c.fillText(val.toFixed(1), x+bw/2, baseY-h-6);
+    c.fillStyle=cssVar('--fg-dim'); c.font='600 11px Inter,sans-serif';
+    c.fillText(lblTop, x+bw/2, baseY+16);
+    c.fillStyle=col; c.font='700 10px JetBrains Mono,monospace';
+    c.fillText(lblBot, x+bw/2, baseY+30);
+  }
+  // 基线
+  c.strokeStyle=cssVar('--line'); c.lineWidth=1.2;
+  c.beginPath(); c.moveTo(14, baseY); c.lineTo(W-14, baseY); c.stroke();
+
+  bar(gap, rt.vL, cssVar('--cls-l'), '左手 left', 'var_L');
+  bar(gap*2+bw, rt.vR, cssVar('--math'), '右手 right', 'var_R');
+
+  // Rayleigh 商 = var_L / var_R 在底部
+  c.fillStyle=cssVar('--solution'); c.font='800 13px JetBrains Mono,monospace'; c.textAlign='center';
+  c.fillText('R = var_L / var_R = '+rt.ratio.toFixed(2), W/2, H-8);
+}
+
+function drawAll(){ drawScatter(); drawBars(); }
+
+// ---- 交互 (Pattern 6 Live Tuning) ----
+document.getElementById('thetaSlider').addEventListener('input', function(e){
+  theta=parseInt(e.target.value,10);
+  updateHUD(); drawAll();
+});
+document.getElementById('btnSolve').addEventListener('click', function(){
+  // CSP 一步求解: 直接把 w 转到广义特征向量方向 (= 扫描得到的 bestTheta)
+  theta=Math.round(bestTheta);
+  document.getElementById('thetaSlider').value=theta;
+  updateHUD(); drawAll();
+  showToast(t('toastSolve')+' θ*='+theta+'°');
+});
+document.getElementById('btnReset').addEventListener('click', function(){
+  theta=30; document.getElementById('thetaSlider').value=30;
+  updateHUD(); drawAll();
+});
+document.getElementById('langBtn').addEventListener('click', function(){
+  LANG = LANG==='cn'?'en':'cn'; refreshI18N(); drawAll();
+});
+
+resizeAll();
+setTimeout(resizeAll,200); setTimeout(resizeAll,600);
+document.fonts.ready.then(function(){resizeAll();});
+refreshI18N();
+updateHUD();
+</script>
+</body>
+</html>
