@@ -1,0 +1,859 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>数据质量检查 — 5 道质检关卡，确认能训 BCI</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&family=Noto+Sans+SC:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    /* Industrial Atelier — Claude warm cream + coral */
+    --paper:     #FAF9F5;
+    --paper-2:   #F1EDDF;
+    --card:      #FFFFFF;
+    --ink:       #191814;
+    --ink-2:     #2B2924;
+    --sub:       #6B6557;
+    --sub-2:     #9D978A;
+    --border:    #EBE5D6;
+    --border-2:  #D9D1BD;
+    --hairline:  #F2EDE0;
+
+    --primary:       #D97757;
+    --primary-ink:   #9A4A2E;
+    --primary-soft:  #F8EDE5;
+    --primary-line:  #ECCFB8;
+
+    /* Domain accent — computing (数据/分类器) */
+    --computing:      #C04E68;
+    --computing-soft: #F4DDE3;
+    --computing-line: #E2B8C4;
+    --computing-ink:  #8E3149;
+
+    --shadow-sm: 0 1px 2px 0 rgba(25,24,20,.04);
+    --shadow:    0 1px 3px 0 rgba(25,24,20,.06), 0 1px 2px -1px rgba(25,24,20,.04);
+    --shadow-md: 0 4px 8px -2px rgba(25,24,20,.06), 0 2px 4px -2px rgba(25,24,20,.04);
+    --shadow-lg: 0 12px 24px -6px rgba(25,24,20,.1), 0 4px 8px -4px rgba(25,24,20,.05);
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    height:100vh;overflow:hidden;
+    background:var(--paper);
+    color:var(--ink);
+    font-family:'Inter','PingFang SC','Noto Sans SC',system-ui,sans-serif;
+    display:flex;
+    -webkit-font-smoothing:antialiased;
+    text-rendering:optimizeLegibility;
+  }
+  .mono{font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,monospace;}
+
+  /* ---------- Sidebar ---------- */
+  .sidebar{
+    width:200px;flex-shrink:0;height:100vh;
+    background:var(--card);
+    border-right:1px solid var(--border);
+    display:flex;flex-direction:column;
+    padding:20px 16px;gap:16px;
+  }
+  .brand{
+    font-size:13px;font-weight:700;letter-spacing:0.02em;color:var(--ink);
+    padding-bottom:14px;border-bottom:1px solid var(--hairline);
+  }
+  .brand-sub{
+    display:block;margin-top:6px;font-size:11px;font-weight:500;
+    color:var(--sub);letter-spacing:0;
+  }
+  .deco{
+    width:100%;height:104px;
+    background:var(--paper-2);
+    border:1px solid var(--border);
+    border-radius:8px;
+    display:flex;align-items:center;justify-content:center;
+    box-shadow:var(--shadow-sm);
+  }
+  .deco svg{width:96px;height:84px;}
+  .guide{display:flex;flex-direction:column;gap:10px;margin-top:4px;}
+  .guide-li{
+    font-size:11.5px;line-height:1.5;
+    color:var(--sub);
+    padding:2px 0 2px 10px;
+    border-left:2px solid var(--border-2);
+  }
+  .guide-li.hl{border-left-color:var(--primary);color:var(--ink-2);}
+  .lang-btn{
+    margin-top:auto;
+    font-family:'JetBrains Mono',monospace;
+    font-size:11px;font-weight:600;letter-spacing:0.06em;
+    padding:8px 12px;cursor:pointer;
+    background:var(--card);color:var(--ink);
+    border:1px solid var(--border-2);
+    border-radius:6px;
+    transition:background 120ms ease, border-color 120ms ease;
+  }
+  .lang-btn:hover{background:var(--paper-2);border-color:var(--computing-line);}
+  .lang-btn:active{background:var(--computing-soft);}
+
+  /* ---------- Main ---------- */
+  .main{
+    flex:1;height:100vh;overflow:hidden;
+    display:grid;
+    grid-template-rows: minmax(96px, 16%) 1fr minmax(116px, 21%);
+    padding:18px 24px;gap:13px;position:relative;
+    background:var(--paper);
+  }
+
+  /* === 顶部 标题 + 庆祝印章 === */
+  .hero{
+    display:flex;align-items:center;gap:22px;
+    padding:14px 22px;
+    background:var(--card);
+    border:1px solid var(--border);
+    border-radius:10px;
+    box-shadow:var(--shadow-sm);
+    position:relative;overflow:hidden;
+  }
+  .hero-text{flex:1;min-width:0;}
+  .hero-text .title{font-size:19px;font-weight:700;color:var(--ink);margin-bottom:6px;letter-spacing:-0.01em;}
+  .hero-text .one{font-size:13px;line-height:1.5;color:var(--sub);}
+  .hero-text .one .ok-word{
+    color:var(--computing-ink);font-weight:600;
+    background:var(--computing-soft);
+    padding:1px 6px;border-radius:4px;margin:0 1px;
+    white-space:nowrap;
+  }
+  .hero-text .one .loop-word{color:var(--primary-ink);font-weight:700;}
+  /* coral 庆祝印章 */
+  .stamp{
+    flex-shrink:0;width:96px;height:96px;position:relative;
+    display:flex;align-items:center;justify-content:center;
+    animation:stamp-breathe 3.4s ease-in-out infinite;
+  }
+  @keyframes stamp-breathe{
+    0%,100%{transform:scale(1) rotate(-7deg);}
+    50%   {transform:scale(1.045) rotate(-7deg);}
+  }
+  .stamp .stamp-ring{
+    position:absolute;inset:0;
+    border:2.5px solid var(--primary);
+    border-radius:50%;
+    box-shadow:inset 0 0 0 3px var(--primary-soft);
+  }
+  .stamp .stamp-ring.dash{
+    inset:8px;border:1.4px dashed var(--primary-line);box-shadow:none;
+  }
+  .stamp .stamp-txt{
+    font-family:'JetBrains Mono',monospace;
+    font-size:14px;font-weight:700;letter-spacing:0.05em;
+    color:var(--primary-ink);text-align:center;line-height:1.05;
+  }
+  .stamp .stamp-txt .small{
+    display:block;font-size:8px;font-weight:600;letter-spacing:0.12em;
+    color:var(--primary);margin-top:2px;
+  }
+
+  /* === 中部 — 上下两块: 5 关卡 + 看板 === */
+  .mid{
+    display:grid;
+    grid-template-rows: 1.18fr 1fr;
+    gap:13px;min-height:0;position:relative;
+  }
+  .panel{
+    position:relative;
+    background:var(--card);
+    border:1px solid var(--border);
+    border-radius:10px;
+    box-shadow:var(--shadow-sm);
+    padding:14px 22px 16px;
+    display:flex;flex-direction:column;gap:10px;min-height:0;
+  }
+  .panel-head{display:flex;align-items:baseline;justify-content:space-between;}
+  .panel-head .ttl{font-size:14px;font-weight:700;color:var(--ink);letter-spacing:-0.01em;}
+  .panel-head .hint{font-size:11px;color:var(--sub);font-family:'JetBrains Mono',monospace;}
+  .panel-head .hint .pin{color:var(--primary);font-weight:700;}
+
+  /* --- 5 道质检关卡 --- */
+  .gates-wrap{position:relative;flex:1;display:flex;align-items:center;min-height:0;}
+  .gates{position:relative;width:100%;display:flex;align-items:stretch;gap:10px;z-index:2;}
+  .gate{
+    flex:1 1 0;min-width:0;
+    padding:11px 9px 12px;
+    background:var(--paper);
+    border:1px solid var(--border);
+    border-radius:8px;
+    cursor:pointer;outline:none;
+    transition:background 200ms ease, border-color 200ms ease, transform 200ms ease, box-shadow 200ms ease;
+    display:flex;flex-direction:column;gap:6px;align-items:center;text-align:center;
+    position:relative;
+  }
+  .gate .gnum{
+    font-family:'JetBrains Mono',monospace;font-size:10.5px;font-weight:700;
+    color:var(--sub-2);letter-spacing:0.06em;
+  }
+  .gate .gicon{
+    width:30px;height:30px;color:var(--sub);
+    display:flex;align-items:center;justify-content:center;
+    transition:color 200ms ease;
+  }
+  .gate .gicon svg{width:28px;height:28px;}
+  .gate .gttl{font-size:12.5px;font-weight:600;color:var(--ink-2);line-height:1.25;}
+  .gate .gsub{font-size:9.5px;color:var(--sub-2);line-height:1.3;}
+  .gate .gpass{
+    margin-top:1px;
+    font-family:'JetBrains Mono',monospace;font-size:9px;font-weight:700;
+    color:var(--computing);background:var(--computing-soft);
+    border:1px solid var(--computing-line);
+    padding:1px 7px;border-radius:999px;letter-spacing:0.05em;
+  }
+  .gate:hover, .gate:focus-visible{
+    background:var(--computing-soft);
+    border-color:var(--computing-line);
+    transform:translateY(-2px);
+    box-shadow:var(--shadow);
+  }
+  .gate:hover .gicon, .gate:focus-visible .gicon{color:var(--computing);}
+  .gate:hover .gttl, .gate:focus-visible .gttl{color:var(--computing-ink);}
+  .gate.active{
+    background:var(--computing-soft);
+    border-color:var(--computing);
+    transform:translateY(-2px);
+    box-shadow:var(--shadow-md);
+  }
+  .gate.active .gicon{color:var(--computing);}
+  .gate.active .gnum{color:var(--computing-ink);}
+  .gate.active .gttl{color:var(--computing-ink);}
+
+  /* --- gate detail panel (判定标准 + 通过/未过对比) --- */
+  .detail-panel{
+    position:absolute;right:18px;top:50%;transform:translateY(-50%);
+    width:300px;
+    padding:14px 16px;
+    background:var(--card);color:var(--ink);
+    border:1px solid var(--computing-line);
+    border-radius:8px;
+    box-shadow:var(--shadow-lg);
+    opacity:0;pointer-events:none;
+    transition:opacity 200ms ease;
+    z-index:6;
+  }
+  .detail-panel.show{opacity:1;}
+  .detail-panel .dp-sid{
+    font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;
+    color:var(--computing);letter-spacing:0.06em;margin-bottom:6px;
+  }
+  .detail-panel .dp-ttl{font-size:14px;font-weight:700;margin-bottom:9px;color:var(--ink);letter-spacing:-0.01em;}
+  .detail-panel .dp-rule{
+    font-size:11.5px;line-height:1.5;color:var(--ink-2);margin-bottom:10px;
+    padding-bottom:10px;border-bottom:1px dashed var(--border-2);
+  }
+  .detail-panel .dp-rule .lbl{
+    display:block;color:var(--sub);font-weight:700;font-size:10px;
+    letter-spacing:0.06em;text-transform:uppercase;margin-bottom:3px;
+    font-family:'JetBrains Mono',monospace;
+  }
+  .dp-cmp{display:flex;gap:8px;}
+  .dp-cmp .cmp{
+    flex:1;min-width:0;padding:8px 9px;border-radius:6px;
+    font-size:11px;line-height:1.4;
+  }
+  .dp-cmp .cmp .ch{
+    display:block;font-family:'JetBrains Mono',monospace;font-size:9px;font-weight:700;
+    letter-spacing:0.08em;margin-bottom:4px;text-transform:uppercase;
+  }
+  .dp-cmp .cmp.pass{background:var(--computing-soft);border:1px solid var(--computing-line);color:var(--computing-ink);}
+  .dp-cmp .cmp.pass .ch{color:var(--computing);}
+  .dp-cmp .cmp.fail{background:var(--paper-2);border:1px solid var(--border-2);color:var(--sub);}
+  .dp-cmp .cmp.fail .ch{color:var(--sub-2);}
+
+  /* --- 质量看板 mock --- */
+  .board{flex:1;display:grid;grid-template-columns:repeat(3,1fr) 1.4fr;gap:11px;min-height:0;}
+  .metric{
+    background:var(--paper);
+    border:1px solid var(--border);
+    border-radius:8px;
+    padding:10px 13px;
+    display:flex;flex-direction:column;justify-content:center;gap:3px;
+    position:relative;
+  }
+  .metric .mlbl{font-size:10px;color:var(--sub);letter-spacing:0.02em;}
+  .metric .mval{
+    font-family:'JetBrains Mono',monospace;font-weight:700;
+    font-size:23px;color:var(--ink);line-height:1;letter-spacing:-0.01em;
+  }
+  .metric .mval .unit{font-size:11px;font-weight:600;color:var(--sub);margin-left:2px;}
+  .metric .mtag{
+    align-self:flex-start;margin-top:3px;
+    font-family:'JetBrains Mono',monospace;font-size:8.5px;font-weight:700;
+    color:var(--computing);background:var(--computing-soft);
+    border:1px solid var(--computing-line);
+    padding:1px 6px;border-radius:999px;letter-spacing:0.04em;
+  }
+  /* 类别平衡条 */
+  .balance{
+    background:var(--paper);
+    border:1px solid var(--border);
+    border-radius:8px;
+    padding:10px 14px;
+    display:flex;flex-direction:column;justify-content:center;gap:8px;
+  }
+  .balance .blbl{font-size:10px;color:var(--sub);letter-spacing:0.02em;display:flex;justify-content:space-between;}
+  .balance .blbl .btag{
+    font-family:'JetBrains Mono',monospace;font-size:8.5px;font-weight:700;
+    color:var(--computing);background:var(--computing-soft);
+    border:1px solid var(--computing-line);padding:1px 6px;border-radius:999px;
+  }
+  .bar{
+    display:flex;height:26px;border-radius:6px;overflow:hidden;
+    border:1px solid var(--border-2);
+  }
+  .bar .seg{
+    display:flex;align-items:center;justify-content:center;
+    font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:700;
+  }
+  .bar .seg.left{background:var(--computing-soft);color:var(--computing-ink);flex:0 0 49%;}
+  .bar .seg.mid{background:var(--border-2);flex:0 0 2%;}
+  .bar .seg.right{background:var(--primary-soft);color:var(--primary-ink);flex:1;}
+  .balance .bnote{font-size:9.5px;color:var(--sub-2);line-height:1.4;}
+
+  /* === 底部 庆祝三承诺 === */
+  .vows{display:grid;grid-template-columns:1fr 1fr 1fr;gap:13px;}
+  .vow{
+    padding:12px 15px;
+    background:var(--card);
+    border:1px solid var(--border);
+    border-radius:8px;
+    box-shadow:var(--shadow-sm);
+    cursor:pointer;outline:none;
+    transition:transform 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
+    display:flex;gap:12px;align-items:flex-start;
+    position:relative;
+  }
+  .vow:hover{border-color:var(--computing-line);box-shadow:var(--shadow);}
+  .vow.tap{transform:scale(1.02);border-color:var(--computing);box-shadow:var(--shadow-md);}
+  .vow .vmark{
+    flex-shrink:0;width:32px;height:32px;
+    border-radius:6px;
+    background:var(--paper-2);
+    border:1px solid var(--border);
+    display:flex;align-items:center;justify-content:center;
+    color:var(--sub);
+    transition:background 180ms ease, border-color 180ms ease, color 180ms ease;
+  }
+  .vow .vmark svg{width:18px;height:18px;}
+  .vow:hover .vmark, .vow.tap .vmark{background:var(--computing-soft);border-color:var(--computing-line);color:var(--computing);}
+  .vow.last .vmark{background:var(--primary-soft);border-color:var(--primary-line);color:var(--primary);}
+  .vow .vtxt{flex:1;min-width:0;}
+  .vow .vnum{
+    font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:700;
+    color:var(--sub-2);letter-spacing:0.1em;margin-bottom:5px;
+  }
+  .vow.last .vnum{color:var(--primary);}
+  .vow .vline{font-size:12.5px;line-height:1.45;color:var(--ink);font-weight:500;letter-spacing:-0.005em;}
+  .vow .vline-en{font-size:10px;font-style:italic;color:var(--sub-2);margin-top:5px;line-height:1.4;}
+</style>
+</head>
+<body>
+  <aside class="sidebar">
+    <div class="brand">
+      <span id="brandMain">EEG-BCI Node</span>
+      <span class="brand-sub" id="brandSub">M20 · 数据质量检查</span>
+    </div>
+    <div class="deco" aria-hidden="true">
+      <!-- 抽象装饰: 盾牌 + 勾 + 脑波 (质检通过) -->
+      <svg viewBox="0 0 110 96" fill="none" stroke="currentColor" stroke-width="1.6" style="color:var(--sub);">
+        <!-- 盾牌 -->
+        <path d="M55 14 L82 24 V50 C82 66 70 76 55 84 C40 76 28 66 28 50 V24 Z"
+              stroke="var(--computing)" stroke-width="1.5" fill="var(--computing-soft)"/>
+        <!-- 勾 -->
+        <path d="M42 50 L52 60 L70 38" stroke="var(--primary)" stroke-width="2.4"
+              stroke-linecap="round" stroke-linejoin="round"/>
+        <!-- 脑波 (干净) -->
+        <path d="M16 90 L28 90 L32 82 L37 90 L42 86 L94 86"
+              stroke="var(--computing)" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" opacity="0.75"/>
+      </svg>
+    </div>
+    <div class="guide">
+      <div class="guide-li hl" id="g1">悬停 5 道关卡，看每道的判定标准</div>
+      <div class="guide-li" id="g2">每道关卡有通过 / 未过对比</div>
+      <div class="guide-li" id="g3">珊瑚印章 = 全部通过，可以训 BCI 了</div>
+    </div>
+    <button class="lang-btn" id="langBtn" type="button">CN / EN</button>
+  </aside>
+
+  <main class="main">
+    <!-- 顶部 标题 + 庆祝印章 -->
+    <section class="hero">
+      <div class="hero-text">
+        <div class="title" id="heroTitle">数据通过质检，可以拿去训 BCI 了</div>
+        <div class="one" id="heroOne">
+          <span class="loop-word" id="hw0">质检 =</span>
+          <span class="ok-word" id="hw1">伪迹清掉</span>
+          <span class="ok-word" id="hw2">坏段剔除</span>
+          <span class="ok-word" id="hw3">类别平衡</span>
+          <span class="ok-word" id="hw4">频谱正常</span>
+          <span class="loop-word" id="hw5">— 5 关全过才放行</span>
+        </div>
+      </div>
+      <div class="stamp" aria-label="QC Pass">
+        <div class="stamp-ring"></div>
+        <div class="stamp-ring dash"></div>
+        <div class="stamp-txt" id="stampTxt">QC<span class="small" id="stampSmall">PASS</span></div>
+      </div>
+    </section>
+
+    <!-- 中部: 5 关卡 + 看板 -->
+    <section class="mid">
+      <!-- 5 道质检关卡 -->
+      <div class="panel">
+        <div class="panel-head">
+          <div class="ttl" id="gateTtl">数据质量 · 5 道关卡</div>
+          <div class="hint mono" id="gateHint">悬停看判定标准 · <span class="pin">5 / 5 通过</span></div>
+        </div>
+        <div class="gates-wrap">
+          <div class="gates" id="gates">
+            <div class="gate" data-gkey="q1" tabindex="0" role="button" aria-label="关卡 1">
+              <div class="gnum">01</div>
+              <div class="gicon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M12 4c0 0-7 2-7 8a7 7 0 0 0 14 0c0-6-7-8-7-8z"/>
+                  <path d="M9 12l2 2 4-4"/>
+                </svg>
+              </div>
+              <div class="gttl" id="q1t">残余伪迹低</div>
+              <div class="gsub" id="q1s">眨眼/肌电基本清掉</div>
+              <div class="gpass mono" id="q1p">PASS</div>
+            </div>
+            <div class="gate" data-gkey="q2" tabindex="0" role="button" aria-label="关卡 2">
+              <div class="gnum">02</div>
+              <div class="gicon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M3 12h3l2-5 4 10 2-6h7"/>
+                  <path d="M4 4v16M20 4v16" opacity="0.4"/>
+                </svg>
+              </div>
+              <div class="gttl" id="q2t">幅度合理</div>
+              <div class="gsub" id="q2s">没有爆表的 μV</div>
+              <div class="gpass mono" id="q2p">PASS</div>
+            </div>
+            <div class="gate" data-gkey="q3" tabindex="0" role="button" aria-label="关卡 3">
+              <div class="gnum">03</div>
+              <div class="gicon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="4" y="5" width="6" height="14" rx="1.5"/>
+                  <rect x="14" y="5" width="6" height="14" rx="1.5" opacity="0.4"/>
+                  <path d="M14 7l6 10M20 7l-6 10" opacity="0.4"/>
+                </svg>
+              </div>
+              <div class="gttl" id="q3t">坏 epoch 已剔除</div>
+              <div class="gsub" id="q3s">超限的段丢掉</div>
+              <div class="gpass mono" id="q3p">PASS</div>
+            </div>
+            <div class="gate" data-gkey="q4" tabindex="0" role="button" aria-label="关卡 4">
+              <div class="gnum">04</div>
+              <div class="gicon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M12 3v18"/>
+                  <path d="M12 7l-7 4 7 4M12 7l7 4-7 4"/>
+                  <circle cx="5" cy="11" r="1.4"/><circle cx="19" cy="11" r="1.4"/>
+                </svg>
+              </div>
+              <div class="gttl" id="q4t">左右手平衡</div>
+              <div class="gsub" id="q4s">两类 trial 数量相当</div>
+              <div class="gpass mono" id="q4p">PASS</div>
+            </div>
+            <div class="gate" data-gkey="q5" tabindex="0" role="button" aria-label="关卡 5">
+              <div class="gnum">05</div>
+              <div class="gicon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M3 20h18"/>
+                  <path d="M5 20V11M9 20V7M13 20V13M17 20V9"/>
+                  <path d="M4 5c3 2 5 2 8 0s5-2 8 0" opacity="0.5"/>
+                </svg>
+              </div>
+              <div class="gttl" id="q5t">频谱正常</div>
+              <div class="gsub" id="q5s">alpha/beta 在，无尖峰</div>
+              <div class="gpass mono" id="q5p">PASS</div>
+            </div>
+          </div>
+        </div>
+        <div class="detail-panel" id="gateDetail" aria-live="polite">
+          <div class="dp-sid mono" id="gdSid">GATE 01</div>
+          <div class="dp-ttl" id="gdTtl">残余伪迹低</div>
+          <div class="dp-rule">
+            <span class="lbl" id="gdRuleLbl">判定标准</span>
+            <span id="gdRule">残余伪迹比例低于阈值。</span>
+          </div>
+          <div class="dp-cmp">
+            <div class="cmp pass">
+              <span class="ch" id="gdPassCh">通过</span>
+              <span id="gdPass">眨眼、肌电基本清掉。</span>
+            </div>
+            <div class="cmp fail">
+              <span class="ch" id="gdFailCh">未过</span>
+              <span id="gdFail">还能看到大段眨眼尖峰。</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 质量看板 mock -->
+      <div class="panel">
+        <div class="panel-head">
+          <div class="ttl" id="boardTtl">质量看板 · 本批数据</div>
+          <div class="hint mono" id="boardHint">清洗后统计 · <span class="pin">全绿</span></div>
+        </div>
+        <div class="board">
+          <div class="metric">
+            <div class="mlbl" id="m1l">保留 epoch 数</div>
+            <div class="mval mono">312</div>
+            <div class="mtag mono" id="m1t">够训练</div>
+          </div>
+          <div class="metric">
+            <div class="mlbl" id="m2l">坏 epoch 剔除率</div>
+            <div class="mval mono">6.4<span class="unit">%</span></div>
+            <div class="mtag mono" id="m2t">在合理区</div>
+          </div>
+          <div class="metric">
+            <div class="mlbl" id="m3l">信噪比 SNR</div>
+            <div class="mval mono">+4.8<span class="unit">dB</span></div>
+            <div class="mtag mono" id="m3t">较清洗前升</div>
+          </div>
+          <div class="balance">
+            <div class="blbl">
+              <span id="b1l">左右手类别平衡</span>
+              <span class="btag mono" id="b1t">≈ 49 : 51</span>
+            </div>
+            <div class="bar" aria-hidden="true">
+              <div class="seg left mono">左手 153</div>
+              <div class="seg mid"></div>
+              <div class="seg right mono">右手 159</div>
+            </div>
+            <div class="bnote" id="b1n">两类数量接近，分类器不会偏向某一边。</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 底部 庆祝三承诺 -->
+    <section class="vows">
+      <div class="vow" data-vow="1" tabindex="0" role="button">
+        <div class="vmark" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 4c0 0-7 2-7 8a7 7 0 0 0 14 0c0-6-7-8-7-8z"/>
+            <path d="M9 12l2 2 4-4"/>
+          </svg>
+        </div>
+        <div class="vtxt">
+          <div class="vnum mono">PROMISE · 01</div>
+          <div class="vline" id="vow1">数据干净：伪迹和坏段都清掉了，剩下的是有用脑波。</div>
+          <div class="vline-en" id="vow1en">The data is clean — artifacts and bad epochs are gone.</div>
+        </div>
+      </div>
+      <div class="vow" data-vow="2" tabindex="0" role="button">
+        <div class="vmark" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 3v18"/>
+            <path d="M12 7l-7 4 7 4M12 7l7 4-7 4"/>
+          </svg>
+        </div>
+        <div class="vtxt">
+          <div class="vnum mono">PROMISE · 02</div>
+          <div class="vline" id="vow2">类别平衡：左右手 trial 数量相当，模型不会偏心。</div>
+          <div class="vline-en" id="vow2en">Classes are balanced — left and right have similar counts.</div>
+        </div>
+      </div>
+      <div class="vow last" data-vow="3" tabindex="0" role="button">
+        <div class="vmark" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M5 7l5-3 5 3v6c0 4-3 6-5 7-2-1-5-3-5-7z"/>
+            <path d="M14 4l5 3v6c0 4-3 6-5 7" opacity="0.45"/>
+            <path d="M8 10l1.5 1.5L13 8"/>
+          </svg>
+        </div>
+        <div class="vtxt">
+          <div class="vnum mono">PROMISE · 03</div>
+          <div class="vline" id="vow3">准备就绪：这批数据可以喂给分类器了 — 下一站 M21 运动想象。</div>
+          <div class="vline-en" id="vow3en">Ready to feed the classifier — next stop: M21 motor imagery.</div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+<script>
+(function(){
+  "use strict";
+
+  var LANG = 'cn';
+
+  var I18N = {
+    brandMain:{cn:'EEG-BCI Node',            en:'EEG-BCI Node'},
+    brandSub: {cn:'M20 · 数据质量检查',       en:'M20 · Data Quality Check'},
+    g1:       {cn:'悬停 5 道关卡，看每道的判定标准', en:'Hover the 5 gates for each pass rule'},
+    g2:       {cn:'每道关卡有通过 / 未过对比',  en:'Each gate shows pass / fail contrast'},
+    g3:       {cn:'珊瑚印章 = 全部通过，可以训 BCI 了', en:'Coral stamp = all pass, ready to train'},
+    heroTitle:{cn:'数据通过质检，可以拿去训 BCI 了', en:'Data passed QC — ready to train the BCI'},
+    stampTxt: {cn:'QC',                       en:'QC'},
+    stampSmall:{cn:'通过',                    en:'PASS'},
+    gateTtl:  {cn:'数据质量 · 5 道关卡',       en:'Data Quality · 5 Gates'},
+    boardTtl: {cn:'质量看板 · 本批数据',       en:'Quality Board · This Batch'},
+    langBtn:  {cn:'CN / EN',                  en:'EN / CN'},
+    gdRuleLbl:{cn:'判定标准',                  en:'Pass Rule'},
+    gdPassCh: {cn:'通过',                      en:'Pass'},
+    gdFailCh: {cn:'未过',                      en:'Fail'},
+    gateHintTxt:{cn:'悬停看判定标准 · ',        en:'Hover for rules · '},
+    gatePin:  {cn:'5 / 5 通过',                en:'5 / 5 pass'},
+    boardHintTxt:{cn:'清洗后统计 · ',           en:'Post-clean stats · '},
+    boardPin: {cn:'全绿',                      en:'all green'},
+    m1l:      {cn:'保留 epoch 数',             en:'Epochs kept'},
+    m1t:      {cn:'够训练',                    en:'enough'},
+    m2l:      {cn:'坏 epoch 剔除率',           en:'Bad-epoch drop'},
+    m2t:      {cn:'在合理区',                  en:'in range'},
+    m3l:      {cn:'信噪比 SNR',                en:'SNR'},
+    m3t:      {cn:'较清洗前升',                en:'up vs raw'},
+    b1l:      {cn:'左右手类别平衡',            en:'Left/right balance'},
+    b1n:      {cn:'两类数量接近，分类器不会偏向某一边。',
+               en:'Counts are close — the classifier will not lean either way.'},
+    vow1:     {cn:'数据干净：伪迹和坏段都清掉了，剩下的是有用脑波。',
+               en:'The data is clean — artifacts and bad epochs are gone.'},
+    vow1en:   {cn:'The data is clean — artifacts and bad epochs are gone.',
+               en:'What is left is usable brain signal, not noise.'},
+    vow2:     {cn:'类别平衡：左右手 trial 数量相当，模型不会偏心。',
+               en:'Classes are balanced — left and right have similar counts.'},
+    vow2en:   {cn:'Classes are balanced — left and right have similar counts.',
+               en:'A fair split keeps the model from cheating on the majority.'},
+    vow3:     {cn:'准备就绪：这批数据可以喂给分类器了 — 下一站 M21 运动想象。',
+               en:'Ready to feed the classifier — next stop: M21 motor imagery.'},
+    vow3en:   {cn:'Ready to feed the classifier — next stop: M21 motor imagery.',
+               en:'Clean, balanced, verified — green light for training.'}
+  };
+
+  // hero 行内词
+  var HWORDS = {
+    cn:{h0:'质检 =', h1:'伪迹清掉', h2:'坏段剔除', h3:'类别平衡', h4:'频谱正常', h5:'— 5 关全过才放行'},
+    en:{h0:'QC =',  h1:'artifacts gone', h2:'bad epochs cut', h3:'balanced', h4:'spectrum OK', h5:'— pass all 5 to ship'}
+  };
+
+  // gate 卡内文字
+  var GATE_TXT = {
+    q1:{t:{cn:'残余伪迹低',     en:'Low Artifacts'},  s:{cn:'眨眼/肌电基本清掉', en:'Blink/EMG mostly gone'}},
+    q2:{t:{cn:'幅度合理',       en:'Sane Amplitude'},  s:{cn:'没有爆表的 μV',     en:'No runaway microvolts'}},
+    q3:{t:{cn:'坏 epoch 已剔除', en:'Bad Epochs Cut'}, s:{cn:'超限的段丢掉',       en:'Over-limit segs dropped'}},
+    q4:{t:{cn:'左右手平衡',     en:'Class Balance'},   s:{cn:'两类 trial 数量相当', en:'Counts roughly equal'}},
+    q5:{t:{cn:'频谱正常',       en:'Spectrum OK'},     s:{cn:'alpha/beta 在，无尖峰', en:'Bands intact, no spikes'}}
+  };
+
+  var GATES = {
+    q1:{
+      sid:{cn:'GATE 01', en:'GATE 01'},
+      ttl:{cn:'残余伪迹低', en:'Low Residual Artifacts'},
+      rule:{cn:'去掉 ICA 伪迹成分后，残余伪迹比例低于设定阈值。',
+            en:'After removing ICA artifact components, residual artifact ratio is below threshold.'},
+      pass:{cn:'眨眼、肌电这些大尖峰基本看不到了。',
+            en:'Big blink and muscle spikes are basically gone.'},
+      fail:{cn:'曲线上还能看到一排排眨眼的大尖峰。',
+            en:'Rows of big blink spikes are still visible.'}
+    },
+    q2:{
+      sid:{cn:'GATE 02', en:'GATE 02'},
+      ttl:{cn:'幅度在合理范围', en:'Amplitude in Sane Range'},
+      rule:{cn:'各 epoch 的幅度落在合理 μV 范围内，没有异常爆表。',
+            en:'Each epoch amplitude stays within a sane microvolt range, no blow-ups.'},
+      pass:{cn:'峰值幅度都在几十 μV 这种正常区间。',
+            en:'Peak amplitudes sit in a normal tens-of-µV band.'},
+      fail:{cn:'有的段冲到几百甚至上千 μV，明显异常。',
+            en:'Some segments hit hundreds or thousands of µV.'}
+    },
+    q3:{
+      sid:{cn:'GATE 03', en:'GATE 03'},
+      ttl:{cn:'坏 epoch 已剔除', en:'Bad Epochs Removed'},
+      rule:{cn:'幅度超限或形态异常的 epoch 已被标记并丢弃。',
+            en:'Epochs over the limit or oddly shaped are flagged and dropped.'},
+      pass:{cn:'剩下的每一段都干净，没有混进坏段。',
+            en:'Every remaining segment is clean, no bad ones left in.'},
+      fail:{cn:'坏段还混在训练数据里，会拖累模型。',
+            en:'Bad segments still mixed in, dragging the model down.'}
+    },
+    q4:{
+      sid:{cn:'GATE 04', en:'GATE 04'},
+      ttl:{cn:'左右手数量平衡', en:'Left/Right Counts Balanced'},
+      rule:{cn:'两类（左手 / 右手）trial 数量接近，没有严重偏斜。',
+            en:'The two classes (left / right) have similar trial counts, no heavy skew.'},
+      pass:{cn:'左右两类数量差不多，模型不会偷懒只猜一边。',
+            en:'Both classes are close, so the model cannot just guess one side.'},
+      fail:{cn:'一类远多于另一类，模型会偏向多数类。',
+            en:'One class far outnumbers the other; the model leans majority.'}
+    },
+    q5:{
+      sid:{cn:'GATE 05', en:'GATE 05'},
+      ttl:{cn:'频谱正常', en:'Spectrum Looks Normal'},
+      rule:{cn:'功率谱上 alpha/beta 等节律在该在的位置，没有异常尖峰。',
+            en:'On the power spectrum, alpha/beta rhythms sit where expected, no odd spikes.'},
+      pass:{cn:'看到正常的脑节律，没有 50/60Hz 工频尖峰。',
+            en:'Normal rhythms show up, no 50/60Hz mains spike.'},
+      fail:{cn:'某个频率冒出尖峰，多半是工频或设备噪声。',
+            en:'A spike pokes out at one frequency — likely mains or device noise.'}
+    }
+  };
+
+  function $(id){return document.getElementById(id);}
+  function $$(sel){return document.querySelectorAll(sel);}
+
+  function applyText(key, el){
+    if(!el || !I18N[key]) return;
+    var v = I18N[key][LANG];
+    if(v != null) el.textContent = v;
+  }
+
+  function setHint(elId, txtKey, pinKey){
+    var el = $(elId);
+    el.innerHTML = '';
+    el.appendChild(document.createTextNode(I18N[txtKey][LANG]));
+    var span = document.createElement('span');
+    span.className = 'pin';
+    span.textContent = I18N[pinKey][LANG];
+    el.appendChild(span);
+  }
+
+  function applyLang(){
+    applyText('brandMain', $('brandMain'));
+    applyText('brandSub', $('brandSub'));
+    applyText('g1', $('g1'));
+    applyText('g2', $('g2'));
+    applyText('g3', $('g3'));
+    applyText('heroTitle', $('heroTitle'));
+    applyText('stampTxt', $('stampTxt'));
+    applyText('stampSmall', $('stampSmall'));
+    applyText('gateTtl', $('gateTtl'));
+    applyText('boardTtl', $('boardTtl'));
+    applyText('gdRuleLbl', $('gdRuleLbl'));
+    applyText('gdPassCh', $('gdPassCh'));
+    applyText('gdFailCh', $('gdFailCh'));
+    applyText('m1l', $('m1l'));
+    applyText('m1t', $('m1t'));
+    applyText('m2l', $('m2l'));
+    applyText('m2t', $('m2t'));
+    applyText('m3l', $('m3l'));
+    applyText('m3t', $('m3t'));
+    applyText('b1l', $('b1l'));
+    applyText('b1n', $('b1n'));
+    $('langBtn').textContent = I18N.langBtn[LANG];
+    $('vow1').textContent   = I18N.vow1[LANG];
+    $('vow1en').textContent = I18N.vow1en[LANG];
+    $('vow2').textContent   = I18N.vow2[LANG];
+    $('vow2en').textContent = I18N.vow2en[LANG];
+    $('vow3').textContent   = I18N.vow3[LANG];
+    $('vow3en').textContent = I18N.vow3en[LANG];
+
+    // hero 行内词
+    var hw = HWORDS[LANG];
+    $('hw0').textContent = hw.h0;
+    $('hw1').textContent = hw.h1;
+    $('hw2').textContent = hw.h2;
+    $('hw3').textContent = hw.h3;
+    $('hw4').textContent = hw.h4;
+    $('hw5').textContent = hw.h5;
+
+    // gate 卡内文字 + PASS badge
+    Object.keys(GATE_TXT).forEach(function(k){
+      var d = GATE_TXT[k];
+      $(k+'t').textContent = d.t[LANG];
+      $(k+'s').textContent = d.s[LANG];
+      $(k+'p').textContent = (LANG === 'cn') ? '通过' : 'PASS';
+    });
+
+    // hints
+    setHint('gateHint', 'gateHintTxt', 'gatePin');
+    setHint('boardHint', 'boardHintTxt', 'boardPin');
+
+    var activeGate = document.querySelector('.gate.active');
+    if(activeGate) renderGate(activeGate.getAttribute('data-gkey'), true);
+  }
+
+  function renderGate(key, keepShown){
+    var g = GATES[key];
+    if(!g) return;
+    $('gdSid').textContent  = g.sid[LANG];
+    $('gdTtl').textContent  = g.ttl[LANG];
+    $('gdRule').textContent = g.rule[LANG];
+    $('gdPass').textContent = g.pass[LANG];
+    $('gdFail').textContent = g.fail[LANG];
+    if(keepShown) $('gateDetail').classList.add('show');
+  }
+
+  // 通用: hover/click/pin 一组 cards 绑定 detail
+  function wireGroup(opts){
+    var els = $$(opts.sel);
+    var attr = opts.attr;
+    var panel = $(opts.panelId);
+    var render = opts.render;
+    var locState = { pinned:null };
+
+    function show(key){ render(key, false); panel.classList.add('show'); }
+    function hide(){ panel.classList.remove('show'); }
+
+    els.forEach(function(el){
+      var key = el.getAttribute(attr);
+      el.addEventListener('mouseenter', function(){ if(locState.pinned) return; show(key); });
+      el.addEventListener('mouseleave', function(){ if(locState.pinned) return; hide(); });
+      el.addEventListener('focus', function(){ if(locState.pinned) return; show(key); });
+      el.addEventListener('blur', function(){ if(locState.pinned) return; hide(); });
+      el.addEventListener('click', function(ev){
+        ev.stopPropagation();
+        if(locState.pinned === key){
+          locState.pinned = null;
+          el.classList.remove('active');
+          hide();
+        } else {
+          els.forEach(function(e){ e.classList.remove('active'); });
+          el.classList.add('active');
+          locState.pinned = key;
+          show(key);
+        }
+      });
+      el.addEventListener('keydown', function(ev){
+        if(ev.key === 'Enter' || ev.key === ' '){ ev.preventDefault(); el.click(); }
+      });
+    });
+
+    return {
+      clear:function(){
+        if(!locState.pinned) return;
+        locState.pinned = null;
+        els.forEach(function(e){ e.classList.remove('active'); });
+        hide();
+      }
+    };
+  }
+
+  var gateGroup = wireGroup({sel:'.gate', attr:'data-gkey', panelId:'gateDetail', render:renderGate});
+
+  document.addEventListener('click', function(){
+    gateGroup.clear();
+  });
+
+  // 承诺卡 tap 反馈
+  $$('.vow').forEach(function(v){
+    v.addEventListener('click', function(ev){
+      ev.stopPropagation();
+      v.classList.add('tap');
+      setTimeout(function(){ v.classList.remove('tap'); }, 220);
+    });
+    v.addEventListener('keydown', function(ev){
+      if(ev.key === 'Enter' || ev.key === ' '){ ev.preventDefault(); v.click(); }
+    });
+  });
+
+  // 语言切换
+  $('langBtn').addEventListener('click', function(ev){
+    ev.stopPropagation();
+    LANG = (LANG === 'cn') ? 'en' : 'cn';
+    applyLang();
+  });
+
+  applyLang();
+})();
+</script>
+</body>
+</html>

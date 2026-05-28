@@ -1,0 +1,457 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"/>
+<title>Neuron Sync Lab</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;700&family=JetBrains+Mono:wght@400;700&family=Inter:wght@400;500&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  /* neuro palette (NRO-20) */
+  --bg-0:oklch(0.18 0.04 25);
+  --bg-1:oklch(0.24 0.05 25);
+  --synaptic:oklch(0.75 0.17 25);
+  --dendrite:oklch(0.55 0.15 25);
+  --axon:oklch(0.32 0.10 25);
+  --firing:oklch(0.92 0.08 25);
+  --memory:oklch(0.85 0.14 85);
+  --neuro:var(--synaptic);
+  --ink:oklch(0.92 0.02 25);
+  --ink-dim:oklch(0.62 0.03 25);
+  --line:oklch(0.40 0.05 25 / 0.25);
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+html,body{width:100%;height:100vh;overflow:hidden;background:var(--bg-0);color:var(--ink);font-family:'Noto Sans SC','Inter',sans-serif;}
+.wrapper{display:flex;flex-direction:column;height:100vh;}
+.header{display:flex;justify-content:space-between;align-items:center;padding:6px 16px 6px 70px;background:oklch(0.22 0.05 25 / 0.92);border-bottom:1px solid var(--line);}
+.title{font-family:'Space Grotesk',sans-serif;font-size:14px;font-weight:700;color:var(--synaptic);letter-spacing:1px;text-transform:uppercase;}
+.subtitle{font-size:11px;color:var(--ink-dim);margin-left:10px;}
+.lang-btn{position:fixed;top:8px;left:8px;z-index:100;font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;padding:4px 10px;cursor:pointer;border:1px solid var(--line);background:oklch(0.20 0.04 25 / 0.85);backdrop-filter:blur(12px);color:var(--synaptic);letter-spacing:1px;}
+.main-area{flex:1;min-height:0;display:flex;overflow:hidden;}
+/* canvas shim chain: parent must be flex column so canvas grows */
+.stage{flex:1;position:relative;display:flex;flex-direction:column;align-items:stretch;justify-content:stretch;padding:0;}
+canvas{display:block;flex:1;width:100%;height:100%;}
+.side-panel{width:200px;display:flex;flex-direction:column;padding:12px;gap:8px;background:oklch(0.22 0.05 25 / 0.92);border-left:1px solid var(--line);overflow-y:auto;}
+.mascot{display:flex;align-items:center;gap:8px;padding-bottom:8px;border-bottom:1px solid var(--line);}
+.mascot svg{flex:none;}
+.mascot .m-name{font-family:'Space Grotesk',sans-serif;font-size:12px;font-weight:700;color:var(--firing);letter-spacing:0.5px;}
+.mascot .m-role{font-size:10px;color:var(--ink-dim);line-height:1.3;}
+.panel-title{font-family:'Space Grotesk',sans-serif;font-size:11px;color:var(--synaptic);letter-spacing:1px;text-transform:uppercase;margin-bottom:2px;}
+.slider-group{margin-bottom:4px;}
+.slider-label{display:flex;justify-content:space-between;font-size:11px;color:var(--ink-dim);margin-bottom:4px;}
+.slider-label .val{font-family:'JetBrains Mono',monospace;font-weight:700;color:var(--firing);}
+input[type=range]{width:100%;height:4px;-webkit-appearance:none;appearance:none;background:linear-gradient(90deg,var(--axon),var(--synaptic));outline:none;cursor:pointer;border-radius:2px;}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;border-radius:50%;background:var(--firing);border:2px solid var(--bg-0);cursor:pointer;box-shadow:0 0 8px var(--synaptic);}
+input[type=range]::-moz-range-thumb{width:16px;height:16px;border-radius:50%;background:var(--firing);border:2px solid var(--bg-0);cursor:pointer;}
+.readout{display:flex;flex-direction:column;gap:5px;padding:8px;background:oklch(0.16 0.03 25 / 0.6);border:1px solid var(--line);}
+.stat-row{display:flex;justify-content:space-between;align-items:center;font-size:11px;}
+.stat-label{color:var(--ink-dim);}
+.stat-val{font-family:'JetBrains Mono',monospace;font-weight:700;color:var(--firing);}
+.stat-val.over{color:var(--memory);}
+.task-box{padding:8px;background:oklch(0.30 0.08 25 / 0.18);border:1px solid oklch(0.55 0.12 25 / 0.4);}
+.task-title{font-family:'Space Grotesk',sans-serif;font-size:11px;color:var(--synaptic);letter-spacing:0.5px;text-transform:uppercase;margin-bottom:4px;}
+.task-desc{font-size:11px;color:var(--ink);line-height:1.5;margin-bottom:6px;}
+.task-status{font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;}
+.task-status.pass{color:var(--memory);}
+.task-status.fail{color:var(--ink-dim);}
+.hud{display:flex;justify-content:space-around;align-items:center;padding:6px 12px;background:oklch(0.14 0.03 25 / 0.7);height:46px;font-size:11px;color:var(--ink-dim);}
+.hud .item{display:flex;flex-direction:column;align-items:center;}
+.hud .label{font-size:9px;text-transform:uppercase;letter-spacing:0.5px;opacity:0.75;font-family:'Space Grotesk',sans-serif;}
+.hud .value{font-size:14px;color:var(--ink);font-weight:700;margin-top:1px;font-family:'JetBrains Mono',monospace;}
+.guide-panel{position:fixed;top:8px;right:212px;width:218px;max-height:40vh;overflow-y:auto;background:oklch(0.20 0.04 25 / 0.88);backdrop-filter:blur(12px);border:1px solid var(--line);padding:10px;z-index:100;font-family:'Noto Sans SC',sans-serif;font-size:12px;color:var(--ink);}
+.guide-panel h3{font-family:'Space Grotesk',sans-serif;font-size:13px;margin-bottom:6px;color:var(--synaptic);cursor:pointer;display:flex;justify-content:space-between;align-items:center;}
+.guide-panel ul{padding-left:14px;line-height:1.55;}
+.guide-toggle{font-size:10px;color:var(--ink-dim);font-family:'JetBrains Mono',monospace;}
+#guideTips{margin-top:6px;color:var(--memory);}
+.victory-overlay{position:fixed;top:0;left:0;width:100%;height:100%;background:oklch(0.10 0.02 25 / 0.75);display:none;align-items:center;justify-content:center;z-index:200;}
+.victory-overlay.show{display:flex;}
+.victory-box{background:oklch(0.20 0.04 25 / 0.96);backdrop-filter:blur(16px);border:1px solid oklch(0.85 0.14 85 / 0.4);padding:24px 32px;max-width:420px;text-align:center;}
+.victory-title{font-family:'Space Grotesk',sans-serif;font-size:18px;color:var(--memory);font-weight:700;margin-bottom:8px;text-transform:uppercase;letter-spacing:2px;}
+.victory-text{font-size:13px;color:var(--ink);line-height:1.7;margin-bottom:14px;}
+.victory-btn{padding:8px 22px;font-family:'Space Grotesk',sans-serif;font-size:12px;font-weight:700;cursor:pointer;border:1px solid var(--memory);background:oklch(0.85 0.14 85 / 0.15);color:var(--memory);text-transform:uppercase;letter-spacing:1px;}
+.victory-btn:hover{background:oklch(0.85 0.14 85 / 0.3);}
+</style>
+</head>
+<body>
+<button class="lang-btn" id="langBtn">CN</button>
+<div class="guide-panel" id="guidePanel">
+  <h3 id="guideToggle"><span id="guideTitle"></span><span class="guide-toggle" id="guideArrow"></span></h3>
+  <div class="guide-content" id="guideContent">
+    <p id="guideGoal"></p>
+    <ul id="guideSteps"></ul>
+    <p id="guideTips"></p>
+  </div>
+</div>
+<div class="victory-overlay" id="victoryOverlay">
+  <div class="victory-box">
+    <div class="victory-title" id="victoryTitle"></div>
+    <div class="victory-text" id="victoryText"></div>
+    <button class="victory-btn" id="victoryBtn"></button>
+  </div>
+</div>
+<div class="wrapper">
+  <div class="header">
+    <div><span class="title" id="headerTitle"></span><span class="subtitle">P-EEG-01-M02</span></div>
+  </div>
+  <div class="main-area">
+    <div class="stage"><canvas id="c"></canvas></div>
+    <div class="side-panel">
+      <div class="mascot">
+        <svg width="34" height="34" viewBox="0 0 34 34" id="mascotSvg">
+          <circle cx="17" cy="17" r="5" fill="oklch(0.92 0.08 25)"/>
+          <g stroke="oklch(0.75 0.17 25)" stroke-width="1.6" stroke-linecap="round" fill="none">
+            <path d="M17 12 L17 3"/><path d="M17 3 L13 1"/><path d="M17 3 L21 1"/>
+            <path d="M22 17 L31 17"/><path d="M31 17 L33 13"/><path d="M31 17 L33 21"/>
+            <path d="M17 22 L17 31"/><path d="M17 31 L13 33"/><path d="M17 31 L21 33"/>
+            <path d="M12 17 L3 17"/><path d="M3 17 L1 13"/><path d="M3 17 L1 21"/>
+          </g>
+        </svg>
+        <div>
+          <div class="m-name">SPARK</div>
+          <div class="m-role" id="mascotRole"></div>
+        </div>
+      </div>
+
+      <div class="panel-title" id="sliderTitle"></div>
+      <div class="slider-group">
+        <div class="slider-label"><span id="lblSync"></span><span class="val" id="valSync">10%</span></div>
+        <input type="range" id="sliderSync" min="0" max="100" value="10">
+      </div>
+
+      <div class="readout">
+        <div class="stat-row"><span class="stat-label" id="lblScalp"></span><span class="stat-val" id="valScalp">--</span></div>
+        <div class="stat-row"><span class="stat-label" id="lblNoise"></span><span class="stat-val" id="valNoise">--</span></div>
+        <div class="stat-row"><span class="stat-label" id="lblDetect"></span><span class="stat-val" id="valDetect">--</span></div>
+      </div>
+
+      <div class="task-box">
+        <div class="task-title" id="taskTitle"></div>
+        <div class="task-desc" id="taskDesc"></div>
+        <div class="task-status fail" id="taskStatus"></div>
+      </div>
+    </div>
+  </div>
+  <div class="hud">
+    <div class="item"><div class="label" id="hudL1"></div><div class="value" id="hudV1">10%</div></div>
+    <div class="item"><div class="label" id="hudL2"></div><div class="value" id="hudV2">--</div></div>
+    <div class="item"><div class="label" id="hudL3"></div><div class="value" id="hudV3">--</div></div>
+  </div>
+</div>
+<script>
+(function(){
+var LANG='cn';
+var I18N={
+  title:{en:'NEURON SYNC LAB',cn:'神经元同步实验室'},
+  mascotRole:{en:'Tune the firing. Watch the scalp.',cn:'调放电同步，看头皮信号。'},
+  sliderTitle:{en:'CONTROLS',cn:'控制台'},
+  lblSync:{en:'SYNCHRONY',cn:'同步度'},
+  lblScalp:{en:'SCALP SIGNAL',cn:'头皮信号'},
+  lblNoise:{en:'NOISE FLOOR',cn:'噪声门槛'},
+  lblDetect:{en:'DETECTABLE?',cn:'能测到？'},
+  detectYes:{en:'YES',cn:'是'},
+  detectNo:{en:'NO',cn:'否'},
+  taskTitle:{en:'MISSION',cn:'任务'},
+  taskDesc:{en:'Find the synchrony level where the scalp signal first rises above the noise floor.',cn:'找到头皮信号首次超过噪声门槛的同步度。'},
+  taskPending:{en:'PENDING — signal still buried in noise',cn:'未完成 — 信号仍埋在噪声里'},
+  taskDone:{en:'SOLVED — the scalp can finally read it!',cn:'完成 — 头皮终于能读到了！'},
+  hudSync:{en:'SYNCHRONY',cn:'同步度'},
+  hudScalp:{en:'SCALP µV',cn:'头皮 µV'},
+  hudState:{en:'STATE',cn:'状态'},
+  stateBuried:{en:'BURIED',cn:'被淹没'},
+  stateRead:{en:'READABLE',cn:'可读取'},
+  guideTitle:{en:'GUIDE',cn:'操作指南'},
+  guideGoal:{en:'A single neuron is far too small for an electrode on your scalp to feel. Only when many neurons fire TOGETHER do their tiny voltages add up into a wave big enough to escape the noise.',cn:'单个神经元太小，头皮上的电极根本感受不到。只有当大量神经元一起放电，它们的微小电压才会叠加成一个足以冲出噪声的波。'},
+  guideS1:{en:'Drag SYNCHRONY from 0% upward',cn:'将同步度从 0% 往上拖'},
+  guideS2:{en:'Watch the neurons go from scattered to in-step',cn:'看神经元从各放各的变成齐步'},
+  guideS3:{en:'Watch the scalp bar grow vs the dashed noise line',cn:'看头皮信号条超过虚线噪声线'},
+  guideS4:{en:'Cross the noise floor to complete the mission',cn:'跨过噪声门槛即可完成任务'},
+  guideTips:{en:'It takes roughly 70% synchrony before the signal breaks through.',cn:'大约需要 70% 的同步度，信号才能突围。'},
+  guideArrowOpen:{en:'[hide]',cn:'[收起]'},
+  guideArrowClosed:{en:'[show]',cn:'[展开]'},
+  victoryTitle:{en:'SIGNAL DETECTED!',cn:'信号被捕获！'},
+  victoryText:{en:'At about 70% synchrony the combined voltage of the neurons finally rose above the noise floor. This is why EEG measures SYNCHRONIZED activity of large neuron populations — a lone neuron, or a disorganized crowd, is invisible to a scalp electrode.',cn:'在大约 70% 同步度时，神经元叠加后的电压终于超过了噪声门槛。这正是为什么 EEG 测量的是大量神经元群的“同步”活动 — 单个神经元、或者一群各行其是的神经元，对头皮电极都是隐形的。'},
+  victoryBtn:{en:'CLOSE',cn:'关闭'},
+};
+function t(k){return(I18N[k]&&I18N[k][LANG])||(I18N[k]&&I18N[k]['en'])||k;}
+
+var canvas=document.getElementById('c');
+var ctx=canvas.getContext('2d');
+var W=0,H=0;
+var DPR=Math.min(window.devicePixelRatio||1,2);
+var guideOpen=true;
+
+// --- model ---
+var sync=10;            // synchrony 0..100 (%)
+var solved=false;
+var NOISE=18;           // noise floor in microvolts (constant)
+var MAX_SIGNAL=60;      // scalp signal at 100% synchrony
+
+// Scalp amplitude grows steeply with synchrony (small populations cancel out).
+// Use a curve so it crosses NOISE near 70%.
+function scalpSignal(s){
+  var x=s/100;
+  // quadratic-ish growth: at s=70 -> ~ NOISE; below stays buried
+  var v=MAX_SIGNAL*Math.pow(x,3.5);
+  return v;
+}
+function isDetectable(s){ return scalpSignal(s)>NOISE; }
+
+// neuron field
+var N=42;
+var neurons=[];
+function initNeurons(){
+  neurons=[];
+  for(var i=0;i<N;i++){
+    neurons.push({
+      bx:Math.random(),       // base x in 0..1 (within left field)
+      by:Math.random(),
+      phase:Math.random()*Math.PI*2,   // individual phase offset
+      freq:0.9+Math.random()*0.4       // individual firing speed
+    });
+  }
+}
+initNeurons();
+
+var tNow=0;
+
+function resize(){
+  var stage=document.querySelector('.stage');
+  var rect=stage.getBoundingClientRect();
+  if(rect.width<1||rect.height<1) return;
+  W=rect.width;H=rect.height;
+  canvas.width=W*DPR;canvas.height=H*DPR;
+  canvas.style.width=W+'px';canvas.style.height=H+'px';
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+}
+
+function neuronFire(n,time){
+  // master rhythm shared when synchronized; individual rhythm otherwise
+  var sFrac=sync/100;
+  var master=time*1.6;
+  var own=time*1.6*n.freq+n.phase;
+  // blended angle: high sync -> all near master
+  var blended=master*sFrac + own*(1-sFrac);
+  // a "fire" is a sharp pulse: use a peaked function of sin
+  var s=Math.sin(blended);
+  var pulse=Math.pow(Math.max(0,s),6); // sharp spike 0..1
+  return pulse;
+}
+
+function draw(){
+  ctx.clearRect(0,0,W,H);
+  // bg gradient (deep space neuro)
+  var bg=ctx.createLinearGradient(0,0,0,H);
+  bg.addColorStop(0,'oklch(0.18 0.04 25)');
+  bg.addColorStop(1,'oklch(0.13 0.03 25)');
+  ctx.fillStyle=bg;ctx.fillRect(0,0,W,H);
+
+  // layout: left ~62% neuron field, right ~38% scalp readout
+  var splitX=W*0.60;
+  var pad=20;
+
+  // --- neuron field ---
+  var fx=pad, fy=pad+24, fw=splitX-pad*1.5, fh=H-pad*2-24;
+  // field label
+  ctx.fillStyle='oklch(0.62 0.03 25)';
+  ctx.font='bold 12px "Space Grotesk"';ctx.textAlign='left';ctx.textBaseline='alphabetic';
+  ctx.fillText(LANG==='cn'?'神经元群 (亮 = 正在放电)':'NEURON POPULATION (bright = firing)',fx,pad+14);
+
+  // draw faint connection grid
+  // neuron positions + firing
+  var sumSigned=0;
+  for(var i=0;i<neurons.length;i++){
+    var n=neurons[i];
+    var x=fx+n.bx*fw;
+    var y=fy+n.by*fh;
+    var p=neuronFire(n,tNow); // 0..1
+    sumSigned+=p;
+    var r=4+p*7;
+    // glow
+    if(p>0.05){
+      var g=ctx.createRadialGradient(x,y,0,x,y,r*2.6);
+      g.addColorStop(0,'oklch(0.92 0.08 25 / '+(0.55*p)+')');
+      g.addColorStop(1,'oklch(0.92 0.08 25 / 0)');
+      ctx.fillStyle=g;
+      ctx.beginPath();ctx.arc(x,y,r*2.6,0,Math.PI*2);ctx.fill();
+    }
+    // body
+    var lit=p>0.3;
+    ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);
+    ctx.fillStyle=lit?'oklch(0.92 0.08 25)':'oklch(0.45 0.10 25)';
+    ctx.fill();
+    ctx.lineWidth=1;
+    ctx.strokeStyle='oklch(0.75 0.17 25 / 0.5)';
+    ctx.stroke();
+  }
+
+  // collective "field potential" trace below neurons -> shows summation
+  // population firing fraction this frame
+  var popFrac=sumSigned/neurons.length; // 0..~1
+
+  // --- divider ---
+  ctx.strokeStyle='oklch(0.40 0.05 25 / 0.3)';
+  ctx.lineWidth=1;
+  ctx.beginPath();ctx.moveTo(splitX,pad);ctx.lineTo(splitX,H-pad);ctx.stroke();
+
+  // --- scalp electrode panel ---
+  var ex=splitX+pad, ew=W-splitX-pad*1.5;
+  ctx.fillStyle='oklch(0.62 0.03 25)';
+  ctx.font='bold 12px "Space Grotesk"';ctx.textAlign='left';
+  ctx.fillText(LANG==='cn'?'头皮电极':'SCALP ELECTRODE',ex,pad+14);
+
+  // electrode dome glyph
+  var domeCx=ex+ew*0.5, domeCy=fy+34, domeR=24;
+  ctx.beginPath();ctx.arc(domeCx,domeCy,domeR,Math.PI,0);ctx.closePath();
+  ctx.fillStyle='oklch(0.30 0.06 25 / 0.7)';ctx.fill();
+  ctx.strokeStyle='oklch(0.75 0.17 25 / 0.6)';ctx.lineWidth=1.5;ctx.stroke();
+  ctx.beginPath();ctx.arc(domeCx,domeCy,5,0,Math.PI*2);
+  var detect=isDetectable(sync);
+  ctx.fillStyle=detect?'oklch(0.85 0.14 85)':'oklch(0.45 0.10 25)';
+  ctx.fill();
+
+  // signal bar vs noise floor
+  var barX=ex+ew*0.18, barW=ew*0.64;
+  var barTop=domeCy+domeR+24;
+  var barBottom=H-pad-40;
+  var barH=barBottom-barTop;
+  if(barH<60){barH=60;barTop=barBottom-barH;}
+  // bar frame
+  ctx.fillStyle='oklch(0.16 0.03 25 / 0.7)';
+  ctx.fillRect(barX,barTop,barW,barH);
+  ctx.strokeStyle='oklch(0.40 0.05 25 / 0.4)';ctx.lineWidth=1;
+  ctx.strokeRect(barX,barTop,barW,barH);
+
+  // scale: 0..MAX_SIGNAL maps to barH
+  function ampY(v){ return barBottom - (v/MAX_SIGNAL)*barH; }
+  // live amplitude = scalpSignal modulated by current population firing (visual liveliness)
+  var baseAmp=scalpSignal(sync);
+  var liveAmp=baseAmp*(0.55+0.9*popFrac); // wiggles with population
+  if(liveAmp>MAX_SIGNAL) liveAmp=MAX_SIGNAL;
+
+  // filled signal bar
+  var sigTop=ampY(liveAmp);
+  var sg=ctx.createLinearGradient(0,barBottom,0,barTop);
+  sg.addColorStop(0,'oklch(0.55 0.15 25)');
+  sg.addColorStop(1,detect?'oklch(0.85 0.14 85)':'oklch(0.75 0.17 25)');
+  ctx.fillStyle=sg;
+  ctx.fillRect(barX+4,sigTop,barW-8,barBottom-sigTop);
+
+  // noise floor dashed line
+  var noiseY=ampY(NOISE);
+  ctx.save();
+  ctx.setLineDash([6,5]);
+  ctx.strokeStyle='oklch(0.85 0.14 85 / 0.9)';
+  ctx.lineWidth=2;
+  ctx.beginPath();ctx.moveTo(barX-6,noiseY);ctx.lineTo(barX+barW+6,noiseY);ctx.stroke();
+  ctx.restore();
+  ctx.fillStyle='oklch(0.85 0.14 85)';
+  ctx.font='bold 10px "JetBrains Mono"';ctx.textAlign='left';ctx.textBaseline='bottom';
+  ctx.fillText((LANG==='cn'?'噪声门槛 ':'NOISE ')+NOISE+'µV',barX-6,noiseY-3);
+
+  // amplitude readout text on bar
+  ctx.fillStyle=detect?'oklch(0.92 0.02 25)':'oklch(0.62 0.03 25)';
+  ctx.font='bold 13px "JetBrains Mono"';ctx.textAlign='center';ctx.textBaseline='middle';
+  ctx.fillText(Math.round(baseAmp)+' µV',barX+barW/2,Math.min(sigTop-12,barTop+14));
+
+  // detect verdict text
+  ctx.font='bold 12px "Space Grotesk"';ctx.textAlign='center';ctx.textBaseline='top';
+  if(detect){
+    ctx.fillStyle='oklch(0.85 0.14 85)';
+    ctx.fillText(LANG==='cn'?'→ 信号冲出噪声！':'→ SIGNAL BREAKS THROUGH!',barX+barW/2,barBottom+8);
+  }else{
+    ctx.fillStyle='oklch(0.62 0.03 25)';
+    ctx.fillText(LANG==='cn'?'信号埋在噪声里':'BURIED IN NOISE',barX+barW/2,barBottom+8);
+  }
+}
+
+function tick(dt){
+  tNow+=dt;
+  draw();
+}
+
+function updateUI(){
+  var amp=scalpSignal(sync);
+  var detect=isDetectable(sync);
+  document.getElementById('valSync').textContent=sync+'%';
+  document.getElementById('valScalp').textContent=Math.round(amp)+' µV';
+  document.getElementById('valNoise').textContent=NOISE+' µV';
+  var dv=document.getElementById('valDetect');
+  dv.textContent=detect?t('detectYes'):t('detectNo');
+  dv.className='stat-val'+(detect?' over':'');
+  document.getElementById('hudV1').textContent=sync+'%';
+  document.getElementById('hudV2').textContent=Math.round(amp);
+  document.getElementById('hudV3').textContent=detect?t('stateRead'):t('stateBuried');
+  var ts=document.getElementById('taskStatus');
+  if(solved){ ts.textContent=t('taskDone'); ts.className='task-status pass'; }
+  else { ts.textContent=t('taskPending'); ts.className='task-status fail'; }
+
+  if(detect&&!solved){
+    solved=true;
+    ts.textContent=t('taskDone'); ts.className='task-status pass';
+    setTimeout(function(){document.getElementById('victoryOverlay').classList.add('show');},350);
+  }
+}
+
+function refreshI18N(){
+  document.getElementById('headerTitle').textContent=t('title');
+  document.getElementById('mascotRole').textContent=t('mascotRole');
+  document.getElementById('sliderTitle').textContent=t('sliderTitle');
+  document.getElementById('lblSync').textContent=t('lblSync');
+  document.getElementById('lblScalp').textContent=t('lblScalp');
+  document.getElementById('lblNoise').textContent=t('lblNoise');
+  document.getElementById('lblDetect').textContent=t('lblDetect');
+  document.getElementById('taskTitle').textContent=t('taskTitle');
+  document.getElementById('taskDesc').textContent=t('taskDesc');
+  document.getElementById('hudL1').textContent=t('hudSync');
+  document.getElementById('hudL2').textContent=t('hudScalp');
+  document.getElementById('hudL3').textContent=t('hudState');
+  document.getElementById('guideTitle').textContent=t('guideTitle');
+  document.getElementById('guideArrow').textContent=guideOpen?t('guideArrowOpen'):t('guideArrowClosed');
+  document.getElementById('guideGoal').textContent=t('guideGoal');
+  var sl=document.getElementById('guideSteps');
+  sl.innerHTML='<li>'+t('guideS1')+'</li><li>'+t('guideS2')+'</li><li>'+t('guideS3')+'</li><li>'+t('guideS4')+'</li>';
+  document.getElementById('guideTips').textContent=t('guideTips');
+  document.getElementById('victoryTitle').textContent=t('victoryTitle');
+  document.getElementById('victoryText').textContent=t('victoryText');
+  document.getElementById('victoryBtn').textContent=t('victoryBtn');
+  updateUI();
+}
+
+// --- events ---
+document.getElementById('sliderSync').addEventListener('input',function(){
+  sync=parseInt(this.value,10);
+  updateUI();
+});
+document.getElementById('langBtn').addEventListener('click',function(){
+  LANG=LANG==='en'?'cn':'en';
+  document.getElementById('langBtn').textContent=LANG.toUpperCase();
+  refreshI18N();
+});
+document.getElementById('guideToggle').addEventListener('click',function(){
+  guideOpen=!guideOpen;
+  document.getElementById('guideContent').style.display=guideOpen?'block':'none';
+  document.getElementById('guideArrow').textContent=guideOpen?t('guideArrowOpen'):t('guideArrowClosed');
+});
+document.getElementById('victoryBtn').addEventListener('click',function(){
+  document.getElementById('victoryOverlay').classList.remove('show');
+});
+window.addEventListener('resize',resize);
+
+// --- loop ---
+var last=performance.now();
+function loop(now){
+  var dt=Math.min(0.05,(now-last)/1000);
+  last=now;
+  tick(dt);
+  requestAnimationFrame(loop);
+}
+
+resize();
+refreshI18N();
+requestAnimationFrame(loop);
+setTimeout(resize,200);
+setTimeout(resize,600);
+document.fonts.ready.then(function(){resize();});
+})();
+</script>
+</body>
+</html>

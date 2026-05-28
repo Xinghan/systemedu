@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>EEG Quality Check</title>
+<style>
+:root{
+  --paper:#FAF9F5; --paper-2:#F1EDDF; --card:#FFFFFF;
+  --ink:#191814; --ink-2:#2B2924; --sub:#6B6557; --sub-2:#9D978A;
+  --border:#EBE5D6; --border-2:#D9D1BD; --hairline:#F2EDE0;
+  --primary:#D97757; --primary-ink:#9A4A2E; --primary-soft:#F8EDE5; --primary-line:#ECCFB8;
+  --computing:#C04E68; --computing-soft:#F4DDE3;
+  --keep:#3C7A5A; --keep-soft:#E0EBE4;
+  --drop:#B5453A; --drop-soft:#F2DEDB;
+  --shadow-sm:0 1px 2px 0 rgba(25,24,20,.04);
+  --shadow:0 1px 3px 0 rgba(25,24,20,.06),0 1px 2px -1px rgba(25,24,20,.04);
+  --shadow-md:0 4px 8px -2px rgba(25,24,20,.06),0 2px 4px -2px rgba(25,24,20,.04);
+  --shadow-lg:0 12px 24px -6px rgba(25,24,20,.1),0 4px 8px -4px rgba(25,24,20,.05);
+  --mono:'JetBrains Mono','SF Mono','Roboto Mono',ui-monospace,Menlo,Consolas,monospace;
+  --sans:'PingFang SC','Inter','Noto Sans SC',-apple-system,sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:100%;height:100vh;overflow:hidden;background:var(--paper);font-family:var(--sans);color:var(--ink)}
+.shell{display:flex;height:100vh}
+
+/* ---------- sidebar ---------- */
+.game-sidebar{width:200px;flex-shrink:0;background:var(--paper-2);border-right:1px solid var(--border);display:flex;flex-direction:column;padding:16px 14px}
+.brand{font-size:13px;font-weight:700;letter-spacing:.5px;color:var(--ink)}
+.brand small{display:block;font-size:10px;font-weight:500;color:var(--sub);letter-spacing:1px;margin-top:3px;text-transform:uppercase;font-family:var(--mono)}
+.divider{height:1px;background:var(--border);margin:14px 0}
+.sect-label{font-size:10px;font-weight:700;letter-spacing:1px;color:var(--sub-2);text-transform:uppercase;font-family:var(--mono);margin-bottom:8px}
+
+.epoch-list{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:4px}
+.ep-chip{width:24px;height:24px;border-radius:5px;border:1px solid var(--border-2);background:var(--card);display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:10px;font-weight:600;color:var(--sub);transition:all .18s}
+.ep-chip.current{border-color:var(--primary);box-shadow:0 0 0 2px var(--primary-soft);color:var(--primary-ink)}
+.ep-chip.kept{background:var(--keep-soft);border-color:var(--keep);color:var(--keep)}
+.ep-chip.dropped{background:var(--drop-soft);border-color:var(--drop);color:var(--drop)}
+
+.stats{margin-top:14px;display:flex;flex-direction:column;gap:8px}
+.stat-row{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:8px 10px;box-shadow:var(--shadow-sm)}
+.stat-row .k{font-size:10px;color:var(--sub);letter-spacing:.4px}
+.stat-row .v{font-family:var(--mono);font-size:18px;font-weight:700;line-height:1.1;margin-top:2px}
+.stat-keep .v{color:var(--keep)}
+.stat-drop .v{color:var(--drop)}
+.stat-rate .v{color:var(--computing)}
+
+.spacer{flex:1}
+.lang-btn{align-self:flex-start;font-family:var(--mono);font-size:11px;font-weight:700;letter-spacing:1px;padding:6px 14px;cursor:pointer;border:1px solid var(--border-2);border-radius:6px;background:var(--card);color:var(--ink-2);transition:all .15s}
+.lang-btn:hover{border-color:var(--primary);color:var(--primary-ink)}
+
+/* ---------- main ---------- */
+.game-main{flex:1;min-width:0;display:flex;flex-direction:column;padding:20px 26px}
+.main-head{display:flex;align-items:baseline;justify-content:space-between;flex-wrap:wrap;gap:8px}
+.title{font-size:20px;font-weight:700;color:var(--ink)}
+.title .accent{color:var(--computing)}
+.subtitle{font-size:12px;color:var(--sub);margin-top:4px;max-width:560px;line-height:1.5}
+.ep-tag{font-family:var(--mono);font-size:12px;font-weight:600;color:var(--primary-ink);background:var(--primary-soft);border:1px solid var(--primary-line);border-radius:20px;padding:5px 14px}
+
+.scope-wrap{flex:1;min-height:0;display:flex;flex-direction:column;margin-top:14px;background:var(--card);border:1px solid var(--border);border-radius:12px;box-shadow:var(--shadow);overflow:hidden}
+.scope-top{display:flex;align-items:center;justify-content:space-between;padding:9px 16px;border-bottom:1px solid var(--hairline);background:var(--paper)}
+.scope-top .ch{font-family:var(--mono);font-size:11px;color:var(--sub);letter-spacing:.5px}
+.scope-top .scale{font-family:var(--mono);font-size:10px;color:var(--sub-2)}
+.canvas-host{flex:1;min-height:0;display:flex;flex-direction:column;padding:6px}
+#scope{width:100%;height:100%;display:block;border-radius:6px}
+
+.metrics{display:flex;gap:10px;margin-top:14px}
+.metric{flex:1;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:11px 13px;box-shadow:var(--shadow-sm)}
+.metric .ml{font-size:10px;color:var(--sub);letter-spacing:.4px;text-transform:uppercase;font-family:var(--mono)}
+.metric .mv{font-family:var(--mono);font-size:18px;font-weight:700;margin-top:3px;color:var(--ink)}
+.metric .mu{font-size:11px;font-weight:500;color:var(--sub-2)}
+.metric .mflag{font-size:10px;margin-top:4px;font-weight:600;letter-spacing:.3px}
+.metric.warn{border-color:var(--drop);background:var(--drop-soft)}
+.metric.warn .mv{color:var(--drop)}
+.metric.warn .mflag{color:var(--drop)}
+.metric.ok .mflag{color:var(--keep)}
+
+.actions{display:flex;gap:14px;margin-top:16px;align-items:center}
+.btn{flex:1;font-family:var(--sans);font-size:15px;font-weight:700;letter-spacing:.5px;padding:14px 0;cursor:pointer;border-radius:10px;border:1.5px solid;transition:all .15s;display:flex;align-items:center;justify-content:center;gap:8px}
+.btn .kbd{font-family:var(--mono);font-size:11px;font-weight:600;opacity:.7;border:1px solid currentColor;border-radius:4px;padding:1px 6px}
+.btn-keep{background:var(--keep-soft);border-color:var(--keep);color:var(--keep)}
+.btn-keep:hover{background:var(--keep);color:#fff}
+.btn-drop{background:var(--drop-soft);border-color:var(--drop);color:var(--drop)}
+.btn-drop:hover{background:var(--drop);color:#fff}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+
+.verdict{margin-top:13px;min-height:42px;border-radius:10px;padding:10px 14px;font-size:12.5px;line-height:1.5;display:none;border:1px solid}
+.verdict.show{display:block}
+.verdict.good{background:var(--keep-soft);border-color:var(--keep);color:#2c5742}
+.verdict.bad{background:var(--drop-soft);border-color:var(--drop);color:#8a342c}
+.verdict b{font-weight:700}
+
+/* ---------- report overlay ---------- */
+.overlay{position:absolute;inset:0;background:rgba(25,24,20,.32);display:none;align-items:center;justify-content:center;z-index:50}
+.overlay.show{display:flex}
+.report{background:var(--card);border:1px solid var(--border);border-radius:16px;box-shadow:var(--shadow-lg);padding:28px 30px;width:min(540px,90%);max-height:88vh;overflow-y:auto}
+.report h2{font-size:20px;font-weight:700;color:var(--ink)}
+.report .rsub{font-size:12.5px;color:var(--sub);margin-top:6px;line-height:1.55}
+.badge{display:none;margin:16px 0;padding:13px 16px;border-radius:12px;background:linear-gradient(135deg,var(--primary-soft),var(--computing-soft));border:1px solid var(--primary-line);align-items:center;gap:13px}
+.badge.show{display:flex}
+.badge .seal{width:46px;height:46px;flex-shrink:0}
+.badge .bt{font-size:14px;font-weight:700;color:var(--primary-ink)}
+.badge .bd{font-size:11px;color:var(--sub);margin-top:2px;line-height:1.4}
+.rgrid{display:flex;gap:10px;margin:18px 0}
+.rcell{flex:1;text-align:center;background:var(--paper);border:1px solid var(--border);border-radius:10px;padding:12px 6px}
+.rcell .rv{font-family:var(--mono);font-size:24px;font-weight:700}
+.rcell .rl{font-size:10px;color:var(--sub);margin-top:3px;letter-spacing:.4px}
+.rcell.c-keep .rv{color:var(--keep)} .rcell.c-drop .rv{color:var(--drop)} .rcell.c-rate .rv{color:var(--computing)}
+.rnote{font-size:12px;line-height:1.6;color:var(--sub);background:var(--paper-2);border-radius:10px;padding:12px 14px;margin-bottom:18px}
+.rnote .tag{font-family:var(--mono);font-weight:700;color:var(--ink-2)}
+.retry-btn{width:100%;font-family:var(--sans);font-size:14px;font-weight:700;letter-spacing:.5px;padding:12px 0;cursor:pointer;border-radius:10px;border:1.5px solid var(--primary);background:var(--primary);color:#fff;transition:all .15s}
+.retry-btn:hover{background:var(--primary-ink);border-color:var(--primary-ink)}
+</style>
+</head>
+<body>
+<div class="shell">
+  <!-- ============ SIDEBAR ============ -->
+  <aside class="game-sidebar">
+    <div class="brand"><span id="brandName"></span><small>EEG · M20 QC</small></div>
+    <div class="divider"></div>
+    <div class="sect-label" id="lblProgress"></div>
+    <div class="epoch-list" id="epochList"></div>
+    <div class="stats">
+      <div class="stat-row stat-keep"><div class="k" id="lblKept"></div><div class="v" id="statKept">0</div></div>
+      <div class="stat-row stat-drop"><div class="k" id="lblDropped"></div><div class="v" id="statDropped">0</div></div>
+      <div class="stat-row stat-rate"><div class="k" id="lblRate"></div><div class="v" id="statRate">--</div></div>
+    </div>
+    <div class="spacer"></div>
+    <button class="lang-btn" id="langBtn">CN</button>
+  </aside>
+
+  <!-- ============ MAIN ============ -->
+  <main class="game-main">
+    <div class="main-head">
+      <div>
+        <div class="title"><span id="titleA"></span> <span class="accent" id="titleB"></span></div>
+        <div class="subtitle" id="subtitle"></div>
+      </div>
+      <div class="ep-tag" id="epTag"></div>
+    </div>
+
+    <div class="scope-wrap">
+      <div class="scope-top">
+        <span class="ch" id="scopeCh"></span>
+        <span class="scale" id="scopeScale"></span>
+      </div>
+      <div class="canvas-host"><canvas id="scope"></canvas></div>
+    </div>
+
+    <div class="metrics">
+      <div class="metric" id="mAmp"><div class="ml" id="lblAmp"></div><div class="mv"><span id="vAmp">--</span> <span class="mu">µV</span></div><div class="mflag" id="fAmp"></div></div>
+      <div class="metric" id="mAlpha"><div class="ml" id="lblAlpha"></div><div class="mv"><span id="vAlpha">--</span> <span class="mu">%</span></div><div class="mflag" id="fAlpha"></div></div>
+      <div class="metric" id="mLine"><div class="ml" id="lblLine"></div><div class="mv"><span id="vLine">--</span> <span class="mu">µV²</span></div><div class="mflag" id="fLine"></div></div>
+    </div>
+
+    <div class="actions">
+      <button class="btn btn-keep" id="btnKeep"><span id="txtKeep"></span><span class="kbd">K</span></button>
+      <button class="btn btn-drop" id="btnDrop"><span id="txtDrop"></span><span class="kbd">D</span></button>
+    </div>
+
+    <div class="verdict" id="verdict"></div>
+  </main>
+
+  <!-- ============ REPORT ============ -->
+  <div class="overlay" id="overlay">
+    <div class="report">
+      <h2 id="repTitle"></h2>
+      <div class="rsub" id="repSub"></div>
+      <div class="badge" id="badge">
+        <svg class="seal" viewBox="0 0 48 48" fill="none">
+          <circle cx="24" cy="24" r="21" stroke="#9A4A2E" stroke-width="2" fill="#F8EDE5"/>
+          <circle cx="24" cy="24" r="15" stroke="#C04E68" stroke-width="1.5" fill="none" stroke-dasharray="3 2"/>
+          <path d="M17 24l5 5 9-11" stroke="#3C7A5A" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+        </svg>
+        <div><div class="bt" id="badgeTitle"></div><div class="bd" id="badgeDesc"></div></div>
+      </div>
+      <div class="rgrid">
+        <div class="rcell c-keep"><div class="rv" id="repKept">0</div><div class="rl" id="repKeptL"></div></div>
+        <div class="rcell c-drop"><div class="rv" id="repDropped">0</div><div class="rl" id="repDroppedL"></div></div>
+        <div class="rcell c-rate"><div class="rv" id="repRate">0%</div><div class="rl" id="repRateL"></div></div>
+      </div>
+      <div class="rnote" id="repNote"></div>
+      <button class="retry-btn" id="retryBtn"></button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+var LANG='cn';
+var I18N={
+  brand:{cn:'脑电质检台',en:'EEG QC BENCH'},
+  progress:{cn:'EPOCH 进度',en:'EPOCH PROGRESS'},
+  kept:{cn:'已保留',en:'KEPT'},
+  dropped:{cn:'已剔除',en:'DROPPED'},
+  rate:{cn:'保留率',en:'KEEP RATE'},
+  titleA:{cn:'逐段质检',en:'TRIAGE THE'},
+  titleB:{cn:'EEG 数据',en:'EEG EPOCHS'},
+  subtitle:{cn:'你是数据质检官。看波形 + 三项指标，决定这一段脑电「保留」还是「剔除」。既要清掉坏段，又别过度剔除好数据。',
+            en:'You are the QC officer. Read the waveform plus three metrics, then KEEP or DROP each epoch. Clean out the bad segments — but do not over-reject good data.'},
+  epTag:{cn:'第 {i} / {n} 段',en:'EPOCH {i} / {n}'},
+  scopeCh:{cn:'通道 Cz · 2 秒窗',en:'CHANNEL Cz · 2s WINDOW'},
+  scopeScale:{cn:'纵轴 ±150 µV',en:'Y-AXIS ±150 µV'},
+  lblAmp:{cn:'峰峰幅度',en:'PEAK-TO-PEAK'},
+  lblAlpha:{cn:'Alpha 节律占比',en:'ALPHA RHYTHM'},
+  lblLine:{cn:'残余方差',en:'RESIDUAL VAR'},
+  txtKeep:{cn:'保留',en:'KEEP'},
+  txtDrop:{cn:'剔除',en:'DROP'},
+  flagOver:{cn:'超阈值',en:'OVER LIMIT'},
+  flagNormal:{cn:'正常',en:'NORMAL'},
+  flagFlat:{cn:'近乎平坦',en:'NEAR FLAT'},
+  flagStrong:{cn:'节律清晰',en:'CLEAR'},
+  flagWeak:{cn:'偏弱',en:'WEAK'},
+  flagHigh:{cn:'偏高',en:'HIGH'},
+  flagLow:{cn:'偏低',en:'LOW'},
+  vGood:{cn:'判断正确',en:'CORRECT CALL'},
+  vBad:{cn:'再想想',en:'RETHINK'},
+  repTitle:{cn:'质检完成',en:'QC COMPLETE'},
+  repSub:{cn:'这是你最终交给后续分析的数据集快照：',en:'Snapshot of the dataset you hand off to analysis:'},
+  repKeptL:{cn:'保留',en:'KEPT'},
+  repDroppedL:{cn:'剔除',en:'DROPPED'},
+  repRateL:{cn:'保留率',en:'KEEP RATE'},
+  badgeTitle:{cn:'数据质检官 解锁',en:'DATA QC OFFICER unlocked'},
+  badgeDesc:{cn:'坏段全清、好段不误伤 — 干净又不过度。',en:'All bad segments removed, good ones kept — clean without over-cutting.'},
+  retry:{cn:'重新质检',en:'RUN AGAIN'},
+  noteGood:{cn:'<span class="tag">恰到好处。</span>你剔掉了所有坏段（运动伪迹 / 眨眼残峰 / 电极脱落），同时保住了节律清晰的好段。真实流程里，过度剔除会让数据量崩塌、统计功效下降；漏掉坏段又会污染平均。',
+            en:'<span class="tag">Just right.</span> You removed every bad segment (motion artifact / residual blink / flat channel) while keeping the clean rhythmic ones. Over-rejecting collapses your sample size; missing bad segments contaminates the average.'},
+  noteOver:{cn:'<span class="tag">剔得太狠。</span>有 {x} 段本来节律清晰、幅度合理的好数据被你误删了。质检不是「越干净越好」，过度剔除会让剩下的样本太少。',
+            en:'<span class="tag">Over-cut.</span> You wrongly dropped {x} good epochs with clear rhythm and reasonable amplitude. QC is not "the less the better" — over-rejection leaves too few samples.'},
+  noteMiss:{cn:'<span class="tag">漏了坏段。</span>有 {x} 段坏数据（幅度爆表 / 眨眼残峰 / 电极脱落）被你保留了，它们会污染后续的平均和频谱。',
+            en:'<span class="tag">Bad segments slipped through.</span> You kept {x} bad epochs (amplitude blow-out / residual blink / flat channel). They will contaminate the average and spectrum downstream.'},
+  noteBoth:{cn:'<span class="tag">两头都偏。</span>既误删了好段，又漏掉了坏段。回到判据：幅度爆表、残余大峰、平坦无信号 都该剔除；节律清晰、幅度合理 则该保留。',
+            en:'<span class="tag">Off on both ends.</span> You both over-cut good data and let bad data through. Recall the rule: blow-out, big residual peak or flat means DROP; clear rhythm with sane amplitude means KEEP.'}
+};
+function t(k){return (I18N[k]&&I18N[k][LANG])||(I18N[k]&&I18N[k]['en'])||k;}
+
+// ---------- epoch dataset ----------
+// kind: 'alpha' good rhythm, 'beta' good lower-amp, 'noisy_ok' mild noise keep,
+//       'motion' amplitude blow-out drop, 'blink' residual blink drop, 'flat' electrode off drop
+// truth: true=keep, false=drop
+var DECK=[
+  {kind:'alpha',   amp:62,  alpha:71, lineVar:9,   truth:true},
+  {kind:'motion',  amp:188, alpha:14, lineVar:240, truth:false},
+  {kind:'beta',    amp:41,  alpha:23, lineVar:7,   truth:true},
+  {kind:'blink',   amp:142, alpha:31, lineVar:38,  truth:false},
+  {kind:'noisy_ok',amp:74,  alpha:58, lineVar:22,  truth:true},
+  {kind:'flat',    amp:6,   alpha:4,  lineVar:1,   truth:false},
+  {kind:'alpha',   amp:55,  alpha:66, lineVar:11,  truth:true},
+  {kind:'motion',  amp:166, alpha:9,  lineVar:198, truth:false},
+  {kind:'beta',    amp:38,  alpha:19, lineVar:6,   truth:true},
+  {kind:'blink',   amp:128, alpha:27, lineVar:33,  truth:false}
+];
+var N=DECK.length;
+var idx=0, kept=0, dropped=0, correct=0;
+var decisions=[]; // {truth, choice}
+
+// ---------- canvas waveform ----------
+var canvas=document.getElementById('scope');
+var ctx=canvas.getContext('2d');
+function sizeCanvas(){
+  var host=canvas.parentElement;
+  var r=host.getBoundingClientRect();
+  var dpr=window.devicePixelRatio||1;
+  canvas.width=Math.max(1,Math.floor(r.width*dpr));
+  canvas.height=Math.max(1,Math.floor(r.height*dpr));
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  return {w:r.width,h:r.height};
+}
+// deterministic pseudo-random so each epoch is stable
+function seeded(seed){var s=seed%2147483647;if(s<=0)s+=2147483646;return function(){s=s*16807%2147483647;return (s-1)/2147483646;};}
+
+function waveSample(ep, x, rnd){
+  // x in [0,1], returns µV
+  var twoPi=Math.PI*2;
+  switch(ep.kind){
+    case 'alpha':   return 30*Math.sin(twoPi*10*x)+8*Math.sin(twoPi*22*x)+ (rnd()-0.5)*8;
+    case 'beta':    return 16*Math.sin(twoPi*20*x)+6*Math.sin(twoPi*31*x)+ (rnd()-0.5)*6;
+    case 'noisy_ok':return 26*Math.sin(twoPi*10*x)+ (rnd()-0.5)*30;
+    case 'motion':  return 70*Math.sin(twoPi*1.2*x)+ 50*Math.sin(twoPi*3*x+1)+ (rnd()-0.5)*40 + 40*Math.sin(twoPi*0.4*x);
+    case 'blink':   { var bx=x*4%1; var blink=(bx<0.12)?Math.exp(-Math.pow((bx-0.05)/0.03,2))*100:0; return 18*Math.sin(twoPi*9*x)+blink+ (rnd()-0.5)*6; }
+    case 'flat':    return (rnd()-0.5)*3;
+  }
+  return 0;
+}
+function drawScope(ep){
+  var d=sizeCanvas();
+  var w=d.w,h=d.h;
+  ctx.clearRect(0,0,w,h);
+  // grid
+  ctx.strokeStyle='#EFE9DB';ctx.lineWidth=1;
+  for(var gx=0;gx<=10;gx++){var px=gx/10*w;ctx.beginPath();ctx.moveTo(px,0);ctx.lineTo(px,h);ctx.stroke();}
+  for(var gy=0;gy<=6;gy++){var py=gy/6*h;ctx.beginPath();ctx.moveTo(0,py);ctx.lineTo(w,py);ctx.stroke();}
+  // mid line
+  ctx.strokeStyle='#D9D1BD';ctx.beginPath();ctx.moveTo(0,h/2);ctx.lineTo(w,h/2);ctx.stroke();
+  // threshold lines (+/-100 µV) at ±150 scale
+  var scale=150;
+  var thY1=h/2 - (100/scale)*(h/2);
+  var thY2=h/2 + (100/scale)*(h/2);
+  ctx.strokeStyle='rgba(181,69,58,.35)';ctx.setLineDash([5,4]);
+  ctx.beginPath();ctx.moveTo(0,thY1);ctx.lineTo(w,thY1);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(0,thY2);ctx.lineTo(w,thY2);ctx.stroke();
+  ctx.setLineDash([]);
+  // waveform
+  var rnd=seeded((ep.kind.charCodeAt(0)*131 + ep.amp*7 + ep.lineVar*3)|0);
+  ctx.strokeStyle='#C04E68';ctx.lineWidth=1.8;ctx.beginPath();
+  var steps=480;
+  for(var i=0;i<=steps;i++){
+    var xx=i/steps;
+    var uv=waveSample(ep,xx,rnd);
+    var px2=xx*w;
+    var py2=h/2 - (uv/scale)*(h/2);
+    if(py2<2)py2=2; if(py2>h-2)py2=h-2;
+    if(i===0)ctx.moveTo(px2,py2);else ctx.lineTo(px2,py2);
+  }
+  ctx.stroke();
+}
+
+// ---------- render current epoch ----------
+function renderEpoch(){
+  var ep=DECK[idx];
+  document.getElementById('epTag').textContent=t('epTag').replace('{i}',idx+1).replace('{n}',N);
+  drawScope(ep);
+  // metrics
+  document.getElementById('vAmp').textContent=ep.amp;
+  document.getElementById('vAlpha').textContent=ep.alpha;
+  document.getElementById('vLine').textContent=ep.lineVar;
+  // amp flag
+  var mAmp=document.getElementById('mAmp'),fAmp=document.getElementById('fAmp');
+  if(ep.amp>100){mAmp.className='metric warn';fAmp.textContent=t('flagOver');}
+  else if(ep.amp<12){mAmp.className='metric warn';fAmp.textContent=t('flagFlat');}
+  else{mAmp.className='metric ok';fAmp.textContent=t('flagNormal');}
+  // alpha flag
+  var mAlpha=document.getElementById('mAlpha'),fAlpha=document.getElementById('fAlpha');
+  if(ep.alpha>=45){mAlpha.className='metric ok';fAlpha.textContent=t('flagStrong');}
+  else{mAlpha.className='metric';fAlpha.textContent=t('flagWeak');}
+  // residual var flag
+  var mLine=document.getElementById('mLine'),fLine=document.getElementById('fLine');
+  if(ep.lineVar>30){mLine.className='metric warn';fLine.textContent=t('flagHigh');}
+  else{mLine.className='metric ok';fLine.textContent=t('flagNormal');}
+  // reset verdict
+  var v=document.getElementById('verdict');v.className='verdict';v.innerHTML='';
+  setButtons(true);
+  refreshChips();
+}
+
+function setButtons(on){
+  document.getElementById('btnKeep').disabled=!on;
+  document.getElementById('btnDrop').disabled=!on;
+}
+
+function refreshChips(){
+  var list=document.getElementById('epochList');list.innerHTML='';
+  for(var i=0;i<N;i++){
+    var c=document.createElement('div');c.className='ep-chip';
+    c.textContent=i+1;
+    if(i<decisions.length){c.classList.add(decisions[i].choice?'kept':'dropped');}
+    else if(i===idx){c.classList.add('current');}
+    list.appendChild(c);
+  }
+}
+
+function updateStats(){
+  document.getElementById('statKept').textContent=kept;
+  document.getElementById('statDropped').textContent=dropped;
+  var done=kept+dropped;
+  document.getElementById('statRate').textContent=done?Math.round(kept/done*100)+'%':'--';
+}
+
+// ---------- decision ----------
+function decide(choice){ // choice true=keep
+  if(idx>=N)return;
+  setButtons(false);
+  var ep=DECK[idx];
+  decisions.push({truth:ep.truth,choice:choice});
+  if(choice)kept++;else dropped++;
+  var right=(choice===ep.truth);
+  if(right)correct++;
+  updateStats();
+  var v=document.getElementById('verdict');
+  v.className='verdict show '+(right?'good':'bad');
+  v.innerHTML='<b>'+(right?t('vGood'):t('vBad'))+'</b> · '+reasonText(ep,choice);
+  refreshChips();
+  setTimeout(function(){
+    idx++;
+    if(idx>=N){finish();}else{renderEpoch();}
+  },1150);
+}
+
+function reasonText(ep,choice){
+  var R={
+    alpha:{cn:'清晰 alpha 节律、幅度合理，应保留。',en:'Clear alpha rhythm with sane amplitude, KEEP.'},
+    beta:{cn:'低幅 beta 节律、信号干净，应保留。',en:'Low-amp beta rhythm, clean, KEEP.'},
+    noisy_ok:{cn:'轻微噪声但节律仍清晰，别过度剔除，应保留。',en:'Mild noise but rhythm still clear, do not over-cut, KEEP.'},
+    motion:{cn:'幅度爆表（超 100µV）加高方差，运动伪迹，应剔除。',en:'Amplitude blow-out (over 100µV) plus high variance, motion artifact, DROP.'},
+    blink:{cn:'残余眨眼大峰、幅度超阈，应剔除。',en:'Residual blink spike over threshold, DROP.'},
+    flat:{cn:'近乎平坦、几乎无信号，电极脱落，应剔除。',en:'Near flat, almost no signal, electrode off, DROP.'}
+  };
+  return (R[ep.kind]&&R[ep.kind][LANG])||'';
+}
+
+// ---------- finish / report ----------
+function finish(){
+  document.getElementById('repTitle').textContent=t('repTitle');
+  document.getElementById('repSub').textContent=t('repSub');
+  document.getElementById('repKept').textContent=kept;
+  document.getElementById('repDropped').textContent=dropped;
+  var rate=Math.round(kept/N*100);
+  document.getElementById('repRate').textContent=rate+'%';
+  document.getElementById('repKeptL').textContent=t('repKeptL');
+  document.getElementById('repDroppedL').textContent=t('repDroppedL');
+  document.getElementById('repRateL').textContent=t('repRateL');
+  // analyze: false-drop (good wrongly dropped), false-keep (bad wrongly kept)
+  var falseDrop=0,falseKeep=0;
+  decisions.forEach(function(d){
+    if(d.truth&&!d.choice)falseDrop++;     // good dropped = over-cut
+    if(!d.truth&&d.choice)falseKeep++;      // bad kept = miss
+  });
+  var badge=document.getElementById('badge');
+  var note='';
+  if(falseDrop===0&&falseKeep===0){
+    badge.classList.add('show');
+    document.getElementById('badgeTitle').textContent=t('badgeTitle');
+    document.getElementById('badgeDesc').textContent=t('badgeDesc');
+    note=t('noteGood');
+  }else{
+    badge.classList.remove('show');
+    if(falseDrop>0&&falseKeep>0){note=t('noteBoth');}
+    else if(falseDrop>0){note=t('noteOver').replace('{x}',falseDrop);}
+    else{note=t('noteMiss').replace('{x}',falseKeep);}
+  }
+  document.getElementById('repNote').innerHTML=note;
+  document.getElementById('retryBtn').textContent=t('retry');
+  document.getElementById('overlay').classList.add('show');
+}
+
+function reset(){
+  idx=0;kept=0;dropped=0;correct=0;decisions=[];
+  document.getElementById('overlay').classList.remove('show');
+  updateStats();
+  renderEpoch();
+}
+
+// ---------- i18n refresh ----------
+function refreshI18N(){
+  document.getElementById('brandName').textContent=t('brand');
+  document.getElementById('lblProgress').textContent=t('progress');
+  document.getElementById('lblKept').textContent=t('kept');
+  document.getElementById('lblDropped').textContent=t('dropped');
+  document.getElementById('lblRate').textContent=t('rate');
+  document.getElementById('titleA').textContent=t('titleA');
+  document.getElementById('titleB').textContent=t('titleB');
+  document.getElementById('subtitle').textContent=t('subtitle');
+  document.getElementById('scopeCh').textContent=t('scopeCh');
+  document.getElementById('scopeScale').textContent=t('scopeScale');
+  document.getElementById('lblAmp').textContent=t('lblAmp');
+  document.getElementById('lblAlpha').textContent=t('lblAlpha');
+  document.getElementById('lblLine').textContent=t('lblLine');
+  document.getElementById('txtKeep').textContent=t('txtKeep');
+  document.getElementById('txtDrop').textContent=t('txtDrop');
+  if(idx<N){renderEpoch();}
+}
+
+// ---------- events ----------
+document.getElementById('langBtn').addEventListener('click',function(){
+  LANG=LANG==='en'?'cn':'en';
+  document.getElementById('langBtn').textContent=LANG.toUpperCase();
+  refreshI18N();
+});
+document.getElementById('btnKeep').addEventListener('click',function(){decide(true);});
+document.getElementById('btnDrop').addEventListener('click',function(){decide(false);});
+document.getElementById('retryBtn').addEventListener('click',reset);
+document.addEventListener('keydown',function(e){
+  if(document.getElementById('overlay').classList.contains('show'))return;
+  if(document.getElementById('btnKeep').disabled)return;
+  var k=e.key.toLowerCase();
+  if(k==='k')decide(true);
+  else if(k==='d')decide(false);
+});
+window.addEventListener('resize',function(){if(idx<N)drawScope(DECK[idx]);});
+
+// ---------- init ----------
+refreshI18N();
+updateStats();
+// 首帧延后到 flex 布局稳定后再画 (双 rAF), 避免 canvas-host 尺寸未就绪导致波形丢失
+requestAnimationFrame(function(){
+  requestAnimationFrame(function(){ renderEpoch(); });
+});
+})();
+</script>
+</body>
+</html>

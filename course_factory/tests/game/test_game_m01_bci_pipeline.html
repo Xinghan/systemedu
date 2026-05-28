@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<style>
+:root{
+  --paper:#FAF9F5; --paper-2:#F1EDDF; --card:#FFFFFF;
+  --ink:#191814; --ink-2:#2B2924; --sub:#6B6557; --sub-2:#9D978A;
+  --border:#EBE5D6; --border-2:#D9D1BD; --hairline:#F2EDE0;
+  --primary:#D97757; --primary-ink:#9A4A2E; --primary-soft:#F8EDE5; --primary-line:#ECCFB8;
+  --robotics:#7C4569; --robotics-soft:#E9DBE3;
+  --ok:#3F7A52; --ok-soft:#E0EBE2; --bad:#B5462F; --bad-soft:#F3DED6;
+  --shadow-sm:0 1px 2px 0 rgba(25,24,20,.04);
+  --shadow:0 1px 3px 0 rgba(25,24,20,.06),0 1px 2px -1px rgba(25,24,20,.04);
+  --shadow-md:0 4px 8px -2px rgba(25,24,20,.06),0 2px 4px -2px rgba(25,24,20,.04);
+  --shadow-lg:0 12px 24px -6px rgba(25,24,20,.1),0 4px 8px -4px rgba(25,24,20,.05);
+  --mono:'JetBrains Mono','SF Mono',ui-monospace,Menlo,Consolas,monospace;
+  --sans:'PingFang SC','Inter','Noto Sans SC',system-ui,sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:100%;height:100vh;overflow:hidden;background:var(--paper);
+  font-family:var(--sans);color:var(--ink);}
+.wrapper{display:flex;height:100vh;}
+
+/* ── 200px sidebar ── */
+.game-sidebar{
+  width:200px;flex-shrink:0;height:100vh;overflow-y:auto;
+  background:var(--paper-2);border-right:1px solid var(--border);
+  padding:14px 12px;display:flex;flex-direction:column;gap:12px;
+}
+.brand{display:flex;flex-direction:column;gap:3px;}
+.brand .kicker{font-family:var(--mono);font-size:10px;letter-spacing:1.5px;
+  color:var(--robotics);text-transform:uppercase;}
+.brand .title{font-size:14px;font-weight:700;color:var(--ink);line-height:1.25;}
+.task-box{background:var(--card);border:1px solid var(--border);
+  border-radius:8px;padding:10px;box-shadow:var(--shadow-sm);}
+.task-box h3{font-family:var(--mono);font-size:10px;letter-spacing:1px;
+  color:var(--sub);text-transform:uppercase;margin-bottom:6px;}
+.task-box p{font-size:12px;line-height:1.55;color:var(--ink-2);}
+.guide{background:var(--card);border:1px solid var(--border);border-radius:8px;
+  padding:10px;box-shadow:var(--shadow-sm);}
+.guide h3{font-family:var(--mono);font-size:10px;letter-spacing:1px;color:var(--sub);
+  text-transform:uppercase;margin-bottom:6px;}
+.guide ul{list-style:none;display:flex;flex-direction:column;gap:6px;}
+.guide li{font-size:11.5px;line-height:1.45;color:var(--ink-2);padding-left:14px;position:relative;}
+.guide li::before{content:'';position:absolute;left:0;top:6px;width:6px;height:6px;
+  background:var(--primary);border-radius:50%;}
+
+/* ── card library in sidebar ── */
+.pool{background:var(--card);border:1px solid var(--border);border-radius:8px;
+  padding:10px;box-shadow:var(--shadow-sm);}
+.pool h3{font-family:var(--mono);font-size:10px;letter-spacing:1px;color:var(--sub);
+  text-transform:uppercase;margin-bottom:8px;}
+.pool-cards{display:flex;flex-direction:column;gap:7px;min-height:24px;}
+.card{cursor:grab;user-select:none;background:var(--paper);
+  border:1px solid var(--border-2);border-left:3px solid var(--robotics);
+  border-radius:6px;padding:7px 9px;transition:box-shadow .18s,border-color .18s,transform .12s;}
+.card:hover{box-shadow:var(--shadow);border-color:var(--robotics);}
+.card.dragging{opacity:.4;}
+.card .c-name{font-size:12px;font-weight:600;color:var(--ink);line-height:1.2;}
+.card .c-tag{font-family:var(--mono);font-size:9px;letter-spacing:.5px;
+  color:var(--sub-2);margin-top:2px;}
+
+.controls{display:flex;gap:6px;margin-top:auto;}
+.btn{flex:1;font-family:var(--mono);font-size:11px;font-weight:700;letter-spacing:.5px;
+  padding:8px 0;cursor:pointer;border-radius:7px;border:1px solid var(--border-2);
+  background:var(--card);color:var(--ink-2);transition:background .15s,color .15s,border-color .15s;}
+.btn:hover{background:var(--paper);}
+.btn.primary{background:var(--primary);border-color:var(--primary);color:#fff;}
+.btn.primary:hover{background:var(--primary-ink);}
+.lang-btn{font-family:var(--mono);font-size:11px;font-weight:700;letter-spacing:1px;
+  padding:6px 0;cursor:pointer;border-radius:7px;border:1px solid var(--robotics);
+  background:var(--robotics-soft);color:var(--robotics);}
+.lang-btn:hover{background:#dfc7d6;}
+
+/* ── main area ── */
+.game-main{flex:1;min-width:0;height:100vh;display:flex;flex-direction:column;
+  padding:18px 22px;overflow-y:auto;}
+.main-head{margin-bottom:14px;}
+.main-head .h-kick{font-family:var(--mono);font-size:11px;letter-spacing:2px;
+  color:var(--primary);text-transform:uppercase;}
+.main-head h1{font-size:20px;font-weight:700;color:var(--ink);margin-top:3px;}
+.main-head p{font-size:13px;color:var(--sub);margin-top:4px;line-height:1.5;}
+
+/* loop endpoints */
+.endpoints{display:flex;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap;}
+.endpoint{background:var(--robotics-soft);border:1px dashed var(--robotics);
+  border-radius:20px;padding:6px 14px;font-size:12px;font-weight:600;color:var(--robotics);
+  display:flex;align-items:center;gap:6px;}
+.endpoint .dot{width:7px;height:7px;border-radius:50%;background:var(--robotics);}
+.ep-arrow{font-family:var(--mono);color:var(--sub-2);font-size:14px;}
+
+/* pipeline */
+.pipeline{flex:1;display:flex;flex-direction:column;gap:0;}
+.pipe-track{display:flex;align-items:stretch;gap:0;flex-wrap:wrap;}
+.slot-wrap{display:flex;align-items:center;}
+.slot{width:178px;min-height:96px;background:var(--card);
+  border:2px dashed var(--border-2);border-radius:10px;
+  padding:10px;display:flex;flex-direction:column;justify-content:center;
+  transition:border-color .18s,background .18s,box-shadow .18s;position:relative;}
+.slot .slot-no{position:absolute;top:7px;right:9px;font-family:var(--mono);
+  font-size:10px;font-weight:700;color:var(--sub-2);}
+.slot .slot-stage{font-family:var(--mono);font-size:9px;letter-spacing:1px;
+  color:var(--sub-2);text-transform:uppercase;margin-bottom:6px;}
+.slot .slot-hint{font-size:12px;color:var(--sub-2);text-align:center;}
+.slot.drag-over{border-color:var(--primary);background:var(--primary-soft);box-shadow:var(--shadow-md);}
+.slot.filled{border-style:solid;border-color:var(--border);}
+.slot.correct{border-color:var(--ok);background:var(--ok-soft);}
+.slot.wrong{border-color:var(--bad);background:var(--bad-soft);}
+.slot .placed{background:var(--paper);border:1px solid var(--border);
+  border-left:3px solid var(--robotics);border-radius:6px;padding:7px 9px;cursor:grab;}
+.slot.correct .placed{border-left-color:var(--ok);}
+.slot.wrong .placed{border-left-color:var(--bad);}
+.slot .placed .c-name{font-size:12px;font-weight:600;color:var(--ink);line-height:1.2;}
+.slot .placed .c-tag{font-family:var(--mono);font-size:9px;color:var(--sub-2);margin-top:2px;}
+
+/* flow connector between slots */
+.flow{width:42px;display:flex;align-items:center;justify-content:center;}
+.flow svg{width:42px;height:24px;}
+.flow .flow-line{stroke:var(--sub-2);stroke-width:2.5;fill:none;
+  stroke-dasharray:5 4;transition:stroke .3s;}
+.flow.live .flow-line{stroke:var(--ok);stroke-dasharray:none;
+  animation:flowdash 1s linear infinite;stroke-dasharray:6 6;}
+.flow.broken .flow-line{stroke:var(--bad);stroke-width:3;}
+.flow .flow-head{fill:var(--sub-2);transition:fill .3s;}
+.flow.live .flow-head{fill:var(--ok);}
+.flow.broken .flow-head{fill:var(--bad);}
+@keyframes flowdash{to{stroke-dashoffset:-12;}}
+
+/* closing-loop arrow row */
+.loop-back{margin-top:14px;display:flex;align-items:center;gap:10px;
+  font-family:var(--mono);font-size:11px;color:var(--sub);}
+.loop-back .lb-line{flex:1;height:2px;background:repeating-linear-gradient(
+  90deg,var(--border-2) 0,var(--border-2) 6px,transparent 6px,transparent 12px);transition:background .3s;}
+.loop-back.live .lb-line{background:var(--ok);}
+.loop-back.live{color:var(--ok);}
+
+/* status banner */
+.status{margin-top:14px;background:var(--card);border:1px solid var(--border);
+  border-radius:10px;padding:12px 16px;box-shadow:var(--shadow-sm);
+  display:flex;align-items:center;justify-content:space-between;gap:14px;min-height:54px;}
+.status .msg{font-size:13px;line-height:1.5;color:var(--ink-2);flex:1;}
+.status .score{font-family:var(--mono);font-size:14px;font-weight:700;color:var(--robotics);
+  white-space:nowrap;}
+.status.good{border-color:var(--ok);background:var(--ok-soft);}
+.status.good .msg{color:var(--ok);}
+.status.bad{border-color:var(--bad);background:var(--bad-soft);}
+.status.bad .msg{color:var(--bad);}
+
+/* success overlay */
+.overlay{display:none;position:fixed;inset:0;z-index:200;
+  background:rgba(25,24,20,.42);backdrop-filter:blur(3px);
+  align-items:center;justify-content:center;}
+.overlay.show{display:flex;}
+.ov-box{background:var(--card);border:1px solid var(--border);border-radius:16px;
+  box-shadow:var(--shadow-lg);padding:30px 36px;max-width:440px;text-align:center;}
+.ov-box .seal{width:46px;height:46px;margin:0 auto 14px;border-radius:50%;
+  border:2px solid var(--ok);display:flex;align-items:center;justify-content:center;
+  animation:pulse 1.8s ease-in-out infinite;}
+.ov-box .seal svg{width:24px;height:24px;}
+@keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.08)}}
+.ov-box h2{font-size:19px;font-weight:700;color:var(--ink);margin-bottom:10px;}
+.ov-box p{font-size:13.5px;line-height:1.7;color:var(--sub);margin-bottom:18px;}
+.ov-box .btn{display:inline-block;flex:none;padding:9px 26px;}
+</style>
+</head>
+<body>
+<div class="wrapper">
+  <aside class="game-sidebar">
+    <div class="brand">
+      <span class="kicker">BCI PIPELINE / M01</span>
+      <span class="title" id="brandTitle"></span>
+    </div>
+    <div class="task-box">
+      <h3 id="taskLabel"></h3>
+      <p id="taskText"></p>
+    </div>
+    <div class="pool">
+      <h3 id="poolTitle"></h3>
+      <div class="pool-cards" id="poolCards"></div>
+    </div>
+    <div class="guide">
+      <h3 id="guideTitle"></h3>
+      <ul id="guideList"></ul>
+    </div>
+    <div class="controls">
+      <button class="btn primary" id="btnCheck"></button>
+      <button class="btn" id="btnReset"></button>
+    </div>
+    <button class="lang-btn" id="langBtn">CN</button>
+  </aside>
+
+  <main class="game-main">
+    <div class="main-head">
+      <div class="h-kick" id="mainKick"></div>
+      <h1 id="mainTitle"></h1>
+      <p id="mainSub"></p>
+    </div>
+
+    <div class="endpoints">
+      <div class="endpoint"><span class="dot"></span><span id="epStart"></span></div>
+      <span class="ep-arrow">&gt;&gt;</span>
+      <span id="epMid" style="font-family:var(--mono);font-size:11px;color:var(--sub-2);"></span>
+      <span class="ep-arrow">&gt;&gt;</span>
+      <div class="endpoint"><span class="dot"></span><span id="epEnd"></span></div>
+    </div>
+
+    <div class="pipeline">
+      <div class="pipe-track" id="pipeTrack"></div>
+      <div class="loop-back" id="loopBack">
+        <span id="loopBackEnd"></span>
+        <span class="lb-line"></span>
+        <span id="loopBackStart"></span>
+      </div>
+    </div>
+
+    <div class="status" id="statusBar">
+      <span class="msg" id="statusMsg"></span>
+      <span class="score" id="statusScore"></span>
+    </div>
+  </main>
+</div>
+
+<div class="overlay" id="overlay">
+  <div class="ov-box">
+    <div class="seal">
+      <svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6" fill="none" stroke="#3F7A52" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </div>
+    <h2 id="ovTitle"></h2>
+    <p id="ovMsg"></p>
+    <button class="btn primary" id="btnReplay"></button>
+  </div>
+</div>
+
+<script>
+(function(){
+"use strict";
+
+var LANG='cn';
+
+/* ── 8 cards: 5 correct pipeline steps + 3 distractors (loop endpoints / decoys) ── */
+/* slots represent the 5-step signal-processing core of the BCI closed loop */
+var CARDS=[
+  {id:'imagine', nameCn:'想象动作',   nameEn:'Imagine Move',  tag:'INTENT',  role:'start'},
+  {id:'eeg',     nameCn:'脑电信号',   nameEn:'EEG Signal',    tag:'DECOY',   role:'decoy'},
+  {id:'acquire', nameCn:'电极采集',   nameEn:'Electrode Pickup',tag:'STEP 1', role:'slot', slot:0},
+  {id:'amplify', nameCn:'放大滤波',   nameEn:'Amplify+Filter',tag:'STEP 2',  role:'slot', slot:1},
+  {id:'feature', nameCn:'特征提取',   nameEn:'Feature Extract',tag:'STEP 3', role:'slot', slot:2},
+  {id:'classify',nameCn:'分类解码',   nameEn:'Classify/Decode',tag:'STEP 4', role:'slot', slot:3},
+  {id:'command', nameCn:'游戏指令',   nameEn:'Game Command',  tag:'STEP 5',  role:'slot', slot:4},
+  {id:'action',  nameCn:'角色动作',   nameEn:'Avatar Action', tag:'END',     role:'end'}
+];
+function card(id){for(var i=0;i<CARDS.length;i++)if(CARDS[i].id===id)return CARDS[i];return null;}
+
+/* 5 pipeline slots — correct card id per slot */
+var CORRECT=['acquire','amplify','feature','classify','command'];
+var SLOT_STAGE=['PICKUP','FILTER','FEATURE','DECODE','COMMAND'];
+
+var slots=[null,null,null,null,null]; // slots[i] = card id or null
+var checked=false;
+
+var I18N={
+  brandTitle:{cn:'脑机闭环拼装',en:'BCI Loop Builder'},
+  taskLabel: {cn:'任务',en:'TASK'},
+  taskText:  {cn:'把 5 个处理步骤卡片拖进流水线槽，组成正确的脑机接口闭环。错序会让数据流断裂亮红线。',
+              en:'Drag the 5 processing-step cards into the pipeline slots to form the correct BCI closed loop. Wrong order breaks the dataflow into a red line.'},
+  poolTitle: {cn:'卡片库',en:'CARD LIBRARY'},
+  guideTitle:{cn:'玩法',en:'HOW TO PLAY'},
+  g1:{cn:'从卡片库拖卡片到右侧 5 个流水线槽',en:'Drag cards from the library into the 5 pipeline slots'},
+  g2:{cn:'2 张是干扰卡，不属于处理流水线',en:'2 cards are decoys, not part of the pipeline'},
+  g3:{cn:'点检查：对了数据流变绿流动，错了断成红线',en:'Click Check: correct = green flow, wrong = broken red line'},
+  btnCheck:  {cn:'检查闭环',en:'CHECK LOOP'},
+  btnReset:  {cn:'重置',en:'RESET'},
+  btnReplay: {cn:'再玩一次',en:'PLAY AGAIN'},
+  mainKick:  {cn:'PATTERN 7 / 战略地图',en:'PATTERN 7 / STRATEGY MAP'},
+  mainTitle: {cn:'组装 BCI 5 步闭环',en:'Assemble the 5-Step BCI Loop'},
+  mainSub:   {cn:'想象动作产生脑电，被采集、放大、提特征、解码，最终变成游戏里角色的动作——再回到大脑形成闭环。',
+              en:'Imagining a move makes EEG; it is picked up, amplified, featurized, decoded, and becomes an avatar action — looping back to the brain.'},
+  epStart:   {cn:'想象动作',en:'Imagine Move'},
+  epMid:     {cn:'5 步信号处理',en:'5-step processing'},
+  epEnd:     {cn:'角色动作',en:'Avatar Action'},
+  loopBackEnd:{cn:'角色动作',en:'Avatar Action'},
+  loopBackStart:{cn:'回到想象（闭环）',en:'back to Imagine (loop)'},
+  slotHint:  {cn:'拖入卡片',en:'drop card'},
+  statusIdle:{cn:'从左侧卡片库把步骤卡拖进 5 个槽，再点“检查闭环”。',
+              en:'Drag step cards from the library into the 5 slots, then click Check Loop.'},
+  statusIncomplete:{cn:'还有空槽——5 个步骤都要填满才能检查闭环。',
+              en:'Some slots are empty — fill all 5 steps before checking the loop.'},
+  statusWrong:{cn:'数据流断裂！红线处的步骤顺序不对，调整后再检查。',
+              en:'Dataflow broken! Steps at the red line are out of order — fix and recheck.'},
+  statusGood:{cn:'闭环点亮，数据流通！',en:'Loop lit — dataflow is live!'},
+  scoreLabel:{cn:'正确',en:'OK'},
+  ovTitle:   {cn:'闭环组装完成',en:'Closed Loop Assembled'},
+  ovMsg:     {cn:'电极采集 → 放大滤波 → 特征提取 → 分类解码 → 游戏指令，5 步全部就位。这就是脑机接口的核心数据流：从脑电到角色动作，再回到大脑。',
+              en:'Pickup -> Amplify -> Feature -> Decode -> Command, all 5 in place. This is the core BCI dataflow: from EEG to avatar action, looping back to the brain.'}
+};
+function t(k){return (I18N[k]&&I18N[k][LANG])||(I18N[k]&&I18N[k].cn)||k;}
+function cname(c){return LANG==='cn'?c.nameCn:c.nameEn;}
+
+/* ── render card library (cards not placed in any slot) ── */
+function renderPool(){
+  var pool=document.getElementById('poolCards');
+  pool.innerHTML='';
+  CARDS.forEach(function(c){
+    if(c.role==='start'||c.role==='end')return; // endpoints shown above pipeline, not draggable into slots
+    if(slots.indexOf(c.id)>=0)return; // already placed
+    var el=document.createElement('div');
+    el.className='card';
+    el.setAttribute('draggable','true');
+    el.setAttribute('data-cid',c.id);
+    el.innerHTML='<div class="c-name">'+cname(c)+'</div><div class="c-tag">'+c.tag+'</div>';
+    el.addEventListener('dragstart',function(e){
+      e.dataTransfer.setData('text/plain',c.id);
+      el.classList.add('dragging');
+    });
+    el.addEventListener('dragend',function(){el.classList.remove('dragging');});
+    el.addEventListener('touchstart',touchStart,{passive:false});
+    pool.appendChild(el);
+  });
+}
+
+/* ── render the 5-slot pipeline with flow connectors ── */
+function renderPipeline(){
+  var track=document.getElementById('pipeTrack');
+  track.innerHTML='';
+  for(var i=0;i<5;i++){
+    var wrap=document.createElement('div');
+    wrap.className='slot-wrap';
+
+    var slot=document.createElement('div');
+    slot.className='slot';
+    slot.setAttribute('data-slot',i);
+    if(slots[i]){
+      slot.classList.add('filled');
+      var c=card(slots[i]);
+      slot.innerHTML='<span class="slot-no">#'+(i+1)+'</span>'
+        +'<span class="slot-stage">'+SLOT_STAGE[i]+'</span>'
+        +'<div class="placed" draggable="true" data-cid="'+c.id+'" data-from="'+i+'">'
+        +'<div class="c-name">'+cname(c)+'</div><div class="c-tag">'+c.tag+'</div></div>';
+    }else{
+      slot.innerHTML='<span class="slot-no">#'+(i+1)+'</span>'
+        +'<span class="slot-stage">'+SLOT_STAGE[i]+'</span>'
+        +'<span class="slot-hint">'+t('slotHint')+'</span>';
+    }
+    if(checked&&slots[i]){
+      slot.classList.add(slots[i]===CORRECT[i]?'correct':'wrong');
+    }
+    bindSlot(slot);
+    wrap.appendChild(slot);
+
+    if(i<4){
+      var flow=document.createElement('div');
+      flow.className='flow';
+      flow.setAttribute('data-flow',i);
+      flow.innerHTML='<svg viewBox="0 0 42 24"><line class="flow-line" x1="2" y1="12" x2="34" y2="12"/>'
+        +'<polygon class="flow-head" points="34,7 42,12 34,17"/></svg>';
+      // flow state after check
+      if(checked){
+        var leftOk=slots[i]===CORRECT[i];
+        var rightOk=slots[i+1]===CORRECT[i+1];
+        if(leftOk&&rightOk)flow.classList.add('live');
+        else flow.classList.add('broken');
+      }
+      wrap.appendChild(flow);
+    }
+    track.appendChild(wrap);
+  }
+  // loop-back line state
+  var lb=document.getElementById('loopBack');
+  lb.classList.toggle('live',checked&&allCorrect());
+}
+
+function bindSlot(slot){
+  slot.addEventListener('dragover',function(e){e.preventDefault();slot.classList.add('drag-over');});
+  slot.addEventListener('dragleave',function(){slot.classList.remove('drag-over');});
+  slot.addEventListener('drop',function(e){
+    e.preventDefault();slot.classList.remove('drag-over');
+    var cid=e.dataTransfer.getData('text/plain');
+    var si=parseInt(slot.getAttribute('data-slot'),10);
+    placeCard(cid,si);
+  });
+  var placed=slot.querySelector('.placed');
+  if(placed){
+    placed.addEventListener('dragstart',function(e){
+      e.dataTransfer.setData('text/plain',placed.getAttribute('data-cid'));
+      var from=parseInt(placed.getAttribute('data-from'),10);
+      slots[from]=null;checked=false;
+      setTimeout(renderAll,0);
+    });
+    placed.addEventListener('touchstart',touchStart,{passive:false});
+  }
+}
+
+function placeCard(cid,si){
+  // remove card from any slot it may already occupy
+  for(var i=0;i<slots.length;i++)if(slots[i]===cid)slots[i]=null;
+  slots[si]=cid;
+  checked=false;
+  renderAll();
+}
+
+function allCorrect(){
+  for(var i=0;i<5;i++)if(slots[i]!==CORRECT[i])return false;
+  return true;
+}
+function filledCount(){var n=0;for(var i=0;i<5;i++)if(slots[i])n++;return n;}
+
+/* ── touch drag (mobile) ── */
+var dragId=null, ghost=null;
+function touchStart(e){
+  e.preventDefault();
+  var el=e.currentTarget;
+  dragId=el.getAttribute('data-cid');
+  var from=el.getAttribute('data-from');
+  if(from!==null&&from!==undefined&&el.classList.contains('placed')){
+    slots[parseInt(from,10)]=null;checked=false;renderAll();
+  }
+  ghost=el.cloneNode(true);
+  ghost.style.position='fixed';ghost.style.zIndex='300';ghost.style.width='160px';
+  ghost.style.opacity='.9';ghost.style.pointerEvents='none';
+  document.body.appendChild(ghost);
+  var tch=e.touches[0];moveGhost(tch.clientX,tch.clientY);
+  document.addEventListener('touchmove',touchMove,{passive:false});
+  document.addEventListener('touchend',touchEnd);
+}
+function moveGhost(x,y){if(ghost){ghost.style.left=(x-80)+'px';ghost.style.top=(y-24)+'px';}}
+function touchMove(e){
+  e.preventDefault();var tch=e.touches[0];moveGhost(tch.clientX,tch.clientY);
+  document.querySelectorAll('.slot').forEach(function(s){
+    var r=s.getBoundingClientRect();
+    s.classList.toggle('drag-over',tch.clientX>=r.left&&tch.clientX<=r.right&&tch.clientY>=r.top&&tch.clientY<=r.bottom);
+  });
+}
+function touchEnd(e){
+  document.removeEventListener('touchmove',touchMove);
+  document.removeEventListener('touchend',touchEnd);
+  if(ghost){document.body.removeChild(ghost);ghost=null;}
+  if(!dragId)return;
+  var tch=e.changedTouches[0],done=false;
+  document.querySelectorAll('.slot').forEach(function(s){
+    s.classList.remove('drag-over');
+    var r=s.getBoundingClientRect();
+    if(!done&&tch.clientX>=r.left&&tch.clientX<=r.right&&tch.clientY>=r.top&&tch.clientY<=r.bottom){
+      placeCard(dragId,parseInt(s.getAttribute('data-slot'),10));done=true;
+    }
+  });
+  if(!done)renderAll();
+  dragId=null;
+}
+
+/* ── check / status ── */
+function checkLoop(){
+  if(filledCount()<5){
+    checked=false;renderAll();
+    setStatus('','statusIncomplete');
+    return;
+  }
+  checked=true;renderAll();
+  var ok=0;for(var i=0;i<5;i++)if(slots[i]===CORRECT[i])ok++;
+  if(ok===5){
+    setStatus('good','statusGood');
+    document.getElementById('overlay').classList.add('show');
+  }else{
+    setStatus('bad','statusWrong');
+  }
+  document.getElementById('statusScore').textContent=t('scoreLabel')+' '+ok+'/5';
+}
+
+function setStatus(kind,key){
+  var bar=document.getElementById('statusBar');
+  bar.className='status'+(kind?(' '+kind):'');
+  document.getElementById('statusMsg').textContent=t(key);
+}
+
+function resetGame(){
+  slots=[null,null,null,null,null];checked=false;
+  document.getElementById('overlay').classList.remove('show');
+  renderAll();
+  setStatus('','statusIdle');
+  document.getElementById('statusScore').textContent=t('scoreLabel')+' 0/5';
+}
+
+/* ── i18n static text ── */
+function renderText(){
+  document.getElementById('langBtn').textContent=LANG.toUpperCase();
+  document.getElementById('brandTitle').textContent=t('brandTitle');
+  document.getElementById('taskLabel').textContent=t('taskLabel');
+  document.getElementById('taskText').textContent=t('taskText');
+  document.getElementById('poolTitle').textContent=t('poolTitle');
+  document.getElementById('guideTitle').textContent=t('guideTitle');
+  document.getElementById('guideList').innerHTML='<li>'+t('g1')+'</li><li>'+t('g2')+'</li><li>'+t('g3')+'</li>';
+  document.getElementById('btnCheck').textContent=t('btnCheck');
+  document.getElementById('btnReset').textContent=t('btnReset');
+  document.getElementById('btnReplay').textContent=t('btnReplay');
+  document.getElementById('mainKick').textContent=t('mainKick');
+  document.getElementById('mainTitle').textContent=t('mainTitle');
+  document.getElementById('mainSub').textContent=t('mainSub');
+  document.getElementById('epStart').textContent=t('epStart');
+  document.getElementById('epMid').textContent=t('epMid');
+  document.getElementById('epEnd').textContent=t('epEnd');
+  document.getElementById('loopBackEnd').textContent=t('loopBackEnd');
+  document.getElementById('loopBackStart').textContent=t('loopBackStart');
+  document.getElementById('ovTitle').textContent=t('ovTitle');
+  document.getElementById('ovMsg').textContent=t('ovMsg');
+}
+
+function renderAll(){
+  renderText();
+  renderPool();
+  renderPipeline();
+}
+
+document.getElementById('langBtn').addEventListener('click',function(){
+  LANG=LANG==='cn'?'en':'cn';
+  renderAll();
+  // keep current status message in new lang
+  var bar=document.getElementById('statusBar');
+  var key=bar.classList.contains('good')?'statusGood':bar.classList.contains('bad')?'statusWrong':'statusIdle';
+  document.getElementById('statusMsg').textContent=t(key);
+  var sc=document.getElementById('statusScore');
+  sc.textContent=t('scoreLabel')+' '+sc.textContent.replace(/[^0-9/]/g,'');
+});
+document.getElementById('btnCheck').addEventListener('click',checkLoop);
+document.getElementById('btnReset').addEventListener('click',resetGame);
+document.getElementById('btnReplay').addEventListener('click',resetGame);
+
+// init
+renderAll();
+setStatus('','statusIdle');
+document.getElementById('statusScore').textContent=t('scoreLabel')+' 0/5';
+
+})();
+</script>
+</body>
+</html>

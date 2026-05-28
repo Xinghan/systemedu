@@ -1,0 +1,668 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>信号质检台</title>
+<style>
+  :root{
+    /* Surfaces — Claude warm cream */
+    --paper:    #FAF9F5;
+    --paper-2:  #F1EDDF;
+    --card:     #FFFFFF;
+    --ink:      #191814;
+    --ink-2:    #2B2924;
+    --sub:      #6B6557;
+    --sub-2:    #9D978A;
+    --border:   #EBE5D6;
+    --border-2: #D9D1BD;
+    --hairline: #F2EDE0;
+
+    /* Primary — Claude coral */
+    --primary:      #D97757;
+    --primary-ink:  #9A4A2E;
+    --primary-soft: #F8EDE5;
+    --primary-line: #ECCFB8;
+
+    /* Domain accent — robotics 紫 */
+    --robotics:     #7C4569;
+    --robotics-soft:#E9DBE3;
+
+    --good:     #5A8A5E;
+    --good-soft:#E2ECE1;
+    --warn:     #C0823C;
+    --warn-soft:#F6ECDB;
+
+    --shadow-sm: 0 1px 2px 0 rgba(25,24,20,.04);
+    --shadow:    0 1px 3px 0 rgba(25,24,20,.06), 0 1px 2px -1px rgba(25,24,20,.04);
+    --shadow-md: 0 4px 8px -2px rgba(25,24,20,.06), 0 2px 4px -2px rgba(25,24,20,.04);
+    --shadow-lg: 0 12px 24px -6px rgba(25,24,20,.1), 0 4px 8px -4px rgba(25,24,20,.05);
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    height:100vh;overflow:hidden;display:flex;
+    background:var(--paper);color:var(--ink);
+    font-family:'PingFang SC','Noto Sans SC','Inter',sans-serif;
+  }
+  .mono{font-family:'JetBrains Mono','SF Mono','Roboto Mono',ui-monospace,monospace;}
+
+  /* ---------------- Sidebar ---------------- */
+  .game-sidebar{
+    width:200px;flex-shrink:0;height:100vh;
+    background:var(--paper-2);border-right:1px solid var(--border-2);
+    display:flex;flex-direction:column;gap:12px;padding:16px 14px;
+    overflow-y:auto;
+  }
+  .brand{display:flex;flex-direction:column;gap:3px;}
+  .brand .kicker{font-size:10px;letter-spacing:.14em;color:var(--robotics);font-weight:700;text-transform:uppercase;}
+  .brand h1{font-size:17px;margin:0;line-height:1.25;color:var(--ink);}
+
+  .progress-box{
+    background:var(--card);border:1px solid var(--border);border-radius:10px;
+    padding:9px 11px;box-shadow:var(--shadow-sm);
+  }
+  .progress-box .lbl{font-size:10px;font-weight:700;color:var(--primary-ink);letter-spacing:.05em;margin-bottom:5px;text-transform:uppercase;}
+  .progress-box .count{font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:700;color:var(--robotics);}
+  .pbar{height:8px;border-radius:5px;background:var(--paper-2);overflow:hidden;border:1px solid var(--border);margin-top:6px;}
+  .pbar i{display:block;height:100%;width:0%;border-radius:5px;background:var(--good);transition:width .4s ease;}
+
+  .case-lbl{font-size:10px;font-weight:700;color:var(--sub);letter-spacing:.05em;text-transform:uppercase;}
+  .case-list{display:flex;flex-direction:column;gap:7px;}
+  .case-btn{
+    display:flex;align-items:center;gap:9px;text-align:left;
+    padding:8px 10px;border-radius:9px;cursor:pointer;
+    background:var(--card);border:1px solid var(--border-2);box-shadow:var(--shadow-sm);
+    transition:transform .12s ease,box-shadow .12s ease,border-color .12s ease;
+    font-family:inherit;color:var(--ink);width:100%;
+  }
+  .case-btn:hover{transform:translateY(-1px);box-shadow:var(--shadow-md);border-color:var(--robotics);}
+  .case-btn.active{border-color:var(--robotics);background:var(--robotics-soft);}
+  .case-btn .seg-no{
+    width:24px;height:24px;flex-shrink:0;border-radius:7px;
+    background:var(--paper-2);border:1px solid var(--border);
+    display:flex;align-items:center;justify-content:center;
+    font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:700;color:var(--sub);
+  }
+  .case-btn.solved .seg-no{background:var(--good-soft);border-color:var(--good);color:var(--good);}
+  .case-btn .seg-txt{display:flex;flex-direction:column;gap:1px;line-height:1.15;}
+  .case-btn .seg-name{font-size:12px;font-weight:700;}
+  .case-btn .seg-sub{font-size:9px;color:var(--sub-2);}
+  .case-btn .seg-tick{
+    margin-left:auto;width:16px;height:16px;flex-shrink:0;color:var(--good);opacity:0;
+    transition:opacity .2s ease;
+  }
+  .case-btn.solved .seg-tick{opacity:1;}
+
+  .btn{
+    padding:8px 11px;border-radius:9px;font-size:12.5px;font-weight:700;cursor:pointer;
+    border:1px solid var(--border-2);background:var(--card);color:var(--ink-2);
+    box-shadow:var(--shadow-sm);transition:transform .1s ease,box-shadow .1s ease;
+    text-align:center;font-family:inherit;
+  }
+  .btn:hover{box-shadow:var(--shadow-md);}
+  .btn:active{transform:translateY(1px);}
+  .lang-btn{margin-top:auto;}
+
+  /* ---------------- Main ---------------- */
+  .game-main{
+    flex:1;height:100vh;display:flex;flex-direction:column;position:relative;
+    padding:16px 22px;overflow:hidden;gap:11px;
+  }
+  .hud{
+    align-self:stretch;
+    background:var(--card);border:1px solid var(--border);border-radius:10px;
+    padding:9px 14px;box-shadow:var(--shadow);font-size:13px;color:var(--sub);
+    min-height:20px;line-height:1.45;flex-shrink:0;
+  }
+  .hud b{color:var(--robotics);}
+  .hud.good{border-color:var(--good);color:var(--good);background:var(--good-soft);}
+  .hud.good b{color:var(--good);}
+  .hud.warn{border-color:var(--warn);color:var(--warn);background:var(--warn-soft);}
+  .hud.warn b{color:var(--warn);}
+
+  /* scope row: waveform + spectrum side by side, impedance meter */
+  .scope-row{
+    flex:1;min-height:0;display:flex;gap:12px;
+  }
+  .panel{
+    background:var(--card);border:1px solid var(--border);border-radius:12px;
+    box-shadow:var(--shadow);padding:11px 14px;display:flex;flex-direction:column;min-height:0;
+  }
+  .panel-lbl{font-size:10px;font-weight:700;color:var(--sub);letter-spacing:.05em;text-transform:uppercase;margin-bottom:6px;flex-shrink:0;}
+  .panel-lbl .tag{color:var(--robotics);}
+  .wave-panel{flex:1.6;min-width:0;}
+  .wave-panel svg{flex:1;width:100%;min-height:0;display:block;}
+  .spec-panel{flex:1;min-width:0;}
+  .spec-panel svg{flex:1;width:100%;min-height:0;display:block;}
+
+  .meta-panel{width:188px;flex-shrink:0;gap:0;}
+  .meta-row{display:flex;justify-content:space-between;align-items:baseline;padding:5px 0;border-bottom:1px solid var(--hairline);}
+  .meta-row:last-child{border-bottom:0;}
+  .meta-row .k{font-size:11px;color:var(--sub);}
+  .meta-row .v{font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:700;color:var(--ink);}
+  .meta-row .v.good{color:var(--good);}
+  .meta-row .v.bad{color:var(--primary);}
+  .meta-bar{height:8px;border-radius:5px;background:var(--paper-2);overflow:hidden;border:1px solid var(--border);margin:4px 0 8px;}
+  .meta-bar i{display:block;height:100%;width:0%;border-radius:5px;background:var(--primary);transition:width .4s ease,background .4s ease;}
+  .meta-bar i.good{background:var(--good);}
+
+  /* diagnosis options */
+  .diag{
+    flex-shrink:0;background:var(--card);border:1px solid var(--border);border-radius:12px;
+    box-shadow:var(--shadow);padding:11px 14px;
+  }
+  .diag-q{font-size:12.5px;font-weight:700;color:var(--ink-2);margin-bottom:8px;}
+  .diag-q span{color:var(--robotics);}
+  .opt-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;}
+  .opt{
+    text-align:left;padding:9px 11px;border-radius:9px;cursor:pointer;
+    background:var(--paper-2);border:1px solid var(--border-2);
+    transition:transform .1s ease,box-shadow .1s ease,border-color .1s ease,background .15s ease;
+    font-family:inherit;color:var(--ink);line-height:1.3;
+  }
+  .opt:hover{transform:translateY(-1px);box-shadow:var(--shadow-md);border-color:var(--robotics);}
+  .opt .o-name{font-size:12px;font-weight:700;display:block;}
+  .opt .o-fix{font-size:10px;color:var(--sub-2);display:block;margin-top:2px;}
+  .opt.correct{border-color:var(--good);background:var(--good-soft);}
+  .opt.correct .o-fix{color:var(--good);}
+  .opt.wrong{border-color:var(--primary);background:var(--primary-soft);}
+  .opt.wrong .o-fix{color:var(--primary-ink);}
+  .opt.locked{pointer-events:none;}
+  .opt.dim{opacity:.45;}
+
+  /* award overlay */
+  .award{
+    position:absolute;inset:0;display:none;align-items:center;justify-content:center;
+    background:rgba(250,249,245,.86);backdrop-filter:blur(2px);z-index:30;
+  }
+  .award.show{display:flex;animation:fade .4s ease;}
+  @keyframes fade{from{opacity:0;}to{opacity:1;}}
+  .award-card{
+    background:var(--card);border:1px solid var(--primary-line);border-radius:16px;
+    padding:28px 36px;box-shadow:var(--shadow-lg);text-align:center;max-width:440px;
+  }
+  .award-card .seal{
+    width:74px;height:74px;margin:0 auto 14px;border-radius:50%;
+    background:var(--primary-soft);border:2px solid var(--primary);
+    display:flex;align-items:center;justify-content:center;
+    font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;color:var(--primary-ink);
+    animation:pulse 2.2s ease-in-out infinite;
+  }
+  @keyframes pulse{0%,100%{transform:scale(1);}50%{transform:scale(1.06);}}
+  .award-card h2{margin:0 0 8px;font-size:21px;color:var(--ink);}
+  .award-card p{margin:0 0 18px;font-size:13px;color:var(--sub);line-height:1.6;}
+</style>
+</head>
+<body>
+  <aside class="game-sidebar">
+    <div class="brand">
+      <span class="kicker" id="kicker">EEG · 信号质检</span>
+      <h1 id="title">信号质检台</h1>
+    </div>
+
+    <div class="progress-box">
+      <div class="lbl" id="progLbl">已诊断</div>
+      <div class="count mono"><span id="progCount">0</span> / 5</div>
+      <div class="pbar"><i id="progBar"></i></div>
+    </div>
+
+    <div class="case-lbl" id="caseLbl">5 段录到的信号</div>
+    <div class="case-list" id="caseList"></div>
+
+    <button class="btn lang-btn" id="langBtn">EN / 中</button>
+  </aside>
+
+  <main class="game-main">
+    <div class="hud" id="hud">挑一段信号，看波形、阻抗、频谱，判断「这段能用吗？问题是什么？」</div>
+
+    <div class="scope-row">
+      <div class="panel wave-panel">
+        <div class="panel-lbl">时域波形 · <span class="tag" id="waveCh">CH1 (O1)</span> · 2 s</div>
+        <svg id="wave" viewBox="0 0 600 220" preserveAspectRatio="none" aria-label="waveform">
+          <line x1="0" y1="110" x2="600" y2="110" stroke="var(--hairline)" stroke-width="1"></line>
+          <path id="wavePath" d="M0 110 L600 110" fill="none" stroke="var(--sub-2)" stroke-width="2"></path>
+        </svg>
+      </div>
+
+      <div class="panel spec-panel">
+        <div class="panel-lbl">频谱 · <span class="tag">0–60 Hz</span></div>
+        <svg id="spec" viewBox="0 0 320 220" preserveAspectRatio="none" aria-label="spectrum">
+          <line x1="0" y1="200" x2="320" y2="200" stroke="var(--border)" stroke-width="1"></line>
+          <g id="specBars"></g>
+          <g id="specAxis"></g>
+        </svg>
+      </div>
+
+      <div class="panel meta-panel">
+        <div class="panel-lbl">电极读数</div>
+        <div class="meta-row"><span class="k" id="impK">阻抗</span><span class="v mono" id="impV">—</span></div>
+        <div class="meta-bar"><i id="impBar"></i></div>
+        <div class="meta-row"><span class="k" id="rangeK">幅度峰峰</span><span class="v mono" id="rangeV">—</span></div>
+        <div class="meta-bar"><i id="rangeBar"></i></div>
+        <div class="meta-row"><span class="k" id="hfK">高频占比</span><span class="v mono" id="hfV">—</span></div>
+        <div class="meta-bar"><i id="hfBar"></i></div>
+        <div class="meta-row"><span class="k" id="lineK">50 Hz 工频</span><span class="v mono" id="lineV">—</span></div>
+        <div class="meta-bar"><i id="lineBar"></i></div>
+      </div>
+    </div>
+
+    <div class="diag">
+      <div class="diag-q" id="diagQ">诊断：这段信号<span>怎么了</span>？该怎么处理？</div>
+      <div class="opt-grid" id="optGrid"></div>
+    </div>
+
+    <div class="award" id="award">
+      <div class="award-card">
+        <div class="seal mono">QC PASS</div>
+        <h2 id="awTitle">信号质检员</h2>
+        <p id="awBody">5 段信号全部诊断正确。你已经能从波形、阻抗、频谱里读出工频污染、电极松动、肌电、运动伪迹——这正是每次录制开工前必做的质检。</p>
+        <button class="btn" id="awBtn">再练一遍</button>
+      </div>
+    </div>
+  </main>
+
+<script>
+(function(){
+  "use strict";
+  var LANG='cn';
+
+  // ---- 5 段信号 case 定义 ----
+  // diag: 正确诊断 id; opts 里每个 case 共用同一套 5 个诊断选项
+  var CASES=[
+    {id:'good',  diag:'ok',     imp:5,   range:55,  hf:8,  line:4,  wkind:'alpha'},
+    {id:'mains', diag:'mains',  imp:6,   range:120, hf:30, line:96, wkind:'mains'},
+    {id:'loose', diag:'loose',  imp:210, range:240, hf:55, line:60, wkind:'loose'},
+    {id:'emg',   diag:'emg',    imp:7,   range:180, hf:92, line:10, wkind:'emg'},
+    {id:'motion',diag:'motion', imp:8,   range:95,  hf:12, line:8,  wkind:'motion'}
+  ];
+
+  // 诊断选项 (5 选 1)
+  var OPTIONS=['ok','mains','loose','emg','motion'];
+
+  var I18N={
+    kicker:{cn:'EEG · 信号质检',en:'EEG · Signal QC'},
+    title:{cn:'信号质检台',en:'Signal QC Bench'},
+    progLbl:{cn:'已诊断',en:'Diagnosed'},
+    caseLbl:{cn:'5 段录到的信号',en:'5 recorded clips'},
+    langBtn:{cn:'EN / 中',en:'中 / EN'},
+    waveCh:{cn:'CH1 (O1)',en:'CH1 (O1)'},
+    impK:{cn:'阻抗',en:'Impedance'},
+    rangeK:{cn:'幅度峰峰',en:'Pk-Pk amp'},
+    hfK:{cn:'高频占比',en:'High-freq %'},
+    lineK:{cn:'50 Hz 工频',en:'50 Hz mains'},
+    diagQ:{cn:'诊断：这段信号<span>怎么了</span>？该怎么处理？',en:'Diagnose: what is <span>wrong</span> with this clip? How to fix it?'},
+    awTitle:{cn:'信号质检员',en:'Signal QC Inspector'},
+    awBody:{cn:'5 段信号全部诊断正确。你已经能从波形、阻抗、频谱里读出工频污染、电极松动、肌电、运动伪迹——这正是每次录制开工前必做的质检。',
+            en:'All 5 clips diagnosed correctly. You can now read mains noise, loose electrodes, EMG and motion artifacts straight off the waveform, impedance and spectrum — exactly the QC check before every recording session.'},
+    awBtn:{cn:'再练一遍',en:'Play again'},
+
+    // case 侧栏名 + 副标题
+    c_good:{cn:'信号 A',en:'Clip A'},     cs_good:{cn:'闭眼静坐',en:'eyes closed'},
+    c_mains:{cn:'信号 B',en:'Clip B'},    cs_mains:{cn:'尖锐周期纹',en:'sharp ripple'},
+    c_loose:{cn:'信号 C',en:'Clip C'},    cs_loose:{cn:'忽大忽小',en:'erratic'},
+    c_emg:{cn:'信号 D',en:'Clip D'},      cs_emg:{cn:'高频毛刺',en:'fuzzy'},
+    c_motion:{cn:'信号 E',en:'Clip E'},   cs_motion:{cn:'大幅漂移',en:'baseline drift'},
+
+    // 诊断选项 name + fix
+    o_ok:{cn:'可用 · 干净 alpha',en:'Usable · clean alpha'},
+    of_ok:{cn:'阻抗低、闭眼 10 Hz 清晰，直接用',en:'low Z, clear 10 Hz, keep it'},
+    o_mains:{cn:'工频污染',en:'Mains noise'},
+    of_mains:{cn:'关附近电器 / 加 50 Hz 陷波',en:'turn off devices / 50 Hz notch'},
+    o_loose:{cn:'电极松动',en:'Loose electrode'},
+    of_loose:{cn:'阻抗高，重涂导电膏压紧',en:'high Z, re-gel & press'},
+    o_emg:{cn:'肌电干扰',en:'EMG (muscle)'},
+    of_emg:{cn:'放松下巴 / 别咬牙',en:'relax jaw, unclench'},
+    o_motion:{cn:'运动伪迹',en:'Motion artifact'},
+    of_motion:{cn:'坐稳别动，重录一段',en:'sit still, re-record'},
+
+    // HUD 提示 (选某段后)
+    h_intro:{cn:'挑一段信号，看波形、阻抗、频谱，判断「这段能用吗？问题是什么？」',
+             en:'Pick a clip, read the waveform, impedance & spectrum, then judge: usable? what is wrong?'},
+    h_pick:{cn:'看 <b>{name}</b> 的三块面板：波形规律吗？阻抗高吗？频谱哪里冒尖？',
+            en:'Inspect <b>{name}</b>: is the waveform regular? impedance high? where does the spectrum spike?'},
+    h_right:{cn:'对了！{why}',en:'Correct! {why}'},
+    h_wrong:{cn:'再看看。{hint}',en:'Look again. {hint}'},
+
+    // 每段诊断正确后的解释
+    w_ok:{cn:'阻抗 5 kΩ、峰峰 55 µV、频谱在 10 Hz 一个干净的 alpha 峰，没有 50 Hz 尖峰也没有满频段毛刺——这段直接能用。',
+          en:'Z = 5 kΩ, 55 µV pk-pk, a clean 10 Hz alpha peak, no 50 Hz spike and no broadband fuzz — usable as is.'},
+    w_mains:{cn:'频谱在 50 Hz 一根又高又窄的尖峰，波形是规律的快速纹波——这是工频污染，关掉附近电器或加 50 Hz 陷波滤波器。',
+             en:'A tall narrow spike at 50 Hz and regular fast ripple in the wave — that is mains noise. Turn off nearby devices or apply a 50 Hz notch filter.'},
+    w_loose:{cn:'阻抗飙到 210 kΩ，幅度忽大忽小没有稳定基线——电极没贴牢，重新涂导电膏压紧再录。',
+             en:'Impedance jumped to 210 kΩ and the amplitude swings erratically — the electrode is not seated. Re-apply gel, press it down, record again.'},
+    w_emg:{cn:'高频占比 92%、频谱在 20 Hz 以上一大片杂乱能量——这是咬牙/绷脸的肌电。让受试者放松下巴，伪迹就消失。',
+           en:'High-freq share 92% and broadband energy above 20 Hz — that is EMG from a clenched jaw. Have the subject relax and it clears.'},
+    w_motion:{cn:'波形整体大幅缓慢漂移、基线跑偏，频谱能量堆在很低频——典型运动伪迹。让受试者坐稳别动，重录这一段。',
+              en:'Slow large baseline drift and energy piled at very low frequency — classic motion artifact. Ask the subject to sit still and re-record.'},
+
+    // 选错时的引导 hint (按真实诊断给提示)
+    hint_good:{cn:'这段其实没毛病：阻抗低、频谱只有一个干净的 10 Hz 峰。',en:'This clip is actually fine: low Z and a single clean 10 Hz peak.'},
+    hint_mains:{cn:'注意频谱里那根孤零零的 50 Hz 高尖峰。',en:'Notice the lone tall spike at 50 Hz in the spectrum.'},
+    hint_loose:{cn:'注意阻抗读数——它高得离谱。',en:'Check the impedance reading — it is way too high.'},
+    hint_emg:{cn:'注意高频占比和 20 Hz 以上那片杂乱能量。',en:'Look at the high-freq share and the mess above 20 Hz.'},
+    hint_motion:{cn:'注意波形整体的大幅缓慢漂移。',en:'Look at the slow large baseline drift across the whole wave.'}
+  };
+  function t(k){return (I18N[k]&&I18N[k][LANG])||(I18N[k]&&I18N[k].en)||k;}
+  function caseName(id){return t('c_'+id);}
+
+  // ---- state ----
+  var sel=0;                 // 当前选中的 case 索引
+  var solved={};             // solved[caseId]=true
+  var won=false;
+  var waveTimer=null;
+
+  var caseListEl=document.getElementById('caseList');
+  var optGridEl=document.getElementById('optGrid');
+
+  // ===== SVG tick (sidebar solved marker) =====
+  function tickSVG(){
+    return '<svg class="seg-tick" viewBox="0 0 16 16"><path d="M3 8 L7 12 L13 4" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  }
+
+  // ===== sidebar case list =====
+  function renderCaseList(){
+    caseListEl.innerHTML='';
+    CASES.forEach(function(c,i){
+      var btn=document.createElement('button');
+      btn.className='case-btn'+(i===sel?' active':'')+(solved[c.id]?' solved':'');
+      btn.setAttribute('data-idx',i);
+      btn.innerHTML=
+        '<span class="seg-no mono">'+(i+1)+'</span>'+
+        '<span class="seg-txt"><span class="seg-name">'+caseName(c.id)+'</span>'+
+        '<span class="seg-sub">'+t('cs_'+c.id)+'</span></span>'+
+        tickSVG();
+      btn.addEventListener('click',function(){selectCase(i);});
+      caseListEl.appendChild(btn);
+    });
+  }
+
+  // ===== 诊断选项 =====
+  function renderOptions(){
+    optGridEl.innerHTML='';
+    var c=CASES[sel];
+    var done=!!solved[c.id];
+    OPTIONS.forEach(function(oid){
+      var op=document.createElement('button');
+      op.className='opt';
+      op.setAttribute('data-oid',oid);
+      op.innerHTML='<span class="o-name">'+t('o_'+oid)+'</span>'+
+                   '<span class="o-fix">'+t('of_'+oid)+'</span>';
+      if(done){
+        op.classList.add('locked');
+        if(oid===c.diag)op.classList.add('correct');
+        else op.classList.add('dim');
+      }else{
+        op.addEventListener('click',function(){chooseOption(oid,op);});
+      }
+      optGridEl.appendChild(op);
+    });
+  }
+
+  function chooseOption(oid,el){
+    var c=CASES[sel];
+    if(solved[c.id]||won)return;
+    if(oid===c.diag){
+      // 对
+      solved[c.id]=true;
+      el.classList.add('correct','locked');
+      // 锁定整组, 标灰其它
+      optGridEl.querySelectorAll('.opt').forEach(function(o){
+        o.classList.add('locked');
+        if(o!==el)o.classList.add('dim');
+      });
+      setHud(t('h_right').replace('{why}',t('w_'+c.diag)),'good');
+      renderCaseList();
+      updateProgress();
+      checkWin();
+    }else{
+      // 错: 短暂标红, 给针对正确诊断的提示
+      el.classList.add('wrong');
+      setHud(t('h_wrong').replace('{hint}',t('hint_'+c.diag)),'warn');
+      setTimeout(function(){el.classList.remove('wrong');},900);
+    }
+  }
+
+  // ===== 选 case: 刷新所有面板 =====
+  function selectCase(i){
+    sel=i;
+    var c=CASES[sel];
+    renderCaseList();
+    renderOptions();
+    drawWave(c);
+    drawSpectrum(c);
+    drawMeta(c);
+    if(!solved[c.id]&&!won){
+      setHud(t('h_pick').replace('{name}',caseName(c.id)),'');
+    }else if(solved[c.id]){
+      setHud(t('h_right').replace('{why}',t('w_'+c.diag)),'good');
+    }
+  }
+
+  // ===== HUD =====
+  function setHud(html,cls){var h=document.getElementById('hud');h.innerHTML=html;h.className='hud'+(cls?(' '+cls):'');}
+
+  // ===== progress =====
+  function updateProgress(){
+    var n=Object.keys(solved).length;
+    document.getElementById('progCount').textContent=n;
+    document.getElementById('progBar').style.width=(n/CASES.length*100)+'%';
+  }
+
+  function checkWin(){
+    if(Object.keys(solved).length>=CASES.length&&!won){
+      won=true;
+      setTimeout(function(){document.getElementById('award').classList.add('show');},700);
+    }
+  }
+
+  // ===== 波形绘制 (按 wkind 生成不同形态, 动起来) =====
+  function wavePath(kind,phase){
+    var pts=[];
+    var mid=110;
+    for(var x=0;x<=600;x+=4){
+      var tt=x/600;
+      var y=mid;
+      if(kind==='alpha'){
+        // 干净 10Hz alpha, 小幅
+        y=mid - Math.sin(tt*Math.PI*2*10 + phase)*48
+              - (Math.random()-0.5)*5;
+      }else if(kind==='mains'){
+        // 底层缓 alpha + 强 50Hz 快速纹波
+        y=mid - Math.sin(tt*Math.PI*2*10 + phase)*18
+              - Math.sin(tt*Math.PI*2*50 + phase*5)*46
+              - (Math.random()-0.5)*4;
+      }else if(kind==='loose'){
+        // 阻抗高: 忽大忽小, 不稳定基线 + 偶发跳变
+        var burst=Math.sin(tt*Math.PI*2*2 + phase*0.3);
+        var amp=42 + burst*36;
+        var jump=(Math.sin(tt*Math.PI*9 + phase)>0.85)?40:0;
+        y=mid - Math.sin(tt*Math.PI*2*9 + phase)*amp
+              - jump - (Math.random()-0.5)*30;
+      }else if(kind==='emg'){
+        // 肌电: 满频段高频毛刺, 幅度大
+        y=mid - Math.sin(tt*Math.PI*2*10 + phase)*16
+              - (Math.random()-0.5)*86
+              - Math.sin(tt*Math.PI*2*38 + phase*4)*22;
+      }else if(kind==='motion'){
+        // 运动: 大幅缓慢漂移基线 + 小 alpha
+        var drift=Math.sin(tt*Math.PI*2*0.8 + phase*0.4)*62
+                + Math.sin(tt*Math.PI*1.3 + phase*0.2)*26;
+        y=mid - drift - Math.sin(tt*Math.PI*2*10 + phase)*14
+              - (Math.random()-0.5)*6;
+      }
+      if(y<8)y=8; if(y>212)y=212;
+      pts.push((x===0?'M':'L')+x+' '+y.toFixed(1));
+    }
+    return pts.join(' ');
+  }
+
+  function waveColor(kind){
+    if(kind==='alpha')return 'var(--good)';
+    return 'var(--primary)';
+  }
+
+  function drawWave(c){
+    var path=document.getElementById('wavePath');
+    path.setAttribute('stroke',waveColor(c.wkind));
+    var ph=0;
+    if(waveTimer)clearInterval(waveTimer);
+    // setInterval OK here: this is a game (F6 game), not a static infographic
+    waveTimer=setInterval(function(){
+      ph+=0.45;
+      path.setAttribute('d',wavePath(c.wkind,ph));
+    },120);
+    path.setAttribute('d',wavePath(c.wkind,0));
+  }
+
+  // ===== 频谱绘制 (条形, x = 0..60Hz, 凸显各 case 特征) =====
+  function specProfile(c){
+    // 20 个频段 (每段 3Hz), 返回 0..1 高度
+    var bins=[];
+    for(var i=0;i<20;i++){
+      var f=i*3+1.5; // 中心频率
+      var h=0;
+      // 基础 1/f 背景
+      h += 0.18/(1+f*0.08);
+      // alpha 峰 (8-12Hz) — 除 loose/emg 弱化外都有
+      var alphaPk=Math.exp(-Math.pow((f-10)/2.2,2));
+      if(c.wkind==='alpha')h+=alphaPk*0.92;
+      else if(c.wkind==='mains')h+=alphaPk*0.30;
+      else if(c.wkind==='motion')h+=alphaPk*0.25;
+      else h+=alphaPk*0.18;
+      // 50Hz 尖峰
+      if(c.wkind==='mains')h+=Math.exp(-Math.pow((f-50)/2.0,2))*0.98;
+      // EMG: 20Hz 以上一大片
+      if(c.wkind==='emg'&&f>=18)h+=0.20+ (f-18)*0.012 + (Math.sin(f)*0.05);
+      // loose: 宽带杂乱
+      if(c.wkind==='loose')h+=0.22+ (Math.sin(f*1.7)*0.12);
+      // motion: 极低频堆积
+      if(c.wkind==='motion'&&f<6)h+=(6-f)*0.16;
+      bins.push(Math.min(1,h));
+    }
+    return bins;
+  }
+
+  function drawSpectrum(c){
+    var g=document.getElementById('specBars');
+    var ax=document.getElementById('specAxis');
+    g.innerHTML='';ax.innerHTML='';
+    var bins=specProfile(c);
+    var n=bins.length, W=320, H=200, gap=2;
+    var bw=(W-gap*(n+1))/n;
+    bins.forEach(function(v,i){
+      var bh=v*(H-12);
+      var x=gap+i*(bw+gap);
+      var y=H-bh;
+      var f=i*3+1.5;
+      var col='var(--robotics)';
+      // 高亮该 case 的关键频段
+      if(c.wkind==='mains'&&f>=46&&f<=53)col='var(--primary)';
+      else if(c.wkind==='emg'&&f>=18)col='var(--primary)';
+      else if(c.wkind==='loose')col='var(--warn)';
+      else if(c.wkind==='motion'&&f<6)col='var(--primary)';
+      else if(c.wkind==='alpha'&&f>=8&&f<=12)col='var(--good)';
+      var r=document.createElementNS('http://www.w3.org/2000/svg','rect');
+      r.setAttribute('x',x.toFixed(1));r.setAttribute('y',y.toFixed(1));
+      r.setAttribute('width',bw.toFixed(1));r.setAttribute('height',bh.toFixed(1));
+      r.setAttribute('rx','1.5');r.setAttribute('fill',col);
+      g.appendChild(r);
+    });
+    // x 轴刻度: 10 / 50 Hz 标注
+    [10,30,50].forEach(function(fz){
+      var i=Math.round((fz-1.5)/3);
+      var x=gap+i*(bw+gap)+bw/2;
+      var tx=document.createElementNS('http://www.w3.org/2000/svg','text');
+      tx.setAttribute('x',x.toFixed(1));tx.setAttribute('y','214');
+      tx.setAttribute('text-anchor','middle');
+      tx.setAttribute('font-size','10');tx.setAttribute('fill','var(--sub-2)');
+      tx.setAttribute('font-family','JetBrains Mono, monospace');
+      tx.textContent=fz+'Hz';
+      ax.appendChild(tx);
+    });
+  }
+
+  // ===== 电极读数面板 =====
+  function drawMeta(c){
+    // 阻抗 (kΩ)
+    var impEl=document.getElementById('impV'), impBar=document.getElementById('impBar');
+    impEl.textContent=c.imp+' kΩ';
+    var impBad=c.imp>50;
+    impEl.className='v mono '+(impBad?'bad':'good');
+    impBar.style.width=Math.min(100,c.imp/250*100)+'%';
+    impBar.className=impBad?'':'good';
+
+    // 幅度峰峰 (µV)
+    var rEl=document.getElementById('rangeV'), rBar=document.getElementById('rangeBar');
+    rEl.textContent=c.range+' µV';
+    var rBad=c.range>140;
+    rEl.className='v mono '+(rBad?'bad':'good');
+    rBar.style.width=Math.min(100,c.range/260*100)+'%';
+    rBar.className=rBad?'':'good';
+
+    // 高频占比 (%)
+    var hEl=document.getElementById('hfV'), hBar=document.getElementById('hfBar');
+    hEl.textContent=c.hf+' %';
+    var hBad=c.hf>40;
+    hEl.className='v mono '+(hBad?'bad':'good');
+    hBar.style.width=c.hf+'%';
+    hBar.className=hBad?'':'good';
+
+    // 50Hz 工频 (%)
+    var lEl=document.getElementById('lineV'), lBar=document.getElementById('lineBar');
+    lEl.textContent=c.line+' %';
+    var lBad=c.line>40;
+    lEl.className='v mono '+(lBad?'bad':'good');
+    lBar.style.width=c.line+'%';
+    lBar.className=lBad?'':'good';
+  }
+
+  // ===== i18n refresh =====
+  function refreshI18N(){
+    document.getElementById('kicker').textContent=t('kicker');
+    document.getElementById('title').textContent=t('title');
+    document.getElementById('progLbl').textContent=t('progLbl');
+    document.getElementById('caseLbl').textContent=t('caseLbl');
+    document.getElementById('langBtn').textContent=t('langBtn');
+    document.getElementById('waveCh').textContent=t('waveCh');
+    document.getElementById('impK').textContent=t('impK');
+    document.getElementById('rangeK').textContent=t('rangeK');
+    document.getElementById('hfK').textContent=t('hfK');
+    document.getElementById('lineK').textContent=t('lineK');
+    document.getElementById('diagQ').innerHTML=t('diagQ');
+    document.getElementById('awTitle').textContent=t('awTitle');
+    document.getElementById('awBody').textContent=t('awBody');
+    document.getElementById('awBtn').textContent=t('awBtn');
+    renderCaseList();
+    renderOptions();
+    var c=CASES[sel];
+    if(won||solved[c.id]){if(solved[c.id])setHud(t('h_right').replace('{why}',t('w_'+c.diag)),'good');}
+    else setHud(t('h_pick').replace('{name}',caseName(c.id)),'');
+  }
+
+  // ===== reset =====
+  function reset(){
+    sel=0;solved={};won=false;
+    document.getElementById('award').classList.remove('show');
+    updateProgress();
+    renderCaseList();
+    selectCase(0);
+    setHud(t('h_intro'),'');
+  }
+
+  // ===== wire up =====
+  document.getElementById('langBtn').addEventListener('click',function(){
+    LANG=(LANG==='cn')?'en':'cn';
+    refreshI18N();
+  });
+  document.getElementById('awBtn').addEventListener('click',reset);
+
+  // ===== init =====
+  updateProgress();
+  renderCaseList();
+  selectCase(0);
+  setHud(t('h_intro'),'');
+})();
+</script>
+</body>
+</html>

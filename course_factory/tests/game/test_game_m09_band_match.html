@@ -1,0 +1,552 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>频段地图师</title>
+<style>
+  :root{
+    /* 第 1 层 — 共享深空底 (neuro hue 25) */
+    --bg-0: oklch(0.14 0.035 25);
+    --bg-1: oklch(0.18 0.04 25);
+    --bg-2: oklch(0.22 0.045 25);
+    --bg-3: oklch(0.28 0.05 25);
+    --line: oklch(0.35 0.05 25 / 0.35);
+    --line-strong: oklch(0.55 0.08 25 / 0.55);
+
+    --fg:      oklch(0.96 0.01 25);
+    --fg-dim:  oklch(0.75 0.02 25);
+    --fg-mute: oklch(0.55 0.03 25);
+    --gold:    oklch(0.85 0.14 85);
+
+    /* 第 2 层 — neuro signature accent (cortex-coral) */
+    --neuro: oklch(0.75 0.17 25);
+
+    /* 第 3 层 — neuro 5 色 palette (NRO-20, themes.js) */
+    --synaptic: oklch(0.75 0.17 25);
+    --dendrite: oklch(0.55 0.15 25);
+    --axon:     oklch(0.32 0.10 25);
+    --firing:   oklch(0.92 0.08 25);
+    --memory:   oklch(0.85 0.14 85);
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  html,body{width:100%;height:100vh;overflow:hidden;}
+  body{
+    height:100vh;display:flex;background:var(--bg-0);color:var(--fg);
+    font-family:'Noto Sans SC','Inter','PingFang SC',sans-serif;
+  }
+  .mono{font-family:'JetBrains Mono','SF Mono','Roboto Mono',ui-monospace,monospace;}
+
+  /* ---------------- Sidebar ---------------- */
+  .game-sidebar{
+    width:200px;flex-shrink:0;height:100vh;
+    background:var(--bg-1);border-right:1px solid var(--line);
+    display:flex;flex-direction:column;gap:13px;padding:16px 14px;overflow-y:auto;
+  }
+  .brand{display:flex;flex-direction:column;gap:5px;}
+  .brand .kicker{font-size:10px;letter-spacing:.16em;color:var(--neuro);font-weight:700;text-transform:uppercase;font-family:'JetBrains Mono',monospace;}
+  .brand h1{font-size:17px;margin:0;line-height:1.25;color:var(--fg);}
+
+  /* mascot Spark — branching dendrite creature */
+  .mascot{display:flex;align-items:center;gap:9px;padding-bottom:11px;border-bottom:1px solid var(--line);}
+  .mascot .m-name{font-size:11px;font-weight:700;color:var(--firing);font-family:'JetBrains Mono',monospace;letter-spacing:.04em;}
+  .mascot .m-role{font-size:9px;color:var(--fg-mute);line-height:1.3;}
+
+  .task{
+    background:var(--bg-2);border:1px solid var(--line);border-radius:8px;
+    padding:10px 11px;box-shadow:3px 3px 0 var(--bg-0);
+  }
+  .task .lbl{font-size:10px;font-weight:700;color:var(--neuro);letter-spacing:.06em;margin-bottom:5px;text-transform:uppercase;font-family:'JetBrains Mono',monospace;}
+  .task ul{margin:0;padding-left:15px;}
+  .task li{font-size:11.5px;color:var(--fg-dim);line-height:1.5;margin-bottom:3px;}
+  .task li b{color:var(--firing);}
+
+  .tray-lbl{font-size:10px;font-weight:700;color:var(--fg-mute);letter-spacing:.06em;text-transform:uppercase;font-family:'JetBrains Mono',monospace;}
+  .tray{display:flex;flex-direction:column;gap:7px;}
+  .chip{
+    padding:7px 9px;border-radius:8px;cursor:grab;user-select:none;touch-action:none;
+    background:var(--bg-2);border:1px solid var(--line-strong);box-shadow:3px 3px 0 var(--bg-0);
+    display:flex;flex-direction:column;gap:3px;
+    transition:transform .12s ease,border-color .12s ease;
+  }
+  .chip:hover{transform:translate(-1px,-1px);border-color:var(--neuro);}
+  .chip:active{cursor:grabbing;}
+  .chip.dragging{opacity:.4;}
+  .chip.placed{opacity:.3;pointer-events:none;}
+  .chip .top{display:flex;justify-content:space-between;align-items:baseline;}
+  .chip .code{font-size:14px;font-weight:700;color:var(--firing);font-family:'JetBrains Mono',monospace;}
+  .chip .hz{font-size:9px;color:var(--fg-mute);font-family:'JetBrains Mono',monospace;}
+  .chip .wave{height:18px;width:100%;}
+  .chip .wave polyline{fill:none;stroke:var(--neuro);stroke-width:2;}
+
+  .actions{display:flex;flex-direction:column;gap:7px;}
+  .btn{
+    padding:8px 11px;border-radius:8px;font-size:12.5px;font-weight:700;cursor:pointer;
+    border:1px solid var(--line-strong);background:var(--bg-2);color:var(--fg);
+    box-shadow:3px 3px 0 var(--bg-0);transition:transform .1s ease;text-align:center;
+    font-family:'JetBrains Mono',monospace;
+  }
+  .btn:active{transform:translate(1px,1px);box-shadow:2px 2px 0 var(--bg-0);}
+  .btn-check{background:var(--neuro);border-color:var(--neuro);color:var(--bg-0);}
+  .lang-btn{margin-top:auto;}
+
+  /* ---------------- Main ---------------- */
+  .game-main{
+    flex:1;height:100vh;display:flex;flex-direction:column;position:relative;
+    padding:16px 22px;overflow:hidden;
+  }
+  .hud{
+    align-self:flex-end;max-width:66%;
+    background:var(--bg-2);border:1px solid var(--line);border-radius:8px;
+    padding:9px 14px;box-shadow:3px 3px 0 var(--bg-0);font-size:12.5px;color:var(--fg-dim);
+    min-height:20px;line-height:1.45;
+  }
+  .hud.good{border-color:var(--memory);color:var(--memory);}
+  .hud.warn{border-color:var(--neuro);color:var(--neuro);}
+  .stage{flex:1;display:flex;flex-direction:column;min-height:0;justify-content:center;align-items:center;}
+  .board-wrap{flex:1;width:100%;display:flex;align-items:center;justify-content:center;min-height:0;}
+  svg.board{max-width:100%;max-height:100%;}
+
+  .slot-cell{transition:opacity .2s;}
+  .slot-rect{fill:var(--bg-1);stroke:var(--line-strong);stroke-width:2;rx:12;transition:fill .15s,stroke .15s;}
+  .slot-rect.over{fill:var(--bg-3);stroke:var(--neuro);}
+  .slot-rect.filled{fill:var(--bg-2);stroke:var(--dendrite);}
+  .slot-rect.correct{fill:oklch(0.30 0.08 85 / 0.4);stroke:var(--memory);}
+  .slot-rect.wrong{fill:oklch(0.30 0.10 25 / 0.4);stroke:var(--neuro);}
+  .state-name{font-size:15px;font-weight:700;fill:var(--fg);text-anchor:middle;pointer-events:none;}
+  .region-tag{font-family:'JetBrains Mono',monospace;font-size:11px;fill:var(--neuro);text-anchor:middle;pointer-events:none;}
+  .clue-wave polyline{fill:none;stroke:var(--fg-mute);stroke-width:2;}
+  .clue-scene{font-size:11px;fill:var(--fg-dim);text-anchor:middle;pointer-events:none;}
+  .placed-band{font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:700;fill:var(--firing);text-anchor:middle;pointer-events:none;}
+  .placed-hz{font-family:'JetBrains Mono',monospace;font-size:10px;fill:var(--fg-mute);text-anchor:middle;pointer-events:none;}
+  .col-head{font-family:'JetBrains Mono',monospace;font-size:11px;fill:var(--fg-mute);text-anchor:middle;letter-spacing:.06em;}
+
+  .award{
+    position:absolute;inset:0;display:none;align-items:center;justify-content:center;
+    background:oklch(0.14 0.035 25 / 0.9);z-index:30;
+  }
+  .award.show{display:flex;animation:fade .4s ease;}
+  @keyframes fade{from{opacity:0;}to{opacity:1;}}
+  .award-card{
+    background:var(--bg-2);border:1px solid var(--memory);border-radius:14px;
+    padding:28px 34px;box-shadow:5px 5px 0 var(--bg-0);text-align:center;max-width:430px;
+  }
+  .award-card .seal{
+    width:70px;height:70px;margin:0 auto 14px;border-radius:50%;
+    background:oklch(0.30 0.08 85 / 0.3);border:2px solid var(--memory);
+    display:flex;align-items:center;justify-content:center;
+    font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:700;color:var(--memory);
+    animation:pulse 2.2s ease-in-out infinite;
+  }
+  @keyframes pulse{0%,100%{transform:scale(1);}50%{transform:scale(1.07);}}
+  .award-card h2{margin:0 0 8px;font-size:20px;color:var(--fg);}
+  .award-card p{margin:0 0 18px;font-size:12.5px;color:var(--fg-dim);line-height:1.6;}
+
+  .ghost{position:fixed;pointer-events:none;z-index:90;transform:translate(-50%,-50%);
+    background:var(--bg-2);border:1px solid var(--neuro);border-radius:8px;padding:5px 10px;
+    box-shadow:3px 3px 0 var(--bg-0);font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:700;color:var(--firing);}
+</style>
+</head>
+<body>
+  <aside class="game-sidebar">
+    <div class="brand">
+      <span class="kicker" id="kicker">EEG · 频段地图</span>
+      <h1 id="title">频段地图师</h1>
+    </div>
+
+    <div class="mascot">
+      <svg width="34" height="34" viewBox="0 0 34 34" aria-hidden="true">
+        <line x1="17" y1="30" x2="17" y2="18" stroke="var(--axon)" stroke-width="2.5"/>
+        <line x1="17" y1="18" x2="9" y2="9" stroke="var(--dendrite)" stroke-width="2.2"/>
+        <line x1="17" y1="18" x2="25" y2="9" stroke="var(--dendrite)" stroke-width="2.2"/>
+        <line x1="17" y1="18" x2="17" y2="7" stroke="var(--dendrite)" stroke-width="2.2"/>
+        <circle cx="9" cy="9" r="3" fill="var(--firing)"/>
+        <circle cx="25" cy="9" r="3" fill="var(--synaptic)"/>
+        <circle cx="17" cy="7" r="3" fill="var(--memory)"/>
+        <circle cx="17" cy="18" r="4" fill="var(--synaptic)"/>
+      </svg>
+      <div>
+        <div class="m-name">SPARK</div>
+        <div class="m-role" id="mRole">脑波侦探</div>
+      </div>
+    </div>
+
+    <div class="task">
+      <div class="lbl" id="taskLbl">侦探任务</div>
+      <ul>
+        <li id="t1">读每个槽位的 <b>波形</b> 与 <b>场景线索</b></li>
+        <li id="t2">把对应 <b>频段卡</b> 拖到正确的脑状态/脑区</li>
+        <li id="t3">五对全配对，点「核对」解锁</li>
+      </ul>
+    </div>
+
+    <div class="tray-lbl" id="trayLbl">频段卡（拖到槽位）</div>
+    <div class="tray" id="tray"></div>
+
+    <div class="actions">
+      <button class="btn btn-check" id="checkBtn">核对配对</button>
+      <button class="btn" id="clueBtn">显示场景线索</button>
+      <button class="btn" id="resetBtn">重置</button>
+    </div>
+
+    <button class="btn lang-btn" id="langBtn">EN / 中</button>
+  </aside>
+
+  <main class="game-main">
+    <div class="hud" id="hud">每个槽位画着典型波形 + 脑区。读懂线索，把左侧频段卡拖到匹配的状态上。先想想：哪个频段最慢？</div>
+
+    <div class="stage">
+      <div class="board-wrap">
+        <svg class="board" id="board" viewBox="0 0 1000 460" preserveAspectRatio="xMidYMid meet" aria-label="band-state matching board">
+          <text class="col-head" x="500" y="22" id="colHead">脑状态 + 脑区  ·  拖入匹配频段</text>
+          <g id="slots"></g>
+        </svg>
+      </div>
+    </div>
+
+    <div class="award" id="award">
+      <div class="award-card">
+        <div class="seal">PASS</div>
+        <h2 id="awTitle">解锁：频段地图师</h2>
+        <p id="awBody">五个频段全部归位！你已能从波形快慢和脑区位置反推大脑状态：delta 深睡、theta 困倦记忆、alpha 放松闭眼、beta 专注运动、gamma 高级认知。这就是读 EEG 的核心地图。</p>
+        <button class="btn btn-check" id="awBtn">再玩一次</button>
+      </div>
+    </div>
+  </main>
+
+<script>
+(function(){
+  "use strict";
+  var LANG='cn';
+
+  // 五个频段 (band) + 其正确归属 (slotId 与 bandId 相同表示配对正确)
+  // freqLabel: 频率范围;  waveCycles: 该频段在统一窗口内的周期数 (越快越多), 用来画典型波形
+  var BANDS=[
+    {id:'delta', code:'delta', hz:'0.5–4 Hz',  cycles:1.2},
+    {id:'theta', code:'theta', hz:'4–8 Hz',    cycles:2.4},
+    {id:'alpha', code:'alpha', hz:'8–12 Hz',   cycles:4.5},
+    {id:'beta',  code:'beta',  hz:'13–30 Hz',  cycles:8},
+    {id:'gamma', code:'gamma', hz:'30–80 Hz',  cycles:16}
+  ];
+
+  // 五个状态槽 (与某个 bandId 配对)
+  var SLOTS=[
+    {id:'delta', region:'全脑 ALL', cycles:1.2,  state:{cn:'深睡',     en:'Deep sleep'},  scene:{cn:'夜里熟睡，最慢最大的波',          en:'Sound asleep — slowest, biggest wave'}},
+    {id:'theta', region:'额叶 Fz',  cycles:2.4,  state:{cn:'困倦 / 记忆', en:'Drowsy / memory'}, scene:{cn:'快睡着 / 走迷宫记路时',          en:'Dozing off / forming memories'}},
+    {id:'alpha', region:'枕叶 O1·O2',cycles:4.5, state:{cn:'放松闭眼',  en:'Relaxed, eyes shut'},scene:{cn:'闭上眼放空，枕叶后脑勺最强',       en:'Eyes closed, idle — strongest at occiput'}},
+    {id:'beta',  region:'中央 C3·C4',cycles:8,   state:{cn:'专注 / 运动', en:'Focus / motor'},  scene:{cn:'做题或动手时，运动区活跃',          en:'Solving / moving — motor cortex busy'}},
+    {id:'gamma', region:'分散 ALL', cycles:16,   state:{cn:'高级认知',  en:'High cognition'}, scene:{cn:'灵光一现，把信息绑在一起',          en:'Aha! binding info together'}}
+  ];
+
+  var I18N={
+    kicker:{cn:'EEG · 频段地图',en:'EEG · Band Map'},
+    title:{cn:'频段地图师',en:'Band Cartographer'},
+    mRole:{cn:'脑波侦探',en:'Brainwave detective'},
+    taskLbl:{cn:'侦探任务',en:'Detective task'},
+    t1:{cn:'读每个槽位的 <b>波形</b> 与 <b>场景线索</b>',en:'Read each slot’s <b>waveform</b> and <b>scene clue</b>'},
+    t2:{cn:'把对应 <b>频段卡</b> 拖到正确的脑状态/脑区',en:'Drag each <b>band card</b> onto the right brain state/region'},
+    t3:{cn:'五对全配对，点「核对」解锁',en:'Pair all five, then hit Check'},
+    trayLbl:{cn:'频段卡（拖到槽位）',en:'Band cards (drag to slots)'},
+    checkBtn:{cn:'核对配对',en:'Check pairs'},
+    clueBtn:{cn:'显示场景线索',en:'Show scene clues'},
+    clueBtnOff:{cn:'隐藏场景线索',en:'Hide scene clues'},
+    resetBtn:{cn:'重置',en:'Reset'},
+    colHead:{cn:'脑状态 + 脑区  ·  拖入匹配频段',en:'Brain state + region  ·  drop matching band'},
+    hudStart:{cn:'每个槽位画着典型波形 + 脑区。读懂线索，把左侧频段卡拖到匹配的状态上。先想想：哪个频段最慢？',
+              en:'Each slot shows a typical waveform + region. Read the clues and drag bands from the left. Which band is the slowest?'},
+    hudPlaced:{cn:'已配对 ',en:'Paired '},
+    hudOf:{cn:' / ',en:' / '},
+    hudWin:{cn:'全对！频段—状态—脑区五对完整。',en:'All correct! Five band–state–region pairs complete.'},
+    hudNotFull:{cn:'还没用上的频段：',en:'Still unplaced: '},
+    hudWrong:{cn:'有 {n} 个频段放错了（标红）。慢波配深睡，快波配认知，再想想。',
+              en:'{n} band(s) misplaced (red). Slow waves pair with sleep, fast with cognition. Try again.'},
+    awTitle:{cn:'解锁：频段地图师',en:'Unlocked: Band Cartographer'},
+    awBody:{cn:'五个频段全部归位！你已能从波形快慢和脑区位置反推大脑状态：delta 深睡、theta 困倦记忆、alpha 放松闭眼、beta 专注运动、gamma 高级认知。这就是读 EEG 的核心地图。',
+            en:'All five bands placed! You can now read brain state from wave speed and scalp region: delta=deep sleep, theta=drowsy/memory, alpha=relaxed eyes-shut, beta=focus/motor, gamma=high cognition. This is the core EEG map.'},
+    awBtn:{cn:'再玩一次',en:'Play again'}
+  };
+  function t(k){return (I18N[k]&&I18N[k][LANG])||(I18N[k]&&I18N[k].en)||k;}
+
+  // 状态: placed[slotId] = bandId
+  var placed={};
+  var clueOn=false;
+  var won=false;
+
+  var slotsG=document.getElementById('slots');
+
+  function shuffle(a){a=a.slice();for(var i=a.length-1;i>0;i--){var j=Math.floor(Math.random()*(i+1));var x=a[i];a[i]=a[j];a[j]=x;}return a;}
+  function bandById(id){for(var i=0;i<BANDS.length;i++){if(BANDS[i].id===id)return BANDS[i];}return null;}
+  function placedCount(){return Object.keys(placed).length;}
+
+  // 画一条波形 polyline points (在 width x height 框内, cycles 个周期)
+  function wavePoints(w,h,cycles,steps){
+    steps=steps||60;var pts=[];var amp=h*0.38;var mid=h/2;
+    for(var i=0;i<=steps;i++){
+      var x=(i/steps)*w;
+      var y=mid - amp*Math.sin((i/steps)*cycles*2*Math.PI);
+      pts.push(x.toFixed(1)+','+y.toFixed(1));
+    }
+    return pts.join(' ');
+  }
+
+  // ---- render slots (5 列) ----
+  var COLS=5, GAP=18, X0=24, Y0=44;
+  function renderSlots(){
+    slotsG.innerHTML='';
+    var boardW=1000, cellW=(boardW - X0*2 - GAP*(COLS-1))/COLS;
+    var cellH=clueOn?340:300;
+    SLOTS.forEach(function(s,idx){
+      var x=X0 + idx*(cellW+GAP);
+      var y=Y0;
+      var g=document.createElementNS('http://www.w3.org/2000/svg','g');
+      g.setAttribute('class','slot-cell');g.setAttribute('data-slot',s.id);
+
+      var rect=document.createElementNS('http://www.w3.org/2000/svg','rect');
+      rect.setAttribute('x',x);rect.setAttribute('y',y);
+      rect.setAttribute('width',cellW);rect.setAttribute('height',cellH);
+      rect.setAttribute('rx',12);
+      rect.setAttribute('class','slot-rect');rect.setAttribute('data-rect',s.id);
+
+      // state name
+      var nm=document.createElementNS('http://www.w3.org/2000/svg','text');
+      nm.setAttribute('x',x+cellW/2);nm.setAttribute('y',y+30);
+      nm.setAttribute('class','state-name');nm.textContent=s.state[LANG];
+
+      // region tag
+      var rg=document.createElementNS('http://www.w3.org/2000/svg','text');
+      rg.setAttribute('x',x+cellW/2);rg.setAttribute('y',y+50);
+      rg.setAttribute('class','region-tag');rg.textContent=s.region;
+
+      // clue waveform (typical wave for this state)
+      var wave=document.createElementNS('http://www.w3.org/2000/svg','polyline');
+      wave.setAttribute('class','clue-wave');
+      var ww=cellW-28, wh=46, wx=x+14, wy=y+66;
+      var pts=wavePoints(ww,wh,s.cycles).split(' ').map(function(p){
+        var c=p.split(',');return (parseFloat(c[0])+wx).toFixed(1)+','+(parseFloat(c[1])+wy).toFixed(1);
+      }).join(' ');
+      wave.setAttribute('points',pts);
+      g.appendChild(rect);g.appendChild(nm);g.appendChild(rg);g.appendChild(wave);
+
+      // optional scene clue
+      if(clueOn){
+        var scLines=wrapText(s.scene[LANG],14);
+        scLines.forEach(function(ln,li){
+          var sc=document.createElementNS('http://www.w3.org/2000/svg','text');
+          sc.setAttribute('x',x+cellW/2);sc.setAttribute('y',y+132+li*15);
+          sc.setAttribute('class','clue-scene');sc.textContent=ln;
+          g.appendChild(sc);
+        });
+      }
+
+      // placed band display
+      var dropZoneY=y+cellH-72;
+      var pid=placed[s.id];
+      if(pid){
+        var bd=bandById(pid);
+        var pb=document.createElementNS('http://www.w3.org/2000/svg','text');
+        pb.setAttribute('x',x+cellW/2);pb.setAttribute('y',dropZoneY+30);
+        pb.setAttribute('class','placed-band');pb.textContent=bd.code;
+        var ph=document.createElementNS('http://www.w3.org/2000/svg','text');
+        ph.setAttribute('x',x+cellW/2);ph.setAttribute('y',dropZoneY+48);
+        ph.setAttribute('class','placed-hz');ph.textContent=bd.hz;
+        g.appendChild(pb);g.appendChild(ph);
+        if(won){rect.classList.add(pid===s.id?'correct':'wrong');}
+        else{rect.classList.add('filled');}
+        // 点击取回
+        g.style.cursor='pointer';
+        g.addEventListener('click',function(){
+          if(won)return;delete placed[s.id];renderSlots();renderTray();updateHud();
+        });
+      }else{
+        // hint: "拖入" placeholder
+        var ph2=document.createElementNS('http://www.w3.org/2000/svg','text');
+        ph2.setAttribute('x',x+cellW/2);ph2.setAttribute('y',dropZoneY+38);
+        ph2.setAttribute('class','placed-hz');ph2.textContent=(LANG==='cn'?'拖入频段':'drop band');
+        g.appendChild(ph2);
+      }
+
+      slotsG.appendChild(g);
+    });
+    // 调整 board 高度跟随 clue 模式
+    document.getElementById('board').setAttribute('viewBox','0 0 1000 '+(Y0+cellH+20));
+    bindDropTargets();
+  }
+
+  function wrapText(str,perLine){
+    if(str.length<=perLine)return [str];
+    var mid=Math.ceil(str.length/2);
+    // try break at a space near mid for EN; for CN just split
+    var sp=str.lastIndexOf(' ',mid+4);
+    if(sp>perLine*0.3){return [str.slice(0,sp),str.slice(sp+1)];}
+    return [str.slice(0,mid),str.slice(mid)];
+  }
+
+  // ---- render band tray ----
+  function renderTray(){
+    var tray=document.getElementById('tray');tray.innerHTML='';
+    var used={};Object.keys(placed).forEach(function(sid){used[placed[sid]]=true;});
+    var order=window.__trayOrder||shuffle(BANDS.map(function(b){return b.id;}));
+    window.__trayOrder=order;
+    order.forEach(function(bid){
+      var b=bandById(bid);
+      var chip=document.createElement('div');
+      chip.className='chip'+(used[bid]?' placed':'');
+      chip.setAttribute('data-bid',bid);
+      if(!used[bid])chip.setAttribute('draggable','true');
+
+      var topRow=document.createElement('div');topRow.className='top';
+      var code=document.createElement('div');code.className='code';code.textContent=b.code;
+      var hz=document.createElement('div');hz.className='hz';hz.textContent=b.hz;
+      topRow.appendChild(code);topRow.appendChild(hz);
+
+      var svgw=document.createElementNS('http://www.w3.org/2000/svg','svg');
+      svgw.setAttribute('class','wave');svgw.setAttribute('viewBox','0 0 160 18');svgw.setAttribute('preserveAspectRatio','none');
+      var poly=document.createElementNS('http://www.w3.org/2000/svg','polyline');
+      poly.setAttribute('points',wavePoints(160,18,b.cycles));
+      svgw.appendChild(poly);
+
+      chip.appendChild(topRow);chip.appendChild(svgw);
+
+      if(!used[bid]){
+        chip.addEventListener('dragstart',function(e){
+          e.dataTransfer.setData('text/plain',bid);
+          e.dataTransfer.effectAllowed='move';chip.classList.add('dragging');
+        });
+        chip.addEventListener('dragend',function(){chip.classList.remove('dragging');});
+        addTouchDrag(chip,bid);
+      }
+      tray.appendChild(chip);
+    });
+  }
+
+  // ---- place a band into a slot ----
+  function placeBand(bid,slotId){
+    if(won)return;
+    if(placed[slotId])return;
+    Object.keys(placed).forEach(function(sid){if(placed[sid]===bid)delete placed[sid];});
+    placed[slotId]=bid;
+    renderSlots();renderTray();updateHud();
+  }
+
+  // ---- SVG drop targets ----
+  function bindDropTargets(){
+    SLOTS.forEach(function(s){
+      var rect=slotsG.querySelector('[data-rect="'+s.id+'"]');
+      if(!rect)return;
+      var g=rect.parentNode;
+      g.addEventListener('dragover',function(e){e.preventDefault();e.dataTransfer.dropEffect='move';rect.classList.add('over');});
+      g.addEventListener('dragleave',function(){rect.classList.remove('over');});
+      g.addEventListener('drop',function(e){
+        e.preventDefault();rect.classList.remove('over');
+        var bid=e.dataTransfer.getData('text/plain');
+        if(bid)placeBand(bid,s.id);
+      });
+    });
+  }
+
+  // ---- touch drag ----
+  var ghost=null;
+  function addTouchDrag(chip,bid){
+    chip.addEventListener('touchstart',function(e){
+      if(won)return;e.preventDefault();
+      ghost=document.createElement('div');ghost.className='ghost';ghost.textContent=bandById(bid).code;
+      document.body.appendChild(ghost);moveGhost(e.touches[0]);
+    },{passive:false});
+    chip.addEventListener('touchmove',function(e){
+      e.preventDefault();if(ghost)moveGhost(e.touches[0]);
+    },{passive:false});
+    chip.addEventListener('touchend',function(e){
+      if(!ghost)return;var tch=e.changedTouches[0];ghost.style.display='none';
+      var below=document.elementFromPoint(tch.clientX,tch.clientY);
+      var g=below&&below.closest?(below.closest('[data-slot]')):null;
+      if(g){placeBand(bid,g.getAttribute('data-slot'));}
+      ghost.remove();ghost=null;
+    });
+  }
+  function moveGhost(tch){ghost.style.left=tch.clientX+'px';ghost.style.top=tch.clientY+'px';}
+
+  // ---- HUD ----
+  function setHud(txt,cls){var h=document.getElementById('hud');h.textContent=txt;h.className='hud'+(cls?(' '+cls):'');}
+  function updateHud(){if(won)return;setHud(t('hudPlaced')+placedCount()+t('hudOf')+SLOTS.length,'');}
+
+  // ---- validate ----
+  function validate(){
+    if(won)return;
+    var usedBands={};Object.keys(placed).forEach(function(sid){usedBands[placed[sid]]=true;});
+    var remaining=BANDS.map(function(b){return b.id;}).filter(function(bid){return !usedBands[bid];});
+    if(remaining.length>0){
+      setHud(t('hudNotFull')+remaining.join(', '),'warn');return;
+    }
+    var wrong=0;
+    SLOTS.forEach(function(s){if(placed[s.id]!==s.id)wrong++;});
+    if(wrong===0){
+      won=true;renderSlots();setHud(t('hudWin'),'good');
+      document.getElementById('award').classList.add('show');
+    }else{
+      flagWrong();setHud(t('hudWrong').replace('{n}',wrong),'warn');
+    }
+  }
+  function flagWrong(){
+    SLOTS.forEach(function(s){
+      var rect=slotsG.querySelector('[data-rect="'+s.id+'"]');
+      if(!rect)return;
+      rect.classList.remove('filled','correct','wrong');
+      if(placed[s.id]){rect.classList.add(placed[s.id]===s.id?'correct':'wrong');}
+    });
+  }
+
+  // ---- clue toggle ----
+  function toggleClue(force){
+    clueOn=(typeof force==='boolean')?force:!clueOn;
+    document.getElementById('clueBtn').textContent=clueOn?t('clueBtnOff'):t('clueBtn');
+    renderSlots();
+  }
+
+  // ---- reset ----
+  function reset(){
+    placed={};won=false;clueOn=false;
+    window.__trayOrder=shuffle(BANDS.map(function(b){return b.id;}));
+    document.getElementById('award').classList.remove('show');
+    document.getElementById('clueBtn').textContent=t('clueBtn');
+    renderSlots();renderTray();setHud(t('hudStart'),'');
+  }
+
+  // ---- i18n refresh ----
+  function refreshI18N(){
+    document.getElementById('kicker').textContent=t('kicker');
+    document.getElementById('title').textContent=t('title');
+    document.getElementById('mRole').textContent=t('mRole');
+    document.getElementById('taskLbl').textContent=t('taskLbl');
+    document.getElementById('t1').innerHTML=t('t1');
+    document.getElementById('t2').innerHTML=t('t2');
+    document.getElementById('t3').textContent=t('t3');
+    document.getElementById('trayLbl').textContent=t('trayLbl');
+    document.getElementById('checkBtn').textContent=t('checkBtn');
+    document.getElementById('clueBtn').textContent=clueOn?t('clueBtnOff'):t('clueBtn');
+    document.getElementById('resetBtn').textContent=t('resetBtn');
+    document.getElementById('colHead').textContent=t('colHead');
+    document.getElementById('awTitle').textContent=t('awTitle');
+    document.getElementById('awBody').textContent=t('awBody');
+    document.getElementById('awBtn').textContent=t('awBtn');
+    renderSlots();renderTray();
+    if(won){setHud(t('hudWin'),'good');}else{updateHud();}
+  }
+
+  // ---- wire up ----
+  document.getElementById('checkBtn').addEventListener('click',validate);
+  document.getElementById('clueBtn').addEventListener('click',function(){toggleClue();});
+  document.getElementById('resetBtn').addEventListener('click',reset);
+  document.getElementById('awBtn').addEventListener('click',reset);
+  document.getElementById('langBtn').addEventListener('click',function(){
+    LANG=(LANG==='cn')?'en':'cn';
+    this.textContent=(LANG==='cn')?'EN / 中':'中 / EN';
+    refreshI18N();
+  });
+
+  // init
+  window.__trayOrder=shuffle(BANDS.map(function(b){return b.id;}));
+  renderSlots();renderTray();setHud(t('hudStart'),'');
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,537 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"/>
+<title>Bandpass Tuner</title>
+<style>
+:root{
+  --bg-0: oklch(0.14 0.035 265);
+  --bg-1: oklch(0.18 0.04 265);
+  --bg-2: oklch(0.22 0.045 265);
+  --bg-3: oklch(0.28 0.05 265);
+  --line: oklch(0.35 0.05 265 / 0.35);
+  --line-strong: oklch(0.55 0.08 265 / 0.55);
+  --fg:      oklch(0.96 0.01 265);
+  --fg-dim:  oklch(0.75 0.02 265);
+  --fg-mute: oklch(0.55 0.03 265);
+  --gold:    oklch(0.85 0.14 85);
+  /* math signature accent — electric blue */
+  --math:    oklch(0.72 0.17 245);
+  /* math 5-color palette (theme_style/themes.js id:'math' Geometry Void) */
+  --m-axis:     oklch(0.72 0.17 245);
+  --m-proof:    oklch(0.52 0.16 245);
+  --m-shadow:   oklch(0.35 0.10 245);
+  --m-solution: oklch(0.92 0.08 240);
+  --m-qed:      oklch(0.85 0.14 85);
+  --mono:'JetBrains Mono',ui-monospace,'SFMono-Regular',Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+html,body{width:100%;height:100vh;overflow:hidden;background:var(--bg-0);color:var(--fg);
+  font-family:system-ui,'Noto Sans SC',sans-serif;}
+.shell{display:flex;height:100vh;width:100%;}
+
+/* ---- 200px sidebar ---- */
+.game-sidebar{width:200px;flex:0 0 200px;height:100vh;background:var(--bg-1);
+  border-right:1px solid var(--line);display:flex;flex-direction:column;
+  padding:12px 12px 10px;gap:10px;overflow-y:auto;}
+.brand{display:flex;align-items:center;gap:8px;}
+.brand svg{width:34px;height:34px;flex:0 0 34px;}
+.brand-txt{display:flex;flex-direction:column;}
+.brand-name{font-family:var(--mono);font-size:11px;font-weight:700;color:var(--math);
+  letter-spacing:1px;text-transform:uppercase;}
+.brand-sub{font-size:10px;color:var(--fg-mute);margin-top:1px;}
+
+.panel-title{font-family:var(--mono);font-size:10px;color:var(--fg-dim);
+  letter-spacing:1px;text-transform:uppercase;border-bottom:1px solid var(--line);
+  padding-bottom:4px;}
+
+.slider-group{display:flex;flex-direction:column;gap:3px;}
+.slider-label{display:flex;justify-content:space-between;align-items:baseline;}
+.slider-label .nm{font-size:11px;color:var(--fg);}
+.slider-label .nm small{color:var(--fg-mute);font-family:var(--mono);font-size:9px;}
+.slider-label .val{font-family:var(--mono);font-size:11px;font-weight:700;}
+input[type=range]{width:100%;height:4px;-webkit-appearance:none;appearance:none;
+  background:var(--bg-3);outline:none;cursor:pointer;border-radius:0;}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;
+  border:2px solid var(--bg-0);cursor:pointer;border-radius:50%;}
+input[type=range]::-moz-range-thumb{width:12px;height:12px;border:2px solid var(--bg-0);
+  cursor:pointer;border-radius:50%;}
+#sLow::-webkit-slider-thumb {background:var(--m-axis);}
+#sHigh::-webkit-slider-thumb{background:var(--m-proof);}
+
+.bandhint{font-size:9.5px;color:var(--fg-mute);line-height:1.4;
+  background:var(--bg-2);border:1px solid var(--line);padding:6px 7px;}
+.bandhint b{color:var(--fg-dim);}
+
+.task{padding:7px 8px;background:var(--bg-2);border:1px solid var(--line);
+  box-shadow:3px 3px 0 var(--bg-0);}
+.task.match{border-color:var(--gold);}
+.task-row{display:flex;justify-content:space-between;align-items:center;gap:4px;}
+.task-name{font-size:11px;font-weight:600;color:var(--fg);}
+.task-state{font-family:var(--mono);font-size:9px;font-weight:700;letter-spacing:0.5px;
+  text-transform:uppercase;color:var(--fg-mute);}
+.task.match .task-state{color:var(--gold);}
+.task-hint{font-size:9.5px;color:var(--fg-mute);margin-top:3px;line-height:1.4;}
+
+.lang-btn{margin-top:auto;align-self:flex-start;font-family:var(--mono);font-size:11px;
+  font-weight:700;padding:4px 12px;cursor:pointer;border:1px solid var(--line-strong);
+  background:var(--bg-2);color:var(--math);letter-spacing:1px;
+  box-shadow:3px 3px 0 var(--bg-0);}
+.lang-btn:hover{background:var(--bg-3);}
+
+/* ---- main stage ---- */
+.game-main{flex:1;min-width:0;height:100vh;display:flex;flex-direction:column;
+  padding:10px 12px;gap:8px;}
+.stage-card{flex:1;min-height:0;display:flex;flex-direction:column;
+  background:var(--bg-1);border:1px solid var(--line);}
+.stage-head{display:flex;justify-content:space-between;align-items:center;
+  padding:5px 10px;border-bottom:1px solid var(--line);}
+.stage-title{font-family:var(--mono);font-size:10px;letter-spacing:1px;
+  text-transform:uppercase;color:var(--fg-dim);}
+.stage-hint{font-size:10px;color:var(--fg-mute);}
+.canvas-wrap{flex:1;min-height:0;position:relative;display:flex;flex-direction:column;}
+canvas{flex:1;display:block;width:100%;min-height:0;}
+
+.hud{display:flex;gap:18px;align-items:center;padding:6px 12px;background:var(--bg-1);
+  border:1px solid var(--line);}
+.hud .item{display:flex;flex-direction:column;}
+.hud .label{font-family:var(--mono);font-size:9px;text-transform:uppercase;
+  letter-spacing:1px;color:var(--fg-mute);}
+.hud .value{font-family:var(--mono);font-size:14px;font-weight:700;color:var(--math);margin-top:1px;}
+.hud .value.gold{color:var(--gold);}
+.hud .progress{margin-left:auto;font-family:var(--mono);font-size:13px;font-weight:700;color:var(--fg-dim);}
+
+/* ---- victory ---- */
+.victory{position:fixed;inset:0;background:oklch(0.14 0.035 265 / 0.82);
+  display:none;align-items:center;justify-content:center;z-index:50;}
+.victory.show{display:flex;}
+.victory-box{background:var(--bg-2);border:1px solid var(--gold);
+  box-shadow:6px 6px 0 var(--bg-0);padding:24px 30px;max-width:430px;text-align:center;}
+.victory-title{font-family:var(--mono);font-size:16px;font-weight:700;color:var(--gold);
+  letter-spacing:1px;text-transform:uppercase;margin-bottom:10px;}
+.victory-text{font-size:13px;color:var(--fg-dim);line-height:1.6;margin-bottom:14px;}
+.victory-btn{font-family:var(--mono);font-size:12px;font-weight:700;padding:7px 22px;
+  cursor:pointer;border:1px solid var(--math);background:var(--bg-3);color:var(--math);
+  text-transform:uppercase;letter-spacing:1px;box-shadow:3px 3px 0 var(--bg-0);}
+</style>
+</head>
+<body>
+<div class="shell">
+  <!-- ===== sidebar ===== -->
+  <aside class="game-sidebar">
+    <div class="brand">
+      <!-- mascot Pi: rotating tetrahedron + a filter window glyph -->
+      <svg viewBox="0 0 40 40" aria-hidden="true">
+        <g fill="none" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round">
+          <path d="M20 5 L33 30 L7 30 Z" stroke="var(--m-axis)"/>
+          <path d="M20 5 L20 30" stroke="var(--m-proof)" opacity="0.85"/>
+          <path d="M20 5 L7 30 M20 5 L33 30" stroke="var(--m-proof)" opacity="0.0"/>
+        </g>
+        <path d="M9 24 L15 24 L20 13 L25 24 L31 24" fill="none" stroke="var(--m-solution)" stroke-width="1.6"/>
+        <circle cx="20" cy="5" r="2.4" fill="var(--gold)"/>
+      </svg>
+      <div class="brand-txt">
+        <span class="brand-name">Pi</span>
+        <span class="brand-sub" id="brandSub">几何之境</span>
+      </div>
+    </div>
+
+    <div class="panel-title" id="ttlCuts">通带截止频率</div>
+    <div class="slider-group">
+      <div class="slider-label">
+        <span class="nm" id="lblLow">低截止 <small>Hz</small></span>
+        <span class="val" id="valLow" style="color:var(--m-axis)">4</span>
+      </div>
+      <input type="range" id="sLow" min="0" max="15" step="0.5" value="4">
+    </div>
+    <div class="slider-group">
+      <div class="slider-label">
+        <span class="nm" id="lblHigh">高截止 <small>Hz</small></span>
+        <span class="val" id="valHigh" style="color:var(--m-proof)">45</span>
+      </div>
+      <input type="range" id="sHigh" min="15" max="60" step="0.5" value="45">
+    </div>
+
+    <div class="bandhint" id="bandHint">
+      <b>目标：</b>保住 8-30 Hz 运动节律（alpha+beta），扔掉 50 Hz 工频干扰。
+    </div>
+
+    <div class="task" id="task">
+      <div class="task-row">
+        <span class="task-name" id="taskName">通带合格</span>
+        <span class="task-state" id="taskState">未达成</span>
+      </div>
+      <div class="task-hint" id="taskHint">三项同时满足才算调对。</div>
+    </div>
+
+    <button class="lang-btn" id="langBtn">EN</button>
+  </aside>
+
+  <!-- ===== main ===== -->
+  <main class="game-main">
+    <div class="stage-card">
+      <div class="stage-head">
+        <span class="stage-title" id="ttlResp">滤波器响应 (增益 vs 频率)</span>
+        <span class="stage-hint" id="hintResp">蓝色窗 = 通带；窗外频率被衰减</span>
+      </div>
+      <div class="canvas-wrap"><canvas id="respC"></canvas></div>
+    </div>
+
+    <div class="stage-card">
+      <div class="stage-head">
+        <span class="stage-title" id="ttlWave">滤波前后波形</span>
+        <span class="stage-hint" id="hintWave">下方 = 滤波后；越干净越好</span>
+      </div>
+      <div class="canvas-wrap"><canvas id="waveC"></canvas></div>
+    </div>
+
+    <div class="hud">
+      <div class="item">
+        <span class="label" id="hudL1">通带</span>
+        <span class="value" id="hudV1">4 - 45 Hz</span>
+      </div>
+      <div class="item">
+        <span class="label" id="hudL2">50Hz 残留</span>
+        <span class="value" id="hudV2">--</span>
+      </div>
+      <div class="item">
+        <span class="label" id="hudL3">节律保留</span>
+        <span class="value" id="hudV3">--</span>
+      </div>
+      <span class="progress" id="hudProg">0 / 3</span>
+    </div>
+  </main>
+</div>
+
+<div class="victory" id="victory">
+  <div class="victory-box">
+    <div class="victory-title" id="vTitle">已解锁 通带调谐师</div>
+    <div class="victory-text" id="vText"></div>
+    <button class="victory-btn" id="vBtn">继续</button>
+  </div>
+</div>
+
+<script>
+(function(){
+var LANG='cn';
+var I18N={
+  brandSub:{cn:'几何之境',en:'Geometry Void'},
+  ttlCuts:{cn:'通带截止频率',en:'PASSBAND CUTOFFS'},
+  lblLow:{cn:'低截止 <small>Hz</small>',en:'Low cut <small>Hz</small>'},
+  lblHigh:{cn:'高截止 <small>Hz</small>',en:'High cut <small>Hz</small>'},
+  bandHint:{cn:'<b>目标：</b>保住 8-30 Hz 运动节律（alpha+beta），扔掉 50 Hz 工频干扰。',
+            en:'<b>Goal:</b> keep the 8-30 Hz motor rhythm (alpha+beta), throw away the 50 Hz mains noise.'},
+  taskName:{cn:'通带合格',en:'Passband valid'},
+  taskHint:{cn:'三项同时满足才算调对。',en:'All three must hold at once.'},
+  stDone:{cn:'已达成',en:'MATCHED'},
+  stTodo:{cn:'未达成',en:'PENDING'},
+  ttlResp:{cn:'滤波器响应 (增益 vs 频率)',en:'FILTER RESPONSE (gain vs freq)'},
+  hintResp:{cn:'蓝色窗 = 通带；窗外频率被衰减',en:'Blue window = passband; outside is attenuated'},
+  ttlWave:{cn:'滤波前后波形',en:'WAVEFORM BEFORE / AFTER'},
+  hintWave:{cn:'下方 = 滤波后；越干净越好',en:'Lower = filtered; cleaner is better'},
+  hudL1:{cn:'通带',en:'PASSBAND'},
+  hudL2:{cn:'50Hz 残留',en:'50Hz LEFT'},
+  hudL3:{cn:'节律保留',en:'RHYTHM KEPT'},
+  vTitle:{cn:'已解锁 通带调谐师',en:'UNLOCKED: Passband Tuner'},
+  vText:{cn:'8-30 Hz 带通是运动想象的经典通带：低截止 <=8 才不切掉 alpha，高截止 >=30 才保住 beta，而窗口又不触及 50 Hz 工频。窗开得越准，滤波后的脑波越干净。',
+         en:'8-30 Hz bandpass is the classic motor-imagery window: low cut <=8 keeps alpha, high cut >=30 keeps beta, and the window stays clear of 50 Hz mains. The tighter the window, the cleaner the filtered wave.'},
+  vBtn:{cn:'继续',en:'Continue'},
+  rawTag:{cn:'原始 (含噪)',en:'RAW (noisy)'},
+  filtTag:{cn:'滤波后',en:'FILTERED'},
+};
+function t(k){var e=I18N[k];return e?(e[LANG]||e.en):k;}
+
+// ---- spectrum content: each component the noisy EEG carries ----
+// freq Hz, base amplitude, semantic group: 'rhythm'(8-30 useful) | 'low'(slow drift) | 'mains'(50Hz) | 'hf'(muscle hf)
+var COMPONENTS=[
+  {freq:1.5, amp:18, group:'low'},     // slow drift / sweat
+  {freq:6,   amp:14, group:'low'},     // theta-ish, not the target
+  {freq:10,  amp:26, group:'rhythm'},  // alpha
+  {freq:13,  amp:22, group:'rhythm'},  // low beta (mu border)
+  {freq:22,  amp:24, group:'rhythm'},  // beta
+  {freq:28,  amp:18, group:'rhythm'},  // high beta
+  {freq:50,  amp:30, group:'mains'},   // POWER-LINE noise
+  {freq:55,  amp:10, group:'hf'},      // muscle hf
+];
+// the "rhythm" energy we want to keep = sum of rhythm amps
+var RHYTHM_TOTAL=COMPONENTS.filter(function(c){return c.group==='rhythm';})
+  .reduce(function(s,c){return s+c.amp;},0);
+var MAINS_AMP=COMPONENTS.filter(function(c){return c.group==='mains';})
+  .reduce(function(s,c){return s+c.amp;},0);
+
+var lowCut=4, highCut=45;
+
+// butterworth-ish band gain 0..1 (smooth roll-off both sides)
+function gainAt(f){
+  // steep roll-off shoulders around the cuts (Butterworth-like)
+  var ORDER=6;
+  var hp=1/Math.sqrt(1+Math.pow(lowCut/Math.max(f,0.01),2*ORDER));   // high-pass at lowCut
+  var lp=1/Math.sqrt(1+Math.pow(f/highCut,2*ORDER));                  // low-pass at highCut
+  return hp*lp;
+}
+
+function resolveColor(varExpr){
+  var probe=document.createElement('span');
+  probe.style.color=varExpr;document.body.appendChild(probe);
+  var c=getComputedStyle(probe).color;document.body.removeChild(probe);
+  return c;
+}
+var C_AXIS=resolveColor('var(--m-axis)');
+var C_PROOF=resolveColor('var(--m-proof)');
+var C_SHADOW=resolveColor('var(--m-shadow)');
+var C_SOLUTION=resolveColor('var(--m-solution)');
+var GOLD=resolveColor('var(--gold)');
+var MATH=resolveColor('var(--math)');
+var FG=resolveColor('var(--fg)');
+var FG_DIM=resolveColor('var(--fg-dim)');
+var FG_MUTE=resolveColor('var(--fg-mute)');
+var LINE=resolveColor('var(--line)');
+var BG1=resolveColor('var(--bg-1)');
+var BG0=resolveColor('var(--bg-0)');
+var BG3=resolveColor('var(--bg-3)');
+var MONO='"JetBrains Mono",ui-monospace,monospace';
+
+var won=false;
+var FMAX=60; // spectrum x-axis max
+
+var respC=document.getElementById('respC'),rctx=respC.getContext('2d');
+var waveC=document.getElementById('waveC'),wctx=waveC.getContext('2d');
+var DPR=Math.min(window.devicePixelRatio||1,2);
+var RW=0,RH=0,WW=0,WH=0;
+
+function setupCanvas(cv,c2){
+  var wrap=cv.parentElement;var r=wrap.getBoundingClientRect();
+  if(r.width<1||r.height<1) return [0,0];
+  cv.width=r.width*DPR;cv.height=r.height*DPR;
+  cv.style.width=r.width+'px';cv.style.height=r.height+'px';
+  c2.setTransform(DPR,0,0,DPR,0,0);
+  return [r.width,r.height];
+}
+function resize(){
+  var a=setupCanvas(respC,rctx);RW=a[0];RH=a[1];
+  var b=setupCanvas(waveC,wctx);WW=b[0];WH=b[1];
+}
+
+// ---- scoring ----
+// mains residual fraction = how much 50Hz energy survives
+function mainsResidual(){return gainAt(50);}
+// rhythm kept fraction = weighted gain over the rhythm components
+function rhythmKept(){
+  var keep=0;
+  COMPONENTS.forEach(function(c){
+    if(c.group==='rhythm') keep+=c.amp*gainAt(c.freq);
+  });
+  return keep/RHYTHM_TOTAL;
+}
+function checkTask(){
+  var mains=mainsResidual();      // want small
+  var kept=rhythmKept();          // want large
+  var killMains=mains<=0.12;      // 50Hz suppressed
+  var keepRhythm=kept>=0.85;      // motor band preserved
+  var validWindow=(lowCut<=8 && highCut>=30 && highCut<=42 && lowCut>=1);
+  var ok=killMains&&keepRhythm&&validWindow;
+  if(ok&&!won){won=true;setTimeout(function(){document.getElementById('victory').classList.add('show');},350);}
+  return {mains:mains,kept:kept,killMains:killMains,keepRhythm:keepRhythm,validWindow:validWindow,ok:ok};
+}
+
+var phase=0;
+function draw(){
+  if(RW<2){resize();}
+  var s=checkTask();
+  drawResponse(s);
+  drawWave(s);
+  updateHUD(s);
+}
+
+function xForFreq(f,w,pad){return pad+(f/FMAX)*(w-pad*2);}
+
+function drawResponse(s){
+  if(RW<2||RH<2) return;
+  rctx.clearRect(0,0,RW,RH);
+  rctx.fillStyle=BG1;rctx.fillRect(0,0,RW,RH);
+  var padL=10,padR=10,padTop=10,base=RH-26;
+  var top=padTop;var h=base-top;
+  // passband shading window (lowCut..highCut)
+  var xL=xForFreq(lowCut,RW,padL),xH=xForFreq(highCut,RW,padL);
+  rctx.fillStyle=resolveColor('var(--m-axis)');
+  rctx.globalAlpha=0.12;rctx.fillRect(xL,top,xH-xL,h);rctx.globalAlpha=1;
+  // window edges
+  rctx.strokeStyle=C_AXIS;rctx.lineWidth=1.4;rctx.setLineDash([4,3]);
+  rctx.beginPath();rctx.moveTo(xL,top);rctx.lineTo(xL,base);
+  rctx.moveTo(xH,top);rctx.lineTo(xH,base);rctx.stroke();rctx.setLineDash([]);
+
+  // baseline + gain=1 line
+  rctx.strokeStyle=LINE;rctx.lineWidth=1;
+  rctx.beginPath();rctx.moveTo(padL,base);rctx.lineTo(RW-padR,base);rctx.stroke();
+  rctx.strokeStyle=LINE;rctx.setLineDash([2,4]);
+  rctx.beginPath();rctx.moveTo(padL,top);rctx.lineTo(RW-padR,top);rctx.stroke();rctx.setLineDash([]);
+
+  // component spectrum bars: height by amp*gain, color by group / kept-or-killed
+  COMPONENTS.forEach(function(c){
+    var x=xForFreq(c.freq,RW,padL);
+    var g=gainAt(c.freq);
+    var fullH=h*(c.amp/34);
+    var keptH=fullH*g;
+    // ghost (original amp) faint
+    rctx.fillStyle=C_SHADOW;rctx.globalAlpha=0.4;
+    rctx.fillRect(x-3,base-fullH,6,fullH);rctx.globalAlpha=1;
+    // surviving energy
+    var col;
+    if(c.group==='mains'||c.group==='hf'){col=(g>0.10)?GOLD:C_PROOF;}
+    else if(c.group==='rhythm'){col=(g>0.7)?C_AXIS:C_PROOF;}
+    else {col=C_PROOF;}
+    // mains: when residual is bad, paint gold (warning) ; when killed, dim
+    if(c.group==='mains'){
+      col=(g>0.12)?GOLD:resolveColor('var(--m-shadow)');
+    }
+    rctx.fillStyle=col;rctx.fillRect(x-3,base-keptH,6,keptH);
+    // label freq
+    rctx.fillStyle=(c.group==='mains')?GOLD:FG_MUTE;
+    rctx.font='8px '+MONO;rctx.textAlign='center';rctx.textBaseline='top';
+    rctx.fillText(c.freq+'',x,base+4);
+  });
+
+  // smooth gain response curve overlaid (math accent)
+  rctx.strokeStyle=MATH;rctx.lineWidth=2.2;rctx.lineJoin='round';
+  rctx.beginPath();
+  for(var f=0;f<=FMAX;f+=0.4){
+    var gx=xForFreq(f,RW,padL);
+    var gy=base-gainAt(f)*h;
+    if(f===0) rctx.beginPath(),rctx.moveTo(gx,gy);else rctx.lineTo(gx,gy);
+  }
+  rctx.stroke();
+
+  // gold glow when fully solved
+  if(s.ok){rctx.strokeStyle=GOLD;rctx.globalAlpha=0.55;rctx.lineWidth=1;
+    rctx.strokeRect(2,2,RW-4,RH-4);rctx.globalAlpha=1;}
+
+  // axis caption
+  rctx.fillStyle=FG_MUTE;rctx.font='8px '+MONO;rctx.textAlign='right';rctx.textBaseline='bottom';
+  rctx.fillText('Hz',RW-padR,base+14);
+}
+
+// build a time-domain signal from COMPONENTS, with per-component gain mode
+function sampleSignal(tt,applyFilter){
+  var sum=0;
+  for(var i=0;i<COMPONENTS.length;i++){
+    var c=COMPONENTS[i];
+    var g=applyFilter?gainAt(c.freq):1;
+    sum+=Math.sin(2*Math.PI*(c.freq/10)*tt+phase*(c.freq/10))*c.amp*g;
+  }
+  return sum;
+}
+
+function drawWave(s){
+  if(WW<2||WH<2) return;
+  wctx.clearRect(0,0,WW,WH);
+  wctx.fillStyle=BG1;wctx.fillRect(0,0,WW,WH);
+  var pad=14;var plotW=WW-pad*2;
+  var rowH=WH/2;
+  var midRaw=rowH*0.5, midFilt=rowH*1.5;
+  // divider
+  wctx.strokeStyle=LINE;wctx.lineWidth=1;
+  wctx.beginPath();wctx.moveTo(0,rowH);wctx.lineTo(WW,rowH);wctx.stroke();
+  // zero axes
+  wctx.strokeStyle=LINE;wctx.setLineDash([2,4]);
+  wctx.beginPath();wctx.moveTo(pad,midRaw);wctx.lineTo(WW-pad,midRaw);
+  wctx.moveTo(pad,midFilt);wctx.lineTo(WW-pad,midFilt);wctx.stroke();wctx.setLineDash([]);
+
+  // normalization based on raw peak estimate
+  var rawAmpSum=COMPONENTS.reduce(function(s2,c){return s2+c.amp;},0);
+  var norm=(rowH*0.40)/rawAmpSum;
+
+  function plot(midY,applyFilter,color,lw){
+    wctx.strokeStyle=color;wctx.lineWidth=lw;wctx.lineJoin='round';
+    wctx.beginPath();
+    for(var x=0;x<=plotW;x+=1.4){
+      var tt=(x/plotW)*4; // 4 "seconds" window
+      var y=midY-sampleSignal(tt,applyFilter)*norm;
+      if(x===0) wctx.moveTo(pad+x,y);else wctx.lineTo(pad+x,y);
+    }
+    wctx.stroke();
+  }
+  // raw (noisy) — dim shadow color
+  plot(midRaw,false,C_SHADOW,1.6);
+  // filtered — solution color, thicker; gold if solved
+  plot(midFilt,true,s.ok?GOLD:C_SOLUTION,2.4);
+
+  // tags
+  wctx.font='bold 9px '+MONO;wctx.textAlign='left';wctx.textBaseline='top';
+  wctx.fillStyle=FG_MUTE;wctx.fillText(t('rawTag'),pad,6);
+  wctx.fillStyle=s.ok?GOLD:C_SOLUTION;wctx.fillText(t('filtTag'),pad,rowH+6);
+}
+
+function updateHUD(s){
+  document.getElementById('hudV1').textContent=lowCut.toFixed(1)+' - '+highCut.toFixed(1)+' Hz';
+  var v2=document.getElementById('hudV2');
+  v2.textContent=Math.round(s.mains*100)+'%';
+  v2.className='value'+(s.killMains?' gold':'');
+  var v3=document.getElementById('hudV3');
+  v3.textContent=Math.round(s.kept*100)+'%';
+  v3.className='value'+(s.keepRhythm?' gold':'');
+  var c=(s.killMains?1:0)+(s.keepRhythm?1:0)+(s.validWindow?1:0);
+  document.getElementById('hudProg').textContent=c+' / 3';
+  var box=document.getElementById('task');
+  var st=document.getElementById('taskState');
+  st.textContent=s.ok?t('stDone'):t('stTodo');
+  box.className='task'+(s.ok?' match':'');
+}
+
+// animate so waves are alive
+function loop(){phase+=0.020;draw();requestAnimationFrame(loop);}
+
+function refreshI18N(){
+  document.getElementById('brandSub').textContent=t('brandSub');
+  document.getElementById('ttlCuts').textContent=t('ttlCuts');
+  document.getElementById('lblLow').innerHTML=t('lblLow');
+  document.getElementById('lblHigh').innerHTML=t('lblHigh');
+  document.getElementById('bandHint').innerHTML=t('bandHint');
+  document.getElementById('taskName').textContent=t('taskName');
+  document.getElementById('taskHint').textContent=t('taskHint');
+  document.getElementById('ttlResp').textContent=t('ttlResp');
+  document.getElementById('hintResp').textContent=t('hintResp');
+  document.getElementById('ttlWave').textContent=t('ttlWave');
+  document.getElementById('hintWave').textContent=t('hintWave');
+  document.getElementById('hudL1').textContent=t('hudL1');
+  document.getElementById('hudL2').textContent=t('hudL2');
+  document.getElementById('hudL3').textContent=t('hudL3');
+  document.getElementById('vTitle').textContent=t('vTitle');
+  document.getElementById('vText').textContent=t('vText');
+  document.getElementById('vBtn').textContent=t('vBtn');
+}
+
+// ---- events ----
+var sLow=document.getElementById('sLow'),sHigh=document.getElementById('sHigh');
+var valLow=document.getElementById('valLow'),valHigh=document.getElementById('valHigh');
+sLow.addEventListener('input',function(){
+  lowCut=parseFloat(sLow.value);
+  // keep low strictly below high
+  if(lowCut>highCut-2){lowCut=highCut-2;sLow.value=lowCut;}
+  valLow.textContent=lowCut.toFixed(1);
+});
+sHigh.addEventListener('input',function(){
+  highCut=parseFloat(sHigh.value);
+  if(highCut<lowCut+2){highCut=lowCut+2;sHigh.value=highCut;}
+  valHigh.textContent=highCut.toFixed(1);
+});
+
+document.getElementById('langBtn').addEventListener('click',function(){
+  LANG=(LANG==='cn')?'en':'cn';
+  document.getElementById('langBtn').textContent=(LANG==='cn')?'EN':'CN';
+  refreshI18N();
+});
+document.getElementById('vBtn').addEventListener('click',function(){
+  document.getElementById('victory').classList.remove('show');
+});
+window.addEventListener('resize',resize);
+
+refreshI18N();
+resize();
+requestAnimationFrame(loop);
+setTimeout(resize,200);
+setTimeout(resize,600);
+if(document.fonts&&document.fonts.ready){document.fonts.ready.then(resize);}
+})();
+</script>
+</body>
+</html>

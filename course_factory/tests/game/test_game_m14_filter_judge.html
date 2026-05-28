@@ -1,0 +1,1018 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>M14 · 滤波质检员 — Geometry Void</title>
+<style>
+  :root{
+    /* Layer 1 — shared deep space canvas */
+    --bg-0: oklch(0.14 0.035 265);
+    --bg-1: oklch(0.18 0.04 265);
+    --bg-2: oklch(0.22 0.045 265);
+    --bg-3: oklch(0.28 0.05 265);
+    --line: oklch(0.35 0.05 265 / 0.35);
+    --line-strong: oklch(0.55 0.08 265 / 0.55);
+    --fg:      oklch(0.96 0.01 265);
+    --fg-dim:  oklch(0.75 0.02 265);
+    --fg-mute: oklch(0.55 0.03 265);
+    --gold:    oklch(0.85 0.14 85);
+
+    /* Layer 2 — math signature accent (electric blue) */
+    --math: oklch(0.72 0.17 245);
+
+    /* Layer 3 — math 5-color palette (themes.js MTH-06) */
+    --AXIS:     oklch(0.72 0.17 245);
+    --PROOF:    oklch(0.52 0.16 245);
+    --SHADOW:   oklch(0.35 0.10 245);
+    --SOLUTION: oklch(0.92 0.08 240);
+    --QED:      oklch(0.85 0.14 85);
+  }
+
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%;width:100%;font-family:'Inter','PingFang SC',sans-serif;color:var(--fg);background:var(--bg-0);overflow:hidden}
+
+  .stage{display:flex;flex-direction:row;height:100vh;width:100vw}
+
+  /* ---------- 200px sidebar ---------- */
+  .game-sidebar{
+    width:200px;flex:0 0 200px;
+    background:var(--bg-1);
+    border-right:1px solid var(--line);
+    display:flex;flex-direction:column;
+    padding:14px 12px;gap:10px;
+    overflow-y:auto;
+  }
+  .brand{
+    display:flex;flex-direction:column;gap:2px;
+    border-bottom:1px solid var(--line);padding-bottom:8px;
+  }
+  .brand .code{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--fg-mute);letter-spacing:1.2px}
+  .brand .title{font-size:13px;color:var(--fg);font-weight:600}
+  .brand .sub{font-size:10px;color:var(--fg-dim);margin-top:2px}
+
+  .mascot{
+    width:100%;height:78px;display:flex;align-items:center;justify-content:center;
+    background:var(--bg-2);border:1px solid var(--line);
+  }
+  .mascot svg{width:100%;height:100%}
+
+  .guide{
+    background:var(--bg-2);border:1px solid var(--line);
+    padding:8px;display:flex;flex-direction:column;gap:4px;
+  }
+  .guide-title{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--math);letter-spacing:1px}
+  .guide-line{font-size:10px;color:var(--fg-dim);line-height:1.4}
+
+  /* case list (5 cases) */
+  .case-block{display:flex;flex-direction:column;gap:6px}
+  .case-title{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--fg-dim);letter-spacing:1px}
+  .case-list{display:flex;flex-direction:column;gap:4px}
+  .case-row{
+    background:var(--bg-2);border:1px solid var(--line);
+    padding:6px 8px;display:flex;align-items:center;gap:6px;
+    cursor:pointer;
+    transition:background .15s, border-color .15s;
+  }
+  .case-row:hover{border-color:var(--math)}
+  .case-row.active{background:var(--bg-3);border-color:var(--math);box-shadow:3px 3px 0 var(--bg-0)}
+  .case-row .cidx{
+    font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--math);font-weight:600;
+    width:22px;text-align:center;
+  }
+  .case-row .clabel{
+    font-size:10px;color:var(--fg-dim);flex:1;line-height:1.2;
+  }
+  .case-row.solved .cidx{color:var(--QED)}
+  .case-row.solved .clabel{color:var(--fg)}
+  .case-row .cmark{
+    width:10px;height:10px;border:1px solid var(--line-strong);
+  }
+  .case-row.solved .cmark{background:var(--QED);border-color:var(--QED)}
+  .case-row.wrong .cmark{background:var(--SHADOW);border-color:var(--SHADOW)}
+
+  /* progress */
+  .progress-block{
+    background:var(--bg-2);border:1px solid var(--line);padding:8px;
+    display:flex;flex-direction:column;gap:6px;
+  }
+  .progress-title{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--fg-dim);letter-spacing:1px}
+  .progress-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:3px}
+  .progress-cell{
+    height:6px;background:var(--bg-3);border:1px solid var(--line);
+  }
+  .progress-cell.hit{background:var(--QED);border-color:var(--QED)}
+  .progress-cell.miss{background:var(--SHADOW);border-color:var(--SHADOW)}
+  .progress-text{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--fg-mute)}
+
+  /* band-window slider — secondary control (highlights the 8-13Hz alpha band) */
+  .slider-block{
+    background:var(--bg-2);border:1px solid var(--line);padding:8px;
+    display:flex;flex-direction:column;gap:6px;
+  }
+  .slider-label{
+    display:flex;justify-content:space-between;align-items:baseline;
+    font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--fg-dim);
+  }
+  .slider-label .val{color:var(--math);font-size:12px;font-weight:600}
+  input[type=range].band-slider{
+    -webkit-appearance:none;appearance:none;width:100%;height:5px;
+    background:linear-gradient(90deg, var(--SHADOW) 0%, var(--PROOF) 50%, var(--SOLUTION) 100%);
+    border:1px solid var(--line);outline:none;cursor:pointer;
+  }
+  input[type=range].band-slider::-webkit-slider-thumb{
+    -webkit-appearance:none;appearance:none;
+    width:12px;height:16px;background:var(--QED);
+    border:2px solid var(--bg-0);box-shadow:2px 2px 0 var(--bg-0);
+    cursor:grab;
+  }
+  input[type=range].band-slider::-moz-range-thumb{
+    width:12px;height:16px;background:var(--QED);
+    border:2px solid var(--bg-0);box-shadow:2px 2px 0 var(--bg-0);
+    cursor:grab;
+  }
+
+  .sidebar-spacer{flex:1;min-height:6px}
+
+  .lang-btn{
+    width:100%;padding:7px 8px;background:var(--bg-3);
+    color:var(--fg);border:1px solid var(--line-strong);
+    font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:1px;
+    cursor:pointer;box-shadow:3px 3px 0 var(--bg-0);
+  }
+  .lang-btn:hover{background:var(--PROOF);color:var(--SOLUTION)}
+
+  .reset-btn{
+    width:100%;padding:6px 8px;background:var(--bg-2);
+    color:var(--fg-dim);border:1px solid var(--line);
+    font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:1px;
+    cursor:pointer;
+  }
+  .reset-btn:hover{color:var(--math);border-color:var(--math)}
+
+  /* ---------- main ---------- */
+  .game-main{
+    flex:1;display:flex;flex-direction:column;
+    background:var(--bg-0);
+    min-width:0;
+  }
+  .main-header{
+    height:46px;border-bottom:1px solid var(--line);
+    display:flex;align-items:center;justify-content:space-between;
+    padding:0 18px;background:var(--bg-1);flex:0 0 46px;
+  }
+  .header-left{
+    font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--fg-dim);letter-spacing:1.4px;
+  }
+  .header-right{
+    display:flex;gap:14px;font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--fg-mute);
+  }
+  .hud-cell{display:flex;flex-direction:column;align-items:flex-end}
+  .hud-cell .label{font-size:9px;color:var(--fg-mute);letter-spacing:1px}
+  .hud-cell .val{color:var(--math);font-size:13px;font-weight:600}
+  .hud-cell .val.gold{color:var(--QED)}
+
+  .main-body{
+    flex:1;display:flex;flex-direction:column;min-height:0;
+    padding:14px 18px;gap:12px;
+  }
+
+  /* signal pane — before/after waveform + spectrum */
+  .signal-pane{
+    flex:2;display:flex;flex-direction:column;min-height:0;
+    background:var(--bg-1);border:1px solid var(--line);
+  }
+  .pane-title{
+    padding:8px 14px;font-family:'JetBrains Mono',monospace;font-size:10px;
+    color:var(--math);letter-spacing:1.4px;
+    border-bottom:1px solid var(--line);background:var(--bg-2);
+    display:flex;justify-content:space-between;align-items:center;
+  }
+  .pane-title .sub{color:var(--fg-mute);font-size:9px;letter-spacing:.8px}
+  .signal-body{flex:1;position:relative;display:flex;flex-direction:column;min-height:0}
+  #signalSvg{width:100%;height:100%;display:block}
+
+  /* milestone toast */
+  .milestone{
+    position:absolute;left:50%;top:50px;transform:translateX(-50%) translateY(-20px);
+    background:var(--QED);color:var(--bg-0);
+    font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:700;
+    padding:10px 22px;letter-spacing:1.5px;
+    box-shadow:4px 4px 0 var(--bg-0);
+    opacity:0;transition:all .35s;pointer-events:none;z-index:20;
+  }
+  .milestone.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+  /* diagnosis pane — 5 verdict chips + case caption + verdict */
+  .diag-pane{
+    flex:1;display:flex;flex-direction:column;min-height:0;
+    background:var(--bg-1);border:1px solid var(--line);
+  }
+  .diag-body{
+    flex:1;display:flex;flex-direction:column;gap:10px;
+    padding:12px 14px;min-height:0;
+  }
+  .case-caption{
+    font-size:11px;color:var(--fg-dim);line-height:1.5;
+  }
+  .case-caption .cn{color:var(--math);font-weight:600;font-family:'JetBrains Mono',monospace;letter-spacing:.6px;margin-right:6px}
+  .chips-row{
+    display:flex;flex-wrap:wrap;gap:8px;
+  }
+  .diag-chip{
+    background:var(--bg-2);border:1px solid var(--line-strong);
+    padding:8px 12px;cursor:pointer;
+    display:flex;flex-direction:column;gap:2px;
+    box-shadow:3px 3px 0 var(--bg-0);
+    transition:transform .12s, border-color .15s;
+    user-select:none;
+    min-width:150px;
+  }
+  .diag-chip:hover{transform:translate(-1px,-1px);box-shadow:4px 4px 0 var(--bg-0);border-color:var(--math)}
+  .diag-chip:active{transform:translate(1px,1px);box-shadow:1px 1px 0 var(--bg-0)}
+  .diag-chip[data-diag="good"]{border-left:3px solid var(--QED)}
+  .diag-chip[data-diag="under"]{border-left:3px solid var(--PROOF)}
+  .diag-chip[data-diag="over"]{border-left:3px solid var(--SHADOW)}
+  .diag-chip[data-diag="phase"]{border-left:3px solid var(--AXIS)}
+  .diag-chip[data-diag="ring"]{border-left:3px solid var(--SOLUTION)}
+  .diag-chip.disabled{pointer-events:none;opacity:.5}
+  .diag-chip .dname{
+    font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:600;letter-spacing:.5px;color:var(--fg);
+  }
+  .diag-chip .ddesc{
+    font-size:9px;color:var(--fg-dim);line-height:1.3;
+  }
+  .verdict-box{
+    margin-top:auto;
+    font-size:11px;color:var(--fg-dim);line-height:1.45;min-height:38px;
+    border-top:1px dashed var(--line);padding-top:8px;
+  }
+  .verdict-box .verdict-tag{
+    display:inline-block;padding:2px 8px;
+    font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:600;letter-spacing:1px;
+    margin-right:8px;
+    border:1px solid var(--line-strong);
+  }
+  .verdict-box.right .verdict-tag{color:var(--QED);border-color:var(--QED);background:var(--bg-2)}
+  .verdict-box.wrong .verdict-tag{color:var(--SHADOW);border-color:var(--SHADOW);background:var(--bg-2)}
+  .verdict-box .verdict-text{color:var(--fg)}
+
+  .case-nav{
+    display:flex;gap:8px;align-items:center;
+  }
+  .nav-btn{
+    padding:6px 12px;background:var(--bg-3);
+    color:var(--fg);border:1px solid var(--line-strong);
+    font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:1px;
+    cursor:pointer;box-shadow:3px 3px 0 var(--bg-0);
+  }
+  .nav-btn:hover{background:var(--PROOF);color:var(--SOLUTION)}
+  .nav-btn:disabled{opacity:.35;cursor:not-allowed}
+
+  /* mascot Pi — rotating tetrahedron */
+  @keyframes spinPi {
+    0%   { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+  }
+  #piBody { animation: spinPi 9s linear infinite; transform-origin: center; }
+</style>
+</head>
+<body>
+  <div class="stage">
+    <!-- ============ Sidebar ============ -->
+    <aside class="game-sidebar">
+      <div class="brand">
+        <span class="code">MTH-06 · M14</span>
+        <span class="title" data-i18n-cn="滤波质检员" data-i18n-en="Filter Inspector">滤波质检员</span>
+        <span class="sub" data-i18n-cn="看滤波前后判断好不好" data-i18n-en="Judge filtering before/after">看滤波前后判断好不好</span>
+      </div>
+
+      <div class="mascot" aria-label="Pi mascot">
+        <svg viewBox="0 0 160 78" xmlns="http://www.w3.org/2000/svg">
+          <g id="piBody" transform="translate(80 39)">
+            <polygon points="0,-26 24,16 -24,16" fill="none" stroke="var(--AXIS)" stroke-width="1.4"/>
+            <polygon points="0,-26 24,16 0,4" fill="var(--PROOF)" opacity="0.45" stroke="var(--AXIS)" stroke-width="0.8"/>
+            <polygon points="0,-26 -24,16 0,4" fill="var(--SHADOW)" opacity="0.55" stroke="var(--AXIS)" stroke-width="0.8"/>
+            <polygon points="24,16 -24,16 0,4" fill="var(--SOLUTION)" opacity="0.18" stroke="var(--AXIS)" stroke-width="0.8"/>
+            <circle cx="0" cy="-26" r="2.2" fill="var(--QED)"/>
+            <circle cx="24" cy="16" r="2.2" fill="var(--QED)"/>
+            <circle cx="-24" cy="16" r="2.2" fill="var(--QED)"/>
+            <circle cx="0" cy="4" r="1.8" fill="var(--SOLUTION)"/>
+          </g>
+        </svg>
+      </div>
+
+      <div class="guide">
+        <div class="guide-title">HOW TO PLAY</div>
+        <div class="guide-line" data-i18n-cn="1 · 选案件看前后波形+频谱" data-i18n-en="1 · Pick case, read wave+spectrum">1 · 选案件看前后波形+频谱</div>
+        <div class="guide-line" data-i18n-cn="2 · 从 5 种诊断里选一个" data-i18n-en="2 · Pick 1 of 5 diagnoses">2 · 从 5 种诊断里选一个</div>
+        <div class="guide-line" data-i18n-cn="3 · 全对 5 个解锁质检员" data-i18n-en="3 · All 5 unlock inspector">3 · 全对 5 个解锁质检员</div>
+      </div>
+
+      <div class="case-block">
+        <div class="case-title" data-i18n-cn="5 个案件 · CASES" data-i18n-en="5 CASES">5 个案件 · CASES</div>
+        <div class="case-list" id="caseList">
+          <div class="case-row active" data-case="0">
+            <span class="cidx">01</span>
+            <span class="clabel" data-i18n-cn="样本 A" data-i18n-en="Sample A">样本 A</span>
+            <span class="cmark"></span>
+          </div>
+          <div class="case-row" data-case="1">
+            <span class="cidx">02</span>
+            <span class="clabel" data-i18n-cn="样本 B" data-i18n-en="Sample B">样本 B</span>
+            <span class="cmark"></span>
+          </div>
+          <div class="case-row" data-case="2">
+            <span class="cidx">03</span>
+            <span class="clabel" data-i18n-cn="样本 C" data-i18n-en="Sample C">样本 C</span>
+            <span class="cmark"></span>
+          </div>
+          <div class="case-row" data-case="3">
+            <span class="cidx">04</span>
+            <span class="clabel" data-i18n-cn="样本 D" data-i18n-en="Sample D">样本 D</span>
+            <span class="cmark"></span>
+          </div>
+          <div class="case-row" data-case="4">
+            <span class="cidx">05</span>
+            <span class="clabel" data-i18n-cn="样本 E" data-i18n-en="Sample E">样本 E</span>
+            <span class="cmark"></span>
+          </div>
+        </div>
+      </div>
+
+      <div class="progress-block">
+        <div class="progress-title" data-i18n-cn="质检进度" data-i18n-en="INSPECTOR">质检进度</div>
+        <div class="progress-grid" id="progressGrid">
+          <div class="progress-cell" data-slot="0"></div>
+          <div class="progress-cell" data-slot="1"></div>
+          <div class="progress-cell" data-slot="2"></div>
+          <div class="progress-cell" data-slot="3"></div>
+          <div class="progress-cell" data-slot="4"></div>
+        </div>
+        <div class="progress-text"><span id="progressCount">0</span> / 5 <span data-i18n-cn="对" data-i18n-en="correct">对</span> · <span data-i18n-cn="目标 5" data-i18n-en="goal 5">目标 5</span></div>
+      </div>
+
+      <div class="slider-block">
+        <div class="slider-label">
+          <span data-i18n-cn="频谱标尺 (Hz)" data-i18n-en="Spectrum cursor (Hz)">频谱标尺 (Hz)</span>
+          <span class="val"><span id="bandReadout">10</span></span>
+        </div>
+        <input type="range" min="1" max="45" step="1" value="10" id="bandSlider" class="band-slider" aria-label="Spectrum frequency cursor" />
+        <div class="slider-label" style="font-size:8px">
+          <span>1</span><span>10</span><span>25</span><span>45</span>
+        </div>
+      </div>
+
+      <div class="sidebar-spacer"></div>
+
+      <button id="resetBtn" class="reset-btn" type="button" data-i18n-cn="重置 RESET" data-i18n-en="RESET">重置 RESET</button>
+      <button id="langBtn" class="lang-btn" type="button">EN / 中文</button>
+    </aside>
+
+    <!-- ============ Main ============ -->
+    <main class="game-main">
+      <header class="main-header">
+        <div class="header-left" data-i18n-cn="M14 · 5 组滤波前后对比" data-i18n-en="M14 · 5 before/after filter cases">M14 · 5 组滤波前后对比</div>
+        <div class="header-right">
+          <div class="hud-cell">
+            <span class="label">CASE</span>
+            <span class="val"><span id="hudCase">01</span>/05</span>
+          </div>
+          <div class="hud-cell">
+            <span class="label">FILTER</span>
+            <span class="val" id="hudFilter">--</span>
+          </div>
+          <div class="hud-cell">
+            <span class="label">PASS</span>
+            <span class="val" id="hudSolved">0/5</span>
+          </div>
+        </div>
+      </header>
+
+      <div class="main-body">
+        <section class="signal-pane">
+          <div class="pane-title">
+            <span data-i18n-cn="滤波前 (灰) vs 滤波后 (蓝) · 波形 + 频谱" data-i18n-en="Before (gray) vs After (blue) · wave + spectrum">滤波前 (灰) vs 滤波后 (蓝) · 波形 + 频谱</span>
+            <span class="sub" data-i18n-cn="alpha 8-13Hz 是要保住的信号" data-i18n-en="alpha 8-13Hz is the signal to keep">alpha 8-13Hz 是要保住的信号</span>
+          </div>
+          <div class="signal-body">
+            <svg id="signalSvg" viewBox="0 0 900 380" preserveAspectRatio="xMidYMid meet"></svg>
+            <div id="milestone" class="milestone" data-i18n-cn="解锁 · 滤波质检员" data-i18n-en="Unlocked · Filter Inspector">解锁 · 滤波质检员</div>
+          </div>
+        </section>
+
+        <section class="diag-pane">
+          <div class="pane-title">
+            <span data-i18n-cn="选 1 种诊断" data-i18n-en="Pick 1 diagnosis">选 1 种诊断</span>
+            <span class="sub" id="caseHintTag" data-i18n-cn="样本 A" data-i18n-en="Sample A">样本 A</span>
+          </div>
+          <div class="diag-body">
+            <div class="case-caption" id="caseCaption">
+              <span class="cn" id="caseCn">样本 A</span>
+              <span id="caseDesc" data-i18n-cn="" data-i18n-en=""></span>
+            </div>
+            <div class="chips-row" id="chipsRow">
+              <button type="button" class="diag-chip" data-diag="good">
+                <span class="dname" data-i18n-cn="好滤波" data-i18n-en="Good filter">好滤波</span>
+                <span class="ddesc" data-i18n-cn="噪声没了 · 信号还在 · 通过" data-i18n-en="Noise gone · signal kept · pass">噪声没了 · 信号还在 · 通过</span>
+              </button>
+              <button type="button" class="diag-chip" data-diag="under">
+                <span class="dname" data-i18n-cn="欠滤波" data-i18n-en="Under-filtered">欠滤波</span>
+                <span class="ddesc" data-i18n-cn="噪声还在 · 通带太宽" data-i18n-en="Noise remains · band too wide">噪声还在 · 通带太宽</span>
+              </button>
+              <button type="button" class="diag-chip" data-diag="over">
+                <span class="dname" data-i18n-cn="过滤波" data-i18n-en="Over-filtered">过滤波</span>
+                <span class="ddesc" data-i18n-cn="信号也削了 · 通带太窄 · alpha丢" data-i18n-en="Signal cut · band too narrow · alpha lost">信号也削了 · 通带太窄 · alpha丢</span>
+              </button>
+              <button type="button" class="diag-chip" data-diag="phase">
+                <span class="dname" data-i18n-cn="相位失真" data-i18n-en="Phase distortion">相位失真</span>
+                <span class="ddesc" data-i18n-cn="波形扭曲移位 · 滤波器阶数问题" data-i18n-en="Waveform shifted · filter order issue">波形扭曲移位 · 滤波器阶数问题</span>
+              </button>
+              <button type="button" class="diag-chip" data-diag="ring">
+                <span class="dname" data-i18n-cn="边缘振铃" data-i18n-en="Edge ringing">边缘振铃</span>
+                <span class="ddesc" data-i18n-cn="边缘抖出余波 (Gibbs) · 截止太陡" data-i18n-en="Gibbs ripple at edges · cutoff too steep">边缘抖出余波 (Gibbs) · 截止太陡</span>
+              </button>
+            </div>
+            <div class="verdict-box" id="verdictBox">
+              <span class="verdict-tag" id="verdictTag" data-i18n-cn="待判定" data-i18n-en="PENDING">待判定</span>
+              <span class="verdict-text" id="verdictText" data-i18n-cn="选一个诊断 chip 提交你的判断。" data-i18n-en="Pick a diagnosis chip to submit.">选一个诊断 chip 提交你的判断。</span>
+            </div>
+            <div class="case-nav">
+              <button type="button" class="nav-btn" id="prevBtn" data-i18n-cn="上一个" data-i18n-en="PREV">上一个</button>
+              <button type="button" class="nav-btn" id="nextBtn" data-i18n-cn="下一个" data-i18n-en="NEXT">下一个</button>
+            </div>
+          </div>
+        </section>
+      </div>
+    </main>
+  </div>
+
+<script>
+(function(){
+  'use strict';
+
+  var SVG_NS = 'http://www.w3.org/2000/svg';
+  var TWO_PI = Math.PI * 2;
+
+  // ===== signal generators (sampled at N points over 1 second) =====
+  // A clean EEG-like signal = strong alpha (10 Hz) + small beta (20 Hz).
+  // "Before" = clean + high-freq noise (40-60 Hz) + small DC/slow drift.
+  // Each case's "after" applies a DIFFERENT (mostly flawed) processing so the
+  // before/after comparison visually encodes the verdict.
+
+  var N = 240;            // samples for waveform
+  var DUR = 1.0;          // seconds shown
+  var FS = N / DUR;       // ~240 Hz effective for plotting purposes
+
+  function timeAxis(){
+    var t = [];
+    for (var i = 0; i < N; i++) t.push(i / FS);
+    return t;
+  }
+  var TT = timeAxis();
+
+  // building blocks ---------------------------------------------------------
+  function alphaWave(t, amp){ return amp * Math.sin(TWO_PI * 10 * t); }
+  function betaWave(t, amp){ return amp * Math.sin(TWO_PI * 20 * t + 0.7); }
+  function noiseWave(t, amp, seedPhase){
+    // deterministic "muscle/line" high-freq mix (45 + 55 Hz) — looks like fuzz
+    return amp * (Math.sin(TWO_PI * 45 * t + seedPhase) * 0.6
+                + Math.sin(TWO_PI * 55 * t + seedPhase * 1.7) * 0.4);
+  }
+  function drift(t, amp){ return amp * Math.sin(TWO_PI * 0.8 * t - 0.4); }
+
+  function cleanBefore(seedPhase){
+    // raw recording: alpha + beta + lots of HF noise + slow drift
+    var s = [];
+    for (var i = 0; i < N; i++){
+      var t = TT[i];
+      s.push(alphaWave(t, 1.0) + betaWave(t, 0.45)
+             + noiseWave(t, 0.7, seedPhase) + drift(t, 0.55));
+    }
+    return s;
+  }
+
+  // ---- "after" variants, one per verdict -----------------------------------
+  function afterGood(seedPhase){
+    // ideal band-pass 4-30: keeps alpha+beta, drops noise & drift, no distortion
+    var s = [];
+    for (var i = 0; i < N; i++){
+      var t = TT[i];
+      s.push(alphaWave(t, 1.0) + betaWave(t, 0.45));
+    }
+    return s;
+  }
+  function afterUnder(seedPhase){
+    // passband too wide: drift removed but most HF noise still present
+    var s = [];
+    for (var i = 0; i < N; i++){
+      var t = TT[i];
+      s.push(alphaWave(t, 1.0) + betaWave(t, 0.45) + noiseWave(t, 0.55, seedPhase));
+    }
+    return s;
+  }
+  function afterOver(seedPhase){
+    // passband too narrow: alpha & beta both crushed, only a weak slow remnant
+    var s = [];
+    for (var i = 0; i < N; i++){
+      var t = TT[i];
+      s.push(alphaWave(t, 0.18) + betaWave(t, 0.0) + Math.sin(TWO_PI * 6 * t) * 0.12);
+    }
+    return s;
+  }
+  function afterPhase(seedPhase){
+    // noise/drift removed BUT large phase lag — waveform shifted/warped in time
+    var s = [];
+    var lag = 0.045; // seconds of group delay -> visible horizontal shift
+    for (var i = 0; i < N; i++){
+      var t = TT[i];
+      // alpha lagged a lot, beta lagged differently (dispersion) -> warped shape
+      s.push(alphaWave(t - lag, 1.0) + betaWave(t - lag * 2.4, 0.45));
+    }
+    return s;
+  }
+  function afterRing(seedPhase){
+    // too-steep cutoff -> Gibbs ringing: extra oscillation bursts at the edges
+    var s = [];
+    for (var i = 0; i < N; i++){
+      var t = TT[i];
+      var base = alphaWave(t, 1.0) + betaWave(t, 0.45);
+      // ringing envelope strongest at both ends, decays toward centre
+      var edge = Math.exp(-Math.pow((t - 0.0) / 0.12, 2))
+               + Math.exp(-Math.pow((t - DUR) / 0.12, 2));
+      var ring = 0.65 * edge * Math.sin(TWO_PI * 30 * t + 0.3);
+      s.push(base + ring);
+    }
+    return s;
+  }
+
+  // ---- crude spectrum (band energy) so frequency panel has real meaning -----
+  // returns energy at a set of probe frequencies via correlation.
+  var FREQS = [2,4,6,8,10,12,14,16,18,20,25,30,35,40,45,55];
+  function spectrum(series){
+    var out = [];
+    for (var f = 0; f < FREQS.length; f++){
+      var re = 0, im = 0, fr = FREQS[f];
+      for (var i = 0; i < N; i++){
+        var t = TT[i];
+        re += series[i] * Math.cos(TWO_PI * fr * t);
+        im += series[i] * Math.sin(TWO_PI * fr * t);
+      }
+      out.push(Math.sqrt(re*re + im*im) / N * 2);
+    }
+    return out;
+  }
+
+  // ===== 5 cases (one per verdict, shuffled order so it's a real puzzle) =====
+  var CASES = [
+    {
+      id:0, cnName:'样本 A', enName:'Sample A',
+      cnDesc:'去掉了慢漂移, 但波形上还爬满高频毛刺。',
+      enDesc:'Slow drift gone, but the trace is still covered in high-freq fuzz.',
+      filter:'BP 1-70 Hz',
+      before:cleanBefore(0.3), after:afterUnder(0.3),
+      correct:'under',
+      cnExplain:'频谱里 45-55Hz 的高峰几乎没降, 波形还是毛糙的 — 通带留得太宽, 噪声没被滤掉。要把上截止拉到 30-40Hz。',
+      enExplain:'The 45-55Hz peaks barely dropped and the trace stays fuzzy — the passband is too wide so noise survives. Lower the high cutoff to 30-40Hz.'
+    },
+    {
+      id:1, cnName:'样本 B', enName:'Sample B',
+      cnDesc:'变得超干净, 可是 alpha 节律几乎被压平了。',
+      enDesc:'Super clean now, but the alpha rhythm is almost flattened out.',
+      filter:'BP 4-9 Hz',
+      before:cleanBefore(1.1), after:afterOver(1.1),
+      correct:'over',
+      cnExplain:'10Hz 的 alpha 峰和 20Hz 的 beta 峰都塌了, 波形振幅只剩零头 — 通带太窄, 把要留的信号也削掉了。把上截止放宽到至少 13Hz 以上。',
+      enExplain:'Both the 10Hz alpha and 20Hz beta peaks collapsed and amplitude is tiny — the passband is too narrow, cutting the signal you needed. Widen the high cutoff past 13Hz.'
+    },
+    {
+      id:2, cnName:'样本 C', enName:'Sample C',
+      cnDesc:'频谱很漂亮, 但波形整体往右移、形状被拉歪了。',
+      enDesc:'Spectrum looks great, yet the whole trace is shifted right and warped.',
+      filter:'IIR order 8',
+      before:cleanBefore(2.0), after:afterPhase(2.0),
+      correct:'phase',
+      cnExplain:'频谱能量对了 (alpha/beta 都在), 可波峰相对滤波前明显延后、波形被扭曲 — 这是相位失真, 高阶 IIR 的非线性相位造成的。换零相位 (filtfilt) 或线性相位 FIR。',
+      enExplain:'The spectrum is right (alpha/beta present) but the peaks lag and the shape is warped vs. before — that is phase distortion from a high-order IIR\'s nonlinear phase. Use zero-phase (filtfilt) or a linear-phase FIR.'
+    },
+    {
+      id:3, cnName:'样本 D', enName:'Sample D',
+      cnDesc:'中间一段挺干净, 可是两头甩出一串多余的余波。',
+      enDesc:'Clean in the middle, but extra ripples burst out at both ends.',
+      filter:'Brick-wall cut',
+      before:cleanBefore(2.7), after:afterRing(2.7),
+      correct:'ring',
+      cnExplain:'信号两端冒出衰减的振荡 (Gibbs 现象), 频谱主体没问题 — 截止太陡 (砖墙式), 频域的尖锐切边在时域抖出振铃。把过渡带做缓一点。',
+      enExplain:'Decaying oscillations appear at both edges (Gibbs phenomenon) while the spectrum body is fine — the cutoff is too steep (brick-wall); a sharp edge in frequency rings in time. Soften the transition band.'
+    },
+    {
+      id:4, cnName:'样本 E', enName:'Sample E',
+      cnDesc:'毛刺和慢漂移都没了, alpha/beta 都还在, 形状也没歪。',
+      enDesc:'Fuzz and drift both gone, alpha/beta intact, shape undistorted.',
+      filter:'BP 4-30 Hz',
+      before:cleanBefore(3.4), after:afterGood(3.4),
+      correct:'good',
+      cnExplain:'频谱里 45-55Hz 噪声峰消失、慢漂移没了, 而 10Hz alpha 和 20Hz beta 峰原样保留, 波形也没移位变形 — 这就是一次合格的带通滤波, 直接通过。',
+      enExplain:'The 45-55Hz noise peaks and slow drift are gone while the 10Hz alpha and 20Hz beta peaks stay intact, with no shift or warp — this is a clean band-pass. It passes.'
+    }
+  ];
+
+  // pre-compute spectra
+  for (var ci = 0; ci < CASES.length; ci++){
+    CASES[ci].beforeSpec = spectrum(CASES[ci].before);
+    CASES[ci].afterSpec  = spectrum(CASES[ci].after);
+  }
+
+  // ===== state (no window-shadow names) =====
+  var stateGame = {
+    lang:'cn',
+    activeCase:0,
+    cursorHz:10,
+    answers:[null,null,null,null,null],
+    correctMark:[null,null,null,null,null],
+    milestoneFired:false
+  };
+
+  // ===== DOM refs =====
+  var svg = document.getElementById('signalSvg');
+  var bandSlider = document.getElementById('bandSlider');
+  var bandReadout = document.getElementById('bandReadout');
+  var hudCase = document.getElementById('hudCase');
+  var hudFilter = document.getElementById('hudFilter');
+  var hudSolved = document.getElementById('hudSolved');
+  var progressGrid = document.getElementById('progressGrid');
+  var progressCount = document.getElementById('progressCount');
+  var milestone = document.getElementById('milestone');
+  var langBtn = document.getElementById('langBtn');
+  var resetBtn = document.getElementById('resetBtn');
+  var caseList = document.getElementById('caseList');
+  var caseRows = caseList.querySelectorAll('.case-row');
+  var chips = document.querySelectorAll('.diag-chip');
+  var prevBtn = document.getElementById('prevBtn');
+  var nextBtn = document.getElementById('nextBtn');
+  var caseCn = document.getElementById('caseCn');
+  var caseDesc = document.getElementById('caseDesc');
+  var caseHintTag = document.getElementById('caseHintTag');
+  var verdictBox = document.getElementById('verdictBox');
+  var verdictTag = document.getElementById('verdictTag');
+  var verdictText = document.getElementById('verdictText');
+
+  function elNS(name, attrs){
+    var el = document.createElementNS(SVG_NS, name);
+    if (attrs){ for (var k in attrs){ el.setAttribute(k, attrs[k]); } }
+    return el;
+  }
+  function txt(x, y, s, opts){
+    var a = {x:x, y:y, 'font-family':'JetBrains Mono, monospace'};
+    for (var k in (opts||{})) a[k] = opts[k];
+    var el = elNS('text', a);
+    el.textContent = s;
+    return el;
+  }
+
+  // ===== layout regions inside the 900x380 viewBox =====
+  // top half = waveform (time domain); bottom-left = spectrum; clear separation.
+  var WAVE = { x:56, y:30, w:820, h:150 };
+  var SPEC = { x:56, y:228, w:820, h:120 };
+
+  function getCase(){ return CASES[stateGame.activeCase]; }
+
+  function seriesExtent(a, b){
+    var mn = Infinity, mx = -Infinity, i;
+    for (i = 0; i < a.length; i++){ if (a[i] < mn) mn = a[i]; if (a[i] > mx) mx = a[i]; }
+    for (i = 0; i < b.length; i++){ if (b[i] < mn) mn = b[i]; if (b[i] > mx) mx = b[i]; }
+    var pad = (mx - mn) * 0.12 + 0.05;
+    return { mn: mn - pad, mx: mx + pad };
+  }
+
+  function polyPoints(series, ext){
+    var pts = [];
+    for (var i = 0; i < series.length; i++){
+      var x = WAVE.x + (i / (series.length - 1)) * WAVE.w;
+      var frac = (series[i] - ext.mn) / (ext.mx - ext.mn);
+      var y = WAVE.y + WAVE.h - frac * WAVE.h;
+      pts.push(x.toFixed(1) + ',' + y.toFixed(1));
+    }
+    return pts.join(' ');
+  }
+
+  function buildWave(c){
+    var ext = seriesExtent(c.before, c.after);
+
+    // wave frame + zero line
+    svg.appendChild(elNS('rect', { x:WAVE.x, y:WAVE.y, width:WAVE.w, height:WAVE.h,
+      fill:'none', stroke:'var(--line)', 'stroke-width':1 }));
+    var zeroFrac = (0 - ext.mn) / (ext.mx - ext.mn);
+    if (zeroFrac > 0 && zeroFrac < 1){
+      var zy = WAVE.y + WAVE.h - zeroFrac * WAVE.h;
+      svg.appendChild(elNS('line', { x1:WAVE.x, y1:zy, x2:WAVE.x+WAVE.w, y2:zy,
+        stroke:'oklch(0.30 0.04 265 / 0.5)', 'stroke-width':1, 'stroke-dasharray':'3,3' }));
+    }
+
+    // before — faint gray
+    svg.appendChild(elNS('polyline', { points:polyPoints(c.before, ext),
+      fill:'none', stroke:'var(--fg-mute)', 'stroke-width':1.4, opacity:0.55,
+      'stroke-linejoin':'round' }));
+    // after — bright math accent
+    svg.appendChild(elNS('polyline', { points:polyPoints(c.after, ext),
+      fill:'none', stroke:'var(--AXIS)', 'stroke-width':2.2,
+      'stroke-linejoin':'round' }));
+
+    // pane label
+    svg.appendChild(txt(WAVE.x + 4, WAVE.y - 8,
+      stateGame.lang==='cn' ? '时域波形 · 1 秒' : 'Time domain · 1 s',
+      { 'font-size':11, fill:'var(--math)', 'font-weight':600, 'letter-spacing':1 }));
+    svg.appendChild(txt(WAVE.x + WAVE.w, WAVE.y - 8, 'time (s)',
+      { 'font-size':10, fill:'var(--fg-mute)', 'text-anchor':'end' }));
+
+    // legend
+    var lx = WAVE.x + WAVE.w - 200, ly = WAVE.y + 14;
+    svg.appendChild(elNS('line', { x1:lx, y1:ly, x2:lx+22, y2:ly,
+      stroke:'var(--fg-mute)', 'stroke-width':1.4, opacity:0.55 }));
+    svg.appendChild(txt(lx+28, ly+4, stateGame.lang==='cn' ? '滤波前' : 'before',
+      { 'font-size':10, fill:'var(--fg-dim)' }));
+    svg.appendChild(elNS('line', { x1:lx+92, y1:ly, x2:lx+114, y2:ly,
+      stroke:'var(--AXIS)', 'stroke-width':2.2 }));
+    svg.appendChild(txt(lx+120, ly+4, stateGame.lang==='cn' ? '滤波后' : 'after',
+      { 'font-size':10, fill:'var(--fg-dim)' }));
+
+    // x ticks (time)
+    for (var k = 0; k <= 4; k++){
+      var tx = WAVE.x + (k/4)*WAVE.w;
+      svg.appendChild(txt(tx, WAVE.y + WAVE.h + 16, (k/4).toFixed(2),
+        { 'font-size':9, fill:'var(--fg-mute)', 'text-anchor':'middle' }));
+    }
+  }
+
+  function buildSpectrum(c){
+    var maxE = 0, i;
+    for (i = 0; i < c.beforeSpec.length; i++){
+      if (c.beforeSpec[i] > maxE) maxE = c.beforeSpec[i];
+      if (c.afterSpec[i]  > maxE) maxE = c.afterSpec[i];
+    }
+    if (maxE <= 0) maxE = 1;
+
+    // frame
+    svg.appendChild(elNS('rect', { x:SPEC.x, y:SPEC.y, width:SPEC.w, height:SPEC.h,
+      fill:'none', stroke:'var(--line)', 'stroke-width':1 }));
+
+    // alpha band shading 8-13 Hz (the signal to keep)
+    var fMax = 60;
+    function xAtHz(hz){ return SPEC.x + (hz / fMax) * SPEC.w; }
+    var ax0 = xAtHz(8), ax1 = xAtHz(13);
+    svg.appendChild(elNS('rect', { x:ax0, y:SPEC.y, width:(ax1-ax0), height:SPEC.h,
+      fill:'var(--QED)', opacity:0.10, stroke:'none' }));
+    svg.appendChild(txt((ax0+ax1)/2, SPEC.y + 12, 'alpha',
+      { 'font-size':9, fill:'var(--QED)', 'text-anchor':'middle', 'font-weight':600 }));
+
+    // bars: before (gray, offset left) + after (blue, offset right) per freq
+    var nB = FREQS.length;
+    var groupW = SPEC.w / nB;
+    var barW = groupW * 0.32;
+    for (i = 0; i < nB; i++){
+      var gx = SPEC.x + (i + 0.5) * groupW;
+      var hB = (c.beforeSpec[i] / maxE) * (SPEC.h - 18);
+      var hA = (c.afterSpec[i]  / maxE) * (SPEC.h - 18);
+      svg.appendChild(elNS('rect', {
+        x: gx - barW - 1, y: SPEC.y + SPEC.h - hB, width:barW, height:hB,
+        fill:'var(--fg-mute)', opacity:0.55 }));
+      svg.appendChild(elNS('rect', {
+        x: gx + 1, y: SPEC.y + SPEC.h - hA, width:barW, height:hA,
+        fill:'var(--AXIS)' }));
+    }
+
+    // freq ticks
+    var ticks = [4,10,20,30,45,55];
+    for (i = 0; i < ticks.length; i++){
+      var fx = xAtHz(ticks[i]);
+      svg.appendChild(txt(fx, SPEC.y + SPEC.h + 14, ticks[i] + '',
+        { 'font-size':9, fill:'var(--fg-mute)', 'text-anchor':'middle' }));
+    }
+
+    // movable cursor (slider)
+    var cx = xAtHz(stateGame.cursorHz);
+    if (cx >= SPEC.x && cx <= SPEC.x + SPEC.w){
+      svg.appendChild(elNS('line', { x1:cx, y1:SPEC.y, x2:cx, y2:SPEC.y+SPEC.h,
+        stroke:'var(--SOLUTION)', 'stroke-width':1.2, 'stroke-dasharray':'5,4', opacity:0.9 }));
+      var labAnchor = cx > SPEC.x + SPEC.w - 60 ? 'end' : (cx < SPEC.x + 40 ? 'start' : 'middle');
+      svg.appendChild(txt(cx, SPEC.y + SPEC.h - 6, stateGame.cursorHz + ' Hz',
+        { 'font-size':10, fill:'var(--SOLUTION)', 'text-anchor':labAnchor, 'font-weight':600 }));
+    }
+
+    // labels
+    svg.appendChild(txt(SPEC.x + 4, SPEC.y - 8,
+      stateGame.lang==='cn' ? '频谱 · 各频率能量 (前 灰 / 后 蓝)' : 'Spectrum · energy per freq (before gray / after blue)',
+      { 'font-size':11, fill:'var(--math)', 'font-weight':600, 'letter-spacing':1 }));
+    svg.appendChild(txt(SPEC.x + SPEC.w, SPEC.y + SPEC.h + 14, 'freq (Hz)',
+      { 'font-size':10, fill:'var(--fg-mute)', 'text-anchor':'end' }));
+  }
+
+  function buildSignal(){
+    while (svg.firstChild) svg.removeChild(svg.firstChild);
+    var c = getCase();
+    buildWave(c);
+    buildSpectrum(c);
+  }
+
+  // ===== HUD / progress =====
+  function solvedCount(){
+    var n = 0;
+    for (var i = 0; i < stateGame.correctMark.length; i++){
+      if (stateGame.correctMark[i] === true) n++;
+    }
+    return n;
+  }
+
+  function updateHUD(){
+    var idx = stateGame.activeCase;
+    hudCase.textContent = (idx < 9 ? '0' : '') + (idx+1);
+    hudFilter.textContent = getCase().filter;
+
+    var s = solvedCount();
+    hudSolved.textContent = s + '/5';
+    progressCount.textContent = s;
+
+    var cells = progressGrid.querySelectorAll('.progress-cell');
+    for (var ci = 0; ci < cells.length; ci++){
+      var sid = parseInt(cells[ci].getAttribute('data-slot'), 10);
+      cells[ci].classList.remove('hit','miss');
+      if (stateGame.correctMark[sid] === true) cells[ci].classList.add('hit');
+      else if (stateGame.correctMark[sid] === false) cells[ci].classList.add('miss');
+    }
+
+    for (var cri = 0; cri < caseRows.length; cri++){
+      var cidx = parseInt(caseRows[cri].getAttribute('data-case'), 10);
+      caseRows[cri].classList.remove('active','solved','wrong');
+      if (cidx === idx) caseRows[cri].classList.add('active');
+      if (stateGame.correctMark[cidx] === true) caseRows[cri].classList.add('solved');
+      else if (stateGame.correctMark[cidx] === false) caseRows[cri].classList.add('wrong');
+    }
+
+    if (s >= 5 && !stateGame.milestoneFired){
+      stateGame.milestoneFired = true;
+      hudSolved.classList.add('gold');
+      milestone.classList.add('show');
+      setTimeout(function(){ milestone.classList.remove('show'); }, 3500);
+    } else if (s < 5){
+      hudSolved.classList.remove('gold');
+      stateGame.milestoneFired = false;
+    }
+  }
+
+  function updateCaseHeader(){
+    var c = getCase();
+    caseCn.textContent = stateGame.lang==='cn' ? c.cnName : c.enName;
+    caseDesc.textContent = stateGame.lang==='cn' ? c.cnDesc : c.enDesc;
+    caseHintTag.textContent = (stateGame.lang==='cn' ? '样本 ' : 'Sample ')
+      + String.fromCharCode(65 + stateGame.activeCase);
+  }
+
+  function diagName(diagId){
+    var cn = { good:'好滤波', under:'欠滤波', over:'过滤波', phase:'相位失真', ring:'边缘振铃' };
+    var en = { good:'Good filter', under:'Under-filtered', over:'Over-filtered', phase:'Phase distortion', ring:'Edge ringing' };
+    return stateGame.lang==='cn' ? cn[diagId] : en[diagId];
+  }
+
+  function updateVerdict(){
+    var idx = stateGame.activeCase;
+    var ans = stateGame.answers[idx];
+    var mark = stateGame.correctMark[idx];
+    var c = getCase();
+    var k;
+
+    verdictBox.classList.remove('right','wrong');
+
+    if (ans === null){
+      verdictTag.textContent = stateGame.lang==='cn' ? '待判定' : 'PENDING';
+      verdictText.textContent = stateGame.lang==='cn'
+        ? '选一个诊断 chip 提交你的判断。'
+        : 'Pick a diagnosis chip to submit.';
+      for (k = 0; k < chips.length; k++) chips[k].classList.remove('disabled');
+      return;
+    }
+
+    for (k = 0; k < chips.length; k++) chips[k].classList.add('disabled');
+
+    if (mark === true){
+      verdictBox.classList.add('right');
+      verdictTag.textContent = stateGame.lang==='cn' ? '判断正确' : 'CORRECT';
+      verdictText.textContent = stateGame.lang==='cn' ? c.cnExplain : c.enExplain;
+    } else {
+      verdictBox.classList.add('wrong');
+      verdictTag.textContent = stateGame.lang==='cn' ? '判断不对' : 'WRONG';
+      var pickedNm = diagName(ans);
+      var trueNm = diagName(c.correct);
+      verdictText.textContent = stateGame.lang==='cn'
+        ? '你选了 "'+pickedNm+'", 真相是 "'+trueNm+'"。' + c.cnExplain
+        : 'You picked "'+pickedNm+'", truth is "'+trueNm+'". ' + c.enExplain;
+    }
+  }
+
+  // ===== case switching =====
+  function switchCase(newIdx){
+    if (newIdx < 0 || newIdx >= CASES.length) return;
+    stateGame.activeCase = newIdx;
+    buildSignal();
+    updateHUD();
+    updateCaseHeader();
+    updateVerdict();
+    refreshNavBtns();
+  }
+  function refreshNavBtns(){
+    prevBtn.disabled = (stateGame.activeCase === 0);
+    nextBtn.disabled = (stateGame.activeCase === CASES.length - 1);
+  }
+
+  // ===== answer =====
+  function pickDiag(diagId){
+    var idx = stateGame.activeCase;
+    if (stateGame.answers[idx] !== null) return;
+    stateGame.answers[idx] = diagId;
+    stateGame.correctMark[idx] = (getCase().correct === diagId);
+    updateVerdict();
+    updateHUD();
+  }
+
+  // ===== reset =====
+  function resetAll(){
+    stateGame.activeCase = 0;
+    stateGame.cursorHz = 10;
+    stateGame.answers = [null,null,null,null,null];
+    stateGame.correctMark = [null,null,null,null,null];
+    stateGame.milestoneFired = false;
+    bandSlider.value = 10;
+    bandReadout.textContent = '10';
+    hudSolved.classList.remove('gold');
+    milestone.classList.remove('show');
+    buildSignal();
+    updateHUD();
+    updateCaseHeader();
+    updateVerdict();
+    refreshNavBtns();
+  }
+
+  // ===== i18n =====
+  function refreshI18N(){
+    var nodes = document.querySelectorAll('[data-i18n-cn]');
+    for (var i = 0; i < nodes.length; i++){
+      var el = nodes[i];
+      var cn = el.getAttribute('data-i18n-cn');
+      var en = el.getAttribute('data-i18n-en');
+      var content = stateGame.lang==='cn' ? cn : en;
+      if (content.indexOf('<') >= 0) el.innerHTML = content;
+      else el.textContent = content;
+    }
+    document.documentElement.lang = stateGame.lang==='cn' ? 'zh-CN' : 'en';
+    buildSignal();
+    updateCaseHeader();
+    updateVerdict();
+  }
+
+  // ===== events =====
+  bandSlider.addEventListener('input', function(){
+    stateGame.cursorHz = parseInt(bandSlider.value, 10);
+    bandReadout.textContent = stateGame.cursorHz;
+    buildSignal();
+  });
+  bandSlider.addEventListener('change', function(){
+    stateGame.cursorHz = parseInt(bandSlider.value, 10);
+    bandReadout.textContent = stateGame.cursorHz;
+    buildSignal();
+  });
+
+  langBtn.addEventListener('click', function(){
+    stateGame.lang = stateGame.lang==='cn' ? 'en' : 'cn';
+    refreshI18N();
+  });
+
+  resetBtn.addEventListener('click', resetAll);
+  prevBtn.addEventListener('click', function(){ switchCase(stateGame.activeCase - 1); });
+  nextBtn.addEventListener('click', function(){ switchCase(stateGame.activeCase + 1); });
+
+  for (var ri = 0; ri < caseRows.length; ri++){
+    (function(row){
+      row.addEventListener('click', function(){
+        switchCase(parseInt(row.getAttribute('data-case'), 10));
+      });
+    })(caseRows[ri]);
+  }
+
+  for (var di = 0; di < chips.length; di++){
+    (function(chip){
+      chip.addEventListener('click', function(){
+        if (chip.classList.contains('disabled')) return;
+        pickDiag(chip.getAttribute('data-diag'));
+      });
+    })(chips[di]);
+  }
+
+  // init
+  buildSignal();
+  updateHUD();
+  updateCaseHeader();
+  updateVerdict();
+  refreshNavBtns();
+})();
+</script>
+</body>
+</html>

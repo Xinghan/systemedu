@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>找出想象动手那几秒 · Epoching</title>
+<style>
+:root{
+  /* 第 1 层 — 共享深空底 (所有 26 套统一) */
+  --bg-0: oklch(0.14 0.035 265);
+  --bg-1: oklch(0.18 0.04 265);
+  --bg-2: oklch(0.22 0.045 265);
+  --bg-3: oklch(0.28 0.05 265);
+  --line: oklch(0.35 0.05 265 / 0.35);
+  --line-strong: oklch(0.55 0.08 265 / 0.55);
+  --fg:      oklch(0.96 0.01 265);
+  --fg-dim:  oklch(0.75 0.02 265);
+  --fg-mute: oklch(0.55 0.03 265);
+  --gold:    oklch(0.85 0.14 85);
+  /* 第 2 层 — cs signature accent (cyan) */
+  --accent:  oklch(0.75 0.17 200);
+  /* 第 3 层 — cs Data Cathedral 5 色 palette */
+  --signal:  oklch(0.75 0.17 200);
+  --core:    oklch(0.55 0.16 200);
+  --depth:   oklch(0.35 0.10 210);
+  --flash:   oklch(0.92 0.08 190);
+  --query:   oklch(0.85 0.14 85);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:100%;height:100vh;overflow:hidden}
+body{background:var(--bg-0);color:var(--fg);
+  font-family:'Noto Sans SC',system-ui,sans-serif;display:flex}
+.mono{font-family:'JetBrains Mono','SF Mono',ui-monospace,monospace}
+.sidebar{width:200px;flex-shrink:0;height:100vh;background:var(--bg-1);
+  border-right:1px solid var(--line);display:flex;flex-direction:column;gap:14px;padding:18px 16px}
+.brand{font-size:11px;letter-spacing:2px;color:var(--accent);text-transform:uppercase}
+.mascot-wrap{display:flex;justify-content:center;padding:6px 0}
+.title-cn{font-size:15px;font-weight:700;line-height:1.4}
+.title-en{font-size:11px;color:var(--fg-mute);font-style:italic;line-height:1.4}
+.guide{list-style:none;display:flex;flex-direction:column;gap:8px;margin-top:4px}
+.guide li{font-size:11.5px;color:var(--fg-dim);line-height:1.45;padding-left:9px;
+  border-left:2px solid var(--core)}
+.lang-btn{margin-top:auto;font-size:11px;font-weight:700;letter-spacing:1px;
+  padding:6px 10px;cursor:pointer;color:var(--accent);background:var(--bg-2);
+  border:1px solid var(--line-strong);box-shadow:3px 3px 0 var(--bg-0)}
+.lang-btn:active{transform:translate(3px,3px);box-shadow:none}
+.stage-wrap{flex:1;min-width:0;height:100vh;position:relative}
+canvas{display:block;width:100%;height:100%}
+.hud{position:absolute;top:14px;right:14px;min-width:188px;padding:11px 13px;
+  background:var(--bg-2);border:1px solid var(--line-strong);box-shadow:3px 3px 0 var(--bg-0)}
+.hud-row{display:flex;justify-content:space-between;align-items:baseline;font-size:11px;margin-bottom:5px}
+.hud-row:last-child{margin-bottom:0}
+.hud-k{color:var(--fg-mute);letter-spacing:1px}
+.hud-v{color:var(--accent);font-weight:700}
+.frame-tag{position:absolute;top:14px;left:14px;font-size:10.5px;letter-spacing:1.5px;
+  color:var(--fg-mute);padding:4px 9px;background:var(--bg-1);border:1px solid var(--line)}
+.cap{position:absolute;bottom:26px;left:50%;transform:translateX(-50%);
+  text-align:center;width:78%;pointer-events:none}
+.cap-zh{font-size:18px;font-weight:700;color:var(--fg);line-height:1.4;
+  text-shadow:0 2px 12px var(--bg-0)}
+.cap-en{font-size:12px;font-style:italic;color:var(--fg-mute);margin-top:4px}
+</style>
+</head>
+<body>
+<aside class="sidebar">
+  <div class="brand mono">CS-01 · EPOCHING</div>
+  <div class="mascot-wrap" id="mascotWrap"></div>
+  <div>
+    <div class="title-cn" id="ttlZh">找出想象动手那几秒</div>
+    <div class="title-en mono" id="ttlEn">Cut out the imagining seconds</div>
+  </div>
+  <ul class="guide">
+    <li id="g1">连续几分钟的脑波录音</li>
+    <li id="g2">每次提示打一个事件时间戳</li>
+    <li id="g3">以事件为锚切出对齐的 epoch</li>
+  </ul>
+  <button class="lang-btn mono" id="langBtn">中 / EN</button>
+</aside>
+<main class="stage-wrap">
+  <canvas id="stage"></canvas>
+  <div class="frame-tag mono" id="frameTag">F1 / 5</div>
+  <div class="hud">
+    <div class="hud-row"><span class="hud-k mono" id="hk1">STAGE</span><span class="hud-v mono" id="hv1">--</span></div>
+    <div class="hud-row"><span class="hud-k mono" id="hk2">EVENTS</span><span class="hud-v mono" id="hv2">0</span></div>
+    <div class="hud-row"><span class="hud-k mono" id="hk3">EPOCHS</span><span class="hud-v mono" id="hv3">0</span></div>
+    <div class="hud-row"><span class="hud-k mono" id="hk4">WINDOW</span><span class="hud-v mono" id="hv4">-0.5~4s</span></div>
+  </div>
+  <div class="cap">
+    <div class="cap-zh" id="capZh"></div>
+    <div class="cap-en mono" id="capEn"></div>
+  </div>
+</main>
+<script>
+(function(){
+"use strict";
+var LANG='cn';
+var I18N={
+  ttlZh:{cn:'找出想象动手那几秒',en:'Find the imagining seconds'},
+  ttlEn:{cn:'把连续录音切成可比较的试验',en:'Cut a recording into epochs'},
+  g1:{cn:'连续几分钟的脑波录音',en:'A few minutes of continuous EEG'},
+  g2:{cn:'每次提示打一个事件时间戳',en:'Each cue stamps an event marker'},
+  g3:{cn:'以事件为锚切出对齐的 epoch',en:'Anchor on events, cut aligned epochs'},
+  hk1:{cn:'阶段',en:'STAGE'},hk2:{cn:'事件数',en:'EVENTS'},hk3:{cn:'切片数',en:'EPOCHS'},hk4:{cn:'窗口',en:'WINDOW'},
+  st:{cn:['连续录音','事件标记','单片窗口','叠成一摞','三维数组'],
+      en:['RAW STREAM','EVENTS','ONE WINDOW','STACK','3D ARRAY']},
+  caps:{
+    cn:['一整段几分钟的连续脑波——想象、休息全混在一起。',
+        '实验里每次提示「想象动手」都打一个时间戳(trigger)。',
+        '以事件为锚，向前 0.5 秒、向后 4 秒，切出一个窗口 = 一个 epoch。',
+        '把每个事件都这样切出来，对齐叠成一摞——这里有 288 个。',
+        '一摞 epoch 就是 [288, 22, 1125] 的三维数组：试验 × 通道 × 时间。'],
+    en:['A few-minute continuous brain wave — imagining and rest, all mixed.',
+        'Each "imagine movement" cue stamps a trigger onto the timeline.',
+        'Anchor on the event: cut -0.5s to +4s. That window is one epoch.',
+        'Cut every event the same way, align and stack them — 288 here.',
+        'The stack is a 3D array [288, 22, 1125]: trials x channels x time.']
+  }
+};
+function t(k){return (I18N[k]&&I18N[k][LANG])||(I18N[k]&&I18N[k].en)||k;}
+
+// ---- Bit mascot (levitating cubic sprite, cs palette) ----
+function mascotSVG(){
+  return '<svg width="64" height="64" viewBox="0 0 64 64" aria-hidden="true">'
+    +'<g>'
+    +'<polygon points="32,8 52,18 52,40 32,50 12,40 12,18" fill="var(--core)" opacity="0.35"/>'
+    +'<polygon points="32,8 52,18 32,28 12,18" fill="var(--signal)" opacity="0.9"/>'
+    +'<polygon points="12,18 32,28 32,50 12,40" fill="var(--depth)" opacity="0.9"/>'
+    +'<polygon points="52,18 32,28 32,50 52,40" fill="var(--core)" opacity="0.9"/>'
+    +'<rect x="27" y="20" width="4" height="4" fill="var(--flash)"/>'
+    +'<rect x="35" y="24" width="4" height="4" fill="var(--query)"/>'
+    +'<rect x="22" y="32" width="4" height="4" fill="var(--flash)"/>'
+    +'</g></svg>';
+}
+
+var canvas=document.getElementById('stage'),ctx=canvas.getContext('2d');
+var W=0,H=0,DPR=Math.min(window.devicePixelRatio||1,2);
+function resize(){var r=canvas.parentElement.getBoundingClientRect();
+  if(r.width<1||r.height<1)return;
+  W=r.width;H=r.height;canvas.width=W*DPR;canvas.height=H*DPR;
+  canvas.style.width=W+'px';canvas.style.height=H+'px';ctx.setTransform(DPR,0,0,DPR,0,0);}
+window.addEventListener('resize',resize);
+setTimeout(resize,200);setTimeout(resize,600);
+if(document.fonts&&document.fonts.ready)document.fonts.ready.then(resize);
+
+function cssv(v){return getComputedStyle(document.documentElement).getPropertyValue(v).trim();}
+function lerp(a,b,p){return a+(b-a)*p;}
+function easeIO(x){return x<0.5?2*x*x:1-Math.pow(-2*x+2,2)/2;}
+function clamp01(x){return x<0?0:x>1?1:x;}
+
+// events along the recording (position 0..1, hand L/R)
+var EVENTS=[{p:0.12,h:'L'},{p:0.27,h:'R'},{p:0.42,h:'L'},
+            {p:0.58,h:'R'},{p:0.71,h:'L'},{p:0.86,h:'R'}];
+var WIN=0.085; // epoch window width as fraction of recording
+
+var startT=null, FDUR=6000, NF=5, TOTAL=NF*FDUR;
+var lastStage=-1;
+
+function brainWave(x0,x1,y,h,now,seed){
+  ctx.beginPath();
+  for(var x=x0;x<=x1;x+=2){
+    var tt=(x-x0)/(x1-x0);
+    var v=Math.sin(tt*55+now/520+seed)*0.42
+         +Math.sin(tt*140+seed*2)*0.16
+         +Math.sin(tt*21+now/900)*0.26;
+    var yy=y - v*h/2;
+    if(x===x0)ctx.moveTo(x,yy);else ctx.lineTo(x,yy);
+  }
+  ctx.stroke();
+}
+
+// small epoch waveform inside a box
+function epochWave(x,y,w,h,col,seed,now){
+  ctx.save();
+  ctx.strokeStyle=col;ctx.lineWidth=1.4;
+  ctx.beginPath();
+  for(var i=0;i<=w;i+=2){
+    var tt=i/w;
+    var v=Math.sin(tt*22+seed*3+now/600)*0.5+Math.sin(tt*48+seed)*0.22;
+    var yy=y+h/2 - v*h*0.36;
+    if(i===0)ctx.moveTo(x+i,yy);else ctx.lineTo(x+i,yy);
+  }
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawGrid(){
+  ctx.strokeStyle=cssv('--line');ctx.lineWidth=0.5;ctx.globalAlpha=0.5;
+  for(var gx=0;gx<W;gx+=36){ctx.beginPath();ctx.moveTo(gx,0);ctx.lineTo(gx,H);ctx.stroke();}
+  for(var gy=0;gy<H;gy+=36){ctx.beginPath();ctx.moveTo(0,gy);ctx.lineTo(W,gy);ctx.stroke();}
+  ctx.globalAlpha=1;
+}
+
+function label(txt,x,y,col,size,align){
+  ctx.save();
+  ctx.font='700 '+size+"px 'JetBrains Mono',ui-monospace,monospace";
+  ctx.fillStyle=col;ctx.textAlign=align||'left';ctx.textBaseline='middle';
+  ctx.fillText(txt,x,y);ctx.restore();
+}
+
+function flagMarker(ex,ytop,ybot,col,lab,grow){
+  ctx.save();
+  ctx.strokeStyle=col;ctx.lineWidth=2;ctx.globalAlpha=grow;
+  ctx.beginPath();ctx.moveTo(ex,ybot);ctx.lineTo(ex,lerp(ybot,ytop,grow));ctx.stroke();
+  // flag
+  ctx.fillStyle=col;
+  var fy=lerp(ybot,ytop,grow);
+  ctx.beginPath();ctx.moveTo(ex,fy);ctx.lineTo(ex+16,fy+5);ctx.lineTo(ex,fy+10);ctx.closePath();ctx.fill();
+  if(grow>0.7){
+    ctx.globalAlpha=(grow-0.7)/0.3;
+    ctx.font="9px 'JetBrains Mono',monospace";ctx.fillStyle=col;ctx.textAlign='center';
+    ctx.fillText(lab,ex,fy-7);
+  }
+  ctx.restore();
+}
+
+function draw(now){
+  if(startT===null)startT=now;
+  var el=(now-startT)%TOTAL;
+  var stage=Math.min(Math.floor(el/FDUR),NF-1);
+  var fp=easeIO(clamp01((el-stage*FDUR)/FDUR)); // progress within frame
+  if(!W||!H){requestAnimationFrame(draw);return;}
+
+  if(stage!==lastStage){updateHUDtext(stage);lastStage=stage;updateCaption(stage);}
+
+  ctx.clearRect(0,0,W,H);
+  drawGrid();
+
+  var signal=cssv('--signal'),core=cssv('--core'),flash=cssv('--flash'),
+      query=cssv('--query'),accent=cssv('--accent'),fg=cssv('--fg'),
+      fgmute=cssv('--fg-mute'),fgdim=cssv('--fg-dim'),gold=cssv('--gold');
+  var colL=signal, colR=query; // left hand cyan, right hand gold-ish query
+
+  var rx0=40, rx1=W*0.66, ry=H*0.30, rh=H*0.20;
+
+  // ---------- recording lane (always) ----------
+  ctx.save();
+  ctx.strokeStyle= stage<=1 ? signal : fgmute;
+  ctx.lineWidth= stage<=1 ? 1.8 : 1.3;
+  ctx.globalAlpha= stage<=3 ? 1 : 0.55;
+  brainWave(rx0,rx1,ry,rh,now,0);
+  ctx.restore();
+  label(LANG==='cn'?'连续录音  时间 →':'continuous recording  time →',rx0,ry-rh/2-16,fgmute,11,'left');
+
+  // baseline axis
+  ctx.strokeStyle=cssv('--line-strong');ctx.lineWidth=1;
+  ctx.beginPath();ctx.moveTo(rx0,ry+rh/2+14);ctx.lineTo(rx1,ry+rh/2+14);ctx.stroke();
+
+  // ---------- F2: event markers grow in ----------
+  if(stage>=1){
+    var revealN = stage===1 ? Math.ceil(fp*EVENTS.length) : EVENTS.length;
+    for(var i=0;i<revealN;i++){
+      var ev=EVENTS[i];
+      var ex=rx0+ev.p*(rx1-rx0);
+      var grow = (stage===1 && i===revealN-1) ? clamp01(fp*EVENTS.length-(revealN-1)) : 1;
+      flagMarker(ex,ry-rh/2-8,ry+rh/2+14,ev.h==='L'?colL:colR,'EV'+(i+1),grow);
+    }
+    // legend
+    label(LANG==='cn'?'■ 想象左手':'L hand',rx1+18,ry-rh/2,colL,10,'left');
+    label(LANG==='cn'?'■ 想象右手':'R hand',rx1+18,ry-rh/2+16,colR,10,'left');
+  }
+
+  // ---------- F3: single window cut from one event ----------
+  if(stage===2){
+    var ev0=EVENTS[2];
+    var ex0=rx0+ev0.p*(rx1-rx0);
+    var winW=WIN*(rx1-rx0);
+    var preW=winW*0.12; // -0.5s portion
+    var wx=ex0-preW, wy=ry-rh/2-10, wh=rh+24;
+    // highlight band sweeping out
+    ctx.save();
+    ctx.fillStyle=colL; ctx.globalAlpha=0.14;
+    ctx.fillRect(wx,wy,winW*fp,wh);
+    ctx.globalAlpha=0.9;ctx.strokeStyle=colL;ctx.lineWidth=2;
+    ctx.strokeRect(wx,wy,winW*fp,wh);
+    ctx.restore();
+    // event tick line emphasised
+    ctx.strokeStyle=colL;ctx.lineWidth=2;ctx.setLineDash([3,3]);
+    ctx.beginPath();ctx.moveTo(ex0,wy-6);ctx.lineTo(ex0,wy+wh+6);ctx.stroke();ctx.setLineDash([]);
+    label('t=0',ex0,wy+wh+18,colL,10,'center');
+    label('-0.5s',wx,wy-8,fgmute,9,'left');
+    label('+4s',wx+winW,wy-8,fgmute,9,'right');
+
+    // the extracted epoch shown below, big
+    var bx=W*0.30, by=H*0.62, bw=W*0.36, bh=H*0.20;
+    ctx.save();ctx.globalAlpha=clamp01(fp*1.4);
+    ctx.fillStyle=cssv('--bg-2');ctx.fillRect(bx,by,bw,bh);
+    ctx.strokeStyle=colL;ctx.lineWidth=2;ctx.strokeRect(bx,by,bw,bh);
+    epochWave(bx+8,by+6,bw-16,bh-12,signal,2,now);
+    label(LANG==='cn'?'一个 epoch · 左手':'one epoch · L',bx+8,by-10,colL,11,'left');
+    ctx.restore();
+    // arrow recording -> epoch
+    if(fp>0.5){
+      ctx.save();ctx.globalAlpha=(fp-0.5)*2;ctx.strokeStyle=accent;ctx.lineWidth=1.6;
+      ctx.beginPath();ctx.moveTo(ex0,wy+wh+22);ctx.lineTo(bx+bw/2,by-16);ctx.stroke();
+      ctx.restore();
+    }
+  }
+
+  // ---------- F4: all epochs stacked ----------
+  if(stage===3){
+    var sx=W*0.20, sy0=H*0.50;
+    var ew=W*0.30, eh=20, gap=7;
+    var stackN=EVENTS.length;
+    for(var s=0;s<stackN;s++){
+      var appear=clamp01(fp*stackN-s);
+      if(appear<=0)continue;
+      var ev2=EVENTS[s];
+      var col=ev2.h==='L'?colL:colR;
+      var fromX=rx0+ev2.p*(rx1-rx0)-ew/2;
+      var ex2=lerp(fromX,sx,easeIO(appear));
+      var ey=lerp(ry,sy0+s*(eh+gap),easeIO(appear));
+      ctx.save();ctx.globalAlpha=0.35+0.65*appear;
+      ctx.fillStyle=cssv('--bg-2');ctx.fillRect(ex2,ey,ew,eh);
+      ctx.strokeStyle=col;ctx.lineWidth=1.4;ctx.strokeRect(ex2,ey,ew,eh);
+      epochWave(ex2+5,ey+2,ew-40,eh-4,col,s+1,now);
+      ctx.font="8px 'JetBrains Mono',monospace";ctx.fillStyle=col;ctx.textAlign='right';
+      ctx.fillText(ev2.h,ex2+ew-6,ey+eh/2+3);
+      ctx.restore();
+    }
+    label(LANG==='cn'?'对齐叠成一摞':'aligned & stacked',sx,sy0-16,fgdim,11,'left');
+    // count badge
+    ctx.save();ctx.globalAlpha=clamp01((fp-0.4)*2);
+    label('… × 288',sx+ew+20,sy0+(stackN/2)*(eh+gap),accent,14,'left');
+    ctx.restore();
+  }
+
+  // ---------- F5: 3D array + gold takeaway ----------
+  if(stage===4){
+    var ap=fp;
+    var cx=W*0.34, cy=H*0.46, cube=Math.min(W,H)*0.20;
+    var dx=cube*0.42, dy=cube*0.30; // iso offsets
+    // back-to-front faces
+    ctx.save();ctx.globalAlpha=clamp01(ap*1.3);
+    // top face (epochs dimension)
+    ctx.fillStyle=core;ctx.globalAlpha=0.32*clamp01(ap*1.3);
+    ctx.beginPath();ctx.moveTo(cx,cy);ctx.lineTo(cx+cube,cy);ctx.lineTo(cx+cube+dx,cy-dy);ctx.lineTo(cx+dx,cy-dy);ctx.closePath();ctx.fill();
+    // front face (channels x time)
+    ctx.globalAlpha=0.55*clamp01(ap*1.3);ctx.fillStyle=cssv('--bg-2');
+    ctx.fillRect(cx,cy,cube,cube);
+    // side face (time)
+    ctx.fillStyle=cssv('--depth');ctx.globalAlpha=0.5*clamp01(ap*1.3);
+    ctx.beginPath();ctx.moveTo(cx+cube,cy);ctx.lineTo(cx+cube+dx,cy-dy);ctx.lineTo(cx+cube+dx,cy+cube-dy);ctx.lineTo(cx+cube,cy+cube);ctx.closePath();ctx.fill();
+    ctx.globalAlpha=clamp01(ap*1.3);
+    // edges
+    ctx.strokeStyle=signal;ctx.lineWidth=1.6;
+    ctx.strokeRect(cx,cy,cube,cube);
+    ctx.beginPath();ctx.moveTo(cx,cy);ctx.lineTo(cx+dx,cy-dy);
+    ctx.moveTo(cx+cube,cy);ctx.lineTo(cx+cube+dx,cy-dy);
+    ctx.moveTo(cx+cube,cy+cube);ctx.lineTo(cx+cube+dx,cy+cube-dy);
+    ctx.moveTo(cx+cube+dx,cy-dy);ctx.lineTo(cx+cube+dx,cy+cube-dy);
+    ctx.lineTo(cx+dx,cy+cube-dy);ctx.moveTo(cx+cube+dx,cy-dy);ctx.lineTo(cx+dx,cy-dy);ctx.stroke();
+    // dimension labels
+    label('288 epochs',cx+dx/2-4,cy-dy/2-6,signal,11,'right');
+    label('22 ch',cx-8,cy+cube/2,query,11,'right');
+    label('1125 t',cx+cube/2,cy+cube+18,flash,11,'center');
+    label('[ 288, 22, 1125 ]',cx+cube/2,cy+cube+38,accent,13,'center');
+    ctx.restore();
+
+    // gold key-moment takeaway
+    if(ap>0.45){
+      ctx.save();ctx.globalAlpha=clamp01((ap-0.45)/0.4);
+      var tx=W*0.68, tyc=H*0.46;
+      ctx.fillStyle=cssv('--bg-1');ctx.strokeStyle=gold;ctx.lineWidth=2;
+      var bw2=W*0.26,bh2=92;
+      ctx.fillRect(tx-bw2/2,tyc-bh2/2,bw2,bh2);ctx.strokeRect(tx-bw2/2,tyc-bh2/2,bw2,bh2);
+      ctx.shadowColor=gold;ctx.shadowBlur=14;
+      ctx.fillStyle=gold;ctx.font='700 14px "Noto Sans SC",sans-serif';
+      ctx.textAlign='center';ctx.textBaseline='middle';
+      var key=LANG==='cn'?['把连续录音','切成一片片','可比较的试验']:['Cut a recording','into comparable','trials (epochs)'];
+      for(var ki=0;ki<key.length;ki++)ctx.fillText(key[ki],tx,tyc-18+ki*20);
+      ctx.restore();
+    }
+  }
+
+  // update dynamic HUD numbers
+  updateHUDnums(stage,fp);
+
+  requestAnimationFrame(draw);
+}
+
+function updateHUDtext(stage){
+  document.getElementById('hv1').textContent=t('st')[stage];
+}
+function updateHUDnums(stage,fp){
+  var ev = stage<1?0 : (stage===1?Math.ceil(fp*EVENTS.length):EVENTS.length);
+  var epo = stage<2?0 : (stage===2?1 : (stage===3?Math.ceil(fp*EVENTS.length):288));
+  document.getElementById('hv2').textContent= stage>=2? '288' : String(ev);
+  document.getElementById('hv3').textContent= stage>=4? '288' : String(epo);
+}
+function updateCaption(stage){
+  var caps=I18N.caps[LANG]||I18N.caps.en;
+  document.getElementById('capZh').textContent=caps[stage]||'';
+  document.getElementById('capEn').textContent=I18N.caps.en[stage]||'';
+  document.getElementById('frameTag').textContent='F'+(stage+1)+' / 5';
+}
+
+function refreshI18N(){
+  document.getElementById('ttlZh').textContent=t('ttlZh');
+  document.getElementById('ttlEn').textContent=t('ttlEn');
+  document.getElementById('g1').textContent=t('g1');
+  document.getElementById('g2').textContent=t('g2');
+  document.getElementById('g3').textContent=t('g3');
+  document.getElementById('hk1').textContent=t('hk1');
+  document.getElementById('hk2').textContent=t('hk2');
+  document.getElementById('hk3').textContent=t('hk3');
+  document.getElementById('hk4').textContent=t('hk4');
+  document.getElementById('mascotWrap').innerHTML=mascotSVG();
+  updateHUDtext(lastStage<0?0:lastStage);
+  updateCaption(lastStage<0?0:lastStage);
+}
+
+document.getElementById('langBtn').addEventListener('click',function(){
+  LANG=LANG==='cn'?'en':'cn';refreshI18N();
+});
+
+document.getElementById('mascotWrap').innerHTML=mascotSVG();
+refreshI18N();
+resize();
+requestAnimationFrame(draw);
+})();
+</script>
+</body>
+</html>

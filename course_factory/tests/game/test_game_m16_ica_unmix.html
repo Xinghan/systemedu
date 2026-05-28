@@ -1,0 +1,572 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"/>
+<title>ICA Unmix Lab</title>
+<style>
+:root{
+  --bg-0: oklch(0.14 0.035 265);
+  --bg-1: oklch(0.18 0.04 265);
+  --bg-2: oklch(0.22 0.045 265);
+  --bg-3: oklch(0.28 0.05 265);
+  --line: oklch(0.35 0.05 265 / 0.35);
+  --line-strong: oklch(0.55 0.08 265 / 0.55);
+  --fg: oklch(0.96 0.01 265);
+  --fg-dim: oklch(0.75 0.02 265);
+  --fg-mute: oklch(0.55 0.03 265);
+  --gold: oklch(0.85 0.14 85);
+  --cs: oklch(0.75 0.17 200);
+  /* cs 5 色 palette */
+  --signal: oklch(0.75 0.17 200);
+  --core:   oklch(0.55 0.16 200);
+  --depth:  oklch(0.35 0.10 210);
+  --flash:  oklch(0.92 0.08 190);
+  --query:  oklch(0.85 0.14 85);
+  /* 三源颜色 (eeg=signal-cyan, blink=query-gold, heart=rose-warm) */
+  --src-eeg: oklch(0.75 0.17 200);
+  --src-blink: oklch(0.85 0.14 85);
+  --src-heart: oklch(0.72 0.16 25);
+  --mono:'JetBrains Mono','SF Mono','Fira Code',Consolas,monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+html,body{width:100%;height:100vh;overflow:hidden;background:var(--bg-0);color:var(--fg);
+  font-family:'Noto Sans SC','Inter',sans-serif;}
+.wrapper{display:flex;height:100vh;}
+
+/* ---- 200px 左侧栏 ---- */
+.game-sidebar{width:200px;flex:0 0 200px;display:flex;flex-direction:column;
+  background:var(--bg-1);border-right:1px solid var(--line);padding:12px 12px 10px;
+  overflow-y:auto;gap:10px;}
+.brand{font-family:var(--mono);font-size:12px;font-weight:700;color:var(--cs);
+  letter-spacing:1px;text-transform:uppercase;line-height:1.3;}
+.brand .sub{display:block;font-size:9px;color:var(--fg-mute);letter-spacing:0.5px;margin-top:2px;}
+.mascot-wrap{display:flex;justify-content:center;}
+.mascot-cap{font-family:var(--mono);font-size:9px;color:var(--fg-mute);text-align:center;
+  letter-spacing:0.5px;margin-top:2px;}
+
+.out-tabs{display:flex;gap:4px;}
+.out-tab{flex:1;font-family:var(--mono);font-size:10px;padding:5px 0;cursor:pointer;
+  text-align:center;border:1px solid var(--line);background:var(--bg-2);color:var(--fg-dim);
+  letter-spacing:0.5px;}
+.out-tab.active{background:var(--cs);color:var(--bg-0);border-color:var(--cs);font-weight:700;}
+
+.slider-title{font-family:var(--mono);font-size:10px;color:var(--cs);letter-spacing:1px;
+  text-transform:uppercase;}
+.slider-group{}
+.slider-label{display:flex;justify-content:space-between;font-size:10px;color:var(--fg-dim);
+  margin-bottom:3px;font-family:var(--mono);letter-spacing:0.5px;}
+.slider-label .val{color:var(--flash);font-weight:700;}
+input[type=range]{width:100%;height:4px;-webkit-appearance:none;appearance:none;
+  background:var(--bg-3);outline:none;cursor:pointer;border-radius:2px;}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:13px;height:13px;
+  background:var(--cs);border:2px solid var(--bg-0);cursor:pointer;border-radius:0;}
+input[type=range]::-moz-range-thumb{width:13px;height:13px;background:var(--cs);
+  border:2px solid var(--bg-0);cursor:pointer;border-radius:0;}
+
+.purity-block{border-top:1px solid var(--line);padding-top:8px;}
+.purity-row{margin-bottom:6px;}
+.purity-head{display:flex;justify-content:space-between;font-family:var(--mono);font-size:9px;
+  color:var(--fg-dim);letter-spacing:0.5px;margin-bottom:2px;}
+.purity-head .pct{font-weight:700;}
+.purity-bar{height:6px;background:var(--bg-3);position:relative;overflow:hidden;}
+.purity-fill{position:absolute;left:0;top:0;height:100%;width:0%;transition:width 0.12s linear;}
+
+.guide{border-top:1px solid var(--line);padding-top:8px;font-size:10px;color:var(--fg-dim);
+  line-height:1.5;}
+.guide b{color:var(--flash);font-weight:600;}
+
+.lang-btn{margin-top:auto;font-family:var(--mono);font-size:11px;font-weight:700;
+  padding:5px 0;cursor:pointer;border:1px solid var(--line-strong);background:var(--bg-2);
+  color:var(--cs);letter-spacing:1px;}
+
+/* ---- 右侧主舞台 ---- */
+.game-main{flex:1;min-width:0;display:flex;flex-direction:column;position:relative;}
+.hud{display:flex;justify-content:flex-end;gap:18px;padding:8px 16px;background:var(--bg-1);
+  border-bottom:1px solid var(--line);}
+.hud .item{display:flex;flex-direction:column;align-items:flex-end;}
+.hud .label{font-family:var(--mono);font-size:8px;color:var(--fg-mute);letter-spacing:0.8px;
+  text-transform:uppercase;}
+.hud .value{font-family:var(--mono);font-size:14px;color:var(--flash);font-weight:700;margin-top:1px;}
+.stage{flex:1;min-height:0;display:flex;flex-direction:column;}
+.canvas-wrap{flex:1;min-height:0;position:relative;display:flex;flex-direction:column;}
+canvas{display:block;width:100%;height:100%;}
+
+.victory{position:absolute;inset:0;background:oklch(0.10 0.03 265 / 0.82);display:none;
+  align-items:center;justify-content:center;z-index:50;}
+.victory.show{display:flex;}
+.victory-box{background:var(--bg-2);border:1px solid var(--cs);padding:26px 34px;max-width:430px;
+  text-align:center;box-shadow:5px 5px 0 var(--bg-0);}
+.victory-title{font-family:var(--mono);font-size:17px;color:var(--gold);font-weight:700;
+  letter-spacing:2px;text-transform:uppercase;margin-bottom:10px;}
+.victory-text{font-size:13px;color:var(--fg-dim);line-height:1.65;margin-bottom:16px;}
+.victory-btn{font-family:var(--mono);font-size:12px;font-weight:700;cursor:pointer;
+  padding:7px 22px;border:1px solid var(--cs);background:var(--bg-1);color:var(--cs);
+  letter-spacing:1px;text-transform:uppercase;}
+.victory-btn:hover{background:var(--cs);color:var(--bg-0);}
+</style>
+</head>
+<body>
+<div class="wrapper">
+  <aside class="game-sidebar">
+    <div class="brand" id="brandTitle">ICA UNMIX LAB<span class="sub" id="brandSub">P-EEG · M16 · BSS</span></div>
+    <div class="mascot-wrap">
+      <svg width="74" height="74" viewBox="0 0 74 74" aria-hidden="true">
+        <!-- Bit: levitating cubic sprite -->
+        <g transform="translate(37,37)">
+          <polygon points="0,-22 19,-11 19,11 0,22 -19,11 -19,-11" fill="var(--depth)" stroke="var(--cs)" stroke-width="1.5"/>
+          <polygon points="0,-22 19,-11 0,0 -19,-11" fill="var(--core)"/>
+          <polygon points="19,-11 19,11 0,22 0,0" fill="var(--cs)"/>
+          <polygon points="-19,-11 0,0 0,22 -19,11" fill="var(--signal)" opacity="0.55"/>
+          <rect x="-7" y="-9" width="5" height="5" fill="var(--flash)"/>
+          <rect x="3" y="-9" width="5" height="5" fill="var(--flash)"/>
+          <rect x="-5" y="2" width="10" height="3" fill="var(--query)"/>
+        </g>
+      </svg>
+    </div>
+    <div class="mascot-cap" id="mascotCap">Bit · 盲源分离师</div>
+
+    <div class="slider-title" id="tabTitle">OUTPUT 通道</div>
+    <div class="out-tabs">
+      <div class="out-tab active" id="tab0" data-ch="0">OUT A</div>
+      <div class="out-tab" id="tab1" data-ch="1">OUT B</div>
+      <div class="out-tab" id="tab2" data-ch="2">OUT C</div>
+    </div>
+
+    <div class="slider-title" id="weightTitle">解混权重 W</div>
+    <div class="slider-group">
+      <div class="slider-label"><span id="lblS1">SENSOR 1</span><span class="val" id="valW0">0.00</span></div>
+      <input type="range" id="wSlider0" min="-200" max="200" value="100">
+    </div>
+    <div class="slider-group">
+      <div class="slider-label"><span id="lblS2">SENSOR 2</span><span class="val" id="valW1">0.00</span></div>
+      <input type="range" id="wSlider1" min="-200" max="200" value="0">
+    </div>
+    <div class="slider-group">
+      <div class="slider-label"><span id="lblS3">SENSOR 3</span><span class="val" id="valW2">0.00</span></div>
+      <input type="range" id="wSlider2" min="-200" max="200" value="0">
+    </div>
+
+    <div class="purity-block">
+      <div class="slider-title" id="purityTitle">纯净度</div>
+      <div class="purity-row">
+        <div class="purity-head"><span id="purLblA">OUT A</span><span class="pct" id="purPctA">0%</span></div>
+        <div class="purity-bar"><div class="purity-fill" id="purFillA" style="background:var(--src-eeg)"></div></div>
+      </div>
+      <div class="purity-row">
+        <div class="purity-head"><span id="purLblB">OUT B</span><span class="pct" id="purPctB">0%</span></div>
+        <div class="purity-bar"><div class="purity-fill" id="purFillB" style="background:var(--src-blink)"></div></div>
+      </div>
+      <div class="purity-row">
+        <div class="purity-head"><span id="purLblC">OUT C</span><span class="pct" id="purPctC">0%</span></div>
+        <div class="purity-bar"><div class="purity-fill" id="purFillC" style="background:var(--src-heart)"></div></div>
+      </div>
+    </div>
+
+    <div class="guide" id="guideBox"></div>
+    <button class="lang-btn" id="langBtn">EN</button>
+  </aside>
+
+  <main class="game-main">
+    <div class="hud">
+      <div class="item"><div class="label" id="hudL1">ACTIVE OUT</div><div class="value" id="hudV1">A</div></div>
+      <div class="item"><div class="label" id="hudL2">PURITY</div><div class="value" id="hudV2">0%</div></div>
+      <div class="item"><div class="label" id="hudL3">SOLVED</div><div class="value" id="hudV3">0 / 3</div></div>
+    </div>
+    <div class="stage">
+      <div class="canvas-wrap"><canvas id="c"></canvas></div>
+    </div>
+    <div class="victory" id="victory">
+      <div class="victory-box">
+        <div class="victory-title" id="vicTitle">盲源分离师</div>
+        <div class="victory-text" id="vicText"></div>
+        <button class="victory-btn" id="vicBtn">CLOSE</button>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script>
+(function(){
+"use strict";
+var LANG='cn';
+
+var I18N={
+  brandTitle:{cn:'ICA 拆混合',en:'ICA UNMIX LAB'},
+  brandSub:{cn:'P-EEG · M16 · 盲源分离',en:'P-EEG · M16 · BSS'},
+  mascotCap:{cn:'Bit · 盲源分离师',en:'Bit · The Unmixer'},
+  tabTitle:{cn:'输出通道',en:'OUTPUT CHANNEL'},
+  weightTitle:{cn:'解混权重 W',en:'UNMIX WEIGHTS W'},
+  lblS1:{cn:'传感器 1',en:'SENSOR 1'},
+  lblS2:{cn:'传感器 2',en:'SENSOR 2'},
+  lblS3:{cn:'传感器 3',en:'SENSOR 3'},
+  purityTitle:{cn:'分离纯净度',en:'SEPARATION PURITY'},
+  hudL1:{cn:'当前输出',en:'ACTIVE OUT'},
+  hudL2:{cn:'纯净度',en:'PURITY'},
+  hudL3:{cn:'已分离',en:'SOLVED'},
+  srcEeg:{cn:'脑波节律',en:'EEG RHYTHM'},
+  srcBlink:{cn:'眨眼尖峰',en:'BLINK SPIKE'},
+  srcHeart:{cn:'心跳脉冲',en:'HEART PULSE'},
+  mixHead:{cn:'三路传感器记录的混合信号（每路都混了三个源）',en:'3 sensor mixtures (each blends all 3 sources)'},
+  outHead:{cn:'当前输出通道分离结果',en:'Separated output channel'},
+  matched:{cn:'已锁定纯净源',en:'PURE SOURCE LOCKED'},
+  dirty:{cn:'仍是混合',en:'STILL MIXED'},
+  guide:{
+    cn:'<b>目标</b>：三路传感器都混了脑波/眨眼/心跳。为每个输出 A/B/C 拨权重，把它调成<b>只剩一个</b>纯净源。<br>1. 选一个 OUT 通道<br>2. 拨三个权重（W·传感器）<br>3. 看波形与纯净度<br>4. 三路都 ≥ 90% 即解锁。',
+    en:'<b>Goal</b>: every sensor mixes EEG/blink/heart. For each output A/B/C, tune weights so it keeps <b>only one</b> pure source.<br>1. Pick an OUT channel<br>2. Drag the 3 weights (W·sensor)<br>3. Watch waveform + purity<br>4. Reach 90% on all three.'
+  },
+  vicTitle:{cn:'盲源分离师',en:'THE UNMIXER'},
+  vicText:{
+    cn:'三路混合被你解开了。这正是 ICA 在做的事：从混在一起的传感器记录里，反推出原本相互独立的脑波、眨眼和心跳。你找到的权重组合，就是解混矩阵的一行。',
+    en:'You unmixed all three channels. This is exactly what ICA does: recover the independent EEG, blink and heart sources from blended sensor recordings. Each weight row you found is a row of the unmixing matrix.'
+  },
+  vicBtn:{cn:'关闭',en:'CLOSE'}
+};
+function t(k){return (I18N[k]&&I18N[k][LANG])||(I18N[k]&&I18N[k].en)||k;}
+
+// ---- 三个独立源 (随时间生成) ----
+// eeg: 10Hz alpha 节律; blink: 周期性大尖峰; heart: 窄脉冲 (QRS-like)
+function srcEeg(tt){ return Math.sin(tt*10.0)*0.7 + Math.sin(tt*21.0)*0.18; }
+function srcBlink(tt){
+  var p = tt % 2.4;
+  // 大而平滑的钟形尖峰
+  var d = p - 0.5;
+  return Math.exp(-(d*d)/0.006) * 1.0 - 0.05;
+}
+function srcHeart(tt){
+  var p = tt % 0.85;
+  var d = p - 0.2;
+  var qrs = Math.exp(-(d*d)/0.0006) * 1.0;
+  var d2 = p - 0.27;
+  qrs -= Math.exp(-(d2*d2)/0.0009) * 0.35;
+  return qrs - 0.04;
+}
+var SRC=[srcEeg,srcBlink,srcHeart];
+var SRC_COLORS=['var(--src-eeg)','var(--src-blink)','var(--src-heart)'];
+// 解析为实际 rgb 备用 (canvas 用)
+var SRC_HEX=['#3fb6d6','#e3c766','#e0795f'];
+
+// 混合矩阵 M: sensor[i] = sum_j M[i][j]*src[j]  (行=传感器, 列=源)
+// 设计成可逆、系数错落, 让逆矩阵每行系数不同 (玩家需真调)
+var M=[
+  [0.80, 0.55, 0.30],
+  [0.40, 0.85, 0.65],
+  [0.65, 0.35, 0.90]
+];
+
+// 解混权重: 每个 output 通道一组 3 权重 (slider 值 /100)
+var W=[
+  [1.0, 0.0, 0.0],
+  [1.0, 0.0, 0.0],
+  [1.0, 0.0, 0.0]
+];
+var activeCh=0;
+var purity=[0,0,0];      // 0..1
+var dominant=[-1,-1,-1]; // 该 output 主导的源 index
+var solved=[false,false,false];
+var allDone=false;
+
+// 采样窗
+var NSAMP=260;
+var TSPAN=3.0; // 秒
+function sampleSources(){
+  var s=[];
+  for(var n=0;n<NSAMP;n++){
+    var tt=n/NSAMP*TSPAN;
+    s.push([SRC[0](tt),SRC[1](tt),SRC[2](tt)]);
+  }
+  return s;
+}
+var SRC_SAMPLES=sampleSources();
+
+function sensorSamples(){
+  // 返回 [n][3sensor]
+  var out=[];
+  for(var n=0;n<NSAMP;n++){
+    var sr=SRC_SAMPLES[n];
+    var row=[];
+    for(var i=0;i<3;i++){
+      row.push(M[i][0]*sr[0]+M[i][1]*sr[1]+M[i][2]*sr[2]);
+    }
+    out.push(row);
+  }
+  return out;
+}
+var SENSOR_SAMPLES=sensorSamples();
+
+// 给定一组权重 -> output 波形 (NSAMP) + 它对每个源的有效系数
+function applyWeights(w){
+  // output[n] = sum_i w[i]*sensor[i][n]
+  //           = sum_i w[i] * (sum_j M[i][j] src_j)
+  //           = sum_j ( sum_i w[i]*M[i][j] ) src_j
+  var srcCoef=[0,0,0];
+  for(var j=0;j<3;j++){
+    var s=0;
+    for(var i=0;i<3;i++) s+=w[i]*M[i][j];
+    srcCoef[j]=s;
+  }
+  var wave=[];
+  for(var n=0;n<NSAMP;n++){
+    var sr=SRC_SAMPLES[n];
+    wave.push(srcCoef[0]*sr[0]+srcCoef[1]*sr[1]+srcCoef[2]*sr[2]);
+  }
+  return {wave:wave,srcCoef:srcCoef};
+}
+
+// 纯净度: output 能量集中在单一源的比例 (用源系数平方分布)
+function computePurity(srcCoef){
+  // 每个源贡献能量 正比于 coef^2 * srcVar  (各源已大致归一, 视方差近似相等)
+  var e=[srcCoef[0]*srcCoef[0],srcCoef[1]*srcCoef[1],srcCoef[2]*srcCoef[2]];
+  var tot=e[0]+e[1]+e[2];
+  if(tot<1e-9) return {purity:0,dom:-1};
+  var dom=0; if(e[1]>e[dom])dom=1; if(e[2]>e[dom])dom=2;
+  return {purity:e[dom]/tot, dom:dom};
+}
+
+function recompute(){
+  for(var ch=0;ch<3;ch++){
+    var r=applyWeights(W[ch]);
+    var p=computePurity(r.srcCoef);
+    purity[ch]=p.purity;
+    dominant[ch]=p.dom;
+  }
+  // solved 条件: 每路纯净度 >= 0.90, 且三路主导源互不相同 (真正三源各归一路)
+  var distinct = (dominant[0]!==dominant[1] && dominant[1]!==dominant[2] && dominant[0]!==dominant[2]);
+  for(var c2=0;c2<3;c2++){
+    solved[c2] = (purity[c2]>=0.90) && distinct && dominant[c2]>=0;
+  }
+  if(solved[0]&&solved[1]&&solved[2]&&!allDone){
+    allDone=true;
+    setTimeout(function(){document.getElementById('victory').classList.add('show');},350);
+  }
+  updateUI();
+  draw();
+}
+
+// ===================== Canvas =====================
+var canvas=document.getElementById('c');
+var ctx=canvas.getContext('2d');
+var DPR=Math.min(window.devicePixelRatio||1,2);
+var W_=0,H_=0;
+
+function resize(){
+  var wrap=canvas.parentElement;
+  var rect=wrap.getBoundingClientRect();
+  if(rect.width<2||rect.height<2) return;
+  W_=rect.width; H_=rect.height;
+  canvas.width=W_*DPR; canvas.height=H_*DPR;
+  canvas.style.width=W_+'px'; canvas.style.height=H_+'px';
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  draw();
+}
+
+function cssVar(v){return getComputedStyle(document.documentElement).getPropertyValue(v).trim();}
+
+function drawWave(samples, x0, y0, w, h, color, lineW, normRef){
+  var maxA=normRef||0;
+  if(!maxA){ for(var k=0;k<samples.length;k++){var a=Math.abs(samples[k]); if(a>maxA)maxA=a;} }
+  if(maxA<1e-6) maxA=1;
+  ctx.beginPath();
+  for(var n=0;n<samples.length;n++){
+    var x=x0 + n/(samples.length-1)*w;
+    var y=y0 + h/2 - (samples[n]/maxA)*(h/2)*0.86;
+    if(n===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+  }
+  ctx.strokeStyle=color; ctx.lineWidth=lineW; ctx.lineJoin='round';
+  ctx.stroke();
+}
+
+function draw(){
+  if(W_<2||H_<2) return;
+  ctx.fillStyle=cssVar('--bg-0')||'#0e1220';
+  ctx.fillRect(0,0,W_,H_);
+
+  var padL=58, padR=18, padT=26, padB=14;
+  var plotW=W_-padL-padR;
+  var midGap=22;
+  var topRegionH=(H_-padT-padB-midGap)*0.56;   // 上: 3 路混合
+  var botRegionH=(H_-padT-padB-midGap)*0.44;    // 下: 输出结果
+  var topY=padT;
+  var botY=padT+topRegionH+midGap;
+
+  // 区标题
+  ctx.fillStyle=cssVar('--fg-dim');
+  ctx.font='11px "Noto Sans SC",sans-serif';
+  ctx.textAlign='left'; ctx.textBaseline='alphabetic';
+  ctx.fillText(t('mixHead'), padL, topY-9);
+  ctx.fillText(t('outHead'), padL, botY-9);
+
+  // ---- 上区: 3 路混合传感器波形 (堆叠) ----
+  var laneH=topRegionH/3;
+  var sensorLabels=['S1','S2','S3'];
+  for(var i=0;i<3;i++){
+    var ly=topY+i*laneH;
+    // 背景轨
+    ctx.fillStyle=cssVar('--bg-1');
+    ctx.fillRect(padL,ly+2,plotW,laneH-4);
+    ctx.strokeStyle=cssVar('--line');
+    ctx.lineWidth=1;
+    ctx.strokeRect(padL,ly+2,plotW,laneH-4);
+    // 中线
+    ctx.strokeStyle=cssVar('--line');
+    ctx.beginPath(); ctx.moveTo(padL,ly+laneH/2); ctx.lineTo(padL+plotW,ly+laneH/2); ctx.stroke();
+    // 波形
+    var col=[];
+    for(var n=0;n<NSAMP;n++) col.push(SENSOR_SAMPLES[n][i]);
+    drawWave(col, padL, ly+2, plotW, laneH-4, cssVar('--fg-dim'), 1.4, 2.6);
+    // 标签
+    ctx.fillStyle=cssVar('--cs');
+    ctx.font='bold 11px "JetBrains Mono",monospace';
+    ctx.textAlign='right'; ctx.textBaseline='middle';
+    ctx.fillText(sensorLabels[i], padL-10, ly+laneH/2);
+  }
+
+  // ---- 下区: 当前 output 分离波形 ----
+  var r=applyWeights(W[activeCh]);
+  ctx.fillStyle=cssVar('--bg-1');
+  ctx.fillRect(padL,botY+2,plotW,botRegionH-4);
+  var dom=dominant[activeCh];
+  var pcol = (dom>=0)? SRC_HEX[dom] : cssVar('--fg-mute');
+  // 锁定时高亮边框
+  if(solved[activeCh]){
+    ctx.strokeStyle=cssVar('--gold'); ctx.lineWidth=2;
+  } else {
+    ctx.strokeStyle=cssVar('--line'); ctx.lineWidth=1;
+  }
+  ctx.strokeRect(padL,botY+2,plotW,botRegionH-4);
+  // 中线
+  ctx.strokeStyle=cssVar('--line');
+  ctx.beginPath(); ctx.moveTo(padL,botY+botRegionH/2); ctx.lineTo(padL+plotW,botY+botRegionH/2); ctx.stroke();
+  // 目标源参考虚线 (主导源的纯波形, 同 normRef 缩放)
+  if(dom>=0){
+    var pure=[];
+    for(var n2=0;n2<NSAMP;n2++) pure.push(SRC_SAMPLES[n2][dom]);
+    ctx.save();
+    ctx.setLineDash([4,4]);
+    ctx.globalAlpha=0.45;
+    drawWave(pure, padL, botY+2, plotW, botRegionH-4, cssVar('--fg-mute'), 1, 1.05);
+    ctx.restore();
+  }
+  // 实际输出波形
+  drawWave(r.wave, padL, botY+2, plotW, botRegionH-4, pcol, 2.2, null);
+  // 输出标签
+  ctx.fillStyle=cssVar('--flash');
+  ctx.font='bold 12px "JetBrains Mono",monospace';
+  ctx.textAlign='right'; ctx.textBaseline='middle';
+  ctx.fillText('OUT '+['A','B','C'][activeCh], padL-10, botY+botRegionH/2);
+
+  // 状态徽
+  var srcKey=['srcEeg','srcBlink','srcHeart'];
+  var statusTxt, statusCol;
+  if(solved[activeCh]){
+    statusTxt=t('matched')+' — '+t(srcKey[dom]);
+    statusCol=cssVar('--gold');
+  } else {
+    statusTxt=t('dirty')+(dom>=0?(' ('+Math.round(purity[activeCh]*100)+'%)'):'');
+    statusCol=cssVar('--fg-mute');
+  }
+  ctx.fillStyle=statusCol;
+  ctx.font='11px "JetBrains Mono",monospace';
+  ctx.textAlign='right'; ctx.textBaseline='alphabetic';
+  ctx.fillText(statusTxt, padL+plotW, botY+botRegionH+2);
+}
+
+// ===================== UI =====================
+function setPurityBar(id,val,solvedFlag){
+  var f=document.getElementById(id);
+  f.style.width=Math.round(val*100)+'%';
+  f.style.opacity = solvedFlag?'1':'0.78';
+}
+function updateUI(){
+  for(var i=0;i<3;i++){
+    document.getElementById('valW'+i).textContent=(W[activeCh][i]).toFixed(2);
+  }
+  setPurityBar('purFillA',purity[0],solved[0]);
+  setPurityBar('purFillB',purity[1],solved[1]);
+  setPurityBar('purFillC',purity[2],solved[2]);
+  document.getElementById('purPctA').textContent=Math.round(purity[0]*100)+'%';
+  document.getElementById('purPctB').textContent=Math.round(purity[1]*100)+'%';
+  document.getElementById('purPctC').textContent=Math.round(purity[2]*100)+'%';
+  document.getElementById('purPctA').style.color=solved[0]?'var(--gold)':'var(--fg-dim)';
+  document.getElementById('purPctB').style.color=solved[1]?'var(--gold)':'var(--fg-dim)';
+  document.getElementById('purPctC').style.color=solved[2]?'var(--gold)':'var(--fg-dim)';
+  document.getElementById('hudV1').textContent=['A','B','C'][activeCh];
+  document.getElementById('hudV2').textContent=Math.round(purity[activeCh]*100)+'%';
+  var cnt=(solved[0]?1:0)+(solved[1]?1:0)+(solved[2]?1:0);
+  document.getElementById('hudV3').textContent=cnt+' / 3';
+}
+
+function syncSlidersToActive(){
+  for(var i=0;i<3;i++){
+    var sl=document.getElementById('wSlider'+i);
+    sl.value=Math.round(W[activeCh][i]*100);
+    document.getElementById('valW'+i).textContent=W[activeCh][i].toFixed(2);
+  }
+}
+
+function refreshI18N(){
+  document.getElementById('brandTitle').childNodes[0].nodeValue=t('brandTitle');
+  document.getElementById('brandSub').textContent=t('brandSub');
+  document.getElementById('mascotCap').textContent=t('mascotCap');
+  document.getElementById('tabTitle').textContent=t('tabTitle');
+  document.getElementById('weightTitle').textContent=t('weightTitle');
+  document.getElementById('lblS1').textContent=t('lblS1');
+  document.getElementById('lblS2').textContent=t('lblS2');
+  document.getElementById('lblS3').textContent=t('lblS3');
+  document.getElementById('purityTitle').textContent=t('purityTitle');
+  document.getElementById('hudL1').textContent=t('hudL1');
+  document.getElementById('hudL2').textContent=t('hudL2');
+  document.getElementById('hudL3').textContent=t('hudL3');
+  document.getElementById('guideBox').innerHTML=t('guide');
+  document.getElementById('vicTitle').textContent=t('vicTitle');
+  document.getElementById('vicText').textContent=t('vicText');
+  document.getElementById('vicBtn').textContent=t('vicBtn');
+  draw();
+  updateUI();
+}
+
+// ===================== Events =====================
+function bindSlider(i){
+  document.getElementById('wSlider'+i).addEventListener('input',function(){
+    W[activeCh][i]=parseInt(this.value,10)/100;
+    document.getElementById('valW'+i).textContent=W[activeCh][i].toFixed(2);
+    recompute();
+  });
+}
+bindSlider(0); bindSlider(1); bindSlider(2);
+
+function bindTab(ch){
+  document.getElementById('tab'+ch).addEventListener('click',function(){
+    activeCh=ch;
+    document.getElementById('tab0').classList.toggle('active',ch===0);
+    document.getElementById('tab1').classList.toggle('active',ch===1);
+    document.getElementById('tab2').classList.toggle('active',ch===2);
+    syncSlidersToActive();
+    recompute();
+  });
+}
+bindTab(0); bindTab(1); bindTab(2);
+
+document.getElementById('langBtn').addEventListener('click',function(){
+  LANG = LANG==='cn' ? 'en' : 'cn';
+  this.textContent = LANG==='cn' ? 'EN' : 'CN';
+  refreshI18N();
+});
+
+document.getElementById('vicBtn').addEventListener('click',function(){
+  document.getElementById('victory').classList.remove('show');
+});
+
+window.addEventListener('resize',resize);
+
+// init
+syncSlidersToActive();
+recompute();
+refreshI18N();
+resize();
+setTimeout(resize,200);
+setTimeout(resize,600);
+if(document.fonts&&document.fonts.ready){document.fonts.ready.then(function(){resize();});}
+})();
+</script>
+</body>
+</html>

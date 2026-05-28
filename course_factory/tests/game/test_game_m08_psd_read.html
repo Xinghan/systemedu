@@ -1,0 +1,846 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<title>M08 · 频谱侦探 PSD 读图 — Geometry Void</title>
+<style>
+  :root{
+    /* Layer 1 — shared deep space canvas (all 26 subjects) */
+    --bg-0: oklch(0.14 0.035 265);
+    --bg-1: oklch(0.18 0.04 265);
+    --bg-2: oklch(0.22 0.045 265);
+    --bg-3: oklch(0.28 0.05 265);
+    --line: oklch(0.35 0.05 265 / 0.35);
+    --line-strong: oklch(0.55 0.08 265 / 0.55);
+    --fg:      oklch(0.96 0.01 265);
+    --fg-dim:  oklch(0.75 0.02 265);
+    --fg-mute: oklch(0.55 0.03 265);
+    --gold:    oklch(0.85 0.14 85);
+
+    /* Layer 2 — math signature accent (electric blue) */
+    --math: oklch(0.72 0.17 245);
+
+    /* Layer 3 — math 5-color palette (themes.js MTH-06 Geometry Void) */
+    --AXIS:     oklch(0.72 0.17 245);
+    --PROOF:    oklch(0.52 0.16 245);
+    --SHADOW:   oklch(0.35 0.10 245);
+    --SOLUTION: oklch(0.92 0.08 240);
+    --QED:      oklch(0.85 0.14 85);
+  }
+
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%;width:100%;font-family:'Inter','PingFang SC',sans-serif;color:var(--fg);background:var(--bg-0);overflow:hidden}
+
+  .stage{display:flex;flex-direction:row;height:100vh;width:100vw}
+
+  /* ---------- 200px sidebar ---------- */
+  .game-sidebar{
+    width:200px;flex:0 0 200px;
+    background:var(--bg-1);
+    border-right:1px solid var(--line);
+    display:flex;flex-direction:column;
+    padding:14px 12px;gap:10px;
+    overflow-y:auto;
+  }
+  .brand{
+    display:flex;flex-direction:column;gap:2px;
+    border-bottom:1px solid var(--line);padding-bottom:8px;
+  }
+  .brand .code{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--fg-mute);letter-spacing:1.2px}
+  .brand .title{font-size:13px;color:var(--fg);font-weight:600}
+  .brand .sub{font-size:10px;color:var(--fg-dim);margin-top:2px}
+
+  .mascot{
+    width:100%;height:78px;display:flex;align-items:center;justify-content:center;
+    background:var(--bg-2);border:1px solid var(--line);
+  }
+  .mascot svg{width:100%;height:100%}
+
+  .guide{
+    background:var(--bg-2);border:1px solid var(--line);
+    padding:8px;display:flex;flex-direction:column;gap:4px;
+  }
+  .guide-title{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--math);letter-spacing:1px}
+  .guide-line{font-size:10px;color:var(--fg-dim);line-height:1.4}
+
+  /* case tracker */
+  .case-block{
+    background:var(--bg-2);border:1px solid var(--line);padding:8px;
+    display:flex;flex-direction:column;gap:6px;
+  }
+  .case-title{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--fg-dim);letter-spacing:1px}
+  .case-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:4px}
+  .case-cell{
+    height:22px;display:flex;align-items:center;justify-content:center;
+    background:var(--bg-3);border:1px solid var(--line);
+    font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--fg-mute);
+    cursor:pointer;transition:all .2s;
+  }
+  .case-cell:hover{border-color:var(--math);color:var(--fg)}
+  .case-cell.active{border-color:var(--math);color:var(--fg);background:var(--bg-1);box-shadow:2px 2px 0 var(--bg-0)}
+  .case-cell.solved{background:oklch(0.85 0.14 85 / 0.22);border-color:var(--QED);color:var(--QED)}
+  .case-text{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--fg-mute)}
+
+  /* smoothing slider — secondary control, redraws PSD visibly */
+  .slider-block{
+    background:var(--bg-2);border:1px solid var(--line);padding:8px;
+    display:flex;flex-direction:column;gap:6px;
+  }
+  .slider-label{
+    display:flex;justify-content:space-between;align-items:baseline;
+    font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--fg-dim);
+  }
+  .slider-label .val{color:var(--math);font-size:12px;font-weight:600}
+  input[type=range].smooth-slider{
+    -webkit-appearance:none;appearance:none;width:100%;height:5px;
+    background:linear-gradient(90deg, var(--SHADOW) 0%, var(--PROOF) 50%, var(--AXIS) 100%);
+    border:1px solid var(--line);outline:none;cursor:pointer;
+  }
+  input[type=range].smooth-slider::-webkit-slider-thumb{
+    -webkit-appearance:none;appearance:none;
+    width:12px;height:16px;background:var(--SOLUTION);
+    border:2px solid var(--bg-0);box-shadow:2px 2px 0 var(--bg-0);
+    cursor:grab;
+  }
+  input[type=range].smooth-slider::-moz-range-thumb{
+    width:12px;height:16px;background:var(--SOLUTION);
+    border:2px solid var(--bg-0);box-shadow:2px 2px 0 var(--bg-0);
+    cursor:grab;
+  }
+
+  .sidebar-spacer{flex:1;min-height:6px}
+
+  .lang-btn{
+    width:100%;padding:7px 8px;background:var(--bg-3);
+    color:var(--fg);border:1px solid var(--line-strong);
+    font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:1px;
+    cursor:pointer;box-shadow:3px 3px 0 var(--bg-0);
+  }
+  .lang-btn:hover{background:var(--PROOF);color:var(--SOLUTION)}
+
+  .reset-btn{
+    width:100%;padding:6px 8px;background:var(--bg-2);
+    color:var(--fg-dim);border:1px solid var(--line);
+    font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:1px;
+    cursor:pointer;
+  }
+  .reset-btn:hover{color:var(--math);border-color:var(--math)}
+
+  /* ---------- main ---------- */
+  .game-main{
+    flex:1;display:flex;flex-direction:column;
+    background:var(--bg-0);
+    min-width:0;
+  }
+  .main-header{
+    height:46px;border-bottom:1px solid var(--line);
+    display:flex;align-items:center;justify-content:space-between;
+    padding:0 18px;background:var(--bg-1);flex:0 0 46px;
+  }
+  .header-left{
+    font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--fg-dim);letter-spacing:1.4px;
+  }
+  .header-right{
+    display:flex;gap:14px;font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--fg-mute);
+  }
+  .hud-cell{display:flex;flex-direction:column;align-items:flex-end}
+  .hud-cell .label{font-size:9px;color:var(--fg-mute);letter-spacing:1px}
+  .hud-cell .val{color:var(--math);font-size:13px;font-weight:600}
+  .hud-cell .val.gold{color:var(--QED)}
+
+  .main-body{
+    flex:1;display:flex;flex-direction:column;min-height:0;
+    padding:14px 18px;gap:12px;
+  }
+
+  /* PSD plot pane */
+  .psd-pane{
+    flex:2;display:flex;flex-direction:column;min-height:0;
+    background:var(--bg-1);border:1px solid var(--line);
+  }
+  .pane-title{
+    padding:8px 14px;font-family:'JetBrains Mono',monospace;font-size:10px;
+    color:var(--math);letter-spacing:1.4px;
+    border-bottom:1px solid var(--line);background:var(--bg-2);
+    display:flex;justify-content:space-between;align-items:center;
+  }
+  .pane-title .sub{color:var(--fg-mute);font-size:9px;letter-spacing:.8px}
+  .psd-body{flex:1;position:relative;display:flex;flex-direction:column;min-height:0}
+  #psdSvg{width:100%;height:100%;display:block}
+
+  /* verdict pane — answer options */
+  .verdict-pane{
+    flex:1;display:flex;flex-direction:column;min-height:0;
+    background:var(--bg-1);border:1px solid var(--line);
+  }
+  .verdict-body{
+    flex:1;display:flex;flex-direction:column;gap:8px;
+    padding:12px 14px;min-height:0;
+  }
+  .verdict-prompt{
+    font-size:11px;color:var(--fg-dim);line-height:1.4;
+  }
+  .verdict-prompt .nv{color:var(--SOLUTION);font-family:'JetBrains Mono',monospace;font-weight:600}
+  .options-row{
+    flex:1;display:flex;flex-direction:row;gap:8px;min-height:0;align-items:stretch;
+  }
+  .option-btn{
+    flex:1;display:flex;flex-direction:column;gap:4px;
+    background:var(--bg-2);border:1px solid var(--line-strong);
+    padding:8px 8px;cursor:pointer;text-align:left;
+    box-shadow:3px 3px 0 var(--bg-0);
+    transition:transform .12s, border-color .2s, background .2s;
+    min-width:0;
+  }
+  .option-btn:hover{transform:translateY(-2px);border-color:var(--math)}
+  .option-btn .oname{
+    font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:600;color:var(--fg);letter-spacing:.4px;
+  }
+  .option-btn .oband{
+    font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--math);
+  }
+  .option-btn .odesc{font-size:9px;color:var(--fg-dim);line-height:1.3}
+  .option-btn.wrong{border-color:var(--SHADOW);animation:shake .35s}
+  .option-btn.correct{border-color:var(--QED);background:oklch(0.85 0.14 85 / 0.16)}
+  .option-btn.correct .oname{color:var(--QED)}
+  .option-btn.locked{pointer-events:none;opacity:.5}
+  @keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-4px)}75%{transform:translateX(4px)}}
+
+  /* explain strip — appears after correct */
+  .explain{
+    border:1px solid var(--QED);background:oklch(0.85 0.14 85 / 0.10);
+    padding:8px 10px;font-size:10px;color:var(--fg);line-height:1.45;
+    display:none;
+  }
+  .explain.show{display:block}
+  .explain .tag{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--QED);letter-spacing:1px;display:block;margin-bottom:3px}
+
+  /* milestone toast */
+  .milestone{
+    position:absolute;left:50%;top:60px;transform:translateX(-50%) translateY(-20px);
+    background:var(--QED);color:var(--bg-0);
+    font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:700;
+    padding:10px 22px;letter-spacing:1.5px;
+    box-shadow:4px 4px 0 var(--bg-0);
+    opacity:0;transition:all .35s;pointer-events:none;z-index:20;
+  }
+  .milestone.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+  /* Pi tetrahedron mascot spin */
+  @keyframes spin {
+    0%   { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+  }
+  #piBody { animation: spin 12s linear infinite; transform-origin: center; transform-box: fill-box; }
+</style>
+</head>
+<body>
+  <div class="stage">
+    <!-- ============ Sidebar ============ -->
+    <aside class="game-sidebar">
+      <div class="brand">
+        <span class="code">MTH-06 · M08</span>
+        <span class="title" data-i18n-cn="频谱侦探" data-i18n-en="Spectrum Detective">频谱侦探</span>
+        <span class="sub" data-i18n-cn="看 PSD 峰判脑状态" data-i18n-en="Read PSD peaks, name the state">看 PSD 峰判脑状态</span>
+      </div>
+
+      <div class="mascot" aria-label="Pi mascot">
+        <!-- Pi — rotating tetrahedron (math theme) -->
+        <svg viewBox="0 0 160 78" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <linearGradient id="piGrad" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="var(--SOLUTION)"/>
+              <stop offset="100%" stop-color="var(--AXIS)"/>
+            </linearGradient>
+          </defs>
+          <g id="piBody" transform="translate(80 39)">
+            <!-- tetrahedron edges -->
+            <polygon points="0,-22 19,11 -19,11" fill="url(#piGrad)" fill-opacity="0.28" stroke="var(--AXIS)" stroke-width="1.4"/>
+            <line x1="0" y1="-22" x2="0" y2="6" stroke="var(--PROOF)" stroke-width="1"/>
+            <line x1="-19" y1="11" x2="0" y2="6" stroke="var(--PROOF)" stroke-width="1"/>
+            <line x1="19" y1="11" x2="0" y2="6" stroke="var(--PROOF)" stroke-width="1"/>
+            <!-- vertices -->
+            <circle cx="0" cy="-22" r="2.4" fill="var(--SOLUTION)"/>
+            <circle cx="19" cy="11" r="2.4" fill="var(--SOLUTION)"/>
+            <circle cx="-19" cy="11" r="2.4" fill="var(--SOLUTION)"/>
+            <circle cx="0" cy="6" r="2" fill="var(--QED)"/>
+          </g>
+        </svg>
+      </div>
+
+      <div class="guide">
+        <div class="guide-title">HOW TO PLAY</div>
+        <div class="guide-line" data-i18n-cn="1 · 看曲线峰落在哪个频段" data-i18n-en="1 · Find which band the peak sits in">1 · 看曲线峰落在哪个频段</div>
+        <div class="guide-line" data-i18n-cn="2 · 选出对应的脑状态" data-i18n-en="2 · Pick the matching brain state">2 · 选出对应的脑状态</div>
+        <div class="guide-line" data-i18n-cn="3 · 破 5 案解锁频谱侦探" data-i18n-en="3 · Solve 5 cases to unlock">3 · 破 5 案解锁频谱侦探</div>
+      </div>
+
+      <div class="case-block">
+        <div class="case-title" data-i18n-cn="案件 · 5 张 PSD" data-i18n-en="CASES · 5 PSD">案件 · 5 张 PSD</div>
+        <div class="case-grid" id="caseGrid">
+          <div class="case-cell active" data-case="0">1</div>
+          <div class="case-cell" data-case="1">2</div>
+          <div class="case-cell" data-case="2">3</div>
+          <div class="case-cell" data-case="3">4</div>
+          <div class="case-cell" data-case="4">5</div>
+        </div>
+        <div class="case-text"><span id="solvedCount">0</span> / 5 <span data-i18n-cn="已破" data-i18n-en="solved">已破</span></div>
+      </div>
+
+      <div class="slider-block">
+        <div class="slider-label">
+          <span data-i18n-cn="频率游标 (Hz)" data-i18n-en="Freq cursor (Hz)">频率游标 (Hz)</span>
+          <span class="val"><span id="cursorReadout">10</span></span>
+        </div>
+        <input type="range" min="1" max="30" step="1" value="10" id="freqCursor" class="smooth-slider" aria-label="Frequency cursor Hz" />
+        <div class="slider-label" style="font-size:8px">
+          <span>1</span><span>8</span><span>13</span><span>30</span>
+        </div>
+      </div>
+
+      <div class="sidebar-spacer"></div>
+
+      <button id="resetBtn" class="reset-btn" type="button" data-i18n-cn="重置 RESET" data-i18n-en="RESET">重置 RESET</button>
+      <button id="langBtn" class="lang-btn" type="button">EN / 中文</button>
+    </aside>
+
+    <!-- ============ Main ============ -->
+    <main class="game-main">
+      <header class="main-header">
+        <div class="header-left" data-i18n-cn="M08 · 功率谱密度 PSD 读图" data-i18n-en="M08 · Power Spectral Density readout">M08 · 功率谱密度 PSD 读图</div>
+        <div class="header-right">
+          <div class="hud-cell">
+            <span class="label">CASE</span>
+            <span class="val"><span id="hudCase">1</span>/5</span>
+          </div>
+          <div class="hud-cell">
+            <span class="label">PEAK</span>
+            <span class="val" id="hudPeak">10 Hz</span>
+          </div>
+          <div class="hud-cell">
+            <span class="label">SOLVED</span>
+            <span class="val" id="hudSolved">0/5</span>
+          </div>
+        </div>
+      </header>
+
+      <div class="main-body">
+        <section class="psd-pane">
+          <div class="pane-title">
+            <span data-i18n-cn="功率谱 · 功率 (μV²/Hz) vs 频率 (Hz)" data-i18n-en="PSD · power (μV²/Hz) vs frequency (Hz)">功率谱 · 功率 (μV²/Hz) vs 频率 (Hz)</span>
+            <span class="sub" data-i18n-cn="背景色带 = 频段 delta/theta/alpha/beta" data-i18n-en="Bands = delta/theta/alpha/beta">背景色带 = 频段 delta/theta/alpha/beta</span>
+          </div>
+          <div class="psd-body">
+            <svg id="psdSvg" viewBox="0 0 900 360" preserveAspectRatio="xMidYMid meet"></svg>
+            <div id="milestone" class="milestone" data-i18n-cn="解锁 · 频谱侦探" data-i18n-en="Unlocked · Spectrum Detective">解锁 · 频谱侦探</div>
+          </div>
+        </section>
+
+        <section class="verdict-pane">
+          <div class="pane-title">
+            <span data-i18n-cn="结案 · 这条曲线是哪种脑状态?" data-i18n-en="Verdict · which brain state is this?">结案 · 这条曲线是哪种脑状态?</span>
+          </div>
+          <div class="verdict-body">
+            <div class="verdict-prompt" id="verdictPrompt"
+              data-i18n-cn="峰值落在 <span class='nv'>--</span> 频段附近 · 它对应什么状态?"
+              data-i18n-en="The peak sits near the <span class='nv'>--</span> band · which state?">峰值落在 <span class="nv">--</span> 频段附近 · 它对应什么状态?</div>
+            <div class="options-row" id="optionsRow"></div>
+            <div class="explain" id="explainStrip">
+              <span class="tag" data-i18n-cn="推理" data-i18n-en="REASONING">推理</span>
+              <span id="explainText"></span>
+            </div>
+          </div>
+        </section>
+      </div>
+    </main>
+  </div>
+
+<script>
+(function(){
+  'use strict';
+
+  // ----- frequency-band definitions (Hz boundaries on a 1-30 Hz axis) -----
+  // delta 1-4, theta 4-8, alpha 8-13, beta 13-30
+  var BANDS = [
+    { id:'delta', lo:1,  hi:4,  label:'delta', cn:'delta (1-4Hz)', color:'var(--SHADOW)' },
+    { id:'theta', lo:4,  hi:8,  label:'theta', cn:'theta (4-8Hz)', color:'var(--PROOF)' },
+    { id:'alpha', lo:8,  hi:13, label:'alpha', cn:'alpha (8-13Hz)', color:'var(--AXIS)' },
+    { id:'beta',  lo:13, hi:30, label:'beta',  cn:'beta (13-30Hz)', color:'var(--SOLUTION)' }
+  ];
+
+  // ----- 5 detective cases. Each = a PSD shaped by Gaussian bumps + 1/f baseline -----
+  // peakHz = where the dominant bump sits; bandId = which band; answer = correct state.
+  var CASES = [
+    {
+      id:0,
+      peakHz:10, bandId:'alpha',
+      // bumps: [centerHz, heightuV2, widthHz]
+      bumps:[[10, 9.2, 1.6]],
+      answer:'relax',
+      promptCN:'峰值落在 <span class="nv">alpha 8-13Hz</span> 频段附近 · 它对应什么状态?',
+      promptEN:'The peak sits near the <span class="nv">alpha 8-13Hz</span> band · which state?',
+      explainCN:'闭眼放松时枕区 alpha 节律 (8-13Hz) 同步增强，PSD 在 10Hz 出现尖峰 — 这是 Berger 1929 发现的 alpha 波。',
+      explainEN:'When relaxed with eyes closed, occipital alpha (8-13Hz) synchronises and the PSD spikes near 10Hz — the classic Berger alpha rhythm.'
+    },
+    {
+      id:1,
+      peakHz:22, bandId:'beta',
+      bumps:[[22, 6.4, 4.5]],
+      answer:'focus',
+      promptCN:'峰值落在 <span class="nv">beta 13-30Hz</span> 频段附近 · 它对应什么状态?',
+      promptEN:'The peak sits near the <span class="nv">beta 13-30Hz</span> band · which state?',
+      explainCN:'专注思考/心算时高频 beta (13-30Hz) 功率抬升，alpha 被抑制 (alpha 阻断)。能量摊在宽 beta 带上，没有一个窄尖峰。',
+      explainEN:'Active focus/mental arithmetic raises beta (13-30Hz) power while alpha is suppressed (alpha blocking). Energy spreads across the broad beta band.'
+    },
+    {
+      id:2,
+      peakHz:6, bandId:'theta',
+      bumps:[[6, 8.0, 1.8]],
+      answer:'drowsy',
+      promptCN:'峰值落在 <span class="nv">theta 4-8Hz</span> 频段附近 · 它对应什么状态?',
+      promptEN:'The peak sits near the <span class="nv">theta 4-8Hz</span> band · which state?',
+      explainCN:'困倦/打瞌睡进入浅睡时 theta (4-8Hz) 增强，峰从 alpha 滑向更低的 theta — 这是入睡过渡的标志。',
+      explainEN:'Drowsiness sliding into light sleep boosts theta (4-8Hz); the peak migrates from alpha down to theta — a hallmark of the sleep-onset transition.'
+    },
+    {
+      id:3,
+      peakHz:0, bandId:'flat',
+      bumps:[], // no bump — only 1/f baseline, broadband flat
+      answer:'eyesopen',
+      promptCN:'曲线 <span class="nv">没有明显尖峰</span> · 它对应什么状态?',
+      promptEN:'The curve has <span class="nv">no clear peak</span> · which state?',
+      explainCN:'睁眼时视觉皮层被激活，alpha 节律去同步化 (desynchronisation)，PSD 变平坦没有突出峰 — alpha 阻断现象。',
+      explainEN:'With eyes open the visual cortex is engaged, alpha desynchronises, and the PSD flattens with no dominant peak — alpha blocking.'
+    },
+    {
+      id:4,
+      peakHz:2, bandId:'delta',
+      bumps:[[2, 11.0, 1.0]], // huge low-freq spike — artifact
+      answer:'blink',
+      promptCN:'极低频 <span class="nv">delta 1-4Hz</span> 出现巨大爆发 · 这是什么?',
+      promptEN:'A huge burst in very-low <span class="nv">delta 1-4Hz</span> · what is this?',
+      explainCN:'眨眼会在前额电极产生大幅低频伪迹，能量集中在 <4Hz 的 delta 段，远大于真实脑电 — 这不是脑状态而是污染，要剔除。',
+      explainEN:'A blink injects a large low-frequency artifact at frontal electrodes, dumping energy below 4Hz far beyond real EEG — not a brain state but contamination to reject.'
+    }
+  ];
+
+  // answer options (shared across cases)
+  var OPTIONS = [
+    { id:'relax',    cn:'闭眼放松', en:'Eyes-closed relax', band:'alpha',  descCN:'枕区 alpha 同步', descEN:'occipital alpha sync' },
+    { id:'focus',    cn:'专注思考', en:'Focused thinking',  band:'beta',   descCN:'beta 抬升 alpha 抑制', descEN:'beta up, alpha down' },
+    { id:'drowsy',   cn:'困倦入睡', en:'Drowsy onset',      band:'theta',  descCN:'theta 增强', descEN:'theta rises' },
+    { id:'eyesopen', cn:'睁眼警觉', en:'Eyes-open alert',   band:'flat',   descCN:'谱平坦无峰', descEN:'flat, no peak' },
+    { id:'blink',    cn:'眨眼污染', en:'Blink artifact',    band:'delta',  descCN:'<4Hz 巨爆 伪迹', descEN:'<4Hz burst, artifact' }
+  ];
+
+  // ----- state (no window-shadow names) -----
+  var stateGame = {
+    lang: 'cn',
+    caseIdx: 0,
+    cursorHz: 10,
+    solved: [false,false,false,false,false],
+    milestoneFired: false
+  };
+
+  // ----- DOM refs -----
+  var svg = document.getElementById('psdSvg');
+  var freqCursor = document.getElementById('freqCursor');
+  var cursorReadout = document.getElementById('cursorReadout');
+  var hudCase = document.getElementById('hudCase');
+  var hudPeak = document.getElementById('hudPeak');
+  var hudSolved = document.getElementById('hudSolved');
+  var caseGrid = document.getElementById('caseGrid');
+  var solvedCount = document.getElementById('solvedCount');
+  var optionsRow = document.getElementById('optionsRow');
+  var verdictPrompt = document.getElementById('verdictPrompt');
+  var explainStrip = document.getElementById('explainStrip');
+  var explainText = document.getElementById('explainText');
+  var milestone = document.getElementById('milestone');
+  var langBtn = document.getElementById('langBtn');
+  var resetBtn = document.getElementById('resetBtn');
+
+  // ----- SVG geometry -----
+  var SVG_NS = 'http://www.w3.org/2000/svg';
+  var VBW = 900, VBH = 360;
+  var PAD_L = 58, PAD_R = 24, PAD_T = 30, PAD_B = 54;
+  var plotW = VBW - PAD_L - PAD_R;
+  var plotH = VBH - PAD_T - PAD_B;
+  var FMIN = 1, FMAX = 30, maxPow = 12;
+
+  function xFromHz(f){ return PAD_L + ((f - FMIN) / (FMAX - FMIN)) * plotW; }
+  function yFromPow(p){ return PAD_T + plotH - (p / maxPow) * plotH; }
+
+  function elNS(name, attrs){
+    var el = document.createElementNS(SVG_NS, name);
+    if (attrs){ for (var k in attrs){ el.setAttribute(k, attrs[k]); } }
+    return el;
+  }
+
+  // PSD model: 1/f baseline + sum of Gaussian bumps. smoothing widens bumps a touch.
+  function psdAt(f, theCase){
+    var baseline = 2.4 / Math.pow(f, 0.85); // 1/f power
+    var sumBump = 0;
+    for (var b = 0; b < theCase.bumps.length; b++){
+      var c = theCase.bumps[b][0], h = theCase.bumps[b][1], w = theCase.bumps[b][2];
+      // smoothing factor from cursor: cursor far from peak slightly broadens (purely visual demo of resolution)
+      var wEff = w * (1 + Math.abs(stateGame.cursorHz - c) * 0.012);
+      sumBump += h * Math.exp(-((f - c) * (f - c)) / (2 * wEff * wEff));
+    }
+    return baseline + sumBump;
+  }
+
+  function buildPSD(){
+    while (svg.firstChild) svg.removeChild(svg.firstChild);
+    var theCase = CASES[stateGame.caseIdx];
+
+    // band background color strips
+    for (var bi = 0; bi < BANDS.length; bi++){
+      var bd = BANDS[bi];
+      var xa = xFromHz(bd.lo), xb = xFromHz(Math.min(bd.hi, FMAX));
+      svg.appendChild(elNS('rect', {
+        x:xa, y:PAD_T, width:(xb - xa), height:plotH,
+        fill:bd.color, 'fill-opacity':0.08
+      }));
+      // band label at top of strip
+      var bl = elNS('text', {
+        x:(xa + xb) / 2, y:PAD_T + 13,
+        'text-anchor':'middle',
+        'font-family':'JetBrains Mono, monospace', 'font-size':10,
+        fill:bd.color, 'font-weight':600, opacity:0.9
+      });
+      bl.textContent = bd.label;
+      svg.appendChild(bl);
+      // band separator line
+      if (bi > 0){
+        svg.appendChild(elNS('line', {
+          x1:xa, y1:PAD_T, x2:xa, y2:PAD_T + plotH,
+          stroke:'oklch(0.40 0.05 265 / 0.4)', 'stroke-width':1, 'stroke-dasharray':'2,3'
+        }));
+      }
+    }
+
+    // x ticks
+    var xTicks = [1,4,8,13,20,30];
+    for (var xi = 0; xi < xTicks.length; xi++){
+      var xv = xTicks[xi];
+      var x = xFromHz(xv);
+      svg.appendChild(elNS('line', {
+        x1:x, y1:PAD_T + plotH, x2:x, y2:PAD_T + plotH + 5,
+        stroke:'oklch(0.45 0.05 265)', 'stroke-width':1
+      }));
+      var t = elNS('text', {
+        x:x, y:PAD_T + plotH + 18,
+        'text-anchor':'middle',
+        'font-family':'JetBrains Mono, monospace', 'font-size':11,
+        fill:'oklch(0.60 0.03 265)'
+      });
+      t.textContent = xv;
+      svg.appendChild(t);
+    }
+
+    // y grid + labels
+    var yTicks = [0, 3, 6, 9, 12];
+    for (var yi = 0; yi < yTicks.length; yi++){
+      var pv = yTicks[yi];
+      var y = yFromPow(pv);
+      svg.appendChild(elNS('line', {
+        x1:PAD_L, y1:y, x2:PAD_L + plotW, y2:y,
+        stroke:'oklch(0.30 0.04 265 / 0.4)', 'stroke-width':1
+      }));
+      var yt = elNS('text', {
+        x:PAD_L - 8, y:y + 4,
+        'text-anchor':'end',
+        'font-family':'JetBrains Mono, monospace', 'font-size':10,
+        fill:'oklch(0.55 0.03 265)'
+      });
+      yt.textContent = pv;
+      svg.appendChild(yt);
+    }
+
+    // axis labels
+    var xlbl = elNS('text', {
+      x:PAD_L + plotW / 2, y:VBH - 12,
+      'text-anchor':'middle',
+      'font-family':'JetBrains Mono, monospace', 'font-size':12,
+      fill:'oklch(0.75 0.02 265)'
+    });
+    xlbl.textContent = stateGame.lang === 'cn' ? '频率 (Hz)' : 'frequency (Hz)';
+    svg.appendChild(xlbl);
+
+    var ylbl = elNS('text', {
+      x:18, y:PAD_T + plotH / 2,
+      'text-anchor':'middle',
+      'font-family':'JetBrains Mono, monospace', 'font-size':12,
+      fill:'oklch(0.75 0.02 265)',
+      transform:'rotate(-90 18 ' + (PAD_T + plotH / 2) + ')'
+    });
+    ylbl.textContent = stateGame.lang === 'cn' ? '功率 (μV²/Hz)' : 'power (μV²/Hz)';
+    svg.appendChild(ylbl);
+
+    // build PSD curve sampled densely
+    var ptsArr = [];
+    var STEP = 0.25;
+    for (var f = FMIN; f <= FMAX + 0.001; f += STEP){
+      var pw = psdAt(f, theCase);
+      if (pw > maxPow) pw = maxPow;
+      ptsArr.push(xFromHz(f) + ',' + yFromPow(pw));
+    }
+    // area fill under curve
+    var area = elNS('polygon', {
+      points: PAD_L + ',' + (PAD_T + plotH) + ' ' + ptsArr.join(' ') + ' ' + (PAD_L + plotW) + ',' + (PAD_T + plotH),
+      fill: 'var(--AXIS)', 'fill-opacity':0.10, stroke:'none'
+    });
+    svg.appendChild(area);
+    var poly = elNS('polyline', {
+      points: ptsArr.join(' '),
+      fill:'none', stroke:'var(--AXIS)', 'stroke-width':2.4, 'stroke-linejoin':'round'
+    });
+    svg.appendChild(poly);
+
+    // peak marker (only if case has a bump)
+    if (theCase.bumps.length > 0){
+      var pk = theCase.peakHz;
+      var pkPow = psdAt(pk, theCase);
+      if (pkPow > maxPow) pkPow = maxPow;
+      svg.appendChild(elNS('circle', {
+        cx:xFromHz(pk), cy:yFromPow(pkPow), r:5.5,
+        fill: stateGame.solved[stateGame.caseIdx] ? 'var(--QED)' : 'var(--SOLUTION)',
+        stroke:'var(--bg-0)', 'stroke-width':2
+      }));
+      var pl = elNS('text', {
+        x:xFromHz(pk), y:yFromPow(pkPow) - 11,
+        'text-anchor':'middle',
+        'font-family':'JetBrains Mono, monospace', 'font-size':11,
+        fill: stateGame.solved[stateGame.caseIdx] ? 'var(--QED)' : 'var(--SOLUTION)',
+        'font-weight':600
+      });
+      pl.textContent = 'PEAK ' + pk + ' Hz';
+      svg.appendChild(pl);
+    } else {
+      // flat case — annotate "no peak"
+      var np = elNS('text', {
+        x:PAD_L + plotW / 2, y:PAD_T + plotH / 2,
+        'text-anchor':'middle',
+        'font-family':'JetBrains Mono, monospace', 'font-size':13,
+        fill:'var(--fg-mute)', 'font-weight':600
+      });
+      np.textContent = stateGame.lang === 'cn' ? '无明显峰 / flat' : 'no clear peak / flat';
+      svg.appendChild(np);
+    }
+
+    // frequency cursor (vertical line driven by slider)
+    var cx = xFromHz(stateGame.cursorHz);
+    var cPow = psdAt(stateGame.cursorHz, theCase);
+    if (cPow > maxPow) cPow = maxPow;
+    svg.appendChild(elNS('line', {
+      x1:cx, y1:PAD_T, x2:cx, y2:PAD_T + plotH,
+      stroke:'var(--SOLUTION)', 'stroke-width':1.4, 'stroke-dasharray':'5,4'
+    }));
+    svg.appendChild(elNS('circle', {
+      cx:cx, cy:yFromPow(cPow), r:4.5,
+      fill:'var(--SOLUTION)', stroke:'var(--bg-0)', 'stroke-width':1.6
+    }));
+    var cl = elNS('text', {
+      x: cx > VBW - 130 ? cx - 10 : cx + 10,
+      y: PAD_T + 28,
+      'text-anchor': cx > VBW - 130 ? 'end' : 'start',
+      'font-family':'JetBrains Mono, monospace', 'font-size':11,
+      fill:'var(--SOLUTION)', 'font-weight':600
+    });
+    cl.textContent = stateGame.cursorHz + ' Hz · ' + cPow.toFixed(1);
+    svg.appendChild(cl);
+  }
+
+  // ----- render answer options -----
+  function bandLabel(bandId){
+    if (bandId === 'flat') return stateGame.lang === 'cn' ? '平坦无峰' : 'flat';
+    for (var i = 0; i < BANDS.length; i++){ if (BANDS[i].id === bandId) return BANDS[i].label; }
+    return bandId;
+  }
+
+  function renderOptions(){
+    var theCase = CASES[stateGame.caseIdx];
+    var isSolved = stateGame.solved[stateGame.caseIdx];
+    optionsRow.innerHTML = '';
+    for (var i = 0; i < OPTIONS.length; i++){
+      (function(opt){
+        var btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'option-btn';
+        btn.setAttribute('data-opt', opt.id);
+        var nm = document.createElement('span');
+        nm.className = 'oname';
+        nm.textContent = stateGame.lang === 'cn' ? opt.cn : opt.en;
+        var bn = document.createElement('span');
+        bn.className = 'oband';
+        bn.textContent = bandLabel(opt.band);
+        var ds = document.createElement('span');
+        ds.className = 'odesc';
+        ds.textContent = stateGame.lang === 'cn' ? opt.descCN : opt.descEN;
+        btn.appendChild(nm); btn.appendChild(bn); btn.appendChild(ds);
+
+        if (isSolved){
+          btn.classList.add('locked');
+          if (opt.id === theCase.answer) btn.classList.add('correct');
+        }
+
+        btn.addEventListener('click', function(){
+          if (stateGame.solved[stateGame.caseIdx]) return;
+          if (opt.id === theCase.answer){
+            stateGame.solved[stateGame.caseIdx] = true;
+            btn.classList.add('correct');
+            lockOptions();
+            showExplain(theCase);
+            buildPSD();
+            updateHUD();
+            // auto-advance to next unsolved case after a beat
+            setTimeout(advanceCase, 1400);
+          } else {
+            btn.classList.add('wrong');
+            setTimeout(function(){ btn.classList.remove('wrong'); }, 380);
+          }
+        });
+        optionsRow.appendChild(btn);
+      })(OPTIONS[i]);
+    }
+  }
+
+  function lockOptions(){
+    var btns = optionsRow.querySelectorAll('.option-btn');
+    for (var i = 0; i < btns.length; i++){ btns[i].classList.add('locked'); }
+  }
+
+  function showExplain(theCase){
+    explainText.textContent = stateGame.lang === 'cn' ? theCase.explainCN : theCase.explainEN;
+    explainStrip.classList.add('show');
+  }
+  function hideExplain(){ explainStrip.classList.remove('show'); }
+
+  function advanceCase(){
+    // find next unsolved case
+    var allDone = true;
+    for (var i = 0; i < CASES.length; i++){
+      if (!stateGame.solved[i]){ allDone = false; break; }
+    }
+    if (allDone){ return; } // milestone already handled in updateHUD
+    var next = stateGame.caseIdx;
+    for (var step = 1; step <= CASES.length; step++){
+      var cand = (stateGame.caseIdx + step) % CASES.length;
+      if (!stateGame.solved[cand]){ next = cand; break; }
+    }
+    selectCase(next);
+  }
+
+  function selectCase(idx){
+    stateGame.caseIdx = idx;
+    hideExplain();
+    var cells = caseGrid.querySelectorAll('.case-cell');
+    for (var i = 0; i < cells.length; i++){
+      cells[i].classList.toggle('active', i === idx);
+    }
+    refreshPrompt();
+    renderOptions();
+    if (stateGame.solved[idx]){ showExplain(CASES[idx]); }
+    buildPSD();
+    updateHUD();
+  }
+
+  function refreshPrompt(){
+    var theCase = CASES[stateGame.caseIdx];
+    verdictPrompt.innerHTML = stateGame.lang === 'cn' ? theCase.promptCN : theCase.promptEN;
+  }
+
+  // ----- HUD / progress -----
+  function updateHUD(){
+    hudCase.textContent = (stateGame.caseIdx + 1);
+    var theCase = CASES[stateGame.caseIdx];
+    hudPeak.textContent = theCase.bumps.length > 0 ? (theCase.peakHz + ' Hz') : 'none';
+    var s = 0;
+    for (var i = 0; i < stateGame.solved.length; i++){ if (stateGame.solved[i]) s++; }
+    hudSolved.textContent = s + '/5';
+    solvedCount.textContent = s;
+
+    var cells = caseGrid.querySelectorAll('.case-cell');
+    for (var ci = 0; ci < cells.length; ci++){
+      cells[ci].classList.toggle('solved', stateGame.solved[ci]);
+    }
+
+    if (s === 5 && !stateGame.milestoneFired){
+      stateGame.milestoneFired = true;
+      hudSolved.classList.add('gold');
+      milestone.classList.add('show');
+      setTimeout(function(){ milestone.classList.remove('show'); }, 3500);
+    } else if (s < 5){
+      hudSolved.classList.remove('gold');
+      stateGame.milestoneFired = false;
+    }
+  }
+
+  // ----- reset -----
+  function resetAll(){
+    stateGame.solved = [false,false,false,false,false];
+    stateGame.milestoneFired = false;
+    stateGame.cursorHz = 10;
+    freqCursor.value = 10;
+    cursorReadout.textContent = 10;
+    hudSolved.classList.remove('gold');
+    milestone.classList.remove('show');
+    var cells = caseGrid.querySelectorAll('.case-cell');
+    for (var i = 0; i < cells.length; i++){ cells[i].classList.remove('solved'); }
+    selectCase(0);
+  }
+
+  // ----- i18n -----
+  function refreshI18N(){
+    var nodes = document.querySelectorAll('[data-i18n-cn]');
+    for (var i = 0; i < nodes.length; i++){
+      var el = nodes[i];
+      var cn = el.getAttribute('data-i18n-cn');
+      var en = el.getAttribute('data-i18n-en');
+      var content = stateGame.lang === 'cn' ? cn : en;
+      if (content.indexOf('<') >= 0) el.innerHTML = content;
+      else el.textContent = content;
+    }
+    document.documentElement.lang = stateGame.lang === 'cn' ? 'zh-CN' : 'en';
+    refreshPrompt();
+    renderOptions();
+    if (stateGame.solved[stateGame.caseIdx]){ showExplain(CASES[stateGame.caseIdx]); }
+    buildPSD();
+    updateHUD();
+  }
+
+  // ----- event listeners -----
+  freqCursor.addEventListener('input', function(){
+    stateGame.cursorHz = parseInt(freqCursor.value, 10);
+    cursorReadout.textContent = stateGame.cursorHz;
+    buildPSD();
+  });
+  freqCursor.addEventListener('change', function(){
+    stateGame.cursorHz = parseInt(freqCursor.value, 10);
+    cursorReadout.textContent = stateGame.cursorHz;
+    buildPSD();
+  });
+
+  var caseCells = caseGrid.querySelectorAll('.case-cell');
+  for (var ci = 0; ci < caseCells.length; ci++){
+    (function(cell){
+      cell.addEventListener('click', function(){
+        selectCase(parseInt(cell.getAttribute('data-case'), 10));
+      });
+    })(caseCells[ci]);
+  }
+
+  langBtn.addEventListener('click', function(){
+    stateGame.lang = stateGame.lang === 'cn' ? 'en' : 'cn';
+    refreshI18N();
+  });
+
+  resetBtn.addEventListener('click', resetAll);
+
+  // init
+  selectCase(0);
+  refreshI18N();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,768 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EEG 预处理流水线总览 — 把切片、滤波、去伪迹串成一条线</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&family=Noto+Sans+SC:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    /* Industrial Atelier — Claude warm cream + coral */
+    --paper:     #FAF9F5;
+    --paper-2:   #F1EDDF;
+    --card:      #FFFFFF;
+    --ink:       #191814;
+    --ink-2:     #2B2924;
+    --sub:       #6B6557;
+    --sub-2:     #9D978A;
+    --border:    #EBE5D6;
+    --border-2:  #D9D1BD;
+    --hairline:  #F2EDE0;
+
+    --primary:       #D97757;
+    --primary-ink:   #9A4A2E;
+    --primary-soft:  #F8EDE5;
+    --primary-line:  #ECCFB8;
+
+    /* domain accent = computing */
+    --computing:      #C04E68;
+    --computing-soft: #F4DDE3;
+    --computing-line: #E2B7C3;
+    --computing-ink:  #7E2C44;
+
+    --shadow-sm: 0 1px 2px 0 rgba(25,24,20,.04);
+    --shadow:    0 1px 3px 0 rgba(25,24,20,.06), 0 1px 2px -1px rgba(25,24,20,.04);
+    --shadow-md: 0 4px 8px -2px rgba(25,24,20,.06), 0 2px 4px -2px rgba(25,24,20,.04);
+    --shadow-lg: 0 12px 24px -6px rgba(25,24,20,.1), 0 4px 8px -4px rgba(25,24,20,.05);
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    height:100vh;overflow:hidden;
+    background:var(--paper);
+    color:var(--ink);
+    font-family:'Inter','PingFang SC','Noto Sans SC',system-ui,sans-serif;
+    display:flex;
+    -webkit-font-smoothing:antialiased;
+    text-rendering:optimizeLegibility;
+  }
+  .mono{font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,monospace;}
+
+  /* ---------- Sidebar ---------- */
+  .sidebar{
+    width:200px;flex-shrink:0;height:100vh;
+    background:var(--card);
+    border-right:1px solid var(--border);
+    display:flex;flex-direction:column;
+    padding:20px 16px;gap:16px;
+  }
+  .brand{
+    font-size:13px;font-weight:700;letter-spacing:0.02em;color:var(--ink);
+    padding-bottom:14px;border-bottom:1px solid var(--hairline);
+  }
+  .brand-sub{
+    display:block;margin-top:6px;font-size:11px;font-weight:500;
+    color:var(--sub);letter-spacing:0;
+  }
+  .deco{
+    width:100%;height:104px;
+    background:var(--paper-2);
+    border:1px solid var(--border);
+    border-radius:8px;
+    display:flex;align-items:center;justify-content:center;
+    box-shadow:var(--shadow-sm);
+  }
+  .deco svg{width:96px;height:84px;}
+  .deco .flow-dot{
+    animation:deco-flow 3.4s ease-in-out infinite;
+  }
+  @keyframes deco-flow{
+    0%,100%{opacity:0.35;transform:translateX(0);}
+    50%    {opacity:1;transform:translateX(6px);}
+  }
+  .guide{display:flex;flex-direction:column;gap:10px;margin-top:4px;}
+  .guide-li{
+    font-size:11.5px;line-height:1.5;
+    color:var(--sub);
+    padding:2px 0 2px 10px;
+    border-left:2px solid var(--border-2);
+  }
+  .guide-li.hl{border-left-color:var(--primary);color:var(--ink-2);}
+  .lang-btn{
+    margin-top:auto;
+    font-family:'JetBrains Mono',monospace;
+    font-size:11px;font-weight:600;letter-spacing:0.06em;
+    padding:8px 12px;cursor:pointer;
+    background:var(--card);color:var(--ink);
+    border:1px solid var(--border-2);
+    border-radius:6px;
+    transition:background 120ms ease, border-color 120ms ease;
+  }
+  .lang-btn:hover{background:var(--paper-2);border-color:var(--primary-line);}
+  .lang-btn:active{background:var(--primary-soft);}
+
+  /* ---------- Main ---------- */
+  .main{
+    flex:1;height:100vh;overflow:hidden;
+    display:grid;
+    grid-template-rows: auto 1fr auto;
+    padding:18px 26px;gap:14px;position:relative;
+    background:var(--paper);
+  }
+
+  /* === 顶部标题卡 === */
+  .head{
+    display:flex;align-items:center;gap:22px;
+    padding:14px 22px;
+    background:var(--card);
+    border:1px solid var(--border);
+    border-radius:10px;
+    box-shadow:var(--shadow-sm);
+    position:relative;overflow:hidden;
+  }
+  .head-text{flex:1;min-width:0;}
+  .head-text .title{font-size:19px;font-weight:700;color:var(--ink);margin-bottom:6px;letter-spacing:-0.01em;}
+  .head-text .lede{font-size:13px;line-height:1.55;color:var(--sub);max-width:680px;}
+  .head-text .lede .em{color:var(--primary-ink);font-weight:600;background:var(--primary-soft);padding:1px 6px;border-radius:4px;}
+  .head-mark{
+    flex-shrink:0;width:74px;height:74px;opacity:0.7;
+  }
+
+  /* === 中部 流水线 === */
+  .pipeline{
+    position:relative;
+    background:var(--card);
+    border:1px solid var(--border);
+    border-radius:10px;
+    box-shadow:var(--shadow-sm);
+    padding:16px 22px 16px;
+    display:flex;flex-direction:column;gap:12px;min-height:0;
+  }
+  .pipeline-head{display:flex;align-items:baseline;justify-content:space-between;}
+  .pipeline-head .ttl{font-size:14px;font-weight:700;color:var(--ink);letter-spacing:-0.01em;}
+  .pipeline-head .hint{font-size:11px;color:var(--sub);font-family:'JetBrains Mono',monospace;}
+  .pipeline-head .hint .pin{color:var(--primary);font-weight:700;}
+
+  .track{
+    position:relative;flex:1;display:flex;align-items:center;min-height:0;
+  }
+  /* coral 主线: 横贯所有工位的流水线主轴 */
+  .mainline{
+    position:absolute;left:8px;right:8px;top:50%;transform:translateY(-50%);
+    height:3px;border-radius:2px;
+    background:linear-gradient(90deg,var(--primary-line),var(--primary),var(--primary-line));
+    z-index:0;
+  }
+  .stations{
+    position:relative;width:100%;display:flex;align-items:stretch;gap:0;z-index:2;
+  }
+  .station-wrap{flex:1 1 0;min-width:0;display:flex;align-items:center;}
+  .station{
+    flex:1 1 0;min-width:0;
+    padding:12px 8px 11px;
+    background:var(--paper);
+    border:1px solid var(--border);
+    border-radius:8px;
+    cursor:pointer;outline:none;
+    transition:background 200ms ease, border-color 200ms ease, transform 200ms ease, box-shadow 200ms ease;
+    display:flex;flex-direction:column;gap:5px;align-items:center;text-align:center;
+    position:relative;
+  }
+  .station .sn{
+    font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:700;
+    color:var(--sub-2);letter-spacing:0.06em;
+  }
+  .station .st{
+    font-size:11.5px;font-weight:600;color:var(--ink-2);line-height:1.25;
+  }
+  .station .stref{
+    font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--sub-2);
+  }
+  .station:hover, .station:focus-visible{
+    background:var(--computing-soft);
+    border-color:var(--computing-line);
+    transform:translateY(-3px);
+    box-shadow:var(--shadow);
+  }
+  .station:hover .sn, .station:focus-visible .sn{color:var(--computing-ink);}
+  .station:hover .stref, .station:focus-visible .stref{color:var(--computing-ink);}
+  .station.active{
+    background:var(--primary-soft);
+    border-color:var(--primary);
+    transform:translateY(-3px);
+    box-shadow:var(--shadow-md);
+  }
+  .station.active .sn{color:var(--primary-ink);}
+  .station.active .st{color:var(--primary-ink);}
+  .station.active .stref{color:var(--primary);}
+
+  /* 工位之间的连接箭头 + 呼吸数据流点 */
+  .connector{
+    flex:0 0 26px;height:100%;
+    position:relative;
+    display:flex;align-items:center;justify-content:center;
+  }
+  .connector .arrow{
+    width:14px;height:8px;color:var(--primary);opacity:0.85;
+  }
+  .connector .pkt{
+    position:absolute;top:50%;left:0;
+    width:7px;height:7px;border-radius:50%;
+    background:var(--primary);
+    box-shadow:0 0 0 3px var(--primary-soft);
+    transform:translate(-3px,-50%);
+    animation:pkt-flow 2.6s ease-in-out infinite;
+  }
+  @keyframes pkt-flow{
+    0%   {transform:translate(-3px,-50%) scale(0.6);opacity:0;}
+    20%  {opacity:1;}
+    50%  {transform:translate(11px,-50%) scale(1);opacity:1;}
+    80%  {opacity:1;}
+    100% {transform:translate(25px,-50%) scale(0.6);opacity:0;}
+  }
+  .connector:nth-of-type(2) .pkt{animation-delay:0.0s;}
+  .connector:nth-of-type(4) .pkt{animation-delay:0.4s;}
+  .connector:nth-of-type(6) .pkt{animation-delay:0.8s;}
+  .connector:nth-of-type(8) .pkt{animation-delay:1.2s;}
+  .connector:nth-of-type(10) .pkt{animation-delay:1.6s;}
+  .connector:nth-of-type(12) .pkt{animation-delay:2.0s;}
+
+  .detail-panel{
+    position:absolute;right:18px;bottom:14px;
+    width:300px;
+    padding:14px 16px;
+    background:var(--card);color:var(--ink);
+    border:1px solid var(--primary-line);
+    border-radius:8px;
+    box-shadow:var(--shadow-lg);
+    opacity:0;pointer-events:none;
+    transition:opacity 200ms ease;
+    z-index:6;
+  }
+  .detail-panel.show{opacity:1;}
+  .detail-panel .dp-sn{
+    font-family:'JetBrains Mono',monospace;font-size:10.5px;font-weight:700;
+    color:var(--primary);letter-spacing:0.06em;margin-bottom:5px;
+  }
+  .detail-panel .dp-ttl{font-size:14.5px;font-weight:700;margin-bottom:10px;color:var(--ink);letter-spacing:-0.01em;}
+  .detail-panel .dp-row{font-size:11.5px;line-height:1.55;margin-bottom:7px;color:var(--ink-2);}
+  .detail-panel .dp-row .lbl{
+    display:inline-block;min-width:50px;
+    color:var(--sub);font-weight:700;margin-right:6px;font-size:10px;
+    letter-spacing:0.04em;text-transform:uppercase;
+    font-family:'JetBrains Mono',monospace;vertical-align:top;
+  }
+  .detail-panel .dp-row .dp-ref{
+    color:var(--computing-ink);background:var(--computing-soft);
+    padding:1px 5px;border-radius:3px;font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:600;
+  }
+
+  /* === 中下 数据形状追踪 === */
+  .shape-row{
+    display:flex;align-items:stretch;gap:0;
+    padding:12px 16px;
+    background:var(--card);
+    border:1px solid var(--border);
+    border-radius:10px;
+    box-shadow:var(--shadow-sm);
+  }
+  .shape-head{
+    flex:0 0 124px;display:flex;flex-direction:column;justify-content:center;
+    padding-right:14px;border-right:1px solid var(--hairline);
+  }
+  .shape-head .sh-ttl{font-size:12.5px;font-weight:700;color:var(--ink);margin-bottom:4px;}
+  .shape-head .sh-sub{font-size:10.5px;line-height:1.4;color:var(--sub);}
+  .shape-steps{
+    flex:1;display:flex;align-items:center;gap:0;padding-left:14px;min-width:0;
+  }
+  .shape-step{
+    flex:1 1 0;min-width:0;text-align:center;
+    display:flex;flex-direction:column;gap:3px;align-items:center;
+  }
+  .shape-step .sh-stage{font-size:10px;color:var(--sub);font-weight:600;line-height:1.2;}
+  .shape-step .sh-shape{
+    font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;
+    color:var(--computing-ink);background:var(--computing-soft);
+    padding:3px 7px;border-radius:4px;letter-spacing:0.02em;white-space:nowrap;
+  }
+  .shape-step.coral .sh-shape{color:var(--primary-ink);background:var(--primary-soft);}
+  .shape-arrow{
+    flex:0 0 18px;color:var(--sub-2);display:flex;align-items:center;justify-content:center;
+  }
+  .shape-arrow svg{width:12px;height:8px;}
+
+  /* === 底部 为什么串成流水线 === */
+  .why{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;}
+  .why-card{
+    padding:12px 14px;
+    background:var(--card);
+    border:1px solid var(--border);
+    border-radius:8px;
+    box-shadow:var(--shadow-sm);
+    cursor:pointer;outline:none;
+    transition:transform 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
+    display:flex;gap:11px;align-items:flex-start;
+    position:relative;
+  }
+  .why-card:hover, .why-card:focus-visible{border-color:var(--primary-line);box-shadow:var(--shadow);transform:translateY(-2px);}
+  .why-card.tap{transform:scale(1.015);border-color:var(--primary);box-shadow:var(--shadow-md);}
+  .why-card .wmark{
+    flex-shrink:0;width:30px;height:30px;
+    border-radius:6px;
+    background:var(--paper-2);
+    border:1px solid var(--border);
+    display:flex;align-items:center;justify-content:center;
+    color:var(--sub);
+  }
+  .why-card .wmark svg{width:17px;height:17px;}
+  .why-card:hover .wmark, .why-card.tap .wmark{background:var(--primary-soft);border-color:var(--primary-line);color:var(--primary);}
+  .why-card .wtxt{flex:1;min-width:0;}
+  .why-card .wnum{
+    font-family:'JetBrains Mono',monospace;font-size:9.5px;font-weight:700;
+    color:var(--sub-2);letter-spacing:0.1em;margin-bottom:4px;
+  }
+  .why-card .wline{font-size:12.5px;line-height:1.45;color:var(--ink);font-weight:600;letter-spacing:-0.005em;}
+  .why-card .wsub{font-size:10.5px;color:var(--sub);margin-top:4px;line-height:1.4;}
+</style>
+</head>
+<body>
+  <aside class="sidebar">
+    <div class="brand">
+      <span id="brandMain">EEG Pipeline</span>
+      <span class="brand-sub" id="brandSub">M19 · 预处理流水线总览</span>
+    </div>
+    <div class="deco" aria-hidden="true">
+      <!-- 抽象装饰: 三个工位方块 + 流动数据点串成一条管道线 -->
+      <svg viewBox="0 0 100 88" fill="none" stroke="currentColor" stroke-width="1.6" style="color:var(--sub);">
+        <line x1="10" y1="44" x2="90" y2="44" stroke="var(--primary-line)" stroke-width="2"/>
+        <rect x="8" y="34" width="20" height="20" rx="3" fill="var(--card)" stroke="var(--border-2)"/>
+        <rect x="40" y="34" width="20" height="20" rx="3" fill="var(--computing-soft)" stroke="var(--computing-line)"/>
+        <rect x="72" y="34" width="20" height="20" rx="3" fill="var(--primary-soft)" stroke="var(--primary)"/>
+        <circle class="flow-dot" cx="30" cy="44" r="3" fill="var(--primary)" stroke="none"/>
+        <circle class="flow-dot" cx="62" cy="44" r="3" fill="var(--primary)" stroke="none"/>
+        <path d="M12 20 q4 -8 8 0 q4 8 8 0" stroke="var(--sub-2)" stroke-width="1.2"/>
+        <path d="M72 68 L76 64 L80 68 L84 64 L88 68" stroke="var(--primary)" stroke-width="1.2"/>
+      </svg>
+    </div>
+    <div class="guide">
+      <div class="guide-li hl" id="g1">悬停任一工位，看它做什么</div>
+      <div class="guide-li" id="g2">点击锁定查看，点空白处取消</div>
+      <div class="guide-li" id="g3">珊瑚色主线 = 数据流动方向</div>
+    </div>
+    <button class="lang-btn" id="langBtn" type="button">CN / EN</button>
+  </aside>
+
+  <main class="main">
+    <!-- 顶部标题 -->
+    <section class="head">
+      <div class="head-text">
+        <div class="title" id="hdTitle">EEG 预处理流水线 · 七个工位一条线</div>
+        <div class="lede" id="hdLede">把前面学的<span class="em">切片、滤波、去伪迹</span>从一堆零散的手工步骤，串成一条可以一键复用、批量处理的自动流水线。原始录制从左边进去，干净的 epoch 数据从右边出来。</div>
+      </div>
+      <svg class="head-mark" viewBox="0 0 100 100" fill="none" aria-hidden="true">
+        <circle cx="50" cy="50" r="42" stroke="var(--primary-line)" stroke-width="1.2" stroke-dasharray="2 3"/>
+        <line x1="22" y1="50" x2="78" y2="50" stroke="var(--primary)" stroke-width="2"/>
+        <rect x="18" y="44" width="12" height="12" rx="2" fill="var(--card)" stroke="var(--primary)"/>
+        <rect x="44" y="44" width="12" height="12" rx="2" fill="var(--computing-soft)" stroke="var(--computing-line)"/>
+        <rect x="70" y="44" width="12" height="12" rx="2" fill="var(--primary-soft)" stroke="var(--primary)"/>
+      </svg>
+    </section>
+
+    <!-- 中部 七工位流水线 -->
+    <section class="pipeline">
+      <div class="pipeline-head">
+        <div class="ttl" id="plTtl">从原始录制到干净 epoch · 7 个工位</div>
+        <div class="hint mono" id="plHint">raw <span class="pin">&rarr;</span> clean epochs</div>
+      </div>
+      <div class="track">
+        <div class="mainline" aria-hidden="true"></div>
+        <div class="stations" id="stations">
+          <div class="station-wrap">
+            <div class="station" data-key="p1" tabindex="0" role="button" aria-label="工位 1 原始录制">
+              <div class="sn mono">01</div>
+              <div class="st" data-fld="st">原始录制</div>
+              <div class="stref mono" data-fld="ref">M10</div>
+            </div>
+          </div>
+          <div class="connector" aria-hidden="true">
+            <svg class="arrow" viewBox="0 0 14 8" fill="currentColor"><path d="M0 3h9V0l5 4-5 4V5H0z"/></svg>
+            <div class="pkt"></div>
+          </div>
+          <div class="station-wrap">
+            <div class="station" data-key="p2" tabindex="0" role="button" aria-label="工位 2 带通滤波">
+              <div class="sn mono">02</div>
+              <div class="st" data-fld="st">带通滤波</div>
+              <div class="stref mono" data-fld="ref">M13</div>
+            </div>
+          </div>
+          <div class="connector" aria-hidden="true">
+            <svg class="arrow" viewBox="0 0 14 8" fill="currentColor"><path d="M0 3h9V0l5 4-5 4V5H0z"/></svg>
+            <div class="pkt"></div>
+          </div>
+          <div class="station-wrap">
+            <div class="station" data-key="p3" tabindex="0" role="button" aria-label="工位 3 分段切片">
+              <div class="sn mono">03</div>
+              <div class="st" data-fld="st">分段切片</div>
+              <div class="stref mono" data-fld="ref">M06</div>
+            </div>
+          </div>
+          <div class="connector" aria-hidden="true">
+            <svg class="arrow" viewBox="0 0 14 8" fill="currentColor"><path d="M0 3h9V0l5 4-5 4V5H0z"/></svg>
+            <div class="pkt"></div>
+          </div>
+          <div class="station-wrap">
+            <div class="station" data-key="p4" tabindex="0" role="button" aria-label="工位 4 ICA 分解">
+              <div class="sn mono">04</div>
+              <div class="st" data-fld="st">ICA 分解</div>
+              <div class="stref mono" data-fld="ref">M16</div>
+            </div>
+          </div>
+          <div class="connector" aria-hidden="true">
+            <svg class="arrow" viewBox="0 0 14 8" fill="currentColor"><path d="M0 3h9V0l5 4-5 4V5H0z"/></svg>
+            <div class="pkt"></div>
+          </div>
+          <div class="station-wrap">
+            <div class="station" data-key="p5" tabindex="0" role="button" aria-label="工位 5 剔除伪迹 IC">
+              <div class="sn mono">05</div>
+              <div class="st" data-fld="st">剔除伪迹 IC</div>
+              <div class="stref mono" data-fld="ref">M17</div>
+            </div>
+          </div>
+          <div class="connector" aria-hidden="true">
+            <svg class="arrow" viewBox="0 0 14 8" fill="currentColor"><path d="M0 3h9V0l5 4-5 4V5H0z"/></svg>
+            <div class="pkt"></div>
+          </div>
+          <div class="station-wrap">
+            <div class="station" data-key="p6" tabindex="0" role="button" aria-label="工位 6 逆变换重建">
+              <div class="sn mono">06</div>
+              <div class="st" data-fld="st">逆变换重建</div>
+              <div class="stref mono" data-fld="ref">M18</div>
+            </div>
+          </div>
+          <div class="connector" aria-hidden="true">
+            <svg class="arrow" viewBox="0 0 14 8" fill="currentColor"><path d="M0 3h9V0l5 4-5 4V5H0z"/></svg>
+            <div class="pkt"></div>
+          </div>
+          <div class="station-wrap">
+            <div class="station" data-key="p7" tabindex="0" role="button" aria-label="工位 7 干净 epoch 数据">
+              <div class="sn mono">07</div>
+              <div class="st" data-fld="st">干净 epoch</div>
+              <div class="stref mono" data-fld="ref">OUT</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="detail-panel" id="detail" aria-live="polite">
+        <div class="dp-sn mono" id="dpSn">01 · 原始录制</div>
+        <div class="dp-ttl" id="dpTtl">原始录制</div>
+        <div class="dp-row"><span class="lbl" id="dpDoLbl">做什么</span><span id="dpDo">读入连续的多通道脑电录制。</span></div>
+        <div class="dp-row"><span class="lbl" id="dpInLbl">输入</span><span id="dpIn">—</span></div>
+        <div class="dp-row"><span class="lbl" id="dpOutLbl">输出</span><span id="dpOut">连续 raw 信号</span></div>
+        <div class="dp-row"><span class="lbl" id="dpRefLbl">来自</span><span class="dp-ref mono" id="dpRef">M10</span></div>
+      </div>
+    </section>
+
+    <!-- 中下 数据形状追踪 -->
+    <section class="shape-row">
+      <div class="shape-head">
+        <div class="sh-ttl" id="shTtl">数据形状变化</div>
+        <div class="sh-sub" id="shSub">同一份数据，沿流水线一路被重塑</div>
+      </div>
+      <div class="shape-steps">
+        <div class="shape-step">
+          <div class="sh-stage" id="shStage1">原始连续</div>
+          <div class="sh-shape mono">[C &times; T]</div>
+        </div>
+        <div class="shape-arrow"><svg viewBox="0 0 12 8" fill="currentColor"><path d="M0 3h7V0l5 4-5 4V5H0z"/></svg></div>
+        <div class="shape-step">
+          <div class="sh-stage" id="shStage2">滤波后</div>
+          <div class="sh-shape mono">[C &times; T]</div>
+        </div>
+        <div class="shape-arrow"><svg viewBox="0 0 12 8" fill="currentColor"><path d="M0 3h7V0l5 4-5 4V5H0z"/></svg></div>
+        <div class="shape-step">
+          <div class="sh-stage" id="shStage3">切成 N 段</div>
+          <div class="sh-shape mono">[N &times; C &times; T]</div>
+        </div>
+        <div class="shape-arrow"><svg viewBox="0 0 12 8" fill="currentColor"><path d="M0 3h7V0l5 4-5 4V5H0z"/></svg></div>
+        <div class="shape-step coral">
+          <div class="sh-stage" id="shStage4">清洁 N 段</div>
+          <div class="sh-shape mono">[N &times; C &times; T]</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 底部 为什么要串成流水线 -->
+    <section class="why">
+      <div class="why-card" data-why="1" tabindex="0" role="button">
+        <div class="wmark" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 12a9 9 0 1 1-3-6.7"/>
+            <path d="M21 3v5h-5"/>
+          </svg>
+        </div>
+        <div class="wtxt">
+          <div class="wnum mono">WHY · 01</div>
+          <div class="wline" id="why1">可复现</div>
+          <div class="wsub" id="why1sub">同样的输入，永远跑出同样的输出，换台电脑也一样。</div>
+        </div>
+      </div>
+      <div class="why-card" data-why="2" tabindex="0" role="button">
+        <div class="wmark" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="4" width="6" height="6" rx="1"/>
+            <rect x="3" y="14" width="6" height="6" rx="1"/>
+            <path d="M13 7h8M13 17h8"/>
+          </svg>
+        </div>
+        <div class="wtxt">
+          <div class="wnum mono">WHY · 02</div>
+          <div class="wline" id="why2">批处理</div>
+          <div class="wsub" id="why2sub">一条命令处理 30 份录制，不用一份份手工点。</div>
+        </div>
+      </div>
+      <div class="why-card" data-why="3" tabindex="0" role="button">
+        <div class="wmark" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 3v4M12 17v4M3 12h4M17 12h4"/>
+            <circle cx="12" cy="12" r="3.5"/>
+          </svg>
+        </div>
+        <div class="wtxt">
+          <div class="wnum mono">WHY · 03</div>
+          <div class="wline" id="why3">参数统一</div>
+          <div class="wsub" id="why3sub">滤波频段、epoch 长度写在一处，所有数据用同一套标准。</div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+<script>
+(function(){
+  "use strict";
+
+  var LANG = 'cn';
+
+  var I18N = {
+    brandMain:{cn:'EEG Pipeline',              en:'EEG Pipeline'},
+    brandSub: {cn:'M19 · 预处理流水线总览',     en:'M19 · Preprocessing Pipeline'},
+    g1:       {cn:'悬停任一工位，看它做什么',    en:'Hover any station to see what it does'},
+    g2:       {cn:'点击锁定查看，点空白处取消',  en:'Click to pin; click outside to clear'},
+    g3:       {cn:'珊瑚色主线 = 数据流动方向',   en:'Coral line = data flow direction'},
+    hdTitle:  {cn:'EEG 预处理流水线 · 七个工位一条线', en:'EEG Preprocessing Pipeline · 7 Stations, One Line'},
+    plTtl:    {cn:'从原始录制到干净 epoch · 7 个工位', en:'From Raw Recording to Clean Epochs · 7 Stations'},
+    shTtl:    {cn:'数据形状变化',                en:'Data Shape Evolution'},
+    shSub:    {cn:'同一份数据，沿流水线一路被重塑', en:'One dataset, reshaped along the line'},
+    shStage1: {cn:'原始连续',                    en:'Raw continuous'},
+    shStage2: {cn:'滤波后',                      en:'After filter'},
+    shStage3: {cn:'切成 N 段',                   en:'Cut into N epochs'},
+    shStage4: {cn:'清洁 N 段',                   en:'Clean N epochs'},
+    why1:     {cn:'可复现',                      en:'Reproducible'},
+    why1sub:  {cn:'同样的输入，永远跑出同样的输出，换台电脑也一样。',
+               en:'Same input always yields the same output — on any machine.'},
+    why2:     {cn:'批处理',                      en:'Batch-able'},
+    why2sub:  {cn:'一条命令处理 30 份录制，不用一份份手工点。',
+               en:'One command processes 30 recordings — no manual clicking.'},
+    why3:     {cn:'参数统一',                    en:'Unified parameters'},
+    why3sub:  {cn:'滤波频段、epoch 长度写在一处，所有数据用同一套标准。',
+               en:'Filter band and epoch length live in one place — one standard for all.'},
+    langBtn:  {cn:'CN / EN',                     en:'EN / CN'},
+    dpDoLbl:  {cn:'做什么',                      en:'Does'},
+    dpInLbl:  {cn:'输入',                        en:'In'},
+    dpOutLbl: {cn:'输出',                        en:'Out'},
+    dpRefLbl: {cn:'来自',                        en:'From'},
+    refOut:   {cn:'本节产出',                    en:'Output'}
+  };
+
+  // 七工位 lede 内含 span，单独处理
+  var HD_LEDE = {
+    cn:['把前面学的','切片、滤波、去伪迹','从一堆零散的手工步骤，串成一条可以一键复用、批量处理的自动流水线。原始录制从左边进去，干净的 epoch 数据从右边出来。'],
+    en:['What you learned about ','epoching, filtering, artifact removal',' goes from scattered manual steps into one reusable, batch-able automatic line. Raw goes in the left, clean epochs come out the right.']
+  };
+
+  var STATIONS = {
+    p1:{
+      sn:{cn:'01 · 原始录制', en:'01 · Raw Recording'},
+      st:{cn:'原始录制',      en:'Raw recording'},
+      ref:'M10',
+      doX:{cn:'读入连续的多通道脑电录制，作为整条流水线的输入。',
+           en:'Load the continuous multi-channel EEG recording as the pipeline input.'},
+      inX:{cn:'—', en:'—'},
+      outX:{cn:'连续 raw 信号 [通道 × 时间]', en:'Continuous raw signal [channels × time]'}
+    },
+    p2:{
+      sn:{cn:'02 · 带通滤波', en:'02 · Band-pass Filter'},
+      st:{cn:'带通滤波 8–30Hz', en:'Band-pass 8–30Hz'},
+      ref:'M13',
+      doX:{cn:'砍掉慢漂移和高频噪声，只留下我们关心的频段（如 8–30Hz）。',
+           en:'Cut slow drift and high-freq noise, keep only the band you care about (e.g. 8–30Hz).'},
+      inX:{cn:'连续 raw 信号', en:'Continuous raw signal'},
+      outX:{cn:'滤波后的连续信号', en:'Filtered continuous signal'}
+    },
+    p3:{
+      sn:{cn:'03 · 分段切片', en:'03 · Epoching'},
+      st:{cn:'分段切片 epoch', en:'Epoching'},
+      ref:'M06',
+      doX:{cn:'按事件标记把连续信号切成一段段等长的 epoch。',
+           en:'Cut the continuous signal into equal-length epochs around event markers.'},
+      inX:{cn:'滤波后连续信号', en:'Filtered continuous signal'},
+      outX:{cn:'N 段 epoch [N × 通道 × 时间]', en:'N epochs [N × channels × time]'}
+    },
+    p4:{
+      sn:{cn:'04 · ICA 分解', en:'04 · ICA Decomposition'},
+      st:{cn:'ICA 分解', en:'ICA decomposition'},
+      ref:'M16',
+      doX:{cn:'把混在一起的信号拆成一组独立成分（IC），眨眼、心跳各自分到一个成分。',
+           en:'Unmix the signal into independent components (ICs) — blinks, heartbeat each land on one.'},
+      inX:{cn:'N 段 epoch', en:'N epochs'},
+      outX:{cn:'一组独立成分 IC + 混合矩阵', en:'A set of ICs + mixing matrix'}
+    },
+    p5:{
+      sn:{cn:'05 · 剔除伪迹 IC', en:'05 · Reject Artifact ICs'},
+      st:{cn:'剔除伪迹 IC', en:'Reject artifact ICs'},
+      ref:'M17',
+      doX:{cn:'认出哪些独立成分是眨眼、肌电等伪迹，把它们标记为剔除。',
+           en:'Identify which ICs are blinks, muscle and other artifacts, and mark them for removal.'},
+      inX:{cn:'一组独立成分 IC', en:'A set of ICs'},
+      outX:{cn:'保留的脑源 IC（伪迹已标记）', en:'Kept brain ICs (artifacts flagged)'}
+    },
+    p6:{
+      sn:{cn:'06 · 逆变换重建', en:'06 · Inverse Reconstruction'},
+      st:{cn:'逆变换重建', en:'Inverse reconstruction'},
+      ref:'M18',
+      doX:{cn:'只用保留的成分逆变换回去，重建出去掉伪迹的通道信号。',
+           en:'Project only the kept components back to reconstruct artifact-free channel signals.'},
+      inX:{cn:'保留的脑源 IC', en:'Kept brain ICs'},
+      outX:{cn:'去伪迹后的 N 段信号', en:'Artifact-free N epochs'}
+    },
+    p7:{
+      sn:{cn:'07 · 干净 epoch 数据', en:'07 · Clean Epoch Data'},
+      st:{cn:'干净 epoch', en:'Clean epochs'},
+      ref:'OUT',
+      doX:{cn:'流水线的产出：可以直接拿去做特征提取和分类的干净数据。',
+           en:'The pipeline output: clean data ready for feature extraction and classification.'},
+      inX:{cn:'去伪迹后的 N 段信号', en:'Artifact-free N epochs'},
+      outX:{cn:'干净 epoch [N × 通道 × 时间]', en:'Clean epochs [N × channels × time]'}
+    }
+  };
+
+  function $(id){return document.getElementById(id);}
+  function $$(sel){return document.querySelectorAll(sel);}
+
+  function applyText(key, el){
+    if(!el || !I18N[key]) return;
+    var v = I18N[key][LANG];
+    if(v != null) el.textContent = v;
+  }
+
+  function applyLang(){
+    ['brandMain','brandSub','g1','g2','g3','hdTitle','plTtl','shTtl','shSub',
+     'shStage1','shStage2','shStage3','shStage4','why1','why1sub','why2','why2sub',
+     'why3','why3sub','dpDoLbl','dpInLbl','dpOutLbl','dpRefLbl'].forEach(function(k){
+      applyText(k, $(k));
+    });
+    $('langBtn').textContent = I18N.langBtn[LANG];
+
+    // head lede (含 span)
+    var lede = $('hdLede');
+    var parts = HD_LEDE[LANG];
+    lede.innerHTML = '';
+    lede.appendChild(document.createTextNode(parts[0]));
+    var em = document.createElement('span');
+    em.className = 'em';
+    em.textContent = parts[1];
+    lede.appendChild(em);
+    lede.appendChild(document.createTextNode(parts[2]));
+
+    // station 卡片文字
+    $$('.station').forEach(function(el){
+      var s = STATIONS[el.getAttribute('data-key')];
+      if(!s) return;
+      var stEl = el.querySelector('[data-fld="st"]');
+      if(stEl) stEl.textContent = s.st[LANG];
+    });
+
+    var active = document.querySelector('.station.active');
+    if(active) renderDetail(active.getAttribute('data-key'), true);
+  }
+
+  function renderDetail(key, keepShown){
+    var s = STATIONS[key];
+    if(!s) return;
+    $('dpSn').textContent  = s.sn[LANG];
+    $('dpTtl').textContent = s.st[LANG];
+    $('dpDo').textContent  = s.doX[LANG];
+    $('dpIn').textContent  = s.inX[LANG];
+    $('dpOut').textContent = s.outX[LANG];
+    var refEl = $('dpRef');
+    refEl.textContent = (s.ref === 'OUT') ? I18N.refOut[LANG] : s.ref;
+    if(keepShown) $('detail').classList.add('show');
+  }
+
+  function showDetail(key){
+    renderDetail(key, false);
+    $('detail').classList.add('show');
+  }
+  function hideDetail(){
+    $('detail').classList.remove('show');
+  }
+
+  // ---- station hover / click ----
+  var stationEls = $$('.station');
+  var pinnedKey = null;
+  stationEls.forEach(function(el){
+    var key = el.getAttribute('data-key');
+    el.addEventListener('mouseenter', function(){ if(pinnedKey) return; showDetail(key); });
+    el.addEventListener('mouseleave', function(){ if(pinnedKey) return; hideDetail(); });
+    el.addEventListener('focus', function(){ if(pinnedKey) return; showDetail(key); });
+    el.addEventListener('blur', function(){ if(pinnedKey) return; hideDetail(); });
+    el.addEventListener('click', function(ev){
+      ev.stopPropagation();
+      if(pinnedKey === key){
+        pinnedKey = null;
+        el.classList.remove('active');
+        hideDetail();
+      } else {
+        stationEls.forEach(function(e){e.classList.remove('active');});
+        el.classList.add('active');
+        pinnedKey = key;
+        showDetail(key);
+      }
+    });
+    el.addEventListener('keydown', function(ev){
+      if(ev.key === 'Enter' || ev.key === ' '){ ev.preventDefault(); el.click(); }
+    });
+  });
+
+  document.addEventListener('click', function(){
+    if(!pinnedKey) return;
+    pinnedKey = null;
+    stationEls.forEach(function(e){e.classList.remove('active');});
+    hideDetail();
+  });
+
+  // ---- why 卡 tap 反馈 ----
+  $$('.why-card').forEach(function(w){
+    w.addEventListener('click', function(ev){
+      ev.stopPropagation();
+      w.classList.add('tap');
+      setTimeout(function(){ w.classList.remove('tap'); }, 220);
+    });
+    w.addEventListener('keydown', function(ev){
+      if(ev.key === 'Enter' || ev.key === ' '){ ev.preventDefault(); w.click(); }
+    });
+  });
+
+  // ---- 语言切换 ----
+  $('langBtn').addEventListener('click', function(ev){
+    ev.stopPropagation();
+    LANG = (LANG === 'cn') ? 'en' : 'cn';
+    applyLang();
+  });
+
+  applyLang();
+})();
+</script>
+</body>
+</html>

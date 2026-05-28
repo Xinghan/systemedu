@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>给脑波画一张"哪种快慢最强"的图</title>
+<style>
+  :root{
+    /* 第 1 层 — 共享深空底 (所有 26 套统一) */
+    --bg-0: oklch(0.14 0.035 265);
+    --bg-1: oklch(0.18 0.04 265);
+    --bg-2: oklch(0.22 0.045 265);
+    --bg-3: oklch(0.28 0.05 265);
+    --line: oklch(0.35 0.05 265 / 0.35);
+    --line-strong: oklch(0.55 0.08 265 / 0.55);
+    --fg:      oklch(0.96 0.01 265);
+    --fg-dim:  oklch(0.75 0.02 265);
+    --fg-mute: oklch(0.55 0.03 265);
+    --gold:    oklch(0.85 0.14 85);
+    /* 第 2 层 — math signature accent (electric blue) */
+    --accent: oklch(0.72 0.17 245);
+    /* 第 3 层 — math 5 色 palette (themes.js MTH-06) 给 5 个频段 */
+    --p-axis:     oklch(0.72 0.17 245);  /* AXIS  -> beta */
+    --p-proof:    oklch(0.52 0.16 245);  /* PROOF -> delta */
+    --p-shadow:   oklch(0.35 0.10 245);  /* SHADOW-> theta (深) */
+    --p-solution: oklch(0.92 0.08 240);  /* SOLUTION -> gamma (亮) */
+    --p-qed:      oklch(0.85 0.14 85);   /* QED -> alpha (金, key) */
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;padding:0;overflow:hidden;height:100vh;background:var(--bg-0);
+       font-family:'Noto Sans SC',system-ui,sans-serif;color:var(--fg);
+       display:flex;}
+  .sidebar{width:200px;flex-shrink:0;height:100vh;background:var(--bg-1);
+           border-right:1.5px solid var(--line-strong);
+           display:flex;flex-direction:column;gap:14px;padding:18px 16px;}
+  .brand{font-size:11px;letter-spacing:2px;color:var(--accent);
+         font-family:'JetBrains Mono',ui-monospace,monospace;font-weight:700;}
+  .ttl{font-size:15px;font-weight:700;line-height:1.4;margin:0;}
+  .desc{font-size:11.5px;line-height:1.5;color:var(--fg-dim);}
+  .desc .en{font-style:italic;color:var(--fg-mute);margin-top:4px;display:block;}
+  .guide{list-style:none;padding:0;margin:4px 0 0;display:flex;flex-direction:column;gap:9px;}
+  .guide li{font-size:11.5px;line-height:1.4;color:var(--fg-dim);
+            border-left:3px solid var(--accent);padding-left:8px;}
+  .mascot{margin-top:6px;align-self:center;}
+  .langbtn{margin-top:auto;border:1.5px solid var(--line-strong);background:var(--bg-2);
+           color:var(--fg);box-shadow:3px 3px 0 var(--bg-0);cursor:pointer;
+           padding:7px 12px;font-size:11.5px;font-weight:700;border-radius:4px;
+           font-family:'JetBrains Mono',ui-monospace,monospace;}
+  .langbtn:active{transform:translate(3px,3px);box-shadow:none;}
+  main{flex:1;height:100vh;position:relative;overflow:hidden;}
+  #stage{display:block;position:absolute;inset:0;width:100%;height:100%;}
+  .hud{position:absolute;top:16px;right:16px;background:var(--bg-1);
+       border:1.5px solid var(--line-strong);box-shadow:3px 3px 0 var(--bg-0);
+       padding:11px 13px;font-size:11.5px;min-width:170px;border-radius:5px;
+       font-family:'JetBrains Mono',ui-monospace,monospace;}
+  .hud .ht{font-weight:700;color:var(--accent);margin-bottom:5px;font-size:12px;}
+  .hud .hrow{color:var(--fg-dim);margin-top:3px;}
+  .hud .hv{color:var(--p-qed);}
+  .caption{position:absolute;bottom:26px;left:50%;transform:translateX(-50%);
+           text-align:center;max-width:78%;}
+  .caption .cz{font-size:19px;font-weight:700;color:var(--fg);}
+  .caption .ce{font-size:13px;font-style:italic;color:var(--fg-mute);margin-top:3px;}
+</style>
+</head>
+<body>
+  <aside class="sidebar">
+    <div class="brand" id="brand">MTH-06 / PSD</div>
+    <h1 class="ttl" id="ttl">给脑波画一张"哪种快慢最强"的图</h1>
+    <div class="desc">
+      <span id="desc1">把一段乱糟糟的脑波，换算成一张"频率配方表"。</span>
+      <span class="en" id="desc2">Turn a messy brain wave into a recipe of frequencies.</span>
+    </div>
+    <ul class="guide">
+      <li id="g1">时域：看时间，看不出快慢</li>
+      <li id="g2">傅里叶：换成频率坐标</li>
+      <li id="g3">PSD：哪个频率最强，一眼看清</li>
+    </ul>
+    <!-- mascot: Pi — 旋转四面体 (math) -->
+    <svg class="mascot" width="62" height="62" viewBox="0 0 62 62" id="mascot">
+      <g id="piRot">
+        <polygon points="31,8 54,46 8,46" fill="none" stroke="var(--accent)" stroke-width="1.6"/>
+        <polygon points="31,8 54,46 31,34" fill="var(--accent)" opacity="0.18"/>
+        <line x1="31" y1="8" x2="31" y2="34" stroke="var(--accent)" stroke-width="1.2" opacity="0.7"/>
+        <line x1="54" y1="46" x2="31" y2="34" stroke="var(--accent)" stroke-width="1.2" opacity="0.7"/>
+        <line x1="8" y1="46" x2="31" y2="34" stroke="var(--accent)" stroke-width="1.2" opacity="0.7"/>
+        <circle cx="31" cy="34" r="2.6" fill="var(--p-qed)"/>
+      </g>
+    </svg>
+    <button class="langbtn" id="langBtn">中 / EN</button>
+  </aside>
+  <main>
+    <canvas id="stage"></canvas>
+    <div class="hud">
+      <div class="ht" id="hudTtl">频谱计算</div>
+      <div class="hrow" id="hudStage">F1 · 时域信号</div>
+      <div class="hrow">峰值频率 <span class="hv" id="hudPeak">--</span></div>
+      <div class="hrow">power = <span class="hv" id="hudFormula">振幅²</span></div>
+    </div>
+    <div class="caption">
+      <div class="cz" id="subZh">这是一段脑波……</div>
+      <div class="ce" id="subEn">This is a brain wave...</div>
+    </div>
+  </main>
+<script>
+(function(){
+  "use strict";
+  var LANG='cn';
+  var I18N={
+    brand:{cn:'MTH-06 / 功率谱',en:'MTH-06 / PSD'},
+    ttl:{cn:'给脑波画一张"哪种快慢最强"的图',en:'A Chart of Which Speed Wins'},
+    desc1:{cn:'把一段乱糟糟的脑波，换算成一张"频率配方表"。',en:'Turn a messy brain wave into a recipe of frequencies.'},
+    desc2:{cn:'把一段乱糟糟的脑波，换算成一张"频率配方表"。',en:'Turn a messy brain wave into a recipe of frequencies.'},
+    g1:{cn:'时域：看时间，看不出快慢',en:'Time domain: speed is hidden'},
+    g2:{cn:'傅里叶：换成频率坐标',en:'Fourier: switch to frequency axis'},
+    g3:{cn:'PSD：哪个频率最强，一眼看清',en:'PSD: strongest frequency at a glance'},
+    hudTtl:{cn:'频谱计算',en:'spectrum'},
+    subs:{
+      cn:['这是一段脑波，横轴是时间。慢波快波全叠在一起，看不出哪种最强。',
+          '傅里叶变换登场：把同一段波，从"时间"坐标换成"频率"坐标。',
+          '每个频率都算它的能量——功率 = 振幅的平方，振幅条变成功率条。',
+          '把功率按频率画成曲线，就是 PSD：看！10Hz 这里冒出一个 alpha 峰。',
+          '闭眼时 alpha 峰更高——一张 PSD 就看清了脑波的频率配方。'],
+      en:['A brain wave, time on the x-axis. Slow and fast pile up — you cannot tell which wins.',
+          'Fourier transform: take the same wave and swap the time axis for a frequency axis.',
+          'For each frequency, compute its energy — power = amplitude squared. Bars become power.',
+          'Plot power against frequency and you get the PSD: an alpha peak rises at 10Hz.',
+          'Eyes closed, the alpha peak grows taller — one PSD reveals the brain wave recipe.']
+    }
+  };
+  function t(k){return (I18N[k]&&I18N[k][LANG])||(I18N[k]&&I18N[k].en)||k;}
+
+  var canvas=document.getElementById('stage'),ctx=canvas.getContext('2d');
+  var W=0,H=0,DPR=Math.min(window.devicePixelRatio||1,2);
+  function resize(){var r=canvas.parentElement.getBoundingClientRect();if(r.width<1||r.height<1)return;
+    W=r.width;H=r.height;canvas.width=W*DPR;canvas.height=H*DPR;
+    canvas.style.width=W+'px';canvas.style.height=H+'px';ctx.setTransform(DPR,0,0,DPR,0,0);}
+  window.addEventListener('resize',resize);setTimeout(resize,200);setTimeout(resize,600);
+  if(document.fonts&&document.fonts.ready)document.fonts.ready.then(resize);
+  var C=function(v){return getComputedStyle(document.documentElement).getPropertyValue(v).trim();};
+
+  // 5 个频段: delta(2) theta(6) alpha(10) beta(20) gamma(38) Hz, 对应 5 色 palette
+  var BANDS=[
+    {hz:2,  name:'delta', amp:0.50, col:'--p-proof'},
+    {hz:6,  name:'theta', amp:0.40, col:'--p-shadow'},
+    {hz:10, name:'alpha', amp:0.95, col:'--p-qed'},   // 主峰
+    {hz:20, name:'beta',  amp:0.32, col:'--p-axis'},
+    {hz:38, name:'gamma', amp:0.18, col:'--p-solution'}
+  ];
+
+  var startT=null, DUR=5200, TOTAL=5*DUR+1600;
+
+  function lerp(a,b,k){return a+(b-a)*k;}
+  function ease(k){return k<0?0:k>1?1:k*k*(3-2*k);}
+
+  // 合成时域信号: 各频段 sin 相加
+  function timeSignal(tt, phase, eyesClosed){
+    var v=0;
+    for(var i=0;i<BANDS.length;i++){
+      var a=BANDS[i].amp;
+      if(BANDS[i].name==='alpha') a*= eyesClosed?1.0:0.45; // 睁眼 alpha 弱
+      v+=Math.sin(tt*Math.PI*2*BANDS[i].hz + phase*(1+i*0.15))*a;
+    }
+    return v;
+  }
+
+  function drawAxes(ox,oy,w,h,xlab,ylab){
+    ctx.strokeStyle=C('--line-strong');ctx.lineWidth=1.6;
+    ctx.beginPath();ctx.moveTo(ox,oy-h);ctx.lineTo(ox,oy);ctx.lineTo(ox+w,oy);ctx.stroke();
+    ctx.fillStyle=C('--fg-mute');ctx.font="11px 'JetBrains Mono',monospace";
+    ctx.textAlign='right';ctx.fillText(ylab,ox-6,oy-h+10);
+    ctx.textAlign='center';ctx.fillText(xlab,ox+w-2,oy+18);
+  }
+
+  function draw(now){
+    if(startT===null)startT=now;
+    var el=now-startT; if(el>TOTAL){startT=now;el=0;}
+    var stage=Math.min(Math.floor(el/DUR),4);
+    var local=(el-stage*DUR)/DUR; // 0..1 该帧进度
+    if(!W||!H){requestAnimationFrame(draw);return;}
+    ctx.clearRect(0,0,W,H);
+
+    var fg=C('--fg'),dim=C('--fg-dim'),mute=C('--fg-mute'),acc=C('--accent'),gold=C('--gold');
+
+    // 背景网格 (深空淡格)
+    ctx.strokeStyle=C('--line');ctx.lineWidth=1;
+    for(var gx=0;gx<W;gx+=40){ctx.beginPath();ctx.moveTo(gx,0);ctx.lineTo(gx,H);ctx.stroke();}
+    for(var gy=0;gy<H;gy+=40){ctx.beginPath();ctx.moveTo(0,gy);ctx.lineTo(W,gy);ctx.stroke();}
+
+    var phase=now/650;
+    var L=70, R=W-50;
+    // 旋转 mascot 四面体
+    var rot=document.getElementById('piRot');
+    if(rot) rot.setAttribute('transform','rotate('+((now/30)%360)+' 31 31)');
+
+    // ---------- F1: 时域信号 ----------
+    if(stage===0){
+      var midY=H*0.5, amp=H*0.26;
+      drawAxes(L,midY+amp+30,R-L,amp*2+30,LANG==='cn'?'时间 →':'time →',LANG==='cn'?'电压':'µV');
+      ctx.strokeStyle=acc;ctx.lineWidth=2.2;ctx.beginPath();
+      for(var x=L;x<=R;x++){
+        var tt=(x-L)/(R-L);
+        var y=midY - timeSignal(tt,phase,true)*amp*0.42;
+        if(x===L)ctx.moveTo(x,y);else ctx.lineTo(x,y);
+      }
+      ctx.stroke();
+      ctx.fillStyle=mute;ctx.font="13px 'Noto Sans SC',sans-serif";ctx.textAlign='center';
+      ctx.fillText(LANG==='cn'?'慢波快波全叠在一起 — 看不出哪种最强':'slow & fast piled up — which one wins?',
+                   (L+R)/2, H*0.84);
+    }
+
+    // ---------- F2: 傅里叶变换 (时域 -> 频域) ----------
+    if(stage===1){
+      var topY=H*0.30, botY=H*0.74, amp2=H*0.10;
+      // 上: 时域波(渐隐)
+      var fade=1-ease(local);
+      ctx.globalAlpha=Math.max(0.2,fade);
+      ctx.strokeStyle=acc;ctx.lineWidth=2;ctx.beginPath();
+      for(var x2=L;x2<=R;x2++){
+        var tt2=(x2-L)/(R-L);var y2=topY - timeSignal(tt2,phase,true)*amp2*0.42;
+        if(x2===L)ctx.moveTo(x2,y2);else ctx.lineTo(x2,y2);
+      }
+      ctx.stroke();ctx.globalAlpha=1;
+      ctx.fillStyle=mute;ctx.font="11px 'JetBrains Mono',monospace";ctx.textAlign='left';
+      ctx.fillText(LANG==='cn'?'时间轴':'time axis', L, topY-amp2-10);
+
+      // 中间: 大箭头 + FFT 标签
+      var ay=(topY+amp2+botY-amp2*4)/2;
+      ctx.strokeStyle=gold;ctx.lineWidth=2.4;
+      var aw=ease(local);
+      ctx.beginPath();ctx.moveTo(W*0.5, topY+amp2+18);ctx.lineTo(W*0.5, topY+amp2+18+50*aw);ctx.stroke();
+      if(aw>0.4){
+        ctx.beginPath();ctx.moveTo(W*0.5-6,topY+amp2+18+50*aw-9);ctx.lineTo(W*0.5,topY+amp2+18+50*aw);
+        ctx.lineTo(W*0.5+6,topY+amp2+18+50*aw-9);ctx.stroke();
+      }
+      ctx.fillStyle=gold;ctx.font="13px 'JetBrains Mono',monospace";ctx.textAlign='left';
+      ctx.fillText('Fourier', W*0.5+14, topY+amp2+48);
+
+      // 下: 频域刻度出现 (空轴 + 5 个频段刻度浮现)
+      drawAxes(L,botY,R-L,amp2*4,LANG==='cn'?'频率 (Hz) →':'frequency (Hz) →','');
+      ctx.fillStyle=dim;ctx.font="11px 'JetBrains Mono',monospace";ctx.textAlign='center';
+      for(var b=0;b<BANDS.length;b++){
+        var bx=L+(BANDS[b].hz/42)*(R-L);
+        ctx.globalAlpha=ease((local-0.3)*2 - b*0.05);
+        ctx.fillStyle=C(BANDS[b].col);
+        ctx.fillText(BANDS[b].hz+'', bx, botY+16);
+        ctx.fillText(BANDS[b].name, bx, botY+30);
+        ctx.globalAlpha=1;
+      }
+      ctx.fillStyle=mute;ctx.font="11px 'JetBrains Mono',monospace";ctx.textAlign='left';
+      ctx.fillText(LANG==='cn'?'频率轴':'frequency axis', L, botY+amp2*4+2);
+    }
+
+    // ---------- F3: 振幅 -> 功率 (平方) ----------
+    if(stage===2){
+      var baseY=H*0.78, maxH=H*0.52;
+      drawAxes(L,baseY,R-L,maxH+10,LANG==='cn'?'频率 (Hz) →':'frequency (Hz) →',LANG==='cn'?'功率':'power');
+      // local<0.5 显振幅条, >0.5 平方成功率条
+      var sq=ease((local-0.3)*1.6);
+      for(var b3=0;b3<BANDS.length;b3++){
+        var band=BANDS[b3];
+        var bx3=L+(band.hz/42)*(R-L);
+        var amplitude=band.amp;
+        var power=amplitude*amplitude;
+        var hgt=lerp(amplitude,power*1.35,sq)*maxH; // 平方后 alpha 更突出
+        var col=C(band.col);
+        ctx.fillStyle=col;ctx.globalAlpha=0.85;
+        ctx.fillRect(bx3-14, baseY-hgt, 28, hgt);
+        ctx.globalAlpha=1;
+        ctx.strokeStyle=col;ctx.lineWidth=1.4;ctx.strokeRect(bx3-14,baseY-hgt,28,hgt);
+        ctx.fillStyle=dim;ctx.font="11px 'JetBrains Mono',monospace";ctx.textAlign='center';
+        ctx.fillText(band.hz+'Hz', bx3, baseY+16);
+      }
+      ctx.fillStyle=gold;ctx.font="15px 'JetBrains Mono',monospace";ctx.textAlign='center';
+      ctx.fillText(sq>0.5?'power = amp x amp':'amplitude', (L+R)/2, H*0.16);
+      ctx.fillStyle=mute;ctx.font="12px 'Noto Sans SC',sans-serif";
+      ctx.fillText(LANG==='cn'?'平方后，强的更强、弱的更弱':'squaring makes strong stronger', (L+R)/2, H*0.16+22);
+    }
+
+    // ---------- F4: PSD 曲线 (alpha 峰) ----------
+    if(stage===3){
+      var baseY4=H*0.80, maxH4=H*0.56;
+      drawAxes(L,baseY4,R-L,maxH4+10,LANG==='cn'?'频率 (Hz) →':'frequency (Hz) →',LANG==='cn'?'功率谱密度':'PSD');
+      var reveal=ease(local*1.3);
+      // PSD 曲线: 各频段高斯峰之和
+      function psd(f, eyesClosed){
+        var p=0;
+        for(var i=0;i<BANDS.length;i++){
+          var a=BANDS[i].amp; if(BANDS[i].name==='alpha')a*=eyesClosed?1.0:0.45;
+          var pw=a*a;
+          var sig=BANDS[i].hz*0.18+1.2;
+          p+=pw*Math.exp(-Math.pow(f-BANDS[i].hz,2)/(2*sig*sig));
+        }
+        return p;
+      }
+      var fmax=42, scale=maxH4/1.05;
+      ctx.strokeStyle=C('--accent');ctx.lineWidth=2.6;ctx.beginPath();
+      var lastX=L+reveal*(R-L);
+      for(var x4=L;x4<=lastX;x4++){
+        var f=(x4-L)/(R-L)*fmax;
+        var y4=baseY4 - psd(f,true)*scale;
+        if(x4===L)ctx.moveTo(x4,y4);else ctx.lineTo(x4,y4);
+      }
+      ctx.stroke();
+      // 填充曲线下面积
+      ctx.lineTo(lastX,baseY4);ctx.lineTo(L,baseY4);ctx.closePath();
+      ctx.fillStyle=C('--accent');ctx.globalAlpha=0.12;ctx.fill();ctx.globalAlpha=1;
+      // alpha 峰标注 (reveal 过 10Hz 之后)
+      var alphaX=L+(10/fmax)*(R-L);
+      if(reveal>(10/fmax)){
+        var alphaY=baseY4 - psd(10,true)*scale;
+        ctx.fillStyle=C('--p-qed');ctx.beginPath();ctx.arc(alphaX,alphaY,5,0,7);ctx.fill();
+        ctx.strokeStyle=C('--p-qed');ctx.setLineDash([3,3]);ctx.lineWidth=1;
+        ctx.beginPath();ctx.moveTo(alphaX,alphaY);ctx.lineTo(alphaX,baseY4);ctx.stroke();ctx.setLineDash([]);
+        ctx.fillStyle=C('--p-qed');ctx.font="12px 'JetBrains Mono',monospace";ctx.textAlign='center';
+        ctx.fillText('alpha 10Hz', alphaX, alphaY-12);
+      }
+      // 频段刻度
+      ctx.font="10px 'JetBrains Mono',monospace";ctx.textAlign='center';
+      for(var b4=0;b4<BANDS.length;b4++){
+        var bx4=L+(BANDS[b4].hz/fmax)*(R-L);
+        ctx.fillStyle=C(BANDS[b4].col);ctx.fillText(BANDS[b4].hz+'',bx4,baseY4+15);
+      }
+    }
+
+    // ---------- F5: 闭眼 vs 睁眼 对比 + gold 印章 ----------
+    if(stage===4){
+      var baseY5=H*0.80, maxH5=H*0.52;
+      drawAxes(L,baseY5,R-L,maxH5+10,LANG==='cn'?'频率 (Hz) →':'frequency (Hz) →',LANG==='cn'?'功率谱密度':'PSD');
+      function psd5(f, eyesClosed){
+        var p=0;
+        for(var i=0;i<BANDS.length;i++){
+          var a=BANDS[i].amp; if(BANDS[i].name==='alpha')a*=eyesClosed?1.0:0.45;
+          var pw=a*a; var sig=BANDS[i].hz*0.18+1.2;
+          p+=pw*Math.exp(-Math.pow(f-BANDS[i].hz,2)/(2*sig*sig));
+        }
+        return p;
+      }
+      var fmax5=42, scale5=maxH5/1.05;
+      // 睁眼 (淡虚线)
+      ctx.strokeStyle=C('--fg-mute');ctx.lineWidth=1.8;ctx.setLineDash([5,4]);ctx.beginPath();
+      for(var x5=L;x5<=R;x5++){var f5=(x5-L)/(R-L)*fmax5;var y5=baseY5-psd5(f5,false)*scale5;
+        if(x5===L)ctx.moveTo(x5,y5);else ctx.lineTo(x5,y5);}
+      ctx.stroke();ctx.setLineDash([]);
+      // 闭眼 (实线 accent)
+      ctx.strokeStyle=C('--accent');ctx.lineWidth=2.6;ctx.beginPath();
+      for(var x6=L;x6<=R;x6++){var f6=(x6-L)/(R-L)*fmax5;var y6=baseY5-psd5(f6,true)*scale5;
+        if(x6===L)ctx.moveTo(x6,y6);else ctx.lineTo(x6,y6);}
+      ctx.stroke();
+      // alpha 峰差: 金色高亮闭眼峰升高
+      var alphaX5=L+(10/fmax5)*(R-L);
+      var yc=baseY5-psd5(10,true)*scale5, yo=baseY5-psd5(10,false)*scale5;
+      var pulse=0.5+0.5*Math.sin(now/300);
+      ctx.strokeStyle=C('--gold');ctx.lineWidth=2;ctx.globalAlpha=0.5+0.5*pulse;
+      ctx.beginPath();ctx.moveTo(alphaX5,yo);ctx.lineTo(alphaX5,yc);ctx.stroke();ctx.globalAlpha=1;
+      ctx.fillStyle=C('--gold');ctx.beginPath();ctx.arc(alphaX5,yc,5,0,7);ctx.fill();
+      ctx.font="11px 'JetBrains Mono',monospace";ctx.textAlign='center';
+      ctx.fillText(LANG==='cn'?'闭眼 alpha 更高':'closed-eye alpha taller', alphaX5, yc-14);
+      // 图例
+      ctx.textAlign='left';ctx.font="11px 'JetBrains Mono',monospace";
+      ctx.strokeStyle=C('--accent');ctx.lineWidth=2.6;ctx.beginPath();ctx.moveTo(L+10,H*0.16);ctx.lineTo(L+38,H*0.16);ctx.stroke();
+      ctx.fillStyle=dim;ctx.fillText(LANG==='cn'?'闭眼':'eyes closed',L+46,H*0.16+4);
+      ctx.strokeStyle=C('--fg-mute');ctx.setLineDash([5,4]);ctx.beginPath();ctx.moveTo(L+150,H*0.16);ctx.lineTo(L+178,H*0.16);ctx.stroke();ctx.setLineDash([]);
+      ctx.fillText(LANG==='cn'?'睁眼':'eyes open',L+186,H*0.16+4);
+      // gold 印章
+      var stampK=ease((local-0.4)*2);
+      if(stampK>0){
+        ctx.globalAlpha=stampK;
+        ctx.fillStyle=C('--gold');ctx.font="700 17px 'Noto Sans SC',sans-serif";ctx.textAlign='center';
+        ctx.fillText(LANG==='cn'?'PSD 一图看清脑波的频率配方':'PSD: the brain wave recipe at a glance',(L+R)/2,H*0.26);
+        ctx.globalAlpha=1;
+      }
+    }
+
+    // HUD 更新
+    var peakTxt = stage<3 ? (LANG==='cn'?'计算中':'computing') : '10 Hz (alpha)';
+    document.getElementById('hudStage').textContent='F'+(stage+1)+' · '+
+      [LANG==='cn'?'时域信号':'time domain',LANG==='cn'?'傅里叶变换':'Fourier',
+       LANG==='cn'?'功率 = 振幅²':'power = amp²',LANG==='cn'?'PSD 曲线':'PSD curve',
+       LANG==='cn'?'状态对比':'state compare'][stage];
+    document.getElementById('hudPeak').textContent=peakTxt;
+    document.getElementById('hudFormula').textContent=LANG==='cn'?'振幅²':'amp²';
+
+    document.getElementById('subZh').textContent=I18N.subs.cn[stage];
+    document.getElementById('subEn').textContent=I18N.subs.en[stage];
+    requestAnimationFrame(draw);
+  }
+
+  function refreshI18N(){
+    document.getElementById('brand').textContent=t('brand');
+    document.getElementById('ttl').textContent=t('ttl');
+    document.getElementById('desc1').textContent=t('desc1');
+    document.getElementById('desc2').textContent=LANG==='cn'?I18N.desc1.en:I18N.desc1.en;
+    document.getElementById('g1').textContent=t('g1');
+    document.getElementById('g2').textContent=t('g2');
+    document.getElementById('g3').textContent=t('g3');
+    document.getElementById('hudTtl').textContent=t('hudTtl');
+  }
+  // desc2 始终显示英文副本
+  document.getElementById('desc2').textContent=I18N.desc1.en;
+
+  document.getElementById('langBtn').addEventListener('click',function(){
+    LANG=LANG==='cn'?'en':'cn';
+    this.textContent=LANG==='cn'?'中 / EN':'EN / 中';
+    document.getElementById('desc2').textContent=LANG==='cn'?I18N.desc1.en:I18N.desc1.cn;
+    refreshI18N();
+  });
+  resize();requestAnimationFrame(draw);
+})();
+</script>
+</body>
+</html>

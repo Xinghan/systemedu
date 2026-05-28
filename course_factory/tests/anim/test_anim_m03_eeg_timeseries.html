@@ -1,0 +1,785 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>脑波现形 - 一个数变成一条线</title>
+<style>
+  :root{
+    /* 第 1 层 — 共享深空底 (所有 26 套统一) */
+    --bg-0: oklch(0.14 0.035 265);
+    --bg-1: oklch(0.18 0.04 265);
+    --bg-2: oklch(0.22 0.045 265);
+    --bg-3: oklch(0.28 0.05 265);
+    --line: oklch(0.35 0.05 265 / 0.35);
+    --line-strong: oklch(0.55 0.08 265 / 0.55);
+    --fg:      oklch(0.96 0.01 265);
+    --fg-dim:  oklch(0.75 0.02 265);
+    --fg-mute: oklch(0.55 0.03 265);
+    --gold:    oklch(0.85 0.14 85);
+
+    /* 第 2 层 — neuro 学科 accent (cortex-coral) */
+    --accent: oklch(0.75 0.17 25);
+
+    /* 第 3 层 — neuro 5 色 palette (Cortex Map) */
+    --synaptic: oklch(0.75 0.17 25);
+    --dendrite: oklch(0.55 0.15 25);
+    --axon:     oklch(0.32 0.10 25);
+    --firing:   oklch(0.92 0.08 25);
+    --memory:   oklch(0.85 0.14 85);
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    height:100vh;overflow:hidden;background:var(--bg-0);color:var(--fg);
+    font-family:'Inter','Noto Sans SC',system-ui,sans-serif;
+    display:flex;
+  }
+  .sidebar{
+    width:200px;flex-shrink:0;height:100vh;
+    background:var(--bg-1);border-right:1px solid var(--line);
+    padding:18px 16px;display:flex;flex-direction:column;gap:14px;
+  }
+  .brand{font-size:11px;letter-spacing:0.14em;color:var(--fg-mute);
+         font-family:'JetBrains Mono',monospace;}
+  .brand b{color:var(--accent);}
+  .title{font-size:16px;font-weight:700;color:var(--fg);line-height:1.35;}
+  .subtitle{font-size:11px;color:var(--fg-dim);line-height:1.5;font-style:italic;}
+  .mascot-wrap{display:flex;justify-content:center;padding:6px 0;}
+  .guide{display:flex;flex-direction:column;gap:8px;}
+  .guide-li{
+    font-size:11px;color:var(--fg-dim);line-height:1.5;
+    padding:6px 8px;border-left:2px solid var(--accent);
+    background:var(--bg-2);
+  }
+  .lang-btn{
+    margin-top:auto;
+    font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;
+    padding:8px 12px;background:var(--bg-2);color:var(--fg);
+    border:1px solid var(--line-strong);cursor:pointer;
+    box-shadow:3px 3px 0 var(--bg-0);
+  }
+  .lang-btn:active{transform:translate(2px,2px);box-shadow:none;}
+
+  main{flex:1;height:100vh;position:relative;overflow:hidden;}
+  canvas#stage{position:absolute;inset:0;width:100%;height:100%;display:block;}
+  .hud{
+    position:absolute;top:14px;right:14px;
+    background:oklch(0.18 0.04 265 / 0.78);backdrop-filter:blur(6px);
+    border:1px solid var(--line-strong);box-shadow:3px 3px 0 var(--bg-0);
+    padding:10px 14px;font-family:'JetBrains Mono',monospace;
+    font-size:11px;min-width:178px;
+  }
+  .hud-ttl{font-size:10px;letter-spacing:0.12em;color:var(--accent);
+           font-weight:700;margin-bottom:4px;}
+  .hud-frame{font-size:18px;font-weight:700;color:var(--fg);}
+  .hud-stage{color:var(--fg-dim);margin-top:3px;font-size:11px;}
+  .hud-val{color:var(--gold);margin-top:5px;font-size:11px;}
+
+  .subtitles{
+    position:absolute;left:50%;bottom:22px;transform:translateX(-50%);
+    text-align:center;max-width:80%;
+    pointer-events:none;
+  }
+  .sub-zh{font-size:18px;font-weight:700;color:var(--fg);line-height:1.4;}
+  .sub-en{font-size:12px;font-style:italic;color:var(--fg-mute);margin-top:4px;}
+  .sub-zh.gold{color:var(--gold);}
+</style>
+</head>
+<body>
+  <aside class="sidebar">
+    <div class="brand"><b>NRO-20</b> / CORTEX MAP</div>
+    <div class="title" id="ttl">脑波现形</div>
+    <div class="subtitle" id="subtitle">一个电压值, 怎么变成一条起伏的线?</div>
+
+    <div class="mascot-wrap">
+      <svg width="80" height="86" viewBox="0 0 80 86" aria-label="Spark mascot">
+        <defs>
+          <radialGradient id="sparkGlow" cx="50%" cy="50%" r="50%">
+            <stop offset="0%"  stop-color="oklch(0.92 0.08 25)" stop-opacity="0.95"/>
+            <stop offset="55%" stop-color="oklch(0.75 0.17 25)" stop-opacity="0.6"/>
+            <stop offset="100%" stop-color="oklch(0.55 0.15 25)" stop-opacity="0"/>
+          </radialGradient>
+        </defs>
+        <ellipse cx="40" cy="42" rx="24" ry="27" fill="url(#sparkGlow)"
+                 stroke="oklch(0.75 0.17 25)" stroke-width="1.4" opacity="0.85"/>
+        <!-- 树突分支 -->
+        <path d="M40 56 L40 40 M40 40 L30 30 M30 30 L24 24 M30 30 L34 22
+                 M40 40 L50 30 M50 30 L56 24 M50 30 L46 22 M40 40 L40 26"
+              fill="none" stroke="oklch(0.75 0.17 25)" stroke-width="2"
+              stroke-linecap="round"/>
+        <!-- 分支末端发光点 -->
+        <circle cx="24" cy="24" r="2.4" fill="oklch(0.92 0.08 25)">
+          <animate attributeName="opacity" values="0.4;1;0.4" dur="2.2s" begin="0s" repeatCount="indefinite"/>
+        </circle>
+        <circle cx="34" cy="22" r="2.4" fill="oklch(0.92 0.08 25)">
+          <animate attributeName="opacity" values="0.4;1;0.4" dur="2.2s" begin="0.5s" repeatCount="indefinite"/>
+        </circle>
+        <circle cx="40" cy="26" r="2.4" fill="oklch(0.92 0.08 25)">
+          <animate attributeName="opacity" values="0.4;1;0.4" dur="2.2s" begin="1.0s" repeatCount="indefinite"/>
+        </circle>
+        <circle cx="46" cy="22" r="2.4" fill="oklch(0.92 0.08 25)">
+          <animate attributeName="opacity" values="0.4;1;0.4" dur="2.2s" begin="1.5s" repeatCount="indefinite"/>
+        </circle>
+        <circle cx="56" cy="24" r="2.4" fill="oklch(0.92 0.08 25)">
+          <animate attributeName="opacity" values="0.4;1;0.4" dur="2.2s" begin="0.8s" repeatCount="indefinite"/>
+        </circle>
+        <!-- 核心 -->
+        <circle cx="40" cy="42" r="4" fill="oklch(0.92 0.08 25)">
+          <animate attributeName="r" values="3.2;5;3.2" dur="2.4s" repeatCount="indefinite"/>
+        </circle>
+        <text x="40" y="80" text-anchor="middle" font-family="JetBrains Mono,monospace"
+              font-size="8" fill="oklch(0.55 0.03 265)" letter-spacing="1">SPARK</text>
+      </svg>
+    </div>
+
+    <div class="guide">
+      <div class="guide-li" id="g1">每一刻测一个电压 (微伏)</div>
+      <div class="guide-li" id="g2">每秒测 250 次 = 250 Hz</div>
+      <div class="guide-li" id="g3">数字连成线 脑波现形</div>
+    </div>
+
+    <button id="langBtn" class="lang-btn">CN / EN</button>
+  </aside>
+
+  <main>
+    <canvas id="stage"></canvas>
+    <div class="hud">
+      <div class="hud-ttl" id="hudTtl">画面</div>
+      <div class="hud-frame" id="hudFrame">1 / 5</div>
+      <div class="hud-stage" id="hudStage">单点电压</div>
+      <div class="hud-val" id="hudVal">U = +12 uV</div>
+    </div>
+    <div class="subtitles">
+      <div class="sub-zh" id="subZh">头皮上的电极, 此刻测到一个电压: +12 微伏.</div>
+      <div class="sub-en" id="subEn">The scalp electrode reads one voltage right now: +12 uV.</div>
+    </div>
+  </main>
+
+<script>
+(function(){
+  "use strict";
+
+  var LANG = 'cn';
+  var I18N = {
+    ttl: {cn:'脑波现形', en:'A Brainwave Appears'},
+    subtitle: {cn:'一个电压值, 怎么变成一条起伏的线?',
+               en:'How does one voltage become a rolling line?'},
+    g1: {cn:'每一刻测一个电压 (微伏)', en:'One voltage per moment (uV)'},
+    g2: {cn:'每秒测 250 次 = 250 Hz',  en:'250 reads per second = 250 Hz'},
+    g3: {cn:'数字连成线 脑波现形',      en:'Numbers join into a line'},
+    hudTtl: {cn:'画面', en:'FRAME'},
+    stages: {
+      cn:['单点电压','采样率 250Hz','一串数字 = 数组','连点成线','脑波现形'],
+      en:['ONE VOLTAGE','SAMPLE 250Hz','ARRAY OF NUMBERS','DOTS TO LINE','WAVE REVEALED']
+    },
+    hudVals: {
+      cn:['U = +12 uV','250 次 / 秒','长度 = 250 个数','一笔连起来','alpha 8-12 Hz'],
+      en:['U = +12 uV','250 reads / s','length = 250','one stroke','alpha 8-12 Hz']
+    },
+    subs: {
+      cn:[
+        '头皮上的电极, 此刻测到一个电压: +12 微伏.',
+        '电极不停地测: 每秒 250 次, 这叫采样率 250 Hz.',
+        '把每次的电压排成一串数字, 这就是一个数组.',
+        '按时间顺序, 把每个数字连成一笔 -- 折线出现了.',
+        '这就是你大脑活动的样子, 你第一次看见了它.'
+      ],
+      en:[
+        'The scalp electrode reads one voltage right now: +12 uV.',
+        'It keeps reading: 250 times a second -- a 250 Hz sample rate.',
+        'Line up each voltage into a row of numbers -- thats an array.',
+        'Join the numbers in time order, one stroke -- a line appears.',
+        'This is what your brain activity looks like. You see it for the first time.'
+      ]
+    }
+  };
+  function t(k){return (I18N[k]&&I18N[k][LANG])||(I18N[k]&&I18N[k].en)||k;}
+
+  // ---- 真实脑波合成 (alpha 主导 + 少量 noise), 单位 uV ----
+  // 用确定式合成保证每次渲染一致, F4/F5 共用同一波形
+  var FS = 250;                 // 采样率 250 Hz
+  var WAVE_SECONDS = 1.0;       // 展示 1 秒数据
+  var N = Math.round(FS * WAVE_SECONDS);
+  var WAVE = [];                // 250 个电压样本 (uV)
+  (function buildWave(){
+    for (var i = 0; i < N; i++){
+      var tt = i / FS;
+      var v = 0;
+      v += 18 * Math.sin(2*Math.PI*10*tt);          // 10 Hz alpha 主节律
+      v +=  6 * Math.sin(2*Math.PI*22*tt + 0.7);    // beta 叠加
+      v +=  4 * Math.sin(2*Math.PI*5*tt + 1.3);     // theta 慢波
+      // 伪随机但确定的 noise
+      v += 3 * Math.sin(i * 12.9898) * Math.cos(i * 4.1414);
+      WAVE.push(v);
+    }
+  })();
+  // 前几个整数样本 (给 F1/F3 显示成数字)
+  var SAMPLE_INTS = [];
+  for (var si = 0; si < WAVE.length; si++) SAMPLE_INTS.push(Math.round(WAVE[si]));
+
+  var canvas = document.getElementById('stage');
+  var ctx = canvas.getContext('2d');
+  var W = 0, H = 0, DPR = Math.min(window.devicePixelRatio || 1, 2);
+
+  function resize(){
+    var host = canvas.parentElement;
+    var r = host.getBoundingClientRect();
+    if (r.width < 2 || r.height < 2) return;
+    W = r.width; H = r.height;
+    canvas.width = W * DPR; canvas.height = H * DPR;
+    canvas.style.width = W + 'px'; canvas.style.height = H + 'px';
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  }
+  window.addEventListener('resize', resize);
+  setTimeout(resize, 60);
+  setTimeout(resize, 400);
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(resize);
+
+  var CSSV = function(v){
+    return getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+  };
+
+  // ---- 时间轴 ----
+  var FRAME_DUR = 6500;
+  var TOTAL_FRAMES = 5;
+  var CYCLE = FRAME_DUR * TOTAL_FRAMES;
+  var startT = null;
+  var lastFrameShown = -1;
+
+  function frameProgress(now){
+    if (startT === null) startT = now;
+    var el = (now - startT) % CYCLE;
+    var idx = Math.floor(el / FRAME_DUR);
+    var u   = (el - idx * FRAME_DUR) / FRAME_DUR;
+    return {idx: idx, u: u, t: now};
+  }
+
+  function easeIO(u){return u<0.5?2*u*u:1-Math.pow(-2*u+2,2)/2;}
+  function lerp(a,b,u){return a+(b-a)*u;}
+
+  // 波形画布区域 (F2-F5 复用同一坐标系)
+  function plotBox(){
+    var x0 = W*0.14, x1 = W*0.90;
+    var yMid = H*0.54;
+    var amp = Math.min(H*0.20, 150);     // 18uV -> amp px
+    return {x0:x0, x1:x1, yMid:yMid, amp:amp, scaleY: amp/24};
+  }
+
+  // 画坐标轴 (时间 x, 电压 y)
+  function drawAxes(box, showGrid){
+    // 0 电压基线
+    ctx.strokeStyle = CSSV('--line-strong');
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(box.x0, box.yMid); ctx.lineTo(box.x1, box.yMid); ctx.stroke();
+    // y 轴
+    ctx.beginPath(); ctx.moveTo(box.x0, box.yMid - box.amp - 20); ctx.lineTo(box.x0, box.yMid + box.amp + 20); ctx.stroke();
+    if (showGrid){
+      ctx.strokeStyle = CSSV('--line');
+      ctx.lineWidth = 1;
+      for (var g = 1; g <= 4; g++){
+        var fx = box.x0 + (box.x1 - box.x0) * g / 4;
+        ctx.beginPath(); ctx.moveTo(fx, box.yMid - box.amp - 20); ctx.lineTo(fx, box.yMid + box.amp + 20); ctx.stroke();
+      }
+    }
+    // 轴标签
+    ctx.fillStyle = CSSV('--fg-mute');
+    ctx.font = "600 11px 'JetBrains Mono',monospace";
+    ctx.textAlign = 'left';
+    ctx.fillText(LANG==='cn'?'电压 uV':'uV', box.x0 - 4, box.yMid - box.amp - 28);
+    ctx.textAlign = 'right';
+    ctx.fillText(LANG==='cn'?'时间 ->':'time ->', box.x1, box.yMid + box.amp + 38);
+    ctx.fillText('0', box.x0 - 8, box.yMid + 4);
+  }
+
+  // ============== 帧 1: 单点电压 ==============
+  function drawFrame1(u, now){
+    var box = plotBox();
+    drawAxes(box, false);
+
+    // 头皮 + 电极示意 (左侧)
+    var headX = W*0.07, headY = H*0.30, headR = 34;
+    ctx.strokeStyle = CSSV('--dendrite');
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(headX, headY, headR, Math.PI*0.15, Math.PI*1.85); ctx.stroke();
+    // 电极
+    var elecX = headX, elecY = headY - headR + 6;
+    var elecPulse = 0.5 + 0.5*Math.sin(now/300);
+    ctx.fillStyle = CSSV('--synaptic');
+    ctx.globalAlpha = 0.5 + 0.5*elecPulse;
+    ctx.beginPath(); ctx.arc(elecX, elecY, 6, 0, Math.PI*2); ctx.fill();
+    ctx.globalAlpha = 1;
+    ctx.strokeStyle = CSSV('--firing');
+    ctx.lineWidth = 1.4;
+    ctx.beginPath(); ctx.arc(elecX, elecY, 6 + elecPulse*5, 0, Math.PI*2); ctx.stroke();
+    ctx.fillStyle = CSSV('--fg-dim');
+    ctx.font = "600 10px 'JetBrains Mono',monospace";
+    ctx.textAlign = 'center';
+    ctx.fillText(LANG==='cn'?'电极':'ELECTRODE', headX, headY + headR + 18);
+
+    // 当前样本值随时间小幅跳动 (取波形前段循环)
+    var k = Math.floor(u * 8) % SAMPLE_INTS.length;
+    var val = SAMPLE_INTS[k];
+    // 数据线 从电极到主舞台
+    ctx.strokeStyle = CSSV('--axon');
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([4,4]);
+    ctx.beginPath(); ctx.moveTo(elecX + 8, elecY); ctx.lineTo(box.x0 + 90, box.yMid - val*box.scaleY); ctx.stroke();
+    ctx.setLineDash([]);
+
+    // 单点 大圆 落在坐标系
+    var ptX = box.x0 + 90;
+    var ptY = box.yMid - val*box.scaleY;
+    // 引导虚线到轴
+    ctx.strokeStyle = CSSV('--line');
+    ctx.lineWidth = 1;
+    ctx.setLineDash([3,3]);
+    ctx.beginPath(); ctx.moveTo(box.x0, ptY); ctx.lineTo(ptX, ptY); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(ptX, box.yMid); ctx.lineTo(ptX, ptY); ctx.stroke();
+    ctx.setLineDash([]);
+    // halo
+    ctx.fillStyle = CSSV('--synaptic');
+    ctx.globalAlpha = 0.25;
+    ctx.beginPath(); ctx.arc(ptX, ptY, 22, 0, Math.PI*2); ctx.fill();
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = CSSV('--firing');
+    ctx.beginPath(); ctx.arc(ptX, ptY, 8, 0, Math.PI*2); ctx.fill();
+
+    // 大数字读数
+    ctx.fillStyle = CSSV('--synaptic');
+    ctx.font = "700 46px 'JetBrains Mono',monospace";
+    ctx.textAlign = 'center';
+    ctx.fillText((val>=0?'+':'') + val, W*0.58, H*0.22);
+    ctx.fillStyle = CSSV('--fg-dim');
+    ctx.font = "600 15px 'JetBrains Mono',monospace";
+    ctx.fillText(LANG==='cn'?'微伏 (uV)':'micro-volts (uV)', W*0.58, H*0.27);
+
+    // insight
+    ctx.fillStyle = CSSV('--fg-dim');
+    ctx.font = "600 14px 'Inter','Noto Sans SC',sans-serif";
+    ctx.textAlign = 'center';
+    ctx.fillText(LANG==='cn' ? '此刻, 电极只测到一个数。' : 'Right now, the electrode reads just one number.',
+                 W*0.52, box.yMid + box.amp + 70);
+  }
+
+  // ============== 帧 2: 采样率 250 Hz ==============
+  function drawFrame2(u, now){
+    var box = plotBox();
+    drawAxes(box, false);
+
+    // 时间标尺 1 秒 = 250 次
+    var shown = Math.min(N, Math.floor(easeIO(Math.min(1,u/0.85)) * N));
+    // 离散采样点 (按真实波形, 但只画点不连线)
+    for (var i = 0; i < shown; i++){
+      var px = lerp(box.x0, box.x1, i / (N - 1));
+      var py = box.yMid - WAVE[i] * box.scaleY;
+      // 采样竖线 (stem)
+      ctx.strokeStyle = CSSV('--axon');
+      ctx.globalAlpha = 0.5;
+      ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(px, box.yMid); ctx.lineTo(px, py); ctx.stroke();
+      ctx.globalAlpha = 1;
+      // 采样点
+      ctx.fillStyle = CSSV('--synaptic');
+      ctx.beginPath(); ctx.arc(px, py, 1.8, 0, Math.PI*2); ctx.fill();
+    }
+    // 最新采样高亮
+    if (shown > 0){
+      var li = shown - 1;
+      var lx = lerp(box.x0, box.x1, li / (N - 1));
+      var ly = box.yMid - WAVE[li] * box.scaleY;
+      ctx.fillStyle = CSSV('--firing');
+      ctx.beginPath(); ctx.arc(lx, ly, 4, 0, Math.PI*2); ctx.fill();
+      ctx.strokeStyle = CSSV('--firing');
+      ctx.globalAlpha = 0.4 + 0.3*Math.sin(now/120);
+      ctx.lineWidth = 1.3;
+      ctx.beginPath(); ctx.arc(lx, ly, 9, 0, Math.PI*2); ctx.stroke();
+      ctx.globalAlpha = 1;
+    }
+
+    // 计数器
+    ctx.fillStyle = CSSV('--synaptic');
+    ctx.font = "700 40px 'JetBrains Mono',monospace";
+    ctx.textAlign = 'left';
+    ctx.fillText(shown + ' / 250', box.x0, H*0.20);
+    ctx.fillStyle = CSSV('--fg-dim');
+    ctx.font = "600 13px 'Inter','Noto Sans SC',sans-serif";
+    ctx.fillText(LANG==='cn'?'这一秒, 已经测了这么多次':'reads taken this second', box.x0, H*0.25);
+
+    // 250 Hz 标签
+    ctx.fillStyle = CSSV('--gold');
+    ctx.font = "700 16px 'JetBrains Mono',monospace";
+    ctx.textAlign = 'right';
+    ctx.fillText('250 Hz', box.x1, H*0.20);
+    ctx.fillStyle = CSSV('--fg-dim');
+    ctx.font = "600 12px 'Inter','Noto Sans SC',sans-serif";
+    ctx.fillText(LANG==='cn'?'采样率 = 每秒次数':'sample rate = reads/sec', box.x1, H*0.245);
+
+    // 1 秒标尺
+    ctx.strokeStyle = CSSV('--fg-mute');
+    ctx.lineWidth = 1.4;
+    var sy = box.yMid + box.amp + 30;
+    ctx.beginPath();
+    ctx.moveTo(box.x0, sy); ctx.lineTo(box.x1, sy);
+    ctx.moveTo(box.x0, sy-5); ctx.lineTo(box.x0, sy+5);
+    ctx.moveTo(box.x1, sy-5); ctx.lineTo(box.x1, sy+5);
+    ctx.stroke();
+    ctx.fillStyle = CSSV('--fg-mute');
+    ctx.font = "600 12px 'JetBrains Mono',monospace";
+    ctx.textAlign = 'center';
+    ctx.fillText(LANG==='cn'?'1 秒':'1 second', (box.x0+box.x1)/2, sy + 18);
+  }
+
+  // ============== 帧 3: 一串数字 = 数组 ==============
+  function drawFrame3(u, now){
+    var box = plotBox();
+    // 上半: 离散采样点保留 (灰淡)
+    for (var i = 0; i < N; i += 1){
+      var px = lerp(box.x0, box.x1, i / (N - 1));
+      var py = box.yMid*0.62 - WAVE[i] * box.scaleY*0.5;
+      ctx.fillStyle = CSSV('--axon');
+      ctx.globalAlpha = 0.55;
+      ctx.beginPath(); ctx.arc(px, py, 1.4, 0, Math.PI*2); ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+    // 基线
+    ctx.strokeStyle = CSSV('--line');
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(box.x0, box.yMid*0.62); ctx.lineTo(box.x1, box.yMid*0.62); ctx.stroke();
+    ctx.fillStyle = CSSV('--fg-mute');
+    ctx.font = "600 11px 'JetBrains Mono',monospace";
+    ctx.textAlign = 'left';
+    ctx.fillText(LANG==='cn'?'每个采样点 -> 一个数字':'each sample -> one number', box.x0, box.yMid*0.62 - box.amp*0.5 - 14);
+
+    // 数组方框: 前 10 个数字逐个"落"进格子
+    var cells = 10;
+    var cellW = 64, cellH = 38, gap = 6;
+    var totalW = cells*cellW + (cells-1)*gap;
+    var gx0 = (W - totalW)/2;
+    var gy = H*0.62;
+    var revealed = Math.floor(easeIO(Math.min(1,u/0.8)) * cells);
+
+    // 大括号
+    ctx.fillStyle = CSSV('--synaptic');
+    ctx.font = "700 30px 'JetBrains Mono',monospace";
+    ctx.textAlign = 'center';
+    ctx.fillText('[', gx0 - 18, gy + cellH*0.72);
+    ctx.fillText(']', gx0 + totalW + 22, gy + cellH*0.72);
+    ctx.fillStyle = CSSV('--fg-dim');
+    ctx.font = "600 14px 'JetBrains Mono',monospace";
+    ctx.fillText('...', gx0 + totalW + 52, gy + cellH*0.72);
+
+    for (var c = 0; c < cells; c++){
+      var cx = gx0 + c*(cellW+gap);
+      var on = c < revealed;
+      ctx.strokeStyle = on ? CSSV('--synaptic') : CSSV('--line');
+      ctx.lineWidth = on ? 1.6 : 1;
+      ctx.fillStyle = CSSV('--bg-2');
+      ctx.beginPath();
+      ctx.rect(cx, gy, cellW, cellH);
+      ctx.fill(); ctx.stroke();
+      if (on){
+        var v = SAMPLE_INTS[c];
+        ctx.fillStyle = (v>=0) ? CSSV('--firing') : CSSV('--dendrite');
+        ctx.font = "700 16px 'JetBrains Mono',monospace";
+        ctx.textAlign = 'center';
+        ctx.fillText((v>=0?'+':'') + v, cx + cellW/2, gy + cellH*0.68);
+        // index
+        ctx.fillStyle = CSSV('--fg-mute');
+        ctx.font = "600 9px 'JetBrains Mono',monospace";
+        ctx.fillText('['+c+']', cx + cellW/2, gy + cellH + 13);
+      }
+      // 落点连线动画: 最新落下的格子 从采样点引一条线
+      if (on && c === revealed-1 && revealed < cells){
+        var spx = lerp(box.x0, box.x1, c / (N - 1));
+        var spy = box.yMid*0.62 - WAVE[c] * box.scaleY*0.5;
+        ctx.strokeStyle = CSSV('--firing');
+        ctx.globalAlpha = 0.7;
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([4,3]);
+        ctx.beginPath(); ctx.moveTo(spx, spy); ctx.lineTo(cx + cellW/2, gy); ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.globalAlpha = 1;
+      }
+    }
+
+    // 数组说明
+    ctx.fillStyle = CSSV('--gold');
+    ctx.font = "700 16px 'Inter','Noto Sans SC',sans-serif";
+    ctx.textAlign = 'center';
+    ctx.fillText(LANG==='cn'?'一串数字 = 一个数组 (array)':'a row of numbers = an array',
+                 W/2, gy + cellH + 50);
+    ctx.fillStyle = CSSV('--fg-dim');
+    ctx.font = "600 12px 'JetBrains Mono',monospace";
+    ctx.fillText(LANG==='cn'?'长度 = 250 (每秒 250 个数)':'length = 250 (250 per second)',
+                 W/2, gy + cellH + 72);
+  }
+
+  // ============== 帧 4: 连点成线 ==============
+  function drawFrame4(u, now){
+    var box = plotBox();
+    drawAxes(box, true);
+
+    // 离散点仍在 (淡)
+    for (var i = 0; i < N; i++){
+      var px = lerp(box.x0, box.x1, i / (N - 1));
+      var py = box.yMid - WAVE[i] * box.scaleY;
+      ctx.fillStyle = CSSV('--axon');
+      ctx.globalAlpha = 0.45;
+      ctx.beginPath(); ctx.arc(px, py, 1.4, 0, Math.PI*2); ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+
+    // 折线: 从左往右逐段"连起来"
+    var drawn = easeIO(Math.min(1, u/0.85));
+    var lastIdx = Math.max(1, Math.floor(drawn * (N - 1)));
+    ctx.strokeStyle = CSSV('--synaptic');
+    ctx.lineWidth = 2.4;
+    ctx.lineJoin = 'round';
+    ctx.beginPath();
+    for (var j = 0; j <= lastIdx; j++){
+      var lx = lerp(box.x0, box.x1, j / (N - 1));
+      var ly = box.yMid - WAVE[j] * box.scaleY;
+      if (j === 0) ctx.moveTo(lx, ly);
+      else ctx.lineTo(lx, ly);
+    }
+    ctx.stroke();
+
+    // 画笔头 (正在连线的笔尖)
+    if (lastIdx < N - 1){
+      var penX = lerp(box.x0, box.x1, lastIdx / (N - 1));
+      var penY = box.yMid - WAVE[lastIdx] * box.scaleY;
+      ctx.fillStyle = CSSV('--firing');
+      ctx.beginPath(); ctx.arc(penX, penY, 5, 0, Math.PI*2); ctx.fill();
+      ctx.strokeStyle = CSSV('--firing');
+      ctx.globalAlpha = 0.4 + 0.3*Math.sin(now/100);
+      ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.arc(penX, penY, 11, 0, Math.PI*2); ctx.stroke();
+      ctx.globalAlpha = 1;
+    }
+
+    // 说明
+    ctx.fillStyle = CSSV('--fg-dim');
+    ctx.font = "600 14px 'Inter','Noto Sans SC',sans-serif";
+    ctx.textAlign = 'center';
+    ctx.fillText(LANG==='cn'?'按时间顺序, 一笔把数字连起来':'join the numbers in time order, one stroke',
+                 W/2, H*0.20);
+    if (drawn > 0.95){
+      ctx.fillStyle = CSSV('--gold');
+      ctx.font = "700 16px 'Inter','Noto Sans SC',sans-serif";
+      ctx.globalAlpha = Math.min(1, (drawn-0.95)/0.05);
+      ctx.fillText(LANG==='cn'?'离散的点, 变成了一条连续的线':'discrete dots became a continuous line',
+                   W/2, box.yMid + box.amp + 60);
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  // ============== 帧 5: 脑波现形 (wow_1 庆祝) ==============
+  function drawFrame5(u, now){
+    var box = plotBox();
+    drawAxes(box, true);
+
+    // 完整折线 (滚动呈现, 持续起伏 -> 强调 alpha 节律)
+    var scroll = (now/1000) * 0.10;   // 缓慢右移制造"持续记录"感
+    ctx.strokeStyle = CSSV('--synaptic');
+    ctx.lineWidth = 2.6;
+    ctx.lineJoin = 'round';
+    // glow underlay
+    ctx.shadowColor = CSSV('--synaptic');
+    ctx.shadowBlur = 8;
+    ctx.beginPath();
+    for (var j = 0; j < N; j++){
+      var phase = (j / (N-1) + scroll) % 1;
+      var lx = lerp(box.x0, box.x1, phase);
+      // 重排避免回卷断裂: 用 wave 的连续相位采样
+      var wIdx = (j + Math.floor(scroll * N)) % N;
+      var ly = box.yMid - WAVE[wIdx] * box.scaleY;
+      if (j === 0) ctx.moveTo(box.x0, box.yMid - WAVE[Math.floor(scroll*N)%N]*box.scaleY);
+      var x = lerp(box.x0, box.x1, j/(N-1));
+      if (j === 0) ctx.moveTo(x, ly); else ctx.lineTo(x, ly);
+    }
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+
+    // alpha 节律高亮: 标出一个 ~10Hz 的周期
+    if (u > 0.30){
+      var hiAlpha = Math.min(1, (u-0.30)/0.2);
+      ctx.globalAlpha = hiAlpha * 0.5;
+      ctx.fillStyle = CSSV('--firing');
+      var pStart = box.x0 + (box.x1-box.x0)*0.30;
+      var pW = (box.x1-box.x0) * (1/ (WAVE_SECONDS*10)); // 一个 10Hz 周期宽度
+      ctx.fillRect(pStart, box.yMid - box.amp - 10, pW, box.amp*2 + 20);
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = CSSV('--firing');
+      ctx.font = "700 12px 'JetBrains Mono',monospace";
+      ctx.textAlign = 'center';
+      ctx.globalAlpha = hiAlpha;
+      ctx.fillText(LANG==='cn'?'alpha 节律 ~10 Hz':'alpha rhythm ~10 Hz', pStart + pW/2, box.yMid - box.amp - 18);
+      ctx.globalAlpha = 1;
+    }
+
+    // 庆祝粒子 (Spark 的 firing 点四散)
+    if (u > 0.45){
+      var burst = (u - 0.45) / 0.55;
+      var nP = 22;
+      for (var p = 0; p < nP; p++){
+        var ang = (p / nP) * Math.PI*2 + now/2000;
+        var rad = burst * (90 + (p%5)*30) * (0.6 + 0.4*Math.sin(now/400 + p));
+        var cxp = W*0.5 + Math.cos(ang)*rad;
+        var cyp = H*0.30 + Math.sin(ang)*rad*0.7;
+        ctx.fillStyle = (p%3===0) ? CSSV('--gold') : CSSV('--firing');
+        ctx.globalAlpha = Math.max(0, 0.8 - burst*0.5);
+        ctx.beginPath(); ctx.arc(cxp, cyp, 2.4 + (p%3), 0, Math.PI*2); ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+    }
+
+    // gold 庆祝语
+    if (u > 0.40){
+      var fadeIn = Math.min(1, (u - 0.40)/0.18);
+      ctx.globalAlpha = fadeIn;
+      ctx.fillStyle = CSSV('--gold');
+      ctx.font = "700 30px 'Inter','Noto Sans SC',sans-serif";
+      ctx.textAlign = 'center';
+      var keyText = LANG==='cn' ? '这就是你大脑活动的样子'
+                                : 'This is what your brain looks like';
+      ctx.fillText(keyText, W*0.5, H*0.20);
+      // 副句
+      ctx.fillStyle = CSSV('--firing');
+      ctx.font = "700 16px 'Inter','Noto Sans SC',sans-serif";
+      ctx.fillText(LANG==='cn'?'你第一次, 看见了它。':'You see it for the first time.',
+                   W*0.5, H*0.25);
+
+      // 关键发现框
+      ctx.strokeStyle = CSSV('--gold');
+      ctx.lineWidth = 2;
+      var bw = 520, bh = 60;
+      var bx = W*0.5 - bw/2, by = H*0.155;
+      ctx.strokeRect(bx, by, bw, bh);
+      var corner = 11;
+      ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.moveTo(bx, by+corner); ctx.lineTo(bx, by); ctx.lineTo(bx+corner, by); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(bx+bw-corner, by); ctx.lineTo(bx+bw, by); ctx.lineTo(bx+bw, by+corner); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(bx, by+bh-corner); ctx.lineTo(bx, by+bh); ctx.lineTo(bx+corner, by+bh); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(bx+bw-corner, by+bh); ctx.lineTo(bx+bw, by+bh); ctx.lineTo(bx+bw, by+bh-corner); ctx.stroke();
+      ctx.globalAlpha = 1;
+    }
+
+    // Spark 在画布上庆祝 (右下, 随 wow 加亮)
+    drawSparkSmall(W*0.88, H*0.80, 0.9, u > 0.45 ? (u-0.45)/0.55 : 0, now);
+  }
+
+  // Spark 小绘制 (庆祝时分支全亮)
+  function drawSparkSmall(x, y, scale, joy, now){
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.scale(scale, scale);
+    var glow = 0.6 + 0.4*joy;
+    // 光晕
+    ctx.fillStyle = CSSV('--synaptic');
+    ctx.globalAlpha = 0.18 + 0.18*joy;
+    ctx.beginPath(); ctx.arc(0, 0, 26, 0, Math.PI*2); ctx.fill();
+    ctx.globalAlpha = 1;
+    // 树突分支
+    ctx.strokeStyle = CSSV('--synaptic');
+    ctx.lineWidth = 2;
+    ctx.lineCap = 'round';
+    var tips = [[-16,-18],[-6,-22],[0,-26],[6,-22],[16,-18]];
+    for (var b = 0; b < tips.length; b++){
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.lineTo(tips[b][0]*0.55, tips[b][1]*0.55);
+      ctx.lineTo(tips[b][0], tips[b][1]);
+      ctx.stroke();
+      // 末端发光
+      var tp = 0.5 + 0.5*Math.sin(now/250 + b);
+      ctx.fillStyle = CSSV('--firing');
+      ctx.globalAlpha = glow * (0.5 + 0.5*tp);
+      ctx.beginPath(); ctx.arc(tips[b][0], tips[b][1], 2.6, 0, Math.PI*2); ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+    // 核心
+    ctx.fillStyle = CSSV('--firing');
+    ctx.beginPath(); ctx.arc(0, 0, 4 + joy*2, 0, Math.PI*2); ctx.fill();
+    // 标签
+    ctx.fillStyle = CSSV('--fg-mute');
+    ctx.font = "600 9px 'JetBrains Mono',monospace";
+    ctx.textAlign = 'center';
+    ctx.fillText('SPARK', 0, 36);
+    ctx.restore();
+  }
+
+  // ---- 帧切换淡入淡出 ----
+  function frameAlpha(u){
+    if (u > 0.92) return Math.max(0, 1 - (u - 0.92) / 0.08);
+    if (u < 0.06) return u / 0.06;
+    return 1;
+  }
+
+  function draw(now){
+    if (!W || !H){
+      requestAnimationFrame(draw);
+      return;
+    }
+    var fp = frameProgress(now);
+
+    // 背景
+    ctx.fillStyle = CSSV('--bg-0');
+    ctx.fillRect(0, 0, W, H);
+
+    // 网格底纹
+    ctx.strokeStyle = CSSV('--line');
+    ctx.lineWidth = 1;
+    for (var gx = 40; gx < W; gx += 60){
+      ctx.beginPath(); ctx.moveTo(gx, 0); ctx.lineTo(gx, H); ctx.stroke();
+    }
+    for (var gy = 40; gy < H; gy += 60){
+      ctx.beginPath(); ctx.moveTo(0, gy); ctx.lineTo(W, gy); ctx.stroke();
+    }
+
+    ctx.globalAlpha = frameAlpha(fp.u);
+    if      (fp.idx === 0) drawFrame1(fp.u, now);
+    else if (fp.idx === 1) drawFrame2(fp.u, now);
+    else if (fp.idx === 2) drawFrame3(fp.u, now);
+    else if (fp.idx === 3) drawFrame4(fp.u, now);
+    else                   drawFrame5(fp.u, now);
+    ctx.globalAlpha = 1;
+
+    // HUD + 字幕
+    if (fp.idx !== lastFrameShown){
+      lastFrameShown = fp.idx;
+      document.getElementById('hudFrame').textContent = (fp.idx + 1) + ' / 5';
+      document.getElementById('hudStage').textContent = I18N.stages[LANG][fp.idx];
+      document.getElementById('hudVal').textContent   = I18N.hudVals[LANG][fp.idx];
+      document.getElementById('subZh').textContent    = I18N.subs[LANG][fp.idx];
+      document.getElementById('subEn').textContent    = I18N.subs.en[fp.idx];
+      var subZhEl = document.getElementById('subZh');
+      if (fp.idx === 4) subZhEl.classList.add('gold');
+      else subZhEl.classList.remove('gold');
+    }
+
+    requestAnimationFrame(draw);
+  }
+
+  function refreshI18N(){
+    document.getElementById('ttl').textContent      = t('ttl');
+    document.getElementById('subtitle').textContent = t('subtitle');
+    document.getElementById('g1').textContent = t('g1');
+    document.getElementById('g2').textContent = t('g2');
+    document.getElementById('g3').textContent = t('g3');
+    document.getElementById('hudTtl').textContent = t('hudTtl');
+    lastFrameShown = -1;
+  }
+
+  document.getElementById('langBtn').addEventListener('click', function(){
+    LANG = (LANG === 'cn') ? 'en' : 'cn';
+    this.textContent = LANG === 'cn' ? 'CN / EN' : 'EN / CN';
+    refreshI18N();
+  });
+
+  resize();
+  requestAnimationFrame(draw);
+})();
+</script>
+</body>
+</html>

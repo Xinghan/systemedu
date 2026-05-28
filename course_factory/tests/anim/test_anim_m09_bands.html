@@ -1,0 +1,701 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>脑波频段 - alpha 和 beta 各管什么</title>
+<style>
+  :root{
+    /* 第 1 层 — 共享深空底 (所有 26 套统一) */
+    --bg-0: oklch(0.14 0.035 265);
+    --bg-1: oklch(0.18 0.04 265);
+    --bg-2: oklch(0.22 0.045 265);
+    --bg-3: oklch(0.28 0.05 265);
+    --line: oklch(0.35 0.05 265 / 0.35);
+    --line-strong: oklch(0.55 0.08 265 / 0.55);
+    --fg:      oklch(0.96 0.01 265);
+    --fg-dim:  oklch(0.75 0.02 265);
+    --fg-mute: oklch(0.55 0.03 265);
+    --gold:    oklch(0.85 0.14 85);
+
+    /* 第 2 层 — neuro 学科 accent (cortex-coral) */
+    --accent: oklch(0.75 0.17 25);
+
+    /* 第 3 层 — neuro 5 色 palette (Cortex Map) */
+    --synaptic: oklch(0.75 0.17 25);
+    --dendrite: oklch(0.55 0.15 25);
+    --axon:     oklch(0.32 0.10 25);
+    --firing:   oklch(0.92 0.08 25);
+    --memory:   oklch(0.85 0.14 85);
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    height:100vh;overflow:hidden;background:var(--bg-0);color:var(--fg);
+    font-family:'Inter','Noto Sans SC',system-ui,sans-serif;
+    display:flex;
+  }
+  .sidebar{
+    width:200px;flex-shrink:0;height:100vh;
+    background:var(--bg-1);border-right:1px solid var(--line);
+    padding:18px 16px;display:flex;flex-direction:column;gap:14px;
+  }
+  .brand{font-size:11px;letter-spacing:0.14em;color:var(--fg-mute);
+         font-family:'JetBrains Mono',monospace;}
+  .brand b{color:var(--accent);}
+  .title{font-size:16px;font-weight:700;color:var(--fg);line-height:1.35;}
+  .subtitle{font-size:11px;color:var(--fg-dim);line-height:1.5;font-style:italic;}
+  .mascot-wrap{display:flex;justify-content:center;padding:6px 0;}
+  .guide{display:flex;flex-direction:column;gap:8px;}
+  .guide-li{
+    font-size:11px;color:var(--fg-dim);line-height:1.5;
+    padding:6px 8px;border-left:2px solid var(--accent);
+    background:var(--bg-2);
+  }
+  .lang-btn{
+    margin-top:auto;
+    font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;
+    padding:8px 12px;background:var(--bg-2);color:var(--fg);
+    border:1px solid var(--line-strong);cursor:pointer;
+    box-shadow:3px 3px 0 var(--bg-0);
+  }
+  .lang-btn:active{transform:translate(2px,2px);box-shadow:none;}
+
+  main{flex:1;height:100vh;position:relative;overflow:hidden;}
+  canvas#stage{position:absolute;inset:0;width:100%;height:100%;display:block;}
+  .hud{
+    position:absolute;top:14px;right:14px;
+    background:oklch(0.18 0.04 265 / 0.78);backdrop-filter:blur(6px);
+    border:1px solid var(--line-strong);box-shadow:3px 3px 0 var(--bg-0);
+    padding:10px 14px;font-family:'JetBrains Mono',monospace;
+    font-size:11px;min-width:184px;
+  }
+  .hud-ttl{font-size:10px;letter-spacing:0.12em;color:var(--accent);
+           font-weight:700;margin-bottom:4px;}
+  .hud-frame{font-size:18px;font-weight:700;color:var(--fg);}
+  .hud-stage{color:var(--fg-dim);margin-top:3px;font-size:11px;}
+  .hud-val{color:var(--gold);margin-top:5px;font-size:11px;}
+
+  .subtitles{
+    position:absolute;left:50%;bottom:22px;transform:translateX(-50%);
+    text-align:center;max-width:80%;
+    pointer-events:none;
+  }
+  .sub-zh{font-size:18px;font-weight:700;color:var(--fg);line-height:1.4;}
+  .sub-en{font-size:12px;font-style:italic;color:var(--fg-mute);margin-top:4px;}
+  .sub-zh.gold{color:var(--gold);}
+</style>
+</head>
+<body>
+  <aside class="sidebar">
+    <div class="brand"><b>NRO-20</b> / CORTEX MAP</div>
+    <div class="title" id="ttl">脑波的快慢</div>
+    <div class="subtitle" id="subtitle">不同快慢的脑波, 分别在我们干什么的时候出现?</div>
+
+    <div class="mascot-wrap">
+      <svg width="80" height="86" viewBox="0 0 80 86" aria-label="Spark mascot">
+        <defs>
+          <radialGradient id="sparkGlow" cx="50%" cy="50%" r="50%">
+            <stop offset="0%"  stop-color="oklch(0.92 0.08 25)" stop-opacity="0.95"/>
+            <stop offset="55%" stop-color="oklch(0.75 0.17 25)" stop-opacity="0.6"/>
+            <stop offset="100%" stop-color="oklch(0.55 0.15 25)" stop-opacity="0"/>
+          </radialGradient>
+        </defs>
+        <ellipse cx="40" cy="42" rx="24" ry="27" fill="url(#sparkGlow)"
+                 stroke="oklch(0.75 0.17 25)" stroke-width="1.4" opacity="0.85"/>
+        <path d="M40 56 L40 40 M40 40 L30 30 M30 30 L24 24 M30 30 L34 22
+                 M40 40 L50 30 M50 30 L56 24 M50 30 L46 22 M40 40 L40 26"
+              fill="none" stroke="oklch(0.75 0.17 25)" stroke-width="2"
+              stroke-linecap="round"/>
+        <circle cx="24" cy="24" r="2.4" fill="oklch(0.92 0.08 25)">
+          <animate attributeName="opacity" values="0.4;1;0.4" dur="2.2s" begin="0s" repeatCount="indefinite"/>
+        </circle>
+        <circle cx="34" cy="22" r="2.4" fill="oklch(0.92 0.08 25)">
+          <animate attributeName="opacity" values="0.4;1;0.4" dur="2.2s" begin="0.5s" repeatCount="indefinite"/>
+        </circle>
+        <circle cx="40" cy="26" r="2.4" fill="oklch(0.92 0.08 25)">
+          <animate attributeName="opacity" values="0.4;1;0.4" dur="2.2s" begin="1.0s" repeatCount="indefinite"/>
+        </circle>
+        <circle cx="46" cy="22" r="2.4" fill="oklch(0.92 0.08 25)">
+          <animate attributeName="opacity" values="0.4;1;0.4" dur="2.2s" begin="1.5s" repeatCount="indefinite"/>
+        </circle>
+        <circle cx="56" cy="24" r="2.4" fill="oklch(0.92 0.08 25)">
+          <animate attributeName="opacity" values="0.4;1;0.4" dur="2.2s" begin="0.8s" repeatCount="indefinite"/>
+        </circle>
+        <circle cx="40" cy="42" r="4" fill="oklch(0.92 0.08 25)">
+          <animate attributeName="r" values="3.2;5;3.2" dur="2.4s" repeatCount="indefinite"/>
+        </circle>
+        <text x="40" y="80" text-anchor="middle" font-family="JetBrains Mono,monospace"
+              font-size="8" fill="oklch(0.55 0.03 265)" letter-spacing="1">SPARK</text>
+      </svg>
+    </div>
+
+    <div class="guide">
+      <div class="guide-li" id="g1">波越快 = 频率越高 (Hz)</div>
+      <div class="guide-li" id="g2">alpha 慢 = 放松闭眼 (枕叶)</div>
+      <div class="guide-li" id="g3">beta 快 = 专注运动 (运动区)</div>
+    </div>
+
+    <button id="langBtn" class="lang-btn">CN / EN</button>
+  </aside>
+
+  <main>
+    <canvas id="stage"></canvas>
+    <div class="hud">
+      <div class="hud-ttl" id="hudTtl">画面</div>
+      <div class="hud-frame" id="hudFrame">1 / 5</div>
+      <div class="hud-stage" id="hudStage">五个频段</div>
+      <div class="hud-val" id="hudVal">delta -> gamma</div>
+    </div>
+    <div class="subtitles">
+      <div class="sub-zh" id="subZh">脑波有快有慢, 科学家按快慢分成五个频段。</div>
+      <div class="sub-en" id="subEn">Brainwaves come slow and fast, sorted into five bands.</div>
+    </div>
+  </main>
+
+<script>
+(function(){
+  "use strict";
+
+  var LANG = 'cn';
+
+  // 五个标准 EEG 频段 (按快慢, Hz). color 用 neuro 5 色 palette 区分
+  // alpha / beta 是本节重点
+  var BANDS = [
+    {key:'delta', lo:0.5, hi:4,  fHz:2,  cn:'delta',  col:'--axon',     amp:1.00, state_cn:'深睡',     state_en:'deep sleep'},
+    {key:'theta', lo:4,   hi:8,  fHz:6,  cn:'theta',  col:'--dendrite', amp:0.78, state_cn:'困倦',     state_en:'drowsy'},
+    {key:'alpha', lo:8,   hi:13, fHz:10, cn:'alpha',  col:'--synaptic', amp:0.56, state_cn:'放松闭眼', state_en:'relaxed, eyes closed'},
+    {key:'beta',  lo:13,  hi:30, fHz:20, cn:'beta',   col:'--firing',   amp:0.36, state_cn:'专注/运动',state_en:'focus / motor'},
+    {key:'gamma', lo:30,  hi:45, fHz:38, cn:'gamma',  col:'--memory',   amp:0.22, state_cn:'高度认知', state_en:'high cognition'}
+  ];
+
+  var I18N = {
+    ttl: {cn:'脑波的快慢', en:'Fast and Slow Brainwaves'},
+    subtitle: {cn:'不同快慢的脑波, 分别在我们干什么的时候出现?',
+               en:'Which states do slow and fast brainwaves go with?'},
+    g1: {cn:'波越快 = 频率越高 (Hz)', en:'faster wave = higher frequency (Hz)'},
+    g2: {cn:'alpha 慢 = 放松闭眼 (枕叶)', en:'alpha = relaxed, eyes shut (occipital)'},
+    g3: {cn:'beta 快 = 专注运动 (运动区)', en:'beta = focus / motor (motor cortex)'},
+    hudTtl: {cn:'画面', en:'FRAME'},
+    stages: {
+      cn:['五个频段','慢波: delta/theta','alpha 8-13 Hz','beta 13-30 Hz','运动想象 ERD'],
+      en:['FIVE BANDS','SLOW: delta/theta','ALPHA 8-13 Hz','BETA 13-30 Hz','MOTOR IMAGERY ERD']
+    },
+    hudVals: {
+      cn:['delta -> gamma','深睡 / 困倦','枕叶 O1 O2 最强','运动区 C3 C4','对侧 mu+beta 下降'],
+      en:['delta -> gamma','sleep / drowsy','strongest at O1 O2','motor C3 C4','contra mu+beta drop']
+    },
+    subs: {
+      cn:[
+        '脑波有快有慢, 科学家按快慢分成五个频段。',
+        '最慢的 delta 和 theta: 又慢又大, 出现在深睡和困倦的时候。',
+        'alpha 8-13 Hz: 放松闭眼时最明显, 在后脑勺的枕叶 O1 O2 最强。',
+        'beta 13-30 Hz: 又快又小, 专注或想动手时最旺, 在头顶运动区 C3 C4。',
+        '关键: 想象动左右手, 对侧运动区的 alpha/beta 会下降 -- BCI 就靠这个。'
+      ],
+      en:[
+        'Brainwaves come slow and fast, sorted by speed into five bands.',
+        'Slowest delta and theta: slow and large -- deep sleep and drowsiness.',
+        'alpha 8-13 Hz: clearest when relaxed with eyes shut, strongest at occipital O1 O2.',
+        'beta 13-30 Hz: fast and small, peaks on focus or movement, at motor cortex C3 C4.',
+        'Key: imagine moving a hand and contralateral alpha/beta drops -- that powers BCI.'
+      ]
+    }
+  };
+  function t(k){return (I18N[k]&&I18N[k][LANG])||(I18N[k]&&I18N[k].en)||k;}
+
+  var canvas = document.getElementById('stage');
+  var ctx = canvas.getContext('2d');
+  var W = 0, H = 0, DPR = Math.min(window.devicePixelRatio || 1, 2);
+
+  function resize(){
+    var host = canvas.parentElement;
+    var r = host.getBoundingClientRect();
+    if (r.width < 2 || r.height < 2) return;
+    W = r.width; H = r.height;
+    canvas.width = W * DPR; canvas.height = H * DPR;
+    canvas.style.width = W + 'px'; canvas.style.height = H + 'px';
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  }
+  window.addEventListener('resize', resize);
+  setTimeout(resize, 60);
+  setTimeout(resize, 400);
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(resize);
+
+  var CSSV = function(v){
+    return getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+  };
+
+  var FRAME_DUR = 6500;
+  var TOTAL_FRAMES = 5;
+  var CYCLE = FRAME_DUR * TOTAL_FRAMES;
+  var startT = null;
+  var lastFrameShown = -1;
+
+  function frameProgress(now){
+    if (startT === null) startT = now;
+    var el = (now - startT) % CYCLE;
+    var idx = Math.floor(el / FRAME_DUR);
+    var u   = (el - idx * FRAME_DUR) / FRAME_DUR;
+    return {idx: idx, u: u, t: now};
+  }
+  function easeIO(u){return u<0.5?2*u*u:1-Math.pow(-2*u+2,2)/2;}
+  function lerp(a,b,u){return a+(b-a)*u;}
+
+  // 画一段正弦脑波: 给定区域 + 频率倍数 fScale + 振幅 + 相位
+  // freqVis 是"视觉上一个区域里画几个周期", 用 band.fHz 归一化让快慢可见
+  function drawWaveSeg(x0, x1, yMid, amp, cyclesAcross, phase, alphaFade){
+    ctx.globalAlpha = alphaFade;
+    ctx.beginPath();
+    var steps = Math.max(60, Math.floor((x1 - x0)));
+    for (var i = 0; i <= steps; i++){
+      var px = lerp(x0, x1, i / steps);
+      var u = i / steps;
+      var py = yMid - Math.sin(u * Math.PI * 2 * cyclesAcross + phase) * amp;
+      if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+    }
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+  }
+
+  // ============== 帧 1: 五个频段总览 ==============
+  function drawFrame1(u, now){
+    var x0 = W*0.30, x1 = W*0.92;
+    var topY = H*0.16, botY = H*0.86;
+    var rowH = (botY - topY) / BANDS.length;
+    // 每条波"从慢到快"自上而下排开, 逐条出现
+    var phase = now/520;
+    for (var i = 0; i < BANDS.length; i++){
+      var appear = easeIO(Math.min(1, Math.max(0, (u - i*0.12) / 0.30)));
+      if (appear <= 0) continue;
+      var b = BANDS[i];
+      var yMid = topY + (i + 0.5) * rowH;
+      // 视觉周期数 = fHz / 2 (delta 1 周期, gamma 19 周期) 让快慢直观
+      var cycles = b.fHz / 2;
+      var amp = rowH * 0.32 * b.amp;
+      ctx.strokeStyle = CSSV(b.col);
+      ctx.lineWidth = (b.key==='alpha'||b.key==='beta') ? 2.6 : 1.8;
+      drawWaveSeg(x0, x1, yMid, amp * appear, cycles, phase * (b.fHz/10), appear);
+      // 频段标签
+      ctx.fillStyle = CSSV(b.col);
+      ctx.font = "700 15px 'JetBrains Mono',monospace";
+      ctx.textAlign = 'right';
+      ctx.globalAlpha = appear;
+      ctx.fillText(b.cn, x0 - 14, yMid - 4);
+      ctx.fillStyle = CSSV('--fg-mute');
+      ctx.font = "600 10px 'JetBrains Mono',monospace";
+      ctx.fillText(b.lo + '-' + b.hi + ' Hz', x0 - 14, yMid + 12);
+      ctx.globalAlpha = 1;
+    }
+    // 左侧 "慢 -> 快" 箭头标尺
+    ctx.strokeStyle = CSSV('--line-strong');
+    ctx.lineWidth = 1.4;
+    var ax = W*0.18;
+    ctx.beginPath(); ctx.moveTo(ax, topY); ctx.lineTo(ax, botY); ctx.stroke();
+    ctx.fillStyle = CSSV('--fg-dim');
+    ctx.font = "600 12px 'JetBrains Mono',monospace";
+    ctx.textAlign = 'center';
+    ctx.save(); ctx.translate(ax - 16, (topY+botY)/2); ctx.rotate(-Math.PI/2);
+    ctx.fillText(LANG==='cn'?'慢  ->  快 (频率 Hz)':'slow  ->  fast (Hz)', 0, 0); ctx.restore();
+
+    ctx.fillStyle = CSSV('--fg-dim');
+    ctx.font = "600 14px 'Inter','Noto Sans SC',sans-serif";
+    ctx.textAlign = 'center';
+    ctx.fillText(LANG==='cn'?'同样是脑波, 快慢不一样':'all brainwaves -- but at different speeds',
+                 (x0+x1)/2, H*0.10);
+  }
+
+  // 画头皮侧面轮廓 (面朝左), 返回头中心 + 半径供电极定位
+  function drawHeadProfile(cx, cy, R, color){
+    ctx.strokeStyle = CSSV(color);
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    // 简化侧脸: 顶 -> 后脑(枕) -> 颈 -> 下巴 -> 鼻 -> 额
+    ctx.moveTo(cx, cy - R);                       // 头顶
+    ctx.bezierCurveTo(cx + R*0.95, cy - R*0.9, cx + R*1.05, cy + R*0.2, cx + R*0.55, cy + R*0.85); // 后脑下行
+    ctx.lineTo(cx + R*0.30, cy + R*1.05);          // 颈后
+    ctx.lineTo(cx + R*0.05, cy + R*1.05);          // 下巴底
+    ctx.bezierCurveTo(cx - R*0.55, cy + R*0.95, cx - R*0.75, cy + R*0.5, cx - R*0.6, cy + R*0.25); // 下巴->鼻下
+    ctx.lineTo(cx - R*0.95, cy + R*0.10);          // 鼻尖
+    ctx.lineTo(cx - R*0.62, cy - R*0.05);          // 鼻根
+    ctx.bezierCurveTo(cx - R*0.85, cy - R*0.6, cx - R*0.5, cy - R, cx, cy - R); // 额头回顶
+    ctx.stroke();
+  }
+
+  // ============== 帧 2: delta / theta 慢大波 (深睡/困倦) ==============
+  function drawFrame2(u, now){
+    var phase = now/520;
+    // 左: 闭眼休息的头侧面 (z形睡眠符号)
+    var hcx = W*0.27, hcy = H*0.40, R = Math.min(H*0.20, 130);
+    drawHeadProfile(hcx, hcy, R, '--dendrite');
+    // 睡眠 Z (用文字, 慢慢上浮)
+    var zAlpha = 0.4 + 0.4*Math.sin(now/700);
+    ctx.fillStyle = CSSV('--dendrite');
+    ctx.globalAlpha = zAlpha;
+    ctx.font = "700 22px 'JetBrains Mono',monospace";
+    ctx.textAlign = 'left';
+    ctx.fillText('z', hcx + R*0.4, hcy - R*0.7);
+    ctx.font = "700 16px 'JetBrains Mono',monospace";
+    ctx.fillText('z', hcx + R*0.2, hcy - R*0.55);
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = CSSV('--fg-dim');
+    ctx.font = "600 13px 'Inter','Noto Sans SC',sans-serif";
+    ctx.textAlign = 'center';
+    ctx.fillText(LANG==='cn'?'深睡 / 困倦':'deep sleep / drowsy', hcx, hcy + R + 34);
+
+    // 右: 两条慢大波 delta(上) + theta(下)
+    var wx0 = W*0.50, wx1 = W*0.92;
+    var dY = H*0.32, tY = H*0.56;
+    var reveal = easeIO(Math.min(1, u/0.7));
+    // delta
+    ctx.strokeStyle = CSSV('--axon');
+    ctx.lineWidth = 3;
+    drawWaveSeg(wx0, lerp(wx0, wx1, reveal), dY, H*0.11, 1, phase*0.2, 1);
+    ctx.fillStyle = CSSV('--axon');
+    ctx.font = "700 14px 'JetBrains Mono',monospace";
+    ctx.textAlign = 'left';
+    ctx.fillText('delta 0.5-4 Hz', wx0, dY - H*0.14);
+    // theta
+    ctx.strokeStyle = CSSV('--dendrite');
+    ctx.lineWidth = 2.6;
+    drawWaveSeg(wx0, lerp(wx0, wx1, reveal), tY, H*0.085, 3, phase*0.6, 1);
+    ctx.fillStyle = CSSV('--dendrite');
+    ctx.fillText('theta 4-8 Hz', wx0, tY - H*0.11);
+
+    // 说明: 慢 = 大 = 同步
+    ctx.fillStyle = CSSV('--fg-dim');
+    ctx.font = "600 14px 'Inter','Noto Sans SC',sans-serif";
+    ctx.textAlign = 'center';
+    if (u > 0.55){
+      ctx.globalAlpha = Math.min(1, (u-0.55)/0.2);
+      ctx.fillText(LANG==='cn'?'慢波又慢又大 -- 大脑没在忙碌':'slow waves are slow and large -- the brain is idling',
+                   (wx0+wx1)/2, H*0.80);
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  // ============== 帧 3: alpha 8-13Hz 放松闭眼, 枕叶最强 ==============
+  function drawFrame3(u, now){
+    var phase = now/520;
+    // 头侧面, 后脑勺(枕叶 O1/O2)发光
+    var hcx = W*0.30, hcy = H*0.42, R = Math.min(H*0.22, 150);
+    drawHeadProfile(hcx, hcy, R, '--dendrite');
+    // 枕叶位置 = 头的后下方 (本图后脑在右侧)
+    var occX = hcx + R*0.80, occY = hcy + R*0.05;
+    var pulse = 0.5 + 0.5*Math.sin(now/300);
+    // 枕叶发光晕
+    ctx.fillStyle = CSSV('--synaptic');
+    ctx.globalAlpha = 0.18 + 0.16*pulse;
+    ctx.beginPath(); ctx.arc(occX, occY, R*0.55, 0, Math.PI*2); ctx.fill();
+    ctx.globalAlpha = 1;
+    // O1/O2 电极点
+    ctx.fillStyle = CSSV('--firing');
+    ctx.beginPath(); ctx.arc(occX, occY - 12, 5, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(occX, occY + 12, 5, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = CSSV('--fg-dim');
+    ctx.font = "600 11px 'JetBrains Mono',monospace";
+    ctx.textAlign = 'left';
+    ctx.fillText('O1', occX + 12, occY - 9);
+    ctx.fillText('O2', occX + 12, occY + 15);
+    ctx.fillStyle = CSSV('--synaptic');
+    ctx.font = "600 12px 'JetBrains Mono',monospace";
+    ctx.textAlign = 'center';
+    ctx.fillText(LANG==='cn'?'枕叶':'occipital', occX, occY + R*0.55 + 8);
+    // 闭眼标记 (眼睛位置画一条横线)
+    ctx.strokeStyle = CSSV('--fg-mute');
+    ctx.lineWidth = 2;
+    var eyeX = hcx - R*0.45, eyeY = hcy - R*0.05;
+    ctx.beginPath(); ctx.moveTo(eyeX - 8, eyeY); ctx.lineTo(eyeX + 8, eyeY); ctx.stroke();
+    ctx.fillStyle = CSSV('--fg-mute');
+    ctx.font = "600 11px 'Inter','Noto Sans SC',sans-serif";
+    ctx.textAlign = 'center';
+    ctx.fillText(LANG==='cn'?'闭眼放松':'eyes closed', hcx, hcy + R + 40);
+
+    // 右: alpha 波 (8-13Hz, 中等快慢, 强), 从枕叶引出
+    var wx0 = W*0.58, wx1 = W*0.93, wY = H*0.40;
+    var reveal = easeIO(Math.min(1, u/0.65));
+    // 连线: 枕叶 -> 波形起点
+    ctx.strokeStyle = CSSV('--axon');
+    ctx.lineWidth = 1.4;
+    ctx.setLineDash([4,4]);
+    ctx.beginPath(); ctx.moveTo(occX, occY); ctx.lineTo(wx0, wY); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.strokeStyle = CSSV('--synaptic');
+    ctx.lineWidth = 2.8;
+    ctx.shadowColor = CSSV('--synaptic'); ctx.shadowBlur = 6;
+    drawWaveSeg(wx0, lerp(wx0, wx1, reveal), wY, H*0.10, 5, phase, 1);
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = CSSV('--synaptic');
+    ctx.font = "700 16px 'JetBrains Mono',monospace";
+    ctx.textAlign = 'left';
+    ctx.fillText('alpha 8-13 Hz', wx0, wY - H*0.14);
+
+    if (u > 0.55){
+      ctx.globalAlpha = Math.min(1, (u-0.55)/0.2);
+      ctx.fillStyle = CSSV('--fg-dim');
+      ctx.font = "600 14px 'Inter','Noto Sans SC',sans-serif";
+      ctx.textAlign = 'center';
+      ctx.fillText(LANG==='cn'?'闭眼一放松, 后脑勺的 alpha 立刻变强':'relax with eyes shut and occipital alpha surges',
+                   W*0.55, H*0.82);
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  // ============== 帧 4: beta 13-30Hz 专注/运动, 中央 C3/C4 ==============
+  function drawFrame4(u, now){
+    var phase = now/520;
+    // 头侧面, 头顶中央(运动区 C3/C4)发光
+    var hcx = W*0.30, hcy = H*0.42, R = Math.min(H*0.22, 150);
+    drawHeadProfile(hcx, hcy, R, '--dendrite');
+    // 中央运动区 = 头顶偏后一点
+    var cX = hcx + R*0.18, cY = hcy - R*0.78;
+    var pulse = 0.5 + 0.5*Math.sin(now/180); // 更快闪 = beta 快
+    ctx.fillStyle = CSSV('--firing');
+    ctx.globalAlpha = 0.18 + 0.18*pulse;
+    ctx.beginPath(); ctx.arc(cX, cY + 14, R*0.42, 0, Math.PI*2); ctx.fill();
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = CSSV('--firing');
+    ctx.beginPath(); ctx.arc(cX - 12, cY + 10, 5, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(cX + 12, cY + 10, 5, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = CSSV('--fg-dim');
+    ctx.font = "600 11px 'JetBrains Mono',monospace";
+    ctx.textAlign = 'center';
+    ctx.fillText('C3', cX - 12, cY - 2);
+    ctx.fillText('C4', cX + 12, cY - 2);
+    ctx.fillStyle = CSSV('--firing');
+    ctx.font = "600 12px 'JetBrains Mono',monospace";
+    ctx.fillText(LANG==='cn'?'运动区':'motor cortex', cX, cY + 30);
+    // 睁眼专注标记 (画个睁开的眼)
+    ctx.strokeStyle = CSSV('--fg-mute');
+    ctx.lineWidth = 2;
+    var eyeX = hcx - R*0.45, eyeY = hcy - R*0.05;
+    ctx.beginPath(); ctx.arc(eyeX, eyeY, 6, 0.15*Math.PI, 0.85*Math.PI, false); ctx.stroke();
+    ctx.beginPath(); ctx.arc(eyeX, eyeY, 6, 1.15*Math.PI, 1.85*Math.PI, false); ctx.stroke();
+    ctx.fillStyle = CSSV('--fg-mute');
+    ctx.beginPath(); ctx.arc(eyeX, eyeY, 2, 0, Math.PI*2); ctx.fill();
+    ctx.font = "600 11px 'Inter','Noto Sans SC',sans-serif";
+    ctx.textAlign = 'center';
+    ctx.fillText(LANG==='cn'?'睁眼专注 / 想动手':'alert / about to move', hcx, hcy + R + 40);
+
+    // 右: beta 波 (13-30Hz, 又快又小)
+    var wx0 = W*0.58, wx1 = W*0.93, wY = H*0.44;
+    var reveal = easeIO(Math.min(1, u/0.65));
+    ctx.strokeStyle = CSSV('--axon');
+    ctx.lineWidth = 1.4;
+    ctx.setLineDash([4,4]);
+    ctx.beginPath(); ctx.moveTo(cX, cY + 14); ctx.lineTo(wx0, wY); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.strokeStyle = CSSV('--firing');
+    ctx.lineWidth = 2.4;
+    drawWaveSeg(wx0, lerp(wx0, wx1, reveal), wY, H*0.055, 11, phase*2, 1); // 快 + 小幅
+    ctx.fillStyle = CSSV('--firing');
+    ctx.font = "700 16px 'JetBrains Mono',monospace";
+    ctx.textAlign = 'left';
+    ctx.fillText('beta 13-30 Hz', wx0, wY - H*0.11);
+
+    if (u > 0.55){
+      ctx.globalAlpha = Math.min(1, (u-0.55)/0.2);
+      ctx.fillStyle = CSSV('--gold');
+      ctx.font = "700 14px 'Inter','Noto Sans SC',sans-serif";
+      ctx.textAlign = 'center';
+      ctx.fillText(LANG==='cn'?'运动想象 BCI, 看的就是运动区的 beta':'motor-imagery BCI watches beta over the motor cortex',
+                   W*0.55, H*0.82);
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  // ============== 帧 5: 运动想象 ERD (对侧 mu+beta 抑制) ==============
+  function drawFrame5(u, now){
+    var phase = now/520;
+    // 头顶俯视图: 左右两个运动区半球, 想象动右手 -> 左侧(对侧)运动区抑制
+    var topcx = W*0.42, topcy = H*0.40, R = Math.min(H*0.20, 130);
+    // 头俯视圆
+    ctx.strokeStyle = CSSV('--dendrite');
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(topcx, topcy, R, 0, Math.PI*2); ctx.stroke();
+    // 鼻子 (上方, 标朝向)
+    ctx.beginPath();
+    ctx.moveTo(topcx - 8, topcy - R); ctx.lineTo(topcx, topcy - R - 12); ctx.lineTo(topcx + 8, topcy - R);
+    ctx.stroke();
+    // 中线
+    ctx.strokeStyle = CSSV('--line');
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(topcx, topcy - R); ctx.lineTo(topcx, topcy + R); ctx.stroke();
+
+    // 想象 "动右手": 想象侧文字
+    var imagineRight = true;
+    ctx.fillStyle = CSSV('--fg-dim');
+    ctx.font = "600 13px 'Inter','Noto Sans SC',sans-serif";
+    ctx.textAlign = 'center';
+    ctx.fillText(LANG==='cn'?'想象: 动 右手':'imagine: move RIGHT hand', topcx, topcy + R + 30);
+
+    // 左半球 C3 (对侧, 抑制 = 变暗变小) / 右半球 C4 (同侧, 维持)
+    var c3x = topcx - R*0.45, c4x = topcx + R*0.45, cyE = topcy - R*0.15;
+    var erd = easeIO(Math.min(1, u/0.55)); // ERD 程度 0->1
+    // C3 对侧抑制: 圆点收缩 + 波振幅下降
+    ctx.fillStyle = CSSV('--synaptic');
+    ctx.globalAlpha = 1 - 0.6*erd;
+    ctx.beginPath(); ctx.arc(c3x, cyE, 7 - 3*erd, 0, Math.PI*2); ctx.fill();
+    ctx.globalAlpha = 1;
+    // C3 抑制环 (示意能量"挖掉")
+    if (erd > 0.1){
+      ctx.strokeStyle = CSSV('--gold');
+      ctx.lineWidth = 1.6;
+      ctx.globalAlpha = erd*0.8;
+      ctx.beginPath(); ctx.arc(c3x, cyE, 16, 0, Math.PI*2); ctx.stroke();
+      ctx.globalAlpha = 1;
+    }
+    ctx.fillStyle = CSSV('--fg-dim');
+    ctx.font = "600 11px 'JetBrains Mono',monospace";
+    ctx.fillText('C3', c3x, cyE - 18);
+    ctx.fillStyle = CSSV('--gold');
+    ctx.font = "600 10px 'Inter','Noto Sans SC',sans-serif";
+    ctx.fillText(LANG==='cn'?'对侧 抑制':'contra suppressed', c3x, cyE + 26);
+    // C4 同侧维持
+    var pulse = 0.5 + 0.5*Math.sin(now/200);
+    ctx.fillStyle = CSSV('--firing');
+    ctx.globalAlpha = 0.6 + 0.3*pulse;
+    ctx.beginPath(); ctx.arc(c4x, cyE, 7, 0, Math.PI*2); ctx.fill();
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = CSSV('--fg-dim');
+    ctx.font = "600 11px 'JetBrains Mono',monospace";
+    ctx.fillText('C4', c4x, cyE - 18);
+    ctx.fillStyle = CSSV('--fg-mute');
+    ctx.font = "600 10px 'Inter','Noto Sans SC',sans-serif";
+    ctx.fillText(LANG==='cn'?'同侧 维持':'ipsi unchanged', c4x, cyE + 26);
+
+    // 下方两条波对比: C3 (mu~10Hz + beta) 振幅塌下去 vs C4 维持
+    var wx0 = W*0.16, wx1 = W*0.86;
+    var bY3 = H*0.74, bY4 = H*0.88;
+    // C3 抑制波: 振幅 = 满幅 * (1 - 0.7*erd)
+    ctx.strokeStyle = CSSV('--synaptic');
+    ctx.lineWidth = 2.2;
+    drawWaveSeg(wx0, wx1, bY3, H*0.055*(1 - 0.72*erd), 7, phase, 1);
+    ctx.fillStyle = CSSV('--synaptic');
+    ctx.font = "600 11px 'JetBrains Mono',monospace";
+    ctx.textAlign = 'right';
+    ctx.fillText('C3 mu+beta', wx0 - 8, bY3 + 4);
+    // C4 维持波
+    ctx.strokeStyle = CSSV('--firing');
+    ctx.lineWidth = 2.2;
+    drawWaveSeg(wx0, wx1, bY4, H*0.052, 9, phase*1.6, 1);
+    ctx.fillStyle = CSSV('--firing');
+    ctx.fillText('C4 mu+beta', wx0 - 8, bY4 + 4);
+    // ERD 下降箭头标注
+    if (erd > 0.3){
+      ctx.fillStyle = CSSV('--gold');
+      ctx.globalAlpha = Math.min(1, (erd-0.3)/0.3);
+      ctx.font = "700 12px 'JetBrains Mono',monospace";
+      ctx.textAlign = 'left';
+      ctx.fillText(LANG==='cn'?'能量下降 (ERD)':'power drop (ERD)', wx1 + 6, bY3 + 4);
+      ctx.globalAlpha = 1;
+    }
+
+    // gold key moment: BCI 靠这个
+    if (u > 0.45){
+      var fadeIn = Math.min(1, (u - 0.45)/0.18);
+      ctx.globalAlpha = fadeIn;
+      ctx.fillStyle = CSSV('--gold');
+      ctx.font = "700 26px 'Inter','Noto Sans SC',sans-serif";
+      ctx.textAlign = 'center';
+      ctx.fillText(LANG==='cn'?'BCI 靠的就是 alpha / beta 在运动区的变化'
+                              :'BCI runs on alpha / beta shifts over the motor cortex',
+                   W*0.5, H*0.13);
+      // 关键发现框
+      ctx.strokeStyle = CSSV('--gold');
+      ctx.lineWidth = 2;
+      var bw = Math.min(W*0.72, 640), bh = 50;
+      var bx = W*0.5 - bw/2, by = H*0.075;
+      var corner = 11;
+      ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.moveTo(bx, by+corner); ctx.lineTo(bx, by); ctx.lineTo(bx+corner, by); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(bx+bw-corner, by); ctx.lineTo(bx+bw, by); ctx.lineTo(bx+bw, by+corner); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(bx, by+bh-corner); ctx.lineTo(bx, by+bh); ctx.lineTo(bx+corner, by+bh); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(bx+bw-corner, by+bh); ctx.lineTo(bx+bw, by+bh); ctx.lineTo(bx+bw, by+bh-corner); ctx.stroke();
+      ctx.globalAlpha = 1;
+    }
+
+    // 庆祝粒子
+    if (u > 0.50){
+      var burst = (u - 0.50) / 0.50;
+      var nP = 18;
+      for (var p = 0; p < nP; p++){
+        var ang = (p / nP) * Math.PI*2 + now/2000;
+        var rad = burst * (70 + (p%5)*26) * (0.6 + 0.4*Math.sin(now/400 + p));
+        var cxp = topcx + Math.cos(ang)*rad;
+        var cyp = topcy + Math.sin(ang)*rad*0.7;
+        ctx.fillStyle = (p%3===0) ? CSSV('--gold') : CSSV('--firing');
+        ctx.globalAlpha = Math.max(0, 0.75 - burst*0.5);
+        ctx.beginPath(); ctx.arc(cxp, cyp, 2.2 + (p%3), 0, Math.PI*2); ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  function frameAlpha(u){
+    if (u > 0.92) return Math.max(0, 1 - (u - 0.92) / 0.08);
+    if (u < 0.06) return u / 0.06;
+    return 1;
+  }
+
+  function draw(now){
+    if (!W || !H){ requestAnimationFrame(draw); return; }
+    var fp = frameProgress(now);
+
+    ctx.fillStyle = CSSV('--bg-0');
+    ctx.fillRect(0, 0, W, H);
+
+    ctx.strokeStyle = CSSV('--line');
+    ctx.lineWidth = 1;
+    for (var gx = 40; gx < W; gx += 60){
+      ctx.beginPath(); ctx.moveTo(gx, 0); ctx.lineTo(gx, H); ctx.stroke();
+    }
+    for (var gy = 40; gy < H; gy += 60){
+      ctx.beginPath(); ctx.moveTo(0, gy); ctx.lineTo(W, gy); ctx.stroke();
+    }
+
+    ctx.globalAlpha = frameAlpha(fp.u);
+    if      (fp.idx === 0) drawFrame1(fp.u, now);
+    else if (fp.idx === 1) drawFrame2(fp.u, now);
+    else if (fp.idx === 2) drawFrame3(fp.u, now);
+    else if (fp.idx === 3) drawFrame4(fp.u, now);
+    else                   drawFrame5(fp.u, now);
+    ctx.globalAlpha = 1;
+
+    if (fp.idx !== lastFrameShown){
+      lastFrameShown = fp.idx;
+      document.getElementById('hudFrame').textContent = (fp.idx + 1) + ' / 5';
+      document.getElementById('hudStage').textContent = I18N.stages[LANG][fp.idx];
+      document.getElementById('hudVal').textContent   = I18N.hudVals[LANG][fp.idx];
+      document.getElementById('subZh').textContent    = I18N.subs[LANG][fp.idx];
+      document.getElementById('subEn').textContent    = I18N.subs.en[fp.idx];
+      var subZhEl = document.getElementById('subZh');
+      if (fp.idx === 4) subZhEl.classList.add('gold');
+      else subZhEl.classList.remove('gold');
+    }
+
+    requestAnimationFrame(draw);
+  }
+
+  function refreshI18N(){
+    document.getElementById('ttl').textContent      = t('ttl');
+    document.getElementById('subtitle').textContent = t('subtitle');
+    document.getElementById('g1').textContent = t('g1');
+    document.getElementById('g2').textContent = t('g2');
+    document.getElementById('g3').textContent = t('g3');
+    document.getElementById('hudTtl').textContent = t('hudTtl');
+    lastFrameShown = -1;
+  }
+
+  document.getElementById('langBtn').addEventListener('click', function(){
+    LANG = (LANG === 'cn') ? 'en' : 'cn';
+    this.textContent = LANG === 'cn' ? 'CN / EN' : 'EN / CN';
+    refreshI18N();
+  });
+
+  resize();
+  requestAnimationFrame(draw);
+})();
+</script>
+</body>
+</html>

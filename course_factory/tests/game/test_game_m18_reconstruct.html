@@ -1,0 +1,480 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"/>
+<title>EEG Reconstruction Lab</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;700&family=JetBrains+Mono:wght@400;700&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg-0: oklch(0.14 0.035 265);
+  --bg-1: oklch(0.18 0.04 265);
+  --bg-2: oklch(0.22 0.045 265);
+  --bg-3: oklch(0.28 0.05 265);
+  --line: oklch(0.35 0.05 265 / 0.35);
+  --line-strong: oklch(0.55 0.08 265 / 0.55);
+  --fg: oklch(0.96 0.01 265);
+  --fg-dim: oklch(0.75 0.02 265);
+  --fg-mute: oklch(0.55 0.03 265);
+  --gold: oklch(0.85 0.14 85);
+  --cs: oklch(0.75 0.17 200);
+  /* cs palette: SIGNAL / CORE / DEPTH / FLASH / QUERY */
+  --signal: oklch(0.75 0.17 200);
+  --core: oklch(0.55 0.16 200);
+  --depth: oklch(0.35 0.10 210);
+  --flash: oklch(0.92 0.08 190);
+  --query: oklch(0.85 0.14 85);
+  --bad: oklch(0.62 0.18 25);
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+html,body{width:100%;height:100vh;overflow:hidden;background:var(--bg-0);color:var(--fg);font-family:'Noto Sans SC','Space Grotesk',sans-serif;}
+.layout{display:flex;height:100vh;}
+
+/* ---- sidebar ---- */
+.game-sidebar{width:200px;min-width:200px;display:flex;flex-direction:column;background:var(--bg-1);border-right:1px solid var(--line);padding:12px 10px;gap:10px;overflow-y:auto;}
+.brand{font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:700;color:var(--signal);letter-spacing:1px;text-transform:uppercase;line-height:1.2;}
+.brand .sub{display:block;font-size:9px;color:var(--fg-mute);letter-spacing:0.5px;margin-top:2px;}
+.mascot-wrap{display:flex;align-items:center;gap:8px;background:var(--bg-2);border:1px solid var(--line);padding:8px;}
+.mascot-name{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--flash);line-height:1.3;}
+.sec-title{font-family:'Space Grotesk',sans-serif;font-size:10px;color:var(--fg-dim);letter-spacing:1px;text-transform:uppercase;border-bottom:1px solid var(--line);padding-bottom:3px;}
+
+.ic-row{display:flex;align-items:center;gap:7px;padding:5px 6px;background:var(--bg-2);border:1px solid var(--line);cursor:pointer;}
+.ic-row.kept{border-color:var(--signal);}
+.ic-toggle{width:30px;height:16px;border-radius:9px;background:var(--depth);position:relative;flex:0 0 auto;transition:background .15s;}
+.ic-row.kept .ic-toggle{background:var(--core);}
+.ic-knob{position:absolute;top:2px;left:2px;width:12px;height:12px;border-radius:50%;background:var(--fg);transition:left .15s;}
+.ic-row.kept .ic-knob{left:16px;background:var(--flash);}
+.ic-mini{width:34px;height:22px;flex:0 0 auto;}
+.ic-meta{flex:1;min-width:0;}
+.ic-id{font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;color:var(--fg);}
+.ic-tag{font-size:9px;color:var(--fg-mute);line-height:1.1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.ic-state{font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:0.5px;}
+.ic-row.kept .ic-state{color:var(--signal);}
+.ic-row.dropped .ic-state{color:var(--fg-mute);}
+
+.gauge{margin-bottom:2px;}
+.gauge-label{display:flex;justify-content:space-between;font-size:10px;color:var(--fg-dim);margin-bottom:3px;}
+.gauge-val{font-family:'JetBrains Mono',monospace;font-weight:700;}
+.gauge-bar{height:8px;background:var(--bg-3);position:relative;overflow:hidden;}
+.gauge-fill{height:100%;width:0%;transition:width .25s;}
+.gauge-fill.clean{background:var(--signal);}
+.gauge-fill.retain{background:var(--query);}
+.gauge-target{position:absolute;top:-2px;bottom:-2px;width:2px;background:var(--flash);}
+
+.lang-btn{margin-top:auto;font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;padding:6px 10px;cursor:pointer;border:1px solid var(--line-strong);background:var(--bg-2);color:var(--signal);letter-spacing:1px;}
+.lang-btn:hover{background:var(--bg-3);}
+
+/* ---- main ---- */
+.game-main{flex:1;min-width:0;display:flex;flex-direction:column;}
+.topbar{display:flex;justify-content:space-between;align-items:center;padding:8px 16px;background:var(--bg-1);border-bottom:1px solid var(--line);}
+.topbar .head{font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:700;color:var(--fg);letter-spacing:0.5px;}
+.topbar .goal{font-size:11px;color:var(--fg-dim);}
+.hud{display:flex;gap:18px;}
+.hud .item{display:flex;flex-direction:column;align-items:flex-end;}
+.hud .hl{font-family:'Space Grotesk',sans-serif;font-size:8px;text-transform:uppercase;letter-spacing:0.5px;color:var(--fg-mute);}
+.hud .hv{font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:700;color:var(--signal);}
+.stage{flex:1;min-height:0;display:flex;flex-direction:column;position:relative;padding:6px;}
+.stage canvas{display:block;width:100%;flex:1;min-height:0;}
+.hint{padding:6px 16px;font-size:11px;color:var(--fg-dim);background:var(--bg-1);border-top:1px solid var(--line);min-height:30px;line-height:1.3;}
+.hint b{color:var(--query);}
+
+.victory{position:fixed;inset:0;background:oklch(0.10 0.03 265 / 0.82);display:none;align-items:center;justify-content:center;z-index:50;}
+.victory.show{display:flex;}
+.victory-box{background:var(--bg-1);border:1px solid var(--signal);box-shadow:6px 6px 0 var(--bg-0);padding:26px 34px;max-width:430px;text-align:center;}
+.victory-title{font-family:'Space Grotesk',sans-serif;font-size:17px;font-weight:700;color:var(--gold);letter-spacing:2px;text-transform:uppercase;margin-bottom:6px;}
+.victory-sub{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--signal);letter-spacing:1px;margin-bottom:10px;}
+.victory-text{font-size:13px;color:var(--fg-dim);line-height:1.6;margin-bottom:14px;}
+.victory-btn{font-family:'Space Grotesk',sans-serif;font-size:12px;font-weight:700;cursor:pointer;border:1px solid var(--signal);background:var(--bg-2);color:var(--signal);padding:8px 22px;letter-spacing:1px;text-transform:uppercase;}
+.victory-btn:hover{background:var(--bg-3);}
+</style>
+</head>
+<body>
+<div class="layout">
+  <div class="game-sidebar">
+    <div class="brand" id="brand">EEG RECON LAB<span class="sub" id="brandSub">P-EEG-01 / M18</span></div>
+    <div class="mascot-wrap">
+      <svg width="40" height="40" viewBox="0 0 40 40" aria-hidden="true">
+        <rect x="9" y="9" width="22" height="22" rx="3" fill="var(--core)" stroke="var(--signal)" stroke-width="1.5"/>
+        <rect x="13" y="13" width="6" height="6" fill="var(--flash)"/>
+        <rect x="21" y="13" width="6" height="6" fill="var(--signal)"/>
+        <rect x="13" y="21" width="6" height="6" fill="var(--signal)"/>
+        <rect x="21" y="21" width="6" height="6" fill="var(--query)"/>
+        <circle cx="20" cy="5" r="2" fill="var(--flash)"/>
+        <line x1="20" y1="7" x2="20" y2="9" stroke="var(--signal)" stroke-width="1.5"/>
+      </svg>
+      <div class="mascot-name" id="mascotName">Bit<br>recon helper</div>
+    </div>
+    <div class="sec-title" id="icTitle">INDEPENDENT COMPONENTS</div>
+    <div id="icList"></div>
+    <div class="sec-title" id="metricTitle">RECON METRICS</div>
+    <div class="gauge">
+      <div class="gauge-label"><span id="cleanLbl">CLEANLINESS</span><span class="gauge-val clean" id="cleanVal">0%</span></div>
+      <div class="gauge-bar"><div class="gauge-fill clean" id="cleanFill"></div><div class="gauge-target" style="left:85%"></div></div>
+    </div>
+    <div class="gauge">
+      <div class="gauge-label"><span id="retainLbl">RETENTION</span><span class="gauge-val retain" id="retainVal">0%</span></div>
+      <div class="gauge-bar"><div class="gauge-fill retain" id="retainFill"></div><div class="gauge-target" style="left:85%"></div></div>
+    </div>
+    <button class="lang-btn" id="langBtn">EN</button>
+  </div>
+  <div class="game-main">
+    <div class="topbar">
+      <div>
+        <div class="head" id="headTitle">去伪迹重建</div>
+        <div class="goal" id="headGoal">勾选要剔除的 IC，把两个指标都调到 85% 以上</div>
+      </div>
+      <div class="hud">
+        <div class="item"><div class="hl" id="hudKeptL">KEPT IC</div><div class="hv" id="hudKept">6 / 6</div></div>
+        <div class="item"><div class="hl" id="hudScoreL">SCORE</div><div class="hv" id="hudScore">--</div></div>
+      </div>
+    </div>
+    <div class="stage" id="stage"><canvas id="c"></canvas></div>
+    <div class="hint" id="hint"></div>
+  </div>
+</div>
+
+<div class="victory" id="victory">
+  <div class="victory-box">
+    <div class="victory-title" id="vTitle">RECON MASTER</div>
+    <div class="victory-sub" id="vSub">脑波重建师 UNLOCKED</div>
+    <div class="victory-text" id="vText"></div>
+    <button class="victory-btn" id="vBtn">CLOSE</button>
+  </div>
+</div>
+
+<script>
+(function(){
+var LANG='cn';
+var I18N={
+  brand:{cn:'脑波重建实验室',en:'EEG RECON LAB'},
+  icTitle:{cn:'独立成分 IC',en:'INDEPENDENT COMPONENTS'},
+  metricTitle:{cn:'重建指标',en:'RECON METRICS'},
+  cleanLbl:{cn:'清洁度',en:'CLEANLINESS'},
+  retainLbl:{cn:'信息保留度',en:'RETENTION'},
+  headTitle:{cn:'去伪迹重建',en:'ARTIFACT REMOVAL'},
+  headGoal:{cn:'点开关决定 IC 去留，把两个指标都调到 85% 以上',en:'Toggle ICs in/out; push both metrics above 85%'},
+  hudKeptL:{cn:'保留 IC',en:'KEPT IC'},
+  hudScoreL:{cn:'总分',en:'SCORE'},
+  mascotName:{cn:'Bit<br>重建助手',en:'Bit<br>recon helper'},
+  vTitle:{cn:'重建完成',en:'RECON MASTER'},
+  vSub:{cn:'脑波重建师 已解锁',en:'EEG RECON MASTER UNLOCKED'},
+  vText:{cn:'你找到了正确的剖选：剔除眨眼、肌电和坏电极三个伪迹 IC，保留三个脑波节律 IC。重建后的信号既干净又保留了原本的节律——这正是 ICA 去伪迹的精髓：不多不少，只扰伪迹。',en:'You found the right cut: drop the three artifact ICs (blink, muscle, bad electrode) and keep the three brain-rhythm ICs. The reconstruction is both clean and intact — the essence of ICA cleaning: remove only the artifacts, nothing more.'},
+  vBtn:{cn:'关闭',en:'CLOSE'},
+  kept:{cn:'保留',en:'KEPT'},
+  dropped:{cn:'剔除',en:'DROP'},
+  rowOriginal:{cn:'原始混合信号 (含伪迹)',en:'ORIGINAL MIXED SIGNAL (with artifacts)'},
+  rowRecon:{cn:'重建信号 (保留的 IC 之和)',en:'RECONSTRUCTED SIGNAL (sum of kept ICs)'},
+  rowClean:{cn:'理想参考 (纯脑波)',en:'IDEAL REFERENCE (clean brain)'},
+  // IC tags
+  ic1tag:{cn:'眨眼伪迹 · 额叶大慢峰',en:'eye blink · frontal slow peak'},
+  ic2tag:{cn:'肌电伪迹 · 高频毛刺',en:'muscle EMG · high-freq fuzz'},
+  ic3tag:{cn:'坏电极 · 50Hz 工频漂移',en:'bad electrode · line-noise drift'},
+  ic4tag:{cn:'脑波 · alpha 10Hz 节律',en:'brain · alpha 10Hz rhythm'},
+  ic5tag:{cn:'脑波 · theta 6Hz 节律',en:'brain · theta 6Hz rhythm'},
+  ic6tag:{cn:'脑波 · beta 20Hz 节律',en:'brain · beta 20Hz rhythm'},
+  hintStart:{cn:'初始保留全部 6 个 IC——重建 = 原始信号，还有大峰污染。试着剔除伪迹 IC。',en:'All 6 ICs kept — recon equals the messy original. Try dropping the artifact ICs.'},
+  hintTooFew:{cn:'还有伪迹没剔：重建信号里仍有 <b>大峰或高频毛刺</b>，清洁度上不去。',en:'Artifacts remain: recon still has <b>big peaks or fuzz</b>, cleanliness stays low.'},
+  hintTooMany:{cn:'剔过头了：你把 <b>脑波节律 IC</b> 也扔了，信号变平，信息保留度掉下去。',en:'Over-cleaned: you dropped <b>brain-rhythm ICs</b> too — signal flattens, retention drops.'},
+  hintGood:{cn:'<b>恰到好处！</b> 只剔伪迹、保留脑波——两个指标都过线。',en:'<b>Just right!</b> Only artifacts removed, brain kept — both metrics pass.'},
+};
+function t(k){var e=I18N[k];return e?(e[LANG]||e.en):k;}
+
+// ---- IC model ----
+// type: 'artifact' or 'brain'. kept = currently retained.
+var ICS=[
+  {id:'IC1', tag:'ic1tag', type:'artifact', kind:'blink', kept:true},
+  {id:'IC2', tag:'ic2tag', type:'artifact', kind:'emg',   kept:true},
+  {id:'IC3', tag:'ic3tag', type:'artifact', kind:'line',  kept:true},
+  {id:'IC4', tag:'ic4tag', type:'brain',    kind:'alpha', kept:true},
+  {id:'IC5', tag:'ic5tag', type:'brain',    kind:'theta', kept:true},
+  {id:'IC6', tag:'ic6tag', type:'brain',    kind:'beta',  kept:true},
+];
+
+var SAMPLES=420;
+// generate each IC waveform over t in [0, 2pi*cycles]
+function icWave(kind, i, N){
+  var x=i/N; // 0..1
+  var ph=x*Math.PI*2;
+  switch(kind){
+    case 'blink':{
+      // sparse large slow gaussian peaks (eye blink)
+      var v=0;
+      var peaks=[0.18,0.55,0.82];
+      for(var p=0;p<peaks.length;p++){var d=x-peaks[p];v+=Math.exp(-(d*d)/0.0009);}
+      return v*1.0;
+    }
+    case 'emg':{
+      // high frequency low-amplitude bursts (muscle)
+      var burst=(x>0.30&&x<0.46)||(x>0.66&&x<0.78)?1:0.25;
+      return Math.sin(ph*38)*0.32*burst + Math.sin(ph*53+1.2)*0.20*burst;
+    }
+    case 'line':{
+      // slow drift + 50Hz-ish line noise (bad electrode)
+      return (x-0.5)*0.9 + Math.sin(ph*50)*0.12;
+    }
+    case 'alpha': return Math.sin(ph*10+0.4)*0.42;
+    case 'theta': return Math.sin(ph*6-0.7)*0.34;
+    case 'beta':  return Math.sin(ph*20+1.1)*0.22;
+  }
+  return 0;
+}
+
+// precompute per-IC samples
+var ICDATA=ICS.map(function(ic){
+  var arr=new Array(SAMPLES);
+  for(var i=0;i<SAMPLES;i++) arr[i]=icWave(ic.kind,i,SAMPLES);
+  return arr;
+});
+// original = sum of all
+var ORIGINAL=new Array(SAMPLES);
+for(var i=0;i<SAMPLES;i++){var s=0;for(var j=0;j<ICS.length;j++)s+=ICDATA[j][i];ORIGINAL[i]=s;}
+// ideal clean reference = sum of brain ICs only
+var IDEAL=new Array(SAMPLES);
+for(var i=0;i<SAMPLES;i++){var s=0;for(var j=0;j<ICS.length;j++){if(ICS[j].type==='brain')s+=ICDATA[j][i];}IDEAL[i]=s;}
+
+function reconstruct(){
+  var arr=new Array(SAMPLES);
+  for(var i=0;i<SAMPLES;i++){var s=0;for(var j=0;j<ICS.length;j++){if(ICS[j].kept)s+=ICDATA[j][i];}arr[i]=s;}
+  return arr;
+}
+
+// correlation-based metrics
+function pearson(a,b){
+  var n=a.length,ma=0,mb=0;
+  for(var i=0;i<n;i++){ma+=a[i];mb+=b[i];}
+  ma/=n;mb/=n;
+  var num=0,da=0,db=0;
+  for(var i=0;i<n;i++){var x=a[i]-ma,y=b[i]-mb;num+=x*y;da+=x*x;db+=y*y;}
+  if(da===0||db===0) return 0;
+  return num/Math.sqrt(da*db);
+}
+
+// CLEANLINESS = how little artifact energy remains in recon (vs IDEAL it is clean)
+// RETENTION  = how much brain rhythm is preserved
+function computeMetrics(recon){
+  // residual artifact energy in recon = recon - IDEAL on the artifact-dominated parts
+  var artEnergy=0, origArtEnergy=0;
+  for(var i=0;i<SAMPLES;i++){
+    var r=recon[i]-IDEAL[i];        // anything not brain = artifact leakage
+    artEnergy+=r*r;
+    var o=ORIGINAL[i]-IDEAL[i];     // full artifact energy
+    origArtEnergy+=o*o;
+  }
+  var clean=1 - (artEnergy/(origArtEnergy||1));
+  clean=Math.max(0,Math.min(1,clean));
+  // retention = correlation of recon's brain content with ideal
+  var ret=pearson(recon, IDEAL);
+  ret=Math.max(0,Math.min(1,ret));
+  // if too much artifact leaks, correlation can be inflated; gate retention by energy match
+  var reconE=0, idealE=0;
+  for(var i=0;i<SAMPLES;i++){reconE+=recon[i]*recon[i];idealE+=IDEAL[i]*IDEAL[i];}
+  var ampRatio=Math.min(reconE,idealE)/(Math.max(reconE,idealE)||1);
+  ret=ret*0.55 + ampRatio*0.45;
+  ret=Math.max(0,Math.min(1,ret));
+  return {clean:clean, retain:ret};
+}
+
+// ---- DOM build ----
+var icListEl=document.getElementById('icList');
+var rowEls=[];
+function miniSparkline(kind){
+  // tiny svg preview of the IC shape
+  var W=34,H=22,N=48,pts=[];
+  for(var i=0;i<N;i++){var v=icWave(kind,i,N);pts.push(v);}
+  var max=0;for(var i=0;i<N;i++)max=Math.max(max,Math.abs(pts[i]));
+  max=max||1;
+  var d='';
+  for(var i=0;i<N;i++){
+    var x=(i/(N-1))*W;
+    var y=H/2 - (pts[i]/max)*(H/2-2);
+    d+=(i===0?'M':'L')+x.toFixed(1)+' '+y.toFixed(1)+' ';
+  }
+  return '<svg class="ic-mini" viewBox="0 0 '+W+' '+H+'" preserveAspectRatio="none"><path d="'+d+'" fill="none" stroke="var(--signal)" stroke-width="1"/></svg>';
+}
+ICS.forEach(function(ic,idx){
+  var row=document.createElement('div');
+  row.className='ic-row kept';
+  row.innerHTML=
+    '<div class="ic-toggle"><div class="ic-knob"></div></div>'+
+    miniSparkline(ic.kind)+
+    '<div class="ic-meta"><div class="ic-id">'+ic.id+'</div><div class="ic-tag" data-tag="'+ic.tag+'"></div></div>'+
+    '<div class="ic-state"></div>';
+  row.addEventListener('click',function(){
+    ic.kept=!ic.kept;
+    recalc();
+  });
+  icListEl.appendChild(row);
+  rowEls.push(row);
+});
+
+// ---- canvas ----
+var canvas=document.getElementById('c');
+var ctx=canvas.getContext('2d');
+var DPR=Math.min(window.devicePixelRatio||1,2);
+var W=0,H=0;
+var curRecon=reconstruct();
+var curMetrics={clean:0,retain:0};
+var won=false;
+var animPhase=0;
+
+function colVar(name){return getComputedStyle(document.documentElement).getPropertyValue(name).trim();}
+
+function resize(){
+  var rect=document.getElementById('stage').getBoundingClientRect();
+  if(rect.width<2||rect.height<2) return;
+  W=rect.width-12;H=rect.height-12;
+  canvas.width=W*DPR;canvas.height=H*DPR;
+  canvas.style.width=W+'px';canvas.style.height=H+'px';
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  draw();
+}
+
+function drawTrace(arr,x0,y0,w,h,color,maxAbs,lineW,phaseShift){
+  var max=maxAbs||1;
+  ctx.beginPath();
+  for(var i=0;i<SAMPLES;i++){
+    var px=x0 + (i/(SAMPLES-1))*w;
+    var py=y0 + h/2 - (arr[i]/max)*(h/2-6);
+    if(i===0)ctx.moveTo(px,py);else ctx.lineTo(px,py);
+  }
+  ctx.strokeStyle=color;ctx.lineWidth=lineW||1.6;ctx.stroke();
+}
+
+function panel(x0,y0,w,h,label,color){
+  ctx.fillStyle=colVar('--bg-1');
+  ctx.fillRect(x0,y0,w,h);
+  ctx.strokeStyle=colVar('--line');ctx.lineWidth=1;ctx.strokeRect(x0+0.5,y0+0.5,w-1,h-1);
+  // center baseline
+  ctx.strokeStyle=colVar('--line');ctx.lineWidth=0.5;
+  ctx.beginPath();ctx.moveTo(x0,y0+h/2);ctx.lineTo(x0+w,y0+h/2);ctx.stroke();
+  // label
+  ctx.fillStyle=color;ctx.font='700 11px "Space Grotesk"';ctx.textAlign='left';ctx.textBaseline='top';
+  ctx.fillText(label,x0+8,y0+7);
+}
+
+function draw(){
+  if(W<2||H<2) return;
+  ctx.clearRect(0,0,W,H);
+  ctx.fillStyle=colVar('--bg-0');ctx.fillRect(0,0,W,H);
+
+  // overall amplitude scale (use original which is largest)
+  var maxAbs=0;for(var i=0;i<SAMPLES;i++)maxAbs=Math.max(maxAbs,Math.abs(ORIGINAL[i]));
+  maxAbs=maxAbs*1.1||1;
+
+  var pad=10;
+  var gap=10;
+  var panelH=(H-pad*2-gap*2)/3;
+  var x0=pad, w=W-pad*2;
+  var sig=colVar('--signal'), query=colVar('--query'), flash=colVar('--flash'), dim=colVar('--fg-dim');
+
+  // panel 1: original mixed
+  var y1=pad;
+  panel(x0,y1,w,panelH,t('rowOriginal'),dim);
+  drawTrace(ORIGINAL,x0,y1,w,panelH,colVar('--core'),maxAbs,1.6);
+
+  // panel 2: reconstruction (highlighted, animated draw position marker)
+  var y2=pad+panelH+gap;
+  var good=curMetrics.clean>=0.85 && curMetrics.retain>=0.85;
+  panel(x0,y2,w,panelH, t('rowRecon'), good?flash:sig);
+  drawTrace(curRecon,x0,y2,w,panelH, good?flash:sig, maxAbs, 2.0);
+  // moving scan dot to signal "live"
+  var sx=x0 + ((animPhase%1))*w;
+  var si=Math.min(SAMPLES-1,Math.floor((animPhase%1)*(SAMPLES-1)));
+  var sy=y2+panelH/2-(curRecon[si]/maxAbs)*(panelH/2-6);
+  ctx.beginPath();ctx.arc(sx,sy,3.5,0,Math.PI*2);ctx.fillStyle=good?flash:sig;ctx.fill();
+
+  // panel 3: ideal reference (faint, for comparison)
+  var y3=pad+panelH*2+gap*2;
+  panel(x0,y3,w,panelH,t('rowClean'),query);
+  drawTrace(IDEAL,x0,y3,w,panelH,query,maxAbs,1.6);
+}
+
+function loop(){
+  animPhase+=0.0045;
+  draw();
+  requestAnimationFrame(loop);
+}
+
+// ---- recompute ----
+function recalc(){
+  curRecon=reconstruct();
+  curMetrics=computeMetrics(curRecon);
+  // sidebar rows
+  ICS.forEach(function(ic,idx){
+    var row=rowEls[idx];
+    row.className='ic-row '+(ic.kept?'kept':'dropped');
+    row.querySelector('.ic-state').textContent=ic.kept?t('kept'):t('dropped');
+  });
+  // gauges
+  var cp=Math.round(curMetrics.clean*100);
+  var rp=Math.round(curMetrics.retain*100);
+  document.getElementById('cleanVal').textContent=cp+'%';
+  document.getElementById('retainVal').textContent=rp+'%';
+  document.getElementById('cleanFill').style.width=cp+'%';
+  document.getElementById('retainFill').style.width=rp+'%';
+  // hud
+  var keptCount=ICS.filter(function(x){return x.kept;}).length;
+  document.getElementById('hudKept').textContent=keptCount+' / 6';
+  document.getElementById('hudScore').textContent=Math.round((cp+rp)/2)+'%';
+  // hint logic
+  var artifactKept=ICS.filter(function(x){return x.type==='artifact'&&x.kept;}).length;
+  var brainDropped=ICS.filter(function(x){return x.type==='brain'&&!x.kept;}).length;
+  var hint;
+  var good=curMetrics.clean>=0.85 && curMetrics.retain>=0.85;
+  if(good) hint='hintGood';
+  else if(brainDropped>0 && artifactKept===0) hint='hintTooMany';
+  else if(artifactKept>=2 && brainDropped===0 && keptCount>=6) hint='hintStart';
+  else if(artifactKept>0) hint='hintTooFew';
+  else if(brainDropped>0) hint='hintTooMany';
+  else hint='hintGood';
+  document.getElementById('hint').innerHTML=t(hint);
+  if(good && !won){
+    won=true;
+    setTimeout(function(){document.getElementById('victory').classList.add('show');},350);
+  }
+  draw();
+}
+
+// ---- i18n ----
+function refreshI18N(){
+  document.getElementById('brand').firstChild.textContent=t('brand');
+  document.getElementById('icTitle').textContent=t('icTitle');
+  document.getElementById('metricTitle').textContent=t('metricTitle');
+  document.getElementById('cleanLbl').textContent=t('cleanLbl');
+  document.getElementById('retainLbl').textContent=t('retainLbl');
+  document.getElementById('headTitle').textContent=t('headTitle');
+  document.getElementById('headGoal').textContent=t('headGoal');
+  document.getElementById('hudKeptL').textContent=t('hudKeptL');
+  document.getElementById('hudScoreL').textContent=t('hudScoreL');
+  document.getElementById('mascotName').innerHTML=t('mascotName');
+  document.getElementById('vTitle').textContent=t('vTitle');
+  document.getElementById('vSub').textContent=t('vSub');
+  document.getElementById('vText').textContent=t('vText');
+  document.getElementById('vBtn').textContent=t('vBtn');
+  // ic tags
+  var tagEls=document.querySelectorAll('.ic-tag');
+  for(var i=0;i<tagEls.length;i++){tagEls[i].textContent=t(tagEls[i].getAttribute('data-tag'));}
+  recalc();
+}
+
+document.getElementById('langBtn').addEventListener('click',function(){
+  LANG=LANG==='cn'?'en':'cn';
+  document.getElementById('langBtn').textContent=LANG==='cn'?'EN':'CN';
+  refreshI18N();
+});
+document.getElementById('vBtn').addEventListener('click',function(){
+  document.getElementById('victory').classList.remove('show');
+});
+window.addEventListener('resize',resize);
+
+// init
+document.getElementById('langBtn').textContent='EN';
+resize();
+refreshI18N();
+loop();
+setTimeout(resize,200);
+setTimeout(resize,600);
+if(document.fonts&&document.fonts.ready)document.fonts.ready.then(resize);
+})();
+</script>
+</body>
+</html>

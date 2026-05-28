@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>mne 数据集探索器</title>
+<style>
+  :root{
+    /* Industrial Atelier — warm cream */
+    --paper:#FAF9F5; --paper-2:#F1EDDF; --card:#FFFFFF;
+    --ink:#191814; --ink-2:#2B2924; --sub:#6B6557; --sub-2:#9D978A;
+    --border:#EBE5D6; --border-2:#D9D1BD; --hairline:#F2EDE0;
+    /* Primary — Claude coral */
+    --primary:#D97757; --primary-ink:#9A4A2E; --primary-soft:#F8EDE5; --primary-line:#ECCFB8;
+    /* Domain accent — computing */
+    --computing:#C04E68; --computing-soft:#F4DDE3;
+    /* soft shadows (blur OK for C class) */
+    --shadow-sm:0 1px 2px 0 rgba(25,24,20,.04);
+    --shadow:0 1px 3px 0 rgba(25,24,20,.06),0 1px 2px -1px rgba(25,24,20,.04);
+    --shadow-md:0 4px 8px -2px rgba(25,24,20,.06),0 2px 4px -2px rgba(25,24,20,.04);
+    --shadow-lg:0 12px 24px -6px rgba(25,24,20,.1),0 4px 8px -4px rgba(25,24,20,.05);
+    --mono:'JetBrains Mono','SFMono-Regular',ui-monospace,Menlo,Consolas,monospace;
+    --sans:'Inter','PingFang SC','Noto Sans SC',-apple-system,sans-serif;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{height:100vh;overflow:hidden;background:var(--paper);color:var(--ink);
+       font-family:var(--sans);display:flex;}
+
+  /* ---------- sidebar ---------- */
+  .game-sidebar{width:200px;flex-shrink:0;height:100vh;background:var(--paper-2);
+      border-right:1px solid var(--border-2);display:flex;flex-direction:column;
+      padding:18px 16px;gap:14px;}
+  .brand{display:flex;flex-direction:column;gap:3px;}
+  .brand .kicker{font-family:var(--mono);font-size:10.5px;letter-spacing:.12em;
+      text-transform:uppercase;color:var(--computing);font-weight:600;}
+  .brand h1{font-size:16px;font-weight:700;margin:0;line-height:1.25;color:var(--ink);}
+  .task-box{background:var(--card);border:1px solid var(--border);border-radius:10px;
+      padding:11px 12px;box-shadow:var(--shadow-sm);}
+  .task-box .t-title{font-size:11px;font-weight:700;color:var(--primary-ink);margin-bottom:5px;}
+  .task-box .t-body{font-size:11.5px;line-height:1.5;color:var(--sub);}
+  .guide{list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:7px;}
+  .guide li{font-size:11.5px;line-height:1.45;color:var(--sub);padding-left:10px;
+      border-left:2px solid var(--primary-line);}
+  /* progress dots */
+  .prog{margin-top:2px;}
+  .prog .p-lbl{font-size:11px;color:var(--sub);margin-bottom:6px;font-weight:600;}
+  .prog .dots{display:flex;gap:7px;}
+  .prog .dot{width:26px;height:26px;border-radius:7px;border:1px solid var(--border-2);
+      background:var(--card);display:flex;align-items:center;justify-content:center;
+      font-family:var(--mono);font-size:11px;color:var(--sub-2);transition:all .25s ease;}
+  .prog .dot.done{background:var(--computing);border-color:var(--computing);color:#fff;}
+  .lang-btn{margin-top:auto;background:var(--card);border:1px solid var(--border-2);
+      border-radius:8px;padding:8px 10px;font-family:var(--mono);font-size:11px;
+      color:var(--ink-2);cursor:pointer;font-weight:600;transition:all .2s ease;}
+  .lang-btn:hover{border-color:var(--computing);color:var(--computing);}
+
+  /* ---------- main ---------- */
+  .game-main{flex:1;height:100vh;display:flex;flex-direction:column;overflow:hidden;
+      padding:18px 22px;gap:14px;}
+
+  /* control bar */
+  .controls{display:flex;gap:14px;flex-wrap:wrap;flex-shrink:0;}
+  .ctrl{background:var(--card);border:1px solid var(--border);border-radius:10px;
+      padding:9px 12px;box-shadow:var(--shadow-sm);flex:1;min-width:170px;}
+  .ctrl .c-lbl{font-family:var(--mono);font-size:10px;letter-spacing:.06em;
+      text-transform:uppercase;color:var(--sub-2);margin-bottom:7px;font-weight:600;}
+  .chips{display:flex;flex-wrap:wrap;gap:5px;}
+  .chip{font-family:var(--mono);font-size:11px;border:1px solid var(--border-2);
+      background:var(--paper);color:var(--ink-2);border-radius:6px;padding:4px 8px;
+      cursor:pointer;transition:all .15s ease;user-select:none;}
+  .chip:hover{border-color:var(--computing);color:var(--computing);}
+  .chip.active{background:var(--computing);border-color:var(--computing);color:#fff;}
+  /* electrode is a dropdown for the 22 options */
+  .e-select{font-family:var(--mono);font-size:12px;width:100%;padding:6px 8px;
+      border:1px solid var(--border-2);border-radius:6px;background:var(--paper);
+      color:var(--ink-2);cursor:pointer;}
+  .e-select:focus{outline:none;border-color:var(--computing);}
+
+  /* preview stage — canvas parent MUST be flex column */
+  .stage{flex:1;min-height:0;display:flex;flex-direction:column;
+      background:var(--card);border:1px solid var(--border);border-radius:12px;
+      box-shadow:var(--shadow);overflow:hidden;}
+  .stage-head{display:flex;align-items:center;justify-content:space-between;
+      padding:11px 16px;border-bottom:1px solid var(--hairline);flex-shrink:0;}
+  .stage-head .s-title{font-size:13px;font-weight:700;color:var(--ink);}
+  .stage-head .s-sub{font-family:var(--mono);font-size:11px;color:var(--computing);}
+  .canvas-wrap{flex:1;min-height:0;position:relative;}
+  #wave{display:block;width:100%;height:100%;}
+
+  /* metadata panel */
+  .meta{flex-shrink:0;display:grid;grid-template-columns:repeat(5,1fr);gap:12px;}
+  .meta-card{background:var(--card);border:1px solid var(--border);border-radius:10px;
+      padding:10px 12px;box-shadow:var(--shadow-sm);}
+  .meta-card .m-k{font-family:var(--mono);font-size:9.5px;letter-spacing:.05em;
+      text-transform:uppercase;color:var(--sub-2);margin-bottom:5px;}
+  .meta-card .m-v{font-family:var(--mono);font-size:15px;font-weight:700;color:var(--ink);}
+  .meta-card .m-u{font-size:10px;color:var(--sub);margin-top:1px;}
+
+  /* status toast */
+  .status{position:fixed;top:16px;right:24px;background:var(--card);
+      border:1px solid var(--primary-line);border-radius:9px;padding:9px 14px;
+      box-shadow:var(--shadow-md);font-size:12px;color:var(--primary-ink);
+      max-width:320px;opacity:0;transform:translateY(-6px);transition:all .3s ease;
+      pointer-events:none;z-index:30;}
+  .status.show{opacity:1;transform:translateY(0);}
+</style>
+</head>
+<body>
+  <aside class="game-sidebar">
+    <div class="brand">
+      <span class="kicker">Module 04 / MNE</span>
+      <h1 id="ttl">mne 数据集探索器</h1>
+    </div>
+    <div class="task-box">
+      <div class="t-title" id="taskTitle">任务</div>
+      <div class="t-body" id="taskBody">浏览 BCI Competition IV 数据集，探索 3 种不同的（被试 + 电极 + 想象动作）组合，解锁"数据集结构理解"。</div>
+    </div>
+    <ul class="guide">
+      <li id="g1">在右上选被试、电极、想象动作</li>
+      <li id="g2">看脑波片段预览随选择变化</li>
+      <li id="g3">下方元数据来自 .gdf 文件头</li>
+    </ul>
+    <div class="prog">
+      <div class="p-lbl" id="progLbl">已探索组合 0 / 3</div>
+      <div class="dots">
+        <div class="dot" data-d="0">1</div>
+        <div class="dot" data-d="1">2</div>
+        <div class="dot" data-d="2">3</div>
+      </div>
+    </div>
+    <button class="lang-btn" id="langBtn">中 / EN</button>
+  </aside>
+
+  <main class="game-main">
+    <div class="controls">
+      <div class="ctrl">
+        <div class="c-lbl" id="cl-subj">Subject 被试</div>
+        <div class="chips" id="subjChips"></div>
+      </div>
+      <div class="ctrl">
+        <div class="c-lbl" id="cl-elec">Electrode 电极（22 通道）</div>
+        <select class="e-select" id="elecSel"></select>
+      </div>
+      <div class="ctrl">
+        <div class="c-lbl" id="cl-trial">Trial 想象动作</div>
+        <div class="chips" id="trialChips"></div>
+      </div>
+    </div>
+
+    <div class="stage">
+      <div class="stage-head">
+        <span class="s-title" id="stTitle">脑波片段预览</span>
+        <span class="s-sub" id="stSub">A01 · Cz · left hand</span>
+      </div>
+      <div class="canvas-wrap">
+        <canvas id="wave"></canvas>
+      </div>
+    </div>
+
+    <div class="meta">
+      <div class="meta-card"><div class="m-k" id="mk0">Sample rate</div><div class="m-v" id="mv0">250</div><div class="m-u" id="mu0">Hz 采样率</div></div>
+      <div class="meta-card"><div class="m-k" id="mk1">Channels</div><div class="m-v" id="mv1">22 EEG</div><div class="m-u" id="mu1">+3 EOG</div></div>
+      <div class="meta-card"><div class="m-k" id="mk2">Trial length</div><div class="m-v" id="mv2">4.0</div><div class="m-u" id="mu2">s 单试时长</div></div>
+      <div class="meta-card"><div class="m-k" id="mk3">Events</div><div class="m-v" id="mv3">288</div><div class="m-u" id="mu3">trials / run</div></div>
+      <div class="meta-card"><div class="m-k" id="mk4">Event code</div><div class="m-v" id="mv4">769</div><div class="m-u" id="mu4">GDF marker</div></div>
+    </div>
+  </main>
+
+  <div class="status" id="status"></div>
+
+<script>
+(function(){
+  "use strict";
+  var LANG='cn';
+
+  // ----- 数据集结构 (BCI Competition IV-2a, mne 读取) -----
+  var SUBJECTS=['A01','A02','A03','A04','A05','A06','A07','A08','A09'];
+  // 22 个 EEG 电极 (10-20 系统子集, BCI IV-2a montage)
+  var ELECTRODES=['Fz','FC3','FC1','FCz','FC2','FC4','C5','C3','C1','Cz','C2','C4','C6',
+                  'CP3','CP1','CPz','CP2','CP4','P1','Pz','P2','POz'];
+  // 4 类想象动作 + 对应 GDF 事件码
+  var TRIALS=[
+    {id:'left',  cn:'左手', en:'left hand',  code:769},
+    {id:'right', cn:'右手', en:'right hand', code:770},
+    {id:'foot',  cn:'双脚', en:'both feet',  code:771},
+    {id:'tongue',cn:'舌头', en:'tongue',     code:772}
+  ];
+
+  var I18N={
+    ttl:{cn:'mne 数据集探索器',en:'mne Dataset Explorer'},
+    taskTitle:{cn:'任务',en:'TASK'},
+    taskBody:{cn:'浏览 BCI Competition IV 数据集，探索 3 种不同的（被试 + 电极 + 想象动作）组合，解锁"数据集结构理解"。',
+              en:'Browse the BCI Competition IV dataset. Explore 3 different (subject + electrode + trial) combos to unlock "dataset structure understanding".'},
+    g1:{cn:'在右上选被试、电极、想象动作',en:'Pick subject, electrode & trial above'},
+    g2:{cn:'看脑波片段预览随选择变化',en:'Watch the EEG preview change'},
+    g3:{cn:'下方元数据来自 .gdf 文件头',en:'Metadata below comes from the .gdf header'},
+    progLbl:{cn:'已探索组合 ',en:'Combos explored '},
+    'cl-subj':{cn:'Subject 被试',en:'Subject'},
+    'cl-elec':{cn:'Electrode 电极（22 通道）',en:'Electrode (22 channels)'},
+    'cl-trial':{cn:'Trial 想象动作',en:'Trial (motor imagery)'},
+    stTitle:{cn:'脑波片段预览',en:'EEG segment preview'},
+    mk0:{cn:'采样率',en:'Sample rate'}, mu0:{cn:'Hz 采样率',en:'Hz sfreq'},
+    mk1:{cn:'通道',en:'Channels'}, mu1:{cn:'+3 EOG',en:'+3 EOG'},
+    mk2:{cn:'单试时长',en:'Trial length'}, mu2:{cn:'s 单试时长',en:'s per trial'},
+    mk3:{cn:'事件数',en:'Events'}, mu3:{cn:'每 run 试验',en:'trials / run'},
+    mk4:{cn:'事件码',en:'Event code'}, mu4:{cn:'GDF 标记',en:'GDF marker'},
+    toastNew:{cn:'新组合已记录！',en:'New combo logged!'},
+    toastUnlock:{cn:'解锁：你已理解 mne 数据集的三层结构 — 被试 / 电极 / 试验。',
+                 en:'Unlocked: you grasp the 3-layer mne structure — subject / electrode / trial.'},
+    toastDup:{cn:'这个组合探索过了，换一个试试。',en:'Already explored — try a different combo.'}
+  };
+  function t(k){return (I18N[k]&&I18N[k][LANG])||(I18N[k]&&I18N[k].en)||k;}
+
+  // ----- 当前选择 -----
+  var sel={subj:'A01', elec:'Cz', trial:TRIALS[0]};
+  var explored={};        // key -> true
+  var exploredCount=0;
+  var unlocked=false;
+
+  // ----- 确定性伪随机 (同一选择 -> 同一波形, 不同选择 -> 不同波形) -----
+  function hashStr(s){var h=2166136261;for(var i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619);}return (h>>>0);}
+  function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;var tn=Math.imul(a^a>>>15,1|a);tn=tn+Math.imul(tn^tn>>>7,61|tn)^tn;return ((tn^tn>>>14)>>>0)/4294967296;};}
+
+  // ----- canvas 绘制 (合成 EEG: 不同动作主导不同节律/通道形态) -----
+  var canvas=document.getElementById('wave');
+  var ctx=canvas.getContext('2d');
+
+  function cssVar(n){return getComputedStyle(document.documentElement).getPropertyValue(n).trim();}
+
+  function resize(){
+    var wrap=canvas.parentElement;
+    var r=wrap.getBoundingClientRect();
+    var dpr=window.devicePixelRatio||1;
+    canvas.width=Math.max(2,Math.round(r.width*dpr));
+    canvas.height=Math.max(2,Math.round(r.height*dpr));
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    draw();
+  }
+
+  function draw(){
+    var w=canvas.clientWidth, h=canvas.clientHeight;
+    if(!w||!h){var r=canvas.parentElement.getBoundingClientRect();w=r.width;h=r.height;}
+    ctx.clearRect(0,0,w,h);
+
+    // 背景网格 (淡)
+    ctx.strokeStyle=cssVar('--hairline')||'#F2EDE0';
+    ctx.lineWidth=1;
+    var gx=8, gy=4;
+    for(var i=1;i<gx;i++){var x=w*i/gx;ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,h);ctx.stroke();}
+    for(var j=1;j<gy;j++){var y=h*j/gy;ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(w,y);ctx.stroke();}
+
+    // 时间轴标签 (0..4s)
+    ctx.fillStyle=cssVar('--sub-2')||'#9D978A';
+    ctx.font='10px '+(cssVar('--mono')||'monospace');
+    ctx.textBaseline='top';
+    for(var ti=0;ti<=4;ti++){
+      var tx=w*ti/4;
+      ctx.fillText(ti+'s', Math.min(tx+3, w-18), h-14);
+    }
+
+    // 合成多通道波形: 主电极在中线 (coral), 其余 3 条参考道
+    var key=sel.subj+'|'+sel.elec+'|'+sel.trial.id;
+    var seed=hashStr(key);
+    var rnd=mulberry32(seed);
+
+    // 动作决定主导频率: 左/右手 -> mu(10Hz) + 对侧 ERD; 脚 -> 中央beta; 舌 -> 较宽频
+    var trialFreq={left:10, right:10, foot:13, tongue:16}[sel.trial.id]||11;
+    // 电极行号影响幅度 (中央 C 区运动想象信号最强)
+    var elecIdx=ELECTRODES.indexOf(sel.elec);
+    var central=/^C/.test(sel.elec)||sel.elec==='FCz'||sel.elec==='CPz';
+    var ampBoost=central?1.0:0.55;
+
+    var lanes=[
+      {label:sel.elec, color:cssVar('--computing')||'#C04E68', main:true, amp:1.0},
+      {label:'Fz',  color:cssVar('--sub')||'#6B6557', amp:0.5},
+      {label:'Pz',  color:cssVar('--sub')||'#6B6557', amp:0.55},
+      {label:'POz', color:cssVar('--sub-2')||'#9D978A', amp:0.45}
+    ];
+
+    var laneH=h/(lanes.length+0.6);
+    lanes.forEach(function(lane,li){
+      var cy=laneH*(li+0.8);
+      var f=trialFreq + (li*1.7) + (rnd()*1.4-0.7);
+      var phase=rnd()*Math.PI*2;
+      var noiseSeed=mulberry32(seed+li*131);
+      var baseAmp=laneH*0.36*lane.amp*ampBoost*(0.8+rnd()*0.5);
+
+      // 通道标签
+      ctx.fillStyle=lane.color;
+      ctx.font=(lane.main?'700 ':'')+'11px '+(cssVar('--mono')||'monospace');
+      ctx.textBaseline='middle';
+      ctx.fillText(lane.label, 6, cy-laneH*0.42);
+
+      // ERD: 运动想象 1~3s 段, 对侧手在主电极上幅度被压低 (motor desync)
+      function erdEnvelope(tt){
+        var inWin=(tt>0.25 && tt<0.75); // 归一化时间窗 1s-3s
+        if(lane.main && (sel.trial.id==='left'||sel.trial.id==='right') && central && inWin){
+          return 0.45; // 抑制
+        }
+        return 1.0;
+      }
+
+      ctx.strokeStyle=lane.color;
+      ctx.lineWidth=lane.main?2.0:1.2;
+      ctx.globalAlpha=lane.main?1:0.7;
+      ctx.beginPath();
+      var N=260;
+      for(var p=0;p<=N;p++){
+        var tt=p/N;
+        var ph=phase + tt*Math.PI*2*f*0.85;
+        var env=erdEnvelope(tt);
+        var slow=Math.sin(tt*Math.PI*2*(1.2+li*0.3))*0.25;
+        var jitter=(noiseSeed()-0.5)*0.5;
+        var v=(Math.sin(ph)*0.7 + slow + jitter)*baseAmp*env;
+        var x=tt*w;
+        var y=cy + v;
+        if(p===0)ctx.moveTo(x,y); else ctx.lineTo(x,y);
+      }
+      ctx.stroke();
+      ctx.globalAlpha=1;
+    });
+
+    // 事件标记线 (cue onset at t=2s -> x = w/2)
+    var cueX=w*0.5;
+    ctx.strokeStyle=cssVar('--primary')||'#D97757';
+    ctx.lineWidth=1.5;
+    ctx.setLineDash([5,4]);
+    ctx.beginPath();ctx.moveTo(cueX,0);ctx.lineTo(cueX,h-16);ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle=cssVar('--primary-ink')||'#9A4A2E';
+    ctx.font='700 10px '+(cssVar('--mono')||'monospace');
+    ctx.textBaseline='top';
+    var cueLbl=(LANG==='cn'?'提示 cue ':'cue ')+sel.trial.code;
+    ctx.fillText(cueLbl, cueX+5, 4);
+  }
+
+  // ----- 元数据更新 -----
+  function updateMeta(){
+    document.getElementById('mv0').textContent='250';
+    document.getElementById('mv1').textContent='22 EEG';
+    document.getElementById('mv2').textContent='4.0';
+    document.getElementById('mv3').textContent='288';
+    document.getElementById('mv4').textContent=String(sel.trial.code);
+    var subTxt=sel.subj+' · '+sel.elec+' · '+(LANG==='cn'?sel.trial.cn:sel.trial.en);
+    document.getElementById('stSub').textContent=subTxt;
+  }
+
+  // ----- 进度 / 解锁 -----
+  function recordExplore(){
+    var key=sel.subj+'|'+sel.elec+'|'+sel.trial.id;
+    if(explored[key]){ toast(t('toastDup')); return; }
+    explored[key]=true;
+    if(exploredCount<3){
+      var dot=document.querySelector('.dot[data-d="'+exploredCount+'"]');
+      if(dot)dot.classList.add('done');
+      exploredCount++;
+      document.getElementById('progLbl').textContent=t('progLbl')+exploredCount+' / 3';
+    }
+    if(exploredCount>=3 && !unlocked){
+      unlocked=true;
+      toast(t('toastUnlock'));
+    }else{
+      toast(t('toastNew'));
+    }
+  }
+
+  var toastTimer=null;
+  function toast(msg){
+    var el=document.getElementById('status');
+    el.textContent=msg;
+    el.classList.add('show');
+    if(toastTimer)clearTimeout(toastTimer);
+    toastTimer=setTimeout(function(){el.classList.remove('show');},2600);
+  }
+
+  // 当三个维度都被用户选过至少一次后, 每次有效切换都尝试记录组合
+  function onSelectionChanged(){
+    updateMeta();
+    draw();
+    recordExplore();
+  }
+
+  // ----- 构建控件 -----
+  function buildSubjects(){
+    var box=document.getElementById('subjChips');box.innerHTML='';
+    SUBJECTS.forEach(function(s){
+      var c=document.createElement('div');
+      c.className='chip'+(s===sel.subj?' active':'');
+      c.textContent=s;c.dataset.subj=s;
+      c.addEventListener('click',function(){
+        if(sel.subj===s)return;
+        sel.subj=s;
+        document.querySelectorAll('#subjChips .chip').forEach(function(x){x.classList.toggle('active',x.dataset.subj===s);});
+        onSelectionChanged();
+      });
+      box.appendChild(c);
+    });
+  }
+  function buildElectrodes(){
+    var selEl=document.getElementById('elecSel');selEl.innerHTML='';
+    ELECTRODES.forEach(function(e){
+      var o=document.createElement('option');o.value=e;o.textContent=e;
+      if(e===sel.elec)o.selected=true;
+      selEl.appendChild(o);
+    });
+    selEl.addEventListener('change',function(){
+      sel.elec=this.value;
+      onSelectionChanged();
+    });
+  }
+  function buildTrials(){
+    var box=document.getElementById('trialChips');box.innerHTML='';
+    TRIALS.forEach(function(tr){
+      var c=document.createElement('div');
+      c.className='chip'+(tr.id===sel.trial.id?' active':'');
+      c.textContent=(LANG==='cn'?tr.cn:tr.en);c.dataset.trial=tr.id;
+      c.addEventListener('click',function(){
+        if(sel.trial.id===tr.id)return;
+        sel.trial=tr;
+        document.querySelectorAll('#trialChips .chip').forEach(function(x){x.classList.toggle('active',x.dataset.trial===tr.id);});
+        onSelectionChanged();
+      });
+      box.appendChild(c);
+    });
+  }
+
+  // ----- i18n 刷新 -----
+  function refreshI18N(){
+    ['ttl','taskTitle','taskBody','g1','g2','g3','cl-subj','cl-elec','cl-trial','stTitle',
+     'mk0','mu0','mk1','mu1','mk2','mu2','mk3','mu3','mk4','mu4'].forEach(function(id){
+      var el=document.getElementById(id)||document.querySelector('[id="'+id+'"]');
+      if(el)el.textContent=t(id);
+    });
+    document.getElementById('progLbl').textContent=t('progLbl')+exploredCount+' / 3';
+    buildTrials();
+    updateMeta();
+    draw();
+  }
+
+  document.getElementById('langBtn').addEventListener('click',function(){
+    LANG=LANG==='cn'?'en':'cn';
+    this.textContent=LANG==='cn'?'中 / EN':'EN / 中';
+    refreshI18N();
+  });
+
+  // ----- init -----
+  buildSubjects();
+  buildElectrodes();
+  buildTrials();
+  updateMeta();
+  window.addEventListener('resize',resize);
+  // 等布局稳定后绘制
+  requestAnimationFrame(function(){resize();});
+  setTimeout(resize,120);
+})();
+</script>
+</body>
+</html>

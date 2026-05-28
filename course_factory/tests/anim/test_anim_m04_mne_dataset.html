@@ -1,0 +1,1049 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>M04 · 装 MNE + 加载 BCI Competition IV 数据集</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+SC:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    /* Surfaces — Claude warm cream */
+    --paper:    #FAF9F5;
+    --paper-2:  #F1EDDF;
+    --card:     #FFFFFF;
+    --ink:      #191814;
+    --ink-2:    #2B2924;
+    --sub:      #6B6557;
+    --sub-2:    #9D978A;
+    --border:   #EBE5D6;
+    --border-2: #D9D1BD;
+    --hairline: #F2EDE0;
+
+    /* Primary — Claude coral */
+    --primary:      #D97757;
+    --primary-ink:  #9A4A2E;
+    --primary-soft: #F8EDE5;
+    --primary-line: #ECCFB8;
+
+    /* Domain accent · computing */
+    --computing:      #C04E68;
+    --computing-soft: #F4DDE3;
+    --computing-line: #E4B9C5;
+
+    --shadow-sm: 0 1px 2px 0 rgba(25,24,20,.04);
+    --shadow:    0 1px 3px 0 rgba(25,24,20,.06), 0 1px 2px -1px rgba(25,24,20,.04);
+    --shadow-md: 0 4px 8px -2px rgba(25,24,20,.06), 0 2px 4px -2px rgba(25,24,20,.04);
+    --shadow-lg: 0 12px 24px -6px rgba(25,24,20,.1), 0 4px 8px -4px rgba(25,24,20,.05);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    height: 100vh; overflow: hidden;
+    background: var(--paper); color: var(--ink);
+    font-family: 'Inter', 'Noto Sans SC', 'PingFang SC', sans-serif;
+    font-size: 14px; line-height: 1.5;
+    display: flex;
+  }
+  .mono { font-family: 'JetBrains Mono', monospace; }
+
+  /* ============ Sidebar 200px ============ */
+  .sidebar {
+    width: 200px; flex-shrink: 0; height: 100vh;
+    background: var(--paper-2);
+    border-right: 1px solid var(--border);
+    display: flex; flex-direction: column;
+    padding: 22px 18px 18px;
+  }
+  .brand-row { display: flex; align-items: center; gap: 8px; margin-bottom: 18px; }
+  .brand-dot {
+    width: 10px; height: 10px; border-radius: 50%;
+    background: var(--primary);
+    box-shadow: 0 0 0 4px var(--primary-soft);
+    animation: pulse 2.4s ease-in-out infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { box-shadow: 0 0 0 4px var(--primary-soft); }
+    50%      { box-shadow: 0 0 0 6px var(--primary-soft); }
+  }
+  .brand-tag {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; letter-spacing: 0.08em;
+    color: var(--sub); font-weight: 600;
+  }
+  .brand-title {
+    font-size: 15px; font-weight: 700; color: var(--ink);
+    line-height: 1.35; margin-bottom: 4px;
+  }
+  .brand-sub {
+    font-size: 11px; color: var(--sub); line-height: 1.5;
+    font-family: 'JetBrains Mono', monospace;
+  }
+  .guide-h {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px; letter-spacing: 0.12em;
+    color: var(--sub-2); margin: 24px 0 8px;
+    text-transform: uppercase;
+  }
+  .guide-list { list-style: none; padding: 0; margin: 0; }
+  .guide-list li {
+    font-size: 12px; color: var(--ink-2); line-height: 1.55;
+    padding: 8px 0 8px 12px;
+    border-left: 2px solid var(--border-2);
+    margin-bottom: 4px;
+  }
+  .guide-list li .num {
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--primary-ink); font-weight: 600;
+    font-size: 10px; margin-right: 6px;
+  }
+  .guide-list li .en {
+    display: block; font-family: 'JetBrains Mono', monospace;
+    font-size: 10px; color: var(--sub-2); margin-top: 2px;
+  }
+  .lang-btn {
+    margin-top: auto;
+    border: 1px solid var(--border-2);
+    background: var(--card);
+    color: var(--ink); cursor: pointer;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; font-weight: 600;
+    padding: 9px 12px; border-radius: 6px;
+    transition: all 180ms ease;
+    letter-spacing: 0.06em;
+  }
+  .lang-btn:hover {
+    border-color: var(--computing-line);
+    background: var(--computing-soft);
+    color: var(--computing);
+  }
+
+  /* ============ Main ============ */
+  .main {
+    flex: 1; height: 100vh; overflow-y: auto;
+    padding: 20px 26px 22px;
+    display: flex; flex-direction: column; gap: 14px;
+  }
+  .section-tag {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px; letter-spacing: 0.12em;
+    color: var(--sub); text-transform: uppercase;
+  }
+  .section-tag .bar { width: 18px; height: 1px; background: var(--border-2); }
+
+  /* ----- A: Hero ----- */
+  .hero {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    box-shadow: var(--shadow-sm);
+    padding: 14px 22px;
+    margin-top: 4px;
+  }
+  .hero-title {
+    font-size: 18px; font-weight: 700; color: var(--ink);
+    line-height: 1.4;
+  }
+  .hero-title .accent { color: var(--primary-ink); }
+  .hero-title .km { color: var(--computing); font-family: 'JetBrains Mono', monospace; }
+  .hero-sub {
+    font-size: 12px; color: var(--sub); margin-top: 8px;
+    font-family: 'JetBrains Mono', monospace;
+    line-height: 1.5;
+  }
+  .analogy-row {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
+    margin-top: 12px;
+  }
+  .analogy {
+    border: 1px solid var(--border-2);
+    border-radius: 8px;
+    background: var(--paper);
+    padding: 11px 14px;
+    display: flex; flex-direction: column; gap: 4px;
+  }
+  .analogy .ana-eq {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px; font-weight: 700; color: var(--ink);
+  }
+  .analogy .ana-eq .lib { color: var(--computing); }
+  .analogy .ana-eq .ref { color: var(--primary-ink); }
+  .analogy .ana-note {
+    font-size: 11px; color: var(--sub); line-height: 1.5;
+  }
+
+  /* ----- B: 4 steps ----- */
+  .steps-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    box-shadow: var(--shadow-sm);
+    padding: 14px 18px 12px;
+  }
+  .steps-head {
+    display: flex; justify-content: space-between; align-items: baseline;
+    margin-bottom: 10px;
+  }
+  .steps-h2 {
+    font-size: 14px; font-weight: 700; color: var(--ink); margin: 0;
+  }
+  .steps-sub {
+    font-size: 11px; color: var(--sub); font-family: 'JetBrains Mono', monospace;
+  }
+  .steps-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+  }
+  .step-tile {
+    border: 1px solid var(--border-2);
+    border-radius: 8px;
+    padding: 10px 12px 10px;
+    background: var(--paper);
+    cursor: pointer;
+    transition: border-color 200ms ease, background 200ms ease;
+    display: flex; flex-direction: column; gap: 6px;
+    min-height: 96px;
+  }
+  .step-tile:hover {
+    border-color: var(--computing);
+    background: var(--computing-soft);
+  }
+  .step-tile.active {
+    border-color: var(--computing);
+    background: var(--computing-soft);
+  }
+  .step-head {
+    display: flex; align-items: center; gap: 8px;
+  }
+  .step-num {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px; font-weight: 700;
+    color: var(--computing);
+    background: var(--card);
+    border: 1px solid var(--computing-line);
+    padding: 2px 7px; border-radius: 999px;
+    letter-spacing: 0.06em;
+  }
+  .step-tag {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px; color: var(--sub-2);
+    margin-left: auto;
+    letter-spacing: 0.06em;
+  }
+  .step-title {
+    font-size: 12.5px; font-weight: 700; color: var(--ink);
+    line-height: 1.35;
+  }
+  .step-sub {
+    font-size: 10.5px; color: var(--sub); line-height: 1.45;
+    font-family: 'JetBrains Mono', monospace;
+  }
+  .step-hint {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px; color: var(--computing);
+    letter-spacing: 0.06em;
+    margin-top: auto;
+  }
+
+  .step-detail {
+    margin-top: 10px;
+    background: #1a1814;
+    border: 1px solid var(--border-2);
+    border-radius: 6px;
+    padding: 11px 14px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; color: #F1EDDF;
+    line-height: 1.55;
+    overflow-x: auto;
+    min-height: 92px;
+    display: none;
+  }
+  .step-detail.show { display: block; }
+  .step-detail .prompt { color: var(--primary); margin-right: 4px; }
+  .step-detail .cmt    { color: #9D978A; }
+  .step-detail .k      { color: #E8B473; }
+  .step-detail .s      { color: #B4D4A8; }
+  .step-detail .url    { color: #B6C5D2; }
+  .step-detail .num    { color: #D9A6BA; }
+  .step-detail .hl     { color: #D97757; }
+  .step-detail-empty {
+    margin-top: 10px;
+    background: var(--paper-2);
+    border: 1px dashed var(--border-2);
+    border-radius: 6px;
+    padding: 10px 14px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; color: var(--sub);
+    line-height: 1.55;
+    min-height: 44px;
+  }
+  .step-detail-empty.hide { display: none; }
+  .step-detail-empty .cn {
+    color: var(--ink-2); font-family: 'Inter', 'Noto Sans SC', sans-serif;
+    margin-right: 6px;
+  }
+
+  /* ----- C: Dataset spec ----- */
+  .ds-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    box-shadow: var(--shadow-sm);
+    padding: 14px 18px 14px;
+  }
+  .ds-head {
+    display: flex; justify-content: space-between; align-items: baseline;
+    margin-bottom: 10px;
+  }
+  .ds-h2 { font-size: 14px; font-weight: 700; color: var(--ink); margin: 0; }
+  .ds-sub { font-size: 11px; color: var(--sub); font-family: 'JetBrains Mono', monospace; }
+  .ds-badge {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px; font-weight: 700;
+    padding: 4px 10px; border-radius: 999px;
+    background: var(--computing-soft); color: var(--computing);
+    border: 1px solid var(--computing-line);
+    letter-spacing: 0.06em;
+  }
+  .ds-row {
+    display: grid;
+    grid-template-columns: 1.15fr 0.85fr;
+    gap: 16px;
+  }
+  .ds-table {
+    border-collapse: collapse;
+    width: 100%;
+    font-family: 'JetBrains Mono', monospace;
+  }
+  .ds-table th {
+    text-align: left;
+    font-size: 9px; color: var(--sub-2);
+    letter-spacing: 0.08em; text-transform: uppercase;
+    padding: 4px 8px 6px;
+    border-bottom: 1px solid var(--border-2);
+    font-weight: 600;
+  }
+  .ds-table td {
+    font-size: 11px; color: var(--ink-2);
+    padding: 6px 8px;
+    border-bottom: 1px solid var(--hairline);
+  }
+  .ds-table tr:last-child td { border-bottom: none; }
+  .ds-table .field { color: var(--computing); font-weight: 700; }
+  .ds-table .val   { color: var(--ink); font-weight: 700; }
+  .ds-table .note  { color: var(--sub); }
+
+  /* MI 4-class panel */
+  .mi-panel {
+    border: 1px solid var(--hairline);
+    border-radius: 8px;
+    background: var(--paper);
+    padding: 10px 12px;
+    display: flex; flex-direction: column; gap: 8px;
+  }
+  .mi-panel h4 {
+    font-size: 11px; font-weight: 700; color: var(--ink); margin: 0;
+    font-family: 'JetBrains Mono', monospace; letter-spacing: 0.04em;
+  }
+  .mi-grid {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
+  }
+  .mi-cell {
+    display: flex; align-items: center; gap: 9px;
+    border: 1px solid var(--border-2);
+    border-radius: 6px;
+    background: var(--card);
+    padding: 7px 9px;
+  }
+  .mi-cell .mi-icon { width: 34px; height: 34px; flex-shrink: 0; }
+  .mi-cell .mi-txt { display: flex; flex-direction: column; gap: 1px; }
+  .mi-cell .mi-name { font-size: 11.5px; font-weight: 700; color: var(--ink); }
+  .mi-cell .mi-code {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px; color: var(--computing); letter-spacing: 0.04em;
+  }
+
+  /* ----- D: Raw object ----- */
+  .raw-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    box-shadow: var(--shadow-sm);
+    padding: 14px 18px 12px;
+  }
+  .raw-head {
+    display: flex; justify-content: space-between; align-items: baseline;
+    margin-bottom: 10px;
+  }
+  .raw-h2 { font-size: 14px; font-weight: 700; color: var(--ink); margin: 0; }
+  .raw-sub { font-size: 11px; color: var(--sub); font-family: 'JetBrains Mono', monospace; }
+  .raw-row {
+    display: grid;
+    grid-template-columns: 1fr 0.92fr;
+    gap: 16px;
+  }
+  .raw-fields { display: flex; flex-direction: column; gap: 9px; }
+  .raw-field {
+    border: 1px solid var(--border-2);
+    border-radius: 7px;
+    background: var(--paper);
+    padding: 9px 12px;
+    cursor: pointer;
+    transition: border-color 200ms ease, background 200ms ease;
+  }
+  .raw-field:hover {
+    border-color: var(--computing);
+    background: var(--computing-soft);
+  }
+  .raw-field .rf-top {
+    display: flex; align-items: baseline; gap: 8px;
+  }
+  .raw-field .rf-name {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px; font-weight: 700; color: var(--computing);
+  }
+  .raw-field .rf-type {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px; color: var(--sub-2);
+  }
+  .raw-field .rf-desc {
+    font-size: 11px; color: var(--ink-2); line-height: 1.5; margin-top: 3px;
+  }
+  .raw-field .rf-desc .cn { display: block; }
+  .raw-field .rf-desc .en {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9.5px; color: var(--sub-2); margin-top: 1px;
+  }
+  .raw-repr {
+    background: #1a1814;
+    border: 1px solid var(--border-2);
+    border-radius: 7px;
+    padding: 11px 13px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10.5px; line-height: 1.7;
+    color: #F1EDDF;
+    overflow-x: auto;
+    white-space: pre;
+  }
+  .raw-repr .prompt { color: var(--primary); }
+  .raw-repr .k    { color: #E8B473; }
+  .raw-repr .hl   { color: #D97757; }
+  .raw-repr .num  { color: #D9A6BA; }
+  .raw-repr .cmt  { color: #9D978A; }
+  .raw-repr .fld  { color: #B6C5D2; }
+
+  /* ----- E: 3 promises ----- */
+  .promise-grid {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px;
+  }
+  .promise-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 14px;
+    box-shadow: var(--shadow-sm);
+    display: flex; gap: 12px; align-items: flex-start;
+    transition: border-color 200ms ease, background 200ms ease;
+  }
+  .promise-card.active {
+    border-color: var(--primary);
+    background: var(--primary-soft);
+  }
+  .promise-card.active .promise-num { color: var(--primary-ink); }
+  .promise-num {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 20px; font-weight: 700;
+    color: var(--sub-2);
+    line-height: 1; min-width: 28px;
+  }
+  .promise-body { flex: 1; }
+  .promise-title {
+    font-size: 12.5px; font-weight: 700; color: var(--ink);
+    margin-bottom: 4px; line-height: 1.35;
+  }
+  .promise-sub {
+    font-size: 10.5px; color: var(--sub); line-height: 1.5;
+    font-family: 'JetBrains Mono', monospace;
+  }
+</style>
+</head>
+<body>
+
+<aside class="sidebar">
+  <div class="brand-row">
+    <span class="brand-dot"></span>
+    <span class="brand-tag" id="brandTag">M04 · MNE</span>
+  </div>
+  <div class="brand-title" id="brandTitle">装 MNE + 读学术数据集</div>
+  <div class="brand-sub" id="brandSub">install mne · load BCI IV-2a</div>
+
+  <div class="guide-h" id="guideH">怎么看这张图</div>
+  <ul class="guide-list">
+    <li id="g1"><span class="num">01</span>看类比 · MNE 和 BCI IV 是啥<span class="en">What MNE / BCI IV are</span></li>
+    <li id="g2"><span class="num">02</span>点 4 个步骤卡 · 展开命令<span class="en">Click each step for the command</span></li>
+    <li id="g3"><span class="num">03</span>对照数据集表 + Raw 结构<span class="en">Read the dataset spec + Raw</span></li>
+  </ul>
+
+  <button class="lang-btn" id="langBtn" type="button">中文 / EN</button>
+</aside>
+
+<main class="main">
+
+  <!-- ========= A · Hero ========= -->
+  <section>
+    <div class="section-tag"><span class="bar"></span><span id="t1">A · MNE + BCI IV 是什么</span></div>
+    <div class="hero">
+      <div class="hero-title" id="heroTitle">
+        想分析脑电, 先有 <span class="accent">工具</span> 再有 <span class="accent">数据</span> · <span class="km">MNE</span> 负责读和算, <span class="km">BCI IV</span> 是公认的练手数据
+      </div>
+      <div class="hero-sub" id="heroSub">
+        这一关你只做两件事: 把 MNE 装进 Python, 再把一个真实实验室的数据集读进电脑, 第一次看到脑电数据的真身。
+      </div>
+      <div class="analogy-row">
+        <div class="analogy">
+          <div class="ana-eq"><span class="lib">mne</span> = 脑电分析的 <span class="ref">numpy</span></div>
+          <div class="ana-note" id="ana1">numpy 是数组运算的标准库 · MNE 就是脑电领域那个标准库, 读文件 / 滤波 / 分段全靠它。</div>
+        </div>
+        <div class="analogy">
+          <div class="ana-eq"><span class="lib">BCI IV</span> = 脑机接口界的 <span class="ref">ImageNet</span></div>
+          <div class="ana-note" id="ana2">ImageNet 是图像 AI 公认的基准数据 · BCI Competition IV 就是脑机接口公认的练手 + 比拼数据集。</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========= B · 4 steps ========= -->
+  <section>
+    <div class="section-tag"><span class="bar"></span><span id="t2">B · 4 步: 从装库到看见数据</span></div>
+    <div class="steps-card" style="margin-top:6px">
+      <div class="steps-head">
+        <h2 class="steps-h2" id="stepsH2">点任一步骤展开命令</h2>
+        <span class="steps-sub" id="stepsSub">click any step to expand the command</span>
+      </div>
+
+      <div class="steps-grid">
+
+        <div class="step-tile" data-step="s1" tabindex="0">
+          <div class="step-head">
+            <span class="step-num">STEP 1</span>
+            <span class="step-tag" data-i="st1tag">1 行命令</span>
+          </div>
+          <div class="step-title" data-i="st1t">pip install mne</div>
+          <div class="step-sub" data-i="st1s">装好脑电分析的标准库</div>
+          <div class="step-hint" data-i="st1h">点开看代码</div>
+        </div>
+
+        <div class="step-tile" data-step="s2" tabindex="0">
+          <div class="step-head">
+            <span class="step-num">STEP 2</span>
+            <span class="step-tag" data-i="st2tag">下载</span>
+          </div>
+          <div class="step-title" data-i="st2t">下载 BCI IV-2a 数据集</div>
+          <div class="step-sub" data-i="st2s">从官网拿 .gdf 文件</div>
+          <div class="step-hint" data-i="st2h">点开看代码</div>
+        </div>
+
+        <div class="step-tile" data-step="s3" tabindex="0">
+          <div class="step-head">
+            <span class="step-num">STEP 3</span>
+            <span class="step-tag" data-i="st3tag">1 个函数</span>
+          </div>
+          <div class="step-title" data-i="st3t">加载 .gdf 文件</div>
+          <div class="step-sub" data-i="st3s">read_raw_gdf 读进 Raw 对象</div>
+          <div class="step-hint" data-i="st3h">点开看代码</div>
+        </div>
+
+        <div class="step-tile" data-step="s4" tabindex="0">
+          <div class="step-head">
+            <span class="step-num">STEP 4</span>
+            <span class="step-tag" data-i="st4tag">看维度</span>
+          </div>
+          <div class="step-title" data-i="st4t">看懂数据结构</div>
+          <div class="step-sub" data-i="st4s">channels × samples + sfreq</div>
+          <div class="step-hint" data-i="st4h">点开看代码</div>
+        </div>
+
+      </div>
+
+      <div class="step-detail-empty" id="stepDetailEmpty">
+        <span class="cn">点上面任一步看具体命令。</span>click any step above to see the exact command
+      </div>
+
+      <pre class="step-detail" id="stepDetail"></pre>
+    </div>
+  </section>
+
+  <!-- ========= C · Dataset spec ========= -->
+  <section>
+    <div class="section-tag"><span class="bar"></span><span id="t3">C · BCI Competition IV-2a 数据集长什么样</span></div>
+    <div class="ds-card" style="margin-top:6px">
+      <div class="ds-head">
+        <div>
+          <h2 class="ds-h2" id="dsH2">数据集规格 + 4 类运动想象</h2>
+          <span class="ds-sub" id="dsSub">dataset spec · 4 motor-imagery classes</span>
+        </div>
+        <span class="ds-badge" id="dsBadge">.GDF · 250 HZ · 4-CLASS</span>
+      </div>
+
+      <div class="ds-row">
+        <table class="ds-table">
+          <thead>
+            <tr>
+              <th id="thItem">项目</th>
+              <th id="thVal">数值</th>
+              <th id="thNote">说明</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><span class="field">subjects</span></td>
+              <td><span class="val">9</span></td>
+              <td data-i="dn1">9 个被试 · A01 到 A09</td>
+            </tr>
+            <tr>
+              <td><span class="field">EEG channels</span></td>
+              <td><span class="val">22</span></td>
+              <td data-i="dn2">22 个脑电电极 (+3 个 EOG)</td>
+            </tr>
+            <tr>
+              <td><span class="field">classes</span></td>
+              <td><span class="val">4</span></td>
+              <td data-i="dn3">4 类运动想象任务</td>
+            </tr>
+            <tr>
+              <td><span class="field">sampling rate</span></td>
+              <td><span class="val">250 Hz</span></td>
+              <td data-i="dn4">每秒采 250 个点</td>
+            </tr>
+            <tr>
+              <td><span class="field">format</span></td>
+              <td><span class="val">.gdf</span></td>
+              <td data-i="dn5">通用数据格式 · MNE 直接读</td>
+            </tr>
+            <tr>
+              <td><span class="field">trials / subj</span></td>
+              <td><span class="val">288</span></td>
+              <td data-i="dn6">每人 288 次 · 4 类各 72 次</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="mi-panel">
+          <h4 id="miH">4 类运动想象 · MOTOR IMAGERY</h4>
+          <div class="mi-grid">
+            <div class="mi-cell">
+              <svg class="mi-icon" viewBox="0 0 34 34" aria-hidden="true">
+                <circle cx="17" cy="17" r="15" fill="#F4DDE3" stroke="#C04E68" stroke-width="1.4"/>
+                <path d="M22 11 L11 17 L22 23" fill="none" stroke="#C04E68" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+              <div class="mi-txt">
+                <span class="mi-name" data-i="mi1">想象左手</span>
+                <span class="mi-code">class 0 · left</span>
+              </div>
+            </div>
+            <div class="mi-cell">
+              <svg class="mi-icon" viewBox="0 0 34 34" aria-hidden="true">
+                <circle cx="17" cy="17" r="15" fill="#F4DDE3" stroke="#C04E68" stroke-width="1.4"/>
+                <path d="M12 11 L23 17 L12 23" fill="none" stroke="#C04E68" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+              <div class="mi-txt">
+                <span class="mi-name" data-i="mi2">想象右手</span>
+                <span class="mi-code">class 1 · right</span>
+              </div>
+            </div>
+            <div class="mi-cell">
+              <svg class="mi-icon" viewBox="0 0 34 34" aria-hidden="true">
+                <circle cx="17" cy="17" r="15" fill="#F4DDE3" stroke="#C04E68" stroke-width="1.4"/>
+                <path d="M17 23 L17 11 M12 16 L17 11 L22 16" fill="none" stroke="#C04E68" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+              <div class="mi-txt">
+                <span class="mi-name" data-i="mi3">想象双脚</span>
+                <span class="mi-code">class 2 · feet</span>
+              </div>
+            </div>
+            <div class="mi-cell">
+              <svg class="mi-icon" viewBox="0 0 34 34" aria-hidden="true">
+                <circle cx="17" cy="17" r="15" fill="#F4DDE3" stroke="#C04E68" stroke-width="1.4"/>
+                <path d="M11 9 Q17 17 11 25 M23 9 Q17 17 23 25" fill="none" stroke="#C04E68" stroke-width="2" stroke-linecap="round"/>
+              </svg>
+              <div class="mi-txt">
+                <span class="mi-name" data-i="mi4">想象舌头</span>
+                <span class="mi-code">class 3 · tongue</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========= D · Raw object ========= -->
+  <section>
+    <div class="section-tag"><span class="bar"></span><span id="t4">D · 读进来后 · MNE Raw 对象的三件套</span></div>
+    <div class="raw-card" style="margin-top:6px">
+      <div class="raw-head">
+        <h2 class="raw-h2" id="rawH2">Raw = info + data + events</h2>
+        <span class="raw-sub" id="rawSub">what raw_gdf actually holds</span>
+      </div>
+
+      <div class="raw-row">
+        <div class="raw-fields">
+          <div class="raw-field">
+            <div class="rf-top">
+              <span class="rf-name">.info</span>
+              <span class="rf-type">dict-like</span>
+            </div>
+            <div class="rf-desc">
+              <span class="cn" data-i="rf1c">元数据 · 电极名字 / 数量 / 采样率 250 Hz</span>
+              <span class="en" data-i="rf1e">metadata · channel names, count, sfreq</span>
+            </div>
+          </div>
+          <div class="raw-field">
+            <div class="rf-top">
+              <span class="rf-name">.get_data()</span>
+              <span class="rf-type">ndarray</span>
+            </div>
+            <div class="rf-desc">
+              <span class="cn" data-i="rf2c">真正的电压矩阵 · 形状 (n_channels, n_samples)</span>
+              <span class="en" data-i="rf2e">the voltage matrix · (channels, samples)</span>
+            </div>
+          </div>
+          <div class="raw-field">
+            <div class="rf-top">
+              <span class="rf-name">.annotations / events</span>
+              <span class="rf-type">list</span>
+            </div>
+            <div class="rf-desc">
+              <span class="cn" data-i="rf3c">事件标记 · 哪一刻是哪一类运动想象</span>
+              <span class="en" data-i="rf3e">event markers · when each MI class happened</span>
+            </div>
+          </div>
+        </div>
+
+        <pre class="raw-repr" id="rawRepr"><span class="prompt">&gt;&gt;&gt;</span> raw = mne.io.read_raw_gdf(<span class="hl">"A01T.gdf"</span>)
+<span class="prompt">&gt;&gt;&gt;</span> raw
+<span class="fld">&lt;RawGDF | A01T.gdf,</span>
+  <span class="fld">25 x 672528</span> <span class="cmt"># 25 ch x samples</span>
+<span class="fld">&gt;</span>
+<span class="prompt">&gt;&gt;&gt;</span> raw.info[<span class="hl">"sfreq"</span>]
+<span class="num">250.0</span>
+<span class="prompt">&gt;&gt;&gt;</span> raw.get_data().shape
+(<span class="num">25</span>, <span class="num">672528</span>)  <span class="cmt"># ch, samples</span>
+<span class="prompt">&gt;&gt;&gt;</span> <span class="cmt"># 672528 / 250 / 60 = 44.8 min</span></pre>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========= E · 3 promises ========= -->
+  <section>
+    <div class="section-tag"><span class="bar"></span><span id="t5">E · 这一关要交付的三件事</span></div>
+    <div class="promise-grid" style="margin-top:6px">
+      <div class="promise-card active">
+        <span class="promise-num">01</span>
+        <div class="promise-body">
+          <div class="promise-title" id="p1t">装好 MNE</div>
+          <div class="promise-sub" id="p1s">pip install mne · import 不报错</div>
+        </div>
+      </div>
+      <div class="promise-card">
+        <span class="promise-num">02</span>
+        <div class="promise-body">
+          <div class="promise-title" id="p2t">加载第一个数据集</div>
+          <div class="promise-sub" id="p2s">read_raw_gdf 读 A01T.gdf 成功</div>
+        </div>
+      </div>
+      <div class="promise-card">
+        <span class="promise-num">03</span>
+        <div class="promise-body">
+          <div class="promise-title" id="p3t">看懂数据维度</div>
+          <div class="promise-sub" id="p3s">说得出 channels × samples · sfreq</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<script>
+(function(){
+  "use strict";
+
+  var LANG = 'cn';
+
+  var I18N = {
+    brandTag:   { cn: 'M04 · MNE', en: 'M04 · MNE' },
+    brandTitle: { cn: '装 MNE + 读学术数据集', en: 'Install MNE + load dataset' },
+    brandSub:   { cn: 'install mne · load BCI IV-2a', en: 'install mne · load BCI IV-2a' },
+    guideH:     { cn: '怎么看这张图', en: 'HOW TO READ' },
+    g1: {
+      cn: '<span class="num">01</span>看类比 · MNE 和 BCI IV 是啥<span class="en">What MNE / BCI IV are</span>',
+      en: '<span class="num">01</span>What MNE / BCI IV are<span class="en">看两个类比</span>'
+    },
+    g2: {
+      cn: '<span class="num">02</span>点 4 个步骤卡 · 展开命令<span class="en">Click each step for the command</span>',
+      en: '<span class="num">02</span>Click each step for the command<span class="en">点步骤看命令</span>'
+    },
+    g3: {
+      cn: '<span class="num">03</span>对照数据集表 + Raw 结构<span class="en">Read the dataset spec + Raw</span>',
+      en: '<span class="num">03</span>Read the dataset spec + Raw<span class="en">看数据集表 + Raw</span>'
+    },
+
+    t1: { cn: 'A · MNE + BCI IV 是什么', en: 'A · WHAT ARE MNE & BCI IV' },
+    t2: { cn: 'B · 4 步: 从装库到看见数据', en: 'B · 4 STEPS: INSTALL TO INSPECT' },
+    t3: { cn: 'C · BCI Competition IV-2a 数据集长什么样', en: 'C · WHAT BCI COMPETITION IV-2a LOOKS LIKE' },
+    t4: { cn: 'D · 读进来后 · MNE Raw 对象的三件套', en: 'D · INSIDE THE MNE RAW OBJECT' },
+    t5: { cn: 'E · 这一关要交付的三件事', en: 'E · THIS NODE — 3 DELIVERABLES' },
+
+    heroTitle: {
+      cn: '想分析脑电, 先有 <span class="accent">工具</span> 再有 <span class="accent">数据</span> · <span class="km">MNE</span> 负责读和算, <span class="km">BCI IV</span> 是公认的练手数据',
+      en: 'To analyze EEG you need a <span class="accent">tool</span> and <span class="accent">data</span> · <span class="km">MNE</span> reads & computes, <span class="km">BCI IV</span> is the standard practice set'
+    },
+    heroSub: {
+      cn: '这一关你只做两件事: 把 MNE 装进 Python, 再把一个真实实验室的数据集读进电脑, 第一次看到脑电数据的真身。',
+      en: 'Two jobs here: install MNE into Python, then load a real lab dataset — see what EEG data actually is for the first time.'
+    },
+    ana1: {
+      cn: 'numpy 是数组运算的标准库 · MNE 就是脑电领域那个标准库, 读文件 / 滤波 / 分段全靠它。',
+      en: 'numpy is the standard array library · MNE is that standard for EEG — reading, filtering, epoching all run on it.'
+    },
+    ana2: {
+      cn: 'ImageNet 是图像 AI 公认的基准数据 · BCI Competition IV 就是脑机接口公认的练手 + 比拼数据集。',
+      en: 'ImageNet is the benchmark for image AI · BCI Competition IV is the go-to practice & benchmark set for BCI.'
+    },
+
+    stepsH2:  { cn: '点任一步骤展开命令', en: 'Click any step to expand the command' },
+    stepsSub: { cn: '4 步走 · 每步一段代码', en: '4 steps · one snippet per step' },
+
+    st1tag: { cn: '1 行命令', en: '1 line' },
+    st1t:   { cn: 'pip install mne', en: 'pip install mne' },
+    st1s:   { cn: '装好脑电分析的标准库', en: 'install the EEG standard lib' },
+    st1h:   { cn: '点开看代码', en: 'CLICK TO OPEN' },
+
+    st2tag: { cn: '下载', en: 'Download' },
+    st2t:   { cn: '下载 BCI IV-2a 数据集', en: 'Download BCI IV-2a dataset' },
+    st2s:   { cn: '从官网拿 .gdf 文件', en: 'grab the .gdf files from the site' },
+    st2h:   { cn: '点开看代码', en: 'CLICK TO OPEN' },
+
+    st3tag: { cn: '1 个函数', en: '1 call' },
+    st3t:   { cn: '加载 .gdf 文件', en: 'Load the .gdf file' },
+    st3s:   { cn: 'read_raw_gdf 读进 Raw 对象', en: 'read_raw_gdf into a Raw object' },
+    st3h:   { cn: '点开看代码', en: 'CLICK TO OPEN' },
+
+    st4tag: { cn: '看维度', en: 'Inspect' },
+    st4t:   { cn: '看懂数据结构', en: 'Read the data shape' },
+    st4s:   { cn: 'channels x samples + sfreq', en: 'channels x samples + sfreq' },
+    st4h:   { cn: '点开看代码', en: 'CLICK TO OPEN' },
+
+    dsH2:  { cn: '数据集规格 + 4 类运动想象', en: 'Dataset spec + 4 motor-imagery classes' },
+    dsSub: { cn: 'dataset spec · 4 motor-imagery classes', en: 'dataset spec · 4 motor-imagery classes' },
+    dsBadge: { cn: '.GDF · 250 HZ · 4 类', en: '.GDF · 250 HZ · 4-CLASS' },
+    thItem: { cn: '项目', en: 'ITEM' },
+    thVal:  { cn: '数值', en: 'VALUE' },
+    thNote: { cn: '说明', en: 'NOTE' },
+    dn1: { cn: '9 个被试 · A01 到 A09', en: '9 subjects · A01 to A09' },
+    dn2: { cn: '22 个脑电电极 (+3 个 EOG)', en: '22 EEG electrodes (+3 EOG)' },
+    dn3: { cn: '4 类运动想象任务', en: '4 motor-imagery tasks' },
+    dn4: { cn: '每秒采 250 个点', en: '250 samples per second' },
+    dn5: { cn: '通用数据格式 · MNE 直接读', en: 'General Data Format · MNE reads it' },
+    dn6: { cn: '每人 288 次 · 4 类各 72 次', en: '288 trials each · 72 per class' },
+
+    miH:  { cn: '4 类运动想象 · MOTOR IMAGERY', en: '4 MOTOR-IMAGERY CLASSES' },
+    mi1:  { cn: '想象左手', en: 'imagine left hand' },
+    mi2:  { cn: '想象右手', en: 'imagine right hand' },
+    mi3:  { cn: '想象双脚', en: 'imagine both feet' },
+    mi4:  { cn: '想象舌头', en: 'imagine tongue' },
+
+    rawH2:  { cn: 'Raw = info + data + events', en: 'Raw = info + data + events' },
+    rawSub: { cn: 'Raw 对象里到底装了啥', en: 'what raw_gdf actually holds' },
+    rf1c: { cn: '元数据 · 电极名字 / 数量 / 采样率 250 Hz', en: 'metadata · channel names, count, sfreq' },
+    rf1e: { cn: 'metadata · channel names, count, sfreq', en: 'electrode names / count / sampling rate' },
+    rf2c: { cn: '真正的电压矩阵 · 形状 (n_channels, n_samples)', en: 'the voltage matrix · (channels, samples)' },
+    rf2e: { cn: 'the voltage matrix · (channels, samples)', en: 'every channel x every time point' },
+    rf3c: { cn: '事件标记 · 哪一刻是哪一类运动想象', en: 'event markers · when each MI class happened' },
+    rf3e: { cn: 'event markers · when each MI class happened', en: 'time stamp + which class label' },
+
+    p1t: { cn: '装好 MNE', en: 'Install MNE' },
+    p1s: { cn: 'pip install mne · import 不报错', en: 'pip install mne · import works' },
+    p2t: { cn: '加载第一个数据集', en: 'Load your first dataset' },
+    p2s: { cn: 'read_raw_gdf 读 A01T.gdf 成功', en: 'read_raw_gdf opens A01T.gdf' },
+    p3t: { cn: '看懂数据维度', en: 'Read the data shape' },
+    p3s: { cn: '说得出 channels x samples · sfreq', en: 'state channels x samples · sfreq' }
+  };
+
+  // —— Step detail snippets ——
+  var STEP_DETAIL = {
+    s1: {
+      cn: '<span class="cmt"># 1) 在终端里装 MNE (脑电分析标准库)</span>\n' +
+          '<span class="prompt">$</span> pip install <span class="hl">mne</span>\n' +
+          '<span class="cmt"># 2) 验证装好了 · 不报错就行</span>\n' +
+          '<span class="prompt">$</span> python -c <span class="s">"import mne; print(mne.__version__)"</span>\n' +
+          '<span class="s">"1.7.0"</span>\n' +
+          '<span class="cmt"># 之后所有脑电代码都从这一句开始:</span>\n' +
+          '<span class="k">import</span> mne',
+      en: '<span class="cmt"># 1) Install MNE (the EEG standard library)</span>\n' +
+          '<span class="prompt">$</span> pip install <span class="hl">mne</span>\n' +
+          '<span class="cmt"># 2) Verify the install — no error = good</span>\n' +
+          '<span class="prompt">$</span> python -c <span class="s">"import mne; print(mne.__version__)"</span>\n' +
+          '<span class="s">"1.7.0"</span>\n' +
+          '<span class="cmt"># Every EEG script starts with:</span>\n' +
+          '<span class="k">import</span> mne'
+    },
+    s2: {
+      cn: '<span class="cmt"># BCI Competition IV-2a 官网下载 .gdf</span>\n' +
+          '<span class="prompt">$</span> open <span class="url">https://www.bbci.de/competition/iv/#dataset2a</span>\n' +
+          '<span class="cmt"># 注册邮箱后下 A01T.gdf ~ A09T.gdf (训练)</span>\n' +
+          '<span class="cmt"># 放进项目的 data/ 目录</span>\n' +
+          '<span class="prompt">$</span> ls data/\n' +
+          '<span class="hl">A01T.gdf</span>  A02T.gdf  A03T.gdf  <span class="cmt"># ...到 A09T</span>',
+      en: '<span class="cmt"># Download .gdf from the BCI IV-2a site</span>\n' +
+          '<span class="prompt">$</span> open <span class="url">https://www.bbci.de/competition/iv/#dataset2a</span>\n' +
+          '<span class="cmt"># After email signup, grab A01T.gdf ~ A09T.gdf</span>\n' +
+          '<span class="cmt"># put them in the project data/ folder</span>\n' +
+          '<span class="prompt">$</span> ls data/\n' +
+          '<span class="hl">A01T.gdf</span>  A02T.gdf  A03T.gdf  <span class="cmt"># ...up to A09T</span>'
+    },
+    s3: {
+      cn: '<span class="k">import</span> mne\n' +
+          '<span class="cmt"># 用一个函数把 .gdf 读进 Raw 对象</span>\n' +
+          'raw = mne.io.read_raw_gdf(\n' +
+          '    <span class="hl">"data/A01T.gdf"</span>,\n' +
+          '    preload=<span class="k">True</span>,   <span class="cmt"># 一次把数据读进内存</span>\n' +
+          ')\n' +
+          '<span class="k">print</span>(raw)\n' +
+          '<span class="cmt"># &lt;RawGDF | A01T.gdf, 25 x 672528 ...&gt;</span>',
+      en: '<span class="k">import</span> mne\n' +
+          '<span class="cmt"># One call reads the .gdf into a Raw object</span>\n' +
+          'raw = mne.io.read_raw_gdf(\n' +
+          '    <span class="hl">"data/A01T.gdf"</span>,\n' +
+          '    preload=<span class="k">True</span>,   <span class="cmt"># load samples into RAM now</span>\n' +
+          ')\n' +
+          '<span class="k">print</span>(raw)\n' +
+          '<span class="cmt"># &lt;RawGDF | A01T.gdf, 25 x 672528 ...&gt;</span>'
+    },
+    s4: {
+      cn: '<span class="cmt"># 看采样率: 每秒几个点</span>\n' +
+          '<span class="k">print</span>(raw.info[<span class="s">"sfreq"</span>])   <span class="cmt"># 250.0</span>\n' +
+          '<span class="cmt"># 看电极: 多少个通道, 都叫啥</span>\n' +
+          '<span class="k">print</span>(<span class="k">len</span>(raw.ch_names), raw.ch_names[:<span class="num">3</span>])\n' +
+          '<span class="cmt"># 25  ["EEG-Fz", "EEG-0", "EEG-1"]</span>\n' +
+          '<span class="cmt"># 看数据矩阵的形状: 通道 x 采样点</span>\n' +
+          '<span class="k">print</span>(raw.get_data().shape)  <span class="cmt"># (25, 672528)</span>',
+      en: '<span class="cmt"># Sampling rate: samples per second</span>\n' +
+          '<span class="k">print</span>(raw.info[<span class="s">"sfreq"</span>])   <span class="cmt"># 250.0</span>\n' +
+          '<span class="cmt"># Channels: how many, what names</span>\n' +
+          '<span class="k">print</span>(<span class="k">len</span>(raw.ch_names), raw.ch_names[:<span class="num">3</span>])\n' +
+          '<span class="cmt"># 25  ["EEG-Fz", "EEG-0", "EEG-1"]</span>\n' +
+          '<span class="cmt"># Data matrix shape: channels x samples</span>\n' +
+          '<span class="k">print</span>(raw.get_data().shape)  <span class="cmt"># (25, 672528)</span>'
+    }
+  };
+
+  function setHTML(id, html) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    el.innerHTML = html;
+  }
+
+  function applyStepDetail(key) {
+    var pane = document.getElementById('stepDetail');
+    var empty = document.getElementById('stepDetailEmpty');
+    if (!key || !STEP_DETAIL[key]) {
+      pane.classList.remove('show');
+      empty.classList.remove('hide');
+      return;
+    }
+    pane.innerHTML = STEP_DETAIL[key][LANG];
+    pane.classList.add('show');
+    empty.classList.add('hide');
+  }
+
+  function apply() {
+    setHTML('brandTag',   I18N.brandTag[LANG]);
+    setHTML('brandTitle', I18N.brandTitle[LANG]);
+    setHTML('brandSub',   I18N.brandSub[LANG]);
+    setHTML('guideH',     I18N.guideH[LANG]);
+    setHTML('g1',         I18N.g1[LANG]);
+    setHTML('g2',         I18N.g2[LANG]);
+    setHTML('g3',         I18N.g3[LANG]);
+
+    setHTML('t1', I18N.t1[LANG]);
+    setHTML('t2', I18N.t2[LANG]);
+    setHTML('t3', I18N.t3[LANG]);
+    setHTML('t4', I18N.t4[LANG]);
+    setHTML('t5', I18N.t5[LANG]);
+
+    setHTML('heroTitle', I18N.heroTitle[LANG]);
+    setHTML('heroSub',   I18N.heroSub[LANG]);
+    setHTML('ana1',      I18N.ana1[LANG]);
+    setHTML('ana2',      I18N.ana2[LANG]);
+
+    setHTML('stepsH2',  I18N.stepsH2[LANG]);
+    setHTML('stepsSub', I18N.stepsSub[LANG]);
+
+    setHTML('dsH2',    I18N.dsH2[LANG]);
+    setHTML('dsSub',   I18N.dsSub[LANG]);
+    setHTML('dsBadge', I18N.dsBadge[LANG]);
+    setHTML('thItem',  I18N.thItem[LANG]);
+    setHTML('thVal',   I18N.thVal[LANG]);
+    setHTML('thNote',  I18N.thNote[LANG]);
+    setHTML('miH',     I18N.miH[LANG]);
+
+    setHTML('rawH2',  I18N.rawH2[LANG]);
+    setHTML('rawSub', I18N.rawSub[LANG]);
+
+    // labels with data-i
+    var nodes = document.querySelectorAll('[data-i]');
+    for (var i = 0; i < nodes.length; i++) {
+      var k = nodes[i].getAttribute('data-i');
+      if (I18N[k]) nodes[i].textContent = I18N[k][LANG];
+    }
+
+    setHTML('p1t', I18N.p1t[LANG]); setHTML('p1s', I18N.p1s[LANG]);
+    setHTML('p2t', I18N.p2t[LANG]); setHTML('p2s', I18N.p2s[LANG]);
+    setHTML('p3t', I18N.p3t[LANG]); setHTML('p3s', I18N.p3s[LANG]);
+
+    // refresh active step detail content if any
+    var activeTile = document.querySelector('.step-tile.active');
+    if (activeTile) {
+      applyStepDetail(activeTile.getAttribute('data-step'));
+    } else {
+      applyStepDetail(null);
+    }
+
+    document.documentElement.setAttribute('lang', LANG === 'cn' ? 'zh-CN' : 'en');
+  }
+
+  // Wire step tiles
+  var tiles = document.querySelectorAll('.step-tile');
+  for (var j = 0; j < tiles.length; j++) {
+    (function (tile) {
+      tile.addEventListener('click', function () {
+        var was = tile.classList.contains('active');
+        for (var k = 0; k < tiles.length; k++) tiles[k].classList.remove('active');
+        if (was) {
+          applyStepDetail(null);
+        } else {
+          tile.classList.add('active');
+          applyStepDetail(tile.getAttribute('data-step'));
+        }
+      });
+      tile.addEventListener('keydown', function (ev) {
+        if (ev.key === 'Enter' || ev.key === ' ') {
+          ev.preventDefault();
+          tile.click();
+        }
+      });
+    })(tiles[j]);
+  }
+
+  document.getElementById('langBtn').addEventListener('click', function () {
+    LANG = (LANG === 'cn') ? 'en' : 'cn';
+    apply();
+  });
+
+  apply();
+})();
+</script>
+</body>
+</html>

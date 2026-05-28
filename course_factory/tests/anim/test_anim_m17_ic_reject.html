@@ -1,0 +1,537 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>认出哪一路是眨眼，把它扔掉</title>
+<style>
+:root{
+  /* Layer 1 — shared deep-space canvas (all 26 subjects) */
+  --bg-0: oklch(0.14 0.035 265);
+  --bg-1: oklch(0.18 0.04 265);
+  --bg-2: oklch(0.22 0.045 265);
+  --bg-3: oklch(0.28 0.05 265);
+  --line: oklch(0.35 0.05 265 / 0.35);
+  --line-strong: oklch(0.55 0.08 265 / 0.55);
+  --fg:      oklch(0.96 0.01 265);
+  --fg-dim:  oklch(0.75 0.02 265);
+  --fg-mute: oklch(0.55 0.03 265);
+  --gold:    oklch(0.85 0.14 85);
+  /* Layer 2 — cs signature accent (cyan) */
+  --accent:  oklch(0.75 0.17 200);
+  /* Layer 3 — cs 5-color palette (themes.js) */
+  --pal-signal: oklch(0.75 0.17 200);
+  --pal-core:   oklch(0.55 0.16 200);
+  --pal-depth:  oklch(0.35 0.10 210);
+  --pal-flash:  oklch(0.92 0.08 190);
+  --pal-query:  oklch(0.85 0.14 85);
+  /* semantic */
+  --reject: oklch(0.68 0.18 25);   /* artefact red (only for verdict, not body) */
+  --keep:   oklch(0.78 0.15 150);  /* brain-wave green verdict */
+}
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;}
+html,body{width:100%;height:100vh;overflow:hidden;}
+body{background:var(--bg-0);color:var(--fg);
+     font-family:'Inter','Noto Sans SC',system-ui,sans-serif;}
+.wrapper{display:flex;flex-direction:row;height:100vh;overflow:hidden;}
+.sidebar{width:200px;min-width:200px;max-width:200px;display:flex;flex-direction:column;gap:8px;
+         padding:14px 12px;background:var(--bg-1);border-right:1px solid var(--line);overflow-y:auto;}
+.brand{display:flex;align-items:center;gap:8px;}
+.brand svg{flex-shrink:0;}
+.brand .bname{font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:700;
+              color:var(--accent);letter-spacing:0.08em;}
+.s-title{font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:700;color:var(--fg);
+         line-height:1.35;margin-top:2px;}
+.s-sub{font-family:'Noto Sans SC',sans-serif;font-size:10px;color:var(--fg-mute);line-height:1.5;}
+.guide-label{font-family:'JetBrains Mono',monospace;font-size:9px;font-weight:700;letter-spacing:0.12em;
+             text-transform:uppercase;color:var(--accent);margin-top:6px;}
+.guide ul{list-style:none;display:flex;flex-direction:column;gap:6px;}
+.guide li{font-family:'Noto Sans SC',sans-serif;font-size:11px;color:var(--fg-dim);line-height:1.45;
+          padding-left:9px;border-left:2px solid var(--pal-core);}
+.lang-btn{align-self:flex-start;margin-top:auto;font-family:'JetBrains Mono',monospace;font-size:10px;
+          font-weight:700;padding:4px 10px;cursor:pointer;border:1px solid var(--line-strong);
+          background:var(--bg-2);color:var(--accent);letter-spacing:0.1em;text-transform:uppercase;
+          box-shadow:3px 3px 0 var(--bg-0);}
+.lang-btn:active{transform:translate(3px,3px);box-shadow:none;}
+.anim-main{flex:1;display:flex;flex-direction:column;min-width:0;position:relative;}
+.canvas-wrap{flex:1;min-height:0;position:relative;}
+canvas{width:100%;height:100%;display:block;}
+.hud{position:absolute;top:14px;right:16px;background:var(--bg-1);border:1px solid var(--line-strong);
+     box-shadow:3px 3px 0 var(--bg-0);padding:8px 12px;min-width:188px;}
+.hud-row{display:flex;justify-content:space-between;gap:14px;align-items:baseline;}
+.hud-row+.hud-row{margin-top:4px;}
+.hud-label{font-family:'JetBrains Mono',monospace;font-size:8px;letter-spacing:0.14em;
+           text-transform:uppercase;color:var(--fg-mute);}
+.hud-val{font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:700;color:var(--accent);}
+.caption{position:absolute;bottom:22px;left:50%;transform:translateX(-50%);text-align:center;
+         max-width:80%;padding:0 16px;}
+.caption .cap-zh{font-family:'Noto Sans SC',sans-serif;font-size:19px;font-weight:700;color:var(--fg);}
+.caption .cap-en{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--fg-mute);margin-top:3px;}
+.frame-ind{position:absolute;bottom:22px;left:18px;font-family:'JetBrains Mono',monospace;
+           font-size:10px;color:var(--fg-mute);letter-spacing:0.12em;}
+</style>
+</head>
+<body>
+<div class="wrapper">
+  <aside class="sidebar">
+    <div class="brand">
+      <!-- Bit mascot: levitating cubic sprite (cs) -->
+      <svg width="26" height="26" viewBox="0 0 26 26" aria-hidden="true">
+        <g id="bit">
+          <rect x="5" y="5" width="16" height="16" rx="2" fill="none"
+                stroke="var(--accent)" stroke-width="1.6"/>
+          <rect x="8.5" y="8.5" width="3.5" height="3.5" fill="var(--pal-signal)"/>
+          <rect x="14" y="8.5" width="3.5" height="3.5" fill="var(--pal-core)"/>
+          <rect x="8.5" y="14" width="3.5" height="3.5" fill="var(--pal-flash)"/>
+          <rect x="14" y="14" width="3.5" height="3.5" fill="var(--pal-query)"/>
+        </g>
+      </svg>
+      <span class="bname">BIT</span>
+    </div>
+    <h1 class="s-title" id="ttl">认出哪一路是眨眼</h1>
+    <div class="s-sub" id="sub">ICA 拆出好几路成分，靠三个证据分清垃圾和真脑波。</div>
+    <div class="guide-label" id="guideLabel">三证据</div>
+    <div class="guide">
+      <ul>
+        <li id="g1">头皮地形图：能量集中在哪</li>
+        <li id="g2">时间波形：长什么样</li>
+        <li id="g3">频谱：哪个频段强</li>
+      </ul>
+    </div>
+    <button class="lang-btn" id="langBtn">EN</button>
+  </aside>
+
+  <main class="anim-main">
+    <div class="canvas-wrap"><canvas id="c"></canvas></div>
+    <div class="hud">
+      <div class="hud-row"><span class="hud-label" id="hl1">STAGE</span><span class="hud-val" id="hv1">--</span></div>
+      <div class="hud-row"><span class="hud-label" id="hl2">FOCUS IC</span><span class="hud-val" id="hv2">--</span></div>
+      <div class="hud-row"><span class="hud-label" id="hl3">VERDICT</span><span class="hud-val" id="hv3">--</span></div>
+    </div>
+    <div class="frame-ind" id="frameInd">F1 / 5</div>
+    <div class="caption">
+      <div class="cap-zh" id="capZh">ICA 拆出 5 路成分</div>
+      <div class="cap-en" id="capEn">ICA splits into 5 components</div>
+    </div>
+  </main>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  // ---- palette pull from CSS vars ----
+  var css=getComputedStyle(document.documentElement);
+  function V(n){return css.getPropertyValue(n).trim();}
+  var COL={
+    bg0:V('--bg-0'),bg1:V('--bg-1'),bg2:V('--bg-2'),bg3:V('--bg-3'),
+    line:V('--line'),lineStrong:V('--line-strong'),
+    fg:V('--fg'),fgDim:V('--fg-dim'),fgMute:V('--fg-mute'),gold:V('--gold'),
+    accent:V('--accent'),
+    signal:V('--pal-signal'),core:V('--pal-core'),depth:V('--pal-depth'),
+    flash:V('--pal-flash'),query:V('--pal-query'),
+    reject:V('--reject'),keep:V('--keep')
+  };
+
+  // ---- i18n ----
+  var I18N={
+    zh:{
+      ttl:'认出哪一路是眨眼',
+      sub:'ICA 拆出好几路成分，靠三个证据分清垃圾和真脑波。',
+      guideLabel:'三证据',
+      g1:'头皮地形图：能量集中在哪',
+      g2:'时间波形：长什么样',
+      g3:'频谱：哪个频段强',
+      hl1:'阶段',hl2:'看哪路',hl3:'判定',
+      stages:[
+        {hud:['排成一排','全部 5 路','待查'],zh:'ICA 拆出 5 路成分，还不知谁好谁坏',en:'5 ICs, none judged yet'},
+        {hud:['取三证据','逐路','待查'],zh:'每路看三个证据：地形图 + 波形 + 频谱',en:'Three evidences: topomap + wave + spectrum'},
+        {hud:['看眨眼路','IC2','伪迹'],zh:'前额发烫 + 慢大峰 + 低频高 → 是眨眼，扔掉',en:'Frontal + slow spike + low-freq → blink, reject'},
+        {hud:['看脑波路','IC4','保留'],zh:'后脑发亮 + 规则节律 + alpha 峰 → 真脑波，留下',en:'Occipital + rhythm + alpha peak → brain, keep'},
+        {hud:['清理完成','2 扔 3 留','完成'],zh:'勾掉眨眼/肌电，保留脑波——清理脑波的关键一步',en:'Drop junk, keep brain waves — the key cleanup'}
+      ],
+      labels:{
+        topomap:'头皮地形图',wave:'时间波形',spectrum:'频谱',
+        reject:'扔掉',keep:'保留',unknown:'?',
+        front:'前额',back:'后脑',
+        ic:['IC1','IC2','IC3','IC4','IC5'],
+        type:['心跳','眨眼','肌电','脑波 α','脑波 β']
+      }
+    },
+    en:{
+      ttl:'Spot the blink, drop it',
+      sub:'ICA splits the signal into components; three evidences tell junk from real brain waves.',
+      guideLabel:'3 EVIDENCES',
+      g1:'Topomap: where energy concentrates',
+      g2:'Time waveform: what it looks like',
+      g3:'Spectrum: which band is strong',
+      hl1:'STAGE',hl2:'FOCUS IC',hl3:'VERDICT',
+      stages:[
+        {hud:['LINE UP','ALL 5','PENDING'],zh:'5 ICs split out, none judged yet',en:'5 ICs split out, none judged yet'},
+        {hud:['3 EVIDENCE','EACH IC','PENDING'],zh:'Three evidences: topomap + wave + spectrum',en:'Three evidences: topomap + wave + spectrum'},
+        {hud:['BLINK IC','IC2','REJECT'],zh:'Frontal + slow spike + low-freq → blink, reject',en:'Frontal + slow spike + low-freq → blink, reject'},
+        {hud:['BRAIN IC','IC4','KEEP'],zh:'Occipital + rhythm + alpha peak → brain, keep',en:'Occipital + rhythm + alpha peak → brain, keep'},
+        {hud:['CLEANED','2 OUT 3 IN','DONE'],zh:'Drop junk, keep brain waves — the key cleanup',en:'Drop junk, keep brain waves — the key cleanup'}
+      ],
+      labels:{
+        topomap:'Topomap',wave:'Waveform',spectrum:'Spectrum',
+        reject:'REJECT',keep:'KEEP',unknown:'?',
+        front:'Front',back:'Back',
+        ic:['IC1','IC2','IC3','IC4','IC5'],
+        type:['Heartbeat','Blink','Muscle','Brain α','Brain β']
+      }
+    }
+  };
+  var lang='zh';
+
+  // ---- IC model: 5 components, each with topomap focus / waveform / spectrum ----
+  // focus: {fx,fy} in 0..1 of head circle (fy 0=front/top, 1=back/bottom); spread
+  // band: dominant frequency band index for spectrum bars (8 bars: 0.5..40Hz log-ish)
+  // verdict: 'reject' | 'keep'
+  var ICS=[
+    // IC1 heartbeat-like (kept neutral but actually artefact-ish; we mark reject? keep it simple: only blink+muscle reject)
+    {topo:{fx:0.5,fy:0.55,spread:0.55},wave:'ecg',band:0,verdict:'reject'},
+    {topo:{fx:0.5,fy:0.16,spread:0.30},wave:'blink',band:0,verdict:'reject'},   // IC2 blink: frontal, slow big spike, low freq
+    {topo:{fx:0.78,fy:0.45,spread:0.20},wave:'emg',band:7,verdict:'reject'},     // IC3 muscle: temporal, fast jitter, high freq
+    {topo:{fx:0.5,fy:0.82,spread:0.34},wave:'alpha',band:3,verdict:'keep'},      // IC4 brain alpha: occipital, rhythm, alpha peak
+    {topo:{fx:0.42,fy:0.5,spread:0.40},wave:'beta',band:5,verdict:'keep'}        // IC5 brain beta
+  ];
+  var FREQ_BARS=8; // approx 2,4,8,10,13,20,30,40 Hz
+
+  function specProfile(band){
+    var arr=[];
+    for(var i=0;i<FREQ_BARS;i++){
+      var d=Math.abs(i-band);
+      var v=Math.exp(-(d*d)/2.2);
+      // 1/f tilt: low freq always a bit higher
+      v=v*0.85+0.15*Math.exp(-i*0.45);
+      arr.push(Math.max(0.04,v));
+    }
+    return arr;
+  }
+
+  // ---- canvas setup ----
+  var cnv=document.getElementById('c'),ctx=cnv.getContext('2d');
+  var W=0,H=0,DPR=1;
+  function fit(){
+    DPR=window.devicePixelRatio||1;
+    W=cnv.clientWidth; H=cnv.clientHeight;
+    cnv.width=W*DPR; cnv.height=H*DPR;
+    ctx.setTransform(DPR,0,0,DPR,0,0);
+  }
+  window.addEventListener('resize',fit); fit();
+
+  // ---- timing ----
+  var FRAMES=5, DUR=6000, TOTAL=FRAMES*DUR, t0=performance.now();
+  var playing=true, pauseAt=0;
+
+  // ---- drawing helpers ----
+  function roundRect(x,y,w,h,r){
+    ctx.beginPath();
+    ctx.moveTo(x+r,y);ctx.arcTo(x+w,y,x+w,y+h,r);ctx.arcTo(x+w,y+h,x,y+h,r);
+    ctx.arcTo(x,y+h,x,y,r);ctx.arcTo(x,y,x+w,y,r);ctx.closePath();
+  }
+
+  // topomap: head circle with gaussian hot-spot
+  function drawTopomap(cx,cy,R,topo,col,glow){
+    ctx.save();
+    // gaussian field via radial layered circles
+    var hx=cx+(topo.fx-0.5)*R*1.4;
+    var hy=cy+(topo.fy-0.5)*R*1.6;
+    ctx.beginPath();ctx.arc(cx,cy,R,0,Math.PI*2);ctx.clip();
+    var steps=7;
+    for(var s=steps;s>=1;s--){
+      var rr=topo.spread*R*(s/steps)*1.5;
+      var a=glow*(0.10+0.13*(1-(s-1)/steps));
+      ctx.beginPath();ctx.arc(hx,hy,rr,0,Math.PI*2);
+      ctx.fillStyle=withA(col,a);ctx.fill();
+    }
+    ctx.restore();
+    // head outline + nose (front marker at top)
+    ctx.save();
+    ctx.strokeStyle=COL.lineStrong;ctx.lineWidth=1.4;
+    ctx.beginPath();ctx.arc(cx,cy,R,0,Math.PI*2);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(cx-5,cy-R);ctx.lineTo(cx,cy-R-7);ctx.lineTo(cx+5,cy-R);ctx.stroke();
+    ctx.restore();
+  }
+  function withA(c,a){
+    // c is oklch(...) string; wrap into oklch(... / a)
+    if(c.indexOf('/')>=0) return c;
+    return c.replace(/\)$/,' / '+a.toFixed(3)+')');
+  }
+
+  // waveform generator
+  function waveSample(kind,x){ // x 0..1
+    var tt=x*6;
+    if(kind==='blink'){
+      // single slow large positive deflection near middle, flat elsewhere
+      var d=x-0.45; return Math.exp(-(d*d)/0.004)*0.95 - 0.05;
+    }
+    if(kind==='emg'){
+      // high frequency jitter, bursty
+      return (Math.sin(tt*38)*0.5+Math.sin(tt*53+1)*0.4)*0.55;
+    }
+    if(kind==='ecg'){
+      // periodic sharp spikes (QRS-like)
+      var ph=(x*3)%1; var d=ph-0.5; return Math.exp(-(d*d)/0.0006)*0.9-0.08;
+    }
+    if(kind==='alpha'){
+      return Math.sin(tt*8)*0.62; // smooth ~10Hz rhythm
+    }
+    if(kind==='beta'){
+      return (Math.sin(tt*16)*0.4+Math.sin(tt*22+0.6)*0.3);
+    }
+    return 0;
+  }
+  function drawWave(x0,y0,w,h,kind,col,lw){
+    ctx.save();ctx.strokeStyle=col;ctx.lineWidth=lw||1.6;ctx.beginPath();
+    var n=90;
+    for(var i=0;i<=n;i++){
+      var fx=i/n;var v=waveSample(kind,fx);
+      var px=x0+fx*w; var py=y0+h/2 - v*h*0.42;
+      if(i===0)ctx.moveTo(px,py);else ctx.lineTo(px,py);
+    }
+    ctx.stroke();ctx.restore();
+  }
+  function drawSpectrum(x0,y0,w,h,band,col){
+    var prof=specProfile(band);
+    var bw=w/FREQ_BARS;
+    for(var i=0;i<FREQ_BARS;i++){
+      var bh=prof[i]*h;
+      ctx.fillStyle=withA(col,0.85);
+      ctx.fillRect(x0+i*bw+1, y0+h-bh, bw-2, bh);
+    }
+    // baseline
+    ctx.strokeStyle=COL.line;ctx.lineWidth=1;
+    ctx.beginPath();ctx.moveTo(x0,y0+h);ctx.lineTo(x0+w,y0+h);ctx.stroke();
+  }
+  function arrow(x1,y1,x2,y2,col,lw){
+    ctx.save();ctx.strokeStyle=col;ctx.lineWidth=lw||1.6;
+    ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke();
+    var a=Math.atan2(y2-y1,x2-x1);
+    ctx.beginPath();ctx.moveTo(x2,y2);
+    ctx.lineTo(x2-9*Math.cos(a-0.4),y2-9*Math.sin(a-0.4));
+    ctx.lineTo(x2-9*Math.cos(a+0.4),y2-9*Math.sin(a+0.4));
+    ctx.closePath();ctx.fillStyle=col;ctx.fill();ctx.restore();
+  }
+  function checkMark(cx,cy,r,col){
+    ctx.save();ctx.strokeStyle=col;ctx.lineWidth=2.4;ctx.lineCap='round';
+    ctx.beginPath();ctx.moveTo(cx-r*0.5,cy);ctx.lineTo(cx-r*0.1,cy+r*0.45);
+    ctx.lineTo(cx+r*0.55,cy-r*0.5);ctx.stroke();ctx.restore();
+  }
+  function crossMark(cx,cy,r,col){
+    ctx.save();ctx.strokeStyle=col;ctx.lineWidth=2.4;ctx.lineCap='round';
+    ctx.beginPath();ctx.moveTo(cx-r*0.45,cy-r*0.45);ctx.lineTo(cx+r*0.45,cy+r*0.45);
+    ctx.moveTo(cx+r*0.45,cy-r*0.45);ctx.lineTo(cx-r*0.45,cy+r*0.45);ctx.stroke();ctx.restore();
+  }
+  function text(s,x,y,col,size,align,bold){
+    ctx.fillStyle=col;
+    ctx.font=(bold?'700 ':'')+size+"px 'JetBrains Mono',monospace";
+    ctx.textAlign=align||'left';ctx.textBaseline='alphabetic';
+    ctx.fillText(s,x,y);ctx.textAlign='left';
+  }
+  function textCJK(s,x,y,col,size,align,bold){
+    ctx.fillStyle=col;
+    ctx.font=(bold?'700 ':'')+size+"px 'Noto Sans SC',sans-serif";
+    ctx.textAlign=align||'left';ctx.textBaseline='alphabetic';
+    ctx.fillText(s,x,y);ctx.textAlign='left';
+  }
+
+  // ---- frame renderer ----
+  // Row layout: each IC is a row; columns = label | topomap | waveform | spectrum | verdict
+  function render(now){
+    var raw= playing ? (now-t0) : pauseAt;
+    var elapsed=((raw%TOTAL)+TOTAL)%TOTAL; // always 0..TOTAL
+    var frame=Math.max(0, Math.min(FRAMES-1, Math.floor(elapsed/DUR)));
+    var fp=(elapsed-frame*DUR)/DUR; // 0..1 within frame
+    var L=I18N[lang].labels;
+
+    ctx.clearRect(0,0,W,H);
+    drawBg();
+
+    // layout
+    var rows=ICS.length;
+    var topPad=58, botPad=84;
+    var avail=H-topPad-botPad;
+    var rh=Math.min(60, (avail-(rows+1)*8)/rows);
+    var gap=(avail-rh*rows)/(rows+1);
+    var startY=topPad+gap;
+    var leftX=Math.max(40, W*0.06);
+    var topoR=Math.min(rh*0.42, 24);
+
+    // column x positions
+    var xIC=leftX;
+    var xTopo=leftX+72;
+    var topoW=topoR*2;
+    var xWave=xTopo+topoW+26;
+    var waveW=Math.max(150,(W-xWave-leftX-360)*0.5);
+    var xSpec=xWave+waveW+28;
+    var specW=Math.max(120, waveW*0.78);
+    var xVerdict=xSpec+specW+26;
+
+    // column headers (frame>=1 highlights the 3 evidences)
+    var headAlpha = frame===0?0.0:1.0;
+    if(frame===0) headAlpha=fp; // fade in nothing on f0 (only labels)
+    ctx.globalAlpha=Math.max(0.0, frame>=1?1:0);
+    if(frame>=1){
+      text(L.topomap, xTopo+topoR, startY-18, COL.accent, 11, 'center', true);
+      text(L.wave,    xWave+waveW/2, startY-18, COL.accent, 11, 'center', true);
+      text(L.spectrum,xSpec+specW/2, startY-18, COL.accent, 11, 'center', true);
+    }
+    ctx.globalAlpha=1;
+
+    for(var i=0;i<rows;i++){
+      var ic=ICS[i];
+      var y=startY+i*(rh+gap);
+      var cy=y+rh/2;
+
+      // focus logic: F3 focus IC2(blink idx1), F4 focus IC4(alpha idx3)
+      var focusIdx=-1;
+      if(frame===2) focusIdx=1;
+      if(frame===3) focusIdx=3;
+      var isFocus=(i===focusIdx);
+      var dim = (focusIdx>=0 && !isFocus) ? 0.32 : 1.0;
+
+      // verdict known?
+      var verdictKnown=false, isReject=false, isKeep=false;
+      if(frame===4){ verdictKnown=true; isReject=(ic.verdict==='reject'); isKeep=(ic.verdict==='keep'); }
+      else if(frame===2 && i===1){ verdictKnown=(fp>0.55); isReject=true; }
+      else if(frame===3 && i===3){ verdictKnown=(fp>0.55); isKeep=true; }
+
+      ctx.globalAlpha=dim;
+
+      // row card
+      var cardCol=COL.bg2;
+      if(verdictKnown && isReject) cardCol=COL.bg2;
+      roundRect(leftX-14, y-2, (xVerdict+70)-(leftX-14), rh+4, 8);
+      ctx.fillStyle=COL.bg1; ctx.fill();
+      ctx.strokeStyle=isFocus?COL.accent:COL.line;
+      ctx.lineWidth=isFocus?2:1;
+      ctx.stroke();
+
+      // IC label + type
+      var icColor = isFocus?COL.flash:COL.signal;
+      text(L.ic[i], xIC, cy-4, icColor, 13, 'left', true);
+      textCJK(L.type[i], xIC, cy+13, COL.fgMute, 10, 'left', false);
+
+      // ---- evidence columns ----
+      if(frame===0){
+        // F1: only show "?" placeholder boxes, evidence not examined yet
+        var qx=xTopo+topoR;
+        text(L.unknown, (xTopo+xVerdict)/2, cy+5, COL.fgMute, 20, 'center', true);
+      } else {
+        // topomap
+        var topoCol = isFocus ? (isReject?COL.reject:(isKeep?COL.keep:COL.flash)) : COL.core;
+        var glow=isFocus?1.15:0.8;
+        drawTopomap(xTopo+topoR, cy, topoR, ic.topo, topoCol, glow);
+        // front/back hint on focus
+        if(isFocus){
+          var ft = ic.topo.fy<0.5 ? L.front : L.back;
+          textCJK(ft, xTopo+topoR, y-3, topoCol, 9, 'center', true);
+        }
+
+        // waveform
+        var wCol = isFocus ? (isReject?COL.reject:(isKeep?COL.keep:COL.signal)) : COL.fgDim;
+        ctx.save();ctx.globalAlpha=dim*(isFocus?1:0.85);
+        drawWave(xWave, cy-rh*0.34, waveW, rh*0.68, ic.wave, wCol, isFocus?2:1.3);
+        ctx.restore();
+
+        // spectrum
+        var sCol = isFocus ? (isReject?COL.reject:(isKeep?COL.keep:COL.signal)) : COL.fgDim;
+        ctx.save();ctx.globalAlpha=dim*(isFocus?1:0.7);
+        drawSpectrum(xSpec, cy-rh*0.32, specW, rh*0.64, ic.band, sCol);
+        ctx.restore();
+      }
+
+      // verdict marker
+      if(verdictKnown){
+        var vx=xVerdict+22, vr=13;
+        if(isReject){
+          crossMark(vx,cy,vr,COL.reject);
+          text(L.reject, vx+24, cy+4, COL.reject, 11, 'left', true);
+        } else if(isKeep){
+          checkMark(vx,cy,vr,COL.keep);
+          text(L.keep, vx+24, cy+4, COL.keep, 11, 'left', true);
+        }
+      }
+      ctx.globalAlpha=1;
+    }
+
+    // F3/F4 evidence callout (three-evidence reasoning bubble near focus)
+    if(frame===2 || frame===3){
+      var fi=(frame===2)?1:3;
+      var ic=ICS[fi];
+      var y=startY+fi*(rh+gap), cy=y+rh/2;
+      var vcol=(frame===2)?COL.reject:COL.keep;
+      // three small ticks linking the 3 evidences to verdict
+      ctx.save();ctx.globalAlpha=Math.min(1,fp*1.6);
+      arrow(xVerdict-6, cy, xVerdict+8, cy, vcol, 1.8);
+      ctx.restore();
+    }
+
+    // F5: gold key-moment banner
+    if(frame===4){
+      var pulse=0.5+0.5*Math.sin(now/360);
+      ctx.save();
+      var bw=Math.min(560, W*0.66), bh=40;
+      var bx=(W-bw)/2, by=H-60;
+      roundRect(bx,by,bw,bh,8);
+      ctx.fillStyle=COL.bg1;ctx.fill();
+      ctx.strokeStyle=withA(COL.gold, 0.5+0.5*pulse);ctx.lineWidth=2;ctx.stroke();
+      textCJK(I18N[lang].stages[4].zh, W/2, by+25, COL.gold, 14, 'center', true);
+      ctx.restore();
+    }
+
+    // ---- HUD + caption + frame indicator ----
+    var st=I18N[lang].stages[frame];
+    setText('hv1', st.hud[0]);
+    setText('hv2', st.hud[1]);
+    setText('hv3', st.hud[2]);
+    // verdict color cue in HUD
+    var hv3=document.getElementById('hv3');
+    var vstr=st.hud[2];
+    if(frame===2) hv3.style.color=COL.reject;
+    else if(frame===3) hv3.style.color=COL.keep;
+    else if(frame===4) hv3.style.color=COL.gold;
+    else hv3.style.color=COL.accent;
+
+    // On F5 the gold canvas banner carries the message; hide the DOM caption to avoid overlap.
+    if(frame===4){ setText('capZh',''); setText('capEn',''); }
+    else { setText('capZh', st.zh); setText('capEn', st.en); }
+    setText('frameInd', 'F'+(frame+1)+' / '+FRAMES);
+
+    requestAnimationFrame(render);
+  }
+
+  function drawBg(){
+    // subtle dot/grid on deep space
+    ctx.save();
+    ctx.strokeStyle=COL.line;ctx.lineWidth=1;
+    var step=46;
+    ctx.globalAlpha=0.5;
+    for(var x=step;x<W;x+=step){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();}
+    for(var y=step;y<H;y+=step){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();}
+    ctx.restore();
+  }
+
+  function setText(id,s){var e=document.getElementById(id);if(e)e.textContent=s;}
+
+  // ---- i18n refresh ----
+  function refreshI18N(){
+    var d=I18N[lang];
+    setText('ttl',d.ttl);setText('sub',d.sub);
+    setText('guideLabel',d.guideLabel);
+    setText('g1',d.g1);setText('g2',d.g2);setText('g3',d.g3);
+    setText('hl1',d.hl1);setText('hl2',d.hl2);setText('hl3',d.hl3);
+    document.getElementById('langBtn').textContent = lang==='zh'?'EN':'中';
+  }
+  document.getElementById('langBtn').addEventListener('click',function(){
+    lang=(lang==='zh')?'en':'zh';
+    refreshI18N();
+  });
+  refreshI18N();
+
+  requestAnimationFrame(render);
+})();
+</script>
+</body>
+</html>

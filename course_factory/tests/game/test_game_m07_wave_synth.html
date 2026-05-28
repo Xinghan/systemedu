@@ -1,0 +1,528 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"/>
+<title>Brain Wave Synthesizer</title>
+<style>
+:root{
+  --bg-0: oklch(0.14 0.035 265);
+  --bg-1: oklch(0.18 0.04 265);
+  --bg-2: oklch(0.22 0.045 265);
+  --bg-3: oklch(0.28 0.05 265);
+  --line: oklch(0.35 0.05 265 / 0.35);
+  --line-strong: oklch(0.55 0.08 265 / 0.55);
+  --fg:      oklch(0.96 0.01 265);
+  --fg-dim:  oklch(0.75 0.02 265);
+  --fg-mute: oklch(0.55 0.03 265);
+  --gold:    oklch(0.85 0.14 85);
+  /* phys signature accent — sky-teal */
+  --phys:    oklch(0.78 0.13 215);
+  /* phys 5-color palette (theme_style/themes.js id:'phys') */
+  --p-field:    oklch(0.78 0.13 215);
+  --p-wave:     oklch(0.55 0.13 215);
+  --p-mass:     oklch(0.35 0.10 215);
+  --p-photon:   oklch(0.92 0.08 215);
+  --p-constant: oklch(0.85 0.14 85);
+  --mono:'JetBrains Mono',ui-monospace,'SFMono-Regular',Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+html,body{width:100%;height:100vh;overflow:hidden;background:var(--bg-0);color:var(--fg);
+  font-family:system-ui,'Noto Sans SC',sans-serif;}
+.shell{display:flex;height:100vh;width:100%;}
+
+/* ---- 200px sidebar ---- */
+.game-sidebar{width:200px;flex:0 0 200px;height:100vh;background:var(--bg-1);
+  border-right:1px solid var(--line);display:flex;flex-direction:column;
+  padding:12px 12px 10px;gap:10px;overflow-y:auto;}
+.brand{display:flex;align-items:center;gap:8px;}
+.brand svg{width:34px;height:34px;flex:0 0 34px;}
+.brand-txt{display:flex;flex-direction:column;}
+.brand-name{font-family:var(--mono);font-size:11px;font-weight:700;color:var(--phys);
+  letter-spacing:1px;text-transform:uppercase;}
+.brand-sub{font-size:10px;color:var(--fg-mute);margin-top:1px;}
+
+.panel-title{font-family:var(--mono);font-size:10px;color:var(--fg-dim);
+  letter-spacing:1px;text-transform:uppercase;border-bottom:1px solid var(--line);
+  padding-bottom:4px;}
+
+.slider-group{display:flex;flex-direction:column;gap:3px;}
+.slider-label{display:flex;justify-content:space-between;align-items:baseline;}
+.slider-label .nm{font-size:11px;color:var(--fg);}
+.slider-label .nm small{color:var(--fg-mute);font-family:var(--mono);font-size:9px;}
+.slider-label .val{font-family:var(--mono);font-size:11px;font-weight:700;}
+input[type=range]{width:100%;height:4px;-webkit-appearance:none;appearance:none;
+  background:var(--bg-3);outline:none;cursor:pointer;border-radius:0;}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;
+  border:2px solid var(--bg-0);cursor:pointer;border-radius:50%;}
+input[type=range]::-moz-range-thumb{width:12px;height:12px;border:2px solid var(--bg-0);
+  cursor:pointer;border-radius:50%;}
+#sTheta::-webkit-slider-thumb{background:var(--p-mass);}
+#sAlpha::-webkit-slider-thumb{background:var(--p-field);}
+#sBeta::-webkit-slider-thumb {background:var(--p-wave);}
+#sGamma::-webkit-slider-thumb{background:var(--p-photon);}
+
+.tasks{display:flex;flex-direction:column;gap:6px;}
+.task{padding:6px 7px;background:var(--bg-2);border:1px solid var(--line);
+  box-shadow:3px 3px 0 var(--bg-0);}
+.task.match{border-color:var(--gold);}
+.task-row{display:flex;justify-content:space-between;align-items:center;gap:4px;}
+.task-name{font-size:11px;font-weight:600;color:var(--fg);}
+.task-state{font-family:var(--mono);font-size:9px;font-weight:700;letter-spacing:0.5px;
+  text-transform:uppercase;color:var(--fg-mute);}
+.task.match .task-state{color:var(--gold);}
+.task-hint{font-size:9.5px;color:var(--fg-mute);margin-top:2px;line-height:1.35;}
+
+.lang-btn{margin-top:auto;align-self:flex-start;font-family:var(--mono);font-size:11px;
+  font-weight:700;padding:4px 12px;cursor:pointer;border:1px solid var(--line-strong);
+  background:var(--bg-2);color:var(--phys);letter-spacing:1px;
+  box-shadow:3px 3px 0 var(--bg-0);}
+.lang-btn:hover{background:var(--bg-3);}
+
+/* ---- main stage ---- */
+.game-main{flex:1;min-width:0;height:100vh;display:flex;flex-direction:column;
+  padding:10px 12px;gap:8px;}
+.stage-card{flex:1;min-height:0;display:flex;flex-direction:column;
+  background:var(--bg-1);border:1px solid var(--line);}
+.stage-head{display:flex;justify-content:space-between;align-items:center;
+  padding:5px 10px;border-bottom:1px solid var(--line);}
+.stage-title{font-family:var(--mono);font-size:10px;letter-spacing:1px;
+  text-transform:uppercase;color:var(--fg-dim);}
+.stage-hint{font-size:10px;color:var(--fg-mute);}
+.canvas-wrap{flex:1;min-height:0;position:relative;display:flex;flex-direction:column;}
+canvas{flex:1;display:block;width:100%;min-height:0;}
+
+.hud{display:flex;gap:18px;align-items:center;padding:6px 12px;background:var(--bg-1);
+  border:1px solid var(--line);}
+.hud .item{display:flex;flex-direction:column;}
+.hud .label{font-family:var(--mono);font-size:9px;text-transform:uppercase;
+  letter-spacing:1px;color:var(--fg-mute);}
+.hud .value{font-family:var(--mono);font-size:14px;font-weight:700;color:var(--phys);margin-top:1px;}
+.hud .value.gold{color:var(--gold);}
+.hud .progress{margin-left:auto;font-family:var(--mono);font-size:13px;font-weight:700;color:var(--fg-dim);}
+
+/* ---- victory ---- */
+.victory{position:fixed;inset:0;background:oklch(0.14 0.035 265 / 0.82);
+  display:none;align-items:center;justify-content:center;z-index:50;}
+.victory.show{display:flex;}
+.victory-box{background:var(--bg-2);border:1px solid var(--gold);
+  box-shadow:6px 6px 0 var(--bg-0);padding:24px 30px;max-width:420px;text-align:center;}
+.victory-title{font-family:var(--mono);font-size:16px;font-weight:700;color:var(--gold);
+  letter-spacing:1px;text-transform:uppercase;margin-bottom:10px;}
+.victory-text{font-size:13px;color:var(--fg-dim);line-height:1.6;margin-bottom:14px;}
+.victory-btn{font-family:var(--mono);font-size:12px;font-weight:700;padding:7px 22px;
+  cursor:pointer;border:1px solid var(--phys);background:var(--bg-3);color:var(--phys);
+  text-transform:uppercase;letter-spacing:1px;box-shadow:3px 3px 0 var(--bg-0);}
+</style>
+</head>
+<body>
+<div class="shell">
+  <!-- ===== sidebar ===== -->
+  <aside class="game-sidebar">
+    <div class="brand">
+      <!-- mascot Echo: tuning-fork + waveform halo -->
+      <svg viewBox="0 0 40 40" aria-hidden="true">
+        <g fill="none" stroke-width="2.4" stroke-linecap="round">
+          <path d="M14 6 L14 20 Q14 27 20 27 Q26 27 26 20 L26 6" stroke="var(--p-field)"/>
+          <line x1="20" y1="27" x2="20" y2="36" stroke="var(--p-field)"/>
+        </g>
+        <path d="M3 33 Q6 24 9 33 Q12 42 15 33" fill="none" stroke="var(--p-photon)" stroke-width="1.6" opacity="0.85"/>
+        <path d="M25 33 Q28 24 31 33 Q34 42 37 33" fill="none" stroke="var(--p-photon)" stroke-width="1.6" opacity="0.85"/>
+        <circle cx="20" cy="6" r="2.4" fill="var(--gold)"/>
+      </svg>
+      <div class="brand-txt">
+        <span class="brand-name">Echo</span>
+        <span class="brand-sub" id="brandSub">力之观测台</span>
+      </div>
+    </div>
+
+    <div class="panel-title" id="ttlBands">频段振幅</div>
+    <div class="slider-group">
+      <div class="slider-label">
+        <span class="nm" id="lblTheta">Theta <small>4 Hz</small></span>
+        <span class="val" id="valTheta" style="color:var(--p-mass)">30</span>
+      </div>
+      <input type="range" id="sTheta" min="0" max="100" value="30">
+    </div>
+    <div class="slider-group">
+      <div class="slider-label">
+        <span class="nm" id="lblAlpha">Alpha <small>10 Hz</small></span>
+        <span class="val" id="valAlpha" style="color:var(--p-field)">30</span>
+      </div>
+      <input type="range" id="sAlpha" min="0" max="100" value="30">
+    </div>
+    <div class="slider-group">
+      <div class="slider-label">
+        <span class="nm" id="lblBeta">Beta <small>20 Hz</small></span>
+        <span class="val" id="valBeta" style="color:var(--p-wave)">30</span>
+      </div>
+      <input type="range" id="sBeta" min="0" max="100" value="30">
+    </div>
+    <div class="slider-group">
+      <div class="slider-label">
+        <span class="nm" id="lblGamma">Gamma <small>40 Hz</small></span>
+        <span class="val" id="valGamma" style="color:var(--p-photon)">30</span>
+      </div>
+      <input type="range" id="sGamma" min="0" max="100" value="30">
+    </div>
+
+    <div class="panel-title" id="ttlTasks">脑状态配方</div>
+    <div class="tasks">
+      <div class="task" id="taskRelax">
+        <div class="task-row">
+          <span class="task-name" id="tnRelax">放松闭眼</span>
+          <span class="task-state" id="tsRelax">未达成</span>
+        </div>
+        <div class="task-hint" id="thRelax">让 Alpha 主导</div>
+      </div>
+      <div class="task" id="taskFocus">
+        <div class="task-row">
+          <span class="task-name" id="tnFocus">专注思考</span>
+          <span class="task-state" id="tsFocus">未达成</span>
+        </div>
+        <div class="task-hint" id="thFocus">让 Beta 主导</div>
+      </div>
+      <div class="task" id="taskDrowsy">
+        <div class="task-row">
+          <span class="task-name" id="tnDrowsy">困倦欲睡</span>
+          <span class="task-state" id="tsDrowsy">未达成</span>
+        </div>
+        <div class="task-hint" id="thDrowsy">让 Theta 主导</div>
+      </div>
+    </div>
+
+    <button class="lang-btn" id="langBtn">EN</button>
+  </aside>
+
+  <!-- ===== main ===== -->
+  <main class="game-main">
+    <div class="stage-card">
+      <div class="stage-head">
+        <span class="stage-title" id="ttlWave">合成波形 (4 正弦叠加)</span>
+        <span class="stage-hint" id="hintWave">拖动滑块即时改变波形</span>
+      </div>
+      <div class="canvas-wrap"><canvas id="waveC"></canvas></div>
+    </div>
+
+    <div class="stage-card">
+      <div class="stage-head">
+        <span class="stage-title" id="ttlSpec">频谱 (各频段能量)</span>
+        <span class="stage-hint" id="hintSpec">最高的柱 = 主导频段</span>
+      </div>
+      <div class="canvas-wrap"><canvas id="specC"></canvas></div>
+    </div>
+
+    <div class="hud">
+      <div class="item">
+        <span class="label" id="hudL1">主导频段</span>
+        <span class="value" id="hudV1">--</span>
+      </div>
+      <div class="item">
+        <span class="label" id="hudL2">脑状态</span>
+        <span class="value" id="hudV2">--</span>
+      </div>
+      <span class="progress" id="hudProg">0 / 3</span>
+    </div>
+  </main>
+</div>
+
+<div class="victory" id="victory">
+  <div class="victory-box">
+    <div class="victory-title" id="vTitle">已解锁 频率配方师</div>
+    <div class="victory-text" id="vText"></div>
+    <button class="victory-btn" id="vBtn">继续</button>
+  </div>
+</div>
+
+<script>
+(function(){
+var LANG='cn';
+var I18N={
+  brandSub:{cn:'力之观测台',en:'Force Observatory'},
+  ttlBands:{cn:'频段振幅',en:'BAND AMPLITUDE'},
+  lblTheta:{cn:'Theta <small>4 Hz</small>',en:'Theta <small>4 Hz</small>'},
+  lblAlpha:{cn:'Alpha <small>10 Hz</small>',en:'Alpha <small>10 Hz</small>'},
+  lblBeta:{cn:'Beta <small>20 Hz</small>',en:'Beta <small>20 Hz</small>'},
+  lblGamma:{cn:'Gamma <small>40 Hz</small>',en:'Gamma <small>40 Hz</small>'},
+  ttlTasks:{cn:'脑状态配方',en:'BRAIN-STATE RECIPES'},
+  tnRelax:{cn:'放松闭眼',en:'Relaxed (eyes shut)'},
+  tnFocus:{cn:'专注思考',en:'Focused thinking'},
+  tnDrowsy:{cn:'困倦欲睡',en:'Drowsy'},
+  thRelax:{cn:'让 Alpha 主导',en:'Make Alpha dominate'},
+  thFocus:{cn:'让 Beta 主导',en:'Make Beta dominate'},
+  thDrowsy:{cn:'让 Theta 主导',en:'Make Theta dominate'},
+  stDone:{cn:'已达成',en:'MATCHED'},
+  stTodo:{cn:'未达成',en:'PENDING'},
+  ttlWave:{cn:'合成波形 (4 正弦叠加)',en:'SYNTH WAVE (4 sines summed)'},
+  hintWave:{cn:'拖动滑块即时改变波形',en:'Drag sliders to reshape the wave'},
+  ttlSpec:{cn:'频谱 (各频段能量)',en:'SPECTRUM (band energy)'},
+  hintSpec:{cn:'最高的柱 = 主导频段',en:'Tallest bar = dominant band'},
+  hudL1:{cn:'主导频段',en:'DOMINANT'},
+  hudL2:{cn:'脑状态',en:'STATE'},
+  stateNeutral:{cn:'混合',en:'Mixed'},
+  stateRelax:{cn:'放松',en:'Relaxed'},
+  stateFocus:{cn:'专注',en:'Focused'},
+  stateDrowsy:{cn:'困倦',en:'Drowsy'},
+  vTitle:{cn:'已解锁 频率配方师',en:'UNLOCKED: Frequency Chef'},
+  vText:{cn:'同一颗大脑，调高不同频段的振幅就调出完全不同的状态：Alpha 高 = 放松，Beta 高 = 专注，Theta 高 = 困倦。脑电波就是这几种正弦叠加而成。',
+         en:'One brain — raise different band amplitudes and you tune completely different states: high Alpha = relaxed, high Beta = focused, high Theta = drowsy. Brain waves are just these sines superposed.'},
+  vBtn:{cn:'继续',en:'Continue'},
+};
+function t(k){var e=I18N[k];return e?(e[LANG]||e.en):k;}
+
+// ---- band model ----
+// freq in Hz, color, current amplitude 0..100
+var bands=[
+  {id:'theta',freq:4, amp:30,color:'var(--p-mass)',  css:''},
+  {id:'alpha',freq:10,amp:30,color:'var(--p-field)', css:''},
+  {id:'beta', freq:20,amp:30,color:'var(--p-wave)',  css:''},
+  {id:'gamma',freq:40,amp:30,color:'var(--p-photon)',css:''},
+];
+// resolve oklch vars to concrete colors via a probe element
+function resolveColor(varExpr){
+  var probe=document.createElement('span');
+  probe.style.color=varExpr;document.body.appendChild(probe);
+  var c=getComputedStyle(probe).color;document.body.removeChild(probe);
+  return c;
+}
+bands.forEach(function(b){b.css=resolveColor(b.color);});
+var GOLD=resolveColor('var(--gold)');
+var PHYS=resolveColor('var(--phys)');
+var FG_MUTE=resolveColor('var(--fg-mute)');
+var LINE=resolveColor('var(--line)');
+
+var done={relax:false,focus:false,drowsy:false};
+var won=false;
+var MONO='"JetBrains Mono",ui-monospace,monospace';
+
+var waveC=document.getElementById('waveC'),wctx=waveC.getContext('2d');
+var specC=document.getElementById('specC'),sctx=specC.getContext('2d');
+var DPR=Math.min(window.devicePixelRatio||1,2);
+var WW=0,WH=0,SW=0,SH=0;
+
+function setupCanvas(cv,c2){
+  var wrap=cv.parentElement;var r=wrap.getBoundingClientRect();
+  if(r.width<1||r.height<1) return [0,0];
+  cv.width=r.width*DPR;cv.height=r.height*DPR;
+  cv.style.width=r.width+'px';cv.style.height=r.height+'px';
+  c2.setTransform(DPR,0,0,DPR,0,0);
+  return [r.width,r.height];
+}
+function resize(){
+  var a=setupCanvas(waveC,wctx);WW=a[0];WH=a[1];
+  var b=setupCanvas(specC,sctx);SW=b[0];SH=b[1];
+}
+
+// dominant band = highest amplitude (ties -> none until clear lead)
+function dominant(){
+  var max=bands[0],second=bands[0].amp;
+  for(var i=0;i<bands.length;i++){if(bands[i].amp>max.amp){second=max.amp;max=bands[i];}
+    else if(i>0&&bands[i].amp>second&&bands[i]!==max){second=bands[i].amp;}}
+  // require a clear lead (>= 18 above the runner-up) to count as dominant
+  var sortedAmps=bands.map(function(b){return b.amp;}).sort(function(x,y){return y-x;});
+  var lead=sortedAmps[0]-sortedAmps[1];
+  return {band:max,lead:lead};
+}
+
+function checkTasks(){
+  var d=dominant();
+  var dom=(d.lead>=18&&d.band.amp>=45)?d.band.id:null;
+  if(dom==='alpha') done.relax=true;
+  if(dom==='beta')  done.focus=true;
+  if(dom==='theta') done.drowsy=true;
+  if(done.relax&&done.focus&&done.drowsy&&!won){
+    won=true;
+    setTimeout(function(){document.getElementById('victory').classList.add('show');},350);
+  }
+  return dom;
+}
+
+function stateLabelFor(dom){
+  if(dom==='alpha') return t('stateRelax');
+  if(dom==='beta')  return t('stateFocus');
+  if(dom==='theta') return t('stateDrowsy');
+  return t('stateNeutral');
+}
+function domLabelFor(dom){
+  if(!dom) return '--';
+  return dom.charAt(0).toUpperCase()+dom.slice(1);
+}
+
+var phase=0;
+function draw(){
+  if(WW<2){resize();}
+  var dom=checkTasks();
+  drawWave(dom);
+  drawSpec(dom);
+  updateHUD(dom);
+}
+
+function drawWave(dom){
+  if(WW<2||WH<2) return;
+  wctx.clearRect(0,0,WW,WH);
+  // bg
+  wctx.fillStyle=resolveColor('var(--bg-1)');wctx.fillRect(0,0,WW,WH);
+  var midY=WH/2;
+  // zero axis
+  wctx.strokeStyle=LINE;wctx.lineWidth=1;
+  wctx.beginPath();wctx.moveTo(0,midY);wctx.lineTo(WW,midY);wctx.stroke();
+
+  var pad=14;
+  var plotW=WW-pad*2;
+  // total possible amplitude for normalization
+  var ampSum=bands.reduce(function(s,b){return s+b.amp;},0);
+  var norm=(ampSum>0)?(WH*0.40)/Math.max(ampSum,160):(WH*0.40)/160;
+
+  // faint per-band component waves
+  for(var bi=0;bi<bands.length;bi++){
+    var b=bands[bi];if(b.amp<=0) continue;
+    wctx.strokeStyle=b.css;wctx.globalAlpha=0.22;wctx.lineWidth=1.2;
+    wctx.beginPath();
+    for(var x=0;x<=plotW;x+=2){
+      var tt=x/plotW;
+      var y=midY-Math.sin(2*Math.PI*b.freq*tt+phase)*b.amp*norm;
+      if(x===0) wctx.moveTo(pad+x,y);else wctx.lineTo(pad+x,y);
+    }
+    wctx.stroke();
+  }
+  wctx.globalAlpha=1;
+
+  // summed wave (the synthesized brain wave) — phys accent, thick
+  wctx.strokeStyle=PHYS;wctx.lineWidth=2.6;wctx.lineJoin='round';
+  wctx.beginPath();
+  for(var sx=0;sx<=plotW;sx+=1.5){
+    var s_t=sx/plotW;var sum=0;
+    for(var k=0;k<bands.length;k++){
+      sum+=Math.sin(2*Math.PI*bands[k].freq*s_t+phase)*bands[k].amp;
+    }
+    var sy=midY-sum*norm;
+    if(sx===0) wctx.moveTo(pad+sx,sy);else wctx.lineTo(pad+sx,sy);
+  }
+  wctx.stroke();
+
+  // gold glow when a recipe matched this frame
+  if(dom){
+    wctx.strokeStyle=GOLD;wctx.globalAlpha=0.5;wctx.lineWidth=1;
+    wctx.strokeRect(2,2,WW-4,WH-4);wctx.globalAlpha=1;
+  }
+}
+
+function drawSpec(dom){
+  if(SW<2||SH<2) return;
+  sctx.clearRect(0,0,SW,SH);
+  sctx.fillStyle=resolveColor('var(--bg-1)');sctx.fillRect(0,0,SW,SH);
+  var pad=18,base=SH-22,top=14;
+  var avail=base-top;
+  var n=bands.length;
+  var slot=(SW-pad*2)/n;
+  var bw=slot*0.5;
+  for(var i=0;i<n;i++){
+    var b=bands[i];
+    var cx=pad+slot*i+slot/2;
+    var h=avail*(b.amp/100);
+    var x=cx-bw/2;var y=base-h;
+    // bar
+    sctx.fillStyle=b.css;sctx.fillRect(x,y,bw,h);
+    // offset solid shadow (no blur)
+    sctx.fillStyle=resolveColor('var(--bg-0)');
+    sctx.fillRect(x+bw,y+3,3,h-3>0?h:0);
+    // dominant marker
+    if(dom===b.id){
+      sctx.strokeStyle=GOLD;sctx.lineWidth=2;
+      sctx.strokeRect(x-2,y-2,bw+4,h+4);
+    }
+    // labels: band name (colored) then freq below it — stacked, no overlap
+    sctx.textAlign='center';sctx.textBaseline='top';
+    sctx.fillStyle=b.css;sctx.font='bold 10px '+MONO;
+    sctx.fillText(b.id.toUpperCase(),cx,base+4);
+    sctx.fillStyle=FG_MUTE;sctx.font='9px '+MONO;
+    sctx.fillText(b.freq+' Hz',cx,base+15);
+    // amp value above bar
+    sctx.fillStyle=resolveColor('var(--fg)');sctx.textBaseline='bottom';
+    sctx.fillText(String(b.amp),cx,y-3);
+  }
+  // baseline
+  sctx.strokeStyle=LINE;sctx.lineWidth=1;
+  sctx.beginPath();sctx.moveTo(pad,base);sctx.lineTo(SW-pad,base);sctx.stroke();
+}
+
+function updateHUD(dom){
+  document.getElementById('hudV1').textContent=domLabelFor(dom);
+  var v2=document.getElementById('hudV2');
+  v2.textContent=stateLabelFor(dom);
+  v2.className='value'+(dom?' gold':'');
+  var c=(done.relax?1:0)+(done.focus?1:0)+(done.drowsy?1:0);
+  document.getElementById('hudProg').textContent=c+' / 3';
+  setTask('taskRelax','tsRelax',done.relax);
+  setTask('taskFocus','tsFocus',done.focus);
+  setTask('taskDrowsy','tsDrowsy',done.drowsy);
+}
+function setTask(boxId,stId,ok){
+  var box=document.getElementById(boxId);
+  var st=document.getElementById(stId);
+  st.textContent=ok?t('stDone'):t('stTodo');
+  box.className='task'+(ok?' match':'');
+}
+
+// animate phase so the wave is visibly alive (rAF)
+function loop(){phase+=0.018;draw();requestAnimationFrame(loop);}
+
+// ---- i18n ----
+function refreshI18N(){
+  document.getElementById('brandSub').textContent=t('brandSub');
+  document.getElementById('ttlBands').textContent=t('ttlBands');
+  document.getElementById('lblTheta').innerHTML=t('lblTheta');
+  document.getElementById('lblAlpha').innerHTML=t('lblAlpha');
+  document.getElementById('lblBeta').innerHTML=t('lblBeta');
+  document.getElementById('lblGamma').innerHTML=t('lblGamma');
+  document.getElementById('ttlTasks').textContent=t('ttlTasks');
+  document.getElementById('tnRelax').textContent=t('tnRelax');
+  document.getElementById('tnFocus').textContent=t('tnFocus');
+  document.getElementById('tnDrowsy').textContent=t('tnDrowsy');
+  document.getElementById('thRelax').textContent=t('thRelax');
+  document.getElementById('thFocus').textContent=t('thFocus');
+  document.getElementById('thDrowsy').textContent=t('thDrowsy');
+  document.getElementById('ttlWave').textContent=t('ttlWave');
+  document.getElementById('hintWave').textContent=t('hintWave');
+  document.getElementById('ttlSpec').textContent=t('ttlSpec');
+  document.getElementById('hintSpec').textContent=t('hintSpec');
+  document.getElementById('hudL1').textContent=t('hudL1');
+  document.getElementById('hudL2').textContent=t('hudL2');
+  document.getElementById('vTitle').textContent=t('vTitle');
+  document.getElementById('vText').textContent=t('vText');
+  document.getElementById('vBtn').textContent=t('vBtn');
+}
+
+// ---- events ----
+function bindSlider(sid,vid,idx){
+  var sl=document.getElementById(sid);var vl=document.getElementById(vid);
+  sl.addEventListener('input',function(){
+    bands[idx].amp=parseInt(sl.value,10);
+    vl.textContent=bands[idx].amp;
+  });
+}
+bindSlider('sTheta','valTheta',0);
+bindSlider('sAlpha','valAlpha',1);
+bindSlider('sBeta','valBeta',2);
+bindSlider('sGamma','valGamma',3);
+
+document.getElementById('langBtn').addEventListener('click',function(){
+  LANG=(LANG==='cn')?'en':'cn';
+  document.getElementById('langBtn').textContent=(LANG==='cn')?'EN':'CN';
+  refreshI18N();
+});
+document.getElementById('vBtn').addEventListener('click',function(){
+  document.getElementById('victory').classList.remove('show');
+});
+window.addEventListener('resize',resize);
+
+// init
+refreshI18N();
+resize();
+requestAnimationFrame(loop);
+setTimeout(resize,200);
+setTimeout(resize,600);
+if(document.fonts&&document.fonts.ready){document.fonts.ready.then(resize);}
+})();
+</script>
+</body>
+</html>

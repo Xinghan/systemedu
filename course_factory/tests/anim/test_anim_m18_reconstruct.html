@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>重建一段干净的脑波</title>
+<style>
+  :root{
+    /* 第 1 层 — 共享深空底 (26 套统一) */
+    --bg-0: oklch(0.14 0.035 265);
+    --bg-1: oklch(0.18 0.04 265);
+    --bg-2: oklch(0.22 0.045 265);
+    --bg-3: oklch(0.28 0.05 265);
+    --line: oklch(0.35 0.05 265 / 0.35);
+    --line-strong: oklch(0.55 0.08 265 / 0.55);
+    --fg:      oklch(0.96 0.01 265);
+    --fg-dim:  oklch(0.75 0.02 265);
+    --fg-mute: oklch(0.55 0.03 265);
+    --gold:    oklch(0.85 0.14 85);
+    /* 第 2 层 — cs signature accent (cyan) */
+    --cs: oklch(0.75 0.17 200);
+    /* 第 3 层 — cs 5 色 palette (themes.js CS-01 "Data Cathedral") */
+    --cs-signal: oklch(0.75 0.17 200);
+    --cs-core:   oklch(0.55 0.16 200);
+    --cs-depth:  oklch(0.35 0.10 210);
+    --cs-flash:  oklch(0.92 0.08 190);
+    --cs-query:  oklch(0.85 0.14 85);
+    /* 剔除态 (用低彩度灰偏暖, 表示废弃) */
+    --reject: oklch(0.62 0.13 25);
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    height:100vh;overflow:hidden;
+    background:var(--bg-0);
+    color:var(--fg);
+    font-family:'Noto Sans SC',system-ui,sans-serif;
+    display:flex;
+  }
+  .mono{font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,monospace;}
+  .sidebar{
+    width:200px;flex-shrink:0;height:100vh;
+    background:var(--bg-1);
+    border-right:1px solid var(--line);
+    display:flex;flex-direction:column;gap:14px;
+    padding:18px 16px;
+  }
+  .brand{display:flex;align-items:center;gap:10px;}
+  .brand h1{font-size:15px;font-weight:700;margin:0;line-height:1.25;color:var(--fg);}
+  .brand .code{font-size:10px;color:var(--cs);letter-spacing:1px;}
+  .lead{font-size:12px;line-height:1.5;color:var(--fg-dim);}
+  .lead .en{font-style:italic;color:var(--fg-mute);margin-top:4px;}
+  .guide{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:9px;}
+  .guide li{
+    font-size:11.5px;line-height:1.4;color:var(--fg-dim);
+    border-left:3px solid var(--cs);padding-left:9px;
+  }
+  .guide li.gold{border-left-color:var(--gold);}
+  .lang-btn{
+    margin-top:auto;
+    font-family:'JetBrains Mono',ui-monospace,monospace;
+    font-size:11px;font-weight:700;
+    color:var(--fg);background:var(--bg-3);
+    border:1px solid var(--line-strong);
+    padding:7px 10px;cursor:pointer;
+    box-shadow:3px 3px 0 var(--bg-0);
+  }
+  .lang-btn:active{transform:translate(3px,3px);box-shadow:none;}
+  .stage-wrap{flex:1;height:100vh;position:relative;overflow:hidden;}
+  #stage{display:block;width:100%;height:100%;}
+  .hud{
+    position:absolute;top:16px;right:16px;
+    background:var(--bg-2);border:1px solid var(--line-strong);
+    box-shadow:3px 3px 0 var(--bg-0);
+    padding:11px 13px;min-width:212px;
+    font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;
+  }
+  .hud .h-ttl{font-weight:700;color:var(--cs);font-size:10px;letter-spacing:1px;margin-bottom:5px;}
+  .hud .h-row{display:flex;justify-content:space-between;gap:12px;margin-top:3px;color:var(--fg-dim);}
+  .hud .h-row b{color:var(--fg);font-weight:700;}
+  .hud .h-stage{color:var(--cs-flash);font-weight:700;margin-bottom:4px;}
+  .caption{
+    position:absolute;bottom:26px;left:50%;transform:translateX(-50%);
+    text-align:center;max-width:78%;
+  }
+  .caption .zh{font-size:19px;font-weight:700;color:var(--fg);}
+  .caption .en{font-size:13px;font-style:italic;color:var(--fg-mute);margin-top:3px;
+    font-family:'JetBrains Mono',ui-monospace,monospace;}
+</style>
+</head>
+<body>
+  <aside class="sidebar">
+    <div class="brand">
+      <svg id="mascot" width="34" height="34" viewBox="0 0 34 34" aria-hidden="true"></svg>
+      <div>
+        <h1 id="ttl">重建干净脑波</h1>
+        <div class="code mono">EEG · M18 · CS-01</div>
+      </div>
+    </div>
+    <div class="lead">
+      <div id="lead-zh">扔掉垃圾成分后，用混合矩阵把剩下的好成分逆变换拼回成一段能用的脑波。</div>
+      <div class="en mono" id="lead-en">Drop bad ICs, then inverse-transform the rest back into clean EEG.</div>
+    </div>
+    <ul class="guide">
+      <li id="g1">5 路 IC：2 路眨眼/肌电已标记剔除</li>
+      <li id="g2">剔除的 IC 清零，保留的不动</li>
+      <li id="g3">逆变换：混合矩阵把好成分拼回电极</li>
+      <li class="gold" id="g4">通道数不变，眨眼污染消失</li>
+    </ul>
+    <button class="lang-btn" id="langBtn">中 / EN</button>
+  </aside>
+  <main class="stage-wrap">
+    <canvas id="stage"></canvas>
+    <div class="hud">
+      <div class="h-ttl" id="hudTtl">阶段 STAGE</div>
+      <div class="h-stage" id="hudStage">现状 · 5 路 IC</div>
+      <div class="h-row"><span id="hudK1">帧 FRAME</span><b id="hudFrame">1 / 5</b></div>
+      <div class="h-row"><span id="hudK2">保留 KEEP</span><b id="hudKeep">3 / 5</b></div>
+      <div class="h-row"><span id="hudK3">通道 CH</span><b id="hudCh">4 -> 4</b></div>
+    </div>
+    <div class="caption">
+      <div class="zh" id="subZh">ICA 拆出 5 路成分，2 路是伪迹</div>
+      <div class="en mono" id="subEn">ICA gives 5 ICs, 2 are artifacts</div>
+    </div>
+  </main>
+<script>
+(function(){
+  "use strict";
+  var lang='zh';
+  var I18N={
+    zh:{
+      ttl:'重建干净脑波',
+      leadZh:'扔掉垃圾成分后，用混合矩阵把剩下的好成分逆变换拼回成一段能用的脑波。',
+      g1:'5 路 IC：2 路眨眼/肌电已标记剔除',
+      g2:'剔除的 IC 清零，保留的不动',
+      g3:'逆变换：混合矩阵把好成分拼回电极',
+      g4:'通道数不变，眨眼污染消失',
+      hudTtl:'阶段 STAGE',hudK1:'帧 FRAME',hudK2:'保留 KEEP',hudK3:'通道 CH',
+      stages:[
+        ['现状 · 5 路 IC','ICA 拆出 5 路成分，2 路是伪迹'],
+        ['清零 · 扔掉垃圾','剔除的 IC 置 0，保留的原样不动'],
+        ['逆变换 · 拼回','混合矩阵 A 把好成分重组回电极空间'],
+        ['重建 · 干净脑波','眨眼大峰没了，真节律留下，通道数不变'],
+        ['对比 · 脏 vs 净','去伪迹 = 拆开 -> 扔垃圾 -> 拼回']
+      ],
+      ic:['IC1 alpha 节律','IC2 慢波','IC3 眨眼伪迹','IC4 theta 节律','IC5 肌电伪迹'],
+      icEn:false,
+      ch:['Fp1','Fz','Cz','Oz'],
+      keep:'保留',drop:'剔除',zero:'清零',
+      labRaw:'重建前 · 脏',labClean:'重建后 · 净',
+      gold:'去伪迹 = 拆开 -> 扔垃圾 -> 拼回，得到干净脑波',
+      matrix:'电极 = A x 保留 IC'
+    },
+    en:{
+      ttl:'Reconstruct EEG',
+      leadZh:'Drop bad ICs, then use the mixing matrix to inverse-transform the kept ICs back into usable EEG.',
+      g1:'5 ICs: 2 (blink/EMG) marked reject',
+      g2:'Zero the rejected ICs, keep the rest',
+      g3:'Inverse transform: mix kept ICs to electrodes',
+      g4:'Channel count unchanged, blink gone',
+      hudTtl:'STAGE',hudK1:'FRAME',hudK2:'KEEP',hudK3:'CH',
+      stages:[
+        ['Now · 5 ICs','ICA gives 5 ICs, 2 are artifacts'],
+        ['Zero · drop junk','Rejected ICs set to 0, kept ones intact'],
+        ['Inverse · recombine','Mixing matrix A rebuilds electrode space'],
+        ['Rebuilt · clean EEG','Blink spike gone, rhythm kept, same CH count'],
+        ['Compare · dirty vs clean','De-artifact = split -> drop -> rebuild']
+      ],
+      ic:['IC1 alpha','IC2 slow','IC3 blink','IC4 theta','IC5 EMG'],
+      icEn:true,
+      ch:['Fp1','Fz','Cz','Oz'],
+      keep:'KEEP',drop:'DROP',zero:'ZERO',
+      labRaw:'Before · dirty',labClean:'After · clean',
+      gold:'De-artifact = split -> drop junk -> rebuild = clean EEG',
+      matrix:'electrode = mixing A x kept ICs'
+    }
+  };
+
+  // ---- mascot Bit (levitating cubic sprite) ----
+  (function(){
+    var s='';
+    s+='<rect x="9" y="9" width="16" height="16" rx="2" fill="none" stroke="var(--cs)" stroke-width="1.6"/>';
+    s+='<rect x="13" y="13" width="3" height="3" fill="var(--cs-signal)"/>';
+    s+='<rect x="18" y="13" width="3" height="3" fill="var(--cs-flash)"/>';
+    s+='<rect x="13" y="18" width="3" height="3" fill="var(--cs-core)"/>';
+    s+='<rect x="18" y="18" width="3" height="3" fill="var(--gold)"/>';
+    document.getElementById('mascot').innerHTML=s;
+  })();
+
+  var cnv=document.getElementById('stage'),ctx=cnv.getContext('2d');
+  function fit(){var d=window.devicePixelRatio||1;cnv.width=cnv.clientWidth*d;cnv.height=cnv.clientHeight*d;ctx.setTransform(d,0,0,d,0,0);}
+  window.addEventListener('resize',fit);fit();
+  var CSS=function(v){return getComputedStyle(document.documentElement).getPropertyValue(v).trim();};
+
+  // ---- Build synthetic IC sources ----
+  // 5 ICs. IC3=blink (rare large spikes), IC5=EMG (high-freq burst) => rejected.
+  var N=600,T=6.0,dt=T/N;
+  var IC=[[],[],[],[],[]];
+  for(var i=0;i<N;i++){
+    var t=i*dt;
+    // IC1: alpha rhythm ~10Hz-ish (scaled), clean oscillation
+    IC[0].push(0.62*Math.sin(2*Math.PI*1.6*t+0.3)+0.12*Math.sin(2*Math.PI*3.2*t));
+    // IC2: slow wave
+    IC[1].push(0.55*Math.sin(2*Math.PI*0.4*t+1.1));
+    // IC3: BLINK artifact — sparse large positive spikes
+    var bl=0;
+    [0.9,2.7,4.6].forEach(function(c){var d=t-c;bl+=Math.exp(-(d*d)/0.012)* (d>-0.25&&d<0.45?1:0);});
+    IC[2].push(1.5*bl);
+    // IC4: theta rhythm
+    IC[3].push(0.40*Math.sin(2*Math.PI*0.9*t+0.6));
+    // IC5: EMG artifact — high-frequency noisy burst in mid section
+    var env=Math.exp(-Math.pow((t-3.2)/1.0,2));
+    IC[4].push(0.9*env*Math.sin(2*Math.PI*9.0*t)*(0.6+0.4*Math.sin(2*Math.PI*0.7*t)));
+  }
+  var REJECT=[false,false,true,false,true]; // IC3,IC5 rejected
+
+  // ---- Mixing matrix A : 4 electrodes (rows) x 5 ICs (cols) ----
+  // Fp1 (frontal) sees blink strongly. Oz (occipital) sees alpha strongly.
+  var A=[
+    /*Fp1*/[0.30,0.35,0.85,0.10,0.20],
+    /*Fz */[0.40,0.30,0.45,0.30,0.55],
+    /*Cz */[0.55,0.20,0.20,0.45,0.45],
+    /*Oz */[0.90,0.10,0.05,0.50,0.10]
+  ];
+  // mix(ics_array) -> 4 electrode signals
+  function mix(ics){
+    var out=[[],[],[],[]];
+    for(var i=0;i<N;i++){
+      for(var e=0;e<4;e++){
+        var v=0;
+        for(var c=0;c<5;c++) v+=A[e][c]*ics[c][i];
+        out[e].push(v);
+      }
+    }
+    return out;
+  }
+  // kept ICs = IC with rejected zeroed
+  var IC_KEPT=IC.map(function(arr,c){return REJECT[c]?arr.map(function(){return 0;}):arr;});
+  var RAW=mix(IC);        // dirty reconstruction (all ICs) = original electrode data
+  var CLEAN=mix(IC_KEPT); // clean reconstruction (kept ICs only)
+
+  // amplitude scale for drawing (shared so dirty vs clean comparable)
+  var AMP=1;
+  (function(){var m=0;[RAW,CLEAN].forEach(function(D){D.forEach(function(s){s.forEach(function(v){if(Math.abs(v)>m)m=Math.abs(v);});});});AMP=m||1;})();
+
+  // ---- timeline ----
+  var NF=5, DUR=6000, TOTAL=NF*DUR, t0=performance.now();
+
+  function drawWave(x0,y0,w,h,arr,col,lw,maxAbs,alpha){
+    ctx.save();
+    if(alpha!=null) ctx.globalAlpha=alpha;
+    ctx.beginPath();ctx.strokeStyle=col;ctx.lineWidth=lw;ctx.lineJoin='round';
+    var ma=maxAbs||1;
+    for(var i=0;i<N;i++){
+      var x=x0+(i/(N-1))*w;
+      var y=y0+h/2-(arr[i]/ma)*h*0.42;
+      if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y);
+    }
+    ctx.stroke();ctx.restore();
+  }
+  function panel(x,y,w,h,fill){
+    ctx.save();
+    ctx.fillStyle=fill||CSS('--bg-2');ctx.fillRect(x,y,w,h);
+    ctx.strokeStyle=CSS('--line');ctx.lineWidth=1;ctx.strokeRect(x+0.5,y+0.5,w-1,h-1);
+    ctx.restore();
+  }
+  function tag(x,y,text,col,sub){
+    ctx.save();
+    ctx.fillStyle=col;ctx.font='700 11px JetBrains Mono,ui-monospace,monospace';
+    ctx.textBaseline='alphabetic';ctx.fillText(text,x,y);
+    if(sub){ctx.fillStyle=CSS('--fg-mute');ctx.font='9px JetBrains Mono,ui-monospace,monospace';
+      ctx.fillText(sub,x,y+12);}
+    ctx.restore();
+  }
+  function chip(x,y,text,col){
+    ctx.save();
+    ctx.font='700 9px JetBrains Mono,ui-monospace,monospace';
+    var tw=ctx.measureText(text).width;
+    ctx.strokeStyle=col;ctx.lineWidth=1;ctx.strokeRect(x+0.5,y+0.5,tw+12,15);
+    ctx.fillStyle=col;ctx.fillText(text,x+6,y+11);
+    ctx.restore();
+  }
+  function arrow(x1,y1,x2,y2,col,lw){
+    ctx.save();ctx.strokeStyle=col;ctx.lineWidth=lw||1.4;
+    ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke();
+    var a=Math.atan2(y2-y1,x2-x1);
+    ctx.beginPath();ctx.moveTo(x2,y2);
+    ctx.lineTo(x2-9*Math.cos(a-0.4),y2-9*Math.sin(a-0.4));
+    ctx.lineTo(x2-9*Math.cos(a+0.4),y2-9*Math.sin(a+0.4));
+    ctx.closePath();ctx.fillStyle=col;ctx.fill();ctx.restore();
+  }
+
+  // layout for IC column (left) and electrode column (right)
+  function icLayout(W,H){
+    var x=70,w=Math.min(310,W*0.34),top=84,h=58,gap=12;
+    return {x:x,w:w,top:top,h:h,gap:gap,rowY:function(k){return top+k*(h+gap);}};
+  }
+  function chLayout(W,H){
+    var w=Math.min(300,W*0.33),x=W-w-70,top=158,h=62,gap=14;
+    return {x:x,w:w,top:top,h:h,gap:gap,rowY:function(k){return top+k*(h+gap);}};
+  }
+
+  function drawICColumn(W,H,d,opt){
+    opt=opt||{};
+    var L=icLayout(W,H);
+    var labels=d.ic;
+    ctx.save();
+    ctx.fillStyle=CSS('--fg-dim');ctx.font='700 12px JetBrains Mono,ui-monospace,monospace';
+    ctx.fillText(lang==='zh'?'5 路独立成分 IC':'5 independent components',L.x,L.top-14);
+    ctx.restore();
+    for(var k=0;k<5;k++){
+      var y=L.rowY(k);
+      var rej=REJECT[k];
+      var zeroed=opt.zeroRejected&&rej;
+      var col= rej?CSS('--reject'):CSS('--cs-signal');
+      var fill= rej?CSS('--bg-1'):CSS('--bg-2');
+      panel(L.x,y,L.w,L.h,fill);
+      // accent bar
+      ctx.save();ctx.fillStyle=col;ctx.fillRect(L.x,y,3,L.h);ctx.restore();
+      tag(L.x+12,y+16,labels[k],rej?CSS('--reject'):CSS('--cs-flash'));
+      // chip keep/drop
+      if(rej) chip(L.x+L.w-50,y+8,d.drop,CSS('--reject'));
+      else chip(L.x+L.w-52,y+8,d.keep,CSS('--cs-signal'));
+      // waveform
+      if(zeroed){
+        // draw flat zero line + ZERO label
+        ctx.save();ctx.strokeStyle=CSS('--fg-mute');ctx.setLineDash([4,4]);ctx.lineWidth=1.2;
+        ctx.beginPath();var yy=y+L.h/2+6;ctx.moveTo(L.x+12,yy);ctx.lineTo(L.x+L.w-12,yy);ctx.stroke();
+        ctx.setLineDash([]);ctx.fillStyle=CSS('--fg-mute');
+        ctx.font='700 10px JetBrains Mono,ui-monospace,monospace';
+        ctx.fillText(d.zero,L.x+L.w/2-12,yy-6);ctx.restore();
+      }else{
+        drawWave(L.x+12,y+18,L.w-24,L.h-22,IC[k],col,rej?1.6:1.5,1.5);
+      }
+    }
+    return L;
+  }
+
+  function drawCHColumn(W,H,arr,d,col,title,alpha){
+    var L=chLayout(W,H);
+    ctx.save();
+    if(alpha!=null)ctx.globalAlpha=alpha;
+    ctx.fillStyle=CSS('--fg-dim');ctx.font='700 12px JetBrains Mono,ui-monospace,monospace';
+    ctx.fillText(title,L.x,L.top-16);
+    ctx.restore();
+    for(var e=0;e<4;e++){
+      var y=L.rowY(e);
+      panel(L.x,y,L.w,L.h,CSS('--bg-2'));
+      ctx.save();ctx.fillStyle=col;ctx.fillRect(L.x,y,3,L.h);if(alpha!=null)ctx.globalAlpha=alpha;ctx.restore();
+      tag(L.x+12,y+16,d.ch[e],CSS('--cs-flash'));
+      drawWave(L.x+12,y+20,L.w-24,L.h-26,arr[e],col,1.6,AMP,alpha);
+    }
+    return L;
+  }
+
+  function render(){
+    var now=performance.now();
+    var el=(now-t0)%TOTAL;
+    var f=Math.floor(el/DUR);
+    var p=(el-f*DUR)/DUR; // 0..1 within frame
+    var W=cnv.clientWidth,H=cnv.clientHeight;
+    var d=I18N[lang];
+    ctx.clearRect(0,0,W,H);
+
+    if(f===0){
+      // F1: 5 ICs, 2 marked reject
+      drawICColumn(W,H,d,{zeroRejected:false});
+    }
+    else if(f===1){
+      // F2: zero the rejected, keep others. animate flatten via progress -> just show zeroed
+      drawICColumn(W,H,d,{zeroRejected:true});
+    }
+    else if(f===2){
+      // F3: inverse transform — kept ICs -> mixing matrix -> electrode space
+      var L=drawICColumn(W,H,d,{zeroRejected:true});
+      var R=chLayout(W,H);
+      // matrix box in middle
+      var mx=L.x+L.w+26, mw=Math.max(64,R.x-(L.x+L.w)-52), my=H*0.40;
+      ctx.save();
+      ctx.fillStyle=CSS('--bg-3');ctx.fillRect(mx,my,mw,70);
+      ctx.strokeStyle=CSS('--cs');ctx.lineWidth=1.4;ctx.strokeRect(mx+0.5,my+0.5,mw-1,69);
+      ctx.fillStyle=CSS('--cs-flash');ctx.font='700 13px JetBrains Mono,ui-monospace,monospace';
+      ctx.textAlign='center';ctx.fillText('A',mx+mw/2,my+30);
+      ctx.fillStyle=CSS('--fg-dim');ctx.font='9px JetBrains Mono,ui-monospace,monospace';
+      ctx.fillText(lang==='zh'?'混合矩阵':'mixing',mx+mw/2,my+48);
+      ctx.textAlign='left';ctx.restore();
+      // flowing arrows kept ICs -> matrix -> electrodes, with progress reveal
+      var dash=(now/40)%14;
+      ctx.save();ctx.setLineDash([7,7]);ctx.lineDashOffset=-dash;
+      for(var k=0;k<5;k++){ if(REJECT[k])continue;
+        var y1=L.rowY(k)+L.h/2;
+        arrow(L.x+L.w+4,y1,mx-4,my+35,CSS('--cs-core'),1.2);
+      }
+      ctx.restore();
+      // matrix -> electrodes (only reveal partly by progress)
+      var reveal=Math.min(4,Math.floor(p*5)+1);
+      ctx.save();ctx.setLineDash([7,7]);ctx.lineDashOffset=-dash;
+      for(var e=0;e<reveal;e++){
+        var y2=R.rowY(e)+R.h/2;
+        arrow(mx+mw+4,my+35,R.x-4,y2,CSS('--cs-signal'),1.3);
+      }
+      ctx.restore();
+      // electrode column appearing progressively
+      drawCHColumn(W,H,CLEAN,d,CSS('--cs-signal'),d.matrix,Math.min(1,p*1.4));
+    }
+    else if(f===3){
+      // F4: reconstructed clean EEG, channel count unchanged
+      drawCHColumn(W,H,CLEAN,d,CSS('--cs-signal'),lang==='zh'?'重建脑波 · 4 通道':'rebuilt EEG · 4 channels',1);
+      // annotate "blink gone" near Fp1 channel
+      var R=chLayout(W,H);
+      var annY=R.rowY(3)+R.h+22;
+      ctx.save();
+      ctx.fillStyle=CSS('--cs-query');ctx.font='700 11px JetBrains Mono,ui-monospace,monospace';
+      ctx.fillText(lang==='zh'?'眨眼大峰 . 消失':'blink spike -> gone',R.x,annY);
+      ctx.fillStyle=CSS('--cs-signal');ctx.fillText(lang==='zh'?'真节律 . 保留':'true rhythm -> kept',R.x+160,annY);
+      ctx.restore();
+    }
+    else{
+      // F5: dirty vs clean comparison per channel + gold moment
+      var w=Math.min(640,W*0.66),x=(W-w)/2,top=92,h=58,gap=16;
+      ctx.save();ctx.fillStyle=CSS('--fg-dim');ctx.font='700 12px JetBrains Mono,ui-monospace,monospace';
+      ctx.fillText(lang==='zh'?'每通道：脏底色 + 净叠加':'each channel: dirty vs clean overlay',x,top-14);
+      ctx.restore();
+      // Draw 4 channels: each row has dirty (top thin) overlaid with clean
+      for(var e=0;e<4;e++){
+        var y=top+e*(h+gap);
+        panel(x,y,w,h,CSS('--bg-2'));
+        ctx.save();ctx.fillStyle=CSS('--cs-signal');ctx.fillRect(x,y,3,h);ctx.restore();
+        tag(x+12,y+15,d.ch[e],CSS('--cs-flash'));
+        // dirty (reject color, dim)
+        drawWave(x+12,y+18,w-24,h-22,RAW[e],CSS('--reject'),1.3,AMP,0.55);
+        // clean (cyan, bold)
+        drawWave(x+12,y+18,w-24,h-22,CLEAN[e],CSS('--cs-signal'),1.8,AMP,1);
+      }
+      // legend
+      ctx.save();ctx.font='700 10px JetBrains Mono,ui-monospace,monospace';
+      ctx.fillStyle=CSS('--reject');ctx.fillText('— '+d.labRaw,x,top+4*(h+gap)+6);
+      ctx.fillStyle=CSS('--cs-signal');ctx.fillText('— '+d.labClean,x+150,top+4*(h+gap)+6);
+      ctx.restore();
+      // gold key moment banner (pulse)
+      var pulse=0.6+0.4*Math.sin(now/260);
+      ctx.save();
+      var by=top+4*(h+gap)+24, bw=Math.min(660,W*0.7), bx=(W-bw)/2;
+      ctx.globalAlpha=pulse;
+      ctx.strokeStyle=CSS('--gold');ctx.lineWidth=1.6;
+      ctx.strokeRect(bx+0.5,by+0.5,bw-1,34);
+      ctx.globalAlpha=1;
+      ctx.fillStyle=CSS('--gold');ctx.font='700 13px JetBrains Mono,ui-monospace,monospace';
+      ctx.textAlign='center';ctx.fillText(d.gold,bx+bw/2,by+22);ctx.textAlign='left';
+      ctx.restore();
+    }
+
+    // HUD
+    var st=d.stages[f];
+    document.getElementById('hudStage').textContent=st[0];
+    document.getElementById('hudFrame').textContent=(f+1)+' / 5';
+    document.getElementById('hudKeep').textContent='3 / 5';
+    document.getElementById('hudCh').textContent='4 -> 4';
+    document.getElementById('subZh').textContent=st[1];
+    document.getElementById('subEn').textContent=I18N.en.stages[f][1];
+
+    requestAnimationFrame(render);
+  }
+  requestAnimationFrame(render);
+
+  function refreshI18N(){
+    var d=I18N[lang];
+    document.getElementById('ttl').textContent=d.ttl;
+    document.getElementById('lead-zh').textContent=d.leadZh;
+    document.getElementById('g1').textContent=d.g1;
+    document.getElementById('g2').textContent=d.g2;
+    document.getElementById('g3').textContent=d.g3;
+    document.getElementById('g4').textContent=d.g4;
+    document.getElementById('hudTtl').textContent=d.hudTtl;
+    document.getElementById('hudK1').textContent=d.hudK1;
+    document.getElementById('hudK2').textContent=d.hudK2;
+    document.getElementById('hudK3').textContent=d.hudK3;
+  }
+  document.getElementById('langBtn').addEventListener('click',function(){
+    lang=(lang==='zh')?'en':'zh';
+    refreshI18N();
+  });
+})();
+</script>
+</body>
+</html>

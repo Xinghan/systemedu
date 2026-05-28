@@ -1,0 +1,887 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<title>M17 · IC 成分质检员 — Data Cathedral</title>
+<style>
+  :root{
+    /* Layer 1 — shared deep space canvas (all 26 subjects) */
+    --bg-0: oklch(0.14 0.035 265);
+    --bg-1: oklch(0.18 0.04 265);
+    --bg-2: oklch(0.22 0.045 265);
+    --bg-3: oklch(0.28 0.05 265);
+    --line: oklch(0.35 0.05 265 / 0.35);
+    --line-strong: oklch(0.55 0.08 265 / 0.55);
+    --fg:      oklch(0.96 0.01 265);
+    --fg-dim:  oklch(0.75 0.02 265);
+    --fg-mute: oklch(0.55 0.03 265);
+    --gold:    oklch(0.85 0.14 85);
+
+    /* Layer 2 — cs signature accent (cyan) */
+    --cs: oklch(0.75 0.17 200);
+
+    /* Layer 3 — cs 5-color palette (themes.js CS-01) */
+    --SIGNAL: oklch(0.75 0.17 200);
+    --CORE:   oklch(0.55 0.16 200);
+    --DEPTH:  oklch(0.35 0.10 210);
+    --FLASH:  oklch(0.92 0.08 190);
+    --QUERY:  oklch(0.85 0.14 85);
+
+    /* verdict semantics — keep = brain (signal), drop = artifact (gold/warn) */
+    --keep: var(--SIGNAL);
+    --drop: oklch(0.72 0.17 25);
+  }
+
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%;width:100%;font-family:'Inter','PingFang SC',sans-serif;color:var(--fg);background:var(--bg-0);overflow:hidden}
+
+  .stage{display:flex;flex-direction:row;height:100vh;width:100vw}
+
+  /* ---------- 200px sidebar ---------- */
+  .game-sidebar{
+    width:200px;flex:0 0 200px;
+    background:var(--bg-1);
+    border-right:1px solid var(--line);
+    display:flex;flex-direction:column;
+    padding:14px 12px;gap:10px;
+    overflow-y:auto;
+  }
+  .brand{
+    display:flex;flex-direction:column;gap:2px;
+    border-bottom:1px solid var(--line);padding-bottom:8px;
+  }
+  .brand .code{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--fg-mute);letter-spacing:1.2px}
+  .brand .title{font-size:13px;color:var(--fg);font-weight:600}
+  .brand .sub{font-size:10px;color:var(--fg-dim);margin-top:2px}
+
+  .mascot{
+    width:100%;height:80px;display:flex;align-items:center;justify-content:center;
+    background:var(--bg-2);border:1px solid var(--line);
+  }
+  .mascot svg{width:100%;height:100%}
+
+  .guide{
+    background:var(--bg-2);border:1px solid var(--line);
+    padding:8px;display:flex;flex-direction:column;gap:4px;
+  }
+  .guide-title{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--cs);letter-spacing:1px}
+  .guide-line{font-size:10px;color:var(--fg-dim);line-height:1.4}
+
+  /* 6-IC progress list (clickable to navigate) */
+  .ic-block{display:flex;flex-direction:column;gap:5px}
+  .ic-title{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--fg-dim);letter-spacing:1px}
+  .ic-item{
+    display:flex;align-items:center;gap:7px;
+    background:var(--bg-2);border:1px solid var(--line);
+    padding:6px 8px;cursor:pointer;
+    box-shadow:3px 3px 0 var(--bg-0);
+    transition:transform .12s, border-color .15s;
+    user-select:none;
+  }
+  .ic-item:hover{transform:translate(-1px,-1px)}
+  .ic-item.active{border-color:var(--cs);background:var(--bg-3)}
+  .ic-dot{
+    width:12px;height:12px;flex:0 0 12px;
+    background:var(--bg-3);border:1px solid var(--line-strong);
+  }
+  .ic-item.judged-keep .ic-dot{background:var(--keep);border-color:var(--keep)}
+  .ic-item.judged-drop .ic-dot{background:var(--drop);border-color:var(--drop)}
+  .ic-item.wrong .ic-dot{background:transparent;border-color:var(--drop);
+    box-shadow:inset 0 0 0 2px var(--drop)}
+  .ic-name{
+    font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--fg);
+    flex:1;letter-spacing:.5px;
+  }
+  .ic-tick{
+    font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--QUERY);
+    min-width:14px;text-align:right;
+  }
+
+  /* magnify slider (also gives verify a wiggle target) */
+  .slider-block{
+    background:var(--bg-2);border:1px solid var(--line);padding:8px;
+    display:flex;flex-direction:column;gap:6px;
+  }
+  .slider-label{
+    display:flex;justify-content:space-between;align-items:baseline;
+    font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--fg-dim);
+  }
+  .slider-label .val{color:var(--cs);font-size:12px;font-weight:600}
+  input[type=range].zoom-slider{
+    -webkit-appearance:none;appearance:none;width:100%;height:5px;
+    background:linear-gradient(90deg, var(--DEPTH) 0%, var(--CORE) 50%, var(--SIGNAL) 100%);
+    border:1px solid var(--line);outline:none;cursor:pointer;
+  }
+  input[type=range].zoom-slider::-webkit-slider-thumb{
+    -webkit-appearance:none;appearance:none;
+    width:12px;height:16px;background:var(--FLASH);
+    border:2px solid var(--bg-0);box-shadow:2px 2px 0 var(--bg-0);cursor:grab;
+  }
+  input[type=range].zoom-slider::-moz-range-thumb{
+    width:12px;height:16px;background:var(--FLASH);
+    border:2px solid var(--bg-0);box-shadow:2px 2px 0 var(--bg-0);cursor:grab;
+  }
+
+  .sidebar-spacer{flex:1;min-height:6px}
+
+  .reset-btn{
+    width:100%;padding:6px 8px;background:var(--bg-2);
+    color:var(--fg-dim);border:1px solid var(--line);
+    font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:1px;cursor:pointer;
+  }
+  .reset-btn:hover{color:var(--cs);border-color:var(--cs)}
+  .lang-btn{
+    width:100%;padding:7px 8px;background:var(--bg-3);
+    color:var(--fg);border:1px solid var(--line-strong);
+    font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:1px;
+    cursor:pointer;box-shadow:3px 3px 0 var(--bg-0);
+  }
+  .lang-btn:hover{background:var(--CORE);color:var(--FLASH)}
+
+  /* ---------- main ---------- */
+  .game-main{
+    flex:1;display:flex;flex-direction:column;
+    background:var(--bg-0);min-width:0;
+  }
+  .main-header{
+    height:46px;border-bottom:1px solid var(--line);
+    display:flex;align-items:center;justify-content:space-between;
+    padding:0 18px;background:var(--bg-1);flex:0 0 46px;
+  }
+  .header-left{
+    font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--fg-dim);letter-spacing:1.4px;
+  }
+  .header-right{display:flex;gap:16px;font-family:'JetBrains Mono',monospace}
+  .hud-cell{display:flex;flex-direction:column;align-items:flex-end}
+  .hud-cell .label{font-size:9px;color:var(--fg-mute);letter-spacing:1px}
+  .hud-cell .val{color:var(--cs);font-size:13px;font-weight:600}
+  .hud-cell .val.gold{color:var(--QUERY)}
+
+  .main-body{
+    flex:1;display:flex;flex-direction:column;min-height:0;
+    padding:14px 18px;gap:12px;
+  }
+
+  /* evidence row: topomap + waveform + spectrum */
+  .evidence-row{
+    flex:1;display:flex;flex-direction:row;gap:12px;min-height:0;
+  }
+  .panel{
+    background:var(--bg-1);border:1px solid var(--line);
+    display:flex;flex-direction:column;min-height:0;
+  }
+  .panel-topo{flex:0 0 30%}
+  .panel-wave{flex:1}
+  .panel-spec{flex:0 0 26%}
+  .panel-title{
+    padding:7px 12px;font-family:'JetBrains Mono',monospace;font-size:10px;
+    color:var(--cs);letter-spacing:1.2px;
+    border-bottom:1px solid var(--line);background:var(--bg-2);
+    display:flex;justify-content:space-between;align-items:center;
+  }
+  .panel-title .sub{color:var(--fg-mute);font-size:9px;letter-spacing:.6px}
+  .panel-canvas-wrap{
+    flex:1;display:flex;flex-direction:column;min-height:0;position:relative;
+  }
+  .panel-canvas-wrap canvas{flex:1;width:100%;display:block}
+
+  /* verdict bar */
+  .verdict-bar{
+    flex:0 0 auto;display:flex;flex-direction:row;gap:12px;align-items:stretch;
+  }
+  .clue-box{
+    flex:1;background:var(--bg-1);border:1px solid var(--line);
+    padding:10px 14px;display:flex;flex-direction:column;gap:4px;min-width:0;
+  }
+  .clue-label{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--fg-mute);letter-spacing:1px}
+  .clue-text{font-size:12px;color:var(--fg-dim);line-height:1.45}
+  .clue-text .hl{color:var(--FLASH);font-weight:600}
+  .verdict-btns{display:flex;flex-direction:column;gap:8px;justify-content:center;flex:0 0 220px}
+  .vbtn{
+    display:flex;align-items:center;gap:10px;
+    padding:11px 16px;cursor:pointer;
+    font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:600;letter-spacing:1px;
+    border:1px solid var(--line-strong);background:var(--bg-2);color:var(--fg);
+    box-shadow:3px 3px 0 var(--bg-0);transition:transform .1s,background .15s;
+  }
+  .vbtn:hover{transform:translate(-1px,-1px)}
+  .vbtn:disabled{opacity:.4;cursor:not-allowed;transform:none}
+  .vbtn .swatch{width:14px;height:14px;flex:0 0 14px;border:1px solid var(--bg-0)}
+  .vbtn.keep .swatch{background:var(--keep)}
+  .vbtn.drop .swatch{background:var(--drop)}
+  .vbtn.keep:hover{background:var(--keep);color:var(--bg-0)}
+  .vbtn.drop:hover{background:var(--drop);color:var(--bg-0)}
+  .vbtn .en{font-size:9px;color:var(--fg-mute);font-weight:400}
+
+  /* feedback toast under clue */
+  .verdict-feedback{
+    font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.5px;
+    min-height:16px;
+  }
+  .verdict-feedback.ok{color:var(--keep)}
+  .verdict-feedback.no{color:var(--drop)}
+
+  /* milestone overlay (clean reconstructed EEG) */
+  .milestone{
+    position:absolute;inset:0;display:none;
+    flex-direction:column;align-items:center;justify-content:center;gap:14px;
+    background:oklch(0.14 0.035 265 / 0.94);z-index:30;
+  }
+  .milestone.show{display:flex}
+  .milestone .badge{
+    font-family:'JetBrains Mono',monospace;font-size:20px;font-weight:700;letter-spacing:2px;
+    color:var(--QUERY);text-shadow:3px 3px 0 var(--bg-0);
+  }
+  .milestone .desc{font-size:12px;color:var(--fg-dim);max-width:460px;text-align:center;line-height:1.5}
+  .milestone canvas{
+    width:560px;max-width:80%;height:120px;
+    background:var(--bg-1);border:1px solid var(--cs);
+  }
+  .milestone .recon-cap{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--cs);letter-spacing:1px}
+
+  /* Bit mascot pulse */
+  @keyframes bitPulse{
+    0%,100%{transform:translate(0,0)}
+    50%{transform:translate(0,-3px)}
+  }
+  #bitCore{animation:bitPulse 3.2s ease-in-out infinite;transform-origin:center}
+</style>
+</head>
+<body>
+  <div class="stage">
+    <!-- ============ Sidebar ============ -->
+    <aside class="game-sidebar">
+      <div class="brand">
+        <span class="code">CS-01 · M17</span>
+        <span class="title" data-i18n-cn="IC 成分质检员" data-i18n-en="IC Inspector">IC 成分质检员</span>
+        <span class="sub" data-i18n-cn="看三证据判脑波/伪迹" data-i18n-en="3 clues, brain or artifact">看三证据判脑波/伪迹</span>
+      </div>
+
+      <div class="mascot" aria-label="Bit mascot">
+        <!-- Bit — Data Cathedral cubic sprite (cs theme) -->
+        <svg viewBox="0 0 160 80" xmlns="http://www.w3.org/2000/svg">
+          <g id="bitCore" transform="translate(80 40)">
+            <!-- iso cube -->
+            <polygon points="0,-22 24,-9 0,4 -24,-9" fill="var(--SIGNAL)" stroke="var(--FLASH)" stroke-width="1"/>
+            <polygon points="-24,-9 0,4 0,28 -24,15" fill="var(--CORE)" stroke="var(--FLASH)" stroke-width="1"/>
+            <polygon points="24,-9 0,4 0,28 24,15" fill="var(--DEPTH)" stroke="var(--FLASH)" stroke-width="1"/>
+            <!-- pixel eyes -->
+            <rect x="-12" y="-12" width="5" height="5" fill="var(--FLASH)"/>
+            <rect x="7" y="-12" width="5" height="5" fill="var(--FLASH)"/>
+            <!-- query spark -->
+            <circle cx="0" cy="-30" r="2.4" fill="var(--QUERY)"/>
+            <rect x="-1" y="-28" width="2" height="5" fill="var(--QUERY)"/>
+          </g>
+        </svg>
+      </div>
+
+      <div class="guide">
+        <div class="guide-title">HOW TO PLAY</div>
+        <div class="guide-line" data-i18n-cn="1 · 看地形+波形+频谱" data-i18n-en="1 · Read topo+wave+spectrum">1 · 看地形+波形+频谱</div>
+        <div class="guide-line" data-i18n-cn="2 · 判 保留(脑波)/剔除(伪迹)" data-i18n-en="2 · Keep brain / drop artifact">2 · 判 保留/剔除</div>
+        <div class="guide-line" data-i18n-cn="3 · 6 个全对解锁干净脑波" data-i18n-en="3 · All 6 right → clean EEG">3 · 6 个全对解锁</div>
+      </div>
+
+      <div class="ic-block">
+        <div class="ic-title" data-i18n-cn="成分清单 · 6 个 IC" data-i18n-en="COMPONENTS · 6 ICs">成分清单 · 6 个 IC</div>
+        <div id="icList"></div>
+      </div>
+
+      <div class="slider-block">
+        <div class="slider-label">
+          <span data-i18n-cn="证据放大" data-i18n-en="Magnify clue">证据放大</span>
+          <span class="val"><span id="zoomReadout">1.0</span>x</span>
+        </div>
+        <input type="range" min="6" max="22" step="1" value="10" id="zoomSlider" class="zoom-slider" aria-label="Magnify clue" />
+      </div>
+
+      <div class="sidebar-spacer"></div>
+
+      <button id="resetBtn" class="reset-btn" type="button" data-i18n-cn="重置 RESET" data-i18n-en="RESET">重置 RESET</button>
+      <button id="langBtn" class="lang-btn" type="button">EN / 中文</button>
+    </aside>
+
+    <!-- ============ Main ============ -->
+    <main class="game-main">
+      <header class="main-header">
+        <div class="header-left" data-i18n-cn="M17 · ICA 成分判读 · 保留脑波 剔除伪迹" data-i18n-en="M17 · ICA component review · keep brain, drop artifact">M17 · ICA 成分判读 · 保留脑波 剔除伪迹</div>
+        <div class="header-right">
+          <div class="hud-cell">
+            <span class="label">VIEWING</span>
+            <span class="val" id="hudView">IC1</span>
+          </div>
+          <div class="hud-cell">
+            <span class="label">CORRECT</span>
+            <span class="val" id="hudCorrect">0/6</span>
+          </div>
+        </div>
+      </header>
+
+      <div class="main-body">
+        <section class="evidence-row">
+          <div class="panel panel-topo">
+            <div class="panel-title">
+              <span data-i18n-cn="地形图 topomap" data-i18n-en="Topomap">地形图 topomap</span>
+              <span class="sub" data-i18n-cn="头皮分布" data-i18n-en="scalp map">头皮分布</span>
+            </div>
+            <div class="panel-canvas-wrap">
+              <canvas id="topoCanvas"></canvas>
+            </div>
+          </div>
+
+          <div class="panel panel-wave">
+            <div class="panel-title">
+              <span data-i18n-cn="时间波形 time series" data-i18n-en="Time series">时间波形 time series</span>
+              <span class="sub" data-i18n-cn="IC 激活 vs 时间" data-i18n-en="IC activation vs time">IC 激活 vs 时间</span>
+            </div>
+            <div class="panel-canvas-wrap">
+              <canvas id="waveCanvas"></canvas>
+            </div>
+          </div>
+
+          <div class="panel panel-spec">
+            <div class="panel-title">
+              <span data-i18n-cn="频谱 spectrum" data-i18n-en="Spectrum">频谱 spectrum</span>
+              <span class="sub" data-i18n-cn="0—60 Hz" data-i18n-en="0—60 Hz">0—60 Hz</span>
+            </div>
+            <div class="panel-canvas-wrap">
+              <canvas id="specCanvas"></canvas>
+            </div>
+          </div>
+        </section>
+
+        <section class="verdict-bar">
+          <div class="clue-box">
+            <span class="clue-label">CLUE · <span id="clueIcName">IC1</span></span>
+            <span class="clue-text" id="clueText"></span>
+            <span class="verdict-feedback" id="verdictFeedback"></span>
+          </div>
+          <div class="verdict-btns">
+            <button class="vbtn keep" id="keepBtn" type="button">
+              <span class="swatch"></span>
+              <span>
+                <span data-i18n-cn="保留 · 脑波" data-i18n-en="KEEP · brain">保留 · 脑波</span>
+              </span>
+            </button>
+            <button class="vbtn drop" id="dropBtn" type="button">
+              <span class="swatch"></span>
+              <span>
+                <span data-i18n-cn="剔除 · 伪迹" data-i18n-en="DROP · artifact">剔除 · 伪迹</span>
+              </span>
+            </button>
+          </div>
+        </section>
+      </div>
+
+      <!-- milestone overlay -->
+      <div class="milestone" id="milestone">
+        <div class="badge" data-i18n-cn="解锁 · 成分质检员" data-i18n-en="Unlocked · IC Inspector">解锁 · 成分质检员</div>
+        <div class="recon-cap" data-i18n-cn="剔除 4 个伪迹后重建的干净脑波" data-i18n-en="Clean EEG rebuilt after dropping 4 artifacts">剔除 4 个伪迹后重建的干净脑波</div>
+        <canvas id="reconCanvas" width="560" height="120"></canvas>
+        <div class="desc" data-i18n-cn="保留 2 个真脑波成分 (后脑 alpha + 中央 mu)，剔除眨眼/肌电/坏电极/工频 4 个伪迹，逆 ICA 重投影得到干净信号。" data-i18n-en="Keep 2 brain components (occipital alpha + central mu); drop blink / EMG / bad-channel / line-noise; back-project to clean signal.">保留 2 个真脑波成分，剔除 4 个伪迹后逆 ICA 重投影得到干净信号。</div>
+        <button class="reset-btn" id="milestoneReset" type="button" style="width:auto;padding:8px 20px" data-i18n-cn="再玩一次" data-i18n-en="Play again">再玩一次</button>
+      </div>
+    </main>
+  </div>
+
+<script>
+(function(){
+  'use strict';
+
+  // ---------- IC definitions: 6 components, each with topo profile + wave + spectrum ----------
+  // verdict: 'keep' (brain) or 'drop' (artifact); artifactType labels the reason.
+  var ICS = [
+    {
+      id:'IC1', verdict:'drop', artifact:'blink',
+      topo:'frontal', waveType:'slowBig', specType:'lowDom',
+      nameCn:'IC1 前额慢大峰', nameEn:'IC1 frontal slow',
+      clueCn:"地形集中在 <span class='hl'>前额两侧</span>，波形是 <span class='hl'>慢而极大的尖峰</span>，频谱能量堆在 <span class='hl'>0—3 Hz</span>。",
+      clueEn:"Topography sits over the <span class='hl'>frontal poles</span>; the wave shows <span class='hl'>slow, huge spikes</span>; spectral power piles up at <span class='hl'>0—3 Hz</span>.",
+      whyCn:'眨眼 — 眼球转动产生的极性场。剔除。',
+      whyEn:'Eye blink — large ocular dipole field. Drop.'
+    },
+    {
+      id:'IC2', verdict:'drop', artifact:'emg',
+      topo:'temporal', waveType:'highFuzz', specType:'highRise',
+      nameCn:'IC2 颞侧高频毛刺', nameEn:'IC2 temporal EMG',
+      clueCn:"地形贴 <span class='hl'>左右颞侧边缘</span>，波形是 <span class='hl'>密集高频毛刺</span>，频谱在 <span class='hl'>20 Hz 以上持续抬升</span>。",
+      clueEn:"Topography hugs the <span class='hl'>temporal edges</span>; wave is <span class='hl'>dense high-frequency fuzz</span>; spectrum <span class='hl'>rises above 20 Hz</span>.",
+      whyCn:'肌电 — 咬肌/颈肌收缩。剔除。',
+      whyEn:'EMG — jaw/neck muscle tension. Drop.'
+    },
+    {
+      id:'IC3', verdict:'keep', artifact:null,
+      topo:'occipital', waveType:'alpha', specType:'alphaPeak',
+      nameCn:'IC3 后脑 alpha', nameEn:'IC3 occipital alpha',
+      clueCn:"地形是 <span class='hl'>后脑一个平滑偶极</span>，波形 <span class='hl'>规律 10 Hz 纺锤</span>，频谱在 <span class='hl'>10 Hz 一个干净尖峰</span>。",
+      clueEn:"Topography is a <span class='hl'>smooth occipital dipole</span>; wave shows <span class='hl'>rhythmic 10 Hz spindles</span>; spectrum has a <span class='hl'>clean peak at 10 Hz</span>.",
+      whyCn:'真脑波 — 闭眼 alpha 节律。保留。',
+      whyEn:'True brain — eyes-closed alpha rhythm. Keep.'
+    },
+    {
+      id:'IC4', verdict:'drop', artifact:'badchan',
+      topo:'single', waveType:'erratic', specType:'flatNoise',
+      nameCn:'IC4 单电极杂乱', nameEn:'IC4 bad channel',
+      clueCn:"地形是 <span class='hl'>单个电极一个孤立亮点</span>，波形 <span class='hl'>毫无规律乱跳</span>，频谱 <span class='hl'>整段平坦无结构</span>。",
+      clueEn:"Topography is one <span class='hl'>isolated bright electrode</span>; wave is <span class='hl'>erratic, structureless</span>; spectrum is <span class='hl'>flat, no shape</span>.",
+      whyCn:'坏电极 — 单通道接触不良。剔除。',
+      whyEn:'Bad channel — single faulty electrode. Drop.'
+    },
+    {
+      id:'IC5', verdict:'keep', artifact:null,
+      topo:'central', waveType:'mu', specType:'muPeak',
+      nameCn:'IC5 中央 mu 节律', nameEn:'IC5 central mu',
+      clueCn:"地形是 <span class='hl'>中央偏侧的偶极</span>，波形 <span class='hl'>拱形 mu 节律</span>，频谱在 <span class='hl'>10 与 20 Hz 双峰</span>。",
+      clueEn:"Topography is a <span class='hl'>centro-lateral dipole</span>; wave shows an <span class='hl'>arch-shaped mu rhythm</span>; spectrum has <span class='hl'>peaks at 10 & 20 Hz</span>.",
+      whyCn:'真脑波 — 感觉运动 mu 节律。保留。',
+      whyEn:'True brain — sensorimotor mu rhythm. Keep.'
+    },
+    {
+      id:'IC6', verdict:'drop', artifact:'line',
+      topo:'global', waveType:'sine50', specType:'spike50',
+      nameCn:'IC6 全脑 50 Hz', nameEn:'IC6 line noise',
+      clueCn:"地形是 <span class='hl'>整个头皮均匀分布</span>，波形是 <span class='hl'>完美正弦</span>，频谱在 <span class='hl'>50 Hz 一根针状尖峰</span>。",
+      clueEn:"Topography is <span class='hl'>uniform across the whole scalp</span>; wave is a <span class='hl'>perfect sine</span>; spectrum has a <span class='hl'>needle spike at 50 Hz</span>.",
+      whyCn:'工频 — 市电 50 Hz 干扰。剔除。',
+      whyEn:'Line noise — 50 Hz mains interference. Drop.'
+    }
+  ];
+
+  // ---------- state (no window-shadow names) ----------
+  var stateGame = {
+    lang: 'cn',
+    current: 0,
+    judged: ICS.map(function(){ return null; }),  // 'keep'|'drop'|null
+    correct: ICS.map(function(){ return false; }),
+    zoom: 1.0,
+    done: false,
+    raf: 0,
+    t0: 0
+  };
+
+  // ---------- DOM ----------
+  var icListEl = document.getElementById('icList');
+  var zoomSlider = document.getElementById('zoomSlider');
+  var zoomReadout = document.getElementById('zoomReadout');
+  var hudView = document.getElementById('hudView');
+  var hudCorrect = document.getElementById('hudCorrect');
+  var clueIcName = document.getElementById('clueIcName');
+  var clueText = document.getElementById('clueText');
+  var verdictFeedback = document.getElementById('verdictFeedback');
+  var keepBtn = document.getElementById('keepBtn');
+  var dropBtn = document.getElementById('dropBtn');
+  var resetBtn = document.getElementById('resetBtn');
+  var langBtn = document.getElementById('langBtn');
+  var milestone = document.getElementById('milestone');
+  var milestoneReset = document.getElementById('milestoneReset');
+
+  var topoCv = document.getElementById('topoCanvas');
+  var waveCv = document.getElementById('waveCanvas');
+  var specCv = document.getElementById('specCanvas');
+  var reconCv = document.getElementById('reconCanvas');
+
+  // resolve oklch CSS vars to usable canvas colors
+  var cssCache = {};
+  function cvar(name){
+    if (cssCache[name]) return cssCache[name];
+    var v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+    cssCache[name] = v || '#888';
+    return cssCache[name];
+  }
+
+  // fit a canvas to its parent with DPR
+  function fitCanvas(cv){
+    var wrap = cv.parentElement;
+    var r = wrap.getBoundingClientRect();
+    var w = Math.max(40, Math.floor(r.width));
+    var h = Math.max(40, Math.floor(r.height));
+    var dpr = window.devicePixelRatio || 1;
+    cv.width = w * dpr;
+    cv.height = h * dpr;
+    var ctx = cv.getContext('2d');
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    return { ctx: ctx, w: w, h: h };
+  }
+
+  // ---------- topomap rendering ----------
+  // head outline + a scalar field hotspot pattern per topo type
+  function drawTopo(){
+    var f = fitCanvas(topoCv);
+    var ctx = f.ctx, W = f.w, H = f.h;
+    ctx.clearRect(0,0,W,H);
+    var cx = W/2, cy = H/2;
+    var R = Math.min(W,H)*0.40;
+
+    var ic = ICS[stateGame.current];
+
+    // field: sample grid, color by signed value -> blue(neg)..bg..gold(pos)
+    var step = Math.max(3, Math.floor(R/14));
+    for (var py = cy-R; py <= cy+R; py += step){
+      for (var px = cx-R; px <= cx+R; px += step){
+        var dx = (px-cx)/R, dy = (py-cy)/R;
+        if (dx*dx + dy*dy > 1.02) continue;
+        var val = topoField(ic.topo, dx, dy);
+        var a = Math.min(1, Math.abs(val));
+        var col;
+        if (val >= 0) col = withAlpha(cvar('--SIGNAL'), a*0.85);
+        else col = withAlpha(cvar('--QUERY'), a*0.85);
+        ctx.fillStyle = col;
+        ctx.fillRect(px-step/2, py-step/2, step, step);
+      }
+    }
+
+    // head circle + nose + ears
+    ctx.strokeStyle = cvar('--line-strong');
+    ctx.lineWidth = 1.6;
+    ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI*2); ctx.stroke();
+    // nose
+    ctx.beginPath();
+    ctx.moveTo(cx-R*0.12, cy-R);
+    ctx.lineTo(cx, cy-R*1.16);
+    ctx.lineTo(cx+R*0.12, cy-R);
+    ctx.stroke();
+    // ears
+    ctx.beginPath(); ctx.arc(cx-R, cy, R*0.14, Math.PI*0.5, Math.PI*1.5); ctx.stroke();
+    ctx.beginPath(); ctx.arc(cx+R, cy, R*0.14, -Math.PI*0.5, Math.PI*0.5); ctx.stroke();
+
+    // label
+    ctx.fillStyle = cvar('--fg-mute');
+    ctx.font = '10px "JetBrains Mono", monospace';
+    ctx.textAlign = 'left';
+    var fr = (stateGame.lang==='cn') ? '前 (Fp)' : 'front (Fp)';
+    ctx.fillText(fr, 6, 14);
+    ctx.textAlign = 'right';
+    var bk = (stateGame.lang==='cn') ? '后 (Oz)' : 'back (Oz)';
+    ctx.fillText(bk, W-6, H-8);
+    ctx.textAlign = 'left';
+  }
+
+  // dy: -1 = front (nose), +1 = back (occiput). dx: -1 left, +1 right.
+  function topoField(type, dx, dy){
+    function blob(bx, by, w){
+      var d2 = (dx-bx)*(dx-bx) + (dy-by)*(dy-by);
+      return Math.exp(-d2 / (w*w));
+    }
+    switch(type){
+      case 'frontal':  // blink — two frontal poles, strong positive
+        return blob(-0.45,-0.7,0.45) + blob(0.45,-0.7,0.45);
+      case 'temporal': // EMG — left+right temporal edges
+        return blob(-0.95,0.05,0.40) + blob(0.95,0.05,0.40);
+      case 'occipital':// alpha — smooth posterior dipole
+        return blob(0,0.62,0.55) - 0.4*blob(0,-0.3,0.6);
+      case 'single':   // bad channel — one isolated electrode
+        return 1.4*blob(0.55,-0.35,0.16);
+      case 'central':  // mu — centro-lateral dipole
+        return blob(-0.35,0.05,0.40) - 0.5*blob(0.4,0.0,0.4);
+      case 'global':   // line noise — uniform everywhere
+        return 0.55;
+    }
+    return 0;
+  }
+
+  // ---------- waveform rendering ----------
+  function drawWave(tsec){
+    var f = fitCanvas(waveCv);
+    var ctx = f.ctx, W = f.w, H = f.h;
+    ctx.clearRect(0,0,W,H);
+    var mid = H/2;
+    var amp = (H*0.32) * (stateGame.zoom/1.6);
+
+    // baseline
+    ctx.strokeStyle = cvar('--line');
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(0, mid); ctx.lineTo(W, mid); ctx.stroke();
+
+    var ic = ICS[stateGame.current];
+    ctx.strokeStyle = (ic.verdict==='keep') ? cvar('--SIGNAL') : cvar('--QUERY');
+    ctx.lineWidth = 1.8;
+    ctx.beginPath();
+    var N = 360;
+    for (var i=0;i<=N;i++){
+      var x = (i/N)*W;
+      var tt = (i/N)*4 + tsec;        // 4 second window, scrolling
+      var y = mid - amp * waveVal(ic.waveType, tt, i);
+      if (i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+    }
+    ctx.stroke();
+
+    // unit caption
+    ctx.fillStyle = cvar('--fg-mute');
+    ctx.font = '9px "JetBrains Mono", monospace';
+    ctx.textAlign = 'left';
+    ctx.fillText('4 s window', 6, H-6);
+  }
+
+  // pseudo-random but deterministic per index
+  function pr(i){ var x = Math.sin(i*12.9898+78.233)*43758.5453; return x-Math.floor(x); }
+
+  function waveVal(type, t, i){
+    switch(type){
+      case 'slowBig': { // blink: occasional big slow bumps
+        var v = 0.06*Math.sin(t*2.0);
+        var phase = ((t*0.8)%1);
+        if (phase < 0.22){ v += 1.05*Math.exp(-Math.pow((phase-0.11)/0.05,2)); }
+        return v;
+      }
+      case 'highFuzz': // EMG: dense high-freq noise
+        return 0.65*(Math.sin(t*70)+Math.sin(t*97+1)*0.7+Math.sin(t*131+2)*0.5)/2.2 + (pr(i*3.1)-0.5)*0.5;
+      case 'alpha':    // clean 10 Hz spindle, waxing/waning
+        return (0.55 + 0.45*Math.sin(t*1.3)) * Math.sin(t*2*Math.PI*10);
+      case 'erratic':  // bad channel: random jumps
+        return (pr(Math.floor(t*30)+i*0.013)-0.5)*1.8;
+      case 'mu':       // arch-shaped mu ~10Hz with harmonic
+        return 0.7*(Math.sin(t*2*Math.PI*10) - 0.35*Math.sin(t*2*Math.PI*20));
+      case 'sine50':   // line noise: pure 50 Hz
+        return 0.85*Math.sin(t*2*Math.PI*50);
+    }
+    return 0;
+  }
+
+  // ---------- spectrum rendering ----------
+  function drawSpec(){
+    var f = fitCanvas(specCv);
+    var ctx = f.ctx, W = f.w, H = f.h;
+    ctx.clearRect(0,0,W,H);
+    var padL = 8, padB = 18, padT = 8, padR = 8;
+    var plotW = W - padL - padR, plotH = H - padT - padB;
+    var baseY = padT + plotH;
+
+    // axis
+    ctx.strokeStyle = cvar('--line');
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(padL, baseY); ctx.lineTo(padL+plotW, baseY); ctx.stroke();
+
+    var ic = ICS[stateGame.current];
+    var col = (ic.verdict==='keep') ? cvar('--SIGNAL') : cvar('--QUERY');
+    var BINS = 60; // 0..60 Hz, 1 Hz bins
+    ctx.fillStyle = col;
+    for (var hz=0; hz<BINS; hz++){
+      var v = specVal(ic.specType, hz);
+      var bw = plotW / BINS;
+      var bh = v * plotH;
+      ctx.fillRect(padL + hz*bw, baseY - bh, Math.max(1,bw-1), bh);
+    }
+
+    // freq ticks
+    ctx.fillStyle = cvar('--fg-mute');
+    ctx.font = '8px "JetBrains Mono", monospace';
+    ctx.textAlign = 'center';
+    [0,10,20,50].forEach(function(hz){
+      var x = padL + (hz/BINS)*plotW;
+      ctx.fillText(hz, x, baseY+11);
+    });
+    ctx.textAlign = 'left';
+    ctx.fillText('Hz', padL+plotW-14, baseY+11);
+  }
+
+  function specVal(type, hz){
+    var g = Math.exp(-hz*hz/40);          // generic 1/f-ish falloff
+    function peak(c,w,a){ return a*Math.exp(-Math.pow((hz-c)/w,2)); }
+    switch(type){
+      case 'lowDom':   return Math.min(1, 0.2 + peak(1,2.2,1.0));         // blink: 0-3Hz dominant
+      case 'highRise': return Math.min(1, 0.12 + (hz>18 ? (hz-18)/60 : 0) + peak(38,16,0.35)); // EMG rising >20
+      case 'alphaPeak':return Math.min(1, 0.10*g + peak(10,1.6,0.95));    // alpha clean 10Hz
+      case 'flatNoise':return 0.28 + 0.06*pr(hz*7.7);                     // bad chan: flat
+      case 'muPeak':   return Math.min(1, 0.10*g + peak(10,1.4,0.8) + peak(20,1.6,0.55)); // mu 10+20
+      case 'spike50':  return Math.min(1, 0.06 + peak(50,0.9,1.0));       // line: needle 50Hz
+    }
+    return 0;
+  }
+
+  // ---------- reconstructed clean EEG (milestone) ----------
+  function drawRecon(tsec){
+    var ctx = reconCv.getContext('2d');
+    var W = reconCv.width, H = reconCv.height;
+    ctx.clearRect(0,0,W,H);
+    ctx.strokeStyle = cvar('--line');
+    ctx.beginPath(); ctx.moveTo(0,H/2); ctx.lineTo(W,H/2); ctx.stroke();
+    // clean = sum of the two KEPT brain rhythms (alpha + mu), no artifacts
+    ctx.strokeStyle = cvar('--SIGNAL');
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    var N = 600;
+    for (var i=0;i<=N;i++){
+      var x = (i/N)*W;
+      var t = (i/N)*4 + tsec;
+      var v = 0.55*waveVal('alpha', t, i) + 0.4*waveVal('mu', t, i);
+      var y = H/2 - (H*0.34)*v;
+      if (i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+    }
+    ctx.stroke();
+  }
+
+  // ---------- color util: append alpha to oklch(...) ----------
+  function withAlpha(oklchStr, a){
+    // oklch(L C H)  ->  oklch(L C H / a)
+    var inner = oklchStr.replace(/^oklch\(/,'').replace(/\)$/,'').trim();
+    return 'oklch(' + inner + ' / ' + a.toFixed(3) + ')';
+  }
+
+  // ---------- IC list (sidebar) ----------
+  function buildList(){
+    icListEl.innerHTML = '';
+    for (var i=0;i<ICS.length;i++){
+      (function(idx){
+        var ic = ICS[idx];
+        var item = document.createElement('div');
+        item.className = 'ic-item';
+        item.setAttribute('data-idx', idx);
+        var dot = document.createElement('span'); dot.className = 'ic-dot';
+        var nameEl = document.createElement('span'); nameEl.className = 'ic-name';
+        nameEl.textContent = ic.id;
+        var tick = document.createElement('span'); tick.className = 'ic-tick';
+        item.appendChild(dot); item.appendChild(nameEl); item.appendChild(tick);
+        item.addEventListener('click', function(){
+          stateGame.current = idx;
+          syncView();
+        });
+        icListEl.appendChild(item);
+      })(i);
+    }
+  }
+
+  function refreshList(){
+    var items = icListEl.querySelectorAll('.ic-item');
+    for (var i=0;i<items.length;i++){
+      var it = items[i];
+      it.classList.remove('active','judged-keep','judged-drop','wrong');
+      if (i === stateGame.current) it.classList.add('active');
+      var j = stateGame.judged[i];
+      var tick = it.querySelector('.ic-tick');
+      if (j){
+        if (stateGame.correct[i]){
+          it.classList.add(j === 'keep' ? 'judged-keep' : 'judged-drop');
+          tick.textContent = (j==='keep') ? 'K' : 'X';
+        } else {
+          it.classList.add('wrong');
+          tick.textContent = '?';
+        }
+      } else {
+        tick.textContent = '';
+      }
+    }
+  }
+
+  // ---------- view sync ----------
+  function syncView(){
+    var ic = ICS[stateGame.current];
+    hudView.textContent = ic.id;
+    clueIcName.textContent = ic.id;
+    clueText.innerHTML = (stateGame.lang==='cn') ? ic.clueCn : ic.clueEn;
+
+    // verdict feedback for already-judged IC
+    verdictFeedback.className = 'verdict-feedback';
+    var j = stateGame.judged[stateGame.current];
+    if (j){
+      var ok = stateGame.correct[stateGame.current];
+      verdictFeedback.classList.add(ok ? 'ok' : 'no');
+      var label = (stateGame.lang==='cn') ? ic.whyCn : ic.whyEn;
+      var prefix = ok ? (stateGame.lang==='cn'?'判对 · ':'Correct · ')
+                      : (stateGame.lang==='cn'?'判错 · ':'Wrong · ');
+      verdictFeedback.textContent = prefix + label;
+    } else {
+      verdictFeedback.textContent = '';
+    }
+
+    var correctCount = 0;
+    for (var k=0;k<ICS.length;k++){ if (stateGame.correct[k]) correctCount++; }
+    hudCorrect.textContent = correctCount + '/6';
+    if (correctCount === 6) hudCorrect.classList.add('gold');
+    else hudCorrect.classList.remove('gold');
+
+    refreshList();
+    // static redraw (rAF loop also draws but ensure immediate update)
+    drawTopo();
+    drawSpec();
+    drawWave(perfNow());
+
+    if (correctCount === 6 && !stateGame.done){
+      stateGame.done = true;
+      setTimeout(showMilestone, 350);
+    }
+  }
+
+  function perfNow(){ return (performance.now() - stateGame.t0)/1000; }
+
+  // ---------- judging ----------
+  function judge(choice){
+    var idx = stateGame.current;
+    var ic = ICS[idx];
+    stateGame.judged[idx] = choice;
+    stateGame.correct[idx] = (choice === ic.verdict);
+    syncView();
+  }
+
+  // ---------- milestone ----------
+  function showMilestone(){ milestone.classList.add('show'); }
+  function hideMilestone(){ milestone.classList.remove('show'); }
+
+  // ---------- reset ----------
+  function resetAll(){
+    stateGame.current = 0;
+    stateGame.judged = ICS.map(function(){ return null; });
+    stateGame.correct = ICS.map(function(){ return false; });
+    stateGame.done = false;
+    hudCorrect.classList.remove('gold');
+    hideMilestone();
+    syncView();
+  }
+
+  // ---------- i18n ----------
+  function refreshI18N(){
+    var nodes = document.querySelectorAll('[data-i18n-cn]');
+    for (var i=0;i<nodes.length;i++){
+      var el = nodes[i];
+      var content = stateGame.lang==='cn' ? el.getAttribute('data-i18n-cn') : el.getAttribute('data-i18n-en');
+      if (content.indexOf('<') >= 0) el.innerHTML = content; else el.textContent = content;
+    }
+    document.documentElement.lang = stateGame.lang==='cn' ? 'zh-CN' : 'en';
+    syncView();
+  }
+
+  // ---------- animation loop (scrolling waveforms) ----------
+  function loop(){
+    var t = perfNow();
+    drawWave(t);
+    if (milestone.classList.contains('show')) drawRecon(t);
+    stateGame.raf = requestAnimationFrame(loop);
+  }
+
+  // ---------- listeners ----------
+  keepBtn.addEventListener('click', function(){ judge('keep'); });
+  dropBtn.addEventListener('click', function(){ judge('drop'); });
+  resetBtn.addEventListener('click', resetAll);
+  milestoneReset.addEventListener('click', resetAll);
+  langBtn.addEventListener('click', function(){
+    stateGame.lang = stateGame.lang==='cn' ? 'en' : 'cn';
+    refreshI18N();
+  });
+
+  zoomSlider.addEventListener('input', function(){
+    stateGame.zoom = parseInt(zoomSlider.value,10)/10;
+    zoomReadout.textContent = stateGame.zoom.toFixed(1);
+    drawWave(perfNow());
+  });
+  zoomSlider.addEventListener('change', function(){
+    stateGame.zoom = parseInt(zoomSlider.value,10)/10;
+    zoomReadout.textContent = stateGame.zoom.toFixed(1);
+    drawWave(perfNow());
+  });
+
+  window.addEventListener('resize', function(){
+    drawTopo(); drawSpec(); drawWave(perfNow());
+  });
+
+  // ---------- init ----------
+  stateGame.t0 = performance.now();
+  buildList();
+  refreshI18N();
+  // give layout a tick to settle, then draw + start loop
+  requestAnimationFrame(function(){
+    drawTopo(); drawSpec();
+    stateGame.raf = requestAnimationFrame(loop);
+  });
+})();
+</script>
+</body>
+</html>

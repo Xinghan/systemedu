@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>电极布局师</title>
+<style>
+  :root{
+    /* Surfaces — Claude warm cream */
+    --paper:    #FAF9F5;
+    --paper-2:  #F1EDDF;
+    --card:     #FFFFFF;
+    --ink:      #191814;
+    --ink-2:    #2B2924;
+    --sub:      #6B6557;
+    --sub-2:    #9D978A;
+    --border:   #EBE5D6;
+    --border-2: #D9D1BD;
+    --hairline: #F2EDE0;
+
+    /* Primary — Claude coral */
+    --primary:      #D97757;
+    --primary-ink:  #9A4A2E;
+    --primary-soft: #F8EDE5;
+    --primary-line: #ECCFB8;
+
+    /* Domain accent — robotics 紫 */
+    --robotics:     #7C4569;
+    --robotics-soft:#E9DBE3;
+
+    --good:    #5A8A5E;
+    --good-soft:#E2ECE1;
+    --warn:    #C0823C;
+
+    --shadow-sm: 0 1px 2px 0 rgba(25,24,20,.04);
+    --shadow:    0 1px 3px 0 rgba(25,24,20,.06), 0 1px 2px -1px rgba(25,24,20,.04);
+    --shadow-md: 0 4px 8px -2px rgba(25,24,20,.06), 0 2px 4px -2px rgba(25,24,20,.04);
+    --shadow-lg: 0 12px 24px -6px rgba(25,24,20,.1), 0 4px 8px -4px rgba(25,24,20,.05);
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    height:100vh;overflow:hidden;display:flex;
+    background:var(--paper);color:var(--ink);
+    font-family:'PingFang SC','Noto Sans SC','Inter',sans-serif;
+  }
+  .mono{font-family:'JetBrains Mono','SF Mono','Roboto Mono',ui-monospace,monospace;}
+
+  /* ---------------- Sidebar ---------------- */
+  .game-sidebar{
+    width:200px;flex-shrink:0;height:100vh;
+    background:var(--paper-2);border-right:1px solid var(--border-2);
+    display:flex;flex-direction:column;gap:14px;padding:18px 16px;
+    overflow-y:auto;
+  }
+  .brand{display:flex;flex-direction:column;gap:4px;}
+  .brand .kicker{font-size:11px;letter-spacing:.14em;color:var(--robotics);font-weight:700;text-transform:uppercase;}
+  .brand h1{font-size:18px;margin:0;line-height:1.25;color:var(--ink);}
+  .task{
+    background:var(--card);border:1px solid var(--border);border-radius:10px;
+    padding:11px 12px;box-shadow:var(--shadow-sm);
+  }
+  .task .lbl{font-size:11px;font-weight:700;color:var(--primary-ink);letter-spacing:.04em;margin-bottom:5px;}
+  .task ul{margin:0;padding-left:16px;}
+  .task li{font-size:12px;color:var(--sub);line-height:1.55;margin-bottom:3px;}
+  .task li b{color:var(--ink-2);}
+
+  .tray-lbl{font-size:11px;font-weight:700;color:var(--sub);letter-spacing:.04em;}
+  .tray{display:flex;flex-wrap:wrap;gap:7px;}
+  .chip{
+    min-width:46px;padding:6px 9px;border-radius:8px;cursor:grab;user-select:none;
+    background:var(--card);border:1px solid var(--border-2);box-shadow:var(--shadow-sm);
+    display:flex;flex-direction:column;align-items:center;gap:1px;touch-action:none;
+    transition:transform .12s ease,box-shadow .12s ease;
+  }
+  .chip:hover{transform:translateY(-1px);box-shadow:var(--shadow-md);border-color:var(--robotics);}
+  .chip:active{cursor:grabbing;}
+  .chip.dragging{opacity:.4;}
+  .chip.placed{opacity:.32;pointer-events:none;}
+  .chip .code{font-size:14px;font-weight:700;color:var(--ink);font-family:'JetBrains Mono',monospace;}
+  .chip .role{font-size:9px;color:var(--sub-2);line-height:1.1;text-align:center;}
+  .chip.key .code{color:var(--robotics);}
+  .chip.blink .code{color:var(--primary);}
+
+  .actions{display:flex;flex-direction:column;gap:8px;}
+  .btn{
+    padding:9px 12px;border-radius:9px;font-size:13px;font-weight:700;cursor:pointer;
+    border:1px solid var(--border-2);background:var(--card);color:var(--ink-2);
+    box-shadow:var(--shadow-sm);transition:transform .1s ease,box-shadow .1s ease;
+    text-align:center;
+  }
+  .btn:hover{box-shadow:var(--shadow-md);}
+  .btn:active{transform:translateY(1px);}
+  .btn-check{background:var(--primary);border-color:var(--primary);color:#fff;}
+  .btn-check:hover{background:var(--primary-ink);}
+  .lang-btn{margin-top:auto;}
+
+  /* ---------------- Main ---------------- */
+  .game-main{
+    flex:1;height:100vh;display:flex;flex-direction:column;position:relative;
+    padding:18px 22px;overflow:hidden;
+  }
+  .hud{
+    align-self:flex-end;max-width:62%;
+    background:var(--card);border:1px solid var(--border);border-radius:10px;
+    padding:9px 14px;box-shadow:var(--shadow);font-size:13px;color:var(--sub);
+    min-height:20px;line-height:1.45;
+  }
+  .hud.good{border-color:var(--good);color:var(--good);background:var(--good-soft);}
+  .hud.warn{border-color:var(--warn);color:var(--warn);background:#F6ECDB;}
+  .stage{
+    flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
+    min-height:0;
+  }
+  .scalp-wrap{
+    flex:1;width:100%;display:flex;align-items:center;justify-content:center;min-height:0;
+  }
+  svg{max-width:100%;max-height:100%;}
+
+  .slot-circle{fill:var(--card);stroke:var(--border-2);stroke-width:2;cursor:default;transition:fill .15s,stroke .15s;}
+  .slot-circle.over{fill:var(--robotics-soft);stroke:var(--robotics);}
+  .slot-circle.filled{stroke:var(--ink-2);}
+  .slot-circle.filled-key{fill:var(--robotics-soft);stroke:var(--robotics);}
+  .slot-circle.correct{fill:var(--good-soft);stroke:var(--good);}
+  .slot-circle.wrong{fill:var(--primary-soft);stroke:var(--primary);}
+  .slot-label{font-family:'JetBrains Mono',monospace;font-size:11px;fill:var(--sub-2);text-anchor:middle;pointer-events:none;}
+  .slot-placed{font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:700;fill:var(--ink);text-anchor:middle;pointer-events:none;}
+  .zone-ring{fill:none;stroke:var(--primary);stroke-width:2.5;stroke-dasharray:6 5;opacity:0;transition:opacity .3s;}
+  .zone-ring.show{opacity:.85;}
+  .head-outline{fill:#FFFFFF;stroke:var(--border-2);stroke-width:2.5;}
+  .head-inner{fill:none;stroke:var(--hairline);stroke-width:2;}
+  .nose{fill:var(--paper-2);stroke:var(--border-2);stroke-width:2;}
+  .ear{fill:var(--paper-2);stroke:var(--border-2);stroke-width:2;}
+  .axis-lbl{font-family:'JetBrains Mono',monospace;font-size:11px;fill:var(--sub-2);text-anchor:middle;}
+
+  .award{
+    position:absolute;inset:0;display:none;align-items:center;justify-content:center;
+    background:rgba(250,249,245,.86);backdrop-filter:blur(2px);z-index:30;
+  }
+  .award.show{display:flex;animation:fade .4s ease;}
+  @keyframes fade{from{opacity:0;}to{opacity:1;}}
+  .award-card{
+    background:var(--card);border:1px solid var(--primary-line);border-radius:16px;
+    padding:30px 38px;box-shadow:var(--shadow-lg);text-align:center;max-width:420px;
+  }
+  .award-card .seal{
+    width:74px;height:74px;margin:0 auto 14px;border-radius:50%;
+    background:var(--primary-soft);border:2px solid var(--primary);
+    display:flex;align-items:center;justify-content:center;
+    font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:700;color:var(--primary-ink);
+    animation:pulse 2.2s ease-in-out infinite;
+  }
+  @keyframes pulse{0%,100%{transform:scale(1);}50%{transform:scale(1.06);}}
+  .award-card h2{margin:0 0 8px;font-size:21px;color:var(--ink);}
+  .award-card p{margin:0 0 18px;font-size:13px;color:var(--sub);line-height:1.6;}
+
+  /* drag ghost */
+  .ghost{position:fixed;pointer-events:none;z-index:90;transform:translate(-50%,-50%);
+    background:var(--card);border:1px solid var(--robotics);border-radius:8px;padding:5px 9px;
+    box-shadow:var(--shadow-md);font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:700;color:var(--robotics);}
+</style>
+</head>
+<body>
+  <aside class="game-sidebar">
+    <div class="brand">
+      <span class="kicker" id="kicker">BCI · 10-20 系统</span>
+      <h1 id="title">电极布局师</h1>
+    </div>
+
+    <div class="task">
+      <div class="lbl" id="taskLbl">本关任务</div>
+      <ul>
+        <li id="t1">把 <b>C3 / Cz / C4</b> 放到运动皮层正上方（运动想象 BCI 的关键三点）</li>
+        <li id="t2">把 <b>Fp1 / Fp2</b> 放到前额——这里最容易被眨眼伪迹污染</li>
+        <li id="t3">全部就位后点「校验布局」</li>
+      </ul>
+    </div>
+
+    <div class="tray-lbl" id="trayLbl">电极库（拖到头皮槽位）</div>
+    <div class="tray" id="tray"></div>
+
+    <div class="actions">
+      <button class="btn btn-check" id="checkBtn">校验布局</button>
+      <button class="btn" id="zoneBtn">显示眨眼污染区</button>
+      <button class="btn" id="resetBtn">重置</button>
+    </div>
+
+    <button class="btn lang-btn" id="langBtn">EN / 中</button>
+  </aside>
+
+  <main class="game-main">
+    <div class="hud" id="hud">从左侧电极库把电极拖到头皮上对应的槽位。先放关键三点 C3 / Cz / C4。</div>
+
+    <div class="stage">
+      <div class="scalp-wrap">
+        <svg id="scalp" viewBox="0 0 520 540" preserveAspectRatio="xMidYMid meet" aria-label="scalp top view">
+          <!-- nose at top -->
+          <path class="nose" d="M260 30 L242 70 Q260 80 278 70 Z"></path>
+          <!-- ears -->
+          <path class="ear" d="M58 270 Q40 250 46 290 Q40 330 58 312 Z"></path>
+          <path class="ear" d="M462 270 Q480 250 474 290 Q480 330 462 312 Z"></path>
+          <!-- head outline -->
+          <circle class="head-outline" cx="260" cy="290" r="210"></circle>
+          <circle class="head-inner" cx="260" cy="290" r="140"></circle>
+          <circle class="head-inner" cx="260" cy="290" r="70"></circle>
+          <!-- orientation labels -->
+          <text class="axis-lbl" x="260" y="18">FRONT 前 / NASION</text>
+          <text class="axis-lbl" x="260" y="528">BACK 后 / INION</text>
+          <text class="axis-lbl" x="20" y="294" transform="rotate(-90 20 294)">LEFT 左</text>
+          <text class="axis-lbl" x="500" y="294" transform="rotate(90 500 294)">RIGHT 右</text>
+
+          <!-- blink contamination ring (around Fp1/Fp2 zone) -->
+          <ellipse id="zoneRing" class="zone-ring" cx="260" cy="138" rx="92" ry="48"></ellipse>
+
+          <!-- slots injected by JS -->
+          <g id="slots"></g>
+        </svg>
+      </div>
+    </div>
+
+    <div class="award" id="award">
+      <div class="award-card">
+        <div class="seal">PASS</div>
+        <h2 id="awTitle">解锁：电极布局师</h2>
+        <p id="awBody">完美！运动想象 BCI 的关键三点 C3 / Cz / C4 全部就位，Fp1 / Fp2 也正确落在最易被眨眼伪迹污染的前额。你已掌握 10-20 系统核心布局。</p>
+        <button class="btn btn-check" id="awBtn">再玩一次</button>
+      </div>
+    </div>
+  </main>
+
+<script>
+(function(){
+  "use strict";
+  var LANG='cn';
+
+  // 10-20 系统槽位坐标 (viewBox 520x540, 中心 260,290)
+  // 仅放置课程关注的子集 + 几个分散点
+  var SLOTS=[
+    {id:'Fp1', x:212, y:128, key:false, blink:true},
+    {id:'Fp2', x:308, y:128, key:false, blink:true},
+    {id:'F3',  x:178, y:212, key:false, blink:false},
+    {id:'Fz',  x:260, y:208, key:false, blink:false},
+    {id:'F4',  x:342, y:212, key:false, blink:false},
+    {id:'C3',  x:160, y:290, key:true,  blink:false},
+    {id:'Cz',  x:260, y:290, key:true,  blink:false},
+    {id:'C4',  x:360, y:290, key:true,  blink:false},
+    {id:'P3',  x:178, y:368, key:false, blink:false},
+    {id:'Pz',  x:260, y:372, key:false, blink:false},
+    {id:'P4',  x:342, y:368, key:false, blink:false},
+    {id:'O1',  x:212, y:452, key:false, blink:false},
+    {id:'O2',  x:308, y:452, key:false, blink:false}
+  ];
+
+  // 电极角色说明 (i18n)
+  var ROLE={
+    Fp1:{cn:'前额·眨眼源',en:'frontal·blink'}, Fp2:{cn:'前额·眨眼源',en:'frontal·blink'},
+    F3:{cn:'额叶',en:'frontal'}, Fz:{cn:'额中线',en:'frontal mid'}, F4:{cn:'额叶',en:'frontal'},
+    C3:{cn:'左运动区',en:'L motor'}, Cz:{cn:'运动中线',en:'motor mid'}, C4:{cn:'右运动区',en:'R motor'},
+    P3:{cn:'顶叶',en:'parietal'}, Pz:{cn:'顶中线',en:'parietal mid'}, P4:{cn:'顶叶',en:'parietal'},
+    O1:{cn:'枕叶·alpha',en:'occipital·alpha'}, O2:{cn:'枕叶·alpha',en:'occipital·alpha'}
+  };
+
+  var I18N={
+    kicker:{cn:'BCI · 10-20 系统',en:'BCI · 10-20 System'},
+    title:{cn:'电极布局师',en:'Electrode Placer'},
+    taskLbl:{cn:'本关任务',en:'Mission'},
+    t1:{cn:'把 <b>C3 / Cz / C4</b> 放到运动皮层正上方（运动想象 BCI 的关键三点）',
+        en:'Place <b>C3 / Cz / C4</b> over the motor cortex (the 3 keys for motor-imagery BCI)'},
+    t2:{cn:'把 <b>Fp1 / Fp2</b> 放到前额——这里最容易被眨眼伪迹污染',
+        en:'Place <b>Fp1 / Fp2</b> on the forehead — most prone to eye-blink artifacts'},
+    t3:{cn:'全部就位后点「校验布局」',en:'When all are set, hit "Validate"'},
+    trayLbl:{cn:'电极库（拖到头皮槽位）',en:'Electrode bin (drag onto scalp)'},
+    checkBtn:{cn:'校验布局',en:'Validate'},
+    zoneBtn:{cn:'显示眨眼污染区',en:'Show blink zone'},
+    zoneBtnOff:{cn:'隐藏眨眼污染区',en:'Hide blink zone'},
+    resetBtn:{cn:'重置',en:'Reset'},
+    hudStart:{cn:'从左侧电极库把电极拖到头皮上对应的槽位。先放关键三点 C3 / Cz / C4。',
+              en:'Drag electrodes from the bin onto matching scalp slots. Start with the key trio C3 / Cz / C4.'},
+    hudPlaced:{cn:'已就位 ',en:'Placed '},
+    hudOf:{cn:' / ',en:' / '},
+    hudWin:{cn:'全对！关键三点与前额眨眼区全部正确。',en:'All correct! Motor trio and frontal blink slots are right.'},
+    hudNotFull:{cn:'还有电极没放：',en:'Still in the bin: '},
+    hudWrong:{cn:'有 {n} 个电极位置不对（标红），看清头皮分区再调整。',
+              en:'{n} electrode(s) misplaced (red). Recheck the scalp regions.'},
+    awTitle:{cn:'解锁：电极布局师',en:'Unlocked: Electrode Placer'},
+    awBody:{cn:'完美！运动想象 BCI 的关键三点 C3 / Cz / C4 全部就位，Fp1 / Fp2 也正确落在最易被眨眼伪迹污染的前额。你已掌握 10-20 系统核心布局。',
+            en:'Perfect! The motor-imagery BCI trio C3 / Cz / C4 is in place, and Fp1 / Fp2 sit on the forehead where eye-blink artifacts are strongest. You command the core 10-20 layout.'},
+    awBtn:{cn:'再玩一次',en:'Play again'}
+  };
+  function t(k){return (I18N[k]&&I18N[k][LANG])||(I18N[k]&&I18N[k].en)||k;}
+
+  // 状态: placed[slotId] = electrodeId (放对则相同, 放错则不同)
+  var placed={};
+  var zoneOn=false;
+  var won=false;
+
+  var svg=document.getElementById('scalp');
+  var slotsG=document.getElementById('slots');
+
+  function shuffle(a){a=a.slice();for(var i=a.length-1;i>0;i--){var j=Math.floor(Math.random()*(i+1));var x=a[i];a[i]=a[j];a[j]=x;}return a;}
+
+  function totalCount(){return SLOTS.length;}
+  function placedCount(){return Object.keys(placed).length;}
+
+  // ---- render scalp slots ----
+  function renderSlots(){
+    slotsG.innerHTML='';
+    SLOTS.forEach(function(s){
+      var g=document.createElementNS('http://www.w3.org/2000/svg','g');
+      g.setAttribute('data-slot',s.id);
+
+      var c=document.createElementNS('http://www.w3.org/2000/svg','circle');
+      c.setAttribute('cx',s.x);c.setAttribute('cy',s.y);c.setAttribute('r',20);
+      c.setAttribute('class','slot-circle');c.setAttribute('data-circle',s.id);
+
+      var lbl=document.createElementNS('http://www.w3.org/2000/svg','text');
+      lbl.setAttribute('x',s.x);lbl.setAttribute('y',s.y+4);
+
+      var pid=placed[s.id];
+      if(pid){
+        lbl.setAttribute('class','slot-placed');
+        lbl.textContent=pid;
+        if(won){
+          c.classList.add(pid===s.id?'correct':'wrong');
+        }else{
+          c.classList.add(SLOTS.filter(function(x){return x.id===pid;})[0] && SLOTS.filter(function(x){return x.id===pid;})[0].key ? 'filled-key':'filled');
+        }
+        // 点击取回
+        g.style.cursor='pointer';
+        g.addEventListener('click',function(){
+          if(won)return;
+          var back=placed[s.id];delete placed[s.id];
+          renderSlots();renderTray();updateHud();
+        });
+      }else{
+        lbl.setAttribute('class','slot-label');
+        lbl.textContent=s.id;
+      }
+
+      g.appendChild(c);g.appendChild(lbl);
+      slotsG.appendChild(g);
+    });
+    bindDropTargets();
+  }
+
+  // ---- render electrode tray ----
+  function renderTray(){
+    var tray=document.getElementById('tray');tray.innerHTML='';
+    // 已放置的电极不再出现在库 (按 electrodeId)
+    var usedEls={};
+    Object.keys(placed).forEach(function(sid){usedEls[placed[sid]]=true;});
+    var order=window.__trayOrder||shuffle(SLOTS.map(function(s){return s.id;}));
+    window.__trayOrder=order;
+    order.forEach(function(eid){
+      var s=SLOTS.filter(function(x){return x.id===eid;})[0];
+      var chip=document.createElement('div');
+      chip.className='chip'+(s.key?' key':'')+(s.blink?' blink':'')+(usedEls[eid]?' placed':'');
+      chip.setAttribute('data-eid',eid);
+      if(!usedEls[eid])chip.setAttribute('draggable','true');
+      var code=document.createElement('div');code.className='code';code.textContent=eid;
+      var role=document.createElement('div');role.className='role';role.textContent=ROLE[eid]?ROLE[eid][LANG]:'';
+      chip.appendChild(code);chip.appendChild(role);
+
+      if(!usedEls[eid]){
+        chip.addEventListener('dragstart',function(e){
+          e.dataTransfer.setData('text/plain',eid);
+          e.dataTransfer.effectAllowed='move';
+          chip.classList.add('dragging');
+        });
+        chip.addEventListener('dragend',function(){chip.classList.remove('dragging');});
+        addTouchDrag(chip,eid);
+      }
+      tray.appendChild(chip);
+    });
+  }
+
+  // ---- place an electrode into a slot ----
+  function placeElectrode(eid,slotId){
+    if(won)return;
+    if(placed[slotId])return; // 槽已占
+    // 若该电极已在别处, 先移除
+    Object.keys(placed).forEach(function(sid){if(placed[sid]===eid)delete placed[sid];});
+    placed[slotId]=eid;
+    renderSlots();renderTray();updateHud();
+  }
+
+  // ---- SVG drop targets ----
+  function bindDropTargets(){
+    SLOTS.forEach(function(s){
+      var circle=slotsG.querySelector('[data-circle="'+s.id+'"]');
+      if(!circle)return;
+      var g=circle.parentNode;
+      g.addEventListener('dragover',function(e){e.preventDefault();e.dataTransfer.dropEffect='move';circle.classList.add('over');});
+      g.addEventListener('dragleave',function(){circle.classList.remove('over');});
+      g.addEventListener('drop',function(e){
+        e.preventDefault();circle.classList.remove('over');
+        var eid=e.dataTransfer.getData('text/plain');
+        if(eid)placeElectrode(eid,s.id);
+      });
+    });
+  }
+
+  // ---- touch drag (ghost + elementFromPoint) ----
+  var ghost=null;
+  function addTouchDrag(chip,eid){
+    chip.addEventListener('touchstart',function(e){
+      if(won)return;
+      e.preventDefault();
+      ghost=document.createElement('div');ghost.className='ghost';ghost.textContent=eid;
+      document.body.appendChild(ghost);moveGhost(e.touches[0]);
+    },{passive:false});
+    chip.addEventListener('touchmove',function(e){
+      e.preventDefault();if(ghost)moveGhost(e.touches[0]);
+    },{passive:false});
+    chip.addEventListener('touchend',function(e){
+      if(!ghost)return;
+      var tch=e.changedTouches[0];
+      ghost.style.display='none';
+      var below=document.elementFromPoint(tch.clientX,tch.clientY);
+      var g=below&&below.closest?(below.closest('[data-slot]')):null;
+      if(g){placeElectrode(eid,g.getAttribute('data-slot'));}
+      ghost.remove();ghost=null;
+    });
+  }
+  function moveGhost(tch){ghost.style.left=tch.clientX+'px';ghost.style.top=tch.clientY+'px';}
+
+  // ---- HUD ----
+  function setHud(txt,cls){
+    var h=document.getElementById('hud');h.textContent=txt;
+    h.className='hud'+(cls?(' '+cls):'');
+  }
+  function updateHud(){
+    if(won)return;
+    var n=placedCount(),total=totalCount();
+    setHud(t('hudPlaced')+n+t('hudOf')+total,'');
+  }
+
+  // ---- validate ----
+  function validate(){
+    if(won)return;
+    var remaining=SLOTS.map(function(s){return s.id;}).filter(function(eid){
+      var used=false;Object.keys(placed).forEach(function(sid){if(placed[sid]===eid)used=true;});
+      return !used;
+    });
+    if(remaining.length>0){
+      setHud(t('hudNotFull')+remaining.join(', '),'warn');
+      return;
+    }
+    // 数全槽 (此时 placedCount === total)
+    var wrong=0;
+    SLOTS.forEach(function(s){if(placed[s.id]!==s.id)wrong++;});
+    if(wrong===0){
+      won=true;
+      renderSlots();
+      setHud(t('hudWin'),'good');
+      document.getElementById('award').classList.add('show');
+    }else{
+      // 临时标红错误, 显示提示 (不锁)
+      flagWrong();
+      setHud(t('hudWrong').replace('{n}',wrong),'warn');
+    }
+  }
+  function flagWrong(){
+    SLOTS.forEach(function(s){
+      var circle=slotsG.querySelector('[data-circle="'+s.id+'"]');
+      if(!circle)return;
+      circle.classList.remove('filled','filled-key','correct','wrong');
+      if(placed[s.id]){
+        circle.classList.add(placed[s.id]===s.id?'correct':'wrong');
+      }
+    });
+  }
+
+  // ---- zone toggle ----
+  function toggleZone(force){
+    zoneOn=(typeof force==='boolean')?force:!zoneOn;
+    document.getElementById('zoneRing').classList.toggle('show',zoneOn);
+    document.getElementById('zoneBtn').textContent=zoneOn?t('zoneBtnOff'):t('zoneBtn');
+  }
+
+  // ---- reset ----
+  function reset(){
+    placed={};won=false;
+    window.__trayOrder=shuffle(SLOTS.map(function(s){return s.id;}));
+    document.getElementById('award').classList.remove('show');
+    toggleZone(false);
+    renderSlots();renderTray();bindDropTargets();
+    setHud(t('hudStart'),'');
+  }
+
+  // ---- i18n refresh ----
+  function refreshI18N(){
+    document.getElementById('kicker').textContent=t('kicker');
+    document.getElementById('title').textContent=t('title');
+    document.getElementById('taskLbl').textContent=t('taskLbl');
+    document.getElementById('t1').innerHTML=t('t1');
+    document.getElementById('t2').innerHTML=t('t2');
+    document.getElementById('t3').textContent=t('t3');
+    document.getElementById('trayLbl').textContent=t('trayLbl');
+    document.getElementById('checkBtn').textContent=t('checkBtn');
+    document.getElementById('zoneBtn').textContent=zoneOn?t('zoneBtnOff'):t('zoneBtn');
+    document.getElementById('resetBtn').textContent=t('resetBtn');
+    document.getElementById('awTitle').textContent=t('awTitle');
+    document.getElementById('awBody').textContent=t('awBody');
+    document.getElementById('awBtn').textContent=t('awBtn');
+    renderSlots();renderTray();bindDropTargets();
+    if(won){setHud(t('hudWin'),'good');}else{updateHud();}
+  }
+
+  // ---- wire up ----
+  document.getElementById('checkBtn').addEventListener('click',validate);
+  document.getElementById('zoneBtn').addEventListener('click',function(){toggleZone();});
+  document.getElementById('resetBtn').addEventListener('click',reset);
+  document.getElementById('awBtn').addEventListener('click',reset);
+  document.getElementById('langBtn').addEventListener('click',function(){
+    LANG=(LANG==='cn')?'en':'cn';
+    this.textContent=(LANG==='cn')?'EN / 中':'中 / EN';
+    refreshI18N();
+  });
+
+  // init
+  window.__trayOrder=shuffle(SLOTS.map(function(s){return s.id;}));
+  renderSlots();renderTray();bindDropTargets();
+  setHud(t('hudStart'),'');
+})();
+</script>
+</body>
+</html>
