@@ -2,11 +2,10 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>CSP 找最佳方向</title>
-<script src="https://cdn.tailwindcss.com"></script>
+<title>CSP 实验台 — 找最能分开的方向</title>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;700&family=Inter:wght@400;600;800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
 <style>
-  /* 第 1 层 — 共享深空底 (B 类, 所有学科统一) */
+  /* 第 1 层 — 共享深空底 (B 类钉死, 禁米黄) */
   :root{
     --bg-0: oklch(0.14 0.035 265);
     --bg-1: oklch(0.18 0.04 265);
@@ -14,370 +13,686 @@
     --bg-3: oklch(0.28 0.05 265);
     --line: oklch(0.35 0.05 265 / 0.35);
     --line-strong: oklch(0.55 0.08 265 / 0.55);
-    --fg:      oklch(0.96 0.01 265);
-    --fg-dim:  oklch(0.75 0.02 265);
+    --fg: oklch(0.96 0.01 265);
+    --fg-dim: oklch(0.75 0.02 265);
     --fg-mute: oklch(0.55 0.03 265);
-    --gold:    oklch(0.85 0.14 85);
-    /* 第 2 层 — math 学科 accent (MTH-06 electric blue) */
-    --math:  oklch(0.72 0.17 245);
-    /* 第 3 层 — MTH-06 5 色 palette */
-    --axis:     oklch(0.72 0.17 245);  /* AXIS */
-    --proof:    oklch(0.52 0.16 245);  /* PROOF */
-    --shadow:   oklch(0.35 0.10 245);  /* SHADOW */
-    --solution: oklch(0.92 0.08 240);  /* SOLUTION */
-    --qed:      oklch(0.85 0.14 85);   /* QED */
-    /* 两类信号区分色 (左手暖 / 右手 math accent) */
-    --cls-l: oklch(0.75 0.16 25);      /* left-hand, cortex coral 区分 */
-    --cls-r: var(--math);              /* right-hand, electric blue */
+    --gold: oklch(0.85 0.14 85);
+    /* 第 2 层 — math signature accent (electric blue) */
+    --math: oklch(0.72 0.17 245);
+    /* 第 3 层 — MTH-06 Geometry Void 5 色 palette */
+    --axis: oklch(0.72 0.17 245);
+    --proof: oklch(0.52 0.16 245);
+    --shadow: oklch(0.35 0.10 245);
+    --solution: oklch(0.92 0.08 240);
+    --qed: oklch(0.85 0.14 85);
+    /* 两类信号 (left/right hand) */
+    --cls-left: oklch(0.68 0.18 25);   /* warm coral-red, 想象左手 */
+    --cls-right: oklch(0.74 0.15 235); /* cool blue, 想象右手 */
+    --bad: oklch(0.65 0.18 25);
+    --ok: oklch(0.80 0.16 145);
   }
-  html,body{margin:0;padding:0;height:100vh;overflow:hidden;background:var(--bg-0);
-    font-family:'Noto Sans SC','Inter',sans-serif;color:var(--fg);}
-  .game-sidebar{background:var(--bg-1);border-right:1.5px solid var(--line-strong);}
-  .panel{background:var(--bg-2);border:1.5px solid var(--line);box-shadow:3px 3px 0 var(--bg-0);}
-  .lang-btn,.btn{background:var(--bg-2);border:1.5px solid var(--line-strong);color:var(--fg);
-    font-weight:600;box-shadow:2px 2px 0 var(--bg-0);transition:all .1s;cursor:pointer;}
-  .lang-btn:hover,.btn:hover{transform:translate(-1px,-1px);box-shadow:3px 3px 0 var(--bg-0);}
-  .lang-btn:active,.btn:active{transform:translate(1px,1px);box-shadow:1px 1px 0 var(--bg-0);}
-  .btn.solve{border-color:var(--axis);color:var(--solution);}
-  .hud-row{display:flex;justify-content:space-between;gap:10px;line-height:1.55;align-items:baseline;}
-  .hud-lbl{color:var(--fg-dim);font-size:11px;font-family:'JetBrains Mono',monospace;}
-  .hud-val{color:var(--axis);font-weight:700;font-size:14px;font-family:'JetBrains Mono',monospace;}
-  .ratio-big{font-family:'JetBrains Mono',monospace;font-weight:700;font-size:30px;line-height:1;
-    color:var(--solution);text-align:center;}
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;height:100vh;overflow:hidden;
+    background:var(--bg-0);font-family:'Noto Sans SC','Inter',sans-serif;color:var(--fg);}
+  body{display:flex;}
   .mono{font-family:'JetBrains Mono',monospace;}
-  .challenge{background:var(--bg-2);border:1.5px dashed var(--axis);padding:8px 12px;}
-  input[type=range]{accent-color:var(--axis);}
-  .lockchip{font-size:10px;font-family:'JetBrains Mono',monospace;padding:2px 7px;
-    border:1px solid var(--line-strong);color:var(--fg-mute);}
-  .lockchip.on{border-color:var(--qed);color:var(--qed);}
+
+  /* 200px 左侧栏 */
+  .game-sidebar{width:200px;flex-shrink:0;height:100vh;background:var(--bg-1);
+    border-right:1px solid var(--line);display:flex;flex-direction:column;gap:12px;padding:14px 13px;overflow-y:auto;}
+  .brand{font-size:14.5px;font-weight:800;line-height:1.3;color:var(--fg);}
+  .brand .sub{display:block;font-size:9.5px;font-weight:600;color:var(--math);font-family:'JetBrains Mono',monospace;margin-top:3px;letter-spacing:.5px;}
+
+  /* mascot Pi — 旋转四面体 */
+  .mascot{display:flex;align-items:center;gap:8px;}
+  .mascot svg{width:38px;height:38px;flex-shrink:0;}
+  .mascot .pi-say{font-size:9.5px;line-height:1.4;color:var(--fg-dim);font-style:italic;}
+
+  /* 项目路线图 S1-S6 */
+  .roadmap{background:var(--bg-2);border:1px solid var(--line);padding:8px 9px;}
+  .rm-title{font-size:9px;color:var(--fg-mute);font-family:'JetBrains Mono',monospace;letter-spacing:.5px;margin-bottom:6px;}
+  .rm-stops{display:flex;flex-direction:column;gap:0;}
+  .rm-stop{display:flex;align-items:center;gap:7px;font-size:10px;line-height:1.5;color:var(--fg-mute);position:relative;padding:1px 0;}
+  .rm-stop .dot{width:9px;height:9px;border:1px solid var(--line-strong);background:var(--bg-0);flex-shrink:0;border-radius:50%;}
+  .rm-stop.done .dot{background:var(--proof);border-color:var(--proof);}
+  .rm-stop.here{color:var(--math);font-weight:700;}
+  .rm-stop.here .dot{background:var(--math);border-color:var(--math);box-shadow:0 0 0 3px oklch(0.72 0.17 245 / 0.25);}
+  .rm-stop .line{position:absolute;left:4px;top:14px;width:1px;height:8px;background:var(--line);}
+  .rm-stop:last-child .line{display:none;}
+
+  .goal{font-size:10.5px;line-height:1.55;color:var(--fg-dim);}
+  .goal b{color:var(--solution);}
+
+  /* 实验参数面板 (左栏只放配置读数, 不放调参滑块) */
+  .param{background:var(--bg-2);border:1px solid var(--line);padding:8px 9px;}
+  .param-title{font-size:9px;color:var(--fg-mute);font-family:'JetBrains Mono',monospace;letter-spacing:.5px;margin-bottom:6px;}
+  .hud-row{display:flex;justify-content:space-between;align-items:baseline;gap:8px;line-height:1.6;}
+  .hud-lbl{color:var(--fg-mute);font-size:9.5px;font-family:'JetBrains Mono',monospace;letter-spacing:.3px;}
+  .hud-val{color:var(--math);font-weight:700;font-size:12px;font-family:'JetBrains Mono',monospace;}
+
+  .lang-btn{margin-top:auto;background:var(--bg-3);border:1px solid var(--line-strong);
+    color:var(--fg);font-weight:600;font-size:11px;padding:8px 10px;cursor:pointer;
+    box-shadow:2px 2px 0 var(--bg-0);transition:transform .08s,box-shadow .08s;
+    font-family:'JetBrains Mono',monospace;}
+  .lang-btn:hover{transform:translate(-1px,-1px);box-shadow:3px 3px 0 var(--bg-0);}
+  .lang-btn:active{transform:translate(1px,1px);box-shadow:1px 1px 0 var(--bg-0);}
+
+  /* Minecraft 角落剪影 */
+  .endgoal{display:flex;align-items:center;gap:6px;background:var(--bg-2);border:1px dashed var(--line-strong);padding:6px 8px;}
+  .endgoal svg{width:26px;height:26px;flex-shrink:0;}
+  .endgoal span{font-size:8.5px;line-height:1.35;color:var(--fg-mute);}
+
+  /* 主区 */
+  .game-main{flex:1;height:100vh;display:flex;flex-direction:column;gap:11px;padding:16px;position:relative;overflow:hidden;}
+  .main-head{display:flex;align-items:center;justify-content:space-between;flex-shrink:0;}
+  .main-title{font-size:14px;font-weight:700;color:var(--fg);}
+  .main-hint{font-size:10.5px;color:var(--fg-dim);}
+
+  /* 实验设计步骤条 (主舞台核心交互, 非调参) */
+  .design-bar{display:flex;gap:11px;flex-shrink:0;}
+  .design-step{flex:1;background:var(--bg-1);border:1px solid var(--line);padding:9px 11px;display:flex;flex-direction:column;gap:7px;}
+  .ds-head{font-size:10px;font-weight:700;color:var(--math);font-family:'JetBrains Mono',monospace;letter-spacing:.3px;}
+  .ds-sub{font-size:9.5px;color:var(--fg-mute);line-height:1.4;}
+  .opt-row{display:flex;gap:6px;flex-wrap:wrap;}
+  .opt{flex:1;min-width:0;background:var(--bg-2);border:1px solid var(--line-strong);color:var(--fg-dim);
+    font-size:10px;font-weight:600;padding:7px 6px;cursor:pointer;text-align:center;
+    box-shadow:2px 2px 0 var(--bg-0);transition:transform .07s,box-shadow .07s;line-height:1.3;
+    font-family:'JetBrains Mono',monospace;}
+  .opt:hover{transform:translate(-1px,-1px);box-shadow:3px 3px 0 var(--bg-0);}
+  .opt.sel{background:var(--bg-3);border-color:var(--math);color:var(--math);box-shadow:2px 2px 0 var(--math);}
+  .opt .sm{display:block;font-size:8px;color:var(--fg-mute);font-weight:400;margin-top:2px;}
+  .opt.sel .sm{color:var(--axis);}
+
+  .run-btn{background:var(--math);border:1px solid var(--math);color:var(--bg-0);
+    font-weight:800;font-size:12.5px;padding:9px 12px;cursor:pointer;
+    box-shadow:3px 3px 0 var(--bg-0);transition:transform .08s,box-shadow .08s;
+    font-family:'JetBrains Mono',monospace;letter-spacing:.5px;}
+  .run-btn:hover{transform:translate(-1px,-1px);box-shadow:4px 4px 0 var(--bg-0);}
+  .run-btn:active{transform:translate(1px,1px);box-shadow:1px 1px 0 var(--bg-0);}
+  .run-btn:disabled{opacity:.4;cursor:not-allowed;}
+
+  /* 手动模式: 出现一个转方向手柄 (仅 manual 时显示) */
+  .manual-ctl{display:none;align-items:center;gap:9px;background:var(--bg-2);border:1px dashed var(--cls-left);padding:7px 11px;flex-shrink:0;}
+  .manual-ctl.on{display:flex;}
+  .manual-ctl .ml{font-size:10px;color:var(--cls-left);font-weight:700;width:118px;flex-shrink:0;}
+  .manual-ctl input[type=range]{flex:1;accent-color:var(--cls-left);height:4px;}
+  .manual-ctl .mv{font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:700;color:var(--cls-left);width:58px;text-align:right;flex-shrink:0;}
+
+  .stage-grid{flex:1;display:grid;grid-template-columns:1.15fr 0.85fr;gap:11px;min-height:0;}
+  .stage-box{background:var(--bg-1);border:1px solid var(--line);position:relative;display:flex;flex-direction:column;}
+  .stage-box canvas{position:absolute;inset:0;width:100%;height:100%;}
+  .stage-cap{position:absolute;top:7px;left:9px;font-size:9px;color:var(--fg-mute);font-family:'JetBrains Mono',monospace;z-index:3;}
+
+  /* 准确率读数条 */
+  .acc-bar{display:flex;align-items:center;gap:14px;background:var(--bg-2);border:1px solid var(--line);
+    padding:10px 14px;flex-shrink:0;box-shadow:3px 3px 0 var(--bg-0);}
+  .acc-lbl{font-size:11px;color:var(--fg-dim);font-weight:700;}
+  .acc-track{flex:1;height:14px;background:var(--bg-0);border:1px solid var(--line);position:relative;overflow:visible;}
+  .acc-fill{position:absolute;left:0;top:0;bottom:0;width:50%;background:var(--proof);transition:width .1s linear,background .4s;}
+  .acc-fill.good{background:var(--ok);}
+  .acc-num{font-family:'JetBrains Mono',monospace;font-size:20px;font-weight:700;color:var(--math);width:78px;text-align:right;flex-shrink:0;}
+  .acc-gate{position:absolute;top:-2px;bottom:-2px;width:2px;background:var(--gold);}
+  .acc-gate-lbl{position:absolute;font-size:8px;color:var(--gold);font-family:'JetBrains Mono',monospace;top:-13px;transform:translateX(-50%);}
+
+  .verdict{font-size:10.5px;line-height:1.5;color:var(--fg-dim);flex-shrink:0;min-height:30px;}
+  .verdict b{color:var(--gold);}
+  .verdict.warn b{color:var(--bad);}
+
+  .toast{position:absolute;top:16px;left:50%;transform:translateX(-50%);
+    background:var(--bg-2);border:1px solid var(--gold);color:var(--gold);
+    padding:9px 16px;font-size:13px;font-weight:700;display:none;z-index:50;max-width:70%;text-align:center;line-height:1.4;
+    box-shadow:4px 4px 0 var(--bg-0);}
 </style>
 </head>
-<body class="h-screen overflow-hidden flex">
+<body>
 
-<aside class="game-sidebar w-[200px] h-screen flex-shrink-0 flex flex-col gap-3 p-3">
-  <!-- Pi mascot: rotating tetrahedron, math 5 色 -->
-  <div class="flex items-center gap-2">
-    <svg width="34" height="34" viewBox="0 0 40 40" aria-hidden="true">
-      <polygon points="20,4 36,30 4,30" fill="none" stroke="var(--axis)" stroke-width="1.6"/>
-      <polygon points="20,4 36,30 20,22" fill="var(--proof)" opacity="0.55"/>
-      <polygon points="20,4 4,30 20,22" fill="var(--shadow)" opacity="0.7"/>
-      <polygon points="4,30 36,30 20,22" fill="var(--axis)" opacity="0.35"/>
-      <circle cx="20" cy="4" r="1.8" fill="var(--solution)"/>
-      <text x="20" y="20" text-anchor="middle" font-family="JetBrains Mono,monospace"
-        font-size="7" font-weight="700" fill="var(--solution)">Pi</text>
+<aside class="game-sidebar">
+  <div class="brand" id="brand">CSP 实验台<span class="sub">MTH-06 / EEG M29</span></div>
+
+  <div class="mascot">
+    <svg id="piMascot" viewBox="0 0 48 48" aria-hidden="true">
+      <polygon id="piFace1" points="24,6 42,38 6,38" fill="none" stroke="var(--math)" stroke-width="1.6"/>
+      <polygon id="piFace2" points="24,6 42,38 24,28" fill="var(--proof)" opacity="0.45"/>
+      <polygon id="piFace3" points="24,6 6,38 24,28" fill="var(--shadow)" opacity="0.6"/>
+      <line x1="24" y1="6" x2="24" y2="28" stroke="var(--line-strong)" stroke-width="0.8"/>
+      <text id="piEq" x="24" y="36" text-anchor="middle" font-size="7" font-family="JetBrains Mono,monospace" fill="var(--solution)">Sw</text>
     </svg>
-    <h1 class="text-sm font-bold leading-tight" id="title">CSP 找最佳方向</h1>
+    <span class="pi-say" id="piSay">Pi: 别再手转了 — 让电脑解出最能分开的方向</span>
   </div>
-  <p class="text-xs leading-relaxed" id="goal" style="color:var(--fg-dim);">
-    转 <b style="color:var(--axis);">投影方向 w</b>, 让左手/右手两类投影的 <b>方差比 (Rayleigh 商)</b> 越大越好。逼近 CSP 自动解!
+
+  <div class="roadmap">
+    <div class="rm-title" id="rmTitle">PROJECT ROUTE</div>
+    <div class="rm-stops">
+      <div class="rm-stop done"><span class="dot"></span><span class="line"></span><span id="rmS1">S1 读懂脑电</span></div>
+      <div class="rm-stop done"><span class="dot"></span><span class="line"></span><span id="rmS2">S2 清洗信号</span></div>
+      <div class="rm-stop here"><span class="dot"></span><span class="line"></span><span id="rmS3">S3 提特征 (你在这)</span></div>
+      <div class="rm-stop"><span class="dot"></span><span class="line"></span><span id="rmS4">S4 训练分类器</span></div>
+      <div class="rm-stop"><span class="dot"></span><span class="line"></span><span id="rmS5">S5 实时解码</span></div>
+      <div class="rm-stop"><span class="dot"></span><span id="rmS6">S6 脑控 Minecraft</span></div>
+    </div>
+  </div>
+
+  <p class="goal" id="goal">
+    前面学的全在这汇合: 让电脑<b>自动找最能分开左右手的方向</b>。设计一次实验 — 选方法、选几个滤波器、跑出准确率。
   </p>
 
-  <!-- Rayleigh 商 大数字 HUD -->
-  <div class="panel p-2 mt-1">
-    <div class="text-[10px] mono text-center mb-1" style="color:var(--fg-dim);" id="lblRayleigh">Rayleigh 商 R(w)</div>
-    <div class="ratio-big" id="vRatio">--</div>
-    <div class="hud-row mt-2"><span class="hud-lbl" id="lblAngle">方向角 θ</span><span class="hud-val" id="vAngle">0°</span></div>
-    <div class="hud-row"><span class="hud-lbl" id="lblVarL">var 左手</span><span class="hud-val" id="vVarL" style="color:var(--cls-l);">--</span></div>
-    <div class="hud-row"><span class="hud-lbl" id="lblVarR">var 右手</span><span class="hud-val" id="vVarR" style="color:var(--cls-r);">--</span></div>
+  <div class="param">
+    <div class="param-title" id="paramTitle">EXPERIMENT</div>
+    <div class="hud-row"><span class="hud-lbl" id="lblMethod">METHOD</span><span class="hud-val" id="vMethod">--</span></div>
+    <div class="hud-row"><span class="hud-lbl" id="lblFilters">FILTERS</span><span class="hud-val" id="vFilters">--</span></div>
+    <div class="hud-row"><span class="hud-lbl" id="lblRuns">RUNS</span><span class="hud-val mono" id="vRuns">0</span></div>
+    <div class="hud-row"><span class="hud-lbl" id="lblBest">BEST ACC</span><span class="hud-val mono" id="vBest" style="color:var(--gold);">--</span></div>
   </div>
 
-  <!-- 最优对比 -->
-  <div class="panel p-2">
-    <div class="hud-row"><span class="hud-lbl" id="lblBest">CSP 最优 R*</span><span class="hud-val" id="vBest" style="color:var(--qed);">--</span></div>
-    <div class="hud-row"><span class="hud-lbl" id="lblPct">接近度</span><span class="hud-val" id="vPct">0%</span></div>
-    <div class="mt-1"><span class="lockchip" id="lockChip">未解锁 / locked</span></div>
+  <div class="endgoal">
+    <svg viewBox="0 0 32 32" aria-hidden="true">
+      <rect x="6" y="8" width="20" height="18" fill="none" stroke="var(--fg-mute)" stroke-width="1.2"/>
+      <rect x="6" y="8" width="20" height="6" fill="var(--shadow)" opacity="0.6"/>
+      <rect x="10" y="16" width="5" height="5" fill="var(--proof)" opacity="0.7"/>
+      <rect x="17" y="16" width="5" height="5" fill="var(--proof)" opacity="0.4"/>
+      <rect x="13" y="2" width="6" height="6" fill="none" stroke="var(--math)" stroke-width="1"/>
+    </svg>
+    <span id="endGoal">终点: 脑控 Minecraft 搭方块</span>
   </div>
 
-  <div class="challenge text-xs" id="challengeBox">
-    <div id="chText" style="color:var(--fg-dim);">转到接近度 &gt; 95% 即解锁 CSP 方向探索者</div>
-  </div>
-
-  <button id="btnSolve" class="btn solve px-2 py-2 text-xs">CSP 一步求解 / Solve</button>
-  <button id="btnReset" class="btn px-2 py-2 text-xs">重置 / Reset</button>
-  <button id="langBtn" class="lang-btn mt-auto px-2 py-2 text-xs">中 / EN</button>
+  <button id="langBtn" class="lang-btn">中 / EN</button>
 </aside>
 
-<main class="flex-1 h-screen relative overflow-hidden p-4 flex flex-col gap-3">
-  <div class="flex items-center justify-between">
-    <h2 class="text-sm font-bold" id="canvasTitle" style="color:var(--fg);">二维特征空间 — 转方向 w, 看两类投影方差</h2>
-    <div class="text-xs mono" id="canvasHint" style="color:var(--fg-dim);">拖下方滑块旋转 w</div>
+<main class="game-main">
+  <div class="main-head">
+    <h2 class="main-title" id="mainTitle">实验设计: 怎么找那个最能分开的方向?</h2>
+    <span class="main-hint" id="mainHint">配置 -> 运行 -> 读准确率</span>
   </div>
 
-  <div class="flex-1 grid grid-cols-3 gap-3" style="min-height:0;">
-    <!-- 散点 + 可转 w 轴 占 2 列 -->
-    <div class="panel relative col-span-2" style="display:flex;flex-direction:column;">
-      <canvas id="stageScatter" class="absolute inset-0 w-full h-full"></canvas>
+  <div class="design-bar">
+    <div class="design-step">
+      <div class="ds-head" id="step1Head">1 · 选搜索方法</div>
+      <div class="ds-sub" id="step1Sub">手动转一根轴去试, 还是让算法解广义特征值?</div>
+      <div class="opt-row">
+        <button class="opt" data-method="manual" id="optManual">手动转方向<span class="sm" id="optManualSm">人眼试角度</span></button>
+        <button class="opt" data-method="csp" id="optCsp">解 CSP<span class="sm" id="optCspSm">广义特征值</span></button>
+      </div>
     </div>
-    <!-- 双投影方差柱 占 1 列 -->
-    <div class="panel relative" style="display:flex;flex-direction:column;">
-      <canvas id="stageBars" class="absolute inset-0 w-full h-full"></canvas>
+    <div class="design-step">
+      <div class="ds-head" id="step2Head">2 · 用几个 CSP 滤波器</div>
+      <div class="ds-sub" id="step2Sub">每个滤波器 = 一个方向。太少会分不开。</div>
+      <div class="opt-row">
+        <button class="opt" data-k="1" id="optK1">1 个<span class="sm" id="optK1Sm">只 1 方向</span></button>
+        <button class="opt" data-k="2" id="optK2">2 个<span class="sm" id="optK2Sm">一对极</span></button>
+        <button class="opt" data-k="6" id="optK6">6 个<span class="sm" id="optK6Sm">三对极</span></button>
+      </div>
+    </div>
+    <div class="design-step" style="flex:0.55;justify-content:center;">
+      <button class="run-btn" id="runBtn" disabled>运行实验</button>
     </div>
   </div>
 
-  <!-- 旋转控件 (Pattern 6 Live Tuning 核心) -->
-  <div class="panel p-3 flex items-center gap-3" style="flex-shrink:0;">
-    <span class="text-xs font-bold w-28 mono" style="color:var(--axis);" id="lblSlider">方向角 θ</span>
-    <input id="thetaSlider" type="range" min="0" max="180" value="30" step="1" class="flex-1">
-    <span class="mono text-sm font-bold w-14 text-right" style="color:var(--axis);" id="sliderVal">30°</span>
+  <div class="manual-ctl" id="manualCtl">
+    <span class="ml" id="manualLbl">手动转方向</span>
+    <input id="manualSlider" type="range" min="0" max="180" value="45" step="1">
+    <span class="mv mono" id="manualVal">45 deg</span>
   </div>
 
-  <div id="toast" class="absolute top-3 left-1/2 -translate-x-1/2 panel px-4 py-2 text-sm font-bold mono"
-    style="display:none;z-index:50;color:var(--qed);"></div>
+  <div class="stage-grid">
+    <div class="stage-box">
+      <div class="stage-cap" id="capScatter">2D 特征点云: 想象左手 红 / 想象右手 蓝</div>
+      <canvas id="stageScatter"></canvas>
+    </div>
+    <div class="stage-box">
+      <div class="stage-cap" id="capHist">投影后一维分布 + 分类边界</div>
+      <canvas id="stageHist"></canvas>
+    </div>
+  </div>
+
+  <div class="acc-bar">
+    <span class="acc-lbl" id="accLbl">解码准确率</span>
+    <div class="acc-track">
+      <div class="acc-fill" id="accFill" style="width:50%"></div>
+      <div class="acc-gate" id="accGate" style="left:80%"></div>
+      <div class="acc-gate-lbl" id="accGateLbl" style="left:80%">80%</div>
+    </div>
+    <span class="acc-num mono" id="accNum">50%</span>
+  </div>
+
+  <div class="verdict" id="verdict">选一个方法 + 一个滤波器数, 然后点运行实验。基线 (随便猜) = 50%。</div>
+
+  <div id="toast" class="toast"></div>
 </main>
 
 <script>
 var LANG='cn';
-var I18N = {
-  title:{cn:'CSP 找最佳方向', en:'CSP: Find Best Direction'},
-  goal:{cn:'转 <b style="color:var(--axis);">投影方向 w</b>, 让左手/右手两类投影的 <b>方差比 (Rayleigh 商)</b> 越大越好。逼近 CSP 自动解!',
-        en:'Rotate <b style="color:var(--axis);">direction w</b> to maximize the variance ratio (<b>Rayleigh quotient</b>) of left/right projections. Approach the CSP solution!'},
-  lblRayleigh:{cn:'Rayleigh 商 R(w)', en:'Rayleigh R(w)'},
-  lblAngle:{cn:'方向角 θ', en:'angle θ'},
-  lblVarL:{cn:'var 左手', en:'var left'},
-  lblVarR:{cn:'var 右手', en:'var right'},
-  lblBest:{cn:'CSP 最优 R*', en:'CSP best R*'},
-  lblPct:{cn:'接近度', en:'closeness'},
-  lockLocked:{cn:'未解锁 / locked', en:'locked'},
-  lockOn:{cn:'CSP 方向探索者 已解锁', en:'CSP Direction Explorer unlocked'},
-  challenge:{cn:'转到接近度 &gt; 95% 即解锁 CSP 方向探索者', en:'reach closeness &gt; 95% to unlock CSP Direction Explorer'},
-  challengeSolved:{cn:'已解锁! 电脑用广义特征值一步就能算出这个最优方向, 无需手动试。',
-                   en:'Unlocked! The computer finds this optimum in one step via generalized eigenvalues — no manual search.'},
-  canvasTitle:{cn:'二维特征空间 — 转方向 w, 看两类投影方差', en:'2D feature space — rotate w, watch class variances'},
-  canvasHint:{cn:'拖下方滑块旋转 w', en:'drag slider to rotate w'},
-  lblSlider:{cn:'方向角 θ', en:'angle θ'},
-  solve:{cn:'CSP 一步求解 / Solve', en:'CSP one-shot Solve'},
-  reset:{cn:'重置 / Reset', en:'Reset'},
-  toastUnlock:{cn:'解锁! R(w) 已逼近 CSP 最优', en:'Unlocked! R(w) reached CSP optimum'},
-  toastSolve:{cn:'广义特征值一步得到 θ*', en:'generalized eigenvalue gives θ*'},
-};
-function t(k){return (I18N[k]&&I18N[k][LANG])||(I18N[k]&&I18N[k]['en'])||k;}
 
-// ---- 数据生成 (确定性高斯) ----
+var I18N = {
+  brand:{cn:'CSP 实验台', en:'CSP Lab'},
+  piSay:{cn:'Pi: 别再手转了 — 让电脑解出最能分开的方向', en:'Pi: Stop hand-spinning — let the machine solve for the best axis'},
+  rmTitle:{cn:'项目路线', en:'PROJECT ROUTE'},
+  rmS1:{cn:'S1 读懂脑电', en:'S1 Read EEG'},
+  rmS2:{cn:'S2 清洗信号', en:'S2 Clean signal'},
+  rmS3:{cn:'S3 提特征 (你在这)', en:'S3 Features (you)'},
+  rmS4:{cn:'S4 训练分类器', en:'S4 Classifier'},
+  rmS5:{cn:'S5 实时解码', en:'S5 Live decode'},
+  rmS6:{cn:'S6 脑控 Minecraft', en:'S6 Mind-control MC'},
+  goal:{cn:'前面学的全在这汇合: 让电脑<b>自动找最能分开左右手的方向</b>。设计一次实验 — 选方法、选几个滤波器、跑出准确率。',
+        en:'Everything you learned converges here: let the machine <b>auto-find the axis that best splits left vs right hand</b>. Design an experiment — pick a method, pick filter count, run for accuracy.'},
+  paramTitle:{cn:'实验配置', en:'EXPERIMENT'},
+  lblMethod:{cn:'方法', en:'METHOD'},
+  lblFilters:{cn:'滤波器', en:'FILTERS'},
+  lblRuns:{cn:'运行次数', en:'RUNS'},
+  lblBest:{cn:'最佳准确率', en:'BEST ACC'},
+  endGoal:{cn:'终点: 脑控 Minecraft 搭方块', en:'Goal: mind-control Minecraft'},
+  mainTitle:{cn:'实验设计: 怎么找那个最能分开的方向?', en:'Experimental design: how to find the most separating axis?'},
+  mainHint:{cn:'配置 -> 运行 -> 读准确率', en:'configure -> run -> read accuracy'},
+  step1Head:{cn:'1 · 选搜索方法', en:'1 · Search method'},
+  step1Sub:{cn:'手动转一根轴去试, 还是让算法解广义特征值?', en:'Spin an axis by hand, or solve the generalized eigenvalue problem?'},
+  optManual:{cn:'手动转方向', en:'Manual spin'},
+  optManualSm:{cn:'人眼试角度', en:'try by eye'},
+  optCsp:{cn:'解 CSP', en:'Solve CSP'},
+  optCspSm:{cn:'广义特征值', en:'gen. eigenvalue'},
+  step2Head:{cn:'2 · 用几个 CSP 滤波器', en:'2 · How many CSP filters'},
+  step2Sub:{cn:'每个滤波器 = 一个方向。太少会分不开。', en:'each filter = one axis. Too few fails to separate.'},
+  optK1:{cn:'1 个', en:'1 filter'},
+  optK1Sm:{cn:'只 1 方向', en:'1 axis only'},
+  optK2:{cn:'2 个', en:'2 filters'},
+  optK2Sm:{cn:'一对极', en:'one polar pair'},
+  optK6:{cn:'6 个', en:'6 filters'},
+  optK6Sm:{cn:'三对极', en:'three pairs'},
+  runBtn:{cn:'运行实验', en:'Run experiment'},
+  runningBtn:{cn:'运行中...', en:'running...'},
+  manualLbl:{cn:'手动转方向', en:'spin axis'},
+  capScatter:{cn:'2D 特征点云: 想象左手 红 / 想象右手 蓝', en:'2D features: imagine-LEFT red / imagine-RIGHT blue'},
+  capHist:{cn:'投影后一维分布 + 分类边界', en:'projected 1D distribution + decision boundary'},
+  accLbl:{cn:'解码准确率', en:'Decode accuracy'},
+  vmManual:{cn:'手动', en:'manual'},
+  vmCsp:{cn:'CSP', en:'CSP'},
+  needBoth:{cn:'选一个方法 + 一个滤波器数, 然后点运行实验。基线 (随便猜) = 50%。',
+            en:'Pick a method + a filter count, then run. Baseline (random guess) = 50%.'},
+  vManualSpin:{cn:'手动模式: 拖下面的手柄转方向, 转到你觉得最开的角度再运行。',
+               en:'Manual: drag the handle below to spin the axis, then run at your best angle.'},
+  vManualWeak:{cn:'手动转方向能碰到一点信号, 但人眼很难找到真正最优 — 准确率卡在 <b>~60-70%</b>。换 <b>解 CSP</b> 试试?',
+               en:'Manual spinning catches some signal, but the eye rarely hits the optimum — stuck at <b>~60-70%</b>. Try <b>Solve CSP</b>?'},
+  vK1:{cn:'只用 <b>1 个滤波器</b>: 只有一个方向, 左右手在剩下方向里还混着 — 后果: 分不开。多给几个滤波器。',
+       en:'Only <b>1 filter</b>: a single axis, left/right still overlap on the rest — consequence: cannot separate. Add more filters.'},
+  vCsp2:{cn:'CSP 解出 <b>一对极方向</b>: 一个让左手方差最大、右手最小, 另一个反过来。准确率跳到 <b>~80%</b>! 这就是 CSP 自动 vs 手动的差距。',
+         en:'CSP solves <b>one polar pair</b>: one axis maximizes left-hand variance & minimizes right, the other flips it. Accuracy jumps to <b>~80%</b>! That is CSP auto vs manual.'},
+  vCsp6:{cn:'CSP 解出 <b>三对极方向 (6 个)</b>: 抓住更多可分结构, 准确率 <b>~85%+</b>。这是真能分左右手的特征了。',
+         en:'CSP solves <b>three polar pairs (6 filters)</b>: captures more separable structure, accuracy <b>~85%+</b>. These features truly split left/right.'},
+  toastWeak:{cn:'手动到顶了 — 让算法来解', en:'Manual maxed out — let the algorithm solve'},
+  toastFail:{cn:'滤波器太少, 分不开!', en:'Too few filters — cannot separate!'},
+  unlock:{cn:'CSP 跑通! 你有了真能分左右手的特征, 离脑控更近 — 解锁徽章「CSP 设计者」',
+          en:'CSP works! You have features that truly split left/right — closer to mind-control. Badge: "CSP Designer"'},
+  badge:{cn:'徽章解锁: CSP 设计者', en:'Badge unlocked: CSP Designer'}
+};
+
+function t(k){return (I18N[k]&&I18N[k][LANG])||(I18N[k]&&I18N[k].en)||k;}
+
+// --------- 状态 ---------
+var method = null;       // 'manual' | 'csp'
+var kFilters = null;     // 1 | 2 | 6
+var manualTheta = 45;    // 手动模式角度
+var lastAcc = 50;        // 当前显示的准确率 (动画)
+var bestAcc = 0;
+var runs = 0;
+var unlocked = false;
+var running = false;
+var projTheta = Math.PI/2; // 当前绘图用的投影方向 (rad)
+
+function refreshI18N(){
+  document.getElementById('brand').firstChild.textContent = t('brand');
+  document.getElementById('piSay').textContent = t('piSay');
+  document.getElementById('rmTitle').textContent = t('rmTitle');
+  document.getElementById('rmS1').textContent = t('rmS1');
+  document.getElementById('rmS2').textContent = t('rmS2');
+  document.getElementById('rmS3').textContent = t('rmS3');
+  document.getElementById('rmS4').textContent = t('rmS4');
+  document.getElementById('rmS5').textContent = t('rmS5');
+  document.getElementById('rmS6').textContent = t('rmS6');
+  document.getElementById('goal').innerHTML = t('goal');
+  document.getElementById('paramTitle').textContent = t('paramTitle');
+  document.getElementById('lblMethod').textContent = t('lblMethod');
+  document.getElementById('lblFilters').textContent = t('lblFilters');
+  document.getElementById('lblRuns').textContent = t('lblRuns');
+  document.getElementById('lblBest').textContent = t('lblBest');
+  document.getElementById('endGoal').textContent = t('endGoal');
+  document.getElementById('mainTitle').textContent = t('mainTitle');
+  document.getElementById('mainHint').textContent = t('mainHint');
+  document.getElementById('step1Head').textContent = t('step1Head');
+  document.getElementById('step1Sub').textContent = t('step1Sub');
+  document.getElementById('optManual').firstChild.textContent = t('optManual');
+  document.getElementById('optManualSm').textContent = t('optManualSm');
+  document.getElementById('optCsp').firstChild.textContent = t('optCsp');
+  document.getElementById('optCspSm').textContent = t('optCspSm');
+  document.getElementById('step2Head').textContent = t('step2Head');
+  document.getElementById('step2Sub').textContent = t('step2Sub');
+  document.getElementById('optK1').firstChild.textContent = t('optK1');
+  document.getElementById('optK1Sm').textContent = t('optK1Sm');
+  document.getElementById('optK2').firstChild.textContent = t('optK2');
+  document.getElementById('optK2Sm').textContent = t('optK2Sm');
+  document.getElementById('optK6').firstChild.textContent = t('optK6');
+  document.getElementById('optK6Sm').textContent = t('optK6Sm');
+  document.getElementById('runBtn').textContent = running ? t('runningBtn') : t('runBtn');
+  document.getElementById('manualLbl').textContent = t('manualLbl');
+  document.getElementById('capScatter').textContent = t('capScatter');
+  document.getElementById('capHist').textContent = t('capHist');
+  document.getElementById('accLbl').textContent = t('accLbl');
+  document.getElementById('vMethod').textContent = method ? (method==='manual'?t('vmManual'):t('vmCsp')) : '--';
+  document.getElementById('vFilters').textContent = kFilters!=null ? (kFilters+'') : '--';
+  document.getElementById('langBtn').textContent = LANG==='cn'?'中 / EN':'EN / 中';
+  drawAll();
+}
+
+document.getElementById('langBtn').addEventListener('click', function(){
+  LANG = LANG==='cn'?'en':'cn';
+  refreshI18N();
+});
+
+// --------- 数据生成 (两类沿不同方向的高斯点云) ---------
 function gauss(seed){
   var u1 = (Math.sin(seed*12.9898)*43758.5453)%1; u1 = u1<0?u1+1:u1;
   var u2 = (Math.sin(seed*78.233)*43758.5453)%1; u2 = u2<0?u2+1:u2;
   if(u1<0.0001) u1=0.0001;
   return Math.sqrt(-2*Math.log(u1))*Math.cos(2*Math.PI*u2);
 }
-// 沿任意主轴 (angleDeg) 拉伸的椭圆点云: 主轴方差 sMaj^2, 次轴方差 sMin^2
-function genCloud(sMaj, sMin, angleDeg, n, seed){
-  var a = angleDeg*Math.PI/180, ca=Math.cos(a), sa=Math.sin(a);
+function genCloud(dirDeg, sMain, sPerp, n, seed){
+  var a = dirDeg*Math.PI/180, ca=Math.cos(a), sa=Math.sin(a);
   var arr=[];
   for(var i=0;i<n;i++){
-    var z1=gauss(seed+i*2.7), z2=gauss(seed+i*2.7+1.3);
-    var u = sMaj*z1, v = sMin*z2;       // 椭圆主/次轴坐标
-    arr.push([u*ca - v*sa, u*sa + v*ca]); // 旋到全局坐标
+    var m = sMain*gauss(seed+i*2.7);
+    var p = sPerp*gauss(seed+i*2.7+1.3);
+    arr.push([m*ca - p*sa, m*sa + p*ca]);
   }
   return arr;
 }
-// 左手: 沿 ~20° 方向方差大; 右手: 沿 ~110° 方向方差大 → 两类协方差结构不同
-var ptsL = genCloud(7.5, 2.2, 20, 220, 31);
-var ptsR = genCloud(7.5, 2.2, 110, 220, 47);
+// 想象左手沿 ~20deg 铺开, 想象右手沿 ~110deg, 最佳分离方向既不是横也不是竖
+var ptsL = genCloud(20, 7.4, 1.7, 150, 31);
+var ptsR = genCloud(110, 7.4, 1.7, 150, 47);
 
-function projectVar(pts, thetaRad){
-  var cw=Math.cos(thetaRad), sw=Math.sin(thetaRad);
-  var vals=pts.map(function(p){return p[0]*cw + p[1]*sw;});
-  var m=vals.reduce(function(a,b){return a+b;},0)/vals.length;
-  var v=vals.reduce(function(a,x){return a+(x-m)*(x-m);},0)/vals.length;
-  return {vals:vals, vr:v};
+function projectVals(pts, thRad){
+  var cw=Math.cos(thRad), sw=Math.sin(thRad);
+  return pts.map(function(p){return p[0]*cw + p[1]*sw;});
 }
-function rayleighAt(thetaDeg){
-  var r=thetaDeg*Math.PI/180;
-  var vL=projectVar(ptsL,r).vr, vR=projectVar(ptsR,r).vr;
-  return {vL:vL, vR:vR, ratio: vR>0.001 ? vL/vR : 999};
+function meanVar(vals){
+  var m = vals.reduce(function(a,b){return a+b;},0)/vals.length;
+  var v = vals.reduce(function(a,x){return a+(x-m)*(x-m);},0)/vals.length;
+  return {mean:m, var:v, std:Math.sqrt(v)};
 }
-// CSP 最优: 扫描求 ratio 最大方向 (= 广义特征向量的解析效果)
-var bestTheta=0, bestRatio=-Infinity;
-(function(){
-  for(var th=0; th<180; th+=0.5){
-    var rt=rayleighAt(th).ratio;
-    if(rt>bestRatio){ bestRatio=rt; bestTheta=th; }
+// CSP 特征是投影后信号的方差 (log-variance)。两类沿不同方向方差大,
+// 所以"可分性" = 沿投影方向 两类方差比的对数幅度 (这正是 CSP 的核心).
+function separationAt(thRad){
+  var vl = projectVals(ptsL, thRad), vr = projectVals(ptsR, thRad);
+  var varL = meanVar(vl).var + 0.05, varR = meanVar(vr).var + 0.05;
+  return Math.abs(Math.log(varL/varR));   // log 方差比, 0=不可分, 越大越分得开
+}
+function accFromSep(sep){
+  // log 方差比 -> 准确率: sep~2.5 (最优轴) 对应 ~0.95
+  var p = 0.5 + 0.5*(1 - Math.exp(-0.55*sep));
+  return Math.max(0.5, Math.min(0.97, p));
+}
+// 广义特征值最优方向: 穷举 argmax sep 近似解析解
+function cspBestTheta(){
+  var best=0, bestTh=0;
+  for(var d=0; d<180; d+=1){
+    var th=d*Math.PI/180, s=separationAt(th);
+    if(s>best){best=s; bestTh=th;}
   }
-})();
-
-var theta=30;
-var unlocked=false;
-
-function refreshI18N(){
-  document.getElementById('title').textContent=t('title');
-  document.getElementById('goal').innerHTML=t('goal');
-  document.getElementById('lblRayleigh').textContent=t('lblRayleigh');
-  document.getElementById('lblAngle').textContent=t('lblAngle');
-  document.getElementById('lblVarL').textContent=t('lblVarL');
-  document.getElementById('lblVarR').textContent=t('lblVarR');
-  document.getElementById('lblBest').textContent=t('lblBest');
-  document.getElementById('lblPct').textContent=t('lblPct');
-  document.getElementById('canvasTitle').textContent=t('canvasTitle');
-  document.getElementById('canvasHint').textContent=t('canvasHint');
-  document.getElementById('lblSlider').textContent=t('lblSlider');
-  document.getElementById('btnSolve').textContent=t('solve');
-  document.getElementById('btnReset').textContent=t('reset');
-  document.getElementById('langBtn').textContent= LANG==='cn'?'中 / EN':'EN / 中';
-  document.getElementById('lockChip').innerHTML = unlocked? t('lockOn') : t('lockLocked');
-  document.getElementById('lockChip').className = 'lockchip'+(unlocked?' on':'');
-  document.getElementById('chText').innerHTML = unlocked? t('challengeSolved') : t('challenge');
+  return {theta:bestTh, sep:best};
 }
 
-function showToast(msg){
-  var el=document.getElementById('toast');
-  el.style.display='block'; el.textContent=msg;
+// --------- 评估一次实验 ---------
+function runExperiment(){
+  if(method==='manual'){
+    var th = manualTheta*Math.PI/180;
+    var sep = separationAt(th);
+    var acc = accFromSep(sep) * 0.94;       // 人眼/单方向上限惩罚
+    acc = Math.min(acc, 0.71);              // 手动天花板 ~71%
+    return {acc:Math.round(acc*100), theta:th, verdictKey:'vManualWeak', weak:true};
+  }
+  var solved = cspBestTheta();
+  if(kFilters===1){
+    var acc1 = accFromSep(solved.sep) * 0.80; // 单滤波器折扣 -> 后果: 分不开
+    acc1 = Math.min(acc1, 0.66);
+    return {acc:Math.round(acc1*100), theta:solved.theta, verdictKey:'vK1', fail:true};
+  }
+  if(kFilters===2){
+    var acc2 = Math.min(0.83, accFromSep(solved.sep)*1.0);
+    acc2 = Math.max(acc2, 0.80);
+    return {acc:Math.round(acc2*100), theta:solved.theta, verdictKey:'vCsp2', success:true};
+  }
+  var acc6 = Math.min(0.90, accFromSep(solved.sep)*1.0 + 0.05);
+  acc6 = Math.max(acc6, 0.85);
+  return {acc:Math.round(acc6*100), theta:solved.theta, verdictKey:'vCsp6', success:true};
+}
+
+// --------- UI 选择 ---------
+function selectMethod(m){
+  method = m;
+  document.getElementById('optManual').classList.toggle('sel', m==='manual');
+  document.getElementById('optCsp').classList.toggle('sel', m==='csp');
+  document.getElementById('vMethod').textContent = m==='manual'?t('vmManual'):t('vmCsp');
+  document.getElementById('manualCtl').classList.toggle('on', m==='manual');
+  if(m==='manual'){
+    projTheta = manualTheta*Math.PI/180;
+    setVerdict(t('vManualSpin'), false);
+  }
+  updateRunBtn();
+  drawAll();
+}
+function selectK(k){
+  kFilters = k;
+  document.getElementById('optK1').classList.toggle('sel', k===1);
+  document.getElementById('optK2').classList.toggle('sel', k===2);
+  document.getElementById('optK6').classList.toggle('sel', k===6);
+  document.getElementById('vFilters').textContent = k+'';
+  updateRunBtn();
+}
+function updateRunBtn(){
+  document.getElementById('runBtn').disabled = !(method && kFilters!=null) || running;
+}
+
+document.getElementById('optManual').addEventListener('click', function(){selectMethod('manual');});
+document.getElementById('optCsp').addEventListener('click', function(){selectMethod('csp');});
+document.getElementById('optK1').addEventListener('click', function(){selectK(1);});
+document.getElementById('optK2').addEventListener('click', function(){selectK(2);});
+document.getElementById('optK6').addEventListener('click', function(){selectK(6);});
+
+document.getElementById('manualSlider').addEventListener('input', function(e){
+  manualTheta = parseInt(e.target.value,10);
+  document.getElementById('manualVal').textContent = manualTheta+' deg';
+  if(method==='manual'){ projTheta = manualTheta*Math.PI/180; drawAll(); }
+});
+
+document.getElementById('runBtn').addEventListener('click', function(){
+  if(running || !(method && kFilters!=null)) return;
+  running = true;
+  document.getElementById('runBtn').textContent = t('runningBtn');
+  document.getElementById('runBtn').disabled = true;
+  var res = runExperiment();
+  runs++;
+  document.getElementById('vRuns').textContent = runs+'';
+  animateProjTo(method==='csp' ? res.theta : (manualTheta*Math.PI/180), function(){
+    animateAccTo(res.acc, function(){
+      var warn = !!(res.weak || res.fail);
+      setVerdict(t(res.verdictKey), warn);
+      if(res.fail) showToast(t('toastFail'), 'bad');
+      else if(res.weak) showToast(t('toastWeak'), 'bad');
+      if(res.acc > bestAcc){
+        bestAcc = res.acc;
+        document.getElementById('vBest').textContent = bestAcc+'%';
+      }
+      if(res.acc >= 80 && !unlocked){
+        unlocked = true;
+        showToast(t('unlock'), 'gold');
+      }
+      running = false;
+      document.getElementById('runBtn').textContent = t('runBtn');
+      updateRunBtn();
+    });
+  });
+});
+
+function setVerdict(html, warn){
+  var el = document.getElementById('verdict');
+  el.innerHTML = html;
+  el.classList.toggle('warn', !!warn);
+}
+
+function animateAccTo(target, done){
+  var start = lastAcc, t0 = performance.now(), dur = 750;
+  function step(now){
+    var k = Math.min(1, (now-t0)/dur);
+    var ease = 1-Math.pow(1-k,3);
+    lastAcc = start + (target-start)*ease;
+    var fill = document.getElementById('accFill');
+    fill.style.width = lastAcc+'%';
+    fill.classList.toggle('good', lastAcc>=80);
+    document.getElementById('accNum').textContent = Math.round(lastAcc)+'%';
+    if(k<1) requestAnimationFrame(step); else if(done) done();
+  }
+  requestAnimationFrame(step);
+}
+function animateProjTo(target, done){
+  var start = projTheta, t0 = performance.now(), dur = 600;
+  var delta = target-start;
+  while(delta> Math.PI) delta-=Math.PI;
+  while(delta<-Math.PI) delta+=Math.PI;
+  function step(now){
+    var k = Math.min(1,(now-t0)/dur);
+    var ease = 1-Math.pow(1-k,3);
+    projTheta = start + delta*ease;
+    drawAll();
+    if(k<1) requestAnimationFrame(step); else { projTheta=target; drawAll(); if(done) done(); }
+  }
+  requestAnimationFrame(step);
+}
+
+function showToast(msg, kind){
+  var el = document.getElementById('toast');
+  el.style.display='block';
+  el.innerHTML = msg;
+  if(kind==='bad'){ el.style.borderColor='var(--bad)'; el.style.color='var(--bad)'; }
+  else { el.style.borderColor='var(--gold)'; el.style.color='var(--gold)'; }
   clearTimeout(showToast._t);
-  showToast._t=setTimeout(function(){el.style.display='none';}, 2200);
+  showToast._t = setTimeout(function(){el.style.display='none';}, 2600);
 }
 
-function updateHUD(){
-  var rt=rayleighAt(theta);
-  document.getElementById('vAngle').textContent=theta.toFixed(0)+'°';
-  document.getElementById('sliderVal').textContent=theta.toFixed(0)+'°';
-  document.getElementById('vVarL').textContent=rt.vL.toFixed(1);
-  document.getElementById('vVarR').textContent=rt.vR.toFixed(1);
-  document.getElementById('vRatio').textContent=rt.ratio.toFixed(2);
-  document.getElementById('vBest').textContent=bestRatio.toFixed(2);
-  // 接近度: 当前 ratio 相对最优 (取 log 域更平滑, 但直接比即可)
-  var pct = Math.max(0, Math.min(100, rt.ratio/bestRatio*100));
-  document.getElementById('vPct').textContent=pct.toFixed(0)+'%';
-  if(!unlocked && pct>=95){
-    unlocked=true;
-    showToast(t('toastUnlock'));
-    refreshI18N();
-  }
-}
+// --------- 渲染 ---------
+var canvasS = document.getElementById('stageScatter');
+var canvasH = document.getElementById('stageHist');
+var ctxS = canvasS.getContext('2d');
+var ctxH = canvasH.getContext('2d');
 
-// ---- canvas ----
-var cScatter=document.getElementById('stageScatter');
-var cBars=document.getElementById('stageBars');
-var ctxS=cScatter.getContext('2d');
-var ctxB=cBars.getContext('2d');
 function resizeOne(canvas){
-  var rect=canvas.parentElement.getBoundingClientRect();
+  var rect = canvas.parentElement.getBoundingClientRect();
   if(rect.width<1||rect.height<1) return;
-  var dpr=window.devicePixelRatio||1;
-  canvas.width=rect.width*dpr; canvas.height=rect.height*dpr;
-  canvas.style.width=rect.width+'px'; canvas.style.height=rect.height+'px';
+  var dpr = window.devicePixelRatio||1;
+  canvas.width = rect.width*dpr; canvas.height = rect.height*dpr;
+  canvas.style.width = rect.width+'px'; canvas.style.height = rect.height+'px';
   canvas.getContext('2d').setTransform(dpr,0,0,dpr,0,0);
 }
-function resizeAll(){ resizeOne(cScatter); resizeOne(cBars); drawAll(); }
+function resizeAll(){ resizeOne(canvasS); resizeOne(canvasH); drawAll(); }
 window.addEventListener('resize', resizeAll);
 
-function cssVar(name){
-  return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
-}
+var CLS_L = 'oklch(0.68 0.18 25)';
+var CLS_L_SOFT = 'oklch(0.68 0.18 25 / 0.5)';
+var CLS_R = 'oklch(0.74 0.15 235)';
+var CLS_R_SOFT = 'oklch(0.74 0.15 235 / 0.5)';
+
+function drawAll(){ drawScatter(); drawHist(); }
 
 function drawScatter(){
-  var c=ctxS, W=cScatter.clientWidth, H=cScatter.clientHeight;
+  var rect = canvasS.parentElement.getBoundingClientRect();
+  var W=rect.width, H=rect.height;
   if(W<1||H<1) return;
-  c.clearRect(0,0,W,H);
-  c.fillStyle=cssVar('--bg-2'); c.fillRect(0,0,W,H);
-
-  var sz=Math.min(W,H)-50, cx=W/2, cy=H/2, unit=sz/2/16;
-  // 网格轴
-  c.strokeStyle=cssVar('--line'); c.lineWidth=1;
-  c.beginPath();
-  c.moveTo(cx-sz/2, cy); c.lineTo(cx+sz/2, cy);
-  c.moveTo(cx, cy-sz/2); c.lineTo(cx, cy+sz/2);
-  c.stroke();
-  c.fillStyle=cssVar('--fg-mute'); c.font='600 10px JetBrains Mono,monospace';
-  c.textAlign='left'; c.fillText('特征 1 / f1', cx+sz/2-58, cy-5);
-  c.textAlign='center'; c.fillText('特征 2 / f2', cx, cy-sz/2-4);
-
-  // 两类散点
-  function plot(pts, col){
-    c.fillStyle=col;
+  ctxS.clearRect(0,0,W,H);
+  ctxS.fillStyle='oklch(0.18 0.04 265)'; ctxS.fillRect(0,0,W,H);
+  var cx=W/2, cy=H/2, sc=Math.min(W,H)/40;
+  ctxS.strokeStyle='oklch(0.35 0.05 265 / 0.35)'; ctxS.lineWidth=1;
+  for(var gx=-3;gx<=3;gx++){ ctxS.beginPath(); ctxS.moveTo(cx+gx*5*sc,0); ctxS.lineTo(cx+gx*5*sc,H); ctxS.stroke(); }
+  for(var gy=-3;gy<=3;gy++){ ctxS.beginPath(); ctxS.moveTo(0,cy+gy*5*sc); ctxS.lineTo(W,cy+gy*5*sc); ctxS.stroke(); }
+  function plot(pts,color){
+    ctxS.fillStyle=color;
     for(var i=0;i<pts.length;i++){
-      var x=cx+pts[i][0]*unit, y=cy-pts[i][1]*unit;
-      if(Math.abs(pts[i][0]*unit)>sz/2 || Math.abs(pts[i][1]*unit)>sz/2) continue;
-      c.beginPath(); c.arc(x,y,2.3,0,Math.PI*2); c.fill();
+      var x=cx+pts[i][0]*sc, y=cy-pts[i][1]*sc;
+      ctxS.beginPath(); ctxS.arc(x,y,2.1,0,2*Math.PI); ctxS.fill();
     }
   }
-  plot(ptsL, 'oklch(0.75 0.16 25 / 0.5)');
-  plot(ptsR, 'oklch(0.72 0.17 245 / 0.5)');
-
-  // 可转 w 轴 (AXIS 色, 玩家旋转的对象)
-  var r=theta*Math.PI/180;
-  var dx=Math.cos(r)*sz/2*0.92, dy=-Math.sin(r)*sz/2*0.92;
-  c.strokeStyle=cssVar('--axis'); c.lineWidth=3; c.setLineDash([9,5]);
-  c.beginPath(); c.moveTo(cx-dx, cy-dy); c.lineTo(cx+dx, cy+dy); c.stroke();
-  c.setLineDash([]);
-  // 箭头
-  c.fillStyle=cssVar('--axis');
-  var ang=Math.atan2(dy,dx);
-  c.save(); c.translate(cx+dx, cy+dy); c.rotate(ang);
-  c.beginPath(); c.moveTo(0,0); c.lineTo(-13,-6); c.lineTo(-13,6); c.closePath(); c.fill();
-  c.restore();
-  // w 标签
-  c.fillStyle=cssVar('--solution'); c.font='800 14px JetBrains Mono,monospace'; c.textAlign='left';
-  c.fillText('w', cx+dx+8, cy+dy-2);
-
-  // 图例 (左下角, 避开数据)
-  c.font='700 11px Inter,sans-serif'; c.textAlign='left';
-  c.fillStyle=cssVar('--cls-l'); c.fillText('左手 left', 12, H-26);
-  c.fillStyle=cssVar('--math'); c.fillText('右手 right', 12, H-10);
-}
-
-function drawBars(){
-  var c=ctxB, W=cBars.clientWidth, H=cBars.clientHeight;
-  if(W<1||H<1) return;
-  c.clearRect(0,0,W,H);
-  c.fillStyle=cssVar('--bg-2'); c.fillRect(0,0,W,H);
-
-  var rt=rayleighAt(theta);
-  c.fillStyle=cssVar('--fg-dim'); c.font='700 11px JetBrains Mono,monospace'; c.textAlign='center';
-  c.fillText('投影方差 / projected var', W/2, 18);
-
-  var baseY=H-58, maxH=baseY-46;
-  var maxV=Math.max(rt.vL, rt.vR, 1);
-  var bw=Math.min(58, (W-60)/2);
-  var gap=(W - bw*2)/3;
-  function bar(x, val, col, lblTop, lblBot){
-    var h=val/maxV*maxH;
-    c.fillStyle=col; c.fillRect(x, baseY-h, bw, h);
-    c.strokeStyle=cssVar('--bg-0'); c.lineWidth=1; c.strokeRect(x, baseY-h, bw, h);
-    c.fillStyle=cssVar('--fg'); c.font='700 13px JetBrains Mono,monospace'; c.textAlign='center';
-    c.fillText(val.toFixed(1), x+bw/2, baseY-h-6);
-    c.fillStyle=cssVar('--fg-dim'); c.font='600 11px Inter,sans-serif';
-    c.fillText(lblTop, x+bw/2, baseY+16);
-    c.fillStyle=col; c.font='700 10px JetBrains Mono,monospace';
-    c.fillText(lblBot, x+bw/2, baseY+30);
+  plot(ptsL, CLS_L_SOFT);
+  plot(ptsR, CLS_R_SOFT);
+  var th=projTheta, dx=Math.cos(th), dy=Math.sin(th);
+  var len=Math.min(W,H)*0.46;
+  ctxS.strokeStyle='oklch(0.72 0.17 245)'; ctxS.lineWidth=2.4;
+  ctxS.beginPath(); ctxS.moveTo(cx-dx*len, cy+dy*len); ctxS.lineTo(cx+dx*len, cy-dy*len); ctxS.stroke();
+  ctxS.fillStyle='oklch(0.72 0.17 245)'; ctxS.font='600 12px JetBrains Mono, monospace';
+  ctxS.fillText(method==='csp'?'CSP w':'w', cx+dx*len+6, cy-dy*len);
+  if(method==='csp' && kFilters>=2){
+    var dx2=Math.cos(th+Math.PI/2), dy2=Math.sin(th+Math.PI/2);
+    ctxS.strokeStyle='oklch(0.92 0.08 240)'; ctxS.lineWidth=1.6; ctxS.setLineDash([5,4]);
+    ctxS.beginPath(); ctxS.moveTo(cx-dx2*len*0.8, cy+dy2*len*0.8); ctxS.lineTo(cx+dx2*len*0.8, cy-dy2*len*0.8); ctxS.stroke();
+    ctxS.setLineDash([]);
   }
-  // 基线
-  c.strokeStyle=cssVar('--line'); c.lineWidth=1.2;
-  c.beginPath(); c.moveTo(14, baseY); c.lineTo(W-14, baseY); c.stroke();
-
-  bar(gap, rt.vL, cssVar('--cls-l'), '左手 left', 'var_L');
-  bar(gap*2+bw, rt.vR, cssVar('--math'), '右手 right', 'var_R');
-
-  // Rayleigh 商 = var_L / var_R 在底部
-  c.fillStyle=cssVar('--solution'); c.font='800 13px JetBrains Mono,monospace'; c.textAlign='center';
-  c.fillText('R = var_L / var_R = '+rt.ratio.toFixed(2), W/2, H-8);
 }
 
-function drawAll(){ drawScatter(); drawBars(); }
+function drawHist(){
+  var rect = canvasH.parentElement.getBoundingClientRect();
+  var W=rect.width, H=rect.height;
+  if(W<1||H<1) return;
+  ctxH.clearRect(0,0,W,H);
+  ctxH.fillStyle='oklch(0.18 0.04 265)'; ctxH.fillRect(0,0,W,H);
+  var th=projTheta;
+  var vl=projectVals(ptsL,th), vr=projectVals(ptsR,th);
+  var all=vl.concat(vr);
+  var mn=Math.min.apply(null,all), mx=Math.max.apply(null,all);
+  var pad=(mx-mn)*0.1+0.001; mn-=pad; mx+=pad;
+  var bins=26, hl=new Array(bins).fill(0), hr=new Array(bins).fill(0);
+  function fill(vals,h){ vals.forEach(function(v){ var b=Math.floor((v-mn)/(mx-mn)*bins); b=Math.max(0,Math.min(bins-1,b)); h[b]++; }); }
+  fill(vl,hl); fill(vr,hr);
+  var maxc=Math.max(Math.max.apply(null,hl), Math.max.apply(null,hr), 1);
+  var bw=(W-40)/bins, base=H-34;
+  function bars(h,color){
+    ctxH.fillStyle=color;
+    for(var i=0;i<bins;i++){
+      var bh=(h[i]/maxc)*(base-30);
+      ctxH.fillRect(20+i*bw, base-bh, bw-1.5, bh);
+    }
+  }
+  bars(hl, CLS_L_SOFT);
+  bars(hr, CLS_R_SOFT);
+  var ml=vl.reduce(function(a,b){return a+b;},0)/vl.length;
+  var mr=vr.reduce(function(a,b){return a+b;},0)/vr.length;
+  var mid=(ml+mr)/2;
+  var bx=20+((mid-mn)/(mx-mn))*(W-40);
+  ctxH.strokeStyle='oklch(0.85 0.14 85)'; ctxH.lineWidth=2; ctxH.setLineDash([4,4]);
+  ctxH.beginPath(); ctxH.moveTo(bx,12); ctxH.lineTo(bx,base); ctxH.stroke(); ctxH.setLineDash([]);
+  ctxH.fillStyle='oklch(0.85 0.14 85)'; ctxH.font='600 9px JetBrains Mono, monospace';
+  ctxH.fillText(LANG==='cn'?'判定线':'boundary', Math.min(bx+4,W-58), 20);
+  ctxH.strokeStyle='oklch(0.55 0.08 265 / 0.55)'; ctxH.lineWidth=1;
+  ctxH.beginPath(); ctxH.moveTo(20,base); ctxH.lineTo(W-20,base); ctxH.stroke();
+  ctxH.font='600 9px JetBrains Mono, monospace';
+  ctxH.fillStyle=CLS_L; ctxH.fillRect(20,H-22,9,9);
+  ctxH.fillStyle='oklch(0.75 0.02 265)'; ctxH.fillText(LANG==='cn'?'左手':'left', 32, H-14);
+  ctxH.fillStyle=CLS_R; ctxH.fillRect(82,H-22,9,9);
+  ctxH.fillStyle='oklch(0.75 0.02 265)'; ctxH.fillText(LANG==='cn'?'右手':'right', 94, H-14);
+}
 
-// ---- 交互 (Pattern 6 Live Tuning) ----
-document.getElementById('thetaSlider').addEventListener('input', function(e){
-  theta=parseInt(e.target.value,10);
-  updateHUD(); drawAll();
-});
-document.getElementById('btnSolve').addEventListener('click', function(){
-  // CSP 一步求解: 直接把 w 转到广义特征向量方向 (= 扫描得到的 bestTheta)
-  theta=Math.round(bestTheta);
-  document.getElementById('thetaSlider').value=theta;
-  updateHUD(); drawAll();
-  showToast(t('toastSolve')+' θ*='+theta+'°');
-});
-document.getElementById('btnReset').addEventListener('click', function(){
-  theta=30; document.getElementById('thetaSlider').value=30;
-  updateHUD(); drawAll();
-});
-document.getElementById('langBtn').addEventListener('click', function(){
-  LANG = LANG==='cn'?'en':'cn'; refreshI18N(); drawAll();
-});
-
-resizeAll();
-setTimeout(resizeAll,200); setTimeout(resizeAll,600);
-document.fonts.ready.then(function(){resizeAll();});
-refreshI18N();
-updateHUD();
+// 初始化
+function init(){
+  resizeAll();
+  refreshI18N();
+  setVerdict(t('needBoth'), false);
+  var ang=0;
+  setInterval(function(){
+    ang=(ang+1.4)%360;
+    var f1=document.getElementById('piFace1'), f2=document.getElementById('piFace2'), f3=document.getElementById('piFace3');
+    if(f1){
+      f1.setAttribute('transform','rotate('+ang+' 24 22)');
+      f2.setAttribute('transform','rotate('+ang+' 24 22)');
+      f3.setAttribute('transform','rotate('+ang+' 24 22)');
+    }
+  },60);
+}
+if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', init);
+else init();
+setTimeout(resizeAll, 60);
+setTimeout(resizeAll, 300);
 </script>
 </body>
 </html>

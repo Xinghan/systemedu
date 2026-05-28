@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>协方差矩阵建造师 — 逐格填满 4x4 Cov 矩阵</title>
+<title>协方差矩阵建造师 — 把 4 电极两两关系搭成一张表</title>
 <style>
   /* ---- math theme (MTH-06 Geometry Void) — deep space ---- */
   :root{
@@ -15,9 +15,8 @@
     --shadow:oklch(0.35 0.10 245);   /* SHADOW */
     --solution:oklch(0.92 0.08 240); /* SOLUTION — 高亮文字 */
     --qed:oklch(0.85 0.14 85);       /* QED — 金色奖励 */
-    --diag:oklch(0.78 0.13 245);     /* 对角线 方差 — 蓝 */
-    --pos:oklch(0.78 0.16 150);      /* 正协方差 绿 */
-    --neg:oklch(0.68 0.20 25);       /* 负协方差 红 */
+    --pos:oklch(0.78 0.16 150);      /* 正相关 绿 */
+    --neg:oklch(0.68 0.20 25);       /* 负相关 红 */
     --ink:#dfe3f5;
     --ink-dim:#9aa0c4;
     --ink-mute:#5d6592;
@@ -30,35 +29,48 @@
     background:var(--bg-0);color:var(--ink);font-family:var(--sans);}
   body{display:flex;}
 
-  /* ---- sidebar 220px ---- */
+  /* ---- sidebar 200px ---- */
   .game-sidebar{
-    width:220px;flex-shrink:0;height:100vh;
+    width:212px;flex-shrink:0;height:100vh;
     background:var(--bg-1);border-right:1.5px solid var(--line);
-    display:flex;flex-direction:column;gap:13px;padding:16px 14px;}
+    display:flex;flex-direction:column;gap:13px;padding:15px 13px;overflow-y:auto;}
   .mascot-wrap{display:flex;align-items:center;gap:10px;}
   .mascot-name{font-family:var(--mono);font-size:13px;font-weight:700;color:var(--accent);letter-spacing:.5px;}
   .mascot-sub{font-size:10px;color:var(--ink-mute);font-family:var(--mono);}
-  h1.title{font-size:15px;font-weight:800;line-height:1.3;margin:0;color:var(--solution);}
-  .subtitle{font-size:11px;color:var(--ink-dim);line-height:1.5;margin:0;}
+  h1.title{font-size:14px;font-weight:800;line-height:1.3;margin:0;color:var(--solution);}
+  .subtitle{font-size:10.5px;color:var(--ink-dim);line-height:1.5;margin:0;}
 
   /* progress */
-  .prog-wrap{margin-top:2px;}
-  .prog-cap{font-family:var(--mono);font-size:10px;color:var(--ink-mute);
-    text-transform:uppercase;letter-spacing:1px;margin-bottom:5px;display:flex;justify-content:space-between;}
-  .prog-cap b{color:var(--accent);}
+  .prog-cap{font-family:var(--mono);font-size:9px;font-weight:700;color:var(--ink-mute);
+    letter-spacing:1.2px;text-transform:uppercase;}
   .prog-bar{height:8px;background:var(--bg-2);border:1.5px solid var(--line);border-radius:2px;overflow:hidden;}
   .prog-fill{height:100%;width:0%;background:var(--accent);transition:width .3s;}
+  .prog-num{font-family:var(--mono);font-size:11px;color:var(--solution);font-weight:700;}
 
-  /* legend hints */
-  .legend{display:flex;flex-direction:column;gap:8px;margin-top:4px;}
-  .leg-row{display:flex;align-items:flex-start;gap:8px;font-size:10.5px;line-height:1.4;color:var(--ink-dim);}
-  .leg-sw{width:14px;height:14px;flex-shrink:0;border:1.5px solid var(--line);border-radius:2px;margin-top:1px;}
-  .leg-sw.diag{background:var(--diag);}
-  .leg-sw.pos{background:var(--pos);}
-  .leg-sw.neg{background:var(--neg);}
-  .leg-row b{color:var(--solution);font-family:var(--mono);}
+  /* project roadmap S1-S6 */
+  .roadmap{display:flex;flex-direction:column;gap:0;margin-top:2px;}
+  .roadmap-cap{font-family:var(--mono);font-size:9px;font-weight:700;color:var(--ink-mute);
+    letter-spacing:1.2px;text-transform:uppercase;margin-bottom:6px;}
+  .rm-station{display:flex;align-items:center;gap:8px;position:relative;padding:1px 0;}
+  .rm-station .node{width:11px;height:11px;flex-shrink:0;border-radius:50%;
+    border:1.5px solid var(--ink-mute);background:var(--bg-0);z-index:2;}
+  .rm-station .seg{position:absolute;left:5px;top:14px;width:1.5px;height:11px;background:var(--line);z-index:1;}
+  .rm-station:last-child .seg{display:none;}
+  .rm-station .rl{font-family:var(--mono);font-size:9.5px;color:var(--ink-mute);line-height:1.25;}
+  .rm-station.done .node{border-color:var(--proof);background:var(--proof);}
+  .rm-station.done .rl{color:var(--ink-dim);}
+  .rm-station.here .node{border-color:var(--accent);background:var(--accent);
+    box-shadow:0 0 0 3px rgba(124,160,240,0.22);}
+  .rm-station.here .rl{color:var(--solution);font-weight:700;}
 
-  .spacer{flex:1;}
+  /* minecraft endpoint silhouette */
+  .endpoint{display:flex;align-items:center;gap:8px;border:1.5px solid var(--line);
+    background:var(--bg-2);padding:7px 9px;border-radius:2px;}
+  .endpoint svg{flex-shrink:0;}
+  .endpoint .et{font-family:var(--mono);font-size:9px;color:var(--ink-mute);line-height:1.35;}
+  .endpoint .et b{color:var(--qed);font-weight:700;}
+
+  .spacer{flex:1;min-height:6px;}
   .lang-btn{background:var(--bg-2);border:1.5px solid var(--accent);color:var(--accent);
     font-family:var(--mono);font-weight:700;font-size:12px;padding:8px 10px;cursor:pointer;
     box-shadow:2px 2px 0 var(--shadow);transition:transform .1s,box-shadow .1s;border-radius:2px;}
@@ -67,73 +79,64 @@
 
   /* ---- main ---- */
   .game-main{flex:1;height:100vh;display:flex;flex-direction:column;
-    padding:16px 18px;gap:12px;min-width:0;overflow:hidden;}
+    padding:15px 18px;gap:11px;min-width:0;overflow:hidden;}
   .main-head{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-shrink:0;}
   .main-head h2{margin:0;font-size:14px;font-weight:700;color:var(--solution);}
   .main-head .hint{font-size:11px;color:var(--ink-dim);font-family:var(--mono);}
 
-  .stage-row{flex:1;display:flex;gap:14px;min-height:0;}
+  /* task banner */
+  .task{font-size:11.5px;line-height:1.55;color:var(--ink-dim);flex-shrink:0;
+    border-left:2.5px solid var(--accent);padding:5px 0 5px 10px;}
+  .task b{color:var(--solution);}
 
-  /* left column: signals (draggable) over scatter */
-  .left-col{flex:1.05;min-width:0;display:flex;flex-direction:column;gap:12px;}
-  .sig-box{flex:1.35;min-height:0;display:flex;flex-direction:column;
-    background:var(--bg-1);border:1.5px solid var(--line);border-radius:3px;position:relative;}
-  .box-lbl{position:absolute;top:8px;left:12px;z-index:3;
-    font-family:var(--mono);font-size:11px;font-weight:700;color:var(--accent);}
-  .box-tip{position:absolute;top:8px;right:12px;z-index:3;
-    font-family:var(--mono);font-size:10px;color:var(--ink-mute);}
-  #sigCanvas{flex:1;width:100%;display:block;cursor:grab;}
-  #sigCanvas.grabbing{cursor:grabbing;}
+  .stage-row{flex:1;display:flex;gap:16px;min-height:0;}
 
-  .scatter-box{flex:1;min-height:0;display:flex;flex-direction:column;
-    background:var(--bg-1);border:1.5px solid var(--line);border-radius:3px;position:relative;}
-  #scatter{flex:1;width:100%;display:block;}
-
-  /* right column: matrix + readout */
-  .right-col{flex:1;min-width:280px;display:flex;flex-direction:column;gap:12px;overflow:hidden;}
-  .matrix-box{flex-shrink:0;background:var(--bg-1);border:1.5px solid var(--line);
-    border-radius:3px;padding:14px;}
-  .matrix-title{font-family:var(--mono);font-size:11px;font-weight:700;color:var(--accent);
+  /* left: matrix builder */
+  .matrix-box{flex:1.15;min-width:0;display:flex;flex-direction:column;
+    background:var(--bg-1);border:1.5px solid var(--line);padding:14px;border-radius:3px;position:relative;}
+  .mx-cap{font-family:var(--mono);font-size:11px;font-weight:700;color:var(--accent);
     text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;}
-  .matrix-grid{display:grid;grid-template-columns:30px repeat(4,1fr);
-    grid-template-rows:26px repeat(4,1fr);gap:5px;}
-  .mh{display:flex;align-items:center;justify-content:center;
-    font-family:var(--mono);font-size:11px;font-weight:700;color:var(--ink-dim);}
-  .mh.corner{color:var(--ink-mute);font-size:9px;}
-  .cell{aspect-ratio:1/1.05;border:1.5px solid var(--line);background:var(--bg-2);
-    border-radius:2px;cursor:pointer;display:flex;flex-direction:column;
-    align-items:center;justify-content:center;gap:2px;transition:all .18s;position:relative;}
-  .cell .cv{font-family:var(--mono);font-size:13px;font-weight:700;color:var(--ink-mute);}
-  .cell .ck{font-family:var(--mono);font-size:8px;color:var(--ink-mute);}
-  .cell:hover{border-color:var(--accent);transform:translateY(-1px);}
-  .cell.empty .cv{color:var(--ink-mute);}
-  .cell.filled{box-shadow:2px 2px 0 var(--shadow);}
-  .cell.diag.filled{border-color:var(--diag);}
-  .cell.diag.filled .cv{color:var(--diag);}
-  .cell.pos.filled{border-color:var(--pos);}
-  .cell.pos.filled .cv{color:var(--pos);}
-  .cell.neg.filled{border-color:var(--neg);}
-  .cell.neg.filled .cv{color:var(--neg);}
-  .cell.mirror{outline:2px dashed var(--qed);outline-offset:1px;}
-  .cell.flash{animation:cellFlash .5s ease;}
-  @keyframes cellFlash{0%{transform:scale(1.18);}100%{transform:scale(1);}}
+  .grid-wrap{flex:1;display:flex;flex-direction:column;justify-content:center;min-height:0;}
+  .grid-outer{display:grid;grid-template-columns:34px repeat(4,1fr);grid-template-rows:34px repeat(4,1fr);
+    gap:5px;width:100%;}
+  .gh{display:flex;align-items:center;justify-content:center;font-family:var(--mono);
+    font-size:12px;font-weight:700;color:var(--accent);}
+  .gh.corner{font-size:9px;color:var(--ink-mute);}
+  .cell{border:1.5px solid var(--line);background:var(--bg-2);border-radius:2px;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;
+    cursor:pointer;font-family:var(--mono);transition:all .15s;min-height:46px;padding:3px;}
+  .cell:hover{border-color:var(--accent);transform:translate(-1px,-1px);box-shadow:2px 2px 0 var(--shadow);}
+  .cell:disabled{cursor:default;}
+  .cell .cv{font-size:14px;font-weight:700;color:var(--ink-mute);}
+  .cell .ck{font-size:8px;color:var(--ink-mute);letter-spacing:.3px;}
+  .cell.diag{border-style:dashed;}
+  .cell.filled .cv{color:var(--solution);}
+  .cell.filled.posv{border-color:var(--pos);} .cell.filled.posv .cv{color:var(--pos);}
+  .cell.filled.negv{border-color:var(--neg);} .cell.filled.negv .cv{color:var(--neg);}
+  .cell.filled.diagv{border-color:var(--accent);border-style:solid;} .cell.filled.diagv .cv{color:var(--accent);}
+  .cell.mirror{animation:flashmir .6s ease;}
+  @keyframes flashmir{0%{box-shadow:0 0 0 0 var(--qed);}50%{box-shadow:0 0 0 3px var(--qed);}100%{box-shadow:none;}}
+  .cell.target{outline:2px solid var(--qed);outline-offset:1px;}
 
-  .readout{flex:1;min-height:0;overflow-y:auto;background:var(--bg-1);
-    border:1.5px solid var(--line);border-radius:3px;padding:13px;
-    display:flex;flex-direction:column;gap:9px;}
-  .ro-title{font-family:var(--mono);font-size:11px;font-weight:700;color:var(--accent);
-    text-transform:uppercase;letter-spacing:1px;}
-  .formula{font-family:var(--mono);font-size:12px;color:var(--solution);
-    background:var(--bg-2);border:1.5px solid var(--line);padding:9px 11px;border-radius:2px;line-height:1.7;}
+  /* right: signals + compute */
+  .right-col{flex:1;min-width:230px;display:flex;flex-direction:column;gap:11px;}
+  .sig-box{flex:1.2;min-width:0;display:flex;flex-direction:column;
+    background:var(--bg-1);border:1.5px solid var(--line);position:relative;border-radius:3px;}
+  .sig-box .box-lbl{position:absolute;top:8px;left:11px;z-index:3;
+    font-family:var(--mono);font-size:11px;font-weight:700;color:var(--accent);}
+  .sig-box .drag-hint{position:absolute;top:8px;right:11px;z-index:3;
+    font-family:var(--mono);font-size:9px;color:var(--ink-mute);}
+  #stage{flex:1;width:100%;display:block;cursor:grab;}
+  #stage.grabbing{cursor:grabbing;}
+
+  .calc-box{flex-shrink:0;background:var(--bg-1);border:1.5px solid var(--line);
+    padding:11px 13px;border-radius:3px;}
+  .calc-title{font-family:var(--mono);font-size:10px;font-weight:700;color:var(--accent);
+    text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;}
+  .formula{font-family:var(--mono);font-size:11.5px;color:var(--solution);line-height:1.7;}
   .formula .hl{color:var(--qed);font-weight:700;}
-  .stat-row{display:flex;justify-content:space-between;align-items:baseline;
-    font-family:var(--mono);font-size:12px;padding:3px 0;border-bottom:1px dashed var(--line);}
-  .stat-row .k{color:var(--ink-dim);}
-  .stat-row .v{color:var(--solution);font-weight:700;}
-  .stat-row .v.accent{color:var(--accent);}
-  .conclusion{font-size:11.5px;line-height:1.6;color:var(--ink-dim);
-    border-left:2.5px solid var(--accent);padding:6px 0 6px 10px;}
-  .conclusion b{color:var(--solution);}
+  .calc-note{font-size:10.5px;color:var(--ink-dim);line-height:1.55;margin-top:6px;}
+  .calc-note b{color:var(--solution);}
 
   /* control row */
   .ctrl-row{display:flex;gap:10px;flex-shrink:0;align-items:center;flex-wrap:wrap;}
@@ -143,15 +146,23 @@
   .btn:hover{transform:translate(-1px,-1px);box-shadow:3px 3px 0 var(--shadow);}
   .btn:active{transform:translate(1px,1px);box-shadow:1px 1px 0 var(--shadow);}
   .btn.ghost{border-color:var(--line);color:var(--ink-dim);box-shadow:2px 2px 0 var(--bg-0);}
-  .stepcap{font-family:var(--mono);font-size:11px;color:var(--ink-dim);}
-  .stepcap b{color:var(--accent);}
+  .btn.gold{border-color:var(--qed);color:var(--qed);}
+  .btn:disabled{opacity:.35;cursor:not-allowed;transform:none;box-shadow:2px 2px 0 var(--shadow);}
+  .statuscap{font-family:var(--mono);font-size:11px;color:var(--ink-dim);}
+  .statuscap b{color:var(--accent);}
+
+  /* CSP consequence readout */
+  .csp{font-family:var(--mono);font-size:11px;padding:6px 10px;border-radius:2px;
+    border:1.5px solid var(--line);background:var(--bg-2);color:var(--ink-mute);}
+  .csp.ok{border-color:var(--pos);color:var(--pos);}
+  .csp.bad{border-color:var(--neg);color:var(--neg);}
 
   /* badge overlay */
-  .badge{position:absolute;inset:0;z-index:30;display:none;align-items:center;justify-content:center;
-    background:rgba(11,13,24,0.88);backdrop-filter:blur(3px);}
+  .badge{position:fixed;inset:0;z-index:40;display:none;align-items:center;justify-content:center;
+    background:rgba(11,13,24,0.86);backdrop-filter:blur(3px);}
   .badge.show{display:flex;}
   .badge-card{background:var(--bg-1);border:2px solid var(--qed);padding:30px 38px;text-align:center;
-    box-shadow:6px 6px 0 var(--shadow);border-radius:4px;max-width:380px;}
+    box-shadow:6px 6px 0 var(--shadow);border-radius:4px;max-width:400px;}
   .badge-card .seal{font-family:var(--mono);font-size:46px;font-weight:800;color:var(--qed);line-height:1;}
   .badge-card .bt{font-size:18px;font-weight:800;color:var(--solution);margin:12px 0 6px;}
   .badge-card .bd{font-size:12px;color:var(--ink-dim);line-height:1.6;}
@@ -179,73 +190,83 @@
   </div>
 
   <h1 class="title" id="title">协方差矩阵建造师</h1>
-  <p class="subtitle" id="subtitle">逐格填满 4 个电极的 4x4 协方差矩阵，亲手发现它的对称结构。</p>
+  <p class="subtitle" id="subtitle">把 4 个电极两两的关系搭成一张表，CSP 才能找出左右手的方向。</p>
 
-  <div class="prog-wrap">
-    <div class="prog-cap"><span id="progLbl">已填格子</span><span><b id="progNum">0</b> / 16</span></div>
-    <div class="prog-bar"><div class="prog-fill" id="progFill"></div></div>
-  </div>
+  <div class="prog-cap" id="progCap">建造进度</div>
+  <div class="prog-bar"><div class="prog-fill" id="progFill"></div></div>
+  <div class="prog-num" id="progNum">0 / 10 格</div>
 
-  <div class="legend">
-    <div class="leg-row"><span class="leg-sw diag"></span><span id="legDiag"><b>对角线</b> = 方差 Var(电极i)，电极与自身。</span></div>
-    <div class="leg-row"><span class="leg-sw pos"></span><span id="legPos"><b>正协方差</b> 同涨同落 (绿)。</span></div>
-    <div class="leg-row"><span class="leg-sw neg"></span><span id="legNeg"><b>负协方差</b> 一涨一落 (红)。</span></div>
+  <div class="roadmap" id="roadmap">
+    <div class="roadmap-cap" id="rmCap">PROJECT ROUTE</div>
+    <div class="rm-station done"><span class="node"></span><span class="seg"></span><span class="rl" id="rm1">S1 读懂脑电信号</span></div>
+    <div class="rm-station done"><span class="node"></span><span class="seg"></span><span class="rl" id="rm2">S2 清洗与去噪</span></div>
+    <div class="rm-station here"><span class="node"></span><span class="seg"></span><span class="rl" id="rm3">S3 提取特征 (你在这)</span></div>
+    <div class="rm-station"><span class="node"></span><span class="seg"></span><span class="rl" id="rm4">S4 训练分类器</span></div>
+    <div class="rm-station"><span class="node"></span><span class="seg"></span><span class="rl" id="rm5">S5 实时解码</span></div>
+    <div class="rm-station"><span class="node"></span><span class="seg"></span><span class="rl" id="rm6">S6 脑控 Minecraft</span></div>
   </div>
 
   <div class="spacer"></div>
+
+  <div class="endpoint">
+    <!-- Minecraft endpoint silhouette (pickaxe + block) -->
+    <svg width="26" height="26" viewBox="0 0 26 26" aria-hidden="true">
+      <rect x="13" y="13" width="10" height="10" fill="none" stroke="var(--qed)" stroke-width="1.4"/>
+      <line x1="13" y1="18" x2="23" y2="18" stroke="var(--shadow)" stroke-width="1"/>
+      <line x1="18" y1="13" x2="18" y2="23" stroke="var(--shadow)" stroke-width="1"/>
+      <line x1="3" y1="11" x2="11" y2="3" stroke="var(--qed)" stroke-width="1.6"/>
+      <path d="M2 4 Q8 2 10 8" fill="none" stroke="var(--qed)" stroke-width="1.4"/>
+    </svg>
+    <div class="et" id="endpointTxt">终点 <b>脑控 Minecraft</b><br>协方差矩阵是 CSP 的原料</div>
+  </div>
+
   <button class="lang-btn" id="langBtn">中 / EN</button>
 </aside>
 
 <main class="game-main">
   <div class="main-head">
-    <h2 id="canvasTitle">脑波信号 — 拖动任意波形改变形状</h2>
-    <span class="hint" id="canvasHint">拖波形 &rarr; 已填格子实时重算</span>
+    <h2 id="canvasTitle">协方差矩阵建造台 — 逐格填满 4 电极</h2>
+    <span class="hint" id="canvasHint">点对角格算方差 · 点非对角格算协方差</span>
+  </div>
+
+  <div class="task" id="task">
+    <b>任务</b>：点矩阵里任意一格亲手算出它的值。对角格 = 该电极<b>方差</b>；非对角格 = 两电极<b>协方差</b>，对称格会自动镜像。填满 10 个独立格 → 解锁建造师徽章。
   </div>
 
   <div class="stage-row">
-    <div class="left-col">
-      <div class="sig-box">
-        <span class="box-lbl" id="sigLbl">4 电极信号 (可拖)</span>
-        <span class="box-tip" id="sigTip">drag a trace up / down</span>
-        <canvas id="sigCanvas"></canvas>
+    <div class="matrix-box">
+      <div class="mx-cap" id="mxCap">协方差矩阵 4&times;4 / COVARIANCE MATRIX</div>
+      <div class="grid-wrap">
+        <div class="grid-outer" id="gridOuter"></div>
       </div>
-      <div class="scatter-box">
-        <span class="box-lbl" id="scLbl">散点 — 点矩阵某格看这一对</span>
-        <span class="box-tip" id="scTip">pick a cell</span>
-        <canvas id="scatter"></canvas>
+      <div class="badge" id="badge">
+        <div class="badge-card">
+          <div class="seal" id="badgeSeal">&#960;</div>
+          <div class="bt" id="badgeTitle">协方差矩阵建造师</div>
+          <div class="bd" id="badgeDesc">你建好了协方差矩阵 —— CSP 的原料齐了。这张对称的表把 4 个电极两两的关系全压进了数字，CSP 接下来就靠它找出"想左手 / 想右手"差别最大的方向。你离脑控 Minecraft 又近了一块积木。</div>
+        </div>
       </div>
     </div>
 
     <div class="right-col">
-      <div class="matrix-box">
-        <div class="matrix-title" id="matTitle">协方差矩阵 / COVARIANCE MATRIX</div>
-        <div class="matrix-grid" id="matrixGrid"></div>
+      <div class="sig-box">
+        <span class="box-lbl" id="boxLbl">4 电极信号 (想象右手)</span>
+        <span class="drag-hint" id="dragHint">拖信号上下</span>
+        <canvas id="stage"></canvas>
       </div>
-
-      <div class="readout">
-        <div class="ro-title" id="roTitle">当前格 / SELECTED</div>
-        <div class="formula" id="formulaBox">
-          点一个格 (i, j) 开始计算 &mdash; Cov = <span class="hl">SUM</span> (xi-x&#772;)(xj-x&#772;) / n
-        </div>
-        <div class="stat-row"><span class="k" id="kCell">格子</span><span class="v accent" id="vCell">&mdash;</span></div>
-        <div class="stat-row"><span class="k" id="kKind">类型</span><span class="v" id="vKind">&mdash;</span></div>
-        <div class="stat-row"><span class="k" id="kVal">计算值</span><span class="v" id="vVal">&mdash;</span></div>
-        <div class="conclusion" id="conclusion" data-empty="1"></div>
+      <div class="calc-box">
+        <div class="calc-title" id="calcTitle">当前计算 / COMPUTE</div>
+        <div class="formula" id="formulaBox">点一个格子开始计算</div>
+        <div class="calc-note" id="calcNote">对角 = Var(X) = Sum(xi-xbar)^2 / n &nbsp;·&nbsp; 非对角 = Cov(X,Y) = Sum(xi-xbar)(yi-ybar) / n</div>
       </div>
     </div>
   </div>
 
   <div class="ctrl-row">
-    <button class="btn" id="btnAuto">自动填一格 &rarr;</button>
-    <button class="btn ghost" id="btnReset">清空矩阵</button>
-    <span class="stepcap" id="stepCap"></span>
-    <div class="badge" id="badge">
-      <div class="badge-card">
-        <div class="seal" id="badgeSeal">&#960;</div>
-        <div class="bt" id="badgeTitle">协方差矩阵建造师</div>
-        <div class="bd" id="badgeDesc">你填满了整个 4x4 协方差矩阵，并发现它沿对角线<b>对称</b>：Cov(i,j)=Cov(j,i)，对角线就是每个电极自己的方差。</div>
-      </div>
-    </div>
+    <button class="btn" id="btnCsp" disabled>运行 CSP &rarr;</button>
+    <button class="btn ghost" id="btnReset">重置矩阵</button>
+    <span class="csp" id="cspOut">CSP 待命：先把矩阵填满</span>
+    <span class="statuscap" id="statusCap"></span>
   </div>
 </main>
 
@@ -255,383 +276,358 @@
 var LANG = 'cn';
 var I18N = {
   title:{cn:'协方差矩阵建造师', en:'Covariance Matrix Builder'},
-  subtitle:{cn:'逐格填满 4 个电极的 4x4 协方差矩阵，亲手发现它的对称结构。',
-            en:'Fill the 4x4 covariance matrix of 4 electrodes cell by cell, and discover its symmetric structure.'},
-  progLbl:{cn:'已填格子', en:'cells filled'},
-  legDiag:{cn:'<b>对角线</b> = 方差 Var(电极i)，电极与自身。',
-           en:'<b>diagonal</b> = variance Var(electrode i): a channel with itself.'},
-  legPos:{cn:'<b>正协方差</b> 同涨同落 (绿)。', en:'<b>positive</b> covariance: rise & fall together (green).'},
-  legNeg:{cn:'<b>负协方差</b> 一涨一落 (红)。', en:'<b>negative</b> covariance: one up, one down (red).'},
-  canvasTitle:{cn:'脑波信号 — 拖动任意波形改变形状', en:'EEG signals — drag any trace to reshape it'},
-  canvasHint:{cn:'拖波形 &rarr; 已填格子实时重算', en:'drag a trace &rarr; filled cells recompute live'},
-  sigLbl:{cn:'4 电极信号 (可拖)', en:'4 electrode signals (drag)'},
-  sigTip:{cn:'上下拖动波形', en:'drag a trace up / down'},
-  scLbl:{cn:'散点 — 点矩阵某格看这一对', en:'scatter — pick a cell to view that pair'},
-  scTip:{cn:'点一个矩阵格', en:'pick a cell'},
-  matTitle:{cn:'协方差矩阵 / COVARIANCE MATRIX', en:'COVARIANCE MATRIX'},
-  roTitle:{cn:'当前格 / SELECTED', en:'SELECTED CELL'},
-  formulaInit:{cn:'点一个格 (i, j) 开始计算 &mdash; Cov = <span class="hl">SUM</span> (xi-x&#772;)(xj-x&#772;) / n',
-               en:'Click a cell (i, j) to compute &mdash; Cov = <span class="hl">SUM</span> (xi-x&#772;)(xj-x&#772;) / n'},
-  kCell:{cn:'格子', en:'cell'},
-  kKind:{cn:'类型', en:'type'},
-  kVal:{cn:'计算值', en:'value'},
-  kindDiag:{cn:'对角 — 方差', en:'diagonal — variance'},
-  kindOff:{cn:'非对角 — 协方差', en:'off-diagonal — covariance'},
-  btnAuto:{cn:'自动填一格 &rarr;', en:'auto-fill a cell &rarr;'},
-  btnReset:{cn:'清空矩阵', en:'reset matrix'},
-  capStart:{cn:'点矩阵任意空格 &rarr; 算出该对电极的协方差并填入；对角线算方差。对称格 (j,i) 会自动镜像同值。',
-            en:'Click any empty cell &rarr; its covariance is computed and filled; the diagonal computes variance. The mirror cell (j,i) auto-fills the same value.'},
-  capProg:{cn:'对称镜像已自动填好。继续点空格，或拖动上面的波形看数值变化。',
-           en:'The mirror was auto-filled. Keep clicking empty cells, or drag the traces above to watch values change.'},
-  capDone:{cn:'矩阵填满！注意它沿对角线完全对称。拖动波形，看正负如何随信号关系翻转。',
-           en:'Matrix complete! Notice it is perfectly symmetric across the diagonal. Drag traces to see signs flip with the relationships.'},
-  concDiag:{cn:'这是 <b>对角格</b>：电极 {i} 与自身。结果 = <b>方差 Var({n})</b>，永远 &ge; 0，衡量这条波动得多大。',
-            en:'This is a <b>diagonal cell</b>: electrode {i} with itself. The result is <b>Var({n})</b> &mdash; always &ge; 0, measuring how much this trace fluctuates.'},
-  concPos:{cn:'电极 {a} 与 {b} <b>同涨同落</b> &rarr; 偏差多为同号 &rarr; 乘积多为正 &rarr; <b>Cov &gt; 0</b>（绿）。',
-           en:'Electrodes {a} and {b} <b>rise and fall together</b> &rarr; deviations mostly share sign &rarr; products mostly positive &rarr; <b>Cov &gt; 0</b> (green).'},
-  concNeg:{cn:'电极 {a} 与 {b} <b>一涨一落</b> &rarr; 偏差多为异号 &rarr; 乘积多为负 &rarr; <b>Cov &lt; 0</b>（红）。',
-           en:'Electrodes {a} and {b} <b>move oppositely</b> &rarr; deviations mostly differ in sign &rarr; products mostly negative &rarr; <b>Cov &lt; 0</b> (red).'},
-  concZero:{cn:'电极 {a} 与 {b} <b>几乎无关</b> &rarr; 正负乘积抵消 &rarr; <b>Cov &asymp; 0</b>。',
-            en:'Electrodes {a} and {b} are <b>nearly unrelated</b> &rarr; products cancel &rarr; <b>Cov &asymp; 0</b>.'},
-  concSym:{cn:'注意：填 (i,j) 时 (j,i) 也自动填了同一个值 &mdash; 协方差矩阵<b>对称</b>。',
-           en:'Note: filling (i,j) also filled (j,i) with the same value &mdash; the covariance matrix is <b>symmetric</b>.'},
+  subtitle:{cn:'把 4 个电极两两的关系搭成一张表，CSP 才能找出左右手的方向。',
+            en:'Build a table of every electrode-pair relationship — only then can CSP find the left/right-hand direction.'},
+  progCap:{cn:'建造进度', en:'BUILD PROGRESS'},
+  rmCap:{cn:'项目路线', en:'PROJECT ROUTE'},
+  rm1:{cn:'S1 读懂脑电信号', en:'S1 Read EEG'},
+  rm2:{cn:'S2 清洗与去噪', en:'S2 Clean & denoise'},
+  rm3:{cn:'S3 提取特征 (你在这)', en:'S3 Extract features (you are here)'},
+  rm4:{cn:'S4 训练分类器', en:'S4 Train classifier'},
+  rm5:{cn:'S5 实时解码', en:'S5 Live decode'},
+  rm6:{cn:'S6 脑控 Minecraft', en:'S6 Mind-control Minecraft'},
+  endpointTxt:{cn:'终点 <b>脑控 Minecraft</b><br>协方差矩阵是 CSP 的原料',
+               en:'Goal <b>Mind-control Minecraft</b><br>the covariance matrix is CSP fuel'},
+  canvasTitle:{cn:'协方差矩阵建造台 — 逐格填满 4 电极', en:'Covariance Matrix Workbench — fill all 4 electrodes'},
+  canvasHint:{cn:'点对角格算方差 · 点非对角格算协方差', en:'tap a diagonal cell for variance · off-diagonal for covariance'},
+  task:{cn:'<b>任务</b>：点矩阵里任意一格亲手算出它的值。对角格 = 该电极<b>方差</b>；非对角格 = 两电极<b>协方差</b>，对称格会自动镜像。填满 10 个独立格 → 解锁建造师徽章。',
+        en:'<b>Task</b>: tap any cell to compute its value. A diagonal cell = that electrode\'s <b>variance</b>; an off-diagonal cell = a pair <b>covariance</b>, and its mirror auto-fills. Fill all 10 independent cells to unlock the builder badge.'},
+  mxCap:{cn:'协方差矩阵 4×4 / COVARIANCE MATRIX', en:'COVARIANCE MATRIX 4×4'},
+  boxLbl:{cn:'4 电极信号 (想象右手)', en:'4 electrode signals (imagine right hand)'},
+  dragHint:{cn:'拖信号上下', en:'drag a trace'},
+  calcTitle:{cn:'当前计算 / COMPUTE', en:'COMPUTE'},
+  calcNote:{cn:'对角 = Var(X) = Sum(xi-xbar)^2 / n &nbsp;·&nbsp; 非对角 = Cov(X,Y) = Sum(xi-xbar)(yi-ybar) / n',
+            en:'diagonal = Var(X) = Sum(xi-xbar)^2 / n &nbsp;·&nbsp; off-diagonal = Cov(X,Y) = Sum(xi-xbar)(yi-ybar) / n'},
+  formulaHint:{cn:'点一个格子开始计算', en:'tap a cell to start computing'},
+  btnCsp:{cn:'运行 CSP →', en:'Run CSP →'},
+  btnReset:{cn:'重置矩阵', en:'Reset matrix'},
   badgeTitle:{cn:'协方差矩阵建造师', en:'Covariance Matrix Builder'},
-  badgeDesc:{cn:'你填满了整个 4x4 协方差矩阵，并发现它沿对角线<b>对称</b>：Cov(i,j)=Cov(j,i)，对角线就是每个电极自己的方差。',
-             en:'You filled the whole 4x4 covariance matrix and found it is <b>symmetric</b> across the diagonal: Cov(i,j)=Cov(j,i), and the diagonal is each electrode’s own variance.'},
+  badgeDesc:{cn:'你建好了协方差矩阵 —— CSP 的原料齐了。这张对称的表把 4 个电极两两的关系全压进了数字，CSP 接下来就靠它找出"想左手 / 想右手"差别最大的方向。你离脑控 Minecraft 又近了一块积木。',
+             en:'You built the covariance matrix — CSP now has its raw material. This symmetric table squeezes every electrode-pair relationship into numbers; CSP uses it to find the direction where "imagine left" vs "imagine right" differ most. One more brick toward mind-control Minecraft.'},
+  // dynamic strings
+  mirrored:{cn:'对称格自动镜像', en:'symmetric cell auto-mirrored'},
+  statusN:{cn:'已填 {n} / 10 个独立格', en:'{n} / 10 independent cells filled'},
+  statusFull:{cn:'矩阵填满！它是对称的 —— 上三角等于下三角。现在点 [运行 CSP]。',
+              en:'Matrix complete! It is symmetric — upper triangle equals lower. Now hit [Run CSP].'},
+  fVar:{cn:'Var(<span class="hl">{a}</span>) = Sum({a}i-{a}bar)^2 / n = <span class="hl">{v}</span>',
+        en:'Var(<span class="hl">{a}</span>) = Sum({a}i-{a}bar)^2 / n = <span class="hl">{v}</span>'},
+  fCov:{cn:'Cov(<span class="hl">{a}</span>,<span class="hl">{b}</span>) = Sum({a}i-{a}bar)({b}i-{b}bar) / n = <span class="hl">{v}</span>',
+        en:'Cov(<span class="hl">{a}</span>,<span class="hl">{b}</span>) = Sum({a}i-{a}bar)({b}i-{b}bar) / n = <span class="hl">{v}</span>'},
+  noteVar:{cn:'对角格永远是<b>正的</b>（平方和），表示这个电极自己有多"抖"。',
+           en:'A diagonal cell is always <b>positive</b> (sum of squares): how much this electrode wobbles on its own.'},
+  notePos:{cn:'<b>正值</b>：两电极一起涨一起落（同步）。对称格 Cov(Y,X) 值<b>完全相同</b>，自动镜像。',
+           en:'<b>Positive</b>: the two electrodes rise and fall together (in sync). The mirror Cov(Y,X) is <b>identical</b>, auto-filled.'},
+  noteNeg:{cn:'<b>负值</b>：一个涨另一个落（反相）。对称格 Cov(Y,X) 值<b>完全相同</b>，自动镜像。',
+           en:'<b>Negative</b>: one rises while the other falls (anti-phase). The mirror Cov(Y,X) is <b>identical</b>, auto-filled.'},
+  cspBad:{cn:'CSP 失败：矩阵未填满，缺格 → 找不到方向。',
+          en:'CSP failed: matrix incomplete, missing cells → no direction found.'},
+  cspOk:{cn:'CSP 成功：用这张对称矩阵找到了分开左右手的方向。',
+         en:'CSP success: this symmetric matrix yielded the direction separating left/right hand.'},
+  cspWait:{cn:'CSP 待命：先把矩阵填满', en:'CSP idle: fill the matrix first'},
+  cspReady:{cn:'CSP 待命：矩阵已填满，点 [运行 CSP]', en:'CSP idle: matrix full, hit [Run CSP]'},
 };
 function t(k){ var e=I18N[k]; return e ? (e[LANG]||e.en) : k; }
+function fillStr(s, obj){ return s.replace(/\{(\w+)\}/g, function(m,p){ return obj[p]!==undefined? obj[p] : m; }); }
 
-/* ============================ signal data ============================ */
-// 4 electrodes, each a sampled trace of N samples. 初始关系刻意多样:
-// C1 & C2 强正相关; C3 与 C1 反相关(负); C4 较独立.
-var NS = 40;                 // 每条信号采样点数
-var ELEC = ['C1','C2','C3','C4'];
-var COLW = ELEC.length;      // 4 通道
-var signals = buildSignals();
+/* ============================ EEG signals ============================ */
+// 4 motor-cortex electrodes, "想象右手" 段. 真电极几何关系:
+// C3/FC3 左脑同步 (正相关); C4 右脑想右手时 ERD, 与左脑反相 (负相关); FC4 偏独立.
+var ELEC = ['C3','C4','FC3','FC4'];
+var N = 12;
+var SIG = {
+  C3:  [ 4, 6, 3,-2,-5,-4,-1, 2, 5, 3,-3,-1],   // 左脑, 活跃
+  FC3: [ 3, 5, 2,-1,-4,-3,-1, 2, 4, 3,-2, 0],   // 左脑前, 与 C3 高度同步
+  C4:  [-3,-5,-2, 1, 4, 3, 0,-2,-4,-3, 2, 1],   // 右脑 ERD, 与左脑反相
+  FC4: [ 1,-1, 2, 0,-2, 1, 3,-1, 0, 2,-3, 1]    // 右脑前, 偏独立
+};
+var GAIN = {C3:1, C4:1, FC3:1, FC4:1};
 
-function buildSignals(){
-  var s = [[],[],[],[]];
-  for(var k=0;k<NS;k++){
-    var ph = k/NS*Math.PI*2;
-    var base = Math.sin(ph*1.5);
-    s[0].push( base*7 + Math.sin(ph*4)*2 );             // C1
-    s[1].push( base*6 + Math.sin(ph*4+0.4)*2 + 1 );     // C2 ~ 同相 (正相关)
-    s[2].push( -base*5 + Math.cos(ph*3)*2.4 );          // C3 ~ 反相 (负相关)
-    s[3].push( Math.sin(ph*5.3)*4.5 + Math.cos(ph*2.1)*2 ); // C4 ~ 较独立
-  }
-  return s;
+function arr(e){ var s=SIG[e], g=GAIN[e], o=[]; for(var i=0;i<N;i++) o.push(s[i]*g); return o; }
+function mean(a){ var s=0; for(var i=0;i<a.length;i++) s+=a[i]; return s/a.length; }
+function variance(e){
+  var a=arr(e), m=mean(a), s=0;
+  for(var i=0;i<N;i++){ var d=a[i]-m; s+=d*d; }
+  return s/N;
 }
-
-/* ---- stats ---- */
-function mean(arr){ var sm=0; for(var i=0;i<arr.length;i++) sm+=arr[i]; return sm/arr.length; }
-function covPair(a,b){
-  var ma=mean(a), mb=mean(b), s=0;
-  for(var i=0;i<a.length;i++) s += (a[i]-ma)*(b[i]-mb);
-  return s/a.length;
+function covar(e1,e2){
+  var a=arr(e1), b=arr(e2), ma=mean(a), mb=mean(b), s=0;
+  for(var i=0;i<N;i++){ s+=(a[i]-ma)*(b[i]-mb); }
+  return s/N;
 }
-function covMatrixVal(i,j){ return covPair(signals[i], signals[j]); }
+function cellVal(r,c){ return r===c ? variance(ELEC[r]) : covar(ELEC[r], ELEC[c]); }
 
-/* ---- matrix fill state ---- */
-var filled = [[false,false,false,false],[false,false,false,false],
-              [false,false,false,false],[false,false,false,false]];
-var selI = -1, selJ = -1;     // 当前选中格
+/* ============================ matrix state ============================ */
+var filled = [];
+function resetFilled(){ filled = [[false,false,false,false],[false,false,false,false],
+  [false,false,false,false],[false,false,false,false]]; }
+resetFilled();
 
-function filledCount(){ var c=0; for(var i=0;i<4;i++) for(var j=0;j<4;j++) if(filled[i][j]) c++; return c; }
-function allFilled(){ return filledCount() === 16; }
+function independentCount(){
+  var n=0;
+  for(var r=0;r<4;r++){ if(filled[r][r]) n++; }
+  for(var r=0;r<4;r++) for(var c=r+1;c<4;c++){ if(filled[r][c]) n++; }
+  return n;
+}
+function allFilled(){ return independentCount()===10; }
 
-/* ============================ matrix DOM ============================ */
-var grid = document.getElementById('matrixGrid');
+/* ============================ build grid ============================ */
+var gridOuter = document.getElementById('gridOuter');
+var cellBtns = {};
 function buildGrid(){
-  var html = '<div class="mh corner">i \\ j</div>';
-  for(var j=0;j<4;j++) html += '<div class="mh">'+ELEC[j]+'</div>';
-  for(var i=0;i<4;i++){
-    html += '<div class="mh">'+ELEC[i]+'</div>';
-    for(var j2=0;j2<4;j2++){
-      html += '<div class="cell empty" data-i="'+i+'" data-j="'+j2+'">'
-            + '<span class="cv">&middot;</span>'
-            + '<span class="ck">'+(i===j2?'Var':'Cov')+'</span></div>';
+  gridOuter.innerHTML='';
+  var corner = document.createElement('div');
+  corner.className='gh corner'; corner.textContent='cov';
+  gridOuter.appendChild(corner);
+  for(var c=0;c<4;c++){
+    var h=document.createElement('div'); h.className='gh'; h.textContent=ELEC[c];
+    gridOuter.appendChild(h);
+  }
+  for(var r=0;r<4;r++){
+    var rh=document.createElement('div'); rh.className='gh'; rh.textContent=ELEC[r];
+    gridOuter.appendChild(rh);
+    for(var c2=0;c2<4;c2++){
+      var b=document.createElement('button');
+      b.className='cell'+(r===c2?' diag':'');
+      b.setAttribute('data-r', r); b.setAttribute('data-c', c2);
+      var cv=document.createElement('div'); cv.className='cv'; cv.textContent='·';
+      var ck=document.createElement('div'); ck.className='ck';
+      ck.textContent=(r===c2?'Var':'Cov');
+      b.appendChild(cv); b.appendChild(ck);
+      b.addEventListener('click', onCellClick);
+      gridOuter.appendChild(b);
+      cellBtns[r+','+c2]=b;
     }
   }
-  grid.innerHTML = html;
-  var cells = grid.querySelectorAll('.cell');
-  for(var c=0;c<cells.length;c++) cells[c].addEventListener('click', onCellClick);
 }
-function cellEl(i,j){ return grid.querySelector('.cell[data-i="'+i+'"][data-j="'+j+'"]'); }
 
-function paintCell(i,j,flash){
-  var el = cellEl(i,j);
-  el.classList.remove('empty','filled','diag','pos','neg','mirror','flash');
-  if(!filled[i][j]){ el.classList.add('empty'); el.querySelector('.cv').innerHTML='&middot;'; return; }
-  var v = covMatrixVal(i,j);
-  el.classList.add('filled');
-  if(i===j) el.classList.add('diag');
-  else if(v > 0.6) el.classList.add('pos');
-  else if(v < -0.6) el.classList.add('neg');
-  el.querySelector('.cv').textContent = v.toFixed(1);
-  if(flash) el.classList.add('flash');
+function fmt(n){ return (n>=0?'+':'') + n.toFixed(1); }
+
+function renderCell(r,c, mirror){
+  var b=cellBtns[r+','+c];
+  var v=cellVal(r,c);
+  b.classList.remove('posv','negv','diagv','mirror','target');
+  b.classList.add('filled');
+  b.querySelector('.cv').textContent = fmt(v);
+  if(r===c) b.classList.add('diagv');
+  else if(v>=0) b.classList.add('posv');
+  else b.classList.add('negv');
+  if(mirror) b.classList.add('mirror');
 }
-function repaintAll(){
-  for(var i=0;i<4;i++) for(var j=0;j<4;j++) paintCell(i,j,false);
-  if(selI>=0){ var s=cellEl(selI,selJ); if(s) s.classList.add('mirror'); var m=cellEl(selJ,selI); if(m) m.classList.add('mirror'); }
+
+function refreshFilledCells(){
+  for(var r=0;r<4;r++) for(var c=0;c<4;c++){
+    if(filled[r][c]) renderCell(r,c,false);
+  }
 }
 
 /* ============================ cell interaction ============================ */
-function fillCell(i,j,wasMirror){
-  var newlyFilled = !filled[i][j];
-  filled[i][j] = true;
-  filled[j][i] = true;          // 对称镜像
-  paintCell(i,j,newlyFilled);
-  if(i!==j) paintCell(j,i,!wasMirror && newlyFilled);
-  return newlyFilled;
-}
+var statusCap = document.getElementById('statusCap');
+var formulaBox = document.getElementById('formulaBox');
+var calcNote = document.getElementById('calcNote');
+var cspOut = document.getElementById('cspOut');
+var btnCsp = document.getElementById('btnCsp');
+
 function onCellClick(e){
-  var el = e.currentTarget;
-  var i = parseInt(el.getAttribute('data-i'),10);
-  var j = parseInt(el.getAttribute('data-j'),10);
-  selI = i; selJ = j;
-  var newlyFilled = fillCell(i,j,false);
-  repaintAll();
-  updateProgress();
-  updateReadout(i,j, newlyFilled && i!==j);
-  drawScatter();
-  if(allFilled()) showBadge();
+  var b=e.currentTarget;
+  var r=parseInt(b.getAttribute('data-r'),10);
+  var c=parseInt(b.getAttribute('data-c'),10);
+  computeCell(r,c);
 }
-
-/* auto-fill: 找第一个空格填上 */
-function autoFill(){
-  for(var i=0;i<4;i++) for(var j=0;j<4;j++){
-    if(!filled[i][j]){
-      selI=i; selJ=j;
-      var nf = fillCell(i,j,false);
-      repaintAll(); updateProgress(); updateReadout(i,j, nf && i!==j); drawScatter();
-      if(allFilled()) showBadge();
-      return;
-    }
+function computeCell(r,c){
+  var v=cellVal(r,c);
+  filled[r][c]=true;
+  renderCell(r,c,false);
+  var mirroredMsg='';
+  if(r!==c){
+    var wasMirNew = !filled[c][r];
+    filled[c][r]=true;
+    renderCell(c,r,true);
+    if(wasMirNew) mirroredMsg = ' · ' + t('mirrored') + ' ' + ELEC[c] + '/' + ELEC[r];
   }
-}
-
-function resetMatrix(){
-  for(var i=0;i<4;i++) for(var j=0;j<4;j++) filled[i][j]=false;
-  selI=-1; selJ=-1;
-  document.getElementById('badge').classList.remove('show');
-  repaintAll(); updateProgress(); clearReadout(); drawScatter();
-  setCap('capStart');
-}
-
-/* ============================ progress + readout ============================ */
-function updateProgress(){
-  var c = filledCount();
-  document.getElementById('progNum').textContent = c;
-  document.getElementById('progFill').style.width = (c/16*100)+'%';
-  if(c===16) setCap('capDone');
-  else if(c>0) setCap('capProg');
-  else setCap('capStart');
-}
-function setCap(key){
-  document.getElementById('stepCap').innerHTML = '<b>'+filledCount()+'/16</b> &mdash; ' + t(key);
-}
-function clearReadout(){
-  document.getElementById('vCell').innerHTML='&mdash;';
-  document.getElementById('vKind').innerHTML='&mdash;';
-  document.getElementById('vVal').innerHTML='&mdash;';
-  document.getElementById('vVal').className='v';
-  var c=document.getElementById('conclusion'); c.innerHTML=''; c.setAttribute('data-empty','1');
-  document.getElementById('formulaBox').innerHTML = t('formulaInit');
-}
-function updateReadout(i,j, showSym){
-  var v = covMatrixVal(i,j);
-  document.getElementById('vCell').textContent = '('+ELEC[i]+', '+ELEC[j]+')';
-  var vv = document.getElementById('vVal');
-  vv.textContent = v.toFixed(2);
-  vv.className = 'v ' + (i===j ? 'accent' : (v>0.6?'':''));
-  if(i===j){
-    document.getElementById('vKind').textContent = t('kindDiag');
+  if(r===c){
+    formulaBox.innerHTML = fillStr(t('fVar'), {a:ELEC[r], v:fmt(v)});
+    calcNote.innerHTML = t('noteVar');
   } else {
-    document.getElementById('vKind').textContent = t('kindOff');
+    formulaBox.innerHTML = fillStr(t('fCov'), {a:ELEC[r], b:ELEC[c], v:fmt(v)});
+    calcNote.innerHTML = v>=0 ? t('notePos') : t('noteNeg');
   }
-  // formula concrete
-  document.getElementById('formulaBox').innerHTML =
-    (i===j
-      ? 'Var('+ELEC[i]+') = <span class="hl">SUM</span> ('+ELEC[i]+'-mean)&#178; / n'
-      : 'Cov('+ELEC[i]+','+ELEC[j]+') = <span class="hl">SUM</span> ('+ELEC[i]+'-mean)('+ELEC[j]+'-mean) / n');
-  // conclusion
-  var conc;
-  if(i===j) conc = t('concDiag').replace('{i}',ELEC[i]).replace('{n}',ELEC[i]);
-  else if(v > 0.6) conc = t('concPos').replace('{a}',ELEC[i]).replace('{b}',ELEC[j]);
-  else if(v < -0.6) conc = t('concNeg').replace('{a}',ELEC[i]).replace('{b}',ELEC[j]);
-  else conc = t('concZero').replace('{a}',ELEC[i]).replace('{b}',ELEC[j]);
-  if(showSym) conc += ' ' + t('concSym');
-  var ce=document.getElementById('conclusion'); ce.innerHTML = conc; ce.setAttribute('data-empty','0');
+  updateProgress(mirroredMsg);
 }
 
-/* ============================ signal canvas (draggable) ============================ */
-var sigCanvas = document.getElementById('sigCanvas');
-var sctx = sigCanvas.getContext('2d');
-var SDPR = 1;
-var sigCols = [];   // 每条信号的颜色
-
-function cssVar(name){ return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || '#fff'; }
-function cssMono(){ return "JetBrains Mono, monospace"; }
-
-function sigResize(){
-  var rect = sigCanvas.parentElement.getBoundingClientRect();
-  if(rect.width<2||rect.height<2) return;
-  SDPR = window.devicePixelRatio||1;
-  sigCanvas.width=rect.width*SDPR; sigCanvas.height=rect.height*SDPR;
-  sigCanvas.style.width=rect.width+'px'; sigCanvas.style.height=rect.height+'px';
-  sctx.setTransform(SDPR,0,0,SDPR,0,0);
-  drawSignals();
-}
-function laneY(k, H){
-  var padTop=30, padBot=14, lanes=4;
-  var lh=(H-padTop-padBot)/lanes;
-  return padTop + lh*k + lh/2;
-}
-function laneH(H){ var padTop=30,padBot=14; return (H-padTop-padBot)/4; }
-function sigColor(k){
-  // 4 通道用 5 色 palette 区分: AXIS / SOLUTION / pos / neg-ish
-  return [cssVar('--accent'), cssVar('--solution'), cssVar('--pos'), cssVar('--qed')][k];
-}
-function drawSignals(){
-  var W=sigCanvas.clientWidth, H=sigCanvas.clientHeight;
-  if(W<2||H<2) return;
-  sctx.clearRect(0,0,W,H);
-  var padL=46, padR=12;
-  var lw = (W-padL-padR);
-  var amp = laneH(H)*0.42;
-  for(var k=0;k<4;k++){
-    var yc = laneY(k,H);
-    // lane baseline
-    sctx.strokeStyle='rgba(42,47,82,0.7)'; sctx.lineWidth=1;
-    sctx.beginPath(); sctx.moveTo(padL,yc); sctx.lineTo(W-padR,yc); sctx.stroke();
-    // label
-    sctx.fillStyle=sigColor(k); sctx.font='700 11px '+cssMono(); sctx.textAlign='left';
-    sctx.fillText(ELEC[k], 10, yc+4);
-    // waveform
-    sctx.strokeStyle=sigColor(k); sctx.lineWidth = (k===dragLane?2.4:1.6);
-    sctx.globalAlpha = (dragLane<0 || k===dragLane)?1:0.55;
-    sctx.beginPath();
-    for(var s=0;s<NS;s++){
-      var x = padL + lw*(s/(NS-1));
-      var y = yc - signals[k][s]/12*amp/ (1) ;  // value range ~ ±12 -> amp
-      y = yc - (signals[k][s]/12)*amp;
-      if(s===0) sctx.moveTo(x,y); else sctx.lineTo(x,y);
+function updateProgress(extraMsg){
+  var n=independentCount();
+  document.getElementById('progNum').textContent = n + ' / 10 ' + (LANG==='cn'?'格':'cells');
+  document.getElementById('progFill').style.width = (n/10*100)+'%';
+  if(allFilled()){
+    statusCap.innerHTML = t('statusFull');
+    btnCsp.disabled=false;
+    if(!cspOut.classList.contains('ok') && !cspOut.classList.contains('bad')){
+      cspOut.className='csp'; cspOut.textContent = t('cspReady');
     }
-    sctx.stroke();
-    sctx.globalAlpha=1;
+    highlightTargets(false);
+  } else {
+    statusCap.innerHTML = fillStr(t('statusN'), {n:n}) + (extraMsg||'');
+    btnCsp.disabled=true;
+    cspOut.className='csp'; cspOut.textContent = t('cspWait');
+    highlightTargets(true);
   }
 }
 
-/* drag: 上下拖整条信号(平移+缩放感) — 用拖动幅度调整该信号的整体振幅与偏移 */
-var dragLane=-1, dragStartY=0, dragOrig=null;
-function sigEvtPos(e){
-  var rect=sigCanvas.getBoundingClientRect();
-  var cx=(e.touches?e.touches[0].clientX:e.clientX)-rect.left;
-  var cy=(e.touches?e.touches[0].clientY:e.clientY)-rect.top;
-  return {mx:cx,my:cy};
+function highlightTargets(on){
+  for(var r=0;r<4;r++) for(var c=0;c<4;c++){
+    cellBtns[r+','+c].classList.remove('target');
+  }
+  if(!on) return;
+  for(var r2=0;r2<4;r2++){ if(!filled[r2][r2]){ cellBtns[r2+','+r2].classList.add('target'); return; } }
+  for(var r3=0;r3<4;r3++) for(var c3=r3+1;c3<4;c3++){ if(!filled[r3][c3]){ cellBtns[r3+','+c3].classList.add('target'); return; } }
 }
-function laneAt(my, H){
+
+/* ============================ CSP consequence ============================ */
+btnCsp.addEventListener('click', function(){
+  if(!allFilled()){
+    cspOut.className='csp bad';
+    cspOut.textContent = t('cspBad');
+    return;
+  }
+  cspOut.className='csp ok';
+  cspOut.textContent = t('cspOk');
+  setTimeout(showBadge, 450);
+});
+
+/* ============================ signal canvas + drag ============================ */
+var canvas=document.getElementById('stage');
+var ctx=canvas.getContext('2d');
+var DPR=1;
+var COL={C3:'--accent', FC3:'--proof', C4:'--neg', FC4:'--qed'};
+
+function resize(){
+  var rect=canvas.parentElement.getBoundingClientRect();
+  if(rect.width<2||rect.height<2) return;
+  DPR=window.devicePixelRatio||1;
+  canvas.width=rect.width*DPR; canvas.height=rect.height*DPR;
+  canvas.style.width=rect.width+'px'; canvas.style.height=rect.height+'px';
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  draw();
+}
+window.addEventListener('resize', resize);
+
+function cssVar(name){ return getComputedStyle(document.documentElement).getPropertyValue(name).trim()||'#fff'; }
+
+function draw(){
+  var W=canvas.clientWidth, H=canvas.clientHeight;
+  if(W<2||H<2) return;
+  ctx.clearRect(0,0,W,H);
+  var padL=14, padR=12, padT=34, padB=14;
+  var plotW=W-padL-padR, plotH=H-padT-padB;
+  var laneH=plotH/4;
   for(var k=0;k<4;k++){
-    var yc=laneY(k,H);
-    if(Math.abs(my-yc) < laneH(H)*0.5) return k;
+    var e=ELEC[k];
+    var baseY=padT + laneH*k + laneH/2;
+    ctx.strokeStyle='rgba(42,47,82,0.5)'; ctx.lineWidth=1;
+    ctx.beginPath(); ctx.moveTo(padL, padT+laneH*(k+1)); ctx.lineTo(W-padR, padT+laneH*(k+1)); ctx.stroke();
+    ctx.strokeStyle='rgba(93,101,146,0.4)'; ctx.setLineDash([3,3]);
+    ctx.beginPath(); ctx.moveTo(padL, baseY); ctx.lineTo(W-padR, baseY); ctx.stroke();
+    ctx.setLineDash([]);
+    var a=arr(e);
+    ctx.strokeStyle=cssVar(COL[e]); ctx.lineWidth=2;
+    ctx.beginPath();
+    for(var i=0;i<N;i++){
+      var x=padL + plotW*(i/(N-1));
+      var y=baseY - a[i]*(laneH*0.34/9);
+      if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+    }
+    ctx.stroke();
+    ctx.fillStyle=cssVar(COL[e]);
+    ctx.font='700 11px JetBrains Mono, monospace';
+    ctx.textAlign='left';
+    ctx.fillText(e, padL+2, baseY - laneH*0.34 - 4);
+    ctx.fillStyle='#9aa0c4'; ctx.font='600 9px JetBrains Mono, monospace';
+    ctx.textAlign='right';
+    ctx.fillText('x'+GAIN[e].toFixed(2), W-padR-2, baseY - laneH*0.34 - 4);
+  }
+}
+
+/* drag a trace up/down to change its amplitude (gain) -> matrix updates live */
+var dragLane=-1, dragStartY=0, dragStartGain=1;
+function laneAt(my){
+  var H=canvas.clientHeight, padT=34, padB=14;
+  var plotH=H-padT-padB, laneH=plotH/4;
+  for(var k=0;k<4;k++){
+    var laneTop=padT+laneH*k, laneBot=laneTop+laneH;
+    if(my>=laneTop && my<laneBot) return k;
   }
   return -1;
 }
-function onSigDown(e){
-  var H=sigCanvas.clientHeight;
-  var p=sigEvtPos(e);
-  dragLane = laneAt(p.my, H);
+function evtY(e){
+  var rect=canvas.getBoundingClientRect();
+  return (e.touches? e.touches[0].clientY : e.clientY) - rect.top;
+}
+function onDown(e){
+  var my=evtY(e);
+  dragLane=laneAt(my);
   if(dragLane>=0){
-    dragStartY=p.my;
-    dragOrig = signals[dragLane].slice();
-    sigCanvas.classList.add('grabbing');
-    e.preventDefault();
+    dragStartY=my; dragStartGain=GAIN[ELEC[dragLane]];
+    canvas.classList.add('grabbing'); e.preventDefault();
   }
 }
-function onSigMove(e){
+function onMove(e){
   if(dragLane<0) return;
-  var p=sigEvtPos(e);
-  var dy = dragStartY - p.my;            // 上拖为正
-  // 将拖动转成: 整体放大/缩小该通道振幅 (factor) + 平移
-  var factor = 1 + dy/120;
-  factor = Math.max(0.15, Math.min(2.6, factor));
-  var mo = mean(dragOrig);
-  for(var s=0;s<NS;s++){
-    signals[dragLane][s] = mo + (dragOrig[s]-mo)*factor;
-  }
-  drawSignals();
-  // 实时重算已填格子 + 散点 + readout
-  repaintAll();
-  if(selI>=0) updateReadout(selI,selJ,false);
-  drawScatter();
+  var my=evtY(e);
+  var dy=dragStartY - my;
+  var g=dragStartGain + dy*0.01;
+  g=Math.max(0.3, Math.min(2.2, g));
+  GAIN[ELEC[dragLane]]=g;
+  draw();
+  refreshFilledCells();
   e.preventDefault();
 }
-function onSigUp(){
-  if(dragLane>=0){ dragLane=-1; dragOrig=null; sigCanvas.classList.remove('grabbing'); drawSignals(); }
-}
-sigCanvas.addEventListener('mousedown', onSigDown);
-window.addEventListener('mousemove', onSigMove);
-window.addEventListener('mouseup', onSigUp);
-sigCanvas.addEventListener('touchstart', onSigDown, {passive:false});
-sigCanvas.addEventListener('touchmove', onSigMove, {passive:false});
-sigCanvas.addEventListener('touchend', onSigUp);
-window.addEventListener('resize', function(){ sigResize(); scatterResize(); });
+function onUp(){ if(dragLane>=0){ dragLane=-1; canvas.classList.remove('grabbing'); } }
+canvas.addEventListener('mousedown', onDown);
+window.addEventListener('mousemove', onMove);
+window.addEventListener('mouseup', onUp);
+canvas.addEventListener('touchstart', onDown, {passive:false});
+canvas.addEventListener('touchmove', onMove, {passive:false});
+canvas.addEventListener('touchend', onUp);
 
-/* ============================ scatter canvas ============================ */
-var scCanvas = document.getElementById('scatter');
-var cctx = scCanvas.getContext('2d');
-var CDPR=1;
-function scatterResize(){
-  var rect=scCanvas.parentElement.getBoundingClientRect();
-  if(rect.width<2||rect.height<2) return;
-  CDPR=window.devicePixelRatio||1;
-  scCanvas.width=rect.width*CDPR; scCanvas.height=rect.height*CDPR;
-  scCanvas.style.width=rect.width+'px'; scCanvas.style.height=rect.height+'px';
-  cctx.setTransform(CDPR,0,0,CDPR,0,0);
-  drawScatter();
-}
-function drawScatter(){
-  var W=scCanvas.clientWidth, H=scCanvas.clientHeight;
-  if(W<2||H<2) return;
-  cctx.clearRect(0,0,W,H);
-  var pad=30, sz=Math.min(W,H)-pad*2;
-  var cx=W/2, cy=H/2, scale=(sz/2)/13;
-  // grid + axes
-  cctx.strokeStyle='rgba(42,47,82,0.55)'; cctx.lineWidth=1;
-  for(var g=-12;g<=12;g+=4){
-    var gx=cx+g*scale, gy=cy-g*scale;
-    cctx.beginPath(); cctx.moveTo(gx,cy-sz/2); cctx.lineTo(gx,cy+sz/2); cctx.stroke();
-    cctx.beginPath(); cctx.moveTo(cx-sz/2,gy); cctx.lineTo(cx+sz/2,gy); cctx.stroke();
+/* ============================ reset / badge ============================ */
+function resetMatrix(){
+  resetFilled();
+  GAIN={C3:1, C4:1, FC3:1, FC4:1};
+  for(var r=0;r<4;r++) for(var c=0;c<4;c++){
+    var b=cellBtns[r+','+c];
+    b.classList.remove('filled','posv','negv','diagv','mirror','target');
+    b.querySelector('.cv').textContent='·';
   }
-  cctx.strokeStyle='#5d6592'; cctx.lineWidth=1.3;
-  cctx.beginPath(); cctx.moveTo(cx-sz/2,cy); cctx.lineTo(cx+sz/2,cy);
-  cctx.moveTo(cx,cy-sz/2); cctx.lineTo(cx,cy+sz/2); cctx.stroke();
+  formulaBox.innerHTML = t('formulaHint');
+  calcNote.innerHTML = t('calcNote');
+  document.getElementById('badge').classList.remove('show');
+  cspOut.className='csp';
+  draw();
+  updateProgress('');
+}
+document.getElementById('btnReset').addEventListener('click', resetMatrix);
 
-  if(selI<0){
-    cctx.fillStyle='#5d6592'; cctx.font='600 12px '+cssMono(); cctx.textAlign='center';
-    cctx.fillText(LANG==='cn'?'点矩阵某格查看这一对':'pick a cell to view a pair', cx, cy);
-    return;
-  }
-  var a=signals[selI], b=signals[selJ];
-  var ma=mean(a), mb=mean(b);
-  // axis labels
-  cctx.fillStyle='#9aa0c4'; cctx.font='700 10px '+cssMono(); cctx.textAlign='right';
-  cctx.fillText(ELEC[selI]+' .', cx+sz/2-2, cy-6);
-  cctx.textAlign='left';
-  cctx.fillText(ELEC[selJ], cx+5, cy-sz/2+12);
-  // mean cross
-  var mpx=cx+(ma-ma)*scale; // mean centered visualization uses centered coords below
-  // points (centered to means)
-  var v = covMatrixVal(selI,selJ);
-  var col = (selI===selJ)?cssVar('--diag'):(v>0.6?cssVar('--pos'):(v<-0.6?cssVar('--neg'):cssVar('--solution')));
-  for(var s=0;s<NS;s++){
-    var px=cx+(a[s]-ma)*scale;
-    var py=cy-(b[s]-mb)*scale;
-    cctx.fillStyle=col; cctx.globalAlpha=0.85;
-    cctx.beginPath(); cctx.arc(px,py,3.2,0,Math.PI*2); cctx.fill();
-  }
-  cctx.globalAlpha=1;
+function showBadge(){ document.getElementById('badge').classList.add('show'); }
+document.getElementById('badge').addEventListener('click', function(){
+  document.getElementById('badge').classList.remove('show');
+});
+
+/* ============================ i18n refresh ============================ */
+function refreshI18N(){
+  var ids=['title','subtitle','progCap','rmCap','rm1','rm2','rm3','rm4','rm5','rm6',
+           'endpointTxt','canvasTitle','canvasHint','task','mxCap','boxLbl','dragHint',
+           'calcTitle','badgeTitle','badgeDesc'];
+  for(var i=0;i<ids.length;i++){ var el=document.getElementById(ids[i]); if(el) el.innerHTML=t(ids[i]); }
+  document.getElementById('btnCsp').textContent = t('btnCsp');
+  document.getElementById('btnReset').textContent = t('btnReset');
+  if(independentCount()===0){ formulaBox.innerHTML=t('formulaHint'); calcNote.innerHTML=t('calcNote'); }
+  document.getElementById('langBtn').textContent = LANG==='cn'?'中 / EN':'EN / 中';
+  updateProgress('');
 }
+document.getElementById('langBtn').addEventListener('click', function(){
+  LANG = LANG==='cn'?'en':'cn';
+  refreshI18N();
+});
 
 /* ============================ mascot spin ============================ */
 var rotAngle=0;
@@ -642,45 +638,14 @@ function spinMascot(){
   requestAnimationFrame(spinMascot);
 }
 
-/* ============================ badge ============================ */
-function showBadge(){ document.getElementById('badge').classList.add('show'); }
-document.getElementById('badge').addEventListener('click', function(){
-  document.getElementById('badge').classList.remove('show');
-});
-
-/* ============================ i18n refresh ============================ */
-function refreshI18N(){
-  var ids=['title','subtitle','progLbl','legDiag','legPos','legNeg','canvasTitle','canvasHint',
-           'sigLbl','sigTip','scLbl','scTip','matTitle','roTitle','kCell','kKind','kVal',
-           'badgeTitle','badgeDesc'];
-  for(var i=0;i<ids.length;i++){ var el=document.getElementById(ids[i]); if(el) el.innerHTML=t(ids[i]); }
-  document.getElementById('btnAuto').innerHTML=t('btnAuto');
-  document.getElementById('btnReset').innerHTML=t('btnReset');
-  document.getElementById('langBtn').textContent = LANG==='cn'?'中 / EN':'EN / 中';
-  // refresh selected readout / cap / formula
-  if(selI>=0) updateReadout(selI,selJ,false);
-  else { document.getElementById('formulaBox').innerHTML=t('formulaInit'); }
-  setCap(filledCount()===16?'capDone':(filledCount()>0?'capProg':'capStart'));
-  drawSignals(); drawScatter();
-}
-document.getElementById('langBtn').addEventListener('click', function(){
-  LANG = LANG==='cn'?'en':'cn'; refreshI18N();
-});
-
-/* ============================ controls ============================ */
-document.getElementById('btnAuto').addEventListener('click', autoFill);
-document.getElementById('btnReset').addEventListener('click', resetMatrix);
-
 /* ============================ init ============================ */
 buildGrid();
-repaintAll();
-updateProgress();
-clearReadout();
-setCap('capStart');
-sigResize(); scatterResize();
-setTimeout(function(){ sigResize(); scatterResize(); },150);
-setTimeout(function(){ sigResize(); scatterResize(); },500);
-if(document.fonts && document.fonts.ready){ document.fonts.ready.then(function(){ sigResize(); scatterResize(); }); }
+formulaBox.innerHTML = t('formulaHint');
+resize();
+setTimeout(resize, 150);
+setTimeout(resize, 500);
+if(document.fonts && document.fonts.ready){ document.fonts.ready.then(resize); }
+updateProgress('');
 spinMascot();
 </script>
 </body>

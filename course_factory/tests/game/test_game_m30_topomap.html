@@ -1,593 +1,555 @@
 <!DOCTYPE html>
-<html lang="zh">
+<html lang="zh-CN">
 <head>
-<meta charset="UTF-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>Topomap Detective</title>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CSP 头皮图判读师</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;700&family=Inter:wght@400;600;800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
 <style>
-:root{
-  /* Industrial Atelier — warm cream */
-  --paper:    #FAF9F5;
-  --paper-2:  #F1EDDF;
-  --card:     #FFFFFF;
-  --ink:      #191814;
-  --ink-2:    #2B2924;
-  --sub:      #6B6557;
-  --sub-2:    #9D978A;
-  --border:   #EBE5D6;
-  --border-2: #D9D1BD;
-  --hairline: #F2EDE0;
-  /* Primary — Claude coral */
-  --primary:      #D97757;
-  --primary-ink:  #9A4A2E;
-  --primary-soft: #F8EDE5;
-  --primary-line: #ECCFB8;
-  /* Domain accent — robotics */
-  --robotics:      #7C4569;
-  --robotics-soft: #E9DBE3;
-  /* heat ramp (cool -> hot, on cream substrate) */
-  --heat-0: #2C4A6E;   /* deep cool */
-  --heat-1: #4E84A8;
-  --heat-2: #8FB89E;
-  --heat-3: #E2C25A;
-  --heat-4: #D97757;   /* warm */
-  --heat-5: #9A2F2F;   /* hottest */
-  --shadow-sm: 0 1px 2px 0 rgba(25,24,20,.04);
-  --shadow:    0 1px 3px 0 rgba(25,24,20,.06), 0 1px 2px -1px rgba(25,24,20,.04);
-  --shadow-md: 0 4px 8px -2px rgba(25,24,20,.06), 0 2px 4px -2px rgba(25,24,20,.04);
-  --shadow-lg: 0 12px 24px -6px rgba(25,24,20,.1), 0 4px 8px -4px rgba(25,24,20,.05);
-  --mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
-  --sans: 'PingFang SC', 'Inter', 'Noto Sans SC', system-ui, sans-serif;
-}
-*{box-sizing:border-box;margin:0;padding:0;}
-html,body{width:100%;height:100vh;overflow:hidden;background:var(--paper);
-  font-family:var(--sans);color:var(--ink);}
-.app{display:flex;height:100vh;width:100%;}
+  /* C 类 — Industrial Atelier 暖纸 (warm cream + robotics accent) */
+  :root{
+    --paper:#FAF9F5;            /* body 暖纸 (硬要求) */
+    --paper-shade:#F0EDE3;      /* sidebar */
+    --card:#FFFFFF;             /* 卡片白底 */
+    --ink:#2A2520;
+    --ink-dim:#6A625A;
+    --ink-mute:#A39C92;
+    --line:#D9D2C5;
+    --line-strong:#B8AE9C;
+    --primary:#7C4569;          /* robotics accent (硬要求) */
+    --primary-soft:#9B6488;
+    --alert:#C8553D;
+    --success:#5E8C61;
+    --warning:#C98A3E;
+    --cool:#4F7CAC;             /* 枕叶 / 非运动 提示色 */
+  }
+  html,body{margin:0;padding:0;height:100vh;overflow:hidden;background:var(--paper);
+    font-family:'Noto Sans SC','Inter',sans-serif;color:var(--ink);}
+  .game-sidebar{background:var(--paper-shade);border-right:1.5px solid var(--line-strong);}
+  .panel{background:var(--card);border:1px solid var(--line-strong);
+    box-shadow:0 2px 8px rgba(42,37,32,0.06);border-radius:8px;}
+  .lang-btn,.btn{background:var(--card);border:1px solid var(--line-strong);color:var(--ink);
+    font-weight:600;border-radius:7px;transition:all .12s;cursor:pointer;
+    box-shadow:0 1px 3px rgba(42,37,32,0.08);}
+  .lang-btn:hover,.btn:hover{transform:translateY(-1px);box-shadow:0 3px 8px rgba(42,37,32,0.12);}
+  .lang-btn:active,.btn:active{transform:translateY(0);box-shadow:0 1px 2px rgba(42,37,32,0.1);}
+  .mono{font-family:'JetBrains Mono',monospace;}
+  .hud-row{display:flex;justify-content:space-between;gap:8px;line-height:1.55;align-items:baseline;}
+  .hud-lbl{color:var(--ink-dim);font-size:11px;font-family:'JetBrains Mono',monospace;}
+  .hud-val{color:var(--primary);font-weight:700;font-size:14px;font-family:'JetBrains Mono',monospace;}
 
-/* ---------- 200px sidebar ---------- */
-.game-sidebar{width:200px;flex-shrink:0;background:var(--paper-2);border-right:1px solid var(--border);
-  display:flex;flex-direction:column;padding:16px 14px;gap:14px;overflow-y:auto;}
-.brand{font-family:var(--mono);font-size:13px;font-weight:700;color:var(--robotics);
-  letter-spacing:1px;text-transform:uppercase;line-height:1.3;}
-.brand small{display:block;font-size:9px;color:var(--sub-2);letter-spacing:2px;margin-top:3px;font-weight:600;}
-.head-emblem{display:flex;flex-direction:column;align-items:center;gap:5px;}
-.head-emblem svg{width:78px;height:78px;}
-.head-emblem .e-name{font-family:var(--mono);font-size:8px;color:var(--sub-2);letter-spacing:1px;}
-.progress-list{display:flex;flex-direction:column;gap:5px;}
-.progress-list .pl-head{font-size:10px;color:var(--sub-2);letter-spacing:1px;text-transform:uppercase;font-weight:700;}
-.pl-item{display:flex;align-items:center;gap:8px;font-family:var(--mono);font-size:11px;
-  color:var(--sub);padding:3px 0;}
-.pl-dot{width:11px;height:11px;border:1px solid var(--border-2);border-radius:50%;flex-shrink:0;background:var(--card);}
-.pl-item.current .pl-dot{border-color:var(--primary);background:var(--primary);animation:pulse 1.6s ease-in-out infinite;}
-.pl-item.done .pl-dot{border-color:var(--robotics);background:var(--robotics);}
-.pl-item.wrong .pl-dot{border-color:var(--primary-ink);background:var(--primary-soft);}
-.pl-item.current{color:var(--ink);font-weight:600;}
-@keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(217,119,87,.4);}50%{box-shadow:0 0 0 4px rgba(217,119,87,0);}}
-.guide{font-size:11px;color:var(--sub);line-height:1.6;}
-.guide .g-head{font-size:10px;color:var(--sub-2);letter-spacing:1px;text-transform:uppercase;margin-bottom:5px;font-weight:700;}
-.spacer{flex:1;}
-.lang-btn{font-family:var(--mono);font-size:11px;font-weight:700;padding:7px 0;cursor:pointer;
-  border:1px solid var(--border-2);background:var(--card);color:var(--robotics);letter-spacing:2px;border-radius:6px;}
-.lang-btn:hover{background:var(--robotics-soft);}
+  /* 路线图 */
+  .route{display:flex;flex-direction:column;gap:0;}
+  .route-step{display:flex;align-items:center;gap:8px;padding:4px 0;position:relative;}
+  .route-dot{width:11px;height:11px;border-radius:50%;border:2px solid var(--line-strong);
+    background:var(--card);flex-shrink:0;z-index:1;}
+  .route-step.done .route-dot{background:var(--success);border-color:var(--success);}
+  .route-step.here .route-dot{background:var(--primary);border-color:var(--primary);
+    box-shadow:0 0 0 4px rgba(124,69,105,0.18);}
+  .route-step.todo .route-dot{background:var(--card);border-color:var(--line-strong);}
+  .route-lbl{font-size:11px;font-family:'JetBrains Mono',monospace;color:var(--ink-mute);}
+  .route-step.done .route-lbl{color:var(--ink-dim);}
+  .route-step.here .route-lbl{color:var(--primary);font-weight:700;}
+  .route-line{position:absolute;left:5px;top:18px;width:2px;height:14px;background:var(--line);}
+  .route-step.done .route-line{background:var(--success);}
 
-/* ---------- main stage ---------- */
-.game-main{flex:1;min-width:0;display:flex;flex-direction:column;padding:18px 20px;gap:14px;}
-.topbar{display:flex;align-items:flex-end;justify-content:space-between;flex-shrink:0;}
-.topbar h1{font-size:19px;font-weight:700;color:var(--ink);letter-spacing:.3px;}
-.topbar h1 small{display:block;font-family:var(--mono);font-size:10px;font-weight:600;
-  color:var(--sub-2);letter-spacing:1px;text-transform:uppercase;margin-top:3px;}
-.hud{display:flex;gap:22px;font-family:var(--mono);}
-.hud-item{text-align:right;}
-.hud-label{font-size:8px;color:var(--sub-2);letter-spacing:1px;text-transform:uppercase;font-weight:600;}
-.hud-value{font-size:16px;color:var(--robotics);font-weight:700;}
+  /* 5 题进度点 */
+  .prog{display:flex;gap:6px;}
+  .prog-pip{width:22px;height:22px;border-radius:6px;border:1.5px solid var(--line-strong);
+    display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;
+    font-family:'JetBrains Mono',monospace;color:var(--ink-mute);background:var(--card);}
+  .prog-pip.cur{border-color:var(--primary);color:var(--primary);box-shadow:0 0 0 3px rgba(124,69,105,0.15);}
+  .prog-pip.ok{border-color:var(--success);background:var(--success);color:#fff;}
+  .prog-pip.bad{border-color:var(--alert);background:var(--alert);color:#fff;}
 
-/* stage = topomap + meta. canvas parent flex column */
-.stage{flex:1;min-height:0;display:flex;gap:16px;}
-.topomap-wrap{flex:1.1;min-width:0;display:flex;flex-direction:column;
-  background:var(--card);border:1px solid var(--border);border-radius:12px;
-  box-shadow:var(--shadow-md);position:relative;overflow:hidden;}
-.tm-meta{display:flex;gap:16px;padding:10px 16px;border-bottom:1px solid var(--hairline);
-  font-family:var(--mono);font-size:10px;color:var(--sub);flex-shrink:0;align-items:center;}
-.tm-meta b{color:var(--robotics);}
-.tm-tag{margin-left:auto;font-family:var(--mono);font-size:9px;letter-spacing:1px;
-  padding:3px 9px;border-radius:99px;background:var(--robotics-soft);color:var(--robotics);font-weight:700;}
-canvas{flex:1;min-height:0;width:100%;display:block;}
-.tm-legend{display:flex;align-items:center;gap:8px;padding:8px 16px;border-top:1px solid var(--hairline);flex-shrink:0;}
-.legend-bar{flex:1;height:9px;border-radius:5px;
-  background:linear-gradient(90deg,var(--heat-0),var(--heat-1),var(--heat-2),var(--heat-3),var(--heat-4),var(--heat-5));}
-.legend-cap{font-family:var(--mono);font-size:9px;color:var(--sub-2);letter-spacing:.5px;}
+  /* 判读选项卡 */
+  .verdict{background:var(--card);border:1.5px solid var(--line-strong);border-radius:9px;
+    padding:11px 13px;cursor:pointer;transition:all .12s;text-align:left;width:100%;
+    box-shadow:0 1px 3px rgba(42,37,32,0.06);}
+  .verdict:hover{border-color:var(--primary-soft);transform:translateY(-1px);
+    box-shadow:0 4px 10px rgba(42,37,32,0.1);}
+  .verdict:disabled{cursor:default;opacity:0.55;transform:none;box-shadow:none;}
+  .verdict.picked{border-color:var(--primary);box-shadow:0 0 0 2px rgba(124,69,105,0.2);}
+  .verdict.right{border-color:var(--success);background:#F1F6EF;opacity:1;}
+  .verdict.wrong{border-color:var(--alert);background:#FBEDEA;opacity:1;}
+  .verdict-key{font-family:'JetBrains Mono',monospace;font-weight:700;color:var(--primary);font-size:12px;}
+  .verdict-txt{font-size:13px;font-weight:600;color:var(--ink);line-height:1.4;}
+  .verdict-sub{font-size:11px;color:var(--ink-dim);line-height:1.4;margin-top:2px;}
 
-/* options column */
-.panel{flex:.9;min-width:240px;display:flex;flex-direction:column;gap:10px;}
-.panel-head{font-size:12px;color:var(--ink);font-weight:600;flex-shrink:0;}
-.opts{display:flex;flex-direction:column;gap:8px;flex:1;min-height:0;overflow-y:auto;}
-.opt{padding:11px 13px;background:var(--card);border:1px solid var(--border);border-radius:10px;cursor:pointer;
-  transition:transform .12s ease,box-shadow .12s ease,border-color .12s ease;box-shadow:var(--shadow-sm);}
-.opt:hover{transform:translateY(-2px);box-shadow:var(--shadow);border-color:var(--robotics);}
-.opt .o-name{font-size:13px;font-weight:700;color:var(--ink-2);line-height:1.35;}
-.opt .o-hint{font-family:var(--mono);font-size:10px;color:var(--sub);margin-top:3px;line-height:1.4;}
-.opt.correct{background:var(--robotics-soft);border-color:var(--robotics);}
-.opt.correct .o-name{color:var(--robotics);}
-.opt.miss{background:var(--primary-soft);border-color:var(--primary);}
-.opt.miss .o-name{color:var(--primary-ink);}
-.opt[disabled]{cursor:default;pointer-events:none;}
+  .feedback{border-radius:9px;padding:12px 14px;font-size:13px;line-height:1.55;}
+  .feedback.good{background:#F1F6EF;border:1.5px solid var(--success);color:#2f4a30;}
+  .feedback.bad{background:#FBEDEA;border:1.5px solid var(--alert);color:#7a2418;}
 
-.fb-bar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-shrink:0;
-  min-height:60px;padding:11px 14px;background:var(--paper-2);border:1px solid var(--border);border-radius:10px;}
-.fb-msg{font-size:12px;color:var(--sub);line-height:1.5;}
-.fb-msg b{color:var(--ink);}
-.fb-btn{font-family:var(--mono);font-size:11px;font-weight:700;padding:9px 20px;cursor:pointer;
-  border:1px solid var(--robotics);background:var(--robotics);color:#fff;letter-spacing:1px;flex-shrink:0;border-radius:8px;}
-.fb-btn:hover{background:var(--robotics-soft);color:var(--robotics);}
-.fb-btn.hidden{display:none;}
+  .badge{font-size:10px;font-family:'JetBrains Mono',monospace;padding:3px 8px;border-radius:5px;
+    border:1px solid var(--line-strong);color:var(--ink-mute);}
+  .badge.on{border-color:var(--success);color:#fff;background:var(--success);}
 
-/* result overlay anchored to stage */
-.result-overlay{display:none;position:absolute;inset:0;background:rgba(250,249,245,.94);
-  z-index:50;justify-content:center;align-items:center;backdrop-filter:blur(2px);}
-.result-overlay.show{display:flex;}
-.result-card{background:var(--card);border:1px solid var(--border-2);border-radius:16px;padding:30px;
-  max-width:400px;width:88%;text-align:center;box-shadow:var(--shadow-lg);}
-.result-card .badge{font-family:var(--mono);font-size:10px;letter-spacing:2px;color:var(--robotics);
-  text-transform:uppercase;margin-bottom:8px;font-weight:700;}
-.result-card h2{font-size:21px;color:var(--ink);margin-bottom:12px;}
-.result-card .score-big{font-family:var(--mono);font-size:42px;color:var(--robotics);font-weight:700;margin-bottom:10px;}
-.result-card p{font-size:13px;line-height:1.65;color:var(--sub);margin-bottom:18px;}
+  .electrode-lbl{font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:600;fill:var(--ink-dim);}
+  .electrode-lbl.key{fill:var(--primary);font-weight:700;}
+
+  .consequence{background:#FBEDEA;border:1px dashed var(--alert);border-radius:8px;
+    padding:8px 11px;font-size:12px;color:#7a2418;line-height:1.5;}
 </style>
 </head>
-<body>
-<div class="app">
-  <!-- ============ SIDEBAR ============ -->
-  <aside class="game-sidebar">
-    <div class="brand" id="brandText">TOPOMAP<br>DETECTIVE<small id="brandSub">CSP / NRO-30</small></div>
-    <div class="head-emblem">
-      <svg viewBox="0 0 100 100" aria-hidden="true">
-        <!-- top-down head with two hotspots -->
-        <circle cx="50" cy="52" r="34" fill="none" stroke="var(--border-2)" stroke-width="2"/>
-        <path d="M42 19 Q50 12 58 19" fill="none" stroke="var(--border-2)" stroke-width="2"/>
-        <line x1="50" y1="18" x2="50" y2="26" stroke="var(--border-2)" stroke-width="2"/>
-        <!-- nasion notch -->
-        <path d="M46 20 L50 14 L54 20 Z" fill="var(--paper-2)" stroke="var(--border-2)" stroke-width="1.5"/>
-        <!-- C3 / C4 hotspots -->
-        <circle cx="36" cy="52" r="9" fill="var(--heat-1)" opacity="0.85"/>
-        <circle cx="64" cy="52" r="11" fill="var(--robotics)" opacity="0.9"/>
-        <text x="36" y="55" font-family="var(--mono)" font-size="8" fill="#fff" text-anchor="middle" font-weight="700">C3</text>
-        <text x="64" y="55" font-family="var(--mono)" font-size="8" fill="#fff" text-anchor="middle" font-weight="700">C4</text>
+<body class="h-screen overflow-hidden flex">
+
+<!-- ===================== SIDEBAR ===================== -->
+<aside class="game-sidebar w-[200px] h-screen flex-shrink-0 flex flex-col gap-3 p-3 overflow-y-auto">
+  <div class="flex items-center gap-2">
+    <!-- robotics 探针图标 -->
+    <svg width="30" height="30" viewBox="0 0 32 32" aria-hidden="true">
+      <circle cx="16" cy="16" r="13" fill="none" stroke="var(--primary)" stroke-width="1.6"/>
+      <circle cx="16" cy="16" r="5.5" fill="var(--primary)" opacity="0.18"/>
+      <circle cx="11" cy="13" r="2.4" fill="var(--alert)"/>
+      <circle cx="21" cy="13" r="2.4" fill="var(--cool)"/>
+      <line x1="16" y1="3" x2="16" y2="29" stroke="var(--line-strong)" stroke-width="0.8"/>
+    </svg>
+    <h1 class="text-sm font-bold leading-tight" id="title">CSP 头皮图判读师</h1>
+  </div>
+
+  <!-- 项目路线图 S1-S6, 高亮 S3 -->
+  <div class="panel p-2.5">
+    <div class="text-[10px] mono font-bold mb-1.5" style="color:var(--ink-dim);" id="lblRoute">项目路线 · 脑控 Minecraft</div>
+    <div class="route" id="routeBox"></div>
+  </div>
+
+  <!-- 5 题进度 -->
+  <div class="panel p-2.5">
+    <div class="text-[10px] mono font-bold mb-1.5" style="color:var(--ink-dim);" id="lblProg">判读进度 5 例</div>
+    <div class="prog" id="progBox"></div>
+    <div class="hud-row mt-2"><span class="hud-lbl" id="lblScore">判对</span><span class="hud-val" id="vScore">0 / 5</span></div>
+  </div>
+
+  <!-- 解锁徽记 -->
+  <div class="panel p-2.5">
+    <div class="text-[10px] mono mb-1" style="color:var(--ink-dim);" id="lblUnlock">认证</div>
+    <span class="badge" id="badge">未解锁 / locked</span>
+  </div>
+
+  <!-- 终点剪影 -->
+  <div class="panel p-2.5 flex items-center gap-2">
+    <svg width="26" height="26" viewBox="0 0 24 24" aria-hidden="true" style="flex-shrink:0;">
+      <!-- Minecraft 风格方块剪影 -->
+      <rect x="3" y="3" width="6" height="6" fill="var(--ink-mute)"/>
+      <rect x="10" y="3" width="6" height="6" fill="var(--ink-dim)"/>
+      <rect x="3" y="10" width="6" height="6" fill="var(--ink-dim)"/>
+      <rect x="10" y="10" width="6" height="6" fill="var(--ink-mute)"/>
+      <rect x="17" y="10" width="4" height="4" fill="var(--primary)"/>
+      <rect x="6" y="17" width="6" height="4" fill="var(--ink-mute)"/>
+    </svg>
+    <span class="text-[10px] leading-snug" style="color:var(--ink-dim);" id="endNote">终点: 用自己的脑放方块</span>
+  </div>
+
+  <button id="langBtn" class="lang-btn mt-auto px-2 py-2 text-xs">中 / EN</button>
+</aside>
+
+<!-- ===================== MAIN ===================== -->
+<main class="flex-1 h-screen relative overflow-y-auto p-5 flex flex-col gap-4">
+
+  <!-- 任务卡: 回扣 -->
+  <div class="panel p-3" style="border-left:4px solid var(--primary);">
+    <div class="text-xs font-bold mb-1" style="color:var(--primary);" id="briefTitle">为什么要做这关</div>
+    <p class="text-sm leading-relaxed" style="color:var(--ink-dim);" id="brief">
+      CSP 给了你一组空间滤波器。但要验证 CSP 真找对了运动区, 而不是追着眼动或噪声跑。
+      把每个 CSP 模式画成头皮热力图 (topomap), 看热点落在哪——落在 C3/C4 运动区才说明算法找对了。
+      你是判读师: 验证 5 个 CSP 模式, 别让坏滤波器混进脑控系统。
+    </p>
+  </div>
+
+  <div class="flex-1 grid gap-4" style="grid-template-columns: minmax(320px, 1.05fr) 1fr; min-height:0;">
+
+    <!-- 头皮 topomap -->
+    <div class="panel p-4 flex flex-col" style="min-height:0;">
+      <div class="flex items-center justify-between mb-2">
+        <h2 class="text-sm font-bold" id="mapTitle" style="color:var(--ink);">CSP 模式 #1 头皮热力图</h2>
+        <span class="text-[11px] mono px-2 py-0.5 rounded" id="caseTag"
+          style="background:var(--paper-shade);color:var(--ink-dim);">CASE 1 / 5</span>
+      </div>
+      <div class="flex-1 flex items-center justify-center" style="min-height:0;">
+        <svg id="topomap" viewBox="0 0 320 340" style="width:100%;max-width:340px;height:auto;"></svg>
+      </div>
+      <div class="flex items-center gap-3 mt-2 text-[11px] mono" style="color:var(--ink-dim);">
+        <span id="legLbl">权重:</span>
+        <span style="display:inline-flex;align-items:center;gap:4px;">
+          <span style="width:14px;height:10px;background:var(--alert);display:inline-block;border-radius:2px;"></span>
+          <span id="legHigh">高</span>
+        </span>
+        <span style="display:inline-flex;align-items:center;gap:4px;">
+          <span style="width:14px;height:10px;background:var(--cool);display:inline-block;border-radius:2px;"></span>
+          <span id="legLow">低/反相</span>
+        </span>
+        <span id="legHint" style="margin-left:auto;color:var(--ink-mute);">C3=左脑 · C4=右脑</span>
+      </div>
+    </div>
+
+    <!-- 判读区 -->
+    <div class="flex flex-col gap-3" style="min-height:0;">
+      <div class="panel p-3">
+        <div class="text-xs font-bold mb-1" style="color:var(--ink);" id="clueTitle">观察线索</div>
+        <p class="text-sm leading-relaxed" style="color:var(--ink-dim);" id="clueText">--</p>
+      </div>
+
+      <div class="text-xs font-bold" style="color:var(--ink);" id="qText">这个 CSP 模式对应什么? 选一个判读:</div>
+      <div class="flex flex-col gap-2" id="verdictBox"></div>
+
+      <div id="feedbackBox"></div>
+
+      <div class="flex gap-2 mt-auto">
+        <button id="btnNext" class="btn px-4 py-2 text-sm font-bold" style="display:none;color:var(--primary);">下一例 →</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 通关弹层 -->
+  <div id="winOverlay" style="display:none;position:absolute;inset:0;background:rgba(250,249,245,0.94);
+    z-index:60;align-items:center;justify-content:center;padding:24px;">
+    <div class="panel" style="max-width:520px;padding:28px;text-align:center;border:2px solid var(--primary);">
+      <svg width="48" height="48" viewBox="0 0 32 32" style="margin:0 auto 12px;">
+        <circle cx="16" cy="16" r="14" fill="none" stroke="var(--primary)" stroke-width="2"/>
+        <path d="M9 16 l5 5 l9 -11" fill="none" stroke="var(--success)" stroke-width="3"
+          stroke-linecap="round" stroke-linejoin="round"/>
       </svg>
-      <div class="e-name">SCALP MAP</div>
+      <h2 class="text-xl font-bold mb-2" style="color:var(--primary);" id="winTitle">CSP 头皮判读师 认证通过</h2>
+      <p class="text-sm leading-relaxed mb-4" style="color:var(--ink-dim);" id="winBody">--</p>
+      <div class="consequence text-left mb-4" id="winEnd">--</div>
+      <button id="btnRestart" class="btn px-5 py-2 text-sm font-bold" style="color:var(--primary);">重新判读 / Replay</button>
     </div>
-    <div class="progress-list">
-      <div class="pl-head" id="plHead">PATTERNS</div>
-      <div id="plItems"></div>
-    </div>
-    <div class="guide">
-      <div class="g-head" id="guideHead">HOW TO PLAY</div>
-      <div id="guideBody"></div>
-    </div>
-    <div class="spacer"></div>
-    <button class="lang-btn" id="langBtn">CN</button>
-  </aside>
-
-  <!-- ============ MAIN ============ -->
-  <main class="game-main">
-    <div class="topbar">
-      <h1 id="mainTitle">CSP 头皮判读师<small id="mainSub">PATTERN <span id="patIdx"></span></small></h1>
-      <div class="hud">
-        <div class="hud-item"><div class="hud-label" id="hudLScore"></div><div class="hud-value" id="hudVScore"></div></div>
-        <div class="hud-item"><div class="hud-label" id="hudLPat"></div><div class="hud-value" id="hudVPat"></div></div>
-      </div>
-    </div>
-
-    <div class="stage">
-      <div class="topomap-wrap">
-        <div class="tm-meta">
-          <span id="metaFilter"></span>
-          <span id="metaPattern"></span>
-          <span class="tm-tag" id="tmTag">CSP W</span>
-        </div>
-        <canvas id="topomap"></canvas>
-        <div class="tm-legend">
-          <span class="legend-cap" id="legCool"></span>
-          <span class="legend-bar"></span>
-          <span class="legend-cap" id="legHot"></span>
-        </div>
-        <!-- result overlay anchored to topomap area -->
-        <div class="result-overlay" id="resultOverlay">
-          <div class="result-card">
-            <div class="badge" id="resultBadge"></div>
-            <h2 id="resultTitle"></h2>
-            <div class="score-big" id="resultScore"></div>
-            <p id="resultMsg"></p>
-            <button class="fb-btn" id="retryBtn"></button>
-          </div>
-        </div>
-      </div>
-
-      <div class="panel">
-        <div class="panel-head" id="panelHead"></div>
-        <div class="opts" id="opts"></div>
-        <div class="fb-bar">
-          <span class="fb-msg" id="fbMsg"></span>
-          <button class="fb-btn hidden" id="nextBtn"></button>
-        </div>
-      </div>
-    </div>
-  </main>
-</div>
+  </div>
+</main>
 
 <script>
-(function(){
 var LANG='cn';
 
 /* ---------------- i18n ---------------- */
-var I18N={
-  brandSub:{en:'CSP / NRO-30',cn:'CSP / NRO-30'},
-  patterns:{en:'PATTERNS',cn:'判读题'},
-  howto:{en:'HOW TO PLAY',cn:'玩法'},
-  guideBody:{en:'Read where the topomap is HOT. CSP weight patterns put motor activity at C3/C4. Hot at C4 (right) = LEFT-hand imagery (crossed). Hot off the motor strip = CSP missed. 5 correct unlocks the badge.',
-    cn:'看头皮图哪里最“热”。CSP 权重图把运动活动放在 C3/C4。热点在 C4（右脑）= 想象左手（交叉对侧）。热点不在运动带上 = CSP 没找对。连判 5 题解锁徽章。'},
-  patWord:{en:'PATTERN',cn:'判读'},
-  score:{en:'SCORE',cn:'得分'},
-  patHud:{en:'PATTERN',cn:'进度'},
-  panelHead:{en:'What does this CSP pattern mean?',cn:'这张 CSP 头皮图意味着什么？'},
-  next:{en:'NEXT PATTERN',cn:'下一张'},
-  finish:{en:'SEE RESULT',cn:'查看结果'},
-  retry:{en:'PLAY AGAIN',cn:'重新开始'},
-  filter:{en:'BAND',cn:'频带'},
-  patMeta:{en:'CSP COMP',cn:'CSP 成分'},
-  legCool:{en:'cool / low',cn:'冷 / 低'},
-  legHot:{en:'hot / high',cn:'热 / 高'},
-  fbHint:{en:'Find the brightest electrode. Is it on the motor strip (C3 left / C4 right), or somewhere else?',
-    cn:'找出最亮的电极。它在运动带上（C3 左 / C4 右）吗，还是别处？'},
-  correct:{en:'Correct.',cn:'正确。'},
-  wrong:{en:'Not quite.',cn:'判错了。'},
-  /* the 5 answer options (shared across all patterns) */
-  oLeft:{en:'Left-hand motor imagery',cn:'想象左手运动'},
-  oRight:{en:'Right-hand motor imagery',cn:'想象右手运动'},
-  oOcc:{en:'Not motor — occipital alpha / eyes',cn:'不是运动 — 枕叶 alpha / 眼动'},
-  oBoth:{en:'Both hands / ambiguous',cn:'双手 / 不清晰'},
-  oArt:{en:'Artifact — CSP misled by noise',cn:'伪迹 — CSP 被噪声带偏'},
-  /* option hints */
-  hLeft:{en:'hot at C4 (right)',cn:'C4(右) 热'},
-  hRight:{en:'hot at C3 (left)',cn:'C3(左) 热'},
-  hOcc:{en:'hot at O1/O2 (back)',cn:'O1/O2(枕) 热'},
-  hBoth:{en:'C3 & C4 both hot',cn:'C3 与 C4 都热'},
-  hArt:{en:'edges scattered hot',cn:'边缘散乱热'},
-  /* per-pattern explanations (why) */
-  eLeft:{en:'The hottest weight sits at C4 over the RIGHT sensorimotor cortex. Movement is controlled by the OPPOSITE hemisphere, so right-cortex activity means the person imagined moving the LEFT hand. CSP found the motor source — this filter is good.',
-    cn:'最热的权重落在右侧感觉运动皮层上方的 C4。运动由对侧半球控制，所以右脑活动代表想象动的是左手。CSP 找到了运动源——这个滤波器是好的。'},
-  eRight:{en:'The peak is at C3 over the LEFT sensorimotor cortex. By the crossed-control rule, left-cortex activity maps to the RIGHT hand. CSP locked onto the correct motor region — clean, usable component.',
-    cn:'峰值在左侧感觉运动皮层上方的 C3。按交叉控制规则，左脑活动对应右手。CSP 锁定了正确的运动区——干净、可用的成分。'},
-  eOcc:{en:'The heat is at O1/O2 at the BACK of the head — the occipital visual cortex, not the motor strip. This is most likely alpha rhythm from closing the eyes, not movement intent. CSP picked the wrong source; reject or re-train this filter.',
-    cn:'热点在头后部的 O1/O2——枕叶视觉皮层，不在运动带上。这多半是闭眼产生的 alpha 节律，不是运动意图。CSP 选错了源；应剔除或重训这个滤波器。'},
-  eBoth:{en:'Both C3 AND C4 light up symmetrically. A good CSP pattern is LATERALIZED (one side), because left vs right hand differ by which hemisphere is busy. Symmetric heat carries no left/right information — the component is ambiguous and weak for classification.',
-    cn:'C3 与 C4 对称地同时变亮。好的 CSP 模式应是单侧化的（偏一侧），因为左右手的差别就在于哪个半球更活跃。对称的热点不含左右信息——这个成分含混、对分类几乎无用。'},
-  eArt:{en:'Hot spots scatter on the OUTER edge electrodes (Fp/T/O rim), not concentrated on a cortical region. CSP maximizes variance difference and will happily lock onto a strong artifact (muscle, motion, bad electrode). This pattern is noise-driven — drop it.',
-    cn:'热点散落在最外圈边缘电极（Fp/T/O 边缘），不集中在某个皮层区。CSP 追求方差差异最大，会乐于锁定强伪迹（肌电、运动、坏电极）。这个模式由噪声驱动——必须丢弃。'},
-  /* result */
-  badge:{en:'NEURO LAB',cn:'神经实验室'},
-  rTitleReader:{en:'CSP TOPOMAP READER',cn:'CSP 头皮判读师'},
-  rTitleGood:{en:'SHARP EYE',cn:'火眼金睛'},
-  rTitleOk:{en:'KEEP TRAINING',cn:'继续训练'},
-  rMsgReader:{en:'All 5 correct. You read a CSP topomap like a pro: hot on C3/C4 means CSP found the motor source (and the OPPOSITE hand was imagined); hot anywhere else means CSP chased noise. Badge unlocked: CSP TOPOMAP READER.',
-    cn:'5 题全对。你已能像专家一样读 CSP 头皮图：热点落在 C3/C4 = CSP 找到了运动区（且想象的是对侧手）；热在别处 = CSP 追了噪声。解锁徽章：CSP 头皮判读师。'},
-  rMsgGood:{en:'Strong run. The key rule: a usable CSP pattern is lateralized and sits on the motor strip (C3/C4). Re-check the ones you missed.',
-    cn:'表现不错。核心规则：可用的 CSP 模式是单侧化的、落在运动带（C3/C4）上。回看判错的题。'},
-  rMsgOk:{en:'Re-read the rule: locate the hottest electrode first, then ask "is it on the motor strip, and which side?" Right-side hot = left hand (crossed control).',
-    cn:'重读规则：先找最热的电极，再问“它在运动带上吗、偏哪侧？”右侧热 = 左手（交叉控制）。'},
+var I18N = {
+  title:{cn:'CSP 头皮图判读师', en:'CSP Topomap Detective'},
+  lblRoute:{cn:'项目路线 · 脑控 Minecraft', en:'Roadmap · Mind-controlled Minecraft'},
+  lblProg:{cn:'判读进度 5 例', en:'Cases: 5'},
+  lblScore:{cn:'判对', en:'correct'},
+  lblUnlock:{cn:'认证', en:'cert'},
+  endNote:{cn:'终点: 用自己的脑放方块', en:'Goal: place blocks with your mind'},
+  badgeLocked:{cn:'未解锁 / locked', en:'locked'},
+  badgeOn:{cn:'CSP 头皮判读师', en:'CSP Topomap Detective'},
+  briefTitle:{cn:'为什么要做这关', en:'Why this stage'},
+  brief:{cn:'CSP 给了你一组空间滤波器。但要验证 CSP 真找对了运动区, 而不是追着眼动或噪声跑。把每个 CSP 模式画成头皮热力图 (topomap), 看热点落在哪——落在 C3/C4 运动区才说明算法找对了。你是判读师: 验证 5 个 CSP 模式, 别让坏滤波器混进脑控系统。',
+        en:'CSP handed you spatial filters. But you must verify CSP truly found motor cortex, not eye movement or noise. Render each CSP pattern as a scalp topomap and read where the hotspot lands — only C3/C4 means the algorithm found the right region. You are the detective: validate 5 CSP patterns, keep bad filters out of the BCI.'},
+  legLbl:{cn:'权重:', en:'weight:'},
+  legHigh:{cn:'高', en:'high'},
+  legLow:{cn:'低/反相', en:'low/anti'},
+  legHint:{cn:'C3=左脑 · C4=右脑', en:'C3=left · C4=right'},
+  clueTitle:{cn:'观察线索', en:'Observed clue'},
+  qText:{cn:'这个 CSP 模式对应什么? 选一个判读:', en:'What does this CSP pattern mean? Pick a verdict:'},
+  next:{cn:'下一例 →', en:'Next case →'},
+  seeResult:{cn:'看判读结果 →', en:'See result →'},
+  restart:{cn:'重新判读 / Replay', en:'Replay'},
+  winTitle:{cn:'CSP 头皮判读师 认证通过', en:'CSP Topomap Detective certified'},
+  winTitleFail:{cn:'判读未通过 — 复盘后重试', en:'Not certified — review & retry'},
+  winBodyPass:{cn:'5 例全判对! 你能从头皮图认出 CSP 到底找的是运动区还是噪声。这正是把数学结果接回大脑的最后一道闸——CSP 验证通过。',
+               en:'All 5 right! You can read a topomap and tell whether CSP grabbed motor cortex or noise. That is the final gate tying the math back to a real brain — CSP validated.'},
+  winBodyFail:{cn:'有判读出错。判错就意味着你可能放行一个追着眼动/噪声的坏滤波器, 让脑控系统误信坏 CSP。再看一遍热点位置规则。',
+               en:'Some verdicts were wrong. A wrong call means you might pass a filter chasing eye movement or noise — the BCI would then trust a bad CSP. Review the hotspot rules and retry.'},
+  winEndPass:{cn:'CSP 验证通过, S3 数学长征到此收官 (方差 → 协方差 → 投影 → CSP → 头皮验证)。下一站 S4: 不再用别人的数据, 开始用你自己的脑。',
+              en:'CSP validated. S3 (the math marathon: variance → covariance → projection → CSP → scalp check) is done. Next is S4: stop using other people’s data, start using your own brain.'},
+  winEndFail:{cn:'坏 CSP 一旦放行, 脑控关卡会把眼动当成「想象左手」, 你想放方块它却乱动。先在这里挡住它。',
+              en:'A bad CSP slipping through makes the control level read eye movement as “imagine left hand” — you try to place a block and it twitches. Stop it here first.'},
+  correct:{cn:'判读正确。', en:'Correct verdict.'},
+  wrongPre:{cn:'判读有误。正确答案: ', en:'Wrong. Correct: '},
 };
-function t(k){return(I18N[k]&&I18N[k][LANG])||(I18N[k]&&I18N[k].en)||k;}
+function t(k){return (I18N[k]&&I18N[k][LANG])||(I18N[k]&&I18N[k]['en'])||k;}
 
-/* ---------------- options (5, shared) ---------------- */
-var OPTS=[
-  {id:'oLeft',  hint:'hLeft'},
-  {id:'oRight', hint:'hRight'},
-  {id:'oOcc',   hint:'hOcc'},
-  {id:'oBoth',  hint:'hBoth'},
-  {id:'oArt',   hint:'hArt'},
+/* ---------------- 项目路线 S1-S6 ---------------- */
+var ROUTE = [
+  {id:'S1', cn:'信号与采集', en:'Signal & capture', st:'done'},
+  {id:'S2', cn:'清洗与特征', en:'Clean & features', st:'done'},
+  {id:'S3', cn:'数学 → CSP 验证', en:'Math → CSP check', st:'here'},
+  {id:'S4', cn:'用你自己的脑', en:'Your own brain', st:'todo'},
+  {id:'S5', cn:'实时解码', en:'Live decode', st:'todo'},
+  {id:'S6', cn:'脑控 Minecraft', en:'Mind Minecraft', st:'todo'},
 ];
 
-/* ---------------- 10-20 electrode layout (x,y in [0,1] head disc) ----------------
-   head disc center (0.5,0.5), radius ~0.46. Nasion at top (y small). */
-var ELEC=[
-  {n:'Fp1',x:0.40,y:0.13},{n:'Fp2',x:0.60,y:0.13},
-  {n:'F7', x:0.20,y:0.27},{n:'F3', x:0.37,y:0.30},{n:'Fz',x:0.50,y:0.30},{n:'F4',x:0.63,y:0.30},{n:'F8',x:0.80,y:0.27},
-  {n:'T3', x:0.13,y:0.50},{n:'C3', x:0.34,y:0.50},{n:'Cz',x:0.50,y:0.50},{n:'C4',x:0.66,y:0.50},{n:'T4',x:0.87,y:0.50},
-  {n:'T5', x:0.20,y:0.73},{n:'P3', x:0.37,y:0.70},{n:'Pz',x:0.50,y:0.70},{n:'P4',x:0.63,y:0.70},{n:'T6',x:0.80,y:0.73},
-  {n:'O1', x:0.40,y:0.87},{n:'O2', x:0.60,y:0.87},
-];
-function elecIdx(name){for(var i=0;i<ELEC.length;i++)if(ELEC[i].n===name)return i;return -1;}
-
-/* ---------------- 5 patterns. weights[name] in [-1,1]; abs => heat intensity ----------------
-   answer index maps to OPTS order. */
-function mkW(spec){
-  var w=[];for(var i=0;i<ELEC.length;i++)w.push(0);
-  for(var k in spec){var idx=elecIdx(k);if(idx>=0)w[idx]=spec[k];}
-  return w;
-}
-var PATTERNS=[
-  { /* C4 hot -> left hand */
-    answer:0, filter:'8-30 Hz', comp:'#1',
-    w:mkW({C4:1.0,'F4':0.45,'P4':0.5,'T4':0.3,Cz:0.25,C3:-0.18}),
-    explain:'eLeft'
-  },
-  { /* C3 hot -> right hand */
-    answer:1, filter:'8-30 Hz', comp:'#2',
-    w:mkW({C3:1.0,'F3':0.45,'P3':0.5,'T3':0.3,Cz:0.25,C4:-0.18}),
-    explain:'eRight'
-  },
-  { /* occipital -> not motor */
-    answer:2, filter:'8-13 Hz', comp:'#4',
-    w:mkW({O1:0.95,O2:1.0,'P3':0.4,'P4':0.45,Pz:0.5,T5:0.25,T6:0.25}),
-    explain:'eOcc'
-  },
-  { /* bilateral symmetric -> both / ambiguous */
-    answer:3, filter:'8-30 Hz', comp:'#3',
-    w:mkW({C3:0.9,C4:0.9,Cz:0.6,'F3':0.3,'F4':0.3,'P3':0.3,'P4':0.3}),
-    explain:'eBoth'
-  },
-  { /* edge scatter -> artifact */
-    answer:4, filter:'1-45 Hz', comp:'#7',
-    w:mkW({Fp1:0.95,Fp2:0.7,'F7':0.85,'F8':0.6,T3:0.8,T4:0.9,O1:0.5,O2:0.55,P3:-0.1,Cz:-0.05}),
-    explain:'eArt'
-  },
+/* ---------------- 5 个判读类别 ---------------- */
+var VERDICTS = [
+  {key:'L', cn:'左手运动想象', en:'Left-hand motor imagery', subCn:'对侧: C4 右脑热', subEn:'contralateral: C4 right hot'},
+  {key:'R', cn:'右手运动想象', en:'Right-hand motor imagery', subCn:'对侧: C3 左脑热', subEn:'contralateral: C3 left hot'},
+  {key:'N', cn:'非运动 (alpha/眼动)', en:'Non-motor (alpha/eye)', subCn:'枕叶 O1/O2 热, CSP 没找对', subEn:'occipital hot, CSP missed'},
+  {key:'B', cn:'双手 / 不清晰', en:'Both hands / unclear', subCn:'双侧对称, 难以区分', subEn:'bilateral, hard to tell'},
+  {key:'A', cn:'伪迹 (噪声带偏)', en:'Artifact (noise)', subCn:'边缘散乱热, CSP 被噪声带偏', subEn:'scattered edge, noise-driven'},
 ];
 
-/* shuffle pattern order */
-function shuffle(a){a=a.slice();for(var i=a.length-1;i>0;i--){var j=Math.floor(Math.random()*(i+1));var x=a[i];a[i]=a[j];a[j]=x;}return a;}
-var order=shuffle([0,1,2,3,4]);
+/* ---------------- 5 个 CSP 模式案例 ---------------- */
+var CASES = [
+  {
+    answer:'L',
+    hotspots:[ {e:'C4', w: 1.0}, {e:'CP4', w:0.45}, {e:'FC4', w:0.4}, {e:'C3', w:-0.18} ],
+    clueCn:'热点紧紧落在 C4 (右脑感觉运动区), 左脑几乎没有。运动控制是对侧的——右脑管左手。',
+    clueEn:'A tight hotspot sits on C4 (right sensorimotor cortex), left side near zero. Motor control is contralateral — right brain drives the left hand.',
+    whyCn:'C4 右脑热 → 对侧的左手运动想象。CSP 这一模式确实抓住了运动皮层, 可信。',
+    whyEn:'C4 right-hemisphere hot → contralateral left-hand imagery. This CSP pattern truly grabbed motor cortex. Trustworthy.'
+  },
+  {
+    answer:'R',
+    hotspots:[ {e:'C3', w:1.0}, {e:'CP3', w:0.5}, {e:'FC3', w:0.42}, {e:'C4', w:-0.15} ],
+    clueCn:'热点集中在 C3 (左脑感觉运动区)。左脑控制右半身, 所以这是右手的运动想象。',
+    clueEn:'The hotspot concentrates on C3 (left sensorimotor cortex). The left brain controls the right side, so this is right-hand imagery.',
+    whyCn:'C3 左脑热 → 对侧的右手运动想象。又一个对准运动区的好滤波器。',
+    whyEn:'C3 left-hemisphere hot → contralateral right-hand imagery. Another filter aimed straight at motor cortex.'
+  },
+  {
+    answer:'N',
+    hotspots:[ {e:'O1', w:0.95}, {e:'O2', w:0.92}, {e:'Oz', w:0.7}, {e:'PO3', w:0.4}, {e:'PO4', w:0.4} ],
+    clueCn:'热点全堆在后脑枕叶 O1/O2/Oz——那是视觉皮层与 alpha 波/眼动的地盘, 不是手的运动区。',
+    clueEn:'Everything piles up at the occipital region O1/O2/Oz — that is visual cortex and alpha/eye-movement territory, not the hand motor area.',
+    whyCn:'枕叶热不是运动。CSP 这次找到的是 alpha 波或眼动差异, 不是左右手。这个滤波器不能用来解码动作。',
+    whyEn:'Occipital is not motor. CSP latched onto alpha or eye-movement differences, not left vs right hand. This filter cannot decode movement.'
+  },
+  {
+    answer:'B',
+    hotspots:[ {e:'C3', w:0.85}, {e:'C4', w:0.83}, {e:'Cz', w:0.6}, {e:'CP3', w:0.45}, {e:'CP4', w:0.45} ],
+    clueCn:'C3 和 C4 几乎一样亮, 左右对称。两手运动区同时强, 无法区分是哪只手——边界不清晰。',
+    clueEn:'C3 and C4 are nearly equally bright and symmetric. Both hand areas fire together, so you cannot tell which hand — the boundary is unclear.',
+    whyCn:'双侧对称热 → 双手/不清晰。运动区是对的, 但没有分出左右, 直接拿去解码会左右手混淆。',
+    whyEn:'Bilateral symmetric hot → both hands / unclear. The region is motor, but it does not separate left from right; decoding with it would confuse the hands.'
+  },
+  {
+    answer:'A',
+    hotspots:[ {e:'Fp1', w:0.9}, {e:'F8', w:-0.8}, {e:'T7', w:0.75}, {e:'O2', w:-0.6}, {e:'F7', w:0.5} ],
+    clueCn:'热点散落在额角、颞侧、枕缘, 红蓝乱跳, 没有任何皮层结构。这是噪声/伪迹的指纹, 不是脑活动。',
+    clueEn:'Hotspots scatter across the frontal corners, temples and edge, red and blue jumping with no cortical structure. That is the fingerprint of noise/artifact, not brain activity.',
+    whyCn:'边缘散乱热 → 伪迹。CSP 被噪声带偏了, 把随机干扰当成了类别差异。坚决拒绝这个模式。',
+    whyEn:'Scattered edge hot → artifact. CSP was dragged off by noise, mistaking random interference for a class difference. Reject this pattern outright.'
+  },
+];
 
-/* ---------------- state ---------------- */
-var cur=0, score=0, answered=false;
-var results=[];for(var ri=0;ri<5;ri++)results.push('pending');
-var phase=0;
+/* 10-20 电极布局 (相对头模 SVG) */
+var HEAD = {cx:160, cy:178, r:120};
+var ELEC = {
+  Fp1:{x:-40,y:-110}, Fpz:{x:0,y:-118}, Fp2:{x:40,y:-110},
+  F7:{x:-92,y:-72}, F3:{x:-50,y:-66}, Fz:{x:0,y:-64}, F4:{x:50,y:-66}, F8:{x:92,y:-72},
+  FC3:{x:-58,y:-32}, FC4:{x:58,y:-32},
+  T7:{x:-116,y:0}, C3:{x:-62,y:0}, Cz:{x:0,y:0}, C4:{x:62,y:0}, T8:{x:116,y:0},
+  CP3:{x:-58,y:34}, CP4:{x:58,y:34},
+  P7:{x:-92,y:72}, P3:{x:-50,y:66}, Pz:{x:0,y:64}, P4:{x:50,y:66}, P8:{x:92,y:72},
+  PO3:{x:-40,y:96}, PO4:{x:40,y:96},
+  O1:{x:-40,y:110}, Oz:{x:0,y:118}, O2:{x:40,y:110},
+};
+var KEY_ELEC = {C3:1,C4:1,O1:1,O2:1,Oz:1};
 
-/* ---------------- canvas topomap drawing ---------------- */
-var canvas=document.getElementById('topomap');
-var ctxc=canvas.getContext('2d');
-var W=0,H=0,DPR=Math.min(window.devicePixelRatio||1,2);
-function resize(){
-  var r=canvas.getBoundingClientRect();
-  W=Math.max(300,r.width);H=Math.max(220,r.height);
-  canvas.width=Math.round(W*DPR);canvas.height=Math.round(H*DPR);
-  ctxc.setTransform(DPR,0,0,DPR,0,0);
-}
-function cssVar(name){return getComputedStyle(document.documentElement).getPropertyValue(name).trim();}
-var COL={};
-function loadColors(){
-  COL.h0=cssVar('--heat-0');COL.h1=cssVar('--heat-1');COL.h2=cssVar('--heat-2');
-  COL.h3=cssVar('--heat-3');COL.h4=cssVar('--heat-4');COL.h5=cssVar('--heat-5');
-  COL.ink=cssVar('--ink');COL.sub=cssVar('--sub');COL.border=cssVar('--border-2');
-  COL.paper=cssVar('--paper');COL.card=cssVar('--card');
-}
-/* parse #rrggbb -> [r,g,b] */
-function hex(c){c=c.replace('#','');return [parseInt(c.substr(0,2),16),parseInt(c.substr(2,2),16),parseInt(c.substr(4,2),16)];}
-var RAMP=[];
-function buildRamp(){RAMP=[hex(COL.h0),hex(COL.h1),hex(COL.h2),hex(COL.h3),hex(COL.h4),hex(COL.h5)];}
-function rampColor(t){ /* t in [0,1] */
-  if(t<=0)return RAMP[0];if(t>=1)return RAMP[RAMP.length-1];
-  var seg=t*(RAMP.length-1);var i=Math.floor(seg);var f=seg-i;
-  var a=RAMP[i],b=RAMP[i+1];
-  return [a[0]+(b[0]-a[0])*f,a[1]+(b[1]-a[1])*f,a[2]+(b[2]-a[2])*f];
-}
+var caseIdx=0, results=[null,null,null,null,null], picked=null, locked=false;
 
-/* interpolate field at point (px,py) using inverse-distance from electrode abs-weights */
-function fieldAt(px,py,w,jitter){
-  var num=0,den=0;
-  for(var i=0;i<ELEC.length;i++){
-    var dx=px-ELEC[i].x, dy=py-ELEC[i].y;
-    var d2=dx*dx+dy*dy+0.0009;
-    var wt=1/(d2*d2);
-    var val=Math.abs(w[i]);
-    num+=wt*val;den+=wt;
-  }
-  var v=den>0?num/den:0;
-  v+=jitter;
-  return v;
+/* ---------------- sidebar 渲染 ---------------- */
+function renderRoute(){
+  var box=document.getElementById('routeBox'); box.innerHTML='';
+  ROUTE.forEach(function(s,i){
+    var row=document.createElement('div');
+    row.className='route-step '+s.st;
+    var line = i<ROUTE.length-1 ? '<span class="route-line"></span>' : '';
+    row.innerHTML='<span class="route-dot"></span>'+line+
+      '<span class="route-lbl">'+s.id+' '+(LANG==='cn'?s.cn:s.en)+'</span>';
+    box.appendChild(row);
+  });
 }
-
-function draw(){
-  if(!W)resize();
-  ctxc.clearRect(0,0,W,H);
-  ctxc.fillStyle=COL.card;ctxc.fillRect(0,0,W,H);
-  var p=PATTERNS[order[cur]];
-  var w=p.w;
-  // disc geometry
-  var cx=W*0.5, cy=H*0.52, R=Math.min(W,H)*0.42;
-  // heat field rendered as coarse grid cells clipped to disc
-  var cell=Math.max(6,Math.round(R/22));
-  var shimmer=Math.sin(phase*1.4)*0.018;
-  for(var gy=cy-R;gy<cy+R;gy+=cell){
-    for(var gx=cx-R;gx<cx+R;gx+=cell){
-      var ddx=(gx+cell/2-cx), ddy=(gy+cell/2-cy);
-      var rr=Math.sqrt(ddx*ddx+ddy*ddy);
-      if(rr>R)continue;
-      var nx=0.5+ddx/(R*2.0), ny=0.5+ddy/(R*2.0);
-      var v=fieldAt(nx,ny,w,shimmer);
-      // normalize: max abs weight ~1, scale
-      var tnorm=Math.max(0,Math.min(1,v*1.05));
-      var rgb=rampColor(tnorm);
-      // fade near rim for round look
-      var edge=rr/R; var alpha=edge>0.92?(1-(edge-0.92)/0.08):1;
-      ctxc.fillStyle='rgba('+Math.round(rgb[0])+','+Math.round(rgb[1])+','+Math.round(rgb[2])+','+(0.92*alpha)+')';
-      ctxc.fillRect(gx,gy,cell+1,cell+1);
-    }
-  }
-  // head outline
-  ctxc.save();
-  ctxc.beginPath();ctxc.arc(cx,cy,R,0,Math.PI*2);ctxc.lineWidth=2.5;ctxc.strokeStyle=COL.ink;ctxc.stroke();
-  // nose
-  ctxc.beginPath();ctxc.moveTo(cx-R*0.12,cy-R+4);ctxc.lineTo(cx,cy-R-R*0.13);ctxc.lineTo(cx+R*0.12,cy-R+4);
-  ctxc.lineWidth=2.5;ctxc.strokeStyle=COL.ink;ctxc.stroke();
-  // ears
-  ctxc.beginPath();ctxc.arc(cx-R,cy,R*0.13,Math.PI*0.5,Math.PI*1.5);ctxc.stroke();
-  ctxc.beginPath();ctxc.arc(cx+R,cy,R*0.13,-Math.PI*0.5,Math.PI*0.5);ctxc.stroke();
-  ctxc.restore();
-  // electrode dots + labels for the motor strip + occipital + frontal (reference markers)
-  ctxc.font="9px 'JetBrains Mono',ui-monospace,Menlo,monospace";
-  for(var i=0;i<ELEC.length;i++){
-    var e=ELEC[i];
-    var ex=cx+(e.x-0.5)*R*2.0, ey=cy+(e.y-0.5)*R*2.0;
-    ctxc.beginPath();ctxc.arc(ex,ey,2.4,0,Math.PI*2);
-    ctxc.fillStyle='rgba(25,24,20,0.55)';ctxc.fill();
-    // label key landmarks
-    if(/^(C3|C4|Cz|O1|O2)$/.test(e.n)){
-      ctxc.fillStyle=COL.ink;ctxc.textAlign='center';
-      var lift=(e.n==='O1'||e.n==='O2')?13:-7;
-      ctxc.fillText(e.n,ex,ey+lift);
-    }
-  }
-  // L / R hemisphere markers
-  ctxc.fillStyle=COL.sub;ctxc.font="bold 11px 'JetBrains Mono',ui-monospace,Menlo,monospace";
-  ctxc.textAlign='center';
-  ctxc.fillText(LANG==='cn'?'左':'L', cx-R-2, cy+R*0.42);
-  ctxc.fillText(LANG==='cn'?'右':'R', cx+R+2, cy+R*0.42);
-}
-
-var timer=null;
-function startLoop(){
-  if(timer)return;
-  timer=setInterval(function(){phase+=0.05;draw();},66);
-}
-
-/* ---------------- UI build ---------------- */
-function buildSidebar(){
-  var box=document.getElementById('plItems');box.innerHTML='';
+function renderProg(){
+  var box=document.getElementById('progBox'); box.innerHTML='';
   for(var i=0;i<5;i++){
-    var d=document.createElement('div');d.className='pl-item';d.dataset.slot=i;
-    var dot=document.createElement('span');dot.className='pl-dot';
-    var lbl=document.createElement('span');lbl.textContent='Pattern '+(i+1);
-    d.appendChild(dot);d.appendChild(lbl);box.appendChild(d);
+    var pip=document.createElement('div'); pip.className='prog-pip';
+    if(results[i]==='ok') pip.className+=' ok';
+    else if(results[i]==='bad') pip.className+=' bad';
+    else if(i===caseIdx) pip.className+=' cur';
+    pip.textContent=(i+1);
+    box.appendChild(pip);
   }
-  refreshSidebar();
+  var good=results.filter(function(r){return r==='ok';}).length;
+  document.getElementById('vScore').textContent=good+' / 5';
 }
-function refreshSidebar(){
-  var items=document.querySelectorAll('#plItems .pl-item');
-  items.forEach(function(el,i){
-    el.classList.remove('current','done','wrong');
-    if(results[i]==='done')el.classList.add('done');
-    else if(results[i]==='wrong')el.classList.add('wrong');
-    if(i===cur)el.classList.add('current');
-  });
+
+/* ---------------- topomap 热力图 ---------------- */
+function colorFor(val){
+  // val in [-1,1]; 正=alert 红, 负=cool 蓝, 0=纸色
+  var alert=[200,85,61], cool=[79,124,172], base=[240,237,227];
+  var a = Math.min(1, Math.abs(val));
+  var tgt = val>=0 ? alert : cool;
+  var r=Math.round(base[0]+(tgt[0]-base[0])*a);
+  var g=Math.round(base[1]+(tgt[1]-base[1])*a);
+  var b=Math.round(base[2]+(tgt[2]-base[2])*a);
+  return 'rgb('+r+','+g+','+b+')';
 }
-function buildOptions(){
-  var box=document.getElementById('opts');box.innerHTML='';
-  OPTS.forEach(function(op,idx){
-    var o=document.createElement('div');o.className='opt';o.dataset.idx=idx;
-    var nm=document.createElement('div');nm.className='o-name';nm.textContent=t(op.id);nm.dataset.i18n=op.id;
-    var ht=document.createElement('div');ht.className='o-hint';ht.textContent=t(op.hint);ht.dataset.i18n=op.hint;
-    o.appendChild(nm);o.appendChild(ht);
-    o.addEventListener('click',function(){onPick(parseInt(this.dataset.idx,10));});
-    box.appendChild(o);
+function fieldAt(px,py,hotspots){
+  // 反距离加权插值 (IDW)
+  var num=0, den=0;
+  for(var k in ELEC){
+    var ex=HEAD.cx+ELEC[k].x, ey=HEAD.cy+ELEC[k].y;
+    var w=0;
+    for(var h=0;h<hotspots.length;h++){ if(hotspots[h].e===k){ w=hotspots[h].w; break; } }
+    var d=Math.hypot(px-ex,py-ey)+6;
+    var inv=1/(d*d);
+    num+=w*inv; den+=inv;
+  }
+  return den>0 ? num/den : 0;
+}
+function drawTopomap(){
+  var svg=document.getElementById('topomap');
+  var cs=CASES[caseIdx];
+  var H=HEAD, grid='';
+  var step=11;
+  for(var py=H.cy-H.r; py<=H.cy+H.r; py+=step){
+    for(var px=H.cx-H.r; px<=H.cx+H.r; px+=step){
+      var dx=px+step/2-H.cx, dy=py+step/2-H.cy;
+      if(dx*dx+dy*dy > H.r*H.r) continue;
+      var v=fieldAt(px+step/2,py+step/2,cs.hotspots);
+      grid+='<rect x="'+px+'" y="'+py+'" width="'+(step+0.6)+'" height="'+(step+0.6)+
+        '" fill="'+colorFor(v)+'"/>';
+    }
+  }
+  var head='<circle cx="'+H.cx+'" cy="'+H.cy+'" r="'+H.r+'" fill="none" stroke="var(--ink)" stroke-width="2"/>'+
+    '<path d="M'+(H.cx-13)+' '+(H.cy-H.r)+' Q'+H.cx+' '+(H.cy-H.r-20)+' '+(H.cx+13)+' '+(H.cy-H.r)+
+      '" fill="var(--paper)" stroke="var(--ink)" stroke-width="2"/>'+
+    '<path d="M'+(H.cx-H.r)+' '+(H.cy-22)+' Q'+(H.cx-H.r-14)+' '+H.cy+' '+(H.cx-H.r)+' '+(H.cy+22)+
+      '" fill="var(--paper)" stroke="var(--ink)" stroke-width="2"/>'+
+    '<path d="M'+(H.cx+H.r)+' '+(H.cy-22)+' Q'+(H.cx+H.r+14)+' '+H.cy+' '+(H.cx+H.r)+' '+(H.cy+22)+
+      '" fill="var(--paper)" stroke="var(--ink)" stroke-width="2"/>';
+  var dots='';
+  for(var k in ELEC){
+    var ex=H.cx+ELEC[k].x, ey=H.cy+ELEC[k].y;
+    var key=KEY_ELEC[k];
+    dots+='<circle cx="'+ex+'" cy="'+ey+'" r="'+(key?3.2:2.2)+'" fill="'+
+      (key?'var(--primary)':'var(--ink-dim)')+'" stroke="var(--paper)" stroke-width="1"/>';
+    if(key){
+      dots+='<text x="'+ex+'" y="'+(ey-6)+'" text-anchor="middle" class="electrode-lbl key">'+k+'</text>';
+    }
+  }
+  svg.innerHTML='<defs><clipPath id="headclip"><circle cx="'+H.cx+'" cy="'+H.cy+'" r="'+(H.r-1)+'"/></clipPath></defs>'+
+    '<g clip-path="url(#headclip)">'+grid+'</g>'+head+dots;
+}
+
+/* ---------------- 判读选项 ---------------- */
+function renderVerdicts(){
+  var box=document.getElementById('verdictBox'); box.innerHTML='';
+  VERDICTS.forEach(function(v){
+    var btn=document.createElement('button');
+    btn.className='verdict'; btn.setAttribute('data-key',v.key);
+    btn.innerHTML='<span class="verdict-key">['+v.key+']</span> '+
+      '<span class="verdict-txt">'+(LANG==='cn'?v.cn:v.en)+'</span>'+
+      '<div class="verdict-sub">'+(LANG==='cn'?v.subCn:v.subEn)+'</div>';
+    btn.addEventListener('click', function(){ onPick(v.key); });
+    if(locked){
+      btn.disabled=true;
+      if(v.key===CASES[caseIdx].answer) btn.classList.add('right');
+      else if(v.key===picked) btn.classList.add('wrong');
+    }
+    box.appendChild(btn);
   });
 }
 
-function onPick(idx){
-  if(answered)return;answered=true;
-  var p=PATTERNS[order[cur]];
-  var correct=(idx===p.answer);
-  if(correct){score++;results[cur]='done';}else{results[cur]='wrong';}
-  var opts=document.querySelectorAll('#opts .opt');
-  opts.forEach(function(o){
-    var oi=parseInt(o.dataset.idx,10);o.setAttribute('disabled','');
-    if(oi===p.answer)o.classList.add('correct');
-    if(oi===idx && !correct)o.classList.add('miss');
-  });
-  document.getElementById('fbMsg').innerHTML='<b>'+(correct?t('correct'):t('wrong'))+'</b> '+t(p.explain);
-  var nb=document.getElementById('nextBtn');nb.classList.remove('hidden');
-  nb.textContent=(cur>=4)?t('finish'):t('next');
-  refreshSidebar();updateHUD();
-}
-function nextPattern(){
-  if(!answered)return;
-  if(cur>=4){showResult();return;}
-  cur++;answered=false;loadPattern();
-}
-function loadPattern(){
-  var p=PATTERNS[order[cur]];
-  document.getElementById('patIdx').textContent=(cur+1)+'/5';
-  document.getElementById('metaFilter').innerHTML=t('filter')+': <b>'+p.filter+'</b>';
-  document.getElementById('metaPattern').innerHTML=t('patMeta')+': <b>'+p.comp+'</b>';
-  document.getElementById('fbMsg').textContent=t('fbHint');
-  document.getElementById('nextBtn').classList.add('hidden');
-  var opts=document.querySelectorAll('#opts .opt');
-  opts.forEach(function(o){o.classList.remove('correct','miss');o.removeAttribute('disabled');});
-  refreshSidebar();updateHUD();draw();
-}
-function updateHUD(){
-  document.getElementById('hudLScore').textContent=t('score');
-  document.getElementById('hudVScore').textContent=score+'/5';
-  document.getElementById('hudLPat').textContent=t('patHud');
-  document.getElementById('hudVPat').textContent=(cur+1)+'/5';
-}
-function showResult(){
-  var ov=document.getElementById('resultOverlay');ov.classList.add('show');
-  document.getElementById('resultBadge').textContent=t('badge');
-  document.getElementById('resultScore').textContent=score+'/5';
-  var title,msg;
-  if(score===5){title=t('rTitleReader');msg=t('rMsgReader');}
-  else if(score>=3){title=t('rTitleGood');msg=t('rMsgGood');}
-  else{title=t('rTitleOk');msg=t('rMsgOk');}
-  document.getElementById('resultTitle').textContent=title;
-  document.getElementById('resultMsg').textContent=msg;
-  document.getElementById('retryBtn').textContent=t('retry');
-}
-function retry(){
-  document.getElementById('resultOverlay').classList.remove('show');
-  order=shuffle([0,1,2,3,4]);
-  cur=0;score=0;answered=false;
-  results=['pending','pending','pending','pending','pending'];
-  loadPattern();
+function verdictName(key){
+  for(var i=0;i<VERDICTS.length;i++) if(VERDICTS[i].key===key) return LANG==='cn'?VERDICTS[i].cn:VERDICTS[i].en;
+  return key;
 }
 
-/* ---------------- i18n refresh ---------------- */
+function renderFeedback(){
+  var cs=CASES[caseIdx], correct=picked===cs.answer;
+  var head = correct ? t('correct') : (t('wrongPre')+verdictName(cs.answer)+(LANG==='cn'?'。':'.'));
+  document.getElementById('feedbackBox').innerHTML='<div class="feedback '+(correct?'good':'bad')+'">'+
+    '<b>'+head+'</b><br>'+(LANG==='cn'?cs.whyCn:cs.whyEn)+'</div>';
+  document.getElementById('btnNext').textContent = caseIdx<4 ? t('next') : t('seeResult');
+}
+
+function onPick(key){
+  if(locked) return;
+  picked=key; locked=true;
+  var cs=CASES[caseIdx];
+  results[caseIdx] = (key===cs.answer) ? 'ok' : 'bad';
+  renderVerdicts();
+  renderProg();
+  renderFeedback();
+  document.getElementById('btnNext').style.display='inline-block';
+}
+
+function loadCase(){
+  var cs=CASES[caseIdx];
+  picked=null; locked=false;
+  document.getElementById('mapTitle').textContent=
+    (LANG==='cn'?'CSP 模式 #'+(caseIdx+1)+' 头皮热力图':'CSP pattern #'+(caseIdx+1)+' scalp topomap');
+  document.getElementById('caseTag').textContent='CASE '+(caseIdx+1)+' / 5';
+  document.getElementById('clueText').textContent=LANG==='cn'?cs.clueCn:cs.clueEn;
+  document.getElementById('feedbackBox').innerHTML='';
+  document.getElementById('btnNext').style.display='none';
+  drawTopomap();
+  renderVerdicts();
+  renderProg();
+}
+
+function nextCase(){
+  if(caseIdx<4){ caseIdx++; loadCase(); }
+  else showWin();
+}
+
+function showWin(){
+  var good=results.filter(function(r){return r==='ok';}).length;
+  var pass = good===5;
+  document.getElementById('winOverlay').style.display='flex';
+  document.getElementById('winTitle').textContent = pass? t('winTitle') : t('winTitleFail');
+  document.getElementById('winTitle').style.color = pass? 'var(--primary)' : 'var(--alert)';
+  document.getElementById('winBody').textContent = pass? t('winBodyPass') : t('winBodyFail');
+  document.getElementById('winEnd').textContent = pass? t('winEndPass') : t('winEndFail');
+  if(pass){
+    var b=document.getElementById('badge'); b.className='badge on'; b.textContent=t('badgeOn');
+  }
+}
+
+function restart(){
+  caseIdx=0; results=[null,null,null,null,null]; picked=null; locked=false;
+  document.getElementById('winOverlay').style.display='none';
+  var b=document.getElementById('badge'); b.className='badge'; b.textContent=t('badgeLocked');
+  loadCase();
+}
+
+/* ---------------- i18n 刷新 ---------------- */
 function refreshI18N(){
-  document.getElementById('brandSub').textContent=t('brandSub');
-  document.getElementById('plHead').textContent=t('patterns');
-  document.getElementById('guideHead').textContent=t('howto');
-  document.getElementById('guideBody').textContent=t('guideBody');
-  document.getElementById('mainTitle').childNodes[0].nodeValue=(LANG==='cn'?'CSP 头皮判读师':'CSP Topomap Reader');
-  document.getElementById('panelHead').textContent=t('panelHead');
-  document.getElementById('legCool').textContent=t('legCool');
-  document.getElementById('legHot').textContent=t('legHot');
-  document.querySelectorAll('#opts [data-i18n]').forEach(function(el){el.textContent=t(el.dataset.i18n);});
-  var p=PATTERNS[order[cur]];
-  document.getElementById('metaFilter').innerHTML=t('filter')+': <b>'+p.filter+'</b>';
-  document.getElementById('metaPattern').innerHTML=t('patMeta')+': <b>'+p.comp+'</b>';
-  if(answered){
-    var correct=(results[cur]==='done');
-    document.getElementById('fbMsg').innerHTML='<b>'+(correct?t('correct'):t('wrong'))+'</b> '+t(p.explain);
-    document.getElementById('nextBtn').textContent=(cur>=4)?t('finish'):t('next');
-  }else{
-    document.getElementById('fbMsg').textContent=t('fbHint');
+  document.getElementById('title').textContent=t('title');
+  document.getElementById('lblRoute').textContent=t('lblRoute');
+  document.getElementById('lblProg').textContent=t('lblProg');
+  document.getElementById('lblScore').textContent=t('lblScore');
+  document.getElementById('lblUnlock').textContent=t('lblUnlock');
+  document.getElementById('endNote').textContent=t('endNote');
+  document.getElementById('briefTitle').textContent=t('briefTitle');
+  document.getElementById('brief').textContent=t('brief');
+  document.getElementById('legLbl').textContent=t('legLbl');
+  document.getElementById('legHigh').textContent=t('legHigh');
+  document.getElementById('legLow').textContent=t('legLow');
+  document.getElementById('legHint').textContent=t('legHint');
+  document.getElementById('clueTitle').textContent=t('clueTitle');
+  document.getElementById('qText').textContent=t('qText');
+  document.getElementById('btnRestart').textContent=t('restart');
+  document.getElementById('langBtn').textContent= LANG==='cn'?'中 / EN':'EN / 中';
+  var bd=document.getElementById('badge');
+  bd.textContent = bd.classList.contains('on') ? t('badgeOn') : t('badgeLocked');
+  renderRoute();
+  document.getElementById('clueText').textContent=LANG==='cn'?CASES[caseIdx].clueCn:CASES[caseIdx].clueEn;
+  document.getElementById('mapTitle').textContent=
+    (LANG==='cn'?'CSP 模式 #'+(caseIdx+1)+' 头皮热力图':'CSP pattern #'+(caseIdx+1)+' scalp topomap');
+  renderVerdicts();
+  if(locked) renderFeedback();
+  // 若结算页打开, 刷新结算文案
+  if(document.getElementById('winOverlay').style.display==='flex'){
+    var good=results.filter(function(r){return r==='ok';}).length, pass=good===5;
+    document.getElementById('winTitle').textContent = pass? t('winTitle') : t('winTitleFail');
+    document.getElementById('winBody').textContent = pass? t('winBodyPass') : t('winBodyFail');
+    document.getElementById('winEnd').textContent = pass? t('winEndPass') : t('winEndFail');
   }
-  var ov=document.getElementById('resultOverlay');
-  if(ov.classList.contains('show')){
-    document.getElementById('resultBadge').textContent=t('badge');
-    var title,msg;
-    if(score===5){title=t('rTitleReader');msg=t('rMsgReader');}
-    else if(score>=3){title=t('rTitleGood');msg=t('rMsgGood');}
-    else{title=t('rTitleOk');msg=t('rMsgOk');}
-    document.getElementById('resultTitle').textContent=title;
-    document.getElementById('resultMsg').textContent=msg;
-    document.getElementById('retryBtn').textContent=t('retry');
-  }
-  updateHUD();draw();
 }
 
 /* ---------------- events ---------------- */
-document.getElementById('langBtn').addEventListener('click',function(){
-  LANG=LANG==='en'?'cn':'en';this.textContent=LANG.toUpperCase();refreshI18N();
+document.getElementById('btnNext').addEventListener('click', nextCase);
+document.getElementById('btnRestart').addEventListener('click', restart);
+document.getElementById('langBtn').addEventListener('click', function(){
+  LANG = LANG==='cn'?'en':'cn';
+  refreshI18N();
 });
-document.getElementById('nextBtn').addEventListener('click',nextPattern);
-document.getElementById('retryBtn').addEventListener('click',retry);
-window.addEventListener('resize',function(){resize();draw();});
 
 /* ---------------- init ---------------- */
-loadColors();buildRamp();resize();
-buildSidebar();buildOptions();loadPattern();refreshI18N();
-draw();startLoop();
-
-})();
+renderRoute();
+loadCase();
+refreshI18N();
 </script>
 </body>
 </html>

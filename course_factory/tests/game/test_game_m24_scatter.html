@@ -1,250 +1,290 @@
-<!DOCTYPE html>
-<html lang="zh">
+<!doctype html>
+<html lang="zh-CN">
 <head>
-<meta charset="UTF-8"/>
-<meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>Covariance Observer — 协方差观察者</title>
+<meta charset="utf-8"/>
+<title>Covariance Detective</title>
 <style>
 :root{
-  /* 第 1 层 — 共享深空底 */
-  --bg-0: oklch(0.14 0.035 265);
-  --bg-1: oklch(0.18 0.04 265);
-  --bg-2: oklch(0.22 0.045 265);
-  --bg-3: oklch(0.28 0.05 265);
-  --line: oklch(0.35 0.05 265 / 0.35);
-  --line-strong: oklch(0.55 0.08 265 / 0.55);
-  --fg: oklch(0.96 0.01 265);
-  --fg-dim: oklch(0.75 0.02 265);
-  --fg-mute: oklch(0.55 0.03 265);
-  --gold: oklch(0.85 0.14 85);
-  /* 第 2 层 — math signature accent (electric blue) */
-  --math: oklch(0.72 0.17 245);
-  /* 第 3 层 — math 5 色 palette */
-  --axis: oklch(0.72 0.17 245);
-  --proof: oklch(0.52 0.16 245);
-  --shadow: oklch(0.35 0.10 245);
+  /* 深空底 (math 色相 245) */
+  --bg-0: oklch(0.13 0.025 245);
+  --bg-1: oklch(0.17 0.03 245);
+  --bg-2: oklch(0.21 0.035 245);
+  --bg-3: oklch(0.27 0.04 245);
+  --line: oklch(0.42 0.06 245 / 0.35);
+  --line-strong: oklch(0.58 0.09 245 / 0.55);
+  --fg: oklch(0.96 0.01 245);
+  --fg-dim: oklch(0.80 0.02 245);
+  --fg-mute: oklch(0.58 0.03 245);
+  /* math accent + 5 色 palette */
+  --math:     oklch(0.72 0.17 245);
+  --axis:     oklch(0.72 0.17 245);
+  --proof:    oklch(0.52 0.16 245);
+  --shadow:   oklch(0.35 0.10 245);
   --solution: oklch(0.92 0.08 240);
-  --qed: oklch(0.85 0.14 85);
+  --qed:      oklch(0.85 0.14 85);
+  /* 关系语义色: 正(暖) 负(冷青) 零(中灰) */
+  --pos:  oklch(0.80 0.16 55);
+  --neg:  oklch(0.78 0.15 200);
+  --zero: oklch(0.70 0.04 245);
+  --danger: oklch(0.66 0.20 25);
+  --good: oklch(0.80 0.15 150);
+  --mono:'JetBrains Mono','SF Mono','Fira Code',Consolas,monospace;
 }
-*{box-sizing:border-box;margin:0;padding:0;border-radius:0}
-html,body{
-  width:100%;height:100vh;overflow:hidden;
-  background:var(--bg-0);
-  font-family:'JetBrains Mono','SF Mono','Cascadia Code',ui-monospace,Menlo,Consolas,monospace;
-  color:var(--fg);
-}
-.shell{display:flex;height:100vh;width:100vw;}
+*{box-sizing:border-box;margin:0;padding:0;}
+html,body{width:100%;height:100vh;overflow:hidden;background:var(--bg-0);color:var(--fg);
+  font-family:'Noto Sans SC','Inter',sans-serif;}
+.wrapper{display:flex;height:100vh;}
 
-/* ── 200px 左侧栏 ── */
-.game-sidebar{
-  width:200px;flex:0 0 200px;
-  display:flex;flex-direction:column;
-  background:var(--bg-1);
-  border-right:1px solid var(--line);
-  padding:14px 12px;
-  overflow-y:auto;
-}
-.brand{display:flex;flex-direction:column;gap:2px;margin-bottom:14px;}
-.brand .code{font-size:10px;letter-spacing:2px;color:var(--math);}
-.brand .title{font-size:14px;font-weight:700;color:var(--fg);letter-spacing:0.5px;line-height:1.2;}
-.brand .sub{font-size:9px;color:var(--fg-mute);letter-spacing:1px;}
+/* ---- 200px 左侧栏 ---- */
+.game-sidebar{width:200px;flex:0 0 200px;display:flex;flex-direction:column;
+  background:var(--bg-1);border-right:1px solid var(--line);padding:12px 12px 10px;
+  overflow-y:auto;gap:10px;}
+.brand{font-family:var(--mono);font-size:12px;font-weight:700;color:var(--math);
+  letter-spacing:1px;text-transform:uppercase;line-height:1.3;}
+.brand .sub{display:block;font-size:9px;color:var(--fg-mute);letter-spacing:0.5px;margin-top:2px;}
+.mascot-wrap{display:flex;justify-content:center;padding:2px 0;}
+.mascot-cap{font-family:var(--mono);font-size:9px;color:var(--fg-mute);text-align:center;
+  letter-spacing:0.5px;margin-top:1px;}
 
-.mascot{margin:4px auto 14px;display:block;}
+.panel-title{font-family:var(--mono);font-size:10px;color:var(--math);letter-spacing:1px;
+  text-transform:uppercase;border-top:1px solid var(--line);padding-top:8px;}
 
-.panel{
-  background:var(--bg-2);
-  border:1px solid var(--line);
-  padding:10px;margin-bottom:12px;
-}
-.panel .ph{font-size:10px;letter-spacing:1.5px;color:var(--fg-dim);text-transform:uppercase;margin-bottom:8px;}
+/* S1-S6 路线图 */
+.route{display:flex;flex-direction:column;gap:3px;}
+.route-step{display:flex;align-items:center;gap:7px;font-family:var(--mono);font-size:10px;
+  color:var(--fg-mute);padding:3px 5px;border:1px solid transparent;letter-spacing:0.3px;}
+.route-step .pin{width:9px;height:9px;flex:0 0 9px;border:1px solid var(--line-strong);
+  background:var(--bg-3);display:inline-block;border-radius:50%;}
+.route-step.done{color:var(--fg-dim);}
+.route-step.done .pin{background:var(--proof);border-color:var(--proof);}
+.route-step.here{color:var(--solution);border-color:var(--math);background:var(--bg-3);font-weight:700;}
+.route-step.here .pin{background:var(--math);border-color:var(--math);}
 
-.slider-row{margin-bottom:6px;}
-.slider-row .lab{display:flex;justify-content:space-between;font-size:11px;color:var(--fg-dim);margin-bottom:5px;}
-.slider-row .lab b{color:var(--math);font-weight:700;}
-input[type=range]{
-  width:100%;height:5px;-webkit-appearance:none;appearance:none;
-  background:var(--bg-3);outline:none;cursor:pointer;
-}
-input[type=range]::-webkit-slider-thumb{
-  -webkit-appearance:none;appearance:none;width:16px;height:16px;
-  background:var(--math);cursor:pointer;border:2px solid var(--bg-0);
-}
-input[type=range]::-moz-range-thumb{
-  width:16px;height:16px;background:var(--math);cursor:pointer;border:2px solid var(--bg-0);
-}
-.scale-row{display:flex;justify-content:space-between;font-size:8px;color:var(--fg-mute);margin-top:3px;letter-spacing:0.5px;}
+/* 案卷进度点 */
+.case-list{display:flex;flex-direction:column;gap:4px;}
+.case-dot{display:flex;align-items:center;gap:7px;font-family:var(--mono);font-size:10px;
+  color:var(--fg-dim);padding:4px 6px;border:1px solid var(--line);background:var(--bg-2);
+  cursor:default;letter-spacing:0.4px;}
+.case-dot .mark{width:11px;height:11px;flex:0 0 11px;border:1px solid var(--line-strong);
+  background:var(--bg-3);display:inline-block;}
+.case-dot.current{border-color:var(--math);color:var(--solution);background:var(--bg-3);}
+.case-dot.solved .mark{background:var(--good);border-color:var(--good);}
+.case-dot.wrong .mark{background:var(--danger);border-color:var(--danger);}
 
-.task-text{font-size:11px;line-height:1.55;color:var(--fg);}
-.task-text .hl{color:var(--qed);font-weight:700;}
+.legend{border-top:1px solid var(--line);padding-top:8px;font-size:10px;color:var(--fg-dim);
+  line-height:1.55;}
+.legend .row{display:flex;align-items:center;gap:6px;margin-bottom:3px;}
+.legend .sw{width:10px;height:10px;flex:0 0 10px;display:inline-block;border-radius:2px;}
+.legend b{color:var(--solution);font-weight:600;}
 
-.btn{
-  font-family:inherit;font-size:11px;font-weight:700;letter-spacing:1px;
-  padding:8px 10px;cursor:pointer;width:100%;
-  border:1px solid var(--math);
-  background:var(--bg-2);color:var(--math);
-  box-shadow:3px 3px 0 var(--bg-0);
-  margin-bottom:8px;text-transform:uppercase;
-}
-.btn:hover{background:var(--math);color:var(--bg-0);}
-.btn.ghost{border-color:var(--line-strong);color:var(--fg-dim);}
-.btn.ghost:hover{background:var(--bg-3);color:var(--fg);}
+.lang-btn{margin-top:auto;font-family:var(--mono);font-size:11px;font-weight:700;
+  padding:6px 0;cursor:pointer;border:1px solid var(--line-strong);background:var(--bg-2);
+  color:var(--math);letter-spacing:1px;}
+.lang-btn:hover{background:var(--bg-3);}
 
-.guess-row{display:flex;gap:6px;margin-bottom:8px;}
-.guess-row .btn{margin-bottom:0;}
+/* ---- 右侧主舞台 ---- */
+.game-main{flex:1;min-width:0;display:flex;flex-direction:column;position:relative;}
+.hud{display:flex;align-items:center;gap:18px;padding:8px 18px;background:var(--bg-1);
+  border-bottom:1px solid var(--line);}
+.hud .title{font-family:var(--mono);font-size:12px;color:var(--math);letter-spacing:1px;
+  font-weight:700;text-transform:uppercase;margin-right:auto;}
+.hud .item{display:flex;flex-direction:column;align-items:flex-end;}
+.hud .label{font-family:var(--mono);font-size:8px;color:var(--fg-mute);letter-spacing:0.8px;
+  text-transform:uppercase;}
+.hud .value{font-family:var(--mono);font-size:14px;color:var(--solution);font-weight:700;margin-top:1px;}
+.hud .value.bad{color:var(--danger);}
 
-.spacer{flex:1;}
-.progress{font-size:10px;color:var(--fg-mute);letter-spacing:1px;margin-bottom:10px;text-align:center;}
-.progress b{color:var(--qed);}
-#langBtn{
-  font-family:inherit;font-size:11px;font-weight:700;letter-spacing:2px;
-  padding:6px 10px;cursor:pointer;width:100%;
-  border:1px solid var(--line-strong);
-  background:var(--bg-2);color:var(--fg-dim);
-}
-#langBtn:hover{border-color:var(--math);color:var(--math);}
+.stage{flex:1;min-height:0;display:flex;flex-direction:column;padding:12px 18px;gap:10px;}
+.scatter-row{flex:1;min-height:0;display:flex;gap:12px;}
+.sc-card{flex:1;min-width:0;background:var(--bg-1);border:1px solid var(--line);
+  display:flex;flex-direction:column;}
+.sc-head{font-family:var(--mono);font-size:10px;color:var(--math);letter-spacing:1px;
+  text-transform:uppercase;padding:7px 10px;border-bottom:1px solid var(--line);
+  display:flex;justify-content:space-between;align-items:center;}
+.sc-head .sub{color:var(--fg-mute);font-size:8px;}
+.sc-head .trial{font-size:8px;padding:2px 6px;border:1px solid var(--line-strong);
+  color:var(--fg-dim);letter-spacing:0.5px;}
+.sc-head .trial.left{color:var(--neg);border-color:var(--neg);}
+.sc-head .trial.right{color:var(--pos);border-color:var(--pos);}
+.canvas-wrap{flex:1;min-height:0;position:relative;display:flex;flex-direction:column;}
+.canvas-wrap canvas{display:block;width:100%;height:100%;}
+.ctx-stack{flex:0 0 30%;display:flex;flex-direction:column;gap:10px;}
+.ctx-stack .sc-card{flex:1;}
 
-/* ── 右侧主舞台 ── */
-.game-main{flex:1;min-width:0;display:flex;flex-direction:column;}
-.main-head{
-  display:flex;align-items:baseline;gap:14px;
-  padding:10px 18px;border-bottom:1px solid var(--line);
-  background:var(--bg-1);
-}
-.main-head .h-title{font-size:13px;font-weight:700;color:var(--fg);letter-spacing:0.5px;}
-.main-head .h-mode{font-size:10px;color:var(--math);letter-spacing:1.5px;text-transform:uppercase;}
+/* 决策区 */
+.decide{display:flex;flex-direction:column;gap:8px;}
+.verdict-q{font-family:var(--mono);font-size:11px;color:var(--fg-dim);letter-spacing:0.4px;
+  text-align:center;}
+.verdict-q b{color:var(--solution);}
+.rel-row{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;}
+.rel-btn{font-family:var(--mono);font-size:12px;padding:8px 18px;cursor:pointer;
+  border:1px solid var(--line-strong);background:var(--bg-2);color:var(--fg-dim);
+  letter-spacing:0.5px;transition:all 0.12s;display:flex;flex-direction:column;
+  align-items:center;gap:3px;min-width:120px;}
+.rel-btn .glyph{font-size:15px;font-weight:700;}
+.rel-btn .cap{font-size:8px;color:var(--fg-mute);letter-spacing:0.3px;}
+.rel-btn:hover:not(:disabled){border-color:var(--math);color:var(--solution);}
+.rel-btn:hover:not(:disabled) .cap{color:var(--fg-dim);}
+.rel-btn.pos:hover:not(:disabled){border-color:var(--pos);}
+.rel-btn.neg:hover:not(:disabled){border-color:var(--neg);}
+.rel-btn.zero:hover:not(:disabled){border-color:var(--zero);}
+.rel-btn.sel{border-color:var(--math);background:var(--bg-3);color:var(--solution);font-weight:700;}
+.rel-btn:disabled{opacity:0.45;cursor:not-allowed;}
 
-/* 上 = 波形, 下 = 散点 */
-.stage{flex:1;min-height:0;display:flex;flex-direction:column;padding:14px 18px;gap:12px;}
-.wave-zone{flex:0 0 34%;min-height:0;display:flex;flex-direction:column;position:relative;border:1px solid var(--line);background:var(--bg-1);}
-.wave-zone .zlab{position:absolute;top:6px;left:8px;font-size:9px;color:var(--fg-mute);letter-spacing:1.5px;z-index:2;}
-.wave-zone canvas{flex:1;display:block;width:100%;height:100%;}
-.scatter-zone{flex:1;min-height:0;display:flex;flex-direction:row;gap:12px;}
-.scatter-box{flex:1;min-width:0;display:flex;flex-direction:column;position:relative;border:1px solid var(--line);background:var(--bg-1);}
-.scatter-box .zlab{position:absolute;top:6px;left:8px;font-size:9px;color:var(--fg-mute);letter-spacing:1.5px;z-index:2;}
-.scatter-box canvas{flex:1;display:block;width:100%;height:100%;}
+/* 反馈条 */
+.feedback{min-height:48px;padding:9px 14px;border:1px solid var(--line);background:var(--bg-2);
+  font-size:12px;line-height:1.5;color:var(--fg-dim);display:flex;align-items:center;gap:10px;}
+.feedback.good{border-color:var(--good);}
+.feedback.harm{border-color:var(--danger);background:oklch(0.20 0.06 25);}
+.feedback.miss{border-color:var(--qed);}
+.feedback .tag{font-family:var(--mono);font-size:10px;font-weight:700;letter-spacing:1px;
+  padding:3px 8px;flex:0 0 auto;text-transform:uppercase;}
+.feedback.good .tag{background:var(--good);color:var(--bg-0);}
+.feedback.harm .tag{background:var(--danger);color:var(--bg-0);}
+.feedback.miss .tag{background:var(--qed);color:var(--bg-0);}
+.feedback .next{margin-left:auto;font-family:var(--mono);font-size:11px;font-weight:700;
+  padding:5px 16px;cursor:pointer;border:1px solid var(--math);background:var(--bg-1);
+  color:var(--math);letter-spacing:1px;text-transform:uppercase;flex:0 0 auto;display:none;}
+.feedback .next.show{display:inline-block;}
+.feedback .next:hover{background:var(--math);color:var(--bg-0);}
 
-/* HUD 列 */
-.hud{flex:0 0 156px;display:flex;flex-direction:column;gap:10px;}
-.hud .card{flex:1;background:var(--bg-2);border:1px solid var(--line);padding:12px 10px;display:flex;flex-direction:column;justify-content:center;}
-.hud .card .k{font-size:9px;letter-spacing:1.5px;color:var(--fg-mute);text-transform:uppercase;margin-bottom:6px;}
-.hud .card .v{font-size:24px;font-weight:700;letter-spacing:0.5px;font-variant-numeric:tabular-nums;}
-.hud .card .v.pos{color:var(--axis);}
-.hud .card .v.neg{color:var(--qed);}
-.hud .card .v.zero{color:var(--fg-dim);}
-.hud .card .note{font-size:10px;color:var(--fg-dim);margin-top:6px;line-height:1.4;}
-.hud .card.sign .v{font-size:18px;}
+/* CSP 原料条 (后果可视化) */
+.csp-bar{display:flex;align-items:center;gap:8px;padding:6px 12px;background:var(--bg-1);
+  border:1px solid var(--line);font-family:var(--mono);font-size:9px;color:var(--fg-mute);
+  letter-spacing:0.5px;}
+.csp-bar .lbl{flex:0 0 auto;text-transform:uppercase;}
+.csp-bar .slots{display:flex;gap:5px;flex:1;}
+.csp-slot{flex:1;height:14px;border:1px solid var(--line-strong);background:var(--bg-3);}
+.csp-slot.ok{background:var(--good);border-color:var(--good);}
+.csp-slot.bad{background:var(--danger);border-color:var(--danger);}
 
-/* toast / 反馈 */
-.toast{
-  position:absolute;left:50%;top:14px;transform:translateX(-50%);
-  background:var(--bg-2);border:1px solid var(--math);
-  box-shadow:4px 4px 0 var(--bg-0);
-  padding:10px 18px;font-size:12px;color:var(--fg);
-  letter-spacing:0.5px;z-index:30;opacity:0;pointer-events:none;
-  transition:opacity 0.25s;max-width:520px;text-align:center;
-}
-.toast.show{opacity:1;}
-.toast.good{border-color:var(--qed);}
-.toast.good b{color:var(--qed);}
-.toast.bad{border-color:var(--proof);}
-.toast b{color:var(--math);}
+/* Minecraft 角落剪影 */
+.mc-corner{position:absolute;right:14px;bottom:12px;display:flex;align-items:center;gap:7px;
+  opacity:0.55;pointer-events:none;z-index:5;}
+.mc-corner .mc-cap{font-family:var(--mono);font-size:8px;color:var(--fg-mute);
+  letter-spacing:0.5px;text-align:right;line-height:1.3;max-width:120px;}
 
-.hidden{display:none !important;}
+/* 通关弹窗 */
+.victory{position:absolute;inset:0;background:oklch(0.10 0.03 245 / 0.86);display:none;
+  align-items:center;justify-content:center;z-index:50;}
+.victory.show{display:flex;}
+.victory-box{background:var(--bg-2);border:1px solid var(--math);padding:26px 36px;max-width:480px;
+  text-align:center;box-shadow:5px 5px 0 var(--bg-0);}
+.victory-title{font-family:var(--mono);font-size:17px;color:var(--qed);font-weight:700;
+  letter-spacing:2px;text-transform:uppercase;margin-bottom:12px;}
+.victory-stat{font-family:var(--mono);font-size:12px;color:var(--solution);margin-bottom:16px;}
+.victory-text{font-size:13px;color:var(--fg-dim);line-height:1.7;margin-bottom:18px;}
+.victory-btn{font-family:var(--mono);font-size:12px;font-weight:700;cursor:pointer;
+  padding:8px 24px;border:1px solid var(--math);background:var(--bg-1);color:var(--math);
+  letter-spacing:1px;text-transform:uppercase;}
+.victory-btn:hover{background:var(--math);color:var(--bg-0);}
 </style>
 </head>
 <body>
-<div class="shell">
-
-  <!-- ── 200px sidebar ── -->
+<div class="wrapper">
   <aside class="game-sidebar">
-    <div class="brand">
-      <span class="code">MTH-06 / EEG-M24</span>
-      <span class="title" data-i18n="brandTitle">协方差观察者</span>
-      <span class="sub" data-i18n="brandSub">COVARIANCE OBSERVER</span>
+    <div class="brand" id="brandTitle">COVARIANCE DETECTIVE<span class="sub" id="brandSub">P-BCI · M24 · C3-C4 散点判读</span></div>
+    <div class="mascot-wrap">
+      <svg width="68" height="68" viewBox="0 0 68 68" aria-hidden="true">
+        <!-- Pi: 旋转四面体 -->
+        <g transform="translate(34,34)" stroke="var(--math)" stroke-width="1.8" fill="none" stroke-linejoin="round">
+          <path d="M0,-22 L20,12 L-20,12 Z" fill="var(--shadow)"/>
+          <path d="M0,-22 L20,12 L-2,4 Z" fill="var(--proof)" fill-opacity="0.55"/>
+          <path d="M0,-22 L-20,12 L-2,4 Z" fill="var(--bg-3)" fill-opacity="0.7"/>
+          <path d="M-20,12 L20,12 L-2,4 Z" fill="var(--shadow)" fill-opacity="0.6"/>
+          <line x1="0" y1="-22" x2="-2" y2="4"/>
+          <line x1="-20" y1="12" x2="-2" y2="4"/>
+          <line x1="20" y1="12" x2="-2" y2="4"/>
+        </g>
+        <text x="34" y="38" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="11"
+          font-weight="700" fill="var(--qed)">P</text>
+      </svg>
+    </div>
+    <div class="mascot-cap" id="mascotCap">PI · 协方差向导</div>
+
+    <div class="panel-title" id="routeTitle">项目路线</div>
+    <div class="route" id="route"></div>
+
+    <div class="panel-title" id="caseTitle">案卷 · 5 对散点</div>
+    <div class="case-list" id="caseList"></div>
+
+    <div class="legend">
+      <div class="row"><span class="sw" style="background:var(--pos)"></span><span id="legPos">正 = 一起抖</span></div>
+      <div class="row"><span class="sw" style="background:var(--neg)"></span><span id="legNeg">负 = 反着抖</span></div>
+      <div class="row"><span class="sw" style="background:var(--zero)"></span><span id="legZero">零 = 互不相关</span></div>
+      <div id="legHint" style="margin-top:5px;color:var(--fg-mute)">看散点<b>倾斜方向</b>判读两电极关系</div>
     </div>
 
-    <!-- Pi mascot: rotating tetrahedron -->
-    <svg class="mascot" width="92" height="92" viewBox="0 0 92 92" aria-hidden="true">
-      <g id="piTetra" transform="translate(46,46)">
-        <polygon id="tf1" points="0,-30 26,16 -26,16" fill="var(--proof)" stroke="var(--axis)" stroke-width="1.5"/>
-        <polygon id="tf2" points="0,-30 26,16 0,30" fill="var(--shadow)" stroke="var(--axis)" stroke-width="1.5"/>
-        <line x1="0" y1="-30" x2="0" y2="30" stroke="var(--axis)" stroke-width="1"/>
-        <text id="piGlyph" x="0" y="6" text-anchor="middle" font-size="20" font-weight="700"
-              font-family="JetBrains Mono,monospace" fill="var(--solution)">r</text>
-      </g>
-    </svg>
-
-    <div class="panel">
-      <div class="ph" data-i18n="phControl">关联强度 r</div>
-      <div class="slider-row">
-        <div class="lab"><span data-i18n="rLabel">C4 跟随 C3</span><b id="rVal">+0.00</b></div>
-        <input type="range" id="rSlider" min="-100" max="100" value="0" step="1"/>
-        <div class="scale-row">
-          <span data-i18n="scaleNeg">-1 反向</span>
-          <span data-i18n="scaleZero">0 无关</span>
-          <span data-i18n="scalePos">+1 同向</span>
-        </div>
-      </div>
-    </div>
-
-    <div class="panel">
-      <div class="ph" data-i18n="phTask">本轮任务</div>
-      <div class="task-text" id="taskText"></div>
-    </div>
-
-    <!-- tune 模式按钮 -->
-    <div id="tuneCtl">
-      <button class="btn" id="submitBtn" data-i18n="submitBtn">提交关联度</button>
-    </div>
-    <!-- detective 模式按钮 -->
-    <div id="guessCtl" class="hidden">
-      <div class="guess-row">
-        <button class="btn" id="guessNeg" data-i18n="guessNeg">负</button>
-        <button class="btn" id="guessZero" data-i18n="guessZero">零</button>
-        <button class="btn" id="guessPos" data-i18n="guessPos">正</button>
-      </div>
-    </div>
-    <button class="btn ghost" id="nextBtn" data-i18n="nextBtn">下一轮</button>
-
-    <div class="spacer"></div>
-    <div class="progress">
-      <span data-i18n="progLabel">已通关</span> <b id="progNum">0</b> / 5
-      <div id="badge" class="hidden" style="color:var(--qed);margin-top:6px;letter-spacing:1px;" data-i18n="badge">已解锁 协方差观察者</div>
-    </div>
-    <button id="langBtn">EN / 中文</button>
+    <button class="lang-btn" id="langBtn" type="button">EN / 中文</button>
   </aside>
 
-  <!-- ── 主舞台 ── -->
   <main class="game-main">
-    <div class="main-head">
-      <span class="h-title" data-i18n="headTitle">两电极信号关系</span>
-      <span class="h-mode" id="modeBadge"></span>
+    <div class="hud">
+      <div class="title" id="hudTitle">看 C3-C4 散点的斜向，判它俩的协方差</div>
+      <div class="item"><span class="label" id="hudProgLbl">已判读</span><span class="value" id="hudProg">0 / 5</span></div>
+      <div class="item"><span class="label" id="hudWrongLbl">CSP 用错料</span><span class="value" id="hudWrong">0</span></div>
     </div>
-    <div class="stage">
-      <div class="toast" id="toast"></div>
 
-      <div class="wave-zone">
-        <span class="zlab" data-i18n="zlabWave">时间序列 — C3 (基准) 与 C4 (跟随)</span>
-        <canvas id="waveCanvas"></canvas>
+    <div class="stage">
+      <div class="scatter-row">
+        <div class="sc-card">
+          <div class="sc-head">
+            <span id="scMainTitle">C3 (横) — C4 (纵) 散点</span>
+            <span class="trial" id="scTrialTag">trial</span>
+          </div>
+          <div class="canvas-wrap"><canvas id="mainCv"></canvas></div>
+        </div>
+        <div class="ctx-stack">
+          <div class="sc-card">
+            <div class="sc-head"><span id="scLeftTitle">想象左手</span><span class="trial left" id="scLeftTag">LEFT</span></div>
+            <div class="canvas-wrap"><canvas id="leftCv"></canvas></div>
+          </div>
+          <div class="sc-card">
+            <div class="sc-head"><span id="scRightTitle">想象右手</span><span class="trial right" id="scRightTag">RIGHT</span></div>
+            <div class="canvas-wrap"><canvas id="rightCv"></canvas></div>
+          </div>
+        </div>
       </div>
 
-      <div class="scatter-zone">
-        <div class="scatter-box">
-          <span class="zlab" data-i18n="zlabScatter">散点图 — 每时刻 (C3, C4) 一个点</span>
-          <canvas id="scatterCanvas"></canvas>
-        </div>
-        <div class="hud">
-          <div class="card">
-            <div class="k" data-i18n="hudCov">协方差 Cov(C3,C4)</div>
-            <div class="v zero" id="covVal">0.000</div>
-            <div class="note" id="covNote" data-i18n="covNoteZero">接近 0：两信号无明显关联</div>
-          </div>
-          <div class="card sign">
-            <div class="k" data-i18n="hudShape">散点形态</div>
-            <div class="v zero" id="shapeVal" data-i18n="shapeRound">圆球</div>
-            <div class="note" id="targetNote"></div>
-          </div>
-        </div>
+      <div class="csp-bar">
+        <span class="lbl" id="cspLbl">CSP 原料 · 协方差关系</span>
+        <div class="slots" id="cspSlots"></div>
+      </div>
+
+      <div class="decide">
+        <div class="verdict-q" id="verdictQ">这对 C3-C4 在<b>本 trial</b> 里是什么关系？看散点云的斜向。</div>
+        <div class="rel-row" id="relRow"></div>
+      </div>
+
+      <div class="feedback" id="feedback">
+        <span class="tag" id="fbTag" style="display:none"></span>
+        <span id="fbText">CSP 要分开左右手，靠的就是 C3-C4 协方差。先学会一眼读懂散点斜向。判对推进，判错则 CSP 装错原料。</span>
+        <button class="next" id="nextBtn" type="button">下一对</button>
+      </div>
+    </div>
+
+    <div class="mc-corner">
+      <svg width="40" height="40" viewBox="0 0 40 40" aria-hidden="true">
+        <g fill="var(--proof)" fill-opacity="0.8" stroke="var(--line-strong)" stroke-width="0.6">
+          <rect x="6"  y="14" width="8" height="8"/>
+          <rect x="14" y="14" width="8" height="8"/>
+          <rect x="22" y="14" width="8" height="8"/>
+          <rect x="10" y="22" width="8" height="8"/>
+          <rect x="18" y="22" width="8" height="8"/>
+          <rect x="26" y="22" width="8" height="8"/>
+          <rect x="14" y="30" width="8" height="6"/>
+        </g>
+        <rect x="14" y="8" width="8" height="6" fill="var(--qed)" fill-opacity="0.7"/>
+      </svg>
+      <span class="mc-cap" id="mcCap">终点：脑控 Minecraft</span>
+    </div>
+
+    <div class="victory" id="victory">
+      <div class="victory-box">
+        <div class="victory-title" id="vicTitle">协方差观察者 已解锁</div>
+        <div class="victory-stat" id="vicStat"></div>
+        <div class="victory-text" id="vicText"></div>
+        <button class="victory-btn" id="vicBtn" type="button">重新判读</button>
       </div>
     </div>
   </main>
@@ -252,383 +292,379 @@ input[type=range]::-moz-range-thumb{
 
 <script>
 "use strict";
-/* ───────── i18n ───────── */
-const I18N = {
-  zh:{
-    brandTitle:"协方差观察者", brandSub:"COVARIANCE OBSERVER",
-    phControl:"关联强度 r", rLabel:"C4 跟随 C3",
-    scaleNeg:"-1 反向", scaleZero:"0 无关", scalePos:"+1 同向",
-    phTask:"本轮任务", submitBtn:"提交关联度",
-    guessNeg:"负", guessZero:"零", guessPos:"正", nextBtn:"下一轮",
-    progLabel:"已通关", badge:"已解锁 协方差观察者",
-    headTitle:"两电极信号关系", zlabWave:"时间序列 — C3 (基准) 与 C4 (跟随)",
-    zlabScatter:"散点图 — 每时刻 (C3, C4) 一个点",
-    hudCov:"协方差 Cov(C3,C4)", hudShape:"散点形态",
-    shapeRound:"圆球", shapeTiltUp:"右上倾斜", shapeTiltDown:"左上倾斜",
-    covNotePos:"为正：C3 高时 C4 也高，散点向右上拉伸",
-    covNoteNeg:"为负：C3 高时 C4 反而低，散点向左上拉伸",
-    covNoteZero:"接近 0：两信号无明显关联，散点呈圆球",
-    modeTune:"调参模式 — 调到目标形态", modeDetective:"侦探模式 — 读散点猜符号",
-    taskTunePos:"把散点调成 <span class='hl'>正向强相关</span>（右上倾斜的细长云）。",
-    taskTuneNeg:"把散点调成 <span class='hl'>负向强相关</span>（左上倾斜的细长云）。",
-    taskTuneZero:"把散点调成 <span class='hl'>近乎无关</span>（圆球，看不出方向）。",
-    taskDetect:"看右侧散点图，<span class='hl'>它的协方差是正、负还是零？</span> 点下面的按钮回答。",
-    targetHint:"目标：",
-    toastTuneGood:"<b>命中！</b> 你的 r=R0，形态匹配。Cov 同号说明关联方向对了。",
-    toastTuneBad:"还差一点 — 当前形态是 SHAPE，目标是 TARGET。继续拨滑块。",
-    toastDetectGood:"<b>判断正确！</b> 散点 SHAPE，协方差 SIGN。",
-    toastDetectBad:"再看一次 — 散点 SHAPE，协方差其实是 SIGN。",
-    win:"<b>全部通关！</b> 你已经能从波形 到 散点 到 协方差符号一眼读懂两信号的关系。",
-    signPos:"正", signNeg:"负", signZero:"零",
-  },
-  en:{
-    brandTitle:"Covariance Observer", brandSub:"协方差观察者",
-    phControl:"Coupling r", rLabel:"C4 follows C3",
-    scaleNeg:"-1 anti", scaleZero:"0 none", scalePos:"+1 same",
-    phTask:"This Round", submitBtn:"Submit r",
-    guessNeg:"Neg", guessZero:"Zero", guessPos:"Pos", nextBtn:"Next",
-    progLabel:"Cleared", badge:"Unlocked: Covariance Observer",
-    headTitle:"Two-Electrode Signal Relation", zlabWave:"Time series — C3 (base) & C4 (follower)",
-    zlabScatter:"Scatter — one dot per moment (C3, C4)",
-    hudCov:"Cov(C3,C4)", hudShape:"Cloud Shape",
-    shapeRound:"Round", shapeTiltUp:"Tilt up-right", shapeTiltDown:"Tilt up-left",
-    covNotePos:"Positive: C3 high then C4 high, cloud stretches up-right",
-    covNoteNeg:"Negative: C3 high then C4 low, cloud stretches up-left",
-    covNoteZero:"Near 0: no clear relation, cloud is round",
-    modeTune:"Tune mode — match the target shape", modeDetective:"Detective mode — read cloud, guess sign",
-    taskTunePos:"Tune the cloud to <span class='hl'>strong positive</span> (a thin cloud tilting up-right).",
-    taskTuneNeg:"Tune the cloud to <span class='hl'>strong negative</span> (a thin cloud tilting up-left).",
-    taskTuneZero:"Tune the cloud to <span class='hl'>near-zero</span> (round, no direction).",
-    taskDetect:"Look at the scatter. <span class='hl'>Is the covariance positive, negative or zero?</span> Tap a button.",
-    targetHint:"Target: ",
-    toastTuneGood:"<b>Match!</b> Your r=R0, shape matches. Same-sign Cov means the direction is right.",
-    toastTuneBad:"Not yet — current shape is SHAPE, target is TARGET. Keep sliding.",
-    toastDetectGood:"<b>Correct!</b> Cloud SHAPE, covariance SIGN.",
-    toastDetectBad:"Look again — cloud SHAPE, covariance is actually SIGN.",
-    win:"<b>All cleared!</b> You can now read two-signal relations from waveform to scatter to covariance sign at a glance.",
-    signPos:"positive", signNeg:"negative", signZero:"zero",
-  }
-};
-let lang = "zh";
-function t(k){ return I18N[lang][k]; }
-function refreshI18N(){
-  document.querySelectorAll("[data-i18n]").forEach(el=>{
-    const k = el.getAttribute("data-i18n");
-    if (I18N[lang][k] !== undefined) el.innerHTML = I18N[lang][k];
-  });
-  renderTask();
-  updateHUD(true);
-}
-
-/* ───────── 关卡定义 ───────── */
-// mode: 'tune' 玩家调到目标; 'detective' 给固定 r 让玩家猜符号
-const LEVELS = [
-  { mode:'tune', target:0.8 },      // 正向强相关
-  { mode:'detective', fixed:-0.75 },// 读负相关
-  { mode:'tune', target:-0.8 },     // 负向强相关
-  { mode:'detective', fixed:0.05 }, // 读零相关
-  { mode:'tune', target:0.0 },      // 近乎无关
-];
-let levelIdx = 0;
-let cleared = 0;
-let roundDone = false;   // 本轮是否已判定
-let detectiveAnswered = false;
-
-/* ───────── 信号生成 (确定性, 给定 r 与种子) ───────── */
-const N = 160;            // 采样点
-let phase = 0;            // 波形动画相位
-let c3 = new Float32Array(N);
-let c4 = new Float32Array(N);
-let noise3 = new Float32Array(N);
-let noise4 = new Float32Array(N);
-
-// 固定噪声序列 (确定性, 不随帧变, 保证散点稳定)
-(function seedNoise(){
-  let s = 12345;
-  function rnd(){ s = (s*1103515245 + 12345) & 0x7fffffff; return (s/0x7fffffff)*2-1; }
-  for(let i=0;i<N;i++){ noise3[i]=rnd(); noise4[i]=rnd(); }
-})();
-
-let rNow = 0;            // 当前关联度 [-1,1]
-
-// 由 r 重建 c3/c4 (C3 基准正弦+噪声; C4 = r*C3 的形 + sqrt(1-r^2)*独立噪声)
-function rebuildSignals(){
-  const k = Math.sqrt(Math.max(0,1 - rNow*rNow));
-  for(let i=0;i<N;i++){
-    const base = Math.sin((i/N)*Math.PI*4 + phase) + 0.35*noise3[i];
-    c3[i] = base;
-    // C4 跟随 base*r，加独立噪声维持总方差
-    c4[i] = rNow*base + k*(0.9*Math.sin((i/N)*Math.PI*4 + phase + 1.7) + 0.5*noise4[i]);
-  }
-}
-
-// 计算样本协方差 (用当前 c3/c4)
-function covariance(){
-  let m3=0,m4=0;
-  for(let i=0;i<N;i++){ m3+=c3[i]; m4+=c4[i]; }
-  m3/=N; m4/=N;
-  let cov=0;
-  for(let i=0;i<N;i++){ cov += (c3[i]-m3)*(c4[i]-m4); }
-  return cov/N;
-}
-
-/* ───────── canvas ───────── */
-const waveC = document.getElementById("waveCanvas");
-const scatC = document.getElementById("scatterCanvas");
-const wctx = waveC.getContext("2d");
-const sctx = scatC.getContext("2d");
-
-function fitCanvas(cv){
-  const r = cv.getBoundingClientRect();
-  const dpr = window.devicePixelRatio || 1;
-  cv.width = Math.max(2, Math.floor(r.width*dpr));
-  cv.height = Math.max(2, Math.floor(r.height*dpr));
-  const ctx = cv.getContext("2d");
-  ctx.setTransform(dpr,0,0,dpr,0,0);
-  return { w:r.width, h:r.height };
-}
-
-function cssVar(name){
-  return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
-}
-
-function drawWave(){
-  const {w,h} = fitCanvas(waveC);
-  wctx.clearRect(0,0,w,h);
-  const axis = cssVar("--axis"), proof = cssVar("--proof"), line = cssVar("--line"), mute = cssVar("--fg-mute");
-  // 中线
-  wctx.strokeStyle = line; wctx.lineWidth = 1;
-  wctx.beginPath(); wctx.moveTo(0,h/2); wctx.lineTo(w,h/2); wctx.stroke();
-  const amp = h*0.18;
-  // C3 (proof 暗蓝)
-  function plot(arr,color,off){
-    wctx.strokeStyle = color; wctx.lineWidth = 2; wctx.beginPath();
-    for(let i=0;i<N;i++){
-      const x = (i/(N-1))*w;
-      const y = h/2 + off - arr[i]*amp;
-      i===0?wctx.moveTo(x,y):wctx.lineTo(x,y);
+(function(){
+  // ============ i18n ============
+  const I18N = {
+    zh:{
+      brand:'COVARIANCE DETECTIVE', brandSub:'P-BCI · M24 · C3-C4 散点判读',
+      mascot:'PI · 协方差向导', routeTitle:'项目路线', caseTitle:'案卷 · 5 对散点',
+      legPos:'正 = 一起抖', legNeg:'负 = 反着抖', legZero:'零 = 互不相关',
+      legHint:'看散点<b>倾斜方向</b>判读两电极关系',
+      lang:'EN / 中文', hudTitle:'看 C3-C4 散点的斜向，判它俩的协方差',
+      progLbl:'已判读', wrongLbl:'CSP 用错料',
+      scMain:'C3 (横) — C4 (纵) 散点', scLeft:'想象左手', scRight:'想象右手',
+      cspLbl:'CSP 原料 · 协方差关系',
+      verdictQ:'这对 C3-C4 在<b>本 trial</b> 里是什么关系？看散点云的斜向。',
+      relPos:'正相关', relNeg:'负相关', relZero:'无关',
+      relPosCap:'右上 / 一起大', relNegCap:'左上右下 / 反着来', relZeroCap:'圆团 / 无方向',
+      next:'下一对',
+      intro:'CSP 要分开左右手，靠的就是 C3-C4 协方差。先学会一眼读懂散点斜向。判对推进，判错则 CSP 装错原料。',
+      vicTitle:'协方差观察者 已解锁', vicBtn:'重新判读',
+      tagGood:'判对', tagHarm:'CSP 装错料',
+      route:['S1 信号基础','S2 滤波清洗','S3 协方差 · 你在这','S4 CSP 空间滤波','S5 解码分类','S6 脑控 Minecraft'],
+      mc:'终点：脑控 Minecraft',
+    },
+    en:{
+      brand:'COVARIANCE DETECTIVE', brandSub:'P-BCI · M24 · C3-C4 scatter',
+      mascot:'PI · covariance guide', routeTitle:'PROJECT ROUTE', caseTitle:'CASEFILE · 5 scatters',
+      legPos:'POS = shake together', legNeg:'NEG = shake opposite', legZero:'ZERO = unrelated',
+      legHint:'read the <b>tilt</b> of the cloud to rule the relation',
+      lang:'中文 / EN', hudTitle:'Read the tilt of C3-C4 scatter, rule the covariance',
+      progLbl:'RULED', wrongLbl:'CSP MISFED',
+      scMain:'C3 (x) — C4 (y) scatter', scLeft:'imagine LEFT', scRight:'imagine RIGHT',
+      cspLbl:'CSP ingredient · covariance',
+      verdictQ:'What relation do C3-C4 show in <b>this trial</b>? Read the cloud tilt.',
+      relPos:'Positive', relNeg:'Negative', relZero:'No relation',
+      relPosCap:'up-right / big together', relNegCap:'up-left down-right / opposite', relZeroCap:'round blob / no tilt',
+      next:'NEXT PAIR',
+      intro:'CSP separates left vs right hand using exactly the C3-C4 covariance. First learn to read the scatter tilt at a glance. Right ruling advances; a wrong one misfeeds CSP.',
+      vicTitle:'COVARIANCE OBSERVER · UNLOCKED', vicBtn:'RULE AGAIN',
+      tagGood:'CORRECT', tagHarm:'CSP MISFED',
+      route:['S1 signal basics','S2 filter & clean','S3 covariance · HERE','S4 CSP spatial filter','S5 decode & classify','S6 brain-control Minecraft'],
+      mc:'goal: brain-control Minecraft',
     }
-    wctx.stroke();
+  };
+  let lang = 'zh';
+  const t = () => I18N[lang];
+
+  // ============ 5 对散点案卷 ============
+  // rel: 'pos'(正) | 'neg'(负) | 'zero'(零)
+  // slope ~ 相关方向, spread ~ 噪声; trial: 'left'|'right' (本主图属于哪个 trial 条件)
+  const CASES = [
+    { id:'#1', rel:'pos', trial:'right', slope:0.85, spread:0.30, seed:11,
+      fb:{ zh:'散点云明显朝<b>右上方</b>斜：C3 大的时候 C4 也大，C3 小 C4 也小——它俩<b>一起抖</b>，这是<b>正协方差</b>。想象右手时，运动皮层两侧常一起活跃。',
+           en:'The cloud clearly tilts to the <b>upper-right</b>: when C3 is high, C4 is high too, and both drop together — they <b>shake together</b>, a <b>positive covariance</b>. Imagining the right hand often co-activates both motor sides.' } },
+    { id:'#2', rel:'neg', trial:'left', slope:-0.82, spread:0.30, seed:23,
+      fb:{ zh:'散点云朝<b>左上—右下</b>斜：C3 大时 C4 偏小，反过来也是——它俩<b>反着抖</b>，这是<b>负协方差</b>。想象左手时，对侧右脑(C4)抑制、左脑(C3)抬升，正是 CSP 想抓的对比。',
+           en:'The cloud tilts <b>upper-left to lower-right</b>: when C3 is high, C4 is low, and vice versa — they <b>shake oppositely</b>, a <b>negative covariance</b>. Imagining the left hand lifts C3 while suppressing the contralateral C4 — exactly the contrast CSP wants.' } },
+    { id:'#3', rel:'zero', trial:'right', slope:0.0, spread:0.52, seed:37,
+      fb:{ zh:'散点是个<b>没有方向的圆团</b>：C3 大不大，跟 C4 大不大没关系——<b>协方差近零</b>。这种 trial 里两电极各干各的，对分左右手帮不上忙。',
+           en:'The points form a <b>round blob with no tilt</b>: knowing C3 tells you nothing about C4 — <b>covariance near zero</b>. In this trial the two electrodes act independently and do not help separate left from right.' } },
+    { id:'#4', rel:'neg', trial:'left', slope:-0.70, spread:0.36, seed:53,
+      fb:{ zh:'虽然散得宽一点，但整体仍朝<b>左上—右下</b>斜：C3 高 C4 低的趋势在——还是<b>负协方差</b>。别被噪声晃乱，先抓主斜向。',
+           en:'Wider scatter, yet the overall tilt is still <b>upper-left to lower-right</b>: the high-C3 low-C4 trend holds — still <b>negative covariance</b>. Do not let noise fool you; grab the main tilt first.' } },
+    { id:'#5', rel:'pos', trial:'right', slope:0.78, spread:0.32, seed:71,
+      fb:{ zh:'最后一对：散点稳稳朝<b>右上</b>斜，C3 与 C4 同涨同落——<b>正协方差</b>。你现在能一眼分清正/负/零三种斜向了，这正是 CSP 的判图眼力。',
+           en:'Final pair: the cloud sits firmly tilted to the <b>upper-right</b>, C3 and C4 rise and fall together — <b>positive covariance</b>. You can now read positive / negative / zero tilt at a glance — exactly the eye CSP needs.' } },
+  ];
+
+  const REL_ORDER = ['pos','neg','zero'];
+
+  // ============ 状态 ============
+  const stateGame = {
+    cur: 0,
+    solved: new Array(CASES.length).fill(null), // null | 'ok' | 'wrong'
+    selRel: null,
+    locked: false,
+    misfed: 0,
+  };
+
+  // ============ DOM ============
+  const $ = id => document.getElementById(id);
+  const mainCv=$('mainCv'), leftCv=$('leftCv'), rightCv=$('rightCv');
+  const mCtx=mainCv.getContext('2d'), lCtx=leftCv.getContext('2d'), rCtx=rightCv.getContext('2d');
+
+  function fitCanvas(cv, ctx){
+    const r = cv.parentElement.getBoundingClientRect();
+    const dpr = window.devicePixelRatio || 1;
+    cv.width = Math.max(2, Math.round(r.width * dpr));
+    cv.height = Math.max(2, Math.round(r.height * dpr));
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    return { w:r.width, h:r.height };
   }
-  plot(c3, proof, -h*0.14);
-  plot(c4, axis, h*0.14);
-  // 标签
-  wctx.font = "10px JetBrains Mono, monospace";
-  wctx.fillStyle = proof; wctx.fillText("C3", 8, h/2 - h*0.14 - amp - 4);
-  wctx.fillStyle = axis;  wctx.fillText("C4", 8, h/2 + h*0.14 + amp + 12);
-}
+  function css(name){ return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
 
-function drawScatter(){
-  const {w,h} = fitCanvas(scatC);
-  sctx.clearRect(0,0,w,h);
-  const axis = cssVar("--axis"), line = cssVar("--line"), mute = cssVar("--fg-mute"), sol = cssVar("--solution"), qed = cssVar("--qed");
-  const pad = 26;
-  const cx0 = pad, cx1 = w-pad, cy0 = h-pad, cy1 = pad;
-  const midX = (cx0+cx1)/2, midY = (cy0+cy1)/2;
-  // 坐标轴
-  sctx.strokeStyle = line; sctx.lineWidth = 1;
-  sctx.beginPath(); sctx.moveTo(cx0,midY); sctx.lineTo(cx1,midY);
-  sctx.moveTo(midX,cy0); sctx.lineTo(midX,cy1); sctx.stroke();
-  sctx.font = "9px JetBrains Mono, monospace"; sctx.fillStyle = mute;
-  sctx.fillText("C3", cx1-22, midY-5);
-  sctx.fillText("C4", midX+5, cy1+10);
-  const sx = (cx1-cx0)/2/2.2;   // x scale (信号幅度约 ±2.2)
-  const sy = (cy0-cy1)/2/2.2;
-  // 点
-  for(let i=0;i<N;i++){
-    const px = midX + c3[i]*sx;
-    const py = midY - c4[i]*sy;
-    sctx.fillStyle = axis;
-    sctx.globalAlpha = 0.55;
-    sctx.beginPath(); sctx.arc(px,py,2.4,0,Math.PI*2); sctx.fill();
+  // 可重复随机 (LCG)
+  function mkRng(seed){ let s=seed>>>0; return ()=>{ s=(s*1664525+1013904223)>>>0; return s/4294967296; }; }
+  function gauss(rng){ let u=0,v=0; while(u===0)u=rng(); while(v===0)v=rng();
+    return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v); }
+
+  // 生成相关散点 (slope ~ 相关方向, spread ~ 噪声)
+  function genPoints(slope, spread, seed, n){
+    const rng=mkRng(seed); const pts=[];
+    for(let i=0;i<n;i++){
+      const a=gauss(rng);                       // 主成分
+      const b=gauss(rng);                       // 噪声成分
+      const x=a*0.6;
+      const y=slope*a*0.6 + b*spread;
+      pts.push([x,y]);
+    }
+    return pts;
   }
-  sctx.globalAlpha = 1;
-}
 
-/* ───────── 形态判定 ───────── */
-function shapeFromCov(cov){
-  if (cov > 0.18) return "up";       // 右上倾斜 (正)
-  if (cov < -0.18) return "down";    // 左上倾斜 (负)
-  return "round";                    // 圆球 (零)
-}
-function shapeLabel(s){
-  return s==="up"?t("shapeTiltUp"):s==="down"?t("shapeTiltDown"):t("shapeRound");
-}
-function signOf(s){ return s==="up"?"pos":s==="down"?"neg":"zero"; }
-
-/* ───────── HUD ───────── */
-function updateHUD(skipDraw){
-  const cov = covariance();
-  const sh = shapeFromCov(cov);
-  const covEl = document.getElementById("covVal");
-  const covNote = document.getElementById("covNote");
-  covEl.textContent = (cov>=0?"+":"") + cov.toFixed(3);
-  covEl.className = "v " + (sh==="up"?"pos":sh==="down"?"neg":"zero");
-  covNote.textContent = sh==="up"?t("covNotePos"):sh==="down"?t("covNoteNeg"):t("covNoteZero");
-  const shapeEl = document.getElementById("shapeVal");
-  shapeEl.textContent = shapeLabel(sh);
-  shapeEl.className = "v " + (sh==="up"?"pos":sh==="down"?"neg":"zero");
-  if(!skipDraw){ drawWave(); drawScatter(); }
-}
-
-/* ───────── 任务渲染 ───────── */
-function renderTask(){
-  const lv = LEVELS[levelIdx];
-  const taskEl = document.getElementById("taskText");
-  const targetNote = document.getElementById("targetNote");
-  const modeBadge = document.getElementById("modeBadge");
-  const tuneCtl = document.getElementById("tuneCtl");
-  const guessCtl = document.getElementById("guessCtl");
-  if(lv.mode==="tune"){
-    tuneCtl.classList.remove("hidden");
-    guessCtl.classList.add("hidden");
-    modeBadge.textContent = t("modeTune");
-    let tk;
-    if(lv.target>0.4) tk="taskTunePos";
-    else if(lv.target<-0.4) tk="taskTuneNeg";
-    else tk="taskTuneZero";
-    taskEl.innerHTML = t(tk);
-    const tShape = lv.target>0.18?t("shapeTiltUp"):lv.target<-0.18?t("shapeTiltDown"):t("shapeRound");
-    targetNote.textContent = t("targetHint") + tShape;
-  } else {
-    tuneCtl.classList.add("hidden");
-    guessCtl.classList.remove("hidden");
-    modeBadge.textContent = t("modeDetective");
-    taskEl.innerHTML = t("taskDetect");
-    targetNote.textContent = "";
+  // 画散点图 (cv, ctx, slope, spread, seed, accentColor, big)
+  function drawScatter(cv, ctx, slope, spread, seed, accent, big){
+    const { w, h } = fitCanvas(cv, ctx);
+    ctx.clearRect(0,0,w,h);
+    const pad = big? 30 : 14;
+    const cx=w/2, cy=h/2;
+    const sx=(w-2*pad)/2.4, sy=(h-2*pad)/2.4;
+    // 网格刻度 (大图)
+    if(big){
+      ctx.strokeStyle=css('--line'); ctx.globalAlpha=0.4;
+      for(const g of [-1,-0.5,0.5,1]){
+        ctx.beginPath(); ctx.moveTo(cx+g*sx,pad); ctx.lineTo(cx+g*sx,h-pad); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(pad,cy-g*sy); ctx.lineTo(w-pad,cy-g*sy); ctx.stroke();
+      }
+      ctx.globalAlpha=1;
+    }
+    // 坐标轴
+    ctx.strokeStyle=css('--line-strong'); ctx.lineWidth=1.2;
+    ctx.beginPath(); ctx.moveTo(pad,cy); ctx.lineTo(w-pad,cy); ctx.stroke();   // x 轴
+    ctx.beginPath(); ctx.moveTo(cx,pad); ctx.lineTo(cx,h-pad); ctx.stroke();   // y 轴
+    if(big){
+      ctx.fillStyle=css('--fg-mute'); ctx.font="10px 'JetBrains Mono',monospace";
+      ctx.fillText('C3', w-pad+2, cy-4);
+      ctx.save(); ctx.translate(cx+4, pad-4); ctx.fillText('C4',0,0); ctx.restore();
+    }
+    // 散点
+    const pts=genPoints(slope, spread, seed, big?140:60);
+    const dot=big?2.6:1.6;
+    ctx.fillStyle=accent;
+    for(const p of pts){
+      const px=cx+p[0]*sx, py=cy-p[1]*sy;
+      if(px<pad||px>w-pad||py<pad||py>h-pad) continue;
+      ctx.beginPath(); ctx.arc(px,py,dot,0,Math.PI*2); ctx.fill();
+    }
   }
-}
 
-/* ───────── 关卡装载 ───────── */
-function loadLevel(){
-  const lv = LEVELS[levelIdx];
-  roundDone = false; detectiveAnswered = false;
-  document.getElementById("nextBtn").disabled = false;
-  const slider = document.getElementById("rSlider");
-  if(lv.mode==="detective"){
-    rNow = lv.fixed;
-    slider.value = Math.round(lv.fixed*100);
-    slider.disabled = true;
-  } else {
-    rNow = 0;
-    slider.value = 0;
-    slider.disabled = false;
+  // 主图: 当前案卷; 左/右上下文图固定示意 (负斜 / 正斜)
+  function drawAll(){
+    const c=CASES[stateGame.cur];
+    const accent = c.rel==='pos'? css('--pos') : c.rel==='neg'? css('--neg') : css('--zero');
+    drawScatter(mainCv, mCtx, c.slope, c.spread, c.seed, accent, true);
+    // 上下文: 想象左手 = 典型负斜; 想象右手 = 典型正斜 (帮助对比"形状不同")
+    drawScatter(leftCv, lCtx, -0.8, 0.28, 101, css('--neg'), false);
+    drawScatter(rightCv, rCtx, 0.8, 0.28, 202, css('--pos'), false);
   }
-  document.getElementById("rVal").textContent = (rNow>=0?"+":"") + rNow.toFixed(2);
-  rebuildSignals();
-  renderTask();
-  updateHUD();
-}
 
-/* ───────── toast ───────── */
-let toastTimer = null;
-function showToast(html, kind){
-  const el = document.getElementById("toast");
-  el.innerHTML = html;
-  el.className = "toast show" + (kind?(" "+kind):"");
-  if(toastTimer) clearTimeout(toastTimer);
-  toastTimer = setTimeout(()=>{ el.classList.remove("show"); }, 3600);
-}
-
-/* ───────── 判定 ───────── */
-function markCleared(){
-  cleared++;
-  document.getElementById("progNum").textContent = cleared;
-  if(cleared>=LEVELS.length){
-    document.getElementById("badge").classList.remove("hidden");
-    showToast(t("win"), "good");
+  // ============ UI 渲染 ============
+  function renderTexts(){
+    const T=t();
+    $('brandTitle').childNodes[0].nodeValue = T.brand;
+    $('brandSub').textContent = T.brandSub;
+    $('mascotCap').textContent = T.mascot;
+    $('routeTitle').textContent = T.routeTitle;
+    $('caseTitle').textContent = T.caseTitle;
+    $('legPos').textContent = T.legPos;
+    $('legNeg').textContent = T.legNeg;
+    $('legZero').textContent = T.legZero;
+    $('legHint').innerHTML = T.legHint;
+    $('langBtn').textContent = T.lang;
+    $('hudTitle').textContent = T.hudTitle;
+    $('hudProgLbl').textContent = T.progLbl;
+    $('hudWrongLbl').textContent = T.wrongLbl;
+    $('scMainTitle').textContent = T.scMain;
+    $('scLeftTitle').textContent = T.scLeft;
+    $('scRightTitle').textContent = T.scRight;
+    $('cspLbl').textContent = T.cspLbl;
+    $('verdictQ').innerHTML = T.verdictQ;
+    $('nextBtn').textContent = T.next;
+    $('vicBtn').textContent = T.vicBtn;
+    $('vicTitle').textContent = T.vicTitle;
+    $('mcCap').textContent = T.mc;
+    renderRoute();
+    renderRelButtons();
+    renderCaseList();
+    renderCsp();
+    updateTrialTag();
   }
-}
 
-function submitTune(){
-  if(roundDone) return;
-  const lv = LEVELS[levelIdx];
-  const cov = covariance();
-  const sh = shapeFromCov(cov);
-  // 目标形态
-  const tShapeKey = lv.target>0.18?"up":lv.target<-0.18?"down":"round";
-  const ok = (sh===tShapeKey);
-  if(ok){
-    roundDone = true;
-    let msg = t("toastTuneGood").replace("R0", (rNow>=0?"+":"")+rNow.toFixed(2));
-    showToast(msg, "good");
-    markCleared();
-    document.getElementById("piGlyph").textContent = "QED";
-    setTimeout(()=>{document.getElementById("piGlyph").textContent="r";}, 1400);
-  } else {
-    let msg = t("toastTuneBad")
-      .replace("SHAPE", shapeLabel(sh))
-      .replace("TARGET", shapeLabel(tShapeKey==="up"?"up":tShapeKey==="down"?"down":"round"));
-    showToast(msg, "bad");
+  function renderRoute(){
+    const box=$('route'); box.innerHTML='';
+    const T=t();
+    T.route.forEach((label,i)=>{
+      const d=document.createElement('div');
+      d.className='route-step';
+      if(i<2) d.classList.add('done');         // S1,S2 已完成
+      else if(i===2) d.classList.add('here');  // S3 你在这
+      const pin=document.createElement('span'); pin.className='pin';
+      const tx=document.createElement('span'); tx.textContent=label;
+      d.appendChild(pin); d.appendChild(tx);
+      box.appendChild(d);
+    });
   }
-}
 
-function submitGuess(guess){
-  if(detectiveAnswered) return;
-  const cov = covariance();
-  const sh = shapeFromCov(cov);
-  const truth = signOf(sh);   // pos / neg / zero
-  const ok = (guess===truth);
-  const signWord = truth==="pos"?t("signPos"):truth==="neg"?t("signNeg"):t("signZero");
-  if(ok){
-    detectiveAnswered = true; roundDone = true;
-    let msg = t("toastDetectGood").replace("SHAPE", shapeLabel(sh)).replace("SIGN", signWord);
-    showToast(msg, "good");
-    markCleared();
-    document.getElementById("piGlyph").textContent = "QED";
-    setTimeout(()=>{document.getElementById("piGlyph").textContent="r";}, 1400);
-  } else {
-    let msg = t("toastDetectBad").replace("SHAPE", shapeLabel(sh)).replace("SIGN", signWord);
-    showToast(msg, "bad");
+  function updateTrialTag(){
+    const c=CASES[stateGame.cur];
+    const tag=$('scTrialTag');
+    tag.className='trial '+(c.trial==='left'?'left':'right');
+    tag.textContent = c.trial==='left' ? (lang==='zh'?'想象左手 trial':'LEFT trial')
+                                       : (lang==='zh'?'想象右手 trial':'RIGHT trial');
+    $('scLeftTag').textContent='LEFT';
+    $('scRightTag').textContent='RIGHT';
   }
-}
 
-function nextLevel(){
-  levelIdx = (levelIdx+1) % LEVELS.length;
-  loadLevel();
-}
+  function renderRelButtons(){
+    const row=$('relRow'); row.innerHTML='';
+    const T=t();
+    const meta={ pos:{cls:'pos',glyph:'/',cap:T.relPosCap,name:T.relPos},
+                 neg:{cls:'neg',glyph:'\\',cap:T.relNegCap,name:T.relNeg},
+                 zero:{cls:'zero',glyph:'o',cap:T.relZeroCap,name:T.relZero} };
+    for(const key of REL_ORDER){
+      const m=meta[key];
+      const b=document.createElement('button');
+      b.type='button'; b.className='rel-btn '+m.cls; b.dataset.rel=key;
+      const g=document.createElement('span'); g.className='glyph'; g.textContent=m.glyph;
+      const nm=document.createElement('span'); nm.textContent=m.name;
+      const cp=document.createElement('span'); cp.className='cap'; cp.textContent=m.cap;
+      b.appendChild(g); b.appendChild(nm); b.appendChild(cp);
+      if(stateGame.selRel===key) b.classList.add('sel');
+      if(stateGame.locked) b.disabled=true;
+      b.addEventListener('click',()=>{ if(stateGame.locked) return; stateGame.selRel=key; rule(key); });
+      row.appendChild(b);
+    }
+  }
 
-/* ───────── 事件 ───────── */
-document.getElementById("rSlider").addEventListener("input", (e)=>{
-  rNow = parseInt(e.target.value,10)/100;
-  document.getElementById("rVal").textContent = (rNow>=0?"+":"") + rNow.toFixed(2);
-  rebuildSignals();
-  updateHUD();
-});
-document.getElementById("submitBtn").addEventListener("click", submitTune);
-document.getElementById("guessPos").addEventListener("click", ()=>submitGuess("pos"));
-document.getElementById("guessZero").addEventListener("click", ()=>submitGuess("zero"));
-document.getElementById("guessNeg").addEventListener("click", ()=>submitGuess("neg"));
-document.getElementById("nextBtn").addEventListener("click", nextLevel);
-document.getElementById("langBtn").addEventListener("click", ()=>{
-  lang = (lang==="zh")?"en":"zh";
-  refreshI18N();
-});
+  function renderCaseList(){
+    const list=$('caseList'); list.innerHTML='';
+    CASES.forEach((c,i)=>{
+      const d=document.createElement('div');
+      d.className='case-dot';
+      const st=stateGame.solved[i];
+      if(st==='ok') d.classList.add('solved');
+      else if(st==='wrong') d.classList.add('wrong');
+      if(i===stateGame.cur && st===null) d.classList.add('current');
+      const mark=document.createElement('span'); mark.className='mark';
+      const label=document.createElement('span'); label.textContent=c.id;
+      d.appendChild(mark); d.appendChild(label);
+      if(st!==null){
+        const v=document.createElement('span');
+        v.style.cssText='margin-left:auto;font-size:9px;color:var(--fg-mute)';
+        v.textContent = st==='wrong' ? (lang==='zh'?'错':'X') : 'OK';
+        d.appendChild(v);
+      }
+      list.appendChild(d);
+    });
+  }
 
-/* ───────── mascot 旋转 + 波形相位推进 ───────── */
-let lastT = 0;
-function tick(ts){
-  if(!lastT) lastT = ts;
-  const dt = (ts-lastT)/1000; lastT = ts;
-  // 波形缓慢流动 (散点形态由 r 决定, 不受相位影响)
-  phase += dt*0.6;
-  rebuildSignals();
-  // tetra 轻微 scale 动画 (旋转感)
-  const tetra = document.getElementById("piTetra");
-  const sc = 1 + 0.06*Math.sin(ts/600);
-  tetra.setAttribute("transform", `translate(46,46) scale(${sc.toFixed(3)},1)`);
-  drawWave();
-  drawScatter();
-  updateHUD(true);
-  requestAnimationFrame(tick);
-}
+  function renderCsp(){
+    const box=$('cspSlots'); box.innerHTML='';
+    CASES.forEach((c,i)=>{
+      const s=document.createElement('div');
+      s.className='csp-slot';
+      const st=stateGame.solved[i];
+      if(st==='ok') s.classList.add('ok');
+      else if(st==='wrong') s.classList.add('bad');
+      box.appendChild(s);
+    });
+  }
 
-window.addEventListener("resize", ()=>{ rebuildSignals(); updateHUD(); });
+  function setHud(){
+    const resolved = stateGame.solved.filter(s=>s!==null).length;
+    $('hudProg').textContent = resolved+' / '+CASES.length;
+    const w=$('hudWrong'); w.textContent=String(stateGame.misfed);
+    w.classList.toggle('bad', stateGame.misfed>0);
+  }
 
-/* init */
-refreshI18N();
-loadLevel();
-requestAnimationFrame(tick);
+  // ============ 判读 ============
+  function rule(choice){ // 'pos'|'neg'|'zero'
+    if(stateGame.locked) return;
+    const c=CASES[stateGame.cur];
+    const T=t();
+    const fb=$('feedback'), fbTag=$('fbTag'), fbText=$('fbText'), nextBtn=$('nextBtn');
+    fb.className='feedback'; fbTag.style.display='inline-block';
+    renderRelButtons(); // 反映 sel
+
+    if(choice===c.rel){
+      stateGame.locked=true;
+      stateGame.solved[stateGame.cur]='ok';
+      fb.classList.add('good'); fbTag.textContent=T.tagGood;
+      fbText.innerHTML = c.fb[lang];
+      nextBtn.classList.add('show');
+    } else {
+      // 判错 —— CSP 装错料 (后果)
+      stateGame.locked=true;
+      stateGame.solved[stateGame.cur]='wrong';
+      stateGame.misfed++;
+      fb.classList.add('harm'); fbTag.textContent=T.tagHarm;
+      const right = c.rel==='pos'?T.relPos:c.rel==='neg'?T.relNeg:T.relZero;
+      fbText.innerHTML = (lang==='zh'
+        ? `判错了。你给 CSP 喂了错的协方差关系，它会按错的方向去分左右手，分类准确率被拖垮。正确答案是<b>${right}</b>—— `
+        : `Wrong. You fed CSP the wrong covariance relation, so it separates left/right along the wrong axis and accuracy collapses. The right answer is <b>${right}</b> — `) + c.fb[lang];
+      nextBtn.classList.add('show');
+    }
+    setHud(); renderCaseList(); renderRelButtons(); renderCsp();
+  }
+
+  // ============ 推进 ============
+  function advance(){
+    const allDone = stateGame.solved.every(s=>s!==null);
+    if(allDone){ showVictory(); return; }
+    let next=-1;
+    for(let i=1;i<=CASES.length;i++){
+      const idx=(stateGame.cur+i)%CASES.length;
+      if(stateGame.solved[idx]===null){ next=idx; break; }
+    }
+    stateGame.cur = next>=0 ? next : stateGame.cur;
+    stateGame.selRel=null; stateGame.locked=false;
+    const fb=$('feedback'); fb.className='feedback';
+    $('fbTag').style.display='none';
+    $('fbText').textContent = t().intro;
+    $('nextBtn').classList.remove('show');
+    drawAll(); renderRelButtons(); renderCaseList(); updateTrialTag(); setHud();
+  }
+
+  function showVictory(){
+    const T=t();
+    const correct = stateGame.solved.filter(s=>s==='ok').length;
+    $('vicStat').textContent = (lang==='zh'
+      ? `判读 ${CASES.length} / ${CASES.length} · 判对 ${correct} · CSP 用错料 ${stateGame.misfed}`
+      : `Ruled ${CASES.length}/${CASES.length} · Correct ${correct} · CSP misfed ${stateGame.misfed}`);
+    $('vicText').innerHTML = stateGame.misfed===0
+      ? (lang==='zh'
+        ? '完美。你能一眼读懂 C3-C4 散点的斜向：右上=正、左上右下=负、圆团=零。这正是 <b>CSP</b> 工作的原料——下一步 (S4) 你会让 CSP 用这些协方差，自动找出最分得开左右手的空间滤波方向。离脑控 Minecraft 又近了一块积木。'
+        : 'Perfect. You can read the tilt of C3-C4 scatter at a glance: up-right = positive, up-left/down-right = negative, round blob = zero. This is exactly the raw material <b>CSP</b> eats — next (S4) you will let CSP use these covariances to auto-find the spatial filter that best separates left from right. One more block toward brain-control Minecraft.')
+      : (lang==='zh'
+        ? `你判完了全部 5 对，但有 ${stateGame.misfed} 次给 CSP 喂了错的协方差关系。记住：先抓散点云的<b>主斜向</b>，别被噪声晃乱。CSP 的准确率全压在这步判读上。再来一遍？`
+        : `You ruled all 5 pairs but misfed CSP ${stateGame.misfed} time(s) with wrong covariance. Lesson: grab the <b>main tilt</b> of the cloud first, do not let noise fool you. CSP accuracy rests on this reading. Run it again?`);
+    $('victory').classList.add('show');
+  }
+
+  function resetGame(){
+    stateGame.cur=0;
+    stateGame.solved=new Array(CASES.length).fill(null);
+    stateGame.selRel=null; stateGame.locked=false; stateGame.misfed=0;
+    $('victory').classList.remove('show');
+    const fb=$('feedback'); fb.className='feedback';
+    $('fbTag').style.display='none';
+    $('fbText').textContent=t().intro;
+    $('nextBtn').classList.remove('show');
+    drawAll(); renderTexts(); setHud();
+  }
+
+  // ============ 事件 ============
+  $('nextBtn').addEventListener('click',advance);
+  $('vicBtn').addEventListener('click',resetGame);
+  $('langBtn').addEventListener('click',()=>{
+    lang = lang==='zh' ? 'en' : 'zh';
+    document.documentElement.lang = lang==='zh' ? 'zh-CN' : 'en';
+    renderTexts(); setHud();
+    if($('victory').classList.contains('show')) showVictory();
+  });
+
+  let rt;
+  window.addEventListener('resize',()=>{ clearTimeout(rt); rt=setTimeout(drawAll,120); });
+
+  // ============ init ============
+  function init(){
+    renderTexts();
+    drawAll();
+    setHud();
+    requestAnimationFrame(()=>requestAnimationFrame(drawAll));
+  }
+  init();
+})();
 </script>
 </body>
 </html>

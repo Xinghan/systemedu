@@ -1,569 +1,812 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>CSP — 让电脑自动找最佳看脑波角度</title>
-<script src="https://cdn.tailwindcss.com"></script>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CSP — 自动找出分左右手的方向</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;700&family=Inter:wght@400;600;800&family=JetBrains+Mono:wght@400;600;700&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
 <style>
-  /* ---- 第 1 层: 共享深空底 (B 类硬约束, 26 套统一) ---- */
   :root{
+    /* Layer 1 — shared deep-space canvas (all 26 subjects, fixed) */
     --bg-0: oklch(0.14 0.035 265);
     --bg-1: oklch(0.18 0.04 265);
     --bg-2: oklch(0.22 0.045 265);
     --bg-3: oklch(0.28 0.05 265);
     --line: oklch(0.35 0.05 265 / 0.35);
     --line-strong: oklch(0.55 0.08 265 / 0.55);
-    --fg:      oklch(0.96 0.01 265);
-    --fg-dim:  oklch(0.75 0.02 265);
+    --fg: oklch(0.96 0.01 265);
+    --fg-dim: oklch(0.75 0.02 265);
     --fg-mute: oklch(0.55 0.03 265);
-    --gold:    oklch(0.85 0.14 85);
-    /* ---- 第 2 层: math signature accent (MTH-06 electric blue) ---- */
+    --gold: oklch(0.85 0.14 85);
+    /* Layer 2 — math signature accent (electric blue) */
     --accent: oklch(0.72 0.17 245);
-    /* ---- 第 3 层: math 5 色 palette (themes.js MTH-06, 限定用法) ---- */
-    --axis:     oklch(0.72 0.17 245);   /* AXIS — 左手类 / 主轴 */
-    --proof:    oklch(0.52 0.16 245);   /* PROOF — 推导链 */
-    --shadow:   oklch(0.35 0.10 245);   /* SHADOW — 底纹 */
-    --solution: oklch(0.92 0.08 240);   /* SOLUTION — 高亮解 */
-    --qed:      oklch(0.85 0.14 85);    /* QED — 收束印章, 同 gold */
-    --right:    oklch(0.75 0.16 15);    /* 右手类对比色 (rose, 来自 med 区分用, 非 body) */
+    /* Layer 3 — math 5-color palette (themes.js id:'math', MTH-06) */
+    --axis:     oklch(0.72 0.17 245);   /* AXIS — the rotating direction w */
+    --proof:    oklch(0.52 0.16 245);   /* PROOF — secondary / right-hand cloud */
+    --shadow:   oklch(0.35 0.10 245);   /* SHADOW — grid / drop lines */
+    --solution: oklch(0.92 0.08 240);   /* SOLUTION — projected-shadow dots */
+    --qed:      oklch(0.85 0.14 85);    /* QED — key insight (== gold) */
   }
-  html,body{margin:0;padding:0;height:100vh;overflow:hidden;background:var(--bg-0);
-    font-family:'Inter',system-ui,sans-serif;color:var(--fg);}
-  .sidebar{background:var(--bg-1);border-right:1px solid var(--line-strong);}
-  .lang-btn{background:var(--bg-2);border:1px solid var(--line-strong);color:var(--fg);
-    font-weight:600;box-shadow:3px 3px 0 var(--bg-0);transition:transform .1s,box-shadow .1s;
-    font-family:'JetBrains Mono',monospace;}
-  .lang-btn:hover{transform:translate(-1px,-1px);box-shadow:4px 4px 0 var(--bg-0);}
+  html,body{margin:0;padding:0;height:100vh;width:100%;overflow:hidden;
+    background:var(--bg-0);font-family:'Noto Sans SC','Inter',sans-serif;color:var(--fg);}
+  .wrapper{display:flex;flex-direction:row;height:100vh;overflow:hidden;}
+  /* Sidebar 200px */
+  .sidebar{width:200px;min-width:200px;max-width:200px;flex-shrink:0;
+    display:flex;flex-direction:column;gap:9px;padding:14px 12px;
+    background:var(--bg-1);border-right:1px solid var(--line);overflow-y:auto;}
+  .brand{display:flex;align-items:center;gap:8px;}
+  .mascot{flex-shrink:0;}
+  .sidebar h1{font-family:'Space Grotesk','Inter',sans-serif;font-size:13px;font-weight:700;
+    line-height:1.3;color:var(--accent);letter-spacing:0.02em;}
+  .sidebar .code{font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:0.14em;
+    color:var(--fg-mute);text-transform:uppercase;}
+  .intro{font-size:11px;line-height:1.55;color:var(--fg-dim);}
+  .intro .en{font-style:italic;font-size:10px;color:var(--fg-mute);margin-top:4px;}
+  .guide-label{font-family:'JetBrains Mono',monospace;font-size:9px;font-weight:700;
+    letter-spacing:0.14em;text-transform:uppercase;color:var(--accent);margin-top:2px;}
+  .guide{list-style:none;padding:0;margin:0;font-size:11px;line-height:1.55;color:var(--fg-dim);}
+  .guide li{margin-bottom:2px;}
+  /* project roadmap S1-S6 */
+  .road-label{font-family:'JetBrains Mono',monospace;font-size:9px;font-weight:700;
+    letter-spacing:0.14em;text-transform:uppercase;color:var(--fg-mute);margin-top:6px;}
+  .road{list-style:none;padding:0;margin:3px 0 0 0;font-family:'JetBrains Mono',monospace;
+    font-size:10px;line-height:1.5;}
+  .road li{display:flex;align-items:center;gap:6px;color:var(--fg-mute);margin-bottom:1px;}
+  .road li .dot{width:6px;height:6px;flex-shrink:0;border-radius:50%;
+    background:var(--line-strong);}
+  .road li.here{color:var(--accent);font-weight:700;}
+  .road li.here .dot{background:var(--accent);box-shadow:0 0 6px var(--accent);}
+  .road li.done .dot{background:var(--fg-mute);}
+  .lang-btn{margin-top:auto;align-self:flex-start;font-family:'JetBrains Mono',monospace;
+    font-size:10px;font-weight:700;letter-spacing:0.1em;padding:5px 12px;cursor:pointer;
+    color:var(--accent);background:transparent;border:1px solid var(--line-strong);
+    box-shadow:3px 3px 0 var(--bg-0);transition:transform .1s;}
+  .lang-btn:hover{transform:translate(-1px,-1px);}
   .lang-btn:active{transform:translate(1px,1px);box-shadow:1px 1px 0 var(--bg-0);}
-  .sub{position:absolute;bottom:22px;left:50%;transform:translateX(-50%);text-align:center;width:84%;pointer-events:none;}
-  .sub-zh{font-size:20px;font-weight:700;color:var(--fg);background:oklch(0.18 0.04 265 / 0.9);
-    padding:6px 18px;display:inline-block;border:1px solid var(--line-strong);}
-  .sub-en{font-size:12px;font-style:italic;color:var(--fg-dim);margin-top:4px;
-    font-family:'JetBrains Mono',monospace;}
-  .hud{position:absolute;top:16px;right:16px;background:oklch(0.18 0.04 265 / 0.92);
-    border:1px solid var(--line-strong);padding:10px 14px;font-family:'JetBrains Mono',monospace;
-    font-size:11px;box-shadow:3px 3px 0 var(--bg-0);min-width:180px;}
-  .hud-row{display:flex;justify-content:space-between;gap:12px;line-height:1.65;}
-  .hud-lbl{color:var(--fg-dim);}.hud-val{color:var(--accent);font-weight:700;}
-  .hud-val.gold{color:var(--gold);}
+  /* Main stage */
+  .stage{flex:1;min-width:0;position:relative;overflow:hidden;}
+  canvas{position:absolute;inset:0;width:100%;height:100%;display:block;}
+  .hud{position:absolute;top:16px;right:16px;background:oklch(0.18 0.04 265 / 0.85);
+    border:1px solid var(--line-strong);padding:9px 13px;font-family:'JetBrains Mono',monospace;
+    font-size:11px;box-shadow:3px 3px 0 var(--bg-0);min-width:188px;}
+  .hud-row{display:flex;justify-content:space-between;gap:14px;line-height:1.7;}
+  .hud-lbl{color:var(--fg-mute);font-size:7px;letter-spacing:0.14em;text-transform:uppercase;
+    align-self:center;}
+  .hud-val{color:var(--accent);font-weight:700;}
+  .sub{position:absolute;bottom:22px;left:50%;transform:translateX(-50%);
+    text-align:center;width:88%;pointer-events:none;}
+  .sub-zh{font-size:18px;font-weight:700;color:var(--fg);
+    background:oklch(0.18 0.04 265 / 0.85);padding:7px 18px;display:inline-block;
+    border:1px solid var(--line-strong);box-shadow:3px 3px 0 var(--bg-0);}
+  .sub-en{font-size:12px;font-style:italic;color:var(--fg-dim);margin-top:5px;}
 </style>
 </head>
-<body class="h-screen overflow-hidden flex">
+<body>
+<div class="wrapper">
 
-<aside class="sidebar w-[200px] h-screen flex-shrink-0 flex flex-col gap-3 p-4">
-  <div class="flex items-center gap-2">
-    <!-- mascot: Pi — 旋转四面体 (MTH-06), 第 3 层 palette 用于 mascot 配色 -->
-    <svg width="34" height="34" viewBox="0 0 40 40" id="mascot">
-      <polygon points="20,5 35,30 5,30" fill="none" stroke="var(--axis)" stroke-width="1.6"/>
+<aside class="sidebar">
+  <div class="brand">
+    <!-- mascot: Pi — rotating tetrahedron, math signature (themes.js id:'math') -->
+    <svg class="mascot" width="30" height="30" viewBox="0 0 40 40" aria-hidden="true">
+      <polygon points="20,5 35,30 5,30" fill="none" stroke="var(--accent)" stroke-width="1.6"/>
       <polygon points="20,5 35,30 20,22" fill="var(--proof)" opacity="0.55"/>
-      <polygon points="20,5 20,22 5,30" fill="var(--axis)" opacity="0.35"/>
-      <line x1="20" y1="22" x2="5" y2="30" stroke="var(--solution)" stroke-width="1"/>
-      <line x1="20" y1="22" x2="35" y2="30" stroke="var(--solution)" stroke-width="1"/>
-      <circle cx="20" cy="16" r="1.8" fill="var(--qed)"/>
+      <polygon points="20,5 5,30 20,22" fill="var(--axis)" opacity="0.35"/>
+      <circle cx="20" cy="22" r="2.4" fill="var(--solution)"/>
+      <text x="20" y="20" text-anchor="middle" font-family="JetBrains Mono,monospace"
+            font-size="8" fill="var(--qed)">Pi</text>
     </svg>
-    <span class="text-xs font-bold tracking-wide" style="font-family:'JetBrains Mono',monospace;color:var(--fg-dim);">MTH-06 / Pi</span>
+    <div>
+      <h1 id="title">CSP · 找最优方向</h1>
+      <div class="code">EEG · M29 · CSP</div>
+    </div>
   </div>
-  <h1 class="text-base font-bold leading-snug" id="title">CSP<br>自动找最佳角度</h1>
-  <div class="text-xs leading-relaxed" id="intro" style="color:var(--fg-dim);">
-    <p class="mb-2">手动转方向找不完。让电脑直接<b style="color:var(--accent);">解出</b>那个最能把左右手分开的角度。</p>
-    <p class="italic text-[10px]" style="color:var(--fg-mute);font-family:'JetBrains Mono',monospace;" id="intro-en">Solve, don't search.</p>
+
+  <div class="intro" id="intro">
+    <span id="introZh">前面所有方差、协方差矩阵、投影, 都是为了这一步: 让电脑自己转出一组方向, 让想左手的投影方差最大、想右手的最小。</span>
+    <div class="en" id="introEn">CSP rotates a direction so left-hand projection variance is max, right-hand min.</div>
   </div>
-  <ul class="text-xs space-y-1.5" id="watchlist" style="color:var(--fg-dim);"></ul>
-  <button id="langBtn" class="lang-btn mt-auto px-3 py-2 text-xs">CN / EN</button>
+
+  <div class="guide-label" id="guideLabel">观察重点</div>
+  <ul class="guide" id="guide"></ul>
+
+  <!-- Project anchor: S1-S6 roadmap, S3 highlighted -->
+  <div class="road-label" id="roadLabel">脑控 Minecraft · 路线</div>
+  <ul class="road" id="road">
+    <li class="done"><span class="dot"></span><span id="r1">S1 认识脑波</span></li>
+    <li class="done"><span class="dot"></span><span id="r2">S2 清洁信号</span></li>
+    <li class="here"><span class="dot"></span><span id="r3">S3 找特征 (CSP)</span></li>
+    <li><span class="dot"></span><span id="r4">S4 训练分类器</span></li>
+    <li><span class="dot"></span><span id="r5">S5 接 Minecraft</span></li>
+    <li><span class="dot"></span><span id="r6">S6 分享作品</span></li>
+  </ul>
+
+  <button class="lang-btn" id="langBtn">中 / EN</button>
 </aside>
 
-<main class="flex-1 h-screen relative overflow-hidden">
-  <canvas id="stage" class="absolute inset-0 w-full h-full"></canvas>
+<main class="stage">
+  <canvas id="c"></canvas>
   <div class="hud">
-    <div class="hud-row"><span class="hud-lbl">frame</span><span class="hud-val" id="hScene">1/5</span></div>
-    <div class="hud-row"><span class="hud-lbl">stage</span><span class="hud-val" id="hStage">recall</span></div>
-    <div class="hud-row"><span class="hud-lbl">Var_L = w.Cov_L.w</span><span class="hud-val" id="hVarL">--</span></div>
-    <div class="hud-row"><span class="hud-lbl">Var_R = w.Cov_R.w</span><span class="hud-val" id="hVarR">--</span></div>
-    <div class="hud-row"><span class="hud-lbl">ratio (Rayleigh)</span><span class="hud-val gold" id="hRatio">--</span></div>
+    <div class="hud-row"><span class="hud-lbl" id="hudL1">stage</span><span class="hud-val" id="hudV1">--</span></div>
+    <div class="hud-row"><span class="hud-lbl" id="hudL2">w angle</span><span class="hud-val" id="hudV2">--</span></div>
+    <div class="hud-row"><span class="hud-lbl" id="hudL3">var L / var R</span><span class="hud-val" id="hudV3">--</span></div>
+    <div class="hud-row"><span class="hud-lbl" id="hudL4">ratio (Rayleigh)</span><span class="hud-val" id="hudV4">--</span></div>
   </div>
   <div class="sub">
-    <div class="sub-zh" id="subZh">...</div>
-    <div class="sub-en" id="subEn">...</div>
+    <div class="sub-zh" id="subZh"></div>
+    <div class="sub-en" id="subEn"></div>
   </div>
 </main>
 
+</div>
+
 <script>
-/* ============================================================
-   M29 CSP (Common Spatial Pattern) — B 类机制 animation
-   核心: max Rayleigh 商 (w·Cov_L·w)/(w·Cov_R·w)
-        = 广义特征值问题 Cov_L w = lambda * Cov_R w
-   公式只在配合可视化分步处出现, 用文字 + 几何, 不堆符号。
-   Sigma 一律写 Cov_L / Cov_R (避免 window 同名 & Unicode Sigma 符号)。
-============================================================ */
+'use strict';
+
+// ====================== Palette (resolved oklch) ======================
+var P = {
+  bg0:'oklch(0.14 0.035 265)', bg1:'oklch(0.18 0.04 265)', bg2:'oklch(0.22 0.045 265)',
+  bg3:'oklch(0.28 0.05 265)',
+  line:'oklch(0.35 0.05 265 / 0.35)', lineStrong:'oklch(0.55 0.08 265 / 0.55)',
+  fg:'oklch(0.96 0.01 265)', fgDim:'oklch(0.75 0.02 265)', fgMute:'oklch(0.55 0.03 265)',
+  accent:'oklch(0.72 0.17 245)',
+  axis:'oklch(0.72 0.17 245)', proof:'oklch(0.52 0.16 245)', shadow:'oklch(0.35 0.10 245)',
+  solution:'oklch(0.92 0.08 240)', qed:'oklch(0.85 0.14 85)',
+  left:'oklch(0.85 0.14 85)',     // left-hand class cloud = QED gold (variance to MAXimize)
+  right:'oklch(0.72 0.17 245)'    // right-hand class cloud = AXIS blue (variance to MINimize)
+};
+
+// ====================== i18n ======================
 var LANG='cn';
 var I18N = {
-  title:{cn:'CSP<br>自动找最佳角度', en:'CSP<br>auto-find best axis'},
-  intro_zh:{cn:'手动转方向找不完。让电脑直接<b style="color:var(--accent);">解出</b>那个最能把左右手分开的角度。',
-            en:'Too many angles to try by hand. Let the computer <b style="color:var(--accent);">solve</b> for the best one.'},
-  intro_en:{cn:'Solve, don\'t search.', en:'Solve, don\'t search.'},
-  watch:{cn:['F1 回顾: 手动转方向找不完','F2 目标: 左手方差大, 右手方差小','F3 比值 = Rayleigh 商','F4 广义特征值一步解出','F5 CSP 滤波器: 完美可分'],
-         en:['F1 recall: rotating by hand never ends','F2 goal: big Var_L, small Var_R','F3 ratio = Rayleigh quotient','F4 generalized eigenvalue solves it','F5 CSP filter: cleanly separable']},
-  s0_zh:{cn:'F1 回顾 M28: 一只手转方向, 投影方差就变 — 但方向有无穷多个, 手动试不完', en:'F1 recall: rotating the axis changes variance, but there are infinitely many angles to try'},
-  s0_en:{cn:'There must be a way to compute the best angle directly.', en:'Surely we can compute the best one directly.'},
-  s1_zh:{cn:'F2 目标: 想象左手 (蓝) 和右手 (红) 两团脑波。要一个方向 w, 投影后左手方差大、右手方差小', en:'F2 goal: find axis w so projected Var_L is large and Var_R is small'},
-  s1_en:{cn:'Two covariance clouds Cov_L and Cov_R, from M26.', en:'Two covariance clouds Cov_L and Cov_R, from M26.'},
-  s2_zh:{cn:'F3 投影方差 = w · Cov · w (用 M26 协方差算)。目标 = 最大化 比值 Var_L / Var_R = Rayleigh 商', en:'F3 projected var = w·Cov·w. Maximize ratio Var_L/Var_R = Rayleigh quotient'},
-  s2_en:{cn:'Big ratio = left spreads wide while right stays tight.', en:'Big ratio = left wide, right tight.'},
-  s3_zh:{cn:'F4 让比值最大的 w 不用搜 — 解广义特征值: Cov_L w = (lambda) Cov_R w。lambda 最大的方向就是答案', en:'F4 the maximizer solves Cov_L w = (lambda) Cov_R w — pick largest lambda'},
-  s3_en:{cn:'Generalized eigenvalue: one solve, exact best axis.', en:'Generalized eigenvalue: one solve, the exact best axis.'},
-  s4_zh:{cn:'F5 CSP 一次给出一组最优空间滤波器, 左右手投影方差天差地别 — 完美可分', en:'F5 CSP yields optimal spatial filters; left vs right cleanly separable'},
-  s4_en:{cn:'CSP: auto-find the best brainwave angle — the core of BCI.', en:'CSP: the core algorithm of a BCI.'},
+  title:{cn:'CSP · 找最优方向', en:'CSP · best direction'},
+  introZh:{cn:'前面所有方差、协方差矩阵、投影, 都是为了这一步: 让电脑自己转出一组方向, 让想左手的投影方差最大、想右手的最小。',
+           en:'Every variance, covariance matrix and projection so far built up to this: let the computer rotate a direction so left-hand projection variance is largest and right-hand smallest.'},
+  introEn:{cn:'CSP rotates a direction so left-hand projection variance is max, right-hand min.',
+           en:'max ratio (w.Cov_L.w)/(w.Cov_R.w) = generalized eigenvalue.'},
+  guideLabel:{cn:'观察重点', en:'WATCH FOR'},
+  guide:{cn:['· 同一根方向 w 一直在转','· w.Cov.w = 投影后的方差','· 转 w: 左方差 / 右方差 此消彼长','· 目标 = 让这个比值最大','· 广义特征值一步锁定最优 w'],
+         en:['· one direction w keeps rotating','· w.Cov.w = variance after projection','· rotate w: var L vs var R trade off','· goal = maximize this ratio','· generalized eigenvalue locks best w']},
+  hudL1:{cn:'stage', en:'stage'}, hudL2:{cn:'w angle', en:'w angle'},
+  hudL3:{cn:'var L / var R', en:'var L / var R'}, hudL4:{cn:'ratio (Rayleigh)', en:'ratio (Rayleigh)'},
+
+  // stage names (HUD)
+  st0:{cn:'回扣 · 两个协方差矩阵', en:'recall · two cov matrices'},
+  st1:{cn:'w.Cov.w = 投影方差', en:'w.Cov.w = proj variance'},
+  st2:{cn:'转 w · 方差此消彼长', en:'rotate w · variance trade-off'},
+  st3:{cn:'目标 · 比值 Rayleigh 商', en:'goal · Rayleigh ratio'},
+  st4:{cn:'广义特征值 · 一步锁定', en:'gen-eigen · lock best w'},
+  st5:{cn:'CSP 跑通 · 左右可分', en:'CSP solved · separable'},
+
+  // subtitles (zh = main line, en = secondary)
+  s0zh:{cn:'还记得吗? M26 给了我们两个协方差矩阵: Cov_L 描述想左手时信号怎么抖, Cov_R 描述想右手时',
+        en:'Remember? M26 gave us two covariance matrices: Cov_L for how the signal varies when imagining the left hand, Cov_R for the right.'},
+  s0en:{cn:'这两团点云就是想左手 / 想右手两种脑电状态。CSP 要找一根方向 w 把它们分开。',
+        en:'These two clouds are the left-imagery and right-imagery brain states. CSP will find a direction w that separates them.'},
+  s1zh:{cn:'把信号投到方向 w 上 (M28 的投影), 投影后这一串数的方差 = w.Cov.w',
+        en:'Project the signal onto direction w (the M28 projection); the variance of those projected numbers equals w.Cov.w.'},
+  s1en:{cn:'金条 = 左手投影的方差, 蓝条 = 右手投影的方差。它们都随 w 改变。',
+        en:'Gold bar = variance of left-hand projection, blue bar = right-hand. Both change with w.'},
+  s2zh:{cn:'同一根 w 慢慢转: 左手方差变大时右手方差就变小, 两根条此消彼长',
+        en:'Rotate the same w slowly: as left variance grows the right shrinks. The two bars trade off.'},
+  s2en:{cn:'没有哪个方向能让两个都大。CSP 要的是让左大右小最极端的那一个。',
+        en:'No direction makes both large. CSP wants the one where left is largest and right smallest.'},
+  s3zh:{cn:'目标写成一个比值: (w.Cov_L.w) / (w.Cov_R.w), 这叫 Rayleigh 商, 越大越好',
+        en:'Write the goal as one ratio: (w.Cov_L.w)/(w.Cov_R.w) — the Rayleigh quotient. Bigger is better.'},
+  s3en:{cn:'转 w 时仪表上的比值随动。我们要找让指针顶到最高的那个 w。',
+        en:'As w rotates the gauge moves. We seek the w that pushes the needle to its peak.'},
+  s4zh:{cn:'不用一格一格试: 解广义特征值 Cov_L.w = (lambda).Cov_R.w, 一步就给出最优 w',
+        en:'No need to sweep angle by angle: solve the generalized eigenproblem Cov_L.w = lambda.Cov_R.w to get the optimal w in one step.'},
+  s4en:{cn:'最大特征值 lambda 就是比值的最大值, 对应的特征向量就是最优方向 w*。',
+        en:'The largest eigenvalue lambda is the maximum of the ratio; its eigenvector is the best direction w*.'},
+  s5zh:{cn:'CSP 跑通了 — 在 w* 上投影, 想左手和想右手的两团数被完美拉开, 你有了真正能分左右手的特征',
+        en:'CSP is solved — projected onto w*, the left and right clouds pull fully apart. You now have a real feature that separates the hands.'},
+  s5en:{cn:'下一步 S4: 用这个 CSP 特征训练你自己的分类器, 离脑控 Minecraft 又近一步。',
+        en:'Next, S4: train your own classifier on this CSP feature — one step closer to mind-controlling Minecraft.'},
+
+  // canvas labels
+  lblL:{cn:'想左手', en:'left hand'},
+  lblR:{cn:'想右手', en:'right hand'},
+  lblCovL:{cn:'Cov_L  (左手协方差, M26)', en:'Cov_L  (left cov, M26)'},
+  lblCovR:{cn:'Cov_R  (右手协方差, M26)', en:'Cov_R  (right cov, M26)'},
+  lblW:{cn:'方向 w', en:'direction w'},
+  lblWstar:{cn:'最优方向 w*', en:'best direction w*'},
+  lblVarL:{cn:'左手方差  w.Cov_L.w', en:'var L  w.Cov_L.w'},
+  lblVarR:{cn:'右手方差  w.Cov_R.w', en:'var R  w.Cov_R.w'},
+  lblProj:{cn:'投到 w 上的一维信号', en:'1-D signal projected on w'},
+  lblRatio:{cn:'比值 = 左方差 / 右方差  (Rayleigh 商)', en:'ratio = var L / var R  (Rayleigh quotient)'},
+  lblMax:{cn:'最大化它 = 找最能分左右手的 w', en:'maximize it = find the most separating w'},
+  lblLam:{cn:'lambda = 比值的最大值', en:'lambda = max of the ratio'},
+  lblTake:{cn:'下一步 S4: 用这个特征训分类器', en:'next S4: train a classifier on this feature'}
 };
-var STAGE_KEY=['recall','goal','rayleigh','eigen','filter'];
-function tt(k){return (I18N[k]&&I18N[k][LANG])||(I18N[k]&&I18N[k]['en'])||k;}
+function t(k){ return (I18N[k]&&I18N[k][LANG]) || (I18N[k]&&I18N[k].en) || k; }
+
 function refreshI18N(){
-  document.getElementById('title').innerHTML = tt('title');
-  document.getElementById('intro').children[0].innerHTML = tt('intro_zh');
-  document.getElementById('intro-en').textContent = tt('intro_en');
-  document.getElementById('watchlist').innerHTML = tt('watch').map(function(x){return '<li>'+x+'</li>';}).join('');
-  document.getElementById('langBtn').textContent = LANG==='cn'?'CN / EN':'EN / CN';
-  updateSubtitle(currentScene);
+  document.getElementById('title').textContent = t('title');
+  document.getElementById('introZh').textContent = t('introZh');
+  document.getElementById('introEn').textContent = t('introEn');
+  document.getElementById('guideLabel').textContent = t('guideLabel');
+  document.getElementById('guide').innerHTML = t('guide').map(function(x){return '<li>'+x+'</li>';}).join('');
+  document.getElementById('roadLabel').textContent = LANG==='cn' ? '脑控 Minecraft · 路线' : 'Mind-Minecraft · path';
+  document.getElementById('r1').textContent = LANG==='cn' ? 'S1 认识脑波' : 'S1 know EEG';
+  document.getElementById('r2').textContent = LANG==='cn' ? 'S2 清洁信号' : 'S2 clean signal';
+  document.getElementById('r3').textContent = LANG==='cn' ? 'S3 找特征 (CSP)' : 'S3 features (CSP)';
+  document.getElementById('r4').textContent = LANG==='cn' ? 'S4 训练分类器' : 'S4 train model';
+  document.getElementById('r5').textContent = LANG==='cn' ? 'S5 接 Minecraft' : 'S5 to Minecraft';
+  document.getElementById('r6').textContent = LANG==='cn' ? 'S6 分享作品' : 'S6 share';
+  document.getElementById('hudL1').textContent = t('hudL1');
+  document.getElementById('hudL2').textContent = t('hudL2');
+  document.getElementById('hudL3').textContent = t('hudL3');
+  document.getElementById('hudL4').textContent = t('hudL4');
+  document.getElementById('langBtn').textContent = LANG==='cn' ? '中 / EN' : 'EN / 中';
+  updateSub(curStage);
 }
 document.getElementById('langBtn').addEventListener('click', function(){
-  LANG = LANG==='cn'?'en':'cn'; refreshI18N();
+  LANG = LANG==='cn' ? 'en' : 'cn'; refreshI18N();
 });
 
-/* ---------- canvas setup ---------- */
-var canvas = document.getElementById('stage');
-var cx2d = canvas.getContext('2d');
-var W=0,H=0,DPR=1;
+// ====================== Canvas ======================
+var cv = document.getElementById('c');
+var ctx = cv.getContext('2d');
+var W=0, H=0, DPR=1;
 function resize(){
-  var rect = canvas.parentElement.getBoundingClientRect();
-  if(rect.width<1||rect.height<1) return;
-  DPR = window.devicePixelRatio||1;
-  canvas.width = rect.width*DPR; canvas.height = rect.height*DPR;
-  canvas.style.width = rect.width+'px'; canvas.style.height = rect.height+'px';
-  cx2d.setTransform(DPR,0,0,DPR,0,0);
+  var rect = cv.parentElement.getBoundingClientRect();
+  if(rect.width<1 || rect.height<1) return;
+  DPR = Math.min(window.devicePixelRatio||1, 2);
+  cv.width = rect.width*DPR; cv.height = rect.height*DPR;
+  cv.style.width = rect.width+'px'; cv.style.height = rect.height+'px';
+  ctx.setTransform(DPR,0,0,DPR,0,0);
   W = rect.width; H = rect.height;
 }
 window.addEventListener('resize', resize);
 resize(); setTimeout(resize,200); setTimeout(resize,600);
-document.fonts.ready.then(function(){resize();});
+document.fonts.ready.then(function(){ resize(); });
 
-/* ---------- color constants (read from CSS vars via canvas) ---------- */
-var C_AXIS='oklch(0.72 0.17 245)';      // left / 主轴 / blue
-var C_AXIS_T='oklch(0.72 0.17 245 / 0.5)';
-var C_RIGHT='oklch(0.75 0.16 15)';       // right / rose
-var C_RIGHT_T='oklch(0.75 0.16 15 / 0.5)';
-var C_PROOF='oklch(0.52 0.16 245)';
-var C_SOL='oklch(0.92 0.08 240)';
-var C_GOLD='oklch(0.85 0.14 85)';
-var C_FG='oklch(0.96 0.01 265)';
-var C_DIM='oklch(0.75 0.02 265)';
-var C_MUTE='oklch(0.55 0.03 265)';
-var C_LINE='oklch(0.45 0.06 265 / 0.5)';
-var C_PANEL='oklch(0.18 0.04 265)';
-var C_PANEL2='oklch(0.22 0.045 265)';
-
-/* ---------- data: two covariance clouds ----------
-   left (蓝): 沿 x 方向方差大 (横向铺开)
-   right (红): 沿 y 方向方差大 (纵向铺开)
-   => 最佳投影方向 约等于 水平 (x), 此时 Var_L 远大于 Var_R   */
-function gauss(seed){
-  var u1 = (Math.sin(seed*12.9898)*43758.5453)%1; u1 = u1<0?u1+1:u1;
-  var u2 = (Math.sin(seed*78.233)*43758.5453)%1; u2 = u2<0?u2+1:u2;
-  if(u1<0.0001) u1=0.0001;
-  return Math.sqrt(-2*Math.log(u1))*Math.cos(2*Math.PI*u2);
+// ====================== Deterministic data ======================
+function rnd(seed){ var x = Math.sin(seed*12.9898)*43758.5453; return x - Math.floor(x); }
+function gaussPair(seed){
+  var u1 = rnd(seed*1.7+0.13); var u2 = rnd(seed*2.3+0.71);
+  if(u1 < 1e-4) u1 = 1e-4;
+  var r = Math.sqrt(-2*Math.log(u1));
+  return [r*Math.cos(2*Math.PI*u2), r*Math.sin(2*Math.PI*u2)];
 }
-function genCloud(sx, sy, rho, n, seed){
-  var arr = [];
+// Two-class clouds: left-hand vs right-hand. CSP is about VARIANCE structure, not just
+// mean separation. So the two classes share the SAME center (origin) but have orthogonal
+// elongation: left-hand cloud stretches along ANG_L, right-hand along ANG_R (perp). CSP
+// then must find a direction where one variance is large and the other small.
+var ANG_L = 60 * Math.PI/180;   // left-hand variance is largest along this axis
+var ANG_R = ANG_L + Math.PI/2;  // right-hand variance largest perpendicular to it
+function buildAnisoCloud(n, ang, sMajor, sMinor, seed){
+  var ca=Math.cos(ang), sa=Math.sin(ang);
+  var pts=[];
   for(var i=0;i<n;i++){
-    var z1 = gauss(seed+i*2.7), z2 = gauss(seed+i*2.7+1.3);
-    arr.push([sx*z1, sy*(rho*z1 + Math.sqrt(Math.max(0,1-rho*rho))*z2)]);
+    var g = gaussPair(seed + i*0.41);
+    var a = g[0]*sMajor;   // along major
+    var b = g[1]*sMinor;   // along minor (perp)
+    pts.push({ x: a*ca - b*sa, y: a*sa + b*ca });
   }
-  return arr;
+  return pts;
 }
-var ptsL = genCloud(8.5, 2.4, 0.1, 190, 31);
-var ptsR = genCloud(2.4, 8.5, 0.1, 190, 47);
+var CLOUD_L = buildAnisoCloud(60, ANG_L, 1.55, 0.45, 13);
+var CLOUD_R = buildAnisoCloud(60, ANG_R, 1.55, 0.45, 29);
 
-function projVar(pts, theta){
-  var cw=Math.cos(theta), sw=Math.sin(theta);
-  var vals = pts.map(function(p){return p[0]*cw + p[1]*sw;});
-  var m = vals.reduce(function(a,b){return a+b;},0)/vals.length;
-  var v = vals.reduce(function(a,x){return a+(x-m)*(x-m);},0)/vals.length;
-  return {vals:vals, mean:m, var:v};
+// projected variance of a cloud onto direction w=(wx,wy)  ==  w . Cov . w
+function projVarOf(cloud, wx, wy){
+  var m=0;
+  for(var i=0;i<cloud.length;i++){ m += cloud[i].x*wx + cloud[i].y*wy; }
+  m/=cloud.length;
+  var v=0;
+  for(var j=0;j<cloud.length;j++){ var p=cloud[j].x*wx + cloud[j].y*wy - m; v += p*p; }
+  return v/cloud.length;
 }
+// CSP-optimal direction = the one maximizing varL/varR. Confirm numerically once.
+function bestAngle(){
+  var best=ANG_L, bestR=-1;
+  for(var d=0; d<180; d++){
+    var a=d*Math.PI/180, wx=Math.cos(a), wy=Math.sin(a);
+    var vr = projVarOf(CLOUD_L,wx,wy) / Math.max(projVarOf(CLOUD_R,wx,wy),1e-6);
+    if(vr>bestR){ bestR=vr; best=a; }
+  }
+  return best;
+}
+var ANG_STAR = bestAngle();
 
-/* ---------- timeline ---------- */
-var currentScene = 0;
-var SCENE_DUR = 7000;
-var N_SCENE = 5;
+// ====================== Timeline ======================
+var STAGE_DUR = [6500, 6500, 7500, 7000, 7000, 7500];  // ms per stage -> ~42s cycle
+var NST = 6;
+var TOTAL = STAGE_DUR.reduce(function(a,b){return a+b;},0);
+var curStage = 0;
 var animStart = performance.now();
-function updateSubtitle(s){
-  var k='s'+s;
-  document.getElementById('subZh').innerHTML = tt(k+'_zh');
-  document.getElementById('subEn').textContent = tt(k+'_en');
-  document.getElementById('hScene').textContent = (s+1)+'/'+N_SCENE;
-  document.getElementById('hStage').textContent = STAGE_KEY[s]||'';
+
+function updateSub(s){
+  document.getElementById('subZh').textContent = t('s'+s+'zh');
+  document.getElementById('subEn').textContent = t('s'+s+'en');
+  document.getElementById('hudV1').textContent = t('st'+s);
 }
 
-/* ---------- shared draw helpers ---------- */
-function panel(px,py,pw,ph){
-  cx2d.fillStyle=C_PANEL; cx2d.strokeStyle=C_LINE; cx2d.lineWidth=1;
-  cx2d.fillRect(px,py,pw,ph); cx2d.strokeRect(px,py,pw,ph);
+// ====================== Drawing helpers ======================
+function easeIO(x){ return x<0.5 ? 2*x*x : 1-Math.pow(-2*x+2,2)/2; }
+function clamp(x,a,b){ return x<a?a:(x>b?b:x); }
+
+function frameTitle(txt){
+  ctx.fillStyle = P.fg;
+  ctx.font = "800 19px 'Space Grotesk','Inter',sans-serif";
+  ctx.textAlign = 'center';
+  ctx.fillText(txt, W/2, 36);
 }
-function frameTitle(s){
-  var titles={cn:['第 1 帧  回顾: 方向无穷多, 手动试不完','第 2 帧  目标: 左手方差大, 右手方差小','第 3 帧  比值 = Rayleigh 商','第 4 帧  广义特征值一步解出','第 5 帧  CSP 滤波器: 完美可分'],
-              en:['F1  recall: too many angles to try','F2  goal: big Var_L, small Var_R','F3  ratio = Rayleigh quotient','F4  generalized eigenvalue solves it','F5  CSP filter: cleanly separable']};
-  cx2d.fillStyle=C_FG; cx2d.font='800 18px Inter,sans-serif'; cx2d.textAlign='center';
-  cx2d.fillText(titles[LANG][s], W/2, 34);
+
+function axisBox(cx, cy, half){
+  ctx.save();
+  ctx.strokeStyle = P.line; ctx.lineWidth = 1;
+  for(var g=-2;g<=2;g++){
+    var gp = g/2.4*half;
+    ctx.beginPath(); ctx.moveTo(cx+gp, cy-half); ctx.lineTo(cx+gp, cy+half); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(cx-half, cy-gp); ctx.lineTo(cx+half, cy-gp); ctx.stroke();
+  }
+  ctx.strokeStyle = P.lineStrong; ctx.lineWidth = 1.4;
+  ctx.beginPath(); ctx.moveTo(cx-half, cy); ctx.lineTo(cx+half, cy); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(cx, cy-half); ctx.lineTo(cx, cy+half); ctx.stroke();
+  ctx.fillStyle = P.fgMute;
+  ctx.font = "700 10px 'JetBrains Mono',monospace";
+  ctx.textAlign='left';  ctx.fillText('C3', cx+half-22, cy-8);
+  ctx.textAlign='right'; ctx.fillText('C4', cx-8, cy-half+12);
+  ctx.restore();
 }
-function drawAxesXY(cx,cy,sz){
-  cx2d.strokeStyle=C_LINE; cx2d.lineWidth=1;
-  cx2d.beginPath();
-  cx2d.moveTo(cx-sz/2,cy); cx2d.lineTo(cx+sz/2,cy);
-  cx2d.moveTo(cx,cy-sz/2); cx2d.lineTo(cx,cy+sz/2);
-  cx2d.stroke();
-  cx2d.fillStyle=C_MUTE; cx2d.font='600 10px JetBrains Mono,monospace';
-  cx2d.textAlign='left';  cx2d.fillText('C3', cx+sz/2+4, cy-3);
-  cx2d.textAlign='center';cx2d.fillText('C4', cx, cy-sz/2-5);
+
+function arrowHead(x1,y1,x2,y2,color,lw){
+  ctx.save();
+  ctx.strokeStyle=color; ctx.fillStyle=color; ctx.lineWidth=lw||2;
+  ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke();
+  var a=Math.atan2(y2-y1,x2-x1), s=9;
+  ctx.beginPath(); ctx.moveTo(x2,y2);
+  ctx.lineTo(x2-s*Math.cos(a-0.4), y2-s*Math.sin(a-0.4));
+  ctx.lineTo(x2-s*Math.cos(a+0.4), y2-s*Math.sin(a+0.4));
+  ctx.closePath(); ctx.fill();
+  ctx.restore();
 }
-function drawCloud(cx,cy,unit,pts,sz,color){
-  for(var i=0;i<pts.length;i++){
-    var x=cx+pts[i][0]*unit, y=cy-pts[i][1]*unit;
-    if(Math.abs(pts[i][0]*unit)>sz/2 || Math.abs(pts[i][1]*unit)>sz/2) continue;
-    cx2d.fillStyle=color;
-    cx2d.beginPath(); cx2d.arc(x,y,2.1,0,Math.PI*2); cx2d.fill();
+
+function dot(x,y,r,color,alpha){
+  ctx.save(); ctx.globalAlpha=alpha==null?1:alpha;
+  ctx.fillStyle=color; ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2); ctx.fill();
+  ctx.restore();
+}
+
+// the two-class scatter — the persistent main object, drawn every stage
+function drawClouds(cx, cy, unit, alphaL, alphaR){
+  for(var i=0;i<CLOUD_L.length;i++){
+    var p=CLOUD_L[i]; dot(cx+p.x*unit, cy-p.y*unit, 2.6, P.left, alphaL==null?0.6:alphaL);
+  }
+  for(var j=0;j<CLOUD_R.length;j++){
+    var q=CLOUD_R[j]; dot(cx+q.x*unit, cy-q.y*unit, 2.6, P.right, alphaR==null?0.6:alphaR);
   }
 }
-function drawProjAxis(cx,cy,sz,theta,color){
-  var dx=Math.cos(theta)*sz*0.5, dy=-Math.sin(theta)*sz*0.5;
-  cx2d.strokeStyle=color; cx2d.lineWidth=2.5; cx2d.setLineDash([6,3]);
-  cx2d.beginPath(); cx2d.moveTo(cx-dx,cy-dy); cx2d.lineTo(cx+dx,cy+dy); cx2d.stroke();
-  cx2d.setLineDash([]);
-  cx2d.fillStyle=color;
-  var ang=Math.atan2(dy,dx);
-  cx2d.save(); cx2d.translate(cx+dx,cy+dy); cx2d.rotate(ang);
-  cx2d.beginPath(); cx2d.moveTo(0,0); cx2d.lineTo(-9,-4); cx2d.lineTo(-9,4); cx2d.closePath(); cx2d.fill();
-  cx2d.restore();
-  cx2d.fillStyle=color; cx2d.font='700 13px JetBrains Mono,monospace'; cx2d.textAlign='left';
-  cx2d.fillText('w', cx+dx+5, cy+dy-2);
+function cloudLegend(cx, cy, half){
+  ctx.fillStyle=P.left; ctx.font="700 11px 'Inter',sans-serif"; ctx.textAlign='left';
+  ctx.fillText(t('lblL'), cx-half, cy-half-10);
+  ctx.fillStyle=P.right; ctx.textAlign='right';
+  ctx.fillText(t('lblR'), cx+half, cy-half-10);
 }
-function setHUD(vL,vR){
-  var eL=document.getElementById('hVarL'), eR=document.getElementById('hVarR'), eRa=document.getElementById('hRatio');
-  eL.textContent = vL==null?'--':vL.toFixed(1);
-  eR.textContent = vR==null?'--':vR.toFixed(1);
-  eRa.textContent = (vL==null||vR==null)?'--':(vL/Math.max(vR,0.01)).toFixed(2);
-}
-
-/* =================== F1: recall (M28 manual rotate) =================== */
-function drawScene0(p){
-  frameTitle(0);
-  var sz=Math.min(W*0.42,H*0.6), cx=W*0.3, cy=H*0.5;
-  panel(cx-sz/2-12,cy-sz/2-12,sz+24,sz+24);
-  drawAxesXY(cx,cy,sz);
-  var unit=sz/26;
-  drawCloud(cx,cy,unit,ptsL,sz,C_AXIS_T);
-  // manual sweeping axis — many angles, never settling
-  var theta = (Math.sin(p*Math.PI*3)*0.5+0.5)*Math.PI;  // oscillate, "trying"
-  drawProjAxis(cx,cy,sz,theta,C_SOL);
-  var vL=projVar(ptsL,theta).var;
-  cx2d.fillStyle=C_DIM; cx2d.font='600 11px Inter,sans-serif'; cx2d.textAlign='center';
-  cx2d.fillText(LANG==='cn'?'手动转方向 (来自 M28)':'rotating by hand (from M28)', cx, cy+sz/2+26);
-
-  // right: ghost angles fanning out — infinitely many
-  var fx=W*0.72, fy=H*0.46, fr=Math.min(W*0.16,H*0.3);
-  var nGhost=14;
-  for(var g=0;g<nGhost;g++){
-    var a = g/nGhost*Math.PI;
-    var alpha = (g < p*nGhost*1.2)?0.9:0.18;
-    cx2d.strokeStyle = 'oklch(0.92 0.08 240 / '+alpha*0.5+')';
-    cx2d.lineWidth=1.2;
-    cx2d.beginPath();
-    cx2d.moveTo(fx-Math.cos(a)*fr, fy+Math.sin(a)*fr);
-    cx2d.lineTo(fx+Math.cos(a)*fr, fy-Math.sin(a)*fr);
-    cx2d.stroke();
+// the rotating direction w — persistent across stages
+function drawW(cx, cy, half, unit, ang, label, glow){
+  var wx=Math.cos(ang), wy=Math.sin(ang);
+  var L=half*1.12;
+  ctx.save();
+  ctx.strokeStyle=P.axis; ctx.lineWidth=2.2; ctx.setLineDash([7,5]);
+  ctx.beginPath(); ctx.moveTo(cx-wx*L, cy+wy*L); ctx.lineTo(cx+wx*L, cy-wy*L); ctx.stroke();
+  ctx.setLineDash([]);
+  if(glow){ ctx.shadowColor=P.qed; ctx.shadowBlur=14*glow; }
+  arrowHead(cx,cy,cx+wx*unit*1.2, cy-wy*unit*1.2, glow?P.qed:P.axis, 3);
+  ctx.shadowBlur=0;
+  dot(cx,cy,3,P.fg,1);
+  if(label){
+    ctx.fillStyle=glow?P.qed:P.axis; ctx.font="700 12px 'JetBrains Mono',monospace"; ctx.textAlign='left';
+    ctx.fillText(label, cx+wx*unit*1.2+6, cy-wy*unit*1.2-6);
   }
-  cx2d.fillStyle=C_FG; cx2d.font='700 13px Inter,sans-serif'; cx2d.textAlign='center';
-  cx2d.fillText(LANG==='cn'?'方向有无穷多个...':'infinitely many angles...', fx, fy-fr-16);
-
-  if(p>0.55){
-    var a=Math.min(1,(p-0.55)*3);
-    cx2d.save(); cx2d.globalAlpha=a;
-    var bx=W/2-250, by=H-92, bw=500, bh=40;
-    cx2d.fillStyle=C_PANEL2; cx2d.strokeStyle='oklch(0.55 0.08 245 / 0.6)'; cx2d.lineWidth=1.5;
-    cx2d.fillRect(bx,by,bw,bh); cx2d.strokeRect(bx,by,bw,bh);
-    cx2d.fillStyle=C_GOLD; cx2d.font='800 14px Inter,sans-serif'; cx2d.textAlign='center';
-    cx2d.fillText(LANG==='cn'?'能不能让电脑直接解出最佳角度?':'can the computer compute the best angle directly?', W/2, by+25);
-    cx2d.restore();
-  }
-  setHUD(vL,null);
-  document.getElementById('hRatio').textContent='--';
+  ctx.restore();
+  return [wx,wy];
 }
 
-/* =================== F2: goal — two covariance clouds =================== */
-function drawScene1(p){
-  frameTitle(1);
-  var sz=Math.min(W*0.5,H*0.62), cx=W*0.5, cy=H*0.5;
-  panel(cx-sz/2-12,cy-sz/2-12,sz+24,sz+24);
-  drawAxesXY(cx,cy,sz);
-  var unit=sz/26;
-  // both clouds appear, L first then R
-  drawCloud(cx,cy,unit,ptsL,sz,C_AXIS_T);
-  cx2d.fillStyle=C_AXIS; cx2d.font='700 12px JetBrains Mono,monospace'; cx2d.textAlign='left';
-  cx2d.fillText(LANG==='cn'?'左手 Cov_L (横向铺开)':'left  Cov_L (wide in x)', cx-sz/2+6, cy-sz/2+14);
-  if(p>0.3){
-    var a=Math.min(1,(p-0.3)*2.2);
-    cx2d.save(); cx2d.globalAlpha=a;
-    drawCloud(cx,cy,unit,ptsR,sz,C_RIGHT_T);
-    cx2d.fillStyle=C_RIGHT; cx2d.font='700 12px JetBrains Mono,monospace'; cx2d.textAlign='left';
-    cx2d.fillText(LANG==='cn'?'右手 Cov_R (纵向铺开)':'right Cov_R (tall in y)', cx-sz/2+6, cy-sz/2+30);
-    cx2d.restore();
-  }
-  // candidate axis (horizontal) — the goal direction
-  if(p>0.6){
-    var a=Math.min(1,(p-0.6)*3);
-    cx2d.save(); cx2d.globalAlpha=a;
-    drawProjAxis(cx,cy,sz,0,C_SOL);
-    cx2d.restore();
-    var vL=projVar(ptsL,0).var, vR=projVar(ptsR,0).var;
-    setHUD(vL,vR);
-    cx2d.fillStyle=C_GOLD; cx2d.font='700 12px Inter,sans-serif'; cx2d.textAlign='center';
-    cx2d.globalAlpha=a;
-    cx2d.fillText(LANG==='cn'?'目标方向: 左手投影散得开, 右手投影挤成一团':'goal: left spreads on w, right stays tight', cx, cy+sz/2+28);
-    cx2d.globalAlpha=1;
-  } else {
-    setHUD(null,null);
-    document.getElementById('hRatio').textContent='--';
-  }
+// a variance bar (vertical). x = left edge, baseY = bottom, value normalized 0..1
+function varBar(x, baseY, w, hMax, value, color){
+  var h = hMax*clamp(value,0,1);
+  ctx.save();
+  ctx.fillStyle=P.bg3; ctx.fillRect(x, baseY-hMax, w, hMax);
+  ctx.strokeStyle=P.line; ctx.lineWidth=1; ctx.strokeRect(x, baseY-hMax, w, hMax);
+  ctx.fillStyle=color; ctx.fillRect(x, baseY-h, w, h);
+  ctx.fillStyle=color; ctx.font="700 10px 'JetBrains Mono',monospace"; ctx.textAlign='center';
+  ctx.fillText(value.toFixed(2), x+w/2, baseY+14);
+  ctx.restore();
 }
 
-/* =================== F3: ratio = Rayleigh quotient =================== */
-function drawScene2(p){
-  frameTitle(2);
-  // left: clouds + sweeping axis
-  var sz=Math.min(W*0.34,H*0.58), cx=W*0.27, cy=H*0.46;
-  panel(cx-sz/2-12,cy-sz/2-12,sz+24,sz+24);
-  drawAxesXY(cx,cy,sz);
-  var unit=sz/26;
-  drawCloud(cx,cy,unit,ptsL,sz,C_AXIS_T);
-  drawCloud(cx,cy,unit,ptsR,sz,C_RIGHT_T);
-  var theta = p*Math.PI;  // sweep 0..PI
-  drawProjAxis(cx,cy,sz,theta,C_SOL);
-  var vL=projVar(ptsL,theta).var, vR=projVar(ptsR,theta).var;
-  cx2d.fillStyle=C_DIM; cx2d.font='600 10px Inter,sans-serif'; cx2d.textAlign='center';
-  cx2d.fillText(LANG==='cn'?'转 w, 同时看两类方差':'rotate w, watch both variances', cx, cy+sz/2+24);
-
-  // right: ratio curve over angle
-  var sz2=Math.min(W*0.4,H*0.5), cx2=W*0.7, cy2=H*0.48;
-  panel(cx2-sz2/2-12,cy2-sz2/2-12,sz2+24,sz2+24);
-  var ax1=cx2-sz2/2+18, ax2=cx2+sz2/2-12;
-  var ay1=cy2+sz2/2-18, ay2=cy2-sz2/2+18;
-  cx2d.strokeStyle=C_LINE; cx2d.lineWidth=1.2;
-  cx2d.beginPath();
-  cx2d.moveTo(ax1,ay1); cx2d.lineTo(ax2,ay1);
-  cx2d.moveTo(ax1,ay1); cx2d.lineTo(ax1,ay2);
-  cx2d.stroke();
-  cx2d.fillStyle=C_DIM; cx2d.font='600 10px JetBrains Mono,monospace';
-  cx2d.textAlign='right'; cx2d.fillText('ratio', ax1-3, ay2+10);
-  cx2d.textAlign='center'; cx2d.fillText('w angle', cx2, ay1+16);
-  // curve ratio = Var_L/Var_R
-  var nS=120, maxR=14;
-  cx2d.strokeStyle=C_GOLD; cx2d.lineWidth=2;
-  cx2d.beginPath();
-  var bestRatio=0, bestTh=0;
-  for(var k=0;k<=nS;k++){
-    var th=k/nS*Math.PI;
-    var r = projVar(ptsL,th).var/Math.max(projVar(ptsR,th).var,0.01);
-    if(r>bestRatio){bestRatio=r;bestTh=th;}
-    var xx=ax1+(ax2-ax1)*k/nS;
-    var yy=ay1-(Math.min(r,maxR)/maxR)*(ay1-ay2);
-    if(k===0) cx2d.moveTo(xx,yy); else cx2d.lineTo(xx,yy);
+function wrapText(text, x, y, maxW, lh){
+  var words = (''+text).split(' ');
+  var line='', yy=y;
+  for(var i=0;i<words.length;i++){
+    var test = line + words[i] + ' ';
+    if(ctx.measureText(test).width > maxW && line.length>0){
+      ctx.fillText(line.trim(), x, yy); line = words[i]+' '; yy += lh;
+    } else { line = test; }
   }
-  cx2d.stroke();
-  // current marker
-  var curR=vL/Math.max(vR,0.01);
-  var mx=ax1+(ax2-ax1)*(theta/Math.PI);
-  var my=ay1-(Math.min(curR,maxR)/maxR)*(ay1-ay2);
-  cx2d.fillStyle=C_SOL; cx2d.strokeStyle=C_PANEL; cx2d.lineWidth=1.5;
-  cx2d.beginPath(); cx2d.arc(mx,my,5,0,Math.PI*2); cx2d.fill(); cx2d.stroke();
-  cx2d.fillStyle=C_SOL; cx2d.font='700 11px JetBrains Mono,monospace'; cx2d.textAlign='left';
-  cx2d.fillText('ratio='+curR.toFixed(2), mx+8, my-2);
-
-  // formula band — words + geometry, minimal symbols
-  if(p>0.45){
-    var a=Math.min(1,(p-0.45)*3);
-    cx2d.save(); cx2d.globalAlpha=a;
-    var bx=W/2-280, by=H-96, bw=560, bh=46;
-    cx2d.fillStyle=C_PANEL2; cx2d.strokeStyle='oklch(0.55 0.08 245 / 0.6)'; cx2d.lineWidth=1.5;
-    cx2d.fillRect(bx,by,bw,bh); cx2d.strokeRect(bx,by,bw,bh);
-    cx2d.fillStyle=C_FG; cx2d.font='700 14px JetBrains Mono,monospace'; cx2d.textAlign='center';
-    cx2d.fillText('Rayleigh = (w . Cov_L . w) / (w . Cov_R . w)', W/2, by+19);
-    cx2d.fillStyle=C_DIM; cx2d.font='500 11px Inter,sans-serif';
-    cx2d.fillText(LANG==='cn'?'投影方差 = w·Cov·w  ·  目标 = 最大化这个比值':'projected var = w·Cov·w  ·  maximize this ratio', W/2, by+37);
-    cx2d.restore();
-  }
-  setHUD(vL,vR);
+  ctx.fillText(line.trim(), x, yy);
 }
 
-/* =================== F4: generalized eigenvalue =================== */
-function drawScene3(p){
-  frameTitle(3);
-  // left: the equation as a transform — Cov_L w aligns with Cov_R w scaled by lambda
-  var cx=W*0.28, cy=H*0.46;
-  // show two small matrix blocks Cov_L, Cov_R + vector w, snapping to eigen solution
-  cx2d.fillStyle=C_DIM; cx2d.font='600 11px Inter,sans-serif'; cx2d.textAlign='center';
-  cx2d.fillText(LANG==='cn'?'不用搜: 直接解一个方程':'no search: solve one equation', cx, cy-H*0.28);
-
-  // equation centerpiece
-  var ey=cy-30;
-  cx2d.font='800 26px JetBrains Mono,monospace'; cx2d.textAlign='center';
-  // animate emphasis: lambda glows
-  cx2d.fillStyle=C_AXIS;  cx2d.textAlign='right'; cx2d.fillText('Cov_L w', cx-6, ey);
-  cx2d.fillStyle=C_FG;    cx2d.textAlign='center'; cx2d.fillText('=', cx+30, ey);
-  var lamA = 0.5+0.5*Math.sin(p*Math.PI*4);
-  cx2d.fillStyle='oklch(0.85 0.14 85 / '+(0.6+0.4*lamA)+')'; cx2d.textAlign='left';
-  cx2d.fillText('lambda', cx+52, ey);
-  cx2d.fillStyle=C_RIGHT; cx2d.fillText('· Cov_R w', cx+52+88, ey);
-
-  cx2d.fillStyle=C_DIM; cx2d.font='600 12px Inter,sans-serif'; cx2d.textAlign='center';
-  cx2d.fillText(LANG==='cn'?'广义特征值问题 (generalized eigenvalue)':'generalized eigenvalue problem', cx+40, ey+34);
-
-  // explain lambda meaning
-  cx2d.fillStyle=C_FG; cx2d.font='600 12px Inter,sans-serif';
-  cx2d.fillText(LANG==='cn'?'lambda = 这个方向上 Var_L / Var_R 的比值':'lambda = the ratio Var_L / Var_R on this w', cx+40, ey+58);
-
-  // right: eigenvalue spectrum bars — pick the largest
-  var sz2=Math.min(W*0.38,H*0.46), bx0=W*0.7, by0=H*0.48;
-  panel(bx0-sz2/2-12,by0-sz2/2-12,sz2+24,sz2+24);
-  var nBars=6;
-  var lambdas=[6.8,3.2,1.6,1.0,0.55,0.18];
-  var baseX=bx0-sz2/2+18, baseY=by0+sz2/2-26, barW=(sz2-30)/nBars, maxL=7;
-  cx2d.strokeStyle=C_LINE; cx2d.lineWidth=1;
-  cx2d.beginPath(); cx2d.moveTo(baseX-4,baseY); cx2d.lineTo(bx0+sz2/2-12,baseY); cx2d.stroke();
-  cx2d.fillStyle=C_DIM; cx2d.font='600 10px JetBrains Mono,monospace'; cx2d.textAlign='center';
-  cx2d.fillText(LANG==='cn'?'lambda 谱 (从大到小)':'lambda spectrum', bx0, by0-sz2/2+2);
-  for(var b=0;b<nBars;b++){
-    var grow=Math.min(1,Math.max(0,(p*1.4)-(b*0.04)));
-    var h=(lambdas[b]/maxL)*(sz2-60)*grow;
-    var isBest=(b===0);
-    cx2d.fillStyle = isBest ? C_GOLD : C_PROOF;
-    cx2d.fillRect(baseX+b*barW, baseY-h, barW-6, h);
-    cx2d.fillStyle=isBest?C_GOLD:C_MUTE; cx2d.font='600 9px JetBrains Mono,monospace';
-    cx2d.fillText(lambdas[b].toFixed(1), baseX+b*barW+(barW-6)/2, baseY+12);
-  }
-  // highlight largest
-  if(p>0.5){
-    var a=Math.min(1,(p-0.5)*3);
-    cx2d.save(); cx2d.globalAlpha=a;
-    cx2d.strokeStyle=C_GOLD; cx2d.lineWidth=1.5; cx2d.setLineDash([4,3]);
-    var h0=(lambdas[0]/maxL)*(sz2-60);
-    cx2d.strokeRect(baseX-2, baseY-h0-4, barW-2, h0+8);
-    cx2d.setLineDash([]);
-    cx2d.fillStyle=C_GOLD; cx2d.font='700 11px Inter,sans-serif'; cx2d.textAlign='center';
-    cx2d.fillText(LANG==='cn'?'最大 lambda = 最佳 w':'largest lambda = best w', baseX+barW/2, baseY-h0-12);
-    cx2d.restore();
-  }
-
-  if(p>0.7){
-    var a=Math.min(1,(p-0.7)*3);
-    cx2d.save(); cx2d.globalAlpha=a;
-    var bx=W/2-270, by=H-86, bw=540, bh=38;
-    cx2d.fillStyle=C_PANEL2; cx2d.strokeStyle='oklch(0.55 0.08 245 / 0.6)'; cx2d.lineWidth=1.5;
-    cx2d.fillRect(bx,by,bw,bh); cx2d.strokeRect(bx,by,bw,bh);
-    cx2d.fillStyle=C_FG; cx2d.font='700 13px Inter,sans-serif'; cx2d.textAlign='center';
-    cx2d.fillText(LANG==='cn'?'lambda 最大的特征向量 w, 左手方差远大于右手 — 这就是答案':'eigenvector w with largest lambda: Var_L >> Var_R', W/2, by+24);
-    cx2d.restore();
-  }
-  setHUD(null,null);
-  document.getElementById('hRatio').textContent = (p>0.4)?'6.8':'--';
+// Minecraft-block silhouette (project endpoint reminder) bottom-left corner of stage
+function drawMinecraftSil(){
+  var bx=14, by=H-58, s=8;
+  ctx.save(); ctx.globalAlpha=0.42;
+  ctx.fillStyle=P.fgMute;
+  ctx.fillRect(bx, by, s*4, s*4);                 // a tiny cube (no emoji)
+  ctx.clearRect(bx+s, by+s, s, s);
+  ctx.clearRect(bx+s*2, by+s, s, s);
+  ctx.clearRect(bx+Math.round(s*1.5), by+Math.round(s*2.5), s, Math.round(s*1.3));
+  ctx.globalAlpha=0.55;
+  ctx.fillStyle=P.fgMute; ctx.font="600 8px 'JetBrains Mono',monospace"; ctx.textAlign='left';
+  ctx.fillText(LANG==='cn'?'终点: 脑控它':'goal: control it', bx+s*4+6, by+s*3);
+  ctx.restore();
 }
 
-/* =================== F5: CSP filter — cleanly separable =================== */
-function drawScene4(p){
-  frameTitle(4);
-  // left: clouds + the solved best axis (green/gold)
-  var sz=Math.min(W*0.32,H*0.56), cx=W*0.27, cy=H*0.44;
-  panel(cx-sz/2-12,cy-sz/2-12,sz+24,sz+24);
-  drawAxesXY(cx,cy,sz);
-  var unit=sz/26;
-  drawCloud(cx,cy,unit,ptsL,sz,C_AXIS_T);
-  drawCloud(cx,cy,unit,ptsR,sz,C_RIGHT_T);
-  drawProjAxis(cx,cy,sz,0,C_GOLD);
-  cx2d.fillStyle=C_GOLD; cx2d.font='700 11px Inter,sans-serif'; cx2d.textAlign='center';
-  cx2d.fillText(LANG==='cn'?'CSP 解出的最优滤波器 w':'CSP optimal filter w', cx, cy+sz/2+24);
+// reference variance to normalize bars (max possible projected variance ~ sMajor^2)
+var VAR_NORM = 1.55*1.55*1.1;
 
-  // right: two projected 1D distributions, far apart (separable)
-  var sz2=Math.min(W*0.4,H*0.5), cx2=W*0.7, cy2=H*0.44;
-  panel(cx2-sz2/2-12,cy2-sz2/2-12,sz2+24,sz2+24);
-  var projL=projVar(ptsL,0), projR=projVar(ptsR,0);
-  var axisY=cy2+sz2/2-30;
-  cx2d.strokeStyle=C_LINE; cx2d.lineWidth=1.2;
-  cx2d.beginPath(); cx2d.moveTo(cx2-sz2/2+10,axisY); cx2d.lineTo(cx2+sz2/2-10,axisY); cx2d.stroke();
-  cx2d.fillStyle=C_DIM; cx2d.font='600 10px Inter,sans-serif'; cx2d.textAlign='center';
-  cx2d.fillText(LANG==='cn'?'投影到 w 后的方差对比':'projected variance on w', cx2, cy2-sz2/2+4);
+// ====================== Stage 0: recall the two M26 covariance matrices ======================
+function drawS0(pr){
+  frameTitle(LANG==='cn'?'还记得吗? M26 给了两个协方差矩阵':'Recall: M26 gave us two covariance matrices');
+  var cx=W*0.33, cy=H*0.52, half=Math.min(W*0.22, H*0.30), unit=half/2.6;
+  axisBox(cx, cy, half);
 
-  // bell-ish bars: left wide, right tight — using variance as spread width
-  function bell(proj, color, alpha){
-    var nB=26, maxRange=22, binW=(sz2-30)/nB;
-    var bins=new Array(nB).fill(0);
-    for(var k=0;k<proj.vals.length;k++){
-      var bi=Math.floor((proj.vals[k]+maxRange)/(2*maxRange)*nB);
-      if(bi>=0&&bi<nB) bins[bi]++;
+  var aL = clamp(pr*2,0,1)*0.6, aR = clamp((pr-0.15)*2,0,1)*0.6;
+  drawClouds(cx, cy, unit, aL, aR);
+  cloudLegend(cx, cy, half);
+
+  // the two cov matrices as ellipses overlaid on the clouds (anisotropy = covariance shape)
+  function covEllipse(ang, color){
+    var ca=Math.cos(ang), sa=Math.sin(ang);
+    ctx.save(); ctx.strokeStyle=color; ctx.lineWidth=1.8; ctx.globalAlpha=0.85;
+    ctx.beginPath();
+    for(var k=0;k<=48;k++){
+      var th=k/48*Math.PI*2;
+      var a=Math.cos(th)*1.55*1.6, b=Math.sin(th)*0.45*1.6;
+      var ex=cx+(a*ca-b*sa)*unit, ey=cy-(a*sa+b*ca)*unit;
+      if(k===0) ctx.moveTo(ex,ey); else ctx.lineTo(ex,ey);
     }
-    var mx=Math.max.apply(null,bins)||1;
-    cx2d.save(); cx2d.globalAlpha=alpha;
-    for(var i=0;i<nB;i++){
-      var h=bins[i]/mx*70;
-      cx2d.fillStyle=color;
-      cx2d.fillRect(cx2-sz2/2+15+i*binW, axisY-h, binW-1.5, h);
-    }
-    cx2d.restore();
+    ctx.stroke(); ctx.restore();
   }
-  var aL=Math.min(1,p*2);
-  bell(projL, C_AXIS_T, aL);
-  if(p>0.25){ bell(projR, C_RIGHT_T, Math.min(1,(p-0.25)*2.2)); }
-  setHUD(projL.var, projR.var);
-  // legend
-  cx2d.fillStyle=C_AXIS; cx2d.font='700 10px JetBrains Mono,monospace'; cx2d.textAlign='left';
-  cx2d.fillText('left  Var='+projL.var.toFixed(1), cx2-sz2/2+15, cy2-sz2/2+22);
-  cx2d.fillStyle=C_RIGHT;
-  cx2d.fillText('right Var='+projR.var.toFixed(1), cx2-sz2/2+15, cy2-sz2/2+36);
+  if(pr>0.35){
+    ctx.save(); ctx.globalAlpha=clamp((pr-0.35)*3,0,1);
+    covEllipse(ANG_L, P.left);
+    covEllipse(ANG_R, P.right);
+    ctx.restore();
+  }
 
-  // gold sealing band (key moment)
-  if(p>0.45){
-    var a=Math.min(1,(p-0.45)*2.5);
-    cx2d.save(); cx2d.globalAlpha=a;
-    var bx=W/2-330, by=H-92, bw=660, bh=48;
-    cx2d.fillStyle='oklch(0.22 0.05 90 / 0.5)'; cx2d.strokeStyle=C_GOLD; cx2d.lineWidth=2;
-    cx2d.fillRect(bx,by,bw,bh); cx2d.strokeRect(bx,by,bw,bh);
-    cx2d.fillStyle=C_GOLD; cx2d.font='800 15px Inter,sans-serif'; cx2d.textAlign='center';
-    cx2d.fillText(LANG==='cn'?'CSP: 让电脑自动找出最能区分左右手的看脑波角度 — BCI 的核心算法'
-                             :'CSP: auto-find the best brainwave angle to tell left from right — the core of a BCI',
-                  W/2, by+22);
-    cx2d.fillStyle=C_DIM; cx2d.font='500 11px Inter,sans-serif';
-    cx2d.fillText(LANG==='cn'?'解一次广义特征值, 投影方差天差地别, 完美可分 (下节 M30 可视化)'
-                             :'one eigen-solve, variances far apart, cleanly separable (next: M30)',
-                  W/2, by+39);
-    cx2d.restore();
+  if(pr>0.5){
+    var fa=clamp((pr-0.5)*2.5,0,1);
+    var bx=W*0.60, by=H*0.28, bw=W*0.34, bh=H*0.21;
+    ctx.save(); ctx.globalAlpha=fa;
+    ctx.fillStyle=P.bg2; ctx.strokeStyle=P.left; ctx.lineWidth=1.6;
+    ctx.fillRect(bx,by,bw,bh); ctx.strokeRect(bx,by,bw,bh);
+    ctx.fillStyle=P.left; ctx.font="700 12px 'JetBrains Mono',monospace"; ctx.textAlign='left';
+    ctx.fillText(t('lblCovL'), bx+16, by+24);
+    ctx.fillStyle=P.fgDim; ctx.font="700 14px 'JetBrains Mono',monospace";
+    ctx.fillText('[ 1.9   0.8 ]', bx+22, by+50);
+    ctx.fillText('[ 0.8   0.6 ]', bx+22, by+70);
+    var by2=by+bh+16;
+    ctx.fillStyle=P.bg2; ctx.strokeStyle=P.right; ctx.lineWidth=1.6;
+    ctx.fillRect(bx,by2,bw,bh); ctx.strokeRect(bx,by2,bw,bh);
+    ctx.fillStyle=P.right; ctx.font="700 12px 'JetBrains Mono',monospace";
+    ctx.fillText(t('lblCovR'), bx+16, by2+24);
+    ctx.fillStyle=P.fgDim; ctx.font="700 14px 'JetBrains Mono',monospace";
+    ctx.fillText('[ 0.6  -0.8 ]', bx+22, by2+50);
+    ctx.fillText('[-0.8   1.9 ]', bx+22, by2+70);
+    ctx.restore();
   }
+
+  drawMinecraftSil();
+  document.getElementById('hudV2').textContent = '--';
+  document.getElementById('hudV3').textContent = '--';
+  document.getElementById('hudV4').textContent = '--';
 }
 
-/* ---------- main loop ---------- */
+// ====================== Stage 1: w.Cov.w = projected variance ======================
+function drawS1(pr){
+  frameTitle(LANG==='cn'?'投到方向 w 上, 这串数的方差 = w.Cov.w':'Project onto w: variance of the result = w.Cov.w');
+  var cx=W*0.30, cy=H*0.52, half=Math.min(W*0.20, H*0.28), unit=half/2.6;
+  axisBox(cx, cy, half);
+  drawClouds(cx, cy, unit, 0.55, 0.55);
+  cloudLegend(cx, cy, half);
+
+  var ang = 30*Math.PI/180;
+  var wv = drawW(cx, cy, half, unit, ang, t('lblW'), 0);
+  var wx=wv[0], wy=wv[1];
+
+  var prog=easeIO(clamp(pr*1.5,0,1));
+  function dropClass(cloud, color){
+    for(var i=0;i<cloud.length;i+=2){
+      var vx=cloud[i].x, vy=cloud[i].y;
+      var px=cx+vx*unit, py=cy-vy*unit;
+      var proj=vx*wx+vy*wy;
+      var sx=cx+proj*wx*unit, sy=cy-proj*wy*unit;
+      ctx.save(); ctx.strokeStyle=P.shadow; ctx.lineWidth=1; ctx.globalAlpha=0.5;
+      ctx.beginPath(); ctx.moveTo(px,py); ctx.lineTo(px+(sx-px)*prog, py+(sy-py)*prog); ctx.stroke();
+      ctx.restore();
+      if(prog>0.6) dot(sx,sy,2.6, color, clamp((prog-0.6)*3,0,1)*0.9);
+    }
+  }
+  dropClass(CLOUD_L, P.left);
+  dropClass(CLOUD_R, P.right);
+
+  var vL=projVarOf(CLOUD_L,wx,wy), vR=projVarOf(CLOUD_R,wx,wy);
+  var baseY=H*0.64, hMax=H*0.30, bw=44, bx=W*0.60;
+  if(pr>0.4){
+    var ba=clamp((pr-0.4)*2.4,0,1);
+    ctx.save(); ctx.globalAlpha=ba;
+    varBar(bx,       baseY, bw, hMax, vL/VAR_NORM, P.left);
+    varBar(bx+bw+50, baseY, bw, hMax, vR/VAR_NORM, P.right);
+    ctx.fillStyle=P.left;  ctx.font="700 11px 'JetBrains Mono',monospace"; ctx.textAlign='center';
+    ctx.fillText(t('lblVarL'), bx+bw/2, baseY-hMax-12);
+    ctx.fillStyle=P.right;
+    ctx.fillText(t('lblVarR'), bx+bw+50+bw/2, baseY-hMax-12);
+    ctx.fillStyle=P.fgDim; ctx.font="700 16px 'JetBrains Mono',monospace"; ctx.textAlign='left';
+    ctx.fillText('w . Cov . w', bx, baseY+44);
+    ctx.fillStyle=P.fgMute; ctx.font="italic 600 11px 'Inter',sans-serif";
+    ctx.fillText(t('lblProj'), bx, baseY+66);
+    ctx.restore();
+  }
+
+  drawMinecraftSil();
+  document.getElementById('hudV2').textContent = '30 deg';
+  document.getElementById('hudV3').textContent = vL.toFixed(2)+' / '+vR.toFixed(2);
+  document.getElementById('hudV4').textContent = (vL/Math.max(vR,1e-6)).toFixed(2);
+}
+
+// ====================== Stage 2: rotate w, variances trade off ======================
+function drawS2(pr){
+  frameTitle(LANG==='cn'?'同一根 w 慢慢转 — 左方差 / 右方差 此消彼长':'Rotate the same w — var L and var R trade off');
+  var cx=W*0.30, cy=H*0.52, half=Math.min(W*0.20, H*0.28), unit=half/2.6;
+  axisBox(cx, cy, half);
+  drawClouds(cx, cy, unit, 0.55, 0.55);
+  cloudLegend(cx, cy, half);
+
+  var ang = pr*Math.PI;   // 0 -> 180 deg
+  var wv=drawW(cx, cy, half, unit, ang, t('lblW'), 0);
+  var wx=wv[0], wy=wv[1];
+  var vL=projVarOf(CLOUD_L,wx,wy), vR=projVarOf(CLOUD_R,wx,wy);
+
+  var baseY=H*0.60, hMax=H*0.28, bw=44, bx=W*0.58;
+  varBar(bx,       baseY, bw, hMax, vL/VAR_NORM, P.left);
+  varBar(bx+bw+50, baseY, bw, hMax, vR/VAR_NORM, P.right);
+  ctx.fillStyle=P.left;  ctx.font="700 11px 'JetBrains Mono',monospace"; ctx.textAlign='center';
+  ctx.fillText(t('lblVarL'), bx+bw/2, baseY-hMax-12);
+  ctx.fillStyle=P.right;
+  ctx.fillText(t('lblVarR'), bx+bw+50+bw/2, baseY-hMax-12);
+
+  // sweep curve: ratio vs angle, with current marker
+  var gx=W*0.58, gy=H*0.74, gw=W*0.30, gh=H*0.14;
+  ctx.save();
+  ctx.strokeStyle=P.line; ctx.lineWidth=1; ctx.strokeRect(gx, gy, gw, gh);
+  ctx.fillStyle=P.fgMute; ctx.font="600 9px 'JetBrains Mono',monospace"; ctx.textAlign='left';
+  ctx.fillText(LANG==='cn'?'比值随角度':'ratio vs angle', gx, gy-6);
+  var maxr=0;
+  for(var d=0; d<=180; d++){
+    var a=d*Math.PI/180, cwx=Math.cos(a), cwy=Math.sin(a);
+    var r = projVarOf(CLOUD_L,cwx,cwy)/Math.max(projVarOf(CLOUD_R,cwx,cwy),1e-6);
+    if(r>maxr) maxr=r;
+  }
+  ctx.strokeStyle=P.qed; ctx.lineWidth=1.6; ctx.beginPath();
+  for(var d2=0; d2<=180; d2++){
+    var a2=d2*Math.PI/180, c2x=Math.cos(a2), c2y=Math.sin(a2);
+    var r2 = projVarOf(CLOUD_L,c2x,c2y)/Math.max(projVarOf(CLOUD_R,c2x,c2y),1e-6);
+    var px=gx+(d2/180)*gw, py=gy+gh-clamp(r2/maxr,0,1)*gh;
+    if(d2===0) ctx.moveTo(px,py); else ctx.lineTo(px,py);
+  }
+  ctx.stroke();
+  var mx=gx+(ang/Math.PI)*gw;
+  ctx.strokeStyle=P.fg; ctx.lineWidth=1; ctx.setLineDash([3,3]);
+  ctx.beginPath(); ctx.moveTo(mx, gy); ctx.lineTo(mx, gy+gh); ctx.stroke(); ctx.setLineDash([]);
+  ctx.restore();
+
+  drawMinecraftSil();
+  document.getElementById('hudV2').textContent = Math.round(ang*180/Math.PI)+' deg';
+  document.getElementById('hudV3').textContent = vL.toFixed(2)+' / '+vR.toFixed(2);
+  document.getElementById('hudV4').textContent = (vL/Math.max(vR,1e-6)).toFixed(2);
+}
+
+// ====================== Stage 3: the goal = Rayleigh ratio, with a gauge ======================
+function drawS3(pr){
+  frameTitle(LANG==='cn'?'目标: 让比值最大 — Rayleigh 商':'Goal: maximize the ratio — the Rayleigh quotient');
+  var cx=W*0.27, cy=H*0.52, half=Math.min(W*0.18, H*0.27), unit=half/2.6;
+  axisBox(cx, cy, half);
+  drawClouds(cx, cy, unit, 0.5, 0.5);
+  cloudLegend(cx, cy, half);
+
+  // keep rotating, then ease toward the optimum (still continuous, same w)
+  var sweepAng;
+  if(pr<0.6){ sweepAng = pr/0.6*Math.PI*0.6; }
+  else { var e=easeIO(clamp((pr-0.6)/0.4,0,1)); sweepAng = Math.PI*0.6*(1-e) + ANG_STAR*e; }
+  var wv=drawW(cx, cy, half, unit, sweepAng, t('lblW'), 0);
+  var wx=wv[0], wy=wv[1];
+  var vL=projVarOf(CLOUD_L,wx,wy), vR=projVarOf(CLOUD_R,wx,wy);
+  var ratio=vL/Math.max(vR,1e-6);
+
+  // ratio formula (fraction laid out by hand)
+  var bx=W*0.48, by=H*0.22;
+  ctx.save();
+  ctx.fillStyle=P.fgMute; ctx.font="700 11px 'JetBrains Mono',monospace"; ctx.textAlign='left';
+  ctx.fillText(t('lblRatio'), bx, by);
+  ctx.fillStyle=P.left; ctx.font="800 21px 'JetBrains Mono',monospace";
+  ctx.fillText('w . Cov_L . w', bx+24, by+32);
+  ctx.strokeStyle=P.fg; ctx.lineWidth=2;
+  ctx.beginPath(); ctx.moveTo(bx+18, by+44); ctx.lineTo(bx+222, by+44); ctx.stroke();
+  ctx.fillStyle=P.right;
+  ctx.fillText('w . Cov_R . w', bx+24, by+70);
+  ctx.fillStyle=P.qed; ctx.font="800 24px 'JetBrains Mono',monospace";
+  ctx.fillText('= '+ratio.toFixed(2), bx+240, by+52);
+  ctx.restore();
+
+  // Rayleigh gauge: bar rises with ratio. Max scale = bestRatio
+  var bestR = projVarOf(CLOUD_L, Math.cos(ANG_STAR), Math.sin(ANG_STAR)) /
+              Math.max(projVarOf(CLOUD_R, Math.cos(ANG_STAR), Math.sin(ANG_STAR)),1e-6);
+  var gx=W*0.60, gy=H*0.52, gw=W*0.28, gh=H*0.27;
+  ctx.save();
+  ctx.fillStyle=P.bg2; ctx.strokeStyle=P.lineStrong; ctx.lineWidth=1.4;
+  ctx.fillRect(gx,gy,gw,gh); ctx.strokeRect(gx,gy,gw,gh);
+  ctx.fillStyle=P.fgMute; ctx.font="700 10px 'JetBrains Mono',monospace"; ctx.textAlign='left';
+  ctx.fillText('Rayleigh', gx+12, gy+18);
+  var barX=gx+18, barY=gy+gh-24, barW=gw-36, barH=14;
+  ctx.fillStyle=P.bg3; ctx.fillRect(barX, barY, barW, barH);
+  ctx.strokeStyle=P.line; ctx.strokeRect(barX, barY, barW, barH);
+  var frac=clamp(ratio/bestR,0,1);
+  ctx.fillStyle = frac>0.92 ? P.qed : P.accent;
+  ctx.fillRect(barX, barY, barW*frac, barH);
+  ctx.strokeStyle=P.qed; ctx.lineWidth=1.4; ctx.setLineDash([3,3]);
+  ctx.beginPath(); ctx.moveTo(barX+barW, gy+26); ctx.lineTo(barX+barW, barY+barH); ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle=P.qed; ctx.font="700 9px 'JetBrains Mono',monospace"; ctx.textAlign='right';
+  ctx.fillText('max', barX+barW, gy+22);
+  ctx.fillStyle=P.fgDim; ctx.font="italic 600 11px 'Inter',sans-serif"; ctx.textAlign='left';
+  ctx.fillText(t('lblMax'), gx+12, gy+gh+18);
+  ctx.restore();
+
+  drawMinecraftSil();
+  document.getElementById('hudV2').textContent = Math.round(sweepAng*180/Math.PI)+' deg';
+  document.getElementById('hudV3').textContent = vL.toFixed(2)+' / '+vR.toFixed(2);
+  document.getElementById('hudV4').textContent = ratio.toFixed(2);
+}
+
+// ====================== Stage 4: generalized eigenvalue locks best w (gold) ======================
+function drawS4(pr){
+  frameTitle(LANG==='cn'?'广义特征值 — 一步解出最优 w':'Generalized eigenvalue — solve best w in one step');
+  var cx=W*0.30, cy=H*0.52, half=Math.min(W*0.20, H*0.28), unit=half/2.6;
+  axisBox(cx, cy, half);
+  drawClouds(cx, cy, unit, 0.5, 0.5);
+  cloudLegend(cx, cy, half);
+
+  // w eases from a wandering angle to ANG_STAR, then glows gold (the "lock")
+  var startA=Math.PI*0.62;
+  var lockT=easeIO(clamp(pr*2.2,0,1));
+  var ang=startA*(1-lockT)+ANG_STAR*lockT;
+  var locked = pr>0.45;
+  var glow = locked ? (0.5+0.5*Math.sin((pr-0.45)*Math.PI*4)) : 0;
+  drawW(cx, cy, half, unit, ang, locked? t('lblWstar') : t('lblW'), glow);
+
+  var wx=Math.cos(ANG_STAR), wy=Math.sin(ANG_STAR);
+  var vL=projVarOf(CLOUD_L,wx,wy), vR=projVarOf(CLOUD_R,wx,wy);
+  var lam=vL/Math.max(vR,1e-6);
+
+  var bx=W*0.55, by=H*0.27, bw=W*0.40, bh=H*0.44;
+  ctx.save();
+  ctx.fillStyle=P.bg2; ctx.strokeStyle=P.lineStrong; ctx.lineWidth=1.4;
+  ctx.fillRect(bx,by,bw,bh); ctx.strokeRect(bx,by,bw,bh);
+  ctx.fillStyle=P.fgMute; ctx.font="700 10px 'JetBrains Mono',monospace"; ctx.textAlign='left';
+  ctx.fillText(LANG==='cn'?'不用一格一格试 —':'no angle sweep needed —', bx+18, by+26);
+  ctx.fillStyle=P.fg; ctx.font="800 20px 'JetBrains Mono',monospace";
+  ctx.fillText('Cov_L . w = lambda . Cov_R . w', bx+18, by+58);
+  var fa=clamp(pr*1.4,0,1); ctx.globalAlpha=fa;
+  ctx.fillStyle=P.accent; ctx.font="700 13px 'Inter',sans-serif";
+  wrapText(LANG==='cn'
+    ? '解这个方程 = 一步找出让比值最大的方向'
+    : 'solving this = finding the max-ratio direction in one step', bx+18, by+90, bw-36, 19);
+  ctx.globalAlpha=1;
+  if(locked){
+    var la=clamp((pr-0.45)*3,0,1); ctx.globalAlpha=la;
+    ctx.fillStyle=P.qed; ctx.font="800 20px 'JetBrains Mono',monospace";
+    ctx.fillText('lambda = '+lam.toFixed(2), bx+18, by+bh*0.66);
+    ctx.fillStyle=P.fgDim; ctx.font="italic 600 12px 'Inter',sans-serif";
+    wrapText(t('lblLam'), bx+18, by+bh*0.66+24, bw-36, 17);
+    ctx.fillStyle=P.solution; ctx.font="600 12px 'Inter',sans-serif";
+    wrapText(LANG==='cn'
+      ? '最大特征值对应的特征向量 = 最优方向 w*'
+      : 'the eigenvector of the largest lambda = best direction w*', bx+18, by+bh-26, bw-36, 16);
+    ctx.globalAlpha=1;
+  }
+  ctx.restore();
+
+  drawMinecraftSil();
+  document.getElementById('hudV2').textContent = Math.round(ANG_STAR*180/Math.PI)+' deg';
+  document.getElementById('hudV3').textContent = vL.toFixed(2)+' / '+vR.toFixed(2);
+  document.getElementById('hudV4').textContent = lam.toFixed(2)+' (max)';
+}
+
+// ====================== Stage 5: solved — separable, hand off to S4 ======================
+function drawS5(pr){
+  frameTitle(LANG==='cn'?'CSP 跑通 — 在 w* 上, 左右手被完全拉开':'CSP solved — on w*, left and right pull fully apart');
+  var cx=W*0.28, cy=H*0.46, half=Math.min(W*0.17, H*0.24), unit=half/2.6;
+  axisBox(cx, cy, half);
+  drawClouds(cx, cy, unit, 0.5, 0.5);
+  cloudLegend(cx, cy, half);
+
+  var wx=Math.cos(ANG_STAR), wy=Math.sin(ANG_STAR);
+  var glow=0.5+0.5*Math.sin(pr*Math.PI*2);
+  drawW(cx, cy, half, unit, ANG_STAR, t('lblWstar'), glow);
+
+  // 1-D projection strip: project both classes onto w*; left spreads wide, right collapses tight
+  var sx0=W*0.50, sy0=H*0.40, sLen=W*0.40;
+  ctx.save();
+  ctx.strokeStyle=P.lineStrong; ctx.lineWidth=2;
+  ctx.beginPath(); ctx.moveTo(sx0, sy0); ctx.lineTo(sx0+sLen, sy0); ctx.stroke();
+  arrowHead(sx0+sLen-1, sy0, sx0+sLen, sy0, P.fgMute, 2);
+  ctx.fillStyle=P.fgMute; ctx.font="600 10px 'JetBrains Mono',monospace"; ctx.textAlign='left';
+  ctx.fillText(t('lblProj'), sx0, sy0-46);
+  ctx.restore();
+
+  var appear=clamp(pr*1.6,0,1);
+  function plot(cloud, color, row){
+    for(var i=0;i<cloud.length;i++){
+      if(i/cloud.length > appear) break;
+      var v=cloud[i].x*wx+cloud[i].y*wy;        // proj onto w*
+      var px=sx0 + ((v+3.2)/6.4)*sLen;
+      var py=sy0 + row*(6+(i%5)*3.2);
+      dot(px, py, 2.4, color, 0.85);
+    }
+  }
+  plot(CLOUD_L, P.left, -1);   // left: wide spread (high variance)
+  plot(CLOUD_R, P.right, +1);  // right: tight (low variance)
+  ctx.fillStyle=P.left; ctx.font="700 10px 'JetBrains Mono',monospace"; ctx.textAlign='left';
+  ctx.fillText(LANG==='cn'?'左手: 散得宽 (方差大)':'left: wide spread (high var)', sx0, sy0-26);
+  ctx.fillStyle=P.right;
+  ctx.fillText(LANG==='cn'?'右手: 挤得紧 (方差小)':'right: tight (low var)', sx0, sy0+58);
+
+  if(pr>0.4){
+    var ba=easeIO(clamp((pr-0.4)/0.6,0,1));
+    var bx=W*0.50, by=H*0.66, bw=W*0.44, bh=H*0.26;
+    ctx.save(); ctx.globalAlpha=ba;
+    ctx.fillStyle=P.bg2; ctx.strokeStyle=P.qed; ctx.lineWidth=2;
+    ctx.fillRect(bx,by,bw,bh); ctx.strokeRect(bx,by,bw,bh);
+    ctx.fillStyle=P.qed; ctx.font="800 17px 'Space Grotesk','Inter',sans-serif"; ctx.textAlign='left';
+    wrapText(LANG==='cn'?'CSP 跑通了 — 你有了真正能分左右手的特征':'CSP is solved — a real feature that separates the hands', bx+18, by+30, bw-36, 24);
+    ctx.fillStyle=P.solution; ctx.font="600 12px 'Inter',sans-serif";
+    wrapText(t('lblTake'), bx+18, by+bh*0.62, bw-36, 17);
+    ctx.fillStyle=P.fgMute; ctx.font="italic 600 11px 'Inter',sans-serif";
+    wrapText(LANG==='cn'?'下一步 S4: 用它训练分类器, 离脑控 Minecraft 又近一步':'next S4: train a classifier on it — closer to mind-controlling Minecraft', bx+18, by+bh-18, bw-36, 16);
+    ctx.restore();
+  }
+
+  drawMinecraftSil();
+  document.getElementById('hudV2').textContent = Math.round(ANG_STAR*180/Math.PI)+' deg (w*)';
+  var vL=projVarOf(CLOUD_L,wx,wy), vR=projVarOf(CLOUD_R,wx,wy);
+  document.getElementById('hudV3').textContent = vL.toFixed(2)+' / '+vR.toFixed(2);
+  document.getElementById('hudV4').textContent = (vL/Math.max(vR,1e-6)).toFixed(2)+' (max)';
+}
+
+// ====================== Render loop ======================
+var DRAW=[drawS0, drawS1, drawS2, drawS3, drawS4, drawS5];
 function render(){
-  var now=performance.now();
-  var t1=now-animStart;
-  var total=SCENE_DUR*N_SCENE;
-  var sceneIdx=Math.floor((t1%total)/SCENE_DUR);
-  var p=((t1%total)%SCENE_DUR)/SCENE_DUR;
-  if(sceneIdx!==currentScene){ currentScene=sceneIdx; updateSubtitle(currentScene); }
-  cx2d.clearRect(0,0,W,H);
-  cx2d.fillStyle='oklch(0.14 0.035 265)'; cx2d.fillRect(0,0,W,H);
-  if(currentScene===0) drawScene0(p);
-  else if(currentScene===1) drawScene1(p);
-  else if(currentScene===2) drawScene2(p);
-  else if(currentScene===3) drawScene3(p);
-  else drawScene4(p);
+  var now = performance.now();
+  var tt = (now - animStart) % TOTAL;
+  var acc=0, idx=0, pr=0;
+  for(var i=0;i<NST;i++){
+    if(tt < acc+STAGE_DUR[i]){ idx=i; pr=(tt-acc)/STAGE_DUR[i]; break; }
+    acc+=STAGE_DUR[i];
+  }
+  if(idx !== curStage){ curStage = idx; updateSub(curStage); }
+
+  ctx.clearRect(0,0,W,H);
+  ctx.fillStyle = P.bg0; ctx.fillRect(0,0,W,H);
+  DRAW[idx](pr);
+
   requestAnimationFrame(render);
 }
+
 refreshI18N();
-updateSubtitle(0);
+updateSub(0);
 requestAnimationFrame(render);
 </script>
 </body>

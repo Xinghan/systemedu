@@ -3,11 +3,10 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>协方差直觉 — 散点倾斜方向</title>
-<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;700&family=Inter:wght@400;600;800&family=JetBrains+Mono:wght@400;600;700&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
+<title>M24 — 协方差直觉：两电极一起抖吗</title>
 <style>
+  /* F2 第 1 层 — 共享深空底 (theme_style/styles.css, 所有 26 套统一不换) */
   :root{
-    /* Layer 1 — shared deep-space canvas (all 26 subjects, fixed) */
     --bg-0: oklch(0.14 0.035 265);
     --bg-1: oklch(0.18 0.04 265);
     --bg-2: oklch(0.22 0.045 265);
@@ -18,636 +17,642 @@
     --fg-dim: oklch(0.75 0.02 265);
     --fg-mute: oklch(0.55 0.03 265);
     --gold: oklch(0.85 0.14 85);
-    /* Layer 2 — math signature accent (electric blue) */
-    --accent: oklch(0.72 0.17 245);
-    /* Layer 3 — math 5-color palette (themes.js id:'math') */
-    --axis:     oklch(0.72 0.17 245);   /* AXIS — coordinate axes / C3 channel */
-    --proof:    oklch(0.52 0.16 245);   /* PROOF — C4 channel / secondary dots */
-    --shadow:   oklch(0.35 0.10 245);   /* SHADOW — grid / faint structure */
-    --solution: oklch(0.92 0.08 240);   /* SOLUTION — highlight dots / pair link */
-    --qed:      oklch(0.85 0.14 85);    /* QED — key insight (== gold) */
+
+    /* F2 第 2 层 — math accent (electric blue, themes.js math nav) */
+    --math: oklch(0.72 0.17 245);
+    --math-dim: oklch(0.52 0.16 245);
+
+    /* F2 第 3 层 — math 5 色 palette (themes.js math: AXIS/PROOF/SHADOW/SOLUTION/QED) */
+    --AXIS:     oklch(0.72 0.17 245); /* electric blue 主 — 数轴 / 主链路 / mascot 主体 */
+    --PROOF:    oklch(0.52 0.16 245); /* mid blue — 次级结构 */
+    --SHADOW:   oklch(0.35 0.10 245); /* deep — 背景卡 */
+    --SOLUTION: oklch(0.92 0.08 240); /* 近白蓝 — 数值 / 高亮变量 / 点云高光 */
+    --QED:      oklch(0.85 0.14 85);  /* gold — 关键结论 / 仪式高潮 */
+
+    /* 两电极语义色 (C3 偏蓝, C4 偏暖, 区别于主 accent 以便对照) */
+    --C3:  oklch(0.74 0.14 230);
+    --C4:  oklch(0.80 0.15 50);
   }
-  html,body{margin:0;padding:0;height:100vh;width:100%;overflow:hidden;
-    background:var(--bg-0);font-family:'Noto Sans SC','Inter',sans-serif;color:var(--fg);}
-  .wrapper{display:flex;flex-direction:row;height:100vh;overflow:hidden;}
-  /* ── Sidebar (200px) ── */
-  .sidebar{width:200px;min-width:200px;max-width:200px;flex-shrink:0;
-    display:flex;flex-direction:column;gap:10px;padding:14px 12px;
-    background:var(--bg-1);border-right:1px solid var(--line);overflow-y:auto;}
-  .brand{display:flex;align-items:center;gap:8px;}
-  .mascot{flex-shrink:0;}
-  .sidebar h1{font-family:'Space Grotesk','Inter',sans-serif;font-size:13px;font-weight:700;
-    line-height:1.3;color:var(--accent);letter-spacing:0.02em;}
-  .sidebar .code{font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:0.14em;
-    color:var(--fg-mute);text-transform:uppercase;}
-  .intro{font-size:11px;line-height:1.55;color:var(--fg-dim);}
-  .intro .en{font-style:italic;font-size:10px;color:var(--fg-mute);margin-top:4px;}
-  .guide-label{font-family:'JetBrains Mono',monospace;font-size:9px;font-weight:700;
-    letter-spacing:0.14em;text-transform:uppercase;color:var(--accent);margin-top:4px;}
-  .guide{list-style:none;padding:0;margin:0;font-size:11px;line-height:1.6;color:var(--fg-dim);}
-  .guide li{margin-bottom:2px;}
-  .lang-btn{margin-top:auto;align-self:flex-start;font-family:'JetBrains Mono',monospace;
-    font-size:10px;font-weight:700;letter-spacing:0.1em;padding:5px 12px;cursor:pointer;
-    color:var(--accent);background:transparent;border:1px solid var(--line-strong);
-    box-shadow:3px 3px 0 var(--bg-0);transition:transform .1s;}
-  .lang-btn:hover{transform:translate(-1px,-1px);}
-  .lang-btn:active{transform:translate(1px,1px);box-shadow:1px 1px 0 var(--bg-0);}
-  /* ── Main stage ── */
-  .stage{flex:1;min-width:0;position:relative;overflow:hidden;}
-  canvas{position:absolute;inset:0;width:100%;height:100%;display:block;}
-  .hud{position:absolute;top:16px;right:16px;background:oklch(0.18 0.04 265 / 0.85);
-    border:1px solid var(--line-strong);padding:9px 13px;font-family:'JetBrains Mono',monospace;
-    font-size:11px;box-shadow:3px 3px 0 var(--bg-0);min-width:172px;}
-  .hud-row{display:flex;justify-content:space-between;gap:14px;line-height:1.7;}
-  .hud-lbl{color:var(--fg-mute);font-size:7px;letter-spacing:0.14em;text-transform:uppercase;
-    align-self:center;}
-  .hud-val{color:var(--accent);font-weight:700;}
-  .sub{position:absolute;bottom:22px;left:50%;transform:translateX(-50%);
-    text-align:center;width:86%;pointer-events:none;}
-  .sub-zh{font-size:19px;font-weight:700;color:var(--fg);
-    background:oklch(0.18 0.04 265 / 0.85);padding:7px 18px;display:inline-block;
-    border:1px solid var(--line-strong);box-shadow:3px 3px 0 var(--bg-0);}
-  .sub-en{font-size:12px;font-style:italic;color:var(--fg-dim);margin-top:5px;}
+
+  *{box-sizing:border-box;margin:0;padding:0;}
+  html,body{height:100%;overflow:hidden;}
+  body{
+    background: var(--bg-0);
+    color: var(--fg);
+    font-family: 'Inter','Noto Sans SC',-apple-system,BlinkMacSystemFont,sans-serif;
+    display: flex;
+    height: 100vh;
+  }
+
+  /* 200px 左侧 sidebar */
+  .sidebar{
+    width: 200px; flex-shrink: 0;
+    background: var(--bg-1);
+    border-right: 1px solid var(--line);
+    padding: 16px 14px;
+    display: flex; flex-direction: column; gap: 12px;
+  }
+  .brand{ border-bottom: 1px solid var(--line); padding-bottom: 10px; }
+  .brand .badge{
+    display: inline-block;
+    font-family: 'JetBrains Mono',ui-monospace,monospace;
+    font-size: 10px; letter-spacing: 0.12em;
+    color: var(--math); background: var(--bg-2);
+    padding: 3px 7px; border: 1px solid var(--line);
+    box-shadow: 2px 2px 0 var(--bg-0); margin-bottom: 6px;
+  }
+  .brand h1{ font-size: 14px; font-weight: 700; color: var(--fg); line-height: 1.3; }
+  .brand .sub{
+    font-size: 10px; color: var(--fg-mute); margin-top: 4px;
+    font-family: 'JetBrains Mono',ui-monospace,monospace; letter-spacing: 0.04em;
+  }
+
+  /* Pi mascot — 旋转四面体 (themes.js math) */
+  .mascot-box{
+    background: var(--bg-2); border: 1px solid var(--line);
+    box-shadow: 3px 3px 0 var(--bg-0);
+    padding: 10px; display: flex; align-items: center; gap: 8px;
+  }
+  .mascot-box .label{
+    font-family: 'JetBrains Mono',ui-monospace,monospace;
+    font-size: 9px; color: var(--fg-dim); letter-spacing: 0.08em;
+  }
+  .mascot-box .name{ font-size: 11px; color: var(--fg); font-weight: 600; margin-top: 2px; }
+
+  /* Guide 3 条 */
+  .guide{ display: flex; flex-direction: column; gap: 8px; }
+  .guide-item{
+    font-size: 11px; line-height: 1.45; color: var(--fg-dim);
+    padding-left: 9px; border-left: 2px solid var(--math);
+    padding-top: 2px; padding-bottom: 2px;
+    transition: color .2s, border-color .2s;
+  }
+  .guide-item.hl{ color: var(--fg); border-left-color: var(--SOLUTION); }
+  .guide-item .num{
+    font-family: 'JetBrains Mono',ui-monospace,monospace;
+    color: var(--math); font-weight: 700; margin-right: 4px;
+  }
+
+  /* 项目进度路线图 (S1-S6) */
+  .route{ display:flex; flex-direction:column; gap:0; margin-top:2px; }
+  .route-ttl{
+    font-size:10px; font-weight:700; letter-spacing:.08em; color:var(--fg-mute);
+    font-family:'JetBrains Mono',monospace; margin-bottom:7px; text-transform:uppercase;
+  }
+  .route-step{
+    display:flex; align-items:center; gap:8px;
+    font-size:10.5px; line-height:1.25; color:var(--fg-mute);
+    padding:3px 0; position:relative;
+  }
+  .route-dot{
+    width:8px; height:8px; border-radius:50%; flex-shrink:0;
+    background:var(--bg-3); border:1.5px solid var(--line-strong);
+  }
+  .route-step.done .route-dot{ background:var(--math-dim); border-color:var(--math-dim); }
+  .route-step.cur{ color:var(--fg); font-weight:700; }
+  .route-step.cur .route-dot{
+    background:var(--math); border-color:var(--SOLUTION);
+    box-shadow:0 0 0 3px oklch(0.72 0.17 245 / 0.25);
+  }
+  .route-step::before{
+    content:''; position:absolute; left:3.5px; top:-6px; width:1.5px; height:12px;
+    background:var(--line);
+  }
+  .route-step:first-of-type::before{ display:none; }
+  .route-step.done::before{ background:var(--math-dim); }
+  .route-here{
+    font-size:8.5px; font-family:'JetBrains Mono',monospace; font-weight:700;
+    color:var(--math); margin-left:auto; letter-spacing:.04em;
+  }
+
+  .sidebar .spacer{ flex: 1; }
+
+  .lang-btn{
+    background: var(--bg-2); border: 1px solid var(--line-strong);
+    box-shadow: 2px 2px 0 var(--bg-0); color: var(--fg);
+    font-family: 'JetBrains Mono',ui-monospace,monospace;
+    font-size: 11px; font-weight: 700; letter-spacing: 0.1em;
+    padding: 7px 10px; cursor: pointer; width: 100%;
+  }
+  .lang-btn:hover{ border-color: var(--math); color: var(--math); }
+  .lang-btn:active{ transform: translate(2px, 2px); box-shadow: none; }
+
+  /* Main stage */
+  .main{ flex: 1; position: relative; overflow: hidden; background: var(--bg-0); }
+  #stage{ position:absolute; inset:0; width: 100%; height: 100%; display: block; }
+
+  /* HUD 右上 */
+  .hud{
+    position: absolute; top: 18px; right: 18px; z-index:5;
+    background: var(--bg-2); border: 1px solid var(--line);
+    box-shadow: 3px 3px 0 var(--bg-0);
+    padding: 10px 14px;
+    font-family: 'JetBrains Mono',ui-monospace,monospace;
+    min-width: 222px;
+  }
+  .hud .row{
+    display: flex; justify-content: space-between; align-items: center;
+    gap: 14px; font-size: 11px; line-height: 1.6;
+  }
+  .hud .label{ color: var(--fg-mute); letter-spacing: 0.06em; }
+  .hud .value{ color: var(--fg); font-weight: 700; }
+  .hud .value.accent{ color: var(--math); }
+  .hud .value.gold{ color: var(--QED); }
+  .hud .sep{ height: 1px; background: var(--line); margin: 6px 0; }
+
+  /* Subtitle 底部 — 辅助点睛, 不是动画主体 */
+  .subtitle{
+    position: absolute; left: 50%; bottom: 26px; transform: translateX(-50%);
+    z-index:5; text-align: center; width: 84%; max-width: 760px; pointer-events: none;
+  }
+  .subtitle .cn{
+    display:inline-block; font-size: 18px; font-weight: 700; color: var(--fg);
+    background: oklch(0.18 0.04 265 / 0.86); border: 1px solid var(--line-strong);
+    padding: 7px 18px; box-shadow: 3px 3px 0 var(--bg-0);
+  }
+  .subtitle .en{
+    margin-top: 6px; font-size: 12px; color: var(--fg-mute); font-style: italic;
+    font-family: 'JetBrains Mono',ui-monospace,monospace; letter-spacing: 0.02em;
+  }
+
+  /* 终点徽记 (Minecraft 角色剪影, 左下角 — 避开下方点云) */
+  .goal-badge{
+    position:absolute; left:18px; bottom:24px; z-index:5;
+    display:flex; align-items:center; gap:9px;
+    background: oklch(0.18 0.04 265 / 0.80);
+    border:1px solid var(--line-strong);
+    padding:7px 11px 7px 8px;
+    box-shadow:3px 3px 0 var(--bg-0);
+  }
+  .goal-badge svg{ width:26px; height:30px; flex-shrink:0; }
+  .goal-badge .gtxt{ font-size:10px; line-height:1.35; color:var(--fg-dim); max-width:128px; }
+  .goal-badge .gtxt b{ color:var(--fg); font-weight:700; }
+
+  /* Ceremonial flash overlay (高潮) */
+  .flash{
+    position: absolute; top: 42%; left: 50%; transform: translate(-50%, -50%);
+    z-index:6;
+    font-family: 'JetBrains Mono',ui-monospace,monospace;
+    font-size: 24px; font-weight: 800; color: var(--QED);
+    letter-spacing: 0.1em; opacity: 0; pointer-events: none;
+    text-shadow: 0 0 28px var(--QED); text-align: center;
+    transition: opacity 0.4s ease;
+  }
+  .flash.on{ opacity: 1; }
+  .flash .small{
+    display: block; text-align: center; font-size: 12px; color: var(--fg-dim);
+    letter-spacing: 0.04em; margin-top: 10px; text-shadow: none; font-weight: 400;
+  }
 </style>
 </head>
 <body>
-<div class="wrapper">
-
-<aside class="sidebar">
-  <div class="brand">
-    <!-- mascot: Pi — rotating tetrahedron, math signature -->
-    <svg class="mascot" width="30" height="30" viewBox="0 0 40 40" aria-hidden="true">
-      <polygon points="20,5 35,30 5,30" fill="none" stroke="var(--accent)" stroke-width="1.6"/>
-      <polygon points="20,5 35,30 20,22" fill="var(--proof)" opacity="0.55"/>
-      <polygon points="20,5 5,30 20,22" fill="var(--axis)" opacity="0.35"/>
-      <circle cx="20" cy="22" r="2.4" fill="var(--solution)"/>
-      <text x="20" y="20" text-anchor="middle" font-family="JetBrains Mono,monospace"
-            font-size="8" fill="var(--qed)">Pi</text>
-    </svg>
-    <div>
-      <h1 id="title">协方差直觉</h1>
-      <div class="code">EEG · M24 · COV</div>
+  <aside class="sidebar">
+    <div class="brand">
+      <span class="badge" id="badgeMod">MOD-M24 / MATH</span>
+      <h1 id="brandH1">两电极一起抖吗</h1>
+      <div class="sub" id="brandSub">C3 x C4 散点倾斜 = 协方差</div>
     </div>
-  </div>
 
-  <div class="intro" id="intro">
-    <span id="introZh">两个电极一个抖的时候, 另一个会不会跟着抖? 把每个时刻的 (C3, C4) 画成散点, 倾斜方向就是答案。</span>
-    <div class="en" id="introEn">Plot each instant as a (C3, C4) dot — the tilt direction is the relationship.</div>
-  </div>
+    <div class="mascot-box">
+      <svg width="42" height="42" viewBox="0 0 60 60" aria-hidden="true">
+        <!-- Pi mascot: 旋转四面体, 面上闪方程 (themes.js math) -->
+        <g transform="translate(30 30)">
+          <polygon points="0,-18 16,10 -16,10" fill="var(--PROOF)" opacity="0.9"/>
+          <polygon points="0,-18 16,10 0,2" fill="var(--AXIS)" opacity="0.95"/>
+          <polygon points="0,-18 -16,10 0,2" fill="var(--SHADOW)" opacity="0.95"/>
+          <polyline points="0,-18 16,10 -16,10 0,-18" fill="none" stroke="var(--SOLUTION)" stroke-width="1"/>
+          <line x1="0" y1="-18" x2="0" y2="2" stroke="var(--SOLUTION)" stroke-width="0.6" opacity="0.6"/>
+          <text y="9" fill="var(--QED)" font-family="'JetBrains Mono',monospace" font-size="8" text-anchor="middle" font-weight="700">cov</text>
+        </g>
+      </svg>
+      <div>
+        <div class="label">MASCOT</div>
+        <div class="name" id="mascotName">Pi · 派</div>
+      </div>
+    </div>
 
-  <div class="guide-label" id="guideLabel">观察重点</div>
-  <ul class="guide" id="guide"></ul>
+    <div class="guide">
+      <div class="guide-item" id="g1"><span class="num">01</span><span class="gtxt">每个时刻取 (C3, C4) 一个点</span></div>
+      <div class="guide-item" id="g2"><span class="num">02</span><span class="gtxt">点云倾斜方向就是协方差</span></div>
+      <div class="guide-item" id="g3"><span class="num">03</span><span class="gtxt">正斜一起抖 / 负斜反着抖</span></div>
+    </div>
 
-  <button class="lang-btn" id="langBtn">中 / EN</button>
-</aside>
+    <!-- 项目进度路线图: 高亮 S3 (你在这) -->
+    <nav class="route" id="route" aria-label="project route">
+      <div class="route-ttl" id="routeTtl">BCI 项目路线</div>
+      <div class="route-step done"><span class="route-dot"></span><span data-s="0">S1 认识脑波</span></div>
+      <div class="route-step done"><span class="route-dot"></span><span data-s="1">S2 清洁信号</span></div>
+      <div class="route-step cur"><span class="route-dot"></span><span data-s="2">S3 找特征训分类器</span><span class="route-here" id="routeHere">你在这</span></div>
+      <div class="route-step"><span class="route-dot"></span><span data-s="3">S4 自录冲准</span></div>
+      <div class="route-step"><span class="route-dot"></span><span data-s="4">S5 接 Minecraft</span></div>
+      <div class="route-step"><span class="route-dot"></span><span data-s="5">S6 分享</span></div>
+    </nav>
 
-<main class="stage">
-  <canvas id="c"></canvas>
-  <div class="hud">
-    <div class="hud-row"><span class="hud-lbl" id="hudL1">frame</span><span class="hud-val" id="hudV1">1/5</span></div>
-    <div class="hud-row"><span class="hud-lbl" id="hudL2">cov C3,C4</span><span class="hud-val" id="hudV2">--</span></div>
-    <div class="hud-row"><span class="hud-lbl" id="hudL3">tilt</span><span class="hud-val" id="hudV3">--</span></div>
-    <div class="hud-row"><span class="hud-lbl" id="hudL4">stage</span><span class="hud-val" id="hudV4">--</span></div>
-  </div>
-  <div class="sub">
-    <div class="sub-zh" id="subZh"></div>
-    <div class="sub-en" id="subEn"></div>
-  </div>
-</main>
+    <div class="spacer"></div>
+    <button id="langBtn" class="lang-btn" type="button">CN / EN</button>
+  </aside>
 
-</div>
+  <main class="main">
+    <canvas id="stage"></canvas>
+
+    <div class="hud">
+      <div class="row"><span class="label" id="hudL1">STAGE</span><span class="value accent" id="hudV1">--</span></div>
+      <div class="sep"></div>
+      <div class="row"><span class="label" id="hudL2">PAIR</span><span class="value" id="hudV2">C3 x C4</span></div>
+      <div class="row"><span class="label" id="hudL3">TILT</span><span class="value accent" id="hudV3">--</span></div>
+      <div class="row"><span class="label" id="hudL4">cov(C3,C4)</span><span class="value gold" id="hudV4">--</span></div>
+    </div>
+
+    <div class="subtitle">
+      <div class="cn" id="subCn">光看单个电极抖不够 — 要分准左右手, 得看两个电极是不是一起抖</div>
+      <div class="en" id="subEn">One electrode's wiggle is not enough — to tell L/R apart, watch if two electrodes wiggle together</div>
+    </div>
+
+    <!-- 终点徽记: Minecraft 角色剪影 (用念头让它动) -->
+    <div class="goal-badge" aria-label="project goal">
+      <svg viewBox="0 0 26 30" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <rect x="6" y="1" width="14" height="13" rx="1" fill="var(--math-dim)" stroke="var(--SOLUTION)" stroke-width="1"/>
+        <rect x="9" y="5" width="2.6" height="2.6" fill="var(--bg-0)"/>
+        <rect x="14.4" y="5" width="2.6" height="2.6" fill="var(--bg-0)"/>
+        <rect x="10" y="9.5" width="6" height="1.6" fill="var(--bg-0)" opacity="0.7"/>
+        <rect x="7" y="15" width="12" height="10" rx="1" fill="var(--SHADOW)" stroke="var(--line-strong)" stroke-width="0.8"/>
+        <rect x="3" y="16" width="3.5" height="8" rx="0.6" fill="var(--SHADOW)"/>
+        <rect x="19.5" y="16" width="3.5" height="8" rx="0.6" fill="var(--SHADOW)"/>
+        <rect x="9" y="25" width="3" height="4" fill="var(--SHADOW)"/>
+        <rect x="14" y="25" width="3" height="4" fill="var(--SHADOW)"/>
+      </svg>
+      <span class="gtxt" id="goalTxt">终点：<b>用念头让它动</b></span>
+    </div>
+
+    <div class="flash" id="flash">
+      TILT = COVARIANCE
+      <span class="small" id="flashSub">散点倾斜方向藏着两电极的关系 — 这是 CSP 的原料</span>
+    </div>
+  </main>
 
 <script>
-'use strict';
+(function(){
+  "use strict";
 
-// ====================== Palette (resolved oklch) ======================
-var P = {
-  bg0:'oklch(0.14 0.035 265)', bg2:'oklch(0.22 0.045 265)',
-  line:'oklch(0.35 0.05 265 / 0.35)', lineStrong:'oklch(0.55 0.08 265 / 0.55)',
-  fg:'oklch(0.96 0.01 265)', fgDim:'oklch(0.75 0.02 265)', fgMute:'oklch(0.55 0.03 265)',
-  accent:'oklch(0.72 0.17 245)',
-  axis:'oklch(0.72 0.17 245)', proof:'oklch(0.52 0.16 245)', shadow:'oklch(0.35 0.10 245)',
-  solution:'oklch(0.92 0.08 240)', qed:'oklch(0.85 0.14 85)',
-  c3:'oklch(0.72 0.17 245)',  // C3 channel = AXIS blue
-  c4:'oklch(0.85 0.14 85)'    // C4 channel = QED gold (distinct from C3)
-};
-
-// ====================== i18n ======================
-var LANG='cn';
-var I18N = {
-  title:{cn:'协方差直觉', en:'Covariance intuition'},
-  introZh:{cn:'两个电极一个抖的时候, 另一个会不会跟着抖? 把每个时刻的 (C3, C4) 画成散点, 倾斜方向就是答案。',
-           en:'When one electrode jitters, does the other follow? Plot each instant as a (C3, C4) dot — the tilt is the answer.'},
-  introEn:{cn:'Plot each instant as a (C3, C4) dot — the tilt direction is the relationship.',
-           en:'Covariance sign = scatter tilt direction.'},
-  guideLabel:{cn:'观察重点', en:'WATCH FOR'},
-  guide:{cn:['· (C3, C4) 配成一个点','· 点云倾斜方向','· 正 / 负 / 无 三种','· 协方差 ≠ 相关系数'],
-         en:['· (C3, C4) form one dot','· tilt of the cloud','· positive / negative / none','· covariance != correlation']},
-  hudL1:{cn:'frame', en:'frame'}, hudL2:{cn:'cov C3,C4', en:'cov C3,C4'},
-  hudL3:{cn:'tilt', en:'tilt'}, hudL4:{cn:'stage', en:'stage'},
-  // frame titles (top of stage)
-  f1t:{cn:'C3 与 C4 — 它们抖动有没有关联?', en:'C3 vs C4 — is their jitter related?'},
-  f2t:{cn:'每个时刻 (C3值, C4值) → 散点上一个点', en:'Each instant (C3, C4) → one dot on the scatter'},
-  f3t:{cn:'三种形态: 正相关 / 负相关 / 无关', en:'Three shapes: positive / negative / none'},
-  f4t:{cn:'倾斜方向 = 一起抖的方向, 越斜关系越强', en:'Tilt = the co-jitter direction; steeper = stronger'},
-  f5t:{cn:'运动想象时 C3-C4 协方差结构会变', en:'Motor imagery reshapes the C3-C4 covariance'},
-  // subtitles
-  s1zh:{cn:'看两条波形像在比赛 — 但光看波形很难说它们是不是一起动',
-        en:'Two waveforms racing — hard to tell from waves alone if they move together'},
-  s1en:{cn:'我们需要换一个看法。', en:'We need a different view.'},
-  s2zh:{cn:'同一时刻读出 C3 和 C4 两个数, 配成坐标 (C3, C4), 落成一个点',
-        en:'Read C3 and C4 at the same instant, pair them as (C3, C4), drop one dot'},
-  s2en:{cn:'横轴 = C3, 纵轴 = C4。', en:'x-axis = C3, y-axis = C4.'},
-  s3zh:{cn:'正: C3大C4也大 (右上斜) / 负: C3大C4小 (左上斜) / 无: 圆球状没方向',
-        en:'Positive: both big (up-right) / Negative: one big one small (up-left) / None: round blob'},
-  s3en:{cn:'点云的形状直接告诉你关系。', en:'The cloud shape tells the relationship.'},
-  s4zh:{cn:'倾斜方向就是协方差的符号: 右上斜 cov>0, 左上斜 cov<0, 越斜越大',
-        en:'Tilt direction is the covariance sign: up-right cov>0, up-left cov<0, steeper = larger'},
-  s4en:{cn:'协方差量化的, 正是这条倾斜。', en:'Covariance quantifies exactly this tilt.'},
-  s5zh:{cn:'散点倾斜方向, 藏着两电极一起抖的秘密',
-        en:'The tilt of the scatter hides the secret of how two electrodes jitter together'},
-  s5en:{cn:'对侧 ERD 让 C3-C4 关系改变 — 下节用公式与协方差矩阵抓住它 (→ CSP)',
-        en:'Contralateral ERD reshapes it — next: the formula & covariance matrix capture it (→ CSP)'},
-  tNone:{cn:'无', en:'none'}, tPos:{cn:'右上 +', en:'up-right +'}, tNeg:{cn:'左上 -', en:'up-left -'},
-  lblC3:{cn:'C3', en:'C3'}, lblC4:{cn:'C4', en:'C4'},
-  lblPos:{cn:'正相关 cov>0', en:'positive cov>0'},
-  lblNeg:{cn:'负相关 cov<0', en:'negative cov<0'},
-  lblZero:{cn:'无关 cov≈0', en:'none cov~0'},
-  lblPair:{cn:'同一时刻配成一个点', en:'same instant → one dot'},
-  lblNotCorr:{cn:'注意: 协方差有单位、会被幅度放大; 相关系数才是归一化的版本',
-              en:'Note: covariance carries units and scales with amplitude; correlation is its normalized cousin'},
-  lblRest:{cn:'静息: 两电极各自抖, 关系弱', en:'rest: weak coupling'},
-  lblMI:{cn:'运动想象: 对侧 ERD, 倾斜变了', en:'imagery: contralateral ERD, tilt shifts'}
-};
-function t(k){ return (I18N[k]&&I18N[k][LANG]) || (I18N[k]&&I18N[k].en) || k; }
-
-function refreshI18N(){
-  document.getElementById('title').textContent = t('title');
-  document.getElementById('introZh').textContent = t('introZh');
-  document.getElementById('introEn').textContent = t('introEn');
-  document.getElementById('guideLabel').textContent = t('guideLabel');
-  document.getElementById('guide').innerHTML = t('guide').map(function(x){return '<li>'+x+'</li>';}).join('');
-  document.getElementById('hudL1').textContent = t('hudL1');
-  document.getElementById('hudL2').textContent = t('hudL2');
-  document.getElementById('hudL3').textContent = t('hudL3');
-  document.getElementById('hudL4').textContent = t('hudL4');
-  document.getElementById('langBtn').textContent = LANG==='cn' ? '中 / EN' : 'EN / 中';
-  updateSub(curFrame);
-}
-document.getElementById('langBtn').addEventListener('click', function(){
-  LANG = LANG==='cn' ? 'en' : 'cn'; refreshI18N();
-});
-
-// ====================== Canvas ======================
-var cv = document.getElementById('c');
-var ctx = cv.getContext('2d');
-var W=0, H=0, DPR=1;
-function resize(){
-  var rect = cv.parentElement.getBoundingClientRect();
-  if(rect.width<1 || rect.height<1) return;
-  DPR = Math.min(window.devicePixelRatio||1, 2);
-  cv.width = rect.width*DPR; cv.height = rect.height*DPR;
-  cv.style.width = rect.width+'px'; cv.style.height = rect.height+'px';
-  ctx.setTransform(DPR,0,0,DPR,0,0);
-  W = rect.width; H = rect.height;
-}
-window.addEventListener('resize', resize);
-resize(); setTimeout(resize,200); setTimeout(resize,600);
-document.fonts.ready.then(function(){ resize(); });
-
-// ====================== Deterministic data ======================
-// rand in [0,1) seeded — for reproducible dot clouds
-function rnd(seed){ var x = Math.sin(seed*12.9898)*43758.5453; return x - Math.floor(x); }
-function gaussPair(seed){
-  // box-muller -> two independent standard normals
-  var u1 = rnd(seed*1.7+0.13); var u2 = rnd(seed*2.3+0.71);
-  if(u1 < 1e-4) u1 = 1e-4;
-  var r = Math.sqrt(-2*Math.log(u1));
-  return [r*Math.cos(2*Math.PI*u2), r*Math.sin(2*Math.PI*u2)];
-}
-// Build a correlated cloud: rho in [-1,1], 0 = round. Returns array of {x,y} in std units.
-function buildCloud(n, rho, seed){
-  var pts=[];
-  for(var i=0;i<n;i++){
-    var g = gaussPair(seed + i*0.37);
-    var z1 = g[0], z2 = g[1];
-    // correlate: y = rho*z1 + sqrt(1-rho^2)*z2
-    var y = rho*z1 + Math.sqrt(Math.max(0,1-rho*rho))*z2;
-    pts.push({x:z1, y:y});
-  }
-  return pts;
-}
-var N = 60;
-var cloudPos = buildCloud(N, 0.82, 3);   // positive
-var cloudNeg = buildCloud(N, -0.82, 7);  // negative
-var cloudNon = buildCloud(N, 0.02, 11);  // none (round)
-// rest vs MI clouds for F5 (mild -> stronger contralateral coupling shift)
-var cloudRest = buildCloud(N, 0.18, 17);
-var cloudMI   = buildCloud(N, -0.74, 23);
-
-// Two source waveforms for F1/F2 — C4 weakly follows C3 (positive coupling)
-function c3sig(tt){ return 0.9*Math.sin(tt*2.1) + 0.4*Math.sin(tt*5.3+0.6) + 0.25*Math.sin(tt*11.0+1.2); }
-function c4sig(tt){ return 0.62*c3sig(tt) + 0.45*Math.sin(tt*4.4+2.1) + 0.2*Math.sin(tt*9.0+0.3); }
-
-// covariance of a std-unit cloud (already standardized, so cov ~ rho)
-function covOf(pts){
-  var n=pts.length, mx=0,my=0;
-  for(var i=0;i<n;i++){ mx+=pts[i].x; my+=pts[i].y; }
-  mx/=n; my/=n;
-  var s=0;
-  for(var j=0;j<n;j++){ s += (pts[j].x-mx)*(pts[j].y-my); }
-  return s/n;
-}
-
-// ====================== Timeline ======================
-var FRAME_DUR = 7000;          // ms per frame
-var NFR = 5;
-var curFrame = 0;
-var animStart = performance.now();
-
-function updateSub(f){
-  var z=['s1zh','s2zh','s3zh','s4zh','s5zh'][f];
-  var e=['s1en','s2en','s3en','s4en','s5en'][f];
-  document.getElementById('subZh').textContent = t(z);
-  document.getElementById('subEn').textContent = t(e);
-}
-
-// ====================== Drawing helpers ======================
-function easeIO(x){ return x<0.5 ? 2*x*x : 1-Math.pow(-2*x+2,2)/2; }
-
-function frameTitle(txt){
-  ctx.fillStyle = P.fg;
-  ctx.font = "800 19px 'Space Grotesk','Inter',sans-serif";
-  ctx.textAlign = 'center';
-  ctx.fillText(txt, W/2, 38);
-}
-
-// draw a scatter axis box, return mapping fns. cx,cy center; half = half-extent px
-function scatterFrame(cx, cy, half, label){
-  ctx.save();
-  // grid
-  ctx.strokeStyle = P.line; ctx.lineWidth = 1;
-  for(var g=-2;g<=2;g++){
-    var gx = cx + g/2.6*half, gy = cy - g/2.6*half;
-    ctx.beginPath(); ctx.moveTo(gx, cy-half); ctx.lineTo(gx, cy+half); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(cx-half, gy); ctx.lineTo(cx+half, gy); ctx.stroke();
-  }
-  // axes
-  ctx.strokeStyle = P.lineStrong; ctx.lineWidth = 1.6;
-  ctx.beginPath(); ctx.moveTo(cx-half, cy); ctx.lineTo(cx+half, cy); ctx.stroke();
-  ctx.beginPath(); ctx.moveTo(cx, cy-half); ctx.lineTo(cx, cy+half); ctx.stroke();
-  // axis labels
-  ctx.fillStyle = P.c3;
-  ctx.font = "700 12px 'JetBrains Mono',monospace";
-  ctx.textAlign = 'right';
-  ctx.fillText(t('lblC3'), cx+half-2, cy+16);
-  ctx.fillStyle = P.c4;
-  ctx.textAlign = 'left';
-  ctx.fillText(t('lblC4'), cx+6, cy-half+10);
-  if(label){
-    ctx.fillStyle = P.fgDim;
-    ctx.font = "700 12px 'Inter',sans-serif";
-    ctx.textAlign='center';
-    ctx.fillText(label, cx, cy+half+22);
-  }
-  ctx.restore();
-  var sc = half/2.9;
-  return {
-    px:function(vx){ return cx + vx*sc; },
-    py:function(vy){ return cy - vy*sc; },
-    sc:sc, cx:cx, cy:cy, half:half
+  /* ===================== i18n ===================== */
+  var LANG = 'cn';
+  var I18N = {
+    badgeMod:   { cn: 'MOD-M24 / MATH', en: 'MOD-M24 / MATH' },
+    brandH1:    { cn: '两电极一起抖吗', en: 'Do they wiggle together' },
+    brandSub:   { cn: 'C3 x C4 散点倾斜 = 协方差', en: 'C3 x C4 tilt = covariance' },
+    mascotName: { cn: 'Pi · 派', en: 'Pi · the tetrahedron' },
+    g1: { cn: '每个时刻取 (C3, C4) 一个点', en: 'Each instant -> one point (C3, C4)' },
+    g2: { cn: '点云倾斜方向就是协方差', en: 'Cloud tilt direction is covariance' },
+    g3: { cn: '正斜一起抖 / 负斜反着抖', en: 'Up-slant: together / Down: opposite' },
+    routeTtl:  { cn: 'BCI 项目路线', en: 'BCI PROJECT ROUTE' },
+    routeHere: { cn: '你在这', en: 'YOU' },
+    route: {
+      cn: ['S1 认识脑波','S2 清洁信号','S3 找特征训分类器','S4 自录冲准','S5 接 Minecraft','S6 分享'],
+      en: ['S1 Read EEG','S2 Clean signal','S3 Feature + classifier','S4 Self-train','S5 To Minecraft','S6 Share']
+    },
+    goalTxt:   { cn: '终点：用念头让它动', en: 'Goal: move it with thought' },
+    hudL1: { cn: '阶段',       en: 'STAGE' },
+    hudL2: { cn: '电极对',     en: 'PAIR' },
+    hudL3: { cn: '倾斜',       en: 'TILT' },
+    hudL4: { cn: 'cov(C3,C4)', en: 'cov(C3,C4)' },
+    btnLang: { cn: 'CN / EN', en: 'CN / EN' }
   };
-}
+  function tt(o){ return (o && o[LANG]) || (o && o.en) || ''; }
+  function t(key){ return I18N[key] ? tt(I18N[key]) : key; }
 
-function dot(x,y,r,color,alpha){
-  ctx.save(); ctx.globalAlpha = alpha;
-  ctx.fillStyle = color;
-  ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2); ctx.fill();
-  ctx.restore();
-}
-
-// least-squares tilt line through std cloud (slope ~ rho since unit variance)
-function tiltLine(map, pts, color, alpha, lw){
-  var n=pts.length, mx=0,my=0;
-  for(var i=0;i<n;i++){ mx+=pts[i].x; my+=pts[i].y; }
-  mx/=n; my/=n;
-  var sxy=0,sxx=0;
-  for(var j=0;j<n;j++){ sxy+=(pts[j].x-mx)*(pts[j].y-my); sxx+=(pts[j].x-mx)*(pts[j].x-mx); }
-  var slope = sxx>1e-6 ? sxy/sxx : 0;
-  var ex = 2.6;
-  ctx.save(); ctx.globalAlpha = alpha;
-  ctx.strokeStyle = color; ctx.lineWidth = lw||2.5;
-  ctx.beginPath();
-  ctx.moveTo(map.px(-ex), map.py(my + slope*(-ex-mx)));
-  ctx.lineTo(map.px( ex), map.py(my + slope*( ex-mx)));
-  ctx.stroke();
-  ctx.restore();
-  return slope;
-}
-
-// mini waveform
-function waveform(x0,y0,w,h,fn,phase,color,label){
-  ctx.save();
-  ctx.fillStyle = P.bg2;
-  ctx.strokeStyle = P.line; ctx.lineWidth = 1;
-  ctx.fillRect(x0,y0,w,h); ctx.strokeRect(x0,y0,w,h);
-  ctx.strokeStyle = color; ctx.lineWidth = 1.8;
-  ctx.beginPath();
-  var midY = y0+h/2;
-  for(var i=0;i<=w-12;i++){
-    var tt = i/w*9 + phase;
-    var v = fn(tt);
-    var px = x0+6+i, py = midY - v*(h*0.32);
-    if(i===0) ctx.moveTo(px,py); else ctx.lineTo(px,py);
-  }
-  ctx.stroke();
-  ctx.fillStyle = color;
-  ctx.font = "700 11px 'JetBrains Mono',monospace";
-  ctx.textAlign='left';
-  ctx.fillText(label, x0+6, y0+15);
-  ctx.restore();
-  return midY;
-}
-
-// ====================== Frames ======================
-function drawF1(p){
-  frameTitle(t('f1t'));
-  var ww = Math.min(W*0.62, 560), x0=(W-ww)/2;
-  var phase = p*5;
-  var h = 110;
-  var y1 = H*0.30, y2 = H*0.55;
-  var m3 = waveform(x0, y1, ww, h, c3sig, phase, P.c3, 'C3');
-  var m4 = waveform(x0, y2, ww, h, c4sig, phase, P.c4, 'C4');
-
-  // moving readout cursor sweeping across both — shows they're sampled together
-  var sweep = (p*ww*0.92) % (ww-12);
-  var sx = x0+6+sweep;
-  ctx.save();
-  ctx.strokeStyle = P.solution; ctx.lineWidth = 1.4; ctx.globalAlpha=0.8;
-  ctx.setLineDash([4,4]);
-  ctx.beginPath(); ctx.moveTo(sx, y1); ctx.lineTo(sx, y2+h); ctx.stroke();
-  ctx.setLineDash([]);
-  // dots where the cursor crosses each wave
-  var tt = (sweep/ww*9)+phase;
-  var py3 = (y1+h/2) - c3sig(tt)*(h*0.32);
-  var py4 = (y2+h/2) - c4sig(tt)*(h*0.32);
-  dot(sx,py3,4.5,P.c3,1); dot(sx,py4,4.5,P.c4,1);
-  ctx.restore();
-
-  // question
-  ctx.fillStyle = P.fgDim;
-  ctx.font = "600 13px 'Inter','Noto Sans SC',sans-serif";
-  ctx.textAlign='center';
-  ctx.fillText(LANG==='cn'?'同一时刻读两个数 — 它们是一起动, 还是各管各?'
-                          :'Read both at one instant — do they move together or apart?',
-               W/2, y2+h+38);
-
-  setHud('1/5', '?', t('tNone'), LANG==='cn'?'波形':'waveform');
-}
-
-function drawF2(p){
-  frameTitle(t('f2t'));
-  // left: tiny waveforms with a moving cursor; right: scatter accumulating dots
-  var lw=Math.min(W*0.34,330), lx=W*0.06;
-  var phase=1.2;
-  var h=78;
-  var y1=H*0.30, y2=H*0.30+h+22;
-  waveform(lx, y1, lw, h, c3sig, phase, P.c3, 'C3');
-  waveform(lx, y2, lw, h, c4sig, phase, P.c4, 'C4');
-
-  // scatter on right
-  var sCx = W*0.74, sCy = H*0.52, half=Math.min(H*0.30, W*0.18);
-  var map = scatterFrame(sCx, sCy, half, t('lblPair'));
-
-  // number of dots revealed
-  var nShown = Math.floor(N * Math.min(1, p*1.25));
-  // the "current" sampling cursor on left waves
-  var idx = nShown>0 ? nShown-1 : 0;
-  var sweepFrac = nShown>0 ? (idx/N) : 0;
-  var sx = lx+6 + sweepFrac*(lw-12);
-  var tt = sweepFrac*9 + phase;
-  var py3=(y1+h/2)-c3sig(tt)*(h*0.32);
-  var py4=(y2+h/2)-c4sig(tt)*(h*0.32);
-
-  // draw accumulated dots
-  for(var i=0;i<nShown;i++){
-    var pt = cloudPos[i];
-    dot(map.px(pt.x), map.py(pt.y), 4, P.proof, 0.82);
-  }
-  // highlight the freshly-paired dot + connector
-  if(nShown>0){
-    var hp = cloudPos[idx];
-    var dx=map.px(hp.x), dy=map.py(hp.y);
-    ctx.save();
-    ctx.strokeStyle = P.solution; ctx.lineWidth=1.2; ctx.globalAlpha=0.7;
-    ctx.setLineDash([3,3]);
-    // cursor on left waves
-    ctx.beginPath(); ctx.moveTo(sx, y1); ctx.lineTo(sx, y2+h); ctx.stroke();
-    ctx.setLineDash([]);
-    ctx.restore();
-    dot(sx,py3,4,P.c3,1); dot(sx,py4,4,P.c4,1);
-    dot(dx,dy,6,P.solution,1);
-    // tiny label "(C3,C4)"
-    ctx.fillStyle=P.solution; ctx.font="600 10px 'JetBrains Mono',monospace";
-    ctx.textAlign='left';
-    ctx.fillText('(C3,C4)', dx+9, dy-7);
-  }
-
-  setHud('2/5', '+', t('tPos'), nShown+'/'+N);
-}
-
-function drawF3(p){
-  frameTitle(t('f3t'));
-  var half = Math.min(H*0.24, W*0.11);
-  var cy = H*0.50;
-  var gap = W/3;
-  var configs = [
-    {cx:gap*0.5,  cloud:cloudPos, col:P.axis,     line:P.solution, lbl:t('lblPos'), key:'+'},
-    {cx:gap*1.5,  cloud:cloudNon, col:P.fgMute,   line:P.fgMute,   lbl:t('lblZero'),key:'0'},
-    {cx:gap*2.5,  cloud:cloudNeg, col:P.proof,    line:P.qed,      lbl:t('lblNeg'), key:'-'}
+  /* ===================== 阶段 (承接同一个散点对象, 连续演化, 非翻页) =====================
+     唯一核心对象 = "C3-C4 同时刻散点云的倾斜方向 (协方差直觉)"
+     全程只演一件事: 把每个时刻 (C3(t),C4(t)) 连续画成散点, 看点云倾斜方向,
+     倾斜方向连续地从 正斜(一起抖) -> 无方向(各抖各的) -> 负斜(反着抖) 演化。
+     coupling rho 在阶段间被一条连续曲线驱动, 点云持续重排, 拟合线持续旋转。 */
+  var STAGES = [
+    { id:'intro',  ms:6200, rho:  0.92,
+      stage:{ cn:'两条波', en:'Two traces' },
+      cn:'光看单个电极抖不够 — 要分准左右手, 得看两个电极是不是一起抖',
+      en:'One electrode is not enough — to tell L/R apart, watch if both wiggle together' },
+    { id:'pos',    ms:7400, rho:  0.92,
+      stage:{ cn:'正相关', en:'Positive' },
+      cn:'C3 涨 C4 也涨 — 每个时刻的 (C3,C4) 点连成一片向右上的斜线: 一起抖',
+      en:'C3 up, C4 up — each instant (C3,C4) forms an up-right slant: they wiggle together' },
+    { id:'zero',   ms:7000, rho:  0.0,
+      stage:{ cn:'无关系', en:'No relation' },
+      cn:'让 C4 各抖各的 — 点云散成一团圆, 没有倾斜方向: 协方差约等于 0',
+      en:'Let C4 wiggle on its own — the cloud rounds into a blob, no tilt: cov approx 0' },
+    { id:'neg',    ms:7400, rho: -0.92,
+      stage:{ cn:'负相关', en:'Negative' },
+      cn:'C3 涨时 C4 反而跌 — 点云倒向左上右下: 反着抖, 协方差为负',
+      en:'C3 up while C4 falls — the cloud tips down-right: opposite wiggle, cov is negative' },
+    { id:'lock',   ms:7200, rho: -0.92,
+      stage:{ cn:'倾斜=协方差', en:'Tilt = covariance' },
+      cn:'散点倾斜方向藏着两电极的关系 — 正斜正、负斜负 — 这是下一步 CSP 的原料',
+      en:'The tilt direction encodes the relation — up=+, down=- — raw material for CSP next' }
   ];
-  for(var k=0;k<3;k++){
-    var cfg=configs[k];
-    // stagger reveal: pos first, none second, neg third
-    var local = Math.min(1, Math.max(0, (p*3 - k)));
-    if(local<=0) continue;
-    var a = easeIO(local);
-    ctx.save(); ctx.globalAlpha = a;
-    var map = scatterFrame(cfg.cx, cy, half, cfg.lbl);
-    var nShown = Math.floor(N*local);
-    for(var i=0;i<nShown;i++){
-      var pt=cfg.cloud[i];
-      dot(map.px(pt.x), map.py(pt.y), 3.4, cfg.col, 0.8);
+
+  /* ===================== 数据 — C3 主波 + 由 rho 耦合的 C4 =====================
+     科学严谨:
+       - C3(t), C4(t) 都标准化到零均值; 散点画的是去均值后的瞬时值。
+       - cov(C3,C4) = mean( C3 * C4 ), 正比于点云沿斜线方向的拉伸。
+       - 用 rho 控制耦合: C4 = rho*C3 + sqrt(1-rho^2)*indep, 使 cov 严格随 rho 变号。
+       - 协方差 != 相关: HUD 标 cov 数值(去量纲后约等于 rho), 倾斜方向(符号)才是直觉核心。
+       - 三态都有噪声, 不画成完美直线 (真实 EEG 永远有抖动)。 */
+  var N = 220;                 // 散点 / 时间样本数 (一个连续窗)
+  function lcg(seed){ var s=seed>>>0; return function(){ s=(s*1664525+1013904223)>>>0; return s/4294967296; }; }
+  var rndC3 = lcg(20240524), rndId = lcg(77013);
+  var SRC_C3 = [], SRC_ID = [];
+  (function(){
+    // 平滑随机游走 + 去均值, 模拟 mu 节律包络的瞬时电压
+    var a=0,b=0, c3=[], id=[];
+    for(var i=0;i<N;i++){
+      a = a*0.86 + (rndC3()-0.5)*0.9 + Math.sin(i*0.21)*0.18;
+      b = b*0.86 + (rndId()-0.5)*0.9 + Math.cos(i*0.17)*0.16;
+      c3.push(a); id.push(b);
     }
-    if(local>0.6 && cfg.key!=='0'){
-      tiltLine(map, cfg.cloud, cfg.line, (local-0.6)/0.4, 2.6);
+    function norm(arr){
+      var m=0,i; for(i=0;i<arr.length;i++) m+=arr[i]; m/=arr.length;
+      var v=0; for(i=0;i<arr.length;i++){ var d=arr[i]-m; v+=d*d; } v=Math.sqrt(v/arr.length)||1;
+      for(i=0;i<arr.length;i++) arr[i]=(arr[i]-m)/v;
     }
-    if(cfg.key==='0' && local>0.6){
-      // draw a faint circle to emphasize "no direction"
-      ctx.strokeStyle=P.fgMute; ctx.globalAlpha=(local-0.6)/0.4*0.6;
-      ctx.lineWidth=1.6; ctx.setLineDash([5,4]);
-      ctx.beginPath(); ctx.arc(map.cx,map.cy,half*0.62,0,Math.PI*2); ctx.stroke();
+    norm(c3); norm(id);
+    SRC_C3=c3; SRC_ID=id;
+  })();
+  // 由 rho 合成 C4 (零均值, 单位尺度)
+  function c4At(i, rho){
+    var k = Math.sqrt(Math.max(0,1-rho*rho));
+    return rho*SRC_C3[i] + k*SRC_ID[i];
+  }
+  // cov(C3, C4) 在给定 rho 下的实际值 (两源已标准化且近独立, cov approx rho)
+  function covAt(rho){
+    var s=0; for(var i=0;i<N;i++) s += SRC_C3[i]*c4At(i,rho);
+    return s/N;
+  }
+
+  /* ===================== Canvas ===================== */
+  var canvas = document.getElementById('stage');
+  var ctx = canvas.getContext('2d');
+  var W=0,H=0,DPR=1;
+  function resize(){
+    var rect = canvas.parentElement.getBoundingClientRect();
+    if(rect.width<1||rect.height<1) return;
+    DPR = window.devicePixelRatio||1;
+    canvas.width = rect.width*DPR; canvas.height = rect.height*DPR;
+    canvas.style.width = rect.width+'px'; canvas.style.height = rect.height+'px';
+    ctx.setTransform(DPR,0,0,DPR,0,0);
+    W = rect.width; H = rect.height;
+  }
+  window.addEventListener('resize', resize);
+  resize();
+  setTimeout(resize,200); setTimeout(resize,600);
+  if(document.fonts&&document.fonts.ready){ document.fonts.ready.then(resize); }
+
+  /* ===================== canvas 调色 (深空 + math AXIS) ===================== */
+  var C = {
+    bg0:'#0a0d18', bg1:'#141a30', bg2:'#1b2240', bg3:'#26305a',
+    line:'rgba(150,165,225,0.30)', lineStrong:'rgba(170,185,235,0.55)',
+    fg:'#eef0fb', fgDim:'#aeb6d6', fgMute:'#7e87ad',
+    axis:'#3da0ff',          /* --math electric blue */
+    axisDim:'#2c66c4',       /* --math-dim */
+    solution:'#d8e4ff',      /* --SOLUTION 近白蓝 */
+    gold:'#f2cf6e',          /* --QED */
+    c3:'#5db4f0',            /* C3 偏蓝 */
+    c4:'#f2a86a'             /* C4 偏暖 */
+  };
+
+  function MONO(s){ return s+" 'JetBrains Mono',ui-monospace,monospace"; }
+  function SANS(s){ return s+" Inter,'Noto Sans SC',sans-serif"; }
+  function lerp(a,b,k){ return a+(b-a)*k; }
+  function clamp(x,lo,hi){ return x<lo?lo:(x>hi?hi:x); }
+  function easeInOut(x){ return x<0.5 ? 2*x*x : 1-Math.pow(-2*x+2,2)/2; }
+  function panel(x,y,w,h,fill){
+    ctx.save();
+    ctx.fillStyle=fill||C.bg1; ctx.strokeStyle=C.line; ctx.lineWidth=1.1;
+    ctx.beginPath(); ctx.rect(x,y,w,h); ctx.fill(); ctx.stroke();
+    ctx.restore();
+  }
+
+  /* ===================== 时间轴: 顶部两条波 (C3 + C4) =====================
+     连续滚动, 一个移动光标点出"当前时刻", 该时刻的 (C3,C4) 同步落到下方散点云。 */
+  function drawTraces(px,py,pw,ph, rho, scanI){
+    panel(px,py,pw,ph,C.bg1);
+    var midC3 = py + ph*0.30, midC4 = py + ph*0.74;
+    var amp = ph*0.20;
+    ctx.font = MONO('700 12px'); ctx.textBaseline='middle'; ctx.textAlign='left';
+    ctx.fillStyle = C.c3; ctx.fillText('C3', px+10, midC3);
+    ctx.fillStyle = C.c4; ctx.fillText('C4', px+10, midC4);
+    ctx.strokeStyle = C.line; ctx.lineWidth=0.8;
+    [midC3,midC4].forEach(function(m){ ctx.beginPath(); ctx.moveTo(px+38,m); ctx.lineTo(px+pw-10,m); ctx.stroke(); });
+    var x0 = px+42, x1 = px+pw-12;
+    function xOf(i){ return lerp(x0,x1, i/(N-1)); }
+    ctx.strokeStyle = C.c3; ctx.lineWidth=1.8; ctx.beginPath();
+    for(var i=0;i<N;i++){ var x=xOf(i), y=midC3 - SRC_C3[i]*amp; if(i===0)ctx.moveTo(x,y); else ctx.lineTo(x,y); }
+    ctx.stroke();
+    ctx.strokeStyle = C.c4; ctx.lineWidth=1.8; ctx.beginPath();
+    for(i=0;i<N;i++){ var x2=xOf(i), y2=midC4 - c4At(i,rho)*amp; if(i===0)ctx.moveTo(x2,y2); else ctx.lineTo(x2,y2); }
+    ctx.stroke();
+    var si = clamp(Math.round(scanI),0,N-1);
+    var sx = xOf(si);
+    ctx.strokeStyle = C.solution; ctx.lineWidth=1; ctx.globalAlpha=0.55;
+    ctx.beginPath(); ctx.moveTo(sx,py+6); ctx.lineTo(sx,py+ph-6); ctx.stroke();
+    ctx.globalAlpha=1;
+    var yc3 = midC3 - SRC_C3[si]*amp, yc4 = midC4 - c4At(si,rho)*amp;
+    ctx.fillStyle = C.c3; ctx.beginPath(); ctx.arc(sx,yc3,4,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle = C.c4; ctx.beginPath(); ctx.arc(sx,yc4,4,0,Math.PI*2); ctx.fill();
+    return { si:si, sx:sx, yc3:yc3, yc4:yc4 };
+  }
+
+  /* ===================== 散点云 (核心对象): (C3, C4) 平面 =====================
+     横轴 C3, 纵轴 C4, 原点居中 (都已去均值)。
+     点云倾斜方向 = 协方差直觉。拟合线随 cov 连续旋转。 */
+  function drawScatter(cx,cy,R, rho, revealK, cursor){
+    ctx.save();
+    ctx.fillStyle = C.bg1; ctx.strokeStyle=C.line; ctx.lineWidth=1.1;
+    ctx.beginPath(); ctx.rect(cx-R,cy-R,2*R,2*R); ctx.fill(); ctx.stroke();
+    ctx.strokeStyle = C.line; ctx.lineWidth=0.5; ctx.globalAlpha=0.6;
+    for(var g=-R+R/3; g<R; g+=R/3){
+      ctx.beginPath(); ctx.moveTo(cx-R,cy+g); ctx.lineTo(cx+R,cy+g); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(cx+g,cy-R); ctx.lineTo(cx+g,cy+R); ctx.stroke();
+    }
+    ctx.globalAlpha=1;
+    ctx.strokeStyle = C.lineStrong; ctx.lineWidth=1.2;
+    ctx.beginPath(); ctx.moveTo(cx-R,cy); ctx.lineTo(cx+R,cy); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(cx,cy-R); ctx.lineTo(cx,cy+R); ctx.stroke();
+    // 轴标签
+    ctx.font = MONO('600 12px');
+    ctx.fillStyle=C.c3; ctx.textAlign='right'; ctx.textBaseline='top';
+    ctx.fillText('C3 ->', cx+R-6, cy+6);
+    ctx.fillStyle=C.c4; ctx.textAlign='left'; ctx.textBaseline='top';
+    ctx.fillText('C4 ^', cx+8, cy-R+8);
+
+    var SC = R*0.30;  // 标准差 -> 像素
+    var nShow = Math.floor(N * clamp(revealK,0,1));
+    for(var i=0;i<nShow;i++){
+      var x = cx + SRC_C3[i]*SC;
+      var y = cy - c4At(i,rho)*SC;
+      var age = (nShow-i)/nShow;
+      var a = clamp(0.22 + 0.6*age, 0.18, 0.85);
+      ctx.globalAlpha = a;
+      ctx.fillStyle = (i===cursor.si) ? C.solution : C.axis;
+      var r = (i===cursor.si) ? 4.5 : 2.4;
+      ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2); ctx.fill();
+    }
+    ctx.globalAlpha=1;
+
+    // 当前时刻投影虚线 (波 -> 散点的对应)
+    if(nShow>0){
+      var px = cx + SRC_C3[cursor.si]*SC, py = cy - c4At(cursor.si,rho)*SC;
+      ctx.setLineDash([3,3]); ctx.strokeStyle=C.solution; ctx.globalAlpha=0.5; ctx.lineWidth=1;
+      ctx.beginPath(); ctx.moveTo(px,cy); ctx.lineTo(px,py); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(cx,py); ctx.lineTo(px,py); ctx.stroke();
+      ctx.setLineDash([]); ctx.globalAlpha=1;
+      ctx.fillStyle=C.solution; ctx.beginPath(); ctx.arc(px,py,4.5,0,Math.PI*2); ctx.fill();
+    }
+
+    // 拟合倾斜线 (cov 方向): 斜率正比于 cov, 连续旋转
+    var cov = covAt(rho);
+    var slopePix = clamp(cov, -1, 1);
+    if(Math.abs(cov) < 0.06){
+      ctx.strokeStyle = C.fgMute; ctx.lineWidth=1.6; ctx.setLineDash([5,4]);
+      ctx.beginPath(); ctx.arc(cx,cy,SC*1.15,0,Math.PI*2); ctx.stroke();
       ctx.setLineDash([]);
+      ctx.font = MONO('700 11px'); ctx.fillStyle=C.fgMute; ctx.textAlign='center'; ctx.textBaseline='bottom';
+      ctx.fillText(LANG==='cn'?'无方向 0':'no tilt 0', cx, cy - SC*1.15 - 4);
+    } else {
+      var len = R*0.92;
+      ctx.strokeStyle = C.gold; ctx.lineWidth=2.6; ctx.globalAlpha=0.95;
+      ctx.beginPath();
+      ctx.moveTo(cx-len, cy + slopePix*len);
+      ctx.lineTo(cx+len, cy - slopePix*len);
+      ctx.stroke();
+      ctx.globalAlpha=1;
+      ctx.font = MONO('700 12px'); ctx.fillStyle=C.gold; ctx.textAlign='left'; ctx.textBaseline='bottom';
+      var tipx = cx+len*0.62, tipy = cy - slopePix*len*0.62;
+      var dirTxt = cov>0 ? (LANG==='cn'?'正斜 +':'up-slant +') : (LANG==='cn'?'负斜 -':'down-slant -');
+      ctx.fillText(dirTxt, tipx+6, tipy-4);
     }
     ctx.restore();
+    return cov;
   }
-  // cov sign tag
-  var covP=covOf(cloudPos).toFixed(2), covN=covOf(cloudNeg).toFixed(2);
-  setHud('3/5', '+'+covP+' / '+covN, LANG==='cn'?'三种':'three', LANG==='cn'?'对比':'compare');
-}
 
-function drawF4(p){
-  frameTitle(t('f4t'));
-  // single big scatter; tilt line rotates / strengthens; show cov sign mapping
-  var half=Math.min(H*0.30, W*0.20);
-  var sCx=W*0.40, sCy=H*0.52;
-  var map = scatterFrame(sCx, sCy, half, null);
-
-  // morph the cloud from positive toward steeper based on p (visual emphasis on tilt)
-  for(var i=0;i<N;i++){
-    var pt=cloudPos[i];
-    dot(map.px(pt.x), map.py(pt.y), 3.8, P.proof, 0.8);
-  }
-  var slope = tiltLine(map, cloudPos, P.solution, Math.min(1,p*2), 3);
-
-  // angle arc to show tilt direction
-  ctx.save();
-  ctx.strokeStyle=P.qed; ctx.lineWidth=2; ctx.globalAlpha=Math.min(1,Math.max(0,(p-0.2)*2.5));
-  var ang=Math.atan(slope);
-  ctx.beginPath(); ctx.arc(map.cx, map.cy, 40, -ang, 0, false); ctx.stroke();
-  // tilt-direction arrow
-  ctx.strokeStyle=P.qed; ctx.fillStyle=P.qed;
-  var alen=half*0.85;
-  var ax2=map.cx+Math.cos(-ang)*alen, ay2=map.cy+Math.sin(-ang)*alen;
-  ctx.lineWidth=2.4;
-  ctx.beginPath(); ctx.moveTo(map.cx,map.cy); ctx.lineTo(ax2,ay2); ctx.stroke();
-  var aa=Math.atan2(ay2-map.cy, ax2-map.cx);
-  ctx.beginPath();
-  ctx.moveTo(ax2,ay2);
-  ctx.lineTo(ax2-11*Math.cos(aa-0.4), ay2-11*Math.sin(aa-0.4));
-  ctx.lineTo(ax2-11*Math.cos(aa+0.4), ay2-11*Math.sin(aa+0.4));
-  ctx.closePath(); ctx.fill();
-  ctx.restore();
-
-  // right panel: cov sign mapping text
-  if(p>0.35){
-    var a=Math.min(1,(p-0.35)*2.5);
-    ctx.save(); ctx.globalAlpha=a;
-    var px=W*0.70, py=H*0.30, pw=Math.min(W*0.26,300);
-    ctx.fillStyle=P.bg2; ctx.strokeStyle=P.lineStrong; ctx.lineWidth=1;
-    ctx.fillRect(px,py,pw,150); ctx.strokeRect(px,py,pw,150);
-    ctx.fillStyle=P.solution; ctx.font="700 13px 'JetBrains Mono',monospace"; ctx.textAlign='left';
-    ctx.fillText('cov(C3,C4)', px+14, py+26);
-    ctx.fillStyle=P.fg; ctx.font="600 12px 'Inter','Noto Sans SC',sans-serif";
-    ctx.fillText(LANG==='cn'?'右上斜  →  cov > 0':'up-right  ->  cov > 0', px+14, py+52);
-    ctx.fillText(LANG==='cn'?'左上斜  →  cov < 0':'up-left   ->  cov < 0', px+14, py+74);
-    ctx.fillText(LANG==='cn'?'没方向  →  cov ≈ 0':'no tilt   ->  cov ~ 0', px+14, py+96);
-    ctx.fillStyle=P.qed; ctx.font="700 12px 'Inter','Noto Sans SC',sans-serif";
-    ctx.fillText(LANG==='cn'?'越斜 → |cov| 越大':'steeper -> |cov| larger', px+14, py+122);
+  /* ===================== 阶段标题 (顶部) ===================== */
+  function drawHeader(){
+    ctx.save();
+    ctx.font = SANS('700 21px'); ctx.fillStyle=C.fg; ctx.textAlign='center'; ctx.textBaseline='top';
+    ctx.fillText(LANG==='cn' ? '两个电极一起抖吗？散点倾斜方向 = 协方差'
+                             : 'Do they wiggle together? Cloud tilt = covariance', W/2, 16);
     ctx.restore();
   }
-  // covariance != correlation note
-  if(p>0.6){
-    var a2=Math.min(1,(p-0.6)*3);
-    ctx.save(); ctx.globalAlpha=a2*0.92;
-    ctx.fillStyle=P.fgMute; ctx.font="italic 600 11px 'Inter','Noto Sans SC',sans-serif";
-    ctx.textAlign='center';
-    ctx.fillText(t('lblNotCorr'), W/2, H*0.50+half+34);
-    ctx.restore();
+
+  /* ===================== 主循环 (autoplay rAF, 连续演化) ===================== */
+  var totalMs = 0; STAGES.forEach(function(s){ totalMs += s.ms; });
+  var startTs = performance.now();
+  var curStage = 0;
+
+  function rhoNow(elapsed){
+    // 连续 rho: 在阶段内对目标 rho 做平滑过渡 (前 45% 用于过渡), 点云持续重排
+    var acc=0;
+    for(var i=0;i<STAGES.length;i++){
+      var s=STAGES[i];
+      if(elapsed < acc+s.ms || i===STAGES.length-1){
+        var prevRho = i>0 ? STAGES[i-1].rho : s.rho;
+        var localK = clamp((elapsed-acc)/s.ms,0,1);
+        var k = clamp(localK/0.45,0,1);
+        return lerp(prevRho, s.rho, easeInOut(k));
+      }
+      acc += s.ms;
+    }
+    return STAGES[STAGES.length-1].rho;
   }
-  setHud('4/5', '+'+slope.toFixed(2), t('tPos'), LANG==='cn'?'量化':'quantify');
-}
-
-function drawF5(p){
-  frameTitle(t('f5t'));
-  // two scatters: rest (left) -> imagery (right), tilt changes
-  var half=Math.min(H*0.22, W*0.105);
-  var cy=H*0.44;
-  var mapR = scatterFrame(W*0.28, cy, half, t('lblRest'));
-  var mapM = scatterFrame(W*0.62, cy, half, t('lblMI'));
-  // rest dots
-  for(var i=0;i<N;i++){
-    var pr=cloudRest[i];
-    dot(mapR.px(pr.x), mapR.py(pr.y), 3.2, P.proof, 0.78);
+  function stageIndex(elapsed){
+    var acc=0;
+    for(var i=0;i<STAGES.length;i++){ acc+=STAGES[i].ms; if(elapsed<acc) return i; }
+    return STAGES.length-1;
   }
-  tiltLine(mapR, cloudRest, P.axis, 0.9, 2.2);
-  // MI dots reveal
-  var nM=Math.floor(N*Math.min(1,p*1.5));
-  for(var j=0;j<nM;j++){
-    var pm=cloudMI[j];
-    dot(mapM.px(pm.x), mapM.py(pm.y), 3.2, P.proof, 0.78);
+
+  function syncSubtitle(idx){
+    var s=STAGES[idx];
+    document.getElementById('subCn').textContent = LANG==='cn'? s.cn : s.en;
+    document.getElementById('subEn').textContent = s.en;
+    document.getElementById('hudV1').textContent = tt(s.stage);
+    var gmap=[0,0,1,2,2];
+    var gids=['g1','g2','g3'];
+    for(var i=0;i<3;i++){ document.getElementById(gids[i]).classList.toggle('hl', i===gmap[idx]); }
   }
-  if(p>0.4) tiltLine(mapM, cloudMI, P.solution, Math.min(1,(p-0.4)*2.2), 2.6);
 
-  // transition arrow
-  ctx.save();
-  ctx.strokeStyle=P.fgDim; ctx.fillStyle=P.fgDim; ctx.lineWidth=2; ctx.globalAlpha=Math.min(1,p*2);
-  var ax=W*0.28+half+14, ay=cy, ax2=W*0.62-half-14;
-  ctx.beginPath(); ctx.moveTo(ax,ay); ctx.lineTo(ax2,ay); ctx.stroke();
-  ctx.beginPath(); ctx.moveTo(ax2,ay); ctx.lineTo(ax2-10,ay-5); ctx.lineTo(ax2-10,ay+5); ctx.closePath(); ctx.fill();
-  ctx.fillStyle=P.fgDim; ctx.font="600 11px 'Inter','Noto Sans SC',sans-serif"; ctx.textAlign='center';
-  ctx.fillText(LANG==='cn'?'对侧 ERD':'contralateral ERD', (ax+ax2)/2, ay-10);
-  ctx.restore();
+  function frame(ts){
+    var elapsed = (ts - startTs) % totalMs;
+    var idx = stageIndex(elapsed);
+    if(idx !== curStage){ curStage = idx; syncSubtitle(idx); }
 
-  // gold key moment banner
-  if(p>0.5){
-    var a=Math.min(1,(p-0.5)*2.5);
-    ctx.save(); ctx.globalAlpha=a;
-    var bw=Math.min(W*0.78,640), bx=W/2-bw/2, by=H*0.74, bh=52;
-    ctx.fillStyle='oklch(0.18 0.04 265 / 0.9)';
-    ctx.strokeStyle=P.qed; ctx.lineWidth=1.6;
-    ctx.fillRect(bx,by,bw,bh); ctx.strokeRect(bx,by,bw,bh);
-    // gold glow accent
-    ctx.shadowColor=P.qed; ctx.shadowBlur=14;
-    ctx.fillStyle=P.qed; ctx.font="800 16px 'Space Grotesk','Noto Sans SC',sans-serif"; ctx.textAlign='center';
-    ctx.fillText(LANG==='cn'?'散点倾斜方向, 藏着两电极一起抖的秘密'
-                            :'The scatter tilt hides how two electrodes jitter together',
-                 W/2, by+22);
-    ctx.shadowBlur=0;
-    ctx.fillStyle=P.fgDim; ctx.font="600 11px 'Inter','Noto Sans SC',sans-serif";
-    ctx.fillText(LANG==='cn'?'下节: 公式 + 协方差矩阵 → CSP':'next: the formula + covariance matrix -> CSP', W/2, by+42);
-    ctx.restore();
+    var rho = rhoNow(elapsed);
+    var cov = covAt(rho);
+
+    var scanI = (elapsed/totalMs * N * 3) % N;
+    var stageStart=0; for(var i=0;i<idx;i++) stageStart+=STAGES[i].ms;
+    var localK = clamp((elapsed-stageStart)/STAGES[idx].ms,0,1);
+    var reveal = idx===0 ? clamp(localK*1.4,0,1) : 1;
+
+    ctx.clearRect(0,0,W,H);
+    ctx.fillStyle = C.bg0; ctx.fillRect(0,0,W,H);
+    drawHeader();
+
+    var pad=46;
+    var traceW = Math.min(W-2*pad, 760);
+    var traceX = (W-traceW)/2, traceY = 56, traceH = Math.max(120, H*0.22);
+    var cursor = drawTraces(traceX, traceY, traceW, traceH, rho, scanI);
+
+    var avail = H - (traceY+traceH) - 88;
+    var R = clamp(Math.min(avail, W*0.34)/2, 110, 215);
+    drawScatter(W/2, traceY+traceH + 22 + R, R, rho, reveal, cursor);
+
+    var tilt;
+    if(cov > 0.06) tilt = LANG==='cn'?'正斜 +':'up-slant +';
+    else if(cov < -0.06) tilt = LANG==='cn'?'负斜 -':'down-slant -';
+    else tilt = LANG==='cn'?'无方向 0':'none 0';
+    document.getElementById('hudV3').textContent = tilt;
+    document.getElementById('hudV4').textContent = (cov>=0?'+':'') + cov.toFixed(2);
+
+    var flashEl = document.getElementById('flash');
+    if(idx===STAGES.length-1 && localK>0.30 && localK<0.92){ flashEl.classList.add('on'); }
+    else { flashEl.classList.remove('on'); }
+
+    requestAnimationFrame(frame);
   }
-  setHud('5/5', covOf(cloudMI).toFixed(2), t('tNeg'), LANG==='cn'?'变化':'shift');
-}
 
-function setHud(fr, cov, tilt, stage){
-  document.getElementById('hudV1').textContent = fr;
-  document.getElementById('hudV2').textContent = cov;
-  document.getElementById('hudV3').textContent = tilt;
-  document.getElementById('hudV4').textContent = stage;
-}
+  /* ===================== i18n 刷新 ===================== */
+  function refreshI18N(){
+    document.getElementById('badgeMod').textContent = t('badgeMod');
+    document.getElementById('brandH1').textContent = t('brandH1');
+    document.getElementById('brandSub').textContent = t('brandSub');
+    document.getElementById('mascotName').textContent = t('mascotName');
+    document.getElementById('g1').querySelector('.gtxt').textContent = t('g1');
+    document.getElementById('g2').querySelector('.gtxt').textContent = t('g2');
+    document.getElementById('g3').querySelector('.gtxt').textContent = t('g3');
+    document.getElementById('routeTtl').textContent = t('routeTtl');
+    document.getElementById('routeHere').textContent = t('routeHere');
+    var rs = document.querySelectorAll('#route .route-step span[data-s]');
+    for(var j=0;j<rs.length;j++){ rs[j].textContent = I18N.route[LANG][j]; }
+    if(LANG==='cn'){ document.getElementById('goalTxt').innerHTML='终点：<b>用念头让它动</b>'; }
+    else { document.getElementById('goalTxt').innerHTML='Goal: <b>move it with thought</b>'; }
+    document.getElementById('hudL1').textContent = t('hudL1');
+    document.getElementById('hudL2').textContent = t('hudL2');
+    document.getElementById('hudL3').textContent = t('hudL3');
+    document.getElementById('hudL4').textContent = t('hudL4');
+    document.getElementById('hudV2').textContent = 'C3 x C4';
+    document.getElementById('langBtn').textContent = t('btnLang');
+    document.getElementById('flashSub').textContent = LANG==='cn'
+      ? '散点倾斜方向藏着两电极的关系 — 这是 CSP 的原料'
+      : 'The tilt direction encodes the two-electrode relation — raw material for CSP';
+    syncSubtitle(curStage);
+  }
+  document.getElementById('langBtn').addEventListener('click', function(){
+    LANG = LANG==='cn' ? 'en' : 'cn';
+    refreshI18N();
+  });
 
-// ====================== Render loop (autoplay) ======================
-function render(){
-  var now = performance.now();
-  var elapsed = now - animStart;
-  var total = FRAME_DUR*NFR;
-  var tt = elapsed % total;
-  var f = Math.floor(tt/FRAME_DUR);
-  var p = (tt % FRAME_DUR)/FRAME_DUR;
-  if(f !== curFrame){ curFrame = f; updateSub(curFrame); }
-
-  ctx.clearRect(0,0,W,H);
-  ctx.fillStyle = P.bg0; ctx.fillRect(0,0,W,H);
-  // subtle radial glow
-  var rg = ctx.createRadialGradient(W*0.5,H*0.32,0, W*0.5,H*0.32, W*0.55);
-  rg.addColorStop(0,'oklch(0.72 0.17 245 / 0.07)'); rg.addColorStop(1,'transparent');
-  ctx.fillStyle=rg; ctx.fillRect(0,0,W,H);
-
-  if(f===0) drawF1(p);
-  else if(f===1) drawF2(p);
-  else if(f===2) drawF3(p);
-  else if(f===3) drawF4(p);
-  else drawF5(p);
-
-  requestAnimationFrame(render);
-}
-
-// init
-refreshI18N();
-updateSub(0);
-requestAnimationFrame(render);
+  // init
+  syncSubtitle(0);
+  refreshI18N();
+  requestAnimationFrame(frame);
+})();
 </script>
 </body>
 </html>
