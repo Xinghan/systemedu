@@ -1,0 +1,584 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>方法对比实验师 — 数据量 vs 方法</title>
+<style>
+  :root{
+    --bg-0:oklch(0.15 0.04 320);
+    --bg-1:oklch(0.21 0.05 322);
+    --bg-2:oklch(0.27 0.06 325);
+    --ai:oklch(0.72 0.17 335);        /* SYNAPSE magenta accent */
+    --synapse:oklch(0.72 0.17 335);
+    --cortex:oklch(0.52 0.16 335);
+    --deep:oklch(0.35 0.10 330);
+    --spark:oklch(0.92 0.08 335);
+    --insight:oklch(0.85 0.14 85);
+    --ink:oklch(0.96 0.02 330);
+    --ink-dim:oklch(0.74 0.03 330);
+    --ink-mute:oklch(0.56 0.04 332);
+    --alert:oklch(0.66 0.20 25);
+    --good:oklch(0.78 0.16 150);
+    --mono:'JetBrains Mono','SFMono-Regular',Consolas,'Liberation Mono',monospace;
+    --sans:'Inter','Segoe UI','Helvetica Neue',Arial,sans-serif;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;height:100vh;overflow:hidden;background:var(--bg-0);color:var(--ink);font-family:var(--sans);}
+  body{display:flex;}
+
+  /* ---- sidebar ---- */
+  .game-sidebar{width:200px;flex-shrink:0;height:100vh;background:var(--bg-1);
+    border-right:1.5px solid var(--deep);display:flex;flex-direction:column;gap:11px;padding:14px;overflow-y:auto;}
+  .mascot{display:flex;align-items:center;gap:8px;}
+  .mascot-orb{width:30px;height:30px;flex-shrink:0;}
+  .mascot-name{font-family:var(--mono);font-size:11px;color:var(--synapse);letter-spacing:.5px;}
+  .mascot-role{font-size:10px;color:var(--ink-mute);}
+  .side-title{font-size:14px;font-weight:800;line-height:1.3;color:var(--ink);}
+  .side-sub{font-size:10.5px;line-height:1.5;color:var(--ink-dim);}
+
+  .route{display:flex;flex-direction:column;gap:3px;margin-top:2px;}
+  .route-lbl{font-family:var(--mono);font-size:9px;color:var(--ink-mute);letter-spacing:1px;}
+  .stop{display:flex;align-items:center;gap:6px;font-family:var(--mono);font-size:10px;color:var(--ink-mute);}
+  .stop .dot{width:8px;height:8px;border-radius:50%;background:var(--deep);flex-shrink:0;}
+  .stop.done .dot{background:var(--cortex);}
+  .stop.here{color:var(--spark);font-weight:700;}
+  .stop.here .dot{background:var(--synapse);box-shadow:0 0 0 3px color-mix(in oklch,var(--synapse) 30%,transparent);}
+
+  .param{background:var(--bg-2);border:1.5px solid var(--deep);box-shadow:3px 3px 0 var(--bg-0);padding:9px 10px;}
+  .param-h{font-family:var(--mono);font-size:9.5px;color:var(--ink-mute);letter-spacing:.5px;margin-bottom:6px;}
+  .param-row{display:flex;justify-content:space-between;font-family:var(--mono);font-size:10.5px;margin-bottom:3px;}
+  .param-row .k{color:var(--ink-mute);}
+  .param-row .v{color:var(--synapse);font-weight:700;}
+
+  .lang-btn{margin-top:auto;background:var(--bg-2);border:1.5px solid var(--cortex);color:var(--ink);
+    font-family:var(--mono);font-size:11px;padding:7px;cursor:pointer;box-shadow:2px 2px 0 var(--bg-0);transition:transform .08s;}
+  .lang-btn:hover{transform:translate(-1px,-1px);}
+  .lang-btn:active{transform:translate(1px,1px);}
+
+  /* ---- main ---- */
+  .game-main{flex:1;height:100vh;display:flex;flex-direction:column;gap:9px;padding:14px 18px;position:relative;overflow:hidden;}
+  .brief{background:var(--bg-1);border:1.5px solid var(--deep);border-left:3px solid var(--synapse);padding:8px 13px;}
+  .brief h2{margin:0 0 2px;font-size:13.5px;color:var(--spark);}
+  .brief p{margin:0;font-size:11.5px;color:var(--ink-dim);line-height:1.5;}
+
+  .stage{flex:1;display:flex;gap:14px;min-height:0;}
+  .col{display:flex;flex-direction:column;gap:8px;min-height:0;}
+  .col.config{width:300px;flex-shrink:0;}
+  .col.matrix{flex:1;}
+  .col-h{font-family:var(--mono);font-size:10.5px;color:var(--ink-mute);letter-spacing:.5px;}
+
+  /* choice groups */
+  .group{margin-bottom:4px;}
+  .group-lbl{font-family:var(--mono);font-size:9.5px;color:var(--ink-mute);margin-bottom:5px;letter-spacing:.5px;}
+  .chips{display:flex;gap:7px;}
+  .chip{flex:1;background:var(--bg-1);border:1.5px solid var(--deep);box-shadow:3px 3px 0 var(--bg-0);
+    padding:9px 7px;cursor:pointer;transition:transform .08s,border-color .12s;text-align:center;}
+  .chip:hover{transform:translate(-1px,-1px);border-color:var(--cortex);}
+  .chip.sel{border-color:var(--synapse);box-shadow:3px 3px 0 var(--cortex);}
+  .chip-t{font-size:12px;font-weight:700;color:var(--ink);}
+  .chip.sel .chip-t{color:var(--spark);}
+  .chip-n{font-family:var(--mono);font-size:9px;color:var(--ink-mute);margin-top:2px;}
+  .chip-d{font-size:9.5px;color:var(--ink-dim);line-height:1.4;margin-top:4px;}
+
+  .runbtn{margin-top:2px;background:var(--synapse);border:1.5px solid var(--spark);color:var(--bg-0);
+    font-family:var(--mono);font-weight:700;font-size:12px;padding:11px;cursor:pointer;box-shadow:3px 3px 0 var(--bg-0);transition:transform .08s;}
+  .runbtn:hover{transform:translate(-1px,-1px);}
+  .runbtn:active{transform:translate(1px,1px);}
+  .runbtn:disabled{background:var(--deep);border-color:var(--deep);color:var(--ink-mute);cursor:not-allowed;box-shadow:none;transform:none;}
+
+  .lastrun{background:var(--bg-1);border:1.5px solid var(--deep);padding:9px 11px;min-height:0;}
+  .lastrun-h{font-family:var(--mono);font-size:9.5px;color:var(--ink-mute);margin-bottom:5px;}
+  .meter{margin-bottom:7px;}
+  .meter-h{display:flex;justify-content:space-between;font-family:var(--mono);font-size:10px;margin-bottom:3px;}
+  .meter-h .nm{color:var(--ink-dim);}
+  .meter-h .pc{font-weight:700;}
+  .track{height:13px;background:var(--bg-2);border:1px solid var(--deep);overflow:hidden;}
+  .fill{height:100%;width:0;transition:width .8s cubic-bezier(.2,.7,.3,1);}
+  .note{font-size:10.5px;line-height:1.5;color:var(--ink-dim);}
+  .note b{color:var(--spark);}
+  .note.bad b{color:var(--alert);}
+  .note.ok b{color:var(--good);}
+  .empty{font-family:var(--mono);font-size:10.5px;color:var(--ink-mute);line-height:1.7;padding:6px 2px;}
+
+  /* matrix chart: data-size (x) vs test acc (y), two method lines */
+  .chart-wrap{flex:1;background:var(--bg-1);border:1.5px solid var(--deep);display:flex;flex-direction:column;min-height:0;padding:10px 12px 8px;}
+  .chart-canvas-box{flex:1;display:flex;flex-direction:column;min-height:0;}
+  canvas{flex:1;width:100%;display:block;}
+  .legend{display:flex;gap:16px;justify-content:center;margin-top:6px;font-family:var(--mono);font-size:10px;}
+  .legend span{display:flex;align-items:center;gap:5px;color:var(--ink-dim);}
+  .legend .sw{width:14px;height:3px;display:inline-block;}
+
+  /* mini scoreboard of cells filled */
+  .grid-track{display:flex;gap:6px;margin-top:7px;}
+  .gt-cell{flex:1;background:var(--bg-2);border:1.5px solid var(--deep);padding:5px 4px;text-align:center;
+    font-family:var(--mono);font-size:9px;color:var(--ink-mute);line-height:1.4;}
+  .gt-cell.filled{border-color:var(--cortex);color:var(--ink-dim);}
+  .gt-cell .gv{font-size:11px;font-weight:700;}
+
+  .toast{position:absolute;top:12px;left:50%;transform:translateX(-50%);background:var(--bg-2);
+    border:1.5px solid var(--synapse);color:var(--ink);font-family:var(--mono);font-size:11px;padding:7px 14px;
+    box-shadow:3px 3px 0 var(--bg-0);opacity:0;transition:opacity .25s;pointer-events:none;z-index:15;}
+  .toast.show{opacity:1;}
+
+  .endpoint{position:absolute;right:14px;bottom:10px;display:flex;align-items:center;gap:7px;opacity:.5;pointer-events:none;}
+  .endpoint span{font-family:var(--mono);font-size:9px;color:var(--ink-mute);max-width:130px;line-height:1.4;}
+
+  .overlay{position:absolute;inset:0;background:color-mix(in oklch,var(--bg-0) 88%,transparent);
+    display:none;align-items:center;justify-content:center;flex-direction:column;gap:10px;text-align:center;z-index:20;padding:30px;}
+  .overlay.show{display:flex;}
+  .badge{font-family:var(--mono);font-size:11px;color:var(--insight);letter-spacing:2px;}
+  .overlay h2{margin:0;font-size:22px;color:var(--spark);}
+  .overlay p{margin:0;max-width:440px;font-size:12.5px;color:var(--ink-dim);line-height:1.6;}
+  .overlay button{margin-top:6px;background:var(--bg-2);border:1.5px solid var(--synapse);color:var(--ink);
+    font-family:var(--mono);font-size:11px;padding:8px 16px;cursor:pointer;box-shadow:2px 2px 0 var(--bg-0);}
+</style>
+</head>
+<body>
+
+<aside class="game-sidebar">
+  <div class="mascot">
+    <svg class="mascot-orb" viewBox="0 0 30 30">
+      <circle cx="15" cy="15" r="11" fill="none" stroke="var(--synapse)" stroke-width="1.5"/>
+      <circle cx="11" cy="12" r="2" fill="var(--synapse)"/>
+      <circle cx="19" cy="11" r="2" fill="var(--insight)"/>
+      <circle cx="15" cy="19" r="2" fill="var(--spark)"/>
+      <line x1="11" y1="12" x2="19" y2="11" stroke="var(--cortex)" stroke-width="1"/>
+      <line x1="19" y1="11" x2="15" y2="19" stroke="var(--cortex)" stroke-width="1"/>
+      <line x1="11" y1="12" x2="15" y2="19" stroke="var(--cortex)" stroke-width="1"/>
+    </svg>
+    <div>
+      <div class="mascot-name">NOVA</div>
+      <div class="mascot-role" id="mRole">实验搭档</div>
+    </div>
+  </div>
+
+  <div class="side-title" id="title">方法对比实验师</div>
+  <div class="side-sub" id="goal">神经网络更高级，一定更好吗？用实验验证。</div>
+
+  <div class="route">
+    <div class="route-lbl" id="routeLbl">脑控 MINECRAFT 路线</div>
+    <div class="stop done"><span class="dot"></span><span data-s="1">S1 信号基础</span></div>
+    <div class="stop done"><span class="dot"></span><span data-s="2">S2 信号清洗</span></div>
+    <div class="stop here"><span class="dot"></span><span data-s="3">S3 分类与方法</span></div>
+    <div class="stop"><span class="dot"></span><span data-s="4">S4 实时解码</span></div>
+    <div class="stop"><span class="dot"></span><span data-s="5">S5 控制接口</span></div>
+    <div class="stop"><span class="dot"></span><span data-s="6">S6 脑控成型</span></div>
+  </div>
+
+  <div class="param">
+    <div class="param-h" id="pHdr">实验进度</div>
+    <div class="param-row"><span class="k" id="pRun">已跑实验</span><span class="v" id="vRun">0</span></div>
+    <div class="param-row"><span class="k" id="pCell">填格 (共6)</span><span class="v" id="vCell">0</span></div>
+    <div class="param-row"><span class="k" id="pCross">发现拐点</span><span class="v" id="vCross">未</span></div>
+  </div>
+
+  <button class="lang-btn" id="langBtn">中 / EN</button>
+</aside>
+
+<main class="game-main">
+  <div class="brief">
+    <h2 id="briefH">神经网络更高级，就一定比老方法准吗？</h2>
+    <p id="briefP">同一批左右手想象的脑电，挑「数据量」和「方法」，跑一场对比实验。把 6 个格子都跑出来，看看小数据下到底谁赢——这决定你 S4 实时解码用哪个方法。</p>
+  </div>
+
+  <div class="stage">
+    <div class="col config">
+      <div class="col-h" id="colCfg">配置实验</div>
+
+      <div class="group">
+        <div class="group-lbl" id="gData">1. 数据量（每类样本）</div>
+        <div class="chips" id="dataChips"></div>
+      </div>
+
+      <div class="group">
+        <div class="group-lbl" id="gMethod">2. 方法</div>
+        <div class="chips" id="methodChips"></div>
+      </div>
+
+      <button class="runbtn" id="runBtn" disabled>运行实验 / Run</button>
+
+      <div class="lastrun" id="lastrun">
+        <div class="lastrun-h" id="lastH">上一场结果</div>
+        <div class="empty" id="lastEmpty">选数据量 + 方法，<br>点「运行实验」</div>
+      </div>
+    </div>
+
+    <div class="col matrix">
+      <div class="col-h" id="colMat">数据量 × 方法 — 测试准确率对比</div>
+      <div class="chart-wrap">
+        <div class="chart-canvas-box"><canvas id="chart"></canvas></div>
+        <div class="legend">
+          <span><i class="sw" style="background:var(--synapse)"></i><span id="legNet">EEGNet 深网</span></span>
+          <span><i class="sw" style="background:var(--insight)"></i><span id="legCsp">CSP+LDA</span></span>
+        </div>
+      </div>
+      <div class="grid-track" id="gridTrack"></div>
+    </div>
+  </div>
+
+  <div class="endpoint">
+    <svg width="26" height="26" viewBox="0 0 26 26">
+      <rect x="3" y="3" width="9" height="9" fill="var(--cortex)"/>
+      <rect x="14" y="3" width="9" height="9" fill="var(--deep)"/>
+      <rect x="3" y="14" width="9" height="9" fill="var(--deep)"/>
+      <rect x="14" y="14" width="9" height="9" fill="var(--cortex)"/>
+    </svg>
+    <span id="epTxt">终点：意念搭建方块</span>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <div class="overlay" id="overlay">
+    <div class="badge" id="ovBadge">解锁</div>
+    <h2 id="ovH">方法对比实验师</h2>
+    <p id="ovP"></p>
+    <button id="ovBtn">继续 / Next</button>
+  </div>
+</main>
+
+<script>
+(function(){
+  const T = {
+    cn:{
+      mRole:'实验搭档', title:'方法对比实验师',
+      goal:'神经网络更高级，一定更好吗？用实验验证。',
+      routeLbl:'脑控 MINECRAFT 路线',
+      pHdr:'实验进度', pRun:'已跑实验', pCell:'填格 (共6)', pCross:'发现拐点',
+      crossNo:'未', crossYes:'已',
+      briefH:'神经网络更高级，就一定比老方法准吗？',
+      briefP:'同一批左右手想象的脑电，挑「数据量」和「方法」，跑一场对比实验。把 6 个格子都跑出来，看看小数据下到底谁赢——这决定你 S4 实时解码用哪个方法。',
+      colCfg:'配置实验', gData:'1. 数据量（每类样本）', gMethod:'2. 方法',
+      colMat:'数据量 × 方法 — 测试准确率对比',
+      run:'运行实验 / Run', langBtn:'中 / EN',
+      lastH:'上一场结果', lastEmpty:'选数据量 + 方法，\n点「运行实验」',
+      epTxt:'终点：意念搭建方块',
+      legNet:'EEGNet 深网', legCsp:'CSP+LDA',
+      mTest:'测试准确率', mTrain:'训练准确率',
+      stops:['S1 信号基础','S2 信号清洗','S3 分类与方法','S4 实时解码','S5 控制接口','S6 脑控成型'],
+      data:[
+        {t:'50', n:'极少', d:'刚采半小时'},
+        {t:'144', n:'一节课', d:'公开数据集量级'},
+        {t:'2000', n:'大数据', d:'多人多日累积'},
+      ],
+      method:[
+        {t:'EEGNet', n:'深度网络', d:'参数多，要喂大量数据才稳，小数据会过拟合（背答案）。'},
+        {t:'CSP+LDA', n:'经典管线', d:'参数少、先验强，小数据下稳，但天花板较低。'},
+      ],
+      axisX:'数据量 / 每类', axisY:'测试准确率 %',
+      notes:{
+        net:{
+          50:{cls:'bad', txt:'EEGNet 在 <b>50 样本</b>：训练 acc 高得离谱，测试只 <b>58%</b>——它在<b>过拟合背答案</b>，上线必翻车。'},
+          144:{cls:'', txt:'EEGNet 在 <b>144 样本</b>：测试 <b>72%</b>，开始追上来，但还没体现深网优势。'},
+          2000:{cls:'ok', txt:'EEGNet 在 <b>2000 样本</b>：测试 <b>88%</b>——数据够多，深网终于<b>反超</b>，发挥出威力。'},
+        },
+        csp:{
+          50:{cls:'ok', txt:'CSP+LDA 在 <b>50 样本</b>：测试 <b>74%</b>——参数少先验强，<b>小数据下很稳</b>，反而赢深网。'},
+          144:{cls:'', txt:'CSP+LDA 在 <b>144 样本</b>：测试 <b>78%</b>，稳步提升，仍领先深网一点。'},
+          2000:{cls:'', txt:'CSP+LDA 在 <b>2000 样本</b>：测试 <b>80%</b>——到顶了，再多数据也涨不动，被深网超过。'},
+        },
+      },
+      toastSel:'已配置，点「运行实验」',
+      toastDup:'这个组合已跑过，结果已在图上',
+      ovWin:'你验证了：<b>小数据下 CSP+LDA 占优</b>（50 样本时 74% vs 深网 58%），只有数据足够多深网才反超。这个拐点决定了你 S4 实时解码——刚起步样本少，就先用 CSP+LDA，别盲目上深网。这是脑控能真正跑起来的关键一步。',
+      ovHint:'再多跑几格：至少跑出 50 样本下 EEGNet 和 CSP 各一次，亲眼看到小数据谁赢，才解锁「方法对比实验师」。',
+    },
+    en:{
+      mRole:'Lab buddy', title:'Method Comparison Scientist',
+      goal:'Is a fancier neural net always better? Verify by experiment.',
+      routeLbl:'BRAIN-MINECRAFT ROUTE',
+      pHdr:'Progress', pRun:'Experiments', pCell:'Cells (of 6)', pCross:'Crossover found',
+      crossNo:'No', crossYes:'Yes',
+      briefH:'Is a fancier neural net really more accurate than the old method?',
+      briefP:'Same left/right-hand EEG. Pick a data size and a method, run a comparison. Fill all 6 cells and see who wins on small data — this decides which method you use for S4 live decoding.',
+      colCfg:'Configure', gData:'1. Data size (per class)', gMethod:'2. Method',
+      colMat:'Data size x method — test accuracy',
+      run:'Run / 运行', langBtn:'EN / 中',
+      lastH:'Last result', lastEmpty:'Pick a size + method,\nhit Run',
+      epTxt:'Goal: build blocks by thought',
+      legNet:'EEGNet deep net', legCsp:'CSP+LDA',
+      mTest:'Test accuracy', mTrain:'Train accuracy',
+      stops:['S1 Signal basics','S2 Cleaning','S3 Classify & methods','S4 Live decode','S5 Control IO','S6 Brain control'],
+      data:[
+        {t:'50', n:'tiny', d:'half-hour rec'},
+        {t:'144', n:'one session', d:'public-dataset scale'},
+        {t:'2000', n:'big data', d:'many subjects/days'},
+      ],
+      method:[
+        {t:'EEGNet', n:'deep net', d:'Many params; needs lots of data to be stable, overfits (memorizes) on small data.'},
+        {t:'CSP+LDA', n:'classic pipe', d:'Few params, strong prior; stable on small data but lower ceiling.'},
+      ],
+      axisX:'Data size / class', axisY:'Test accuracy %',
+      notes:{
+        net:{
+          50:{cls:'bad', txt:'EEGNet at <b>50 samples</b>: train acc sky-high, test only <b>58%</b> — it is <b>overfitting</b>, will fail live.'},
+          144:{cls:'', txt:'EEGNet at <b>144 samples</b>: test <b>72%</b>, catching up but no deep-net edge yet.'},
+          2000:{cls:'ok', txt:'EEGNet at <b>2000 samples</b>: test <b>88%</b> — with enough data the deep net finally <b>overtakes</b>.'},
+        },
+        csp:{
+          50:{cls:'ok', txt:'CSP+LDA at <b>50 samples</b>: test <b>74%</b> — few params, strong prior, <b>stable on small data</b>, beats the deep net.'},
+          144:{cls:'', txt:'CSP+LDA at <b>144 samples</b>: test <b>78%</b>, steady, still slightly ahead.'},
+          2000:{cls:'', txt:'CSP+LDA at <b>2000 samples</b>: test <b>80%</b> — ceiling reached, more data does not help, deep net passes it.'},
+        },
+      },
+      toastSel:'Configured. Hit Run.',
+      toastDup:'Already ran this combo — see the chart.',
+      ovWin:'You verified it: <b>CSP+LDA wins on small data</b> (74% vs 58% at 50 samples); only with enough data does the deep net overtake. This crossover decides S4 live decoding — early on, with few samples, start with CSP+LDA instead of blindly reaching for the deep net. A key step to actually making brain-control work.',
+      ovHint:'Run more: at least run EEGNet AND CSP at 50 samples to see who wins on small data, then Method Comparison Scientist unlocks.',
+    }
+  };
+
+  // ground-truth test accuracies: methodKey -> dataKey -> %
+  const ACC = {
+    net:{50:58, 144:72, 2000:88},
+    csp:{50:74, 144:78, 2000:80},
+  };
+  const TRAIN = {
+    net:{50:99, 144:95, 2000:92},
+    csp:{50:82, 144:84, 2000:84},
+  };
+  const DATA_KEYS=[50,144,2000];
+  const DKEY=['50','144','2000'];
+  const MKEY=['net','csp'];
+
+  let lang='cn';
+  let selData=null;     // index 0..2
+  let selMethod=null;   // 'net'|'csp'
+  let runCount=0;
+  let crossFound=false;
+  let lastShown=null;   // {mk, dk} of last rendered result, for lang re-render
+  const ran={};         // 'net-50' -> true ; stores which cells discovered
+
+  const $=id=>document.getElementById(id);
+  const dataChips=$('dataChips'), methodChips=$('methodChips'), runBtn=$('runBtn');
+  const lastrun=$('lastrun'), overlay=$('overlay'), toastEl=$('toast'), gridTrack=$('gridTrack');
+  const canvas=$('chart'), ctx=canvas.getContext('2d');
+
+  function buildChips(){
+    dataChips.innerHTML='';
+    T[lang].data.forEach((c,i)=>{
+      const el=document.createElement('div');
+      el.className='chip'+(selData===i?' sel':'');
+      el.dataset.di=i;
+      el.innerHTML='<div class="chip-t">'+c.t+'</div><div class="chip-n">'+c.n+'</div>';
+      el.addEventListener('click',()=>{selData=i; refreshSel();});
+      dataChips.appendChild(el);
+    });
+    methodChips.innerHTML='';
+    T[lang].method.forEach((c,i)=>{
+      const key=MKEY[i];
+      const el=document.createElement('div');
+      el.className='chip'+(selMethod===key?' sel':'');
+      el.dataset.mk=key;
+      el.innerHTML='<div class="chip-t">'+c.t+'</div><div class="chip-n">'+c.n+'</div><div class="chip-d">'+c.d+'</div>';
+      el.addEventListener('click',()=>{selMethod=key; refreshSel();});
+      methodChips.appendChild(el);
+    });
+  }
+
+  function refreshSel(){
+    [...dataChips.children].forEach(ch=>ch.classList.toggle('sel',+ch.dataset.di===selData));
+    [...methodChips.children].forEach(ch=>ch.classList.toggle('sel',ch.dataset.mk===selMethod));
+    runBtn.disabled = !(selData!==null && selMethod);
+    if(!runBtn.disabled) toast(T[lang].toastSel);
+  }
+
+  function toast(msg){
+    toastEl.textContent=msg;
+    toastEl.classList.add('show');
+    clearTimeout(toast._t);
+    toast._t=setTimeout(()=>toastEl.classList.remove('show'),1700);
+  }
+
+  function runExperiment(){
+    if(selData===null||!selMethod) return;
+    const dk=DKEY[selData], mk=selMethod;
+    const cellId=mk+'-'+dk;
+    const isNew=!ran[cellId];
+    ran[cellId]=true;
+
+    runCount++;
+    $('vRun').textContent=runCount;
+    $('vCell').textContent=Object.keys(ran).length;
+
+    showLast(mk, dk);
+    drawChart();
+    drawGridTrack();
+
+    // crossover discovered: at 50 samples both methods have been run -> player saw CSP beat net
+    if(ran['net-50'] && ran['csp-50'] && !crossFound){
+      crossFound=true;
+      $('vCross').textContent=T[lang].crossYes;
+      setTimeout(()=>showOverlay(true),900);
+    }
+    if(!isNew) toast(T[lang].toastDup);
+  }
+
+  function showLast(mk, dk){
+    lastShown={mk, dk};
+    const tt=T[lang];
+    const test=ACC[mk][dk], train=TRAIN[mk][dk];
+    const note=tt.notes[mk][dk];
+    const testColor = note.cls==='bad'?'var(--alert)':(note.cls==='ok'?'var(--good)':'var(--synapse)');
+    lastrun.innerHTML=
+      '<div class="lastrun-h">'+tt.lastH+'  ·  '+(mk==='net'?'EEGNet':'CSP+LDA')+' @ '+dk+'</div>'+
+      meter(tt.mTrain, train, 'var(--cortex)')+
+      meter(tt.mTest, test, testColor)+
+      '<div class="note '+note.cls+'">'+note.txt+'</div>';
+    requestAnimationFrame(()=>requestAnimationFrame(()=>{
+      const fills=lastrun.querySelectorAll('.fill');
+      if(fills[0]) fills[0].style.width=train+'%';
+      if(fills[1]) fills[1].style.width=test+'%';
+    }));
+  }
+
+  function meter(name,val,color){
+    return '<div class="meter"><div class="meter-h"><span class="nm">'+name+'</span>'+
+      '<span class="pc" style="color:'+color+'">'+val+'%</span></div>'+
+      '<div class="track"><div class="fill" style="background:'+color+'"></div></div></div>';
+  }
+
+  function drawGridTrack(){
+    const tt=T[lang];
+    gridTrack.innerHTML='';
+    // one cell per (method,data) = 6, show discovered acc or '?'
+    [['net','50'],['net','144'],['net','2000'],['csp','50'],['csp','144'],['csp','2000']].forEach(([mk,dk])=>{
+      const filled=!!ran[mk+'-'+dk];
+      const el=document.createElement('div');
+      el.className='gt-cell'+(filled?' filled':'');
+      const lbl=(mk==='net'?'NET':'CSP')+' '+dk;
+      const col=mk==='net'?'var(--synapse)':'var(--insight)';
+      el.innerHTML='<div>'+lbl+'</div><div class="gv" style="color:'+(filled?col:'var(--ink-mute)')+'">'+(filled?ACC[mk][dk]+'%':'?')+'</div>';
+      gridTrack.appendChild(el);
+    });
+  }
+
+  function sizeCanvas(){
+    const box=canvas.parentElement;
+    const r=box.getBoundingClientRect();
+    const dpr=window.devicePixelRatio||1;
+    canvas.width=Math.max(10,Math.floor(r.width*dpr));
+    canvas.height=Math.max(10,Math.floor(r.height*dpr));
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    return {w:r.width, h:r.height};
+  }
+
+  function css(v){ return getComputedStyle(document.documentElement).getPropertyValue(v).trim(); }
+
+  function drawChart(){
+    const {w,h}=sizeCanvas();
+    ctx.clearRect(0,0,w,h);
+    const padL=42, padR=14, padT=14, padB=30;
+    const plotW=w-padL-padR, plotH=h-padT-padB;
+    const yMin=40, yMax=100;
+    const xy=(xi,acc)=>{
+      const x=padL + (DATA_KEYS.length<=1?plotW/2 : (xi/(DATA_KEYS.length-1))*plotW);
+      const y=padT + plotH - ((acc-yMin)/(yMax-yMin))*plotH;
+      return [x,y];
+    };
+
+    // grid + y labels
+    ctx.strokeStyle=css('--deep'); ctx.lineWidth=1;
+    ctx.fillStyle=css('--ink-mute');
+    ctx.font='10px '+css('--mono').replace(/['"]/g,'');
+    ctx.textAlign='right'; ctx.textBaseline='middle';
+    for(let a=40;a<=100;a+=10){
+      const [,y]=xy(0,a);
+      ctx.beginPath(); ctx.moveTo(padL,y); ctx.lineTo(w-padR,y); ctx.stroke();
+      ctx.fillText(a+'', padL-6, y);
+    }
+    // x labels
+    ctx.textAlign='center'; ctx.textBaseline='top';
+    DATA_KEYS.forEach((d,i)=>{
+      const [x]=xy(i,40);
+      ctx.fillText(d+'', x, h-padB+6);
+    });
+    // axis titles
+    ctx.fillStyle=css('--ink-dim');
+    ctx.textAlign='center';
+    ctx.fillText(T[lang].axisX, padL+plotW/2, h-12);
+
+    // draw a method line through discovered points
+    function drawLine(mk, color){
+      const pts=[];
+      DKEY.forEach((dk,i)=>{ if(ran[mk+'-'+dk]) pts.push([i, ACC[mk][dk]]); });
+      // connect
+      ctx.strokeStyle=color; ctx.lineWidth=2.5;
+      ctx.beginPath();
+      pts.forEach((p,idx)=>{
+        const [px,py]=xy(p[0],p[1]);
+        if(idx===0) ctx.moveTo(px,py); else ctx.lineTo(px,py);
+      });
+      ctx.stroke();
+      // points
+      pts.forEach(p=>{
+        const [px,py]=xy(p[0],p[1]);
+        ctx.fillStyle=color;
+        ctx.beginPath(); ctx.arc(px,py,4,0,Math.PI*2); ctx.fill();
+        ctx.fillStyle=css('--spark');
+        ctx.font='bold 10px '+css('--mono').replace(/['"]/g,'');
+        ctx.textAlign='center'; ctx.textBaseline='bottom';
+        ctx.fillText(p[1]+'', px, py-7);
+      });
+    }
+    drawLine('csp', css('--insight'));
+    drawLine('net', css('--synapse'));
+
+    // hint if empty
+    if(Object.keys(ran).length===0){
+      ctx.fillStyle=css('--ink-mute');
+      ctx.font='11px '+css('--sans').replace(/['"]/g,'');
+      ctx.textAlign='center'; ctx.textBaseline='middle';
+      ctx.fillText(lang==='cn'?'跑实验后，结果会画成两条线':'Run experiments to plot two lines', padL+plotW/2, padT+plotH/2);
+    }
+  }
+
+  function showOverlay(win){
+    const tt=T[lang];
+    $('ovBadge').textContent= lang==='cn'?'解锁':'UNLOCKED';
+    $('ovH').textContent=tt.title;
+    $('ovP').innerHTML=win?tt.ovWin:tt.ovHint;
+    $('ovBtn').textContent= win?(lang==='cn'?'继续 / Next':'Next / 继续'):(lang==='cn'?'再试 / Replay':'Replay / 再试');
+    overlay.classList.add('show');
+  }
+
+  function applyLang(){
+    const tt=T[lang];
+    $('mRole').textContent=tt.mRole;
+    $('title').textContent=tt.title;
+    $('goal').textContent=tt.goal;
+    $('routeLbl').textContent=tt.routeLbl;
+    $('pHdr').textContent=tt.pHdr;
+    $('pRun').textContent=tt.pRun; $('pCell').textContent=tt.pCell; $('pCross').textContent=tt.pCross;
+    $('vCross').textContent=crossFound?tt.crossYes:tt.crossNo;
+    $('briefH').textContent=tt.briefH; $('briefP').textContent=tt.briefP;
+    $('colCfg').textContent=tt.colCfg; $('gData').textContent=tt.gData; $('gMethod').textContent=tt.gMethod;
+    $('colMat').textContent=tt.colMat;
+    $('runBtn').textContent=tt.run;
+    $('langBtn').textContent=tt.langBtn;
+    $('epTxt').textContent=tt.epTxt;
+    $('legNet').textContent=tt.legNet; $('legCsp').textContent=tt.legCsp;
+    document.querySelectorAll('.stop span[data-s]').forEach(s=>{
+      const i=+s.dataset.s-1; s.textContent=tt.stops[i];
+    });
+    buildChips();
+    drawGridTrack();
+    // re-render last result panel in new lang if a run exists, else empty
+    if(lastShown){
+      showLast(lastShown.mk, lastShown.dk);
+    }else{
+      lastrun.innerHTML='<div class="lastrun-h">'+tt.lastH+'</div><div class="empty">'+tt.lastEmpty.replace('\n','<br>')+'</div>';
+    }
+    drawChart();
+    document.documentElement.lang = lang==='cn'?'zh-CN':'en';
+  }
+
+  $('langBtn').addEventListener('click',()=>{ lang=lang==='cn'?'en':'cn'; applyLang(); });
+  runBtn.addEventListener('click',runExperiment);
+  $('ovBtn').addEventListener('click',()=>{ overlay.classList.remove('show'); });
+  window.addEventListener('resize',()=>{ drawChart(); });
+
+  applyLang();
+})();
+</script>
+</body>
+</html>

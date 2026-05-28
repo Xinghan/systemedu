@@ -1,0 +1,500 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>跨被试崩塌 — 别人的模型认不出你的脑波</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;700&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+  /* ---- 第 1 层: 共享深空底 (所有 26 套统一) ---- */
+  :root{
+    --bg-0: oklch(0.14 0.035 265);
+    --bg-1: oklch(0.18 0.04 265);
+    --bg-2: oklch(0.22 0.045 265);
+    --bg-3: oklch(0.28 0.05 265);
+    --line: oklch(0.35 0.05 265 / 0.35);
+    --line-strong: oklch(0.55 0.08 265 / 0.55);
+    --fg:      oklch(0.96 0.01 265);
+    --fg-dim:  oklch(0.75 0.02 265);
+    --fg-mute: oklch(0.55 0.03 265);
+    --gold:    oklch(0.85 0.14 85);
+    /* ---- 第 2 层: cs 学科 signature accent ---- */
+    --cs:      oklch(0.75 0.17 200);
+    /* ---- 第 3 层: cs 5 色 palette (themes.js cs 段) ---- */
+    --cs-signal: oklch(0.75 0.17 200);
+    --cs-core:   oklch(0.55 0.16 200);
+    --cs-depth:  oklch(0.35 0.10 210);
+    --cs-flash:  oklch(0.92 0.08 190);
+    --cs-query:  oklch(0.85 0.14 85);
+    /* 错分类点(掉到错侧)用暖警示, 与 cyan 形成"对不上"的对比 */
+    --miss:    oklch(0.70 0.18 25);
+  }
+  html,body{margin:0;padding:0;height:100vh;overflow:hidden;background:var(--bg-0);
+    font-family:'Noto Sans SC',sans-serif;color:var(--fg);}
+  body{display:flex;}
+  /* ---- sidebar ---- */
+  .sidebar{width:200px;height:100vh;flex-shrink:0;background:var(--bg-1);
+    border-right:1px solid var(--line);display:flex;flex-direction:column;gap:14px;padding:18px 16px;box-sizing:border-box;}
+  .brand{font-size:15px;font-weight:700;line-height:1.35;}
+  .brand small{display:block;font-size:10px;font-weight:400;color:var(--fg-mute);margin-top:3px;font-family:'JetBrains Mono',monospace;}
+  .guide{font-size:11.5px;line-height:1.7;color:var(--fg-dim);}
+  .guide b{color:var(--cs-signal);font-weight:700;}
+  /* ---- 进度路线图 ---- */
+  .route{margin-top:2px;}
+  .route-title{font-size:9.5px;color:var(--fg-mute);font-family:'JetBrains Mono',monospace;letter-spacing:.05em;margin-bottom:7px;}
+  .route-line{display:flex;flex-direction:column;gap:0;position:relative;padding-left:14px;}
+  .route-line::before{content:'';position:absolute;left:4px;top:6px;bottom:6px;width:1.5px;background:var(--line);}
+  .stop{display:flex;align-items:center;gap:8px;font-size:10.5px;line-height:1.9;color:var(--fg-mute);position:relative;font-family:'JetBrains Mono',monospace;}
+  .stop::before{content:'';position:absolute;left:-13px;width:7px;height:7px;border-radius:50%;background:var(--bg-3);border:1.5px solid var(--line-strong);}
+  .stop.here{color:var(--cs-signal);font-weight:700;font-size:11.5px;}
+  .stop.here::before{background:var(--cs-signal);border-color:var(--cs-flash);box-shadow:0 0 8px var(--cs-signal);width:9px;height:9px;left:-14px;}
+  .stop.done{color:var(--fg-dim);}
+  .stop.done::before{background:var(--cs-core);border-color:var(--cs-core);}
+  .lang-btn{margin-top:auto;padding:8px 12px;font-size:12px;font-family:'JetBrains Mono',monospace;
+    background:var(--bg-2);color:var(--fg);border:1px solid var(--line-strong);cursor:pointer;
+    box-shadow:3px 3px 0 var(--bg-0);transition:transform .1s,box-shadow .1s;}
+  .lang-btn:hover{transform:translate(-1px,-1px);box-shadow:4px 4px 0 var(--bg-0);}
+  .lang-btn:active{transform:translate(1px,1px);box-shadow:1px 1px 0 var(--bg-0);}
+  /* ---- 主舞台 ---- */
+  .stage{flex:1;height:100vh;position:relative;overflow:hidden;}
+  canvas#c{position:absolute;inset:0;width:100%;height:100%;}
+  /* ---- HUD ---- */
+  .hud{position:absolute;top:18px;right:18px;background:var(--bg-1);border:1px solid var(--line-strong);
+    padding:11px 15px;font-family:'JetBrains Mono',monospace;font-size:11px;min-width:200px;
+    box-shadow:3px 3px 0 var(--bg-0);}
+  .hud-row{display:flex;justify-content:space-between;gap:14px;line-height:1.75;}
+  .hud-lbl{color:var(--fg-mute);}
+  .hud-val{color:var(--cs-signal);font-weight:700;}
+  .hud-val.warn{color:var(--miss);}
+  /* ---- 字幕 ---- */
+  .sub{position:absolute;bottom:26px;left:50%;transform:translateX(-50%);text-align:center;width:78%;pointer-events:none;}
+  .sub-zh{font-size:20px;font-weight:700;color:var(--fg);background:var(--bg-1);
+    padding:7px 20px;display:inline-block;border:1px solid var(--line-strong);box-shadow:3px 3px 0 var(--bg-0);}
+  .sub-en{font-size:12px;font-style:italic;color:var(--fg-dim);margin-top:6px;font-family:'JetBrains Mono',monospace;}
+</style>
+</head>
+<body>
+<aside class="sidebar">
+  <div class="brand" id="brand">跨被试崩塌<small>CS-01 / cross-subject</small></div>
+  <div class="guide" id="guide">
+    一个被试训好的模型, 换到<b>别人</b>脑上, 准确率连续崩塌 —
+    个体差异让<b>通用模型认不出你的脑波</b>。
+  </div>
+  <div class="route">
+    <div class="route-title" id="routeTitle">PROJECT ROUTE</div>
+    <div class="route-line">
+      <div class="stop done" id="s1">S1 认识脑波</div>
+      <div class="stop done" id="s2">S2 清洁信号</div>
+      <div class="stop here" id="s3">S3 训分类器</div>
+      <div class="stop" id="s4">S4 自录冲准</div>
+      <div class="stop" id="s5">S5 接 Minecraft</div>
+      <div class="stop" id="s6">S6 分享</div>
+    </div>
+  </div>
+  <button class="lang-btn" id="langBtn">中 / EN</button>
+</aside>
+<main class="stage">
+  <canvas id="c"></canvas>
+  <div class="hud">
+    <div class="hud-row"><span class="hud-lbl" id="hl0">testing on</span><span class="hud-val" id="hSubj">subject 1</span></div>
+    <div class="hud-row"><span class="hud-lbl" id="hl1">model from</span><span class="hud-val">subject 1</span></div>
+    <div class="hud-row"><span class="hud-lbl" id="hl2">accuracy</span><span class="hud-val" id="hAcc">82.0%</span></div>
+    <div class="hud-row"><span class="hud-lbl" id="hl3">domain shift</span><span class="hud-val" id="hShift">0.00</span></div>
+  </div>
+  <div class="sub">
+    <div class="sub-zh" id="subZh"></div>
+    <div class="sub-en" id="subEn"></div>
+  </div>
+</main>
+<script>
+"use strict";
+const cv = document.getElementById('c');
+const ctx = cv.getContext('2d');
+let W = 0, H = 0, DPR = Math.min(window.devicePixelRatio || 1, 2);
+function resize(){
+  const r = cv.getBoundingClientRect();
+  W = r.width; H = r.height;
+  cv.width = W * DPR; cv.height = H * DPR;
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+}
+window.addEventListener('resize', resize); resize();
+
+// ---- 取 CSS 变量颜色 ----
+const css = getComputedStyle(document.documentElement);
+const C = {
+  signal: css.getPropertyValue('--cs-signal').trim() || 'oklch(0.75 0.17 200)',
+  core:   css.getPropertyValue('--cs-core').trim()   || 'oklch(0.55 0.16 200)',
+  depth:  css.getPropertyValue('--cs-depth').trim()  || 'oklch(0.35 0.10 210)',
+  flash:  css.getPropertyValue('--cs-flash').trim()  || 'oklch(0.92 0.08 190)',
+  query:  css.getPropertyValue('--cs-query').trim()  || 'oklch(0.85 0.14 85)',
+  gold:   css.getPropertyValue('--gold').trim()      || 'oklch(0.85 0.14 85)',
+  miss:   css.getPropertyValue('--miss').trim()      || 'oklch(0.70 0.18 25)',
+  fg:     css.getPropertyValue('--fg').trim(),
+  fgDim:  css.getPropertyValue('--fg-dim').trim(),
+  fgMute: css.getPropertyValue('--fg-mute').trim(),
+  line:   css.getPropertyValue('--line').trim(),
+  lineS:  css.getPropertyValue('--line-strong').trim(),
+  bg1:    css.getPropertyValue('--bg-1').trim(),
+  bg2:    css.getPropertyValue('--bg-2').trim(),
+};
+
+// ===========================================================================
+// 唯一核心对象: 一条固定的决策线 + 一团连续漂移的脑波点云
+//   - 决策线 (subject 1 训出的模型) 永远不动
+//   - 点云从 subject 1 的分布出发, 连续平移/旋转/缩放成 subject 2..9 的分布 (域偏移)
+//   - 落在错侧的点逐渐变多 -> 准确率连续崩塌
+// ===========================================================================
+
+// 两类脑波 (想象左手 / 想象右手), 各 60 个 trial 点, 在特征平面上的"基准"坐标 (subject 1)
+const N = 60;
+const RNG = (function(){ let s = 20240528; return ()=>{ s = (s*1103515245+12345)&0x7fffffff; return s/0x7fffffff; }; })();
+function gauss(){ return (RNG()+RNG()+RNG()+RNG()-2)/2; }
+
+// 基准分布 (单位特征空间, 范围约 -1..1): 左手类聚在左下, 右手类聚在右上
+const base = [];
+for(let i=0;i<N;i++) base.push({cls:0, x:-0.45+gauss()*0.30, y:-0.38+gauss()*0.30});
+for(let i=0;i<N;i++) base.push({cls:1, x: 0.45+gauss()*0.30, y: 0.40+gauss()*0.30});
+
+// subject 序列: 每个 subject 有一组域偏移参数 (dx,dy 平移, rot 旋转, sc 缩放).
+// subject 1 = 零偏移 (模型出处, 完美). 后续逐渐增大 -> 个体差异.
+// 偏移成因标签 (科学严谨: 跨被试域偏移的真实来源)
+const SUBJECTS = [
+  {id:1, dx: 0.00, dy: 0.00, rot: 0.00, sc:1.00, cause:''},
+  {id:2, dx: 0.18, dy:-0.10, rot: 0.10, sc:1.06, cause:'头皮厚度不同'},
+  {id:3, dx:-0.14, dy: 0.20, rot:-0.14, sc:0.94, cause:'电极阻抗不同'},
+  {id:4, dx: 0.26, dy: 0.16, rot: 0.22, sc:1.10, cause:'任务理解不同'},
+  {id:5, dx:-0.30, dy:-0.22, rot:-0.20, sc:1.14, cause:'头皮厚度不同'},
+  {id:6, dx: 0.34, dy:-0.28, rot: 0.30, sc:0.88, cause:'电极阻抗不同'},
+  {id:7, dx:-0.36, dy: 0.30, rot:-0.30, sc:1.20, cause:'任务理解不同'},
+  {id:8, dx: 0.42, dy: 0.34, rot: 0.36, sc:1.24, cause:'头皮厚度不同'},
+  {id:9, dx:-0.46, dy:-0.38, rot:-0.40, sc:1.28, cause:'电极阻抗不同'},
+];
+const CAUSE_EN = {'':'','头皮厚度不同':'scalp thickness','电极阻抗不同':'electrode impedance','任务理解不同':'task interpretation'};
+
+// 决策线: subject 1 上线性分类器学到的边界. 在单位特征空间用法向量 + 偏置表示.
+// subject 1 两类沿 y=x 方向分开, 边界约为直线 x + y = 0 (法向 (1,1)).
+const Wd = {nx: 0.707, ny: 0.707, b: 0.0}; // 决策: sign(nx*x + ny*y + b)
+
+// 把一个 base 点按 subject 偏移参数变换 (域偏移: 平移+旋转+缩放)
+function shiftPoint(p, sj){
+  const cs_ = Math.cos(sj.rot), sn = Math.sin(sj.rot);
+  let x = p.x * sj.sc, y = p.y * sj.sc;
+  const rx = x*cs_ - y*sn, ry = x*sn + y*cs_;
+  return {x: rx + sj.dx, y: ry + sj.dy};
+}
+// 用固定的 subject1 决策线预测一个 (单位空间) 点的类别
+function predict(x, y){ return (Wd.nx*x + Wd.ny*y + Wd.b) >= 0 ? 1 : 0; }
+
+// 计算某 subject 漂移后的准确率
+function accuracyOf(sj){
+  let correct = 0;
+  for(const p of base){ const s = shiftPoint(p, sj); if(predict(s.x, s.y) === p.cls) correct++; }
+  return correct / base.length;
+}
+// 预算每个 subject 的目标准确率 (用于平滑插值)
+SUBJECTS.forEach(sj => sj.acc = accuracyOf(sj));
+
+// ---- 坐标: 单位特征空间 -> canvas 像素 ----
+function plotGeom(){
+  const m = 90;
+  const left = m + 20, right = W - m - 30;
+  const topY = 110, bot = H - 130;
+  const size = Math.min(right-left, bot-topY);
+  const cx = (left+right)/2, cy = (topY+bot)/2;
+  const scale = size/2 * 0.82;
+  return {cx, cy, scale, size, top: topY, bot, left, right};
+}
+function toPx(g, x, y){ return {px: g.cx + x*g.scale, py: g.cy - y*g.scale}; }
+
+// ---- 平滑插值: 当前在 subject 之间连续过渡 ----
+function lerp(a,b,t){ return a + (b-a)*t; }
+function easeInOut(t){ return t<0.5 ? 2*t*t : 1-Math.pow(-2*t+2,2)/2; }
+function lerpSubj(a, b, t){
+  return {
+    dx:lerp(a.dx,b.dx,t), dy:lerp(a.dy,b.dy,t), rot:lerp(a.rot,b.rot,t),
+    sc:lerp(a.sc,b.sc,t), acc:lerp(a.acc,b.acc,t),
+    idFrom:a.id, idTo:b.id, t, cause:b.cause
+  };
+}
+
+// ===========================================================================
+// 时间轴 (rAF 连续): 一镜到底, 决策线不动, 点云连续漂移过 9 个 subject
+// ===========================================================================
+const HOLD = 1.35;   // 每个 subject 停留
+const MOVE = 1.05;   // subject 间过渡
+let t0 = performance.now();
+
+// 当前漂移崩塌曲线累积 (准确率随时间), 用于右下角迷你曲线
+const curve = []; // {x:0..1 progress, acc}
+
+// 字幕脚本 (跟随画面, 画面为主体)
+const SUBS = [
+  {zh:'通用模型方便 — 但它能直接认出我的脑波吗?', en:'A shared model is convenient — but can it read MY brain?'},
+  {zh:'subject 1 自己训的边界: 想左手 / 想右手, 干净分开 82%', en:'subject 1 own model: left vs right, cleanly split at 82%'},
+  {zh:'同一条边界不动, 现在拿去测 subject 2 的脑波', en:'same boundary, now test it on subject 2'},
+  {zh:'换人, 整团脑波就平移旋转 — 这就是域偏移', en:'new person, the whole cloud shifts & rotates — domain shift'},
+  {zh:'越往后的人偏得越远, 越来越多点落到线的错侧', en:'later subjects drift further, more points fall on the wrong side'},
+  {zh:'头皮厚度 / 电极阻抗 / 任务理解 — 每个人都不一样', en:'scalp / impedance / task interpretation — everyone differs'},
+  {zh:'准确率从 82% 一路连续崩到 5 成多 — 几乎在瞎猜', en:'accuracy collapses 82% to ~55% — barely above guessing'},
+  {zh:'别人的模型在你身上掉准 — 所以 S4 要训你自己的专属模型', en:'others\' models fail on you — so S4: train YOUR own model'},
+];
+let curSub = -1;
+function setSub(i){
+  if(i===curSub) return; curSub = i;
+  document.getElementById('subZh').textContent = LANG==='zh' ? SUBS[i].zh : '';
+  document.getElementById('subEn').textContent = SUBS[i].en;
+}
+
+// 画一段虚线轴
+function axes(g){
+  ctx.strokeStyle = C.line; ctx.lineWidth = 1; ctx.setLineDash([3,5]);
+  ctx.beginPath(); ctx.moveTo(g.cx, g.top); ctx.lineTo(g.cx, g.bot); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(g.left, g.cy); ctx.lineTo(g.right, g.cy); ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle = C.fgMute; ctx.font = "10px 'JetBrains Mono', monospace";
+  ctx.textAlign='left';
+  ctx.fillText('C3 power', g.right-58, g.cy-8);
+  ctx.fillText('C4 power', g.cx+8, g.top+4);
+}
+
+// 画固定决策线 (subject 1 的模型边界): 法向 (nx,ny), 过原点
+function decisionLine(g, glow){
+  // 边界: nx*x + ny*y = 0  -> 方向向量 (-ny, nx)
+  const dirx = -Wd.ny, diry = Wd.nx;
+  const L = 1.6;
+  const a = toPx(g, -dirx*L, -diry*L);
+  const b = toPx(g,  dirx*L,  diry*L);
+  // 半透明分隔: 两侧淡色区
+  ctx.save();
+  ctx.lineWidth = glow ? 3.5 : 2.5;
+  ctx.strokeStyle = C.signal;
+  if(glow){ ctx.shadowColor = C.signal; ctx.shadowBlur = 14; }
+  ctx.beginPath(); ctx.moveTo(a.px,a.py); ctx.lineTo(b.px,b.py); ctx.stroke();
+  ctx.restore();
+  // 边界标签
+  ctx.fillStyle = C.signal; ctx.font = "600 11px 'JetBrains Mono', monospace";
+  ctx.textAlign='left';
+  ctx.fillText('subject 1 model', b.px+6, b.py+4);
+}
+
+// 画一个脑波点
+function dot(px, py, color, r, ring){
+  ctx.beginPath(); ctx.arc(px,py,r,0,Math.PI*2);
+  ctx.fillStyle = color; ctx.fill();
+  if(ring){ ctx.lineWidth=1.5; ctx.strokeStyle=C.miss; ctx.stroke(); }
+}
+
+let LANG = 'zh';
+let raf = null;
+
+function frame(now){
+  const t = (now - t0)/1000;
+  const g = plotGeom();
+  ctx.clearRect(0,0,W,H);
+
+  // 阶段时序: idx 段 (每段 = HOLD + MOVE). idx 在 0..len-1
+  const seg = HOLD + MOVE;
+  const total = SUBJECTS.length * seg;
+  const lt = t % total;
+  let idx = Math.floor(lt / seg);
+  if(idx > SUBJECTS.length-1) idx = SUBJECTS.length-1;
+  if(idx < 0) idx = 0;
+  const within = lt - idx*seg;
+  let cur;
+  if(within < HOLD || idx >= SUBJECTS.length-1){
+    cur = lerpSubj(SUBJECTS[idx], SUBJECTS[idx], 0);
+    cur.id = SUBJECTS[idx].id;
+  } else {
+    const tt = easeInOut((within - HOLD)/MOVE);
+    cur = lerpSubj(SUBJECTS[idx], SUBJECTS[idx+1], tt);
+    cur.id = tt < 0.5 ? SUBJECTS[idx].id : SUBJECTS[idx+1].id;
+  }
+
+  // ---- 标题区 ----
+  ctx.fillStyle = C.fg; ctx.font = "700 17px 'Noto Sans SC', sans-serif"; ctx.textAlign='left';
+  ctx.fillText(LANG==='zh' ? '跨被试崩塌: 一条固定边界, 漂走的脑波' : 'Cross-subject collapse: one fixed boundary, drifting brains',
+    g.left-40<24?24:g.left-40, 56);
+  ctx.fillStyle = C.fgMute; ctx.font = "11px 'JetBrains Mono', monospace";
+  ctx.fillText('decision line = trained ONCE on subject 1, never re-trained', g.left-40<24?24:g.left-40, 76);
+
+  // ---- 坐标轴 ----
+  axes(g);
+
+  // ---- 固定决策线 (核心对象之一, 永不动) ----
+  const isFirst = (cur.idFrom===1 && cur.t===0 && idx===0) || cur.id===1;
+  decisionLine(g, idx===0 && within<HOLD);
+
+  // ---- 连续漂移的脑波点云 (核心对象之二) ----
+  const sj = {dx:cur.dx, dy:cur.dy, rot:cur.rot, sc:cur.sc};
+  let correct=0;
+  for(const p of base){
+    const s = shiftPoint(p, sj);
+    const pr = predict(s.x, s.y);
+    const ok = pr === p.cls;
+    if(ok) correct++;
+    const pt = toPx(g, s.x, s.y);
+    // 类别本色: 左手类 core(青深), 右手类 flash(青亮); 错分类的描红环
+    const baseColor = p.cls===0 ? C.core : C.flash;
+    dot(pt.px, pt.py, ok ? baseColor : C.miss, ok?4.5:5.2, !ok);
+  }
+  const accNow = correct/base.length;
+
+  // ---- 个体差异成因标注 (漂移时浮现) ----
+  if(cur.cause && within>=HOLD && idx<SUBJECTS.length-1){
+    ctx.fillStyle = C.miss; ctx.font = "600 13px 'Noto Sans SC', sans-serif"; ctx.textAlign='center';
+    const label = LANG==='zh' ? ('成因: '+cur.cause) : ('cause: '+CAUSE_EN[cur.cause]);
+    ctx.fillText(label, g.cx, g.bot+34);
+  }
+
+  // ---- 域偏移量化 (中心位移幅度) ----
+  const shiftMag = Math.sqrt(cur.dx*cur.dx + cur.dy*cur.dy) + Math.abs(cur.rot)*0.5 + Math.abs(cur.sc-1);
+
+  // ---- 右下角崩塌曲线 (准确率随 subject 累积) ----
+  drawCollapseCurve(g, cur.id, accNow);
+
+  // ---- key moment: 最后一个 subject 崩到底, gold 一闪 ----
+  if(cur.id===9 && within<HOLD){
+    ctx.save();
+    ctx.globalAlpha = 0.5 + 0.5*Math.abs(Math.sin(t*3));
+    ctx.fillStyle = C.gold; ctx.font="700 15px 'Noto Sans SC', sans-serif"; ctx.textAlign='center';
+    ctx.fillText(LANG==='zh' ? '崩塌到底: 几乎在瞎猜' : 'collapsed: barely above chance', g.cx, 96);
+    ctx.restore();
+  }
+
+  // ---- 角落 Minecraft 终点剪影 + Bit mascot ----
+  drawMascotBit(W-58, H-58, t);
+  drawMinecraftHint(74, H-46);
+
+  // ---- HUD ----
+  document.getElementById('hSubj').textContent = 'subject '+cur.id;
+  const accEl = document.getElementById('hAcc');
+  accEl.textContent = (accNow*100).toFixed(1)+'%';
+  accEl.className = accNow<0.7 ? 'hud-val warn' : 'hud-val';
+  const shiftEl = document.getElementById('hShift');
+  shiftEl.textContent = shiftMag.toFixed(2);
+  shiftEl.className = shiftMag>0.4 ? 'hud-val warn' : 'hud-val';
+
+  // ---- 字幕脚本 (跟随阶段) ----
+  let si;
+  if(cur.id===1 && within<HOLD*0.5) si = idx===0?0:1;
+  else if(cur.id===1) si = 1;
+  else if(cur.id===2) si = within<HOLD ? 3 : 2;
+  else if(cur.id<=4) si = 3;
+  else if(cur.id<=6) si = 5;
+  else if(cur.id<=8) si = 4;
+  else si = within<HOLD ? 6 : 7;
+  if(idx===0 && within<HOLD*0.6) si=0;
+  if(idx===1) si= within<HOLD? 2 : 3;
+  if(cur.id===9) si = within<HOLD? 6 : 7;
+  setSub(si);
+
+  raf = requestAnimationFrame(frame);
+}
+
+// ---- 崩塌曲线 (右下小图) ----
+function drawCollapseCurve(g, curId, accNow){
+  const bw = 200, bh = 92;
+  const bx = g.right - bw + 30, by = g.bot - bh + 110;
+  ctx.save();
+  ctx.fillStyle = C.bg1; ctx.strokeStyle = C.lineS; ctx.lineWidth=1;
+  ctx.fillRect(bx,by,bw,bh); ctx.strokeRect(bx,by,bw,bh);
+  ctx.fillStyle=C.fgMute; ctx.font="9px 'JetBrains Mono', monospace"; ctx.textAlign='left';
+  ctx.fillText(LANG==='zh'?'准确率 vs 被试':'accuracy vs subject', bx+8, by+14);
+  // y 参考: 50% chance 线
+  const yFor = a => by+bh-12 - (a-0.45)/(0.85-0.45)*(bh-26);
+  const xFor = id => bx+14 + (id-1)/(SUBJECTS.length-1)*(bw-28);
+  ctx.strokeStyle=C.fgMute; ctx.setLineDash([2,3]); ctx.lineWidth=1;
+  ctx.beginPath(); ctx.moveTo(bx+10, yFor(0.5)); ctx.lineTo(bx+bw-8, yFor(0.5)); ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle=C.fgMute; ctx.fillText('chance 50%', bx+bw-66, yFor(0.5)-3);
+  // 折线: 到 curId 为止 (已经历的 subject 的目标 acc), 末点用 accNow
+  ctx.strokeStyle=C.signal; ctx.lineWidth=2; ctx.beginPath();
+  for(let i=0;i<SUBJECTS.length;i++){
+    const id = SUBJECTS[i].id;
+    if(id>curId) break;
+    const a = id===curId ? accNow : SUBJECTS[i].acc;
+    const X=xFor(id), Y=yFor(a);
+    if(i===0) ctx.moveTo(X,Y); else ctx.lineTo(X,Y);
+  }
+  ctx.stroke();
+  // 当前点高亮
+  const cX=xFor(curId), cY=yFor(accNow);
+  ctx.beginPath(); ctx.arc(cX,cY,4,0,Math.PI*2);
+  ctx.fillStyle = accNow<0.7?C.miss:C.signal; ctx.fill();
+  ctx.restore();
+}
+
+// ---- Bit mascot: 悬浮立方体精灵 (cs themes.js mascot), 像素随漂移微抖 ----
+function drawMascotBit(x, y, t){
+  ctx.save();
+  ctx.translate(x, y + Math.sin(t*1.6)*4);
+  const s=11;
+  // 立方体三面 (cs palette)
+  ctx.fillStyle=C.core;  ctx.beginPath(); ctx.moveTo(0,-s);ctx.lineTo(s,-s/2);ctx.lineTo(s,s/2);ctx.lineTo(0,s);ctx.closePath();ctx.fill();
+  ctx.fillStyle=C.signal;ctx.beginPath(); ctx.moveTo(0,-s);ctx.lineTo(-s,-s/2);ctx.lineTo(-s,s/2);ctx.lineTo(0,s);ctx.closePath();ctx.fill();
+  ctx.fillStyle=C.flash; ctx.beginPath(); ctx.moveTo(0,-s);ctx.lineTo(s,-s/2);ctx.lineTo(0,0);ctx.lineTo(-s,-s/2);ctx.closePath();ctx.fill();
+  // 像素抖动点
+  for(let i=0;i<3;i++){
+    const a=t*2+i*2.1;
+    ctx.fillStyle=C.query; ctx.fillRect(Math.cos(a)*(s+6)-1.5, Math.sin(a)*(s+6)-1.5+ (i-1)*3, 3,3);
+  }
+  ctx.fillStyle=C.fgMute; ctx.font="8px 'JetBrains Mono', monospace"; ctx.textAlign='center';
+  ctx.fillText('Bit', 0, s+15);
+  ctx.restore();
+}
+
+// ---- Minecraft 终点剪影 (项目终点常驻徽记) ----
+function drawMinecraftHint(x, y){
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.globalAlpha=0.55;
+  // 苦力怕风格方块头剪影 (终点 = 脑控 Minecraft)
+  const u=4;
+  ctx.fillStyle=C.depth;
+  ctx.fillRect(-3*u,-3*u,6*u,6*u);
+  ctx.fillStyle=C.bg2;
+  ctx.fillRect(-2*u,-2*u,2*u,2*u); // 左眼
+  ctx.fillRect( 0,   -2*u,2*u,2*u); // 右眼
+  ctx.fillRect(-1*u, 0, 2*u,3*u);   // 嘴
+  ctx.globalAlpha=0.7;
+  ctx.fillStyle=C.fgMute; ctx.font="8px 'JetBrains Mono', monospace"; ctx.textAlign='center';
+  ctx.fillText(LANG==='zh'?'终点: 脑控 Minecraft':'goal: mind-control Minecraft', 0, 5*u+10);
+  ctx.restore();
+}
+
+// ---- i18n ----
+const I18N = {
+  zh:{
+    brand:'跨被试崩塌', guide:'一个被试训好的模型, 换到<b>别人</b>脑上, 准确率连续崩塌 — 个体差异让<b>通用模型认不出你的脑波</b>。',
+    routeTitle:'项目路线', hl0:'测试对象', hl1:'模型来自', hl2:'准确率', hl3:'域偏移量',
+    s1:'S1 认识脑波', s2:'S2 清洁信号', s3:'S3 训分类器', s4:'S4 自录冲准', s5:'S5 接 Minecraft', s6:'S6 分享',
+  },
+  en:{
+    brand:'Cross-subject', guide:"A model trained on one subject, applied to <b>someone else</b>, collapses in accuracy — individual differences mean <b>a shared model can't read your brain</b>.",
+    routeTitle:'PROJECT ROUTE', hl0:'testing on', hl1:'model from', hl2:'accuracy', hl3:'domain shift',
+    s1:'S1 know waves', s2:'S2 clean', s3:'S3 classifier', s4:'S4 self-record', s5:'S5 Minecraft', s6:'S6 share',
+  }
+};
+function refreshI18N(){
+  const d = I18N[LANG];
+  document.getElementById('brand').innerHTML = d.brand + '<small>CS-01 / cross-subject</small>';
+  document.getElementById('guide').innerHTML = d.guide;
+  document.getElementById('routeTitle').textContent = d.routeTitle;
+  ['hl0','hl1','hl2','hl3','s1','s2','s3','s4','s5','s6'].forEach(id=>{
+    const el=document.getElementById(id); if(el) el.textContent = d[id];
+  });
+  // 字幕立即刷新
+  if(curSub>=0){
+    document.getElementById('subZh').textContent = LANG==='zh' ? SUBS[curSub].zh : '';
+    document.getElementById('subEn').textContent = SUBS[curSub].en;
+  }
+}
+document.getElementById('langBtn').addEventListener('click', ()=>{
+  LANG = LANG==='zh' ? 'en' : 'zh';
+  refreshI18N();
+});
+
+refreshI18N();
+raf = requestAnimationFrame(frame);
+</script>
+</body>
+</html>

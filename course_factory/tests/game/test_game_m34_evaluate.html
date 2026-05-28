@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>评估设计师 — 公平评估实验台</title>
+<style>
+  :root{
+    --bg-0:oklch(0.18 0.04 240);
+    --bg-1:oklch(0.24 0.05 235);
+    --bg-2:oklch(0.30 0.06 230);
+    --cs:oklch(0.75 0.17 200);
+    --signal:oklch(0.75 0.17 200);
+    --core:oklch(0.55 0.16 200);
+    --depth:oklch(0.35 0.10 210);
+    --flash:oklch(0.92 0.08 190);
+    --query:oklch(0.85 0.14 85);
+    --ink:oklch(0.95 0.02 220);
+    --ink-dim:oklch(0.72 0.03 220);
+    --ink-mute:oklch(0.55 0.04 225);
+    --alert:oklch(0.65 0.20 25);
+    --good:oklch(0.78 0.16 150);
+    --mono:'JetBrains Mono','SFMono-Regular',Consolas,'Liberation Mono',monospace;
+    --sans:'Inter','Segoe UI','Helvetica Neue',Arial,sans-serif;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;height:100vh;overflow:hidden;background:var(--bg-0);color:var(--ink);font-family:var(--sans);}
+  body{display:flex;}
+
+  /* ---- sidebar ---- */
+  .game-sidebar{width:200px;flex-shrink:0;height:100vh;background:var(--bg-1);
+    border-right:1.5px solid var(--depth);display:flex;flex-direction:column;gap:12px;padding:14px;}
+  .mascot{display:flex;align-items:center;gap:8px;}
+  .mascot-cube{width:30px;height:30px;flex-shrink:0;}
+  .mascot-name{font-family:var(--mono);font-size:11px;color:var(--signal);letter-spacing:.5px;}
+  .mascot-role{font-size:10px;color:var(--ink-mute);}
+  .side-title{font-size:14px;font-weight:800;line-height:1.3;color:var(--ink);}
+  .side-sub{font-size:10.5px;line-height:1.5;color:var(--ink-dim);}
+
+  .route{display:flex;flex-direction:column;gap:3px;margin-top:2px;}
+  .route-lbl{font-family:var(--mono);font-size:9px;color:var(--ink-mute);letter-spacing:1px;}
+  .stop{display:flex;align-items:center;gap:6px;font-family:var(--mono);font-size:10px;color:var(--ink-mute);}
+  .stop .dot{width:8px;height:8px;border-radius:50%;background:var(--depth);flex-shrink:0;}
+  .stop.done .dot{background:var(--core);}
+  .stop.here{color:var(--flash);font-weight:700;}
+  .stop.here .dot{background:var(--signal);box-shadow:0 0 0 3px color-mix(in oklch,var(--signal) 30%,transparent);}
+
+  .hud{background:var(--bg-2);border:1.5px solid var(--depth);box-shadow:3px 3px 0 var(--bg-0);padding:8px 9px;display:flex;flex-direction:column;gap:5px;}
+  .hud-row{display:flex;justify-content:space-between;align-items:baseline;gap:6px;}
+  .hud-lbl{font-family:var(--mono);font-size:9.5px;color:var(--ink-mute);}
+  .hud-val{font-family:var(--mono);font-size:13px;font-weight:700;color:var(--signal);}
+
+  .lang-btn{margin-top:auto;background:var(--bg-2);border:1.5px solid var(--core);color:var(--ink);
+    font-family:var(--mono);font-size:11px;padding:7px;cursor:pointer;box-shadow:2px 2px 0 var(--bg-0);transition:transform .08s;}
+  .lang-btn:hover{transform:translate(-1px,-1px);}
+  .lang-btn:active{transform:translate(1px,1px);}
+
+  /* ---- main ---- */
+  .game-main{flex:1;height:100vh;display:flex;flex-direction:column;gap:10px;padding:16px 18px;position:relative;overflow:hidden;}
+  .brief{background:var(--bg-1);border:1.5px solid var(--depth);border-left:3px solid var(--signal);padding:9px 13px;}
+  .brief h2{margin:0 0 2px;font-size:13.5px;color:var(--flash);}
+  .brief p{margin:0;font-size:11.5px;color:var(--ink-dim);line-height:1.5;}
+
+  .stage{flex:1;display:flex;gap:14px;min-height:0;}
+  .col{flex:1;display:flex;flex-direction:column;gap:8px;min-height:0;}
+  .col-h{font-family:var(--mono);font-size:11px;color:var(--ink-mute);letter-spacing:.5px;}
+
+  /* experiment config cards */
+  .cards{display:flex;flex-direction:column;gap:9px;}
+  .card{background:var(--bg-1);border:1.5px solid var(--depth);box-shadow:3px 3px 0 var(--bg-0);
+    padding:11px 12px;cursor:pointer;transition:transform .08s,border-color .12s;}
+  .card:hover{transform:translate(-1px,-1px);border-color:var(--core);}
+  .card.sel{border-color:var(--signal);box-shadow:3px 3px 0 var(--core);}
+  .card-t{font-size:12.5px;font-weight:700;color:var(--ink);margin-bottom:3px;display:flex;justify-content:space-between;}
+  .card-tag{font-family:var(--mono);font-size:9px;color:var(--ink-mute);}
+  .card.sel .card-tag{color:var(--signal);}
+  .card-d{font-size:10.5px;color:var(--ink-dim);line-height:1.5;}
+
+  .ratiobar{display:flex;height:22px;border:1.5px solid var(--depth);margin-top:7px;font-family:var(--mono);font-size:9px;overflow:hidden;}
+  .rb-train{background:var(--core);color:var(--bg-0);display:flex;align-items:center;justify-content:center;}
+  .rb-test{background:var(--query);color:var(--bg-0);display:flex;align-items:center;justify-content:center;}
+
+  .runbtn{margin-top:4px;background:var(--signal);border:1.5px solid var(--flash);color:var(--bg-0);
+    font-family:var(--mono);font-weight:700;font-size:12px;padding:10px;cursor:pointer;box-shadow:3px 3px 0 var(--bg-0);transition:transform .08s;}
+  .runbtn:hover{transform:translate(-1px,-1px);}
+  .runbtn:active{transform:translate(1px,1px);}
+  .runbtn:disabled{background:var(--depth);border-color:var(--depth);color:var(--ink-mute);cursor:not-allowed;box-shadow:none;transform:none;}
+
+  /* result panel */
+  .result{flex:1;background:var(--bg-1);border:1.5px solid var(--depth);padding:12px;display:flex;flex-direction:column;gap:10px;min-height:0;}
+  .meter{display:flex;flex-direction:column;gap:4px;}
+  .meter-h{display:flex;justify-content:space-between;font-family:var(--mono);font-size:10.5px;}
+  .meter-h .nm{color:var(--ink-dim);}
+  .meter-h .pc{font-weight:700;}
+  .track{height:16px;background:var(--bg-2);border:1px solid var(--depth);overflow:hidden;}
+  .fill{height:100%;width:0;transition:width .9s cubic-bezier(.2,.7,.3,1);}
+  .verdict{margin-top:auto;border-top:1px solid var(--depth);padding-top:9px;font-size:11.5px;line-height:1.55;color:var(--ink-dim);}
+  .verdict b{color:var(--flash);}
+  .verdict.bad b{color:var(--alert);}
+  .verdict.ok b{color:var(--good);}
+
+  .empty{flex:1;display:flex;align-items:center;justify-content:center;text-align:center;
+    font-family:var(--mono);font-size:11px;color:var(--ink-mute);line-height:1.7;padding:0 20px;}
+
+  /* unlock overlay */
+  .overlay{position:absolute;inset:0;background:color-mix(in oklch,var(--bg-0) 88%,transparent);
+    display:none;align-items:center;justify-content:center;flex-direction:column;gap:10px;text-align:center;z-index:20;padding:30px;}
+  .overlay.show{display:flex;}
+  .badge{font-family:var(--mono);font-size:11px;color:var(--query);letter-spacing:2px;}
+  .overlay h2{margin:0;font-size:22px;color:var(--flash);}
+  .overlay p{margin:0;max-width:420px;font-size:12.5px;color:var(--ink-dim);line-height:1.6;}
+  .overlay button{margin-top:6px;background:var(--bg-2);border:1.5px solid var(--signal);color:var(--ink);
+    font-family:var(--mono);font-size:11px;padding:8px 16px;cursor:pointer;box-shadow:2px 2px 0 var(--bg-0);}
+
+  /* minecraft endpoint silhouette */
+  .endpoint{position:absolute;right:14px;bottom:12px;display:flex;align-items:center;gap:7px;opacity:.5;pointer-events:none;}
+  .endpoint svg{display:block;}
+  .endpoint span{font-family:var(--mono);font-size:9px;color:var(--ink-mute);max-width:120px;line-height:1.4;}
+
+  .toast{position:absolute;top:14px;left:50%;transform:translateX(-50%);background:var(--bg-2);
+    border:1.5px solid var(--signal);color:var(--ink);font-family:var(--mono);font-size:11px;padding:7px 14px;
+    box-shadow:3px 3px 0 var(--bg-0);opacity:0;transition:opacity .25s;pointer-events:none;z-index:15;}
+  .toast.show{opacity:1;}
+</style>
+</head>
+<body>
+
+<aside class="game-sidebar">
+  <div class="mascot">
+    <svg class="mascot-cube" viewBox="0 0 30 30">
+      <rect x="6" y="6" width="18" height="18" rx="2" fill="none" stroke="var(--signal)" stroke-width="1.6"/>
+      <rect x="9" y="9" width="5" height="5" fill="var(--signal)"/>
+      <rect x="16" y="9" width="5" height="5" fill="var(--core)"/>
+      <rect x="9" y="16" width="5" height="5" fill="var(--query)"/>
+      <rect x="16" y="16" width="5" height="5" fill="var(--flash)"/>
+    </svg>
+    <div>
+      <div class="mascot-name">BIT</div>
+      <div class="mascot-role" id="mRole">评估搭档</div>
+    </div>
+  </div>
+
+  <div class="side-title" id="title">评估设计师</div>
+  <div class="side-sub" id="goal">设计一场公平的考试，分清分类器是真准还是在背答案。</div>
+
+  <div class="route">
+    <div class="route-lbl" id="routeLbl">脑控 MINECRAFT 路线</div>
+    <div class="stop done"><span class="dot"></span><span data-s="1">S1 信号基础</span></div>
+    <div class="stop done"><span class="dot"></span><span data-s="2">S2 信号清洗</span></div>
+    <div class="stop here"><span class="dot"></span><span data-s="3">S3 分类与评估</span></div>
+    <div class="stop"><span class="dot"></span><span data-s="4">S4 实时解码</span></div>
+    <div class="stop"><span class="dot"></span><span data-s="5">S5 控制接口</span></div>
+    <div class="stop"><span class="dot"></span><span data-s="6">S6 脑控成型</span></div>
+  </div>
+
+  <div class="hud">
+    <div class="hud-row"><span class="hud-lbl" id="hExp">已设计实验</span><span class="hud-val" id="vExp">0</span></div>
+    <div class="hud-row"><span class="hud-lbl" id="hFair">公平实验</span><span class="hud-val" id="vFair">0 / 1</span></div>
+    <div class="hud-row"><span class="hud-lbl" id="hSamp">样本总数</span><span class="hud-val">120</span></div>
+  </div>
+
+  <button class="lang-btn" id="langBtn">中 / EN</button>
+</aside>
+
+<main class="game-main">
+  <div class="brief">
+    <h2 id="briefH">怎么公平地知道分类器真准，还是只是背答案？</h2>
+    <p id="briefP">你有 120 段左右手想象的脑电样本。挑一个实验方案，配置训练/测试如何切分，再点「运行实验」看结果。当心：用训练数据当考题，准确率会虚高得离谱。</p>
+  </div>
+
+  <div class="stage">
+    <div class="col">
+      <div class="col-h" id="colChoose">选实验方案（点卡片选中）</div>
+      <div class="cards" id="cards"></div>
+      <button class="runbtn" id="runBtn" disabled>运行实验 / Run</button>
+    </div>
+
+    <div class="col">
+      <div class="col-h" id="colResult">实验结果 — 训练 acc vs 测试 acc</div>
+      <div class="result" id="resultPanel">
+        <div class="empty" id="resultEmpty">选一个方案并运行<br>结果会出现在这里</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="endpoint">
+    <svg width="26" height="26" viewBox="0 0 26 26">
+      <rect x="3" y="3" width="9" height="9" fill="var(--core)"/>
+      <rect x="14" y="3" width="9" height="9" fill="var(--depth)"/>
+      <rect x="3" y="14" width="9" height="9" fill="var(--depth)"/>
+      <rect x="14" y="14" width="9" height="9" fill="var(--core)"/>
+    </svg>
+    <span id="epTxt">终点：意念搭建方块</span>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <div class="overlay" id="overlay">
+    <div class="badge" id="ovBadge">解锁</div>
+    <h2 id="ovH">评估设计师</h2>
+    <p id="ovP"></p>
+    <button id="ovBtn">再试一次 / Replay</button>
+  </div>
+</main>
+
+<script>
+(function(){
+  const T = {
+    cn:{
+      mRole:'评估搭档', title:'评估设计师',
+      goal:'设计一场公平的考试，分清分类器是真准还是在背答案。',
+      routeLbl:'脑控 MINECRAFT 路线',
+      hExp:'已设计实验', hFair:'公平实验', hSamp:'样本总数',
+      briefH:'怎么公平地知道分类器真准，还是只是背答案？',
+      briefP:'你有 120 段左右手想象的脑电样本。挑一个实验方案，配置训练/测试如何切分，再点「运行实验」看结果。当心：用训练数据当考题，准确率会虚高得离谱。',
+      colChoose:'选实验方案（点卡片选中）', colResult:'实验结果 — 训练 acc vs 测试 acc',
+      resultEmpty:'选一个方案并运行\n结果会出现在这里',
+      run:'运行实验 / Run', langBtn:'中 / EN',
+      epTxt:'终点：意念搭建方块',
+      train:'训练', test:'测试',
+      mTrain:'训练集准确率', mTest:'测试集准确率（真实力）',
+      ovBadge:'解锁', ovBtnReplay:'再试一次 / Replay', ovBtnNext:'继续 / Next',
+      stops:['S1 信号基础','S2 信号清洗','S3 分类与评估','S4 实时解码','S5 控制接口','S6 脑控成型'],
+      cards:[
+        {tag:'方案 A', t:'用训练数据当考题',
+          d:'全部 120 段都拿去训练，再用同样这 120 段考它。省事，但考题它早背过了。', tr:100, te:0},
+        {tag:'方案 B', t:'80 / 20 公平切分',
+          d:'96 段训练，留 24 段它从没见过的来考。考它没背过的，才看得出真实力。', tr:80, te:20},
+        {tag:'方案 C', t:'只留 4 段当测试',
+          d:'116 段训练，只留 4 段考它。测试集太小，对一两段就抖很大，结果不稳。', tr:97, te:3},
+      ],
+      verdict:{
+        A:{cls:'bad', html:'训练准确率 <b>95%</b>，但这是<b>作弊</b>：你用它背过的数据考它，分不出真假。脑控上线会翻车。'},
+        B:{cls:'ok', html:'测试集是它<b>没见过</b>的，测出真准确率 <b>≈78%</b>。两条线接近、可信。这才是公平评估。'},
+        C:{cls:'bad', html:'测试集只有 4 段，结果<b>极不稳</b>：换一批就大跳。样本太少，数字没法信。'},
+      },
+      toastSel:'已选方案，点「运行实验」', toastCheat:'这是作弊评估，不可信！',
+      ovWin:'你学会公平评估了——80/20 切分、考它没背过的数据。这一步保证：等你真把分类器接到 Minecraft 上，它是真能用，而不是实验室里虚高、上线就翻车。',
+      ovCheat:'这场实验作弊或不可信。要解锁「评估设计师」，请找出真正公平的方案（提示：考它没见过的数据，且测试集别太小）。',
+    },
+    en:{
+      mRole:'Eval buddy', title:'Eval Designer',
+      goal:'Design a fair exam to tell if your classifier is truly accurate or just memorizing.',
+      routeLbl:'BRAIN-MINECRAFT ROUTE',
+      hExp:'Experiments', hFair:'Fair ones', hSamp:'Total samples',
+      briefH:'How do you fairly know the classifier is truly accurate, not just memorizing?',
+      briefP:'You have 120 EEG samples of imagined left/right hand. Pick an experiment, set how to split train/test, then Run. Beware: testing on training data inflates accuracy wildly.',
+      colChoose:'Pick an experiment (click a card)', colResult:'Result — train acc vs test acc',
+      resultEmpty:'Pick a plan and run\nresults appear here',
+      run:'Run experiment / 运行', langBtn:'EN / 中',
+      epTxt:'Goal: build blocks by thought',
+      train:'Train', test:'Test',
+      mTrain:'Train accuracy', mTest:'Test accuracy (true skill)',
+      ovBadge:'UNLOCKED', ovBtnReplay:'Replay / 再试', ovBtnNext:'Next / 继续',
+      stops:['S1 Signal basics','S2 Cleaning','S3 Classify & eval','S4 Live decode','S5 Control IO','S6 Brain control'],
+      cards:[
+        {tag:'Plan A', t:'Test on training data',
+          d:'Train on all 120, then quiz it with the same 120. Easy — but it has already seen every question.', tr:100, te:0},
+        {tag:'Plan B', t:'80 / 20 fair split',
+          d:'Train on 96, hold out 24 it never saw to test. Quizzing unseen data reveals real skill.', tr:80, te:20},
+        {tag:'Plan C', t:'Only 4 test samples',
+          d:'Train on 116, test on just 4. The test set is tiny — one or two flips swing it wildly, unstable.', tr:97, te:3},
+      ],
+      verdict:{
+        A:{cls:'bad', html:'Train acc <b>95%</b>, but this is <b>cheating</b>: you quiz it on data it memorized. Useless. It will fail live.'},
+        B:{cls:'ok', html:'The test set is <b>unseen</b>, giving true accuracy <b>≈78%</b>. The two bars are close and trustworthy. This is fair evaluation.'},
+        C:{cls:'bad', html:'Only 4 test samples — the result is <b>wildly unstable</b>: a new batch jumps far. Too few to trust.'},
+      },
+      toastSel:'Selected. Hit Run.', toastCheat:'Cheating eval — not trustworthy!',
+      ovWin:'You learned fair evaluation — an 80/20 split, quizzing unseen data. This guarantees that when you wire the classifier into Minecraft, it actually works instead of looking great in the lab and failing live.',
+      ovCheat:'This experiment cheats or is unreliable. To unlock Eval Designer, find the truly fair plan (hint: test on unseen data, and don\'t make the test set tiny).',
+    }
+  };
+
+  let lang='cn';
+  let selected=null;            // 'A'|'B'|'C'
+  let expCount=0;
+  let fairDone=false;
+  const KEYS=['A','B','C'];
+
+  const $=id=>document.getElementById(id);
+  const cardsEl=$('cards'), resultPanel=$('resultPanel'), runBtn=$('runBtn');
+  const overlay=$('overlay'), toastEl=$('toast');
+
+  // accuracy outcomes per plan (deterministic-ish with small variance for C)
+  function outcome(key){
+    if(key==='A') return {train:95, test:95, label:'train', cheat:true};   // 用训练数据考 → 虚高 95%
+    if(key==='B') return {train:84, test:78, cheat:false};                 // 公平 80/20 → 真 78%
+    // C: tiny test set → highly unstable test acc
+    const swing=[50,75,100,25,80][expCount%5];
+    return {train:88, test:swing, unstable:true, cheat:false};
+  }
+
+  function buildCards(){
+    cardsEl.innerHTML='';
+    T[lang].cards.forEach((c,i)=>{
+      const key=KEYS[i];
+      const el=document.createElement('div');
+      el.className='card'+(selected===key?' sel':'');
+      el.dataset.key=key;
+      el.innerHTML=
+        '<div class="card-t"><span>'+c.t+'</span><span class="card-tag">'+c.tag+'</span></div>'+
+        '<div class="card-d">'+c.d+'</div>'+
+        '<div class="ratiobar"><div class="rb-train" style="width:'+c.tr+'%">'+(c.tr?c.tr+'%':'')+'</div>'+
+        '<div class="rb-test" style="width:'+c.te+'%">'+(c.te?c.te+'%':'')+'</div></div>';
+      el.addEventListener('click',()=>selectCard(key));
+      cardsEl.appendChild(el);
+    });
+  }
+
+  function selectCard(key){
+    selected=key;
+    [...cardsEl.children].forEach(ch=>ch.classList.toggle('sel',ch.dataset.key===key));
+    runBtn.disabled=false;
+    toast(T[lang].toastSel);
+  }
+
+  function toast(msg){
+    toastEl.textContent=msg;
+    toastEl.classList.add('show');
+    clearTimeout(toast._t);
+    toast._t=setTimeout(()=>toastEl.classList.remove('show'),1800);
+  }
+
+  function runExperiment(){
+    if(!selected) return;
+    const o=outcome(selected);
+    expCount++;
+    $('vExp').textContent=expCount;
+
+    const tt=T[lang];
+    const v=tt.verdict[selected];
+    resultPanel.innerHTML=
+      meter(tt.mTrain, o.train, 'var(--core)')+
+      meter(tt.mTest, o.test, o.cheat?'var(--alert)':(o.unstable?'var(--query)':'var(--good)'))+
+      '<div class="verdict '+v.cls+'" id="verdictBox">'+v.html+'</div>';
+
+    // animate fills next frame
+    requestAnimationFrame(()=>requestAnimationFrame(()=>{
+      const fills=resultPanel.querySelectorAll('.fill');
+      if(fills[0]) fills[0].style.width=o.train+'%';
+      if(fills[1]) fills[1].style.width=o.test+'%';
+    }));
+
+    if(o.cheat) toast(tt.toastCheat);
+
+    // win condition: plan B (fair, unseen, big enough) → unlock
+    if(selected==='B' && !o.cheat && !o.unstable){
+      fairDone=true;
+      $('vFair').textContent='1 / 1';
+      setTimeout(()=>showOverlay(true),1100);
+    }
+  }
+
+  function meter(name,val,color){
+    return '<div class="meter">'+
+      '<div class="meter-h"><span class="nm">'+name+'</span><span class="pc" style="color:'+color+'">'+val+'%</span></div>'+
+      '<div class="track"><div class="fill" style="background:'+color+'"></div></div></div>';
+  }
+
+  function showOverlay(win){
+    const tt=T[lang];
+    $('ovBadge').textContent=win?tt.ovBadge:tt.ovBadge;
+    $('ovH').textContent=win?tt.title:tt.title;
+    $('ovP').textContent=win?tt.ovWin:tt.ovCheat;
+    $('ovBtn').textContent=win?tt.ovBtnNext:tt.ovBtnReplay;
+    overlay.classList.add('show');
+  }
+
+  function applyLang(){
+    const tt=T[lang];
+    $('mRole').textContent=tt.mRole;
+    $('title').textContent=tt.title;
+    $('goal').textContent=tt.goal;
+    $('routeLbl').textContent=tt.routeLbl;
+    $('hExp').textContent=tt.hExp; $('hFair').textContent=tt.hFair; $('hSamp').textContent=tt.hSamp;
+    $('briefH').textContent=tt.briefH; $('briefP').textContent=tt.briefP;
+    $('colChoose').textContent=tt.colChoose; $('colResult').textContent=tt.colResult;
+    $('runBtn').textContent=tt.run;
+    $('langBtn').textContent=tt.langBtn;
+    $('epTxt').textContent=tt.epTxt;
+    $('vFair').textContent=(fairDone?'1':'0')+' / 1';
+    document.querySelectorAll('.stop span[data-s]').forEach(s=>{
+      const i=+s.dataset.s-1; s.textContent=tt.stops[i];
+    });
+    if(!selected){
+      resultPanel.innerHTML='<div class="empty" id="resultEmpty">'+tt.resultEmpty.replace('\n','<br>')+'</div>';
+    }
+    buildCards();
+    document.documentElement.lang = lang==='cn'?'zh-CN':'en';
+  }
+
+  $('langBtn').addEventListener('click',()=>{ lang=lang==='cn'?'en':'cn'; applyLang(); });
+  runBtn.addEventListener('click',runExperiment);
+  $('ovBtn').addEventListener('click',()=>{
+    overlay.classList.remove('show');
+    if(!fairDone){ selected=null; runBtn.disabled=true; applyLang(); }
+  });
+
+  applyLang();
+})();
+</script>
+</body>
+</html>

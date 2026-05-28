@@ -1,0 +1,705 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>黎曼距离调参台 / Riemann Distance Tuner</title>
+<style>
+  :root{
+    /* deep-space base (B node) */
+    --bg-0:oklch(0.16 0.03 245);
+    --bg-1:oklch(0.21 0.04 245);
+    --bg-2:oklch(0.27 0.05 245);
+    /* math 5-color palette (themes.js MTH-06) */
+    --accent:oklch(0.72 0.17 245);   /* AXIS */
+    --proof:oklch(0.52 0.16 245);    /* PROOF */
+    --shadow:oklch(0.35 0.10 245);   /* SHADOW */
+    --solution:oklch(0.92 0.08 240); /* SOLUTION */
+    --qed:oklch(0.85 0.14 85);       /* QED gold */
+    --ink:oklch(0.92 0.04 245);
+    --ink-dim:oklch(0.70 0.04 245);
+    --ink-mute:oklch(0.52 0.03 245);
+    --left:oklch(0.75 0.16 25);      /* class LEFT — warm */
+    --right:oklch(0.72 0.15 200);    /* class RIGHT — cool */
+    --probe:var(--qed);
+    --mono:'JetBrains Mono','SF Mono','Menlo','Consolas',monospace;
+    --sans:'JetBrains Mono','SF Mono','Menlo',system-ui,sans-serif;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;height:100vh;overflow:hidden;background:var(--bg-0);color:var(--ink);
+    font-family:var(--sans);-webkit-font-smoothing:antialiased;}
+  body{display:flex;}
+  /* ---------- sidebar ---------- */
+  .game-sidebar{width:200px;flex-shrink:0;height:100vh;background:var(--bg-1);
+    border-right:1.5px solid var(--shadow);display:flex;flex-direction:column;gap:11px;padding:14px 13px;overflow:hidden;}
+  .mascot-row{display:flex;align-items:center;gap:9px;}
+  .mascot{width:34px;height:34px;flex-shrink:0;}
+  .mascot-name{font-size:11px;color:var(--ink-dim);line-height:1.3;}
+  .mascot-name b{color:var(--accent);font-size:13px;}
+  .s-title{font-size:13px;font-weight:700;color:var(--ink);line-height:1.35;}
+  .s-sub{font-size:10.5px;color:var(--ink-dim);line-height:1.5;}
+  /* roadmap */
+  .roadmap{display:flex;flex-direction:column;gap:3px;background:var(--bg-2);border:1px solid var(--shadow);
+    border-radius:6px;padding:8px 9px;}
+  .road-h{font-size:9px;letter-spacing:.12em;color:var(--ink-mute);font-family:var(--mono);margin-bottom:2px;}
+  .road-item{display:flex;align-items:center;gap:7px;font-size:10.5px;color:var(--ink-mute);font-family:var(--mono);
+    line-height:1.5;}
+  .road-dot{width:9px;height:9px;border-radius:50%;border:1.5px solid var(--ink-mute);flex-shrink:0;}
+  .road-item.done .road-dot{background:var(--proof);border-color:var(--proof);}
+  .road-item.done{color:var(--ink-dim);}
+  .road-item.here{color:var(--qed);font-weight:700;}
+  .road-item.here .road-dot{background:var(--qed);border-color:var(--qed);
+    box-shadow:0 0 0 3px color-mix(in oklch,var(--qed) 28%,transparent);}
+  /* HUD */
+  .hud{background:var(--bg-2);border:1px solid var(--shadow);border-radius:6px;padding:9px 10px;
+    display:flex;flex-direction:column;gap:6px;}
+  .hud-row{display:flex;justify-content:space-between;align-items:baseline;gap:8px;font-family:var(--mono);}
+  .hud-lbl{font-size:10px;color:var(--ink-dim);}
+  .hud-val{font-size:13px;font-weight:700;}
+  .verdict-box{margin-top:2px;text-align:center;font-family:var(--mono);font-size:11px;font-weight:700;
+    padding:4px;border-radius:4px;background:var(--bg-1);border:1px dashed var(--shadow);}
+  .langBtn{margin-top:auto;background:var(--bg-2);border:1.5px solid var(--accent);color:var(--accent);
+    font-family:var(--mono);font-size:11px;font-weight:700;padding:8px;border-radius:6px;cursor:pointer;
+    box-shadow:3px 3px 0 var(--bg-0);transition:transform .08s,box-shadow .08s;}
+  .langBtn:hover{transform:translate(-1px,-1px);box-shadow:4px 4px 0 var(--bg-0);}
+  .langBtn:active{transform:translate(1px,1px);box-shadow:1px 1px 0 var(--bg-0);}
+  /* ---------- main ---------- */
+  .game-main{flex:1;height:100vh;display:flex;flex-direction:column;padding:14px 16px;gap:10px;
+    position:relative;overflow:hidden;}
+  .main-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;}
+  .main-title{font-size:15px;font-weight:700;color:var(--ink);line-height:1.3;}
+  .main-hint{font-size:11px;color:var(--ink-dim);line-height:1.5;max-width:330px;}
+  /* mode toggle (metric the classifier uses) */
+  .metric-toggle{display:flex;gap:6px;align-items:center;}
+  .mbtn{font-family:var(--mono);font-size:10.5px;font-weight:700;padding:6px 11px;border-radius:6px;cursor:pointer;
+    border:1.5px solid var(--shadow);background:var(--bg-1);color:var(--ink-dim);transition:all .1s;}
+  .mbtn.active{background:var(--accent);border-color:var(--accent);color:var(--bg-0);}
+  .mbtn.eu.active{background:var(--ink-mute);border-color:var(--ink-mute);}
+  .stage-wrap{flex:1;min-height:0;display:flex;flex-direction:column;
+    background:var(--bg-1);border:1.5px solid var(--shadow);border-radius:10px;position:relative;overflow:hidden;}
+  #stage{flex:1;width:100%;height:100%;display:block;}
+  /* task card */
+  .task-card{position:absolute;left:14px;bottom:14px;max-width:300px;background:var(--bg-2);
+    border:1.5px solid var(--accent);border-radius:8px;padding:10px 12px;box-shadow:4px 4px 0 var(--bg-0);}
+  .task-step{font-family:var(--mono);font-size:9px;letter-spacing:.1em;color:var(--accent);margin-bottom:3px;}
+  .task-text{font-size:11.5px;color:var(--ink);line-height:1.5;}
+  .task-hint{font-size:10px;color:var(--ink-dim);margin-top:4px;line-height:1.4;}
+  /* minecraft silhouette anchor */
+  .anchor-corner{position:absolute;right:13px;bottom:11px;display:flex;align-items:center;gap:7px;
+    opacity:.62;pointer-events:none;}
+  .anchor-corner svg{display:block;}
+  .anchor-txt{font-family:var(--mono);font-size:8.5px;color:var(--ink-mute);line-height:1.3;text-align:right;}
+  /* toast */
+  #toast{position:absolute;top:14px;left:50%;transform:translateX(-50%);background:var(--bg-2);
+    border:1.5px solid var(--qed);border-radius:8px;padding:9px 16px;font-family:var(--mono);font-size:12px;
+    font-weight:700;color:var(--qed);box-shadow:4px 4px 0 var(--bg-0);display:none;z-index:30;text-align:center;
+    max-width:80%;line-height:1.5;}
+  /* win banner */
+  #winBanner{position:absolute;inset:0;background:color-mix(in oklch,var(--bg-0) 86%,transparent);
+    display:none;flex-direction:column;align-items:center;justify-content:center;gap:14px;z-index:40;padding:24px;text-align:center;}
+  #winBanner.show{display:flex;}
+  .win-medal{font-family:var(--mono);font-size:13px;letter-spacing:.1em;color:var(--qed);}
+  .win-title{font-size:24px;font-weight:800;color:var(--solution);line-height:1.25;}
+  .win-sub{font-size:13px;color:var(--ink-dim);max-width:420px;line-height:1.6;}
+  .win-anchor{font-size:12px;color:var(--accent);max-width:430px;line-height:1.6;
+    border-top:1px solid var(--shadow);padding-top:12px;margin-top:4px;}
+  .win-btn{margin-top:6px;font-family:var(--mono);font-size:12px;font-weight:700;padding:9px 18px;border-radius:7px;
+    cursor:pointer;background:var(--accent);border:1.5px solid var(--accent);color:var(--bg-0);
+    box-shadow:4px 4px 0 var(--bg-0);}
+  .win-btn:active{transform:translate(1px,1px);box-shadow:2px 2px 0 var(--bg-0);}
+</style>
+</head>
+<body>
+<aside class="game-sidebar">
+  <div class="mascot-row">
+    <svg class="mascot" viewBox="0 0 40 40" aria-hidden="true">
+      <!-- Pi: rotating tetrahedron -->
+      <polygon points="20,5 35,30 5,30" fill="none" stroke="var(--accent)" stroke-width="2"/>
+      <polygon points="20,5 35,30 20,22" fill="var(--proof)" opacity="0.55"/>
+      <polygon points="20,5 5,30 20,22" fill="var(--accent)" opacity="0.45"/>
+      <line x1="20" y1="22" x2="5" y2="30" stroke="var(--solution)" stroke-width="1.2"/>
+      <line x1="20" y1="22" x2="35" y2="30" stroke="var(--solution)" stroke-width="1.2"/>
+    </svg>
+    <div class="mascot-name"><b id="mName">Pi</b><br><span id="mRole">几何向导</span></div>
+  </div>
+  <div class="s-title" id="sTitle">黎曼距离调参台</div>
+  <div class="s-sub" id="sSub">换个几何量协方差矩阵之间的距离, 量得更准。拖测试点, 调用对的距离来分类。</div>
+
+  <div class="roadmap">
+    <div class="road-h" id="roadH">PROJECT · 脑控 MINECRAFT</div>
+    <div class="road-item done"><span class="road-dot"></span><span id="r1">S1 采脑电信号</span></div>
+    <div class="road-item done"><span class="road-dot"></span><span id="r2">S2 清洗与特征</span></div>
+    <div class="road-item here"><span class="road-dot"></span><span id="r3">S3 协方差几何分类</span></div>
+    <div class="road-item"><span class="road-dot"></span><span id="r4">S4 实时解码</span></div>
+    <div class="road-item"><span class="road-dot"></span><span id="r5">S5 控制映射</span></div>
+    <div class="road-item"><span class="road-dot"></span><span id="r6">S6 脑控通关</span></div>
+  </div>
+
+  <div class="hud">
+    <div class="hud-row"><span class="hud-lbl" id="hL">测试点到左手类 L̄</span></div>
+    <div class="hud-row" style="margin-top:-2px;">
+      <span class="hud-lbl" id="hRiemL">黎曼 d</span>
+      <span class="hud-val" id="vRiemL" style="color:var(--left);">--</span>
+    </div>
+    <div class="hud-row" style="margin-top:-2px;">
+      <span class="hud-lbl" id="hEuL">欧氏 d</span>
+      <span class="hud-val" id="vEuL" style="color:var(--ink-mute);">--</span>
+    </div>
+    <div class="hud-row" style="margin-top:4px;"><span class="hud-lbl" id="hR">测试点到右手类 R̄</span></div>
+    <div class="hud-row" style="margin-top:-2px;">
+      <span class="hud-lbl" id="hRiemR">黎曼 d</span>
+      <span class="hud-val" id="vRiemR" style="color:var(--right);">--</span>
+    </div>
+    <div class="hud-row" style="margin-top:-2px;">
+      <span class="hud-lbl" id="hEuR">欧氏 d</span>
+      <span class="hud-val" id="vEuR" style="color:var(--ink-mute);">--</span>
+    </div>
+    <div class="verdict-box" id="verdictBox">判类: --</div>
+  </div>
+
+  <button class="langBtn" id="langBtn" type="button">EN / 中</button>
+</aside>
+
+<main class="game-main">
+  <div class="main-head">
+    <div>
+      <div class="main-title" id="mainTitle">弯空间里, 直线会骗你</div>
+      <div class="main-hint" id="mainHint">协方差矩阵活在一个弯曲的流形上。拖动金色测试点, 对比两把尺子: 欧氏是穿过外面的直弦, 黎曼是贴着曲面走的弧。切换分类器用的距离, 看哪把尺子分对。</div>
+    </div>
+    <div class="metric-toggle">
+      <button class="mbtn" id="btnRiem" type="button">用黎曼</button>
+      <button class="mbtn eu active" id="btnEu" type="button">用欧氏</button>
+    </div>
+  </div>
+
+  <div class="stage-wrap">
+    <canvas id="stage"></canvas>
+    <div class="task-card">
+      <div class="task-step" id="taskStep">TASK 1 / 3</div>
+      <div class="task-text" id="taskText">把测试点拖到曲面右下的"陷阱区"。看欧氏直弦怎么误判, 再切到黎曼把它分对。</div>
+      <div class="task-hint" id="taskHint">直弦会穿过曲面外面, 把距离量短了。</div>
+    </div>
+    <div class="anchor-corner">
+      <svg width="26" height="26" viewBox="0 0 26 26" aria-hidden="true">
+        <rect x="3" y="3" width="20" height="20" fill="none" stroke="var(--ink-mute)" stroke-width="1.4"/>
+        <rect x="3" y="3" width="6.6" height="6.6" fill="var(--ink-mute)" opacity="0.5"/>
+        <rect x="16.4" y="3" width="6.6" height="6.6" fill="var(--ink-mute)" opacity="0.3"/>
+        <rect x="9.6" y="9.6" width="6.6" height="6.6" fill="var(--ink-mute)" opacity="0.45"/>
+        <rect x="3" y="16.4" width="6.6" height="6.6" fill="var(--ink-mute)" opacity="0.3"/>
+        <rect x="16.4" y="16.4" width="6.6" height="6.6" fill="var(--ink-mute)" opacity="0.5"/>
+      </svg>
+      <div class="anchor-txt" id="anchorTxt">终点<br>脑控 Minecraft</div>
+    </div>
+    <div id="toast"></div>
+    <div id="winBanner">
+      <div class="win-medal" id="winMedal">UNLOCKED · 解锁徽章</div>
+      <div class="win-title" id="winTitle">黎曼几何分类师</div>
+      <div class="win-sub" id="winSub">你用对了几何: 沿曲面量的黎曼距离把三个测试点全分对了, 而直线欧氏在弯空间里栽了跟头。</div>
+      <div class="win-anchor" id="winAnchor">黎曼几何也能提准 — 到 S3 末尾, 把它和 LDA 摆一起比比, 看哪个分类器最适合驱动你的脑控 Minecraft。</div>
+      <button class="win-btn" id="winBtn" type="button">再玩一遍 / Replay</button>
+    </div>
+  </div>
+</main>
+
+<script>
+"use strict";
+var LANG='cn';
+var I18N={
+  mName:{cn:'Pi',en:'Pi'},
+  mRole:{cn:'几何向导',en:'geometry guide'},
+  sTitle:{cn:'黎曼距离调参台',en:'Riemann Distance Tuner'},
+  sSub:{cn:'换个几何量协方差矩阵之间的距离, 量得更准。拖测试点, 调用对的距离来分类。',
+        en:'Switch geometry to measure distance between covariance matrices more accurately. Drag the probe, pick the right metric to classify.'},
+  roadH:{cn:'PROJECT · 脑控 MINECRAFT',en:'PROJECT · BRAIN-CTRL MINECRAFT'},
+  r1:{cn:'S1 采脑电信号',en:'S1 capture EEG'},
+  r2:{cn:'S2 清洗与特征',en:'S2 clean & feature'},
+  r3:{cn:'S3 协方差几何分类',en:'S3 covariance geometry'},
+  r4:{cn:'S4 实时解码',en:'S4 live decode'},
+  r5:{cn:'S5 控制映射',en:'S5 control map'},
+  r6:{cn:'S6 脑控通关',en:'S6 mind-control win'},
+  hL:{cn:'测试点到左手类 L̄',en:'probe to LEFT class L̄'},
+  hR:{cn:'测试点到右手类 R̄',en:'probe to RIGHT class R̄'},
+  hRiemL:{cn:'黎曼 d',en:'Riemann d'},
+  hEuL:{cn:'欧氏 d',en:'Euclid d'},
+  hRiemR:{cn:'黎曼 d',en:'Riemann d'},
+  hEuR:{cn:'欧氏 d',en:'Euclid d'},
+  mainTitle:{cn:'弯空间里, 直线会骗你',en:'In curved space, straight lines lie'},
+  mainHint:{cn:'协方差矩阵活在一个弯曲的流形上。拖动金色测试点, 对比两把尺子: 欧氏是穿过外面的直弦, 黎曼是贴着曲面走的弧。切换分类器用的距离, 看哪把尺子分对。',
+            en:'Covariance matrices live on a curved manifold. Drag the gold probe and compare two rulers: Euclid is a straight chord cutting outside, Riemann is an arc hugging the surface. Switch which metric the classifier uses and see which one gets it right.'},
+  btnEu:{cn:'用欧氏',en:'use Euclid'},
+  btnRiem:{cn:'用黎曼',en:'use Riemann'},
+  verdict:{cn:'判类',en:'verdict'},
+  vLeft:{cn:'左手 LEFT',en:'LEFT'},
+  vRight:{cn:'右手 RIGHT',en:'RIGHT'},
+  vTie:{cn:'难分 (太接近)',en:'too close'},
+  anchorTxt:{cn:'终点<br>脑控 Minecraft',en:'goal<br>brain-ctrl Minecraft'},
+  winMedal:{cn:'UNLOCKED · 解锁徽章',en:'UNLOCKED · BADGE'},
+  winTitle:{cn:'黎曼几何分类师',en:'Riemannian Geometry Classifier'},
+  winSub:{cn:'你用对了几何: 沿曲面量的黎曼距离把三个测试点全分对了, 而直线欧氏在弯空间里栽了跟头。',
+          en:'You used the right geometry: Riemann distance along the surface classified all three probes correctly, while straight-line Euclid stumbled in curved space.'},
+  winAnchor:{cn:'黎曼几何也能提准 — 到 S3 末尾, 把它和 LDA 摆一起比比, 看哪个分类器最适合驱动你的脑控 Minecraft。',
+             en:'Riemann geometry boosts accuracy too — at the end of S3, line it up against LDA and compare which classifier best drives your brain-controlled Minecraft.'},
+  winBtn:{cn:'再玩一遍 / Replay',en:'Replay / 再玩'},
+  probeLabel:{cn:'测试点 (拖我)',en:'probe (drag me)'},
+  euChord:{cn:'欧氏直弦',en:'Euclid chord'},
+  riemArc:{cn:'黎曼弧',en:'Riemann arc'},
+  tasks:{
+    cn:[
+      {step:'TASK 1 / 3',text:'把测试点拖到山脊左侧的陷阱区。这一格真属于左手类, 但直线穿过山脊外面, 看着离右手类更近。',hint:'先用欧氏 -> 会判错; 切到黎曼 -> 判对, 即通过。',zone:'trapMid',truth:'left'},
+      {step:'TASK 2 / 3',text:'再拖到山脊上方的陷阱区。同样紧贴左手谷, 可直弦还是被山脊骗向右手类。',hint:'欧氏判错, 切黎曼让弧线绕回左手谷才通过。',zone:'trapTop',truth:'left'},
+      {step:'TASK 3 / 3',text:'最后拖到山脊下方的陷阱区。这是个高山脊: 沿曲面的黎曼弧要绕远才能到右手, 所以它稳稳判左手。',hint:'用黎曼把它分到左手 LEFT 即通过, 收下徽章。',zone:'trapBot',truth:'left'}
+    ],
+    en:[
+      {step:'TASK 1 / 3',text:'Drag the probe to the trap zone left of the ridge. This cell truly belongs to LEFT, but the chord cuts outside the ridge and looks closer to RIGHT.',hint:'Euclid -> wrong; switch to Riemann -> correct to pass.',zone:'trapMid',truth:'left'},
+      {step:'TASK 2 / 3',text:'Now the upper trap zone. Still hugging the LEFT valley, yet the straight chord is again fooled toward RIGHT.',hint:'Euclid wrong; switch to Riemann so the arc loops back into the LEFT valley to pass.',zone:'trapTop',truth:'left'},
+      {step:'TASK 3 / 3',text:'Finally the lower trap zone. A tall ridge: the Riemann arc must detour far to reach RIGHT, so it firmly says LEFT.',hint:'Use Riemann to classify it LEFT to pass and claim the badge.',zone:'trapBot',truth:'left'}
+    ]
+  },
+  passToast:{cn:'用黎曼分对了! 直弦栽进了弯空间, 弧线才量得准。',en:'Riemann got it right! The chord fell into curved space; only the arc measures true.'},
+  euWrongToast:{cn:'欧氏判错了 — 直弦穿过曲面外, 距离量短了。切到黎曼试试。',en:'Euclid is wrong — the chord cuts outside, shortening distance. Try Riemann.'},
+  needDrag:{cn:'先把测试点拖进高亮陷阱区。',en:'Drag the probe into the highlighted trap zone first.'}
+};
+function t(k){var e=I18N[k];return (e&&e[LANG])||(e&&e.en)||k;}
+
+/* ---------------- geometry model ----------------
+   We model the SPD manifold as a curved (bowl) surface in 2D screen space.
+   A "height" field h(x,y) gives the manifold's bulge. Euclidean distance is the
+   flat straight-line chord on screen; Riemannian distance is the arc length along
+   the curved surface (chord projected onto the bulge), so it is always >= Euclid
+   and grows much faster when the path crosses the curved ridge.
+------------------------------------------------------------------ */
+var canvas=document.getElementById('stage'), ctx=canvas.getContext('2d');
+var W=0,H=0,DPR=1;
+var probe={x:0,y:0,init:false};
+var dragging=false;
+var metric='eu';            // classifier metric in use: 'eu' | 'riem'
+var taskIdx=0;
+var passedFirstWrong=false; // did Euclid produce a wrong verdict this task?
+
+// class centers (in normalized 0..1 of the manifold box).
+// A tall curved RIDGE WALL runs down the middle (near nx=0.50). The two class
+// valleys sit on opposite sides. A point just on one side can be Euclidean-near
+// the *other* center (chord ignores the wall) yet geodesically far (arc must
+// climb the wall) — that is exactly where Euclid misclassifies and Riemann wins.
+var leftN={x:0.18,y:0.50};   // LEFT valley (far left of wall)
+var rightN={x:0.82,y:0.50};  // RIGHT valley (far right of wall)
+
+function geom(){
+  var pad=40;
+  var bx=pad, by=pad+8, bw=W-pad*2, bh=H-pad*2-8;
+  return {bx:bx,by:by,bw:bw,bh:bh};
+}
+function nToScreen(n){var g=geom();return {x:g.bx+n.x*g.bw, y:g.by+n.y*g.bh};}
+function screenToN(p){var g=geom();return {x:(p.x-g.bx)/g.bw, y:(p.y-g.by)/g.bh};}
+
+// height of the manifold bulge at normalized (nx,ny). A ridge runs diagonally;
+// the bowl rises toward a curved spine, so paths crossing it stretch a lot.
+var WALL_NX=0.595;   // wall slightly toward RIGHT so left-of-wall probes can be
+                     // Euclidean-nearer to RIGHT yet geodesically nearer to LEFT.
+function manifoldH(nx,ny){
+  // Tall, narrow curved ridge wall. Thin barrier; flat valleys on either side.
+  var wall = Math.exp(-Math.pow((nx-WALL_NX)/0.075, 2));
+  return 260 * wall;
+}
+
+// Euclidean (flat chord) screen distance between two screen points.
+function euDist(a,b){var dx=a.x-b.x,dy=a.y-b.y;return Math.sqrt(dx*dx+dy*dy);}
+
+// Riemannian (geodesic along surface): integrate arc length over the height field.
+function riemDist(aScr,bScr){
+  var a=screenToN(aScr), b=screenToN(bScr);
+  var N=24, prev=null, total=0;
+  for(var i=0;i<=N;i++){
+    var s=i/N;
+    var nx=a.x+(b.x-a.x)*s, ny=a.y+(b.y-a.y)*s;
+    var sp=nToScreen({x:nx,y:ny});
+    var z=manifoldH(nx,ny);
+    var cur={x:sp.x,y:sp.y,z:z};
+    if(prev){
+      var dx=cur.x-prev.x, dy=cur.y-prev.y, dz=cur.z-prev.z;
+      total+=Math.sqrt(dx*dx+dy*dy+dz*dz);  // 3D arc length = path over the bulge
+    }
+    prev=cur;
+  }
+  return total;
+}
+
+function verdictFor(metricKey){
+  var lc=nToScreen(leftN), rc=nToScreen(rightN);
+  var dL,dR;
+  if(metricKey==='eu'){dL=euDist(probe,lc);dR=euDist(probe,rc);}
+  else{dL=riemDist(probe,lc);dR=riemDist(probe,rc);}
+  var diff=Math.abs(dL-dR);
+  var rel=diff/Math.max(dL,dR);
+  var v= rel<0.04 ? 'tie' : (dL<dR?'left':'right');
+  return {dL:dL,dR:dR,v:v};
+}
+
+// trap zone definitions (normalized targets) per task
+// All three trap zones sit just LEFT of the ridge wall (nx~0.52). There a probe
+// is Euclidean-nearer to RIGHT (chord ignores the wall) yet truly belongs to LEFT
+// (geodesic stays in the left valley). Verified: eu=right(wrong), riem=left(correct).
+var ZONES={
+  trapMid:{cx:0.525,cy:0.50,r:0.085},
+  trapTop:{cx:0.515,cy:0.24,r:0.085},
+  trapBot:{cx:0.515,cy:0.76,r:0.085}
+};
+function curTask(){return I18N.tasks[LANG][taskIdx];}
+function inZone(){
+  var z=ZONES[curTask().zone];
+  var n=screenToN(probe);
+  var dx=n.x-z.cx, dy=n.y-z.cy;
+  return Math.sqrt(dx*dx+dy*dy)<=z.r;
+}
+
+/* ---------------- rendering ---------------- */
+function resize(){
+  var wrap=canvas.parentElement.getBoundingClientRect();
+  if(wrap.width<2||wrap.height<2)return;
+  DPR=window.devicePixelRatio||1;
+  canvas.width=wrap.width*DPR; canvas.height=wrap.height*DPR;
+  canvas.style.width=wrap.width+'px'; canvas.style.height=wrap.height+'px';
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  W=wrap.width; H=wrap.height;
+  if(!probe.init){var z=ZONES[curTask().zone];var sp=nToScreen({x:z.cx-0.18,y:z.cy-0.18});probe.x=sp.x;probe.y=sp.y;probe.init=true;}
+  draw();
+}
+window.addEventListener('resize',resize);
+
+function css(v){return getComputedStyle(document.documentElement).getPropertyValue(v).trim();}
+
+function drawManifold(){
+  var g=geom();
+  // contour mesh of the curved manifold (warped grid)
+  var cols=14, rows=11;
+  ctx.lineWidth=1;
+  // horizontal warped lines
+  for(var r=0;r<=rows;r++){
+    ctx.beginPath();
+    for(var c=0;c<=cols;c++){
+      var nx=c/cols, ny=r/rows;
+      var sp=nToScreen({x:nx,y:ny});
+      var z=manifoldH(nx,ny);
+      var y=sp.y - z*0.55;          // lift by height -> visible bulge
+      if(c===0)ctx.moveTo(sp.x,y);else ctx.lineTo(sp.x,y);
+    }
+    var a=0.10+0.10*(1-r/rows);
+    ctx.strokeStyle='rgba(140,170,255,'+a.toFixed(3)+')';
+    ctx.stroke();
+  }
+  for(var c2=0;c2<=cols;c2++){
+    ctx.beginPath();
+    for(var r2=0;r2<=rows;r2++){
+      var nx2=c2/cols, ny2=r2/rows;
+      var sp2=nToScreen({x:nx2,y:ny2});
+      var z2=manifoldH(nx2,ny2);
+      var y2=sp2.y - z2*0.55;
+      if(r2===0)ctx.moveTo(sp2.x,y2);else ctx.lineTo(sp2.x,y2);
+    }
+    ctx.strokeStyle='rgba(140,170,255,0.10)';
+    ctx.stroke();
+  }
+}
+
+function liftY(scr){var n=screenToN(scr);return scr.y - manifoldH(n.x,n.y)*0.55;}
+
+function drawZone(){
+  var z=ZONES[curTask().zone];
+  var sp=nToScreen({x:z.cx,y:z.cy});
+  var rr=z.r*geom().bw;
+  var y=sp.y - manifoldH(z.cx,z.cy)*0.55;
+  ctx.save();
+  ctx.setLineDash([6,5]);
+  ctx.strokeStyle=css('--qed');
+  ctx.lineWidth=1.6;
+  ctx.beginPath();ctx.arc(sp.x,y,rr,0,Math.PI*2);ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle='color-mix(in oklch,'+css('--qed')+' 9%, transparent)';
+  ctx.fill();
+  ctx.fillStyle=css('--qed');
+  ctx.font='700 10px '+css('--mono');
+  ctx.textAlign='center';
+  ctx.fillText(LANG==='cn'?'陷阱区 · 拖到这':'trap zone · drag here', sp.x, y-rr-6);
+  ctx.restore();
+}
+
+function drawCenter(n,color,label){
+  var sp=nToScreen(n);
+  var y=sp.y - manifoldH(n.x,n.y)*0.55;
+  ctx.fillStyle=color;ctx.strokeStyle=css('--bg-0');ctx.lineWidth=2;
+  ctx.beginPath();ctx.arc(sp.x,y,12,0,Math.PI*2);ctx.fill();ctx.stroke();
+  ctx.fillStyle=css('--bg-0');ctx.font='800 11px '+css('--mono');
+  ctx.textAlign='center';ctx.textBaseline='middle';
+  ctx.fillText(label,sp.x,y);
+  ctx.textBaseline='alphabetic';
+  return {x:sp.x,y:y,flat:sp};
+}
+
+// cluster of small dots around a center
+function drawCluster(n,color){
+  ctx.fillStyle=color;ctx.globalAlpha=0.55;
+  for(var i=0;i<9;i++){
+    var ang=i*0.7+0.2, rad=0.05+0.02*(i%3);
+    var nx=n.x+Math.cos(ang)*rad, ny=n.y+Math.sin(ang)*rad;
+    var sp=nToScreen({x:nx,y:ny});
+    var y=sp.y-manifoldH(nx,ny)*0.55;
+    ctx.beginPath();ctx.arc(sp.x,y,3,0,Math.PI*2);ctx.fill();
+  }
+  ctx.globalAlpha=1;
+}
+
+// draw a distance path: euclid = straight chord (flat); riem = arc following surface
+function drawPath(target,color,isRiem,dashed){
+  ctx.strokeStyle=color;ctx.lineWidth= isRiem?2.4:1.8;
+  if(dashed){ctx.setLineDash([6,4]);}else{ctx.setLineDash([]);}
+  ctx.beginPath();
+  var pStart={x:probe.x,y:liftY(probe)};
+  if(!isRiem){
+    // straight chord drawn flat between lifted endpoints (ignores surface -> dips through)
+    ctx.moveTo(pStart.x,pStart.y);
+    ctx.lineTo(target.x,target.y);
+  }else{
+    var N=22;var a=screenToN(probe);var b=screenToN({x:target.flat.x,y:target.flat.y});
+    for(var i=0;i<=N;i++){
+      var s=i/N;
+      var nx=a.x+(b.x-a.x)*s, ny=a.y+(b.y-a.y)*s;
+      var sp=nToScreen({x:nx,y:ny});
+      var y=sp.y-manifoldH(nx,ny)*0.55;
+      if(i===0)ctx.moveTo(sp.x,y);else ctx.lineTo(sp.x,y);
+    }
+  }
+  ctx.stroke();
+  ctx.setLineDash([]);
+}
+
+function draw(){
+  if(W===0)return;
+  ctx.clearRect(0,0,W,H);
+  // background
+  ctx.fillStyle=css('--bg-1');ctx.fillRect(0,0,W,H);
+  drawManifold();
+  drawZone();
+
+  drawCluster(leftN,css('--left'));
+  drawCluster(rightN,css('--right'));
+
+  var probeLift={x:probe.x,y:liftY(probe)};
+  var lc=drawCenter(leftN,css('--left'),'L');
+  var rc=drawCenter(rightN,css('--right'),'R');
+
+  // paths: show BOTH metrics so the contrast is visible; the ACTIVE metric is bold.
+  var euActive=metric==='eu', riemActive=metric==='riem';
+  // Euclid chords (straight) — drawn faded if not active
+  ctx.globalAlpha=euActive?1:0.4;
+  drawPath(lc,css('--ink-mute'),false,true);
+  drawPath(rc,css('--ink-mute'),false,true);
+  ctx.globalAlpha=1;
+  // Riemann arcs (along surface)
+  ctx.globalAlpha=riemActive?1:0.4;
+  drawPath(lc,css('--left'),true,false);
+  drawPath(rc,css('--right'),true,false);
+  ctx.globalAlpha=1;
+
+  // distance numbers near midpoints
+  var vEu=verdictFor('eu'), vRi=verdictFor('riem');
+  ctx.font='700 11px '+css('--mono');ctx.textAlign='center';
+  ctx.fillStyle=css('--left');
+  ctx.fillText(vRi.dL.toFixed(0),(probeLift.x+lc.x)/2,(probeLift.y+lc.y)/2-6);
+  ctx.fillStyle=css('--right');
+  ctx.fillText(vRi.dR.toFixed(0),(probeLift.x+rc.x)/2,(probeLift.y+rc.y)/2-6);
+
+  // probe
+  ctx.fillStyle=css('--probe');ctx.strokeStyle=css('--bg-0');ctx.lineWidth=2.4;
+  ctx.beginPath();ctx.arc(probeLift.x,probeLift.y,12,0,Math.PI*2);ctx.fill();ctx.stroke();
+  ctx.fillStyle=css('--bg-0');ctx.font='800 13px '+css('--mono');
+  ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText('?',probeLift.x,probeLift.y);
+  ctx.textBaseline='alphabetic';
+  ctx.fillStyle=css('--probe');ctx.font='700 10px '+css('--mono');
+  ctx.fillText(t('probeLabel'),probeLift.x,probeLift.y-18);
+
+  // active-metric banner (top strip) — clear visual state change on toggle
+  var bannerCol = metric==='riem' ? css('--solution') : css('--ink-mute');
+  ctx.fillStyle = bannerCol;
+  ctx.globalAlpha=0.16;
+  ctx.fillRect(0,0,W,30);
+  ctx.globalAlpha=1;
+  ctx.fillStyle=bannerCol;
+  ctx.font='700 12px '+css('--mono');ctx.textAlign='left';
+  ctx.fillText((LANG==='cn'?'分类器尺子: ':'classifier ruler: ')+(metric==='riem'?t('riemArc'):t('euChord')), 14, 20);
+
+  // legend top-right inside canvas
+  ctx.textAlign='left';ctx.font='600 10px '+css('--mono');
+  ctx.strokeStyle=css('--ink-mute');ctx.setLineDash([6,4]);ctx.lineWidth=1.6;
+  ctx.beginPath();ctx.moveTo(W-150,46);ctx.lineTo(W-128,46);ctx.stroke();ctx.setLineDash([]);
+  ctx.fillStyle=css('--ink-mute');ctx.fillText(t('euChord'),W-122,49);
+  ctx.strokeStyle=css('--solution');ctx.lineWidth=2.4;
+  ctx.beginPath();ctx.moveTo(W-150,62);ctx.lineTo(W-128,62);ctx.stroke();
+  ctx.fillStyle=css('--solution');ctx.fillText(t('riemArc'),W-122,65);
+
+  updateHUD(vEu,vRi);
+}
+
+function updateHUD(vEu,vRi){
+  document.getElementById('vRiemL').textContent=vRi.dL.toFixed(0);
+  document.getElementById('vRiemR').textContent=vRi.dR.toFixed(0);
+  document.getElementById('vEuL').textContent=vEu.dL.toFixed(0);
+  document.getElementById('vEuR').textContent=vEu.dR.toFixed(0);
+  var active=metric==='eu'?vEu:vRi;
+  var box=document.getElementById('verdictBox');
+  var vtxt= active.v==='tie'?t('vTie'):(active.v==='left'?t('vLeft'):t('vRight'));
+  box.textContent=t('verdict')+': '+vtxt+(metric==='eu'?'  ['+t('btnEu')+']':'  ['+t('btnRiem')+']');
+  var col= active.v==='tie'?css('--ink-dim'):(active.v==='left'?css('--left'):css('--right'));
+  box.style.color=col;
+  box.style.borderColor=col;
+}
+
+/* ---------------- interaction ---------------- */
+function pointerToCanvas(clientX,clientY){
+  var rect=canvas.getBoundingClientRect();
+  return {x:clientX-rect.left, y:clientY-rect.top};
+}
+function nearProbe(p){
+  var lift={x:probe.x,y:liftY(probe)};
+  return Math.abs(p.x-lift.x)<24 && Math.abs(p.y-lift.y)<24;
+}
+canvas.addEventListener('mousedown',function(e){
+  var p=pointerToCanvas(e.clientX,e.clientY);
+  if(nearProbe(p))dragging=true;
+});
+canvas.addEventListener('mousemove',function(e){
+  if(!dragging)return;
+  var p=pointerToCanvas(e.clientX,e.clientY);
+  probe.x=p.x;probe.y=p.y;clampProbe();draw();evaluate();
+});
+window.addEventListener('mouseup',function(){dragging=false;});
+canvas.addEventListener('touchstart',function(e){
+  if(!e.touches[0])return;
+  var p=pointerToCanvas(e.touches[0].clientX,e.touches[0].clientY);
+  if(nearProbe(p)){dragging=true;e.preventDefault();}
+},{passive:false});
+canvas.addEventListener('touchmove',function(e){
+  if(!dragging||!e.touches[0])return;e.preventDefault();
+  var p=pointerToCanvas(e.touches[0].clientX,e.touches[0].clientY);
+  probe.x=p.x;probe.y=p.y;clampProbe();draw();evaluate();
+},{passive:false});
+canvas.addEventListener('touchend',function(){dragging=false;});
+
+function clampProbe(){
+  var g=geom();
+  probe.x=Math.max(g.bx+6,Math.min(g.bx+g.bw-6,probe.x));
+  probe.y=Math.max(g.by+6,Math.min(g.by+g.bh-6,probe.y));
+}
+
+var solved=[false,false,false];
+function evaluate(){
+  if(taskIdx>=3)return;
+  var task=curTask();
+  if(!inZone())return;
+  var vEu=verdictFor('eu'), vRi=verdictFor('riem');
+  // detect that Euclid produces the WRONG verdict here (the trap)
+  if(vEu.v!==task.truth && vEu.v!=='tie') passedFirstWrong=true;
+  // pass condition: currently using Riemann AND Riemann verdict == truth
+  if(metric==='riem' && vRi.v===task.truth){
+    if(!solved[taskIdx]){
+      solved[taskIdx]=true;
+      showToast(t('passToast'),true);
+      taskIdx++;
+      if(taskIdx>=3){ setTimeout(winGame,900); }
+      else{ setTimeout(loadTask,1100); }
+    }
+  } else if(metric==='eu' && vEu.v!==task.truth && vEu.v!=='tie'){
+    // nudge: euclid is wrong here
+    showToast(t('euWrongToast'),false);
+  }
+}
+
+var toastTimer=null;
+function showToast(msg,gold){
+  var el=document.getElementById('toast');
+  el.textContent=msg;
+  el.style.display='block';
+  el.style.borderColor=gold?css('--qed'):css('--accent');
+  el.style.color=gold?css('--qed'):css('--accent');
+  clearTimeout(toastTimer);
+  toastTimer=setTimeout(function(){el.style.display='none';},2200);
+}
+
+function loadTask(){
+  passedFirstWrong=false;
+  var z=ZONES[curTask().zone];
+  // place probe just outside the zone so the player must drag it in
+  var sp=nToScreen({x:Math.max(0.06,z.cx-0.22), y:Math.max(0.06,z.cy-0.22)});
+  probe.x=sp.x;probe.y=sp.y;clampProbe();
+  refreshTaskCard();draw();
+}
+function refreshTaskCard(){
+  var task=curTask();
+  document.getElementById('taskStep').textContent=task.step;
+  document.getElementById('taskText').textContent=task.text;
+  document.getElementById('taskHint').textContent=task.hint;
+}
+
+function winGame(){document.getElementById('winBanner').classList.add('show');}
+
+/* ---------------- buttons ---------------- */
+document.getElementById('btnEu').addEventListener('click',function(){
+  metric='eu';this.classList.add('active');document.getElementById('btnRiem').classList.remove('active');
+  draw();evaluate();
+});
+document.getElementById('btnRiem').addEventListener('click',function(){
+  metric='riem';this.classList.add('active');document.getElementById('btnEu').classList.remove('active');
+  draw();evaluate();
+});
+document.getElementById('winBtn').addEventListener('click',function(){
+  taskIdx=0;solved=[false,false,false];metric='eu';
+  document.getElementById('btnEu').classList.add('active');
+  document.getElementById('btnRiem').classList.remove('active');
+  document.getElementById('winBanner').classList.remove('show');
+  loadTask();
+});
+document.getElementById('langBtn').addEventListener('click',function(){
+  LANG=LANG==='cn'?'en':'cn';
+  this.textContent=LANG==='cn'?'EN / 中':'中 / EN';
+  refreshI18N();draw();
+});
+
+function refreshI18N(){
+  document.getElementById('mName').textContent=t('mName');
+  document.getElementById('mRole').textContent=t('mRole');
+  document.getElementById('sTitle').textContent=t('sTitle');
+  document.getElementById('sSub').textContent=t('sSub');
+  document.getElementById('roadH').textContent=t('roadH');
+  document.getElementById('r1').textContent=t('r1');
+  document.getElementById('r2').textContent=t('r2');
+  document.getElementById('r3').textContent=t('r3');
+  document.getElementById('r4').textContent=t('r4');
+  document.getElementById('r5').textContent=t('r5');
+  document.getElementById('r6').textContent=t('r6');
+  document.getElementById('hL').textContent=t('hL');
+  document.getElementById('hR').textContent=t('hR');
+  document.getElementById('hRiemL').textContent=t('hRiemL');
+  document.getElementById('hEuL').textContent=t('hEuL');
+  document.getElementById('hRiemR').textContent=t('hRiemR');
+  document.getElementById('hEuR').textContent=t('hEuR');
+  document.getElementById('mainTitle').textContent=t('mainTitle');
+  document.getElementById('mainHint').textContent=t('mainHint');
+  document.getElementById('btnEu').textContent=t('btnEu');
+  document.getElementById('btnRiem').textContent=t('btnRiem');
+  document.getElementById('anchorTxt').innerHTML=t('anchorTxt');
+  document.getElementById('winMedal').textContent=t('winMedal');
+  document.getElementById('winTitle').textContent=t('winTitle');
+  document.getElementById('winSub').textContent=t('winSub');
+  document.getElementById('winAnchor').textContent=t('winAnchor');
+  document.getElementById('winBtn').textContent=t('winBtn');
+  refreshTaskCard();
+}
+
+/* ---------------- boot ---------------- */
+refreshI18N();
+resize();
+setTimeout(resize,200);
+setTimeout(resize,600);
+if(document.fonts&&document.fonts.ready){document.fonts.ready.then(resize);}
+</script>
+</body>
+</html>

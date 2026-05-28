@@ -1,0 +1,590 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Cross-Subject Collapse Detective</title>
+<style>
+:root{
+  --bg-0:oklch(0.18 0.03 220);
+  --bg-1:oklch(0.23 0.04 215);
+  --panel:oklch(0.26 0.04 215);
+  --cs-signal:oklch(0.75 0.17 200);
+  --cs-core:oklch(0.55 0.16 200);
+  --cs-depth:oklch(0.35 0.10 210);
+  --cs-flash:oklch(0.92 0.08 190);
+  --cs-query:oklch(0.85 0.14 85);
+  --ink:oklch(0.92 0.02 220);
+  --ink-dim:oklch(0.66 0.03 220);
+  --line:oklch(0.40 0.04 215);
+  --good:oklch(0.78 0.16 150);
+  --bad:oklch(0.68 0.20 25);
+  --mono:'JetBrains Mono','SFMono-Regular',Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:100%;height:100vh;overflow:hidden;background:var(--bg-0);color:var(--ink);font-family:var(--mono)}
+.app{display:flex;height:100vh;width:100%}
+
+/* ---- sidebar ---- */
+.game-sidebar{width:200px;flex-shrink:0;background:var(--bg-1);border-right:1px solid var(--line);display:flex;flex-direction:column;padding:14px 12px;gap:12px}
+.brand{display:flex;align-items:center;gap:9px}
+.mascot{width:30px;height:30px;flex-shrink:0;position:relative}
+.mascot .cube{position:absolute;width:9px;height:9px;background:var(--cs-signal);box-shadow:2px 2px 0 var(--bg-0)}
+.brand .bname{font-size:13px;font-weight:700;color:var(--cs-flash);letter-spacing:1px}
+.brand .btag{font-size:8px;color:var(--ink-dim);margin-top:1px}
+.sec-label{font-size:8px;letter-spacing:2px;color:var(--cs-core);text-transform:uppercase;margin-bottom:2px}
+
+.route{display:flex;flex-direction:column;gap:0}
+.route .stop{display:flex;align-items:center;gap:8px;padding:4px 0;position:relative}
+.route .dot{width:11px;height:11px;flex-shrink:0;border:2px solid var(--line);background:var(--bg-0)}
+.route .stop.done .dot{background:var(--cs-core);border-color:var(--cs-core)}
+.route .stop.here .dot{background:var(--cs-signal);border-color:var(--cs-flash);box-shadow:0 0 0 3px oklch(0.75 0.17 200 / 0.25)}
+.route .seg{position:absolute;left:5px;top:18px;width:2px;height:14px;background:var(--line)}
+.route .stop.done .seg{background:var(--cs-core)}
+.route .rtext{font-size:9px;color:var(--ink-dim);line-height:1.2}
+.route .stop.here .rtext{color:var(--cs-flash);font-weight:700}
+.route .stop.done .rtext{color:var(--cs-core)}
+
+.prog{display:flex;flex-direction:column;gap:5px}
+.prog .pcell{display:flex;align-items:center;gap:7px;font-size:10px;color:var(--ink-dim)}
+.prog .pmark{width:12px;height:12px;border:1px solid var(--line);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:8px}
+.prog .pcell.solved .pmark{background:var(--good);border-color:var(--good);color:var(--bg-0)}
+.prog .pcell.solved{color:var(--ink)}
+.prog .pcell.cur .pmark{border-color:var(--cs-signal);background:oklch(0.75 0.17 200 / 0.2)}
+.prog .pcell.cur{color:var(--cs-flash)}
+.prog .pcell.miss .pmark{background:var(--bad);border-color:var(--bad);color:var(--bg-0)}
+
+.mc{margin-top:auto;display:flex;flex-direction:column;gap:6px}
+.mc-art{display:flex;align-items:flex-end;gap:2px;height:26px}
+.mc-art i{display:block;width:5px;background:var(--cs-depth);border-top:2px solid var(--cs-core)}
+.mc-cap{font-size:8px;color:var(--ink-dim);line-height:1.3}
+#langBtn{font-family:var(--mono);font-size:11px;font-weight:700;padding:6px;cursor:pointer;border:1px solid var(--line);background:var(--bg-0);color:var(--cs-flash);letter-spacing:1px}
+#langBtn:hover{background:var(--cs-depth)}
+
+/* ---- main ---- */
+.game-main{flex:1;min-width:0;display:flex;flex-direction:column;padding:14px 18px;gap:10px;overflow:hidden}
+.hdr{flex-shrink:0}
+.hdr h1{font-size:15px;color:var(--cs-flash);letter-spacing:1px}
+.hdr .sub{font-size:10px;color:var(--ink-dim);margin-top:3px;line-height:1.5;max-width:760px}
+
+.case{flex:1;min-height:0;display:flex;flex-direction:column;gap:10px;overflow-y:auto;padding-right:4px}
+.casecard{background:var(--bg-1);border:1px solid var(--line);padding:10px 12px}
+.casecard h2{font-size:11px;color:var(--cs-signal);letter-spacing:1px;margin-bottom:6px;display:flex;justify-content:space-between;align-items:baseline}
+.casecard h2 .badge{font-size:9px;color:var(--cs-query)}
+.brief{font-size:11px;line-height:1.6;color:var(--ink)}
+.brief b{color:var(--cs-flash)}
+
+/* accuracy table */
+.acctable{width:100%;border-collapse:collapse;font-size:10px;margin-top:4px}
+.acctable th{text-align:left;color:var(--cs-core);font-weight:700;padding:4px 6px;border-bottom:1px solid var(--line);font-size:9px;letter-spacing:1px}
+.acctable td{padding:5px 6px;border-bottom:1px solid var(--bg-0);color:var(--ink)}
+.acctable tr.you td{color:var(--cs-flash);background:oklch(0.75 0.17 200 / 0.08)}
+.bar{display:inline-block;height:9px;background:var(--cs-core);vertical-align:middle;margin-right:6px}
+.bar.low{background:var(--bad)}
+.bar.hi{background:var(--good)}
+
+/* evidence chips */
+.evgrid{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px}
+.evchip{flex:1;min-width:150px;background:var(--bg-0);border:1px solid var(--line);padding:7px 9px}
+.evchip .et{font-size:8px;letter-spacing:1px;color:var(--cs-query);text-transform:uppercase}
+.evchip .ev{font-size:13px;color:var(--cs-flash);margin-top:2px}
+.evchip .en{font-size:8px;color:var(--ink-dim);margin-top:1px}
+
+/* suspects */
+.suspects{display:flex;flex-direction:column;gap:7px;margin-top:4px}
+.suspect{display:flex;align-items:flex-start;gap:10px;background:var(--bg-0);border:1px solid var(--line);padding:9px 11px;cursor:pointer;transition:border-color .12s,background .12s}
+.suspect:hover{border-color:var(--cs-core)}
+.suspect .sicon{width:14px;height:14px;border:1px solid var(--cs-core);flex-shrink:0;margin-top:1px}
+.suspect .stitle{font-size:11px;color:var(--cs-flash);font-weight:700}
+.suspect .sdesc{font-size:10px;color:var(--ink-dim);margin-top:2px;line-height:1.5}
+.suspect.picked{border-color:var(--cs-signal);background:oklch(0.75 0.17 200 / 0.1)}
+.suspect.picked .sicon{background:var(--cs-signal);border-color:var(--cs-signal)}
+.suspect.right{border-color:var(--good);background:oklch(0.78 0.16 150 / 0.1)}
+.suspect.right .sicon{background:var(--good);border-color:var(--good)}
+.suspect.wrong{border-color:var(--bad);background:oklch(0.68 0.20 25 / 0.1)}
+.suspect.wrong .sicon{background:var(--bad);border-color:var(--bad)}
+.suspect.locked{pointer-events:none;opacity:.92}
+
+.verdict{display:none;background:var(--panel);border:1px solid var(--cs-core);padding:10px 12px}
+.verdict.show{display:block}
+.verdict.fail{border-color:var(--bad)}
+.verdict h3{font-size:11px;letter-spacing:1px;color:var(--cs-flash);margin-bottom:5px}
+.verdict.fail h3{color:var(--bad)}
+.verdict p{font-size:10px;line-height:1.6;color:var(--ink)}
+
+.actions{flex-shrink:0;display:flex;gap:8px;align-items:center}
+.actions button{font-family:var(--mono);font-size:11px;font-weight:700;padding:8px 16px;cursor:pointer;border:1px solid var(--line);background:var(--bg-1);color:var(--cs-flash);letter-spacing:1px}
+.actions button:hover:not(:disabled){background:var(--cs-depth)}
+.actions button:disabled{opacity:.4;cursor:not-allowed}
+.actions button.primary{border-color:var(--cs-signal);background:oklch(0.75 0.17 200 / 0.18)}
+.hud{margin-left:auto;display:flex;gap:16px;font-size:10px}
+.hud .h{display:flex;flex-direction:column;align-items:flex-end}
+.hud .h .l{font-size:8px;letter-spacing:1px;color:var(--ink-dim)}
+.hud .h .v{font-size:13px;color:var(--cs-flash);font-weight:700}
+
+/* unlock overlay */
+.unlock{position:fixed;inset:0;background:oklch(0.18 0.03 220 / 0.94);display:none;align-items:center;justify-content:center;z-index:50}
+.unlock.show{display:flex}
+.unlock .box{max-width:440px;background:var(--bg-1);border:1px solid var(--cs-signal);padding:24px 26px;text-align:center}
+.unlock .ttl{font-size:9px;letter-spacing:3px;color:var(--cs-query)}
+.unlock .big{font-size:18px;color:var(--cs-flash);margin:8px 0 12px;letter-spacing:1px}
+.unlock p{font-size:11px;line-height:1.7;color:var(--ink);text-align:left}
+.unlock p b{color:var(--cs-signal)}
+.unlock .next{margin-top:14px;font-size:10px;color:var(--cs-query);border:1px dashed var(--cs-core);padding:8px 10px;line-height:1.6}
+.unlock button{margin-top:16px;font-family:var(--mono);font-size:11px;font-weight:700;padding:8px 18px;cursor:pointer;border:1px solid var(--cs-signal);background:oklch(0.75 0.17 200 / 0.18);color:var(--cs-flash);letter-spacing:1px}
+</style>
+</head>
+<body>
+<div class="app">
+  <!-- ====== SIDEBAR ====== -->
+  <aside class="game-sidebar">
+    <div class="brand">
+      <div class="mascot" id="mascot"></div>
+      <div>
+        <div class="bname">BIT</div>
+        <div class="btag" id="brandTag"></div>
+      </div>
+    </div>
+
+    <div>
+      <div class="sec-label" id="routeLabel"></div>
+      <div class="route" id="route"></div>
+    </div>
+
+    <div>
+      <div class="sec-label" id="progLabel"></div>
+      <div class="prog" id="prog"></div>
+    </div>
+
+    <div class="mc">
+      <div class="mc-art" id="mcArt"></div>
+      <div class="mc-cap" id="mcCap"></div>
+      <button id="langBtn">CN</button>
+    </div>
+  </aside>
+
+  <!-- ====== MAIN ====== -->
+  <main class="game-main">
+    <div class="hdr">
+      <h1 id="mainTitle"></h1>
+      <div class="sub" id="mainSub"></div>
+    </div>
+
+    <div class="case" id="caseWrap"></div>
+
+    <div class="actions">
+      <button class="primary" id="btnAccuse" disabled></button>
+      <button id="btnNext" disabled></button>
+      <button id="btnReset"></button>
+      <div class="hud">
+        <div class="h"><div class="l" id="hudCaseL"></div><div class="v" id="hudCaseV">1/3</div></div>
+        <div class="h"><div class="l" id="hudSolvedL"></div><div class="v" id="hudSolvedV">0</div></div>
+        <div class="h"><div class="l" id="hudWasteL"></div><div class="v" id="hudWasteV">0</div></div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- unlock -->
+<div class="unlock" id="unlock">
+  <div class="box">
+    <div class="ttl" id="unlockTtl"></div>
+    <div class="big" id="unlockBig"></div>
+    <p id="unlockBody"></p>
+    <div class="next" id="unlockNext"></div>
+    <button id="unlockBtn"></button>
+  </div>
+</div>
+
+<script>
+(function(){
+var LANG='cn';
+
+// ---------------- i18n ----------------
+var I18N={
+  brandTag:{en:'domain-shift detective',cn:'域偏移侦探'},
+  routeLabel:{en:'project route',cn:'项目路线'},
+  progLabel:{en:'cases',cn:'案件进度'},
+  mcCap:{en:'goal: mind-control Minecraft',cn:'终点：脑控 Minecraft'},
+  s1:{en:'S1 read EEG',cn:'S1 读懂脑电'},
+  s2:{en:'S2 clean signal',cn:'S2 清洗信号'},
+  s3:{en:'S3 decode L/R',cn:'S3 解码左右'},
+  s4:{en:'S4 record YOU',cn:'S4 录你的脑'},
+  s5:{en:'S5 train model',cn:'S5 训你的模型'},
+  s6:{en:'S6 control game',cn:'S6 脑控游戏'},
+  title:{en:'WHY THE SHARED MODEL FAILS ON YOU',cn:'别人的模型用在你身上，为什么掉准'},
+  sub:{en:'A model trained on other people scores 88% on them — but only ~60% on you. You are the detective. Read each person’s accuracy + scalp data, then accuse the ONE reason the model collapses. Accuse wrong and you waste a real recording session chasing the wrong fix.',cn:'一个用别人脑电训出的模型，在他们身上能到 88%——可是用在你身上只有 ~60%。你是侦探。读每个人的准确率 + 头皮数据，推理出模型崩塌的那一个原因。拓错人，你就会白白浪费一次真实录脑去修一个错的问题。'},
+
+  caseTag:{en:'CASE',cn:'案件'},
+  briefH:{en:'CASE FILE',cn:'案情'},
+  tableH:{en:'PER-SUBJECT ACCURACY (shared model)',cn:'各被试准确率（通用模型）'},
+  evH:{en:'SCALP / SESSION EVIDENCE',cn:'头皮 / 会话 证据'},
+  suspectH:{en:'ACCUSE ONE CAUSE',cn:'拓出一个原因'},
+  colSubj:{en:'subject',cn:'被试'},
+  colAcc:{en:'accuracy',cn:'准确率'},
+  you:{en:'YOU',cn:'你'},
+
+  btnAccuse:{en:'ACCUSE',cn:'提出控诉'},
+  btnNext:{en:'NEXT CASE',cn:'下一案'},
+  btnReset:{en:'RESET',cn:'重置'},
+  hudCaseL:{en:'CASE',cn:'案件'},
+  hudSolvedL:{en:'SOLVED',cn:'告破'},
+  hudWasteL:{en:'WASTED SESSIONS',cn:'白折腾'},
+
+  vRightH:{en:'CASE CLOSED',cn:'案件告破'},
+  vWrongH:{en:'WRONG ACCUSATION — SESSION WASTED',cn:'拓错人——白折腾一次'},
+
+  // suspects (shared)
+  sk_thick_t:{en:'Scalp thickness / head size',cn:'头皮厚度 / 头型差异'},
+  sk_thick_d:{en:'Skull + scalp thickness differs per person, shrinking and reshaping which features reach the electrode.',cn:'每个人颅骨加头皮厚度不同，会衰减并重塑传到电极的特征。'},
+  sk_imp_t:{en:'Electrode impedance / bad contact',cn:'电极阻抗 / 接触不良'},
+  sk_imp_d:{en:'Dry hair, gel, or loose cap raises impedance so the same brain signal arrives weaker and noisier.',cn:'头发干、凝胶或帽子松，会抬高阻抗，同样的脑信号传到时更弱、更噪。'},
+  sk_task_t:{en:'Task understanding / strategy',cn:'任务理解 / 想象策略'},
+  sk_task_d:{en:'People imagine movement differently (squeeze vs picture vs say-it), so their brain pattern differs from the training crowd.',cn:'人们“想象动作”的方式不同（挤手 vs 脑海成像 vs 默念），脑模式跟训练人群不一样。'},
+
+  unlockTtl:{en:'CASE 3 / 3 SOLVED',cn:'第三案告破'},
+  unlockBig:{en:'DOMAIN-SHIFT DETECTIVE',cn:'域偏移侦探'},
+  unlockBody:{en:'You cracked all three. The shared model wasn’t broken — your brain just lives in a different <b>domain</b>: different scalp, different contact, different way you imagine moving. That gap between the training crowd and you is called <b>domain shift</b>, and no amount of tuning someone else’s model fully closes it.',cn:'三案全破。那个通用模型并没坏——只是你的大脑活在一个不同的<b>域</b>里：不同的头皮、不同的接触、不同的想象方式。训练人群跟你之间的这道鸿沟叫<b>域偏移</b>，怎么调别人的模型都堵不严。'},
+  unlockNext:{en:'NEXT [S4]: now you know WHY you need your own model. Time to record YOUR brain.',cn:'下一步 [S4]：你明白了为什么需要自己的模型。该去录你自己的脑了。'},
+  unlockBtn:{en:'BACK TO BOARD',cn:'返回推理板'},
+
+  hint:{en:'Pick one suspect, then ACCUSE.',cn:'选一个嫌疑人，再提出控诉。'},
+};
+function t(k){return(I18N[k]&&I18N[k][LANG])||(I18N[k]&&I18N[k].en)||k;}
+
+// ---------------- cases ----------------
+// each: brief, accuracy rows, evidence chips, suspect key -> right/wrong + per-suspect feedback
+var SUSPECT_KEYS=['thick','imp','task'];
+var CASES=[
+  {
+    badge:'A',
+    brief:{
+      en:'Your cap is freshly gelled, contact reads clean (5 kΩ). You imagine clenching your hand exactly like the tutorial. Yet you score 59%. The subjects the model was trained on all have thin scalps; the team scanned your head and yours is noticeably thicker.',
+      cn:'你的帽子刚上好凝胶，接触读数干净（5 kΩ）。你完全按教程那样想象握拳。可你只有 59%。训模型那批被试头皮都很薄；团队扫了你的头，你的明显厚很多。'
+    },
+    rows:[
+      {sub:'S-01',acc:89,you:false},{sub:'S-02',acc:86,you:false},
+      {sub:'S-03',acc:90,you:false},{sub:{key:'you'},acc:59,you:true}
+    ],
+    ev:[
+      {tk:{en:'impedance',cn:'电极阻抗'},vv:'5 kΩ',nn:{en:'clean contact',cn:'接触良好'}},
+      {tk:{en:'your scalp',cn:'你的头皮'},vv:'+58%',nn:{en:'thicker than train set',cn:'比训练集厚'}},
+      {tk:{en:'imagery match',cn:'想象匹配'},vv:'OK',nn:{en:'followed tutorial',cn:'按教程做'}}
+    ],
+    answer:'thick',
+    fb:{
+      thick:{en:'Right. Contact is clean and your imagery matched, so those are ruled out. The one thing that differs is your thicker scalp/skull — it blurs and weakens the motor features the model learned on thin-skull subjects.',cn:'对。接触干净、想象也匹配，这两项被排除。唯一不同的是你更厚的头皮/颅骨——它把模型在薄颅骨人身上学到的运动特征衰减、模糊了。'},
+      imp:{en:'No — impedance reads a clean 5 kΩ. You’d burn a whole re-gel session and still score 59%. Look at what is actually different about YOU vs the training crowd.',cn:'不对——阻抗读数干净 5 kΩ。你会白白耗一整场重上凝胶还是 59%。看看你跟训练人群到底哪里不同。'},
+      task:{en:'No — you followed the imagery tutorial exactly. Re-teaching yourself the task wouldn’t move the score. The case file points at something physical.',cn:'不对——你完全按想象教程做了。重新学任务推不动分数。案情指向的是生理上的东西。'}
+    }
+  },
+  {
+    badge:'B',
+    brief:{
+      en:'Different day. The model is the same. Your head shape is average, you imagine movement well in the warm-up. But the cap was rushed on over dry hair: the contact meter screams. P-04, who got 91%, sat for a 10-minute gel prep.',
+      cn:'另一天。模型没变。你头型普通，热身时想象动作也很好。但帽子是赶在干头发上匆匆戴上的：接触仪狂响。拿 91% 的 P-04 老老实实上了 10 分钟凝胶。'
+    },
+    rows:[
+      {sub:'P-04',acc:91,you:false},{sub:'P-05',acc:84,you:false},
+      {sub:'P-06',acc:87,you:false},{sub:{key:'you'},acc:62,you:true}
+    ],
+    ev:[
+      {tk:{en:'impedance',cn:'电极阻抗'},vv:'180 kΩ',nn:{en:'far over 20 kΩ limit',cn:'远超 20 kΩ 上限'}},
+      {tk:{en:'your scalp',cn:'你的头皮'},vv:'avg',nn:{en:'matches train set',cn:'与训练集相似'}},
+      {tk:{en:'imagery match',cn:'想象匹配'},vv:'OK',nn:{en:'strong in warm-up',cn:'热身时很强'}}
+    ],
+    answer:'imp',
+    fb:{
+      imp:{en:'Right. 180 kΩ is nine times over the limit — the brain signal arrives buried in noise. Scalp is average and imagery is fine, so the bad contact is the culprit. Re-gel and the score should jump.',cn:'对。180 kΩ 是上限的九倍——脑信号传到时被噪声埋了。头皮普通、想象正常，所以接触不良是凶手。重上凝胶分数应该换。'},
+      thick:{en:'No — the scan says your scalp is average, matching the training set. You’d chase a thickness problem that isn’t there while the meter is literally screaming.',cn:'不对——扫描显示你头皮普通，跟训练集一致。你会去追一个不存在的厚度问题，而接触仪在那狂响。'},
+      task:{en:'No — your imagery was strong in warm-up. Retraining your strategy ignores the 180 kΩ alarm. You’d waste a session.',cn:'不对——你热身时想象很强。重训策略无视了 180 kΩ 的警报。你会白折腾一场。'}
+    }
+  },
+  {
+    badge:'C',
+    brief:{
+      en:'Final case. Cap is perfect (8 kΩ), your scalp is average. Yet 58%. In the interview you say: “I just say the word LEFT in my head.” The training subjects were all coached to vividly FEEL their hand squeezing. Your signal looks like word-thinking, not movement-imagery.',
+      cn:'最后一案。帽子完美（8 kΩ），头皮普通。可还是 58%。访谈里你说：“我就是在脑子里默念 左 这个字。”训练被试都被反复教过——要生动地 感受 手在挤。你的信号看起来像在想词，不像运动想象。'
+    },
+    rows:[
+      {sub:'T-07',acc:90,you:false},{sub:'T-08',acc:88,you:false},
+      {sub:'T-09',acc:85,you:false},{sub:{key:'you'},acc:58,you:true}
+    ],
+    ev:[
+      {tk:{en:'impedance',cn:'电极阻抗'},vv:'8 kΩ',nn:{en:'clean contact',cn:'接触良好'}},
+      {tk:{en:'your scalp',cn:'你的头皮'},vv:'avg',nn:{en:'matches train set',cn:'与训练集相似'}},
+      {tk:{en:'imagery match',cn:'想象匹配'},vv:'OFF',nn:{en:'word, not movement',cn:'在想词不是动作'}}
+    ],
+    answer:'task',
+    fb:{
+      task:{en:'Right. Contact and scalp are both fine — ruled out. You’re saying the word LEFT, but the model learned the brain pattern of FEELING a hand squeeze. Same instruction, different mental strategy = a different domain. Match the imagery and the score climbs.',cn:'对。接触和头皮都正常——被排除。你在默念“左”字，但模型学的是 感受 手在挤 的脑模式。同一句指令、不同的心理策略 = 不同的域。换成动作想象，分数就升。'},
+      imp:{en:'No — 8 kΩ is a clean contact. Re-gelling won’t fix a mismatch in HOW you imagine. Read the interview line.',cn:'不对——8 kΩ 接触很干净。重上凝胶修不了你 怎么想象 的偏差。读读访谈那句话。'},
+      thick:{en:'No — your scalp scan is average. A thickness fix is impossible anyway, and it ignores the clearest clue: you said you imagine the WORD, not the movement.',cn:'不对——你的头皮扫描普通。厚度本来也没法改，而且它无视了最明显的线索：你说你想的是 字，不是动作。'}
+    }
+  }
+];
+
+// ---------------- state ----------------
+var caseIdx=0;
+var picked=null;          // suspect key currently selected
+var locked=false;         // case decided
+var solvedFlags=[null,null,null]; // null / 'right' / 'wrong'
+var wasted=0;
+
+// ---------------- render: sidebar ----------------
+function buildMascot(){
+  var m=document.getElementById('mascot');
+  m.innerHTML='';
+  var pts=[[0,0],[12,2],[2,12],[14,14]];
+  pts.forEach(function(p){
+    var c=document.createElement('div');c.className='cube';
+    c.style.left=p[0]+'px';c.style.top=p[1]+'px';
+    m.appendChild(c);
+  });
+}
+function buildRoute(){
+  var r=document.getElementById('route');
+  r.innerHTML='';
+  var stops=['s1','s2','s3','s4','s5','s6'];
+  stops.forEach(function(s,i){
+    var st=document.createElement('div');
+    st.className='stop'+(i<2?' done':'')+(i===2?' here':'');
+    var seg=i<stops.length-1?'<div class="seg"></div>':'';
+    st.innerHTML='<div class="dot"></div><div class="rtext">'+t(s)+'</div>'+seg;
+    r.appendChild(st);
+  });
+}
+function buildMcArt(){
+  var a=document.getElementById('mcArt');
+  a.innerHTML='';
+  var hs=[10,16,22,14,18,12,20];
+  hs.forEach(function(h){
+    var i=document.createElement('i');i.style.height=h+'px';a.appendChild(i);
+  });
+}
+function buildProg(){
+  var p=document.getElementById('prog');
+  p.innerHTML='';
+  for(var i=0;i<CASES.length;i++){
+    var cell=document.createElement('div');
+    var cls='pcell';
+    if(solvedFlags[i]==='right')cls+=' solved';
+    else if(solvedFlags[i]==='wrong')cls+=' miss';
+    else if(i===caseIdx)cls+=' cur';
+    cell.className=cls;
+    var mk=solvedFlags[i]==='right'?'+':(solvedFlags[i]==='wrong'?'x':(i+1));
+    cell.innerHTML='<div class="pmark">'+mk+'</div><div>'+t('caseTag')+' '+CASES[i].badge+'</div>';
+    p.appendChild(cell);
+  }
+}
+
+// ---------------- render: main case ----------------
+function buildCase(){
+  var c=CASES[caseIdx];
+  var w=document.getElementById('caseWrap');
+  w.innerHTML='';
+
+  // brief
+  var brief=document.createElement('div');
+  brief.className='casecard';
+  brief.innerHTML='<h2>'+t('briefH')+' <span class="badge">'+t('caseTag')+' '+c.badge+'</span></h2>'+
+    '<div class="brief">'+c.brief[LANG]+'</div>';
+  w.appendChild(brief);
+
+  // accuracy table
+  var tbl=document.createElement('div');
+  tbl.className='casecard';
+  var rowsHtml='';
+  c.rows.forEach(function(rw){
+    var label=(rw.sub&&rw.sub.key==='you')?t('you'):rw.sub;
+    var barCls=rw.acc<70?'low':(rw.acc>=85?'hi':'');
+    var bw=Math.round(rw.acc*1.1);
+    rowsHtml+='<tr'+(rw.you?' class="you"':'')+'>'+
+      '<td>'+label+'</td>'+
+      '<td><span class="bar '+barCls+'" style="width:'+bw+'px"></span>'+rw.acc+'%</td></tr>';
+  });
+  tbl.innerHTML='<h2>'+t('tableH')+'</h2>'+
+    '<table class="acctable"><tr><th>'+t('colSubj')+'</th><th>'+t('colAcc')+'</th></tr>'+rowsHtml+'</table>';
+  w.appendChild(tbl);
+
+  // evidence
+  var ev=document.createElement('div');
+  ev.className='casecard';
+  var evHtml='';
+  c.ev.forEach(function(e){
+    evHtml+='<div class="evchip"><div class="et">'+e.tk[LANG]+'</div><div class="ev">'+e.vv+'</div><div class="en">'+e.nn[LANG]+'</div></div>';
+  });
+  ev.innerHTML='<h2>'+t('evH')+'</h2><div class="evgrid">'+evHtml+'</div>';
+  w.appendChild(ev);
+
+  // suspects
+  var sus=document.createElement('div');
+  sus.className='casecard';
+  sus.innerHTML='<h2>'+t('suspectH')+'</h2>';
+  var box=document.createElement('div');
+  box.className='suspects';
+  SUSPECT_KEYS.forEach(function(sk){
+    var el=document.createElement('div');
+    el.className='suspect';
+    el.dataset.key=sk;
+    el.innerHTML='<div class="sicon"></div><div><div class="stitle">'+t('sk_'+sk+'_t')+'</div>'+
+      '<div class="sdesc">'+t('sk_'+sk+'_d')+'</div></div>';
+    el.addEventListener('click',function(){onPick(sk);});
+    box.appendChild(el);
+  });
+  sus.appendChild(box);
+  // verdict
+  var vd=document.createElement('div');
+  vd.className='verdict';vd.id='verdict';
+  vd.innerHTML='<h3 id="verdictH"></h3><p id="verdictP"></p>';
+  sus.appendChild(vd);
+  w.appendChild(sus);
+
+  refreshButtons();
+}
+
+function onPick(sk){
+  if(locked)return;
+  picked=sk;
+  document.querySelectorAll('.suspect').forEach(function(el){
+    el.classList.toggle('picked',el.dataset.key===sk);
+  });
+  refreshButtons();
+}
+
+function accuse(){
+  if(locked||!picked)return;
+  var c=CASES[caseIdx];
+  var correct=(picked===c.answer);
+  locked=true;
+  solvedFlags[caseIdx]=correct?'right':'wrong';
+  if(!correct)wasted++;
+
+  // mark suspects
+  document.querySelectorAll('.suspect').forEach(function(el){
+    el.classList.remove('picked');
+    el.classList.add('locked');
+    if(el.dataset.key===c.answer)el.classList.add('right');
+    else if(el.dataset.key===picked)el.classList.add('wrong');
+  });
+
+  // verdict
+  var vd=document.getElementById('verdict');
+  vd.classList.add('show');
+  if(correct)vd.classList.remove('fail');else vd.classList.add('fail');
+  document.getElementById('verdictH').textContent=correct?t('vRightH'):t('vWrongH');
+  document.getElementById('verdictP').innerHTML=c.fb[picked][LANG];
+
+  buildProg();
+  updateHud();
+  refreshButtons();
+
+  // all solved correctly?
+  if(allRight())showUnlock();
+}
+
+function allRight(){
+  for(var i=0;i<CASES.length;i++)if(solvedFlags[i]!=='right')return false;
+  return true;
+}
+
+function nextCase(){
+  if(caseIdx<CASES.length-1){
+    caseIdx++;
+    picked=null;locked=false;
+    buildCase();buildProg();updateHud();
+  }
+}
+
+function resetAll(){
+  caseIdx=0;picked=null;locked=false;wasted=0;
+  solvedFlags=[null,null,null];
+  document.getElementById('unlock').classList.remove('show');
+  buildCase();buildProg();updateHud();
+}
+
+function refreshButtons(){
+  document.getElementById('btnAccuse').disabled=(locked||!picked);
+  document.getElementById('btnNext').disabled=!(locked&&caseIdx<CASES.length-1);
+}
+
+function updateHud(){
+  document.getElementById('hudCaseV').textContent=(caseIdx+1)+'/'+CASES.length;
+  var sc=0;solvedFlags.forEach(function(f){if(f==='right')sc++;});
+  document.getElementById('hudSolvedV').textContent=sc+'';
+  document.getElementById('hudWasteV').textContent=wasted+'';
+}
+
+function showUnlock(){
+  document.getElementById('unlockTtl').textContent=t('unlockTtl');
+  document.getElementById('unlockBig').textContent=t('unlockBig');
+  document.getElementById('unlockBody').innerHTML=t('unlockBody');
+  document.getElementById('unlockNext').textContent=t('unlockNext');
+  document.getElementById('unlockBtn').textContent=t('unlockBtn');
+  document.getElementById('unlock').classList.add('show');
+}
+
+// ---------------- i18n refresh ----------------
+function refreshStatic(){
+  document.getElementById('brandTag').textContent=t('brandTag');
+  document.getElementById('routeLabel').textContent=t('routeLabel');
+  document.getElementById('progLabel').textContent=t('progLabel');
+  document.getElementById('mcCap').textContent=t('mcCap');
+  document.getElementById('mainTitle').textContent=t('title');
+  document.getElementById('mainSub').textContent=t('sub');
+  document.getElementById('btnAccuse').textContent=t('btnAccuse');
+  document.getElementById('btnNext').textContent=t('btnNext');
+  document.getElementById('btnReset').textContent=t('btnReset');
+  document.getElementById('hudCaseL').textContent=t('hudCaseL');
+  document.getElementById('hudSolvedL').textContent=t('hudSolvedL');
+  document.getElementById('hudWasteL').textContent=t('hudWasteL');
+}
+
+function fullRender(){
+  refreshStatic();
+  buildRoute();
+  buildProg();
+  buildCase();
+  updateHud();
+  if(document.getElementById('unlock').classList.contains('show'))showUnlock();
+}
+
+// ---------------- events ----------------
+document.getElementById('langBtn').addEventListener('click',function(){
+  LANG=LANG==='en'?'cn':'en';
+  document.getElementById('langBtn').textContent=LANG.toUpperCase();
+  // rebuild current case preserving decided state
+  fullRender();
+  if(locked){
+    // re-mark decided
+    var c=CASES[caseIdx];
+    document.querySelectorAll('.suspect').forEach(function(el){
+      el.classList.add('locked');
+      if(el.dataset.key===c.answer)el.classList.add('right');
+      else if(solvedFlags[caseIdx]==='wrong')el.classList.add('wrong');
+    });
+    var vd=document.getElementById('verdict');
+    vd.classList.add('show');
+    if(solvedFlags[caseIdx]==='wrong')vd.classList.add('fail');
+    document.getElementById('verdictH').textContent=solvedFlags[caseIdx]==='right'?t('vRightH'):t('vWrongH');
+    // pick stored picked feedback: recompute
+    var fbKey=solvedFlags[caseIdx]==='right'?c.answer:(picked||c.answer);
+    document.getElementById('verdictP').innerHTML=c.fb[fbKey][LANG];
+    refreshButtons();
+  }
+});
+document.getElementById('btnAccuse').addEventListener('click',accuse);
+document.getElementById('btnNext').addEventListener('click',nextCase);
+document.getElementById('btnReset').addEventListener('click',resetAll);
+document.getElementById('unlockBtn').addEventListener('click',function(){
+  document.getElementById('unlock').classList.remove('show');
+});
+
+// ---------------- init ----------------
+buildMascot();
+buildMcArt();
+fullRender();
+})();
+</script>
+</body>
+</html>

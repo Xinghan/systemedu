@@ -1,0 +1,566 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>黎曼几何特征 — 协方差矩阵作弯曲流形上的点</title>
+<style>
+  :root{
+    /* 第 1 层 — 共享深空底 (所有 26 套统一) */
+    --bg-0: oklch(0.14 0.035 265);
+    --bg-1: oklch(0.18 0.04 265);
+    --bg-2: oklch(0.22 0.045 265);
+    --bg-3: oklch(0.28 0.05 265);
+    --line: oklch(0.35 0.05 265 / 0.35);
+    --line-strong: oklch(0.55 0.08 265 / 0.55);
+    --fg: oklch(0.96 0.01 265);
+    --fg-dim: oklch(0.75 0.02 265);
+    --fg-mute: oklch(0.55 0.03 265);
+    --gold: oklch(0.85 0.14 85);
+    /* 第 2 层 — math signature accent (electric blue) */
+    --math: oklch(0.72 0.17 245);
+    /* 第 3 层 — math 5 色 palette (themes.js MTH-06 Geometry Void) */
+    --axis: oklch(0.72 0.17 245);
+    --proof: oklch(0.52 0.16 245);
+    --shadow: oklch(0.35 0.10 245);
+    --solution: oklch(0.92 0.08 240);
+    --qed: oklch(0.85 0.14 85);
+    /* 两类用 math 系内冷暖区分: 左手=axis 蓝, 右手=品红(从 ai magenta 借作"另一类", 仅数据可视化) */
+    --classL: oklch(0.72 0.17 245);
+    --classR: oklch(0.74 0.17 330);
+  }
+  html,body{margin:0;padding:0;height:100vh;overflow:hidden;background:var(--bg-0);
+    font-family:'JetBrains Mono','SF Mono',Menlo,Consolas,monospace;color:var(--fg);}
+  body{display:flex;}
+  .sidebar{width:200px;flex-shrink:0;height:100vh;background:var(--bg-1);
+    border-right:1px solid var(--line);display:flex;flex-direction:column;gap:14px;padding:18px 16px;box-sizing:border-box;}
+  .brand{display:flex;align-items:center;gap:10px;}
+  .brand h1{font-size:14px;font-weight:700;line-height:1.3;margin:0;color:var(--fg);}
+  .brand .code{font-size:9px;color:var(--fg-mute);letter-spacing:1px;}
+  .guide{font-size:11px;line-height:1.6;color:var(--fg-dim);list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:7px;}
+  .guide li{padding-left:12px;position:relative;}
+  .guide li::before{content:'';position:absolute;left:0;top:7px;width:5px;height:5px;background:var(--math);}
+  /* 项目路线图 S1-S6 */
+  .route{margin-top:4px;border-top:1px solid var(--line);padding-top:12px;}
+  .route-title{font-size:9px;color:var(--fg-mute);letter-spacing:1.5px;margin-bottom:8px;}
+  .route-list{list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:0;}
+  .route-list li{font-size:10px;color:var(--fg-mute);line-height:1.5;padding:3px 0 3px 16px;position:relative;}
+  .route-list li::before{content:'';position:absolute;left:3px;top:9px;width:6px;height:6px;border-radius:50%;
+    border:1px solid var(--fg-mute);background:var(--bg-1);}
+  .route-list li.cur{color:var(--math);font-weight:700;}
+  .route-list li.cur::before{background:var(--math);border-color:var(--math);box-shadow:0 0 8px var(--math);}
+  .route-list li.done{color:var(--fg-dim);}
+  .route-list li.done::before{background:var(--proof);border-color:var(--proof);}
+  .route-line{position:absolute;left:5.5px;top:-6px;width:1px;height:12px;background:var(--line);}
+  .lang-btn{margin-top:auto;padding:8px 10px;font-size:11px;font-family:inherit;cursor:pointer;
+    background:var(--bg-2);color:var(--fg);border:1px solid var(--line-strong);
+    box-shadow:3px 3px 0 var(--bg-0);transition:transform .1s;}
+  .lang-btn:hover{transform:translate(-1px,-1px);}
+  .lang-btn:active{transform:translate(2px,2px);box-shadow:1px 1px 0 var(--bg-0);}
+  main{flex:1;height:100vh;position:relative;overflow:hidden;}
+  canvas#stage{position:absolute;inset:0;width:100%;height:100%;}
+  .hud{position:absolute;top:16px;right:16px;background:var(--bg-1);border:1px solid var(--line-strong);
+    padding:10px 13px;font-size:11px;box-shadow:3px 3px 0 var(--bg-0);min-width:172px;z-index:3;}
+  .hud-row{display:flex;justify-content:space-between;gap:14px;line-height:1.7;}
+  .hud-lbl{color:var(--fg-dim);}
+  .hud-val{color:var(--math);font-weight:700;}
+  .sub{position:absolute;bottom:22px;left:50%;transform:translateX(-50%);text-align:center;width:84%;pointer-events:none;z-index:3;}
+  .sub-zh{font-size:18px;font-weight:700;color:var(--fg);background:oklch(0.18 0.04 265 / 0.9);
+    padding:6px 18px;display:inline-block;border:1px solid var(--line-strong);box-shadow:3px 3px 0 var(--bg-0);}
+  .sub-en{font-size:12px;font-style:italic;color:var(--fg-dim);margin-top:5px;}
+</style>
+</head>
+<body>
+<aside class="sidebar">
+  <div class="brand">
+    <svg width="34" height="34" viewBox="0 0 40 40" id="mascot" aria-hidden="true">
+      <!-- Pi: 旋转四面体, 面会闪方程 (math mascot) -->
+      <g id="piTetra"></g>
+    </svg>
+    <div>
+      <h1 id="title">黎曼几何特征</h1>
+      <div class="code">MTH-06 · M36</div>
+    </div>
+  </div>
+  <ul class="guide" id="guide">
+    <li id="g0">协方差矩阵不是一堆数</li>
+    <li id="g1">它是弯曲空间上的一个点</li>
+    <li id="g2">两类各聚成一团点</li>
+    <li id="g3">贴弯面量距离 &gt; 穿心直线</li>
+  </ul>
+  <div class="route">
+    <div class="route-title" id="routeTitle">项目路线</div>
+    <ul class="route-list" id="route">
+      <li class="done" id="r1">S1 认识脑波</li>
+      <li class="done" id="r2">S2 清洁信号</li>
+      <li class="cur"  id="r3"><span class="route-line"></span>S3 找特征训分类器</li>
+      <li id="r4"><span class="route-line"></span>S4 自录冲准</li>
+      <li id="r5"><span class="route-line"></span>S5 接 Minecraft</li>
+      <li id="r6"><span class="route-line"></span>S6 分享作品</li>
+    </ul>
+  </div>
+  <button class="lang-btn" id="langBtn">中 / EN</button>
+</aside>
+<main>
+  <canvas id="stage"></canvas>
+  <div class="hud">
+    <div class="hud-row"><span class="hud-lbl" id="hStageLbl">stage</span><span class="hud-val" id="hStage">1/4</span></div>
+    <div class="hud-row"><span class="hud-lbl">geom</span><span class="hud-val" id="hGeom">SPD point</span></div>
+    <div class="hud-row"><span class="hud-lbl">dist</span><span class="hud-val" id="hDist">--</span></div>
+    <div class="hud-row"><span class="hud-lbl">acc</span><span class="hud-val" id="hAcc">--</span></div>
+  </div>
+  <div class="sub">
+    <div class="sub-zh" id="subZh"></div>
+    <div class="sub-en" id="subEn"></div>
+  </div>
+</main>
+<script>
+"use strict";
+var LANG='cn';
+var I18N={
+  title:{cn:'黎曼几何特征',en:'Riemannian features'},
+  routeTitle:{cn:'项目路线',en:'PROJECT ROUTE'},
+  hStageLbl:{cn:'stage',en:'stage'},
+  g:{cn:['协方差矩阵不是一堆数','它是弯曲空间上的一个点','两类各聚成一团点','贴弯面量距离 > 穿心直线'],
+     en:['cov matrix is not just numbers','it is one point on a curved space','each class = one cloud of points','geodesic on surface > straight chord']},
+  route:{cn:['S1 认识脑波','S2 清洁信号','S3 找特征训分类器','S4 自录冲准','S5 接 Minecraft','S6 分享作品'],
+         en:['S1 read brainwave','S2 clean signal','S3 find features','S4 self-calibrate','S5 to Minecraft','S6 share']},
+  // 开头项目锚: 为什么现在学这个
+  s0_zh:{cn:'S3: CSP+LDA 不是唯一招 — 换个几何视角看协方差矩阵, 能更准',
+         en:'S3: CSP+LDA is not the only way — view the covariance matrix geometrically, get higher acc'},
+  s0_en:{cn:'同一批脑波协方差, 换黎曼几何特征再比一次',en:'same EEG covariances, recompared with Riemannian geometry'},
+  // 演化 4 阶段, 承接同一个协方差点
+  s1_zh:{cn:'一个 3x3 协方差矩阵, 塌成弯曲空间(SPD 流形)上的一个点',
+         en:'a 3x3 covariance matrix collapses into one point on a curved space (SPD manifold)'},
+  s1_en:{cn:'协方差矩阵都是对称正定的, 它们住在弯曲流形上, 不是平地',
+         en:'cov matrices are symmetric-positive-definite — they live on a curved manifold, not flat ground'},
+  s2_zh:{cn:'想左手 / 想右手, 每个 trial 一个协方差点 — 落到弯面上聚成两团',
+         en:'left vs right intent: each trial = one cov point — landing on the surface as two clouds'},
+  s2_en:{cn:'同一张弯面, 蓝团=想左手, 品红团=想右手',
+         en:'same curved surface, blue=think-left, magenta=think-right'},
+  s3_zh:{cn:'量两团远近: 穿过空间内部的直线(欧氏)会抄近路, 低估距离',
+         en:'measure cloud distance: a straight chord through the interior (Euclidean) cuts a shortcut, underestimates'},
+  s3_en:{cn:'弯曲空间里, 直线不是真正的距离',
+         en:'on a curved space the straight chord is not the true distance'},
+  s4_zh:{cn:'改走贴着弯面爬的黎曼测地线 — 距离拉长, 两类分得更开, 准确率 +升',
+         en:'use the Riemannian geodesic crawling along the surface — distance grows, classes separate more, acc rises'},
+  s4_en:{cn:'S3 末尾我们把黎曼几何和 CSP+LDA 比一比哪个最好',
+         en:'at the end of S3 we benchmark Riemannian geometry against CSP+LDA'}
+};
+function t(k){return (I18N[k]&&I18N[k][LANG])||(I18N[k]&&I18N[k].en)||k;}
+
+function refreshI18N(){
+  document.getElementById('title').textContent=t('title');
+  document.getElementById('routeTitle').textContent=t('routeTitle');
+  document.getElementById('hStageLbl').textContent=t('hStageLbl');
+  var gs=t('g');for(var i=0;i<4;i++){document.getElementById('g'+i).textContent=gs[i];}
+  var rs=t('route');var rids=['r1','r2','r3','r4','r5','r6'];
+  for(var j=0;j<6;j++){
+    var el=document.getElementById(rids[j]);
+    var line=el.querySelector('.route-line');
+    el.textContent=rs[j];
+    if(line){el.insertBefore(line,el.firstChild);}
+  }
+  document.getElementById('langBtn').textContent=LANG==='cn'?'中 / EN':'EN / 中';
+  updateSubtitle(currentStage);
+}
+document.getElementById('langBtn').addEventListener('click',function(){LANG=LANG==='cn'?'en':'cn';refreshI18N();});
+
+// ---- mascot Pi (静态 SVG 四面体, 不依赖 rAF 即可见) ----
+(function(){
+  var g=document.getElementById('piTetra');
+  function ln(x1,y1,x2,y2,c,w){return '<line x1="'+x1+'" y1="'+y1+'" x2="'+x2+'" y2="'+y2+'" stroke="'+c+'" stroke-width="'+(w||1.4)+'"/>';}
+  var ax='var(--axis)',so='var(--solution)';
+  // 四面体投影: 顶点
+  var T={x:20,y:6},A={x:7,y:30},B={x:33,y:30},C={x:20,y:22};
+  var s=ln(T.x,T.y,A.x,A.y,ax)+ln(T.x,T.y,B.x,B.y,ax)+ln(A.x,A.y,B.x,B.y,ax)
+    +ln(T.x,T.y,C.x,C.y,so,1)+ln(A.x,A.y,C.x,C.y,so,1)+ln(B.x,B.y,C.x,C.y,so,1);
+  // 一面闪方程符号 pi
+  s+='<text x="20" y="20" text-anchor="middle" font-size="7" fill="var(--qed)" font-family="JetBrains Mono">Pi</text>';
+  g.innerHTML=s;
+})();
+
+// ---- canvas setup ----
+var canvas=document.getElementById('stage'),ctx=canvas.getContext('2d');
+var W=0,H=0,DPR=1;
+function resize(){var r=canvas.parentElement.getBoundingClientRect();if(r.width<1||r.height<1)return;
+  DPR=window.devicePixelRatio||1;canvas.width=r.width*DPR;canvas.height=r.height*DPR;
+  canvas.style.width=r.width+'px';canvas.style.height=r.height+'px';ctx.setTransform(DPR,0,0,DPR,0,0);W=r.width;H=r.height;}
+window.addEventListener('resize',resize);resize();setTimeout(resize,200);setTimeout(resize,600);
+if(document.fonts&&document.fonts.ready){document.fonts.ready.then(resize);}
+
+// 读 CSS 变量解析成可用色 (canvas 不认 var())
+function cssv(name){return getComputedStyle(document.documentElement).getPropertyValue(name).trim();}
+var COL={};
+function loadColors(){
+  COL.bg0=cssv('--bg-0');COL.bg1=cssv('--bg-1');COL.bg2=cssv('--bg-2');COL.bg3=cssv('--bg-3');
+  COL.line=cssv('--line');COL.lineS=cssv('--line-strong');
+  COL.fg=cssv('--fg');COL.fgDim=cssv('--fg-dim');COL.fgMute=cssv('--fg-mute');
+  COL.math=cssv('--math');COL.gold=cssv('--gold');
+  COL.axis=cssv('--axis');COL.proof=cssv('--proof');COL.shadow=cssv('--shadow');
+  COL.solution=cssv('--solution');COL.qed=cssv('--qed');
+  COL.classL=cssv('--classL');COL.classR=cssv('--classR');
+}
+loadColors();
+
+var currentStage=0,STAGE_DUR=8500,animStart=performance.now();
+var STAGE_KEYS=['s1','s2','s3','s4'];
+function updateSubtitle(s){
+  // s===-1 表示开头项目锚 (intro), 由时间线控制
+  var key= s<0?'s0':STAGE_KEYS[s]||'s1';
+  document.getElementById('subZh').innerHTML=t(key+'_zh');
+  document.getElementById('subEn').textContent=t(key+'_en');
+  document.getElementById('hStage').textContent=(Math.max(0,s)+1)+'/4';
+}
+
+// ---- 共享几何: 弯曲流形碗面 (透视投影的网格), 全程同一张 ----
+// 流形中心在画面中部, 用 z = curv*(x^2+y^2) 的碗面, 等角投影
+var stageCx,stageCy,manR;
+function layout(){stageCx=W*0.52;stageCy=H*0.52;manR=Math.min(W,H)*0.30;}
+function projManifold(u,v,lift){
+  // u,v in [-1,1] 平面坐标; 碗面下沉 depth ~ (u^2+v^2)
+  layout();
+  var depth=(u*u+v*v);
+  var px=stageCx + u*manR*1.15;
+  // 碗面: 越往外越往下沉 (视觉弯曲); lift 让点浮在面上一点
+  var py=stageCy + v*manR*0.62 + depth*manR*0.34 - (lift||0);
+  return {x:px,y:py};
+}
+
+// 协方差点的固定布局: 两团, 蓝(左)在流形偏左, 品红(右)偏右
+function rng(seed){var x=Math.sin(seed*99.13)*43758.5453;return x-Math.floor(x);}
+var ptsL=[],ptsR=[];
+(function(){
+  for(var i=0;i<9;i++){
+    ptsL.push({u:-0.46+(rng(i+1)-0.5)*0.42, v:-0.05+(rng(i+9)-0.5)*0.42});
+    ptsR.push({u: 0.46+(rng(i+20)-0.5)*0.42, v: 0.02+(rng(i+30)-0.5)*0.42});
+  }
+})();
+function centroid(arr){var u=0,v=0;for(var i=0;i<arr.length;i++){u+=arr[i].u;v+=arr[i].v;}return{u:u/arr.length,v:v/arr.length};}
+var cL=centroid(ptsL),cR=centroid(ptsR);
+
+// 画弯曲流形网格 (碗面)
+function drawManifold(alpha){
+  ctx.save();ctx.globalAlpha=alpha;
+  ctx.strokeStyle=COL.line;ctx.lineWidth=1;
+  var N=9;
+  for(var i=0;i<=N;i++){
+    var u=-1+2*i/N;
+    ctx.beginPath();
+    for(var j=0;j<=N;j++){var v=-1+2*j/N;var p=projManifold(u,v,0);if(j===0)ctx.moveTo(p.x,p.y);else ctx.lineTo(p.x,p.y);}
+    ctx.stroke();
+    ctx.beginPath();
+    for(var k=0;k<=N;k++){var u2=-1+2*k/N;var p2=projManifold(u2,u,0);if(k===0)ctx.moveTo(p2.x,p2.y);else ctx.lineTo(p2.x,p2.y);}
+    ctx.stroke();
+  }
+  // 流形外缘高亮
+  ctx.strokeStyle=COL.proof;ctx.lineWidth=1.5;ctx.globalAlpha=alpha*0.8;
+  ctx.beginPath();
+  for(var a=0;a<=64;a++){var th=a/64*Math.PI*2;var p=projManifold(Math.cos(th),Math.sin(th),0);if(a===0)ctx.moveTo(p.x,p.y);else ctx.lineTo(p.x,p.y);}
+  ctx.closePath();ctx.stroke();
+  ctx.restore();
+  // 标签
+  ctx.save();ctx.globalAlpha=alpha;
+  ctx.fillStyle=COL.fgMute;ctx.font='600 11px JetBrains Mono,monospace';ctx.textAlign='left';
+  var lp=projManifold(-1,-1,0);
+  ctx.fillText(LANG==='cn'?'SPD 流形 (弯曲空间)':'SPD manifold (curved space)',lp.x-6,lp.y-10);
+  ctx.restore();
+}
+
+function dot(p,r,fill,glow){
+  if(glow){ctx.save();ctx.shadowColor=fill;ctx.shadowBlur=glow;}
+  ctx.fillStyle=fill;ctx.beginPath();ctx.arc(p.x,p.y,r,0,Math.PI*2);ctx.fill();
+  if(glow)ctx.restore();
+}
+
+function easeInOut(x){return x<0.5?2*x*x:1-Math.pow(-2*x+2,2)/2;}
+
+// ---- 矩阵网格绘制 (阶段 1: 数字矩阵塌成点) ----
+function drawMatrixGrid(cx,cy,cell,alpha,collapse){
+  // collapse 0->1: 数字网格向中心点收缩
+  var vals=[['2.1','0.8','0.3'],['0.8','1.9','0.5'],['0.3','0.5','1.4']];
+  ctx.save();ctx.globalAlpha=alpha;
+  for(var r=0;r<3;r++)for(var c=0;c<3;c++){
+    var ox=(c-1)*cell, oy=(r-1)*cell;
+    // 塌缩: 朝中心收并淡出
+    var sx=cx+ox*(1-collapse);
+    var sy=cy+oy*(1-collapse);
+    var ca=(1-collapse);
+    ctx.globalAlpha=alpha*ca;
+    ctx.strokeStyle=COL.line;ctx.lineWidth=1;
+    ctx.strokeRect(sx-cell*0.42,sy-cell*0.42,cell*0.84,cell*0.84);
+    ctx.fillStyle=(r===c)?COL.solution:COL.fgDim;
+    ctx.font='600 '+Math.max(9,14*(1-collapse*0.4))+'px JetBrains Mono,monospace';
+    ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.fillText(vals[r][c],sx,sy);
+  }
+  ctx.restore();
+  ctx.textBaseline='alphabetic';
+}
+
+// ---- 测地线: 沿碗面从 cL 到 cR 的曲线 (经过弯面, 走外缘弧) ----
+function geodesicPath(steps){
+  // 近似: 在 (u,v) 平面用一条向外凸的弧 (体现"贴弯面爬"), 再投影
+  var path=[];
+  for(var i=0;i<=steps;i++){
+    var s=i/steps;
+    var u=cL.u+(cR.u-cL.u)*s;
+    var v=cL.v+(cR.v-cL.v)*s;
+    // 向外凸: 远离原点, 模拟沿碗壁爬
+    var bow=Math.sin(s*Math.PI)*0.30;
+    var rad=Math.sqrt(u*u+v*v)+0.0001;
+    u+= (u/rad)*bow*0.0; // 保持水平, 主要靠 v 抬
+    v+= bow; // 往下凸贴碗壁
+    path.push(projManifold(u,v,0));
+  }
+  return path;
+}
+
+// ====================== 时间线 ======================
+// intro 占前 4.5s, 之后 4 个演化阶段, 全程同一张流形/同一批点
+var INTRO_DUR=4500;
+function render(){
+  var now=performance.now(),tg=now-animStart;
+  loadColors();layout();
+  ctx.clearRect(0,0,W,H);
+  ctx.fillStyle=COL.bg0;ctx.fillRect(0,0,W,H);
+  drawStarfield(tg);
+
+  if(tg<INTRO_DUR){
+    // 项目锚开场: 路线 S3 + 引子 + 一个矩阵浮现
+    if(currentStage!==-1){currentStage=-1;updateSubtitle(-1);}
+    drawIntro(tg/INTRO_DUR);
+    document.getElementById('hDist').textContent='--';
+    document.getElementById('hAcc').textContent='--';
+    document.getElementById('hGeom').textContent='SPD point';
+    requestAnimationFrame(render);return;
+  }
+
+  var te=tg-INTRO_DUR;
+  var loop=STAGE_DUR*4;
+  var tl=te%loop;
+  var st=Math.floor(tl/STAGE_DUR);
+  var p=(tl%STAGE_DUR)/STAGE_DUR;
+  if(st!==currentStage){currentStage=st;updateSubtitle(st);}
+
+  // 全程: 流形随阶段渐显并保持
+  var manA=Math.min(1,(st>0?1:easeInOut(Math.min(1,p*2))));
+  drawManifold(manA);
+
+  if(st===0)drawStage1(p);
+  else if(st===1)drawStage2(p);
+  else if(st===2)drawStage3(p);
+  else drawStage4(p);
+
+  // 终点常驻徽记: 角落 Minecraft 剪影
+  drawMinecraftCorner();
+
+  requestAnimationFrame(render);
+}
+
+// 星空背景 (深空, 极淡)
+var stars=[];
+(function(){for(var i=0;i<70;i++)stars.push({x:rng(i*3+1),y:rng(i*7+2),s:rng(i*11+3)*1.4+0.3,tw:rng(i*5+4)*6.28});})();
+function drawStarfield(tg){
+  ctx.save();
+  for(var i=0;i<stars.length;i++){
+    var s=stars[i];var a=0.12+0.10*Math.sin(tg/900+s.tw);
+    ctx.globalAlpha=a;ctx.fillStyle=COL.solution;
+    ctx.beginPath();ctx.arc(s.x*W,s.y*H,s.s,0,Math.PI*2);ctx.fill();
+  }
+  ctx.restore();
+}
+
+function drawIntro(p){
+  var a=easeInOut(Math.min(1,p*1.5));
+  ctx.save();ctx.globalAlpha=a;
+  ctx.fillStyle=COL.fg;ctx.font='700 22px JetBrains Mono,monospace';ctx.textAlign='center';
+  ctx.fillText(LANG==='cn'?'换个几何视角看协方差矩阵':'A geometric view of the covariance matrix',W*0.52,H*0.30);
+  ctx.fillStyle=COL.math;ctx.font='600 14px JetBrains Mono,monospace';
+  ctx.fillText(LANG==='cn'?'S3: CSP+LDA 不是唯一招, 能不能更准?':'S3: CSP+LDA is not the only way — can we do better?',W*0.52,H*0.30+30);
+  ctx.restore();
+  // 一个矩阵从星空浮现, 暗示主角
+  var mp=easeInOut(Math.min(1,Math.max(0,(p-0.35)*1.8)));
+  if(mp>0){drawMatrixGrid(W*0.52,H*0.60,54,mp,0);
+    ctx.save();ctx.globalAlpha=mp;ctx.fillStyle=COL.fgDim;ctx.font='600 12px JetBrains Mono,monospace';ctx.textAlign='center';
+    ctx.fillText(LANG==='cn'?'一个 3x3 协方差矩阵 = 一个 trial 的脑波关系':'a 3x3 covariance matrix = one trial of brainwave relations',W*0.52,H*0.60+96);
+    ctx.restore();}
+}
+
+// 阶段 1: 矩阵塌成流形上的一个点 (数字 -> 几何点)
+function drawStage1(p){
+  document.getElementById('hGeom').textContent='SPD point';
+  document.getElementById('hDist').textContent='--';
+  document.getElementById('hAcc').textContent='--';
+  // 矩阵在画面上方, 塌缩落到流形中部的一个点
+  var collapse=easeInOut(Math.min(1,p*1.4));
+  var landP=projManifold(0.0,-0.1,6);
+  var mcx=W*0.52, mcy=stageCy-manR*0.9 - 30;
+  // 矩阵塌缩 + 整体下落到 landP
+  var fly=easeInOut(Math.min(1,Math.max(0,(p-0.45)*2.2)));
+  var curX=mcx+(landP.x-mcx)*fly;
+  var curY=mcy+(landP.y-mcy)*fly;
+  drawMatrixGrid(curX,curY,48,1-fly*0.0,collapse);
+  // 落点: 一个发光蓝点
+  if(collapse>0.4){
+    var da=easeInOut(Math.min(1,(collapse-0.4)*1.7));
+    dot(landP,7+fly*1.5,COL.axis,12+fly*6);
+    ctx.save();ctx.globalAlpha=da;
+    ctx.fillStyle=COL.solution;ctx.font='600 12px JetBrains Mono,monospace';ctx.textAlign='center';
+    ctx.fillText(LANG==='cn'?'-> 流形上的一个点':'-> one point on the manifold',landP.x,landP.y+26);
+    ctx.restore();
+  }
+  // gold 一闪: 数字变成几何点的"顿悟"
+  if(p>0.75&&p<0.92){
+    var g=Math.sin((p-0.75)/0.17*Math.PI);
+    ctx.save();ctx.globalAlpha=g*0.9;ctx.strokeStyle=COL.gold;ctx.lineWidth=2;
+    ctx.beginPath();ctx.arc(landP.x,landP.y,16+g*8,0,Math.PI*2);ctx.stroke();ctx.restore();
+  }
+}
+
+// 阶段 2: 两类各自的多个 trial 协方差点落到同一张弯面, 聚成两团
+function drawStage2(p){
+  document.getElementById('hGeom').textContent='2 clouds';
+  document.getElementById('hDist').textContent='--';
+  document.getElementById('hAcc').textContent='--';
+  var n=ptsL.length;
+  for(var i=0;i<n;i++){
+    var ap=Math.min(1,Math.max(0,p*2.4 - i*0.13));
+    if(ap<=0)continue;
+    var apE=easeInOut(ap);
+    var pl=projManifold(ptsL[i].u,ptsL[i].v,4);
+    var pr=projManifold(ptsR[i].u,ptsR[i].v,4);
+    // 落点动画: 从上方坠落
+    var dropL={x:pl.x,y:pl.y-(1-apE)*120};
+    var dropR={x:pr.x,y:pr.y-(1-apE)*120};
+    ctx.save();ctx.globalAlpha=apE;
+    dot(dropL,6,COL.classL,8);
+    dot(dropR,6,COL.classR,8);
+    ctx.restore();
+  }
+  // 两团标签
+  if(p>0.5){
+    var la=easeInOut(Math.min(1,(p-0.5)*2.5));
+    ctx.save();ctx.globalAlpha=la;
+    var clp=projManifold(cL.u,cL.v-0.55,0);
+    var crp=projManifold(cR.u,cR.v-0.55,0);
+    ctx.fillStyle=COL.classL;ctx.font='700 13px JetBrains Mono,monospace';ctx.textAlign='center';
+    ctx.fillText(LANG==='cn'?'想左手':'think LEFT',clp.x,clp.y);
+    ctx.fillStyle=COL.classR;
+    ctx.fillText(LANG==='cn'?'想右手':'think RIGHT',crp.x,crp.y);
+    ctx.restore();
+  }
+}
+
+// 阶段 3: 欧氏直线 (穿过流形内部抄近路, 错)
+function drawStage3(p){
+  document.getElementById('hGeom').textContent='2 clouds';
+  // 保持两团点
+  drawTwoClouds(1);
+  var cpL=projManifold(cL.u,cL.v,4);
+  var cpR=projManifold(cR.u,cR.v,4);
+  // 质心强调
+  dot(cpL,8,COL.classL,14);dot(cpR,8,COL.classR,14);
+  // 欧氏直线 (穿心, 虚线红/灰, 标错)
+  var seg=easeInOut(Math.min(1,p*1.6));
+  ctx.save();
+  ctx.setLineDash([7,5]);ctx.strokeStyle=COL.fgMute;ctx.lineWidth=2.5;
+  ctx.beginPath();ctx.moveTo(cpL.x,cpL.y);
+  ctx.lineTo(cpL.x+(cpR.x-cpL.x)*seg,cpL.y+(cpR.y-cpL.y)*seg);ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.restore();
+  // 直线距离读数
+  var euLen=Math.hypot(cpR.x-cpL.x,cpR.y-cpL.y);
+  document.getElementById('hDist').textContent='Eucl '+Math.round(euLen*seg);
+  document.getElementById('hAcc').textContent='73%';
+  if(p>0.55){
+    var la=easeInOut(Math.min(1,(p-0.55)*2.2));
+    ctx.save();ctx.globalAlpha=la;
+    var mx=(cpL.x+cpR.x)/2, my=(cpL.y+cpR.y)/2;
+    ctx.fillStyle=COL.fgMute;ctx.font='700 12px JetBrains Mono,monospace';ctx.textAlign='center';
+    ctx.fillText(LANG==='cn'?'欧氏直线: 穿过空间内部抄近路':'Euclidean chord: shortcut through interior',mx,my-14);
+    ctx.fillStyle=COL.classR;ctx.font='700 11px JetBrains Mono,monospace';
+    ctx.fillText(LANG==='cn'?'-> 在弯空间里低估了真实距离':'-> underestimates true distance on curved space',mx,my+22);
+    ctx.restore();
+  }
+}
+
+// 阶段 4: 黎曼测地线 (贴弯面爬, 对) + 距离拉长 + 准确率升 + gold 收束
+function drawStage4(p){
+  document.getElementById('hGeom').textContent='geodesic';
+  drawTwoClouds(1);
+  var cpL=projManifold(cL.u,cL.v,4);
+  var cpR=projManifold(cR.u,cR.v,4);
+  // 先淡显欧氏直线作对比 (灰虚)
+  ctx.save();ctx.globalAlpha=0.45;ctx.setLineDash([7,5]);ctx.strokeStyle=COL.fgMute;ctx.lineWidth=2;
+  ctx.beginPath();ctx.moveTo(cpL.x,cpL.y);ctx.lineTo(cpR.x,cpR.y);ctx.stroke();ctx.setLineDash([]);ctx.restore();
+  dot(cpL,8,COL.classL,14);dot(cpR,8,COL.classR,14);
+  // 黎曼测地线 (贴面凸弧, 实线 accent, 从 L 生长到 R)
+  var path=geodesicPath(48);
+  var grow=easeInOut(Math.min(1,p*1.5));
+  var lastIdx=Math.floor(grow*(path.length-1));
+  ctx.save();ctx.strokeStyle=COL.math;ctx.lineWidth=3.5;ctx.shadowColor=COL.math;ctx.shadowBlur=8;
+  ctx.beginPath();ctx.moveTo(path[0].x,path[0].y);
+  for(var i=1;i<=lastIdx;i++)ctx.lineTo(path[i].x,path[i].y);ctx.stroke();ctx.restore();
+  // 测地线 vs 欧氏 长度
+  var geoLen=0;for(var k=1;k<path.length;k++)geoLen+=Math.hypot(path[k].x-path[k-1].x,path[k].y-path[k-1].y);
+  var euLen=Math.hypot(cpR.x-cpL.x,cpR.y-cpL.y);
+  document.getElementById('hDist').textContent='Riem '+Math.round(geoLen*grow);
+  // 准确率从 73 升到 86
+  var acc=Math.round(73+13*grow);
+  document.getElementById('hAcc').textContent=acc+'%';
+  if(grow>0.85){
+    // 标注: 测地线更长 = 两类分更开
+    var la=easeInOut(Math.min(1,(grow-0.85)*6));
+    var mid=path[Math.floor(path.length*0.5)];
+    ctx.save();ctx.globalAlpha=la;
+    ctx.fillStyle=COL.math;ctx.font='700 13px JetBrains Mono,monospace';ctx.textAlign='center';
+    ctx.fillText(LANG==='cn'?'黎曼测地线: 贴弯面爬, 距离更长':'Riemannian geodesic: crawls the surface, longer',mid.x,mid.y+30);
+    ctx.fillStyle=COL.gold;ctx.font='700 14px JetBrains Mono,monospace';
+    ctx.fillText(LANG==='cn'?'两类分得更开 -> 准确率 73% -> '+acc+'%':'classes split more -> acc 73% -> '+acc+'%',mid.x,mid.y+52);
+    ctx.restore();
+    // gold climax: 两团外圈一闪
+    var g=Math.sin(Math.min(1,(grow-0.85)*6)*Math.PI);
+    ctx.save();ctx.globalAlpha=g*0.8;ctx.strokeStyle=COL.gold;ctx.lineWidth=2;
+    ctx.beginPath();ctx.arc(cpL.x,cpL.y,20,0,Math.PI*2);ctx.stroke();
+    ctx.beginPath();ctx.arc(cpR.x,cpR.y,20,0,Math.PI*2);ctx.stroke();ctx.restore();
+  }
+}
+
+// 复用: 画两团协方差点 (阶段 3/4 持续在场)
+function drawTwoClouds(alpha){
+  for(var i=0;i<ptsL.length;i++){
+    var pl=projManifold(ptsL[i].u,ptsL[i].v,4);
+    var pr=projManifold(ptsR[i].u,ptsR[i].v,4);
+    ctx.save();ctx.globalAlpha=alpha*0.85;
+    dot(pl,5,COL.classL,5);dot(pr,5,COL.classR,5);
+    ctx.restore();
+  }
+}
+
+// 终点徽记: 右下角 Minecraft 方块剪影 + 一句
+function drawMinecraftCorner(){
+  var bx=W-150,by=H-66;
+  ctx.save();ctx.globalAlpha=0.55;
+  // 像素方块 (creeper 风格剪影)
+  ctx.fillStyle=COL.proof;
+  var c=8;
+  var grid=[
+    [1,1,1,1],
+    [1,0,0,1],
+    [1,0,0,1],
+    [1,1,1,1]
+  ];
+  for(var r=0;r<4;r++)for(var k=0;k<4;k++){if(grid[r][k])ctx.fillRect(bx+k*c,by+r*c,c-1,c-1);}
+  ctx.globalAlpha=0.7;
+  ctx.fillStyle=COL.fgMute;ctx.font='600 9px JetBrains Mono,monospace';ctx.textAlign='left';
+  ctx.fillText(LANG==='cn'?'终点: 脑控 Minecraft':'goal: mind-control Minecraft',bx+40,by+12);
+  ctx.fillText(LANG==='cn'?'S3 末尾比 Riemann vs CSP':'S3 end: Riemann vs CSP',bx+40,by+26);
+  ctx.restore();
+}
+
+refreshI18N();
+updateSubtitle(-1);
+requestAnimationFrame(render);
+</script>
+</body>
+</html>

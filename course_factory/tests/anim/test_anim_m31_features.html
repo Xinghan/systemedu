@@ -1,0 +1,573 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>从一个 trial 榨出 6 个特征数</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+  /* 第 1 层 — 共享深空底 (26 套统一) */
+  :root{
+    --bg-0: oklch(0.14 0.035 265);
+    --bg-1: oklch(0.18 0.04 265);
+    --bg-2: oklch(0.22 0.045 265);
+    --bg-3: oklch(0.28 0.05 265);
+    --line: oklch(0.35 0.05 265 / 0.35);
+    --line-strong: oklch(0.55 0.08 265 / 0.55);
+    --fg:      oklch(0.96 0.01 265);
+    --fg-dim:  oklch(0.75 0.02 265);
+    --fg-mute: oklch(0.55 0.03 265);
+    --gold:    oklch(0.85 0.14 85);
+    /* 第 2 层 — cs 学科 accent (cyan) */
+    --cs:      oklch(0.75 0.17 200);
+    /* 第 3 层 — cs 5 色 palette (限 mascot / 数据可视化) */
+    --p-signal: oklch(0.75 0.17 200);
+    --p-core:   oklch(0.55 0.16 200);
+    --p-depth:  oklch(0.35 0.10 210);
+    --p-flash:  oklch(0.92 0.08 190);
+    --p-query:  oklch(0.85 0.14 85);
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;height:100vh;overflow:hidden;background:var(--bg-0);
+    font-family:'Inter',system-ui,sans-serif;color:var(--fg);}
+  body{display:flex;}
+  /* sidebar */
+  .sidebar{width:200px;height:100vh;flex-shrink:0;background:var(--bg-1);
+    border-right:1px solid var(--line);display:flex;flex-direction:column;gap:14px;padding:16px;}
+  .brand{font-size:15px;font-weight:800;line-height:1.3;}
+  .brand .sub{display:block;font-size:11px;font-weight:600;color:var(--cs);margin-top:3px;
+    font-family:'JetBrains Mono',monospace;}
+  .guide{font-size:11px;line-height:1.55;color:var(--fg-dim);}
+  .guide li{margin-bottom:6px;list-style:none;position:relative;padding-left:12px;}
+  .guide li:before{content:'>';position:absolute;left:0;color:var(--cs);
+    font-family:'JetBrains Mono',monospace;}
+  ul{margin:0;padding:0;}
+  /* route map */
+  .route{margin-top:2px;}
+  .route-title{font-size:10px;color:var(--fg-mute);text-transform:uppercase;
+    letter-spacing:1px;font-family:'JetBrains Mono',monospace;margin-bottom:7px;}
+  .route-row{display:flex;align-items:center;gap:7px;font-size:11px;color:var(--fg-mute);
+    margin-bottom:5px;font-family:'JetBrains Mono',monospace;}
+  .route-dot{width:8px;height:8px;border-radius:50%;background:var(--bg-3);flex-shrink:0;
+    border:1px solid var(--line-strong);}
+  .route-row.here{color:var(--cs);font-weight:700;}
+  .route-row.here .route-dot{background:var(--cs);border-color:var(--cs);
+    box-shadow:0 0 0 3px oklch(0.75 0.17 200 / 0.22);}
+  .route-row.done{color:var(--fg-dim);}
+  .route-row.done .route-dot{background:var(--p-core);border-color:var(--p-core);}
+  .lang-btn{margin-top:auto;padding:8px 10px;font-size:12px;font-weight:600;cursor:pointer;
+    background:var(--bg-2);color:var(--fg);border:1px solid var(--line-strong);
+    font-family:'JetBrains Mono',monospace;box-shadow:3px 3px 0 var(--bg-0);transition:transform .1s;}
+  .lang-btn:hover{transform:translate(-1px,-1px);}
+  .lang-btn:active{transform:translate(1px,1px);box-shadow:1px 1px 0 var(--bg-0);}
+  /* mascot */
+  .mascot{margin-top:4px;}
+  .mascot-cap{font-size:10px;color:var(--fg-mute);text-align:center;margin-top:4px;
+    font-family:'JetBrains Mono',monospace;}
+  /* main stage */
+  .stage{flex:1;height:100vh;position:relative;overflow:hidden;}
+  canvas{position:absolute;inset:0;width:100%;height:100%;display:block;}
+  /* HUD */
+  .hud{position:absolute;top:16px;right:16px;background:var(--bg-1);
+    border:1px solid var(--line-strong);padding:10px 14px;min-width:182px;
+    font-family:'JetBrains Mono',monospace;font-size:11px;box-shadow:3px 3px 0 var(--bg-0);}
+  .hud-row{display:flex;justify-content:space-between;gap:14px;line-height:1.65;}
+  .hud-lbl{color:var(--fg-mute);}
+  .hud-val{color:var(--cs);font-weight:700;}
+  .hud-val.gold{color:var(--gold);}
+  /* subtitle */
+  .sub{position:absolute;bottom:22px;left:50%;transform:translateX(-50%);
+    text-align:center;width:84%;pointer-events:none;}
+  .sub-zh{font-size:19px;font-weight:800;color:var(--fg);
+    background:oklch(0.18 0.04 265 / 0.9);padding:7px 20px;display:inline-block;
+    border:1px solid var(--line-strong);}
+  .sub-en{font-size:12px;font-style:italic;color:var(--fg-dim);margin-top:5px;
+    font-family:'JetBrains Mono',monospace;}
+  /* corner Minecraft silhouette */
+  .endmark{position:absolute;bottom:14px;right:16px;display:flex;align-items:center;
+    gap:7px;opacity:0.5;pointer-events:none;}
+  .endmark span{font-size:9px;color:var(--fg-mute);font-family:'JetBrains Mono',monospace;
+    max-width:96px;line-height:1.35;}
+</style>
+</head>
+<body>
+
+<aside class="sidebar">
+  <div class="brand" id="brand">脑控 Minecraft
+    <span class="sub" id="brandSub">S3 · FEATURES</span>
+  </div>
+
+  <ul class="guide" id="guide">
+    <li id="g0">一个 trial = 11000 个数</li>
+    <li id="g1">CSP 投影到 6 个最优方向</li>
+    <li id="g2">每路取方差 -> 取 log</li>
+    <li id="g3">压成 6 个特征数</li>
+  </ul>
+
+  <!-- mascot Bit -->
+  <div class="mascot">
+    <svg viewBox="0 0 120 90" width="100%" id="mascotSvg" aria-hidden="true">
+      <g id="bitBody">
+        <rect x="42" y="26" width="36" height="36" rx="4" fill="var(--p-core)" stroke="var(--p-signal)" stroke-width="2"/>
+        <rect x="48" y="32" width="10" height="10" rx="2" fill="var(--p-flash)"/>
+        <rect x="62" y="32" width="10" height="10" rx="2" fill="var(--p-signal)"/>
+        <rect x="48" y="46" width="10" height="10" rx="2" fill="var(--p-signal)"/>
+        <rect x="62" y="46" width="10" height="10" rx="2" fill="var(--p-depth)"/>
+        <circle cx="53" cy="20" r="2.5" fill="var(--p-flash)"/>
+        <circle cx="67" cy="20" r="2.5" fill="var(--p-flash)"/>
+        <line x1="53" y1="22" x2="53" y2="26" stroke="var(--p-signal)" stroke-width="1.5"/>
+        <line x1="67" y1="22" x2="67" y2="26" stroke="var(--p-signal)" stroke-width="1.5"/>
+      </g>
+    </svg>
+    <div class="mascot-cap">Bit</div>
+  </div>
+
+  <div class="route">
+    <div class="route-title" id="routeTitle">ROUTE</div>
+    <div class="route-row done"><span class="route-dot"></span><span id="r1">S1 认识脑波</span></div>
+    <div class="route-row done"><span class="route-dot"></span><span id="r2">S2 清洁信号</span></div>
+    <div class="route-row here"><span class="route-dot"></span><span id="r3">S3 提特征</span></div>
+    <div class="route-row"><span class="route-dot"></span><span id="r4">S4 自录冲准</span></div>
+    <div class="route-row"><span class="route-dot"></span><span id="r5">S5 接 Minecraft</span></div>
+    <div class="route-row"><span class="route-dot"></span><span id="r6">S6 分享</span></div>
+  </div>
+
+  <button class="lang-btn" id="langBtn">中 / EN</button>
+</aside>
+
+<main class="stage">
+  <canvas id="cv"></canvas>
+  <div class="hud">
+    <div class="hud-row"><span class="hud-lbl">stage</span><span class="hud-val" id="hStage">--</span></div>
+    <div class="hud-row"><span class="hud-lbl">trial dims</span><span class="hud-val" id="hDims">22 x 500</span></div>
+    <div class="hud-row"><span class="hud-lbl">numbers</span><span class="hud-val" id="hNums">11000</span></div>
+    <div class="hud-row"><span class="hud-lbl">feature dim</span><span class="hud-val gold" id="hFeat">--</span></div>
+  </div>
+  <div class="sub">
+    <div class="sub-zh" id="subZh"></div>
+    <div class="sub-en" id="subEn"></div>
+  </div>
+  <div class="endmark">
+    <!-- minecraft creeper-ish block silhouette -->
+    <svg width="22" height="22" viewBox="0 0 22 22" aria-hidden="true">
+      <rect x="2" y="2" width="18" height="18" fill="var(--p-depth)" stroke="var(--cs)" stroke-width="1"/>
+      <rect x="5" y="6" width="4" height="4" fill="var(--bg-0)"/>
+      <rect x="13" y="6" width="4" height="4" fill="var(--bg-0)"/>
+      <rect x="9" y="11" width="4" height="3" fill="var(--bg-0)"/>
+      <rect x="7" y="14" width="2" height="3" fill="var(--bg-0)"/>
+      <rect x="13" y="14" width="2" height="3" fill="var(--bg-0)"/>
+    </svg>
+    <span id="endTxt">终点: 念头驱动方块</span>
+  </div>
+</main>
+
+<script>
+"use strict";
+var LANG='cn';
+
+/* ---------------- i18n ---------------- */
+var I18N = {
+  brand:{cn:'脑控 Minecraft', en:'Mind-craft'},
+  brandSub:{cn:'S3 · 特征', en:'S3 · FEATURES'},
+  g:{cn:['一个 trial = 11000 个数','CSP 投影到 6 个最优方向','每路取方差 -> 取 log','压成 6 个特征数'],
+     en:['one trial = 11000 numbers','CSP projects to 6 best axes','per axis: variance -> log','squeeze into 6 features']},
+  route:{cn:'路线', en:'ROUTE'},
+  r:{cn:['S1 认识脑波','S2 清洁信号','S3 提特征','S4 自录冲准','S5 接 Minecraft','S6 分享'],
+     en:['S1 see waves','S2 clean','S3 features','S4 record','S5 Minecraft','S6 share']},
+  endTxt:{cn:'终点: 念头驱动方块', en:'goal: thoughts move blocks'},
+  /* 连续演化阶段说明 (字幕辅助, 画面为主) */
+  c0:{zh:{cn:'CSP 找好方向了 — 现在把每段脑波榨成几个能代表它的关键数',
+          en:'CSP found the axes — now squeeze each EEG block into a few key numbers'},
+      en:{cn:'起点: 一个 trial 是 22 通道 x 500 点 = 11000 个原始数',
+          en:'start: one trial = 22 channels x 500 samples = 11000 raw numbers'}},
+  c1:{zh:{cn:'第一步: 用 CSP 的 6 个方向把这一整块数投影成 6 条新时间序列',
+          en:'step 1: project the whole block onto CSP 6 axes -> 6 new time series'},
+      en:{cn:'11000 个数没变少, 只是换了个最利于分左右手的坐标系',
+          en:'still 11000 numbers — just rotated into the most left/right-separating frame'}},
+  c2:{zh:{cn:'第二步: 每一条投影只问一件事 — 它抖得多厉害? 取方差',
+          en:'step 2: each projection asks one thing — how hard does it wobble? take variance'},
+      en:{cn:'一整条 500 点的序列, 坍缩成一个方差数 var(z)',
+          en:'a full 500-point series collapses into one variance number var(z)'}},
+  c3:{zh:{cn:'第三步: 方差是长尾的 — 取 log 把它拉成接近高斯的钟形, LDA 更好分',
+          en:'step 3: variance is long-tailed — take log to make it near-Gaussian for LDA'},
+      en:{cn:'log 压缩大值、拉开小值, 分布对称了, 线性分类器才好画线',
+          en:'log compresses large, stretches small — symmetric dist suits a linear classifier'}},
+  c4:{zh:{cn:'终点: 11000 个数 -> 6 个特征数, 一个 trial 收成一根短向量',
+          en:'end: 11000 numbers -> 6 features — one trial becomes a tiny vector'},
+      en:{cn:'每个 trial 变成 6 个特征数, 下一步喂给分类器分左右手',
+          en:'each trial -> 6 feature numbers; next: feed a classifier to tell left vs right hand'}},
+};
+function t(k){return (I18N[k]&&I18N[k][LANG])||(I18N[k]&&I18N[k].en)||k;}
+function cuePair(k){ return I18N[k][LANG]||I18N[k].en; }
+
+function refreshI18N(){
+  document.getElementById('brand').childNodes[0].nodeValue = t('brand')+' ';
+  document.getElementById('brandSub').textContent = t('brandSub');
+  var gs=t('g'); for(var i=0;i<4;i++) document.getElementById('g'+i).textContent=gs[i];
+  document.getElementById('routeTitle').textContent = t('route');
+  var rs=t('r'); for(var j=0;j<6;j++) document.getElementById('r'+(j+1)).textContent=rs[j];
+  document.getElementById('endTxt').textContent = t('endTxt');
+  document.getElementById('langBtn').textContent = LANG==='cn'?'中 / EN':'EN / 中';
+  updateCue();
+}
+document.getElementById('langBtn').addEventListener('click', function(){
+  LANG = LANG==='cn'?'en':'cn'; refreshI18N();
+});
+
+/* ---------------- canvas setup ---------------- */
+var cv = document.getElementById('cv');
+var g = cv.getContext('2d');
+var W=0,H=0,DPR=1;
+function resize(){
+  var rect = cv.parentElement.getBoundingClientRect();
+  if(rect.width<1||rect.height<1) return;
+  DPR = window.devicePixelRatio||1;
+  cv.width = rect.width*DPR; cv.height = rect.height*DPR;
+  cv.style.width=rect.width+'px'; cv.style.height=rect.height+'px';
+  g.setTransform(DPR,0,0,DPR,0,0);
+  W=rect.width; H=rect.height;
+}
+window.addEventListener('resize', resize);
+resize(); setTimeout(resize,200); setTimeout(resize,600);
+if(document.fonts&&document.fonts.ready) document.fonts.ready.then(resize);
+
+/* ---------------- colors (from cs palette) ---------------- */
+var C_SIGNAL='oklch(0.75 0.17 200)';
+var C_CORE='oklch(0.55 0.16 200)';
+var C_DEPTH='oklch(0.35 0.10 210)';
+var C_FLASH='oklch(0.92 0.08 190)';
+var C_GOLD='oklch(0.85 0.14 85)';
+var C_FG='oklch(0.96 0.01 265)';
+var C_DIM='oklch(0.75 0.02 265)';
+var C_MUTE='oklch(0.55 0.03 265)';
+var C_LINE='oklch(0.35 0.05 265 / 0.5)';
+var C_BG1='oklch(0.18 0.04 265)';
+var C_BG2='oklch(0.22 0.045 265)';
+var FONT_M="'JetBrains Mono', monospace";
+var FONT_S="'Inter', sans-serif";
+
+/* ---------------- deterministic data ---------------- */
+function hashRnd(s){ var u=Math.sin(s*12.9898)*43758.5453; u=u-Math.floor(u); return u; }
+function gauss(s){
+  var u1=hashRnd(s), u2=hashRnd(s+0.5);
+  if(u1<1e-6) u1=1e-6;
+  return Math.sqrt(-2*Math.log(u1))*Math.cos(2*Math.PI*u2);
+}
+// the ONE trial: 22 channels x 500 samples. We draw representative wiggle per channel.
+var N_CH=22, N_T=500;
+// six CSP projection axes ordered: var goes high->low (the 6 features). amplitudes chosen
+// so log-variance fans out nicely. These are the destiny of our one trial.
+var rawVar = [3.9, 2.6, 1.5, 0.9, 0.42, 0.16];  // variance per projection (long-tailed)
+var featLog = rawVar.map(function(v){return Math.log(v);});  // log -> the 6 features
+
+/* per-projection time series sample (sinusoid+noise) reproducible */
+function projSample(axis, i){
+  var freq = 0.06 + axis*0.012;
+  var amp = Math.sqrt(rawVar[axis]);
+  return amp*(Math.sin(i*freq + axis)*0.8 + gauss(i*0.7+axis*97)*0.45);
+}
+function chSample(ch, i){
+  var amp = 0.6 + 0.5*hashRnd(ch*7+3);
+  var freq = 0.05 + 0.05*hashRnd(ch*3+1);
+  return amp*(Math.sin(i*freq + ch)*0.7 + gauss(i*0.9+ch*53)*0.5);
+}
+
+/* ---------------- timeline ----------------
+   One continuous "juicing" pass. Phases blend; the SAME data block is the only object.
+   c0 intro(framing) c1 project c2 variance c3 log c4 vector
+*/
+var PHASES = ['c0','c1','c2','c3','c4'];
+var DUR = [5500, 7000, 7500, 7500, 7000];  // ms each, total ~34.5s
+var TOTAL = DUR.reduce(function(a,b){return a+b;},0);
+var animStart = performance.now();
+
+function phaseAt(tms){
+  var acc=0;
+  for(var i=0;i<DUR.length;i++){
+    if(tms < acc+DUR[i]) return {idx:i, p:(tms-acc)/DUR[i]};
+    acc+=DUR[i];
+  }
+  return {idx:DUR.length-1, p:1};
+}
+function ease(x){ return x<0.5 ? 2*x*x : 1-Math.pow(-2*x+2,2)/2; }
+function clamp01(x){ return x<0?0:x>1?1:x; }
+
+var curPhase=-1;
+function updateCue(){
+  var key = PHASES[curPhase<0?0:curPhase];
+  var pair = cuePair(key);
+  document.getElementById('subZh').textContent = pair.cn;
+  document.getElementById('subEn').textContent = pair.en;
+  // HUD
+  var stageNames=['raw block','CSP project','variance','log','feature vector'];
+  document.getElementById('hStage').textContent = stageNames[curPhase<0?0:curPhase];
+  if(curPhase<=0){ document.getElementById('hFeat').textContent='--'; }
+}
+
+/* ---------------- layout geometry (continuous morph) ----------------
+   The trial lives at a left "block" region early, then 6 projection lanes appear in
+   the center, then each lane collapses to a variance bar on the right, then logs,
+   then a single vector chip. We crossfade between consecutive layouts so the SAME
+   6 quantities continuously travel rightward and shrink.
+*/
+function lanesY(){
+  var topY=H*0.16, bot=H*0.84;
+  var ys=[];
+  for(var k=0;k<6;k++) ys.push(topY + (bot-topY)*(k/(5)));
+  return ys;
+}
+
+function drawTitleTop(txt){
+  g.fillStyle=C_FG; g.font='800 17px '+FONT_S; g.textAlign='center';
+  g.fillText(txt, (W*0.5), 34);
+}
+
+/* draw the raw 22-channel block as stacked wiggly lines inside a framed box */
+function drawRawBlock(x,y,w,h,alpha,phaseProg){
+  g.save(); g.globalAlpha=alpha;
+  g.fillStyle=C_BG1; g.strokeStyle=C_LINE; g.lineWidth=1;
+  g.fillRect(x,y,w,h); g.strokeRect(x,y,w,h);
+  var n = N_CH;
+  var rowH=h/n;
+  // a moving scan window to feel "live" data
+  var tnow=performance.now()*0.001;
+  for(var c=0;c<n;c++){
+    g.beginPath();
+    var cy=y+rowH*c+rowH*0.5;
+    for(var i=0;i<=80;i++){
+      var frac=i/80;
+      var samp=chSample(c, frac*N_T + tnow*8);
+      var px=x+frac*w;
+      var py=cy - samp*rowH*0.42;
+      if(i===0) g.moveTo(px,py); else g.lineTo(px,py);
+    }
+    g.strokeStyle = c%2? C_CORE : C_SIGNAL; g.globalAlpha=alpha*0.55;
+    g.lineWidth=1; g.stroke();
+  }
+  g.globalAlpha=alpha;
+  g.fillStyle=C_DIM; g.font='10px '+FONT_M; g.textAlign='left';
+  g.fillText('22 ch', x+4, y-6);
+  g.save(); g.translate(x-8,y+h*0.5); g.rotate(-Math.PI/2);
+  g.textAlign='center'; g.fillText('500 samples', 0,0); g.restore();
+  g.fillStyle=C_GOLD; g.font='700 12px '+FONT_M; g.textAlign='center';
+  g.fillText('11000 numbers', x+w*0.5, y+h+18);
+  g.restore();
+}
+
+/* draw 6 projection lanes (time series), amplitude proportional to sqrt(rawVar) */
+function drawProjLanes(cx, laneW, ys, alpha, growth){
+  g.save(); g.globalAlpha=alpha;
+  var tnow=performance.now()*0.001;
+  for(var k=0;k<6;k++){
+    var y=ys[k];
+    var laneH = (H*0.68)/6 * 0.78;
+    // baseline
+    g.strokeStyle=C_LINE; g.lineWidth=1;
+    g.beginPath(); g.moveTo(cx, y); g.lineTo(cx+laneW, y); g.stroke();
+    // series
+    g.beginPath();
+    var amp = Math.sqrt(rawVar[k]);
+    for(var i=0;i<=120;i++){
+      var frac=i/120;
+      var samp=projSample(k, frac*N_T + tnow*10);
+      var px=cx + frac*laneW*growth;
+      var py=y - samp*laneH*0.42;
+      if(i===0) g.moveTo(px,py); else g.lineTo(px,py);
+      if(frac>growth) break;
+    }
+    g.strokeStyle = (k<2)?C_SIGNAL : (k<4)?C_CORE : C_DEPTH;
+    g.lineWidth=1.4; g.stroke();
+    // label
+    g.fillStyle=C_DIM; g.font='10px '+FONT_M; g.textAlign='right';
+    g.fillText('z'+(k+1), cx-8, y+3);
+  }
+  g.restore();
+}
+
+/* draw variance bars (one number per lane) */
+function drawVarBars(x, ys, maxLen, alpha, fill){
+  g.save(); g.globalAlpha=alpha;
+  for(var k=0;k<6;k++){
+    var y=ys[k];
+    var len = (rawVar[k]/rawVar[0])*maxLen*fill;
+    g.fillStyle = (k<2)?C_SIGNAL : (k<4)?C_CORE : C_DEPTH;
+    g.fillRect(x, y-7, len, 14);
+    g.strokeStyle=C_LINE; g.lineWidth=1; g.strokeRect(x, y-7, Math.max(len,1), 14);
+    g.fillStyle=C_FG; g.font='10px '+FONT_M; g.textAlign='left';
+    g.fillText('var='+rawVar[k].toFixed(2), x+len+8, y+4);
+  }
+  g.restore();
+}
+
+/* the log axis morph: show a distribution that goes from long-tailed to bell */
+function drawLogMorph(cx, cy, w, h, p){
+  g.save();
+  // two mini histograms side by side that morph: left=raw var (skewed), right=log (bell)
+  // We animate one histogram transitioning from skewed to symmetric.
+  var bins=18;
+  g.strokeStyle=C_LINE; g.lineWidth=1;
+  g.beginPath(); g.moveTo(cx-w/2, cy+h/2); g.lineTo(cx+w/2, cy+h/2); g.stroke();
+  var bw=w/bins;
+  for(var b=0;b<bins;b++){
+    var fr=b/(bins-1);
+    // skewed dist: exp-like (front-loaded)
+    var skew=Math.exp(-fr*3.2);
+    // bell dist (gaussian)
+    var bell=Math.exp(-Math.pow((fr-0.5)*3.0,2));
+    var v = skew*(1-p) + bell*p;
+    var bh = v*h*0.92;
+    var bx=cx-w/2 + b*bw;
+    g.fillStyle = b/bins<0.5? C_SIGNAL : C_CORE;
+    g.globalAlpha=0.85;
+    g.fillRect(bx+1, cy+h/2-bh, bw-2, bh);
+  }
+  g.globalAlpha=1;
+  // gold bell outline appearing
+  if(p>0.05){
+    g.strokeStyle=C_GOLD; g.lineWidth=2; g.globalAlpha=clamp01(p);
+    g.beginPath();
+    for(var i=0;i<=60;i++){
+      var fr=i/60;
+      var bell=Math.exp(-Math.pow((fr-0.5)*3.0,2));
+      var v=bell*p;
+      var px=cx-w/2+fr*w;
+      var py=cy+h/2 - v*h*0.92;
+      if(i===0) g.moveTo(px,py); else g.lineTo(px,py);
+    }
+    g.stroke();
+    g.globalAlpha=1;
+  }
+  g.fillStyle=C_DIM; g.font='10px '+FONT_M; g.textAlign='center';
+  g.fillText(LANG==='cn'?'方差分布 (长尾)':'variance dist (skewed)', cx, cy+h/2+18);
+  if(p>0.4){
+    g.globalAlpha=clamp01((p-0.4)/0.6);
+    g.fillStyle=C_GOLD;
+    g.fillText(LANG==='cn'?'取 log -> 近高斯钟形':'after log -> near-Gaussian bell', cx, cy+h/2+34);
+    g.globalAlpha=1;
+  }
+  g.restore();
+}
+
+/* the final 6-number feature vector chip */
+function drawFeatureVector(cx, cy, alpha, pop){
+  g.save(); g.globalAlpha=alpha;
+  var bw=64, bh=40, gap=8;
+  var totalW=6*bw+5*gap;
+  var sx=cx-totalW/2;
+  for(var k=0;k<6;k++){
+    var bx=sx+k*(bw+gap);
+    var scale = 0.6 + 0.4*ease(clamp01(pop*1.5 - k*0.08));
+    var ww=bw*scale, hh=bh*scale;
+    var ox=bx+(bw-ww)/2, oy=cy-hh/2;
+    g.fillStyle=C_BG2; g.strokeStyle=C_SIGNAL; g.lineWidth=1.5;
+    g.fillRect(ox,oy,ww,hh); g.strokeRect(ox,oy,ww,hh);
+    g.fillStyle=C_GOLD; g.font='700 13px '+FONT_M; g.textAlign='center';
+    g.fillText(featLog[k].toFixed(2), bx+bw/2, cy+5);
+    g.fillStyle=C_MUTE; g.font='9px '+FONT_M;
+    g.fillText('f'+(k+1), bx+bw/2, oy-6);
+  }
+  g.restore();
+}
+
+/* big "11000 -> 6" reducer arrow callout */
+function drawReduceLabel(cx, y, alpha){
+  g.save(); g.globalAlpha=alpha;
+  g.fillStyle=C_FLASH; g.font='800 22px '+FONT_M; g.textAlign='center';
+  g.fillText('11000  ->  6', cx, y);
+  g.restore();
+}
+
+/* ---------------- render ---------------- */
+function render(){
+  var now=performance.now();
+  var tms=(now-animStart)%TOTAL;
+  var ph=phaseAt(tms);
+  if(ph.idx!==curPhase){ curPhase=ph.idx; updateCue(); }
+  var p=ph.p, ep=ease(p);
+
+  g.clearRect(0,0,W,H);
+  g.fillStyle='oklch(0.14 0.035 265)'; g.fillRect(0,0,W,H);
+
+  var ys=lanesY();
+  // feature dim HUD: counts up as we reach phase 4
+  if(curPhase>=4){ document.getElementById('hFeat').textContent='6'; }
+  else if(curPhase===0){ document.getElementById('hFeat').textContent='--'; }
+
+  // --- continuous layered render: same 6 quantities drift right + shrink ---
+  if(curPhase===0){
+    // intro: the raw block fades in, big
+    drawTitleTop(LANG==='cn'?'锁定一个 trial — 把它榨成几个特征数':'lock one trial — juice it into a few features');
+    var a=ease(clamp01(p*2));
+    drawRawBlock(W*0.34, H*0.18, W*0.32, H*0.6, a, p);
+    document.getElementById('hStage').textContent='raw block';
+  }
+  else if(curPhase===1){
+    // project: block on left, 6 lanes growing out of it in center
+    drawTitleTop(LANG==='cn'?'CSP 投影: 同一块数 -> 6 条最优方向':'CSP projection: same block -> 6 best axes');
+    drawRawBlock(W*0.06, H*0.18, W*0.2, H*0.6, 1, 1);
+    // arrows from block to lanes
+    g.strokeStyle=C_LINE; g.lineWidth=1;
+    var bx=W*0.06+W*0.2, by=H*0.5;
+    for(var k=0;k<6;k++){
+      g.globalAlpha=clamp01(p*2-k*0.1);
+      g.beginPath(); g.moveTo(bx, by); g.lineTo(W*0.42, ys[k]); g.stroke();
+    }
+    g.globalAlpha=1;
+    drawProjLanes(W*0.42, W*0.42, ys, 1, clamp01(p*1.4));
+    document.getElementById('hStage').textContent='CSP project';
+  }
+  else if(curPhase===2){
+    // variance: lanes on left compress into a variance bar on the right
+    drawTitleTop(LANG==='cn'?'每条投影只取一个数: 方差 var(z)':'each projection -> one number: variance var(z)');
+    var laneAlpha=1-ep*0.55;
+    drawProjLanes(W*0.1, W*0.34, ys, laneAlpha, 1);
+    // collapsing indicator: a sweeping "squeeze" that turns wiggle into bar
+    drawVarBars(W*0.55, ys, W*0.25, 1, ep);
+    // squeeze arrows
+    g.strokeStyle=C_GOLD; g.lineWidth=1.5; g.globalAlpha=0.7;
+    for(var k2=0;k2<6;k2++){
+      g.beginPath(); g.moveTo(W*0.45, ys[k2]); g.lineTo(W*0.54, ys[k2]); g.stroke();
+    }
+    g.globalAlpha=1;
+    document.getElementById('hStage').textContent='variance';
+  }
+  else if(curPhase===3){
+    // log: variance bars on left, distribution morph in center showing why log
+    drawTitleTop(LANG==='cn'?'为什么取 log: 把长尾方差拉成近高斯':'why log: turn long-tailed variance into near-Gaussian');
+    drawVarBars(W*0.06, ys, W*0.18, 1-ep*0.4, 1);
+    drawLogMorph(W*0.58, H*0.46, W*0.34, H*0.42, ep);
+    // log feature emerging numbers on right edge
+    g.save(); g.globalAlpha=ep;
+    for(var k3=0;k3<6;k3++){
+      g.fillStyle=C_GOLD; g.font='700 11px '+FONT_M; g.textAlign='left';
+      g.fillText('log(var'+(k3+1)+')='+featLog[k3].toFixed(2), W*0.06, ys[k3]+24);
+    }
+    g.restore();
+    document.getElementById('hStage').textContent='log';
+  }
+  else {
+    // final: everything collapses into one 6-number vector chip + reduce label
+    drawTitleTop(LANG==='cn'?'一个 trial = 一根 6 维特征向量':'one trial = a single 6-D feature vector');
+    drawReduceLabel(W*0.5, H*0.3, ease(clamp01(p*2)));
+    drawFeatureVector(W*0.5, H*0.52, 1, p);
+    // gold key-moment flash ring on completion
+    if(p>0.55){
+      var fa=Math.sin(Math.min(1,(p-0.55)/0.45)*Math.PI);
+      g.save(); g.globalAlpha=fa*0.8;
+      g.strokeStyle=C_GOLD; g.lineWidth=2;
+      g.strokeRect(W*0.5-220, H*0.52-40, 440, 80);
+      g.restore();
+    }
+    // forward pointer to S4 / classifier
+    g.fillStyle=C_DIM; g.font='12px '+FONT_M; g.textAlign='center';
+    g.fillText(LANG==='cn'?'-> 下一步: 喂给分类器分左右手 (S4)':'-> next: feed classifier to tell left/right hand (S4)', W*0.5, H*0.72);
+    document.getElementById('hStage').textContent='feature vector';
+  }
+
+  requestAnimationFrame(render);
+}
+
+refreshI18N();
+requestAnimationFrame(render);
+</script>
+</body>
+</html>

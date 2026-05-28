@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>M37 EEGNet — 一个小 CNN 端到端自己学特征</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Noto+Sans+SC:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    /* 第 1 层 — 共享深空底 (所有 26 学科统一) */
+    --bg-0: oklch(0.14 0.035 265);
+    --bg-1: oklch(0.18 0.04 265);
+    --bg-2: oklch(0.22 0.045 265);
+    --bg-3: oklch(0.28 0.05 265);
+    --line: oklch(0.35 0.05 265 / 0.35);
+    --line-strong: oklch(0.55 0.08 265 / 0.55);
+    --fg:      oklch(0.96 0.01 265);
+    --fg-dim:  oklch(0.75 0.02 265);
+    --fg-mute: oklch(0.55 0.03 265);
+    --gold:    oklch(0.85 0.14 85);
+    /* 第 2 层 — ai 学科 signature accent (magenta) */
+    --ai: oklch(0.72 0.17 335);
+    /* 第 3 层 — ai Neural Aurora 5 色 palette (themes.js ai 段) */
+    --syn:    oklch(0.72 0.17 335);  /* SYNAPSE */
+    --cortex: oklch(0.52 0.16 335);  /* CORTEX */
+    --deep:   oklch(0.35 0.10 330);  /* DEEP */
+    --spark:  oklch(0.92 0.08 335);  /* SPARK */
+    --insight:oklch(0.85 0.14 85);   /* INSIGHT */
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;height:100vh;overflow:hidden;background:var(--bg-0);
+    font-family:'Noto Sans SC',sans-serif;color:var(--fg);}
+  body{display:flex;}
+  /* ---- sidebar ---- */
+  .sidebar{width:200px;height:100vh;flex-shrink:0;background:var(--bg-1);
+    border-right:1px solid var(--line);display:flex;flex-direction:column;gap:14px;padding:16px 14px;}
+  .brand{font-size:15px;font-weight:700;line-height:1.3;}
+  .brand small{display:block;font-family:'JetBrains Mono',monospace;font-size:10px;
+    font-weight:500;color:var(--ai);margin-top:3px;letter-spacing:.06em;}
+  .mascot-wrap{display:flex;justify-content:center;padding:4px 0;}
+  .route{font-family:'JetBrains Mono',monospace;font-size:10px;line-height:1.9;color:var(--fg-mute);}
+  .route .rt{display:flex;align-items:center;gap:6px;}
+  .route .dot{width:7px;height:7px;border-radius:50%;background:var(--bg-3);flex-shrink:0;}
+  .route .rt.now .dot{background:var(--ai);box-shadow:0 0 8px var(--ai);}
+  .route .rt.now{color:var(--spark);font-weight:700;}
+  .route .rt.done .dot{background:var(--cortex);}
+  .guide{font-size:11px;line-height:1.7;color:var(--fg-dim);border-top:1px solid var(--line);padding-top:10px;}
+  .guide b{color:var(--fg);}
+  .lang-btn{margin-top:auto;background:var(--bg-2);border:1px solid var(--line-strong);
+    color:var(--fg);font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:600;
+    padding:8px 0;cursor:pointer;box-shadow:3px 3px 0 var(--bg-0);transition:transform .08s;}
+  .lang-btn:hover{transform:translate(-1px,-1px);}
+  .lang-btn:active{transform:translate(1px,1px);box-shadow:1px 1px 0 var(--bg-0);}
+  /* ---- stage ---- */
+  .stage{flex:1;height:100vh;position:relative;overflow:hidden;}
+  canvas{position:absolute;inset:0;width:100%;height:100%;display:block;}
+  .hud{position:absolute;top:16px;right:16px;background:var(--bg-1);border:1px solid var(--line-strong);
+    padding:10px 13px;font-family:'JetBrains Mono',monospace;font-size:11px;
+    box-shadow:3px 3px 0 var(--bg-0);min-width:176px;z-index:3;}
+  .hud-row{display:flex;justify-content:space-between;gap:14px;line-height:1.65;}
+  .hud-lbl{color:var(--fg-mute);}
+  .hud-val{color:var(--ai);font-weight:700;}
+  .sub{position:absolute;left:50%;bottom:26px;transform:translateX(-50%);width:84%;
+    text-align:center;pointer-events:none;z-index:3;}
+  .sub-zh{display:inline-block;font-size:18px;font-weight:700;color:var(--fg);
+    background:var(--bg-1);border:1px solid var(--line-strong);padding:7px 18px;line-height:1.4;}
+  .sub-en{margin-top:5px;font-family:'JetBrains Mono',monospace;font-size:11px;
+    font-style:italic;color:var(--fg-dim);}
+  /* Minecraft 终点剪影 角落常驻 */
+  .goal{position:absolute;left:16px;bottom:16px;z-index:3;display:flex;align-items:center;gap:7px;
+    font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--fg-mute);opacity:.85;}
+</style>
+</head>
+<body>
+<aside class="sidebar">
+  <div class="brand" id="brand">EEGNet 端到端<small>AI-05 / NEURAL AURORA</small></div>
+  <div class="mascot-wrap">
+    <!-- mascot: Nova — soft polygonal orb with shifting internal nodes -->
+    <svg width="64" height="64" viewBox="0 0 64 64" id="mascot">
+      <polygon points="32,6 54,20 54,44 32,58 10,44 10,20" fill="none" stroke="var(--cortex)" stroke-width="1.5"/>
+      <circle cx="32" cy="32" r="17" fill="var(--deep)" opacity="0.55"/>
+      <circle class="nv" cx="24" cy="26" r="3" fill="var(--syn)"/>
+      <circle class="nv" cx="40" cy="27" r="3" fill="var(--spark)"/>
+      <circle class="nv" cx="32" cy="40" r="3" fill="var(--syn)"/>
+      <line x1="24" y1="26" x2="40" y2="27" stroke="var(--syn)" stroke-width="1" opacity="0.6"/>
+      <line x1="40" y1="27" x2="32" y2="40" stroke="var(--syn)" stroke-width="1" opacity="0.6"/>
+      <line x1="32" y1="40" x2="24" y2="26" stroke="var(--syn)" stroke-width="1" opacity="0.6"/>
+    </svg>
+  </div>
+  <div class="route" id="route">
+    <div class="rt done"><span class="dot"></span><span data-r="0">S1 认识脑波</span></div>
+    <div class="rt done"><span class="dot"></span><span data-r="1">S2 清洁信号</span></div>
+    <div class="rt now"><span class="dot"></span><span data-r="2">S3 找特征训分类器</span></div>
+    <div class="rt"><span class="dot"></span><span data-r="3">S4 自录冲准</span></div>
+    <div class="rt"><span class="dot"></span><span data-r="4">S5 接 Minecraft</span></div>
+    <div class="rt"><span class="dot"></span><span data-r="5">S6 分享</span></div>
+  </div>
+  <div class="guide" id="guide">
+    <b data-g="t">看一条原始脑波</b><br>
+    被一个小 CNN 一层层<br>自己学出特征, 不靠手工 CSP。
+  </div>
+  <button class="lang-btn" id="langBtn">中 / EN</button>
+</aside>
+
+<main class="stage">
+  <canvas id="cv"></canvas>
+  <div class="hud">
+    <div class="hud-row"><span class="hud-lbl">layer</span><span class="hud-val" id="hLayer">raw EEG</span></div>
+    <div class="hud-row"><span class="hud-lbl">shape</span><span class="hud-val" id="hShape">22 x 256</span></div>
+    <div class="hud-row"><span class="hud-lbl">learned</span><span class="hud-val" id="hLearned">auto</span></div>
+    <div class="hud-row"><span class="hud-lbl">out</span><span class="hud-val" id="hOut">--</span></div>
+  </div>
+  <div class="sub">
+    <div class="sub-zh" id="subZh">前面我们手工设计 CSP 特征 — 神经网络能不能自己学出来?</div>
+    <div class="sub-en" id="subEn">We hand-designed CSP features. Can a network learn them by itself?</div>
+  </div>
+  <div class="goal" id="goal">
+    <svg width="16" height="16" viewBox="0 0 16 16"><rect x="2" y="2" width="12" height="12" fill="none" stroke="var(--fg-mute)" stroke-width="1"/><rect x="5" y="5" width="3" height="3" fill="var(--ai)"/><rect x="9" y="8" width="3" height="3" fill="var(--cortex)"/></svg>
+    <span data-goal>终点: 用念头操控 Minecraft</span>
+  </div>
+</main>
+
+<script>
+(function(){
+  "use strict";
+  var cv = document.getElementById('cv');
+  var ctx = cv.getContext('2d');
+  var DPR = Math.min(window.devicePixelRatio||1, 2);
+  var W=0, H=0;
+  function resize(){
+    var r = cv.parentElement.getBoundingClientRect();
+    W = r.width; H = r.height;
+    cv.width = Math.max(2, W*DPR); cv.height = Math.max(2, H*DPR);
+    ctx.setTransform(DPR,0,0,DPR,0,0);
+  }
+  window.addEventListener('resize', resize); resize();
+
+  // ---- i18n ----
+  var LANG='cn';
+  var I18N = {
+    brand:{cn:'EEGNet 端到端', en:'EEGNet end-to-end'},
+    goal:{cn:'终点: 用念头操控 Minecraft', en:'Goal: control Minecraft by thought'},
+    guide_t:{cn:'看一条原始脑波', en:'Watch one raw brainwave'},
+    // 连续演化字幕 — 跟随同一条信号穿过网络的各阶段
+    cues:[
+      {t:0.00, zh:'前面我们手工设计 CSP 特征 — 神经网络能不能自己学出来?', en:'We hand-designed CSP features. Can a net learn them by itself?'},
+      {t:0.14, zh:'同一条原始 22 通道脑波, 不做手工特征, 直接喂进 EEGNet', en:'Same raw 22-channel EEG, no hand features — fed straight into EEGNet'},
+      {t:0.30, zh:'时间卷积层: 小核连续滑过时间, 自己学出"哪些频率有意思"', en:'Temporal conv: tiny kernels slide over time, learn which rhythms matter'},
+      {t:0.50, zh:'深度可分空间卷积: 跨 22 通道连续融合 — 它在自学一组空间滤波器', en:'Depthwise spatial conv: fuse across 22 channels — learning spatial filters'},
+      {t:0.66, zh:'这组空间滤波器, 长得很像我们手工调的 CSP — 但它是自己学出来的', en:'These spatial filters resemble CSP — but the net learned them on its own'},
+      {t:0.80, zh:'池化压缩 -> 同一条信号一路流到分类头, 点亮 想左手 / 想右手', en:'Pool & compress -> the same signal flows to the head: left vs right'},
+      {t:0.92, zh:'EEGNet 全程端到端自己学特征 — 但小数据下不一定赢 CSP, 下节比一比', en:'EEGNet learns features end-to-end — yet may not beat CSP on small data. Next: compare.'}
+    ]
+  };
+  function applyI18N(){
+    document.getElementById('brand').childNodes[0].nodeValue = I18N.brand[LANG];
+    document.querySelector('[data-goal]').textContent = I18N.goal[LANG];
+    document.querySelector('[data-g="t"]').textContent = I18N.guide_t[LANG];
+    document.getElementById('langBtn').textContent = LANG==='cn' ? 'EN' : '中文';
+  }
+  document.getElementById('langBtn').addEventListener('click', function(){
+    LANG = (LANG==='cn') ? 'en' : 'cn';
+    applyI18N();
+  });
+
+  function currentCue(p){
+    var c = I18N.cues[0];
+    for (var i=0;i<I18N.cues.length;i++){ if (p >= I18N.cues[i].t) c = I18N.cues[i]; }
+    return c;
+  }
+
+  // ---- 信号源: 同一条 raw EEG (22 ch). 全程是同一个对象 ----
+  var NCH = 22;          // 通道
+  var phase = [];        // 每通道相位/频率, 让波连续流动
+  for (var i=0;i<NCH;i++){ phase.push({f: 0.9+i*0.05, a: 0.5+0.5*Math.sin(i), ph: i*0.7}); }
+  // 哪些通道在"想左手/想右手"时更强 (用于结尾分类可信演化)
+  function chSample(i, x, tt){
+    var p = phase[i];
+    // mu/beta 节律 + 噪声, 随时间连续流动
+    var v = Math.sin((x*p.f*7) + tt*1.4 + p.ph) * p.a;
+    v += 0.35*Math.sin((x*p.f*16) + tt*2.1 + p.ph*1.7);
+    v += 0.12*Math.sin(x*53 + i*9 + tt*5);
+    return v;
+  }
+
+  var DUR = 30; // s, 一镜到底连续演化
+  var t0 = performance.now();
+
+  // ---- 绘制工具 ----
+  function lerp(a,b,t){ return a + (b-a)*t; }
+  function clamp(v,a,b){ return v<a?a:(v>b?b:v); }
+  function ease(t){ return t<0?0:(t>1?1:(t*t*(3-2*t))); }
+
+  function font(px, w){ return (w||500)+' '+px+"px 'JetBrains Mono', monospace"; }
+
+  // 主流程: 同一条信号从左流入, 逐层被网络变形, 一路流到右端
+  function draw(now){
+    var tt = (now - t0)/1000;
+    var p = (tt % DUR) / DUR;          // 0..1 循环进度
+    var glob = tt;                     // 连续时间 (波流动用)
+
+    ctx.clearRect(0,0,W,H);
+    // 深空底渐隐光晕
+    var g = ctx.createRadialGradient(W*0.5, H*0.45, 40, W*0.5, H*0.45, Math.max(W,H)*0.7);
+    g.addColorStop(0, 'oklch(0.20 0.05 300 / 0.55)');
+    g.addColorStop(1, 'oklch(0.14 0.035 265 / 0)');
+    ctx.fillStyle = g; ctx.fillRect(0,0,W,H);
+
+    // 横向网络通道布局: 把舞台分成连续推进的 x 区间 (raw -> temporalConv -> spatialConv -> pool -> head)
+    var padL = 60, padR = 60;
+    var x0 = padL, x1 = W - padR;
+    var span = x1 - x0;
+    // 各阶段的 x 锚 (信号连续穿过, 不是切帧)
+    var X = {
+      raw:    x0 + span*0.02,
+      tconv:  x0 + span*0.30,
+      sconv:  x0 + span*0.56,
+      pool:   x0 + span*0.74,
+      head:   x0 + span*0.92
+    };
+    var midY = H*0.46;
+    var bandH = Math.min(H*0.5, 320);
+    var topY = midY - bandH/2;
+
+    // “信号流前沿”——一个随 p 连续向右推进的波前, 决定每层何时被点亮
+    var front = ease(clamp(p/0.84, 0, 1)); // 0..1, 推进到 head
+    var frontX = lerp(X.raw, X.head, front);
+
+    // ---------- 1) raw EEG: 同一条 22 通道波, 持续流动 ----------
+    var chGap = bandH / NCH;
+    ctx.lineWidth = 1.1;
+    for (var c=0;c<NCH;c++){
+      var cy = topY + chGap*(c+0.5);
+      ctx.beginPath();
+      var alive = clamp((frontX - X.raw) / (span*0.10), 0.15, 1);
+      ctx.strokeStyle = 'oklch(0.72 0.10 300 / '+(0.30+0.25*alive)+')';
+      var seg = X.tconv - X.raw - 10;
+      for (var s=0;s<=40;s++){
+        var xx = X.raw + seg*(s/40);
+        var xn = s/40;
+        var vy = chSample(c, xn, glob) * (chGap*0.42);
+        if (s===0) ctx.moveTo(xx, cy - vy); else ctx.lineTo(xx, cy - vy);
+      }
+      ctx.stroke();
+    }
+    label(X.raw+ (X.tconv-X.raw)/2, topY-14, LANG==='cn'?'原始 EEG · 22 通道':'raw EEG · 22 ch', 'var(--fg-dim)');
+
+    // ---------- 2) temporal conv: 小核连续滑过时间, 学频率模式 ----------
+    var tProg = clamp((front-0.06)/0.30, 0, 1);          // 这一层被激活的程度
+    var kx = lerp(X.raw+12, X.tconv-12, (Math.sin(glob*2.2)*0.5+0.5)); // 滑动核位置 (连续来回)
+    if (tProg>0){
+      // 卷积核小窗 (在 raw 区滑动)
+      var kh = bandH*0.9;
+      ctx.save();
+      ctx.globalAlpha = 0.85*tProg;
+      ctx.strokeStyle = 'var(--syn)';
+      ctx.lineWidth = 1.6;
+      ctx.strokeRect(kx-9, topY-4, 18, kh+8);
+      ctx.fillStyle = 'oklch(0.72 0.17 335 / 0.10)';
+      ctx.fillRect(kx-9, topY-4, 18, kh+8);
+      ctx.restore();
+      // 学出来的频带特征图 (在 tconv 锚): 几条平滑包络, 随时间脉动
+      var nF = 8;
+      var fGap = bandH/nF;
+      for (var f=0;f<nF;f++){
+        var fy = topY + fGap*(f+0.5);
+        ctx.beginPath();
+        var sw = X.sconv - X.tconv - 16;
+        var act = 0.4 + 0.6*Math.abs(Math.sin(glob*1.1 + f*0.9));
+        ctx.strokeStyle = 'oklch('+(0.55+0.25*act)+' 0.16 335 / '+(0.65*tProg)+')';
+        ctx.lineWidth = 1.6;
+        for (var s2=0;s2<=30;s2++){
+          var xx2 = X.tconv + sw*(s2/30);
+          var env = act*(fGap*0.36)*Math.sin(s2/30*Math.PI*(1.5+f*0.3) + glob*1.3);
+          if (s2===0) ctx.moveTo(xx2, fy-env); else ctx.lineTo(xx2, fy-env);
+        }
+        ctx.stroke();
+      }
+      label(X.tconv + (X.sconv-X.tconv)/2, topY-14, LANG==='cn'?'时间卷积 · 自学频率模式':'temporal conv · learn rhythms', 'var(--syn)');
+    }
+
+    // ---------- 3) depthwise spatial conv: 跨通道融合, 学出空间滤波器 (像 CSP) ----------
+    var sProg = clamp((front-0.30)/0.26, 0, 1);
+    if (sProg>0){
+      // 用一个小 headmap-like 圆: 22 个电极点, 权重随训练连续成形 -> 空间滤波器
+      var hx = X.sconv + (X.pool-X.sconv)*0.5;
+      var hy = midY;
+      var R = Math.min(bandH*0.42, 110);
+      // 头颅圈
+      ctx.beginPath(); ctx.arc(hx, hy, R, 0, Math.PI*2);
+      ctx.strokeStyle = 'var(--line-strong)'; ctx.lineWidth=1.4; ctx.stroke();
+      // 鼻尖
+      ctx.beginPath(); ctx.moveTo(hx-7, hy-R); ctx.lineTo(hx, hy-R-9); ctx.lineTo(hx+7, hy-R); ctx.strokeStyle='var(--line-strong)'; ctx.stroke();
+      // 电极权重 (空间滤波器系数): 随 sProg 从均匀 -> 学出对侧偏置 (像 CSP)
+      var formed = ease(sProg);
+      for (var e=0;e<NCH;e++){
+        var ang = (e/NCH)*Math.PI*2;
+        var rr = R*(0.35 + 0.55*((e%3)/2));
+        var ex = hx + Math.cos(ang)*rr;
+        var ey = hy + Math.sin(ang)*rr;
+        // 学到的权重: 左半区正 / 右半区负 (motor 对侧), 越训练越分明
+        var side = Math.cos(ang);
+        var wgt = formed * side * (0.6+0.4*Math.sin(glob*0.9+e));
+        var mag = Math.abs(wgt);
+        ctx.beginPath();
+        ctx.arc(ex, ey, 3+6*mag, 0, Math.PI*2);
+        if (wgt>=0) ctx.fillStyle = 'oklch(0.72 0.17 335 / '+(0.25+0.6*mag)+')';
+        else        ctx.fillStyle = 'oklch(0.55 0.12 250 / '+(0.25+0.6*mag)+')';
+        ctx.fill();
+      }
+      label(hx, hy+R+22, LANG==='cn'?'空间卷积 · 自学空间滤波器 (~CSP)':'spatial conv · learned filters (~CSP)', 'var(--spark)');
+      // 结尾点出 “像 CSP” 的 key moment
+      if (p>0.62 && p<0.80){
+        ctx.save();
+        ctx.globalAlpha = ease((p-0.62)/0.06) * (1-ease((p-0.74)/0.06));
+        ctx.strokeStyle = 'var(--gold)'; ctx.lineWidth=2.2;
+        ctx.beginPath(); ctx.arc(hx, hy, R+10, 0, Math.PI*2); ctx.stroke();
+        label(hx, hy-R-22, LANG==='cn'?'自己学出来的, 不是手调的':'learned, not hand-tuned', 'var(--gold)');
+        ctx.restore();
+      }
+    }
+
+    // ---------- 4) pool: 压缩 ----------
+    var poProg = clamp((front-0.56)/0.18, 0, 1);
+    if (poProg>0){
+      var pbx = X.pool, pby = midY;
+      var ph2 = bandH*0.5*(1-0.45*ease(poProg));
+      ctx.fillStyle = 'oklch(0.35 0.10 330 / '+(0.5*poProg)+')';
+      ctx.fillRect(pbx-10, pby-ph2/2, 20, ph2);
+      ctx.strokeStyle='var(--cortex)'; ctx.lineWidth=1.3; ctx.strokeRect(pbx-10, pby-ph2/2, 20, ph2);
+      label(pbx, pby+ph2/2+18, LANG==='cn'?'池化压缩':'pool', 'var(--fg-dim)');
+    }
+
+    // ---------- 5) classify head: 同一条信号一路流到这里, 点亮 left/right ----------
+    var hProg = clamp((front-0.74)/0.10, 0, 1);
+    var leftAct=0, rightAct=0;
+    if (hProg>0){
+      // 由空间滤波器对侧偏置算出来的分类倾向 (连续摆动, 训练越久越确定)
+      var bias = Math.sin(glob*0.55); // 演示: 信号在 想左/想右 间连续切换
+      var conf = ease(hProg);
+      leftAct  = clamp(0.5 + bias*0.45*conf, 0.05, 0.97);
+      rightAct = 1 - leftAct;
+      var hx2 = X.head, hyA = midY-46, hyB = midY+46;
+      drawNeuron(hx2, hyA, leftAct,  LANG==='cn'?'想左手':'left',  'var(--syn)');
+      drawNeuron(hx2, hyB, rightAct, LANG==='cn'?'想右手':'right', 'var(--spark)');
+      // 连线 pool->head
+      ctx.strokeStyle = 'oklch(0.72 0.17 335 / '+(0.4*hProg)+')'; ctx.lineWidth=1.2;
+      ctx.beginPath(); ctx.moveTo(X.pool+10, midY); ctx.lineTo(hx2-16, hyA); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(X.pool+10, midY); ctx.lineTo(hx2-16, hyB); ctx.stroke();
+    }
+
+    // ---------- 流动粒子: 沿网络主链路连续推进, 强化"同一条信号一路流过" ----------
+    var nP = 26;
+    for (var pi=0; pi<nP; pi++){
+      var pp = (glob*0.18 + pi/nP) % 1;
+      if (pp > front+0.04) continue; // 没到的不画
+      var px = lerp(X.raw, X.head, pp);
+      var py = midY + Math.sin(pp*Math.PI*3 + glob*2)* (bandH*0.18*(1-pp*0.6));
+      ctx.beginPath(); ctx.arc(px, py, 1.8, 0, Math.PI*2);
+      ctx.fillStyle = 'oklch(0.92 0.08 335 / '+(0.5*(1-pp*0.4))+')';
+      ctx.fill();
+    }
+
+    // ---------- HUD 更新 ----------
+    var hLayer, hShape, hLearned, hOut;
+    if (front<0.10){ hLayer='raw EEG'; hShape='22 x 256'; hLearned='-'; hOut='--'; }
+    else if (front<0.34){ hLayer='temporalConv'; hShape='8 x 256'; hLearned='rhythms'; hOut='--'; }
+    else if (front<0.58){ hLayer='spatialConv'; hShape='16 x 1'; hLearned='filters(~CSP)'; hOut='--'; }
+    else if (front<0.78){ hLayer='avgPool'; hShape='16 x 32'; hLearned='compress'; hOut='--'; }
+    else { hLayer='classify'; hShape='2'; hLearned='end2end';
+           hOut = (leftAct>=rightAct? 'left ':'right ') + Math.round(Math.max(leftAct,rightAct)*100)+'%'; }
+    setTxt('hLayer', hLayer); setTxt('hShape', hShape);
+    setTxt('hLearned', hLearned); setTxt('hOut', hOut);
+
+    // ---------- 字幕 ----------
+    var cue = currentCue(p);
+    document.getElementById('subZh').textContent = cue.zh;
+    document.getElementById('subEn').textContent = cue.en;
+    // 双语对换
+    if (LANG==='en'){
+      document.getElementById('subZh').textContent = cue.en;
+      document.getElementById('subEn').textContent = cue.zh;
+    }
+
+    requestAnimationFrame(draw);
+  }
+
+  function label(x, y, txt, color){
+    ctx.save();
+    ctx.font = font(11,600);
+    ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillStyle = color || 'var(--fg-dim)';
+    ctx.fillText(txt, x, y);
+    ctx.restore();
+  }
+  function drawNeuron(x,y,act,txt,col){
+    ctx.beginPath(); ctx.arc(x,y,16,0,Math.PI*2);
+    ctx.fillStyle = 'oklch(0.22 0.045 265 / 0.9)'; ctx.fill();
+    ctx.strokeStyle = col; ctx.lineWidth = 1.2 + 2.4*act;
+    ctx.stroke();
+    ctx.beginPath(); ctx.arc(x,y,16*act,0,Math.PI*2);
+    ctx.fillStyle = col; ctx.globalAlpha = 0.30+0.5*act; ctx.fill(); ctx.globalAlpha=1;
+    ctx.font = font(11,700); ctx.textAlign='left'; ctx.textBaseline='middle';
+    ctx.fillStyle = 'var(--fg)';
+    ctx.fillText(txt+'  '+Math.round(act*100)+'%', x+24, y);
+  }
+  function setTxt(id, v){ var el=document.getElementById(id); if (el) el.textContent=v; }
+
+  applyI18N();
+  requestAnimationFrame(draw);
+})();
+</script>
+</body>
+</html>

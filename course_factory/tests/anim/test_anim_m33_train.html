@@ -1,0 +1,805 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>训练分类器 — 让电脑从带标签的脑波里自动学出参数</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;700&family=Inter:wght@400;600;800&family=JetBrains+Mono:wght@400;600;700&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    /* Layer 1 — shared deep-space canvas (all 26 subjects, fixed) */
+    --bg-0: oklch(0.14 0.035 265);
+    --bg-1: oklch(0.18 0.04 265);
+    --bg-2: oklch(0.22 0.045 265);
+    --bg-3: oklch(0.28 0.05 265);
+    --line: oklch(0.35 0.05 265 / 0.35);
+    --line-strong: oklch(0.55 0.08 265 / 0.55);
+    --fg: oklch(0.96 0.01 265);
+    --fg-dim: oklch(0.75 0.02 265);
+    --fg-mute: oklch(0.55 0.03 265);
+    --gold: oklch(0.85 0.14 85);
+    /* Layer 2 — CS signature accent (cyan) */
+    --accent: oklch(0.75 0.17 200);
+    /* Layer 3 — CS 5-color palette (themes.js id:'cs', CS-01 — Data Cathedral) */
+    --signal: oklch(0.75 0.17 200);   /* SIGNAL — the cyan accent / main link */
+    --core:   oklch(0.55 0.16 200);   /* CORE — secondary structure */
+    --depth:  oklch(0.35 0.10 210);   /* DEPTH — grid / drop lines */
+    --flash:  oklch(0.92 0.08 190);   /* FLASH — bright projected dots */
+    --query:  oklch(0.85 0.14 85);    /* QUERY — key insight (== gold) */
+  }
+  html,body{margin:0;padding:0;height:100vh;width:100%;overflow:hidden;
+    background:var(--bg-0);font-family:'Noto Sans SC','Inter',sans-serif;color:var(--fg);}
+  .wrapper{display:flex;flex-direction:row;height:100vh;overflow:hidden;}
+  /* Sidebar 200px */
+  .sidebar{width:200px;min-width:200px;max-width:200px;flex-shrink:0;
+    display:flex;flex-direction:column;gap:9px;padding:14px 12px;
+    background:var(--bg-1);border-right:1px solid var(--line);overflow-y:auto;}
+  .brand{display:flex;align-items:center;gap:8px;}
+  .mascot{flex-shrink:0;}
+  .sidebar h1{font-family:'Space Grotesk','Inter',sans-serif;font-size:13px;font-weight:700;
+    line-height:1.3;color:var(--accent);letter-spacing:0.02em;}
+  .sidebar .code{font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:0.14em;
+    color:var(--fg-mute);text-transform:uppercase;}
+  .intro{font-size:11px;line-height:1.55;color:var(--fg-dim);}
+  .intro .en{font-style:italic;font-size:10px;color:var(--fg-mute);margin-top:4px;}
+  .guide-label{font-family:'JetBrains Mono',monospace;font-size:9px;font-weight:700;
+    letter-spacing:0.14em;text-transform:uppercase;color:var(--accent);margin-top:2px;}
+  .guide{list-style:none;padding:0;margin:0;font-size:11px;line-height:1.55;color:var(--fg-dim);}
+  .guide li{margin-bottom:2px;}
+  /* project roadmap S1-S6 */
+  .road-label{font-family:'JetBrains Mono',monospace;font-size:9px;font-weight:700;
+    letter-spacing:0.14em;text-transform:uppercase;color:var(--fg-mute);margin-top:6px;}
+  .road{list-style:none;padding:0;margin:3px 0 0 0;font-family:'JetBrains Mono',monospace;
+    font-size:10px;line-height:1.5;}
+  .road li{display:flex;align-items:center;gap:6px;color:var(--fg-mute);margin-bottom:1px;}
+  .road li .dot{width:6px;height:6px;flex-shrink:0;border-radius:50%;
+    background:var(--line-strong);}
+  .road li.here{color:var(--accent);font-weight:700;}
+  .road li.here .dot{background:var(--accent);box-shadow:0 0 6px var(--accent);}
+  .road li.done .dot{background:var(--fg-mute);}
+  .lang-btn{margin-top:auto;align-self:flex-start;font-family:'JetBrains Mono',monospace;
+    font-size:10px;font-weight:700;letter-spacing:0.1em;padding:5px 12px;cursor:pointer;
+    color:var(--accent);background:transparent;border:1px solid var(--line-strong);
+    box-shadow:3px 3px 0 var(--bg-0);transition:transform .1s;}
+  .lang-btn:hover{transform:translate(-1px,-1px);}
+  .lang-btn:active{transform:translate(1px,1px);box-shadow:1px 1px 0 var(--bg-0);}
+  /* Main stage */
+  .stage{flex:1;min-width:0;position:relative;overflow:hidden;}
+  canvas{position:absolute;inset:0;width:100%;height:100%;display:block;}
+  .hud{position:absolute;top:16px;right:16px;background:oklch(0.18 0.04 265 / 0.85);
+    border:1px solid var(--line-strong);padding:9px 13px;font-family:'JetBrains Mono',monospace;
+    font-size:11px;box-shadow:3px 3px 0 var(--bg-0);min-width:198px;}
+  .hud-row{display:flex;justify-content:space-between;gap:14px;line-height:1.7;}
+  .hud-lbl{color:var(--fg-mute);font-size:7px;letter-spacing:0.14em;text-transform:uppercase;
+    align-self:center;}
+  .hud-val{color:var(--accent);font-weight:700;}
+  .sub{position:absolute;bottom:22px;left:50%;transform:translateX(-50%);
+    text-align:center;width:88%;pointer-events:none;}
+  .sub-zh{font-size:18px;font-weight:700;color:var(--fg);
+    background:oklch(0.18 0.04 265 / 0.85);padding:7px 18px;display:inline-block;
+    border:1px solid var(--line-strong);box-shadow:3px 3px 0 var(--bg-0);}
+  .sub-en{font-size:12px;font-style:italic;color:var(--fg-dim);margin-top:5px;}
+</style>
+</head>
+<body>
+<div class="wrapper">
+
+<aside class="sidebar">
+  <div class="brand">
+    <!-- mascot: Bit — a levitating cubic sprite (themes.js id:'cs') -->
+    <svg class="mascot" width="30" height="30" viewBox="0 0 40 40" aria-hidden="true">
+      <rect x="9" y="9" width="22" height="22" rx="2" fill="none" stroke="var(--signal)" stroke-width="1.6"/>
+      <rect x="13" y="13" width="6" height="6" fill="var(--core)"/>
+      <rect x="21" y="13" width="6" height="6" fill="var(--flash)"/>
+      <rect x="13" y="21" width="6" height="6" fill="var(--flash)"/>
+      <rect x="21" y="21" width="6" height="6" fill="var(--core)"/>
+      <text x="20" y="7" text-anchor="middle" font-family="JetBrains Mono,monospace"
+            font-size="7" fill="var(--query)">Bit</text>
+    </svg>
+    <div>
+      <h1 id="title">训练分类器 · 学参数</h1>
+      <div class="code">EEG · M33 · TRAIN</div>
+    </div>
+  </div>
+
+  <div class="intro" id="intro">
+    <span id="introZh">前面的零件都齐了。现在让电脑从你带标签的脑波数据里, 自动学会分左右手 — 训练, 就是从数据里把参数学出来。</span>
+    <div class="en" id="introEn">All parts are ready. Now let the computer learn to tell left from right — training = fitting parameters from your labeled data.</div>
+  </div>
+
+  <div class="guide-label" id="guideLabel">观察重点</div>
+  <ul class="guide" id="guide"></ul>
+
+  <!-- Project anchor: S1-S6 roadmap, S3 highlighted -->
+  <div class="road-label" id="roadLabel">脑控 Minecraft · 路线</div>
+  <ul class="road" id="road">
+    <li class="done"><span class="dot"></span><span id="r1">S1 认识脑波</span></li>
+    <li class="done"><span class="dot"></span><span id="r2">S2 清洁信号</span></li>
+    <li class="here"><span class="dot"></span><span id="r3">S3 训练分类器</span></li>
+    <li><span class="dot"></span><span id="r4">S4 自录冲准</span></li>
+    <li><span class="dot"></span><span id="r5">S5 接 Minecraft</span></li>
+    <li><span class="dot"></span><span id="r6">S6 分享作品</span></li>
+  </ul>
+
+  <button class="lang-btn" id="langBtn">中 / EN</button>
+</aside>
+
+<main class="stage">
+  <canvas id="c"></canvas>
+  <div class="hud">
+    <div class="hud-row"><span class="hud-lbl" id="hudL1">phase</span><span class="hud-val" id="hudV1">--</span></div>
+    <div class="hud-row"><span class="hud-lbl" id="hudL2">batches seen</span><span class="hud-val" id="hudV2">--</span></div>
+    <div class="hud-row"><span class="hud-lbl" id="hudL3">params learned</span><span class="hud-val" id="hudV3">--</span></div>
+    <div class="hud-row"><span class="hud-lbl" id="hudL4">train accuracy</span><span class="hud-val" id="hudV4">--</span></div>
+  </div>
+  <div class="sub">
+    <div class="sub-zh" id="subZh"></div>
+    <div class="sub-en" id="subEn"></div>
+  </div>
+</main>
+
+</div>
+
+<script>
+'use strict';
+
+// ====================== Palette (resolved oklch) ======================
+var P = {
+  bg0:'oklch(0.14 0.035 265)', bg1:'oklch(0.18 0.04 265)', bg2:'oklch(0.22 0.045 265)',
+  bg3:'oklch(0.28 0.05 265)',
+  line:'oklch(0.35 0.05 265 / 0.35)', lineStrong:'oklch(0.55 0.08 265 / 0.55)',
+  fg:'oklch(0.96 0.01 265)', fgDim:'oklch(0.75 0.02 265)', fgMute:'oklch(0.55 0.03 265)',
+  accent:'oklch(0.75 0.17 200)',
+  signal:'oklch(0.75 0.17 200)', core:'oklch(0.55 0.16 200)', depth:'oklch(0.35 0.10 210)',
+  flash:'oklch(0.92 0.08 190)', query:'oklch(0.85 0.14 85)',
+  // class colors: left-hand = gold (QUERY), right-hand = cyan (SIGNAL).
+  // labels are KNOWN during training (supervised) — that's the whole point.
+  left:'oklch(0.85 0.14 85)',
+  right:'oklch(0.75 0.17 200)'
+};
+
+// ====================== i18n ======================
+var LANG='cn';
+var I18N = {
+  title:{cn:'训练分类器 · 学参数', en:'train classifier · learn params'},
+  introZh:{cn:'前面的零件都齐了。现在让电脑从你带标签的脑波数据里, 自动学会分左右手 — 训练, 就是从数据里把参数学出来。',
+           en:'All parts ready. Now let the computer learn to tell left from right from your labeled EEG — training = fitting params from labeled data.'},
+  introEn:{cn:'All parts ready. Training = fitting params from your labeled EEG data.',
+           en:'supervised learning: labeled batches in -> CSP+LDA params out.'},
+  guideLabel:{cn:'观察重点', en:'WATCH FOR'},
+  guide:{cn:['· 带标签数据一批批流进管道','· 左/右标签全程已知 (监督)','· CSP 滤波方向被慢慢调出','· LDA 分界线被慢慢学出','· 参数从随机收敛到能分左右'],
+         en:['· labeled batches flow into pipe','· left/right labels always known','· CSP filter direction tuned out','· LDA boundary learned out','· params converge random -> good']},
+  hudL1:{cn:'phase', en:'phase'}, hudL2:{cn:'batches seen', en:'batches seen'},
+  hudL3:{cn:'params learned', en:'params learned'}, hudL4:{cn:'train accuracy', en:'train accuracy'},
+
+  // phase names (HUD)
+  st0:{cn:'带标签数据 · 流进管道', en:'labeled data · into pipe'},
+  st1:{cn:'CSP 方向 · 被学出', en:'CSP direction · learned'},
+  st2:{cn:'LDA 分界线 · 被学出', en:'LDA boundary · learned'},
+  st3:{cn:'参数收敛 · 越来越准', en:'params converge · accuracy up'},
+  st4:{cn:'训练完成 · 分类器就绪', en:'trained · classifier ready'},
+
+  // subtitles (zh = main line, en = secondary)
+  s0zh:{cn:'看右边这条管道: 一批批带标签的脑波 (金=想左手, 蓝=想右手) 不停流进来 — 这就是训练数据',
+        en:'Watch the pipe on the right: labeled EEG batches (gold = left, blue = right) keep flowing in — this is the training data.'},
+  s0en:{cn:'关键: 每一批的左/右标签是已知的。"知道答案地学" 就叫监督学习。',
+        en:'Key: each batch already carries its left/right label. Learning with answers given = supervised learning.'},
+  s1zh:{cn:'数据先喂给 CSP 这一步。每来一批, CSP 的滤波方向就被往" 让左右最分得开" 的角度挪一点',
+        en:'Data first feeds the CSP step. With every batch, the CSP filter direction nudges toward the angle that best separates left and right.'},
+  s1en:{cn:'方向不是人定的, 是从一批批数据里慢慢" 学" 出来的。这是被学出的第一个参数。',
+        en:'The direction is not set by hand — it is learned, batch by batch. This is the first learned parameter.'},
+  s2zh:{cn:'CSP 把每段脑波变成一个二维特征点。再喂给 LDA, 它学一条分界线把金点和蓝点劈开',
+        en:'CSP turns each EEG segment into a 2-D feature point. Fed to LDA, it learns a boundary line that splits the gold and blue points.'},
+  s2en:{cn:'分界线也是参数。每来一批带标签的点, 这条线就被往" 错得最少" 的位置挪一点。',
+        en:'The boundary is also a parameter. Each labeled batch nudges the line toward fewer mistakes.'},
+  s3zh:{cn:'整条管道一起被训: 见的批次越多, CSP 方向越准、LDA 线越正, 训练准确率一路往上爬',
+        en:'The whole pipeline trains together: more batches seen, the CSP direction and LDA line both improve, and training accuracy climbs.'},
+  s3en:{cn:'参数从一开始的随机, 被数据一点点修, 慢慢" 收敛" 到能分左右手的那一组值。',
+        en:'Params start random and get corrected by the data, converging to a set of values that separates the hands.'},
+  s4zh:{cn:'训练完成 — 这套 CSP+LDA 参数, 就是电脑从你的数据里自己学会的" 分左右手的本事"',
+        en:'Training done — these CSP+LDA params are the left-vs-right skill the computer learned from your own data.'},
+  s4en:{cn:'下一步 S4: 拿没见过的脑波考它, 看它到底准不准。离脑控 Minecraft 又近一步。',
+        en:'Next, S4: test it on unseen EEG to see how accurate it really is. One step closer to mind-controlling Minecraft.'},
+
+  // canvas labels
+  lblPipe:{cn:'CSP + LDA 管道', en:'CSP + LDA pipeline'},
+  lblIn:{cn:'带标签训练数据', en:'labeled training data'},
+  lblL:{cn:'想左手', en:'left hand'},
+  lblR:{cn:'想右手', en:'right hand'},
+  lblCSP:{cn:'CSP · 滤波方向', en:'CSP · filter dir'},
+  lblFeat:{cn:'CSP 特征', en:'CSP feature'},
+  lblLDA:{cn:'LDA · 分界线', en:'LDA · boundary'},
+  lblParam:{cn:'被学出的参数', en:'learned params'},
+  lblRand:{cn:'随机起点', en:'random start'},
+  lblConv:{cn:'收敛', en:'converged'},
+  lblAcc:{cn:'训练准确率', en:'train accuracy'},
+  lblDir:{cn:'方向 w', en:'direction w'},
+  lblFeatSpace:{cn:'CSP 特征空间', en:'CSP feature space'},
+  lblErr:{cn:'分错的点', en:'misclassified'},
+  lblReady:{cn:'分类器就绪', en:'classifier ready'},
+  lblNext:{cn:'下一步 S4: 考它准不准', en:'next S4: test its accuracy'},
+  lblStep1:{cn:'1 输入', en:'1 input'},
+  lblStep2:{cn:'2 CSP', en:'2 CSP'},
+  lblStep3:{cn:'3 特征', en:'3 feature'},
+  lblStep4:{cn:'4 LDA', en:'4 LDA'}
+};
+function t(k){ return (I18N[k]&&I18N[k][LANG]) || (I18N[k]&&I18N[k].en) || k; }
+
+function refreshI18N(){
+  document.getElementById('title').textContent = t('title');
+  document.getElementById('introZh').textContent = t('introZh');
+  document.getElementById('introEn').textContent = t('introEn');
+  document.getElementById('guideLabel').textContent = t('guideLabel');
+  document.getElementById('guide').innerHTML = t('guide').map(function(x){return '<li>'+x+'</li>';}).join('');
+  document.getElementById('roadLabel').textContent = LANG==='cn' ? '脑控 Minecraft · 路线' : 'Mind-Minecraft · path';
+  document.getElementById('r1').textContent = LANG==='cn' ? 'S1 认识脑波' : 'S1 know EEG';
+  document.getElementById('r2').textContent = LANG==='cn' ? 'S2 清洁信号' : 'S2 clean signal';
+  document.getElementById('r3').textContent = LANG==='cn' ? 'S3 训练分类器' : 'S3 train model';
+  document.getElementById('r4').textContent = LANG==='cn' ? 'S4 自录冲准' : 'S4 record & tune';
+  document.getElementById('r5').textContent = LANG==='cn' ? 'S5 接 Minecraft' : 'S5 to Minecraft';
+  document.getElementById('r6').textContent = LANG==='cn' ? 'S6 分享作品' : 'S6 share';
+  document.getElementById('hudL1').textContent = t('hudL1');
+  document.getElementById('hudL2').textContent = t('hudL2');
+  document.getElementById('hudL3').textContent = t('hudL3');
+  document.getElementById('hudL4').textContent = t('hudL4');
+  document.getElementById('langBtn').textContent = LANG==='cn' ? '中 / EN' : 'EN / 中';
+  updateSub(curStage);
+}
+document.getElementById('langBtn').addEventListener('click', function(){
+  LANG = LANG==='cn' ? 'en' : 'cn'; refreshI18N();
+});
+
+// ====================== Canvas ======================
+var cv = document.getElementById('c');
+var ctx = cv.getContext('2d');
+var W=0, H=0, DPR=1;
+function resize(){
+  var rect = cv.parentElement.getBoundingClientRect();
+  if(rect.width<1 || rect.height<1) return;
+  DPR = Math.min(window.devicePixelRatio||1, 2);
+  cv.width = rect.width*DPR; cv.height = rect.height*DPR;
+  cv.style.width = rect.width+'px'; cv.style.height = rect.height+'px';
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  W = rect.width; H = rect.height;
+}
+window.addEventListener('resize', resize);
+resize(); setTimeout(resize,200); setTimeout(resize,600);
+document.fonts.ready.then(function(){ resize(); });
+
+// ====================== Deterministic data ======================
+function rnd(seed){ var x = Math.sin(seed*12.9898)*43758.5453; return x - Math.floor(x); }
+function gaussPair(seed){
+  var u1 = rnd(seed*1.7+0.13); var u2 = rnd(seed*2.3+0.71);
+  if(u1 < 1e-4) u1 = 1e-4;
+  var r = Math.sqrt(-2*Math.log(u1));
+  return [r*Math.cos(2*Math.PI*u2), r*Math.sin(2*Math.PI*u2)];
+}
+// In the raw 2-channel (C3,C4) space, the two classes share a center but differ in
+// VARIANCE direction (just like real CSP input). The CSP-optimal filter axis is the
+// one where left-variance is large and right small. After CSP, each segment becomes a
+// 2-D feature (log-var on best axis, log-var on worst axis), which IS separable.
+var ANG_L = 58 * Math.PI/180;            // left-imagery variance largest along here
+var ANG_R = ANG_L + Math.PI/2;           // right-imagery variance largest perpendicular
+function buildAnisoCloud(n, ang, sMajor, sMinor, seed){
+  var ca=Math.cos(ang), sa=Math.sin(ang);
+  var pts=[];
+  for(var i=0;i<n;i++){
+    var g = gaussPair(seed + i*0.41);
+    var a = g[0]*sMajor, b = g[1]*sMinor;
+    pts.push({ x: a*ca - b*sa, y: a*sa + b*ca });
+  }
+  return pts;
+}
+var CLOUD_L = buildAnisoCloud(48, ANG_L, 1.55, 0.45, 13);
+var CLOUD_R = buildAnisoCloud(48, ANG_R, 1.55, 0.45, 29);
+
+function projVarOf(cloud, wx, wy){
+  var m=0;
+  for(var i=0;i<cloud.length;i++){ m += cloud[i].x*wx + cloud[i].y*wy; }
+  m/=cloud.length;
+  var v=0;
+  for(var j=0;j<cloud.length;j++){ var p=cloud[j].x*wx + cloud[j].y*wy - m; v += p*p; }
+  return v/cloud.length;
+}
+function bestAngle(){
+  var best=ANG_L, bestR=-1;
+  for(var d=0; d<180; d++){
+    var a=d*Math.PI/180, wx=Math.cos(a), wy=Math.sin(a);
+    var vr = projVarOf(CLOUD_L,wx,wy) / Math.max(projVarOf(CLOUD_R,wx,wy),1e-6);
+    if(vr>bestR){ bestR=vr; best=a; }
+  }
+  return best;
+}
+var ANG_STAR = bestAngle();          // CSP-optimal filter angle (learning target #1)
+
+// CSP feature for a raw point: (log-var-ish coordinate along best axis, along worst axis).
+// We model each training "segment" as one raw point; its CSP feature = projection magnitudes
+// onto the two CSP axes, which makes left vs right separable in feature space.
+function cspFeature(pt, ang){
+  var wx=Math.cos(ang), wy=Math.sin(ang);
+  var px=Math.cos(ang+Math.PI/2), py=Math.sin(ang+Math.PI/2);
+  var f1 = Math.abs(pt.x*wx + pt.y*wy);   // energy on best axis
+  var f2 = Math.abs(pt.x*px + pt.y*py);   // energy on worst axis
+  return { fx: f1, fy: f2 };
+}
+// LDA-ideal boundary angle in feature space, given current CSP angle. We learn it as a
+// line through the feature cloud means; here we precompute the converged orientation.
+function featMeans(ang){
+  var fl={x:0,y:0}, fr={x:0,y:0};
+  for(var i=0;i<CLOUD_L.length;i++){ var a=cspFeature(CLOUD_L[i],ang); fl.x+=a.fx; fl.y+=a.fy; }
+  for(var j=0;j<CLOUD_R.length;j++){ var b=cspFeature(CLOUD_R[j],ang); fr.x+=b.fx; fr.y+=b.fy; }
+  fl.x/=CLOUD_L.length; fl.y/=CLOUD_L.length; fr.x/=CLOUD_R.length; fr.y/=CLOUD_R.length;
+  return {fl:fl, fr:fr};
+}
+// boundary normal = direction between class means (LDA's core idea, equal-cov case)
+function ldaBoundary(ang){
+  var m=featMeans(ang);
+  var nx=m.fl.x-m.fr.x, ny=m.fl.y-m.fr.y;
+  var mid={x:(m.fl.x+m.fr.x)/2, y:(m.fl.y+m.fr.y)/2};
+  var len=Math.sqrt(nx*nx+ny*ny)||1; nx/=len; ny/=len;
+  // threshold = projection of midpoint onto normal
+  var thr = mid.x*nx + mid.y*ny;
+  return {nx:nx, ny:ny, thr:thr, ml:m.fl, mr:m.fr};
+}
+var BND_STAR = ldaBoundary(ANG_STAR);
+
+// training accuracy under a given CSP angle + boundary: fraction correctly classified
+function trainAcc(ang, bnd){
+  var ok=0, tot=0;
+  for(var i=0;i<CLOUD_L.length;i++){
+    var f=cspFeature(CLOUD_L[i],ang);
+    var s=f.fx*bnd.nx+f.fy*bnd.ny - bnd.thr;
+    if(s>0) ok++; tot++;                  // left expected on positive side
+  }
+  for(var j=0;j<CLOUD_R.length;j++){
+    var g=cspFeature(CLOUD_R[j],ang);
+    var s2=g.fx*bnd.nx+g.fy*bnd.ny - bnd.thr;
+    if(s2<=0) ok++; tot++;                // right expected on negative side
+  }
+  return ok/tot;
+}
+
+// ====================== Timeline ======================
+var STAGE_DUR = [7000, 7500, 7500, 7500, 7000];  // ms per stage -> ~36.5s cycle
+var NST = 5;
+var TOTAL = STAGE_DUR.reduce(function(a,b){return a+b;},0);
+var curStage = 0;
+var animStart = performance.now();
+
+function updateSub(s){
+  document.getElementById('subZh').textContent = t('s'+s+'zh');
+  document.getElementById('subEn').textContent = t('s'+s+'en');
+  document.getElementById('hudV1').textContent = t('st'+s);
+}
+
+// ====================== Drawing helpers ======================
+function easeIO(x){ return x<0.5 ? 2*x*x : 1-Math.pow(-2*x+2,2)/2; }
+function clamp(x,a,b){ return x<a?a:(x>b?b:x); }
+
+function frameTitle(txt){
+  ctx.fillStyle = P.fg;
+  ctx.font = "800 19px 'Space Grotesk','Inter',sans-serif";
+  ctx.textAlign = 'center';
+  ctx.fillText(txt, W/2, 36);
+}
+
+function dot(x,y,r,color,alpha){
+  ctx.save(); ctx.globalAlpha=alpha==null?1:alpha;
+  ctx.fillStyle=color; ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2); ctx.fill();
+  ctx.restore();
+}
+function squareDot(x,y,r,color,alpha){
+  ctx.save(); ctx.globalAlpha=alpha==null?1:alpha;
+  ctx.fillStyle=color; ctx.fillRect(x-r,y-r,r*2,r*2);
+  ctx.restore();
+}
+function arrowHead(x1,y1,x2,y2,color,lw){
+  ctx.save();
+  ctx.strokeStyle=color; ctx.fillStyle=color; ctx.lineWidth=lw||2;
+  ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke();
+  var a=Math.atan2(y2-y1,x2-x1), s=9;
+  ctx.beginPath(); ctx.moveTo(x2,y2);
+  ctx.lineTo(x2-s*Math.cos(a-0.4), y2-s*Math.sin(a-0.4));
+  ctx.lineTo(x2-s*Math.cos(a+0.4), y2-s*Math.sin(a+0.4));
+  ctx.closePath(); ctx.fill();
+  ctx.restore();
+}
+function wrapText(text, x, y, maxW, lh){
+  var words = (''+text).split(' ');
+  var line='', yy=y;
+  for(var i=0;i<words.length;i++){
+    var test = line + words[i] + ' ';
+    if(ctx.measureText(test).width > maxW && line.length>0){
+      ctx.fillText(line.trim(), x, yy); line = words[i]+' '; yy += lh;
+    } else { line = test; }
+  }
+  ctx.fillText(line.trim(), x, yy);
+}
+
+// Minecraft-block silhouette (project endpoint reminder) bottom-left of stage
+function drawMinecraftSil(){
+  var bx=14, by=H-58, s=8;
+  ctx.save(); ctx.globalAlpha=0.42;
+  ctx.fillStyle=P.fgMute;
+  ctx.fillRect(bx, by, s*4, s*4);
+  ctx.clearRect(bx+s, by+s, s, s);
+  ctx.clearRect(bx+s*2, by+s, s, s);
+  ctx.clearRect(bx+Math.round(s*1.5), by+Math.round(s*2.5), s, Math.round(s*1.3));
+  ctx.globalAlpha=0.55;
+  ctx.fillStyle=P.fgMute; ctx.font="600 8px 'JetBrains Mono',monospace"; ctx.textAlign='left';
+  ctx.fillText(LANG==='cn'?'终点: 脑控它':'goal: control it', bx+s*4+6, by+s*3);
+  ctx.restore();
+}
+
+// ---- The persistent pipeline frame: 4 boxes 1 输入 2 CSP 3 特征 4 LDA ----
+// Drawn (with varying emphasis) in EVERY stage so the "one object" stays on screen.
+function pipeLayout(){
+  var x0=W*0.40, x1=W*0.94, top=H*0.16, bh=H*0.60;
+  var n=4, gap=(x1-x0)/n;
+  var boxes=[];
+  for(var i=0;i<n;i++){
+    boxes.push({ x:x0+gap*i+8, y:top, w:gap-16, h:bh, cx:x0+gap*i+gap/2 });
+  }
+  return {boxes:boxes, top:top, bh:bh, x0:x0, x1:x1};
+}
+function drawPipeFrame(activeIdx, glowIdx){
+  var pl=pipeLayout();
+  var labels=[t('lblStep1'), t('lblStep2'), t('lblStep3'), t('lblStep4')];
+  for(var i=0;i<pl.boxes.length;i++){
+    var b=pl.boxes[i];
+    var on = (i<=activeIdx);
+    ctx.save();
+    ctx.fillStyle = on ? P.bg2 : P.bg1;
+    ctx.strokeStyle = (i===glowIdx) ? P.query : (on ? P.accent : P.line);
+    ctx.lineWidth = (i===glowIdx) ? 2.2 : 1.3;
+    ctx.fillRect(b.x, b.y, b.w, b.h);
+    ctx.strokeRect(b.x, b.y, b.w, b.h);
+    ctx.fillStyle = on ? P.accent : P.fgMute;
+    ctx.font="700 11px 'JetBrains Mono',monospace"; ctx.textAlign='center';
+    ctx.fillText(labels[i], b.cx, b.y+18);
+    ctx.restore();
+    // connector arrow to next box
+    if(i<pl.boxes.length-1){
+      var nb=pl.boxes[i+1];
+      arrowHead(b.x+b.w, b.y+b.h*0.5, nb.x, nb.y+nb.h*0.5, on?P.core:P.line, on?2:1);
+    }
+  }
+  return pl;
+}
+
+// flowing labeled batches entering from the left toward box 0 (data stream).
+// time-based so motion is continuous; left=gold square, right=cyan square.
+function drawIncomingStream(now, intensity){
+  var pl=pipeLayout();
+  var entryX=pl.boxes[0].x, cy=pl.boxes[0].y+pl.boxes[0].h*0.5;
+  var startX=W*0.30;
+  var lane=[-18,-6,6,18];
+  for(var k=0;k<8;k++){
+    var phase=((now*0.00018) + k*0.135) % 1;          // 0..1 travel
+    var px=startX + phase*(entryX-startX);
+    var isLeft = (k%2===0);
+    var py=cy + lane[k%4];
+    var a = clamp(intensity,0,1) * (0.4+0.6*Math.sin(phase*Math.PI));
+    squareDot(px, py, 3.4, isLeft?P.left:P.right, a);
+  }
+  // input label
+  ctx.fillStyle=P.fgDim; ctx.font="700 11px 'JetBrains Mono',monospace"; ctx.textAlign='left';
+  ctx.globalAlpha=clamp(intensity,0,1);
+  ctx.fillText(t('lblIn'), startX-4, cy-40);
+  // tiny legend gold/blue = labels known
+  ctx.globalAlpha=1;
+  squareDot(startX, cy+44, 4, P.left, clamp(intensity,0,1));
+  ctx.fillStyle=P.left; ctx.font="600 10px 'Inter',sans-serif";
+  ctx.fillText(t('lblL'), startX+10, cy+48);
+  squareDot(startX+62, cy+44, 4, P.right, clamp(intensity,0,1));
+  ctx.fillStyle=P.right;
+  ctx.fillText(t('lblR'), startX+72, cy+48);
+}
+
+// left panel mini scatter (raw C3/C4 input) with the CSP axis w drawn at a given angle.
+function drawRawScatter(cx, cy, half, ang, glow, alpha){
+  var unit=half/2.6;
+  // grid
+  ctx.save(); ctx.strokeStyle=P.line; ctx.lineWidth=1; ctx.globalAlpha=(alpha==null?1:alpha)*0.9;
+  ctx.strokeRect(cx-half, cy-half, half*2, half*2);
+  ctx.strokeStyle=P.lineStrong;
+  ctx.beginPath(); ctx.moveTo(cx-half,cy); ctx.lineTo(cx+half,cy); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(cx,cy-half); ctx.lineTo(cx,cy+half); ctx.stroke();
+  ctx.fillStyle=P.fgMute; ctx.font="700 9px 'JetBrains Mono',monospace"; ctx.textAlign='left';
+  ctx.fillText('C3', cx+half-20, cy-6);
+  ctx.fillText('C4', cx+6, cy-half+12);
+  ctx.restore();
+  var aa=(alpha==null?1:alpha);
+  for(var i=0;i<CLOUD_L.length;i++){ var p=CLOUD_L[i]; dot(cx+p.x*unit, cy-p.y*unit, 2.4, P.left, 0.6*aa); }
+  for(var j=0;j<CLOUD_R.length;j++){ var q=CLOUD_R[j]; dot(cx+q.x*unit, cy-q.y*unit, 2.4, P.right, 0.6*aa); }
+  // the CSP filter direction line (the parameter being learned)
+  var wx=Math.cos(ang), wy=Math.sin(ang), L=half*1.1;
+  ctx.save(); ctx.globalAlpha=aa;
+  ctx.strokeStyle=glow?P.query:P.signal; ctx.lineWidth=glow?3:2.2; ctx.setLineDash([7,5]);
+  if(glow){ ctx.shadowColor=P.query; ctx.shadowBlur=12; }
+  ctx.beginPath(); ctx.moveTo(cx-wx*L, cy+wy*L); ctx.lineTo(cx+wx*L, cy-wy*L); ctx.stroke();
+  ctx.setLineDash([]); ctx.shadowBlur=0;
+  ctx.fillStyle=glow?P.query:P.signal; ctx.font="700 11px 'JetBrains Mono',monospace"; ctx.textAlign='left';
+  ctx.fillText(t('lblDir'), cx+wx*half*0.9+4, cy-wy*half*0.9-4);
+  ctx.restore();
+}
+
+// feature-space scatter (after CSP) with the LDA boundary at a given orientation/threshold.
+// blends between a random boundary (bnd0) and the learned one by parameter prog.
+function drawFeatScatter(cx, cy, half, ang, bnd, alpha){
+  var aa=(alpha==null?1:alpha);
+  // collect features to find display scale
+  var feats=[];
+  var i;
+  for(i=0;i<CLOUD_L.length;i++) feats.push({f:cspFeature(CLOUD_L[i],ang), c:P.left, cls:1});
+  for(i=0;i<CLOUD_R.length;i++) feats.push({f:cspFeature(CLOUD_R[i],ang), c:P.right, cls:-1});
+  var mx=0.001, my=0.001;
+  for(i=0;i<feats.length;i++){ mx=Math.max(mx,feats[i].f.fx); my=Math.max(my,feats[i].f.fy); }
+  var sx=half*1.8/mx, sy=half*1.8/my;
+  var ox=cx-half*0.9, oy=cy+half*0.9;  // origin bottom-left
+  // frame
+  ctx.save(); ctx.globalAlpha=aa*0.9; ctx.strokeStyle=P.line; ctx.lineWidth=1;
+  ctx.strokeRect(cx-half, cy-half, half*2, half*2);
+  ctx.fillStyle=P.fgMute; ctx.font="700 9px 'JetBrains Mono',monospace"; ctx.textAlign='left';
+  ctx.fillText(t('lblFeatSpace'), cx-half+4, cy-half+12);
+  ctx.restore();
+  // boundary line: nx*X + ny*Y = thr  in feature units -> map to pixels.
+  // draw line by sampling two far X-extents.
+  function toPx(fx,fy){ return [ox+fx*sx, oy-fy*sy]; }
+  ctx.save(); ctx.globalAlpha=aa;
+  ctx.strokeStyle=P.flash; ctx.lineWidth=2.4; ctx.setLineDash([6,4]);
+  // param line nx*fx + ny*fy = thr  -> solve for fy across fx range
+  var fxA=0, fxB=mx*1.05, pa, pb;
+  if(Math.abs(bnd.ny)>1e-4){
+    var fyA=(bnd.thr-bnd.nx*fxA)/bnd.ny, fyB=(bnd.thr-bnd.nx*fxB)/bnd.ny;
+    pa=toPx(fxA,fyA); pb=toPx(fxB,fyB);
+  } else {
+    var fxc=bnd.thr/bnd.nx; pa=toPx(fxc,0); pb=toPx(fxc,my*1.05);
+  }
+  ctx.beginPath(); ctx.moveTo(pa[0],pa[1]); ctx.lineTo(pb[0],pb[1]); ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle=P.flash; ctx.font="700 10px 'JetBrains Mono',monospace"; ctx.textAlign='right';
+  ctx.fillText(t('lblLDA'), cx+half-4, cy+half-6);
+  ctx.restore();
+  // points, colored by true label; misclassified get a ring
+  for(i=0;i<feats.length;i++){
+    var px=toPx(feats[i].f.fx, feats[i].f.fy);
+    var s=feats[i].f.fx*bnd.nx+feats[i].f.fy*bnd.ny - bnd.thr;
+    var correct = (feats[i].cls===1) ? (s>0) : (s<=0);
+    dot(px[0], px[1], 2.6, feats[i].c, aa*0.85);
+    if(!correct){
+      ctx.save(); ctx.globalAlpha=aa;
+      ctx.strokeStyle=P.fg; ctx.lineWidth=1.2;
+      ctx.beginPath(); ctx.arc(px[0],px[1],4.4,0,Math.PI*2); ctx.stroke();
+      ctx.restore();
+    }
+  }
+}
+
+// a small "learned params" readout panel — numbers move from random to converged
+function drawParamPanel(x, y, w, ang, accVal){
+  ctx.save();
+  ctx.fillStyle=P.bg2; ctx.strokeStyle=P.lineStrong; ctx.lineWidth=1.3;
+  ctx.fillRect(x,y,w,84); ctx.strokeRect(x,y,w,84);
+  ctx.fillStyle=P.fgMute; ctx.font="700 9px 'JetBrains Mono',monospace"; ctx.textAlign='left';
+  ctx.fillText(t('lblParam'), x+12, y+18);
+  ctx.fillStyle=P.signal; ctx.font="700 13px 'JetBrains Mono',monospace";
+  ctx.fillText('CSP w = '+Math.round(ang*180/Math.PI)+' deg', x+12, y+40);
+  ctx.fillStyle=P.flash;
+  ctx.fillText('LDA thr = '+ (BND_STAR.thr*0.5+0.5).toFixed(2), x+12, y+58);
+  ctx.fillStyle=P.query;
+  ctx.fillText('acc = '+(accVal*100).toFixed(0)+'%', x+12, y+76);
+  ctx.restore();
+}
+
+// horizontal accuracy gauge climbing (used in s3/s4)
+function drawAccGauge(x, y, w, frac, label){
+  ctx.save();
+  ctx.fillStyle=P.fgMute; ctx.font="700 10px 'JetBrains Mono',monospace"; ctx.textAlign='left';
+  ctx.fillText(label, x, y-8);
+  ctx.fillStyle=P.bg3; ctx.fillRect(x, y, w, 16);
+  ctx.strokeStyle=P.line; ctx.strokeRect(x, y, w, 16);
+  ctx.fillStyle = frac>0.9 ? P.query : P.accent;
+  ctx.fillRect(x, y, w*clamp(frac,0,1), 16);
+  ctx.fillStyle=P.fg; ctx.font="700 11px 'JetBrains Mono',monospace"; ctx.textAlign='right';
+  ctx.fillText((frac*100).toFixed(0)+'%', x+w, y+30);
+  ctx.restore();
+}
+
+// ====================== Stage 0: labeled data flows into the pipeline ======================
+function drawS0(pr){
+  frameTitle(LANG==='cn'?'带标签的脑波, 一批批流进 CSP+LDA 管道':'Labeled EEG flows batch by batch into the CSP+LDA pipeline');
+  var now=performance.now();
+  drawPipeFrame(0, 0);
+  drawIncomingStream(now, clamp(pr*2,0,1));
+
+  // raw scatter sitting inside box 0, with an UNLEARNED (random) CSP axis
+  var pl=pipeLayout();
+  var b=pl.boxes[0];
+  var cx=b.x+b.w*0.5, cy=b.y+b.h*0.55, half=Math.min(b.w*0.42, b.h*0.30);
+  var randAng = 18*Math.PI/180;     // random starting filter — not learned yet
+  drawRawScatter(cx, cy, half, randAng, false, clamp((pr-0.2)*1.6,0,1));
+  ctx.fillStyle=P.fgMute; ctx.font="italic 600 10px 'Inter',sans-serif"; ctx.textAlign='center';
+  ctx.fillText(t('lblRand'), cx, cy+half+22);
+
+  drawMinecraftSil();
+  document.getElementById('hudV2').textContent = Math.floor(pr*9)+' / 50';
+  document.getElementById('hudV3').textContent = LANG==='cn'?'随机':'random';
+  document.getElementById('hudV4').textContent = '~50%';
+}
+
+// ====================== Stage 1: CSP filter direction is learned from batches ======================
+function drawS1(pr){
+  frameTitle(LANG==='cn'?'第一步参数: CSP 滤波方向被一批批数据" 学" 出来':'First learned param: the CSP filter direction is tuned out by the batches');
+  var now=performance.now();
+  drawPipeFrame(1, 1);
+  drawIncomingStream(now, 1);
+
+  var pl=pipeLayout();
+  var b=pl.boxes[1];
+  var cx=b.x+b.w*0.5, cy=b.y+b.h*0.52, half=Math.min(b.w*0.42, b.h*0.30);
+  // CSP axis eases from random start toward ANG_STAR as more batches arrive
+  var startA=18*Math.PI/180;
+  var prog=easeIO(clamp(pr,0,1));
+  var ang=startA*(1-prog)+ANG_STAR*prog;
+  var locked = pr>0.85;
+  drawRawScatter(cx, cy, half, ang, locked, 1);
+  // CSP label inside box 1
+  ctx.fillStyle=locked?P.query:P.accent; ctx.font="700 11px 'JetBrains Mono',monospace"; ctx.textAlign='center';
+  ctx.fillText(t('lblCSP'), cx, b.y+b.h-14);
+
+  // small param panel under box 2/3 area
+  var acc=trainAcc(ang, ldaBoundary(ang));
+  drawParamPanel(pl.boxes[3].x, pl.boxes[3].y+pl.boxes[3].h*0.30, pl.boxes[3].w-6, ang, acc*0.7+0.15);
+
+  drawMinecraftSil();
+  document.getElementById('hudV2').textContent = (10+Math.floor(pr*18))+' / 50';
+  document.getElementById('hudV3').textContent = 'CSP w='+Math.round(ang*180/Math.PI)+'deg';
+  document.getElementById('hudV4').textContent = ((acc*0.7+0.15)*100).toFixed(0)+'%';
+}
+
+// ====================== Stage 2: LDA boundary is learned in feature space ======================
+function drawS2(pr){
+  frameTitle(LANG==='cn'?'第二步参数: LDA 在特征空间里学出一条分界线':'Second learned param: LDA learns a boundary line in feature space');
+  var now=performance.now();
+  drawPipeFrame(3, 3);
+  drawIncomingStream(now, 0.7);
+
+  var pl=pipeLayout();
+  // CSP now near-optimal; feature scatter shown inside box 3, boundary morphs to learned
+  var ang=ANG_STAR;
+  var b=pl.boxes[2];
+  var cxf=b.x+b.w*0.5, cyf=b.y+b.h*0.52, halff=Math.min(b.w*0.40, b.h*0.30);
+  // a "random" starting boundary that rotates/shifts toward BND_STAR
+  var prog=easeIO(clamp(pr,0,1));
+  var randNx=Math.cos(0.2), randNy=Math.sin(0.2);
+  var bnd={
+    nx: randNx*(1-prog)+BND_STAR.nx*prog,
+    ny: randNy*(1-prog)+BND_STAR.ny*prog,
+    thr: (0.0)*(1-prog)+BND_STAR.thr*prog
+  };
+  var nl=Math.sqrt(bnd.nx*bnd.nx+bnd.ny*bnd.ny)||1; bnd.nx/=nl; bnd.ny/=nl;
+  drawFeatScatter(cxf, cyf, halff, ang, bnd, 1);
+  ctx.fillStyle=P.accent; ctx.font="700 11px 'JetBrains Mono',monospace"; ctx.textAlign='center';
+  ctx.fillText(t('lblFeat'), pl.boxes[2].cx, pl.boxes[2].y+pl.boxes[2].h-14);
+
+  var acc=trainAcc(ang, bnd);
+  drawParamPanel(pl.boxes[3].x, pl.boxes[3].y+pl.boxes[3].h*0.34, pl.boxes[3].w-6, ang, acc);
+  // note about misclassified points shrinking
+  ctx.fillStyle=P.fgDim; ctx.font="italic 600 10px 'Inter',sans-serif"; ctx.textAlign='left';
+  ctx.fillText(t('lblErr'), pl.boxes[2].x, pl.boxes[2].y+pl.boxes[2].h+16);
+
+  drawMinecraftSil();
+  document.getElementById('hudV2').textContent = (28+Math.floor(pr*14))+' / 50';
+  document.getElementById('hudV3').textContent = 'LDA learning';
+  document.getElementById('hudV4').textContent = (acc*100).toFixed(0)+'%';
+}
+
+// ====================== Stage 3: whole pipeline converges, accuracy climbs ======================
+function drawS3(pr){
+  frameTitle(LANG==='cn'?'整条管道一起收敛 — 见的批次越多, 越准':'The whole pipeline converges — more batches seen, the more accurate');
+  var now=performance.now();
+  drawPipeFrame(3, -1);
+  drawIncomingStream(now, 0.5);
+
+  var pl=pipeLayout();
+  // both params now essentially learned; show raw axis (box1) + feature boundary (box2)
+  var ang=ANG_STAR;
+  var b1=pl.boxes[1];
+  drawRawScatter(b1.x+b1.w*0.5, b1.y+b1.h*0.52, Math.min(b1.w*0.40,b1.h*0.28), ang, true, 0.95);
+  var b2=pl.boxes[2];
+  drawFeatScatter(b2.x+b2.w*0.5, b2.y+b2.h*0.52, Math.min(b2.w*0.40,b2.h*0.28), ang, BND_STAR, 0.95);
+
+  // accuracy gauge climbing from ~0.5 to final, as a function of batches seen
+  var finalAcc=trainAcc(ang, BND_STAR);
+  var acc=0.5+(finalAcc-0.5)*easeIO(clamp(pr,0,1));
+  var gx=pl.boxes[3].x+8, gy=pl.boxes[3].y+pl.boxes[3].h*0.40, gw=pl.boxes[3].w-22;
+  drawAccGauge(gx, gy, gw, acc, t('lblAcc'));
+  // converged param note
+  ctx.fillStyle=P.query; ctx.font="700 10px 'JetBrains Mono',monospace"; ctx.textAlign='left';
+  if(pr>0.7) ctx.fillText(t('lblConv'), gx, gy+58);
+
+  // convergence trail: a tiny line showing acc rising over "batches"
+  var tx=pl.boxes[3].x+8, ty=pl.boxes[3].y+pl.boxes[3].h*0.74, tw=pl.boxes[3].w-22, th=H*0.10;
+  ctx.save(); ctx.strokeStyle=P.line; ctx.lineWidth=1; ctx.strokeRect(tx,ty,tw,th);
+  ctx.strokeStyle=P.signal; ctx.lineWidth=1.8; ctx.beginPath();
+  var pts=Math.floor(pr*40)+2;
+  for(var k=0;k<=pts;k++){
+    var fr=k/40;
+    var a=0.5+(finalAcc-0.5)*easeIO(clamp(fr,0,1));
+    var px=tx+fr*tw, py=ty+th-(a-0.45)/(1-0.45)*th;
+    if(k===0) ctx.moveTo(px,py); else ctx.lineTo(px,py);
+  }
+  ctx.stroke();
+  ctx.fillStyle=P.fgMute; ctx.font="600 8px 'JetBrains Mono',monospace"; ctx.textAlign='left';
+  ctx.fillText(LANG==='cn'?'准确率 vs 批次':'acc vs batches', tx, ty-4);
+  ctx.restore();
+
+  drawMinecraftSil();
+  document.getElementById('hudV2').textContent = (42+Math.floor(pr*8))+' / 50';
+  document.getElementById('hudV3').textContent = LANG==='cn'?'收敛中':'converging';
+  document.getElementById('hudV4').textContent = (acc*100).toFixed(0)+'%';
+}
+
+// ====================== Stage 4: trained — classifier ready, hand off to S4 ======================
+function drawS4(pr){
+  frameTitle(LANG==='cn'?'训练完成 — 电脑从你的数据里学出了分左右手的本事':'Trained — the computer learned a left-vs-right skill from your data');
+  drawPipeFrame(3, 3);
+
+  var pl=pipeLayout();
+  var ang=ANG_STAR;
+  var b1=pl.boxes[1];
+  drawRawScatter(b1.x+b1.w*0.5, b1.y+b1.h*0.50, Math.min(b1.w*0.40,b1.h*0.26),
+                 ang, 0.5+0.5*Math.sin(pr*Math.PI*2)>0.7, 0.9);
+  var b2=pl.boxes[2];
+  drawFeatScatter(b2.x+b2.w*0.5, b2.y+b2.h*0.50, Math.min(b2.w*0.40,b2.h*0.26), ang, BND_STAR, 0.9);
+
+  var finalAcc=trainAcc(ang, BND_STAR);
+  drawParamPanel(pl.boxes[3].x, pl.boxes[3].y+pl.boxes[3].h*0.18, pl.boxes[3].w-6, ang, finalAcc);
+
+  // "ready" stamp + handoff card under the pipeline
+  if(pr>0.25){
+    var ba=easeIO(clamp((pr-0.25)/0.75,0,1));
+    var bx=W*0.40, by=H*0.80, bw=W*0.54, bh=H*0.16;
+    ctx.save(); ctx.globalAlpha=ba;
+    ctx.fillStyle=P.bg2; ctx.strokeStyle=P.query; ctx.lineWidth=2;
+    ctx.fillRect(bx,by,bw,bh); ctx.strokeRect(bx,by,bw,bh);
+    ctx.fillStyle=P.query; ctx.font="800 16px 'Space Grotesk','Inter',sans-serif"; ctx.textAlign='left';
+    wrapText(LANG==='cn'?'分类器就绪: 这套 CSP+LDA 参数 = 学出来的本事':'classifier ready: this CSP+LDA param set = the learned skill',
+             bx+16, by+26, bw-32, 22);
+    ctx.fillStyle=P.flash; ctx.font="600 11px 'Inter',sans-serif";
+    wrapText(t('lblNext'), bx+16, by+bh-14, bw-32, 16);
+    ctx.restore();
+  }
+
+  drawMinecraftSil();
+  document.getElementById('hudV2').textContent = '50 / 50';
+  document.getElementById('hudV3').textContent = LANG==='cn'?'已学定':'learned';
+  document.getElementById('hudV4').textContent = (finalAcc*100).toFixed(0)+'% (train)';
+}
+
+// ====================== Render loop ======================
+var DRAW=[drawS0, drawS1, drawS2, drawS3, drawS4];
+function render(){
+  var now = performance.now();
+  var tt = (now - animStart) % TOTAL;
+  var acc=0, idx=0, pr=0;
+  for(var i=0;i<NST;i++){
+    if(tt < acc+STAGE_DUR[i]){ idx=i; pr=(tt-acc)/STAGE_DUR[i]; break; }
+    acc+=STAGE_DUR[i];
+  }
+  if(idx !== curStage){ curStage = idx; updateSub(curStage); }
+
+  ctx.clearRect(0,0,W,H);
+  ctx.fillStyle = P.bg0; ctx.fillRect(0,0,W,H);
+  DRAW[idx](pr);
+
+  requestAnimationFrame(render);
+}
+
+refreshI18N();
+updateSub(0);
+requestAnimationFrame(render);
+</script>
+</body>
+</html>

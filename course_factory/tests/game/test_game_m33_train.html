@@ -1,0 +1,815 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>分类器训练师 — 把零件拼成训练流水线</title>
+<style>
+:root{
+  /* deep-space base */
+  --bg-0:oklch(0.18 0.03 240);
+  --bg-1:oklch(0.23 0.035 240);
+  --bg-2:oklch(0.28 0.04 240);
+  --line:oklch(0.40 0.04 230);
+  --line-2:oklch(0.48 0.05 230);
+  --txt:oklch(0.93 0.02 230);
+  --txt-2:oklch(0.74 0.03 230);
+  --txt-3:oklch(0.58 0.03 230);
+  /* cs (CS-01) palette */
+  --cs:oklch(0.75 0.17 200);   /* SIGNAL — accent */
+  --core:oklch(0.55 0.16 200); /* CORE */
+  --depth:oklch(0.35 0.10 210);/* DEPTH */
+  --flash:oklch(0.92 0.08 190);/* FLASH */
+  --query:oklch(0.85 0.14 85); /* QUERY — warn/highlight */
+  --ok:oklch(0.78 0.15 155);
+  --bad:oklch(0.70 0.18 25);
+  --mono:'JetBrains Mono','SF Mono',ui-monospace,Menlo,Consolas,monospace;
+  --sans:'PingFang SC','Inter','Noto Sans SC',system-ui,sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:100%;height:100vh;overflow:hidden;background:var(--bg-0);
+  font-family:var(--sans);color:var(--txt);}
+.wrapper{display:flex;height:100vh;}
+
+/* ─────────────  200px sidebar  ───────────── */
+.game-sidebar{
+  width:200px;flex-shrink:0;height:100vh;overflow-y:auto;
+  background:var(--bg-1);border-right:1px solid var(--line);
+  padding:14px 12px;display:flex;flex-direction:column;gap:13px;
+}
+/* mascot Bit */
+.mascot{display:flex;align-items:center;gap:9px;}
+.bit{width:34px;height:34px;flex-shrink:0;position:relative;}
+.bit .px{position:absolute;width:8px;height:8px;border-radius:2px;background:var(--cs);
+  transition:transform .4s cubic-bezier(.3,1.4,.5,1),background .4s;}
+.bit.solved .px{background:var(--flash);}
+.mascot .who .nm{font-family:var(--mono);font-size:11px;font-weight:700;color:var(--cs);letter-spacing:.5px;}
+.mascot .who .ro{font-size:9.5px;color:var(--txt-3);line-height:1.3;}
+
+.s-h{font-family:var(--mono);font-size:9px;letter-spacing:1.3px;color:var(--txt-3);
+  text-transform:uppercase;margin-bottom:6px;}
+
+/* roadmap S1-S6 */
+.roadmap{display:flex;flex-direction:column;gap:0;}
+.stage{display:flex;align-items:center;gap:8px;padding:4px 0;position:relative;}
+.stage .dot{width:13px;height:13px;flex-shrink:0;border-radius:50%;
+  border:1.5px solid var(--line-2);background:var(--bg-2);position:relative;z-index:2;}
+.stage .lbl{font-size:10px;color:var(--txt-3);line-height:1.25;}
+.stage.done .dot{background:var(--core);border-color:var(--core);}
+.stage.done .lbl{color:var(--txt-2);}
+.stage.here .dot{background:var(--cs);border-color:var(--cs);box-shadow:0 0 0 4px color-mix(in oklch,var(--cs) 28%,transparent);}
+.stage.here .lbl{color:var(--cs);font-weight:700;}
+.stage:not(:last-child)::after{content:"";position:absolute;left:6px;top:17px;
+  width:1.5px;height:13px;background:var(--line-2);z-index:1;}
+.stage.done:not(:last-child)::after{background:var(--core);}
+
+/* block tray */
+.tray{display:flex;flex-direction:column;gap:6px;}
+.tray-list{display:flex;flex-direction:column;gap:6px;min-height:20px;}
+.block{display:flex;align-items:center;gap:8px;padding:8px 9px;border-radius:8px;
+  background:var(--bg-2);border:1.5px solid var(--line);font-size:11px;color:var(--txt);
+  cursor:grab;transition:border-color .16s,transform .12s,box-shadow .16s;
+  user-select:none;box-shadow:2px 2px 0 var(--bg-0);}
+.block:hover{border-color:var(--cs);}
+.block:active{cursor:grabbing;}
+.block.dragging{opacity:.3;}
+.block.used{opacity:.3;pointer-events:none;}
+.block .gly{width:24px;height:24px;flex-shrink:0;border-radius:6px;
+  background:color-mix(in oklch,var(--cs) 16%,var(--bg-1));
+  border:1px solid var(--core);display:flex;align-items:center;justify-content:center;}
+.block .gly svg{width:14px;height:14px;}
+.block .bt{display:flex;flex-direction:column;gap:1px;line-height:1.2;}
+.block .bt .b1{font-family:var(--mono);font-size:11px;letter-spacing:.3px;}
+.block .bt .b2{font-size:8.5px;color:var(--txt-3);}
+
+.spacer{flex:1;min-height:6px;}
+.ctrl{display:flex;flex-direction:column;gap:7px;}
+.btn{font-family:var(--mono);font-size:11.5px;letter-spacing:.6px;padding:10px;border-radius:8px;
+  border:1.5px solid var(--line-2);cursor:pointer;transition:all .16s;background:var(--bg-2);color:var(--txt);}
+.btn:hover:not(:disabled){border-color:var(--cs);color:var(--cs);}
+.btn:disabled{opacity:.4;cursor:default;}
+.btn.run{background:var(--cs);border-color:var(--cs);color:var(--bg-0);font-weight:700;box-shadow:2px 2px 0 var(--bg-0);}
+.btn.run:hover:not(:disabled){background:var(--flash);border-color:var(--flash);}
+.lang-btn{font-family:var(--mono);font-size:11px;letter-spacing:.5px;padding:8px 10px;border-radius:7px;
+  background:var(--bg-2);border:1px solid var(--line-2);color:var(--txt-2);cursor:pointer;transition:all .18s;}
+.lang-btn:hover{border-color:var(--cs);color:var(--cs);}
+
+/* ─────────────  main stage  ───────────── */
+.game-main{flex:1;height:100vh;display:flex;flex-direction:column;overflow:hidden;
+  padding:18px 22px;gap:13px;position:relative;}
+
+.head{display:flex;align-items:center;gap:13px;background:var(--bg-1);
+  border:1px solid var(--line);border-radius:12px;padding:12px 16px;box-shadow:3px 3px 0 var(--bg-0);}
+.head .ic{width:42px;height:42px;flex-shrink:0;border-radius:10px;
+  background:color-mix(in oklch,var(--cs) 16%,var(--bg-1));border:1px solid var(--core);
+  display:flex;align-items:center;justify-content:center;}
+.head .ic svg{width:23px;height:23px;}
+.head .meta .nm{font-size:13.5px;font-weight:700;}
+.head .meta .ds{font-size:11px;color:var(--txt-2);line-height:1.45;margin-top:2px;max-width:560px;}
+.head .status{margin-left:auto;font-family:var(--mono);font-size:10.5px;letter-spacing:.5px;
+  padding:6px 13px;border-radius:20px;background:var(--bg-2);border:1px solid var(--line-2);
+  color:var(--txt-2);white-space:nowrap;}
+.head .status.fail{background:color-mix(in oklch,var(--bad) 20%,var(--bg-1));border-color:var(--bad);color:var(--bad);}
+.head .status.win{background:color-mix(in oklch,var(--ok) 20%,var(--bg-1));border-color:var(--ok);color:var(--ok);}
+
+/* pipeline lane */
+.pipe-card{background:var(--bg-1);border:1px solid var(--line);border-radius:12px;
+  padding:16px 18px;box-shadow:3px 3px 0 var(--bg-0);}
+.pipe-card .lane-t{font-family:var(--mono);font-size:9.5px;letter-spacing:1.3px;
+  color:var(--cs);text-transform:uppercase;margin-bottom:12px;display:flex;justify-content:space-between;}
+.pipe-card .lane-t .hint{color:var(--txt-3);letter-spacing:.5px;}
+.lane{display:flex;align-items:stretch;gap:0;}
+.endcap{flex-shrink:0;width:84px;display:flex;flex-direction:column;align-items:center;
+  justify-content:center;gap:6px;padding:10px 6px;border-radius:10px;
+  background:var(--bg-2);border:1px dashed var(--line-2);}
+.endcap .tag{font-family:var(--mono);font-size:8.5px;letter-spacing:.7px;color:var(--txt-3);text-transform:uppercase;}
+.endcap svg{width:58px;height:30px;}
+.arrow{flex-shrink:0;width:22px;display:flex;align-items:center;justify-content:center;color:var(--line-2);}
+.arrow svg{width:16px;height:16px;}
+.flow-mid{flex:1;display:flex;align-items:stretch;min-width:0;}
+.slot{flex:1;min-width:0;min-height:88px;border-radius:10px;border:1.5px dashed var(--line-2);
+  background:var(--bg-2);margin:0 5px;display:flex;flex-direction:column;align-items:center;
+  justify-content:center;gap:5px;position:relative;
+  transition:border-color .16s,background .16s,box-shadow .16s;}
+.slot .snum{position:absolute;top:5px;left:8px;font-family:var(--mono);font-size:9px;color:var(--txt-3);}
+.slot .ph{font-size:10px;color:var(--txt-3);text-align:center;padding:0 8px;line-height:1.35;}
+.slot.over{border-color:var(--cs);background:color-mix(in oklch,var(--cs) 12%,var(--bg-2));}
+.slot.filled{border-style:solid;border-color:var(--line-2);background:var(--bg-1);}
+.slot.ok-step{border-color:var(--ok);background:color-mix(in oklch,var(--ok) 14%,var(--bg-1));}
+.slot.bad-step{border-color:var(--bad);background:color-mix(in oklch,var(--bad) 16%,var(--bg-1));}
+.slot.flowing{box-shadow:0 0 0 3px color-mix(in oklch,var(--cs) 35%,transparent);}
+.placed{display:flex;flex-direction:column;align-items:center;gap:4px;cursor:grab;user-select:none;
+  padding:6px 4px;width:100%;}
+.placed .pg{width:26px;height:26px;border-radius:7px;background:color-mix(in oklch,var(--cs) 18%,var(--bg-1));
+  border:1px solid var(--core);display:flex;align-items:center;justify-content:center;}
+.placed .pg svg{width:15px;height:15px;}
+.placed .pn{font-family:var(--mono);font-size:11px;letter-spacing:.3px;}
+.placed .px2{font-size:8.5px;color:var(--txt-3);}
+.placed .rm{position:absolute;top:4px;right:6px;font-family:var(--mono);font-size:13px;color:var(--txt-3);
+  cursor:pointer;line-height:1;padding:2px 4px;border-radius:4px;}
+.placed .rm:hover{color:var(--bad);background:color-mix(in oklch,var(--bad) 16%,transparent);}
+
+/* result panel */
+.result{flex:1;min-height:0;display:flex;gap:13px;}
+.r-left{flex:1.3;background:var(--bg-1);border:1px solid var(--line);border-radius:12px;
+  padding:14px 16px;box-shadow:3px 3px 0 var(--bg-0);display:flex;flex-direction:column;gap:10px;overflow:hidden;}
+.r-left .r-h{font-family:var(--mono);font-size:9.5px;letter-spacing:1.3px;color:var(--cs);text-transform:uppercase;}
+.log{flex:1;min-height:0;overflow-y:auto;font-family:var(--mono);font-size:10.5px;line-height:1.7;
+  color:var(--txt-2);display:flex;flex-direction:column;gap:2px;}
+.log .ln{display:flex;gap:8px;}
+.log .ln .tk{color:var(--txt-3);flex-shrink:0;}
+.log .ln.ok .tk{color:var(--ok);}
+.log .ln.err .tk{color:var(--bad);}
+.log .ln.run .tk{color:var(--cs);}
+.log .ln.win .tk{color:var(--query);}
+.log .empty{color:var(--txt-3);font-style:italic;}
+
+.r-right{flex:1;background:var(--bg-1);border:1px solid var(--line);border-radius:12px;
+  padding:14px 16px;box-shadow:3px 3px 0 var(--bg-0);display:flex;flex-direction:column;gap:11px;}
+.r-right .r-h{font-family:var(--mono);font-size:9.5px;letter-spacing:1.3px;color:var(--cs);text-transform:uppercase;}
+.acc-box{display:flex;flex-direction:column;align-items:center;gap:4px;padding:6px 0;}
+.acc-num{font-family:var(--mono);font-size:38px;font-weight:700;color:var(--txt-3);line-height:1;transition:color .3s;}
+.acc-num.live{color:var(--query);}
+.acc-cap{font-size:10px;color:var(--txt-3);letter-spacing:.5px;}
+.acc-bar{width:100%;height:9px;border-radius:5px;background:var(--bg-2);border:1px solid var(--line);overflow:hidden;}
+.acc-bar .fill{height:100%;width:0;background:linear-gradient(90deg,var(--core),var(--cs));transition:width .9s cubic-bezier(.4,0,.2,1);}
+/* confusion preview: left vs right hand */
+.conf{display:flex;flex-direction:column;gap:6px;}
+.conf .ct{font-family:var(--mono);font-size:8.5px;letter-spacing:.6px;color:var(--txt-3);text-transform:uppercase;}
+.conf .rows{display:flex;flex-direction:column;gap:5px;}
+.conf .row{display:flex;align-items:center;gap:8px;}
+.conf .row .nm{font-size:10px;color:var(--txt-2);width:54px;flex-shrink:0;}
+.conf .row .trk{flex:1;height:14px;border-radius:4px;background:var(--bg-2);border:1px solid var(--line);overflow:hidden;position:relative;}
+.conf .row .seg{height:100%;float:left;transition:width .8s ease;}
+.conf .row .seg.hit{background:var(--ok);}
+.conf .row .seg.miss{background:color-mix(in oklch,var(--bad) 70%,var(--bg-2));}
+
+/* minecraft corner silhouette + endpoint */
+.endpoint{position:absolute;right:18px;bottom:14px;display:flex;align-items:center;gap:8px;
+  opacity:.5;pointer-events:none;}
+.endpoint svg{width:26px;height:26px;color:var(--txt-3);}
+.endpoint .ep-t{font-size:9.5px;color:var(--txt-3);line-height:1.3;max-width:130px;}
+
+/* win overlay */
+.overlay{position:absolute;inset:0;background:color-mix(in oklch,var(--bg-0) 78%,transparent);
+  display:none;align-items:center;justify-content:center;z-index:20;backdrop-filter:blur(3px);}
+.overlay.show{display:flex;}
+.win-card{background:var(--bg-1);border:1.5px solid var(--cs);border-radius:16px;
+  padding:26px 30px;max-width:420px;text-align:center;box-shadow:5px 5px 0 var(--bg-0);}
+.win-card .wc-bit{width:52px;height:52px;margin:0 auto 12px;position:relative;}
+.win-card .wc-bit .px{position:absolute;width:12px;height:12px;border-radius:3px;background:var(--flash);}
+.win-card .wc-t{font-size:16px;font-weight:700;color:var(--cs);margin-bottom:8px;}
+.win-card .wc-acc{font-family:var(--mono);font-size:30px;font-weight:700;color:var(--query);margin-bottom:10px;}
+.win-card .wc-d{font-size:12px;color:var(--txt-2);line-height:1.65;margin-bottom:16px;}
+.win-card .wc-unlock{font-family:var(--mono);font-size:10px;letter-spacing:.6px;color:var(--ok);
+  background:color-mix(in oklch,var(--ok) 14%,var(--bg-1));border:1px solid var(--ok);
+  border-radius:8px;padding:8px 12px;margin-bottom:16px;}
+.win-card .btn.run{width:100%;}
+</style>
+</head>
+<body>
+<div class="wrapper">
+  <!-- ───── sidebar ───── -->
+  <aside class="game-sidebar">
+    <div class="mascot">
+      <div class="bit" id="bit">
+        <span class="px" style="left:0;top:0"></span>
+        <span class="px" style="left:13px;top:0"></span>
+        <span class="px" style="left:0;top:13px"></span>
+        <span class="px" style="left:13px;top:13px"></span>
+        <span class="px" style="left:26px;top:6px"></span>
+        <span class="px" style="left:6px;top:26px"></span>
+      </div>
+      <div class="who">
+        <div class="nm">Bit</div>
+        <div class="ro" data-i18n="bitRole">流水线学徒</div>
+      </div>
+    </div>
+
+    <div>
+      <div class="s-h" data-i18n="roadmapH">脑控之路</div>
+      <div class="roadmap" id="roadmap"></div>
+    </div>
+
+    <div class="tray">
+      <div class="s-h" data-i18n="trayH">零件库 · 拖入流水线</div>
+      <div class="tray-list" id="tray"></div>
+    </div>
+
+    <div class="spacer"></div>
+
+    <div class="ctrl">
+      <button class="btn run" id="runBtn" data-i18n="runBtn">运行训练</button>
+      <button class="btn" id="resetBtn" data-i18n="resetBtn">清空重来</button>
+      <button class="lang-btn" id="langBtn">EN</button>
+    </div>
+  </aside>
+
+  <!-- ───── main ───── -->
+  <main class="game-main">
+    <div class="head">
+      <div class="ic">
+        <svg viewBox="0 0 24 24" fill="none" stroke="var(--cs)" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="4" width="6" height="6" rx="1"/><rect x="15" y="4" width="6" height="6" rx="1"/>
+          <rect x="9" y="14" width="6" height="6" rx="1"/><path d="M6 10v2a2 2 0 0 0 2 2h1"/><path d="M18 10v2a2 2 0 0 1-2 2h-1"/>
+        </svg>
+      </div>
+      <div class="meta">
+        <div class="nm" data-i18n="title">分类器训练师</div>
+        <div class="ds" data-i18n="subtitle">把零件拼成训练流水线，让电脑学会分你的左右手。漏块或装反顺序，fit 都会报错。</div>
+      </div>
+      <div class="status" id="status" data-i18n="stIdle">流水线未运行</div>
+    </div>
+
+    <div class="pipe-card">
+      <div class="lane-t">
+        <span data-i18n="laneT">训练流水线 · TRAIN PIPELINE</span>
+        <span class="hint" data-i18n="laneHint">数据从左流到右</span>
+      </div>
+      <div class="lane">
+        <div class="endcap">
+          <span class="tag">RAW EEG</span>
+          <svg viewBox="0 0 58 30" fill="none" stroke="var(--core)" stroke-width="1.4">
+            <path d="M1 15 Q5 4 9 15 T17 15 Q21 26 25 15 T33 15 Q37 6 41 15 T49 15 Q53 22 57 15"/>
+          </svg>
+        </div>
+        <div class="arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 12h14m-5-5 5 5-5 5"/></svg></div>
+        <div class="flow-mid" id="flowMid"></div>
+        <div class="arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 12h14m-5-5 5 5-5 5"/></svg></div>
+        <div class="endcap">
+          <span class="tag">MODEL</span>
+          <svg viewBox="0 0 58 30" fill="none" stroke="var(--core)" stroke-width="1.4" stroke-linecap="round">
+            <rect x="6" y="6" width="46" height="18" rx="3"/><path d="M16 15h26M29 9v12"/>
+          </svg>
+        </div>
+      </div>
+    </div>
+
+    <div class="result">
+      <div class="r-left">
+        <div class="r-h" data-i18n="logH">训练日志 · fit() 输出</div>
+        <div class="log" id="log"><div class="empty" data-i18n="logEmpty">把四个零件拖进流水线，然后点「运行训练」。</div></div>
+      </div>
+      <div class="r-right">
+        <div class="r-h" data-i18n="accH">模型表现</div>
+        <div class="acc-box">
+          <div class="acc-num" id="accNum">--%</div>
+          <div class="acc-cap" data-i18n="accCap">左右手分类准确率</div>
+        </div>
+        <div class="acc-bar"><div class="fill" id="accFill"></div></div>
+        <div class="conf">
+          <div class="ct" data-i18n="confT">分得对吗 (50 次想象)</div>
+          <div class="rows">
+            <div class="row"><span class="nm" data-i18n="leftHand">想象左手</span><div class="trk"><div class="seg hit" id="lHit"></div><div class="seg miss" id="lMiss"></div></div></div>
+            <div class="row"><span class="nm" data-i18n="rightHand">想象右手</span><div class="trk"><div class="seg hit" id="rHit"></div><div class="seg miss" id="rMiss"></div></div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="endpoint">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+        <rect x="3" y="9" width="6" height="6"/><rect x="9" y="9" width="6" height="6" fill="currentColor" opacity=".3"/>
+        <rect x="15" y="9" width="6" height="6"/><rect x="9" y="3" width="6" height="6"/><rect x="9" y="15" width="6" height="6"/>
+      </svg>
+      <div class="ep-t" data-i18n="endpoint">终点 S6：脑控 Minecraft</div>
+    </div>
+
+    <!-- win overlay -->
+    <div class="overlay" id="overlay">
+      <div class="win-card">
+        <div class="wc-bit" id="wcBit">
+          <span class="px" style="left:0;top:0"></span><span class="px" style="left:20px;top:0"></span>
+          <span class="px" style="left:40px;top:0"></span><span class="px" style="left:10px;top:20px"></span>
+          <span class="px" style="left:30px;top:20px"></span><span class="px" style="left:20px;top:40px"></span>
+        </div>
+        <div class="wc-t" data-i18n="winT">你训出了第一个脑波分类器！</div>
+        <div class="wc-acc" id="wcAcc">86%</div>
+        <div class="wc-d" data-i18n="winD">CSP 提空间特征、提取统计量、LDA 找分界、fit 学参数——四步顺序对了，电脑就能用一个数分开左右手。这就是脑控的核心引擎。</div>
+        <div class="wc-unlock" data-i18n="winUnlock">解锁称号：分类器训练师</div>
+        <button class="btn run" id="againBtn" data-i18n="againBtn">再训一次</button>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  // ───────── i18n ─────────
+  const I18N = {
+    zh:{
+      bitRole:"流水线学徒", roadmapH:"脑控之路", trayH:"零件库 · 拖入流水线",
+      runBtn:"运行训练", resetBtn:"清空重来",
+      title:"分类器训练师",
+      subtitle:"把零件拼成训练流水线，让电脑学会分你的左右手。漏块或装反顺序，fit 都会报错。",
+      stIdle:"流水线未运行", stReady:"流水线就绪 · 可运行", stRun:"训练中…",
+      stFail:"fit 报错", stWin:"训练成功",
+      laneT:"训练流水线 · TRAIN PIPELINE", laneHint:"数据从左流到右",
+      logH:"训练日志 · fit() 输出", logEmpty:"把四个零件拖进流水线，然后点「运行训练」。",
+      accH:"模型表现", accCap:"左右手分类准确率",
+      confT:"分得对吗 (50 次想象)", leftHand:"想象左手", rightHand:"想象右手",
+      endpoint:"终点 S6：脑控 Minecraft",
+      winT:"你训出了第一个脑波分类器！",
+      winD:"CSP 提空间特征、提取统计量、LDA 找分界、fit 学参数——四步顺序对了，电脑就能用一个数分开左右手。这就是脑控的核心引擎。",
+      winUnlock:"解锁称号：分类器训练师", againBtn:"再训一次",
+      slotPh:"空槽 · 拖零件来",
+      blocks:{
+        csp:{n:"CSP",d:"空间滤波"}, feat:{n:"提取特征",d:"算方差/对数能量"},
+        lda:{n:"LDA",d:"线性判别"}, fit:{n:"fit()",d:"学参数"}
+      },
+      stages:["S1 读懂脑电","S2 采集信号","S3 训练分类器","S4 实时解码","S5 控制接口","S6 脑控 Minecraft"],
+      log:{
+        start:"开始 pipeline.fit(X_raw, y) …",
+        noCsp:"ValueError: 直接喂原始脑波给 LDA，特征维度过万，无法收敛。缺一步空间滤波 (CSP)。",
+        noFeat:"ValueError: CSP 输出是滤波后信号，LDA 需要的是每段的特征数（如方差）。缺「提取特征」。",
+        noLda:"ValueError: 没有分类器，只有特征。流水线学不到「哪边是左、哪边是右」。缺 LDA。",
+        noFit:"NotFittedError: 零件都在，但没人喊 fit()。模型从未真正学习。缺 fit()。",
+        fitFirst:"OrderError: fit() 放在最前面——还没有任何特征可学。fit 必须收尾，不能打头。",
+        orderBad:"OrderError: 顺序乱了。正确数据流是 CSP → 提取特征 → LDA → fit()，每一步的输出喂给下一步。",
+        empty:"流水线是空的，没有零件可运行。",
+        sCsp:"[1/4] CSP 学到 4 个空间滤波器，把 8 通道压成强判别成分。",
+        sFeat:"[2/4] 对每段算 log 方差 → 每次想象变成 4 个特征数。",
+        sLda:"[3/4] LDA 在特征空间找到一条最佳分界线。",
+        sFit:"[4/4] fit() 完成，参数已写入模型。",
+        done:"pipeline 训练完成。在 50 段留出数据上评估…"
+      }
+    },
+    en:{
+      bitRole:"Pipeline apprentice", roadmapH:"Road to mind-control", trayH:"Parts bin · drag into pipeline",
+      runBtn:"Run training", resetBtn:"Clear",
+      title:"Classifier Trainer",
+      subtitle:"Snap parts into a training pipeline so the computer learns to tell your left from right hand. Miss a part or wrong order and fit() throws.",
+      stIdle:"Pipeline not run", stReady:"Pipeline ready · run it", stRun:"Training…",
+      stFail:"fit error", stWin:"Training OK",
+      laneT:"TRAIN PIPELINE", laneHint:"data flows left to right",
+      logH:"Train log · fit() output", logEmpty:"Drag the four parts in, then hit Run training.",
+      accH:"Model performance", accCap:"left-vs-right accuracy",
+      confT:"Got it right? (50 imaginations)", leftHand:"Imagine left", rightHand:"Imagine right",
+      endpoint:"Goal S6: mind-control Minecraft",
+      winT:"You trained your first brainwave classifier!",
+      winD:"CSP pulls spatial features, feature-extract gets stats, LDA finds the boundary, fit() learns the params — order them right and the computer separates left from right with one number. This is the engine of mind-control.",
+      winUnlock:"Unlocked: Classifier Trainer", againBtn:"Train again",
+      slotPh:"empty · drop a part",
+      blocks:{
+        csp:{n:"CSP",d:"spatial filter"}, feat:{n:"Feature",d:"var / log-power"},
+        lda:{n:"LDA",d:"linear discr."}, fit:{n:"fit()",d:"learn params"}
+      },
+      stages:["S1 Read EEG","S2 Acquire","S3 Train classifier","S4 Live decode","S5 Control IF","S6 Mind-control MC"],
+      log:{
+        start:"calling pipeline.fit(X_raw, y) …",
+        noCsp:"ValueError: feeding raw EEG straight to LDA, feature dim in the tens of thousands, won't converge. Missing a spatial filter (CSP).",
+        noFeat:"ValueError: CSP outputs filtered signals, LDA needs per-trial features (e.g. variance). Missing Feature extraction.",
+        noLda:"ValueError: no classifier, only features. The pipeline can't learn which side is left or right. Missing LDA.",
+        noFit:"NotFittedError: all parts present, but nobody called fit(). The model never actually learned. Missing fit().",
+        fitFirst:"OrderError: fit() is first — there are no features to learn yet. fit must come last.",
+        orderBad:"OrderError: order is scrambled. Correct flow is CSP -> Feature -> LDA -> fit(), each step feeds the next.",
+        empty:"Pipeline is empty, nothing to run.",
+        sCsp:"[1/4] CSP learned 4 spatial filters, squeezing 8 channels into strong discriminative components.",
+        sFeat:"[2/4] log-variance per trial -> each imagination becomes 4 feature numbers.",
+        sLda:"[3/4] LDA found the best dividing line in feature space.",
+        sFit:"[4/4] fit() done, parameters written into the model.",
+        done:"pipeline trained. evaluating on 50 held-out trials…"
+      }
+    }
+  };
+  let lang = "zh";
+
+  // ───────── block defs (correct order) ─────────
+  const CORRECT = ["csp","feat","lda","fit"];
+  const GLYPHS = {
+    csp:'<svg viewBox="0 0 24 24" fill="none" stroke="var(--cs)" stroke-width="1.7" stroke-linecap="round"><path d="M3 12h4l3-7 4 14 3-7h4"/></svg>',
+    feat:'<svg viewBox="0 0 24 24" fill="none" stroke="var(--cs)" stroke-width="1.7" stroke-linecap="round"><rect x="4" y="13" width="3.5" height="7"/><rect x="10" y="8" width="3.5" height="12"/><rect x="16" y="4" width="3.5" height="16"/></svg>',
+    lda:'<svg viewBox="0 0 24 24" fill="none" stroke="var(--cs)" stroke-width="1.7" stroke-linecap="round"><circle cx="7" cy="8" r="1.5"/><circle cx="9" cy="14" r="1.5"/><circle cx="15" cy="9" r="1.5"/><circle cx="17" cy="15" r="1.5"/><path d="M4 19 20 5"/></svg>',
+    fit:'<svg viewBox="0 0 24 24" fill="none" stroke="var(--cs)" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v3m0 12v3m9-9h-3M6 12H3m13.5-6.5-2 2m-7 7-2 2m11 0-2-2m-7-7-2-2"/><circle cx="12" cy="12" r="3.2"/></svg>'
+  };
+
+  const N_SLOTS = CORRECT.length;
+  // state: slots[i] = block id or null
+  let slots = new Array(N_SLOTS).fill(null);
+  let dragId = null;        // currently dragged block id
+  let dragFromSlot = null;  // slot index if dragging an already-placed block
+
+  const $ = s => document.querySelector(s);
+  const trayEl = $("#tray");
+  const flowMid = $("#flowMid");
+  const logEl = $("#log");
+  const statusEl = $("#status");
+  const runBtn = $("#runBtn");
+  const overlay = $("#overlay");
+
+  function L(){ return I18N[lang]; }
+
+  // ───────── render roadmap ─────────
+  function renderRoadmap(){
+    const stages = L().stages;
+    const rm = $("#roadmap");
+    rm.innerHTML = "";
+    stages.forEach((s,i)=>{
+      const cls = i < 2 ? "done" : (i === 2 ? "here" : "");
+      const div = document.createElement("div");
+      div.className = "stage " + cls;
+      div.innerHTML = '<span class="dot"></span><span class="lbl">'+s+'</span>';
+      rm.appendChild(div);
+    });
+  }
+
+  // ───────── render tray ─────────
+  function renderTray(){
+    trayEl.innerHTML = "";
+    CORRECT.forEach(id=>{
+      const placed = slots.includes(id);
+      const b = L().blocks[id];
+      const el = document.createElement("div");
+      el.className = "block" + (placed ? " used" : "");
+      el.setAttribute("draggable", placed ? "false" : "true");
+      el.dataset.bid = id;
+      el.innerHTML = '<span class="gly">'+GLYPHS[id]+'</span>'+
+        '<span class="bt"><span class="b1">'+b.n+'</span><span class="b2">'+b.d+'</span></span>';
+      if(!placed){
+        el.addEventListener("dragstart", e=>{
+          dragId = id; dragFromSlot = null;
+          el.classList.add("dragging");
+          if(e.dataTransfer){ e.dataTransfer.effectAllowed="move"; e.dataTransfer.setData("text/plain", id);}
+        });
+        el.addEventListener("dragend", ()=> el.classList.remove("dragging"));
+      }
+      trayEl.appendChild(el);
+    });
+  }
+
+  // ───────── render flow (slots) ─────────
+  function renderFlow(){
+    flowMid.innerHTML = "";
+    for(let i=0;i<N_SLOTS;i++){
+      const slot = document.createElement("div");
+      slot.className = "slot" + (slots[i] ? " filled" : "");
+      slot.dataset.idx = i;
+      slot.innerHTML = '<span class="snum">'+(i+1)+'</span>';
+      if(slots[i]){
+        const id = slots[i];
+        const b = L().blocks[id];
+        const p = document.createElement("div");
+        p.className = "placed";
+        p.setAttribute("draggable","true");
+        p.innerHTML = '<span class="rm" data-rm="'+i+'">x</span>'+
+          '<span class="pg">'+GLYPHS[id]+'</span>'+
+          '<span class="pn">'+b.n+'</span><span class="px2">'+b.d+'</span>';
+        p.addEventListener("dragstart", e=>{
+          dragId = id; dragFromSlot = i;
+          if(e.dataTransfer){ e.dataTransfer.effectAllowed="move"; e.dataTransfer.setData("text/plain", id);}
+        });
+        slot.appendChild(p);
+      } else {
+        const ph = document.createElement("span");
+        ph.className = "ph";
+        ph.textContent = L().slotPh;
+        slot.appendChild(ph);
+      }
+      // drop handlers
+      slot.addEventListener("dragover", e=>{ e.preventDefault(); slot.classList.add("over");
+        if(e.dataTransfer) e.dataTransfer.dropEffect="move"; });
+      slot.addEventListener("dragleave", ()=> slot.classList.remove("over"));
+      slot.addEventListener("drop", e=>{
+        e.preventDefault(); slot.classList.remove("over");
+        dropInto(i);
+      });
+      flowMid.appendChild(slot);
+    }
+    // remove-button handlers (delegation)
+    flowMid.querySelectorAll("[data-rm]").forEach(x=>{
+      x.addEventListener("click", e=>{
+        e.stopPropagation();
+        const idx = parseInt(x.dataset.rm,10);
+        slots[idx] = null;
+        afterChange();
+      });
+    });
+  }
+
+  function dropInto(idx){
+    if(!dragId) return;
+    const incoming = dragId;
+    if(dragFromSlot !== null){
+      // moving a placed block: swap
+      const tmp = slots[idx];
+      slots[idx] = incoming;
+      slots[dragFromSlot] = tmp;
+    } else {
+      // from tray: if slot occupied, send its block back to tray (null), place new
+      slots[idx] = incoming;
+    }
+    dragId = null; dragFromSlot = null;
+    afterChange();
+  }
+
+  function afterChange(){
+    renderTray();
+    renderFlow();
+    updateReadiness();
+  }
+
+  function filledCount(){ return slots.filter(Boolean).length; }
+
+  function updateReadiness(){
+    const n = filledCount();
+    if(n === 0){ setStatus("stIdle"); }
+    else if(n === N_SLOTS){ setStatus("stReady"); }
+    else { setStatus("stIdle"); }
+    statusEl.classList.remove("fail","win");
+  }
+
+  function setStatus(key, cls){
+    statusEl.textContent = L()[key];
+    statusEl.dataset.i18n = key;
+    statusEl.classList.remove("fail","win");
+    if(cls) statusEl.classList.add(cls);
+  }
+
+  // ───────── logging ─────────
+  function clearLog(){ logEl.innerHTML = ""; }
+  function logLine(text, cls){
+    const ln = document.createElement("div");
+    ln.className = "ln " + (cls||"");
+    const t = new Date();
+    const tk = String(t.getSeconds()).padStart(2,"0")+"."+String(Math.floor(t.getMilliseconds()/10)).padStart(2,"0");
+    ln.innerHTML = '<span class="tk">'+tk+'</span><span class="ms"></span>';
+    ln.querySelector(".ms").textContent = text;
+    logEl.appendChild(ln);
+    logEl.scrollTop = logEl.scrollHeight;
+  }
+
+  // ───────── evaluate pipeline correctness ─────────
+  // returns {ok:true} or {ok:false, errKey, badSlot}
+  function evaluate(){
+    const filled = slots.filter(Boolean);
+    if(filled.length === 0) return {ok:false, errKey:"empty"};
+
+    // which required blocks are missing
+    const missing = CORRECT.filter(id => !slots.includes(id));
+    if(missing.length){
+      // report first missing in canonical order with tailored message
+      const m = missing[0];
+      const map = {csp:"noCsp", feat:"noFeat", lda:"noLda", fit:"noFit"};
+      return {ok:false, errKey:map[m], missingId:m};
+    }
+
+    // all present — check order
+    // fit must be last
+    if(slots[0] === "fit") return {ok:false, errKey:"fitFirst"};
+    const correctOrder = CORRECT.every((id,i)=> slots[i] === id);
+    if(!correctOrder) return {ok:false, errKey:"orderBad"};
+
+    return {ok:true};
+  }
+
+  // ───────── run training (animated) ─────────
+  let running = false;
+  let runTimers = [];
+  function clearTimers(){ runTimers.forEach(clearTimeout); runTimers = []; }
+  function later(fn, ms){ const t = setTimeout(fn, ms); runTimers.push(t); }
+
+  function markSlot(idx, cls){
+    const s = flowMid.querySelector('.slot[data-idx="'+idx+'"]');
+    if(s){ s.classList.add(cls); }
+  }
+  function flowSlot(idx){
+    flowMid.querySelectorAll(".slot").forEach(s=>s.classList.remove("flowing"));
+    const s = flowMid.querySelector('.slot[data-idx="'+idx+'"]');
+    if(s) s.classList.add("flowing");
+  }
+  function clearSlotMarks(){
+    flowMid.querySelectorAll(".slot").forEach(s=> s.classList.remove("ok-step","bad-step","flowing"));
+  }
+
+  function run(){
+    if(running) return;
+    clearTimers();
+    clearSlotMarks();
+    clearLog();
+    overlay.classList.remove("show");
+    $("#accNum").textContent = "--%";
+    $("#accNum").classList.remove("live");
+    $("#accFill").style.width = "0";
+    setSeg(0,0,0,0);
+
+    const res = evaluate();
+    running = true;
+    runBtn.disabled = true;
+    setStatus("stRun");
+
+    logLine(L().log.start, "run");
+
+    if(!res.ok){
+      // failure path — animate which step breaks
+      later(()=>{
+        // mark slots: highlight the broken slot
+        if(res.errKey === "fitFirst"){ markSlot(0,"bad-step"); }
+        else if(res.errKey === "orderBad"){
+          // mark first out-of-place slot
+          for(let i=0;i<N_SLOTS;i++){ if(slots[i] !== CORRECT[i]){ markSlot(i,"bad-step"); break; } }
+        } else if(res.errKey === "empty"){ /* nothing */ }
+        else {
+          // missing block: mark all filled green up to failure, the broken concept is "absence"
+          slots.forEach((s,i)=>{ if(s) markSlot(i,"bad-step"); });
+        }
+        logLine(L().log[res.errKey], "err");
+        finishFail();
+      }, 520);
+      return;
+    }
+
+    // success path — flow through each step
+    const stepKeys = ["sCsp","sFeat","sLda","sFit"];
+    let step = 0;
+    function doStep(){
+      if(step >= N_SLOTS){ finishWin(); return; }
+      flowSlot(step);
+      later(()=>{
+        markSlot(step,"ok-step");
+        logLine(L().log[stepKeys[step]], "ok");
+        step++;
+        later(doStep, 520);
+      }, 360);
+    }
+    later(doStep, 520);
+  }
+
+  function finishFail(){
+    running = false;
+    runBtn.disabled = false;
+    setStatus("stFail","fail");
+    $("#accNum").textContent = "--%";
+    pulseBit(false);
+  }
+
+  function finishWin(){
+    flowMid.querySelectorAll(".slot").forEach(s=>s.classList.remove("flowing"));
+    logLine(L().log.done, "run");
+    later(()=>{
+      // deterministic-ish accuracy in a believable BCI range 82-90
+      const acc = 82 + Math.floor(Math.random()*9); // 82..90
+      animateAcc(acc);
+      logLine("accuracy = "+acc+"%  (left "+lr.l+"/25, right "+lr.r+"/25)", "win");
+      setStatus("stWin","win");
+      pulseBit(true);
+      running = false;
+      runBtn.disabled = false;
+      later(()=> showWin(acc), 900);
+    }, 600);
+  }
+
+  let lr = {l:0,r:0};
+  function animateAcc(acc){
+    const accNum = $("#accNum");
+    accNum.classList.add("live");
+    let cur = 0;
+    const target = acc;
+    const tick = ()=>{
+      cur += Math.max(1, Math.round((target-cur)/4));
+      if(cur >= target) cur = target;
+      accNum.textContent = cur + "%";
+      if(cur < target) later(tick, 40);
+    };
+    tick();
+    $("#accFill").style.width = acc + "%";
+    // confusion: split acc into per-class hits out of 25 each
+    const total = 50;
+    const hits = Math.round(acc/100*total);
+    // distribute roughly even with small skew
+    let lHit = Math.min(25, Math.round(hits/2)+ (Math.random()<.5?0:1));
+    let rHit = Math.min(25, hits - lHit);
+    if(rHit > 25){ lHit += rHit-25; rHit = 25; }
+    lr = {l:lHit, r:rHit};
+    setSeg(lHit, 25-lHit, rHit, 25-rHit);
+  }
+  function setSeg(lHit,lMiss,rHit,rMiss){
+    $("#lHit").style.width = (lHit/25*100)+"%";
+    $("#lMiss").style.width = (lMiss/25*100)+"%";
+    $("#rHit").style.width = (rHit/25*100)+"%";
+    $("#rMiss").style.width = (rMiss/25*100)+"%";
+  }
+
+  // mascot pixel rearrange on solve
+  function pulseBit(solved){
+    const bit = $("#bit");
+    if(solved){
+      bit.classList.add("solved");
+      bit.querySelectorAll(".px").forEach(px=>{
+        const dx = (Math.random()*10-5).toFixed(1);
+        const dy = (Math.random()*10-5).toFixed(1);
+        px.style.transform = "translate("+dx+"px,"+dy+"px) rotate(45deg)";
+      });
+      later(()=>{ bit.querySelectorAll(".px").forEach(px=> px.style.transform=""); }, 600);
+    } else {
+      bit.classList.remove("solved");
+      bit.querySelectorAll(".px").forEach(px=> px.style.transform="");
+    }
+  }
+
+  function showWin(acc){
+    $("#wcAcc").textContent = acc + "%";
+    overlay.classList.add("show");
+  }
+
+  // ───────── reset ─────────
+  function reset(){
+    clearTimers();
+    running = false;
+    runBtn.disabled = false;
+    slots = new Array(N_SLOTS).fill(null);
+    clearSlotMarks();
+    overlay.classList.remove("show");
+    $("#accNum").textContent = "--%";
+    $("#accNum").classList.remove("live");
+    $("#accFill").style.width = "0";
+    setSeg(0,0,0,0);
+    pulseBit(false);
+    clearLog();
+    const e = document.createElement("div");
+    e.className = "empty"; e.dataset.i18n = "logEmpty"; e.textContent = L().logEmpty;
+    logEl.appendChild(e);
+    afterChange();
+  }
+
+  // ───────── i18n apply ─────────
+  function applyLang(){
+    document.querySelectorAll("[data-i18n]").forEach(el=>{
+      const k = el.dataset.i18n;
+      if(L()[k] !== undefined && typeof L()[k] === "string") el.textContent = L()[k];
+    });
+    $("#langBtn").textContent = lang === "zh" ? "EN" : "中文";
+    document.documentElement.lang = lang === "zh" ? "zh" : "en";
+    renderRoadmap();
+    renderTray();
+    renderFlow();
+    updateReadiness();
+  }
+
+  // ───────── wire up ─────────
+  // tray container: allow dropping a placed block back to tray to remove
+  trayEl.addEventListener("dragover", e=> e.preventDefault());
+  trayEl.addEventListener("drop", e=>{
+    e.preventDefault();
+    if(dragId && dragFromSlot !== null){
+      slots[dragFromSlot] = null;
+      dragId = null; dragFromSlot = null;
+      afterChange();
+    }
+  });
+
+  runBtn.addEventListener("click", run);
+  $("#resetBtn").addEventListener("click", reset);
+  $("#againBtn").addEventListener("click", ()=>{ overlay.classList.remove("show"); reset(); });
+  $("#langBtn").addEventListener("click", ()=>{ lang = lang === "zh" ? "en" : "zh"; applyLang(); });
+
+  // init
+  renderRoadmap();
+  renderTray();
+  renderFlow();
+  updateReadiness();
+})();
+</script>
+</body>
+</html>

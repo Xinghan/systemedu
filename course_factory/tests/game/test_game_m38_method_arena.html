@@ -1,0 +1,805 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>方法竞技场 — 把有限资源压给一个主力</title>
+<style>
+:root{
+  --paper:#FAF9F5; --paper-2:#F1EDDF; --card:#FFFFFF;
+  --ink:#191814; --ink-2:#2B2924; --sub:#6B6557; --sub-2:#9D978A;
+  --border:#EBE5D6; --border-2:#D9D1BD; --hairline:#F2EDE0;
+  /* domain accent: computing #C04E68 */
+  --primary:#C04E68; --primary-ink:#8F3149; --primary-soft:#F8E7EC; --primary-line:#ECC4CF;
+  --ok:#3F7A52; --ok-soft:#E0EBE2; --ok-line:#BFD8C6;
+  --warn:#9A7A1E; --warn-soft:#F3EBD2; --warn-line:#E4D5A6;
+  --bad:#B5462F; --bad-soft:#F3DED6; --bad-line:#E4BDAE;
+  --shadow-sm:0 1px 2px 0 rgba(25,24,20,.04);
+  --shadow:0 1px 3px 0 rgba(25,24,20,.06),0 1px 2px -1px rgba(25,24,20,.04);
+  --shadow-md:0 4px 8px -2px rgba(25,24,20,.07),0 2px 4px -2px rgba(25,24,20,.04);
+  --shadow-lg:0 14px 30px -8px rgba(25,24,20,.12),0 4px 10px -4px rgba(25,24,20,.06);
+  --mono:'JetBrains Mono','SF Mono',ui-monospace,Menlo,Consolas,monospace;
+  --sans:'PingFang SC','Inter','Noto Sans SC',system-ui,sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:100%;height:100vh;overflow:hidden;background:var(--paper);
+  font-family:var(--sans);color:var(--ink);}
+.wrapper{display:flex;height:100vh;}
+
+/* ── 200px sidebar ── */
+.game-sidebar{
+  width:200px;flex-shrink:0;height:100vh;overflow-y:auto;
+  background:var(--paper-2);border-right:1px solid var(--border);
+  padding:14px 12px;display:flex;flex-direction:column;gap:12px;
+}
+.brand{display:flex;flex-direction:column;gap:3px;}
+.brand .kicker{font-family:var(--mono);font-size:9.5px;letter-spacing:1.6px;
+  color:var(--primary-ink);text-transform:uppercase;}
+.brand .title{font-size:14px;font-weight:700;color:var(--ink);line-height:1.25;}
+.brand .sub{font-size:10.5px;color:var(--sub);line-height:1.4;}
+
+/* roadmap S1-S6 */
+.roadmap{display:flex;flex-direction:column;gap:4px;}
+.roadmap h3{font-family:var(--mono);font-size:9.5px;letter-spacing:1px;
+  color:var(--sub);text-transform:uppercase;margin-bottom:2px;}
+.rm-item{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:7px;
+  background:var(--card);border:1px solid var(--border);font-size:10.5px;color:var(--sub);}
+.rm-item .num{font-family:var(--mono);font-size:9px;width:17px;height:17px;flex-shrink:0;
+  display:flex;align-items:center;justify-content:center;border-radius:5px;
+  background:var(--paper-2);border:1px solid var(--border-2);color:var(--sub);}
+.rm-item .lbl{line-height:1.2;}
+.rm-item.done{color:var(--ok);}
+.rm-item.done .num{background:var(--ok);color:#fff;border-color:var(--ok);}
+.rm-item.here{border-color:var(--primary-line);background:var(--primary-soft);
+  color:var(--primary-ink);font-weight:700;box-shadow:var(--shadow-sm);}
+.rm-item.here .num{background:var(--primary);color:#fff;border-color:var(--primary);}
+.rm-item.next .num{border-style:dashed;}
+
+/* budget pool HUD */
+.pool{background:var(--card);border:1px solid var(--border);border-radius:8px;
+  padding:10px;box-shadow:var(--shadow-sm);display:flex;flex-direction:column;gap:8px;}
+.pool h3{font-family:var(--mono);font-size:9.5px;letter-spacing:1px;
+  color:var(--sub);text-transform:uppercase;}
+.pool-row{display:flex;align-items:center;gap:7px;}
+.pool-row .pdot{width:9px;height:9px;border-radius:3px;flex-shrink:0;}
+.pdot.time{background:var(--primary);}
+.pdot.data{background:var(--ok);}
+.pdot.compute{background:var(--warn);}
+.pool-row .pname{font-size:10.5px;color:var(--ink-2);flex:1;}
+.pool-row .pval{font-family:var(--mono);font-size:11px;font-weight:700;color:var(--ink);}
+.pool-row .pval.empty{color:var(--bad);}
+
+.task-box{background:var(--card);border:1px solid var(--border);
+  border-radius:8px;padding:10px;box-shadow:var(--shadow-sm);}
+.task-box h3{font-family:var(--mono);font-size:9.5px;letter-spacing:1px;
+  color:var(--sub);text-transform:uppercase;margin-bottom:6px;}
+.task-box p{font-size:11px;line-height:1.55;color:var(--ink-2);}
+
+/* minecraft endpoint silhouette */
+.endpoint{display:flex;align-items:center;gap:8px;padding:8px 9px;border-radius:7px;
+  background:var(--ink);color:var(--paper);}
+.endpoint svg{width:22px;height:22px;flex-shrink:0;opacity:.85;}
+.endpoint .et{display:flex;flex-direction:column;gap:1px;}
+.endpoint .et .lab{font-family:var(--mono);font-size:8px;letter-spacing:1px;opacity:.6;text-transform:uppercase;}
+.endpoint .et .gl{font-size:10px;line-height:1.25;}
+
+.spacer{flex:1;}
+.lang-btn{align-self:stretch;font-family:var(--mono);font-size:11px;letter-spacing:.5px;
+  padding:9px 10px;border-radius:7px;background:var(--card);border:1px solid var(--border-2);
+  color:var(--ink-2);cursor:pointer;transition:all .2s;}
+.lang-btn:hover{background:var(--primary-soft);border-color:var(--primary-line);color:var(--primary-ink);}
+
+/* ── main ── */
+.game-main{flex:1;height:100vh;display:flex;flex-direction:column;overflow:hidden;
+  padding:20px 24px;gap:14px;}
+
+.hdr{display:flex;align-items:flex-start;gap:14px;}
+.hdr .htxt{flex:1;}
+.hdr .step-tag{font-family:var(--mono);font-size:10px;letter-spacing:1.2px;
+  color:var(--primary-ink);text-transform:uppercase;margin-bottom:5px;}
+.hdr h1{font-size:18px;font-weight:700;color:var(--ink);line-height:1.35;margin-bottom:5px;}
+.hdr .lead{font-size:12px;color:var(--sub);line-height:1.55;max-width:640px;}
+.scenario{flex-shrink:0;font-family:var(--mono);font-size:10px;letter-spacing:.5px;text-align:right;
+  background:var(--card);border:1px solid var(--border);border-radius:9px;padding:9px 12px;
+  color:var(--sub);line-height:1.5;box-shadow:var(--shadow-sm);white-space:nowrap;}
+.scenario b{color:var(--bad);font-size:13px;}
+
+/* allocation rail */
+.alloc{flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:12px;}
+.methods{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;}
+.mcard{background:var(--card);border:1.5px solid var(--border);border-radius:13px;
+  padding:14px 14px 12px;box-shadow:var(--shadow-md);display:flex;flex-direction:column;gap:10px;
+  transition:border-color .18s,box-shadow .18s,transform .18s;cursor:pointer;}
+.mcard:hover{border-color:var(--primary-line);transform:translateY(-1px);box-shadow:var(--shadow-lg);}
+.mcard.chosen{border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-soft),var(--shadow-lg);}
+.mcard .mhead{display:flex;align-items:flex-start;gap:9px;}
+.mcard .mbadge{width:34px;height:34px;flex-shrink:0;border-radius:9px;
+  background:var(--primary-soft);border:1px solid var(--primary-line);
+  display:flex;align-items:center;justify-content:center;}
+.mcard .mbadge svg{width:19px;height:19px;}
+.mcard .mname{font-size:13.5px;font-weight:700;color:var(--ink);line-height:1.25;}
+.mcard .mtag{font-family:var(--mono);font-size:9px;letter-spacing:.6px;color:var(--sub);
+  text-transform:uppercase;margin-top:2px;}
+.mcard .mdesc{font-size:10.5px;color:var(--sub);line-height:1.5;}
+
+/* 5-dim score bars */
+.dims{display:flex;flex-direction:column;gap:5px;}
+.dim{display:flex;align-items:center;gap:7px;}
+.dim .dname{font-size:9.5px;color:var(--sub);width:58px;flex-shrink:0;line-height:1.15;}
+.dim .dtrack{flex:1;height:7px;background:var(--paper-2);border-radius:4px;overflow:hidden;border:1px solid var(--hairline);}
+.dim .dfill{height:100%;border-radius:4px;background:var(--primary);
+  transition:width .5s cubic-bezier(.4,0,.2,1);}
+.dim.acc .dfill{background:var(--ok);}
+.dim .dval{font-family:var(--mono);font-size:9.5px;color:var(--ink-2);width:24px;text-align:right;flex-shrink:0;}
+
+/* per-method resource investment rows */
+.invest{display:flex;flex-direction:column;gap:6px;border-top:1px solid var(--hairline);padding-top:9px;}
+.inv-row{display:flex;align-items:center;gap:6px;}
+.inv-row .ilab{display:flex;align-items:center;gap:5px;font-size:10px;color:var(--ink-2);flex:1;}
+.inv-row .ilab .pdot{width:8px;height:8px;border-radius:2px;flex-shrink:0;}
+.inv-ctl{display:flex;align-items:center;gap:5px;}
+.inv-ctl button{width:22px;height:22px;border-radius:6px;border:1px solid var(--border-2);
+  background:var(--paper-2);color:var(--ink-2);font-family:var(--mono);font-size:13px;line-height:1;
+  cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s;}
+.inv-ctl button:hover:not(:disabled){background:var(--primary-soft);border-color:var(--primary-line);color:var(--primary-ink);}
+.inv-ctl button:disabled{opacity:.35;cursor:not-allowed;}
+.inv-ctl .iqty{font-family:var(--mono);font-size:12px;font-weight:700;color:var(--ink);width:18px;text-align:center;}
+
+/* commit bar */
+.commit{display:flex;align-items:center;gap:14px;background:var(--card);
+  border:1px solid var(--border);border-radius:12px;padding:13px 18px;box-shadow:var(--shadow);}
+.commit .ctxt{flex:1;}
+.commit .ctxt .ct1{font-size:12.5px;font-weight:700;color:var(--ink);}
+.commit .ctxt .ct2{font-size:11px;color:var(--sub);margin-top:2px;line-height:1.5;}
+.btn{font-family:var(--mono);font-size:12px;letter-spacing:.4px;padding:11px 20px;border-radius:9px;
+  cursor:pointer;border:1px solid var(--border-2);background:var(--card);color:var(--ink-2);transition:all .18s;}
+.btn:hover:not(:disabled){border-color:var(--primary-line);background:var(--primary-soft);color:var(--primary-ink);}
+.btn.primary{background:var(--primary);border-color:var(--primary);color:#fff;}
+.btn.primary:hover:not(:disabled){background:var(--primary-ink);}
+.btn:disabled{opacity:.45;cursor:not-allowed;}
+
+/* outcome panel */
+.outcome{background:var(--card);border:1px solid var(--border);border-radius:13px;
+  box-shadow:var(--shadow-lg);overflow:hidden;}
+.outcome .oc-head{display:flex;align-items:center;gap:10px;padding:13px 18px;
+  font-family:var(--mono);font-size:11px;letter-spacing:1px;text-transform:uppercase;
+  border-bottom:1px solid var(--hairline);}
+.outcome .oc-head .oico{width:22px;height:22px;flex-shrink:0;}
+.outcome.good .oc-head{color:var(--ok);background:var(--ok-soft);}
+.outcome.good{border-color:var(--ok-line);}
+.outcome.warn .oc-head{color:var(--warn);background:var(--warn-soft);}
+.outcome.warn{border-color:var(--warn-line);}
+.outcome.bad .oc-head{color:var(--bad);background:var(--bad-soft);}
+.outcome.bad{border-color:var(--bad-line);}
+.outcome .oc-body{padding:15px 18px;display:flex;flex-direction:column;gap:12px;}
+.oc-body .oc-line{font-size:13px;color:var(--ink);line-height:1.6;}
+.oc-body .oc-sub{font-size:11.5px;color:var(--sub);line-height:1.6;}
+
+/* S4 accuracy gauge */
+.gauge{background:var(--paper-2);border:1px dashed var(--border-2);border-radius:10px;padding:13px 15px;}
+.gauge .gtop{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:8px;}
+.gauge .gtit{font-family:var(--mono);font-size:10px;letter-spacing:.8px;color:var(--sub);text-transform:uppercase;}
+.gauge .gnum{font-family:var(--mono);font-size:24px;font-weight:700;color:var(--ink);}
+.gauge .gtrack{height:14px;background:var(--card);border-radius:7px;overflow:hidden;border:1px solid var(--border);position:relative;}
+.gauge .gthresh{position:absolute;top:-3px;bottom:-3px;width:2px;background:var(--ink-2);left:70%;}
+.gauge .gthresh::after{content:'';position:absolute;top:-4px;left:-3px;width:8px;height:8px;
+  border-radius:50%;background:var(--ink-2);}
+.gauge .gfill{height:100%;border-radius:7px;transition:width 1.1s cubic-bezier(.4,0,.2,1);}
+.gauge.good .gfill{background:var(--ok);}
+.gauge.warn .gfill{background:var(--warn);}
+.gauge.bad .gfill{background:var(--bad);}
+.gauge .gnote{font-size:10px;color:var(--sub-2);margin-top:7px;font-family:var(--mono);}
+
+.oc-actions{display:flex;gap:9px;}
+
+/* unlock banner */
+.unlock{background:var(--ok-soft);border:1px solid var(--ok-line);border-radius:13px;
+  padding:18px 20px;box-shadow:var(--shadow-md);}
+.unlock .badge{display:inline-flex;align-items:center;gap:8px;font-family:var(--mono);
+  font-size:11px;letter-spacing:1px;text-transform:uppercase;color:var(--ok);
+  background:var(--card);border:1px solid var(--ok-line);border-radius:20px;padding:6px 13px;margin-bottom:11px;}
+.unlock h2{font-size:17px;color:var(--ink);margin-bottom:7px;line-height:1.4;}
+.unlock p{font-size:12.5px;color:var(--ink-2);line-height:1.65;}
+.unlock .toS4{margin-top:12px;display:flex;align-items:center;gap:9px;font-family:var(--mono);
+  font-size:11px;color:var(--primary-ink);background:var(--primary-soft);border:1px solid var(--primary-line);
+  border-radius:9px;padding:10px 13px;}
+.unlock .toS4 svg{width:18px;height:18px;flex-shrink:0;}
+.hidden{display:none !important;}
+</style>
+</head>
+<body>
+<div class="wrapper">
+
+  <!-- ── 200px sidebar ── -->
+  <aside class="game-sidebar">
+    <div class="brand">
+      <span class="kicker" data-i18n="kicker">METHOD ARENA · S3</span>
+      <span class="title" data-i18n="brandTitle">方法竞技场</span>
+      <span class="sub" data-i18n="brandSub">把有限资源压给一个主力</span>
+    </div>
+
+    <div class="roadmap">
+      <h3 data-i18n="routeTag">ROADMAP</h3>
+      <div class="rm-item done"><span class="num">1</span><span class="lbl" data-i18n="rs1">采集脑信号</span></div>
+      <div class="rm-item done"><span class="num">2</span><span class="lbl" data-i18n="rs2">特征与对齐</span></div>
+      <div class="rm-item here"><span class="num">3</span><span class="lbl" data-i18n="rs3">选解码方法</span></div>
+      <div class="rm-item next"><span class="num">4</span><span class="lbl" data-i18n="rs4">用自己的脑实战</span></div>
+      <div class="rm-item next"><span class="num">5</span><span class="lbl" data-i18n="rs5">闭环控制</span></div>
+      <div class="rm-item next"><span class="num">6</span><span class="lbl" data-i18n="rs6">脑控 Minecraft</span></div>
+    </div>
+
+    <div class="pool">
+      <h3 data-i18n="poolTag">RESOURCE POOL</h3>
+      <div class="pool-row"><span class="pdot time"></span><span class="pname" data-i18n="rTime">时间</span><span class="pval" id="poolTime">6</span></div>
+      <div class="pool-row"><span class="pdot data"></span><span class="pname" data-i18n="rData">数据</span><span class="pval" id="poolData">6</span></div>
+      <div class="pool-row"><span class="pdot compute"></span><span class="pname" data-i18n="rCompute">算力</span><span class="pval" id="poolCompute">6</span></div>
+    </div>
+
+    <div class="task-box">
+      <h3 data-i18n="missionTag">MISSION</h3>
+      <p data-i18n="mission">资源有限。把时间 / 数据 / 算力分给三种解码方法，选出唯一带去 S4 用自己的脑实战的主力。</p>
+    </div>
+
+    <div class="endpoint">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M3 7l9-4 9 4-9 4-9-4z"/><path d="M3 7v10l9 4 9-4V7"/><path d="M12 11v10"/>
+      </svg>
+      <div class="et"><span class="lab" data-i18n="goalLab">FINAL GOAL</span><span class="gl" data-i18n="goalTxt">用念头玩 Minecraft</span></div>
+    </div>
+
+    <div class="spacer"></div>
+    <button class="lang-btn" id="langBtn" type="button">EN / 中文</button>
+  </aside>
+
+  <!-- ── main ── -->
+  <main class="game-main">
+
+    <!-- header -->
+    <div class="hdr">
+      <div class="htxt">
+        <div class="step-tag" data-i18n="stepTag">S3 · 决策关 · 资源分配</div>
+        <h1 data-i18n="title">资源有限，选哪个方法带去 S4 用自己的脑</h1>
+        <p class="lead" data-i18n="lead">S1-S2 你录到的脑数据并不多。三种解码方法对资源的胃口完全不同：把预算押对，S4 实战才顺；押错，S4 准确率会拉胯。每种资源只有 6 块，用完为止。</p>
+      </div>
+      <div class="scenario">
+        <span data-i18n="scTitle">你的脑数据量</span><br/><b data-i18n="scVal">偏小</b>
+      </div>
+    </div>
+
+    <!-- allocation stage -->
+    <div class="alloc" id="alloc">
+      <div class="methods" id="methods"></div>
+
+      <div class="commit" id="commit">
+        <div class="ctxt">
+          <div class="ct1" id="commitTitle"></div>
+          <div class="ct2" id="commitHint"></div>
+        </div>
+        <button class="btn primary" id="commitBtn" type="button" disabled data-i18n="commitBtn">选定主力，带去 S4</button>
+      </div>
+
+      <!-- outcome -->
+      <div class="outcome hidden" id="outcome">
+        <div class="oc-head" id="ocHead"></div>
+        <div class="oc-body">
+          <div class="gauge" id="gauge">
+            <div class="gtop">
+              <span class="gtit" id="gaugeTit"></span>
+              <span class="gnum" id="gaugeNum">0%</span>
+            </div>
+            <div class="gtrack"><div class="gthresh"></div><div class="gfill" id="gaugeFill" style="width:0%"></div></div>
+            <div class="gnote" id="gaugeNote"></div>
+          </div>
+          <div class="oc-line" id="ocLine"></div>
+          <div class="oc-sub" id="ocSub"></div>
+          <div class="oc-actions" id="ocActions"></div>
+        </div>
+      </div>
+
+      <!-- unlock -->
+      <div class="unlock hidden" id="unlock">
+        <span class="badge" data-i18n="unlockedBadge">UNLOCKED · 方法决策官</span>
+        <h2 id="unlockTitle"></h2>
+        <p id="unlockBody"></p>
+        <div class="toS4">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+          <span data-i18n="toS4">S4 开始：用自己的脑实战，主力方法已就位。</span>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  /* ── budget pool ── */
+  var POOL_INIT = { time:6, data:6, compute:6 };
+  var RES_KEYS = ["time","data","compute"];
+
+  /* ── three decoding methods ──
+     base = 资源为 0 时的底子 (满分 100)
+     resp = 每块资源对各维度的边际加成 (data 弹性是关键区分)
+     dims: acc=S4准确率潜力, robust=小数据稳健, speed=训练/推理速度, simple=实现简单, scale=数据上限/可扩展 */
+  var METHODS = [
+    {
+      id:"csp",
+      nameZh:"CSP + LDA", nameEn:"CSP + LDA",
+      tagZh:"经典空间滤波", tagEn:"CLASSIC SPATIAL",
+      descZh:"运动想象老牌方案：小数据也稳，实现简单，但准确率上限有限。",
+      descEn:"Veteran motor-imagery pick: stable on small data, simple to build, but a limited accuracy ceiling.",
+      // 小数据稳: 即便 data 少也有不错底子; data 弹性低 (给再多 data 涨得慢)
+      base:{ acc:46, robust:78, speed:70, simple:82, scale:38 },
+      resp:{ acc:{time:4,data:2.5,compute:1}, robust:{time:1,data:3,compute:0}, speed:{time:2,data:0,compute:4},
+             simple:{time:1,data:0,compute:0}, scale:{time:1,data:3,compute:1} }
+    },
+    {
+      id:"riem",
+      nameZh:"黎曼几何", nameEn:"Riemannian",
+      tagZh:"协方差流形", tagEn:"COVARIANCE MANIFOLD",
+      descZh:"在协方差矩阵的流形上分类：中等数据表现强，跨被试更稳，算力胃口中等。",
+      descEn:"Classifies on the covariance manifold: strong on medium data, more cross-subject stable, moderate compute appetite.",
+      base:{ acc:50, robust:64, speed:52, simple:50, scale:58 },
+      resp:{ acc:{time:4,data:4,compute:3}, robust:{time:2,data:3,compute:1}, speed:{time:1,data:0,compute:5},
+             simple:{time:1,data:0,compute:1}, scale:{time:1,data:4,compute:2} }
+    },
+    {
+      id:"eegnet",
+      nameZh:"EEGNet 深网", nameEn:"EEGNet (deep net)",
+      tagZh:"端到端卷积网", tagEn:"END-TO-END CNN",
+      descZh:"端到端学习，数据越多越强，上限最高；但小数据极易过拟合、吃算力。",
+      descEn:"End-to-end learning: the more data the stronger, highest ceiling; but tiny data over-fits badly and eats compute.",
+      // 准确率对 data 极度敏感; data 少时 base.acc 低 (深网小数据拉胯)
+      base:{ acc:24, robust:28, speed:40, simple:36, scale:46 },
+      resp:{ acc:{time:1.5,data:11,compute:1.5}, robust:{time:1,data:7,compute:1}, speed:{time:1,data:0,compute:7},
+             simple:{time:1,data:0,compute:0}, scale:{time:1,data:6,compute:3} },
+      // deep net: accuracy is hard-capped when starved of data (over-fitting), no matter how much time/compute
+      dataCap:{ key:"acc", capPerData:14, capBase:14 }
+    }
+  ];
+
+  var DIM_META = [
+    { key:"acc",    zh:"S4 准确率", en:"S4 accuracy", acc:true },
+    { key:"robust", zh:"小数据稳", en:"Small-data robust" },
+    { key:"speed",  zh:"训练速度", en:"Train speed" },
+    { key:"simple", zh:"实现简单", en:"Simplicity" },
+    { key:"scale",  zh:"数据上限", en:"Data ceiling" }
+  ];
+
+  /* ── i18n ── */
+  var lang = "zh";
+  var I18N = {
+    zh:{
+      kicker:"METHOD ARENA · S3", brandTitle:"方法竞技场", brandSub:"把有限资源压给一个主力",
+      routeTag:"项目路线", rs1:"采集脑信号", rs2:"特征与对齐", rs3:"选解码方法",
+      rs4:"用自己的脑实战", rs5:"闭环控制", rs6:"脑控 Minecraft",
+      poolTag:"资源池", rTime:"时间", rData:"数据", rCompute:"算力",
+      missionTag:"任务", mission:"资源有限。把时间 / 数据 / 算力分给三种解码方法，选出唯一带去 S4 用自己的脑实战的主力。",
+      goalLab:"终点", goalTxt:"用念头玩 Minecraft",
+      stepTag:"S3 · 决策关 · 资源分配", title:"资源有限，选哪个方法带去 S4 用自己的脑",
+      lead:"S1-S2 你录到的脑数据并不多。三种解码方法对资源的胃口完全不同：把预算押对，S4 实战才顺；押错，S4 准确率会拉胯。每种资源只有 6 块，用完为止。",
+      scTitle:"你的脑数据量", scVal:"偏小",
+      commitBtn:"选定主力，带去 S4", toS4:"S4 开始：用自己的脑实战，主力方法已就位。",
+      unlockedBadge:"已解锁 · 方法决策官",
+      retry:"重新分配资源",
+      cHintIdle:"先把资源分给某个方法，再选它做主力。点 + 投入，点 − 收回。",
+      cHintNoPick:"已分配资源，但还没选主力。点一张方法卡把它选为主力。",
+      cTitleIdle:"还没分配资源",
+      cTitlePick:"主力候选：",
+      gaugeTit:"S4 实战预测准确率",
+      gThreshNote:"虚线 = 70% 可用脑控阈值",
+      avg:"平均",
+      ocGoodHead:"主力就位 · S4 可上场", ocWarnHead:"勉强能用 · S4 会吃力", ocBadHead:"主力翻车 · S4 会拉胯",
+      // outcome lines built in JS
+      noPickWarn:"没有任何方法拿到资源，无法选出主力。"
+    },
+    en:{
+      kicker:"METHOD ARENA · S3", brandTitle:"Method Arena", brandSub:"Bet limited budget on ONE workhorse",
+      routeTag:"ROADMAP", rs1:"Acquire signal", rs2:"Features & align", rs3:"Pick decoder",
+      rs4:"Drive with your brain", rs5:"Closed loop", rs6:"Brain-control Minecraft",
+      poolTag:"RESOURCE POOL", rTime:"Time", rData:"Data", rCompute:"Compute",
+      missionTag:"MISSION", mission:"Budget is limited. Split time / data / compute across three decoders and pick the ONE workhorse to bring into S4, where you drive with your own brain.",
+      goalLab:"FINAL GOAL", goalTxt:"Play Minecraft with thought",
+      stepTag:"S3 · DECISION · RESOURCE ALLOCATION", title:"Budget is limited — which method do you bring into S4 to drive with your brain?",
+      lead:"You recorded only a little brain data in S1-S2. The three decoders crave resources very differently: bet right and S4 runs smooth; bet wrong and S4 accuracy tanks. Each resource has only 6 blocks — once spent, it's gone.",
+      scTitle:"Your brain-data amount", scVal:"SMALL",
+      commitBtn:"Lock workhorse, bring to S4", toS4:"S4 begins: drive with your own brain, workhorse in place.",
+      unlockedBadge:"UNLOCKED · METHOD DECISION OFFICER",
+      retry:"Re-allocate resources",
+      cHintIdle:"Give resources to a method first, then pick it as workhorse. Click + to invest, − to take back.",
+      cHintNoPick:"Resources allocated, but no workhorse picked. Click a method card to make it the workhorse.",
+      cTitleIdle:"No resources allocated yet",
+      cTitlePick:"Workhorse candidate: ",
+      gaugeTit:"Predicted S4 live accuracy",
+      gThreshNote:"Dashed line = 70% usable brain-control threshold",
+      avg:"avg",
+      ocGoodHead:"WORKHORSE READY · S4 CAN GO", ocWarnHead:"BARELY USABLE · S4 WILL STRUGGLE", ocBadHead:"WORKHORSE FAILS · S4 TANKS",
+      noPickWarn:"No method received any resources, so no workhorse can be chosen."
+    }
+  };
+  function T(k){ return I18N[lang][k]; }
+
+  /* ── state ── */
+  // alloc[methodId][resKey] = blocks given
+  var alloc = {};
+  METHODS.forEach(function(m){ alloc[m.id] = { time:0, data:0, compute:0 }; });
+  var chosen = null;     // method id picked as workhorse
+  var committed = false;
+
+  /* ── elements ── */
+  var $ = function(id){ return document.getElementById(id); };
+  var elMethods = $("methods"), elCommit = $("commit"), elCommitBtn = $("commitBtn"),
+      elCommitTitle = $("commitTitle"), elCommitHint = $("commitHint"),
+      elOutcome = $("outcome"), elOcHead = $("ocHead"), elOcLine = $("ocLine"),
+      elOcSub = $("ocSub"), elOcActions = $("ocActions"),
+      elGauge = $("gauge"), elGaugeTit = $("gaugeTit"), elGaugeNum = $("gaugeNum"),
+      elGaugeFill = $("gaugeFill"), elGaugeNote = $("gaugeNote"),
+      elUnlock = $("unlock"), elUnlockTitle = $("unlockTitle"), elUnlockBody = $("unlockBody"),
+      elPoolTime = $("poolTime"), elPoolData = $("poolData"), elPoolCompute = $("poolCompute");
+
+  var ICON_OK = '<svg class="oico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="8.5 12.2 11 14.7 15.6 9.4"/></svg>';
+  var ICON_WARN = '<svg class="oico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l9 16H3z"/><line x1="12" y1="9" x2="12" y2="13.5"/><circle cx="12" cy="16.4" r="0.4" fill="currentColor"/></svg>';
+  var ICON_BAD = '<svg class="oico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>';
+  var ICON_CPU = '<svg viewBox="0 0 24 24" fill="none" stroke="#C04E68" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="6" width="12" height="12" rx="2"/><path d="M9 1v3M15 1v3M9 20v3M15 20v3M1 9h3M1 15h3M20 9h3M20 15h3"/></svg>';
+  var ICON_MANIFOLD = '<svg viewBox="0 0 24 24" fill="none" stroke="#C04E68" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12c4-6 14-6 18 0M3 12c4 6 14 6 18 0"/><circle cx="12" cy="12" r="2"/></svg>';
+  var ICON_NET = '<svg viewBox="0 0 24 24" fill="none" stroke="#C04E68" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="5" cy="6" r="2"/><circle cx="5" cy="18" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="7" r="2"/><circle cx="19" cy="17" r="2"/><path d="M7 6.6 10.3 11M7 17.4 10.3 13M13.8 11 17 7.7M13.8 13 17 16.3"/></svg>';
+  var METHOD_ICON = { csp:ICON_CPU, riem:ICON_MANIFOLD, eegnet:ICON_NET };
+
+  /* ── compute remaining pool ── */
+  function poolUsed(resKey){
+    var u = 0;
+    METHODS.forEach(function(m){ u += alloc[m.id][resKey]; });
+    return u;
+  }
+  function poolLeft(resKey){ return POOL_INIT[resKey] - poolUsed(resKey); }
+
+  /* ── compute a method's 5-dim scores from its allocation ── */
+  function methodScores(m){
+    var a = alloc[m.id];
+    var out = {};
+    DIM_META.forEach(function(d){
+      var v = m.base[d.key];
+      var r = m.resp[d.key];
+      v += r.time * a.time + r.data * a.data + r.compute * a.compute;
+      // data-hungry methods (deep net): the target dim is hard-capped by how much DATA it got,
+      // modelling over-fitting on small data — extra time/compute can't rescue it.
+      if (m.dataCap && m.dataCap.key === d.key){
+        var cap = m.dataCap.capBase + m.dataCap.capPerData * a.data;
+        v = Math.min(v, cap);
+      }
+      out[d.key] = Math.max(0, Math.min(100, Math.round(v)));
+    });
+    return out;
+  }
+  function totalInvested(mid){
+    var a = alloc[mid];
+    return a.time + a.data + a.compute;
+  }
+
+  /* ── render pool HUD ── */
+  function renderPool(){
+    var map = { time:elPoolTime, data:elPoolData, compute:elPoolCompute };
+    RES_KEYS.forEach(function(k){
+      var left = poolLeft(k);
+      map[k].textContent = left;
+      map[k].className = "pval" + (left === 0 ? " empty" : "");
+    });
+  }
+
+  /* ── render method cards ── */
+  function renderMethods(){
+    elMethods.innerHTML = "";
+    METHODS.forEach(function(m){
+      var sc = methodScores(m);
+      var card = document.createElement("div");
+      card.className = "mcard" + (chosen === m.id ? " chosen" : "");
+      card.setAttribute("data-method", m.id);
+
+      var dimsHtml = DIM_META.map(function(d){
+        var v = sc[d.key];
+        return '<div class="dim'+(d.acc?' acc':'')+'">' +
+          '<span class="dname">'+(lang==="zh"?d.zh:d.en)+'</span>' +
+          '<span class="dtrack"><span class="dfill" style="width:'+v+'%"></span></span>' +
+          '<span class="dval">'+v+'</span>' +
+        '</div>';
+      }).join("");
+
+      var investHtml = RES_KEYS.map(function(k){
+        var qty = alloc[m.id][k];
+        var canPlus = poolLeft(k) > 0;
+        var canMinus = qty > 0;
+        var resName = lang==="zh" ? T(k==="time"?"rTime":k==="data"?"rData":"rCompute")
+                                  : T(k==="time"?"rTime":k==="data"?"rData":"rCompute");
+        return '<div class="inv-row">' +
+          '<span class="ilab"><span class="pdot '+k+'"></span>'+resName+'</span>' +
+          '<span class="inv-ctl">' +
+            '<button type="button" class="inv-minus" data-res="'+k+'"'+(canMinus?"":" disabled")+'>&#8722;</button>' +
+            '<span class="iqty">'+qty+'</span>' +
+            '<button type="button" class="inv-plus" data-res="'+k+'"'+(canPlus?"":" disabled")+'>+</button>' +
+          '</span>' +
+        '</div>';
+      }).join("");
+
+      card.innerHTML =
+        '<div class="mhead">' +
+          '<span class="mbadge">'+METHOD_ICON[m.id]+'</span>' +
+          '<span><span class="mname">'+(lang==="zh"?m.nameZh:m.nameEn)+'</span>' +
+          '<span class="mtag">'+(lang==="zh"?m.tagZh:m.tagEn)+'</span></span>' +
+        '</div>' +
+        '<div class="mdesc">'+(lang==="zh"?m.descZh:m.descEn)+'</div>' +
+        '<div class="dims">'+dimsHtml+'</div>' +
+        '<div class="invest">'+investHtml+'</div>';
+
+      // pick as workhorse on card click (ignore clicks on +/- buttons)
+      card.addEventListener("click", function(ev){
+        if (committed) return;
+        if (ev.target.closest(".inv-ctl")) return;
+        if (totalInvested(m.id) === 0) return; // must have resources to be a candidate
+        chosen = m.id;
+        renderMethods();
+        renderCommit();
+      });
+
+      // +/- handlers
+      card.querySelectorAll(".inv-plus").forEach(function(b){
+        b.addEventListener("click", function(ev){
+          ev.stopPropagation();
+          if (committed) return;
+          var k = b.getAttribute("data-res");
+          if (poolLeft(k) > 0){ alloc[m.id][k] += 1; afterAllocChange(); }
+        });
+      });
+      card.querySelectorAll(".inv-minus").forEach(function(b){
+        b.addEventListener("click", function(ev){
+          ev.stopPropagation();
+          if (committed) return;
+          var k = b.getAttribute("data-res");
+          if (alloc[m.id][k] > 0){
+            alloc[m.id][k] -= 1;
+            if (totalInvested(m.id) === 0 && chosen === m.id) chosen = null;
+            afterAllocChange();
+          }
+        });
+      });
+
+      elMethods.appendChild(card);
+    });
+  }
+
+  function afterAllocChange(){
+    renderPool();
+    renderMethods();
+    renderCommit();
+  }
+
+  /* ── commit bar ── */
+  function renderCommit(){
+    var anyInvested = METHODS.some(function(m){ return totalInvested(m.id) > 0; });
+    if (!anyInvested){
+      elCommitTitle.textContent = T("cTitleIdle");
+      elCommitHint.textContent = T("cHintIdle");
+      elCommitBtn.disabled = true;
+    } else if (!chosen){
+      elCommitTitle.textContent = T("cTitleIdle");
+      elCommitHint.textContent = T("cHintNoPick");
+      elCommitBtn.disabled = true;
+    } else {
+      var m = methodById(chosen);
+      elCommitTitle.textContent = T("cTitlePick") + (lang==="zh"?m.nameZh:m.nameEn);
+      var a = alloc[chosen];
+      elCommitHint.textContent = (lang==="zh"
+        ? ("时间 "+a.time+" · 数据 "+a.data+" · 算力 "+a.compute+"  —  这就是你押进 S4 的方法")
+        : ("Time "+a.time+" · Data "+a.data+" · Compute "+a.compute+"  —  this is what you bet into S4"));
+      elCommitBtn.disabled = false;
+    }
+  }
+
+  function methodById(id){
+    for (var i=0;i<METHODS.length;i++){ if (METHODS[i].id === id) return METHODS[i]; }
+    return null;
+  }
+
+  /* ── commit → evaluate S4 consequence ── */
+  function commit(){
+    if (!chosen || committed) return;
+    committed = true;
+    elCommitBtn.disabled = true;
+
+    var m = methodById(chosen);
+    var sc = methodScores(m);
+    // S4 predicted accuracy = weighted blend; acc dominates, robust matters for small data.
+    var s4 = Math.round(sc.acc * 0.62 + sc.robust * 0.23 + sc.scale * 0.15);
+    s4 = Math.max(0, Math.min(99, s4));
+
+    // detect "no workhorse / spread thin" — chosen method got <4 of its own total invested while others hold a lot
+    var chosenTotal = totalInvested(chosen);
+    var otherTotal = 0;
+    METHODS.forEach(function(mm){ if (mm.id !== chosen) otherTotal += totalInvested(mm.id); });
+    var spreadThin = (chosenTotal <= 6 && otherTotal >= chosenTotal); // bulk of budget elsewhere
+
+    var grade; // good / warn / bad
+    if (s4 >= 72) grade = "good";
+    else if (s4 >= 58) grade = "warn";
+    else grade = "bad";
+
+    showOutcome(m, sc, s4, grade, spreadThin);
+  }
+
+  function showOutcome(m, sc, s4, grade, spreadThin){
+    elOutcome.className = "outcome " + grade;
+    elGauge.className = "gauge " + grade;
+
+    var headTxt, ico;
+    if (grade === "good"){ headTxt = T("ocGoodHead"); ico = ICON_OK; }
+    else if (grade === "warn"){ headTxt = T("ocWarnHead"); ico = ICON_WARN; }
+    else { headTxt = T("ocBadHead"); ico = ICON_BAD; }
+    elOcHead.innerHTML = ico + '<span>'+headTxt+'</span>';
+
+    elGaugeTit.textContent = T("gaugeTit");
+    elGaugeNote.textContent = T("gThreshNote");
+
+    // build diagnostic line specific to method + allocation
+    var a = alloc[m.id];
+    var line, sub;
+    var nm = lang==="zh" ? m.nameZh : m.nameEn;
+
+    if (m.id === "eegnet" && a.data <= 3){
+      // deep net starved of data → tanks (key pedagogical branch)
+      line = lang==="zh"
+        ? ("你把主力押给了 "+nm+"，但只喂了 "+a.data+" 块数据。深网吃数据，小数据下它直接过拟合——S4 实战准确率拉胯，光标乱跳。")
+        : ("You bet on "+nm+" but fed it only "+a.data+" data blocks. Deep nets are data-hungry; starved of data it over-fits — S4 live accuracy tanks and the cursor jumps.");
+      sub = lang==="zh"
+        ? "教训：数据少的时候，别把主力赌在深网上。把数据省给吃小数据稳的方法，或先去 S2 录更多数据。"
+        : "Lesson: with little data, don't bet your workhorse on a deep net. Spend data on a small-data-stable method, or go back to S2 and record more.";
+    } else if (spreadThin && grade !== "good"){
+      line = lang==="zh"
+        ? ("资源被你平摊给了三家，"+nm+" 只拿到一点点，谁都没练成主力。S4 上场时方法是半吊子，准确率上不去。")
+        : ("You spread the budget across all three; "+nm+" got only scraps, so nobody became a real workhorse. In S4 the method is half-baked and accuracy stalls.");
+      sub = lang==="zh"
+        ? "教训：资源有限时，分散投入等于没有主力。集中押一个，把它喂到能用为止。"
+        : "Lesson: with limited budget, spreading thin means no workhorse. Concentrate on one and feed it until it's usable.";
+    } else if (m.id === "csp" && grade === "good"){
+      line = lang==="zh"
+        ? (nm+" 在小数据上稳如老狗：你只有这么点数据，它却能稳定分开左右手。S4 实战顺，光标听话。")
+        : (nm+" is rock-solid on small data: with only this much data it still separates left/right reliably. S4 runs smooth and the cursor obeys.");
+      sub = lang==="zh"
+        ? "对的决策：数据少就押小数据稳的经典方法。它准确率上限不算最高，但在你的预算下是最稳的主力。"
+        : "Right call: with little data, bet on the small-data-stable classic. Its ceiling isn't the highest, but under your budget it's the steadiest workhorse.";
+    } else if (grade === "good"){
+      line = lang==="zh"
+        ? (nm+" 拿到了它需要的资源，五维都立起来了，S4 预测准确率越过了可用阈值。带它走，没问题。")
+        : (nm+" got the resources it needs; all five dims stand up and predicted S4 accuracy clears the usable threshold. Bring it along, you're good.");
+      sub = lang==="zh"
+        ? "对的决策：你看懂了每个方法的资源胃口，把预算压在了对的地方。"
+        : "Right call: you read each method's resource appetite and bet the budget in the right place.";
+    } else {
+      line = lang==="zh"
+        ? (nm+" 拿到的资源还不够撑起 S4：预测准确率没到 70% 的可用阈值，光标会经常误识别。")
+        : (nm+" didn't get enough to carry S4: predicted accuracy is below the 70% usable threshold and the cursor will mis-fire often.");
+      sub = lang==="zh"
+        ? "再想想：哪个方法在你这点数据下最稳？把更多对的资源压给它，或回 S2 多录数据。"
+        : "Rethink: which method is steadiest with your data? Pour more of the right resources into it, or go back to S2 for more data.";
+    }
+    elOcLine.textContent = line;
+    elOcSub.textContent = sub;
+
+    elOutcome.classList.remove("hidden");
+
+    // animate gauge after layout
+    elGaugeNum.textContent = "0%";
+    elGaugeFill.style.width = "0%";
+    window.setTimeout(function(){
+      elGaugeFill.style.width = s4 + "%";
+      animateNum(0, s4, 900);
+    }, 80);
+
+    // actions
+    elOcActions.innerHTML = "";
+    if (grade === "good"){
+      var win = document.createElement("button");
+      win.type = "button"; win.className = "btn primary";
+      win.textContent = lang==="zh" ? "解锁方法决策官，进入 S4" : "Unlock & enter S4";
+      win.addEventListener("click", function(){ doUnlock(m, s4); });
+      elOcActions.appendChild(win);
+    }
+    var redo = document.createElement("button");
+    redo.type = "button"; redo.className = "btn";
+    redo.textContent = T("retry");
+    redo.addEventListener("click", reset);
+    elOcActions.appendChild(redo);
+  }
+
+  function animateNum(from, to, dur){
+    var start = null;
+    function tick(ts){
+      if (start === null) start = ts;
+      var p = Math.min(1, (ts - start) / dur);
+      var v = Math.round(from + (to - from) * p);
+      elGaugeNum.textContent = v + "%";
+      if (p < 1) window.requestAnimationFrame(tick);
+    }
+    window.requestAnimationFrame(tick);
+  }
+
+  function reset(){
+    committed = false; chosen = null;
+    METHODS.forEach(function(m){ alloc[m.id] = { time:0, data:0, compute:0 }; });
+    elOutcome.classList.add("hidden");
+    elUnlock.classList.add("hidden");
+    elCommit.classList.remove("hidden");
+    renderAll();
+  }
+
+  function doUnlock(m, s4){
+    var nm = lang==="zh" ? m.nameZh : m.nameEn;
+    elOutcome.classList.add("hidden");
+    elCommit.classList.add("hidden");
+    elUnlockTitle.textContent = lang==="zh"
+      ? ("你选出了主力方法："+nm+"（预测 "+s4+"%），S4 开始用自己的脑实战。")
+      : ("You picked your workhorse: "+nm+" (predicted "+s4+"%). S4 begins — drive with your own brain.");
+    elUnlockBody.textContent = lang==="zh"
+      ? "方法择优的本质不是哪个最牛，而是哪个在你手上的资源下最能撑起项目。你刚做的就是真实 BCI 工程的决策：权衡数据、时间、算力，把唯一的主力押对，离脑控 Minecraft 又近了一大步。"
+      : "Method selection isn't about which is best in theory, but which holds up under the resources you actually have. You just made the real BCI engineering call: trade off data, time and compute, bet on one workhorse, and step much closer to brain-control Minecraft.";
+    elUnlock.classList.remove("hidden");
+  }
+
+  /* ── i18n apply ── */
+  function applyStaticI18n(){
+    var nodes = document.querySelectorAll("[data-i18n]");
+    for (var i=0;i<nodes.length;i++){
+      var k = nodes[i].getAttribute("data-i18n");
+      if (I18N[lang][k] !== undefined) nodes[i].textContent = I18N[lang][k];
+    }
+    document.documentElement.lang = lang;
+  }
+  function toggleLang(){
+    lang = (lang === "zh") ? "en" : "zh";
+    applyStaticI18n();
+    renderAll();
+  }
+
+  function renderAll(){
+    renderPool();
+    renderMethods();
+    renderCommit();
+  }
+
+  /* ── init ── */
+  document.getElementById("langBtn").addEventListener("click", toggleLang);
+  elCommitBtn.addEventListener("click", commit);
+  applyStaticI18n();
+  renderAll();
+
+  /* test hooks (own namespace, no window same-name vars) */
+  window.__arena = {
+    invest:function(mid, resKey, n){
+      n = n || 1;
+      for (var i=0;i<n;i++){
+        if (poolLeft(resKey) > 0){ alloc[mid][resKey] += 1; }
+      }
+      afterAllocChange();
+    },
+    pick:function(mid){
+      if (totalInvested(mid) === 0) return false;
+      chosen = mid; renderMethods(); renderCommit(); return true;
+    },
+    commit:function(){ commit(); },
+    clickUnlock:function(){ var b = elOcActions.querySelector(".primary"); if (b){ b.click(); return true; } return false; },
+    clickRedo:function(){ var btns = elOcActions.querySelectorAll(".btn"); var b = btns[btns.length-1]; if (b){ b.click(); return true; } return false; },
+    poolLeft:function(k){ return poolLeft(k); },
+    scores:function(mid){ return methodScores(methodById(mid)); },
+    state:function(){
+      return {
+        chosen:chosen, committed:committed,
+        alloc:JSON.parse(JSON.stringify(alloc)),
+        s4num: $("gaugeNum").textContent,
+        outcomeClass: elOutcome.className,
+        unlockShown: !elUnlock.classList.contains("hidden")
+      };
+    }
+  };
+})();
+</script>
+</body>
+</html>

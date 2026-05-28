@@ -1,0 +1,812 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>训练 vs 测试评估 — 用没见过的数据考出真准确率</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&family=Noto+Sans+SC:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    /* 第1层 共享深空底 (所有 26 套统一) */
+    --bg-0: oklch(0.14 0.035 265);
+    --bg-1: oklch(0.18 0.04 265);
+    --bg-2: oklch(0.22 0.045 265);
+    --bg-3: oklch(0.28 0.05 265);
+    --line: oklch(0.35 0.05 265 / 0.35);
+    --line-strong: oklch(0.55 0.08 265 / 0.55);
+    --fg: oklch(0.96 0.01 265);
+    --fg-dim: oklch(0.75 0.02 265);
+    --fg-mute: oklch(0.55 0.03 265);
+    --gold: oklch(0.85 0.14 85);
+    /* 第2层 cs accent (cyan) */
+    --cs: oklch(0.75 0.17 200);
+    /* 第3层 cs 5色 palette (themes.js cs 段) */
+    --signal: oklch(0.75 0.17 200);
+    --core:   oklch(0.55 0.16 200);
+    --depth:  oklch(0.35 0.10 210);
+    --flash:  oklch(0.92 0.08 190);
+    --query:  oklch(0.85 0.14 85);
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;height:100vh;overflow:hidden;}
+  body{
+    background:var(--bg-0);
+    color:var(--fg);
+    font-family:'Inter','Noto Sans SC',system-ui,sans-serif;
+    display:flex;
+    -webkit-font-smoothing:antialiased;
+  }
+  .mono{font-family:'JetBrains Mono',ui-monospace,Menlo,monospace;}
+
+  /* ---------- Sidebar ---------- */
+  .sidebar{
+    width:200px;flex-shrink:0;height:100vh;
+    background:var(--bg-1);
+    border-right:1px solid var(--line);
+    display:flex;flex-direction:column;
+    padding:20px 16px;gap:15px;
+  }
+  .brand{
+    font-size:13px;font-weight:700;letter-spacing:.02em;color:var(--fg);
+    padding-bottom:14px;border-bottom:1px solid var(--line);
+  }
+  .brand-sub{display:block;margin-top:6px;font-size:11px;font-weight:500;color:var(--fg-dim);}
+  .deco{
+    width:100%;height:112px;
+    background:var(--bg-2);
+    border:1px solid var(--line);
+    border-radius:8px;
+    display:flex;align-items:center;justify-content:center;
+  }
+  .deco svg{width:100px;height:96px;}
+  .guide{display:flex;flex-direction:column;gap:9px;margin-top:0;list-style:none;padding:0;}
+  .guide-li{
+    font-size:11.5px;line-height:1.45;color:var(--fg-dim);
+    padding:2px 0 2px 10px;border-left:2px solid var(--line-strong);
+    transition:color .25s,border-color .25s;
+  }
+  .guide-li.hl{border-left-color:var(--cs);color:var(--fg);}
+
+  /* ---------- 项目进度路线图 (S1-S6) ---------- */
+  .route{display:flex;flex-direction:column;gap:0;margin-top:2px;}
+  .route-ttl{
+    font-size:10px;font-weight:700;letter-spacing:.08em;color:var(--fg-mute);
+    font-family:'JetBrains Mono',monospace;margin-bottom:7px;text-transform:uppercase;
+  }
+  .route-step{
+    display:flex;align-items:center;gap:8px;
+    font-size:10.5px;line-height:1.25;color:var(--fg-mute);
+    padding:3px 0;position:relative;
+  }
+  .route-dot{
+    width:8px;height:8px;border-radius:50%;flex-shrink:0;
+    background:var(--bg-3);border:1.5px solid var(--line-strong);
+  }
+  .route-step.done .route-dot{background:var(--core);border-color:var(--core);}
+  .route-step.cur{color:var(--fg);font-weight:700;}
+  .route-step.cur .route-dot{
+    background:var(--cs);border-color:var(--flash);
+    box-shadow:0 0 0 3px oklch(0.75 0.17 200 / 0.25);
+  }
+  .route-step::before{
+    content:'';position:absolute;left:3.5px;top:-6px;width:1.5px;height:12px;
+    background:var(--line);
+  }
+  .route-step:first-of-type::before{display:none;}
+  .route-step.done::before{background:var(--core);}
+  .route-here{
+    font-size:8.5px;font-family:'JetBrains Mono',monospace;font-weight:700;
+    color:var(--cs);margin-left:auto;letter-spacing:.04em;
+  }
+
+  /* ---------- 终点徽记 (Minecraft 角色剪影, 右下角) ---------- */
+  .goal-badge{
+    position:absolute;right:16px;bottom:16px;z-index:5;
+    display:flex;align-items:center;gap:9px;
+    background:oklch(0.18 0.04 265 / 0.78);
+    border:1px solid var(--line-strong);
+    border-radius:8px;padding:7px 11px 7px 8px;
+    box-shadow:3px 3px 0 var(--bg-0);backdrop-filter:blur(2px);
+  }
+  .goal-badge svg{width:26px;height:30px;flex-shrink:0;}
+  .goal-badge .gtxt{font-size:10px;line-height:1.35;color:var(--fg-dim);max-width:130px;}
+  .goal-badge .gtxt b{color:var(--fg);font-weight:700;}
+
+  .lang-btn{
+    margin-top:auto;
+    font-family:'JetBrains Mono',monospace;
+    font-size:11px;font-weight:600;letter-spacing:.06em;
+    padding:8px 12px;cursor:pointer;
+    background:var(--bg-2);color:var(--fg);
+    border:1px solid var(--line-strong);
+    border-radius:6px;
+    box-shadow:3px 3px 0 var(--bg-0);
+    transition:transform .1s, background .12s;
+  }
+  .lang-btn:hover{background:var(--bg-3);transform:translate(-1px,-1px);}
+  .lang-btn:active{transform:translate(1px,1px);box-shadow:1px 1px 0 var(--bg-0);}
+
+  /* ---------- Main stage ---------- */
+  .main{
+    flex:1;height:100vh;position:relative;overflow:hidden;
+    background:var(--bg-0);
+  }
+  #stage{position:absolute;inset:0;width:100%;height:100%;display:block;}
+
+  .hud{
+    position:absolute;top:16px;right:16px;z-index:5;
+    background:oklch(0.18 0.04 265 / 0.82);
+    border:1px solid var(--line-strong);
+    border-radius:8px;padding:10px 13px;
+    font-family:'JetBrains Mono',monospace;font-size:11px;
+    min-width:172px;box-shadow:3px 3px 0 var(--bg-0);
+    backdrop-filter:blur(2px);
+  }
+  .hud-row{display:flex;justify-content:space-between;gap:14px;line-height:1.7;}
+  .hud-lbl{color:var(--fg-dim);}
+  .hud-val{color:var(--cs);font-weight:700;}
+  .hud-val.gold{color:var(--gold);}
+
+  .sub{
+    position:absolute;left:50%;bottom:26px;transform:translateX(-50%);
+    z-index:5;text-align:center;width:86%;max-width:780px;pointer-events:none;
+  }
+  .sub-zh{
+    display:inline-block;font-size:20px;font-weight:700;color:var(--fg);
+    background:oklch(0.18 0.04 265 / 0.85);
+    border:1px solid var(--line-strong);
+    padding:7px 20px;border-radius:8px;
+    box-shadow:3px 3px 0 var(--bg-0);
+  }
+  .sub-en{margin-top:6px;font-size:12.5px;font-style:italic;color:var(--fg-dim);}
+</style>
+</head>
+<body>
+
+<aside class="sidebar">
+  <div class="brand">SystemEdu<span class="brand-sub" id="brandSub">训练 vs 测试评估 · EEG M34</span></div>
+  <!-- mascot: Bit — 立方像素精灵 (解题时重排像素) -->
+  <div class="deco">
+    <svg viewBox="0 0 100 96" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <!-- 立方体外框 -->
+      <path d="M50 14 L82 30 L82 64 L50 82 L18 64 L18 30 Z" fill="var(--depth)" stroke="var(--core)" stroke-width="2"/>
+      <path d="M50 14 L82 30 L50 46 L18 30 Z" fill="var(--core)" stroke="var(--signal)" stroke-width="1.6"/>
+      <path d="M50 46 L82 30 L82 64 L50 82 Z" fill="oklch(0.30 0.09 205)" stroke="var(--signal)" stroke-width="1.2" opacity="0.9"/>
+      <path d="M50 46 L18 30 L18 64 L50 82 Z" fill="oklch(0.24 0.07 210)" stroke="var(--signal)" stroke-width="1.2" opacity="0.9"/>
+      <!-- 重排的像素 -->
+      <rect x="34" y="34" width="6" height="6" fill="var(--signal)"/>
+      <rect x="60" y="34" width="6" height="6" fill="var(--flash)"/>
+      <rect x="40" y="58" width="6" height="6" fill="var(--signal)"/>
+      <rect x="58" y="62" width="6" height="6" fill="var(--query)"/>
+      <!-- 眼睛 (front 面) -->
+      <rect x="40" y="50" width="4.5" height="4.5" fill="var(--flash)"/>
+      <rect x="55" y="50" width="4.5" height="4.5" fill="var(--flash)"/>
+    </svg>
+  </div>
+  <ul class="guide" id="guide">
+    <li class="guide-li" data-f="0">分类器训好了，但它真会分吗</li>
+    <li class="guide-li" data-f="1">把数据切两堆：训练 + 测试</li>
+    <li class="guide-li" data-f="2">用训练集考：准确率虚高</li>
+    <li class="guide-li" data-f="3">用没见过的测试集才是真考</li>
+    <li class="guide-li" data-f="4">两个数对比，差距即真相</li>
+  </ul>
+
+  <!-- 项目进度路线图: 高亮 S3 (你在这) -->
+  <nav class="route" id="route" aria-label="project route">
+    <div class="route-ttl" id="routeTtl">BCI 项目路线</div>
+    <div class="route-step done"><span class="route-dot"></span><span data-s="1">S1 认识脑波</span></div>
+    <div class="route-step done"><span class="route-dot"></span><span data-s="2">S2 清洁信号</span></div>
+    <div class="route-step cur"><span class="route-dot"></span><span data-s="3">S3 找特征训分类器</span><span class="route-here" id="routeHere">你在这</span></div>
+    <div class="route-step"><span class="route-dot"></span><span data-s="4">S4 自录冲准</span></div>
+    <div class="route-step"><span class="route-dot"></span><span data-s="5">S5 接 Minecraft</span></div>
+    <div class="route-step"><span class="route-dot"></span><span data-s="6">S6 分享</span></div>
+  </nav>
+
+  <button id="langBtn" class="lang-btn">中 / EN</button>
+</aside>
+
+<main class="main">
+  <canvas id="stage"></canvas>
+
+  <div class="hud">
+    <div class="hud-row"><span class="hud-lbl">frame</span><span class="hud-val" id="hF">1/5</span></div>
+    <div class="hud-row"><span class="hud-lbl">stage</span><span class="hud-val" id="hStage">classifier</span></div>
+    <div class="hud-row"><span class="hud-lbl">train acc</span><span class="hud-val" id="hTrain">--</span></div>
+    <div class="hud-row"><span class="hud-lbl">test acc</span><span class="hud-val" id="hTest">--</span></div>
+  </div>
+
+  <div class="sub">
+    <div class="sub-zh" id="subZh">分类器训好了，但它真会分，还是只是背了答案？</div>
+    <div class="sub-en" id="subEn">The classifier is trained — but can it really classify, or did it just memorize?</div>
+  </div>
+
+  <!-- 终点徽记: Minecraft 角色剪影 (用念头让它动) -->
+  <div class="goal-badge" aria-label="project goal">
+    <svg viewBox="0 0 26 30" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <rect x="6" y="1" width="14" height="13" rx="1" fill="var(--core)" stroke="var(--flash)" stroke-width="1"/>
+      <rect x="9" y="5" width="2.6" height="2.6" fill="var(--bg-0)"/>
+      <rect x="14.4" y="5" width="2.6" height="2.6" fill="var(--bg-0)"/>
+      <rect x="10" y="9.5" width="6" height="1.6" fill="var(--bg-0)" opacity="0.7"/>
+      <rect x="7" y="15" width="12" height="10" rx="1" fill="var(--depth)" stroke="var(--line-strong)" stroke-width="0.8"/>
+      <rect x="3" y="16" width="3.5" height="8" rx="0.6" fill="var(--depth)"/>
+      <rect x="19.5" y="16" width="3.5" height="8" rx="0.6" fill="var(--depth)"/>
+      <rect x="9" y="25" width="3" height="4" fill="var(--depth)"/>
+      <rect x="14" y="25" width="3" height="4" fill="var(--depth)"/>
+    </svg>
+    <span class="gtxt" id="goalTxt">终点：<b>用念头让它动</b></span>
+  </div>
+</main>
+
+<script>
+/* ===================== i18n ===================== */
+var LANG = 'cn';
+var I18N = {
+  brandSub: {cn:'训练 vs 测试评估 · EEG M34', en:'Train vs Test Eval · EEG M34'},
+  guide: {
+    cn:['分类器训好了，但它真会分吗','把数据切两堆：训练 + 测试','用训练集考：准确率虚高','用没见过的测试集才是真考','两个数对比，差距即真相'],
+    en:['Trained — but can it really classify?','Split data: train pile + test pile','Quiz on train set: inflated accuracy','Unseen test set is the real exam','Two numbers, the gap is the truth']
+  },
+  /* subCues per frame */
+  s0:{cn:'分类器训好了，但它真会分，还是只是背了答案？得公平考它', en:'The classifier is trained — but can it really classify, or did it just memorize? We must test it fairly'},
+  s1:{cn:'先把所有 trial 切成两堆：训练集教它，测试集留着当考卷（它从没见过）', en:'Split all trials in two: a train pile to teach it, a test pile kept as the exam — it has never seen these'},
+  s2:{cn:'用训练集考它：这些它学过，几乎全对，准确率虚高 = 像考自己出的题', en:'Quiz it on the train set: it learned these, nearly all correct — inflated accuracy, like grading its own homework'},
+  s3:{cn:'换用没见过的测试集考：才考出真本事，通常会低一些', en:'Now quiz on the unseen test set: this reveals its real skill — usually lower'},
+  s4:{cn:'两个准确率一对比，差距就是真相；测试准确率才算数', en:'Compare the two — the gap is the truth; only the test accuracy counts'},
+  routeTtl:{cn:'BCI 项目路线', en:'BCI Project Route'},
+  routeHere:{cn:'你在这', en:'YOU'},
+  route:{
+    cn:['S1 认识脑波','S2 清洁信号','S3 找特征训分类器','S4 自录冲准','S5 接 Minecraft','S6 分享'],
+    en:['S1 Read EEG','S2 Clean signal','S3 Feature + classifier','S4 Self-train','S5 To Minecraft','S6 Share']
+  },
+  goalTxt:{cn:'终点：用念头让它动', en:'Goal: move it with thought'}
+};
+function tt(o){return (o&&o[LANG])||(o&&o.en)||'';}
+
+function refreshI18N(){
+  document.getElementById('brandSub').textContent = tt(I18N.brandSub);
+  var g = document.querySelectorAll('#guide .guide-li');
+  for(var i=0;i<g.length;i++){ g[i].textContent = I18N.guide[LANG][i]; }
+  document.getElementById('routeTtl').textContent = tt(I18N.routeTtl);
+  document.getElementById('routeHere').textContent = tt(I18N.routeHere);
+  var rs = document.querySelectorAll('#route .route-step span[data-s]');
+  for(var j=0;j<rs.length;j++){ rs[j].textContent = I18N.route[LANG][j]; }
+  if(LANG==='cn'){ document.getElementById('goalTxt').innerHTML = '终点：<b>用念头让它动</b>'; }
+  else { document.getElementById('goalTxt').innerHTML = 'Goal: <b>move it with thought</b>'; }
+  document.getElementById('langBtn').textContent = LANG==='cn' ? '中 / EN' : 'EN / 中';
+  syncSub();
+  syncGuideHL();
+}
+document.getElementById('langBtn').addEventListener('click', function(){
+  LANG = LANG==='cn' ? 'en' : 'cn';
+  refreshI18N();
+});
+
+/* ===================== Canvas ===================== */
+var canvas = document.getElementById('stage');
+var ctx = canvas.getContext('2d');
+var W=0,H=0,DPR=1;
+function resize(){
+  var rect = canvas.parentElement.getBoundingClientRect();
+  if(rect.width<1||rect.height<1) return;
+  DPR = window.devicePixelRatio||1;
+  canvas.width = rect.width*DPR; canvas.height = rect.height*DPR;
+  canvas.style.width = rect.width+'px'; canvas.style.height = rect.height+'px';
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  W = rect.width; H = rect.height;
+}
+window.addEventListener('resize', resize);
+resize();
+setTimeout(resize,200); setTimeout(resize,600);
+if(document.fonts&&document.fonts.ready){document.fonts.ready.then(resize);}
+
+/* ===================== Palette (canvas) — deep space + cs cyan ===================== */
+var C = {
+  bg0:'#0c0f1c', bg1:'#141a2e', bg2:'#1b2238', bg3:'#252e49',
+  line:'rgba(150,160,210,0.30)', lineStrong:'rgba(170,180,225,0.55)',
+  fg:'#eef0f8', fgDim:'#aab0c8', fgMute:'#7b8198',
+  signal:'#39c9d8', core:'#1f97a8', depth:'#1a4654', flash:'#bff0f4',
+  gold:'#f2cf6e',
+  classL:'#39c9d8',   // 类别"想左手" — signal cyan
+  classR:'#f2a36e',   // 类别"想右手" — warm amber (与 cyan 区分, 仍属深空可读)
+  good:'#7fd6a6',     // 答对
+  bad:'#ec6a6a'       // 答错
+};
+
+/* ===================== 固定数据集 (确定性, 全程同一批 trial) ===================== */
+// 24 个 trial: 每个有 label (L/R) + 二维特征 (feat); 训练 16 个, 测试 8 个.
+// 训练集模型"几乎全记住" => 训练集只错 ~1 个; 测试集是新数据 => 错 ~2 个.
+var DATA = (function(){
+  var arr = [];
+  var seed = 20260528;
+  function rnd(){ seed = (seed*1103515245 + 12345) & 0x7fffffff; return seed/0x7fffffff; }
+  for(var i=0;i<24;i++){
+    var lab = (i % 2 === 0) ? 'L' : 'R';
+    // L 类聚在左下, R 类聚在右上, 有重叠 -> 边界附近会错
+    var cx = lab==='L' ? 0.34 : 0.64;
+    var cy = lab==='L' ? 0.62 : 0.36;
+    var fx = cx + (rnd()-0.5)*0.30;
+    var fy = cy + (rnd()-0.5)*0.30;
+    arr.push({lab:lab, fx:fx, fy:fy, isTest:i>=16});
+  }
+  // 标记哪些会被模型分错 (落在边界另一侧的几个)
+  // 训练集 (前16) 错 1 个: index 7; 测试集 (后8) 错 2 个: index 18, 21
+  for(var k=0;k<arr.length;k++) arr[k].wrong = false;
+  arr[7].wrong = true;            // train 错 1
+  arr[18].wrong = true;           // test 错 1
+  arr[21].wrong = true;           // test 错 2
+  return arr;
+})();
+var TRAIN = DATA.filter(function(d){return !d.isTest;});  // 16
+var TEST  = DATA.filter(function(d){return d.isTest;});   // 8
+var TRAIN_TOTAL = TRAIN.length;                 // 16
+var TRAIN_RIGHT = TRAIN.filter(function(d){return !d.wrong;}).length; // 15
+var TEST_TOTAL  = TEST.length;                  // 8
+var TEST_RIGHT  = TEST.filter(function(d){return !d.wrong;}).length;  // 6
+var TRAIN_ACC = TRAIN_RIGHT / TRAIN_TOTAL;      // 0.9375 ~ 94%
+var TEST_ACC  = TEST_RIGHT / TEST_TOTAL;        // 0.75   ~ 75%
+
+var animFrames = 5;
+var FRAME_DUR = 6800;           // 6.8s x 5 = 34s cycle (评估概念较细)
+var animStart = performance.now();
+var curFrame = 0;
+
+function syncSub(){
+  var o = I18N['s'+curFrame];
+  document.getElementById('subZh').textContent = LANG==='cn' ? o.cn : o.en;
+  document.getElementById('subEn').textContent = o.en;
+}
+function syncGuideHL(){
+  var g = document.querySelectorAll('#guide .guide-li');
+  for(var i=0;i<g.length;i++){ g[i].classList.toggle('hl', i===curFrame); }
+}
+
+/* ===================== draw helpers ===================== */
+function rr(x,y,w,h,r){
+  ctx.beginPath();
+  ctx.moveTo(x+r,y);
+  ctx.arcTo(x+w,y,x+w,y+h,r);
+  ctx.arcTo(x+w,y+h,x,y+h,r);
+  ctx.arcTo(x,y+h,x,y,r);
+  ctx.arcTo(x,y,x+w,y,r);
+  ctx.closePath();
+}
+function panel(x,y,w,h,fill,stroke){
+  ctx.save();
+  ctx.fillStyle = fill||C.bg1;
+  ctx.strokeStyle = stroke||C.line;
+  ctx.lineWidth = 1.2;
+  rr(x,y,w,h,10); ctx.fill(); ctx.stroke();
+  ctx.restore();
+}
+function frameTitle(s){
+  ctx.save();
+  ctx.fillStyle = C.fg;
+  ctx.font = '700 19px Inter, sans-serif';
+  ctx.textAlign = 'center'; ctx.textBaseline='alphabetic';
+  ctx.fillText(s, W/2, 38);
+  ctx.restore();
+}
+
+/* 同一个分类器方块 (贯穿全程的核心对象) */
+function drawModel(cx, cy, s, opts){
+  opts = opts || {};
+  var pulse = opts.pulse || 0;          // 0..1 考试时的"思考"脉动
+  var label = opts.label;
+  ctx.save();
+  // 光晕
+  if(pulse>0.02){
+    var g = ctx.createRadialGradient(cx,cy,4,cx,cy,s*1.5);
+    g.addColorStop(0,'rgba(57,201,216,'+(0.32*pulse).toFixed(3)+')');
+    g.addColorStop(1,'rgba(57,201,216,0)');
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.arc(cx,cy,s*1.5,0,Math.PI*2); ctx.fill();
+  }
+  // 立方体 (等距)
+  var topH = s*0.55;
+  ctx.lineJoin='round';
+  // 顶面
+  ctx.beginPath();
+  ctx.moveTo(cx, cy-s);
+  ctx.lineTo(cx+s, cy-s+topH);
+  ctx.lineTo(cx, cy-s+topH*2);
+  ctx.lineTo(cx-s, cy-s+topH);
+  ctx.closePath();
+  ctx.fillStyle=C.core; ctx.strokeStyle=C.signal; ctx.lineWidth=2; ctx.fill(); ctx.stroke();
+  // 右面
+  ctx.beginPath();
+  ctx.moveTo(cx+s, cy-s+topH);
+  ctx.lineTo(cx+s, cy+topH);
+  ctx.lineTo(cx, cy+topH*2);
+  ctx.lineTo(cx, cy-s+topH*2);
+  ctx.closePath();
+  ctx.fillStyle='#16414c'; ctx.fill(); ctx.stroke();
+  // 左面 (front)
+  ctx.beginPath();
+  ctx.moveTo(cx-s, cy-s+topH);
+  ctx.lineTo(cx-s, cy+topH);
+  ctx.lineTo(cx, cy+topH*2);
+  ctx.lineTo(cx, cy-s+topH*2);
+  ctx.closePath();
+  ctx.fillStyle=C.depth; ctx.fill(); ctx.stroke();
+  // 眼睛 (front 面)
+  var ey = cy-s+topH*1.4;
+  ctx.fillStyle=C.flash;
+  ctx.fillRect(cx-s*0.55, ey, s*0.16, s*0.16);
+  ctx.fillRect(cx-s*0.18, ey, s*0.16, s*0.16);
+  ctx.restore();
+  if(label){
+    ctx.save();
+    ctx.fillStyle=C.fgDim; ctx.font='600 12px JetBrains Mono, monospace';
+    ctx.textAlign='center'; ctx.textBaseline='top';
+    ctx.fillText(label, cx, cy+topH*2+8);
+    ctx.restore();
+  }
+}
+
+/* 一个 trial 数据点 (小方块: cyan=L, amber=R; 考过的描边 good/bad) */
+function drawTrial(x,y,d,opts){
+  opts = opts||{};
+  var r = opts.r||7;
+  var graded = opts.graded;        // true=已批改
+  ctx.save();
+  ctx.globalAlpha = opts.alpha==null?1:opts.alpha;
+  ctx.fillStyle = d.lab==='L' ? C.classL : C.classR;
+  if(graded){
+    ctx.strokeStyle = d.wrong ? C.bad : C.good;
+    ctx.lineWidth = 3;
+  } else {
+    ctx.strokeStyle = C.lineStrong;
+    ctx.lineWidth = 1.2;
+  }
+  rr(x-r,y-r,r*2,r*2,2.5); ctx.fill(); ctx.stroke();
+  // 错的画一个 X (用线, 非 emoji)
+  if(graded && d.wrong){
+    ctx.strokeStyle=C.bad; ctx.lineWidth=2;
+    ctx.beginPath();
+    ctx.moveTo(x-r*0.5,y-r*0.5); ctx.lineTo(x+r*0.5,y+r*0.5);
+    ctx.moveTo(x+r*0.5,y-r*0.5); ctx.lineTo(x-r*0.5,y+r*0.5);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+/* 准确率竖条 (从 0 长到 frac) */
+function drawAccBar(x,y,w,h,frac,color,topLbl,valLbl){
+  ctx.save();
+  panel(x,y,w,h,C.bg1);
+  var ph=h-8, pb=y+h-4;
+  var fh=ph*frac;
+  // 渐变填充
+  ctx.fillStyle=color;
+  rr(x+4, pb-fh, w-8, fh, 5); ctx.fill();
+  // 100% 虚线参考
+  ctx.strokeStyle=C.line; ctx.setLineDash([4,4]); ctx.lineWidth=1;
+  ctx.beginPath(); ctx.moveTo(x, y+4); ctx.lineTo(x+w, y+4); ctx.stroke();
+  ctx.setLineDash([]);
+  // 顶标签
+  ctx.fillStyle=C.fgDim; ctx.font='700 12px Inter, sans-serif';
+  ctx.textAlign='center'; ctx.textBaseline='alphabetic';
+  ctx.fillText(topLbl, x+w/2, y-8);
+  // 数值
+  ctx.fillStyle=color; ctx.font='800 22px JetBrains Mono, monospace';
+  ctx.fillText(valLbl, x+w/2, pb-fh-10);
+  ctx.restore();
+}
+
+function drawArrow(x1,y1,x2,y2,color,label,alpha){
+  ctx.save();
+  ctx.globalAlpha = alpha==null?1:alpha;
+  ctx.strokeStyle = color; ctx.fillStyle=color; ctx.lineWidth=2.6;
+  ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke();
+  var a = Math.atan2(y2-y1,x2-x1);
+  ctx.beginPath();
+  ctx.moveTo(x2,y2);
+  ctx.lineTo(x2-13*Math.cos(a-0.35), y2-13*Math.sin(a-0.35));
+  ctx.lineTo(x2-13*Math.cos(a+0.35), y2-13*Math.sin(a+0.35));
+  ctx.closePath(); ctx.fill();
+  if(label){
+    ctx.font='700 11px Inter, sans-serif';
+    ctx.textAlign='center'; ctx.textBaseline='bottom';
+    var mx=(x1+x2)/2, my=(y1+y2)/2-7;
+    var tw = ctx.measureText(label).width;
+    ctx.fillStyle = 'rgba(12,15,28,0.82)';
+    rr(mx-tw/2-5, my-15, tw+10, 17, 4); ctx.fill();
+    ctx.fillStyle = color;
+    ctx.fillText(label, mx, my);
+  }
+  ctx.restore();
+}
+
+function legend(x,y){
+  ctx.save();
+  ctx.font='600 11px JetBrains Mono, monospace'; ctx.textAlign='left'; ctx.textBaseline='middle';
+  drawTrial(x+6,y,{lab:'L',wrong:false},{r:6});
+  ctx.fillStyle=C.fgDim; ctx.fillText(LANG==='cn'?'想左手 L':'left L', x+18, y);
+  drawTrial(x+96,y,{lab:'R',wrong:false},{r:6});
+  ctx.fillStyle=C.fgDim; ctx.fillText(LANG==='cn'?'想右手 R':'right R', x+108, y);
+  ctx.restore();
+}
+
+/* ===================== Frames ===================== */
+function bgFill(){ ctx.fillStyle = C.bg0; ctx.fillRect(0,0,W,H); }
+
+// 计算每个 trial 在散点区的像素坐标
+function scatterPos(d, ox, oy, sw, sh){
+  return { x: ox + d.fx*sw, y: oy + d.fy*sh };
+}
+
+// F1 — 同一个分类器方块: 训好了, 但它真会分还是背了答案?
+function frame0(p){
+  bgFill();
+  frameTitle(LANG==='cn'?'分类器训好了 — 但它真会分，还是背了答案？':'The classifier is trained — but did it learn, or memorize?');
+  var cx=W*0.5, cy=H*0.46;
+  var s=Math.min(W*0.085, 64);
+  var pulse = 0.4 + 0.3*Math.sin(p*Math.PI*2*1.2);
+  drawModel(cx, cy, s, {pulse:pulse, label: LANG==='cn'?'你训好的分类器':'your trained classifier'});
+  // 周围一圈 trial 飞入 (它"学过的"数据)
+  var n = Math.min(DATA.length, Math.floor(p*DATA.length*1.5)+1);
+  for(var i=0;i<n;i++){
+    var ang = i/DATA.length*Math.PI*2 - Math.PI/2;
+    var rad = Math.min(W*0.20,H*0.30) * (0.78 + 0.18*Math.sin(i*1.7));
+    var tx = cx + Math.cos(ang)*rad;
+    var ty = cy + Math.sin(ang)*rad*0.82;
+    var a = Math.min(1,(n-i));
+    drawTrial(tx,ty,DATA[i],{alpha:a*0.9,r:6});
+  }
+  // 问号牌
+  if(p>0.45){
+    var qa=Math.min(1,(p-0.45)*3);
+    ctx.save(); ctx.globalAlpha=qa;
+    var bw=Math.min(W*0.5,440), bh=46, bx=cx-bw/2, by=H*0.78;
+    ctx.fillStyle='rgba(20,26,46,0.92)'; ctx.strokeStyle=C.gold; ctx.lineWidth=1.6;
+    rr(bx,by,bw,bh,9); ctx.fill(); ctx.stroke();
+    ctx.fillStyle=C.gold; ctx.font='700 14px Inter, sans-serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText(LANG==='cn'?'要公平考它 — 用它没见过的数据':'Test it fairly — with data it has never seen', cx, by+bh/2);
+    ctx.restore();
+  }
+  document.getElementById('hStage').textContent='classifier';
+  document.getElementById('hTrain').textContent='--';
+  document.getElementById('hTest').textContent='--';
+  document.getElementById('hTrain').className='hud-val';
+  document.getElementById('hTest').className='hud-val';
+}
+
+// F2 — 同一批数据被切成两堆: 训练集 (教它) + 测试集 (留作考卷)
+function frame1(p){
+  bgFill();
+  frameTitle(LANG==='cn'?'把同一批数据切两堆：训练集教它，测试集当考卷':'Split the same data: train pile teaches, test pile is the exam');
+  legend(W*0.5-100, 64);
+  // 起点: 中间一团; 终点: 左堆 train, 右堆 test
+  var midX=W*0.5, midY=H*0.30;
+  var trainBox={x:W*0.10,y:H*0.40,w:W*0.46,h:H*0.42};
+  var testBox ={x:W*0.62,y:H*0.40,w:W*0.27,h:H*0.42};
+  // 框
+  var ba=Math.min(1,p*2);
+  ctx.save(); ctx.globalAlpha=ba;
+  panel(trainBox.x,trainBox.y,trainBox.w,trainBox.h,'rgba(31,151,168,0.07)',C.signal);
+  panel(testBox.x,testBox.y,testBox.w,testBox.h,'rgba(242,207,110,0.07)',C.gold);
+  ctx.fillStyle=C.signal; ctx.font='700 14px Inter, sans-serif'; ctx.textAlign='left'; ctx.textBaseline='alphabetic';
+  ctx.fillText(LANG==='cn'?'训练集 · 16 个 (教它)':'TRAIN · 16 (teach it)', trainBox.x+12, trainBox.y-8);
+  ctx.fillStyle=C.gold;
+  ctx.fillText(LANG==='cn'?'测试集 · 8 个 (从没见过)':'TEST · 8 (never seen)', testBox.x+12, testBox.y-8);
+  ctx.restore();
+  // 每个 trial 从中间一团飞到各自的堆
+  var split = Math.max(0,(p-0.15)/0.85);
+  for(var i=0;i<DATA.length;i++){
+    var d=DATA[i];
+    // 中间起点 (网格)
+    var col=i%6, row=Math.floor(i/6);
+    var sx=midX-110+col*44, sy=midY-30+row*22;
+    // 终点 (各自堆里网格)
+    var ex,ey;
+    if(!d.isTest){
+      var ti=TRAIN.indexOf(d);
+      var tc=ti%4, trw=Math.floor(ti/4);
+      ex=trainBox.x+36+tc*((trainBox.w-60)/3.4);
+      ey=trainBox.y+44+trw*((trainBox.h-66)/3.4);
+    } else {
+      var si=TEST.indexOf(d);
+      var sc=si%2, srw=Math.floor(si/2);
+      ex=testBox.x+44+sc*((testBox.w-80)/1.2);
+      ey=testBox.y+44+srw*((testBox.h-66)/3.4);
+    }
+    var t=Math.min(1, split*1.4 - i*0.02);
+    if(t<0) t=0;
+    var ease = t<0.5? 2*t*t : 1-Math.pow(-2*t+2,2)/2;
+    var x=sx+(ex-sx)*ease, y=sy+(ey-sy)*ease;
+    drawTrial(x,y,d,{r:7});
+  }
+  document.getElementById('hStage').textContent='split 16/8';
+  document.getElementById('hTrain').textContent='16 seen';
+  document.getElementById('hTest').textContent='8 unseen';
+  document.getElementById('hTrain').className='hud-val';
+  document.getElementById('hTest').className='hud-val gold';
+}
+
+// F3 — 同一个模型用训练集考: 它学过这些, 几乎全对 (虚高)
+function frame2(p){
+  bgFill();
+  frameTitle(LANG==='cn'?'用训练集考它：这些它学过，几乎全对 — 准确率虚高':'Quiz on the TRAIN set: it learned these, nearly all right — inflated');
+  legend(W*0.06, 66);
+  var cx=W*0.30, cy=H*0.30, s=Math.min(W*0.05,42);
+  drawModel(cx,cy,s,{pulse:0.35+0.25*Math.sin(p*Math.PI*2*2)});
+  // 散点区放训练集, 逐个批改
+  var sw=Math.min(W*0.30,330), sh=Math.min(H*0.40,300);
+  var ox=W*0.18, oy=H*0.40;
+  ctx.save();
+  ctx.fillStyle=C.signal; ctx.font='700 12px Inter, sans-serif'; ctx.textAlign='center';
+  ctx.fillText(LANG==='cn'?'训练集 16 个':'TRAIN set · 16', ox+sw/2, oy-6);
+  ctx.restore();
+  var gradeN = Math.floor(Math.min(1,p*1.3)*TRAIN.length);
+  var rightSoFar=0, totalSoFar=0;
+  for(var i=0;i<TRAIN.length;i++){
+    var d=TRAIN[i];
+    var pos=scatterPos(d, ox, oy, sw, sh);
+    var graded = i<gradeN;
+    if(graded){ totalSoFar++; if(!d.wrong) rightSoFar++; }
+    drawTrial(pos.x,pos.y,d,{graded:graded,r:8});
+    // 批改时画一道从模型到点的"考"光线
+    if(graded && i===gradeN-1){
+      drawArrow(cx+s*0.4,cy+s*0.4,pos.x,pos.y-12,C.signal,LANG==='cn'?'考':'quiz',Math.min(1,(p*1.3*TRAIN.length-i)));
+    }
+  }
+  // 准确率竖条 (右侧)
+  var accFrac = totalSoFar>0 ? rightSoFar/totalSoFar : 0;
+  var dispFrac = gradeN>=TRAIN.length ? TRAIN_ACC : accFrac;
+  var barX=W*0.66, barY=H*0.26, barW=Math.min(W*0.12,120), barH=H*0.50;
+  var pct = Math.round(dispFrac*100);
+  drawAccBar(barX,barY,barW,barH,dispFrac,C.signal,LANG==='cn'?'训练准确率':'train acc', pct+'%');
+  if(gradeN>=TRAIN.length){
+    ctx.save();
+    ctx.fillStyle=C.gold; ctx.font='600 12px Inter, sans-serif'; ctx.textAlign='center';
+    ctx.fillText(LANG==='cn'?'像考自己出的题，太漂亮':'grading its own homework — too pretty', barX+barW/2, barY+barH+22);
+    ctx.restore();
+  }
+  document.getElementById('hStage').textContent='quiz on TRAIN';
+  document.getElementById('hTrain').textContent= pct+'% ('+rightSoFar+'/'+totalSoFar+')';
+  document.getElementById('hTrain').className='hud-val';
+  document.getElementById('hTest').textContent='--';
+  document.getElementById('hTest').className='hud-val';
+}
+
+// F4 — 同一个模型转身用测试集考: 没见过, 错几个, 真准确率更低
+function frame3(p){
+  bgFill();
+  frameTitle(LANG==='cn'?'同一个模型，换用没见过的测试集考 — 才是真考':'Same model, now quiz the UNSEEN test set — the real exam');
+  legend(W*0.06, 66);
+  var cx=W*0.30, cy=H*0.30, s=Math.min(W*0.05,42);
+  drawModel(cx,cy,s,{pulse:0.35+0.25*Math.sin(p*Math.PI*2*2)});
+  var sw=Math.min(W*0.26,300), sh=Math.min(H*0.38,280);
+  var ox=W*0.18, oy=H*0.40;
+  ctx.save();
+  ctx.fillStyle=C.gold; ctx.font='700 12px Inter, sans-serif'; ctx.textAlign='center';
+  ctx.fillText(LANG==='cn'?'测试集 8 个 (从没见过)':'TEST set · 8 (unseen)', ox+sw/2, oy-6);
+  ctx.restore();
+  var gradeN = Math.floor(Math.min(1,p*1.3)*TEST.length);
+  var rightSoFar=0, totalSoFar=0;
+  for(var i=0;i<TEST.length;i++){
+    var d=TEST[i];
+    // 测试点分散在测试散点区 (用相对坐标重映射, 8 个点排开)
+    var col=i%4, row=Math.floor(i/4);
+    var pos={x:ox+30+col*((sw-50)/3), y:oy+50+row*((sh-70)/1)};
+    var graded=i<gradeN;
+    if(graded){ totalSoFar++; if(!d.wrong) rightSoFar++; }
+    drawTrial(pos.x,pos.y,d,{graded:graded,r:9});
+    if(graded && i===gradeN-1){
+      drawArrow(cx+s*0.4,cy+s*0.4,pos.x,pos.y-13,C.gold,LANG==='cn'?'真考':'real quiz',Math.min(1,(p*1.3*TEST.length-i)));
+    }
+  }
+  var accFrac=totalSoFar>0?rightSoFar/totalSoFar:0;
+  var dispFrac=gradeN>=TEST.length?TEST_ACC:accFrac;
+  var barX=W*0.66, barY=H*0.26, barW=Math.min(W*0.12,120), barH=H*0.50;
+  var pct=Math.round(dispFrac*100);
+  // 灰色幽灵: 训练准确率参考线 (虚高的那条还在)
+  ctx.save();
+  var ghY=barY+(barH-8)*(1-TRAIN_ACC)+4;
+  ctx.strokeStyle=C.signal; ctx.setLineDash([5,4]); ctx.lineWidth=1.6; ctx.globalAlpha=0.7;
+  ctx.beginPath(); ctx.moveTo(barX-8,ghY); ctx.lineTo(barX+barW+8,ghY); ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle=C.signal; ctx.font='600 10px JetBrains Mono, monospace'; ctx.textAlign='right';
+  ctx.fillText(LANG==='cn'?'训练 '+Math.round(TRAIN_ACC*100)+'%':'train '+Math.round(TRAIN_ACC*100)+'%', barX-10, ghY-3);
+  ctx.restore();
+  drawAccBar(barX,barY,barW,barH,dispFrac,C.gold,LANG==='cn'?'测试准确率':'test acc', pct+'%');
+  if(gradeN>=TEST.length){
+    ctx.save();
+    ctx.fillStyle=C.fgDim; ctx.font='600 12px Inter, sans-serif'; ctx.textAlign='center';
+    ctx.fillText(LANG==='cn'?'低了一截 = 它真本事':'lower = its real skill', barX+barW/2, barY+barH+22);
+    ctx.restore();
+  }
+  document.getElementById('hStage').textContent='quiz on TEST';
+  document.getElementById('hTrain').textContent=Math.round(TRAIN_ACC*100)+'%';
+  document.getElementById('hTrain').className='hud-val';
+  document.getElementById('hTest').textContent= pct+'% ('+rightSoFar+'/'+totalSoFar+')';
+  document.getElementById('hTest').className='hud-val gold';
+}
+
+// F5 — 两个数并排: 差距即真相; 反例"用训练集当考卷 = 作弊"
+function frame4(p){
+  bgFill();
+  frameTitle(LANG==='cn'?'两个准确率并排：差距就是真相 — 测试准确率才算数':'Two accuracies side by side: the gap is the truth — test acc counts');
+  var barW=Math.min(W*0.13,130), barH=H*0.46, barY=H*0.22;
+  var x0=W*0.30-barW/2, x1=W*0.56-barW/2;
+  // 训练条 (虚高)
+  var t0=Math.min(1,p*1.6);
+  drawAccBar(x0,barY,barW,barH,TRAIN_ACC*t0,C.signal,LANG==='cn'?'训练准确率':'train acc',Math.round(TRAIN_ACC*100*t0)+'%');
+  // 测试条 (真实)
+  var t1=Math.min(1,Math.max(0,p*1.6-0.2));
+  drawAccBar(x1,barY,barW,barH,TEST_ACC*t1,C.gold,LANG==='cn'?'测试准确率':'test acc',Math.round(TEST_ACC*100*t1)+'%');
+  // 差距标注
+  if(p>0.35){
+    var ga=Math.min(1,(p-0.35)*3);
+    var yTr=barY+(barH-8)*(1-TRAIN_ACC)+4;
+    var yTe=barY+(barH-8)*(1-TEST_ACC)+4;
+    ctx.save(); ctx.globalAlpha=ga;
+    ctx.strokeStyle=C.gold; ctx.lineWidth=1.6; ctx.setLineDash([5,4]);
+    ctx.beginPath();
+    ctx.moveTo(x0,yTr); ctx.lineTo(x1+barW,yTr);
+    ctx.moveTo(x1,yTe); ctx.lineTo(x1+barW,yTe);
+    ctx.stroke(); ctx.setLineDash([]);
+    var gx=x1+barW+14;
+    drawArrow(gx,yTr,gx,yTe,C.gold,'',ga);
+    drawArrow(gx,yTe,gx,yTr,C.gold,'',ga);
+    ctx.fillStyle=C.gold; ctx.font='800 15px JetBrains Mono, monospace';
+    ctx.textAlign='left'; ctx.textBaseline='middle';
+    var gap=Math.round((TRAIN_ACC-TEST_ACC)*100);
+    ctx.fillText(LANG==='cn'?'差距 '+gap+'%':'gap '+gap+'%', gx+10, (yTr+yTe)/2);
+    ctx.restore();
+  }
+  // 反例: 用训练集当考卷 = 作弊看过答案
+  if(p>0.5){
+    var ca=Math.min(1,(p-0.5)*3);
+    var bw=Math.min(W*0.78,640), bh=58, bx=W/2-bw/2, by=H-128;
+    ctx.save(); ctx.globalAlpha=ca;
+    ctx.fillStyle='rgba(40,18,18,0.9)'; ctx.strokeStyle=C.bad; ctx.lineWidth=1.6;
+    rr(bx,by,bw,bh,10); ctx.fill(); ctx.stroke();
+    // 禁止标 (圆+斜杠, 非 emoji)
+    var ix=bx+26, iy=by+bh/2;
+    ctx.strokeStyle=C.bad; ctx.lineWidth=2.4;
+    ctx.beginPath(); ctx.arc(ix,iy,12,0,Math.PI*2); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(ix-8.5,iy-8.5); ctx.lineTo(ix+8.5,iy+8.5); ctx.stroke();
+    ctx.fillStyle=C.bad; ctx.font='800 15px Inter, sans-serif'; ctx.textAlign='left'; ctx.textBaseline='alphabetic';
+    ctx.fillText(LANG==='cn'?'不能用训练集当考卷 = 作弊（看过答案）':'Never grade on the train set = cheating (saw the answers)', bx+50, by+24);
+    ctx.fillStyle=C.fgDim; ctx.font='500 12px Inter, sans-serif';
+    ctx.fillText(LANG==='cn'?'用没见过的数据考出真准确率，才知道脑控靠不靠谱':'Real accuracy from unseen data tells us if mind-control will actually work', bx+50, by+44);
+    ctx.restore();
+  }
+  document.getElementById('hStage').textContent='compare';
+  document.getElementById('hTrain').textContent=Math.round(TRAIN_ACC*100)+'%';
+  document.getElementById('hTrain').className='hud-val';
+  document.getElementById('hTest').textContent=Math.round(TEST_ACC*100)+'%';
+  document.getElementById('hTest').className= p>0.35?'hud-val gold':'hud-val';
+}
+
+/* ===================== loop ===================== */
+function render(){
+  var now = performance.now();
+  var total = now - animStart;
+  var idx = Math.floor((total % (FRAME_DUR*animFrames)) / FRAME_DUR);
+  var p = ((total % (FRAME_DUR*animFrames)) % FRAME_DUR) / FRAME_DUR;
+  if(idx !== curFrame){
+    curFrame = idx;
+    document.getElementById('hF').textContent = (curFrame+1)+'/5';
+    syncSub();
+    syncGuideHL();
+  }
+  ctx.clearRect(0,0,W,H);
+  if(curFrame===0) frame0(p);
+  else if(curFrame===1) frame1(p);
+  else if(curFrame===2) frame2(p);
+  else if(curFrame===3) frame3(p);
+  else frame4(p);
+  requestAnimationFrame(render);
+}
+
+/* init */
+document.getElementById('hF').textContent = '1/5';
+refreshI18N();
+requestAnimationFrame(render);
+</script>
+</body>
+</html>

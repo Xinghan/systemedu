@@ -1,0 +1,744 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LDA 分界线调参师 — 画一条线分开左右手</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;700&family=Inter:wght@400;600;800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+  /* 第 1 层 — 共享深空底 (B 类钉死, 禁米黄) */
+  :root{
+    --bg-0: oklch(0.14 0.035 265);
+    --bg-1: oklch(0.18 0.04 265);
+    --bg-2: oklch(0.22 0.045 265);
+    --bg-3: oklch(0.28 0.05 265);
+    --line: oklch(0.35 0.05 265 / 0.35);
+    --line-strong: oklch(0.55 0.08 265 / 0.55);
+    --fg: oklch(0.96 0.01 265);
+    --fg-dim: oklch(0.75 0.02 265);
+    --fg-mute: oklch(0.55 0.03 265);
+    --gold: oklch(0.85 0.14 85);
+    /* 第 2 层 — math signature accent (electric blue) */
+    --math: oklch(0.72 0.17 245);
+    /* 第 3 层 — MTH-06 Geometry Void 5 色 palette */
+    --axis: oklch(0.72 0.17 245);
+    --proof: oklch(0.52 0.16 245);
+    --shadow: oklch(0.35 0.10 245);
+    --solution: oklch(0.92 0.08 240);
+    --qed: oklch(0.85 0.14 85);
+    /* 两类信号 (left/right hand) */
+    --cls-left: oklch(0.68 0.18 25);   /* warm coral-red, 想象左手 */
+    --cls-right: oklch(0.74 0.15 235); /* cool blue, 想象右手 */
+    --bad: oklch(0.65 0.18 25);
+    --ok: oklch(0.80 0.16 145);
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;height:100vh;overflow:hidden;
+    background:var(--bg-0);font-family:'Noto Sans SC','Inter',sans-serif;color:var(--fg);}
+  body{display:flex;}
+  .mono{font-family:'JetBrains Mono',monospace;}
+
+  /* 200px 左侧栏 */
+  .game-sidebar{width:200px;flex-shrink:0;height:100vh;background:var(--bg-1);
+    border-right:1px solid var(--line);display:flex;flex-direction:column;gap:12px;padding:14px 13px;overflow-y:auto;}
+  .brand{font-size:14.5px;font-weight:800;line-height:1.3;color:var(--fg);}
+  .brand .sub{display:block;font-size:9.5px;font-weight:600;color:var(--math);font-family:'JetBrains Mono',monospace;margin-top:3px;letter-spacing:.5px;}
+
+  /* mascot Pi — 旋转四面体 */
+  .mascot{display:flex;align-items:center;gap:8px;}
+  .mascot svg{width:38px;height:38px;flex-shrink:0;}
+  .mascot .pi-say{font-size:9.5px;line-height:1.4;color:var(--fg-dim);font-style:italic;}
+
+  /* 项目路线图 S1-S6 */
+  .roadmap{background:var(--bg-2);border:1px solid var(--line);padding:8px 9px;}
+  .rm-title{font-size:9px;color:var(--fg-mute);font-family:'JetBrains Mono',monospace;letter-spacing:.5px;margin-bottom:6px;}
+  .rm-stops{display:flex;flex-direction:column;gap:0;}
+  .rm-stop{display:flex;align-items:center;gap:7px;font-size:10px;line-height:1.5;color:var(--fg-mute);position:relative;padding:1px 0;}
+  .rm-stop .dot{width:9px;height:9px;border:1px solid var(--line-strong);background:var(--bg-0);flex-shrink:0;border-radius:50%;}
+  .rm-stop.done .dot{background:var(--proof);border-color:var(--proof);}
+  .rm-stop.here{color:var(--math);font-weight:700;}
+  .rm-stop.here .dot{background:var(--math);border-color:var(--math);box-shadow:0 0 0 3px oklch(0.72 0.17 245 / 0.25);}
+  .rm-stop .line{position:absolute;left:4px;top:14px;width:1px;height:8px;background:var(--line);}
+  .rm-stop:last-child .line{display:none;}
+
+  .goal{font-size:10.5px;line-height:1.55;color:var(--fg-dim);}
+  .goal b{color:var(--solution);}
+
+  /* 实验读数面板 (左栏只放进度读数, 真正调参在舞台上拖线) */
+  .param{background:var(--bg-2);border:1px solid var(--line);padding:8px 9px;}
+  .param-title{font-size:9px;color:var(--fg-mute);font-family:'JetBrains Mono',monospace;letter-spacing:.5px;margin-bottom:6px;}
+  .hud-row{display:flex;justify-content:space-between;align-items:baseline;gap:8px;line-height:1.6;}
+  .hud-lbl{color:var(--fg-mute);font-size:9.5px;font-family:'JetBrains Mono',monospace;letter-spacing:.3px;}
+  .hud-val{color:var(--math);font-weight:700;font-size:12px;font-family:'JetBrains Mono',monospace;}
+
+  .lang-btn{margin-top:auto;background:var(--bg-3);border:1px solid var(--line-strong);
+    color:var(--fg);font-weight:600;font-size:11px;padding:8px 10px;cursor:pointer;
+    box-shadow:2px 2px 0 var(--bg-0);transition:transform .08s,box-shadow .08s;
+    font-family:'JetBrains Mono',monospace;}
+  .lang-btn:hover{transform:translate(-1px,-1px);box-shadow:3px 3px 0 var(--bg-0);}
+  .lang-btn:active{transform:translate(1px,1px);box-shadow:1px 1px 0 var(--bg-0);}
+
+  /* Minecraft 角落剪影 */
+  .endgoal{display:flex;align-items:center;gap:6px;background:var(--bg-2);border:1px dashed var(--line-strong);padding:6px 8px;}
+  .endgoal svg{width:26px;height:26px;flex-shrink:0;}
+  .endgoal span{font-size:8.5px;line-height:1.35;color:var(--fg-mute);}
+
+  /* 主区 */
+  .game-main{flex:1;height:100vh;display:flex;flex-direction:column;gap:11px;padding:16px;position:relative;overflow:hidden;}
+  .main-head{display:flex;align-items:center;justify-content:space-between;flex-shrink:0;}
+  .main-title{font-size:14px;font-weight:700;color:var(--fg);}
+  .main-hint{font-size:10.5px;color:var(--fg-dim);}
+
+  /* 工具条: 自由拖 / 让 LDA 解 / 重置 */
+  .toolbar{display:flex;gap:10px;flex-shrink:0;align-items:stretch;}
+  .tip{flex:1;background:var(--bg-1);border:1px solid var(--line);padding:8px 11px;font-size:10px;line-height:1.45;color:var(--fg-dim);display:flex;align-items:center;}
+  .tip b{color:var(--solution);}
+  .lda-btn{background:var(--math);border:1px solid var(--math);color:var(--bg-0);
+    font-weight:800;font-size:12px;padding:9px 14px;cursor:pointer;
+    box-shadow:3px 3px 0 var(--bg-0);transition:transform .08s,box-shadow .08s;
+    font-family:'JetBrains Mono',monospace;letter-spacing:.4px;white-space:nowrap;}
+  .lda-btn:hover{transform:translate(-1px,-1px);box-shadow:4px 4px 0 var(--bg-0);}
+  .lda-btn:active{transform:translate(1px,1px);box-shadow:1px 1px 0 var(--bg-0);}
+  .lda-btn:disabled{opacity:.4;cursor:not-allowed;}
+  .reset-btn{background:var(--bg-3);border:1px solid var(--line-strong);color:var(--fg-dim);
+    font-weight:600;font-size:11px;padding:9px 12px;cursor:pointer;
+    box-shadow:2px 2px 0 var(--bg-0);transition:transform .08s,box-shadow .08s;
+    font-family:'JetBrains Mono',monospace;white-space:nowrap;}
+  .reset-btn:hover{transform:translate(-1px,-1px);box-shadow:3px 3px 0 var(--bg-0);}
+  .reset-btn:active{transform:translate(1px,1px);box-shadow:1px 1px 0 var(--bg-0);}
+
+  /* 舞台: 左特征图(拖线) + 右读数(准确率+混淆矩阵+Fisher) */
+  .stage-grid{flex:1;display:grid;grid-template-columns:1.25fr 0.75fr;gap:11px;min-height:0;}
+  .stage-box{background:var(--bg-1);border:1px solid var(--line);position:relative;display:flex;flex-direction:column;min-height:0;}
+  .stage-box canvas{position:absolute;inset:0;width:100%;height:100%;cursor:crosshair;}
+  .stage-cap{position:absolute;top:7px;left:9px;font-size:9px;color:var(--fg-mute);font-family:'JetBrains Mono',monospace;z-index:3;pointer-events:none;}
+
+  /* 右侧读数面板 */
+  .readout{display:flex;flex-direction:column;gap:11px;min-height:0;}
+  .acc-card{background:var(--bg-1);border:1px solid var(--line);padding:11px 13px;flex-shrink:0;}
+  .acc-head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px;}
+  .acc-lbl{font-size:10.5px;color:var(--fg-dim);font-weight:700;}
+  .acc-num{font-family:'JetBrains Mono',monospace;font-size:26px;font-weight:700;color:var(--math);line-height:1;}
+  .acc-track{height:14px;background:var(--bg-0);border:1px solid var(--line);position:relative;overflow:visible;}
+  .acc-fill{position:absolute;left:0;top:0;bottom:0;width:50%;background:var(--proof);transition:width .12s linear,background .4s;}
+  .acc-fill.good{background:var(--ok);}
+  .acc-gate{position:absolute;top:-2px;bottom:-2px;width:2px;background:var(--gold);}
+  .acc-gate-lbl{position:absolute;font-size:8px;color:var(--gold);font-family:'JetBrains Mono',monospace;top:-13px;transform:translateX(-50%);}
+
+  /* 混淆矩阵 */
+  .cm-card{background:var(--bg-1);border:1px solid var(--line);padding:11px 13px;flex-shrink:0;}
+  .cm-title{font-size:9px;color:var(--fg-mute);font-family:'JetBrains Mono',monospace;letter-spacing:.5px;margin-bottom:8px;}
+  .cm-grid{display:grid;grid-template-columns:auto 1fr 1fr;gap:3px;font-family:'JetBrains Mono',monospace;font-size:10px;}
+  .cm-cell{padding:6px 4px;text-align:center;background:var(--bg-2);border:1px solid var(--line);}
+  .cm-hd{color:var(--fg-mute);background:transparent;border:none;font-size:8.5px;display:flex;align-items:center;justify-content:center;line-height:1.2;}
+  .cm-num{font-size:15px;font-weight:700;color:var(--fg);}
+  .cm-cell.hit{border-color:var(--ok);}
+  .cm-cell.hit .cm-num{color:var(--ok);}
+  .cm-cell.miss .cm-num{color:var(--bad);}
+
+  .fisher-card{background:var(--bg-1);border:1px solid var(--line);padding:11px 13px;flex:1;min-height:0;display:flex;flex-direction:column;}
+  .fisher-card .cm-title{margin-bottom:7px;}
+  .fisher-row{display:flex;justify-content:space-between;align-items:baseline;gap:8px;line-height:1.7;}
+  .fisher-lbl{color:var(--fg-mute);font-size:9.5px;font-family:'JetBrains Mono',monospace;}
+  .fisher-val{color:var(--solution);font-weight:700;font-size:12px;font-family:'JetBrains Mono',monospace;}
+  .fisher-note{margin-top:auto;font-size:9.5px;line-height:1.5;color:var(--fg-dim);padding-top:8px;}
+  .fisher-note b{color:var(--gold);}
+
+  .toast{position:absolute;top:18px;left:50%;transform:translateX(-50%);
+    background:var(--bg-2);border:1px solid var(--gold);color:var(--gold);
+    padding:11px 20px;font-size:13.5px;font-weight:700;display:none;z-index:50;max-width:72%;text-align:center;line-height:1.5;
+    box-shadow:4px 4px 0 var(--bg-0);}
+  .toast .small{display:block;font-size:10px;font-weight:400;color:var(--fg-dim);margin-top:5px;}
+</style>
+</head>
+<body>
+
+<aside class="game-sidebar">
+  <div class="brand" id="brand">分界线调参师<span class="sub">MTH-06 / EEG M32</span></div>
+
+  <div class="mascot">
+    <svg id="piMascot" viewBox="0 0 48 48" aria-hidden="true">
+      <polygon id="piFace1" points="24,6 42,38 6,38" fill="none" stroke="var(--math)" stroke-width="1.6"/>
+      <polygon id="piFace2" points="24,6 42,38 24,28" fill="var(--proof)" opacity="0.45"/>
+      <polygon id="piFace3" points="24,6 6,38 24,28" fill="var(--shadow)" opacity="0.6"/>
+      <line x1="24" y1="6" x2="24" y2="28" stroke="var(--line-strong)" stroke-width="0.8"/>
+      <text id="piEq" x="24" y="36" text-anchor="middle" font-size="6.5" font-family="JetBrains Mono,monospace" fill="var(--solution)">a.f+b</text>
+    </svg>
+    <span class="pi-say" id="piSay">Pi: 用特征数画一条线判左右手 — 试到准确率最高</span>
+  </div>
+
+  <div class="roadmap">
+    <div class="rm-title" id="rmTitle">PROJECT ROUTE</div>
+    <div class="rm-stops">
+      <div class="rm-stop done"><span class="dot"></span><span class="line"></span><span id="rmS1">S1 读懂脑电</span></div>
+      <div class="rm-stop done"><span class="dot"></span><span class="line"></span><span id="rmS2">S2 清洗信号</span></div>
+      <div class="rm-stop here"><span class="dot"></span><span class="line"></span><span id="rmS3">S3 提特征 + 分类 (你在这)</span></div>
+      <div class="rm-stop"><span class="dot"></span><span class="line"></span><span id="rmS4">S4 训练评估</span></div>
+      <div class="rm-stop"><span class="dot"></span><span class="line"></span><span id="rmS5">S5 实时解码</span></div>
+      <div class="rm-stop"><span class="dot"></span><span id="rmS6">S6 脑控 Minecraft</span></div>
+    </div>
+  </div>
+
+  <p class="goal" id="goal">
+    CSP 已经把每个 trial 压成 2 个特征数 <b>(f1, f6)</b>。现在轮到分类器: <b>画一条分界线</b>把想象左手和想象右手分开。
+  </p>
+
+  <div class="param">
+    <div class="param-title" id="paramTitle">YOUR LINE</div>
+    <div class="hud-row"><span class="hud-lbl" id="lblAngle">ANGLE</span><span class="hud-val mono" id="vAngle">--</span></div>
+    <div class="hud-row"><span class="hud-lbl" id="lblShift">SHIFT</span><span class="hud-val mono" id="vShift">--</span></div>
+    <div class="hud-row"><span class="hud-lbl" id="lblBest">BEST ACC</span><span class="hud-val mono" id="vBest" style="color:var(--gold);">--</span></div>
+  </div>
+
+  <div class="endgoal">
+    <svg viewBox="0 0 32 32" aria-hidden="true">
+      <rect x="6" y="8" width="20" height="18" fill="none" stroke="var(--fg-mute)" stroke-width="1.2"/>
+      <rect x="6" y="8" width="20" height="6" fill="var(--shadow)" opacity="0.6"/>
+      <rect x="10" y="16" width="5" height="5" fill="var(--proof)" opacity="0.7"/>
+      <rect x="17" y="16" width="5" height="5" fill="var(--proof)" opacity="0.4"/>
+      <rect x="13" y="2" width="6" height="6" fill="none" stroke="var(--math)" stroke-width="1"/>
+    </svg>
+    <span id="endGoal">终点: 脑控 Minecraft 搭方块</span>
+  </div>
+
+  <button id="langBtn" class="lang-btn">中 / EN</button>
+</aside>
+
+<main class="game-main">
+  <div class="main-head">
+    <h2 class="main-title" id="mainTitle">拖动分界线: 中心拖动平移, 端点拖动转角度</h2>
+    <span class="main-hint" id="mainHint">实时看分对率</span>
+  </div>
+
+  <div class="toolbar">
+    <div class="tip" id="tip">提示: 想让分对率高, 这条线要让两类<b>中心离得远</b>、又让每类自己<b>聚得紧</b> — 这就是 Fisher 准则。试不动了就让 LDA 帮你解最优。</div>
+    <button class="lda-btn" id="ldaBtn">让 LDA 解最优</button>
+    <button class="reset-btn" id="resetBtn">重置</button>
+  </div>
+
+  <div class="stage-grid">
+    <div class="stage-box" id="featBox">
+      <div class="stage-cap" id="capFeat">特征平面 (f1, f6): 想象左手 红 / 想象右手 蓝 — 拖动黄线</div>
+      <canvas id="stageFeat"></canvas>
+    </div>
+    <div class="readout">
+      <div class="acc-card">
+        <div class="acc-head">
+          <span class="acc-lbl" id="accLbl">分对率</span>
+          <span class="acc-num mono" id="accNum">--</span>
+        </div>
+        <div class="acc-track">
+          <div class="acc-fill" id="accFill" style="width:50%"></div>
+          <div class="acc-gate" id="accGate" style="left:90%"></div>
+          <div class="acc-gate-lbl" id="accGateLbl" style="left:90%">90%</div>
+        </div>
+      </div>
+      <div class="cm-card">
+        <div class="cm-title" id="cmTitle">CONFUSION MATRIX</div>
+        <div class="cm-grid">
+          <div class="cm-cell cm-hd"></div>
+          <div class="cm-cell cm-hd" id="cmPredL">判 左</div>
+          <div class="cm-cell cm-hd" id="cmPredR">判 右</div>
+          <div class="cm-cell cm-hd" id="cmTrueL">真 左</div>
+          <div class="cm-cell hit" id="cmLL"><span class="cm-num" id="nLL">0</span></div>
+          <div class="cm-cell miss" id="cmLR"><span class="cm-num" id="nLR">0</span></div>
+          <div class="cm-cell cm-hd" id="cmTrueR">真 右</div>
+          <div class="cm-cell miss" id="cmRL"><span class="cm-num" id="nRL">0</span></div>
+          <div class="cm-cell hit" id="cmRR"><span class="cm-num" id="nRR">0</span></div>
+        </div>
+      </div>
+      <div class="fisher-card">
+        <div class="cm-title" id="fisherTitle">FISHER 准则</div>
+        <div class="fisher-row"><span class="fisher-lbl" id="fbLbl">中心间距</span><span class="fisher-val mono" id="fbVal">--</span></div>
+        <div class="fisher-row"><span class="fisher-lbl" id="fwLbl">类内散布</span><span class="fisher-val mono" id="fwVal">--</span></div>
+        <div class="fisher-row"><span class="fisher-lbl" id="fjLbl">Fisher J</span><span class="fisher-val mono" id="fjVal" style="color:var(--gold);">--</span></div>
+        <div class="fisher-note" id="fisherNote">J = 中心间距 / 类内散布。J 越大, 这条线分得越干净。<b>LDA 用一行公式直接解出 J 最大的方向。</b></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast" class="toast"></div>
+</main>
+
+<script>
+var LANG='cn';
+
+var I18N = {
+  brand:{cn:'分界线调参师', en:'Boundary Tuner'},
+  piSay:{cn:'Pi: 用特征数画一条线判左右手 — 试到准确率最高', en:'Pi: Draw a line from features to call left vs right — push the accuracy up'},
+  piSayWin:{cn:'Pi: 这就是分类器的分界线! LDA 一行公式直接解出来', en:'Pi: That is the classifier boundary! LDA solves it in one formula'},
+  rmTitle:{cn:'项目路线', en:'PROJECT ROUTE'},
+  rmS1:{cn:'S1 读懂脑电', en:'S1 Read EEG'},
+  rmS2:{cn:'S2 清洗信号', en:'S2 Clean signal'},
+  rmS3:{cn:'S3 提特征 + 分类 (你在这)', en:'S3 Features + classify (you)'},
+  rmS4:{cn:'S4 训练评估', en:'S4 Train + eval'},
+  rmS5:{cn:'S5 实时解码', en:'S5 Live decode'},
+  rmS6:{cn:'S6 脑控 Minecraft', en:'S6 Mind-control MC'},
+  goal:{cn:'CSP 已经把每个 trial 压成 2 个特征数 <b>(f1, f6)</b>。现在轮到分类器: <b>画一条分界线</b>把想象左手和想象右手分开。',
+        en:'CSP squeezed each trial into 2 feature numbers <b>(f1, f6)</b>. Now the classifier: <b>draw a boundary line</b> to split imagined-left from imagined-right.'},
+  paramTitle:{cn:'你的线', en:'YOUR LINE'},
+  lblAngle:{cn:'角度', en:'ANGLE'},
+  lblShift:{cn:'平移', en:'SHIFT'},
+  lblBest:{cn:'最佳分对率', en:'BEST ACC'},
+  endGoal:{cn:'终点: 脑控 Minecraft 搭方块', en:'Goal: mind-control Minecraft'},
+  mainTitle:{cn:'拖动分界线: 中心拖动平移, 端点拖动转角度', en:'Drag the boundary: middle to shift, endpoints to rotate'},
+  mainHint:{cn:'实时看分对率', en:'live accuracy'},
+  tip:{cn:'提示: 想让分对率高, 这条线要让两类<b>中心离得远</b>、又让每类自己<b>聚得紧</b> — 这就是 Fisher 准则。试不动了就让 LDA 帮你解最优。',
+       en:'Tip: high accuracy means a line where the two class <b>centers are far</b> and each class is <b>tightly grouped</b> — that is the Fisher criterion. Stuck? let LDA solve the optimum.'},
+  ldaBtn:{cn:'让 LDA 解最优', en:'Let LDA solve'},
+  resetBtn:{cn:'重置', en:'Reset'},
+  capFeat:{cn:'特征平面 (f1, f6): 想象左手 红 / 想象右手 蓝 — 拖动黄线', en:'Feature plane (f1, f6): imagined-left red / right blue — drag the gold line'},
+  accLbl:{cn:'分对率', en:'Accuracy'},
+  cmTitle:{cn:'混淆矩阵', en:'CONFUSION MATRIX'},
+  cmPredL:{cn:'判 左', en:'pred L'},
+  cmPredR:{cn:'判 右', en:'pred R'},
+  cmTrueL:{cn:'真 左', en:'true L'},
+  cmTrueR:{cn:'真 右', en:'true R'},
+  fisherTitle:{cn:'FISHER 准则', en:'FISHER CRITERION'},
+  fbLbl:{cn:'中心间距', en:'between'},
+  fwLbl:{cn:'类内散布', en:'within'},
+  fjLbl:{cn:'Fisher J', en:'Fisher J'},
+  fisherNote:{cn:'J = 中心间距 / 类内散布。J 越大, 这条线分得越干净。<b>LDA 用一行公式直接解出 J 最大的方向。</b>',
+              en:'J = between / within. Bigger J = cleaner split. <b>LDA solves for the J-maximizing direction in one formula.</b>'},
+  winTitle:{cn:'解锁: LDA 调参师', en:'Unlocked: LDA Tuner'},
+  winBody:{cn:'你画出了分类器的分界线 — 这是 BCI 大脑解码器的核心。<span class="small">同样一根线, 上线后就是判断你想的是左手还是右手, 再去脑控 Minecraft。</span>',
+           en:'You drew the classifier boundary — the heart of a BCI brain decoder.<span class="small">The same line, deployed live, decides whether you imagined left or right, then drives Minecraft.</span>'},
+};
+function t(k){return (I18N[k]&&I18N[k][LANG])||(I18N[k]&&I18N[k]['en'])||k;}
+
+function setText(id,key){var el=document.getElementById(id); if(el) el.textContent=t(key);}
+function setHTML(id,key){var el=document.getElementById(id); if(el) el.innerHTML=t(key);}
+
+function refreshI18N(){
+  document.getElementById('brand').innerHTML = t('brand')+'<span class="sub">MTH-06 / EEG M32</span>';
+  document.getElementById('piSay').textContent = unlocked ? t('piSayWin') : t('piSay');
+  setText('rmTitle','rmTitle');
+  setText('rmS1','rmS1'); setText('rmS2','rmS2'); setText('rmS3','rmS3');
+  setText('rmS4','rmS4'); setText('rmS5','rmS5'); setText('rmS6','rmS6');
+  setHTML('goal','goal');
+  setText('paramTitle','paramTitle');
+  setText('lblAngle','lblAngle'); setText('lblShift','lblShift'); setText('lblBest','lblBest');
+  setText('endGoal','endGoal');
+  setText('mainTitle','mainTitle'); setText('mainHint','mainHint');
+  setHTML('tip','tip');
+  setText('ldaBtn','ldaBtn'); setText('resetBtn','resetBtn');
+  setText('capFeat','capFeat');
+  setText('accLbl','accLbl');
+  setText('cmTitle','cmTitle');
+  setText('cmPredL','cmPredL'); setText('cmPredR','cmPredR');
+  setText('cmTrueL','cmTrueL'); setText('cmTrueR','cmTrueR');
+  setText('fisherTitle','fisherTitle');
+  setText('fbLbl','fbLbl'); setText('fwLbl','fwLbl'); setText('fjLbl','fjLbl');
+  setHTML('fisherNote','fisherNote');
+  document.getElementById('langBtn').textContent = LANG==='cn'?'中 / EN':'EN / 中';
+}
+document.getElementById('langBtn').addEventListener('click', function(){
+  LANG = LANG==='cn'?'en':'cn'; refreshI18N();
+});
+
+/* ---------------- 数据: 两类特征点 (f1, f6) ---------------- */
+function gauss(seed){
+  var u1 = (Math.sin(seed*12.9898)*43758.5453)%1; u1 = u1<0?u1+1:u1;
+  var u2 = (Math.sin(seed*78.233)*43758.5453)%1; u2 = u2<0?u2+1:u2;
+  if(u1<0.0001) u1=0.0001;
+  return Math.sqrt(-2*Math.log(u1))*Math.cos(2*Math.PI*u2);
+}
+function genCluster(cx, cy, sx, sy, n, seed){
+  var arr = [];
+  for(var i=0;i<n;i++){
+    arr.push([cx + sx*gauss(seed+i*2.7), cy + sy*gauss(seed+i*2.7+1.3)]);
+  }
+  return arr;
+}
+// 数据坐标系: f1 横轴, f6 纵轴, 取值大约 [-3.5, 3.5]
+// 想象左手: f1 高 f6 低 (右下)；想象右手: f1 低 f6 高 (左上) —— 与 anim 一致
+var leftPts  = genCluster( 1.7, -1.3, 0.62, 0.62, 30, 17);  // true LEFT
+var rightPts = genCluster(-1.4,  1.4, 0.60, 0.62, 30, 31);  // true RIGHT
+
+function mean(pts){var mx=0,my=0;for(var i=0;i<pts.length;i++){mx+=pts[i][0];my+=pts[i][1];}return [mx/pts.length,my/pts.length];}
+var muL = mean(leftPts);
+var muR = mean(rightPts);
+var midX = (muL[0]+muR[0])/2, midY = (muL[1]+muR[1])/2;
+
+/* Fisher 最优方向 (Sigma=I 近似): 判别方向 a = muL - muR, 分界线垂直于 a 过中点 */
+function withinScatter(){
+  // 类内散布 (沿判别方向 a 投影后的方差和)
+  var ax = muL[0]-muR[0], ay = muL[1]-muR[1];
+  var an = Math.sqrt(ax*ax+ay*ay); ax/=an; ay/=an;
+  function projVar(pts){
+    var m=0; for(var i=0;i<pts.length;i++) m+=pts[i][0]*ax+pts[i][1]*ay; m/=pts.length;
+    var v=0; for(var i=0;i<pts.length;i++){var p=pts[i][0]*ax+pts[i][1]*ay-m; v+=p*p;} return v/pts.length;
+  }
+  return projVar(leftPts)+projVar(rightPts);
+}
+var optWithin = withinScatter();
+var optBetween = Math.sqrt((muL[0]-muR[0])*(muL[0]-muR[0])+(muL[1]-muR[1])*(muL[1]-muR[1]));
+
+/* ---------------- 分界线状态: 用 (theta, shift) 表示 ----------------
+   线方向单位向量 d = (cos theta, sin theta), 线过 点 P = mid + shift * n,
+   其中 n 是线的法向 (与判别方向同向)。
+   判别: 点在法向正侧 -> LEFT, 负侧 -> RIGHT。
+*/
+// 最优解: 法向 = (muL-muR) 方向, theta = 法向角 + 90deg
+var optNormAngle = Math.atan2(muL[1]-muR[1], muL[0]-muR[0]); // 法向角
+function optTheta(){ return optNormAngle + Math.PI/2; }
+var state = { theta: 0, shift: 0 }; // 初始: 水平线过中点附近 (故意不太对)
+function resetLine(){ state.theta = 0.0; state.shift = 1.2; unlocked=false; bestAcc=0; flashUnlock=false; }
+resetLine();
+
+var unlocked = false;
+var bestAcc = 0;
+var flashUnlock = false;
+
+/* 给定 (theta, shift) 计算每个点的预测、准确率、混淆矩阵 */
+function classify(){
+  var nx = Math.cos(state.theta + Math.PI/2); // 法向 = 线方向旋90
+  var ny = Math.sin(state.theta + Math.PI/2);
+  var px = midX + state.shift*nx, py = midY + state.shift*ny; // 线上一点
+  function side(p){ return (p[0]-px)*nx + (p[1]-py)*ny; } // >0 一侧
+  // 决定哪一侧判 LEFT: 看左类中心在哪一侧
+  var leftSideSign = (muL[0]-px)*nx + (muL[1]-py)*ny >= 0 ? 1 : -1;
+  var LL=0,LR=0,RL=0,RR=0;
+  for(var i=0;i<leftPts.length;i++){
+    var s = side(leftPts[i])*leftSideSign;
+    if(s>=0) LL++; else LR++;
+  }
+  for(var i=0;i<rightPts.length;i++){
+    var s = side(rightPts[i])*leftSideSign;
+    if(s>=0) RL++; else RR++;
+  }
+  var total = leftPts.length+rightPts.length;
+  var acc = (LL+RR)/total;
+  return {LL:LL,LR:LR,RL:RL,RR:RR,acc:acc,leftSideSign:leftSideSign,nx:nx,ny:ny,px:px,py:py};
+}
+
+/* Fisher J for current line orientation (沿当前法向投影) */
+function fisherForCurrent(){
+  var nx = Math.cos(state.theta + Math.PI/2), ny = Math.sin(state.theta + Math.PI/2);
+  function projMeanVar(pts){
+    var m=0; for(var i=0;i<pts.length;i++) m+=pts[i][0]*nx+pts[i][1]*ny; m/=pts.length;
+    var v=0; for(var i=0;i<pts.length;i++){var p=pts[i][0]*nx+pts[i][1]*ny-m; v+=p*p;} return [m,v/pts.length];
+  }
+  var L=projMeanVar(leftPts), R=projMeanVar(rightPts);
+  var between = Math.abs(L[0]-R[0]);
+  var within = L[1]+R[1];
+  var J = within>1e-6 ? between/Math.sqrt(within) : 0;
+  return {between:between, within:within, J:J};
+}
+
+/* ---------------- canvas 绘制 ---------------- */
+var canvas = document.getElementById('stageFeat');
+var ctx = canvas.getContext('2d');
+var W=0,H=0,DPR=1, PADL=46, PADR=18, PADT=18, PADB=40;
+function resize(){
+  var rect = canvas.parentElement.getBoundingClientRect();
+  if(rect.width<1||rect.height<1) return;
+  DPR = window.devicePixelRatio||1;
+  canvas.width = rect.width*DPR; canvas.height = rect.height*DPR;
+  canvas.style.width = rect.width+'px'; canvas.style.height = rect.height+'px';
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  W = rect.width; H = rect.height;
+}
+window.addEventListener('resize', resize);
+
+// 数据坐标 <-> 屏幕坐标
+var DATA_MIN=-3.6, DATA_MAX=3.6;
+function dataToScreenX(fx){ var pw=W-PADL-PADR; return PADL + (fx-DATA_MIN)/(DATA_MAX-DATA_MIN)*pw; }
+function dataToScreenY(fy){ var ph=H-PADT-PADB; return PADT + (DATA_MAX-fy)/(DATA_MAX-DATA_MIN)*ph; }
+function screenToDataX(sx){ var pw=W-PADL-PADR; return DATA_MIN + (sx-PADL)/pw*(DATA_MAX-DATA_MIN); }
+function screenToDataY(sy){ var ph=H-PADT-PADB; return DATA_MAX - (sy-PADT)/ph*(DATA_MAX-DATA_MIN); }
+
+// 拿到当前线在屏幕上的两个端点 + 中心点
+function lineScreenGeom(){
+  var nx = Math.cos(state.theta+Math.PI/2), ny = Math.sin(state.theta+Math.PI/2);
+  var cxD = midX + state.shift*nx, cyD = midY + state.shift*ny; // 线中心(数据)
+  var dx = Math.cos(state.theta), dy = Math.sin(state.theta);   // 线方向(数据)
+  var L = 3.2; // 半长(数据单位)
+  var aD = [cxD - dx*L, cyD - dy*L];
+  var bD = [cxD + dx*L, cyD + dy*L];
+  return {
+    cx: dataToScreenX(cxD), cy: dataToScreenY(cyD),
+    ax: dataToScreenX(aD[0]), ay: dataToScreenY(aD[1]),
+    bx: dataToScreenX(bD[0]), by: dataToScreenY(bD[1]),
+  };
+}
+
+function draw(){
+  if(W<2||H<2){requestAnimationFrame(draw);return;}
+  ctx.clearRect(0,0,W,H);
+  ctx.fillStyle = getCSS('--bg-1'); ctx.fillRect(0,0,W,H);
+
+  // 网格
+  ctx.strokeStyle = getCSS('--line'); ctx.lineWidth=1;
+  for(var g=-3;g<=3;g++){
+    var sx=dataToScreenX(g), sy=dataToScreenY(g);
+    ctx.beginPath(); ctx.moveTo(sx,PADT); ctx.lineTo(sx,H-PADB); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(PADL,sy); ctx.lineTo(W-PADR,sy); ctx.stroke();
+  }
+  // 轴标签
+  ctx.fillStyle = getCSS('--fg-mute'); ctx.font='600 11px JetBrains Mono,monospace';
+  ctx.textAlign='center'; ctx.fillText('f1  (top CSP)', (PADL+W-PADR)/2, H-14);
+  ctx.save(); ctx.translate(14,(PADT+H-PADB)/2); ctx.rotate(-Math.PI/2);
+  ctx.fillText('f6  (bottom CSP)',0,0); ctx.restore();
+
+  var res = classify();
+
+  // 决策半平面着色 (淡)
+  drawHalfplaneTint(res);
+
+  // 数据点
+  drawPoints(leftPts, '--cls-left', res, true);
+  drawPoints(rightPts, '--cls-right', res, false);
+
+  // 两类中心 (星)
+  drawCenter(muL, '--cls-left', 'uL');
+  drawCenter(muR, '--cls-right', 'uR');
+
+  // 分界线 + 手柄
+  drawLine(res);
+
+  // 图例
+  ctx.font='700 11px Inter,sans-serif'; ctx.textAlign='left';
+  ctx.fillStyle=getCSS('--cls-left'); ctx.fillText('● '+(LANG==='cn'?'想象左手':'imagined LEFT'), PADL+4, PADT+14);
+  ctx.fillStyle=getCSS('--cls-right'); ctx.fillText('● '+(LANG==='cn'?'想象右手':'imagined RIGHT'), PADL+150, PADT+14);
+
+  // 更新读数
+  updateReadout(res);
+  requestAnimationFrame(draw);
+}
+
+function getCSS(v){ return getComputedStyle(document.documentElement).getPropertyValue(v).trim(); }
+
+function drawHalfplaneTint(res){
+  // 用线把矩形分两半填色
+  var geo = lineScreenGeom();
+  // 法向屏幕方向
+  var nxs = geo.bx-geo.ax, nys = geo.by-geo.ay;
+  // perpendicular (法向) 在屏幕: rotate dir by 90
+  var pnx = -(geo.by-geo.ay), pny = (geo.bx-geo.ax);
+  var nn = Math.sqrt(pnx*pnx+pny*pny); pnx/=nn; pny/=nn;
+  // 判 LEFT 一侧的中心屏幕点
+  var clxScreen = dataToScreenX(muL[0]), clyScreen = dataToScreenY(muL[1]);
+  // 沿 pn 远移大距离构造两个多边形覆盖; 简化: 用裁剪
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(PADL,PADT,W-PADL-PADR,H-PADT-PADB);
+  ctx.clip();
+  var big=4000;
+  // LEFT 半平面: 朝向 muL 的那一侧
+  var sgn = ((clxScreen-geo.cx)*pnx + (clyScreen-geo.cy)*pny) >= 0 ? 1 : -1;
+  ctx.fillStyle = withAlpha('--cls-left',0.07);
+  ctx.beginPath();
+  ctx.moveTo(geo.ax+pnx*sgn*big, geo.ay+pny*sgn*big);
+  ctx.lineTo(geo.bx+pnx*sgn*big, geo.by+pny*sgn*big);
+  ctx.lineTo(geo.bx, geo.by);
+  ctx.lineTo(geo.ax, geo.ay);
+  ctx.closePath(); ctx.fill();
+  ctx.fillStyle = withAlpha('--cls-right',0.07);
+  ctx.beginPath();
+  ctx.moveTo(geo.ax-pnx*sgn*big, geo.ay-pny*sgn*big);
+  ctx.lineTo(geo.bx-pnx*sgn*big, geo.by-pny*sgn*big);
+  ctx.lineTo(geo.bx, geo.by);
+  ctx.lineTo(geo.ax, geo.ay);
+  ctx.closePath(); ctx.fill();
+  ctx.restore();
+}
+function withAlpha(v,a){
+  // oklch(...) -> oklch(... / a) hack: just use rgba fallback via temp element
+  var base=getCSS(v);
+  if(base.indexOf('oklch')===0){ return base.replace(/\)\s*$/, ' / '+a+')'); }
+  return base;
+}
+
+function drawPoints(pts, colorVar, res, isLeftClass){
+  var nx=res.nx, ny=res.ny, px=res.px, py=res.py, sgn=res.leftSideSign;
+  for(var i=0;i<pts.length;i++){
+    var sx=dataToScreenX(pts[i][0]), sy=dataToScreenY(pts[i][1]);
+    var s = ((pts[i][0]-px)*nx+(pts[i][1]-py)*ny)*sgn;
+    var predLeft = s>=0;
+    var correct = predLeft === isLeftClass;
+    ctx.beginPath(); ctx.arc(sx,sy,4.5,0,Math.PI*2);
+    ctx.fillStyle=getCSS(colorVar); ctx.fill();
+    ctx.lineWidth=1.6;
+    ctx.strokeStyle = correct ? getCSS('--ok') : getCSS('--bad');
+    ctx.stroke();
+  }
+}
+function drawCenter(mu, colorVar, label){
+  var sx=dataToScreenX(mu[0]), sy=dataToScreenY(mu[1]);
+  ctx.save();
+  ctx.beginPath(); ctx.arc(sx,sy,9,0,Math.PI*2);
+  ctx.fillStyle=getCSS(colorVar); ctx.fill();
+  ctx.lineWidth=2; ctx.strokeStyle=getCSS('--fg'); ctx.stroke();
+  ctx.fillStyle=getCSS('--bg-0'); ctx.font='800 9px JetBrains Mono,monospace';
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.fillText(label, sx, sy+0.5);
+  ctx.restore(); ctx.textBaseline='alphabetic';
+}
+function drawLine(res){
+  var geo = lineScreenGeom();
+  var acc = res.acc;
+  var col = acc>=0.9 ? getCSS('--gold') : getCSS('--math');
+  ctx.lineWidth=3; ctx.strokeStyle=col;
+  ctx.beginPath(); ctx.moveTo(geo.ax,geo.ay); ctx.lineTo(geo.bx,geo.by); ctx.stroke();
+  // 端点手柄
+  [[geo.ax,geo.ay],[geo.bx,geo.by]].forEach(function(p){
+    ctx.beginPath(); ctx.arc(p[0],p[1],7,0,Math.PI*2);
+    ctx.fillStyle=getCSS('--bg-0'); ctx.fill();
+    ctx.lineWidth=2.4; ctx.strokeStyle=col; ctx.stroke();
+  });
+  // 中心手柄 (方块, 提示可拖平移)
+  ctx.save();
+  ctx.translate(geo.cx,geo.cy); ctx.rotate(state.theta);
+  ctx.fillStyle=getCSS('--bg-0'); ctx.strokeStyle=col; ctx.lineWidth=2.4;
+  ctx.fillRect(-6,-6,12,12); ctx.strokeRect(-6,-6,12,12);
+  ctx.restore();
+}
+
+/* ---------------- 读数更新 ---------------- */
+function updateReadout(res){
+  var accPct = Math.round(res.acc*100);
+  document.getElementById('accNum').textContent = accPct+'%';
+  var fill=document.getElementById('accFill');
+  fill.style.width = accPct+'%';
+  if(res.acc>=0.9) fill.classList.add('good'); else fill.classList.remove('good');
+  // 混淆矩阵
+  document.getElementById('nLL').textContent=res.LL;
+  document.getElementById('nLR').textContent=res.LR;
+  document.getElementById('nRL').textContent=res.RL;
+  document.getElementById('nRR').textContent=res.RR;
+  // Fisher
+  var f = fisherForCurrent();
+  document.getElementById('fbVal').textContent = f.between.toFixed(2);
+  document.getElementById('fwVal').textContent = f.within.toFixed(2);
+  document.getElementById('fjVal').textContent = f.J.toFixed(2);
+  // 左栏读数
+  var angDeg = ((state.theta*180/Math.PI)%360+360)%360;
+  document.getElementById('vAngle').textContent = angDeg.toFixed(0)+' deg';
+  document.getElementById('vShift').textContent = state.shift.toFixed(2);
+  if(res.acc>bestAcc){ bestAcc=res.acc; }
+  document.getElementById('vBest').textContent = Math.round(bestAcc*100)+'%';
+
+  // 解锁判定
+  if(!unlocked && res.acc>=0.9){
+    unlocked=true; showWin();
+  }
+}
+
+function showWin(){
+  var toast=document.getElementById('toast');
+  toast.innerHTML = '<b>'+t('winTitle')+'</b><br>'+t('winBody');
+  toast.style.display='block';
+  document.getElementById('piSay').textContent = t('piSayWin');
+  document.getElementById('rmS4');
+  setTimeout(function(){ toast.style.display='none'; }, 6500);
+}
+
+/* ---------------- LDA 自动求解 (动画到最优) ---------------- */
+var animating=false;
+function solveLDA(){
+  if(animating) return;
+  animating=true;
+  var startTheta=state.theta, startShift=state.shift;
+  var targetTheta=optTheta();
+  // 归一化 target 角度到与 start 最近
+  while(targetTheta-startTheta>Math.PI) targetTheta-=Math.PI;
+  while(targetTheta-startTheta<-Math.PI) targetTheta+=Math.PI;
+  var targetShift=0; // 最优线过中点 -> shift 0
+  var dur=1100, t0=performance.now();
+  function step(now){
+    var p=Math.min(1,(now-t0)/dur);
+    var e=p<0.5?2*p*p:1-Math.pow(-2*p+2,2)/2; // easeInOut
+    state.theta = startTheta + (targetTheta-startTheta)*e;
+    state.shift = startShift + (targetShift-startShift)*e;
+    if(p<1){ requestAnimationFrame(step); }
+    else { animating=false; }
+  }
+  requestAnimationFrame(step);
+}
+document.getElementById('ldaBtn').addEventListener('click', solveLDA);
+document.getElementById('resetBtn').addEventListener('click', function(){
+  resetLine(); document.getElementById('piSay').textContent=t('piSay');
+  document.getElementById('toast').style.display='none';
+});
+
+/* ---------------- 拖拽交互 (核心调参, 长在舞台上) ---------------- */
+var drag=null; // 'a' | 'b' | 'mid'
+function pointerPos(ev){
+  var rect=canvas.getBoundingClientRect();
+  var cx = (ev.touches?ev.touches[0].clientX:ev.clientX)-rect.left;
+  var cy = (ev.touches?ev.touches[0].clientY:ev.clientY)-rect.top;
+  return {x:cx,y:cy};
+}
+function hitTest(p){
+  var geo=lineScreenGeom();
+  function near(x,y,r){ return (p.x-x)*(p.x-x)+(p.y-y)*(p.y-y) <= r*r; }
+  if(near(geo.cx,geo.cy,15)) return 'mid';
+  if(near(geo.ax,geo.ay,15)) return 'a';
+  if(near(geo.bx,geo.by,15)) return 'b';
+  // 点中线身也算转动 (拿离中心远的那端)
+  // 线段距离
+  var dx=geo.bx-geo.ax, dy=geo.by-geo.ay; var L2=dx*dx+dy*dy;
+  if(L2>0){
+    var tt=((p.x-geo.ax)*dx+(p.y-geo.ay)*dy)/L2; tt=Math.max(0,Math.min(1,tt));
+    var px=geo.ax+tt*dx, py=geo.ay+tt*dy;
+    if(near(px,py,12)) return 'mid';
+  }
+  return null;
+}
+function onDown(ev){
+  var p=pointerPos(ev);
+  var h=hitTest(p);
+  if(h){ drag=h; ev.preventDefault(); }
+}
+function onMove(ev){
+  if(!drag) {
+    // hover cursor
+    var hp=pointerPos(ev);
+    canvas.style.cursor = hitTest(hp) ? 'grab' : 'crosshair';
+    return;
+  }
+  if(animating) return;
+  var p=pointerPos(ev);
+  var fx=screenToDataX(p.x), fy=screenToDataY(p.y);
+  if(drag==='mid'){
+    // 平移: 把线中心投影到法向, 更新 shift; 角度不变
+    var nx=Math.cos(state.theta+Math.PI/2), ny=Math.sin(state.theta+Math.PI/2);
+    state.shift = (fx-midX)*nx + (fy-midY)*ny;
+    state.shift = Math.max(-3, Math.min(3, state.shift));
+  } else {
+    // 转角度: 端点跟随指针 -> 计算线方向
+    var cxD = midX + state.shift*Math.cos(state.theta+Math.PI/2);
+    var cyD = midY + state.shift*Math.sin(state.theta+Math.PI/2);
+    var ang = Math.atan2(fy-cyD, fx-cxD);
+    if(drag==='a') ang += Math.PI;
+    state.theta = ang;
+  }
+  ev.preventDefault();
+}
+function onUp(){ drag=null; canvas.style.cursor='crosshair'; }
+canvas.addEventListener('mousedown', onDown);
+window.addEventListener('mousemove', onMove);
+window.addEventListener('mouseup', onUp);
+canvas.addEventListener('touchstart', onDown, {passive:false});
+window.addEventListener('touchmove', onMove, {passive:false});
+window.addEventListener('touchend', onUp);
+
+/* mascot Pi 旋转 */
+var piT=0;
+function spinPi(){
+  piT+=0.02;
+  var s=0.86+0.14*Math.cos(piT);
+  var m=document.getElementById('piMascot');
+  if(m) m.style.transform='rotateY('+(piT*40)+'deg)';
+  requestAnimationFrame(spinPi);
+}
+spinPi();
+
+/* boot */
+resize(); setTimeout(resize,200); setTimeout(resize,600);
+if(document.fonts&&document.fonts.ready){ document.fonts.ready.then(resize); }
+refreshI18N();
+requestAnimationFrame(draw);
+</script>
+</body>
+</html>

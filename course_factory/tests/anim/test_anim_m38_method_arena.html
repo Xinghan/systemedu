@@ -1,0 +1,593 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>M38 方法擂台 — 比完所有方法，选出带去 S4 的主力</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&family=Noto+Sans+SC:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    /* Industrial Atelier — Claude warm cream + coral */
+    --paper:     #FAF9F5;
+    --paper-2:   #F1EDDF;
+    --card:      #FFFFFF;
+    --ink:       #191814;
+    --ink-2:     #2B2924;
+    --sub:       #6B6557;
+    --sub-2:     #9D978A;
+    --border:    #EBE5D6;
+    --border-2:  #D9D1BD;
+    --hairline:  #F2EDE0;
+
+    --primary:       #D97757;
+    --primary-ink:   #9A4A2E;
+    --primary-soft:  #F8EDE5;
+    --primary-line:  #ECCFB8;
+
+    /* Domain accent — computing (信号解码 / 分类器) */
+    --computing:      #C04E68;
+    --computing-soft: #F4DDE3;
+    --computing-line: #E2B4C0;
+    --computing-ink:  #8A3349;
+
+    --shadow-sm: 0 1px 2px 0 rgba(25,24,20,.04);
+    --shadow:    0 1px 3px 0 rgba(25,24,20,.06), 0 1px 2px -1px rgba(25,24,20,.04);
+    --shadow-md: 0 4px 8px -2px rgba(25,24,20,.06), 0 2px 4px -2px rgba(25,24,20,.04);
+    --shadow-lg: 0 12px 24px -6px rgba(25,24,20,.1), 0 4px 8px -4px rgba(25,24,20,.05);
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    height:100vh;overflow:hidden;
+    background:var(--paper);
+    color:var(--ink);
+    font-family:'Inter','PingFang SC','Noto Sans SC',system-ui,sans-serif;
+    display:flex;
+    -webkit-font-smoothing:antialiased;
+    text-rendering:optimizeLegibility;
+  }
+  .mono{font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,monospace;}
+
+  /* ---------- Sidebar ---------- */
+  .sidebar{
+    width:200px;flex-shrink:0;height:100vh;
+    background:var(--card);
+    border-right:1px solid var(--border);
+    display:flex;flex-direction:column;
+    padding:22px 18px;gap:16px;
+  }
+  .brand{display:flex;flex-direction:column;gap:10px;}
+  .brand-mark{
+    width:38px;height:38px;border-radius:10px;
+    background:var(--computing-soft);
+    border:1px solid var(--computing-line);
+    display:flex;align-items:center;justify-content:center;
+  }
+  .brand-mark svg{width:22px;height:22px;}
+  .brand-tag{
+    font-size:10px;letter-spacing:.14em;text-transform:uppercase;
+    color:var(--computing-ink);font-weight:600;
+  }
+  .brand-title{font-size:15px;font-weight:700;color:var(--ink);line-height:1.35;}
+  .brand-sub{font-size:11px;color:var(--sub-2);line-height:1.5;}
+
+  /* ---------- Roadmap rail in sidebar ---------- */
+  .rail{display:flex;flex-direction:column;gap:0;margin-top:2px;}
+  .rail-h{
+    font-size:10px;letter-spacing:.12em;text-transform:uppercase;
+    color:var(--sub-2);font-weight:600;margin-bottom:8px;
+  }
+  .rail-row{display:flex;gap:9px;align-items:flex-start;position:relative;padding-bottom:9px;}
+  .rail-row:not(:last-child)::before{
+    content:"";position:absolute;left:5px;top:13px;bottom:-1px;width:1.5px;background:var(--border-2);
+  }
+  .rail-dot{
+    width:11px;height:11px;border-radius:50%;flex-shrink:0;margin-top:2px;z-index:1;
+    background:var(--card);border:2px solid var(--border-2);
+  }
+  .rail-row.done .rail-dot{background:var(--computing-soft);border-color:var(--computing-line);}
+  .rail-row.now .rail-dot{
+    background:var(--primary);border-color:var(--primary);
+    animation:dotbeat 2.8s ease-in-out infinite;
+  }
+  @keyframes dotbeat{
+    0%,100%{box-shadow:0 0 0 0 rgba(217,119,87,.30);}
+    50%{box-shadow:0 0 0 5px rgba(217,119,87,0);}
+  }
+  .rail-txt{display:flex;flex-direction:column;gap:1px;}
+  .rail-tag{font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:700;color:var(--sub-2);letter-spacing:.04em;}
+  .rail-row.now .rail-tag{color:var(--primary-ink);}
+  .rail-row.done .rail-tag{color:var(--computing-ink);}
+  .rail-name{font-size:11px;color:var(--sub);line-height:1.3;}
+  .rail-row.now .rail-name{color:var(--ink);font-weight:600;}
+  .rail-fin{
+    margin-top:2px;font-size:9px;font-weight:700;letter-spacing:.06em;
+    color:var(--primary-ink);text-transform:uppercase;
+  }
+
+  .sidebar-foot{margin-top:auto;display:flex;flex-direction:column;gap:10px;}
+  .lang-btn{
+    appearance:none;border:1px solid var(--border-2);background:var(--paper);
+    color:var(--ink-2);font-size:11.5px;font-weight:600;
+    padding:7px 12px;border-radius:8px;cursor:pointer;
+    display:flex;align-items:center;justify-content:center;gap:6px;
+    transition:background .2s ease,border-color .2s ease;
+    font-family:inherit;
+  }
+  .lang-btn:hover{background:var(--paper-2);border-color:var(--computing-line);}
+  .lang-btn .dotmono{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--sub-2);}
+
+  /* ---------- Stage ---------- */
+  .stage{flex:1;height:100vh;overflow:hidden;display:flex;flex-direction:column;padding:22px 30px 20px;gap:14px;}
+
+  /* ---------- Celebration stamp head ---------- */
+  .head{display:flex;align-items:flex-start;gap:18px;flex-shrink:0;}
+  .head-main{display:flex;flex-direction:column;gap:7px;flex:1;}
+  .head-q{
+    display:inline-flex;align-items:center;gap:8px;
+    font-size:11.5px;font-weight:600;letter-spacing:.04em;
+    color:var(--computing-ink);
+  }
+  .head-q .qmark{
+    width:18px;height:18px;border-radius:5px;background:var(--computing-soft);
+    border:1px solid var(--computing-line);
+    display:inline-flex;align-items:center;justify-content:center;
+    font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;color:var(--computing-ink);
+  }
+  .head h1{margin:0;font-size:24px;font-weight:700;line-height:1.2;letter-spacing:-.01em;}
+  .head h1 .accent{color:var(--primary-ink);}
+  .head-sub{font-size:13px;color:var(--sub);line-height:1.5;max-width:640px;}
+
+  .stamp{
+    flex-shrink:0;width:158px;
+    background:var(--primary-soft);border:1.5px solid var(--primary-line);
+    border-radius:13px;padding:13px 14px;text-align:center;
+    position:relative;
+    animation:stampbreath 3.4s ease-in-out infinite;
+  }
+  @keyframes stampbreath{
+    0%,100%{box-shadow:0 0 0 0 rgba(217,119,87,.18); transform:scale(1);}
+    50%{box-shadow:0 0 0 6px rgba(217,119,87,0); transform:scale(1.018);}
+  }
+  .stamp-ring{
+    width:42px;height:42px;border-radius:50%;margin:0 auto 7px;
+    background:var(--primary);border:2px solid var(--primary-ink);
+    display:flex;align-items:center;justify-content:center;
+  }
+  .stamp-ring svg{width:24px;height:24px;}
+  .stamp-t{font-size:11px;font-weight:700;color:var(--primary-ink);line-height:1.35;}
+  .stamp-mono{font-family:'JetBrains Mono',monospace;font-size:9px;font-weight:700;letter-spacing:.1em;color:var(--primary-ink);text-transform:uppercase;margin-top:5px;}
+
+  /* ---------- Arena body: radar + cards ---------- */
+  .arena{flex:1;display:flex;gap:18px;min-height:0;}
+
+  .radar-wrap{
+    flex:0 0 360px;
+    background:var(--card);border:1px solid var(--border);border-radius:14px;
+    box-shadow:var(--shadow-sm);
+    padding:14px 16px 12px;display:flex;flex-direction:column;
+  }
+  .panel-label{
+    display:flex;align-items:center;gap:9px;margin-bottom:6px;
+    font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;
+    color:var(--sub-2);font-weight:600;
+  }
+  .panel-label .bar{width:22px;height:2px;background:var(--primary);border-radius:2px;}
+  .radar-svg{flex:1;width:100%;min-height:0;}
+
+  .legend{display:flex;gap:13px;justify-content:center;margin-top:4px;flex-wrap:wrap;}
+  .leg{display:inline-flex;align-items:center;gap:6px;font-size:11px;color:var(--sub);font-weight:600;cursor:default;
+    transition:color .18s ease;}
+  .leg .sw{width:11px;height:11px;border-radius:3px;flex-shrink:0;}
+  .leg.dim{opacity:.4;}
+
+  /* radar method shapes — controlled by body class */
+  .poly{transition:opacity .25s ease,fill-opacity .25s ease;}
+  body.focus-csp .poly:not(.poly-csp){opacity:.12;}
+  body.focus-rie .poly:not(.poly-rie){opacity:.12;}
+  body.focus-net .poly:not(.poly-net){opacity:.12;}
+  body.focus-csp .leg:not(.leg-csp),
+  body.focus-rie .leg:not(.leg-rie),
+  body.focus-net .leg:not(.leg-net){opacity:.4;}
+
+  /* ---------- Method cards ---------- */
+  .cards{flex:1;display:flex;flex-direction:column;gap:11px;min-height:0;}
+  .mcard{
+    flex:1;background:var(--card);border:1px solid var(--border);border-radius:13px;
+    box-shadow:var(--shadow-sm);padding:13px 15px;
+    display:flex;flex-direction:column;gap:6px;position:relative;overflow:hidden;
+    cursor:default;
+    transition:transform .2s ease,box-shadow .2s ease,border-color .2s ease;
+  }
+  .mcard::before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;}
+  .mcard.csp::before{background:#C04E68;}
+  .mcard.rie::before{background:#527B95;}
+  .mcard.net::before{background:#C89B3C;}
+  .mcard:hover{transform:translateY(-2px);box-shadow:var(--shadow-md);border-color:var(--border-2);}
+  .mcard.winner{border-color:var(--primary-line);background:var(--primary-soft);}
+  .mcard.winner:hover{border-color:var(--primary);}
+
+  .mc-top{display:flex;align-items:center;gap:10px;}
+  .mc-badge{
+    font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:700;
+    padding:2px 8px;border-radius:6px;letter-spacing:.04em;flex-shrink:0;
+  }
+  .mcard.csp .mc-badge{background:var(--computing-soft);border:1px solid var(--computing-line);color:var(--computing-ink);}
+  .mcard.rie .mc-badge{background:#DEE5EC;border:1px solid #B9CAD6;color:#3B5E73;}
+  .mcard.net .mc-badge{background:#F2E6C9;border:1px solid #E0CC93;color:#7A621F;}
+  .mc-name{font-size:14.5px;font-weight:700;color:var(--ink);line-height:1.2;}
+  .mc-name .sm{font-size:11.5px;font-weight:500;color:var(--sub-2);margin-left:6px;}
+  .mc-tag{
+    margin-left:auto;font-size:10.5px;font-weight:600;color:var(--sub);
+    display:flex;align-items:center;gap:5px;
+  }
+  .winner-pill{
+    font-size:9.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;
+    background:var(--primary);color:#fff;padding:2px 8px;border-radius:6px;
+  }
+  .mc-desc{font-size:12px;color:var(--sub);line-height:1.5;}
+  .mc-meta{display:flex;gap:7px;margin-top:auto;flex-wrap:wrap;}
+  .pmchip{
+    font-size:10.5px;font-weight:600;color:var(--ink-2);
+    background:var(--paper-2);border:1px solid var(--border);
+    padding:3px 9px;border-radius:6px;display:inline-flex;align-items:center;gap:5px;
+  }
+  .pmchip .k{color:var(--sub-2);font-family:'JetBrains Mono',monospace;font-size:9.5px;}
+
+  /* ---------- Decision + handoff bottom ---------- */
+  .bottom{flex-shrink:0;display:flex;gap:14px;}
+  .decision{
+    flex:1;background:var(--paper-2);border:1px solid var(--border-2);border-radius:13px;
+    padding:12px 16px;display:flex;align-items:center;gap:14px;
+  }
+  .dec-ic{
+    width:38px;height:38px;border-radius:10px;flex-shrink:0;
+    background:var(--computing-soft);border:1px solid var(--computing-line);
+    display:flex;align-items:center;justify-content:center;
+  }
+  .dec-ic svg{width:22px;height:22px;}
+  .dec-body{display:flex;flex-direction:column;gap:2px;}
+  .dec-h{font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--computing-ink);font-weight:700;}
+  .dec-t{font-size:13px;font-weight:700;color:var(--ink);line-height:1.35;}
+  .dec-reasons{display:flex;gap:7px;margin-left:auto;flex-wrap:wrap;}
+  .rchip{
+    font-size:10.5px;font-weight:600;color:var(--computing-ink);
+    background:var(--card);border:1px solid var(--computing-line);
+    padding:5px 10px;border-radius:7px;display:inline-flex;align-items:center;gap:5px;
+  }
+  .rchip svg{width:13px;height:13px;flex-shrink:0;}
+
+  .handoff{
+    flex:0 0 320px;background:var(--primary-soft);border:1.5px solid var(--primary-line);
+    border-radius:13px;padding:12px 16px;display:flex;align-items:center;gap:13px;
+  }
+  .ho-ic{
+    width:38px;height:38px;border-radius:10px;flex-shrink:0;
+    background:var(--primary);border:1px solid var(--primary-ink);
+    display:flex;align-items:center;justify-content:center;
+  }
+  .ho-ic svg{width:22px;height:22px;}
+  .ho-body{display:flex;flex-direction:column;gap:2px;}
+  .ho-h{font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--primary-ink);font-weight:700;}
+  .ho-t{font-size:13px;font-weight:700;color:var(--ink);line-height:1.35;}
+  .ho-d{font-size:11px;color:var(--primary-ink);line-height:1.4;}
+
+  .en{display:none;}
+  body.lang-en .cn{display:none;}
+  body.lang-en .en{display:inline;}
+  body.lang-en .en.block{display:block;}
+</style>
+</head>
+<body>
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-mark">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#8A3349" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M4 7l4 4-4 4"/><path d="M11 17h9"/>
+          <path d="M14 7l-2 5 4 0-2 5"/>
+        </svg>
+      </div>
+      <div>
+        <div class="brand-tag mono">M38 · ARENA</div>
+        <div class="brand-title"><span class="cn">方法擂台</span><span class="en">Method arena</span></div>
+        <div class="brand-sub"><span class="cn">比完所有方法，选出主力</span><span class="en">Compare all, pick the champion</span></div>
+      </div>
+    </div>
+
+    <div class="rail">
+      <div class="rail-h"><span class="cn">学习路线</span><span class="en">Roadmap</span></div>
+
+      <div class="rail-row done">
+        <span class="rail-dot"></span>
+        <span class="rail-txt"><span class="rail-tag mono">S1</span><span class="rail-name"><span class="cn">认识脑波</span><span class="en">Meet waves</span></span></span>
+      </div>
+      <div class="rail-row done">
+        <span class="rail-dot"></span>
+        <span class="rail-txt"><span class="rail-tag mono">S2</span><span class="rail-name"><span class="cn">清洁信号</span><span class="en">Clean signal</span></span></span>
+      </div>
+      <div class="rail-row now">
+        <span class="rail-dot"></span>
+        <span class="rail-txt">
+          <span class="rail-tag mono">S3</span>
+          <span class="rail-name"><span class="cn">找特征 · 训分类器</span><span class="en">Features + classifier</span></span>
+          <span class="rail-fin"><span class="cn">你在这 · 收官</span><span class="en">you are here · finale</span></span>
+        </span>
+      </div>
+      <div class="rail-row">
+        <span class="rail-dot"></span>
+        <span class="rail-txt"><span class="rail-tag mono">S4</span><span class="rail-name"><span class="cn">用自己的脑实战</span><span class="en">Run on your brain</span></span></span>
+      </div>
+      <div class="rail-row">
+        <span class="rail-dot"></span>
+        <span class="rail-txt"><span class="rail-tag mono">S5</span><span class="rail-name"><span class="cn">接 Minecraft</span><span class="en">Connect Minecraft</span></span></span>
+      </div>
+      <div class="rail-row">
+        <span class="rail-dot"></span>
+        <span class="rail-txt"><span class="rail-tag mono">S6</span><span class="rail-name"><span class="cn">分享作品</span><span class="en">Share it</span></span></span>
+      </div>
+    </div>
+
+    <div class="sidebar-foot">
+      <button class="lang-btn" id="langBtn" type="button">
+        <span class="cn">EN / 中文</span><span class="en">中文 / EN</span>
+        <span class="dotmono">A/文</span>
+      </button>
+    </div>
+  </aside>
+
+  <main class="stage">
+    <header class="head">
+      <div class="head-main">
+        <div class="head-q">
+          <span class="qmark mono">?</span>
+          <span class="cn">比较所有方法，到底哪个最好？</span><span class="en">Compare every method — which one is best?</span>
+        </div>
+        <h1>
+          <span class="cn">三大解码法同台<span class="accent">打擂</span>，选出带去 S4 的<span class="accent">主力</span></span>
+          <span class="en">Three decoders <span class="accent">enter the arena</span> — pick the <span class="accent">champion</span> for S4</span>
+        </h1>
+        <p class="head-sub">
+          <span class="cn">S3 找特征、训分类器的长征到这里收官。把三种主流方法在五个维度上摆到一起，看清各自的强弱，再选出一个带进 S4 用自己的大脑实战。</span>
+          <span class="en block">S3's long march — find features, train a classifier — ends here. Line up three mainstream methods across five dimensions, see the trade-offs, then pick one to carry into S4 on your own brain.</span>
+        </p>
+      </div>
+      <div class="stamp">
+        <div class="stamp-ring">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 3l2.3 4.7 5.2.8-3.8 3.7.9 5.2L12 15.8 7.4 18.2l.9-5.2L4.5 9.3l5.2-.8z"/>
+          </svg>
+        </div>
+        <div class="stamp-t"><span class="cn">选出带去 S4 的主力方法</span><span class="en">Champion chosen for S4</span></div>
+        <div class="stamp-mono">S3 · FINALE</div>
+      </div>
+    </header>
+
+    <section class="arena">
+      <!-- Radar -->
+      <div class="radar-wrap">
+        <div class="panel-label"><span class="bar"></span><span class="cn">五维对比雷达</span><span class="en">5-dimension radar</span></div>
+        <svg class="radar-svg" id="radar" viewBox="0 0 360 290" preserveAspectRatio="xMidYMid meet" role="img" aria-label="radar">
+          <!-- grid + polygons injected by script -->
+        </svg>
+        <div class="legend" id="legend">
+          <span class="leg leg-csp" data-m="csp"><span class="sw" style="background:#C04E68"></span><span class="cn">CSP + LDA</span><span class="en">CSP + LDA</span></span>
+          <span class="leg leg-rie" data-m="rie"><span class="sw" style="background:#527B95"></span><span class="cn">黎曼</span><span class="en">Riemannian</span></span>
+          <span class="leg leg-net" data-m="net"><span class="sw" style="background:#C89B3C"></span><span class="cn">EEGNet</span><span class="en">EEGNet</span></span>
+        </div>
+      </div>
+
+      <!-- Method cards -->
+      <div class="cards">
+
+        <div class="mcard csp winner" data-m="csp">
+          <div class="mc-top">
+            <span class="mc-badge">CSP+LDA</span>
+            <span class="mc-name"><span class="cn">共空间模式 + 线性判别</span><span class="en">CSP + LDA</span></span>
+            <span class="mc-tag"><span class="winner-pill"><span class="cn">主力</span><span class="en">champion</span></span></span>
+          </div>
+          <div class="mc-desc">
+            <span class="cn">先用 CSP 把左右手想象的差异放大成几个特征，再用 LDA 画一条直线分两类。经典、轻巧，几十条数据就能训出能用的分类器。</span>
+            <span class="en">CSP amplifies the left-vs-right difference into a few features; LDA draws a line to split two classes. Classic and light — a few dozen trials already train a usable classifier.</span>
+          </div>
+          <div class="mc-meta">
+            <span class="pmchip"><span class="k">acc</span><span class="cn">准确率 中高</span><span class="en">accuracy mid-high</span></span>
+            <span class="pmchip"><span class="k">data</span><span class="cn">小数据稳</span><span class="en">few-data robust</span></span>
+            <span class="pmchip"><span class="k">speed</span><span class="cn">极快</span><span class="en">very fast</span></span>
+            <span class="pmchip"><span class="k">why</span><span class="cn">看得懂</span><span class="en">interpretable</span></span>
+          </div>
+        </div>
+
+        <div class="mcard rie" data-m="rie">
+          <div class="mc-top">
+            <span class="mc-badge">RIEMANN</span>
+            <span class="mc-name"><span class="cn">黎曼几何分类</span><span class="en">Riemannian</span><span class="sm">covariance manifold</span></span>
+          </div>
+          <div class="mc-desc">
+            <span class="cn">直接拿协方差矩阵在弯曲的几何空间里量距离分类。准确率常常最高、最稳，但数学更绕，要看懂背后的流形不容易。</span>
+            <span class="en">Classifies covariance matrices by measuring distance on a curved geometric space. Often the most accurate and stable, but the math bends harder — the manifold is tough to picture.</span>
+          </div>
+          <div class="mc-meta">
+            <span class="pmchip"><span class="k">acc</span><span class="cn">准确率 最高</span><span class="en">accuracy top</span></span>
+            <span class="pmchip"><span class="k">data</span><span class="cn">小数据较稳</span><span class="en">few-data ok</span></span>
+            <span class="pmchip"><span class="k">speed</span><span class="cn">中等</span><span class="en">medium</span></span>
+            <span class="pmchip"><span class="k">why</span><span class="cn">较难懂</span><span class="en">harder</span></span>
+          </div>
+        </div>
+
+        <div class="mcard net" data-m="net">
+          <div class="mc-top">
+            <span class="mc-badge">EEGNET</span>
+            <span class="mc-name"><span class="cn">EEGNet 深度网络</span><span class="en">EEGNet</span><span class="sm">end-to-end CNN</span></span>
+          </div>
+          <div class="mc-desc">
+            <span class="cn">一张专为脑电设计的小卷积网络，自己从原始信号里学特征。天花板很高，但要喂大量数据、调参慢，像个黑盒不易解释。</span>
+            <span class="en">A compact CNN built for EEG that learns features from raw signal itself. High ceiling, but it needs lots of data, slow tuning, and acts like a black box.</span>
+          </div>
+          <div class="mc-meta">
+            <span class="pmchip"><span class="k">acc</span><span class="cn">天花板高</span><span class="en">high ceiling</span></span>
+            <span class="pmchip"><span class="k">data</span><span class="cn">小数据弱</span><span class="en">few-data weak</span></span>
+            <span class="pmchip"><span class="k">speed</span><span class="cn">训练慢</span><span class="en">slow train</span></span>
+            <span class="pmchip"><span class="k">why</span><span class="cn">黑盒</span><span class="en">black box</span></span>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <section class="bottom">
+      <div class="decision">
+        <div class="dec-ic">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#8A3349" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 3l2.3 4.7 5.2.8-3.8 3.7.9 5.2L12 15.8 7.4 18.2l.9-5.2L4.5 9.3l5.2-.8z"/>
+          </svg>
+        </div>
+        <div class="dec-body">
+          <div class="dec-h"><span class="cn">选定 · CSP + LDA</span><span class="en">Chosen · CSP + LDA</span></div>
+          <div class="dec-t"><span class="cn">不是最准的，但最适合你现在的处境</span><span class="en">Not the most accurate — the best fit for where you are</span></div>
+        </div>
+        <div class="dec-reasons">
+          <span class="rchip">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#8A3349" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
+            <span class="cn">小数据也稳</span><span class="en">stable on little data</span>
+          </span>
+          <span class="rchip">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#8A3349" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
+            <span class="cn">训得快</span><span class="en">fast to train</span>
+          </span>
+          <span class="rchip">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#8A3349" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
+            <span class="cn">看得懂</span><span class="en">interpretable</span>
+          </span>
+        </div>
+      </div>
+
+      <div class="handoff">
+        <div class="ho-ic">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M5 12h13"/><path d="M13 6l6 6-6 6"/>
+          </svg>
+        </div>
+        <div class="ho-body">
+          <div class="ho-h"><span class="cn">下一站 · S4</span><span class="en">Next · S4</span></div>
+          <div class="ho-t"><span class="cn">带 CSP+LDA 去用自己的脑</span><span class="en">Take CSP+LDA to your own brain</span></div>
+          <div class="ho-d"><span class="cn">用你录的真实脑电把准确率练上去</span><span class="en">Push accuracy up on your own EEG</span></div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+<script>
+(function(){
+  // ---------- i18n ----------
+  var langBtn = document.getElementById('langBtn');
+  var pageState = { en:false };
+  langBtn.addEventListener('click', function(){
+    pageState.en = !pageState.en;
+    document.body.classList.toggle('lang-en', pageState.en);
+  });
+
+  // ---------- Radar chart (static SVG, hover-driven highlight) ----------
+  var svg = document.getElementById('radar');
+  var SVGNS = 'http://www.w3.org/2000/svg';
+  var cx = 180, cy = 138, R = 96;
+  var rings = 4;
+  // 5 axes: 准确率 / 小数据表现 / 速度 / 可解释性 / 实现难度(低=好,值越大越简单)
+  var axes = [
+    { cn:'准确率', en:'Accuracy' },
+    { cn:'小数据表现', en:'Few-data' },
+    { cn:'速度', en:'Speed' },
+    { cn:'可解释性', en:'Explainable' },
+    { cn:'易实现', en:'Easy build' }
+  ];
+  var N = axes.length;
+  // values 0..5 per axis
+  var methods = {
+    csp: { color:'#C04E68', vals:[3.5, 4.6, 5.0, 4.7, 4.6] },
+    rie: { color:'#527B95', vals:[4.8, 3.9, 3.0, 2.6, 2.4] },
+    net: { color:'#C89B3C', vals:[4.4, 1.9, 1.8, 1.6, 1.9] }
+  };
+
+  function ptOnAxis(i, rFrac){
+    var ang = -Math.PI/2 + (i * 2 * Math.PI / N);
+    return {
+      x: cx + Math.cos(ang) * R * rFrac,
+      y: cy + Math.sin(ang) * R * rFrac
+    };
+  }
+  function mk(tag, attrs){
+    var e = document.createElementNS(SVGNS, tag);
+    for (var k in attrs){ e.setAttribute(k, attrs[k]); }
+    return e;
+  }
+
+  // rings
+  for (var r=1; r<=rings; r++){
+    var pts = [];
+    for (var i=0;i<N;i++){ var p = ptOnAxis(i, r/rings); pts.push(p.x.toFixed(1)+','+p.y.toFixed(1)); }
+    svg.appendChild(mk('polygon', {
+      points: pts.join(' '),
+      fill:'none', stroke:'#EBE5D6', 'stroke-width': r===rings ? 1.4 : 1
+    }));
+  }
+  // spokes + labels
+  for (var i=0;i<N;i++){
+    var outer = ptOnAxis(i, 1);
+    svg.appendChild(mk('line', { x1:cx, y1:cy, x2:outer.x, y2:outer.y, stroke:'#EBE5D6', 'stroke-width':1 }));
+    var lp = ptOnAxis(i, 1.205);
+    var anchor = Math.abs(lp.x - cx) < 6 ? 'middle' : (lp.x > cx ? 'start' : 'end');
+    // CN label
+    var tcn = mk('text', { x:lp.x.toFixed(1), y:(lp.y+3).toFixed(1), 'text-anchor':anchor,
+      'font-size':'10.5', 'font-weight':'600', fill:'#6B6557', 'font-family':"'Inter','Noto Sans SC',sans-serif" });
+    tcn.setAttribute('class','cn'); tcn.textContent = axes[i].cn;
+    svg.appendChild(tcn);
+    var ten = mk('text', { x:lp.x.toFixed(1), y:(lp.y+3).toFixed(1), 'text-anchor':anchor,
+      'font-size':'10', 'font-weight':'600', fill:'#6B6557', 'font-family':"'Inter',sans-serif" });
+    ten.setAttribute('class','en'); ten.textContent = axes[i].en;
+    svg.appendChild(ten);
+  }
+
+  // method polygons
+  function buildPoly(key){
+    var m = methods[key];
+    var pts = [];
+    for (var i=0;i<N;i++){ var p = ptOnAxis(i, m.vals[i]/5); pts.push(p.x.toFixed(1)+','+p.y.toFixed(1)); }
+    var poly = mk('polygon', {
+      points: pts.join(' '),
+      fill: m.color, 'fill-opacity': key==='csp' ? '0.20' : '0.13',
+      stroke: m.color, 'stroke-width': key==='csp' ? 2.4 : 1.8,
+      'stroke-linejoin':'round'
+    });
+    poly.setAttribute('class', 'poly poly-'+key);
+    svg.appendChild(poly);
+    // vertices
+    for (var j=0;j<N;j++){
+      var v = ptOnAxis(j, m.vals[j]/5);
+      var dot = mk('circle', { cx:v.x.toFixed(1), cy:v.y.toFixed(1), r: key==='csp' ? 3 : 2.4, fill:m.color });
+      dot.setAttribute('class','poly poly-'+key);
+      svg.appendChild(dot);
+    }
+  }
+  // draw order: net, rie, csp (csp on top)
+  buildPoly('net'); buildPoly('rie'); buildPoly('csp');
+
+  // ---------- hover focus link: cards + legend -> body focus class ----------
+  var focusMap = { csp:'focus-csp', rie:'focus-rie', net:'focus-net' };
+  function clearFocus(){
+    document.body.classList.remove('focus-csp','focus-rie','focus-net');
+  }
+  function bind(el){
+    var key = el.getAttribute('data-m');
+    if (!key || !focusMap[key]) return;
+    el.addEventListener('mouseenter', function(){ clearFocus(); document.body.classList.add(focusMap[key]); });
+    el.addEventListener('mouseleave', clearFocus);
+  }
+  var cards = document.querySelectorAll('.mcard');
+  for (var c=0;c<cards.length;c++){ bind(cards[c]); }
+  var legs = document.querySelectorAll('.legend .leg');
+  for (var g=0;g<legs.length;g++){ bind(legs[g]); }
+})();
+</script>
+</body>
+</html>

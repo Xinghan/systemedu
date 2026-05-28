@@ -1,0 +1,910 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>特征炼金台 — 把脑波榨成几个关键数</title>
+<style>
+:root{
+  /* deep-space base */
+  --bg-0:#0a0d14; --bg-1:#10141e; --bg-2:#161c28; --panel:#131826;
+  --line:#222b3d; --line-2:#2e3a52; --hair:#1a2030;
+  --txt:#e6ecf6; --txt-2:#aab6cc; --sub:#6c7a93; --sub-2:#4d5870;
+  /* cs Data Cathedral palette (oklch) */
+  --cs:oklch(0.75 0.17 200);            /* SIGNAL — primary accent */
+  --signal:oklch(0.75 0.17 200);
+  --core:oklch(0.55 0.16 200);
+  --depth:oklch(0.35 0.10 210);
+  --flash:oklch(0.92 0.08 190);
+  --query:oklch(0.85 0.14 85);          /* gold — left/right + warnings */
+  --accent:var(--signal);
+  --ok:oklch(0.78 0.15 155);
+  --bad:oklch(0.70 0.17 25);
+  --left:oklch(0.75 0.17 200);          /* left-hand class */
+  --right:oklch(0.85 0.14 85);          /* right-hand class */
+  --mono:'JetBrains Mono','SF Mono',ui-monospace,Menlo,Consolas,monospace;
+  --sans:'PingFang SC','Inter','Noto Sans SC',system-ui,sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:100%;height:100vh;overflow:hidden;background:var(--bg-0);
+  font-family:var(--sans);color:var(--txt);}
+.wrapper{display:flex;height:100vh;}
+
+/* ── 200px sidebar ── */
+.game-sidebar{
+  width:200px;flex-shrink:0;height:100vh;overflow-y:auto;
+  background:var(--bg-1);border-right:1px solid var(--line);
+  padding:14px 12px;display:flex;flex-direction:column;gap:13px;
+}
+/* Bit mascot */
+.bit{display:flex;align-items:center;gap:9px;}
+.bit .cube{width:34px;height:34px;flex-shrink:0;position:relative;}
+.bit .cube svg{width:34px;height:34px;}
+.bit .who{display:flex;flex-direction:column;gap:1px;}
+.bit .who .nm{font-family:var(--mono);font-size:11px;font-weight:700;color:var(--signal);letter-spacing:.5px;}
+.bit .who .rl{font-size:9.5px;color:var(--sub);}
+
+.brand{display:flex;flex-direction:column;gap:3px;}
+.brand .kicker{font-family:var(--mono);font-size:9px;letter-spacing:1.6px;
+  color:var(--core);text-transform:uppercase;}
+.brand .title{font-size:14px;font-weight:700;color:var(--txt);line-height:1.25;}
+
+/* route map */
+.route h3,.tray h3,.task-box h3{font-family:var(--mono);font-size:9px;letter-spacing:1px;
+  color:var(--sub);text-transform:uppercase;margin-bottom:7px;}
+.route{display:flex;flex-direction:column;gap:0;}
+.stop{display:flex;align-items:center;gap:8px;padding:2px 0;position:relative;}
+.stop .dot{width:11px;height:11px;border-radius:50%;flex-shrink:0;
+  background:var(--bg-2);border:1.5px solid var(--line-2);position:relative;z-index:2;}
+.stop .dot.done{background:var(--core);border-color:var(--core);}
+.stop .dot.here{background:var(--signal);border-color:var(--signal);
+  box-shadow:0 0 0 4px color-mix(in oklch, var(--signal) 22%, transparent);}
+.stop .seg{position:absolute;left:5px;top:14px;width:1.5px;height:13px;background:var(--line-2);z-index:1;}
+.stop .seg.done{background:var(--core);}
+.stop .lbl{font-size:10.5px;color:var(--sub);line-height:1.2;}
+.stop.is-here .lbl{color:var(--signal);font-weight:700;}
+.stop.is-done .lbl{color:var(--txt-2);}
+
+/* station tray */
+.tray{display:flex;flex-direction:column;gap:6px;}
+.tray-list{display:flex;flex-direction:column;gap:6px;min-height:22px;
+  border:1.5px dashed transparent;border-radius:8px;transition:border-color .18s;}
+.tray-list.over{border-color:var(--core);}
+.block{display:flex;align-items:center;gap:8px;padding:8px 9px;border-radius:8px;
+  background:var(--bg-2);border:1.5px solid var(--line);font-size:11px;color:var(--txt-2);
+  cursor:grab;transition:border-color .18s,box-shadow .18s,transform .12s;
+  box-shadow:3px 3px 0 var(--bg-0);user-select:none;}
+.block:hover{border-color:var(--core);}
+.block:active{cursor:grabbing;}
+.block.dragging{opacity:.35;}
+.block .glyph{width:24px;height:24px;flex-shrink:0;border-radius:6px;
+  background:var(--bg-1);border:1px solid var(--line-2);
+  display:flex;align-items:center;justify-content:center;}
+.block .glyph svg{width:14px;height:14px;}
+.block .b-lbl{line-height:1.2;}
+
+.task-box{background:var(--bg-2);border:1px solid var(--line);
+  border-radius:8px;padding:10px;box-shadow:3px 3px 0 var(--bg-0);}
+.task-box p{font-size:10.5px;line-height:1.55;color:var(--txt-2);}
+
+.spacer{flex:1;min-height:6px;}
+.ctrl-row{display:flex;flex-direction:column;gap:7px;}
+.btn{font-family:var(--mono);font-size:11.5px;letter-spacing:.5px;padding:10px;border-radius:8px;
+  border:1.5px solid var(--line-2);cursor:pointer;transition:all .18s;background:var(--bg-2);color:var(--txt-2);}
+.btn:hover:not(:disabled){border-color:var(--core);color:var(--flash);}
+.btn:disabled{opacity:.42;cursor:default;}
+.btn.run{background:var(--signal);border-color:var(--signal);color:var(--bg-0);font-weight:700;}
+.btn.run:hover:not(:disabled){background:var(--flash);border-color:var(--flash);color:var(--bg-0);}
+.lang-btn{font-family:var(--mono);font-size:11px;letter-spacing:.5px;
+  padding:9px 10px;border-radius:7px;background:var(--bg-2);border:1px solid var(--line-2);
+  color:var(--txt-2);cursor:pointer;transition:all .2s;}
+.lang-btn:hover{border-color:var(--core);color:var(--flash);}
+
+/* ── main ── */
+.game-main{flex:1;height:100vh;display:flex;flex-direction:column;overflow:hidden;
+  padding:18px 22px;gap:13px;position:relative;}
+
+/* minecraft endpoint corner sigil */
+.endpoint{position:absolute;top:14px;right:18px;display:flex;align-items:center;gap:7px;
+  opacity:.62;pointer-events:none;}
+.endpoint svg{width:26px;height:26px;}
+.endpoint .ep-txt{font-family:var(--mono);font-size:8.5px;letter-spacing:.4px;
+  color:var(--sub);text-align:right;line-height:1.3;}
+
+.head{display:flex;align-items:center;gap:13px;background:var(--panel);
+  border:1px solid var(--line);border-radius:12px;padding:12px 16px;box-shadow:3px 3px 0 var(--bg-0);}
+.head .icon{width:42px;height:42px;flex-shrink:0;border-radius:10px;
+  background:var(--bg-2);border:1px solid var(--line-2);
+  display:flex;align-items:center;justify-content:center;}
+.head .icon svg{width:23px;height:23px;}
+.head .meta{display:flex;flex-direction:column;gap:2px;max-width:62%;}
+.head .name{font-size:13px;font-weight:700;color:var(--txt);}
+.head .desc{font-size:11px;color:var(--sub);line-height:1.45;}
+.head .status{margin-left:auto;font-family:var(--mono);font-size:10px;letter-spacing:.5px;
+  padding:6px 12px;border-radius:20px;background:var(--bg-2);border:1px solid var(--line-2);
+  color:var(--sub);white-space:nowrap;}
+.head .status.fail{background:color-mix(in oklch,var(--bad) 16%,var(--bg-2));border-color:var(--bad);color:var(--bad);}
+.head .status.win{background:color-mix(in oklch,var(--ok) 16%,var(--bg-2));border-color:var(--ok);color:var(--ok);}
+
+.stage{flex:1;display:flex;flex-direction:column;min-height:0;gap:12px;}
+
+/* alchemy lane: ore -> stations -> feature vault */
+.forge{background:var(--panel);border:1px solid var(--line);border-radius:12px;
+  padding:14px 16px;box-shadow:3px 3px 0 var(--bg-0);}
+.forge .lane-title{font-family:var(--mono);font-size:9px;letter-spacing:1.2px;
+  color:var(--core);text-transform:uppercase;margin-bottom:10px;}
+.lane{display:flex;align-items:stretch;gap:0;}
+.ore{flex-shrink:0;width:96px;display:flex;flex-direction:column;align-items:center;
+  justify-content:center;gap:6px;padding:10px 6px;border-radius:10px;
+  background:var(--bg-2);border:1px dashed var(--line-2);}
+.ore .tag{font-family:var(--mono);font-size:8.5px;letter-spacing:.7px;color:var(--sub);text-transform:uppercase;text-align:center;}
+.ore svg{width:74px;height:30px;}
+.ore .sub-tag{font-family:var(--mono);font-size:8px;color:var(--sub-2);}
+.flow-mid{flex:1;display:flex;align-items:center;gap:0;padding:0 4px;min-width:0;}
+.slot{flex:1;min-width:0;min-height:84px;border-radius:10px;border:1.5px dashed var(--line-2);
+  background:var(--bg-1);margin:0 5px;display:flex;flex-direction:column;align-items:center;
+  justify-content:center;gap:4px;position:relative;transition:border-color .18s,background .18s,box-shadow .18s;}
+.slot .slot-num{position:absolute;top:5px;left:7px;font-family:var(--mono);font-size:9px;color:var(--sub-2);}
+.slot .placeholder{font-size:10px;color:var(--sub-2);text-align:center;padding:0 6px;line-height:1.3;}
+.slot.over{border-color:var(--signal);background:color-mix(in oklch,var(--signal) 12%,var(--bg-1));}
+.slot.filled{border-style:solid;border-color:var(--line-2);background:var(--bg-2);box-shadow:3px 3px 0 var(--bg-0);}
+.slot.active{border-color:var(--signal);box-shadow:0 0 0 3px color-mix(in oklch,var(--signal) 24%,transparent);}
+.slot.good-step{border-color:var(--ok);}
+.slot.bad-step{border-color:var(--bad);}
+.placed{display:flex;flex-direction:column;align-items:center;gap:3px;cursor:grab;user-select:none;padding:6px 4px;width:100%;}
+.placed .glyph{width:26px;height:26px;border-radius:7px;background:var(--bg-1);
+  border:1px solid var(--line-2);display:flex;align-items:center;justify-content:center;}
+.placed .glyph svg{width:15px;height:15px;}
+.placed .p-lbl{font-size:9.5px;color:var(--txt-2);text-align:center;line-height:1.2;max-width:92px;}
+.placed .p-eff{font-family:var(--mono);font-size:8px;color:var(--sub);text-align:center;}
+.arrow{flex-shrink:0;width:18px;display:flex;align-items:center;justify-content:center;color:var(--line-2);transition:color .2s;}
+.arrow svg{width:14px;height:14px;}
+.arrow.flowing{color:var(--signal);}
+.vault{flex-shrink:0;width:96px;display:flex;flex-direction:column;align-items:center;
+  justify-content:center;gap:5px;padding:10px 6px;border-radius:10px;
+  background:var(--bg-2);border:1px dashed var(--line-2);}
+.vault .tag{font-family:var(--mono);font-size:8.5px;letter-spacing:.7px;color:var(--sub);text-transform:uppercase;text-align:center;}
+.vault .feat-count{font-family:var(--mono);font-size:20px;font-weight:700;color:var(--sub-2);}
+.vault.has .feat-count{color:var(--query);}
+.vault .feat-lbl{font-family:var(--mono);font-size:8px;color:var(--sub-2);text-align:center;line-height:1.2;}
+
+/* lower: feature scatter (separability) + log */
+.scatter-wrap{flex:1;min-height:0;display:flex;gap:12px;}
+.scatter{flex:1;min-width:0;background:var(--panel);border:1px solid var(--line);
+  border-radius:12px;padding:12px 14px;box-shadow:3px 3px 0 var(--bg-0);
+  display:flex;flex-direction:column;gap:8px;min-height:0;}
+.scatter .s-head{display:flex;align-items:center;justify-content:space-between;}
+.scatter .s-title{font-family:var(--mono);font-size:9px;letter-spacing:1.2px;color:var(--sub);text-transform:uppercase;}
+.scatter .legend{display:flex;gap:12px;}
+.scatter .lg{display:flex;align-items:center;gap:5px;font-family:var(--mono);font-size:9px;color:var(--txt-2);}
+.scatter .lg .sw{width:9px;height:9px;border-radius:2px;}
+.canvas-host{flex:1;min-height:0;display:flex;flex-direction:column;}
+#scatterCv{width:100%;height:100%;display:block;border-radius:8px;background:var(--bg-1);border:1px solid var(--line);}
+
+.metrics{flex-shrink:0;width:148px;display:flex;flex-direction:column;gap:9px;}
+.mtile{background:var(--panel);border:1px solid var(--line);border-radius:10px;
+  padding:10px 12px;box-shadow:3px 3px 0 var(--bg-0);display:flex;flex-direction:column;gap:2px;}
+.mtile .m-lbl{font-family:var(--mono);font-size:8.5px;letter-spacing:.6px;color:var(--sub-2);text-transform:uppercase;}
+.mtile .m-val{font-family:var(--mono);font-size:20px;font-weight:700;color:var(--txt);}
+.mtile.good .m-val{color:var(--ok);}
+.mtile.poor .m-val{color:var(--bad);}
+.bar{height:7px;border-radius:4px;background:var(--bg-2);overflow:hidden;margin-top:3px;}
+.bar > i{display:block;height:100%;width:0;background:var(--signal);transition:width .5s ease;}
+.mtile.good .bar > i{background:var(--ok);}
+.mtile.poor .bar > i{background:var(--bad);}
+
+.log{flex-shrink:0;background:var(--panel);border:1px solid var(--line);border-radius:10px;
+  padding:11px 14px;box-shadow:3px 3px 0 var(--bg-0);min-height:44px;display:flex;align-items:center;gap:10px;}
+.log .badge{font-family:var(--mono);font-size:9px;letter-spacing:.8px;padding:4px 8px;border-radius:6px;
+  background:var(--bg-2);border:1px solid var(--line-2);color:var(--sub);text-transform:uppercase;flex-shrink:0;}
+.log .badge.fail{background:color-mix(in oklch,var(--bad) 16%,var(--bg-2));border-color:var(--bad);color:var(--bad);}
+.log .badge.win{background:color-mix(in oklch,var(--ok) 16%,var(--bg-2));border-color:var(--ok);color:var(--ok);}
+.log .msg{font-size:11.5px;line-height:1.5;color:var(--txt-2);}
+
+@media (max-height:740px){
+  .slot{min-height:68px;}
+  .ore svg{height:22px;}
+}
+</style>
+</head>
+<body>
+<div class="wrapper">
+  <!-- ── 200px sidebar ── -->
+  <aside class="game-sidebar">
+    <div class="bit">
+      <div class="cube">
+        <svg viewBox="0 0 34 34" fill="none">
+          <path d="M17 3 L29 9 L29 23 L17 29 L5 23 L5 9 Z" stroke="var(--signal)" stroke-width="1.6" fill="color-mix(in oklch, var(--signal) 14%, transparent)"/>
+          <path d="M17 3 L17 16 M17 16 L29 9 M17 16 L5 9" stroke="var(--core)" stroke-width="1.2"/>
+          <rect x="13" y="12" width="3" height="3" fill="var(--flash)"/>
+          <rect x="18" y="14" width="3" height="3" fill="var(--query)"/>
+        </svg>
+      </div>
+      <div class="who">
+        <div class="nm">BIT</div>
+        <div class="rl" data-i18n="bitRole">炼金助手</div>
+      </div>
+    </div>
+
+    <div class="brand">
+      <div class="kicker">EEG · S3 · M31</div>
+      <div class="title" data-i18n="title">特征炼金台</div>
+    </div>
+
+    <div class="route">
+      <h3 data-i18n="routeTitle">脑控之路</h3>
+      <div id="routeList"></div>
+    </div>
+
+    <div class="tray">
+      <h3 data-i18n="trayTitle">加工台</h3>
+      <div class="tray-list" id="trayList"></div>
+    </div>
+
+    <div class="task-box">
+      <h3 data-i18n="taskTitle">任务</h3>
+      <p data-i18n="taskBody">把这段脑波 trial 拖过三座加工台，按对顺序炼出 6 个能分左右手的特征。</p>
+    </div>
+
+    <div class="spacer"></div>
+
+    <div class="ctrl-row">
+      <button class="btn run" id="runBtn" disabled data-i18n="runBtn">开炉炼制</button>
+      <button class="btn" id="resetBtn" data-i18n="resetBtn">重置</button>
+      <button class="lang-btn" id="langBtn">EN / 中</button>
+    </div>
+  </aside>
+
+  <!-- ── main ── -->
+  <main class="game-main">
+    <div class="endpoint">
+      <svg viewBox="0 0 24 24" fill="none">
+        <rect x="3" y="3" width="8" height="8" fill="var(--core)" opacity="0.85"/>
+        <rect x="13" y="3" width="8" height="8" fill="var(--depth)"/>
+        <rect x="3" y="13" width="8" height="8" fill="var(--depth)"/>
+        <rect x="13" y="13" width="8" height="8" fill="var(--signal)" opacity="0.85"/>
+      </svg>
+      <div class="ep-txt" data-i18n="epTxt">终点<br/>脑控 Minecraft</div>
+    </div>
+
+    <div class="head">
+      <div class="icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="var(--signal)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M6 3v4M6 11v10M18 3v10M18 17v4"/><circle cx="6" cy="9" r="2"/><circle cx="18" cy="15" r="2"/>
+        </svg>
+      </div>
+      <div class="meta">
+        <div class="name" data-i18n="headName">把每段脑波榨成几个关键数</div>
+        <div class="desc" data-i18n="headDesc">这段是"想象左手"的一次 trial，几千个采样点。分类器吃不下原始波形，要先炼成几个特征。</div>
+      </div>
+      <div class="status" id="statusPill" data-i18n="statusIdle">待开炉</div>
+    </div>
+
+    <div class="stage">
+      <div class="forge">
+        <div class="lane-title" data-i18n="laneTitle">炼金流程（原料从左流向右）</div>
+        <div class="lane">
+          <div class="ore">
+            <div class="tag" data-i18n="oreTag">原料 · trial</div>
+            <svg id="oreWave" viewBox="0 0 74 30"></svg>
+            <div class="sub-tag" data-i18n="oreSub">~3000 点</div>
+          </div>
+          <div class="arrow" id="arrIn">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+          </div>
+          <div class="flow-mid" id="flowMid"></div>
+          <div class="arrow" id="arrOut">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+          </div>
+          <div class="vault" id="vault">
+            <div class="tag" data-i18n="vaultTag">特征</div>
+            <div class="feat-count" id="featCount">0</div>
+            <div class="feat-lbl" data-i18n="vaultLbl">个 · 喂分类器</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="scatter-wrap">
+        <div class="scatter">
+          <div class="s-head">
+            <div class="s-title" data-i18n="scatterTitle">特征空间 — 每点是一次 trial</div>
+            <div class="legend">
+              <span class="lg"><span class="sw" style="background:var(--left)"></span><span data-i18n="legLeft">想象左手</span></span>
+              <span class="lg"><span class="sw" style="background:var(--right)"></span><span data-i18n="legRight">想象右手</span></span>
+            </div>
+          </div>
+          <div class="canvas-host"><canvas id="scatterCv"></canvas></div>
+        </div>
+        <div class="metrics">
+          <div class="mtile" id="mSep">
+            <span class="m-lbl" data-i18n="sepLbl">左右可分度</span>
+            <span class="m-val" id="sepVal">--</span>
+            <div class="bar"><i id="sepBar"></i></div>
+          </div>
+          <div class="mtile" id="mAcc">
+            <span class="m-lbl" data-i18n="accLbl">LDA 准确率</span>
+            <span class="m-val" id="accVal">--</span>
+            <div class="bar"><i id="accBar"></i></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="log">
+        <span class="badge" id="logBadge" data-i18n="logBadgeIdle">提示</span>
+        <span class="msg" id="logMsg" data-i18n="logIdle">把三座加工台拖入三个槽，凑齐后点「开炉炼制」。配方顺序决定特征能不能分开左右手。</span>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  // ── i18n ──
+  var I18N = {
+    zh:{
+      bitRole:"炼金助手", title:"特征炼金台",
+      routeTitle:"脑控之路", trayTitle:"加工台", taskTitle:"任务",
+      taskBody:"把这段脑波 trial 拖过三座加工台，按对顺序炼出 6 个能分左右手的特征。",
+      runBtn:"开炉炼制", resetBtn:"重置",
+      epTxt:"终点 · 脑控 Minecraft",
+      headName:"把每段脑波榨成几个关键数",
+      headDesc:"这段是“想象左手”的一次 trial，几千个采样点。分类器吃不下原始波形，要先炼成几个特征。",
+      statusIdle:"待开炉", statusRun:"炼制中…", statusFail:"配方不对", statusWin:"特征炼金师达成",
+      oreTag:"原料 · trial", oreSub:"~3000 点", vaultTag:"特征", vaultLbl:"个 · 喂分类器",
+      laneTitle:"炼金流程（原料从左流向右）",
+      scatterTitle:"特征空间 — 每点是一次 trial",
+      legLeft:"想象左手", legRight:"想象右手",
+      sepLbl:"左右可分度", accLbl:"LDA 准确率",
+      logBadgeIdle:"提示", logBadgeFail:"未达成", logBadgeWin:"达成",
+      logIdle:"把三座加工台拖入三个槽，凑齐后点“开炉炼制”。配方顺序决定特征能不能分开左右手。",
+      placeholder:"拖加工台到此",
+      stations:{
+        csp:{name:"CSP 投影", eff:"投到最优方向"},
+        var:{name:"取方差", eff:"算每路能量"},
+        log:{name:"取 log", eff:"压平拉正态"}
+      },
+      stepOk:{
+        csp:"CSP 投影：把多路脑波投到“最能拉开左右手”的几个空间方向上，想象左手时一组方向能量大、想象右手时另一组大。",
+        var:"取方差：对每个 CSP 方向上的那段信号取方差，等于量它的能量大小——一个长波形被榨成一个数。",
+        log:"取 log：方差分布偏斜、长尾，取 log 压平、拉成接近正态，LDA 这类线性分类器才好画一条直线分开。"
+      },
+      verdictWin:"配方正确：CSP 投影 - 取方差 - 取 log。6 个特征把想象左手和想象右手的 trial 在特征空间里拉成两堆，LDA 一条线就分开了。你炼出了能分左右手的特征——下一步就能训分类器了。",
+      failNoCsp:"漏了 CSP 投影：直接对原始多路信号取方差，没用上“最能分左右手”的方向，左右两堆点几乎重叠，特征很弱。",
+      failNoVar:"漏了取方差：CSP 投影出来还是一长段时间序列，没榨成一个数，分类器吃不下“几千点”的原料。",
+      failNoLog:"漏了取 log：方差分布偏斜、有长尾，没拉正态，左右两堆被少数大值拖花，LDA 的直线分不干净，准确率掉下来。",
+      failVarBeforeCsp:"顺序错：先取方差再 CSP。方差已经把时间维压没了，CSP 没有信号方向可投，等于白投，特征退化。",
+      failLogEarly:"顺序错：log 取早了。还没取方差就没有“能量”可压，log 作用在波形上意义不对，后面分不开。",
+      failGeneric:"配方不对：特征没把左右手拉开，两堆点缠在一起。对照“CSP 投影 - 取方差 - 取 log”再排一次。",
+      flowStart:"原料 trial 进入炼金台…"
+    },
+    en:{
+      bitRole:"Alchemy aide", title:"Feature Alchemy",
+      routeTitle:"Road to BCI", trayTitle:"Stations", taskTitle:"Task",
+      taskBody:"Drag this EEG trial through the three stations in the right order to forge 6 features that separate left vs right hand.",
+      runBtn:"Fire the Forge", resetBtn:"Reset",
+      epTxt:"Goal · BCI Minecraft",
+      headName:"Squeeze each EEG segment into a few key numbers",
+      headDesc:"This is one 'imagine left hand' trial, a few thousand samples. A classifier can't eat raw waveforms — forge them into features first.",
+      statusIdle:"Idle", statusRun:"Forging…", statusFail:"Wrong recipe", statusWin:"Feature Alchemist unlocked",
+      oreTag:"Ore · trial", oreSub:"~3000 pts", vaultTag:"Features", vaultLbl:"to classifier",
+      laneTitle:"Alchemy flow (ore flows left to right)",
+      scatterTitle:"Feature space — each point is one trial",
+      legLeft:"Imagine left", legRight:"Imagine right",
+      sepLbl:"L/R separability", accLbl:"LDA accuracy",
+      logBadgeIdle:"Hint", logBadgeFail:"Not yet", logBadgeWin:"Done",
+      logIdle:"Drag the three stations into the three slots, then hit Fire the Forge. Recipe order decides whether features split left vs right.",
+      placeholder:"Drop a station",
+      stations:{
+        csp:{name:"CSP project", eff:"to best axes"},
+        var:{name:"Variance", eff:"per-axis energy"},
+        log:{name:"Log", eff:"flatten to normal"}
+      },
+      stepOk:{
+        csp:"CSP project: project multi-channel EEG onto the few spatial axes that best pull left vs right apart — left-hand trials have high energy on one set, right-hand on another.",
+        var:"Variance: take the variance of each CSP-axis signal = its energy. A long waveform is squeezed into a single number.",
+        log:"Log: variance is skewed with a long tail; log flattens it toward normal so a linear classifier like LDA can draw a clean dividing line."
+      },
+      verdictWin:"Correct recipe: CSP project - Variance - Log. 6 features pull left-hand and right-hand trials into two clusters; LDA splits them with one line. You've forged features that separate left vs right — next you can train the classifier.",
+      failNoCsp:"Missing CSP project: taking variance straight on raw channels skips the 'best discriminating' axes, so left and right clusters nearly overlap — weak features.",
+      failNoVar:"Missing Variance: a CSP projection is still a long time series, not squeezed into a number — the classifier can't eat thousands of points per trial.",
+      failNoLog:"Missing Log: variance is skewed with a long tail; without log the two clusters get smeared by a few large values and LDA's line can't cut clean — accuracy drops.",
+      failVarBeforeCsp:"Wrong order: variance before CSP. Variance already collapsed the time axis, so CSP has no signal to project — projection is wasted and features degrade.",
+      failLogEarly:"Wrong order: log too early. Before variance there's no 'energy' to compress; log on the waveform is meaningless and the rest can't separate.",
+      failGeneric:"Wrong recipe: the features didn't pull left vs right apart — the two clusters tangle together. Compare against CSP project - Variance - Log and try again.",
+      flowStart:"Ore trial enters the alchemy table…"
+    }
+  };
+  var lang = "zh";
+  function t(k){ var o=I18N[lang]; return o[k]!==undefined?o[k]:k; }
+
+  // ── route stops (S1..S6), highlight S3 ──
+  var ROUTE = [
+    {zh:"S1 信号入门", en:"S1 Signals"},
+    {zh:"S2 清洗去噪", en:"S2 Cleaning"},
+    {zh:"S3 提特征", en:"S3 Features"},
+    {zh:"S4 训分类器", en:"S4 Classifier"},
+    {zh:"S5 实时解码", en:"S5 Decode"},
+    {zh:"S6 脑控游戏", en:"S6 BCI game"}
+  ];
+  var HERE = 2; // S3 index
+  function renderRoute(){
+    var host = document.getElementById("routeList");
+    host.innerHTML = "";
+    ROUTE.forEach(function(s, i){
+      var row = document.createElement("div");
+      row.className = "stop" + (i<HERE?" is-done":"") + (i===HERE?" is-here":"");
+      var dotCls = "dot" + (i<HERE?" done":"") + (i===HERE?" here":"");
+      var segHtml = (i < ROUTE.length-1) ? '<span class="seg'+(i<HERE?' done':'')+'"></span>' : '';
+      row.innerHTML = '<span class="'+dotCls+'">'+segHtml+'</span>'+
+                      '<span class="lbl">'+s[lang]+'</span>';
+      host.appendChild(row);
+    });
+  }
+
+  // ── station glyphs (inline svg) ──
+  var GLYPH = {
+    csp:'<svg viewBox="0 0 24 24" fill="none" stroke="var(--signal)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20L20 4M4 4l6 6M14 14l6 6"/><circle cx="12" cy="12" r="2"/></svg>',
+    var:'<svg viewBox="0 0 24 24" fill="none" stroke="var(--signal)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 18V9M10 18V5M16 18v-7M22 18h-2"/><path d="M3 18h18"/></svg>',
+    log:'<svg viewBox="0 0 24 24" fill="none" stroke="var(--signal)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19C7 19 7 6 12 6s5 8 8 8"/></svg>'
+  };
+
+  var CORRECT = ["csp","var","log"];
+  var BLOCK_IDS = ["csp","var","log"];
+  var NSLOT = 3;
+
+  var slots = [null,null,null];
+  var trayState = BLOCK_IDS.slice();
+  var dragId = null, dragFrom = null;
+  var running = false, won = false;
+
+  // ── DOM refs ──
+  var trayList = document.getElementById("trayList");
+  var flowMid  = document.getElementById("flowMid");
+  var runBtn   = document.getElementById("runBtn");
+  var resetBtn = document.getElementById("resetBtn");
+  var langBtn  = document.getElementById("langBtn");
+  var statusPill = document.getElementById("statusPill");
+  var logBadge = document.getElementById("logBadge");
+  var logMsg   = document.getElementById("logMsg");
+  var scatterCv= document.getElementById("scatterCv");
+  var oreWave  = document.getElementById("oreWave");
+  var arrIn    = document.getElementById("arrIn");
+  var arrOut   = document.getElementById("arrOut");
+  var vault    = document.getElementById("vault");
+  var featCount= document.getElementById("featCount");
+  var sepVal=document.getElementById("sepVal"), accVal=document.getElementById("accVal");
+  var sepBar=document.getElementById("sepBar"), accBar=document.getElementById("accBar");
+  var mSep=document.getElementById("mSep"), mAcc=document.getElementById("mAcc");
+
+  function getCss(name){ return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || "#888"; }
+
+  function applyStaticI18n(){
+    document.querySelectorAll("[data-i18n]").forEach(function(el){
+      var k = el.getAttribute("data-i18n");
+      var v = t(k);
+      if (typeof v === "string") el.innerHTML = v;
+    });
+    document.documentElement.lang = (lang==="zh")?"zh":"en";
+  }
+
+  function renderTray(){
+    trayList.innerHTML = "";
+    trayState.forEach(function(id){
+      var b = I18N[lang].stations[id];
+      var el = document.createElement("div");
+      el.className = "block";
+      el.setAttribute("draggable","true");
+      el.dataset.id = id;
+      el.innerHTML = '<span class="glyph">'+GLYPH[id]+'</span><span class="b-lbl">'+b.name+'</span>';
+      el.addEventListener("dragstart", function(e){ onDragStart(e, id, "tray"); });
+      el.addEventListener("dragend", onDragEnd);
+      trayList.appendChild(el);
+    });
+  }
+
+  function renderSlots(){
+    flowMid.innerHTML = "";
+    for (var i=0;i<NSLOT;i++){
+      if (i>0){
+        var arr = document.createElement("div");
+        arr.className = "arrow";
+        arr.dataset.arr = String(i);
+        arr.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>';
+        flowMid.appendChild(arr);
+      }
+      var slot = document.createElement("div");
+      slot.className = "slot";
+      slot.dataset.slot = String(i);
+      var id = slots[i];
+      var numEl = document.createElement("span");
+      numEl.className = "slot-num";
+      numEl.textContent = "0"+(i+1);
+      slot.appendChild(numEl);
+
+      if (id){
+        slot.classList.add("filled");
+        var b = I18N[lang].stations[id];
+        var p = document.createElement("div");
+        p.className = "placed";
+        p.setAttribute("draggable","true");
+        p.dataset.id = id;
+        p.innerHTML = '<span class="glyph">'+GLYPH[id]+'</span>'+
+                      '<span class="p-lbl">'+b.name+'</span>'+
+                      '<span class="p-eff">'+b.eff+'</span>';
+        (function(idx){
+          p.addEventListener("dragstart", function(e){ onDragStart(e, slots[idx], idx); });
+          p.addEventListener("dragend", onDragEnd);
+        })(i);
+        slot.appendChild(p);
+      } else {
+        var ph = document.createElement("span");
+        ph.className = "placeholder";
+        ph.textContent = t("placeholder");
+        slot.appendChild(ph);
+      }
+      (function(idx, slotEl){
+        slotEl.addEventListener("dragover", function(e){ e.preventDefault(); slotEl.classList.add("over"); });
+        slotEl.addEventListener("dragleave", function(){ slotEl.classList.remove("over"); });
+        slotEl.addEventListener("drop", function(e){ e.preventDefault(); slotEl.classList.remove("over"); onDropSlot(idx); });
+      })(i, slot);
+      flowMid.appendChild(slot);
+    }
+    updateRunBtn();
+  }
+
+  trayList.addEventListener("dragover", function(e){ e.preventDefault(); trayList.classList.add("over"); });
+  trayList.addEventListener("dragleave", function(){ trayList.classList.remove("over"); });
+  trayList.addEventListener("drop", function(e){ e.preventDefault(); trayList.classList.remove("over"); onDropTray(); });
+
+  function onDragStart(e, id, from){
+    if (running || won) { e.preventDefault(); return; }
+    dragId = id; dragFrom = from;
+    try { e.dataTransfer.setData("text/plain", String(id)); e.dataTransfer.effectAllowed = "move"; } catch(_){}
+    if (e.target && e.target.classList) e.target.classList.add("dragging");
+  }
+  function onDragEnd(e){ if (e.target && e.target.classList) e.target.classList.remove("dragging"); }
+
+  function onDropSlot(idx){
+    if (running || won || dragId===null) return;
+    var moving = dragId, existing = slots[idx];
+    if (dragFrom === "tray"){
+      var pos = trayState.indexOf(moving);
+      if (pos>=0) trayState.splice(pos,1);
+      if (existing) trayState.push(existing);
+      slots[idx] = moving;
+    } else {
+      var srcIdx = dragFrom;
+      if (srcIdx === idx){ clearDrag(); return; }
+      slots[srcIdx] = existing;
+      slots[idx] = moving;
+    }
+    clearDrag(); resetVerdict(); renderTray(); renderSlots();
+  }
+
+  function onDropTray(){
+    if (running || won || dragId===null) return;
+    if (dragFrom !== "tray" && typeof dragFrom === "number"){
+      slots[dragFrom] = null;
+      if (trayState.indexOf(dragId)<0) trayState.push(dragId);
+    }
+    clearDrag(); resetVerdict(); renderTray(); renderSlots();
+  }
+
+  function clearDrag(){ dragId=null; dragFrom=null; }
+
+  function updateRunBtn(){
+    var full = slots.every(function(s){ return s!==null; });
+    runBtn.disabled = !full || running || won;
+  }
+
+  function resetVerdict(){
+    if (won) return;
+    setStatus("idle");
+    setLog("idle", t("logIdle"));
+    flowMid.querySelectorAll(".slot").forEach(function(s){ s.classList.remove("good-step","bad-step","active"); });
+  }
+
+  function setStatus(kind){
+    statusPill.classList.remove("fail","win");
+    if (kind==="idle") statusPill.textContent=t("statusIdle");
+    else if (kind==="run") statusPill.textContent=t("statusRun");
+    else if (kind==="fail"){ statusPill.textContent=t("statusFail"); statusPill.classList.add("fail"); }
+    else if (kind==="win"){ statusPill.textContent=t("statusWin"); statusPill.classList.add("win"); }
+  }
+  function setLog(kind,msg){
+    logBadge.classList.remove("fail","win");
+    if (kind==="idle") logBadge.textContent=t("logBadgeIdle");
+    else if (kind==="fail"){ logBadge.textContent=t("logBadgeFail"); logBadge.classList.add("fail"); }
+    else if (kind==="win"){ logBadge.textContent=t("logBadgeWin"); logBadge.classList.add("win"); }
+    logMsg.textContent = msg;
+  }
+
+  // ════════════════════════════════════════════════════════════════
+  //  Trial feature model.
+  //  Each trial belongs to class L or R. A trial's "true" CSP-axis
+  //  energies differ by class: left-imagery raises one axis, right the
+  //  other (ERD/ERS over sensorimotor cortex). The recipe determines how
+  //  honestly that class difference survives into the 2-D feature we plot.
+  // ════════════════════════════════════════════════════════════════
+  var NTRIAL = 60;
+  var rngState = 0;
+  function srand(s){ rngState = s>>>0; }
+  function rnd(){ rngState = (rngState*1664525 + 1013904223) >>> 0; return rngState/4294967296; }
+  function gauss(){ return (rnd()+rnd()+rnd()+rnd()-2)*0.7; }
+
+  // build trial population with true latent energies per CSP axis
+  function buildTrials(){
+    srand(20260528);
+    var arr=[];
+    for (var i=0;i<NTRIAL;i++){
+      var cls = (i % 2 === 0) ? "L" : "R";
+      // true energies on two CSP axes (left raises axis A, right raises axis B)
+      var eA = (cls==="L"? 2.1 : 0.85) * Math.exp(gauss()*0.45);  // log-normal-ish, skewed
+      var eB = (cls==="R"? 2.1 : 0.85) * Math.exp(gauss()*0.45);
+      arr.push({ cls:cls, eA:eA, eB:eB });
+    }
+    return arr;
+  }
+  var TRIALS = buildTrials();
+
+  // ore waveform spark
+  function drawOre(){
+    srand(7);
+    var pts=[];
+    for (var i=0;i<=72;i+=2){
+      var x=i/72;
+      var v = Math.sin(x*Math.PI*2*9)*5 + Math.sin(x*Math.PI*2*16)*2 + gauss()*1.2;
+      var py = 15 - v;
+      py=Math.max(2,Math.min(28,py));
+      pts.push((i+1).toFixed(0)+","+py.toFixed(1));
+    }
+    oreWave.innerHTML='<polyline points="'+pts.join(" ")+'" fill="none" stroke="var(--core)" stroke-width="1.2" stroke-linejoin="round"/>';
+  }
+
+  // Given a recipe (ordered list of station ids), produce a 2-D feature
+  // per trial + a quality descriptor. Returns {pts, quality, reason}.
+  function computeFeatures(order){
+    var hasCsp = order.indexOf("csp")>=0;
+    var hasVar = order.indexOf("var")>=0;
+    var hasLog = order.indexOf("log")>=0;
+    var iCsp=order.indexOf("csp"), iVar=order.indexOf("var"), iLog=order.indexOf("log");
+
+    var reason = null;
+    var correctOrder = hasCsp&&hasVar&&hasLog && iCsp<iVar && iVar<iLog;
+
+    // failure reasoning (priority order)
+    if (!hasCsp) reason="failNoCsp";
+    else if (!hasVar) reason="failNoVar";
+    else if (hasCsp&&hasVar&&iVar<iCsp) reason="failVarBeforeCsp";
+    else if (!hasLog) reason="failNoLog";
+    else if (hasLog&&hasVar&&iLog<iVar) reason="failLogEarly";
+    else if (!correctOrder) reason="failGeneric";
+
+    var pts=[];
+    for (var i=0;i<TRIALS.length;i++){
+      var tr=TRIALS[i];
+      var fx, fy;
+      if (correctOrder){
+        // ideal: log of CSP-axis variance -> clean, well-separated, gaussian-ish
+        fx = Math.log(tr.eA);
+        fy = Math.log(tr.eB);
+      } else if (hasCsp && hasVar && iCsp<iVar && !hasLog){
+        // missing log: skewed long tail, clusters smeared by big values
+        fx = tr.eA; fy = tr.eB;
+      } else if (!hasCsp && hasVar){
+        // no CSP: variance on raw mixed channels -> class info nearly washed out
+        srand(900+i);
+        var mix = (tr.eA+tr.eB)*0.5;
+        fx = mix + gauss()*1.3 + (tr.cls==="L"?0.15:-0.15);
+        fy = mix + gauss()*1.3;
+      } else if (hasCsp && (iVar<iCsp || (hasLog&&iLog<iVar))){
+        // wrong order: projection wasted / log too early -> degraded, scrambled
+        srand(500+i);
+        fx = Math.log(Math.max(0.05,(tr.eA+tr.eB)*0.5)) + gauss()*0.9;
+        fy = Math.log(Math.max(0.05,(tr.eA*0.4+tr.eB*0.6))) + gauss()*0.9 + (tr.cls==="L"?0.1:-0.1);
+      } else if (hasCsp && !hasVar){
+        // no variance: still time series, can't form a stable point -> jittery
+        srand(300+i);
+        fx = (tr.cls==="L"?0.4:-0.4) + gauss()*1.6;
+        fy = gauss()*1.6;
+      } else {
+        srand(100+i);
+        fx = gauss()*1.4 + (tr.cls==="L"?0.3:-0.3);
+        fy = gauss()*1.4;
+      }
+      pts.push({cls:tr.cls, x:fx, y:fy});
+    }
+    var sep = separability(pts);
+    return { pts:pts, correctOrder:correctOrder, reason:reason, sep:sep };
+  }
+
+  // Fisher-style separability: between-class distance / within-class spread.
+  function separability(pts){
+    var L=pts.filter(function(p){return p.cls==="L";});
+    var R=pts.filter(function(p){return p.cls==="R";});
+    function mean(a,k){ var s=0; a.forEach(function(p){s+=p[k];}); return s/a.length; }
+    function vr(a,k,m){ var s=0; a.forEach(function(p){s+=(p[k]-m)*(p[k]-m);}); return s/a.length; }
+    var mLx=mean(L,"x"),mLy=mean(L,"y"),mRx=mean(R,"x"),mRy=mean(R,"y");
+    var dx=mLx-mRx, dy=mLy-mRy;
+    var between=Math.sqrt(dx*dx+dy*dy);
+    var within=Math.sqrt(vr(L,"x",mLx)+vr(L,"y",mLy)+vr(R,"x",mRx)+vr(R,"y",mRy))/2 + 0.001;
+    return between/within;
+  }
+
+  // ── scatter render ──
+  var lastFeat = null;
+  function drawScatter(feat){
+    lastFeat = feat;
+    var dpr=window.devicePixelRatio||1;
+    var rect=scatterCv.getBoundingClientRect();
+    var W=Math.max(320,rect.width), H=Math.max(120,rect.height);
+    scatterCv.width=Math.round(W*dpr); scatterCv.height=Math.round(H*dpr);
+    var ctx=scatterCv.getContext("2d");
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    ctx.clearRect(0,0,W,H);
+
+    // grid
+    ctx.strokeStyle=getCss('--hair'); ctx.lineWidth=1;
+    for (var gx=1;gx<6;gx++){ var px=W*gx/6; ctx.beginPath();ctx.moveTo(px,0);ctx.lineTo(px,H);ctx.stroke(); }
+    for (var gy=1;gy<4;gy++){ var py=H*gy/4; ctx.beginPath();ctx.moveTo(0,py);ctx.lineTo(W,py);ctx.stroke(); }
+
+    if (!feat){ return; }
+    var pts=feat.pts;
+    var xs=pts.map(function(p){return p.x;}), ys=pts.map(function(p){return p.y;});
+    var xmin=Math.min.apply(null,xs),xmax=Math.max.apply(null,xs);
+    var ymin=Math.min.apply(null,ys),ymax=Math.max.apply(null,ys);
+    var padX=(xmax-xmin)*0.12+0.01, padY=(ymax-ymin)*0.12+0.01;
+    xmin-=padX;xmax+=padX;ymin-=padY;ymax+=padY;
+    function sx(x){ return 28+(x-xmin)/(xmax-xmin)*(W-44); }
+    function sy(y){ return H-22-(y-ymin)/(ymax-ymin)*(H-40); }
+
+    var cL=getCss('--left'), cR=getCss('--right');
+    pts.forEach(function(p){
+      ctx.beginPath();
+      ctx.fillStyle = (p.cls==="L")? cL : cR;
+      ctx.globalAlpha=0.9;
+      ctx.arc(sx(p.x), sy(p.y), 4.2, 0, Math.PI*2);
+      ctx.fill();
+    });
+    ctx.globalAlpha=1;
+
+    // if correct order, draw LDA-ish boundary line
+    if (feat.correctOrder){
+      var L=pts.filter(function(p){return p.cls==="L";});
+      var R=pts.filter(function(p){return p.cls==="R";});
+      function mn(a,k){var s=0;a.forEach(function(p){s+=p[k];});return s/a.length;}
+      var mx=(mn(L,"x")+mn(R,"x"))/2, my=(mn(L,"y")+mn(R,"y"))/2;
+      var wx=mn(L,"x")-mn(R,"x"), wy=mn(L,"y")-mn(R,"y");
+      // boundary perpendicular to w through midpoint
+      var px1=mx-wy*4, py1=my+wx*4, px2=mx+wy*4, py2=my-wx*4;
+      ctx.strokeStyle=getCss('--flash'); ctx.lineWidth=1.6; ctx.setLineDash([6,5]);
+      ctx.beginPath(); ctx.moveTo(sx(px1),sy(py1)); ctx.lineTo(sx(px2),sy(py2)); ctx.stroke();
+      ctx.setLineDash([]);
+    }
+
+    // axis labels
+    ctx.fillStyle=getCss('--sub-2');
+    ctx.font="9px 'JetBrains Mono', monospace";
+    ctx.fillText("feat 1", 30, H-7);
+    ctx.save(); ctx.translate(11,18); ctx.rotate(-Math.PI/2); ctx.fillText("feat 2",0,0); ctx.restore();
+  }
+
+  // sep -> approximate LDA accuracy
+  function sepToAcc(sep){
+    // logistic-ish mapping, capped
+    var a = 50 + 48*(1 - Math.exp(-sep*0.85));
+    return Math.max(50, Math.min(99, a));
+  }
+
+  // ════════════════════════════════════════════════════════════════
+  //  RUN: flow trial through stations, stage by stage.
+  // ════════════════════════════════════════════════════════════════
+  var flowTimer=null;
+  function runForge(){
+    if (running || won) return;
+    var order=slots.slice();
+    if (order.some(function(s){return s===null;})) return;
+    running=true; updateRunBtn();
+    setStatus("run"); setLog("idle", t("flowStart"));
+    flowMid.querySelectorAll(".slot").forEach(function(s){ s.classList.remove("good-step","bad-step","active"); });
+    arrIn.classList.add("flowing"); arrOut.classList.remove("flowing");
+    featCount.textContent="0"; vault.classList.remove("has");
+
+    var feat = computeFeatures(order);
+
+    var step=0;
+    if (flowTimer) clearInterval(flowTimer);
+    flowTimer=setInterval(function(){
+      if (step>=order.length){
+        clearInterval(flowTimer); flowTimer=null;
+        finishForge(order, feat);
+        return;
+      }
+      var id=order[step];
+      var prior=order.slice(0,step);
+      var slotEls=flowMid.querySelectorAll(".slot");
+      slotEls.forEach(function(s){ s.classList.remove("active"); });
+      var goodHere=stepIsConstructive(id, prior);
+      var thisSlot=slotEls[step];
+      if (thisSlot){ thisSlot.classList.add("active"); thisSlot.classList.add(goodHere?"good-step":"bad-step"); }
+      var arrEl=flowMid.querySelector('[data-arr="'+step+'"]'); if (arrEl) arrEl.classList.add("flowing");
+      setLog("idle", I18N[lang].stepOk[id]);
+      step++;
+    }, 760);
+  }
+
+  function stepIsConstructive(id, prior){
+    if (id==="csp") return prior.length===0;       // CSP must be first
+    if (id==="var") return prior.indexOf("csp")>=0; // variance after CSP
+    if (id==="log") return prior.indexOf("var")>=0; // log after variance
+    return false;
+  }
+
+  function finishForge(order, feat){
+    arrIn.classList.remove("flowing");
+    arrOut.classList.add("flowing");
+    drawScatter(feat);
+
+    var sep=feat.sep;
+    var sepPct=Math.round(Math.min(100, sep/2.4*100));
+    var acc=sepToAcc(sep);
+    sepVal.textContent=sepPct+"%";
+    accVal.textContent=acc.toFixed(1)+"%";
+    sepBar.style.width=sepPct+"%";
+    accBar.style.width=Math.min(100,(acc-50)/49*100)+"%";
+
+    mSep.classList.remove("good","poor"); mAcc.classList.remove("good","poor");
+    var win = feat.correctOrder && acc>=85;
+    if (win){ mSep.classList.add("good"); mAcc.classList.add("good"); }
+    else { mSep.classList.add("poor"); mAcc.classList.add("poor"); }
+
+    if (win){
+      featCount.textContent="6"; vault.classList.add("has");
+      won=true; setStatus("win"); setLog("win", t("verdictWin"));
+    } else {
+      // partial features only on degraded recipes
+      var fc = feat.correctOrder?6 : (order.indexOf("var")>=0?3:1);
+      featCount.textContent=String(fc);
+      setStatus("fail"); setLog("fail", t(feat.reason||"failGeneric"));
+    }
+    running=false; updateRunBtn();
+  }
+
+  function doReset(){
+    if (flowTimer){ clearInterval(flowTimer); flowTimer=null; }
+    slots=[null,null,null];
+    trayState=BLOCK_IDS.slice();
+    running=false; won=false; clearDrag();
+    sepVal.textContent="--"; accVal.textContent="--";
+    sepBar.style.width="0"; accBar.style.width="0";
+    mSep.classList.remove("good","poor"); mAcc.classList.remove("good","poor");
+    arrIn.classList.remove("flowing"); arrOut.classList.remove("flowing");
+    featCount.textContent="0"; vault.classList.remove("has");
+    setStatus("idle"); setLog("idle", t("logIdle"));
+    renderTray(); renderSlots(); drawOre(); drawScatter(null);
+  }
+
+  function toggleLang(){
+    lang=(lang==="zh")?"en":"zh";
+    applyStaticI18n(); renderRoute(); renderTray(); renderSlots();
+    if (won){ setStatus("win"); setLog("win", t("verdictWin")); }
+    else if (running){ setStatus("run"); }
+    else { setStatus("idle"); setLog("idle", t("logIdle")); }
+    if (lastFeat && !running) drawScatter(lastFeat);
+  }
+
+  runBtn.addEventListener("click", runForge);
+  resetBtn.addEventListener("click", doReset);
+  langBtn.addEventListener("click", toggleLang);
+  window.addEventListener("resize", function(){ if (!running) drawScatter(lastFeat); });
+
+  // ── init ──
+  applyStaticI18n(); renderRoute(); renderTray(); renderSlots();
+  requestAnimationFrame(function(){ drawOre(); drawScatter(null); });
+
+})();
+</script>
+</body>
+</html>

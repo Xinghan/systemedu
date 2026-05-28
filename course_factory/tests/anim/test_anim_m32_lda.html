@@ -1,0 +1,773 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>M32 — LDA 分界线：画一条线把想左手 / 想右手分开</title>
+<style>
+  /* F2 第 1 层 — 共享深空底 (theme_style/styles.css, 所有 26 套统一不换) */
+  :root{
+    --bg-0: oklch(0.14 0.035 265);
+    --bg-1: oklch(0.18 0.04 265);
+    --bg-2: oklch(0.22 0.045 265);
+    --bg-3: oklch(0.28 0.05 265);
+    --line: oklch(0.35 0.05 265 / 0.35);
+    --line-strong: oklch(0.55 0.08 265 / 0.55);
+    --fg: oklch(0.96 0.01 265);
+    --fg-dim: oklch(0.75 0.02 265);
+    --fg-mute: oklch(0.55 0.03 265);
+    --gold: oklch(0.85 0.14 85);
+
+    /* F2 第 2 层 — math accent (electric blue, themes.js math nav) */
+    --math: oklch(0.72 0.17 245);
+    --math-dim: oklch(0.52 0.16 245);
+
+    /* F2 第 3 层 — math 5 色 palette (themes.js math: AXIS/PROOF/SHADOW/SOLUTION/QED) */
+    --AXIS:     oklch(0.72 0.17 245); /* electric blue 主 — 数轴 / 分界线法线 / mascot 主体 */
+    --PROOF:    oklch(0.52 0.16 245); /* mid blue — 次级结构 / 投影刻度 */
+    --SHADOW:   oklch(0.35 0.10 245); /* deep — 背景卡 */
+    --SOLUTION: oklch(0.92 0.08 240); /* 近白蓝 — 数值 / 高亮 / 最优法线 */
+    --QED:      oklch(0.85 0.14 85);  /* gold — 最优分界线 / 仪式高潮 */
+
+    /* 左右手两类语义色 (LEFT 偏暖 / RIGHT 偏青, 区别于主 accent 便于对照) */
+    --LEFT:  oklch(0.80 0.15 50);   /* 想左手 — 暖橙 */
+    --RIGHT: oklch(0.78 0.14 200);  /* 想右手 — 青 */
+  }
+
+  *{box-sizing:border-box;margin:0;padding:0;}
+  html,body{height:100%;overflow:hidden;}
+  body{
+    background: var(--bg-0);
+    color: var(--fg);
+    font-family: 'Inter','Noto Sans SC',-apple-system,BlinkMacSystemFont,sans-serif;
+    display: flex;
+    height: 100vh;
+  }
+
+  /* 200px 左侧 sidebar */
+  .sidebar{
+    width: 200px; flex-shrink: 0;
+    background: var(--bg-1);
+    border-right: 1px solid var(--line);
+    padding: 16px 14px;
+    display: flex; flex-direction: column; gap: 12px;
+  }
+  .brand{ border-bottom: 1px solid var(--line); padding-bottom: 10px; }
+  .brand .badge{
+    display: inline-block;
+    font-family: 'JetBrains Mono',ui-monospace,monospace;
+    font-size: 10px; letter-spacing: 0.12em;
+    color: var(--math); background: var(--bg-2);
+    padding: 3px 7px; border: 1px solid var(--line);
+    box-shadow: 2px 2px 0 var(--bg-0); margin-bottom: 6px;
+  }
+  .brand h1{ font-size: 14px; font-weight: 700; color: var(--fg); line-height: 1.3; }
+  .brand .sub{
+    font-size: 10px; color: var(--fg-mute); margin-top: 4px;
+    font-family: 'JetBrains Mono',ui-monospace,monospace; letter-spacing: 0.04em;
+  }
+
+  /* Pi mascot — 旋转四面体 (themes.js math) */
+  .mascot-box{
+    background: var(--bg-2); border: 1px solid var(--line);
+    box-shadow: 3px 3px 0 var(--bg-0);
+    padding: 10px; display: flex; align-items: center; gap: 8px;
+  }
+  .mascot-box .label{
+    font-family: 'JetBrains Mono',ui-monospace,monospace;
+    font-size: 9px; color: var(--fg-dim); letter-spacing: 0.08em;
+  }
+  .mascot-box .name{ font-size: 11px; color: var(--fg); font-weight: 600; margin-top: 2px; }
+
+  /* Guide 3 条 */
+  .guide{ display: flex; flex-direction: column; gap: 8px; }
+  .guide-item{
+    font-size: 11px; line-height: 1.45; color: var(--fg-dim);
+    padding-left: 9px; border-left: 2px solid var(--math);
+    padding-top: 2px; padding-bottom: 2px;
+    transition: color .2s, border-color .2s;
+  }
+  .guide-item.hl{ color: var(--fg); border-left-color: var(--SOLUTION); }
+  .guide-item .num{
+    font-family: 'JetBrains Mono',ui-monospace,monospace;
+    color: var(--math); font-weight: 700; margin-right: 4px;
+  }
+
+  /* 项目进度路线图 (S1-S6) */
+  .route{ display:flex; flex-direction:column; gap:0; margin-top:2px; }
+  .route-ttl{
+    font-size:10px; font-weight:700; letter-spacing:.08em; color:var(--fg-mute);
+    font-family:'JetBrains Mono',monospace; margin-bottom:7px; text-transform:uppercase;
+  }
+  .route-step{
+    display:flex; align-items:center; gap:8px;
+    font-size:10.5px; line-height:1.25; color:var(--fg-mute);
+    padding:3px 0; position:relative;
+  }
+  .route-dot{
+    width:8px; height:8px; border-radius:50%; flex-shrink:0;
+    background:var(--bg-3); border:1.5px solid var(--line-strong);
+  }
+  .route-step.done .route-dot{ background:var(--math-dim); border-color:var(--math-dim); }
+  .route-step.cur{ color:var(--fg); font-weight:700; }
+  .route-step.cur .route-dot{
+    background:var(--math); border-color:var(--SOLUTION);
+    box-shadow:0 0 0 3px oklch(0.72 0.17 245 / 0.25);
+  }
+  .route-step::before{
+    content:''; position:absolute; left:3.5px; top:-6px; width:1.5px; height:12px;
+    background:var(--line);
+  }
+  .route-step:first-of-type::before{ display:none; }
+  .route-step.done::before{ background:var(--math-dim); }
+  .route-here{
+    font-size:8.5px; font-family:'JetBrains Mono',monospace; font-weight:700;
+    color:var(--math); margin-left:auto; letter-spacing:.04em;
+  }
+
+  .sidebar .spacer{ flex: 1; }
+
+  .lang-btn{
+    background: var(--bg-2); border: 1px solid var(--line-strong);
+    box-shadow: 2px 2px 0 var(--bg-0); color: var(--fg);
+    font-family: 'JetBrains Mono',ui-monospace,monospace;
+    font-size: 11px; font-weight: 700; letter-spacing: 0.1em;
+    padding: 7px 10px; cursor: pointer; width: 100%;
+  }
+  .lang-btn:hover{ border-color: var(--math); color: var(--math); }
+  .lang-btn:active{ transform: translate(2px, 2px); box-shadow: none; }
+
+  /* Main stage */
+  .main{ flex: 1; position: relative; overflow: hidden; background: var(--bg-0); }
+  #stage{ position:absolute; inset:0; width: 100%; height: 100%; display: block; }
+
+  /* HUD 右上 */
+  .hud{
+    position: absolute; top: 18px; right: 18px; z-index:5;
+    background: var(--bg-2); border: 1px solid var(--line);
+    box-shadow: 3px 3px 0 var(--bg-0);
+    padding: 10px 14px;
+    font-family: 'JetBrains Mono',ui-monospace,monospace;
+    min-width: 230px;
+  }
+  .hud .row{
+    display: flex; justify-content: space-between; align-items: center;
+    gap: 14px; font-size: 11px; line-height: 1.6;
+  }
+  .hud .label{ color: var(--fg-mute); letter-spacing: 0.06em; }
+  .hud .value{ color: var(--fg); font-weight: 700; }
+  .hud .value.accent{ color: var(--math); }
+  .hud .value.gold{ color: var(--QED); }
+  .hud .sep{ height: 1px; background: var(--line); margin: 6px 0; }
+
+  /* Subtitle 底部 — 辅助点睛, 不是动画主体 */
+  .subtitle{
+    position: absolute; left: 50%; bottom: 22px; transform: translateX(-50%);
+    z-index:5; text-align: center; width: 84%; max-width: 780px; pointer-events: none;
+  }
+  .subtitle .cn{
+    display:inline-block; font-size: 18px; font-weight: 700; color: var(--fg);
+    background: oklch(0.18 0.04 265 / 0.86); border: 1px solid var(--line-strong);
+    padding: 7px 18px; box-shadow: 3px 3px 0 var(--bg-0);
+  }
+  .subtitle .en{
+    margin-top: 6px; font-size: 12px; color: var(--fg-mute); font-style: italic;
+    font-family: 'JetBrains Mono',ui-monospace,monospace; letter-spacing: 0.02em;
+  }
+
+  /* 终点徽记 (Minecraft 角色剪影, 左下角) */
+  .goal-badge{
+    position:absolute; left:18px; bottom:22px; z-index:5;
+    display:flex; align-items:center; gap:9px;
+    background: oklch(0.18 0.04 265 / 0.80);
+    border:1px solid var(--line-strong);
+    padding:7px 11px 7px 8px;
+    box-shadow:3px 3px 0 var(--bg-0);
+  }
+  .goal-badge svg{ width:26px; height:30px; flex-shrink:0; }
+  .goal-badge .gtxt{ font-size:10px; line-height:1.35; color:var(--fg-dim); max-width:128px; }
+  .goal-badge .gtxt b{ color:var(--fg); font-weight:700; }
+
+  /* Ceremonial flash overlay (最优分界线高潮) */
+  .flash{
+    position: absolute; top: 40%; left: 50%; transform: translate(-50%, -50%);
+    z-index:6;
+    font-family: 'JetBrains Mono',ui-monospace,monospace;
+    font-size: 23px; font-weight: 800; color: var(--QED);
+    letter-spacing: 0.08em; opacity: 0; pointer-events: none;
+    text-shadow: 0 0 28px var(--QED); text-align: center;
+    transition: opacity 0.4s ease;
+  }
+  .flash.on{ opacity: 1; }
+  .flash .small{
+    display: block; text-align: center; font-size: 12px; color: var(--fg-dim);
+    letter-spacing: 0.04em; margin-top: 10px; text-shadow: none; font-weight: 400;
+  }
+</style>
+</head>
+<body>
+  <aside class="sidebar">
+    <div class="brand">
+      <span class="badge" id="badgeMod">MOD-M32 / MATH</span>
+      <h1 id="brandH1">画一条线分开左右手</h1>
+      <div class="sub" id="brandSub">LDA — 旋到最优分界线</div>
+    </div>
+
+    <div class="mascot-box">
+      <svg width="42" height="42" viewBox="0 0 60 60" aria-hidden="true">
+        <!-- Pi mascot: 旋转四面体, 面上闪方程 (themes.js math) -->
+        <g transform="translate(30 30)">
+          <polygon points="0,-18 16,10 -16,10" fill="var(--PROOF)" opacity="0.9"/>
+          <polygon points="0,-18 16,10 0,2" fill="var(--AXIS)" opacity="0.95"/>
+          <polygon points="0,-18 -16,10 0,2" fill="var(--SHADOW)" opacity="0.95"/>
+          <polyline points="0,-18 16,10 -16,10 0,-18" fill="none" stroke="var(--SOLUTION)" stroke-width="1"/>
+          <line x1="0" y1="-18" x2="0" y2="2" stroke="var(--SOLUTION)" stroke-width="0.6" opacity="0.6"/>
+          <text y="9" fill="var(--QED)" font-family="'JetBrains Mono',monospace" font-size="7" text-anchor="middle" font-weight="700">LDA</text>
+        </g>
+      </svg>
+      <div>
+        <div class="label">MASCOT</div>
+        <div class="name" id="mascotName">Pi · 派</div>
+      </div>
+    </div>
+
+    <div class="guide">
+      <div class="guide-item" id="g1"><span class="num">01</span><span class="gtxt">两团点 = 想左手 / 想右手的特征</span></div>
+      <div class="guide-item" id="g2"><span class="num">02</span><span class="gtxt">一条线连续旋转, 试每个方向</span></div>
+      <div class="guide-item" id="g3"><span class="num">03</span><span class="gtxt">两类中心拉远 + 各类内收紧 = 最优</span></div>
+    </div>
+
+    <!-- 项目进度路线图: 高亮 S3 (你在这) -->
+    <nav class="route" id="route" aria-label="project route">
+      <div class="route-ttl" id="routeTtl">BCI 项目路线</div>
+      <div class="route-step done"><span class="route-dot"></span><span data-s="0">S1 认识脑波</span></div>
+      <div class="route-step done"><span class="route-dot"></span><span data-s="1">S2 清洁信号</span></div>
+      <div class="route-step cur"><span class="route-dot"></span><span data-s="2">S3 找特征训分类器</span><span class="route-here" id="routeHere">你在这</span></div>
+      <div class="route-step"><span class="route-dot"></span><span data-s="3">S4 自录冲准</span></div>
+      <div class="route-step"><span class="route-dot"></span><span data-s="4">S5 接 Minecraft</span></div>
+      <div class="route-step"><span class="route-dot"></span><span data-s="5">S6 分享</span></div>
+    </nav>
+
+    <div class="spacer"></div>
+    <button id="langBtn" class="lang-btn" type="button">CN / EN</button>
+  </aside>
+
+  <main class="main">
+    <canvas id="stage"></canvas>
+
+    <div class="hud">
+      <div class="row"><span class="label" id="hudL1">STAGE</span><span class="value accent" id="hudV1">--</span></div>
+      <div class="sep"></div>
+      <div class="row"><span class="label" id="hudL2">ANGLE</span><span class="value" id="hudV2">--</span></div>
+      <div class="row"><span class="label" id="hudL3">BETWEEN / WITHIN</span><span class="value accent" id="hudV3">--</span></div>
+      <div class="row"><span class="label" id="hudL4">FISHER J</span><span class="value gold" id="hudV4">--</span></div>
+    </div>
+
+    <div class="subtitle">
+      <div class="cn" id="subCn">有了特征数, 怎么画一条线判断这是想左还是想右手</div>
+      <div class="en" id="subEn">We have features — how to draw one line to tell think-left from think-right</div>
+    </div>
+
+    <!-- 终点徽记: Minecraft 角色剪影 (用念头让它动) -->
+    <div class="goal-badge" aria-label="project goal">
+      <svg viewBox="0 0 26 30" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <rect x="6" y="1" width="14" height="13" rx="1" fill="var(--math-dim)" stroke="var(--SOLUTION)" stroke-width="1"/>
+        <rect x="9" y="5" width="2.6" height="2.6" fill="var(--bg-0)"/>
+        <rect x="14.4" y="5" width="2.6" height="2.6" fill="var(--bg-0)"/>
+        <rect x="10" y="9.5" width="6" height="1.6" fill="var(--bg-0)" opacity="0.7"/>
+        <rect x="7" y="15" width="12" height="10" rx="1" fill="var(--SHADOW)" stroke="var(--line-strong)" stroke-width="0.8"/>
+        <rect x="3" y="16" width="3.5" height="8" rx="0.6" fill="var(--SHADOW)"/>
+        <rect x="19.5" y="16" width="3.5" height="8" rx="0.6" fill="var(--SHADOW)"/>
+        <rect x="9" y="25" width="3" height="4" fill="var(--SHADOW)"/>
+        <rect x="14" y="25" width="3" height="4" fill="var(--SHADOW)"/>
+      </svg>
+      <span class="gtxt" id="goalTxt">终点：<b>用念头让它动</b></span>
+    </div>
+
+    <div class="flash" id="flash">
+      OPTIMAL BOUNDARY
+      <span class="small" id="flashSub">LDA 找到最优分界线 — 这就是分类器的核心</span>
+    </div>
+  </main>
+
+<script>
+(function(){
+  "use strict";
+
+  /* ===================== i18n ===================== */
+  var LANG = 'cn';
+  var I18N = {
+    badgeMod:   { cn: 'MOD-M32 / MATH', en: 'MOD-M32 / MATH' },
+    brandH1:    { cn: '画一条线分开左右手', en: 'One line to split L / R' },
+    brandSub:   { cn: 'LDA — 旋到最优分界线', en: 'LDA — rotate to optimal' },
+    mascotName: { cn: 'Pi · 派', en: 'Pi · the tetrahedron' },
+    g1: { cn: '两团点 = 想左手 / 想右手的特征', en: 'Two clouds = think-L / think-R features' },
+    g2: { cn: '一条线连续旋转, 试每个方向', en: 'One line rotates, trying each direction' },
+    g3: { cn: '两类中心拉远 + 各类内收紧 = 最优', en: 'Centers far + each class tight = optimal' },
+    routeTtl:  { cn: 'BCI 项目路线', en: 'BCI PROJECT ROUTE' },
+    routeHere: { cn: '你在这', en: 'YOU' },
+    route: {
+      cn: ['S1 认识脑波','S2 清洁信号','S3 找特征训分类器','S4 自录冲准','S5 接 Minecraft','S6 分享'],
+      en: ['S1 Read EEG','S2 Clean signal','S3 Feature + classifier','S4 Self-train','S5 To Minecraft','S6 Share']
+    },
+    goalTxt:   { cn: '终点：用念头让它动', en: 'Goal: move it with thought' },
+    hudL1: { cn: '阶段',          en: 'STAGE' },
+    hudL2: { cn: '分界线角度',    en: 'ANGLE' },
+    hudL3: { cn: '类间/类内',     en: 'BETWEEN / WITHIN' },
+    hudL4: { cn: 'Fisher 准则 J', en: 'FISHER J' },
+    btnLang: { cn: 'CN / EN', en: 'CN / EN' }
+  };
+  function tt(o){ return (o && o[LANG]) || (o && o.en) || ''; }
+  function t(key){ return I18N[key] ? tt(I18N[key]) : key; }
+
+  /* ===================== 阶段 (承接同一个特征平面 + 同一条线, 连续旋转, 非翻页) =====================
+     唯一核心对象 = "特征平面上一条 LDA 分界线 (及其法线), 连续旋转, 实时显示
+                    左右手两类投影到法线后的分离度 (Fisher J), 转到 J 最大的最优分界线"。
+     全程只演一件事: 同两团点 (想左手 / 想右手), 同一条线在旋转, 投影直方图随之重排,
+     Fisher J = 类间距离^2 / (类内方差和) 实时变化, 转到峰值定格。
+     theta 角由一条连续曲线驱动 (扫过整个 0-180 度), 阶段只是给同一连续旋转配解说。 */
+  var STAGES = [
+    { id:'intro', ms:6400,
+      stage:{ cn:'两团特征', en:'Two clouds' },
+      cn:'有了特征数, 怎么画一条线判断这是想左还是想右手',
+      en:'We have features — how to draw one line to tell think-left from think-right' },
+    { id:'bad',   ms:7400,
+      stage:{ cn:'坏方向', en:'Bad angle' },
+      cn:'随便挑个方向投影: 两类影子叠在一起, 分不开 — Fisher J 很小',
+      en:'Pick a random direction: the two shadows overlap, can not split — Fisher J tiny' },
+    { id:'sweep', ms:9200,
+      stage:{ cn:'连续旋转', en:'Rotating' },
+      cn:'让这条线连续旋转, 边转边看: 两类影子的中心离得越来越远',
+      en:'Rotate the line continuously and watch: the two shadow centers drift apart' },
+    { id:'tight', ms:8000,
+      stage:{ cn:'类内收紧', en:'Within tight' },
+      cn:'好方向还要每团影子自己越窄越好 — 中心远 + 各类紧, 才真正分得开',
+      en:'A good axis also keeps each shadow narrow — far centers + tight clusters truly split' },
+    { id:'lock',  ms:8400,
+      stage:{ cn:'最优分界线', en:'Optimal' },
+      cn:'LDA 找到最优分界线, 这就是分类器的核心 — 下一步就拿它判左右手',
+      en:'LDA finds the optimal boundary — the heart of the classifier we will use next' }
+  ];
+
+  /* ===================== 数据 — 想左手 / 想右手 两团二维特征点 =====================
+     科学严谨 (LDA Fisher 准则):
+       - 特征轴 = (C3 power, C4 power) 二维: 想左手时 C4 抑制(ERD)、想右手时 C3 抑制,
+         所以两类中心沿一条斜线分开 (LEFT 偏右下, RIGHT 偏左上)。
+       - 每类是各向异性高斯 (有主轴方向), 故"哪个投影方向类内最窄"不平凡, LDA 才有意义。
+       - 投影: 给定法线方向单位向量 w(theta), 点 p 的投影标量 s = p . w。
+       - 类间 = (mean_L . w - mean_R . w)^2   类内 = var_L(s) + var_R(s)
+       - Fisher J(theta) = 类间 / 类内。LDA 的最优 w 正比于 Sw^{-1}(mL - mR), 这里
+         通过连续扫描 theta 求 argmax J 直观呈现 (与解析解一致)。
+       - 分界线垂直于 w (法线), 故旋转 w 等价于旋转分界线。 */
+  var NPC = 120; // 每类点数
+  function lcg(seed){ var s=seed>>>0; return function(){ s=(s*1664525+1013904223)>>>0; return s/4294967296; }; }
+  function gauss(rnd){ // Box-Muller
+    var u=Math.max(1e-6,rnd()), v=rnd();
+    return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);
+  }
+  // 两类: 中心 + 协方差主轴 (各向异性), 在 [-1,1] 标准化特征空间
+  // LEFT  中心 (+0.42, -0.42), RIGHT 中心 (-0.42, +0.42) — 沿反对角分开
+  // 两类共享一个倾斜的类内散布 (主轴沿 +45 度), 让 LDA 最优方向 != 简单连心线方向
+  var classDef = [
+    { key:'L', mx:  0.42, my: -0.42, color:'left'  },
+    { key:'R', mx: -0.42, my:  0.42, color:'right' }
+  ];
+  var sigMajor = 0.40, sigMinor = 0.13, spreadAngle = Math.PI/4; // 散布主轴 +45 度
+  var ca = Math.cos(spreadAngle), sa = Math.sin(spreadAngle);
+  var PTS = []; // {x,y,cls}
+  (function(){
+    var rnd = lcg(913207);
+    for(var c=0;c<2;c++){
+      var d = classDef[c];
+      for(var i=0;i<NPC;i++){
+        var a = gauss(rnd)*sigMajor;   // 沿主轴
+        var b = gauss(rnd)*sigMinor;   // 沿次轴
+        var dx = a*ca - b*sa;
+        var dy = a*sa + b*ca;
+        PTS.push({ x: d.mx+dx, y: d.my+dy, cls: c });
+      }
+    }
+  })();
+  // 给定法线方向角 theta, 计算投影统计
+  function projStats(theta){
+    var wx = Math.cos(theta), wy = Math.sin(theta);
+    var sum=[0,0], cnt=[0,0];
+    var k,p,s;
+    for(k=0;k<PTS.length;k++){ p=PTS[k]; s=p.x*wx+p.y*wy; sum[p.cls]+=s; cnt[p.cls]++; }
+    var mL=sum[0]/cnt[0], mR=sum[1]/cnt[1];
+    var vL=0,vR=0;
+    for(k=0;k<PTS.length;k++){ p=PTS[k]; s=p.x*wx+p.y*wy; if(p.cls===0){var d=s-mL;vL+=d*d;} else {var e=s-mR;vR+=e*e;} }
+    vL/=cnt[0]; vR/=cnt[1];
+    var between=(mL-mR)*(mL-mR);
+    var within=vL+vR;
+    return { wx:wx, wy:wy, mL:mL, mR:mR, vL:vL, vR:vR, between:between, within:within, J: between/Math.max(within,1e-6) };
+  }
+  // 离线扫描求最优 theta (argmax J) 与 J 范围, 供归一化与定格
+  var THETA_OPT=0, JMAX=0, JMIN=1e9;
+  (function(){
+    for(var k=0;k<720;k++){
+      var th=k/720*Math.PI;            // 法线方向 0..180 度 (180 与 0 等价)
+      var J=projStats(th).J;
+      if(J>JMAX){ JMAX=J; THETA_OPT=th; }
+      if(J<JMIN) JMIN=J;
+    }
+  })();
+
+  /* ===================== Canvas ===================== */
+  var canvas = document.getElementById('stage');
+  var ctx = canvas.getContext('2d');
+  var W=0,H=0,DPR=1;
+  function resize(){
+    var rect = canvas.parentElement.getBoundingClientRect();
+    if(rect.width<1||rect.height<1) return;
+    DPR = window.devicePixelRatio||1;
+    canvas.width = rect.width*DPR; canvas.height = rect.height*DPR;
+    canvas.style.width = rect.width+'px'; canvas.style.height = rect.height+'px';
+    ctx.setTransform(DPR,0,0,DPR,0,0);
+    W = rect.width; H = rect.height;
+  }
+  window.addEventListener('resize', resize);
+  resize();
+  setTimeout(resize,200); setTimeout(resize,600);
+  if(document.fonts&&document.fonts.ready){ document.fonts.ready.then(resize); }
+
+  /* ===================== canvas 调色 (深空 + math AXIS) ===================== */
+  var C = {
+    bg0:'#0a0d18', bg1:'#141a30', bg2:'#1b2240', bg3:'#26305a',
+    line:'rgba(150,165,225,0.30)', lineStrong:'rgba(170,185,235,0.55)',
+    fg:'#eef0fb', fgDim:'#aeb6d6', fgMute:'#7e87ad',
+    axis:'#3da0ff',          /* --math electric blue (法线 / 主链路) */
+    axisDim:'#2c66c4',       /* --math-dim */
+    solution:'#d8e4ff',      /* --SOLUTION 近白蓝 */
+    gold:'#f2cf6e',          /* --QED 最优 */
+    left:'#f2a86a',          /* LEFT 想左手 暖橙 */
+    right:'#5fc6d8'          /* RIGHT 想右手 青 */
+  };
+
+  function MONO(s){ return s+" 'JetBrains Mono',ui-monospace,monospace"; }
+  function SANS(s){ return s+" Inter,'Noto Sans SC',sans-serif"; }
+  function lerp(a,b,k){ return a+(b-a)*k; }
+  function clamp(x,lo,hi){ return x<lo?lo:(x>hi?hi:x); }
+  function easeInOut(x){ return x<0.5 ? 2*x*x : 1-Math.pow(-2*x+2,2)/2; }
+
+  /* ===================== 特征平面 (核心对象): 两团点 + 旋转分界线 + 法线 + 投影影子 =====================
+     横轴 C3 power, 纵轴 C4 power, 原点居中。
+     - 两团点 (LEFT 暖 / RIGHT 青) 固定不动。
+     - 一条分界线连续旋转 (theta 控制其法线方向)。
+     - 法线方向上画一条投影轴, 把每个点垂直投到轴上 (影子点), 形成两类影子分布。
+     - 中心远 + 各类窄 = Fisher 大。最优时分界线 --gold 描金。 */
+  function drawPlane(cx,cy,R, theta, isOpt, projFill){
+    // 坐标变换: 特征 [-1,1] -> 画布
+    var SC = R*0.78;
+    function PX(fx){ return cx + fx*SC; }
+    function PY(fy){ return cy - fy*SC; }
+
+    // 平面卡 + 网格 + 主轴
+    ctx.save();
+    ctx.fillStyle = C.bg1; ctx.strokeStyle=C.line; ctx.lineWidth=1.1;
+    ctx.beginPath(); ctx.rect(cx-R,cy-R,2*R,2*R); ctx.fill(); ctx.stroke();
+    ctx.strokeStyle = C.line; ctx.lineWidth=0.5; ctx.globalAlpha=0.55;
+    for(var g=-R+R/3; g<R; g+=R/3){
+      ctx.beginPath(); ctx.moveTo(cx-R,cy+g); ctx.lineTo(cx+R,cy+g); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(cx+g,cy-R); ctx.lineTo(cx+g,cy+R); ctx.stroke();
+    }
+    ctx.globalAlpha=1;
+    ctx.strokeStyle = C.lineStrong; ctx.lineWidth=1.1;
+    ctx.beginPath(); ctx.moveTo(cx-R,cy); ctx.lineTo(cx+R,cy); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(cx,cy-R); ctx.lineTo(cx,cy+R); ctx.stroke();
+    ctx.font = MONO('600 11px');
+    ctx.fillStyle=C.fgMute; ctx.textAlign='right'; ctx.textBaseline='top';
+    ctx.fillText('C3 power ->', cx+R-6, cy+5);
+    ctx.fillStyle=C.fgMute; ctx.textAlign='left'; ctx.textBaseline='top';
+    ctx.fillText('C4 power ^', cx+6, cy-R+6);
+
+    var wx=Math.cos(theta), wy=Math.sin(theta);   // 法线单位向量
+    var dx=-wy, dy=wx;                              // 分界线方向 (垂直法线)
+
+    // 投影轴 (沿法线方向穿过原点) — 把影子落在这条轴上
+    var axLen=R*0.96;
+    ctx.strokeStyle=C.axisDim; ctx.lineWidth=1.4; ctx.setLineDash([2,4]); ctx.globalAlpha=0.8;
+    ctx.beginPath();
+    ctx.moveTo(cx - wx*axLen, cy + wy*axLen);  // 注意 canvas y 向下
+    ctx.lineTo(cx + wx*axLen, cy - wy*axLen);
+    ctx.stroke(); ctx.setLineDash([]); ctx.globalAlpha=1;
+
+    // 每个点 -> 投影到法线轴的影子 (虚线连接 + 影子点)
+    var k,p,s, shadow=[];
+    for(k=0;k<PTS.length;k++){
+      p=PTS[k];
+      s = p.x*wx + p.y*wy;                  // 投影标量 (特征空间)
+      var fx=PX(p.x), fy=PY(p.y);
+      var sxp = cx + wx*(s*SC), syp = cy - wy*(s*SC);  // 影子在轴上的画布位置
+      shadow.push({sxp:sxp, syp:syp, cls:p.cls, s:s, fx:fx, fy:fy});
+    }
+    // 投影连接虚线 (稀疏画, 避免糊)
+    ctx.lineWidth=0.7; ctx.globalAlpha=0.18;
+    for(k=0;k<shadow.length;k+=3){
+      var sh=shadow[k];
+      ctx.strokeStyle = sh.cls===0 ? C.left : C.right;
+      ctx.beginPath(); ctx.moveTo(sh.fx,sh.fy); ctx.lineTo(sh.sxp,sh.syp); ctx.stroke();
+    }
+    ctx.globalAlpha=1;
+
+    // 原始点云
+    for(k=0;k<shadow.length;k++){
+      var q=shadow[k];
+      ctx.fillStyle = q.cls===0 ? C.left : C.right;
+      ctx.globalAlpha = 0.85;
+      ctx.beginPath(); ctx.arc(q.fx,q.fy,3.0,0,Math.PI*2); ctx.fill();
+    }
+    ctx.globalAlpha=1;
+    // 影子点 (落在投影轴上)
+    for(k=0;k<shadow.length;k++){
+      var r=shadow[k];
+      ctx.fillStyle = r.cls===0 ? C.left : C.right;
+      ctx.globalAlpha = 0.9;
+      ctx.beginPath(); ctx.arc(r.sxp,r.syp,2.0,0,Math.PI*2); ctx.fill();
+    }
+    ctx.globalAlpha=1;
+
+    // 两类中心 (投影到轴) — 高亮, 演示"中心拉远"
+    var st=projStats(theta);
+    var cLx = cx + wx*(st.mL*SC), cLy = cy - wy*(st.mL*SC);
+    var cRx = cx + wx*(st.mR*SC), cRy = cy - wy*(st.mR*SC);
+    ctx.strokeStyle=C.solution; ctx.lineWidth=1.6; ctx.globalAlpha=0.85;
+    ctx.beginPath(); ctx.moveTo(cLx,cLy); ctx.lineTo(cRx,cRy); ctx.stroke();
+    ctx.globalAlpha=1;
+    [[cLx,cLy,C.left],[cRx,cRy,C.right]].forEach(function(c){
+      ctx.fillStyle=c[2]; ctx.beginPath(); ctx.arc(c[0],c[1],5,0,Math.PI*2); ctx.fill();
+      ctx.strokeStyle=C.solution; ctx.lineWidth=1.4; ctx.stroke();
+    });
+
+    // 分界线 (垂直法线, 过两中心连线中点的等分点) — 旋转的主角
+    var midS=(st.mL+st.mR)/2;
+    var bx = cx + wx*(midS*SC), by = cy - wy*(midS*SC); // 分界线上一点
+    var bl=R*1.02;
+    // 分界线方向 (dx,dy) 是特征空间方向, 转画布需翻 y -> (dx, -dy)
+    ctx.lineWidth = isOpt? 3.4 : 2.4;
+    ctx.strokeStyle = isOpt ? C.gold : C.axis;
+    if(isOpt){ ctx.shadowColor=C.gold; ctx.shadowBlur=14; }
+    ctx.beginPath();
+    ctx.moveTo(bx - dx*bl, by + dy*bl);
+    ctx.lineTo(bx + dx*bl, by - dy*bl);
+    ctx.stroke();
+    ctx.shadowBlur=0;
+
+    // 分界线标签
+    ctx.font = MONO('700 11px');
+    ctx.fillStyle = isOpt ? C.gold : C.axis;
+    ctx.textAlign='left'; ctx.textBaseline='bottom';
+    var lbx = bx + dx*bl*0.5, lby = by - dy*bl*0.5;
+    ctx.fillText(isOpt ? (LANG==='cn'?'最优分界线':'optimal') : (LANG==='cn'?'分界线':'boundary'), lbx+6, lby-3);
+
+    ctx.restore();
+    return st;
+  }
+
+  /* ===================== 投影分布直方图 (右侧): 两类影子沿法线的密度 =====================
+     直接读出"重叠还是分开" — 配合特征平面, 让 Fisher 准则可视。 */
+  function drawHist(px,py,pw,ph, theta, isOpt){
+    ctx.save();
+    ctx.fillStyle=C.bg1; ctx.strokeStyle=C.line; ctx.lineWidth=1.1;
+    ctx.beginPath(); ctx.rect(px,py,pw,ph); ctx.fill(); ctx.stroke();
+    ctx.font=MONO('700 10px'); ctx.fillStyle=C.fgDim; ctx.textAlign='left'; ctx.textBaseline='top';
+    ctx.fillText(LANG==='cn'?'投影到法线 ->':'projection onto normal ->', px+8, py+7);
+
+    var wx=Math.cos(theta), wy=Math.sin(theta);
+    var BINS=34, lo=-1.0, hi=1.0;
+    var hL=new Array(BINS).fill(0), hR=new Array(BINS).fill(0);
+    var k,p,s,bi;
+    for(k=0;k<PTS.length;k++){ p=PTS[k]; s=p.x*wx+p.y*wy; bi=Math.floor((s-lo)/(hi-lo)*BINS); bi=clamp(bi,0,BINS-1); if(p.cls===0) hL[bi]++; else hR[bi]++; }
+    var mx=1; for(k=0;k<BINS;k++){ if(hL[k]>mx)mx=hL[k]; if(hR[k]>mx)mx=hR[k]; }
+    var x0=px+10, x1=px+pw-10, y1=py+ph-12;
+    var bw=(x1-x0)/BINS, hmax=ph-44;
+    for(k=0;k<BINS;k++){
+      var x=x0+k*bw;
+      var lH=hL[k]/mx*hmax, rH=hR[k]/mx*hmax;
+      ctx.fillStyle=C.left;  ctx.globalAlpha=0.62; ctx.fillRect(x, y1-lH, bw*0.92, lH);
+      ctx.fillStyle=C.right; ctx.globalAlpha=0.62; ctx.fillRect(x, y1-rH, bw*0.92, rH);
+    }
+    ctx.globalAlpha=1;
+    // 基线
+    ctx.strokeStyle=C.lineStrong; ctx.lineWidth=1; ctx.beginPath(); ctx.moveTo(x0,y1); ctx.lineTo(x1,y1); ctx.stroke();
+    // 两类均值竖线
+    var st=projStats(theta);
+    function mLine(m,col){ var mx2=x0+(m-lo)/(hi-lo)*(x1-x0); ctx.strokeStyle=col; ctx.lineWidth=1.6; ctx.setLineDash([3,3]); ctx.beginPath(); ctx.moveTo(mx2,py+22); ctx.lineTo(mx2,y1); ctx.stroke(); ctx.setLineDash([]); }
+    mLine(st.mL, C.left); mLine(st.mR, C.right);
+    // 重叠提示
+    ctx.font=MONO('700 11px'); ctx.textAlign='right'; ctx.textBaseline='top';
+    ctx.fillStyle = isOpt? C.gold : C.fgMute;
+    ctx.fillText(isOpt ? (LANG==='cn'?'两类分开':'separated') : (LANG==='cn'?'看重叠':'overlap?'), x1, py+7);
+    ctx.restore();
+  }
+
+  /* ===================== Fisher J 曲线 (底部条): J(theta) 随角度变化, 当前角标记 =====================
+     让"为什么这个角度最优"可读 — 当前 theta 的小球在曲线上滑, 转到峰值定格。 */
+  function drawJCurve(px,py,pw,ph, theta){
+    ctx.save();
+    ctx.fillStyle=C.bg1; ctx.strokeStyle=C.line; ctx.lineWidth=1;
+    ctx.beginPath(); ctx.rect(px,py,pw,ph); ctx.fill(); ctx.stroke();
+    ctx.font=MONO('700 9px'); ctx.fillStyle=C.fgMute; ctx.textAlign='left'; ctx.textBaseline='top';
+    ctx.fillText('Fisher J( angle )', px+8, py+5);
+    var x0=px+10, x1=px+pw-10, yb=py+ph-8, yt=py+18;
+    // 曲线
+    ctx.strokeStyle=C.axisDim; ctx.lineWidth=2; ctx.beginPath();
+    for(var k=0;k<=180;k++){
+      var th=k/180*Math.PI;
+      var J=projStats(th).J;
+      var nx=x0+(k/180)*(x1-x0);
+      var ny=yb-(J-JMIN)/(JMAX-JMIN)*(yb-yt);
+      if(k===0)ctx.moveTo(nx,ny); else ctx.lineTo(nx,ny);
+    }
+    ctx.stroke();
+    // 最优峰位
+    var ox=x0+(THETA_OPT/Math.PI)*(x1-x0);
+    ctx.strokeStyle=C.gold; ctx.lineWidth=1; ctx.setLineDash([2,3]); ctx.globalAlpha=0.7;
+    ctx.beginPath(); ctx.moveTo(ox,yt); ctx.lineTo(ox,yb); ctx.stroke(); ctx.setLineDash([]); ctx.globalAlpha=1;
+    // 当前角小球
+    var thn=((theta%Math.PI)+Math.PI)%Math.PI;
+    var curJ=projStats(thn).J;
+    var bx=x0+(thn/Math.PI)*(x1-x0);
+    var byv=yb-(curJ-JMIN)/(JMAX-JMIN)*(yb-yt);
+    ctx.fillStyle = Math.abs(thn-THETA_OPT)<0.04 ? C.gold : C.solution;
+    ctx.beginPath(); ctx.arc(bx,byv,4.5,0,Math.PI*2); ctx.fill();
+    ctx.restore();
+  }
+
+  /* ===================== 阶段标题 (顶部) ===================== */
+  function drawHeader(){
+    ctx.save();
+    ctx.font = SANS('700 21px'); ctx.fillStyle=C.fg; ctx.textAlign='center'; ctx.textBaseline='top';
+    ctx.fillText(LANG==='cn' ? 'LDA：旋转一条线, 把想左手 / 想右手分开'
+                             : 'LDA: rotate one line to split think-L / think-R', W/2, 14);
+    ctx.restore();
+  }
+
+  /* ===================== 主循环 (autoplay rAF, 连续演化) ===================== */
+  var totalMs = 0; STAGES.forEach(function(s){ totalMs += s.ms; });
+  var startTs = performance.now();
+  var curStage = 0;
+
+  function stageIndex(elapsed){
+    var acc=0;
+    for(var i=0;i<STAGES.length;i++){ acc+=STAGES[i].ms; if(elapsed<acc) return i; }
+    return STAGES.length-1;
+  }
+
+  // theta 随时间连续推进: intro 静置一个坏方向 -> bad 停坏方向 ->
+  // sweep 连续扫过 -> tight 微调收紧 -> lock 落到 THETA_OPT 定格。
+  // 全程同一条线在转, 不是切换不同画面。
+  var THETA_BAD = THETA_OPT + Math.PI*0.42;  // 一个明显不好的方向
+  function thetaNow(elapsed){
+    var s0=STAGES[0].ms, s1=STAGES[1].ms, s2=STAGES[2].ms, s3=STAGES[3].ms;
+    var a0=s0, a1=a0+s1, a2=a1+s2, a3=a2+s3;
+    if(elapsed < a0){            // intro: 停在坏方向 (展示初始)
+      return THETA_BAD;
+    } else if(elapsed < a1){     // bad: 停坏方向 (强调分不开)
+      return THETA_BAD;
+    } else if(elapsed < a2){     // sweep: 从坏方向连续旋转, 越过最优一点
+      var k=easeInOut(clamp((elapsed-a1)/s2,0,1));
+      return lerp(THETA_BAD, THETA_OPT - 0.20, k);
+    } else if(elapsed < a3){     // tight: 微调收紧到最优附近
+      var k2=easeInOut(clamp((elapsed-a2)/s3,0,1));
+      return lerp(THETA_OPT - 0.20, THETA_OPT, k2);
+    } else {                     // lock: 落到最优, 定格
+      return THETA_OPT;
+    }
+  }
+
+  function syncSubtitle(idx){
+    var s=STAGES[idx];
+    document.getElementById('subCn').textContent = LANG==='cn'? s.cn : s.en;
+    document.getElementById('subEn').textContent = s.en;
+    document.getElementById('hudV1').textContent = tt(s.stage);
+    var gmap=[0,1,1,2,2];
+    var gids=['g1','g2','g3'];
+    for(var i=0;i<3;i++){ document.getElementById(gids[i]).classList.toggle('hl', i===gmap[idx]); }
+  }
+
+  function frame(ts){
+    var elapsed = (ts - startTs) % totalMs;
+    var idx = stageIndex(elapsed);
+    if(idx !== curStage){ curStage = idx; syncSubtitle(idx); }
+
+    var theta = thetaNow(elapsed);
+    var thn=((theta%Math.PI)+Math.PI)%Math.PI;
+    var isOpt = (idx===STAGES.length-1) || Math.abs(thn-THETA_OPT)<0.03;
+
+    ctx.clearRect(0,0,W,H);
+    ctx.fillStyle = C.bg0; ctx.fillRect(0,0,W,H);
+    drawHeader();
+
+    // 布局: 左大特征平面, 右上投影直方图, 底部 Fisher J 曲线条
+    var topY=52, botBar=64, gap=18, pad=44;
+    var planeR = clamp(Math.min((H-topY-botBar-58), W*0.42)/2, 120, 232);
+    var planeCx = pad + planeR + 10;
+    var planeCy = topY + planeR + 14;
+    var st = drawPlane(planeCx, planeCy, planeR, theta, isOpt);
+
+    var histX = planeCx + planeR + gap + 8;
+    var histW = clamp(W - histX - pad, 200, 430);
+    var histY = topY + 8;
+    var histH = clamp(planeR*1.0, 150, 230);
+    drawHist(histX, histY, histW, histH, theta, isOpt);
+
+    // Fisher J 曲线条 (底部, 横跨)
+    var jY = H - botBar - 6;
+    drawJCurve(pad, jY, W-2*pad, botBar, theta);
+
+    // HUD 实时读数
+    var angDeg = (thn*180/Math.PI);
+    var ratio = st.between/Math.max(st.within,1e-6);
+    document.getElementById('hudV2').textContent = angDeg.toFixed(0)+' deg';
+    document.getElementById('hudV3').textContent = st.between.toFixed(3)+' / '+st.within.toFixed(3);
+    document.getElementById('hudV4').textContent = st.J.toFixed(2);
+
+    // 高潮: 最优定格闪金
+    var flashEl = document.getElementById('flash');
+    var stageStart=0; for(var i=0;i<idx;i++) stageStart+=STAGES[i].ms;
+    var localK = clamp((elapsed-stageStart)/STAGES[idx].ms,0,1);
+    if(idx===STAGES.length-1 && localK>0.22 && localK<0.90){ flashEl.classList.add('on'); }
+    else { flashEl.classList.remove('on'); }
+
+    requestAnimationFrame(frame);
+  }
+
+  /* ===================== i18n 刷新 ===================== */
+  function refreshI18N(){
+    document.getElementById('badgeMod').textContent = t('badgeMod');
+    document.getElementById('brandH1').textContent = t('brandH1');
+    document.getElementById('brandSub').textContent = t('brandSub');
+    document.getElementById('mascotName').textContent = t('mascotName');
+    document.getElementById('g1').querySelector('.gtxt').textContent = t('g1');
+    document.getElementById('g2').querySelector('.gtxt').textContent = t('g2');
+    document.getElementById('g3').querySelector('.gtxt').textContent = t('g3');
+    document.getElementById('routeTtl').textContent = t('routeTtl');
+    document.getElementById('routeHere').textContent = t('routeHere');
+    var rs = document.querySelectorAll('#route .route-step span[data-s]');
+    for(var j=0;j<rs.length;j++){ rs[j].textContent = I18N.route[LANG][j]; }
+    if(LANG==='cn'){ document.getElementById('goalTxt').innerHTML='终点：<b>用念头让它动</b>'; }
+    else { document.getElementById('goalTxt').innerHTML='Goal: <b>move it with thought</b>'; }
+    document.getElementById('hudL1').textContent = t('hudL1');
+    document.getElementById('hudL2').textContent = t('hudL2');
+    document.getElementById('hudL3').textContent = t('hudL3');
+    document.getElementById('hudL4').textContent = t('hudL4');
+    document.getElementById('langBtn').textContent = t('btnLang');
+    document.getElementById('flashSub').textContent = LANG==='cn'
+      ? 'LDA 找到最优分界线 — 这就是分类器的核心'
+      : 'LDA finds the optimal boundary — the heart of the classifier';
+    syncSubtitle(curStage);
+  }
+  document.getElementById('langBtn').addEventListener('click', function(){
+    LANG = LANG==='cn' ? 'en' : 'cn';
+    refreshI18N();
+  });
+
+  // init
+  syncSubtitle(0);
+  refreshI18N();
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
