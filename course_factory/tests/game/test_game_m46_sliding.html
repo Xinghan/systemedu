@@ -1,0 +1,587 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>滑窗解码观察站 — 看脑波一步步变成意图</title>
+<style>
+  /* ===== cs 主题 (CS-01 Data Cathedral) — B 类深空底 ===== */
+  :root{
+    --bg-0:oklch(0.15 0.03 215);       /* 深空底 */
+    --bg-1:oklch(0.20 0.04 215);       /* 面板 */
+    --bg-2:oklch(0.26 0.05 212);       /* 卡片 */
+    --cs:oklch(0.75 0.17 200);         /* 学科 accent SIGNAL */
+    --signal:oklch(0.75 0.17 200);
+    --core:oklch(0.55 0.16 200);
+    --depth:oklch(0.35 0.10 210);
+    --flash:oklch(0.92 0.08 190);
+    --query:oklch(0.85 0.14 85);
+    --ink:oklch(0.96 0.02 210);
+    --ink-dim:oklch(0.76 0.03 210);
+    --ink-mute:oklch(0.56 0.04 210);
+    --line:oklch(0.40 0.05 210);
+    --left:oklch(0.78 0.16 150);       /* 左手概率 (绿) */
+    --right:oklch(0.82 0.15 80);       /* 右手概率 (金) */
+    --alert:oklch(0.66 0.20 25);
+    --mono:'JetBrains Mono','SFMono-Regular',Consolas,'Liberation Mono',monospace;
+    --sans:'Inter','Segoe UI','Helvetica Neue',Arial,sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  html,body{height:100vh;overflow:hidden;background:var(--bg-0);color:var(--ink);font-family:var(--sans);}
+  body{display:flex;}
+
+  /* ---------- 200px sidebar ---------- */
+  .game-sidebar{width:200px;min-width:200px;flex-shrink:0;height:100vh;background:var(--bg-1);
+    border-right:1.5px solid var(--depth);display:flex;flex-direction:column;gap:11px;padding:14px;overflow-y:auto;}
+  .mascot{display:flex;align-items:center;gap:8px;padding-bottom:10px;border-bottom:1px solid var(--depth);}
+  .mascot svg{width:34px;height:34px;flex-shrink:0;}
+  .mascot-name{font-family:var(--mono);font-size:11px;color:var(--signal);letter-spacing:.5px;}
+  .mascot-role{font-size:10px;color:var(--ink-mute);}
+
+  .side-title{font-size:13.5px;font-weight:800;line-height:1.3;color:var(--ink);}
+  .side-sub{font-size:10.5px;line-height:1.55;color:var(--ink-dim);}
+
+  .route{display:flex;flex-direction:column;gap:4px;margin-top:2px;}
+  .route-lbl{font-family:var(--mono);font-size:9px;color:var(--ink-mute);letter-spacing:1px;}
+  .stop{display:flex;align-items:center;gap:6px;font-family:var(--mono);font-size:10px;color:var(--ink-mute);}
+  .stop .dot{width:8px;height:8px;border-radius:50%;background:var(--depth);flex-shrink:0;}
+  .stop.done .dot{background:var(--core);}
+  .stop.here{color:var(--flash);font-weight:700;}
+  .stop.here .dot{background:var(--signal);box-shadow:0 0 0 3px color-mix(in oklch,var(--signal) 30%,transparent);}
+
+  .endpoint{display:flex;align-items:center;gap:7px;opacity:.6;padding-top:8px;border-top:1px solid var(--depth);}
+  .endpoint svg{flex-shrink:0;}
+  .endpoint span{font-family:var(--mono);font-size:8.5px;color:var(--ink-mute);line-height:1.4;}
+
+  .spacer{flex:1;}
+  .lang-btn{background:var(--bg-2);border:1.5px solid var(--core);color:var(--ink);
+    font-family:var(--mono);font-size:11px;letter-spacing:1px;padding:7px;cursor:pointer;
+    box-shadow:2px 2px 0 var(--bg-0);transition:transform .08s;width:100%;}
+  .lang-btn:hover{transform:translate(-1px,-1px);}
+  .lang-btn:active{transform:translate(1px,1px);}
+
+  /* ---------- main ---------- */
+  .game-main{flex:1;height:100vh;display:flex;flex-direction:column;min-width:0;}
+  .topbar{display:flex;align-items:center;justify-content:space-between;
+    padding:12px 20px;border-bottom:1.5px solid var(--depth);flex:0 0 auto;}
+  .topbar h1{font-size:15px;font-weight:700;letter-spacing:.3px;}
+  .topbar .hud{display:flex;gap:20px;font-family:var(--mono);font-size:10.5px;color:var(--ink-dim);}
+  .topbar .hud b{color:var(--flash);font-size:13px;}
+
+  .brief{background:var(--bg-1);border-bottom:1.5px solid var(--depth);border-left:3px solid var(--signal);
+    padding:8px 20px;flex:0 0 auto;}
+  .brief p{font-size:11.5px;color:var(--ink-dim);line-height:1.5;}
+  .brief b{color:var(--flash);}
+
+  /* 控制区: 触发脑波段 + 滑窗速度 (因果触发, 非滑块) */
+  .controls{display:flex;align-items:center;gap:9px;flex-wrap:wrap;
+    padding:11px 20px;border-bottom:1.5px solid var(--depth);flex:0 0 auto;}
+  .grp{display:flex;align-items:center;gap:7px;}
+  .grp-label{font-family:var(--mono);font-size:9.5px;color:var(--ink-mute);letter-spacing:.5px;}
+  .divider{width:1px;height:24px;background:var(--depth);margin:0 4px;}
+
+  .act-btn{font-family:var(--mono);font-size:11.5px;font-weight:600;padding:8px 13px;cursor:pointer;
+    transition:.12s;letter-spacing:.3px;border:1.5px solid var(--line);background:var(--bg-2);color:var(--ink);}
+  .act-btn:hover:not(:disabled){border-color:var(--signal);color:var(--flash);}
+  .act-btn:disabled{opacity:.32;cursor:not-allowed;}
+  .act-btn.primary{background:var(--signal);color:var(--bg-0);border-color:var(--signal);box-shadow:3px 3px 0 var(--bg-0);}
+  .act-btn.primary:hover:not(:disabled){background:var(--flash);}
+  .act-btn.stop{background:transparent;color:var(--ink);}
+  .act-btn.stop:hover:not(:disabled){border-color:var(--alert);color:var(--alert);}
+  .act-btn.feed-l{border-color:var(--left);color:var(--left);}
+  .act-btn.feed-l:hover:not(:disabled){background:color-mix(in oklch,var(--left) 18%,transparent);}
+  .act-btn.feed-r{border-color:var(--right);color:var(--right);}
+  .act-btn.feed-r:hover:not(:disabled){background:color-mix(in oklch,var(--right) 18%,transparent);}
+  .speed-btn{font-family:var(--mono);font-size:10.5px;padding:7px 11px;cursor:pointer;transition:.12s;
+    border:1.5px solid var(--line);background:var(--bg-2);color:var(--ink-dim);}
+  .speed-btn.active{background:var(--core);color:var(--bg-0);border-color:var(--core);box-shadow:2px 2px 0 var(--bg-0);}
+  .speed-btn:hover:not(.active){color:var(--ink);border-color:var(--core);}
+
+  /* canvas 舞台 — 父容器 flex column */
+  .stage{flex:1;display:flex;flex-direction:column;min-height:0;padding:14px 20px 16px;position:relative;}
+  .stage canvas{flex:1;width:100%;height:100%;display:block;}
+
+  .verdict{position:absolute;inset:14px 20px 16px;display:none;flex-direction:column;
+    align-items:center;justify-content:center;text-align:center;gap:12px;padding:0 30px;
+    background:color-mix(in oklch,var(--bg-0) 92%,transparent);z-index:5;}
+  .verdict.show{display:flex;}
+  .verdict .badge{font-family:var(--mono);font-size:13px;color:var(--query);letter-spacing:1px;}
+  .verdict .title{font-size:20px;font-weight:800;color:var(--flash);}
+  .verdict .desc{font-size:12.5px;color:var(--ink-dim);line-height:1.65;max-width:480px;}
+  .verdict .desc b{color:var(--signal);}
+</style>
+</head>
+<body>
+
+  <!-- ===== sidebar ===== -->
+  <aside class="game-sidebar">
+    <div class="mascot">
+      <!-- Bit — 悬浮立方精灵 (SVG, 无 emoji) -->
+      <svg viewBox="0 0 40 40" fill="none">
+        <rect x="9" y="9" width="22" height="22" rx="2" fill="var(--bg-2)" stroke="var(--signal)" stroke-width="2"/>
+        <rect x="13" y="13" width="6" height="6" fill="var(--signal)"/>
+        <rect x="21" y="13" width="6" height="6" fill="var(--core)"/>
+        <rect x="13" y="21" width="6" height="6" fill="var(--core)"/>
+        <rect x="21" y="21" width="6" height="6" fill="var(--flash)"/>
+      </svg>
+      <div>
+        <div class="mascot-name" id="mascotName">BIT</div>
+        <div class="mascot-role" id="mascotRole">解码向导</div>
+      </div>
+    </div>
+
+    <div class="side-title" id="sideTitle">滑窗解码观察站</div>
+    <div class="side-sub" id="sideSub">脑控要实时，看滑窗怎么一步步吐出你的意图。</div>
+
+    <div class="route">
+      <div class="route-lbl" id="routeLbl">脑控 MINECRAFT 路线</div>
+      <div class="stop done"><span class="dot"></span><span data-s="1">S1 信号基础</span></div>
+      <div class="stop done"><span class="dot"></span><span data-s="2">S2 信号清洗</span></div>
+      <div class="stop done"><span class="dot"></span><span data-s="3">S3 分类与方法</span></div>
+      <div class="stop here"><span class="dot"></span><span data-s="4">S4 实时解码</span></div>
+      <div class="stop"><span class="dot"></span><span data-s="5">S5 训练专属模型</span></div>
+      <div class="stop"><span class="dot"></span><span data-s="6">S6 脑控成型</span></div>
+    </div>
+
+    <div class="spacer"></div>
+
+    <div class="endpoint">
+      <svg width="26" height="26" viewBox="0 0 26 26">
+        <rect x="3" y="3" width="9" height="9" fill="var(--core)"/>
+        <rect x="14" y="3" width="9" height="9" fill="var(--depth)"/>
+        <rect x="3" y="14" width="9" height="9" fill="var(--depth)"/>
+        <rect x="14" y="14" width="9" height="9" fill="var(--core)"/>
+      </svg>
+      <span id="epTxt">终点：脑控 Minecraft<br>S6 用念头放置方块</span>
+    </div>
+
+    <button id="langBtn" class="lang-btn">中 / EN</button>
+  </aside>
+
+  <!-- ===== main ===== -->
+  <main class="game-main">
+    <div class="topbar">
+      <h1 id="mainTitle">实时解码：脑波 > 滑窗 > 概率</h1>
+      <div class="hud">
+        <span id="hudWin">窗位 <b id="vWin">0%</b></span>
+        <span id="hudOut">解码输出 <b id="vOut">0</b></span>
+        <span id="hudVote">累积投票 <b id="vVote">L0 R0</b></span>
+      </div>
+    </div>
+
+    <div class="brief">
+      <p id="briefP"><b>因果链:</b> 脑波流入 > 2 秒窗口滑动 > 窗内解码 > 吐出左/右概率 > 累积投票。先点「开始实时流」，再触发不同脑波段，看概率流如何一步步响应。</p>
+    </div>
+
+    <div class="controls">
+      <div class="grp">
+        <button id="btnStart" class="act-btn primary" data-cn="开始实时流" data-en="START STREAM">开始实时流</button>
+        <button id="btnStop" class="act-btn stop" data-cn="停止" data-en="STOP" disabled>停止</button>
+      </div>
+      <div class="divider"></div>
+      <div class="grp">
+        <span class="grp-label" id="feedLabel">触发脑波</span>
+        <button id="btnFeedL" class="act-btn feed-l" data-cn="强左" data-en="STRONG L" disabled>强左</button>
+        <button id="btnFeedW" class="act-btn" data-cn="弱/含糊" data-en="WEAK" disabled>弱/含糊</button>
+        <button id="btnFeedR" class="act-btn feed-r" data-cn="强右" data-en="STRONG R" disabled>强右</button>
+      </div>
+      <div class="divider"></div>
+      <div class="grp">
+        <span class="grp-label" id="speedLabel">窗滑速度</span>
+        <button class="speed-btn" data-speed="fast" data-cn="太快" data-en="TOO FAST">太快</button>
+        <button class="speed-btn active" data-speed="mid" data-cn="标准 2s" data-en="STD 2s">标准 2s</button>
+        <button class="speed-btn" data-speed="slow" data-cn="太慢" data-en="TOO SLOW">太慢</button>
+      </div>
+    </div>
+
+    <div class="stage">
+      <canvas id="cv"></canvas>
+      <div class="verdict" id="verdict">
+        <div class="badge" id="vBadge">CAUSAL CHAIN UNLOCKED</div>
+        <div class="title" id="vTitle">实时解码观察者</div>
+        <div class="desc" id="vDesc"></div>
+      </div>
+    </div>
+  </main>
+
+<script>
+"use strict";
+var LANG='cn';
+
+// ---------- i18n ----------
+var T={
+  cn:{
+    langBtn:'中 / EN', mascotRole:'解码向导', sideTitle:'滑窗解码观察站',
+    sideSub:'脑控要实时，看滑窗怎么一步步吐出你的意图。',
+    routeLbl:'脑控 MINECRAFT 路线',
+    stops:['S1 信号基础','S2 信号清洗','S3 分类与方法','S4 实时解码','S5 训练专属模型','S6 脑控成型'],
+    epTxt:'终点：脑控 Minecraft<br>S6 用念头放置方块',
+    mainTitle:'实时解码：脑波 > 滑窗 > 概率',
+    hudWin:'窗位', hudOut:'解码输出', hudVote:'累积投票',
+    briefP:'<b>因果链:</b> 脑波流入 > 2 秒窗口滑动 > 窗内解码 > 吐出左/右概率 > 累积投票。先点「开始实时流」，再触发不同脑波段，看概率流如何一步步响应。',
+    feedLabel:'触发脑波', speedLabel:'窗滑速度',
+    start:'开始实时流', stop:'停止', feedL:'强左', feedW:'弱/含糊', feedR:'强右',
+    spFast:'太快', spMid:'标准 2s', spSlow:'太慢',
+    chain:['脑波流入','2s 窗滑动','窗内解码','左/右概率','累积投票'],
+    leftL:'左 LEFT', rightL:'右 RIGHT',
+    noiseHint:'窗太快 > 样本少、噪声大、概率乱跳',
+    lagHint:'窗太慢 > 反应迟、跟不上意图切换',
+    okHint:'2s 标准窗 > 样本够、平滑又跟得上',
+    streamLbl:'脑波流 (EEG)', winLbl:'滑动窗口', decLbl:'解码器', probLbl:'概率', voteLbl:'投票累积',
+    decided:'判定',
+    badge:'因果链跑通',
+    vTitle:'实时解码观察者',
+    vDesc:'你刚追完整条因果链：<b>脑波流入 > 2s 窗滑动 > 窗内解码 > 左/右概率 > 累积投票</b>。这正是脑控的实时心脏——电脑每隔一拍就读一小段刚刚的脑波，猜你想动哪只手。<br><br>实时解码跑通，下一步接进 <b>Minecraft</b>：S5 训练你的专属模型，S6 就靠这条链把念头变成放方块。'
+  },
+  en:{
+    langBtn:'EN / 中', mascotRole:'Decode Guide', sideTitle:'Sliding-Window Decoder',
+    sideSub:'Brain control must be real-time — watch the window turn brainwaves into intent.',
+    routeLbl:'BRAIN-CONTROL MINECRAFT ROUTE',
+    stops:['S1 Signal basics','S2 Cleaning','S3 Classify & methods','S4 Real-time decode','S5 Train your model','S6 Brain control'],
+    epTxt:'Endpoint: mind-control Minecraft<br>S6 place blocks with thought',
+    mainTitle:'Real-time decode: wave -> window -> prob',
+    hudWin:'Win pos', hudOut:'Decodes', hudVote:'Votes',
+    briefP:'<b>Causal chain:</b> brainwaves flow in -> a 2s window slides -> decode inside it -> emit left/right probability -> accumulate votes. Hit START STREAM, then trigger bands and watch the probability flow respond.',
+    feedLabel:'Trigger band', speedLabel:'Window speed',
+    start:'START STREAM', stop:'STOP', feedL:'STRONG L', feedW:'WEAK', feedR:'STRONG R',
+    spFast:'TOO FAST', spMid:'STD 2s', spSlow:'TOO SLOW',
+    chain:['Wave in','2s window','Decode','L/R prob','Vote'],
+    leftL:'LEFT', rightL:'RIGHT',
+    noiseHint:'Too fast -> few samples, noisy, prob jitters',
+    lagHint:'Too slow -> laggy, misses intent switches',
+    okHint:'2s window -> enough samples, smooth & responsive',
+    streamLbl:'Brainwave stream (EEG)', winLbl:'Sliding window', decLbl:'Decoder', probLbl:'Probability', voteLbl:'Vote tally',
+    decided:'DECIDED',
+    badge:'CAUSAL CHAIN COMPLETE',
+    vTitle:'Real-time Decode Observer',
+    vDesc:'You traced the whole chain: <b>wave in -> 2s window slides -> decode inside -> L/R probability -> votes pile up</b>. This is the beating heart of brain control: every tick the computer reads a slice of recent brainwaves and guesses which hand you imagined.<br><br>Real-time decode works. Next it wires into <b>Minecraft</b>: S5 trains your personal model, S6 turns thought into placed blocks through this very chain.'
+  }
+};
+
+// ---------- state ----------
+var streaming=false;
+var winSpeed='mid';                 // fast / mid / slow
+var SPEED={fast:0.045, mid:0.018, slow:0.007};   // 窗位前进/帧
+var winSamples={fast:12, mid:50, slow:120};       // 窗内样本数 -> 噪声/平滑
+var winPos=0;                       // 0..1 窗口在流上的位置
+var intentBias=0;                   // -1 强左 ... +1 强右 (0 = 弱/含糊)
+var intentDecay=0.992;
+var probL=0.5, probR=0.5;           // 当前解码概率
+var votes={L:0,R:0};
+var decodeCount=0;
+var lastDecode=0;
+var decideTimer=0, decided=null;    // 最近一次判定 'L'/'R'
+var hint='';
+var pulse=[];                       // 因果链脉冲: {seg, t}  seg=0..4
+var unlocked=false;
+var streamData=[];                  // 脑波流缓存 (供绘制)
+var bandTriggered=0;                // 已触发脑波次数 (解锁条件)
+var stageNames=['L','W','R'];       // last triggered
+var lastTrig='';
+
+// ---------- DOM ----------
+var $=function(id){return document.getElementById(id);};
+var btnStart=$('btnStart'), btnStop=$('btnStop');
+var btnFeedL=$('btnFeedL'), btnFeedW=$('btnFeedW'), btnFeedR=$('btnFeedR');
+var speedBtns=document.querySelectorAll('.speed-btn');
+
+function applyLang(){
+  var d=T[LANG];
+  $('langBtn').textContent=d.langBtn;
+  $('mascotRole').textContent=d.mascotRole;
+  $('sideTitle').textContent=d.sideTitle;
+  $('sideSub').textContent=d.sideSub;
+  $('routeLbl').textContent=d.routeLbl;
+  document.querySelectorAll('.stop span[data-s]').forEach(function(el){
+    var i=parseInt(el.getAttribute('data-s'),10)-1; el.textContent=d.stops[i];
+  });
+  $('epTxt').innerHTML=d.epTxt;
+  $('mainTitle').textContent=d.mainTitle;
+  $('briefP').innerHTML=d.briefP;
+  $('feedLabel').textContent=d.feedLabel;
+  $('speedLabel').textContent=d.speedLabel;
+  $('hudWin').firstChild.textContent=d.hudWin+' ';
+  $('hudOut').firstChild.textContent=d.hudOut+' ';
+  $('hudVote').firstChild.textContent=d.hudVote+' ';
+  btnStart.textContent=d.start; btnStop.textContent=d.stop;
+  btnFeedL.textContent=d.feedL; btnFeedW.textContent=d.feedW; btnFeedR.textContent=d.feedR;
+  speedBtns.forEach(function(b){
+    var s=b.getAttribute('data-speed');
+    b.textContent=s==='fast'?d.spFast:s==='slow'?d.spSlow:d.spMid;
+  });
+  $('vBadge').textContent=d.badge;
+  $('vTitle').textContent=d.vTitle;
+  $('vDesc').innerHTML=d.vDesc;
+}
+
+$('langBtn').addEventListener('click',function(){LANG=LANG==='cn'?'en':'cn';applyLang();});
+
+function setStreaming(on){
+  streaming=on;
+  btnStart.disabled=on; btnStop.disabled=!on;
+  btnFeedL.disabled=!on; btnFeedW.disabled=!on; btnFeedR.disabled=!on;
+  if(on){ pulse.push({seg:0,t:0}); }
+}
+btnStart.addEventListener('click',function(){
+  if(unlocked){ // restart fresh
+    unlocked=false; $('verdict').classList.remove('show');
+    votes={L:0,R:0}; decodeCount=0; bandTriggered=0; probL=0.5; probR=0.5;
+  }
+  setStreaming(true);
+});
+btnStop.addEventListener('click',function(){ setStreaming(false); });
+
+function trigger(bias,label){
+  if(!streaming) return;
+  intentBias=bias; lastTrig=label;
+  bandTriggered++;
+  pulse.push({seg:0,t:0});       // 新脉冲从「脑波流入」段出发
+}
+btnFeedL.addEventListener('click',function(){ trigger(-1,'L'); });
+btnFeedW.addEventListener('click',function(){ trigger(0,'W'); });
+btnFeedR.addEventListener('click',function(){ trigger(1,'R'); });
+
+speedBtns.forEach(function(b){
+  b.addEventListener('click',function(){
+    speedBtns.forEach(function(x){x.classList.remove('active');});
+    b.classList.add('active');
+    winSpeed=b.getAttribute('data-speed');
+  });
+});
+
+// ---------- canvas ----------
+var cv=$('cv'), ctx=cv.getContext('2d');
+var W=0,H=0,DPR=1;
+function resize(){
+  var r=cv.parentElement.getBoundingClientRect();
+  if(r.width<2||r.height<2) return;
+  DPR=window.devicePixelRatio||1;
+  cv.width=r.width*DPR; cv.height=r.height*DPR;
+  cv.style.width=r.width+'px'; cv.style.height=r.height+'px';
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  W=r.width; H=r.height;
+}
+window.addEventListener('resize',resize);
+setTimeout(resize,50);setTimeout(resize,250);setTimeout(resize,700);
+if(document.fonts&&document.fonts.ready){document.fonts.ready.then(resize);}
+
+// 颜色读取
+var CSS=getComputedStyle(document.documentElement);
+function c(n){return CSS.getPropertyValue(n).trim();}
+var COL={bg0:'',bg1:'',bg2:'',signal:'',core:'',depth:'',flash:'',query:'',ink:'',inkDim:'',inkMute:'',line:'',left:'',right:'',alert:''};
+function loadCol(){
+  COL.bg0=c('--bg-0');COL.bg1=c('--bg-1');COL.bg2=c('--bg-2');COL.signal=c('--cs');
+  COL.core=c('--core');COL.depth=c('--depth');COL.flash=c('--flash');COL.query=c('--query');
+  COL.ink=c('--ink');COL.inkDim=c('--ink-dim');COL.inkMute=c('--ink-mute');COL.line=c('--line');
+  COL.left=c('--left');COL.right=c('--right');COL.alert=c('--alert');
+}
+loadCol();
+
+var frame=0;
+// 5 段因果链坐标 (相对) — 横向流水线
+function chainBoxes(){
+  var pad=24, gap=12;
+  var n=5;
+  var bx=pad, by=H*0.62, bw=(W-pad*2-gap*(n-1))/n, bh=H*0.30;
+  var boxes=[];
+  for(var i=0;i<n;i++){ boxes.push({x:bx+i*(bw+gap), y:by, w:bw, h:bh, cx:bx+i*(bw+gap)+bw/2, cy:by+bh/2}); }
+  return boxes;
+}
+
+function step(){
+  frame++;
+  if(streaming){
+    winPos+=SPEED[winSpeed];
+    if(winPos>1) winPos-=1;
+    intentBias*=intentDecay;
+
+    // 解码节奏: 每当窗口滑过一个「解码间隔」就吐一次概率
+    var interval=winSpeed==='fast'?6:winSpeed==='slow'?40:16;
+    if(frame-lastDecode>=interval){
+      lastDecode=frame;
+      decodeCount++;
+      // 窗内样本数决定噪声: 样本少 -> 噪声大
+      var ns=winSamples[winSpeed];
+      var noise=(Math.random()-0.5)*2*(0.5/Math.sqrt(ns/4));
+      // 真信号 = intentBias 映射到概率
+      var sig=intentBias*0.45;
+      var pr=0.5+sig+noise;          // 右手概率
+      pr=Math.max(0.02,Math.min(0.98,pr));
+      // 平滑 (慢窗更平滑)
+      var alpha=winSpeed==='fast'?0.7:winSpeed==='slow'?0.18:0.4;
+      probR=probR*(1-alpha)+pr*alpha;
+      probL=1-probR;
+      // 投票
+      if(probR>0.62){votes.R++;decided='R';decideTimer=28;}
+      else if(probL>0.62){votes.L++;decided='L';decideTimer=28;}
+      pulse.push({seg:2,t:0});       // 从解码段往后发脉冲
+    }
+  }
+  if(decideTimer>0) decideTimer--;
+
+  // 推进脉冲
+  for(var i=pulse.length-1;i>=0;i--){
+    pulse[i].t+=0.045;
+    if(pulse[i].t>=1){
+      pulse[i].seg++; pulse[i].t=0;
+      if(pulse[i].seg>4) pulse.splice(i,1);
+    }
+  }
+
+  // 解锁: 触发过 >=3 种以上脑波 (强左/弱/强右各试) 且累积投票 >= 14
+  if(streaming && !unlocked && bandTriggered>=4 && (votes.L+votes.R)>=14){
+    unlocked=true; streaming=false;
+    btnStart.disabled=false; btnStop.disabled=true;
+    btnFeedL.disabled=true; btnFeedW.disabled=true; btnFeedR.disabled=true;
+    $('verdict').classList.add('show');
+  }
+}
+
+function roundRect(x,y,w,h,r){
+  ctx.beginPath();
+  ctx.moveTo(x+r,y);ctx.arcTo(x+w,y,x+w,y+h,r);ctx.arcTo(x+w,y+h,x,y+h,r);
+  ctx.arcTo(x,y+h,x,y,r);ctx.arcTo(x,y,x+w,y,r);ctx.closePath();
+}
+
+function drawStream(){
+  // 顶部脑波流 + 滑动窗
+  var d=T[LANG];
+  var sx=24, sw=W-48, sy=H*0.10, sh=H*0.22;
+  ctx.strokeStyle=COL.line;ctx.lineWidth=1;
+  ctx.strokeRect(sx,sy,sw,sh);
+  ctx.fillStyle=COL.inkMute;ctx.font='10px '+ '"JetBrains Mono",monospace';ctx.textAlign='left';
+  ctx.fillText(d.streamLbl,sx+6,sy-6);
+
+  // 波形 (随 intentBias 倾斜)
+  ctx.beginPath();
+  var midY=sy+sh/2;
+  for(var px=0;px<=sw;px+=3){
+    var ph=px/12 - frame*0.10;
+    var amp = sh*0.30 * (0.5+0.5*Math.abs(intentBias));
+    var y=midY + Math.sin(ph)*amp*0.5 + Math.sin(ph*2.3+1)*amp*0.3 + (Math.random()-0.5)*amp*0.15;
+    if(px===0) ctx.moveTo(sx+px,y); else ctx.lineTo(sx+px,y);
+  }
+  ctx.strokeStyle=streaming?COL.signal:COL.depth;ctx.lineWidth=1.6;ctx.stroke();
+
+  // 滑动窗口 (2s 长度按 winSamples 比例)
+  var wfrac=winSpeed==='fast'?0.10:winSpeed==='slow'?0.34:0.20;
+  var ww=sw*wfrac;
+  var wx=sx+winPos*(sw-ww);
+  ctx.fillStyle='color-mix(in oklch,'+COL.query+' 16%, transparent)';
+  // color-mix in fillStyle may not parse in canvas; fallback rgba via globalAlpha
+  ctx.save();
+  ctx.globalAlpha=0.16; ctx.fillStyle=COL.query; ctx.fillRect(wx,sy+1,ww,sh-2); ctx.restore();
+  ctx.strokeStyle=COL.query;ctx.lineWidth=2;ctx.strokeRect(wx,sy+1,ww,sh-2);
+  ctx.fillStyle=COL.query;ctx.font='9px "JetBrains Mono",monospace';ctx.textAlign='center';
+  ctx.fillText(d.winLbl+' ('+winSamples[winSpeed]+' smp)',wx+ww/2,sy-6);
+}
+
+function drawChain(){
+  var d=T[LANG];
+  var boxes=chainBoxes();
+  var labels=d.chain;
+  // 连线
+  for(var i=0;i<boxes.length-1;i++){
+    var a=boxes[i], b=boxes[i+1];
+    ctx.strokeStyle=COL.depth;ctx.lineWidth=2;
+    ctx.beginPath();ctx.moveTo(a.x+a.w,a.cy);ctx.lineTo(b.x,b.cy);ctx.stroke();
+    // 箭头
+    ctx.fillStyle=COL.depth;
+    ctx.beginPath();ctx.moveTo(b.x,b.cy);ctx.lineTo(b.x-7,b.cy-4);ctx.lineTo(b.x-7,b.cy+4);ctx.closePath();ctx.fill();
+  }
+  // 脉冲沿连线流动
+  pulse.forEach(function(p){
+    if(p.seg>=boxes.length-1) return;
+    var a=boxes[p.seg], b=boxes[p.seg+1];
+    var x=a.x+a.w + (b.x-(a.x+a.w))*p.t;
+    var col= lastTrig==='L'?COL.left : lastTrig==='R'?COL.right : COL.flash;
+    ctx.fillStyle=col;
+    ctx.beginPath();ctx.arc(x,a.cy,5,0,Math.PI*2);ctx.fill();
+    ctx.globalAlpha=0.3;ctx.beginPath();ctx.arc(x,a.cy,10,0,Math.PI*2);ctx.fill();ctx.globalAlpha=1;
+  });
+  // 盒子
+  for(var i=0;i<boxes.length;i++){
+    var bx=boxes[i];
+    var active = streaming && (frame%2===0);
+    ctx.fillStyle=COL.bg2;
+    roundRect(bx.x,bx.y,bx.w,bx.h,5);ctx.fill();
+    ctx.strokeStyle= (i===3)?COL.signal:COL.line;ctx.lineWidth=1.5;
+    roundRect(bx.x,bx.y,bx.w,bx.h,5);ctx.stroke();
+    ctx.fillStyle=COL.inkDim;ctx.font='600 11px "JetBrains Mono",monospace';ctx.textAlign='center';
+    wrapText(labels[i],bx.cx,bx.y+18,bx.w-10,13);
+
+    // 第 3 段 (概率) 画双条
+    if(i===3){
+      var pbx=bx.x+10, pbw=bx.w-20, pby=bx.y+bx.h*0.46, pbh=10;
+      // 右概率
+      ctx.fillStyle=COL.bg0;ctx.fillRect(pbx,pby,pbw,pbh);
+      ctx.fillStyle=COL.right;ctx.fillRect(pbx,pby,pbw*probR,pbh);
+      ctx.fillStyle=COL.inkMute;ctx.font='8px "JetBrains Mono",monospace';ctx.textAlign='left';
+      ctx.fillText('R '+probR.toFixed(2),pbx,pby-3);
+      var pby2=pby+pbh+10;
+      ctx.fillStyle=COL.bg0;ctx.fillRect(pbx,pby2,pbw,pbh);
+      ctx.fillStyle=COL.left;ctx.fillRect(pbx,pby2,pbw*probL,pbh);
+      ctx.fillText('L '+probL.toFixed(2),pbx,pby2-3);
+    }
+    // 第 4 段 (投票) 画 L/R 计数
+    if(i===4){
+      ctx.font='700 15px "JetBrains Mono",monospace';
+      ctx.textAlign='center';
+      ctx.fillStyle=COL.left;ctx.fillText('L '+votes.L,bx.cx,bx.y+bx.h*0.55);
+      ctx.fillStyle=COL.right;ctx.fillText('R '+votes.R,bx.cx,bx.y+bx.h*0.78);
+    }
+    // 第 0 段 (流入) 强弱指示
+    if(i===0){
+      ctx.font='700 13px "JetBrains Mono",monospace';ctx.textAlign='center';
+      var lbl = lastTrig==='L'?d.leftL : lastTrig==='R'?d.rightL : (streaming?'...':'idle');
+      ctx.fillStyle= lastTrig==='L'?COL.left : lastTrig==='R'?COL.right : COL.inkMute;
+      ctx.fillText(lbl,bx.cx,bx.y+bx.h*0.62);
+    }
+    // 第 2 段 (解码) 判定闪烁
+    if(i===2 && decideTimer>0 && decided){
+      ctx.font='700 13px "JetBrains Mono",monospace';ctx.textAlign='center';
+      ctx.fillStyle= decided==='L'?COL.left:COL.right;
+      ctx.fillText(d.decided+' '+decided,bx.cx,bx.y+bx.h*0.66);
+    }
+  }
+}
+
+function wrapText(text,x,y,maxW,lh){
+  var words=text.split(' ');var line='';var yy=y;
+  for(var i=0;i<words.length;i++){
+    var test=line+words[i]+' ';
+    if(ctx.measureText(test).width>maxW && line!==''){ctx.fillText(line.trim(),x,yy);line=words[i]+' ';yy+=lh;}
+    else line=test;
+  }
+  ctx.fillText(line.trim(),x,yy);
+}
+
+function drawHintBar(){
+  var d=T[LANG];
+  hint = winSpeed==='fast'?d.noiseHint : winSpeed==='slow'?d.lagHint : d.okHint;
+  var col = winSpeed==='mid'?COL.left:COL.alert;
+  ctx.textAlign='center';ctx.font='11px "JetBrains Mono",monospace';
+  ctx.fillStyle=col;
+  ctx.fillText(hint, W/2, H*0.40);
+}
+
+function render(){
+  step();
+  if(!W||!H){ requestAnimationFrame(render); return; }
+  ctx.fillStyle=COL.bg0;ctx.fillRect(0,0,W,H);
+  drawStream();
+  drawHintBar();
+  drawChain();
+
+  // HUD 同步
+  $('vWin').textContent=Math.round(winPos*100)+'%';
+  $('vOut').textContent=decodeCount;
+  $('vVote').textContent='L'+votes.L+' R'+votes.R;
+
+  requestAnimationFrame(render);
+}
+
+applyLang();
+requestAnimationFrame(render);
+</script>
+</body>
+</html>

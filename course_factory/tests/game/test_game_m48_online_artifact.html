@@ -1,0 +1,651 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>M48 · 在线伪迹防护设计师 — 眨眼咬牙不害你, 正常想象不误拦</title>
+<style>
+  /* ===== neuro 主题 (NRO-20) — B 类深空底 ===== */
+  :root{
+    --bg-0: oklch(0.16 0.03 25);       /* 深空底 */
+    --bg-1: oklch(0.21 0.04 25);       /* 面板 */
+    --bg-2: oklch(0.26 0.05 25);       /* 卡片 */
+    --accent: oklch(0.75 0.17 25);     /* SYNAPTIC (neuro accent) */
+    --synaptic: oklch(0.75 0.17 25);
+    --dendrite: oklch(0.55 0.15 25);
+    --axon:     oklch(0.32 0.10 25);
+    --firing:   oklch(0.92 0.08 25);
+    --memory:   oklch(0.85 0.14 85);
+    --ink: oklch(0.95 0.02 25);
+    --ink-dim: oklch(0.70 0.03 25);
+    --line: oklch(0.40 0.05 25);
+    --good: oklch(0.78 0.15 150);
+    --bad:  oklch(0.68 0.18 25);
+    --mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  html,body{height:100%;}
+  body{
+    background: var(--bg-0);
+    color: var(--ink);
+    font-family: var(--mono);
+    overflow:hidden;
+  }
+  .wrapper{display:flex;height:100vh;width:100vw;}
+
+  /* ===== 200px sidebar ===== */
+  .game-sidebar{
+    width:200px;min-width:200px;
+    background: var(--bg-1);
+    border-right:1px solid var(--line);
+    display:flex;flex-direction:column;
+    padding:16px 14px;
+  }
+  .mascot{
+    display:flex;flex-direction:column;align-items:center;gap:6px;
+    padding-bottom:12px;border-bottom:1px solid var(--line);
+  }
+  .mascot svg{width:54px;height:54px;}
+  .mascot .name{font-size:12px;color:var(--accent);letter-spacing:1.5px;}
+  .mascot .sub{font-size:9.5px;color:var(--ink-dim);text-align:center;line-height:1.4;}
+
+  /* 路线图 */
+  .route{margin-top:14px;}
+  .route .rt-title{font-size:9.5px;color:var(--ink-dim);letter-spacing:1px;margin-bottom:8px;}
+  .route .rt-step{display:flex;align-items:center;gap:8px;font-size:10px;color:var(--ink-dim);margin:5px 0;}
+  .route .rt-step .dot{width:8px;height:8px;border:1px solid var(--line);flex:0 0 8px;}
+  .route .rt-step.done .dot{background:var(--dendrite);border-color:var(--dendrite);}
+  .route .rt-step.now{color:var(--accent);font-weight:600;}
+  .route .rt-step.now .dot{background:var(--accent);border-color:var(--accent);box-shadow:0 0 0 3px oklch(0.75 0.17 25 / 0.25);}
+
+  /* 防护参数 hint */
+  .params{margin-top:16px;}
+  .params .p-title{font-size:9.5px;color:var(--ink-dim);letter-spacing:1px;margin-bottom:7px;}
+  .params .p-line{font-size:9.5px;color:var(--ink-dim);line-height:1.5;margin:4px 0;display:flex;gap:6px;}
+  .params .p-line .k{color:var(--accent);flex:0 0 auto;}
+
+  .spacer{flex:1;}
+
+  .lang-btn{
+    margin-top:12px;
+    background:transparent;color:var(--ink-dim);
+    border:1px solid var(--line);
+    font-family:var(--mono);font-size:10.5px;letter-spacing:1px;
+    padding:7px 0;cursor:pointer;width:100%;
+    transition:.18s;
+  }
+  .lang-btn:hover{color:var(--accent);border-color:var(--accent);}
+
+  /* ===== main ===== */
+  .game-main{flex:1;display:flex;flex-direction:column;min-width:0;}
+
+  .topbar{
+    display:flex;align-items:flex-start;justify-content:space-between;
+    padding:12px 22px;border-bottom:1px solid var(--line);flex:0 0 auto;gap:18px;
+  }
+  .topbar h1{font-size:14px;font-weight:600;letter-spacing:.3px;}
+  .topbar .hook{font-size:10.5px;color:var(--ink-dim);margin-top:4px;line-height:1.5;max-width:560px;}
+  .topbar .hud{display:flex;gap:18px;font-size:10px;color:var(--ink-dim);text-align:right;flex:0 0 auto;}
+  .topbar .hud span b{color:var(--firing);font-size:14px;display:block;}
+
+  .stage{flex:1;display:flex;min-height:0;padding:16px 22px;gap:16px;overflow:hidden;}
+
+  /* 左: 实时 EEG 流 */
+  .scope-col{flex:1.25;display:flex;flex-direction:column;min-width:0;gap:10px;}
+  .scope{
+    flex:1;display:flex;flex-direction:column;min-height:0;
+    border:1px solid var(--line);background:var(--bg-1);position:relative;
+  }
+  .scope .cap{
+    position:absolute;top:8px;left:12px;font-size:10px;
+    color:var(--ink-dim);letter-spacing:.5px;z-index:2;pointer-events:none;
+  }
+  .scope .legend{
+    position:absolute;top:8px;right:12px;font-size:9px;z-index:2;pointer-events:none;
+    display:flex;gap:12px;
+  }
+  .scope .legend i{display:inline-block;width:18px;height:0;border-top:2px solid;vertical-align:middle;margin-right:4px;}
+  .scope canvas{flex:1;width:100%;height:100%;display:block;}
+
+  .results{
+    flex:0 0 auto;border:1px solid var(--line);background:var(--bg-1);
+    padding:10px 14px;display:flex;gap:20px;align-items:center;min-height:62px;
+  }
+  .results .rtit{font-size:9.5px;color:var(--ink-dim);letter-spacing:1px;flex:0 0 auto;}
+  .metric{display:flex;flex-direction:column;gap:2px;}
+  .metric .ml{font-size:9px;color:var(--ink-dim);}
+  .metric .mv{font-size:18px;font-weight:700;color:var(--firing);}
+  .metric .mv.warn{color:var(--bad);}
+  .metric .mv.ok{color:var(--good);}
+  .results .resmsg{font-size:10px;color:var(--ink-dim);line-height:1.5;flex:1;}
+
+  /* 右: 配置面板 */
+  .config-col{flex:0 0 270px;display:flex;flex-direction:column;min-height:0;gap:12px;overflow-y:auto;}
+  .cfg{border:1px solid var(--line);background:var(--bg-1);padding:11px 13px;}
+  .cfg .ctit{font-size:10px;color:var(--accent);letter-spacing:.5px;margin-bottom:8px;}
+  .cfg .csub{font-size:9px;color:var(--ink-dim);margin-bottom:9px;line-height:1.5;}
+  .choices{display:flex;flex-direction:column;gap:7px;}
+  .choice{
+    background:var(--bg-2);color:var(--ink-dim);
+    border:1px solid var(--line);text-align:left;
+    font-family:var(--mono);font-size:10px;line-height:1.4;
+    padding:8px 10px;cursor:pointer;transition:.15s;
+  }
+  .choice b{display:block;color:var(--ink);font-size:10.5px;margin-bottom:2px;}
+  .choice:hover{border-color:var(--accent);}
+  .choice.sel{border-color:var(--accent);color:var(--ink);box-shadow:3px 3px 0 var(--bg-0);background:var(--bg-0);}
+
+  .runbtn{
+    background:var(--accent);color:var(--bg-0);
+    border:1px solid var(--accent);font-family:var(--mono);font-size:12px;font-weight:700;
+    padding:12px 0;cursor:pointer;box-shadow:3px 3px 0 var(--bg-0);letter-spacing:.8px;width:100%;
+    transition:.15s;
+  }
+  .runbtn:hover:not(:disabled){background:var(--firing);}
+  .runbtn:disabled{opacity:.5;cursor:default;box-shadow:none;}
+
+  /* 项目终点剪影 (角落) */
+  .anchor{
+    position:absolute;right:14px;bottom:12px;z-index:3;
+    display:flex;align-items:center;gap:7px;opacity:.5;pointer-events:none;
+  }
+  .anchor svg{width:24px;height:24px;}
+  .anchor span{font-size:9px;color:var(--ink-dim);letter-spacing:.5px;}
+
+  /* 结算 */
+  .verdict{
+    position:absolute;inset:0;display:none;flex-direction:column;
+    align-items:center;justify-content:center;text-align:center;
+    background:oklch(0.16 0.03 25 / 0.95);z-index:8;gap:12px;padding:0 24px;
+  }
+  .verdict.show{display:flex;}
+  .verdict .badge{font-size:19px;color:var(--memory);font-weight:600;letter-spacing:1.5px;}
+  .verdict .desc{font-size:12px;color:var(--ink-dim);line-height:1.7;max-width:460px;}
+  .verdict .desc b{color:var(--firing);}
+  .verdict button{
+    margin-top:8px;background:transparent;color:var(--ink);border:1px solid var(--line);
+    font-family:var(--mono);font-size:11px;padding:8px 22px;cursor:pointer;letter-spacing:1px;
+  }
+  .verdict button:hover{border-color:var(--accent);color:var(--accent);}
+</style>
+</head>
+<body>
+<div class="wrapper">
+
+  <!-- ===== sidebar ===== -->
+  <aside class="game-sidebar">
+    <div class="mascot">
+      <!-- Spark — 分叉树突精灵 (SVG, 无 emoji) -->
+      <svg viewBox="0 0 64 64" fill="none" stroke="var(--accent)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="32" cy="34" r="9" fill="var(--bg-2)"/>
+        <circle cx="29" cy="32" r="1.8" fill="var(--firing)" stroke="none"/>
+        <circle cx="35" cy="33" r="1.8" fill="var(--firing)" stroke="none"/>
+        <path d="M32 25 L32 14 M32 14 L27 9 M32 14 L37 9"/>
+        <path d="M24 30 L13 26 M13 26 L8 29 M13 26 L9 21"/>
+        <path d="M40 30 L51 26 M51 26 L56 29 M51 26 L55 21"/>
+        <path d="M27 42 L21 51 M37 42 L43 51"/>
+      </svg>
+      <span class="name" id="mascotName">SPARK</span>
+      <span class="sub" id="mascotSub">在线伪迹防护设计师</span>
+    </div>
+
+    <div class="route">
+      <div class="rt-title" id="rtTitle">脑控之路</div>
+      <div class="rt-step done"><span class="dot"></span><span id="rt1">S1 记录脑波</span></div>
+      <div class="rt-step done"><span class="dot"></span><span id="rt2">S2 清洗信号</span></div>
+      <div class="rt-step done"><span class="dot"></span><span id="rt3">S3 提取特征</span></div>
+      <div class="rt-step now"><span class="dot"></span><span id="rt4">S4 训练解码</span></div>
+      <div class="rt-step"><span class="dot"></span><span id="rt5">S5 实时控制</span></div>
+      <div class="rt-step"><span class="dot"></span><span id="rt6">S6 脑控 MC</span></div>
+    </div>
+
+    <div class="params">
+      <div class="p-title" id="pTitle">你能调的三件事</div>
+      <div class="p-line"><span class="k">1</span><span id="p1">峰峰值阈值: 多大算伪迹</span></div>
+      <div class="p-line"><span class="k">2</span><span id="p2">命中后: 拒绝还是纠正</span></div>
+      <div class="p-line"><span class="k">3</span><span id="p3">连续触发: 强制休息?</span></div>
+    </div>
+
+    <div class="spacer"></div>
+    <button id="langBtn" class="lang-btn">中 / EN</button>
+  </aside>
+
+  <!-- ===== main ===== -->
+  <main class="game-main">
+    <div class="topbar">
+      <div>
+        <h1 id="hTitle">在线伪迹防护设计师 · 让实时脑控稳住</h1>
+        <div class="hook" id="hHook">实时玩 Minecraft 时一眨眼、一咬牙, EEG 就蹦出一根大尖峰, 角色乱动。怎么挡住它, 又不能把正常的左右手想象也误拦? 设计一套在线防护方案, 跑测看结果。</div>
+      </div>
+      <div class="hud">
+        <span id="hudRunsW"><b id="hudRuns">0</b>已跑测</span>
+        <span id="hudBestW"><b id="hudBest">—</b>最佳评级</span>
+      </div>
+    </div>
+
+    <div class="stage">
+      <!-- 左: 实时流 + 结果 -->
+      <div class="scope-col">
+        <div class="scope">
+          <div class="cap" id="scopeCap">实时 EEG 流 · C3 (峰峰值监测中)</div>
+          <div class="legend">
+            <span style="color:var(--ink-dim)"><i style="border-color:var(--accent)"></i><span id="lgSig">信号</span></span>
+            <span style="color:var(--ink-dim)"><i style="border-color:var(--memory)"></i><span id="lgThr">阈值线</span></span>
+          </div>
+          <canvas id="stream"></canvas>
+          <div class="anchor">
+            <!-- Minecraft 方块剪影 -->
+            <svg viewBox="0 0 32 32" fill="none" stroke="var(--ink-dim)" stroke-width="2">
+              <rect x="5" y="5" width="22" height="22"/>
+              <line x1="5" y1="13" x2="27" y2="13"/>
+              <line x1="13" y1="5" x2="13" y2="27"/>
+              <line x1="20" y1="13" x2="20" y2="27"/>
+            </svg>
+            <span id="anchorTxt">终点 · 脑控 Minecraft</span>
+          </div>
+        </div>
+
+        <div class="results">
+          <div class="rtit" id="resTit">跑测结果</div>
+          <div class="metric"><span class="ml" id="mlBlock">伪迹拦截率</span><span class="mv" id="mBlock">—</span></div>
+          <div class="metric"><span class="ml" id="mlReject">正常想象误拒率</span><span class="mv" id="mReject">—</span></div>
+          <div class="metric"><span class="ml" id="mlGrade">可玩性评级</span><span class="mv" id="mGrade">—</span></div>
+          <div class="resmsg" id="resMsg" data-empty="1">先在右侧定好阈值、动作和休息策略, 再点跑测。</div>
+        </div>
+      </div>
+
+      <!-- 右: 配置面板 -->
+      <div class="config-col">
+        <div class="cfg">
+          <div class="ctit" id="c1Tit">1 · 峰峰值阈值</div>
+          <div class="csub" id="c1Sub">伪迹（眨眼/咬牙）峰峰值远大于正常脑波。阈值越低越敏感。</div>
+          <div class="choices" id="c1Choices"></div>
+        </div>
+        <div class="cfg">
+          <div class="ctit" id="c2Tit">2 · 命中后动作</div>
+          <div class="csub" id="c2Sub">峰峰值超阈值时, 这个时间窗怎么处理?</div>
+          <div class="choices" id="c2Choices"></div>
+        </div>
+        <div class="cfg">
+          <div class="ctit" id="c3Tit">3 · 强制休息</div>
+          <div class="csub" id="c3Sub">连续多次命中说明用户在挣扎, 要不要强制歇一拍?</div>
+          <div class="choices" id="c3Choices"></div>
+        </div>
+        <button id="runBtn" class="runbtn">跑测这套方案</button>
+      </div>
+    </div>
+
+    <!-- 结算 -->
+    <div class="verdict" id="verdict">
+      <div class="badge" id="vBadge">在线伪迹防护设计师</div>
+      <div class="desc" id="vDesc"></div>
+      <button id="restartBtn" class="lang-btn" style="width:auto;">再设计一套</button>
+    </div>
+  </main>
+</div>
+
+<script>
+var LANG='cn';
+
+// ---- 配置选项 ----
+// thr: 峰峰值阈值 (uV). 正常想象的峰峰值约 40-95uV, 伪迹约 130-400uV
+var THR_OPTS=[
+  {key:'loose', thr:60,  cn_t:'松 (60µV)', cn_d:'很容易触发', en_t:'loose (60µV)', en_d:'fires very easily'},
+  {key:'mid',   thr:120, cn_t:'适中 (120µV)', cn_d:'卡在两者之间', en_t:'mid (120µV)', en_d:'sits between'},
+  {key:'tight', thr:280, cn_t:'紧 (280µV)', cn_d:'只抓最大尖峰', en_t:'tight (280µV)', en_d:'only the biggest'}
+];
+var ACT_OPTS=[
+  {key:'reject',  cn_t:'拒绝该窗', cn_d:'这段不解码, 角色保持不动', en_t:'reject window', en_d:'do not decode, avatar holds'},
+  {key:'correct', cn_t:'尝试纠正', cn_d:'减去伪迹模板再解码', en_t:'try to correct', en_d:'subtract template, decode anyway'},
+  {key:'ignore',  cn_t:'不处理', cn_d:'照常解码', en_t:'do nothing', en_d:'decode as usual'}
+];
+var REST_OPTS=[
+  {key:'on',  cn_t:'开 (连3次命中歇0.5s)', cn_d:'防止连环误动', en_t:'on (3 hits → 0.5s rest)', en_d:'stops runaway'},
+  {key:'off', cn_t:'关', cn_d:'不强制休息', en_t:'off', en_d:'no forced rest'}
+];
+
+// ---- 固定测试场景: 一段 90 段的实时流 ----
+// 每段是一个解码窗. type: 'imagery'(正常左/右手想象, 峰峰值低), 'artifact'(眨眼/咬牙, 峰峰值高), 'rest'(放空, 低)
+// 用固定 seed 生成, 保证每次跑测同一段流 (实验可对照)
+function buildScenario(){
+  var seq=[]; var rng=mulberry(20480);
+  for(var i=0;i<90;i++){
+    var r=rng();
+    var seg;
+    if(r<0.18){ // 伪迹 (眨眼/咬牙)
+      seg={type:'artifact', pp:140+rng()*260}; // 140-400uV
+    } else if(r<0.34){ // 放空
+      seg={type:'rest', pp:30+rng()*30};
+    } else { // 正常想象 (信号本体)
+      seg={type:'imagery', pp:40+rng()*55, side: rng()<0.5?'L':'R'}; // 40-95uV
+    }
+    seq.push(seg);
+  }
+  return seq;
+}
+function mulberry(a){return function(){a|=0;a=a+0x6D2B79F5|0;var t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+
+var SCENARIO=buildScenario();
+
+// ---- 选择状态 ----
+var sel={thr:null, act:null, rest:null};
+var runs=0, bestRank=-1; // 评级排序: 0 D, 1 C, 2 B, 3 A
+var RANKS=['D','C','B','A'];
+var anim=null;      // 跑测动画句柄
+var lastResult=null;
+
+var T={
+  cn:{title:'在线伪迹防护设计师 · 让实时脑控稳住',
+      hook:'实时玩 Minecraft 时一眨眼、一咬牙, EEG 就蹦出一根大尖峰, 角色乱动。怎么挡住它, 又不能把正常的左右手想象也误拦? 设计一套在线防护方案, 跑测看结果。',
+      rtTitle:'脑控之路', mascotSub:'在线伪迹防护设计师', anchorTxt:'终点 · 脑控 Minecraft',
+      pTitle:'你能调的三件事', p1:'峰峰值阈值: 多大算伪迹', p2:'命中后: 拒绝还是纠正', p3:'连续触发: 强制休息?',
+      scopeCap:'实时 EEG 流 · C3 (峰峰值监测中)', lgSig:'信号', lgThr:'阈值线',
+      c1Tit:'1 · 峰峰值阈值', c1Sub:'伪迹（眨眼/咬牙）峰峰值远大于正常脑波。阈值越低越敏感。',
+      c2Tit:'2 · 命中后动作', c2Sub:'峰峰值超阈值时, 这个时间窗怎么处理?',
+      c3Tit:'3 · 强制休息', c3Sub:'连续多次命中说明用户在挣扎, 要不要强制歇一拍?',
+      resTit:'跑测结果', mlBlock:'伪迹拦截率', mlReject:'正常想象误拒率', mlGrade:'可玩性评级',
+      hudRuns:'已跑测', hudBest:'最佳评级', run:'跑测这套方案', running:'跑测中…', restart:'再设计一套',
+      empty:'先在右侧定好阈值、动作和休息策略, 再点跑测。',
+      rt:['S1 记录脑波','S2 清洗信号','S3 提取特征','S4 训练解码','S5 实时控制','S6 脑控 MC']},
+  en:{title:'Online Artifact Guard Designer · keep live control steady',
+      hook:'Playing Minecraft live, one blink or jaw clench throws a huge spike onto the EEG and the avatar lurches. How do you block it without also rejecting genuine left/right-hand imagery? Design an online guard, then run the test.',
+      rtTitle:'Road to BCI', mascotSub:'online artifact guard designer', anchorTxt:'goal · brain-controlled Minecraft',
+      pTitle:'three things you set', p1:'peak-to-peak threshold', p2:'on hit: reject or correct', p3:'repeated hits: force rest?',
+      scopeCap:'live EEG stream · C3 (peak-to-peak watch)', lgSig:'signal', lgThr:'threshold',
+      c1Tit:'1 · peak-to-peak threshold', c1Sub:'Artifacts (blink/clench) have far larger peak-to-peak than real EEG. Lower = more sensitive.',
+      c2Tit:'2 · action on hit', c2Sub:'When peak-to-peak exceeds threshold, what do you do with this window?',
+      c3Tit:'3 · forced rest', c3Sub:'Many hits in a row means the user is struggling. Force a short pause?',
+      resTit:'test result', mlBlock:'artifacts blocked', mlReject:'real imagery wrongly rejected', mlGrade:'playability grade',
+      hudRuns:'runs', hudBest:'best grade', run:'run this design', running:'running…', restart:'design again',
+      empty:'Set threshold, action and rest on the right, then run the test.',
+      rt:['S1 record','S2 clean','S3 features','S4 train decode','S5 live control','S6 BCI MC']}
+};
+function L(){return T[LANG];}
+
+// ---- 渲染选项卡 ----
+function renderChoices(){
+  fillChoiceGroup('c1Choices', THR_OPTS, 'thr');
+  fillChoiceGroup('c2Choices', ACT_OPTS, 'act');
+  fillChoiceGroup('c3Choices', REST_OPTS, 'rest');
+}
+function fillChoiceGroup(id, opts, slot){
+  var box=document.getElementById(id); box.innerHTML='';
+  opts.forEach(function(o){
+    var b=document.createElement('button');
+    b.className='choice'+(sel[slot]===o.key?' sel':'');
+    b.innerHTML='<b>'+(LANG==='cn'?o.cn_t:o.en_t)+'</b>'+(LANG==='cn'?o.cn_d:o.en_d);
+    b.addEventListener('click',function(){
+      sel[slot]=o.key;
+      renderChoices();
+      updateRunBtn();
+    });
+    box.appendChild(b);
+  });
+}
+function updateRunBtn(){
+  var ready=sel.thr&&sel.act&&sel.rest;
+  document.getElementById('runBtn').disabled=!ready;
+}
+
+// ---- 评估一套方案 (确定性, 基于固定场景) ----
+function evaluate(s){
+  var thr=THR_OPTS.find(function(o){return o.key===s.thr;}).thr;
+  var artTotal=0, artBlocked=0, imgTotal=0, imgRejected=0;
+  var hitStreak=0, resting=0;
+  SCENARIO.forEach(function(seg){
+    var hit = seg.pp>=thr; // 峰峰值命中
+    // 强制休息: 若正在 rest 中, 这一窗直接不解码 (算作保守, 不计入误拒/漏网)
+    if(resting>0){ resting--; if(hit) hitStreak++; else hitStreak=0; return; }
+    if(seg.type==='artifact'){
+      artTotal++;
+      if(hit){
+        // 命中: reject/correct 都算挡住; correct 偶尔残留, ignore 完全漏
+        if(s.act==='ignore') { /* 不处理 = 漏网 */ }
+        else artBlocked++;
+        hitStreak++;
+      } else { hitStreak=0; } // 没命中 = 阈值太高, 漏网
+    } else if(seg.type==='imagery'){
+      imgTotal++;
+      if(hit){
+        // 正常想象被误判为伪迹
+        if(s.act==='ignore') { /* 不处理 = 照常解码, 不误拒 */ }
+        else imgRejected++; // reject 直接拒; correct 也会扭曲掉这窗真实想象 => 算误拒
+        hitStreak++;
+      } else { hitStreak=0; }
+    } else { // rest 段
+      if(hit){ hitStreak++; } else hitStreak=0;
+    }
+    // 强制休息触发
+    if(s.rest==='on' && hitStreak>=3){ resting=2; hitStreak=0; }
+  });
+  var blockRate = artTotal? artBlocked/artTotal : 0;
+  var rejRate   = imgTotal? imgRejected/imgTotal : 0;
+  // 评级: 拦截高 + 误拒低 = A; 误拒>30% 直接不可玩 (D)
+  var rank;
+  if(rejRate>0.30) rank=0;                       // 误拒过高 = 不可玩
+  else if(blockRate<0.55) rank=0;                // 伪迹大量漏网 = 不可玩
+  else if(blockRate>=0.85 && rejRate<=0.10) rank=3; // A
+  else if(blockRate>=0.70 && rejRate<=0.20) rank=2; // B
+  else rank=1;                                    // C
+  return {thr:thr, blockRate:blockRate, rejRate:rejRate, rank:rank,
+          artTotal:artTotal, artBlocked:artBlocked, imgTotal:imgTotal, imgRejected:imgRejected};
+}
+
+// ---- 跑测: 动画扫过整段流, 然后出结果 ----
+var running=false, scanI=0, scanResult=null;
+function runTest(){
+  if(running) return;
+  if(!(sel.thr&&sel.act&&sel.rest)) return;
+  running=true; scanI=0;
+  scanResult=evaluate(sel);
+  document.getElementById('runBtn').disabled=true;
+  document.getElementById('runBtn').textContent=L().running;
+  // 清空结果显示
+  setMetric('mBlock','—',''); setMetric('mReject','—',''); setMetric('mGrade','—','');
+  var rm=document.getElementById('resMsg'); rm.textContent=''; rm.setAttribute('data-empty','0');
+}
+
+function finishRun(){
+  running=false;
+  runs++;
+  document.getElementById('hudRuns').textContent=runs;
+  var r=scanResult; lastResult=r;
+  if(r.rank>bestRank){ bestRank=r.rank; document.getElementById('hudBest').textContent=RANKS[bestRank]; }
+  // 指标
+  var bp=Math.round(r.blockRate*100), rp=Math.round(r.rejRate*100);
+  setMetric('mBlock', bp+'%', bp>=70?'ok':'warn');
+  setMetric('mReject', rp+'%', rp<=20?'ok':'warn');
+  setMetric('mGrade', RANKS[r.rank], r.rank>=2?'ok':(r.rank===0?'warn':''));
+  showResMsg(r);
+  document.getElementById('runBtn').disabled=false;
+  document.getElementById('runBtn').textContent=L().run;
+  // 达 A 解锁
+  if(r.rank===3) setTimeout(showVerdict, 700);
+}
+
+function setMetric(id, val, cls){
+  var el=document.getElementById(id);
+  el.textContent=val;
+  el.className='mv'+(cls?' '+cls:'');
+}
+
+function showResMsg(r){
+  var rm=document.getElementById('resMsg'); rm.setAttribute('data-empty','0');
+  var bp=Math.round(r.blockRate*100), rp=Math.round(r.rejRate*100);
+  var msg;
+  if(r.rejRate>0.30){
+    msg=LANG==='cn'
+      ? '阈值太严 / 动作太狠: '+rp+'% 的正常左右手想象被当成伪迹拦掉了。你想往左走, 系统却一直拒解码——超过 30% 误拒, 实时根本玩不动。'
+      : 'Too strict: '+rp+'% of genuine imagery was rejected as artifact. You try to go left and the system keeps refusing to decode — over 30% false reject means it is unplayable.';
+  } else if(r.blockRate<0.55){
+    msg=LANG==='cn'
+      ? '阈值太松 / 不处理: 只挡住 '+bp+'% 的伪迹, 大量眨眼咬牙漏网。它们冒充成解码指令, 角色在 Minecraft 里乱跑乱挖。'
+      : 'Too lenient: only '+bp+'% of artifacts blocked. Blinks and clenches slip through, masquerade as commands, and the avatar runs wild in Minecraft.';
+  } else if(r.rank===3){
+    msg=LANG==='cn'
+      ? '漂亮。挡住 '+bp+'% 的伪迹, 误拒只有 '+rp+'%。眨眼咬牙被稳稳拦下, 正常想象几乎全放行——这套防护实时可用。'
+      : 'Clean. '+bp+'% artifacts blocked, only '+rp+'% false reject. Blinks and clenches caught, real imagery passes — this guard is live-ready.';
+  } else {
+    msg=LANG==='cn'
+      ? '能用但还不够稳: 拦截 '+bp+'%, 误拒 '+rp+'%。再调一个参数把两个数都拉到更好——拦截≥85% 且 误拒≤10% 就是 A。'
+      : 'Playable but not solid: '+bp+'% blocked, '+rp+'% false reject. Tune one more knob — aim for ≥85% blocked and ≤10% false reject to hit grade A.';
+  }
+  rm.textContent=msg;
+}
+
+function showVerdict(){
+  var v=document.getElementById('verdict');
+  var r=lastResult;
+  var bp=Math.round(r.blockRate*100), rp=Math.round(r.rejRate*100);
+  document.getElementById('vBadge').textContent=LANG==='cn'?'称号解锁: 在线伪迹防护设计师':'Unlocked: Online Artifact Guard Designer';
+  document.getElementById('vDesc').innerHTML=LANG==='cn'
+    ? '评级 A —— 拦截 <b>'+bp+'%</b> 伪迹, 误拒只有 <b>'+rp+'%</b>。防护装好, 实时脑控稳了: 戴上 EEG 玩 Minecraft 时, 眨眼咬牙不再让角色乱动, 而你想往左往右的真实意图照样被听见。<b>你离终点又近了一步</b>——下一站 S5 实时控制, 把这套稳定的信号接到角色的手脚上。'
+    : 'Grade A — <b>'+bp+'%</b> artifacts blocked, only <b>'+rp+'%</b> false reject. The guard is in place and live control is steady: wearing the EEG in Minecraft, blinks and clenches no longer jerk the avatar, while your real left/right intent still gets through. <b>One step closer to the goal</b> — next stop S5 live control, wiring this steady signal to the avatar.';
+  v.classList.add('show');
+}
+
+// ---- i18n 刷新 ----
+function refreshI18N(){
+  var t=L();
+  document.getElementById('langBtn').textContent = LANG==='cn'?'中 / EN':'EN / 中';
+  document.getElementById('hTitle').textContent=t.title;
+  document.getElementById('hHook').textContent=t.hook;
+  document.getElementById('rtTitle').textContent=t.rtTitle;
+  document.getElementById('mascotSub').textContent=t.mascotSub;
+  document.getElementById('anchorTxt').textContent=t.anchorTxt;
+  document.getElementById('pTitle').textContent=t.pTitle;
+  document.getElementById('p1').textContent=t.p1;
+  document.getElementById('p2').textContent=t.p2;
+  document.getElementById('p3').textContent=t.p3;
+  document.getElementById('scopeCap').textContent=t.scopeCap;
+  document.getElementById('lgSig').textContent=t.lgSig;
+  document.getElementById('lgThr').textContent=t.lgThr;
+  document.getElementById('c1Tit').textContent=t.c1Tit;
+  document.getElementById('c1Sub').textContent=t.c1Sub;
+  document.getElementById('c2Tit').textContent=t.c2Tit;
+  document.getElementById('c2Sub').textContent=t.c2Sub;
+  document.getElementById('c3Tit').textContent=t.c3Tit;
+  document.getElementById('c3Sub').textContent=t.c3Sub;
+  document.getElementById('resTit').textContent=t.resTit;
+  document.getElementById('mlBlock').textContent=t.mlBlock;
+  document.getElementById('mlReject').textContent=t.mlReject;
+  document.getElementById('mlGrade').textContent=t.mlGrade;
+  document.getElementById('hudRunsW').innerHTML='<b id="hudRuns">'+runs+'</b>'+t.hudRuns;
+  document.getElementById('hudBestW').innerHTML='<b id="hudBest">'+(bestRank>=0?RANKS[bestRank]:'—')+'</b>'+t.hudBest;
+  document.getElementById('runBtn').textContent=running?t.running:t.run;
+  for(var i=0;i<6;i++){document.getElementById('rt'+(i+1)).textContent=t.rt[i];}
+  var rm=document.getElementById('resMsg');
+  if(rm.getAttribute('data-empty')==='1') rm.textContent=t.empty;
+  else if(lastResult) showResMsg(lastResult);
+  renderChoices();
+}
+
+// ---- 事件 ----
+document.getElementById('runBtn').addEventListener('click', runTest);
+document.getElementById('langBtn').addEventListener('click', function(){
+  LANG=LANG==='cn'?'en':'cn';
+  refreshI18N();
+});
+document.getElementById('restartBtn').addEventListener('click', function(){
+  document.getElementById('verdict').classList.remove('show');
+});
+
+// ---- canvas: 实时流 ----
+var canvas=document.getElementById('stream'), cx=canvas.getContext('2d');
+var W=0,H=0,DPR=1;
+function resize(){
+  var r=canvas.parentElement.getBoundingClientRect();
+  if(r.width<1||r.height<1) return;
+  DPR=window.devicePixelRatio||1;
+  canvas.width=r.width*DPR; canvas.height=r.height*DPR;
+  canvas.style.width=r.width+'px'; canvas.style.height=r.height+'px';
+  cx.setTransform(DPR,0,0,DPR,0,0);
+  W=r.width; H=r.height;
+}
+window.addEventListener('resize',resize);
+setTimeout(resize,50); setTimeout(resize,200); setTimeout(resize,600);
+if(document.fonts&&document.fonts.ready) document.fonts.ready.then(resize);
+function cssvar(n){return getComputedStyle(document.documentElement).getPropertyValue(n).trim();}
+
+// 平滑滚动相位
+var phase=0;
+function draw(){
+  if(W&&H){
+    cx.clearRect(0,0,W,H);
+    cx.fillStyle=cssvar('--bg-1'); cx.fillRect(0,0,W,H);
+    var padL=46, padR=18, padT=34, padB=20;
+    var plotW=W-padL-padR, plotH=H-padT-padB;
+    if(plotW>40&&plotH>30){
+      var midY=padT+plotH/2;
+      var ppMax=420; // uV 满量程映射到 plotH
+      var scaleY=function(uv){return midY - (uv/ppMax)*(plotH/2);};
+      // 阈值线 (已选则画; 上下对称)
+      var thrOpt = sel.thr? THR_OPTS.find(function(o){return o.key===sel.thr;}) : null;
+      if(thrOpt){
+        var ty=scaleY(thrOpt.thr/2), tyb=scaleY(-thrOpt.thr/2);
+        cx.strokeStyle=cssvar('--memory'); cx.lineWidth=1; cx.setLineDash([5,4]);
+        cx.beginPath(); cx.moveTo(padL,ty); cx.lineTo(W-padR,ty); cx.moveTo(padL,tyb); cx.lineTo(W-padR,tyb); cx.stroke();
+        cx.setLineDash([]);
+      }
+      // 中线
+      cx.strokeStyle=cssvar('--line'); cx.globalAlpha=0.4; cx.lineWidth=1;
+      cx.beginPath(); cx.moveTo(padL,midY); cx.lineTo(W-padR,midY); cx.stroke(); cx.globalAlpha=1;
+      // 画一段滚动波形 (取场景中一窗为视觉, 跑测时高亮当前扫到的窗)
+      var winCount = running? SCENARIO.length : 26;
+      var startIdx = running? Math.max(0, scanI-25) : 0;
+      var visN=26;
+      var px=padL, segW=plotW/visN;
+      var thr = thrOpt? thrOpt.thr : null;
+      cx.lineWidth=1.6;
+      for(var v=0; v<visN; v++){
+        var gi=(startIdx+v) % SCENARIO.length;
+        var seg=SCENARIO[gi];
+        var hit = thr!=null && seg.pp>=thr;
+        var col = (seg.type==='artifact') ? cssvar('--bad') : cssvar('--accent');
+        if(running && (startIdx+v)===scanI){ // 当前扫到
+          cx.fillStyle=cssvar('--bg-2'); cx.fillRect(px, padT, segW, plotH);
+        }
+        // 命中且被处理 => 画灰罩 (拦截)
+        if(running && hit && (startIdx+v)<=scanI && sel.act && sel.act!=='ignore'){
+          cx.fillStyle='oklch(0.85 0.14 85 / 0.10)'; cx.fillRect(px, padT, segW, plotH);
+        }
+        // 波形: 用 pp 决定振幅, 多个小正弦
+        cx.strokeStyle=col; cx.beginPath();
+        var samples=10;
+        for(var k=0;k<=samples;k++){
+          var t=k/samples;
+          var amp=seg.pp/2;
+          var noise=Math.sin((t*6+phase+gi)*1.7)*0.5 + Math.sin((t*13+gi)*1.1)*0.5;
+          var y=midY - (amp*noise/ppMax)*(plotH/2);
+          var x=px+t*segW;
+          if(k===0)cx.moveTo(x,y); else cx.lineTo(x,y);
+        }
+        cx.stroke();
+        px+=segW;
+      }
+      // y 轴刻度
+      cx.fillStyle=cssvar('--ink-dim'); cx.font='9px '+cssvar('--mono');
+      cx.textAlign='right'; cx.textBaseline='middle';
+      cx.fillText('+'+ppMax/2, padL-6, scaleY(ppMax/2));
+      cx.fillText('0', padL-6, midY);
+      cx.fillText('-'+ppMax/2, padL-6, scaleY(-ppMax/2));
+      cx.fillStyle=cssvar('--ink-dim'); cx.font='9px '+cssvar('--mono'); cx.textAlign='left';
+      cx.fillText('µV', padL-40, padT+8);
+    }
+  }
+  phase+=0.06;
+  // 跑测扫描推进
+  if(running){
+    scanI+=2;
+    if(scanI>=SCENARIO.length){ scanI=SCENARIO.length-1; finishRun(); }
+  }
+  requestAnimationFrame(draw);
+}
+requestAnimationFrame(draw);
+
+// ---- init ----
+refreshI18N();
+updateRunBtn();
+</script>
+</body>
+</html>

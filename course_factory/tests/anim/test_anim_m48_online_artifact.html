@@ -1,0 +1,728 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>在线伪迹拒绝 — 实时流里把眨眼咬牙那一窗守掉，角色不乱动 · EEG M48</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&family=Noto+Sans+SC:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    /* 第1层 共享深空底 (所有 26 套统一, 不换) */
+    --bg-0: oklch(0.14 0.035 265);
+    --bg-1: oklch(0.18 0.04 265);
+    --bg-2: oklch(0.22 0.045 265);
+    --bg-3: oklch(0.28 0.05 265);
+    --line: oklch(0.35 0.05 265 / 0.35);
+    --line-strong: oklch(0.55 0.08 265 / 0.55);
+    --fg: oklch(0.96 0.01 265);
+    --fg-dim: oklch(0.75 0.02 265);
+    --fg-mute: oklch(0.55 0.03 265);
+    --gold: oklch(0.85 0.14 85);
+    /* 第2层 neuro accent (cortex-coral) */
+    --neuro: oklch(0.75 0.17 25);
+    /* 第3层 neuro 5色 palette (themes.js neuro 段) */
+    --synaptic: oklch(0.75 0.17 25);
+    --dendrite: oklch(0.55 0.15 25);
+    --axon:     oklch(0.32 0.10 25);
+    --firing:   oklch(0.92 0.08 25);
+    --memory:   oklch(0.85 0.14 85);
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;height:100vh;overflow:hidden;}
+  body{
+    background:var(--bg-0);
+    color:var(--fg);
+    font-family:'Inter','Noto Sans SC',system-ui,sans-serif;
+    display:flex;
+    -webkit-font-smoothing:antialiased;
+  }
+  .mono{font-family:'JetBrains Mono',ui-monospace,Menlo,monospace;}
+
+  /* ---------- Sidebar ---------- */
+  .sidebar{
+    width:200px;flex-shrink:0;height:100vh;
+    background:var(--bg-1);
+    border-right:1px solid var(--line);
+    display:flex;flex-direction:column;
+    padding:20px 16px;gap:14px;
+  }
+  .brand{
+    font-size:13px;font-weight:700;letter-spacing:.02em;color:var(--fg);
+    padding-bottom:12px;border-bottom:1px solid var(--line);
+  }
+  .brand-sub{display:block;margin-top:6px;font-size:11px;font-weight:500;color:var(--fg-dim);}
+  .deco{
+    width:100%;height:104px;
+    background:var(--bg-2);
+    border:1px solid var(--line);
+    border-radius:8px;
+    display:flex;align-items:center;justify-content:center;
+  }
+  .deco svg{width:92px;height:92px;}
+  .guide{display:flex;flex-direction:column;gap:8px;margin-top:0;list-style:none;padding:0;}
+  .guide-li{
+    font-size:11.5px;line-height:1.45;color:var(--fg-dim);
+    padding:2px 0 2px 10px;border-left:2px solid var(--line-strong);
+    transition:color .25s,border-color .25s;
+  }
+  .guide-li.hl{border-left-color:var(--neuro);color:var(--fg);}
+
+  /* ---------- 项目进度路线图 (S1-S6, 高亮 S4) ---------- */
+  .route{display:flex;flex-direction:column;gap:0;margin-top:2px;}
+  .route-ttl{
+    font-size:10px;font-weight:700;letter-spacing:.08em;color:var(--fg-mute);
+    font-family:'JetBrains Mono',monospace;margin-bottom:7px;text-transform:uppercase;
+  }
+  .route-step{
+    display:flex;align-items:center;gap:8px;
+    font-size:10.5px;line-height:1.2;color:var(--fg-mute);
+    padding:3px 0;position:relative;
+  }
+  .route-dot{
+    width:8px;height:8px;border-radius:50%;flex-shrink:0;
+    background:var(--bg-3);border:1.5px solid var(--line-strong);
+  }
+  .route-step.done .route-dot{background:var(--dendrite);border-color:var(--dendrite);}
+  .route-step.cur{color:var(--fg);font-weight:700;}
+  .route-step.cur .route-dot{
+    background:var(--neuro);border-color:var(--firing);
+    box-shadow:0 0 0 3px oklch(0.75 0.17 25 / 0.25);
+  }
+  .route-step::before{
+    content:'';position:absolute;left:3.5px;top:-6px;width:1.5px;height:12px;
+    background:var(--line);
+  }
+  .route-step:first-of-type::before{display:none;}
+  .route-step.done::before{background:var(--dendrite);}
+  .route-here{
+    font-size:8.5px;font-family:'JetBrains Mono',monospace;font-weight:700;
+    color:var(--neuro);margin-left:auto;letter-spacing:.04em;
+  }
+
+  .lang-btn{
+    margin-top:auto;
+    font-family:'JetBrains Mono',monospace;
+    font-size:11px;font-weight:600;letter-spacing:.06em;
+    padding:8px 12px;cursor:pointer;
+    background:var(--bg-2);color:var(--fg);
+    border:1px solid var(--line-strong);
+    border-radius:6px;
+    box-shadow:3px 3px 0 var(--bg-0);
+    transition:transform .1s, background .12s;
+  }
+  .lang-btn:hover{background:var(--bg-3);transform:translate(-1px,-1px);}
+  .lang-btn:active{transform:translate(1px,1px);box-shadow:1px 1px 0 var(--bg-0);}
+
+  /* ---------- Main stage ---------- */
+  .main{
+    flex:1;height:100vh;position:relative;overflow:hidden;
+    background:var(--bg-0);
+    display:flex;flex-direction:column;
+  }
+  #stage{position:absolute;inset:0;width:100%;height:100%;display:block;}
+
+  .hud{
+    position:absolute;top:16px;right:16px;z-index:5;
+    background:oklch(0.18 0.04 265 / 0.82);
+    border:1px solid var(--line-strong);
+    border-radius:8px;padding:10px 13px;
+    font-family:'JetBrains Mono',monospace;font-size:11px;
+    min-width:184px;box-shadow:3px 3px 0 var(--bg-0);
+    backdrop-filter:blur(2px);
+  }
+  .hud-row{display:flex;justify-content:space-between;gap:14px;line-height:1.7;}
+  .hud-lbl{color:var(--fg-dim);}
+  .hud-val{color:var(--neuro);font-weight:700;}
+  .hud-val.gold{color:var(--gold);}
+  .hud-val.reject{color:var(--firing);}
+
+  .sub{
+    position:absolute;left:50%;bottom:22px;transform:translateX(-50%);
+    z-index:5;text-align:center;width:90%;max-width:860px;pointer-events:none;
+  }
+  .sub-zh{
+    display:inline-block;font-size:18px;font-weight:700;color:var(--fg);
+    background:oklch(0.18 0.04 265 / 0.86);
+    border:1px solid var(--line-strong);
+    padding:7px 20px;border-radius:8px;
+    box-shadow:3px 3px 0 var(--bg-0);
+  }
+  .sub-en{margin-top:6px;font-size:12.5px;font-style:italic;color:var(--fg-dim);}
+
+  /* ---------- 终点徽记 (Minecraft 角色剪影, 右下角) ---------- */
+  .goal-badge{
+    position:absolute;right:16px;bottom:104px;z-index:6;
+    display:flex;align-items:center;gap:9px;
+    background:oklch(0.18 0.04 265 / 0.78);
+    border:1px solid var(--line-strong);
+    border-radius:8px;padding:7px 11px 7px 8px;
+    box-shadow:3px 3px 0 var(--bg-0);backdrop-filter:blur(2px);
+  }
+  .goal-badge svg{width:24px;height:28px;flex-shrink:0;}
+  .goal-badge .gtxt{font-size:10px;line-height:1.35;color:var(--fg-dim);max-width:130px;}
+  .goal-badge .gtxt b{color:var(--fg);font-weight:700;}
+</style>
+</head>
+<body>
+
+<aside class="sidebar">
+  <div class="brand">SystemEdu<span class="brand-sub" id="brandSub">在线伪迹拒绝 · EEG M48</span></div>
+  <!-- mascot: Spark — 会随念头连接而点亮的分支树突精灵 (neuro) -->
+  <div class="deco">
+    <svg viewBox="0 0 92 92" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <!-- 树突主干 -->
+      <path d="M46 78 L46 50" stroke="var(--dendrite)" stroke-width="3.4" stroke-linecap="round"/>
+      <!-- 分支 -->
+      <path d="M46 56 L30 40" stroke="var(--dendrite)" stroke-width="2.6" stroke-linecap="round"/>
+      <path d="M46 56 L62 40" stroke="var(--dendrite)" stroke-width="2.6" stroke-linecap="round"/>
+      <path d="M46 50 L46 30" stroke="var(--dendrite)" stroke-width="2.6" stroke-linecap="round"/>
+      <path d="M30 40 L22 28" stroke="var(--axon)" stroke-width="2" stroke-linecap="round"/>
+      <path d="M62 40 L70 28" stroke="var(--axon)" stroke-width="2" stroke-linecap="round"/>
+      <path d="M46 30 L36 20" stroke="var(--axon)" stroke-width="2" stroke-linecap="round"/>
+      <path d="M46 30 L56 20" stroke="var(--axon)" stroke-width="2" stroke-linecap="round"/>
+      <!-- 突触点亮 (firing) -->
+      <circle cx="22" cy="28" r="4.2" fill="var(--firing)"/>
+      <circle cx="70" cy="28" r="4.2" fill="var(--synaptic)"/>
+      <circle cx="36" cy="20" r="3.6" fill="var(--synaptic)"/>
+      <circle cx="56" cy="20" r="3.6" fill="var(--firing)"/>
+      <!-- 胞体 + 眼 -->
+      <circle cx="46" cy="60" r="9" fill="var(--axon)" stroke="var(--synaptic)" stroke-width="1.8"/>
+      <circle cx="42.5" cy="59" r="1.9" fill="var(--firing)"/>
+      <circle cx="49.5" cy="59" r="1.9" fill="var(--firing)"/>
+    </svg>
+  </div>
+  <ul class="guide" id="guide">
+    <li class="guide-li hl" data-f="0">实时脑波流，正常解码角色在动</li>
+    <li class="guide-li" data-f="1">突然一个眨眼，幅度猛跳一大下</li>
+    <li class="guide-li" data-f="2">峰峰值守门看到超阈，拒掉这一窗</li>
+    <li class="guide-li" data-f="3">这一窗 do nothing，角色保持不动</li>
+  </ul>
+
+  <!-- 项目进度路线图: 高亮 S4 (你在这) -->
+  <nav class="route" id="route" aria-label="project route">
+    <div class="route-ttl" id="routeTtl">BCI 项目路线</div>
+    <div class="route-step done"><span class="route-dot"></span><span data-s="1">S1 认识脑波</span></div>
+    <div class="route-step done"><span class="route-dot"></span><span data-s="2">S2 清洁信号</span></div>
+    <div class="route-step done"><span class="route-dot"></span><span data-s="3">S3 找特征训分类器</span></div>
+    <div class="route-step cur"><span class="route-dot"></span><span data-s="4">S4 自录冲准</span><span class="route-here" id="routeHere">你在这</span></div>
+    <div class="route-step"><span class="route-dot"></span><span data-s="5">S5 接 Minecraft</span></div>
+    <div class="route-step"><span class="route-dot"></span><span data-s="6">S6 分享</span></div>
+  </nav>
+
+  <button id="langBtn" class="lang-btn">中 / EN</button>
+</aside>
+
+<main class="main">
+  <canvas id="stage"></canvas>
+
+  <div class="hud">
+    <div class="hud-row"><span class="hud-lbl">window</span><span class="hud-val" id="hWin">#0</span></div>
+    <div class="hud-row"><span class="hud-lbl">peak-to-peak</span><span class="hud-val" id="hP2P">0</span></div>
+    <div class="hud-row"><span class="hud-lbl">threshold</span><span class="hud-val" id="hThr">100</span></div>
+    <div class="hud-row"><span class="hud-lbl">gate</span><span class="hud-val" id="hGate">PASS</span></div>
+    <div class="hud-row"><span class="hud-lbl">action</span><span class="hud-val" id="hAct">decode</span></div>
+    <div class="hud-row"><span class="hud-lbl">rejected</span><span class="hud-val" id="hRej">0</span></div>
+  </div>
+
+  <div class="sub">
+    <div class="sub-zh" id="subZh">实时玩时你会眨眼咬牙，不能让这些假信号害角色乱动</div>
+    <div class="sub-en" id="subEn">When you play live you blink and clench — these fake signals must not jerk the character</div>
+  </div>
+
+  <!-- 终点徽记: Minecraft 角色剪影 -->
+  <div class="goal-badge" aria-label="project goal">
+    <svg viewBox="0 0 24 28" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <rect x="5" y="1" width="13" height="12" rx="1" fill="var(--dendrite)" stroke="var(--firing)" stroke-width="1"/>
+      <rect x="8" y="4.5" width="2.4" height="2.4" fill="var(--bg-0)"/>
+      <rect x="13" y="4.5" width="2.4" height="2.4" fill="var(--bg-0)"/>
+      <rect x="9" y="8.5" width="5" height="1.5" fill="var(--bg-0)" opacity="0.7"/>
+      <rect x="6" y="14" width="11" height="9" rx="1" fill="var(--axon)" stroke="var(--line-strong)" stroke-width="0.8"/>
+      <rect x="2.5" y="15" width="3.2" height="7.4" rx="0.6" fill="var(--axon)"/>
+      <rect x="17.5" y="15" width="3.2" height="7.4" rx="0.6" fill="var(--axon)"/>
+      <rect x="8" y="23" width="2.8" height="4" fill="var(--axon)"/>
+      <rect x="12.5" y="23" width="2.8" height="4" fill="var(--axon)"/>
+    </svg>
+    <span class="gtxt" id="goalTxt">终点：<b>用念头让它动</b></span>
+  </div>
+</main>
+
+<script>
+/* ===================== i18n ===================== */
+var LANG = 'cn';
+var I18N = {
+  brandSub: {cn:'在线伪迹拒绝 · EEG M48', en:'Online Artifact Reject · EEG M48'},
+  guide: {
+    cn:['实时脑波流，正常解码角色在动','突然一个眨眼，幅度猛跳一大下','峰峰值守门看到超阈，拒掉这一窗','这一窗 do nothing，角色保持不动'],
+    en:['Live EEG stream — decoding, the character moves','A sudden blink — amplitude jumps way up','Peak-to-peak gate sees over-threshold, rejects this window','That window does nothing — the character holds still']
+  },
+  /* subCues — 跟随同一条实时流的守门进程 */
+  s0:{cn:'实时玩时你会眨眼咬牙，不能让这些假信号害角色乱动',
+      en:'When you play live you blink and clench — these fake signals must not jerk the character'},
+  s1:{cn:'脑波一窗一窗实时流进来，正常窗被解码，角色平稳地动',
+      en:'EEG flows in window by window — normal windows decode, the character moves smoothly'},
+  s2:{cn:'突然一个眨眼：这一窗幅度猛跳，峰峰值远超阈值线',
+      en:'A blink hits: this window spikes — its peak-to-peak shoots past the threshold line'},
+  s3:{cn:'守门连续盯每一窗的峰峰值，超阈就把这一整窗标记拒绝',
+      en:'The gate watches each window peak-to-peak; over-threshold = reject the whole window'},
+  s4:{cn:'被拒的窗 do nothing：不解码、不发指令，角色保持不动',
+      en:'A rejected window does nothing: no decode, no command — the character stays put'},
+  routeTtl:{cn:'BCI 项目路线', en:'BCI Project Route'},
+  routeHere:{cn:'你在这', en:'YOU'},
+  route:{
+    cn:['S1 认识脑波','S2 清洁信号','S3 找特征训分类器','S4 自录冲准','S5 接 Minecraft','S6 分享'],
+    en:['S1 Read EEG','S2 Clean signal','S3 Feature + classifier','S4 Self-train','S5 To Minecraft','S6 Share']
+  },
+  goalTxt:{cn:'终点：用念头让它动', en:'Goal: move it with thought'}
+};
+function tt(o){return (o&&o[LANG])||(o&&o.en)||'';}
+
+function refreshI18N(){
+  document.getElementById('brandSub').textContent = tt(I18N.brandSub);
+  var g = document.querySelectorAll('#guide .guide-li');
+  for(var i=0;i<g.length;i++){ g[i].textContent = I18N.guide[LANG][i]; }
+  document.getElementById('routeTtl').textContent = tt(I18N.routeTtl);
+  document.getElementById('routeHere').textContent = tt(I18N.routeHere);
+  var rs = document.querySelectorAll('#route .route-step span[data-s]');
+  for(var j=0;j<rs.length;j++){ rs[j].textContent = I18N.route[LANG][j]; }
+  if(LANG==='cn'){ document.getElementById('goalTxt').innerHTML = '终点：<b>用念头让它动</b>'; }
+  else { document.getElementById('goalTxt').innerHTML = 'Goal: <b>move it with thought</b>'; }
+  document.getElementById('langBtn').textContent = LANG==='cn' ? '中 / EN' : 'EN / 中';
+  syncSub();
+}
+document.getElementById('langBtn').addEventListener('click', function(){
+  LANG = LANG==='cn' ? 'en' : 'cn';
+  refreshI18N();
+});
+
+/* ===================== Canvas ===================== */
+var canvas = document.getElementById('stage');
+var ctx = canvas.getContext('2d');
+var W=0,H=0,DPR=1;
+function resize(){
+  var rect = canvas.parentElement.getBoundingClientRect();
+  if(rect.width<1||rect.height<1) return;
+  DPR = window.devicePixelRatio||1;
+  canvas.width = rect.width*DPR; canvas.height = rect.height*DPR;
+  canvas.style.width = rect.width+'px'; canvas.style.height = rect.height+'px';
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  W = rect.width; H = rect.height;
+}
+window.addEventListener('resize', resize);
+resize();
+setTimeout(resize,200); setTimeout(resize,600);
+if(document.fonts&&document.fonts.ready){document.fonts.ready.then(resize);}
+
+/* ===================== Palette (canvas) — deep space + neuro coral ===================== */
+var C = {
+  bg0:'#0c0f1c', bg1:'#141a2e', bg2:'#1b2238', bg3:'#262d44',
+  line:'rgba(150,160,210,0.30)', lineStrong:'rgba(170,180,225,0.55)',
+  fg:'#eef0f8', fgDim:'#aab0c8', fgMute:'#7b8198',
+  neuro:'#f0795a', synaptic:'#f0795a', dendrite:'#c2543c',
+  axon:'#6e3528', firing:'#ffd0c2', memory:'#f2cf6e', gold:'#f2cf6e'
+};
+
+/* =====================================================================
+   一镜到底: 唯一核心对象 = 一条实时脑波流 + 一个峰峰值守门
+   实时流连续向左滚动 -> 滑窗逐窗算 peak-to-peak -> 正常窗 PASS 解码角色平稳动
+   -> 突然一个眨眼大跳出现 -> 这一窗 p2p 超过阈值线 -> 守门拒绝整窗(REJECT)
+   -> 被拒窗 do nothing(不解码不发指令) -> 角色保持不动(不被伪迹带乱)
+   全程一条流在滚, 一个守门在判, 不切换不同主题, 非翻页.
+   ===================================================================== */
+
+var animStart = performance.now();
+/* 实时流参数 */
+var SR_PX = 78;          // 像素/秒 流速 (脑波向左滚)
+var WIN_SEC = 1.0;       // 每窗 1 秒
+var THRESH = 100;        // peak-to-peak 阈值 (uV)
+/* 眨眼伪迹事件: 在时间轴上确定性安排几次眨眼 (每个 winIdx 处发生) */
+var BLINK_AT = {3:1, 7:1, 11:1, 15:1, 19:1};   // 这些窗号正中有眨眼大跳
+
+/* 角色状态 (被实时解码驱动): 正常窗推动角色平移; 被拒窗 do nothing 角色不动 */
+var charX = 0;            // 角色位置 (-1..1 概念上, 这里用像素偏移)
+var charTargetX = 0;
+var lastWinIdx = -1;
+var rejectedTotal = 0;
+var lastDir = 0;         // 上一次解码方向 (用于平滑)
+
+/* 确定性"基线脑波" — 给定 t 返回归一化幅度 (无眨眼时的正常 mu/beta 抖动) */
+function baseEEG(t){
+  return Math.sin(t*2*Math.PI*1.1)*0.34
+       + Math.sin(t*2*Math.PI*2.7+0.8)*0.22
+       + Math.sin(t*2*Math.PI*5.3+1.7)*0.12;
+}
+/* 眨眼伪迹: 在某窗中心一个大而钝的正向尖峰 (眨眼典型: 慢、大、单极) */
+function blinkArtifact(winIdx, frac){
+  if(!BLINK_AT[winIdx]) return 0;
+  // frac: 0..1 窗内位置, 眨眼在窗中心
+  var d = frac - 0.5;
+  return Math.exp(-d*d*42) * 1.55;   // 远大于基线 -> p2p 爆表
+}
+/* 给定全局时间 t(秒) 的真实脑波值 (基线 + 可能的眨眼) */
+function eegAt(tSec){
+  var winIdx = Math.floor(tSec / WIN_SEC);
+  var frac = (tSec % WIN_SEC) / WIN_SEC;
+  return baseEEG(tSec) + blinkArtifact(winIdx, frac);
+}
+/* 把归一化幅度换成 uV 读数 (展示用): 1.0 ~ 约 110uV */
+function toUV(norm){ return Math.abs(norm)*108; }
+
+/* 计算某窗的 peak-to-peak (uV) — 采样该窗内若干点 */
+function winPeakToPeak(winIdx){
+  var mn=999, mx=-999;
+  for(var k=0;k<=40;k++){
+    var tSec = winIdx*WIN_SEC + (k/40)*WIN_SEC;
+    var v = eegAt(tSec);
+    if(v<mn)mn=v; if(v>mx)mx=v;
+  }
+  return (mx-mn)*108;   // 同 toUV 比例
+}
+function winRejected(winIdx){ return winPeakToPeak(winIdx) > THRESH; }
+/* 正常窗解码出的方向 (确定性: 交替 想左/想右, 概念示意) */
+function winDir(winIdx){ return (winIdx%2===0)? -1 : 1; }
+
+/* ===================== guide / subCue 阶段同步 ===================== */
+/* 阶段不是翻页, 而是"当前实时进程正讲到哪一环"——基于当前窗是否临近/正处理眨眼 */
+function currentPhase(tSec){
+  // 找最近的下一个/当前眨眼窗, 用与之的距离决定讲解焦点
+  var winIdx = Math.floor(tSec/WIN_SEC);
+  var frac = (tSec%WIN_SEC)/WIN_SEC;
+  // 若当前窗是眨眼窗
+  if(BLINK_AT[winIdx]){
+    if(frac<0.35) return 1;   // 大跳刚出现
+    if(frac<0.7)  return 2;   // 守门判超阈
+    return 3;                 // do nothing 角色不动
+  }
+  return 0;                    // 正常流, 角色平稳动
+}
+var lastGuide=-1;
+function syncGuideHL(g){
+  var lis=document.querySelectorAll('#guide .guide-li');
+  for(var i=0;i<lis.length;i++){ lis[i].classList.toggle('hl', i===g); }
+}
+function syncSub(){
+  var tSec=(performance.now()-animStart)/1000;
+  var p=currentPhase(tSec);
+  var o=I18N['s'+p];
+  document.getElementById('subZh').textContent = LANG==='cn'?o.cn:o.en;
+  document.getElementById('subEn').textContent = o.en;
+}
+
+/* ===================== draw helpers ===================== */
+function rr(x,y,w,h,r){
+  ctx.beginPath();
+  ctx.moveTo(x+r,y);
+  ctx.arcTo(x+w,y,x+w,y+h,r);
+  ctx.arcTo(x+w,y+h,x,y+h,r);
+  ctx.arcTo(x,y+h,x,y,r);
+  ctx.arcTo(x,y,x+w,y,r);
+  ctx.closePath();
+}
+function bgFill(){ ctx.fillStyle=C.bg0; ctx.fillRect(0,0,W,H); }
+function mainTitle(s){
+  ctx.save();
+  ctx.fillStyle=C.fg; ctx.font='700 18px Inter, sans-serif';
+  ctx.textAlign='center'; ctx.textBaseline='alphabetic';
+  ctx.fillText(s, (LEFT+RIGHT)/2, 34);
+  ctx.restore();
+}
+
+/* ===================== layout ===================== */
+var LEFT=0, RIGHT=0, GX=14;
+function layout(){ LEFT=GX; RIGHT=W-GX; }
+
+/* ===================== 主渲染: 一条实时流连续滚动, 守门连续判 ===================== */
+function render(){
+  layout();
+  ctx.clearRect(0,0,W,H);
+  bgFill();
+
+  var nowSec=(performance.now()-animStart)/1000;
+  var phase=currentPhase(nowSec);
+  if(phase!==lastGuide){ lastGuide=phase; syncGuideHL(phase); syncSub(); }
+
+  /* ----- 顶部标题: 始终描述同一个守门机制, 随阶段微调焦点 ----- */
+  var titleZH, titleEN;
+  if(phase===0){ titleZH='实时脑波一窗一窗流进来，正常窗被解码，角色平稳地动';
+                 titleEN='Live EEG streams in window by window; normal windows decode, the character moves'; }
+  else if(phase===1){ titleZH='突然一个眨眼——这一窗幅度猛跳一大下';
+                      titleEN='A sudden blink — this window jumps way up'; }
+  else if(phase===2){ titleZH='峰峰值守门连续盯每一窗：超过阈值线 = 拒绝整窗';
+                      titleEN='The peak-to-peak gate watches every window: over the line = reject the whole window'; }
+  else { titleZH='被拒的窗 do nothing：不解码、不发指令，角色保持不动';
+         titleEN='A rejected window does nothing: no decode, no command — the character holds still'; }
+  mainTitle(LANG==='cn'?titleZH:titleEN);
+
+  var fullW=RIGHT-LEFT;
+
+  /* ============ 主区 1: 实时脑波流 + 滑窗 + 阈值带 (屏幕中上部) ============ */
+  var streamY = H*0.38;            // 脑波基线 y
+  var streamH = H*0.20;            // 波形振幅区高
+  var streamX0 = LEFT;
+  var streamX1 = RIGHT;
+  var streamPxW = streamX1-streamX0;
+
+  /* 阈值带: peak-to-peak 阈值用上下两条对称包络线表示 (超出 = 拒) */
+  var thrHalf = (THRESH/2/108) * streamH;   // 阈值的半幅 (uV->px)
+  ctx.save();
+  // 阈值带底色
+  ctx.fillStyle='rgba(240,121,90,0.05)';
+  ctx.fillRect(streamX0, streamY-thrHalf, streamPxW, thrHalf*2);
+  // 阈值上下线 (虚线)
+  ctx.setLineDash([6,5]);
+  ctx.strokeStyle=C.dendrite; ctx.lineWidth=1.3;
+  ctx.beginPath(); ctx.moveTo(streamX0,streamY-thrHalf); ctx.lineTo(streamX1,streamY-thrHalf); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(streamX0,streamY+thrHalf); ctx.lineTo(streamX1,streamY+thrHalf); ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle=C.dendrite; ctx.font='600 9.5px JetBrains Mono, monospace';
+  ctx.textAlign='left'; ctx.textBaseline='bottom';
+  ctx.fillText(LANG==='cn'?'峰峰值阈值带 ±'+(THRESH/2)+'µV':'p2p threshold band ±'+(THRESH/2)+'µV', streamX0+4, streamY-thrHalf-3);
+  ctx.restore();
+
+  /* 实时流: 屏幕右边是"现在", 向左是过去. 时间映射: 右端 x=streamX1 对应 nowSec.
+     x 对应的时间 tSec = nowSec - (streamX1 - x)/SR_PX */
+  function xToT(x){ return nowSec - (streamX1 - x)/SR_PX; }
+  function tToX(t){ return streamX1 - (nowSec - t)*SR_PX; }
+
+  /* 当前窗 (最右侧正在进入的完整窗) — 用"已完成的最近一窗"作为判定对象,
+     即 nowSec 所在窗的前一窗已采满, 这里取 nowSec 落入的窗为"正在采集",
+     判定刚采满的窗 winIdxDone = floor(nowSec/WIN_SEC) - 0 ... 用当前窗实时累积 */
+  var curWinIdx = Math.floor(nowSec/WIN_SEC);
+  var curWinStartT = curWinIdx*WIN_SEC;
+  var winFrac = (nowSec - curWinStartT)/WIN_SEC;     // 当前窗采集进度 0..1
+
+  /* 画滑窗高亮框 (覆盖当前正在采集的 1 秒窗在流上的区间) */
+  var winXr = tToX(nowSec);                  // 窗右端 (现在)
+  var winXl = tToX(curWinStartT);            // 窗左端 (1秒前)
+  if(winXl<streamX0) winXl=streamX0;
+
+  /* 当前窗的 peak-to-peak (实时, 截至当前采集进度) */
+  var mn=999,mx=-999;
+  for(var s=0;s<=36;s++){
+    var ts=curWinStartT + (s/36)*Math.max(0.02,winFrac)*WIN_SEC;
+    var vv=eegAt(ts);
+    if(vv<mn)mn=vv; if(vv>mx)mx=vv;
+  }
+  var curP2P=(mx-mn)*108;
+  var isBlinkWin = !!BLINK_AT[curWinIdx];
+  var willReject = curP2P>THRESH;            // 当前窗到目前为止是否已超阈
+  var fullWinP2P = winPeakToPeak(curWinIdx); // 该窗采满后的 p2p (用于已判定窗)
+
+  /* 画窗框: 正常=neuro 微框, 超阈=firing 警示框 + 拒绝叉 */
+  ctx.save();
+  var winRej = willReject;
+  ctx.fillStyle = winRej ? 'rgba(240,121,90,0.10)' : 'rgba(240,121,90,0.04)';
+  ctx.strokeStyle = winRej ? C.firing : C.neuro;
+  ctx.lineWidth = winRej ? 2.2 : 1.4;
+  rr(winXl, streamY-streamH-6, (winXr-winXl), streamH*2+12, 5); ctx.fill(); ctx.stroke();
+  // 窗标签
+  ctx.fillStyle = winRej?C.firing:C.neuro;
+  ctx.font='700 10px JetBrains Mono, monospace';
+  ctx.textAlign='center'; ctx.textBaseline='bottom';
+  ctx.fillText((winRej?(LANG==='cn'?'拒绝窗':'REJECT'):(LANG==='cn'?'当前窗':'window'))+' #'+curWinIdx,
+               (winXl+winXr)/2, streamY-streamH-9);
+  ctx.restore();
+
+  /* 画实时脑波折线 (整条可见流) */
+  ctx.save();
+  ctx.lineWidth=2; ctx.lineJoin='round'; ctx.lineCap='round';
+  // 分段着色: 落在已判定的拒绝窗内的点用 firing, 其余用 neuro
+  var prevX=null, prevY=null, prevRej=null;
+  for(var px=Math.ceil(streamX0); px<=streamX1; px+=2){
+    var tS=xToT(px);
+    if(tS<0) continue;
+    var v=eegAt(tS);
+    var y=streamY - v*streamH;
+    var wIdx=Math.floor(tS/WIN_SEC);
+    var rejHere = winRejected(wIdx);
+    if(prevX!==null){
+      ctx.beginPath();
+      ctx.strokeStyle = rejHere ? C.firing : C.neuro;
+      ctx.globalAlpha = rejHere ? 1 : 0.92;
+      ctx.moveTo(prevX,prevY); ctx.lineTo(px,y); ctx.stroke();
+    }
+    prevX=px; prevY=y; prevRej=rejHere;
+  }
+  ctx.restore();
+
+  /* 超阈处: 在波峰/谷超出阈值带的位置标小警示点 */
+  ctx.save();
+  for(var px2=Math.ceil(streamX0); px2<=streamX1; px2+=3){
+    var tS2=xToT(px2); if(tS2<0)continue;
+    var v2=eegAt(tS2);
+    var y2=streamY - v2*streamH;
+    if(Math.abs(v2*streamH)>thrHalf){
+      ctx.fillStyle=C.firing; ctx.globalAlpha=0.85;
+      ctx.beginPath(); ctx.arc(px2,y2,1.8,0,Math.PI*2); ctx.fill();
+    }
+  }
+  ctx.restore();
+
+  /* ============ 主区 2: 守门判定环节 (中部, 把当前窗 p2p 与阈值条对比) ============ */
+  var gateY = H*0.66;
+  drawGate(LEFT+fullW*0.06, gateY, fullW*0.40, curP2P, THRESH, winRej, isBlinkWin);
+
+  /* ============ 主区 3: 角色 (右侧, 被解码驱动) ============
+     正常窗: 解码方向推动角色平移 (平稳)
+     拒绝窗: do nothing, 角色目标位置不变 -> 保持不动 (关键! 不被伪迹带乱) */
+  // 在每个窗结束(进入新窗)时结算上一窗动作
+  if(curWinIdx!==lastWinIdx){
+    var doneIdx=curWinIdx-1;
+    if(doneIdx>=0){
+      if(winRejected(doneIdx)){
+        rejectedTotal++;
+        // do nothing: charTargetX 不变 -> 角色保持不动
+      } else {
+        // 正常解码: 按方向小步移动 (clamp 在舞台内)
+        charTargetX += winDir(doneIdx)*1;
+        if(charTargetX>3)charTargetX=3; if(charTargetX<-3)charTargetX=-3;
+        lastDir=winDir(doneIdx);
+      }
+    }
+    lastWinIdx=curWinIdx;
+  }
+  // 角色平滑趋近目标 (正常窗才会有目标变化; 拒绝窗目标不变 => 角色稳)
+  charX += (charTargetX-charX)*0.08;
+  drawCharacter(RIGHT-fullW*0.20, H*0.66, fullW*0.16, charX, winRej, lastDir);
+
+  /* ============ HUD 实时读数 ============ */
+  document.getElementById('hWin').textContent='#'+curWinIdx;
+  document.getElementById('hP2P').textContent=Math.round(curP2P)+'µV';
+  document.getElementById('hThr').textContent=THRESH+'µV';
+  var gateEl=document.getElementById('hGate');
+  var actEl=document.getElementById('hAct');
+  if(winRej){
+    gateEl.textContent='REJECT'; gateEl.className='hud-val reject';
+    actEl.textContent= LANG==='cn'?'不动 (do nothing)':'do nothing'; actEl.className='hud-val reject';
+  } else {
+    gateEl.textContent='PASS'; gateEl.className='hud-val';
+    actEl.textContent= LANG==='cn'?'解码 '+(lastDir<0?'左':'右'):'decode '+(lastDir<0?'L':'R'); actEl.className='hud-val';
+  }
+  var rejEl=document.getElementById('hRej');
+  rejEl.textContent=rejectedTotal;
+  rejEl.className = winRej?'hud-val gold':'hud-val';
+
+  requestAnimationFrame(render);
+}
+
+/* 守门判定可视: 一根竖向 p2p 量条 vs 阈值线, 超阈亮红并显示 REJECT, 否则 PASS */
+function drawGate(x,y,w,p2p,thr,rejected,isBlinkWin){
+  ctx.save();
+  var barW=w, barH=H*0.20, bx=x, by=y-barH/2;
+  // 标题
+  ctx.fillStyle=C.fgDim; ctx.font='600 11px Inter, sans-serif';
+  ctx.textAlign='left'; ctx.textBaseline='bottom';
+  ctx.fillText(LANG==='cn'?'峰峰值守门 · p2p vs 阈值':'Peak-to-peak gate · p2p vs threshold', bx, by-6);
+
+  // 量条容器
+  ctx.fillStyle=C.bg1; ctx.strokeStyle=C.line; ctx.lineWidth=1;
+  rr(bx,by,barW,barH,7); ctx.fill(); ctx.stroke();
+
+  // 阈值刻度位置 (条内): 0 在左, maxScale 在右
+  var maxScale=Math.max(220, thr*2);
+  function valToX(v){ return bx+6 + (barW-12)*Math.min(1,v/maxScale); }
+  // 阈值竖线
+  var thrX=valToX(thr);
+  ctx.setLineDash([5,4]); ctx.strokeStyle=C.dendrite; ctx.lineWidth=1.6;
+  ctx.beginPath(); ctx.moveTo(thrX,by+4); ctx.lineTo(thrX,by+barH-4); ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle=C.dendrite; ctx.font='600 9px JetBrains Mono, monospace';
+  ctx.textAlign='center'; ctx.textBaseline='top';
+  ctx.fillText('阈值'.length&&LANG==='cn'?'阈值 '+thr:'thr '+thr, thrX, by+barH+3);
+
+  // p2p 填充条
+  var pX=valToX(p2p);
+  var fillW=pX-(bx+6);
+  ctx.fillStyle = rejected ? C.firing : C.neuro;
+  ctx.globalAlpha = rejected ? 0.9 : 0.8;
+  rr(bx+6, by+6, Math.max(2,fillW), barH-12, 4); ctx.fill();
+  ctx.globalAlpha=1;
+
+  // 当前 p2p 数值
+  ctx.fillStyle=C.fg; ctx.font='700 13px JetBrains Mono, monospace';
+  ctx.textAlign='left'; ctx.textBaseline='middle';
+  ctx.fillText(Math.round(p2p)+'µV', bx+barW+12, by+barH*0.30);
+
+  // 判定结果章
+  ctx.font='800 14px JetBrains Mono, monospace';
+  if(rejected){
+    ctx.fillStyle=C.firing;
+    ctx.fillText(LANG==='cn'?'超阈 → 拒绝整窗':'OVER → REJECT WINDOW', bx+barW+12, by+barH*0.72);
+  } else {
+    ctx.fillStyle=C.neuro;
+    ctx.fillText(LANG==='cn'?'未超阈 → 通过解码':'UNDER → PASS, decode', bx+barW+12, by+barH*0.72);
+  }
+  ctx.restore();
+}
+
+/* 角色: 一个简易方块小人, 正常窗被解码后平稳移动; 拒绝窗 do nothing 保持不动.
+   rejected=true 时在头顶显示 "守住" 盾, 强调不被伪迹带乱 */
+function drawCharacter(cx0,cy,zoneW,charX,rejected,dir){
+  ctx.save();
+  // 角色平台 / 轨道
+  var trackY=cy+44;
+  ctx.strokeStyle=C.line; ctx.lineWidth=1.2;
+  ctx.beginPath(); ctx.moveTo(cx0-zoneW*0.7,trackY); ctx.lineTo(cx0+zoneW*0.9,trackY); ctx.stroke();
+  // 刻度
+  for(var i=-3;i<=3;i++){
+    var tx=cx0 + i*(zoneW*0.22);
+    ctx.strokeStyle=C.line; ctx.beginPath(); ctx.moveTo(tx,trackY-3); ctx.lineTo(tx,trackY+3); ctx.stroke();
+  }
+  // 角色位置
+  var px=cx0 + charX*(zoneW*0.22);
+  var size=30;
+  // 头 (方块, Minecraft 风)
+  ctx.fillStyle=C.dendrite; ctx.strokeStyle=C.firing; ctx.lineWidth=1.4;
+  rr(px-size/2, trackY-size-30, size, size, 3); ctx.fill(); ctx.stroke();
+  // 眼
+  ctx.fillStyle=C.bg0;
+  ctx.fillRect(px-8, trackY-size-22, 5,5);
+  ctx.fillRect(px+3, trackY-size-22, 5,5);
+  // 身体
+  ctx.fillStyle=C.axon; ctx.strokeStyle=C.line; ctx.lineWidth=1;
+  rr(px-size/2+3, trackY-30, size-6, 28, 2); ctx.fill(); ctx.stroke();
+  // 脚
+  ctx.fillStyle=C.axon;
+  ctx.fillRect(px-9, trackY-3, 6,6);
+  ctx.fillRect(px+3, trackY-3, 6,6);
+
+  // 状态标注
+  ctx.textAlign='center';
+  if(rejected){
+    // 盾: 强调"守住, 不动"
+    ctx.save();
+    ctx.translate(px, trackY-size-52);
+    ctx.fillStyle=C.firing; ctx.globalAlpha=0.9;
+    ctx.beginPath();
+    ctx.moveTo(0,-10); ctx.lineTo(9,-5); ctx.lineTo(9,4);
+    ctx.quadraticCurveTo(9,11,0,15); ctx.quadraticCurveTo(-9,11,-9,4);
+    ctx.lineTo(-9,-5); ctx.closePath(); ctx.fill();
+    ctx.restore();
+    ctx.fillStyle=C.firing; ctx.font='700 11px Inter, sans-serif'; ctx.textBaseline='top';
+    ctx.fillText(LANG==='cn'?'守住 · 不动':'held · no move', px, trackY+12);
+  } else {
+    ctx.fillStyle=C.neuro; ctx.font='700 11px Inter, sans-serif'; ctx.textBaseline='top';
+    ctx.fillText(LANG==='cn'?(dir<0?'解码: 向左':'解码: 向右'):(dir<0?'decode: left':'decode: right'), px, trackY+12);
+    // 移动方向小箭头 (用三角, 非 emoji)
+    ctx.fillStyle=C.synaptic;
+    var ax=px + (dir<0?-22:22);
+    ctx.beginPath();
+    if(dir<0){ ctx.moveTo(ax,trackY-18); ctx.lineTo(ax+8,trackY-23); ctx.lineTo(ax+8,trackY-13); }
+    else { ctx.moveTo(ax,trackY-18); ctx.lineTo(ax-8,trackY-23); ctx.lineTo(ax-8,trackY-13); }
+    ctx.closePath(); ctx.fill();
+  }
+  // 区标题
+  ctx.fillStyle=C.fgDim; ctx.font='600 11px Inter, sans-serif';
+  ctx.textAlign='center'; ctx.textBaseline='bottom';
+  ctx.fillText(LANG==='cn'?'角色 (被解码驱动)':'character (driven by decode)', cx0+zoneW*0.1, trackY-size-66);
+  ctx.restore();
+}
+
+/* init */
+refreshI18N();
+syncGuideHL(0);
+requestAnimationFrame(render);
+</script>
+</body>
+</html>

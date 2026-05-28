@@ -1,0 +1,794 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>M49 · 漂移与校准</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Noto+Sans+SC:wght@400;500;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    /* 第 1 层 — 共享深空底 (所有 26 套统一) */
+    --bg-0: oklch(0.14 0.035 265);
+    --bg-1: oklch(0.18 0.04 265);
+    --bg-2: oklch(0.22 0.045 265);
+    --bg-3: oklch(0.28 0.05 265);
+    --line: oklch(0.35 0.05 265 / 0.35);
+    --line-strong: oklch(0.55 0.08 265 / 0.55);
+    --fg:      oklch(0.96 0.01 265);
+    --fg-dim:  oklch(0.75 0.02 265);
+    --fg-mute: oklch(0.55 0.03 265);
+    --gold:    oklch(0.85 0.14 85);
+
+    /* 第 2 层 — neuro signature accent (cortex-coral) */
+    --accent: oklch(0.75 0.17 25);
+
+    /* 第 3 层 — neuro 5 色 palette (themes.js Cortex Map) */
+    --synaptic: oklch(0.75 0.17 25);
+    --dendrite: oklch(0.55 0.15 25);
+    --axon:     oklch(0.32 0.10 25);
+    --firing:   oklch(0.92 0.08 25);
+    --memory:   oklch(0.85 0.14 85);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    height: 100vh; overflow: hidden;
+    background: var(--bg-0); color: var(--fg);
+    font-family: 'Inter', 'Noto Sans SC', 'PingFang SC', sans-serif;
+    font-size: 14px; line-height: 1.5;
+    display: flex;
+  }
+  .mono { font-family: 'JetBrains Mono', monospace; }
+
+  /* ============ Sidebar 200px ============ */
+  .sidebar {
+    width: 200px; flex-shrink: 0; height: 100vh;
+    background: var(--bg-1);
+    border-right: 1px solid var(--line);
+    display: flex; flex-direction: column;
+    padding: 22px 18px 18px;
+    position: relative;
+  }
+  .brand-row { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+  .brand-dot {
+    width: 10px; height: 10px; border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 0 4px oklch(0.75 0.17 25 / 0.18);
+    animation: pulse 2.4s ease-in-out infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { box-shadow: 0 0 0 4px oklch(0.75 0.17 25 / 0.18); }
+    50%      { box-shadow: 0 0 0 7px oklch(0.75 0.17 25 / 0.10); }
+  }
+  .brand-tag {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; letter-spacing: 0.08em;
+    color: var(--fg-dim); font-weight: 600;
+  }
+  .brand-title { font-size: 15px; font-weight: 700; color: var(--fg); line-height: 1.35; margin-bottom: 4px; }
+  .brand-sub { font-size: 11px; color: var(--fg-mute); line-height: 1.5; font-family: 'JetBrains Mono', monospace; }
+
+  /* mascot Spark */
+  .mascot { margin: 14px 0 4px; display: flex; align-items: center; gap: 8px; }
+  .mascot .m-name {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px; letter-spacing: 0.06em; color: var(--fg-mute); line-height: 1.3;
+  }
+  .mascot .m-name b { color: var(--synaptic); font-weight: 700; }
+
+  /* guide 3 条 */
+  .guide-h {
+    font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.12em;
+    color: var(--fg-mute); margin: 14px 0 7px; text-transform: uppercase;
+  }
+  .guide { list-style: none; padding: 0; margin: 0; }
+  .guide li {
+    font-size: 11px; color: var(--fg-dim); line-height: 1.4;
+    padding: 4px 0 4px 14px; position: relative;
+  }
+  .guide li::before {
+    content: ''; position: absolute; left: 0; top: 9px;
+    width: 5px; height: 5px; border-radius: 50%; background: var(--dendrite);
+  }
+
+  /* roadmap S1-S6 */
+  .road-h {
+    font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.12em;
+    color: var(--fg-mute); margin: 16px 0 8px; text-transform: uppercase;
+  }
+  .road { list-style: none; padding: 0; margin: 0; }
+  .road li {
+    position: relative; font-size: 11px; color: var(--fg-mute); line-height: 1.35;
+    padding: 4px 0 4px 18px; border-left: 2px solid var(--line);
+  }
+  .road li::before {
+    content: ''; position: absolute; left: -5px; top: 8px;
+    width: 7px; height: 7px; border-radius: 50%; background: var(--bg-3);
+  }
+  .road li .st {
+    font-family: 'JetBrains Mono', monospace; font-weight: 700; font-size: 10px;
+    margin-right: 5px; color: var(--fg-mute);
+  }
+  .road li.done { color: var(--fg-dim); }
+  .road li.done::before { background: var(--dendrite); }
+  .road li.done .st { color: var(--dendrite); }
+  .road li.cur { color: var(--fg); font-weight: 700; border-left-color: var(--accent); }
+  .road li.cur::before {
+    background: var(--accent);
+    box-shadow: 0 0 0 3px oklch(0.75 0.17 25 / 0.20);
+    animation: pulse 2.4s ease-in-out infinite;
+  }
+  .road li.cur .st { color: var(--synaptic); }
+  .road li .badge {
+    display: inline-block; font-family: 'JetBrains Mono', monospace;
+    font-size: 8px; font-weight: 700; letter-spacing: 0.05em;
+    background: oklch(0.75 0.17 25 / 0.18); color: var(--synaptic);
+    padding: 1px 5px; border-radius: 3px; margin-left: 4px;
+  }
+
+  /* Minecraft silhouette corner (终点徽记) */
+  .mc-corner { margin-top: 12px; opacity: 0.6; display: flex; align-items: center; gap: 6px; }
+  .mc-corner svg { display: block; }
+  .mc-corner .mc-label {
+    font-family: 'JetBrains Mono', monospace; font-size: 8px;
+    letter-spacing: 0.05em; color: var(--fg-mute); line-height: 1.3;
+  }
+
+  .lang-btn {
+    margin-top: auto;
+    border: 1px solid var(--line-strong);
+    background: var(--bg-2); color: var(--fg); cursor: pointer;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; font-weight: 600;
+    padding: 9px 12px; border-radius: 6px;
+    transition: all 160ms ease; letter-spacing: 0.06em;
+    box-shadow: 3px 3px 0 var(--bg-0);
+  }
+  .lang-btn:hover { border-color: var(--accent); color: var(--synaptic); }
+
+  /* ============ Main stage ============ */
+  .main { flex: 1; height: 100vh; position: relative; overflow: hidden; }
+  #stage { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+
+  /* HUD 右上 */
+  .hud {
+    position: absolute; top: 18px; right: 18px;
+    background: oklch(0.18 0.04 265 / 0.85);
+    border: 1px solid var(--line-strong);
+    border-radius: 8px; padding: 10px 14px;
+    font-family: 'JetBrains Mono', monospace; font-size: 11px;
+    min-width: 172px; box-shadow: 3px 3px 0 var(--bg-0);
+    backdrop-filter: blur(2px);
+  }
+  .hud-row { display: flex; justify-content: space-between; gap: 14px; line-height: 1.7; }
+  .hud-lbl { color: var(--fg-mute); }
+  .hud-val { color: var(--synaptic); font-weight: 700; }
+  .hud-val.gold { color: var(--gold); }
+
+  /* subtitle 辅助点睛 */
+  .sub {
+    position: absolute; bottom: 24px; left: 50%; transform: translateX(-50%);
+    text-align: center; width: 78%; pointer-events: none;
+  }
+  .sub-zh {
+    font-size: 18px; font-weight: 700; color: var(--fg);
+    background: oklch(0.14 0.035 265 / 0.72);
+    padding: 6px 18px; display: inline-block; border-radius: 6px;
+    border: 1px solid var(--line); line-height: 1.45;
+  }
+  .sub-zh .hi { color: var(--synaptic); }
+  .sub-zh .gd { color: var(--gold); }
+  .sub-en {
+    font-size: 12px; font-style: italic; color: var(--fg-dim);
+    margin-top: 6px; font-family: 'Inter', sans-serif;
+  }
+</style>
+</head>
+<body>
+
+<aside class="sidebar">
+  <div class="brand-row">
+    <span class="brand-dot"></span>
+    <span class="brand-tag" id="brandTag">M49 · 自录冲准</span>
+  </div>
+  <div class="brand-title" id="brandTitle">漂移与校准</div>
+  <div class="brand-sub" id="brandSub">drift &amp; calibration</div>
+
+  <div class="mascot">
+    <svg width="34" height="34" viewBox="0 0 34 34" aria-hidden="true">
+      <!-- Spark: 小树突生物, 节点连线随波点亮 -->
+      <line x1="17" y1="17" x2="6"  y2="8"  stroke="oklch(0.55 0.15 25)" stroke-width="1.4"/>
+      <line x1="17" y1="17" x2="28" y2="7"  stroke="oklch(0.55 0.15 25)" stroke-width="1.4"/>
+      <line x1="17" y1="17" x2="7"  y2="27" stroke="oklch(0.55 0.15 25)" stroke-width="1.4"/>
+      <line x1="17" y1="17" x2="27" y2="28" stroke="oklch(0.55 0.15 25)" stroke-width="1.4"/>
+      <circle cx="6"  cy="8"  r="2.4" fill="oklch(0.92 0.08 25)"/>
+      <circle cx="28" cy="7"  r="2.4" fill="oklch(0.75 0.17 25)"/>
+      <circle cx="7"  cy="27" r="2.4" fill="oklch(0.75 0.17 25)"/>
+      <circle cx="27" cy="28" r="2.4" fill="oklch(0.92 0.08 25)"/>
+      <circle cx="17" cy="17" r="4.2" fill="oklch(0.75 0.17 25)"/>
+      <circle cx="17" cy="17" r="6.6" fill="none" stroke="oklch(0.75 0.17 25 / 0.4)" stroke-width="1"/>
+    </svg>
+    <span class="m-name"><b>Spark</b><br>cortex guide</span>
+  </div>
+
+  <div class="guide-h" id="guideH">看什么</div>
+  <ul class="guide">
+    <li id="g1">同一个模型，一条准确率线</li>
+    <li id="g2">越用越往下漂 5-15 分</li>
+    <li id="g3">5 分钟校准，线又升回去</li>
+  </ul>
+
+  <div class="road-h" id="roadH">脑控 Minecraft 长征</div>
+  <ul class="road">
+    <li class="done"><span class="st">S1</span><span id="r1">采脑波</span></li>
+    <li class="done"><span class="st">S2</span><span id="r2">看懂信号</span></li>
+    <li class="done"><span class="st">S3</span><span id="r3">建模型</span></li>
+    <li class="cur"><span class="st">S4</span><span id="r4">自录冲准</span><span class="badge" id="r4b">你在这</span></li>
+    <li><span class="st">S5</span><span id="r5">接进游戏</span></li>
+    <li><span class="st">S6</span><span id="r6">脑控真玩</span></li>
+  </ul>
+
+  <div class="mc-corner">
+    <svg width="42" height="38" viewBox="0 0 42 38" aria-hidden="true">
+      <rect x="2"  y="20" width="13" height="13" fill="oklch(0.32 0.10 25)"/>
+      <rect x="15" y="20" width="13" height="13" fill="oklch(0.55 0.15 25)"/>
+      <rect x="2"  y="20" width="13" height="13" fill="none" stroke="oklch(0.55 0.08 265 / 0.55)" stroke-width="0.7"/>
+      <rect x="15" y="20" width="13" height="13" fill="none" stroke="oklch(0.55 0.08 265 / 0.55)" stroke-width="0.7"/>
+      <path d="M21 2 L38 8 L36 12 L23 9 L21 13 L19 9 L20 5 Z" fill="oklch(0.55 0.15 25)"/>
+      <rect x="19" y="9" width="3" height="15" fill="oklch(0.32 0.10 25)" transform="rotate(8 20 16)"/>
+    </svg>
+    <span class="mc-label" id="mcLabel">终点<br>Minecraft</span>
+  </div>
+
+  <button class="lang-btn" id="langBtn" type="button">中文 / EN</button>
+</aside>
+
+<main class="main">
+  <canvas id="stage"></canvas>
+  <div class="hud">
+    <div class="hud-row"><span class="hud-lbl" id="hPhaseL">phase</span><span class="hud-val" id="hPhase">stable</span></div>
+    <div class="hud-row"><span class="hud-lbl">day</span><span class="hud-val mono" id="hDay">1</span></div>
+    <div class="hud-row"><span class="hud-lbl" id="hAccL">accuracy</span><span class="hud-val mono gold" id="hAcc">74%</span></div>
+    <div class="hud-row"><span class="hud-lbl" id="hDriftL">drift</span><span class="hud-val mono" id="hDrift">0 pts</span></div>
+  </div>
+  <div class="sub">
+    <div class="sub-zh" id="subZh">今天能用的模型，明天为什么不灵了？大脑和设备每天都在变。</div>
+    <div class="sub-en" id="subEn">A model that worked today fails tomorrow — brain and gear drift every day.</div>
+  </div>
+</main>
+
+<script>
+(function () {
+  "use strict";
+
+  var LANG = 'cn';
+
+  /* ---------- i18n: sidebar / hud labels ---------- */
+  var I18N = {
+    brandTag:   { cn: 'M49 · 自录冲准',     en: 'M49 · SELF-RECORD' },
+    brandTitle: { cn: '漂移与校准',          en: 'Drift & Calibration' },
+    brandSub:   { cn: 'drift & calibration', en: 'drift & calibration' },
+    guideH:     { cn: '看什么',              en: 'WATCH' },
+    g1: { cn: '同一个模型，一条准确率线',     en: 'one model, one accuracy line' },
+    g2: { cn: '越用越往下漂 5-15 分',         en: 'it drifts down 5-15 pts' },
+    g3: { cn: '5 分钟校准，线又升回去',       en: '5-min calib pulls it back up' },
+    roadH: { cn: '脑控 Minecraft 长征',       en: 'BRAIN-MINECRAFT ROADMAP' },
+    r1: { cn: '采脑波',   en: 'Record EEG' },
+    r2: { cn: '看懂信号', en: 'Read signal' },
+    r3: { cn: '建模型',   en: 'Build model' },
+    r4: { cn: '自录冲准', en: 'Self-record' },
+    r4b:{ cn: '你在这',   en: 'YOU ARE HERE' },
+    r5: { cn: '接进游戏', en: 'Wire to game' },
+    r6: { cn: '脑控真玩', en: 'Play by mind' },
+    mcLabel: { cn: '终点<br>Minecraft', en: 'Goal<br>Minecraft' },
+    hPhaseL: { cn: 'phase', en: 'phase' },
+    hAccL:   { cn: 'accuracy', en: 'accuracy' },
+    hDriftL: { cn: 'drift', en: 'drift' }
+  };
+
+  /* ---------- subtitle script keyed by phase ---------- */
+  var SUB = {
+    intro: {
+      zh: '今天能用的模型，明天为什么<span class="hi">不灵了</span>？大脑和设备每天都在变。',
+      en: 'Why does a model that worked today fail tomorrow? Brain and gear change daily.'
+    },
+    drift: {
+      zh: '同一个训好的模型，准确率一天天<span class="hi">往下漂</span>：电极挪了、阻抗变了、状态也不同。',
+      en: 'The same trained model drifts down day by day: electrodes shift, impedance changes, state differs.'
+    },
+    dropped: {
+      zh: '掉了 <span class="hi">5-15 分</span>。模型没坏，是你的大脑和设备跟训练那天不一样了。',
+      en: 'Down 5-15 pts. The model is fine — your brain and gear just differ from training day.'
+    },
+    calib: {
+      zh: '别重训整个模型。花 <span class="hi">5 分钟</span>录一小把今天的新数据，<span class="hi">微调</span>一下。',
+      en: 'Do not retrain from scratch. Spend 5 min recording a little fresh data and fine-tune.'
+    },
+    recover: {
+      zh: '同一条线<span class="gd">连续升回去</span>了！少量新数据就把模型拉回今天的你。',
+      en: 'The same line climbs back up! A little fresh data realigns the model to today-you.'
+    },
+    outro: {
+      zh: '每次玩前花 <span class="gd">5 分钟校准</span>，脑控才天天能用。',
+      en: 'Calibrate 5 minutes before each session — that is how brain control stays usable every day.'
+    }
+  };
+
+  function setHTML(id, html) { var el = document.getElementById(id); if (el) el.innerHTML = html; }
+  function setText(id, t) { var el = document.getElementById(id); if (el) el.textContent = t; }
+
+  function refreshI18N() {
+    var keys = ['brandTag','brandTitle','brandSub','guideH','g1','g2','g3','roadH',
+                'r1','r2','r3','r4','r4b','r5','r6','mcLabel','hPhaseL','hAccL','hDriftL'];
+    for (var i = 0; i < keys.length; i++) if (I18N[keys[i]]) setHTML(keys[i], I18N[keys[i]][LANG]);
+    setText('langBtn', LANG === 'cn' ? '中文 / EN' : 'EN / 中文');
+    document.documentElement.setAttribute('lang', LANG === 'cn' ? 'zh-CN' : 'en');
+    // subtitle 立即随当前 phase 刷新
+    applySub();
+  }
+
+  var curPhase = 'intro';
+  function applySub() {
+    var s = SUB[curPhase] || SUB.intro;
+    setHTML('subZh', s.zh);
+    setText('subEn', s[LANG === 'cn' ? 'en' : 'zh']);
+    // subZh shows current LANG; if EN selected swap which is big
+    if (LANG === 'en') {
+      setHTML('subZh', s.en);
+      setHTML('subEn', s.zh);
+    } else {
+      setHTML('subZh', s.zh);
+      setHTML('subEn', s.en);
+    }
+  }
+
+  document.getElementById('langBtn').addEventListener('click', function () {
+    LANG = (LANG === 'cn') ? 'en' : 'cn';
+    refreshI18N();
+  });
+
+  /* ====================================================================
+     CANVAS — 唯一核心对象: 一条「同一模型」的准确率曲线, 连续漂移下滑 再校准回升
+     一镜到底, rAF 连续推进 t, 曲线逐点生长, 背景脑+电极随漂移微动
+     ==================================================================== */
+  var canvas = document.getElementById('stage');
+  var c = canvas.getContext('2d');
+  var W = 0, H = 0, DPR = 1;
+
+  function resize() {
+    var r = canvas.parentElement.getBoundingClientRect();
+    if (r.width < 1 || r.height < 1) return;
+    DPR = window.devicePixelRatio || 1;
+    canvas.width = Math.round(r.width * DPR);
+    canvas.height = Math.round(r.height * DPR);
+    canvas.style.width = r.width + 'px';
+    canvas.style.height = r.height + 'px';
+    c.setTransform(DPR, 0, 0, DPR, 0, 0);
+    W = r.width; H = r.height;
+  }
+  window.addEventListener('resize', resize);
+
+  /* ---- color helpers ---- */
+  var COL = {
+    bg0: getComputedStyle(document.documentElement).getPropertyValue('--bg-0').trim(),
+    accent: 'oklch(0.75 0.17 25)',
+    synaptic: 'oklch(0.75 0.17 25)',
+    dendrite: 'oklch(0.55 0.15 25)',
+    axon: 'oklch(0.32 0.10 25)',
+    firing: 'oklch(0.92 0.08 25)',
+    memory: 'oklch(0.85 0.14 85)',
+    gold: 'oklch(0.85 0.14 85)',
+    fg: 'oklch(0.96 0.01 265)',
+    fgDim: 'oklch(0.75 0.02 265)',
+    fgMute: 'oklch(0.55 0.03 265)',
+    line: 'oklch(0.40 0.05 265 / 0.45)',
+    grid: 'oklch(0.30 0.04 265 / 0.5)'
+  };
+
+  /* ====================================================================
+     时间轴: 一个完整循环 ~ 34s. 阶段是「同一条曲线」的连续演化, 非翻页.
+       t 单位 = 秒 (循环内). 数据由 accAt(day) 连续给出.
+     模型: trainDay=1 训练. 之后每天用同一模型, 准确率随漂移连续下滑.
+       第 5 天玩家做校准(5min 微调), 之后准确率回升并稳住.
+     ==================================================================== */
+  var CYCLE = 34.0;     // 秒
+  var TRAIN_ACC = 0.74; // 训练当天基线
+  var FLOOR_ACC = 0.61; // 漂移到第 5 天前的低点 (掉 13 pts)
+  var CALIB_DAY = 5;    // 校准发生在第 5 天
+  var RECOVER_ACC = 0.73;
+  var MAX_DAY = 8;
+
+  // 阶段时间窗 (秒) — 用于推进 day 指针 + 切字幕
+  // intro 0-4 | drift 4-15 (day1->day5 连续下滑) | dropped 15-18 | calib 18-23 | recover 23-30 | outro 30-34
+  function phaseAt(t) {
+    if (t < 4)  return 'intro';
+    if (t < 15) return 'drift';
+    if (t < 18) return 'dropped';
+    if (t < 23) return 'calib';
+    if (t < 30) return 'recover';
+    return 'outro';
+  }
+
+  // 把 t 映射到「当前已走到第几天 (连续小数)」
+  function dayAt(t) {
+    if (t < 4) return 1;
+    if (t < 15) return 1 + (t - 4) / 11 * (CALIB_DAY - 1);       // day1 -> day5
+    if (t < 18) return CALIB_DAY;                                 // 停在 day5 看掉了多少
+    if (t < 23) return CALIB_DAY;                                 // 校准当天
+    if (t < 30) return CALIB_DAY + (t - 23) / 7 * (MAX_DAY - CALIB_DAY); // day5 -> day8 回升后稳
+    return MAX_DAY;
+  }
+
+  // 校准进度 0..1 (仅在 calib 窗口内)
+  function calibProg(t) {
+    if (t < 18) return 0;
+    if (t < 23) return (t - 18) / 5;
+    return 1;
+  }
+
+  // 连续准确率函数: 给定天数 d (1..MAX_DAY) + 校准是否已完成
+  // drift 段: 从 TRAIN_ACC 平滑下滑到 FLOOR_ACC (在 day5)
+  // recover 段: 校准后回升到 RECOVER_ACC 并轻微波动稳住
+  function accAt(d, calibratedFrac) {
+    var driftAcc;
+    if (d <= CALIB_DAY) {
+      var f = (d - 1) / (CALIB_DAY - 1);          // 0..1 over day1..day5
+      // ease: 头几天慢漂, 后面加速 (电极/阻抗累积)
+      var e = f * f * (3 - 2 * f);
+      driftAcc = TRAIN_ACC - (TRAIN_ACC - FLOOR_ACC) * e;
+    } else {
+      driftAcc = FLOOR_ACC;
+    }
+    if (calibratedFrac <= 0) return driftAcc;
+    // 校准把曲线从 FLOOR 拉向 RECOVER, 校准后保持
+    var target;
+    if (d <= CALIB_DAY) {
+      target = FLOOR_ACC + (RECOVER_ACC - FLOOR_ACC) * calibratedFrac;
+    } else {
+      // 校准后继续用, 略有微漂但被校准托住
+      var g = (d - CALIB_DAY) / (MAX_DAY - CALIB_DAY);
+      target = RECOVER_ACC - 0.015 * g;
+    }
+    if (d <= CALIB_DAY) return driftAcc + (target - driftAcc); // = target during calib day
+    return target;
+  }
+
+  /* ---- background brain + electrodes (随漂移微动) ---- */
+  var electrodes = [];
+  (function () {
+    // 8 个电极锚点 (相对脑中心的极角 + 半径), 各有独立微漂 + 阻抗相位
+    for (var i = 0; i < 8; i++) {
+      var ang = (i / 8) * Math.PI * 2 + 0.3;
+      electrodes.push({
+        baseAng: ang,
+        r: 0.62 + 0.18 * ((i % 3) / 2),
+        phase: i * 0.9,
+        driftSpeed: 0.5 + (i % 4) * 0.13
+      });
+    }
+  })();
+
+  function drawBrain(t, driftAmt, calibFlash) {
+    // 脑 + 电极 占左侧背景, 不抢曲线; driftAmt 0..1 控制电极偏移 + 阻抗发红
+    var cx = W * 0.215, cy = H * 0.40, rad = Math.min(W, H) * 0.135;
+    c.save();
+    // 脑轮廓 (两半球)
+    c.strokeStyle = 'oklch(0.40 0.06 265 / 0.55)';
+    c.lineWidth = 1.6;
+    c.beginPath();
+    c.ellipse(cx, cy, rad * 1.15, rad, 0, 0, Math.PI * 2);
+    c.stroke();
+    c.beginPath();
+    c.moveTo(cx, cy - rad);
+    c.lineTo(cx, cy + rad);
+    c.strokeStyle = 'oklch(0.40 0.06 265 / 0.35)';
+    c.stroke();
+    // 沟回 (几条弧, 装饰)
+    c.strokeStyle = 'oklch(0.45 0.07 265 / 0.30)';
+    c.lineWidth = 1.1;
+    for (var k = -2; k <= 2; k++) {
+      c.beginPath();
+      c.ellipse(cx, cy, rad * (0.45 + Math.abs(k) * 0.22), rad * 0.7, 0, 0, Math.PI * 2);
+      c.stroke();
+    }
+
+    // 电极
+    for (var i = 0; i < electrodes.length; i++) {
+      var el = electrodes[i];
+      // 漂移: 电极位置随 driftAmt 慢慢偏离原位 (位置漂)
+      var wobble = Math.sin(t * el.driftSpeed + el.phase) ;
+      var dAng = el.baseAng + driftAmt * 0.22 * wobble;
+      var dR = el.r + driftAmt * 0.10 * Math.cos(t * 0.6 + el.phase);
+      var ex = cx + Math.cos(dAng) * rad * dR * 1.15;
+      var ey = cy + Math.sin(dAng) * rad * dR;
+      // 阻抗: 漂移越大越偏红 (dendrite/firing), 校准后回到 synaptic 稳定
+      var imp = driftAmt;
+      var col;
+      if (calibFlash > 0) col = 'oklch(0.92 0.08 25)';            // 校准时新数据点闪亮
+      else if (imp > 0.55) col = 'oklch(0.55 0.15 25)';          // 高阻抗发暗红
+      else col = 'oklch(0.75 0.17 25)';                          // 稳定 cortex-coral
+      // 连到脑中心 (信号线)
+      c.strokeStyle = 'oklch(0.40 0.10 25 / ' + (0.25 + 0.25 * (1 - imp)) + ')';
+      c.lineWidth = 1;
+      c.beginPath(); c.moveTo(cx, cy); c.lineTo(ex, ey); c.stroke();
+      // 电极盘
+      var pr = 4.2 + 1.6 * Math.abs(Math.sin(t * 1.4 + el.phase)) * (calibFlash > 0 ? 1.5 : 1);
+      c.fillStyle = col;
+      c.beginPath(); c.arc(ex, ey, pr, 0, Math.PI * 2); c.fill();
+      if (imp > 0.55 && calibFlash <= 0) {
+        // 阻抗告警光环
+        c.strokeStyle = 'oklch(0.55 0.15 25 / 0.5)';
+        c.lineWidth = 1.2;
+        c.beginPath(); c.arc(ex, ey, pr + 3 + 2 * Math.sin(t * 3 + el.phase), 0, Math.PI * 2); c.stroke();
+      }
+    }
+    c.restore();
+  }
+
+  /* ---- the ONE accuracy curve (主角) ---- */
+  function drawCurve(t) {
+    // 绘图区 (右侧大块)
+    var x0 = W * 0.40, x1 = W * 0.945;
+    var y0 = H * 0.16, y1 = H * 0.80;
+    var accHi = 0.80, accLo = 0.55;
+    function px(d) { return x0 + (d - 1) / (MAX_DAY - 1) * (x1 - x0); }
+    function py(a) { return y1 - (a - accLo) / (accHi - accLo) * (y1 - y0); }
+
+    // 坐标轴 + 网格
+    c.save();
+    c.strokeStyle = COL.grid; c.lineWidth = 1;
+    c.font = '10px "JetBrains Mono", monospace';
+    c.fillStyle = COL.fgMute; c.textAlign = 'right';
+    var ticks = [0.55, 0.60, 0.65, 0.70, 0.75, 0.80];
+    for (var i = 0; i < ticks.length; i++) {
+      var yy = py(ticks[i]);
+      c.strokeStyle = 'oklch(0.30 0.04 265 / 0.35)';
+      c.beginPath(); c.moveTo(x0, yy); c.lineTo(x1, yy); c.stroke();
+      c.fillText(Math.round(ticks[i] * 100) + '%', x0 - 8, yy + 3.5);
+    }
+    // 70% 可用线 (gold dashed) — 进游戏门槛
+    c.strokeStyle = 'oklch(0.85 0.14 85 / 0.7)'; c.lineWidth = 1.3;
+    c.setLineDash([6, 4]);
+    var y70 = py(0.70);
+    c.beginPath(); c.moveTo(x0, y70); c.lineTo(x1, y70); c.stroke();
+    c.setLineDash([]);
+    c.fillStyle = COL.gold; c.textAlign = 'left';
+    c.fillText(LANG === 'cn' ? '70% 可用线' : '70% usable', x0 + 6, y70 - 6);
+    // x 轴
+    c.strokeStyle = COL.line; c.lineWidth = 1.2;
+    c.beginPath(); c.moveTo(x0, y1); c.lineTo(x1, y1); c.stroke();
+    c.beginPath(); c.moveTo(x0, y0); c.lineTo(x0, y1); c.stroke();
+    c.fillStyle = COL.fgMute; c.textAlign = 'center';
+    for (var d = 1; d <= MAX_DAY; d++) {
+      c.fillText('D' + d, px(d), y1 + 16);
+    }
+    c.textAlign = 'left';
+    c.fillStyle = COL.fgDim; c.font = '11px "JetBrains Mono", monospace';
+    c.fillText(LANG === 'cn' ? 'accuracy / day' : 'accuracy / day', x0, y0 - 8);
+    c.restore();
+
+    var dNow = dayAt(t);
+    var cp = calibProg(t);
+    var ph = phaseAt(t);
+
+    // === 校准前的漂移曲线 (实线, 从 day1 长到 dNow 或 day5) ===
+    // 在 calib 之前(t<18) 曲线长到 dNow; calib 及之后, drift 段定格到 day5 并标记掉落
+    var driftEnd = (t < 18) ? dNow : CALIB_DAY;
+    c.save();
+    c.lineWidth = 3.2; c.lineJoin = 'round'; c.lineCap = 'round';
+    c.strokeStyle = COL.synaptic;
+    c.beginPath();
+    var first = true;
+    var STEP = 0.06;
+    for (var dd = 1; dd <= driftEnd + 0.0001; dd += STEP) {
+      var dq = Math.min(dd, driftEnd);
+      var a = accAt(dq, 0);
+      var X = px(dq), Y = py(a);
+      if (first) { c.moveTo(X, Y); first = false; } else c.lineTo(X, Y);
+    }
+    c.stroke();
+    // 漂移区阴影 (训练基线 vs 当前, 体现掉了多少)
+    if (t >= 6) {
+      c.fillStyle = 'oklch(0.55 0.15 25 / 0.12)';
+      c.beginPath();
+      c.moveTo(px(1), py(TRAIN_ACC));
+      c.lineTo(px(driftEnd), py(TRAIN_ACC));
+      for (var db = driftEnd; db >= 1; db -= STEP) {
+        c.lineTo(px(db), py(accAt(db, 0)));
+      }
+      c.closePath(); c.fill();
+    }
+    c.restore();
+
+    // 训练基线虚线 (memory color) — 参照 "训练那天有多准"
+    c.save();
+    c.strokeStyle = 'oklch(0.55 0.03 265 / 0.55)'; c.lineWidth = 1; c.setLineDash([3, 4]);
+    c.beginPath(); c.moveTo(px(1), py(TRAIN_ACC)); c.lineTo(px(MAX_DAY), py(TRAIN_ACC)); c.stroke();
+    c.setLineDash([]);
+    c.restore();
+
+    // === 校准 + 回升曲线 ===
+    if (t >= 18) {
+      // 校准注入: 在 day5 处冒出新数据点 (firing 亮点)
+      var nNew = Math.floor(cp * 6);
+      for (var ni = 0; ni < nNew; ni++) {
+        var nx = px(CALIB_DAY) + (ni - 2.5) * 9;
+        var ny = py(FLOOR_ACC + (RECOVER_ACC - FLOOR_ACC) * cp) + Math.sin(t * 4 + ni) * 4;
+        c.fillStyle = 'oklch(0.92 0.08 25)';
+        c.beginPath(); c.arc(nx, ny, 3.2, 0, Math.PI * 2); c.fill();
+      }
+      // 回升竖向箭头 (FLOOR -> 当前回升值) 在 day5
+      var recCur = FLOOR_ACC + (RECOVER_ACC - FLOOR_ACC) * cp;
+      c.save();
+      c.strokeStyle = COL.gold; c.lineWidth = 2.6; c.lineCap = 'round';
+      c.beginPath(); c.moveTo(px(CALIB_DAY), py(FLOOR_ACC)); c.lineTo(px(CALIB_DAY), py(recCur)); c.stroke();
+      // 箭头头
+      var ay = py(recCur);
+      c.beginPath();
+      c.moveTo(px(CALIB_DAY), ay);
+      c.lineTo(px(CALIB_DAY) - 5, ay + 9);
+      c.lineTo(px(CALIB_DAY) + 5, ay + 9);
+      c.closePath(); c.fillStyle = COL.gold; c.fill();
+      c.restore();
+
+      // 回升后曲线 (day5 -> dNow), 校准完成后画 (firing 高亮主角)
+      if (cp >= 1 && dNow > CALIB_DAY) {
+        c.save();
+        c.lineWidth = 3.2; c.lineJoin = 'round'; c.lineCap = 'round';
+        c.strokeStyle = 'oklch(0.92 0.08 25)';
+        c.beginPath();
+        c.moveTo(px(CALIB_DAY), py(RECOVER_ACC));
+        for (var dr = CALIB_DAY; dr <= dNow + 0.0001; dr += STEP) {
+          var dr2 = Math.min(dr, dNow);
+          c.lineTo(px(dr2), py(accAt(dr2, 1)));
+        }
+        c.stroke();
+        c.restore();
+      }
+    }
+
+    // === 当前读数点 (脉动) ===
+    var aNow, yNow, cdot;
+    if (t < 18)        { aNow = accAt(dNow, 0); cdot = COL.synaptic; }
+    else if (t < 23)   { aNow = FLOOR_ACC + (RECOVER_ACC - FLOOR_ACC) * cp; cdot = COL.gold; }
+    else               { aNow = accAt(dNow, 1); cdot = 'oklch(0.92 0.08 25)'; }
+    var xN = px(t < 18 ? dNow : CALIB_DAY <= dNow ? dNow : CALIB_DAY);
+    if (t >= 18 && t < 23) xN = px(CALIB_DAY);
+    yNow = py(aNow);
+    var pr = 5 + 2.4 * Math.abs(Math.sin(t * 3));
+    c.save();
+    c.fillStyle = cdot;
+    c.beginPath(); c.arc(xN, yNow, 5, 0, Math.PI * 2); c.fill();
+    c.strokeStyle = cdot; c.lineWidth = 1.5;
+    c.beginPath(); c.arc(xN, yNow, pr + 3, 0, Math.PI * 2); c.stroke();
+    // 读数标签
+    c.fillStyle = cdot; c.font = '13px "JetBrains Mono", monospace'; c.textAlign = 'center';
+    c.fillText(Math.round(aNow * 100) + '%', xN, yNow - 14);
+    c.restore();
+
+    // === 阶段注解文字 (画面自身, 非字幕) ===
+    c.save();
+    c.font = '12px "JetBrains Mono", monospace'; c.textAlign = 'left';
+    if (ph === 'drift') {
+      c.fillStyle = COL.dendrite;
+      var lbl = LANG === 'cn' ? '电极挪位 · 阻抗升高 · 状态变了 · 同一模型越用越偏' : 'electrode shift · impedance up · state drift';
+      c.fillText(lbl, x0 + 4, y0 + 14);
+    } else if (ph === 'dropped') {
+      c.fillStyle = COL.synaptic; c.font = '14px "JetBrains Mono", monospace';
+      var dp = Math.round((TRAIN_ACC - FLOOR_ACC) * 100);
+      c.fillText('-' + dp + ' pts  ' + (LANG === 'cn' ? '(74% -> 61%) 跌破可用线' : '(74% -> 61%) below usable'), x0 + 4, y0 + 14);
+    } else if (ph === 'calib') {
+      c.fillStyle = COL.gold;
+      c.fillText(LANG === 'cn' ? '5 分钟校准 · 录 20 条新数据 · 微调 (不重训)' : '5-min calib · 20 fresh samples · fine-tune (no retrain)', x0 + 4, y0 + 14);
+      // 倒计时条
+      var bw = 150;
+      c.strokeStyle = COL.line; c.strokeRect(x0 + 4, y0 + 24, bw, 7);
+      c.fillStyle = COL.gold; c.fillRect(x0 + 4, y0 + 24, bw * cp, 7);
+    } else if (ph === 'recover') {
+      c.fillStyle = 'oklch(0.92 0.08 25)'; c.font = '14px "JetBrains Mono", monospace';
+      c.fillText((LANG === 'cn' ? '校准回升 ' : 'recovered ') + '+' + Math.round((RECOVER_ACC - FLOOR_ACC) * 100) + ' pts -> 73%', x0 + 4, y0 + 14);
+    } else if (ph === 'outro') {
+      c.fillStyle = COL.gold;
+      c.fillText(LANG === 'cn' ? '每次玩前先校准, 这条线就天天稳在可用线之上' : 'calibrate each session — the line stays usable', x0 + 4, y0 + 14);
+    }
+    c.restore();
+
+    return { acc: aNow, day: dNow, phase: ph, calibP: cp };
+  }
+
+  /* ---- starfield (深空底点缀, 极淡) ---- */
+  var stars = [];
+  (function () {
+    for (var i = 0; i < 60; i++) {
+      stars.push({ x: Math.random(), y: Math.random(), r: Math.random() * 1.1 + 0.3, ph: Math.random() * 6.28 });
+    }
+  })();
+  function drawStars(t) {
+    c.save();
+    for (var i = 0; i < stars.length; i++) {
+      var s = stars[i];
+      var tw = 0.25 + 0.25 * (0.5 + 0.5 * Math.sin(t * 0.8 + s.ph));
+      c.fillStyle = 'oklch(0.85 0.05 265 / ' + tw + ')';
+      c.beginPath(); c.arc(s.x * W, s.y * H, s.r, 0, Math.PI * 2); c.fill();
+    }
+    c.restore();
+  }
+
+  /* ---- HUD update ---- */
+  function updateHUD(st, t) {
+    var phaseNames = {
+      intro:   { cn: '介绍',   en: 'intro' },
+      drift:   { cn: '漂移中', en: 'drifting' },
+      dropped: { cn: '已跌破', en: 'dropped' },
+      calib:   { cn: '校准中', en: 'calibrating' },
+      recover: { cn: '回升',   en: 'recovered' },
+      outro:   { cn: '稳住',   en: 'stable' }
+    };
+    setText('hPhase', phaseNames[st.phase][LANG]);
+    setText('hDay', 'D' + Math.round(st.day));
+    setText('hAcc', Math.round(st.acc * 100) + '%');
+    var driftPts = Math.round((TRAIN_ACC - st.acc) * 100);
+    var hd = document.getElementById('hDrift');
+    if (st.phase === 'recover' || st.phase === 'outro') {
+      setText('hDrift', '+' + Math.round((st.acc - FLOOR_ACC) * 100) + ' pts');
+      hd.classList.add('gold');
+    } else {
+      setText('hDrift', (driftPts > 0 ? '-' : '') + Math.abs(driftPts) + ' pts');
+      hd.classList.remove('gold');
+    }
+    var ha = document.getElementById('hAcc');
+    if (st.acc >= 0.70) ha.classList.add('gold'); else ha.classList.remove('gold');
+  }
+
+  /* ---- main loop ---- */
+  var startTime = null, lastPhase = '';
+  function frame(now) {
+    if (startTime === null) startTime = now;
+    var t = ((now - startTime) / 1000) % CYCLE;
+
+    // bg
+    c.clearRect(0, 0, W, H);
+    c.fillStyle = COL.bg0;
+    c.fillRect(0, 0, W, H);
+    drawStars(t);
+
+    // 漂移量驱动背景脑 (drift 段升高, 校准后归零)
+    var ph = phaseAt(t);
+    var driftAmt;
+    if (t < 4) driftAmt = 0.05;
+    else if (t < 18) driftAmt = Math.min(1, (t - 4) / 13 * 1.0);
+    else if (t < 23) driftAmt = 1 - calibProg(t);     // 校准把阻抗压回去
+    else driftAmt = 0.08;
+    var calibFlash = (t >= 18 && t < 23) ? 1 : 0;
+    drawBrain(t, driftAmt, calibFlash);
+
+    var st = drawCurve(t);
+    updateHUD(st, t);
+
+    // 切字幕 (跟随 phase)
+    if (ph !== lastPhase) {
+      lastPhase = ph;
+      curPhase = ph;
+      applySub();
+    }
+
+    requestAnimationFrame(frame);
+  }
+
+  function boot() {
+    resize();
+    refreshI18N();
+    curPhase = 'intro';
+    applySub();
+    requestAnimationFrame(frame);
+  }
+
+  // 等字体/布局稳定
+  if (document.readyState === 'complete') boot();
+  else window.addEventListener('load', boot);
+  // 兜底: 若 load 已过
+  setTimeout(function () { if (startTime === null) boot(); }, 300);
+})();
+</script>
+</body>
+</html>

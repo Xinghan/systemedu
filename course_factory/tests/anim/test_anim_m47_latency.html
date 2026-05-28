@@ -1,0 +1,723 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>M47 · 从想到动要多久 · 延迟链</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+SC:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    /* ---- Layer 1: shared deep-space canvas (all 26 subjects) ---- */
+    --bg-0: oklch(0.14 0.035 265);
+    --bg-1: oklch(0.18 0.04 265);
+    --bg-2: oklch(0.22 0.045 265);
+    --bg-3: oklch(0.28 0.05 265);
+    --line: oklch(0.35 0.05 265 / 0.35);
+    --line-strong: oklch(0.55 0.08 265 / 0.55);
+    --fg:      oklch(0.96 0.01 265);
+    --fg-dim:  oklch(0.75 0.02 265);
+    --fg-mute: oklch(0.55 0.03 265);
+    --gold:    oklch(0.85 0.14 85);
+
+    /* ---- Layer 2: cs signature accent ---- */
+    --cs:      oklch(0.75 0.17 200);
+
+    /* ---- Layer 3: cs 5-color palette (themes.js cs) ---- */
+    --cs-signal: oklch(0.75 0.17 200);
+    --cs-core:   oklch(0.55 0.16 200);
+    --cs-depth:  oklch(0.35 0.10 210);
+    --cs-flash:  oklch(0.92 0.08 190);
+    --cs-query:  oklch(0.85 0.14 85);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    width: 100%; height: 100vh; overflow: hidden;
+    background: var(--bg-0); color: var(--fg);
+    font-family: 'Inter', 'Noto Sans SC', 'PingFang SC', sans-serif;
+    font-size: 14px;
+  }
+  body { display: flex; }
+  .mono { font-family: 'JetBrains Mono', monospace; }
+
+  /* ============ Sidebar 200px ============ */
+  .sidebar {
+    width: 200px; flex-shrink: 0; height: 100vh;
+    background: var(--bg-1);
+    border-right: 1px solid var(--line);
+    display: flex; flex-direction: column;
+    padding: 20px 16px 16px;
+    position: relative;
+  }
+  .brand-row { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+  .brand-dot {
+    width: 10px; height: 10px; border-radius: 50%;
+    background: var(--cs-signal);
+    box-shadow: 0 0 0 4px oklch(0.75 0.17 200 / 0.18);
+    animation: pulse 2.2s ease-in-out infinite;
+  }
+  @keyframes pulse {
+    0%,100% { box-shadow: 0 0 0 4px oklch(0.75 0.17 200 / 0.18); }
+    50%     { box-shadow: 0 0 0 7px oklch(0.75 0.17 200 / 0.10); }
+  }
+  .brand-tag {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; letter-spacing: 0.08em;
+    color: var(--fg-dim); font-weight: 600;
+  }
+  .brand-title {
+    font-size: 14.5px; font-weight: 700; color: var(--fg);
+    line-height: 1.35; margin-bottom: 4px;
+  }
+  .brand-sub {
+    font-size: 10.5px; color: var(--fg-mute); line-height: 1.5;
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  /* mascot Bit */
+  .mascot { margin: 14px 0 6px; }
+
+  /* roadmap S1-S6 */
+  .road-h {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9.5px; letter-spacing: 0.12em;
+    color: var(--fg-mute); margin: 12px 0 7px;
+    text-transform: uppercase;
+  }
+  .road { list-style: none; padding: 0; margin: 0; }
+  .road li {
+    position: relative;
+    font-size: 11px; color: var(--fg-mute); line-height: 1.35;
+    padding: 4px 0 4px 16px;
+    border-left: 2px solid var(--line);
+  }
+  .road li::before {
+    content: ''; position: absolute; left: -5px; top: 8px;
+    width: 7px; height: 7px; border-radius: 50%;
+    background: var(--line-strong);
+  }
+  .road li .st {
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 700; font-size: 9.5px; margin-right: 5px;
+    color: var(--fg-mute);
+  }
+  .road li.done { color: var(--fg-dim); }
+  .road li.done::before { background: var(--cs-core); }
+  .road li.done .st { color: var(--cs-signal); }
+  .road li.cur {
+    color: var(--fg); font-weight: 600;
+    border-left-color: var(--cs-signal);
+  }
+  .road li.cur::before {
+    background: var(--cs-signal);
+    box-shadow: 0 0 0 3px oklch(0.75 0.17 200 / 0.20);
+    animation: pulse 2.2s ease-in-out infinite;
+  }
+  .road li.cur .st { color: var(--cs-signal); }
+  .road li .badge {
+    display: inline-block; font-family: 'JetBrains Mono', monospace;
+    font-size: 8px; font-weight: 700; letter-spacing: 0.06em;
+    background: oklch(0.75 0.17 200 / 0.18); color: var(--cs-flash);
+    padding: 1px 5px; border-radius: 3px; margin-left: 4px;
+  }
+
+  /* Minecraft silhouette corner (endpoint badge) */
+  .mc-corner {
+    margin-top: 8px; opacity: 0.7;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .mc-corner .mc-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 8px; letter-spacing: 0.05em; color: var(--fg-mute);
+    line-height: 1.3;
+  }
+
+  /* guide 3 lines */
+  .guide {
+    margin-top: 10px;
+    border-top: 1px solid var(--line);
+    padding-top: 9px;
+  }
+  .guide-h {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px; letter-spacing: 0.1em; color: var(--fg-mute);
+    text-transform: uppercase; margin-bottom: 6px;
+  }
+  .guide ul { list-style: none; padding: 0; margin: 0; }
+  .guide li {
+    font-size: 10px; color: var(--fg-dim); line-height: 1.45;
+    padding-left: 11px; position: relative; margin-bottom: 4px;
+  }
+  .guide li::before {
+    content: ''; position: absolute; left: 0; top: 6px;
+    width: 4px; height: 4px; border-radius: 50%; background: var(--cs-core);
+  }
+
+  .lang-btn {
+    margin-top: auto;
+    border: 1px solid var(--line-strong);
+    background: var(--bg-2);
+    color: var(--fg); cursor: pointer;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; font-weight: 600;
+    padding: 8px 12px; border-radius: 6px;
+    letter-spacing: 0.06em;
+    box-shadow: 3px 3px 0 var(--bg-0);
+  }
+  .lang-btn:hover { border-color: var(--cs-signal); color: var(--cs-flash); }
+
+  /* ============ Main stage ============ */
+  .main { flex: 1; height: 100vh; position: relative; display: flex; flex-direction: column; }
+  .canvas-wrap { flex: 1; min-height: 0; position: relative; }
+  canvas { display: block; width: 100%; height: 100%; }
+
+  /* HUD top-right */
+  .hud {
+    position: absolute; top: 14px; right: 16px;
+    display: flex; gap: 22px;
+    background: oklch(0.18 0.04 265 / 0.82);
+    border: 1px solid var(--line);
+    border-radius: 8px; padding: 9px 16px;
+    box-shadow: 3px 3px 0 var(--bg-0);
+  }
+  .hud .col { text-align: right; }
+  .hud .label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 8.5px; letter-spacing: 0.1em; color: var(--fg-mute);
+    text-transform: uppercase;
+  }
+  .hud .value {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 14px; font-weight: 700; color: var(--cs-signal);
+    margin-top: 2px;
+  }
+  .hud .value.warn { color: var(--cs-query); }
+</style>
+</head>
+<body>
+
+<aside class="sidebar">
+  <div class="brand-row">
+    <span class="brand-dot"></span>
+    <span class="brand-tag" id="brandTag">M47 · 延迟链</span>
+  </div>
+  <div class="brand-title" id="brandTitle">从想到动，要多久？</div>
+  <div class="brand-sub" id="brandSub">think &rarr; act latency</div>
+
+  <!-- mascot Bit: levitating cubic sprite -->
+  <svg class="mascot" width="56" height="48" viewBox="0 0 56 48" aria-hidden="true">
+    <g id="bitSprite">
+      <rect x="16" y="8"  width="10" height="10" fill="var(--cs-core)"  opacity="0.85"/>
+      <rect x="27" y="8"  width="10" height="10" fill="var(--cs-signal)" opacity="0.9"/>
+      <rect x="16" y="19" width="10" height="10" fill="var(--cs-signal)"/>
+      <rect x="27" y="19" width="10" height="10" fill="var(--cs-flash)"/>
+      <rect x="21" y="30" width="10" height="6"  fill="var(--cs-depth)"/>
+      <rect x="22" y="22" width="3" height="3" fill="var(--bg-0)"/>
+      <rect x="30" y="22" width="3" height="3" fill="var(--bg-0)"/>
+    </g>
+    <ellipse cx="27" cy="44" rx="13" ry="2.4" fill="var(--cs-core)" opacity="0.25"/>
+  </svg>
+
+  <div class="road-h" id="roadH">脑控 Minecraft 长征</div>
+  <ul class="road">
+    <li class="done"><span class="st">S1</span><span id="r1">采脑波</span></li>
+    <li class="done"><span class="st">S2</span><span id="r2">看懂信号</span></li>
+    <li class="done"><span class="st">S3</span><span id="r3">建模型</span></li>
+    <li class="cur"><span class="st">S4</span><span id="r4">自录冲准</span><span class="badge" id="r4b">你在这</span></li>
+    <li><span class="st">S5</span><span id="r5">接进游戏</span></li>
+    <li><span class="st">S6</span><span id="r6">脑控真玩</span></li>
+  </ul>
+
+  <div class="mc-corner">
+    <svg width="40" height="36" viewBox="0 0 40 36" aria-hidden="true">
+      <rect x="2"  y="20" width="12" height="12" fill="var(--cs-depth)"/>
+      <rect x="14" y="20" width="12" height="12" fill="var(--cs-core)" opacity="0.7"/>
+      <rect x="2"  y="20" width="12" height="12" fill="none" stroke="var(--line-strong)" stroke-width="0.8"/>
+      <rect x="14" y="20" width="12" height="12" fill="none" stroke="var(--line-strong)" stroke-width="0.8"/>
+      <path d="M20 2 L36 7 L34 11 L22 8 L20 12 L18 8 L19 4 Z" fill="var(--cs-signal)" opacity="0.8"/>
+    </svg>
+    <span class="mc-label" id="mcLabel">终点<br>Minecraft</span>
+  </div>
+
+  <div class="guide">
+    <div class="guide-h" id="guideH">看点</div>
+    <ul>
+      <li id="g1">一个念头，要走 5 段才到角色</li>
+      <li id="g2">buffer 缓冲是最慢的一段</li>
+      <li id="g3">总延迟 &lt; 500ms 才玩得动</li>
+    </ul>
+  </div>
+
+  <button class="lang-btn" id="langBtn" type="button">中文 / EN</button>
+</aside>
+
+<main class="main">
+  <div class="canvas-wrap" id="canvasWrap">
+    <canvas id="c"></canvas>
+  </div>
+  <div class="hud">
+    <div class="col">
+      <div class="label" id="hudL0">当前段</div>
+      <div class="value" id="hudV0">--</div>
+    </div>
+    <div class="col">
+      <div class="label" id="hudL1">本段延迟</div>
+      <div class="value" id="hudV1">0 ms</div>
+    </div>
+    <div class="col">
+      <div class="label" id="hudL2">累计总延迟</div>
+      <div class="value" id="hudV2">0 ms</div>
+    </div>
+  </div>
+</main>
+
+<script>
+(function () {
+  "use strict";
+
+  var LANG = 'cn';
+
+  var I18N = {
+    brandTag:   { cn: 'M47 · 延迟链',           en: 'M47 · LATENCY CHAIN' },
+    brandTitle: { cn: '从想到动，要多久？',       en: 'How long from thought to move?' },
+    brandSub:   { cn: 'think → act latency', en: 'think → act latency' },
+    roadH:      { cn: '脑控 Minecraft 长征',      en: 'BRAIN-MINECRAFT ROADMAP' },
+    r1: { cn: '采脑波',   en: 'Record EEG' },
+    r2: { cn: '看懂信号', en: 'Read signal' },
+    r3: { cn: '建模型',   en: 'Build model' },
+    r4: { cn: '自录冲准', en: 'Self-record' },
+    r4b:{ cn: '你在这',   en: 'YOU ARE HERE' },
+    r5: { cn: '接进游戏', en: 'Wire to game' },
+    r6: { cn: '脑控真玩', en: 'Play by mind' },
+    mcLabel: { cn: '终点<br>Minecraft', en: 'Goal<br>Minecraft' },
+    guideH: { cn: '看点', en: 'WATCH' },
+    g1: { cn: '一个念头，要走 5 段才到角色', en: 'One thought crosses 5 stages to the character' },
+    g2: { cn: 'buffer 缓冲是最慢的一段',     en: 'The buffer stage is the slowest' },
+    g3: { cn: '总延迟 < 500ms 才玩得动',     en: 'Total latency must be < 500ms to play' },
+    hudL0: { cn: '当前段',     en: 'STAGE' },
+    hudL1: { cn: '本段延迟',   en: 'STAGE MS' },
+    hudL2: { cn: '累计总延迟', en: 'TOTAL MS' },
+    hudIdle: { cn: '待命', en: 'IDLE' }
+  };
+  function t(k){ return (I18N[k] && I18N[k][LANG]) || (I18N[k] && I18N[k].en) || k; }
+
+  // ---- The 5 latency stages of the chain (scientifically grounded) ----
+  // 生理 EEG 形成 ~30ms, 采集(ADC+spatial filter) ~40ms,
+  // buffer 缓冲窗(滑动窗等数据攒够) ~200ms (最长 = 瓶颈),
+  // 计算(分类器推理) ~50ms, IO 输出(发指令到游戏) ~20ms.
+  // 合计 ~340ms < 500ms -> playable.
+  var STAGES = [
+    { key:'physio', ms: 30,  cn:'生理延迟', en:'Physiology',  desc_cn:'脑波形成', desc_en:'EEG forms',     col:'oklch(0.4 0.11 210)' },
+    { key:'acq',    ms: 40,  cn:'采集延迟', en:'Acquisition', desc_cn:'电极读数', desc_en:'ADC readout',   col:'oklch(0.55 0.16 200)'  },
+    { key:'buffer', ms: 200, cn:'缓冲延迟', en:'Buffering',   desc_cn:'攒够一窗', desc_en:'fill a window', col:'oklch(0.75 0.17 200)', king:true },
+    { key:'compute',ms: 50,  cn:'计算延迟', en:'Compute',     desc_cn:'分类器推理', desc_en:'classifier',   col:'oklch(0.55 0.16 200)'  },
+    { key:'io',     ms: 20,  cn:'输出延迟', en:'IO output',   desc_cn:'发出指令', desc_en:'emit command',  col:'oklch(0.92 0.08 190)' }
+  ];
+  var TOTAL_MS = 0; for (var si=0; si<STAGES.length; si++) TOTAL_MS += STAGES[si].ms;
+  var BUDGET = 500; // ms playable budget
+
+  // Canvas can't resolve CSS var(); use literal oklch values (same as :root).
+  var C = {
+    bg0:'oklch(0.14 0.035 265)', bg1:'oklch(0.18 0.04 265)',
+    bg2:'oklch(0.22 0.045 265)', bg3:'oklch(0.28 0.05 265)',
+    line:'oklch(0.45 0.06 265 / 0.45)', lineStrong:'oklch(0.6 0.09 265 / 0.6)',
+    fg:'oklch(0.96 0.01 265)', fgDim:'oklch(0.78 0.02 265)', fgMute:'oklch(0.6 0.03 265)',
+    gold:'oklch(0.85 0.14 85)',
+    csSignal:'oklch(0.75 0.17 200)', csCore:'oklch(0.55 0.16 200)',
+    csDepth:'oklch(0.4 0.11 210)', csFlash:'oklch(0.92 0.08 190)'
+  };
+  // map stage palette tokens to literals
+  var COLMAP = {
+    'oklch(0.4 0.11 210)':C.csDepth, 'oklch(0.55 0.16 200)':C.csCore,
+    'oklch(0.75 0.17 200)':C.csSignal, 'oklch(0.92 0.08 190)':C.csFlash, 'oklch(0.85 0.14 85)':C.gold
+  };
+  function col(s){ return COLMAP[s] || s; }
+
+  var canvas = document.getElementById('c');
+  var ctx = canvas.getContext('2d');
+  var wrap = document.getElementById('canvasWrap');
+  var DPR = Math.min(window.devicePixelRatio || 1, 2);
+  var W = 820, H = 540, scale = 1, offX = 0, offY = 0;
+
+  function resize() {
+    var r = wrap.getBoundingClientRect();
+    if (r.width < 1 || r.height < 1) return;
+    canvas.width = r.width * DPR; canvas.height = r.height * DPR;
+    canvas.style.width = r.width + 'px'; canvas.style.height = r.height + 'px';
+    scale = Math.min(r.width / W, r.height / H);
+    offX = (r.width - W * scale) / 2; offY = (r.height - H * scale) / 2;
+  }
+  function setTf(){ ctx.setTransform(DPR*scale,0,0,DPR*scale,DPR*offX,DPR*offY); }
+
+  // ---- timing: one continuous cycle ----
+  // Each stage "fills" over a duration proportional to its ms (visual time, not realtime ms).
+  // total cycle ~ idle(1.2s) + sum(stage fills) + verdict(2.4s) + hold(1.5s)
+  var V_PER_MS = 7.0;          // visual ms per latency-ms while a stage fills
+  var IDLE = 1100;            // ms before the thought fires
+  var VERDICT = 2400;         // verdict reveal
+  var HOLD = 1500;            // hold then loop
+  var stageDur = STAGES.map(function(s){ return s.ms * V_PER_MS; });
+  var stageStart = []; var acc = IDLE;
+  for (var k=0;k<STAGES.length;k++){ stageStart[k]=acc; acc += stageDur[k]; }
+  var CHAIN_END = acc;
+  var CYCLE = CHAIN_END + VERDICT + HOLD;
+
+  var startT = null;
+  function easeOut(x){ return 1 - Math.pow(1-x, 2.2); }
+  function easeInOut(x){ return x<0.5 ? 2*x*x : 1-Math.pow(-2*x+2,2)/2; }
+
+  // ---- layout geometry ----
+  var BRAIN = { x: 96, y: 150, r: 38 };
+  var CHAR  = { x: 724, y: 150 };
+  var nodeY = 150;
+  var nodeXs = [];                          // x center of each stage node along the pipeline
+  var lane0 = 170, laneW = 470;
+  for (var n=0;n<STAGES.length;n++){ nodeXs.push(lane0 + (n+0.5)*(laneW/STAGES.length)); }
+
+  // cumulative total bar geometry (bottom)
+  var BAR = { x: 96, y: 410, w: 628, h: 34 };
+
+  function fmt(ms){ return Math.round(ms) + ' ms'; }
+
+  // ---- drawing helpers ----
+  function drawBrain(x,y,r,glow){
+    ctx.save();
+    if (glow>0){ ctx.shadowColor='oklch(0.75 0.17 200)'; ctx.shadowBlur=18*glow; }
+    ctx.strokeStyle='oklch(0.75 0.17 200)'; ctx.lineWidth=2;
+    ctx.fillStyle='oklch(0.22 0.045 265 / 0.85)';
+    ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2); ctx.fill(); ctx.stroke();
+    ctx.shadowBlur=0;
+    // EEG squiggle inside
+    ctx.strokeStyle='oklch(0.92 0.08 190)'; ctx.lineWidth=1.6; ctx.globalAlpha=0.55+0.45*glow;
+    ctx.beginPath();
+    for (var i=0;i<=24;i++){
+      var px=x-r*0.7 + (i/24)*r*1.4;
+      var py=y + Math.sin(i*0.9 + glow*6)*r*0.28*(0.4+0.6*glow);
+      if(i===0)ctx.moveTo(px,py); else ctx.lineTo(px,py);
+    }
+    ctx.stroke(); ctx.globalAlpha=1;
+    ctx.restore();
+    // label
+    ctx.fillStyle='oklch(0.78 0.02 265)'; ctx.font='11px "JetBrains Mono",monospace';
+    ctx.textAlign='center'; ctx.textBaseline='top';
+    ctx.fillText(LANG==='cn'?'想象 "左"':'imagine "left"', x, y+r+8);
+  }
+
+  function drawCharacter(x,y,react){
+    // minecraft-ish blocky character, reacts (steps left) when react>0
+    ctx.save();
+    var dx = -react*16;
+    ctx.translate(x+dx, y);
+    // body
+    ctx.fillStyle = react>0 ? 'oklch(0.75 0.17 200)' : 'oklch(0.4 0.11 210)';
+    ctx.fillRect(-13,-8,26,30);
+    ctx.strokeStyle='oklch(0.6 0.09 265 / 0.6)'; ctx.lineWidth=1;
+    ctx.strokeRect(-13,-8,26,30);
+    // head
+    ctx.fillStyle = react>0 ? 'oklch(0.55 0.16 200)' : 'oklch(0.28 0.05 265)';
+    ctx.fillRect(-11,-30,22,22);
+    ctx.strokeRect(-11,-30,22,22);
+    // eyes
+    ctx.fillStyle = react>0 ? 'oklch(0.92 0.08 190)' : 'oklch(0.6 0.03 265)';
+    ctx.fillRect(-7,-23,5,5); ctx.fillRect(3,-23,5,5);
+    ctx.restore();
+    // motion arrow when reacting
+    if (react>0){
+      ctx.save();
+      ctx.globalAlpha = react;
+      ctx.strokeStyle='oklch(0.85 0.14 85)'; ctx.lineWidth=2.4;
+      ctx.beginPath(); ctx.moveTo(x-20, y-3); ctx.lineTo(x-44, y-3); ctx.stroke();
+      ctx.fillStyle='oklch(0.85 0.14 85)';
+      ctx.beginPath(); ctx.moveTo(x-44,y-3); ctx.lineTo(x-36,y-8); ctx.lineTo(x-36,y+2); ctx.closePath(); ctx.fill();
+      ctx.restore();
+    }
+    ctx.fillStyle = react>0?'oklch(0.85 0.14 85)':'oklch(0.6 0.03 265)';
+    ctx.font='11px "JetBrains Mono",monospace'; ctx.textAlign='center'; ctx.textBaseline='top';
+    ctx.fillText(LANG==='cn'?'角色':'character', x, y+30);
+  }
+
+  // a stage node along the pipeline; fillP 0..1 = how full its own latency bar is
+  function drawStageNode(idx, fillP, isActive, pulseGlow){
+    var s = STAGES[idx];
+    var cx = nodeXs[idx], cy = nodeY;
+    var bw = (laneW/STAGES.length) - 14, bh = 64;
+    var x = cx - bw/2, y = cy - bh/2;
+    ctx.save();
+    // box
+    if (isActive){ ctx.shadowColor=s.col; ctx.shadowBlur=14; }
+    ctx.fillStyle = isActive ? 'oklch(0.22 0.045 265 / 0.9)' : 'oklch(0.18 0.04 265 / 0.7)';
+    ctx.fillRect(x,y,bw,bh);
+    ctx.shadowBlur=0;
+    ctx.strokeStyle = isActive ? s.col : 'oklch(0.45 0.06 265 / 0.45)'; ctx.lineWidth = isActive?2:1;
+    ctx.strokeRect(x,y,bw,bh);
+    // king (bottleneck) marker
+    if (s.king){
+      ctx.strokeStyle='oklch(0.85 0.14 85)'; ctx.lineWidth=1.4;
+      ctx.setLineDash([4,3]); ctx.strokeRect(x-3,y-3,bw+6,bh+6); ctx.setLineDash([]);
+    }
+    // name
+    ctx.fillStyle = isActive ? 'oklch(0.96 0.01 265)' : 'oklch(0.78 0.02 265)';
+    ctx.font='bold 11px "JetBrains Mono",monospace'; ctx.textAlign='center'; ctx.textBaseline='top';
+    ctx.fillText(LANG==='cn'?s.cn:s.en, cx, y+7);
+    ctx.fillStyle='oklch(0.6 0.03 265)'; ctx.font='9px "JetBrains Mono",monospace';
+    ctx.fillText(LANG==='cn'?s.desc_cn:s.desc_en, cx, y+21);
+    // per-stage latency mini-bar (continuously fills)
+    var mbX=x+9, mbY=y+bh-16, mbW=bw-18, mbH=8;
+    ctx.fillStyle='oklch(0.14 0.035 265 / 0.9)'; ctx.fillRect(mbX,mbY,mbW,mbH);
+    ctx.strokeStyle='oklch(0.45 0.06 265 / 0.45)'; ctx.lineWidth=0.8; ctx.strokeRect(mbX,mbY,mbW,mbH);
+    ctx.fillStyle=s.col;
+    ctx.fillRect(mbX, mbY, mbW*Math.max(0,Math.min(1,fillP)), mbH);
+    // ms readout
+    ctx.fillStyle = isActive ? s.col : 'oklch(0.6 0.03 265)';
+    ctx.font='9px "JetBrains Mono",monospace'; ctx.textAlign='center';
+    ctx.fillText(Math.round(s.ms*Math.min(1,fillP))+'ms', cx, mbY-12);
+    ctx.restore();
+  }
+
+  // travelling pulse along the pipeline
+  function drawPulse(px, py, energy){
+    ctx.save();
+    ctx.shadowColor='oklch(0.92 0.08 190)'; ctx.shadowBlur=16;
+    ctx.fillStyle='oklch(0.92 0.08 190)';
+    ctx.beginPath(); ctx.arc(px,py,5+2*energy,0,Math.PI*2); ctx.fill();
+    ctx.globalAlpha=0.4; ctx.beginPath(); ctx.arc(px,py,11+4*energy,0,Math.PI*2); ctx.fill();
+    ctx.restore();
+  }
+
+  function drawPipelineSpine(progressIdx){
+    // base spine line from brain to character through nodes
+    ctx.save();
+    ctx.strokeStyle='oklch(0.6 0.09 265 / 0.6)'; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.moveTo(BRAIN.x+BRAIN.r, nodeY); ctx.lineTo(CHAR.x-22, nodeY); ctx.stroke();
+    // lit portion up to progress
+    if (progressIdx>0){
+      ctx.strokeStyle='oklch(0.55 0.16 200)'; ctx.lineWidth=2.6;
+      ctx.beginPath(); ctx.moveTo(BRAIN.x+BRAIN.r, nodeY);
+      var endx = (progressIdx>=STAGES.length) ? CHAR.x-22 : nodeXs[Math.min(progressIdx,STAGES.length-1)];
+      ctx.lineTo(endx, nodeY); ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  // cumulative total bar at bottom: each stage stacked as a segment, grows continuously
+  function drawTotalBar(stageIdx, partialP){
+    var x=BAR.x, y=BAR.y, w=BAR.w, h=BAR.h;
+    // track scaled so BUDGET maps to full width
+    var pxPerMs = w / BUDGET;
+    ctx.save();
+    // track
+    ctx.fillStyle='oklch(0.14 0.035 265 / 0.9)'; ctx.fillRect(x,y,w,h);
+    ctx.strokeStyle='oklch(0.45 0.06 265 / 0.45)'; ctx.lineWidth=1; ctx.strokeRect(x,y,w,h);
+    // 500ms budget line (right end of track == 500)
+    var budgetX = x + BUDGET*pxPerMs;
+    ctx.strokeStyle='oklch(0.85 0.14 85)'; ctx.lineWidth=1.6; ctx.setLineDash([5,4]);
+    ctx.beginPath(); ctx.moveTo(budgetX, y-10); ctx.lineTo(budgetX, y+h+6); ctx.stroke(); ctx.setLineDash([]);
+    ctx.fillStyle='oklch(0.85 0.14 85)'; ctx.font='10px "JetBrains Mono",monospace';
+    ctx.textAlign='right'; ctx.textBaseline='bottom';
+    ctx.fillText((LANG==='cn'?'可玩线 ':'playable ')+'500ms', budgetX, y-12);
+
+    // stacked filled segments
+    var cum = 0; var curX = x;
+    for (var i=0;i<STAGES.length;i++){
+      var fullThis = (i<stageIdx) ? 1 : (i===stageIdx ? partialP : 0);
+      if (fullThis<=0) break;
+      var segMs = STAGES[i].ms * fullThis;
+      var segW = segMs * pxPerMs;
+      ctx.fillStyle = STAGES[i].col;
+      ctx.fillRect(curX, y+2, segW, h-4);
+      // segment divider
+      ctx.strokeStyle='oklch(0.14 0.035 265 / 0.7)'; ctx.lineWidth=1;
+      ctx.beginPath(); ctx.moveTo(curX,y); ctx.lineTo(curX,y+h); ctx.stroke();
+      // king segment highlight outline
+      if (STAGES[i].king && fullThis>0.02){
+        ctx.strokeStyle='oklch(0.85 0.14 85)'; ctx.lineWidth=1.6;
+        ctx.strokeRect(curX, y+2, segW, h-4);
+      }
+      curX += segW; cum += segMs;
+    }
+    // running total readout on the filled head
+    ctx.fillStyle='oklch(0.96 0.01 265)'; ctx.font='bold 12px "JetBrains Mono",monospace';
+    ctx.textAlign='left'; ctx.textBaseline='middle';
+    if (cum>2) ctx.fillText(Math.round(cum)+'ms', curX+6, y+h/2);
+    // label
+    ctx.fillStyle='oklch(0.78 0.02 265)'; ctx.font='10px "JetBrains Mono",monospace';
+    ctx.textAlign='left'; ctx.textBaseline='bottom';
+    ctx.fillText(LANG==='cn'?'累计总延迟 (从想到角色动)':'cumulative total latency (thought → move)', x, y-8);
+    ctx.restore();
+    return cum;
+  }
+
+  function drawVerdict(reveal){
+    // reveal 0..1 ; show total vs budget, bottleneck callout
+    if (reveal<=0) return;
+    ctx.save();
+    ctx.globalAlpha = easeOut(reveal);
+    var pass = TOTAL_MS < BUDGET;
+    var cx = W/2, cy = 300;
+    // verdict pill
+    var txt = (LANG==='cn'
+      ? '总延迟 '+TOTAL_MS+'ms < 500ms  →  玩得动'
+      : 'total '+TOTAL_MS+'ms < 500ms  →  playable');
+    ctx.font='bold 17px "JetBrains Mono",monospace'; ctx.textAlign='center'; ctx.textBaseline='middle';
+    var tw = ctx.measureText(txt).width;
+    ctx.fillStyle='oklch(0.18 0.04 265 / 0.92)';
+    ctx.shadowColor=pass?'oklch(0.85 0.14 85)':'oklch(0.75 0.17 200)'; ctx.shadowBlur=20*reveal;
+    var pw=tw+44, ph=44;
+    ctx.fillRect(cx-pw/2, cy-ph/2, pw, ph);
+    ctx.shadowBlur=0;
+    ctx.strokeStyle=pass?'oklch(0.85 0.14 85)':'oklch(0.75 0.17 200)'; ctx.lineWidth=2;
+    ctx.strokeRect(cx-pw/2, cy-ph/2, pw, ph);
+    ctx.fillStyle=pass?'oklch(0.85 0.14 85)':'oklch(0.75 0.17 200)';
+    ctx.fillText(txt, cx, cy);
+    // bottleneck callout
+    ctx.font='12px "Noto Sans SC","Inter",sans-serif'; ctx.fillStyle='oklch(0.78 0.02 265)';
+    var bn = (LANG==='cn'
+      ? '瓶颈在 buffer 缓冲段（200ms，占了一半多）—— 要更快，先缩短缓冲窗'
+      : 'Bottleneck = buffer stage (200ms, over half). To go faster, shrink the buffer window first.');
+    ctx.fillText(bn, cx, cy+34);
+    ctx.restore();
+  }
+
+  function clearStage(){
+    ctx.setTransform(1,0,0,1,0,0);
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    var g=ctx.createLinearGradient(0,0,0,canvas.height);
+    g.addColorStop(0,'oklch(0.14 0.035 265)');
+    g.addColorStop(1,'oklch(0.16 0.04 268)');
+    ctx.fillStyle=g; ctx.fillRect(0,0,canvas.width,canvas.height);
+    // faint grid
+    setTf();
+    ctx.strokeStyle='oklch(0.45 0.06 265 / 0.45)'; ctx.lineWidth=0.5; ctx.globalAlpha=0.4;
+    for (var x=0;x<W;x+=40){ ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,H); ctx.stroke(); }
+    for (var y=0;y<H;y+=40){ ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(W,y); ctx.stroke(); }
+    ctx.globalAlpha=1;
+  }
+
+  function header(){
+    ctx.fillStyle='oklch(0.96 0.01 265)'; ctx.font='bold 15px "Inter","Noto Sans SC",sans-serif';
+    ctx.textAlign='left'; ctx.textBaseline='top';
+    ctx.fillText(LANG==='cn'?'一个念头，要走多久才让角色动':'How long a thought takes to move the character', 96, 44);
+    ctx.fillStyle='oklch(0.6 0.03 265)'; ctx.font='11px "JetBrains Mono",monospace';
+    ctx.fillText(LANG==='cn'?'太慢就没法玩 —— 延迟链 5 段连续累加'
+                            :'too slow = unplayable —— 5 stages add up', 96, 66);
+  }
+
+  function setHUD(stageIdx, stageP, cum){
+    var v0 = document.getElementById('hudV0');
+    var v1 = document.getElementById('hudV1');
+    var v2 = document.getElementById('hudV2');
+    if (stageIdx<0){
+      v0.textContent = t('hudIdle');
+      v1.textContent = '0 ms';
+    } else if (stageIdx>=STAGES.length){
+      v0.textContent = (LANG==='cn'?'到达角色':'reached char');
+      v1.textContent = '0 ms';
+    } else {
+      var s=STAGES[stageIdx];
+      v0.textContent = (LANG==='cn'?s.cn:s.en);
+      v1.textContent = Math.round(s.ms*Math.min(1,stageP))+' ms';
+    }
+    v2.textContent = Math.round(cum)+' ms';
+    v2.className = 'value' + (cum>=BUDGET ? ' warn' : '');
+  }
+
+  function frame(ts){
+    if (startT===null) startT=ts;
+    var elapsed = (ts - startT) % CYCLE;
+
+    clearStage();
+    header();
+
+    // determine current stage + partial fill from continuous timeline
+    var stageIdx = -1, stageP = 0;
+    for (var i=0;i<STAGES.length;i++){
+      if (elapsed >= stageStart[i] && elapsed < stageStart[i]+stageDur[i]){
+        stageIdx=i; stageP = (elapsed - stageStart[i]) / stageDur[i];
+        break;
+      } else if (elapsed >= stageStart[i]+stageDur[i]){
+        stageIdx=i; stageP=1; // last completed (will be overwritten by next active)
+      }
+    }
+    var inChain = elapsed < CHAIN_END;
+    var afterChain = elapsed >= CHAIN_END;
+    if (afterChain){ stageIdx = STAGES.length; stageP = 1; }
+    // brain glow ramps during idle->fire
+    var brainGlow = 0;
+    if (elapsed < IDLE){ brainGlow = easeInOut(Math.min(1, elapsed/IDLE)); stageIdx=-1; stageP=0; }
+    else if (inChain){ brainGlow = 1; }
+    else { brainGlow = 0.2; }
+
+    drawPipelineSpine(afterChain ? STAGES.length : (stageIdx<0?0:(stageP>=1?stageIdx+1:stageIdx)));
+
+    // nodes: each fully-fills as the pulse passes; active node fills with stageP
+    for (var j=0;j<STAGES.length;j++){
+      var fp = 0, active=false;
+      if (afterChain){ fp=1; }
+      else if (stageIdx>=0){
+        if (j<stageIdx) fp=1;
+        else if (j===stageIdx){ fp=stageP; active=true; }
+        else fp=0;
+      }
+      drawStageNode(j, fp, active, active?1:0);
+    }
+
+    drawBrain(BRAIN.x, BRAIN.y, BRAIN.r, brainGlow);
+
+    // travelling pulse position along nodes during chain
+    if (elapsed>=IDLE && inChain && stageIdx>=0){
+      var fromX = (stageIdx===0) ? BRAIN.x+BRAIN.r : nodeXs[stageIdx-1];
+      var toX = nodeXs[stageIdx];
+      var px = fromX + (toX-fromX)*easeInOut(stageP);
+      drawPulse(px, nodeY, 0.6+0.4*Math.sin(ts*0.01));
+    }
+
+    // character reacts after chain completes
+    var react = 0;
+    if (afterChain){
+      var rt = Math.min(1,(elapsed-CHAIN_END)/600);
+      react = easeOut(rt);
+    }
+    drawCharacter(CHAR.x, CHAR.y, react);
+
+    // cumulative bottom bar
+    var cum = drawTotalBar(afterChain?STAGES.length:Math.max(0,stageIdx), afterChain?1:(stageIdx<0?0:stageP));
+
+    // verdict after chain
+    if (afterChain){
+      var reveal = Math.min(1, (elapsed-CHAIN_END)/700);
+      // gold flash key-moment as it passes (under budget)
+      drawVerdict(reveal);
+    }
+
+    setHUD(elapsed<IDLE?-1:stageIdx, stageP, cum);
+
+    requestAnimationFrame(frame);
+  }
+
+  // ---- i18n apply for sidebar/HUD DOM ----
+  function applyI18N(){
+    var ids = ['brandTag','brandTitle','brandSub','roadH','r1','r2','r3','r4','r4b','r5','r6',
+               'mcLabel','guideH','g1','g2','g3','hudL0','hudL1','hudL2'];
+    for (var i=0;i<ids.length;i++){
+      var el=document.getElementById(ids[i]);
+      if (el && I18N[ids[i]]) el.innerHTML = I18N[ids[i]][LANG];
+    }
+    document.documentElement.setAttribute('lang', LANG==='cn'?'zh-CN':'en');
+  }
+
+  document.getElementById('langBtn').addEventListener('click', function(){
+    LANG = (LANG==='cn')?'en':'cn';
+    applyI18N();
+  });
+
+  window.addEventListener('resize', resize);
+  if (window.ResizeObserver){ new ResizeObserver(resize).observe(wrap); }
+  applyI18N();
+  resize();
+  setTimeout(resize,200);
+  setTimeout(resize,600);
+  if (document.fonts && document.fonts.ready){ document.fonts.ready.then(resize); }
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,876 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>M49 · 每天校准的代价 — Cortex Map</title>
+<style>
+  :root{
+    /* Layer 1 — shared deep space canvas (neuro hue 25) */
+    --bg-0: oklch(0.14 0.035 25);
+    --bg-1: oklch(0.18 0.04 25);
+    --bg-2: oklch(0.22 0.045 25);
+    --bg-3: oklch(0.28 0.05 25);
+    --line: oklch(0.40 0.06 25 / 0.35);
+    --line-strong: oklch(0.58 0.10 25 / 0.55);
+    --fg:      oklch(0.96 0.01 25);
+    --fg-dim:  oklch(0.76 0.03 25);
+    --fg-mute: oklch(0.56 0.04 25);
+
+    /* Layer 2 — neuro signature accent (themes.js NRO-20) */
+    --neuro: oklch(0.75 0.17 25);
+
+    /* Layer 3 — neuro 5-color palette */
+    --SYNAPTIC: oklch(0.75 0.17 25);
+    --DENDRITE: oklch(0.55 0.15 25);
+    --AXON:     oklch(0.32 0.10 25);
+    --FIRING:   oklch(0.92 0.08 25);
+    --MEMORY:   oklch(0.85 0.14 85);
+
+    --good: oklch(0.80 0.16 145);
+    --bad:  oklch(0.70 0.19 30);
+  }
+
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%;width:100%;
+    font-family:'Inter','PingFang SC',sans-serif;
+    color:var(--fg);background:var(--bg-0);overflow:hidden}
+
+  .stage{display:flex;flex-direction:row;height:100vh;width:100vw}
+
+  /* ============ 200px sidebar ============ */
+  .game-sidebar{
+    width:200px;flex:0 0 200px;
+    background:var(--bg-1);
+    border-right:1px solid var(--line);
+    display:flex;flex-direction:column;
+    padding:14px 12px;gap:10px;
+    overflow-y:auto;
+  }
+  .brand{display:flex;flex-direction:column;gap:2px;
+    border-bottom:1px solid var(--line);padding-bottom:8px}
+  .brand .code{font-family:'JetBrains Mono',monospace;font-size:10px;
+    color:var(--fg-mute);letter-spacing:1.2px}
+  .brand .title{font-size:13px;color:var(--fg);font-weight:600}
+  .brand .sub{font-size:10px;color:var(--fg-dim);margin-top:2px}
+
+  .mascot{
+    width:100%;height:72px;display:flex;align-items:center;justify-content:center;
+    background:var(--bg-2);border:1px solid var(--line);position:relative;
+  }
+  .mascot svg{width:100%;height:100%}
+  .mascot .mname{position:absolute;left:8px;bottom:5px;
+    font-family:'JetBrains Mono',monospace;font-size:8px;
+    color:var(--fg-mute);letter-spacing:1px}
+
+  /* ---- project roadmap S1..S6 ---- */
+  .route{
+    background:var(--bg-2);border:1px solid var(--line);
+    padding:8px;display:flex;flex-direction:column;gap:5px;
+  }
+  .route-title{font-family:'JetBrains Mono',monospace;font-size:9px;
+    color:var(--neuro);letter-spacing:1px}
+  .route-list{display:flex;flex-direction:column;gap:3px}
+  .route-step{
+    display:flex;align-items:center;gap:6px;
+    font-family:'JetBrains Mono',monospace;font-size:9px;
+    color:var(--fg-mute);line-height:1.2;
+  }
+  .route-step .dot{
+    width:8px;height:8px;flex:0 0 8px;border-radius:50%;
+    background:var(--bg-3);border:1px solid var(--line-strong);
+  }
+  .route-step.done .dot{background:var(--DENDRITE);border-color:var(--DENDRITE)}
+  .route-step.here{color:var(--fg);font-weight:600}
+  .route-step.here .dot{
+    background:var(--neuro);border-color:var(--FIRING);
+    box-shadow:0 0 0 3px oklch(0.75 0.17 25 / 0.25);
+  }
+  .route-step .sname{font-size:8.5px}
+
+  /* ---- day progress ---- */
+  .progress-block{
+    background:var(--bg-2);border:1px solid var(--line);padding:8px;
+    display:flex;flex-direction:column;gap:6px;
+  }
+  .progress-title{font-family:'JetBrains Mono',monospace;font-size:9px;
+    color:var(--fg-dim);letter-spacing:1px}
+  .progress-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:3px}
+  .day-cell{
+    height:22px;background:var(--bg-3);border:1px solid var(--line);
+    display:flex;align-items:center;justify-content:center;
+    font-family:'JetBrains Mono',monospace;font-size:9px;
+    color:var(--fg-mute);transition:background .25s,border-color .25s;
+  }
+  .day-cell.cur{border-color:var(--neuro);color:var(--neuro)}
+  .day-cell.calib{background:var(--AXON);border-color:var(--good);color:var(--good)}
+  .day-cell.skip{background:var(--AXON);border-color:var(--bad);color:var(--bad)}
+  .streak-text{font-family:'JetBrains Mono',monospace;font-size:10px;
+    color:var(--fg-mute)}
+  .streak-text .nv{color:var(--MEMORY);font-weight:600}
+
+  .guide{
+    background:var(--bg-2);border:1px solid var(--line);
+    padding:8px;display:flex;flex-direction:column;gap:4px;
+  }
+  .guide-title{font-family:'JetBrains Mono',monospace;font-size:9px;
+    color:var(--neuro);letter-spacing:1px}
+  .guide-line{font-size:9.5px;color:var(--fg-dim);line-height:1.4}
+
+  .sidebar-spacer{flex:1;min-height:6px}
+
+  .lang-btn{
+    width:100%;padding:7px 8px;background:var(--bg-3);
+    color:var(--fg);border:1px solid var(--line-strong);
+    font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:1px;
+    cursor:pointer;box-shadow:3px 3px 0 var(--bg-0);
+  }
+  .lang-btn:hover{background:var(--DENDRITE);color:var(--FIRING)}
+
+  /* ============ main ============ */
+  .game-main{
+    flex:1;display:flex;flex-direction:column;
+    background:var(--bg-0);min-width:0;position:relative;
+  }
+  .main-header{
+    height:46px;border-bottom:1px solid var(--line);
+    display:flex;align-items:center;justify-content:space-between;
+    padding:0 18px;background:var(--bg-1);flex:0 0 46px;
+  }
+  .header-left{font-family:'JetBrains Mono',monospace;font-size:11px;
+    color:var(--fg-dim);letter-spacing:1.3px}
+  .header-right{display:flex;gap:16px;font-family:'JetBrains Mono',monospace}
+  .hud-cell{display:flex;flex-direction:column;align-items:flex-end}
+  .hud-cell .label{font-size:9px;color:var(--fg-mute);letter-spacing:1px}
+  .hud-cell .val{color:var(--neuro);font-size:13px;font-weight:600}
+  .hud-cell .val.gold{color:var(--MEMORY)}
+
+  /* corner minecraft silhouette */
+  .endgame{
+    position:absolute;right:20px;top:58px;z-index:6;
+    display:flex;align-items:center;gap:8px;
+    background:var(--bg-1);border:1px solid var(--line);
+    padding:6px 10px;opacity:.92;pointer-events:none;
+  }
+  .endgame svg{width:26px;height:26px;flex:0 0 26px}
+  .endgame .etxt{font-family:'JetBrains Mono',monospace;font-size:8.5px;
+    color:var(--fg-mute);line-height:1.35;max-width:150px}
+  .endgame .etxt .hl{color:var(--neuro)}
+
+  .main-body{flex:1;display:flex;flex-direction:column;
+    min-height:0;padding:14px 18px;gap:12px}
+
+  /* task / intro card */
+  .task-card{
+    background:var(--bg-1);border:1px solid var(--line);
+    border-left:3px solid var(--neuro);
+    padding:10px 14px;display:flex;flex-direction:column;gap:3px;
+    flex:0 0 auto;
+  }
+  .task-card .tprompt{font-size:12.5px;color:var(--fg);line-height:1.45}
+  .task-card .twhy{font-size:10px;color:var(--fg-dim);line-height:1.4}
+
+  /* the day scene: left = play viewport, right = decision/consequence */
+  .day-scene{flex:1;display:flex;gap:12px;min-height:0}
+
+  .play-pane{
+    flex:1.3;display:flex;flex-direction:column;min-height:0;min-width:0;
+    background:var(--bg-1);border:1px solid var(--line);
+  }
+  .pane-title{
+    padding:8px 14px;font-family:'JetBrains Mono',monospace;font-size:10px;
+    color:var(--neuro);letter-spacing:1.3px;
+    border-bottom:1px solid var(--line);background:var(--bg-2);
+    display:flex;justify-content:space-between;align-items:center;
+  }
+  .pane-title .acc{color:var(--fg-dim)}
+  .pane-title .acc b{color:var(--MEMORY)}
+  .play-body{flex:1;position:relative;display:flex;flex-direction:column;min-height:0}
+  #playCanvas{width:100%;height:100%;display:block}
+
+  /* right side: decision + consequence stack */
+  .side-pane{
+    flex:1;display:flex;flex-direction:column;gap:12px;min-height:0;min-width:0;
+  }
+
+  .decide-box{
+    background:var(--bg-1);border:1px solid var(--line);
+    padding:12px;display:flex;flex-direction:column;gap:10px;flex:0 0 auto;
+  }
+  .decide-q{font-size:12px;color:var(--fg);line-height:1.4}
+  .decide-q b{color:var(--neuro)}
+  .decide-row{display:flex;flex-direction:column;gap:8px}
+  .decide-btn{
+    width:100%;padding:12px 12px;background:var(--bg-2);
+    border:1px solid var(--line-strong);
+    color:var(--fg);cursor:pointer;text-align:left;
+    display:flex;flex-direction:column;gap:3px;
+    box-shadow:3px 3px 0 var(--bg-0);
+    transition:transform .1s, background .15s, border-color .15s;
+  }
+  .decide-btn:hover:not(:disabled){background:var(--bg-3);border-color:var(--neuro)}
+  .decide-btn:active:not(:disabled){transform:translate(2px,2px);box-shadow:1px 1px 0 var(--bg-0)}
+  .decide-btn:disabled{opacity:.35;cursor:not-allowed}
+  .decide-btn .dlabel{font-size:13px;font-weight:600}
+  .decide-btn .dhint{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--fg-mute);line-height:1.4}
+  .decide-btn[data-pick="calib"] .dlabel{color:var(--good)}
+  .decide-btn[data-pick="skip"]  .dlabel{color:var(--bad)}
+
+  /* consequence panel */
+  .consq{
+    flex:1;min-height:0;overflow-y:auto;
+    background:var(--bg-1);border:1px solid var(--line);
+    border-left:3px solid var(--neuro);
+    padding:12px;display:flex;flex-direction:column;gap:8px;
+  }
+  .consq.hidden{display:none}
+  .consq .ctag{font-family:'JetBrains Mono',monospace;font-size:9px;
+    letter-spacing:1.3px}
+  .consq.good .ctag{color:var(--good)}
+  .consq.bad  .ctag{color:var(--bad)}
+  .consq .chead{font-size:13px;font-weight:600;color:var(--fg)}
+  .consq .cbody{font-size:11px;color:var(--fg-dim);line-height:1.5}
+  .consq .cbody b{color:var(--MEMORY)}
+  .accbar-wrap{display:flex;flex-direction:column;gap:4px;margin-top:2px}
+  .accbar-label{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--fg-mute);
+    display:flex;justify-content:space-between}
+  .accbar-label .now{color:var(--neuro);font-weight:600}
+  .accbar{height:12px;background:var(--bg-3);border:1px solid var(--line);position:relative;overflow:hidden}
+  .accbar .fill{height:100%;width:0;transition:width .6s ease;background:var(--good)}
+  .accbar .thresh{position:absolute;top:-2px;bottom:-2px;width:2px;background:var(--MEMORY);left:70%}
+  .next-row{display:flex;gap:10px;align-items:center;margin-top:4px}
+  .next-btn{
+    padding:9px 16px;background:var(--neuro);color:var(--bg-0);
+    border:1px solid var(--FIRING);
+    font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:600;letter-spacing:1px;
+    cursor:pointer;box-shadow:3px 3px 0 var(--bg-0);
+  }
+  .next-btn:hover{background:var(--FIRING)}
+  .next-btn:active{transform:translate(2px,2px);box-shadow:1px 1px 0 var(--bg-0)}
+
+  /* end overlay */
+  .end-overlay{
+    position:absolute;inset:0;z-index:20;
+    background:oklch(0.14 0.035 25 / 0.94);
+    display:flex;align-items:center;justify-content:center;
+    flex-direction:column;gap:14px;padding:30px;text-align:center;
+  }
+  .end-overlay.hidden{display:none}
+  .end-overlay .badge{
+    width:96px;height:96px;display:flex;align-items:center;justify-content:center;
+    background:var(--bg-1);border:2px solid var(--MEMORY);
+    box-shadow:4px 4px 0 var(--bg-0);
+  }
+  .end-overlay .badge svg{width:64px;height:64px}
+  .end-overlay .etitle{font-size:20px;font-weight:700;color:var(--MEMORY)}
+  .end-overlay .esub{font-size:12.5px;color:var(--fg-dim);line-height:1.6;max-width:430px}
+  .end-overlay .esub b{color:var(--neuro)}
+  .end-overlay.failed .badge{border-color:var(--bad)}
+  .end-overlay.failed .etitle{color:var(--bad)}
+  .end-overlay .ebtns{display:flex;gap:12px;margin-top:6px}
+
+  .mono{font-family:'JetBrains Mono',monospace}
+</style>
+</head>
+<body>
+<div class="stage">
+
+  <!-- ============ SIDEBAR ============ -->
+  <aside class="game-sidebar">
+    <div class="brand">
+      <div class="code mono">NRO-20 · M49</div>
+      <div class="title" data-i18n="brandTitle">每天校准的代价</div>
+      <div class="sub" data-i18n="brandSub">脑控前的 5 分钟习惯</div>
+    </div>
+
+    <div class="mascot">
+      <svg viewBox="0 0 120 72" aria-hidden="true">
+        <!-- Spark: branching dendrite creature -->
+        <g stroke="var(--neuro)" stroke-width="2.4" fill="none" stroke-linecap="round">
+          <circle cx="60" cy="36" r="11" fill="var(--AXON)" stroke="var(--FIRING)"/>
+          <path d="M60 25 L60 10 M60 10 L52 4 M60 10 L68 4"/>
+          <path d="M71 36 L88 30 M88 30 L96 24 M88 30 L94 38"/>
+          <path d="M49 36 L32 30 M32 30 L24 24 M32 30 L26 38"/>
+          <path d="M60 47 L60 62 M60 62 L52 68 M60 62 L68 68"/>
+        </g>
+        <circle cx="55" cy="34" r="2" fill="var(--FIRING)"/>
+        <circle cx="65" cy="34" r="2" fill="var(--FIRING)"/>
+      </svg>
+      <span class="mname mono">SPARK</span>
+    </div>
+
+    <!-- project roadmap -->
+    <div class="route">
+      <div class="route-title mono" data-i18n="routeTitle">项目路线</div>
+      <div class="route-list">
+        <div class="route-step done"><span class="dot"></span><span class="sname" data-i18n="s1">S1 读懂脑电</span></div>
+        <div class="route-step done"><span class="dot"></span><span class="sname" data-i18n="s2">S2 清洗信号</span></div>
+        <div class="route-step done"><span class="dot"></span><span class="sname" data-i18n="s3">S3 解码左右</span></div>
+        <div class="route-step here"><span class="dot"></span><span class="sname" data-i18n="s4">S4 稳定上线</span></div>
+        <div class="route-step"><span class="dot"></span><span class="sname" data-i18n="s5">S5 接入游戏</span></div>
+        <div class="route-step"><span class="dot"></span><span class="sname" data-i18n="s6">S6 脑控通关</span></div>
+      </div>
+    </div>
+
+    <!-- day progress -->
+    <div class="progress-block">
+      <div class="progress-title mono" data-i18n="weekTitle">本周打卡</div>
+      <div class="progress-grid" id="dayGrid"></div>
+      <div class="streak-text mono">
+        <span data-i18n="streakLbl">连续校准</span> <span class="nv" id="streakVal">0</span> <span data-i18n="daysUnit">天</span>
+      </div>
+    </div>
+
+    <div class="guide">
+      <div class="guide-title mono" data-i18n="guideTitle">怎么玩</div>
+      <div class="guide-line" data-i18n="guide1">你扮演每天开玩前的自己。</div>
+      <div class="guide-line" data-i18n="guide2">每天决定：先花 5 分钟校准，还是直接开玩。</div>
+      <div class="guide-line" data-i18n="guide3">连续 5 天都坚持校准，解锁徽章。</div>
+    </div>
+
+    <div class="sidebar-spacer"></div>
+    <button class="lang-btn mono" id="langBtn">EN / 中文</button>
+  </aside>
+
+  <!-- ============ MAIN ============ -->
+  <main class="game-main">
+    <div class="main-header">
+      <div class="header-left mono" data-i18n="hdrLeft">每日校准决策 · 角色扮演</div>
+      <div class="header-right">
+        <div class="hud-cell">
+          <span class="label" data-i18n="hudDay">DAY</span>
+          <span class="val" id="hudDay">1 / 5</span>
+        </div>
+        <div class="hud-cell">
+          <span class="label" data-i18n="hudAcc">今日准确率</span>
+          <span class="val gold" id="hudAcc">--%</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- corner minecraft silhouette + endpoint -->
+    <div class="endgame">
+      <svg viewBox="0 0 32 32" aria-hidden="true">
+        <g fill="none" stroke="var(--neuro)" stroke-width="1.6">
+          <rect x="6" y="10" width="20" height="16"/>
+          <path d="M6 14 H26 M14 14 V26 M6 18 H14 M18 10 V26 M18 18 H26"/>
+        </g>
+      </svg>
+      <div class="etxt">
+        <span data-i18n="endLbl">终点</span>: <span class="hl" data-i18n="endName">脑控 Minecraft</span><br>
+        <span data-i18n="endTail">稳定准确率才能天天玩</span>
+      </div>
+    </div>
+
+    <div class="main-body">
+      <div class="task-card">
+        <div class="tprompt" data-i18n="introPrompt">解码器已经能分清你想象左手还是右手了。可它每天醒来都有点“漂”——电极位置、你的状态、当天的脑波基线都变了。</div>
+        <div class="twhy" id="introWhy" data-i18n="introWhy">每天开玩前要不要先花 5 分钟校准？偷懒的代价是什么？连过 5 天，看看坚持校准的人和偷懒的人，谁能天天脑控玩得动。</div>
+      </div>
+
+      <div class="day-scene">
+        <!-- play viewport -->
+        <div class="play-pane">
+          <div class="pane-title mono">
+            <span data-i18n="playTitle">脑控试玩 · 角色走位</span>
+            <span class="acc"><span data-i18n="playAccLbl">准确率</span> <b id="paneAcc">--</b></span>
+          </div>
+          <div class="play-body">
+            <canvas id="playCanvas"></canvas>
+          </div>
+        </div>
+
+        <!-- decision + consequence -->
+        <div class="side-pane">
+          <div class="decide-box" id="decideBox">
+            <div class="decide-q" id="decideQ"><b data-i18n="dayLbl">第 1 天</b> · <span data-i18n="decideQ">今天先做什么？</span></div>
+            <div class="decide-row">
+              <button class="decide-btn" data-pick="calib" id="btnCalib">
+                <span class="dlabel" data-i18n="calibLabel">花 5 分钟校准</span>
+                <span class="dhint" data-i18n="calibHint">让解码器重新对齐今天的脑波基线，准确率回升。</span>
+              </button>
+              <button class="decide-btn" data-pick="skip" id="btnSkip">
+                <span class="dlabel" data-i18n="skipLabel">偷懒，直接开玩</span>
+                <span class="dhint" data-i18n="skipHint">省下 5 分钟，但漂移没修——今天准确率会暴跌。</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="consq hidden" id="consq">
+            <div class="ctag mono" id="consqTag">RESULT</div>
+            <div class="chead" id="consqHead"></div>
+            <div class="cbody" id="consqBody"></div>
+            <div class="accbar-wrap">
+              <div class="accbar-label mono">
+                <span data-i18n="accBarLbl">今日解码准确率</span>
+                <span class="now" id="consqAccVal">--%</span>
+              </div>
+              <div class="accbar"><div class="fill" id="consqFill"></div><div class="thresh"></div></div>
+            </div>
+            <div class="next-row">
+              <button class="next-btn mono" id="nextBtn" data-i18n="nextBtn">进入第 2 天</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- end overlay -->
+    <div class="end-overlay hidden" id="endOverlay">
+      <div class="badge" id="endBadge">
+        <svg viewBox="0 0 64 64" aria-hidden="true">
+          <g fill="none" stroke="var(--MEMORY)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="32" cy="26" r="16"/>
+            <path d="M24 26 l6 6 l10 -12"/>
+            <path d="M22 42 l-4 16 l14 -8 l14 8 l-4 -16"/>
+          </g>
+        </svg>
+      </div>
+      <div class="etitle" id="endTitle"></div>
+      <div class="esub" id="endSub"></div>
+      <div class="ebtns">
+        <button class="next-btn mono" id="replayBtn" data-i18n="replayBtn">再过一周</button>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  // ---------- i18n ----------
+  const I18N = {
+    zh:{
+      brandTitle:"每天校准的代价", brandSub:"脑控前的 5 分钟习惯",
+      routeTitle:"项目路线",
+      s1:"S1 读懂脑电", s2:"S2 清洗信号", s3:"S3 解码左右",
+      s4:"S4 稳定上线", s5:"S5 接入游戏", s6:"S6 脑控通关",
+      weekTitle:"本周打卡", streakLbl:"连续校准", daysUnit:"天",
+      guideTitle:"怎么玩",
+      guide1:"你扮演每天开玩前的自己。",
+      guide2:"每天决定：先花 5 分钟校准，还是直接开玩。",
+      guide3:"连续 5 天都坚持校准，解锁徽章。",
+      hdrLeft:"每日校准决策 · 角色扮演",
+      hudDay:"DAY", hudAcc:"今日准确率",
+      endLbl:"终点", endName:"脑控 Minecraft", endTail:"稳定准确率才能天天玩",
+      introPrompt:"解码器已经能分清你想象左手还是右手了。可它每天醒来都有点“漂”——电极位置、你的状态、当天的脑波基线都变了。",
+      introWhy:"每天开玩前要不要先花 5 分钟校准？偷懒的代价是什么？连过 5 天，看看坚持校准的人和偷懒的人，谁能天天脑控玩得动。",
+      playTitle:"脑控试玩 · 角色走位", playAccLbl:"准确率",
+      dayLbl:"第 1 天", decideQ:"今天先做什么？",
+      calibLabel:"花 5 分钟校准", calibHint:"让解码器重新对齐今天的脑波基线，准确率回升。",
+      skipLabel:"偷懒，直接开玩", skipHint:"省下 5 分钟，但漂移没修——今天准确率会暴跌。",
+      accBarLbl:"今日解码准确率", nextBtn:"进入第 2 天", replayBtn:"再过一周"
+    },
+    en:{
+      brandTitle:"The Cost of Daily Calibration", brandSub:"5-min habit before brain-control",
+      routeTitle:"PROJECT ROUTE",
+      s1:"S1 Read EEG", s2:"S2 Clean Signal", s3:"S3 Decode L/R",
+      s4:"S4 Stay Stable", s5:"S5 Hook Game", s6:"S6 Beat It Brain-Only",
+      weekTitle:"THIS WEEK", streakLbl:"Calib streak", daysUnit:"d",
+      guideTitle:"HOW TO PLAY",
+      guide1:"You role-play yourself, each morning before playing.",
+      guide2:"Each day: spend 5 min calibrating, or just start playing.",
+      guide3:"Calibrate 5 days in a row to unlock the badge.",
+      hdrLeft:"Daily calibration decision · Role-play",
+      hudDay:"DAY", hudAcc:"Today's accuracy",
+      endLbl:"Goal", endName:"Brain-control Minecraft", endTail:"Stable accuracy = play every day",
+      introPrompt:"The decoder can already tell whether you imagine your left or right hand. But every morning it 'drifts' — electrode positions, your state, and today's EEG baseline have all shifted.",
+      introWhy:"Each morning: spend 5 min calibrating, or skip it? What's the cost of skipping? Live 5 days and see who can keep playing brain-control — the one who calibrates, or the one who skips.",
+      playTitle:"Brain-control trial · Avatar walk", playAccLbl:"Accuracy",
+      dayLbl:"Day 1", decideQ:"What do you do first today?",
+      calibLabel:"Spend 5 min calibrating", calibHint:"Re-aligns the decoder to today's EEG baseline; accuracy recovers.",
+      skipLabel:"Skip it, start playing", skipHint:"Saves 5 min, but the drift is unfixed — today's accuracy crashes.",
+      accBarLbl:"Today's decode accuracy", nextBtn:"Go to Day 2", replayBtn:"Live another week"
+    }
+  };
+  let lang = "zh";
+  const TOTAL_DAYS = 5;
+  const THRESHOLD = 70; // accuracy % needed to play smoothly
+
+  // dynamic strings (built per-day, not in static i18n table)
+  function dynText(key, ctx){
+    const D = ctx || {};
+    const T = {
+      zh:{
+        dayLbl:(d)=>`第 ${d} 天`,
+        nextBtn:(d)=> d<TOTAL_DAYS ? `进入第 ${d+1} 天` : "看看一周结果",
+        calibHead:"花 5 分钟校准了",
+        calibBody:(a,p)=>`解码器重新对齐了今天的脑波基线，漂移修好了。今日准确率 <b>${a}%</b>，<b>${p}</b>。`,
+        skipHead:"偷懒，没校准",
+        skipBody:(a,p)=>`漂移没修，解码器还在用昨天的基线。今日准确率暴跌到 <b>${a}%</b>，<b>${p}</b>。`,
+        playOk:"角色听话，按你想的方向走",
+        playBad:"角色乱走、卡墙，玩不动",
+      },
+      en:{
+        dayLbl:(d)=>`Day ${d}`,
+        nextBtn:(d)=> d<TOTAL_DAYS ? `Go to Day ${d+1}` : "See the week's result",
+        calibHead:"Spent 5 min calibrating",
+        calibBody:(a,p)=>`The decoder re-aligned to today's EEG baseline; the drift is fixed. Today's accuracy <b>${a}%</b>, <b>${p}</b>.`,
+        skipHead:"Skipped — no calibration",
+        skipBody:(a,p)=>`Drift unfixed; the decoder still uses yesterday's baseline. Accuracy crashed to <b>${a}%</b>, <b>${p}</b>.`,
+        playOk:"the avatar obeys and walks where you think",
+        playBad:"the avatar wanders, hits walls, unplayable",
+      }
+    };
+    const fn = T[lang][key];
+    return typeof fn === "function" ? fn(D.a, D.p) : fn;
+  }
+
+  function applyI18n(){
+    document.documentElement.lang = lang === "zh" ? "zh-CN" : "en";
+    document.querySelectorAll("[data-i18n]").forEach(el=>{
+      const k = el.getAttribute("data-i18n");
+      if (I18N[lang][k] !== undefined) el.textContent = I18N[lang][k];
+    });
+    // refresh dynamic, language-sensitive labels
+    refreshDynamicLabels();
+  }
+
+  // ---------- game state ----------
+  const stateGame = {
+    day: 1,
+    streak: 0,           // consecutive calibration days
+    decided: false,      // decision made for current day
+    history: [],         // 'calib' | 'skip' per day
+    todayAcc: 0,
+    todayCalib: false,
+    finished: false,
+  };
+
+  // ---------- DOM ----------
+  const el = (id)=>document.getElementById(id);
+  const dayGrid   = el("dayGrid");
+  const streakVal = el("streakVal");
+  const hudDay    = el("hudDay");
+  const hudAcc    = el("hudAcc");
+  const paneAcc   = el("paneAcc");
+  const decideBox = el("decideBox");
+  const decideQ   = el("decideQ");
+  const btnCalib  = el("btnCalib");
+  const btnSkip   = el("btnSkip");
+  const consq     = el("consq");
+  const consqTag  = el("consqTag");
+  const consqHead = el("consqHead");
+  const consqBody = el("consqBody");
+  const consqAccVal = el("consqAccVal");
+  const consqFill = el("consqFill");
+  const nextBtn   = el("nextBtn");
+  const endOverlay= el("endOverlay");
+  const endTitle  = el("endTitle");
+  const endSub    = el("endSub");
+  const endBadge  = el("endBadge");
+  const replayBtn = el("replayBtn");
+
+  function buildDayGrid(){
+    dayGrid.innerHTML = "";
+    for (let d=1; d<=TOTAL_DAYS; d++){
+      const c = document.createElement("div");
+      c.className = "day-cell mono";
+      c.id = "dc"+d;
+      c.textContent = d;
+      dayGrid.appendChild(c);
+    }
+  }
+
+  function refreshSidebar(){
+    for (let d=1; d<=TOTAL_DAYS; d++){
+      const c = el("dc"+d);
+      if (!c) continue;
+      c.className = "day-cell mono";
+      const h = stateGame.history[d-1];
+      if (h === "calib") c.classList.add("calib");
+      else if (h === "skip") c.classList.add("skip");
+      if (d === stateGame.day && !stateGame.finished) c.classList.add("cur");
+    }
+    streakVal.textContent = stateGame.streak;
+  }
+
+  function refreshDynamicLabels(){
+    hudDay.textContent = stateGame.day + " / " + TOTAL_DAYS;
+    // "<b>第 N 天</b> · 今天先做什么？"
+    decideQ.innerHTML = "<b>"+dynTextDay()+"</b> · "+I18N[lang].decideQ;
+    nextBtn.textContent = (lang==="zh"
+      ? (stateGame.day<TOTAL_DAYS?`进入第 ${stateGame.day+1} 天`:"看看一周结果")
+      : (stateGame.day<TOTAL_DAYS?`Go to Day ${stateGame.day+1}`:"See the week's result"));
+  }
+  function dynTextDay(){
+    return lang==="zh" ? `第 ${stateGame.day} 天` : `Day ${stateGame.day}`;
+  }
+
+  // accuracy model: calibrate => high (78-90); skip => crashes, worse the more days drifted.
+  function computeAccuracy(picked){
+    if (picked === "calib"){
+      // fresh re-align; slight day variance
+      return Math.round(82 + Math.random()*8); // 82-90
+    } else {
+      // skip: drift compounds; if previously skipped recently, worse
+      const recentSkips = stateGame.history.slice(-2).filter(h=>h==="skip").length;
+      const base = 52 - recentSkips*8;
+      return Math.max(34, Math.round(base + Math.random()*8 - 4)); // ~38-58
+    }
+  }
+
+  // ---------- canvas: avatar walk in a tiny minecraft-ish corridor ----------
+  const canvas = el("playCanvas");
+  const ctx = canvas.getContext("2d");
+  let raf = null;
+  const avatar = { x:0, y:0, vx:0, vy:0, target:0, jitterPhase:0 };
+  let dpr = 1, cw = 0, ch = 0;
+
+  function resizeCanvas(){
+    const r = canvas.parentElement.getBoundingClientRect();
+    dpr = window.devicePixelRatio || 1;
+    cw = Math.max(120, r.width);
+    ch = Math.max(120, r.height);
+    canvas.width = Math.floor(cw*dpr);
+    canvas.height = Math.floor(ch*dpr);
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+  }
+
+  function startWalk(acc){
+    // acc drives how well avatar tracks the intended path
+    avatar.acc = acc;
+    avatar.x = cw*0.12;
+    avatar.y = ch*0.5;
+    avatar.t = 0;
+    if (raf) cancelAnimationFrame(raf);
+    drawLoop();
+  }
+
+  function drawLoop(){
+    raf = requestAnimationFrame(drawLoop);
+    if (cw<=0 || ch<=0) return;
+    avatar.t += 0.016;
+
+    const acc = avatar.acc || 0;
+    const good = acc >= THRESHOLD;
+    // intended path: gently rightward toward a "diamond goal"
+    const goalX = cw*0.84, goalY = ch*0.5;
+
+    // jitter inversely proportional to accuracy
+    const errLevel = Math.max(0, (THRESHOLD - acc)) / THRESHOLD; // 0 when >=70
+    const jitter = errLevel * 26;
+    // intended velocity
+    const dx = goalX - avatar.x, dy = goalY - avatar.y;
+    const dist = Math.hypot(dx,dy)||1;
+    const speed = good ? 0.9 : 0.42;
+    avatar.x += (dx/dist)*speed;
+    avatar.y += (dy/dist)*speed;
+    // misdecode jitter (random sideways stutter)
+    if (!good){
+      avatar.x += Math.sin(avatar.t*9.3)*jitter*0.06 + (Math.random()-0.5)*errLevel*2.2;
+      avatar.y += Math.cos(avatar.t*7.7)*jitter*0.10 + (Math.random()-0.5)*errLevel*3.0;
+    }
+    // clamp inside corridor
+    avatar.y = Math.max(ch*0.22, Math.min(ch*0.78, avatar.y));
+    avatar.x = Math.max(cw*0.08, Math.min(goalX, avatar.x));
+
+    // ---- render ----
+    ctx.clearRect(0,0,cw,ch);
+    // floor grid (minecraft blocks)
+    ctx.strokeStyle = "oklch(0.40 0.06 25 / 0.25)";
+    ctx.lineWidth = 1;
+    const cell = Math.max(28, cw/14);
+    for (let gx=0; gx<=cw; gx+=cell){ ctx.beginPath(); ctx.moveTo(gx,0); ctx.lineTo(gx,ch); ctx.stroke(); }
+    for (let gy=0; gy<=ch; gy+=cell){ ctx.beginPath(); ctx.moveTo(0,gy); ctx.lineTo(cw,gy); ctx.stroke(); }
+
+    // corridor walls (top/bottom)
+    ctx.fillStyle = "oklch(0.22 0.045 25)";
+    ctx.fillRect(0, 0, cw, ch*0.20);
+    ctx.fillRect(0, ch*0.80, cw, ch*0.20);
+    ctx.strokeStyle = "oklch(0.58 0.10 25 / 0.5)";
+    ctx.strokeRect(0, ch*0.20, cw, ch*0.60);
+
+    // goal diamond
+    ctx.save();
+    ctx.translate(goalX, goalY);
+    ctx.rotate(avatar.t*0.8);
+    ctx.fillStyle = "oklch(0.85 0.14 85)";
+    ctx.beginPath();
+    const gs = 12;
+    ctx.moveTo(0,-gs); ctx.lineTo(gs,0); ctx.lineTo(0,gs); ctx.lineTo(-gs,0); ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+
+    // intended path guide
+    ctx.strokeStyle = "oklch(0.55 0.15 25 / 0.4)";
+    ctx.setLineDash([6,6]);
+    ctx.beginPath(); ctx.moveTo(cw*0.12, ch*0.5); ctx.lineTo(goalX, goalY); ctx.stroke();
+    ctx.setLineDash([]);
+
+    // avatar (blocky steve-ish)
+    const ax = avatar.x, ay = avatar.y;
+    ctx.fillStyle = good ? "oklch(0.75 0.17 25)" : "oklch(0.70 0.19 30)";
+    ctx.fillRect(ax-9, ay-12, 18, 24);
+    ctx.fillStyle = "oklch(0.92 0.08 25)";
+    ctx.fillRect(ax-9, ay-12, 18, 9); // head
+    ctx.fillStyle = "var(--bg-0)";
+    ctx.fillRect(ax-5, ay-9, 3, 3);
+    ctx.fillRect(ax+2, ay-9, 3, 3);
+
+    // status text on canvas
+    ctx.font = "11px 'JetBrains Mono', monospace";
+    ctx.fillStyle = good ? "oklch(0.80 0.16 145)" : "oklch(0.70 0.19 30)";
+    const msg = lang==="zh"
+      ? (good ? "走位稳 · 听脑指挥" : "走位乱 · 卡墙打转")
+      : (good ? "steady · obeys mind" : "erratic · stuck on walls");
+    ctx.fillText(msg, 12, ch-14);
+  }
+
+  // ---------- flow ----------
+  function makeDecision(picked){
+    if (stateGame.decided || stateGame.finished) return;
+    stateGame.decided = true;
+    stateGame.todayCalib = (picked === "calib");
+    stateGame.history[stateGame.day-1] = picked;
+
+    const acc = computeAccuracy(picked);
+    stateGame.todayAcc = acc;
+    const playable = acc >= THRESHOLD;
+
+    if (picked === "calib") stateGame.streak += 1;
+    else stateGame.streak = 0;
+
+    // lock buttons
+    btnCalib.disabled = true;
+    btnSkip.disabled = true;
+    btnCalib.style.borderColor = picked==="calib" ? "var(--good)" : "";
+    btnSkip.style.borderColor  = picked==="skip"  ? "var(--bad)" : "";
+
+    // HUD
+    hudAcc.textContent = acc + "%";
+    paneAcc.textContent = acc + "%";
+
+    // consequence panel
+    consq.classList.remove("hidden","good","bad");
+    consq.classList.add(picked==="calib" ? "good" : "bad");
+    consqTag.textContent = picked==="calib"
+      ? (lang==="zh"?"已校准":"CALIBRATED")
+      : (lang==="zh"?"已偷懒":"SKIPPED");
+    consqHead.textContent = picked==="calib" ? dynText("calibHead") : dynText("skipHead");
+    const playMsg = playable ? dynText("playOk") : dynText("playBad");
+    consqBody.innerHTML = picked==="calib"
+      ? dynText("calibBody",{a:acc, p:playMsg})
+      : dynText("skipBody",{a:acc, p:playMsg});
+
+    consqAccVal.textContent = acc + "%";
+    consqFill.style.width = acc + "%";
+    consqFill.style.background = playable ? "var(--good)" : "var(--bad)";
+
+    nextBtn.textContent = (lang==="zh"
+      ? (stateGame.day<TOTAL_DAYS?`进入第 ${stateGame.day+1} 天`:"看看一周结果")
+      : (stateGame.day<TOTAL_DAYS?`Go to Day ${stateGame.day+1}`:"See the week's result"));
+
+    refreshSidebar();
+    startWalk(acc);
+  }
+
+  function nextDay(){
+    if (stateGame.day >= TOTAL_DAYS){
+      finishWeek();
+      return;
+    }
+    stateGame.day += 1;
+    stateGame.decided = false;
+    btnCalib.disabled = false;
+    btnSkip.disabled = false;
+    btnCalib.style.borderColor = "";
+    btnSkip.style.borderColor = "";
+    consq.classList.add("hidden");
+    hudAcc.textContent = "--%";
+    paneAcc.textContent = "--";
+    if (raf) cancelAnimationFrame(raf);
+    ctx.clearRect(0,0,cw,ch);
+    refreshDynamicLabels();
+    refreshSidebar();
+  }
+
+  function finishWeek(){
+    stateGame.finished = true;
+    const won = stateGame.streak >= TOTAL_DAYS; // all 5 calibrated
+    endOverlay.classList.remove("hidden","failed");
+    if (!won) endOverlay.classList.add("failed");
+
+    if (won){
+      endTitle.textContent = lang==="zh" ? "校准习惯养成者" : "Calibration Habit Master";
+      endSub.innerHTML = lang==="zh"
+        ? "连续 5 天，你都先校准再开玩。解码器天天对齐基线，准确率稳稳压住 70% 线，角色每天都听你脑子的指挥。<br><b>养成校准习惯，脑控天天稳</b>——你离 S6「脑控通关 Minecraft」又近了一步。"
+        : "Five days straight, you calibrated before playing. The decoder re-aligned its baseline daily, accuracy held above the 70% line, and the avatar obeyed your mind every day.<br><b>Build the calibration habit, brain-control stays stable</b> — one step closer to S6, beating Minecraft brain-only.";
+    } else {
+      const skips = stateGame.history.filter(h=>h==="skip").length;
+      endTitle.textContent = lang==="zh" ? "习惯没养成" : "Habit Not Formed";
+      endSub.innerHTML = lang==="zh"
+        ? `这一周你偷懒了 <b>${skips}</b> 天。偷懒那天漂移没修，准确率跌穿 70%，角色乱走玩不动。明白了吗——脑控不是装一次就一劳永逸，<b>每天 5 分钟校准</b>才是天天能玩的代价。再过一周试试坚持。`
+        : `You skipped <b>${skips}</b> day(s) this week. On skip days the drift went unfixed, accuracy fell below 70%, and the avatar was unplayable. The lesson — brain-control isn't set-once-forever; <b>5 minutes of daily calibration</b> is the price of playing every day. Live another week and try to stick with it.`;
+    }
+  }
+
+  function resetWeek(){
+    stateGame.day = 1;
+    stateGame.streak = 0;
+    stateGame.decided = false;
+    stateGame.history = [];
+    stateGame.todayAcc = 0;
+    stateGame.finished = false;
+    endOverlay.classList.add("hidden");
+    consq.classList.add("hidden");
+    btnCalib.disabled = false;
+    btnSkip.disabled = false;
+    btnCalib.style.borderColor = "";
+    btnSkip.style.borderColor = "";
+    hudAcc.textContent = "--%";
+    paneAcc.textContent = "--";
+    if (raf) cancelAnimationFrame(raf);
+    resizeCanvas();
+    ctx.clearRect(0,0,cw,ch);
+    refreshDynamicLabels();
+    refreshSidebar();
+  }
+
+  // ---------- listeners ----------
+  btnCalib.addEventListener("click", ()=>makeDecision("calib"));
+  btnSkip.addEventListener("click", ()=>makeDecision("skip"));
+  nextBtn.addEventListener("click", nextDay);
+  replayBtn.addEventListener("click", resetWeek);
+  el("langBtn").addEventListener("click", ()=>{
+    lang = (lang==="zh") ? "en" : "zh";
+    applyI18n();
+    // if a decision already shown, re-render consequence in new language
+    if (stateGame.decided && !stateGame.finished){
+      const picked = stateGame.history[stateGame.day-1];
+      const acc = stateGame.todayAcc;
+      const playable = acc >= THRESHOLD;
+      consqTag.textContent = picked==="calib"
+        ? (lang==="zh"?"已校准":"CALIBRATED") : (lang==="zh"?"已偷懒":"SKIPPED");
+      consqHead.textContent = picked==="calib" ? dynText("calibHead") : dynText("skipHead");
+      const playMsg = playable ? dynText("playOk") : dynText("playBad");
+      consqBody.innerHTML = picked==="calib"
+        ? dynText("calibBody",{a:acc,p:playMsg}) : dynText("skipBody",{a:acc,p:playMsg});
+    }
+    if (stateGame.finished) finishWeek();
+  });
+
+  window.addEventListener("resize", ()=>{ resizeCanvas(); });
+
+  // ---------- init ----------
+  buildDayGrid();
+  applyI18n();
+  resizeCanvas();
+  refreshSidebar();
+  refreshDynamicLabels();
+  // a faint idle frame so canvas isn't blank
+  setTimeout(()=>{ if (!stateGame.decided){ resizeCanvas();
+    ctx.clearRect(0,0,cw,ch);
+    ctx.strokeStyle="oklch(0.40 0.06 25 / 0.25)"; ctx.lineWidth=1;
+    const cell=Math.max(28,cw/14);
+    for(let gx=0;gx<=cw;gx+=cell){ctx.beginPath();ctx.moveTo(gx,0);ctx.lineTo(gx,ch);ctx.stroke();}
+    for(let gy=0;gy<=ch;gy+=cell){ctx.beginPath();ctx.moveTo(0,gy);ctx.lineTo(cw,gy);ctx.stroke();}
+    ctx.fillStyle="oklch(0.56 0.04 25)"; ctx.font="12px 'JetBrains Mono',monospace";
+    ctx.fillText(lang==="zh"?"做出今天的决定，看角色怎么走":"Decide today's action, watch the avatar walk", 16, ch/2);
+  }}, 80);
+
+})();
+</script>
+</body>
+</html>

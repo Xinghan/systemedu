@@ -1,0 +1,702 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<script>window.__systemedu_resize_patch_optout=true;</script>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Inter:wght@400;500;600&family=Noto+Sans+SC:wght@400;500;700&display=swap" rel="stylesheet">
+<title>延迟侦探 · Latency Detective</title>
+<style>
+:root{
+  /* cs (CS-01) deep-space palette — oklch */
+  --bg-0:#080b12;             /* deep space base */
+  --bg-1:#0d121d;            /* panel base */
+  --bg-2:#121a28;            /* raised card */
+  --cs:oklch(0.75 0.17 200);          /* SIGNAL — accent */
+  --core:oklch(0.55 0.16 200);        /* CORE */
+  --depth:oklch(0.35 0.10 210);       /* DEPTH */
+  --flash:oklch(0.92 0.08 190);       /* FLASH */
+  --query:oklch(0.85 0.14 85);        /* QUERY (amber) */
+  --ink:oklch(0.95 0.02 220);
+  --dim:oklch(0.72 0.03 220);
+  --mute:oklch(0.52 0.03 220);
+  --line:oklch(0.32 0.04 220);
+  --good:oklch(0.78 0.16 165);
+  --bad:oklch(0.66 0.19 25);
+  --sh:3px 3px 0 var(--bg-0);
+}
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;}
+html,body{width:100%;height:100vh;overflow:hidden;background:var(--bg-0);color:var(--ink);font-family:'Inter','Noto Sans SC',sans-serif;}
+.mono{font-family:'JetBrains Mono',monospace;}
+.game-wrap{display:flex;flex-direction:row;height:100vh;overflow:hidden;}
+
+/* ---------- sidebar ---------- */
+.game-sidebar{width:200px;min-width:200px;max-width:200px;display:flex;flex-direction:column;gap:11px;padding:15px 13px 13px;background:var(--bg-1);border-right:1px solid var(--line);overflow-y:auto;}
+.brand{display:flex;align-items:center;gap:9px;}
+.mascot{width:26px;height:26px;flex-shrink:0;}
+.brand-txt{display:flex;flex-direction:column;gap:1px;}
+.side-title{font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:700;color:var(--cs);letter-spacing:0.03em;}
+.side-sub{font-size:10px;color:var(--dim);line-height:1.45;}
+.divider{height:1px;background:var(--line);margin:1px 0;}
+
+/* roadmap */
+.rm-label{font-family:'JetBrains Mono',monospace;font-size:8px;letter-spacing:0.16em;color:var(--mute);text-transform:uppercase;}
+.roadmap{display:flex;flex-direction:column;gap:0;margin-top:3px;}
+.rm-step{display:flex;align-items:center;gap:8px;padding:3px 0;position:relative;}
+.rm-dot{width:9px;height:9px;border-radius:50%;border:1.5px solid var(--line);background:var(--bg-1);flex-shrink:0;z-index:1;}
+.rm-step.done .rm-dot{background:var(--core);border-color:var(--core);}
+.rm-step.active .rm-dot{background:var(--cs);border-color:var(--cs);box-shadow:0 0 0 3px color-mix(in oklch, var(--cs) 28%, transparent);}
+.rm-step:not(:last-child)::before{content:"";position:absolute;left:4px;top:13px;width:1.5px;height:14px;background:var(--line);}
+.rm-step.done:not(:last-child)::before{background:var(--core);}
+.rm-txt{font-size:10px;color:var(--mute);line-height:1.2;}
+.rm-step.done .rm-txt{color:var(--dim);}
+.rm-step.active .rm-txt{color:var(--cs);font-weight:700;}
+.rm-here{font-family:'JetBrains Mono',monospace;font-size:7.5px;font-weight:700;color:var(--cs);letter-spacing:0.08em;margin-left:auto;}
+
+/* case progress */
+.case-row{display:flex;gap:6px;flex-wrap:wrap;margin-top:2px;}
+.case-pip{width:22px;height:22px;border-radius:6px;border:1.5px solid var(--line);background:var(--bg-2);display:flex;align-items:center;justify-content:center;font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:700;color:var(--mute);}
+.case-pip.solved{border-color:var(--good);color:var(--good);background:color-mix(in oklch, var(--good) 14%, var(--bg-2));}
+.case-pip.active{border-color:var(--cs);color:var(--cs);box-shadow:var(--sh);}
+
+.guide{font-size:10px;color:var(--dim);line-height:1.55;}
+.side-spacer{flex:1;}
+.lang-btn{align-self:flex-start;font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:700;padding:5px 12px;cursor:pointer;border:1px solid var(--line);border-radius:6px;background:var(--bg-2);color:var(--cs);letter-spacing:0.12em;}
+.lang-btn:hover{border-color:var(--cs);background:color-mix(in oklch, var(--cs) 16%, var(--bg-2));}
+.lang-btn:active{transform:translate(1px,1px);}
+
+/* ---------- main ---------- */
+.game-main{flex:1;display:flex;flex-direction:column;min-width:0;position:relative;}
+.main-head{display:flex;align-items:baseline;gap:14px;padding:15px 26px 4px;flex-shrink:0;flex-wrap:wrap;}
+.main-title{font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:700;color:var(--cs);letter-spacing:0.03em;}
+.main-q{font-size:12px;color:var(--dim);font-style:italic;}
+.stage{flex:1;display:flex;flex-direction:column;min-height:0;padding:8px 26px 20px;gap:12px;}
+
+/* ---- latency chain (clickable segments) ---- */
+.chain-box{flex-shrink:0;border:1px solid var(--line);border-radius:12px;background:var(--bg-1);padding:16px 16px 14px;position:relative;box-shadow:var(--sh);}
+.chain-head{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:11px;}
+.chain-lbl{font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:0.14em;color:var(--mute);text-transform:uppercase;}
+.chain-hint{font-size:10.5px;color:var(--cs);font-weight:600;}
+.chain{display:flex;align-items:stretch;gap:0;height:64px;border-radius:8px;overflow:hidden;border:1px solid var(--line);}
+.seg{flex-grow:1;flex-basis:0;min-width:0;border-right:1px solid var(--bg-0);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;cursor:pointer;position:relative;transition:filter 0.15s,outline 0.12s;background:var(--bg-2);color:var(--ink);font-family:inherit;padding:0 2px;}
+.seg:last-child{border-right:none;}
+.seg:hover:not(.locked){filter:brightness(1.18);}
+.seg.locked{cursor:default;}
+.seg.picked{outline:2px solid var(--flash);outline-offset:-2px;z-index:2;}
+.seg.correct{outline:2px solid var(--good);outline-offset:-2px;z-index:2;}
+.seg.wrongpick{outline:2px solid var(--bad);outline-offset:-2px;z-index:2;}
+.seg-name{font-family:'JetBrains Mono',monospace;font-size:9px;font-weight:700;letter-spacing:0.02em;text-align:center;line-height:1.15;}
+.seg-ms{font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:700;}
+.chain-scale{display:flex;justify-content:space-between;margin-top:5px;font-family:'JetBrains Mono',monospace;font-size:8px;color:var(--mute);letter-spacing:0.04em;}
+
+/* ---- total latency meter ---- */
+.meter-box{flex-shrink:0;border:1px solid var(--line);border-radius:12px;background:var(--bg-1);padding:12px 16px 14px;box-shadow:var(--sh);}
+.meter-head{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:8px;}
+.meter-lbl{font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:0.14em;color:var(--mute);text-transform:uppercase;}
+.meter-val{font-family:'JetBrains Mono',monospace;font-size:20px;font-weight:700;}
+.meter-val.ok{color:var(--good);}
+.meter-val.over{color:var(--bad);}
+.meter-track{height:14px;background:var(--bg-2);border-radius:7px;position:relative;overflow:visible;border:1px solid var(--line);}
+.meter-fill{position:absolute;left:0;top:0;bottom:0;border-radius:6px;transition:width 0.55s cubic-bezier(.2,.7,.2,1),background 0.3s;}
+.meter-gate{position:absolute;top:-4px;bottom:-4px;width:2px;background:var(--query);border-radius:1px;}
+.meter-gate::after{content:"500ms";position:absolute;top:-13px;left:-13px;font-family:'JetBrains Mono',monospace;font-size:8px;color:var(--query);font-weight:700;white-space:nowrap;}
+.meter-cap{font-family:'JetBrains Mono',monospace;font-size:8px;color:var(--mute);margin-top:6px;letter-spacing:0.05em;}
+
+/* ---- options panel ---- */
+.options{flex:1;display:flex;flex-direction:column;min-height:0;gap:9px;}
+.opt-prompt{font-size:12px;color:var(--ink);line-height:1.5;font-weight:500;}
+.opt-prompt b{color:var(--cs);}
+.opt-grid{display:flex;gap:11px;flex:1;min-height:0;}
+.opt{flex:1;min-width:0;border:1px solid var(--line);border-radius:11px;background:var(--bg-1);padding:12px 13px;cursor:pointer;display:flex;flex-direction:column;gap:6px;transition:border-color 0.18s,transform 0.14s,box-shadow 0.18s;text-align:left;font-family:inherit;color:inherit;appearance:none;-webkit-appearance:none;box-shadow:var(--sh);}
+.opt:hover:not(.disabled){border-color:var(--cs);transform:translate(-2px,-2px);box-shadow:5px 5px 0 var(--bg-0);}
+.opt:active:not(.disabled){transform:translate(0,0);box-shadow:var(--sh);}
+.opt.disabled{opacity:0.4;cursor:not-allowed;}
+.opt-name{font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;color:var(--ink);letter-spacing:0.01em;line-height:1.25;}
+.opt-desc{font-size:10px;color:var(--dim);line-height:1.45;flex:1;}
+.opt-tag{font-family:'JetBrains Mono',monospace;font-size:8.5px;font-weight:700;letter-spacing:0.08em;color:var(--cs);align-self:flex-start;padding:2px 7px;border-radius:5px;background:color-mix(in oklch, var(--cs) 16%, var(--bg-2));}
+
+/* ---- feedback ---- */
+.feedback{flex-shrink:0;min-height:36px;display:flex;align-items:center;gap:11px;padding:9px 14px;background:var(--bg-1);border:1px solid var(--line);border-radius:10px;box-shadow:var(--sh);}
+.fb-tag{font-family:'JetBrains Mono',monospace;font-size:9px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;padding:3px 9px;border-radius:5px;flex-shrink:0;}
+.fb-tag.good{color:var(--good);background:color-mix(in oklch, var(--good) 18%, var(--bg-0));}
+.fb-tag.warn{color:var(--bad);background:color-mix(in oklch, var(--bad) 18%, var(--bg-0));}
+.fb-tag.info{color:var(--cs);background:color-mix(in oklch, var(--cs) 18%, var(--bg-0));}
+.fb-text{font-size:11.5px;color:var(--ink);line-height:1.45;}
+
+/* minecraft silhouette badge */
+.endpoint{position:absolute;right:18px;bottom:14px;display:flex;align-items:center;gap:8px;opacity:0.8;pointer-events:none;z-index:5;}
+.endpoint svg{width:30px;height:30px;flex-shrink:0;}
+.endpoint .ep-txt{font-family:'JetBrains Mono',monospace;font-size:8.5px;color:var(--mute);line-height:1.3;letter-spacing:0.02em;text-align:right;}
+
+/* overlay */
+.overlay{position:absolute;inset:0;background:color-mix(in oklch, var(--bg-0) 94%, transparent);display:none;flex-direction:column;align-items:center;justify-content:center;gap:14px;text-align:center;padding:30px;z-index:30;}
+.overlay.show{display:flex;}
+.ov-mc{width:54px;height:54px;margin-bottom:2px;display:none;}
+.ov-badge{font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:700;letter-spacing:0.16em;text-transform:uppercase;padding:5px 14px;border-radius:6px;}
+.ov-badge.win{color:var(--bg-0);background:var(--good);}
+.ov-badge.lose{color:var(--bad);border:1px solid var(--bad);}
+.ov-title{font-family:'JetBrains Mono',monospace;font-size:24px;font-weight:700;color:var(--ink);letter-spacing:0.01em;}
+.ov-msg{font-size:13px;color:var(--dim);max-width:470px;line-height:1.65;}
+.ov-next{font-size:11.5px;color:var(--cs);font-weight:600;max-width:450px;line-height:1.55;}
+.ov-btn{font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;padding:9px 20px;cursor:pointer;border:1px solid var(--cs);border-radius:7px;background:var(--bg-2);color:var(--cs);letter-spacing:0.08em;}
+.ov-btn:hover{background:var(--cs);color:var(--bg-0);}
+.ov-btn:active{transform:translate(1px,1px);}
+</style>
+</head>
+<body>
+<div class="game-wrap">
+  <!-- ===== SIDEBAR ===== -->
+  <aside class="game-sidebar">
+    <div class="brand">
+      <svg class="mascot" viewBox="0 0 32 32" aria-hidden="true">
+        <!-- Bit — levitating cubic sprite -->
+        <rect x="8" y="8" width="16" height="16" rx="2" fill="none" stroke="var(--cs)" stroke-width="2"/>
+        <rect x="12" y="12" width="3" height="3" fill="var(--cs)"/>
+        <rect x="17" y="12" width="3" height="3" fill="var(--flash)"/>
+        <rect x="12" y="17" width="3" height="3" fill="var(--query)"/>
+        <rect x="17" y="17" width="3" height="3" fill="var(--core)"/>
+      </svg>
+      <div class="brand-txt">
+        <span class="side-title" id="sTitle">延迟侦探</span>
+        <span class="side-sub mono" id="sBit">BIT · CS-01</span>
+      </div>
+    </div>
+    <div class="side-sub" id="sSub">找出最拖时间的那一段 · S4 调优</div>
+    <div class="divider"></div>
+
+    <span class="rm-label" id="rmLabel">项目路线</span>
+    <div class="roadmap" id="roadmap"></div>
+
+    <div class="divider"></div>
+    <span class="rm-label" id="caseLabel">案件进度</span>
+    <div class="case-row" id="caseRow"></div>
+
+    <div class="divider"></div>
+    <span class="rm-label" id="sGuideL">办案手册</span>
+    <div class="guide" id="sGuide">先点延迟链上最拖时间的那一段(诊断瓶颈)，再选对它的处理。砍错段或砍砍不动的段，总延迟还是超 500ms，玩不动 Minecraft。</div>
+
+    <div class="side-spacer"></div>
+    <button class="lang-btn" id="langBtn">EN</button>
+  </aside>
+
+  <!-- ===== MAIN ===== -->
+  <main class="game-main">
+    <div class="main-head">
+      <span class="main-title" id="mTitle">案件 1 / 3</span>
+      <span class="main-q" id="mQ">想到角色动，到方块真的动，要多久？找出最拖时间的那一段。</span>
+    </div>
+    <div class="stage">
+
+      <!-- latency chain -->
+      <div class="chain-box">
+        <div class="chain-head">
+          <span class="chain-lbl" id="chainLbl">延迟链 · 念头到方块</span>
+          <span class="chain-hint" id="chainHint">第 1 步：点最拖时间的那一段</span>
+        </div>
+        <div class="chain" id="chain"></div>
+        <div class="chain-scale">
+          <span id="scaleA">念头</span>
+          <span id="scaleB">方块动</span>
+        </div>
+      </div>
+
+      <!-- total latency meter -->
+      <div class="meter-box">
+        <div class="meter-head">
+          <span class="meter-lbl" id="meterLbl">总延迟 TOTAL LATENCY</span>
+          <span class="meter-val over mono" id="meterVal">0 ms</span>
+        </div>
+        <div class="meter-track"><div class="meter-fill" id="meterFill" style="width:0%"></div><div class="meter-gate" id="meterGate"></div></div>
+        <div class="meter-cap" id="meterCap">绿区 &lt;500ms 才够流畅玩 Minecraft</div>
+      </div>
+
+      <!-- options -->
+      <div class="options">
+        <div class="opt-prompt" id="optPrompt">先在上方延迟链里点出你认为最拖时间的那一段。</div>
+        <div class="opt-grid" id="optGrid"></div>
+      </div>
+
+      <!-- feedback -->
+      <div class="feedback">
+        <span class="fb-tag info" id="fbTag">提示</span>
+        <span class="fb-text" id="fbText">延迟链像证物：每段都有耗时。先抓住最拖时间的嫌疑段，再决定怎么处理它。</span>
+      </div>
+
+      <!-- minecraft endpoint badge -->
+      <div class="endpoint">
+        <svg viewBox="0 0 32 32" aria-hidden="true">
+          <rect x="6" y="9" width="20" height="18" fill="var(--mute)" opacity="0.5"/>
+          <polygon points="6,9 11,4 31,4 26,9" fill="var(--mute)" opacity="0.34"/>
+          <polygon points="26,9 31,4 31,22 26,27" fill="var(--mute)" opacity="0.24"/>
+          <rect x="9" y="12" width="5" height="5" fill="var(--cs)" opacity="0.7"/>
+          <rect x="18" y="12" width="5" height="5" fill="var(--cs)" opacity="0.7"/>
+          <rect x="12" y="21" width="8" height="3" fill="var(--cs)" opacity="0.55"/>
+        </svg>
+        <span class="ep-txt" id="epTxt">终点：脑控 Minecraft<br>S6 用念头放方块</span>
+      </div>
+
+      <!-- overlay -->
+      <div class="overlay" id="overlay">
+        <svg class="ov-mc" id="ovMc" viewBox="0 0 32 32" aria-hidden="true">
+          <rect x="6" y="9" width="20" height="18" fill="var(--good)" opacity="0.85"/>
+          <polygon points="6,9 11,4 31,4 26,9" fill="var(--good)" opacity="0.6"/>
+          <polygon points="26,9 31,4 31,22 26,27" fill="var(--good)" opacity="0.45"/>
+          <rect x="9" y="12" width="5" height="5" fill="var(--bg-0)"/>
+          <rect x="18" y="12" width="5" height="5" fill="var(--bg-0)"/>
+          <rect x="12" y="21" width="8" height="3" fill="var(--bg-0)"/>
+        </svg>
+        <span class="ov-badge" id="ovBadge"></span>
+        <span class="ov-title" id="ovTitle"></span>
+        <span class="ov-msg" id="ovMsg"></span>
+        <span class="ov-next" id="ovNext"></span>
+        <button class="ov-btn" id="ovBtn">RESET</button>
+      </div>
+
+    </div>
+  </main>
+</div>
+
+<script>
+(function(){
+'use strict';
+
+// ---------------------------------------------------------------------------
+// i18n
+// ---------------------------------------------------------------------------
+var I18N = {
+  zh:{
+    sTitle:'延迟侦探', sSub:'找出最拖时间的那一段 · S4 调优',
+    rmLabel:'项目路线',
+    stops:['S1 信号基础','S2 信号清洗','S3 分类与方法','S4 数据采集与调优','S5 训练专属模型','S6 脑控成型'],
+    here:'你在这',
+    caseLabel:'案件进度', sGuideL:'办案手册',
+    sGuide:'先点延迟链上最拖时间的那一段(诊断瓶颈)，再选对它的处理。砍错段或砍砍不动的段，总延迟还是超 500ms，玩不动 Minecraft。',
+    langBtn:'EN',
+    mTitleR:function(i,n){return '案件 '+i+' / '+n;},
+    mQ:'想到角色动，到方块真的动，要多久？找出最拖时间的那一段。',
+    chainLbl:'延迟链 · 念头到方块',
+    hintPick:'第 1 步：点最拖时间的那一段',
+    hintFix:'第 2 步：决定怎么处理这一段',
+    scaleA:'念头', scaleB:'方块动',
+    meterLbl:'总延迟 TOTAL LATENCY', meterCap:'绿区 <500ms 才够流畅玩 Minecraft',
+    promptPick:'先在上方延迟链里点出你认为最拖时间的那一段。',
+    promptFix:function(name){return '你怀疑 <b>'+name+'</b> 是瓶颈。现在决定：对这一段做什么？';},
+    tagGood:'破案', tagWarn:'误判', tagInfo:'提示',
+    fbStart:'延迟链像证物：每段都有耗时。先抓住最拖时间的嫌疑段，再决定怎么处理它。',
+    fbWrongSeg:function(real){return '这段不是最拖时间的。证物上 '+real+' 才是耗时最长的瓶颈——重新看数字。';},
+    fbPicked:function(name,ms){return '锁定嫌疑段 '+name+'（'+ms+'ms，全链最长）。现在选怎么处理它。';},
+    msUnit:'ms',
+    segNames:{phys:'生理传导',acq:'采集硬件',buf:'缓冲窗口',cmp:'解码计算',io:'输出 IO'},
+    win:{badge:'S4 调优', title:'延迟侦探 解锁', msg:'你三次都抓对了瓶颈：盯住最长那一段，能砍的(缓冲窗口/计算)就砍，砍不动的(生理/采集)别瞎动。延迟从拖沓压进了绿区。',
+         next:'砍掉延迟瓶颈，脑控够快能玩了！S4 调优收官——下一步 S5 训练你的专属模型，再到 S6 用念头放方块。', btn:'再办一案'},
+    loseOver:{badge:'延迟超标', title:'还是太慢', msg:function(t){return '总延迟停在 '+t+'ms，超过 500ms 的红线。角色会拖半拍才动，玩不动 Minecraft。回想：你是不是去砍砍不动的段(生理/采集)，放过了真正最长的缓冲/计算？';},
+            next:'延迟没压进绿区就接 Minecraft，方块会慢半拍。先把瓶颈抓准、砍对，再谈 S5。', btn:'重新办案'}
+  },
+  en:{
+    sTitle:'LATENCY DETECTIVE', sSub:'Find the slowest stage · S4 tuning',
+    rmLabel:'PROJECT ROADMAP',
+    stops:['S1 Signal basics','S2 Signal cleaning','S3 Classify & methods','S4 Collect & tune','S5 Train your model','S6 Mind-control build'],
+    here:'YOU ARE HERE',
+    caseLabel:'CASES', sGuideL:'CASE MANUAL',
+    sGuide:'First click the slowest stage on the chain (diagnose the bottleneck), then choose how to treat it. Cut the wrong stage, or one you cannot cut, and total latency stays above 500ms — Minecraft lags.',
+    langBtn:'CN',
+    mTitleR:function(i,n){return 'CASE '+i+' / '+n;},
+    mQ:'From thought to block moving — how long? Find the slowest stage.',
+    chainLbl:'LATENCY CHAIN · THOUGHT TO BLOCK',
+    hintPick:'STEP 1: click the slowest stage',
+    hintFix:'STEP 2: decide how to treat it',
+    scaleA:'thought', scaleB:'block moves',
+    meterLbl:'TOTAL LATENCY', meterCap:'Green zone <500ms is needed for smooth Minecraft',
+    promptPick:'First click the stage you think is slowest on the chain above.',
+    promptFix:function(name){return 'You suspect <b>'+name+'</b> is the bottleneck. Now decide: what do you do to this stage?';},
+    tagGood:'SOLVED', tagWarn:'MISREAD', tagInfo:'INFO',
+    fbStart:'The chain is the evidence: each stage costs time. Lock onto the slowest suspect first, then decide how to treat it.',
+    fbWrongSeg:function(real){return 'That stage is not the slowest. The evidence shows '+real+' is the longest — re-read the numbers.';},
+    fbPicked:function(name,ms){return 'Suspect locked: '+name+' ('+ms+'ms, longest in chain). Now choose how to treat it.';},
+    msUnit:'ms',
+    segNames:{phys:'PHYSIOLOGY',acq:'ACQ HW',buf:'BUFFER WIN',cmp:'DECODE CMP',io:'OUTPUT IO'},
+    win:{badge:'S4 TUNED', title:'LATENCY DETECTIVE UNLOCKED', msg:'Three for three: lock onto the longest stage, cut what is cuttable (buffer window / compute), leave the un-cuttable (physiology / acquisition) alone. Latency dropped from sluggish into the green.',
+         next:'Bottleneck cut — mind-control is fast enough to play! S4 tuning is done. Next S5 trains your personal model, then S6 places blocks by thought.', btn:'NEW CASE'},
+    loseOver:{badge:'LATENCY OVER', title:'STILL TOO SLOW', msg:function(t){return 'Total latency stuck at '+t+'ms, over the 500ms line. The character lags half a beat — Minecraft is unplayable. Did you cut an un-cuttable stage (physiology / acquisition) and ignore the real long buffer / compute?';},
+            next:'Wire Minecraft in before latency hits the green zone and blocks lag. Diagnose and cut the right bottleneck first, then talk S5.', btn:'RETRY CASES'}
+  }
+};
+
+// ---------------------------------------------------------------------------
+// Cases — 3 latency chains. Each: 5 segments, the slowest is the bottleneck.
+// Each treat option: dms (delta total, negative = faster), correctSeg flag.
+// 关键真相: buffer 与 compute 可砍; 生理/采集砍不动(动了无效或更糟).
+// ---------------------------------------------------------------------------
+var SEG_KEYS = ['phys','acq','buf','cmp','io'];
+
+var CASES = [
+  {
+    // case 1: buffer window 380ms is the obvious bottleneck (total 520 > 500)
+    ms:{phys:30, acq:40, buf:380, cmp:50, io:20},
+    bottleneck:'buf',
+    treats:{
+      buf:[
+        {id:'shrink', dms:-300, good:true,
+         nameZH:'减小缓冲窗口', nameEN:'SHRINK BUFFER WINDOW',
+         descZH:'380ms 缓冲是为攒够样本，但窗口太长。缩到 80ms，解码照样能跑。', descEN:'The 380ms buffer waits to collect samples, but it is too long. Cut to 80ms; decoding still runs.',
+         tagZH:'砍得动', tagEN:'CUTTABLE'},
+        {id:'wait', dms:0, good:false,
+         nameZH:'保持不动 等更稳', nameEN:'KEEP IT FOR STABILITY',
+         descZH:'怕缩短窗口影响精度，索性不动。可它就是最大的拖延，留着总延迟下不来。', descEN:'Afraid shrinking hurts accuracy, so leave it. But it is the biggest delay; keep it and total latency stays high.',
+         tagZH:'放过瓶颈', tagEN:'IGNORE'},
+        {id:'double', dms:200, good:false,
+         nameZH:'加长窗口求更准', nameEN:'LENGTHEN FOR ACCURACY',
+         descZH:'觉得攒更多样本更准。延迟反而更长，方块更慢。', descEN:'Think more samples = more accurate. Latency gets worse, blocks lag more.',
+         tagZH:'反向操作', tagEN:'BACKFIRE'}
+      ]
+    }
+  },
+  {
+    // case 2: compute 340ms is bottleneck (heavy model, total 520 > 500). physiology固定.
+    ms:{phys:30, acq:35, buf:90, cmp:340, io:25},
+    bottleneck:'cmp',
+    treats:{
+      cmp:[
+        {id:'light', dms:-280, good:true,
+         nameZH:'换轻量分类器', nameEN:'USE A LIGHTER CLASSIFIER',
+         descZH:'当前模型每帧算 340ms。换更轻的分类器，精度几乎不掉，算到 60ms。', descEN:'Current model takes 340ms/frame. A lighter classifier keeps accuracy, drops to 60ms.',
+         tagZH:'砍得动', tagEN:'CUTTABLE'},
+        {id:'gpu', dms:-30, good:false,
+         nameZH:'只买更贵 CPU', nameEN:'JUST BUY A FASTER CPU',
+         descZH:'硬堆硬件只省一点点，瓶颈是算法本身太重，治标不治本。', descEN:'Throwing hardware shaves only a little; the algorithm itself is too heavy — a band-aid.',
+         tagZH:'治标', tagEN:'WEAK'},
+        {id:'ignore', dms:0, good:false,
+         nameZH:'去优化采集硬件', nameEN:'OPTIMIZE ACQ HARDWARE',
+         descZH:'采集才 35ms，根本不是瓶颈。优化它对总延迟几乎没用。', descEN:'Acquisition is only 35ms — not the bottleneck. Optimizing it barely helps total latency.',
+         tagZH:'砍错段', tagEN:'WRONG STAGE'}
+      ]
+    }
+  },
+  {
+    // case 3: 真正最长是 acq 220ms 但 acq 砍不动 -> 正解是承认它固定, 转去砍次长 buffer
+    // 设计: bottleneck 仍是最长段 acq, 但正确处理是"接受它固定 + 砍能砍的 buffer".
+    ms:{phys:35, acq:220, buf:180, cmp:55, io:25},
+    bottleneck:'acq',
+    treats:{
+      acq:[
+        {id:'accept', dms:-130, good:true,
+         nameZH:'采集固定 转砍缓冲', nameEN:'ACQ IS FIXED — CUT BUFFER',
+         descZH:'采集 220ms 是放大器/采样率的硬件物理下限，砍不动。承认它固定，转去砍能砍的 180ms 缓冲到 50ms。', descEN:'Acquisition 220ms is a hardware floor (amp/sample rate) — un-cuttable. Accept it, then cut the cuttable 180ms buffer to 50ms.',
+         tagZH:'砍不动 转砍', tagEN:'FIXED, PIVOT'},
+        {id:'force', dms:90, good:false,
+         nameZH:'强行调采集 求更快', nameEN:'FORCE ACQ FASTER',
+         descZH:'硬压采样率/通道，信号变脏。重采+丢帧反而让总延迟更糟。', descEN:'Force the sample rate/channels down; signal gets dirty. Re-sampling and dropped frames make total latency worse.',
+         tagZH:'砍不动还硬砍', tagEN:'CANNOT CUT'},
+        {id:'stuck', dms:0, good:false,
+         nameZH:'卡在采集上 不动别处', nameEN:'STUCK ON ACQ, IGNORE REST',
+         descZH:'盯着采集砍不动就放弃，却没注意 180ms 缓冲也很长、且能砍。', descEN:'Give up because acquisition cannot be cut, missing that the 180ms buffer is also long — and cuttable.',
+         tagZH:'放过可砍段', tagEN:'MISS CUTTABLE'}
+      ]
+    }
+  }
+];
+
+var GATE = 500;          // ms threshold
+var SCALE_MAX = 700;     // meter full-scale ms (gate ~71%, room for over-gate states)
+
+// ---------------------------------------------------------------------------
+// State
+// ---------------------------------------------------------------------------
+var lang='zh';
+var HERE_STAGE=3;        // S4 (0-based index 3)
+var stateGame=null;
+
+function caseTotal(c){
+  var t=0; SEG_KEYS.forEach(function(k){ t+=c.ms[k]; }); return t;
+}
+
+function freshState(){
+  return {
+    caseIdx:0,
+    picked:null,        // chosen seg key (suspect)
+    phase:'pick',       // 'pick' | 'fix' | 'done'
+    total:caseTotal(CASES[0]),
+    solved:[false,false,false],
+    over:false, won:false, lost:false
+  };
+}
+
+// ---------------------------------------------------------------------------
+// DOM
+// ---------------------------------------------------------------------------
+var $=function(id){return document.getElementById(id);};
+var els={
+  chain:$('chain'), optGrid:$('optGrid'), optPrompt:$('optPrompt'),
+  roadmap:$('roadmap'), caseRow:$('caseRow'),
+  meterVal:$('meterVal'), meterFill:$('meterFill'),
+  fbTag:$('fbTag'), fbText:$('fbText'),
+  mTitle:$('mTitle'), chainHint:$('chainHint'),
+  overlay:$('overlay'), ovBadge:$('ovBadge'), ovTitle:$('ovTitle'),
+  ovMsg:$('ovMsg'), ovNext:$('ovNext'), ovBtn:$('ovBtn'), ovMc:$('ovMc')
+};
+
+function segColor(key){
+  // map each seg to a palette token (no quiz, just visual identity)
+  var map={phys:'--depth', acq:'--core', buf:'--cs', cmp:'--query', io:'--core'};
+  return 'var('+ (map[key]||'--core') +')';
+}
+
+// ---------------------------------------------------------------------------
+// Roadmap + case pips
+// ---------------------------------------------------------------------------
+function renderRoadmap(){
+  var t=I18N[lang]; els.roadmap.innerHTML='';
+  t.stops.forEach(function(label,i){
+    var step=document.createElement('div');
+    var cls='rm-step';
+    if(i<HERE_STAGE) cls+=' done'; else if(i===HERE_STAGE) cls+=' active';
+    step.className=cls;
+    var here=(i===HERE_STAGE)?'<span class="rm-here">'+t.here+'</span>':'';
+    step.innerHTML='<span class="rm-dot"></span><span class="rm-txt">'+label+'</span>'+here;
+    els.roadmap.appendChild(step);
+  });
+}
+function renderCases(){
+  els.caseRow.innerHTML='';
+  for(var i=0;i<CASES.length;i++){
+    var pip=document.createElement('div');
+    var cls='case-pip';
+    if(stateGame.solved[i]) cls+=' solved';
+    else if(i===stateGame.caseIdx && !stateGame.over) cls+=' active';
+    pip.className=cls;
+    pip.textContent=String(i+1);
+    els.caseRow.appendChild(pip);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Chain render (clickable segments)
+// ---------------------------------------------------------------------------
+function renderChain(){
+  var t=I18N[lang], c=CASES[stateGame.caseIdx];
+  els.chain.innerHTML='';
+  var total=caseTotal(c);
+  SEG_KEYS.forEach(function(key){
+    var ms=c.ms[key];
+    var seg=document.createElement('button');
+    seg.type='button';
+    seg.className='seg';
+    seg.setAttribute('data-seg',key);
+    seg.style.flexGrow=String(Math.max(1, ms));   // width proportional to time
+    seg.style.background='color-mix(in oklch, '+segColor(key)+' 32%, var(--bg-2))';
+    if(stateGame.phase!=='pick') seg.classList.add('locked');
+    if(stateGame.picked===key) seg.classList.add(stateGame.phase==='pick'?'picked':'correct');
+    seg.innerHTML='<span class="seg-name">'+t.segNames[key]+'</span>'+
+                  '<span class="seg-ms mono">'+ms+'</span>';
+    if(stateGame.phase==='pick'){
+      seg.addEventListener('click', function(){ onPickSeg(key); });
+    }
+    els.chain.appendChild(seg);
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Phase 1: pick suspect segment
+// ---------------------------------------------------------------------------
+function onPickSeg(key){
+  if(stateGame.phase!=='pick' || stateGame.over) return;
+  var t=I18N[lang], c=CASES[stateGame.caseIdx];
+  if(key!==c.bottleneck){
+    // misread: highlight wrong, tell which is actually longest, stay in pick phase
+    flashSeg(key,'wrongpick');
+    setFeedback('warn', t.fbWrongSeg(t.segNames[c.bottleneck]));
+    return;
+  }
+  // correct suspect
+  stateGame.picked=key;
+  stateGame.phase='fix';
+  setFeedback('good', t.fbPicked(t.segNames[key], c.ms[key]));
+  els.chainHint.textContent=t.hintFix;
+  els.optPrompt.innerHTML=t.promptFix(t.segNames[key]);
+  renderChain();
+  renderOptions();
+}
+
+function flashSeg(key,cls){
+  var node=els.chain.querySelector('.seg[data-seg="'+key+'"]');
+  if(!node) return;
+  node.classList.add(cls);
+  setTimeout(function(){ if(node) node.classList.remove(cls); }, 700);
+}
+
+// ---------------------------------------------------------------------------
+// Phase 2: choose treatment for the suspect
+// ---------------------------------------------------------------------------
+function renderOptions(){
+  var t=I18N[lang], c=CASES[stateGame.caseIdx];
+  els.optGrid.innerHTML='';
+  if(stateGame.phase==='pick'){
+    els.optGrid.innerHTML='';
+    return;
+  }
+  var treats=c.treats[stateGame.picked];
+  treats.forEach(function(o){
+    var btn=document.createElement('button');
+    btn.type='button';
+    btn.className='opt';
+    btn.setAttribute('data-id',o.id);
+    btn.innerHTML=
+      '<span class="opt-tag mono">'+(lang==='zh'?o.tagZH:o.tagEN)+'</span>'+
+      '<span class="opt-name">'+(lang==='zh'?o.nameZH:o.nameEN)+'</span>'+
+      '<span class="opt-desc">'+(lang==='zh'?o.descZH:o.descEN)+'</span>';
+    btn.addEventListener('click', function(){ onTreat(o); });
+    els.optGrid.appendChild(btn);
+  });
+}
+
+function onTreat(o){
+  if(stateGame.phase!=='fix' || stateGame.over) return;
+  var t=I18N[lang], c=CASES[stateGame.caseIdx];
+  // apply latency delta
+  stateGame.total = Math.max(60, stateGame.total + o.dms);
+  syncMeter();
+
+  if(o.good && stateGame.total < GATE){
+    // case solved
+    stateGame.solved[stateGame.caseIdx]=true;
+    var detail=(lang==='zh')
+      ? '处理 '+t.segNames[stateGame.picked]+'：总延迟降到 '+stateGame.total+'ms，进绿区。'
+      : 'Treated '+t.segNames[stateGame.picked]+': total down to '+stateGame.total+'ms, inside the green zone.';
+    setFeedback('good', detail);
+    stateGame.phase='done';
+    renderChain();
+    renderCases();
+    // advance or win
+    setTimeout(function(){
+      if(stateGame.caseIdx >= CASES.length-1){
+        stateGame.over=true; stateGame.won=true;
+        showOverlay('win', t.win);
+      } else {
+        nextCase();
+      }
+    }, 950);
+  } else {
+    // wrong treatment OR good treatment但 still over -> lose this run
+    var why=(lang==='zh')
+      ? (lang==='zh'?o.descZH:o.descEN)
+      : (lang==='zh'?o.descZH:o.descEN);
+    setFeedback('warn', (lang==='zh'?o.descZH:o.descEN));
+    if(stateGame.total >= GATE){
+      stateGame.over=true; stateGame.lost=true;
+      stateGame.phase='done';
+      renderChain();
+      setTimeout(function(){ showOverlay('lose', t.loseOver, stateGame.total); }, 850);
+    }
+  }
+}
+
+function nextCase(){
+  stateGame.caseIdx += 1;
+  stateGame.picked=null;
+  stateGame.phase='pick';
+  stateGame.total=caseTotal(CASES[stateGame.caseIdx]);
+  refreshHead();
+  syncMeter();
+  renderChain();
+  renderOptions();
+  renderCases();
+  var t=I18N[lang];
+  els.chainHint.textContent=t.hintPick;
+  els.optPrompt.innerHTML=t.promptPick;
+  setFeedback('info', t.fbStart);
+}
+
+// ---------------------------------------------------------------------------
+// HUD
+// ---------------------------------------------------------------------------
+function refreshHead(){
+  var t=I18N[lang];
+  els.mTitle.textContent=t.mTitleR(stateGame.caseIdx+1, CASES.length);
+}
+function syncMeter(){
+  var t=I18N[lang];
+  var pct=Math.min(100, (stateGame.total/SCALE_MAX)*100);
+  els.meterFill.style.width=pct+'%';
+  var ok = stateGame.total < GATE;
+  els.meterFill.style.background = ok ? 'var(--good)' : 'var(--bad)';
+  els.meterVal.textContent = stateGame.total+' '+t.msUnit;
+  els.meterVal.className='meter-val mono '+(ok?'ok':'over');
+  $('meterGate').style.left=Math.min(100,(GATE/SCALE_MAX)*100)+'%';
+}
+function setFeedback(kind,text){
+  var t=I18N[lang];
+  els.fbTag.className='fb-tag '+(kind==='good'?'good':kind==='warn'?'warn':'info');
+  els.fbTag.textContent = kind==='good'?t.tagGood:kind==='warn'?t.tagWarn:t.tagInfo;
+  els.fbText.textContent=text;
+}
+
+// ---------------------------------------------------------------------------
+// Overlay
+// ---------------------------------------------------------------------------
+function showOverlay(kind,cfg,totalVal){
+  els.ovBadge.className='ov-badge '+kind;
+  els.ovBadge.textContent=cfg.badge;
+  els.ovTitle.textContent=cfg.title;
+  els.ovMsg.textContent=(typeof cfg.msg==='function')?cfg.msg(totalVal):cfg.msg;
+  els.ovNext.textContent=cfg.next;
+  els.ovBtn.textContent=cfg.btn;
+  els.ovMc.style.display=(kind==='win')?'block':'none';
+  els.overlay.classList.add('show');
+}
+
+// ---------------------------------------------------------------------------
+// i18n apply
+// ---------------------------------------------------------------------------
+function applyLang(){
+  var t=I18N[lang];
+  document.documentElement.lang=(lang==='zh'?'zh':'en');
+  $('sTitle').textContent=t.sTitle;
+  $('sSub').textContent=t.sSub;
+  $('rmLabel').textContent=t.rmLabel;
+  $('caseLabel').textContent=t.caseLabel;
+  $('sGuideL').textContent=t.sGuideL;
+  $('sGuide').textContent=t.sGuide;
+  $('langBtn').textContent=t.langBtn;
+  $('mQ').textContent=t.mQ;
+  $('chainLbl').textContent=t.chainLbl;
+  $('scaleA').textContent=t.scaleA;
+  $('scaleB').textContent=t.scaleB;
+  $('meterLbl').textContent=t.meterLbl;
+  $('meterCap').textContent=t.meterCap;
+  $('epTxt').innerHTML=t.epTxt;
+  els.chainHint.textContent=(stateGame.phase==='pick')?t.hintPick:t.hintFix;
+  if(stateGame.phase==='pick'){ els.optPrompt.innerHTML=t.promptPick; }
+  else if(stateGame.picked){ els.optPrompt.innerHTML=t.promptFix(t.segNames[stateGame.picked]); }
+  refreshHead();
+  renderRoadmap();
+  renderCases();
+  syncMeter();
+  renderChain();
+  renderOptions();
+  if(stateGame.phase==='pick' && !stateGame.over){ setFeedback('info', t.fbStart); }
+  if(stateGame.over){
+    if(stateGame.won) showOverlay('win', t.win);
+    else if(stateGame.lost) showOverlay('lose', t.loseOver, stateGame.total);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Init
+// ---------------------------------------------------------------------------
+function start(){
+  stateGame=freshState();
+  els.overlay.classList.remove('show');
+  applyLang();
+}
+
+$('langBtn').addEventListener('click', function(){
+  lang=(lang==='zh'?'en':'zh');
+  applyLang();
+});
+$('ovBtn').addEventListener('click', function(){ start(); });
+
+start();
+})();
+</script>
+</body>
+</html>

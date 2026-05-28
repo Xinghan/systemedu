@@ -1,0 +1,766 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>把实时解码封成一个稳定模块 — M50 实时解码模块</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&family=Noto+Sans+SC:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    /* Industrial Atelier — Claude warm cream + coral */
+    --paper:     #FAF9F5;
+    --paper-2:   #F1EDDF;
+    --card:      #FFFFFF;
+    --ink:       #191814;
+    --ink-2:     #2B2924;
+    --sub:       #6B6557;
+    --sub-2:     #9D978A;
+    --border:    #EBE5D6;
+    --border-2:  #D9D1BD;
+    --hairline:  #F2EDE0;
+
+    --primary:       #D97757;
+    --primary-ink:   #9A4A2E;
+    --primary-soft:  #F8EDE5;
+    --primary-line:  #ECCFB8;
+
+    /* domain accent: computing (脑控解码 = 计算领域) */
+    --computing:      #C04E68;
+    --computing-soft: #F4DDE3;
+    --computing-line: #E4B7C2;
+    --computing-ink:  #7A2F44;
+
+    --shadow-sm: 0 1px 2px 0 rgba(25,24,20,.04);
+    --shadow:    0 1px 3px 0 rgba(25,24,20,.06), 0 1px 2px -1px rgba(25,24,20,.04);
+    --shadow-md: 0 4px 8px -2px rgba(25,24,20,.06), 0 2px 4px -2px rgba(25,24,20,.04);
+    --shadow-lg: 0 12px 24px -6px rgba(25,24,20,.1), 0 4px 8px -4px rgba(25,24,20,.05);
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    height:100vh;overflow:hidden;
+    background:var(--paper);
+    color:var(--ink);
+    font-family:'Inter','PingFang SC','Noto Sans SC',system-ui,sans-serif;
+    display:flex;
+    -webkit-font-smoothing:antialiased;
+    text-rendering:optimizeLegibility;
+  }
+  .mono{font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,monospace;}
+
+  /* ---------- Sidebar ---------- */
+  .sidebar{
+    width:200px;flex-shrink:0;height:100vh;
+    background:var(--card);
+    border-right:1px solid var(--border);
+    display:flex;flex-direction:column;
+    padding:20px 16px;gap:14px;
+  }
+  .brand{
+    font-size:13px;font-weight:700;letter-spacing:0.02em;color:var(--ink);
+    padding-bottom:12px;border-bottom:1px solid var(--hairline);
+  }
+  .brand-sub{
+    display:block;margin-top:6px;font-size:11px;font-weight:500;
+    color:var(--sub);letter-spacing:0;
+  }
+
+  /* sidebar 路线图 S1-S6 (项目锚) */
+  .roadmini{display:flex;flex-direction:column;gap:5px;}
+  .roadmini-ttl{
+    font-family:'JetBrains Mono',monospace;font-size:9.5px;font-weight:700;
+    color:var(--sub-2);letter-spacing:0.1em;margin-bottom:2px;
+  }
+  .rm-step{
+    display:flex;align-items:center;gap:8px;
+    font-size:11px;color:var(--sub);
+    padding:3px 6px;border-radius:5px;
+    border:1px solid transparent;
+  }
+  .rm-step .rm-id{
+    font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:700;
+    color:var(--sub-2);width:18px;flex-shrink:0;
+  }
+  .rm-step.done .rm-id{color:var(--sub);}
+  .rm-step.now{
+    background:var(--primary-soft);
+    border-color:var(--primary-line);
+    color:var(--primary-ink);font-weight:600;
+    position:relative;
+  }
+  .rm-step.now .rm-id{color:var(--primary);}
+  .rm-step.now .rm-dot{
+    position:absolute;right:6px;width:8px;height:8px;border-radius:50%;
+    background:var(--primary);
+    box-shadow:0 0 0 3px var(--card);
+    animation:dot-pulse 1.9s ease-in-out infinite;
+  }
+  @keyframes dot-pulse{
+    0%,100%{transform:scale(1);opacity:1;}
+    50%   {transform:scale(1.35);opacity:0.72;}
+  }
+
+  .guide{display:flex;flex-direction:column;gap:8px;margin-top:2px;
+    padding-top:12px;border-top:1px solid var(--hairline);}
+  .guide-li{
+    font-size:11px;line-height:1.5;
+    color:var(--sub);
+    padding:2px 0 2px 10px;
+    border-left:2px solid var(--border-2);
+  }
+  .guide-li.hl{border-left-color:var(--primary);color:var(--ink-2);}
+  .lang-btn{
+    margin-top:auto;
+    font-family:'JetBrains Mono',monospace;
+    font-size:11px;font-weight:600;letter-spacing:0.06em;
+    padding:8px 12px;cursor:pointer;
+    background:var(--card);color:var(--ink);
+    border:1px solid var(--border-2);
+    border-radius:6px;
+    transition:background 120ms ease, border-color 120ms ease;
+  }
+  .lang-btn:hover{background:var(--paper-2);border-color:var(--primary-line);}
+  .lang-btn:active{background:var(--primary-soft);}
+
+  /* ---------- Main ---------- */
+  .main{
+    flex:1;height:100vh;overflow:hidden;
+    display:grid;
+    grid-template-rows: auto 1fr auto;
+    padding:18px 24px;gap:13px;position:relative;
+    background:var(--paper);
+  }
+
+  /* === 顶部标题 === */
+  .header{
+    display:flex;align-items:center;gap:18px;
+    padding:14px 20px;
+    background:var(--card);
+    border:1px solid var(--border);
+    border-radius:10px;
+    box-shadow:var(--shadow-sm);
+    position:relative;overflow:hidden;
+  }
+  .header-badge{
+    flex-shrink:0;
+    width:54px;height:54px;border-radius:10px;
+    background:var(--computing-soft);
+    border:1px solid var(--computing-line);
+    display:flex;align-items:center;justify-content:center;
+    color:var(--computing);
+    box-shadow:var(--shadow-sm);
+  }
+  .header-badge svg{width:30px;height:30px;}
+  .header-text{flex:1;min-width:0;}
+  .header-text .h-title{font-size:21px;font-weight:700;color:var(--ink);letter-spacing:-0.015em;line-height:1.2;}
+  .header-text .h-sub{font-size:12.5px;line-height:1.55;color:var(--sub);margin-top:5px;max-width:680px;}
+  .header-stamp{
+    position:absolute;right:18px;top:50%;transform:translateY(-50%) rotate(-7deg);
+    font-family:'JetBrains Mono',monospace;
+    font-size:9.5px;font-weight:700;letter-spacing:0.1em;
+    color:var(--primary);
+    border:2px solid var(--primary-line);
+    background:var(--primary-soft);
+    padding:5px 9px;border-radius:6px;
+    animation:stamp-pulse 2.8s ease-in-out infinite;
+  }
+  @keyframes stamp-pulse{
+    0%,100%{transform:translateY(-50%) rotate(-7deg) scale(1);box-shadow:0 1px 3px 0 rgba(217,119,87,.16);}
+    50%   {transform:translateY(-50%) rotate(-7deg) scale(1.045);box-shadow:0 4px 12px -2px rgba(217,119,87,.26);}
+  }
+
+  /* === 中部 主体: 左 5 原则 + 右 状态机 === */
+  .body{
+    display:grid;grid-template-columns: 1.05fr 1fr;gap:13px;min-height:0;
+  }
+  .panel{
+    background:var(--card);
+    border:1px solid var(--border);
+    border-radius:10px;
+    box-shadow:var(--shadow-sm);
+    padding:15px 18px 16px;
+    display:flex;flex-direction:column;min-height:0;
+    position:relative;
+  }
+  .panel-head{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:11px;}
+  .panel-head .ttl{font-size:14px;font-weight:700;color:var(--ink);letter-spacing:-0.01em;}
+  .panel-head .tag{
+    font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:600;
+    color:var(--computing-ink);background:var(--computing-soft);
+    padding:2px 7px;border-radius:4px;letter-spacing:0.04em;
+  }
+
+  /* 5 原则 列表 */
+  .api-list{display:flex;flex-direction:column;gap:8px;flex:1;min-height:0;}
+  .api-row{
+    border:1px solid var(--border);
+    border-radius:8px;
+    background:var(--paper);
+    padding:10px 12px;
+    cursor:pointer;outline:none;
+    transition:background 180ms ease, border-color 180ms ease, transform 160ms ease, box-shadow 180ms ease;
+    display:flex;gap:11px;align-items:flex-start;
+  }
+  .api-row:hover, .api-row:focus-visible{
+    background:var(--computing-soft);
+    border-color:var(--computing-line);
+    transform:translateX(2px);
+    box-shadow:var(--shadow);
+  }
+  .api-row.open{
+    background:var(--primary-soft);
+    border-color:var(--primary);
+    box-shadow:var(--shadow-md);
+  }
+  .api-icon{
+    flex-shrink:0;width:30px;height:30px;border-radius:6px;
+    background:var(--card);
+    border:1px solid var(--border);
+    display:flex;align-items:center;justify-content:center;
+    color:var(--sub);
+  }
+  .api-icon svg{width:17px;height:17px;}
+  .api-row:hover .api-icon, .api-row:focus-visible .api-icon{color:var(--computing);border-color:var(--computing-line);}
+  .api-row.open .api-icon{color:var(--primary);border-color:var(--primary-line);background:var(--card);}
+  .api-body{flex:1;min-width:0;}
+  .api-name{
+    font-size:13px;font-weight:600;color:var(--ink);letter-spacing:-0.005em;
+    display:flex;align-items:baseline;gap:8px;
+  }
+  .api-name .sig{font-family:'JetBrains Mono',monospace;font-size:10.5px;font-weight:500;color:var(--sub-2);}
+  .api-row:hover .api-name .sig, .api-row.open .api-name .sig{color:var(--computing-ink);}
+  .api-row.open .api-name .sig{color:var(--primary-ink);}
+  .api-desc{
+    font-size:11.5px;line-height:1.5;color:var(--sub);margin-top:5px;
+    max-height:0;overflow:hidden;opacity:0;
+    transition:max-height 220ms ease, opacity 200ms ease, margin-top 200ms ease;
+  }
+  .api-row:hover .api-desc, .api-row:focus-visible .api-desc, .api-row.open .api-desc{
+    max-height:60px;opacity:1;margin-top:6px;
+  }
+
+  /* 状态机 SVG 区 */
+  .fsm-wrap{flex:1;position:relative;display:flex;flex-direction:column;min-height:0;}
+  .fsm-svg{flex:1;width:100%;min-height:0;}
+  .fsm-node{cursor:pointer;}
+  .fsm-box{
+    transition:fill 180ms ease, stroke 180ms ease;
+  }
+  .fsm-node:hover .fsm-box, .fsm-node:focus-visible .fsm-box{
+    fill:var(--computing-soft);stroke:var(--computing);
+  }
+  .fsm-node.open .fsm-box{ fill:var(--primary-soft);stroke:var(--primary); }
+  .fsm-label{font-family:'JetBrains Mono',monospace;font-weight:700;pointer-events:none;}
+  .fsm-sub{font-family:'Inter','Noto Sans SC',sans-serif;pointer-events:none;}
+  /* running 节点 1 个温和呼吸 (当前活跃态) */
+  .fsm-run-ring{
+    transform-origin:center;transform-box:fill-box;
+    animation:run-breath 2.6s ease-in-out infinite;
+  }
+  @keyframes run-breath{
+    0%,100%{opacity:0.45;}
+    50%    {opacity:0.9;}
+  }
+  .fsm-detail{
+    position:absolute;left:12px;bottom:10px;right:12px;
+    padding:10px 13px;
+    background:var(--card);
+    border:1px solid var(--primary-line);
+    border-radius:8px;
+    box-shadow:var(--shadow-lg);
+    opacity:0;pointer-events:none;
+    transition:opacity 200ms ease;
+    z-index:4;
+  }
+  .fsm-detail.show{opacity:1;}
+  .fsm-detail .fd-name{
+    font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;
+    color:var(--primary);letter-spacing:0.04em;margin-bottom:4px;
+  }
+  .fsm-detail .fd-desc{font-size:11.5px;line-height:1.5;color:var(--ink-2);}
+
+  /* === 底部: 为什么封模块 + S5 衔接 === */
+  .footer{
+    display:grid;grid-template-columns: 1fr 1fr 1fr 1.15fr;gap:12px;
+  }
+  .why{
+    padding:12px 14px;
+    background:var(--card);
+    border:1px solid var(--border);
+    border-radius:8px;
+    box-shadow:var(--shadow-sm);
+    cursor:pointer;outline:none;
+    transition:transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+    display:flex;gap:10px;align-items:flex-start;
+  }
+  .why:hover, .why:focus-visible{border-color:var(--computing-line);box-shadow:var(--shadow);transform:translateY(-2px);}
+  .why .wmark{
+    flex-shrink:0;width:30px;height:30px;border-radius:6px;
+    background:var(--paper-2);border:1px solid var(--border);
+    display:flex;align-items:center;justify-content:center;color:var(--sub);
+  }
+  .why .wmark svg{width:17px;height:17px;}
+  .why:hover .wmark, .why:focus-visible .wmark{background:var(--computing-soft);border-color:var(--computing-line);color:var(--computing);}
+  .why .wtxt{flex:1;min-width:0;}
+  .why .wnum{font-family:'JetBrains Mono',monospace;font-size:9.5px;font-weight:700;color:var(--sub-2);letter-spacing:0.08em;margin-bottom:4px;}
+  .why .wline{font-size:12px;line-height:1.4;color:var(--ink);font-weight:600;}
+  .why .wdesc{font-size:10.5px;line-height:1.45;color:var(--sub);margin-top:4px;}
+
+  /* S5 衔接卡 (项目锚回扣) */
+  .bridge{
+    padding:12px 16px;
+    background:var(--primary-soft);
+    border:1px solid var(--primary-line);
+    border-radius:8px;
+    box-shadow:var(--shadow-sm);
+    display:flex;flex-direction:column;justify-content:center;gap:6px;
+    position:relative;overflow:hidden;
+  }
+  .bridge .b-tag{
+    font-family:'JetBrains Mono',monospace;font-size:9.5px;font-weight:700;
+    color:var(--primary);letter-spacing:0.08em;
+  }
+  .bridge .b-line{font-size:13px;font-weight:700;color:var(--primary-ink);line-height:1.35;letter-spacing:-0.01em;}
+  .bridge .b-sub{font-size:10.5px;line-height:1.45;color:var(--sub);position:relative;z-index:2;max-width:88%;}
+  /* Minecraft 剪影角落 (项目终点暗示) */
+  .mc-silhouette{
+    position:absolute;right:-6px;bottom:-6px;
+    width:62px;height:62px;opacity:0.5;pointer-events:none;
+  }
+</style>
+</head>
+<body>
+  <aside class="sidebar">
+    <div class="brand">
+      <span id="brandMain">BrainCraft EEG</span>
+      <span class="brand-sub" id="brandSub">M50 · 封装实时模块</span>
+    </div>
+
+    <!-- 项目锚: S1-S6 路线图, 高亮 S4 -->
+    <div class="roadmini" aria-label="项目路线 S1 到 S6">
+      <div class="roadmini-ttl mono" id="roadTtl">ROADMAP · S4/6</div>
+      <div class="rm-step done"><span class="rm-id mono">S1</span><span id="rs1">读懂脑电</span></div>
+      <div class="rm-step done"><span class="rm-id mono">S2</span><span id="rs2">采集信号</span></div>
+      <div class="rm-step done"><span class="rm-id mono">S3</span><span id="rs3">训练解码</span></div>
+      <div class="rm-step now"><span class="rm-id mono">S4</span><span id="rs4">封实时模块</span><span class="rm-dot" aria-hidden="true"></span></div>
+      <div class="rm-step"><span class="rm-id mono">S5</span><span id="rs5">接进游戏</span></div>
+      <div class="rm-step"><span class="rm-id mono">S6</span><span id="rs6">脑控通关</span></div>
+    </div>
+
+    <div class="guide">
+      <div class="guide-li hl" id="g1">悬停 5 条接口，看它管什么</div>
+      <div class="guide-li" id="g2">点状态机方块，看进入条件</div>
+      <div class="guide-li" id="g3">珊瑚色 = 你现在在 S4</div>
+    </div>
+    <button class="lang-btn" id="langBtn" type="button">CN / EN</button>
+  </aside>
+
+  <main class="main">
+    <!-- 顶部标题 -->
+    <section class="header">
+      <div class="header-badge" aria-hidden="true">
+        <!-- 抽象模块/积木块 SVG -->
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round">
+          <rect x="3.5" y="6.5" width="17" height="13" rx="1.5"/>
+          <path d="M8 6.5V4.5h3v2M13 6.5V4.5h3v2"/>
+          <path d="M3.5 11h17"/>
+          <circle cx="8" cy="15.5" r="1.1" fill="currentColor" stroke="none"/>
+          <path d="M11 15.5h6"/>
+        </svg>
+      </div>
+      <div class="header-text">
+        <div class="h-title" id="hTitle">把实时解码封成一个稳定模块</div>
+        <div class="h-sub" id="hSub">前面零散的脚本，整理成一个有清晰接口的实时解码模块：喂进脑电，吐出意图。不管谁来调、调多少次，它都稳稳运转。</div>
+      </div>
+      <div class="header-stamp mono" id="hStamp">S4 · CLIMAX</div>
+    </section>
+
+    <!-- 中部主体 -->
+    <section class="body">
+      <!-- 左: API 5 原则 -->
+      <div class="panel">
+        <div class="panel-head">
+          <span class="ttl" id="apiTtl">模块 API 设计 · 5 条接口</span>
+          <span class="tag mono" id="apiTag">RealtimeDecoder</span>
+        </div>
+        <div class="api-list" id="apiList">
+          <div class="api-row" data-api="input" tabindex="0" role="button">
+            <div class="api-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12h11"/><path d="M11 8l4 4-4 4"/><path d="M19 5v14"/></svg>
+            </div>
+            <div class="api-body">
+              <div class="api-name"><span id="apiInputN">输入接口</span><span class="sig mono">feed(samples)</span></div>
+              <div class="api-desc" id="apiInputD">接收一小段脑电样本（一个窗口），是模块唯一的数据入口。调用方只管喂，不用懂里面怎么算。</div>
+            </div>
+          </div>
+          <div class="api-row" data-api="output" tabindex="0" role="button">
+            <div class="api-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M5 5v14"/><path d="M9 12h11"/><path d="M16 8l4 4-4 4"/></svg>
+            </div>
+            <div class="api-body">
+              <div class="api-name"><span id="apiOutputN">输出接口</span><span class="sig mono">predict() -&gt; intent</span></div>
+              <div class="api-desc" id="apiOutputD">吐出一个意图标签加置信度，比如「左 / 右 / 不动 · 0.87」。格式固定，游戏端拿来就能用。</div>
+            </div>
+          </div>
+          <div class="api-row" data-api="calib" tabindex="0" role="button">
+            <div class="api-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"/><path d="M12 4v3M12 17v3M4 12h3M17 12h3"/><circle cx="12" cy="12" r="2"/></svg>
+            </div>
+            <div class="api-body">
+              <div class="api-name"><span id="apiCalibN">校准接口</span><span class="sig mono">calibrate(data)</span></div>
+              <div class="api-desc" id="apiCalibD">每个人脑电不一样。开局先校准，让模块认识「这个人的左和右」，之后才准。</div>
+            </div>
+          </div>
+          <div class="api-row" data-api="error" tabindex="0" role="button">
+            <div class="api-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l9 16H3z"/><path d="M12 9v5"/><circle cx="12" cy="17" r="0.6" fill="currentColor" stroke="none"/></svg>
+            </div>
+            <div class="api-body">
+              <div class="api-name"><span id="apiErrorN">错误处理</span><span class="sig mono">on_error()</span></div>
+              <div class="api-desc" id="apiErrorD">信号断了、电极掉了、数据乱了——模块不崩，而是返回明确错误，让游戏端知道该暂停还是提示。</div>
+            </div>
+          </div>
+          <div class="api-row" data-api="status" tabindex="0" role="button">
+            <div class="api-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/></svg>
+            </div>
+            <div class="api-body">
+              <div class="api-name"><span id="apiStatusN">状态查询</span><span class="sig mono">get_state()</span></div>
+              <div class="api-desc" id="apiStatusD">随时能问模块「你现在在干嘛」——空闲、校准中、运行中还是出错。游戏端据此显示对应界面。</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 右: 状态机 -->
+      <div class="panel">
+        <div class="panel-head">
+          <span class="ttl" id="fsmTtl">运行状态机</span>
+          <span class="tag mono" id="fsmTag">get_state()</span>
+        </div>
+        <div class="fsm-wrap">
+          <svg class="fsm-svg" viewBox="0 0 420 320" preserveAspectRatio="xMidYMid meet" aria-label="状态机: idle calibrating running error">
+            <defs>
+              <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                <path d="M0 1L9 5L0 9z" fill="var(--sub)"/>
+              </marker>
+            </defs>
+
+            <!-- 转移箭头 (画在节点下面) -->
+            <!-- idle -> calibrating -->
+            <path d="M150 58 H205" fill="none" stroke="var(--sub)" stroke-width="1.6" marker-end="url(#arrow)"/>
+            <text class="fsm-sub" x="177" y="49" text-anchor="middle" font-size="10" fill="var(--sub)" id="trCal">校准</text>
+            <!-- calibrating -> running -->
+            <path d="M270 88 V150" fill="none" stroke="var(--sub)" stroke-width="1.6" marker-end="url(#arrow)"/>
+            <text class="fsm-sub" x="297" y="122" text-anchor="middle" font-size="10" fill="var(--sub)" id="trRun">校准完成</text>
+            <!-- running -> idle (停止) -->
+            <path d="M205 180 H150 V88" fill="none" stroke="var(--sub)" stroke-width="1.6" marker-end="url(#arrow)"/>
+            <text class="fsm-sub" x="130" y="138" text-anchor="middle" font-size="10" fill="var(--sub)" id="trStop">停止</text>
+            <!-- running -> error -->
+            <path d="M270 210 V258" fill="none" stroke="var(--computing)" stroke-width="1.6" marker-end="url(#arrow)"/>
+            <text class="fsm-sub" x="312" y="238" text-anchor="middle" font-size="10" fill="var(--computing-ink)" id="trErr">信号异常</text>
+            <!-- error -> idle (重置) -->
+            <path d="M205 288 H95 V58 H145" fill="none" stroke="var(--sub)" stroke-width="1.4" stroke-dasharray="4 3" marker-end="url(#arrow)"/>
+            <text class="fsm-sub" x="86" y="180" text-anchor="middle" font-size="10" fill="var(--sub)" id="trReset">重置</text>
+
+            <!-- running 呼吸光环 (当前活跃态, 1 个温和呼吸) -->
+            <rect class="fsm-run-ring" x="206" y="151" width="128" height="58" rx="11" fill="none" stroke="var(--primary)" stroke-width="2.4"/>
+
+            <!-- 节点: idle -->
+            <g class="fsm-node" data-fsm="idle" tabindex="0" role="button" aria-label="idle 空闲态">
+              <rect class="fsm-box" x="86" y="32" width="64" height="52" rx="9" fill="var(--paper)" stroke="var(--border-2)" stroke-width="1.6"/>
+              <text class="fsm-label" x="118" y="56" text-anchor="middle" font-size="12" fill="var(--ink)" id="nIdle">idle</text>
+              <text class="fsm-sub" x="118" y="71" text-anchor="middle" font-size="9" fill="var(--sub)" id="nIdleZh">空闲</text>
+            </g>
+            <!-- 节点: calibrating -->
+            <g class="fsm-node" data-fsm="calib" tabindex="0" role="button" aria-label="calibrating 校准态">
+              <rect class="fsm-box" x="208" y="32" width="124" height="52" rx="9" fill="var(--paper)" stroke="var(--border-2)" stroke-width="1.6"/>
+              <text class="fsm-label" x="270" y="56" text-anchor="middle" font-size="12" fill="var(--ink)" id="nCal">calibrating</text>
+              <text class="fsm-sub" x="270" y="71" text-anchor="middle" font-size="9" fill="var(--sub)" id="nCalZh">校准中</text>
+            </g>
+            <!-- 节点: running -->
+            <g class="fsm-node open" data-fsm="run" tabindex="0" role="button" aria-label="running 运行态">
+              <rect class="fsm-box" x="210" y="155" width="120" height="50" rx="9" fill="var(--primary-soft)" stroke="var(--primary)" stroke-width="1.8"/>
+              <text class="fsm-label" x="270" y="178" text-anchor="middle" font-size="12" fill="var(--primary-ink)" id="nRun">running</text>
+              <text class="fsm-sub" x="270" y="193" text-anchor="middle" font-size="9" fill="var(--primary)" id="nRunZh">运行中 · 持续出意图</text>
+            </g>
+            <!-- 节点: error -->
+            <g class="fsm-node" data-fsm="err" tabindex="0" role="button" aria-label="error 错误态">
+              <rect class="fsm-box" x="208" y="262" width="124" height="50" rx="9" fill="var(--computing-soft)" stroke="var(--computing-line)" stroke-width="1.6"/>
+              <text class="fsm-label" x="270" y="285" text-anchor="middle" font-size="12" fill="var(--computing-ink)" id="nErr">error</text>
+              <text class="fsm-sub" x="270" y="300" text-anchor="middle" font-size="9" fill="var(--computing-ink)" id="nErrZh">出错 · 安全暂停</text>
+            </g>
+          </svg>
+          <div class="fsm-detail" id="fsmDetail" aria-live="polite">
+            <div class="fd-name mono" id="fdName">running · 运行中</div>
+            <div class="fd-desc" id="fdDesc">校准完成后进入运行：每来一个窗口就 predict 一次，源源不断把意图喂给游戏。</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 底部: 为什么封模块 + S5 衔接 -->
+    <section class="footer">
+      <div class="why" data-why="1" tabindex="0" role="button">
+        <div class="wmark" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="8" height="8" rx="1.5"/><rect x="13" y="13" width="8" height="8" rx="1.5"/><path d="M11 7h6v6"/></svg>
+        </div>
+        <div class="wtxt">
+          <div class="wnum mono">WHY · 01</div>
+          <div class="wline" id="why1">可复用</div>
+          <div class="wdesc" id="why1d">封一次，下个项目、换个游戏直接 import 再用。</div>
+        </div>
+      </div>
+      <div class="why" data-why="2" tabindex="0" role="button">
+        <div class="wmark" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3v5c0 5-3 8-7 10-4-2-7-5-7-10V6z"/><path d="M9 12l2 2 4-4"/></svg>
+        </div>
+        <div class="wtxt">
+          <div class="wnum mono">WHY · 02</div>
+          <div class="wline" id="why2">更稳定</div>
+          <div class="wdesc" id="why2d">接口固定 + 错误兜底，出问题不连累整个游戏。</div>
+        </div>
+      </div>
+      <div class="why" data-why="3" tabindex="0" role="button">
+        <div class="wmark" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M8 7l-4 5 4 5"/><path d="M16 7l4 5-4 5"/><path d="M13 5l-2 14"/></svg>
+        </div>
+        <div class="wtxt">
+          <div class="wnum mono">WHY · 03</div>
+          <div class="wline" id="why3">接游戏方便</div>
+          <div class="wdesc" id="why3d">游戏端只认 5 条接口，不用懂脑电细节。</div>
+        </div>
+      </div>
+
+      <!-- S5 衔接 (项目锚回扣) -->
+      <div class="bridge">
+        <div class="b-tag mono" id="bTag">NEXT · S5</div>
+        <div class="b-line" id="bLine">模块封好，下一步直接接进 Minecraft</div>
+        <div class="b-sub" id="bSub">S5 不再碰脑电细节，只调这 5 条接口，让脑子里的「左 / 右」变成游戏里角色真的走动。</div>
+        <svg class="mc-silhouette" viewBox="0 0 48 48" fill="none" aria-hidden="true">
+          <!-- Minecraft 方块角色剪影 (抽象像素人) -->
+          <rect x="14" y="6" width="20" height="18" rx="1" fill="var(--primary)" opacity="0.55"/>
+          <rect x="16" y="24" width="16" height="14" rx="1" fill="var(--primary)" opacity="0.42"/>
+          <rect x="10" y="24" width="6" height="12" rx="1" fill="var(--primary)" opacity="0.42"/>
+          <rect x="32" y="24" width="6" height="12" rx="1" fill="var(--primary)" opacity="0.42"/>
+          <rect x="18" y="38" width="5" height="6" fill="var(--primary)" opacity="0.5"/>
+          <rect x="25" y="38" width="5" height="6" fill="var(--primary)" opacity="0.5"/>
+          <rect x="19" y="12" width="4" height="4" fill="var(--paper)"/>
+          <rect x="25" y="12" width="4" height="4" fill="var(--paper)"/>
+        </svg>
+      </div>
+    </section>
+  </main>
+
+<script>
+(function(){
+  "use strict";
+
+  var LANG = 'cn';
+
+  var I18N = {
+    brandMain:{cn:'BrainCraft EEG',          en:'BrainCraft EEG'},
+    brandSub: {cn:'M50 · 封装实时模块',       en:'M50 · Pack the Realtime Module'},
+    roadTtl:  {cn:'ROADMAP · S4/6',          en:'ROADMAP · S4/6'},
+    rs1:      {cn:'读懂脑电',                 en:'Read EEG'},
+    rs2:      {cn:'采集信号',                 en:'Capture'},
+    rs3:      {cn:'训练解码',                 en:'Train Decode'},
+    rs4:      {cn:'封实时模块',               en:'Pack Module'},
+    rs5:      {cn:'接进游戏',                 en:'Wire to Game'},
+    rs6:      {cn:'脑控通关',                 en:'Brain Control'},
+    g1:       {cn:'悬停 5 条接口，看它管什么', en:'Hover the 5 APIs to see what each does'},
+    g2:       {cn:'点状态机方块，看进入条件',   en:'Click a state box to see its entry rule'},
+    g3:       {cn:'珊瑚色 = 你现在在 S4',      en:'Coral = you are at S4 now'},
+    hTitle:   {cn:'把实时解码封成一个稳定模块', en:'Pack Realtime Decoding into a Stable Module'},
+    hSub:     {cn:'前面零散的脚本，整理成一个有清晰接口的实时解码模块：喂进脑电，吐出意图。不管谁来调、调多少次，它都稳稳运转。',
+               en:'Turn scattered scripts into one realtime decoder with a clean interface: feed in EEG, get out intent — stable no matter who calls it, or how often.'},
+    hStamp:   {cn:'S4 · CLIMAX',             en:'S4 · CLIMAX'},
+    apiTtl:   {cn:'模块 API 设计 · 5 条接口',  en:'Module API · 5 Interfaces'},
+    apiTag:   {cn:'RealtimeDecoder',         en:'RealtimeDecoder'},
+    apiInputN:{cn:'输入接口',                 en:'Input'},
+    apiInputD:{cn:'接收一小段脑电样本（一个窗口），是模块唯一的数据入口。调用方只管喂，不用懂里面怎么算。',
+               en:'Receives a short EEG window — the module’s only data entry. Callers just feed; they need not know the math inside.'},
+    apiOutputN:{cn:'输出接口',                en:'Output'},
+    apiOutputD:{cn:'吐出一个意图标签加置信度，比如「左 / 右 / 不动 · 0.87」。格式固定，游戏端拿来就能用。',
+               en:'Emits an intent label plus confidence, e.g. "left / right / idle · 0.87". Fixed format, ready for the game side.'},
+    apiCalibN:{cn:'校准接口',                 en:'Calibration'},
+    apiCalibD:{cn:'每个人脑电不一样。开局先校准，让模块认识「这个人的左和右」，之后才准。',
+               en:'Everyone’s EEG differs. Calibrate first so the module learns this person’s "left and right" before it can be accurate.'},
+    apiErrorN:{cn:'错误处理',                 en:'Error Handling'},
+    apiErrorD:{cn:'信号断了、电极掉了、数据乱了——模块不崩，而是返回明确错误，让游戏端知道该暂停还是提示。',
+               en:'Signal drops, an electrode falls off, data gets noisy — the module never crashes; it returns a clear error so the game can pause or warn.'},
+    apiStatusN:{cn:'状态查询',                en:'Status Query'},
+    apiStatusD:{cn:'随时能问模块「你现在在干嘛」——空闲、校准中、运行中还是出错。游戏端据此显示对应界面。',
+               en:'Ask the module "what are you doing now" anytime — idle, calibrating, running or error. The game shows the matching UI.'},
+    fsmTtl:   {cn:'运行状态机',               en:'Runtime State Machine'},
+    fsmTag:   {cn:'get_state()',             en:'get_state()'},
+    trCal:    {cn:'校准',                     en:'calibrate'},
+    trRun:    {cn:'校准完成',                 en:'calibrated'},
+    trStop:   {cn:'停止',                     en:'stop'},
+    trErr:    {cn:'信号异常',                 en:'signal fault'},
+    trReset:  {cn:'重置',                     en:'reset'},
+    nIdleZh:  {cn:'空闲',                     en:'idle'},
+    nCalZh:   {cn:'校准中',                   en:'calibrating'},
+    nRunZh:   {cn:'运行中 · 持续出意图',       en:'running · streaming intent'},
+    nErrZh:   {cn:'出错 · 安全暂停',           en:'error · safe pause'},
+    why1:     {cn:'可复用',                   en:'Reusable'},
+    why1d:    {cn:'封一次，下个项目、换个游戏直接 import 再用。',
+               en:'Pack once; the next project or game just imports and reuses it.'},
+    why2:     {cn:'更稳定',                   en:'More Stable'},
+    why2d:    {cn:'接口固定 + 错误兜底，出问题不连累整个游戏。',
+               en:'Fixed interface plus error fallback — a fault never drags down the whole game.'},
+    why3:     {cn:'接游戏方便',               en:'Easy to Wire'},
+    why3d:    {cn:'游戏端只认 5 条接口，不用懂脑电细节。',
+               en:'The game side only knows the 5 APIs, not any EEG detail.'},
+    bTag:     {cn:'NEXT · S5',               en:'NEXT · S5'},
+    bLine:    {cn:'模块封好，下一步直接接进 Minecraft',
+               en:'Module packed — next we wire it straight into Minecraft'},
+    bSub:     {cn:'S5 不再碰脑电细节，只调这 5 条接口，让脑子里的「左 / 右」变成游戏里角色真的走动。',
+               en:'S5 touches no EEG detail — just calls these 5 APIs so "left / right" in your head becomes a character actually moving in-game.'},
+    langBtn:  {cn:'CN / EN',                  en:'EN / CN'}
+  };
+
+  // 状态机详情 (hover/click 弹出)
+  var FSM = {
+    idle: {
+      name:{cn:'idle · 空闲', en:'idle · standby'},
+      desc:{cn:'模块刚启动或被停止：不吃数据、不出意图，等待校准开始。',
+            en:'Just started or stopped: takes no data, emits no intent, waiting for calibration.'}
+    },
+    calib:{
+      name:{cn:'calibrating · 校准中', en:'calibrating'},
+      desc:{cn:'收集这个人「左 / 右 / 不动」的样本，学会他的脑电模式。校够了才放行到运行。',
+            en:'Collects this person’s left/right/idle samples to learn their EEG pattern. Only then move to running.'}
+    },
+    run:  {
+      name:{cn:'running · 运行中', en:'running'},
+      desc:{cn:'校准完成后进入运行：每来一个窗口就 predict 一次，源源不断把意图喂给游戏。',
+            en:'After calibration: predict once per window, streaming intent to the game nonstop.'}
+    },
+    err:  {
+      name:{cn:'error · 出错', en:'error'},
+      desc:{cn:'检测到信号异常（电极掉、断流），立刻安全暂停并报错，等重置后回到空闲。',
+            en:'Detects a signal fault (electrode off, stream lost), safely pauses and reports; reset returns to idle.'}
+    }
+  };
+
+  function $(id){return document.getElementById(id);}
+  function $$(sel){return document.querySelectorAll(sel);}
+
+  function applyText(key, el){
+    if(!el || !I18N[key]) return;
+    var v = I18N[key][LANG];
+    if(v != null) el.textContent = v;
+  }
+
+  var TEXT_KEYS = ['brandMain','brandSub','roadTtl','rs1','rs2','rs3','rs4','rs5','rs6',
+    'g1','g2','g3','hTitle','hSub','hStamp','apiTtl','apiTag',
+    'apiInputN','apiInputD','apiOutputN','apiOutputD','apiCalibN','apiCalibD',
+    'apiErrorN','apiErrorD','apiStatusN','apiStatusD',
+    'fsmTtl','fsmTag','trCal','trRun','trStop','trErr','trReset',
+    'nIdleZh','nCalZh','nRunZh','nErrZh',
+    'why1','why1d','why2','why2d','why3','why3d','bTag','bLine','bSub'];
+
+  function applyLang(){
+    TEXT_KEYS.forEach(function(k){ applyText(k, $(k)); });
+    $('langBtn').textContent = I18N.langBtn[LANG];
+    // 若状态机详情正显示, 同步语言
+    var openNode = document.querySelector('.fsm-node.open');
+    if(openNode) renderFsm(openNode.getAttribute('data-fsm'), true);
+  }
+
+  // ---- 5 接口 hover/click ----
+  var apiEls = $$('.api-row');
+  var apiPinned = null;
+  apiEls.forEach(function(el){
+    var k = el.getAttribute('data-api');
+    el.addEventListener('click', function(ev){
+      ev.stopPropagation();
+      if(apiPinned === k){
+        apiPinned = null; el.classList.remove('open');
+      } else {
+        apiEls.forEach(function(e){e.classList.remove('open');});
+        el.classList.add('open'); apiPinned = k;
+      }
+    });
+    el.addEventListener('keydown', function(ev){
+      if(ev.key === 'Enter' || ev.key === ' '){ ev.preventDefault(); el.click(); }
+    });
+  });
+
+  // ---- 状态机 hover/click ----
+  var fsmEls = $$('.fsm-node');
+  var fsmPinned = null;
+
+  function renderFsm(key, keepShown){
+    var s = FSM[key];
+    if(!s) return;
+    $('fdName').textContent = s.name[LANG];
+    $('fdDesc').textContent = s.desc[LANG];
+    if(keepShown) $('fsmDetail').classList.add('show');
+  }
+  function showFsm(key){ renderFsm(key, false); $('fsmDetail').classList.add('show'); }
+  function hideFsm(){ $('fsmDetail').classList.remove('show'); }
+
+  fsmEls.forEach(function(el){
+    var k = el.getAttribute('data-fsm');
+    el.addEventListener('mouseenter', function(){ if(fsmPinned) return; el.classList.add('open'); showFsm(k); });
+    el.addEventListener('mouseleave', function(){
+      if(fsmPinned) return;
+      if(k !== 'run') el.classList.remove('open');  // running 是默认活跃态, 保持高亮
+      else { /* 保留 run 默认 open */ }
+      // 非 pinned 时鼠标移开收起详情 (但 run 默认态保留 open class)
+      hideFsm();
+      // 默认让 run 维持 open
+      var defaultRun = document.querySelector('.fsm-node[data-fsm="run"]');
+      if(defaultRun) defaultRun.classList.add('open');
+      fsmEls.forEach(function(e){ if(e.getAttribute('data-fsm') !== 'run') e.classList.remove('open'); });
+    });
+    el.addEventListener('focus', function(){ if(fsmPinned) return; el.classList.add('open'); showFsm(k); });
+    el.addEventListener('blur', function(){ if(fsmPinned) return; hideFsm(); });
+    el.addEventListener('click', function(ev){
+      ev.stopPropagation();
+      if(fsmPinned === k){
+        fsmPinned = null;
+        hideFsm();
+        fsmEls.forEach(function(e){ if(e.getAttribute('data-fsm') !== 'run') e.classList.remove('open'); });
+      } else {
+        fsmEls.forEach(function(e){e.classList.remove('open');});
+        el.classList.add('open'); fsmPinned = k; showFsm(k);
+      }
+    });
+    el.addEventListener('keydown', function(ev){
+      if(ev.key === 'Enter' || ev.key === ' '){ ev.preventDefault(); el.click(); }
+    });
+  });
+
+  // ---- 为什么卡 tap 反馈 ----
+  $$('.why').forEach(function(w){
+    w.addEventListener('keydown', function(ev){
+      if(ev.key === 'Enter' || ev.key === ' '){ ev.preventDefault(); }
+    });
+  });
+
+  // ---- 点空白取消所有 pin ----
+  document.addEventListener('click', function(){
+    if(apiPinned){ apiPinned = null; apiEls.forEach(function(e){e.classList.remove('open');}); }
+    if(fsmPinned){
+      fsmPinned = null; hideFsm();
+      fsmEls.forEach(function(e){ if(e.getAttribute('data-fsm') !== 'run') e.classList.remove('open'); });
+    }
+  });
+
+  // ---- 语言切换 ----
+  $('langBtn').addEventListener('click', function(ev){
+    ev.stopPropagation();
+    LANG = (LANG === 'cn') ? 'en' : 'cn';
+    applyLang();
+  });
+
+  applyLang();
+})();
+</script>
+</body>
+</html>

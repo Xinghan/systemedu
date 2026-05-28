@@ -1,0 +1,848 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<script>window.__systemedu_resize_patch_optout=true;</script>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Inter:wght@400;500;600&family=Noto+Sans+SC:wght@400;500;700&display=swap" rel="stylesheet">
+<title>稳定性验证师 · Stability Verifier</title>
+<style>
+:root{
+  --paper:#FAF9F5;
+  --card:#FFFFFF;
+  --primary:#C04E68;          /* computing coral accent */
+  --primary-soft:#F4DCE2;
+  --ink:#2B2622;
+  --dim:#6E665E;
+  --mute:#A39A8E;
+  --line:#E6E0D6;
+  --line-2:#D8D0C3;
+  --good:#3E7C5A;             /* pass-day green */
+  --good-soft:#E2EFE7;
+  --bad:#C0432E;              /* fail-day / risk red */
+  --bad-soft:#F6E0DA;
+  --warn:#B8923A;            /* luck / uncertain amber */
+  --warn-soft:#F3E9D2;
+  --shadow:0 2px 8px rgba(43,38,34,0.06), 0 1px 2px rgba(43,38,34,0.05);
+  --shadow-h:0 6px 18px rgba(43,38,34,0.10), 0 2px 4px rgba(43,38,34,0.06);
+}
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;}
+html,body{width:100%;height:100vh;overflow:hidden;background:var(--paper);color:var(--ink);font-family:'Inter','Noto Sans SC',sans-serif;}
+.mono{font-family:'JetBrains Mono',monospace;}
+.game-wrap{display:flex;flex-direction:row;height:100vh;overflow:hidden;}
+
+/* ---------- sidebar ---------- */
+.game-sidebar{width:200px;min-width:200px;max-width:200px;display:flex;flex-direction:column;gap:10px;padding:14px 13px 12px;background:var(--card);border-right:1px solid var(--line);overflow-y:auto;}
+.side-title{font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:700;color:var(--primary);letter-spacing:0.04em;}
+.side-sub{font-size:10.5px;color:var(--dim);line-height:1.5;}
+.divider{height:1px;background:var(--line);margin:1px 0;}
+
+/* roadmap */
+.rm-label{font-family:'JetBrains Mono',monospace;font-size:8px;letter-spacing:0.16em;color:var(--mute);text-transform:uppercase;}
+.roadmap{display:flex;flex-direction:column;gap:0;margin-top:3px;}
+.rm-step{display:flex;align-items:center;gap:8px;padding:3px 0;position:relative;}
+.rm-dot{width:9px;height:9px;border-radius:50%;border:1.5px solid var(--line-2);background:var(--card);flex-shrink:0;z-index:1;}
+.rm-step.done .rm-dot{background:var(--good);border-color:var(--good);}
+.rm-step.active .rm-dot{background:var(--primary);border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-soft);}
+.rm-step:not(:last-child)::before{content:"";position:absolute;left:4px;top:13px;width:1.5px;height:14px;background:var(--line-2);}
+.rm-step.done:not(:last-child)::before{background:var(--good);}
+.rm-txt{font-size:10px;color:var(--mute);line-height:1.2;}
+.rm-step.done .rm-txt{color:var(--dim);}
+.rm-step.active .rm-txt{color:var(--primary);font-weight:700;}
+.rm-here{font-family:'JetBrains Mono',monospace;font-size:7.5px;font-weight:700;color:var(--primary);letter-spacing:0.1em;margin-left:auto;}
+
+/* design summary */
+.dsum{display:flex;flex-direction:column;gap:5px;}
+.dsum-row{display:flex;align-items:baseline;justify-content:space-between;gap:6px;}
+.dsum-k{font-family:'JetBrains Mono',monospace;font-size:8px;letter-spacing:0.12em;color:var(--mute);text-transform:uppercase;}
+.dsum-v{font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;color:var(--ink);}
+.rigor-track{height:6px;background:var(--line);border-radius:3px;position:relative;overflow:hidden;margin-top:1px;}
+.rigor-fill{position:absolute;left:0;top:0;bottom:0;border-radius:3px;width:0%;transition:width 0.4s cubic-bezier(.2,.7,.2,1);background:var(--warn);}
+.rigor-fill.ok{background:var(--good);}
+
+.guide{font-size:10px;color:var(--dim);line-height:1.55;}
+.side-spacer{flex:1;}
+.lang-btn{align-self:flex-start;font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:700;padding:5px 12px;cursor:pointer;border:1px solid var(--line-2);border-radius:6px;background:var(--card);color:var(--primary);letter-spacing:0.12em;}
+.lang-btn:hover{border-color:var(--primary);background:var(--primary-soft);}
+.lang-btn:active{transform:translateY(1px);}
+
+/* ---------- main ---------- */
+.game-main{flex:1;display:flex;flex-direction:column;min-width:0;position:relative;}
+.main-head{display:flex;align-items:baseline;gap:14px;padding:14px 24px 4px;flex-shrink:0;flex-wrap:wrap;}
+.main-title{font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:700;color:var(--primary);letter-spacing:0.04em;}
+.main-q{font-size:12px;color:var(--dim);font-style:italic;}
+.stage{flex:1;display:flex;flex-direction:column;min-height:0;padding:6px 24px 18px;gap:11px;}
+
+/* design panel: three knob-groups (discrete choices, NOT sliders) */
+.design{display:flex;gap:11px;flex-shrink:0;flex-wrap:wrap;}
+.dgroup{flex:1;min-width:180px;border:1px solid var(--line);border-radius:11px;background:var(--card);padding:10px 12px;display:flex;flex-direction:column;gap:7px;box-shadow:var(--shadow);}
+.dgroup-h{display:flex;flex-direction:column;gap:1px;}
+.dgroup-t{font-family:'JetBrains Mono',monospace;font-size:10.5px;font-weight:700;color:var(--ink);letter-spacing:0.02em;}
+.dgroup-q{font-size:9.5px;color:var(--mute);line-height:1.35;}
+.opts{display:flex;gap:6px;flex-wrap:wrap;}
+.opt{flex:1;min-width:48px;font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:700;padding:7px 4px;cursor:pointer;border:1px solid var(--line-2);border-radius:7px;background:var(--paper);color:var(--dim);text-align:center;line-height:1.25;transition:border-color 0.15s,background 0.15s,color 0.15s;appearance:none;-webkit-appearance:none;font-family:'JetBrains Mono',monospace;}
+.opt small{display:block;font-size:7.5px;font-weight:500;color:var(--mute);letter-spacing:0.02em;margin-top:2px;}
+.opt:hover:not(.sel){border-color:var(--primary);color:var(--primary);}
+.opt.sel{border-color:var(--primary);background:var(--primary);color:var(--card);}
+.opt.sel small{color:rgba(255,255,255,0.85);}
+
+/* run row */
+.run-row{display:flex;align-items:center;gap:12px;flex-shrink:0;}
+.run-btn{font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:700;padding:10px 22px;cursor:pointer;border:1px solid var(--primary);border-radius:8px;background:var(--primary);color:var(--card);letter-spacing:0.06em;}
+.run-btn:hover{filter:brightness(1.06);}
+.run-btn:active{transform:translateY(1px);}
+.run-btn:disabled{opacity:0.5;cursor:not-allowed;}
+.run-cost{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--dim);line-height:1.4;}
+.run-cost b{color:var(--primary);}
+
+/* results chart */
+.chart-box{flex:1;display:flex;flex-direction:column;min-height:0;border:1px solid var(--line);border-radius:12px;background:var(--card);position:relative;box-shadow:var(--shadow);overflow:hidden;}
+.chart-box canvas{width:100%!important;height:100%!important;display:block;}
+.chart-legend{position:absolute;top:10px;right:14px;display:flex;gap:14px;font-family:'JetBrains Mono',monospace;font-size:10px;}
+.lg{display:flex;align-items:center;gap:5px;color:var(--dim);}
+.lg .sw{width:13px;height:13px;border-radius:3px;}
+.lg.pass .sw{background:var(--good);}
+.lg.fail .sw{background:var(--bad);}
+.lg.goal .sw{background:transparent;border-radius:0;height:0;width:15px;border-top:2px dashed var(--primary);}
+
+/* minecraft silhouette + endpoint badge (corner) */
+.endpoint{position:absolute;left:14px;bottom:12px;display:flex;align-items:center;gap:8px;opacity:0.8;pointer-events:none;}
+.endpoint svg{width:30px;height:30px;flex-shrink:0;}
+.endpoint .ep-txt{font-family:'JetBrains Mono',monospace;font-size:8.5px;color:var(--mute);line-height:1.3;letter-spacing:0.02em;}
+
+/* placeholder before first run */
+.empty{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;text-align:center;padding:24px;pointer-events:none;}
+.empty.hide{display:none;}
+.empty-t{font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:700;color:var(--mute);letter-spacing:0.02em;}
+.empty-m{font-size:11px;color:var(--mute);max-width:380px;line-height:1.6;}
+
+/* verdict feedback */
+.feedback{min-height:34px;display:flex;align-items:center;gap:11px;padding:8px 13px;background:var(--card);border:1px solid var(--line);border-radius:10px;box-shadow:var(--shadow);flex-shrink:0;}
+.fb-tag{font-family:'JetBrains Mono',monospace;font-size:9.5px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;padding:3px 9px;border-radius:5px;flex-shrink:0;}
+.fb-tag.good{color:var(--good);background:var(--good-soft);}
+.fb-tag.warn{color:var(--warn);background:var(--warn-soft);}
+.fb-tag.bad{color:var(--bad);background:var(--bad-soft);}
+.fb-tag.info{color:var(--primary);background:var(--primary-soft);}
+.fb-text{font-size:12px;color:var(--ink);line-height:1.45;}
+
+/* overlay */
+.overlay{position:absolute;inset:0;background:rgba(250,249,245,0.94);display:none;flex-direction:column;align-items:center;justify-content:center;gap:13px;text-align:center;padding:28px;z-index:30;}
+.overlay.show{display:flex;}
+.ov-mc{width:52px;height:52px;margin-bottom:2px;}
+.ov-badge{font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:700;letter-spacing:0.16em;text-transform:uppercase;padding:5px 14px;border-radius:6px;}
+.ov-badge.win{color:var(--card);background:var(--good);}
+.ov-badge.lose{color:var(--bad);border:1px solid var(--bad);}
+.ov-title{font-family:'JetBrains Mono',monospace;font-size:22px;font-weight:700;color:var(--ink);letter-spacing:0.01em;}
+.ov-msg{font-size:13px;color:var(--dim);max-width:480px;line-height:1.65;}
+.ov-next{font-size:11.5px;color:var(--primary);font-weight:600;max-width:450px;line-height:1.55;}
+.ov-btn{font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;padding:9px 20px;cursor:pointer;border:1px solid var(--primary);border-radius:7px;background:var(--card);color:var(--primary);letter-spacing:0.08em;}
+.ov-btn:hover{background:var(--primary);color:var(--card);}
+.ov-btn:active{transform:translateY(1px);}
+</style>
+</head>
+<body>
+<div class="game-wrap">
+  <!-- ===== SIDEBAR ===== -->
+  <aside class="game-sidebar">
+    <div class="side-title" id="sTitle">稳定性验证师</div>
+    <div class="side-sub" id="sSub">过一次 70% 是运气还是真稳？设计反复测验证 · S4 收官</div>
+    <div class="divider"></div>
+
+    <span class="rm-label" id="rmLabel">项目路线</span>
+    <div class="roadmap" id="roadmap"></div>
+
+    <div class="divider"></div>
+
+    <span class="rm-label" id="dsumL">验证方案</span>
+    <div class="dsum">
+      <div class="dsum-row"><span class="dsum-k" id="dkDays">DAYS</span><span class="dsum-v mono" id="dvDays">-</span></div>
+      <div class="dsum-row"><span class="dsum-k" id="dkTrials">TRIALS/DAY</span><span class="dsum-v mono" id="dvTrials">-</span></div>
+      <div class="dsum-row"><span class="dsum-k" id="dkCrit">CRITERION</span><span class="dsum-v mono" id="dvCrit">-</span></div>
+      <div class="dsum-row"><span class="dsum-k" id="dkRigor">RIGOR</span><span class="dsum-v mono" id="dvRigor">0%</span></div>
+      <div class="rigor-track"><div class="rigor-fill" id="rigorFill"></div></div>
+    </div>
+
+    <div class="divider"></div>
+    <span class="rm-label" id="sGuideL">怎么玩</span>
+    <div class="guide" id="sGuide">你是稳定性验证师。配置左下方案：测几天、每天多少 trial、用什么判据。然后点「跑验证」。系统会模拟逐天真实波动——单天结果可能是运气，多天 + 严格判据才能证明真稳定。</div>
+
+    <div class="side-spacer"></div>
+    <button class="lang-btn" id="langBtn">EN</button>
+  </aside>
+
+  <!-- ===== MAIN ===== -->
+  <main class="game-main">
+    <div class="main-head">
+      <span class="main-title" id="mTitle">稳定性验证 · 设计实验</span>
+      <span class="main-q" id="mQ">过一次 70% 是运气还是真稳？设计一套验证方案来证明它。</span>
+    </div>
+    <div class="stage">
+
+      <!-- design panel: discrete choices, NOT sliders -->
+      <div class="design" id="design">
+        <div class="dgroup">
+          <div class="dgroup-h">
+            <span class="dgroup-t" id="g1t">测几天</span>
+            <span class="dgroup-q" id="g1q">脑电每天状态都不同，多天才能排除运气。</span>
+          </div>
+          <div class="opts" id="optsDays"></div>
+        </div>
+        <div class="dgroup">
+          <div class="dgroup-h">
+            <span class="dgroup-t" id="g2t">每天多少 trial</span>
+            <span class="dgroup-q" id="g2q">trial 太少，单天准确率本身就不可信。</span>
+          </div>
+          <div class="opts" id="optsTrials"></div>
+        </div>
+        <div class="dgroup">
+          <div class="dgroup-h">
+            <span class="dgroup-t" id="g3t">过线判据</span>
+            <span class="dgroup-q" id="g3q">用什么标准算「真稳」？越严越能排除运气。</span>
+          </div>
+          <div class="opts" id="optsCrit"></div>
+        </div>
+      </div>
+
+      <div class="run-row">
+        <button class="run-btn" id="runBtn" type="button">跑验证</button>
+        <span class="run-cost" id="runCost"></span>
+      </div>
+
+      <div class="chart-box">
+        <canvas id="bars"></canvas>
+        <div class="chart-legend">
+          <span class="lg pass"><span class="sw"></span><span id="lgPass">达标天</span></span>
+          <span class="lg fail"><span class="sw"></span><span id="lgFail">不达标</span></span>
+          <span class="lg goal"><span class="sw"></span><span id="lgGoal">70% 线</span></span>
+        </div>
+        <div class="empty" id="empty">
+          <span class="empty-t" id="emptyT">尚未验证</span>
+          <span class="empty-m" id="emptyM">配置上方的验证方案，再点「跑验证」。系统会逐天采样真实波动的准确率，并给出置信区间与判定。</span>
+        </div>
+        <div class="endpoint">
+          <svg viewBox="0 0 32 32" aria-hidden="true">
+            <!-- minecraft block silhouette -->
+            <rect x="6" y="9" width="20" height="18" fill="var(--mute)" opacity="0.55"/>
+            <polygon points="6,9 11,4 31,4 26,9" fill="var(--mute)" opacity="0.38"/>
+            <polygon points="26,9 31,4 31,22 26,27" fill="var(--mute)" opacity="0.28"/>
+            <rect x="9" y="12" width="5" height="5" fill="var(--paper)" opacity="0.9"/>
+            <rect x="18" y="12" width="5" height="5" fill="var(--paper)" opacity="0.9"/>
+            <rect x="12" y="21" width="8" height="3" fill="var(--paper)" opacity="0.7"/>
+          </svg>
+          <span class="ep-txt" id="epTxt">终点：脑控 Minecraft<br>S6 用念头放置方块</span>
+        </div>
+        <div class="overlay" id="overlay">
+          <svg class="ov-mc" id="ovMc" viewBox="0 0 32 32" style="display:none" aria-hidden="true">
+            <rect x="6" y="9" width="20" height="18" fill="var(--good)" opacity="0.85"/>
+            <polygon points="6,9 11,4 31,4 26,9" fill="var(--good)" opacity="0.6"/>
+            <polygon points="26,9 31,4 31,22 26,27" fill="var(--good)" opacity="0.45"/>
+            <rect x="9" y="12" width="5" height="5" fill="var(--card)"/>
+            <rect x="18" y="12" width="5" height="5" fill="var(--card)"/>
+            <rect x="12" y="21" width="8" height="3" fill="var(--card)"/>
+          </svg>
+          <span class="ov-badge" id="ovBadge"></span>
+          <span class="ov-title" id="ovTitle"></span>
+          <span class="ov-msg" id="ovMsg"></span>
+          <span class="ov-next" id="ovNext"></span>
+          <button class="ov-btn" id="ovBtn" type="button">RESET</button>
+        </div>
+      </div>
+
+      <div class="feedback">
+        <span class="fb-tag info" id="fbTag">START</span>
+        <span class="fb-text" id="fbText">真模型刚好过了一次 70%。但脑电每天都在变——这一次是真稳定，还是碰巧手气好？设计一套能证明它的验证实验。</span>
+      </div>
+
+    </div>
+  </main>
+</div>
+
+<script>
+(function(){
+'use strict';
+
+// ---------------------------------------------------------------------------
+// i18n
+// ---------------------------------------------------------------------------
+var I18N = {
+  zh:{
+    sTitle:'稳定性验证师', sSub:'过一次 70% 是运气还是真稳？设计反复测验证 · S4 收官',
+    rmLabel:'项目路线',
+    stops:['S1 信号基础','S2 信号清洗','S3 分类与方法','S4 数据采集与调优','S5 训练专属模型','S6 脑控成型'],
+    here:'你在这',
+    dsumL:'验证方案', dkDays:'测几天', dkTrials:'每天 TRIAL', dkCrit:'判据', dkRigor:'严谨度',
+    sGuideL:'怎么玩',
+    sGuide:'你是稳定性验证师。配置右侧方案：测几天、每天多少 trial、用什么判据。然后点「跑验证」。系统会模拟逐天真实波动——单天结果可能是运气，多天 + 严格判据才能证明真稳定。',
+    langBtn:'EN',
+    mTitle:'稳定性验证 · 设计实验',
+    mQ:'过一次 70% 是运气还是真稳？设计一套验证方案来证明它。',
+    g1t:'测几天', g1q:'脑电每天状态都不同，多天才能排除运气。',
+    g2t:'每天多少 trial', g2q:'trial 太少，单天准确率本身就不可信。',
+    g3t:'过线判据', g3q:'用什么标准算「真稳」？越严越能排除运气。',
+    runBtn:'跑验证', running:'采样中…',
+    runCostFn:function(d){return '本次将采样 '+d+' 天的真实任务数据';},
+    lgPass:'达标天', lgFail:'不达标', lgGoal:'70% 线',
+    epTxt:'终点：脑控 Minecraft<br>S6 用念头放置方块',
+    emptyT:'尚未验证', emptyM:'配置上方的验证方案，再点「跑验证」。系统会逐天采样真实波动的准确率，并给出置信区间与判定。',
+    fbStart:'真模型刚好过了一次 70%。但脑电每天都在变——这一次是真稳定，还是碰巧手气好？设计一套能证明它的验证实验。',
+    tagPass:'已证稳', tagLuck:'存疑', tagUntrust:'不可信', tagInfo:'提示',
+    daysOpts:[
+      {v:1, l:'1 天', s:'只测一次'},
+      {v:3, l:'3 天', s:'隔天复测'},
+      {v:5, l:'5 天', s:'一周跨天'}
+    ],
+    trialsOpts:[
+      {v:10, l:'10', s:'每天 10 次'},
+      {v:20, l:'20', s:'每天 20 次'},
+      {v:40, l:'40', s:'每天 40 次'}
+    ],
+    critOpts:[
+      {v:'any', l:'过一次即可', s:'任意一天 ≥70%'},
+      {v:'majority', l:'多数天', s:'过半数天 ≥70%'},
+      {v:'k45', l:'4/5 判据', s:'至少 4 天 ≥70%'}
+    ],
+    critName:{any:'过一次即可', majority:'多数天', k45:'4/5 判据'},
+    // verdict messages keyed by outcome
+    vOneDay:'只测了 1 天就下结论——脑电每天状态都不同，这一次过线完全可能是运气。无法证明真稳定。',
+    vFewTrials:function(n){return '每天只有 '+n+' 个 trial，单天准确率本身波动就很大，过没过线都不可信。先把 trial 加上去。';},
+    vLooseCrit:'用「过一次即可」当判据——只要某天手气好就算赢，这恰恰是在奖励运气，不是在排除运气。',
+    vMajorityWeak:'多天测了，但「多数天」判据偏松：恰好一半多一点达标也算过，留了运气的口子。要彻底排除运气，用更严的 4/5。',
+    vUnstableModel:'方案够严谨，但数据说话：跨天准确率围着 70% 上下乱跳，真实波动太大——模型本身还没到稳定线，不是验证方法的问题。回 S4 多采数据再调。',
+    vProven:'严谨方案 + 跨天稳定达标。你用反复实验排除了运气，证明了模型是真稳定的——这正是一名稳定性验证师该做的。',
+    win:{badge:'解锁 · 稳定性验证师', title:'稳定性已证明',
+         msg:'你设计了 5 天跨天复测 + 足量 trial + 4/5 严格判据，逐天准确率稳稳压在 70% 线上。运气被排除了：模型是真稳定的。',
+         next:'稳定过 70% 证明了！S4 收官——你的专属模型经得起反复检验。S5 把它接进 Minecraft 真玩，离 S6 念力放方块只差最后一步。',
+         btn:'再设计一次'},
+    loseLuck:{badge:'验证不足', title:'可能只是运气',
+              msg:'你的验证方案不够严谨，没能排除「碰巧手气好」。如果就这样上线，换一天状态一变，脑控很可能当场翻车。',
+              next:'记住：单天 / 少 trial / 松判据都证明不了稳定。把它当真上线前，先用 5 天 + 足量 trial + 4/5 判据反复验证。',
+              btn:'重新设计'},
+    loseModel:{badge:'模型未达稳定', title:'波动太大',
+               msg:'验证方法没问题，但跨天准确率围着 70% 乱跳——模型本身还不够稳。验证师的职责就是诚实地报告：现在不能上线。',
+               next:'别急着接 Minecraft。回 S4 多采几段真实数据、再调一调，把跨天波动压下来，然后再来验证。',
+               btn:'重新设计'}
+  },
+  en:{
+    sTitle:'STABILITY VERIFIER', sSub:'Is one 70% pass luck or real? Design repeated tests · close out S4',
+    rmLabel:'PROJECT ROADMAP',
+    stops:['S1 Signal basics','S2 Signal cleaning','S3 Classify & methods','S4 Collect & tune','S5 Train your model','S6 Mind-control build'],
+    here:'YOU ARE HERE',
+    dsumL:'VERIFY PLAN', dkDays:'DAYS', dkTrials:'TRIALS/DAY', dkCrit:'CRITERION', dkRigor:'RIGOR',
+    sGuideL:'HOW TO PLAY',
+    sGuide:'You are the stability verifier. Configure the plan on the right: how many days, trials per day, and the pass criterion. Then hit RUN. The system simulates real day-to-day variance — a single day can be luck; only many days + a strict criterion prove real stability.',
+    langBtn:'CN',
+    mTitle:'STABILITY VERIFICATION · DESIGN THE EXPERIMENT',
+    mQ:'Is one 70% pass luck or real stability? Design a plan that proves it.',
+    g1t:'HOW MANY DAYS', g1q:'EEG state shifts daily — only multiple days rule out luck.',
+    g2t:'TRIALS PER DAY', g2q:'Too few trials and a single-day accuracy is untrustworthy.',
+    g3t:'PASS CRITERION', g3q:'What counts as "stable"? Stricter rules out luck.',
+    runBtn:'RUN', running:'SAMPLING…',
+    runCostFn:function(d){return 'This run samples '+d+' day(s) of real task data';},
+    lgPass:'pass day', lgFail:'miss day', lgGoal:'70% line',
+    epTxt:'Endpoint: mind-control Minecraft<br>S6 place blocks with thought',
+    emptyT:'NOT VERIFIED YET', emptyM:'Configure the plan above, then hit RUN. The system samples accuracy with real day-to-day variance and reports a confidence interval and verdict.',
+    fbStart:'The real model just crossed 70% once. But EEG drifts every day — was that real stability or a lucky run? Design an experiment that proves it.',
+    tagPass:'PROVEN', tagLuck:'DOUBTFUL', tagUntrust:'UNTRUSTED', tagInfo:'INFO',
+    daysOpts:[
+      {v:1, l:'1 DAY', s:'one shot'},
+      {v:3, l:'3 DAYS', s:'every other day'},
+      {v:5, l:'5 DAYS', s:'across a week'}
+    ],
+    trialsOpts:[
+      {v:10, l:'10', s:'10 per day'},
+      {v:20, l:'20', s:'20 per day'},
+      {v:40, l:'40', s:'40 per day'}
+    ],
+    critOpts:[
+      {v:'any', l:'ANY DAY', s:'any day >=70%'},
+      {v:'majority', l:'MAJORITY', s:'>half days >=70%'},
+      {v:'k45', l:'4-OF-5', s:'>=4 days >=70%'}
+    ],
+    critName:{any:'any day', majority:'majority', k45:'4-of-5'},
+    vOneDay:'You concluded from just 1 day — EEG state shifts daily, so this single pass could be pure luck. Cannot prove real stability.',
+    vFewTrials:function(n){return 'Only '+n+' trials per day means a single-day accuracy is itself noisy — pass or fail, it is untrustworthy. Add more trials first.';},
+    vLooseCrit:'Using "any day passes" as the criterion — one lucky day wins. That rewards luck instead of ruling it out.',
+    vMajorityWeak:'Multiple days, but the "majority" criterion is loose: barely over half counts as a pass, leaving a window for luck. To fully rule it out, use the stricter 4-of-5.',
+    vUnstableModel:'The plan is rigorous, but the data speaks: cross-day accuracy bounces around 70% — too much real variance. The model itself is not stable yet, not a flaw in your method. Go back to S4, collect more data and tune.',
+    vProven:'Rigorous plan + cross-day passes. You ruled out luck with repeated experiments and proved the model is genuinely stable — exactly what a stability verifier does.',
+    win:{badge:'UNLOCK · STABILITY VERIFIER', title:'STABILITY PROVEN',
+         msg:'You designed 5-day cross-day retests + ample trials + a strict 4-of-5 criterion, and daily accuracy held above the 70% line. Luck is ruled out: the model is genuinely stable.',
+         next:'Stable past 70% — proven! S4 is done; your personal model survives repeated scrutiny. S5 wires it into Minecraft for real play — one step from S6 placing blocks by thought.',
+         btn:'DESIGN AGAIN'},
+    loseLuck:{badge:'INSUFFICIENT VERIFICATION', title:'COULD JUST BE LUCK',
+              msg:'Your plan was not rigorous enough to rule out a lucky run. Ship it like this and the moment your state shifts, the mind-control will fail on the spot.',
+              next:'Remember: a single day / few trials / a loose criterion prove nothing. Before shipping for real, verify repeatedly with 5 days + ample trials + the 4-of-5 criterion.',
+              btn:'REDESIGN'},
+    loseModel:{badge:'MODEL NOT STABLE', title:'TOO MUCH VARIANCE',
+               msg:'Your method is sound, but cross-day accuracy bounces around 70% — the model itself is not stable enough. A verifier reports honestly: it is not ready to ship.',
+               next:'Do not rush into Minecraft. Go back to S4, collect more real data and tune to flatten cross-day variance, then verify again.',
+               btn:'REDESIGN'}
+  }
+};
+
+var lang='zh';
+
+// ---------------------------------------------------------------------------
+// Game state
+// ---------------------------------------------------------------------------
+var HERE_STAGE=3;            // index of S4 (0-based) — active node
+var GOAL=70;
+
+// the TRUE underlying model — fixed per round (player does not see it directly).
+// trueMean ~70 means genuinely-at-threshold; daily mean drifts around trueMean.
+// stable round: trueMean 73, low day-drift  -> rigorous design will pass
+// to keep it deterministic + winnable, we model the real model as stable (73)
+// unless the design itself is the failure. A second "unstable model" branch is
+// available via low effective sample (it surfaces variance the player can't beat).
+var TRUE_MEAN = 77.0;        // real per-day expected accuracy of the trained model
+var DAY_DRIFT_SD = 2.4;      // genuine cross-day shift of the brain state (real, irreducible-ish)
+var TRIAL_NOISE_K = 0.55;    // damp finite-trial measurement noise (game readability, not raw binomial)
+
+var stateGame=null;
+
+function freshState(){
+  return {
+    days:null, trials:null, crit:null,
+    ran:false, over:false, won:false,
+    result:null,
+    seed: 1 // re-seeded per run for reproducible-but-varied sampling
+  };
+}
+
+// deterministic PRNG so a given design behaves consistently within a run
+function mulberry32(a){
+  return function(){
+    a|=0; a=a+0x6D2B79F5|0;
+    var t=Math.imul(a^a>>>15,1|a);
+    t=t+Math.imul(t^t>>>7,61|t)^t;
+    return ((t^t>>>14)>>>0)/4294967296;
+  };
+}
+// box-muller normal
+function gauss(rng){
+  var u=Math.max(1e-9,rng()), v=rng();
+  return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);
+}
+
+function clampPct(v){ return Math.max(0, Math.min(100, v)); }
+
+// ---------------------------------------------------------------------------
+// Core simulation: sample per-day accuracy from the TRUE model with real variance.
+// The fewer trials, the wider the per-day binomial-style noise (luck dominates).
+// ---------------------------------------------------------------------------
+function runVerification(){
+  var s=stateGame;
+  var rng=mulberry32((Date.now()&0xffff) ^ (s.days*131+s.trials*7+(s.crit==='k45'?5:s.crit==='majority'?3:1)));
+  var dayAcc=[];
+  for(var d=0; d<s.days; d++){
+    // genuine day-to-day brain-state drift (irreducible, real)
+    var dayMean = TRUE_MEAN + gauss(rng)*DAY_DRIFT_SD;
+    // measurement noise from finite trials: SE of a proportion ~ sqrt(p(1-p)/n)*100
+    var p = clampPct(dayMean)/100;
+    var se = Math.sqrt(Math.max(0.0001,p*(1-p))/s.trials)*100*TRIAL_NOISE_K;
+    var measured = clampPct(dayMean + gauss(rng)*se);
+    dayAcc.push(measured);
+  }
+  // aggregate stats
+  var mean = dayAcc.reduce(function(a,b){return a+b;},0)/dayAcc.length;
+  // 95% CI half-width across days (combine day-drift + per-day SE roughly)
+  var n=dayAcc.length;
+  var variance = dayAcc.reduce(function(a,b){return a+(b-mean)*(b-mean);},0)/Math.max(1,n);
+  var sd=Math.sqrt(variance);
+  var ciHalf = (n>1) ? 1.96*sd/Math.sqrt(n) : 1.96*Math.sqrt(Math.max(0.0001,(mean/100)*(1-mean/100))/s.trials)*100;
+  var ciLow = mean - ciHalf, ciHigh = mean + ciHalf;
+  var passDays = dayAcc.filter(function(a){return a>=GOAL;}).length;
+
+  // criterion evaluation
+  var critMet=false;
+  if(s.crit==='any') critMet = passDays>=1;
+  else if(s.crit==='majority') critMet = passDays > s.days/2;
+  else if(s.crit==='k45') critMet = passDays>=4; // requires days>=5 to be meaningful
+
+  // ----- design-rigor gating: WHY a verdict happens -----
+  // outcome ∈ {oneDay, fewTrials, looseCrit, majorityWeak, unstableModel, proven}
+  var outcome;
+  if(s.days===1){
+    outcome='oneDay';
+  } else if(s.trials < 20){
+    outcome='fewTrials';
+  } else if(s.crit==='any'){
+    outcome='looseCrit';
+  } else if(s.crit==='majority'){
+    outcome='majorityWeak';
+  } else {
+    // rigorous design (>=3 days, >=20 trials, k45). Need 5 days for 4/5 to apply,
+    // AND the model must actually hold up. With TRUE_MEAN 73 & enough trials, the
+    // genuine signal wins through; CI low above ~68 and >=4 pass days => proven.
+    if(s.days<5){
+      // 4/5 with <5 days can't be satisfied -> design flaw surfaced as luck risk
+      outcome = critMet ? 'proven' : 'majorityWeak';
+    } else {
+      // strong design. Honest model check: a genuinely-stable model should reliably
+      // clear a rigorous plan. Proven when 4/5 days pass AND the cross-day mean holds
+      // above the line (CI lower bound not collapsing far below goal).
+      outcome = (critMet && mean >= GOAL && ciLow >= GOAL-5) ? 'proven' : 'unstableModel';
+    }
+  }
+
+  s.result={ dayAcc:dayAcc, mean:mean, ciLow:clampPct(ciLow), ciHigh:clampPct(ciHigh),
+             ciHalf:ciHalf, passDays:passDays, critMet:critMet, outcome:outcome };
+  s.ran=true;
+  return s.result;
+}
+
+// ---------------------------------------------------------------------------
+// DOM refs
+// ---------------------------------------------------------------------------
+var $=function(id){return document.getElementById(id);};
+var els={
+  roadmap:$('roadmap'),
+  optsDays:$('optsDays'), optsTrials:$('optsTrials'), optsCrit:$('optsCrit'),
+  dvDays:$('dvDays'), dvTrials:$('dvTrials'), dvCrit:$('dvCrit'), dvRigor:$('dvRigor'),
+  rigorFill:$('rigorFill'),
+  runBtn:$('runBtn'), runCost:$('runCost'),
+  empty:$('empty'),
+  fbTag:$('fbTag'), fbText:$('fbText'),
+  overlay:$('overlay'), ovBadge:$('ovBadge'), ovTitle:$('ovTitle'),
+  ovMsg:$('ovMsg'), ovNext:$('ovNext'), ovBtn:$('ovBtn'), ovMc:$('ovMc')
+};
+
+// ---------------------------------------------------------------------------
+// Roadmap
+// ---------------------------------------------------------------------------
+function renderRoadmap(){
+  var t=I18N[lang];
+  els.roadmap.innerHTML='';
+  t.stops.forEach(function(label,i){
+    var step=document.createElement('div');
+    var cls='rm-step';
+    if(i<HERE_STAGE) cls+=' done';
+    else if(i===HERE_STAGE) cls+=' active';
+    step.className=cls;
+    var here = (i===HERE_STAGE)?'<span class="rm-here">'+t.here+'</span>':'';
+    step.innerHTML='<span class="rm-dot"></span><span class="rm-txt">'+label+'</span>'+here;
+    els.roadmap.appendChild(step);
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Design option rendering
+// ---------------------------------------------------------------------------
+function renderOptions(){
+  var t=I18N[lang];
+  buildGroup(els.optsDays, t.daysOpts, 'days');
+  buildGroup(els.optsTrials, t.trialsOpts, 'trials');
+  buildGroup(els.optsCrit, t.critOpts, 'crit');
+  refreshSelected();
+}
+
+function buildGroup(container, opts, field){
+  container.innerHTML='';
+  opts.forEach(function(o){
+    var b=document.createElement('button');
+    b.type='button';
+    b.className='opt';
+    b.setAttribute('data-field', field);
+    b.setAttribute('data-val', String(o.v));
+    b.innerHTML = o.l + '<small>'+o.s+'</small>';
+    b.addEventListener('click', function(){ onSelect(field, o.v); });
+    container.appendChild(b);
+  });
+}
+
+function onSelect(field, val){
+  if(stateGame.over) return;
+  stateGame[field]=val;
+  // reselecting after a run lets you redesign without forced reset
+  refreshSelected();
+  updateDesignSummary();
+}
+
+function refreshSelected(){
+  ['days','trials','crit'].forEach(function(field){
+    var nodes=document.querySelectorAll('.opt[data-field="'+field+'"]');
+    nodes.forEach(function(n){
+      var v=n.getAttribute('data-val');
+      var cur=stateGame[field];
+      var match = (cur!==null && String(cur)===v);
+      n.classList.toggle('sel', match);
+    });
+  });
+}
+
+// rigor score: days(40) + trials(30) + criterion(30)
+function rigorScore(){
+  var s=stateGame, sc=0;
+  if(s.days===1) sc+=4; else if(s.days===3) sc+=24; else if(s.days===5) sc+=40;
+  if(s.trials===10) sc+=4; else if(s.trials===20) sc+=20; else if(s.trials===40) sc+=30;
+  if(s.crit==='any') sc+=4; else if(s.crit==='majority') sc+=16; else if(s.crit==='k45') sc+=30;
+  return sc;
+}
+
+function updateDesignSummary(){
+  var s=stateGame, t=I18N[lang];
+  els.dvDays.textContent = s.days!==null ? (s.days+(lang==='zh'?' 天':'d')) : '-';
+  els.dvTrials.textContent = s.trials!==null ? String(s.trials) : '-';
+  els.dvCrit.textContent = s.crit!==null ? t.critName[s.crit] : '-';
+  var ready = (s.days!==null && s.trials!==null && s.crit!==null);
+  var sc = ready ? rigorScore() : 0;
+  els.dvRigor.textContent = sc+'%';
+  els.rigorFill.style.width = sc+'%';
+  els.rigorFill.classList.toggle('ok', sc>=85);
+  els.runBtn.disabled = !ready || stateGame.over;
+  els.runCost.textContent = ready ? t.runCostFn(s.days) : '';
+}
+
+// ---------------------------------------------------------------------------
+// Run
+// ---------------------------------------------------------------------------
+function onRun(){
+  var s=stateGame, t=I18N[lang];
+  if(s.over) return;
+  if(s.days===null||s.trials===null||s.crit===null) return;
+
+  els.runBtn.disabled=true;
+  els.runBtn.textContent=t.running;
+
+  // brief animated sampling, then result
+  setTimeout(function(){
+    var r=runVerification();
+    els.empty.classList.add('hide');
+    drawBars();
+    showVerdict(r);
+    els.runBtn.textContent=t.runBtn;
+    els.runBtn.disabled = s.over;
+  }, 480);
+}
+
+function showVerdict(r){
+  var t=I18N[lang];
+  var oc=r.outcome;
+  var msg='', kind='warn';
+  if(oc==='oneDay'){ msg=t.vOneDay; kind='bad'; }
+  else if(oc==='fewTrials'){ msg=t.vFewTrials(stateGame.trials); kind='bad'; }
+  else if(oc==='looseCrit'){ msg=t.vLooseCrit; kind='warn'; }
+  else if(oc==='majorityWeak'){ msg=t.vMajorityWeak; kind='warn'; }
+  else if(oc==='unstableModel'){ msg=t.vUnstableModel; kind='warn'; }
+  else if(oc==='proven'){ msg=t.vProven; kind='good'; }
+  setFeedback(kind, msg);
+
+  // end states
+  if(oc==='proven'){
+    stateGame.over=true; stateGame.won=true;
+    showOverlay('win', t.win);
+  } else if(oc==='unstableModel'){
+    stateGame.over=true; stateGame.won=false;
+    showOverlay('lose', t.loseModel);
+  } else {
+    // insufficient verification — not terminal-lose overlay, let them redesign,
+    // but if rigor is hopeless (1 day / few trials / loose), surface lose overlay too.
+    if(oc==='oneDay' || oc==='fewTrials'){
+      stateGame.over=true; stateGame.won=false;
+      showOverlay('lose', t.loseLuck);
+    }
+    // looseCrit / majorityWeak: stay open for redesign (no overlay)
+  }
+  updateDesignSummary();
+}
+
+function setFeedback(kind,text){
+  var t=I18N[lang];
+  var cls = kind==='good'?'good':kind==='bad'?'bad':kind==='warn'?'warn':'info';
+  els.fbTag.className='fb-tag '+cls;
+  els.fbTag.textContent = kind==='good'?t.tagPass:kind==='bad'?t.tagUntrust:kind==='warn'?t.tagLuck:t.tagInfo;
+  els.fbText.textContent = text;
+}
+
+function showOverlay(kind,cfg){
+  els.ovBadge.className='ov-badge '+kind;
+  els.ovBadge.textContent=cfg.badge;
+  els.ovTitle.textContent=cfg.title;
+  els.ovMsg.textContent=cfg.msg;
+  els.ovNext.textContent=cfg.next;
+  els.ovBtn.textContent=cfg.btn;
+  els.ovMc.style.display=(kind==='win')?'block':'none';
+  els.overlay.classList.add('show');
+}
+
+// ---------------------------------------------------------------------------
+// Bar chart of per-day accuracy + 70% line + CI band
+// ---------------------------------------------------------------------------
+var cv=$('bars'), cx=cv.getContext('2d');
+function resizeCanvas(){
+  var box=cv.parentElement.getBoundingClientRect();
+  var dpr=window.devicePixelRatio||1;
+  cv.width=Math.max(10,Math.floor(box.width*dpr));
+  cv.height=Math.max(10,Math.floor(box.height*dpr));
+  cx.setTransform(dpr,0,0,dpr,0,0);
+  if(stateGame && stateGame.ran) drawBars();
+}
+function cssVar(n){ return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
+
+function drawBars(){
+  if(!stateGame || !stateGame.result) return;
+  var r=stateGame.result, t=I18N[lang];
+  var box=cv.parentElement.getBoundingClientRect();
+  var W=box.width, H=box.height;
+  cx.clearRect(0,0,W,H);
+  var padL=46, padR=24, padT=24, padB=42;
+  var x0=padL, x1=W-padR, y0=H-padB, y1=padT;
+  var loA=40, hiA=90;
+  function ay(v){ return y0 + (y1-y0)*((v-loA)/(hiA-loA)); }
+
+  var col={
+    line:cssVar('--line'), dim:cssVar('--dim'), mute:cssVar('--mute'),
+    primary:cssVar('--primary'), good:cssVar('--good'), bad:cssVar('--bad'),
+    paper:cssVar('--paper')
+  };
+
+  // y grid + labels
+  cx.font='9px JetBrains Mono'; cx.textAlign='right'; cx.textBaseline='middle';
+  for(var v=50; v<=80; v+=10){
+    var y=ay(v);
+    cx.strokeStyle=col.line; cx.lineWidth=1; cx.globalAlpha=0.85;
+    cx.beginPath(); cx.moveTo(x0,y); cx.lineTo(x1,y); cx.stroke(); cx.globalAlpha=1;
+    cx.fillStyle=col.mute; cx.fillText(v+'%', x0-6, y);
+  }
+  // axes
+  cx.strokeStyle=col.dim; cx.lineWidth=1.1; cx.globalAlpha=0.55;
+  cx.beginPath(); cx.moveTo(x0,y1); cx.lineTo(x0,y0); cx.lineTo(x1,y0); cx.stroke(); cx.globalAlpha=1;
+
+  var n=r.dayAcc.length;
+  var slot=(x1-x0)/n;
+  var bw=Math.min(54, slot*0.56);
+
+  // CI band (mean +/- ci) drawn behind bars
+  var cyLow=ay(r.ciLow), cyHigh=ay(r.ciHigh), cyMean=ay(r.mean);
+  cx.fillStyle=col.primary; cx.globalAlpha=0.07;
+  cx.fillRect(x0, cyHigh, x1-x0, cyLow-cyHigh);
+  cx.globalAlpha=1;
+  cx.strokeStyle=col.primary; cx.globalAlpha=0.5; cx.lineWidth=1; cx.setLineDash([3,3]);
+  cx.beginPath(); cx.moveTo(x0,cyMean); cx.lineTo(x1,cyMean); cx.stroke();
+  cx.setLineDash([]); cx.globalAlpha=1;
+
+  // bars per day
+  for(var i=0;i<n;i++){
+    var cxBar=x0+slot*(i+0.5);
+    var acc=r.dayAcc[i];
+    var by=ay(acc);
+    var pass=acc>=GOAL;
+    cx.fillStyle = pass?col.good:col.bad;
+    cx.globalAlpha=0.9;
+    cx.beginPath();
+    var bx=cxBar-bw/2;
+    var h=y0-by;
+    roundRectTop(cx,bx,by,bw,h,4);
+    cx.fill();
+    cx.globalAlpha=1;
+    // value label
+    cx.fillStyle = pass?col.good:col.bad; cx.font='10px JetBrains Mono';
+    cx.textAlign='center'; cx.textBaseline='bottom';
+    cx.fillText(acc.toFixed(0)+'%', cxBar, by-4);
+    // x label
+    cx.fillStyle=col.mute; cx.font='9px JetBrains Mono'; cx.textBaseline='top';
+    cx.fillText((lang==='zh'?'D':'D')+(i+1), cxBar, y0+6);
+  }
+
+  // 70% goal line (drawn last, on top)
+  var gy=ay(GOAL);
+  cx.save(); cx.strokeStyle=col.primary; cx.lineWidth=1.6; cx.setLineDash([7,5]);
+  cx.beginPath(); cx.moveTo(x0,gy); cx.lineTo(x1,gy); cx.stroke(); cx.restore();
+  cx.fillStyle=col.primary; cx.font='10px JetBrains Mono'; cx.textAlign='left'; cx.textBaseline='bottom';
+  cx.fillText('GOAL 70%', x0+4, gy-3);
+
+  // summary caption: mean + CI + pass count
+  cx.fillStyle=col.dim; cx.font='10px JetBrains Mono'; cx.textAlign='left'; cx.textBaseline='top';
+  var cap = (lang==='zh'
+      ? '跨天均值 '+r.mean.toFixed(1)+'%  ·  95%CI ['+r.ciLow.toFixed(1)+', '+r.ciHigh.toFixed(1)+']  ·  达标 '+r.passDays+'/'+n+' 天'
+      : 'cross-day mean '+r.mean.toFixed(1)+'%  ·  95%CI ['+r.ciLow.toFixed(1)+', '+r.ciHigh.toFixed(1)+']  ·  '+r.passDays+'/'+n+' days pass');
+  cx.fillText(cap, x0, y0+22);
+}
+
+function roundRectTop(c,x,y,w,h,r){
+  r=Math.min(r,w/2,Math.max(0,h));
+  c.beginPath();
+  c.moveTo(x,y+h);
+  c.lineTo(x,y+r);
+  c.quadraticCurveTo(x,y,x+r,y);
+  c.lineTo(x+w-r,y);
+  c.quadraticCurveTo(x+w,y,x+w,y+r);
+  c.lineTo(x+w,y+h);
+  c.closePath();
+}
+
+// ---------------------------------------------------------------------------
+// i18n apply
+// ---------------------------------------------------------------------------
+function applyLang(){
+  var t=I18N[lang];
+  document.documentElement.lang = (lang==='zh'?'zh':'en');
+  $('sTitle').textContent=t.sTitle;
+  $('sSub').textContent=t.sSub;
+  $('rmLabel').textContent=t.rmLabel;
+  $('dsumL').textContent=t.dsumL;
+  $('dkDays').textContent=t.dkDays;
+  $('dkTrials').textContent=t.dkTrials;
+  $('dkCrit').textContent=t.dkCrit;
+  $('dkRigor').textContent=t.dkRigor;
+  $('sGuideL').textContent=t.sGuideL;
+  $('sGuide').textContent=t.sGuide;
+  $('langBtn').textContent=t.langBtn;
+  $('mTitle').textContent=t.mTitle;
+  $('mQ').textContent=t.mQ;
+  $('g1t').textContent=t.g1t; $('g1q').textContent=t.g1q;
+  $('g2t').textContent=t.g2t; $('g2q').textContent=t.g2q;
+  $('g3t').textContent=t.g3t; $('g3q').textContent=t.g3q;
+  $('runBtn').textContent=t.runBtn;
+  $('lgPass').textContent=t.lgPass;
+  $('lgFail').textContent=t.lgFail;
+  $('lgGoal').textContent=t.lgGoal;
+  $('epTxt').innerHTML=t.epTxt;
+  $('emptyT').textContent=t.emptyT;
+  $('emptyM').textContent=t.emptyM;
+
+  renderRoadmap();
+  renderOptions();
+  updateDesignSummary();
+
+  if(!stateGame.ran){ setFeedback('info', t.fbStart); }
+  else if(stateGame.result){
+    showVerdict(stateGame.result); // re-localize verdict text (won't re-flip state)
+    drawBars();
+  }
+  // re-render overlay text if shown
+  if(stateGame.over){
+    var oc=stateGame.result?stateGame.result.outcome:'';
+    if(stateGame.won) showOverlay('win', t.win);
+    else if(oc==='unstableModel') showOverlay('lose', t.loseModel);
+    else showOverlay('lose', t.loseLuck);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Init / restart
+// ---------------------------------------------------------------------------
+function start(){
+  stateGame=freshState();
+  els.overlay.classList.remove('show');
+  els.empty.classList.remove('hide');
+  els.runBtn.textContent=I18N[lang].runBtn;
+  applyLang();
+}
+
+$('langBtn').addEventListener('click', function(){
+  lang = (lang==='zh'?'en':'zh');
+  applyLang();
+});
+$('runBtn').addEventListener('click', onRun);
+$('ovBtn').addEventListener('click', function(){ start(); });
+window.addEventListener('resize', resizeCanvas);
+
+start();
+requestAnimationFrame(function(){ resizeCanvas(); });
+setTimeout(resizeCanvas, 120);
+
+})();
+</script>
+</body>
+</html>

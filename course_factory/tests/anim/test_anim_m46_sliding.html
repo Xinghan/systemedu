@@ -1,0 +1,742 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>M46 · 滑窗实时解码</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+SC:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    /* 第 1 层 — 共享深空底 (所有 26 套统一) */
+    --bg-0: oklch(0.14 0.035 265);
+    --bg-1: oklch(0.18 0.04 265);
+    --bg-2: oklch(0.22 0.045 265);
+    --bg-3: oklch(0.28 0.05 265);
+    --line: oklch(0.35 0.05 265 / 0.35);
+    --line-strong: oklch(0.55 0.08 265 / 0.55);
+
+    --fg:      oklch(0.96 0.01 265);
+    --fg-dim:  oklch(0.75 0.02 265);
+    --fg-mute: oklch(0.55 0.03 265);
+    --gold:    oklch(0.85 0.14 85);
+
+    /* 第 2 层 — cs 学科 accent cyan */
+    --cs: oklch(0.75 0.17 200);
+
+    /* 第 3 层 — cs 5 色 palette (theme_style/themes.js cs 段) */
+    --signal: oklch(0.75 0.17 200);  /* SIGNAL */
+    --core:   oklch(0.55 0.16 200);  /* CORE */
+    --depth:  oklch(0.35 0.10 210);  /* DEPTH */
+    --flash:  oklch(0.92 0.08 190);  /* FLASH */
+    --query:  oklch(0.85 0.14 85);   /* QUERY */
+
+    /* 左右两类概率用对比双色: 左=cyan(signal)，右=gold(query) */
+    --left:   oklch(0.75 0.17 200);
+    --right:  oklch(0.85 0.14 85);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    height: 100vh; overflow: hidden;
+    background: var(--bg-0); color: var(--fg);
+    font-family: 'Inter', 'Noto Sans SC', 'PingFang SC', sans-serif;
+    font-size: 14px; line-height: 1.5;
+    display: flex;
+  }
+  .mono { font-family: 'JetBrains Mono', monospace; }
+
+  /* ============ Sidebar 200px ============ */
+  .sidebar {
+    width: 200px; flex-shrink: 0; height: 100vh;
+    background: var(--bg-1);
+    border-right: 1px solid var(--line);
+    display: flex; flex-direction: column;
+    padding: 22px 18px 18px;
+    position: relative;
+  }
+  .brand-row { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; }
+  .brand-dot {
+    width: 10px; height: 10px; border-radius: 50%;
+    background: var(--cs);
+    box-shadow: 0 0 0 4px oklch(0.75 0.17 200 / 0.18);
+    animation: pulse 2.2s ease-in-out infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { box-shadow: 0 0 0 4px oklch(0.75 0.17 200 / 0.18); }
+    50%      { box-shadow: 0 0 0 7px oklch(0.75 0.17 200 / 0.10); }
+  }
+  .brand-tag {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; letter-spacing: 0.08em;
+    color: var(--fg-dim); font-weight: 600;
+  }
+  .brand-title {
+    font-size: 15px; font-weight: 700; color: var(--fg);
+    line-height: 1.35; margin-bottom: 4px;
+  }
+  .brand-sub {
+    font-size: 11px; color: var(--fg-mute); line-height: 1.5;
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  /* mascot Bit — levitating cubic sprite */
+  .mascot { margin: 14px 0 4px; }
+  .mascot svg { display: block; }
+
+  /* roadmap S1-S6 */
+  .road-h {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px; letter-spacing: 0.12em;
+    color: var(--fg-mute); margin: 14px 0 8px;
+    text-transform: uppercase;
+  }
+  .road { list-style: none; padding: 0; margin: 0; }
+  .road li {
+    position: relative;
+    font-size: 11px; color: var(--fg-mute); line-height: 1.35;
+    padding: 4px 0 4px 18px;
+    border-left: 2px solid var(--line);
+  }
+  .road li::before {
+    content: ''; position: absolute; left: -5px; top: 8px;
+    width: 7px; height: 7px; border-radius: 50%;
+    background: var(--line-strong);
+  }
+  .road li .st {
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 700; font-size: 10px; margin-right: 5px;
+    color: var(--fg-mute);
+  }
+  .road li.done { color: var(--fg-dim); }
+  .road li.done::before { background: var(--core); }
+  .road li.done .st { color: var(--cs); }
+  .road li.cur {
+    color: var(--fg); font-weight: 600;
+    border-left-color: var(--cs);
+  }
+  .road li.cur::before {
+    background: var(--cs);
+    box-shadow: 0 0 0 3px oklch(0.75 0.17 200 / 0.20);
+    animation: pulse 2.2s ease-in-out infinite;
+  }
+  .road li.cur .st { color: var(--flash); }
+  .road li .badge {
+    display: inline-block; font-family: 'JetBrains Mono', monospace;
+    font-size: 8px; font-weight: 700; letter-spacing: 0.06em;
+    background: oklch(0.75 0.17 200 / 0.16); color: var(--flash);
+    padding: 1px 5px; border-radius: 3px; margin-left: 4px;
+  }
+
+  /* Minecraft silhouette corner */
+  .mc-corner {
+    margin-top: 12px; opacity: 0.6;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .mc-corner svg { display: block; }
+  .mc-corner .mc-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 8px; letter-spacing: 0.05em; color: var(--fg-mute);
+    line-height: 1.3;
+  }
+
+  .lang-btn {
+    margin-top: auto;
+    border: 1px solid var(--line-strong);
+    background: var(--bg-2);
+    color: var(--fg); cursor: pointer;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; font-weight: 600;
+    padding: 9px 12px; border-radius: 6px;
+    transition: all 180ms ease;
+    letter-spacing: 0.06em;
+  }
+  .lang-btn:hover {
+    border-color: var(--cs);
+    background: oklch(0.75 0.17 200 / 0.12);
+    color: var(--flash);
+  }
+
+  /* ============ Main stage ============ */
+  .main {
+    flex: 1; height: 100vh; overflow: hidden;
+    position: relative;
+    display: flex; flex-direction: column;
+  }
+  canvas#stage { display: block; width: 100%; height: 100%; }
+
+  /* HUD top-right */
+  .hud {
+    position: absolute; top: 16px; right: 18px;
+    background: oklch(0.18 0.04 265 / 0.78);
+    border: 1px solid var(--line-strong);
+    border-radius: 9px;
+    padding: 10px 13px;
+    backdrop-filter: blur(3px);
+    min-width: 184px;
+    box-shadow: 3px 3px 0 var(--bg-0);
+  }
+  .hud-row { display: flex; justify-content: space-between; align-items: baseline; gap: 14px; }
+  .hud-row + .hud-row { margin-top: 5px; }
+  .hud-k {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9.5px; letter-spacing: 0.06em;
+    color: var(--fg-mute); text-transform: uppercase;
+  }
+  .hud-v {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12.5px; font-weight: 700; color: var(--flash);
+  }
+  .hud-v.left  { color: var(--left); }
+  .hud-v.right { color: var(--right); }
+  .hud-div { height: 1px; background: var(--line); margin: 7px 0; }
+
+  /* opening / closing caption strip (subCue 辅助点睛) */
+  .cue {
+    position: absolute; left: 24px; bottom: 18px;
+    max-width: 560px;
+    background: oklch(0.18 0.04 265 / 0.78);
+    border-left: 3px solid var(--cs);
+    border-radius: 0 8px 8px 0;
+    padding: 9px 14px;
+    font-size: 12.5px; color: var(--fg-dim); line-height: 1.5;
+    backdrop-filter: blur(3px);
+    transition: opacity 500ms ease;
+  }
+  .cue .accent { color: var(--flash); font-weight: 700; }
+  .cue .mono { font-family: 'JetBrains Mono', monospace; color: var(--cs); }
+
+  .title-strip {
+    position: absolute; top: 16px; left: 24px;
+    pointer-events: none;
+  }
+  .title-strip .t-tag {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px; letter-spacing: 0.14em; color: var(--cs);
+    text-transform: uppercase;
+  }
+  .title-strip .t-main {
+    font-size: 18px; font-weight: 700; color: var(--fg);
+    margin-top: 3px; line-height: 1.25;
+    text-shadow: 0 1px 8px var(--bg-0);
+  }
+</style>
+</head>
+<body>
+
+<aside class="sidebar">
+  <div class="brand-row">
+    <span class="brand-dot"></span>
+    <span class="brand-tag" id="brandTag">M46 · 实时解码</span>
+  </div>
+  <div class="brand-title" id="brandTitle">滑窗实时解码</div>
+  <div class="brand-sub" id="brandSub">2s window · 200ms step</div>
+
+  <!-- mascot Bit -->
+  <div class="mascot">
+    <svg width="58" height="50" viewBox="0 0 58 50" aria-hidden="true">
+      <g transform="translate(14 6)">
+        <rect x="2" y="2" width="26" height="26" rx="3" fill="oklch(0.22 0.045 265)" stroke="var(--cs)" stroke-width="1.6"/>
+        <rect x="7"  y="7"  width="6" height="6" rx="1" fill="var(--signal)"/>
+        <rect x="17" y="7"  width="6" height="6" rx="1" fill="var(--flash)"/>
+        <rect x="7"  y="17" width="6" height="6" rx="1" fill="var(--core)"/>
+        <rect x="17" y="17" width="6" height="6" rx="1" fill="var(--query)"/>
+        <circle cx="10" cy="33" r="1.6" fill="var(--cs)"/>
+        <circle cx="20" cy="36" r="1.6" fill="var(--cs)" opacity="0.6"/>
+        <circle cx="15" cy="38" r="1.4" fill="var(--cs)" opacity="0.4"/>
+      </g>
+    </svg>
+  </div>
+
+  <div class="road-h" id="roadH">脑控 Minecraft 长征</div>
+  <ul class="road">
+    <li class="done"><span class="st">S1</span><span id="r1">采脑波</span></li>
+    <li class="done"><span class="st">S2</span><span id="r2">看懂信号</span></li>
+    <li class="done"><span class="st">S3</span><span id="r3">建模型</span></li>
+    <li class="cur"><span class="st">S4</span><span id="r4">实时解码</span><span class="badge" id="r4b">你在这</span></li>
+    <li><span class="st">S5</span><span id="r5">接进游戏</span></li>
+    <li><span class="st">S6</span><span id="r6">脑控真玩</span></li>
+  </ul>
+
+  <div class="mc-corner">
+    <svg width="44" height="40" viewBox="0 0 44 40" aria-hidden="true">
+      <rect x="2"  y="22" width="14" height="14" fill="var(--bg-3)"/>
+      <rect x="16" y="22" width="14" height="14" fill="var(--bg-2)"/>
+      <rect x="2"  y="22" width="14" height="14" fill="none" stroke="var(--line-strong)" stroke-width="0.8"/>
+      <rect x="16" y="22" width="14" height="14" fill="none" stroke="var(--line-strong)" stroke-width="0.8"/>
+      <path d="M22 2 L40 8 L38 12 L24 10 L22 14 L20 10 L21 5 Z" fill="var(--core)"/>
+      <rect x="20" y="10" width="3" height="16" fill="var(--depth)" transform="rotate(8 21 18)"/>
+    </svg>
+    <span class="mc-label" id="mcLabel">终点<br>Minecraft</span>
+  </div>
+
+  <button class="lang-btn" id="langBtn" type="button">中文 / EN</button>
+</aside>
+
+<main class="main">
+  <div class="title-strip">
+    <div class="t-tag" id="tTag">S4 · REAL-TIME DECODE</div>
+    <div class="t-main" id="tMain">每隔一点，就猜一次你想哪只手</div>
+  </div>
+
+  <canvas id="stage"></canvas>
+
+  <div class="hud">
+    <div class="hud-row"><span class="hud-k" id="hWinK">窗位 window</span><span class="hud-v mono" id="hWinV">--</span></div>
+    <div class="hud-row"><span class="hud-k" id="hStepK">步长 step</span><span class="hud-v mono" id="hStepV">200 ms</span></div>
+    <div class="hud-div"></div>
+    <div class="hud-row"><span class="hud-k" id="hLeftK">P(左 LEFT)</span><span class="hud-v left mono" id="hLeftV">--</span></div>
+    <div class="hud-row"><span class="hud-k" id="hRightK">P(右 RIGHT)</span><span class="hud-v right mono" id="hRightV">--</span></div>
+  </div>
+
+  <div class="cue" id="cue"></div>
+</main>
+
+<script>
+(function () {
+  "use strict";
+
+  var LANG = 'cn';
+
+  var I18N = {
+    brandTag:   { cn: 'M46 · 实时解码',          en: 'M46 · LIVE DECODE' },
+    brandTitle: { cn: '滑窗实时解码',            en: 'Sliding-window decode' },
+    brandSub:   { cn: '2s window · 200ms step',  en: '2s window · 200ms step' },
+    roadH:      { cn: '脑控 Minecraft 长征',     en: 'BRAIN-MINECRAFT ROADMAP' },
+    r1: { cn: '采脑波',   en: 'Record EEG' },
+    r2: { cn: '看懂信号', en: 'Read signal' },
+    r3: { cn: '建模型',   en: 'Build model' },
+    r4: { cn: '实时解码', en: 'Live decode' },
+    r4b:{ cn: '你在这',   en: 'YOU ARE HERE' },
+    r5: { cn: '接进游戏', en: 'Wire to game' },
+    r6: { cn: '脑控真玩', en: 'Play by mind' },
+    mcLabel: { cn: '终点<br>Minecraft', en: 'Goal<br>Minecraft' },
+
+    tTag:  { cn: 'S4 · 实时解码',                en: 'S4 · REAL-TIME DECODE' },
+    tMain: { cn: '每隔一点，就猜一次你想哪只手', en: 'Every tick, guess which hand you mean' },
+
+    hWinK:   { cn: '窗位 window',  en: 'window pos' },
+    hStepK:  { cn: '步长 step',    en: 'step' },
+    hLeftK:  { cn: 'P(左 LEFT)',   en: 'P(LEFT)' },
+    hRightK: { cn: 'P(右 RIGHT)',  en: 'P(RIGHT)' },
+
+    // subCues — 跟随阶段点睛 (画面是主体)
+    cueOpen: {
+      cn: '录好的脑波是<span class="accent">事后</span>分析的。脑控要<span class="accent">实时</span>——脑波边流进来，就得<span class="accent">每隔一点猜一次</span>你想的是哪只手。',
+      en: 'Recorded EEG is analyzed <span class="accent">afterward</span>. Brain control must be <span class="accent">live</span> — as the signal streams in, <span class="accent">guess which hand every tick</span>.'
+    },
+    cueSlide: {
+      cn: '一个 <span class="mono">2 秒宽</span>的分析窗，钉在最新这段脑波上，每 <span class="mono">200ms</span> 向右滑一步——总是看最近 2 秒。',
+      en: 'A <span class="mono">2-second</span> window sits on the latest EEG, sliding right every <span class="mono">200ms</span> — always the most recent 2 seconds.'
+    },
+    cueDecode: {
+      cn: '每滑一步，<span class="accent">窗里这 2 秒</span>就被分类器解码一次，<span class="mono">吐出一个左/右概率</span>。窗不停滑，概率就不停更新。',
+      en: 'Each step, <span class="accent">the 2s inside the window</span> is decoded once, <span class="mono">emitting one left/right probability</span>. The window keeps sliding, the probability keeps updating.'
+    },
+    cueStream: {
+      cn: '一串概率连续流出来——这就是<span class="accent">实时意图流</span>。每个点都是某一瞬间「你大概在想左 / 想右」。',
+      en: 'A continuous stream of probabilities flows out — this is the <span class="accent">live intent stream</span>. Each dot is "you probably mean left / right" at that instant.'
+    },
+    cueClose: {
+      cn: '实时概率流出来了。<span class="accent">下一步：测它多快、怎么把这串概率接进游戏</span>，让人物真的跟着你的念头动。',
+      en: 'The live probability stream is out. <span class="accent">Next: how fast is it, and how to wire this stream into the game</span> so the character truly follows your mind.'
+    }
+  };
+
+  function setHTML(id, html) { var el = document.getElementById(id); if (el) el.innerHTML = html; }
+
+  function applyI18N() {
+    var keys = ['brandTag','brandTitle','brandSub','roadH','r1','r2','r3','r4','r4b','r5','r6','mcLabel',
+                'tTag','tMain','hWinK','hStepK','hLeftK','hRightK'];
+    for (var i = 0; i < keys.length; i++) {
+      if (I18N[keys[i]]) setHTML(keys[i], I18N[keys[i]][LANG]);
+    }
+    document.documentElement.setAttribute('lang', LANG === 'cn' ? 'zh-CN' : 'en');
+    // cue 由动画阶段决定，立即刷新当前 cue
+    renderCue(currentCueKey);
+  }
+
+  document.getElementById('langBtn').addEventListener('click', function () {
+    LANG = (LANG === 'cn') ? 'en' : 'cn';
+    applyI18N();
+  });
+
+  // ----------------------------------------------------------------
+  // Canvas: 唯一核心对象 = 一条实时脑波流上，2s 窗以 200ms 步长连续滑动，
+  // 每步解码吐出一个左/右概率，概率连续成流。一镜到底，连续演化，非翻页。
+  // ----------------------------------------------------------------
+  var cv = document.getElementById('stage');
+  var ctx2 = cv.getContext('2d');
+  var DPR = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+  var W = 0, H = 0;
+
+  // 读取 css 变量颜色 (canvas 用具体色串)
+  var COL = {
+    bg0:   '#0c0e16',
+    grid:  'rgba(120,140,190,0.10)',
+    fgDim: '#a9b2cb',
+    fgMute:'#737d99',
+    sig:   '#3ec8e8',   /* signal cyan  ~ oklch(0.75 0.17 200) */
+    sigDim:'#2a8aa3',
+    flash: '#bfeef7',   /* flash        */
+    gold:  '#e8c66a',   /* query / gold */
+    goldDim:'#a98b3e',
+    core:  '#2a8aa3',
+    win:   'rgba(62,200,232,0.10)',
+    winEdge:'#3ec8e8'
+  };
+
+  function resize() {
+    var rect = cv.getBoundingClientRect();
+    W = Math.max(320, rect.width);
+    H = Math.max(240, rect.height);
+    cv.width  = Math.floor(W * DPR);
+    cv.height = Math.floor(H * DPR);
+    ctx2.setTransform(DPR, 0, 0, DPR, 0, 0);
+  }
+  window.addEventListener('resize', resize);
+  resize();
+
+  // ---- 信号模型 ----
+  // 一条连续脑波: 基础 mu/beta 节律 + 噪声，叠加一个缓变的"真实意图" intent ∈ [-1,1]
+  // (负=偏想左手, 正=偏想右手)。intent 随时间平滑漂移，模拟人脑念头的切换。
+  // 窗内解码 = 对窗覆盖的 intent 做软判决 -> P(right)。
+  var t = 0;                 // 全局时间 (秒)
+  var SPEED = 1.0;           // 1 秒真实时间 = 1 秒信号时间
+  var WIN_SEC = 2.0;         // 窗宽 2s
+  var STEP_SEC = 0.2;        // 步长 200ms
+  var lastStepT = 0;         // 上次解码步的信号时间
+  var stepFlash = 0;         // 解码脉冲亮度 (每步触发，衰减)
+  var pLeft = 0.5, pRight = 0.5;     // 平滑显示用
+  var pLeftRaw = 0.5;
+  var probStream = [];       // 概率流历史 {tt, pr}  pr=P(right)
+  var MAX_STREAM = 64;
+
+  // intent(τ): 信号时间 τ 处的真实意图，平滑漂移 + 几段明确意图
+  function intentAt(tau) {
+    // 多正弦合成的缓变曲线，范围约 [-1,1]
+    var v = 0.62 * Math.sin(tau * 0.55 + 0.4)
+          + 0.30 * Math.sin(tau * 0.23 + 1.7)
+          + 0.14 * Math.sin(tau * 1.10 + 3.1);
+    if (v > 1) v = 1; if (v < -1) v = -1;
+    return v;
+  }
+
+  // 某信号时间 τ 处的脑波瞬时电压 (用于画波形)
+  function eegAt(tau) {
+    var it = intentAt(tau);
+    // mu(10Hz)/beta(20Hz) 节律，幅度被 intent 调制 (左右半球此处简化为单条总览波)
+    var mu   = Math.sin(tau * 2 * Math.PI * 2.4);          // 慢节律(便于可视化)
+    var beta = 0.5 * Math.sin(tau * 2 * Math.PI * 5.1 + 1);
+    // 伪随机噪声 (确定性，便于动画稳定)
+    var n = 0.35 * Math.sin(tau * 41.7) * Math.sin(tau * 13.3 + 0.6);
+    var amp = 0.7 + 0.5 * Math.abs(it);   // intent 越强，节律越分明
+    return amp * (mu + beta) * 0.55 + n;
+  }
+
+  // 把信号时间 τ 映射成屏幕 x。窗右沿(=最新时刻 = t)固定在屏幕某处，过去时间在左。
+  // 我们让 "now" (t) 落在主区右侧 padR 处，向左每秒占 PXPS 像素。
+  var PXPS = 0;   // px per second，resize 后算
+  var padL = 0, padR = 0, waveTop = 0, waveH = 0, axisY = 0;
+  var probTop = 0, probH = 0, streamTop = 0, streamH = 0;
+
+  function layout() {
+    padL = 36;
+    padR = 150;                       // 右侧留给概率条
+    var usableW = W - padL - padR;
+    // 屏幕上展示约 5 秒历史窗口宽度
+    var VISIBLE_SEC = 5.0;
+    PXPS = usableW / VISIBLE_SEC;
+    waveTop = 78;
+    waveH   = Math.min(150, (H - 78) * 0.30);
+    axisY   = waveTop + waveH * 0.5;
+    probTop = waveTop + waveH + 34;
+    probH   = Math.min(150, (H - probTop) * 0.42);
+    streamTop = probTop + probH + 34;
+    streamH = Math.max(60, H - streamTop - 84);
+  }
+  layout();
+  window.addEventListener('resize', layout);
+
+  // now(t) 对应屏幕 x:
+  function xOfTau(tau) {
+    // tau == t -> x = W - padR ; 每早 1 秒 -> 左移 PXPS
+    return (W - padR) - (t - tau) * PXPS;
+  }
+
+  function fmtPct(p) {
+    return (p * 100).toFixed(0) + '%';
+  }
+  function fmtWin() {
+    var lo = Math.max(0, t - WIN_SEC);
+    return lo.toFixed(1) + '–' + t.toFixed(1) + 's';
+  }
+
+  // 阶段控制 cue (跟随时间推进，点睛，画面才是主体)
+  var currentCueKey = 'cueOpen';
+  function pickCue() {
+    if (t < 5)   return 'cueOpen';
+    if (t < 12)  return 'cueSlide';
+    if (t < 21)  return 'cueDecode';
+    if (t < 30)  return 'cueStream';
+    return 'cueClose';
+  }
+  function renderCue(key) {
+    currentCueKey = key;
+    setHTML('cue', I18N[key] ? I18N[key][LANG] : '');
+  }
+
+  var lastFrame = performance.now();
+
+  function decodeStep() {
+    // 对当前窗 [t-WIN, t] 内的 intent 取均值，软判决成 P(right)
+    var lo = t - WIN_SEC;
+    var acc = 0, m = 6;
+    for (var k = 0; k < m; k++) {
+      var tau = lo + (k + 0.5) / m * WIN_SEC;
+      acc += intentAt(tau);
+    }
+    var mean = acc / m;                   // [-1,1]
+    // logistic 软判决：mean>0 偏右，<0 偏左
+    var pr = 1 / (1 + Math.exp(-mean * 2.6));
+    pLeftRaw = 1 - pr;
+    probStream.push({ tt: t, pr: pr });
+    if (probStream.length > MAX_STREAM) probStream.shift();
+    stepFlash = 1.0;
+    lastStepT = t;
+  }
+
+  function drawGrid() {
+    ctx2.strokeStyle = COL.grid;
+    ctx2.lineWidth = 1;
+    // wave 区水平基线
+    ctx2.beginPath();
+    ctx2.moveTo(padL, axisY); ctx2.lineTo(W - padR + 110, axisY);
+    ctx2.stroke();
+  }
+
+  function drawWave() {
+    // 连续脑波流：从右端(now)向左画历史波形，整体随 t 向左滚动
+    ctx2.lineWidth = 1.8;
+    ctx2.strokeStyle = COL.sig;
+    ctx2.beginPath();
+    var xStart = padL;
+    var first = true;
+    for (var x = xStart; x <= W - padR; x += 2) {
+      // x -> tau
+      var tau = t - ((W - padR) - x) / PXPS;
+      if (tau < 0) continue;
+      var y = axisY - eegAt(tau) * (waveH * 0.42);
+      if (first) { ctx2.moveTo(x, y); first = false; }
+      else ctx2.lineTo(x, y);
+    }
+    ctx2.stroke();
+
+    // 流入端高亮点 (最新样本)
+    var nowX = W - padR;
+    var nowY = axisY - eegAt(t) * (waveH * 0.42);
+    ctx2.fillStyle = COL.flash;
+    ctx2.beginPath(); ctx2.arc(nowX, nowY, 3.2, 0, Math.PI * 2); ctx2.fill();
+    ctx2.fillStyle = COL.fgMute;
+    ctx2.font = '10px "JetBrains Mono", monospace';
+    ctx2.textAlign = 'left';
+    ctx2.fillText(LANG === 'cn' ? '脑波持续流入 →' : 'EEG streaming in →', nowX - 138, waveTop - 8);
+  }
+
+  function drawWindow() {
+    // 2s 分析窗：钉在 [t-WIN, t]，半透明高亮 + 边框，随每步轻微"跳"
+    var xR = xOfTau(t);
+    var xL = xOfTau(t - WIN_SEC);
+    xL = Math.max(padL, xL);
+    var wY = waveTop - 6;
+    var wH = waveH + 12;
+    // 解码脉冲让窗体边框发亮
+    var glow = 0.5 + 0.5 * stepFlash;
+    ctx2.fillStyle = COL.win;
+    ctx2.fillRect(xL, wY, xR - xL, wH);
+    ctx2.strokeStyle = COL.winEdge;
+    ctx2.lineWidth = 1.4 + 1.6 * stepFlash;
+    ctx2.globalAlpha = glow;
+    ctx2.strokeRect(xL, wY, xR - xL, wH);
+    ctx2.globalAlpha = 1;
+
+    // 窗标签
+    ctx2.fillStyle = COL.flash;
+    ctx2.font = '700 11px "JetBrains Mono", monospace';
+    ctx2.textAlign = 'center';
+    var cx = (xL + xR) / 2;
+    ctx2.fillText('2s WINDOW', cx, wY - 6);
+
+    // 窗内步长刻度 (每 200ms 一个小 tick，体现采样网格)
+    ctx2.strokeStyle = 'rgba(62,200,232,0.30)';
+    ctx2.lineWidth = 1;
+    for (var s = 0; s <= WIN_SEC + 1e-6; s += STEP_SEC) {
+      var xs = xOfTau(t - WIN_SEC + s);
+      if (xs < xL - 1) continue;
+      ctx2.beginPath();
+      ctx2.moveTo(xs, wY + wH - 8); ctx2.lineTo(xs, wY + wH);
+      ctx2.stroke();
+    }
+    return { xL: xL, xR: xR, cx: cx, cy: wY + wH * 0.5 };
+  }
+
+  function drawProbBars(winRef) {
+    // 概率条：左/右两条，随每步解码连续更新 (呼吸)。位置在右侧固定柱区。
+    var bx = W - padR + 22;
+    var bw = 96;
+    var barH = 16;
+    var topY = probTop;
+    // 标题
+    ctx2.fillStyle = COL.fgDim;
+    ctx2.font = '700 11px "JetBrains Mono", monospace';
+    ctx2.textAlign = 'left';
+    ctx2.fillText(LANG === 'cn' ? '解码概率' : 'DECODED P', bx, topY - 12);
+
+    function bar(y, p, col, colDim, label) {
+      ctx2.fillStyle = 'rgba(120,140,190,0.14)';
+      ctx2.fillRect(bx, y, bw, barH);
+      ctx2.fillStyle = col;
+      ctx2.fillRect(bx, y, bw * p, barH);
+      ctx2.strokeStyle = colDim;
+      ctx2.lineWidth = 1;
+      ctx2.strokeRect(bx, y, bw, barH);
+      ctx2.fillStyle = COL.fgMute;
+      ctx2.font = '9px "JetBrains Mono", monospace';
+      ctx2.fillText(label, bx, y - 4);
+      ctx2.fillStyle = col;
+      ctx2.font = '700 11px "JetBrains Mono", monospace';
+      ctx2.textAlign = 'right';
+      ctx2.fillText((p * 100).toFixed(0) + '%', bx + bw, y - 4);
+      ctx2.textAlign = 'left';
+    }
+    bar(topY,        pLeft,  COL.sig,  COL.sigDim,  LANG === 'cn' ? '左 LEFT' : 'LEFT');
+    bar(topY + 44,   pRight, COL.gold, COL.goldDim, LANG === 'cn' ? '右 RIGHT' : 'RIGHT');
+
+    // 从窗到概率条的解码连线脉冲 (每步一道，体现"窗 -> 解码 -> 概率")
+    if (stepFlash > 0.02 && winRef) {
+      ctx2.strokeStyle = 'rgba(191,238,247,' + (0.7 * stepFlash).toFixed(3) + ')';
+      ctx2.lineWidth = 1.5;
+      ctx2.setLineDash([4, 4]);
+      ctx2.beginPath();
+      ctx2.moveTo(winRef.xR, winRef.cy);
+      ctx2.lineTo(bx, topY + barH * 0.5 + (pRight > pLeft ? 44 : 0));
+      ctx2.stroke();
+      ctx2.setLineDash([]);
+      // "decode" 标
+      ctx2.fillStyle = 'rgba(191,238,247,' + (0.9 * stepFlash).toFixed(3) + ')';
+      ctx2.font = '700 9px "JetBrains Mono", monospace';
+      ctx2.textAlign = 'center';
+      ctx2.fillText('classify()', (winRef.xR + bx) / 2, winRef.cy - 8);
+    }
+  }
+
+  function drawStream() {
+    // 概率流历史：底部一条连续推进的 P(right) 轨迹 (0.5 中线)，每解码点一个圆
+    var x0 = padL, x1 = W - padR + 110;
+    var midY = streamTop + streamH * 0.5;
+    // 0.5 中线
+    ctx2.strokeStyle = 'rgba(120,140,190,0.22)';
+    ctx2.lineWidth = 1;
+    ctx2.setLineDash([3, 5]);
+    ctx2.beginPath(); ctx2.moveTo(x0, midY); ctx2.lineTo(x1, midY); ctx2.stroke();
+    ctx2.setLineDash([]);
+    // 标题 + 中线标签
+    ctx2.fillStyle = COL.fgDim;
+    ctx2.font = '700 11px "JetBrains Mono", monospace';
+    ctx2.textAlign = 'left';
+    ctx2.fillText(LANG === 'cn' ? '实时概率流  P(右)' : 'LIVE STREAM  P(right)', x0, streamTop - 12);
+    ctx2.fillStyle = COL.fgMute;
+    ctx2.font = '9px "JetBrains Mono", monospace';
+    ctx2.textAlign = 'right';
+    ctx2.fillText('0.5', x0 - 4, midY + 3);
+
+    if (probStream.length < 2) return;
+    // 概率流以信号时间映射，跟脑波同坐标系，连续向左推进
+    ctx2.lineWidth = 2;
+    ctx2.beginPath();
+    var started = false;
+    for (var i = 0; i < probStream.length; i++) {
+      var pt = probStream[i];
+      var x = xOfTau(pt.tt);
+      if (x < x0) continue;
+      var y = streamTop + (1 - pt.pr) * streamH;  // pr=1(右) 在上
+      if (!started) { ctx2.moveTo(x, y); started = true; }
+      else ctx2.lineTo(x, y);
+    }
+    ctx2.strokeStyle = COL.flash;
+    ctx2.stroke();
+    // 每个解码点画圆，左偏 cyan / 右偏 gold
+    for (var j = 0; j < probStream.length; j++) {
+      var p = probStream[j];
+      var px = xOfTau(p.tt);
+      if (px < x0) continue;
+      var py = streamTop + (1 - p.pr) * streamH;
+      ctx2.fillStyle = (p.pr >= 0.5) ? COL.gold : COL.sig;
+      ctx2.beginPath(); ctx2.arc(px, py, 3, 0, Math.PI * 2); ctx2.fill();
+    }
+    // 最新点高亮 (gold key-moment 一闪：当概率明显偏向一侧)
+    var last = probStream[probStream.length - 1];
+    var lx = xOfTau(last.tt), ly = streamTop + (1 - last.pr) * streamH;
+    var strong = Math.abs(last.pr - 0.5) > 0.28;
+    ctx2.fillStyle = strong ? COL.gold : COL.flash;
+    ctx2.beginPath(); ctx2.arc(lx, ly, strong ? 5.5 : 4, 0, Math.PI * 2); ctx2.fill();
+    if (strong && stepFlash > 0.3) {
+      ctx2.strokeStyle = COL.gold;
+      ctx2.lineWidth = 1.4;
+      ctx2.globalAlpha = stepFlash;
+      ctx2.beginPath(); ctx2.arc(lx, ly, 9, 0, Math.PI * 2); ctx2.stroke();
+      ctx2.globalAlpha = 1;
+    }
+  }
+
+  function updateHUD() {
+    setHTML('hWinV', fmtWin());
+    var lEl = document.getElementById('hLeftV');
+    var rEl = document.getElementById('hRightV');
+    if (lEl) lEl.textContent = fmtPct(pLeft);
+    if (rEl) rEl.textContent = fmtPct(pRight);
+  }
+
+  function frame(now) {
+    var dt = Math.min(0.05, (now - lastFrame) / 1000);
+    lastFrame = now;
+    t += dt * SPEED;
+
+    // 每 200ms 信号时间触发一次解码步 (节奏锚)
+    while (t - lastStepT >= STEP_SEC) {
+      lastStepT += STEP_SEC;
+      // 在精确步时刻解码 (用 t 近似当前窗)
+      decodeStep();
+    }
+    // 概率平滑趋向 raw (连续呼吸更新)
+    pLeft  += (pLeftRaw - pLeft) * Math.min(1, dt * 9);
+    pRight = 1 - pLeft;
+    // 解码脉冲衰减
+    stepFlash *= Math.pow(0.02, dt);   // 快速衰减
+    if (stepFlash < 0.001) stepFlash = 0;
+
+    // 阶段 cue
+    var ck = pickCue();
+    if (ck !== currentCueKey) renderCue(ck);
+
+    // 绘制
+    ctx2.clearRect(0, 0, W, H);
+    drawGrid();
+    drawWave();
+    var winRef = drawWindow();
+    drawProbBars(winRef);
+    drawStream();
+    updateHUD();
+
+    requestAnimationFrame(frame);
+  }
+
+  // init
+  // 预热概率流 (避免开场空白)
+  lastStepT = 0;
+  applyI18N();
+  renderCue('cueOpen');
+  requestAnimationFrame(function (ts) { lastFrame = ts; requestAnimationFrame(frame); });
+})();
+</script>
+</body>
+</html>

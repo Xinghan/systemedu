@@ -1,0 +1,870 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>解码模块状态机 — 搭一个 30 分钟不崩的模块</title>
+<style>
+:root{
+  --paper:#FAF9F5; --paper-2:#F1EDDF; --card:#FFFFFF;
+  --ink:#191814; --ink-2:#2B2924; --sub:#6B6557; --sub-2:#9D978A;
+  --border:#EBE5D6; --border-2:#D9D1BD; --hairline:#F2EDE0;
+  /* domain accent: computing #C04E68 */
+  --primary:#C04E68; --primary-ink:#8F3149; --primary-soft:#F8E7EC; --primary-line:#ECC4CF;
+  --ok:#3F7A52; --ok-soft:#E0EBE2; --ok-line:#BFD8C6;
+  --bad:#B5462F; --bad-soft:#F3DED6; --bad-line:#E4BDAE;
+  --warn:#A9772A; --warn-soft:#F4E9D2; --warn-line:#E2C996;
+  --shadow-sm:0 1px 2px 0 rgba(25,24,20,.04);
+  --shadow:0 1px 3px 0 rgba(25,24,20,.06),0 1px 2px -1px rgba(25,24,20,.04);
+  --shadow-md:0 4px 8px -2px rgba(25,24,20,.07),0 2px 4px -2px rgba(25,24,20,.04);
+  --shadow-lg:0 14px 30px -8px rgba(25,24,20,.12),0 4px 10px -4px rgba(25,24,20,.06);
+  --mono:'JetBrains Mono','SF Mono',ui-monospace,Menlo,Consolas,monospace;
+  --sans:'PingFang SC','Inter','Noto Sans SC',system-ui,sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:100%;height:100vh;overflow:hidden;background:var(--paper);
+  font-family:var(--sans);color:var(--ink);}
+.wrapper{display:flex;height:100vh;}
+
+/* ── 200px sidebar ── */
+.game-sidebar{
+  width:200px;flex-shrink:0;height:100vh;overflow-y:auto;
+  background:var(--paper-2);border-right:1px solid var(--border);
+  padding:13px 11px;display:flex;flex-direction:column;gap:11px;
+}
+.brand{display:flex;flex-direction:column;gap:3px;}
+.brand .kicker{font-family:var(--mono);font-size:9px;letter-spacing:1.5px;
+  color:var(--primary-ink);text-transform:uppercase;}
+.brand .title{font-size:13.5px;font-weight:700;color:var(--ink);line-height:1.25;}
+.brand .sub{font-size:10px;color:var(--sub);line-height:1.4;}
+
+/* roadmap */
+.roadmap{display:flex;flex-direction:column;gap:4px;}
+.roadmap h3{font-family:var(--mono);font-size:8.5px;letter-spacing:1px;
+  color:var(--sub);text-transform:uppercase;margin-bottom:1px;}
+.road-item{display:flex;align-items:center;gap:7px;padding:5px 7px;border-radius:6px;
+  background:var(--card);border:1px solid var(--border);font-size:10px;color:var(--sub);}
+.road-item .rn{font-family:var(--mono);font-size:8.5px;width:15px;height:15px;flex-shrink:0;
+  display:flex;align-items:center;justify-content:center;border-radius:4px;
+  background:var(--paper-2);border:1px solid var(--border-2);color:var(--sub);}
+.road-item.done{color:var(--ok);}
+.road-item.done .rn{background:var(--ok);color:#fff;border-color:var(--ok);}
+.road-item.here{border-color:var(--primary-line);background:var(--primary-soft);
+  color:var(--primary-ink);font-weight:600;box-shadow:var(--shadow-sm);}
+.road-item.here .rn{background:var(--primary);color:#fff;border-color:var(--primary);}
+
+/* palette: states + transitions */
+.lib{display:flex;flex-direction:column;gap:5px;}
+.lib h3{font-family:var(--mono);font-size:8.5px;letter-spacing:1px;
+  color:var(--sub);text-transform:uppercase;margin-bottom:1px;}
+.state-chip{display:flex;align-items:center;gap:8px;padding:7px 8px;border-radius:7px;
+  background:var(--card);border:1.5px solid var(--border-2);font-size:11px;color:var(--ink-2);
+  cursor:grab;transition:all .15s;font-weight:600;user-select:none;}
+.state-chip:hover{border-color:var(--primary-line);box-shadow:var(--shadow-sm);transform:translateY(-1px);}
+.state-chip.placed{opacity:.4;cursor:default;}
+.state-chip .swatch{width:13px;height:13px;border-radius:4px;flex-shrink:0;border:1px solid rgba(0,0,0,.12);}
+.state-chip .sname{flex:1;}
+.state-chip .stag{font-family:var(--mono);font-size:8px;color:var(--sub-2);}
+.sw-idle{background:#C9C2B0;} .sw-cal{background:var(--warn);}
+.sw-run{background:var(--ok);} .sw-err{background:var(--bad);}
+
+.hint{font-size:9.5px;color:var(--sub);line-height:1.45;background:var(--card);
+  border:1px dashed var(--border-2);border-radius:6px;padding:7px 8px;}
+
+.spacer{flex:1;min-height:6px;}
+.lang-btn{align-self:stretch;font-family:var(--mono);font-size:10.5px;letter-spacing:.5px;
+  padding:8px 9px;border-radius:7px;background:var(--card);border:1px solid var(--border-2);
+  color:var(--ink-2);cursor:pointer;transition:all .2s;}
+.lang-btn:hover{background:var(--primary-soft);border-color:var(--primary-line);color:var(--primary-ink);}
+
+/* ── main ── */
+.game-main{flex:1;height:100vh;display:flex;flex-direction:column;overflow:hidden;
+  padding:16px 20px;gap:12px;}
+
+/* top brief strip */
+.brief{display:flex;align-items:center;gap:13px;background:var(--card);
+  border:1px solid var(--border);border-radius:11px;padding:11px 16px;box-shadow:var(--shadow);}
+.brief .mc{width:42px;height:42px;flex-shrink:0;border-radius:9px;
+  background:var(--paper-2);border:1px solid var(--border-2);
+  display:flex;align-items:center;justify-content:center;}
+.brief .mc svg{width:26px;height:26px;}
+.brief .meta{display:flex;flex-direction:column;gap:2px;}
+.brief .name{font-size:13px;font-weight:700;color:var(--ink);}
+.brief .desc{font-size:11px;color:var(--sub);line-height:1.45;}
+.brief .status{margin-left:auto;font-family:var(--mono);font-size:10px;letter-spacing:.4px;
+  padding:6px 11px;border-radius:20px;background:var(--paper-2);border:1px solid var(--border-2);
+  color:var(--sub);white-space:nowrap;}
+.brief .status.run{background:var(--warn-soft);border-color:var(--warn-line);color:var(--warn);}
+.brief .status.crash{background:var(--bad-soft);border-color:var(--bad-line);color:var(--bad);}
+.brief .status.win{background:var(--ok-soft);border-color:var(--ok-line);color:var(--ok);}
+
+/* work row: canvas + result */
+.work{flex:1;display:flex;gap:13px;min-height:0;}
+
+/* canvas — state machine board */
+.board-wrap{flex:1;display:flex;flex-direction:column;min-width:0;background:var(--card);
+  border:1px solid var(--border);border-radius:12px;box-shadow:var(--shadow-md);overflow:hidden;}
+.board-head{display:flex;align-items:center;gap:10px;padding:9px 14px;border-bottom:1px solid var(--hairline);}
+.board-head .bt{font-family:var(--mono);font-size:9.5px;letter-spacing:1px;color:var(--primary-ink);text-transform:uppercase;}
+.board-head .bsub{font-size:10.5px;color:var(--sub);margin-left:auto;}
+.board{flex:1;position:relative;min-height:0;overflow:hidden;
+  background:
+    radial-gradient(circle at 1px 1px, var(--border) 1px, transparent 0);
+  background-size:22px 22px;background-color:var(--paper);}
+.board.dragover{background-color:var(--primary-soft);}
+.svg-edges{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;}
+
+/* placed node */
+.node{position:absolute;width:124px;padding:9px 11px;border-radius:10px;background:var(--card);
+  border:2px solid var(--border-2);box-shadow:var(--shadow);cursor:pointer;user-select:none;
+  transition:border-color .15s,box-shadow .15s,transform .15s;}
+.node:hover{box-shadow:var(--shadow-md);transform:translateY(-1px);}
+.node .nhead{display:flex;align-items:center;gap:7px;margin-bottom:3px;}
+.node .ndot{width:11px;height:11px;border-radius:50%;flex-shrink:0;}
+.node .nname{font-size:12px;font-weight:700;color:var(--ink);}
+.node .ndesc{font-size:9.5px;color:var(--sub);line-height:1.4;}
+.node.sel{border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-soft);}
+.node.linkSrc{border-color:var(--warn);box-shadow:0 0 0 3px var(--warn-soft);}
+.node.flash{border-color:var(--primary);box-shadow:0 0 0 5px var(--primary-soft);}
+.node.crashNode{border-color:var(--bad);box-shadow:0 0 0 4px var(--bad-soft);}
+.nd-idle{background:#C9C2B0;} .nd-cal{background:var(--warn);}
+.nd-run{background:var(--ok);} .nd-err{background:var(--bad);}
+
+.board-empty{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+  flex-direction:column;gap:7px;color:var(--sub-2);pointer-events:none;text-align:center;padding:20px;}
+.board-empty .be-big{font-size:13px;color:var(--sub);font-weight:600;}
+.board-empty .be-sm{font-size:11px;}
+
+/* transition picker popover */
+.tpick{position:absolute;z-index:30;background:var(--card);border:1px solid var(--border-2);
+  border-radius:10px;box-shadow:var(--shadow-lg);padding:10px;width:210px;}
+.tpick .tph{font-family:var(--mono);font-size:9px;letter-spacing:.8px;color:var(--sub);
+  text-transform:uppercase;margin-bottom:7px;}
+.tpick .tcond{display:block;width:100%;text-align:left;font-family:var(--sans);font-size:11px;
+  padding:8px 9px;border-radius:7px;border:1px solid var(--border);background:var(--paper);
+  color:var(--ink-2);cursor:pointer;margin-bottom:5px;transition:all .15s;}
+.tpick .tcond:hover{border-color:var(--primary-line);background:var(--primary-soft);color:var(--primary-ink);}
+.tpick .tcancel{font-family:var(--mono);font-size:10px;color:var(--sub);background:none;border:none;
+  cursor:pointer;padding:3px;}
+
+.edge-lbl{font-family:var(--mono);font-size:9px;}
+
+/* right: control + result */
+.panel{width:268px;flex-shrink:0;display:flex;flex-direction:column;gap:11px;min-height:0;}
+.ctl-card{background:var(--card);border:1px solid var(--border);border-radius:11px;
+  padding:13px;box-shadow:var(--shadow);}
+.ctl-card h3{font-family:var(--mono);font-size:9px;letter-spacing:1px;color:var(--sub);
+  text-transform:uppercase;margin-bottom:8px;}
+.ctl-card .task{font-size:11px;line-height:1.55;color:var(--ink-2);margin-bottom:11px;}
+.btn{font-family:var(--mono);font-size:11.5px;letter-spacing:.4px;padding:10px 14px;border-radius:8px;
+  cursor:pointer;border:1px solid var(--border-2);background:var(--card);color:var(--ink-2);
+  transition:all .18s;width:100%;}
+.btn:hover:not(:disabled){border-color:var(--primary-line);background:var(--primary-soft);color:var(--primary-ink);}
+.btn:disabled{opacity:.45;cursor:default;}
+.btn.primary{background:var(--primary);border-color:var(--primary);color:#fff;}
+.btn.primary:hover:not(:disabled){background:var(--primary-ink);}
+.btn.ghost{font-size:10.5px;padding:7px 12px;margin-top:7px;}
+
+/* stress result */
+.result{flex:1;background:var(--card);border:1px solid var(--border);border-radius:11px;
+  box-shadow:var(--shadow);display:flex;flex-direction:column;overflow:hidden;min-height:0;}
+.result .rh{display:flex;align-items:center;gap:8px;padding:10px 13px;border-bottom:1px solid var(--hairline);}
+.result .rh .rt{font-family:var(--mono);font-size:9.5px;letter-spacing:1px;color:var(--primary-ink);text-transform:uppercase;}
+.result .rh .clock{margin-left:auto;font-family:var(--mono);font-size:12px;font-weight:700;color:var(--ink);}
+.result .rbody{flex:1;overflow-y:auto;padding:11px 13px;}
+.log-line{font-family:var(--mono);font-size:10px;line-height:1.6;color:var(--sub);
+  padding:2px 0;border-bottom:1px dashed var(--hairline);}
+.log-line .lt{color:var(--sub-2);}
+.log-line.ev-cal{color:var(--warn);} .log-line.ev-run{color:var(--ok);}
+.log-line.ev-err{color:var(--bad);font-weight:600;} .log-line.ev-crash{color:var(--bad);font-weight:700;}
+.gauge{height:8px;border-radius:5px;background:var(--paper-2);overflow:hidden;margin-top:9px;
+  border:1px solid var(--border);}
+.gauge > span{display:block;height:100%;width:0;background:var(--primary);transition:width .3s linear;}
+.result-empty{flex:1;display:flex;align-items:center;justify-content:center;text-align:center;
+  padding:18px;color:var(--sub-2);font-size:11px;line-height:1.6;}
+
+/* win / fail banner overlay inside result */
+.verdict{padding:13px;border-radius:9px;margin-top:10px;}
+.verdict.win{background:var(--ok-soft);border:1px solid var(--ok-line);}
+.verdict.fail{background:var(--bad-soft);border:1px solid var(--bad-line);}
+.verdict .vbadge{display:inline-flex;align-items:center;gap:6px;font-family:var(--mono);font-size:9.5px;
+  letter-spacing:.8px;text-transform:uppercase;padding:4px 9px;border-radius:14px;margin-bottom:7px;}
+.verdict.win .vbadge{background:var(--card);border:1px solid var(--ok-line);color:var(--ok);}
+.verdict.fail .vbadge{background:var(--card);border:1px solid var(--bad-line);color:var(--bad);}
+.verdict h4{font-size:12.5px;color:var(--ink);margin-bottom:5px;line-height:1.4;}
+.verdict p{font-size:10.5px;color:var(--ink-2);line-height:1.55;}
+
+.hidden{display:none !important;}
+</style>
+</head>
+<body>
+<div class="wrapper">
+
+  <!-- ── 200px sidebar ── -->
+  <aside class="game-sidebar">
+    <div class="brand">
+      <span class="kicker" data-i18n="kicker">DECODER MODULE</span>
+      <span class="title" data-i18n="brandTitle">解码模块状态机</span>
+      <span class="sub" data-i18n="brandSub">搭一个不崩的实时解码模块</span>
+    </div>
+
+    <div class="roadmap">
+      <h3 data-i18n="roadmap">ROADMAP</h3>
+      <div class="road-item done"><span class="rn">S1</span><span data-i18n="r1">读懂脑信号</span></div>
+      <div class="road-item done"><span class="rn">S2</span><span data-i18n="r2">采集与清洗</span></div>
+      <div class="road-item done"><span class="rn">S3</span><span data-i18n="r3">训练解码器</span></div>
+      <div class="road-item here"><span class="rn">S4</span><span data-i18n="r4">封装解码模块</span></div>
+      <div class="road-item"><span class="rn">S5</span><span data-i18n="r5">实时闭环控制</span></div>
+      <div class="road-item"><span class="rn">S6</span><span data-i18n="r6">脑控 Minecraft</span></div>
+    </div>
+
+    <div class="lib">
+      <h3 data-i18n="stateLib">状态库 · 拖到画布</h3>
+      <div class="state-chip" draggable="true" data-state="idle">
+        <span class="swatch sw-idle"></span><span class="sname" data-i18n="stIdle">空闲</span><span class="stag">IDLE</span>
+      </div>
+      <div class="state-chip" draggable="true" data-state="calibrating">
+        <span class="swatch sw-cal"></span><span class="sname" data-i18n="stCal">校准</span><span class="stag">CAL</span>
+      </div>
+      <div class="state-chip" draggable="true" data-state="running">
+        <span class="swatch sw-run"></span><span class="sname" data-i18n="stRun">解码运行</span><span class="stag">RUN</span>
+      </div>
+      <div class="state-chip" draggable="true" data-state="error">
+        <span class="swatch sw-err"></span><span class="sname" data-i18n="stErr">错误处理</span><span class="stag">ERR</span>
+      </div>
+    </div>
+
+    <div class="hint" data-i18n="hint">点画布上的状态 → 再点另一个状态，弹出转移条件菜单，选条件连成箭头。</div>
+
+    <div class="spacer"></div>
+    <button class="lang-btn" id="langBtn" type="button">EN / 中文</button>
+  </aside>
+
+  <!-- ── main ── -->
+  <main class="game-main">
+
+    <!-- brief -->
+    <div class="brief">
+      <div class="mc">
+        <!-- minecraft block silhouette (project endpoint badge) -->
+        <svg viewBox="0 0 24 24" fill="none" stroke="#C04E68" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 2 21 7v10l-9 5-9-5V7z"/><path d="M12 2v20"/><path d="M3 7l9 5 9-5"/>
+        </svg>
+      </div>
+      <div class="meta">
+        <span class="name" data-i18n="briefName">S4 · 把实时解码搭成稳定状态机</span>
+        <span class="desc" data-i18n="briefDesc">才能可靠接进游戏。这个模块要 30 分钟不崩，才能拿去控制 Minecraft。</span>
+      </div>
+      <span class="status" id="status" data-i18n="stStandby">未压测</span>
+    </div>
+
+    <!-- work area -->
+    <div class="work">
+
+      <!-- state machine board -->
+      <div class="board-wrap">
+        <div class="board-head">
+          <span class="bt" data-i18n="boardTag">STATE MACHINE · 状态机画布</span>
+          <span class="bsub" id="boardSub"></span>
+        </div>
+        <div class="board" id="board">
+          <svg class="svg-edges" id="edges"></svg>
+          <div class="board-empty" id="boardEmpty">
+            <span class="be-big" data-i18n="emptyBig">从左侧把状态拖进来</span>
+            <span class="be-sm" data-i18n="emptySm">idle / calibrating / running / error，缺一个压测就会出事</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- control + stress result -->
+      <div class="panel">
+        <div class="ctl-card">
+          <h3 data-i18n="missionTag">MISSION</h3>
+          <p class="task" data-i18n="mission">搭出完整状态机：空闲→校准→运行，运行遇伪迹要能进错误处理再恢复。然后压测 30 分钟，全程不崩就解锁。</p>
+          <button class="btn primary" id="stressBtn" type="button" data-i18n="stress">压测 30 分钟</button>
+          <button class="btn ghost" id="resetBtn" type="button" data-i18n="reset">清空画布重搭</button>
+        </div>
+
+        <div class="result" id="result">
+          <div class="rh">
+            <span class="rt" data-i18n="stressTag">STRESS TEST · 压测</span>
+            <span class="clock" id="clock">00:00</span>
+          </div>
+          <div class="result-empty" id="resultEmpty" data-i18n="resultEmpty">
+            先把状态机搭完整，再点「压测 30 分钟」。日志会逐条显示模块在真实信号流下的反应。
+          </div>
+          <div class="rbody hidden" id="rbody">
+            <div id="logArea"></div>
+            <div class="gauge"><span id="gaugeFill"></span></div>
+            <div id="verdict"></div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </main>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  /* ── i18n ── */
+  var lang = "zh";
+  var I18N = {
+    zh:{
+      kicker:"DECODER MODULE", brandTitle:"解码模块状态机", brandSub:"搭一个不崩的实时解码模块",
+      roadmap:"项目路线", r1:"读懂脑信号", r2:"采集与清洗", r3:"训练解码器",
+      r4:"封装解码模块", r5:"实时闭环控制", r6:"脑控 Minecraft",
+      stateLib:"状态库 · 拖到画布", stIdle:"空闲", stCal:"校准", stRun:"解码运行", stErr:"错误处理",
+      hint:"点画布上的状态 → 再点另一个状态，弹出转移条件菜单，选条件连成箭头。",
+      briefName:"S4 · 把实时解码搭成稳定状态机",
+      briefDesc:"才能可靠接进游戏。这个模块要 30 分钟不崩，才能拿去控制 Minecraft。",
+      stStandby:"未压测", stTesting:"压测中", stCrash:"已崩溃", stStable:"30 分钟稳定",
+      boardTag:"STATE MACHINE · 状态机画布",
+      emptyBig:"从左侧把状态拖进来",
+      emptySm:"idle / calibrating / running / error，缺一个压测就会出事",
+      missionTag:"任务",
+      mission:"搭出完整状态机：空闲→校准→运行，运行遇伪迹要能进错误处理再恢复。然后压测 30 分钟，全程不崩就解锁。",
+      stress:"压测 30 分钟", reset:"清空画布重搭", stressTag:"STRESS TEST · 压测",
+      resultEmpty:"先把状态机搭完整，再点「压测 30 分钟」。日志会逐条显示模块在真实信号流下的反应。",
+      tpickH:"选转移条件", tcancel:"取消",
+      nodeDesc:{
+        idle:"开机待命，等学生戴好电极", calibrating:"采几分钟基线，对齐信号", running:"实时输出左/右手意图",
+        error:"接住伪迹/漂移，不让模块挂掉"
+      },
+      // transition conditions, keyed by "src>dst"
+      cond:{
+        "idle>calibrating":"按下开始 / 戴好电极",
+        "calibrating>running":"基线对齐完成",
+        "running>error":"检测到伪迹或低置信度",
+        "error>calibrating":"重新对齐信号",
+        "error>running":"伪迹消失，恢复解码",
+        "running>idle":"用户结束会话",
+        "calibrating>idle":"取消校准",
+        "running>calibrating":"漂移过大，回去重校",
+        "idle>running":"跳过校准直接跑(危险)",
+        "running>running":"持续输出",
+        "error>idle":"错误后直接关机"
+      },
+      stressBtn:"压测 30 分钟",
+      verCrash:{
+        noerr:{t:"模块崩溃 · 缺少错误处理", b:"压到第 8 分钟，学生眨了一下眼，一阵肌电伪迹涌进来。状态机里没有 error 态，running 接不住异常，整个模块直接抛错退出——脑控游戏当场卡死。真实模块必须有 error 态来接住伪迹。"},
+        nocal:{t:"模块崩溃 · 缺少校准", b:"前几分钟还行，但脑电基线慢慢漂移。没有 calibrating 态可回退，running 越读越歪，到第 14 分钟置信度全线崩盘——光标乱飘没法用。漂移必须靠重新校准来修。"},
+        nostart:{t:"无法启动 · 缺少基础状态", b:"状态机连最基本的 idle/running 都不全，模块根本起不来。补齐四个状态再压测。"},
+        deadend:{t:"模块卡死 · 转移逻辑不闭合", b:"running 进了 error，却没有从 error 出来的路（恢复或重校）。一旦出错就永远困在 error 里，模块假死。错误处理必须有出口，能回到正常流程。"},
+        norun:{t:"模块崩溃 · 流程接不通", b:"从 idle 一路走不到 running（缺校准衔接或转移条件接错）。模块压根没进入解码，自然不能控制游戏。检查 idle→calibrating→running 这条主线。"}
+      },
+      verWin:{t:"模块封好，接进 Minecraft", b:"30 分钟全程稳定：眨眼伪迹被 error 态接住后自动恢复，基线漂移触发重校准，主流程一次没断。你刚刚封装出一个可靠的解码模块——下一步 S5，就把它接进实时闭环，离脑控 Minecraft 只差一关。"},
+      badge:"已解锁 · 模块架构师", failBadge:"压测未通过",
+      logStart:"压测开始 · 注入真实信号流", logEnd:"压测结束",
+      ev:{boot:"模块上电 → idle",calStart:"进入校准，采集基线",calDone:"基线对齐，转入 running",
+        decode:"解码输出意图",artifact:"伪迹涌入！",caught:"error 态接住，准备恢复",
+        recover:"恢复 running",drift:"基线漂移升高",recal:"触发重新校准",stable:"信号稳定，继续解码"}
+    },
+    en:{
+      kicker:"DECODER MODULE", brandTitle:"Decoder State Machine", brandSub:"Build a decode module that won't crash",
+      roadmap:"PROJECT ROAD", r1:"Read brain signal", r2:"Acquire & clean", r3:"Train decoder",
+      r4:"Wrap decode module", r5:"Real-time loop", r6:"Mind-control Minecraft",
+      stateLib:"STATE LIBRARY · drag in", stIdle:"Idle", stCal:"Calibrating", stRun:"Running", stErr:"Error",
+      hint:"Click a placed state, then click another — a transition-condition menu pops up; pick one to draw the arrow.",
+      briefName:"S4 · Turn live decoding into a stable state machine",
+      briefDesc:"so it can plug into the game reliably. This module must survive 30 min to drive Minecraft.",
+      stStandby:"Not tested", stTesting:"Testing", stCrash:"Crashed", stStable:"Stable 30 min",
+      boardTag:"STATE MACHINE BOARD",
+      emptyBig:"Drag states in from the left",
+      emptySm:"idle / calibrating / running / error — miss one and the stress test breaks",
+      missionTag:"MISSION",
+      mission:"Build the full machine: idle→calibrating→running, with running able to enter error on artifacts and recover. Then stress-test 30 min; survive it to unlock.",
+      stress:"Stress test 30 min", reset:"Clear & rebuild", stressTag:"STRESS TEST",
+      resultEmpty:"Build the full state machine first, then hit Stress test 30 min. The log shows how the module reacts to a real signal stream.",
+      tpickH:"Pick transition condition", tcancel:"Cancel",
+      nodeDesc:{
+        idle:"Powered on, waiting for electrodes", calibrating:"Collect a baseline, align signal", running:"Stream left/right intent live",
+        error:"Catch artifacts/drift, keep module alive"
+      },
+      cond:{
+        "idle>calibrating":"Start / electrodes on",
+        "calibrating>running":"Baseline aligned",
+        "running>error":"Artifact or low confidence",
+        "error>calibrating":"Re-align signal",
+        "error>running":"Artifact gone, resume",
+        "running>idle":"User ends session",
+        "calibrating>idle":"Cancel calibration",
+        "running>calibrating":"Drift too high, re-calibrate",
+        "idle>running":"Skip calibration (risky)",
+        "running>running":"Keep streaming",
+        "error>idle":"Shut down on error"
+      },
+      stressBtn:"Stress test 30 min",
+      verCrash:{
+        noerr:{t:"Module crashed · no error state", b:"At minute 8 the student blinks; a burst of EMG artifact floods in. With no error state, running can't catch the exception and the whole module throws and exits — the game freezes. A real module needs an error state to absorb artifacts."},
+        nocal:{t:"Module crashed · no calibration", b:"Fine at first, but the EEG baseline slowly drifts. With no calibrating state to fall back to, running reads more and more skewed until confidence collapses around minute 14. Drift must be fixed by re-calibration."},
+        nostart:{t:"Won't start · missing core states", b:"The machine lacks even idle/running. The module can't boot. Add all four states and test again."},
+        deadend:{t:"Module stuck · transitions not closed", b:"running enters error, but there's no way out of error (recover or re-calibrate). One fault and it's trapped forever — a frozen module. Error handling must have an exit back to normal flow."},
+        norun:{t:"Module crashed · flow broken", b:"You can't reach running from idle (missing the calibration link or wrong transition). The module never decodes, so it can't drive the game. Check the main line idle→calibrating→running."}
+      },
+      verWin:{t:"Module sealed — plugging into Minecraft", b:"Stable for the full 30 min: blink artifacts were caught by the error state and auto-recovered, baseline drift triggered re-calibration, the main flow never broke. You just wrapped a reliable decode module — next is S5, wire it into the real-time loop, one step from mind-controlling Minecraft."},
+      badge:"UNLOCKED · MODULE ARCHITECT", failBadge:"STRESS TEST FAILED",
+      logStart:"Stress test begins · injecting real signal stream", logEnd:"Stress test ends",
+      ev:{boot:"Module power on → idle",calStart:"Calibrating, collecting baseline",calDone:"Baseline aligned → running",
+        decode:"Decoding intent",artifact:"Artifact burst!",caught:"Error state caught it, recovering",
+        recover:"Resumed running",drift:"Baseline drift rising",recal:"Re-calibration triggered",stable:"Signal stable, keep decoding"}
+    }
+  };
+  function T(k){ return I18N[lang][k]; }
+
+  /* ── state meta ── */
+  var STATE_META = {
+    idle:        { cls:"nd-idle", labelKey:"stIdle" },
+    calibrating: { cls:"nd-cal",  labelKey:"stCal" },
+    running:     { cls:"nd-run",  labelKey:"stRun" },
+    error:       { cls:"nd-err",  labelKey:"stErr" }
+  };
+  var DEFAULT_POS = {
+    idle:        { x:40,  y:130 },
+    calibrating: { x:230, y:40  },
+    running:     { x:230, y:230 },
+    error:      { x:430, y:130 }
+  };
+
+  /* ── model ── */
+  var placed = {};            // stateKey -> {x,y}
+  var nodeEls = {};           // stateKey -> element
+  var edges = [];             // {src,dst,cond}
+  var selected = null;        // first clicked node for linking
+  var $ = function(id){ return document.getElementById(id); };
+
+  var board = $("board"), svg = $("edges"), boardEmpty = $("boardEmpty"),
+      boardSub = $("boardSub"), statusEl = $("status"),
+      stressBtn = $("stressBtn"), resetBtn = $("resetBtn"),
+      resultEmpty = $("resultEmpty"), rbody = $("rbody"), logArea = $("logArea"),
+      gaugeFill = $("gaugeFill"), verdictEl = $("verdict"), clockEl = $("clock");
+
+  var testing = false;
+
+  /* ── drag from sidebar ── */
+  var chips = document.querySelectorAll(".state-chip");
+  for (var c=0;c<chips.length;c++){
+    chips[c].addEventListener("dragstart", function(e){
+      e.dataTransfer.setData("text/plain", this.getAttribute("data-state"));
+      e.dataTransfer.effectAllowed = "copy";
+    });
+  }
+  board.addEventListener("dragover", function(e){ e.preventDefault(); board.classList.add("dragover"); });
+  board.addEventListener("dragleave", function(){ board.classList.remove("dragover"); });
+  board.addEventListener("drop", function(e){
+    e.preventDefault(); board.classList.remove("dragover");
+    if (testing) return;
+    var key = e.dataTransfer.getData("text/plain");
+    if (!key || !STATE_META[key] || placed[key]) return;
+    var r = board.getBoundingClientRect();
+    var x = e.clientX - r.left - 62, y = e.clientY - r.top - 26;
+    placeState(key, clamp(x, 4, r.width-128), clamp(y, 4, r.height-66));
+  });
+
+  function clamp(v,min,max){ return Math.max(min, Math.min(max, v)); }
+
+  function placeState(key, x, y){
+    placed[key] = { x:x, y:y };
+    var meta = STATE_META[key];
+    var el = document.createElement("div");
+    el.className = "node";
+    el.setAttribute("data-node", key);
+    el.style.left = x + "px"; el.style.top = y + "px";
+    el.innerHTML =
+      '<div class="nhead"><span class="ndot '+meta.cls+'"></span>' +
+      '<span class="nname">'+T(meta.labelKey)+'</span></div>' +
+      '<div class="ndesc">'+T("nodeDesc")[key]+'</div>';
+    el.addEventListener("click", function(ev){ ev.stopPropagation(); onNodeClick(key); });
+    board.appendChild(el);
+    nodeEls[key] = el;
+    // mark chip placed
+    var chip = document.querySelector('.state-chip[data-state="'+key+'"]');
+    if (chip) chip.classList.add("placed");
+    refresh();
+  }
+
+  /* ── linking: click src then dst -> pick condition ── */
+  function onNodeClick(key){
+    if (testing) return;
+    closePicker();
+    if (selected === null){
+      selected = key;
+      highlightSel();
+      return;
+    }
+    if (selected === key){
+      selected = null; highlightSel(); return;
+    }
+    var src = selected, dst = key;
+    selected = null; highlightSel();
+    openPicker(src, dst);
+  }
+
+  function highlightSel(){
+    for (var k in nodeEls){
+      nodeEls[k].classList.remove("linkSrc","sel");
+      if (k === selected) nodeEls[k].classList.add("linkSrc");
+    }
+  }
+
+  /* board click cancels selection / picker */
+  board.addEventListener("click", function(){ selected=null; highlightSel(); closePicker(); });
+
+  var pickerEl = null;
+  function closePicker(){ if (pickerEl){ pickerEl.remove(); pickerEl=null; } }
+  function openPicker(src, dst){
+    closePicker();
+    var key = src + ">" + dst;
+    // condition for this direction; fall back to a generic label
+    var condTxt = T("cond")[key] || (T("cond")[src+">"+dst]);
+    var p = document.createElement("div");
+    p.className = "tpick";
+    var ps = placed[src], pd = placed[dst];
+    var mx = (ps.x + pd.x)/2 + 30, my = (ps.y + pd.y)/2;
+    var r = board.getBoundingClientRect();
+    p.style.left = clamp(mx, 6, r.width-218) + "px";
+    p.style.top  = clamp(my, 6, r.height-110) + "px";
+    var html = '<div class="tph">'+T("tpickH")+' · '+T(STATE_META[src].labelKey)+' → '+T(STATE_META[dst].labelKey)+'</div>';
+    // offer the canonical condition for this edge + 2 distractors so it's a real choice
+    var conds = buildCondChoices(src, dst);
+    for (var i=0;i<conds.length;i++){
+      html += '<button type="button" class="tcond" data-cond="'+conds[i].id+'">'+conds[i].txt+'</button>';
+    }
+    html += '<button type="button" class="tcancel">'+T("tcancel")+'</button>';
+    p.innerHTML = html;
+    board.appendChild(p);
+    pickerEl = p;
+    var btns = p.querySelectorAll(".tcond");
+    for (var j=0;j<btns.length;j++){
+      (function(b){
+        b.addEventListener("click", function(ev){
+          ev.stopPropagation();
+          addEdge(src, dst, b.getAttribute("data-cond"));
+          closePicker();
+        });
+      })(btns[j]);
+    }
+    p.querySelector(".tcancel").addEventListener("click", function(ev){ ev.stopPropagation(); closePicker(); });
+    p.addEventListener("click", function(ev){ ev.stopPropagation(); });
+  }
+
+  // canonical condition id == "src>dst"; offer it + 2 plausible-but-wrong ones
+  function buildCondChoices(src, dst){
+    var canonical = src + ">" + dst;
+    var pool = [canonical];
+    var allKeys = Object.keys(I18N[lang].cond);
+    // add up to 2 distractors that share src OR dst (so they look tempting)
+    for (var i=0;i<allKeys.length && pool.length<3;i++){
+      var k = allKeys[i];
+      if (k === canonical) continue;
+      var parts = k.split(">");
+      if (parts[0] === src || parts[1] === dst) pool.push(k);
+    }
+    // shuffle deterministically-ish
+    var out = pool.map(function(id){ return { id:id, txt:T("cond")[id] }; });
+    for (var s=out.length-1;s>0;s--){ var t=(src.charCodeAt(0)+dst.charCodeAt(0)+s)%(s+1); var tmp=out[s];out[s]=out[t];out[t]=tmp; }
+    return out;
+  }
+
+  function addEdge(src, dst, condId){
+    // replace existing same src->dst
+    for (var i=edges.length-1;i>=0;i--){ if (edges[i].src===src && edges[i].dst===dst) edges.splice(i,1); }
+    edges.push({ src:src, dst:dst, cond:condId });
+    refresh();
+  }
+
+  /* ── render edges (SVG) ── */
+  function refresh(){
+    var keys = Object.keys(placed);
+    boardEmpty.classList.toggle("hidden", keys.length>0);
+    drawEdges();
+    updateBoardSub();
+    updateStressBtn();
+  }
+
+  function nodeCenter(key){
+    var el = nodeEls[key]; var p = placed[key];
+    var w = el ? el.offsetWidth : 124, h = el ? el.offsetHeight : 60;
+    return { x:p.x + w/2, y:p.y + h/2, w:w, h:h };
+  }
+
+  function drawEdges(){
+    while (svg.firstChild) svg.removeChild(svg.firstChild);
+    // arrow marker defs
+    var ns = "http://www.w3.org/2000/svg";
+    var defs = document.createElementNS(ns,"defs");
+    defs.innerHTML =
+      '<marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">' +
+      '<path d="M0 0 L10 5 L0 10 z" fill="#8F3149"/></marker>';
+    svg.appendChild(defs);
+    for (var i=0;i<edges.length;i++){
+      var e = edges[i];
+      if (!placed[e.src] || !placed[e.dst]) continue;
+      var a = nodeCenter(e.src), b = nodeCenter(e.dst);
+      var dx = b.x - a.x, dy = b.y - a.y, len = Math.sqrt(dx*dx+dy*dy)||1;
+      var ux = dx/len, uy = dy/len;
+      var ax = a.x + ux*(a.w/2+2), ay = a.y + uy*(a.h/2+2);
+      var bx = b.x - ux*(b.w/2+10), by = b.y - uy*(b.h/2+10);
+      var line = document.createElementNS(ns,"line");
+      line.setAttribute("x1",ax); line.setAttribute("y1",ay);
+      line.setAttribute("x2",bx); line.setAttribute("y2",by);
+      line.setAttribute("stroke","#C04E68"); line.setAttribute("stroke-width","2");
+      line.setAttribute("marker-end","url(#arrow)");
+      svg.appendChild(line);
+      // condition label
+      var lx=(ax+bx)/2, ly=(ay+by)/2;
+      var bg = document.createElementNS(ns,"rect");
+      var txt = T("cond")[e.cond] || "";
+      var wlbl = Math.min(160, txt.length*6.0+12);
+      bg.setAttribute("x", lx-wlbl/2); bg.setAttribute("y", ly-9);
+      bg.setAttribute("width", wlbl); bg.setAttribute("height", 16);
+      bg.setAttribute("rx",4); bg.setAttribute("fill","#FFFFFF");
+      bg.setAttribute("stroke","#ECC4CF"); bg.setAttribute("stroke-width","1");
+      svg.appendChild(bg);
+      var tx = document.createElementNS(ns,"text");
+      tx.setAttribute("x",lx); tx.setAttribute("y",ly+2.5);
+      tx.setAttribute("text-anchor","middle"); tx.setAttribute("class","edge-lbl");
+      tx.setAttribute("fill","#8F3149");
+      tx.textContent = txt.length>22 ? txt.slice(0,21)+"…" : txt;
+      svg.appendChild(tx);
+    }
+  }
+
+  function updateBoardSub(){
+    var ns = Object.keys(placed).length;
+    boardSub.textContent = (lang==="zh"
+      ? (ns+" 个状态 · "+edges.length+" 条转移")
+      : (ns+" states · "+edges.length+" transitions"));
+  }
+
+  function hasFourStates(){
+    return placed.idle && placed.calibrating && placed.running && placed.error;
+  }
+  function updateStressBtn(){
+    stressBtn.disabled = testing || Object.keys(placed).length === 0;
+  }
+
+  /* ── reset ── */
+  resetBtn.addEventListener("click", function(){
+    if (testing) return;
+    placed = {}; edges = []; selected = null;
+    for (var k in nodeEls){ if (nodeEls[k].parentNode) nodeEls[k].parentNode.removeChild(nodeEls[k]); }
+    nodeEls = {};
+    closePicker();
+    var pchips = document.querySelectorAll(".state-chip.placed");
+    for (var i=0;i<pchips.length;i++) pchips[i].classList.remove("placed");
+    rbody.classList.add("hidden"); resultEmpty.classList.remove("hidden");
+    setStatus("standby");
+    refresh();
+  });
+
+  function setStatus(kind){
+    statusEl.className = "status" + (kind==="testing"?" run":kind==="crash"?" crash":kind==="win"?" win":"");
+    statusEl.textContent = kind==="testing"?T("stTesting"):kind==="crash"?T("stCrash"):kind==="win"?T("stStable"):T("stStandby");
+  }
+
+  /* ── evaluate the machine before/after stress ── */
+  function evaluateMachine(){
+    // returns {ok:true} or {ok:false, reason:'noerr|nocal|nostart|deadend|norun'}
+    if (!(placed.idle && placed.running)) return { ok:false, reason:"nostart" };
+    if (!placed.calibrating) return { ok:false, reason:"nocal" };
+    if (!placed.error) return { ok:false, reason:"noerr" };
+    // need to reach running from idle (idle->calibrating->running OR idle->running)
+    if (!canReach("idle","running")) return { ok:false, reason:"norun" };
+    // running must be able to enter error
+    if (!hasEdge("running","error")) return { ok:false, reason:"noerr" };
+    // error must have an exit back to a productive state (running or calibrating)
+    if (!(hasEdge("error","running") || hasEdge("error","calibrating"))) return { ok:false, reason:"deadend" };
+    // calibration drift recovery: running->calibrating OR error->calibrating must exist
+    if (!(hasEdge("running","calibrating") || hasEdge("error","calibrating"))) return { ok:false, reason:"nocal" };
+    return { ok:true };
+  }
+  function hasEdge(s,d){ for (var i=0;i<edges.length;i++) if (edges[i].src===s && edges[i].dst===d) return true; return false; }
+  function canReach(s,d){
+    var seen={}, stack=[s];
+    while (stack.length){
+      var cur=stack.pop(); if (cur===d) return true; if (seen[cur]) continue; seen[cur]=1;
+      for (var i=0;i<edges.length;i++) if (edges[i].src===cur) stack.push(edges[i].dst);
+    }
+    return false;
+  }
+
+  /* ── stress test ── */
+  var timer = null;
+  stressBtn.addEventListener("click", function(){ runStress(); });
+
+  function runStress(){
+    if (testing || Object.keys(placed).length===0) return;
+    testing = true; updateStressBtn(); resetBtn.disabled = true;
+    closePicker(); selected=null; highlightSel();
+    resultEmpty.classList.add("hidden"); rbody.classList.remove("hidden");
+    logArea.innerHTML = ""; verdictEl.innerHTML = ""; gaugeFill.style.width="0%";
+    setStatus("testing");
+    addLog("00:00", T("logStart"), "");
+
+    var verdict = evaluateMachine();
+    // determine crash minute by reason (deterministic, scripted)
+    var crashMin = null;
+    if (!verdict.ok){
+      crashMin = verdict.reason==="nostart" ? 1
+               : verdict.reason==="norun" ? 4
+               : verdict.reason==="noerr" ? 8
+               : verdict.reason==="deadend" ? 11
+               : 14; // nocal
+    }
+    var totalMin = 30;
+    var endMin = crashMin || totalMin;
+
+    // scripted event stream
+    var minute = 0;
+    var ev = T("ev");
+    timer = window.setInterval(function(){
+      minute += 1;
+      var mm = pad(minute);
+      clockEl.textContent = mm + ":00";
+      gaugeFill.style.width = Math.round(minute/totalMin*100) + "%";
+
+      // narrate the live flow
+      if (minute===1) addLog(mm, ev.boot, "");
+      else if (minute===2 && placed.calibrating) addLog(mm, ev.calStart, "ev-cal");
+      else if (minute===3) addLog(mm, placed.calibrating?ev.calDone:ev.decode, "ev-run");
+      else if (minute===5) addLog(mm, ev.decode, "ev-run");
+      else if (minute===8){
+        addLog(mm, ev.artifact, "ev-err");
+        if (verdict.ok || (placed.error && hasEdge("running","error"))){
+          flashNode("error");
+          addLog(mm, ev.caught, "ev-err");
+        }
+      }
+      else if (minute===9){
+        if (verdict.ok || hasEdge("error","running")) addLog(mm, ev.recover, "ev-run");
+      }
+      else if (minute===13) addLog(mm, ev.drift, "ev-cal");
+      else if (minute===14){
+        if (verdict.ok || hasEdge("running","calibrating") || hasEdge("error","calibrating")){
+          flashNode("calibrating"); addLog(mm, ev.recal, "ev-cal");
+        }
+      }
+      else if (minute===16) addLog(mm, ev.stable, "ev-run");
+      else if (minute===22) addLog(mm, ev.decode, "ev-run");
+
+      if (crashMin && minute >= crashMin){
+        window.clearInterval(timer); timer=null;
+        crash(verdict.reason, mm);
+        return;
+      }
+      if (minute >= endMin){
+        window.clearInterval(timer); timer=null;
+        win(mm);
+      }
+    }, 320);
+  }
+
+  function flashNode(key){
+    var el = nodeEls[key]; if (!el) return;
+    el.classList.add("flash");
+    window.setTimeout(function(){ el.classList.remove("flash"); }, 900);
+  }
+
+  function crash(reason, mm){
+    testing=false; resetBtn.disabled=false; updateStressBtn();
+    setStatus("crash");
+    clockEl.textContent = mm + ":00";
+    var v = T("verCrash")[reason] || T("verCrash").nostart;
+    addLog(mm, "[CRASH] "+v.t, "ev-crash");
+    // highlight culprit node
+    var culprit = reason==="noerr"?"running":reason==="nocal"?"running":reason==="deadend"?"error":null;
+    if (culprit && nodeEls[culprit]) nodeEls[culprit].classList.add("crashNode");
+    verdictEl.innerHTML =
+      '<div class="verdict fail">' +
+      '<span class="vbadge">'+iconBad()+' '+T("failBadge")+'</span>' +
+      '<h4>'+v.t+'</h4><p>'+v.b+'</p></div>';
+    scrollLog();
+  }
+
+  function win(mm){
+    testing=false; resetBtn.disabled=false; updateStressBtn();
+    setStatus("win");
+    clockEl.textContent = "30:00";
+    gaugeFill.style.width="100%";
+    addLog("30", T("logEnd"), "ev-run");
+    var v = T("verWin");
+    verdictEl.innerHTML =
+      '<div class="verdict win">' +
+      '<span class="vbadge">'+iconOk()+' '+T("badge")+'</span>' +
+      '<h4>'+v.t+'</h4><p>'+v.b+'</p></div>';
+    for (var k in nodeEls) nodeEls[k].classList.remove("crashNode");
+    scrollLog();
+  }
+
+  function iconBad(){ return '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></svg>'; }
+  function iconOk(){ return '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>'; }
+
+  function pad(n){ return (n<10?"0":"")+n; }
+  function addLog(mm, txt, cls){
+    var d = document.createElement("div");
+    d.className = "log-line" + (cls?(" "+cls):"");
+    d.innerHTML = '<span class="lt">'+mm+':00</span>  '+txt;
+    logArea.appendChild(d);
+    scrollLog();
+  }
+  function scrollLog(){ rbody.scrollTop = rbody.scrollHeight; }
+
+  /* ── i18n re-render ── */
+  function applyStaticI18n(){
+    var nodes = document.querySelectorAll("[data-i18n]");
+    for (var i=0;i<nodes.length;i++){
+      var k = nodes[i].getAttribute("data-i18n");
+      if (I18N[lang][k] !== undefined && typeof I18N[lang][k]==="string") nodes[i].textContent = I18N[lang][k];
+    }
+    document.documentElement.lang = lang;
+    // refresh placed node labels/desc
+    for (var key in nodeEls){
+      var el = nodeEls[key], meta = STATE_META[key];
+      el.querySelector(".nname").textContent = T(meta.labelKey);
+      el.querySelector(".ndesc").textContent = T("nodeDesc")[key];
+    }
+    setStatusByCurrent();
+  }
+  function setStatusByCurrent(){
+    if (statusEl.classList.contains("crash")) statusEl.textContent=T("stCrash");
+    else if (statusEl.classList.contains("win")) statusEl.textContent=T("stStable");
+    else if (statusEl.classList.contains("run")) statusEl.textContent=T("stTesting");
+    else statusEl.textContent=T("stStandby");
+  }
+
+  function toggleLang(){
+    lang = (lang==="zh")?"en":"zh";
+    applyStaticI18n();
+    drawEdges(); updateBoardSub();
+    closePicker();
+  }
+  $("langBtn").addEventListener("click", toggleLang);
+
+  /* ── init ── */
+  applyStaticI18n();
+  refresh();
+
+  /* test hooks (own namespace) */
+  window.__sm = {
+    place:function(key){ if(!placed[key]) placeState(key, DEFAULT_POS[key].x, DEFAULT_POS[key].y); },
+    placeAll:function(){ ["idle","calibrating","running","error"].forEach(function(k){ if(!placed[k]) placeState(k,DEFAULT_POS[k].x,DEFAULT_POS[k].y); }); },
+    link:function(s,d,cond){ addEdge(s,d,cond||(s+">"+d)); },
+    buildFull:function(){
+      this.placeAll();
+      addEdge("idle","calibrating","idle>calibrating");
+      addEdge("calibrating","running","calibrating>running");
+      addEdge("running","error","running>error");
+      addEdge("error","running","error>running");
+      addEdge("running","calibrating","running>calibrating");
+    },
+    stress:function(){ runStress(); },
+    evalNow:function(){ return evaluateMachine(); },
+    state:function(){ return { placed:Object.keys(placed), edges:edges.length, testing:testing, status:statusEl.textContent }; }
+  };
+})();
+</script>
+</body>
+</html>
