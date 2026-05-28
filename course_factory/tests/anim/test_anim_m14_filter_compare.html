@@ -3,10 +3,10 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>对比滤波前后 - 噪声真的少了吗</title>
+<title>滤波前后对比 - 噪声真的少了吗</title>
 <style>
   :root{
-    /* 第 1 层 — 共享深空底 (所有 26 套统一) */
+    /* 第 1 层 — 共享深空底 (所有 26 套统一, 不换) */
     --bg-0: oklch(0.14 0.035 265);
     --bg-1: oklch(0.18 0.04 265);
     --bg-2: oklch(0.22 0.045 265);
@@ -18,15 +18,16 @@
     --fg-mute: oklch(0.55 0.03 265);
     --gold:    oklch(0.85 0.14 85);
 
-    /* 第 2 层 — math 学科 accent (electric blue) */
-    --accent: oklch(0.72 0.17 245);
+    /* 第 2 层 — phys 学科 accent (sky-teal) */
+    --accent: oklch(0.78 0.13 215);
 
-    /* 第 3 层 — math 5 色 palette (Geometry Void) */
-    --axis:     oklch(0.72 0.17 245);
-    --proof:    oklch(0.52 0.16 245);
-    --shadow:   oklch(0.35 0.10 245);
-    --solution: oklch(0.92 0.08 240);
-    --qed:      oklch(0.85 0.14 85);
+    /* 第 3 层 — phys 5 色 palette (Force Observatory) */
+    --field:    oklch(0.78 0.13 215);  /* FIELD  - 滤波后干净波 */
+    --wave:     oklch(0.55 0.13 215);  /* WAVE   - 原始脏波 */
+    --mass:     oklch(0.35 0.10 215);  /* MASS   - 网格/底层 */
+    --photon:   oklch(0.92 0.08 215);  /* PHOTON - mascot 高光 */
+    --constant: oklch(0.85 0.14 85);   /* CONSTANT = gold key moment */
+    --noise:    oklch(0.75 0.16 15);   /* 被剥掉的噪声层 (rose, 与信号对立) */
   }
   *{box-sizing:border-box;}
   html,body{margin:0;padding:0;}
@@ -35,6 +36,7 @@
     font-family:'Inter','Noto Sans SC',system-ui,sans-serif;
     display:flex;
   }
+  /* ===== 左侧 200px sidebar ===== */
   .sidebar{
     width:200px;flex-shrink:0;height:100vh;
     background:var(--bg-1);border-right:1px solid var(--line);
@@ -45,652 +47,382 @@
   .brand b{color:var(--accent);}
   .title{font-size:16px;font-weight:700;color:var(--fg);line-height:1.35;}
   .subtitle{font-size:11px;color:var(--fg-dim);line-height:1.5;font-style:italic;}
-  .mascot-wrap{display:flex;justify-content:center;padding:6px 0;}
+  .mascot-wrap{display:flex;justify-content:center;padding:4px 0;}
   .guide{display:flex;flex-direction:column;gap:8px;}
   .guide-li{
     font-size:11px;color:var(--fg-dim);line-height:1.5;
     padding:6px 8px;border-left:2px solid var(--accent);
     background:var(--bg-2);
   }
+  .guide-li b{color:var(--fg);}
   .lang-btn{
     margin-top:auto;
     font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;
     padding:8px 12px;background:var(--bg-2);color:var(--fg);
     border:1px solid var(--line-strong);cursor:pointer;
-    box-shadow:3px 3px 0 var(--bg-0);
+    box-shadow:3px 3px 0 var(--bg-0);letter-spacing:0.08em;
   }
-  .lang-btn:active{transform:translate(2px,2px);box-shadow:none;}
-
-  main{flex:1;height:100vh;position:relative;overflow:hidden;}
-  canvas#stage{position:absolute;inset:0;width:100%;height:100%;display:block;}
+  .lang-btn:hover{background:var(--bg-3);}
+  /* ===== 右侧主舞台 ===== */
+  .stage{flex:1;height:100vh;position:relative;display:flex;flex-direction:column;}
   .hud{
-    position:absolute;top:14px;right:14px;
-    background:oklch(0.18 0.04 265 / 0.78);backdrop-filter:blur(6px);
-    border:1px solid var(--line-strong);box-shadow:3px 3px 0 var(--bg-0);
-    padding:10px 14px;font-family:'JetBrains Mono',monospace;
-    font-size:11px;min-width:194px;
+    position:absolute;top:16px;right:18px;z-index:5;text-align:right;
+    font-family:'JetBrains Mono',monospace;pointer-events:none;
   }
-  .hud-ttl{font-size:10px;letter-spacing:0.12em;color:var(--accent);
-           font-weight:700;margin-bottom:4px;}
-  .hud-frame{font-size:18px;font-weight:700;color:var(--fg);}
-  .hud-stage{color:var(--fg-dim);margin-top:3px;font-size:11px;}
-  .hud-val{color:var(--gold);margin-top:5px;font-size:11px;}
-
-  .subtitles{
+  .hud-phase{font-size:13px;font-weight:700;color:var(--accent);letter-spacing:0.06em;}
+  .hud-val{font-size:11px;color:var(--fg-dim);margin-top:4px;line-height:1.6;}
+  .hud-val .num{color:var(--photon);}
+  .hud-val .warn{color:var(--constant);}
+  .cue{
     position:absolute;left:50%;bottom:22px;transform:translateX(-50%);
-    text-align:center;max-width:80%;
-    pointer-events:none;
+    z-index:5;max-width:74%;text-align:center;
+    font-size:13px;color:var(--fg-dim);line-height:1.55;
+    background:oklch(0.18 0.04 265 / 0.78);
+    border:1px solid var(--line);padding:8px 16px;
+    backdrop-filter:blur(2px);
   }
-  .sub-zh{font-size:18px;font-weight:700;color:var(--fg);line-height:1.4;}
-  .sub-en{font-size:12px;font-style:italic;color:var(--fg-mute);margin-top:4px;}
-  .sub-zh.gold{color:var(--gold);}
+  .cue b{color:var(--accent);}
+  .cue .g{color:var(--constant);}
+  svg{flex:1;width:100%;height:100%;display:block;}
 </style>
 </head>
 <body>
   <aside class="sidebar">
-    <div class="brand"><b>MTH-06</b> / GEOMETRY VOID</div>
-    <div class="title" id="ttl">对比滤波前后</div>
-    <div class="subtitle" id="subtitle">滤波之后波形真的变干净了吗? 有用的信息有没有被一起删掉?</div>
-
+    <div class="brand">SYSTEM<b>EDU</b> · EEG M14</div>
+    <div class="title" data-i18n="title">滤波前后对比</div>
+    <div class="subtitle" data-i18n="sub">同一段脏脑波，被滤波器连续抚平成干净波</div>
     <div class="mascot-wrap">
-      <svg width="84" height="92" viewBox="0 0 84 92" aria-label="Pi mascot">
-        <defs>
-          <linearGradient id="piFace" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%"  stop-color="oklch(0.72 0.17 245)" stop-opacity="0.9"/>
-            <stop offset="100%" stop-color="oklch(0.52 0.16 245)" stop-opacity="0.5"/>
-          </linearGradient>
-        </defs>
-        <!-- Pi: 旋转四面体, 缓慢自转 -->
-        <g transform="translate(42 44)">
-          <animateTransform attributeName="transform" type="rotate"
-            from="0 0 0" to="360 0 0" dur="14s" repeatCount="indefinite" additive="sum"/>
-          <polygon points="0,-28 26,16 -26,16" fill="url(#piFace)"
-                   stroke="oklch(0.72 0.17 245)" stroke-width="1.6" opacity="0.92"/>
-          <polygon points="0,-28 26,16 0,6" fill="oklch(0.52 0.16 245)"
-                   stroke="oklch(0.72 0.17 245)" stroke-width="1.2" opacity="0.55"/>
-          <line x1="0" y1="-28" x2="0" y2="6" stroke="oklch(0.92 0.08 240)" stroke-width="1.1" opacity="0.7"/>
-          <line x1="-26" y1="16" x2="0" y2="6" stroke="oklch(0.92 0.08 240)" stroke-width="1.1" opacity="0.7"/>
-          <line x1="26" y1="16" x2="0" y2="6" stroke="oklch(0.92 0.08 240)" stroke-width="1.1" opacity="0.7"/>
-        </g>
-        <!-- 面上闪现的公式: π 字符 -->
-        <text x="42" y="49" text-anchor="middle" font-family="JetBrains Mono,monospace"
-              font-size="13" font-weight="700" fill="oklch(0.92 0.08 240)">
-          pi
-          <animate attributeName="opacity" values="0.3;1;0.3" dur="3.4s" repeatCount="indefinite"/>
-        </text>
-        <text x="42" y="86" text-anchor="middle" font-family="JetBrains Mono,monospace"
-              font-size="8" fill="oklch(0.55 0.03 265)" letter-spacing="1">PI</text>
+      <!-- mascot Echo: 音叉 + 波形光环 (phys palette: field/photon/constant) -->
+      <svg width="92" height="92" viewBox="0 0 92 92" aria-label="Echo mascot">
+        <circle cx="46" cy="46" r="40" fill="none" stroke="var(--field)" stroke-width="1.5" opacity="0.35"/>
+        <circle cx="46" cy="46" r="32" fill="none" stroke="var(--field)" stroke-width="1.5" opacity="0.55">
+          <animate attributeName="r" values="30;34;30" dur="2.6s" repeatCount="indefinite"/>
+        </circle>
+        <!-- 音叉本体 -->
+        <path d="M40 64 L40 42 M52 64 L52 42 M40 42 Q46 30 52 42" fill="none"
+              stroke="var(--photon)" stroke-width="3.2" stroke-linecap="round"/>
+        <rect x="42" y="64" width="8" height="14" rx="2" fill="var(--photon)"/>
+        <!-- 波形光环 -->
+        <path d="M14 46 Q22 40 30 46 T46 46" fill="none" stroke="var(--constant)" stroke-width="2" stroke-linecap="round" opacity="0.85"/>
+        <path d="M78 46 Q70 52 62 46 T46 46" fill="none" stroke="var(--constant)" stroke-width="2" stroke-linecap="round" opacity="0.85"/>
+        <circle cx="46" cy="46" r="2.6" fill="var(--constant)"/>
       </svg>
     </div>
-
     <div class="guide">
-      <div class="guide-li" id="g1">滤波 = 留住有用频段, 削掉噪声</div>
-      <div class="guide-li" id="g2">看时域: 毛刺 / 漂移有没有少</div>
-      <div class="guide-li" id="g3">看频谱: 噪声峰压下, 8-30Hz 留住</div>
+      <div class="guide-li" data-i18n="g1"><b>脏波</b>：快毛刺 + 慢漂移混进真节律</div>
+      <div class="guide-li" data-i18n="g2"><b>扫过</b>：滤波门抹掉快抖、拉回慢漂</div>
+      <div class="guide-li" data-i18n="g3"><b>过度</b>：截止太狠会连真节律一起削平</div>
     </div>
-
-    <button id="langBtn" class="lang-btn">CN / EN</button>
+    <button class="lang-btn" id="langBtn">EN / 中</button>
   </aside>
 
-  <main>
-    <canvas id="stage"></canvas>
+  <main class="stage">
     <div class="hud">
-      <div class="hud-ttl" id="hudTtl">画面</div>
-      <div class="hud-frame" id="hudFrame">1 / 5</div>
-      <div class="hud-stage" id="hudStage">滤波前</div>
-      <div class="hud-val" id="hudVal">噪声大 / 有漂移</div>
+      <div class="hud-phase" id="hudPhase">PHASE</div>
+      <div class="hud-val" id="hudVal"></div>
     </div>
-    <div class="subtitles">
-      <div class="sub-zh" id="subZh">这是一段原始 EEG: 又是毛刺又是慢慢漂移, 真正的脑波被埋在里面。</div>
-      <div class="sub-en" id="subEn">Raw EEG: full of spikes and slow drift, the real brainwave is buried inside.</div>
-    </div>
+    <svg id="scene" viewBox="0 0 1000 640" preserveAspectRatio="xMidYMid meet"></svg>
+    <div class="cue" id="cue"></div>
   </main>
 
 <script>
 (function(){
-  "use strict";
+  'use strict';
+  const SVGNS = 'http://www.w3.org/2000/svg';
+  const scene = document.getElementById('scene');
+  const W = 1000, H = 640;
 
-  var LANG = 'cn';
-
-  var I18N = {
-    ttl: {cn:'对比滤波前后', en:'Before vs After Filtering'},
-    subtitle: {cn:'滤波之后波形真的变干净了吗? 有用的信息有没有被一起删掉?',
-               en:'Did filtering really clean it up? Did it delete useful signal too?'},
-    g1: {cn:'滤波 = 留住有用频段, 削掉噪声', en:'filter = keep useful band, cut noise'},
-    g2: {cn:'看时域: 毛刺 / 漂移有没有少', en:'time domain: fewer spikes / drift?'},
-    g3: {cn:'看频谱: 噪声峰压下, 8-30Hz 留住', en:'spectrum: noise peaks down, 8-30Hz kept'},
-    hudTtl: {cn:'画面', en:'FRAME'},
-    stages: {
-      cn:['滤波前','滤波后','上下叠放对比','频谱对比 PSD','警惕过度滤波'],
-      en:['BEFORE FILTER','AFTER FILTER','OVERLAY COMPARE','SPECTRUM PSD','OVER-FILTERING']
+  /* ---------- i18n ---------- */
+  let lang = 'zh';
+  const I18N = {
+    zh:{
+      title:'滤波前后对比', sub:'同一段脏脑波，被滤波器连续抚平成干净波',
+      g1:'<b>脏波</b>：快毛刺 + 慢漂移混进真节律',
+      g2:'<b>扫过</b>：滤波门抹掉快抖、拉回慢漂',
+      g3:'<b>过度</b>：截止太狠会连真节律一起削平',
+      labRaw:'原始脏波  RAW', labClean:'滤波后  FILTERED', labNoise:'被剥掉的噪声层  RAW − FILTERED',
+      tagGate:'滤波门', tagFast:'快毛刺', tagSlow:'慢漂移', tagRhythm:'真节律(alpha)',
+      cues:[
+        '这是<b>一段脑波</b>：真正的 alpha 节律里，混进了快<b>毛刺</b>和慢<b>漂移</b>。',
+        '一个<b>滤波门</b>从左往右扫过同一段波 —— 注意：它走过的地方，波被连续抚平。',
+        '门左侧的快抖被抹掉、慢漂被拉回基线，<b>干净的真节律</b>浮现出来。',
+        '下方实时显示 <b>原始 − 滤波</b> 差值：这就是被<span class="g">剥掉的噪声层</span>，只剩毛刺和漂移。',
+        '看清楚了：噪声真的少了，而<b>有用的节律完整保留</b>。这是滤波该有的样子。',
+        '但若把截止收得<span class="g">太狠</span>（过度滤波）——',
+        '连真节律也被一起削平：波<span class="g">失真</span>了。差值层里出现了本该保留的信号。',
+        '结论：好的滤波<b>去噪保信号</b>；过度滤波会<span class="g">误伤有用信息</span>。'
+      ]
     },
-    hudVals: {
-      cn:['噪声大 / 有漂移','干净 / 主节律在','毛刺剥离, 节律保留','噪声峰压下, 8-30Hz 留','削太狠 -> 信号变形'],
-      en:['noisy / drifting','clean / rhythm kept','spikes off, rhythm stays','noise down, 8-30Hz kept','too narrow -> distorted']
-    },
-    subs: {
-      cn:[
-        '这是一段原始 EEG: 又是毛刺又是慢慢漂移, 真正的脑波被埋在里面。',
-        '过一遍 1-40 Hz 带通滤波: 高频毛刺没了, 慢漂移也压平了, 波形干净多了。',
-        '把两条叠在一起看: 噪声那层确实被剥掉了, 中间的主节律几乎原样保留。',
-        '看频谱才放心: 高频噪声峰被压下去, 而 8-30 Hz 有用频段几乎一点没动。',
-        '但别上头! 截止太窄会连有用的 8-30 Hz 一起削掉, 波形会失真变形。'
-      ],
-      en:[
-        'Raw EEG: full of spikes and slow drift, the real brainwave is buried inside.',
-        'Run a 1-40 Hz band-pass: spikes gone, slow drift flattened, much cleaner.',
-        'Stack them: the noise layer is stripped, the core rhythm stays almost intact.',
-        'The spectrum confirms it: noise peaks pushed down, the 8-30 Hz band barely moves.',
-        'But don\'t overdo it: a too-narrow cutoff also cuts useful 8-30 Hz and distorts the wave.'
+    en:{
+      title:'Filter Before / After', sub:'One messy brain wave, continuously smoothed clean by a filter',
+      g1:'<b>Messy</b>: fast spikes + slow drift over the real rhythm',
+      g2:'<b>Sweep</b>: the filter gate erases fast jitter, pulls back slow drift',
+      g3:'<b>Too much</b>: a cutoff too tight flattens the real rhythm too',
+      labRaw:'RAW  messy wave', labClean:'FILTERED  clean', labNoise:'STRIPPED NOISE  RAW − FILTERED',
+      tagGate:'FILTER GATE', tagFast:'fast spikes', tagSlow:'slow drift', tagRhythm:'real rhythm (alpha)',
+      cues:[
+        'This is <b>one brain wave</b>: a real alpha rhythm with fast <b>spikes</b> and slow <b>drift</b> mixed in.',
+        'A <b>filter gate</b> sweeps left to right over the same wave — where it passes, the wave is smoothed.',
+        'Behind the gate the fast jitter is erased and slow drift pulled to baseline; the <b>clean rhythm</b> emerges.',
+        'Below, the <b>RAW − FILTERED</b> difference shows in real time: the <span class="g">stripped noise layer</span>.',
+        'See it: the noise is truly gone, yet the <b>useful rhythm stays intact</b>. This is filtering done right.',
+        'But push the cutoff <span class="g">too tight</span> (over-filtering) —',
+        'the real rhythm gets flattened too: the wave is <span class="g">distorted</span>. Real signal leaks into the difference.',
+        'Takeaway: good filtering <b>removes noise, keeps signal</b>; over-filtering <span class="g">harms useful information</span>.'
       ]
     }
   };
-  function t(k){return (I18N[k]&&I18N[k][LANG])||(I18N[k]&&I18N[k].en)||k;}
 
-  var canvas = document.getElementById('stage');
-  var ctx = canvas.getContext('2d');
-  var W = 0, H = 0, DPR = Math.min(window.devicePixelRatio || 1, 2);
+  /* ---------- 唯一核心对象: 同一段波 ----------
+     raw(x)  = 真节律(alpha) + 快毛刺(高频) + 慢漂移(低频基线)
+     clean(x)= 真节律 (温和过度滤波时真节律也被削)
+     一个扫描门 gateX 从左到右移动: 门左 = 已滤波(clean), 门右 = raw, 门中为过渡带
+  */
+  // 信号分量 (相对中线 y=0 的振幅, 单位 px)
+  const A_RHYTHM = 46;   // 真 alpha 节律
+  const A_SLOW   = 34;   // 慢漂移
+  const A_FAST   = 20;   // 快毛刺
+  const F_RHYTHM = 5.2;  // 真节律频率 (相对相位)
+  const F_SLOW   = 0.85; // 慢漂移
+  const F_FAST   = 34;   // 快毛刺 (高频)
 
-  function resize(){
-    var host = canvas.parentElement;
-    var r = host.getBoundingClientRect();
-    if (r.width < 2 || r.height < 2) return;
-    W = r.width; H = r.height;
-    canvas.width = W * DPR; canvas.height = H * DPR;
-    canvas.style.width = W + 'px'; canvas.style.height = H + 'px';
-    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  function rhythm(p, phase){ return A_RHYTHM*Math.sin(p*F_RHYTHM + phase*0.6); }
+  function slow(p){ return A_SLOW*Math.sin(p*F_SLOW + 0.7) + 0.30*A_SLOW*Math.sin(p*0.4); }
+  function fast(p, phase){
+    // 高频 + 不规则毛刺
+    return A_FAST*Math.sin(p*F_FAST + phase*4.1)
+         + 0.5*A_FAST*Math.sin(p*F_FAST*1.7 + 1.3)
+         + 0.35*A_FAST*Math.sin(p*F_FAST*2.6 + 4.0);
   }
-  window.addEventListener('resize', resize);
-  setTimeout(resize, 60);
-  setTimeout(resize, 400);
-  if (document.fonts && document.fonts.ready) document.fonts.ready.then(resize);
-
-  var CSSV = function(v){
-    return getComputedStyle(document.documentElement).getPropertyValue(v).trim();
-  };
-
-  var FRAME_DUR = 6500;
-  var TOTAL_FRAMES = 5;
-  var CYCLE = FRAME_DUR * TOTAL_FRAMES;
-  var startT = null;
-  var lastFrameShown = -1;
-
-  function frameProgress(now){
-    if (startT === null) startT = now;
-    var el = (now - startT) % CYCLE;
-    var idx = Math.floor(el / FRAME_DUR);
-    var u   = (el - idx * FRAME_DUR) / FRAME_DUR;
-    return {idx: idx, u: u, t: now};
-  }
-  function easeIO(u){return u<0.5?2*u*u:1-Math.pow(-2*u+2,2)/2;}
-  function lerp(a,b,u){return a+(b-a)*u;}
-  function clamp01(x){return x<0?0:(x>1?1:x);}
-
-  // ---- 信号合成 ----
-  // 共用一根"真实信号": 一个 ~10Hz 主节律 (mu/alpha 带) + 一个 ~22Hz beta 成分,
-  // 它代表 8-30Hz 的"有用信息"。
-  // 原始信号 = 真实信号 + 高频毛刺(~55Hz 大噪声) + 慢漂移(~0.4Hz baseline wander)。
-  // px: 0..1 横向归一化坐标, phase: 时间相位让波"流动"
-  function signalCore(px, phase){
-    var mu   = Math.sin(px * Math.PI * 2 * 9  + phase * 0.9);   // ~主节律
-    var beta = 0.45 * Math.sin(px * Math.PI * 2 * 22 + phase * 1.4); // beta 成分
-    return mu * 0.62 + beta;
-  }
-  function noiseHigh(px, phase){
-    // 高频毛刺 (54Hz 上下) + 一点点抖动, 振幅大
-    return 0.55 * Math.sin(px * Math.PI * 2 * 54 + phase * 3.1)
-         + 0.22 * Math.sin(px * Math.PI * 2 * 78 + phase * 4.7);
-  }
-  function driftSlow(px, phase){
-    // 慢漂移: 半个周期级别的 baseline wander
-    return 0.85 * Math.sin(px * Math.PI * 2 * 0.6 + phase * 0.25 + 0.6);
-  }
-  // 原始 = core + 高频 + 漂移
-  function rawSignal(px, phase){
-    return signalCore(px, phase) + noiseHigh(px, phase) + driftSlow(px, phase);
-  }
-  // 正常滤波 (1-40Hz 带通): 几乎只剩 core (去毛刺去漂移)
-  function filteredSignal(px, phase){
-    return signalCore(px, phase);
-  }
-  // 过度滤波 (例如 9-11Hz 太窄带通): 只剩 mu, beta 被削掉 + 整体衰减/相位拖延 -> 失真
-  function overFiltered(px, phase){
-    var mu = Math.sin(px * Math.PI * 2 * 9 + phase * 0.9 - 0.5); // 相位被拖
-    return mu * 0.42; // beta 没了, 幅度也缩水
+  function raw(p, phase){ return rhythm(p,phase) + slow(p) + fast(p,phase); }
+  // clean: 保留节律(+残留极小慢分量). overK=0 正常; overK 越大代表过度滤波, 节律也被衰减
+  function clean(p, phase, overK){
+    const keep = 1 - 0.78*overK;       // 过度滤波时真节律被衰减
+    const slowResid = 0.06*slow(p);    // 正常滤波留下极小慢残留
+    return rhythm(p,phase)*keep + slowResid;
   }
 
-  // 通用: 画一条信号曲线 (fn(px,phase) -> 振幅 -1..2), reveal 控制从左画到右
-  function drawSignalLine(fn, x0, x1, yMid, yScale, phase, reveal, color, lw, glow){
-    var x1r = lerp(x0, x1, reveal);
-    ctx.strokeStyle = CSSV(color);
-    ctx.lineWidth = lw;
-    if (glow){ ctx.shadowColor = CSSV(color); ctx.shadowBlur = glow; }
-    ctx.beginPath();
-    var steps = Math.max(120, Math.floor((x1r - x0)));
-    for (var i = 0; i <= steps; i++){
-      var px = i / steps;                   // 0..1 along visible part
-      var absPx = (x0 + (x1r - x0) * px - x0) / (x1 - x0); // 归一到整段 0..1
-      var v = fn(absPx, phase);
-      var py = yMid - v * yScale;
-      var sx = lerp(x0, x1r, px);
-      if (i === 0) ctx.moveTo(sx, py); else ctx.lineTo(sx, py);
-    }
-    ctx.stroke();
-    ctx.shadowBlur = 0;
+  // 屏幕几何
+  const PLOT_X0 = 60, PLOT_X1 = 940, PLOT_W = PLOT_X1 - PLOT_X0;
+  const MID_Y   = 250;   // 主波中线
+  const NOISE_Y = 520;   // 噪声差值层中线
+  const NOISE_BASE = 470;
+  const SAMPLES = 220;
+
+  function px(i){ return PLOT_X0 + PLOT_W*(i/(SAMPLES-1)); }
+  function pval(i){ return (i/(SAMPLES-1))*Math.PI*4.2; } // 波形相位坐标
+
+  /* ---------- 静态场景骨架 ---------- */
+  function el(tag, attrs){
+    const n = document.createElementNS(SVGNS, tag);
+    for(const k in attrs) n.setAttribute(k, attrs[k]);
+    return n;
+  }
+  // 网格底
+  for(let gy=120; gy<=420; gy+=50){
+    scene.appendChild(el('line',{x1:PLOT_X0,y1:gy,x2:PLOT_X1,y2:gy,stroke:'var(--mass)','stroke-width':1,opacity:0.4}));
+  }
+  scene.appendChild(el('line',{x1:PLOT_X0,y1:MID_Y,x2:PLOT_X1,y2:MID_Y,stroke:'var(--line-strong)','stroke-width':1,'stroke-dasharray':'4 6'}));
+  scene.appendChild(el('line',{x1:PLOT_X0,y1:NOISE_BASE,x2:PLOT_X1,y2:NOISE_BASE,stroke:'var(--line)','stroke-width':1,'stroke-dasharray':'2 6'}));
+
+  // 标签
+  const labRaw   = el('text',{x:PLOT_X1, y:118, 'text-anchor':'end', fill:'var(--wave)','font-family':'JetBrains Mono, monospace','font-size':13});
+  const labClean = el('text',{x:PLOT_X0, y:118, 'text-anchor':'start', fill:'var(--field)','font-family':'JetBrains Mono, monospace','font-size':13,'font-weight':700});
+  const labNoise = el('text',{x:PLOT_X0, y:NOISE_BASE+26, 'text-anchor':'start', fill:'var(--noise)','font-family':'JetBrains Mono, monospace','font-size':12});
+  scene.appendChild(labRaw); scene.appendChild(labClean); scene.appendChild(labNoise);
+
+  // 主波路径 (左=clean 已滤波, 右=raw 脏) — 用同一条 path, 门处切换
+  const wavePath = el('path',{fill:'none','stroke-width':2.6,'stroke-linejoin':'round','stroke-linecap':'round'});
+  scene.appendChild(wavePath);
+  // 节律基准虚影 (淡, 让人对比真节律是否被保留)
+  const ghostPath = el('path',{fill:'none',stroke:'var(--field)','stroke-width':1,opacity:0.22,'stroke-dasharray':'3 5'});
+  scene.appendChild(ghostPath);
+  // 噪声差值层
+  const noisePath = el('path',{fill:'none',stroke:'var(--noise)','stroke-width':1.8,'stroke-linejoin':'round'});
+  scene.appendChild(noisePath);
+  const noiseFill = el('path',{fill:'var(--noise)',opacity:0.10,stroke:'none'});
+  scene.appendChild(noiseFill);
+
+  // 扫描门 (过渡带): 一条竖线 + 半透明前缘
+  const gateBand = el('rect',{y:96, height:340, fill:'var(--accent)', opacity:0.07});
+  scene.appendChild(gateBand);
+  const gateLine = el('line',{y1:96, y2:436, stroke:'var(--accent)','stroke-width':2.4});
+  scene.appendChild(gateLine);
+  const gateGlow = el('line',{y1:96, y2:436, stroke:'var(--photon)','stroke-width':5, opacity:0.18});
+  scene.appendChild(gateGlow);
+  const gateTag = el('text',{y:88,'text-anchor':'middle', fill:'var(--accent)','font-family':'JetBrains Mono, monospace','font-size':12,'font-weight':700});
+  scene.appendChild(gateTag);
+
+  // 局部标注 (快毛刺 / 慢漂移 / 真节律) — 随阶段淡入淡出
+  const annFast = el('text',{x:760,y:300,'text-anchor':'middle',fill:'var(--noise)','font-family':'JetBrains Mono, monospace','font-size':12,opacity:0});
+  const annSlow = el('text',{x:840,y:200,'text-anchor':'middle',fill:'var(--fg-mute)','font-family':'JetBrains Mono, monospace','font-size':12,opacity:0});
+  const annRhythm = el('text',{x:200,y:340,'text-anchor':'middle',fill:'var(--field)','font-family':'JetBrains Mono, monospace','font-size':12,opacity:0});
+  scene.appendChild(annFast); scene.appendChild(annSlow); scene.appendChild(annRhythm);
+
+  // gold 警示闪 (过度滤波)
+  const warnFlash = el('rect',{x:0,y:0,width:W,height:H,fill:'var(--constant)',opacity:0});
+  scene.appendChild(warnFlash);
+
+  /* ---------- 时间轴 / 阶段 ----------
+     单一 rAF 连续推进 phase. cue 索引随 t 切, 但波形本身全程连续演化, 不切帧.
+     阶段安排 (总 ~34s):
+       seg0 0-3.5    脏波全裸 (gate 在最左, 全 raw)
+       seg1 3.5-9    gate 扫过 (左 clean 右 raw)
+       seg2 9-13     gate 到中部, 强调干净浮现
+       seg3 13-18    噪声差值层强调
+       seg4 18-22    gate 到底, 全 clean, 保信号确认
+       seg5 22-25    过渡到过度滤波 (overK 渐升)
+       seg6 25-30    过度滤波削平节律 (失真)
+       seg7 30-34    结论
+  */
+  const SEG = [3.5, 9, 13, 18, 22, 25, 30, 34];
+  function segIndex(t){
+    for(let i=0;i<SEG.length;i++){ if(t < SEG[i]) return i; }
+    return SEG.length-1;
+  }
+  function smooth(a,b,t){ // t in [a,b] -> 0..1 ease
+    if(t<=a) return 0; if(t>=b) return 1;
+    const u=(t-a)/(b-a); return u*u*(3-2*u);
   }
 
-  function drawAxisBaseline(x0, x1, y){
-    ctx.strokeStyle = CSSV('--line-strong');
-    ctx.lineWidth = 1;
-    ctx.setLineDash([5,5]);
-    ctx.beginPath(); ctx.moveTo(x0, y); ctx.lineTo(x1, y); ctx.stroke();
-    ctx.setLineDash([]);
-  }
+  const cueEl = document.getElementById('cue');
+  const hudPhase = document.getElementById('hudPhase');
+  const hudVal = document.getElementById('hudVal');
+  let lastCue = -1;
 
-  // ============== 帧 1: 滤波前 — 毛刺 + 漂移 ==============
-  function drawFrame1(u, now){
-    var phase = now/650;
-    var x0 = W*0.10, x1 = W*0.94, yMid = H*0.46, yScale = H*0.16;
-    var reveal = easeIO(clamp01(u/0.55));
+  function build(){
+    const t0 = performance.now();
+    function tick(now){
+      const t = ((now - t0)/1000) % 34;     // 34s 循环
+      const phase = (now - t0)/1000 * 2.2;   // 波形持续滚动相位
 
-    drawAxisBaseline(x0, x1, yMid);
-    // 原始信号: 用 --proof (中蓝) 画, 毛刺感强
-    drawSignalLine(rawSignal, x0, x1, yMid, yScale, phase, reveal, '--proof', 1.6, 0);
+      // 扫描门位置: seg1-4 从左扫到右; 其他段保持端点
+      let gateFrac;
+      if(t < SEG[0]) gateFrac = 0.0;                                   // 全 raw
+      else if(t < SEG[3]) gateFrac = smooth(SEG[0], SEG[3], t);         // 连续扫过
+      else gateFrac = 1.0;                                             // 全 clean
+      const gateX = PLOT_X0 + PLOT_W*gateFrac;
+      const bandW = 26;
 
-    // 标签
-    ctx.fillStyle = CSSV('--proof');
-    ctx.font = "700 16px 'JetBrains Mono',monospace";
-    ctx.textAlign = 'left';
-    ctx.fillText(LANG==='cn'?'原始信号 RAW':'RAW signal', x0, H*0.16);
+      // 过度滤波强度: seg5 起渐升, seg6 满, seg7 略回稳定在失真态
+      let overK = 0;
+      if(t >= SEG[4] && t < SEG[5]) overK = smooth(SEG[4], SEG[5], t)*1.0;
+      else if(t >= SEG[5]) overK = 1.0;
 
-    // 标注: 毛刺 + 漂移
-    if (u > 0.5){
-      var a = clamp01((u-0.5)/0.22);
-      ctx.globalAlpha = a;
-      // 毛刺标注 (上方)
-      ctx.fillStyle = CSSV('--fg-dim');
-      ctx.font = "600 13px 'Inter','Noto Sans SC',sans-serif";
-      ctx.textAlign = 'center';
-      ctx.fillText(LANG==='cn'?'高频毛刺':'high-freq spikes', W*0.32, H*0.22);
-      ctx.strokeStyle = CSSV('--line-strong');
-      ctx.lineWidth = 1.2;
-      ctx.beginPath(); ctx.moveTo(W*0.32, H*0.235); ctx.lineTo(W*0.30, H*0.34); ctx.stroke();
-      // 漂移标注 (下方)
-      ctx.fillStyle = CSSV('--fg-dim');
-      ctx.fillText(LANG==='cn'?'慢漂移 (基线游走)':'slow drift (baseline)', W*0.70, H*0.74);
-      ctx.beginPath(); ctx.moveTo(W*0.70, H*0.725); ctx.lineTo(W*0.66, H*0.60); ctx.stroke();
-      ctx.globalAlpha = 1;
-    }
-    // 提示问题
-    ctx.fillStyle = CSSV('--fg-mute');
-    ctx.font = "italic 600 13px 'Inter','Noto Sans SC',sans-serif";
-    ctx.textAlign = 'center';
-    ctx.fillText(LANG==='cn'?'真正的脑波就埋在这堆噪声里':'the real brainwave is buried in here',
-                 (x0+x1)/2, H*0.90);
-  }
-
-  // ============== 帧 2: 滤波后 — 干净 ==============
-  function drawFrame2(u, now){
-    var phase = now/650;
-    var x0 = W*0.10, x1 = W*0.94, yMid = H*0.46, yScale = H*0.16;
-
-    drawAxisBaseline(x0, x1, yMid);
-
-    // 先淡淡画出残留的原始 (作为"之前"参照, 渐隐)
-    var ghost = 1 - easeIO(clamp01(u/0.45));
-    if (ghost > 0.02){
-      ctx.globalAlpha = ghost * 0.4;
-      drawSignalLine(rawSignal, x0, x1, yMid, yScale, phase, 1, '--shadow', 1.2, 0);
-      ctx.globalAlpha = 1;
-    }
-
-    // 滤波后干净信号: 从噪声中"浮现", 用 --solution (亮蓝白) + 微光
-    var reveal = easeIO(clamp01(u/0.55));
-    drawSignalLine(filteredSignal, x0, x1, yMid, yScale, phase, reveal, '--solution', 2.6, 6);
-
-    // 滤波器盒子图标 (左上): 1-40 Hz 带通
-    ctx.strokeStyle = CSSV('--axis');
-    ctx.lineWidth = 1.8;
-    var bx = x0, by = H*0.08, bw = 140, bh = 30;
-    ctx.strokeRect(bx, by, bw, bh);
-    ctx.fillStyle = CSSV('--axis');
-    ctx.font = "700 12px 'JetBrains Mono',monospace";
-    ctx.textAlign = 'center';
-    ctx.fillText('BANDPASS 1-40 Hz', bx + bw/2, by + 20);
-
-    ctx.fillStyle = CSSV('--solution');
-    ctx.font = "700 16px 'JetBrains Mono',monospace";
-    ctx.textAlign = 'left';
-    ctx.fillText(LANG==='cn'?'滤波后 FILTERED':'FILTERED signal', x0, H*0.18);
-
-    if (u > 0.55){
-      ctx.globalAlpha = clamp01((u-0.55)/0.2);
-      ctx.fillStyle = CSSV('--fg-dim');
-      ctx.font = "600 14px 'Inter','Noto Sans SC',sans-serif";
-      ctx.textAlign = 'center';
-      ctx.fillText(LANG==='cn'?'毛刺没了, 漂移压平了 -- 主节律清清楚楚'
-                              :'spikes gone, drift flattened -- the rhythm is crisp',
-                   (x0+x1)/2, H*0.90);
-      ctx.globalAlpha = 1;
-    }
-  }
-
-  // ============== 帧 3: 上下叠放对比 ==============
-  function drawFrame3(u, now){
-    var phase = now/650;
-    var x0 = W*0.10, x1 = W*0.94;
-    var yRaw = H*0.30, yFlt = H*0.66, yScale = H*0.12;
-
-    // 上: 原始
-    drawAxisBaseline(x0, x1, yRaw);
-    drawSignalLine(rawSignal, x0, x1, yRaw, yScale, phase, 1, '--proof', 1.5, 0);
-    ctx.fillStyle = CSSV('--proof');
-    ctx.font = "700 14px 'JetBrains Mono',monospace";
-    ctx.textAlign = 'left';
-    ctx.fillText(LANG==='cn'?'原始 RAW':'RAW', x0, yRaw - H*0.14);
-
-    // 下: 滤波后
-    drawAxisBaseline(x0, x1, yFlt);
-    drawSignalLine(filteredSignal, x0, x1, yFlt, yScale, phase, 1, '--solution', 2.4, 4);
-    ctx.fillStyle = CSSV('--solution');
-    ctx.fillText(LANG==='cn'?'滤波后 FILTERED':'FILTERED', x0, yFlt - H*0.14);
-
-    // 中间: "被剥掉的噪声层" = raw - filtered, 渐显, 用 --shadow
-    var sep = easeIO(clamp01(u/0.6));
-    if (sep > 0.02){
-      var ySep = (yRaw + yFlt)/2;
-      ctx.globalAlpha = sep;
-      ctx.strokeStyle = CSSV('--shadow');
-      ctx.lineWidth = 1.4;
-      ctx.beginPath();
-      var steps = 160;
-      for (var i = 0; i <= steps; i++){
-        var px = i/steps;
-        var diff = rawSignal(px, phase) - filteredSignal(px, phase); // 被剥掉的部分
-        var py = ySep - diff * (yScale*0.7);
-        var sx = lerp(x0, x1, px);
-        if (i===0) ctx.moveTo(sx, py); else ctx.lineTo(sx, py);
+      // ----- 主波 path: 左(clean) 右(raw), 门处过渡 -----
+      let d = '', dg = '';
+      for(let i=0;i<SAMPLES;i++){
+        const x = px(i), p = pval(i);
+        // 门混合系数: x 在 gate 左侧=clean(1), 右侧=raw(0), 过渡带平滑
+        let m = (gateX - x)/bandW; m = Math.max(0, Math.min(1, m+0.5));
+        const r = raw(p, phase);
+        const c = clean(p, phase, overK);
+        const y = MID_Y - (m*c + (1-m)*r);
+        d += (i===0?'M':'L') + x.toFixed(1) + ' ' + y.toFixed(1) + ' ';
+        // ghost = 纯真节律 (基准, 看是否被保留)
+        const gy = MID_Y - rhythm(p, phase);
+        dg += (i===0?'M':'L') + x.toFixed(1) + ' ' + gy.toFixed(1) + ' ';
       }
-      ctx.stroke();
-      ctx.fillStyle = CSSV('--shadow');
-      ctx.font = "600 12px 'JetBrains Mono',monospace";
-      ctx.textAlign = 'right';
-      ctx.fillText(LANG==='cn'?'= 被剥掉的噪声':'= noise removed', x1, ySep - H*0.06);
-      ctx.globalAlpha = 1;
-    }
+      wavePath.setAttribute('d', d);
+      ghostPath.setAttribute('d', dg);
+      // 主波颜色: 随 gate 位置在 wave->field 间渐变 (用 clean 占比近似), 过度滤波偏 constant 警示
+      const cleanShare = gateFrac;
+      wavePath.setAttribute('stroke', overK>0.5 ? 'var(--constant)' : (cleanShare>0.55 ? 'var(--field)' : 'var(--wave)'));
+      ghostPath.setAttribute('opacity', (t>=SEG[1] ? 0.30 : 0.12).toFixed(2));
 
-    // 连接括号: raw - noise = filtered
-    if (u > 0.5){
-      ctx.globalAlpha = clamp01((u-0.5)/0.22);
-      ctx.fillStyle = CSSV('--gold');
-      ctx.font = "700 22px 'JetBrains Mono',monospace";
-      ctx.textAlign = 'center';
-      ctx.fillText('-', x1 + 0, (yRaw+(yRaw+yFlt)/2)/2);
-      ctx.fillText('=', x1 + 0, ((yRaw+yFlt)/2 + yFlt)/2);
-      ctx.globalAlpha = 1;
-    }
-
-    ctx.fillStyle = CSSV('--fg-dim');
-    ctx.font = "600 14px 'Inter','Noto Sans SC',sans-serif";
-    ctx.textAlign = 'center';
-    ctx.fillText(LANG==='cn'?'剥掉的只是噪声层, 中间的节律几乎原样保留'
-                            :'only the noise layer is stripped -- the rhythm stays intact',
-                 (x0+x1)/2, H*0.92);
-  }
-
-  // ============== 帧 4: 频谱对比 PSD ==============
-  // PSD 曲线: x = 频率 0..60Hz, y = 功率. raw 有高频噪声峰, filtered 压住高频.
-  function psdRaw(f){
-    // 1/f 背景 + mu(10) + beta(22) 峰 + 高频噪声峰(54) + 漂移(<1Hz)
-    var bg = 1.0/(f+1.5);
-    var mu = 0.9*Math.exp(-Math.pow((f-10)/2.2,2));
-    var beta = 0.5*Math.exp(-Math.pow((f-22)/3.5,2));
-    var drift = 1.3*Math.exp(-Math.pow((f-0.5)/0.8,2));
-    var hfnoise = 1.05*Math.exp(-Math.pow((f-54)/4.5,2));
-    return bg + mu + beta + drift + hfnoise;
-  }
-  function psdFiltered(f){
-    // 1-40Hz 带通: 保留 mu/beta, 削掉 <1Hz 漂移 与 >40Hz 噪声峰
-    var roll = 1/(1+Math.pow(f/40, 8));   // 高通侧滚降 40Hz
-    var hp   = 1/(1+Math.pow(1/(f+0.01), 6)); // 低频 1Hz 高通
-    return psdRaw(f) * roll * hp - 1.05*Math.exp(-Math.pow((f-54)/4.5,2))*roll*0; // 噪声峰已被 roll 压
-  }
-  function drawFrame4(u, now){
-    var gx0 = W*0.14, gx1 = W*0.92, gy0 = H*0.18, gy1 = H*0.80;
-    var fMax = 60, pMax = 2.2;
-    function fx(f){ return lerp(gx0, gx1, f/fMax); }
-    function py(p){ return lerp(gy1, gy0, clamp01(p/pMax)); }
-
-    // 坐标轴
-    ctx.strokeStyle = CSSV('--line-strong');
-    ctx.lineWidth = 1.4;
-    ctx.beginPath(); ctx.moveTo(gx0, gy0); ctx.lineTo(gx0, gy1); ctx.lineTo(gx1, gy1); ctx.stroke();
-    ctx.fillStyle = CSSV('--fg-mute');
-    ctx.font = "600 11px 'JetBrains Mono',monospace";
-    ctx.textAlign = 'center';
-    for (var f = 0; f <= 60; f += 10){
-      var xx = fx(f);
-      ctx.strokeStyle = CSSV('--line');
-      ctx.beginPath(); ctx.moveTo(xx, gy0); ctx.lineTo(xx, gy1); ctx.stroke();
-      ctx.fillStyle = CSSV('--fg-mute');
-      ctx.fillText(f+'', xx, gy1 + 16);
-    }
-    ctx.fillStyle = CSSV('--fg-dim');
-    ctx.fillText(LANG==='cn'?'频率 (Hz)':'frequency (Hz)', (gx0+gx1)/2, gy1 + 34);
-    ctx.save(); ctx.translate(gx0 - 26, (gy0+gy1)/2); ctx.rotate(-Math.PI/2);
-    ctx.fillText(LANG==='cn'?'功率 PSD':'power (PSD)', 0, 0); ctx.restore();
-
-    // 有用频段 8-30Hz 高亮带 (gold 淡底)
-    var keepReveal = easeIO(clamp01(u/0.4));
-    ctx.fillStyle = CSSV('--gold');
-    ctx.globalAlpha = 0.10 * keepReveal;
-    ctx.fillRect(fx(8), gy0, fx(30)-fx(8), gy1-gy0);
-    ctx.globalAlpha = 1;
-    if (keepReveal > 0.6){
-      ctx.fillStyle = CSSV('--gold');
-      ctx.font = "700 11px 'JetBrains Mono',monospace";
-      ctx.textAlign = 'center';
-      ctx.fillText(LANG==='cn'?'保留 8-30 Hz':'KEEP 8-30 Hz', (fx(8)+fx(30))/2, gy0 + 14);
-    }
-
-    // raw PSD 曲线
-    ctx.strokeStyle = CSSV('--proof');
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    for (var ff = 0; ff <= fMax; ff += 0.4){
-      var yy = py(psdRaw(ff));
-      if (ff === 0) ctx.moveTo(fx(ff), yy); else ctx.lineTo(fx(ff), yy);
-    }
-    ctx.stroke();
-
-    // filtered PSD 曲线 (动画 morph: raw -> filtered)
-    var morph = easeIO(clamp01((u-0.15)/0.5));
-    ctx.strokeStyle = CSSV('--solution');
-    ctx.lineWidth = 2.6;
-    ctx.shadowColor = CSSV('--solution'); ctx.shadowBlur = 5;
-    ctx.beginPath();
-    for (var fg = 0; fg <= fMax; fg += 0.4){
-      var pv = lerp(psdRaw(fg), psdFiltered(fg), morph);
-      var yv = py(pv);
-      if (fg === 0) ctx.moveTo(fx(fg), yv); else ctx.lineTo(fx(fg), yv);
-    }
-    ctx.stroke();
-    ctx.shadowBlur = 0;
-
-    // 标注: 噪声峰 (54Hz) 被压下 的下箭头
-    if (morph > 0.3){
-      ctx.globalAlpha = clamp01((morph-0.3)/0.3);
-      ctx.strokeStyle = CSSV('--gold');
-      ctx.fillStyle = CSSV('--gold');
-      ctx.lineWidth = 2;
-      var nx = fx(54);
-      ctx.beginPath(); ctx.moveTo(nx, py(psdRaw(54))); ctx.lineTo(nx, py(0.15)); ctx.stroke();
-      // 箭头 (用三角, 不用 unicode)
-      ctx.beginPath();
-      ctx.moveTo(nx-5, py(0.15)-8); ctx.lineTo(nx+5, py(0.15)-8); ctx.lineTo(nx, py(0.15)); ctx.closePath();
-      ctx.fill();
-      ctx.font = "600 11px 'JetBrains Mono',monospace";
-      ctx.textAlign = 'center';
-      ctx.fillText(LANG==='cn'?'噪声峰压下':'noise peak cut', nx, py(psdRaw(54)) - 8);
-      ctx.globalAlpha = 1;
-    }
-
-    // 图例
-    ctx.font = "600 12px 'JetBrains Mono',monospace";
-    ctx.textAlign = 'left';
-    ctx.fillStyle = CSSV('--proof');   ctx.fillText('--- RAW', gx1 - 110, gy0 + 6);
-    ctx.fillStyle = CSSV('--solution'); ctx.fillText('--- FILTERED', gx1 - 110, gy0 + 24);
-  }
-
-  // ============== 帧 5: 警惕过度滤波 ==============
-  function drawFrame5(u, now){
-    var phase = now/650;
-    var x0 = W*0.10, x1 = W*0.94;
-    var yGood = H*0.30, yBad = H*0.62, yScale = H*0.11;
-
-    // 上: 好滤波 (1-40Hz, 保留 8-30Hz) -- 干净且节律完整
-    drawAxisBaseline(x0, x1, yGood);
-    drawSignalLine(filteredSignal, x0, x1, yGood, yScale, phase, 1, '--solution', 2.4, 4);
-    ctx.fillStyle = CSSV('--solution');
-    ctx.font = "700 13px 'JetBrains Mono',monospace";
-    ctx.textAlign = 'left';
-    ctx.fillText(LANG==='cn'?'好滤波 1-40 Hz':'GOOD 1-40 Hz', x0, yGood - H*0.13);
-
-    // 下: 过度滤波 (太窄, 削掉 beta + 拖相位) -- 失真
-    drawAxisBaseline(x0, x1, yBad);
-    var morphBad = easeIO(clamp01(u/0.45)); // 从好信号塌成过滤过头的样子
-    ctx.strokeStyle = CSSV('--proof');
-    ctx.lineWidth = 2.2;
-    ctx.beginPath();
-    var steps = 160;
-    for (var i = 0; i <= steps; i++){
-      var px = i/steps;
-      var v = lerp(filteredSignal(px, phase), overFiltered(px, phase), morphBad);
-      var py = yBad - v * yScale;
-      var sx = lerp(x0, x1, px);
-      if (i===0) ctx.moveTo(sx, py); else ctx.lineTo(sx, py);
-    }
-    ctx.stroke();
-    ctx.fillStyle = CSSV('--proof');
-    ctx.font = "700 13px 'JetBrains Mono',monospace";
-    ctx.fillText(LANG==='cn'?'过度滤波 9-11 Hz':'TOO NARROW 9-11 Hz', x0, yBad - H*0.13);
-
-    // 标注: beta 被削掉 (下方)
-    if (morphBad > 0.5){
-      ctx.globalAlpha = clamp01((morphBad-0.5)/0.25);
-      ctx.fillStyle = CSSV('--fg-dim');
-      ctx.font = "600 12px 'Inter','Noto Sans SC',sans-serif";
-      ctx.textAlign = 'center';
-      ctx.fillText(LANG==='cn'?'beta 被一起削掉了, 波形变平变形'
-                              :'beta got cut too -- waveform flattened & distorted',
-                   (x0+x1)/2, yBad + H*0.16);
-      ctx.globalAlpha = 1;
-    }
-
-    // gold key moment: 好滤波 = 噪声没了, 信号还在
-    if (u > 0.42){
-      var fadeIn = clamp01((u - 0.42)/0.18);
-      ctx.globalAlpha = fadeIn;
-      // 关键框
-      ctx.strokeStyle = CSSV('--gold');
-      var bw = Math.min(W*0.74, 660), bh = 50;
-      var bx = W*0.5 - bw/2, by = H*0.80;
-      var corner = 11;
-      ctx.lineWidth = 3;
-      ctx.beginPath(); ctx.moveTo(bx, by+corner); ctx.lineTo(bx, by); ctx.lineTo(bx+corner, by); ctx.stroke();
-      ctx.beginPath(); ctx.moveTo(bx+bw-corner, by); ctx.lineTo(bx+bw, by); ctx.lineTo(bx+bw, by+corner); ctx.stroke();
-      ctx.beginPath(); ctx.moveTo(bx, by+bh-corner); ctx.lineTo(bx, by+bh); ctx.lineTo(bx+corner, by+bh); ctx.stroke();
-      ctx.beginPath(); ctx.moveTo(bx+bw-corner, by+bh); ctx.lineTo(bx+bw, by+bh); ctx.lineTo(bx+bw, by+bh-corner); ctx.stroke();
-      ctx.fillStyle = CSSV('--gold');
-      ctx.font = "700 19px 'Inter','Noto Sans SC',sans-serif";
-      ctx.textAlign = 'center';
-      ctx.fillText(LANG==='cn'?'好滤波: 噪声没了, 信号还在'
-                              :'good filtering: noise gone, signal still there',
-                   W*0.5, by + 32);
-      ctx.globalAlpha = 1;
-    }
-
-    // 庆祝粒子 (从好信号那条线发散)
-    if (u > 0.5){
-      var burst = (u - 0.5)/0.5;
-      var nP = 16;
-      for (var p = 0; p < nP; p++){
-        var ang = (p/nP)*Math.PI*2 + now/2200;
-        var rad = burst*(60 + (p%4)*24)*(0.6 + 0.4*Math.sin(now/420 + p));
-        var cxp = W*0.5 + Math.cos(ang)*rad;
-        var cyp = yGood + Math.sin(ang)*rad*0.6;
-        ctx.fillStyle = (p%3===0) ? CSSV('--gold') : CSSV('--solution');
-        ctx.globalAlpha = Math.max(0, 0.7 - burst*0.5);
-        ctx.beginPath(); ctx.arc(cxp, cyp, 2 + (p%3), 0, Math.PI*2); ctx.fill();
+      // ----- 噪声差值层: raw - filtered (= 被剥掉的部分) -----
+      // 仅在 gate 左侧 (已滤波) 有差值; 右侧未滤波, 差值=0 (尚未剥离)
+      let dn = '', dnf = '';
+      const showNoise = t >= SEG[1]*0.85; // 扫过后开始显现
+      for(let i=0;i<SAMPLES;i++){
+        const x = px(i), p = pval(i);
+        let m = (gateX - x)/bandW; m = Math.max(0, Math.min(1, m+0.5));
+        const r = raw(p, phase);
+        const c = clean(p, phase, overK);
+        const diff = (r - c) * m;        // 被剥掉的层, 仅门左侧
+        const y = NOISE_BASE - diff*0.62;
+        dn  += (i===0?'M':'L') + x.toFixed(1) + ' ' + y.toFixed(1) + ' ';
+        dnf += (i===0? ('M'+x.toFixed(1)+' '+NOISE_BASE.toFixed(1)+' L') : 'L') + x.toFixed(1) + ' ' + y.toFixed(1) + ' ';
       }
-      ctx.globalAlpha = 1;
+      dnf += 'L' + PLOT_X1.toFixed(1) + ' ' + NOISE_BASE.toFixed(1) + ' Z';
+      noisePath.setAttribute('d', dn);
+      noiseFill.setAttribute('d', dnf);
+      const noiseOp = showNoise ? smooth(SEG[1]*0.85, SEG[1]+1.5, t) : 0;
+      noisePath.setAttribute('opacity', (0.9*noiseOp).toFixed(2));
+      noiseFill.setAttribute('opacity', (0.12*noiseOp).toFixed(2));
+      // 过度滤波时差值层里混入了真节律 -> 变 gold 警示
+      noisePath.setAttribute('stroke', overK>0.5 ? 'var(--constant)' : 'var(--noise)');
+
+      // ----- 扫描门 -----
+      const gateOn = (t >= SEG[0]*0.6 && t < SEG[3]+0.5);
+      const gOp = gateOn ? smooth(SEG[0]*0.6, SEG[0], t) * (1 - smooth(SEG[3], SEG[3]+0.5, t)) : 0;
+      gateLine.setAttribute('x1', gateX); gateLine.setAttribute('x2', gateX);
+      gateGlow.setAttribute('x1', gateX); gateGlow.setAttribute('x2', gateX);
+      gateBand.setAttribute('x', gateX - bandW); gateBand.setAttribute('width', bandW*1.4);
+      gateLine.setAttribute('opacity', gOp.toFixed(2));
+      gateGlow.setAttribute('opacity', (gOp*0.6).toFixed(2));
+      gateBand.setAttribute('opacity', (gOp*0.10).toFixed(2));
+      gateTag.setAttribute('x', Math.max(PLOT_X0+44, Math.min(PLOT_X1-44, gateX)));
+      gateTag.setAttribute('opacity', gOp.toFixed(2));
+      gateTag.textContent = I18N[lang].tagGate;
+
+      // ----- 局部标注 -----
+      annFast.setAttribute('opacity', (t<SEG[0]? smooth(1.0, SEG[0]-0.5, t):0).toFixed(2));
+      annSlow.setAttribute('opacity', (t<SEG[0]? smooth(1.4, SEG[0]-0.3, t):0).toFixed(2));
+      annRhythm.setAttribute('opacity', (t>=SEG[2]&&t<SEG[4]? smooth(SEG[2], SEG[2]+1, t)*(1-smooth(SEG[4]-0.5,SEG[4],t)):0).toFixed(2));
+      annFast.textContent = '< ' + I18N[lang].tagFast;
+      annSlow.textContent = '~ ' + I18N[lang].tagSlow;
+      annRhythm.textContent = I18N[lang].tagRhythm;
+
+      // ----- gold 警示闪 (进入过度滤波瞬间) -----
+      const flashWin = (t>=SEG[5] && t<SEG[5]+0.8) ? Math.sin((t-SEG[5])/0.8*Math.PI)*0.14 : 0;
+      warnFlash.setAttribute('opacity', flashWin.toFixed(3));
+
+      // ----- 标签文字 -----
+      labRaw.textContent = I18N[lang].labRaw;
+      labClean.textContent = I18N[lang].labClean;
+      labNoise.textContent = I18N[lang].labNoise;
+
+      // ----- HUD -----
+      const seg = segIndex(t);
+      const phaseNames = ['1/8 messy','2/8 sweep','3/8 emerge','4/8 stripped','5/8 keep','6/8 over','7/8 distort','8/8 verdict'];
+      hudPhase.textContent = phaseNames[seg];
+      const sweepPct = Math.round(gateFrac*100);
+      if(overK > 0.05){
+        hudVal.innerHTML = 'over-filter <span class="warn">'+Math.round(overK*100)+'%</span><br>'
+          + 'rhythm kept <span class="warn">'+Math.round((1-0.78*overK)*100)+'%</span>';
+      } else {
+        hudVal.innerHTML = 'sweep <span class="num">'+sweepPct+'%</span><br>'
+          + 'rhythm kept <span class="num">100%</span>';
+      }
+
+      // ----- cue 字幕 (索引随阶段, 仅辅助) -----
+      const cueIdx = Math.min(seg, I18N[lang].cues.length-1);
+      if(cueIdx !== lastCue){
+        cueEl.innerHTML = I18N[lang].cues[cueIdx];
+        lastCue = cueIdx;
+      }
+
+      requestAnimationFrame(tick);
     }
+    requestAnimationFrame(tick);
   }
 
-  function frameAlpha(u){
-    if (u > 0.92) return Math.max(0, 1 - (u - 0.92) / 0.08);
-    if (u < 0.06) return u / 0.06;
-    return 1;
-  }
-
-  function draw(now){
-    if (!W || !H){ requestAnimationFrame(draw); return; }
-    var fp = frameProgress(now);
-
-    ctx.fillStyle = CSSV('--bg-0');
-    ctx.fillRect(0, 0, W, H);
-
-    // 背景网格 (geometry void 气质)
-    ctx.strokeStyle = CSSV('--line');
-    ctx.lineWidth = 1;
-    for (var gx = 40; gx < W; gx += 60){
-      ctx.beginPath(); ctx.moveTo(gx, 0); ctx.lineTo(gx, H); ctx.stroke();
-    }
-    for (var gy = 40; gy < H; gy += 60){
-      ctx.beginPath(); ctx.moveTo(0, gy); ctx.lineTo(W, gy); ctx.stroke();
-    }
-
-    ctx.globalAlpha = frameAlpha(fp.u);
-    if      (fp.idx === 0) drawFrame1(fp.u, now);
-    else if (fp.idx === 1) drawFrame2(fp.u, now);
-    else if (fp.idx === 2) drawFrame3(fp.u, now);
-    else if (fp.idx === 3) drawFrame4(fp.u, now);
-    else                   drawFrame5(fp.u, now);
-    ctx.globalAlpha = 1;
-
-    if (fp.idx !== lastFrameShown){
-      lastFrameShown = fp.idx;
-      document.getElementById('hudFrame').textContent = (fp.idx + 1) + ' / 5';
-      document.getElementById('hudStage').textContent = I18N.stages[LANG][fp.idx];
-      document.getElementById('hudVal').textContent   = I18N.hudVals[LANG][fp.idx];
-      document.getElementById('subZh').textContent    = I18N.subs[LANG][fp.idx];
-      document.getElementById('subEn').textContent    = I18N.subs.en[fp.idx];
-      var subZhEl = document.getElementById('subZh');
-      if (fp.idx === 4) subZhEl.classList.add('gold');
-      else subZhEl.classList.remove('gold');
-    }
-
-    requestAnimationFrame(draw);
-  }
-
+  /* ---------- i18n 刷新 ---------- */
   function refreshI18N(){
-    document.getElementById('ttl').textContent      = t('ttl');
-    document.getElementById('subtitle').textContent = t('subtitle');
-    document.getElementById('g1').textContent = t('g1');
-    document.getElementById('g2').textContent = t('g2');
-    document.getElementById('g3').textContent = t('g3');
-    document.getElementById('hudTtl').textContent = t('hudTtl');
-    lastFrameShown = -1;
+    document.querySelectorAll('[data-i18n]').forEach(n=>{
+      n.innerHTML = I18N[lang][n.getAttribute('data-i18n')];
+    });
+    lastCue = -1; // 强制下一帧刷新 cue
+    document.documentElement.lang = (lang==='zh'?'zh-CN':'en');
   }
-
   document.getElementById('langBtn').addEventListener('click', function(){
-    LANG = (LANG === 'cn') ? 'en' : 'cn';
-    this.textContent = LANG === 'cn' ? 'CN / EN' : 'EN / CN';
+    lang = (lang==='zh') ? 'en' : 'zh';
     refreshI18N();
   });
 
-  resize();
-  requestAnimationFrame(draw);
+  refreshI18N();
+  build();
 })();
 </script>
 </body>

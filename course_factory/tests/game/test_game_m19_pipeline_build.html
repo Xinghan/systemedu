@@ -1,808 +1,811 @@
 <!DOCTYPE html>
 <html lang="zh">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>EEG 清洗流水线搭建台 / EEG Cleaning Pipeline Builder</title>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>预处理流水线工程师 — 把脏脑波洗成干净信号</title>
 <style>
-:root {
-  --paper:    #FAF9F5;
-  --paper-2:  #F1EDDF;
-  --card:     #FFFFFF;
-  --ink:      #191814;
-  --ink-2:    #2B2924;
-  --sub:      #6B6557;
-  --sub-2:    #9D978A;
-  --border:   #EBE5D6;
-  --border-2: #D9D1BD;
-  --hairline: #F2EDE0;
-
-  --primary:      #D97757;
-  --primary-ink:  #9A4A2E;
-  --primary-soft: #F8EDE5;
-  --primary-line: #ECCFB8;
-
-  --computing:      #C04E68;
-  --computing-soft: #F4DDE3;
-
-  --good:  #4F7A4A;
-  --warn:  #B5723A;
-
-  --shadow-sm: 0 1px 2px 0 rgba(25,24,20,.04);
-  --shadow:    0 1px 3px 0 rgba(25,24,20,.06), 0 1px 2px -1px rgba(25,24,20,.04);
-  --shadow-md: 0 4px 8px -2px rgba(25,24,20,.06), 0 2px 4px -2px rgba(25,24,20,.04);
-  --shadow-lg: 0 12px 24px -6px rgba(25,24,20,.1), 0 4px 8px -4px rgba(25,24,20,.05);
-
-  --mono: 'JetBrains Mono', 'SF Mono', 'Menlo', monospace;
-  --sans: 'PingFang SC', 'Inter', 'Noto Sans SC', system-ui, sans-serif;
+:root{
+  --paper:#FAF9F5; --paper-2:#F1EDDF; --card:#FFFFFF;
+  --ink:#191814; --ink-2:#2B2924; --sub:#6B6557; --sub-2:#9D978A;
+  --border:#EBE5D6; --border-2:#D9D1BD; --hairline:#F2EDE0;
+  /* domain accent: computing #C04E68 */
+  --primary:#C04E68; --primary-ink:#8F3149; --primary-soft:#F8E7EC; --primary-line:#ECC4CF;
+  --ok:#3F7A52; --ok-soft:#E0EBE2; --ok-line:#BFD8C6;
+  --bad:#B5462F; --bad-soft:#F3DED6; --bad-line:#E4BDAE;
+  --warn:#9A7A1E; --warn-soft:#F3ECD3; --warn-line:#E0D0A0;
+  --shadow-sm:0 1px 2px 0 rgba(25,24,20,.04);
+  --shadow:0 1px 3px 0 rgba(25,24,20,.06),0 1px 2px -1px rgba(25,24,20,.04);
+  --shadow-md:0 4px 8px -2px rgba(25,24,20,.07),0 2px 4px -2px rgba(25,24,20,.04);
+  --shadow-lg:0 14px 30px -8px rgba(25,24,20,.12),0 4px 10px -4px rgba(25,24,20,.06);
+  --mono:'JetBrains Mono','SF Mono',ui-monospace,Menlo,Consolas,monospace;
+  --sans:'PingFang SC','Inter','Noto Sans SC',system-ui,sans-serif;
 }
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:100%;height:100vh;overflow:hidden;background:var(--paper);
+  font-family:var(--sans);color:var(--ink);}
+.wrapper{display:flex;height:100vh;}
 
-* { box-sizing: border-box; margin: 0; padding: 0; }
-
-html, body { height: 100%; }
-
-body {
-  font-family: var(--sans);
-  background: var(--paper);
-  color: var(--ink);
-  display: flex;
-  height: 100vh;
-  overflow: hidden;
+/* ── 200px sidebar: block tray + run/reset + langBtn ── */
+.game-sidebar{
+  width:200px;flex-shrink:0;height:100vh;overflow-y:auto;
+  background:var(--paper-2);border-right:1px solid var(--border);
+  padding:14px 12px;display:flex;flex-direction:column;gap:12px;
 }
+.brand{display:flex;flex-direction:column;gap:3px;}
+.brand .kicker{font-family:var(--mono);font-size:9.5px;letter-spacing:1.6px;
+  color:var(--primary-ink);text-transform:uppercase;}
+.brand .title{font-size:14px;font-weight:700;color:var(--ink);line-height:1.25;}
+.brand .sub{font-size:10.5px;color:var(--sub);line-height:1.4;}
 
-/* ===== Sidebar ===== */
-.game-sidebar {
-  width: 200px;
-  min-width: 200px;
-  background: var(--paper-2);
-  border-right: 1px solid var(--border);
-  display: flex;
-  flex-direction: column;
-  padding: 18px 14px;
-  gap: 14px;
-  overflow-y: auto;
+.tray h3,.task-box h3{font-family:var(--mono);font-size:9.5px;letter-spacing:1px;
+  color:var(--sub);text-transform:uppercase;margin-bottom:6px;}
+.tray{display:flex;flex-direction:column;gap:6px;}
+.tray-list{display:flex;flex-direction:column;gap:6px;min-height:22px;
+  border:1.5px dashed transparent;border-radius:8px;transition:border-color .18s;}
+.tray-list.over{border-color:var(--primary-line);}
+.block{display:flex;align-items:center;gap:8px;padding:8px 9px;border-radius:8px;
+  background:var(--card);border:1.5px solid var(--border);font-size:11px;color:var(--ink-2);
+  cursor:grab;transition:border-color .18s,box-shadow .18s,transform .12s;box-shadow:var(--shadow-sm);
+  user-select:none;}
+.block:hover{border-color:var(--primary-line);box-shadow:var(--shadow-md);}
+.block:active{cursor:grabbing;}
+.block.dragging{opacity:.35;}
+.block .glyph{width:22px;height:22px;flex-shrink:0;border-radius:6px;
+  background:var(--primary-soft);border:1px solid var(--primary-line);
+  display:flex;align-items:center;justify-content:center;}
+.block .glyph svg{width:13px;height:13px;}
+.block .b-lbl{line-height:1.25;}
+
+.task-box{background:var(--card);border:1px solid var(--border);
+  border-radius:8px;padding:10px;box-shadow:var(--shadow-sm);}
+.task-box p{font-size:11px;line-height:1.55;color:var(--ink-2);}
+
+.spacer{flex:1;min-height:6px;}
+.ctrl-row{display:flex;flex-direction:column;gap:7px;}
+.btn{font-family:var(--mono);font-size:11.5px;letter-spacing:.5px;padding:10px;border-radius:8px;
+  border:1.5px solid var(--border-2);cursor:pointer;transition:all .18s;background:var(--card);color:var(--ink-2);}
+.btn:hover:not(:disabled){background:var(--primary-soft);border-color:var(--primary-line);color:var(--primary-ink);}
+.btn:disabled{opacity:.5;cursor:default;}
+.btn.run{background:var(--primary);border-color:var(--primary);color:#fff;}
+.btn.run:hover:not(:disabled){background:var(--primary-ink);border-color:var(--primary-ink);color:#fff;}
+.lang-btn{font-family:var(--mono);font-size:11px;letter-spacing:.5px;
+  padding:9px 10px;border-radius:7px;background:var(--card);border:1px solid var(--border-2);
+  color:var(--ink-2);cursor:pointer;transition:all .2s;}
+.lang-btn:hover{background:var(--primary-soft);border-color:var(--primary-line);color:var(--primary-ink);}
+
+/* ── main: pipeline canvas + data flow viewer ── */
+.game-main{flex:1;height:100vh;display:flex;flex-direction:column;overflow:hidden;
+  padding:20px 24px;gap:14px;}
+
+.head{display:flex;align-items:center;gap:14px;background:var(--card);
+  border:1px solid var(--border);border-radius:12px;padding:13px 18px;box-shadow:var(--shadow);}
+.head .icon{width:44px;height:44px;flex-shrink:0;border-radius:11px;
+  background:var(--primary-soft);border:1px solid var(--primary-line);
+  display:flex;align-items:center;justify-content:center;}
+.head .icon svg{width:24px;height:24px;}
+.head .meta{display:flex;flex-direction:column;gap:2px;}
+.head .name{font-size:13.5px;font-weight:700;color:var(--ink);}
+.head .desc{font-size:11.5px;color:var(--sub);line-height:1.45;}
+.head .status{margin-left:auto;font-family:var(--mono);font-size:10.5px;letter-spacing:.5px;
+  padding:6px 12px;border-radius:20px;background:var(--paper-2);border:1px solid var(--border-2);
+  color:var(--sub);white-space:nowrap;}
+.head .status.fail{background:var(--bad-soft);border-color:var(--bad-line);color:var(--bad);}
+.head .status.win{background:var(--ok-soft);border-color:var(--ok-line);color:var(--ok);}
+
+/* pipeline canvas */
+.canvas-wrap{flex:1;display:flex;flex-direction:column;min-height:0;gap:14px;}
+
+.pipeline{background:var(--card);border:1px solid var(--border);border-radius:12px;
+  padding:16px 18px;box-shadow:var(--shadow-md);}
+.pipeline .lane-title{font-family:var(--mono);font-size:9.5px;letter-spacing:1.2px;
+  color:var(--primary-ink);text-transform:uppercase;margin-bottom:10px;}
+.lane{display:flex;align-items:stretch;gap:0;}
+.src,.sink{flex-shrink:0;width:86px;display:flex;flex-direction:column;align-items:center;
+  justify-content:center;gap:5px;padding:10px 6px;border-radius:10px;
+  background:var(--paper-2);border:1px dashed var(--border-2);}
+.src .tag,.sink .tag{font-family:var(--mono);font-size:9px;letter-spacing:.8px;color:var(--sub);text-transform:uppercase;}
+.src .wave,.sink .wave{width:62px;height:24px;}
+.flow-mid{flex:1;display:flex;align-items:center;gap:0;padding:0 4px;min-width:0;}
+.slot{flex:1;min-width:0;min-height:78px;border-radius:10px;border:1.5px dashed var(--border-2);
+  background:var(--paper);margin:0 4px;display:flex;flex-direction:column;align-items:center;
+  justify-content:center;gap:4px;position:relative;transition:border-color .18s,background .18s,box-shadow .18s;}
+.slot .slot-num{position:absolute;top:5px;left:7px;font-family:var(--mono);font-size:9px;color:var(--sub-2);}
+.slot .placeholder{font-size:10px;color:var(--sub-2);text-align:center;padding:0 6px;line-height:1.3;}
+.slot.over{border-color:var(--primary);background:var(--primary-soft);}
+.slot.filled{border-style:solid;border-color:var(--border-2);background:var(--card);box-shadow:var(--shadow-sm);}
+.slot.active{border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-soft);}
+.slot.clean-step{border-color:var(--ok-line);background:var(--ok-soft);}
+.slot.dirty-step{border-color:var(--bad-line);background:var(--bad-soft);}
+.placed{display:flex;flex-direction:column;align-items:center;gap:3px;cursor:grab;user-select:none;padding:6px 4px;width:100%;}
+.placed .glyph{width:24px;height:24px;border-radius:7px;background:var(--primary-soft);
+  border:1px solid var(--primary-line);display:flex;align-items:center;justify-content:center;}
+.placed .glyph svg{width:14px;height:14px;}
+.placed .p-lbl{font-size:9.5px;color:var(--ink-2);text-align:center;line-height:1.2;max-width:88px;}
+.placed .p-eff{font-family:var(--mono);font-size:8.5px;color:var(--sub);}
+.arrow{flex-shrink:0;width:18px;display:flex;align-items:center;justify-content:center;color:var(--border-2);transition:color .2s;}
+.arrow svg{width:14px;height:14px;}
+.arrow.flowing{color:var(--primary);}
+
+/* signal viewer */
+.viewer{flex:1;min-height:0;background:var(--card);border:1px solid var(--border);
+  border-radius:12px;padding:14px 16px;box-shadow:var(--shadow-sm);display:flex;flex-direction:column;gap:8px;}
+.viewer .v-head{display:flex;align-items:center;justify-content:space-between;}
+.viewer .v-title{font-family:var(--mono);font-size:9.5px;letter-spacing:1.2px;
+  color:var(--sub);text-transform:uppercase;}
+.metrics{display:flex;gap:16px;}
+.metric{display:flex;flex-direction:column;align-items:flex-end;gap:1px;}
+.metric .m-val{font-family:var(--mono);font-size:13px;font-weight:700;color:var(--ink);}
+.metric .m-lbl{font-family:var(--mono);font-size:8.5px;letter-spacing:.6px;color:var(--sub-2);text-transform:uppercase;}
+.metric.good .m-val{color:var(--ok);}
+.metric.poor .m-val{color:var(--bad);}
+.canvas-host{flex:1;min-height:0;display:flex;flex-direction:column;}
+#scope{width:100%;height:100%;display:block;border-radius:8px;background:var(--paper-2);
+  border:1px solid var(--border);}
+
+/* log / verdict */
+.log{background:var(--card);border:1px solid var(--border);border-radius:10px;
+  padding:11px 14px;box-shadow:var(--shadow-sm);min-height:42px;display:flex;align-items:center;gap:10px;}
+.log .badge{font-family:var(--mono);font-size:9px;letter-spacing:.8px;padding:4px 8px;border-radius:6px;
+  background:var(--paper-2);border:1px solid var(--border-2);color:var(--sub);text-transform:uppercase;flex-shrink:0;}
+.log .badge.fail{background:var(--bad-soft);border-color:var(--bad-line);color:var(--bad);}
+.log .badge.win{background:var(--ok-soft);border-color:var(--ok-line);color:var(--ok);}
+.log .msg{font-size:12px;line-height:1.5;color:var(--ink-2);}
+
+@media (max-height:720px){
+  .src .wave,.sink .wave{height:18px;}
+  .slot{min-height:64px;}
 }
-
-.brand { display: flex; flex-direction: column; gap: 4px; }
-.brand .b-tag {
-  font-family: var(--mono);
-  font-size: 10px;
-  letter-spacing: 1px;
-  color: var(--computing);
-  text-transform: uppercase;
-}
-.brand .b-title { font-size: 15px; font-weight: 700; color: var(--ink); line-height: 1.3; }
-
-.lib-label {
-  font-family: var(--mono);
-  font-size: 10px;
-  letter-spacing: .8px;
-  color: var(--sub-2);
-  text-transform: uppercase;
-}
-
-.part-list { display: flex; flex-direction: column; gap: 8px; }
-
-.part-card {
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 9px 10px;
-  cursor: grab;
-  box-shadow: var(--shadow-sm);
-  transition: box-shadow .18s, border-color .18s, transform .18s;
-  user-select: none;
-}
-.part-card:hover { box-shadow: var(--shadow-md); border-color: var(--computing); }
-.part-card:active { cursor: grabbing; }
-.part-card.used { opacity: .35; pointer-events: none; }
-.part-card.dragging { opacity: .5; }
-
-.part-card .pc-name { font-size: 12.5px; font-weight: 600; color: var(--ink-2); }
-.part-card .pc-en { font-family: var(--mono); font-size: 9.5px; color: var(--sub-2); margin-top: 2px; }
-
-.side-actions { display: flex; flex-direction: column; gap: 8px; margin-top: auto; }
-
-.btn {
-  font-family: var(--sans);
-  font-size: 13px;
-  font-weight: 600;
-  border: 1px solid var(--border-2);
-  border-radius: 8px;
-  padding: 9px 12px;
-  background: var(--card);
-  color: var(--ink-2);
-  cursor: pointer;
-  transition: background .16s, border-color .16s, transform .1s;
-}
-.btn:hover { background: var(--hairline); }
-.btn:active { transform: translateY(1px); }
-.btn-run {
-  background: var(--primary);
-  border-color: var(--primary-ink);
-  color: #fff;
-}
-.btn-run:hover { background: var(--primary-ink); }
-
-.lang-btn {
-  font-family: var(--mono);
-  font-size: 11px;
-  letter-spacing: .5px;
-  border: 1px solid var(--border-2);
-  border-radius: 8px;
-  padding: 7px 12px;
-  background: transparent;
-  color: var(--sub);
-  cursor: pointer;
-  align-self: flex-start;
-}
-.lang-btn:hover { color: var(--computing); border-color: var(--computing); }
-
-.guide { font-size: 11px; color: var(--sub); line-height: 1.6; }
-.guide li { margin-left: 14px; margin-bottom: 3px; }
-
-/* ===== Main ===== */
-.game-main {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-  padding: 22px 26px 18px;
-  gap: 16px;
-}
-
-.main-head { display: flex; flex-direction: column; gap: 5px; }
-.main-head h1 { font-size: 19px; font-weight: 700; color: var(--ink); }
-.main-head .sub { font-size: 12.5px; color: var(--sub); }
-
-/* pipeline track */
-.track-wrap { display: flex; flex-direction: column; gap: 8px; }
-.track-label { font-family: var(--mono); font-size: 10px; letter-spacing: 1px; color: var(--sub-2); text-transform: uppercase; }
-
-.pipeline {
-  display: flex;
-  align-items: stretch;
-  gap: 0;
-  flex-wrap: nowrap;
-  overflow-x: auto;
-  padding-bottom: 4px;
-}
-
-.src-node, .out-node {
-  flex: 0 0 92px;
-  border-radius: 10px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 12px 8px;
-  text-align: center;
-  gap: 4px;
-}
-.src-node { background: var(--computing-soft); border: 1px solid var(--computing); }
-.out-node { background: var(--primary-soft); border: 1px solid var(--primary-line); }
-.src-node .n-t, .out-node .n-t { font-size: 12px; font-weight: 700; color: var(--ink); }
-.src-node .n-en, .out-node .n-en { font-family: var(--mono); font-size: 9px; color: var(--sub); }
-
-.slot {
-  flex: 0 0 132px;
-  min-height: 86px;
-  border: 1.5px dashed var(--border-2);
-  border-radius: 10px;
-  background: var(--card);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 8px;
-  text-align: center;
-  position: relative;
-  transition: border-color .16s, background .16s;
-}
-.slot .slot-idx {
-  position: absolute; top: 5px; left: 8px;
-  font-family: var(--mono); font-size: 9px; color: var(--sub-2);
-}
-.slot.over { border-color: var(--computing); background: var(--computing-soft); }
-.slot .empty-hint { font-size: 11px; color: var(--sub-2); }
-.slot.filled { border-style: solid; border-color: var(--border-2); }
-.slot .placed-name { font-size: 12.5px; font-weight: 600; color: var(--ink-2); }
-.slot .placed-en { font-family: var(--mono); font-size: 8.5px; color: var(--sub-2); margin-top: 2px; }
-.slot .placed-clear {
-  position: absolute; top: 4px; right: 6px;
-  font-family: var(--mono); font-size: 13px; color: var(--sub-2);
-  cursor: pointer; line-height: 1; padding: 2px;
-}
-.slot .placed-clear:hover { color: var(--computing); }
-.slot.flow-active { box-shadow: 0 0 0 2px var(--computing) inset; }
-.slot.flow-done { border-color: var(--good); }
-
-.arrow {
-  flex: 0 0 28px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--sub-2);
-}
-.arrow svg { width: 22px; height: 14px; }
-
-/* status banner */
-.banner {
-  border-radius: 10px;
-  padding: 12px 16px;
-  font-size: 13px;
-  line-height: 1.5;
-  border: 1px solid var(--border);
-  background: var(--card);
-  color: var(--sub);
-  min-height: 48px;
-  display: flex;
-  align-items: center;
-}
-.banner.warn { background: #FBF1E6; border-color: #E6C79C; color: var(--warn); }
-.banner.good { background: #EEF4ED; border-color: #BBD3B6; color: var(--good); }
-.banner .b-key { font-weight: 700; margin-right: 6px; }
-
-/* data flow viz */
-.viz-wrap {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  box-shadow: var(--shadow);
-  padding: 12px 14px;
-  min-height: 0;
-  gap: 8px;
-}
-.viz-head { display: flex; justify-content: space-between; align-items: baseline; }
-.viz-head .vh-t { font-size: 12.5px; font-weight: 600; color: var(--ink-2); }
-.viz-head .vh-stage { font-family: var(--mono); font-size: 11px; color: var(--computing); }
-.viz-canvas-host {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-}
-#flowCanvas { width: 100%; flex: 1; display: block; border-radius: 8px; background: var(--paper-2); }
-
-.metric-row { display: flex; gap: 18px; padding-top: 2px; }
-.metric { display: flex; flex-direction: column; gap: 2px; }
-.metric .m-k { font-family: var(--mono); font-size: 9px; letter-spacing: .6px; color: var(--sub-2); text-transform: uppercase; }
-.metric .m-v { font-family: var(--mono); font-size: 14px; font-weight: 700; color: var(--ink); }
-.metric .m-v.bad { color: var(--warn); }
-.metric .m-v.ok { color: var(--good); }
-
-.gold-stamp {
-  position: fixed;
-  inset: 0;
-  display: none;
-  align-items: center;
-  justify-content: center;
-  background: rgba(25,24,20,.32);
-  z-index: 30;
-}
-.gold-stamp.show { display: flex; animation: stampFade .35s ease; }
-@keyframes stampFade { from { opacity: 0; } to { opacity: 1; } }
-.gold-card {
-  background: var(--card);
-  border: 2px solid var(--primary);
-  border-radius: 16px;
-  padding: 28px 34px;
-  max-width: 420px;
-  text-align: center;
-  box-shadow: var(--shadow-lg);
-}
-.gold-card .gs-seal {
-  font-family: var(--mono);
-  font-size: 12px;
-  letter-spacing: 2px;
-  color: var(--primary);
-  text-transform: uppercase;
-  animation: sealPulse 1.6s ease-in-out infinite;
-}
-@keyframes sealPulse { 0%,100% { opacity: .7; } 50% { opacity: 1; } }
-.gold-card .gs-t { font-size: 20px; font-weight: 700; margin: 10px 0 8px; color: var(--ink); }
-.gold-card .gs-d { font-size: 13px; color: var(--sub); line-height: 1.6; margin-bottom: 18px; }
-.gold-card .btn { width: 100%; }
 </style>
 </head>
 <body>
+<div class="wrapper">
+  <!-- ── 200px sidebar ── -->
   <aside class="game-sidebar">
     <div class="brand">
-      <div class="b-tag" data-i18n="tag">M19 / PIPELINE</div>
-      <div class="b-title" data-i18n="brand">EEG 清洗流水线</div>
+      <div class="kicker" data-i18n="kicker">EEG · 预处理</div>
+      <div class="title" data-i18n="title">流水线工程师</div>
+      <div class="sub" data-i18n="brandSub">把处理块按正确顺序串成预处理管线</div>
     </div>
 
-    <div class="lib-label" data-i18n="lib">零件库 · 处理工位</div>
-    <div class="part-list" id="partList"></div>
+    <div class="tray">
+      <h3 data-i18n="trayTitle">处理块库</h3>
+      <div class="tray-list" id="trayList"></div>
+    </div>
 
-    <ul class="guide">
-      <li data-i18n="g1">把工位卡拖到右侧槽位</li>
-      <li data-i18n="g2">顺序很重要：先滤波再分解</li>
-      <li data-i18n="g3">点运行看脑波逐步变干净</li>
-    </ul>
+    <div class="task-box">
+      <h3 data-i18n="taskTitle">任务</h3>
+      <p data-i18n="taskBody">把 4 个处理块拖入 4 个槽位，顺序决定脏脑波能否被洗净。点执行让信号流过管线。</p>
+    </div>
 
-    <div class="side-actions">
-      <button class="btn btn-run" id="runBtn" data-i18n="run">运行流水线</button>
-      <button class="btn" id="resetBtn" data-i18n="reset">重置</button>
-      <button class="lang-btn" id="langBtn">中文 / EN</button>
+    <div class="spacer"></div>
+
+    <div class="ctrl-row">
+      <button class="btn run" id="runBtn" disabled data-i18n="runBtn">执行管线</button>
+      <button class="btn" id="resetBtn" data-i18n="resetBtn">重置</button>
+      <button class="lang-btn" id="langBtn">EN / 中</button>
     </div>
   </aside>
 
+  <!-- ── main: pipeline canvas + data flow viewer ── -->
   <main class="game-main">
-    <div class="main-head">
-      <h1 data-i18n="title">搭一条能复用的脑电清洗流水线</h1>
-      <div class="sub" data-i18n="subtitle">脏脑波从左流入，按正确顺序经过每个工位，干净 epoch 从右流出。</div>
-    </div>
-
-    <div class="track-wrap">
-      <div class="track-label" data-i18n="track">PIPELINE · 拖入 5 个工位</div>
-      <div class="pipeline" id="pipeline"></div>
-    </div>
-
-    <div class="banner" id="banner">
-      <span data-i18n="bInit">把零件库里的 5 张工位卡拖进槽位，再点"运行流水线"。</span>
-    </div>
-
-    <div class="viz-wrap">
-      <div class="viz-head">
-        <span class="vh-t" data-i18n="vizT">数据流可视化 · 脑波在各工位的状态</span>
-        <span class="vh-stage" id="vizStage" data-i18n="vizIdle">待运行</span>
+    <div class="head">
+      <div class="icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#8F3149" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 12h3l2-6 4 12 3-9 2 3h4"/>
+        </svg>
       </div>
-      <div class="viz-canvas-host">
-        <canvas id="flowCanvas"></canvas>
+      <div class="meta">
+        <div class="name" data-i18n="headName">原始脑波：脏数据一段</div>
+        <div class="desc" data-i18n="headDesc">含 50Hz 工频、慢漂移、眨眼伪迹，需经预处理才能用</div>
       </div>
-      <div class="metric-row">
-        <div class="metric"><span class="m-k" data-i18n="mLine">50Hz 工频</span><span class="m-v" id="mLine">—</span></div>
-        <div class="metric"><span class="m-k" data-i18n="mBlink">眨眼伪迹</span><span class="m-v" id="mBlink">—</span></div>
-        <div class="metric"><span class="m-k" data-i18n="mEpoch">输出分段</span><span class="m-v" id="mEpoch">—</span></div>
+      <div class="status" id="statusPill" data-i18n="statusIdle">待执行</div>
+    </div>
+
+    <div class="canvas-wrap">
+      <div class="pipeline">
+        <div class="lane-title" data-i18n="laneTitle">预处理管线（从左到右流过）</div>
+        <div class="lane">
+          <div class="src">
+            <div class="tag" data-i18n="srcTag">脏脑波</div>
+            <svg class="wave" id="srcWave" viewBox="0 0 62 24"></svg>
+          </div>
+          <div class="arrow" id="arrIn">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+          </div>
+          <div class="flow-mid" id="flowMid"></div>
+          <div class="arrow" id="arrOut">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+          </div>
+          <div class="sink">
+            <div class="tag" data-i18n="sinkTag">输出</div>
+            <svg class="wave" id="sinkWave" viewBox="0 0 62 24"></svg>
+          </div>
+        </div>
+      </div>
+
+      <div class="viewer">
+        <div class="v-head">
+          <div class="v-title" data-i18n="viewerTitle">信号示波器 — 逐级变化</div>
+          <div class="metrics">
+            <div class="metric" id="mSnr"><span class="m-val" id="snrVal">--</span><span class="m-lbl">SNR dB</span></div>
+            <div class="metric" id="mArt"><span class="m-val" id="artVal">--</span><span class="m-lbl" data-i18n="artLbl">残余伪迹%</span></div>
+          </div>
+        </div>
+        <div class="canvas-host">
+          <canvas id="scope"></canvas>
+        </div>
+      </div>
+
+      <div class="log">
+        <span class="badge" id="logBadge" data-i18n="logBadgeIdle">提示</span>
+        <span class="msg" id="logMsg" data-i18n="logIdle">拖块入槽，凑齐 4 块后点「执行管线」。处理顺序错了，污染会一路传下去。</span>
       </div>
     </div>
   </main>
-
-  <div class="gold-stamp" id="goldStamp">
-    <div class="gold-card">
-      <div class="gs-seal" data-i18n="seal">PIPELINE VERIFIED</div>
-      <div class="gs-t" data-i18n="goldT">你搭出了一条能复用的清洗流水线</div>
-      <div class="gs-d" data-i18n="goldD">脏脑波经过滤波、分段、ICA 分解、剔除伪迹、逆变换重建，输出了干净的 epoch。这套顺序换一份新数据也能直接复用。</div>
-      <button class="btn btn-run" id="goldClose" data-i18n="goldBtn">再搭一次</button>
-    </div>
-  </div>
+</div>
 
 <script>
-'use strict';
+(function(){
+  "use strict";
 
-// ---------- i18n ----------
-const I18N = {
-  zh: {
-    tag: 'M19 / PIPELINE', brand: 'EEG 清洗流水线', lib: '零件库 · 处理工位',
-    g1: '把工位卡拖到右侧槽位', g2: '顺序很重要：先滤波再分解', g3: '点运行看脑波逐步变干净',
-    run: '运行流水线', reset: '重置', track: 'PIPELINE · 拖入 5 个工位',
-    title: '搭一条能复用的脑电清洗流水线',
-    subtitle: '脏脑波从左流入，按正确顺序经过每个工位，干净 epoch 从右流出。',
-    bInit: '把零件库里的 5 张工位卡拖进槽位，再点"运行流水线"。',
-    vizT: '数据流可视化 · 脑波在各工位的状态', vizIdle: '待运行',
-    mLine: '50Hz 工频', mBlink: '眨眼伪迹', mEpoch: '输出分段',
-    seal: 'PIPELINE VERIFIED', goldT: '你搭出了一条能复用的清洗流水线',
-    goldD: '脏脑波经过滤波、分段、ICA 分解、剔除伪迹、逆变换重建，输出了干净的 epoch。这套顺序换一份新数据也能直接复用。',
-    goldBtn: '再搭一次',
-    src: '脏脑波', srcEn: 'RAW', out: '干净 epoch', outEn: 'CLEAN', empty: '空槽位',
-    needAll: '还有空槽位，先把 5 个工位都摆上再运行。',
-    warnOrder: '工频没滤掉，ICA 会被干扰 —— 带通滤波要排在 ICA 分解前面。',
-    warnEpoch: 'ICA 应该在分段切片之后做：先切成 epoch，再分解每段。',
-    warnRebuild: '剔除伪迹后必须做逆变换重建，否则数据还停在成分空间，不是干净脑波。',
-    warnDrop: '输出还有眨眼污染 —— 漏了剔除伪迹这一步。',
-    warnGeneric: '顺序不对，数据没能逐步变干净。看提示调整工位排列。',
-    stages: ['原始', '带通滤波', '分段切片', 'ICA 分解', '剔除伪迹', '逆变换重建'],
-    high: '高', mid: '中', low: '低', none: '无',
-  },
-  en: {
-    tag: 'M19 / PIPELINE', brand: 'EEG Clean Pipeline', lib: 'Parts · Stages',
-    g1: 'Drag stage cards into the slots', g2: 'Order matters: filter before decompose', g3: 'Run it and watch the wave get clean',
-    run: 'Run Pipeline', reset: 'Reset', track: 'PIPELINE · drag in 5 stages',
-    title: 'Build a reusable EEG cleaning pipeline',
-    subtitle: 'Dirty EEG flows in from the left, passes each stage in the right order, clean epochs flow out.',
-    bInit: 'Drag all 5 stage cards from the library into the slots, then press "Run Pipeline".',
-    vizT: 'Data Flow · wave state at each stage', vizIdle: 'idle',
-    mLine: '50Hz line', mBlink: 'blink artifact', mEpoch: 'output epochs',
-    seal: 'PIPELINE VERIFIED', goldT: 'You built a reusable cleaning pipeline',
-    goldD: 'Dirty EEG went through filtering, epoching, ICA decomposition, artifact removal, and inverse reconstruction — out came clean epochs. Reuse this order on any new recording.',
-    goldBtn: 'Build again',
-    src: 'Dirty EEG', srcEn: 'RAW', out: 'Clean epoch', outEn: 'CLEAN', empty: 'empty slot',
-    needAll: 'Empty slots remain — place all 5 stages before running.',
-    warnOrder: 'Line noise was never filtered, so ICA gets corrupted — band-pass must come before ICA.',
-    warnEpoch: 'ICA should run after epoching: cut into epochs first, then decompose each one.',
-    warnRebuild: 'After removing artifacts you must inverse-reconstruct, otherwise data is still in component space, not clean EEG.',
-    warnDrop: 'Output still has blink contamination — the artifact-removal stage is missing.',
-    warnGeneric: 'Wrong order, the data did not get cleaner. Check the hint and rearrange.',
-    stages: ['raw', 'band-pass', 'epoching', 'ICA', 'reject', 'inverse'],
-    high: 'high', mid: 'mid', low: 'low', none: 'none',
-  }
-};
-let lang = 'zh';
-
-// ---------- pipeline model ----------
-// correct order: filter -> epoch -> ica -> reject -> rebuild
-const PARTS = [
-  { id: 'filter',  zh: '带通滤波',   en: 'Band-pass',  enc: 'BANDPASS' },
-  { id: 'epoch',   zh: '分段切片',   en: 'Epoching',   enc: 'EPOCH' },
-  { id: 'ica',     zh: 'ICA 分解',   en: 'ICA Decomp', enc: 'ICA' },
-  { id: 'reject',  zh: '剔除伪迹',   en: 'Reject IC',  enc: 'REJECT' },
-  { id: 'rebuild', zh: '逆变换重建', en: 'Inverse',    enc: 'INVERSE' },
-];
-const CORRECT = ['filter', 'epoch', 'ica', 'reject', 'rebuild'];
-const N = CORRECT.length;
-
-const slots = new Array(N).fill(null); // slot index -> part id
-
-// ---------- DOM ----------
-const partListEl = document.getElementById('partList');
-const pipelineEl = document.getElementById('pipeline');
-const bannerEl   = document.getElementById('banner');
-const runBtn     = document.getElementById('runBtn');
-const resetBtn   = document.getElementById('resetBtn');
-const langBtn    = document.getElementById('langBtn');
-const canvas     = document.getElementById('flowCanvas');
-const ctx        = canvas.getContext('2d');
-const vizStageEl = document.getElementById('vizStage');
-const mLineEl    = document.getElementById('mLine');
-const mBlinkEl   = document.getElementById('mBlink');
-const mEpochEl   = document.getElementById('mEpoch');
-const goldStamp  = document.getElementById('goldStamp');
-
-let dragPartId = null;
-let running = false;
-let flowTimer = null;
-let waveT = 0;
-let waveTimer = null;
-
-// ---------- build part library ----------
-function renderParts() {
-  partListEl.innerHTML = '';
-  PARTS.forEach(p => {
-    const card = document.createElement('div');
-    card.className = 'part-card';
-    card.setAttribute('draggable', 'true');
-    card.dataset.pid = p.id;
-    if (slots.includes(p.id)) card.classList.add('used');
-    const pcName = document.createElement('div');
-    pcName.className = 'pc-name';
-    pcName.textContent = lang === 'zh' ? p.zh : p.en;
-    const en = document.createElement('div');
-    en.className = 'pc-en';
-    en.textContent = p.enc;
-    card.appendChild(pcName); card.appendChild(en);
-
-    card.addEventListener('dragstart', (ev) => {
-      dragPartId = p.id;
-      card.classList.add('dragging');
-      ev.dataTransfer.effectAllowed = 'move';
-      try { ev.dataTransfer.setData('text/plain', p.id); } catch (e) {}
-    });
-    card.addEventListener('dragend', () => { card.classList.remove('dragging'); dragPartId = null; });
-    partListEl.appendChild(card);
-  });
-}
-
-// ---------- build pipeline track ----------
-function arrowSVG() {
-  return '<svg viewBox="0 0 22 14"><path d="M1 7 H17 M13 3 L18 7 L13 11" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
-}
-
-function renderPipeline() {
-  const t = I18N[lang];
-  pipelineEl.innerHTML = '';
-
-  const src = document.createElement('div');
-  src.className = 'src-node';
-  src.innerHTML = '<div class="n-t">' + t.src + '</div><div class="n-en">' + t.srcEn + '</div>';
-  pipelineEl.appendChild(src);
-
-  for (let i = 0; i < N; i++) {
-    const arr = document.createElement('div');
-    arr.className = 'arrow';
-    arr.innerHTML = arrowSVG();
-    pipelineEl.appendChild(arr);
-
-    const slot = document.createElement('div');
-    slot.className = 'slot';
-    slot.dataset.idx = String(i);
-    const idx = document.createElement('div');
-    idx.className = 'slot-idx';
-    idx.textContent = (i + 1).toString().padStart(2, '0');
-    slot.appendChild(idx);
-
-    const pid = slots[i];
-    if (pid) {
-      slot.classList.add('filled');
-      const part = PARTS.find(p => p.id === pid);
-      const nm = document.createElement('div');
-      nm.className = 'placed-name';
-      nm.textContent = lang === 'zh' ? part.zh : part.en;
-      const en = document.createElement('div');
-      en.className = 'placed-en';
-      en.textContent = part.enc;
-      const clr = document.createElement('div');
-      clr.className = 'placed-clear';
-      clr.textContent = '×';
-      clr.addEventListener('click', () => { slots[i] = null; refresh(); resetViz(); });
-      slot.appendChild(nm); slot.appendChild(en); slot.appendChild(clr);
-    } else {
-      const hint = document.createElement('div');
-      hint.className = 'empty-hint';
-      hint.textContent = t.empty;
-      slot.appendChild(hint);
+  // ── i18n ──
+  var I18N = {
+    zh:{
+      kicker:"EEG · 预处理", title:"流水线工程师",
+      brandSub:"把处理块按正确顺序串成预处理管线",
+      trayTitle:"处理块库", taskTitle:"任务",
+      taskBody:"把 4 个处理块拖入 4 个槽位，顺序决定脏脑波能否被洗净。点执行让信号流过管线。",
+      runBtn:"执行管线", resetBtn:"重置",
+      headName:"原始脑波：脏数据一段",
+      headDesc:"含 50Hz 工频、慢漂移、眨眼伪迹，需经预处理才能用",
+      statusIdle:"待执行", statusRun:"流过中…", statusFail:"管线失败", statusWin:"洗净 · 工程师达成",
+      srcTag:"脏脑波", sinkTag:"输出",
+      laneTitle:"预处理管线（从左到右流过）",
+      viewerTitle:"信号示波器 — 逐级变化", artLbl:"残余伪迹%",
+      logBadgeIdle:"提示", logBadgeFail:"失败", logBadgeWin:"达成",
+      logIdle:"拖块入槽，凑齐 4 块后点「执行管线」。处理顺序错了，污染会一路传下去。",
+      placeholder:"拖块到此",
+      blocks:{
+        bandpass:{name:"带通滤波", eff:"1–40Hz"},
+        slice:{name:"分段切片", eff:"切 trial"},
+        ica:{name:"ICA 分解", eff:"拆独立成分"},
+        reject:{name:"剔除伪迹", eff:"去眨眼成分"}
+      },
+      stepOk:{
+        bandpass:"带通滤波：50Hz 工频和慢漂移被压掉，波形先变规整。",
+        slice:"分段切片：把连续信号切成对齐的 trial，后续按段处理。",
+        ica:"ICA 分解：把信号拆成独立成分，眨眼成分被单独分出来。",
+        reject:"剔除伪迹：去掉眨眼那条成分，逆变换重建出干净信号。"
+      },
+      verdictWin:"顺序正确：滤波 - 切片 - ICA 分解 - 剔除伪迹。脏脑波被逐级洗净，达成「流水线工程师」。",
+      failICAbeforeFilter:"顺序错：ICA 在滤波之前。50Hz 工频没去掉，ICA 把工频当成「独立成分」分了出来，伪迹去不干净，污染传到输出。",
+      failRejectBeforeICA:"顺序错：还没 ICA 分解就先剔除。没有独立成分可剔，眨眼伪迹原样留在信号里。",
+      failSliceBeforeFilter:"顺序错：先切片再滤波。慢漂移在每个 trial 边界制造跳变，滤波后段间不连续，残余伪迹偏高。",
+      failGeneric:"顺序不对：污染沿着管线一路传下去，输出仍然脏。对照「滤波-切片-ICA-剔除」再排一次。",
+      flowStart:"脏脑波进入管线…"
+    },
+    en:{
+      kicker:"EEG · PREPROC", title:"Pipeline Engineer",
+      brandSub:"Chain the blocks in the right order into a preprocessing pipeline",
+      trayTitle:"Block Library", taskTitle:"Task",
+      taskBody:"Drag the 4 blocks into the 4 slots. Order decides whether the dirty EEG gets cleaned. Hit Run to flow the signal through.",
+      runBtn:"Run Pipeline", resetBtn:"Reset",
+      headName:"Raw EEG: one dirty segment",
+      headDesc:"50Hz line noise, slow drift, blink artifacts — needs preprocessing first",
+      statusIdle:"Idle", statusRun:"Flowing…", statusFail:"Pipeline failed", statusWin:"Clean · Engineer unlocked",
+      srcTag:"Dirty", sinkTag:"Output",
+      laneTitle:"Preprocessing pipeline (flows left to right)",
+      viewerTitle:"Signal scope — stage by stage", artLbl:"Residual art.%",
+      logBadgeIdle:"Hint", logBadgeFail:"Fail", logBadgeWin:"Done",
+      logIdle:"Drag blocks into slots. With 4 placed, hit Run. Wrong order and pollution propagates all the way down.",
+      placeholder:"Drop here",
+      blocks:{
+        bandpass:{name:"Bandpass", eff:"1–40Hz"},
+        slice:{name:"Slice", eff:"cut trials"},
+        ica:{name:"ICA Decomp", eff:"split ICs"},
+        reject:{name:"Reject Art.", eff:"drop blink IC"}
+      },
+      stepOk:{
+        bandpass:"Bandpass: 50Hz line noise and slow drift suppressed; waveform tidies up first.",
+        slice:"Slice: continuous signal cut into aligned trials for per-segment processing.",
+        ica:"ICA: signal split into independent components; the blink IC is isolated.",
+        reject:"Reject: drop the blink IC and inverse-transform to rebuild a clean signal."
+      },
+      verdictWin:"Correct order: Filter -> Slice -> ICA -> Reject. The dirty EEG was cleaned stage by stage. Pipeline Engineer unlocked.",
+      failICAbeforeFilter:"Wrong order: ICA before filtering. 50Hz line noise wasn't removed, so ICA treats line noise as an 'independent component' — artifacts can't be cleaned and pollution reaches the output.",
+      failRejectBeforeICA:"Wrong order: rejecting before ICA decomposition. There are no components to reject, so blink artifacts stay in the signal untouched.",
+      failSliceBeforeFilter:"Wrong order: slicing before filtering. Slow drift creates jumps at each trial boundary; after filtering the segments are discontinuous and residual artifacts stay high.",
+      failGeneric:"Wrong order: pollution propagates down the pipeline and the output is still dirty. Compare against Filter -> Slice -> ICA -> Reject and try again.",
+      flowStart:"Dirty EEG enters the pipeline…"
     }
+  };
+  var lang = "zh";
+  function t(k){ var o=I18N[lang]; return o[k]!==undefined?o[k]:k; }
 
-    slot.addEventListener('dragover', (ev) => { ev.preventDefault(); slot.classList.add('over'); });
-    slot.addEventListener('dragleave', () => slot.classList.remove('over'));
-    slot.addEventListener('drop', (ev) => {
-      ev.preventDefault();
-      slot.classList.remove('over');
-      let pid2 = dragPartId;
-      if (!pid2) { try { pid2 = ev.dataTransfer.getData('text/plain'); } catch (e) {} }
-      if (!pid2) return;
-      // remove this part from any other slot first
-      const prev = slots.indexOf(pid2);
-      if (prev >= 0) slots[prev] = null;
-      const idxN = Number(slot.dataset.idx);
-      slots[idxN] = pid2;
-      refresh(); resetViz();
+  // ── block glyphs (inline svg, no emoji) ──
+  var GLYPH = {
+    bandpass:'<svg viewBox="0 0 24 24" fill="none" stroke="#8F3149" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l2-5 3 12 2-9 2 4h5"/></svg>',
+    slice:'<svg viewBox="0 0 24 24" fill="none" stroke="#8F3149" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6v12M12 6v12M20 6v12"/></svg>',
+    ica:'<svg viewBox="0 0 24 24" fill="none" stroke="#8F3149" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M5 19V8M12 19V5M19 19v-7"/></svg>',
+    reject:'<svg viewBox="0 0 24 24" fill="none" stroke="#8F3149" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"/><path d="M9 9l6 6M15 9l-6 6"/></svg>'
+  };
+
+  // correct pipeline order: filter -> slice -> ica -> reject
+  var CORRECT = ["bandpass","slice","ica","reject"];
+  var BLOCK_IDS = ["bandpass","slice","ica","reject"];
+
+  // slots state: array of 4 block ids or null
+  var slots = [null,null,null,null];
+  var trayState = BLOCK_IDS.slice();
+  var dragId = null;     // currently dragged block id
+  var dragFrom = null;   // 'tray' or slot index (number)
+  var running = false;
+  var won = false;
+
+  // ── DOM refs ──
+  var trayList = document.getElementById("trayList");
+  var flowMid  = document.getElementById("flowMid");
+  var runBtn   = document.getElementById("runBtn");
+  var resetBtn = document.getElementById("resetBtn");
+  var langBtn  = document.getElementById("langBtn");
+  var statusPill = document.getElementById("statusPill");
+  var logBadge = document.getElementById("logBadge");
+  var logMsg   = document.getElementById("logMsg");
+  var scope    = document.getElementById("scope");
+  var snrVal   = document.getElementById("snrVal");
+  var artVal   = document.getElementById("artVal");
+  var mSnr     = document.getElementById("mSnr");
+  var mArt     = document.getElementById("mArt");
+  var arrIn    = document.getElementById("arrIn");
+  var arrOut   = document.getElementById("arrOut");
+  var srcWaveEl= document.getElementById("srcWave");
+  var sinkWaveEl=document.getElementById("sinkWave");
+
+  // ── apply i18n to static [data-i18n] nodes ──
+  function applyStaticI18n(){
+    var nodes = document.querySelectorAll("[data-i18n]");
+    nodes.forEach(function(el){
+      var k = el.getAttribute("data-i18n");
+      var v = t(k);
+      if (typeof v === "string") el.textContent = v;
     });
-
-    pipelineEl.appendChild(slot);
+    document.documentElement.lang = (lang==="zh")?"zh":"en";
   }
 
-  const arr2 = document.createElement('div');
-  arr2.className = 'arrow';
-  arr2.innerHTML = arrowSVG();
-  pipelineEl.appendChild(arr2);
+  // ── build tray ──
+  function renderTray(){
+    trayList.innerHTML = "";
+    trayState.forEach(function(id){
+      var b = I18N[lang].blocks[id];
+      var el = document.createElement("div");
+      el.className = "block";
+      el.setAttribute("draggable","true");
+      el.dataset.id = id;
+      el.innerHTML = '<span class="glyph">'+GLYPH[id]+'</span><span class="b-lbl">'+b.name+'</span>';
+      el.addEventListener("dragstart", function(e){ onDragStart(e, id, "tray"); });
+      el.addEventListener("dragend", onDragEnd);
+      trayList.appendChild(el);
+    });
+  }
 
-  const out = document.createElement('div');
-  out.className = 'out-node';
-  out.innerHTML = '<div class="n-t">' + t.out + '</div><div class="n-en">' + t.outEn + '</div>';
-  pipelineEl.appendChild(out);
-}
+  // ── build slots ──
+  function renderSlots(){
+    flowMid.innerHTML = "";
+    for (var i=0;i<4;i++){
+      if (i>0){
+        var arr = document.createElement("div");
+        arr.className = "arrow";
+        arr.dataset.arr = String(i);
+        arr.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>';
+        flowMid.appendChild(arr);
+      }
+      var slot = document.createElement("div");
+      slot.className = "slot";
+      slot.dataset.slot = String(i);
+      var id = slots[i];
+      var numEl = document.createElement("span");
+      numEl.className = "slot-num";
+      numEl.textContent = "0"+(i+1);
+      slot.appendChild(numEl);
 
-// ---------- evaluation ----------
-function evaluate() {
-  // returns { ok, key } ; key is i18n message key
-  if (slots.includes(null)) return { ok: false, key: 'needAll' };
+      if (id){
+        slot.classList.add("filled");
+        var b = I18N[lang].blocks[id];
+        var p = document.createElement("div");
+        p.className = "placed";
+        p.setAttribute("draggable","true");
+        p.dataset.id = id;
+        p.innerHTML = '<span class="glyph">'+GLYPH[id]+'</span>'+
+                      '<span class="p-lbl">'+b.name+'</span>'+
+                      '<span class="p-eff">'+b.eff+'</span>';
+        (function(idx){
+          p.addEventListener("dragstart", function(e){ onDragStart(e, slots[idx], idx); });
+          p.addEventListener("dragend", onDragEnd);
+        })(i);
+        slot.appendChild(p);
+      } else {
+        var ph = document.createElement("span");
+        ph.className = "placeholder";
+        ph.textContent = t("placeholder");
+        slot.appendChild(ph);
+      }
+      (function(idx, slotEl){
+        slotEl.addEventListener("dragover", function(e){ e.preventDefault(); slotEl.classList.add("over"); });
+        slotEl.addEventListener("dragleave", function(){ slotEl.classList.remove("over"); });
+        slotEl.addEventListener("drop", function(e){ e.preventDefault(); slotEl.classList.remove("over"); onDropSlot(idx); });
+      })(i, slot);
+      flowMid.appendChild(slot);
+    }
+    updateRunBtn();
+  }
 
-  // correct?
-  let correct = true;
-  for (let i = 0; i < N; i++) if (slots[i] !== CORRECT[i]) { correct = false; break; }
-  if (correct) return { ok: true, key: null };
+  // ── tray as drop target (return a block) ──
+  trayList.addEventListener("dragover", function(e){ e.preventDefault(); trayList.classList.add("over"); });
+  trayList.addEventListener("dragleave", function(){ trayList.classList.remove("over"); });
+  trayList.addEventListener("drop", function(e){ e.preventDefault(); trayList.classList.remove("over"); onDropTray(); });
 
-  const posOf = (id) => slots.indexOf(id);
-  const pFilter = posOf('filter'), pEpoch = posOf('epoch'),
-        pIca = posOf('ica'), pReject = posOf('reject'), pRebuild = posOf('rebuild');
+  function onDragStart(e, id, from){
+    if (running || won) { e.preventDefault(); return; }
+    dragId = id; dragFrom = from;
+    try { e.dataTransfer.setData("text/plain", String(id)); e.dataTransfer.effectAllowed = "move"; } catch(_){}
+    if (e.target && e.target.classList) e.target.classList.add("dragging");
+  }
+  function onDragEnd(e){
+    if (e.target && e.target.classList) e.target.classList.remove("dragging");
+  }
 
-  // filter must be before ica
-  if (pFilter > pIca) return { ok: false, key: 'warnOrder' };
-  // epoch must be before ica
-  if (pEpoch > pIca) return { ok: false, key: 'warnEpoch' };
-  // reject must be before rebuild
-  if (pReject > pRebuild) return { ok: false, key: 'warnRebuild' };
-  // reject must be after ica (can't reject components before decomposing) -> generic
-  if (pReject < pIca) return { ok: false, key: 'warnGeneric' };
-  return { ok: false, key: 'warnGeneric' };
-}
+  function onDropSlot(idx){
+    if (running || won || dragId===null) return;
+    var moving = dragId;
+    var existing = slots[idx];
+    if (dragFrom === "tray"){
+      var pos = trayState.indexOf(moving);
+      if (pos>=0) trayState.splice(pos,1);
+      if (existing) trayState.push(existing);
+      slots[idx] = moving;
+    } else {
+      var srcIdx = dragFrom;
+      if (srcIdx === idx){ clearDrag(); return; }
+      slots[srcIdx] = existing; // may be null -> swap
+      slots[idx] = moving;
+    }
+    clearDrag();
+    resetVerdict();
+    renderTray(); renderSlots();
+  }
 
-// ---------- banner ----------
-function setBanner(text, cls) {
-  bannerEl.className = 'banner' + (cls ? ' ' + cls : '');
-  bannerEl.innerHTML = '';
-  const span = document.createElement('span');
-  span.textContent = text;
-  bannerEl.appendChild(span);
-}
+  function onDropTray(){
+    if (running || won || dragId===null) return;
+    if (dragFrom !== "tray" && typeof dragFrom === "number"){
+      slots[dragFrom] = null;
+      if (trayState.indexOf(dragId)<0) trayState.push(dragId);
+    }
+    clearDrag();
+    resetVerdict();
+    renderTray(); renderSlots();
+  }
 
-// ---------- run flow ----------
-function clearFlowClasses() {
-  document.querySelectorAll('.slot').forEach(s => s.classList.remove('flow-active', 'flow-done'));
-}
+  function clearDrag(){ dragId=null; dragFrom=null; }
 
-function resetViz() {
-  if (flowTimer) { clearTimeout(flowTimer); flowTimer = null; }
-  running = false;
-  clearFlowClasses();
-  flowStage = 0;
-  vizStageEl.textContent = I18N[lang].vizIdle;
-  mLineEl.textContent = '—'; mLineEl.className = 'm-v';
-  mBlinkEl.textContent = '—'; mBlinkEl.className = 'm-v';
-  mEpochEl.textContent = '—'; mEpochEl.className = 'm-v';
-}
+  function updateRunBtn(){
+    var full = slots.every(function(s){ return s!==null; });
+    runBtn.disabled = !full || running || won;
+  }
 
-// per-stage signal cleanliness given the player's actual order
-let flowStage = 0;     // 0..N : how many slots processed
-let flowState = null;  // { line, blink, epoched } running state during flow
+  function resetVerdict(){
+    if (won) return;
+    setStatus("idle");
+    setLog("idle", t("logIdle"));
+    var ss = flowMid.querySelectorAll(".slot");
+    ss.forEach(function(s){ s.classList.remove("clean-step","dirty-step","active"); });
+  }
 
-function computeStateAfter(stageId, st) {
-  // st: { line:0..1, blink:0..1, epoched:bool }
-  const out = { line: st.line, blink: st.blink, epoched: st.epoched };
-  if (stageId === 'filter') out.line = Math.max(0, st.line - 0.92);
-  else if (stageId === 'epoch') out.epoched = true;
-  else if (stageId === 'ica') { /* decompose: nothing removed yet, but enables reject */ out._decomposed = true; }
-  else if (stageId === 'reject') {
-    // only effective if decomposed before
-    if (st._decomposed) out.blink = Math.max(0, st.blink - 0.95);
-    out._rejected = true;
-  } else if (stageId === 'rebuild') { out._rebuilt = true; }
-  out._decomposed = out._decomposed || st._decomposed;
-  out._rejected = out._rejected || st._rejected;
-  return out;
-}
+  function setStatus(kind){
+    statusPill.classList.remove("fail","win");
+    if (kind==="idle"){ statusPill.textContent = t("statusIdle"); }
+    else if (kind==="run"){ statusPill.textContent = t("statusRun"); }
+    else if (kind==="fail"){ statusPill.textContent = t("statusFail"); statusPill.classList.add("fail"); }
+    else if (kind==="win"){ statusPill.textContent = t("statusWin"); statusPill.classList.add("win"); }
+  }
+  function setLog(kind, msg){
+    logBadge.classList.remove("fail","win");
+    if (kind==="idle"){ logBadge.textContent=t("logBadgeIdle"); }
+    else if (kind==="fail"){ logBadge.textContent=t("logBadgeFail"); logBadge.classList.add("fail"); }
+    else if (kind==="win"){ logBadge.textContent=t("logBadgeWin"); logBadge.classList.add("win"); }
+    logMsg.textContent = msg;
+  }
 
-function stepFlow(verdict) {
-  if (flowStage >= N) {
-    // finished
+  // ════════════════════════════════════════════════════════════════
+  //  Signal model — a dirty EEG segment + per-block transforms.
+  //  Each sample tracks separable contaminant channels so order-
+  //  dependent pollution propagation is modeled honestly.
+  // ════════════════════════════════════════════════════════════════
+  var N = 320;
+  function buildDirty(){
+    var arr = [];
+    for (var i=0;i<N;i++){
+      var x = i/N;
+      var neural = Math.sin(x*Math.PI*2*9)*0.55 + Math.sin(x*Math.PI*2*16)*0.18;
+      // icaQuality: set when ICA runs — "clean" only if line already removed.
+      arr.push({ neural:neural, line:1, drift:1, blink:1, driftJump:false, icaClean:false });
+    }
+    return arr;
+  }
+  function lineComp(i){ var x=i/N; return Math.sin(x*Math.PI*2*50)*0.45; }
+  function driftComp(i){ var x=i/N; return (x-0.5)*1.6 + Math.sin(x*Math.PI*2*0.6)*0.35; }
+  function blinkComp(i){
+    var b=0; var centers=[70,210];
+    for (var c=0;c<centers.length;c++){
+      var d=i-centers[c];
+      if (d>=-6) b += 1.4*Math.exp(-(d*d)/110);
+    }
+    return b;
+  }
+  function sampleVal(seg, i){
+    var v = seg[i].neural;
+    if (seg[i].line)  v += seg[i].line  * lineComp(i);
+    if (seg[i].drift) v += seg[i].drift * driftComp(i);
+    if (seg[i].blink) v += seg[i].blink * blinkComp(i);
+    if (seg[i].driftJump) v += 1.2;
+    return v;
+  }
+
+  function applyBlock(seg, id, prior){
+    if (id==="bandpass"){
+      for (var i=0;i<seg.length;i++){ seg[i].line=0; seg[i].drift=0; }
+      return;
+    }
+    if (id==="slice"){
+      var filteredFirst = prior.indexOf("bandpass") >= 0;
+      for (var j=0;j<seg.length;j++){
+        if (!filteredFirst && (j%80<3)) seg[j].driftJump = true;
+      }
+      return;
+    }
+    if (id==="ica"){
+      // Decomposition quality is decided NOW: a clean blink IC is only
+      // obtained if 50Hz line noise was already filtered out. If ICA runs
+      // on un-filtered data it absorbs line noise into the components and
+      // the blink IC is corrupted — captured per-sample, propagates forward.
+      var lineAlreadyGone = prior.indexOf("bandpass") >= 0;
+      for (var m=0;m<seg.length;m++){ seg[m].icaClean = lineAlreadyGone; }
+      return;
+    }
+    if (id==="reject"){
+      // Can only drop the blink IC if ICA ran AND produced a clean decomposition.
+      var icaOk = prior.indexOf("ica") >= 0;
+      for (var k=0;k<seg.length;k++){
+        if (icaOk && seg[k].icaClean) seg[k].blink = 0;
+      }
+      return;
+    }
+  }
+
+  function residualArtifact(seg){
+    var line=0, drift=0, blink=0, jump=0;
+    for (var i=0;i<seg.length;i++){
+      if (seg[i].line)  line  += Math.abs(lineComp(i));
+      if (seg[i].drift) drift += Math.abs(driftComp(i));
+      if (seg[i].blink) blink += Math.abs(blinkComp(i));
+      if (seg[i].driftJump) jump += 0.5;
+    }
+    return (line+drift+blink+jump)/N*4;
+  }
+
+  function getCss(name){
+    return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || "#000";
+  }
+
+  // ── draw scope: stacked traces for each pipeline stage ──
+  function drawScope(stages){
+    var dpr = window.devicePixelRatio||1;
+    var rect = scope.getBoundingClientRect();
+    var W = Math.max(320, rect.width), H = Math.max(110, rect.height);
+    scope.width = Math.round(W*dpr); scope.height = Math.round(H*dpr);
+    var ctx = scope.getContext("2d");
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    ctx.clearRect(0,0,W,H);
+
+    var n = stages.length || 1;
+    var rowH = H/n;
+    stages.forEach(function(st, r){
+      var y0 = rowH*r;
+      var mid = y0 + rowH*0.58;
+      ctx.strokeStyle = getCss('--hairline'); ctx.lineWidth=1;
+      ctx.beginPath(); ctx.moveTo(0,mid); ctx.lineTo(W,mid); ctx.stroke();
+      ctx.fillStyle = getCss('--sub-2');
+      ctx.font = "9px 'JetBrains Mono', monospace";
+      ctx.fillText(st.label, 6, y0+12);
+      ctx.strokeStyle = st.color; ctx.lineWidth=1.4;
+      ctx.beginPath();
+      var amp = rowH*0.34;
+      for (var i=0;i<N;i++){
+        var v = sampleVal(st.seg, i);
+        var px = (i/(N-1))*(W-12)+6;
+        var py = mid - v*amp/2.6;
+        if (i===0) ctx.moveTo(px,py); else ctx.lineTo(px,py);
+      }
+      ctx.stroke();
+    });
+  }
+
+  function drawSpark(svgEl, seg, color){
+    var pts=[];
+    for (var i=0;i<N;i+=6){
+      var v=sampleVal(seg,i);
+      var px = (i/(N-1))*60+1;
+      var py = 12 - v*3.0;
+      py = Math.max(2, Math.min(22, py));
+      pts.push(px.toFixed(1)+","+py.toFixed(1));
+    }
+    svgEl.innerHTML = '<polyline points="'+pts.join(" ")+'" fill="none" stroke="'+color+'" stroke-width="1.2" stroke-linejoin="round"/>';
+  }
+
+  function classifyFailure(order){
+    var iFilter = order.indexOf("bandpass");
+    var iSlice  = order.indexOf("slice");
+    var iICA    = order.indexOf("ica");
+    var iReject = order.indexOf("reject");
+    if (iICA < iFilter) return "failICAbeforeFilter";
+    if (iReject < iICA) return "failRejectBeforeICA";
+    if (iSlice < iFilter) return "failSliceBeforeFilter";
+    return "failGeneric";
+  }
+
+  // is this block constructive given the prior steps?
+  function stepIsConstructive(id, prior){
+    if (id==="bandpass") return true;
+    if (id==="slice")    return prior.indexOf("bandpass")>=0;
+    if (id==="ica")      return prior.indexOf("bandpass")>=0;
+    if (id==="reject")   return prior.indexOf("ica")>=0 && prior.indexOf("bandpass")>=0;
+    return false;
+  }
+
+  function cloneSeg(seg){
+    return seg.map(function(s){ return Object.assign({}, s); });
+  }
+
+  // ════════════════════════════════════════════════════════════════
+  //  RUN: flow the dirty signal through, stage by stage, animated.
+  // ════════════════════════════════════════════════════════════════
+  var flowTimer = null;
+  function runPipeline(){
+    if (running || won) return;
+    var order = slots.slice();
+    if (order.some(function(s){ return s===null; })) return;
+    running = true;
+    updateRunBtn();
+    setStatus("run");
+    setLog("idle", t("flowStart"));
+    flowMid.querySelectorAll(".slot").forEach(function(s){ s.classList.remove("clean-step","dirty-step","active"); });
+    arrIn.classList.add("flowing"); arrOut.classList.remove("flowing");
+
+    var isCorrect = CORRECT.every(function(id,i){ return order[i]===id; });
+
+    var seg = buildDirty();
+    var stages = [{ label: lang==="zh"?"脏脑波":"dirty", seg: cloneSeg(seg), color: getCss('--bad') }];
+    drawScope(stages);
+    drawSpark(srcWaveEl, seg, getCss('--bad'));
+
+    var step = 0;
+    if (flowTimer) clearInterval(flowTimer);
+    flowTimer = setInterval(function(){
+      if (step >= order.length){
+        clearInterval(flowTimer); flowTimer=null;
+        finishRun(order, isCorrect, seg);
+        return;
+      }
+      var id = order[step];
+      var prior = order.slice(0, step);
+      applyBlock(seg, id, prior);
+
+      var slotEls = flowMid.querySelectorAll(".slot");
+      slotEls.forEach(function(s){ s.classList.remove("active"); });
+      var goodHere = stepIsConstructive(id, prior);
+      var thisSlot = slotEls[step];
+      if (thisSlot){
+        thisSlot.classList.add("active");
+        thisSlot.classList.add(goodHere ? "clean-step" : "dirty-step");
+      }
+      var arrEl = flowMid.querySelector('[data-arr="'+step+'"]');
+      if (arrEl) arrEl.classList.add("flowing");
+
+      setLog("idle", I18N[lang].stepOk[id]);
+
+      var col = goodHere ? getCss('--ok') : getCss('--bad');
+      var lbl = (lang==="zh"?"第":"S")+(step+1)+" · "+I18N[lang].blocks[id].name;
+      stages.push({ label: lbl, seg: cloneSeg(seg), color: col });
+      drawScope(stages);
+      step++;
+    }, 740);
+  }
+
+  function finishRun(order, isCorrect, seg){
+    arrIn.classList.remove("flowing");
+    arrOut.classList.add("flowing");
+    var resid = residualArtifact(seg);
+    var artPct = Math.round(Math.min(100, resid*100));
+    var snr = 14 - resid*60;
+    snr = Math.max(-4, Math.min(18, snr));
+    snrVal.textContent = snr.toFixed(1);
+    artVal.textContent = String(artPct);
+
+    mSnr.classList.remove("good","poor"); mArt.classList.remove("good","poor");
+    var clean = isCorrect && artPct <= 6;
+    if (clean){ mSnr.classList.add("good"); mArt.classList.add("good"); }
+    else { mSnr.classList.add("poor"); mArt.classList.add("poor"); }
+
+    drawSpark(sinkWaveEl, seg, clean? getCss('--ok'): getCss('--bad'));
+
+    if (clean){
+      won = true;
+      setStatus("win");
+      setLog("win", t("verdictWin"));
+    } else {
+      setStatus("fail");
+      setLog("fail", t(classifyFailure(order)));
+    }
     running = false;
-    finishFlow(verdict);
-    return;
+    updateRunBtn();
   }
-  clearFlowClasses();
-  const slotEls = document.querySelectorAll('.slot');
-  for (let k = 0; k < flowStage; k++) slotEls[k].classList.add('flow-done');
-  slotEls[flowStage].classList.add('flow-active');
 
-  const pid = slots[flowStage];
-  flowState = computeStateAfter(pid, flowState);
-
-  // stage label
-  const stIdx = CORRECT.indexOf(pid) + 1; // for label only
-  vizStageEl.textContent = I18N[lang].stages[stIdx] || I18N[lang].stages[0];
-
-  updateMetrics(flowState);
-  flowStage++;
-  flowTimer = setTimeout(() => stepFlow(verdict), 760);
-}
-
-function updateMetrics(st) {
-  const t = I18N[lang];
-  const band = (v) => v > 0.6 ? t.high : v > 0.25 ? t.mid : v > 0.02 ? t.low : t.none;
-  mLineEl.textContent = band(st.line);
-  mLineEl.className = 'm-v ' + (st.line > 0.25 ? 'bad' : 'ok');
-  mBlinkEl.textContent = band(st.blink);
-  mBlinkEl.className = 'm-v ' + (st.blink > 0.25 ? 'bad' : 'ok');
-  mEpochEl.textContent = st.epoched ? '8' : '0';
-  mEpochEl.className = 'm-v ' + (st.epoched ? 'ok' : 'bad');
-}
-
-function finishFlow(verdict) {
-  const slotEls = document.querySelectorAll('.slot');
-  slotEls.forEach(s => { s.classList.remove('flow-active'); s.classList.add('flow-done'); });
-  vizStageEl.textContent = I18N[lang].stages[N];
-  if (verdict.ok) {
-    setBanner(I18N[lang].goldT, 'good');
-    setTimeout(() => goldStamp.classList.add('show'), 420);
-  } else {
-    setBanner(I18N[lang][verdict.key], 'warn');
+  // ── reset ──
+  function doReset(){
+    if (flowTimer){ clearInterval(flowTimer); flowTimer=null; }
+    slots = [null,null,null,null];
+    trayState = BLOCK_IDS.slice();
+    running = false; won = false;
+    clearDrag();
+    snrVal.textContent = "--"; artVal.textContent = "--";
+    mSnr.classList.remove("good","poor"); mArt.classList.remove("good","poor");
+    arrIn.classList.remove("flowing"); arrOut.classList.remove("flowing");
+    setStatus("idle");
+    setLog("idle", t("logIdle"));
+    renderTray(); renderSlots();
+    var d = buildDirty();
+    drawScope([{ label: lang==="zh"?"脏脑波":"dirty", seg:d, color:getCss('--bad') }]);
+    drawSpark(srcWaveEl, d, getCss('--bad'));
+    sinkWaveEl.innerHTML = "";
   }
-}
 
-function runPipeline() {
-  if (running) return;
-  const verdict = evaluate();
-  if (verdict.key === 'needAll') {
-    setBanner(I18N[lang].needAll, 'warn');
-    return;
+  // ── lang toggle ──
+  function toggleLang(){
+    lang = (lang==="zh") ? "en" : "zh";
+    applyStaticI18n();
+    renderTray(); renderSlots();
+    if (won){ setStatus("win"); setLog("win", t("verdictWin")); }
+    else if (running){ setStatus("run"); }
+    else { setStatus("idle"); setLog("idle", t("logIdle")); }
+    if (!running && !won){
+      var d=buildDirty();
+      drawScope([{ label: lang==="zh"?"脏脑波":"dirty", seg:d, color:getCss('--bad') }]);
+      drawSpark(srcWaveEl, d, getCss('--bad'));
+    }
   }
-  // start flow regardless; viz shows where it breaks
-  running = true;
-  flowStage = 0;
-  flowState = { line: 1, blink: 1, epoched: false, _decomposed: false, _rejected: false, _rebuilt: false };
-  clearFlowClasses();
-  setBanner(lang === 'zh' ? '数据流过流水线…' : 'Streaming data through the pipeline...', '');
-  updateMetrics(flowState);
-  stepFlow(verdict);
-}
 
-// ---------- background wave animation (data flow) ----------
-function resizeCanvas() {
-  const r = canvas.getBoundingClientRect();
-  const dpr = window.devicePixelRatio || 1;
-  canvas.width = Math.max(2, Math.floor(r.width * dpr));
-  canvas.height = Math.max(2, Math.floor(r.height * dpr));
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-}
-
-function drawWave() {
-  const r = canvas.getBoundingClientRect();
-  const W = r.width, H = r.height;
-  ctx.clearRect(0, 0, W, H);
-
-  // dirtiness based on current running state (or full-dirty when idle)
-  let line = 1, blink = 1;
-  if (flowState) { line = flowState.line; blink = flowState.blink; }
-
-  // mid baseline
-  const midY = H / 2;
-  // grid hint
-  ctx.strokeStyle = 'rgba(157,151,138,.18)';
-  ctx.lineWidth = 1;
-  ctx.beginPath(); ctx.moveTo(0, midY); ctx.lineTo(W, midY); ctx.stroke();
-
-  // wave
-  ctx.beginPath();
-  for (let x = 0; x <= W; x += 2) {
-    const phase = (x / W) * Math.PI * 8 + waveT;
-    let y = Math.sin(phase) * (H * 0.10);           // base alpha-like rhythm
-    y += Math.sin(phase * 6.3) * (H * 0.06) * line; // 50Hz line noise component
-    // blink spikes: large slow bumps at a few x positions
-    const blinkCenters = [0.22, 0.58, 0.85];
-    blinkCenters.forEach((bc) => {
-      const dx = (x / W) - bc;
-      y += Math.exp(-(dx * dx) / 0.0009) * (H * 0.34) * blink;
-    });
-    if (x === 0) ctx.moveTo(x, midY - y);
-    else ctx.lineTo(x, midY - y);
-  }
-  // color: dirtier = more computing red, cleaner = good green
-  const dirt = Math.max(line, blink);
-  const r1 = Math.round(192 * dirt + 79 * (1 - dirt));
-  const g1 = Math.round(78 * dirt + 122 * (1 - dirt));
-  const b1 = Math.round(104 * dirt + 74 * (1 - dirt));
-  ctx.strokeStyle = 'rgb(' + r1 + ',' + g1 + ',' + b1 + ')';
-  ctx.lineWidth = 1.8;
-  ctx.stroke();
-}
-
-function tick() {
-  waveT += 0.06;
-  drawWave();
-}
-
-// ---------- refresh / wiring ----------
-function refresh() {
-  renderParts();
-  renderPipeline();
-}
-
-function applyLang() {
-  document.querySelectorAll('[data-i18n]').forEach(el => {
-    const k = el.getAttribute('data-i18n');
-    if (I18N[lang][k] !== undefined) el.textContent = I18N[lang][k];
+  // ── wire events ──
+  runBtn.addEventListener("click", runPipeline);
+  resetBtn.addEventListener("click", doReset);
+  langBtn.addEventListener("click", toggleLang);
+  window.addEventListener("resize", function(){
+    if (!running && !won){
+      var d=buildDirty();
+      drawScope([{ label: lang==="zh"?"脏脑波":"dirty", seg:d, color:getCss('--bad') }]);
+    }
   });
-  document.documentElement.lang = lang === 'zh' ? 'zh' : 'en';
-  refresh();
-}
 
-langBtn.addEventListener('click', () => {
-  lang = lang === 'zh' ? 'en' : 'zh';
-  applyLang();
-  // keep viz labels consistent
-  if (!running) vizStageEl.textContent = I18N[lang].vizIdle;
-});
+  // ── init ──
+  applyStaticI18n();
+  renderTray();
+  renderSlots();
+  requestAnimationFrame(function(){
+    var d=buildDirty();
+    drawScope([{ label: lang==="zh"?"脏脑波":"dirty", seg:d, color:getCss('--bad') }]);
+    drawSpark(srcWaveEl, d, getCss('--bad'));
+  });
 
-runBtn.addEventListener('click', runPipeline);
-resetBtn.addEventListener('click', () => {
-  for (let i = 0; i < N; i++) slots[i] = null;
-  resetViz();
-  refresh();
-  setBanner(I18N[lang].bInit, '');
-});
-document.getElementById('goldClose').addEventListener('click', () => {
-  goldStamp.classList.add('show'); // ensure exists
-  goldStamp.classList.remove('show');
-  for (let i = 0; i < N; i++) slots[i] = null;
-  resetViz(); refresh();
-  setBanner(I18N[lang].bInit, '');
-});
-
-window.addEventListener('resize', () => { resizeCanvas(); });
-
-// init
-refresh();
-applyLang();
-resetViz();
-setBanner(I18N[lang].bInit, '');
-requestAnimationFrame(() => {
-  resizeCanvas();
-  waveTimer = setInterval(tick, 40);
-});
+})();
 </script>
 </body>
 </html>

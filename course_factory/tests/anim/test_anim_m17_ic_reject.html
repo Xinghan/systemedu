@@ -1,536 +1,527 @@
 <!DOCTYPE html>
-<html lang="zh">
+<html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>认出哪一路是眨眼，把它扔掉</title>
+<title>靠三个签名认出哪一路是眨眼，把它扔掉</title>
 <style>
-:root{
-  /* Layer 1 — shared deep-space canvas (all 26 subjects) */
-  --bg-0: oklch(0.14 0.035 265);
-  --bg-1: oklch(0.18 0.04 265);
-  --bg-2: oklch(0.22 0.045 265);
-  --bg-3: oklch(0.28 0.05 265);
-  --line: oklch(0.35 0.05 265 / 0.35);
-  --line-strong: oklch(0.55 0.08 265 / 0.55);
-  --fg:      oklch(0.96 0.01 265);
-  --fg-dim:  oklch(0.75 0.02 265);
-  --fg-mute: oklch(0.55 0.03 265);
-  --gold:    oklch(0.85 0.14 85);
-  /* Layer 2 — cs signature accent (cyan) */
-  --accent:  oklch(0.75 0.17 200);
-  /* Layer 3 — cs 5-color palette (themes.js) */
-  --pal-signal: oklch(0.75 0.17 200);
-  --pal-core:   oklch(0.55 0.16 200);
-  --pal-depth:  oklch(0.35 0.10 210);
-  --pal-flash:  oklch(0.92 0.08 190);
-  --pal-query:  oklch(0.85 0.14 85);
-  /* semantic */
-  --reject: oklch(0.68 0.18 25);   /* artefact red (only for verdict, not body) */
-  --keep:   oklch(0.78 0.15 150);  /* brain-wave green verdict */
-}
-*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;}
-html,body{width:100%;height:100vh;overflow:hidden;}
-body{background:var(--bg-0);color:var(--fg);
-     font-family:'Inter','Noto Sans SC',system-ui,sans-serif;}
-.wrapper{display:flex;flex-direction:row;height:100vh;overflow:hidden;}
-.sidebar{width:200px;min-width:200px;max-width:200px;display:flex;flex-direction:column;gap:8px;
-         padding:14px 12px;background:var(--bg-1);border-right:1px solid var(--line);overflow-y:auto;}
-.brand{display:flex;align-items:center;gap:8px;}
-.brand svg{flex-shrink:0;}
-.brand .bname{font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:700;
-              color:var(--accent);letter-spacing:0.08em;}
-.s-title{font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:700;color:var(--fg);
-         line-height:1.35;margin-top:2px;}
-.s-sub{font-family:'Noto Sans SC',sans-serif;font-size:10px;color:var(--fg-mute);line-height:1.5;}
-.guide-label{font-family:'JetBrains Mono',monospace;font-size:9px;font-weight:700;letter-spacing:0.12em;
-             text-transform:uppercase;color:var(--accent);margin-top:6px;}
-.guide ul{list-style:none;display:flex;flex-direction:column;gap:6px;}
-.guide li{font-family:'Noto Sans SC',sans-serif;font-size:11px;color:var(--fg-dim);line-height:1.45;
-          padding-left:9px;border-left:2px solid var(--pal-core);}
-.lang-btn{align-self:flex-start;margin-top:auto;font-family:'JetBrains Mono',monospace;font-size:10px;
-          font-weight:700;padding:4px 10px;cursor:pointer;border:1px solid var(--line-strong);
-          background:var(--bg-2);color:var(--accent);letter-spacing:0.1em;text-transform:uppercase;
-          box-shadow:3px 3px 0 var(--bg-0);}
-.lang-btn:active{transform:translate(3px,3px);box-shadow:none;}
-.anim-main{flex:1;display:flex;flex-direction:column;min-width:0;position:relative;}
-.canvas-wrap{flex:1;min-height:0;position:relative;}
-canvas{width:100%;height:100%;display:block;}
-.hud{position:absolute;top:14px;right:16px;background:var(--bg-1);border:1px solid var(--line-strong);
-     box-shadow:3px 3px 0 var(--bg-0);padding:8px 12px;min-width:188px;}
-.hud-row{display:flex;justify-content:space-between;gap:14px;align-items:baseline;}
-.hud-row+.hud-row{margin-top:4px;}
-.hud-label{font-family:'JetBrains Mono',monospace;font-size:8px;letter-spacing:0.14em;
-           text-transform:uppercase;color:var(--fg-mute);}
-.hud-val{font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:700;color:var(--accent);}
-.caption{position:absolute;bottom:22px;left:50%;transform:translateX(-50%);text-align:center;
-         max-width:80%;padding:0 16px;}
-.caption .cap-zh{font-family:'Noto Sans SC',sans-serif;font-size:19px;font-weight:700;color:var(--fg);}
-.caption .cap-en{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--fg-mute);margin-top:3px;}
-.frame-ind{position:absolute;bottom:22px;left:18px;font-family:'JetBrains Mono',monospace;
-           font-size:10px;color:var(--fg-mute);letter-spacing:0.12em;}
+  :root{
+    /* 第 1 层 — 共享深空底 (所有 26 套统一) */
+    --bg-0: oklch(0.14 0.035 265);
+    --bg-1: oklch(0.18 0.04 265);
+    --bg-2: oklch(0.22 0.045 265);
+    --bg-3: oklch(0.28 0.05 265);
+    --line: oklch(0.35 0.05 265 / 0.35);
+    --line-strong: oklch(0.55 0.08 265 / 0.55);
+    --fg:      oklch(0.96 0.01 265);
+    --fg-dim:  oklch(0.75 0.02 265);
+    --fg-mute: oklch(0.55 0.03 265);
+    --gold:    oklch(0.85 0.14 85);
+    /* 第 2 层 — neuro signature accent (cortex-coral) */
+    --accent:  oklch(0.75 0.17 25);
+    /* 第 3 层 — neuro 5 色 palette (themes.js NRO-20) */
+    --p-synaptic: oklch(0.75 0.17 25);   /* SYNAPTIC -> 眨眼成分主色/锁定 */
+    --p-dendrite: oklch(0.55 0.15 25);   /* DENDRITE -> 次级/暗珊瑚 */
+    --p-axon:     oklch(0.32 0.10 25);   /* AXON     -> 底纹/弱 */
+    --p-firing:   oklch(0.92 0.08 25);   /* FIRING   -> 高亮亮线 */
+    --p-memory:   oklch(0.85 0.14 85);   /* MEMORY   -> 金色 key (= gold) */
+    /* 其它 IC (脑节律/慢漂移) 用冷色, 与珊瑚拉开, 凸显眨眼那一路 */
+    --c-brain: oklch(0.70 0.10 250);     /* 脑节律 IC, 冷蓝 */
+    --c-drift: oklch(0.62 0.06 200);     /* 慢漂移 IC, 灰青 */
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;padding:0;overflow:hidden;height:100vh;background:var(--bg-0);
+       font-family:'Noto Sans SC',system-ui,sans-serif;color:var(--fg);display:flex;}
+  .sidebar{width:200px;flex-shrink:0;height:100vh;background:var(--bg-1);
+           border-right:1.5px solid var(--line-strong);
+           display:flex;flex-direction:column;gap:14px;padding:18px 16px;}
+  .brand{font-size:11px;letter-spacing:2px;color:var(--accent);
+         font-family:'JetBrains Mono',ui-monospace,monospace;font-weight:700;}
+  .ttl{font-size:15px;font-weight:700;line-height:1.4;margin:0;}
+  .desc{font-size:11.5px;line-height:1.5;color:var(--fg-dim);}
+  .desc .en{font-style:italic;color:var(--fg-mute);margin-top:4px;display:block;}
+  .guide{list-style:none;padding:0;margin:4px 0 0;display:flex;flex-direction:column;gap:9px;}
+  .guide li{font-size:11.5px;line-height:1.4;color:var(--fg-dim);
+            border-left:3px solid var(--accent);padding-left:8px;}
+  .mascot{margin-top:6px;align-self:center;}
+  .langbtn{margin-top:auto;border:1.5px solid var(--line-strong);background:var(--bg-2);
+           color:var(--fg);box-shadow:3px 3px 0 var(--bg-0);cursor:pointer;
+           padding:7px 12px;font-size:11.5px;font-weight:700;border-radius:4px;
+           font-family:'JetBrains Mono',ui-monospace,monospace;}
+  .langbtn:active{transform:translate(3px,3px);box-shadow:none;}
+  main{flex:1;height:100vh;position:relative;overflow:hidden;}
+  #stage{display:block;position:absolute;inset:0;width:100%;height:100%;}
+  .hud{position:absolute;top:16px;right:16px;background:var(--bg-1);
+       border:1.5px solid var(--line-strong);box-shadow:3px 3px 0 var(--bg-0);
+       padding:11px 13px;font-size:11.5px;min-width:198px;border-radius:5px;
+       font-family:'JetBrains Mono',ui-monospace,monospace;}
+  .hud .ht{font-weight:700;color:var(--accent);margin-bottom:5px;font-size:12px;}
+  .hud .hrow{color:var(--fg-dim);margin-top:3px;}
+  .hud .hv{color:var(--p-memory);}
+  .caption{position:absolute;bottom:26px;left:50%;transform:translateX(-50%);
+           text-align:center;max-width:84%;}
+  .caption .cz{font-size:18px;font-weight:700;color:var(--fg);line-height:1.4;}
+  .caption .ce{font-size:13px;font-style:italic;color:var(--fg-mute);margin-top:3px;}
 </style>
 </head>
 <body>
-<div class="wrapper">
   <aside class="sidebar">
-    <div class="brand">
-      <!-- Bit mascot: levitating cubic sprite (cs) -->
-      <svg width="26" height="26" viewBox="0 0 26 26" aria-hidden="true">
-        <g id="bit">
-          <rect x="5" y="5" width="16" height="16" rx="2" fill="none"
-                stroke="var(--accent)" stroke-width="1.6"/>
-          <rect x="8.5" y="8.5" width="3.5" height="3.5" fill="var(--pal-signal)"/>
-          <rect x="14" y="8.5" width="3.5" height="3.5" fill="var(--pal-core)"/>
-          <rect x="8.5" y="14" width="3.5" height="3.5" fill="var(--pal-flash)"/>
-          <rect x="14" y="14" width="3.5" height="3.5" fill="var(--pal-query)"/>
+    <div class="brand" id="brand">NRO-20 / IC 成分识别</div>
+    <h1 class="ttl" id="ttl">认出哪一路是眨眼，把它扔掉</h1>
+    <div class="desc">
+      <span id="desc1">ICA 拆出好几路独立成分。眨眼那一路藏不住三个签名：前额对称的头皮分布、几百毫秒的大慢峰、低频能量特别高。三者吻合，就锁定它、剔除它。</span>
+      <span class="en" id="desc2">ICA yields several components. The blink one carries three tell-tale signatures — frontal symmetric scalp map, a slow large peak, low-freq heavy spectrum. When all three agree, mark it and drop it.</span>
+    </div>
+    <ul class="guide">
+      <li id="g1">几路 IC 排开，盯住眨眼那一路</li>
+      <li id="g2">签名 1 头皮图：前额对称大块</li>
+      <li id="g3">签名 2 波形：几百毫秒大慢峰</li>
+      <li id="g4">签名 3 频谱：低频能量最高</li>
+      <li id="g5">三证吻合，标记 REJECT 剔除</li>
+    </ul>
+    <!-- mascot: Spark — 一只会随想法点亮的分枝树突精灵 (neuro) -->
+    <svg class="mascot" width="64" height="64" viewBox="0 0 64 64" id="mascot">
+      <g id="sparkRot">
+        <circle cx="32" cy="32" r="6.5" fill="var(--accent)" opacity="0.9"/>
+        <circle cx="32" cy="32" r="6.5" fill="none" stroke="var(--p-firing)" stroke-width="1.2" id="sparkPulse"/>
+        <g stroke="var(--accent)" stroke-width="1.6" fill="none" stroke-linecap="round">
+          <path d="M32 25 L32 14 M32 14 L26 8 M32 14 L38 8"/>
+          <path d="M32 39 L32 50 M32 50 L26 56 M32 50 L38 56"/>
+          <path d="M25 32 L14 32 M14 32 L8 26 M14 32 L8 38"/>
+          <path d="M39 32 L50 32 M50 32 L56 26 M50 32 L56 38"/>
         </g>
-      </svg>
-      <span class="bname">BIT</span>
-    </div>
-    <h1 class="s-title" id="ttl">认出哪一路是眨眼</h1>
-    <div class="s-sub" id="sub">ICA 拆出好几路成分，靠三个证据分清垃圾和真脑波。</div>
-    <div class="guide-label" id="guideLabel">三证据</div>
-    <div class="guide">
-      <ul>
-        <li id="g1">头皮地形图：能量集中在哪</li>
-        <li id="g2">时间波形：长什么样</li>
-        <li id="g3">频谱：哪个频段强</li>
-      </ul>
-    </div>
-    <button class="lang-btn" id="langBtn">EN</button>
+        <circle cx="26" cy="8" r="1.8" fill="var(--p-firing)"/>
+        <circle cx="38" cy="8" r="1.8" fill="var(--p-firing)"/>
+        <circle cx="8"  cy="26" r="1.8" fill="var(--p-firing)"/>
+        <circle cx="56" cy="38" r="1.8" fill="var(--p-firing)"/>
+        <circle cx="38" cy="56" r="1.8" fill="var(--p-firing)"/>
+      </g>
+    </svg>
+    <button class="langbtn" id="langBtn">中 / EN</button>
   </aside>
-
-  <main class="anim-main">
-    <div class="canvas-wrap"><canvas id="c"></canvas></div>
+  <main>
+    <canvas id="stage"></canvas>
     <div class="hud">
-      <div class="hud-row"><span class="hud-label" id="hl1">STAGE</span><span class="hud-val" id="hv1">--</span></div>
-      <div class="hud-row"><span class="hud-label" id="hl2">FOCUS IC</span><span class="hud-val" id="hv2">--</span></div>
-      <div class="hud-row"><span class="hud-label" id="hl3">VERDICT</span><span class="hud-val" id="hv3">--</span></div>
+      <div class="ht" id="hudTtl">IC 成分识别</div>
+      <div class="hrow" id="hudStage">阶段 · 排开成分</div>
+      <div class="hrow"><span id="hudFocusLbl">锁定</span> <span class="hv" id="hudFocus">IC2 眨眼</span></div>
+      <div class="hrow"><span id="hudEvLbl">签名吻合</span> <span class="hv" id="hudEv">0 / 3</span></div>
     </div>
-    <div class="frame-ind" id="frameInd">F1 / 5</div>
     <div class="caption">
-      <div class="cap-zh" id="capZh">ICA 拆出 5 路成分</div>
-      <div class="cap-en" id="capEn">ICA splits into 5 components</div>
+      <div class="cz" id="subZh">ICA 拆出了好几路独立成分，先把它们排开。</div>
+      <div class="ce" id="subEn">ICA splits the recording into several independent components — line them up.</div>
     </div>
   </main>
-</div>
-
 <script>
 (function(){
   "use strict";
-  // ---- palette pull from CSS vars ----
-  var css=getComputedStyle(document.documentElement);
-  function V(n){return css.getPropertyValue(n).trim();}
-  var COL={
-    bg0:V('--bg-0'),bg1:V('--bg-1'),bg2:V('--bg-2'),bg3:V('--bg-3'),
-    line:V('--line'),lineStrong:V('--line-strong'),
-    fg:V('--fg'),fgDim:V('--fg-dim'),fgMute:V('--fg-mute'),gold:V('--gold'),
-    accent:V('--accent'),
-    signal:V('--pal-signal'),core:V('--pal-core'),depth:V('--pal-depth'),
-    flash:V('--pal-flash'),query:V('--pal-query'),
-    reject:V('--reject'),keep:V('--keep')
-  };
+  var LANG='cn';
 
-  // ---- i18n ----
-  var I18N={
-    zh:{
-      ttl:'认出哪一路是眨眼',
-      sub:'ICA 拆出好几路成分，靠三个证据分清垃圾和真脑波。',
-      guideLabel:'三证据',
-      g1:'头皮地形图：能量集中在哪',
-      g2:'时间波形：长什么样',
-      g3:'频谱：哪个频段强',
-      hl1:'阶段',hl2:'看哪路',hl3:'判定',
-      stages:[
-        {hud:['排成一排','全部 5 路','待查'],zh:'ICA 拆出 5 路成分，还不知谁好谁坏',en:'5 ICs, none judged yet'},
-        {hud:['取三证据','逐路','待查'],zh:'每路看三个证据：地形图 + 波形 + 频谱',en:'Three evidences: topomap + wave + spectrum'},
-        {hud:['看眨眼路','IC2','伪迹'],zh:'前额发烫 + 慢大峰 + 低频高 → 是眨眼，扔掉',en:'Frontal + slow spike + low-freq → blink, reject'},
-        {hud:['看脑波路','IC4','保留'],zh:'后脑发亮 + 规则节律 + alpha 峰 → 真脑波，留下',en:'Occipital + rhythm + alpha peak → brain, keep'},
-        {hud:['清理完成','2 扔 3 留','完成'],zh:'勾掉眨眼/肌电，保留脑波——清理脑波的关键一步',en:'Drop junk, keep brain waves — the key cleanup'}
-      ],
-      labels:{
-        topomap:'头皮地形图',wave:'时间波形',spectrum:'频谱',
-        reject:'扔掉',keep:'保留',unknown:'?',
-        front:'前额',back:'后脑',
-        ic:['IC1','IC2','IC3','IC4','IC5'],
-        type:['心跳','眨眼','肌电','脑波 α','脑波 β']
-      }
-    },
-    en:{
-      ttl:'Spot the blink, drop it',
-      sub:'ICA splits the signal into components; three evidences tell junk from real brain waves.',
-      guideLabel:'3 EVIDENCES',
-      g1:'Topomap: where energy concentrates',
-      g2:'Time waveform: what it looks like',
-      g3:'Spectrum: which band is strong',
-      hl1:'STAGE',hl2:'FOCUS IC',hl3:'VERDICT',
-      stages:[
-        {hud:['LINE UP','ALL 5','PENDING'],zh:'5 ICs split out, none judged yet',en:'5 ICs split out, none judged yet'},
-        {hud:['3 EVIDENCE','EACH IC','PENDING'],zh:'Three evidences: topomap + wave + spectrum',en:'Three evidences: topomap + wave + spectrum'},
-        {hud:['BLINK IC','IC2','REJECT'],zh:'Frontal + slow spike + low-freq → blink, reject',en:'Frontal + slow spike + low-freq → blink, reject'},
-        {hud:['BRAIN IC','IC4','KEEP'],zh:'Occipital + rhythm + alpha peak → brain, keep',en:'Occipital + rhythm + alpha peak → brain, keep'},
-        {hud:['CLEANED','2 OUT 3 IN','DONE'],zh:'Drop junk, keep brain waves — the key cleanup',en:'Drop junk, keep brain waves — the key cleanup'}
-      ],
-      labels:{
-        topomap:'Topomap',wave:'Waveform',spectrum:'Spectrum',
-        reject:'REJECT',keep:'KEEP',unknown:'?',
-        front:'Front',back:'Back',
-        ic:['IC1','IC2','IC3','IC4','IC5'],
-        type:['Heartbeat','Blink','Muscle','Brain α','Brain β']
-      }
-    }
-  };
-  var lang='zh';
+  // ---- 唯一核心对象 = "眨眼 IC", 用三签名连续锁定 ----
+  // 四路 IC (排开): IC1 脑节律(冷蓝), IC2 眨眼(珊瑚, 主角), IC3 慢漂移(灰青), IC4 脑节律2(冷蓝)
+  // 只有 IC2 是焦点; 其余始终作陪衬, 镜头从不离开 IC2。
 
-  // ---- IC model: 5 components, each with topomap focus / waveform / spectrum ----
-  // focus: {fx,fy} in 0..1 of head circle (fy 0=front/top, 1=back/bottom); spread
-  // band: dominant frequency band index for spectrum bars (8 bars: 0.5..40Hz log-ish)
-  // verdict: 'reject' | 'keep'
-  var ICS=[
-    // IC1 heartbeat-like (kept neutral but actually artefact-ish; we mark reject? keep it simple: only blink+muscle reject)
-    {topo:{fx:0.5,fy:0.55,spread:0.55},wave:'ecg',band:0,verdict:'reject'},
-    {topo:{fx:0.5,fy:0.16,spread:0.30},wave:'blink',band:0,verdict:'reject'},   // IC2 blink: frontal, slow big spike, low freq
-    {topo:{fx:0.78,fy:0.45,spread:0.20},wave:'emg',band:7,verdict:'reject'},     // IC3 muscle: temporal, fast jitter, high freq
-    {topo:{fx:0.5,fy:0.82,spread:0.34},wave:'alpha',band:3,verdict:'keep'},      // IC4 brain alpha: occipital, rhythm, alpha peak
-    {topo:{fx:0.42,fy:0.5,spread:0.40},wave:'beta',band:5,verdict:'keep'}        // IC5 brain beta
-  ];
-  var FREQ_BARS=8; // approx 2,4,8,10,13,20,30,40 Hz
-
-  function specProfile(band){
-    var arr=[];
-    for(var i=0;i<FREQ_BARS;i++){
-      var d=Math.abs(i-band);
-      var v=Math.exp(-(d*d)/2.2);
-      // 1/f tilt: low freq always a bit higher
-      v=v*0.85+0.15*Math.exp(-i*0.45);
-      arr.push(Math.max(0.04,v));
-    }
-    return arr;
-  }
-
-  // ---- canvas setup ----
-  var cnv=document.getElementById('c'),ctx=cnv.getContext('2d');
-  var W=0,H=0,DPR=1;
-  function fit(){
-    DPR=window.devicePixelRatio||1;
-    W=cnv.clientWidth; H=cnv.clientHeight;
-    cnv.width=W*DPR; cnv.height=H*DPR;
-    ctx.setTransform(DPR,0,0,DPR,0,0);
-  }
-  window.addEventListener('resize',fit); fit();
-
-  // ---- timing ----
-  var FRAMES=5, DUR=6000, TOTAL=FRAMES*DUR, t0=performance.now();
-  var playing=true, pauseAt=0;
-
-  // ---- drawing helpers ----
-  function roundRect(x,y,w,h,r){
-    ctx.beginPath();
-    ctx.moveTo(x+r,y);ctx.arcTo(x+w,y,x+w,y+h,r);ctx.arcTo(x+w,y+h,x,y+h,r);
-    ctx.arcTo(x,y+h,x,y,r);ctx.arcTo(x,y,x+w,y,r);ctx.closePath();
-  }
-
-  // topomap: head circle with gaussian hot-spot
-  function drawTopomap(cx,cy,R,topo,col,glow){
-    ctx.save();
-    // gaussian field via radial layered circles
-    var hx=cx+(topo.fx-0.5)*R*1.4;
-    var hy=cy+(topo.fy-0.5)*R*1.6;
-    ctx.beginPath();ctx.arc(cx,cy,R,0,Math.PI*2);ctx.clip();
-    var steps=7;
-    for(var s=steps;s>=1;s--){
-      var rr=topo.spread*R*(s/steps)*1.5;
-      var a=glow*(0.10+0.13*(1-(s-1)/steps));
-      ctx.beginPath();ctx.arc(hx,hy,rr,0,Math.PI*2);
-      ctx.fillStyle=withA(col,a);ctx.fill();
-    }
-    ctx.restore();
-    // head outline + nose (front marker at top)
-    ctx.save();
-    ctx.strokeStyle=COL.lineStrong;ctx.lineWidth=1.4;
-    ctx.beginPath();ctx.arc(cx,cy,R,0,Math.PI*2);ctx.stroke();
-    ctx.beginPath();ctx.moveTo(cx-5,cy-R);ctx.lineTo(cx,cy-R-7);ctx.lineTo(cx+5,cy-R);ctx.stroke();
-    ctx.restore();
-  }
-  function withA(c,a){
-    // c is oklch(...) string; wrap into oklch(... / a)
-    if(c.indexOf('/')>=0) return c;
-    return c.replace(/\)$/,' / '+a.toFixed(3)+')');
-  }
-
-  // waveform generator
-  function waveSample(kind,x){ // x 0..1
-    var tt=x*6;
+  // 各 IC 的时域波形函数 (tt:0..1 一屏时间窗 ~几秒)
+  function icWave(kind, tt, ph){
     if(kind==='blink'){
-      // single slow large positive deflection near middle, flat elsewhere
-      var d=x-0.45; return Math.exp(-(d*d)/0.004)*0.95 - 0.05;
+      // 眨眼: 偶发的、几百毫秒的大慢峰 (低频大幅)
+      var p=(tt*1.6+ph*0.04)%1;
+      var peak=Math.exp(-Math.pow((p-0.45)/0.085,2));   // 宽 -> 慢
+      var base=Math.sin(tt*Math.PI*2*1.1+ph)*0.10;       // 极低频底
+      return peak*1.55 + base;
     }
-    if(kind==='emg'){
-      // high frequency jitter, bursty
-      return (Math.sin(tt*38)*0.5+Math.sin(tt*53+1)*0.4)*0.55;
+    if(kind==='brain'){  // 脑节律: 规律 ~10Hz 中等幅, 快
+      return Math.sin(tt*Math.PI*2*10 + ph)*0.62 + Math.sin(tt*Math.PI*2*21+ph*1.3)*0.18;
     }
-    if(kind==='ecg'){
-      // periodic sharp spikes (QRS-like)
-      var ph=(x*3)%1; var d=ph-0.5; return Math.exp(-(d*d)/0.0006)*0.9-0.08;
-    }
-    if(kind==='alpha'){
-      return Math.sin(tt*8)*0.62; // smooth ~10Hz rhythm
-    }
-    if(kind==='beta'){
-      return (Math.sin(tt*16)*0.4+Math.sin(tt*22+0.6)*0.3);
+    if(kind==='drift'){  // 慢漂移: 很慢的正弦, 小幅
+      return Math.sin(tt*Math.PI*2*0.8 + ph)*0.55;
     }
     return 0;
   }
-  function drawWave(x0,y0,w,h,kind,col,lw){
-    ctx.save();ctx.strokeStyle=col;ctx.lineWidth=lw||1.6;ctx.beginPath();
-    var n=90;
-    for(var i=0;i<=n;i++){
-      var fx=i/n;var v=waveSample(kind,fx);
-      var px=x0+fx*w; var py=y0+h/2 - v*h*0.42;
-      if(i===0)ctx.moveTo(px,py);else ctx.lineTo(px,py);
+
+  var ICS=[
+    {id:'IC1', kind:'brain', col:'--c-brain', cn:'脑节律',   en:'brain rhythm'},
+    {id:'IC2', kind:'blink', col:'--p-synaptic', cn:'眨眼',  en:'eye blink'},
+    {id:'IC3', kind:'drift', col:'--c-drift', cn:'慢漂移',   en:'slow drift'},
+    {id:'IC4', kind:'brain', col:'--c-brain', cn:'脑节律 2', en:'brain rhythm 2'}
+  ];
+  var FOCUS=1; // IC2 = 眨眼, 唯一锁定对象
+
+  // 频谱: 各 IC 在 1..30Hz 的能量分布 (用于签名3)
+  // 眨眼 -> 低频(1-4Hz)爆高; 脑节律 -> 10Hz 峰; 漂移 -> 最低频
+  function spectrum(kind, f){
+    if(kind==='blink'){ return Math.exp(-Math.pow((f-1.6)/2.2,2))*1.0 + 0.04; }
+    if(kind==='brain'){ return Math.exp(-Math.pow((f-10)/2.6,2))*0.85 + Math.exp(-Math.pow((f-20)/3,2))*0.28 + 0.03; }
+    if(kind==='drift'){ return Math.exp(-Math.pow((f-0.9)/1.0,2))*0.95 + 0.03; }
+    return 0.03;
+  }
+
+  var I18N={
+    brand:{cn:'NRO-20 / IC 成分识别',en:'NRO-20 / IC LABELLING'},
+    ttl:{cn:'认出哪一路是眨眼，把它扔掉',en:'Spot the blink component, then drop it'},
+    desc1:{cn:'ICA 拆出好几路独立成分。眨眼那一路藏不住三个签名：前额对称的头皮分布、几百毫秒的大慢峰、低频能量特别高。三者吻合，就锁定它、剔除它。',
+           en:'ICA yields several components. The blink one carries three tell-tale signatures — frontal symmetric scalp map, a slow large peak, low-freq heavy spectrum. When all three agree, mark it and drop it.'},
+    g1:{cn:'几路 IC 排开，盯住眨眼那一路',en:'lay out the ICs, lock onto the blink one'},
+    g2:{cn:'签名 1 头皮图：前额对称大块',en:'sig 1 topomap: frontal symmetric'},
+    g3:{cn:'签名 2 波形：几百毫秒大慢峰',en:'sig 2 wave: slow large peak'},
+    g4:{cn:'签名 3 频谱：低频能量最高',en:'sig 3 spectrum: low-freq heavy'},
+    g5:{cn:'三证吻合，标记 REJECT 剔除',en:'all agree -> mark REJECT, drop it'},
+    hudTtl:{cn:'IC 成分识别',en:'IC labelling'},
+    hudFocusLbl:{cn:'锁定',en:'focus'},
+    hudEvLbl:{cn:'签名吻合',en:'signatures'},
+    stages:{
+      cn:['排开成分','签名1 头皮图','签名2 时域波形','签名3 频谱','三证吻合 · 剔除'],
+      en:['lay out ICs','sig1 topomap','sig2 waveform','sig3 spectrum','match · reject']
+    },
+    subs:{
+      cn:['ICA 把脑电拆成好几路独立成分（IC）。哪一路是眨眼？盯住有偶发大尖峰的那一路 —— IC2，镜头从此不离开它。',
+          '签名一：头皮分布。把 IC2 的权重画回头皮，能量全堆在前额、左右对称一大块 —— 眨眼来自眼睛，电信号正是从前额漏进来的。第 1 个证据吻合。',
+          '签名二：时域波形。盯着 IC2 这一路，每隔几秒就鼓起一个几百毫秒的大慢峰，比脑节律大得多、慢得多 —— 这正是一次眨眼的形状。第 2 个证据吻合。',
+          '签名三：频谱。把同一路 IC2 做频谱，能量几乎全压在 1–4Hz 的低频，而脑节律的 10Hz 峰这里几乎没有 —— 又一个眨眼的指纹。第 3 个证据吻合。',
+          '三个签名指向同一路：IC2 就是眨眼。给它盖上 REJECT，把这一路清零、其余成分重建回脑电 —— 眨眼被干净地剔除了。'],
+      en:['ICA splits EEG into several independent components (IC). Which is the blink? Lock onto the one with sudden big peaks — IC2. The camera never leaves it.',
+          'Signature 1: scalp map. Project IC2\'s weights back to the scalp — energy piles up at the frontal region, left-right symmetric. Blinks come from the eyes, leaking in at the forehead. Evidence 1 matches.',
+          'Signature 2: time waveform. Watch IC2: every few seconds a ~300ms slow peak swells up, far bigger and slower than brain rhythm — exactly the shape of one blink. Evidence 2 matches.',
+          'Signature 3: spectrum. Take the FFT of the same IC2 — energy is crammed into the 1–4Hz low band, while the brain 10Hz peak is almost absent here. Another blink fingerprint. Evidence 3 matches.',
+          'Three signatures point to one component: IC2 is the blink. Stamp it REJECT, zero this channel and rebuild from the rest — the blink is cleanly removed.']
     }
-    ctx.stroke();ctx.restore();
-  }
-  function drawSpectrum(x0,y0,w,h,band,col){
-    var prof=specProfile(band);
-    var bw=w/FREQ_BARS;
-    for(var i=0;i<FREQ_BARS;i++){
-      var bh=prof[i]*h;
-      ctx.fillStyle=withA(col,0.85);
-      ctx.fillRect(x0+i*bw+1, y0+h-bh, bw-2, bh);
+  };
+  function t(k){return (I18N[k]&&I18N[k][LANG])||(I18N[k]&&I18N[k].en)||k;}
+
+  var canvas=document.getElementById('stage'),ctx=canvas.getContext('2d');
+  var W=0,H=0,DPR=Math.min(window.devicePixelRatio||1,2);
+  function resize(){var r=canvas.parentElement.getBoundingClientRect();if(r.width<1||r.height<1)return;
+    W=r.width;H=r.height;canvas.width=W*DPR;canvas.height=H*DPR;
+    canvas.style.width=W+'px';canvas.style.height=H+'px';ctx.setTransform(DPR,0,0,DPR,0,0);}
+  window.addEventListener('resize',resize);setTimeout(resize,200);setTimeout(resize,600);
+  if(document.fonts&&document.fonts.ready)document.fonts.ready.then(resize);
+  var C=function(v){return getComputedStyle(document.documentElement).getPropertyValue(v).trim();};
+
+  var startT=null, DUR=6800, NSTAGE=5, TOTAL=NSTAGE*DUR+1400;
+  function lerp(a,b,k){return a+(b-a)*k;}
+  function clamp01(k){return k<0?0:k>1?1:k;}
+  function ease(k){k=clamp01(k);return k*k*(3-2*k);}
+
+  // 画一段 IC 波形
+  function drawWave(x0,x1,midY,amp,phase,fn,col,lw,alpha){
+    ctx.strokeStyle=col;ctx.lineWidth=lw;ctx.globalAlpha=alpha;ctx.beginPath();
+    var prev=false;
+    for(var x=x0;x<=x1;x++){
+      var tt=(x-x0)/(x1-x0);
+      var y=midY - fn(tt,phase)*amp;
+      if(!prev){ctx.moveTo(x,y);prev=true;}else ctx.lineTo(x,y);
     }
-    // baseline
-    ctx.strokeStyle=COL.line;ctx.lineWidth=1;
-    ctx.beginPath();ctx.moveTo(x0,y0+h);ctx.lineTo(x0+w,y0+h);ctx.stroke();
-  }
-  function arrow(x1,y1,x2,y2,col,lw){
-    ctx.save();ctx.strokeStyle=col;ctx.lineWidth=lw||1.6;
-    ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke();
-    var a=Math.atan2(y2-y1,x2-x1);
-    ctx.beginPath();ctx.moveTo(x2,y2);
-    ctx.lineTo(x2-9*Math.cos(a-0.4),y2-9*Math.sin(a-0.4));
-    ctx.lineTo(x2-9*Math.cos(a+0.4),y2-9*Math.sin(a+0.4));
-    ctx.closePath();ctx.fillStyle=col;ctx.fill();ctx.restore();
-  }
-  function checkMark(cx,cy,r,col){
-    ctx.save();ctx.strokeStyle=col;ctx.lineWidth=2.4;ctx.lineCap='round';
-    ctx.beginPath();ctx.moveTo(cx-r*0.5,cy);ctx.lineTo(cx-r*0.1,cy+r*0.45);
-    ctx.lineTo(cx+r*0.55,cy-r*0.5);ctx.stroke();ctx.restore();
-  }
-  function crossMark(cx,cy,r,col){
-    ctx.save();ctx.strokeStyle=col;ctx.lineWidth=2.4;ctx.lineCap='round';
-    ctx.beginPath();ctx.moveTo(cx-r*0.45,cy-r*0.45);ctx.lineTo(cx+r*0.45,cy+r*0.45);
-    ctx.moveTo(cx+r*0.45,cy-r*0.45);ctx.lineTo(cx-r*0.45,cy+r*0.45);ctx.stroke();ctx.restore();
-  }
-  function text(s,x,y,col,size,align,bold){
-    ctx.fillStyle=col;
-    ctx.font=(bold?'700 ':'')+size+"px 'JetBrains Mono',monospace";
-    ctx.textAlign=align||'left';ctx.textBaseline='alphabetic';
-    ctx.fillText(s,x,y);ctx.textAlign='left';
-  }
-  function textCJK(s,x,y,col,size,align,bold){
-    ctx.fillStyle=col;
-    ctx.font=(bold?'700 ':'')+size+"px 'Noto Sans SC',sans-serif";
-    ctx.textAlign=align||'left';ctx.textBaseline='alphabetic';
-    ctx.fillText(s,x,y);ctx.textAlign='left';
+    ctx.stroke();ctx.globalAlpha=1;
   }
 
-  // ---- frame renderer ----
-  // Row layout: each IC is a row; columns = label | topomap | waveform | spectrum | verdict
-  function render(now){
-    var raw= playing ? (now-t0) : pauseAt;
-    var elapsed=((raw%TOTAL)+TOTAL)%TOTAL; // always 0..TOTAL
-    var frame=Math.max(0, Math.min(FRAMES-1, Math.floor(elapsed/DUR)));
-    var fp=(elapsed-frame*DUR)/DUR; // 0..1 within frame
-    var L=I18N[lang].labels;
-
-    ctx.clearRect(0,0,W,H);
-    drawBg();
-
-    // layout
-    var rows=ICS.length;
-    var topPad=58, botPad=84;
-    var avail=H-topPad-botPad;
-    var rh=Math.min(60, (avail-(rows+1)*8)/rows);
-    var gap=(avail-rh*rows)/(rows+1);
-    var startY=topPad+gap;
-    var leftX=Math.max(40, W*0.06);
-    var topoR=Math.min(rh*0.42, 24);
-
-    // column x positions
-    var xIC=leftX;
-    var xTopo=leftX+72;
-    var topoW=topoR*2;
-    var xWave=xTopo+topoW+26;
-    var waveW=Math.max(150,(W-xWave-leftX-360)*0.5);
-    var xSpec=xWave+waveW+28;
-    var specW=Math.max(120, waveW*0.78);
-    var xVerdict=xSpec+specW+26;
-
-    // column headers (frame>=1 highlights the 3 evidences)
-    var headAlpha = frame===0?0.0:1.0;
-    if(frame===0) headAlpha=fp; // fade in nothing on f0 (only labels)
-    ctx.globalAlpha=Math.max(0.0, frame>=1?1:0);
-    if(frame>=1){
-      text(L.topomap, xTopo+topoR, startY-18, COL.accent, 11, 'center', true);
-      text(L.wave,    xWave+waveW/2, startY-18, COL.accent, 11, 'center', true);
-      text(L.spectrum,xSpec+specW/2, startY-18, COL.accent, 11, 'center', true);
+  // 头皮 topomap: 眨眼成分 -> 前额左右对称两团强能量
+  // grow: 0..1 能量充满程度; cx,cy,r 头位置
+  function drawTopomap(cx,cy,r,grow,now){
+    ctx.save();
+    // 头轮廓
+    ctx.strokeStyle=C('--line-strong');ctx.lineWidth=1.6;
+    ctx.beginPath();ctx.arc(cx,cy,r,0,Math.PI*2);ctx.stroke();
+    // 鼻子 (朝上 = 前额方向)
+    ctx.beginPath();ctx.moveTo(cx-7,cy-r);ctx.lineTo(cx,cy-r-10);ctx.lineTo(cx+7,cy-r);ctx.stroke();
+    // 双耳
+    ctx.beginPath();ctx.arc(cx-r,cy,4,Math.PI*0.5,Math.PI*1.5);ctx.stroke();
+    ctx.beginPath();ctx.arc(cx+r,cy,4,-Math.PI*0.5,Math.PI*0.5);ctx.stroke();
+    // 能量热图: 网格采样, 两个前额对称热点 (眨眼)
+    var hot=[[cx-r*0.42, cy-r*0.52],[cx+r*0.42, cy-r*0.52]];
+    var step=Math.max(5, Math.round(r/18));
+    ctx.beginPath();ctx.arc(cx,cy,r,0,Math.PI*2);ctx.clip();
+    for(var py=cy-r;py<=cy+r;py+=step){
+      for(var px=cx-r;px<=cx+r;px+=step){
+        var v=0;
+        for(var h=0;h<hot.length;h++){
+          var d2=(px-hot[h][0])*(px-hot[h][0])+(py-hot[h][1])*(py-hot[h][1]);
+          v+=Math.exp(-d2/(2*Math.pow(r*0.36,2)));
+        }
+        v=Math.min(1,v)*grow;
+        if(v<0.04)continue;
+        // 珊瑚色热度: 弱->暗珊瑚, 强->亮珊瑚
+        var col = v>0.62 ? C('--p-firing') : (v>0.32 ? C('--p-synaptic') : C('--p-dendrite'));
+        ctx.fillStyle=col;ctx.globalAlpha=0.12+0.55*v;
+        ctx.fillRect(px-step/2, py-step/2, step+1, step+1);
+      }
     }
     ctx.globalAlpha=1;
+    ctx.restore();
+    // 对称轴提示 (前额对称) — grow 充满后画出
+    if(grow>0.7){
+      ctx.strokeStyle=C('--p-firing');ctx.lineWidth=1;
+      ctx.globalAlpha=0.4*ease((grow-0.7)/0.3);
+      ctx.setLineDash([3,4]);
+      ctx.beginPath();ctx.moveTo(cx,cy-r);ctx.lineTo(cx,cy+r);ctx.stroke();
+      ctx.setLineDash([]);ctx.globalAlpha=1;
+    }
+  }
 
-    for(var i=0;i<rows;i++){
+  // 频谱柱状: 1..30Hz; hl=true 高亮低频
+  function drawSpectrum(x0,y0,wBar,hBar,kind,grow,hlLow){
+    var nb=26, fmin=1, fmax=30, bw=wBar/nb;
+    for(var i=0;i<nb;i++){
+      var f=fmin+(fmax-fmin)*(i/(nb-1));
+      var val=spectrum(kind,f)*grow;
+      var bh=val*hBar;
+      var isLow = f<=4;
+      var col = (hlLow&&isLow)? C('--p-firing') : (kind==='blink'? C('--p-synaptic'):C('--c-brain'));
+      ctx.fillStyle=col;ctx.globalAlpha=(hlLow&&isLow)?0.95:0.7;
+      ctx.fillRect(x0+i*bw, y0-bh, bw-1.5, bh);
+      ctx.globalAlpha=1;
+    }
+    // 轴
+    ctx.strokeStyle=C('--line-strong');ctx.lineWidth=1;
+    ctx.beginPath();ctx.moveTo(x0,y0);ctx.lineTo(x0+wBar,y0);ctx.stroke();
+    ctx.fillStyle=C('--fg-mute');ctx.font="9px 'JetBrains Mono',monospace";ctx.textAlign='left';
+    ctx.fillText('1Hz', x0, y0+13);
+    ctx.textAlign='right';ctx.fillText('30Hz', x0+wBar, y0+13);
+  }
+
+  function draw(now){
+    if(startT===null)startT=now;
+    var el=now-startT; if(el>TOTAL){startT=now;el=0;}
+    var stage=Math.min(Math.floor(el/DUR),NSTAGE-1);
+    var local=(el-stage*DUR)/DUR;
+    if(!W||!H){requestAnimationFrame(draw);return;}
+    ctx.clearRect(0,0,W,H);
+
+    var fg=C('--fg'),dim=C('--fg-dim'),mute=C('--fg-mute'),acc=C('--accent'),gold=C('--gold');
+    var pmain=C('--p-synaptic'),pfire=C('--p-firing');
+
+    // 背景网格
+    ctx.strokeStyle=C('--line');ctx.lineWidth=1;
+    for(var gx=0;gx<W;gx+=40){ctx.beginPath();ctx.moveTo(gx,0);ctx.lineTo(gx,H);ctx.stroke();}
+    for(var gy=0;gy<H;gy+=40){ctx.beginPath();ctx.moveTo(0,gy);ctx.lineTo(W,gy);ctx.stroke();}
+
+    var phase=now/520;
+    var L=80, R=W-60;
+    var pulse=document.getElementById('sparkPulse');
+    if(pulse) pulse.setAttribute('r', (6.5 + 2.5*Math.abs(Math.sin(now/520))).toFixed(2));
+
+    // ============================================================
+    // 连续锁定: 全程左侧是四路 IC 排开 (IC2 始终被高亮框住 = 镜头不离开)
+    // 右侧逐阶段升起 IC2 的三个签名证据。这是同一对象被连续审讯的过程。
+    // ============================================================
+
+    // 左侧 IC 列表 — 随阶段推进, IC2 越来越"被聚焦", 其余越来越淡
+    var listX0=L, listX1= stage===0 ? R-40 : W*0.40;   // 阶段0占满, 之后让位给证据区
+    var ys=[H*0.22, H*0.40, H*0.58, H*0.76];
+    // IC2 锁定框的"收紧"程度: 随阶段越锁越紧
+    var lockK = ease(Math.min(1, (stage + local)/1.0));   // 阶段0内逐渐锁定
+    if(stage>0) lockK=1;
+
+    for(var i=0;i<ICS.length;i++){
       var ic=ICS[i];
-      var y=startY+i*(rh+gap);
-      var cy=y+rh/2;
-
-      // focus logic: F3 focus IC2(blink idx1), F4 focus IC4(alpha idx3)
-      var focusIdx=-1;
-      if(frame===2) focusIdx=1;
-      if(frame===3) focusIdx=3;
-      var isFocus=(i===focusIdx);
-      var dim = (focusIdx>=0 && !isFocus) ? 0.32 : 1.0;
-
-      // verdict known?
-      var verdictKnown=false, isReject=false, isKeep=false;
-      if(frame===4){ verdictKnown=true; isReject=(ic.verdict==='reject'); isKeep=(ic.verdict==='keep'); }
-      else if(frame===2 && i===1){ verdictKnown=(fp>0.55); isReject=true; }
-      else if(frame===3 && i===3){ verdictKnown=(fp>0.55); isKeep=true; }
-
-      ctx.globalAlpha=dim;
-
-      // row card
-      var cardCol=COL.bg2;
-      if(verdictKnown && isReject) cardCol=COL.bg2;
-      roundRect(leftX-14, y-2, (xVerdict+70)-(leftX-14), rh+4, 8);
-      ctx.fillStyle=COL.bg1; ctx.fill();
-      ctx.strokeStyle=isFocus?COL.accent:COL.line;
-      ctx.lineWidth=isFocus?2:1;
-      ctx.stroke();
-
-      // IC label + type
-      var icColor = isFocus?COL.flash:COL.signal;
-      text(L.ic[i], xIC, cy-4, icColor, 13, 'left', true);
-      textCJK(L.type[i], xIC, cy+13, COL.fgMute, 10, 'left', false);
-
-      // ---- evidence columns ----
-      if(frame===0){
-        // F1: only show "?" placeholder boxes, evidence not examined yet
-        var qx=xTopo+topoR;
-        text(L.unknown, (xTopo+xVerdict)/2, cy+5, COL.fgMute, 20, 'center', true);
-      } else {
-        // topomap
-        var topoCol = isFocus ? (isReject?COL.reject:(isKeep?COL.keep:COL.flash)) : COL.core;
-        var glow=isFocus?1.15:0.8;
-        drawTopomap(xTopo+topoR, cy, topoR, ic.topo, topoCol, glow);
-        // front/back hint on focus
-        if(isFocus){
-          var ft = ic.topo.fy<0.5 ? L.front : L.back;
-          textCJK(ft, xTopo+topoR, y-3, topoCol, 9, 'center', true);
-        }
-
-        // waveform
-        var wCol = isFocus ? (isReject?COL.reject:(isKeep?COL.keep:COL.signal)) : COL.fgDim;
-        ctx.save();ctx.globalAlpha=dim*(isFocus?1:0.85);
-        drawWave(xWave, cy-rh*0.34, waveW, rh*0.68, ic.wave, wCol, isFocus?2:1.3);
-        ctx.restore();
-
-        // spectrum
-        var sCol = isFocus ? (isReject?COL.reject:(isKeep?COL.keep:COL.signal)) : COL.fgDim;
-        ctx.save();ctx.globalAlpha=dim*(isFocus?1:0.7);
-        drawSpectrum(xSpec, cy-rh*0.32, specW, rh*0.64, ic.band, sCol);
-        ctx.restore();
+      var isF=(i===FOCUS);
+      // 非焦点随锁定淡出; 焦点保持亮
+      var dim2 = isF ? 1 : lerp(0.85, 0.28, lockK);
+      var amp = isF ? H*0.058 : H*0.045;
+      var col = C(ic.col);
+      // 锁定框 (只给 IC2)
+      if(isF){
+        var boxA=ease(lockK);
+        ctx.strokeStyle=pmain;ctx.lineWidth=1.6;
+        ctx.globalAlpha=(0.55+0.45*Math.abs(Math.sin(now/600)))*boxA;
+        var bx=listX0-10, bw=(listX1-listX0)+20, by=ys[i]-H*0.085, bh=H*0.16;
+        ctx.strokeRect(bx,by,bw,bh);
+        // 角标
+        ctx.globalAlpha=boxA;ctx.fillStyle=pmain;ctx.font="700 10px 'JetBrains Mono',monospace";ctx.textAlign='left';
+        ctx.fillText(LANG==='cn'?'锁定':'LOCK', bx+4, by+13);
+        ctx.globalAlpha=1;
       }
-
-      // verdict marker
-      if(verdictKnown){
-        var vx=xVerdict+22, vr=13;
-        if(isReject){
-          crossMark(vx,cy,vr,COL.reject);
-          text(L.reject, vx+24, cy+4, COL.reject, 11, 'left', true);
-        } else if(isKeep){
-          checkMark(vx,cy,vr,COL.keep);
-          text(L.keep, vx+24, cy+4, COL.keep, 11, 'left', true);
-        }
-      }
+      // IC 波形
+      drawWave(listX0, listX1, ys[i], amp, phase,
+        (function(k){return function(tt,ph){return icWave(k,tt,ph);};})(ic.kind),
+        col, isF?2.4:1.7, dim2);
+      // 标签
+      ctx.fillStyle=col;ctx.globalAlpha=dim2;
+      ctx.font=(isF?"700 ":"")+"12px 'Noto Sans SC',sans-serif";ctx.textAlign='left';
+      ctx.fillText(ic.id+' · '+(LANG==='cn'?ic.cn:ic.en), listX0, ys[i]-H*0.092);
       ctx.globalAlpha=1;
     }
 
-    // F3/F4 evidence callout (three-evidence reasoning bubble near focus)
-    if(frame===2 || frame===3){
-      var fi=(frame===2)?1:3;
-      var ic=ICS[fi];
-      var y=startY+fi*(rh+gap), cy=y+rh/2;
-      var vcol=(frame===2)?COL.reject:COL.keep;
-      // three small ticks linking the 3 evidences to verdict
-      ctx.save();ctx.globalAlpha=Math.min(1,fp*1.6);
-      arrow(xVerdict-6, cy, xVerdict+8, cy, vcol, 1.8);
-      ctx.restore();
+    // 证据区: 在 IC 列表右侧。HUD 占右上, 故证据内容从 H*0.30 起, 不与 HUD 冲突。
+    var evX0=W*0.48, evX1=R, evCx=(evX0+evX1)/2;
+    var evTop=H*0.34;   // 证据主体起始 y, 让出顶部 badge 行 + HUD
+
+    // 已吻合签名计数 (HUD)
+    var evCount=0;
+
+    // 阶段标题 (证据区, 在 badge 行下方)
+    function evTitle(txtCn,txtEn){
+      ctx.fillStyle=acc;ctx.font="700 13px 'Noto Sans SC',sans-serif";ctx.textAlign='left';
+      ctx.fillText(LANG==='cn'?txtCn:txtEn, evX0, evTop-H*0.04);
     }
 
-    // F5: gold key-moment banner
-    if(frame===4){
-      var pulse=0.5+0.5*Math.sin(now/360);
-      ctx.save();
-      var bw=Math.min(560, W*0.66), bh=40;
-      var bx=(W-bw)/2, by=H-60;
-      roundRect(bx,by,bw,bh,8);
-      ctx.fillStyle=COL.bg1;ctx.fill();
-      ctx.strokeStyle=withA(COL.gold, 0.5+0.5*pulse);ctx.lineWidth=2;ctx.stroke();
-      textCJK(I18N[lang].stages[4].zh, W/2, by+25, COL.gold, 14, 'center', true);
-      ctx.restore();
+    // 累积签名 badge 行 (左上, 证据区上方一条). n=当前已确认签名数
+    // 让"连续锁定"可见: 每过一阶段, 多一个吻合的小章, 永不消失。
+    var BADGES=[
+      {cn:'头皮·前额对称', en:'topo frontal'},
+      {cn:'波形·大慢峰',   en:'wave slow-peak'},
+      {cn:'频谱·低频高',   en:'spec low-freq'}
+    ];
+    function drawBadges(n){
+      var bw=110, bh=24, gap=10, by=H*0.10, bx0=evX0;
+      for(var i=0;i<3;i++){
+        var on=i<n;
+        var bx=bx0+i*(bw+gap);
+        ctx.fillStyle=on?C('--bg-2'):C('--bg-1');
+        ctx.globalAlpha=on?1:0.45;ctx.fillRect(bx,by,bw,bh);
+        ctx.strokeStyle=on?pmain:C('--line');ctx.lineWidth=1.2;ctx.strokeRect(bx,by,bw,bh);
+        ctx.fillStyle=on?pfire:C('--fg-mute');ctx.font="700 9px 'JetBrains Mono',monospace";ctx.textAlign='left';
+        ctx.fillText(on?'OK':'..', bx+5, by+15);
+        ctx.fillStyle=on?C('--fg-dim'):C('--fg-mute');ctx.font="9.5px 'Noto Sans SC',sans-serif";
+        ctx.fillText(LANG==='cn'?BADGES[i].cn:BADGES[i].en, bx+24, by+15);
+        ctx.globalAlpha=1;
+      }
     }
 
-    // ---- HUD + caption + frame indicator ----
-    var st=I18N[lang].stages[frame];
-    setText('hv1', st.hud[0]);
-    setText('hv2', st.hud[1]);
-    setText('hv3', st.hud[2]);
-    // verdict color cue in HUD
-    var hv3=document.getElementById('hv3');
-    var vstr=st.hud[2];
-    if(frame===2) hv3.style.color=COL.reject;
-    else if(frame===3) hv3.style.color=COL.keep;
-    else if(frame===4) hv3.style.color=COL.gold;
-    else hv3.style.color=COL.accent;
+    // ---- 阶段0: 排开成分 + 锁定 IC2 ----
+    if(stage===0){
+      ctx.fillStyle=mute;ctx.font="11px 'Noto Sans SC',sans-serif";ctx.textAlign='center';
+      ctx.globalAlpha=ease((local-0.4)*2);
+      ctx.fillText(LANG==='cn'?'哪一路有偶发大尖峰？盯住它 —— IC2':'which has sudden big peaks? lock onto it — IC2',(listX0+listX1)/2, H*0.92);
+      ctx.globalAlpha=1;
+    }
 
-    // On F5 the gold canvas banner carries the message; hide the DOM caption to avoid overlap.
-    if(frame===4){ setText('capZh',''); setText('capEn',''); }
-    else { setText('capZh', st.zh); setText('capEn', st.en); }
-    setText('frameInd', 'F'+(frame+1)+' / '+FRAMES);
+    // ---- 阶段1: 签名1 头皮 topomap ----
+    if(stage===1){
+      var g1=ease(local*1.3);
+      drawBadges(g1>0.6?1:0);
+      evTitle('签名 1 · 头皮分布','sig 1 · scalp topomap');
+      drawTopomap(evCx, evTop+H*0.20, H*0.18, g1, now);
+      ctx.fillStyle=dim;ctx.font="11.5px 'Noto Sans SC',sans-serif";ctx.textAlign='center';
+      ctx.globalAlpha=ease(local);
+      ctx.fillText(LANG==='cn'?'能量堆在前额、左右对称':'energy at the frontal scalp, symmetric', evCx, evTop+H*0.46);
+      ctx.globalAlpha=1;
+      evCount=g1>0.6?1:0;
+    }
 
-    requestAnimationFrame(render);
+    // ---- 阶段2: 签名2 时域大慢峰 (镜头推近 IC2 波形) ----
+    if(stage===2){
+      var g2=ease(local*1.2);
+      drawBadges(g2>0.6?2:1);
+      evTitle('签名 2 · 时域波形（放大 IC2）','sig 2 · IC2 waveform (zoom)');
+      var wY=evTop+H*0.12, wAmp=H*0.13;
+      drawWave(evX0, evX1, wY, wAmp, phase, function(tt,ph){return icWave('blink',tt,ph);}, pmain, 2.8, g2);
+      if(g2>0.4){
+        var ax0=evX0+(evX1-evX0)*0.30, ax1=evX0+(evX1-evX0)*0.50;
+        var ay=wY+wAmp*0.7;
+        ctx.strokeStyle=pfire;ctx.lineWidth=1.4;ctx.globalAlpha=ease((g2-0.4)*2.2);
+        ctx.beginPath();ctx.moveTo(ax0,ay);ctx.lineTo(ax0,ay+8);ctx.lineTo(ax1,ay+8);ctx.lineTo(ax1,ay);ctx.stroke();
+        ctx.fillStyle=pfire;ctx.font="700 11px 'JetBrains Mono',monospace";ctx.textAlign='center';
+        ctx.fillText(LANG==='cn'?'~300ms 大慢峰':'~300ms slow peak',(ax0+ax1)/2, ay+22);
+        ctx.globalAlpha=1;
+      }
+      // 对照: 脑节律小快波 (底部)
+      drawWave(evX0, evX1, evTop+H*0.40, H*0.04, phase, function(tt,ph){return icWave('brain',tt,ph);}, C('--c-brain'), 1.5, 0.55*g2);
+      ctx.fillStyle=C('--c-brain');ctx.font="10px 'Noto Sans SC',sans-serif";ctx.textAlign='left';ctx.globalAlpha=0.7*g2;
+      ctx.fillText(LANG==='cn'?'对照：脑节律又小又快':'vs brain rhythm: small & fast', evX0, evTop+H*0.34);
+      ctx.globalAlpha=1;
+      evCount=g2>0.6?2:1;
+    }
+
+    // ---- 阶段3: 签名3 频谱低频高 (同一路 IC2 做 FFT) ----
+    if(stage===3){
+      var g3=ease(local*1.2);
+      drawBadges(g3>0.6?3:2);
+      evTitle('签名 3 · 频谱（同一路 IC2）','sig 3 · spectrum of IC2');
+      var spY=evTop+H*0.40, spW=(evX1-evX0)*0.92, spH=H*0.30;
+      drawSpectrum(evX0, spY, spW, spH, 'blink', g3, true);
+      if(g3>0.4){
+        ctx.fillStyle=pfire;ctx.font="700 12px 'Noto Sans SC',sans-serif";ctx.textAlign='left';
+        ctx.globalAlpha=ease((g3-0.4)*2.2);
+        ctx.fillText(LANG==='cn'?'能量几乎全压在 1–4Hz 低频':'energy crammed into 1–4Hz', evX0, evTop+H*0.04);
+        // 对照: 脑节律频谱轮廓 (10Hz 峰), 显示这里没有
+        ctx.strokeStyle=C('--c-brain');ctx.lineWidth=1.6;ctx.globalAlpha=0.55*g3;
+        var nb=26;ctx.beginPath();var prevP=false;
+        for(var i3=0;i3<nb;i3++){var f=1+(29)*(i3/(nb-1));var bv=spectrum('brain',f)*g3;
+          var xx=evX0+(i3/(nb-1))*spW; var yy=spY-bv*spH;
+          if(!prevP){ctx.moveTo(xx,yy);prevP=true;}else ctx.lineTo(xx,yy);}
+        ctx.stroke();ctx.globalAlpha=1;
+        ctx.fillStyle=C('--c-brain');ctx.font="10px 'Noto Sans SC',sans-serif";ctx.globalAlpha=0.7*g3;ctx.textAlign='left';
+        ctx.fillText(LANG==='cn'?'脑节律 10Hz 峰这里几乎没有':'brain 10Hz peak absent here', evX0+spW*0.40, evTop+H*0.12);
+        ctx.globalAlpha=1;
+      }
+      evCount=g3>0.6?3:2;
+    }
+
+    // ---- 阶段4: 三证吻合, REJECT 剔除 ----
+    if(stage===4){
+      evCount=3;
+      drawBadges(3);
+      evTitle('三个签名指向同一路 IC2','three signatures, all on IC2');
+      ctx.fillStyle=pfire;ctx.font="700 14px 'Noto Sans SC',sans-serif";ctx.textAlign='center';
+      ctx.globalAlpha=ease(local*1.4);
+      ctx.fillText(LANG==='cn'?'头皮 + 波形 + 频谱 三证一致':'topo + wave + spectrum all agree', evCx, evTop+H*0.10);
+      ctx.globalAlpha=1;
+      // 对 IC2 盖 REJECT 章 + 清零 (左侧 IC2 行)
+      var stampK=ease((local-0.35)*2);
+      if(stampK>0){
+        var sx=listX0-10, sy=ys[FOCUS]-H*0.085, sw=(listX1-listX0)+20, sh=H*0.16;
+        ctx.save();
+        ctx.globalAlpha=0.6*stampK;ctx.fillStyle=C('--bg-0');ctx.fillRect(sx,sy,sw,sh);ctx.restore();
+        // 压平的直线 (清零)
+        ctx.strokeStyle=C('--fg-mute');ctx.lineWidth=1.4;ctx.globalAlpha=stampK*0.8;
+        ctx.beginPath();ctx.moveTo(listX0, ys[FOCUS]);ctx.lineTo(listX1, ys[FOCUS]);ctx.stroke();ctx.globalAlpha=1;
+        // REJECT 印章
+        ctx.save();
+        ctx.translate((listX0+listX1)/2, ys[FOCUS]);ctx.rotate(-0.14);
+        ctx.globalAlpha=stampK;
+        ctx.strokeStyle=gold;ctx.lineWidth=2.4;
+        var rw=132, rh=34;ctx.strokeRect(-rw/2,-rh/2,rw,rh);
+        ctx.fillStyle=gold;ctx.font="700 19px 'JetBrains Mono',monospace";ctx.textAlign='center';ctx.textBaseline='middle';
+        ctx.fillText('REJECT', 0, 1);ctx.textBaseline='alphabetic';
+        ctx.restore();ctx.globalAlpha=1;
+      }
+      // 重建说明 + 金色收束
+      var fin=ease((local-0.55)*2.2);
+      if(fin>0){
+        ctx.globalAlpha=fin;
+        ctx.fillStyle=gold;ctx.font="700 15px 'Noto Sans SC',sans-serif";ctx.textAlign='center';
+        var msg=LANG==='cn'?'IC2 清零，其余成分重建 —— 眨眼被干净剔除':'IC2 zeroed, rest rebuilt — blink cleanly removed';
+        ctx.fillText(msg, evCx, evTop+H*0.34);
+        var tw=ctx.measureText(msg).width;
+        ctx.strokeStyle=gold;ctx.lineWidth=1.5;
+        ctx.beginPath();ctx.moveTo(evCx-tw/2,evTop+H*0.34+11);ctx.lineTo(evCx+tw/2,evTop+H*0.34+11);ctx.stroke();
+        ctx.globalAlpha=1;
+      }
+    }
+
+    // HUD 更新
+    var stArr=I18N.stages[LANG]||I18N.stages.en;
+    document.getElementById('hudStage').textContent=(LANG==='cn'?'阶段 · ':'stage · ')+stArr[stage];
+    document.getElementById('hudFocus').textContent=LANG==='cn'?'IC2 眨眼':'IC2 blink';
+    document.getElementById('hudEv').textContent=evCount+' / 3';
+
+    document.getElementById('subZh').textContent=I18N.subs.cn[stage];
+    document.getElementById('subEn').textContent=I18N.subs.en[stage];
+    requestAnimationFrame(draw);
   }
 
-  function drawBg(){
-    // subtle dot/grid on deep space
-    ctx.save();
-    ctx.strokeStyle=COL.line;ctx.lineWidth=1;
-    var step=46;
-    ctx.globalAlpha=0.5;
-    for(var x=step;x<W;x+=step){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();}
-    for(var y=step;y<H;y+=step){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();}
-    ctx.restore();
-  }
-
-  function setText(id,s){var e=document.getElementById(id);if(e)e.textContent=s;}
-
-  // ---- i18n refresh ----
   function refreshI18N(){
-    var d=I18N[lang];
-    setText('ttl',d.ttl);setText('sub',d.sub);
-    setText('guideLabel',d.guideLabel);
-    setText('g1',d.g1);setText('g2',d.g2);setText('g3',d.g3);
-    setText('hl1',d.hl1);setText('hl2',d.hl2);setText('hl3',d.hl3);
-    document.getElementById('langBtn').textContent = lang==='zh'?'EN':'中';
+    document.getElementById('brand').textContent=t('brand');
+    document.getElementById('ttl').textContent=t('ttl');
+    document.getElementById('desc1').textContent=t('desc1');
+    document.getElementById('desc2').textContent=LANG==='cn'?I18N.desc1.en:I18N.desc1.cn;
+    document.getElementById('g1').textContent=t('g1');
+    document.getElementById('g2').textContent=t('g2');
+    document.getElementById('g3').textContent=t('g3');
+    document.getElementById('g4').textContent=t('g4');
+    document.getElementById('g5').textContent=t('g5');
+    document.getElementById('hudTtl').textContent=t('hudTtl');
+    document.getElementById('hudFocusLbl').textContent=t('hudFocusLbl');
+    document.getElementById('hudEvLbl').textContent=t('hudEvLbl');
   }
+  document.getElementById('desc2').textContent=I18N.desc1.en;
+
   document.getElementById('langBtn').addEventListener('click',function(){
-    lang=(lang==='zh')?'en':'zh';
+    LANG=LANG==='cn'?'en':'cn';
+    this.textContent=LANG==='cn'?'中 / EN':'EN / 中';
     refreshI18N();
   });
-  refreshI18N();
-
-  requestAnimationFrame(render);
+  resize();requestAnimationFrame(draw);
 })();
 </script>
 </body>

@@ -6,7 +6,7 @@
 <title>把混在一起的信号拆成几路独立来源</title>
 <style>
   :root{
-    /* 第 1 层 — 共享深空底 (所有 26 套统一) */
+    /* 第 1 层 — 共享深空底 (所有 26 套统一, 不换) */
     --bg-0: oklch(0.14 0.035 265);
     --bg-1: oklch(0.18 0.04 265);
     --bg-2: oklch(0.22 0.045 265);
@@ -17,16 +17,15 @@
     --fg-dim:  oklch(0.75 0.02 265);
     --fg-mute: oklch(0.55 0.03 265);
     --gold:    oklch(0.85 0.14 85);
-    /* 第 2 层 — cs signature accent (cyan) */
-    --accent: oklch(0.75 0.17 200);
-    /* 第 3 层 — cs 5 色 palette (themes.js CS-01) */
-    --p-signal: oklch(0.75 0.17 200);  /* SIGNAL -> 脑波节律 (主) */
-    --p-core:   oklch(0.55 0.16 200);  /* CORE   -> 眨眼 */
-    --p-depth:  oklch(0.35 0.10 210);  /* DEPTH  -> 混合区底/弱 */
-    --p-flash:  oklch(0.92 0.08 190);  /* FLASH  -> 分离后亮线 */
-    --p-query:  oklch(0.85 0.14 85);   /* QUERY  -> 金色 key (= gold) */
-    --c-emg:    oklch(0.70 0.18 25);   /* 肌电杂音 (暖红, 第 4 源) */
-    --c-heart:  oklch(0.72 0.16 320);  /* 心跳 (洋红, 鸡尾酒会用) */
+    /* 第 2 层 — math signature accent (electric blue) */
+    --accent: oklch(0.72 0.17 245);
+    /* 第 3 层 — math 5 色 palette (themes.js MTH-06: AXIS/PROOF/SHADOW/SOLUTION/QED) */
+    --p-axis:     oklch(0.72 0.17 245);  /* AXIS     -> 来源 1 / 脑波节律 (主蓝) */
+    --p-proof:    oklch(0.52 0.16 245);  /* PROOF    -> 来源 2 / 眨眼 (深蓝) */
+    --p-shadow:   oklch(0.35 0.10 245);  /* SHADOW   -> 混合云底 / 弱 */
+    --p-solution: oklch(0.92 0.08 240);  /* SOLUTION -> 分离后亮线 / 锁定 */
+    --p-qed:      oklch(0.85 0.14 85);   /* QED      -> 金色 key moment (= gold) */
+    --c-src3:     oklch(0.72 0.16 320);  /* 来源 3 / 心跳 (洋红, 区分第三源) */
   }
   *{box-sizing:border-box;}
   body{margin:0;padding:0;overflow:hidden;height:100vh;background:var(--bg-0);
@@ -53,44 +52,44 @@
   #stage{display:block;position:absolute;inset:0;width:100%;height:100%;}
   .hud{position:absolute;top:16px;right:16px;background:var(--bg-1);
        border:1.5px solid var(--line-strong);box-shadow:3px 3px 0 var(--bg-0);
-       padding:11px 13px;font-size:11.5px;min-width:186px;border-radius:5px;
+       padding:11px 13px;font-size:11.5px;min-width:198px;border-radius:5px;
        font-family:'JetBrains Mono',ui-monospace,monospace;}
   .hud .ht{font-weight:700;color:var(--accent);margin-bottom:5px;font-size:12px;}
   .hud .hrow{color:var(--fg-dim);margin-top:3px;}
-  .hud .hv{color:var(--p-query);}
-  .caption{position:absolute;bottom:26px;left:50%;transform:translateX(-50%);
-           text-align:center;max-width:82%;}
-  .caption .cz{font-size:18px;font-weight:700;color:var(--fg);line-height:1.4;}
-  .caption .ce{font-size:13px;font-style:italic;color:var(--fg-mute);margin-top:3px;}
+  .hud .hv{color:var(--p-qed);}
+  .caption{position:absolute;bottom:24px;left:50%;transform:translateX(-50%);
+           text-align:center;max-width:84%;}
+  .caption .cz{font-size:17px;font-weight:700;color:var(--fg);line-height:1.4;}
+  .caption .ce{font-size:12.5px;font-style:italic;color:var(--fg-mute);margin-top:3px;}
 </style>
 </head>
 <body>
   <aside class="sidebar">
-    <div class="brand" id="brand">CS-01 / ICA 盲源分离</div>
+    <div class="brand" id="brand">MTH-06 / ICA 盲源分离</div>
     <h1 class="ttl" id="ttl">把混在一起的信号拆成几路独立来源</h1>
     <div class="desc">
-      <span id="desc1">电极录到的每一路，其实是脑波、眨眼、肌电几个来源混在一起。ICA 假设这些来源彼此独立，反推出一组权重把它们一路路拆开。</span>
-      <span class="en" id="desc2">Each electrode records several sources mixed together. ICA assumes the sources are independent and recovers them.</span>
+      <span id="desc1">每个电极录到的，都是脑波、眨眼、心跳几个来源按不同比例混在一起。ICA 假设这些来源彼此独立，连续旋转出一组解混权重，把混合一路路拆开。</span>
+      <span class="en" id="desc2">Each electrode is several sources mixed in different proportions. ICA rotates to find an unmixing that peels them apart.</span>
     </div>
     <ul class="guide">
-      <li id="g1">鸡尾酒会：几个声源同时响</li>
-      <li id="g2">每个电极 = 各来源的混合</li>
-      <li id="g3">独立假设 → 求解混权重</li>
-      <li id="g4">拆出独立成分 IC</li>
+      <li id="g1">几个独立来源同时在响</li>
+      <li id="g2">电极 = 各来源的线性混合 X=A·S</li>
+      <li id="g3">连续旋转解混方向 W</li>
+      <li id="g4">每路锁定为单一独立成分</li>
     </ul>
-    <!-- mascot: Bit — 悬浮立方精灵 (cs) -->
+    <!-- mascot: Pi — 旋转四面体, 面上闪方程 (math MTH-06) -->
     <svg class="mascot" width="64" height="64" viewBox="0 0 64 64" id="mascot">
-      <g id="bitRot">
-        <polygon points="32,10 50,21 50,43 32,54 14,43 14,21" fill="none" stroke="var(--accent)" stroke-width="1.6"/>
-        <polygon points="32,10 50,21 32,32 14,21" fill="var(--accent)" opacity="0.20"/>
-        <polygon points="50,21 50,43 32,54 32,32" fill="var(--p-core)" opacity="0.16"/>
-        <line x1="32" y1="10" x2="32" y2="32" stroke="var(--accent)" stroke-width="1.1" opacity="0.6"/>
-        <line x1="14" y1="21" x2="32" y2="32" stroke="var(--accent)" stroke-width="1.1" opacity="0.6"/>
-        <line x1="50" y1="21" x2="32" y2="32" stroke="var(--accent)" stroke-width="1.1" opacity="0.6"/>
-        <circle cx="32" cy="32" r="2.6" fill="var(--p-query)"/>
-        <circle cx="24" cy="24" r="1.4" fill="var(--p-flash)"/>
-        <circle cx="40" cy="26" r="1.4" fill="var(--p-flash)"/>
-        <circle cx="36" cy="42" r="1.4" fill="var(--p-flash)"/>
+      <g id="piRot">
+        <polygon points="32,9 53,46 11,46" fill="none" stroke="var(--accent)" stroke-width="1.6"/>
+        <polygon points="32,9 53,46 32,38" fill="var(--accent)" opacity="0.18"/>
+        <polygon points="32,9 11,46 32,38" fill="var(--p-proof)" opacity="0.20"/>
+        <line x1="32" y1="9" x2="32" y2="38" stroke="var(--accent)" stroke-width="1.1" opacity="0.6"/>
+        <line x1="11" y1="46" x2="32" y2="38" stroke="var(--accent)" stroke-width="1.1" opacity="0.6"/>
+        <line x1="53" y1="46" x2="32" y2="38" stroke="var(--accent)" stroke-width="1.1" opacity="0.6"/>
+        <circle cx="32" cy="38" r="2.6" fill="var(--p-qed)"/>
+        <circle cx="32" cy="9" r="1.6" fill="var(--p-solution)"/>
+        <circle cx="11" cy="46" r="1.6" fill="var(--p-solution)"/>
+        <circle cx="53" cy="46" r="1.6" fill="var(--p-solution)"/>
       </g>
     </svg>
     <button class="langbtn" id="langBtn">中 / EN</button>
@@ -99,13 +98,14 @@
     <canvas id="stage"></canvas>
     <div class="hud">
       <div class="ht" id="hudTtl">ICA 盲源分离</div>
-      <div class="hrow" id="hudStage">F1 · 鸡尾酒会</div>
-      <div class="hrow"><span id="hudSrcLbl">来源</span> <span class="hv" id="hudSrc">3</span></div>
-      <div class="hrow"><span id="hudMixLbl">电极混合</span> <span class="hv" id="hudMix">X = A · S</span></div>
+      <div class="hrow"><span id="hudPhaseLbl">阶段</span> <span class="hv" id="hudPhase">混合</span></div>
+      <div class="hrow"><span id="hudThetaLbl">旋转角 W</span> <span class="hv" id="hudTheta">0&#176;</span></div>
+      <div class="hrow"><span id="hudLockLbl">已锁定成分</span> <span class="hv" id="hudLock">0 / 3</span></div>
+      <div class="hrow"><span id="hudEqnLbl">关系</span> <span class="hv" id="hudEqn">X = A &#183; S</span></div>
     </div>
     <div class="caption">
-      <div class="cz" id="subZh">几个声音同时在响……</div>
-      <div class="ce" id="subEn">Several voices speaking at once...</div>
+      <div class="cz" id="subZh">三个独立来源混进每一路电极……</div>
+      <div class="ce" id="subEn">Three independent sources blended into every electrode...</div>
     </div>
   </main>
 <script>
@@ -113,77 +113,100 @@
   "use strict";
   var LANG='cn';
 
-  // 鸡尾酒会 / EEG 的来源 (独立成分 S)
-  //   alpha  脑波 alpha 节律  ~10Hz  慢而规律
-  //   blink  眨眼             低频大尖峰, 偶发
-  //   emg    肌电             高频毛刺
-  //   heart  心跳 (仅 F1 鸡尾酒会比喻用)  规律脉冲
-  // 每个来源用一个独立的波形函数 (互不相关 => "独立")
-  function srcWave(kind, tt, ph){
-    if(kind==='alpha'){ return Math.sin(tt*Math.PI*2*9 + ph)*0.9; }
-    if(kind==='blink'){ // 偶发大尖峰
+  // ===== 唯一核心对象: 几路混合信号被 ICA 连续旋转分离成独立源 =====
+  // 三个真实来源 S (互相独立 -> ICA 的核心假设):
+  //   src0 alpha  脑波 alpha 节律  ~9Hz 慢而规律       (--p-axis 蓝)
+  //   src1 blink  眨眼            偶发低频大尖峰        (--p-proof 深蓝)
+  //   src2 heart  心跳            规律窄脉冲 ~1.3Hz     (--c-src3 洋红)
+  function srcWave(idx, tt, ph){
+    if(idx===0){ // alpha 脑波节律
+      return Math.sin(tt*Math.PI*2*9 + ph)*0.85 + Math.sin(tt*Math.PI*2*4.5+ph*0.6)*0.18;
+    }
+    if(idx===1){ // 眨眼: 偶发大尖峰
       var p=(tt*2.0+ph*0.05)%1; var s=Math.exp(-Math.pow((p-0.5)/0.07,2));
-      return s*1.5;
+      return s*1.55 - 0.05;
     }
-    if(kind==='emg'){ // 高频毛刺
-      return (Math.sin(tt*Math.PI*2*48+ph)*0.5 + Math.sin(tt*Math.PI*2*71+ph*1.7)*0.4)*0.5;
-    }
-    if(kind==='heart'){ // 规律窄脉冲 ~1.2Hz
-      var q=(tt*5.0+ph*0.04)%1; var sp=Math.exp(-Math.pow((q-0.5)/0.04,2));
-      return sp*1.3;
+    if(idx===2){ // 心跳: 规律窄脉冲
+      var q=(tt*4.0+ph*0.04)%1; var sp=Math.exp(-Math.pow((q-0.5)/0.045,2));
+      var q2=((tt*4.0+ph*0.04)+0.5)%1; var sp2=Math.exp(-Math.pow((q2-0.5)/0.10,2));
+      return sp*1.35 - sp2*0.35;
     }
     return 0;
   }
+  var NSRC=3;
+  var SRC_COL=['--p-axis','--p-proof','--c-src3'];
+  var SRC_NAME_CN=['脑波节律 alpha','眨眼','心跳'];
+  var SRC_NAME_EN=['brain rhythm','eye blink','heartbeat'];
 
-  // 混合矩阵 A: 行=电极, 列=来源. 每个电极是各来源不同比例的线性叠加
-  // (4 电极 x 4 源: alpha, blink, emg, heart->此处第4源用 emg2 区分, 但 EEG 段用 4 源)
-  // F1 鸡尾酒会: 3 源 (alpha 当"人声A", blink 当"人声B", heart 当"音乐"), 3 麦克风
-  var SRC_F1=['alpha','blink','heart'];
-  var MIC_F1=[
-    [0.7,0.5,0.4],
-    [0.4,0.8,0.5],
-    [0.5,0.4,0.8]
+  // 混合矩阵 A (3x3): 每行=一个电极, 每列=一个来源, 元素=该源在该电极的比例.
+  //  这就是 X = A · S —— 每路电极是三个源不同比例的线性叠加.
+  var A=[
+    [0.78, 0.46, 0.34],
+    [0.40, 0.82, 0.42],
+    [0.46, 0.36, 0.80]
   ];
-  // F2-F5 EEG: 4 源, 4 电极
-  var SRC_EEG=['alpha','blink','emg','heart'];
-  var SRC_COL={alpha:'--p-signal', blink:'--p-core', emg:'--c-emg', heart:'--c-heart'};
-  var SRC_NAME_CN={alpha:'脑波节律', blink:'眨眼', emg:'肌电', heart:'心跳'};
-  var SRC_NAME_EN={alpha:'brain rhythm', blink:'eye blink', emg:'muscle (EMG)', heart:'heartbeat'};
-  // 混合矩阵 A (4x4): 每行一个电极, 各源比例不同 -> 真实混合
-  var MIX_EEG=[
-    [0.75,0.55,0.30,0.25],
-    [0.45,0.80,0.40,0.35],
-    [0.35,0.40,0.78,0.30],
-    [0.50,0.30,0.45,0.72]
-  ];
+  // 真实解混矩阵 W = A 的逆 (预先解析求好, 用于 morph 终态).
+  function inv3(m){
+    var a=m[0][0],b=m[0][1],c=m[0][2],
+        d=m[1][0],e=m[1][1],f=m[1][2],
+        g=m[2][0],h=m[2][1],i=m[2][2];
+    var det=a*(e*i-f*h)-b*(d*i-f*g)+c*(d*h-e*g);
+    return [
+      [(e*i-f*h)/det,(c*h-b*i)/det,(b*f-c*e)/det],
+      [(f*g-d*i)/det,(a*i-c*g)/det,(c*d-a*f)/det],
+      [(d*h-e*g)/det,(b*g-a*h)/det,(a*e-b*d)/det]
+    ];
+  }
+  var Winv=inv3(A);
+
+  // 电极混合波 (X 的第 row 路): A[row] · S
+  function mixVal(row, tt, ph){
+    var v=0; for(var j=0;j<NSRC;j++){ v += A[row][j]*srcWave(j,tt,ph+j*0.55); }
+    return v*0.52;
+  }
+  // 部分解混: 用插值矩阵 Wt = lerp(I, Winv, k) 作用于混合 X, 得到第 out 路.
+  //  k=0 -> 还是混合; k=1 -> 完全分离回独立源.  连续 k 即"连续旋转分离".
+  function unmixVal(out, k, tt, ph){
+    var v=0;
+    for(var r=0;r<NSRC;r++){
+      var wIO = (out===r?1:0)*(1-k) + Winv[out][r]*k; // lerp(I, Winv)
+      v += wIO * mixVal(r, tt, ph);
+    }
+    return v;
+  }
 
   var I18N={
-    brand:{cn:'CS-01 / ICA 盲源分离',en:'CS-01 / ICA SOURCE SPLIT'},
+    brand:{cn:'MTH-06 / ICA 盲源分离',en:'MTH-06 / ICA SOURCE SPLIT'},
     ttl:{cn:'把混在一起的信号拆成几路独立来源',en:'Split mixed signals into independent sources'},
-    desc1:{cn:'电极录到的每一路，其实是脑波、眨眼、肌电几个来源混在一起。ICA 假设这些来源彼此独立，反推出一组权重把它们一路路拆开。',
-           en:'Each electrode records several sources mixed together. ICA assumes the sources are independent and recovers them.'},
-    g1:{cn:'鸡尾酒会：几个声源同时响',en:'cocktail party: many sources at once'},
-    g2:{cn:'每个电极 = 各来源的混合',en:'each electrode = a mixture'},
-    g3:{cn:'独立假设 → 求解混权重',en:'independence -> unmixing weights'},
-    g4:{cn:'拆出独立成分 IC',en:'recover independent components'},
+    desc1:{cn:'每个电极录到的，都是脑波、眨眼、心跳几个来源按不同比例混在一起。ICA 假设这些来源彼此独立，连续旋转出一组解混权重，把混合一路路拆开。',
+           en:'Each electrode is several sources mixed in different proportions. ICA rotates to find an unmixing that peels them apart.'},
+    g1:{cn:'几个独立来源同时在响',en:'several independent sources at once'},
+    g2:{cn:'电极 = 各来源的线性混合 X=A·S',en:'electrode = linear mix  X = A·S'},
+    g3:{cn:'连续旋转解混方向 W',en:'rotate the unmixing W continuously'},
+    g4:{cn:'每路锁定为单一独立成分',en:'each channel locks to one source'},
     hudTtl:{cn:'ICA 盲源分离',en:'ICA source separation'},
-    hudSrcLbl:{cn:'来源',en:'sources'},
-    hudMixLbl:{cn:'电极混合',en:'mixing'},
-    stages:{
-      cn:['鸡尾酒会','电极在混合','独立性假设','求解混权重','拆成独立成分'],
-      en:['cocktail party','electrodes mix','independence','unmixing','components out']
+    hudPhaseLbl:{cn:'阶段',en:'phase'},
+    hudThetaLbl:{cn:'旋转角 W',en:'rotate W'},
+    hudLockLbl:{cn:'已锁定成分',en:'locked IC'},
+    hudEqnLbl:{cn:'关系',en:'relation'},
+    phases:{
+      cn:['三源混合','旋转求解混','逐路锁定','分离完成'],
+      en:['mixed','rotating W','locking','separated']
     },
+    // 字幕跟随同一个连续过程点睛 (不是分段大纲)
     subs:{
-      cn:['想象一个鸡尾酒会：脑波、眨眼、心跳三个"声源"同时在响。每个麦克风（电极）都不在某一个声源旁边，所以录到的都是三者的不同混合。',
-          '回到 EEG：4 个电极贴在头皮不同位置，每一路录到的都是脑波、眨眼、肌电、心跳按不同比例叠加的混合 —— 写成 X = A·S，A 是混合矩阵。',
-          'ICA 的核心假设：这几个来源彼此"独立"——脑波节律、眨眼、肌电各自有自己的节奏，互不预测。算法就靠这个独立性，反推出一组解混权重 W。',
-          '把 W 乘回混合信号：Y = W·X。W 近似是混合矩阵 A 的逆，相当于把混在一起的比例一层层抵消，让每一路重新变得"只剩一个来源"。',
-          '拆完了：4 路混合 → 4 个独立成分（IC）。一路是规律的眨眼大尖峰，一路是干净的脑波节律，一路是高频肌电，一路是心跳。ICA 把混在一起的源头一路路拆开。'],
-      en:['Picture a cocktail party: brain rhythm, eye blink and heartbeat are three "sources" sounding at once. Each microphone (electrode) hears a different mixture of all three.',
-          'Back to EEG: 4 electrodes on the scalp each record a different blend of brain rhythm, blink, muscle and heartbeat — written X = A·S, where A is the mixing matrix.',
-          'ICA\'s key assumption: the sources are independent — each has its own rhythm and cannot predict the others. From that independence the algorithm solves for unmixing weights W.',
-          'Apply W to the mixtures: Y = W·X. W is roughly the inverse of A, cancelling out the blended proportions so each channel again carries only one source.',
-          'Done: 4 mixtures -> 4 independent components (IC). One is the rhythmic blink spikes, one a clean brain rhythm, one high-freq muscle, one heartbeat. ICA peels the sources apart one by one.']
+      cn:[
+        '三个彼此独立的来源——脑波、眨眼、心跳——按不同比例混进每一路电极。你看到的每条波，都是三者叠在一起：X = A·S。',
+        'ICA 不知道 A，只知道一条假设：这三个来源互相独立。于是它连续旋转一组解混方向 W，一边转一边看哪个方向能把混合拆得最"互不相关"。',
+        'W 越转越接近 A 的逆。每对准一个来源，对应那一路就从一团混合，连续地收成一条干净的单一波形——锁定一个独立成分。',
+        '三路全部锁定：脑波、眨眼、心跳各自独立浮现。同一束混合信号，被一个连续的旋转变换，一路路拆回了它的来源。'
+      ],
+      en:[
+        'Three mutually independent sources — brain rhythm, blink, heartbeat — are blended into every electrode in different proportions. Each wave you see is all three layered: X = A·S.',
+        'ICA does not know A. It knows only one assumption: the sources are independent. So it continuously rotates an unmixing W, watching which direction makes the channels least correlated.',
+        'As W approaches the inverse of A, each time a source is aligned, that channel continuously collapses from a blend into one clean waveform — an independent component is locked.',
+        'All three locked: brain rhythm, blink and heartbeat emerge on their own. One bundle of mixed signal, peeled back to its sources by a single continuous rotation.'
+      ]
     }
   };
   function t(k){return (I18N[k]&&I18N[k][LANG])||(I18N[k]&&I18N[k].en)||k;}
@@ -197,12 +220,14 @@
   if(document.fonts&&document.fonts.ready)document.fonts.ready.then(resize);
   var C=function(v){return getComputedStyle(document.documentElement).getPropertyValue(v).trim();};
 
-  var startT=null, DUR=6000, NSTAGE=5, TOTAL=NSTAGE*DUR+1400;
+  // 连续时间轴: 一段 ~30s 的连续演化, 不切并列帧.
+  //   k(t): 解混进度 0->1 (W 从单位阵连续转到 A 逆), 是整个动画的主驱动量.
+  var startT=null, CYCLE=30000;
   function lerp(a,b,k){return a+(b-a)*k;}
   function clamp01(k){return k<0?0:k>1?1:k;}
   function ease(k){k=clamp01(k);return k*k*(3-2*k);}
 
-  // 画一段波形 (kind=源 或 'mix:行号')
+  // 把一段波形画出来 (横向时间窗)
   function drawWave(x0,x1,midY,amp,phase,fn,col,lw,alpha){
     ctx.strokeStyle=col;ctx.lineWidth=lw;ctx.globalAlpha=alpha;ctx.beginPath();
     var prev=false;
@@ -213,255 +238,176 @@
     }
     ctx.stroke();ctx.globalAlpha=1;
   }
-  // 混合波: 给定电极行 row 与源数组 srcs 与矩阵 M
-  function mixFn(M,row,srcs){
-    return function(tt,ph){
-      var v=0;
-      for(var j=0;j<srcs.length;j++){ v+=M[row][j]*srcWave(srcs[j],tt,ph+j*0.6); }
-      return v*0.5;
-    };
-  }
-  function srcFn(kind,idx){
-    return function(tt,ph){ return srcWave(kind,tt,ph+idx*0.6); };
-  }
 
-  // 小头皮 + 电极点 (右上某处)
-  function drawHead(cx,cy,r,activeIdx,now){
+  // 小头皮 + 3 电极点 (左上常驻, 提示"这是 EEG 电极")
+  function drawHead(cx,cy,r,now){
     ctx.strokeStyle=C('--line-strong');ctx.lineWidth=1.4;
     ctx.beginPath();ctx.arc(cx,cy,r,0,Math.PI*2);ctx.stroke();
-    // 鼻子
     ctx.beginPath();ctx.moveTo(cx-5,cy-r);ctx.lineTo(cx,cy-r-7);ctx.lineTo(cx+5,cy-r);ctx.stroke();
-    var pos=[[-0.5,-0.45],[0.5,-0.45],[-0.5,0.45],[0.5,0.45]];
-    for(var i=0;i<4;i++){
+    var pos=[[0,-0.55],[-0.55,0.35],[0.55,0.35]];
+    for(var i=0;i<NSRC;i++){
       var px=cx+pos[i][0]*r, py=cy+pos[i][1]*r;
-      var on=(activeIdx<0)||(activeIdx===i);
-      ctx.fillStyle=on?C('--accent'):C('--p-depth');
-      ctx.globalAlpha=on?(0.7+0.3*Math.sin(now/300+i)):0.5;
+      ctx.fillStyle=C('--accent');
+      ctx.globalAlpha=0.6+0.35*Math.sin(now/320+i);
       ctx.beginPath();ctx.arc(px,py,5,0,Math.PI*2);ctx.fill();ctx.globalAlpha=1;
       ctx.fillStyle=C('--fg-mute');ctx.font="9px 'JetBrains Mono',monospace";ctx.textAlign='center';
       ctx.fillText('E'+(i+1),px,py-9);
     }
   }
 
+  // 2D 散点 (取两路混合的瞬时值做坐标): 混合时是斜椭圆云, 解混后回正成轴对齐.
+  //  这是 ICA 几何直觉 —— "旋转坐标轴让数据沿独立方向对齐".
+  function drawScatter(cx,cy,rad,k,now){
+    // 椭圆云: 半长轴随旋转 k 从倾斜回正
+    var theta = (1-k)*(-32*Math.PI/180); // 倾斜 -> 0
+    ctx.save();
+    // 坐标轴
+    ctx.strokeStyle=C('--line');ctx.lineWidth=1;
+    ctx.beginPath();ctx.moveTo(cx-rad,cy);ctx.lineTo(cx+rad,cy);
+    ctx.moveTo(cx,cy-rad);ctx.lineTo(cx,cy+rad);ctx.stroke();
+    // 旋转中的"解混方向"轴 (accent), 连续转到水平/垂直
+    ctx.strokeStyle=C('--accent');ctx.lineWidth=1.6;ctx.globalAlpha=0.85;
+    var ax=Math.cos(theta), ay=Math.sin(theta);
+    ctx.beginPath();
+    ctx.moveTo(cx-ax*rad, cy-ay*rad);ctx.lineTo(cx+ax*rad, cy+ay*rad);
+    ctx.moveTo(cx+ay*rad, cy-ax*rad);ctx.lineTo(cx-ay*rad, cy+ax*rad);
+    ctx.stroke();ctx.globalAlpha=1;
+    // 散点: 采样源 0/1 组成的混合, 旋转回正
+    for(var s=0;s<150;s++){
+      var tt=s/150 + (now/9000)%1;
+      var s0=srcWave(0,tt,0), s1=srcWave(1,tt,0.6);
+      // 混合坐标 (倾斜) -> 解混坐标 (回正), 随 k 插值
+      var mx = A[0][0]*s0 + A[0][1]*s1;
+      var my = A[1][0]*s0 + A[1][1]*s1;
+      var px = lerp(mx, s0, k);
+      var py = lerp(my, s1, k);
+      var dx=px*rad*0.42, dy=py*rad*0.42;
+      var alpha = 0.18 + 0.5*Math.exp(-((s%30)/30));
+      ctx.fillStyle = k>0.85 ? C('--p-solution') : C('--accent');
+      ctx.globalAlpha=alpha*0.55;
+      ctx.beginPath();ctx.arc(cx+dx, cy-dy, 1.8, 0, Math.PI*2);ctx.fill();
+    }
+    ctx.globalAlpha=1;
+    ctx.restore();
+  }
+
+  // 锁定一路成分的时机: 三路在 k 推进过程中依次"对准"
+  var LOCK_K=[0.42, 0.62, 0.82];
+  var lockFlash=[0,0,0];
+
   function draw(now){
     if(startT===null)startT=now;
-    var el=now-startT; if(el>TOTAL){startT=now;el=0;}
-    var stage=Math.min(Math.floor(el/DUR),NSTAGE-1);
-    var local=(el-stage*DUR)/DUR;
+    var el=(now-startT); if(el>CYCLE){startT=now;el=0;lockFlash=[0,0,0];}
+    var prog=el/CYCLE; // 0..1 整段进度
     if(!W||!H){requestAnimationFrame(draw);return;}
-    ctx.clearRect(0,0,W,H);
 
-    var fg=C('--fg'),dim=C('--fg-dim'),mute=C('--fg-mute'),acc=C('--accent'),gold=C('--gold');
+    // 解混进度 k: 前 18% 停在混合(建立"X=A·S"), 然后连续旋转到 1, 末尾停在分离态.
+    var k;
+    if(prog<0.16) k=0;
+    else if(prog<0.78) k=ease((prog-0.16)/0.62);
+    else k=1;
+
+    // 当前文字阶段 (仅供字幕/HUD, 画面本身连续, 不切)
+    var phase = prog<0.16?0 : (k<0.99?1 : (prog<0.92?2:3));
+    if(k>=0.98 && phase<2) phase=2;
+
+    ctx.clearRect(0,0,W,H);
+    var dim=C('--fg-dim'),mute=C('--fg-mute'),acc=C('--accent'),gold=C('--gold');
 
     // 背景网格
     ctx.strokeStyle=C('--line');ctx.lineWidth=1;
     for(var gx=0;gx<W;gx+=40){ctx.beginPath();ctx.moveTo(gx,0);ctx.lineTo(gx,H);ctx.stroke();}
     for(var gy=0;gy<H;gy+=40){ctx.beginPath();ctx.moveTo(0,gy);ctx.lineTo(W,gy);ctx.stroke();}
 
-    var phase=now/520;
-    var L=70, R=W-50;
-    var rot=document.getElementById('bitRot');
-    if(rot) rot.setAttribute('transform','rotate('+((now/40)%360)+' 32 32)');
+    var phaseW=now/520;
+    var rot=document.getElementById('piRot');
+    if(rot) rot.setAttribute('transform','rotate('+((now/45)%360)+' 32 32)');
 
-    // ---------- F1: 鸡尾酒会 ----------
-    if(stage===0){
-      // 左: 3 个声源图标 + 各自波形; 右: 3 个麦克风录到混合
-      ctx.fillStyle=acc;ctx.font="700 14px 'Noto Sans SC',sans-serif";ctx.textAlign='left';
-      ctx.fillText(LANG==='cn'?'声源（独立）':'sources (independent)', L, H*0.14);
-      ctx.fillText(LANG==='cn'?'麦克风录到的（混合）':'what mics hear (mixed)', W*0.56, H*0.14);
-      var srcY=[H*0.30,H*0.50,H*0.70];
-      var sNames=[
-        {cn:'人声 A · 脑波', en:'voice A · brain', col:'--p-signal', k:'alpha'},
-        {cn:'人声 B · 眨眼', en:'voice B · blink', col:'--p-core',   k:'blink'},
-        {cn:'音乐 · 心跳',   en:'music · heart',  col:'--c-heart',   k:'heart'}
-      ];
-      for(var i=0;i<3;i++){
-        var rev=ease((local*1.5) - i*0.12);
-        drawWave(L,L+W*0.30, srcY[i], H*0.07, phase, srcFn(sNames[i].k,i), C(sNames[i].col), 2.2, rev);
-        ctx.fillStyle=C(sNames[i].col);ctx.font="11px 'Noto Sans SC',sans-serif";ctx.textAlign='left';
-        ctx.globalAlpha=rev;ctx.fillText(LANG==='cn'?sNames[i].cn:sNames[i].en, L, srcY[i]-H*0.085);ctx.globalAlpha=1;
+    // 常驻头皮 (左上) — 提示这是 EEG 电极
+    drawHead(W*0.135, H*0.20, H*0.115, now);
+    ctx.fillStyle=mute;ctx.font="10px 'JetBrains Mono',monospace";ctx.textAlign='center';
+    ctx.fillText(LANG==='cn'?'3 电极':'3 electrodes', W*0.135, H*0.345);
+
+    // ---- 主舞台: 三路信号, 从"混合(左)"连续变形为"分离(同一行原地收成纯波)" ----
+    // 这是唯一对象: 每一行就是同一路电极信号, 随 k 连续从混合 morph 到单一来源.
+    var rowY=[H*0.26, H*0.50, H*0.74];
+    var wx0=W*0.30, wx1=W-60;
+    var amp=H*0.085;
+    for(var row=0;row<NSRC;row++){
+      // 连续 morph: k=0 混合, k=1 -> 第 row 个独立成分
+      var fn=(function(r){ return function(tt,ph){ return unmixVal(r,k,tt,ph); }; })(row);
+      // 颜色: 随该路锁定程度从 accent 连续过渡到对应来源色
+      var lk = clamp01((k - (LOCK_K[row]-0.16)) / 0.16);
+      var col = lk>0.5 ? C(SRC_COL[row]) : acc;
+      // 锁定一闪 (gold)
+      if(k>=LOCK_K[row] && lockFlash[row]<1) lockFlash[row]=Math.min(1, lockFlash[row]+0.06);
+      var glow = lockFlash[row]*(0.6+0.4*Math.sin(now/120));
+      if(glow>0.02){
+        ctx.save();ctx.shadowColor=gold;ctx.shadowBlur=0; // 无 blur 阴影规范
+        ctx.strokeStyle=gold;ctx.globalAlpha=0.35*glow;ctx.lineWidth=4;
+        drawWave(wx0,wx1,rowY[row],amp,phaseW,fn,gold,4,0.30*glow);
+        ctx.restore();
       }
-      // 中间汇聚箭头 (混合发生)
-      var midX=W*0.46;
-      ctx.strokeStyle=C('--line-strong');ctx.lineWidth=1.4;
-      var mixGlow=ease((local-0.35)*2);
-      for(var s=0;s<3;s++){
-        ctx.globalAlpha=0.5+0.5*mixGlow;
-        ctx.beginPath();ctx.moveTo(L+W*0.31, srcY[s]);
-        ctx.bezierCurveTo(midX-30,srcY[s],midX-30,H*0.50,midX,H*0.50);ctx.stroke();
-      }
-      ctx.globalAlpha=1;
-      ctx.fillStyle=acc;ctx.font="700 12px 'JetBrains Mono',monospace";ctx.textAlign='center';
-      ctx.globalAlpha=mixGlow;ctx.fillText(LANG==='cn'?'混 合':'MIX', midX, H*0.50-10);ctx.globalAlpha=1;
-      // 右: 3 麦克风混合波形
-      var micY=[H*0.30,H*0.50,H*0.70], rx0=W*0.58, rx1=W-50;
-      for(var m=0;m<3;m++){
-        var rv=ease((local-0.4)*1.8 - m*0.1);
-        drawWave(rx0,rx1, micY[m], H*0.065, phase, mixFn(MIC_F1,m,SRC_F1), acc, 2.0, rv);
-        ctx.fillStyle=mute;ctx.font="10px 'JetBrains Mono',monospace";ctx.textAlign='left';
-        ctx.globalAlpha=rv;ctx.fillText('MIC '+(m+1), rx0, micY[m]-H*0.08);ctx.globalAlpha=1;
+      drawWave(wx0,wx1,rowY[row],amp,phaseW,fn,col,2.2,1);
+
+      // 行标签: 左端先是 X(混合 Ei), 锁定后变成 IC + 来源名
+      var labCN = lk>0.5 ? ('IC'+(row+1)+' · '+SRC_NAME_CN[row]) : ('E'+(row+1)+' 混合');
+      var labEN = lk>0.5 ? ('IC'+(row+1)+' · '+SRC_NAME_EN[row]) : ('E'+(row+1)+' mixed');
+      ctx.fillStyle = lk>0.5 ? C(SRC_COL[row]) : dim;
+      ctx.font="700 11.5px 'Noto Sans SC',sans-serif";ctx.textAlign='left';
+      ctx.fillText(LANG==='cn'?labCN:labEN, wx0, rowY[row]-amp-8);
+      // 锁定勾标 (用 LOCK 字样, 无符号)
+      if(lk>0.85){
+        ctx.fillStyle=gold;ctx.font="700 10px 'JetBrains Mono',monospace";ctx.textAlign='right';
+        ctx.fillText(LANG==='cn'?'已锁定':'LOCKED', wx1, rowY[row]-amp-8);
       }
     }
 
-    // ---------- F2: EEG 电极在混合 ----------
-    if(stage===1){
-      drawHead(W*0.30, H*0.34, H*0.16, -1, now);
-      ctx.fillStyle=acc;ctx.font="700 13px 'Noto Sans SC',sans-serif";ctx.textAlign='center';
-      ctx.fillText(LANG==='cn'?'4 个电极各录一路混合':'4 electrodes, each a mixture', W*0.30, H*0.60);
-      // 右侧 4 路电极混合波形
-      var ey=[H*0.20,H*0.40,H*0.60,H*0.80], ex0=W*0.55, ex1=W-50;
-      ctx.fillStyle=dim;ctx.font="11px 'Noto Sans SC',sans-serif";ctx.textAlign='left';
-      for(var e=0;e<4;e++){
-        var rv2=ease(local*1.4 - e*0.12);
-        drawWave(ex0,ex1, ey[e], H*0.07, phase, mixFn(MIX_EEG,e,SRC_EEG), acc, 2.0, rv2);
-        ctx.fillStyle=C('--fg-mute');ctx.font="10px 'JetBrains Mono',monospace";ctx.textAlign='left';
-        ctx.globalAlpha=rv2;ctx.fillText('E'+(e+1), ex0-2, ey[e]-H*0.085);ctx.globalAlpha=1;
-      }
-      // X = A · S 公式淡入
-      var fk=ease((local-0.45)*2);
-      ctx.globalAlpha=fk;
-      ctx.fillStyle=gold;ctx.font="700 16px 'JetBrains Mono',monospace";ctx.textAlign='center';
-      ctx.fillText('X = A · S', W*0.30, H*0.78);
-      ctx.fillStyle=dim;ctx.font="11px 'Noto Sans SC',sans-serif";
-      ctx.fillText(LANG==='cn'?'X=电极录到的  A=混合矩阵  S=真实来源':'X=recorded  A=mixing matrix  S=true sources', W*0.30, H*0.86);
-      ctx.globalAlpha=1;
-    }
+    // ---- 2D 散点几何 (中左): 旋转坐标轴让数据沿独立方向对齐 ----
+    var scX=W*0.135, scY=H*0.62, scR=H*0.16;
+    drawScatter(scX, scY, scR, k, now);
+    ctx.fillStyle=mute;ctx.font="10px 'JetBrains Mono',monospace";ctx.textAlign='center';
+    ctx.fillText(LANG==='cn'?'旋转坐标找独立方向':'rotate axes to find sources', scX, scY+scR+18);
 
-    // ---------- F3: 独立性假设 + 求解混权重 ----------
-    if(stage===2){
-      // 上方: 4 个独立来源标志 (互不相关)
-      ctx.fillStyle=acc;ctx.font="700 13px 'Noto Sans SC',sans-serif";ctx.textAlign='center';
-      ctx.fillText(LANG==='cn'?'核心假设：这几个来源彼此独立':'key assumption: sources are independent',(L+R)/2, H*0.13);
-      var sy=H*0.34, sx0=L, gapW=(R-L)/4;
-      for(var i3=0;i3<4;i3++){
-        var k=SRC_EEG[i3];
-        var cx3=sx0+gapW*i3+gapW*0.5;
-        var rv3=ease(local*1.5 - i3*0.10);
-        drawWave(cx3-gapW*0.40, cx3+gapW*0.40, sy, H*0.05, phase, srcFn(k,i3), C(SRC_COL[k]), 1.9, rv3);
-        ctx.fillStyle=C(SRC_COL[k]);ctx.font="11px 'Noto Sans SC',sans-serif";ctx.textAlign='center';
-        ctx.globalAlpha=rv3;
-        ctx.fillText(LANG==='cn'?SRC_NAME_CN[k]:SRC_NAME_EN[k], cx3, sy-H*0.065);ctx.globalAlpha=1;
-      }
-      // "互不预测" 说明
-      ctx.fillStyle=mute;ctx.font="11px 'Noto Sans SC',sans-serif";ctx.textAlign='center';
-      ctx.globalAlpha=ease((local-0.25)*2);
-      ctx.fillText(LANG==='cn'?'各自有自己的节奏，互不预测':'each has its own rhythm — none predicts another',(L+R)/2, sy+H*0.10);
-      ctx.globalAlpha=1;
-      // 下方: 算法找权重 W  (W·X -> Y, W 近似 A 逆)
-      var wk=ease((local-0.40)*2);
-      if(wk>0){
-        ctx.globalAlpha=wk;
-        var by=H*0.66;
-        ctx.fillStyle=acc;ctx.font="700 12px 'Noto Sans SC',sans-serif";ctx.textAlign='center';
-        ctx.fillText(LANG==='cn'?'算法靠独立性，反推一组解混权重 W':'using independence, solve for unmixing weights W',(L+R)/2, by);
-        // 矩阵格子动画 (W 4x4)
-        var mx=(L+R)/2-90, my=by+22, cell=24;
-        ctx.strokeStyle=C('--line-strong');ctx.lineWidth=1.2;
-        ctx.fillStyle=acc;ctx.font="700 18px 'JetBrains Mono',monospace";ctx.textAlign='center';
-        ctx.fillText('W', mx-18, my+2*cell);
-        for(var rI=0;rI<4;rI++)for(var cI=0;cI<4;cI++){
-          var gx2=mx+cI*cell, gy2=my+rI*cell;
-          var fill=0.12+0.30*Math.abs(Math.sin(now/400 + rI*1.3 + cI*0.7));
-          ctx.fillStyle=C('--accent');ctx.globalAlpha=wk*fill;
-          ctx.fillRect(gx2,gy2,cell-3,cell-3);ctx.globalAlpha=wk;
-          ctx.strokeRect(gx2,gy2,cell-3,cell-3);
-        }
-        ctx.fillStyle=gold;ctx.font="700 15px 'JetBrains Mono',monospace";ctx.textAlign='left';
-        ctx.fillText('Y = W · X', mx+4*cell+24, my+2*cell);
-        ctx.globalAlpha=1;
-      }
+    // ---- 中央 W 矩阵: 单位阵 -> A 逆, 元素随 k 连续填充 ----
+    var mx=W*0.30-118, my=H*0.46, cell=20;
+    ctx.fillStyle=acc;ctx.font="700 14px 'JetBrains Mono',monospace";ctx.textAlign='center';
+    ctx.fillText('W', mx-16, my+1.5*cell);
+    for(var rI=0;rI<NSRC;rI++)for(var cI=0;cI<NSRC;cI++){
+      var gx2=mx+cI*cell, gy2=my+rI*cell;
+      var target=Winv[rI][cI];
+      var ident=(rI===cI)?1:0;
+      var val=lerp(ident,target,k);
+      var mag=clamp01(Math.abs(val)/1.6);
+      ctx.fillStyle=C('--accent');ctx.globalAlpha=0.12+0.55*mag;
+      ctx.fillRect(gx2,gy2,cell-3,cell-3);ctx.globalAlpha=1;
+      ctx.strokeStyle=C('--line-strong');ctx.lineWidth=1;
+      ctx.strokeRect(gx2,gy2,cell-3,cell-3);
     }
+    // 关系式: 混合时 X=A·S, 解混后 Y=W·X
+    ctx.fillStyle=gold;ctx.font="700 13px 'JetBrains Mono',monospace";ctx.textAlign='left';
+    var eqn = k<0.5 ? 'X = A · S' : 'Y = W · X';
+    ctx.globalAlpha=0.55+0.45*Math.abs(Math.sin(now/700));
+    ctx.fillText(eqn, mx, my+NSRC*cell+18);ctx.globalAlpha=1;
 
-    // ---------- F4: 应用 W, 混合解开 (动态形变) ----------
-    if(stage===3){
-      // 左侧: 4 路混合 (E1-E4)  右侧: 逐渐变为 4 路独立 IC
-      var unmix=ease(local*1.05); // 0=仍混合, 1=完全分离
-      ctx.fillStyle=acc;ctx.font="700 12px 'Noto Sans SC',sans-serif";ctx.textAlign='center';
-      ctx.fillText(LANG==='cn'?'电极混合 X':'mixtures X', W*0.24, H*0.12);
-      ctx.fillStyle=gold;ctx.font="700 14px 'JetBrains Mono',monospace";
-      ctx.fillText('Y = W · X', W*0.50, H*0.12);
-      ctx.fillStyle=C('--p-flash');ctx.font="700 12px 'Noto Sans SC',sans-serif";
-      ctx.fillText(LANG==='cn'?'独立成分 Y':'components Y', W*0.78, H*0.12);
-      var y4=[H*0.26,H*0.44,H*0.62,H*0.80];
-      var lx0=L, lx1=W*0.40, rx2=W*0.60, rx3=R;
-      for(var c4=0;c4<4;c4++){
-        var k4=SRC_EEG[c4];
-        // 左侧混合 (淡)
-        drawWave(lx0,lx1, y4[c4], H*0.065, phase, mixFn(MIX_EEG,c4,SRC_EEG), acc, 1.8, 0.85);
-        ctx.fillStyle=C('--fg-mute');ctx.font="9px 'JetBrains Mono',monospace";ctx.textAlign='left';
-        ctx.fillText('E'+(c4+1), lx0-2, y4[c4]-H*0.075);
-        // 右侧: 从混合 morph 到独立源
-        var morphFn=(function(row,kind,idx){
-          return function(tt,ph){
-            var mixV=mixFn(MIX_EEG,row,SRC_EEG)(tt,ph);
-            var pureV=srcWave(kind,tt,ph+idx*0.6);
-            return lerp(mixV,pureV,unmix);
-          };
-        })(c4,k4,c4);
-        var rcol = unmix>0.7 ? C(SRC_COL[k4]) : acc;
-        drawWave(rx2,rx3, y4[c4], H*0.065, phase, morphFn, rcol, 2.0, 1);
-        ctx.fillStyle = unmix>0.6 ? C(SRC_COL[k4]) : C('--fg-mute');
-        ctx.font="10px 'Noto Sans SC',sans-serif";ctx.textAlign='left';
-        ctx.globalAlpha=0.5+0.5*unmix;
-        ctx.fillText(unmix>0.5?(LANG==='cn'?SRC_NAME_CN[k4]:SRC_NAME_EN[k4]):'IC'+(c4+1), rx2, y4[c4]-H*0.075);
-        ctx.globalAlpha=1;
-      }
-      // 中间 W 乘号 + 流动
-      ctx.fillStyle=acc;ctx.font="700 22px 'JetBrains Mono',monospace";ctx.textAlign='center';
-      ctx.fillText('W', W*0.50, H*0.52);
-      ctx.strokeStyle=C('--line-strong');ctx.lineWidth=1.3;
-      var flow=(now/20)%30;
-      ctx.setLineDash([4,26]);ctx.lineDashOffset=-flow;
-      ctx.globalAlpha=0.5+0.5*unmix;
-      ctx.beginPath();ctx.moveTo(lx1+6,H*0.52);ctx.lineTo(rx2-6,H*0.52);ctx.stroke();
-      ctx.setLineDash([]);ctx.globalAlpha=1;
-      ctx.fillStyle=mute;ctx.font="11px 'Noto Sans SC',sans-serif";ctx.textAlign='center';
-      ctx.globalAlpha=ease((local-0.3)*2);
-      ctx.fillText(LANG==='cn'?'W 近似 A 的逆，抵消混合比例':'W is approx the inverse of A, undoing the mix', W*0.50, H*0.93);
+    // 旋转箭头提示 (W 在连续转) — 仅在解混进行中显示
+    if(k>0.02 && k<0.98){
+      var arcCx=mx+1.5*cell, arcCy=my-16, arcR=14;
+      ctx.strokeStyle=acc;ctx.lineWidth=1.6;ctx.globalAlpha=0.8;
+      ctx.beginPath();ctx.arc(arcCx,arcCy,arcR, -Math.PI*0.4, -Math.PI*0.4 + Math.PI*1.5*k);ctx.stroke();
       ctx.globalAlpha=1;
-    }
-
-    // ---------- F5: 4 路独立成分 + 金色印章 ----------
-    if(stage===4){
-      ctx.fillStyle=C('--p-flash');ctx.font="700 14px 'Noto Sans SC',sans-serif";ctx.textAlign='center';
-      ctx.fillText(LANG==='cn'?'分离完成：4 个独立成分 (IC)':'separated: 4 independent components',(L+R)/2, H*0.12);
-      var y5=[H*0.25,H*0.40,H*0.55,H*0.70], descX=R-12;
-      for(var c5=0;c5<4;c5++){
-        var k5=SRC_EEG[c5];
-        var rv5=ease(local*1.5 - c5*0.10);
-        // 卡片底
-        ctx.fillStyle=C('--bg-1');ctx.globalAlpha=0.6*rv5;
-        ctx.fillRect(L-8, y5[c5]-H*0.055, R-L+16, H*0.10);ctx.globalAlpha=1;
-        ctx.strokeStyle=C(SRC_COL[k5]);ctx.lineWidth=1.2;ctx.globalAlpha=rv5;
-        ctx.strokeRect(L-8, y5[c5]-H*0.055, R-L+16, H*0.10);ctx.globalAlpha=1;
-        drawWave(L+90, R-150, y5[c5], H*0.038, phase, srcFn(k5,c5), C(SRC_COL[k5]), 2.0, rv5);
-        ctx.fillStyle=C(SRC_COL[k5]);ctx.font="700 12px 'Noto Sans SC',sans-serif";ctx.textAlign='left';
-        ctx.globalAlpha=rv5;ctx.fillText('IC'+(c5+1)+' · '+(LANG==='cn'?SRC_NAME_CN[k5]:SRC_NAME_EN[k5]), L, y5[c5]+4);ctx.globalAlpha=1;
-      }
-      var stampK=ease((local-0.45)*2);
-      if(stampK>0){
-        ctx.globalAlpha=stampK;
-        var stampTxt=LANG==='cn'?'ICA 把混在一起的源头一路路拆开':'ICA peels the mixed sources apart, one by one';
-        ctx.fillStyle=gold;ctx.font="700 17px 'Noto Sans SC',sans-serif";ctx.textAlign='center';
-        ctx.fillText(stampTxt,(L+R)/2,H*0.84);
-        var tw=ctx.measureText(stampTxt).width;
-        ctx.strokeStyle=gold;ctx.lineWidth=1.5;
-        ctx.beginPath();ctx.moveTo((L+R)/2-tw/2,H*0.84+11);ctx.lineTo((L+R)/2+tw/2,H*0.84+11);ctx.stroke();
-        ctx.globalAlpha=1;
-      }
     }
 
     // HUD 更新
-    var stArr = I18N.stages[LANG]||I18N.stages.en;
-    document.getElementById('hudStage').textContent='F'+(stage+1)+' · '+stArr[stage];
-    var srcN = stage===0 ? '3' : '4';
-    document.getElementById('hudSrc').textContent=srcN;
-    var mixTxt = stage>=3 ? 'Y = W · X' : 'X = A · S';
-    document.getElementById('hudMix').textContent=mixTxt;
-    document.getElementById('hudMixLbl').textContent = stage>=3 ? (LANG==='cn'?'解混':'unmix') : (LANG==='cn'?'电极混合':'mixing');
+    var phArr=I18N.phases[LANG]||I18N.phases.en;
+    document.getElementById('hudPhase').textContent=phArr[phase];
+    document.getElementById('hudTheta').textContent=Math.round(k*32)+'°';
+    var locked=0; for(var z=0;z<NSRC;z++){ if(k>=LOCK_K[z]) locked++; }
+    document.getElementById('hudLock').textContent=locked+' / '+NSRC;
+    document.getElementById('hudEqn').textContent = k<0.5 ? 'X = A · S' : 'Y = W · X';
 
-    document.getElementById('subZh').textContent=I18N.subs.cn[stage];
-    document.getElementById('subEn').textContent=I18N.subs.en[stage];
+    document.getElementById('subZh').textContent=I18N.subs.cn[phase];
+    document.getElementById('subEn').textContent=I18N.subs.en[phase];
     requestAnimationFrame(draw);
   }
 
@@ -475,8 +421,10 @@
     document.getElementById('g3').textContent=t('g3');
     document.getElementById('g4').textContent=t('g4');
     document.getElementById('hudTtl').textContent=t('hudTtl');
-    document.getElementById('hudSrcLbl').textContent=t('hudSrcLbl');
-    document.getElementById('hudMixLbl').textContent=t('hudMixLbl');
+    document.getElementById('hudPhaseLbl').textContent=t('hudPhaseLbl');
+    document.getElementById('hudThetaLbl').textContent=t('hudThetaLbl');
+    document.getElementById('hudLockLbl').textContent=t('hudLockLbl');
+    document.getElementById('hudEqnLbl').textContent=t('hudEqnLbl');
   }
   document.getElementById('desc2').textContent=I18N.desc1.en;
 

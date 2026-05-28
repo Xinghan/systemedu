@@ -1,491 +1,868 @@
 <!DOCTYPE html>
 <html lang="zh">
 <head>
-<meta charset="UTF-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>EEG Quality Check</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EEG 数据质检方案设计台 / EEG QC Protocol Design Bench</title>
 <style>
-:root{
-  --paper:#FAF9F5; --paper-2:#F1EDDF; --card:#FFFFFF;
-  --ink:#191814; --ink-2:#2B2924; --sub:#6B6557; --sub-2:#9D978A;
-  --border:#EBE5D6; --border-2:#D9D1BD; --hairline:#F2EDE0;
-  --primary:#D97757; --primary-ink:#9A4A2E; --primary-soft:#F8EDE5; --primary-line:#ECCFB8;
-  --computing:#C04E68; --computing-soft:#F4DDE3;
-  --keep:#3C7A5A; --keep-soft:#E0EBE4;
-  --drop:#B5453A; --drop-soft:#F2DEDB;
-  --shadow-sm:0 1px 2px 0 rgba(25,24,20,.04);
-  --shadow:0 1px 3px 0 rgba(25,24,20,.06),0 1px 2px -1px rgba(25,24,20,.04);
-  --shadow-md:0 4px 8px -2px rgba(25,24,20,.06),0 2px 4px -2px rgba(25,24,20,.04);
-  --shadow-lg:0 12px 24px -6px rgba(25,24,20,.1),0 4px 8px -4px rgba(25,24,20,.05);
-  --mono:'JetBrains Mono','SF Mono','Roboto Mono',ui-monospace,Menlo,Consolas,monospace;
-  --sans:'PingFang SC','Inter','Noto Sans SC',-apple-system,sans-serif;
+:root {
+  --paper:    #FAF9F5;
+  --paper-2:  #F1EDDF;
+  --card:     #FFFFFF;
+  --ink:      #191814;
+  --ink-2:    #2B2924;
+  --sub:      #6B6557;
+  --sub-2:    #9D978A;
+  --border:   #EBE5D6;
+  --border-2: #D9D1BD;
+  --hairline: #F2EDE0;
+
+  --primary:      #D97757;
+  --primary-ink:  #9A4A2E;
+  --primary-soft: #F8EDE5;
+  --primary-line: #ECCFB8;
+
+  --computing:      #C04E68;
+  --computing-soft: #F4DDE3;
+  --computing-line: #E3B4C0;
+
+  --good:  #4F7A4A;
+  --good-soft: #EEF4ED;
+  --good-line: #BBD3B6;
+  --warn:  #B5723A;
+  --warn-soft: #FBF1E6;
+  --warn-line: #E6C79C;
+
+  --shadow-sm: 0 1px 2px 0 rgba(25,24,20,.04);
+  --shadow:    0 1px 3px 0 rgba(25,24,20,.06), 0 1px 2px -1px rgba(25,24,20,.04);
+  --shadow-md: 0 4px 8px -2px rgba(25,24,20,.06), 0 2px 4px -2px rgba(25,24,20,.04);
+  --shadow-lg: 0 12px 24px -6px rgba(25,24,20,.1), 0 4px 8px -4px rgba(25,24,20,.05);
+
+  --mono: 'JetBrains Mono', 'SF Mono', 'Menlo', monospace;
+  --sans: 'PingFang SC', 'Inter', 'Noto Sans SC', system-ui, sans-serif;
 }
-*{box-sizing:border-box;margin:0;padding:0}
-html,body{width:100%;height:100vh;overflow:hidden;background:var(--paper);font-family:var(--sans);color:var(--ink)}
-.shell{display:flex;height:100vh}
 
-/* ---------- sidebar ---------- */
-.game-sidebar{width:200px;flex-shrink:0;background:var(--paper-2);border-right:1px solid var(--border);display:flex;flex-direction:column;padding:16px 14px}
-.brand{font-size:13px;font-weight:700;letter-spacing:.5px;color:var(--ink)}
-.brand small{display:block;font-size:10px;font-weight:500;color:var(--sub);letter-spacing:1px;margin-top:3px;text-transform:uppercase;font-family:var(--mono)}
-.divider{height:1px;background:var(--border);margin:14px 0}
-.sect-label{font-size:10px;font-weight:700;letter-spacing:1px;color:var(--sub-2);text-transform:uppercase;font-family:var(--mono);margin-bottom:8px}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; }
 
-.epoch-list{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:4px}
-.ep-chip{width:24px;height:24px;border-radius:5px;border:1px solid var(--border-2);background:var(--card);display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:10px;font-weight:600;color:var(--sub);transition:all .18s}
-.ep-chip.current{border-color:var(--primary);box-shadow:0 0 0 2px var(--primary-soft);color:var(--primary-ink)}
-.ep-chip.kept{background:var(--keep-soft);border-color:var(--keep);color:var(--keep)}
-.ep-chip.dropped{background:var(--drop-soft);border-color:var(--drop);color:var(--drop)}
+body {
+  font-family: var(--sans);
+  background: var(--paper);
+  color: var(--ink);
+  display: flex;
+  height: 100vh;
+  overflow: hidden;
+}
 
-.stats{margin-top:14px;display:flex;flex-direction:column;gap:8px}
-.stat-row{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:8px 10px;box-shadow:var(--shadow-sm)}
-.stat-row .k{font-size:10px;color:var(--sub);letter-spacing:.4px}
-.stat-row .v{font-family:var(--mono);font-size:18px;font-weight:700;line-height:1.1;margin-top:2px}
-.stat-keep .v{color:var(--keep)}
-.stat-drop .v{color:var(--drop)}
-.stat-rate .v{color:var(--computing)}
+/* ===== Sidebar ===== */
+.game-sidebar {
+  width: 200px;
+  min-width: 200px;
+  background: var(--paper-2);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  padding: 16px 13px;
+  gap: 12px;
+  overflow-y: auto;
+}
+.brand { display: flex; flex-direction: column; gap: 4px; }
+.brand .b-tag {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 1px;
+  color: var(--computing);
+  text-transform: uppercase;
+}
+.brand .b-title { font-size: 15px; font-weight: 700; color: var(--ink); line-height: 1.3; }
 
-.spacer{flex:1}
-.lang-btn{align-self:flex-start;font-family:var(--mono);font-size:11px;font-weight:700;letter-spacing:1px;padding:6px 14px;cursor:pointer;border:1px solid var(--border-2);border-radius:6px;background:var(--card);color:var(--ink-2);transition:all .15s}
-.lang-btn:hover{border-color:var(--primary);color:var(--primary-ink)}
+.sec-label {
+  font-family: var(--mono);
+  font-size: 9.5px;
+  letter-spacing: .8px;
+  color: var(--sub-2);
+  text-transform: uppercase;
+  margin-top: 2px;
+}
 
-/* ---------- main ---------- */
-.game-main{flex:1;min-width:0;display:flex;flex-direction:column;padding:20px 26px}
-.main-head{display:flex;align-items:baseline;justify-content:space-between;flex-wrap:wrap;gap:8px}
-.title{font-size:20px;font-weight:700;color:var(--ink)}
-.title .accent{color:var(--computing)}
-.subtitle{font-size:12px;color:var(--sub);margin-top:4px;max-width:560px;line-height:1.5}
-.ep-tag{font-family:var(--mono);font-size:12px;font-weight:600;color:var(--primary-ink);background:var(--primary-soft);border:1px solid var(--primary-line);border-radius:20px;padding:5px 14px}
+/* threshold tier picker */
+.tier-list { display: flex; flex-direction: column; gap: 6px; }
+.tier {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 10px;
+  cursor: pointer;
+  box-shadow: var(--shadow-sm);
+  transition: border-color .16s, box-shadow .16s;
+}
+.tier:hover { border-color: var(--computing); }
+.tier.active { border-color: var(--computing); background: var(--computing-soft); box-shadow: var(--shadow-md); }
+.tier .t-name { font-size: 12px; font-weight: 600; color: var(--ink-2); }
+.tier .t-meta { font-family: var(--mono); font-size: 9px; color: var(--sub-2); margin-top: 2px; }
+.tier.active .t-meta { color: var(--computing); }
 
-.scope-wrap{flex:1;min-height:0;display:flex;flex-direction:column;margin-top:14px;background:var(--card);border:1px solid var(--border);border-radius:12px;box-shadow:var(--shadow);overflow:hidden}
-.scope-top{display:flex;align-items:center;justify-content:space-between;padding:9px 16px;border-bottom:1px solid var(--hairline);background:var(--paper)}
-.scope-top .ch{font-family:var(--mono);font-size:11px;color:var(--sub);letter-spacing:.5px}
-.scope-top .scale{font-family:var(--mono);font-size:10px;color:var(--sub-2)}
-.canvas-host{flex:1;min-height:0;display:flex;flex-direction:column;padding:6px}
-#scope{width:100%;height:100%;display:block;border-radius:6px}
+/* keep-floor stepper */
+.floor-row { display: flex; align-items: center; gap: 8px; }
+.floor-row .step-btn {
+  font-family: var(--mono);
+  font-size: 15px;
+  width: 28px; height: 28px;
+  border: 1px solid var(--border-2);
+  border-radius: 7px;
+  background: var(--card);
+  color: var(--ink-2);
+  cursor: pointer;
+  line-height: 1;
+  display: flex; align-items: center; justify-content: center;
+}
+.floor-row .step-btn:hover { border-color: var(--computing); color: var(--computing); }
+.floor-row .step-btn:active { transform: translateY(1px); }
+.floor-val {
+  flex: 1;
+  text-align: center;
+  font-family: var(--mono);
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--ink);
+}
 
-.metrics{display:flex;gap:10px;margin-top:14px}
-.metric{flex:1;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:11px 13px;box-shadow:var(--shadow-sm)}
-.metric .ml{font-size:10px;color:var(--sub);letter-spacing:.4px;text-transform:uppercase;font-family:var(--mono)}
-.metric .mv{font-family:var(--mono);font-size:18px;font-weight:700;margin-top:3px;color:var(--ink)}
-.metric .mu{font-size:11px;font-weight:500;color:var(--sub-2)}
-.metric .mflag{font-size:10px;margin-top:4px;font-weight:600;letter-spacing:.3px}
-.metric.warn{border-color:var(--drop);background:var(--drop-soft)}
-.metric.warn .mv{color:var(--drop)}
-.metric.warn .mflag{color:var(--drop)}
-.metric.ok .mflag{color:var(--keep)}
+/* QC metric checkboxes */
+.metric-pick { display: flex; flex-direction: column; gap: 6px; }
+.mp-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 7px 9px;
+  cursor: pointer;
+  box-shadow: var(--shadow-sm);
+  transition: border-color .16s;
+}
+.mp-item:hover { border-color: var(--computing); }
+.mp-item.on { border-color: var(--computing); background: var(--computing-soft); }
+.mp-box {
+  width: 15px; height: 15px;
+  border: 1.5px solid var(--border-2);
+  border-radius: 4px;
+  flex: 0 0 15px;
+  margin-top: 1px;
+  position: relative;
+  transition: border-color .16s, background .16s;
+}
+.mp-item.on .mp-box { border-color: var(--computing); background: var(--computing); }
+.mp-item.on .mp-box::after {
+  content: '';
+  position: absolute;
+  left: 4px; top: 1px;
+  width: 4px; height: 8px;
+  border: solid #fff;
+  border-width: 0 2px 2px 0;
+  transform: rotate(40deg);
+}
+.mp-text { display: flex; flex-direction: column; gap: 1px; }
+.mp-text .mt-n { font-size: 11.5px; font-weight: 600; color: var(--ink-2); }
+.mp-text .mt-d { font-size: 9.5px; color: var(--sub); line-height: 1.4; }
 
-.actions{display:flex;gap:14px;margin-top:16px;align-items:center}
-.btn{flex:1;font-family:var(--sans);font-size:15px;font-weight:700;letter-spacing:.5px;padding:14px 0;cursor:pointer;border-radius:10px;border:1.5px solid;transition:all .15s;display:flex;align-items:center;justify-content:center;gap:8px}
-.btn .kbd{font-family:var(--mono);font-size:11px;font-weight:600;opacity:.7;border:1px solid currentColor;border-radius:4px;padding:1px 6px}
-.btn-keep{background:var(--keep-soft);border-color:var(--keep);color:var(--keep)}
-.btn-keep:hover{background:var(--keep);color:#fff}
-.btn-drop{background:var(--drop-soft);border-color:var(--drop);color:var(--drop)}
-.btn-drop:hover{background:var(--drop);color:#fff}
-.btn:disabled{opacity:.4;cursor:not-allowed}
+.side-actions { display: flex; flex-direction: column; gap: 8px; margin-top: auto; }
+.btn {
+  font-family: var(--sans);
+  font-size: 13px;
+  font-weight: 600;
+  border: 1px solid var(--border-2);
+  border-radius: 8px;
+  padding: 9px 12px;
+  background: var(--card);
+  color: var(--ink-2);
+  cursor: pointer;
+  transition: background .16s, border-color .16s, transform .1s;
+}
+.btn:hover { background: var(--hairline); }
+.btn:active { transform: translateY(1px); }
+.btn-run {
+  background: var(--primary);
+  border-color: var(--primary-ink);
+  color: #fff;
+}
+.btn-run:hover { background: var(--primary-ink); }
+.lang-btn {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: .5px;
+  border: 1px solid var(--border-2);
+  border-radius: 8px;
+  padding: 7px 12px;
+  background: transparent;
+  color: var(--sub);
+  cursor: pointer;
+  align-self: flex-start;
+}
+.lang-btn:hover { color: var(--computing); border-color: var(--computing); }
 
-.verdict{margin-top:13px;min-height:42px;border-radius:10px;padding:10px 14px;font-size:12.5px;line-height:1.5;display:none;border:1px solid}
-.verdict.show{display:block}
-.verdict.good{background:var(--keep-soft);border-color:var(--keep);color:#2c5742}
-.verdict.bad{background:var(--drop-soft);border-color:var(--drop);color:#8a342c}
-.verdict b{font-weight:700}
+/* ===== Main ===== */
+.game-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: 20px 24px 16px;
+  gap: 14px;
+  overflow-y: auto;
+}
+.main-head { display: flex; flex-direction: column; gap: 4px; }
+.main-head h1 { font-size: 18px; font-weight: 700; color: var(--ink); }
+.main-head .sub { font-size: 12px; color: var(--sub); line-height: 1.5; }
 
-/* ---------- report overlay ---------- */
-.overlay{position:absolute;inset:0;background:rgba(25,24,20,.32);display:none;align-items:center;justify-content:center;z-index:50}
-.overlay.show{display:flex}
-.report{background:var(--card);border:1px solid var(--border);border-radius:16px;box-shadow:var(--shadow-lg);padding:28px 30px;width:min(540px,90%);max-height:88vh;overflow-y:auto}
-.report h2{font-size:20px;font-weight:700;color:var(--ink)}
-.report .rsub{font-size:12.5px;color:var(--sub);margin-top:6px;line-height:1.55}
-.badge{display:none;margin:16px 0;padding:13px 16px;border-radius:12px;background:linear-gradient(135deg,var(--primary-soft),var(--computing-soft));border:1px solid var(--primary-line);align-items:center;gap:13px}
-.badge.show{display:flex}
-.badge .seal{width:46px;height:46px;flex-shrink:0}
-.badge .bt{font-size:14px;font-weight:700;color:var(--primary-ink)}
-.badge .bd{font-size:11px;color:var(--sub);margin-top:2px;line-height:1.4}
-.rgrid{display:flex;gap:10px;margin:18px 0}
-.rcell{flex:1;text-align:center;background:var(--paper);border:1px solid var(--border);border-radius:10px;padding:12px 6px}
-.rcell .rv{font-family:var(--mono);font-size:24px;font-weight:700}
-.rcell .rl{font-size:10px;color:var(--sub);margin-top:3px;letter-spacing:.4px}
-.rcell.c-keep .rv{color:var(--keep)} .rcell.c-drop .rv{color:var(--drop)} .rcell.c-rate .rv{color:var(--computing)}
-.rnote{font-size:12px;line-height:1.6;color:var(--sub);background:var(--paper-2);border-radius:10px;padding:12px 14px;margin-bottom:18px}
-.rnote .tag{font-family:var(--mono);font-weight:700;color:var(--ink-2)}
-.retry-btn{width:100%;font-family:var(--sans);font-size:14px;font-weight:700;letter-spacing:.5px;padding:12px 0;cursor:pointer;border-radius:10px;border:1.5px solid var(--primary);background:var(--primary);color:#fff;transition:all .15s}
-.retry-btn:hover{background:var(--primary-ink);border-color:var(--primary-ink)}
+/* protocol summary card */
+.protocol {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.proto-chip {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  padding: 9px 12px;
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 116px;
+}
+.proto-chip .pk { font-family: var(--mono); font-size: 9px; letter-spacing: .6px; color: var(--sub-2); text-transform: uppercase; }
+.proto-chip .pv { font-family: var(--mono); font-size: 13px; font-weight: 700; color: var(--computing); }
+
+/* epoch grid */
+.grid-wrap {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: var(--shadow);
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+}
+.grid-head { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+.grid-head .gh-t { font-size: 12px; font-weight: 600; color: var(--ink-2); }
+.grid-head .gh-legend { display: flex; gap: 12px; font-family: var(--mono); font-size: 9.5px; color: var(--sub); }
+.legend-dot { display: inline-flex; align-items: center; gap: 4px; }
+.legend-dot i { width: 9px; height: 9px; border-radius: 3px; display: inline-block; }
+.epoch-canvas-host {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+#epochCanvas { width: 100%; height: 172px; display: block; border-radius: 8px; background: var(--paper-2); }
+
+/* results */
+.results {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+.res-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: var(--shadow);
+  padding: 13px 15px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.res-card .rc-k { font-family: var(--mono); font-size: 9.5px; letter-spacing: .6px; color: var(--sub-2); text-transform: uppercase; }
+.res-card .rc-v { font-family: var(--mono); font-size: 22px; font-weight: 700; color: var(--ink); line-height: 1; }
+.res-card .rc-v.bad { color: var(--warn); }
+.res-card .rc-v.ok { color: var(--good); }
+.res-card .rc-d { font-size: 10.5px; color: var(--sub); line-height: 1.4; }
+/* balance dual bar */
+.bal-bar { display: flex; height: 12px; border-radius: 6px; overflow: hidden; border: 1px solid var(--border); }
+.bal-bar .bal-l { background: var(--computing); transition: width .3s; }
+.bal-bar .bal-r { background: var(--primary); transition: width .3s; }
+.bal-tags { display: flex; justify-content: space-between; font-family: var(--mono); font-size: 9px; color: var(--sub); }
+
+/* verdict banner */
+.banner {
+  border-radius: 11px;
+  padding: 12px 16px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--sub);
+  min-height: 46px;
+  display: flex;
+  align-items: center;
+}
+.banner.warn { background: var(--warn-soft); border-color: var(--warn-line); color: var(--warn); }
+.banner.good { background: var(--good-soft); border-color: var(--good-line); color: var(--good); }
+
+/* gold stamp */
+.gold-stamp {
+  position: fixed;
+  inset: 0;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background: rgba(25,24,20,.32);
+  z-index: 30;
+}
+.gold-stamp.show { display: flex; animation: stampFade .35s ease; }
+@keyframes stampFade { from { opacity: 0; } to { opacity: 1; } }
+.gold-card {
+  background: var(--card);
+  border: 2px solid var(--primary);
+  border-radius: 16px;
+  padding: 26px 32px;
+  max-width: 430px;
+  text-align: center;
+  box-shadow: var(--shadow-lg);
+}
+.gold-card .gs-seal {
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: 2px;
+  color: var(--primary);
+  text-transform: uppercase;
+  animation: sealPulse 1.6s ease-in-out infinite;
+}
+@keyframes sealPulse { 0%,100% { opacity: .7; } 50% { opacity: 1; } }
+.gold-card .gs-t { font-size: 19px; font-weight: 700; margin: 10px 0 8px; color: var(--ink); }
+.gold-card .gs-d { font-size: 12.5px; color: var(--sub); line-height: 1.6; margin-bottom: 18px; }
+.gold-card .btn { width: 100%; }
 </style>
 </head>
 <body>
-<div class="shell">
-  <!-- ============ SIDEBAR ============ -->
   <aside class="game-sidebar">
-    <div class="brand"><span id="brandName"></span><small>EEG · M20 QC</small></div>
-    <div class="divider"></div>
-    <div class="sect-label" id="lblProgress"></div>
-    <div class="epoch-list" id="epochList"></div>
-    <div class="stats">
-      <div class="stat-row stat-keep"><div class="k" id="lblKept"></div><div class="v" id="statKept">0</div></div>
-      <div class="stat-row stat-drop"><div class="k" id="lblDropped"></div><div class="v" id="statDropped">0</div></div>
-      <div class="stat-row stat-rate"><div class="k" id="lblRate"></div><div class="v" id="statRate">--</div></div>
+    <div class="brand">
+      <div class="b-tag" data-i18n="tag">M20 / QC PROTOCOL</div>
+      <div class="b-title" data-i18n="brand">数据质检方案设计</div>
     </div>
-    <div class="spacer"></div>
-    <button class="lang-btn" id="langBtn">CN</button>
+
+    <div class="sec-label" data-i18n="secThresh">1 · 峰峰幅度阈值</div>
+    <div class="tier-list" id="tierList"></div>
+
+    <div class="sec-label" data-i18n="secFloor">2 · 保留比例下限</div>
+    <div class="floor-row">
+      <button class="step-btn" id="floorDown">-</button>
+      <div class="floor-val" id="floorVal">60%</div>
+      <button class="step-btn" id="floorUp">+</button>
+    </div>
+
+    <div class="sec-label" data-i18n="secMetric">3 · 质检指标</div>
+    <div class="metric-pick" id="metricPick"></div>
+
+    <div class="side-actions">
+      <button class="btn btn-run" id="runBtn" data-i18n="run">跑质检方案</button>
+      <button class="btn" id="resetBtn" data-i18n="reset">重置</button>
+      <button class="lang-btn" id="langBtn">中文 / EN</button>
+    </div>
   </aside>
 
-  <!-- ============ MAIN ============ -->
   <main class="game-main">
     <div class="main-head">
-      <div>
-        <div class="title"><span id="titleA"></span> <span class="accent" id="titleB"></span></div>
-        <div class="subtitle" id="subtitle"></div>
+      <h1 data-i18n="title">设计一套质检方案，剔掉坏 epoch 又留够训练数据</h1>
+      <div class="sub" data-i18n="subtitle">这批切好的 epoch 有的干净、有的还带残余伪迹。你来定阈值、保留下限、检测指标，跑一遍自动剔除，看保留率、类别平衡、整体质量够不够上分类器训练。</div>
+    </div>
+
+    <div class="protocol" id="protocol">
+      <div class="proto-chip"><span class="pk" data-i18n="pThresh">幅度阈值</span><span class="pv" id="cThresh">±120 µV</span></div>
+      <div class="proto-chip"><span class="pk" data-i18n="pFloor">保留下限</span><span class="pv" id="cFloor">60%</span></div>
+      <div class="proto-chip"><span class="pk" data-i18n="pMetric">质检指标</span><span class="pv" id="cMetric">1 项</span></div>
+    </div>
+
+    <div class="grid-wrap">
+      <div class="grid-head">
+        <span class="gh-t" data-i18n="gridT">Epoch 池 · 80 段（左手想象 40 / 右手想象 40）</span>
+        <span class="gh-legend">
+          <span class="legend-dot"><i style="background:var(--good)"></i><span data-i18n="lgKeep">保留</span></span>
+          <span class="legend-dot"><i style="background:var(--warn)"></i><span data-i18n="lgDrop">剔除</span></span>
+        </span>
       </div>
-      <div class="ep-tag" id="epTag"></div>
-    </div>
-
-    <div class="scope-wrap">
-      <div class="scope-top">
-        <span class="ch" id="scopeCh"></span>
-        <span class="scale" id="scopeScale"></span>
+      <div class="epoch-canvas-host">
+        <canvas id="epochCanvas"></canvas>
       </div>
-      <div class="canvas-host"><canvas id="scope"></canvas></div>
     </div>
 
-    <div class="metrics">
-      <div class="metric" id="mAmp"><div class="ml" id="lblAmp"></div><div class="mv"><span id="vAmp">--</span> <span class="mu">µV</span></div><div class="mflag" id="fAmp"></div></div>
-      <div class="metric" id="mAlpha"><div class="ml" id="lblAlpha"></div><div class="mv"><span id="vAlpha">--</span> <span class="mu">%</span></div><div class="mflag" id="fAlpha"></div></div>
-      <div class="metric" id="mLine"><div class="ml" id="lblLine"></div><div class="mv"><span id="vLine">--</span> <span class="mu">µV²</span></div><div class="mflag" id="fLine"></div></div>
+    <div class="results">
+      <div class="res-card">
+        <span class="rc-k" data-i18n="rKeep">保留率 KEEP</span>
+        <span class="rc-v" id="rKeep">—</span>
+        <span class="rc-d" id="rKeepD" data-i18n="rKeepIdle">先跑方案</span>
+      </div>
+      <div class="res-card">
+        <span class="rc-k" data-i18n="rBal">类别平衡 BALANCE</span>
+        <div class="bal-bar"><div class="bal-l" id="balL" style="width:50%"></div><div class="bal-r" id="balR" style="width:50%"></div></div>
+        <div class="bal-tags"><span data-i18n="balLeft">左手</span><span id="balText">—</span><span data-i18n="balRight">右手</span></div>
+        <span class="rc-d" id="rBalD" data-i18n="rBalIdle">两类各剩多少</span>
+      </div>
+      <div class="res-card">
+        <span class="rc-k" data-i18n="rClean">残余脏数据 DIRTY</span>
+        <span class="rc-v" id="rClean">—</span>
+        <span class="rc-d" id="rCleanD" data-i18n="rCleanIdle">混进训练集的坏段</span>
+      </div>
     </div>
 
-    <div class="actions">
-      <button class="btn btn-keep" id="btnKeep"><span id="txtKeep"></span><span class="kbd">K</span></button>
-      <button class="btn btn-drop" id="btnDrop"><span id="txtDrop"></span><span class="kbd">D</span></button>
+    <div class="banner" id="banner">
+      <span data-i18n="bInit">左侧选好阈值、保留下限和指标，点"跑质检方案"。这是个权衡：阈值太严会剔太多、太松会放脏数据进来。</span>
     </div>
-
-    <div class="verdict" id="verdict"></div>
   </main>
 
-  <!-- ============ REPORT ============ -->
-  <div class="overlay" id="overlay">
-    <div class="report">
-      <h2 id="repTitle"></h2>
-      <div class="rsub" id="repSub"></div>
-      <div class="badge" id="badge">
-        <svg class="seal" viewBox="0 0 48 48" fill="none">
-          <circle cx="24" cy="24" r="21" stroke="#9A4A2E" stroke-width="2" fill="#F8EDE5"/>
-          <circle cx="24" cy="24" r="15" stroke="#C04E68" stroke-width="1.5" fill="none" stroke-dasharray="3 2"/>
-          <path d="M17 24l5 5 9-11" stroke="#3C7A5A" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
-        </svg>
-        <div><div class="bt" id="badgeTitle"></div><div class="bd" id="badgeDesc"></div></div>
-      </div>
-      <div class="rgrid">
-        <div class="rcell c-keep"><div class="rv" id="repKept">0</div><div class="rl" id="repKeptL"></div></div>
-        <div class="rcell c-drop"><div class="rv" id="repDropped">0</div><div class="rl" id="repDroppedL"></div></div>
-        <div class="rcell c-rate"><div class="rv" id="repRate">0%</div><div class="rl" id="repRateL"></div></div>
-      </div>
-      <div class="rnote" id="repNote"></div>
-      <button class="retry-btn" id="retryBtn"></button>
+  <div class="gold-stamp" id="goldStamp">
+    <div class="gold-card">
+      <div class="gs-seal" data-i18n="seal">QC OFFICER CERTIFIED</div>
+      <div class="gs-t" data-i18n="goldT">你成了合格的数据质检官</div>
+      <div class="gs-d" data-i18n="goldD">这套方案剔掉了带残余伪迹的坏 epoch，保留量过了训练下限，两类样本还基本平衡 —— 干净、够量、不偏科，正好能喂给分类器。</div>
+      <button class="btn btn-run" id="goldClose" data-i18n="goldBtn">再调一套</button>
     </div>
   </div>
-</div>
 
 <script>
-(function(){
-var LANG='cn';
-var I18N={
-  brand:{cn:'脑电质检台',en:'EEG QC BENCH'},
-  progress:{cn:'EPOCH 进度',en:'EPOCH PROGRESS'},
-  kept:{cn:'已保留',en:'KEPT'},
-  dropped:{cn:'已剔除',en:'DROPPED'},
-  rate:{cn:'保留率',en:'KEEP RATE'},
-  titleA:{cn:'逐段质检',en:'TRIAGE THE'},
-  titleB:{cn:'EEG 数据',en:'EEG EPOCHS'},
-  subtitle:{cn:'你是数据质检官。看波形 + 三项指标，决定这一段脑电「保留」还是「剔除」。既要清掉坏段，又别过度剔除好数据。',
-            en:'You are the QC officer. Read the waveform plus three metrics, then KEEP or DROP each epoch. Clean out the bad segments — but do not over-reject good data.'},
-  epTag:{cn:'第 {i} / {n} 段',en:'EPOCH {i} / {n}'},
-  scopeCh:{cn:'通道 Cz · 2 秒窗',en:'CHANNEL Cz · 2s WINDOW'},
-  scopeScale:{cn:'纵轴 ±150 µV',en:'Y-AXIS ±150 µV'},
-  lblAmp:{cn:'峰峰幅度',en:'PEAK-TO-PEAK'},
-  lblAlpha:{cn:'Alpha 节律占比',en:'ALPHA RHYTHM'},
-  lblLine:{cn:'残余方差',en:'RESIDUAL VAR'},
-  txtKeep:{cn:'保留',en:'KEEP'},
-  txtDrop:{cn:'剔除',en:'DROP'},
-  flagOver:{cn:'超阈值',en:'OVER LIMIT'},
-  flagNormal:{cn:'正常',en:'NORMAL'},
-  flagFlat:{cn:'近乎平坦',en:'NEAR FLAT'},
-  flagStrong:{cn:'节律清晰',en:'CLEAR'},
-  flagWeak:{cn:'偏弱',en:'WEAK'},
-  flagHigh:{cn:'偏高',en:'HIGH'},
-  flagLow:{cn:'偏低',en:'LOW'},
-  vGood:{cn:'判断正确',en:'CORRECT CALL'},
-  vBad:{cn:'再想想',en:'RETHINK'},
-  repTitle:{cn:'质检完成',en:'QC COMPLETE'},
-  repSub:{cn:'这是你最终交给后续分析的数据集快照：',en:'Snapshot of the dataset you hand off to analysis:'},
-  repKeptL:{cn:'保留',en:'KEPT'},
-  repDroppedL:{cn:'剔除',en:'DROPPED'},
-  repRateL:{cn:'保留率',en:'KEEP RATE'},
-  badgeTitle:{cn:'数据质检官 解锁',en:'DATA QC OFFICER unlocked'},
-  badgeDesc:{cn:'坏段全清、好段不误伤 — 干净又不过度。',en:'All bad segments removed, good ones kept — clean without over-cutting.'},
-  retry:{cn:'重新质检',en:'RUN AGAIN'},
-  noteGood:{cn:'<span class="tag">恰到好处。</span>你剔掉了所有坏段（运动伪迹 / 眨眼残峰 / 电极脱落），同时保住了节律清晰的好段。真实流程里，过度剔除会让数据量崩塌、统计功效下降；漏掉坏段又会污染平均。',
-            en:'<span class="tag">Just right.</span> You removed every bad segment (motion artifact / residual blink / flat channel) while keeping the clean rhythmic ones. Over-rejecting collapses your sample size; missing bad segments contaminates the average.'},
-  noteOver:{cn:'<span class="tag">剔得太狠。</span>有 {x} 段本来节律清晰、幅度合理的好数据被你误删了。质检不是「越干净越好」，过度剔除会让剩下的样本太少。',
-            en:'<span class="tag">Over-cut.</span> You wrongly dropped {x} good epochs with clear rhythm and reasonable amplitude. QC is not "the less the better" — over-rejection leaves too few samples.'},
-  noteMiss:{cn:'<span class="tag">漏了坏段。</span>有 {x} 段坏数据（幅度爆表 / 眨眼残峰 / 电极脱落）被你保留了，它们会污染后续的平均和频谱。',
-            en:'<span class="tag">Bad segments slipped through.</span> You kept {x} bad epochs (amplitude blow-out / residual blink / flat channel). They will contaminate the average and spectrum downstream.'},
-  noteBoth:{cn:'<span class="tag">两头都偏。</span>既误删了好段，又漏掉了坏段。回到判据：幅度爆表、残余大峰、平坦无信号 都该剔除；节律清晰、幅度合理 则该保留。',
-            en:'<span class="tag">Off on both ends.</span> You both over-cut good data and let bad data through. Recall the rule: blow-out, big residual peak or flat means DROP; clear rhythm with sane amplitude means KEEP.'}
+'use strict';
+
+// ---------- i18n ----------
+const I18N = {
+  zh: {
+    tag: 'M20 / QC PROTOCOL', brand: '数据质检方案设计',
+    secThresh: '1 · 峰峰幅度阈值', secFloor: '2 · 保留比例下限', secMetric: '3 · 质检指标',
+    run: '跑质检方案', reset: '重置',
+    title: '设计一套质检方案，剔掉坏 epoch 又留够训练数据',
+    subtitle: '这批切好的 epoch 有的干净、有的还带残余伪迹。你来定阈值、保留下限、检测指标，跑一遍自动剔除，看保留率、类别平衡、整体质量够不够上分类器训练。',
+    pThresh: '幅度阈值', pFloor: '保留下限', pMetric: '质检指标',
+    gridT: 'Epoch 池 · 80 段（左手想象 40 / 右手想象 40）',
+    lgKeep: '保留', lgDrop: '剔除',
+    rKeep: '保留率 KEEP', rKeepIdle: '先跑方案',
+    rBal: '类别平衡 BALANCE', rBalIdle: '两类各剩多少', balLeft: '左手', balRight: '右手',
+    rClean: '残余脏数据 DIRTY', rCleanIdle: '混进训练集的坏段',
+    bInit: '左侧选好阈值、保留下限和指标，点"跑质检方案"。这是个权衡：阈值太严会剔太多、太松会放脏数据进来。',
+    chipUnit: ' 项',
+    runStream: '正在跑质检：逐段比对幅度与指标…',
+    tiers: [
+      { name: '很严 ±80µV', meta: 'strict' },
+      { name: '严 ±100µV', meta: 'tight' },
+      { name: '适中 ±120µV', meta: 'balanced' },
+      { name: '松 ±170µV', meta: 'loose' },
+      { name: '很松 ±240µV', meta: 'lax' },
+    ],
+    metrics: [
+      { n: '峰峰幅度', d: '超阈值直接判坏段' },
+      { n: '方差异常', d: '过高/过低都剔' },
+      { n: '残余眨眼', d: '前额道大慢波' },
+      { n: '坏导比例', d: '单段太多坏导剔掉' },
+    ],
+    vTooStrict: '阈值太严：只剩 {keep}%，低于你设的 {floor}% 下限，数据不够训练分类器。',
+    vBelowFloor: '没达到保留下限：剩 {keep}% < {floor}%，再放宽阈值或调低下限。',
+    vTooLoose: '阈值太松：还有 {dirty} 段带残余伪迹混进了训练集，这些脏段会污染模型。',
+    vImbalance: '类别失衡：左 {l} / 右 {r}，差太多，分类器会偏向样本多的那一类。',
+    vNoThresh: '至少要勾上"峰峰幅度"这个指标，否则没有任何阈值在起作用。',
+    vGood: '达标：保留 {keep}%（≥{floor}%），脏数据 {dirty} 段，左右 {l}/{r} 基本平衡 —— 够量、够干净、不偏科。',
+    rKeepGoodD: '过了训练下限', rKeepBadD: '低于训练下限',
+    rCleanGoodD: '训练集干净', rCleanBadD: '脏段污染模型',
+    rBalGoodD: '两类基本平衡', rBalBadD: '类别偏斜',
+    seal: 'QC OFFICER CERTIFIED', goldT: '你成了合格的数据质检官',
+    goldD: '这套方案剔掉了带残余伪迹的坏 epoch，保留量过了训练下限，两类样本还基本平衡 —— 干净、够量、不偏科，正好能喂给分类器。',
+    goldBtn: '再调一套',
+    labL: '左手 L', labR: '右手 R',
+  },
+  en: {
+    tag: 'M20 / QC PROTOCOL', brand: 'QC Protocol Design',
+    secThresh: '1 · Peak-to-peak threshold', secFloor: '2 · Keep-ratio floor', secMetric: '3 · QC metrics',
+    run: 'Run QC Protocol', reset: 'Reset',
+    title: 'Design a QC protocol: drop bad epochs, keep enough to train',
+    subtitle: 'These cut epochs are a mix — some clean, some with residual artifacts. You set the threshold, keep-floor and detection metrics, run auto-rejection, and read keep-rate, class balance and overall quality to see if it can train a classifier.',
+    pThresh: 'Threshold', pFloor: 'Keep floor', pMetric: 'Metrics',
+    gridT: 'Epoch pool · 80 trials (left-hand 40 / right-hand 40)',
+    lgKeep: 'keep', lgDrop: 'drop',
+    rKeep: 'KEEP RATE', rKeepIdle: 'run first',
+    rBal: 'CLASS BALANCE', rBalIdle: 'left vs right kept', balLeft: 'left', balRight: 'right',
+    rClean: 'RESIDUAL DIRTY', rCleanIdle: 'bad trials sneaking in',
+    bInit: 'Pick a threshold, keep-floor and metrics on the left, then "Run QC Protocol". It is a trade-off: too strict drops too many, too loose lets dirty trials in.',
+    chipUnit: ' picked',
+    runStream: 'Running QC: comparing each epoch against amplitude & metrics...',
+    tiers: [
+      { name: 'Very strict ±80µV', meta: 'strict' },
+      { name: 'Strict ±100µV', meta: 'tight' },
+      { name: 'Balanced ±120µV', meta: 'balanced' },
+      { name: 'Loose ±170µV', meta: 'loose' },
+      { name: 'Very loose ±240µV', meta: 'lax' },
+    ],
+    metrics: [
+      { n: 'Peak-to-peak', d: 'over threshold = bad' },
+      { n: 'Variance', d: 'too high/low rejected' },
+      { n: 'Residual blink', d: 'frontal slow waves' },
+      { n: 'Bad-channel ratio', d: 'too many bad chans' },
+    ],
+    vTooStrict: 'Too strict: only {keep}% left, below your {floor}% floor — not enough to train.',
+    vBelowFloor: 'Below keep-floor: {keep}% < {floor}%. Loosen the threshold or lower the floor.',
+    vTooLoose: 'Too loose: {dirty} epochs with residual artifacts slipped into the training set and will corrupt the model.',
+    vImbalance: 'Imbalanced: left {l} / right {r}, too skewed — the classifier will favor the larger class.',
+    vNoThresh: 'You must at least enable "Peak-to-peak", otherwise no threshold is actually applied.',
+    vGood: 'Passed: kept {keep}% (>={floor}%), {dirty} dirty epochs, left/right {l}/{r} balanced — enough, clean, and not skewed.',
+    rKeepGoodD: 'above train floor', rKeepBadD: 'below train floor',
+    rCleanGoodD: 'training set clean', rCleanBadD: 'dirty corrupts model',
+    rBalGoodD: 'classes balanced', rBalBadD: 'class skew',
+    seal: 'QC OFFICER CERTIFIED', goldT: 'You are a certified data QC officer',
+    goldD: 'This protocol dropped the residual-artifact epochs, kept above the training floor, and the two classes stayed balanced — clean, sufficient, and unbiased, ready to feed a classifier.',
+    goldBtn: 'Design another',
+    labL: 'LEFT', labR: 'RIGHT',
+  }
 };
-function t(k){return (I18N[k]&&I18N[k][LANG])||(I18N[k]&&I18N[k]['en'])||k;}
+let lang = 'zh';
 
-// ---------- epoch dataset ----------
-// kind: 'alpha' good rhythm, 'beta' good lower-amp, 'noisy_ok' mild noise keep,
-//       'motion' amplitude blow-out drop, 'blink' residual blink drop, 'flat' electrode off drop
-// truth: true=keep, false=drop
-var DECK=[
-  {kind:'alpha',   amp:62,  alpha:71, lineVar:9,   truth:true},
-  {kind:'motion',  amp:188, alpha:14, lineVar:240, truth:false},
-  {kind:'beta',    amp:41,  alpha:23, lineVar:7,   truth:true},
-  {kind:'blink',   amp:142, alpha:31, lineVar:38,  truth:false},
-  {kind:'noisy_ok',amp:74,  alpha:58, lineVar:22,  truth:true},
-  {kind:'flat',    amp:6,   alpha:4,  lineVar:1,   truth:false},
-  {kind:'alpha',   amp:55,  alpha:66, lineVar:11,  truth:true},
-  {kind:'motion',  amp:166, alpha:9,  lineVar:198, truth:false},
-  {kind:'beta',    amp:38,  alpha:19, lineVar:6,   truth:true},
-  {kind:'blink',   amp:128, alpha:27, lineVar:33,  truth:false}
-];
-var N=DECK.length;
-var idx=0, kept=0, dropped=0, correct=0;
-var decisions=[]; // {truth, choice}
+// ---------- deterministic epoch pool ----------
+// 80 epochs: 40 left (cls 0) + 40 right (cls 1). each has a peak-to-peak amplitude
+// and artifact flags. "dirty" epochs carry residual artifacts after cleaning.
+// Built so a balanced protocol (±120, peak-to-peak only) keeps ~70%, balanced, clean.
+const POOL = buildPool();
 
-// ---------- canvas waveform ----------
-var canvas=document.getElementById('scope');
-var ctx=canvas.getContext('2d');
-function sizeCanvas(){
-  var host=canvas.parentElement;
-  var r=host.getBoundingClientRect();
-  var dpr=window.devicePixelRatio||1;
-  canvas.width=Math.max(1,Math.floor(r.width*dpr));
-  canvas.height=Math.max(1,Math.floor(r.height*dpr));
-  ctx.setTransform(dpr,0,0,dpr,0,0);
-  return {w:r.width,h:r.height};
-}
-// deterministic pseudo-random so each epoch is stable
-function seeded(seed){var s=seed%2147483647;if(s<=0)s+=2147483646;return function(){s=s*16807%2147483647;return (s-1)/2147483646;};}
-
-function waveSample(ep, x, rnd){
-  // x in [0,1], returns µV
-  var twoPi=Math.PI*2;
-  switch(ep.kind){
-    case 'alpha':   return 30*Math.sin(twoPi*10*x)+8*Math.sin(twoPi*22*x)+ (rnd()-0.5)*8;
-    case 'beta':    return 16*Math.sin(twoPi*20*x)+6*Math.sin(twoPi*31*x)+ (rnd()-0.5)*6;
-    case 'noisy_ok':return 26*Math.sin(twoPi*10*x)+ (rnd()-0.5)*30;
-    case 'motion':  return 70*Math.sin(twoPi*1.2*x)+ 50*Math.sin(twoPi*3*x+1)+ (rnd()-0.5)*40 + 40*Math.sin(twoPi*0.4*x);
-    case 'blink':   { var bx=x*4%1; var blink=(bx<0.12)?Math.exp(-Math.pow((bx-0.05)/0.03,2))*100:0; return 18*Math.sin(twoPi*9*x)+blink+ (rnd()-0.5)*6; }
-    case 'flat':    return (rnd()-0.5)*3;
+function buildPool() {
+  let seed = 20240520;
+  const rnd = () => { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff; };
+  const arr = [];
+  for (let cls = 0; cls < 2; cls++) {
+    for (let i = 0; i < 40; i++) {
+      const dirty = rnd() < 0.28;             // ~28% truly dirty
+      let amp;
+      if (dirty) amp = 135 + rnd() * 120;     // 135..255 µV (caught by tight thresholds)
+      else       amp = 45 + rnd() * 65;       // 45..110 µV (clean)
+      const variance = dirty && rnd() < 0.5;
+      const blink    = dirty && rnd() < 0.5;
+      const badchan  = dirty && rnd() < 0.4;
+      arr.push({ cls: cls, amp: Math.round(amp), dirty: dirty, variance: variance, blink: blink, badchan: badchan });
+    }
   }
-  return 0;
-}
-function drawScope(ep){
-  var d=sizeCanvas();
-  var w=d.w,h=d.h;
-  ctx.clearRect(0,0,w,h);
-  // grid
-  ctx.strokeStyle='#EFE9DB';ctx.lineWidth=1;
-  for(var gx=0;gx<=10;gx++){var px=gx/10*w;ctx.beginPath();ctx.moveTo(px,0);ctx.lineTo(px,h);ctx.stroke();}
-  for(var gy=0;gy<=6;gy++){var py=gy/6*h;ctx.beginPath();ctx.moveTo(0,py);ctx.lineTo(w,py);ctx.stroke();}
-  // mid line
-  ctx.strokeStyle='#D9D1BD';ctx.beginPath();ctx.moveTo(0,h/2);ctx.lineTo(w,h/2);ctx.stroke();
-  // threshold lines (+/-100 µV) at ±150 scale
-  var scale=150;
-  var thY1=h/2 - (100/scale)*(h/2);
-  var thY2=h/2 + (100/scale)*(h/2);
-  ctx.strokeStyle='rgba(181,69,58,.35)';ctx.setLineDash([5,4]);
-  ctx.beginPath();ctx.moveTo(0,thY1);ctx.lineTo(w,thY1);ctx.stroke();
-  ctx.beginPath();ctx.moveTo(0,thY2);ctx.lineTo(w,thY2);ctx.stroke();
-  ctx.setLineDash([]);
-  // waveform
-  var rnd=seeded((ep.kind.charCodeAt(0)*131 + ep.amp*7 + ep.lineVar*3)|0);
-  ctx.strokeStyle='#C04E68';ctx.lineWidth=1.8;ctx.beginPath();
-  var steps=480;
-  for(var i=0;i<=steps;i++){
-    var xx=i/steps;
-    var uv=waveSample(ep,xx,rnd);
-    var px2=xx*w;
-    var py2=h/2 - (uv/scale)*(h/2);
-    if(py2<2)py2=2; if(py2>h-2)py2=h-2;
-    if(i===0)ctx.moveTo(px2,py2);else ctx.lineTo(px2,py2);
-  }
-  ctx.stroke();
+  return arr;
 }
 
-// ---------- render current epoch ----------
-function renderEpoch(){
-  var ep=DECK[idx];
-  document.getElementById('epTag').textContent=t('epTag').replace('{i}',idx+1).replace('{n}',N);
-  drawScope(ep);
-  // metrics
-  document.getElementById('vAmp').textContent=ep.amp;
-  document.getElementById('vAlpha').textContent=ep.alpha;
-  document.getElementById('vLine').textContent=ep.lineVar;
-  // amp flag
-  var mAmp=document.getElementById('mAmp'),fAmp=document.getElementById('fAmp');
-  if(ep.amp>100){mAmp.className='metric warn';fAmp.textContent=t('flagOver');}
-  else if(ep.amp<12){mAmp.className='metric warn';fAmp.textContent=t('flagFlat');}
-  else{mAmp.className='metric ok';fAmp.textContent=t('flagNormal');}
-  // alpha flag
-  var mAlpha=document.getElementById('mAlpha'),fAlpha=document.getElementById('fAlpha');
-  if(ep.alpha>=45){mAlpha.className='metric ok';fAlpha.textContent=t('flagStrong');}
-  else{mAlpha.className='metric';fAlpha.textContent=t('flagWeak');}
-  // residual var flag
-  var mLine=document.getElementById('mLine'),fLine=document.getElementById('fLine');
-  if(ep.lineVar>30){mLine.className='metric warn';fLine.textContent=t('flagHigh');}
-  else{mLine.className='metric ok';fLine.textContent=t('flagNormal');}
-  // reset verdict
-  var v=document.getElementById('verdict');v.className='verdict';v.innerHTML='';
-  setButtons(true);
-  refreshChips();
-}
+const TIER_THRESH = [80, 100, 120, 170, 240];
+let tierIdx = 2;                                 // default ±120
+let keepFloor = 60;                              // %
+const metricOn = [true, false, false, false];    // peak-to-peak on by default
+let lastResult = null;
+let running = false;
+let revealCount = 0;
+let revealTimer = null;
+let judged = [];
 
-function setButtons(on){
-  document.getElementById('btnKeep').disabled=!on;
-  document.getElementById('btnDrop').disabled=!on;
-}
+// ---------- DOM ----------
+const tierListEl = document.getElementById('tierList');
+const metricPickEl = document.getElementById('metricPick');
+const floorValEl = document.getElementById('floorVal');
+const floorUpEl = document.getElementById('floorUp');
+const floorDownEl = document.getElementById('floorDown');
+const runBtn = document.getElementById('runBtn');
+const resetBtn = document.getElementById('resetBtn');
+const langBtn = document.getElementById('langBtn');
+const bannerEl = document.getElementById('banner');
+const canvas = document.getElementById('epochCanvas');
+const cctx = canvas.getContext('2d');
+const goldStamp = document.getElementById('goldStamp');
 
-function refreshChips(){
-  var list=document.getElementById('epochList');list.innerHTML='';
-  for(var i=0;i<N;i++){
-    var c=document.createElement('div');c.className='ep-chip';
-    c.textContent=i+1;
-    if(i<decisions.length){c.classList.add(decisions[i].choice?'kept':'dropped');}
-    else if(i===idx){c.classList.add('current');}
-    list.appendChild(c);
-  }
-}
+const cThresh = document.getElementById('cThresh');
+const cFloor = document.getElementById('cFloor');
+const cMetric = document.getElementById('cMetric');
+const rKeepEl = document.getElementById('rKeep');
+const rKeepD = document.getElementById('rKeepD');
+const rCleanEl = document.getElementById('rClean');
+const rCleanD = document.getElementById('rCleanD');
+const rBalD = document.getElementById('rBalD');
+const balL = document.getElementById('balL');
+const balR = document.getElementById('balR');
+const balText = document.getElementById('balText');
 
-function updateStats(){
-  document.getElementById('statKept').textContent=kept;
-  document.getElementById('statDropped').textContent=dropped;
-  var done=kept+dropped;
-  document.getElementById('statRate').textContent=done?Math.round(kept/done*100)+'%':'--';
-}
-
-// ---------- decision ----------
-function decide(choice){ // choice true=keep
-  if(idx>=N)return;
-  setButtons(false);
-  var ep=DECK[idx];
-  decisions.push({truth:ep.truth,choice:choice});
-  if(choice)kept++;else dropped++;
-  var right=(choice===ep.truth);
-  if(right)correct++;
-  updateStats();
-  var v=document.getElementById('verdict');
-  v.className='verdict show '+(right?'good':'bad');
-  v.innerHTML='<b>'+(right?t('vGood'):t('vBad'))+'</b> · '+reasonText(ep,choice);
-  refreshChips();
-  setTimeout(function(){
-    idx++;
-    if(idx>=N){finish();}else{renderEpoch();}
-  },1150);
-}
-
-function reasonText(ep,choice){
-  var R={
-    alpha:{cn:'清晰 alpha 节律、幅度合理，应保留。',en:'Clear alpha rhythm with sane amplitude, KEEP.'},
-    beta:{cn:'低幅 beta 节律、信号干净，应保留。',en:'Low-amp beta rhythm, clean, KEEP.'},
-    noisy_ok:{cn:'轻微噪声但节律仍清晰，别过度剔除，应保留。',en:'Mild noise but rhythm still clear, do not over-cut, KEEP.'},
-    motion:{cn:'幅度爆表（超 100µV）加高方差，运动伪迹，应剔除。',en:'Amplitude blow-out (over 100µV) plus high variance, motion artifact, DROP.'},
-    blink:{cn:'残余眨眼大峰、幅度超阈，应剔除。',en:'Residual blink spike over threshold, DROP.'},
-    flat:{cn:'近乎平坦、几乎无信号，电极脱落，应剔除。',en:'Near flat, almost no signal, electrode off, DROP.'}
-  };
-  return (R[ep.kind]&&R[ep.kind][LANG])||'';
-}
-
-// ---------- finish / report ----------
-function finish(){
-  document.getElementById('repTitle').textContent=t('repTitle');
-  document.getElementById('repSub').textContent=t('repSub');
-  document.getElementById('repKept').textContent=kept;
-  document.getElementById('repDropped').textContent=dropped;
-  var rate=Math.round(kept/N*100);
-  document.getElementById('repRate').textContent=rate+'%';
-  document.getElementById('repKeptL').textContent=t('repKeptL');
-  document.getElementById('repDroppedL').textContent=t('repDroppedL');
-  document.getElementById('repRateL').textContent=t('repRateL');
-  // analyze: false-drop (good wrongly dropped), false-keep (bad wrongly kept)
-  var falseDrop=0,falseKeep=0;
-  decisions.forEach(function(d){
-    if(d.truth&&!d.choice)falseDrop++;     // good dropped = over-cut
-    if(!d.truth&&d.choice)falseKeep++;      // bad kept = miss
+// ---------- sidebar render ----------
+function renderTiers() {
+  const t = I18N[lang];
+  tierListEl.innerHTML = '';
+  t.tiers.forEach(function (tier, i) {
+    const el = document.createElement('div');
+    el.className = 'tier' + (i === tierIdx ? ' active' : '');
+    const nm = document.createElement('div');
+    nm.className = 't-name'; nm.textContent = tier.name;
+    const mt = document.createElement('div');
+    mt.className = 't-meta'; mt.textContent = '±' + TIER_THRESH[i] + ' µV · ' + tier.meta;
+    el.appendChild(nm); el.appendChild(mt);
+    el.addEventListener('click', function () {
+      tierIdx = i; renderTiers(); syncProtocol(); clearRun();
+    });
+    tierListEl.appendChild(el);
   });
-  var badge=document.getElementById('badge');
-  var note='';
-  if(falseDrop===0&&falseKeep===0){
-    badge.classList.add('show');
-    document.getElementById('badgeTitle').textContent=t('badgeTitle');
-    document.getElementById('badgeDesc').textContent=t('badgeDesc');
-    note=t('noteGood');
-  }else{
-    badge.classList.remove('show');
-    if(falseDrop>0&&falseKeep>0){note=t('noteBoth');}
-    else if(falseDrop>0){note=t('noteOver').replace('{x}',falseDrop);}
-    else{note=t('noteMiss').replace('{x}',falseKeep);}
+}
+
+function renderMetrics() {
+  const t = I18N[lang];
+  metricPickEl.innerHTML = '';
+  t.metrics.forEach(function (m, i) {
+    const el = document.createElement('div');
+    el.className = 'mp-item' + (metricOn[i] ? ' on' : '');
+    const box = document.createElement('div'); box.className = 'mp-box';
+    const tx = document.createElement('div'); tx.className = 'mp-text';
+    const n = document.createElement('div'); n.className = 'mt-n'; n.textContent = m.n;
+    const d = document.createElement('div'); d.className = 'mt-d'; d.textContent = m.d;
+    tx.appendChild(n); tx.appendChild(d);
+    el.appendChild(box); el.appendChild(tx);
+    el.addEventListener('click', function () {
+      metricOn[i] = !metricOn[i]; renderMetrics(); syncProtocol(); clearRun();
+    });
+    metricPickEl.appendChild(el);
+  });
+}
+
+function syncProtocol() {
+  cThresh.textContent = '±' + TIER_THRESH[tierIdx] + ' µV';
+  cFloor.textContent = keepFloor + '%';
+  cMetric.textContent = metricOn.filter(Boolean).length + I18N[lang].chipUnit;
+  floorValEl.textContent = keepFloor + '%';
+}
+
+// ---------- evaluation ----------
+function evaluateProtocol() {
+  const thresh = TIER_THRESH[tierIdx];
+  const useAmp = metricOn[0], useVar = metricOn[1], useBlink = metricOn[2], useBad = metricOn[3];
+  const drops = POOL.map(function (ep) {
+    let drop = false;
+    if (useAmp && ep.amp > thresh) drop = true;
+    if (useVar && ep.variance) drop = true;
+    if (useBlink && ep.blink) drop = true;
+    if (useBad && ep.badchan) drop = true;
+    return drop;
+  });
+  let keptL = 0, keptR = 0, dirtyKept = 0, keptTotal = 0;
+  POOL.forEach(function (ep, i) {
+    if (!drops[i]) {
+      keptTotal++;
+      if (ep.cls === 0) keptL++; else keptR++;
+      if (ep.dirty) dirtyKept++;
+    }
+  });
+  const keepRate = Math.round(keptTotal / POOL.length * 100);
+  const minKept = Math.min(keptL, keptR);
+  const maxKept = Math.max(keptL, keptR) || 1;
+  const balanceRatio = minKept / maxKept;
+  return { drops: drops, keptL: keptL, keptR: keptR, keptTotal: keptTotal,
+           keepRate: keepRate, dirtyKept: dirtyKept, balanceRatio: balanceRatio };
+}
+
+function verdictOf(st) {
+  const t = I18N[lang];
+  const fmt = function (key) {
+    return t[key]
+      .replace('{keep}', st.keepRate).replace('{floor}', keepFloor)
+      .replace('{dirty}', st.dirtyKept).replace('{l}', st.keptL).replace('{r}', st.keptR);
+  };
+  if (!metricOn[0]) return { ok: false, msg: fmt('vNoThresh') };
+  if (st.keepRate < keepFloor) {
+    if (st.keepRate < 55) return { ok: false, msg: fmt('vTooStrict') };
+    return { ok: false, msg: fmt('vBelowFloor') };
   }
-  document.getElementById('repNote').innerHTML=note;
-  document.getElementById('retryBtn').textContent=t('retry');
-  document.getElementById('overlay').classList.add('show');
+  if (st.dirtyKept >= 4) return { ok: false, msg: fmt('vTooLoose') };
+  if (st.balanceRatio < 0.8) return { ok: false, msg: fmt('vImbalance') };
+  return { ok: true, msg: fmt('vGood') };
 }
 
-function reset(){
-  idx=0;kept=0;dropped=0;correct=0;decisions=[];
-  document.getElementById('overlay').classList.remove('show');
-  updateStats();
-  renderEpoch();
+// ---------- run with streamed reveal ----------
+function clearRun() {
+  if (revealTimer) { clearTimeout(revealTimer); revealTimer = null; }
+  running = false;
+  judged = [];
+  revealCount = POOL.length;
+  lastResult = null;
+  rKeepEl.textContent = '—'; rKeepEl.className = 'rc-v'; rKeepD.textContent = I18N[lang].rKeepIdle;
+  rCleanEl.textContent = '—'; rCleanEl.className = 'rc-v'; rCleanD.textContent = I18N[lang].rCleanIdle;
+  rBalD.textContent = I18N[lang].rBalIdle;
+  balL.style.width = '50%'; balR.style.width = '50%'; balText.textContent = '—';
+  setBanner(I18N[lang].bInit, '');
+  drawGrid();
 }
 
-// ---------- i18n refresh ----------
-function refreshI18N(){
-  document.getElementById('brandName').textContent=t('brand');
-  document.getElementById('lblProgress').textContent=t('progress');
-  document.getElementById('lblKept').textContent=t('kept');
-  document.getElementById('lblDropped').textContent=t('dropped');
-  document.getElementById('lblRate').textContent=t('rate');
-  document.getElementById('titleA').textContent=t('titleA');
-  document.getElementById('titleB').textContent=t('titleB');
-  document.getElementById('subtitle').textContent=t('subtitle');
-  document.getElementById('scopeCh').textContent=t('scopeCh');
-  document.getElementById('scopeScale').textContent=t('scopeScale');
-  document.getElementById('lblAmp').textContent=t('lblAmp');
-  document.getElementById('lblAlpha').textContent=t('lblAlpha');
-  document.getElementById('lblLine').textContent=t('lblLine');
-  document.getElementById('txtKeep').textContent=t('txtKeep');
-  document.getElementById('txtDrop').textContent=t('txtDrop');
-  if(idx<N){renderEpoch();}
+function runProtocol() {
+  if (running) return;
+  const st = evaluateProtocol();
+  lastResult = st;
+  running = true;
+  judged = st.drops.slice();
+  revealCount = 0;
+  setBanner(I18N[lang].runStream, '');
+  streamReveal(st);
 }
 
-// ---------- events ----------
-document.getElementById('langBtn').addEventListener('click',function(){
-  LANG=LANG==='en'?'cn':'en';
-  document.getElementById('langBtn').textContent=LANG.toUpperCase();
-  refreshI18N();
+function streamReveal(st) {
+  const total = POOL.length;
+  const stepN = 6;
+  function step() {
+    revealCount = Math.min(total, revealCount + stepN);
+    drawGrid();
+    if (revealCount >= total) { running = false; finishRun(st); return; }
+    revealTimer = setTimeout(step, 70);
+  }
+  step();
+}
+
+function finishRun(st) {
+  const t = I18N[lang];
+  rKeepEl.textContent = st.keepRate + '%';
+  const keepOk = st.keepRate >= keepFloor;
+  rKeepEl.className = 'rc-v ' + (keepOk ? 'ok' : 'bad');
+  rKeepD.textContent = keepOk ? t.rKeepGoodD : t.rKeepBadD;
+
+  rCleanEl.textContent = String(st.dirtyKept);
+  const cleanOk = st.dirtyKept < 4;
+  rCleanEl.className = 'rc-v ' + (cleanOk ? 'ok' : 'bad');
+  rCleanD.textContent = cleanOk ? t.rCleanGoodD : t.rCleanBadD;
+
+  const tot = (st.keptL + st.keptR) || 1;
+  balL.style.width = (st.keptL / tot * 100) + '%';
+  balR.style.width = (st.keptR / tot * 100) + '%';
+  balText.textContent = st.keptL + ' / ' + st.keptR;
+  rBalD.textContent = st.balanceRatio >= 0.8 ? t.rBalGoodD : t.rBalBadD;
+
+  const v = verdictOf(st);
+  setBanner(v.msg, v.ok ? 'good' : 'warn');
+  if (v.ok) setTimeout(function () { goldStamp.classList.add('show'); }, 480);
+}
+
+function setBanner(text, cls) {
+  bannerEl.className = 'banner' + (cls ? ' ' + cls : '');
+  bannerEl.innerHTML = '';
+  const span = document.createElement('span');
+  span.textContent = text;
+  bannerEl.appendChild(span);
+}
+
+// ---------- epoch grid canvas ----------
+function resizeCanvas() {
+  const r = canvas.getBoundingClientRect();
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = Math.max(2, Math.floor(r.width * dpr));
+  canvas.height = Math.max(2, Math.floor(r.height * dpr));
+  cctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  drawGrid();
+}
+
+function colVar(name) {
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+}
+
+function drawGrid() {
+  const r = canvas.getBoundingClientRect();
+  const W = r.width, H = r.height;
+  cctx.clearRect(0, 0, W, H);
+  if (W < 4 || H < 4) return;
+
+  const cols = 20, rows = 4, gapMid = 14;
+  const padX = 26, padY = 12;
+  const cellW = (W - padX - 8 - (cols - 1) * 4) / cols;
+  const cellH = (H - padY * 2 - gapMid - (rows - 1) * 4) / rows;
+
+  const cGood = colVar('--good');
+  const cWarn = colVar('--warn');
+  const cNeutral = colVar('--sub-2');
+  const cComp = colVar('--computing');
+  const cPrim = colVar('--primary');
+
+  for (let idx = 0; idx < POOL.length; idx++) {
+    const inClass = idx < 40 ? 0 : 1;
+    const local = idx % 40;
+    const cc = local % cols;
+    const rrBase = inClass === 0 ? 0 : 2;
+    const rr = rrBase + Math.floor(local / cols);
+    const x = padX + cc * (cellW + 4);
+    let y = padY + rr * (cellH + 4);
+    if (rr >= 2) y += gapMid;
+
+    let fill, alpha = 1;
+    if (running && idx >= revealCount) {
+      fill = inClass === 0 ? cComp : cPrim;          // not yet judged this run
+    } else if (lastResult) {
+      fill = judged[idx] ? cWarn : cGood;            // judged: keep/drop
+    } else {
+      fill = inClass === 0 ? cComp : cPrim; alpha = 0.30; // idle preview
+    }
+    cctx.globalAlpha = alpha;
+    cctx.fillStyle = fill;
+    roundRect(cctx, x, y, cellW, cellH, 2.5);
+    cctx.fill();
+    cctx.globalAlpha = 1;
+  }
+
+  cctx.fillStyle = cNeutral;
+  cctx.font = '9px ' + colVar('--mono').replace(/['"]/g, '');
+  cctx.textBaseline = 'middle';
+  cctx.save();
+  cctx.translate(11, padY + cellH);
+  cctx.rotate(-Math.PI / 2);
+  cctx.textAlign = 'right';
+  cctx.fillText(I18N[lang].labL, 0, 0);
+  cctx.restore();
+  cctx.save();
+  cctx.translate(11, padY + gapMid + cellH * 3 + 12);
+  cctx.rotate(-Math.PI / 2);
+  cctx.textAlign = 'right';
+  cctx.fillText(I18N[lang].labR, 0, 0);
+  cctx.restore();
+}
+
+function roundRect(c, x, y, w, h, r) {
+  if (w < 1 || h < 1) return;
+  r = Math.min(r, w / 2, h / 2);
+  c.beginPath();
+  c.moveTo(x + r, y);
+  c.arcTo(x + w, y, x + w, y + h, r);
+  c.arcTo(x + w, y + h, x, y + h, r);
+  c.arcTo(x, y + h, x, y, r);
+  c.arcTo(x, y, x + w, y, r);
+  c.closePath();
+}
+
+// ---------- floor stepper ----------
+floorUpEl.addEventListener('click', function () {
+  keepFloor = Math.min(90, keepFloor + 5); syncProtocol(); clearRun();
 });
-document.getElementById('btnKeep').addEventListener('click',function(){decide(true);});
-document.getElementById('btnDrop').addEventListener('click',function(){decide(false);});
-document.getElementById('retryBtn').addEventListener('click',reset);
-document.addEventListener('keydown',function(e){
-  if(document.getElementById('overlay').classList.contains('show'))return;
-  if(document.getElementById('btnKeep').disabled)return;
-  var k=e.key.toLowerCase();
-  if(k==='k')decide(true);
-  else if(k==='d')decide(false);
+floorDownEl.addEventListener('click', function () {
+  keepFloor = Math.max(30, keepFloor - 5); syncProtocol(); clearRun();
 });
-window.addEventListener('resize',function(){if(idx<N)drawScope(DECK[idx]);});
+
+// ---------- lang ----------
+function applyLang() {
+  document.querySelectorAll('[data-i18n]').forEach(function (el) {
+    const k = el.getAttribute('data-i18n');
+    if (I18N[lang][k] !== undefined) el.textContent = I18N[lang][k];
+  });
+  document.documentElement.lang = lang === 'zh' ? 'zh' : 'en';
+  renderTiers(); renderMetrics(); syncProtocol();
+}
+langBtn.addEventListener('click', function () {
+  lang = lang === 'zh' ? 'en' : 'zh';
+  applyLang();
+  if (!running && !lastResult) setBanner(I18N[lang].bInit, '');
+  drawGrid();
+});
+
+runBtn.addEventListener('click', runProtocol);
+resetBtn.addEventListener('click', function () {
+  tierIdx = 2; keepFloor = 60;
+  metricOn[0] = true; metricOn[1] = false; metricOn[2] = false; metricOn[3] = false;
+  renderTiers(); renderMetrics(); syncProtocol(); clearRun();
+});
+document.getElementById('goldClose').addEventListener('click', function () {
+  goldStamp.classList.remove('show'); clearRun();
+});
+
+window.addEventListener('resize', resizeCanvas);
 
 // ---------- init ----------
-refreshI18N();
-updateStats();
-// 首帧延后到 flex 布局稳定后再画 (双 rAF), 避免 canvas-host 尺寸未就绪导致波形丢失
-requestAnimationFrame(function(){
-  requestAnimationFrame(function(){ renderEpoch(); });
-});
-})();
+renderTiers();
+renderMetrics();
+syncProtocol();
+applyLang();
+revealCount = POOL.length;
+setBanner(I18N[lang].bInit, '');
+requestAnimationFrame(function () { resizeCanvas(); });
 </script>
 </body>
 </html>
