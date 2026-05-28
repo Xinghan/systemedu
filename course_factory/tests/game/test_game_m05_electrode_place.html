@@ -1,527 +1,497 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="zh-CN">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>电极布局师</title>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Electrode Placement Planner</title>
 <style>
-  :root{
-    /* Surfaces — Claude warm cream */
-    --paper:    #FAF9F5;
-    --paper-2:  #F1EDDF;
-    --card:     #FFFFFF;
-    --ink:      #191814;
-    --ink-2:    #2B2924;
-    --sub:      #6B6557;
-    --sub-2:    #9D978A;
-    --border:   #EBE5D6;
-    --border-2: #D9D1BD;
-    --hairline: #F2EDE0;
+:root{
+  --bg-0:oklch(0.18 0.03 25);
+  --bg-1:oklch(0.23 0.04 25);
+  --accent:oklch(0.75 0.17 25);
+  --synaptic:oklch(0.75 0.17 25);
+  --dendrite:oklch(0.55 0.15 25);
+  --axon:oklch(0.32 0.10 25);
+  --firing:oklch(0.92 0.08 25);
+  --memory:oklch(0.85 0.14 85);
+  --ink:oklch(0.94 0.02 60);
+  --muted:oklch(0.66 0.03 40);
+  --mono:'JetBrains Mono','SFMono-Regular',ui-monospace,'Menlo',Consolas,monospace;
+  --sans:'JetBrains Mono',ui-monospace,system-ui,'Noto Sans SC',sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:100%;height:100vh;overflow:hidden;background:var(--bg-0);color:var(--ink);font-family:var(--sans)}
+.shell{display:flex;flex-direction:row;height:100vh}
 
-    /* Primary — Claude coral */
-    --primary:      #D97757;
-    --primary-ink:  #9A4A2E;
-    --primary-soft: #F8EDE5;
-    --primary-line: #ECCFB8;
+/* ---------- sidebar ---------- */
+.game-sidebar{width:200px;flex:0 0 200px;background:var(--bg-1);border-right:1px solid var(--axon);
+  display:flex;flex-direction:column;padding:14px 14px 12px;overflow-y:auto}
+.brand{display:flex;align-items:center;gap:9px;margin-bottom:14px}
+.mascot{width:34px;height:34px;flex:0 0 34px}
+.brand .who{line-height:1.15}
+.brand .who b{font-size:12px;letter-spacing:.5px;color:var(--firing)}
+.brand .who span{display:block;font-size:9px;color:var(--muted);letter-spacing:.5px}
 
-    /* Domain accent — robotics 紫 */
-    --robotics:     #7C4569;
-    --robotics-soft:#E9DBE3;
+.card{background:var(--axon);border:1px solid var(--dendrite);padding:9px 10px;margin-bottom:11px}
+.card h4{font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--memory);margin-bottom:6px;font-weight:700}
+.card p{font-size:11px;line-height:1.6;color:var(--ink)}
 
-    --good:    #5A8A5E;
-    --good-soft:#E2ECE1;
-    --warn:    #C0823C;
+.budget{display:flex;align-items:baseline;gap:6px}
+.budget .num{font-family:var(--mono);font-size:30px;font-weight:700;color:var(--firing);line-height:1}
+.budget .of{font-size:11px;color:var(--muted)}
+.budget .lbl{font-size:10px;color:var(--muted);letter-spacing:1px;margin-left:auto}
 
-    --shadow-sm: 0 1px 2px 0 rgba(25,24,20,.04);
-    --shadow:    0 1px 3px 0 rgba(25,24,20,.06), 0 1px 2px -1px rgba(25,24,20,.04);
-    --shadow-md: 0 4px 8px -2px rgba(25,24,20,.06), 0 2px 4px -2px rgba(25,24,20,.04);
-    --shadow-lg: 0 12px 24px -6px rgba(25,24,20,.1), 0 4px 8px -4px rgba(25,24,20,.05);
-  }
-  *{box-sizing:border-box;}
-  html,body{margin:0;padding:0;}
-  body{
-    height:100vh;overflow:hidden;display:flex;
-    background:var(--paper);color:var(--ink);
-    font-family:'PingFang SC','Noto Sans SC','Inter',sans-serif;
-  }
-  .mono{font-family:'JetBrains Mono','SF Mono','Roboto Mono',ui-monospace,monospace;}
+.stat{display:flex;justify-content:space-between;align-items:center;font-size:11px;padding:3px 0}
+.stat .k{color:var(--muted)}
+.stat .v{font-family:var(--mono);color:var(--ink)}
+.stat .v.good{color:var(--memory)}
+.stat .v.bad{color:var(--accent)}
 
-  /* ---------------- Sidebar ---------------- */
-  .game-sidebar{
-    width:200px;flex-shrink:0;height:100vh;
-    background:var(--paper-2);border-right:1px solid var(--border-2);
-    display:flex;flex-direction:column;gap:14px;padding:18px 16px;
-    overflow-y:auto;
-  }
-  .brand{display:flex;flex-direction:column;gap:4px;}
-  .brand .kicker{font-size:11px;letter-spacing:.14em;color:var(--robotics);font-weight:700;text-transform:uppercase;}
-  .brand h1{font-size:18px;margin:0;line-height:1.25;color:var(--ink);}
-  .task{
-    background:var(--card);border:1px solid var(--border);border-radius:10px;
-    padding:11px 12px;box-shadow:var(--shadow-sm);
-  }
-  .task .lbl{font-size:11px;font-weight:700;color:var(--primary-ink);letter-spacing:.04em;margin-bottom:5px;}
-  .task ul{margin:0;padding-left:16px;}
-  .task li{font-size:12px;color:var(--sub);line-height:1.55;margin-bottom:3px;}
-  .task li b{color:var(--ink-2);}
+.barwrap{height:8px;background:var(--bg-0);border:1px solid var(--dendrite);margin-top:6px;position:relative}
+.barfill{height:100%;width:0%;background:var(--memory);transition:width .35s ease}
 
-  .tray-lbl{font-size:11px;font-weight:700;color:var(--sub);letter-spacing:.04em;}
-  .tray{display:flex;flex-wrap:wrap;gap:7px;}
-  .chip{
-    min-width:46px;padding:6px 9px;border-radius:8px;cursor:grab;user-select:none;
-    background:var(--card);border:1px solid var(--border-2);box-shadow:var(--shadow-sm);
-    display:flex;flex-direction:column;align-items:center;gap:1px;touch-action:none;
-    transition:transform .12s ease,box-shadow .12s ease;
-  }
-  .chip:hover{transform:translateY(-1px);box-shadow:var(--shadow-md);border-color:var(--robotics);}
-  .chip:active{cursor:grabbing;}
-  .chip.dragging{opacity:.4;}
-  .chip.placed{opacity:.32;pointer-events:none;}
-  .chip .code{font-size:14px;font-weight:700;color:var(--ink);font-family:'JetBrains Mono',monospace;}
-  .chip .role{font-size:9px;color:var(--sub-2);line-height:1.1;text-align:center;}
-  .chip.key .code{color:var(--robotics);}
-  .chip.blink .code{color:var(--primary);}
+.actions{margin-top:auto;display:flex;flex-direction:column;gap:8px;padding-top:10px}
+.btn{font-family:var(--mono);font-size:12px;font-weight:700;letter-spacing:.5px;padding:9px 0;cursor:pointer;
+  border:1px solid var(--accent);background:var(--bg-0);color:var(--firing);text-align:center;
+  box-shadow:3px 3px 0 var(--bg-0)}
+.btn:hover{background:var(--axon)}
+.btn[disabled]{opacity:.4;cursor:not-allowed}
+.btn.ghost{border-color:var(--dendrite);color:var(--muted);box-shadow:none}
+#langBtn{font-family:var(--mono);font-size:11px;letter-spacing:1px;padding:6px 0;cursor:pointer;
+  border:1px solid var(--dendrite);background:transparent;color:var(--muted)}
+#langBtn:hover{color:var(--firing);border-color:var(--accent)}
 
-  .actions{display:flex;flex-direction:column;gap:8px;}
-  .btn{
-    padding:9px 12px;border-radius:9px;font-size:13px;font-weight:700;cursor:pointer;
-    border:1px solid var(--border-2);background:var(--card);color:var(--ink-2);
-    box-shadow:var(--shadow-sm);transition:transform .1s ease,box-shadow .1s ease;
-    text-align:center;
-  }
-  .btn:hover{box-shadow:var(--shadow-md);}
-  .btn:active{transform:translateY(1px);}
-  .btn-check{background:var(--primary);border-color:var(--primary);color:#fff;}
-  .btn-check:hover{background:var(--primary-ink);}
-  .lang-btn{margin-top:auto;}
+/* ---------- main ---------- */
+.game-main{flex:1;min-width:0;display:flex;flex-direction:column}
+.topbar{display:flex;align-items:center;gap:14px;padding:10px 18px;border-bottom:1px solid var(--axon)}
+.topbar .ttl{font-size:13px;font-weight:700;color:var(--firing);letter-spacing:.5px}
+.topbar .sub{font-size:10px;color:var(--muted);letter-spacing:.5px}
+.legend{margin-left:auto;display:flex;gap:14px}
+.legend .li{display:flex;align-items:center;gap:5px;font-size:10px;color:var(--muted)}
+.legend .dot{width:10px;height:10px;border-radius:50%}
+.stage{flex:1;min-height:0;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:10px}
+.stage canvas{display:block;cursor:pointer}
+.hint{font-size:11px;color:var(--muted);padding:6px 0 2px;min-height:20px;text-align:center}
+.hint.bad{color:var(--accent)}
+.hint.good{color:var(--memory)}
 
-  /* ---------------- Main ---------------- */
-  .game-main{
-    flex:1;height:100vh;display:flex;flex-direction:column;position:relative;
-    padding:18px 22px;overflow:hidden;
-  }
-  .hud{
-    align-self:flex-end;max-width:62%;
-    background:var(--card);border:1px solid var(--border);border-radius:10px;
-    padding:9px 14px;box-shadow:var(--shadow);font-size:13px;color:var(--sub);
-    min-height:20px;line-height:1.45;
-  }
-  .hud.good{border-color:var(--good);color:var(--good);background:var(--good-soft);}
-  .hud.warn{border-color:var(--warn);color:var(--warn);background:#F6ECDB;}
-  .stage{
-    flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
-    min-height:0;
-  }
-  .scalp-wrap{
-    flex:1;width:100%;display:flex;align-items:center;justify-content:center;min-height:0;
-  }
-  svg{max-width:100%;max-height:100%;}
-
-  .slot-circle{fill:var(--card);stroke:var(--border-2);stroke-width:2;cursor:default;transition:fill .15s,stroke .15s;}
-  .slot-circle.over{fill:var(--robotics-soft);stroke:var(--robotics);}
-  .slot-circle.filled{stroke:var(--ink-2);}
-  .slot-circle.filled-key{fill:var(--robotics-soft);stroke:var(--robotics);}
-  .slot-circle.correct{fill:var(--good-soft);stroke:var(--good);}
-  .slot-circle.wrong{fill:var(--primary-soft);stroke:var(--primary);}
-  .slot-label{font-family:'JetBrains Mono',monospace;font-size:11px;fill:var(--sub-2);text-anchor:middle;pointer-events:none;}
-  .slot-placed{font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:700;fill:var(--ink);text-anchor:middle;pointer-events:none;}
-  .zone-ring{fill:none;stroke:var(--primary);stroke-width:2.5;stroke-dasharray:6 5;opacity:0;transition:opacity .3s;}
-  .zone-ring.show{opacity:.85;}
-  .head-outline{fill:#FFFFFF;stroke:var(--border-2);stroke-width:2.5;}
-  .head-inner{fill:none;stroke:var(--hairline);stroke-width:2;}
-  .nose{fill:var(--paper-2);stroke:var(--border-2);stroke-width:2;}
-  .ear{fill:var(--paper-2);stroke:var(--border-2);stroke-width:2;}
-  .axis-lbl{font-family:'JetBrains Mono',monospace;font-size:11px;fill:var(--sub-2);text-anchor:middle;}
-
-  .award{
-    position:absolute;inset:0;display:none;align-items:center;justify-content:center;
-    background:rgba(250,249,245,.86);backdrop-filter:blur(2px);z-index:30;
-  }
-  .award.show{display:flex;animation:fade .4s ease;}
-  @keyframes fade{from{opacity:0;}to{opacity:1;}}
-  .award-card{
-    background:var(--card);border:1px solid var(--primary-line);border-radius:16px;
-    padding:30px 38px;box-shadow:var(--shadow-lg);text-align:center;max-width:420px;
-  }
-  .award-card .seal{
-    width:74px;height:74px;margin:0 auto 14px;border-radius:50%;
-    background:var(--primary-soft);border:2px solid var(--primary);
-    display:flex;align-items:center;justify-content:center;
-    font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:700;color:var(--primary-ink);
-    animation:pulse 2.2s ease-in-out infinite;
-  }
-  @keyframes pulse{0%,100%{transform:scale(1);}50%{transform:scale(1.06);}}
-  .award-card h2{margin:0 0 8px;font-size:21px;color:var(--ink);}
-  .award-card p{margin:0 0 18px;font-size:13px;color:var(--sub);line-height:1.6;}
-
-  /* drag ghost */
-  .ghost{position:fixed;pointer-events:none;z-index:90;transform:translate(-50%,-50%);
-    background:var(--card);border:1px solid var(--robotics);border-radius:8px;padding:5px 9px;
-    box-shadow:var(--shadow-md);font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:700;color:var(--robotics);}
+/* ---------- modal ---------- */
+.scrim{position:fixed;inset:0;background:rgba(0,0,0,.62);display:none;z-index:40}
+.modal{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:min(440px,86vw);
+  background:var(--bg-1);border:1px solid var(--accent);padding:26px 28px;z-index:41;display:none;
+  box-shadow:6px 6px 0 var(--bg-0)}
+.modal h2{font-size:17px;color:var(--firing);margin-bottom:6px;letter-spacing:.5px}
+.modal .verdict{font-family:var(--mono);font-size:34px;font-weight:700;margin:10px 0}
+.modal .verdict.win{color:var(--memory)}
+.modal .verdict.fail{color:var(--accent)}
+.modal p{font-size:12px;line-height:1.7;color:var(--ink);margin-bottom:8px}
+.modal .sim{font-family:var(--mono);font-size:11px;color:var(--muted);background:var(--bg-0);
+  border:1px solid var(--axon);padding:8px 10px;margin:8px 0;line-height:1.7}
+.modal .sim b{color:var(--firing)}
+.modal .row{display:flex;gap:10px;margin-top:14px}
+.unlock{display:inline-block;font-family:var(--mono);font-size:11px;letter-spacing:1px;color:var(--bg-0);
+  background:var(--memory);padding:5px 12px;margin-top:4px}
 </style>
 </head>
 <body>
+<div class="shell">
   <aside class="game-sidebar">
     <div class="brand">
-      <span class="kicker" id="kicker">BCI · 10-20 系统</span>
-      <h1 id="title">电极布局师</h1>
+      <svg class="mascot" viewBox="0 0 34 34" aria-hidden="true">
+        <g fill="none" stroke="var(--accent)" stroke-width="1.6" stroke-linecap="round">
+          <line x1="17" y1="17" x2="17" y2="5"/>
+          <line x1="17" y1="17" x2="7" y2="11"/>
+          <line x1="17" y1="17" x2="27" y2="11"/>
+          <line x1="17" y1="17" x2="9" y2="26"/>
+          <line x1="17" y1="17" x2="25" y2="26"/>
+        </g>
+        <circle cx="17" cy="17" r="3.4" fill="var(--firing)"/>
+        <circle cx="17" cy="5" r="2" fill="var(--memory)"/>
+        <circle cx="7" cy="11" r="2" fill="var(--dendrite)"/>
+        <circle cx="27" cy="11" r="2" fill="var(--dendrite)"/>
+        <circle cx="9" cy="26" r="2" fill="var(--dendrite)"/>
+        <circle cx="25" cy="26" r="2" fill="var(--dendrite)"/>
+      </svg>
+      <div class="who"><b>Spark</b><span data-i="role"></span></div>
     </div>
 
-    <div class="task">
-      <div class="lbl" id="taskLbl">本关任务</div>
-      <ul>
-        <li id="t1">把 <b>C3 / Cz / C4</b> 放到运动皮层正上方（运动想象 BCI 的关键三点）</li>
-        <li id="t2">把 <b>Fp1 / Fp2</b> 放到前额——这里最容易被眨眼伪迹污染</li>
-        <li id="t3">全部就位后点「校验布局」</li>
-      </ul>
+    <div class="card">
+      <h4 data-i="taskH"></h4>
+      <p data-i="taskBody"></p>
     </div>
 
-    <div class="tray-lbl" id="trayLbl">电极库（拖到头皮槽位）</div>
-    <div class="tray" id="tray"></div>
+    <div class="card">
+      <h4 data-i="budgetH"></h4>
+      <div class="budget">
+        <span class="num" id="budgetNum">8</span>
+        <span class="of">/ 8</span>
+        <span class="lbl" data-i="budgetUnit"></span>
+      </div>
+    </div>
+
+    <div class="card">
+      <h4 data-i="coverH"></h4>
+      <div class="stat"><span class="k" data-i="covMotor"></span><span class="v" id="sMotor">0 / 4</span></div>
+      <div class="stat"><span class="k" data-i="covRef"></span><span class="v" id="sRef">0 / 1</span></div>
+      <div class="stat"><span class="k" data-i="covWaste"></span><span class="v" id="sWaste">0</span></div>
+      <div class="barwrap"><div class="barfill" id="covBar"></div></div>
+    </div>
 
     <div class="actions">
-      <button class="btn btn-check" id="checkBtn">校验布局</button>
-      <button class="btn" id="zoneBtn">显示眨眼污染区</button>
-      <button class="btn" id="resetBtn">重置</button>
+      <button class="btn" id="btnRun" data-i="run"></button>
+      <button class="btn ghost" id="btnReset" data-i="reset"></button>
+      <button id="langBtn">EN / 中文</button>
     </div>
-
-    <button class="btn lang-btn" id="langBtn">EN / 中</button>
   </aside>
 
   <main class="game-main">
-    <div class="hud" id="hud">从左侧电极库把电极拖到头皮上对应的槽位。先放关键三点 C3 / Cz / C4。</div>
-
-    <div class="stage">
-      <div class="scalp-wrap">
-        <svg id="scalp" viewBox="0 0 520 540" preserveAspectRatio="xMidYMid meet" aria-label="scalp top view">
-          <!-- nose at top -->
-          <path class="nose" d="M260 30 L242 70 Q260 80 278 70 Z"></path>
-          <!-- ears -->
-          <path class="ear" d="M58 270 Q40 250 46 290 Q40 330 58 312 Z"></path>
-          <path class="ear" d="M462 270 Q480 250 474 290 Q480 330 462 312 Z"></path>
-          <!-- head outline -->
-          <circle class="head-outline" cx="260" cy="290" r="210"></circle>
-          <circle class="head-inner" cx="260" cy="290" r="140"></circle>
-          <circle class="head-inner" cx="260" cy="290" r="70"></circle>
-          <!-- orientation labels -->
-          <text class="axis-lbl" x="260" y="18">FRONT 前 / NASION</text>
-          <text class="axis-lbl" x="260" y="528">BACK 后 / INION</text>
-          <text class="axis-lbl" x="20" y="294" transform="rotate(-90 20 294)">LEFT 左</text>
-          <text class="axis-lbl" x="500" y="294" transform="rotate(90 500 294)">RIGHT 右</text>
-
-          <!-- blink contamination ring (around Fp1/Fp2 zone) -->
-          <ellipse id="zoneRing" class="zone-ring" cx="260" cy="138" rx="92" ry="48"></ellipse>
-
-          <!-- slots injected by JS -->
-          <g id="slots"></g>
-        </svg>
+    <div class="topbar">
+      <div>
+        <div class="ttl" data-i="hTitle"></div>
+        <div class="sub">P-EEG-01-M05 · neuro · 10-20 system</div>
+      </div>
+      <div class="legend">
+        <div class="li"><span class="dot" style="background:var(--memory)"></span><span data-i="lgMotor"></span></div>
+        <div class="li"><span class="dot" style="background:var(--firing)"></span><span data-i="lgRef"></span></div>
+        <div class="li"><span class="dot" style="background:var(--dendrite)"></span><span data-i="lgOther"></span></div>
       </div>
     </div>
-
-    <div class="award" id="award">
-      <div class="award-card">
-        <div class="seal">PASS</div>
-        <h2 id="awTitle">解锁：电极布局师</h2>
-        <p id="awBody">完美！运动想象 BCI 的关键三点 C3 / Cz / C4 全部就位，Fp1 / Fp2 也正确落在最易被眨眼伪迹污染的前额。你已掌握 10-20 系统核心布局。</p>
-        <button class="btn btn-check" id="awBtn">再玩一次</button>
-      </div>
+    <div class="stage">
+      <canvas id="scalp"></canvas>
+      <div class="hint" id="hint" data-i="hintIdle"></div>
     </div>
   </main>
+</div>
+
+<div class="scrim" id="scrim"></div>
+<div class="modal" id="modal">
+  <h2 id="mTitle"></h2>
+  <div class="verdict" id="mVerdict"></div>
+  <p id="mMsg"></p>
+  <div class="sim" id="mSim"></div>
+  <div id="mUnlock"></div>
+  <div class="row">
+    <button class="btn" id="mAgain" data-i="again"></button>
+    <button class="btn ghost" id="mClose" data-i="close"></button>
+  </div>
+</div>
 
 <script>
 (function(){
   "use strict";
-  var LANG='cn';
 
-  // 10-20 系统槽位坐标 (viewBox 520x540, 中心 260,290)
-  // 仅放置课程关注的子集 + 几个分散点
-  var SLOTS=[
-    {id:'Fp1', x:212, y:128, key:false, blink:true},
-    {id:'Fp2', x:308, y:128, key:false, blink:true},
-    {id:'F3',  x:178, y:212, key:false, blink:false},
-    {id:'Fz',  x:260, y:208, key:false, blink:false},
-    {id:'F4',  x:342, y:212, key:false, blink:false},
-    {id:'C3',  x:160, y:290, key:true,  blink:false},
-    {id:'Cz',  x:260, y:290, key:true,  blink:false},
-    {id:'C4',  x:360, y:290, key:true,  blink:false},
-    {id:'P3',  x:178, y:368, key:false, blink:false},
-    {id:'Pz',  x:260, y:372, key:false, blink:false},
-    {id:'P4',  x:342, y:368, key:false, blink:false},
-    {id:'O1',  x:212, y:452, key:false, blink:false},
-    {id:'O2',  x:308, y:452, key:false, blink:false}
+  // ---------- i18n ----------
+  var LANG='cn';
+  var I18N={
+    role:{cn:'电极布局向导',en:'Montage guide'},
+    taskH:{cn:'任务',en:'MISSION'},
+    taskBody:{cn:'你只有 8 个电极。规划贴在头皮哪几个位置，才能最好地抓到「想象左手 / 右手」的脑信号，再预演解码。',
+              en:'You have only 8 electrodes. Plan where on the scalp to place them so the imagined left/right-hand signal is best captured, then run the decode rehearsal.'},
+    budgetH:{cn:'电极预算',en:'ELECTRODE BUDGET'},
+    budgetUnit:{cn:'剩余',en:'left'},
+    coverH:{cn:'运动区覆盖',en:'MOTOR COVERAGE'},
+    covMotor:{cn:'运动区命中',en:'Motor sites'},
+    covRef:{cn:'参考点',en:'Reference'},
+    covWaste:{cn:'浪费(远区)',en:'Wasted'},
+    run:{cn:'预演解码',en:'RUN REHEARSAL'},
+    reset:{cn:'清空重排',en:'CLEAR'},
+    hTitle:{cn:'头皮 10-20 电极规划',en:'Scalp 10-20 Electrode Planner'},
+    lgMotor:{cn:'运动区',en:'Motor strip'},
+    lgRef:{cn:'参考点',en:'Reference'},
+    lgOther:{cn:'其它位置',en:'Other sites'},
+    hintIdle:{cn:'点头皮上的位置放/取电极。运动想象信号最强在中央运动区 C3 / C4。',
+              en:'Click a site to add/remove an electrode. Imagined-movement signal is strongest over the central motor strip C3 / C4.'},
+    hintNoBudget:{cn:'电极用完了。先取下一个，或直接预演。',en:'Out of electrodes. Remove one, or run the rehearsal.'},
+    hintPlaced:{cn:'已放置 {n} 个电极。',en:'{n} electrode(s) placed.'},
+    again:{cn:'再排一次',en:'PLAN AGAIN'},
+    close:{cn:'关闭',en:'CLOSE'},
+    // outcomes
+    winT:{cn:'布局通过',en:'Montage passed'},
+    winV:{cn:'解码成功',en:'DECODE OK'},
+    winM:{cn:'你的电极盖住了双侧运动区，并留了参考点。预演用这套布局清楚分出了左右手想象。',
+          en:'Your electrodes cover both motor strips and keep a reference. The rehearsal cleanly separated left vs right imagery.'},
+    failMotorT:{cn:'预演失败',en:'Rehearsal failed'},
+    failV:{cn:'无法解码',en:'CANNOT DECODE'},
+    failMotorM:{cn:'电极没盖住中央运动区 C3 / C4，运动想象的 ERD 信号根本没被采到，后续解码无从下手。',
+                en:'No electrode over the central motor strip C3 / C4 — the movement-imagery ERD signal was never recorded, so decoding has nothing to work with.'},
+    failOneT:{cn:'只盖了一侧',en:'Only one side'},
+    failOneM:{cn:'只有一侧运动区被采到。要区分左 vs 右手，必须同时拿到对侧 C3 和 C4 的信号。',
+              en:'Only one motor strip was recorded. To tell left from right you need both C3 and C4 on opposite sides.'},
+    failRefT:{cn:'缺参考点',en:'No reference'},
+    failRefM:{cn:'运动区盖到了，但没有参考电极。脑电是电位差，没有参考点信号会漂、噪声压不住，解码不稳。',
+              en:'Motor strips covered, but no reference electrode. EEG is a potential difference — without a reference the signal drifts and noise dominates.'},
+    answer:{cn:'核心答案：很多电极是为了在头皮不同位置同时取样，把对侧运动区 C3 / C4 一起看，才能比较左右、分出想象的是哪只手。',
+            en:'Core idea: many electrodes sample many scalp sites at once. Seeing C3 and C4 (opposite motor strips) together lets you compare sides and decode which hand was imagined.'},
+    unlock:{cn:'解锁称号：电极布局师',en:'Unlocked: Montage Designer'}
+  };
+
+  // ---------- 10-20 sites (normalized coords on a head circle) ----------
+  // type: motor (C3/C4 + flanking FC/CP central row), ref (Cz / mastoid reference),
+  //       other (frontal / occipital / temporal — not useful for hand MI)
+  var SITES=[
+    {id:'Fp1',x:-0.30,y:-0.82,type:'other'},
+    {id:'Fp2',x: 0.30,y:-0.82,type:'other'},
+    {id:'F7', x:-0.66,y:-0.50,type:'other'},
+    {id:'F3', x:-0.32,y:-0.46,type:'other'},
+    {id:'Fz', x: 0.00,y:-0.44,type:'other'},
+    {id:'F4', x: 0.32,y:-0.46,type:'other'},
+    {id:'F8', x: 0.66,y:-0.50,type:'other'},
+    {id:'FC3',x:-0.34,y:-0.18,type:'motor'},
+    {id:'FC4',x: 0.34,y:-0.18,type:'motor'},
+    {id:'T7', x:-0.86,y: 0.00,type:'other'},
+    {id:'C3', x:-0.40,y: 0.00,type:'motor'},
+    {id:'Cz', x: 0.00,y: 0.00,type:'ref'},
+    {id:'C4', x: 0.40,y: 0.00,type:'motor'},
+    {id:'T8', x: 0.86,y: 0.00,type:'other'},
+    {id:'CP3',x:-0.34,y: 0.18,type:'motor'},
+    {id:'CP4',x: 0.34,y: 0.18,type:'motor'},
+    {id:'P3', x:-0.32,y: 0.46,type:'other'},
+    {id:'Pz', x: 0.00,y: 0.44,type:'other'},
+    {id:'P4', x: 0.32,y: 0.46,type:'other'},
+    {id:'P7', x:-0.66,y: 0.50,type:'other'},
+    {id:'P8', x: 0.66,y: 0.50,type:'other'},
+    {id:'O1', x:-0.30,y: 0.82,type:'other'},
+    {id:'O2', x: 0.30,y: 0.82,type:'other'},
+    {id:'A1', x:-0.98,y: 0.30,type:'ref'},
+    {id:'A2', x: 0.98,y: 0.30,type:'ref'}
   ];
 
-  // 电极角色说明 (i18n)
-  var ROLE={
-    Fp1:{cn:'前额·眨眼源',en:'frontal·blink'}, Fp2:{cn:'前额·眨眼源',en:'frontal·blink'},
-    F3:{cn:'额叶',en:'frontal'}, Fz:{cn:'额中线',en:'frontal mid'}, F4:{cn:'额叶',en:'frontal'},
-    C3:{cn:'左运动区',en:'L motor'}, Cz:{cn:'运动中线',en:'motor mid'}, C4:{cn:'右运动区',en:'R motor'},
-    P3:{cn:'顶叶',en:'parietal'}, Pz:{cn:'顶中线',en:'parietal mid'}, P4:{cn:'顶叶',en:'parietal'},
-    O1:{cn:'枕叶·alpha',en:'occipital·alpha'}, O2:{cn:'枕叶·alpha',en:'occipital·alpha'}
-  };
+  var BUDGET=8;
+  var placed={};            // id -> true
+  var canvas=document.getElementById('scalp');
+  var ctx=canvas.getContext('2d');
+  var geom={cx:0,cy:0,R:0}; // current head geometry in px
 
-  var I18N={
-    kicker:{cn:'BCI · 10-20 系统',en:'BCI · 10-20 System'},
-    title:{cn:'电极布局师',en:'Electrode Placer'},
-    taskLbl:{cn:'本关任务',en:'Mission'},
-    t1:{cn:'把 <b>C3 / Cz / C4</b> 放到运动皮层正上方（运动想象 BCI 的关键三点）',
-        en:'Place <b>C3 / Cz / C4</b> over the motor cortex (the 3 keys for motor-imagery BCI)'},
-    t2:{cn:'把 <b>Fp1 / Fp2</b> 放到前额——这里最容易被眨眼伪迹污染',
-        en:'Place <b>Fp1 / Fp2</b> on the forehead — most prone to eye-blink artifacts'},
-    t3:{cn:'全部就位后点「校验布局」',en:'When all are set, hit "Validate"'},
-    trayLbl:{cn:'电极库（拖到头皮槽位）',en:'Electrode bin (drag onto scalp)'},
-    checkBtn:{cn:'校验布局',en:'Validate'},
-    zoneBtn:{cn:'显示眨眼污染区',en:'Show blink zone'},
-    zoneBtnOff:{cn:'隐藏眨眼污染区',en:'Hide blink zone'},
-    resetBtn:{cn:'重置',en:'Reset'},
-    hudStart:{cn:'从左侧电极库把电极拖到头皮上对应的槽位。先放关键三点 C3 / Cz / C4。',
-              en:'Drag electrodes from the bin onto matching scalp slots. Start with the key trio C3 / Cz / C4.'},
-    hudPlaced:{cn:'已就位 ',en:'Placed '},
-    hudOf:{cn:' / ',en:' / '},
-    hudWin:{cn:'全对！关键三点与前额眨眼区全部正确。',en:'All correct! Motor trio and frontal blink slots are right.'},
-    hudNotFull:{cn:'还有电极没放：',en:'Still in the bin: '},
-    hudWrong:{cn:'有 {n} 个电极位置不对（标红），看清头皮分区再调整。',
-              en:'{n} electrode(s) misplaced (red). Recheck the scalp regions.'},
-    awTitle:{cn:'解锁：电极布局师',en:'Unlocked: Electrode Placer'},
-    awBody:{cn:'完美！运动想象 BCI 的关键三点 C3 / Cz / C4 全部就位，Fp1 / Fp2 也正确落在最易被眨眼伪迹污染的前额。你已掌握 10-20 系统核心布局。',
-            en:'Perfect! The motor-imagery BCI trio C3 / Cz / C4 is in place, and Fp1 / Fp2 sit on the forehead where eye-blink artifacts are strongest. You command the core 10-20 layout.'},
-    awBtn:{cn:'再玩一次',en:'Play again'}
-  };
-  function t(k){return (I18N[k]&&I18N[k][LANG])||(I18N[k]&&I18N[k].en)||k;}
+  function placedCount(){var n=0;for(var k in placed){if(placed[k])n++;}return n;}
+  function placedList(){var a=[];for(var k in placed){if(placed[k])a.push(k);}return a;}
 
-  // 状态: placed[slotId] = electrodeId (放对则相同, 放错则不同)
-  var placed={};
-  var zoneOn=false;
-  var won=false;
+  // ---------- analysis ----------
+  function analyze(){
+    var leftMotor=false,rightMotor=false,motorHits=0,refHits=0,waste=0;
+    SITES.forEach(function(s){
+      if(!placed[s.id])return;
+      if(s.type==='motor'){motorHits++; if(s.x<0)leftMotor=true; else rightMotor=true;}
+      else if(s.type==='ref'){refHits++;}
+      else {waste++;}
+    });
+    return {leftMotor:leftMotor,rightMotor:rightMotor,motorHits:motorHits,refHits:refHits,waste:waste};
+  }
 
-  var svg=document.getElementById('scalp');
-  var slotsG=document.getElementById('slots');
+  // ---------- rendering ----------
+  function resize(){
+    var stage=canvas.parentElement;
+    var r=stage.getBoundingClientRect();
+    var w=Math.max(260,r.width-8);
+    var h=Math.max(260,r.height-34);
+    var size=Math.min(w,h);
+    var dpr=window.devicePixelRatio||1;
+    canvas.width=size*dpr; canvas.height=size*dpr;
+    canvas.style.width=size+'px'; canvas.style.height=size+'px';
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    geom.cx=size/2; geom.cy=size/2; geom.R=size*0.40;
+    draw();
+  }
 
-  function shuffle(a){a=a.slice();for(var i=a.length-1;i>0;i--){var j=Math.floor(Math.random()*(i+1));var x=a[i];a[i]=a[j];a[j]=x;}return a;}
+  function siteXY(s){return {x:geom.cx+s.x*geom.R, y:geom.cy+s.y*geom.R};}
+  function colVar(name){return getComputedStyle(document.documentElement).getPropertyValue(name).trim();}
 
-  function totalCount(){return SLOTS.length;}
-  function placedCount(){return Object.keys(placed).length;}
+  function draw(){
+    var w=canvas.width/(window.devicePixelRatio||1);
+    ctx.clearRect(0,0,w,w);
+    var cx=geom.cx,cy=geom.cy,R=geom.R;
+    var memory=colVar('--memory'),firing=colVar('--firing'),dend=colVar('--dendrite'),
+        axon=colVar('--axon'),accent=colVar('--accent'),muted=colVar('--muted'),ink=colVar('--ink');
 
-  // ---- render scalp slots ----
-  function renderSlots(){
-    slotsG.innerHTML='';
-    SLOTS.forEach(function(s){
-      var g=document.createElementNS('http://www.w3.org/2000/svg','g');
-      g.setAttribute('data-slot',s.id);
+    // head outline
+    ctx.lineWidth=2; ctx.strokeStyle=dend;
+    ctx.beginPath(); ctx.arc(cx,cy,R,0,Math.PI*2); ctx.stroke();
+    // nose
+    ctx.beginPath(); ctx.moveTo(cx-R*0.12,cy-R); ctx.lineTo(cx,cy-R*1.16); ctx.lineTo(cx+R*0.12,cy-R); ctx.stroke();
+    // ears
+    ctx.beginPath(); ctx.arc(cx-R,cy,R*0.10,Math.PI*0.5,Math.PI*1.5); ctx.stroke();
+    ctx.beginPath(); ctx.arc(cx+R,cy,R*0.10,-Math.PI*0.5,Math.PI*0.5); ctx.stroke();
 
-      var c=document.createElementNS('http://www.w3.org/2000/svg','circle');
-      c.setAttribute('cx',s.x);c.setAttribute('cy',s.y);c.setAttribute('r',20);
-      c.setAttribute('class','slot-circle');c.setAttribute('data-circle',s.id);
+    // motor-strip band highlight (central column)
+    ctx.save();
+    ctx.beginPath(); ctx.arc(cx,cy,R,0,Math.PI*2); ctx.clip();
+    ctx.globalAlpha=0.12; ctx.fillStyle=memory;
+    ctx.fillRect(0,cy-R*0.30,w,R*0.60);
+    ctx.globalAlpha=1;
+    ctx.restore();
+    // band label
+    ctx.font='10px JetBrains Mono, monospace'; ctx.fillStyle=muted;
+    ctx.textAlign='left'; ctx.textBaseline='alphabetic';
+    ctx.fillText('motor strip', cx-R+6, cy-R*0.30-4);
 
-      var lbl=document.createElementNS('http://www.w3.org/2000/svg','text');
-      lbl.setAttribute('x',s.x);lbl.setAttribute('y',s.y+4);
+    // midline
+    ctx.strokeStyle=axon; ctx.lineWidth=1; ctx.setLineDash([3,4]);
+    ctx.beginPath(); ctx.moveTo(cx,cy-R); ctx.lineTo(cx,cy+R); ctx.stroke();
+    ctx.setLineDash([]);
 
-      var pid=placed[s.id];
-      if(pid){
-        lbl.setAttribute('class','slot-placed');
-        lbl.textContent=pid;
-        if(won){
-          c.classList.add(pid===s.id?'correct':'wrong');
-        }else{
-          c.classList.add(SLOTS.filter(function(x){return x.id===pid;})[0] && SLOTS.filter(function(x){return x.id===pid;})[0].key ? 'filled-key':'filled');
-        }
-        // 点击取回
-        g.style.cursor='pointer';
-        g.addEventListener('click',function(){
-          if(won)return;
-          var back=placed[s.id];delete placed[s.id];
-          renderSlots();renderTray();updateHud();
-        });
-      }else{
-        lbl.setAttribute('class','slot-label');
-        lbl.textContent=s.id;
+    // sites
+    SITES.forEach(function(s){
+      var p=siteXY(s);
+      var on=!!placed[s.id];
+      var base = s.type==='motor'?memory : s.type==='ref'?firing : dend;
+      ctx.beginPath(); ctx.arc(p.x,p.y,8,0,Math.PI*2);
+      if(on){
+        ctx.fillStyle=base; ctx.fill();
+        ctx.lineWidth=3; ctx.strokeStyle=accent; ctx.stroke();
+        ctx.beginPath(); ctx.arc(p.x,p.y,3.2,0,Math.PI*2); ctx.fillStyle=colVar('--bg-0'); ctx.fill();
+      } else {
+        ctx.fillStyle='rgba(0,0,0,0)';
+        ctx.lineWidth=1.4; ctx.strokeStyle=base; ctx.stroke();
       }
-
-      g.appendChild(c);g.appendChild(lbl);
-      slotsG.appendChild(g);
+      ctx.font='9px JetBrains Mono, monospace';
+      ctx.fillStyle= on? ink : muted;
+      ctx.textAlign='center'; ctx.textBaseline='middle';
+      ctx.fillText(s.id, p.x, p.y-14);
     });
-    bindDropTargets();
   }
 
-  // ---- render electrode tray ----
-  function renderTray(){
-    var tray=document.getElementById('tray');tray.innerHTML='';
-    // 已放置的电极不再出现在库 (按 electrodeId)
-    var usedEls={};
-    Object.keys(placed).forEach(function(sid){usedEls[placed[sid]]=true;});
-    var order=window.__trayOrder||shuffle(SLOTS.map(function(s){return s.id;}));
-    window.__trayOrder=order;
-    order.forEach(function(eid){
-      var s=SLOTS.filter(function(x){return x.id===eid;})[0];
-      var chip=document.createElement('div');
-      chip.className='chip'+(s.key?' key':'')+(s.blink?' blink':'')+(usedEls[eid]?' placed':'');
-      chip.setAttribute('data-eid',eid);
-      if(!usedEls[eid])chip.setAttribute('draggable','true');
-      var code=document.createElement('div');code.className='code';code.textContent=eid;
-      var role=document.createElement('div');role.className='role';role.textContent=ROLE[eid]?ROLE[eid][LANG]:'';
-      chip.appendChild(code);chip.appendChild(role);
-
-      if(!usedEls[eid]){
-        chip.addEventListener('dragstart',function(e){
-          e.dataTransfer.setData('text/plain',eid);
-          e.dataTransfer.effectAllowed='move';
-          chip.classList.add('dragging');
-        });
-        chip.addEventListener('dragend',function(){chip.classList.remove('dragging');});
-        addTouchDrag(chip,eid);
+  // ---------- hit test ----------
+  canvas.addEventListener('click',function(e){
+    var rect=canvas.getBoundingClientRect();
+    var mx=(e.clientX-rect.left), my=(e.clientY-rect.top);
+    var best=null,bd=15;
+    SITES.forEach(function(s){
+      var p=siteXY(s);
+      var d=Math.hypot(p.x-mx,p.y-my);
+      if(d<bd){bd=d;best=s;}
+    });
+    if(!best)return;
+    if(placed[best.id]){
+      delete placed[best.id];
+    } else {
+      if(placedCount()>=BUDGET){
+        flash(t('hintNoBudget'),'bad'); refresh(); return;
       }
-      tray.appendChild(chip);
-    });
-  }
-
-  // ---- place an electrode into a slot ----
-  function placeElectrode(eid,slotId){
-    if(won)return;
-    if(placed[slotId])return; // 槽已占
-    // 若该电极已在别处, 先移除
-    Object.keys(placed).forEach(function(sid){if(placed[sid]===eid)delete placed[sid];});
-    placed[slotId]=eid;
-    renderSlots();renderTray();updateHud();
-  }
-
-  // ---- SVG drop targets ----
-  function bindDropTargets(){
-    SLOTS.forEach(function(s){
-      var circle=slotsG.querySelector('[data-circle="'+s.id+'"]');
-      if(!circle)return;
-      var g=circle.parentNode;
-      g.addEventListener('dragover',function(e){e.preventDefault();e.dataTransfer.dropEffect='move';circle.classList.add('over');});
-      g.addEventListener('dragleave',function(){circle.classList.remove('over');});
-      g.addEventListener('drop',function(e){
-        e.preventDefault();circle.classList.remove('over');
-        var eid=e.dataTransfer.getData('text/plain');
-        if(eid)placeElectrode(eid,s.id);
-      });
-    });
-  }
-
-  // ---- touch drag (ghost + elementFromPoint) ----
-  var ghost=null;
-  function addTouchDrag(chip,eid){
-    chip.addEventListener('touchstart',function(e){
-      if(won)return;
-      e.preventDefault();
-      ghost=document.createElement('div');ghost.className='ghost';ghost.textContent=eid;
-      document.body.appendChild(ghost);moveGhost(e.touches[0]);
-    },{passive:false});
-    chip.addEventListener('touchmove',function(e){
-      e.preventDefault();if(ghost)moveGhost(e.touches[0]);
-    },{passive:false});
-    chip.addEventListener('touchend',function(e){
-      if(!ghost)return;
-      var tch=e.changedTouches[0];
-      ghost.style.display='none';
-      var below=document.elementFromPoint(tch.clientX,tch.clientY);
-      var g=below&&below.closest?(below.closest('[data-slot]')):null;
-      if(g){placeElectrode(eid,g.getAttribute('data-slot'));}
-      ghost.remove();ghost=null;
-    });
-  }
-  function moveGhost(tch){ghost.style.left=tch.clientX+'px';ghost.style.top=tch.clientY+'px';}
-
-  // ---- HUD ----
-  function setHud(txt,cls){
-    var h=document.getElementById('hud');h.textContent=txt;
-    h.className='hud'+(cls?(' '+cls):'');
-  }
-  function updateHud(){
-    if(won)return;
-    var n=placedCount(),total=totalCount();
-    setHud(t('hudPlaced')+n+t('hudOf')+total,'');
-  }
-
-  // ---- validate ----
-  function validate(){
-    if(won)return;
-    var remaining=SLOTS.map(function(s){return s.id;}).filter(function(eid){
-      var used=false;Object.keys(placed).forEach(function(sid){if(placed[sid]===eid)used=true;});
-      return !used;
-    });
-    if(remaining.length>0){
-      setHud(t('hudNotFull')+remaining.join(', '),'warn');
-      return;
+      placed[best.id]=true;
     }
-    // 数全槽 (此时 placedCount === total)
-    var wrong=0;
-    SLOTS.forEach(function(s){if(placed[s.id]!==s.id)wrong++;});
-    if(wrong===0){
-      won=true;
-      renderSlots();
-      setHud(t('hudWin'),'good');
-      document.getElementById('award').classList.add('show');
-    }else{
-      // 临时标红错误, 显示提示 (不锁)
-      flagWrong();
-      setHud(t('hudWrong').replace('{n}',wrong),'warn');
-    }
-  }
-  function flagWrong(){
-    SLOTS.forEach(function(s){
-      var circle=slotsG.querySelector('[data-circle="'+s.id+'"]');
-      if(!circle)return;
-      circle.classList.remove('filled','filled-key','correct','wrong');
-      if(placed[s.id]){
-        circle.classList.add(placed[s.id]===s.id?'correct':'wrong');
-      }
-    });
-  }
-
-  // ---- zone toggle ----
-  function toggleZone(force){
-    zoneOn=(typeof force==='boolean')?force:!zoneOn;
-    document.getElementById('zoneRing').classList.toggle('show',zoneOn);
-    document.getElementById('zoneBtn').textContent=zoneOn?t('zoneBtnOff'):t('zoneBtn');
-  }
-
-  // ---- reset ----
-  function reset(){
-    placed={};won=false;
-    window.__trayOrder=shuffle(SLOTS.map(function(s){return s.id;}));
-    document.getElementById('award').classList.remove('show');
-    toggleZone(false);
-    renderSlots();renderTray();bindDropTargets();
-    setHud(t('hudStart'),'');
-  }
-
-  // ---- i18n refresh ----
-  function refreshI18N(){
-    document.getElementById('kicker').textContent=t('kicker');
-    document.getElementById('title').textContent=t('title');
-    document.getElementById('taskLbl').textContent=t('taskLbl');
-    document.getElementById('t1').innerHTML=t('t1');
-    document.getElementById('t2').innerHTML=t('t2');
-    document.getElementById('t3').textContent=t('t3');
-    document.getElementById('trayLbl').textContent=t('trayLbl');
-    document.getElementById('checkBtn').textContent=t('checkBtn');
-    document.getElementById('zoneBtn').textContent=zoneOn?t('zoneBtnOff'):t('zoneBtn');
-    document.getElementById('resetBtn').textContent=t('resetBtn');
-    document.getElementById('awTitle').textContent=t('awTitle');
-    document.getElementById('awBody').textContent=t('awBody');
-    document.getElementById('awBtn').textContent=t('awBtn');
-    renderSlots();renderTray();bindDropTargets();
-    if(won){setHud(t('hudWin'),'good');}else{updateHud();}
-  }
-
-  // ---- wire up ----
-  document.getElementById('checkBtn').addEventListener('click',validate);
-  document.getElementById('zoneBtn').addEventListener('click',function(){toggleZone();});
-  document.getElementById('resetBtn').addEventListener('click',reset);
-  document.getElementById('awBtn').addEventListener('click',reset);
-  document.getElementById('langBtn').addEventListener('click',function(){
-    LANG=(LANG==='cn')?'en':'cn';
-    this.textContent=(LANG==='cn')?'EN / 中':'中 / EN';
-    refreshI18N();
+    refresh();
   });
 
-  // init
-  window.__trayOrder=shuffle(SLOTS.map(function(s){return s.id;}));
-  renderSlots();renderTray();bindDropTargets();
-  setHud(t('hudStart'),'');
+  function flash(msg,cls){
+    var h=document.getElementById('hint');
+    h.textContent=msg; h.className='hint'+(cls?' '+cls:'');
+  }
+
+  // ---------- sidebar refresh ----------
+  function refresh(){
+    var a=analyze();
+    var used=placedCount();
+    document.getElementById('budgetNum').textContent=(BUDGET-used);
+    document.getElementById('sMotor').textContent=a.motorHits+' / 4';
+    document.getElementById('sMotor').className='v'+(a.leftMotor&&a.rightMotor?' good':'');
+    document.getElementById('sRef').textContent=a.refHits+' / 1';
+    document.getElementById('sRef').className='v'+(a.refHits>=1?' good':'');
+    document.getElementById('sWaste').textContent=a.waste;
+    document.getElementById('sWaste').className='v'+(a.waste>0?' bad':'');
+    var pct=0;
+    if(a.leftMotor)pct+=25; if(a.rightMotor)pct+=25;
+    if(a.refHits>=1)pct+=30;
+    pct+=Math.max(0,20-a.waste*7);
+    pct=Math.max(0,Math.min(100,pct));
+    document.getElementById('covBar').style.width=pct+'%';
+
+    document.getElementById('btnRun').disabled = used===0;
+    if(used===0){ flash(t('hintIdle'),''); }
+    else if(used<BUDGET){ flash(t('hintPlaced').replace('{n}',used),''); }
+    draw();
+  }
+
+  // ---------- run rehearsal ----------
+  function runRehearsal(){
+    var a=analyze();
+    var pl=placedList().join(' ');
+    var title,verdict,verdictCls,msg,simLines,showUnlock=false;
+
+    if(!a.leftMotor && !a.rightMotor){
+      title=t('failMotorT'); verdict=t('failV'); verdictCls='fail'; msg=t('failMotorM');
+      simLines=[
+        line('montage', pl||'—'),
+        line('C3 / C4 captured', 'no'),
+        line('ERD over motor cortex', 'not recorded'),
+        line('left vs right separable', 'no')
+      ];
+    } else if(!(a.leftMotor && a.rightMotor)){
+      title=t('failOneT'); verdict=t('failV'); verdictCls='fail'; msg=t('failOneM');
+      simLines=[
+        line('montage', pl),
+        line('motor side covered', a.leftMotor?'left only':'right only'),
+        line('contralateral compare', 'impossible'),
+        line('left vs right separable', 'no')
+      ];
+    } else if(a.refHits<1){
+      title=t('failRefT'); verdict=t('failV'); verdictCls='fail'; msg=t('failRefM');
+      simLines=[
+        line('montage', pl),
+        line('C3 & C4 captured', 'yes'),
+        line('reference electrode', 'missing'),
+        line('signal drift / noise', 'high — unstable')
+      ];
+    } else {
+      showUnlock=true;
+      title=t('winT'); verdict=t('winV'); verdictCls='win'; msg=t('winM');
+      var acc=Math.max(78, 96 - a.waste*4);
+      simLines=[
+        line('montage', pl),
+        line('C3 & C4 captured', 'yes'),
+        line('reference electrode', 'yes'),
+        line('decode left vs right', acc+'% acc')
+      ];
+    }
+    openModal(title,verdict,verdictCls,msg,simLines,showUnlock);
+  }
+
+  function line(k,v){return '<div><b>'+k+':</b> '+v+'</div>';}
+
+  function openModal(title,verdict,vcls,msg,simLines,showUnlock){
+    document.getElementById('mTitle').textContent=title;
+    var v=document.getElementById('mVerdict'); v.textContent=verdict; v.className='verdict '+vcls;
+    document.getElementById('mMsg').textContent=msg;
+    document.getElementById('mSim').innerHTML=simLines.join('');
+    var u=document.getElementById('mUnlock');
+    if(showUnlock){
+      u.innerHTML='<span class="unlock">'+t('unlock')+'</span>'+
+        '<p style="margin-top:10px">'+t('answer')+'</p>';
+    } else {
+      u.innerHTML='<p style="margin-top:6px;color:var(--muted)">'+t('answer')+'</p>';
+    }
+    document.getElementById('scrim').style.display='block';
+    document.getElementById('modal').style.display='block';
+  }
+  function closeModal(){
+    document.getElementById('scrim').style.display='none';
+    document.getElementById('modal').style.display='none';
+  }
+
+  // ---------- reset ----------
+  function resetAll(){placed={}; closeModal(); refresh();}
+
+  // ---------- i18n apply ----------
+  function t(key){return I18N[key]?I18N[key][LANG]:key;}
+  function applyLang(){
+    document.querySelectorAll('[data-i]').forEach(function(el){
+      var k=el.getAttribute('data-i'); if(I18N[k])el.textContent=I18N[k][LANG];
+    });
+    document.documentElement.lang = LANG==='cn'?'zh-CN':'en';
+    refresh();
+  }
+
+  // ---------- wire ----------
+  document.getElementById('langBtn').addEventListener('click',function(){
+    LANG = LANG==='cn'?'en':'cn'; applyLang();
+  });
+  document.getElementById('btnRun').addEventListener('click',runRehearsal);
+  document.getElementById('btnReset').addEventListener('click',resetAll);
+  document.getElementById('mAgain').addEventListener('click',resetAll);
+  document.getElementById('mClose').addEventListener('click',closeModal);
+  document.getElementById('scrim').addEventListener('click',closeModal);
+  window.addEventListener('resize',resize);
+
+  applyLang();
+  resize();
 })();
 </script>
 </body>

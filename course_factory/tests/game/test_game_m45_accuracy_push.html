@@ -1,0 +1,616 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<script>window.__systemedu_resize_patch_optout=true;</script>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Inter:wght@400;500&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<title>Accuracy Push 70</title>
+<style>
+:root{
+  --bg-0:oklch(0.16 0.03 245);
+  --bg-1:oklch(0.20 0.035 245);
+  --axis:oklch(0.72 0.17 245);
+  --proof:oklch(0.52 0.16 245);
+  --shadow:oklch(0.35 0.10 245);
+  --solution:oklch(0.92 0.08 240);
+  --qed:oklch(0.85 0.14 85);
+  --ink:oklch(0.92 0.02 245);
+  --dim:oklch(0.62 0.04 245);
+  --mute:oklch(0.45 0.04 245);
+  --line:oklch(0.32 0.05 245);
+  --bad:oklch(0.62 0.20 25);
+}
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;}
+html,body{width:100%;height:100vh;overflow:hidden;background:var(--bg-0);color:var(--ink);font-family:'Inter','Noto Sans SC',sans-serif;}
+.mono{font-family:'JetBrains Mono',monospace;}
+.game-wrap{display:flex;flex-direction:row;height:100vh;overflow:hidden;}
+
+/* ---------- sidebar ---------- */
+.game-sidebar{width:200px;min-width:200px;max-width:200px;display:flex;flex-direction:column;gap:8px;padding:12px 12px 10px;background:var(--bg-1);border-right:1px solid var(--line);overflow-y:auto;}
+.side-title{font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:700;color:var(--axis);letter-spacing:0.06em;text-transform:uppercase;}
+.side-sub{font-size:11px;color:var(--dim);line-height:1.5;}
+.divider{height:1px;background:var(--line);margin:2px 0;}
+.mascot{display:flex;align-items:center;gap:8px;padding:6px 0;}
+.mascot svg{width:42px;height:42px;flex-shrink:0;}
+.mascot-name{font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;color:var(--qed);letter-spacing:0.1em;}
+.mascot-role{font-size:9px;color:var(--mute);letter-spacing:0.04em;}
+.stat-row{display:flex;flex-direction:column;gap:2px;}
+.stat-label{font-family:'JetBrains Mono',monospace;font-size:8px;letter-spacing:0.16em;color:var(--mute);text-transform:uppercase;}
+.stat-val{font-family:'JetBrains Mono',monospace;font-size:20px;font-weight:700;letter-spacing:0.04em;}
+.stat-val.holdout{color:var(--qed);}
+.stat-val.train{color:var(--proof);}
+.stat-track{height:6px;background:oklch(0.26 0.04 245);position:relative;overflow:hidden;}
+.stat-fill{position:absolute;left:0;top:0;bottom:0;transition:width 0.6s cubic-bezier(.2,.7,.2,1);}
+.stat-fill.holdout{background:var(--qed);}
+.stat-fill.train{background:var(--proof);}
+.goal-mark{position:absolute;top:-2px;bottom:-2px;width:2px;background:var(--solution);left:70%;}
+.ap-box{display:flex;gap:5px;flex-wrap:wrap;margin-top:2px;}
+.ap-dot{width:14px;height:14px;border:1.5px solid var(--axis);background:var(--axis);transition:background 0.3s;}
+.ap-dot.spent{background:transparent;border-color:var(--mute);}
+.guide{font-size:10.5px;color:var(--dim);line-height:1.55;}
+.side-spacer{flex:1;}
+.lang-btn{align-self:flex-start;font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:700;padding:4px 10px;cursor:pointer;border:1px solid var(--line);background:transparent;color:var(--axis);letter-spacing:0.15em;text-transform:uppercase;}
+.lang-btn:hover{border-color:var(--axis);background:oklch(0.24 0.05 245);}
+
+/* ---------- main ---------- */
+.game-main{flex:1;display:flex;flex-direction:column;min-width:0;}
+.main-head{display:flex;align-items:baseline;gap:14px;padding:10px 22px 6px;flex-shrink:0;flex-wrap:wrap;}
+.main-title{font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:700;color:var(--axis);letter-spacing:0.08em;text-transform:uppercase;}
+.main-q{font-size:12px;color:var(--dim);}
+.stage{flex:1;display:flex;flex-direction:column;min-height:0;padding:0 22px 14px;gap:10px;}
+.chart-box{flex:1;display:flex;flex-direction:column;min-height:0;border:1px solid var(--line);background:var(--bg-1);position:relative;}
+.chart-box canvas{width:100%!important;height:100%!important;display:block;}
+.chart-legend{position:absolute;top:8px;right:12px;display:flex;gap:14px;font-family:'JetBrains Mono',monospace;font-size:10px;}
+.lg{display:flex;align-items:center;gap:5px;color:var(--dim);}
+.lg .sw{width:14px;height:3px;}
+.lg.train .sw{background:var(--proof);}
+.lg.holdout .sw{background:var(--qed);}
+.lg.goal .sw{background:var(--solution);height:0;border-top:2px dashed var(--solution);}
+
+/* feedback line */
+.feedback{min-height:30px;display:flex;align-items:center;gap:10px;padding:6px 12px;background:var(--bg-1);border:1px solid var(--line);}
+.fb-tag{font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;padding:2px 7px;flex-shrink:0;}
+.fb-tag.good{color:var(--qed);border:1px solid var(--qed);}
+.fb-tag.warn{color:var(--bad);border:1px solid var(--bad);}
+.fb-tag.info{color:var(--axis);border:1px solid var(--axis);}
+.fb-text{font-size:12px;color:var(--ink);line-height:1.4;}
+
+/* cards */
+.cards{display:flex;gap:10px;flex-shrink:0;}
+.card{flex:1;min-width:0;border:1px solid var(--line);background:var(--bg-1);padding:10px 11px;cursor:pointer;display:flex;flex-direction:column;gap:6px;transition:border-color 0.2s,transform 0.15s,box-shadow 0.2s;position:relative;text-align:left;font-family:inherit;color:inherit;appearance:none;-webkit-appearance:none;}
+.card:hover:not(.disabled){border-color:var(--axis);transform:translateY(-2px);box-shadow:3px 3px 0 var(--bg-0);}
+.card.disabled{opacity:0.42;cursor:not-allowed;}
+.card.flash{animation:flash 0.5s ease-out;}
+@keyframes flash{0%{box-shadow:0 0 0 0 var(--axis);}100%{box-shadow:0 0 0 6px transparent;}}
+.card-head{display:flex;align-items:center;justify-content:space-between;gap:6px;}
+.card-name{font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;color:var(--solution);letter-spacing:0.04em;text-transform:uppercase;}
+.card-cost{font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:700;color:var(--axis);white-space:nowrap;}
+.card-cost .ap-c{color:var(--axis);}
+.card-desc{font-size:10px;color:var(--dim);line-height:1.45;flex:1;}
+.card-effect{display:flex;gap:8px;font-family:'JetBrains Mono',monospace;font-size:9px;}
+.card-effect .e-h{color:var(--qed);}
+.card-effect .e-r{color:var(--bad);}
+.card-risk{font-size:9px;color:var(--mute);font-style:italic;line-height:1.35;}
+.card-used{position:absolute;inset:0;background:oklch(0.16 0.03 245 / 0.55);display:none;align-items:center;justify-content:center;}
+.card-used span{font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:700;color:var(--dim);letter-spacing:0.15em;}
+
+/* win/lose overlay */
+.overlay{position:absolute;inset:0;background:oklch(0.13 0.03 245 / 0.92);display:none;flex-direction:column;align-items:center;justify-content:center;gap:14px;text-align:center;padding:24px;z-index:20;}
+.overlay.show{display:flex;}
+.ov-badge{font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;letter-spacing:0.2em;text-transform:uppercase;padding:5px 14px;}
+.ov-badge.win{color:var(--bg-0);background:var(--qed);}
+.ov-badge.lose{color:var(--ink);border:1px solid var(--bad);}
+.ov-title{font-family:'JetBrains Mono',monospace;font-size:26px;font-weight:700;color:var(--solution);letter-spacing:0.04em;}
+.ov-msg{font-size:13px;color:var(--dim);max-width:440px;line-height:1.6;}
+.ov-btn{font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;padding:8px 18px;cursor:pointer;border:1px solid var(--axis);background:transparent;color:var(--axis);letter-spacing:0.12em;text-transform:uppercase;}
+.ov-btn:hover{background:var(--axis);color:var(--bg-0);}
+</style>
+</head>
+<body>
+<div class="game-wrap">
+  <!-- ===== SIDEBAR ===== -->
+  <aside class="game-sidebar">
+    <div class="side-title" id="sTitle">ACCURACY PUSH</div>
+    <div class="side-sub" id="sSub">把 holdout 准确率冲过 70%</div>
+    <div class="divider"></div>
+
+    <div class="mascot">
+      <svg viewBox="0 0 48 48" aria-hidden="true">
+        <polygon points="24,5 43,38 5,38" fill="none" stroke="var(--axis)" stroke-width="1.6"/>
+        <polygon points="24,5 43,38 24,30" fill="oklch(0.52 0.16 245 / 0.35)"/>
+        <line x1="24" y1="5" x2="24" y2="30" stroke="var(--axis)" stroke-width="1"/>
+        <line x1="5" y1="38" x2="24" y2="30" stroke="var(--axis)" stroke-width="1"/>
+        <text x="24" y="34" text-anchor="middle" font-family="JetBrains Mono" font-size="9" fill="var(--qed)">Pi</text>
+      </svg>
+      <div>
+        <div class="mascot-name">PI</div>
+        <div class="mascot-role" id="sRole">调优顾问</div>
+      </div>
+    </div>
+
+    <div class="divider"></div>
+
+    <div class="stat-row">
+      <span class="stat-label" id="sHoldoutL">HOLDOUT ACC</span>
+      <span class="stat-val holdout mono" id="vHoldout">58.0%</span>
+      <div class="stat-track"><div class="stat-fill holdout" id="fHoldout" style="width:58%"></div><div class="goal-mark"></div></div>
+    </div>
+    <div class="stat-row">
+      <span class="stat-label" id="sTrainL">TRAIN ACC</span>
+      <span class="stat-val train mono" id="vTrain">61.0%</span>
+      <div class="stat-track"><div class="stat-fill train" id="fTrain" style="width:61%"></div></div>
+    </div>
+
+    <div class="divider"></div>
+    <span class="stat-label" id="sApL">ACTION POINTS</span>
+    <div class="ap-box" id="apBox"></div>
+
+    <div class="divider"></div>
+    <span class="stat-label" id="sGuideL">GUIDE</span>
+    <div class="guide" id="sGuide">每张牌花行动点。看双曲线响应：holdout 涨才算真涨。只在训练集上猛调 → 过拟合，holdout 会掉。</div>
+
+    <div class="side-spacer"></div>
+    <button class="lang-btn" id="langBtn">EN</button>
+  </aside>
+
+  <!-- ===== MAIN ===== -->
+  <main class="game-main">
+    <div class="main-head">
+      <span class="main-title" id="mTitle">准确率攻坚 · ROUND 1</span>
+      <span class="main-q" id="mQ">我的准确率还不够高，有哪些办法能真正把它提上去？</span>
+    </div>
+    <div class="stage">
+      <div class="chart-box">
+        <canvas id="curve"></canvas>
+        <div class="chart-legend">
+          <span class="lg train"><span class="sw"></span><span id="lgTrain">TRAIN</span></span>
+          <span class="lg holdout"><span class="sw"></span><span id="lgHoldout">HOLDOUT</span></span>
+          <span class="lg goal"><span class="sw"></span><span id="lgGoal">GOAL 70%</span></span>
+        </div>
+        <div class="overlay" id="overlay">
+          <span class="ov-badge" id="ovBadge"></span>
+          <span class="ov-title" id="ovTitle"></span>
+          <span class="ov-msg" id="ovMsg"></span>
+          <button class="ov-btn" id="ovBtn">RESET</button>
+        </div>
+      </div>
+
+      <div class="feedback">
+        <span class="fb-tag info" id="fbTag">START</span>
+        <span class="fb-text" id="fbText">起点：holdout 58%，离 70% 还差 12 个点。打出一张杠杆牌开始攻坚。</span>
+      </div>
+
+      <div class="cards" id="cards"></div>
+    </div>
+  </main>
+</div>
+
+<script>
+(function(){
+'use strict';
+
+// ---------------------------------------------------------------------------
+// i18n
+// ---------------------------------------------------------------------------
+var I18N = {
+  zh:{
+    sTitle:'准确率攻坚', sSub:'把 holdout 准确率冲过 70%',
+    sRole:'调优顾问',
+    sHoldoutL:'HOLDOUT 准确率', sTrainL:'TRAIN 准确率',
+    sApL:'行动点', sGuideL:'指南',
+    sGuide:'每张牌花行动点。看双曲线响应：holdout 涨才算真涨。只在训练集上猛调 → 过拟合，holdout 会掉。',
+    langBtn:'EN',
+    mTitleR:function(r){return '准确率攻坚 · 第 '+r+' 步';},
+    mQ:'我的准确率还不够高，有哪些办法能真正把它提上去？',
+    lgTrain:'训练集', lgHoldout:'保留集', lgGoal:'目标 70%',
+    fbStart:'起点：holdout 58%，离 70% 还差 12 个点。打出一张杠杆牌开始攻坚。',
+    used:'已用尽',
+    win:{badge:'攻坚成功', title:'HOLDOUT >= 70%', msg:'你证明了：真正把准确率提上去靠的是多采真实数据，而不是在训练集上反复调参。数据为王。', btn:'再来一局'},
+    loseAP:{badge:'行动点耗尽', title:'仍未达标', msg:function(h){return 'holdout 停在 '+h.toFixed(1)+'%。行动点花光了却没冲过 70%。回想：哪些点其实喂了过拟合？多采数据(+大)远比换模型/微调(+小)有用。';}, btn:'再试一次'},
+    overfit:'过拟合警告：train 涨了但 holdout 反而掉。训练集上的提升不是真本事。',
+    cards:[
+      {id:'data', name:'多采 1 SESSION 数据', cost:3,
+       desc:'再录一段真实脑电任务数据，扩充训练样本。',
+       risk:'代价最高：花 3 行动点。但这是唯一能让 holdout 稳涨的杠杆。',
+       eH:'+9~12', eR:'train 同步涨'},
+      {id:'csp', name:'减 CSP 成分数', cost:1,
+       desc:'砍掉冗余的空间滤波成分，降低过拟合。',
+       risk:'减太多会欠拟合，holdout 反跌。第一次减有效，之后边际递减。',
+       eH:'+3 / -', eR:'防过拟合'},
+      {id:'band', name:'调频段', cost:1,
+       desc:'把带通调到 mu/beta(8–30Hz)运动想象频段。',
+       risk:'调对一次有效；选错频段(如调进噪声带) holdout 下降。',
+       eH:'+4 / -2', eR:'选错则降'},
+      {id:'strategy', name:'改想象策略', cost:2,
+       desc:'让被试更专注、想象更一致，提升信号质量。',
+       risk:'提升真实信号，holdout 中幅上涨；但改善有上限。',
+       eH:'+5', eR:'有上限'},
+      {id:'ensemble', name:'ENSEMBLE 多模型', cost:2,
+       desc:'训多个分类器投票，压低方差。',
+       risk:'只在 train 上微调时极易过拟合：train 飙、holdout 掉。仅当数据足够时才真涨。',
+       eH:'+2 / 陷阱', eR:'易过拟合'}
+    ]
+  },
+  en:{
+    sTitle:'ACCURACY PUSH', sSub:'Push holdout accuracy past 70%',
+    sRole:'Tuning Advisor',
+    sHoldoutL:'HOLDOUT ACC', sTrainL:'TRAIN ACC',
+    sApL:'ACTION POINTS', sGuideL:'GUIDE',
+    sGuide:'Each card costs action points. Watch both curves: only holdout gains count. Tuning on train alone → overfit, holdout drops.',
+    langBtn:'CN',
+    mTitleR:function(r){return 'ACCURACY PUSH · STEP '+r;},
+    mQ:'My accuracy is still low — which levers actually push it up?',
+    lgTrain:'TRAIN', lgHoldout:'HOLDOUT', lgGoal:'GOAL 70%',
+    fbStart:'Start: holdout 58%, 12 points short of 70%. Play a lever card to begin.',
+    used:'USED UP',
+    win:{badge:'GOAL REACHED', title:'HOLDOUT >= 70%', msg:'You proved it: real accuracy gains come from collecting more real data, not from repeatedly tuning on the train set. Data is king.', btn:'PLAY AGAIN'},
+    loseAP:{badge:'OUT OF AP', title:'GOAL MISSED', msg:function(h){return 'Holdout stuck at '+h.toFixed(1)+'%. You spent all action points without crossing 70%. Which moves just fed overfitting? More data (+big) beats model tweaks (+small).';}, btn:'TRY AGAIN'},
+    overfit:'OVERFIT WARNING: train rose but holdout fell. Train-set gains are not real skill.',
+    cards:[
+      {id:'data', name:'COLLECT 1 SESSION', cost:3,
+       desc:'Record another real EEG task session, expanding the training samples.',
+       risk:'Highest cost: 3 AP. But the only lever that grows holdout reliably.',
+       eH:'+9~12', eR:'train rises too'},
+      {id:'csp', name:'REDUCE CSP COMPONENTS', cost:1,
+       desc:'Trim redundant spatial-filter components, cutting overfit.',
+       risk:'Cut too much → underfit, holdout drops. First cut helps, diminishing after.',
+       eH:'+3 / -', eR:'anti-overfit'},
+      {id:'band', name:'TUNE FREQ BAND', cost:1,
+       desc:'Set the band-pass to mu/beta (8–30Hz) motor-imagery range.',
+       risk:'Right once helps; wrong band (into noise) drops holdout.',
+       eH:'+4 / -2', eR:'wrong=drop'},
+      {id:'strategy', name:'IMAGERY STRATEGY', cost:2,
+       desc:'Make the subject more focused and consistent, raising signal quality.',
+       risk:'Lifts real signal, mid holdout gain; improvement is capped.',
+       eH:'+5', eR:'capped'},
+      {id:'ensemble', name:'ENSEMBLE MODELS', cost:2,
+       desc:'Train several classifiers and vote to reduce variance.',
+       risk:'Tuning on train alone easily overfits: train spikes, holdout drops. Real gain only with enough data.',
+       eH:'+2 / trap', eR:'overfit-prone'}
+    ]
+  }
+};
+var lang='zh';
+
+// ---------------------------------------------------------------------------
+// Game state
+// ---------------------------------------------------------------------------
+var AP_MAX=7;
+var GOAL=70;
+var stateGame=null;
+
+function freshState(){
+  return {
+    holdout:58.0,
+    train:61.0,
+    ap:AP_MAX,
+    step:0,
+    over:false,
+    won:false,
+    history:[{train:61.0,holdout:58.0}],
+    // per-card usage counters for diminishing/branching effects
+    use:{data:0,csp:0,band:0,strategy:0,ensemble:0}
+  };
+}
+
+// effect rules — each returns {dH, dT, msg, kind}
+// dH = holdout delta, dT = train delta. The adversarial core lives here.
+function applyCard(id){
+  var s=stateGame, u=s.use[id];
+  var dH=0,dT=0,kind='good',key='';
+  if(id==='data'){
+    // 数据为王: 大幅、真实、holdout 与 train 同步涨; 几乎无衰减
+    dH = 11 - u*1.5;          // 11, 9.5, 8 ...
+    dT = dH + 2;              // train 略高但同向
+    kind='good'; key='data';
+  } else if(id==='csp'){
+    // 第一次减有效 (防过拟合, 缩小 train-holdout gap), 之后欠拟合反跌
+    if(u===0){ dH=3; dT=-1; kind='good'; key='csp_first'; }
+    else { dH=-3; dT=-4; kind='warn'; key='csp_under'; }
+  } else if(id==='band'){
+    // 调对一次 +; 之后选进噪声带 -
+    if(u===0){ dH=4; dT=3; kind='good'; key='band_first'; }
+    else { dH=-2; dT=1; kind='warn'; key='band_wrong'; }   // train 微涨 holdout 跌 = 噪声拟合
+  } else if(id==='strategy'){
+    // 真实信号提升, 中幅, 有上限
+    dH = (u===0)?5:2; dT=dH+1; kind='good'; key='strategy';
+    if(u>=2){ dH=0; dT=0; kind='info'; key='strategy_cap'; }
+  } else if(id==='ensemble'){
+    // 过拟合陷阱: 当数据不足(data 使用<1)时 train 飙 holdout 掉
+    if(s.use.data===0){ dH=-3; dT=+6; kind='warn'; key='ensemble_overfit'; }
+    else { dH=2; dT=3; kind='good'; key='ensemble_ok'; }
+  }
+  s.holdout = clamp(s.holdout + dH);
+  s.train   = clamp(s.train + dT);
+  s.use[id] += 1;
+  s.history.push({train:s.train, holdout:s.holdout});
+  return {dH:dH,dT:dT,kind:kind,key:key};
+}
+function clamp(v){ return Math.max(0, Math.min(100, v)); }
+
+// feedback text per result
+function feedbackText(id,r){
+  var t=I18N[lang];
+  var sign=function(x){return (x>=0?'+':'')+x.toFixed(1);};
+  var base = '  [Δholdout '+sign(r.dH)+', Δtrain '+sign(r.dT)+']';
+  var msgZH={
+    data:'多采真实数据：holdout 实打实地涨。这就是“数据为王”。',
+    csp_first:'减 CSP 成分缩小了 train-holdout 差距，过拟合减轻。',
+    csp_under:'减过头了——成分太少导致欠拟合，holdout 反跌。',
+    band_first:'频段对准 mu/beta 运动想象带，holdout 上涨。',
+    band_wrong:'频段调进了噪声带：train 看似稳，holdout 掉了。',
+    strategy:'被试更专注，信号质量提升，holdout 中幅上涨。',
+    strategy_cap:'想象策略已到上限，再调不出新增益。',
+    ensemble_overfit:'数据不足就 ensemble：train 飙到天上，holdout 反而掉——典型过拟合。',
+    ensemble_ok:'数据充足后 ensemble 压低方差，holdout 小涨。'
+  };
+  var msgEN={
+    data:'Collected real data: holdout rises for real. This is "data is king".',
+    csp_first:'Trimming CSP narrowed the train-holdout gap, easing overfit.',
+    csp_under:'Cut too far — too few components underfit, holdout dropped.',
+    band_first:'Band aligned to mu/beta motor-imagery range, holdout up.',
+    band_wrong:'Band drifted into noise: train looks fine, holdout fell.',
+    strategy:'Subject more focused, signal quality up, mid holdout gain.',
+    strategy_cap:'Imagery strategy is capped — no further gain.',
+    ensemble_overfit:'Ensembling with too little data: train spikes, holdout falls — textbook overfit.',
+    ensemble_ok:'With enough data, ensemble cuts variance, small holdout gain.'
+  };
+  var m=(lang==='zh'?msgZH:msgEN)[r.key]||'';
+  return m+base;
+}
+
+// ---------------------------------------------------------------------------
+// DOM refs
+// ---------------------------------------------------------------------------
+var $=function(id){return document.getElementById(id);};
+var els={
+  vHoldout:$('vHoldout'), vTrain:$('vTrain'),
+  fHoldout:$('fHoldout'), fTrain:$('fTrain'),
+  apBox:$('apBox'), cards:$('cards'),
+  fbTag:$('fbTag'), fbText:$('fbText'),
+  mTitle:$('mTitle'),
+  overlay:$('overlay'), ovBadge:$('ovBadge'), ovTitle:$('ovTitle'), ovMsg:$('ovMsg'), ovBtn:$('ovBtn')
+};
+
+// ---------------------------------------------------------------------------
+// Render cards
+// ---------------------------------------------------------------------------
+function renderCards(){
+  var t=I18N[lang];
+  els.cards.innerHTML='';
+  t.cards.forEach(function(c){
+    var div=document.createElement('button');
+    div.type='button';
+    div.className='card';
+    div.setAttribute('data-id',c.id);
+    div.innerHTML =
+      '<div class="card-head"><span class="card-name">'+c.name+'</span>'+
+        '<span class="card-cost mono"><span class="ap-c">'+c.cost+' AP</span></span></div>'+
+      '<div class="card-desc">'+c.desc+'</div>'+
+      '<div class="card-effect mono"><span class="e-h">H '+c.eH+'</span><span class="e-r">'+c.eR+'</span></div>'+
+      '<div class="card-risk">'+c.risk+'</div>'+
+      '<div class="card-used"><span>'+t.used+'</span></div>';
+    div.addEventListener('click', function(){ onCard(c); });
+    els.cards.appendChild(div);
+  });
+  refreshCardState();
+}
+
+function refreshCardState(){
+  var t=I18N[lang];
+  var nodes=els.cards.querySelectorAll('.card');
+  nodes.forEach(function(n){
+    var id=n.getAttribute('data-id');
+    var cost=0; t.cards.forEach(function(c){ if(c.id===id) cost=c.cost; });
+    var affordable = !stateGame.over && stateGame.ap>=cost;
+    n.classList.toggle('disabled', !affordable);
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Action
+// ---------------------------------------------------------------------------
+function onCard(c){
+  if(stateGame.over) return;
+  if(stateGame.ap < c.cost) return;
+  stateGame.ap -= c.cost;
+  stateGame.step += 1;
+  var prevHoldout = stateGame.holdout;
+  var r = applyCard(c.id);
+
+  // flash card
+  var node = els.cards.querySelector('.card[data-id="'+c.id+'"]');
+  if(node){ node.classList.remove('flash'); void node.offsetWidth; node.classList.add('flash'); }
+
+  // detect overfit event (train up, holdout down) for a special banner
+  var overfitEvent = (r.dT>0 && r.dH<0);
+  var t=I18N[lang];
+  var fbKind = r.kind;
+  var fbMsg = feedbackText(c.id, r);
+  if(overfitEvent){ fbKind='warn'; fbMsg = t.overfit+'  '+fbMsg; }
+  setFeedback(fbKind, fbMsg);
+
+  syncHUD();
+  drawCurve();
+  checkEnd();
+}
+
+function setFeedback(kind,text){
+  els.fbTag.className='fb-tag '+(kind==='good'?'good':kind==='warn'?'warn':'info');
+  els.fbTag.textContent = kind==='good'?(lang==='zh'?'真涨':'REAL'):kind==='warn'?(lang==='zh'?'警告':'WARN'):'INFO';
+  els.fbText.textContent = text;
+}
+
+function syncHUD(){
+  var s=stateGame, t=I18N[lang];
+  els.vHoldout.textContent = s.holdout.toFixed(1)+'%';
+  els.vTrain.textContent   = s.train.toFixed(1)+'%';
+  els.fHoldout.style.width = s.holdout+'%';
+  els.fTrain.style.width   = s.train+'%';
+  els.mTitle.textContent   = t.mTitleR(s.step);
+  // AP dots
+  els.apBox.innerHTML='';
+  for(var i=0;i<AP_MAX;i++){
+    var d=document.createElement('div');
+    d.className='ap-dot'+(i>=s.ap?' spent':'');
+    els.apBox.appendChild(d);
+  }
+  refreshCardState();
+}
+
+function checkEnd(){
+  var s=stateGame, t=I18N[lang];
+  if(s.holdout >= GOAL){
+    s.over=true; s.won=true;
+    showOverlay('win', t.win.badge, t.win.title, t.win.msg, t.win.btn);
+  } else if(s.ap<=0){
+    // can any remaining card be afforded? no AP -> end
+    s.over=true; s.won=false;
+    showOverlay('lose', t.loseAP.badge, t.loseAP.title, t.loseAP.msg(s.holdout), t.loseAP.btn);
+  }
+  refreshCardState();
+}
+
+function showOverlay(kind,badge,title,msg,btn){
+  els.ovBadge.className='ov-badge '+kind;
+  els.ovBadge.textContent=badge;
+  els.ovTitle.textContent=title;
+  els.ovMsg.textContent=msg;
+  els.ovBtn.textContent=btn;
+  els.overlay.classList.add('show');
+}
+
+// ---------------------------------------------------------------------------
+// Curve chart
+// ---------------------------------------------------------------------------
+var cv=$('curve'), cx=cv.getContext('2d');
+function resizeCanvas(){
+  var box=cv.parentElement.getBoundingClientRect();
+  var dpr=window.devicePixelRatio||1;
+  cv.width=Math.max(10,Math.floor(box.width*dpr));
+  cv.height=Math.max(10,Math.floor(box.height*dpr));
+  cx.setTransform(dpr,0,0,dpr,0,0);
+  drawCurve();
+}
+
+function cssVar(n){ return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
+
+function drawCurve(){
+  var box=cv.parentElement.getBoundingClientRect();
+  var W=box.width, H=box.height;
+  cx.clearRect(0,0,W,H);
+  var padL=46, padR=18, padT=20, padB=28;
+  var x0=padL, x1=W-padR, y0=H-padB, y1=padT;
+  var loA=45, hiA=85;                       // accuracy axis range
+  function ax(i,n){ return x0 + (x1-x0) * (n<=1?0.5:(i/(n-1))); }
+  function ay(v){ return y0 + (y1-y0) * ((v-loA)/(hiA-loA)); }
+
+  var col={
+    line:cssVar('--line'), dim:cssVar('--dim'), mute:cssVar('--mute'),
+    axis:cssVar('--axis'), proof:cssVar('--proof'), qed:cssVar('--qed'), sol:cssVar('--solution')
+  };
+
+  // grid + y labels
+  cx.strokeStyle=col.line; cx.lineWidth=1; cx.font='9px JetBrains Mono'; cx.fillStyle=col.mute;
+  cx.textAlign='right'; cx.textBaseline='middle';
+  for(var v=50; v<=80; v+=10){
+    var y=ay(v);
+    cx.globalAlpha=0.5; cx.beginPath(); cx.moveTo(x0,y); cx.lineTo(x1,y); cx.stroke(); cx.globalAlpha=1;
+    cx.fillText(v+'%', x0-6, y);
+  }
+  // axes
+  cx.strokeStyle=col.dim; cx.lineWidth=1.2; cx.globalAlpha=0.7;
+  cx.beginPath(); cx.moveTo(x0,y1); cx.lineTo(x0,y0); cx.lineTo(x1,y0); cx.stroke(); cx.globalAlpha=1;
+
+  // goal line 70%
+  var gy=ay(GOAL);
+  cx.save(); cx.strokeStyle=col.sol; cx.lineWidth=1.4; cx.setLineDash([6,5]);
+  cx.beginPath(); cx.moveTo(x0,gy); cx.lineTo(x1,gy); cx.stroke(); cx.restore();
+  cx.fillStyle=col.sol; cx.textAlign='left'; cx.textBaseline='bottom';
+  cx.fillText('GOAL 70%', x0+4, gy-3);
+
+  // x labels (steps)
+  var h=stateGame.history, n=h.length;
+  cx.fillStyle=col.mute; cx.textAlign='center'; cx.textBaseline='top';
+  for(var i=0;i<n;i++){
+    cx.fillText(String(i), ax(i,n), y0+6);
+  }
+
+  // plot a series
+  function plot(key,color){
+    cx.strokeStyle=color; cx.lineWidth=2.4; cx.beginPath();
+    for(var i=0;i<n;i++){
+      var px=ax(i,n), py=ay(h[i][key]);
+      if(i===0) cx.moveTo(px,py); else cx.lineTo(px,py);
+    }
+    cx.stroke();
+    // points
+    cx.fillStyle=color;
+    for(var j=0;j<n;j++){
+      cx.beginPath(); cx.arc(ax(j,n), ay(h[j][key]), 3.2, 0, Math.PI*2); cx.fill();
+    }
+    // last value label
+    var last=h[n-1][key];
+    cx.fillStyle=color; cx.font='11px JetBrains Mono'; cx.textAlign='left'; cx.textBaseline='middle';
+    cx.fillText(last.toFixed(1)+'%', Math.min(ax(n-1,n)+8, x1-44), ay(last));
+    cx.font='9px JetBrains Mono';
+  }
+  plot('train', col.proof);
+  plot('holdout', col.qed);
+
+  // x axis caption
+  cx.fillStyle=col.mute; cx.font='9px JetBrains Mono'; cx.textAlign='right'; cx.textBaseline='top';
+  cx.fillText(lang==='zh'?'步':'STEP', x1, y0+6);
+}
+
+// ---------------------------------------------------------------------------
+// i18n apply
+// ---------------------------------------------------------------------------
+function applyLang(){
+  var t=I18N[lang];
+  document.documentElement.lang = (lang==='zh'?'zh':'en');
+  $('sTitle').textContent=t.sTitle;
+  $('sSub').textContent=t.sSub;
+  $('sRole').textContent=t.sRole;
+  $('sHoldoutL').textContent=t.sHoldoutL;
+  $('sTrainL').textContent=t.sTrainL;
+  $('sApL').textContent=t.sApL;
+  $('sGuideL').textContent=t.sGuideL;
+  $('sGuide').textContent=t.sGuide;
+  $('langBtn').textContent=t.langBtn;
+  $('mQ').textContent=t.mQ;
+  $('lgTrain').textContent=t.lgTrain;
+  $('lgHoldout').textContent=t.lgHoldout;
+  $('lgGoal').textContent=t.lgGoal;
+  if(stateGame.step===0){ setFeedback('info', t.fbStart); }
+  renderCards();
+  syncHUD();
+  drawCurve();
+}
+
+// ---------------------------------------------------------------------------
+// Init / restart
+// ---------------------------------------------------------------------------
+function start(){
+  stateGame=freshState();
+  els.overlay.classList.remove('show');
+  applyLang();
+}
+
+$('langBtn').addEventListener('click', function(){
+  lang = (lang==='zh'?'en':'zh');
+  applyLang();
+});
+$('ovBtn').addEventListener('click', function(){ start(); });
+window.addEventListener('resize', resizeCanvas);
+
+start();
+// initial sizing after layout settles
+requestAnimationFrame(function(){ resizeCanvas(); });
+setTimeout(resizeCanvas, 120);
+
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,605 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Mind Drive — 念力驾驶</title>
+<style>
+:root{
+  /* deep-space base */
+  --bg-0:oklch(0.16 0.02 25);
+  --bg-1:oklch(0.21 0.03 25);
+  --bg-2:oklch(0.27 0.04 25);
+  /* neuro NRO-20 palette */
+  --neuro:oklch(0.75 0.17 25);     /* SYNAPTIC (accent) */
+  --dendrite:oklch(0.55 0.15 25);  /* DENDRITE */
+  --axon:oklch(0.32 0.10 25);      /* AXON */
+  --firing:oklch(0.92 0.08 25);    /* FIRING */
+  --memory:oklch(0.85 0.14 85);    /* MEMORY (gold celebration) */
+  --ink:oklch(0.93 0.01 25);
+  --mute:oklch(0.62 0.02 25);
+  --mono:'JetBrains Mono','SF Mono','Roboto Mono',ui-monospace,monospace;
+  --sans:'JetBrains Mono','Noto Sans SC',ui-monospace,sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:100%;height:100vh;overflow:hidden;background:var(--bg-0);color:var(--ink);font-family:var(--sans)}
+.app{display:flex;height:100vh;width:100%}
+
+/* ---------- 200px sidebar ---------- */
+.game-sidebar{width:200px;flex-shrink:0;background:var(--bg-1);border-right:1px solid var(--axon);
+  display:flex;flex-direction:column;padding:16px 14px;gap:14px;overflow-y:auto}
+.brand{display:flex;flex-direction:column;gap:3px}
+.brand .code{font-family:var(--mono);font-size:10px;letter-spacing:2px;color:var(--neuro);text-transform:uppercase}
+.brand .title{font-size:16px;font-weight:700;letter-spacing:1px;color:var(--firing)}
+.brand .zh{font-size:11px;color:var(--mute)}
+
+.mascot{display:flex;align-items:center;gap:8px;background:var(--bg-2);border:1px solid var(--axon);padding:8px}
+.mascot svg{flex-shrink:0}
+.mascot .m-text .m-name{font-family:var(--mono);font-size:11px;color:var(--neuro);font-weight:700}
+.mascot .m-text .m-say{font-size:9px;color:var(--mute);line-height:1.3;margin-top:2px}
+
+.panel{background:var(--bg-2);border:1px solid var(--axon);padding:10px}
+.panel .p-head{font-family:var(--mono);font-size:9px;letter-spacing:1.5px;text-transform:uppercase;color:var(--mute);margin-bottom:6px}
+.panel .quest{font-size:11px;line-height:1.5;color:var(--ink)}
+.panel .quest b{color:var(--memory)}
+
+.stat-row{display:flex;justify-content:space-between;align-items:baseline;font-family:var(--mono);margin-top:5px}
+.stat-row .s-label{font-size:9px;color:var(--mute);letter-spacing:1px}
+.stat-row .s-val{font-size:14px;font-weight:700}
+.s-good{color:var(--neuro)}
+.s-bad{color:var(--memory)}
+.s-neu{color:var(--firing)}
+
+.sidebar-spacer{flex:1}
+#langBtn{font-family:var(--mono);font-size:11px;font-weight:700;letter-spacing:1px;padding:7px 0;width:100%;
+  cursor:pointer;border:1px solid var(--neuro);background:transparent;color:var(--neuro)}
+#langBtn:hover{background:var(--neuro);color:var(--bg-0)}
+
+/* ---------- main stage ---------- */
+.game-main{flex:1;min-width:0;display:flex;flex-direction:column;position:relative}
+.stage-head{padding:10px 18px 6px;flex-shrink:0}
+.stage-head h1{font-size:15px;font-weight:700;letter-spacing:0.5px;color:var(--firing)}
+.stage-head .coreq{font-size:11px;color:var(--neuro);margin-top:2px;font-style:italic}
+
+/* HUD strip */
+.hud{display:flex;gap:10px;padding:4px 18px 8px;flex-shrink:0;align-items:stretch}
+.hud .cell{flex:1;background:var(--bg-1);border:1px solid var(--axon);padding:6px 8px}
+.hud .cell .h-label{font-family:var(--mono);font-size:8px;letter-spacing:1px;color:var(--mute);text-transform:uppercase}
+.hud .cell .h-val{font-family:var(--mono);font-size:13px;font-weight:700;color:var(--firing);margin-top:2px}
+/* confidence bar */
+.conf-wrap{flex:2;background:var(--bg-1);border:1px solid var(--axon);padding:6px 8px;display:flex;flex-direction:column;justify-content:center}
+.conf-wrap .h-label{font-family:var(--mono);font-size:8px;letter-spacing:1px;color:var(--mute);text-transform:uppercase}
+.conf-track{height:8px;background:var(--bg-2);margin-top:4px;position:relative;overflow:hidden}
+.conf-fill{height:100%;width:0%;background:var(--neuro);transition:width 0.12s linear}
+
+/* canvas zone — parent has flex column so canvas can fill */
+.scene{flex:1;min-height:0;display:flex;flex-direction:column;position:relative;margin:0 18px}
+.scene canvas{display:block;width:100%;height:100%;background:var(--bg-1);border:1px solid var(--axon)}
+
+/* decode log overlay (top-right of scene) */
+.decode-feed{position:absolute;top:8px;right:8px;width:172px;background:rgba(0,0,0,0.42);border:1px solid var(--axon);
+  padding:7px 9px;font-family:var(--mono);font-size:9px;line-height:1.55;color:var(--mute);pointer-events:none}
+.decode-feed .df-head{color:var(--neuro);letter-spacing:1px;margin-bottom:3px}
+.decode-feed .df-line{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.df-ok{color:var(--neuro)}
+.df-err{color:var(--memory)}
+
+/* imagine trigger buttons */
+.triggers{display:flex;gap:14px;padding:12px 18px;flex-shrink:0}
+.imagine-btn{flex:1;cursor:pointer;border:2px solid var(--dendrite);background:var(--bg-1);color:var(--firing);
+  padding:14px 10px;text-align:center;position:relative;overflow:hidden;transition:border-color 0.12s,background 0.12s}
+.imagine-btn:hover{border-color:var(--neuro)}
+.imagine-btn:disabled{opacity:0.38;cursor:not-allowed}
+.imagine-btn .ib-icon{font-family:var(--mono);font-size:20px;font-weight:700;letter-spacing:2px;color:var(--neuro)}
+.imagine-btn .ib-label{font-size:12px;font-weight:700;margin-top:3px}
+.imagine-btn .ib-sub{font-family:var(--mono);font-size:9px;color:var(--mute);margin-top:2px}
+.imagine-btn.charging{animation:pulse 0.5s ease-in-out infinite alternate}
+@keyframes pulse{from{border-color:var(--dendrite)}to{border-color:var(--neuro)}}
+/* decode wave fill inside button */
+.ib-wave{position:absolute;left:0;bottom:0;width:100%;height:0%;background:var(--neuro);opacity:0.16}
+
+/* celebration / win overlay */
+.overlay{position:absolute;inset:0;background:rgba(0,0,0,0.0);z-index:40;display:none;
+  flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:24px;transition:background 0.4s}
+.overlay.show{display:flex;background:rgba(0,0,0,0.78)}
+.overlay .o-badge{font-family:var(--mono);font-size:10px;letter-spacing:3px;color:var(--memory);text-transform:uppercase}
+.overlay .o-title{font-size:26px;font-weight:700;color:var(--memory);margin-top:8px;text-shadow:0 0 24px var(--memory)}
+.overlay .o-body{font-size:13px;color:var(--ink);line-height:1.7;margin-top:12px;max-width:420px}
+.overlay button{margin-top:18px;font-family:var(--mono);font-size:12px;font-weight:700;letter-spacing:1px;
+  padding:9px 26px;cursor:pointer;border:1px solid var(--memory);background:transparent;color:var(--memory)}
+.overlay button:hover{background:var(--memory);color:var(--bg-0)}
+
+/* first-success ceremony flash banner */
+.ceremony{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%) scale(0.6);z-index:35;
+  font-family:var(--mono);font-size:20px;font-weight:700;letter-spacing:2px;color:var(--memory);
+  text-shadow:0 0 30px var(--memory);opacity:0;pointer-events:none;text-align:center}
+.ceremony.fire{animation:ceremonyPop 1.6s ease-out forwards}
+@keyframes ceremonyPop{0%{opacity:0;transform:translate(-50%,-50%) scale(0.6)}
+  18%{opacity:1;transform:translate(-50%,-50%) scale(1.12)}
+  72%{opacity:1;transform:translate(-50%,-50%) scale(1)}
+  100%{opacity:0;transform:translate(-50%,-55%) scale(1)}}
+</style>
+</head>
+<body>
+<div class="app">
+  <!-- ===== 200px sidebar (no sliders) ===== -->
+  <aside class="game-sidebar">
+    <div class="brand">
+      <div class="code">NRO-20 · M55</div>
+      <div class="title" id="brandTitle">Mind Drive</div>
+      <div class="zh" id="brandZh">念力驾驶 · 第一次脑控闭环</div>
+    </div>
+
+    <div class="mascot">
+      <svg width="34" height="34" viewBox="0 0 34 34" aria-hidden="true">
+        <line x1="17" y1="17" x2="17" y2="5"  stroke="var(--neuro)" stroke-width="1.6"/>
+        <line x1="17" y1="17" x2="7"  y2="11" stroke="var(--dendrite)" stroke-width="1.4"/>
+        <line x1="17" y1="17" x2="27" y2="12" stroke="var(--dendrite)" stroke-width="1.4"/>
+        <line x1="17" y1="17" x2="9"  y2="26" stroke="var(--dendrite)" stroke-width="1.4"/>
+        <line x1="17" y1="17" x2="26" y2="25" stroke="var(--dendrite)" stroke-width="1.4"/>
+        <circle cx="17" cy="17" r="4.5" fill="var(--neuro)"/>
+        <circle cx="17" cy="5"  r="2" fill="var(--firing)"/>
+        <circle cx="7"  cy="11" r="1.8" fill="var(--firing)"/>
+        <circle cx="27" cy="12" r="1.8" fill="var(--firing)"/>
+        <circle cx="9"  cy="26" r="1.8" fill="var(--firing)"/>
+        <circle cx="26" cy="25" r="1.8" fill="var(--firing)"/>
+      </svg>
+      <div class="m-text">
+        <div class="m-name">Spark</div>
+        <div class="m-say" id="mascotSay">想得越清楚，我就越听话</div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="p-head" id="questHead">Mission</div>
+      <div class="quest" id="questBody">不用手、不碰键盘。只靠<b>运动想象</b>，把方块开到金色出口 <b>EXIT</b>。</div>
+    </div>
+
+    <div class="panel">
+      <div class="p-head" id="statHead">Decode Stats</div>
+      <div class="stat-row"><span class="s-label" id="lbHit">命中</span><span class="s-val s-good" id="vHit">0</span></div>
+      <div class="stat-row"><span class="s-label" id="lbMiss">误识别</span><span class="s-val s-bad" id="vMiss">0</span></div>
+      <div class="stat-row"><span class="s-label" id="lbAcc">实测准确</span><span class="s-val s-neu" id="vAcc">--</span></div>
+      <div class="stat-row"><span class="s-label" id="lbDist">距出口</span><span class="s-val s-neu" id="vDist">--</span></div>
+    </div>
+
+    <div class="sidebar-spacer"></div>
+    <button id="langBtn">EN</button>
+  </aside>
+
+  <!-- ===== main stage ===== -->
+  <main class="game-main">
+    <div class="stage-head">
+      <h1 id="stageTitle">念力驾驶 — 第一次用念头让角色动起来</h1>
+      <div class="coreq" id="coreQ">我能不能完全不用手，只用脑子让角色动起来？</div>
+    </div>
+
+    <div class="hud">
+      <div class="cell"><div class="h-label" id="hudStateL">Link</div><div class="h-val" id="hudState">待命 IDLE</div></div>
+      <div class="cell"><div class="h-label" id="hudLatL">Decode Latency</div><div class="h-val" id="hudLat">-- ms</div></div>
+      <div class="cell"><div class="h-label" id="hudPredL">Last Decode</div><div class="h-val" id="hudPred">--</div></div>
+      <div class="conf-wrap">
+        <div class="h-label" id="hudConfL">Classifier Confidence</div>
+        <div class="conf-track"><div class="conf-fill" id="confFill"></div></div>
+      </div>
+    </div>
+
+    <div class="scene" id="scene">
+      <canvas id="cv"></canvas>
+      <div class="decode-feed">
+        <div class="df-head" id="feedHead">DECODE FEED</div>
+        <div class="df-line" id="feed0">&nbsp;</div>
+        <div class="df-line" id="feed1">&nbsp;</div>
+        <div class="df-line" id="feed2">&nbsp;</div>
+        <div class="df-line" id="feed3">&nbsp;</div>
+      </div>
+      <div class="ceremony" id="ceremony"></div>
+      <div class="overlay" id="overlay">
+        <div class="o-badge" id="oBadge">UNLOCKED</div>
+        <div class="o-title" id="oTitle">念力驾驶员</div>
+        <div class="o-body" id="oBody"></div>
+        <button id="btnAgain">再来一程</button>
+      </div>
+    </div>
+
+    <div class="triggers">
+      <button class="imagine-btn" id="btnLeft">
+        <span class="ib-wave" id="waveLeft"></span>
+        <span class="ib-icon">&lt;&lt;</span>
+        <span class="ib-label" id="leftLabel">想象左手</span>
+        <span class="ib-sub" id="leftSub">imagine LEFT hand</span>
+      </button>
+      <button class="imagine-btn" id="btnRight">
+        <span class="ib-wave" id="waveRight"></span>
+        <span class="ib-icon">&gt;&gt;</span>
+        <span class="ib-label" id="rightLabel">想象右手</span>
+        <span class="ib-sub" id="rightSub">imagine RIGHT hand</span>
+      </button>
+    </div>
+  </main>
+</div>
+
+<script>
+"use strict";
+(function(){
+  // ---------- i18n ----------
+  var lang='zh';
+  var I18N={
+    zh:{
+      brandTitle:'Mind Drive', brandZh:'念力驾驶 · 第一次脑控闭环',
+      mascotSay:'想得越清楚，我就越听话',
+      questHead:'任务', questBody:'不用手、不碰键盘。只靠<b>运动想象</b>，把方块开到金色出口 <b>EXIT</b>。',
+      statHead:'解码统计', lbHit:'命中', lbMiss:'误识别', lbAcc:'实测准确', lbDist:'距出口',
+      stageTitle:'念力驾驶 — 第一次用念头让角色动起来',
+      coreQ:'我能不能完全不用手，只用脑子让角色动起来？',
+      hudStateL:'连接', hudLatL:'解码延迟', hudPredL:'上次解码', hudConfL:'分类器置信度',
+      stIdle:'待命 IDLE', stImagine:'想象采集中…', stDecode:'CSP+LDA 解码…', stMove:'执行中',
+      feedHead:'解码日志',
+      leftLabel:'想象左手', leftSub:'imagine LEFT hand',
+      rightLabel:'想象右手', rightSub:'imagine RIGHT hand',
+      langBtn:'EN', again:'再来一程',
+      oBadge:'已解锁', oTitle:'念力驾驶员',
+      decodeLeft:'左转', decodeRight:'右转',
+      feedOk:function(want,got,ms,conf){return '想象'+want+' -> 解码'+got+' ['+ms+'ms · '+conf+'%]';},
+      feedErr:function(want,got,ms,conf){return '想象'+want+' -> 误判'+got+' ['+ms+'ms · '+conf+'%]';},
+      winBody:function(hit,miss,acc){return '你刚刚完全没碰手柄，只靠念头把方块开到了出口。\n真实脑机接口就是这样：解码会延迟、会偶尔抽风（你这程误识别 '+miss+' 次，准确率 '+acc+'%），但闭环会把你一点点带到终点。';},
+      firstWin:'它真的动了！',
+    },
+    en:{
+      brandTitle:'Mind Drive', brandZh:'Brain control · first closed loop',
+      mascotSay:'The clearer you think, the better I obey',
+      questHead:'Mission', questBody:'No hands. No keyboard. Use only <b>motor imagery</b> to drive the block to the gold <b>EXIT</b>.',
+      statHead:'Decode Stats', lbHit:'Hits', lbMiss:'Misreads', lbAcc:'Live Acc', lbDist:'To Exit',
+      stageTitle:'Mind Drive — move a character with thought alone',
+      coreQ:'Can I move a character with my mind, using no hands at all?',
+      hudStateL:'Link', hudLatL:'Decode Latency', hudPredL:'Last Decode', hudConfL:'Classifier Confidence',
+      stIdle:'IDLE', stImagine:'sampling imagery…', stDecode:'CSP+LDA decoding…', stMove:'executing',
+      feedHead:'DECODE FEED',
+      leftLabel:'imagine LEFT', leftSub:'想象左手',
+      rightLabel:'imagine RIGHT', rightSub:'想象右手',
+      langBtn:'中文', again:'Drive again',
+      oBadge:'UNLOCKED', oTitle:'Mind Pilot',
+      decodeLeft:'LEFT', decodeRight:'RIGHT',
+      feedOk:function(want,got,ms,conf){return 'imag '+want+' -> '+got+' ['+ms+'ms · '+conf+'%]';},
+      feedErr:function(want,got,ms,conf){return 'imag '+want+' -> MISREAD '+got+' ['+ms+'ms · '+conf+'%]';},
+      winBody:function(hit,miss,acc){return 'You just drove the block to the exit with nothing but thought — no controller.\nReal BCI feels exactly like this: decoding lags, and it twitches sometimes ('+miss+' misreads this run, '+acc+'% accuracy), but the closed loop still carries you home.';},
+      firstWin:'It actually moved!',
+    }
+  };
+
+  // ---------- DOM ----------
+  var $=function(id){return document.getElementById(id);};
+  var cv=$('cv'), scene=$('scene');
+  var ctx2d=cv.getContext('2d');
+  var btnLeft=$('btnLeft'), btnRight=$('btnRight');
+  var waveLeft=$('waveLeft'), waveRight=$('waveRight');
+  var confFill=$('confFill');
+  var overlay=$('overlay'), ceremony=$('ceremony');
+
+  // ---------- world (top-down grid scene) ----------
+  var GRID=9;                 // 9x9 cells
+  var player={cx:4, cy:8, ang:-Math.PI/2}; // start bottom-center, facing up (north)
+  var exit={cx:4, cy:0};      // gold exit top-center
+  // simple obstacle blocks (avoid for flavor; player slides past walls)
+  var walls=[{x:2,y:4},{x:6,y:4},{x:3,y:2},{x:5,y:6}];
+  var trail=[];               // visited cell centers for the path ghost
+  var px=0, py=0;             // pixel pos (interpolated)
+  var firstSuccess=false, won=false, busy=false;
+  var stats={hit:0, miss:0};
+
+  // closed-loop tunables (these model the BCI imperfection — fixed, NOT user sliders)
+  var MISREAD_P=0.25;         // ~25% chance the decoder flips direction
+  var LAT_MIN=200, LAT_MAX=500;
+
+  // ---------- canvas sizing via parent rect ----------
+  var W=0,H=0,cell=0,ox=0,oy=0,DPR=1;
+  function resize(){
+    var r=scene.getBoundingClientRect();
+    DPR=window.devicePixelRatio||1;
+    W=Math.max(40,Math.floor(r.width));
+    H=Math.max(40,Math.floor(r.height));
+    cv.width=Math.floor(W*DPR); cv.height=Math.floor(H*DPR);
+    cv.style.width=W+'px'; cv.style.height=H+'px';
+    ctx2d.setTransform(DPR,0,0,DPR,0,0);
+    var pad=Math.min(W,H)*0.06;
+    cell=Math.floor((Math.min(W,H)-pad*2)/GRID);
+    var gridPix=cell*GRID;
+    ox=Math.floor((W-gridPix)/2);
+    oy=Math.floor((H-gridPix)/2);
+    // re-anchor pixel pos to player if first time
+    if(px===0&&py===0){ px=cellPx(player.cx); py=cellPy(player.cy); }
+  }
+  function cellPx(cx){return ox+cx*cell+cell/2;}
+  function cellPy(cy){return oy+cy*cell+cell/2;}
+
+  // ---------- moving-average smoother for the EEG sparkline ----------
+  var eegBuf=[]; for(var i=0;i<120;i++) eegBuf.push(0);
+  var imaginingSide=null; // 'L' / 'R' / null  — drives the live EEG flavor
+
+  // ---------- draw loop ----------
+  function draw(){
+    ctx2d.clearRect(0,0,W,H);
+    // background grid
+    ctx2d.strokeStyle='oklch(0.27 0.04 25)';
+    ctx2d.lineWidth=1;
+    for(var g=0;g<=GRID;g++){
+      ctx2d.beginPath();ctx2d.moveTo(ox+g*cell,oy);ctx2d.lineTo(ox+g*cell,oy+GRID*cell);ctx2d.stroke();
+      ctx2d.beginPath();ctx2d.moveTo(ox,oy+g*cell);ctx2d.lineTo(ox+GRID*cell,oy+g*cell);ctx2d.stroke();
+    }
+    // walls
+    walls.forEach(function(w){
+      ctx2d.fillStyle='oklch(0.32 0.10 25)';
+      ctx2d.fillRect(ox+w.x*cell+cell*0.12, oy+w.y*cell+cell*0.12, cell*0.76, cell*0.76);
+    });
+    // exit (gold, pulsing)
+    var pulse=0.5+0.5*Math.sin(Date.now()/350);
+    var ex=cellPx(exit.cx), ey=cellPy(exit.cy);
+    ctx2d.save();
+    ctx2d.globalAlpha=0.25+0.4*pulse;
+    ctx2d.fillStyle='oklch(0.85 0.14 85)';
+    ctx2d.fillRect(ox+exit.cx*cell+2, oy+exit.cy*cell+2, cell-4, cell-4);
+    ctx2d.restore();
+    ctx2d.strokeStyle='oklch(0.85 0.14 85)';
+    ctx2d.lineWidth=2;
+    ctx2d.strokeRect(ox+exit.cx*cell+2, oy+exit.cy*cell+2, cell-4, cell-4);
+    ctx2d.fillStyle='oklch(0.85 0.14 85)';
+    ctx2d.font='700 '+Math.max(9,cell*0.22)+'px '+'JetBrains Mono,monospace';
+    ctx2d.textAlign='center'; ctx2d.textBaseline='middle';
+    ctx2d.fillText('EXIT', ex, ey);
+
+    // trail ghost
+    ctx2d.fillStyle='oklch(0.55 0.15 25 / 0.35)';
+    trail.forEach(function(t){
+      ctx2d.beginPath();
+      ctx2d.arc(cellPx(t.cx), cellPy(t.cy), cell*0.10, 0, Math.PI*2);
+      ctx2d.fill();
+    });
+
+    // interpolate pixel pos toward target cell
+    var tx=cellPx(player.cx), ty=cellPy(player.cy);
+    px+=(tx-px)*0.18; py+=(ty-py)*0.18;
+
+    // player block (the "character" driven by thought)
+    var s=cell*0.62;
+    ctx2d.save();
+    ctx2d.translate(px,py);
+    ctx2d.rotate(player.ang+Math.PI/2);
+    // body
+    ctx2d.fillStyle='oklch(0.75 0.17 25)';
+    ctx2d.fillRect(-s/2,-s/2,s,s);
+    // facing nose (firing color triangle)
+    ctx2d.fillStyle='oklch(0.92 0.08 25)';
+    ctx2d.beginPath();
+    ctx2d.moveTo(0,-s*0.62);
+    ctx2d.lineTo(-s*0.26,-s*0.22);
+    ctx2d.lineTo(s*0.26,-s*0.22);
+    ctx2d.closePath(); ctx2d.fill();
+    ctx2d.restore();
+
+    // live EEG sparkline at bottom of scene (flavor of the imagined signal)
+    drawEEG();
+    requestAnimationFrame(draw);
+  }
+
+  function drawEEG(){
+    // push a new sample: imagined side biases left/right channel amplitude
+    var base=(Math.random()-0.5)*6;
+    if(imaginingSide==='L') base+=Math.sin(Date.now()/60)*16; // mu-rhythm desync flavor
+    else if(imaginingSide==='R') base+=Math.sin(Date.now()/70+1)*16;
+    eegBuf.push(base); eegBuf.shift();
+    var bw=W, bh=Math.max(22,H*0.10), by=H-bh-4, bx=8;
+    ctx2d.strokeStyle='oklch(0.55 0.15 25 / 0.55)';
+    ctx2d.lineWidth=1.4;
+    ctx2d.beginPath();
+    for(var i=0;i<eegBuf.length;i++){
+      var x=bx+(i/(eegBuf.length-1))*(bw-bx-180);
+      var y=by+bh/2 - eegBuf[i];
+      if(i===0) ctx2d.moveTo(x,y); else ctx2d.lineTo(x,y);
+    }
+    ctx2d.stroke();
+    ctx2d.fillStyle='oklch(0.62 0.02 25)';
+    ctx2d.font='9px JetBrains Mono,monospace';
+    ctx2d.textAlign='left'; ctx2d.textBaseline='alphabetic';
+    ctx2d.fillText('mu 8-12Hz  C3 / C4', bx, by-4);
+  }
+
+  // ---------- closed loop: imagine -> sample -> decode -> move ----------
+  var feedLines=[];
+  function pushFeed(txt, cls){
+    feedLines.unshift({txt:txt,cls:cls});
+    if(feedLines.length>4) feedLines.pop();
+    for(var i=0;i<4;i++){
+      var el=$('feed'+i);
+      var f=feedLines[i];
+      if(f){ el.textContent=f.txt; el.className='df-line '+(f.cls||''); }
+      else { el.innerHTML='&nbsp;'; el.className='df-line'; }
+    }
+  }
+
+  function setState(key){ $('hudState').textContent=I18N[lang][key]; }
+
+  function imagine(side){            // side = 'L' or 'R'
+    if(busy||won) return;
+    busy=true;
+    var t=I18N[lang];
+    var btn = side==='L'?btnLeft:btnRight;
+    var wave = side==='L'?waveLeft:waveRight;
+    btnLeft.disabled=true; btnRight.disabled=true;
+    btn.classList.add('charging');
+    imaginingSide=side;
+    setState('stImagine');
+
+    // --- phase 1: imagery sampling (visualize a charging wave + climbing confidence) ---
+    var sampleMs=620;
+    var t0=Date.now();
+    var rawConf=0.55+Math.random()*0.4; // 0.55..0.95 — what the classifier will report
+    var anim=setInterval(function(){
+      var p=Math.min(1,(Date.now()-t0)/sampleMs);
+      wave.style.height=(p*100)+'%';
+      confFill.style.width=(p*rawConf*100)+'%';
+    },24);
+
+    setTimeout(function(){
+      clearInterval(anim);
+      btn.classList.remove('charging');
+      wave.style.height='0%';
+      imaginingSide=null;
+      setState('stDecode');
+
+      // --- phase 2: realistic decode latency 200-500ms ---
+      var lat=Math.round(LAT_MIN+Math.random()*(LAT_MAX-LAT_MIN));
+      $('hudLat').textContent=lat+' ms';
+
+      setTimeout(function(){
+        // --- phase 3: CSP+LDA classification, with misread probability ---
+        var confPct=Math.round(rawConf*100);
+        confFill.style.width=confPct+'%';
+        var misread = Math.random() < MISREAD_P*(1.15-rawConf); // lower conf -> more misreads
+        var decoded = misread ? (side==='L'?'R':'L') : side;
+        var wantTxt = side==='L'?t.decodeLeft:t.decodeRight;
+        var gotTxt  = decoded==='L'?t.decodeLeft:t.decodeRight;
+
+        $('hudPred').textContent = (decoded==='L'?'<< ':'>> ')+gotTxt;
+
+        if(misread){
+          stats.miss++;
+          pushFeed(t.feedErr(wantTxt,gotTxt,lat,confPct),'df-err');
+          twitch(decoded);
+        } else {
+          stats.hit++;
+          pushFeed(t.feedOk(wantTxt,gotTxt,lat,confPct),'df-ok');
+        }
+        applyMove(decoded, misread);
+        refreshStats();
+
+        // --- first success ceremony ---
+        if(!misread && !firstSuccess){
+          firstSuccess=true;
+          ceremony.textContent=t.firstWin;
+          ceremony.classList.remove('fire'); void ceremony.offsetWidth;
+          ceremony.classList.add('fire');
+        }
+
+        setState('stMove');
+        setTimeout(function(){
+          confFill.style.width='0%';
+          $('hudPred').textContent='--';
+          setState('stIdle');
+          busy=false;
+          if(!won){ btnLeft.disabled=false; btnRight.disabled=false; }
+          checkWin();
+        }, 520);
+      }, lat);
+    }, sampleMs);
+  }
+
+  // visual twitch when misread (the "抽搐" feedback)
+  function twitch(decoded){
+    var jolt = decoded==='L'? -1 : 1;
+    player.ang += jolt*0.5;
+    setTimeout(function(){ player.ang -= jolt*0.5; }, 160);
+  }
+
+  // turn + advance one cell in current facing
+  function applyMove(decoded){
+    // decode controls TURN (left/right relative), then auto-advance one step forward
+    player.ang += (decoded==='L'? -Math.PI/2 : Math.PI/2);
+    // normalize
+    while(player.ang<-Math.PI) player.ang+=Math.PI*2;
+    while(player.ang>Math.PI)  player.ang-=Math.PI*2;
+    // forward vector (snap to 4 dirs)
+    var dx=Math.round(Math.cos(player.ang));
+    var dy=Math.round(Math.sin(player.ang));
+    var nx=player.cx+dx, ny=player.cy+dy;
+    // clamp inside grid; blocked by wall -> stay (bumps)
+    if(nx<0||nx>=GRID||ny<0||ny>=GRID) return;
+    var blocked=walls.some(function(w){return w.x===nx&&w.y===ny;});
+    if(blocked) return;
+    trail.push({cx:player.cx,cy:player.cy});
+    if(trail.length>40) trail.shift();
+    player.cx=nx; player.cy=ny;
+  }
+
+  function refreshStats(){
+    $('vHit').textContent=stats.hit;
+    $('vMiss').textContent=stats.miss;
+    var tot=stats.hit+stats.miss;
+    $('vAcc').textContent = tot? Math.round(stats.hit/tot*100)+'%':'--';
+    var d=Math.abs(player.cx-exit.cx)+Math.abs(player.cy-exit.cy);
+    $('vDist').textContent=d;
+  }
+
+  function checkWin(){
+    if(player.cx===exit.cx && player.cy===exit.cy && !won){
+      won=true;
+      btnLeft.disabled=true; btnRight.disabled=true;
+      var t=I18N[lang];
+      var tot=stats.hit+stats.miss;
+      var acc= tot? Math.round(stats.hit/tot*100):0;
+      $('oBadge').textContent=t.oBadge;
+      $('oTitle').textContent=t.oTitle;
+      $('oBody').textContent=t.winBody(stats.hit, stats.miss, acc);
+      overlay.classList.add('show');
+    }
+  }
+
+  function resetRun(){
+    player={cx:4,cy:8,ang:-Math.PI/2};
+    px=cellPx(player.cx); py=cellPy(player.cy);
+    trail=[]; stats={hit:0,miss:0};
+    won=false; busy=false; firstSuccess=false;
+    feedLines=[]; for(var i=0;i<4;i++){var el=$('feed'+i); el.innerHTML='&nbsp;'; el.className='df-line';}
+    overlay.classList.remove('show');
+    btnLeft.disabled=false; btnRight.disabled=false;
+    confFill.style.width='0%';
+    $('hudLat').textContent='-- ms'; $('hudPred').textContent='--';
+    setState('stIdle');
+    refreshStats();
+  }
+
+  // ---------- i18n apply ----------
+  function applyLang(){
+    var t=I18N[lang];
+    document.documentElement.lang = lang==='zh'?'zh':'en';
+    $('brandTitle').textContent=t.brandTitle;
+    $('brandZh').textContent=t.brandZh;
+    $('mascotSay').textContent=t.mascotSay;
+    $('questHead').textContent=t.questHead;
+    $('questBody').innerHTML=t.questBody;
+    $('statHead').textContent=t.statHead;
+    $('lbHit').textContent=t.lbHit; $('lbMiss').textContent=t.lbMiss;
+    $('lbAcc').textContent=t.lbAcc; $('lbDist').textContent=t.lbDist;
+    $('stageTitle').textContent=t.stageTitle;
+    $('coreQ').textContent=t.coreQ;
+    $('hudStateL').textContent=t.hudStateL; $('hudLatL').textContent=t.hudLatL;
+    $('hudPredL').textContent=t.hudPredL; $('hudConfL').textContent=t.hudConfL;
+    $('feedHead').textContent=t.feedHead;
+    $('leftLabel').textContent=t.leftLabel; $('leftSub').textContent=t.leftSub;
+    $('rightLabel').textContent=t.rightLabel; $('rightSub').textContent=t.rightSub;
+    $('langBtn').textContent=t.langBtn;
+    $('btnAgain').textContent=t.again;
+    $('oBadge').textContent=t.oBadge; $('oTitle').textContent=t.oTitle;
+    if(!busy && !won) setState('stIdle');
+    refreshStats();
+  }
+
+  // ---------- events ----------
+  btnLeft.addEventListener('click', function(){ imagine('L'); });
+  btnRight.addEventListener('click', function(){ imagine('R'); });
+  $('btnAgain').addEventListener('click', resetRun);
+  $('langBtn').addEventListener('click', function(){
+    lang = (lang==='zh')?'en':'zh';
+    applyLang();
+  });
+  window.addEventListener('resize', resize);
+
+  // ---------- boot ----------
+  resize();
+  applyLang();
+  setState('stIdle');
+  refreshStats();
+  requestAnimationFrame(draw);
+})();
+</script>
+</body>
+</html>

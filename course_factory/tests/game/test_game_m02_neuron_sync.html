@@ -1,457 +1,524 @@
-<!doctype html>
-<html lang="zh-CN">
+<!DOCTYPE html>
+<html lang="zh">
 <head>
-<meta charset="utf-8"/>
-<title>Neuron Sync Lab</title>
-<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;700&family=JetBrains+Mono:wght@400;700&family=Inter:wght@400;500&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>脑波起源 · 同步度因果链</title>
 <style>
-:root{
-  /* neuro palette (NRO-20) */
-  --bg-0:oklch(0.18 0.04 25);
-  --bg-1:oklch(0.24 0.05 25);
-  --synaptic:oklch(0.75 0.17 25);
-  --dendrite:oklch(0.55 0.15 25);
-  --axon:oklch(0.32 0.10 25);
-  --firing:oklch(0.92 0.08 25);
-  --memory:oklch(0.85 0.14 85);
-  --neuro:var(--synaptic);
-  --ink:oklch(0.92 0.02 25);
-  --ink-dim:oklch(0.62 0.03 25);
-  --line:oklch(0.40 0.05 25 / 0.25);
-}
-*{box-sizing:border-box;margin:0;padding:0;}
-html,body{width:100%;height:100vh;overflow:hidden;background:var(--bg-0);color:var(--ink);font-family:'Noto Sans SC','Inter',sans-serif;}
-.wrapper{display:flex;flex-direction:column;height:100vh;}
-.header{display:flex;justify-content:space-between;align-items:center;padding:6px 16px 6px 70px;background:oklch(0.22 0.05 25 / 0.92);border-bottom:1px solid var(--line);}
-.title{font-family:'Space Grotesk',sans-serif;font-size:14px;font-weight:700;color:var(--synaptic);letter-spacing:1px;text-transform:uppercase;}
-.subtitle{font-size:11px;color:var(--ink-dim);margin-left:10px;}
-.lang-btn{position:fixed;top:8px;left:8px;z-index:100;font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;padding:4px 10px;cursor:pointer;border:1px solid var(--line);background:oklch(0.20 0.04 25 / 0.85);backdrop-filter:blur(12px);color:var(--synaptic);letter-spacing:1px;}
-.main-area{flex:1;min-height:0;display:flex;overflow:hidden;}
-/* canvas shim chain: parent must be flex column so canvas grows */
-.stage{flex:1;position:relative;display:flex;flex-direction:column;align-items:stretch;justify-content:stretch;padding:0;}
-canvas{display:block;flex:1;width:100%;height:100%;}
-.side-panel{width:200px;display:flex;flex-direction:column;padding:12px;gap:8px;background:oklch(0.22 0.05 25 / 0.92);border-left:1px solid var(--line);overflow-y:auto;}
-.mascot{display:flex;align-items:center;gap:8px;padding-bottom:8px;border-bottom:1px solid var(--line);}
-.mascot svg{flex:none;}
-.mascot .m-name{font-family:'Space Grotesk',sans-serif;font-size:12px;font-weight:700;color:var(--firing);letter-spacing:0.5px;}
-.mascot .m-role{font-size:10px;color:var(--ink-dim);line-height:1.3;}
-.panel-title{font-family:'Space Grotesk',sans-serif;font-size:11px;color:var(--synaptic);letter-spacing:1px;text-transform:uppercase;margin-bottom:2px;}
-.slider-group{margin-bottom:4px;}
-.slider-label{display:flex;justify-content:space-between;font-size:11px;color:var(--ink-dim);margin-bottom:4px;}
-.slider-label .val{font-family:'JetBrains Mono',monospace;font-weight:700;color:var(--firing);}
-input[type=range]{width:100%;height:4px;-webkit-appearance:none;appearance:none;background:linear-gradient(90deg,var(--axon),var(--synaptic));outline:none;cursor:pointer;border-radius:2px;}
-input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;border-radius:50%;background:var(--firing);border:2px solid var(--bg-0);cursor:pointer;box-shadow:0 0 8px var(--synaptic);}
-input[type=range]::-moz-range-thumb{width:16px;height:16px;border-radius:50%;background:var(--firing);border:2px solid var(--bg-0);cursor:pointer;}
-.readout{display:flex;flex-direction:column;gap:5px;padding:8px;background:oklch(0.16 0.03 25 / 0.6);border:1px solid var(--line);}
-.stat-row{display:flex;justify-content:space-between;align-items:center;font-size:11px;}
-.stat-label{color:var(--ink-dim);}
-.stat-val{font-family:'JetBrains Mono',monospace;font-weight:700;color:var(--firing);}
-.stat-val.over{color:var(--memory);}
-.task-box{padding:8px;background:oklch(0.30 0.08 25 / 0.18);border:1px solid oklch(0.55 0.12 25 / 0.4);}
-.task-title{font-family:'Space Grotesk',sans-serif;font-size:11px;color:var(--synaptic);letter-spacing:0.5px;text-transform:uppercase;margin-bottom:4px;}
-.task-desc{font-size:11px;color:var(--ink);line-height:1.5;margin-bottom:6px;}
-.task-status{font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;}
-.task-status.pass{color:var(--memory);}
-.task-status.fail{color:var(--ink-dim);}
-.hud{display:flex;justify-content:space-around;align-items:center;padding:6px 12px;background:oklch(0.14 0.03 25 / 0.7);height:46px;font-size:11px;color:var(--ink-dim);}
-.hud .item{display:flex;flex-direction:column;align-items:center;}
-.hud .label{font-size:9px;text-transform:uppercase;letter-spacing:0.5px;opacity:0.75;font-family:'Space Grotesk',sans-serif;}
-.hud .value{font-size:14px;color:var(--ink);font-weight:700;margin-top:1px;font-family:'JetBrains Mono',monospace;}
-.guide-panel{position:fixed;top:8px;right:212px;width:218px;max-height:40vh;overflow-y:auto;background:oklch(0.20 0.04 25 / 0.88);backdrop-filter:blur(12px);border:1px solid var(--line);padding:10px;z-index:100;font-family:'Noto Sans SC',sans-serif;font-size:12px;color:var(--ink);}
-.guide-panel h3{font-family:'Space Grotesk',sans-serif;font-size:13px;margin-bottom:6px;color:var(--synaptic);cursor:pointer;display:flex;justify-content:space-between;align-items:center;}
-.guide-panel ul{padding-left:14px;line-height:1.55;}
-.guide-toggle{font-size:10px;color:var(--ink-dim);font-family:'JetBrains Mono',monospace;}
-#guideTips{margin-top:6px;color:var(--memory);}
-.victory-overlay{position:fixed;top:0;left:0;width:100%;height:100%;background:oklch(0.10 0.02 25 / 0.75);display:none;align-items:center;justify-content:center;z-index:200;}
-.victory-overlay.show{display:flex;}
-.victory-box{background:oklch(0.20 0.04 25 / 0.96);backdrop-filter:blur(16px);border:1px solid oklch(0.85 0.14 85 / 0.4);padding:24px 32px;max-width:420px;text-align:center;}
-.victory-title{font-family:'Space Grotesk',sans-serif;font-size:18px;color:var(--memory);font-weight:700;margin-bottom:8px;text-transform:uppercase;letter-spacing:2px;}
-.victory-text{font-size:13px;color:var(--ink);line-height:1.7;margin-bottom:14px;}
-.victory-btn{padding:8px 22px;font-family:'Space Grotesk',sans-serif;font-size:12px;font-weight:700;cursor:pointer;border:1px solid var(--memory);background:oklch(0.85 0.14 85 / 0.15);color:var(--memory);text-transform:uppercase;letter-spacing:1px;}
-.victory-btn:hover{background:oklch(0.85 0.14 85 / 0.3);}
+  /* ===== neuro 主题 (NRO-20) — B 类深空底 ===== */
+  :root{
+    --bg-0: oklch(0.18 0.03 25);      /* 深空底 */
+    --bg-1: oklch(0.23 0.04 25);      /* 面板 */
+    --accent: oklch(0.75 0.17 25);    /* 学科 accent (红橙) */
+    --synaptic: oklch(0.75 0.17 25);
+    --dendrite: oklch(0.55 0.15 25);
+    --axon: oklch(0.32 0.10 25);
+    --firing: oklch(0.92 0.08 25);
+    --memory: oklch(0.85 0.14 85);
+    --ink: oklch(0.94 0.02 25);
+    --ink-dim: oklch(0.70 0.03 25);
+    --line: oklch(0.40 0.05 25);
+    --mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  html,body{height:100%;}
+  body{
+    background: var(--bg-0);
+    color: var(--ink);
+    font-family: var(--mono);
+    overflow:hidden;
+  }
+  .wrapper{display:flex;height:100vh;width:100vw;}
+
+  /* ===== 200px sidebar ===== */
+  .game-sidebar{
+    width:200px;min-width:200px;
+    background: var(--bg-1);
+    border-right:1px solid var(--line);
+    display:flex;flex-direction:column;
+    padding:18px 16px;
+  }
+  .mascot{
+    display:flex;flex-direction:column;align-items:center;gap:8px;
+    padding-bottom:14px;border-bottom:1px solid var(--line);
+  }
+  .mascot svg{width:64px;height:64px;}
+  .mascot .name{font-size:13px;color:var(--accent);letter-spacing:1px;}
+  .mascot .sub{font-size:10px;color:var(--ink-dim);}
+
+  .task{margin-top:16px;font-size:11.5px;line-height:1.65;color:var(--ink-dim);}
+  .task b{color:var(--ink);font-weight:600;}
+  .task .core-q{
+    color:var(--accent);font-size:12.5px;display:block;margin-bottom:10px;
+    line-height:1.5;
+  }
+
+  .legend{margin-top:16px;font-size:10px;line-height:1.6;color:var(--ink-dim);}
+  .legend .row{display:flex;align-items:center;gap:6px;margin:4px 0;}
+  .legend .dot{width:9px;height:9px;border-radius:50%;flex:0 0 9px;}
+
+  .spacer{flex:1;}
+  .progress-wrap{margin-top:14px;}
+  .progress-label{font-size:10px;color:var(--ink-dim);margin-bottom:5px;}
+  .progress-bar{height:8px;background:var(--axon);border:1px solid var(--line);position:relative;}
+  .progress-fill{height:100%;width:0%;background:var(--accent);transition:width .35s ease;}
+
+  .lang-btn{
+    margin-top:14px;
+    background:transparent;color:var(--ink-dim);
+    border:1px solid var(--line);
+    font-family:var(--mono);font-size:11px;letter-spacing:1px;
+    padding:7px 0;cursor:pointer;width:100%;
+    transition:.18s;
+  }
+  .lang-btn:hover{color:var(--accent);border-color:var(--accent);}
+
+  /* ===== main ===== */
+  .game-main{flex:1;display:flex;flex-direction:column;min-width:0;}
+
+  .topbar{
+    display:flex;align-items:center;justify-content:space-between;
+    padding:14px 22px;border-bottom:1px solid var(--line);
+    flex:0 0 auto;
+  }
+  .topbar h1{font-size:15px;font-weight:600;letter-spacing:.5px;}
+  .topbar .hud{display:flex;gap:22px;font-size:11px;color:var(--ink-dim);}
+  .topbar .hud span b{color:var(--firing);font-size:14px;}
+
+  /* 脑区 chips + 动作按钮 区 */
+  .controls{
+    display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+    padding:12px 22px;border-bottom:1px solid var(--line);flex:0 0 auto;
+  }
+  .controls .grp-label{font-size:10px;color:var(--ink-dim);margin-right:2px;}
+  .chip{
+    background:var(--bg-1);color:var(--ink-dim);
+    border:1px solid var(--line);
+    font-family:var(--mono);font-size:11px;
+    padding:6px 12px;cursor:pointer;transition:.15s;
+  }
+  .chip.active{
+    background:var(--accent);color:var(--bg-0);
+    border-color:var(--accent);box-shadow:3px 3px 0 var(--bg-0);
+  }
+  .chip:hover:not(.active){color:var(--ink);border-color:var(--accent);}
+  .divider{width:1px;height:22px;background:var(--line);margin:0 6px;}
+
+  .act-btn{
+    font-family:var(--mono);font-size:12px;font-weight:600;
+    padding:9px 16px;cursor:pointer;transition:.15s;letter-spacing:.3px;
+  }
+  .act-btn.sync{
+    background:var(--accent);color:var(--bg-0);border:1px solid var(--accent);
+    box-shadow:3px 3px 0 var(--bg-0);
+  }
+  .act-btn.sync:hover{background:var(--firing);}
+  .act-btn.scatter{
+    background:transparent;color:var(--ink);border:1px solid var(--line);
+  }
+  .act-btn.scatter:hover{border-color:var(--firing);color:var(--firing);}
+  .act-btn:disabled{opacity:.35;cursor:not-allowed;box-shadow:none;}
+
+  /* canvas 双区: 神经元群 (上) + 头皮电极波形 (下) — 父容器 flex column */
+  .stage{flex:1;display:flex;flex-direction:column;min-height:0;padding:14px 22px 18px;gap:14px;}
+  .panel{
+    display:flex;flex-direction:column;min-height:0;
+    border:1px solid var(--line);background:var(--bg-1);position:relative;
+  }
+  .panel .cap{
+    position:absolute;top:8px;left:10px;font-size:10px;
+    color:var(--ink-dim);letter-spacing:.5px;z-index:2;pointer-events:none;
+  }
+  .panel-neurons{flex:1.3;}
+  .panel-scope{flex:1;}
+  .panel canvas{flex:1;width:100%;height:100%;display:block;}
+
+  .verdict{
+    position:absolute;inset:0;display:none;flex-direction:column;
+    align-items:center;justify-content:center;text-align:center;
+    background:oklch(0.18 0.03 25 / 0.92);z-index:5;gap:10px;padding:0 20px;
+  }
+  .verdict.show{display:flex;}
+  .verdict .badge{
+    font-size:18px;color:var(--memory);font-weight:600;letter-spacing:1px;
+  }
+  .verdict .desc{font-size:12px;color:var(--ink-dim);line-height:1.6;max-width:380px;}
 </style>
 </head>
 <body>
-<button class="lang-btn" id="langBtn">CN</button>
-<div class="guide-panel" id="guidePanel">
-  <h3 id="guideToggle"><span id="guideTitle"></span><span class="guide-toggle" id="guideArrow"></span></h3>
-  <div class="guide-content" id="guideContent">
-    <p id="guideGoal"></p>
-    <ul id="guideSteps"></ul>
-    <p id="guideTips"></p>
-  </div>
-</div>
-<div class="victory-overlay" id="victoryOverlay">
-  <div class="victory-box">
-    <div class="victory-title" id="victoryTitle"></div>
-    <div class="victory-text" id="victoryText"></div>
-    <button class="victory-btn" id="victoryBtn"></button>
-  </div>
-</div>
 <div class="wrapper">
-  <div class="header">
-    <div><span class="title" id="headerTitle"></span><span class="subtitle">P-EEG-01-M02</span></div>
-  </div>
-  <div class="main-area">
-    <div class="stage"><canvas id="c"></canvas></div>
-    <div class="side-panel">
-      <div class="mascot">
-        <svg width="34" height="34" viewBox="0 0 34 34" id="mascotSvg">
-          <circle cx="17" cy="17" r="5" fill="oklch(0.92 0.08 25)"/>
-          <g stroke="oklch(0.75 0.17 25)" stroke-width="1.6" stroke-linecap="round" fill="none">
-            <path d="M17 12 L17 3"/><path d="M17 3 L13 1"/><path d="M17 3 L21 1"/>
-            <path d="M22 17 L31 17"/><path d="M31 17 L33 13"/><path d="M31 17 L33 21"/>
-            <path d="M17 22 L17 31"/><path d="M17 31 L13 33"/><path d="M17 31 L21 33"/>
-            <path d="M12 17 L3 17"/><path d="M3 17 L1 13"/><path d="M3 17 L1 21"/>
-          </g>
-        </svg>
-        <div>
-          <div class="m-name">SPARK</div>
-          <div class="m-role" id="mascotRole"></div>
-        </div>
-      </div>
 
-      <div class="panel-title" id="sliderTitle"></div>
-      <div class="slider-group">
-        <div class="slider-label"><span id="lblSync"></span><span class="val" id="valSync">10%</span></div>
-        <input type="range" id="sliderSync" min="0" max="100" value="10">
-      </div>
+  <!-- ===== sidebar ===== -->
+  <aside class="game-sidebar">
+    <div class="mascot">
+      <!-- Spark — 分叉树突生物 (SVG, 无 emoji) -->
+      <svg viewBox="0 0 64 64" fill="none" stroke="var(--accent)" stroke-width="2.4" stroke-linecap="round">
+        <circle cx="32" cy="32" r="9" fill="var(--firing)" stroke="none"/>
+        <line x1="32" y1="23" x2="32" y2="8"/>
+        <line x1="32" y1="8" x2="26" y2="3"/><line x1="32" y1="8" x2="38" y2="3"/>
+        <line x1="41" y1="32" x2="56" y2="28"/>
+        <line x1="56" y1="28" x2="61" y2="22"/><line x1="56" y1="28" x2="62" y2="33"/>
+        <line x1="32" y1="41" x2="38" y2="56"/>
+        <line x1="38" y1="56" x2="34" y2="62"/><line x1="38" y1="56" x2="44" y2="60"/>
+        <line x1="23" y1="32" x2="8" y2="36"/>
+        <line x1="8" y1="36" x2="2" y2="32"/><line x1="8" y1="36" x2="4" y2="42"/>
+        <circle cx="32" cy="30" r="2" fill="var(--bg-0)" stroke="none"/>
+      </svg>
+      <span class="name" id="mascotName">SPARK</span>
+      <span class="sub" id="mascotSub">树突向导</span>
+    </div>
 
-      <div class="readout">
-        <div class="stat-row"><span class="stat-label" id="lblScalp"></span><span class="stat-val" id="valScalp">--</span></div>
-        <div class="stat-row"><span class="stat-label" id="lblNoise"></span><span class="stat-val" id="valNoise">--</span></div>
-        <div class="stat-row"><span class="stat-label" id="lblDetect"></span><span class="stat-val" id="valDetect">--</span></div>
-      </div>
+    <div class="task">
+      <span class="core-q" id="coreQ">脑电波从哪来?</span>
+      <span id="taskBody"></span>
+    </div>
 
-      <div class="task-box">
-        <div class="task-title" id="taskTitle"></div>
-        <div class="task-desc" id="taskDesc"></div>
-        <div class="task-status fail" id="taskStatus"></div>
+    <div class="legend">
+      <div class="row"><span class="dot" style="background:var(--axon)"></span><span id="lg0">未放电神经元</span></div>
+      <div class="row"><span class="dot" style="background:var(--firing)"></span><span id="lg1">同步放电中</span></div>
+      <div class="row"><span class="dot" style="background:var(--memory)"></span><span id="lg2">头皮可测电压</span></div>
+    </div>
+
+    <div class="spacer"></div>
+
+    <div class="progress-wrap">
+      <div class="progress-label" id="progLabel">同步度 → 电压</div>
+      <div class="progress-bar"><div class="progress-fill" id="progFill"></div></div>
+    </div>
+
+    <button class="lang-btn" id="langBtn">EN</button>
+  </aside>
+
+  <!-- ===== main ===== -->
+  <main class="game-main">
+    <div class="topbar">
+      <h1 id="title">同步度 → 头皮电压 · 因果链</h1>
+      <div class="hud">
+        <span id="hudSync">同步度 <b id="syncVal">0%</b></span>
+        <span id="hudVolt">头皮电压 <b id="voltVal">2 µV</b></span>
+        <span id="hudRhythm">节律 <b id="rhythmVal">--</b></span>
       </div>
     </div>
-  </div>
-  <div class="hud">
-    <div class="item"><div class="label" id="hudL1"></div><div class="value" id="hudV1">10%</div></div>
-    <div class="item"><div class="label" id="hudL2"></div><div class="value" id="hudV2">--</div></div>
-    <div class="item"><div class="label" id="hudL3"></div><div class="value" id="hudV3">--</div></div>
-  </div>
+
+    <div class="controls">
+      <span class="grp-label" id="regionLabel">脑区:</span>
+      <button class="chip active" id="chipOcc" data-region="occ">枕叶</button>
+      <button class="chip" id="chipMot" data-region="mot">运动区</button>
+      <div class="divider"></div>
+      <button class="act-btn sync" id="btnSync">让更多神经元同步</button>
+      <button class="act-btn scatter" id="btnScatter">打散同步</button>
+    </div>
+
+    <div class="stage">
+      <div class="panel panel-neurons">
+        <span class="cap" id="capNeurons">一片皮层神经元 (放大)</span>
+        <canvas id="cvNeurons"></canvas>
+      </div>
+      <div class="panel panel-scope">
+        <span class="cap" id="capScope">头皮电极读数 (EEG)</span>
+        <canvas id="cvScope"></canvas>
+        <div class="verdict" id="verdict">
+          <span class="badge" id="verdictBadge">解锁: 脑波起源观察者</span>
+          <span class="desc" id="verdictDesc"></span>
+        </div>
+      </div>
+    </div>
+  </main>
 </div>
+
 <script>
-(function(){
-var LANG='cn';
-var I18N={
-  title:{en:'NEURON SYNC LAB',cn:'神经元同步实验室'},
-  mascotRole:{en:'Tune the firing. Watch the scalp.',cn:'调放电同步，看头皮信号。'},
-  sliderTitle:{en:'CONTROLS',cn:'控制台'},
-  lblSync:{en:'SYNCHRONY',cn:'同步度'},
-  lblScalp:{en:'SCALP SIGNAL',cn:'头皮信号'},
-  lblNoise:{en:'NOISE FLOOR',cn:'噪声门槛'},
-  lblDetect:{en:'DETECTABLE?',cn:'能测到？'},
-  detectYes:{en:'YES',cn:'是'},
-  detectNo:{en:'NO',cn:'否'},
-  taskTitle:{en:'MISSION',cn:'任务'},
-  taskDesc:{en:'Find the synchrony level where the scalp signal first rises above the noise floor.',cn:'找到头皮信号首次超过噪声门槛的同步度。'},
-  taskPending:{en:'PENDING — signal still buried in noise',cn:'未完成 — 信号仍埋在噪声里'},
-  taskDone:{en:'SOLVED — the scalp can finally read it!',cn:'完成 — 头皮终于能读到了！'},
-  hudSync:{en:'SYNCHRONY',cn:'同步度'},
-  hudScalp:{en:'SCALP µV',cn:'头皮 µV'},
-  hudState:{en:'STATE',cn:'状态'},
-  stateBuried:{en:'BURIED',cn:'被淹没'},
-  stateRead:{en:'READABLE',cn:'可读取'},
-  guideTitle:{en:'GUIDE',cn:'操作指南'},
-  guideGoal:{en:'A single neuron is far too small for an electrode on your scalp to feel. Only when many neurons fire TOGETHER do their tiny voltages add up into a wave big enough to escape the noise.',cn:'单个神经元太小，头皮上的电极根本感受不到。只有当大量神经元一起放电，它们的微小电压才会叠加成一个足以冲出噪声的波。'},
-  guideS1:{en:'Drag SYNCHRONY from 0% upward',cn:'将同步度从 0% 往上拖'},
-  guideS2:{en:'Watch the neurons go from scattered to in-step',cn:'看神经元从各放各的变成齐步'},
-  guideS3:{en:'Watch the scalp bar grow vs the dashed noise line',cn:'看头皮信号条超过虚线噪声线'},
-  guideS4:{en:'Cross the noise floor to complete the mission',cn:'跨过噪声门槛即可完成任务'},
-  guideTips:{en:'It takes roughly 70% synchrony before the signal breaks through.',cn:'大约需要 70% 的同步度，信号才能突围。'},
-  guideArrowOpen:{en:'[hide]',cn:'[收起]'},
-  guideArrowClosed:{en:'[show]',cn:'[展开]'},
-  victoryTitle:{en:'SIGNAL DETECTED!',cn:'信号被捕获！'},
-  victoryText:{en:'At about 70% synchrony the combined voltage of the neurons finally rose above the noise floor. This is why EEG measures SYNCHRONIZED activity of large neuron populations — a lone neuron, or a disorganized crowd, is invisible to a scalp electrode.',cn:'在大约 70% 同步度时，神经元叠加后的电压终于超过了噪声门槛。这正是为什么 EEG 测量的是大量神经元群的“同步”活动 — 单个神经元、或者一群各行其是的神经元，对头皮电极都是隐形的。'},
-  victoryBtn:{en:'CLOSE',cn:'关闭'},
+"use strict";
+// ============ i18n ============
+var LANG = 'zh';
+var I18N = {
+  zh: {
+    mascotName:'SPARK', mascotSub:'树突向导',
+    coreQ:'脑电波从哪来?',
+    taskBody:'<b>任务</b>: 点击 <b>"让更多神经元同步"</b>, 看头皮电极上的电压如何被一级级推高, 从噪声平线推到清晰可测的节律。点 <b>"打散同步"</b> 看它塌回噪声。把任一脑区推到可测节律即可解锁 <b>脑波起源观察者</b>。',
+    lg0:'未放电神经元', lg1:'同步放电中', lg2:'头皮可测电压',
+    progLabel:'同步度 → 电压',
+    title:'同步度 → 头皮电压 · 因果链',
+    hudSync:'同步度', hudVolt:'头皮电压', hudRhythm:'节律',
+    regionLabel:'脑区:', chipOcc:'枕叶', chipMot:'运动区',
+    btnSync:'让更多神经元同步', btnScatter:'打散同步',
+    capNeurons:'一片皮层神经元 (放大)', capScope:'头皮电极读数 (EEG)',
+    langBtn:'EN',
+    verdictBadge:'解锁: 脑波起源观察者',
+    verdictOcc:'枕叶神经元高度同步, 头皮测到清晰的 alpha 节律 (8–12 Hz)。单个神经元的微电流太弱, 是成千上万个一起同步放电, 才在头皮叠加成可测的宏观脑波。',
+    verdictMot:'运动区神经元同步, 头皮测到 beta 节律 (13–30 Hz)。脑波不是某个神经元"发出"的, 而是大量神经元同步放电的宏观结果。',
+    rhythmFlat:'噪声', unit:'µV',
+    syncNeurons:'神经元同步放电', peak:'峰值'
+  },
+  en: {
+    mascotName:'SPARK', mascotSub:'Dendrite Guide',
+    coreQ:'Where do brain waves come from?',
+    taskBody:'<b>Goal</b>: Click <b>"Sync more neurons"</b> and watch the scalp electrode voltage get pushed up step by step, from a noisy flat line into a clear measurable rhythm. Click <b>"Scatter sync"</b> to collapse it back to noise. Push either region to a measurable rhythm to unlock <b>Brain-Wave Origin Observer</b>.',
+    lg0:'Resting neuron', lg1:'Firing in sync', lg2:'Scalp voltage',
+    progLabel:'Synchrony → Voltage',
+    title:'Synchrony → Scalp Voltage · Causal Chain',
+    hudSync:'Synchrony', hudVolt:'Scalp V', hudRhythm:'Rhythm',
+    regionLabel:'Region:', chipOcc:'Occipital', chipMot:'Motor',
+    btnSync:'Sync more neurons', btnScatter:'Scatter sync',
+    capNeurons:'A patch of cortical neurons (zoom)', capScope:'Scalp electrode reading (EEG)',
+    langBtn:'CN',
+    verdictBadge:'Unlocked: Brain-Wave Origin Observer',
+    verdictOcc:'Occipital neurons are highly synchronized; the scalp picks up a clear alpha rhythm (8–12 Hz). A single neuron is far too weak — only when tens of thousands fire together does it sum into a measurable macroscopic brain wave.',
+    verdictMot:'Motor-cortex neurons synced; the scalp reads a beta rhythm (13–30 Hz). A brain wave is not "emitted" by one neuron — it is the macroscopic result of many neurons firing in sync.',
+    rhythmFlat:'noise', unit:'µV',
+    syncNeurons:'neurons firing in sync', peak:'peak'
+  }
 };
-function t(k){return(I18N[k]&&I18N[k][LANG])||(I18N[k]&&I18N[k]['en'])||k;}
+function t(k){ return I18N[LANG][k]; }
 
-var canvas=document.getElementById('c');
-var ctx=canvas.getContext('2d');
-var W=0,H=0;
-var DPR=Math.min(window.devicePixelRatio||1,2);
-var guideOpen=true;
+// ============ 因果链状态 (非调参: 离散级别, 由动作推进) ============
+var REGIONS = {
+  occ: { sync:0, baseHz:10, rhythmZh:'alpha', verdict:'verdictOcc' }, // alpha 8-12Hz
+  mot: { sync:0, baseHz:20, rhythmZh:'beta',  verdict:'verdictMot' }  // beta 13-30Hz
+};
+var current = 'occ';
+var MAX_SYNC = 5;          // 5 个离散同步级别
+var WIN_SYNC = 5;          // 达到顶级 = 可测节律
+var won = false;           // 是否已首次解锁 (用于显示 verdict 一次)
+var wonRegions = {};       // 各脑区是否已达可测节律
+var pulsePhase = 0;        // 神经元放电脉冲相位
+var scopeBuf = [];         // 波形历史
+var SCOPE_LEN = 220;
 
-// --- model ---
-var sync=10;            // synchrony 0..100 (%)
-var solved=false;
-var NOISE=18;           // noise floor in microvolts (constant)
-var MAX_SIGNAL=60;      // scalp signal at 100% synchrony
-
-// Scalp amplitude grows steeply with synchrony (small populations cancel out).
-// Use a curve so it crosses NOISE near 70%.
-function scalpSignal(s){
-  var x=s/100;
-  // quadratic-ish growth: at s=70 -> ~ NOISE; below stays buried
-  var v=MAX_SIGNAL*Math.pow(x,3.5);
-  return v;
+function syncFrac(){ return REGIONS[current].sync / MAX_SYNC; }
+// 电压: 同步度的强非线性放大 (单神经元弱 -> 群体叠加宏观可测)
+function voltageUV(){
+  var f = syncFrac();
+  return 2 + Math.round(78 * Math.pow(f, 1.6));   // 噪声底 2µV -> ~80µV
 }
-function isDetectable(s){ return scalpSignal(s)>NOISE; }
-
-// neuron field
-var N=42;
-var neurons=[];
-function initNeurons(){
-  neurons=[];
-  for(var i=0;i<N;i++){
-    neurons.push({
-      bx:Math.random(),       // base x in 0..1 (within left field)
-      by:Math.random(),
-      phase:Math.random()*Math.PI*2,   // individual phase offset
-      freq:0.9+Math.random()*0.4       // individual firing speed
-    });
-  }
-}
-initNeurons();
-
-var tNow=0;
-
-function resize(){
-  var stage=document.querySelector('.stage');
-  var rect=stage.getBoundingClientRect();
-  if(rect.width<1||rect.height<1) return;
-  W=rect.width;H=rect.height;
-  canvas.width=W*DPR;canvas.height=H*DPR;
-  canvas.style.width=W+'px';canvas.style.height=H+'px';
-  ctx.setTransform(DPR,0,0,DPR,0,0);
+function rhythmName(){
+  var f = syncFrac();
+  if(f <= 0.3) return t('rhythmFlat');
+  return REGIONS[current].rhythmZh;   // alpha / beta (拉丁字母, 双语通用)
 }
 
-function neuronFire(n,time){
-  // master rhythm shared when synchronized; individual rhythm otherwise
-  var sFrac=sync/100;
-  var master=time*1.6;
-  var own=time*1.6*n.freq+n.phase;
-  // blended angle: high sync -> all near master
-  var blended=master*sFrac + own*(1-sFrac);
-  // a "fire" is a sharp pulse: use a peaked function of sin
-  var s=Math.sin(blended);
-  var pulse=Math.pow(Math.max(0,s),6); // sharp spike 0..1
-  return pulse;
+// ============ canvas 设置 ============
+var cvN = document.getElementById('cvNeurons');
+var cvS = document.getElementById('cvScope');
+var ctxN = cvN.getContext('2d');
+var ctxS = cvS.getContext('2d');
+
+function css(v){ return getComputedStyle(document.documentElement).getPropertyValue(v).trim(); }
+var C = {}, MONO='';
+function loadColors(){
+  C.bg0=css('--bg-0'); C.bg1=css('--bg-1'); C.accent=css('--accent');
+  C.axon=css('--axon'); C.firing=css('--firing'); C.memory=css('--memory');
+  C.dendrite=css('--dendrite'); C.line=css('--line'); C.inkdim=css('--ink-dim');
+  MONO = "11px 'JetBrains Mono', monospace";
 }
 
-function draw(){
-  ctx.clearRect(0,0,W,H);
-  // bg gradient (deep space neuro)
-  var bg=ctx.createLinearGradient(0,0,0,H);
-  bg.addColorStop(0,'oklch(0.18 0.04 25)');
-  bg.addColorStop(1,'oklch(0.13 0.03 25)');
-  ctx.fillStyle=bg;ctx.fillRect(0,0,W,H);
+function fitCanvas(cv){
+  var r = cv.parentElement.getBoundingClientRect();
+  var dpr = window.devicePixelRatio || 1;
+  cv.width = Math.max(2, Math.floor(r.width * dpr));
+  cv.height = Math.max(2, Math.floor(r.height * dpr));
+  cv.getContext('2d').setTransform(dpr,0,0,dpr,0,0);
+  return { w:r.width, h:r.height };
+}
 
-  // layout: left ~62% neuron field, right ~38% scalp readout
-  var splitX=W*0.60;
-  var pad=20;
-
-  // --- neuron field ---
-  var fx=pad, fy=pad+24, fw=splitX-pad*1.5, fh=H-pad*2-24;
-  // field label
-  ctx.fillStyle='oklch(0.62 0.03 25)';
-  ctx.font='bold 12px "Space Grotesk"';ctx.textAlign='left';ctx.textBaseline='alphabetic';
-  ctx.fillText(LANG==='cn'?'神经元群 (亮 = 正在放电)':'NEURON POPULATION (bright = firing)',fx,pad+14);
-
-  // draw faint connection grid
-  // neuron positions + firing
-  var sumSigned=0;
-  for(var i=0;i<neurons.length;i++){
-    var n=neurons[i];
-    var x=fx+n.bx*fw;
-    var y=fy+n.by*fh;
-    var p=neuronFire(n,tNow); // 0..1
-    sumSigned+=p;
-    var r=4+p*7;
-    // glow
-    if(p>0.05){
-      var g=ctx.createRadialGradient(x,y,0,x,y,r*2.6);
-      g.addColorStop(0,'oklch(0.92 0.08 25 / '+(0.55*p)+')');
-      g.addColorStop(1,'oklch(0.92 0.08 25 / 0)');
-      ctx.fillStyle=g;
-      ctx.beginPath();ctx.arc(x,y,r*2.6,0,Math.PI*2);ctx.fill();
+// 神经元网格布局
+var neurons = [];
+function buildNeurons(w,h){
+  neurons = [];
+  var cols = 14, rows = 8;
+  var mx = w*0.10, my = h*0.20;
+  var gw = (w - mx*2)/(cols-1), gh = (h - my*2)/(rows-1);
+  for(var rI=0;rI<rows;rI++){
+    for(var cI=0;cI<cols;cI++){
+      neurons.push({
+        x: mx + cI*gw + (Math.random()-0.5)*gw*0.25,
+        y: my + rI*gh + (Math.random()-0.5)*gh*0.25,
+        phase: Math.random()*Math.PI*2
+      });
     }
-    // body
-    var lit=p>0.3;
-    ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);
-    ctx.fillStyle=lit?'oklch(0.92 0.08 25)':'oklch(0.45 0.10 25)';
-    ctx.fill();
-    ctx.lineWidth=1;
-    ctx.strokeStyle='oklch(0.75 0.17 25 / 0.5)';
-    ctx.stroke();
-  }
-
-  // collective "field potential" trace below neurons -> shows summation
-  // population firing fraction this frame
-  var popFrac=sumSigned/neurons.length; // 0..~1
-
-  // --- divider ---
-  ctx.strokeStyle='oklch(0.40 0.05 25 / 0.3)';
-  ctx.lineWidth=1;
-  ctx.beginPath();ctx.moveTo(splitX,pad);ctx.lineTo(splitX,H-pad);ctx.stroke();
-
-  // --- scalp electrode panel ---
-  var ex=splitX+pad, ew=W-splitX-pad*1.5;
-  ctx.fillStyle='oklch(0.62 0.03 25)';
-  ctx.font='bold 12px "Space Grotesk"';ctx.textAlign='left';
-  ctx.fillText(LANG==='cn'?'头皮电极':'SCALP ELECTRODE',ex,pad+14);
-
-  // electrode dome glyph
-  var domeCx=ex+ew*0.5, domeCy=fy+34, domeR=24;
-  ctx.beginPath();ctx.arc(domeCx,domeCy,domeR,Math.PI,0);ctx.closePath();
-  ctx.fillStyle='oklch(0.30 0.06 25 / 0.7)';ctx.fill();
-  ctx.strokeStyle='oklch(0.75 0.17 25 / 0.6)';ctx.lineWidth=1.5;ctx.stroke();
-  ctx.beginPath();ctx.arc(domeCx,domeCy,5,0,Math.PI*2);
-  var detect=isDetectable(sync);
-  ctx.fillStyle=detect?'oklch(0.85 0.14 85)':'oklch(0.45 0.10 25)';
-  ctx.fill();
-
-  // signal bar vs noise floor
-  var barX=ex+ew*0.18, barW=ew*0.64;
-  var barTop=domeCy+domeR+24;
-  var barBottom=H-pad-40;
-  var barH=barBottom-barTop;
-  if(barH<60){barH=60;barTop=barBottom-barH;}
-  // bar frame
-  ctx.fillStyle='oklch(0.16 0.03 25 / 0.7)';
-  ctx.fillRect(barX,barTop,barW,barH);
-  ctx.strokeStyle='oklch(0.40 0.05 25 / 0.4)';ctx.lineWidth=1;
-  ctx.strokeRect(barX,barTop,barW,barH);
-
-  // scale: 0..MAX_SIGNAL maps to barH
-  function ampY(v){ return barBottom - (v/MAX_SIGNAL)*barH; }
-  // live amplitude = scalpSignal modulated by current population firing (visual liveliness)
-  var baseAmp=scalpSignal(sync);
-  var liveAmp=baseAmp*(0.55+0.9*popFrac); // wiggles with population
-  if(liveAmp>MAX_SIGNAL) liveAmp=MAX_SIGNAL;
-
-  // filled signal bar
-  var sigTop=ampY(liveAmp);
-  var sg=ctx.createLinearGradient(0,barBottom,0,barTop);
-  sg.addColorStop(0,'oklch(0.55 0.15 25)');
-  sg.addColorStop(1,detect?'oklch(0.85 0.14 85)':'oklch(0.75 0.17 25)');
-  ctx.fillStyle=sg;
-  ctx.fillRect(barX+4,sigTop,barW-8,barBottom-sigTop);
-
-  // noise floor dashed line
-  var noiseY=ampY(NOISE);
-  ctx.save();
-  ctx.setLineDash([6,5]);
-  ctx.strokeStyle='oklch(0.85 0.14 85 / 0.9)';
-  ctx.lineWidth=2;
-  ctx.beginPath();ctx.moveTo(barX-6,noiseY);ctx.lineTo(barX+barW+6,noiseY);ctx.stroke();
-  ctx.restore();
-  ctx.fillStyle='oklch(0.85 0.14 85)';
-  ctx.font='bold 10px "JetBrains Mono"';ctx.textAlign='left';ctx.textBaseline='bottom';
-  ctx.fillText((LANG==='cn'?'噪声门槛 ':'NOISE ')+NOISE+'µV',barX-6,noiseY-3);
-
-  // amplitude readout text on bar
-  ctx.fillStyle=detect?'oklch(0.92 0.02 25)':'oklch(0.62 0.03 25)';
-  ctx.font='bold 13px "JetBrains Mono"';ctx.textAlign='center';ctx.textBaseline='middle';
-  ctx.fillText(Math.round(baseAmp)+' µV',barX+barW/2,Math.min(sigTop-12,barTop+14));
-
-  // detect verdict text
-  ctx.font='bold 12px "Space Grotesk"';ctx.textAlign='center';ctx.textBaseline='top';
-  if(detect){
-    ctx.fillStyle='oklch(0.85 0.14 85)';
-    ctx.fillText(LANG==='cn'?'→ 信号冲出噪声！':'→ SIGNAL BREAKS THROUGH!',barX+barW/2,barBottom+8);
-  }else{
-    ctx.fillStyle='oklch(0.62 0.03 25)';
-    ctx.fillText(LANG==='cn'?'信号埋在噪声里':'BURIED IN NOISE',barX+barW/2,barBottom+8);
   }
 }
 
-function tick(dt){
-  tNow+=dt;
-  draw();
+function drawNeurons(w,h){
+  ctxN.clearRect(0,0,w,h);
+  if(neurons.length===0) return;
+  var f = syncFrac();
+  var nSync = Math.round(neurons.length * f);
+  var sharedPhase = pulsePhase;
+  for(var i=0;i<neurons.length;i++){
+    var n = neurons[i];
+    var isSync = i < nSync;
+    var ph = isSync ? sharedPhase : (pulsePhase*0.6 + n.phase);
+    var fire = Math.max(0, Math.sin(ph));
+    var r = 5 + fire*5*(isSync?1:0.5);
+    if(isSync && (i % 14)!==0 && (i-1) < nSync && i>0){
+      var prev = neurons[i-1];
+      ctxN.strokeStyle = C.dendrite;
+      ctxN.globalAlpha = 0.18 + fire*0.25;
+      ctxN.lineWidth = 1;
+      ctxN.beginPath(); ctxN.moveTo(prev.x,prev.y); ctxN.lineTo(n.x,n.y); ctxN.stroke();
+      ctxN.globalAlpha = 1;
+    }
+    if(isSync && fire>0.3){
+      ctxN.fillStyle = C.firing;
+      ctxN.globalAlpha = 0.12*fire;
+      ctxN.beginPath(); ctxN.arc(n.x,n.y,r*2.4,0,Math.PI*2); ctxN.fill();
+      ctxN.globalAlpha = 1;
+    }
+    ctxN.fillStyle = isSync ? (fire>0.25 ? C.firing : C.dendrite) : C.axon;
+    ctxN.beginPath(); ctxN.arc(n.x,n.y,r,0,Math.PI*2); ctxN.fill();
+  }
+  ctxN.fillStyle = C.inkdim;
+  ctxN.font = MONO;
+  ctxN.textAlign='left';
+  ctxN.fillText(nSync + ' / ' + neurons.length + ' ' + t('syncNeurons'), w*0.10, h*0.12);
 }
 
-function updateUI(){
-  var amp=scalpSignal(sync);
-  var detect=isDetectable(sync);
-  document.getElementById('valSync').textContent=sync+'%';
-  document.getElementById('valScalp').textContent=Math.round(amp)+' µV';
-  document.getElementById('valNoise').textContent=NOISE+' µV';
-  var dv=document.getElementById('valDetect');
-  dv.textContent=detect?t('detectYes'):t('detectNo');
-  dv.className='stat-val'+(detect?' over':'');
-  document.getElementById('hudV1').textContent=sync+'%';
-  document.getElementById('hudV2').textContent=Math.round(amp);
-  document.getElementById('hudV3').textContent=detect?t('stateRead'):t('stateBuried');
-  var ts=document.getElementById('taskStatus');
-  if(solved){ ts.textContent=t('taskDone'); ts.className='task-status pass'; }
-  else { ts.textContent=t('taskPending'); ts.className='task-status fail'; }
+// 头皮电极波形采样: 同步度低=噪声平线, 高=清晰节律
+function sampleScope(tms){
+  var f = syncFrac();
+  var rhythmAmp = (voltageUV()-2);
+  var hz = REGIONS[current].baseHz;
+  var rhythm = Math.sin(tms/1000 * hz * 2*Math.PI) * rhythmAmp;
+  var noiseAmp = 6 * (1-f) + 1.5;
+  var noise = (Math.random()-0.5)*2 * noiseAmp;
+  return rhythm + noise;   // µV
+}
 
-  if(detect&&!solved){
-    solved=true;
-    ts.textContent=t('taskDone'); ts.className='task-status pass';
-    setTimeout(function(){document.getElementById('victoryOverlay').classList.add('show');},350);
+function drawScope(w,h){
+  ctxS.clearRect(0,0,w,h);
+  var midY = h*0.55;
+  ctxS.strokeStyle = C.line; ctxS.globalAlpha=0.5; ctxS.lineWidth=1;
+  ctxS.beginPath(); ctxS.moveTo(0,midY); ctxS.lineTo(w,midY); ctxS.stroke();
+  ctxS.globalAlpha=1;
+  ctxS.fillStyle=C.inkdim; ctxS.font="9px 'JetBrains Mono', monospace"; ctxS.textAlign='left';
+  ctxS.fillText('0 '+t('unit'), 4, midY-4);
+  var f = syncFrac();
+  var col = f>=0.99 ? C.memory : (f>0.3 ? C.firing : C.inkdim);
+  ctxS.strokeStyle = col; ctxS.lineWidth = f>0.3?2:1.4; ctxS.globalAlpha = 0.95;
+  ctxS.beginPath();
+  var scaleY = (h*0.42)/90;
+  for(var i=0;i<scopeBuf.length;i++){
+    var x = (i/(SCOPE_LEN-1))*w;
+    var y = midY - scopeBuf[i]*scaleY;
+    if(i===0) ctxS.moveTo(x,y); else ctxS.lineTo(x,y);
+  }
+  ctxS.stroke(); ctxS.globalAlpha=1;
+  ctxS.fillStyle = col; ctxS.font=MONO; ctxS.textAlign='right';
+  ctxS.fillText(t('peak')+' '+voltageUV()+' '+t('unit'), w-6, h*0.16);
+}
+
+// ============ HUD ============
+function updateHUD(){
+  var f = syncFrac();
+  document.getElementById('syncVal').textContent = Math.round(f*100)+'%';
+  document.getElementById('voltVal').textContent = voltageUV()+' '+t('unit');
+  document.getElementById('rhythmVal').textContent = rhythmName();
+  document.getElementById('progFill').style.width = (f*100)+'%';
+}
+
+// ============ 因果动作 (核心交互, 非调参) ============
+function regionDone(){ return wonRegions[current] === true; }
+
+function doSync(){
+  if(regionDone()) return;
+  var R = REGIONS[current];
+  if(R.sync < MAX_SYNC) R.sync += 1;   // 离散推进一级
+  updateHUD();
+  checkWin();
+}
+function doScatter(){
+  if(regionDone()) return;
+  var R = REGIONS[current];
+  R.sync = Math.max(0, R.sync - 2);    // 打散: 同步度塌回
+  updateHUD();
+}
+function switchRegion(reg){
+  current = reg;
+  document.getElementById('chipOcc').classList.toggle('active', reg==='occ');
+  document.getElementById('chipMot').classList.toggle('active', reg==='mot');
+  // 切区后按当前区是否已达成, 决定 verdict 与 sync 按钮可用性
+  refreshRegionState();
+  updateHUD();
+}
+function refreshRegionState(){
+  var vd = document.getElementById('verdict');
+  if(regionDone()){
+    document.getElementById('verdictBadge').textContent = t('verdictBadge');
+    document.getElementById('verdictDesc').textContent = t(REGIONS[current].verdict);
+    vd.classList.add('show');
+    document.getElementById('btnSync').disabled = true;
+  } else {
+    vd.classList.remove('show');
+    document.getElementById('btnSync').disabled = false;
+  }
+}
+function checkWin(){
+  var R = REGIONS[current];
+  if(R.sync >= WIN_SYNC && !wonRegions[current]){
+    wonRegions[current] = true;
+    won = true;
+    refreshRegionState();
   }
 }
 
-function refreshI18N(){
-  document.getElementById('headerTitle').textContent=t('title');
-  document.getElementById('mascotRole').textContent=t('mascotRole');
-  document.getElementById('sliderTitle').textContent=t('sliderTitle');
-  document.getElementById('lblSync').textContent=t('lblSync');
-  document.getElementById('lblScalp').textContent=t('lblScalp');
-  document.getElementById('lblNoise').textContent=t('lblNoise');
-  document.getElementById('lblDetect').textContent=t('lblDetect');
-  document.getElementById('taskTitle').textContent=t('taskTitle');
-  document.getElementById('taskDesc').textContent=t('taskDesc');
-  document.getElementById('hudL1').textContent=t('hudSync');
-  document.getElementById('hudL2').textContent=t('hudScalp');
-  document.getElementById('hudL3').textContent=t('hudState');
-  document.getElementById('guideTitle').textContent=t('guideTitle');
-  document.getElementById('guideArrow').textContent=guideOpen?t('guideArrowOpen'):t('guideArrowClosed');
-  document.getElementById('guideGoal').textContent=t('guideGoal');
-  var sl=document.getElementById('guideSteps');
-  sl.innerHTML='<li>'+t('guideS1')+'</li><li>'+t('guideS2')+'</li><li>'+t('guideS3')+'</li><li>'+t('guideS4')+'</li>';
-  document.getElementById('guideTips').textContent=t('guideTips');
-  document.getElementById('victoryTitle').textContent=t('victoryTitle');
-  document.getElementById('victoryText').textContent=t('victoryText');
-  document.getElementById('victoryBtn').textContent=t('victoryBtn');
-  updateUI();
+// ============ 渲染循环 ============
+var dimN={w:0,h:0}, dimS={w:0,h:0};
+function relayout(){
+  dimN = fitCanvas(cvN);
+  dimS = fitCanvas(cvS);
+  buildNeurons(dimN.w, dimN.h);
 }
-
-// --- events ---
-document.getElementById('sliderSync').addEventListener('input',function(){
-  sync=parseInt(this.value,10);
-  updateUI();
-});
-document.getElementById('langBtn').addEventListener('click',function(){
-  LANG=LANG==='en'?'cn':'en';
-  document.getElementById('langBtn').textContent=LANG.toUpperCase();
-  refreshI18N();
-});
-document.getElementById('guideToggle').addEventListener('click',function(){
-  guideOpen=!guideOpen;
-  document.getElementById('guideContent').style.display=guideOpen?'block':'none';
-  document.getElementById('guideArrow').textContent=guideOpen?t('guideArrowOpen'):t('guideArrowClosed');
-});
-document.getElementById('victoryBtn').addEventListener('click',function(){
-  document.getElementById('victoryOverlay').classList.remove('show');
-});
-window.addEventListener('resize',resize);
-
-// --- loop ---
-var last=performance.now();
-function loop(now){
-  var dt=Math.min(0.05,(now-last)/1000);
-  last=now;
-  tick(dt);
+function loop(ts){
+  pulsePhase += 0.12;
+  scopeBuf.push(sampleScope(ts));
+  while(scopeBuf.length > SCOPE_LEN) scopeBuf.shift();
+  drawNeurons(dimN.w, dimN.h);
+  drawScope(dimS.w, dimS.h);
   requestAnimationFrame(loop);
 }
 
-resize();
-refreshI18N();
+// ============ i18n 应用 ============
+function applyLang(){
+  document.getElementById('mascotName').textContent = t('mascotName');
+  document.getElementById('mascotSub').textContent = t('mascotSub');
+  document.getElementById('coreQ').textContent = t('coreQ');
+  document.getElementById('taskBody').innerHTML = t('taskBody');
+  document.getElementById('lg0').textContent = t('lg0');
+  document.getElementById('lg1').textContent = t('lg1');
+  document.getElementById('lg2').textContent = t('lg2');
+  document.getElementById('progLabel').textContent = t('progLabel');
+  document.getElementById('title').textContent = t('title');
+  document.getElementById('hudSync').childNodes[0].nodeValue = t('hudSync')+' ';
+  document.getElementById('hudVolt').childNodes[0].nodeValue = t('hudVolt')+' ';
+  document.getElementById('hudRhythm').childNodes[0].nodeValue = t('hudRhythm')+' ';
+  document.getElementById('regionLabel').textContent = t('regionLabel');
+  document.getElementById('chipOcc').textContent = t('chipOcc');
+  document.getElementById('chipMot').textContent = t('chipMot');
+  document.getElementById('btnSync').textContent = t('btnSync');
+  document.getElementById('btnScatter').textContent = t('btnScatter');
+  document.getElementById('capNeurons').textContent = t('capNeurons');
+  document.getElementById('capScope').textContent = t('capScope');
+  document.getElementById('langBtn').textContent = t('langBtn');
+  refreshRegionState();
+  updateHUD();
+}
+
+// ============ 事件绑定 (addEventListener, 无 onclick) ============
+document.getElementById('btnSync').addEventListener('click', doSync);
+document.getElementById('btnScatter').addEventListener('click', doScatter);
+document.getElementById('chipOcc').addEventListener('click', function(){ switchRegion('occ'); });
+document.getElementById('chipMot').addEventListener('click', function(){ switchRegion('mot'); });
+document.getElementById('langBtn').addEventListener('click', function(){
+  LANG = (LANG==='zh') ? 'en' : 'zh';
+  applyLang();
+});
+window.addEventListener('resize', relayout);
+
+// ============ 启动 ============
+loadColors();
+relayout();
+applyLang();
 requestAnimationFrame(loop);
-setTimeout(resize,200);
-setTimeout(resize,600);
-document.fonts.ready.then(function(){resize();});
-})();
 </script>
 </body>
 </html>

@@ -3,666 +3,721 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>脑波录制装配台</title>
+<title>录制流程建造台 / EEG Recording Setup — M10 Game</title>
 <style>
-  :root{
-    /* Surfaces — Claude warm cream */
-    --paper:    #FAF9F5;
-    --paper-2:  #F1EDDF;
-    --card:     #FFFFFF;
-    --ink:      #191814;
-    --ink-2:    #2B2924;
-    --sub:      #6B6557;
-    --sub-2:    #9D978A;
-    --border:   #EBE5D6;
-    --border-2: #D9D1BD;
-    --hairline: #F2EDE0;
+  /* ============== Layer 1 — Deep-space canvas (shared across 26 subjects) ============== */
+  :root {
+    --bg-0: oklch(0.14 0.035 275);
+    --bg-1: oklch(0.18 0.04 275);
+    --bg-2: oklch(0.22 0.045 275);
+    --bg-3: oklch(0.28 0.05 275);
+    --line: oklch(0.40 0.06 275 / 0.35);
+    --line-strong: oklch(0.55 0.10 275 / 0.55);
 
-    /* Primary — Claude coral */
-    --primary:      #D97757;
-    --primary-ink:  #9A4A2E;
-    --primary-soft: #F8EDE5;
-    --primary-line: #ECCFB8;
+    --fg:      oklch(0.96 0.01 275);
+    --fg-dim:  oklch(0.78 0.02 275);
+    --fg-mute: oklch(0.58 0.03 275);
+    --gold:    oklch(0.85 0.14 85);
 
-    /* Domain accent — robotics 紫 */
-    --robotics:     #7C4569;
-    --robotics-soft:#E9DBE3;
+    /* Layer 2 — electrical engineering accent (indigo) */
+    --elec: oklch(0.72 0.17 275);
 
-    --good:     #5A8A5E;
-    --good-soft:#E2ECE1;
-    --warn:     #C0823C;
-    --warn-soft:#F6ECDB;
+    /* Layer 3 — elec 5-color palette (themes.js id=elec, mascot Volt) */
+    --CURRENT: oklch(0.72 0.17 275);   /* bright current */
+    --TRACE:   oklch(0.52 0.16 275);   /* deep trace */
+    --BOARD:   oklch(0.35 0.10 275);   /* board */
+    --PULSE:   oklch(0.92 0.08 275);   /* pale pulse */
+    --RELAY:   oklch(0.85 0.14 85);    /* gold relay (warning) */
 
-    --shadow-sm: 0 1px 2px 0 rgba(25,24,20,.04);
-    --shadow:    0 1px 3px 0 rgba(25,24,20,.06), 0 1px 2px -1px rgba(25,24,20,.04);
-    --shadow-md: 0 4px 8px -2px rgba(25,24,20,.06), 0 2px 4px -2px rgba(25,24,20,.04);
-    --shadow-lg: 0 12px 24px -6px rgba(25,24,20,.1), 0 4px 8px -4px rgba(25,24,20,.05);
+    --bad: oklch(0.65 0.20 25);        /* fail red */
+    --ok:  oklch(0.78 0.16 150);       /* success green */
   }
-  *{box-sizing:border-box;}
-  html,body{margin:0;padding:0;}
-  body{
-    height:100vh;overflow:hidden;display:flex;
-    background:var(--paper);color:var(--ink);
-    font-family:'PingFang SC','Noto Sans SC','Inter',sans-serif;
-  }
-  .mono{font-family:'JetBrains Mono','SF Mono','Roboto Mono',ui-monospace,monospace;}
 
-  /* ---------------- Sidebar ---------------- */
-  .game-sidebar{
-    width:200px;flex-shrink:0;height:100vh;
-    background:var(--paper-2);border-right:1px solid var(--border-2);
-    display:flex;flex-direction:column;gap:12px;padding:16px 14px;
-    overflow-y:auto;
-  }
-  .brand{display:flex;flex-direction:column;gap:3px;}
-  .brand .kicker{font-size:10px;letter-spacing:.14em;color:var(--robotics);font-weight:700;text-transform:uppercase;}
-  .brand h1{font-size:17px;margin:0;line-height:1.25;color:var(--ink);}
+  * { box-sizing: border-box; margin: 0; padding: 0; }
 
-  .step-box{
-    background:var(--card);border:1px solid var(--border);border-radius:10px;
-    padding:10px 11px;box-shadow:var(--shadow-sm);
+  html, body {
+    width: 100%;
+    height: 100vh;
+    overflow: hidden;
+    background: var(--bg-0);
+    color: var(--fg);
+    font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    letter-spacing: 0.02em;
   }
-  .step-box .lbl{font-size:10px;font-weight:700;color:var(--primary-ink);letter-spacing:.05em;margin-bottom:4px;text-transform:uppercase;}
-  .step-box .now{font-size:12.5px;color:var(--ink-2);line-height:1.45;}
-  .step-box .now b{color:var(--robotics);}
 
-  .tray-lbl{font-size:10px;font-weight:700;color:var(--sub);letter-spacing:.05em;text-transform:uppercase;}
-  .tray{display:flex;flex-direction:column;gap:7px;}
-  .chip{
-    padding:8px 10px;border-radius:9px;cursor:grab;user-select:none;
-    background:var(--card);border:1px solid var(--border-2);box-shadow:var(--shadow-sm);
-    display:flex;align-items:center;gap:8px;touch-action:none;
-    transition:transform .12s ease,box-shadow .12s ease,border-color .12s ease;
+  /* ============== Layout — sidebar + main ============== */
+  .stage-wrap {
+    display: flex;
+    flex-direction: row;
+    width: 100%;
+    height: 100vh;
   }
-  .chip:hover{transform:translateY(-1px);box-shadow:var(--shadow-md);border-color:var(--robotics);}
-  .chip:active{cursor:grabbing;}
-  .chip.dragging{opacity:.4;}
-  .chip.used{opacity:.3;pointer-events:none;}
-  .chip .ic{width:22px;height:22px;flex-shrink:0;}
-  .chip .txt{display:flex;flex-direction:column;gap:1px;line-height:1.1;}
-  .chip .name{font-size:12px;font-weight:700;color:var(--ink);}
-  .chip .role{font-size:9px;color:var(--sub-2);}
 
-  .actions{display:flex;flex-direction:column;gap:7px;margin-top:2px;}
-  .btn{
-    padding:8px 11px;border-radius:9px;font-size:12.5px;font-weight:700;cursor:pointer;
-    border:1px solid var(--border-2);background:var(--card);color:var(--ink-2);
-    box-shadow:var(--shadow-sm);transition:transform .1s ease,box-shadow .1s ease;
-    text-align:center;
+  .game-sidebar {
+    width: 200px;
+    flex-shrink: 0;
+    background: var(--bg-1);
+    border-right: 1px solid var(--line);
+    padding: 14px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    overflow-y: auto;
   }
-  .btn:hover{box-shadow:var(--shadow-md);}
-  .btn:active{transform:translateY(1px);}
-  .btn-rec{background:var(--primary);border-color:var(--primary);color:#fff;}
-  .btn-rec:hover{background:var(--primary-ink);}
-  .btn-rec:disabled{background:var(--border-2);border-color:var(--border-2);color:var(--sub-2);cursor:not-allowed;box-shadow:none;}
-  .lang-btn{margin-top:auto;}
 
-  /* ---------------- Main ---------------- */
-  .game-main{
-    flex:1;height:100vh;display:flex;flex-direction:column;position:relative;
-    padding:16px 22px;overflow:hidden;gap:12px;
+  .game-main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    overflow: hidden;
+    background: var(--bg-0);
+    padding: 16px 20px;
+    gap: 12px;
   }
-  .hud{
-    align-self:stretch;
-    background:var(--card);border:1px solid var(--border);border-radius:10px;
-    padding:9px 14px;box-shadow:var(--shadow);font-size:13px;color:var(--sub);
-    min-height:20px;line-height:1.45;flex-shrink:0;
-  }
-  .hud.good{border-color:var(--good);color:var(--good);background:var(--good-soft);}
-  .hud.warn{border-color:var(--warn);color:var(--warn);background:var(--warn-soft);}
 
-  /* assembly chain */
-  .chain-wrap{
-    flex:1;display:flex;flex-direction:column;min-height:0;gap:12px;
+  /* ============== Sidebar ============== */
+  .sb-brand {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--elec);
+    line-height: 1.35;
+    border-bottom: 1px solid var(--line);
+    padding-bottom: 10px;
+    letter-spacing: 0.04em;
   }
-  .chain{
-    flex:1;width:100%;display:flex;align-items:stretch;justify-content:center;
-    min-height:0;gap:0;
+  .sb-brand .sub {
+    display: block;
+    font-size: 10px;
+    color: var(--fg-dim);
+    margin-top: 4px;
+    letter-spacing: 0.14em;
+    font-weight: 400;
   }
-  .node{
-    flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;
-    position:relative;min-width:0;
-  }
-  .slot{
-    width:100%;max-width:150px;flex:1;min-height:0;border-radius:13px;
-    border:2px dashed var(--border-2);background:var(--card);
-    display:flex;flex-direction:column;align-items:center;justify-content:center;
-    padding:8px;gap:6px;transition:border-color .15s,background .15s,box-shadow .15s;
-    position:relative;
-  }
-  .slot.over{border-color:var(--robotics);background:var(--robotics-soft);border-style:solid;}
-  .slot.filled{border-style:solid;border-color:var(--ink-2);box-shadow:var(--shadow-md);cursor:pointer;}
-  .slot.filled.correct{border-color:var(--good);}
-  .slot.filled.wrong{border-color:var(--primary);background:var(--primary-soft);}
-  .slot.locked{cursor:default;}
-  .slot-hint{font-size:11px;color:var(--sub-2);text-align:center;line-height:1.35;}
-  .slot-stepno{
-    position:absolute;top:6px;left:8px;font-family:'JetBrains Mono',monospace;
-    font-size:11px;font-weight:700;color:var(--sub-2);
-  }
-  .slot svg.dev{width:62px;height:62px;}
-  .slot .placed-name{font-size:11.5px;font-weight:700;color:var(--ink);text-align:center;line-height:1.2;}
-  .gel-dot{position:absolute;top:6px;right:8px;width:9px;height:9px;border-radius:50%;background:var(--good);box-shadow:0 0 0 2px var(--good-soft);display:none;}
-  .gel-dot.show{display:block;}
 
-  .arrow{
-    width:30px;flex-shrink:0;align-self:center;display:flex;align-items:center;justify-content:center;color:var(--sub-2);
+  .sb-mascot {
+    background: var(--bg-2);
+    border: 1px solid var(--line);
+    padding: 8px;
+    box-shadow: 3px 3px 0 var(--bg-0);
   }
-  .arrow svg{width:22px;height:22px;}
+  .sb-mascot svg { width: 100%; height: 64px; display: block; }
+  .sb-mascot .mascot-name {
+    font-size: 9px;
+    color: var(--elec);
+    text-align: center;
+    margin-top: 5px;
+    letter-spacing: 0.2em;
+  }
 
-  /* signal quality panel */
-  .signal-panel{
-    flex-shrink:0;background:var(--card);border:1px solid var(--border);border-radius:12px;
-    box-shadow:var(--shadow);padding:11px 14px;display:flex;gap:16px;align-items:center;
+  .sb-section { display: flex; flex-direction: column; gap: 6px; }
+  .sb-section h4 {
+    font-size: 9px;
+    font-weight: 700;
+    color: var(--gold);
+    text-transform: uppercase;
+    letter-spacing: 0.16em;
   }
-  .scope{flex:1;min-width:0;}
-  .scope-lbl{font-size:10px;font-weight:700;color:var(--sub);letter-spacing:.05em;text-transform:uppercase;margin-bottom:4px;}
-  .scope svg{width:100%;height:64px;display:block;}
-  .meter{width:150px;flex-shrink:0;display:flex;flex-direction:column;gap:5px;}
-  .meter-row{display:flex;justify-content:space-between;align-items:baseline;}
-  .meter-row .k{font-size:11px;color:var(--sub);}
-  .meter-row .v{font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:700;color:var(--ink);}
-  .meter-row .v.good{color:var(--good);}
-  .meter-row .v.bad{color:var(--primary);}
-  .meter-bar{height:9px;border-radius:5px;background:var(--paper-2);overflow:hidden;border:1px solid var(--border);}
-  .meter-bar i{display:block;height:100%;width:0%;border-radius:5px;background:var(--primary);transition:width .5s ease,background .5s ease;}
-  .meter-bar i.good{background:var(--good);}
+  .sb-section li {
+    font-size: 10px;
+    color: var(--fg-dim);
+    line-height: 1.5;
+  }
+  .sb-section ol { padding-left: 14px; }
 
-  .award{
-    position:absolute;inset:0;display:none;align-items:center;justify-content:center;
-    background:rgba(250,249,245,.86);backdrop-filter:blur(2px);z-index:30;
+  /* step-card tray in sidebar */
+  .tray {
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+    min-height: 40px;
+    padding: 6px;
+    background: var(--bg-2);
+    border: 1px dashed var(--line);
   }
-  .award.show{display:flex;animation:fade .4s ease;}
-  @keyframes fade{from{opacity:0;}to{opacity:1;}}
-  .award-card{
-    background:var(--card);border:1px solid var(--primary-line);border-radius:16px;
-    padding:28px 36px;box-shadow:var(--shadow-lg);text-align:center;max-width:430px;
+  .tray.empty::after {
+    content: attr(data-empty);
+    font-size: 9px;
+    color: var(--fg-mute);
+    text-align: center;
+    padding: 8px 0;
+    letter-spacing: 0.1em;
   }
-  .award-card .seal{
-    width:70px;height:70px;margin:0 auto 14px;border-radius:50%;
-    background:var(--primary-soft);border:2px solid var(--primary);
-    display:flex;align-items:center;justify-content:center;
-    font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:700;color:var(--primary-ink);
-    animation:pulse 2.2s ease-in-out infinite;
-  }
-  @keyframes pulse{0%,100%{transform:scale(1);}50%{transform:scale(1.06);}}
-  .award-card h2{margin:0 0 8px;font-size:21px;color:var(--ink);}
-  .award-card p{margin:0 0 18px;font-size:13px;color:var(--sub);line-height:1.6;}
 
-  /* drag ghost */
-  .ghost{position:fixed;pointer-events:none;z-index:90;transform:translate(-50%,-50%);
-    background:var(--card);border:1px solid var(--robotics);border-radius:9px;padding:6px 11px;
-    box-shadow:var(--shadow-md);font-size:12px;font-weight:700;color:var(--robotics);}
+  .step-card {
+    background: var(--bg-3);
+    border: 1px solid var(--line-strong);
+    border-left: 3px solid var(--TRACE);
+    padding: 7px 8px;
+    font-size: 10px;
+    color: var(--fg);
+    cursor: grab;
+    box-shadow: 2px 2px 0 var(--bg-0);
+    line-height: 1.35;
+    user-select: none;
+  }
+  .step-card:hover { border-left-color: var(--elec); }
+  .step-card:active { cursor: grabbing; }
+  .step-card.dragging { opacity: 0.4; }
+  .step-card .sc-tag {
+    display: block;
+    font-size: 8px;
+    color: var(--elec);
+    letter-spacing: 0.1em;
+    margin-bottom: 2px;
+  }
+
+  .lang-btn {
+    margin-top: auto;
+    background: var(--bg-2);
+    border: 1px solid var(--line-strong);
+    color: var(--fg-dim);
+    font-family: inherit;
+    font-size: 11px;
+    padding: 8px;
+    cursor: pointer;
+    letter-spacing: 0.06em;
+    box-shadow: 2px 2px 0 var(--bg-0);
+  }
+  .lang-btn:hover { background: var(--elec); color: var(--bg-0); }
+  .lang-btn:active { box-shadow: 1px 1px 0 var(--bg-0); transform: translate(2px, 2px); }
+
+  /* ============== Main — header ============== */
+  .main-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    border-bottom: 1px solid var(--line);
+    padding-bottom: 8px;
+    flex-shrink: 0;
+  }
+  .main-head .title { font-size: 15px; font-weight: 700; color: var(--PULSE); letter-spacing: 0.04em; }
+  .main-head .q { font-size: 10px; color: var(--fg-dim); }
+
+  /* ============== Main — pipeline slots ============== */
+  .slot-row {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    flex-shrink: 0;
+  }
+  .slot {
+    flex: 1;
+    min-width: 116px;
+    min-height: 62px;
+    background: var(--bg-1);
+    border: 1px dashed var(--line);
+    border-radius: 4px;
+    padding: 5px 6px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 4px;
+    position: relative;
+  }
+  .slot .slot-idx {
+    position: absolute;
+    top: 3px;
+    right: 6px;
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--BOARD);
+  }
+  .slot.over { border-color: var(--elec); background: var(--bg-2); }
+  .slot.filled { border-style: solid; border-color: var(--TRACE); }
+  .slot .placed {
+    font-size: 10px;
+    color: var(--fg);
+    cursor: grab;
+    line-height: 1.3;
+  }
+  .slot .placed .sc-tag {
+    display: block;
+    font-size: 8px;
+    color: var(--elec);
+    letter-spacing: 0.1em;
+    margin-bottom: 2px;
+  }
+  .slot .ph {
+    font-size: 9px;
+    color: var(--fg-mute);
+    letter-spacing: 0.08em;
+  }
+
+  /* ============== Main — signal panel ============== */
+  .signal-panel {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    background: var(--bg-1);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    overflow: hidden;
+    min-height: 120px;
+  }
+  .sp-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 6px 10px;
+    border-bottom: 1px solid var(--line);
+    font-size: 10px;
+    color: var(--fg-dim);
+  }
+  .sp-head .imp { color: var(--gold); }
+  .scope-wrap {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    min-height: 80px;
+  }
+  #scope { display: block; width: 100%; height: 100%; }
+
+  .verdict {
+    padding: 6px 10px;
+    font-size: 10px;
+    line-height: 1.45;
+    border-top: 1px solid var(--line);
+    min-height: 30px;
+    color: var(--fg-dim);
+  }
+  .verdict.fail { color: var(--bad); border-top-color: var(--bad); }
+  .verdict.win { color: var(--ok); border-top-color: var(--ok); }
+
+  /* ============== Main — controls ============== */
+  .ctrl-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-shrink: 0;
+  }
+  .btn {
+    background: var(--bg-2);
+    border: 1px solid var(--line-strong);
+    color: var(--fg);
+    font-family: inherit;
+    font-size: 12px;
+    padding: 9px 16px;
+    cursor: pointer;
+    letter-spacing: 0.04em;
+    box-shadow: 2px 2px 0 var(--bg-0);
+  }
+  .btn:hover { border-color: var(--elec); }
+  .btn:active { box-shadow: 1px 1px 0 var(--bg-0); transform: translate(1px, 1px); }
+  .btn.primary { background: var(--elec); color: var(--bg-0); font-weight: 700; border-color: var(--elec); }
+  .btn.primary:hover { background: var(--PULSE); }
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  .badge {
+    margin-left: auto;
+    font-size: 11px;
+    color: var(--gold);
+    letter-spacing: 0.08em;
+    opacity: 0;
+    transition: opacity 0.4s;
+  }
+  .badge.shown { opacity: 1; }
 </style>
 </head>
 <body>
+<div class="stage-wrap">
+  <!-- ============== SIDEBAR ============== -->
   <aside class="game-sidebar">
-    <div class="brand">
-      <span class="kicker" id="kicker">OpenBCI · 录制配置</span>
-      <h1 id="title">脑波录制装配台</h1>
+    <div class="sb-brand" data-i18n-zh="录制流程建造台" data-i18n-en="RECORDING SETUP RIG">录制流程建造台
+      <span class="sub">M10 · OpenBCI Cyton</span>
     </div>
 
-    <div class="step-box">
-      <div class="lbl" id="stepLbl">当前步骤</div>
-      <div class="now" id="stepNow">把 <b>电极帽</b> 拖到第 1 个槽位</div>
+    <div class="sb-mascot">
+      <svg viewBox="0 0 100 64" aria-hidden="true">
+        <polygon points="46,6 38,34 50,32 40,58 64,26 50,28 58,6"
+                 fill="var(--elec)" stroke="var(--PULSE)" stroke-width="1.4"/>
+        <circle cx="20" cy="20" r="2.4" fill="var(--RELAY)"/>
+        <circle cx="80" cy="44" r="2.4" fill="var(--RELAY)"/>
+        <line x1="20" y1="20" x2="40" y2="20" stroke="var(--TRACE)" stroke-width="1"/>
+        <line x1="62" y1="44" x2="80" y2="44" stroke="var(--TRACE)" stroke-width="1"/>
+      </svg>
+      <div class="mascot-name">VOLT</div>
     </div>
 
-    <div class="tray-lbl" id="trayLbl">零件库（拖到右侧装配链）</div>
-    <div class="tray" id="tray"></div>
-
-    <div class="actions">
-      <button class="btn btn-rec" id="recBtn" disabled>开始录制</button>
-      <button class="btn" id="resetBtn">重置</button>
+    <div class="sb-section">
+      <h4 data-i18n-zh="步骤卡 · 待用" data-i18n-en="STEP CARDS · TRAY">步骤卡 · 待用</h4>
+      <div id="tray" class="tray" data-empty="全部已放入流程槽"></div>
     </div>
 
-    <button class="btn lang-btn" id="langBtn">EN / 中</button>
+    <div class="sb-section">
+      <h4 data-i18n-zh="操作说明" data-i18n-en="HOW TO PLAY">操作说明</h4>
+      <ol>
+        <li data-i18n-zh="把步骤卡拖到右边流程槽" data-i18n-en="Drag step cards into the pipeline slots">把步骤卡拖到右边流程槽</li>
+        <li data-i18n-zh="按正确顺序排满 6 槽" data-i18n-en="Order all 6 slots correctly">按正确顺序排满 6 槽</li>
+        <li data-i18n-zh="点开始录制看信号质量" data-i18n-en="Hit RECORD, check signal">点开始录制看信号质量</li>
+        <li data-i18n-zh="跳过导电胶=阻抗高=噪声" data-i18n-en="Skip gel = high impedance = noise">跳过导电胶=阻抗高=噪声</li>
+      </ol>
+    </div>
+
+    <button id="langBtn" class="lang-btn">EN / 中文</button>
   </aside>
 
+  <!-- ============== MAIN ============== -->
   <main class="game-main">
-    <div class="hud" id="hud">按正确顺序把零件拖进装配链：戴帽 → 涂导电膏降阻抗 → 电极插 Cyton → Cyton 配对 dongle → dongle 插电脑 → 开 GUI 录制。</div>
-
-    <div class="chain-wrap">
-      <div class="chain" id="chain"></div>
-
-      <div class="signal-panel">
-        <div class="scope">
-          <div class="scope-lbl" id="scopeLbl">通道信号 · CH1 (O1, alpha)</div>
-          <svg id="scope" viewBox="0 0 600 64" preserveAspectRatio="none" aria-label="signal scope">
-            <line x1="0" y1="32" x2="600" y2="32" stroke="var(--hairline)" stroke-width="1"></line>
-            <path id="wave" d="M0 32 L600 32" fill="none" stroke="var(--sub-2)" stroke-width="2"></path>
-          </svg>
-        </div>
-        <div class="meter">
-          <div class="meter-row"><span class="k" id="impLbl">电极阻抗</span><span class="v bad mono" id="impVal">—</span></div>
-          <div class="meter-bar"><i id="impBar"></i></div>
-          <div class="meter-row" style="margin-top:2px;"><span class="k" id="qLbl">信号质量</span><span class="v bad mono" id="qVal">—</span></div>
-          <div class="meter-bar"><i id="qBar"></i></div>
-        </div>
-      </div>
+    <div class="main-head">
+      <div class="title" data-i18n-zh="用 Cyton 录第一段真脑波" data-i18n-en="Record your first real EEG with Cyton">用 Cyton 录第一段真脑波</div>
+      <div class="q" data-i18n-zh="顺序对了，信号才干净" data-i18n-en="Right order = clean signal">顺序对了，信号才干净</div>
     </div>
 
-    <div class="award" id="award">
-      <div class="award-card">
-        <div class="seal mono">REC OK</div>
-        <h2 id="awTitle">录到了真脑波</h2>
-        <p id="awBody">装配链全对，导电膏把阻抗压到 5 kΩ 以下，GUI 录到了一段干净的 alpha 波。这就是一套真实可用的 OpenBCI 录制系统。</p>
-        <button class="btn btn-rec" id="awBtn">再玩一次</button>
+    <div id="slotRow" class="slot-row"></div>
+
+    <div class="signal-panel">
+      <div class="sp-head">
+        <span data-i18n-zh="信号示波器 · C3 / C4" data-i18n-en="Signal scope · C3 / C4">信号示波器 · C3 / C4</span>
+        <span class="imp" id="impLabel" data-i18n-zh="阻抗：—" data-i18n-en="Impedance: —">阻抗：—</span>
       </div>
+      <div class="scope-wrap">
+        <canvas id="scope"></canvas>
+      </div>
+      <div id="verdict" class="verdict" data-i18n-zh="排好顺序，按下开始录制。" data-i18n-en="Order the steps, then hit RECORD.">排好顺序，按下开始录制。</div>
+    </div>
+
+    <div class="ctrl-row">
+      <button id="recordBtn" class="btn primary" data-i18n-zh="开始录制" data-i18n-en="RECORD">开始录制</button>
+      <button id="resetBtn" class="btn" data-i18n-zh="重置" data-i18n-en="RESET">重置</button>
+      <span id="badge" class="badge" data-i18n-zh="已解锁：录制工程师" data-i18n-en="UNLOCKED: Recording Engineer">已解锁：录制工程师</span>
     </div>
   </main>
+</div>
 
 <script>
-(function(){
-  "use strict";
-  var LANG='cn';
+(function () {
+  'use strict';
 
-  // 装配链 6 步, 每步期望一个零件 id
-  var STAGES=[
-    {pos:0, want:'cap',     stepKey:'s1'},
-    {pos:1, want:'gel',     stepKey:'s2'},
-    {pos:2, want:'cyton',   stepKey:'s3'},
-    {pos:3, want:'dongle',  stepKey:'s4'},
-    {pos:4, want:'computer',stepKey:'s5'},
-    {pos:5, want:'gui',     stepKey:'s6'}
-  ];
-
-  // 零件库 (含 1 个干扰项: 参考/地电极合并为 ref —— 已集成在帽里, 单拖会被判错位)
-  var PARTS=[
-    {id:'cap'},
-    {id:'gel'},
-    {id:'ref'},
-    {id:'cyton'},
-    {id:'dongle'},
-    {id:'computer'},
-    {id:'gui'}
-  ];
-
-  // ---- SVG 设备图标 (抽象描边, 无 emoji) ----
-  function devSVG(id,color){
-    var c=color||'var(--ink-2)';
-    var inner;
-    switch(id){
-      case 'cap': inner='<circle cx="31" cy="34" r="20" fill="none" stroke="'+c+'" stroke-width="3"/><path d="M11 34 Q31 8 51 34" fill="none" stroke="'+c+'" stroke-width="3"/><circle cx="22" cy="30" r="2.6" fill="'+c+'"/><circle cx="31" cy="26" r="2.6" fill="'+c+'"/><circle cx="40" cy="30" r="2.6" fill="'+c+'"/><circle cx="26" cy="40" r="2.6" fill="'+c+'"/><circle cx="36" cy="40" r="2.6" fill="'+c+'"/>'; break;
-      case 'gel': inner='<path d="M24 14 h14 v8 l4 6 v22 a4 4 0 0 1 -4 4 h-14 a4 4 0 0 1 -4 -4 v-22 l4 -6 z" fill="none" stroke="'+c+'" stroke-width="3"/><path d="M27 38 h8" stroke="'+c+'" stroke-width="3"/><path d="M31 34 v8" stroke="'+c+'" stroke-width="3"/>'; break;
-      case 'ref': inner='<circle cx="31" cy="22" r="9" fill="none" stroke="'+c+'" stroke-width="3"/><path d="M31 31 v18 M22 49 h18" stroke="'+c+'" stroke-width="3" fill="none"/>'; break;
-      case 'cyton': inner='<rect x="14" y="18" width="34" height="28" rx="3" fill="none" stroke="'+c+'" stroke-width="3"/><circle cx="22" cy="40" r="2.4" fill="'+c+'"/><circle cx="29" cy="40" r="2.4" fill="'+c+'"/><circle cx="36" cy="40" r="2.4" fill="'+c+'"/><circle cx="43" cy="40" r="2.4" fill="'+c+'"/><rect x="24" y="24" width="14" height="8" rx="1.5" fill="none" stroke="'+c+'" stroke-width="2.4"/>'; break;
-      case 'dongle': inner='<rect x="16" y="26" width="24" height="14" rx="3" fill="none" stroke="'+c+'" stroke-width="3"/><rect x="40" y="30" width="8" height="6" fill="none" stroke="'+c+'" stroke-width="3"/><path d="M22 26 v-6 M30 26 v-6" stroke="'+c+'" stroke-width="2.6"/>'; break;
-      case 'computer': inner='<rect x="13" y="16" width="36" height="24" rx="2.5" fill="none" stroke="'+c+'" stroke-width="3"/><path d="M22 48 h18 M27 40 v8 M35 40 v8" stroke="'+c+'" stroke-width="2.8" fill="none"/>'; break;
-      case 'gui': inner='<rect x="13" y="16" width="36" height="28" rx="2.5" fill="none" stroke="'+c+'" stroke-width="3"/><line x1="13" y1="24" x2="49" y2="24" stroke="'+c+'" stroke-width="2.4"/><path d="M18 36 q5 -10 9 0 t9 0 t9 0" fill="none" stroke="'+c+'" stroke-width="2.4"/>'; break;
-      default: inner='';
-    }
-    return '<svg class="dev" viewBox="0 0 62 62" xmlns="http://www.w3.org/2000/svg">'+inner+'</svg>';
-  }
-
-  var I18N={
-    kicker:{cn:'OpenBCI · 录制配置',en:'OpenBCI · Recording Setup'},
-    title:{cn:'脑波录制装配台',en:'Brainwave Rig Builder'},
-    stepLbl:{cn:'当前步骤',en:'Current step'},
-    trayLbl:{cn:'零件库（拖到右侧装配链）',en:'Parts bin (drag onto chain)'},
-    recBtn:{cn:'开始录制',en:'Start recording'},
-    resetBtn:{cn:'重置',en:'Reset'},
-    scopeLbl:{cn:'通道信号 · CH1 (O1, alpha)',en:'Channel · CH1 (O1, alpha)'},
-    impLbl:{cn:'电极阻抗',en:'Impedance'},
-    qLbl:{cn:'信号质量',en:'Signal quality'},
-    hudStart:{cn:'按正确顺序把零件拖进装配链：戴帽 → 涂导电膏降阻抗 → 电极插 Cyton → Cyton 配对 dongle → dongle 插电脑 → 开 GUI 录制。',
-              en:'Drag parts into the chain in order: cap → gel (lowers impedance) → electrodes into Cyton → Cyton pairs dongle → dongle into PC → open GUI to record.'},
-    hudNeed:{cn:'第 {n} 槽需要：{name}。拖错会留在原位。',en:'Slot {n} needs: {name}. A wrong part stays put.'},
-    hudReady:{cn:'六步全部就位，点「开始录制」检验整条链路。',en:'All six steps placed — hit "Start recording" to test the chain.'},
-    hudNoGel:{cn:'警告：跳过了导电膏！头皮-电极阻抗 230 kΩ，信号全是噪声，录不到脑波。',
-              en:'Warning: gel skipped! Scalp-electrode impedance 230 kΩ — pure noise, no brainwaves.'},
-    hudBadOrder:{cn:'警告：链路顺序不对，dongle 没配上 Cyton，GUI 收不到数据。',
-                 en:'Warning: chain order wrong — dongle never paired Cyton, GUI gets no data.'},
-    hudRecording:{cn:'录制中… 阻抗 4.6 kΩ，CH1 收到清晰 alpha 波。',en:'Recording… impedance 4.6 kΩ, clean alpha on CH1.'},
-    // parts
-    p_cap:{cn:'电极帽',en:'Electrode cap'}, r_cap:{cn:'8 通道 · 戴头上',en:'8-ch · on head'},
-    p_gel:{cn:'导电膏',en:'Conductive gel'}, r_gel:{cn:'降阻抗 · 注电极孔',en:'lowers impedance'},
-    p_ref:{cn:'参考/地电极',en:'Ref / Ground'}, r_ref:{cn:'已集成在帽里',en:'built into cap'},
-    p_cyton:{cn:'Cyton 板',en:'Cyton board'}, r_cyton:{cn:'8 通道放大采样',en:'8-ch amp + ADC'},
-    p_dongle:{cn:'USB dongle',en:'USB dongle'}, r_dongle:{cn:'无线接 Cyton',en:'RF link'},
-    p_computer:{cn:'电脑',en:'Computer'}, r_computer:{cn:'插 dongle',en:'hosts dongle'},
-    p_gui:{cn:'GUI 软件',en:'GUI software'}, r_gui:{cn:'查看/录制',en:'view & record'},
-    // slot hints
-    h_cap:{cn:'戴上电极帽',en:'Put on cap'},
-    h_gel:{cn:'注入导电膏',en:'Inject gel'},
-    h_cyton:{cn:'电极插 Cyton',en:'Plug into Cyton'},
-    h_dongle:{cn:'Cyton 配对 dongle',en:'Pair dongle'},
-    h_computer:{cn:'dongle 插电脑',en:'Dongle to PC'},
-    h_gui:{cn:'打开 GUI',en:'Open GUI'},
-    awTitle:{cn:'录到了真脑波',en:'Real brainwaves recorded'},
-    awBody:{cn:'装配链全对，导电膏把阻抗压到 5 kΩ 以下，GUI 录到了一段干净的 alpha 波。这就是一套真实可用的 OpenBCI 录制系统。',
-            en:'The chain is correct, gel pushed impedance below 5 kΩ, and the GUI captured a clean alpha rhythm. That is a real, working OpenBCI recording rig.'},
-    awBtn:{cn:'再玩一次',en:'Play again'}
-  };
-  function t(k){return (I18N[k]&&I18N[k][LANG])||(I18N[k]&&I18N[k].en)||k;}
-  function partName(id){return t('p_'+id);}
-  function partRole(id){return t('r_'+id);}
-
-  // ---- state ----
-  // filled[pos] = part id (放对则等于 STAGES[pos].want)
-  var filled={};
-  var recording=false;
-  var won=false;
-  var waveTimer=null;
-
-  var chainEl=document.getElementById('chain');
-
-  // ---- render assembly chain ----
-  function nextEmptyStage(){
-    for(var i=0;i<STAGES.length;i++){if(!filled[i])return i;}
-    return -1;
-  }
-
-  function renderChain(){
-    chainEl.innerHTML='';
-    STAGES.forEach(function(st,i){
-      var node=document.createElement('div');node.className='node';
-
-      var slot=document.createElement('div');
-      slot.className='slot';
-      slot.setAttribute('data-pos',i);
-
-      var stepno=document.createElement('div');stepno.className='slot-stepno mono';stepno.textContent=(i+1);
-      slot.appendChild(stepno);
-
-      var pid=filled[i];
-      if(pid){
-        slot.classList.add('filled');
-        var ok=(pid===st.want);
-        if(recording||won){slot.classList.add(ok?'correct':'wrong');}
-        var icCol=(recording||won)?(ok?'var(--good)':'var(--primary)'):'var(--robotics)';
-        slot.insertAdjacentHTML('beforeend',devSVG(pid,icCol));
-        var nm=document.createElement('div');nm.className='placed-name';nm.textContent=partName(pid);
-        slot.appendChild(nm);
-        // gel marker: 第2槽放对 gel -> 显示降阻抗指示点
-        if(st.want==='gel'&&pid==='gel'){
-          var dot=document.createElement('div');dot.className='gel-dot show';slot.appendChild(dot);
+  // ---- i18n ----
+  let lang = 'zh';
+  function applyLang() {
+    document.querySelectorAll('[data-i18n-zh]').forEach(function (el) {
+      const txt = lang === 'zh' ? el.getAttribute('data-i18n-zh') : el.getAttribute('data-i18n-en');
+      if (el.children.length === 0) {
+        el.textContent = txt;
+      } else {
+        let replaced = false;
+        for (const n of el.childNodes) {
+          if (n.nodeType === 3 && n.textContent.trim()) { n.textContent = txt; replaced = true; break; }
         }
-        if(!recording&&!won){
-          slot.classList.remove('locked');
-          slot.style.cursor='pointer';
-          slot.addEventListener('click',function(){
-            if(recording||won)return;
-            delete filled[i];
-            renderChain();renderTray();updateStep();drawWave(false);
-          });
-        }else{slot.classList.add('locked');}
-      }else{
-        var hint=document.createElement('div');hint.className='slot-hint';hint.textContent=t('h_'+st.want);
-        slot.appendChild(hint);
-      }
-      node.appendChild(slot);
-      chainEl.appendChild(node);
-
-      // arrow between nodes
-      if(i<STAGES.length-1){
-        var arr=document.createElement('div');arr.className='arrow';
-        arr.innerHTML='<svg viewBox="0 0 22 22"><path d="M3 11 H17 M12 6 L18 11 L12 16" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>';
-        chainEl.appendChild(arr);
+        if (!replaced) {
+          el.insertBefore(document.createTextNode(txt), el.firstChild);
+        }
       }
     });
-    bindDropTargets();
+    document.documentElement.lang = lang === 'zh' ? 'zh-CN' : 'en';
   }
-
-  // ---- render tray ----
-  function renderTray(){
-    var tray=document.getElementById('tray');tray.innerHTML='';
-    var used={};
-    Object.keys(filled).forEach(function(p){used[filled[p]]=true;});
-    PARTS.forEach(function(part){
-      var id=part.id;
-      var chip=document.createElement('div');
-      chip.className='chip'+(used[id]?' used':'');
-      chip.setAttribute('data-pid',id);
-      if(!used[id]&&!recording&&!won)chip.setAttribute('draggable','true');
-
-      var icWrap=document.createElement('div');icWrap.className='ic';
-      icWrap.innerHTML=devSVG(id,'var(--robotics)').replace('class="dev"','class="dev" width="22" height="22"');
-      var txt=document.createElement('div');txt.className='txt';
-      var nm=document.createElement('div');nm.className='name';nm.textContent=partName(id);
-      var role=document.createElement('div');role.className='role';role.textContent=partRole(id);
-      txt.appendChild(nm);txt.appendChild(role);
-      chip.appendChild(icWrap);chip.appendChild(txt);
-
-      if(!used[id]&&!recording&&!won){
-        chip.addEventListener('dragstart',function(e){
-          e.dataTransfer.setData('text/plain',id);
-          e.dataTransfer.effectAllowed='move';
-          chip.classList.add('dragging');
-        });
-        chip.addEventListener('dragend',function(){chip.classList.remove('dragging');});
-        addTouchDrag(chip,id);
-      }
-      tray.appendChild(chip);
-    });
-  }
-
-  // ---- place a part into a stage ----
-  function placePart(pid,pos){
-    if(recording||won)return;
-    if(filled[pos])return; // 槽已占
-    // 若该零件已放别处, 先移除
-    Object.keys(filled).forEach(function(p){if(filled[p]===pid)delete filled[p];});
-    filled[pos]=pid;
-    renderChain();renderTray();updateStep();
-    updateRecBtn();
-  }
-
-  // ---- SVG/DOM drop targets ----
-  function bindDropTargets(){
-    var slots=chainEl.querySelectorAll('.slot');
-    slots.forEach(function(slot){
-      if(slot.classList.contains('filled'))return;
-      var pos=parseInt(slot.getAttribute('data-pos'),10);
-      slot.addEventListener('dragover',function(e){e.preventDefault();e.dataTransfer.dropEffect='move';slot.classList.add('over');});
-      slot.addEventListener('dragleave',function(){slot.classList.remove('over');});
-      slot.addEventListener('drop',function(e){
-        e.preventDefault();slot.classList.remove('over');
-        var pid=e.dataTransfer.getData('text/plain');
-        if(pid)placePart(pid,pos);
-      });
-    });
-  }
-
-  // ---- touch drag ----
-  var ghost=null;
-  function addTouchDrag(chip,pid){
-    chip.addEventListener('touchstart',function(e){
-      if(recording||won)return;
-      e.preventDefault();
-      ghost=document.createElement('div');ghost.className='ghost';ghost.textContent=partName(pid);
-      document.body.appendChild(ghost);moveGhost(e.touches[0]);
-    },{passive:false});
-    chip.addEventListener('touchmove',function(e){
-      e.preventDefault();if(ghost)moveGhost(e.touches[0]);
-    },{passive:false});
-    chip.addEventListener('touchend',function(e){
-      if(!ghost)return;
-      var tch=e.changedTouches[0];
-      ghost.style.display='none';
-      var below=document.elementFromPoint(tch.clientX,tch.clientY);
-      var slot=below&&below.closest?below.closest('.slot'):null;
-      if(slot&&!slot.classList.contains('filled')){
-        placePart(pid,parseInt(slot.getAttribute('data-pos'),10));
-      }
-      ghost.remove();ghost=null;
-    });
-  }
-  function moveGhost(tch){ghost.style.left=tch.clientX+'px';ghost.style.top=tch.clientY+'px';}
-
-  // ---- step indicator + HUD ----
-  function setHud(txt,cls){var h=document.getElementById('hud');h.textContent=txt;h.className='hud'+(cls?(' '+cls):'');}
-  function setStep(txt){document.getElementById('stepNow').innerHTML=txt;}
-
-  function updateStep(){
-    if(recording||won)return;
-    var ne=nextEmptyStage();
-    if(ne<0){
-      setStep('<b>'+(LANG==='cn'?'全部就位':'all set')+'</b> — '+(LANG==='cn'?'点开始录制':'start recording'));
-      setHud(t('hudReady'),'');
-    }else{
-      var want=STAGES[ne].want;
-      setStep((LANG==='cn'?'第 ':'Slot ')+(ne+1)+(LANG==='cn'?' 槽需要 ':' needs ')+'<b>'+partName(want)+'</b>');
-      setHud(t('hudNeed').replace('{n}',(ne+1)).replace('{name}',partName(want)),'');
-    }
-  }
-
-  function updateRecBtn(){
-    var ne=nextEmptyStage();
-    document.getElementById('recBtn').disabled=(ne>=0)||recording||won;
-  }
-
-  // ---- signal scope ----
-  function buildPath(amp,noise,phase){
-    // amp: alpha 幅度 (0..1), noise: 噪声幅度 (0..1)
-    var pts=[];
-    for(var x=0;x<=600;x+=6){
-      var alpha=Math.sin((x/600)*Math.PI*2*6 + phase)*amp*22; // ~10Hz 样式
-      var nz=(Math.random()-0.5)*noise*48;
-      var y=32 - alpha - nz;
-      pts.push((x===0?'M':'L')+x+' '+y.toFixed(1));
-    }
-    return pts.join(' ');
-  }
-  function drawWave(active){
-    var wave=document.getElementById('wave');
-    if(!active){
-      if(waveTimer){clearInterval(waveTimer);waveTimer=null;}
-      wave.setAttribute('d','M0 32 L600 32');
-      wave.setAttribute('stroke','var(--sub-2)');
-      setMeter(null);
-      return;
-    }
-  }
-
-  // clean alpha animation
-  function startCleanWave(){
-    var wave=document.getElementById('wave');
-    wave.setAttribute('stroke','var(--good)');
-    var ph=0;
-    if(waveTimer)clearInterval(waveTimer);
-    waveTimer=setInterval(function(){
-      ph+=0.5;
-      wave.setAttribute('d',buildPath(1.0,0.06,ph));
-    },120);
-  }
-  // noisy / flat-noise animation (failure)
-  function startNoiseWave(){
-    var wave=document.getElementById('wave');
-    wave.setAttribute('stroke','var(--primary)');
-    var ph=0;
-    if(waveTimer)clearInterval(waveTimer);
-    waveTimer=setInterval(function(){
-      ph+=0.5;
-      wave.setAttribute('d',buildPath(0.12,1.0,ph));
-    },120);
-  }
-
-  function setMeter(state){
-    var impVal=document.getElementById('impVal'),qVal=document.getElementById('qVal');
-    var impBar=document.getElementById('impBar'),qBar=document.getElementById('qBar');
-    if(state==='good'){
-      impVal.textContent='4.6 kΩ';impVal.className='v good mono';
-      qVal.textContent='98%';qVal.className='v good mono';
-      impBar.style.width='12%';impBar.className='good';
-      qBar.style.width='98%';qBar.className='good';
-    }else if(state==='bad'){
-      impVal.textContent='230 kΩ';impVal.className='v bad mono';
-      qVal.textContent='6%';qVal.className='v bad mono';
-      impBar.style.width='96%';impBar.className='';
-      qBar.style.width='6%';qBar.className='';
-    }else{
-      impVal.textContent='—';impVal.className='v bad mono';
-      qVal.textContent='—';qVal.className='v bad mono';
-      impBar.style.width='0%';impBar.className='';
-      qBar.style.width='0%';qBar.className='';
-    }
-  }
-
-  // ---- evaluate the chain ----
-  function record(){
-    var ne=nextEmptyStage();
-    if(ne>=0||recording||won)return;
-
-    // 检查整条链
-    var orderOk=true, gelOk=true;
-    STAGES.forEach(function(st,i){
-      if(filled[i]!==st.want)orderOk=false;
-    });
-    // 导电膏特判: 第2槽必须是 gel
-    if(filled[1]!=='gel')gelOk=false;
-
-    recording=true;
-    updateRecBtn();
-    renderChain();renderTray();
-
-    if(orderOk&&gelOk){
-      setHud(t('hudRecording'),'good');
-      setMeter('good');
-      startCleanWave();
-      won=true;
-      setTimeout(function(){
-        document.getElementById('award').classList.add('show');
-      },1100);
-    }else{
-      // 失败: 区分缺导电膏 vs 顺序错
-      setMeter('bad');
-      startNoiseWave();
-      if(!gelOk){setHud(t('hudNoGel'),'warn');}
-      else{setHud(t('hudBadOrder'),'warn');}
-      // 失败可重试: 1.6s 后解锁 (保留布局, 标红错位)
-      setTimeout(function(){
-        recording=false;
-        drawWave(false);
-        renderChain();renderTray();updateRecBtn();
-      },1900);
-    }
-  }
-
-  // ---- reset ----
-  function reset(){
-    filled={};recording=false;won=false;
-    if(waveTimer){clearInterval(waveTimer);waveTimer=null;}
-    document.getElementById('award').classList.remove('show');
-    drawWave(false);
-    renderChain();renderTray();updateRecBtn();
-    setStep((LANG==='cn'?'把 ':'Drag ')+'<b>'+partName('cap')+'</b>'+(LANG==='cn'?' 拖到第 1 个槽位':' to slot 1'));
-    setHud(t('hudStart'),'');
-  }
-
-  // ---- i18n refresh ----
-  function refreshI18N(){
-    document.getElementById('kicker').textContent=t('kicker');
-    document.getElementById('title').textContent=t('title');
-    document.getElementById('stepLbl').textContent=t('stepLbl');
-    document.getElementById('trayLbl').textContent=t('trayLbl');
-    document.getElementById('recBtn').textContent=t('recBtn');
-    document.getElementById('resetBtn').textContent=t('resetBtn');
-    document.getElementById('scopeLbl').textContent=t('scopeLbl');
-    document.getElementById('impLbl').textContent=t('impLbl');
-    document.getElementById('qLbl').textContent=t('qLbl');
-    document.getElementById('awTitle').textContent=t('awTitle');
-    document.getElementById('awBody').textContent=t('awBody');
-    document.getElementById('awBtn').textContent=t('awBtn');
-    renderChain();renderTray();
-    if(won){setHud(t('hudRecording'),'good');}
-    else if(recording){/* 进行中, 不覆盖 */}
-    else{updateStep();}
-  }
-
-  // ---- wire up ----
-  document.getElementById('recBtn').addEventListener('click',record);
-  document.getElementById('resetBtn').addEventListener('click',reset);
-  document.getElementById('awBtn').addEventListener('click',reset);
-  document.getElementById('langBtn').addEventListener('click',function(){
-    LANG=(LANG==='cn')?'en':'cn';
-    this.textContent=(LANG==='cn')?'EN / 中':'中 / EN';
-    refreshI18N();
+  document.getElementById('langBtn').addEventListener('click', function () {
+    lang = lang === 'zh' ? 'en' : 'zh';
+    applyLang();
+    renderTray();
+    renderSlots();
   });
 
-  // init
-  renderChain();renderTray();
-  setMeter(null);
-  reset();
+  // ---- step definitions (correct order index = position in array) ----
+  const STEPS = [
+    { id: 'electrode', tag: 'C3 / C4', zh: '贴 C3 / C4 电极', en: 'Place C3 / C4 electrodes' },
+    { id: 'gel',       tag: 'GEL',     zh: '上导电胶降阻抗', en: 'Apply conductive gel' },
+    { id: 'bluetooth', tag: 'CYTON BT', zh: '连 Cyton 蓝牙', en: 'Pair Cyton over Bluetooth' },
+    { id: 'srate',     tag: '250 Hz',  zh: '设采样率 250 Hz', en: 'Set sample rate 250 Hz' },
+    { id: 'acquire',   tag: 'STREAM',  zh: '开始采集脑波', en: 'Start acquiring EEG' },
+    { id: 'save',      tag: '.BDF',    zh: '存盘 .bdf', en: 'Save to .bdf file' }
+  ];
+  const N = STEPS.length;
+  const CANON = ['electrode', 'gel', 'bluetooth', 'srate', 'acquire', 'save'];
+
+  function stepLabel(s) { return lang === 'zh' ? s.zh : s.en; }
+  function findStep(id) { return STEPS.find(function (s) { return s.id === id; }); }
+
+  // state
+  let trayIds = STEPS.map(function (s) { return s.id; });
+  let slots = new Array(N).fill(null);
+  let dragId = null;
+  let dragFromSlot = -1;
+  let won = false;
+
+  const trayEl = document.getElementById('tray');
+  const slotRowEl = document.getElementById('slotRow');
+
+  // ---- render tray (sidebar) ----
+  function renderTray() {
+    trayEl.innerHTML = '';
+    trayEl.classList.toggle('empty', trayIds.length === 0);
+    trayEl.setAttribute('data-empty', lang === 'zh' ? '全部已放入流程槽' : 'All cards placed');
+    trayIds.forEach(function (id) {
+      const s = findStep(id);
+      const card = document.createElement('div');
+      card.className = 'step-card';
+      card.draggable = true;
+      card.dataset.id = id;
+      card.innerHTML = '<span class="sc-tag"></span>';
+      card.querySelector('.sc-tag').textContent = s.tag;
+      card.appendChild(document.createTextNode(stepLabel(s)));
+      attachDragSource(card, id, -1);
+      trayEl.appendChild(card);
+    });
+  }
+
+  // ---- render slots (main pipeline) ----
+  function renderSlots() {
+    slotRowEl.innerHTML = '';
+    for (let i = 0; i < N; i++) {
+      const slot = document.createElement('div');
+      slot.className = 'slot';
+      slot.dataset.slot = String(i);
+      const idx = document.createElement('span');
+      idx.className = 'slot-idx';
+      idx.textContent = String(i + 1);
+      slot.appendChild(idx);
+
+      const filledId = slots[i];
+      if (filledId) {
+        slot.classList.add('filled');
+        const s = findStep(filledId);
+        const placed = document.createElement('div');
+        placed.className = 'placed';
+        placed.draggable = true;
+        placed.dataset.id = filledId;
+        const tag = document.createElement('span');
+        tag.className = 'sc-tag';
+        tag.textContent = s.tag;
+        placed.appendChild(tag);
+        placed.appendChild(document.createTextNode(stepLabel(s)));
+        attachDragSource(placed, filledId, i);
+        slot.appendChild(placed);
+      } else {
+        const ph = document.createElement('div');
+        ph.className = 'ph';
+        ph.textContent = lang === 'zh' ? '拖步骤到此' : 'drop step';
+        slot.appendChild(ph);
+      }
+
+      attachDropTarget(slot, i);
+      slotRowEl.appendChild(slot);
+    }
+  }
+
+  function attachDragSource(el, id, fromSlot) {
+    el.addEventListener('dragstart', function (e) {
+      dragId = id;
+      dragFromSlot = fromSlot;
+      el.classList.add('dragging');
+      if (e.dataTransfer) { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', id); }
+    });
+    el.addEventListener('dragend', function () { el.classList.remove('dragging'); });
+  }
+
+  function attachDropTarget(slot, slotIdx) {
+    slot.addEventListener('dragover', function (e) {
+      e.preventDefault();
+      if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
+      slot.classList.add('over');
+    });
+    slot.addEventListener('dragleave', function () { slot.classList.remove('over'); });
+    slot.addEventListener('drop', function (e) {
+      e.preventDefault();
+      slot.classList.remove('over');
+      placeIntoSlot(slotIdx);
+    });
+  }
+
+  // shared place logic (also reused by headless harness)
+  function placeIntoSlot(slotIdx) {
+    if (!dragId) return;
+    const incoming = dragId;
+    const occupant = slots[slotIdx];
+
+    if (dragFromSlot >= 0) {
+      slots[dragFromSlot] = null;
+    } else {
+      trayIds = trayIds.filter(function (x) { return x !== incoming; });
+    }
+
+    if (occupant) {
+      if (dragFromSlot >= 0) {
+        slots[dragFromSlot] = occupant; // swap between two slots
+      } else {
+        trayIds.push(occupant);
+      }
+    }
+    slots[slotIdx] = incoming;
+
+    dragId = null;
+    dragFromSlot = -1;
+    renderTray();
+    renderSlots();
+    resetVerdict();
+  }
+
+  // expose for headless testing (native HTML5 DnD is impractical in Playwright)
+  window.__placeStep = function (id, slotIdx) {
+    dragId = id;
+    const inTray = trayIds.indexOf(id);
+    dragFromSlot = inTray >= 0 ? -1 : slots.indexOf(id);
+    placeIntoSlot(slotIdx);
+  };
+
+  // ---- scope canvas ----
+  const cv = document.getElementById('scope');
+  const ctx = cv.getContext('2d');
+  let raf = 0;
+  let mode = 'idle'; // idle | clean | noise | flat
+  let t = 0;
+
+  function fitCanvas() {
+    const wrap = cv.parentElement;
+    const r = wrap.getBoundingClientRect();
+    const dpr = window.devicePixelRatio || 1;
+    cv.width = Math.max(2, Math.round(r.width * dpr));
+    cv.height = Math.max(2, Math.round(r.height * dpr));
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    return { w: r.width, h: r.height };
+  }
+  function css(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
+
+  function draw() {
+    const dim = fitCanvas();
+    const w = dim.w, h = dim.h;
+    ctx.clearRect(0, 0, w, h);
+    ctx.strokeStyle = css('--line');
+    ctx.lineWidth = 1;
+    for (let gx = 0; gx <= w; gx += 40) { ctx.beginPath(); ctx.moveTo(gx, 0); ctx.lineTo(gx, h); ctx.stroke(); }
+    const mid = h / 2;
+    ctx.beginPath(); ctx.moveTo(0, mid); ctx.lineTo(w, mid); ctx.stroke();
+
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    for (let x = 0; x <= w; x += 2) {
+      let y = mid;
+      if (mode === 'clean') {
+        const phase = (x / w) * Math.PI * 14 + t * 0.06;
+        y = mid + Math.sin(phase) * (h * 0.22) + Math.sin(phase * 2.3) * (h * 0.05);
+        ctx.strokeStyle = css('--ok');
+      } else if (mode === 'noise') {
+        y = mid + (Math.random() - 0.5) * h * 0.78;
+        ctx.strokeStyle = css('--bad');
+      } else if (mode === 'flat') {
+        y = mid + Math.sin(x * 0.05 + t * 0.01) * 0.6;
+        ctx.strokeStyle = css('--fg-mute');
+      } else {
+        y = mid + Math.sin((x / w) * Math.PI * 4 + t * 0.02) * (h * 0.04);
+        ctx.strokeStyle = css('--TRACE');
+      }
+      if (x === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    t += 1;
+    raf = requestAnimationFrame(draw);
+  }
+
+  // ---- verdict / verification ----
+  const verdictEl = document.getElementById('verdict');
+  const impEl = document.getElementById('impLabel');
+  const badgeEl = document.getElementById('badge');
+  const recordBtn = document.getElementById('recordBtn');
+
+  function setVerdict(state, zh, en, imp) {
+    verdictEl.className = 'verdict' + (state ? ' ' + state : '');
+    verdictEl.setAttribute('data-i18n-zh', zh);
+    verdictEl.setAttribute('data-i18n-en', en);
+    verdictEl.textContent = lang === 'zh' ? zh : en;
+    if (imp !== undefined) {
+      const z = '阻抗：' + imp, e = 'Impedance: ' + imp;
+      impEl.setAttribute('data-i18n-zh', z);
+      impEl.setAttribute('data-i18n-en', e);
+      impEl.textContent = lang === 'zh' ? z : e;
+    }
+  }
+
+  function resetVerdict() {
+    if (won) return;
+    mode = 'idle';
+    setVerdict('', '顺序变了，重新按开始录制验证。', 'Order changed, hit RECORD to verify.', '—');
+    badgeEl.classList.remove('shown');
+  }
+
+  // returns { kind: 'incomplete' | 'noise' | 'nodata' | 'win' }
+  function evaluate() {
+    if (slots.indexOf(null) !== -1) return { kind: 'incomplete' };
+    const order = slots.slice();
+    const at = function (id) { return order.indexOf(id); };
+
+    const eIdx = at('electrode');
+    const gIdx = at('gel');
+    const bIdx = at('bluetooth');
+    const aIdx = at('acquire');
+    const sIdx = at('save');
+
+    // hard fail: bluetooth paired after acquisition -> Cyton link never opened, no data
+    if (bIdx > aIdx) return { kind: 'nodata' };
+    // hard fail: gel not before acquisition or not after electrode -> high impedance noise
+    if (gIdx > aIdx || gIdx < eIdx) return { kind: 'noise' };
+
+    // exact canonical?
+    let exact = true;
+    for (let i = 0; i < N; i++) { if (order[i] !== CANON[i]) { exact = false; break; } }
+    if (exact) return { kind: 'win' };
+
+    // any other deviation produces noisy / unstable signal
+    return { kind: 'noise' };
+  }
+
+  recordBtn.addEventListener('click', function () {
+    const r = evaluate();
+    if (r.kind === 'incomplete') {
+      mode = 'idle';
+      setVerdict('fail', '还有空槽，先把 6 步全排进流程槽。', 'Empty slots remain — place all 6 steps first.', '—');
+      return;
+    }
+    if (r.kind === 'nodata') {
+      mode = 'flat';
+      setVerdict('fail',
+        '先采集后连蓝牙：Cyton 没建立链路，收不到任何数据。',
+        'Acquired before pairing Bluetooth: Cyton link never opened, no data received.',
+        '— (no link)');
+      return;
+    }
+    if (r.kind === 'noise') {
+      mode = 'noise';
+      setVerdict('fail',
+        '没在采集前上导电胶，电极阻抗高，记录全是噪声。',
+        'Gel not applied before acquisition: electrode impedance high, recording is pure noise.',
+        '> 750 kΩ');
+      return;
+    }
+    // win
+    mode = 'clean';
+    won = true;
+    setVerdict('win',
+      '顺序正确：阻抗降到 5 kΩ，C3/C4 录到干净脑波节律，已存盘 .bdf。',
+      'Correct order: impedance down to 5 kΩ, clean EEG rhythm on C3/C4, saved to .bdf.',
+      '5 kΩ');
+    badgeEl.classList.add('shown');
+  });
+
+  document.getElementById('resetBtn').addEventListener('click', function () {
+    trayIds = STEPS.map(function (s) { return s.id; });
+    slots = new Array(N).fill(null);
+    won = false;
+    mode = 'idle';
+    badgeEl.classList.remove('shown');
+    renderTray();
+    renderSlots();
+    setVerdict('', '排好顺序，按下开始录制。', 'Order the steps, then hit RECORD.', '—');
+  });
+
+  // expose state for headless assertions
+  window.__state = function () { return { slots: slots.slice(), mode: mode, won: won, imp: impEl.textContent }; };
+
+  // ---- init ----
+  applyLang();
+  renderTray();
+  renderSlots();
+  window.addEventListener('resize', fitCanvas);
+  draw();
 })();
 </script>
 </body>

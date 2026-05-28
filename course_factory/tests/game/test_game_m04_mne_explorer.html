@@ -1,458 +1,663 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="zh-CN">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>mne 数据集探索器</title>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>数据侦探 · Shape 判读</title>
 <style>
-  :root{
-    /* Industrial Atelier — warm cream */
-    --paper:#FAF9F5; --paper-2:#F1EDDF; --card:#FFFFFF;
-    --ink:#191814; --ink-2:#2B2924; --sub:#6B6557; --sub-2:#9D978A;
-    --border:#EBE5D6; --border-2:#D9D1BD; --hairline:#F2EDE0;
-    /* Primary — Claude coral */
-    --primary:#D97757; --primary-ink:#9A4A2E; --primary-soft:#F8EDE5; --primary-line:#ECCFB8;
-    /* Domain accent — computing */
-    --computing:#C04E68; --computing-soft:#F4DDE3;
-    /* soft shadows (blur OK for C class) */
-    --shadow-sm:0 1px 2px 0 rgba(25,24,20,.04);
-    --shadow:0 1px 3px 0 rgba(25,24,20,.06),0 1px 2px -1px rgba(25,24,20,.04);
-    --shadow-md:0 4px 8px -2px rgba(25,24,20,.06),0 2px 4px -2px rgba(25,24,20,.04);
-    --shadow-lg:0 12px 24px -6px rgba(25,24,20,.1),0 4px 8px -4px rgba(25,24,20,.05);
-    --mono:'JetBrains Mono','SFMono-Regular',ui-monospace,Menlo,Consolas,monospace;
-    --sans:'Inter','PingFang SC','Noto Sans SC',-apple-system,sans-serif;
-  }
-  *{box-sizing:border-box;}
-  html,body{margin:0;padding:0;}
-  body{height:100vh;overflow:hidden;background:var(--paper);color:var(--ink);
-       font-family:var(--sans);display:flex;}
+:root{
+  --bg-0: oklch(0.14 0.035 265);
+  --bg-1: oklch(0.18 0.04 265);
+  --bg-2: oklch(0.22 0.045 265);
+  --bg-3: oklch(0.28 0.05 265);
+  --line: oklch(0.35 0.05 265 / 0.35);
+  --line-strong: oklch(0.55 0.08 265 / 0.55);
+  --fg: oklch(0.96 0.01 265);
+  --fg-dim: oklch(0.75 0.02 265);
+  --fg-mute: oklch(0.55 0.03 265);
+  --cs:     oklch(0.75 0.17 200);
+  /* cs 5 色 palette */
+  --signal: oklch(0.75 0.17 200);
+  --core:   oklch(0.55 0.16 200);
+  --depth:  oklch(0.35 0.10 210);
+  --flash:  oklch(0.92 0.08 190);
+  --query:  oklch(0.85 0.14 85);
+  --bad:    oklch(0.66 0.18 25);
+  --good:   oklch(0.78 0.16 150);
+  --mono:'JetBrains Mono','SF Mono','Fira Code',Consolas,monospace;
+  --sans:'Noto Sans SC','Inter',sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+html,body{width:100%;height:100vh;overflow:hidden;background:var(--bg-0);color:var(--fg);font-family:var(--sans);}
+.wrapper{display:flex;height:100vh;}
 
-  /* ---------- sidebar ---------- */
-  .game-sidebar{width:200px;flex-shrink:0;height:100vh;background:var(--paper-2);
-      border-right:1px solid var(--border-2);display:flex;flex-direction:column;
-      padding:18px 16px;gap:14px;}
-  .brand{display:flex;flex-direction:column;gap:3px;}
-  .brand .kicker{font-family:var(--mono);font-size:10.5px;letter-spacing:.12em;
-      text-transform:uppercase;color:var(--computing);font-weight:600;}
-  .brand h1{font-size:16px;font-weight:700;margin:0;line-height:1.25;color:var(--ink);}
-  .task-box{background:var(--card);border:1px solid var(--border);border-radius:10px;
-      padding:11px 12px;box-shadow:var(--shadow-sm);}
-  .task-box .t-title{font-size:11px;font-weight:700;color:var(--primary-ink);margin-bottom:5px;}
-  .task-box .t-body{font-size:11.5px;line-height:1.5;color:var(--sub);}
-  .guide{list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:7px;}
-  .guide li{font-size:11.5px;line-height:1.45;color:var(--sub);padding-left:10px;
-      border-left:2px solid var(--primary-line);}
-  /* progress dots */
-  .prog{margin-top:2px;}
-  .prog .p-lbl{font-size:11px;color:var(--sub);margin-bottom:6px;font-weight:600;}
-  .prog .dots{display:flex;gap:7px;}
-  .prog .dot{width:26px;height:26px;border-radius:7px;border:1px solid var(--border-2);
-      background:var(--card);display:flex;align-items:center;justify-content:center;
-      font-family:var(--mono);font-size:11px;color:var(--sub-2);transition:all .25s ease;}
-  .prog .dot.done{background:var(--computing);border-color:var(--computing);color:#fff;}
-  .lang-btn{margin-top:auto;background:var(--card);border:1px solid var(--border-2);
-      border-radius:8px;padding:8px 10px;font-family:var(--mono);font-size:11px;
-      color:var(--ink-2);cursor:pointer;font-weight:600;transition:all .2s ease;}
-  .lang-btn:hover{border-color:var(--computing);color:var(--computing);}
+/* ---------- 200px sidebar ---------- */
+.game-sidebar{width:200px;flex:0 0 200px;display:flex;flex-direction:column;
+  background:var(--bg-1);border-right:1px solid var(--line);padding:14px 13px 12px;gap:12px;overflow-y:auto;}
+.brand{font-family:var(--mono);font-size:12px;font-weight:700;color:var(--cs);
+  letter-spacing:1px;text-transform:uppercase;line-height:1.35;}
+.brand .sub{display:block;font-size:8.5px;color:var(--fg-mute);letter-spacing:0.5px;margin-top:3px;}
 
-  /* ---------- main ---------- */
-  .game-main{flex:1;height:100vh;display:flex;flex-direction:column;overflow:hidden;
-      padding:18px 22px;gap:14px;}
+/* mascot Bit — 立方精灵 */
+.mascot-wrap{display:flex;flex-direction:column;align-items:center;gap:4px;}
+.bit{width:54px;height:54px;position:relative;}
+.bit svg{display:block;}
+.mascot-cap{font-family:var(--mono);font-size:8.5px;color:var(--fg-mute);text-align:center;letter-spacing:0.5px;line-height:1.4;}
 
-  /* control bar */
-  .controls{display:flex;gap:14px;flex-wrap:wrap;flex-shrink:0;}
-  .ctrl{background:var(--card);border:1px solid var(--border);border-radius:10px;
-      padding:9px 12px;box-shadow:var(--shadow-sm);flex:1;min-width:170px;}
-  .ctrl .c-lbl{font-family:var(--mono);font-size:10px;letter-spacing:.06em;
-      text-transform:uppercase;color:var(--sub-2);margin-bottom:7px;font-weight:600;}
-  .chips{display:flex;flex-wrap:wrap;gap:5px;}
-  .chip{font-family:var(--mono);font-size:11px;border:1px solid var(--border-2);
-      background:var(--paper);color:var(--ink-2);border-radius:6px;padding:4px 8px;
-      cursor:pointer;transition:all .15s ease;user-select:none;}
-  .chip:hover{border-color:var(--computing);color:var(--computing);}
-  .chip.active{background:var(--computing);border-color:var(--computing);color:#fff;}
-  /* electrode is a dropdown for the 22 options */
-  .e-select{font-family:var(--mono);font-size:12px;width:100%;padding:6px 8px;
-      border:1px solid var(--border-2);border-radius:6px;background:var(--paper);
-      color:var(--ink-2);cursor:pointer;}
-  .e-select:focus{outline:none;border-color:var(--computing);}
+.task-box{background:var(--bg-2);border:1px solid var(--line);padding:9px 10px;}
+.task-box .tt{font-family:var(--mono);font-size:9px;color:var(--cs);letter-spacing:1px;text-transform:uppercase;margin-bottom:5px;}
+.task-box .tb{font-size:10.5px;line-height:1.5;color:var(--fg-dim);}
 
-  /* preview stage — canvas parent MUST be flex column */
-  .stage{flex:1;min-height:0;display:flex;flex-direction:column;
-      background:var(--card);border:1px solid var(--border);border-radius:12px;
-      box-shadow:var(--shadow);overflow:hidden;}
-  .stage-head{display:flex;align-items:center;justify-content:space-between;
-      padding:11px 16px;border-bottom:1px solid var(--hairline);flex-shrink:0;}
-  .stage-head .s-title{font-size:13px;font-weight:700;color:var(--ink);}
-  .stage-head .s-sub{font-family:var(--mono);font-size:11px;color:var(--computing);}
-  .canvas-wrap{flex:1;min-height:0;position:relative;}
-  #wave{display:block;width:100%;height:100%;}
+/* 6 档案进度 */
+.files-prog{}
+.fp-lbl{font-family:var(--mono);font-size:9px;color:var(--fg-mute);letter-spacing:0.6px;margin-bottom:6px;text-transform:uppercase;}
+.fp-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;}
+.fp-cell{aspect-ratio:1;border:1px solid var(--line);background:var(--bg-2);
+  display:flex;align-items:center;justify-content:center;font-family:var(--mono);
+  font-size:11px;color:var(--fg-mute);transition:all .25s ease;position:relative;}
+.fp-cell.current{border-color:var(--cs);color:var(--cs);box-shadow:3px 3px 0 var(--bg-0);}
+.fp-cell.solved{background:var(--good);border-color:var(--good);color:var(--bg-0);font-weight:700;}
+.fp-cell.failed{background:var(--bad);border-color:var(--bad);color:var(--bg-0);font-weight:700;}
 
-  /* metadata panel */
-  .meta{flex-shrink:0;display:grid;grid-template-columns:repeat(5,1fr);gap:12px;}
-  .meta-card{background:var(--card);border:1px solid var(--border);border-radius:10px;
-      padding:10px 12px;box-shadow:var(--shadow-sm);}
-  .meta-card .m-k{font-family:var(--mono);font-size:9.5px;letter-spacing:.05em;
-      text-transform:uppercase;color:var(--sub-2);margin-bottom:5px;}
-  .meta-card .m-v{font-family:var(--mono);font-size:15px;font-weight:700;color:var(--ink);}
-  .meta-card .m-u{font-size:10px;color:var(--sub);margin-top:1px;}
+.guide{list-style:none;display:flex;flex-direction:column;gap:6px;margin-top:2px;}
+.guide li{font-size:10px;line-height:1.4;color:var(--fg-dim);padding-left:9px;border-left:2px solid var(--depth);}
 
-  /* status toast */
-  .status{position:fixed;top:16px;right:24px;background:var(--card);
-      border:1px solid var(--primary-line);border-radius:9px;padding:9px 14px;
-      box-shadow:var(--shadow-md);font-size:12px;color:var(--primary-ink);
-      max-width:320px;opacity:0;transform:translateY(-6px);transition:all .3s ease;
-      pointer-events:none;z-index:30;}
-  .status.show{opacity:1;transform:translateY(0);}
+.lang-btn{margin-top:auto;background:var(--bg-2);border:1px solid var(--line-strong);
+  padding:8px 10px;font-family:var(--mono);font-size:11px;color:var(--fg-dim);
+  cursor:pointer;font-weight:600;letter-spacing:0.5px;transition:all .2s ease;}
+.lang-btn:hover{border-color:var(--cs);color:var(--cs);}
+
+/* ---------- main ---------- */
+.game-main{flex:1;height:100vh;display:flex;flex-direction:column;overflow:hidden;padding:16px 22px;gap:13px;}
+.main-head{display:flex;align-items:baseline;justify-content:space-between;flex-shrink:0;}
+.mh-title{font-size:16px;font-weight:700;color:var(--fg);}
+.mh-title .case-id{font-family:var(--mono);color:var(--cs);margin-right:8px;}
+.mh-sub{font-family:var(--mono);font-size:11px;color:var(--query);}
+
+/* 数据卡 — 档案 */
+.dossier{flex-shrink:0;background:var(--bg-1);border:1px solid var(--line-strong);
+  display:flex;flex-direction:column;}
+.dossier-bar{display:flex;align-items:center;gap:10px;padding:8px 14px;background:var(--bg-2);
+  border-bottom:1px solid var(--line);font-family:var(--mono);font-size:10px;
+  color:var(--fg-mute);letter-spacing:0.8px;text-transform:uppercase;}
+.dossier-bar .tag{color:var(--cs);}
+.dossier-grid{display:grid;grid-template-columns:1.3fr 1fr;}
+.dg-left{padding:14px 16px;border-right:1px solid var(--line);}
+.dg-right{padding:14px 16px;display:flex;flex-direction:column;gap:9px;}
+.code-line{font-family:var(--mono);font-size:12.5px;line-height:1.85;color:var(--fg-dim);white-space:pre-wrap;}
+.code-line .kw{color:var(--core);}
+.code-line .num{color:var(--flash);font-weight:600;}
+.code-line .str{color:var(--query);}
+.code-line .com{color:var(--fg-mute);}
+.code-line .shape{color:var(--signal);font-weight:700;background:oklch(0.75 0.17 200 / 0.12);padding:0 4px;}
+
+.info-row{display:flex;justify-content:space-between;align-items:center;font-family:var(--mono);font-size:11px;}
+.info-row .ik{color:var(--fg-mute);letter-spacing:0.5px;}
+.info-row .iv{color:var(--fg);font-weight:600;}
+
+/* 判读问题区 */
+.quiz{flex:1;min-height:0;display:flex;flex-direction:column;gap:10px;overflow-y:auto;padding-right:4px;}
+.q-block{background:var(--bg-1);border:1px solid var(--line);padding:11px 14px;}
+.q-block.locked{opacity:0.4;pointer-events:none;}
+.q-block.correct{border-color:var(--good);}
+.q-prompt{font-size:12.5px;color:var(--fg);margin-bottom:9px;line-height:1.4;}
+.q-prompt .qnum{font-family:var(--mono);color:var(--cs);margin-right:7px;font-size:11px;}
+.opts{display:flex;flex-wrap:wrap;gap:8px;}
+.opt{font-family:var(--mono);font-size:12px;border:1px solid var(--line-strong);
+  background:var(--bg-2);color:var(--fg-dim);padding:7px 13px;cursor:pointer;
+  transition:all .15s ease;user-select:none;}
+.opt:hover{border-color:var(--cs);color:var(--cs);}
+.opt.chosen-right{background:var(--good);border-color:var(--good);color:var(--bg-0);font-weight:700;}
+.opt.chosen-wrong{background:var(--bad);border-color:var(--bad);color:var(--bg-0);}
+.opt.disabled{pointer-events:none;}
+.q-fb{margin-top:9px;font-size:11px;line-height:1.5;padding:8px 11px;border-left:3px solid;display:none;}
+.q-fb.show{display:block;}
+.q-fb.ok{border-color:var(--good);background:oklch(0.78 0.16 150 / 0.1);color:var(--good);}
+.q-fb.err{border-color:var(--bad);background:oklch(0.66 0.18 25 / 0.1);color:oklch(0.82 0.14 25);}
+
+/* 底部操作条 */
+.action-bar{flex-shrink:0;display:flex;align-items:center;justify-content:space-between;gap:14px;}
+.verdict{font-family:var(--mono);font-size:11px;color:var(--fg-mute);letter-spacing:0.5px;}
+.verdict .hit{color:var(--good);}
+.next-btn{font-family:var(--mono);font-size:12px;letter-spacing:0.5px;font-weight:700;
+  background:var(--cs);color:var(--bg-0);border:1px solid var(--cs);padding:9px 22px;
+  cursor:pointer;transition:all .2s ease;}
+.next-btn:disabled{background:var(--bg-2);color:var(--fg-mute);border-color:var(--line);cursor:not-allowed;}
+.next-btn:not(:disabled):hover{box-shadow:3px 3px 0 var(--bg-0);}
+
+/* reshape 后果弹层 */
+.consequence{position:fixed;inset:0;background:oklch(0.14 0.035 265 / 0.82);
+  display:none;align-items:center;justify-content:center;z-index:40;backdrop-filter:blur(3px);}
+.consequence.show{display:flex;}
+.csq-card{background:var(--bg-1);border:1px solid var(--bad);max-width:480px;padding:26px 28px;box-shadow:6px 6px 0 var(--bg-0);}
+.csq-card .crash{font-family:var(--mono);font-size:11px;color:var(--bad);letter-spacing:1px;margin-bottom:12px;}
+.csq-card .trace{font-family:var(--mono);font-size:11.5px;line-height:1.7;color:var(--fg-dim);
+  background:var(--bg-0);border:1px solid var(--line);padding:12px 14px;white-space:pre-wrap;margin-bottom:16px;}
+.csq-card .trace .ef{color:var(--bad);}
+.csq-card .msg{font-size:12.5px;line-height:1.6;color:var(--fg);margin-bottom:18px;}
+.csq-card .retry{font-family:var(--mono);font-size:12px;font-weight:700;background:var(--cs);
+  color:var(--bg-0);border:none;padding:9px 20px;cursor:pointer;}
+.csq-card .retry:hover{box-shadow:3px 3px 0 var(--bg-0);}
+
+/* 通关弹层 */
+.win{position:fixed;inset:0;background:oklch(0.14 0.035 265 / 0.86);
+  display:none;align-items:center;justify-content:center;z-index:45;backdrop-filter:blur(4px);}
+.win.show{display:flex;}
+.win-card{background:var(--bg-1);border:1px solid var(--cs);max-width:440px;padding:30px 30px;
+  text-align:center;box-shadow:6px 6px 0 var(--bg-0);}
+.win-card .badge{font-family:var(--mono);font-size:11px;color:var(--query);letter-spacing:2px;margin-bottom:14px;}
+.win-card .wt{font-size:22px;font-weight:700;color:var(--cs);margin-bottom:14px;}
+.win-card .wb{font-size:13px;line-height:1.65;color:var(--fg-dim);}
 </style>
 </head>
 <body>
+<div class="wrapper">
+  <!-- ---------- sidebar ---------- -->
   <aside class="game-sidebar">
-    <div class="brand">
-      <span class="kicker">Module 04 / MNE</span>
-      <h1 id="ttl">mne 数据集探索器</h1>
-    </div>
-    <div class="task-box">
-      <div class="t-title" id="taskTitle">任务</div>
-      <div class="t-body" id="taskBody">浏览 BCI Competition IV 数据集，探索 3 种不同的（被试 + 电极 + 想象动作）组合，解锁"数据集结构理解"。</div>
-    </div>
-    <ul class="guide">
-      <li id="g1">在右上选被试、电极、想象动作</li>
-      <li id="g2">看脑波片段预览随选择变化</li>
-      <li id="g3">下方元数据来自 .gdf 文件头</li>
-    </ul>
-    <div class="prog">
-      <div class="p-lbl" id="progLbl">已探索组合 0 / 3</div>
-      <div class="dots">
-        <div class="dot" data-d="0">1</div>
-        <div class="dot" data-d="1">2</div>
-        <div class="dot" data-d="2">3</div>
+    <div class="brand">DATA DETECTIVE<span class="sub" id="brandSub">M04 · SHAPE 判读</span></div>
+
+    <div class="mascot-wrap">
+      <div class="bit">
+        <svg viewBox="0 0 54 54" width="54" height="54" aria-hidden="true">
+          <rect x="9"  y="9"  width="16" height="16" fill="oklch(0.75 0.17 200)"/>
+          <rect x="29" y="9"  width="16" height="16" fill="oklch(0.55 0.16 200)"/>
+          <rect x="9"  y="29" width="16" height="16" fill="oklch(0.85 0.14 85)"/>
+          <rect x="29" y="29" width="16" height="16" fill="oklch(0.92 0.08 190)"/>
+          <rect x="22" y="22" width="10" height="10" fill="oklch(0.14 0.035 265)" stroke="oklch(0.75 0.17 200)" stroke-width="1.5"/>
+        </svg>
       </div>
+      <div class="mascot-cap" id="bitCap">Bit — 你的搭档<br/>每破一案重排像素</div>
     </div>
+
+    <div class="task-box">
+      <div class="tt" id="taskT">CASE BRIEF</div>
+      <div class="tb" id="taskB">读懂 6 份 EEG 数据档案。每份只给你 array.shape、采样率、event 标记和 .info 摘要 —— 你来判断它真正长什么样。判错维度，后面 reshape 会当场崩。</div>
+    </div>
+
+    <div class="files-prog">
+      <div class="fp-lbl" id="progLbl">案卷 0 / 6 已结案</div>
+      <div class="fp-grid" id="fpGrid"></div>
+    </div>
+
+    <ul class="guide">
+      <li id="gd1">看 shape 每一维代表什么</li>
+      <li id="gd2">交叉验证 sfreq × 时长 = 采样点</li>
+      <li id="gd3">event 码判断是不是运动想象</li>
+    </ul>
+
     <button class="lang-btn" id="langBtn">中 / EN</button>
   </aside>
 
+  <!-- ---------- main ---------- -->
   <main class="game-main">
-    <div class="controls">
-      <div class="ctrl">
-        <div class="c-lbl" id="cl-subj">Subject 被试</div>
-        <div class="chips" id="subjChips"></div>
-      </div>
-      <div class="ctrl">
-        <div class="c-lbl" id="cl-elec">Electrode 电极（22 通道）</div>
-        <select class="e-select" id="elecSel"></select>
-      </div>
-      <div class="ctrl">
-        <div class="c-lbl" id="cl-trial">Trial 想象动作</div>
-        <div class="chips" id="trialChips"></div>
-      </div>
+    <div class="main-head">
+      <div class="mh-title"><span class="case-id" id="caseId">CASE 01</span><span id="caseName">未命名数据集</span></div>
+      <div class="mh-sub" id="caseSrc">source: mne.io.read_raw</div>
     </div>
 
-    <div class="stage">
-      <div class="stage-head">
-        <span class="s-title" id="stTitle">脑波片段预览</span>
-        <span class="s-sub" id="stSub">A01 · Cz · left hand</span>
+    <section class="dossier">
+      <div class="dossier-bar"><span class="tag">DOSSIER</span><span id="dossierHint">证物：array.shape + .info 摘要</span></div>
+      <div class="dossier-grid">
+        <div class="dg-left"><div class="code-line" id="codeBlock"></div></div>
+        <div class="dg-right" id="infoBlock"></div>
       </div>
-      <div class="canvas-wrap">
-        <canvas id="wave"></canvas>
-      </div>
-    </div>
+    </section>
 
-    <div class="meta">
-      <div class="meta-card"><div class="m-k" id="mk0">Sample rate</div><div class="m-v" id="mv0">250</div><div class="m-u" id="mu0">Hz 采样率</div></div>
-      <div class="meta-card"><div class="m-k" id="mk1">Channels</div><div class="m-v" id="mv1">22 EEG</div><div class="m-u" id="mu1">+3 EOG</div></div>
-      <div class="meta-card"><div class="m-k" id="mk2">Trial length</div><div class="m-v" id="mv2">4.0</div><div class="m-u" id="mu2">s 单试时长</div></div>
-      <div class="meta-card"><div class="m-k" id="mk3">Events</div><div class="m-v" id="mv3">288</div><div class="m-u" id="mu3">trials / run</div></div>
-      <div class="meta-card"><div class="m-k" id="mk4">Event code</div><div class="m-v" id="mv4">769</div><div class="m-u" id="mu4">GDF marker</div></div>
+    <section class="quiz" id="quiz"></section>
+
+    <div class="action-bar">
+      <div class="verdict" id="verdict">判读进度 <span class="hit">0</span> / 0</div>
+      <button class="next-btn" id="nextBtn" disabled>提交结案</button>
     </div>
   </main>
+</div>
 
-  <div class="status" id="status"></div>
+<!-- reshape 后果 -->
+<div class="consequence" id="csq">
+  <div class="csq-card">
+    <div class="crash" id="csqCrash">RESHAPE CRASHED</div>
+    <div class="trace" id="csqTrace"></div>
+    <div class="msg" id="csqMsg"></div>
+    <button class="retry" id="csqRetry">回到档案重判</button>
+  </div>
+</div>
+
+<!-- 通关 -->
+<div class="win" id="win">
+  <div class="win-card">
+    <div class="badge">BADGE UNLOCKED</div>
+    <div class="wt" id="winT">数据侦探</div>
+    <div class="wb" id="winB">6 份档案全部结案。你已经能只看 shape 和 .info 就还原一个 EEG 数据集的真实结构 —— 这是加载任何数据集的第一步。</div>
+  </div>
+</div>
 
 <script>
 (function(){
   "use strict";
   var LANG='cn';
 
-  // ----- 数据集结构 (BCI Competition IV-2a, mne 读取) -----
-  var SUBJECTS=['A01','A02','A03','A04','A05','A06','A07','A08','A09'];
-  // 22 个 EEG 电极 (10-20 系统子集, BCI IV-2a montage)
-  var ELECTRODES=['Fz','FC3','FC1','FCz','FC2','FC4','C5','C3','C1','Cz','C2','C4','C6',
-                  'CP3','CP1','CPz','CP2','CP4','P1','Pz','P2','POz'];
-  // 4 类想象动作 + 对应 GDF 事件码
-  var TRIALS=[
-    {id:'left',  cn:'左手', en:'left hand',  code:769},
-    {id:'right', cn:'右手', en:'right hand', code:770},
-    {id:'foot',  cn:'双脚', en:'both feet',  code:771},
-    {id:'tongue',cn:'舌头', en:'tongue',     code:772}
+  function L(o){return (o&&o[LANG])||(o&&o.en)||'';}
+
+  /* ============ 6 份档案 ============
+     每份不同 shape 排列, 逼玩家从各维推理, 不能套模板 */
+  var CASES=[
+    {
+      id:'BCI-IV-2a',
+      name:{cn:'运动想象 · 单被试 epochs',en:'Motor Imagery · single subject epochs'},
+      src:'mne.read_epochs("A01.fif")',
+      code:[
+        {com:'# 已切成 epochs 的运动想象数据'},
+        {kw:'epochs',plain:'.get_data().shape  '},{op:'-> '},{shape:'(288, 22, 1000)'},
+        {com:'epochs.info["sfreq"] = 250.0'},
+        {com:'event_id = {left:769, right:770, foot:771, tongue:772}'}
+      ],
+      info:[
+        {k:'sfreq',v:'250 Hz'},
+        {k:'n epochs',v:'288'},
+        {k:'event codes',v:'769 770 771 772'},
+        {k:'ch_types',v:'22 eeg'}
+      ],
+      reshapeTo:{cn:'(288, 22000) 给分类器',en:'(288, 22000) for classifier'},
+      questions:[
+        {p:{cn:'第一维 288 是什么？',en:'What is the first dim, 288?'},
+         opts:[{cn:'试次数 trials',en:'trials',ok:true},{cn:'通道数 channels',en:'channels'},{cn:'采样点 samples',en:'samples'}],
+         fb:{ok:{cn:'对。epochs 第一维永远是 n_epochs / trials。',en:'Right. The first dim of epochs is always n_epochs / trials.'},
+             err:{cn:'不对。22 才是通道、1000 才是采样点。第一维是 288 个试次。',en:'No. 22 is channels, 1000 is samples. The first dim is 288 trials.'}}},
+        {p:{cn:'每段时长是多少秒？',en:'How long is each segment (seconds)?'},
+         opts:[{cn:'4 秒',en:'4 s',ok:true},{cn:'250 秒',en:'250 s'},{cn:'1000 秒',en:'1000 s'}],
+         fb:{ok:{cn:'对。1000 采样点 ÷ 250 Hz = 4 秒。',en:'Right. 1000 samples / 250 Hz = 4 s.'},
+             err:{cn:'用第三维 ÷ sfreq：1000 / 250 = 4 秒，不是直接读数字。',en:'Divide samples by sfreq: 1000 / 250 = 4 s.'}}},
+        {p:{cn:'这是运动想象数据吗？',en:'Is this motor imagery data?'},
+         opts:[{cn:'是，event 769-772 是四类想象',en:'Yes, 769-772 = 4 imagery classes',ok:true},{cn:'不是，是静息态',en:'No, resting state'}],
+         fb:{ok:{cn:'对。769/770/771/772 正是 BCI-IV-2a 的左右脚舌想象码。',en:'Right. 769/770/771/772 are the BCI-IV-2a imagery codes.'},
+             err:{cn:'有 4 类离散 event 码且每类对应一个动作 —— 这就是运动想象。',en:'4 discrete event codes, one per action — that is motor imagery.'}}}
+      ]
+    },
+    {
+      id:'RAW-CONT',
+      name:{cn:'连续原始记录 · 未分段',en:'Continuous raw recording · not epoched'},
+      src:'mne.io.read_raw_edf("rest.edf")',
+      code:[
+        {com:'# 一整段连续记录, 还没切 epoch'},
+        {kw:'raw',plain:'.get_data().shape  '},{op:'-> '},{shape:'(64, 76800)'},
+        {com:'raw.info["sfreq"] = 256.0'},
+        {com:'len(raw.annotations) = 0   # 没有事件标记'}
+      ],
+      info:[
+        {k:'sfreq',v:'256 Hz'},
+        {k:'shape',v:'(64, 76800)'},
+        {k:'annotations',v:'0'},
+        {k:'ch_types',v:'64 eeg'}
+      ],
+      reshapeTo:{cn:'(trials, 64, T) 切 epoch',en:'(trials, 64, T) epoching'},
+      questions:[
+        {p:{cn:'这份数据有几个 trial？',en:'How many trials?'},
+         opts:[{cn:'0 个，还是连续未分段',en:'0, still continuous',ok:true},{cn:'64 个',en:'64'},{cn:'76800 个',en:'76800'}],
+         fb:{ok:{cn:'对。raw 只有 (通道, 时间) 两维，没有 trial 维 —— 还没切。',en:'Right. raw is (channels, time), no trial dim — not epoched yet.'},
+             err:{cn:'raw 是二维 (64 通道, 76800 采样点)，根本没有 trial 维。',en:'raw is 2D (64 ch, 76800 samples). There is no trial dim at all.'}}},
+        {p:{cn:'第二维 76800 代表什么？',en:'What does the 2nd dim, 76800, mean?'},
+         opts:[{cn:'总采样点数 (时间)',en:'total samples (time)',ok:true},{cn:'通道数',en:'channels'},{cn:'事件数',en:'events'}],
+         fb:{ok:{cn:'对。76800 / 256 Hz = 300 秒，整整 5 分钟连续记录。',en:'Right. 76800 / 256 = 300 s, a 5-min continuous run.'},
+             err:{cn:'64 是通道，76800 是时间采样点 (= 300 秒)。',en:'64 is channels; 76800 is time samples (= 300 s).'}}},
+        {p:{cn:'能直接喂给试次分类器吗？',en:'Can it go straight into a trial classifier?'},
+         opts:[{cn:'不能，得先 epoching 切段',en:'No, must epoch first',ok:true},{cn:'能，直接 reshape',en:'Yes, just reshape'}],
+         fb:{ok:{cn:'对。没有事件标记、没有 trial 维，必须先定义 events 再切 epoch。',en:'Right. No events, no trial dim — define events and epoch first.'},
+             err:{cn:'没有 trial 维也没有 event，硬 reshape 会切错边界。',en:'No trial dim and no events — a blind reshape splits at wrong boundaries.'}}}
+      ]
+    },
+    {
+      id:'TRANSPOSED',
+      name:{cn:'可疑档案 · 维度顺序反了？',en:'Suspicious file · axes swapped?'},
+      src:'np.load("mystery.npy")',
+      code:[
+        {com:'# 别人传来的 .npy, 没有 .info, 只能看 shape 推'},
+        {kw:'arr',plain:'.shape  '},{op:'-> '},{shape:'(500, 19, 128)'},
+        {com:'# 提示: 采样率 128 Hz, 每段 1 秒, 19 个标准 10-20 电极'}
+      ],
+      info:[
+        {k:'sfreq',v:'128 Hz'},
+        {k:'seg length',v:'1 s'},
+        {k:'montage',v:'10-20 (19 ch)'},
+        {k:'.info',v:'missing'}
+      ],
+      reshapeTo:{cn:'(500, 19*128) 拉平',en:'(500, 19*128) flatten'},
+      questions:[
+        {p:{cn:'哪一维是通道？',en:'Which dim is channels?'},
+         opts:[{cn:'19 (中间维)',en:'19 (middle)',ok:true},{cn:'500 (第一维)',en:'500 (first)'},{cn:'128 (最后维)',en:'128 (last)'}],
+         fb:{ok:{cn:'对。19 个标准 10-20 电极 —— 通道数通常是个小整数。',en:'Right. 19 standard 10-20 electrodes — channel count is a small int.'},
+             err:{cn:'19 才是 10-20 电极数；500 是试次，128 是 1 秒×128Hz 的采样点。',en:'19 is the 10-20 channels; 500 is trials, 128 is 1s×128Hz samples.'}}},
+        {p:{cn:'128 这一维代表？',en:'What is the dim 128?'},
+         opts:[{cn:'采样点 (1秒×128Hz)',en:'samples (1s×128Hz)',ok:true},{cn:'通道数',en:'channels'},{cn:'被试数',en:'subjects'}],
+         fb:{ok:{cn:'对。1 秒 × 128 Hz = 128 采样点，正好对上最后一维。',en:'Right. 1 s × 128 Hz = 128 samples, matches the last dim.'},
+             err:{cn:'sfreq×时长 = 128×1 = 128，所以最后一维是采样点。',en:'sfreq×duration = 128×1 = 128, so the last dim is samples.'}}},
+        {p:{cn:'拉平成分类器输入，正确写法？',en:'To flatten for a classifier, which is right?'},
+         opts:[{cn:'reshape(500, 19*128)',en:'reshape(500, 19*128)',ok:true},{cn:'reshape(19, 500*128)',en:'reshape(19, 500*128)'}],
+         fb:{ok:{cn:'对。保留 500 个试次为样本，把 19×128 展平成特征。',en:'Right. Keep 500 trials as samples, flatten 19×128 into features.'},
+             err:{cn:'第一维必须是样本数 500，不能把通道当样本。',en:'The first dim must be 500 samples — do not treat channels as samples.'}}}
+      ]
+    },
+    {
+      id:'EVOKED',
+      name:{cn:'诱发电位 · 已对齐平均',en:'Evoked potential · trial-averaged'},
+      src:'epochs.average()  # -> Evoked',
+      code:[
+        {com:'# 已经把所有 trial 平均掉了'},
+        {kw:'evoked',plain:'.data.shape  '},{op:'-> '},{shape:'(32, 600)'},
+        {com:'evoked.info["sfreq"] = 600.0'},
+        {com:'evoked.nave = 240   # 由 240 个 trial 平均而来'}
+      ],
+      info:[
+        {k:'sfreq',v:'600 Hz'},
+        {k:'shape',v:'(32, 600)'},
+        {k:'nave',v:'240 trials'},
+        {k:'tmin..tmax',v:'-0.2 .. 0.8 s'}
+      ],
+      reshapeTo:{cn:'按 trial 做单试解码',en:'single-trial decoding'},
+      questions:[
+        {p:{cn:'这份 data 里还有几个独立 trial？',en:'How many independent trials remain?'},
+         opts:[{cn:'1 个 (已平均)',en:'1 (averaged)',ok:true},{cn:'240 个',en:'240'},{cn:'32 个',en:'32'}],
+         fb:{ok:{cn:'对。average() 把 240 个 trial 压成 1 条平均波形，shape 没有 trial 维。',en:'Right. average() collapsed 240 trials into one waveform; no trial dim.'},
+             err:{cn:'nave=240 是平均了多少个，但结果只剩 1 条；shape (32,600) 没有 trial 维。',en:'nave=240 is how many were averaged, but only 1 remains; (32,600) has no trial dim.'}}},
+        {p:{cn:'第一维 32 是？',en:'What is the first dim, 32?'},
+         opts:[{cn:'通道数',en:'channels',ok:true},{cn:'采样点',en:'samples'},{cn:'trial 数',en:'trials'}],
+         fb:{ok:{cn:'对。evoked 是 (通道, 时间)，32 是通道。',en:'Right. evoked is (channels, time); 32 = channels.'},
+             err:{cn:'evoked 二维 (通道, 时间)：32 通道, 600 采样点。',en:'evoked is 2D (channels, time): 32 ch, 600 samples.'}}},
+        {p:{cn:'能拿它做单试解码吗？',en:'Can you do single-trial decoding with it?'},
+         opts:[{cn:'不能，单试信息已被平均掉',en:'No, single-trial info is gone',ok:true},{cn:'能，nave=240',en:'Yes, nave=240'}],
+         fb:{ok:{cn:'对。平均后只剩诱发成分，单试的逐次变化没了。',en:'Right. Averaging keeps only the evoked component; trial-by-trial variation is gone.'},
+             err:{cn:'平均是不可逆的，单试解码必须用 epochs 而不是 evoked。',en:'Averaging is irreversible; single-trial decoding needs epochs, not evoked.'}}}
+      ]
+    },
+    {
+      id:'MULTI-SUBJ',
+      name:{cn:'多被试堆叠 · 4 维数组',en:'Multi-subject stack · 4-D array'},
+      src:'np.stack([s1, s2, ... s9])',
+      code:[
+        {com:'# 9 个被试的 epochs 堆在一起'},
+        {kw:'X',plain:'.shape  '},{op:'-> '},{shape:'(9, 288, 22, 750)'},
+        {com:'sfreq = 250 Hz   # 每段 3 秒'},
+        {com:'# 注意: 这是 4 维, 比单被试多了一维'}
+      ],
+      info:[
+        {k:'ndim',v:'4'},
+        {k:'sfreq',v:'250 Hz'},
+        {k:'seg length',v:'3 s'},
+        {k:'subjects',v:'9'}
+      ],
+      reshapeTo:{cn:'(9*288, 22, 750) 合并被试',en:'(9*288, 22, 750) pool subjects'},
+      questions:[
+        {p:{cn:'第一维 9 是什么？',en:'What is the first dim, 9?'},
+         opts:[{cn:'被试数 subjects',en:'subjects',ok:true},{cn:'通道数',en:'channels'},{cn:'trial 数',en:'trials'}],
+         fb:{ok:{cn:'对。多了一维 9 = 被试，第二维 288 才是每人的 trial。',en:'Right. The extra leading dim 9 = subjects; 288 is per-subject trials.'},
+             err:{cn:'4 维数组 (被试, trial, 通道, 采样)：9 是被试，288 才是 trial。',en:'4D (subj, trial, ch, samp): 9 subjects, 288 trials.'}}},
+        {p:{cn:'每段 3 秒, 第四维应是多少？',en:'At 3 s per seg, the 4th dim should be?'},
+         opts:[{cn:'750 (=3×250)',en:'750 (=3×250)',ok:true},{cn:'288',en:'288'},{cn:'22',en:'22'}],
+         fb:{ok:{cn:'对。3 秒 × 250 Hz = 750 采样点，对上第四维。',en:'Right. 3 s × 250 Hz = 750 samples, matches the 4th dim.'},
+             err:{cn:'sfreq×时长 = 250×3 = 750，第四维是采样点。',en:'sfreq×duration = 250×3 = 750; the 4th dim is samples.'}}},
+        {p:{cn:'合并所有被试的 trial, 正确 reshape？',en:'To pool all trials across subjects, which reshape?'},
+         opts:[{cn:'(9*288, 22, 750)',en:'(9*288, 22, 750)',ok:true},{cn:'(9, 288*22, 750)',en:'(9, 288*22, 750)'}],
+         fb:{ok:{cn:'对。把被试维和 trial 维相乘合并，通道/采样保持不动。',en:'Right. Merge subject×trial dims; keep ch/samples intact.'},
+             err:{cn:'要合并的是被试和 trial (前两维)，不是 trial 和通道。',en:'You merge subject and trial (first two dims), not trial and channels.'}}}
+      ]
+    },
+    {
+      id:'TRAP-CH',
+      name:{cn:'陷阱档案 · 高密度蒙太奇',en:'Trap file · high-density montage'},
+      src:'mne.read_epochs("hd.fif")',
+      code:[
+        {com:'# 高密度脑电, 通道数比采样点还像 trial'},
+        {kw:'epochs',plain:'.get_data().shape  '},{op:'-> '},{shape:'(120, 256, 256)'},
+        {com:'sfreq = 256 Hz   # 每段 1 秒'},
+        {com:'# 警告: 中间维和末维都是 256, 很容易搞混!'}
+      ],
+      info:[
+        {k:'sfreq',v:'256 Hz'},
+        {k:'seg length',v:'1 s'},
+        {k:'montage',v:'256-ch geodesic'},
+        {k:'n epochs',v:'120'}
+      ],
+      reshapeTo:{cn:'对每个通道单独滤波',en:'per-channel filtering'},
+      questions:[
+        {p:{cn:'中间维 256 是通道还是采样点？',en:'Is the middle 256 channels or samples?'},
+         opts:[{cn:'通道 (256-ch 高密度)',en:'channels (256-ch HD)',ok:true},{cn:'采样点',en:'samples'},{cn:'trial',en:'trials'}],
+         fb:{ok:{cn:'对。epochs 维序是 (trial, 通道, 采样)，中间维永远是通道。',en:'Right. epochs order is (trial, ch, samples); middle is always channels.'},
+             err:{cn:'两个 256 巧合相等，但维序固定：中间是通道，末维是采样点。',en:'Both are 256 by coincidence, but order is fixed: middle=channels, last=samples.'}}},
+        {p:{cn:'末维 256 怎么验证是采样点？',en:'How to verify the last 256 is samples?'},
+         opts:[{cn:'1秒×256Hz=256, 对上',en:'1s×256Hz=256, matches',ok:true},{cn:'看哪个数大',en:'pick the bigger number'}],
+         fb:{ok:{cn:'对。用 sfreq×时长 算出采样点应是 256，跟末维吻合。',en:'Right. sfreq×duration gives 256 samples, matching the last dim.'},
+             err:{cn:'数字大小没用 (这里都是256)，要用 sfreq×时长 验证。',en:'Size tells nothing (both 256); verify with sfreq×duration.'}}},
+        {p:{cn:'对每通道滤波, 应沿哪一维循环？',en:'To filter per channel, loop over which dim?'},
+         opts:[{cn:'中间维 (axis=1, 通道)',en:'middle dim (axis=1, channels)',ok:true},{cn:'第一维 (trial)',en:'first dim (trials)'},{cn:'末维 (采样)',en:'last dim (samples)'}],
+         fb:{ok:{cn:'对。逐通道处理就沿 axis=1，把 trial 和时间留给滤波器。',en:'Right. Per-channel means axis=1; leave trials & time to the filter.'},
+             err:{cn:'通道在 axis=1。沿 trial 或采样循环会把整段信号当一个通道。',en:'Channels are axis=1. Looping over trials/samples treats whole signal as one channel.'}}}
+      ]
+    }
   ];
 
   var I18N={
-    ttl:{cn:'mne 数据集探索器',en:'mne Dataset Explorer'},
-    taskTitle:{cn:'任务',en:'TASK'},
-    taskBody:{cn:'浏览 BCI Competition IV 数据集，探索 3 种不同的（被试 + 电极 + 想象动作）组合，解锁"数据集结构理解"。',
-              en:'Browse the BCI Competition IV dataset. Explore 3 different (subject + electrode + trial) combos to unlock "dataset structure understanding".'},
-    g1:{cn:'在右上选被试、电极、想象动作',en:'Pick subject, electrode & trial above'},
-    g2:{cn:'看脑波片段预览随选择变化',en:'Watch the EEG preview change'},
-    g3:{cn:'下方元数据来自 .gdf 文件头',en:'Metadata below comes from the .gdf header'},
-    progLbl:{cn:'已探索组合 ',en:'Combos explored '},
-    'cl-subj':{cn:'Subject 被试',en:'Subject'},
-    'cl-elec':{cn:'Electrode 电极（22 通道）',en:'Electrode (22 channels)'},
-    'cl-trial':{cn:'Trial 想象动作',en:'Trial (motor imagery)'},
-    stTitle:{cn:'脑波片段预览',en:'EEG segment preview'},
-    mk0:{cn:'采样率',en:'Sample rate'}, mu0:{cn:'Hz 采样率',en:'Hz sfreq'},
-    mk1:{cn:'通道',en:'Channels'}, mu1:{cn:'+3 EOG',en:'+3 EOG'},
-    mk2:{cn:'单试时长',en:'Trial length'}, mu2:{cn:'s 单试时长',en:'s per trial'},
-    mk3:{cn:'事件数',en:'Events'}, mu3:{cn:'每 run 试验',en:'trials / run'},
-    mk4:{cn:'事件码',en:'Event code'}, mu4:{cn:'GDF 标记',en:'GDF marker'},
-    toastNew:{cn:'新组合已记录！',en:'New combo logged!'},
-    toastUnlock:{cn:'解锁：你已理解 mne 数据集的三层结构 — 被试 / 电极 / 试验。',
-                 en:'Unlocked: you grasp the 3-layer mne structure — subject / electrode / trial.'},
-    toastDup:{cn:'这个组合探索过了，换一个试试。',en:'Already explored — try a different combo.'}
+    brandSub:{cn:'M04 · SHAPE 判读',en:'M04 · SHAPE READING'},
+    bitCap:{cn:'Bit — 你的搭档<br/>每破一案重排像素',en:'Bit — your partner<br/>rearranges on each solve'},
+    taskT:{cn:'CASE BRIEF',en:'CASE BRIEF'},
+    taskB:{cn:'读懂 6 份 EEG 数据档案。每份只给你 array.shape、采样率、event 标记和 .info 摘要 —— 你来判断它真正长什么样。判错维度，后面 reshape 会当场崩。',
+           en:'Crack 6 EEG data dossiers. Each gives only array.shape, sfreq, event markers and an .info summary — you decide what it really is. Misread a dim and the later reshape crashes on the spot.'},
+    progLbl:{cn:'案卷 ',en:'Cases '},
+    gd1:{cn:'看 shape 每一维代表什么',en:'Read what each shape dim means'},
+    gd2:{cn:'交叉验证 sfreq × 时长 = 采样点',en:'Cross-check sfreq × duration = samples'},
+    gd3:{cn:'event 码判断是不是运动想象',en:'Use event codes to spot motor imagery'},
+    nextSubmit:{cn:'提交结案',en:'CLOSE CASE'},
+    nextWait:{cn:'先答完三问',en:'ANSWER ALL 3'},
+    csqCrash:{cn:'RESHAPE CRASHED',en:'RESHAPE CRASHED'},
+    csqRetry:{cn:'回到档案重判',en:'BACK TO DOSSIER'},
+    winT:{cn:'数据侦探',en:'DATA DETECTIVE'},
+    winB:{cn:'6 份档案全部结案。你已经能只看 shape 和 .info 就还原一个 EEG 数据集的真实结构 —— 这是加载任何数据集的第一步。',
+          en:'All 6 dossiers closed. You can now reconstruct an EEG dataset’s true structure from shape + .info alone — the first step of loading any dataset.'}
   };
-  function t(k){return (I18N[k]&&I18N[k][LANG])||(I18N[k]&&I18N[k].en)||k;}
 
-  // ----- 当前选择 -----
-  var sel={subj:'A01', elec:'Cz', trial:TRIALS[0]};
-  var explored={};        // key -> true
-  var exploredCount=0;
-  var unlocked=false;
+  var idx=0;                 // 当前档案
+  var solved=new Array(CASES.length).fill(false);
+  var answeredRight=[];      // 当前档案每题是否答对
+  var doneCount=0;
+  var wrongCount=0;          // 当前档案累计错答 (进新档案归零)
 
-  // ----- 确定性伪随机 (同一选择 -> 同一波形, 不同选择 -> 不同波形) -----
-  function hashStr(s){var h=2166136261;for(var i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619);}return (h>>>0);}
-  function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;var tn=Math.imul(a^a>>>15,1|a);tn=tn+Math.imul(tn^tn>>>7,61|tn)^tn;return ((tn^tn>>>14)>>>0)/4294967296;};}
+  /* ---------- 渲染当前档案 ---------- */
+  function renderCase(){
+    var c=CASES[idx];
+    document.getElementById('caseId').textContent='CASE '+String(idx+1).padStart(2,'0');
+    document.getElementById('caseName').textContent=L(c.name);
+    document.getElementById('caseSrc').textContent='source: '+c.src;
 
-  // ----- canvas 绘制 (合成 EEG: 不同动作主导不同节律/通道形态) -----
-  var canvas=document.getElementById('wave');
-  var ctx=canvas.getContext('2d');
-
-  function cssVar(n){return getComputedStyle(document.documentElement).getPropertyValue(n).trim();}
-
-  function resize(){
-    var wrap=canvas.parentElement;
-    var r=wrap.getBoundingClientRect();
-    var dpr=window.devicePixelRatio||1;
-    canvas.width=Math.max(2,Math.round(r.width*dpr));
-    canvas.height=Math.max(2,Math.round(r.height*dpr));
-    ctx.setTransform(dpr,0,0,dpr,0,0);
-    draw();
-  }
-
-  function draw(){
-    var w=canvas.clientWidth, h=canvas.clientHeight;
-    if(!w||!h){var r=canvas.parentElement.getBoundingClientRect();w=r.width;h=r.height;}
-    ctx.clearRect(0,0,w,h);
-
-    // 背景网格 (淡)
-    ctx.strokeStyle=cssVar('--hairline')||'#F2EDE0';
-    ctx.lineWidth=1;
-    var gx=8, gy=4;
-    for(var i=1;i<gx;i++){var x=w*i/gx;ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,h);ctx.stroke();}
-    for(var j=1;j<gy;j++){var y=h*j/gy;ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(w,y);ctx.stroke();}
-
-    // 时间轴标签 (0..4s)
-    ctx.fillStyle=cssVar('--sub-2')||'#9D978A';
-    ctx.font='10px '+(cssVar('--mono')||'monospace');
-    ctx.textBaseline='top';
-    for(var ti=0;ti<=4;ti++){
-      var tx=w*ti/4;
-      ctx.fillText(ti+'s', Math.min(tx+3, w-18), h-14);
-    }
-
-    // 合成多通道波形: 主电极在中线 (coral), 其余 3 条参考道
-    var key=sel.subj+'|'+sel.elec+'|'+sel.trial.id;
-    var seed=hashStr(key);
-    var rnd=mulberry32(seed);
-
-    // 动作决定主导频率: 左/右手 -> mu(10Hz) + 对侧 ERD; 脚 -> 中央beta; 舌 -> 较宽频
-    var trialFreq={left:10, right:10, foot:13, tongue:16}[sel.trial.id]||11;
-    // 电极行号影响幅度 (中央 C 区运动想象信号最强)
-    var elecIdx=ELECTRODES.indexOf(sel.elec);
-    var central=/^C/.test(sel.elec)||sel.elec==='FCz'||sel.elec==='CPz';
-    var ampBoost=central?1.0:0.55;
-
-    var lanes=[
-      {label:sel.elec, color:cssVar('--computing')||'#C04E68', main:true, amp:1.0},
-      {label:'Fz',  color:cssVar('--sub')||'#6B6557', amp:0.5},
-      {label:'Pz',  color:cssVar('--sub')||'#6B6557', amp:0.55},
-      {label:'POz', color:cssVar('--sub-2')||'#9D978A', amp:0.45}
-    ];
-
-    var laneH=h/(lanes.length+0.6);
-    lanes.forEach(function(lane,li){
-      var cy=laneH*(li+0.8);
-      var f=trialFreq + (li*1.7) + (rnd()*1.4-0.7);
-      var phase=rnd()*Math.PI*2;
-      var noiseSeed=mulberry32(seed+li*131);
-      var baseAmp=laneH*0.36*lane.amp*ampBoost*(0.8+rnd()*0.5);
-
-      // 通道标签
-      ctx.fillStyle=lane.color;
-      ctx.font=(lane.main?'700 ':'')+'11px '+(cssVar('--mono')||'monospace');
-      ctx.textBaseline='middle';
-      ctx.fillText(lane.label, 6, cy-laneH*0.42);
-
-      // ERD: 运动想象 1~3s 段, 对侧手在主电极上幅度被压低 (motor desync)
-      function erdEnvelope(tt){
-        var inWin=(tt>0.25 && tt<0.75); // 归一化时间窗 1s-3s
-        if(lane.main && (sel.trial.id==='left'||sel.trial.id==='right') && central && inWin){
-          return 0.45; // 抑制
-        }
-        return 1.0;
-      }
-
-      ctx.strokeStyle=lane.color;
-      ctx.lineWidth=lane.main?2.0:1.2;
-      ctx.globalAlpha=lane.main?1:0.7;
-      ctx.beginPath();
-      var N=260;
-      for(var p=0;p<=N;p++){
-        var tt=p/N;
-        var ph=phase + tt*Math.PI*2*f*0.85;
-        var env=erdEnvelope(tt);
-        var slow=Math.sin(tt*Math.PI*2*(1.2+li*0.3))*0.25;
-        var jitter=(noiseSeed()-0.5)*0.5;
-        var v=(Math.sin(ph)*0.7 + slow + jitter)*baseAmp*env;
-        var x=tt*w;
-        var y=cy + v;
-        if(p===0)ctx.moveTo(x,y); else ctx.lineTo(x,y);
-      }
-      ctx.stroke();
-      ctx.globalAlpha=1;
+    // code block
+    var cb=document.getElementById('codeBlock'); cb.innerHTML='';
+    c.code.forEach(function(seg){
+      var sp=document.createElement('span');
+      if(seg.com){sp.className='com';sp.textContent=seg.com+'\n';}
+      else if(seg.kw){sp.className='kw';sp.textContent=seg.kw;}
+      else if(seg.shape){sp.className='shape';sp.textContent=seg.shape;}
+      else if(seg.num){sp.className='num';sp.textContent=seg.num;}
+      else if(seg.str){sp.className='str';sp.textContent=seg.str;}
+      else if(seg.op){sp.textContent=seg.op;}
+      else{sp.textContent=seg.plain||'';}
+      cb.appendChild(sp);
+      if(seg.shape||seg.op){cb.appendChild(document.createTextNode(seg.op?'':'\n'));}
     });
 
-    // 事件标记线 (cue onset at t=2s -> x = w/2)
-    var cueX=w*0.5;
-    ctx.strokeStyle=cssVar('--primary')||'#D97757';
-    ctx.lineWidth=1.5;
-    ctx.setLineDash([5,4]);
-    ctx.beginPath();ctx.moveTo(cueX,0);ctx.lineTo(cueX,h-16);ctx.stroke();
-    ctx.setLineDash([]);
-    ctx.fillStyle=cssVar('--primary-ink')||'#9A4A2E';
-    ctx.font='700 10px '+(cssVar('--mono')||'monospace');
-    ctx.textBaseline='top';
-    var cueLbl=(LANG==='cn'?'提示 cue ':'cue ')+sel.trial.code;
-    ctx.fillText(cueLbl, cueX+5, 4);
+    // info block
+    var ib=document.getElementById('infoBlock'); ib.innerHTML='';
+    c.info.forEach(function(r){
+      var row=document.createElement('div'); row.className='info-row';
+      var k=document.createElement('span'); k.className='ik'; k.textContent=r.k;
+      var v=document.createElement('span'); v.className='iv'; v.textContent=r.v;
+      row.appendChild(k); row.appendChild(v); ib.appendChild(row);
+    });
+
+    // questions
+    answeredRight=new Array(c.questions.length).fill(false);
+    wrongCount=0;
+    var quiz=document.getElementById('quiz'); quiz.innerHTML='';
+    c.questions.forEach(function(q,qi){
+      var blk=document.createElement('div'); blk.className='q-block';
+      blk.dataset.qi=qi;
+
+      var pr=document.createElement('div'); pr.className='q-prompt';
+      var qn=document.createElement('span'); qn.className='qnum'; qn.textContent='Q'+(qi+1);
+      pr.appendChild(qn); pr.appendChild(document.createTextNode(L(q.p)));
+      blk.appendChild(pr);
+
+      var opts=document.createElement('div'); opts.className='opts';
+      q.opts.forEach(function(o,oi){
+        var b=document.createElement('div'); b.className='opt';
+        b.textContent=L(o); b.dataset.oi=oi;
+        b.addEventListener('click',function(){ chooseOpt(qi,oi,b,blk); });
+        opts.appendChild(b);
+      });
+      blk.appendChild(opts);
+
+      var fb=document.createElement('div'); fb.className='q-fb';
+      blk.appendChild(fb);
+
+      quiz.appendChild(blk);
+    });
+
+    updateVerdict();
+    syncNextBtn();
   }
 
-  // ----- 元数据更新 -----
-  function updateMeta(){
-    document.getElementById('mv0').textContent='250';
-    document.getElementById('mv1').textContent='22 EEG';
-    document.getElementById('mv2').textContent='4.0';
-    document.getElementById('mv3').textContent='288';
-    document.getElementById('mv4').textContent=String(sel.trial.code);
-    var subTxt=sel.subj+' · '+sel.elec+' · '+(LANG==='cn'?sel.trial.cn:sel.trial.en);
-    document.getElementById('stSub').textContent=subTxt;
-  }
-
-  // ----- 进度 / 解锁 -----
-  function recordExplore(){
-    var key=sel.subj+'|'+sel.elec+'|'+sel.trial.id;
-    if(explored[key]){ toast(t('toastDup')); return; }
-    explored[key]=true;
-    if(exploredCount<3){
-      var dot=document.querySelector('.dot[data-d="'+exploredCount+'"]');
-      if(dot)dot.classList.add('done');
-      exploredCount++;
-      document.getElementById('progLbl').textContent=t('progLbl')+exploredCount+' / 3';
-    }
-    if(exploredCount>=3 && !unlocked){
-      unlocked=true;
-      toast(t('toastUnlock'));
+  function chooseOpt(qi,oi,btn,blk){
+    var c=CASES[idx];
+    var q=c.questions[qi];
+    var o=q.opts[oi];
+    var fb=blk.querySelector('.q-fb');
+    // 取消同题其它选项的临时高亮 (允许改正)
+    blk.querySelectorAll('.opt').forEach(function(x){x.classList.remove('chosen-wrong');});
+    if(o.ok){
+      btn.classList.add('chosen-right');
+      blk.querySelectorAll('.opt').forEach(function(x){x.classList.add('disabled');});
+      blk.classList.add('correct');
+      fb.className='q-fb show ok'; fb.textContent=L(q.fb.ok);
+      answeredRight[qi]=true;
     }else{
-      toast(t('toastNew'));
+      btn.classList.add('chosen-wrong');
+      fb.className='q-fb show err'; fb.textContent=L(q.fb.err);
+      answeredRight[qi]=false;
     }
+    updateVerdict();
+    syncNextBtn();
   }
 
-  var toastTimer=null;
-  function toast(msg){
-    var el=document.getElementById('status');
-    el.textContent=msg;
-    el.classList.add('show');
-    if(toastTimer)clearTimeout(toastTimer);
-    toastTimer=setTimeout(function(){el.classList.remove('show');},2600);
+  function allAnswered(){ return answeredRight.every(function(v){return v;}); }
+
+  function updateVerdict(){
+    var hit=answeredRight.filter(function(v){return v;}).length;
+    var el=document.getElementById('verdict');
+    el.innerHTML=(LANG==='cn'?'判读进度 ':'reads ')+'<span class="hit">'+hit+'</span> / '+answeredRight.length;
   }
 
-  // 当三个维度都被用户选过至少一次后, 每次有效切换都尝试记录组合
-  function onSelectionChanged(){
-    updateMeta();
-    draw();
-    recordExplore();
+  function syncNextBtn(){
+    var btn=document.getElementById('nextBtn');
+    if(allAnswered()){ btn.disabled=false; btn.textContent=L(I18N.nextSubmit); }
+    else{ btn.disabled=true; btn.textContent=L(I18N.nextWait); }
   }
 
-  // ----- 构建控件 -----
-  function buildSubjects(){
-    var box=document.getElementById('subjChips');box.innerHTML='';
-    SUBJECTS.forEach(function(s){
-      var c=document.createElement('div');
-      c.className='chip'+(s===sel.subj?' active':'');
-      c.textContent=s;c.dataset.subj=s;
-      c.addEventListener('click',function(){
-        if(sel.subj===s)return;
-        sel.subj=s;
-        document.querySelectorAll('#subjChips .chip').forEach(function(x){x.classList.toggle('active',x.dataset.subj===s);});
-        onSelectionChanged();
-      });
-      box.appendChild(c);
-    });
-  }
-  function buildElectrodes(){
-    var selEl=document.getElementById('elecSel');selEl.innerHTML='';
-    ELECTRODES.forEach(function(e){
-      var o=document.createElement('option');o.value=e;o.textContent=e;
-      if(e===sel.elec)o.selected=true;
-      selEl.appendChild(o);
-    });
-    selEl.addEventListener('change',function(){
-      sel.elec=this.value;
-      onSelectionChanged();
-    });
-  }
-  function buildTrials(){
-    var box=document.getElementById('trialChips');box.innerHTML='';
-    TRIALS.forEach(function(tr){
-      var c=document.createElement('div');
-      c.className='chip'+(tr.id===sel.trial.id?' active':'');
-      c.textContent=(LANG==='cn'?tr.cn:tr.en);c.dataset.trial=tr.id;
-      c.addEventListener('click',function(){
-        if(sel.trial.id===tr.id)return;
-        sel.trial=tr;
-        document.querySelectorAll('#trialChips .chip').forEach(function(x){x.classList.toggle('active',x.dataset.trial===tr.id);});
-        onSelectionChanged();
-      });
-      box.appendChild(c);
-    });
+  /* ---------- 进度网格 ---------- */
+  function renderProg(){
+    var grid=document.getElementById('fpGrid'); grid.innerHTML='';
+    for(var i=0;i<CASES.length;i++){
+      var cell=document.createElement('div'); cell.className='fp-cell';
+      cell.textContent=String(i+1);
+      if(solved[i])cell.classList.add('solved');
+      else if(i===idx)cell.classList.add('current');
+      grid.appendChild(cell);
+    }
+    document.getElementById('progLbl').textContent=L(I18N.progLbl)+doneCount+' / '+CASES.length+(LANG==='cn'?' 已结案':' closed');
   }
 
-  // ----- i18n 刷新 -----
-  function refreshI18N(){
-    ['ttl','taskTitle','taskBody','g1','g2','g3','cl-subj','cl-elec','cl-trial','stTitle',
-     'mk0','mu0','mk1','mu1','mk2','mu2','mk3','mu3','mk4','mu4'].forEach(function(id){
-      var el=document.getElementById(id)||document.querySelector('[id="'+id+'"]');
-      if(el)el.textContent=t(id);
-    });
-    document.getElementById('progLbl').textContent=t('progLbl')+exploredCount+' / 3';
-    buildTrials();
-    updateMeta();
-    draw();
+  /* ---------- 结案 / 后果 ---------- */
+  function submitCase(){
+    if(!allAnswered())return;
+    solved[idx]=true; doneCount++;
+    renderProg();
+    if(doneCount>=CASES.length){
+      showWin();
+      return;
+    }
+    // 推进到下一个未结案的档案
+    var next=idx;
+    for(var step=1;step<=CASES.length;step++){
+      var cand=(idx+step)%CASES.length;
+      if(!solved[cand]){ next=cand; break; }
+    }
+    idx=next;
+    renderCase();
+    renderProg();
+  }
+
+  // 后果演示: 若玩家在某题选错过 (这里用一个独立"模拟 reshape"按钮触发, 但本设计在提交即正确)
+  // 后果在"用户尝试在未全答对就硬交"时不存在; 真实后果体现在错答即时反馈 + reshape 演示
+  // 提供一个 reshape 崩溃演示: 当玩家答错某题且想跳过时无法提交(按钮禁用), 即"判错维度后续 reshape 会崩"
+  // 这里把崩溃作为"如果当初判错维度"的可视化, 触发于错误反馈累计
+
+  function showCrash(qi){
+    var c=CASES[idx];
+    var trace=document.getElementById('csqTrace');
+    trace.innerHTML='';
+    var line1=document.createElement('div');
+    line1.textContent='>>> X = data.reshape('+L(c.reshapeTo).split(' ')[0]+' ...)';
+    var line2=document.createElement('div'); line2.className='ef';
+    line2.textContent='ValueError: cannot reshape array';
+    var line3=document.createElement('div'); line3.className='ef';
+    line3.textContent='  axis misread -> size mismatch';
+    trace.appendChild(line1); trace.appendChild(line2); trace.appendChild(line3);
+    document.getElementById('csqMsg').textContent=(LANG==='cn'
+      ? '你把某一维判错了。如果带着这个判读去做 '+L(c.reshapeTo)+'，维度乘积对不上，reshape 当场崩。回去把那一维想清楚。'
+      : 'You misread a dimension. Carrying that into '+L(c.reshapeTo)+' makes the products mismatch and reshape crashes. Go back and rethink that axis.');
+    document.getElementById('csq').classList.add('show');
+  }
+
+  document.getElementById('csqRetry').addEventListener('click',function(){
+    document.getElementById('csq').classList.remove('show');
+  });
+
+  function showWin(){ document.getElementById('win').classList.add('show'); }
+
+  document.getElementById('nextBtn').addEventListener('click',submitCase);
+
+  /* ---------- i18n ---------- */
+  function applyStatic(){
+    document.getElementById('brandSub').innerHTML=L(I18N.brandSub);
+    document.getElementById('bitCap').innerHTML=L(I18N.bitCap);
+    document.getElementById('taskT').textContent=L(I18N.taskT);
+    document.getElementById('taskB').textContent=L(I18N.taskB);
+    document.getElementById('gd1').textContent=L(I18N.gd1);
+    document.getElementById('gd2').textContent=L(I18N.gd2);
+    document.getElementById('gd3').textContent=L(I18N.gd3);
+    document.getElementById('csqCrash').textContent=L(I18N.csqCrash);
+    document.getElementById('csqRetry').textContent=L(I18N.csqRetry);
+    document.getElementById('winT').textContent=L(I18N.winT);
+    document.getElementById('winB').textContent=L(I18N.winB);
   }
 
   document.getElementById('langBtn').addEventListener('click',function(){
     LANG=LANG==='cn'?'en':'cn';
     this.textContent=LANG==='cn'?'中 / EN':'EN / 中';
-    refreshI18N();
+    applyStatic();
+    renderCase();
+    renderProg();
   });
 
-  // ----- init -----
-  buildSubjects();
-  buildElectrodes();
-  buildTrials();
-  updateMeta();
-  window.addEventListener('resize',resize);
-  // 等布局稳定后绘制
-  requestAnimationFrame(function(){resize();});
-  setTimeout(resize,120);
+  // 错答累计触发 reshape 后果 (有后果): 同一档案内累计错 2 次, 演示崩溃
+  // wrongCount 每进入新档案归零 (见 renderCase), 答对不抵消 —— 判错维度就是判错了
+  document.getElementById('quiz').addEventListener('click',function(e){
+    var t=e.target;
+    if(t&&t.classList&&t.classList.contains('chosen-wrong')){
+      wrongCount++;
+      if(wrongCount===2){ showCrash(); }
+    }
+  });
+
+  /* ---------- init ---------- */
+  applyStatic();
+  renderCase();
+  renderProg();
 })();
 </script>
 </body>

@@ -1,667 +1,487 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="zh">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>信号质检台</title>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Spark 的录制台 — 调出可靠配置看见 alpha 升起</title>
 <style>
-  :root{
-    /* Surfaces — Claude warm cream */
-    --paper:    #FAF9F5;
-    --paper-2:  #F1EDDF;
-    --card:     #FFFFFF;
-    --ink:      #191814;
-    --ink-2:    #2B2924;
-    --sub:      #6B6557;
-    --sub-2:    #9D978A;
-    --border:   #EBE5D6;
-    --border-2: #D9D1BD;
-    --hairline: #F2EDE0;
+:root{
+  /* neuro 深空底 + accent + 5 色 palette (theme_style/themes.js #20) */
+  --bg-0:#0c0a0e;            /* 深空底 */
+  --bg-1:#15111a;            /* 卡片底 */
+  --bg-2:#1d1722;            /* 控件槽 */
+  --accent:oklch(0.75 0.17 25);     /* neuro accent (红橙) */
+  --synaptic:oklch(0.75 0.17 25);
+  --dendrite:oklch(0.55 0.15 25);
+  --axon:oklch(0.32 0.10 25);
+  --firing:oklch(0.92 0.08 25);
+  --memory:oklch(0.85 0.14 85);     /* 金 — alpha 升起高光 */
+  --ink:oklch(0.93 0.02 25);
+  --sub:oklch(0.66 0.04 25);
+  --line:oklch(0.30 0.04 25);
+  --bad:oklch(0.62 0.18 25);
+  --noise:oklch(0.50 0.02 25);
+  --mono:'JetBrains Mono','SF Mono',ui-monospace,Menlo,Consolas,monospace;
+  --sans:'PingFang SC','Inter','Noto Sans SC',system-ui,sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:100%;height:100vh;overflow:hidden;background:var(--bg-0);
+  font-family:var(--sans);color:var(--ink);}
+.wrapper{display:flex;height:100vh;}
 
-    /* Primary — Claude coral */
-    --primary:      #D97757;
-    --primary-ink:  #9A4A2E;
-    --primary-soft: #F8EDE5;
-    --primary-line: #ECCFB8;
+/* -- 200px sidebar -- */
+.game-sidebar{
+  width:200px;flex-shrink:0;height:100vh;overflow-y:auto;
+  background:var(--bg-1);border-right:1px solid var(--line);
+  padding:12px 11px;display:flex;flex-direction:column;gap:11px;}
+.brand{display:flex;align-items:center;gap:9px;}
+.mascot{width:34px;height:34px;flex-shrink:0;}
+.brand .txt .kicker{font-family:var(--mono);font-size:8.5px;letter-spacing:1.4px;
+  color:var(--accent);text-transform:uppercase;}
+.brand .txt .name{font-size:13px;font-weight:700;color:var(--ink);line-height:1.2;}
 
-    /* Domain accent — robotics 紫 */
-    --robotics:     #7C4569;
-    --robotics-soft:#E9DBE3;
+.task-box{background:var(--bg-2);border:1px solid var(--line);
+  padding:8px 9px;box-shadow:3px 3px 0 var(--bg-0);}
+.task-box h3{font-family:var(--mono);font-size:8.5px;letter-spacing:1px;
+  color:var(--sub);text-transform:uppercase;margin-bottom:4px;}
+.task-box p{font-size:11px;line-height:1.5;color:var(--ink);}
 
-    --good:     #5A8A5E;
-    --good-soft:#E2ECE1;
-    --warn:     #C0823C;
-    --warn-soft:#F6ECDB;
+.knobs{display:flex;flex-direction:column;gap:9px;}
+.knob{display:flex;flex-direction:column;gap:4px;}
+.knob .lab{font-family:var(--mono);font-size:9px;letter-spacing:.5px;color:var(--sub);
+  text-transform:uppercase;display:flex;justify-content:space-between;align-items:baseline;}
+.knob .lab .val{color:var(--accent);font-weight:700;font-size:10px;}
+.knob .lab .val.warn{color:var(--bad);}
+.knob .lab .val.good{color:var(--memory);}
+.knob .hint{font-size:9.5px;color:var(--sub);line-height:1.35;}
+input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:6px;
+  background:var(--bg-0);outline:none;border:1px solid var(--line);cursor:pointer;}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:15px;height:15px;
+  background:var(--accent);border:2px solid var(--firing);cursor:pointer;}
+input[type=range]::-moz-range-thumb{width:15px;height:15px;background:var(--accent);
+  border:2px solid var(--firing);cursor:pointer;}
+.toggle-row{display:flex;gap:6px;}
+.toggle-btn{flex:1;font-family:var(--mono);font-size:9.5px;padding:6px 4px;cursor:pointer;
+  background:var(--bg-0);border:1px solid var(--line);color:var(--sub);letter-spacing:.5px;
+  transition:all .15s;}
+.toggle-btn.on{background:var(--accent);border-color:var(--accent);color:var(--bg-0);font-weight:700;}
 
-    --shadow-sm: 0 1px 2px 0 rgba(25,24,20,.04);
-    --shadow:    0 1px 3px 0 rgba(25,24,20,.06), 0 1px 2px -1px rgba(25,24,20,.04);
-    --shadow-md: 0 4px 8px -2px rgba(25,24,20,.06), 0 2px 4px -2px rgba(25,24,20,.04);
-    --shadow-lg: 0 12px 24px -6px rgba(25,24,20,.1), 0 4px 8px -4px rgba(25,24,20,.05);
-  }
-  *{box-sizing:border-box;}
-  html,body{margin:0;padding:0;}
-  body{
-    height:100vh;overflow:hidden;display:flex;
-    background:var(--paper);color:var(--ink);
-    font-family:'PingFang SC','Noto Sans SC','Inter',sans-serif;
-  }
-  .mono{font-family:'JetBrains Mono','SF Mono','Roboto Mono',ui-monospace,monospace;}
+.quality{background:var(--bg-2);border:1px solid var(--line);padding:8px 9px;
+  box-shadow:3px 3px 0 var(--bg-0);}
+.quality h3{font-family:var(--mono);font-size:8.5px;letter-spacing:1px;color:var(--sub);
+  text-transform:uppercase;margin-bottom:6px;}
+.q-row{display:flex;justify-content:space-between;align-items:center;font-size:10px;
+  margin-bottom:4px;font-family:var(--mono);}
+.q-row .ql{color:var(--sub);}
+.q-row .qv{font-weight:700;color:var(--noise);}
+.q-row .qv.ok{color:var(--memory);}
+.q-row .qv.bad{color:var(--bad);}
+.q-bar{height:5px;background:var(--bg-0);border:1px solid var(--line);margin-top:2px;overflow:hidden;}
+.q-bar .fill{height:100%;width:0%;background:var(--noise);transition:width .25s,background .25s;}
 
-  /* ---------------- Sidebar ---------------- */
-  .game-sidebar{
-    width:200px;flex-shrink:0;height:100vh;
-    background:var(--paper-2);border-right:1px solid var(--border-2);
-    display:flex;flex-direction:column;gap:12px;padding:16px 14px;
-    overflow-y:auto;
-  }
-  .brand{display:flex;flex-direction:column;gap:3px;}
-  .brand .kicker{font-size:10px;letter-spacing:.14em;color:var(--robotics);font-weight:700;text-transform:uppercase;}
-  .brand h1{font-size:17px;margin:0;line-height:1.25;color:var(--ink);}
+.spacer{flex:1;}
+.lang-btn{align-self:stretch;font-family:var(--mono);font-size:11px;letter-spacing:1px;
+  padding:8px 10px;background:var(--bg-2);border:1px solid var(--line);
+  color:var(--ink);cursor:pointer;transition:all .15s;}
+.lang-btn:hover{background:var(--accent);border-color:var(--accent);color:var(--bg-0);}
 
-  .progress-box{
-    background:var(--card);border:1px solid var(--border);border-radius:10px;
-    padding:9px 11px;box-shadow:var(--shadow-sm);
-  }
-  .progress-box .lbl{font-size:10px;font-weight:700;color:var(--primary-ink);letter-spacing:.05em;margin-bottom:5px;text-transform:uppercase;}
-  .progress-box .count{font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:700;color:var(--robotics);}
-  .pbar{height:8px;border-radius:5px;background:var(--paper-2);overflow:hidden;border:1px solid var(--border);margin-top:6px;}
-  .pbar i{display:block;height:100%;width:0%;border-radius:5px;background:var(--good);transition:width .4s ease;}
+/* -- main -- */
+.game-main{flex:1;height:100vh;display:flex;flex-direction:column;overflow:hidden;
+  padding:16px 18px;gap:12px;}
+.head-strip{display:flex;align-items:center;gap:12px;flex-shrink:0;}
+.head-strip .title{font-size:15px;font-weight:700;color:var(--ink);}
+.head-strip .sub{font-size:10.5px;color:var(--sub);line-height:1.4;}
+.head-strip .status{margin-left:auto;font-family:var(--mono);font-size:10.5px;letter-spacing:.5px;
+  padding:6px 12px;background:var(--bg-2);border:1px solid var(--line);color:var(--sub);white-space:nowrap;}
+.head-strip .status.bad{background:var(--bg-1);border-color:var(--bad);color:var(--bad);}
+.head-strip .status.win{background:var(--bg-1);border-color:var(--memory);color:var(--memory);}
 
-  .case-lbl{font-size:10px;font-weight:700;color:var(--sub);letter-spacing:.05em;text-transform:uppercase;}
-  .case-list{display:flex;flex-direction:column;gap:7px;}
-  .case-btn{
-    display:flex;align-items:center;gap:9px;text-align:left;
-    padding:8px 10px;border-radius:9px;cursor:pointer;
-    background:var(--card);border:1px solid var(--border-2);box-shadow:var(--shadow-sm);
-    transition:transform .12s ease,box-shadow .12s ease,border-color .12s ease;
-    font-family:inherit;color:var(--ink);width:100%;
-  }
-  .case-btn:hover{transform:translateY(-1px);box-shadow:var(--shadow-md);border-color:var(--robotics);}
-  .case-btn.active{border-color:var(--robotics);background:var(--robotics-soft);}
-  .case-btn .seg-no{
-    width:24px;height:24px;flex-shrink:0;border-radius:7px;
-    background:var(--paper-2);border:1px solid var(--border);
-    display:flex;align-items:center;justify-content:center;
-    font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:700;color:var(--sub);
-  }
-  .case-btn.solved .seg-no{background:var(--good-soft);border-color:var(--good);color:var(--good);}
-  .case-btn .seg-txt{display:flex;flex-direction:column;gap:1px;line-height:1.15;}
-  .case-btn .seg-name{font-size:12px;font-weight:700;}
-  .case-btn .seg-sub{font-size:9px;color:var(--sub-2);}
-  .case-btn .seg-tick{
-    margin-left:auto;width:16px;height:16px;flex-shrink:0;color:var(--good);opacity:0;
-    transition:opacity .2s ease;
-  }
-  .case-btn.solved .seg-tick{opacity:1;}
+.panes{flex:1;min-height:0;display:flex;flex-direction:column;gap:12px;}
+.pane{background:var(--bg-1);border:1px solid var(--line);box-shadow:3px 3px 0 var(--bg-0);
+  display:flex;flex-direction:column;min-height:0;}
+.pane.wave{flex:1.3;}
+.pane.spec{flex:1;}
+.pane-head{display:flex;align-items:center;gap:8px;padding:7px 12px;border-bottom:1px solid var(--line);flex-shrink:0;}
+.pane-head .pt{font-family:var(--mono);font-size:10px;letter-spacing:1px;color:var(--accent);text-transform:uppercase;}
+.pane-head .pd{font-size:9.5px;color:var(--sub);}
+.pane-head .alpha-tag{margin-left:auto;font-family:var(--mono);font-size:9.5px;letter-spacing:.5px;
+  padding:3px 8px;border:1px solid var(--line);color:var(--noise);}
+.pane-head .alpha-tag.rising{border-color:var(--memory);color:var(--memory);}
+.canvas-wrap{flex:1;min-height:0;position:relative;display:flex;flex-direction:column;}
+canvas{display:block;width:100%;height:100%;}
 
-  .btn{
-    padding:8px 11px;border-radius:9px;font-size:12.5px;font-weight:700;cursor:pointer;
-    border:1px solid var(--border-2);background:var(--card);color:var(--ink-2);
-    box-shadow:var(--shadow-sm);transition:transform .1s ease,box-shadow .1s ease;
-    text-align:center;font-family:inherit;
-  }
-  .btn:hover{box-shadow:var(--shadow-md);}
-  .btn:active{transform:translateY(1px);}
-  .lang-btn{margin-top:auto;}
-
-  /* ---------------- Main ---------------- */
-  .game-main{
-    flex:1;height:100vh;display:flex;flex-direction:column;position:relative;
-    padding:16px 22px;overflow:hidden;gap:11px;
-  }
-  .hud{
-    align-self:stretch;
-    background:var(--card);border:1px solid var(--border);border-radius:10px;
-    padding:9px 14px;box-shadow:var(--shadow);font-size:13px;color:var(--sub);
-    min-height:20px;line-height:1.45;flex-shrink:0;
-  }
-  .hud b{color:var(--robotics);}
-  .hud.good{border-color:var(--good);color:var(--good);background:var(--good-soft);}
-  .hud.good b{color:var(--good);}
-  .hud.warn{border-color:var(--warn);color:var(--warn);background:var(--warn-soft);}
-  .hud.warn b{color:var(--warn);}
-
-  /* scope row: waveform + spectrum side by side, impedance meter */
-  .scope-row{
-    flex:1;min-height:0;display:flex;gap:12px;
-  }
-  .panel{
-    background:var(--card);border:1px solid var(--border);border-radius:12px;
-    box-shadow:var(--shadow);padding:11px 14px;display:flex;flex-direction:column;min-height:0;
-  }
-  .panel-lbl{font-size:10px;font-weight:700;color:var(--sub);letter-spacing:.05em;text-transform:uppercase;margin-bottom:6px;flex-shrink:0;}
-  .panel-lbl .tag{color:var(--robotics);}
-  .wave-panel{flex:1.6;min-width:0;}
-  .wave-panel svg{flex:1;width:100%;min-height:0;display:block;}
-  .spec-panel{flex:1;min-width:0;}
-  .spec-panel svg{flex:1;width:100%;min-height:0;display:block;}
-
-  .meta-panel{width:188px;flex-shrink:0;gap:0;}
-  .meta-row{display:flex;justify-content:space-between;align-items:baseline;padding:5px 0;border-bottom:1px solid var(--hairline);}
-  .meta-row:last-child{border-bottom:0;}
-  .meta-row .k{font-size:11px;color:var(--sub);}
-  .meta-row .v{font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:700;color:var(--ink);}
-  .meta-row .v.good{color:var(--good);}
-  .meta-row .v.bad{color:var(--primary);}
-  .meta-bar{height:8px;border-radius:5px;background:var(--paper-2);overflow:hidden;border:1px solid var(--border);margin:4px 0 8px;}
-  .meta-bar i{display:block;height:100%;width:0%;border-radius:5px;background:var(--primary);transition:width .4s ease,background .4s ease;}
-  .meta-bar i.good{background:var(--good);}
-
-  /* diagnosis options */
-  .diag{
-    flex-shrink:0;background:var(--card);border:1px solid var(--border);border-radius:12px;
-    box-shadow:var(--shadow);padding:11px 14px;
-  }
-  .diag-q{font-size:12.5px;font-weight:700;color:var(--ink-2);margin-bottom:8px;}
-  .diag-q span{color:var(--robotics);}
-  .opt-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;}
-  .opt{
-    text-align:left;padding:9px 11px;border-radius:9px;cursor:pointer;
-    background:var(--paper-2);border:1px solid var(--border-2);
-    transition:transform .1s ease,box-shadow .1s ease,border-color .1s ease,background .15s ease;
-    font-family:inherit;color:var(--ink);line-height:1.3;
-  }
-  .opt:hover{transform:translateY(-1px);box-shadow:var(--shadow-md);border-color:var(--robotics);}
-  .opt .o-name{font-size:12px;font-weight:700;display:block;}
-  .opt .o-fix{font-size:10px;color:var(--sub-2);display:block;margin-top:2px;}
-  .opt.correct{border-color:var(--good);background:var(--good-soft);}
-  .opt.correct .o-fix{color:var(--good);}
-  .opt.wrong{border-color:var(--primary);background:var(--primary-soft);}
-  .opt.wrong .o-fix{color:var(--primary-ink);}
-  .opt.locked{pointer-events:none;}
-  .opt.dim{opacity:.45;}
-
-  /* award overlay */
-  .award{
-    position:absolute;inset:0;display:none;align-items:center;justify-content:center;
-    background:rgba(250,249,245,.86);backdrop-filter:blur(2px);z-index:30;
-  }
-  .award.show{display:flex;animation:fade .4s ease;}
-  @keyframes fade{from{opacity:0;}to{opacity:1;}}
-  .award-card{
-    background:var(--card);border:1px solid var(--primary-line);border-radius:16px;
-    padding:28px 36px;box-shadow:var(--shadow-lg);text-align:center;max-width:440px;
-  }
-  .award-card .seal{
-    width:74px;height:74px;margin:0 auto 14px;border-radius:50%;
-    background:var(--primary-soft);border:2px solid var(--primary);
-    display:flex;align-items:center;justify-content:center;
-    font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;color:var(--primary-ink);
-    animation:pulse 2.2s ease-in-out infinite;
-  }
-  @keyframes pulse{0%,100%{transform:scale(1);}50%{transform:scale(1.06);}}
-  .award-card h2{margin:0 0 8px;font-size:21px;color:var(--ink);}
-  .award-card p{margin:0 0 18px;font-size:13px;color:var(--sub);line-height:1.6;}
+.win-overlay{position:absolute;inset:0;background:rgba(12,10,14,.82);display:none;
+  align-items:center;justify-content:center;z-index:30;}
+.win-overlay.show{display:flex;}
+.win-card{background:var(--bg-1);border:2px solid var(--memory);padding:22px 26px;max-width:380px;
+  text-align:center;box-shadow:6px 6px 0 var(--bg-0);}
+.win-card h2{font-family:var(--mono);color:var(--memory);font-size:16px;letter-spacing:1px;margin-bottom:8px;}
+.win-card p{color:var(--sub);font-size:12px;line-height:1.65;margin-bottom:14px;}
+.win-card button{font-family:var(--mono);font-size:11px;letter-spacing:1px;padding:7px 20px;
+  background:var(--bg-2);border:1px solid var(--memory);color:var(--memory);cursor:pointer;}
 </style>
 </head>
 <body>
+<div class="wrapper">
+  <!-- -- 200px sidebar -- -->
   <aside class="game-sidebar">
     <div class="brand">
-      <span class="kicker" id="kicker">EEG · 信号质检</span>
-      <h1 id="title">信号质检台</h1>
+      <svg class="mascot" viewBox="0 0 40 40" aria-hidden="true">
+        <circle cx="20" cy="20" r="6" fill="var(--accent)"/>
+        <g stroke="var(--dendrite)" stroke-width="2" fill="none" stroke-linecap="round">
+          <path d="M20 14 L20 5 M17 8 L20 5 L23 8"/>
+          <path d="M26 20 L35 20 M32 17 L35 20 L32 23"/>
+          <path d="M20 26 L20 35 M17 32 L20 35 L23 32"/>
+          <path d="M14 20 L5 20 M8 17 L5 20 L8 23"/>
+        </g>
+        <circle cx="20" cy="5" r="2.2" fill="var(--firing)"/>
+        <circle cx="35" cy="20" r="2.2" fill="var(--firing)"/>
+        <circle cx="20" cy="35" r="2.2" fill="var(--firing)"/>
+        <circle cx="5" cy="20" r="2.2" fill="var(--firing)"/>
+      </svg>
+      <div class="txt">
+        <div class="kicker">NRO-20</div>
+        <div class="name" id="brandName">Spark 录制台</div>
+      </div>
     </div>
 
-    <div class="progress-box">
-      <div class="lbl" id="progLbl">已诊断</div>
-      <div class="count mono"><span id="progCount">0</span> / 5</div>
-      <div class="pbar"><i id="progBar"></i></div>
+    <div class="task-box">
+      <h3 id="taskH">Mission</h3>
+      <p id="taskP">调三个旋钮，让信号干净、闭眼时 alpha 从噪声里清晰升起。</p>
     </div>
 
-    <div class="case-lbl" id="caseLbl">5 段录到的信号</div>
-    <div class="case-list" id="caseList"></div>
+    <div class="knobs">
+      <div class="knob">
+        <div class="lab"><span id="k1L">电极接触压力</span><span class="val" id="k1V">--</span></div>
+        <input type="range" id="k1" min="0" max="100" step="1" value="20"/>
+        <div class="hint" id="k1H">太松阻抗高，全是噪声。</div>
+      </div>
+      <div class="knob">
+        <div class="lab"><span id="k2L">50Hz 工频陷波</span><span class="val" id="k2V">OFF</span></div>
+        <div class="toggle-row">
+          <button class="toggle-btn" id="notchOff" data-on="0">OFF</button>
+          <button class="toggle-btn on" id="notchOn" data-on="1">ON</button>
+        </div>
+        <div class="hint" id="k2H">不开陷波，50Hz 工频盖住 alpha。</div>
+      </div>
+      <div class="knob">
+        <div class="lab"><span id="k3L">坐姿放松度</span><span class="val" id="k3V">--</span></div>
+        <input type="range" id="k3" min="0" max="100" step="1" value="25"/>
+        <div class="hint" id="k3H">紧张会有肌电污染。</div>
+      </div>
+    </div>
 
-    <button class="btn lang-btn" id="langBtn">EN / 中</button>
+    <div class="quality">
+      <h3 id="qH">Signal Quality</h3>
+      <div class="q-row"><span class="ql" id="qImpL">阻抗</span><span class="qv" id="qImpV">--</span></div>
+      <div class="q-bar"><div class="fill" id="qImpBar"></div></div>
+      <div class="q-row" style="margin-top:6px"><span class="ql" id="qSnrL">信噪比</span><span class="qv" id="qSnrV">--</span></div>
+      <div class="q-bar"><div class="fill" id="qSnrBar"></div></div>
+    </div>
+
+    <div class="spacer"></div>
+    <button class="lang-btn" id="langBtn">EN</button>
   </aside>
 
+  <!-- -- main -- -->
   <main class="game-main">
-    <div class="hud" id="hud">挑一段信号，看波形、阻抗、频谱，判断「这段能用吗？问题是什么？」</div>
-
-    <div class="scope-row">
-      <div class="panel wave-panel">
-        <div class="panel-lbl">时域波形 · <span class="tag" id="waveCh">CH1 (O1)</span> · 2 s</div>
-        <svg id="wave" viewBox="0 0 600 220" preserveAspectRatio="none" aria-label="waveform">
-          <line x1="0" y1="110" x2="600" y2="110" stroke="var(--hairline)" stroke-width="1"></line>
-          <path id="wavePath" d="M0 110 L600 110" fill="none" stroke="var(--sub-2)" stroke-width="2"></path>
-        </svg>
+    <div class="head-strip">
+      <div>
+        <div class="title" id="mTitle">脑电录制台 · 闭眼出 alpha</div>
+        <div class="sub" id="mSub">调出可靠录制配置，看 8–12Hz alpha 节律升起</div>
       </div>
-
-      <div class="panel spec-panel">
-        <div class="panel-lbl">频谱 · <span class="tag">0–60 Hz</span></div>
-        <svg id="spec" viewBox="0 0 320 220" preserveAspectRatio="none" aria-label="spectrum">
-          <line x1="0" y1="200" x2="320" y2="200" stroke="var(--border)" stroke-width="1"></line>
-          <g id="specBars"></g>
-          <g id="specAxis"></g>
-        </svg>
-      </div>
-
-      <div class="panel meta-panel">
-        <div class="panel-lbl">电极读数</div>
-        <div class="meta-row"><span class="k" id="impK">阻抗</span><span class="v mono" id="impV">—</span></div>
-        <div class="meta-bar"><i id="impBar"></i></div>
-        <div class="meta-row"><span class="k" id="rangeK">幅度峰峰</span><span class="v mono" id="rangeV">—</span></div>
-        <div class="meta-bar"><i id="rangeBar"></i></div>
-        <div class="meta-row"><span class="k" id="hfK">高频占比</span><span class="v mono" id="hfV">—</span></div>
-        <div class="meta-bar"><i id="hfBar"></i></div>
-        <div class="meta-row"><span class="k" id="lineK">50 Hz 工频</span><span class="v mono" id="lineV">—</span></div>
-        <div class="meta-bar"><i id="lineBar"></i></div>
-      </div>
+      <div class="status" id="statusPill">配置中…</div>
     </div>
 
-    <div class="diag">
-      <div class="diag-q" id="diagQ">诊断：这段信号<span>怎么了</span>？该怎么处理？</div>
-      <div class="opt-grid" id="optGrid"></div>
-    </div>
-
-    <div class="award" id="award">
-      <div class="award-card">
-        <div class="seal mono">QC PASS</div>
-        <h2 id="awTitle">信号质检员</h2>
-        <p id="awBody">5 段信号全部诊断正确。你已经能从波形、阻抗、频谱里读出工频污染、电极松动、肌电、运动伪迹——这正是每次录制开工前必做的质检。</p>
-        <button class="btn" id="awBtn">再练一遍</button>
+    <div class="panes">
+      <div class="pane wave">
+        <div class="pane-head">
+          <span class="pt">Raw EEG</span>
+          <span class="pd" id="waveDesc">原始波形（时域）</span>
+          <span class="alpha-tag" id="eyeTag">睁眼</span>
+        </div>
+        <div class="canvas-wrap"><canvas id="waveCanvas"></canvas></div>
+      </div>
+      <div class="pane spec">
+        <div class="pane-head">
+          <span class="pt">Spectrum</span>
+          <span class="pd" id="specDesc">频谱（频域），找 alpha 峰</span>
+          <span class="alpha-tag" id="alphaTag">alpha: --</span>
+        </div>
+        <div class="canvas-wrap">
+          <canvas id="specCanvas"></canvas>
+          <div class="win-overlay" id="winOverlay">
+            <div class="win-card">
+              <h2 id="winTitle">看见了 alpha 升起</h2>
+              <p id="winBody">配置干净后，闭上眼，8–12Hz 处的金色峰从噪声里清晰升起 —— 这就是大脑「待机」的 alpha 节律。</p>
+              <button id="winBtn">重新调试</button>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   </main>
+</div>
 
 <script>
 (function(){
-  "use strict";
-  var LANG='cn';
-
-  // ---- 5 段信号 case 定义 ----
-  // diag: 正确诊断 id; opts 里每个 case 共用同一套 5 个诊断选项
-  var CASES=[
-    {id:'good',  diag:'ok',     imp:5,   range:55,  hf:8,  line:4,  wkind:'alpha'},
-    {id:'mains', diag:'mains',  imp:6,   range:120, hf:30, line:96, wkind:'mains'},
-    {id:'loose', diag:'loose',  imp:210, range:240, hf:55, line:60, wkind:'loose'},
-    {id:'emg',   diag:'emg',    imp:7,   range:180, hf:92, line:10, wkind:'emg'},
-    {id:'motion',diag:'motion', imp:8,   range:95,  hf:12, line:8,  wkind:'motion'}
-  ];
-
-  // 诊断选项 (5 选 1)
-  var OPTIONS=['ok','mains','loose','emg','motion'];
-
-  var I18N={
-    kicker:{cn:'EEG · 信号质检',en:'EEG · Signal QC'},
-    title:{cn:'信号质检台',en:'Signal QC Bench'},
-    progLbl:{cn:'已诊断',en:'Diagnosed'},
-    caseLbl:{cn:'5 段录到的信号',en:'5 recorded clips'},
-    langBtn:{cn:'EN / 中',en:'中 / EN'},
-    waveCh:{cn:'CH1 (O1)',en:'CH1 (O1)'},
-    impK:{cn:'阻抗',en:'Impedance'},
-    rangeK:{cn:'幅度峰峰',en:'Pk-Pk amp'},
-    hfK:{cn:'高频占比',en:'High-freq %'},
-    lineK:{cn:'50 Hz 工频',en:'50 Hz mains'},
-    diagQ:{cn:'诊断：这段信号<span>怎么了</span>？该怎么处理？',en:'Diagnose: what is <span>wrong</span> with this clip? How to fix it?'},
-    awTitle:{cn:'信号质检员',en:'Signal QC Inspector'},
-    awBody:{cn:'5 段信号全部诊断正确。你已经能从波形、阻抗、频谱里读出工频污染、电极松动、肌电、运动伪迹——这正是每次录制开工前必做的质检。',
-            en:'All 5 clips diagnosed correctly. You can now read mains noise, loose electrodes, EMG and motion artifacts straight off the waveform, impedance and spectrum — exactly the QC check before every recording session.'},
-    awBtn:{cn:'再练一遍',en:'Play again'},
-
-    // case 侧栏名 + 副标题
-    c_good:{cn:'信号 A',en:'Clip A'},     cs_good:{cn:'闭眼静坐',en:'eyes closed'},
-    c_mains:{cn:'信号 B',en:'Clip B'},    cs_mains:{cn:'尖锐周期纹',en:'sharp ripple'},
-    c_loose:{cn:'信号 C',en:'Clip C'},    cs_loose:{cn:'忽大忽小',en:'erratic'},
-    c_emg:{cn:'信号 D',en:'Clip D'},      cs_emg:{cn:'高频毛刺',en:'fuzzy'},
-    c_motion:{cn:'信号 E',en:'Clip E'},   cs_motion:{cn:'大幅漂移',en:'baseline drift'},
-
-    // 诊断选项 name + fix
-    o_ok:{cn:'可用 · 干净 alpha',en:'Usable · clean alpha'},
-    of_ok:{cn:'阻抗低、闭眼 10 Hz 清晰，直接用',en:'low Z, clear 10 Hz, keep it'},
-    o_mains:{cn:'工频污染',en:'Mains noise'},
-    of_mains:{cn:'关附近电器 / 加 50 Hz 陷波',en:'turn off devices / 50 Hz notch'},
-    o_loose:{cn:'电极松动',en:'Loose electrode'},
-    of_loose:{cn:'阻抗高，重涂导电膏压紧',en:'high Z, re-gel & press'},
-    o_emg:{cn:'肌电干扰',en:'EMG (muscle)'},
-    of_emg:{cn:'放松下巴 / 别咬牙',en:'relax jaw, unclench'},
-    o_motion:{cn:'运动伪迹',en:'Motion artifact'},
-    of_motion:{cn:'坐稳别动，重录一段',en:'sit still, re-record'},
-
-    // HUD 提示 (选某段后)
-    h_intro:{cn:'挑一段信号，看波形、阻抗、频谱，判断「这段能用吗？问题是什么？」',
-             en:'Pick a clip, read the waveform, impedance & spectrum, then judge: usable? what is wrong?'},
-    h_pick:{cn:'看 <b>{name}</b> 的三块面板：波形规律吗？阻抗高吗？频谱哪里冒尖？',
-            en:'Inspect <b>{name}</b>: is the waveform regular? impedance high? where does the spectrum spike?'},
-    h_right:{cn:'对了！{why}',en:'Correct! {why}'},
-    h_wrong:{cn:'再看看。{hint}',en:'Look again. {hint}'},
-
-    // 每段诊断正确后的解释
-    w_ok:{cn:'阻抗 5 kΩ、峰峰 55 µV、频谱在 10 Hz 一个干净的 alpha 峰，没有 50 Hz 尖峰也没有满频段毛刺——这段直接能用。',
-          en:'Z = 5 kΩ, 55 µV pk-pk, a clean 10 Hz alpha peak, no 50 Hz spike and no broadband fuzz — usable as is.'},
-    w_mains:{cn:'频谱在 50 Hz 一根又高又窄的尖峰，波形是规律的快速纹波——这是工频污染，关掉附近电器或加 50 Hz 陷波滤波器。',
-             en:'A tall narrow spike at 50 Hz and regular fast ripple in the wave — that is mains noise. Turn off nearby devices or apply a 50 Hz notch filter.'},
-    w_loose:{cn:'阻抗飙到 210 kΩ，幅度忽大忽小没有稳定基线——电极没贴牢，重新涂导电膏压紧再录。',
-             en:'Impedance jumped to 210 kΩ and the amplitude swings erratically — the electrode is not seated. Re-apply gel, press it down, record again.'},
-    w_emg:{cn:'高频占比 92%、频谱在 20 Hz 以上一大片杂乱能量——这是咬牙/绷脸的肌电。让受试者放松下巴，伪迹就消失。',
-           en:'High-freq share 92% and broadband energy above 20 Hz — that is EMG from a clenched jaw. Have the subject relax and it clears.'},
-    w_motion:{cn:'波形整体大幅缓慢漂移、基线跑偏，频谱能量堆在很低频——典型运动伪迹。让受试者坐稳别动，重录这一段。',
-              en:'Slow large baseline drift and energy piled at very low frequency — classic motion artifact. Ask the subject to sit still and re-record.'},
-
-    // 选错时的引导 hint (按真实诊断给提示)
-    hint_good:{cn:'这段其实没毛病：阻抗低、频谱只有一个干净的 10 Hz 峰。',en:'This clip is actually fine: low Z and a single clean 10 Hz peak.'},
-    hint_mains:{cn:'注意频谱里那根孤零零的 50 Hz 高尖峰。',en:'Notice the lone tall spike at 50 Hz in the spectrum.'},
-    hint_loose:{cn:'注意阻抗读数——它高得离谱。',en:'Check the impedance reading — it is way too high.'},
-    hint_emg:{cn:'注意高频占比和 20 Hz 以上那片杂乱能量。',en:'Look at the high-freq share and the mess above 20 Hz.'},
-    hint_motion:{cn:'注意波形整体的大幅缓慢漂移。',en:'Look at the slow large baseline drift across the whole wave.'}
-  };
-  function t(k){return (I18N[k]&&I18N[k][LANG])||(I18N[k]&&I18N[k].en)||k;}
-  function caseName(id){return t('c_'+id);}
-
-  // ---- state ----
-  var sel=0;                 // 当前选中的 case 索引
-  var solved={};             // solved[caseId]=true
-  var won=false;
-  var waveTimer=null;
-
-  var caseListEl=document.getElementById('caseList');
-  var optGridEl=document.getElementById('optGrid');
-
-  // ===== SVG tick (sidebar solved marker) =====
-  function tickSVG(){
-    return '<svg class="seg-tick" viewBox="0 0 16 16"><path d="M3 8 L7 12 L13 4" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+"use strict";
+var stateLang='cn';
+var I18N={
+  cn:{
+    brand:'Spark 录制台', taskH:'任务', task:'调三个旋钮，让信号干净、闭眼时 alpha 从噪声里清晰升起。',
+    k1L:'电极接触压力', k3L:'坐姿放松度', k2L:'50Hz 工频陷波',
+    k1H:'太松阻抗高，全是噪声。', k2H:'不开陷波，50Hz 工频盖住 alpha。', k3H:'紧张会有肌电污染。',
+    qH:'信号质量', qImpL:'阻抗', qSnrL:'信噪比',
+    mTitle:'脑电录制台 · 闭眼出 alpha', mSub:'调出可靠录制配置，看 8–12Hz alpha 节律升起',
+    waveDesc:'原始波形（时域）', specDesc:'频谱（频域），找 alpha 峰',
+    statusConfig:'配置中…', statusNoisy:'信号太脏，看不见 alpha', statusClose:'快了，再调干净一点',
+    statusWin:'alpha 清晰升起！', eyeOpen:'睁眼', eyeClose:'闭眼',
+    winTitle:'看见了 alpha 升起', winBody:'配置干净后，闭上眼，8–12Hz 处的金色峰从噪声里清晰升起 —— 这就是大脑「待机」的 alpha 节律。',
+    winBtn:'重新调试', lang:'EN',
+    impHigh:'高(差)', impMid:'偏高', impLow:'低(好)', snrLow:'低', snrMid:'中', snrHigh:'高',
+    alphaNone:'被噪声淹没', alphaWeak:'隐约', alphaClear:'清晰'
+  },
+  en:{
+    brand:'Spark Rig', taskH:'Mission', task:'Tune three knobs so the signal is clean and alpha rises clearly from noise when eyes close.',
+    k1L:'Electrode Contact', k3L:'Relaxation', k2L:'50Hz Notch Filter',
+    k1H:'Too loose = high impedance, all noise.', k2H:'No notch = 50Hz mains buries alpha.', k3H:'Tension adds EMG contamination.',
+    qH:'Signal Quality', qImpL:'Impedance', qSnrL:'SNR',
+    mTitle:'EEG Recording Rig · Eyes-closed alpha', mSub:'Dial in a reliable config, watch the 8-12Hz alpha rhythm rise',
+    waveDesc:'Raw waveform (time domain)', specDesc:'Spectrum (freq domain), find alpha peak',
+    statusConfig:'Configuring...', statusNoisy:'Signal too dirty, alpha invisible', statusClose:'Almost, clean it up a bit more',
+    statusWin:'Alpha rises clearly!', eyeOpen:'Eyes open', eyeClose:'Eyes closed',
+    winTitle:'You saw alpha rise', winBody:'With a clean config, close your eyes and the golden peak at 8-12Hz rises clearly from noise - the brain idling alpha rhythm.',
+    winBtn:'Re-tune', lang:'CN',
+    impHigh:'High(bad)', impMid:'High', impLow:'Low(good)', snrLow:'Low', snrMid:'Mid', snrHigh:'High',
+    alphaNone:'Buried in noise', alphaWeak:'Faint', alphaClear:'Clear'
   }
+};
 
-  // ===== sidebar case list =====
-  function renderCaseList(){
-    caseListEl.innerHTML='';
-    CASES.forEach(function(c,i){
-      var btn=document.createElement('button');
-      btn.className='case-btn'+(i===sel?' active':'')+(solved[c.id]?' solved':'');
-      btn.setAttribute('data-idx',i);
-      btn.innerHTML=
-        '<span class="seg-no mono">'+(i+1)+'</span>'+
-        '<span class="seg-txt"><span class="seg-name">'+caseName(c.id)+'</span>'+
-        '<span class="seg-sub">'+t('cs_'+c.id)+'</span></span>'+
-        tickSVG();
-      btn.addEventListener('click',function(){selectCase(i);});
-      caseListEl.appendChild(btn);
-    });
+// -- config state (the knobs) --
+var cfg={ contact:20, notch:1, relax:25 };
+var eyesClosed=false;      // 自动每 4s 切睁眼/闭眼
+var won=false;
+var t=0;
+
+var $=function(id){return document.getElementById(id);};
+function L(){return I18N[stateLang];}
+
+// -- 计算信号质量 (确定性物理模型) --
+function deriveMetrics(){
+  var c=cfg.contact;
+  // 阻抗 kΩ: 接触差 -> 很高, 接触好 -> 低
+  var impedance = c>=70 ? (10 - (c-70)/30*5) : (90 - c/70*78);
+  impedance = Math.max(3, impedance);
+  // 工频噪声幅度: 没开陷波时巨大
+  var mains = cfg.notch ? 4 : 55;
+  // 肌电(EMG)污染: 放松度低 -> 高
+  var emg = (100 - cfg.relax) * 0.6;
+  // 接触噪声: 阻抗越高噪声越大
+  var contactNoise = impedance * 0.9;
+  // alpha 真实功率: 闭眼且放松时强
+  var alphaPower = eyesClosed ? (30 + cfg.relax*0.4) : 6;
+  var totalNoise = mains + emg + contactNoise + 6;
+  var snr = alphaPower / totalNoise;
+  return {impedance:impedance, mains:mains, emg:emg, contactNoise:contactNoise,
+          alphaPower:alphaPower, totalNoise:totalNoise, snr:snr};
+}
+
+// 胜利判定: 闭眼态 SNR 足够 + 阻抗低 + 开陷波 + 放松
+function checkWin(m){
+  return eyesClosed && m.snr>=1.2 && m.impedance<=12 && cfg.notch===1 && cfg.relax>=60;
+}
+
+function updateReadouts(){
+  var m=deriveMetrics();
+  var l=L();
+  $('k1V').textContent = cfg.contact;
+  $('k1V').className = 'val' + (cfg.contact>=70 ? ' good' : cfg.contact<40 ? ' warn' : '');
+  $('k3V').textContent = cfg.relax;
+  $('k3V').className = 'val' + (cfg.relax>=60 ? ' good' : cfg.relax<40 ? ' warn' : '');
+  $('k2V').textContent = cfg.notch ? 'ON' : 'OFF';
+  $('k2V').className = 'val' + (cfg.notch ? ' good' : ' warn');
+  var impTxt = m.impedance>40 ? l.impHigh : m.impedance>15 ? l.impMid : l.impLow;
+  $('qImpV').textContent = m.impedance.toFixed(0)+'kΩ '+impTxt;
+  $('qImpV').className = 'qv ' + (m.impedance<=12?'ok':m.impedance>40?'bad':'');
+  $('qImpBar').style.width = Math.max(4,Math.min(100, 100-m.impedance))+'%';
+  $('qImpBar').style.background = m.impedance<=12?'var(--memory)':m.impedance>40?'var(--bad)':'var(--noise)';
+  var snrPct = Math.max(4,Math.min(100, m.snr/2*100));
+  var snrTxt = m.snr<0.5 ? l.snrLow : m.snr<1.2 ? l.snrMid : l.snrHigh;
+  $('qSnrV').textContent = m.snr.toFixed(2)+' '+snrTxt;
+  $('qSnrV').className = 'qv ' + (m.snr>=1.2?'ok':m.snr<0.5?'bad':'');
+  $('qSnrBar').style.width = snrPct+'%';
+  $('qSnrBar').style.background = m.snr>=1.2?'var(--memory)':m.snr<0.5?'var(--bad)':'var(--noise)';
+  $('eyeTag').textContent = eyesClosed ? l.eyeClose : l.eyeOpen;
+  var alphaVisible = eyesClosed && m.snr>=1.2;
+  var alphaFaint = eyesClosed && m.snr>=0.6 && m.snr<1.2;
+  var atag = $('alphaTag');
+  if(alphaVisible){ atag.textContent='alpha: '+l.alphaClear; atag.classList.add('rising'); }
+  else if(alphaFaint){ atag.textContent='alpha: '+l.alphaWeak; atag.classList.remove('rising'); }
+  else { atag.textContent='alpha: '+l.alphaNone; atag.classList.remove('rising'); }
+  var pill=$('statusPill');
+  if(won){ pill.textContent=l.statusWin; pill.className='status win'; }
+  else if(checkWin(m)){ /* 下一帧触发胜利 */ }
+  else if(m.snr<0.5){ pill.textContent=l.statusNoisy; pill.className='status bad'; }
+  else if(m.snr<1.2){ pill.textContent=l.statusClose; pill.className='status'; }
+  else { pill.textContent=l.statusConfig; pill.className='status'; }
+  return m;
+}
+
+var waveC=$('waveCanvas'), waveCtx=waveC.getContext('2d');
+var specC=$('specCanvas'), specCtx=specC.getContext('2d');
+function fit(cv){
+  var r=cv.parentElement.getBoundingClientRect();
+  var dpr=window.devicePixelRatio||1;
+  cv.width=Math.max(2,Math.floor(r.width*dpr));
+  cv.height=Math.max(2,Math.floor(r.height*dpr));
+  var ctx=cv.getContext('2d'); ctx.setTransform(dpr,0,0,dpr,0,0);
+  return {w:r.width,h:r.height};
+}
+function cssVar(n){return getComputedStyle(document.documentElement).getPropertyValue(n).trim();}
+
+function noiseAt(seed){
+  var x=Math.sin(seed*12.9898)*43758.5453;
+  return (x-Math.floor(x))*2-1;
+}
+
+function drawWave(m){
+  var d=fit(waveC), w=d.w, h=d.h, ctx=waveCtx;
+  ctx.clearRect(0,0,w,h);
+  ctx.fillStyle=cssVar('--bg-0'); ctx.fillRect(0,0,w,h);
+  ctx.strokeStyle=cssVar('--line'); ctx.lineWidth=1;
+  ctx.beginPath(); ctx.moveTo(0,h/2); ctx.lineTo(w,h/2); ctx.stroke();
+  var amp=h*0.36;
+  var alphaA = m.alphaPower/100;
+  var mainsA = m.mains/100;
+  var emgA   = m.emg/100;
+  var cnA    = m.contactNoise/100;
+  ctx.lineWidth=1.6;
+  ctx.strokeStyle = (eyesClosed && m.snr>=1.2) ? cssVar('--memory') : cssVar('--synaptic');
+  ctx.beginPath();
+  for(var x=0;x<w;x++){
+    var ph=x/w*8*Math.PI;
+    var sig=0;
+    sig += alphaA*Math.sin(ph + t*0.08);
+    sig += mainsA*Math.sin(ph*5 + t*0.4);
+    sig += emgA*noiseAt(x*0.7 + t)*0.9;
+    sig += cnA*noiseAt(x*1.9 + t*1.3)*0.8;
+    var y=h/2 - sig*amp;
+    if(x===0)ctx.moveTo(x,y); else ctx.lineTo(x,y);
   }
+  ctx.stroke();
+}
 
-  // ===== 诊断选项 =====
-  function renderOptions(){
-    optGridEl.innerHTML='';
-    var c=CASES[sel];
-    var done=!!solved[c.id];
-    OPTIONS.forEach(function(oid){
-      var op=document.createElement('button');
-      op.className='opt';
-      op.setAttribute('data-oid',oid);
-      op.innerHTML='<span class="o-name">'+t('o_'+oid)+'</span>'+
-                   '<span class="o-fix">'+t('of_'+oid)+'</span>';
-      if(done){
-        op.classList.add('locked');
-        if(oid===c.diag)op.classList.add('correct');
-        else op.classList.add('dim');
-      }else{
-        op.addEventListener('click',function(){chooseOption(oid,op);});
-      }
-      optGridEl.appendChild(op);
-    });
-  }
-
-  function chooseOption(oid,el){
-    var c=CASES[sel];
-    if(solved[c.id]||won)return;
-    if(oid===c.diag){
-      // 对
-      solved[c.id]=true;
-      el.classList.add('correct','locked');
-      // 锁定整组, 标灰其它
-      optGridEl.querySelectorAll('.opt').forEach(function(o){
-        o.classList.add('locked');
-        if(o!==el)o.classList.add('dim');
-      });
-      setHud(t('h_right').replace('{why}',t('w_'+c.diag)),'good');
-      renderCaseList();
-      updateProgress();
-      checkWin();
-    }else{
-      // 错: 短暂标红, 给针对正确诊断的提示
-      el.classList.add('wrong');
-      setHud(t('h_wrong').replace('{hint}',t('hint_'+c.diag)),'warn');
-      setTimeout(function(){el.classList.remove('wrong');},900);
-    }
-  }
-
-  // ===== 选 case: 刷新所有面板 =====
-  function selectCase(i){
-    sel=i;
-    var c=CASES[sel];
-    renderCaseList();
-    renderOptions();
-    drawWave(c);
-    drawSpectrum(c);
-    drawMeta(c);
-    if(!solved[c.id]&&!won){
-      setHud(t('h_pick').replace('{name}',caseName(c.id)),'');
-    }else if(solved[c.id]){
-      setHud(t('h_right').replace('{why}',t('w_'+c.diag)),'good');
-    }
-  }
-
-  // ===== HUD =====
-  function setHud(html,cls){var h=document.getElementById('hud');h.innerHTML=html;h.className='hud'+(cls?(' '+cls):'');}
-
-  // ===== progress =====
-  function updateProgress(){
-    var n=Object.keys(solved).length;
-    document.getElementById('progCount').textContent=n;
-    document.getElementById('progBar').style.width=(n/CASES.length*100)+'%';
-  }
-
-  function checkWin(){
-    if(Object.keys(solved).length>=CASES.length&&!won){
-      won=true;
-      setTimeout(function(){document.getElementById('award').classList.add('show');},700);
-    }
-  }
-
-  // ===== 波形绘制 (按 wkind 生成不同形态, 动起来) =====
-  function wavePath(kind,phase){
-    var pts=[];
-    var mid=110;
-    for(var x=0;x<=600;x+=4){
-      var tt=x/600;
-      var y=mid;
-      if(kind==='alpha'){
-        // 干净 10Hz alpha, 小幅
-        y=mid - Math.sin(tt*Math.PI*2*10 + phase)*48
-              - (Math.random()-0.5)*5;
-      }else if(kind==='mains'){
-        // 底层缓 alpha + 强 50Hz 快速纹波
-        y=mid - Math.sin(tt*Math.PI*2*10 + phase)*18
-              - Math.sin(tt*Math.PI*2*50 + phase*5)*46
-              - (Math.random()-0.5)*4;
-      }else if(kind==='loose'){
-        // 阻抗高: 忽大忽小, 不稳定基线 + 偶发跳变
-        var burst=Math.sin(tt*Math.PI*2*2 + phase*0.3);
-        var amp=42 + burst*36;
-        var jump=(Math.sin(tt*Math.PI*9 + phase)>0.85)?40:0;
-        y=mid - Math.sin(tt*Math.PI*2*9 + phase)*amp
-              - jump - (Math.random()-0.5)*30;
-      }else if(kind==='emg'){
-        // 肌电: 满频段高频毛刺, 幅度大
-        y=mid - Math.sin(tt*Math.PI*2*10 + phase)*16
-              - (Math.random()-0.5)*86
-              - Math.sin(tt*Math.PI*2*38 + phase*4)*22;
-      }else if(kind==='motion'){
-        // 运动: 大幅缓慢漂移基线 + 小 alpha
-        var drift=Math.sin(tt*Math.PI*2*0.8 + phase*0.4)*62
-                + Math.sin(tt*Math.PI*1.3 + phase*0.2)*26;
-        y=mid - drift - Math.sin(tt*Math.PI*2*10 + phase)*14
-              - (Math.random()-0.5)*6;
-      }
-      if(y<8)y=8; if(y>212)y=212;
-      pts.push((x===0?'M':'L')+x+' '+y.toFixed(1));
-    }
-    return pts.join(' ');
-  }
-
-  function waveColor(kind){
-    if(kind==='alpha')return 'var(--good)';
-    return 'var(--primary)';
-  }
-
-  function drawWave(c){
-    var path=document.getElementById('wavePath');
-    path.setAttribute('stroke',waveColor(c.wkind));
-    var ph=0;
-    if(waveTimer)clearInterval(waveTimer);
-    // setInterval OK here: this is a game (F6 game), not a static infographic
-    waveTimer=setInterval(function(){
-      ph+=0.45;
-      path.setAttribute('d',wavePath(c.wkind,ph));
-    },120);
-    path.setAttribute('d',wavePath(c.wkind,0));
-  }
-
-  // ===== 频谱绘制 (条形, x = 0..60Hz, 凸显各 case 特征) =====
-  function specProfile(c){
-    // 20 个频段 (每段 3Hz), 返回 0..1 高度
-    var bins=[];
-    for(var i=0;i<20;i++){
-      var f=i*3+1.5; // 中心频率
-      var h=0;
-      // 基础 1/f 背景
-      h += 0.18/(1+f*0.08);
-      // alpha 峰 (8-12Hz) — 除 loose/emg 弱化外都有
-      var alphaPk=Math.exp(-Math.pow((f-10)/2.2,2));
-      if(c.wkind==='alpha')h+=alphaPk*0.92;
-      else if(c.wkind==='mains')h+=alphaPk*0.30;
-      else if(c.wkind==='motion')h+=alphaPk*0.25;
-      else h+=alphaPk*0.18;
-      // 50Hz 尖峰
-      if(c.wkind==='mains')h+=Math.exp(-Math.pow((f-50)/2.0,2))*0.98;
-      // EMG: 20Hz 以上一大片
-      if(c.wkind==='emg'&&f>=18)h+=0.20+ (f-18)*0.012 + (Math.sin(f)*0.05);
-      // loose: 宽带杂乱
-      if(c.wkind==='loose')h+=0.22+ (Math.sin(f*1.7)*0.12);
-      // motion: 极低频堆积
-      if(c.wkind==='motion'&&f<6)h+=(6-f)*0.16;
-      bins.push(Math.min(1,h));
-    }
-    return bins;
-  }
-
-  function drawSpectrum(c){
-    var g=document.getElementById('specBars');
-    var ax=document.getElementById('specAxis');
-    g.innerHTML='';ax.innerHTML='';
-    var bins=specProfile(c);
-    var n=bins.length, W=320, H=200, gap=2;
-    var bw=(W-gap*(n+1))/n;
-    bins.forEach(function(v,i){
-      var bh=v*(H-12);
-      var x=gap+i*(bw+gap);
-      var y=H-bh;
-      var f=i*3+1.5;
-      var col='var(--robotics)';
-      // 高亮该 case 的关键频段
-      if(c.wkind==='mains'&&f>=46&&f<=53)col='var(--primary)';
-      else if(c.wkind==='emg'&&f>=18)col='var(--primary)';
-      else if(c.wkind==='loose')col='var(--warn)';
-      else if(c.wkind==='motion'&&f<6)col='var(--primary)';
-      else if(c.wkind==='alpha'&&f>=8&&f<=12)col='var(--good)';
-      var r=document.createElementNS('http://www.w3.org/2000/svg','rect');
-      r.setAttribute('x',x.toFixed(1));r.setAttribute('y',y.toFixed(1));
-      r.setAttribute('width',bw.toFixed(1));r.setAttribute('height',bh.toFixed(1));
-      r.setAttribute('rx','1.5');r.setAttribute('fill',col);
-      g.appendChild(r);
-    });
-    // x 轴刻度: 10 / 50 Hz 标注
-    [10,30,50].forEach(function(fz){
-      var i=Math.round((fz-1.5)/3);
-      var x=gap+i*(bw+gap)+bw/2;
-      var tx=document.createElementNS('http://www.w3.org/2000/svg','text');
-      tx.setAttribute('x',x.toFixed(1));tx.setAttribute('y','214');
-      tx.setAttribute('text-anchor','middle');
-      tx.setAttribute('font-size','10');tx.setAttribute('fill','var(--sub-2)');
-      tx.setAttribute('font-family','JetBrains Mono, monospace');
-      tx.textContent=fz+'Hz';
-      ax.appendChild(tx);
-    });
-  }
-
-  // ===== 电极读数面板 =====
-  function drawMeta(c){
-    // 阻抗 (kΩ)
-    var impEl=document.getElementById('impV'), impBar=document.getElementById('impBar');
-    impEl.textContent=c.imp+' kΩ';
-    var impBad=c.imp>50;
-    impEl.className='v mono '+(impBad?'bad':'good');
-    impBar.style.width=Math.min(100,c.imp/250*100)+'%';
-    impBar.className=impBad?'':'good';
-
-    // 幅度峰峰 (µV)
-    var rEl=document.getElementById('rangeV'), rBar=document.getElementById('rangeBar');
-    rEl.textContent=c.range+' µV';
-    var rBad=c.range>140;
-    rEl.className='v mono '+(rBad?'bad':'good');
-    rBar.style.width=Math.min(100,c.range/260*100)+'%';
-    rBar.className=rBad?'':'good';
-
-    // 高频占比 (%)
-    var hEl=document.getElementById('hfV'), hBar=document.getElementById('hfBar');
-    hEl.textContent=c.hf+' %';
-    var hBad=c.hf>40;
-    hEl.className='v mono '+(hBad?'bad':'good');
-    hBar.style.width=c.hf+'%';
-    hBar.className=hBad?'':'good';
-
-    // 50Hz 工频 (%)
-    var lEl=document.getElementById('lineV'), lBar=document.getElementById('lineBar');
-    lEl.textContent=c.line+' %';
-    var lBad=c.line>40;
-    lEl.className='v mono '+(lBad?'bad':'good');
-    lBar.style.width=c.line+'%';
-    lBar.className=lBad?'':'good';
-  }
-
-  // ===== i18n refresh =====
-  function refreshI18N(){
-    document.getElementById('kicker').textContent=t('kicker');
-    document.getElementById('title').textContent=t('title');
-    document.getElementById('progLbl').textContent=t('progLbl');
-    document.getElementById('caseLbl').textContent=t('caseLbl');
-    document.getElementById('langBtn').textContent=t('langBtn');
-    document.getElementById('waveCh').textContent=t('waveCh');
-    document.getElementById('impK').textContent=t('impK');
-    document.getElementById('rangeK').textContent=t('rangeK');
-    document.getElementById('hfK').textContent=t('hfK');
-    document.getElementById('lineK').textContent=t('lineK');
-    document.getElementById('diagQ').innerHTML=t('diagQ');
-    document.getElementById('awTitle').textContent=t('awTitle');
-    document.getElementById('awBody').textContent=t('awBody');
-    document.getElementById('awBtn').textContent=t('awBtn');
-    renderCaseList();
-    renderOptions();
-    var c=CASES[sel];
-    if(won||solved[c.id]){if(solved[c.id])setHud(t('h_right').replace('{why}',t('w_'+c.diag)),'good');}
-    else setHud(t('h_pick').replace('{name}',caseName(c.id)),'');
-  }
-
-  // ===== reset =====
-  function reset(){
-    sel=0;solved={};won=false;
-    document.getElementById('award').classList.remove('show');
-    updateProgress();
-    renderCaseList();
-    selectCase(0);
-    setHud(t('h_intro'),'');
-  }
-
-  // ===== wire up =====
-  document.getElementById('langBtn').addEventListener('click',function(){
-    LANG=(LANG==='cn')?'en':'cn';
-    refreshI18N();
+function drawSpec(m){
+  var d=fit(specC), w=d.w, h=d.h, ctx=specCtx;
+  ctx.clearRect(0,0,w,h);
+  ctx.fillStyle=cssVar('--bg-0'); ctx.fillRect(0,0,w,h);
+  var fmax=60, pad=30;
+  function fx(f){return pad + (f/fmax)*(w-pad-8);}
+  ctx.strokeStyle=cssVar('--line'); ctx.lineWidth=1;
+  ctx.beginPath(); ctx.moveTo(pad,h-18); ctx.lineTo(w-4,h-18); ctx.stroke();
+  ctx.fillStyle=cssVar('--sub'); ctx.font='9px JetBrains Mono,monospace';
+  [0,10,20,30,40,50,60].forEach(function(f){
+    ctx.fillText(f+'', fx(f)-5, h-5);
   });
-  document.getElementById('awBtn').addEventListener('click',reset);
+  ctx.fillStyle='rgba(212,180,80,0.10)';
+  ctx.fillRect(fx(8),0,fx(12)-fx(8),h-18);
+  ctx.fillStyle=cssVar('--memory'); ctx.font='9px JetBrains Mono,monospace';
+  ctx.fillText('alpha', fx(8)+1, 11);
+  var base=h-18;
+  function power(f){
+    var p=0;
+    p += m.alphaPower * Math.exp(-Math.pow(f-10,2)/8);
+    p += m.mains * Math.exp(-Math.pow(f-50,2)/2);
+    p += m.emg * (f>20 ? (f-20)/40 : 0) * 0.8;
+    p += (m.contactNoise+6) * (0.4 + 0.3*noiseAt(f));
+    return p;
+  }
+  var maxP=0,i;
+  for(i=0;i<=fmax;i+=0.5){ var pp=power(i); if(pp>maxP)maxP=pp; }
+  maxP=Math.max(maxP,40);
+  var alphaClear = eyesClosed && m.snr>=1.2;
+  ctx.beginPath();
+  ctx.moveTo(fx(0),base);
+  for(i=0;i<=fmax;i+=0.5){
+    var y=base - (power(i)/maxP)*(base-6);
+    ctx.lineTo(fx(i),y);
+  }
+  ctx.lineTo(fx(fmax),base); ctx.closePath();
+  ctx.fillStyle = alphaClear ? 'rgba(212,180,80,0.16)' : 'rgba(120,120,120,0.10)';
+  ctx.fill();
+  ctx.beginPath();
+  for(i=0;i<=fmax;i+=0.5){
+    var yy=base - (power(i)/maxP)*(base-6);
+    if(i===0)ctx.moveTo(fx(i),yy); else ctx.lineTo(fx(i),yy);
+  }
+  ctx.lineWidth=1.6;
+  ctx.strokeStyle = alphaClear ? cssVar('--memory') : cssVar('--noise');
+  ctx.stroke();
+  if(alphaClear){
+    var ay=base - (power(10)/maxP)*(base-6);
+    ctx.fillStyle=cssVar('--memory');
+    ctx.beginPath(); ctx.arc(fx(10),ay,4,0,Math.PI*2); ctx.fill();
+  }
+}
 
-  // ===== init =====
-  updateProgress();
-  renderCaseList();
-  selectCase(0);
-  setHud(t('h_intro'),'');
+var eyeTimer=0;
+function loop(){
+  t+=1;
+  eyeTimer+=1;
+  if(eyeTimer>=240){ eyesClosed=!eyesClosed; eyeTimer=0; }
+  var m=updateReadouts();
+  drawWave(m);
+  drawSpec(m);
+  if(!won && checkWin(m)){
+    won=true;
+    $('winOverlay').classList.add('show');
+    $('statusPill').textContent=L().statusWin;
+    $('statusPill').className='status win';
+  }
+  requestAnimationFrame(loop);
+}
+
+$('k1').addEventListener('input',function(e){ cfg.contact=parseInt(e.target.value,10); });
+$('k3').addEventListener('input',function(e){ cfg.relax=parseInt(e.target.value,10); });
+$('notchOn').addEventListener('click',function(){
+  cfg.notch=1; $('notchOn').classList.add('on'); $('notchOff').classList.remove('on');
+});
+$('notchOff').addEventListener('click',function(){
+  cfg.notch=0; $('notchOff').classList.add('on'); $('notchOn').classList.remove('on');
+});
+$('winBtn').addEventListener('click',function(){
+  won=false; $('winOverlay').classList.remove('show');
+});
+
+function applyLang(){
+  var l=L();
+  $('brandName').textContent=l.brand;
+  $('taskH').textContent=l.taskH; $('taskP').textContent=l.task;
+  $('k1L').textContent=l.k1L; $('k2L').textContent=l.k2L; $('k3L').textContent=l.k3L;
+  $('k1H').textContent=l.k1H; $('k2H').textContent=l.k2H; $('k3H').textContent=l.k3H;
+  $('qH').textContent=l.qH; $('qImpL').textContent=l.qImpL; $('qSnrL').textContent=l.qSnrL;
+  $('mTitle').textContent=l.mTitle; $('mSub').textContent=l.mSub;
+  $('waveDesc').textContent=l.waveDesc; $('specDesc').textContent=l.specDesc;
+  $('winTitle').textContent=l.winTitle; $('winBody').textContent=l.winBody; $('winBtn').textContent=l.winBtn;
+  $('langBtn').textContent=l.lang;
+}
+$('langBtn').addEventListener('click',function(){
+  stateLang = stateLang==='cn' ? 'en' : 'cn';
+  applyLang();
+});
+
+applyLang();
+updateReadouts();
+loop();
+
+// 暴露给测试钩子 (Playwright 实测核心闭环用)
+window.__rig = {
+  set:function(o){ if('contact' in o)cfg.contact=o.contact; if('notch' in o)cfg.notch=o.notch;
+    if('relax' in o)cfg.relax=o.relax; if('eyes' in o)eyesClosed=o.eyes; },
+  metrics:deriveMetrics, isWin:function(){return won;},
+  alphaClear:function(){var m=deriveMetrics();return eyesClosed && m.snr>=1.2;}
+};
 })();
 </script>
 </body>

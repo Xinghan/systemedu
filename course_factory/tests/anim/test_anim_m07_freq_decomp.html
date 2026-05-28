@@ -1,12 +1,12 @@
-<!DOCTYPE html>
-<html lang="zh-CN">
+<!doctype html>
+<html lang="zh">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>把脑波拆成快波加慢波</title>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>傅里叶分解 — 一条脑波拆成几条快慢不同的波</title>
 <style>
-  :root{
-    /* 第 1 层 — 共享深空底 (所有 26 套统一) */
+  :root {
+    /* 第 1 层 — 共享深空底 (26 套统一, 不换) */
     --bg-0: oklch(0.14 0.035 265);
     --bg-1: oklch(0.18 0.04 265);
     --bg-2: oklch(0.22 0.045 265);
@@ -17,358 +17,457 @@
     --fg-dim:  oklch(0.75 0.02 265);
     --fg-mute: oklch(0.55 0.03 265);
     --gold:    oklch(0.85 0.14 85);
+
     /* 第 2 层 — phys signature accent (sky-teal) */
-    --accent:  oklch(0.78 0.13 215);
-    /* 第 3 层 — phys 5 色 palette (themes.js Force Observatory) */
-    --field:   oklch(0.78 0.13 215);
-    --wave:    oklch(0.55 0.13 215);
-    --mass:    oklch(0.35 0.10 215);
-    --photon:  oklch(0.92 0.08 215);
-    --constant:oklch(0.85 0.14 85);
+    --phys: oklch(0.78 0.13 215);
+
+    /* 第 3 层 — phys 5 色 palette (theme_style/themes.js PHY-09 Force Observatory) */
+    --field:    oklch(0.78 0.13 215);  /* FIELD    — 复合波 / 主角 */
+    --wave:     oklch(0.55 0.13 215);  /* WAVE     — 中速分量 alpha */
+    --mass:     oklch(0.35 0.10 215);  /* MASS     — 慢分量 delta-theta */
+    --photon:   oklch(0.92 0.08 215);  /* PHOTON   — 快分量 beta */
+    --constant: oklch(0.85 0.14 85);   /* CONSTANT = gold key moment */
   }
-  *{box-sizing:border-box;}
-  body{margin:0;padding:0;height:100vh;overflow:hidden;display:flex;
-       background:var(--bg-0);color:var(--fg);
-       font-family:'Noto Sans SC',system-ui,sans-serif;}
-  .sidebar{width:200px;flex-shrink:0;height:100vh;display:flex;flex-direction:column;
-           gap:14px;padding:18px 16px;background:var(--bg-1);
-           border-right:1.5px solid var(--line-strong);}
-  .brand{font-size:15px;font-weight:700;line-height:1.3;}
-  .brand .code{font-family:'JetBrains Mono',ui-monospace,monospace;font-size:10px;
-               color:var(--accent);letter-spacing:0.08em;display:block;margin-top:3px;}
-  .mascot{display:flex;justify-content:center;padding:4px 0;}
-  .lede{font-size:11px;line-height:1.5;color:var(--fg-dim);}
-  .lede .en{font-style:italic;color:var(--fg-mute);margin-top:5px;}
-  .guide{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:9px;}
-  .guide li{font-size:11px;line-height:1.45;color:var(--fg-dim);
-            padding-left:9px;border-left:3px solid var(--accent);}
-  .lang-btn{margin-top:auto;padding:7px 10px;font-size:11px;font-weight:700;
-            font-family:'JetBrains Mono',ui-monospace,monospace;cursor:pointer;
-            color:var(--fg);background:var(--bg-2);
-            border:1.5px solid var(--line-strong);box-shadow:3px 3px 0 var(--bg-0);}
-  .lang-btn:active{transform:translate(3px,3px);box-shadow:none;}
-  .stage-wrap{flex:1;position:relative;overflow:hidden;height:100vh;}
-  #stage{position:absolute;inset:0;width:100%;height:100%;display:block;}
-  .hud{position:absolute;top:16px;right:16px;padding:11px 13px;min-width:172px;
-       font-family:'JetBrains Mono',ui-monospace,monospace;font-size:12px;
-       background:var(--bg-2);border:1.5px solid var(--line-strong);
-       box-shadow:3px 3px 0 var(--bg-0);}
-  .hud .htitle{font-weight:700;color:var(--accent);margin-bottom:6px;}
-  .hud .hrow{display:flex;justify-content:space-between;gap:10px;color:var(--fg-dim);margin-top:3px;}
-  .hud .hrow b{color:var(--fg);font-weight:700;}
-  .caption{position:absolute;bottom:30px;left:50%;transform:translateX(-50%);
-           text-align:center;max-width:78%;}
-  .caption .zh{font-size:20px;font-weight:700;color:var(--fg);}
-  .caption .en{font-size:14px;font-style:italic;color:var(--fg-mute);margin-top:4px;}
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; }
+  body {
+    background: var(--bg-0);
+    color: var(--fg);
+    font-family: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+    height: 100vh;
+    overflow: hidden;
+    display: flex;
+  }
+
+  /* ---------- 200px 左侧栏 ---------- */
+  .sidebar {
+    width: 200px;
+    flex-shrink: 0;
+    background: var(--bg-1);
+    border-right: 1px solid var(--line);
+    display: flex;
+    flex-direction: column;
+    padding: 18px 16px;
+    gap: 16px;
+  }
+  .brand { display: flex; flex-direction: column; gap: 4px; }
+  .brand-title {
+    font-size: 13px; font-weight: 700; letter-spacing: 0.04em; color: var(--fg);
+  }
+  .brand-code {
+    font-size: 10px; color: var(--phys); letter-spacing: 0.12em;
+  }
+
+  .mascot-wrap {
+    display: flex; flex-direction: column; align-items: center; gap: 6px;
+    padding: 8px 0;
+  }
+  .mascot-name { font-size: 10px; color: var(--fg-dim); letter-spacing: 0.08em; }
+  #mascotRing { transition: none; }
+
+  .guide { display: flex; flex-direction: column; gap: 10px; }
+  .guide-item {
+    font-size: 11px; line-height: 1.45; color: var(--fg-dim);
+    padding-left: 12px; position: relative;
+  }
+  .guide-item::before {
+    content: ''; position: absolute; left: 0; top: 6px;
+    width: 5px; height: 5px; background: var(--phys);
+    box-shadow: 2px 2px 0 var(--bg-0);
+  }
+
+  .legend { display: flex; flex-direction: column; gap: 7px; }
+  .legend-item { display: flex; align-items: center; gap: 8px; font-size: 10px; color: var(--fg-dim); }
+  .legend-swatch { width: 16px; height: 3px; flex-shrink: 0; }
+
+  .spacer { flex: 1; }
+
+  .lang-btn {
+    align-self: flex-start;
+    background: var(--bg-2);
+    color: var(--fg);
+    border: 1px solid var(--line-strong);
+    font-family: inherit;
+    font-size: 11px;
+    letter-spacing: 0.05em;
+    padding: 6px 12px;
+    cursor: pointer;
+    box-shadow: 3px 3px 0 var(--bg-0);
+  }
+  .lang-btn:active { transform: translate(2px, 2px); box-shadow: 1px 1px 0 var(--bg-0); }
+
+  /* ---------- 右侧主舞台 ---------- */
+  .stage { flex: 1; position: relative; display: flex; flex-direction: column; }
+  .stage svg { width: 100%; height: 100%; display: block; }
+
+  .hud {
+    position: absolute; top: 16px; right: 18px;
+    text-align: right;
+    background: var(--bg-1);
+    border: 1px solid var(--line);
+    padding: 10px 14px;
+    box-shadow: 3px 3px 0 var(--bg-0);
+    min-width: 178px;
+  }
+  .hud-phase {
+    font-size: 12px; color: var(--phys); letter-spacing: 0.06em;
+    font-weight: 700; margin-bottom: 6px;
+  }
+  .hud-row {
+    font-size: 10px; color: var(--fg-dim);
+    display: flex; justify-content: space-between; gap: 14px; line-height: 1.6;
+  }
+  .hud-val { color: var(--fg); }
+
+  .cue {
+    position: absolute; left: 50%; bottom: 26px;
+    transform: translateX(-50%);
+    text-align: center;
+    max-width: 72%;
+    font-size: 13px; line-height: 1.5;
+    color: var(--fg);
+    background: oklch(0.18 0.04 265 / 0.82);
+    border: 1px solid var(--line);
+    padding: 8px 18px;
+    box-shadow: 3px 3px 0 var(--bg-0);
+  }
+  .cue-sub { display: block; font-size: 10px; color: var(--fg-mute); margin-top: 3px; }
 </style>
 </head>
 <body>
   <aside class="sidebar">
-    <div class="brand">脑波拆解台<span class="code" id="brandCode">PHY-09 · FOURIER</span></div>
-    <div class="mascot">
-      <!-- Echo: tuning-fork mascot with waveform halo -->
-      <svg width="78" height="78" viewBox="0 0 78 78" aria-hidden="true">
-        <circle cx="39" cy="39" r="30" fill="none" stroke="var(--wave)" stroke-width="1.2" opacity="0.5"/>
-        <path d="M14 39 q6 -13 12 0 q6 13 12 0 q6 -13 12 0 q6 13 12 0" fill="none"
-              stroke="var(--field)" stroke-width="2"/>
-        <path d="M33 22 L33 40 q0 6 6 6 q6 0 6 -6 L45 22" fill="none"
-              stroke="var(--photon)" stroke-width="3" stroke-linecap="round"/>
-        <line x1="39" y1="46" x2="39" y2="58" stroke="var(--photon)" stroke-width="3" stroke-linecap="round"/>
-        <circle cx="33" cy="22" r="3" fill="var(--constant)"/>
-        <circle cx="45" cy="22" r="3" fill="var(--constant)"/>
+    <div class="brand">
+      <span class="brand-title" data-i18n="brandTitle">力之观测台</span>
+      <span class="brand-code">PHY-09 · M07</span>
+    </div>
+
+    <div class="mascot-wrap">
+      <!-- mascot Echo — 音叉 + 波形光晕环 (themes.js: tuning-fork with a halo of waveforms) -->
+      <svg width="80" height="80" viewBox="0 0 80 80" aria-hidden="true">
+        <g id="mascotRing" fill="none" stroke-width="2.2" stroke-linecap="round">
+          <circle cx="40" cy="40" r="31" stroke="var(--mass)"   opacity="0.40"/>
+          <circle cx="40" cy="40" r="23" stroke="var(--wave)"   opacity="0.58"/>
+          <circle cx="40" cy="40" r="15" stroke="var(--photon)" opacity="0.80"/>
+        </g>
+        <g fill="none" stroke="var(--field)" stroke-width="3" stroke-linecap="round">
+          <path d="M31 51 L31 27 M49 51 L49 27 M31 51 Q40 61 49 51 M40 57 L40 71"/>
+        </g>
+        <circle id="mascotTip" cx="40" cy="71" r="3.2" fill="var(--gold)" stroke="none"/>
       </svg>
+      <span class="mascot-name">Echo</span>
     </div>
-    <div class="lede">
-      <div id="lede1">一段乱起伏的脑波，真能拆成几个干净的快波和慢波吗？</div>
-      <div class="en" id="lede2">Can a messy brain wave split into clean fast + slow waves?</div>
+
+    <div class="guide">
+      <p class="guide-item" data-i18n="g1">这条杂乱的脑波，其实是几条波叠成的。</p>
+      <p class="guide-item" data-i18n="g2">看它连续裂开成快慢不同的分量。</p>
+      <p class="guide-item" data-i18n="g3">再看它们逐条相加，重组回原波。</p>
     </div>
-    <ul class="guide">
-      <li id="g1">乱波看似无规律</li>
-      <li id="g2">其实是慢中快三波叠加</li>
-      <li id="g3">逐个分离再相加验证</li>
-    </ul>
-    <button class="lang-btn" id="langBtn">中 / EN</button>
+
+    <div class="legend">
+      <div class="legend-item"><span class="legend-swatch" style="background:var(--mass)"></span><span data-i18n="legSlow">慢波 3 Hz</span></div>
+      <div class="legend-item"><span class="legend-swatch" style="background:var(--wave)"></span><span data-i18n="legMid">中波 10 Hz</span></div>
+      <div class="legend-item"><span class="legend-swatch" style="background:var(--photon)"></span><span data-i18n="legFast">快波 22 Hz</span></div>
+      <div class="legend-item"><span class="legend-swatch" style="background:var(--field)"></span><span data-i18n="legComp">复合脑波</span></div>
+    </div>
+
+    <div class="spacer"></div>
+
+    <button class="lang-btn" id="langBtn" type="button" data-i18n="langLabel">EN / 中</button>
   </aside>
 
-  <main class="stage-wrap">
-    <canvas id="stage"></canvas>
+  <main class="stage">
+    <svg id="scene" viewBox="0 0 1000 600" preserveAspectRatio="xMidYMid meet">
+      <defs>
+        <filter id="glow" x="-20%" y="-60%" width="140%" height="220%">
+          <feGaussianBlur stdDeviation="2.2" result="b"/>
+          <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+        </filter>
+      </defs>
+
+      <!-- 静态网格基线 -->
+      <g id="grid" stroke="var(--line)" stroke-width="1"></g>
+
+      <!-- 三条分量波 (慢/中/快). 全程是同一条复合波被剥出的三层. -->
+      <path id="comp0" fill="none" stroke="var(--mass)"   stroke-width="2.6" opacity="0"/>
+      <path id="comp1" fill="none" stroke="var(--wave)"   stroke-width="2.6" opacity="0"/>
+      <path id="comp2" fill="none" stroke="var(--photon)" stroke-width="2.6" opacity="0"/>
+
+      <!-- 分量轨道零线 (分离时淡淡浮现) -->
+      <line id="lane0" stroke="var(--mass)"   stroke-width="1" stroke-dasharray="4 6" opacity="0"/>
+      <line id="lane1" stroke="var(--wave)"   stroke-width="1" stroke-dasharray="4 6" opacity="0"/>
+      <line id="lane2" stroke="var(--photon)" stroke-width="1" stroke-dasharray="4 6" opacity="0"/>
+
+      <!-- 分量标签 -->
+      <g font-family="'JetBrains Mono', monospace" font-size="13" font-weight="600">
+        <text id="lbl0" x="26" fill="var(--mass)"   opacity="0"></text>
+        <text id="lbl1" x="26" fill="var(--wave)"   opacity="0"></text>
+        <text id="lbl2" x="26" fill="var(--photon)" opacity="0"></text>
+      </g>
+
+      <!-- 复合波 (唯一核心对象 / 主角): 始终 = 三分量在中心的逐点求和 -->
+      <path id="composite" fill="none" stroke="var(--field)" stroke-width="3.4"
+            stroke-linecap="round" filter="url(#glow)"/>
+
+      <!-- 重组 aha 高亮 -->
+      <text id="aha" x="500" y="58" text-anchor="middle"
+            font-family="'JetBrains Mono', monospace" font-size="18" font-weight="700"
+            fill="var(--gold)" opacity="0"></text>
+    </svg>
+
     <div class="hud">
-      <div class="htitle" id="hudTtl">成分配方</div>
-      <div class="hrow"><span id="hl1">慢波 theta 4Hz</span><b id="hv1">—</b></div>
-      <div class="hrow"><span id="hl2">中波 alpha 10Hz</span><b id="hv2">—</b></div>
-      <div class="hrow"><span id="hl3">快波 beta 25Hz</span><b id="hv3">—</b></div>
+      <div class="hud-phase" id="hudPhase"></div>
+      <div class="hud-row"><span data-i18n="hudSlow">慢波</span><span class="hud-val" id="vSlow">— Hz</span></div>
+      <div class="hud-row"><span data-i18n="hudMid">中波</span><span class="hud-val" id="vMid">— Hz</span></div>
+      <div class="hud-row"><span data-i18n="hudFast">快波</span><span class="hud-val" id="vFast">— Hz</span></div>
+      <div class="hud-row"><span data-i18n="hudSep">分离度</span><span class="hud-val" id="vSep">0%</span></div>
     </div>
-    <div class="caption">
-      <div class="zh" id="capZh">这是一段复杂的脑波……</div>
-      <div class="en" id="capEn">A complex brain wave...</div>
+
+    <div class="cue">
+      <span id="cueMain"></span>
+      <span class="cue-sub" id="cueSub"></span>
     </div>
   </main>
 
 <script>
-(function(){
-  "use strict";
-  var LANG='cn';
+(function () {
+  'use strict';
 
-  // 三个频率成分: 慢波 theta 4Hz / 中波 alpha 10Hz / 快波 beta 25Hz
-  // freqVis = 在可视窗口内显示的周期数 (拉开快慢对比), amp = 振幅
-  var COMP=[
-    {key:'theta', label:'慢波 theta 4Hz',  labelEn:'slow theta 4Hz',  freqVis:1.5, amp:0.55, color:'--wave'},
-    {key:'alpha', label:'中波 alpha 10Hz', labelEn:'mid alpha 10Hz',  freqVis:4.0, amp:0.95, color:'--photon'},
-    {key:'beta',  label:'快波 beta 25Hz',  labelEn:'fast beta 25Hz',  freqVis:9.5, amp:0.40, color:'--field'}
+  // ---------------------------------------------------------------------------
+  // i18n
+  // ---------------------------------------------------------------------------
+  var LANG = 'zh';
+  var I18N = {
+    zh: {
+      brandTitle: '力之观测台',
+      g1: '这条杂乱的脑波，其实是几条波叠成的。',
+      g2: '看它连续裂开成快慢不同的分量。',
+      g3: '再看它们逐条相加，重组回原波。',
+      langLabel: 'EN / 中',
+      legSlow: '慢波 3 Hz', legMid: '中波 10 Hz', legFast: '快波 22 Hz', legComp: '复合脑波',
+      hudSlow: '慢波', hudMid: '中波', hudFast: '快波', hudSep: '分离度',
+      lblSlow: '慢波 · 3 Hz · delta-theta',
+      lblMid:  '中波 · 10 Hz · alpha',
+      lblFast: '快波 · 22 Hz · beta',
+      phases: ['复合脑波', '正在分离', '三条分量', '逐条重组'],
+      cues: [
+        { m: '这条脑波看起来杂乱无章。', s: '它其实不是一条波 — 而是几条波叠在一起。' },
+        { m: '看它连续地裂开。', s: '同一条波正分离成快慢不同的三条分量。' },
+        { m: '原来只有三条简单正弦波。', s: '慢的 3 Hz、中的 10 Hz、快的 22 Hz，各自规整。' },
+        { m: '把三条逐条加回去 — 又变回原波。', s: '复合波 = 这几条单频波之和，这就是傅里叶分解。' }
+      ],
+      aha: '复合波 = 慢 + 中 + 快'
+    },
+    en: {
+      brandTitle: 'Force Observatory',
+      g1: 'This messy brainwave is really several waves stacked.',
+      g2: 'Watch it split, continuously, into slow & fast parts.',
+      g3: 'Then watch them add back, one by one, into the original.',
+      langLabel: '中 / EN',
+      legSlow: 'slow 3 Hz', legMid: 'mid 10 Hz', legFast: 'fast 22 Hz', legComp: 'composite',
+      hudSlow: 'slow', hudMid: 'mid', hudFast: 'fast', hudSep: 'split',
+      lblSlow: 'slow . 3 Hz . delta-theta',
+      lblMid:  'mid . 10 Hz . alpha',
+      lblFast: 'fast . 22 Hz . beta',
+      phases: ['composite wave', 'separating', 'three parts', 'recombining'],
+      cues: [
+        { m: 'This brainwave looks chaotic.', s: "It isn't one wave — it's several waves added together." },
+        { m: 'Watch it split apart, continuously.', s: 'The same wave separates into three parts of different speeds.' },
+        { m: 'Just three plain sine waves.', s: 'slow 3 Hz, mid 10 Hz, fast 22 Hz — each perfectly regular.' },
+        { m: 'Add the three back, one by one — the original returns.', s: 'composite = sum of single-frequency waves. This is Fourier.' }
+      ],
+      aha: 'composite = slow + mid + fast'
+    }
+  };
+
+  // ---------------------------------------------------------------------------
+  // 几何常量
+  // ---------------------------------------------------------------------------
+  var W = 1000, H = 600;
+  var MID = 300;           // 复合波合并时的中心 y
+  var N = 360;             // 采样点数
+  var X0 = 70, X1 = 940;   // 绘制 x 范围
+
+  // 三条分量: freq=屏内可见周期数(代理真实 Hz) / amp / 相位 / 分离轨道 y
+  // 科学严谨: 复合波 = 三条单频正弦逐点求和; 3 / 10 / 22 Hz 对应 delta-theta / alpha / beta
+  var COMPS = [
+    { freq: 3.0,  amp: 64, phase: 0.0, laneY: 150, hz: '3.0 Hz' },   // 慢
+    { freq: 10.0, amp: 40, phase: 1.1, laneY: 300, hz: '10.0 Hz' },  // 中
+    { freq: 22.0, amp: 22, phase: 2.3, laneY: 450, hz: '22.0 Hz' }   // 快
   ];
 
-  // F5 两种脑状态配方 (相对强度 0-1)
-  var RECIPE={
-    relax: [0.6, 1.0, 0.25],   // 放松: alpha 多
-    focus: [0.35, 0.45, 1.0]   // 专注: beta 多
+  var EL = {
+    composite: document.getElementById('composite'),
+    aha: document.getElementById('aha'),
+    grid: document.getElementById('grid'),
+    comp: [document.getElementById('comp0'), document.getElementById('comp1'), document.getElementById('comp2')],
+    lane: [document.getElementById('lane0'), document.getElementById('lane1'), document.getElementById('lane2')],
+    lbl:  [document.getElementById('lbl0'), document.getElementById('lbl1'), document.getElementById('lbl2')],
+    hudPhase: document.getElementById('hudPhase'),
+    vSlow: document.getElementById('vSlow'),
+    vMid:  document.getElementById('vMid'),
+    vFast: document.getElementById('vFast'),
+    vSep:  document.getElementById('vSep'),
+    cueMain: document.getElementById('cueMain'),
+    cueSub:  document.getElementById('cueSub'),
+    mascotRing: document.getElementById('mascotRing'),
+    mascotTip:  document.getElementById('mascotTip')
   };
 
-  var I18N={
-    brandCode:{cn:'PHY-09 · 傅里叶',en:'PHY-09 · FOURIER'},
-    lede1:{cn:'一段乱起伏的脑波，真能拆成几个干净的快波和慢波吗？',en:'Can a messy brain wave really split into clean fast + slow waves?'},
-    lede2:{cn:'拆成快波加慢波。',en:'Split into fast + slow waves.'},
-    g1:{cn:'乱波看似无规律',en:'Messy wave seems patternless'},
-    g2:{cn:'其实是慢中快三波叠加',en:'Really slow+mid+fast, added up'},
-    g3:{cn:'逐个分离再相加验证',en:'Separate, then re-add to verify'},
-    hudTtl:{cn:'成分配方',en:'recipe'},
-    capZh:{cn:'这是一段复杂的脑波……',en:'A complex brain wave...'},
-    subs:{
-      cn:['这是一段复杂的脑波，又乱又起伏，看不出规律。',
-          '其实它是三个干净的正弦波叠在一起：慢的、中的、快的。',
-          '把它们逐个分离——慢波 theta、中波 alpha、快波 beta，各自都很干净。',
-          '再把三条波相加，竟然又拼回了一开始那段乱波——叠加成立！',
-          '不同脑状态只是配方不同：放松时 alpha 多，专注时 beta 多。'],
-      en:['A complex brain wave — messy and bumpy, no obvious pattern.',
-          'Actually it is three clean sine waves stacked: slow, mid, and fast.',
-          'Separate them one by one — slow theta, mid alpha, fast beta, each clean.',
-          'Add the three back up — it rebuilds the original messy wave. Superposition holds!',
-          'Different brain states are just different recipes: relaxed = more alpha, focused = more beta.']
-    },
-    keyMoment:{cn:'任何波都是正弦波的合唱 —— 傅里叶',en:'Any wave is a chorus of sines — Fourier'}
-  };
-  function t(k){return (I18N[k]&&I18N[k][LANG])||(I18N[k]&&I18N[k].en)||k;}
-
-  var canvas=document.getElementById('stage'),ctx=canvas.getContext('2d');
-  var W=0,H=0,DPR=Math.min(window.devicePixelRatio||1,2);
-  function resize(){var r=canvas.parentElement.getBoundingClientRect();
-    if(r.width<1||r.height<1)return;
-    W=r.width;H=r.height;canvas.width=W*DPR;canvas.height=H*DPR;
-    canvas.style.width=W+'px';canvas.style.height=H+'px';ctx.setTransform(DPR,0,0,DPR,0,0);}
-  window.addEventListener('resize',resize);
-  setTimeout(resize,150);setTimeout(resize,500);
-  if(document.fonts&&document.fonts.ready)document.fonts.ready.then(resize);
-
-  var C=function(v){return getComputedStyle(document.documentElement).getPropertyValue(v).trim();};
-
-  var startT=null, DUR=6000, NF=5, TOTAL=NF*DUR;
-  function easeIO(u){return u<0.5?2*u*u:1-Math.pow(-2*u+2,2)/2;}
-  function clamp01(x){return x<0?0:x>1?1:x;}
-
-  // 在归一化 x (0..1) 上, 用相位 ph 算单个成分的值; weight 缩放强度
-  function comp(x,ph,i,weight){
-    var c=COMP[i];
-    return Math.sin(x*Math.PI*2*c.freqVis + ph)*c.amp*(weight==null?1:weight);
-  }
-  function sumWave(x,ph,weights){
-    var v=0;for(var i=0;i<COMP.length;i++)v+=comp(x,ph,i,weights?weights[i]:1);
-    return v;
-  }
-  // 最大可能幅度 (用于归一化到画布)
-  function maxAmp(weights){var m=0;for(var i=0;i<COMP.length;i++)m+=COMP[i].amp*(weights?weights[i]:1);return m;}
-
-  // 画单条成分波 (干净正弦)
-  function drawSingle(x0,x1,midY,ampPx,ph,i,weight){
-    var c=COMP[i];
-    ctx.strokeStyle=C(c.color);ctx.lineWidth=2.4;ctx.lineJoin='round';ctx.beginPath();
-    for(var px=x0;px<=x1;px++){
-      var xn=(px-x0)/(x1-x0);
-      var y=midY - comp(xn,ph,i,weight)/(c.amp||1)*ampPx;
-      if(px===x0)ctx.moveTo(px,y);else ctx.lineTo(px,y);
+  // 静态网格基线
+  (function drawGrid() {
+    var s = '';
+    for (var gx = X0; gx <= X1; gx += 96) {
+      s += '<line x1="' + gx + '" y1="40" x2="' + gx + '" y2="560" opacity="0.4"/>';
     }
-    ctx.stroke();
+    for (var gy = 80; gy <= 540; gy += 92) {
+      s += '<line x1="' + X0 + '" y1="' + gy + '" x2="' + X1 + '" y2="' + gy + '" opacity="0.5"/>';
+    }
+    EL.grid.innerHTML = s;
+  })();
+
+  // 单条分量在 x=u 处相对其零线的位移; tWave = 全局流动相位
+  function compDisp(c, u, tWave) {
+    return c.amp * Math.sin(2 * Math.PI * c.freq * u + c.phase + tWave);
+  }
+  function smooth(x) { x = Math.max(0, Math.min(1, x)); return x * x * (3 - 2 * x); }
+
+  // ---------------------------------------------------------------------------
+  // 一个连续 cyc (0..1 循环) 驱动 同一条波 的 separation 形态.
+  //   0.00-0.20  composite    sep=0  三波重叠在 MID, 只显复合波 (主角登场)
+  //   0.20-0.44  separating   sep 0->1  分量从复合波连续下沉到各自轨道
+  //   0.44-0.62  three parts  sep=1  三条分量各自荡漾, 标签 + 轨道亮
+  //   0.62-0.92  recombining  逐条把分量加回中心 (build 1->2->3), 复合波重现, aha 闪
+  //   0.92-1.00  composite    sep=0  收束循环
+  // 复合波 composite 始终 = 三分量在 MID 的逐点求和, 永远是屏上主角.
+  // ---------------------------------------------------------------------------
+  var CYCLE_MS = 32000;
+  var start = null;
+
+  function phaseOf(cyc) {
+    if (cyc < 0.20) return 0;
+    if (cyc < 0.44) return 1;
+    if (cyc < 0.62) return 2;
+    if (cyc < 0.92) return 3;
+    return 0;
+  }
+  function separationOf(cyc) {
+    if (cyc < 0.20) return 0;
+    if (cyc < 0.44) return smooth((cyc - 0.20) / 0.24);       // 0 -> 1
+    if (cyc < 0.62) return 1;
+    if (cyc < 0.72) return 1 - smooth((cyc - 0.62) / 0.10);   // 1 -> 0 (分量回中)
+    return 0;
+  }
+  // 重组阶段: 逐条把分量"加进"复合波. build∈[0,3] 表示已加入几条 (含小数过渡).
+  function buildCountOf(cyc) {
+    if (cyc < 0.62) return 3;            // 分离前/中, 复合波本就含全部三条
+    if (cyc >= 0.92) return 3;
+    var p = (cyc - 0.62) / 0.30;         // 0..1 across recombine window
+    return smooth(p) * 3;                // 0 -> 3 连续逐条加回
   }
 
-  // 画合成波 (多成分叠加, 归一化)
-  function drawSum(x0,x1,midY,ampPx,ph,weights,colorVar,lw){
-    ctx.strokeStyle=C(colorVar);ctx.lineWidth=lw||2.8;ctx.lineJoin='round';ctx.beginPath();
-    var norm=maxAmp(weights)||1;
-    for(var px=x0;px<=x1;px++){
-      var xn=(px-x0)/(x1-x0);
-      var y=midY - sumWave(xn,ph,weights)/norm*ampPx;
-      if(px===x0)ctx.moveTo(px,y);else ctx.lineTo(px,y);
+  function buildPath(yOf) {
+    var d = 'M';
+    for (var i = 0; i <= N; i++) {
+      var u = i / N;
+      var x = X0 + u * (X1 - X0);
+      d += (i === 0 ? '' : 'L') + x.toFixed(1) + ' ' + yOf(u).toFixed(1);
     }
-    ctx.stroke();
+    return d;
   }
 
-  function bg(){
-    ctx.fillStyle=C('--bg-0');ctx.fillRect(0,0,W,H);
-    ctx.strokeStyle=C('--line');ctx.lineWidth=1;
-    for(var gx=0;gx<W;gx+=40){ctx.beginPath();ctx.moveTo(gx,0);ctx.lineTo(gx,H);ctx.stroke();}
-    for(var gy=0;gy<H;gy+=40){ctx.beginPath();ctx.moveTo(0,gy);ctx.lineTo(W,gy);ctx.stroke();}
-  }
+  function frame(ts) {
+    if (start === null) start = ts;
+    var elapsed = (ts - start) % CYCLE_MS;
+    var cyc = elapsed / CYCLE_MS;
+    var tWave = (ts - start) / 1000 * 1.4;   // 波形持续流动
 
-  function label(text,x,y,colorVar,size,align){
-    ctx.fillStyle=C(colorVar);ctx.textAlign=align||'left';
-    ctx.font=(size||12)+"px 'JetBrains Mono',ui-monospace,monospace";
-    ctx.fillText(text,x,y);
-  }
-  function labelCJK(text,x,y,colorVar,size,align){
-    ctx.fillStyle=C(colorVar);ctx.textAlign=align||'left';
-    ctx.font=(size||12)+"px 'Noto Sans SC',sans-serif";
-    ctx.fillText(text,x,y);
-  }
+    var sep = separationOf(cyc);
+    var ph = phaseOf(cyc);
+    var build = buildCountOf(cyc);           // 0..3
+    var T = I18N[LANG];
 
-  function draw(now){
-    if(startT===null)startT=now;
-    var el=now-startT;if(el>=TOTAL){startT=now;el=0;}
-    if(!W||!H){requestAnimationFrame(draw);return;}
-    var frame=Math.min(Math.floor(el/DUR),NF-1);
-    var fu=clamp01((el-frame*DUR)/DUR); // 帧内进度 0..1
-    var ph=now/650;
-
-    bg();
-
-    var x0=70, x1=W-50, fullMid=H*0.46;
-    var ampBig=H*0.18;
-
-    if(frame===0){
-      // F1: 一段乱脑波 (theta+alpha+beta 全 weight=1)
-      drawSum(x0,x1,fullMid,ampBig,ph,[1,1,1],'--field',2.8);
-      labelCJK(LANG==='cn'?'一段脑波 (随时间)':'a brain wave (over time)',x0,fullMid-ampBig-22,'--fg-mute',12);
-      label('EEG',x0,fullMid+ampBig+30,'--accent',12);
-      setHUD('—','—','—');
-    }
-    else if(frame===1){
-      // F2: 揭示是三波叠加 — 上方合成波, 下方三条成分淡入分行
-      var topMid=H*0.26, topAmp=H*0.11;
-      drawSum(x0,x1,topMid,topAmp,ph,[1,1,1],'--field',2.6);
-      labelCJK(LANG==='cn'?'它 = 三个简单波叠起来':'it = three simple waves stacked',x0,topMid-topAmp-16,'--fg-dim',12);
-      // 三行成分, 渐次淡入
-      var rows=[H*0.54,H*0.70,H*0.86], rowAmp=H*0.055;
-      for(var i=0;i<3;i++){
-        var appear=clamp01((fu-i*0.18)/0.4);
-        if(appear<=0)continue;
-        ctx.globalAlpha=appear;
-        drawSingle(x0,x1,rows[i],rowAmp,ph,i,1);
-        ctx.globalAlpha=1;
-        labelCJK((LANG==='cn'?COMP[i].label:COMP[i].labelEn),x0,rows[i]-rowAmp-8,COMP[i].color,11);
-        // 加号
-        if(i>0){labelCJK('+',x0-26,rows[i]+4,'--fg-mute',18,'center');}
-      }
-      setHUD(LANG==='cn'?'慢':'slow',LANG==='cn'?'中':'mid',LANG==='cn'?'快':'fast');
-    }
-    else if(frame===2){
-      // F3: 逐个分离 — 三条干净正弦各占一行, 标注频率
-      var rows=[H*0.24,H*0.50,H*0.76], rowAmp=H*0.085;
-      for(var i=0;i<3;i++){
-        drawSingle(x0,x1,rows[i],rowAmp,ph,i,1);
-        labelCJK((LANG==='cn'?COMP[i].label:COMP[i].labelEn),x0,rows[i]-rowAmp-10,COMP[i].color,13);
-        label(['4 Hz','10 Hz','25 Hz'][i],x1,rows[i]-rowAmp-10,COMP[i].color,12,'right');
-        // 基线
-        ctx.strokeStyle=C('--line');ctx.lineWidth=1;ctx.setLineDash([4,5]);
-        ctx.beginPath();ctx.moveTo(x0,rows[i]);ctx.lineTo(x1,rows[i]);ctx.stroke();ctx.setLineDash([]);
-      }
-      setHUD(LANG==='cn'?'分离':'split',LANG==='cn'?'分离':'split',LANG==='cn'?'分离':'split');
-    }
-    else if(frame===3){
-      // F4: 三波相加 = 原始乱波. 上半三条淡色成分往中间汇聚求和, 下半合成线压在原波上重合
-      var topMid=H*0.30, topAmp=H*0.09;
-      // 三条成分半透明
-      for(var i=0;i<3;i++){
-        ctx.globalAlpha=0.45;
-        drawSingle(x0,x1,topMid,topAmp,ph,i,1);
-        ctx.globalAlpha=1;
-      }
-      labelCJK(LANG==='cn'?'三条波相加……':'add the three waves...',x0,topMid-topAmp-30,'--fg-dim',12);
-      label('theta + alpha + beta',x0,topMid-topAmp-12,'--accent',11);
-      // 下半: 原波 (粗淡) + 合成波 (gold 细线) 重合, 合成线从左往右"画出"
-      var botMid=H*0.68, botAmp=H*0.17;
-      // 原波 (参考, sky-teal 粗淡)
-      ctx.globalAlpha=0.4;
-      drawSum(x0,x1,botMid,botAmp,ph,[1,1,1],'--field',5);
-      ctx.globalAlpha=1;
-      // 合成波 gold, 按 fu 进度画出 (key moment: 重合)
-      var drawTo=x0+(x1-x0)*easeIO(fu);
-      ctx.strokeStyle=C('--gold');ctx.lineWidth=2.4;ctx.lineJoin='round';ctx.beginPath();
-      var norm=maxAmp([1,1,1]);
-      for(var px=x0;px<=drawTo;px++){
-        var xn=(px-x0)/(x1-x0);
-        var y=botMid - sumWave(xn,ph,[1,1,1])/norm*botAmp;
-        if(px===x0)ctx.moveTo(px,y);else ctx.lineTo(px,y);
-      }
-      ctx.stroke();
-      labelCJK(LANG==='cn'?'= 原来那段乱波 (完全重合)':'= the original messy wave (perfect match)',x0,botMid+botAmp+30,fu>0.85?'--gold':'--fg-mute',13);
-      setHUD('1.0','1.0','1.0');
-    }
-    else {
-      // F5: 两种脑状态配方对比 + gold 金句
-      var colW=(x1-x0-60)/2, gap=60;
-      var states=[
-        {name:LANG==='cn'?'放松':'relaxed', w:RECIPE.relax, cx0:x0},
-        {name:LANG==='cn'?'专注':'focused', w:RECIPE.focus, cx0:x0+colW+gap}
-      ];
-      var midY=H*0.36, ampPx=H*0.12;
-      for(var s=0;s<2;s++){
-        var st=states[s], cx1=st.cx0+colW;
-        // 该状态的合成波 (用 accent 色)
-        drawSum(st.cx0,cx1,midY,ampPx, ph, st.w, s===0?'--photon':'--field',2.6);
-        labelCJK(st.name,(st.cx0+cx1)/2,midY-ampPx-26,s===0?'--photon':'--field',16,'center');
-        // 配方迷你柱 (theta/alpha/beta 强度)
-        var barBase=H*0.74, barW=colW/5, bx=st.cx0+barW*0.5;
-        for(var i=0;i<3;i++){
-          var bh=st.w[i]*H*0.16;
-          ctx.fillStyle=C(COMP[i].color);
-          ctx.fillRect(bx-barW*0.3, barBase-bh, barW*0.6, bh);
-          ctx.strokeStyle=C('--line-strong');ctx.lineWidth=1.2;
-          ctx.strokeRect(bx-barW*0.3, barBase-bh, barW*0.6, bh);
-          label(['T','A','B'][i],bx,barBase+16,'--fg-mute',11,'center');
-          bx+=barW;
-        }
-        labelCJK(LANG==='cn'?'配方 (慢/中/快)':'recipe (slow/mid/fast)',(st.cx0+cx1)/2,barBase+34,'--fg-dim',11,'center');
-      }
-      // gold 金句
-      var glow=0.55+0.45*Math.sin(now/400);
-      ctx.globalAlpha=glow;
-      labelCJK(t('keyMoment'),W/2,H*0.92,'--gold',16,'center');
-      ctx.globalAlpha=1;
-      var rw=RECIPE.relax, fw=RECIPE.focus;
-      setHUD(LANG==='cn'?'放松多':'relax+', LANG==='cn'?'状态变':'varies', LANG==='cn'?'专注多':'focus+');
+    // 每条分量的加权权重 (重组时逐条 0->1 浮现; 其余时刻 =1)
+    function weightOf(k) {
+      if (ph !== 3) return 1;
+      return Math.max(0, Math.min(1, build - k));
     }
 
-    // caption
-    document.getElementById('capZh').textContent=I18N.subs.cn[frame];
-    document.getElementById('capEn').textContent=I18N.subs.en[frame];
+    // ---- 复合波 (主角): 当前已加入分量的逐点求和, 永远可见 ----
+    EL.composite.setAttribute('d', buildPath(function (u) {
+      var sum = 0;
+      for (var k = 0; k < COMPS.length; k++) sum += weightOf(k) * compDisp(COMPS[k], u, tWave);
+      return MID - sum;
+    }));
+    var compOpacity = ph === 3 ? (0.22 + 0.78 * smooth(build / 3)) : (1 - 0.78 * sep);
+    EL.composite.setAttribute('opacity', compOpacity.toFixed(3));
 
-    requestAnimationFrame(draw);
+    // ---- 三条分量: y 在 MID 与各自 lane 间按 sep 插值, 连续浮现 ----
+    var labelFade = sep > 0.45 ? Math.min(1, (sep - 0.45) / 0.25) : 0;
+    for (var k = 0; k < COMPS.length; k++) {
+      var c = COMPS[k];
+      var laneY = MID + (c.laneY - MID) * sep;
+      (function (cc, ly, idx) {
+        // 重组阶段: 已加入的分量从轨道淡出(已融进复合波), 未加入的仍亮
+        var recFade = ph === 3 ? (1 - Math.max(0, Math.min(1, build - idx))) : 1;
+        EL.comp[idx].setAttribute('d', buildPath(function (u) { return ly - compDisp(cc, u, tWave); }));
+        EL.comp[idx].setAttribute('opacity', ((0.12 + 0.86 * sep) * recFade).toFixed(3));
+        EL.lane[idx].setAttribute('x1', X0); EL.lane[idx].setAttribute('x2', X1);
+        EL.lane[idx].setAttribute('y1', ly); EL.lane[idx].setAttribute('y2', ly);
+        EL.lane[idx].setAttribute('opacity', (0.45 * sep * recFade).toFixed(3));
+        EL.lbl[idx].setAttribute('y', (ly - cc.amp - 14).toFixed(1));
+        EL.lbl[idx].setAttribute('opacity', (labelFade * recFade).toFixed(3));
+      })(c, laneY, k);
+    }
+    EL.lbl[0].textContent = T.lblSlow;
+    EL.lbl[1].textContent = T.lblMid;
+    EL.lbl[2].textContent = T.lblFast;
+
+    // ---- aha 高亮 (重组接近完成时闪现) ----
+    var ahaOp = 0;
+    if (cyc >= 0.78 && cyc < 0.92) {
+      ahaOp = Math.sin(((cyc - 0.78) / 0.14) * Math.PI);
+    }
+    EL.aha.textContent = T.aha;
+    EL.aha.setAttribute('opacity', ahaOp.toFixed(3));
+
+    // ---- mascot Echo: 波纹环随波幅轻微脉动 (tuning-fork halo) ----
+    var pulse = 1 + 0.06 * Math.sin(tWave * 1.6);
+    EL.mascotRing.setAttribute('transform', 'translate(40 40) scale(' + pulse.toFixed(3) + ') translate(-40 -40)');
+    EL.mascotTip.setAttribute('opacity', (0.6 + 0.4 * Math.abs(Math.sin(tWave))).toFixed(3));
+
+    // ---- HUD ----
+    EL.hudPhase.textContent = T.phases[ph];
+    var shown = sep > 0.15 || ph === 3;
+    EL.vSlow.textContent = shown ? COMPS[0].hz : '— Hz';
+    EL.vMid.textContent  = shown ? COMPS[1].hz : '— Hz';
+    EL.vFast.textContent = shown ? COMPS[2].hz : '— Hz';
+    EL.vSep.textContent  = Math.round((ph === 3 ? (1 - build / 3) : sep) * 100) + '%';
+
+    // ---- 字幕 (辅助点睛, 画面为主体) ----
+    EL.cueMain.textContent = T.cues[ph].m;
+    EL.cueSub.textContent  = T.cues[ph].s;
+
+    requestAnimationFrame(frame);
   }
+  requestAnimationFrame(frame);
 
-  function setHUD(a,b,c){
-    document.getElementById('hv1').textContent=a;
-    document.getElementById('hv2').textContent=b;
-    document.getElementById('hv3').textContent=c;
+  // ---------------------------------------------------------------------------
+  // i18n 刷新 + lang 切换 (一次性更新所有静态 textContent; 动态文本下一帧由 frame 同步)
+  // ---------------------------------------------------------------------------
+  function refreshI18N() {
+    var T = I18N[LANG];
+    document.querySelectorAll('[data-i18n]').forEach(function (el) {
+      var key = el.getAttribute('data-i18n');
+      if (T[key] != null) el.textContent = T[key];
+    });
+    document.documentElement.lang = LANG;
   }
-
-  function refreshI18N(){
-    document.getElementById('brandCode').textContent=t('brandCode');
-    document.getElementById('lede1').textContent=t('lede1');
-    document.getElementById('lede2').textContent=t('lede2');
-    document.getElementById('g1').textContent=t('g1');
-    document.getElementById('g2').textContent=t('g2');
-    document.getElementById('g3').textContent=t('g3');
-    document.getElementById('hudTtl').textContent=t('hudTtl');
-    document.getElementById('hl1').textContent=LANG==='cn'?'慢波 theta 4Hz':'slow theta 4Hz';
-    document.getElementById('hl2').textContent=LANG==='cn'?'中波 alpha 10Hz':'mid alpha 10Hz';
-    document.getElementById('hl3').textContent=LANG==='cn'?'快波 beta 25Hz':'fast beta 25Hz';
-  }
-
-  document.getElementById('langBtn').addEventListener('click',function(){
-    LANG=LANG==='cn'?'en':'cn';
-    this.textContent=LANG==='cn'?'中 / EN':'EN / 中';
+  document.getElementById('langBtn').addEventListener('click', function () {
+    LANG = (LANG === 'zh') ? 'en' : 'zh';
     refreshI18N();
   });
-
-  resize();
-  requestAnimationFrame(draw);
+  refreshI18N();
 })();
 </script>
 </body>

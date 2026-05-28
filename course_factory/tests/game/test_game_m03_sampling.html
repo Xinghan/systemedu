@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>采样率调参 · Sampling Tuner</title>
+<title>造波沙盒 · Wave Forge</title>
 <style>
 :root{
   /* 第 1 层 — 共享深空底 */
@@ -46,34 +46,39 @@ body{
   border-right:1px solid var(--line);
   display:flex;
   flex-direction:column;
-  padding:14px 13px;
-  gap:13px;
+  padding:13px 12px;
+  gap:11px;
   overflow-y:auto;
 }
-.brand{font-size:11px; letter-spacing:.12em; color:var(--fg-mute);}
+.brand{font-size:10px; letter-spacing:.12em; color:var(--fg-mute);}
 .brand b{display:block; font-size:14px; letter-spacing:.04em; color:var(--neuro); margin-top:3px;}
 
 .mascot-box{
   background: var(--bg-2);
   border:1px solid var(--line);
   border-radius:8px;
-  padding:9px;
+  padding:8px;
   display:flex;
   flex-direction:column;
   align-items:center;
-  gap:4px;
+  gap:3px;
 }
 .mascot-name{font-size:10px; color:var(--fg-dim); letter-spacing:.06em;}
 
-.ctrl{display:flex; flex-direction:column; gap:6px;}
+.ctrl{display:flex; flex-direction:column; gap:5px;}
 .ctrl label{font-size:11px; color:var(--fg-dim); display:flex; justify-content:space-between; align-items:baseline;}
-.ctrl .val{font-size:14px; color:var(--neuro); font-weight:700;}
+.ctrl .val{font-size:13px; font-weight:700;}
+.ctrl .val.f{color:var(--firing);}
+.ctrl .val.a{color:var(--synaptic);}
+.ctrl .val.fs{color:var(--neuro);}
 input[type=range]{
   -webkit-appearance:none; appearance:none;
   width:100%; height:5px; border-radius:3px;
-  background: linear-gradient(90deg, var(--axon), var(--dendrite), var(--synaptic));
   outline:none;
 }
+#freq{background: linear-gradient(90deg, var(--axon), var(--firing));}
+#amp{background: linear-gradient(90deg, var(--axon), var(--synaptic));}
+#rate{background: linear-gradient(90deg, var(--axon), var(--dendrite), var(--synaptic));}
 input[type=range]::-webkit-slider-thumb{
   -webkit-appearance:none; appearance:none;
   width:16px; height:16px; border-radius:50%;
@@ -92,31 +97,20 @@ input[type=range]::-moz-range-thumb{
   border:1px solid var(--line);
   border-left:3px solid var(--neuro);
   border-radius:6px;
-  padding:9px;
+  padding:8px;
   font-size:11px;
-  line-height:1.55;
+  line-height:1.5;
   color:var(--fg-dim);
 }
 .task b{color:var(--firing);}
-.task .nyq{color:var(--neuro);}
-
-.status{
-  background: var(--bg-2);
-  border:1px solid var(--line);
-  border-radius:6px;
-  padding:9px;
-  font-size:11px;
-  line-height:1.5;
-}
-.status .s-line{display:flex; justify-content:space-between; margin-bottom:3px;}
-.status .s-key{color:var(--fg-mute);}
-.status .s-ok{color:var(--memory); font-weight:700;}
-.status .s-bad{color:var(--dendrite); font-weight:700;}
+.task .goal{color:var(--memory); font-weight:700;}
+.task .prog{color:var(--neuro); font-weight:700;}
 
 .legend{font-size:10px; color:var(--fg-mute); line-height:1.7;}
 .legend .sw{display:inline-block; width:18px; height:3px; vertical-align:middle; margin-right:5px;}
 .legend .sw.real{background:var(--fg-mute);}
 .legend .sw.samp{background:var(--synaptic);}
+.legend .sw.tgt{background:var(--memory); height:2px;}
 .legend .dot{display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--firing); vertical-align:middle; margin-right:5px;}
 
 .lang-btn{
@@ -143,10 +137,12 @@ input[type=range]::-moz-range-thumb{
   gap:10px;
   min-width:0;
 }
-.head{display:flex; justify-content:space-between; align-items:baseline;}
+.head{display:flex; justify-content:space-between; align-items:baseline; gap:12px;}
 .head h1{font-size:16px; letter-spacing:.03em; font-weight:700;}
-.head .hud{font-size:12px; color:var(--fg-dim);}
-.head .hud b{color:var(--neuro);}
+.head .hud{font-size:12px; color:var(--fg-dim); display:flex; gap:14px;}
+.head .hud span b{color:var(--neuro);}
+.head .hud .aliasFlag{color:var(--dendrite); font-weight:700;}
+.head .hud .aliasFlag.hide{display:none;}
 
 .stage{
   flex:1;
@@ -173,15 +169,15 @@ canvas{
 }
 .caption b{color:var(--firing);}
 .caption .win{color:var(--memory); font-weight:700;}
+.caption .alias{color:var(--dendrite); font-weight:700;}
 </style>
 </head>
 <body>
   <aside class="game-sidebar">
-    <div class="brand">CORTEX MAP · NRO-20<b data-i18n="brand">采样率调参</b></div>
+    <div class="brand">CORTEX MAP · NRO-20<b data-i18n="brand">造波沙盒</b></div>
 
     <div class="mascot-box">
-      <svg width="92" height="72" viewBox="0 0 92 72" aria-hidden="true">
-        <!-- Spark — branching dendrite creature -->
+      <svg width="88" height="66" viewBox="0 0 92 72" aria-hidden="true">
         <g stroke="var(--dendrite)" stroke-width="2.4" fill="none" stroke-linecap="round">
           <path d="M46 60 L46 40"/>
           <path d="M46 44 L32 30"/>
@@ -202,25 +198,29 @@ canvas{
     </div>
 
     <div class="ctrl">
-      <label><span data-i18n="rateLabel">采样率 fs</span><span class="val"><span id="rateVal">120</span> Hz</span></label>
-      <input type="range" id="rate" min="10" max="500" step="2" value="120">
+      <label><span data-i18n="freqLabel">频率 f</span><span class="val f"><span id="freqVal">10</span> Hz</span></label>
+      <input type="range" id="freq" min="2" max="40" step="1" value="10">
+    </div>
+    <div class="ctrl">
+      <label><span data-i18n="ampLabel">幅度 A</span><span class="val a"><span id="ampVal">0.6</span></span></label>
+      <input type="range" id="amp" min="0.2" max="1.0" step="0.05" value="0.6">
+    </div>
+    <div class="ctrl">
+      <label><span data-i18n="rateLabel">采样率 fs</span><span class="val fs"><span id="rateVal">200</span> Hz</span></label>
+      <input type="range" id="rate" min="10" max="400" step="2" value="200">
     </div>
 
     <div class="task">
-      <b data-i18n="taskTitle">任务</b><br>
-      <span data-i18n="taskBody">脑波里藏着一段 30Hz 的 beta 节律。拨动滑块，找到能还原这段快波的最低采样率。</span><br>
-      <span class="nyq" data-i18n="taskHint">提示：奈奎斯特说 fs 至少要 2× 信号最高频率。</span>
-    </div>
-
-    <div class="status">
-      <div class="s-line"><span class="s-key" data-i18n="stBeta">beta 还原</span><span id="stBeta" class="s-bad">失真</span></div>
-      <div class="s-line"><span class="s-key" data-i18n="stNyq">奈奎斯特</span><span id="stNyq" class="s-bad">不足</span></div>
-      <div class="s-line"><span class="s-key" data-i18n="stMin">达标最低 fs</span><span id="stMin" class="s-key">60 Hz</span></div>
+      <b data-i18n="taskTitle">目标波</b><br>
+      <span data-i18n="taskBody">把你的波调成虚线目标的样子：</span><br>
+      <span class="goal">f = <span id="tgtF">18</span> Hz · A = <span id="tgtA">0.8</span></span><br>
+      <span class="prog" data-i18n="progLabel">已造</span> <span class="prog"><span id="doneN">0</span>/3</span>
     </div>
 
     <div class="legend">
       <div><span class="sw real"></span><span data-i18n="lgReal">真实脑波</span></div>
       <div><span class="sw samp"></span><span data-i18n="lgRecon">采样重建</span></div>
+      <div><span class="sw tgt"></span><span data-i18n="lgTgt">目标波</span></div>
       <div><span class="dot"></span><span data-i18n="lgDot">采样点</span></div>
     </div>
 
@@ -229,8 +229,11 @@ canvas{
 
   <main class="game-main">
     <div class="head">
-      <h1 data-i18n="title">采样率 vs 波形重建</h1>
-      <div class="hud" data-i18n="hud1">最高频率 <b>30 Hz</b> · 奈奎斯特 <b>60 Hz</b></div>
+      <h1 data-i18n="title">造波沙盒 · 调出你的脑波</h1>
+      <div class="hud">
+        <span data-i18n="hudNyq">奈奎斯特 <b id="nyqHud">20</b> Hz</span>
+        <span class="aliasFlag hide" id="aliasFlag" data-i18n="aliasFlag">混叠！</span>
+      </div>
     </div>
     <div class="stage">
       <canvas id="cv"></canvas>
@@ -242,27 +245,45 @@ canvas{
 (function(){
   "use strict";
 
-  // ---------- 真实连续脑波: alpha 10Hz + beta 30Hz + 低频漂移 ----------
-  // 单位: 振幅无量纲, 时间窗 0.3s 显示
+  var COL_FONT = 'JetBrains Mono, monospace';
   var WIN_SEC = 0.3;        // 显示时间窗 (秒)
-  var F_ALPHA = 10;         // alpha 节律 Hz
-  var F_BETA = 30;          // beta 节律 Hz (任务目标)
-  var F_DRIFT = 2;          // 慢漂移 Hz
-  var NYQUIST = 2 * F_BETA; // 60 Hz — 还原 beta 的理论下限
+  var F_DRIFT = 2;          // 慢漂移 Hz, 给波形一点底子让它"像脑波"
+  var A_DRIFT = 0.18;
 
-  function trueWave(t){
-    return 0.55 * Math.sin(2*Math.PI*F_ALPHA*t)
-         + 0.40 * Math.sin(2*Math.PI*F_BETA*t + 0.6)
-         + 0.30 * Math.sin(2*Math.PI*F_DRIFT*t);
+  // ---------- 玩家可调参数 ----------
+  var stateWave = { f: 10, a: 0.6, fs: 200 };
+
+  // ---------- 目标波序列 (达成解锁波形造物主) ----------
+  var TARGETS = [
+    { f: 18, a: 0.80 },
+    { f: 8,  a: 0.40 },
+    { f: 30, a: 0.95 }
+  ];
+  var tgtIdx = 0;
+  var doneN = 0;
+  var unlocked = false;
+  var matchHoldFrames = 0;   // 连续匹配帧计数, 防抖
+
+  // 玩家造的真实连续脑波: 主节律 f + 慢漂移
+  function trueWave(t, p){
+    return p.a * Math.sin(2*Math.PI*p.f*t)
+         + A_DRIFT * Math.sin(2*Math.PI*F_DRIFT*t);
   }
 
   var cv = document.getElementById('cv');
   var ctx = cv.getContext('2d');
+  var freq = document.getElementById('freq');
+  var amp = document.getElementById('amp');
   var rate = document.getElementById('rate');
+  var freqVal = document.getElementById('freqVal');
+  var ampVal = document.getElementById('ampVal');
   var rateVal = document.getElementById('rateVal');
-  var stBeta = document.getElementById('stBeta');
-  var stNyq = document.getElementById('stNyq');
   var captionEl = document.getElementById('caption');
+  var aliasFlag = document.getElementById('aliasFlag');
+  var nyqHud = document.getElementById('nyqHud');
+  var doneNEl = document.getElementById('doneN');
+  var tgtFEl = document.getElementById('tgtF');
+  var tgtAEl = document.getElementById('tgtA');
 
   var css = getComputedStyle(document.documentElement);
   function C(name){ return css.getPropertyValue(name).trim(); }
@@ -271,7 +292,8 @@ canvas{
     line: C('--line'), lineStrong: C('--line-strong'),
     fg: C('--fg'), fgDim: C('--fg-dim'), fgMute: C('--fg-mute'),
     neuro: C('--neuro'), synaptic: C('--synaptic'),
-    dendrite: C('--dendrite'), firing: C('--firing'), gold: C('--gold')
+    dendrite: C('--dendrite'), firing: C('--firing'),
+    memory: C('--memory'), gold: C('--gold')
   };
 
   var dpr = Math.max(1, window.devicePixelRatio || 1);
@@ -287,31 +309,34 @@ canvas{
     draw();
   }
 
-  // 坐标映射
   function px(t){ return pad.l + (t / WIN_SEC) * (W - pad.l - pad.r); }
   function py(v){
     var mid = pad.t + (H - pad.t - pad.b) / 2;
-    var amp = (H - pad.t - pad.b) / 2 - 6;
-    return mid - v * (amp / 1.4); // 1.4 ≈ 信号峰值
+    var amplPx = (H - pad.t - pad.b) / 2 - 6;
+    return mid - v * (amplPx / 1.25); // 1.25 ≈ 信号峰值上限
   }
 
-  function draw(){
-    var fs = parseInt(rate.value, 10);
-    ctx.clearRect(0, 0, W, H);
+  function targetWave(t){
+    var tg = TARGETS[tgtIdx];
+    return tg.a * Math.sin(2*Math.PI*tg.f*t)
+         + A_DRIFT * Math.sin(2*Math.PI*F_DRIFT*t);
+  }
 
-    // 背景
-    ctx.fillStyle = COL.bg0;
-    ctx.fillRect(0, 0, W, H);
+  // 玩家波是否匹配目标 (频率精确 + 幅度容差)
+  function isMatch(){
+    var tg = TARGETS[tgtIdx];
+    var fOk = Math.abs(stateWave.f - tg.f) < 0.6;       // 整数步进, 精确命中
+    var aOk = Math.abs(stateWave.a - tg.a) < 0.06;
+    var fsOk = stateWave.fs >= 2 * stateWave.f;          // 采样率必须够: 自己造的波能被采下来
+    return fOk && aOk && fsOk;
+  }
 
-    // 中线
+  function drawGrid(){
     ctx.strokeStyle = COL.line;
     ctx.lineWidth = 1;
     ctx.beginPath();
     ctx.moveTo(pad.l, py(0)); ctx.lineTo(W - pad.r, py(0));
     ctx.stroke();
-
-    // 竖向网格 (每 0.05s)
-    ctx.strokeStyle = COL.line;
     ctx.globalAlpha = 0.5;
     for (var g = 0; g <= WIN_SEC + 1e-9; g += 0.05){
       ctx.beginPath();
@@ -319,20 +344,61 @@ canvas{
       ctx.stroke();
     }
     ctx.globalAlpha = 1;
-
     // 轴标签
     ctx.fillStyle = COL.fgMute;
     ctx.font = '10px ' + COL_FONT;
     ctx.textAlign = 'left';
-    ctx.fillText('+', 6, py(1.2) + 3);
+    ctx.fillText('+', 6, py(1.1) + 3);
     ctx.fillText('0', 8, py(0) + 3);
-    ctx.fillText('-', 6, py(-1.2) + 3);
+    ctx.fillText('-', 6, py(-1.1) + 3);
     ctx.textAlign = 'center';
     ctx.fillText('0', px(0), H - pad.b + 14);
     ctx.fillText('0.15s', px(0.15), H - pad.b + 14);
     ctx.fillText('0.30s', px(0.30) - 12, H - pad.b + 14);
+  }
 
-    // (1) 真实连续脑波 — 细灰线
+  // 线性插值重建波在 t 处的值 (用采样点连线)
+  function reconAt(t, samples, dt){
+    if (samples.length < 2) return samples.length ? samples[0].v : 0;
+    var idx = Math.min(samples.length - 2, Math.max(0, Math.floor(t / dt)));
+    var a = samples[idx], b = samples[idx + 1];
+    var frac = (t - a.t) / (b.t - a.t);
+    frac = Math.max(0, Math.min(1, frac));
+    return a.v + (b.v - a.v) * frac;
+  }
+
+  function draw(){
+    var p = stateWave;
+    var fs = p.fs;
+    var nyq = 2 * p.f;
+    var aliasing = fs < nyq;   // 采样不足 → 混叠
+
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = COL.bg0;
+    ctx.fillRect(0, 0, W, H);
+    drawGrid();
+
+    var matched = isMatch();
+
+    // (0) 目标波 — 金色虚线 (仅当本关未达成时显示)
+    if (!unlocked){
+      ctx.save();
+      ctx.strokeStyle = COL.memory;
+      ctx.lineWidth = 1.6;
+      ctx.setLineDash([6, 5]);
+      ctx.globalAlpha = matched ? 0.45 : 0.9;
+      ctx.beginPath();
+      var ts = 600;
+      for (var ti = 0; ti <= ts; ti++){
+        var tt = (ti / ts) * WIN_SEC;
+        var x = px(tt), y = py(targetWave(tt));
+        if (ti === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    // (1) 玩家真实连续脑波 — 细灰线
     ctx.strokeStyle = COL.fgMute;
     ctx.lineWidth = 1.4;
     ctx.globalAlpha = 0.85;
@@ -340,30 +406,29 @@ canvas{
     var steps = 600;
     for (var i = 0; i <= steps; i++){
       var t = (i / steps) * WIN_SEC;
-      var x = px(t), y = py(trueWave(t));
-      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      var xx = px(t), yy = py(trueWave(t, p));
+      if (i === 0) ctx.moveTo(xx, yy); else ctx.lineTo(xx, yy);
     }
     ctx.stroke();
     ctx.globalAlpha = 1;
 
-    // (2) 采样点 + 折线重建 (zero-order interpolation between samples)
+    // (2) 采样点 + 折线重建
     var dt = 1 / fs;
     var samples = [];
-    for (var tt = 0; tt <= WIN_SEC + 1e-9; tt += dt){
-      samples.push({ t: tt, v: trueWave(tt) });
+    for (var s = 0; s <= WIN_SEC + 1e-9; s += dt){
+      samples.push({ t: s, v: trueWave(s, p) });
     }
-
-    // 重建折线 (linear interpolation 连接采样点)
-    ctx.strokeStyle = COL.synaptic;
-    ctx.lineWidth = 2.2;
+    // 重建折线 (连采样点) — 采样不足时, 这条线会画出"虚假的慢波"= 混叠
+    ctx.strokeStyle = aliasing ? COL.dendrite : COL.synaptic;
+    ctx.lineWidth = 2.3;
     ctx.beginPath();
     for (var j = 0; j < samples.length; j++){
-      var sx = px(samples[j].t), sy = py(samples[j].v);
-      if (j === 0) ctx.moveTo(sx, sy); else ctx.lineTo(sx, sy);
+      var jx = px(samples[j].t), jy = py(samples[j].v);
+      if (j === 0) ctx.moveTo(jx, jy); else ctx.lineTo(jx, jy);
     }
     ctx.stroke();
 
-    // 采样点 — 只在采样不太密时画点 (避免堆成一团)
+    // 采样点 (太密就不画, 避免堆团)
     if (samples.length <= 80){
       ctx.fillStyle = COL.firing;
       for (var k = 0; k < samples.length; k++){
@@ -373,89 +438,94 @@ canvas{
       }
     }
 
-    // ---------- 判定: beta 是否还原 ----------
-    // 用重建波在密集采样下与真实波的均方误差作为还原度
-    var err = reconError(samples);
-    var betaOk = fs >= NYQUIST && err < 0.16;   // 达到奈奎斯特且误差小
-    var nyqOk = fs >= NYQUIST;
-    var goldWin = fs >= NYQUIST && fs <= 100;    // 找到接近最低的达标区间
+    // HUD 框 (画布左上)
+    drawHud(p, aliasing, matched);
 
-    // HUD 框 (右上角, fs 与状态)
-    drawHud(fs, betaOk, nyqOk);
-
-    // gold 高亮: 250Hz 区间提示 (在画布顶部标注典型 EEG 设置)
-    if (fs >= 200){
-      ctx.fillStyle = COL.gold;
-      ctx.font = 'bold 11px ' + COL_FONT;
-      ctx.textAlign = 'right';
-      ctx.fillText(LANG === 'zh' ? '250Hz 临床档：alpha/beta 全捕捉' : '250Hz clinical: alpha+beta captured', W - pad.r - 4, pad.t + 12);
+    // 解锁横幅
+    if (unlocked){
+      ctx.save();
+      ctx.fillStyle = COL.memory;
+      ctx.font = 'bold ' + Math.min(26, W/22) + 'px ' + COL_FONT;
+      ctx.textAlign = 'center';
+      ctx.fillText(LANG === 'zh' ? '波形造物主' : 'WAVE FORGER', W/2, pad.t + 30);
+      ctx.font = '12px ' + COL_FONT;
+      ctx.fillStyle = COL.fgDim;
+      ctx.fillText(LANG === 'zh' ? '三个目标波全部造出 — 脑波就是随时间起伏的线，你能任意塑形它'
+                                 : 'All three target waves forged — a brain wave is just a line rising over time, and you shaped it',
+                   W/2, pad.t + 50);
+      ctx.restore();
     }
 
-    // 更新侧栏状态 + caption
-    updatePanels(fs, betaOk, nyqOk, goldWin);
-  }
-
-  var COL_FONT = 'JetBrains Mono, monospace';
-
-  function reconError(samples){
-    // 线性插值重建, 与真实波 600 点比较均方误差
-    if (samples.length < 2) return 1;
-    var sum = 0, n = 0;
-    for (var i = 0; i <= 600; i++){
-      var t = (i / 600) * WIN_SEC;
-      // 找到 t 所在采样区间
-      var idx = Math.min(samples.length - 2, Math.floor(t / (1/parseInt(rate.value,10))));
-      var a = samples[idx], b = samples[idx+1];
-      var rec;
-      if (b && b.t !== a.t){
-        var frac = (t - a.t) / (b.t - a.t);
-        rec = a.v + (b.v - a.v) * Math.max(0, Math.min(1, frac));
-      } else {
-        rec = a.v;
+    // 匹配防抖: 连续匹配 ~30 帧 (≈0.5s) 才判达成, 防止扫过去误触
+    if (!unlocked && matched){
+      matchHoldFrames++;
+      if (matchHoldFrames >= 18){
+        advanceTarget();
       }
-      var d = rec - trueWave(t);
-      sum += d * d; n++;
+    } else {
+      matchHoldFrames = 0;
     }
-    return Math.sqrt(sum / n);
+
+    updatePanels(p, aliasing, matched, nyq);
   }
 
-  function drawHud(fs, betaOk, nyqOk){
-    var bw = 116, bh = 50, bx = pad.l + 6, by = pad.t + 4;
+  function drawHud(p, aliasing, matched){
+    var bw = 132, bh = 56, bx = pad.l + 6, by = pad.t + 4;
     ctx.fillStyle = COL.bg2;
-    ctx.strokeStyle = COL.lineStrong;
-    ctx.lineWidth = 1;
+    ctx.strokeStyle = matched ? COL.memory : COL.lineStrong;
+    ctx.lineWidth = matched ? 1.8 : 1;
     ctx.fillRect(bx, by, bw, bh);
     ctx.strokeRect(bx, by, bw, bh);
     ctx.textAlign = 'left';
+    ctx.font = '10px ' + COL_FONT;
     ctx.fillStyle = COL.fgDim;
-    ctx.font = '10px ' + COL_FONT;
-    ctx.fillText('fs', bx + 8, by + 16);
-    ctx.fillStyle = COL.neuro;
-    ctx.font = 'bold 15px ' + COL_FONT;
-    ctx.fillText(fs + ' Hz', bx + 26, by + 17);
-    ctx.font = '10px ' + COL_FONT;
-    ctx.fillStyle = betaOk ? COL.gold : COL.dendrite;
-    ctx.fillText(LANG === 'zh' ? (betaOk ? 'beta 已还原' : 'beta 失真') : (betaOk ? 'beta OK' : 'beta lost'), bx + 8, by + 36);
+    ctx.fillText('f  ' + p.f + ' Hz', bx + 8, by + 15);
+    ctx.fillText('A  ' + p.a.toFixed(2), bx + 8, by + 29);
+    ctx.fillStyle = aliasing ? COL.dendrite : COL.neuro;
+    ctx.fillText('fs ' + p.fs + ' Hz', bx + 8, by + 43);
+    if (aliasing){
+      ctx.fillStyle = COL.dendrite;
+      ctx.font = 'bold 10px ' + COL_FONT;
+      ctx.textAlign = 'right';
+      ctx.fillText(LANG === 'zh' ? '混叠' : 'ALIAS', bx + bw - 8, by + 43);
+    }
+  }
+
+  function advanceTarget(){
+    doneN++;
+    matchHoldFrames = 0;
+    if (tgtIdx < TARGETS.length - 1){
+      tgtIdx++;
+      syncTargetLabels();
+    } else {
+      unlocked = true;
+    }
+  }
+
+  function syncTargetLabels(){
+    var tg = TARGETS[tgtIdx];
+    tgtFEl.textContent = tg.f;
+    tgtAEl.textContent = tg.a.toFixed(2);
+    doneNEl.textContent = doneN;
   }
 
   // ---------- i18n ----------
   var LANG = 'zh';
   var I18N = {
-    brand:    {zh:'采样率调参', en:'Sampling Tuner'},
+    brand:    {zh:'造波沙盒', en:'Wave Forge'},
+    freqLabel:{zh:'频率 f', en:'Freq f'},
+    ampLabel: {zh:'幅度 A', en:'Amp A'},
     rateLabel:{zh:'采样率 fs', en:'Sample rate fs'},
-    taskTitle:{zh:'任务', en:'TASK'},
-    taskBody: {zh:'脑波里藏着一段 30Hz 的 beta 节律。拨动滑块，找到能还原这段快波的最低采样率。',
-               en:'A 30Hz beta rhythm hides in the wave. Drag the slider to find the lowest sample rate that rebuilds it.'},
-    taskHint: {zh:'提示：奈奎斯特说 fs 至少要 2× 信号最高频率。',
-               en:'Hint: Nyquist says fs must be at least 2x the highest frequency.'},
-    stBeta:   {zh:'beta 还原', en:'beta recon'},
-    stNyq:    {zh:'奈奎斯特', en:'Nyquist'},
-    stMin:    {zh:'达标最低 fs', en:'min ok fs'},
+    taskTitle:{zh:'目标波', en:'TARGET'},
+    taskBody: {zh:'把你的波调成虚线目标的样子：', en:'Match your wave to the dashed target:'},
+    progLabel:{zh:'已造', en:'forged'},
     lgReal:   {zh:'真实脑波', en:'true wave'},
     lgRecon:  {zh:'采样重建', en:'reconstructed'},
+    lgTgt:    {zh:'目标波', en:'target'},
     lgDot:    {zh:'采样点', en:'sample pts'},
-    title:    {zh:'采样率 vs 波形重建', en:'Sample rate vs reconstruction'},
-    hud1:     {zh:'最高频率 <b>30 Hz</b> · 奈奎斯特 <b>60 Hz</b>', en:'max freq <b>30 Hz</b> · Nyquist <b>60 Hz</b>'}
+    title:    {zh:'造波沙盒 · 调出你的脑波', en:'Wave Forge · shape your brain wave'},
+    hudNyq:   {zh:'奈奎斯特 <b id="nyqHud">20</b> Hz', en:'Nyquist <b id="nyqHud">20</b> Hz'},
+    aliasFlag:{zh:'混叠！', en:'ALIASING!'}
   };
 
   function applyI18N(){
@@ -464,38 +534,49 @@ canvas{
       var key = els[i].getAttribute('data-i18n');
       if (I18N[key]) els[i].innerHTML = I18N[key][LANG];
     }
+    // hudNyq 重新生成了 #nyqHud, 重新抓引用
+    nyqHud = document.getElementById('nyqHud');
   }
 
-  function updatePanels(fs, betaOk, nyqOk, goldWin){
-    stBeta.textContent = LANG === 'zh' ? (betaOk ? '已还原' : '失真') : (betaOk ? 'OK' : 'lost');
-    stBeta.className = betaOk ? 's-ok' : 's-bad';
-    stNyq.textContent = LANG === 'zh' ? (nyqOk ? '达到' : '不足') : (nyqOk ? 'met' : 'under');
-    stNyq.className = nyqOk ? 's-ok' : 's-bad';
+  function updatePanels(p, aliasing, matched, nyq){
+    if (nyqHud) nyqHud.textContent = nyq;
+    aliasFlag.classList.toggle('hide', !aliasing);
 
     var cap;
-    if (fs < 25){
+    if (unlocked){
       cap = LANG === 'zh'
-        ? '采样太稀，连线只剩锯齿——快波完全丢失，甚至出现<b>虚假的慢波</b>（混叠）。'
-        : 'Too sparse. The line is jagged, the fast wave is gone, and a <b>false slow wave</b> appears (aliasing).';
-    } else if (fs < NYQUIST){
+        ? '<span class="win">波形造物主解锁！</span>你刚刚明白了：脑波不过是一条<b>随时间起伏的线</b>——频率决定它多快，幅度决定它多高，采样率决定你能不能如实记下它。'
+        : '<span class="win">Wave Forger unlocked!</span> You just learned: a brain wave is only a <b>line rising and falling over time</b> — frequency sets how fast, amplitude how tall, and sample rate whether you can record it faithfully.';
+    } else if (aliasing){
       cap = LANG === 'zh'
-        ? '比 alpha 够，但还<b>没到 beta 的奈奎斯特 60Hz</b>，30Hz 快波被压扁、错位。'
-        : 'Enough for alpha, but <b>below beta Nyquist 60Hz</b>; the 30Hz fast wave is flattened and shifted.';
-    } else if (goldWin){
+        ? '<span class="alias">采样不足！</span>fs 比 2×f 还小，采样点连出的红线变成了一条<b>虚假的慢波</b>——这就是混叠。先把采样率提上去。'
+        : '<span class="alias">Undersampled!</span> fs is below 2x f, so the dots connect into a <b>false slow wave</b> — that is aliasing. Raise the sample rate first.';
+    } else if (matched){
       cap = LANG === 'zh'
-        ? '<span class="win">达标！</span>fs 越过 60Hz 后，重建波贴住真实脑波，30Hz beta 被完整捕捉。'
-        : '<span class="win">Got it!</span> Past 60Hz the reconstruction hugs the true wave; 30Hz beta is fully captured.';
+        ? '<span class="win">对上了！</span>你的波贴住了目标，采样率也够。再稳住半秒就记一笔。'
+        : '<span class="win">Matched!</span> Your wave hugs the target and the sample rate is enough. Hold steady for half a second to log it.';
     } else {
       cap = LANG === 'zh'
-        ? '采样很充足，重建几乎与真实波重合。临床 EEG 常用 250Hz 留足余量。'
-        : 'Plenty of samples; reconstruction nearly overlaps the truth. Clinical EEG often uses 250Hz for margin.';
+        ? '拨 <b>频率</b> 让波变快变慢，拨 <b>幅度</b> 让它变高变矮，拨 <b>采样率</b> 看采样点是否跟得上。自由造，看波怎么随你的手起伏。'
+        : 'Drag <b>frequency</b> to speed it up or down, <b>amplitude</b> to make it taller, <b>sample rate</b> to see if the dots keep up. Forge freely and watch the wave answer your hand.';
     }
     captionEl.innerHTML = cap;
   }
 
   // ---------- events ----------
+  freq.addEventListener('input', function(){
+    stateWave.f = parseInt(freq.value, 10);
+    freqVal.textContent = stateWave.f;
+    draw();
+  });
+  amp.addEventListener('input', function(){
+    stateWave.a = parseFloat(amp.value);
+    ampVal.textContent = stateWave.a.toFixed(2);
+    draw();
+  });
   rate.addEventListener('input', function(){
-    rateVal.textContent = rate.value;
+    stateWave.fs = parseInt(rate.value, 10);
+    rateVal.textContent = stateWave.fs;
     draw();
   });
 
@@ -503,15 +584,19 @@ canvas{
     LANG = (LANG === 'zh') ? 'en' : 'zh';
     document.documentElement.lang = LANG;
     applyI18N();
-    rateVal.textContent = rate.value;
     draw();
   });
 
   window.addEventListener('resize', resize);
 
+  // 当玩家把滑块停在匹配区间但不动时, 也要让防抖计数累加 → 用一个轻量定时器持续重绘判定
+  setInterval(function(){
+    if (!unlocked && isMatch()){ draw(); }
+  }, 28);
+
   // init
   applyI18N();
-  // 等一帧拿到布局尺寸
+  syncTargetLabels();
   requestAnimationFrame(function(){ resize(); });
 })();
 </script>

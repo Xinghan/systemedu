@@ -70,17 +70,17 @@ canvas{display:block;width:100%;height:100%}
     <div class="title-en mono" id="ttlEn">Cut out the imagining seconds</div>
   </div>
   <ul class="guide">
-    <li id="g1">连续几分钟的脑波录音</li>
-    <li id="g2">每次提示打一个事件时间戳</li>
-    <li id="g3">以事件为锚切出对齐的 epoch</li>
+    <li id="g1">一整条连续的脑波录音</li>
+    <li id="g2">每次提示落一个事件标记</li>
+    <li id="g3">以标记为锚切出对齐的 epoch</li>
   </ul>
   <button class="lang-btn mono" id="langBtn">中 / EN</button>
 </aside>
 <main class="stage-wrap">
   <canvas id="stage"></canvas>
-  <div class="frame-tag mono" id="frameTag">F1 / 5</div>
+  <div class="frame-tag mono" id="frameTag">PHASE</div>
   <div class="hud">
-    <div class="hud-row"><span class="hud-k mono" id="hk1">STAGE</span><span class="hud-v mono" id="hv1">--</span></div>
+    <div class="hud-row"><span class="hud-k mono" id="hk1">PHASE</span><span class="hud-v mono" id="hv1">--</span></div>
     <div class="hud-row"><span class="hud-k mono" id="hk2">EVENTS</span><span class="hud-v mono" id="hv2">0</span></div>
     <div class="hud-row"><span class="hud-k mono" id="hk3">EPOCHS</span><span class="hud-v mono" id="hv3">0</span></div>
     <div class="hud-row"><span class="hud-k mono" id="hk4">WINDOW</span><span class="hud-v mono" id="hv4">-0.5~4s</span></div>
@@ -96,24 +96,22 @@ canvas{display:block;width:100%;height:100%}
 var LANG='cn';
 var I18N={
   ttlZh:{cn:'找出想象动手那几秒',en:'Find the imagining seconds'},
-  ttlEn:{cn:'把连续录音切成可比较的试验',en:'Cut a recording into epochs'},
-  g1:{cn:'连续几分钟的脑波录音',en:'A few minutes of continuous EEG'},
-  g2:{cn:'每次提示打一个事件时间戳',en:'Each cue stamps an event marker'},
-  g3:{cn:'以事件为锚切出对齐的 epoch',en:'Anchor on events, cut aligned epochs'},
-  hk1:{cn:'阶段',en:'STAGE'},hk2:{cn:'事件数',en:'EVENTS'},hk3:{cn:'切片数',en:'EPOCHS'},hk4:{cn:'窗口',en:'WINDOW'},
-  st:{cn:['连续录音','事件标记','单片窗口','叠成一摞','三维数组'],
-      en:['RAW STREAM','EVENTS','ONE WINDOW','STACK','3D ARRAY']},
+  ttlEn:{cn:'把一条长录音切成对齐的 epoch',en:'Slice one long recording into epochs'},
+  g1:{cn:'一整条连续的脑波录音',en:'One long continuous EEG recording'},
+  g2:{cn:'每次提示落一个事件标记',en:'Each cue drops an event marker'},
+  g3:{cn:'以标记为锚切出对齐的 epoch',en:'Anchor on markers, cut aligned epochs'},
+  hk1:{cn:'阶段',en:'PHASE'},hk2:{cn:'事件数',en:'EVENTS'},hk3:{cn:'切片数',en:'EPOCHS'},hk4:{cn:'窗口',en:'WINDOW'},
+  ph:{cn:['流出录音','落下标记','滑窗切片','对齐堆叠'],
+      en:['STREAMING','MARKING','WINDOWING','STACKING']},
   caps:{
-    cn:['一整段几分钟的连续脑波——想象、休息全混在一起。',
-        '实验里每次提示「想象动手」都打一个时间戳(trigger)。',
-        '以事件为锚，向前 0.5 秒、向后 4 秒，切出一个窗口 = 一个 epoch。',
-        '把每个事件都这样切出来，对齐叠成一摞——这里有 288 个。',
-        '一摞 epoch 就是 [288, 22, 1125] 的三维数组：试验 × 通道 × 时间。'],
-    en:['A few-minute continuous brain wave — imagining and rest, all mixed.',
-        'Each "imagine movement" cue stamps a trigger onto the timeline.',
-        'Anchor on the event: cut -0.5s to +4s. That window is one epoch.',
-        'Cut every event the same way, align and stack them — 288 here.',
-        'The stack is a 3D array [288, 22, 1125]: trials x channels x time.']
+    cn:['这是一整条几分钟的连续脑波——想象、休息全混在一条线里流过。',
+        '实验里每次提示「想象动手」，就在那一刻落下一个事件标记。',
+        '以每个标记为锚，向前 0.5 秒、向后 4 秒框出一个窗口，抽成一段 epoch。',
+        '每段都这样抽出来、对齐时间零点叠成一摞——这就是 [288, 22, 1125]。'],
+    en:['One long continuous brain wave — imagining and rest all flow in a single line.',
+        'Each "imagine movement" cue drops an event marker at that exact moment.',
+        'Anchor on each marker: window -0.5s to +4s, lift out one epoch segment.',
+        'Lift every segment, align on t=0, stack them — the array [288, 22, 1125].']
   }
 };
 function t(k){return (I18N[k]&&I18N[k][LANG])||(I18N[k]&&I18N[k].en)||k;}
@@ -147,40 +145,26 @@ function lerp(a,b,p){return a+(b-a)*p;}
 function easeIO(x){return x<0.5?2*x*x:1-Math.pow(-2*x+2,2)/2;}
 function clamp01(x){return x<0?0:x>1?1:x;}
 
-// events along the recording (position 0..1, hand L/R)
-var EVENTS=[{p:0.12,h:'L'},{p:0.27,h:'R'},{p:0.42,h:'L'},
-            {p:0.58,h:'R'},{p:0.71,h:'L'},{p:0.86,h:'R'}];
-var WIN=0.085; // epoch window width as fraction of recording
+// the ONE long recording: events along it (position 0..1, hand L/R)
+var EVENTS=[{p:0.10,h:'L'},{p:0.235,h:'R'},{p:0.37,h:'L'},
+            {p:0.505,h:'R'},{p:0.64,h:'L'},{p:0.775,h:'R'},{p:0.90,h:'L'}];
+var PRE=0.022;   // -0.5s portion, fraction of full recording
+var POST=0.078;  // +4s portion
 
-var startT=null, FDUR=6000, NF=5, TOTAL=NF*FDUR;
-var lastStage=-1;
-
-function brainWave(x0,x1,y,h,now,seed){
-  ctx.beginPath();
-  for(var x=x0;x<=x1;x+=2){
-    var tt=(x-x0)/(x1-x0);
-    var v=Math.sin(tt*55+now/520+seed)*0.42
-         +Math.sin(tt*140+seed*2)*0.16
-         +Math.sin(tt*21+now/900)*0.26;
-    var yy=y - v*h/2;
-    if(x===x0)ctx.moveTo(x,yy);else ctx.lineTo(x,yy);
-  }
-  ctx.stroke();
+// ---- single continuous timeline (no frame switching) ----
+var startT=null, CYCLE=34000;       // 34s loop
+// phase boundaries within the cycle (cumulative progress 0..1)
+var PH=[0.20,0.42,0.74,1.00];       // stream / mark / window / stack
+function phaseOf(p){
+  if(p<PH[0])return 0; if(p<PH[1])return 1; if(p<PH[2])return 2; return 3;
 }
+var lastPhase=-1;
 
-// small epoch waveform inside a box
-function epochWave(x,y,w,h,col,seed,now){
-  ctx.save();
-  ctx.strokeStyle=col;ctx.lineWidth=1.4;
-  ctx.beginPath();
-  for(var i=0;i<=w;i+=2){
-    var tt=i/w;
-    var v=Math.sin(tt*22+seed*3+now/600)*0.5+Math.sin(tt*48+seed)*0.22;
-    var yy=y+h/2 - v*h*0.36;
-    if(i===0)ctx.moveTo(x+i,yy);else ctx.lineTo(x+i,yy);
-  }
-  ctx.stroke();
-  ctx.restore();
+// recording waveform sample (deterministic, smooth)
+function waveAt(tt,now,seed){
+  return Math.sin(tt*52+now/640+seed)*0.40
+       + Math.sin(tt*135+seed*2)*0.15
+       + Math.sin(tt*20+now/980)*0.27;
 }
 
 function drawGrid(){
@@ -197,14 +181,53 @@ function label(txt,x,y,col,size,align){
   ctx.fillText(txt,x,y);ctx.restore();
 }
 
-function flagMarker(ex,ytop,ybot,col,lab,grow){
+// geometry of the one long recording lane
+var REC={};
+function recGeom(){
+  REC.x0=46; REC.x1=W-150; REC.y=H*0.26; REC.h=H*0.165;
+  REC.span=REC.x1-REC.x0;
+}
+// x position of recording fraction
+function rfx(p){return REC.x0+p*REC.span;}
+
+// draw the long recording, only up to fraction "drawn"; segments under
+// extracted windows fade once lifted (lift 0..1 global)
+function drawRecording(now,drawn,activeWinCenter,lift){
+  ctx.save();
+  ctx.lineWidth=1.7;
+  ctx.beginPath();
+  var started=false;
+  var maxX=rfx(drawn);
+  for(var x=REC.x0;x<=maxX;x+=2){
+    var tt=(x-REC.x0)/REC.span;
+    var yy=REC.y - waveAt(tt,now,0)*REC.h/2;
+    if(!started){ctx.moveTo(x,yy);started=true;}else ctx.lineTo(x,yy);
+  }
+  // recording dims as epochs get lifted out
+  var dim=1-0.45*lift;
+  ctx.globalAlpha=dim;
+  ctx.strokeStyle=cssv('--signal');
+  ctx.stroke();
+  ctx.restore();
+  // baseline + time axis
+  ctx.save();
+  ctx.strokeStyle=cssv('--line-strong');ctx.lineWidth=1;
+  ctx.beginPath();ctx.moveTo(REC.x0,REC.y+REC.h/2+16);ctx.lineTo(maxX,REC.y+REC.h/2+16);ctx.stroke();
+  ctx.restore();
+  label(LANG==='cn'?'一整条连续录音   时间 ->':'one continuous recording   time ->',
+        REC.x0,REC.y-REC.h/2-18,cssv('--fg-mute'),11,'left');
+}
+
+// flag marker at fraction p, grow 0..1
+function flagMarker(p,col,lab,grow){
+  var ex=rfx(p);
+  var ytop=REC.y-REC.h/2-10, ybot=REC.y+REC.h/2+16;
   ctx.save();
   ctx.strokeStyle=col;ctx.lineWidth=2;ctx.globalAlpha=grow;
   ctx.beginPath();ctx.moveTo(ex,ybot);ctx.lineTo(ex,lerp(ybot,ytop,grow));ctx.stroke();
-  // flag
   ctx.fillStyle=col;
   var fy=lerp(ybot,ytop,grow);
-  ctx.beginPath();ctx.moveTo(ex,fy);ctx.lineTo(ex+16,fy+5);ctx.lineTo(ex,fy+10);ctx.closePath();ctx.fill();
+  ctx.beginPath();ctx.moveTo(ex,fy);ctx.lineTo(ex+15,fy+5);ctx.lineTo(ex,fy+10);ctx.closePath();ctx.fill();
   if(grow>0.7){
     ctx.globalAlpha=(grow-0.7)/0.3;
     ctx.font="9px 'JetBrains Mono',monospace";ctx.fillStyle=col;ctx.textAlign='center';
@@ -213,185 +236,165 @@ function flagMarker(ex,ytop,ybot,col,lab,grow){
   ctx.restore();
 }
 
+// extracted epoch waveform (re-samples the SAME recording in [p-PRE, p+POST])
+function epochWaveOf(p,bx,by,bw,bh,col,now){
+  ctx.save();ctx.strokeStyle=col;ctx.lineWidth=1.4;ctx.beginPath();
+  var t0=p-PRE, t1=p+POST, started=false;
+  for(var i=0;i<=bw;i+=2){
+    var ftt=t0+(i/bw)*(t1-t0);
+    var v=waveAt(ftt,now,0);
+    var yy=by+bh/2 - v*bh*0.40;
+    if(!started){ctx.moveTo(bx+i,yy);started=true;}else ctx.lineTo(bx+i,yy);
+  }
+  ctx.stroke();ctx.restore();
+}
+
 function draw(now){
   if(startT===null)startT=now;
-  var el=(now-startT)%TOTAL;
-  var stage=Math.min(Math.floor(el/FDUR),NF-1);
-  var fp=easeIO(clamp01((el-stage*FDUR)/FDUR)); // progress within frame
   if(!W||!H){requestAnimationFrame(draw);return;}
+  recGeom();
+  var prog=((now-startT)%CYCLE)/CYCLE;
+  var phase=phaseOf(prog);
+  if(phase!==lastPhase){updateHUDtext(phase);updateCaption(phase);lastPhase=phase;}
 
-  if(stage!==lastStage){updateHUDtext(stage);lastStage=stage;updateCaption(stage);}
+  var signal=cssv('--signal'),core=cssv('--core'),flash=cssv('--flash'),
+      query=cssv('--query'),accent=cssv('--accent'),
+      fgmute=cssv('--fg-mute'),fgdim=cssv('--fg-dim'),gold=cssv('--gold');
+  var colL=signal, colR=query;
+
+  // ---- phase-local progress (continuous, overlapping; nothing ever cleared) ----
+  // p0: recording draws out 0..1
+  var p0=clamp01(prog/PH[0]);
+  var drawn=easeIO(p0);
+  // p1: markers fall in, staggered across [PH0..PH1]
+  var p1=clamp01((prog-PH[0])/(PH[1]-PH[0]));
+  // p2: window slides across, lifting epochs, across [PH1..PH2]
+  var p2=clamp01((prog-PH[1])/(PH[2]-PH[1]));
+  // p3: final stack settle + gold takeaway, across [PH2..1]
+  var p3=clamp01((prog-PH[2])/(1-PH[2]));
 
   ctx.clearRect(0,0,W,H);
   drawGrid();
 
-  var signal=cssv('--signal'),core=cssv('--core'),flash=cssv('--flash'),
-      query=cssv('--query'),accent=cssv('--accent'),fg=cssv('--fg'),
-      fgmute=cssv('--fg-mute'),fgdim=cssv('--fg-dim'),gold=cssv('--gold');
-  var colL=signal, colR=query; // left hand cyan, right hand gold-ish query
+  // how much the recording has been "consumed" into epochs (drives dim)
+  var lift = phase>=2 ? p2 : 0;
 
-  var rx0=40, rx1=W*0.66, ry=H*0.30, rh=H*0.20;
+  // ===== THE ONE LONG RECORDING (always present) =====
+  drawRecording(now,drawn,0,lift);
 
-  // ---------- recording lane (always) ----------
-  ctx.save();
-  ctx.strokeStyle= stage<=1 ? signal : fgmute;
-  ctx.lineWidth= stage<=1 ? 1.8 : 1.3;
-  ctx.globalAlpha= stage<=3 ? 1 : 0.55;
-  brainWave(rx0,rx1,ry,rh,now,0);
-  ctx.restore();
-  label(LANG==='cn'?'连续录音  时间 →':'continuous recording  time →',rx0,ry-rh/2-16,fgmute,11,'left');
-
-  // baseline axis
-  ctx.strokeStyle=cssv('--line-strong');ctx.lineWidth=1;
-  ctx.beginPath();ctx.moveTo(rx0,ry+rh/2+14);ctx.lineTo(rx1,ry+rh/2+14);ctx.stroke();
-
-  // ---------- F2: event markers grow in ----------
-  if(stage>=1){
-    var revealN = stage===1 ? Math.ceil(fp*EVENTS.length) : EVENTS.length;
-    for(var i=0;i<revealN;i++){
+  // ===== event markers (persist once dropped) =====
+  var marksShown=0;
+  if(phase>=1){
+    for(var i=0;i<EVENTS.length;i++){
+      var startF=i/EVENTS.length, endF=(i+1)/EVENTS.length;
+      var grow = phase===1 ? clamp01((p1-startF)/(endF-startF)) : 1;
+      if(grow<=0)continue;
       var ev=EVENTS[i];
-      var ex=rx0+ev.p*(rx1-rx0);
-      var grow = (stage===1 && i===revealN-1) ? clamp01(fp*EVENTS.length-(revealN-1)) : 1;
-      flagMarker(ex,ry-rh/2-8,ry+rh/2+14,ev.h==='L'?colL:colR,'EV'+(i+1),grow);
+      flagMarker(ev.p,ev.h==='L'?colL:colR,'EV'+(i+1),grow);
+      if(grow>0.6)marksShown++;
     }
-    // legend
-    label(LANG==='cn'?'■ 想象左手':'L hand',rx1+18,ry-rh/2,colL,10,'left');
-    label(LANG==='cn'?'■ 想象右手':'R hand',rx1+18,ry-rh/2+16,colR,10,'left');
+    // legend (right of recording)
+    label(LANG==='cn'?'L 想象左手':'L hand',REC.x1+14,REC.y-REC.h/2,colL,10,'left');
+    label(LANG==='cn'?'R 想象右手':'R hand',REC.x1+14,REC.y-REC.h/2+16,colR,10,'left');
   }
 
-  // ---------- F3: single window cut from one event ----------
-  if(stage===2){
-    var ev0=EVENTS[2];
-    var ex0=rx0+ev0.p*(rx1-rx0);
-    var winW=WIN*(rx1-rx0);
-    var preW=winW*0.12; // -0.5s portion
-    var wx=ex0-preW, wy=ry-rh/2-10, wh=rh+24;
-    // highlight band sweeping out
-    ctx.save();
-    ctx.fillStyle=colL; ctx.globalAlpha=0.14;
-    ctx.fillRect(wx,wy,winW*fp,wh);
-    ctx.globalAlpha=0.9;ctx.strokeStyle=colL;ctx.lineWidth=2;
-    ctx.strokeRect(wx,wy,winW*fp,wh);
-    ctx.restore();
-    // event tick line emphasised
-    ctx.strokeStyle=colL;ctx.lineWidth=2;ctx.setLineDash([3,3]);
-    ctx.beginPath();ctx.moveTo(ex0,wy-6);ctx.lineTo(ex0,wy+wh+6);ctx.stroke();ctx.setLineDash([]);
-    label('t=0',ex0,wy+wh+18,colL,10,'center');
-    label('-0.5s',wx,wy-8,fgmute,9,'left');
-    label('+4s',wx+winW,wy-8,fgmute,9,'right');
+  // ===== stack area below: epochs lifted out, aligned on t=0 =====
+  var sx=W*0.30, sTop=H*0.55, eh=Math.max(15,(H*0.36)/EVENTS.length-6), gap=6, ew=W*0.30;
+  var t0x=sx+ew*(PRE/(PRE+POST)); // aligned t=0 column
 
-    // the extracted epoch shown below, big
-    var bx=W*0.30, by=H*0.62, bw=W*0.36, bh=H*0.20;
-    ctx.save();ctx.globalAlpha=clamp01(fp*1.4);
-    ctx.fillStyle=cssv('--bg-2');ctx.fillRect(bx,by,bw,bh);
-    ctx.strokeStyle=colL;ctx.lineWidth=2;ctx.strokeRect(bx,by,bw,bh);
-    epochWave(bx+8,by+6,bw-16,bh-12,signal,2,now);
-    label(LANG==='cn'?'一个 epoch · 左手':'one epoch · L',bx+8,by-10,colL,11,'left');
-    ctx.restore();
-    // arrow recording -> epoch
-    if(fp>0.5){
-      ctx.save();ctx.globalAlpha=(fp-0.5)*2;ctx.strokeStyle=accent;ctx.lineWidth=1.6;
-      ctx.beginPath();ctx.moveTo(ex0,wy+wh+22);ctx.lineTo(bx+bw/2,by-16);ctx.stroke();
-      ctx.restore();
-    }
-  }
-
-  // ---------- F4: all epochs stacked ----------
-  if(stage===3){
-    var sx=W*0.20, sy0=H*0.50;
-    var ew=W*0.30, eh=20, gap=7;
-    var stackN=EVENTS.length;
-    for(var s=0;s<stackN;s++){
-      var appear=clamp01(fp*stackN-s);
-      if(appear<=0)continue;
+  // which events have been lifted (sliding window passes each)
+  if(phase>=2){
+    for(var s=0;s<EVENTS.length;s++){
       var ev2=EVENTS[s];
+      // window reaches event s at fraction s/N of the slide
+      var reach = clamp01((p2*EVENTS.length)-s);
+      if(reach<=0)continue;
       var col=ev2.h==='L'?colL:colR;
-      var fromX=rx0+ev2.p*(rx1-rx0)-ew/2;
-      var ex2=lerp(fromX,sx,easeIO(appear));
-      var ey=lerp(ry,sy0+s*(eh+gap),easeIO(appear));
-      ctx.save();ctx.globalAlpha=0.35+0.65*appear;
-      ctx.fillStyle=cssv('--bg-2');ctx.fillRect(ex2,ey,ew,eh);
-      ctx.strokeStyle=col;ctx.lineWidth=1.4;ctx.strokeRect(ex2,ey,ew,eh);
-      epochWave(ex2+5,ey+2,ew-40,eh-4,col,s+1,now);
+      // source box position on the recording (around the marker)
+      var srcX=rfx(ev2.p-PRE), srcY=REC.y-eh/2, srcW=ew*((PRE+POST)/(PRE+POST));
+      // we draw a small lift-out rect interpolating from recording to the stack slot
+      var dstX=sx, dstY=sTop+s*(eh+gap);
+      var ease=easeIO(reach);
+      var bx=lerp(rfx(ev2.p)-ew/2,dstX,ease);
+      var by=lerp(REC.y-eh/2,dstY,ease);
+      ctx.save();ctx.globalAlpha=0.35+0.65*reach;
+      ctx.fillStyle=cssv('--bg-2');ctx.fillRect(bx,by,ew,eh);
+      ctx.strokeStyle=col;ctx.lineWidth=1.4;ctx.strokeRect(bx,by,ew,eh);
+      epochWaveOf(ev2.p,bx+4,by+2,ew-34,eh-4,col,now);
       ctx.font="8px 'JetBrains Mono',monospace";ctx.fillStyle=col;ctx.textAlign='right';
-      ctx.fillText(ev2.h,ex2+ew-6,ey+eh/2+3);
+      ctx.fillText(ev2.h,bx+ew-6,by+eh/2+3);
       ctx.restore();
     }
-    label(LANG==='cn'?'对齐叠成一摞':'aligned & stacked',sx,sy0-16,fgdim,11,'left');
-    // count badge
-    ctx.save();ctx.globalAlpha=clamp01((fp-0.4)*2);
-    label('… × 288',sx+ew+20,sy0+(stackN/2)*(eh+gap),accent,14,'left');
+    // aligned t=0 guide line through the settled stack
+    if(p2>0.15){
+      ctx.save();ctx.globalAlpha=clamp01((p2-0.15)*2)*0.8;
+      ctx.strokeStyle=accent;ctx.lineWidth=1.4;ctx.setLineDash([4,4]);
+      ctx.beginPath();ctx.moveTo(t0x,sTop-12);ctx.lineTo(t0x,sTop+EVENTS.length*(eh+gap));ctx.stroke();
+      ctx.setLineDash([]);
+      label('t=0',t0x,sTop-22,accent,10,'center');
+      ctx.restore();
+    }
+    label(LANG==='cn'?'抽出对齐 -> 叠成一摞':'lift & align -> stack',sx,sTop-22,fgdim,11,'left');
+  }
+
+  // ===== sliding window head (the cutter), visible during phase 2 =====
+  if(phase===2){
+    var headP=lerp(EVENTS[0].p,EVENTS[EVENTS.length-1].p,p2);
+    var wx=rfx(headP-PRE), wW=(PRE+POST)*REC.span;
+    var wy=REC.y-REC.h/2-12, wh=REC.h+28;
+    ctx.save();
+    ctx.fillStyle=accent;ctx.globalAlpha=0.12;ctx.fillRect(wx,wy,wW,wh);
+    ctx.globalAlpha=0.95;ctx.strokeStyle=accent;ctx.lineWidth=2;ctx.strokeRect(wx,wy,wW,wh);
+    label('-0.5s',wx,wy-8,fgmute,9,'left');
+    label('+4s',wx+wW,wy-8,fgmute,9,'right');
     ctx.restore();
   }
 
-  // ---------- F5: 3D array + gold takeaway ----------
-  if(stage===4){
-    var ap=fp;
-    var cx=W*0.34, cy=H*0.46, cube=Math.min(W,H)*0.20;
-    var dx=cube*0.42, dy=cube*0.30; // iso offsets
-    // back-to-front faces
-    ctx.save();ctx.globalAlpha=clamp01(ap*1.3);
-    // top face (epochs dimension)
-    ctx.fillStyle=core;ctx.globalAlpha=0.32*clamp01(ap*1.3);
-    ctx.beginPath();ctx.moveTo(cx,cy);ctx.lineTo(cx+cube,cy);ctx.lineTo(cx+cube+dx,cy-dy);ctx.lineTo(cx+dx,cy-dy);ctx.closePath();ctx.fill();
-    // front face (channels x time)
-    ctx.globalAlpha=0.55*clamp01(ap*1.3);ctx.fillStyle=cssv('--bg-2');
-    ctx.fillRect(cx,cy,cube,cube);
-    // side face (time)
-    ctx.fillStyle=cssv('--depth');ctx.globalAlpha=0.5*clamp01(ap*1.3);
-    ctx.beginPath();ctx.moveTo(cx+cube,cy);ctx.lineTo(cx+cube+dx,cy-dy);ctx.lineTo(cx+cube+dx,cy+cube-dy);ctx.lineTo(cx+cube,cy+cube);ctx.closePath();ctx.fill();
-    ctx.globalAlpha=clamp01(ap*1.3);
-    // edges
-    ctx.strokeStyle=signal;ctx.lineWidth=1.6;
-    ctx.strokeRect(cx,cy,cube,cube);
-    ctx.beginPath();ctx.moveTo(cx,cy);ctx.lineTo(cx+dx,cy-dy);
-    ctx.moveTo(cx+cube,cy);ctx.lineTo(cx+cube+dx,cy-dy);
-    ctx.moveTo(cx+cube,cy+cube);ctx.lineTo(cx+cube+dx,cy+cube-dy);
-    ctx.moveTo(cx+cube+dx,cy-dy);ctx.lineTo(cx+cube+dx,cy+cube-dy);
-    ctx.lineTo(cx+dx,cy+cube-dy);ctx.moveTo(cx+cube+dx,cy-dy);ctx.lineTo(cx+dx,cy-dy);ctx.stroke();
-    // dimension labels
-    label('288 epochs',cx+dx/2-4,cy-dy/2-6,signal,11,'right');
-    label('22 ch',cx-8,cy+cube/2,query,11,'right');
-    label('1125 t',cx+cube/2,cy+cube+18,flash,11,'center');
-    label('[ 288, 22, 1125 ]',cx+cube/2,cy+cube+38,accent,13,'center');
-    ctx.restore();
+  // ===== phase 3: count badge + 3D-array gold takeaway =====
+  if(phase>=3){
+    // count growing toward 288
+    var cnt=Math.round(lerp(EVENTS.length, 288, easeIO(clamp01(p3*1.4))));
+    label('... x  '+cnt,sx+ew+18,sTop+EVENTS.length*(eh+gap)/2,accent,15,'left');
 
-    // gold key-moment takeaway
-    if(ap>0.45){
-      ctx.save();ctx.globalAlpha=clamp01((ap-0.45)/0.4);
-      var tx=W*0.68, tyc=H*0.46;
+    if(p3>0.35){
+      var ap=clamp01((p3-0.35)/0.5);
+      ctx.save();ctx.globalAlpha=ap;
+      var tx=W*0.50, tyc=H*0.50;
+      var bw2=W*0.30,bh2=104;
       ctx.fillStyle=cssv('--bg-1');ctx.strokeStyle=gold;ctx.lineWidth=2;
-      var bw2=W*0.26,bh2=92;
       ctx.fillRect(tx-bw2/2,tyc-bh2/2,bw2,bh2);ctx.strokeRect(tx-bw2/2,tyc-bh2/2,bw2,bh2);
-      ctx.shadowColor=gold;ctx.shadowBlur=14;
-      ctx.fillStyle=gold;ctx.font='700 14px "Noto Sans SC",sans-serif';
-      ctx.textAlign='center';ctx.textBaseline='middle';
-      var key=LANG==='cn'?['把连续录音','切成一片片','可比较的试验']:['Cut a recording','into comparable','trials (epochs)'];
-      for(var ki=0;ki<key.length;ki++)ctx.fillText(key[ki],tx,tyc-18+ki*20);
+      ctx.fillStyle=gold;ctx.textAlign='center';ctx.textBaseline='middle';
+      ctx.font='700 16px "JetBrains Mono",monospace';
+      ctx.fillText('[ 288, 22, 1125 ]',tx,tyc-26);
+      ctx.font='600 11px "JetBrains Mono",monospace';ctx.fillStyle=cssv('--fg-dim');
+      ctx.fillText('trials  x  channels  x  time',tx,tyc-4);
+      ctx.fillStyle=gold;ctx.font='700 13px "Noto Sans SC",sans-serif';
+      var key=LANG==='cn'?'长录音 -> 一摞对齐的 epoch':'long recording -> a stack of aligned epochs';
+      ctx.fillText(key,tx,tyc+26);
       ctx.restore();
     }
   }
 
-  // update dynamic HUD numbers
-  updateHUDnums(stage,fp);
+  // HUD numbers
+  var evNum = phase<1?0 : (phase===1?marksShown : EVENTS.length);
+  var epoNum;
+  if(phase<2)epoNum=0;
+  else if(phase===2)epoNum=Math.min(EVENTS.length,Math.floor(p2*EVENTS.length)+1);
+  else epoNum=288;
+  document.getElementById('hv2').textContent= phase>=2 ? '288' : String(evNum);
+  document.getElementById('hv3').textContent= String(epoNum);
 
   requestAnimationFrame(draw);
 }
 
-function updateHUDtext(stage){
-  document.getElementById('hv1').textContent=t('st')[stage];
+function updateHUDtext(phase){
+  document.getElementById('hv1').textContent=t('ph')[phase];
+  document.getElementById('frameTag').textContent='PHASE '+(phase+1)+' / 4';
 }
-function updateHUDnums(stage,fp){
-  var ev = stage<1?0 : (stage===1?Math.ceil(fp*EVENTS.length):EVENTS.length);
-  var epo = stage<2?0 : (stage===2?1 : (stage===3?Math.ceil(fp*EVENTS.length):288));
-  document.getElementById('hv2').textContent= stage>=2? '288' : String(ev);
-  document.getElementById('hv3').textContent= stage>=4? '288' : String(epo);
-}
-function updateCaption(stage){
+function updateCaption(phase){
   var caps=I18N.caps[LANG]||I18N.caps.en;
-  document.getElementById('capZh').textContent=caps[stage]||'';
-  document.getElementById('capEn').textContent=I18N.caps.en[stage]||'';
-  document.getElementById('frameTag').textContent='F'+(stage+1)+' / 5';
+  document.getElementById('capZh').textContent=caps[phase]||'';
+  document.getElementById('capEn').textContent=I18N.caps.en[phase]||'';
 }
 
 function refreshI18N(){
@@ -405,8 +408,8 @@ function refreshI18N(){
   document.getElementById('hk3').textContent=t('hk3');
   document.getElementById('hk4').textContent=t('hk4');
   document.getElementById('mascotWrap').innerHTML=mascotSVG();
-  updateHUDtext(lastStage<0?0:lastStage);
-  updateCaption(lastStage<0?0:lastStage);
+  var ph=lastPhase<0?0:lastPhase;
+  updateHUDtext(ph);updateCaption(ph);
 }
 
 document.getElementById('langBtn').addEventListener('click',function(){
