@@ -1,0 +1,567 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>录制范式实验设计台 / Recording Paradigm Lab — M39 Game</title>
+<style>
+  /* ============== Layer 1 — Deep-space canvas (shared across 26 subjects) ============== */
+  :root {
+    --bg-0: oklch(0.14 0.035 265);
+    --bg-1: oklch(0.18 0.04 265);
+    --bg-2: oklch(0.22 0.045 265);
+    --bg-3: oklch(0.28 0.05 265);
+    --line: oklch(0.35 0.05 265 / 0.35);
+    --line-strong: oklch(0.55 0.08 265 / 0.55);
+
+    --fg:      oklch(0.96 0.01 265);
+    --fg-dim:  oklch(0.75 0.02 265);
+    --fg-mute: oklch(0.55 0.03 265);
+
+    /* Layer 2 — cs signature accent (cyan) */
+    --cs: oklch(0.75 0.17 200);
+
+    /* Layer 3 — cs 5-color palette (themes.js id=cs, mascot Bit) */
+    --SIGNAL: oklch(0.75 0.17 200);   /* bright signal cyan */
+    --CORE:   oklch(0.55 0.16 200);   /* deep core */
+    --DEPTH:  oklch(0.35 0.10 210);   /* depth blue */
+    --FLASH:  oklch(0.92 0.08 190);   /* pale flash */
+    --QUERY:  oklch(0.85 0.14 85);    /* gold (warning / query) */
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html, body {
+    width: 100%;
+    height: 100vh;
+    overflow: hidden;
+    background: var(--bg-0);
+    color: var(--fg);
+    font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    letter-spacing: 0.02em;
+  }
+
+  .stage-wrap { display: flex; width: 100%; height: 100vh; }
+
+  /* ============== Sidebar ============== */
+  .game-sidebar {
+    width: 200px;
+    flex-shrink: 0;
+    height: 100vh;
+    background: var(--bg-1);
+    border-right: 1px solid var(--line);
+    display: flex;
+    flex-direction: column;
+    padding: 14px 12px;
+    overflow-y: auto;
+  }
+  .sb-title { font-size: 13px; font-weight: 700; color: var(--SIGNAL); line-height: 1.3; }
+  .sb-sub { font-size: 10px; color: var(--fg-mute); margin-top: 4px; line-height: 1.4; }
+
+  /* Bit mascot */
+  .mascot { display: flex; align-items: center; gap: 8px; margin: 12px 0 8px; }
+  .mascot-cube {
+    width: 26px; height: 26px; flex-shrink: 0; position: relative;
+    background: var(--bg-2); border: 1px solid var(--SIGNAL);
+  }
+  .mascot-cube::before, .mascot-cube::after {
+    content: ''; position: absolute; background: var(--SIGNAL);
+  }
+  .mascot-cube::before { width: 8px; height: 8px; top: 4px; left: 4px; }
+  .mascot-cube::after { width: 6px; height: 6px; bottom: 4px; right: 5px; background: var(--FLASH); }
+  .mascot-name { font-size: 10px; color: var(--FLASH); }
+  .mascot-say { font-size: 9px; color: var(--fg-mute); line-height: 1.4; }
+
+  /* Roadmap */
+  .roadmap { margin: 10px 0; }
+  .road-h { font-size: 9px; color: var(--fg-mute); text-transform: uppercase; letter-spacing: .08em; margin-bottom: 6px; }
+  .stage-row { display: flex; align-items: center; gap: 6px; margin-bottom: 3px; font-size: 9px; color: var(--fg-mute); }
+  .stage-dot { width: 8px; height: 8px; flex-shrink: 0; border: 1px solid var(--line-strong); background: var(--bg-2); }
+  .stage-row.done .stage-dot { background: var(--CORE); border-color: var(--CORE); }
+  .stage-row.done { color: var(--fg-dim); }
+  .stage-row.here .stage-dot { background: var(--SIGNAL); border-color: var(--FLASH); box-shadow: 0 0 0 2px var(--bg-1), 0 0 6px var(--SIGNAL); }
+  .stage-row.here { color: var(--SIGNAL); font-weight: 700; }
+
+  /* Param picker (discrete, NOT sliders) */
+  .picker { margin: 8px 0; }
+  .pick-h { font-size: 10px; color: var(--fg-dim); margin-bottom: 4px; }
+  .pick-row { display: flex; gap: 4px; flex-wrap: wrap; }
+  .chip {
+    font-family: inherit; font-size: 9px; padding: 3px 6px;
+    background: var(--bg-2); color: var(--fg-dim);
+    border: 1px solid var(--line-strong); cursor: pointer;
+    transition: all .12s; flex: 1; text-align: center; min-width: 0;
+  }
+  .chip:hover { border-color: var(--SIGNAL); color: var(--fg); }
+  .chip.sel {
+    background: var(--CORE); color: var(--FLASH); border-color: var(--SIGNAL);
+    box-shadow: 2px 2px 0 var(--bg-0);
+  }
+  .pick-hint { font-size: 8px; color: var(--fg-mute); margin-top: 2px; }
+
+  .run-btn {
+    font-family: inherit; font-size: 11px; font-weight: 700;
+    margin-top: 10px; padding: 8px; cursor: pointer;
+    background: var(--SIGNAL); color: var(--bg-0);
+    border: 1px solid var(--FLASH); box-shadow: 3px 3px 0 var(--bg-0);
+    transition: all .1s;
+  }
+  .run-btn:hover { transform: translate(-1px,-1px); box-shadow: 4px 4px 0 var(--bg-0); }
+  .run-btn:active { transform: translate(1px,1px); box-shadow: 1px 1px 0 var(--bg-0); }
+  .run-btn:disabled { opacity: .5; cursor: not-allowed; }
+
+  .lang-btn {
+    font-family: inherit; font-size: 10px; margin-top: auto; padding: 6px 8px; cursor: pointer;
+    background: var(--bg-2); color: var(--fg-dim);
+    border: 1px solid var(--line-strong); transition: all .12s;
+  }
+  .lang-btn:hover { color: var(--SIGNAL); border-color: var(--SIGNAL); }
+
+  /* ============== Main ============== */
+  .game-main { flex: 1; height: 100vh; display: flex; flex-direction: column; position: relative; min-width: 0; }
+  canvas#stage { flex: 1; width: 100%; display: block; }
+
+  /* Minecraft endgame silhouette, corner */
+  .endgame {
+    position: absolute; bottom: 8px; right: 10px; z-index: 5;
+    display: flex; align-items: center; gap: 6px;
+    font-size: 8px; color: var(--fg-mute); pointer-events: none;
+  }
+  .mc-cube { width: 14px; height: 14px; position: relative; }
+  .mc-cube i {
+    position: absolute; width: 6px; height: 6px;
+    background: var(--DEPTH); border: 1px solid var(--line-strong);
+  }
+  .mc-cube i:nth-child(1){ top:0; left:0; background: var(--CORE); }
+  .mc-cube i:nth-child(2){ top:0; left:7px; }
+  .mc-cube i:nth-child(3){ top:7px; left:0; }
+  .mc-cube i:nth-child(4){ top:7px; left:7px; background: var(--CORE); }
+</style>
+</head>
+<body>
+<div class="stage-wrap">
+  <aside class="game-sidebar">
+    <div class="sb-title" id="sbTitle">录制范式实验设计台</div>
+    <div class="sb-sub" id="sbSub">设计录自己脑波的流程</div>
+
+    <div class="mascot">
+      <div class="mascot-cube"></div>
+      <div>
+        <div class="mascot-name">Bit</div>
+        <div class="mascot-say" id="bitSay">先装配好你的范式</div>
+      </div>
+    </div>
+
+    <div class="roadmap">
+      <div class="road-h" id="roadH">项目路线 / ROADMAP</div>
+      <div class="stage-row done"><span class="stage-dot"></span><span id="s1">S1 信号入门</span></div>
+      <div class="stage-row done"><span class="stage-dot"></span><span id="s2">S2 预处理</span></div>
+      <div class="stage-row done"><span class="stage-dot"></span><span id="s3">S3 特征/解码</span></div>
+      <div class="stage-row here"><span class="stage-dot"></span><span id="s4">S4 采集范式 (在这)</span></div>
+      <div class="stage-row"><span class="stage-dot"></span><span id="s5">S5 实时解码</span></div>
+      <div class="stage-row"><span class="stage-dot"></span><span id="s6">S6 脑控 Minecraft</span></div>
+    </div>
+
+    <div class="picker">
+      <div class="pick-h" id="ph-cue">cue 时长</div>
+      <div class="pick-row" data-group="cue">
+        <button class="chip" data-v="0.4">0.4s</button>
+        <button class="chip sel" data-v="1.5">1.5s</button>
+        <button class="chip" data-v="4">4s</button>
+      </div>
+      <div class="pick-hint" id="hint-cue">业界 1-2s</div>
+    </div>
+
+    <div class="picker">
+      <div class="pick-h" id="ph-img">想象时长</div>
+      <div class="pick-row" data-group="img">
+        <button class="chip" data-v="1.5">1.5s</button>
+        <button class="chip sel" data-v="4">4s</button>
+        <button class="chip" data-v="8">8s</button>
+      </div>
+      <div class="pick-hint" id="hint-img">业界 3-5s</div>
+    </div>
+
+    <div class="picker">
+      <div class="pick-h" id="ph-rest">trial 间休息</div>
+      <div class="pick-row" data-group="rest">
+        <button class="chip" data-v="0">0s</button>
+        <button class="chip sel" data-v="2">2s</button>
+        <button class="chip" data-v="4">4s</button>
+      </div>
+      <div class="pick-hint" id="hint-rest">无休息易疲劳/串扰</div>
+    </div>
+
+    <div class="picker">
+      <div class="pick-h" id="ph-n">每类 trial 数</div>
+      <div class="pick-row" data-group="n">
+        <button class="chip" data-v="10">10</button>
+        <button class="chip" data-v="25">25</button>
+        <button class="chip sel" data-v="50">50</button>
+      </div>
+      <div class="pick-hint" id="hint-n">业界 >= 40</div>
+    </div>
+
+    <div class="picker">
+      <div class="pick-h" id="ph-order">cue 顺序</div>
+      <div class="pick-row" data-group="order">
+        <button class="chip sel" data-v="rand">伪随机</button>
+        <button class="chip" data-v="alt">交替</button>
+        <button class="chip" data-v="block">分块</button>
+      </div>
+      <div class="pick-hint" id="hint-order">可预测顺序引期待偏置</div>
+    </div>
+
+    <button class="run-btn" id="runBtn">跑这次录制</button>
+    <button class="lang-btn" id="langBtn">中 / EN</button>
+  </aside>
+
+  <main class="game-main">
+    <canvas id="stage"></canvas>
+    <div class="endgame">
+      <div class="mc-cube"><i></i><i></i><i></i><i></i></div>
+      <span id="endTxt">终点: 脑控 Minecraft</span>
+    </div>
+  </main>
+</div>
+
+<script>
+var LANG = 'cn';
+var I18N = {
+  sbTitle:   {cn:'录制范式实验设计台', en:'Recording Paradigm Lab'},
+  sbSub:     {cn:'设计录自己脑波的流程', en:'Design how you record your own brainwaves'},
+  bitSay0:   {cn:'先装配好你的范式', en:'Assemble your paradigm first'},
+  bitRunning:{cn:'录制模拟运行中...', en:'Simulating session...'},
+  roadH:     {cn:'项目路线 / ROADMAP', en:'PROJECT ROADMAP'},
+  s1:{cn:'S1 信号入门',en:'S1 Signal basics'}, s2:{cn:'S2 预处理',en:'S2 Preproc'},
+  s3:{cn:'S3 特征/解码',en:'S3 Feature/decode'}, s4:{cn:'S4 采集范式 (在这)',en:'S4 Paradigm (here)'},
+  s5:{cn:'S5 实时解码',en:'S5 Live decode'}, s6:{cn:'S6 脑控 Minecraft',en:'S6 Brain-Minecraft'},
+  ph_cue:{cn:'cue 时长',en:'cue duration'}, ph_img:{cn:'想象时长',en:'imagery duration'},
+  ph_rest:{cn:'trial 间休息',en:'inter-trial rest'}, ph_n:{cn:'每类 trial 数',en:'trials/class'},
+  ph_order:{cn:'cue 顺序',en:'cue order'},
+  hint_cue:{cn:'业界 1-2s',en:'std 1-2s'}, hint_img:{cn:'业界 3-5s',en:'std 3-5s'},
+  hint_rest:{cn:'无休息易疲劳/串扰',en:'no rest -> fatigue/carryover'},
+  hint_n:{cn:'业界 >= 40',en:'std >= 40'}, hint_order:{cn:'可预测顺序引期待偏置',en:'predictable -> anticipation bias'},
+  rand:{cn:'伪随机',en:'pseudo-rand'}, alt:{cn:'交替',en:'alternate'}, block:{cn:'分块',en:'block'},
+  runBtn:{cn:'跑这次录制',en:'Run this session'},
+  endTxt:{cn:'终点: 脑控 Minecraft',en:'Goal: Brain-Minecraft'},
+  preview:{cn:'单 trial 时序预览',en:'Single-trial timeline'},
+  fix:{cn:'注视',en:'fixation'}, cue:{cn:'提示',en:'cue'}, img:{cn:'想象',en:'imagery'}, rest:{cn:'休息',en:'rest'},
+  orderPrev:{cn:'cue 顺序 (前 20 trial)',en:'cue order (first 20)'},
+  diag:{cn:'数据质量诊断',en:'Data quality diagnosis'},
+  runHint:{cn:'点左侧「跑这次录制」模拟采集并诊断',en:'Click "Run this session" to simulate & diagnose'},
+  // diagnostics
+  d_fatigue:{cn:'疲劳/串扰',en:'fatigue / carryover'},
+  d_bias:{cn:'期待偏置',en:'anticipation bias'},
+  d_amount:{cn:'训练量',en:'training amount'},
+  d_timing:{cn:'时序合理',en:'timing sanity'},
+  ok:{cn:'良好',en:'OK'}, warn:{cn:'偏弱',en:'weak'}, bad:{cn:'有偏',en:'biased'},
+  // failure reasons
+  r_norest:{cn:'无休息: 上一 trial 想象拖到下一 trial, 标签被污染',en:'No rest: prior imagery bleeds into next trial, labels contaminated'},
+  r_predict:{cn:'顺序可预测: 大脑提前准备, 学到的是期待而非真实想象',en:'Predictable order: brain pre-plans; model learns anticipation, not real imagery'},
+  r_few:{cn:'trial 太少: 解码器没足够样本, 训不出稳定模型',en:'Too few trials: decoder lacks samples, cannot train a stable model'},
+  r_cuelong:{cn:'cue 太长: 想象阶段被压缩或注意力涣散',en:'Cue too long: imagery window squeezed or attention drifts'},
+  r_imgshort:{cn:'想象太短: 抓不到稳定的 ERD 节律变化',en:'Imagery too short: misses stable ERD rhythm change'},
+  r_imglong:{cn:'想象太长: 后段走神, 信号变脏',en:'Imagery too long: mind wanders late, signal gets noisy'},
+  // verdict
+  vClean:{cn:'干净可训数据', en:'Clean trainable data'},
+  vDirty:{cn:'数据有偏 — 修正后重跑', en:'Biased data — fix & rerun'},
+  unlock:{cn:'解锁: 范式设计师', en:'Unlocked: Paradigm Designer'},
+  unlockSay:{cn:'范式定好, 准备录 50 次 — 这批干净数据将喂给 S5 实时解码器, 离脑控 Minecraft 又近一步', en:'Paradigm locked, ready to record 50x — this clean data feeds the S5 live decoder, one step closer to brain-Minecraft'},
+  cleanCount:{cn:'本次产出干净 trial: ', en:'Clean trials produced: '}
+};
+function t(k){ return (I18N[k]&&I18N[k][LANG]) || (I18N[k]&&I18N[k]['en']) || k; }
+
+// ---- discrete experimental design state (NOT continuous tuning) ----
+var design = { cue:1.5, img:4, rest:2, n:50, order:'rand' };
+var lastResult = null;     // null = not yet run
+var runProgress = 0;       // 0..1 session simulation
+var running = false;
+var won = false;
+
+function applyI18N(){
+  document.getElementById('sbTitle').textContent = t('sbTitle');
+  document.getElementById('sbSub').textContent = t('sbSub');
+  document.getElementById('bitSay').textContent = running ? t('bitRunning') : (won ? t('unlockSay') : t('bitSay0'));
+  document.getElementById('roadH').textContent = t('roadH');
+  ['s1','s2','s3','s4','s5','s6'].forEach(function(id){ document.getElementById(id).textContent = t(id); });
+  document.getElementById('ph-cue').textContent = t('ph_cue');
+  document.getElementById('ph-img').textContent = t('ph_img');
+  document.getElementById('ph-rest').textContent = t('ph_rest');
+  document.getElementById('ph-n').textContent = t('ph_n');
+  document.getElementById('ph-order').textContent = t('ph_order');
+  document.getElementById('hint-cue').textContent = t('hint_cue');
+  document.getElementById('hint-img').textContent = t('hint_img');
+  document.getElementById('hint-rest').textContent = t('hint_rest');
+  document.getElementById('hint-n').textContent = t('hint_n');
+  document.getElementById('hint-order').textContent = t('hint_order');
+  document.getElementById('runBtn').textContent = t('runBtn');
+  document.getElementById('langBtn').textContent = LANG === 'cn' ? '中 / EN' : 'EN / 中';
+  document.getElementById('endTxt').textContent = t('endTxt');
+  // localize order chips
+  document.querySelectorAll('[data-group="order"] .chip').forEach(function(c){
+    c.textContent = t(c.getAttribute('data-v'));
+  });
+}
+
+// ---- chip selection (discrete experimental config) ----
+document.querySelectorAll('.pick-row').forEach(function(row){
+  var group = row.getAttribute('data-group');
+  row.querySelectorAll('.chip').forEach(function(chip){
+    chip.addEventListener('click', function(){
+      if(running) return;
+      row.querySelectorAll('.chip').forEach(function(c){ c.classList.remove('sel'); });
+      chip.classList.add('sel');
+      var v = chip.getAttribute('data-v');
+      design[group] = (group === 'order') ? v : parseFloat(v);
+      lastResult = null;   // changing design invalidates previous run
+      won = false;
+      applyI18N();         // reset mascot line to "assemble"
+      render();
+    });
+  });
+});
+
+document.getElementById('langBtn').addEventListener('click', function(){
+  LANG = LANG === 'cn' ? 'en' : 'cn';
+  applyI18N();
+  render();
+});
+
+// ---- core: evaluate the designed paradigm (hypothesis -> design -> verify) ----
+function evaluateDesign(){
+  var issues = [];
+  // rest: 0 -> carryover; 4 fine; 2 fine
+  if(design.rest === 0) issues.push({key:'r_norest', dim:'d_fatigue', sev:'bad'});
+  // order predictable
+  if(design.order === 'alt') issues.push({key:'r_predict', dim:'d_bias', sev:'bad'});
+  if(design.order === 'block') issues.push({key:'r_predict', dim:'d_bias', sev:'bad'});
+  // trial count
+  if(design.n <= 10) issues.push({key:'r_few', dim:'d_amount', sev:'bad'});
+  else if(design.n < 40) issues.push({key:'r_few', dim:'d_amount', sev:'warn'});
+  // cue duration
+  if(design.cue >= 4) issues.push({key:'r_cuelong', dim:'d_timing', sev:'warn'});
+  // imagery duration
+  if(design.img <= 1.5) issues.push({key:'r_imgshort', dim:'d_timing', sev:'bad'});
+  if(design.img >= 8) issues.push({key:'r_imglong', dim:'d_timing', sev:'warn'});
+
+  var hasBad = issues.some(function(i){ return i.sev === 'bad'; });
+  var hasWarn = issues.some(function(i){ return i.sev === 'warn'; });
+  var clean = !hasBad && !hasWarn;
+  // clean trial yield: bad zeroes some, warn reduces
+  var totalTrials = design.n * 2;
+  var yieldFrac = clean ? 1.0 : (hasBad ? 0.45 : 0.8);
+  var cleanTrials = Math.round(totalTrials * yieldFrac);
+  return { issues:issues, clean:clean, cleanTrials:cleanTrials, totalTrials:totalTrials };
+}
+
+document.getElementById('runBtn').addEventListener('click', function(){
+  if(running) return;
+  running = true;
+  won = false;
+  runProgress = 0;
+  lastResult = null;
+  document.getElementById('runBtn').disabled = true;
+  applyI18N();
+});
+
+function tickSimulation(dt){
+  if(!running) return;
+  runProgress += dt / 1400;   // ~1.4s sim
+  if(runProgress >= 1){
+    runProgress = 1;
+    running = false;
+    document.getElementById('runBtn').disabled = false;
+    lastResult = evaluateDesign();
+    if(lastResult.clean && !won){ won = true; }
+    applyI18N();
+  }
+}
+
+// ============== canvas render ==============
+var canvas = document.getElementById('stage'), ctx = canvas.getContext('2d');
+var W = 0, H = 0, DPR = 1;
+function resize(){
+  var p = canvas.parentElement.getBoundingClientRect();
+  if(p.width < 1 || p.height < 1) return;
+  DPR = window.devicePixelRatio || 1;
+  canvas.width = p.width * DPR; canvas.height = p.height * DPR;
+  canvas.style.width = p.width + 'px'; canvas.style.height = p.height + 'px';
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  W = p.width; H = p.height;
+}
+window.addEventListener('resize', resize);
+setTimeout(resize,50); setTimeout(resize,200); setTimeout(resize,600);
+if(document.fonts && document.fonts.ready){ document.fonts.ready.then(resize); }
+
+function col(name){ return getComputedStyle(document.documentElement).getPropertyValue('--'+name).trim(); }
+
+function pseudoSeq(order, count){
+  var s = [];
+  if(order === 'alt'){ for(var i=0;i<count;i++) s.push(i%2===0?'L':'R'); }
+  else if(order === 'block'){ for(var i=0;i<count;i++) s.push(i<count/2?'L':'R'); }
+  else { // pseudo-random, balanced, no >2 streak
+    var base = 's4eeg39'; var streak=0, last='';
+    for(var i=0;i<count;i++){
+      var h = (base.charCodeAt(i%base.length) * (i+7)) % 100;
+      var pick = h < 50 ? 'L' : 'R';
+      if(pick === last) streak++; else streak = 0;
+      if(streak >= 2){ pick = last === 'L' ? 'R' : 'L'; streak = 0; }
+      s.push(pick); last = pick;
+    }
+  }
+  return s;
+}
+
+function render(){
+  if(!W || !H) return;
+  ctx.clearRect(0,0,W,H);
+  ctx.fillStyle = col('bg-0'); ctx.fillRect(0,0,W,H);
+
+  // faint grid (data cathedral motif)
+  ctx.strokeStyle = col('line'); ctx.lineWidth = 1;
+  for(var gx=40; gx<W; gx+=40){ ctx.beginPath(); ctx.moveTo(gx,0); ctx.lineTo(gx,H); ctx.stroke(); }
+  for(var gy=40; gy<H; gy+=40){ ctx.beginPath(); ctx.moveTo(0,gy); ctx.lineTo(W,gy); ctx.stroke(); }
+
+  var pad = 40;
+  // ---- title ----
+  ctx.fillStyle = col('SIGNAL'); ctx.font = '700 18px JetBrains Mono, monospace';
+  ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+  ctx.fillText(t('preview'), pad, 44);
+
+  // ---- single trial timeline ----
+  var tlx = pad, tly = 64, tlw = W - pad*2, tlh = 34;
+  var phases = [
+    {n:t('fix'),  d:2,           c:'DEPTH'},
+    {n:t('cue'),  d:design.cue,  c:'CORE'},
+    {n:t('img'),  d:design.img,  c:'SIGNAL'},
+    {n:t('rest'), d:design.rest, c:'bg-3'}
+  ];
+  var total = phases.reduce(function(s,p){ return s+p.d; }, 0);
+  var cx = tlx;
+  for(var i=0;i<phases.length;i++){
+    var pw = total>0 ? tlw * phases[i].d / total : 0;
+    if(pw < 0.5){ continue; }
+    ctx.fillStyle = col(phases[i].c);
+    ctx.fillRect(cx, tly, pw, tlh);
+    ctx.strokeStyle = col('bg-0'); ctx.lineWidth = 2;
+    ctx.strokeRect(cx, tly, pw, tlh);
+    if(pw > 38){
+      ctx.fillStyle = phases[i].c === 'bg-3' ? col('fg-dim') : col('bg-0');
+      ctx.font = '700 11px JetBrains Mono, monospace'; ctx.textAlign = 'center';
+      ctx.fillText(phases[i].n, cx+pw/2, tly+21);
+    }
+    ctx.fillStyle = col('fg-mute'); ctx.font = '600 10px JetBrains Mono, monospace'; ctx.textAlign = 'center';
+    if(pw > 22) ctx.fillText(phases[i].d.toFixed(1)+'s', cx+pw/2, tly+tlh+14);
+    cx += pw;
+  }
+  ctx.fillStyle = col('fg-dim'); ctx.font = '600 11px JetBrains Mono, monospace'; ctx.textAlign = 'left';
+  ctx.fillText('1 trial = '+total.toFixed(1)+'s   |   session = '+(design.n*2)+' trial / '+((total*design.n*2)/60).toFixed(1)+'min', pad, tly+tlh+34);
+
+  // ---- order preview (first 20) ----
+  var oy = tly + tlh + 58;
+  ctx.fillStyle = col('FLASH'); ctx.font = '700 13px JetBrains Mono, monospace'; ctx.textAlign = 'left';
+  ctx.fillText(t('orderPrev'), pad, oy);
+  var seq = pseudoSeq(design.order, 20);
+  var bw = Math.min(22, (W - pad*2) / 22);
+  for(var k=0;k<20;k++){
+    var bx = pad + k*(bw+2), by = oy + 10;
+    ctx.fillStyle = seq[k]==='L' ? col('SIGNAL') : col('QUERY');
+    ctx.fillRect(bx, by, bw, bw);
+    ctx.strokeStyle = col('bg-0'); ctx.lineWidth = 1; ctx.strokeRect(bx, by, bw, bw);
+    ctx.fillStyle = col('bg-0'); ctx.font = '700 11px JetBrains Mono, monospace';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(seq[k], bx+bw/2, by+bw/2);
+    ctx.textBaseline = 'alphabetic';
+  }
+
+  // ---- diagnosis / run state ----
+  var dy = oy + bw + 44;
+  ctx.fillStyle = col('SIGNAL'); ctx.font = '700 16px JetBrains Mono, monospace'; ctx.textAlign = 'left';
+  ctx.fillText(t('diag'), pad, dy);
+
+  if(running){
+    // session progress bar (recording simulation)
+    var pbw = W - pad*2, pbh = 18, pbx = pad, pby = dy + 18;
+    ctx.strokeStyle = col('line-strong'); ctx.lineWidth = 1; ctx.strokeRect(pbx, pby, pbw, pbh);
+    ctx.fillStyle = col('CORE'); ctx.fillRect(pbx, pby, pbw*runProgress, pbh);
+    ctx.fillStyle = col('FLASH'); ctx.font = '600 11px JetBrains Mono, monospace'; ctx.textAlign = 'center';
+    ctx.fillText('recording trial '+Math.round(runProgress*design.n*2)+' / '+(design.n*2), pbx+pbw/2, pby+13);
+    // live EEG-ish trace
+    var ly = pby + pbh + 50;
+    ctx.strokeStyle = col('SIGNAL'); ctx.lineWidth = 1.5; ctx.beginPath();
+    for(var x=0;x<pbw;x++){
+      var ph = (x*0.08) + runProgress*30;
+      var yy = ly + Math.sin(ph)*8 + Math.sin(ph*2.3)*4;
+      if(x===0) ctx.moveTo(pbx+x, yy); else ctx.lineTo(pbx+x, yy);
+    }
+    ctx.stroke();
+  } else if(!lastResult){
+    ctx.fillStyle = col('fg-mute'); ctx.font = '500 13px JetBrains Mono, monospace'; ctx.textAlign = 'left';
+    ctx.fillText(t('runHint'), pad, dy + 28);
+  } else {
+    // 4 dimension cards
+    var dims = ['d_fatigue','d_bias','d_amount','d_timing'];
+    var sevByDim = {};
+    lastResult.issues.forEach(function(is){
+      var cur = sevByDim[is.dim];
+      if(cur === 'bad') return;
+      if(is.sev === 'bad') sevByDim[is.dim] = 'bad';
+      else if(!cur) sevByDim[is.dim] = is.sev;
+    });
+    var cardW = (W - pad*2 - 30) / 4, cardH = 56, cy = dy + 16;
+    for(var c=0;c<4;c++){
+      var ccx = pad + c*(cardW+10);
+      var sev = sevByDim[dims[c]] || 'ok';
+      var sc = sev === 'bad' ? col('QUERY') : (sev === 'warn' ? col('FLASH') : col('SIGNAL'));
+      ctx.fillStyle = col('bg-1'); ctx.fillRect(ccx, cy, cardW, cardH);
+      ctx.strokeStyle = sc; ctx.lineWidth = 2; ctx.strokeRect(ccx, cy, cardW, cardH);
+      ctx.fillStyle = col('fg-dim'); ctx.font = '600 10px JetBrains Mono, monospace'; ctx.textAlign = 'center';
+      ctx.fillText(t(dims[c]), ccx+cardW/2, cy+20);
+      ctx.fillStyle = sc; ctx.font = '700 14px JetBrains Mono, monospace';
+      ctx.fillText(t(sev === 'bad' ? 'bad' : (sev === 'warn' ? 'warn' : 'ok')), ccx+cardW/2, cy+42);
+    }
+
+    // issue list
+    var iy = cy + cardH + 30;
+    if(lastResult.issues.length){
+      var shown = {};
+      lastResult.issues.forEach(function(is){
+        if(shown[is.key]) return; shown[is.key] = true;
+        ctx.fillStyle = is.sev === 'bad' ? col('QUERY') : col('FLASH');
+        ctx.font = '600 12px JetBrains Mono, monospace'; ctx.textAlign = 'left';
+        ctx.fillText('- ' + t(is.key), pad, iy);
+        iy += 22;
+      });
+    }
+
+    // verdict
+    var vy = Math.max(iy + 14, cy + cardH + 60);
+    if(lastResult.clean){
+      ctx.fillStyle = col('SIGNAL'); ctx.font = '700 22px JetBrains Mono, monospace'; ctx.textAlign = 'left';
+      ctx.fillText(t('vClean'), pad, vy);
+      ctx.fillStyle = col('FLASH'); ctx.font = '700 14px JetBrains Mono, monospace';
+      ctx.fillText('[ ' + t('unlock') + ' ]', pad, vy + 28);
+      ctx.fillStyle = col('fg-dim'); ctx.font = '500 12px JetBrains Mono, monospace';
+      ctx.fillText(t('cleanCount') + lastResult.cleanTrials + ' / ' + lastResult.totalTrials, pad, vy + 50);
+    } else {
+      ctx.fillStyle = col('QUERY'); ctx.font = '700 20px JetBrains Mono, monospace'; ctx.textAlign = 'left';
+      ctx.fillText(t('vDirty'), pad, vy);
+      ctx.fillStyle = col('fg-mute'); ctx.font = '500 12px JetBrains Mono, monospace';
+      ctx.fillText(t('cleanCount') + lastResult.cleanTrials + ' / ' + lastResult.totalTrials, pad, vy + 24);
+    }
+  }
+}
+
+var lastT = performance.now();
+function loop(now){
+  var dt = now - lastT; lastT = now;
+  if(running) tickSimulation(dt);
+  render();
+  requestAnimationFrame(loop);
+}
+applyI18N();
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>

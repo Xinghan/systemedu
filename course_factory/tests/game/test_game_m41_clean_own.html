@@ -1,0 +1,699 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>M41 Self-Record QC</title>
+<style>
+:root{
+  --bg-0:oklch(0.18 0.03 230);
+  --bg-1:oklch(0.23 0.04 225);
+  --signal:oklch(0.75 0.17 200);
+  --core:oklch(0.55 0.16 200);
+  --depth:oklch(0.35 0.10 210);
+  --flash:oklch(0.92 0.08 190);
+  --query:oklch(0.85 0.14 85);
+  --ink:oklch(0.90 0.02 220);
+  --muted:oklch(0.62 0.03 220);
+  --line:oklch(0.40 0.05 220);
+  --bad:oklch(0.68 0.18 25);
+  --mono:'JetBrains Mono','SF Mono',ui-monospace,'Cascadia Code',Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:100%;height:100vh;overflow:hidden;background:var(--bg-0);color:var(--ink);font-family:var(--mono)}
+.app{display:flex;height:100vh}
+
+/* ---------- sidebar ---------- */
+.game-sidebar{width:200px;min-width:200px;height:100vh;background:var(--bg-1);border-right:1px solid var(--line);display:flex;flex-direction:column;padding:14px 12px;overflow-y:auto}
+.brand{display:flex;align-items:center;gap:8px;margin-bottom:14px}
+.mascot{width:30px;height:30px;flex-shrink:0}
+.brand-txt .b1{font-size:12px;font-weight:700;color:var(--signal);letter-spacing:1px}
+.brand-txt .b2{font-size:9px;color:var(--muted);letter-spacing:.5px}
+
+.sec-label{font-size:9px;color:var(--muted);letter-spacing:1.5px;text-transform:uppercase;margin:12px 0 6px}
+
+/* roadmap */
+.road{display:flex;flex-direction:column;gap:2px}
+.road-step{display:flex;align-items:center;gap:8px;padding:4px 6px;font-size:10px;color:var(--muted);border-left:2px solid var(--line)}
+.road-step .dot{width:7px;height:7px;border:1px solid var(--line);border-radius:50%;flex-shrink:0}
+.road-step.done{color:var(--core)}
+.road-step.done .dot{background:var(--core);border-color:var(--core)}
+.road-step.here{color:var(--signal);border-left-color:var(--signal);background:rgba(0,200,255,0.06);font-weight:700}
+.road-step.here .dot{background:var(--signal);border-color:var(--signal);box-shadow:0 0 0 3px rgba(0,200,255,0.18)}
+.road-step .rs-name{line-height:1.2}
+
+/* progress */
+.prog-wrap{display:flex;flex-direction:column;gap:6px}
+.prog-bar{height:8px;background:var(--depth);border:1px solid var(--line)}
+.prog-fill{height:100%;width:0;background:var(--signal);transition:width .35s}
+.prog-txt{font-size:10px;color:var(--ink)}
+.prog-clean{font-size:9px;color:var(--muted);line-height:1.4}
+.prog-clean b{color:var(--query)}
+
+.endcap{margin-top:auto;padding-top:12px;border-top:1px solid var(--line)}
+.mc-shape{display:block;margin:0 auto 4px}
+.endcap p{font-size:8px;color:var(--muted);text-align:center;line-height:1.4}
+
+.lang-btn{margin-top:10px;width:100%;font-family:var(--mono);font-size:11px;font-weight:700;padding:6px 0;cursor:pointer;border:1px solid var(--core);background:transparent;color:var(--signal);letter-spacing:1px}
+.lang-btn:hover{background:var(--core);color:var(--bg-0)}
+
+/* ---------- main ---------- */
+.game-main{flex:1;min-width:0;display:flex;flex-direction:column;padding:14px 18px;overflow:hidden}
+.main-head{display:flex;flex-direction:column;gap:3px;margin-bottom:8px}
+.main-head h1{font-size:15px;color:var(--signal);letter-spacing:1px}
+.main-head .sub{font-size:10px;color:var(--muted);line-height:1.4;max-width:760px}
+
+.case-grid{flex:1;min-height:0;display:flex;gap:14px}
+
+/* evidence column */
+.evidence{flex:1.05;min-width:0;display:flex;flex-direction:column;background:var(--bg-1);border:1px solid var(--line);padding:10px;overflow:hidden}
+.ev-tabs{display:flex;gap:4px;margin-bottom:8px;flex-wrap:wrap}
+.ev-tab{font-family:var(--mono);font-size:9px;padding:4px 7px;cursor:pointer;border:1px solid var(--line);background:transparent;color:var(--muted);letter-spacing:.5px}
+.ev-tab.active{border-color:var(--signal);color:var(--signal);background:rgba(0,200,255,0.07)}
+.ev-canvas-wrap{flex:1;min-height:0;display:flex;flex-direction:column;position:relative}
+#evCanvas{flex:1;width:100%;display:block;background:var(--bg-0);border:1px solid var(--depth)}
+.ev-readout{font-size:9px;color:var(--muted);margin-top:6px;line-height:1.4;min-height:26px}
+.ev-readout b{color:var(--flash)}
+
+/* diagnosis column */
+.diag{flex:1;min-width:0;display:flex;flex-direction:column;overflow:hidden}
+.case-counter{font-size:10px;color:var(--query);letter-spacing:1px;margin-bottom:6px}
+.diag-q{font-size:11px;color:var(--ink);line-height:1.45;margin-bottom:10px}
+.opts{display:flex;flex-direction:column;gap:7px;overflow-y:auto;flex:1;padding-right:2px}
+.opt{text-align:left;font-family:var(--mono);font-size:10px;line-height:1.45;padding:9px 10px;cursor:pointer;border:1px solid var(--line);background:var(--bg-1);color:var(--ink);transition:border-color .15s,background .15s}
+.opt:hover{border-color:var(--core)}
+.opt.sel{border-color:var(--signal);background:rgba(0,200,255,0.10);box-shadow:3px 3px 0 var(--depth)}
+.opt.correct{border-color:var(--query);background:rgba(180,150,40,0.16)}
+.opt.wrong{border-color:var(--bad);background:rgba(200,60,40,0.14)}
+.opt .ot{display:block;font-weight:700;color:var(--signal);margin-bottom:2px;letter-spacing:.5px}
+.opt.correct .ot{color:var(--query)}
+.opt.wrong .ot{color:var(--bad)}
+
+.diag-foot{display:flex;align-items:center;gap:10px;margin-top:10px}
+.act-btn{font-family:var(--mono);font-size:11px;font-weight:700;padding:8px 18px;cursor:pointer;border:1px solid var(--signal);background:var(--signal);color:var(--bg-0);letter-spacing:1px}
+.act-btn:hover{background:var(--flash)}
+.act-btn:disabled{opacity:.35;cursor:not-allowed;background:transparent;color:var(--muted);border-color:var(--line)}
+.verdict{font-size:10px;line-height:1.45;flex:1}
+.verdict.ok{color:var(--query)}
+.verdict.no{color:var(--bad)}
+
+/* end overlay */
+.overlay{position:absolute;inset:0;background:rgba(8,14,22,0.92);display:none;align-items:center;justify-content:center;z-index:50}
+.panel{background:var(--bg-1);border:1px solid var(--signal);padding:26px 28px;max-width:460px;width:90%;text-align:center;box-shadow:6px 6px 0 var(--depth)}
+.panel h2{font-size:17px;color:var(--signal);letter-spacing:1px;margin-bottom:10px}
+.panel .big{font-size:34px;color:var(--query);margin:8px 0}
+.panel .ptxt{font-size:11px;color:var(--ink);line-height:1.6;margin:10px 0;text-align:left}
+.panel .ptxt b{color:var(--flash)}
+.panel .warn{color:var(--bad)}
+.panel .unlock{font-size:11px;color:var(--query);line-height:1.5;margin-top:12px;border-top:1px solid var(--line);padding-top:12px}
+.retry-btn{font-family:var(--mono);font-size:11px;font-weight:700;padding:8px 22px;cursor:pointer;border:1px solid var(--signal);background:transparent;color:var(--signal);letter-spacing:1px;margin-top:14px}
+.retry-btn:hover{background:var(--signal);color:var(--bg-0)}
+</style>
+</head>
+<body>
+<div class="app">
+  <!-- ===== SIDEBAR ===== -->
+  <aside class="game-sidebar">
+    <div class="brand">
+      <svg class="mascot" viewBox="0 0 30 30" aria-hidden="true">
+        <rect x="6" y="6" width="18" height="18" rx="3" fill="none" stroke="var(--signal)" stroke-width="2"/>
+        <rect x="10" y="10" width="4" height="4" fill="var(--signal)"/>
+        <rect x="16" y="10" width="4" height="4" fill="var(--flash)"/>
+        <rect x="10" y="16" width="4" height="4" fill="var(--query)"/>
+        <rect x="16" y="16" width="4" height="4" fill="var(--core)"/>
+      </svg>
+      <div class="brand-txt">
+        <div class="b1">BIT</div>
+        <div class="b2" id="bitRole"></div>
+      </div>
+    </div>
+
+    <div class="sec-label" id="lblRoute"></div>
+    <div class="road" id="road"></div>
+
+    <div class="sec-label" id="lblProg"></div>
+    <div class="prog-wrap">
+      <div class="prog-bar"><div class="prog-fill" id="progFill"></div></div>
+      <div class="prog-txt" id="progTxt"></div>
+      <div class="prog-clean" id="progClean"></div>
+    </div>
+
+    <div class="endcap">
+      <svg class="mc-shape" width="44" height="30" viewBox="0 0 44 30" aria-hidden="true">
+        <rect x="6" y="14" width="32" height="14" fill="var(--depth)"/>
+        <rect x="6" y="8" width="14" height="6" fill="var(--core)"/>
+        <rect x="20" y="4" width="18" height="10" fill="var(--core)"/>
+        <rect x="10" y="18" width="4" height="4" fill="var(--signal)"/>
+        <rect x="26" y="10" width="4" height="4" fill="var(--query)"/>
+      </svg>
+      <p id="endTxt"></p>
+    </div>
+
+    <button class="lang-btn" id="langBtn">EN</button>
+  </aside>
+
+  <!-- ===== MAIN ===== -->
+  <main class="game-main">
+    <div class="main-head">
+      <h1 id="title"></h1>
+      <div class="sub" id="intro"></div>
+    </div>
+
+    <div class="case-grid">
+      <!-- evidence -->
+      <section class="evidence">
+        <div class="ev-tabs" id="evTabs"></div>
+        <div class="ev-canvas-wrap">
+          <canvas id="evCanvas"></canvas>
+        </div>
+        <div class="ev-readout" id="evReadout"></div>
+      </section>
+
+      <!-- diagnosis -->
+      <section class="diag">
+        <div class="case-counter" id="caseCounter"></div>
+        <div class="diag-q" id="diagQ"></div>
+        <div class="opts" id="opts"></div>
+        <div class="diag-foot">
+          <button class="act-btn" id="submitBtn" disabled></button>
+          <div class="verdict" id="verdict"></div>
+        </div>
+      </section>
+    </div>
+
+    <!-- end overlay -->
+    <div class="overlay" id="overlay">
+      <div class="panel">
+        <h2 id="endTitle"></h2>
+        <div class="big" id="endScore"></div>
+        <div class="ptxt" id="endDetail"></div>
+        <div class="unlock" id="endUnlock"></div>
+        <button class="retry-btn" id="retryBtn"></button>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script>
+(function(){
+var LANG='cn';
+function L(o){return o[LANG]||o.en;}
+
+// ---------------- i18n strings ----------------
+var T={
+  bitRole:{cn:'质检助手',en:'QC ASSISTANT'},
+  lblRoute:{cn:'项目路线',en:'PROJECT ROUTE'},
+  lblProg:{cn:'质检进度',en:'QC PROGRESS'},
+  title:{cn:'自录数据质检 · 侦探室',en:'SELF-RECORD QC · DETECTIVE'},
+  intro:{
+    cn:'你刚用自己的头环录下了一批脑电。公开数据干净，但自录的往往脏——老是扭头、虐眼、周围电器干扰。在训你专属模型之前，必须先把脏东西查出来清掉。看证据，判读每个问题的真正原因。',
+    en:'You just recorded your own EEG with your headset. Public data is clean; self-recordings are dirty—you turn your head, blink, and household devices interfere. Before training YOUR model, you must find and clear the dirt. Read the evidence, diagnose the true cause of each problem.'},
+  lblEvCh:{cn:'通道波形',en:'CHANNELS'},
+  lblEvEp:{cn:'Epoch 幅度',en:'EPOCH AMP'},
+  lblEvIca:{cn:'ICA 成分',en:'ICA COMP'},
+  lblEvSpec:{cn:'频谱',en:'SPECTRUM'},
+  caseN:{cn:'案件',en:'CASE'},
+  submit:{cn:'提交判读',en:'SUBMIT'},
+  next:{cn:'下一个案件',en:'NEXT CASE'},
+  vOk:{cn:'判读正确。这段脏数据已标记清除。',en:'Correct. This dirty segment is marked for removal.'},
+  vNo:{cn:'判读错误。脏数据没被清掉，会留在训练集里。',en:'Wrong. The dirt was not cleaned and stays in the training set.'},
+  progT:{cn:'已判读',en:'DIAGNOSED'},
+  cleanTip:{cn:'漏判一条脏数据，专属模型就会<b>学坏</b>。',en:'Each missed dirty segment makes your model <b>learn wrong</b>.'},
+  endTxt:{cn:'终点：脑控 Minecraft',en:'Goal: Mind-controlled Minecraft'},
+  // roadmap names
+  rs1:{cn:'S1 认识脑电',en:'S1 Read EEG'},
+  rs2:{cn:'S2 信号清洗',en:'S2 Clean signal'},
+  rs3:{cn:'S3 提取特征',en:'S3 Features'},
+  rs4:{cn:'S4 自录质检',en:'S4 Self-record QC'},
+  rs5:{cn:'S5 训专属模型',en:'S5 Train model'},
+  rs6:{cn:'S6 脑控方块',en:'S6 Mind-control'},
+  // end
+  endWin:{cn:'数据洗净',en:'DATA CLEANED'},
+  endFail:{cn:'数据还脏',en:'STILL DIRTY'},
+  endDetailWin:{cn:'你把自录数据的每一条问题都查出来了：脱落的电极、动作伪迹的坏 epoch、眨眼成分、工频干扰。这批数据现在和公开数据一样干净。',en:'You found every problem in your own recording: a detached electrode, motion-artifact epochs, an eye-blink component, and powerline interference. This batch is now as clean as public data.'},
+  endDetailFail:{cn:'你还有脏数据没查出来。如果现在拿去训模型，它会把眨眼、扭头当成“意图”去学。重查一遍。',en:'You missed some dirty data. If you train now, the model will learn blinks and head turns as "intent". Re-check.'},
+  unlockWin:{cn:'解锁：自录质检员。数据洗净，准备训你的专属模型（S5）——距离脑控方块又近一步。',en:'Unlocked: Self-Record QC Inspector. Data cleaned, ready to train YOUR model (S5)—one step closer to mind-controlled Minecraft.'},
+  unlockFail:{cn:'未解锁。净数据是专属模型的地基。',en:'Not unlocked. Clean data is the foundation of your model.'},
+  retry:{cn:'重新质检',en:'RE-INSPECT'}
+};
+
+// ---------------- evidence tabs ----------------
+var EV_TABS=[
+  {id:'ch',label:'lblEvCh'},
+  {id:'ep',label:'lblEvEp'},
+  {id:'ica',label:'lblEvIca'},
+  {id:'spec',label:'lblEvSpec'}
+];
+
+// ---------------- cases ----------------
+// Each case: which evidence view shows the smoking gun, the question, options, correct id, why
+var CASES=[
+  {
+    view:'ch',
+    q:{cn:'看通道波形：其中一个通道从头到尾是一条平线，完全不动。最可能的原因是？',en:'Look at the channels: one channel is a flat line from start to end, completely still. Most likely cause?'},
+    opts:[
+      {id:'a',t:{cn:'电极脱落',en:'Electrode detached'},d:{cn:'该通道没接触头皮，采不到信号。',en:'That electrode lost scalp contact, picking up nothing.'}},
+      {id:'b',t:{cn:'大脑太平静',en:'Calm brain'},d:{cn:'大脑从不会完全静止，总有背景活动。',en:'A brain is never totally silent; there is always background activity.'}},
+      {id:'c',t:{cn:'采样率太高',en:'Sample rate too high'},d:{cn:'采样率高不会把信号变成平线。',en:'A high sample rate does not flatten a signal.'}}
+    ],
+    correct:'a'
+  },
+  {
+    view:'ep',
+    q:{cn:'看 epoch 幅度分布：几个 epoch 的幅度冲到 ±400µV，远超其他。这些应该怎么处理？',en:'Look at the epoch amplitude distribution: a few epochs spike to ±400µV, far above the rest. What should you do?'},
+    opts:[
+      {id:'a',t:{cn:'保留全部',en:'Keep them all'},d:{cn:'超大幅度是动作伪迹，保留会污染训练。',en:'Huge amplitudes are motion artifacts; keeping them pollutes training.'}},
+      {id:'b',t:{cn:'丢掉这几个坏 epoch',en:'Drop these bad epochs'},d:{cn:'动作（扭头/咬牙）造成幅度爆表，应丢弃。',en:'Movement (head turn / clenching) causes the spike; drop them.'}},
+      {id:'c',t:{cn:'把所有 epoch 除以400',en:'Divide every epoch by 400'},d:{cn:'缩放不会去掉伪迹，只会把真信号也变形。',en:'Scaling does not remove the artifact; it warps the real signal too.'}}
+    ],
+    correct:'b'
+  },
+  {
+    view:'ica',
+    q:{cn:'看 ICA 成分：有一个成分能量全集中在前额，还周期性出现大慢波。这是什么？',en:'Look at the ICA components: one component is energy-concentrated at the frontal sites with periodic large slow waves. What is it?'},
+    opts:[
+      {id:'a',t:{cn:'眨眼成分',en:'Eye-blink component'},d:{cn:'前额 + 周期性大慢波 = 典型眨眼，应剔除这个成分。',en:'Frontal + periodic slow waves = classic blink; reject this component.'}},
+      {id:'b',t:{cn:'心跳成分',en:'Heartbeat component'},d:{cn:'心跳是规律尖峰，且不集中在前额。',en:'Heartbeat is sharp regular spikes, not frontal-concentrated.'}},
+      {id:'c',t:{cn:'真运动意图',en:'Real motor intent'},d:{cn:'运动意图在运动区（C3/C4），不在前额。',en:'Motor intent sits over motor cortex (C3/C4), not the forehead.'}}
+    ],
+    correct:'a'
+  },
+  {
+    view:'spec',
+    q:{cn:'看频谱：在 50Hz 处有一根尖锐的巨峰，比周围高出很多。这个峰从哪来？',en:'Look at the spectrum: a sharp huge peak at 50Hz, far above its neighbors. Where does it come from?'},
+    opts:[
+      {id:'a',t:{cn:'大脑 gamma 波',en:'Brain gamma waves'},d:{cn:'gamma 是宽频能量，不会是单一 50Hz 尖峰。',en:'Gamma is broadband, not a single sharp 50Hz line.'}},
+      {id:'b',t:{cn:'工频干扰',en:'Powerline interference'},d:{cn:'50Hz 是市电频率，周围电器泄进电极，应陷波滤除。',en:'50Hz is the mains frequency; nearby devices leak in. Notch-filter it out.'}},
+      {id:'c',t:{cn:'采样误差',en:'Sampling error'},d:{cn:'采样误差不会恰好落在 50Hz。',en:'Sampling error would not land exactly at 50Hz.'}}
+    ],
+    correct:'b'
+  }
+];
+
+// ---------------- state ----------------
+var stateGame={
+  idx:0,
+  curView:'ch',
+  selected:null,
+  locked:false,
+  correctCount:0,
+  answered:[] // booleans per case
+};
+var canvas=document.getElementById('evCanvas');
+var ctx2d=canvas.getContext('2d');
+var animT=0;
+var rafId=null;
+
+// ---------------- helpers: read css var color ----------------
+var cssCache={};
+function cvar(name){
+  if(cssCache[name])return cssCache[name];
+  var v=getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  cssCache[name]=v||'#888';
+  return cssCache[name];
+}
+
+// ---------------- canvas sizing ----------------
+function fitCanvas(){
+  var wrap=canvas.parentElement;
+  var r=wrap.getBoundingClientRect();
+  var w=Math.max(120,Math.floor(r.width));
+  var h=Math.max(120,Math.floor(r.height));
+  var dpr=window.devicePixelRatio||1;
+  canvas.width=Math.floor(w*dpr);
+  canvas.height=Math.floor(h*dpr);
+  canvas.style.width=w+'px';
+  canvas.style.height=h+'px';
+  ctx2d.setTransform(dpr,0,0,dpr,0,0);
+  return {w:w,h:h};
+}
+
+// deterministic pseudo-noise
+function nz(i){var x=Math.sin(i*12.9898)*43758.5453;return x-Math.floor(x);}
+
+// ---------------- evidence renderers ----------------
+function drawChannels(w,h){
+  var labels=['Fz','C3','C4','Pz'];
+  var deadIdx=2; // C4 detached -> flat line
+  var rows=labels.length;
+  var pad=10, lab=30;
+  var rowH=(h-pad*2)/rows;
+  ctx2d.font='9px monospace';
+  for(var k=0;k<rows;k++){
+    var cy=pad+rowH*k+rowH*0.5;
+    ctx2d.fillStyle=cvar('--muted');
+    ctx2d.fillText(labels[k],4,cy+3);
+    ctx2d.strokeStyle= (k===deadIdx)?cvar('--bad'):cvar('--signal');
+    ctx2d.lineWidth=1.4;
+    ctx2d.beginPath();
+    for(var px=0;px<=(w-lab);px+=2){
+      var t=(px/(w-lab))*6 + animT*0.5;
+      var amp;
+      if(k===deadIdx){ amp=0; }
+      else { amp=Math.sin(t*(2+k*0.6))*rowH*0.22 + Math.sin(t*5.3+k)*rowH*0.08 + (nz(px+k*97)-0.5)*rowH*0.06; }
+      var x=lab+px, y=cy+amp;
+      if(px===0)ctx2d.moveTo(x,y);else ctx2d.lineTo(x,y);
+    }
+    ctx2d.stroke();
+    if(k===deadIdx){
+      ctx2d.fillStyle=cvar('--bad');
+      ctx2d.fillText('FLAT',lab+6,cy-6);
+    }
+  }
+}
+
+function drawEpochs(w,h){
+  // bar-ish amplitude per epoch, a few spike huge
+  var n=16;
+  var spikes={3:1,9:1,12:1};
+  var pad=14, base=h-26;
+  var bw=(w-pad*2)/n*0.62, gap=(w-pad*2)/n;
+  var maxA=h-50;
+  ctx2d.strokeStyle=cvar('--line'); ctx2d.lineWidth=1;
+  ctx2d.beginPath(); ctx2d.moveTo(pad,base); ctx2d.lineTo(w-pad,base); ctx2d.stroke();
+  // threshold line
+  var thrY=base-maxA*0.55;
+  ctx2d.strokeStyle=cvar('--query'); ctx2d.setLineDash([4,3]);
+  ctx2d.beginPath(); ctx2d.moveTo(pad,thrY); ctx2d.lineTo(w-pad,thrY); ctx2d.stroke();
+  ctx2d.setLineDash([]);
+  ctx2d.fillStyle=cvar('--query'); ctx2d.font='8px monospace';
+  ctx2d.fillText('reject thr',w-pad-54,thrY-4);
+  for(var i=0;i<n;i++){
+    var isSpike=spikes[i];
+    var hgt = isSpike ? (maxA*(0.78+0.18*nz(i))) : (maxA*(0.18+0.22*nz(i*3+1)));
+    var x=pad+gap*i+(gap-bw)/2;
+    var y=base-hgt;
+    ctx2d.fillStyle= isSpike? cvar('--bad'):cvar('--core');
+    ctx2d.fillRect(x,y,bw,hgt);
+    if(isSpike){
+      ctx2d.fillStyle=cvar('--bad'); ctx2d.font='7px monospace';
+      ctx2d.fillText('400',x-2,y-3);
+    }
+  }
+  ctx2d.fillStyle=cvar('--muted'); ctx2d.font='8px monospace';
+  ctx2d.fillText('epoch index ->',pad,base+16);
+}
+
+function drawICA(w,h){
+  // four scalp-blob components, one frontal blink with slow wave
+  var comps=[
+    {name:'IC1',front:false,real:true},
+    {name:'IC2',front:true,blink:true},
+    {name:'IC3',front:false,real:true},
+    {name:'IC4',front:false,real:true}
+  ];
+  var cols=2, rows=2;
+  var cw=w/cols, ch=h/rows;
+  for(var c=0;c<comps.length;c++){
+    var cx=(c%cols)*cw, cy=Math.floor(c/cols)*ch;
+    var mx=cx+cw*0.5, my=cy+ch*0.42, rad=Math.min(cw,ch)*0.26;
+    // head circle
+    ctx2d.strokeStyle=cvar('--line'); ctx2d.lineWidth=1;
+    ctx2d.beginPath(); ctx2d.arc(mx,my,rad,0,Math.PI*2); ctx2d.stroke();
+    // nose
+    ctx2d.beginPath(); ctx2d.moveTo(mx-4,my-rad); ctx2d.lineTo(mx,my-rad-6); ctx2d.lineTo(mx+4,my-rad); ctx2d.stroke();
+    // topo blob
+    var blobY = comps[c].front ? my-rad*0.55 : my+rad*0.15*(c%2?1:-1);
+    var blobX = comps[c].front ? mx : mx+rad*0.3*(c%2?-1:1);
+    var col = comps[c].blink ? cvar('--bad') : cvar('--core');
+    var g=ctx2d.createRadialGradient(blobX,blobY,1,blobX,blobY,rad*0.7);
+    g.addColorStop(0,col); g.addColorStop(1,'rgba(0,0,0,0)');
+    ctx2d.fillStyle=g;
+    ctx2d.beginPath(); ctx2d.arc(blobX,blobY,rad*0.7,0,Math.PI*2); ctx2d.fill();
+    // label + mini time series
+    ctx2d.fillStyle= comps[c].blink? cvar('--bad'):cvar('--muted');
+    ctx2d.font='8px monospace';
+    ctx2d.fillText(comps[c].name+(comps[c].blink?' frontal':''),cx+6,cy+ch-16);
+    ctx2d.strokeStyle= comps[c].blink? cvar('--bad'):cvar('--signal');
+    ctx2d.lineWidth=1; ctx2d.beginPath();
+    var ty=cy+ch-7;
+    for(var px=0;px<cw-12;px+=2){
+      var t=px/14 + animT;
+      var a;
+      if(comps[c].blink){ a=Math.sin(t*0.8)>0.6? -7*Math.sin((t*0.8-0.6)*8):(nz(px+c)-0.5)*1.2; }
+      else { a=Math.sin(t*(3+c))*2.4+(nz(px+c*5)-0.5)*1.4; }
+      var x=cx+6+px, y=ty+a;
+      if(px===0)ctx2d.moveTo(x,y);else ctx2d.lineTo(x,y);
+    }
+    ctx2d.stroke();
+  }
+}
+
+function drawSpectrum(w,h){
+  var pad=16, base=h-24;
+  var maxA=h-44;
+  ctx2d.strokeStyle=cvar('--line'); ctx2d.lineWidth=1;
+  ctx2d.beginPath(); ctx2d.moveTo(pad,base); ctx2d.lineTo(w-pad,base); ctx2d.stroke();
+  var fMax=60;
+  function fx(f){return pad+(f/fMax)*(w-pad*2);}
+  // 1/f-ish curve + alpha bump + 50Hz spike
+  ctx2d.strokeStyle=cvar('--signal'); ctx2d.lineWidth=1.6;
+  ctx2d.beginPath();
+  for(var f=0;f<=fMax;f+=0.5){
+    var p = 1/(f+1.2)*1.8;            // 1/f
+    p += 0.6*Math.exp(-Math.pow((f-10)/2.4,2)); // alpha bump
+    var spike=0;
+    if(Math.abs(f-50)<0.8) spike=2.4*Math.exp(-Math.pow((f-50)/0.5,2));
+    p+=spike;
+    var y=base - Math.min(maxA, p/3.4*maxA*2.2);
+    var x=fx(f);
+    if(f===0)ctx2d.moveTo(x,y);else ctx2d.lineTo(x,y);
+  }
+  ctx2d.stroke();
+  // 50Hz marker
+  ctx2d.strokeStyle=cvar('--bad'); ctx2d.setLineDash([3,3]);
+  ctx2d.beginPath(); ctx2d.moveTo(fx(50),base); ctx2d.lineTo(fx(50),base-maxA*0.95); ctx2d.stroke();
+  ctx2d.setLineDash([]);
+  ctx2d.fillStyle=cvar('--bad'); ctx2d.font='8px monospace';
+  ctx2d.fillText('50Hz',fx(50)-10,base-maxA*0.95-3);
+  // axis ticks
+  ctx2d.fillStyle=cvar('--muted'); ctx2d.font='8px monospace';
+  [0,10,20,30,40,50,60].forEach(function(f){
+    ctx2d.fillText(f+'',fx(f)-4,base+12);
+  });
+  ctx2d.fillText('Hz',w-pad-14,base+12);
+}
+
+var READOUTS={
+  ch:{cn:'4 个通道。注意那条 <b>红色平线</b>：从头到尾没有任何起伏。',en:'4 channels. Note the <b>red flat line</b>: no fluctuation at all, start to end.'},
+  ep:{cn:'每根柱 = 一个 epoch 的幅度。几根 <b>红柱冲到 400µV</b>，越过虚线阈值。',en:'Each bar = one epoch amplitude. A few <b>red bars hit 400µV</b>, above the dashed threshold.'},
+  ica:{cn:'4 个 ICA 成分的头皮分布。<b>IC2 能量集中在前额</b>，下方时间曲线有周期性大慢波。',en:'Scalp maps of 4 ICA components. <b>IC2 energy at the forehead</b>, with periodic slow waves below.'},
+  spec:{cn:'功率谱。除了 10Hz 的 alpha 鼓包，<b>50Hz 处有一根尖峰</b>。',en:'Power spectrum. Besides the alpha bump at 10Hz, there is <b>a sharp peak at 50Hz</b>.'}
+};
+
+function renderEvidence(){
+  var sz=fitCanvas();
+  ctx2d.clearRect(0,0,sz.w,sz.h);
+  if(stateGame.curView==='ch')drawChannels(sz.w,sz.h);
+  else if(stateGame.curView==='ep')drawEpochs(sz.w,sz.h);
+  else if(stateGame.curView==='ica')drawICA(sz.w,sz.h);
+  else drawSpectrum(sz.w,sz.h);
+  document.getElementById('evReadout').innerHTML=L(READOUTS[stateGame.curView]);
+}
+
+function loop(){
+  animT+=0.05;
+  renderEvidence();
+  rafId=requestAnimationFrame(loop);
+}
+
+// ---------------- build UI ----------------
+function buildTabs(){
+  var box=document.getElementById('evTabs');
+  box.innerHTML='';
+  EV_TABS.forEach(function(tab){
+    var b=document.createElement('button');
+    b.className='ev-tab'+(tab.id===stateGame.curView?' active':'');
+    b.textContent=L(T[tab.label]);
+    b.setAttribute('data-view',tab.id);
+    b.addEventListener('click',function(){
+      stateGame.curView=tab.id;
+      buildTabs();
+      renderEvidence();
+    });
+    box.appendChild(b);
+  });
+}
+
+function buildRoad(){
+  var road=document.getElementById('road');
+  road.innerHTML='';
+  var steps=[
+    {k:'rs1',st:'done'},{k:'rs2',st:'done'},{k:'rs3',st:'done'},
+    {k:'rs4',st:'here'},{k:'rs5',st:''},{k:'rs6',st:''}
+  ];
+  steps.forEach(function(s){
+    var d=document.createElement('div');
+    d.className='road-step '+s.st;
+    d.innerHTML='<span class="dot"></span><span class="rs-name">'+L(T[s.k])+'</span>';
+    road.appendChild(d);
+  });
+}
+
+function buildCase(){
+  var c=CASES[stateGame.idx];
+  stateGame.curView=c.view;
+  stateGame.selected=null;
+  stateGame.locked=false;
+  buildTabs();
+  renderEvidence();
+  document.getElementById('caseCounter').textContent=L(T.caseN)+' '+(stateGame.idx+1)+' / '+CASES.length;
+  document.getElementById('diagQ').textContent=L(c.q);
+  var optBox=document.getElementById('opts');
+  optBox.innerHTML='';
+  // shuffle option order deterministically per case
+  var order=c.opts.map(function(o,i){return i;});
+  for(var i=order.length-1;i>0;i--){var j=Math.floor(nz(stateGame.idx*7+i)* (i+1));var tmp=order[i];order[i]=order[j];order[j]=tmp;}
+  order.forEach(function(oi){
+    var o=c.opts[oi];
+    var btn=document.createElement('button');
+    btn.className='opt';
+    btn.setAttribute('data-oid',o.id);
+    btn.innerHTML='<span class="ot">'+L(o.t)+'</span>'+L(o.d);
+    btn.addEventListener('click',function(){ selectOpt(o.id,btn); });
+    optBox.appendChild(btn);
+  });
+  var sb=document.getElementById('submitBtn');
+  sb.textContent=L(T.submit);
+  sb.disabled=true;
+  var v=document.getElementById('verdict');
+  v.textContent=''; v.className='verdict';
+  updateProgress();
+}
+
+function selectOpt(oid,btn){
+  if(stateGame.locked)return;
+  stateGame.selected=oid;
+  var all=document.querySelectorAll('#opts .opt');
+  all.forEach(function(b){b.classList.remove('sel');});
+  btn.classList.add('sel');
+  document.getElementById('submitBtn').disabled=false;
+}
+
+function submit(){
+  var c=CASES[stateGame.idx];
+  if(stateGame.locked){
+    // acting as NEXT
+    nextCase();
+    return;
+  }
+  if(!stateGame.selected)return;
+  stateGame.locked=true;
+  var ok=(stateGame.selected===c.correct);
+  stateGame.answered[stateGame.idx]=ok;
+  if(ok)stateGame.correctCount++;
+  // mark options
+  var all=document.querySelectorAll('#opts .opt');
+  all.forEach(function(b){
+    var oid=b.getAttribute('data-oid');
+    if(oid===c.correct)b.classList.add('correct');
+    else if(oid===stateGame.selected)b.classList.add('wrong');
+  });
+  var v=document.getElementById('verdict');
+  v.className='verdict '+(ok?'ok':'no');
+  v.textContent=ok?L(T.vOk):L(T.vNo);
+  var sb=document.getElementById('submitBtn');
+  sb.disabled=false;
+  sb.textContent= (stateGame.idx<CASES.length-1)? L(T.next) : L({cn:'查看结果',en:'SEE RESULT'});
+  updateProgress();
+}
+
+function nextCase(){
+  if(stateGame.idx<CASES.length-1){
+    stateGame.idx++;
+    buildCase();
+  }else{
+    showEnd();
+  }
+}
+
+function updateProgress(){
+  var diagnosed=stateGame.answered.filter(function(x){return x!==undefined;}).length;
+  document.getElementById('progFill').style.width=(diagnosed/CASES.length*100)+'%';
+  document.getElementById('progTxt').textContent=L(T.progT)+' '+diagnosed+'/'+CASES.length;
+  document.getElementById('progClean').innerHTML=L(T.cleanTip);
+}
+
+function showEnd(){
+  var win=(stateGame.correctCount===CASES.length);
+  document.getElementById('endTitle').textContent= win? L(T.endWin):L(T.endFail);
+  document.getElementById('endTitle').className= win?'':'warn';
+  document.getElementById('endScore').textContent=stateGame.correctCount+' / '+CASES.length;
+  document.getElementById('endDetail').innerHTML= win? L(T.endDetailWin):L(T.endDetailFail);
+  document.getElementById('endUnlock').innerHTML= win? L(T.unlockWin):L(T.unlockFail);
+  document.getElementById('endUnlock').className= win?'unlock':'unlock warn';
+  document.getElementById('retryBtn').textContent=L(T.retry);
+  document.getElementById('overlay').style.display='flex';
+}
+
+function resetGame(){
+  stateGame.idx=0;
+  stateGame.correctCount=0;
+  stateGame.answered=[];
+  document.getElementById('overlay').style.display='none';
+  buildCase();
+}
+
+// ---------------- i18n refresh ----------------
+function refreshStatic(){
+  document.getElementById('bitRole').textContent=L(T.bitRole);
+  document.getElementById('lblRoute').textContent=L(T.lblRoute);
+  document.getElementById('lblProg').textContent=L(T.lblProg);
+  document.getElementById('title').textContent=L(T.title);
+  document.getElementById('intro').textContent=L(T.intro);
+  document.getElementById('endTxt').textContent=L(T.endTxt);
+  buildRoad();
+}
+
+// ---------------- bindings ----------------
+document.getElementById('langBtn').addEventListener('click',function(){
+  LANG=(LANG==='cn')?'en':'cn';
+  document.getElementById('langBtn').textContent=(LANG==='cn')?'EN':'CN';
+  refreshStatic();
+  // rebuild case keeping state
+  var savedSel=stateGame.selected, savedLock=stateGame.locked;
+  rebuildCaseKeepState(savedSel,savedLock);
+  if(document.getElementById('overlay').style.display==='flex')showEnd();
+});
+
+function rebuildCaseKeepState(sel,lock){
+  var c=CASES[stateGame.idx];
+  buildTabs();
+  renderEvidence();
+  document.getElementById('caseCounter').textContent=L(T.caseN)+' '+(stateGame.idx+1)+' / '+CASES.length;
+  document.getElementById('diagQ').textContent=L(c.q);
+  var optBox=document.getElementById('opts');
+  optBox.innerHTML='';
+  c.opts.forEach(function(o){
+    var btn=document.createElement('button');
+    btn.className='opt';
+    btn.setAttribute('data-oid',o.id);
+    btn.innerHTML='<span class="ot">'+L(o.t)+'</span>'+L(o.d);
+    if(lock){
+      if(o.id===c.correct)btn.classList.add('correct');
+      else if(o.id===sel)btn.classList.add('wrong');
+    }else if(o.id===sel){btn.classList.add('sel');}
+    btn.addEventListener('click',function(){ selectOpt(o.id,btn); });
+    optBox.appendChild(btn);
+  });
+  var sb=document.getElementById('submitBtn');
+  if(lock){ sb.textContent=(stateGame.idx<CASES.length-1)?L(T.next):L({cn:'查看结果',en:'SEE RESULT'}); sb.disabled=false; }
+  else { sb.textContent=L(T.submit); sb.disabled=!sel; }
+  var v=document.getElementById('verdict');
+  if(lock){ var ok=(sel===c.correct); v.className='verdict '+(ok?'ok':'no'); v.textContent=ok?L(T.vOk):L(T.vNo); }
+  else { v.textContent=''; v.className='verdict'; }
+  updateProgress();
+}
+
+document.getElementById('submitBtn').addEventListener('click',submit);
+document.getElementById('retryBtn').addEventListener('click',resetGame);
+window.addEventListener('resize',function(){ renderEvidence(); });
+
+// ---------------- init ----------------
+refreshStatic();
+buildCase();
+loop();
+})();
+</script>
+</body>
+</html>

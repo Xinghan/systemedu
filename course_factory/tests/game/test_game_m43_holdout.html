@@ -1,0 +1,680 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<script>window.__systemedu_resize_patch_optout=true;</script>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700;800&family=Inter:wght@400;500;700&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<title>诚实评估 — Holdout 抵制诱惑</title>
+<style>
+  :root{
+    /* cs deep-space palette (theme_style/themes.js · cs) */
+    --bg-0: oklch(0.16 0.03 235);
+    --bg-1: oklch(0.20 0.035 235);
+    --bg-2: oklch(0.24 0.04 235);
+    --bg-3: oklch(0.28 0.05 235);
+    --signal: oklch(0.75 0.17 200);   /* accent */
+    --core:   oklch(0.55 0.16 200);
+    --depth:  oklch(0.35 0.10 210);
+    --flash:  oklch(0.92 0.08 190);
+    --query:  oklch(0.85 0.14 85);
+    --fg:     oklch(0.94 0.02 235);
+    --fg-dim: oklch(0.70 0.03 235);
+    --fg-mute:oklch(0.52 0.04 235);
+    --line:   oklch(0.32 0.05 235);
+    --line-strong: oklch(0.42 0.06 235);
+    --bad:    oklch(0.64 0.20 25);
+    --bad-soft: oklch(0.40 0.13 25);
+  }
+  *,*::before,*::after{margin:0;padding:0;box-sizing:border-box;}
+  html,body{width:100%;height:100vh;overflow:hidden;background:var(--bg-0);
+    color:var(--fg);font-family:'Inter','Noto Sans SC',sans-serif;}
+  .mono{font-family:'JetBrains Mono',monospace;}
+  .wrap{display:flex;height:100vh;overflow:hidden;}
+
+  /* ---------- 200px sidebar ---------- */
+  .game-sidebar{width:200px;flex-shrink:0;height:100vh;background:var(--bg-1);
+    border-right:1px solid var(--line);display:flex;flex-direction:column;gap:11px;
+    padding:13px 12px;overflow-y:auto;}
+  .brand{font-size:14px;font-weight:800;line-height:1.3;color:var(--fg);}
+  .brand .sub{display:block;font-size:9px;font-weight:700;color:var(--signal);
+    font-family:'JetBrains Mono',monospace;margin-top:3px;letter-spacing:.08em;}
+
+  /* mascot Bit — levitating cube */
+  .mascot{display:flex;align-items:center;gap:8px;}
+  .mascot svg{width:38px;height:38px;flex-shrink:0;}
+  .mascot .say{font-size:9px;line-height:1.45;color:var(--fg-dim);font-style:italic;}
+
+  /* roadmap S1-S6 */
+  .roadmap{background:var(--bg-2);border:1px solid var(--line);padding:8px 9px;}
+  .rm-title{font-size:9px;color:var(--fg-mute);font-family:'JetBrains Mono',monospace;
+    letter-spacing:.08em;margin-bottom:6px;}
+  .rm-stops{display:flex;flex-direction:column;gap:0;}
+  .rm-stop{display:flex;align-items:center;gap:7px;font-size:10px;line-height:1.5;
+    color:var(--fg-mute);position:relative;padding:1px 0;}
+  .rm-stop .dot{width:9px;height:9px;border:1px solid var(--line-strong);
+    background:var(--bg-0);flex-shrink:0;border-radius:50%;}
+  .rm-stop.done .dot{background:var(--core);border-color:var(--core);}
+  .rm-stop.here{color:var(--signal);font-weight:700;}
+  .rm-stop.here .dot{background:var(--signal);border-color:var(--signal);
+    box-shadow:0 0 0 3px oklch(0.75 0.17 200 / 0.22);}
+  .rm-stop .line{position:absolute;left:4px;top:14px;width:1px;height:8px;background:var(--line);}
+  .rm-stop:last-child .line{display:none;}
+
+  /* integrity meter (诚信值) */
+  .integrity{background:var(--bg-2);border:1px solid var(--line);padding:8px 9px;}
+  .int-title{font-size:9px;color:var(--fg-mute);font-family:'JetBrains Mono',monospace;
+    letter-spacing:.08em;margin-bottom:6px;}
+  .int-track{height:8px;background:var(--bg-0);border:1px solid var(--line);
+    position:relative;overflow:hidden;}
+  .int-fill{position:absolute;left:0;top:0;bottom:0;width:100%;background:var(--query);
+    transition:width .5s cubic-bezier(.2,.7,.2,1),background .4s;}
+  .int-fill.low{background:var(--bad);}
+  .int-num{font-family:'JetBrains Mono',monospace;font-size:15px;font-weight:800;
+    color:var(--query);margin-top:5px;}
+  .int-num.low{color:var(--bad);}
+
+  .goal{font-size:10px;line-height:1.55;color:var(--fg-dim);}
+  .goal b{color:var(--flash);}
+
+  /* Minecraft 角落剪影 */
+  .endgoal{display:flex;align-items:center;gap:6px;background:var(--bg-2);
+    border:1px dashed var(--line-strong);padding:6px 8px;}
+  .endgoal svg{width:26px;height:26px;flex-shrink:0;}
+  .endgoal span{font-size:8.5px;line-height:1.35;color:var(--fg-mute);}
+
+  .lang-btn{margin-top:auto;background:var(--bg-3);border:1px solid var(--line-strong);
+    color:var(--fg);font-weight:700;font-size:10px;padding:8px 10px;cursor:pointer;
+    box-shadow:2px 2px 0 var(--bg-0);transition:transform .08s,box-shadow .08s;
+    font-family:'JetBrains Mono',monospace;letter-spacing:.12em;text-transform:uppercase;}
+  .lang-btn:hover{transform:translate(-1px,-1px);box-shadow:3px 3px 0 var(--bg-0);}
+  .lang-btn:active{transform:translate(1px,1px);box-shadow:1px 1px 0 var(--bg-0);}
+
+  /* ---------- main ---------- */
+  .game-main{flex:1;height:100vh;display:flex;flex-direction:column;gap:11px;
+    padding:16px 18px;position:relative;overflow:hidden;min-width:0;}
+  .main-head{display:flex;align-items:baseline;justify-content:space-between;
+    flex-shrink:0;gap:14px;flex-wrap:wrap;}
+  .main-title{font-size:15px;font-weight:800;color:var(--fg);}
+  .round-tag{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--fg-dim);
+    border:1px solid var(--line);padding:4px 9px;background:var(--bg-1);flex-shrink:0;}
+
+  .opening{font-size:11px;line-height:1.55;color:var(--query);background:var(--bg-1);
+    border:1px solid var(--line);border-left:3px solid var(--query);padding:9px 12px;flex-shrink:0;}
+
+  /* dual readouts: 报告准确率 vs 上线实际 */
+  .readouts{display:flex;gap:12px;flex-shrink:0;}
+  .ro{flex:1;background:var(--bg-1);border:1px solid var(--line);padding:10px 13px;
+    position:relative;}
+  .ro-lbl{font-size:9px;color:var(--fg-mute);font-family:'JetBrains Mono',monospace;
+    letter-spacing:.1em;text-transform:uppercase;margin-bottom:5px;}
+  .ro-num{font-family:'JetBrains Mono',monospace;font-size:26px;font-weight:800;
+    line-height:1;transition:color .4s;}
+  .ro.report .ro-num{color:var(--signal);}
+  .ro.deploy .ro-num{color:var(--core);}
+  .ro-sub{font-size:9px;color:var(--fg-mute);margin-top:4px;line-height:1.4;}
+  .ro-track{height:6px;background:var(--bg-0);border:1px solid var(--line);
+    margin-top:7px;position:relative;overflow:hidden;}
+  .ro-fill{position:absolute;left:0;top:0;bottom:0;width:0%;
+    transition:width .6s cubic-bezier(.2,.7,.2,1),background .4s;}
+  .ro.report .ro-fill{background:var(--signal);}
+  .ro.deploy .ro-fill{background:var(--core);}
+  .ro.deploy .ro-fill.crash{background:var(--bad);}
+  .ro-flag{position:absolute;top:9px;right:11px;font-family:'JetBrains Mono',monospace;
+    font-size:8px;font-weight:700;letter-spacing:.1em;padding:2px 6px;display:none;}
+  .ro-flag.tainted{display:block;color:var(--bad);border:1px solid var(--bad);}
+  .ro-flag.pure{display:block;color:var(--query);border:1px solid var(--query);}
+
+  /* temptation scene */
+  .scene{flex:1;display:flex;flex-direction:column;gap:11px;min-height:0;overflow:hidden;}
+  .scene-card{background:var(--bg-1);border:1px solid var(--line);padding:13px 16px;
+    flex-shrink:0;}
+  .sc-tag{font-family:'JetBrains Mono',monospace;font-size:9px;font-weight:700;
+    color:var(--query);letter-spacing:.12em;text-transform:uppercase;margin-bottom:6px;}
+  .sc-text{font-size:12.5px;line-height:1.6;color:var(--fg);}
+  .sc-text b{color:var(--query);}
+
+  /* the two choice cards */
+  .choices{display:flex;gap:12px;flex-shrink:0;}
+  .choice{flex:1;min-width:0;background:var(--bg-2);border:1px solid var(--line-strong);
+    padding:13px 14px;cursor:pointer;display:flex;flex-direction:column;gap:7px;
+    text-align:left;font-family:inherit;color:inherit;appearance:none;-webkit-appearance:none;
+    box-shadow:3px 3px 0 var(--bg-0);transition:transform .1s,box-shadow .1s,border-color .15s;}
+  .choice:hover:not(:disabled){transform:translate(-1px,-1px);box-shadow:4px 4px 0 var(--bg-0);}
+  .choice:active:not(:disabled){transform:translate(1px,1px);box-shadow:1px 1px 0 var(--bg-0);}
+  .choice:disabled{opacity:.4;cursor:not-allowed;}
+  .choice.resist{border-color:var(--core);}
+  .choice.resist:hover:not(:disabled){border-color:var(--query);}
+  .choice.peek{border-color:var(--bad-soft);}
+  .choice.peek:hover:not(:disabled){border-color:var(--bad);}
+  .ch-head{display:flex;align-items:center;justify-content:space-between;gap:8px;}
+  .ch-name{font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:800;
+    letter-spacing:.04em;}
+  .choice.resist .ch-name{color:var(--query);}
+  .choice.peek .ch-name{color:var(--bad);}
+  .ch-lure{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--fg-mute);
+    border:1px solid var(--line);padding:2px 6px;white-space:nowrap;}
+  .ch-desc{font-size:11px;line-height:1.5;color:var(--fg-dim);}
+
+  /* consequence panel */
+  .consequence{background:var(--bg-1);border:1px solid var(--line);padding:11px 14px;
+    flex-shrink:0;display:none;}
+  .consequence.show{display:block;}
+  .cq-tag{font-family:'JetBrains Mono',monospace;font-size:9px;font-weight:700;
+    letter-spacing:.12em;text-transform:uppercase;margin-bottom:6px;}
+  .cq-tag.good{color:var(--query);}
+  .cq-tag.bad{color:var(--bad);}
+  .cq-text{font-size:11.5px;line-height:1.6;color:var(--fg);}
+  .cq-text b{color:var(--query);}
+  .cq-text b.bad{color:var(--bad);}
+
+  .next-row{display:flex;justify-content:flex-end;flex-shrink:0;}
+  .next-btn{background:var(--signal);border:1px solid var(--signal);color:var(--bg-0);
+    font-weight:800;font-size:12px;padding:9px 18px;cursor:pointer;
+    box-shadow:3px 3px 0 var(--bg-0);transition:transform .08s,box-shadow .08s;
+    font-family:'JetBrains Mono',monospace;letter-spacing:.06em;text-transform:uppercase;}
+  .next-btn:hover{transform:translate(-1px,-1px);box-shadow:4px 4px 0 var(--bg-0);}
+  .next-btn:active{transform:translate(1px,1px);box-shadow:1px 1px 0 var(--bg-0);}
+  .next-btn.hidden{display:none;}
+
+  /* end overlay */
+  .overlay{position:absolute;inset:0;background:oklch(0.13 0.03 235 / 0.94);
+    display:none;flex-direction:column;align-items:center;justify-content:center;
+    gap:14px;text-align:center;padding:30px;z-index:30;}
+  .overlay.show{display:flex;}
+  .ov-badge{font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:800;
+    letter-spacing:.2em;text-transform:uppercase;padding:5px 15px;}
+  .ov-badge.win{color:var(--bg-0);background:var(--query);}
+  .ov-badge.fail{color:var(--fg);border:1px solid var(--bad);}
+  .ov-title{font-family:'JetBrains Mono',monospace;font-size:25px;font-weight:800;
+    color:var(--flash);letter-spacing:.02em;}
+  .ov-msg{font-size:13px;color:var(--fg-dim);max-width:480px;line-height:1.65;}
+  .ov-msg b{color:var(--query);}
+  .ov-msg b.bad{color:var(--bad);}
+  .ov-btn{font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;
+    padding:9px 20px;cursor:pointer;border:1px solid var(--signal);background:transparent;
+    color:var(--signal);letter-spacing:.12em;text-transform:uppercase;margin-top:4px;}
+  .ov-btn:hover{background:var(--signal);color:var(--bg-0);}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- ===== SIDEBAR ===== -->
+  <aside class="game-sidebar">
+    <div class="brand" id="brand">诚实评估<span class="sub">CS-01 / EEG M43</span></div>
+
+    <div class="mascot">
+      <svg id="bitMascot" viewBox="0 0 48 48" aria-hidden="true">
+        <rect id="bitOuter" x="11" y="11" width="26" height="26" rx="3" fill="none"
+          stroke="var(--signal)" stroke-width="1.6"/>
+        <rect x="17" y="17" width="6" height="6" fill="var(--core)" opacity="0.8"/>
+        <rect x="25" y="17" width="6" height="6" fill="var(--query)" opacity="0.7"/>
+        <rect x="17" y="25" width="6" height="6" fill="var(--flash)" opacity="0.5"/>
+        <rect x="25" y="25" width="6" height="6" fill="var(--core)" opacity="0.4"/>
+      </svg>
+      <span class="say" id="bitSay">Bit: 守住 holdout, 我们才知道真相</span>
+    </div>
+
+    <div class="roadmap">
+      <div class="rm-title" id="rmTitle">PROJECT ROUTE</div>
+      <div class="rm-stops">
+        <div class="rm-stop done"><span class="dot"></span><span class="line"></span><span id="rmS1">S1 读懂脑电</span></div>
+        <div class="rm-stop done"><span class="dot"></span><span class="line"></span><span id="rmS2">S2 清洗信号</span></div>
+        <div class="rm-stop done"><span class="dot"></span><span class="line"></span><span id="rmS3">S3 提特征</span></div>
+        <div class="rm-stop here"><span class="dot"></span><span class="line"></span><span id="rmS4">S4 训练分类器 (你在这)</span></div>
+        <div class="rm-stop"><span class="dot"></span><span class="line"></span><span id="rmS5">S5 实时解码</span></div>
+        <div class="rm-stop"><span class="dot"></span><span id="rmS6">S6 脑控 Minecraft</span></div>
+      </div>
+    </div>
+
+    <div class="integrity">
+      <div class="int-title" id="intTitle">INTEGRITY · 诚信值</div>
+      <div class="int-track"><div class="int-fill" id="intFill"></div></div>
+      <div class="int-num mono" id="intNum">100</div>
+    </div>
+
+    <p class="goal" id="goal">
+      S4 你正在<b>调分类器超参数</b>。holdout 是你唯一诚实的考官 — 一旦用它调参, 它就被污染, 准确率读数全是自欺。
+    </p>
+
+    <div class="endgoal">
+      <svg viewBox="0 0 32 32" aria-hidden="true">
+        <rect x="6" y="8" width="20" height="18" fill="none" stroke="var(--fg-mute)" stroke-width="1.2"/>
+        <rect x="6" y="8" width="20" height="6" fill="var(--depth)" opacity="0.7"/>
+        <rect x="10" y="16" width="5" height="5" fill="var(--core)" opacity="0.7"/>
+        <rect x="17" y="16" width="5" height="5" fill="var(--core)" opacity="0.4"/>
+        <rect x="13" y="2" width="6" height="6" fill="none" stroke="var(--signal)" stroke-width="1"/>
+      </svg>
+      <span id="endGoal">终点: 脑控 Minecraft 搭方块</span>
+    </div>
+
+    <button id="langBtn" class="lang-btn">中 / EN</button>
+  </aside>
+
+  <!-- ===== MAIN ===== -->
+  <main class="game-main">
+    <div class="main-head">
+      <h2 class="main-title" id="mainTitle">你是诚实的科学家 — 抵制偷看 holdout</h2>
+      <span class="round-tag mono" id="roundTag">ROUND 1 / 4</span>
+    </div>
+
+    <div class="opening" id="opening">
+      训练时手痒想看 holdout 刷分? 这是自欺。每一轮都会有诱惑递到你面前 — 你来选。
+    </div>
+
+    <div class="readouts">
+      <div class="ro report">
+        <div class="ro-lbl" id="roReportLbl">报告准确率 (你写进报告的数)</div>
+        <div class="ro-num mono" id="roReportNum">--%</div>
+        <div class="ro-sub" id="roReportSub">来自 holdout 的"考试成绩"</div>
+        <div class="ro-track"><div class="ro-fill" id="roReportFill"></div></div>
+      </div>
+      <div class="ro deploy">
+        <div class="ro-flag" id="roDeployFlag"></div>
+        <div class="ro-lbl" id="roDeployLbl">上线脑控实际 (真戴上电极)</div>
+        <div class="ro-num mono" id="roDeployNum">--%</div>
+        <div class="ro-sub" id="roDeploySub">从未见过的新数据 — 不会撒谎</div>
+        <div class="ro-track"><div class="ro-fill" id="roDeployFill"></div></div>
+      </div>
+    </div>
+
+    <div class="scene">
+      <div class="scene-card">
+        <div class="sc-tag" id="scTag">TEMPTATION · 诱惑</div>
+        <div class="sc-text" id="scText"></div>
+      </div>
+
+      <div class="choices">
+        <button class="choice resist" id="choiceResist" type="button">
+          <div class="ch-head">
+            <span class="ch-name" id="resistName">抵制诱惑</span>
+            <span class="ch-lure" id="resistLure">只在训练集调</span>
+          </div>
+          <div class="ch-desc" id="resistDesc"></div>
+        </button>
+        <button class="choice peek" id="choicePeek" type="button">
+          <div class="ch-head">
+            <span class="ch-name" id="peekName">屈服偷看</span>
+            <span class="ch-lure" id="peekLure">用 holdout 刷分</span>
+          </div>
+          <div class="ch-desc" id="peekDesc"></div>
+        </button>
+      </div>
+
+      <div class="consequence" id="consequence">
+        <div class="cq-tag" id="cqTag">RESULT</div>
+        <div class="cq-text" id="cqText"></div>
+      </div>
+
+      <div class="next-row">
+        <button class="next-btn hidden" id="nextBtn" type="button">下一轮</button>
+      </div>
+    </div>
+
+    <!-- end overlay -->
+    <div class="overlay" id="overlay">
+      <div class="ov-badge" id="ovBadge"></div>
+      <div class="ov-title mono" id="ovTitle"></div>
+      <div class="ov-msg" id="ovMsg"></div>
+      <button class="ov-btn" id="ovBtn" type="button">重玩</button>
+    </div>
+  </main>
+</div>
+
+<script>
+(function(){
+  'use strict';
+
+  // ===== 四轮诱惑情境 (用项目自己的脑控数据, 非抽象) =====
+  // 关键模型: 每轮诚实 holdout 真实准确率随训练而真实上升 (72->75->77->78)。
+  // 偷看 = 把 holdout 拿来挑超参 -> 报告读数虚高 (跳到 90+), 但 holdout 此后被污染,
+  // 上线脑控实际崩 (因为没有诚实考官, 选出的超参其实在过拟合那批 holdout)。
+  const ROUNDS = [
+    {
+      sc_cn: '第一次跑完, 训练集 88%、holdout 72%。导师群里有人说"反正 holdout 就那几十条, 拿来挑学习率, 分数能蹭上去"。<b>你手痒了。</b>',
+      sc_en: 'First run: train 88%, holdout 72%. Someone in the group says "the holdout is just a few dozen samples — use it to pick the learning rate, the score jumps." <b>Your hand itches.</b>',
+      resist_cn: '把训练集再切一小块当验证集, 用它选学习率。holdout 收进抽屉, 不碰。',
+      resist_en: 'Carve a small validation slice off the training set, tune learning rate on that. Lock the holdout in a drawer.',
+      peek_cn: '直接把 holdout 当验证集, 试 10 个学习率, 留分数最高那个。',
+      peek_en: 'Use the holdout as validation, try 10 learning rates, keep the highest score.',
+      honestAcc: 75,   // 诚实路线本轮的真实 holdout
+      reportPeek: 91,  // 偷看后报告读数 (虚高)
+      deployPeek: 64,  // 偷看后上线实际 (开始崩)
+      good_cn: '你忍住了。验证集挑出 lr=0.01, holdout 仍然干净 — 报告 <b>75%</b>, 这就是真相。',
+      good_en: 'You held back. Validation picked lr=0.01, the holdout stays clean — report reads <b>75%</b>, that is the truth.',
+      bad_cn: '报告窜到 <b class="bad">91%</b>, 爽。但 holdout 已经参与了选参 — 它<b class="bad">不再是诚实考官</b>。上线戴电极一试, 实际只有 <b class="bad">64%</b>。',
+      bad_en: 'Report jumps to <b class="bad">91%</b>, sweet. But the holdout helped pick params — it is <b class="bad">no longer an honest judge</b>. On real electrodes, deploy is only <b class="bad">64%</b>.'
+    },
+    {
+      sc_cn: 'C4 通道的特征加进来了, holdout 又升一点。你想再调正则系数, "就再看一眼 holdout 挑个最好的"。',
+      sc_en: 'You added the C4 channel feature, holdout ticks up again. You want to tune the regularization — "just one more peek to pick the best".',
+      resist_cn: '继续用切出来的验证集挑正则系数, holdout 依旧不动。',
+      resist_en: 'Keep tuning regularization on your validation slice, never touch the holdout.',
+      peek_cn: '再偷看一次 holdout, 这次试 6 个正则系数挑最高。',
+      peek_en: 'Peek again, try 6 regularization values, keep the highest.',
+      honestAcc: 77,
+      reportPeek: 94,
+      deployPeek: 58,
+      good_cn: '验证集挑出 C=0.3, holdout 报告 <b>77%</b> — 一步一个脚印, 都是真的。',
+      good_en: 'Validation picked C=0.3, holdout reports <b>77%</b> — step by step, all real.',
+      bad_cn: '报告飘到 <b class="bad">94%</b>。可你<b class="bad">两次偷看同一批 holdout</b>, 模型只是在背它的答案。上线实际跌到 <b class="bad">58%</b> — 越调越假。',
+      bad_en: 'Report drifts to <b class="bad">94%</b>. But you have <b class="bad">peeked the same holdout twice</b> — the model is just memorizing its answers. Deploy falls to <b class="bad">58%</b>.'
+    },
+    {
+      sc_cn: '答辩前一天。同组同学的报告写着 holdout 95%, 你的诚实路线才 77%。<b>"差这么多, 评委会不会觉得我做得差?"</b>',
+      sc_en: 'Night before the review. A teammate reports 95% holdout, your honest path is only 77%. <b>"That gap looks bad — will judges think my work is worse?"</b>',
+      resist_cn: '在报告里写清楚: holdout 全程未参与调参, 77% 是可复现的真实数字。',
+      resist_en: 'State clearly in the report: holdout never touched tuning; 77% is a reproducible, honest number.',
+      peek_cn: '临时把 holdout 拿来调最后一版, 让报告数字"好看一点"。',
+      peek_en: 'Quickly tune one last version on the holdout so the report number "looks nicer".',
+      honestAcc: 78,
+      reportPeek: 96,
+      deployPeek: 51,
+      good_cn: '你写下: <b>77%, holdout 纯净</b>。评委一眼看出这是诚实评估 — 比虚高的 95% 更可信。',
+      good_en: 'You write: <b>77%, holdout untouched</b>. Judges see honest evaluation at a glance — more trustworthy than an inflated 95%.',
+      bad_cn: '报告 <b class="bad">96%</b>, 看着真漂亮。但 holdout 被你<b class="bad">榨干了最后一点诚实</b>, 它早就不代表真实世界。上线脑控 <b class="bad">51%</b> — 跟掷硬币差不多。',
+      bad_en: 'Report <b class="bad">96%</b>, looks gorgeous. But you have <b class="bad">squeezed the last honesty out of the holdout</b>. Deploy is <b class="bad">51%</b> — barely a coin flip.'
+    },
+    {
+      sc_cn: '终局: 把模型烧进脑控盒, 真戴上电极, 想象左手让 Minecraft 角色左移。<b>报告里的数字, 现在要兑现了。</b>',
+      sc_en: 'Final: flash the model into the headset, wear real electrodes, imagine left hand to move the Minecraft avatar left. <b>The reported number must now be cashed.</b>',
+      resist_cn: '相信你诚实的 78%。它低, 但它真 — 上线就该是这个数。',
+      resist_en: 'Trust your honest 78%. It is low, but real — that is exactly what deployment should be.',
+      peek_cn: '已经太晚了, holdout 早被污染。你只能祈祷那个虚高的数字成立。',
+      peek_en: 'Too late — the holdout is already tainted. You can only pray the inflated number holds.',
+      honestAcc: 78,
+      reportPeek: 96,
+      deployPeek: 49,
+      good_cn: '想象左手, 角色稳稳左移; 想象右手, 右移。<b>78% 就是 78%, 脑控真能用了。</b>',
+      good_en: 'Imagine left — avatar slides left; imagine right — right. <b>78% is 78%, the mind-control actually works.</b>',
+      bad_cn: '想象左手, 角色抽搐着往右; 再想, 卡住不动。报告写着 96%, 现实<b class="bad">不到一半</b>。<b class="bad">你骗的不是评委, 是自己。</b>',
+      bad_en: 'Imagine left — the avatar twitches right; try again — it freezes. Report said 96%, reality is <b class="bad">under half</b>. <b class="bad">You did not fool the judges, you fooled yourself.</b>'
+    }
+  ];
+
+  // ===== State =====
+  const stateGame = {
+    lang: 'cn',
+    round: 0,            // 0-based
+    integrity: 100,
+    tainted: false,      // 一旦偷看, holdout 永久污染
+    resistedAll: true,   // 全程抵制 -> 通关
+    reportAcc: 0,        // 当前报告读数
+    deployAcc: 0,        // 当前上线实际
+    decided: false,      // 本轮是否已选
+    finished: false,
+  };
+
+  // ===== DOM =====
+  const el = function(id){ return document.getElementById(id); };
+  const intFill = el('intFill'), intNum = el('intNum');
+  const roReportNum = el('roReportNum'), roReportFill = el('roReportFill');
+  const roDeployNum = el('roDeployNum'), roDeployFill = el('roDeployFill');
+  const roDeployFlag = el('roDeployFlag');
+  const scText = el('scText');
+  const choiceResist = el('choiceResist'), choicePeek = el('choicePeek');
+  const consequence = el('consequence'), cqTag = el('cqTag'), cqText = el('cqText');
+  const nextBtn = el('nextBtn'), roundTag = el('roundTag');
+  const overlay = el('overlay');
+
+  // ===== i18n static =====
+  const I18N = {
+    cn:{
+      brand:'诚实评估', brandSub:'CS-01 / EEG M43',
+      bitSay:'Bit: 守住 holdout, 我们才知道真相',
+      rmTitle:'项目路线', rmS1:'S1 读懂脑电', rmS2:'S2 清洗信号', rmS3:'S3 提特征',
+      rmS4:'S4 训练分类器 (你在这)', rmS5:'S5 实时解码', rmS6:'S6 脑控 Minecraft',
+      intTitle:'INTEGRITY · 诚信值',
+      goal:'S4 你正在<b>调分类器超参数</b>。holdout 是你唯一诚实的考官 — 一旦用它调参, 它就被污染, 准确率读数全是自欺。',
+      endGoal:'终点: 脑控 Minecraft 搭方块',
+      mainTitle:'你是诚实的科学家 — 抵制偷看 holdout',
+      opening:'训练时手痒想看 holdout 刷分? 这是自欺。每一轮都会有诱惑递到你面前 — 你来选。',
+      roReportLbl:'报告准确率 (你写进报告的数)', roReportSub:'来自 holdout 的"考试成绩"',
+      roDeployLbl:'上线脑控实际 (真戴上电极)', roDeploySub:'从未见过的新数据 — 不会撒谎',
+      scTag:'TEMPTATION · 诱惑',
+      resistName:'抵制诱惑', resistLure:'只在训练集调',
+      peekName:'屈服偷看', peekLure:'用 holdout 刷分',
+      next:'下一轮', deploy:'上线脑控', replay:'重玩',
+      flagPure:'PURE 纯净', flagTainted:'TAINTED 已污染',
+      cqGood:'RESULT · 守住诚实', cqBad:'RESULT · 自欺',
+    },
+    en:{
+      brand:'Honest Eval', brandSub:'CS-01 / EEG M43',
+      bitSay:'Bit: guard the holdout, only then we know the truth',
+      rmTitle:'PROJECT ROUTE', rmS1:'S1 Read EEG', rmS2:'S2 Clean signal', rmS3:'S3 Features',
+      rmS4:'S4 Train classifier (you)', rmS5:'S5 Live decode', rmS6:'S6 Mind-control MC',
+      intTitle:'INTEGRITY',
+      goal:'In S4 you are <b>tuning classifier hyperparameters</b>. The holdout is your only honest examiner — tune on it once and it is tainted; every accuracy reading becomes self-deception.',
+      endGoal:'Goal: mind-control Minecraft',
+      mainTitle:'You are the honest scientist — resist peeking the holdout',
+      opening:'Itching to peek the holdout for a better score? That is self-deception. A temptation arrives each round — you choose.',
+      roReportLbl:'Reported accuracy (what you write down)', roReportSub:'the "exam score" from the holdout',
+      roDeployLbl:'Live mind-control (real electrodes)', roDeploySub:'never-seen data — it never lies',
+      scTag:'TEMPTATION',
+      resistName:'Resist', resistLure:'tune on train only',
+      peekName:'Give in & peek', peekLure:'tune on holdout',
+      next:'Next round', deploy:'Go live', replay:'Replay',
+      flagPure:'PURE', flagTainted:'TAINTED',
+      cqGood:'RESULT · honesty held', cqBad:'RESULT · self-deception',
+    }
+  };
+
+  function t(){ return I18N[stateGame.lang]; }
+
+  // ===== Render =====
+  function setBar(fill, num, pct, isCrash){
+    fill.style.width = Math.max(0, Math.min(100, pct)) + '%';
+    fill.classList.toggle('crash', !!isCrash);
+    num.textContent = pct + '%';
+  }
+
+  function renderIntegrity(){
+    const v = stateGame.integrity;
+    intFill.style.width = v + '%';
+    intNum.textContent = v;
+    const low = v < 60;
+    intFill.classList.toggle('low', low);
+    intNum.classList.toggle('low', low);
+  }
+
+  function renderReadouts(){
+    if(stateGame.reportAcc === 0){
+      roReportNum.textContent = '--%'; roReportFill.style.width = '0%';
+    } else {
+      setBar(roReportFill, roReportNum, stateGame.reportAcc, false);
+    }
+    if(stateGame.deployAcc === 0){
+      roDeployNum.textContent = '--%'; roDeployFill.style.width = '0%';
+    } else {
+      setBar(roDeployFill, roDeployNum, stateGame.deployAcc, stateGame.tainted);
+    }
+    // holdout flag
+    roDeployFlag.className = 'ro-flag ' + (stateGame.tainted ? 'tainted' : (stateGame.reportAcc ? 'pure' : ''));
+    roDeployFlag.textContent = stateGame.tainted ? t().flagTainted : (stateGame.reportAcc ? t().flagPure : '');
+  }
+
+  function renderRound(){
+    const r = ROUNDS[stateGame.round];
+    const lang = stateGame.lang;
+    roundTag.textContent = 'ROUND ' + (stateGame.round + 1) + ' / ' + ROUNDS.length;
+    scText.innerHTML = (lang === 'cn') ? r.sc_cn : r.sc_en;
+    el('resistDesc').textContent = (lang === 'cn') ? r.resist_cn : r.resist_en;
+    el('peekDesc').textContent = (lang === 'cn') ? r.peek_cn : r.peek_en;
+
+    // final round relabels peek choice (太晚了)
+    const isFinal = stateGame.round === ROUNDS.length - 1;
+    choiceResist.querySelector('.ch-name').textContent = isFinal
+      ? (lang === 'cn' ? '上线诚实的数' : 'Deploy the honest number')
+      : t().resistName;
+    choicePeek.querySelector('.ch-name').textContent = isFinal
+      ? (lang === 'cn' ? '硬着头皮上线' : 'Deploy anyway')
+      : t().peekName;
+
+    consequence.classList.remove('show');
+    nextBtn.classList.add('hidden');
+    nextBtn.textContent = isFinal ? '' : t().next;
+    choiceResist.disabled = false;
+    choicePeek.disabled = false;
+    stateGame.decided = false;
+  }
+
+  function decide(peek){
+    if(stateGame.decided || stateGame.finished) return;
+    stateGame.decided = true;
+    choiceResist.disabled = true;
+    choicePeek.disabled = true;
+    const r = ROUNDS[stateGame.round];
+    const lang = stateGame.lang;
+    const isFinal = stateGame.round === ROUNDS.length - 1;
+
+    if(peek){
+      // 屈服: holdout 永久污染, 诚信下降, 报告虚高, 上线崩
+      stateGame.tainted = true;
+      stateGame.resistedAll = false;
+      stateGame.integrity = Math.max(0, stateGame.integrity - 28);
+      stateGame.reportAcc = r.reportPeek;
+      stateGame.deployAcc = r.deployPeek;
+      cqTag.textContent = t().cqBad;
+      cqTag.className = 'cq-tag bad';
+      cqText.innerHTML = (lang === 'cn') ? r.bad_cn : r.bad_en;
+    } else {
+      // 抵制: holdout 状态延续 (若之前已污染则仍污染), 报告=诚实, 上线≈报告
+      stateGame.reportAcc = r.honestAcc;
+      // 若 holdout 之前被污染过, 抵制也救不回诚实考官 -> 上线仍偏低
+      stateGame.deployAcc = stateGame.tainted
+        ? Math.max(40, r.honestAcc - 22)
+        : r.honestAcc - 1;   // 诚实路线: 上线 ≈ 报告 (略低 1, 现实噪声)
+      cqTag.textContent = t().cqGood;
+      cqTag.className = 'cq-tag good';
+      cqText.innerHTML = (lang === 'cn') ? r.good_cn : r.good_en;
+    }
+
+    renderIntegrity();
+    renderReadouts();
+    consequence.classList.add('show');
+
+    if(isFinal){
+      setTimeout(endGame, 650);
+    } else {
+      nextBtn.textContent = t().next;
+      nextBtn.classList.remove('hidden');
+    }
+  }
+
+  function nextRound(){
+    if(stateGame.round < ROUNDS.length - 1){
+      stateGame.round++;
+      renderRound();
+    }
+  }
+
+  function endGame(){
+    stateGame.finished = true;
+    const lang = stateGame.lang;
+    const ovBadge = el('ovBadge'), ovTitle = el('ovTitle'), ovMsg = el('ovMsg');
+    if(stateGame.resistedAll){
+      ovBadge.className = 'ov-badge win';
+      ovBadge.textContent = lang === 'cn' ? '解锁徽章' : 'BADGE UNLOCKED';
+      ovTitle.textContent = lang === 'cn' ? '诚实科学家' : 'HONEST SCIENTIST';
+      ovMsg.innerHTML = lang === 'cn'
+        ? '四轮全程没碰 holdout。报告 <b>78%</b>, 上线脑控也是 <b>78%</b> — 数字没撒谎。<b>你守住了诚实评估, 脑控才真能用。</b>'
+        : 'You never touched the holdout across all four rounds. Report <b>78%</b>, live mind-control <b>78%</b> — the number did not lie. <b>You guarded honest evaluation, so the mind-control actually works.</b>';
+    } else {
+      ovBadge.className = 'ov-badge fail';
+      ovBadge.textContent = lang === 'cn' ? '上线翻车' : 'DEPLOY CRASHED';
+      ovTitle.textContent = lang === 'cn' ? '自欺的代价' : 'THE COST OF SELF-DECEPTION';
+      ovMsg.innerHTML = lang === 'cn'
+        ? '你偷看过 holdout, 报告数字很漂亮 — 可它早不是诚实考官。上线脑控实际只有 <b class="bad">' + stateGame.deployAcc + '%</b>。<b class="bad">污染过的 holdout 救不回来。</b> 再玩一次, 这次全程守住它。'
+        : 'You peeked the holdout. The reported number looked great — but it stopped being an honest judge. Live mind-control was only <b class="bad">' + stateGame.deployAcc + '%</b>. <b class="bad">A tainted holdout cannot be recovered.</b> Play again and guard it the whole way.';
+    }
+    overlay.classList.add('show');
+  }
+
+  function restart(){
+    stateGame.round = 0;
+    stateGame.integrity = 100;
+    stateGame.tainted = false;
+    stateGame.resistedAll = true;
+    stateGame.reportAcc = 0;
+    stateGame.deployAcc = 0;
+    stateGame.finished = false;
+    overlay.classList.remove('show');
+    renderIntegrity();
+    renderReadouts();
+    renderRound();
+  }
+
+  // ===== i18n apply (static labels) =====
+  function applyI18n(){
+    const d = t();
+    el('brand').innerHTML = d.brand + '<span class="sub">' + d.brandSub + '</span>';
+    el('bitSay').textContent = d.bitSay;
+    el('rmTitle').textContent = d.rmTitle;
+    el('rmS1').textContent = d.rmS1; el('rmS2').textContent = d.rmS2;
+    el('rmS3').textContent = d.rmS3; el('rmS4').textContent = d.rmS4;
+    el('rmS5').textContent = d.rmS5; el('rmS6').textContent = d.rmS6;
+    el('intTitle').textContent = d.intTitle;
+    el('goal').innerHTML = d.goal;
+    el('endGoal').textContent = d.endGoal;
+    el('mainTitle').textContent = d.mainTitle;
+    el('opening').textContent = d.opening;
+    el('roReportLbl').textContent = d.roReportLbl;
+    el('roReportSub').textContent = d.roReportSub;
+    el('roDeployLbl').textContent = d.roDeployLbl;
+    el('roDeploySub').textContent = d.roDeploySub;
+    el('scTag').textContent = d.scTag;
+    el('resistLure').textContent = d.resistLure;
+    el('peekLure').textContent = d.peekLure;
+    el('ovBtn').textContent = d.replay;
+    // re-render dynamic parts in new language, but keep state
+    renderReadouts();
+    if(stateGame.decided){
+      // keep consequence text language synced
+      const r = ROUNDS[stateGame.round];
+      const peeked = stateGame.tainted && cqTag.classList.contains('bad');
+      cqTag.textContent = cqTag.classList.contains('bad') ? d.cqBad : d.cqGood;
+      cqText.innerHTML = cqTag.classList.contains('bad')
+        ? (stateGame.lang === 'cn' ? r.bad_cn : r.bad_en)
+        : (stateGame.lang === 'cn' ? r.good_cn : r.good_en);
+    }
+    renderRound2KeepDecision();
+    if(stateGame.finished) endGame();
+  }
+
+  // re-render scene text + choice names without resetting decision flags
+  function renderRound2KeepDecision(){
+    const r = ROUNDS[stateGame.round];
+    const lang = stateGame.lang;
+    const isFinal = stateGame.round === ROUNDS.length - 1;
+    roundTag.textContent = 'ROUND ' + (stateGame.round + 1) + ' / ' + ROUNDS.length;
+    scText.innerHTML = (lang === 'cn') ? r.sc_cn : r.sc_en;
+    el('resistDesc').textContent = (lang === 'cn') ? r.resist_cn : r.resist_en;
+    el('peekDesc').textContent = (lang === 'cn') ? r.peek_cn : r.peek_en;
+    choiceResist.querySelector('.ch-name').textContent = isFinal
+      ? (lang === 'cn' ? '上线诚实的数' : 'Deploy the honest number')
+      : t().resistName;
+    choicePeek.querySelector('.ch-name').textContent = isFinal
+      ? (lang === 'cn' ? '硬着头皮上线' : 'Deploy anyway')
+      : t().peekName;
+    if(!stateGame.decided) nextBtn.textContent = isFinal ? '' : t().next;
+  }
+
+  // ===== wire =====
+  choiceResist.addEventListener('click', function(){ decide(false); });
+  choicePeek.addEventListener('click', function(){ decide(true); });
+  nextBtn.addEventListener('click', nextRound);
+  el('ovBtn').addEventListener('click', restart);
+  el('langBtn').addEventListener('click', function(){
+    stateGame.lang = (stateGame.lang === 'cn') ? 'en' : 'cn';
+    applyI18n();
+  });
+
+  // ===== init =====
+  renderIntegrity();
+  renderReadouts();
+  renderRound();
+})();
+</script>
+</body>
+</html>

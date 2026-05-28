@@ -1,0 +1,559 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>设计自己的 MI 录制范式 — cue / imagery / rest 时间结构</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+  /* 第 1 层 — 共享深空底 (26 套统一) */
+  :root{
+    --bg-0: oklch(0.14 0.035 265);
+    --bg-1: oklch(0.18 0.04 265);
+    --bg-2: oklch(0.22 0.045 265);
+    --bg-3: oklch(0.28 0.05 265);
+    --line: oklch(0.35 0.05 265 / 0.35);
+    --line-strong: oklch(0.55 0.08 265 / 0.55);
+    --fg:      oklch(0.96 0.01 265);
+    --fg-dim:  oklch(0.75 0.02 265);
+    --fg-mute: oklch(0.55 0.03 265);
+    --gold:    oklch(0.85 0.14 85);
+    /* 第 2 层 — cs 学科 accent (cyan) */
+    --cs:      oklch(0.75 0.17 200);
+    /* 第 3 层 — cs 5 色 palette (限 mascot / 数据可视化) */
+    --p-signal: oklch(0.75 0.17 200);
+    --p-core:   oklch(0.55 0.16 200);
+    --p-depth:  oklch(0.35 0.10 210);
+    --p-flash:  oklch(0.92 0.08 190);
+    --p-query:  oklch(0.85 0.14 85);
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;height:100vh;overflow:hidden;background:var(--bg-0);
+    font-family:'Inter',system-ui,sans-serif;color:var(--fg);}
+  body{display:flex;}
+  /* sidebar */
+  .sidebar{width:200px;height:100vh;flex-shrink:0;background:var(--bg-1);
+    border-right:1px solid var(--line);display:flex;flex-direction:column;gap:13px;padding:16px;}
+  .brand{font-size:15px;font-weight:800;line-height:1.3;}
+  .brand .sub{display:block;font-size:11px;font-weight:600;color:var(--cs);margin-top:3px;
+    font-family:'JetBrains Mono',monospace;}
+  .guide{font-size:11px;line-height:1.5;color:var(--fg-dim);}
+  .guide li{margin-bottom:6px;list-style:none;position:relative;padding-left:12px;}
+  .guide li:before{content:'>';position:absolute;left:0;color:var(--cs);
+    font-family:'JetBrains Mono',monospace;}
+  ul{margin:0;padding:0;}
+  /* route map */
+  .route{margin-top:2px;}
+  .route-title{font-size:10px;color:var(--fg-mute);text-transform:uppercase;
+    letter-spacing:1px;font-family:'JetBrains Mono',monospace;margin-bottom:7px;}
+  .route-row{display:flex;align-items:center;gap:7px;font-size:11px;color:var(--fg-mute);
+    margin-bottom:5px;font-family:'JetBrains Mono',monospace;}
+  .route-dot{width:8px;height:8px;border-radius:50%;background:var(--bg-3);flex-shrink:0;
+    border:1px solid var(--line-strong);}
+  .route-row.here{color:var(--cs);font-weight:700;}
+  .route-row.here .route-dot{background:var(--cs);border-color:var(--cs);
+    box-shadow:0 0 0 3px oklch(0.75 0.17 200 / 0.22);}
+  .route-row.done{color:var(--fg-dim);}
+  .route-row.done .route-dot{background:var(--p-core);border-color:var(--p-core);}
+  .lang-btn{margin-top:auto;padding:8px 10px;font-size:12px;font-weight:600;cursor:pointer;
+    background:var(--bg-2);color:var(--fg);border:1px solid var(--line-strong);
+    font-family:'JetBrains Mono',monospace;box-shadow:3px 3px 0 var(--bg-0);transition:transform .1s;}
+  .lang-btn:hover{transform:translate(-1px,-1px);}
+  .lang-btn:active{transform:translate(1px,1px);box-shadow:1px 1px 0 var(--bg-0);}
+  /* mascot */
+  .mascot{margin-top:2px;}
+  .mascot-cap{font-size:10px;color:var(--fg-mute);text-align:center;margin-top:4px;
+    font-family:'JetBrains Mono',monospace;}
+  /* main stage */
+  .stage{flex:1;height:100vh;position:relative;overflow:hidden;}
+  canvas{position:absolute;inset:0;width:100%;height:100%;display:block;}
+  /* HUD */
+  .hud{position:absolute;top:16px;right:16px;background:var(--bg-1);
+    border:1px solid var(--line-strong);padding:10px 14px;min-width:194px;
+    font-family:'JetBrains Mono',monospace;font-size:11px;box-shadow:3px 3px 0 var(--bg-0);}
+  .hud-row{display:flex;justify-content:space-between;gap:14px;line-height:1.65;}
+  .hud-lbl{color:var(--fg-mute);}
+  .hud-val{color:var(--cs);font-weight:700;}
+  .hud-val.gold{color:var(--gold);}
+  /* subtitle */
+  .sub{position:absolute;bottom:22px;left:50%;transform:translateX(-50%);
+    text-align:center;width:84%;pointer-events:none;}
+  .sub-zh{font-size:18px;font-weight:800;color:var(--fg);
+    background:oklch(0.18 0.04 265 / 0.9);padding:7px 20px;display:inline-block;
+    border:1px solid var(--line-strong);}
+  .sub-en{font-size:12px;font-style:italic;color:var(--fg-dim);margin-top:5px;
+    font-family:'JetBrains Mono',monospace;}
+  /* corner Minecraft silhouette */
+  .endmark{position:absolute;bottom:14px;right:16px;display:flex;align-items:center;
+    gap:7px;opacity:0.5;pointer-events:none;}
+  .endmark span{font-size:9px;color:var(--fg-mute);font-family:'JetBrains Mono',monospace;
+    max-width:96px;line-height:1.35;}
+</style>
+</head>
+<body>
+
+<aside class="sidebar">
+  <div class="brand" id="brand">脑控 Minecraft
+    <span class="sub" id="brandSub">S4 · 自录范式</span>
+  </div>
+
+  <ul class="guide" id="guide">
+    <li id="g0">轮到你自己了</li>
+    <li id="g1">cue 提示想左 / 想右</li>
+    <li id="g2">imagery 窗里专心想象</li>
+    <li id="g3">rest 休息后下一个 trial</li>
+  </ul>
+
+  <!-- mascot Bit -->
+  <div class="mascot">
+    <svg viewBox="0 0 120 86" width="100%" id="mascotSvg" aria-hidden="true">
+      <g id="bitBody">
+        <rect x="42" y="24" width="36" height="36" rx="4" fill="var(--p-core)" stroke="var(--p-signal)" stroke-width="2"/>
+        <rect x="48" y="30" width="10" height="10" rx="2" fill="var(--p-flash)"/>
+        <rect x="62" y="30" width="10" height="10" rx="2" fill="var(--p-signal)"/>
+        <rect x="48" y="44" width="10" height="10" rx="2" fill="var(--p-signal)"/>
+        <rect x="62" y="44" width="10" height="10" rx="2" fill="var(--p-depth)"/>
+        <circle cx="53" cy="18" r="2.5" fill="var(--p-flash)"/>
+        <circle cx="67" cy="18" r="2.5" fill="var(--p-flash)"/>
+        <line x1="53" y1="20" x2="53" y2="24" stroke="var(--p-signal)" stroke-width="1.5"/>
+        <line x1="67" y1="20" x2="67" y2="24" stroke="var(--p-signal)" stroke-width="1.5"/>
+      </g>
+    </svg>
+    <div class="mascot-cap">Bit</div>
+  </div>
+
+  <div class="route">
+    <div class="route-title" id="routeTitle">ROUTE</div>
+    <div class="route-row done"><span class="route-dot"></span><span id="r1">S1 认识脑波</span></div>
+    <div class="route-row done"><span class="route-dot"></span><span id="r2">S2 清洁信号</span></div>
+    <div class="route-row done"><span class="route-dot"></span><span id="r3">S3 训分类器</span></div>
+    <div class="route-row here"><span class="route-dot"></span><span id="r4">S4 用自己的脑</span></div>
+    <div class="route-row"><span class="route-dot"></span><span id="r5">S5 接 Minecraft</span></div>
+    <div class="route-row"><span class="route-dot"></span><span id="r6">S6 分享</span></div>
+  </div>
+
+  <button class="lang-btn" id="langBtn">中 / EN</button>
+</aside>
+
+<main class="stage">
+  <canvas id="cv"></canvas>
+  <div class="hud">
+    <div class="hud-row"><span class="hud-lbl">phase</span><span class="hud-val" id="hPhase">--</span></div>
+    <div class="hud-row"><span class="hud-lbl">cue</span><span class="hud-val" id="hCue">--</span></div>
+    <div class="hud-row"><span class="hud-lbl">t (s)</span><span class="hud-val" id="hClock">0.0</span></div>
+    <div class="hud-row"><span class="hud-lbl">trial</span><span class="hud-val gold" id="hTrial">0 / 50</span></div>
+  </div>
+  <div class="sub">
+    <div class="sub-zh" id="subZh"></div>
+    <div class="sub-en" id="subEn"></div>
+  </div>
+  <div class="endmark">
+    <!-- minecraft block silhouette -->
+    <svg width="22" height="22" viewBox="0 0 22 22" aria-hidden="true">
+      <rect x="2" y="2" width="18" height="18" fill="var(--p-depth)" stroke="var(--cs)" stroke-width="1"/>
+      <rect x="5" y="6" width="4" height="4" fill="var(--bg-0)"/>
+      <rect x="13" y="6" width="4" height="4" fill="var(--bg-0)"/>
+      <rect x="9" y="11" width="4" height="3" fill="var(--bg-0)"/>
+      <rect x="7" y="14" width="2" height="3" fill="var(--bg-0)"/>
+      <rect x="13" y="14" width="2" height="3" fill="var(--bg-0)"/>
+    </svg>
+    <span id="endTxt">终点: 念头驱动方块</span>
+  </div>
+</main>
+
+<script>
+"use strict";
+var LANG='cn';
+
+/* ---------------- i18n ---------------- */
+var I18N = {
+  brand:{cn:'脑控 Minecraft', en:'Mind-craft'},
+  brandSub:{cn:'S4 · 自录范式', en:'S4 · PARADIGM'},
+  g:{cn:['轮到你自己了','cue 提示想左 / 想右','imagery 窗里专心想象','rest 休息后下一个 trial'],
+     en:['now it is your turn','cue tells: imagine L / R','imagery window: focus','rest, then next trial']},
+  route:{cn:'路线', en:'ROUTE'},
+  r:{cn:['S1 认识脑波','S2 清洁信号','S3 训分类器','S4 用自己的脑','S5 接 Minecraft','S6 分享'],
+     en:['S1 see waves','S2 clean','S3 classifier','S4 your brain','S5 Minecraft','S6 share']},
+  endTxt:{cn:'终点: 念头驱动方块', en:'goal: thoughts move blocks'},
+  /* 开场 + 收尾的项目回扣 (单独成句, 在对应阶段顶) */
+  intro:{cn:{cn:'轮到你自己了! 先设计一套录自己脑波的实验流程',
+             en:'now it is your turn — first design a routine to record your own EEG'},
+         en:{cn:'分类器已就绪 (S3), 但它没见过你的脑 — 你得亲自录一批带标签的脑波',
+             en:'the classifier is ready (S3) but never saw your brain — record labelled EEG yourself'}},
+  outro:{cn:{cn:'范式定好, 下一步真的戴上设备录 50 次',
+             en:'paradigm set — next, actually put on the headset and record 50 times'},
+         en:{cn:'每个 trial 都有干净的 cue 标签, 录满 50 次就能训出属于你的分类器',
+             en:'each trial has a clean cue label — 50 of them train a classifier that is yours'}},
+  /* 三段 trial 阶段说明 */
+  cue:{cn:{cn:'cue 阶段: 一个箭头亮起, 告诉你这一 trial 该想象哪只手',
+           en:'cue phase: an arrow lights up — it tells you which hand to imagine this trial'},
+       en:{cn:'箭头方向是这一 trial 的标签 (左 / 右), 之后录下的脑波就归到这一类',
+           en:'the arrow is this trial label (L / R); the EEG you record now belongs to that class'}},
+  imagery:{cn:{cn:'imagery 阶段: 持续想象那只手在动 — 真正被记录的就是这段',
+               en:'imagery phase: keep imagining that hand moving — this window is what gets recorded'},
+           en:{cn:'4 秒想象窗是有用信号的来源, 想得越稳, C3 / C4 的节律变化越清晰',
+               en:'the 4s imagery window is where signal lives — steadier focus = clearer C3/C4 rhythm'}},
+  rest:{cn:{cn:'rest 阶段: 放空休息, 让大脑回到基线, 避免上一 trial 拖累下一个',
+            en:'rest phase: relax to baseline so the previous trial does not bleed into the next'},
+        en:{cn:'随机长度的 rest 还防止你"踩节奏"提前想象, 让每个 trial 互相独立',
+            en:'a jittered rest also stops you pre-empting the cue, keeping trials independent'}},
+};
+function t(k){return (I18N[k]&&I18N[k][LANG])||(I18N[k]&&I18N[k].en)||k;}
+function cuePair(k){ return I18N[k][LANG]||I18N[k].en; }
+
+function refreshI18N(){
+  document.getElementById('brand').childNodes[0].nodeValue = t('brand')+' ';
+  document.getElementById('brandSub').textContent = t('brandSub');
+  var gs=t('g'); for(var i=0;i<4;i++) document.getElementById('g'+i).textContent=gs[i];
+  document.getElementById('routeTitle').textContent = t('route');
+  var rs=t('r'); for(var j=0;j<6;j++) document.getElementById('r'+(j+1)).textContent=rs[j];
+  document.getElementById('endTxt').textContent = t('endTxt');
+  document.getElementById('langBtn').textContent = LANG==='cn'?'中 / EN':'EN / 中';
+  updateCue();
+}
+document.getElementById('langBtn').addEventListener('click', function(){
+  LANG = LANG==='cn'?'en':'cn'; refreshI18N();
+});
+
+/* ---------------- canvas setup ---------------- */
+var cv = document.getElementById('cv');
+var g = cv.getContext('2d');
+var W=0,H=0,DPR=1;
+function resize(){
+  var rect = cv.parentElement.getBoundingClientRect();
+  if(rect.width<1||rect.height<1) return;
+  DPR = window.devicePixelRatio||1;
+  cv.width = rect.width*DPR; cv.height = rect.height*DPR;
+  cv.style.width=rect.width+'px'; cv.style.height=rect.height+'px';
+  g.setTransform(DPR,0,0,DPR,0,0);
+  W=rect.width; H=rect.height;
+}
+window.addEventListener('resize', resize);
+resize(); setTimeout(resize,200); setTimeout(resize,600);
+if(document.fonts&&document.fonts.ready) document.fonts.ready.then(resize);
+
+/* ---------------- colors (from cs palette) ---------------- */
+var C_SIGNAL='oklch(0.75 0.17 200)';
+var C_CORE='oklch(0.55 0.16 200)';
+var C_DEPTH='oklch(0.35 0.10 210)';
+var C_FLASH='oklch(0.92 0.08 190)';
+var C_GOLD='oklch(0.85 0.14 85)';
+var C_FG='oklch(0.96 0.01 265)';
+var C_DIM='oklch(0.75 0.02 265)';
+var C_MUTE='oklch(0.55 0.03 265)';
+var C_LINE='oklch(0.35 0.05 265 / 0.5)';
+var C_BG1='oklch(0.18 0.04 265)';
+var C_BG2='oklch(0.22 0.045 265)';
+var FONT_M="'JetBrains Mono', monospace";
+var FONT_S="'Inter', sans-serif";
+
+/* ---------------- the ONE object: a MI trial paradigm timeline ----------------
+   One trial = three segments with fixed/jittered durations:
+     cue     1.0s  (arrow points L or R = the label)
+     imagery 4.0s  (the recorded window)
+     rest    1.5..2.5s jittered
+   We replay this structure trial after trial, pseudo-randomly L/R balanced,
+   accumulating toward a target of 50. The SAME timeline is the only object:
+   a moving playhead sweeps it; segments light up in turn; the trial counter grows. */
+var SEG = { cue:1.0, imagery:4.0, restMin:1.5, restMax:2.5 };
+var TARGET = 50;
+
+/* deterministic pseudo-random, balanced L/R order (the paradigm requires balance) */
+function buildOrder(n){
+  var arr=[], i;
+  for(i=0;i<n/2;i++){ arr.push(0); arr.push(1); } // 0=L 1=R balanced
+  var seed=20260528;
+  function rnd(){ seed=(seed*1103515245+12345)&0x7fffffff; return seed/0x7fffffff; }
+  for(i=arr.length-1;i>0;i--){
+    var j=Math.floor(rnd()*(i+1));
+    var tmp=arr[i]; arr[i]=arr[j]; arr[j]=tmp;
+  }
+  return arr;
+}
+var ORDER = buildOrder(TARGET);
+/* jittered rest per trial (deterministic) */
+function restDur(k){
+  var u=Math.abs(Math.sin(k*2.3994+0.7));
+  return SEG.restMin + (SEG.restMax-SEG.restMin)*u;
+}
+function trialDur(k){ return SEG.cue + SEG.imagery + restDur(k); }
+
+/* ---------------- macro timeline: intro -> live trials -> ff -> outro ----------
+   intro & outro are part of the SAME object's lifecycle (designing -> running ->
+   handing off), not separate slides. During "live" we show a few trials in full,
+   then fast-forward the rest as ticks marching to 50, then outro. */
+var T_INTRO=4.5, SHOWN_TRIALS=3, SPEED=1.6, T_FF=7.0, T_OUTRO=5.0;
+var shownDur=0, _k;
+for(_k=0;_k<SHOWN_TRIALS;_k++) shownDur += trialDur(_k)/SPEED;
+var T_LIVE_END=T_INTRO+shownDur, T_FF_END=T_LIVE_END+T_FF, TOTAL=T_FF_END+T_OUTRO;
+
+var animStart=performance.now();
+function ease(x){ return x<0.5 ? 2*x*x : 1-Math.pow(-2*x+2,2)/2; }
+function clamp01(x){ return x<0?0:x>1?1:x; }
+function lerp(a,b,t){ return a+(b-a)*t; }
+
+var macro='intro', liveTrial=0, liveSeg='cue';
+
+function updateCue(){
+  var key;
+  if(macro==='intro') key='intro';
+  else if(macro==='outro') key='outro';
+  else key=liveSeg;
+  var pair=cuePair(key);
+  document.getElementById('subZh').textContent=pair.cn;
+  document.getElementById('subEn').textContent=pair.en;
+}
+
+/* ---------------- helpers ---------------- */
+function roundRect(x,y,w,h,r){
+  if(w<2*r) r=w/2; if(h<2*r) r=h/2;
+  g.beginPath();
+  g.moveTo(x+r,y); g.arcTo(x+w,y,x+w,y+h,r); g.arcTo(x+w,y+h,x,y+h,r);
+  g.arcTo(x,y+h,x,y,r); g.arcTo(x,y,x+w,y,r); g.closePath();
+}
+/* EEG-ish trace, amplitude suppressed during imagery (ERD) for realism */
+function eegTrace(x,y,w,amp,suppress,seedp){
+  g.beginPath();
+  for(var i=0;i<=120;i++){
+    var fr=i/120;
+    var phase=performance.now()*0.004;
+    var s = Math.sin(fr*38+phase+seedp)*0.6 + Math.sin(fr*61+phase*1.3+seedp*2)*0.3
+          + Math.sin(fr*97+phase*0.7)*0.12;
+    s *= (1-0.6*suppress);
+    var px=x+fr*w, py=y - s*amp;
+    if(i===0) g.moveTo(px,py); else g.lineTo(px,py);
+  }
+  g.stroke();
+}
+/* cue arrow: dir 0=left 1=right */
+function drawArrow(cx,cy,size,dir,col,alpha){
+  g.save(); g.globalAlpha=alpha;
+  g.strokeStyle=col; g.fillStyle=col; g.lineWidth=size*0.16;
+  g.lineCap='round'; g.lineJoin='round';
+  var s=dir===0?-1:1;
+  g.beginPath(); g.moveTo(cx-s*size*0.7,cy); g.lineTo(cx+s*size*0.5,cy); g.stroke();
+  g.beginPath();
+  g.moveTo(cx+s*size*0.7,cy);
+  g.lineTo(cx+s*size*0.2,cy-size*0.45);
+  g.lineTo(cx+s*size*0.2,cy+size*0.45);
+  g.closePath(); g.fill();
+  g.restore();
+}
+
+/* the master timeline bar (the ONE object): one trial's 3 segments + playhead */
+function drawTrialTimeline(x,y,w,h,dir,play,activeSeg,alpha){
+  g.save(); g.globalAlpha=alpha;
+  var rd = restDur(liveTrial>=0?liveTrial:0);
+  var tot=SEG.cue+SEG.imagery+rd;
+  var wCue=w*SEG.cue/tot, wImg=w*SEG.imagery/tot, wRest=w*rd/tot;
+  var xs=[x, x+wCue, x+wCue+wImg], ws=[wCue,wImg,wRest];
+  var names=['cue','imagery','rest'];
+  var labelsCN=['cue 提示','imagery 想象','rest 休息'];
+  var labelsEN=['cue','imagery','rest'];
+  var durs=[SEG.cue,SEG.imagery,rd];
+  var cols=[C_CORE,C_SIGNAL,C_DEPTH];
+  for(var i=0;i<3;i++){
+    var active=(names[i]===activeSeg);
+    g.fillStyle=active?cols[i]:C_BG2;
+    g.globalAlpha=alpha*(active?0.92:0.55);
+    roundRect(xs[i]+2,y,ws[i]-4,h,5); g.fill();
+    g.globalAlpha=alpha;
+    g.strokeStyle=active?cols[i]:C_LINE; g.lineWidth=active?2:1;
+    roundRect(xs[i]+2,y,ws[i]-4,h,5); g.stroke();
+    g.fillStyle=active?C_FG:C_MUTE; g.font='700 12px '+FONT_M; g.textAlign='center';
+    g.fillText((LANG==='cn'?labelsCN[i]:labelsEN[i]), xs[i]+ws[i]/2, y+h/2+4);
+    g.fillStyle=C_MUTE; g.font='10px '+FONT_M;
+    g.fillText(durs[i].toFixed(1)+'s', xs[i]+ws[i]/2, y+h+16);
+  }
+  /* imagery = "recorded window" bracket */
+  g.strokeStyle=C_GOLD; g.lineWidth=1.5; g.globalAlpha=alpha*0.9;
+  var ry=y-10;
+  g.beginPath();
+  g.moveTo(xs[1]+4,ry+5); g.lineTo(xs[1]+4,ry); g.lineTo(xs[1]+ws[1]-4,ry); g.lineTo(xs[1]+ws[1]-4,ry+5);
+  g.stroke();
+  g.fillStyle=C_GOLD; g.font='10px '+FONT_M; g.textAlign='center';
+  g.fillText(LANG==='cn'?'被记录的窗口':'recorded window', xs[1]+ws[1]/2, ry-4);
+  g.globalAlpha=alpha;
+  /* playhead */
+  if(play>=0){
+    var ph=x+w*play;
+    g.strokeStyle=C_FLASH; g.lineWidth=2;
+    g.beginPath(); g.moveTo(ph,y-14); g.lineTo(ph,y+h+22); g.stroke();
+    g.fillStyle=C_FLASH;
+    g.beginPath(); g.moveTo(ph,y-14); g.lineTo(ph-5,y-22); g.lineTo(ph+5,y-22); g.closePath(); g.fill();
+  }
+  g.restore();
+}
+
+/* live: cue arrow + EEG window above the timeline */
+function drawLiveCanvas(dir, activeSeg, segProg){
+  var cx=W*0.5;
+  var arrowA = activeSeg==='cue'?1:0.4;
+  var arrowS = 46*(activeSeg==='cue'?(0.7+0.3*ease(segProg)):1);
+  drawArrow(cx, H*0.30, arrowS, dir, dir===0?C_SIGNAL:C_FLASH, arrowA);
+  g.fillStyle=dir===0?C_SIGNAL:C_FLASH; g.font='800 16px '+FONT_M; g.textAlign='center';
+  g.globalAlpha=arrowA;
+  g.fillText(dir===0?(LANG==='cn'?'想象左手':'imagine LEFT'):(LANG==='cn'?'想象右手':'imagine RIGHT'), cx, H*0.30-44);
+  g.globalAlpha=1;
+
+  var bx=W*0.30, by=H*0.40, bw=W*0.40, bh=H*0.14;
+  var recording=activeSeg==='imagery';
+  g.strokeStyle=recording?C_GOLD:C_LINE; g.lineWidth=recording?2:1;
+  g.fillStyle=C_BG1; roundRect(bx,by,bw,bh,8); g.fill();
+  roundRect(bx,by,bw,bh,8); g.stroke();
+  g.strokeStyle=C_SIGNAL; g.lineWidth=1.4;
+  eegTrace(bx+8, by+bh*0.34, bw-16, bh*0.18, recording?1:0, 0.0);
+  g.strokeStyle=C_CORE; g.lineWidth=1.4;
+  eegTrace(bx+8, by+bh*0.72, bw-16, bh*0.18, recording?1:0, 3.1);
+  g.fillStyle=C_MUTE; g.font='10px '+FONT_M; g.textAlign='left';
+  g.fillText('C3', bx+6, by+bh*0.34-8);
+  g.fillText('C4', bx+6, by+bh*0.72-8);
+  if(recording){
+    var blink=0.5+0.5*Math.sin(performance.now()*0.012);
+    g.fillStyle=C_GOLD; g.globalAlpha=blink;
+    g.beginPath(); g.arc(bx+bw-16, by+12, 4, 0, Math.PI*2); g.fill();
+    g.globalAlpha=1;
+    g.fillStyle=C_GOLD; g.font='700 10px '+FONT_M; g.textAlign='right';
+    g.fillText('REC', bx+bw-24, by+15);
+  }
+}
+
+/* collected trials strip: grows toward 50 */
+function drawCollected(count, x, y, w){
+  var per=Math.min(14, w/TARGET);
+  var cellW=per-per*0.25;
+  g.save();
+  for(var i=0;i<TARGET;i++){
+    var px=x+i*per;
+    var filled=i<count, dir=ORDER[i];
+    g.fillStyle=filled?(dir===0?C_SIGNAL:C_FLASH):C_BG2;
+    g.globalAlpha=filled?0.9:0.4;
+    g.fillRect(px, y, cellW, 12);
+  }
+  g.globalAlpha=1;
+  g.fillStyle=C_DIM; g.font='10px '+FONT_M; g.textAlign='left';
+  g.fillText(LANG==='cn'?'已录 trial':'recorded trials', x, y-6);
+  g.fillStyle=C_GOLD; g.font='700 11px '+FONT_M; g.textAlign='right';
+  g.fillText(count+' / '+TARGET, x+w, y-6);
+  g.restore();
+}
+
+function drawTitleTop(txt){
+  g.fillStyle=C_FG; g.font='800 17px '+FONT_S; g.textAlign='center';
+  g.fillText(txt, W*0.5, 34);
+}
+
+/* ---------------- render ---------------- */
+function render(){
+  var now=performance.now();
+  var tms=((now-animStart)/1000)%TOTAL;
+
+  g.clearRect(0,0,W,H);
+  g.fillStyle='oklch(0.14 0.035 265)'; g.fillRect(0,0,W,H);
+
+  var prevMacro=macro, prevSeg=liveSeg;
+
+  if(tms < T_INTRO){
+    macro='intro'; liveTrial=0;
+    drawTitleTop(LANG==='cn'?'设计你的录制范式: cue -> imagery -> rest':'design your recording paradigm: cue -> imagery -> rest');
+    var a=ease(clamp01(tms/1.2));
+    drawTrialTimeline(W*0.14, H*0.50, W*0.72, 56, 1, -1, 'none', a);
+    g.globalAlpha=ease(clamp01((tms-1.5)/1.5));
+    g.fillStyle=C_DIM; g.font='13px '+FONT_M; g.textAlign='center';
+    g.fillText(LANG==='cn'?'同一结构会重复很多次, 左 / 右 顺序伪随机且各占一半':
+                          'this one structure repeats many times — L / R order pseudo-random, balanced 50/50', W*0.5, H*0.70);
+    g.globalAlpha=1;
+    drawCollected(0, W*0.14, H*0.82, W*0.72);
+    document.getElementById('hPhase').textContent='design';
+    document.getElementById('hCue').textContent='--';
+    document.getElementById('hClock').textContent='0.0';
+    document.getElementById('hTrial').textContent='0 / '+TARGET;
+  }
+  else if(tms < T_LIVE_END){
+    macro='live';
+    var local=tms-T_INTRO, acc=0, k=0, within=0, td=0;
+    for(k=0;k<SHOWN_TRIALS;k++){
+      td=trialDur(k)/SPEED;
+      if(local < acc+td){ within=local-acc; break; }
+      acc+=td;
+    }
+    if(k>=SHOWN_TRIALS){ k=SHOWN_TRIALS-1; within=trialDur(k)/SPEED; }
+    liveTrial=k;
+    var dir=ORDER[k];
+    var realWithin=within*SPEED;
+    var rd=restDur(k), totReal=SEG.cue+SEG.imagery+rd;
+    var play=realWithin/totReal;
+    var seg, segProg;
+    if(realWithin < SEG.cue){ seg='cue'; segProg=realWithin/SEG.cue; }
+    else if(realWithin < SEG.cue+SEG.imagery){ seg='imagery'; segProg=(realWithin-SEG.cue)/SEG.imagery; }
+    else { seg='rest'; segProg=(realWithin-SEG.cue-SEG.imagery)/rd; }
+    liveSeg=seg;
+
+    drawTitleTop(LANG==='cn'?('实录 trial #'+(k+1)+' — 走一遍 cue / imagery / rest'):
+                            ('recording trial #'+(k+1)+' — one full cue / imagery / rest pass'));
+    drawLiveCanvas(dir, seg, segProg);
+    drawTrialTimeline(W*0.14, H*0.62, W*0.72, 48, dir, play, seg, 1);
+    drawCollected(k, W*0.14, H*0.86, W*0.72);
+
+    document.getElementById('hPhase').textContent=seg;
+    document.getElementById('hCue').textContent=(dir===0?'LEFT':'RIGHT');
+    document.getElementById('hClock').textContent=realWithin.toFixed(1);
+    document.getElementById('hTrial').textContent=(k+1)+' / '+TARGET;
+  }
+  else if(tms < T_FF_END){
+    macro='ff';
+    var fp=clamp01((tms-T_LIVE_END)/T_FF);
+    var count=Math.round(lerp(SHOWN_TRIALS, TARGET, ease(fp)));
+    var ffTrial=Math.min(TARGET-1, count);
+    liveTrial=ffTrial;
+    var dir2=ORDER[ffTrial];
+    var cyc=(performance.now()*0.0009)%1;
+    var seg2=cyc<0.18?'cue':(cyc<0.74?'imagery':'rest');
+    liveSeg=seg2;
+    drawTitleTop(LANG==='cn'?'同一范式不断重复 — 一个 trial 接一个 trial 录满':
+                            'the same paradigm repeats — trial after trial until full');
+    drawLiveCanvas(dir2, seg2, (cyc%0.3)/0.3);
+    drawTrialTimeline(W*0.14, H*0.62, W*0.72, 48, dir2, cyc, seg2, 1);
+    drawCollected(count, W*0.14, H*0.86, W*0.72);
+    if(count>=TARGET){
+      var fa=Math.sin(clamp01((fp-0.85)/0.15)*Math.PI);
+      g.save(); g.globalAlpha=fa*0.8; g.strokeStyle=C_GOLD; g.lineWidth=2;
+      g.strokeRect(W*0.13, H*0.84, W*0.74, 24); g.restore();
+    }
+    document.getElementById('hPhase').textContent='repeat';
+    document.getElementById('hCue').textContent=(dir2===0?'LEFT':'RIGHT');
+    document.getElementById('hClock').textContent=(SEG.cue+SEG.imagery+restDur(ffTrial)).toFixed(1);
+    document.getElementById('hTrial').textContent=count+' / '+TARGET;
+  }
+  else {
+    macro='outro';
+    var op=clamp01((tms-T_FF_END)/T_OUTRO);
+    drawTitleTop(LANG==='cn'?'范式定稿: 50 个干净 trial, 左 / 右 各半':
+                            'paradigm finalized: 50 clean trials, balanced L / R');
+    drawCollected(TARGET, W*0.14, H*0.40, W*0.72);
+    var nL=0,i; for(i=0;i<TARGET;i++) if(ORDER[i]===0) nL++;
+    g.fillStyle=C_SIGNAL; g.font='700 13px '+FONT_M; g.textAlign='center';
+    g.fillText((LANG==='cn'?'左手 ':'LEFT ')+nL, W*0.40, H*0.50);
+    g.fillStyle=C_FLASH;
+    g.fillText((LANG==='cn'?'右手 ':'RIGHT ')+(TARGET-nL), W*0.60, H*0.50);
+    liveTrial=0;
+    drawTrialTimeline(W*0.20, H*0.58, W*0.60, 44, 1, -1, 'none', 1);
+    g.globalAlpha=ease(op);
+    g.fillStyle=C_GOLD; g.font='800 15px '+FONT_M; g.textAlign='center';
+    g.fillText(LANG==='cn'?'-> 戴上设备, 按这套范式真录 50 次':'-> put on the headset, run this paradigm for real x50', W*0.5, H*0.76);
+    g.globalAlpha=1;
+    document.getElementById('hPhase').textContent='done';
+    document.getElementById('hCue').textContent='L='+nL+' R='+(TARGET-nL);
+    document.getElementById('hClock').textContent=(SEG.cue+SEG.imagery+SEG.restMin).toFixed(1)+'-'+(SEG.cue+SEG.imagery+SEG.restMax).toFixed(1);
+    document.getElementById('hTrial').textContent=TARGET+' / '+TARGET;
+  }
+
+  if(macro!==prevMacro || liveSeg!==prevSeg) updateCue();
+
+  requestAnimationFrame(render);
+}
+
+refreshI18N();
+requestAnimationFrame(render);
+</script>
+</body>
+</html>

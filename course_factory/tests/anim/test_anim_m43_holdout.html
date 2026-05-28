@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Holdout 封存 — 诚实评估</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;700;800&family=Inter:wght@400;600;800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  /* 第 1 层 — 共享深空底 (所有学科统一) */
+  --bg-0: oklch(0.14 0.035 265);
+  --bg-1: oklch(0.18 0.04 265);
+  --bg-2: oklch(0.22 0.045 265);
+  --bg-3: oklch(0.28 0.05 265);
+  --line: oklch(0.35 0.05 265 / 0.35);
+  --line-strong: oklch(0.55 0.08 265 / 0.55);
+  --fg:      oklch(0.96 0.01 265);
+  --fg-dim:  oklch(0.75 0.02 265);
+  --fg-mute: oklch(0.55 0.03 265);
+  --gold:    oklch(0.85 0.14 85);
+  /* 第 2 层 — cs 学科 accent (cyan) */
+  --accent: oklch(0.75 0.17 200);
+  /* 第 3 层 — cs 5 色 palette (mascot + 数据可视化) */
+  --cs-signal: oklch(0.75 0.17 200);
+  --cs-core:   oklch(0.55 0.16 200);
+  --cs-depth:  oklch(0.35 0.10 210);
+  --cs-flash:  oklch(0.92 0.08 190);
+  --cs-query:  oklch(0.85 0.14 85);
+  --alert:     oklch(0.62 0.20 25);
+}
+html,body{margin:0;padding:0;height:100vh;overflow:hidden;background:var(--bg-0);font-family:'Noto Sans SC','Inter',sans-serif;color:var(--fg);}
+body{display:flex;}
+.sidebar{width:200px;flex-shrink:0;height:100vh;background:var(--bg-1);border-right:1px solid var(--line);display:flex;flex-direction:column;gap:14px;padding:18px 16px;box-sizing:border-box;}
+.brand{font-size:15px;font-weight:800;line-height:1.3;color:var(--fg);}
+.brand small{display:block;font-size:10px;font-weight:600;color:var(--accent);font-family:'JetBrains Mono',monospace;margin-top:3px;letter-spacing:.5px;}
+.mascot-wrap{display:flex;justify-content:center;padding:4px 0;}
+.guide{list-style:none;margin:0;padding:0;font-size:11.5px;line-height:1.55;color:var(--fg-dim);}
+.guide li{margin-bottom:8px;padding-left:12px;position:relative;}
+.guide li::before{content:'';position:absolute;left:0;top:7px;width:5px;height:5px;background:var(--accent);}
+.route{margin-top:4px;}
+.route-title{font-size:9.5px;font-weight:700;color:var(--fg-mute);font-family:'JetBrains Mono',monospace;letter-spacing:1px;margin-bottom:8px;}
+.route-step{display:flex;align-items:center;gap:8px;font-size:10.5px;color:var(--fg-mute);margin-bottom:7px;font-family:'JetBrains Mono',monospace;}
+.route-dot{width:9px;height:9px;border-radius:50%;border:1.5px solid var(--line-strong);flex-shrink:0;}
+.route-step.here{color:var(--gold);font-weight:700;}
+.route-step.here .route-dot{background:var(--gold);border-color:var(--gold);box-shadow:0 0 8px var(--gold);}
+.lang-btn{margin-top:auto;padding:8px 10px;font-size:11px;font-weight:600;font-family:'JetBrains Mono',monospace;background:var(--bg-2);color:var(--fg);border:1px solid var(--line-strong);cursor:pointer;box-shadow:3px 3px 0 var(--bg-0);transition:transform .1s;}
+.lang-btn:hover{transform:translate(-1px,-1px);}
+.lang-btn:active{transform:translate(1px,1px);box-shadow:1px 1px 0 var(--bg-0);}
+main{flex:1;height:100vh;position:relative;overflow:hidden;}
+canvas{position:absolute;inset:0;width:100%;height:100%;}
+.hud{position:absolute;top:16px;right:16px;background:var(--bg-1);border:1px solid var(--line-strong);padding:9px 13px;font-family:'JetBrains Mono',monospace;font-size:11px;box-shadow:3px 3px 0 var(--bg-0);min-width:172px;}
+.hud-row{display:flex;justify-content:space-between;gap:14px;line-height:1.7;}
+.hud-lbl{color:var(--fg-mute);}
+.hud-val{color:var(--accent);font-weight:700;}
+.endpoint{position:absolute;left:16px;bottom:60px;display:flex;align-items:center;gap:8px;font-size:10px;font-family:'JetBrains Mono',monospace;color:var(--fg-mute);opacity:.85;pointer-events:none;}
+.sub{position:absolute;bottom:20px;left:50%;transform:translateX(-50%);text-align:center;width:84%;pointer-events:none;}
+.sub-zh{font-size:19px;font-weight:700;color:var(--fg);background:oklch(0.18 0.04 265 / 0.86);padding:6px 18px;display:inline-block;border:1px solid var(--line-strong);}
+.sub-en{font-size:12px;font-style:italic;color:var(--fg-dim);margin-top:4px;}
+</style>
+</head>
+<body>
+<aside class="sidebar">
+  <div class="brand">脑控 Minecraft<small>BCI · S4 自录冲准</small></div>
+  <div class="mascot-wrap">
+    <svg width="58" height="58" viewBox="0 0 58 58" aria-label="Bit">
+      <!-- Bit — 悬浮立方精灵 (cs mascot) -->
+      <rect x="14" y="14" width="30" height="30" rx="4" fill="var(--cs-depth)" stroke="var(--accent)" stroke-width="2"/>
+      <rect x="20" y="20" width="7" height="7" fill="var(--cs-signal)"/>
+      <rect x="31" y="20" width="7" height="7" fill="var(--cs-flash)"/>
+      <rect x="20" y="31" width="7" height="7" fill="var(--cs-core)"/>
+      <rect x="31" y="31" width="7" height="7" fill="var(--cs-query)"/>
+      <circle cx="23.5" cy="11" r="2" fill="var(--accent)"><animate attributeName="cy" values="11;8;11" dur="2.4s" repeatCount="indefinite"/></circle>
+      <circle cx="34.5" cy="11" r="2" fill="var(--accent)"><animate attributeName="cy" values="11;9;11" dur="2.4s" begin="0.6s" repeatCount="indefinite"/></circle>
+    </svg>
+  </div>
+  <ul class="guide">
+    <li id="g1">80/20 切分数据集</li>
+    <li id="g2">20% holdout 封存上锁</li>
+    <li id="g3">只在 80% 上反复调</li>
+    <li id="g4">最后一次诚实考试</li>
+  </ul>
+  <div class="route">
+    <div class="route-title">ROUTE</div>
+    <div class="route-step"><span class="route-dot"></span><span id="r1">S1 认识脑波</span></div>
+    <div class="route-step"><span class="route-dot"></span><span id="r2">S2 清洁信号</span></div>
+    <div class="route-step"><span class="route-dot"></span><span id="r3">S3 训分类器</span></div>
+    <div class="route-step here"><span class="route-dot"></span><span id="r4">S4 自录冲准</span></div>
+    <div class="route-step"><span class="route-dot"></span><span id="r5">S5 接 Minecraft</span></div>
+    <div class="route-step"><span class="route-dot"></span><span id="r6">S6 分享</span></div>
+  </div>
+  <button id="langBtn" class="lang-btn">EN / 中</button>
+</aside>
+<main>
+  <canvas id="stage"></canvas>
+  <div class="hud">
+    <div class="hud-row"><span class="hud-lbl">phase</span><span class="hud-val" id="hPhase">split</span></div>
+    <div class="hud-row"><span class="hud-lbl">vault</span><span class="hud-val" id="hVault">--</span></div>
+    <div class="hud-row"><span class="hud-lbl">honest acc</span><span class="hud-val" id="hAcc">--</span></div>
+  </div>
+  <div class="endpoint">
+    <svg width="22" height="22" viewBox="0 0 22 22" aria-label="Minecraft">
+      <rect x="2" y="2" width="18" height="18" fill="none" stroke="var(--fg-mute)" stroke-width="1.4"/>
+      <rect x="6" y="6" width="4" height="4" fill="var(--fg-mute)"/>
+      <rect x="12" y="6" width="4" height="4" fill="var(--fg-mute)"/>
+      <rect x="6" y="13" width="10" height="3" fill="var(--fg-mute)"/>
+    </svg>
+    <span id="endTxt">为了让角色听你的念头动</span>
+  </div>
+  <div class="sub">
+    <div class="sub-zh" id="subZh">把自己的数据分 80/20</div>
+    <div class="sub-en" id="subEn">split your own data 80/20</div>
+  </div>
+</main>
+<script>
+var LANG='cn';
+// 字幕跟随连续演化的 5 个阶段 (承接同一份数据集 + 同一个保险箱)
+var SUB={
+  0:{zh:'调模型时手痒想看 holdout? 不行, 那会自欺',en:'Tempted to peek at holdout while tuning? No — that is self-deception'},
+  1:{zh:'你自己录的数据连续地分成 80% 训练 + 20% holdout',en:'Your own recordings split into 80% train + 20% holdout'},
+  2:{zh:'那 20% 被锁进保险箱 — 训练全程绝不打开',en:'That 20% is locked in a vault — never opened during training'},
+  3:{zh:'只在 80% 上反复调; 手伸向保险箱? 被弹回',en:'Tune only on the 80%; reach for the vault? It bounces you back'},
+  4:{zh:'训练收敛, 保险箱终于开一次 — 仅此一次',en:'Training converged; the vault opens once — only once'},
+  5:{zh:'诚实的 holdout 准确率, 才是脑控真能用的保证',en:'Honest holdout accuracy is the only guarantee your BCI really works'}
+};
+var GUIDE={g1:['80/20 切分数据集','split 80/20'],g2:['20% holdout 封存上锁','seal & lock 20%'],g3:['只在 80% 上反复调','tune on 80% only'],g4:['最后一次诚实考试','one honest exam']};
+var ROUTE={r1:['S1 认识脑波','S1 read brainwaves'],r2:['S2 清洁信号','S2 clean signal'],r3:['S3 训分类器','S3 train clf'],r4:['S4 自录冲准','S4 self-record'],r5:['S5 接 Minecraft','S5 to Minecraft'],r6:['S6 分享','S6 share']};
+function refreshI18N(){
+  document.getElementById('langBtn').textContent=LANG==='cn'?'EN / 中':'中 / EN';
+  var s=SUB[phase]||SUB[0];
+  document.getElementById('subZh').textContent=LANG==='cn'?s.zh:s.en;
+  document.getElementById('subEn').textContent=LANG==='cn'?s.en:s.zh;
+  for(var k in GUIDE){document.getElementById(k).textContent=GUIDE[k][LANG==='cn'?0:1];}
+  for(var r in ROUTE){document.getElementById(r).textContent=ROUTE[r][LANG==='cn'?0:1];}
+  document.getElementById('endTxt').textContent=LANG==='cn'?'为了让角色听你的念头动':'so the avatar obeys your thoughts';
+}
+document.getElementById('langBtn').addEventListener('click',function(){LANG=LANG==='cn'?'en':'cn';refreshI18N();});
+
+var canvas=document.getElementById('stage'),ctx=canvas.getContext('2d');
+var W=0,H=0,DPR=1;
+function resize(){var r=canvas.parentElement.getBoundingClientRect();if(r.width<1||r.height<1)return;DPR=window.devicePixelRatio||1;canvas.width=r.width*DPR;canvas.height=r.height*DPR;canvas.style.width=r.width+'px';canvas.style.height=r.height+'px';ctx.setTransform(DPR,0,0,DPR,0,0);W=r.width;H=r.height;}
+window.addEventListener('resize',resize);resize();setTimeout(resize,200);setTimeout(resize,600);
+document.fonts.ready.then(resize);
+
+// ---- 唯一对象: 一份 EEG 数据集 (60 个 trial 点), 全程同一批点连续演化 ----
+var N=60, HOLD=12; // 20% holdout
+var pts=[];
+(function init(){
+  for(var i=0;i<N;i++){
+    pts.push({
+      id:i,
+      isL:i%2===0,
+      hold:false,
+      // 起点: 从左侧成团涌入
+      x0:-40-Math.random()*60, y0:0,
+      sx:0,sy:0, // split target
+      vx:0,vy:0, // vault target
+      tx:0,ty:0, // train cloud target
+      ex:0,ey:0, // exam slot target
+      correct: Math.random()<0.72, // 该点考试是否答对 (诚实 ~72%)
+      jit:Math.random()*Math.PI*2
+    });
+  }
+  // stratified holdout: 交替挑 L/R 各 6 个, 标记 hold
+  var lc=0,rc=0;
+  for(var i=0;i<N;i++){
+    if(pts[i].isL && lc<HOLD/2){pts[i].hold=true;lc++;}
+    else if(!pts[i].isL && rc<HOLD/2){pts[i].hold=true;rc++;}
+  }
+})();
+
+// 全周期连续时间轴 (一镜到底, 6 段承接同一对象)
+var PHASE_DUR=[5500,5500,6000,7000,6500,7000]; // ms
+var TOTAL=PHASE_DUR.reduce(function(a,b){return a+b;},0);
+var phase=0, animStart=0;
+var handX=0, vaultLockGlow=0;
+
+function lerp(a,b,t){return a+(b-a)*t;}
+function easeIO(t){return t<0.5?2*t*t:1-Math.pow(-2*t+2,2)/2;}
+
+// 计算每个 point 在每个阶段的目标位置 (基于当前 W/H)
+function layout(){
+  var cx=W*0.5, cy=H*0.46;
+  // split: 全部点排成网格在中央
+  var cols=12, gw=Math.min(34,(W*0.62)/cols);
+  var rows=Math.ceil(N/cols);
+  var gx0=cx-(cols*gw)/2, gy0=cy-(rows*gw)/2;
+  // train cloud (左) + vault (右)
+  var trainCx=W*0.32, vaultCx=W*0.74, ny=cy;
+  var tCols=8, tgw=Math.min(30,(W*0.32)/tCols);
+  var hCols=4, hgw=Math.min(28,(W*0.18)/hCols);
+  var ti=0,hi=0;
+  for(var i=0;i<N;i++){
+    var p=pts[i];
+    var col=i%cols, row=Math.floor(i/cols);
+    p.sx=gx0+col*gw+gw/2; p.sy=gy0+row*gw+gw/2;
+    if(p.hold){
+      var hc=hi%hCols, hr=Math.floor(hi/hCols);
+      p.vx=vaultCx-(hCols*hgw)/2+hc*hgw+hgw/2;
+      p.vy=ny-((Math.ceil(HOLD/hCols))*hgw)/2+hr*hgw+hgw/2+8;
+      hi++;
+    } else {
+      var tc=ti%tCols, tr=Math.floor(ti/tCols);
+      p.tx=trainCx-(tCols*tgw)/2+tc*tgw+tgw/2;
+      p.ty=ny-((Math.ceil((N-HOLD)/tCols))*tgw)/2+tr*tgw+tgw/2;
+      ti++;
+    }
+    // exam slots: holdout 点一列滑入右侧考场闸门
+    if(p.hold){
+      p.ex=W*0.66; p.ey=H*0.20+(hi-1)*((H*0.5)/HOLD);
+    }
+  }
+}
+
+function drawPoint(p,x,y,r,active){
+  ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);
+  if(p.hold){
+    ctx.fillStyle=active?'rgba(0,0,0,0)':'oklch(0.55 0.16 200)';
+  }
+  ctx.fillStyle=p.hold?'oklch(0.62 0.20 25)':(p.isL?'oklch(0.75 0.17 200)':'oklch(0.55 0.16 200)');
+  ctx.fill();
+  ctx.lineWidth=1.2;ctx.strokeStyle='oklch(0.14 0.035 265)';ctx.stroke();
+}
+
+function drawVault(x,y,w,h,openT,glow){
+  // 保险箱外壳
+  ctx.save();
+  ctx.fillStyle='oklch(0.22 0.045 265)';
+  ctx.strokeStyle='oklch(0.62 0.20 25 / '+(0.5+0.5*glow)+')';
+  ctx.lineWidth=2.5;
+  ctx.fillRect(x,y,w,h);ctx.strokeRect(x,y,w,h);
+  // 门 (随 openT 向右掀开)
+  var doorW=w*(1-openT*0.92);
+  ctx.fillStyle='oklch(0.28 0.05 265)';
+  ctx.fillRect(x,y,doorW,h);ctx.strokeRect(x,y,doorW,h);
+  // 锁 (训练阶段亮红, 开门后熄)
+  var lockA=1-openT;
+  if(lockA>0.02){
+    var lcx=x+doorW-14, lcy=y+h/2;
+    ctx.globalAlpha=lockA;
+    ctx.strokeStyle='oklch(0.85 0.14 85)';ctx.lineWidth=2.4;
+    ctx.beginPath();ctx.arc(lcx,lcy-6,5,Math.PI,0);ctx.stroke();
+    ctx.fillStyle='oklch(0.62 0.20 25)';
+    ctx.fillRect(lcx-7,lcy-2,14,13);
+    ctx.strokeStyle='oklch(0.85 0.14 85)';ctx.strokeRect(lcx-7,lcy-2,14,13);
+    ctx.fillStyle='oklch(0.85 0.14 85)';ctx.beginPath();ctx.arc(lcx,lcy+3,2,0,Math.PI*2);ctx.fill();
+    ctx.globalAlpha=1;
+  }
+  // SEALED 标
+  if(openT<0.5){
+    ctx.fillStyle='oklch(0.62 0.20 25 / '+(0.7*(1-openT*2))+')';
+    ctx.font='700 11px JetBrains Mono';ctx.textAlign='center';
+    ctx.fillText('SEALED 20%',x+w/2,y-8);
+  }
+  ctx.restore();
+}
+
+function label(txt,x,y,col,size){
+  ctx.fillStyle=col;ctx.font='800 '+(size||14)+'px Inter';ctx.textAlign='center';
+  ctx.fillText(txt,x,y);
+}
+
+function render(now){
+  if(!animStart)animStart=now;
+  var t=(now-animStart)%TOTAL;
+  // 找当前 phase + 段内归一化 p
+  var acc=0,ph=0,p=0;
+  for(var i=0;i<PHASE_DUR.length;i++){
+    if(t<acc+PHASE_DUR[i]){ph=i;p=(t-acc)/PHASE_DUR[i];break;}
+    acc+=PHASE_DUR[i];
+  }
+  if(ph!==phase){phase=ph;refreshI18N();}
+  layout();
+  ctx.clearRect(0,0,W,H);
+  ctx.fillStyle='oklch(0.14 0.035 265)';ctx.fillRect(0,0,W,H);
+
+  var ep=easeIO(p);
+  var tt=now*0.001;
+
+  // ---- 连续位置插值: 同一批点在阶段之间平滑流动 ----
+  for(var i=0;i<N;i++){
+    var pt=pts[i];
+    var x,y,r=7;
+    var jx=Math.sin(tt*1.3+pt.jit)*1.5, jy=Math.cos(tt*1.1+pt.jit)*1.5;
+    if(ph===0){
+      // 涌入并排成网格
+      var a=easeIO(Math.min(1,p*1.4 - (i/N)*0.3));
+      if(a<0)a=0;
+      x=lerp(pt.x0,pt.sx,a); y=lerp(cyOf()+pt.id*0,pt.sy,a);
+    } else if(ph===1){
+      // 网格 -> split 成两堆 (train cloud / vault region)
+      var tgtx=pt.hold?pt.vx:pt.tx, tgty=pt.hold?pt.vy:pt.ty;
+      x=lerp(pt.sx,tgtx,ep); y=lerp(pt.sy,tgty,ep);
+    } else if(ph===2){
+      // 封存: holdout 进保险箱后微缩, train 待命
+      x=pt.hold?pt.vx:pt.tx; y=pt.hold?pt.vy:pt.ty;
+      if(pt.hold){r=6;}
+    } else if(ph===3){
+      // 训练: train 点轻微脉动 (反复迭代); holdout 锁住不动
+      x=pt.tx; y=pt.ty;
+      if(!pt.hold){x+=jx;y+=jy;}
+      else{x=pt.vx;y=pt.vy;}
+    } else if(ph===4){
+      // 开箱: holdout 点连续滑入右侧考场闸门
+      var a=easeIO(Math.min(1,p*1.2 - (pt.hold?(holdIndex(i)/HOLD)*0.4:0)));
+      if(pt.hold){ x=lerp(pt.vx,pt.ex,a); y=lerp(pt.vy,pt.ey,a); }
+      else{ x=pt.tx; y=pt.ty; }
+    } else {
+      // 诚实考试: holdout 逐点判对错累积准确率
+      x=pt.hold?pt.ex:pt.tx; y=pt.hold?pt.ey:pt.ty;
+    }
+    // 训练堆背景框 (只画一次, 在循环外更好, 此处略)
+    drawPoint(pt,x,y,r,ph>=4&&pt.hold);
+  }
+
+  // ---- 阶段叠加层 ----
+  if(ph===0){
+    label(LANG==='cn'?'你自己录的 60 个 trial':'your own 60 trials',W*0.5,H*0.2,'oklch(0.96 0.01 265)',17);
+    document.getElementById('hPhase').textContent='intake';
+    document.getElementById('hVault').textContent='--';
+    document.getElementById('hAcc').textContent='--';
+  } else if(ph===1){
+    // 一条分割线把数据集分成 80/20
+    var lineX=lerp(W*0.5,W*0.53,ep);
+    ctx.strokeStyle='oklch(0.85 0.14 85 / '+(0.3+0.5*ep)+')';ctx.lineWidth=2;ctx.setLineDash([6,5]);
+    ctx.beginPath();ctx.moveTo(lineX,H*0.14);ctx.lineTo(lineX,H*0.78);ctx.stroke();ctx.setLineDash([]);
+    label(LANG==='cn'?'80% 训练':'80% train',W*0.32,H*0.16,'oklch(0.75 0.17 200)',15);
+    label(LANG==='cn'?'20% holdout':'20% holdout',W*0.74,H*0.16,'oklch(0.62 0.20 25)',15);
+    document.getElementById('hPhase').textContent='split 80/20';
+    document.getElementById('hVault').textContent='open';
+    document.getElementById('hAcc').textContent='--';
+  } else if(ph===2){
+    // 保险箱罩住 holdout 并上锁 (门关上, 锁亮)
+    var v=vaultRect();
+    drawVault(v.x,v.y,v.w,v.h,1-ep,Math.abs(Math.sin(tt*3))); // openT 从 1->0 关门
+    label(LANG==='cn'?'80% 训练堆':'80% train pile',W*0.32,H*0.16,'oklch(0.75 0.17 200)',15);
+    document.getElementById('hPhase').textContent='seal vault';
+    document.getElementById('hVault').textContent='LOCKED';
+    document.getElementById('hAcc').textContent='--';
+  } else if(ph===3){
+    // 训练: 准确率曲线在 80% 上反复爬升; 手伸向保险箱被弹回
+    var v=vaultRect();
+    drawVault(v.x,v.y,v.w,v.h,0,Math.abs(Math.sin(tt*3)));
+    // 训练曲线 (train acc 连续爬升, 在 train cloud 上方)
+    drawTrainCurve(p,tt);
+    // 手伸向保险箱 -> 被弹回 (周期动作)
+    drawTemptHand(tt,v);
+    label(LANG==='cn'?'只在 80% 上反复 fit + CV':'fit + CV on 80% only',W*0.30,H*0.14,'oklch(0.75 0.17 200)',14);
+    document.getElementById('hPhase').textContent='train (80%)';
+    document.getElementById('hVault').textContent='LOCKED';
+    document.getElementById('hAcc').textContent='--';
+  } else if(ph===4){
+    // 开箱: 门掀开, holdout 滑入考场闸门
+    var v=vaultRect();
+    drawVault(v.x,v.y,v.w,v.h,ep,0);
+    // 考场闸门
+    ctx.strokeStyle='oklch(0.85 0.14 85)';ctx.lineWidth=2;
+    ctx.strokeRect(W*0.63,H*0.16,3,H*0.58);
+    label(LANG==='cn'?'考场闸门 · 仅此一次':'exam gate · once only',W*0.78,H*0.13,'oklch(0.85 0.14 85)',13);
+    document.getElementById('hPhase').textContent='open once';
+    document.getElementById('hVault').textContent='OPEN 1x';
+    document.getElementById('hAcc').textContent='...';
+  } else {
+    // 诚实考试: 逐点判对错, 累积诚实准确率
+    var graded=Math.min(HOLD,Math.floor(p*HOLD*1.15));
+    var correctN=0;
+    var hi=0;
+    for(var i=0;i<N;i++){
+      if(!pts[i].hold)continue;
+      hi++;
+      if(hi<=graded){
+        var ok=pts[i].correct;
+        if(ok)correctN++;
+        // 在考场点旁画 对/错 记号
+        var px=pts[i].ex+18, py=pts[i].ey;
+        ctx.font='700 13px JetBrains Mono';ctx.textAlign='left';
+        ctx.fillStyle=ok?'oklch(0.75 0.17 200)':'oklch(0.62 0.20 25)';
+        ctx.fillText(ok?'PASS':'MISS',px,py+4);
+      }
+    }
+    var accNow=graded>0?Math.round(correctN/graded*100):0;
+    // 诚实准确率大字 + gold 收束
+    var done=p>0.85;
+    ctx.font='800 '+(done?64:54)+'px JetBrains Mono';ctx.textAlign='center';
+    ctx.fillStyle=done?'oklch(0.85 0.14 85)':'oklch(0.75 0.17 200)';
+    ctx.fillText(accNow+'%',W*0.32,H*0.42);
+    label(LANG==='cn'?'诚实 holdout 准确率':'honest holdout accuracy',W*0.32,H*0.50,'oklch(0.75 0.02 265)',14);
+    if(done){
+      // gold 一闪定格
+      ctx.strokeStyle='oklch(0.85 0.14 85 / '+(0.4+0.4*Math.sin(tt*4))+')';ctx.lineWidth=2.5;
+      ctx.strokeRect(W*0.20,H*0.30,W*0.24,H*0.22);
+      label(LANG==='cn'?'这才是脑控能不能用的真凭据':'this is the real proof the BCI works',W*0.32,H*0.60,'oklch(0.85 0.14 85)',13);
+    }
+    document.getElementById('hPhase').textContent='honest exam';
+    document.getElementById('hVault').textContent='OPENED';
+    document.getElementById('hAcc').textContent=accNow+'%';
+  }
+
+  // train pile 标注框 (常驻于训练堆, 强调它是反复被用的)
+  if(ph>=1){
+    var tb=trainBox();
+    ctx.strokeStyle='oklch(0.55 0.08 265 / 0.45)';ctx.lineWidth=1.2;ctx.setLineDash([4,4]);
+    ctx.strokeRect(tb.x,tb.y,tb.w,tb.h);ctx.setLineDash([]);
+  }
+
+  requestAnimationFrame(render);
+}
+
+function cyOf(){return H*0.46;}
+function vaultRect(){return {x:W*0.66,y:H*0.30,w:W*0.20,h:H*0.30};}
+function trainBox(){return {x:W*0.16,y:H*0.28,w:W*0.34,h:H*0.34};}
+function holdIndex(globalI){var c=0;for(var i=0;i<N;i++){if(pts[i].hold){if(i===globalI)return c;c++;}}return 0;}
+
+function drawTrainCurve(p,tt){
+  // 准确率曲线在 train cloud 上方, 连续爬升并带反复抖动 (CV 多折)
+  var bx=W*0.16, by=H*0.24, bw=W*0.34, bh=H*0.0;
+  var ox=bx, oy=H*0.66, ow=W*0.34, oh=H*0.16;
+  ctx.strokeStyle='oklch(0.75 0.17 200)';ctx.lineWidth=2.2;
+  ctx.beginPath();
+  var prog=Math.min(1,p*1.1);
+  for(var i=0;i<=40;i++){
+    var u=i/40;
+    if(u>prog)break;
+    var base=0.2+0.6*(1-Math.exp(-u*3));
+    var wob=Math.sin((u*12)+tt*2)*0.04*(1-u); // 反复迭代抖动
+    var yv=base+wob;
+    var px=ox+u*ow, py=oy+oh-yv*oh;
+    if(i===0)ctx.moveTo(px,py);else ctx.lineTo(px,py);
+  }
+  ctx.stroke();
+  ctx.fillStyle='oklch(0.55 0.03 265)';ctx.font='600 10px JetBrains Mono';ctx.textAlign='left';
+  ctx.fillText(LANG==='cn'?'train/CV acc 上升 (反复调)':'train/CV acc up (re-tuned)',ox,oy+oh+14);
+}
+
+function drawTemptHand(tt,v){
+  // 一只手 (箭头) 周期性伸向保险箱 -> 撞到锁 -> 被弹回
+  var cyc=(tt*0.5)%1;
+  var reach=cyc<0.6?easeIO(cyc/0.6):easeIO(1-(cyc-0.6)/0.4);
+  var fromX=W*0.50, toX=v.x-12;
+  var hx=lerp(fromX,toX,reach), hy=v.y+v.h*0.5;
+  // 箭杆
+  ctx.strokeStyle='oklch(0.85 0.14 85 / '+(0.5+0.4*reach)+')';ctx.lineWidth=2.4;
+  ctx.beginPath();ctx.moveTo(fromX-20,hy);ctx.lineTo(hx,hy);ctx.stroke();
+  // 箭头
+  ctx.beginPath();ctx.moveTo(hx,hy);ctx.lineTo(hx-9,hy-6);ctx.lineTo(hx-9,hy+6);ctx.closePath();
+  ctx.fillStyle='oklch(0.85 0.14 85)';ctx.fill();
+  // 撞锁回弹火花 (reach 接近 1 时)
+  if(reach>0.82){
+    ctx.fillStyle='oklch(0.62 0.20 25)';ctx.font='800 16px JetBrains Mono';ctx.textAlign='left';
+    ctx.fillText('X',toX+2,hy+6);
+    ctx.font='700 11px JetBrains Mono';ctx.fillStyle='oklch(0.85 0.14 85)';
+    ctx.fillText(LANG==='cn'?'手痒? 弹回!':'tempted? bounced!',hx-70,hy-14);
+  }
+}
+
+refreshI18N();
+requestAnimationFrame(render);
+</script>
+</body>
+</html>

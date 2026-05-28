@@ -1,0 +1,1165 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<title>OpenBCI 录制佩戴套件 3D · M40 录满 50 次想象试验</title>
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Inter:wght@400;500;700&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+/* === SystemEdu AESTHETIC.md — 米黄手册插画风 (3D object 专用, engineering accent) === */
+:root {
+  --paper:        #f3ecdc;   /* 米黄羊皮纸 — 主背景 */
+  --paper-shade:  #e8dec5;   /* 阴影面 */
+  --paper-bright: #fff8e8;   /* 卡片亮底 */
+  --ink:          #2a2520;   /* 唯一描边色 + 主文字 */
+  --ink-dim:      #6a625a;
+  --ink-mute:     #a39c92;
+  /* 物体浅色填充 (核心铁律) */
+  --fill-grey-1:  #e8e4dc;
+  --fill-grey-2:  #d4cebc;
+  --fill-grey-3:  #b8b0a0;
+  --fill-metal:   #d0d4d8;
+  --fill-glass:   #c4d4dc;
+  --fill-pcb:     #bdd4b8;   /* 浅薄荷绿 PCB */
+  --fill-warm:    #e8d4b8;
+  --fill-blue:    #c8d8e8;
+  /* 学科 accent (engineering) */
+  --accent:       #6a6a5e;
+  --alert:        #a35a40;
+  /* 别名 */
+  --bg:           var(--paper);
+  --bg2:          var(--paper-shade);
+  --surface:      var(--paper-bright);
+  --text:         var(--ink);
+  --muted:        var(--ink-dim);
+  --primary:      var(--ink);
+  --tertiary:     var(--accent);
+  --laser:        var(--alert);
+}
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;}
+html,body{width:100%;height:100vh;overflow:hidden;background:var(--bg);color:var(--text);font-family:'Inter','Noto Sans SC',sans-serif;}
+.app{display:flex;flex-direction:row;height:100vh;}
+.sidebar{width:200px;min-width:200px;display:flex;flex-direction:column;gap:8px;padding:14px;background:var(--bg2);border-right:1.5px solid var(--primary);overflow-y:auto;}
+.lang-btn{align-self:flex-start;font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:700;padding:4px 10px;cursor:pointer;border:1.5px solid var(--primary);background:var(--surface);color:var(--primary);letter-spacing:0.15em;text-transform:uppercase;}
+.lang-btn:hover{background:var(--primary);color:var(--surface);}
+h1.sb-title{font-family:'JetBrains Mono',monospace;font-size:13px;color:var(--primary);text-transform:uppercase;letter-spacing:0.05em;line-height:1.3;}
+.sb-sub{font-family:'Noto Sans SC',sans-serif;font-size:11px;color:var(--muted);margin-top:-4px;}
+.divider{height:1px;background:var(--primary);margin:6px 0;opacity:0.4;}
+.section-label{font-family:'JetBrains Mono',monospace;font-size:9px;font-weight:700;color:var(--muted);letter-spacing:0.15em;text-transform:uppercase;margin-top:4px;}
+.zoom-hint{font-size:11px;color:var(--text);line-height:1.6;background:var(--surface);border:1.5px solid var(--primary);padding:8px 10px;margin-top:4px;}
+.zoom-hint strong{color:var(--primary);}
+.parts-list{display:flex;flex-direction:column;gap:4px;margin-top:4px;}
+.part-row{font-size:11px;color:var(--text);padding:5px 10px;border:1.5px solid var(--primary);cursor:pointer;font-family:'Noto Sans SC',sans-serif;display:flex;align-items:center;gap:6px;background:var(--surface);}
+.part-row:hover{background:var(--primary);color:var(--surface);}
+.part-row:hover .num{color:var(--surface);}
+.part-row .num{font-family:'JetBrains Mono',monospace;font-weight:700;color:var(--primary);}
+.part-row.dim{opacity:0.55;cursor:default;}
+.part-row.dim:hover{background:var(--surface);color:var(--text);}
+.legend{font-size:10px;color:var(--muted);line-height:1.6;}
+.legend strong{color:var(--primary);}
+.action-btn{font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;padding:7px 10px;cursor:pointer;background:var(--surface);color:var(--primary);border:1.5px solid var(--primary);letter-spacing:0.1em;text-transform:uppercase;margin-top:4px;box-shadow:3px 3px 0 var(--primary);text-align:center;user-select:none;}
+.action-btn:active{box-shadow:1px 1px 0 var(--primary);transform:translate(2px, 2px);}
+.action-btn:hover{background:var(--primary);color:var(--surface);}
+.spacer{flex:1;}
+
+.main{flex:1;position:relative;overflow:hidden;background:var(--bg);display:flex;flex-direction:column;}
+.canvas-wrap{flex:1;position:relative;overflow:hidden;}
+.canvas-wrap canvas{display:block;width:100%!important;height:100%!important;cursor:grab;}
+.canvas-wrap canvas:active{cursor:grabbing;}
+.title-overlay{position:absolute;top:14px;left:14px;background:var(--surface);border:1.5px solid var(--primary);padding:10px 16px;max-width:400px;z-index:5;box-shadow:4px 4px 0 var(--primary);}
+.title-overlay h2{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--primary);font-weight:700;letter-spacing:0.08em;text-transform:uppercase;}
+.title-overlay p{font-size:11px;color:var(--text);margin-top:4px;line-height:1.5;font-family:'Noto Sans SC',sans-serif;}
+.hud{position:absolute;top:14px;right:14px;background:var(--surface);border:1.5px solid var(--primary);padding:10px 14px;font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text);line-height:1.6;min-width:190px;z-index:5;box-shadow:4px 4px 0 var(--primary);}
+.hud .label{color:var(--muted);font-size:9px;letter-spacing:0.15em;text-transform:uppercase;}
+.hud .val{color:var(--primary);font-weight:700;font-size:13px;}
+.hint-bar{position:absolute;bottom:14px;left:50%;transform:translateX(-50%);background:var(--surface);border:1.5px solid var(--primary);padding:6px 14px;font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--muted);letter-spacing:0.1em;z-index:5;box-shadow:3px 3px 0 var(--primary);}
+.hint-bar strong{color:var(--primary);}
+
+/* 引出线标签 (DK Eyewitness 风, L0 部件注解) */
+.callout{position:absolute;pointer-events:none;background:var(--surface);border:1.5px solid var(--primary);padding:3px 8px;font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--primary);font-weight:700;letter-spacing:0.03em;white-space:nowrap;transform:translate(-50%,-50%);z-index:6;box-shadow:2px 2px 0 var(--primary);}
+.callout.hot{background:var(--accent);color:var(--surface);}
+.callout .cn{font-family:'Noto Sans SC',sans-serif;font-weight:700;}
+
+/* hover 点击提示 */
+.click-prompt{position:absolute;background:var(--tertiary);color:var(--surface);font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;padding:4px 10px;pointer-events:none;transform:translate(-50%,-150%);white-space:nowrap;z-index:8;display:none;border:1.5px solid var(--primary);box-shadow:2px 2px 0 var(--primary);}
+.click-prompt.show{display:block;}
+
+/* ===== Zoom modal (L1/L2 子场景) ===== */
+.zoom-modal{position:absolute;inset:0;background:rgba(42, 37, 32, 0.45);display:flex;align-items:center;justify-content:center;z-index:100;}
+.zoom-modal.hidden{display:none;}
+.zoom-card{width:min(88%, 1100px);height:min(86vh, 700px);background:var(--surface);border:1.5px solid var(--primary);display:flex;flex-direction:column;box-shadow:8px 8px 0 var(--primary);}
+.zoom-header{display:flex;align-items:center;justify-content:space-between;padding:10px 18px;border-bottom:1.5px solid var(--primary);background:var(--bg2);}
+.zoom-bc{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text);letter-spacing:0.05em;}
+.zoom-bc .crumb{color:var(--muted);}
+.zoom-bc .sep{color:var(--muted);margin:0 8px;}
+.zoom-bc .current{color:var(--primary);font-weight:700;}
+.zoom-actions{display:flex;gap:8px;}
+.zoom-btn{font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:700;padding:5px 12px;cursor:pointer;border:1.5px solid var(--primary);background:var(--surface);color:var(--primary);letter-spacing:0.1em;text-transform:uppercase;user-select:none;}
+.zoom-btn:hover{background:var(--primary);color:var(--surface);}
+.zoom-btn.close{color:var(--laser);border-color:var(--laser);}
+.zoom-btn.close:hover{background:var(--laser);color:var(--surface);}
+
+.zoom-body{flex:1;display:flex;flex-direction:row;min-height:0;}
+.zoom-3d{flex:1;position:relative;background:var(--bg);overflow:hidden;}
+.zoom-3d canvas{display:block;width:100%!important;height:100%!important;}
+.zoom-info{width:320px;min-width:320px;border-left:1.5px solid var(--primary);padding:18px 22px;overflow-y:auto;display:flex;flex-direction:column;gap:10px;background:var(--surface);}
+.zoom-info h3{font-family:'JetBrains Mono',monospace;font-size:13px;color:var(--primary);text-transform:uppercase;letter-spacing:0.06em;line-height:1.3;}
+.zoom-info .sub{font-family:'Noto Sans SC',sans-serif;font-size:11px;color:var(--muted);margin-top:-4px;}
+.zoom-info p{font-size:12px;color:var(--text);line-height:1.7;font-family:'Noto Sans SC',sans-serif;}
+.zoom-info .key-fact{background:var(--bg2);border-left:3px solid var(--accent);padding:8px 12px;font-size:11px;color:var(--text);line-height:1.6;}
+.zoom-info .key-fact strong{color:var(--accent);}
+.zoom-info .note{font-size:10px;color:var(--muted);font-style:italic;border-top:1px dashed var(--muted);padding-top:8px;line-height:1.5;}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="sidebar">
+    <button class="lang-btn" id="langBtn">CN</button>
+    <h1 class="sb-title" id="title">EEG 录制套件 · 点击下钻</h1>
+    <div class="sb-sub" id="subtitle">头模 + 电极帽 + Cyton + dongle + 导电胶</div>
+    <div class="divider"></div>
+
+    <div class="section-label" id="lblHowto">使用方法</div>
+    <div class="zoom-hint" id="howtoText">
+      <strong>① 拖拽旋转 / 滚轮缩放</strong>看完整佩戴<br>
+      <strong>② 点击电极帽 / 湿电极</strong>下钻<br>
+      <strong>③ 弹出</strong>独立 3D 子场景<br>
+      <strong>④ 子场景里继续</strong>拖拽看细节
+    </div>
+
+    <div class="divider"></div>
+    <div class="section-label" id="lblParts">部件清单</div>
+    <div class="parts-list">
+      <div class="part-row" data-jump="cap"><span class="num">[1]</span><span data-i18n="part_cap">电极帽 (剖视)</span></div>
+      <div class="part-row" data-jump="electrode"><span class="num">[2]</span><span data-i18n="part_elec">单湿电极 + 导电胶</span></div>
+      <div class="part-row dim"><span class="num">[3]</span><span data-i18n="part_bundle">导线束</span></div>
+      <div class="part-row dim"><span class="num">[4]</span><span data-i18n="part_cyton">Cyton 板 (挂身侧)</span></div>
+      <div class="part-row dim"><span class="num">[5]</span><span data-i18n="part_gel">导电胶针管套件</span></div>
+      <div class="part-row dim"><span class="num">[6]</span><span data-i18n="part_dongle">USB dongle 接电脑</span></div>
+    </div>
+
+    <div class="divider"></div>
+    <div class="section-label" id="lblLegend">录制链路</div>
+    <div class="legend" id="legendText">
+      <strong>[1]</strong> 电极帽按 10-20 摆位<br>
+      <strong>[5]</strong> 导电胶注入每个电极降阻抗<br>
+      <strong>[2]</strong> 湿电极贴头皮收 μV 脑电<br>
+      <strong>[3]</strong> 导线束汇到 Cyton<br>
+      <strong>[4]</strong> Cyton 放大数字化<br>
+      <strong>[6]</strong> dongle 无线收到电脑录 50 试验
+    </div>
+
+    <div class="spacer"></div>
+    <div class="action-btn" id="btnReset" data-i18n="reset_view">重置视角</div>
+    <div class="action-btn" id="btnOrbit">自动旋转</div>
+  </div>
+
+  <div class="main">
+    <div class="canvas-wrap">
+      <canvas id="canvas-main"></canvas>
+      <div class="title-overlay">
+        <h2 id="overlayH" data-i18n="overlay_h">OpenBCI 完整录制佩戴套件</h2>
+        <p id="overlayP" data-i18n="overlay_p">M40 你戴上整套设备录满 50 次想象试验。点击电极帽看它怎么按 10-20 摆位，点单湿电极看导电胶怎么降阻抗。</p>
+      </div>
+      <div class="hud" id="hud">
+        <div><span class="label" data-i18n="hud_hover">悬停部件</span><br><span class="val" id="hudHover">--</span></div>
+        <div style="margin-top:6px;"><span class="label" data-i18n="hud_depth">下钻层级</span><br><span class="val" id="hudDepth">L0 · 整套佩戴</span></div>
+      </div>
+      <div class="hint-bar" id="hintBar"><strong data-i18n="hint_strong">拖拽 · 滚轮 · 点击部件</strong><span data-i18n="hint_rest"> 进入子场景</span></div>
+      <div class="click-prompt" id="clickPrompt" data-i18n="click_to_zoom">点击进入子场景</div>
+    </div>
+
+    <!-- Zoom modal -->
+    <div class="zoom-modal hidden" id="zoomModal">
+      <div class="zoom-card">
+        <div class="zoom-header">
+          <div class="zoom-bc">
+            <span class="crumb">录制套件</span>
+            <span class="sep">/</span>
+            <span class="current" id="zoomCrumb">--</span>
+          </div>
+          <div class="zoom-actions">
+            <div class="zoom-btn" id="zoomBack" data-i18n="back">返回</div>
+            <div class="zoom-btn close" id="zoomClose" data-i18n="close">关闭</div>
+          </div>
+        </div>
+        <div class="zoom-body">
+          <div class="zoom-3d"><canvas id="canvas-zoom"></canvas></div>
+          <div class="zoom-info">
+            <h3 id="zoomTitle">--</h3>
+            <div class="sub" id="zoomSub">--</div>
+            <p id="zoomDesc">--</p>
+            <div class="key-fact" id="zoomKey">--</div>
+            <div class="note" id="zoomNote">--</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+// ============================================================
+// i18n
+// ============================================================
+const I18N = {
+  title:       {cn:'EEG 录制套件 · 点击下钻', en:'EEG kit · Click to zoom'},
+  subtitle:    {cn:'头模 + 电极帽 + Cyton + dongle + 导电胶', en:'Head + cap + Cyton + dongle + gel'},
+  part_cap:    {cn:'电极帽 (剖视)', en:'Electrode cap (cutaway)'},
+  part_elec:   {cn:'单湿电极 + 导电胶', en:'Wet electrode + gel'},
+  part_bundle: {cn:'导线束', en:'Wire bundle'},
+  part_cyton:  {cn:'Cyton 板 (挂身侧)', en:'Cyton board (worn)'},
+  part_gel:    {cn:'导电胶针管套件', en:'Conductive gel syringe'},
+  part_dongle: {cn:'USB dongle 接电脑', en:'USB dongle to PC'},
+  reset_view:  {cn:'重置视角', en:'Reset view'},
+  auto_orbit:  {cn:'自动旋转', en:'Auto-orbit'},
+  stop_orbit:  {cn:'停止旋转', en:'Stop orbit'},
+  overlay_h:   {cn:'OpenBCI 完整录制佩戴套件', en:'OpenBCI full recording kit'},
+  overlay_p:   {cn:'M40 你戴上整套设备录满 50 次想象试验。点击电极帽看它怎么按 10-20 摆位，点单湿电极看导电胶怎么降阻抗。', en:'In M40 you wear the full kit and record 50 imagery trials. Click the cap to see 10-20 placement, click a wet electrode to see how gel lowers impedance.'},
+  hud_hover:   {cn:'悬停部件', en:'Hovering'},
+  hud_depth:   {cn:'下钻层级', en:'Zoom level'},
+  click_to_zoom:{cn:'点击进入子场景', en:'Click to enter sub-scene'},
+  hint_strong: {cn:'拖拽 · 滚轮 · 点击部件', en:'Drag · Scroll · Click parts'},
+  hint_rest:   {cn:' 进入子场景', en:' to enter sub-scene'},
+  back:        {cn:'返回', en:'BACK'},
+  close:       {cn:'关闭', en:'CLOSE'},
+  // callouts (L0 引出线标签)
+  co_cap:      {cn:'电极帽', en:'Electrode cap'},
+  co_bundle:   {cn:'导线束', en:'Wire bundle'},
+  co_cyton:    {cn:'Cyton 板', en:'Cyton board'},
+  co_gel:      {cn:'导电胶针管', en:'Gel syringe'},
+  co_dongle:   {cn:'USB dongle', en:'USB dongle'},
+  co_motor:    {cn:'C3/C4 运动区', en:'C3/C4 motor area'},
+  co_pc:       {cn:'电脑 (录 50 试验)', en:'PC (50 trials)'},
+  // hovers
+  hov_cap:     {cn:'电极帽 (点击剖视)', en:'Electrode cap (click for cutaway)'},
+  hov_elec:    {cn:'C3 湿电极 (点击放大)', en:'C3 wet electrode (click to zoom)'},
+  // L1 card: cap cutaway
+  card_cap_h:  {cn:'[1] 电极帽剖视 · 10-20 摆位', en:'[1] Cap cutaway · 10-20 layout'},
+  card_cap_s:  {cn:'弹性网帽怎么把电极固定到精确位置', en:'How the elastic mesh fixes electrodes at exact sites'},
+  card_cap_p:  {cn:'电极帽是一张弹性网，上面预留一排排电极孔位，按国际 10-20 系统命名 (Fp/F/C/P/O 配奇偶数)。剖开看：每个孔位下面是一个塑料电极座，湿电极卡在里面，座中间留一个注胶口直通头皮。运动想象任务最关键的是 C3 和 C4 —— 它们正好压在左右大脑的初级运动皮层 (运动区) 上方。你想象动左手，右脑 C4 一带的 mu 节律 (8-12 Hz) 会衰减；想象动右手则换成 C3。所以这两个孔位必须贴准。', en:'The cap is an elastic mesh with rows of electrode holes named by the international 10-20 system (Fp/F/C/P/O with odd/even numbers). Cut it open: under each hole is a plastic electrode socket holding a wet electrode, with a gel port straight down to the scalp. For motor imagery the key sites are C3 and C4 — they sit right over the left/right primary motor cortex. Imagine your left hand and the mu rhythm (8-12 Hz) near C4 drops; imagine the right hand and it shifts to C3. So these two holes must be placed precisely.'},
+  card_cap_k:  {cn:'关键：C3/C4 必须压在运动区上方 — 摆位偏了，想象左右手的信号就分不开', en:'Key: C3/C4 must sit over the motor cortex — misplacement and left/right imagery cannot be separated.'},
+  card_cap_n:  {cn:'拖拽看网帽下的电极座 + C3/C4 高亮孔位', en:'Drag to see sockets under the mesh and the highlighted C3/C4 holes.'},
+  // L2 card: single wet electrode + gel
+  card_elec_h: {cn:'[2] 单湿电极 + 导电胶 · 降阻抗', en:'[2] Wet electrode + gel · lowering impedance'},
+  card_elec_s: {cn:'Ag/AgCl 盘 + 导电胶怎么把接触电阻打下来', en:'How the Ag/AgCl disc + gel cut contact resistance'},
+  card_elec_p: {cn:'湿电极底部是一片银/氯化银 (Ag/AgCl) 圆盘 —— 这种材料和导电胶里的氯离子之间能发生稳定的可逆电化学反应，把头皮的离子电流干净地变成金属里的电子电流，几乎不漂移。但干头皮和角质层电阻很高 (常 >200 kΩ)，信号会被淹没。所以你用针管把导电胶注进电极座的小孔，胶填满金属盘和头皮之间的缝隙、软化角质层，把接触阻抗压到几 kΩ 甚至更低。阻抗越低、噪声越小，50 次想象试验录出来才干净可分。', en:'At the bottom of a wet electrode is a silver/silver-chloride (Ag/AgCl) disc — it does a stable reversible electrochemical reaction with the chloride ions in the gel, converting scalp ionic current into clean electron current in the metal with almost no drift. But dry skin and the keratin layer have very high resistance (often >200 kohm), drowning the signal. So you inject conductive gel through the socket hole; the gel fills the gap between disc and scalp and softens the keratin, dropping contact impedance to a few kΩ or less. Lower impedance, less noise — only then are your 50 imagery trials clean and separable.'},
+  card_elec_k: {cn:'关键：Ag/AgCl 盘 + 导电胶把接触阻抗从 >200kΩ 压到几 kΩ — 这是录到干净脑电的前提', en:'Key: Ag/AgCl disc + gel cut contact impedance from >200kΩ to a few kΩ — the prerequisite for clean EEG.'},
+  card_elec_n: {cn:'拖拽看针管注胶填满金属盘与头皮间的缝隙', en:'Drag to watch the syringe fill the gap between the disc and the scalp.'},
+};
+let LANG = 'cn';
+const t = k => (I18N[k] && I18N[k][LANG]) || (I18N[k] && I18N[k].en) || k;
+
+function refreshI18N() {
+  document.getElementById('title').textContent = t('title');
+  document.getElementById('subtitle').textContent = t('subtitle');
+  document.getElementById('lblHowto').textContent = LANG === 'cn' ? '使用方法' : 'HOW TO USE';
+  document.getElementById('lblParts').textContent = LANG === 'cn' ? '部件清单' : 'PARTS LIST';
+  document.getElementById('lblLegend').textContent = LANG === 'cn' ? '录制链路' : 'RECORDING CHAIN';
+  document.querySelectorAll('[data-i18n]').forEach(el => {
+    const key = el.getAttribute('data-i18n');
+    if (I18N[key]) el.textContent = t(key);
+  });
+  const ob = document.getElementById('btnOrbit');
+  if (ob) ob.textContent = autoOrbit ? t('stop_orbit') : t('auto_orbit');
+  updateCalloutText();
+}
+
+document.getElementById('langBtn').addEventListener('click', () => {
+  LANG = LANG === 'cn' ? 'en' : 'cn';
+  document.getElementById('langBtn').textContent = LANG.toUpperCase();
+  refreshI18N();
+  document.getElementById('hudDepth').textContent = currentZoom
+    ? hudDepthText(currentZoom)
+    : (LANG === 'cn' ? 'L0 · 整套佩戴' : 'L0 · Full kit');
+  if (currentZoom) renderZoomCard(currentZoom);
+});
+
+// ============================================================
+// MAT palette — 米黄手册风
+// ============================================================
+const MAT = {
+  paper:        0xf3ecdc,
+  paperShade:   0xe8dec5,
+  paperBright:  0xfff8e8,
+  ink:          0x2a2520,   // 唯一深色, 只用于 EdgesGeometry 描边
+  inkDim:       0x6a625a,
+  // 浅色物体填充 (所有 3D mesh 只能从这里选)
+  fillGrey1:    0xe8e4dc,
+  fillGrey2:    0xd4cebc,
+  fillGrey3:    0xb8b0a0,
+  fillMetal:    0xd0d4d8,
+  fillGlass:    0xc4d4dc,
+  fillPcb:      0xbdd4b8,   // 浅薄荷绿 PCB
+  fillWarm:     0xe8d4b8,
+  fillBlue:     0xc8d8e8,
+  // 学科 accent (engineering)
+  accent:       0x6a6a5e,
+  alert:        0xa35a40,
+  gold:         0xddc580,
+  grid1:        0x6a625a,
+  grid2:        0xb8a890,
+};
+
+// === Toon 渐变贴图 ===
+function makeToonGradient() {
+  const c = document.createElement('canvas');
+  c.width = 3; c.height = 1;
+  const cx = c.getContext('2d');
+  cx.fillStyle = '#505050'; cx.fillRect(0, 0, 1, 1);
+  cx.fillStyle = '#a8a8a8'; cx.fillRect(1, 0, 1, 1);
+  cx.fillStyle = '#ffffff'; cx.fillRect(2, 0, 1, 1);
+  const tex = new THREE.CanvasTexture(c);
+  tex.minFilter = THREE.NearestFilter;
+  tex.magFilter = THREE.NearestFilter;
+  tex.generateMipmaps = false;
+  return tex;
+}
+const TOON_GRADIENT = makeToonGradient();
+
+// === Toon mesh helper: 浅色填充 + EdgesGeometry 黑描边 ===
+function toonMesh(geom, color, opts = {}) {
+  const mat = new THREE.MeshToonMaterial({
+    color,
+    gradientMap: TOON_GRADIENT,
+    transparent: !!opts.transparent,
+    opacity: opts.opacity !== undefined ? opts.opacity : 1,
+    side: opts.side || THREE.FrontSide,
+  });
+  const m = new THREE.Mesh(geom, mat);
+  if (!opts.noEdges) {
+    const edges = new THREE.LineSegments(
+      new THREE.EdgesGeometry(geom, opts.edgeAngle || 30),
+      new THREE.LineBasicMaterial({ color: MAT.ink })
+    );
+    m.add(edges);
+  }
+  return m;
+}
+
+// === FLIPBOOK: 给一棵子树所有 toon/basic mesh 补黑描边 ===
+function addEdgesToAllMeshes(root, edgeAngle = 30) {
+  const edgeMat = new THREE.LineBasicMaterial({ color: MAT.ink });
+  root.traverse((obj) => {
+    if (obj.isMesh && obj.geometry && !obj.userData._hasEdges) {
+      const m = obj.material;
+      if (!m) return;
+      if (!(m.isMeshToonMaterial || m.isMeshBasicMaterial)) return;
+      const gt = obj.geometry.type;
+      if (gt === 'CircleGeometry' || gt === 'PlaneGeometry') return;
+      try {
+        const edges = new THREE.LineSegments(new THREE.EdgesGeometry(obj.geometry, edgeAngle), edgeMat);
+        edges.renderOrder = 1;
+        obj.add(edges);
+        obj.userData._hasEdges = true;
+      } catch (e) { /* 跳过不支持的 geometry */ }
+    }
+  });
+}
+
+// ============================================================
+// MAIN SCENE (L0) — 完整佩戴套件
+// ============================================================
+const mainCanvas = document.getElementById('canvas-main');
+const renderer = new THREE.WebGLRenderer({ canvas: mainCanvas, antialias: true, alpha: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.0;
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(MAT.paper);
+scene.fog = new THREE.Fog(MAT.paper, 110, 260);
+
+const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 600);
+const DEFAULT_CAM = new THREE.Vector3(26, 18, 34);
+camera.position.copy(DEFAULT_CAM);
+
+function resizeMain() {
+  const r = mainCanvas.parentElement.getBoundingClientRect();
+  if (r.width === 0 || r.height === 0) { requestAnimationFrame(resizeMain); return; }
+  renderer.setSize(r.width, r.height, true);
+  camera.aspect = r.width / r.height;
+  camera.updateProjectionMatrix();
+}
+window.addEventListener('resize', resizeMain);
+if (typeof ResizeObserver !== 'undefined') {
+  new ResizeObserver(resizeMain).observe(mainCanvas.parentElement);
+}
+requestAnimationFrame(() => requestAnimationFrame(resizeMain));
+
+const controls = new OrbitControls(camera, mainCanvas);
+controls.enableDamping = true;
+controls.dampingFactor = 0.08;
+controls.minDistance = 14;
+controls.maxDistance = 90;
+controls.target.set(0, 4, 0);
+
+// 灯光 (暖白主调 + 冷副 + 暖 rim + 半球)
+scene.add(new THREE.AmbientLight(0xfff5e0, 0.55));
+const keyLight = new THREE.DirectionalLight(0xfff8e8, 1.0);
+keyLight.position.set(18, 30, 16);
+keyLight.castShadow = true;
+keyLight.shadow.mapSize.set(2048, 2048);
+keyLight.shadow.camera.left = -32; keyLight.shadow.camera.right = 32;
+keyLight.shadow.camera.top = 32; keyLight.shadow.camera.bottom = -32;
+keyLight.shadow.bias = -0.0005;
+scene.add(keyLight);
+const fillLight = new THREE.DirectionalLight(0xc4d8e8, 0.35);
+fillLight.position.set(-18, 10, -14);
+scene.add(fillLight);
+const rimLight = new THREE.DirectionalLight(0xffd89a, 0.25);
+rimLight.position.set(8, -12, -20);
+scene.add(rimLight);
+scene.add(new THREE.HemisphereLight(0xffeed0, 0x6a5a4a, 0.4));
+
+const kit = new THREE.Group();
+scene.add(kit);
+
+const clickableParts = [];
+function tagClickable(obj, target, hoverKey) {
+  obj.userData.zoomTarget = target;
+  obj.userData.hoverKey = hoverKey;
+  obj.traverse?.(c => { c.userData.zoomTarget = target; c.userData.hoverKey = hoverKey; });
+  clickableParts.push(obj);
+}
+
+// 几何参考: 头中心在 (0, 7, 0), 头半径 ~3.4
+const HEAD_C = new THREE.Vector3(0, 7, 0);
+const HEAD_R = 3.4;
+
+// --- 头模 (头 + 颈 + 肩) ---
+function makeHead() {
+  const g = new THREE.Group();
+  // 头 (浅奶橙皮肤)
+  const head = toonMesh(new THREE.SphereGeometry(HEAD_R, 32, 24), MAT.fillWarm);
+  head.scale.set(1, 1.12, 1.04);
+  head.position.copy(HEAD_C);
+  head.castShadow = true;
+  g.add(head);
+  // 颈
+  const neck = toonMesh(new THREE.CylinderGeometry(1.2, 1.5, 2.4, 20), MAT.fillWarm);
+  neck.position.set(0, HEAD_C.y - HEAD_R - 0.6, 0);
+  g.add(neck);
+  // 肩/胸 (浅灰衣服)
+  const torso = toonMesh(new THREE.CylinderGeometry(3.6, 4.4, 5.0, 24), MAT.fillGrey2);
+  torso.position.set(0, HEAD_C.y - HEAD_R - 4.0, 0);
+  torso.castShadow = true; torso.receiveShadow = true;
+  g.add(torso);
+  // 鼻子小三角提示朝向 (+Z 是脸朝向)
+  const nose = toonMesh(new THREE.ConeGeometry(0.45, 0.9, 8), MAT.fillWarm);
+  nose.rotation.x = Math.PI/2;
+  nose.position.set(0, HEAD_C.y - 0.4, HEAD_R * 1.02 + 0.2);
+  g.add(nose);
+  kit.add(g);
+}
+makeHead();
+
+// --- 电极帽 (CLICKABLE) — 弹性网帽 + 电极孔位阵列 (10-20) ---
+const capGroup = new THREE.Group();
+// 记录 C3/C4 电极世界坐标, 给单电极引出 + 导线束起点
+let c3World = new THREE.Vector3(), c4World = new THREE.Vector3();
+function makeCap() {
+  // 网帽: 半透薄壳 (略大于头, 罩上半球)
+  const cap = toonMesh(
+    new THREE.SphereGeometry(HEAD_R + 0.25, 32, 20, 0, Math.PI*2, 0, Math.PI * 0.62),
+    MAT.fillGlass, { transparent: true, opacity: 0.42, side: THREE.DoubleSide }
+  );
+  cap.scale.set(1, 1.12, 1.04);
+  cap.position.copy(HEAD_C);
+  capGroup.add(cap);
+
+  // 网格经纬线 (描边感) — 用细 torus / line 提示弹性带
+  for (let i = 0; i < 6; i++) {
+    const ang = (i / 6) * Math.PI;
+    const band = new THREE.Mesh(
+      new THREE.TorusGeometry(HEAD_R + 0.27, 0.045, 6, 40, Math.PI),
+      new THREE.MeshToonMaterial({ color: MAT.accent })
+    );
+    band.position.copy(HEAD_C);
+    band.rotation.y = ang;
+    band.rotation.x = 0;
+    band.scale.set(1, 1.12, 1.04);
+    capGroup.add(band);
+  }
+
+  // 电极孔位阵列 (按 10-20 近似摆位; 球面坐标)
+  // [name, 方位角phi(绕Y, 0=前+Z), 极角theta(从顶点下来)]
+  const sites = [
+    {n:'Fp1', phi: 18, th: 62, motor:false}, {n:'Fp2', phi:-18, th:62, motor:false},
+    {n:'F3',  phi: 34, th: 42, motor:false}, {n:'F4',  phi:-34, th:42, motor:false},
+    {n:'Fz',  phi: 0,  th: 30, motor:false},
+    {n:'C3',  phi: 55, th: 28, motor:true },  {n:'C4', phi:-55, th:28, motor:true },
+    {n:'Cz',  phi: 0,  th: 2,  motor:false},
+    {n:'P3',  phi: 38, th: 46, motor:false, back:true}, {n:'P4', phi:-38, th:46, motor:false, back:true},
+    {n:'Pz',  phi: 0,  th: 38, motor:false, back:true},
+    {n:'O1',  phi: 20, th: 64, motor:false, back:true}, {n:'O2', phi:-20, th:64, motor:false, back:true},
+  ];
+  const phiSign = s => s.back ? Math.PI : 0; // back 用 -Z 半球
+  for (const s of sites) {
+    const phi = THREE.MathUtils.degToRad(s.phi) + (s.back ? Math.PI : 0);
+    const th = THREE.MathUtils.degToRad(s.th);
+    // 球面 -> 笛卡尔 (顶点 +Y; 脸朝 +Z)
+    const r = HEAD_R + 0.30;
+    const x = r * Math.sin(th) * Math.sin(phi);
+    const y = r * Math.cos(th);
+    const z = r * Math.sin(th) * Math.cos(phi);
+    const pos = new THREE.Vector3(x, y * 1.12, z * 1.04).add(HEAD_C);
+    const col = s.motor ? MAT.accent : MAT.fillMetal;
+    const disc = toonMesh(new THREE.CylinderGeometry(0.32, 0.32, 0.18, 16), col, {noEdges:true});
+    // 让电极盘法线朝外
+    const normal = pos.clone().sub(HEAD_C).normalize();
+    disc.position.copy(pos);
+    disc.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0), normal);
+    capGroup.add(disc);
+    // 描边圈
+    const ring = new THREE.Mesh(
+      new THREE.TorusGeometry(0.34, 0.04, 6, 18),
+      new THREE.MeshBasicMaterial({ color: MAT.ink })
+    );
+    ring.position.copy(pos);
+    ring.quaternion.setFromUnitVectors(new THREE.Vector3(0,0,1), normal);
+    capGroup.add(ring);
+    if (s.n === 'C3') c3World.copy(pos);
+    if (s.n === 'C4') c4World.copy(pos);
+  }
+}
+makeCap();
+kit.add(capGroup);
+tagClickable(capGroup, 'cap', 'hov_cap');
+
+// --- 单湿电极高亮 (CLICKABLE) — 放在 C3, 比其它略大 ---
+const elecGroup = new THREE.Group();
+function makeHighlightElectrode() {
+  const normal = c3World.clone().sub(HEAD_C).normalize();
+  // 电极座 (浅灰塑料)
+  const socket = toonMesh(new THREE.CylinderGeometry(0.5, 0.55, 0.5, 18), MAT.fillGrey2);
+  socket.position.copy(c3World).addScaledVector(normal, 0.18);
+  socket.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0), normal);
+  elecGroup.add(socket);
+  // 顶部注胶口 (accent)
+  const port = toonMesh(new THREE.CylinderGeometry(0.16, 0.16, 0.3, 12), MAT.accent, {noEdges:true});
+  port.position.copy(c3World).addScaledVector(normal, 0.55);
+  port.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0), normal);
+  elecGroup.add(port);
+  elecGroup.position.set(0,0,0);
+}
+makeHighlightElectrode();
+kit.add(elecGroup);
+tagClickable(elecGroup, 'electrode', 'hov_elec');
+
+// --- 导线束 (从 C3/C4 等电极汇到 Cyton) ---
+const CYTON_POS = new THREE.Vector3(5.6, HEAD_C.y - HEAD_R - 5.5, 3.2); // 挂胸前右侧
+function makeWireBundle() {
+  const g = new THREE.Group();
+  // 几条代表导线从顶部电极区汇到 Cyton
+  const starts = [
+    c3World.clone(), c4World.clone(),
+    HEAD_C.clone().add(new THREE.Vector3(1.5, HEAD_R + 0.4, 2.0)),
+    HEAD_C.clone().add(new THREE.Vector3(-1.5, HEAD_R + 0.4, 2.0)),
+    HEAD_C.clone().add(new THREE.Vector3(0, HEAD_R + 0.6, -1.5)),
+  ];
+  for (const s of starts) {
+    const mid = new THREE.Vector3(
+      (s.x + CYTON_POS.x) / 2 + 1.0,
+      Math.min(s.y, HEAD_C.y) - 1.0,
+      (s.z + CYTON_POS.z) / 2 + 0.6
+    );
+    const curve = new THREE.QuadraticBezierCurve3(s, mid, CYTON_POS.clone().add(new THREE.Vector3(0, 1.0, 0)));
+    const tube = new THREE.Mesh(
+      new THREE.TubeGeometry(curve, 28, 0.075, 7),
+      new THREE.MeshToonMaterial({ color: MAT.fillGrey3 })
+    );
+    g.add(tube);
+  }
+  kit.add(g);
+}
+makeWireBundle();
+
+// --- Cyton 板 (挂身侧) ---
+function makeCyton() {
+  const g = new THREE.Group();
+  // 主 PCB (浅薄荷绿)
+  const pcb = toonMesh(new THREE.BoxGeometry(2.8, 0.3, 2.8), MAT.fillPcb);
+  g.add(pcb);
+  // ADS1299 芯片
+  const chip = toonMesh(new THREE.BoxGeometry(1.0, 0.25, 1.0), MAT.fillGrey3);
+  chip.position.set(-0.5, 0.27, -0.3);
+  g.add(chip);
+  // 排针 (金)
+  for (let i = 0; i < 8; i++) {
+    const pin = toonMesh(new THREE.CylinderGeometry(0.04, 0.04, 0.5, 8), MAT.gold, {noEdges:true});
+    pin.position.set(-1.0 + i * 0.28, 0.4, 1.2);
+    g.add(pin);
+  }
+  // 丝印
+  const lc = document.createElement('canvas'); lc.width=256; lc.height=80;
+  const lctx = lc.getContext('2d'); lctx.clearRect(0,0,256,80);
+  lctx.fillStyle = '#2a2520'; lctx.font = 'bold 30px JetBrains Mono';
+  lctx.textAlign='center'; lctx.textBaseline='middle'; lctx.fillText('CYTON', 128, 40);
+  const lab = new THREE.Mesh(new THREE.PlaneGeometry(2.0, 0.62),
+    new THREE.MeshToonMaterial({ map: new THREE.CanvasTexture(lc), transparent: true }));
+  lab.rotation.x = -Math.PI/2; lab.position.set(0.7, 0.17, 0.8);
+  g.add(lab);
+  // 挂带 (从肩到板, accent 细带)
+  const strap = toonMesh(new THREE.BoxGeometry(0.3, 4.5, 0.12), MAT.accent, {noEdges:true});
+  strap.position.set(CYTON_POS.x - 1.2, CYTON_POS.y + 2.6, CYTON_POS.z - 0.4);
+  strap.rotation.z = 0.25;
+  kit.add(strap);
+
+  g.position.copy(CYTON_POS);
+  g.rotation.x = -0.35;
+  g.rotation.y = -0.4;
+  kit.add(g);
+}
+makeCyton();
+
+// --- 导电胶针管套件 (放桌上) ---
+const TABLE_Y = HEAD_C.y - HEAD_R - 6.6;
+function makeGelSyringe() {
+  const g = new THREE.Group();
+  // 针管筒 (半透玻璃)
+  const barrel = toonMesh(new THREE.CylinderGeometry(0.45, 0.45, 3.2, 18), MAT.fillGlass,
+    { transparent: true, opacity: 0.5 });
+  barrel.rotation.z = Math.PI/2;
+  g.add(barrel);
+  // 胶柱 (内部, warm) — 表示胶
+  const gel = toonMesh(new THREE.CylinderGeometry(0.36, 0.36, 2.0, 16), MAT.fillWarm, {noEdges:true});
+  gel.rotation.z = Math.PI/2; gel.position.x = -0.3;
+  g.add(gel);
+  // 推杆 (accent)
+  const plunger = toonMesh(new THREE.CylinderGeometry(0.18, 0.18, 1.4, 12), MAT.accent, {noEdges:true});
+  plunger.rotation.z = Math.PI/2; plunger.position.x = 2.3;
+  g.add(plunger);
+  // 推杆头盘
+  const cap = toonMesh(new THREE.CylinderGeometry(0.6, 0.6, 0.2, 18), MAT.fillGrey2);
+  cap.rotation.z = Math.PI/2; cap.position.x = 3.0;
+  g.add(cap);
+  // 钝针头 (金属细管)
+  const tip = toonMesh(new THREE.CylinderGeometry(0.07, 0.12, 1.0, 10), MAT.fillMetal, {noEdges:true});
+  tip.rotation.z = Math.PI/2; tip.position.x = -2.1;
+  g.add(tip);
+  g.position.set(-7.5, TABLE_Y + 0.5, 4.5);
+  g.rotation.y = 0.4;
+  g.rotation.z = -0.12;
+  kit.add(g);
+}
+makeGelSyringe();
+
+// --- 电脑 (笔记本, 摆桌上, dongle 插在它上面) ---
+function makeLaptop() {
+  const g = new THREE.Group();
+  // 底座
+  const base = toonMesh(new THREE.BoxGeometry(6.0, 0.3, 4.2), MAT.fillGrey2);
+  g.add(base);
+  // 屏幕
+  const screen = toonMesh(new THREE.BoxGeometry(6.0, 4.0, 0.25), MAT.fillGrey3);
+  screen.position.set(0, 2.0, -2.0);
+  screen.rotation.x = -0.28;
+  g.add(screen);
+  // 屏幕内容 (画 50 试验进度 + EEG 曲线)
+  const sc = document.createElement('canvas'); sc.width=320; sc.height=220;
+  const x = sc.getContext('2d');
+  x.fillStyle = '#fff8e8'; x.fillRect(0,0,320,220);
+  x.fillStyle = '#2a2520'; x.font = 'bold 22px JetBrains Mono';
+  x.fillText('RECORDING', 16, 30);
+  x.fillStyle = '#6a6a5e'; x.font = 'bold 18px JetBrains Mono';
+  x.fillText('TRIAL 50 / 50', 16, 58);
+  // 几条 EEG 曲线
+  x.strokeStyle = '#a35a40'; x.lineWidth = 2;
+  for (let row = 0; row < 4; row++) {
+    x.beginPath();
+    const y0 = 95 + row * 30;
+    for (let px = 0; px <= 300; px += 4) {
+      const yy = y0 + Math.sin(px * 0.12 + row) * 8 + Math.sin(px * 0.31 + row*2) * 4;
+      if (px === 0) x.moveTo(16 + px, yy); else x.lineTo(16 + px, yy);
+    }
+    x.stroke();
+  }
+  const scTex = new THREE.CanvasTexture(sc);
+  const disp = new THREE.Mesh(new THREE.PlaneGeometry(5.4, 3.5),
+    new THREE.MeshBasicMaterial({ map: scTex }));
+  disp.position.set(0, 2.0, -1.86);
+  disp.rotation.x = -0.28;
+  g.add(disp);
+  g.position.set(6.5, TABLE_Y + 0.15, -3.0);
+  g.rotation.y = -0.5;
+  kit.add(g);
+  return g;
+}
+const laptop = makeLaptop();
+
+// --- USB dongle (插在笔记本上) ---
+function makeDongle() {
+  const g = new THREE.Group();
+  const body = toonMesh(new THREE.BoxGeometry(1.3, 0.4, 0.7), MAT.fillGrey2);
+  g.add(body);
+  const usb = toonMesh(new THREE.BoxGeometry(0.7, 0.25, 0.5), MAT.fillMetal);
+  usb.position.set(-1.0, 0, 0);
+  g.add(usb);
+  const led = new THREE.Mesh(new THREE.SphereGeometry(0.08, 10, 10),
+    new THREE.MeshBasicMaterial({ color: MAT.accent }));
+  led.position.set(0.5, 0.24, 0);
+  g.add(led);
+  // 摆在笔记本底座右前角
+  g.position.set(9.0, TABLE_Y + 0.4, -1.4);
+  g.rotation.y = -0.5;
+  kit.add(g);
+}
+makeDongle();
+
+// --- 桌面 ---
+const table = toonMesh(new THREE.BoxGeometry(34, 0.6, 22), MAT.fillGrey1);
+table.position.set(0, TABLE_Y - 0.3, 0);
+table.receiveShadow = true;
+kit.add(table);
+
+// 地板 + grid
+const ground = new THREE.Mesh(new THREE.PlaneGeometry(120, 120), new THREE.ShadowMaterial({ opacity: 0.24 }));
+ground.rotation.x = -Math.PI/2;
+ground.position.y = TABLE_Y - 0.6;
+ground.receiveShadow = true;
+scene.add(ground);
+const grid = new THREE.GridHelper(90, 36, MAT.grid1, MAT.grid2);
+grid.position.y = TABLE_Y - 0.59;
+grid.material.transparent = true; grid.material.opacity = 0.32;
+scene.add(grid);
+
+// 主场景所有 mesh 补描边
+addEdgesToAllMeshes(scene);
+
+// ============================================================
+// L0 引出线标签 (HTML overlay 跟随部件)
+// ============================================================
+const callouts = [];
+function addCallout(key, worldPos) {
+  const el = document.createElement('div');
+  el.className = 'callout';
+  document.querySelector('.canvas-wrap').appendChild(el);
+  callouts.push({ el, pos: worldPos.clone(), key });
+}
+addCallout('co_cap',    HEAD_C.clone().add(new THREE.Vector3(0, HEAD_R + 1.6, 0)));
+addCallout('co_motor',  c3World.clone().add(new THREE.Vector3(0.4, 0.8, 0)));
+addCallout('co_bundle', new THREE.Vector3(3.0, HEAD_C.y - HEAD_R - 2.6, 2.6));
+addCallout('co_cyton',  CYTON_POS.clone().add(new THREE.Vector3(0, 1.8, 0)));
+addCallout('co_gel',    new THREE.Vector3(-7.5, TABLE_Y + 1.8, 4.5));
+addCallout('co_dongle', new THREE.Vector3(9.0, TABLE_Y + 1.4, -1.4));
+addCallout('co_pc',     new THREE.Vector3(6.5, TABLE_Y + 4.6, -3.0));
+
+function updateCalloutText() {
+  callouts.forEach(c => {
+    const txt = t(c.key);
+    c.el.innerHTML = '<span class="cn">' + txt + '</span>';
+  });
+}
+function updateCallouts() {
+  const r = mainCanvas.getBoundingClientRect();
+  callouts.forEach(c => {
+    const sp = c.pos.clone().project(camera);
+    const x = (sp.x * 0.5 + 0.5) * r.width;
+    const y = (-sp.y * 0.5 + 0.5) * r.height;
+    if (sp.z > 1 || x < 0 || x > r.width || y < 0 || y > r.height) {
+      c.el.style.display = 'none';
+    } else {
+      c.el.style.display = '';
+      c.el.style.left = x + 'px';
+      c.el.style.top = y + 'px';
+      const isHot = (hoveredTarget === 'cap' && (c.key === 'co_cap' || c.key === 'co_motor'))
+                 || (hoveredTarget === 'electrode' && c.key === 'co_motor');
+      c.el.classList.toggle('hot', isHot);
+    }
+  });
+}
+updateCalloutText();
+
+// ============================================================
+// Raycaster — hover + click
+// ============================================================
+const raycaster = new THREE.Raycaster();
+const pointer = new THREE.Vector2();
+let hoveredTarget = null;
+const clickPrompt = document.getElementById('clickPrompt');
+
+mainCanvas.addEventListener('pointermove', (e) => {
+  const r = mainCanvas.getBoundingClientRect();
+  pointer.x = ((e.clientX - r.left) / r.width) * 2 - 1;
+  pointer.y = -((e.clientY - r.top) / r.height) * 2 + 1;
+  raycaster.setFromCamera(pointer, camera);
+  const hits = raycaster.intersectObjects(clickableParts, true);
+  if (hits.length > 0) {
+    const o = hits[0].object;
+    const tgt = o.userData?.zoomTarget;
+    const hk = o.userData?.hoverKey;
+    if (tgt) {
+      hoveredTarget = tgt;
+      document.getElementById('hudHover').textContent = hk ? t(hk) : tgt;
+      mainCanvas.style.cursor = 'pointer';
+      clickPrompt.style.left = e.clientX + 'px';
+      clickPrompt.style.top = e.clientY + 'px';
+      clickPrompt.textContent = t('click_to_zoom');
+      clickPrompt.classList.add('show');
+      return;
+    }
+  }
+  hoveredTarget = null;
+  document.getElementById('hudHover').textContent = '--';
+  mainCanvas.style.cursor = 'grab';
+  clickPrompt.classList.remove('show');
+});
+mainCanvas.addEventListener('click', () => {
+  if (hoveredTarget) openZoom(hoveredTarget);
+});
+
+// ============================================================
+// 主循环 — 3D object 默认静止可拖拽
+// ============================================================
+let autoOrbit = false;
+mainCanvas.addEventListener('pointerdown', () => {
+  if (autoOrbit) {
+    autoOrbit = false;
+    const ob = document.getElementById('btnOrbit');
+    if (ob) ob.textContent = t('auto_orbit');
+  }
+});
+function animateMain() {
+  if (autoOrbit) {
+    const now = performance.now() * 0.0002;
+    camera.position.x = Math.cos(now) * 40;
+    camera.position.z = Math.sin(now) * 40;
+    camera.position.y = 18 + Math.sin(now * 1.3) * 3;
+    camera.lookAt(0, 4, 0);
+  }
+  controls.update();
+  renderer.render(scene, camera);
+  updateCallouts();
+  requestAnimationFrame(animateMain);
+}
+animateMain();
+
+// ============================================================
+// L1 / L2 子场景
+// ============================================================
+let currentZoom = null;
+let zoomRenderer = null, zoomScene = null, zoomCamera = null, zoomControls = null, zoomAnimId = null;
+const zoomCanvas = document.getElementById('canvas-zoom');
+
+function initZoomRenderer() {
+  if (zoomRenderer) return;
+  zoomRenderer = new THREE.WebGLRenderer({ canvas: zoomCanvas, antialias: true });
+  zoomRenderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  zoomRenderer.toneMapping = THREE.ACESFilmicToneMapping;
+  zoomRenderer.toneMappingExposure = 1.05;
+}
+function resizeZoom() {
+  const r = zoomCanvas.parentElement.getBoundingClientRect();
+  if (r.width === 0 || r.height === 0) return;
+  zoomRenderer.setSize(r.width, r.height, true);
+  if (zoomCamera) { zoomCamera.aspect = r.width / r.height; zoomCamera.updateProjectionMatrix(); }
+}
+window.addEventListener('resize', resizeZoom);
+function cleanupZoom() {
+  if (zoomAnimId) cancelAnimationFrame(zoomAnimId);
+  zoomAnimId = null; zoomScene = null; zoomCamera = null;
+  if (zoomControls) { zoomControls.dispose(); zoomControls = null; }
+}
+function setupSubScene() {
+  cleanupZoom();
+  zoomScene = new THREE.Scene();
+  zoomScene.background = new THREE.Color(MAT.paper);
+  zoomScene.fog = new THREE.Fog(MAT.paper, 24, 70);
+  zoomCamera = new THREE.PerspectiveCamera(45, 1, 0.01, 200);
+  zoomControls = new OrbitControls(zoomCamera, zoomCanvas);
+  zoomControls.enableDamping = true;
+  zoomControls.dampingFactor = 0.08;
+  zoomScene.add(new THREE.AmbientLight(0xfff5e0, 0.55));
+  const kl = new THREE.DirectionalLight(0xfff8e8, 1.0); kl.position.set(10, 14, 8); zoomScene.add(kl);
+  const fl = new THREE.DirectionalLight(0xc4d8e8, 0.35); fl.position.set(-10, 5, -8); zoomScene.add(fl);
+  const rim = new THREE.DirectionalLight(0xffd89a, 0.25); rim.position.set(6, -8, -14); zoomScene.add(rim);
+  zoomScene.add(new THREE.HemisphereLight(0xffeed0, 0x6a5a4a, 0.4));
+}
+function subFloor(y) {
+  const fl = new THREE.Mesh(new THREE.PlaneGeometry(30, 30), new THREE.ShadowMaterial({ opacity: 0.26 }));
+  fl.rotation.x = -Math.PI/2; fl.position.y = y; zoomScene.add(fl);
+  const gr = new THREE.GridHelper(30, 30, MAT.grid1, MAT.grid2);
+  gr.position.y = y; gr.material.transparent = true; gr.material.opacity = 0.25; zoomScene.add(gr);
+}
+
+// ---------- L1: 电极帽剖视 (孔位 + 电极座 + C3/C4 贴运动区) ----------
+function buildCapSubScene() {
+  setupSubScene();
+  zoomCamera.position.set(8, 6, 9);
+  zoomControls.target.set(0, 1, 0);
+
+  // 头皮半球 (剖一半: 露出运动皮层)
+  const scalp = toonMesh(
+    new THREE.SphereGeometry(4.2, 36, 24, 0, Math.PI, 0, Math.PI * 0.6),
+    MAT.fillWarm, { transparent: true, opacity: 0.55, side: THREE.DoubleSide }
+  );
+  scalp.rotation.y = -Math.PI/2;
+  zoomScene.add(scalp);
+  // 运动皮层条带 (左右各一, accent) — 标 C3/C4 压在上面
+  for (const sx of [-1, 1]) {
+    const strip = toonMesh(new THREE.TorusGeometry(2.6, 0.28, 8, 24, Math.PI * 0.5),
+      MAT.accent, {noEdges:true});
+    strip.position.set(0, 0.4, 0);
+    strip.rotation.z = sx > 0 ? (Math.PI*0.55) : (Math.PI*0.45);
+    strip.rotation.x = Math.PI/2 * sx * 0.0;
+    strip.scale.set(sx, 1, 1);
+    zoomScene.add(strip);
+  }
+  // 运动皮层条带 (简洁版: 两条沿冠状方向的弧, 标运动区)
+  const motorBand = toonMesh(new THREE.TorusGeometry(3.6, 0.3, 8, 40, Math.PI),
+    MAT.accent, {noEdges:true});
+  motorBand.rotation.z = Math.PI/2;
+  motorBand.position.y = 0.2;
+  zoomScene.add(motorBand);
+
+  // 弹性网帽剖面 (半透壳)
+  const cap = toonMesh(
+    new THREE.SphereGeometry(4.55, 36, 22, 0, Math.PI, 0, Math.PI * 0.6),
+    MAT.fillGlass, { transparent: true, opacity: 0.32, side: THREE.DoubleSide }
+  );
+  cap.rotation.y = -Math.PI/2;
+  zoomScene.add(cap);
+
+  // 电极孔位 + 座 (一排, 含 C3/C4 高亮)
+  const layout = [
+    {n:'F3', x:-2.4, z:2.0, motor:false}, {n:'Fz', x:0, z:2.4, motor:false}, {n:'F4', x:2.4, z:2.0, motor:false},
+    {n:'C3', x:-3.0, z:0, motor:true}, {n:'Cz', x:0, z:0.0, motor:false}, {n:'C4', x:3.0, z:0, motor:true},
+    {n:'P3', x:-2.4, z:-2.0, motor:false}, {n:'Pz', x:0, z:-2.4, motor:false}, {n:'P4', x:2.4, z:-2.0, motor:false},
+  ];
+  for (const s of layout) {
+    const r = 4.45;
+    const horiz = Math.sqrt(s.x*s.x + s.z*s.z);
+    const y = Math.sqrt(Math.max(0, r*r - horiz*horiz));
+    const pos = new THREE.Vector3(s.x, y, s.z);
+    const normal = pos.clone().normalize();
+    const col = s.motor ? MAT.accent : MAT.fillMetal;
+    // 电极座 (塑料)
+    const socket = toonMesh(new THREE.CylinderGeometry(0.4, 0.45, 0.5, 16), MAT.fillGrey2);
+    socket.position.copy(pos);
+    socket.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0), normal);
+    zoomScene.add(socket);
+    // 电极盘
+    const disc = toonMesh(new THREE.CylinderGeometry(0.3, 0.3, 0.16, 16), col, {noEdges:true});
+    disc.position.copy(pos).addScaledVector(normal, -0.1);
+    disc.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0), normal);
+    zoomScene.add(disc);
+    // 注胶口
+    const port = toonMesh(new THREE.CylinderGeometry(0.12, 0.12, 0.3, 10), s.motor?MAT.alert:MAT.accent, {noEdges:true});
+    port.position.copy(pos).addScaledVector(normal, 0.32);
+    port.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0), normal);
+    zoomScene.add(port);
+    // 名称标签
+    const lc = document.createElement('canvas'); lc.width=96; lc.height=48;
+    const cx = lc.getContext('2d'); cx.clearRect(0,0,96,48);
+    cx.fillStyle = s.motor ? '#a35a40' : '#2a2520';
+    cx.font = 'bold 30px JetBrains Mono'; cx.textAlign='center'; cx.textBaseline='middle';
+    cx.fillText(s.n, 48, 26);
+    const spr = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(lc), transparent: true }));
+    spr.scale.set(0.9, 0.45, 1);
+    spr.position.copy(pos).addScaledVector(normal, 0.9);
+    zoomScene.add(spr);
+  }
+  // "运动区 MOTOR" 标签
+  {
+    const lc = document.createElement('canvas'); lc.width=256; lc.height=64;
+    const cx = lc.getContext('2d'); cx.clearRect(0,0,256,64);
+    cx.fillStyle = '#a35a40'; cx.font = 'bold 30px JetBrains Mono';
+    cx.textAlign='center'; cx.textBaseline='middle';
+    cx.fillText(LANG==='cn'?'运动区':'MOTOR CORTEX', 128, 32);
+    const spr = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(lc), transparent: true }));
+    spr.scale.set(2.4, 0.6, 1); spr.position.set(0, 1.0, 0.0);
+    zoomScene.add(spr);
+  }
+  subFloor(-3.4);
+}
+
+// ---------- L2: 单湿电极 + 导电胶注射 (Ag/AgCl 盘 + 降阻抗) ----------
+function buildElectrodeSubScene() {
+  setupSubScene();
+  zoomCamera.position.set(5, 4, 7);
+  zoomControls.target.set(0, 0.5, 0);
+
+  // 头皮一小块 (warm 平板 + 角质层)
+  const skin = toonMesh(new THREE.CylinderGeometry(3.0, 3.0, 0.6, 32), MAT.fillWarm);
+  skin.position.y = -1.0;
+  zoomScene.add(skin);
+  // 角质层 (薄, fillGrey2)
+  const keratin = toonMesh(new THREE.CylinderGeometry(3.0, 3.0, 0.16, 32), MAT.fillGrey2, {noEdges:true});
+  keratin.position.y = -0.62;
+  zoomScene.add(keratin);
+  // 头发几根 (提示头皮)
+  for (let i = 0; i < 10; i++) {
+    const ang = (i/10) * Math.PI * 2;
+    const hair = toonMesh(new THREE.CylinderGeometry(0.03, 0.03, 1.0, 6), MAT.fillGrey3, {noEdges:true});
+    hair.position.set(Math.cos(ang)*2.4, -0.1, Math.sin(ang)*2.4);
+    hair.rotation.z = 0.3 * Math.cos(ang);
+    zoomScene.add(hair);
+  }
+
+  // 电极座 (塑料, 中空)
+  const socket = toonMesh(new THREE.CylinderGeometry(1.3, 1.4, 1.4, 32, 1, true), MAT.fillGrey2,
+    { side: THREE.DoubleSide });
+  socket.position.y = 0.6;
+  zoomScene.add(socket);
+  // 顶盖带注胶孔 (环)
+  const topRing = toonMesh(new THREE.TorusGeometry(0.9, 0.18, 10, 32), MAT.fillGrey2);
+  topRing.rotation.x = Math.PI/2; topRing.position.y = 1.3;
+  zoomScene.add(topRing);
+
+  // Ag/AgCl 圆盘 (浅金属银, 在座底部贴近头皮)
+  const disc = toonMesh(new THREE.CylinderGeometry(1.0, 1.0, 0.2, 32), MAT.fillMetal);
+  disc.position.y = -0.05;
+  zoomScene.add(disc);
+  // Ag/AgCl 标签
+  {
+    const lc = document.createElement('canvas'); lc.width=256; lc.height=72;
+    const cx = lc.getContext('2d'); cx.clearRect(0,0,256,72);
+    cx.fillStyle = '#2a2520'; cx.font = 'bold 34px JetBrains Mono';
+    cx.textAlign='center'; cx.textBaseline='middle'; cx.fillText('Ag/AgCl', 128, 36);
+    const spr = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(lc), transparent: true }));
+    spr.scale.set(2.0, 0.56, 1); spr.position.set(-2.4, 0.0, 0);
+    zoomScene.add(spr);
+  }
+
+  // 导电胶 (accent warm 填满盘与头皮之间 + 座内) — 半透
+  const gel = toonMesh(new THREE.CylinderGeometry(0.95, 0.95, 0.5, 28), MAT.fillWarm,
+    { transparent: true, opacity: 0.7, noEdges: true });
+  gel.position.y = -0.32;
+  zoomScene.add(gel);
+  const gelInSocket = toonMesh(new THREE.CylinderGeometry(0.7, 0.85, 0.9, 24), MAT.fillWarm,
+    { transparent: true, opacity: 0.55, noEdges: true });
+  gelInSocket.position.y = 0.4;
+  zoomScene.add(gelInSocket);
+  // 胶标签
+  {
+    const lc = document.createElement('canvas'); lc.width=256; lc.height=72;
+    const cx = lc.getContext('2d'); cx.clearRect(0,0,256,72);
+    cx.fillStyle = '#6a6a5e'; cx.font = 'bold 30px JetBrains Mono';
+    cx.textAlign='center'; cx.textBaseline='middle';
+    cx.fillText(LANG==='cn'?'导电胶':'GEL', 128, 36);
+    const spr = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(lc), transparent: true }));
+    spr.scale.set(1.8, 0.5, 1); spr.position.set(2.4, 0.2, 0);
+    zoomScene.add(spr);
+  }
+
+  // 针管从上方注入 (倾斜)
+  const syr = new THREE.Group();
+  const barrel = toonMesh(new THREE.CylinderGeometry(0.4, 0.4, 2.6, 18), MAT.fillGlass,
+    { transparent: true, opacity: 0.5 });
+  syr.add(barrel);
+  const plunger = toonMesh(new THREE.CylinderGeometry(0.16, 0.16, 1.2, 12), MAT.accent, {noEdges:true});
+  plunger.position.y = 1.6; syr.add(plunger);
+  const tip = toonMesh(new THREE.CylinderGeometry(0.06, 0.1, 1.0, 10), MAT.fillMetal, {noEdges:true});
+  tip.position.y = -1.7; syr.add(tip);
+  syr.position.set(0.0, 2.8, 0.0);
+  syr.rotation.z = 0.0;
+  zoomScene.add(syr);
+
+  // 阻抗箭头标注: 红下降 (>200kΩ -> 几kΩ)
+  {
+    const lc = document.createElement('canvas'); lc.width=320; lc.height=96;
+    const cx = lc.getContext('2d'); cx.clearRect(0,0,320,96);
+    cx.fillStyle = '#a35a40'; cx.font = 'bold 26px JetBrains Mono';
+    cx.textAlign='center'; cx.textBaseline='middle';
+    cx.fillText(LANG==='cn'?'阻抗 >200kΩ → 几kΩ':'Z >200kΩ → few kΩ', 160, 48);
+    const spr = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(lc), transparent: true }));
+    spr.scale.set(3.2, 0.96, 1); spr.position.set(0, -1.8, 0);
+    zoomScene.add(spr);
+  }
+
+  // 接触电流箭头 (从头皮经胶经盘向上, accent) — 几段小锥头
+  for (let i = 0; i < 3; i++) {
+    const arrow = toonMesh(new THREE.ConeGeometry(0.12, 0.3, 8), MAT.accent, {noEdges:true});
+    arrow.position.set(-0.6 + i * 0.6, 0.2 + i * 0.0, 0);
+    zoomScene.add(arrow);
+  }
+
+  subFloor(-1.4);
+}
+
+// ============================================================
+// Zoom modal 管理
+// ============================================================
+const SCENE_BUILDERS = { cap: buildCapSubScene, electrode: buildElectrodeSubScene };
+
+function hudDepthText(target) {
+  const lvl = target === 'cap' ? 'L1' : 'L2';
+  const partName = target === 'cap' ? t('hov_cap') : t('hov_elec');
+  return `${lvl} · ${partName}`;
+}
+
+function openZoom(target) {
+  if (!SCENE_BUILDERS[target]) return;
+  currentZoom = target;
+  document.getElementById('zoomModal').classList.remove('hidden');
+  document.getElementById('hudDepth').textContent = hudDepthText(target);
+  initZoomRenderer();
+  SCENE_BUILDERS[target]();
+  if (zoomScene) addEdgesToAllMeshes(zoomScene);
+  renderZoomCard(target);
+  setTimeout(resizeZoom, 50);
+  function loop() {
+    if (zoomScene && zoomCamera) {
+      zoomControls.update();
+      zoomRenderer.render(zoomScene, zoomCamera);
+    }
+    zoomAnimId = requestAnimationFrame(loop);
+  }
+  loop();
+}
+function closeZoom() {
+  document.getElementById('zoomModal').classList.add('hidden');
+  cleanupZoom();
+  currentZoom = null;
+  document.getElementById('hudDepth').textContent = LANG === 'cn' ? 'L0 · 整套佩戴' : 'L0 · Full kit';
+}
+document.getElementById('zoomClose').addEventListener('click', closeZoom);
+document.getElementById('zoomBack').addEventListener('click', closeZoom);
+
+function renderZoomCard(target) {
+  const prefix = target === 'cap' ? 'cap' : 'elec';
+  document.getElementById('zoomCrumb').textContent = target === 'cap' ? t('hov_cap') : t('hov_elec');
+  document.getElementById('zoomTitle').textContent = t(`card_${prefix}_h`);
+  document.getElementById('zoomSub').textContent = t(`card_${prefix}_s`);
+  document.getElementById('zoomDesc').textContent = t(`card_${prefix}_p`);
+  const keyLbl = LANG === 'cn' ? '关键' : 'Key';
+  document.getElementById('zoomKey').innerHTML = '<strong>' + keyLbl + '</strong>: ' + t(`card_${prefix}_k`).replace(/^关键：|^Key: /, '');
+  document.getElementById('zoomNote').textContent = t(`card_${prefix}_n`);
+}
+
+// sidebar 部件清单 (可点击的两项跳转)
+document.querySelectorAll('.part-row[data-jump]').forEach(r => {
+  r.addEventListener('click', () => openZoom(r.getAttribute('data-jump')));
+});
+
+document.getElementById('btnReset').addEventListener('click', () => {
+  camera.position.copy(DEFAULT_CAM);
+  controls.target.set(0, 4, 0);
+  autoOrbit = false;
+  document.getElementById('btnOrbit').textContent = t('auto_orbit');
+});
+document.getElementById('btnOrbit').addEventListener('click', (e) => {
+  autoOrbit = !autoOrbit;
+  e.currentTarget.textContent = autoOrbit ? t('stop_orbit') : t('auto_orbit');
+});
+
+refreshI18N();
+document.getElementById('btnOrbit').textContent = t('auto_orbit');
+</script>
+</body>
+</html>

@@ -1,0 +1,741 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>M42 · 个人 vs 通用模型 — 对照实验设计</title>
+<script>window.__systemedu_resize_patch_optout=true;</script>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Inter:wght@400;500;700&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;}
+:root{
+  /* 第 1 层 — shared deep-space */
+  --bg-0: oklch(0.14 0.035 265);
+  --bg-1: oklch(0.18 0.04 265);
+  --bg-2: oklch(0.22 0.045 265);
+  --bg-3: oklch(0.28 0.05 265);
+  --line: oklch(0.35 0.05 265 / 0.35);
+  --line-strong: oklch(0.55 0.08 265 / 0.55);
+  --fg:      oklch(0.96 0.01 265);
+  --fg-dim:  oklch(0.75 0.02 265);
+  --fg-mute: oklch(0.55 0.03 265);
+
+  /* 第 2 层 — cs accent (signal cyan) */
+  --cs: oklch(0.75 0.17 200);
+
+  /* 第 3 层 — cs palette (Data Cathedral) */
+  --signal: oklch(0.75 0.17 200);
+  --core:   oklch(0.55 0.16 200);
+  --depth:  oklch(0.35 0.10 210);
+  --flash:  oklch(0.92 0.08 190);
+  --query:  oklch(0.85 0.14 85);
+}
+html,body{width:100%;height:100vh;overflow:hidden;background:var(--bg-0);color:var(--fg);font-family:'Inter','Noto Sans SC',sans-serif;}
+.game-wrap{display:flex;flex-direction:row;height:100vh;overflow:hidden;}
+
+/* ── Sidebar (200px) ── */
+.game-sidebar{
+  width:200px;min-width:200px;max-width:200px;
+  display:flex;flex-direction:column;gap:7px;padding:11px 10px;
+  background:var(--bg-1);
+  border-right:1px solid var(--line);
+  overflow-y:auto;
+}
+.sidebar-brand{
+  font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;
+  letter-spacing:0.15em;text-transform:uppercase;color:var(--cs);
+}
+.sidebar-title{
+  font-family:'Noto Sans SC',sans-serif;font-size:13px;font-weight:700;
+  color:var(--fg);line-height:1.3;
+}
+.sidebar-sub{
+  font-family:'JetBrains Mono',monospace;font-size:9px;
+  color:var(--fg-mute);letter-spacing:0.10em;text-transform:uppercase;
+}
+.sidebar-divider{height:1px;background:var(--line);margin:3px 0;}
+.sidebar-section{
+  font-family:'JetBrains Mono',monospace;font-size:9px;font-weight:700;
+  color:var(--fg-mute);letter-spacing:0.18em;text-transform:uppercase;
+  margin-top:1px;
+}
+.sidebar-goal{
+  font-family:'Noto Sans SC',sans-serif;font-size:10.5px;
+  color:var(--fg-dim);line-height:1.55;
+}
+
+/* mascot Bit — cubic sprite */
+.mascot-wrap{display:flex;justify-content:center;align-items:center;padding:4px 0 0 0;}
+.mascot-wrap svg{width:74px;height:74px;}
+
+/* route map */
+.route{display:flex;flex-direction:column;gap:3px;}
+.route-row{display:flex;align-items:center;gap:7px;padding:3px 6px;border:1px solid transparent;}
+.route-dot{width:8px;height:8px;flex-shrink:0;background:var(--depth);}
+.route-txt{
+  font-family:'JetBrains Mono',monospace;font-size:9px;font-weight:700;
+  letter-spacing:0.06em;color:var(--fg-mute);text-transform:uppercase;
+}
+.route-row.done .route-dot{background:var(--core);}
+.route-row.done .route-txt{color:var(--fg-dim);}
+.route-row.here{border:1px solid var(--cs);background:rgba(80,200,220,0.08);}
+.route-row.here .route-dot{background:var(--cs);}
+.route-row.here .route-txt{color:var(--cs);}
+
+/* unlock badge */
+.unlock-row{
+  display:flex;align-items:center;gap:6px;
+  padding:5px 7px;border:1px dashed var(--line-strong);background:var(--bg-2);
+}
+.unlock-dot{width:8px;height:8px;background:var(--depth);flex-shrink:0;}
+.unlock-txt{
+  font-family:'JetBrains Mono',monospace;font-size:8.5px;font-weight:700;
+  letter-spacing:0.08em;text-transform:uppercase;color:var(--fg-dim);line-height:1.35;
+}
+.unlock-row.cleared{border:1px solid var(--query);background:rgba(220,190,90,0.08);}
+.unlock-row.cleared .unlock-dot{background:var(--query);}
+.unlock-row.cleared .unlock-txt{color:var(--query);}
+
+/* mc silhouette */
+.mc-anchor{display:flex;align-items:center;gap:6px;margin-top:auto;padding-top:6px;}
+.mc-anchor svg{width:26px;height:26px;flex-shrink:0;}
+.mc-anchor span{
+  font-family:'JetBrains Mono',monospace;font-size:8px;
+  color:var(--fg-mute);letter-spacing:0.05em;line-height:1.3;
+}
+
+.lang-btn{
+  align-self:stretch;flex-shrink:0;margin-top:4px;
+  font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:700;
+  padding:6px 9px;cursor:pointer;
+  border:1px solid var(--cs);background:transparent;color:var(--cs);
+  letter-spacing:0.15em;text-transform:uppercase;
+  box-shadow:3px 3px 0 var(--bg-0);
+}
+.lang-btn:hover{background:var(--bg-2);}
+.lang-btn:active{transform:translate(2px,2px);box-shadow:1px 1px 0 var(--bg-0);}
+
+/* ── Main area ── */
+.game-main{flex:1;display:flex;flex-direction:column;min-width:0;}
+.game-hud{
+  display:flex;align-items:center;justify-content:space-between;gap:14px;
+  padding:9px 18px;background:var(--bg-1);
+  border-bottom:1px solid var(--line);flex-shrink:0;
+}
+.hud-q{
+  font-family:'Noto Sans SC',sans-serif;font-size:12.5px;font-weight:700;
+  color:var(--flash);line-height:1.4;
+}
+.hud-q .accent{color:var(--cs);}
+.hud-items{display:flex;gap:16px;}
+.hud-item{display:flex;flex-direction:column;align-items:flex-end;gap:1px;min-width:88px;}
+.hud-label{
+  font-family:'JetBrains Mono',monospace;font-size:8px;
+  letter-spacing:0.16em;color:var(--fg-mute);text-transform:uppercase;
+}
+.hud-val{
+  font-family:'JetBrains Mono',monospace;font-size:15px;font-weight:700;
+  color:var(--cs);letter-spacing:0.04em;
+}
+.hud-val.good{color:var(--query);}
+.hud-val.bad{color:var(--core);}
+
+.game-body{
+  flex:1;display:flex;flex-direction:column;min-height:0;
+  background:var(--bg-0);position:relative;overflow:hidden;
+}
+.lab{flex:1;display:flex;flex-direction:row;min-height:0;}
+
+/* design columns */
+.arm{
+  flex:1;display:flex;flex-direction:column;min-width:0;min-height:0;
+  border-right:1px solid var(--line);
+}
+.arm:last-child{border-right:none;}
+.arm-head{
+  padding:8px 14px;background:var(--bg-1);border-bottom:1px solid var(--line);
+  display:flex;align-items:center;justify-content:space-between;gap:8px;flex-shrink:0;
+}
+.arm-name{
+  font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;
+  letter-spacing:0.1em;text-transform:uppercase;
+}
+.arm.personal .arm-name{color:var(--cs);}
+.arm.generic .arm-name{color:var(--fg-dim);}
+.arm-tag{
+  font-family:'JetBrains Mono',monospace;font-size:8px;
+  color:var(--fg-mute);letter-spacing:0.1em;text-transform:uppercase;
+}
+.arm-body{flex:1;padding:12px 14px;display:flex;flex-direction:column;gap:11px;overflow-y:auto;min-height:0;}
+
+/* config rows */
+.cfg{display:flex;flex-direction:column;gap:5px;}
+.cfg-label{
+  font-family:'JetBrains Mono',monospace;font-size:9px;font-weight:700;
+  letter-spacing:0.12em;text-transform:uppercase;color:var(--fg-mute);
+}
+.cfg-opts{display:flex;flex-direction:column;gap:5px;}
+.opt{
+  font-family:'JetBrains Mono',monospace;font-size:10px;
+  padding:7px 9px;cursor:pointer;
+  border:1px solid var(--line);background:var(--bg-2);color:var(--fg-dim);
+  letter-spacing:0.03em;transition:all .08s;
+  display:flex;align-items:center;justify-content:space-between;gap:6px;
+}
+.opt:hover{border-color:var(--line-strong);background:var(--bg-3);}
+.opt.sel{
+  border-color:var(--cs);background:rgba(80,200,220,0.1);color:var(--flash);
+  box-shadow:2px 2px 0 var(--bg-0);
+}
+.opt .meta{font-size:8px;color:var(--fg-mute);letter-spacing:0.04em;}
+.opt.sel .meta{color:var(--cs);}
+
+/* control panel center */
+.control{
+  width:220px;flex-shrink:0;background:var(--bg-1);
+  border-left:1px solid var(--line);border-right:1px solid var(--line);
+  display:flex;flex-direction:column;padding:12px 13px;gap:10px;overflow-y:auto;
+}
+.control-title{
+  font-family:'JetBrains Mono',monospace;font-size:9.5px;font-weight:700;
+  letter-spacing:0.16em;text-transform:uppercase;color:var(--cs);
+}
+.check-list{display:flex;flex-direction:column;gap:6px;}
+.check{
+  display:flex;align-items:flex-start;gap:7px;
+  font-family:'JetBrains Mono',monospace;font-size:9px;line-height:1.4;
+  color:var(--fg-mute);letter-spacing:0.02em;
+}
+.check .box{
+  width:11px;height:11px;flex-shrink:0;margin-top:1px;
+  border:1px solid var(--line-strong);background:var(--bg-0);
+}
+.check.ok{color:var(--query);}
+.check.ok .box{background:var(--query);border-color:var(--query);}
+.check.bad{color:var(--core);}
+.check.bad .box{background:var(--core);border-color:var(--core);}
+
+.run-btn{
+  font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;
+  padding:9px 10px;cursor:pointer;width:100%;
+  border:1px solid var(--cs);background:var(--cs);color:var(--bg-0);
+  letter-spacing:0.14em;text-transform:uppercase;
+  box-shadow:3px 3px 0 var(--bg-0);transition:all .08s;
+}
+.run-btn:hover{background:var(--flash);}
+.run-btn:active{transform:translate(2px,2px);box-shadow:1px 1px 0 var(--bg-0);}
+.run-btn:disabled{
+  border-color:var(--line);background:var(--bg-3);color:var(--fg-mute);
+  cursor:not-allowed;box-shadow:none;
+}
+.reset-btn{
+  font-family:'JetBrains Mono',monospace;font-size:9.5px;font-weight:700;
+  padding:7px 10px;cursor:pointer;width:100%;
+  border:1px solid var(--line-strong);background:transparent;color:var(--fg-dim);
+  letter-spacing:0.12em;text-transform:uppercase;
+}
+.reset-btn:hover{background:var(--bg-2);color:var(--fg);}
+
+.verdict{
+  font-family:'Noto Sans SC',sans-serif;font-size:10px;line-height:1.5;
+  padding:8px 9px;border:1px solid var(--line-strong);background:var(--bg-2);
+  color:var(--fg-dim);min-height:34px;
+}
+.verdict.valid{border-color:var(--query);background:rgba(220,190,90,0.08);color:var(--query);}
+.verdict.invalid{border-color:var(--core);background:rgba(70,150,170,0.06);color:var(--flash);}
+
+/* result chart overlay */
+.result-bars{
+  display:flex;flex-direction:column;gap:9px;margin-top:2px;
+}
+.bar-row{display:flex;flex-direction:column;gap:3px;}
+.bar-top{display:flex;justify-content:space-between;align-items:baseline;}
+.bar-name{
+  font-family:'JetBrains Mono',monospace;font-size:9px;font-weight:700;
+  letter-spacing:0.06em;text-transform:uppercase;
+}
+.bar-name.p{color:var(--cs);}
+.bar-name.g{color:var(--fg-dim);}
+.bar-pct{
+  font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:700;
+  letter-spacing:0.04em;
+}
+.bar-pct.p{color:var(--cs);}
+.bar-pct.g{color:var(--fg-dim);}
+.bar-track{height:10px;background:var(--bg-3);overflow:hidden;}
+.bar-fill{height:100%;width:0;transition:width .7s cubic-bezier(.22,1,.36,1);}
+.bar-fill.p{background:var(--cs);}
+.bar-fill.g{background:var(--depth);}
+.lead-tag{
+  font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;
+  letter-spacing:0.05em;text-align:center;padding:5px;margin-top:2px;
+}
+.lead-tag.valid{color:var(--query);}
+.lead-tag.invalid{color:var(--core);}
+
+.fair-note{
+  font-family:'JetBrains Mono',monospace;font-size:8px;
+  color:var(--fg-mute);letter-spacing:0.04em;line-height:1.5;margin-top:auto;
+}
+</style>
+</head>
+<body>
+<div class="game-wrap">
+  <!-- ───────── Sidebar ───────── -->
+  <aside class="game-sidebar">
+    <div class="sidebar-brand">CS-01</div>
+    <div class="sidebar-title" id="sb-title">对照实验师</div>
+    <div class="sidebar-sub" id="sb-sub">M42 · Personal vs Generic</div>
+
+    <div class="mascot-wrap" aria-hidden="true">
+      <svg viewBox="0 0 80 80" id="mascot">
+        <rect x="22" y="22" width="36" height="36" fill="none" stroke="var(--cs)" stroke-width="2"/>
+        <rect x="30" y="30" width="9" height="9" fill="var(--signal)"/>
+        <rect x="41" y="30" width="9" height="9" fill="var(--core)"/>
+        <rect x="30" y="41" width="9" height="9" fill="var(--core)"/>
+        <rect x="41" y="41" width="9" height="9" fill="var(--query)"/>
+        <line x1="40" y1="10" x2="40" y2="22" stroke="var(--cs)" stroke-width="1.5"/>
+        <circle cx="40" cy="9" r="2.5" fill="var(--flash)"/>
+      </svg>
+    </div>
+
+    <div class="sidebar-divider"></div>
+    <div class="sidebar-section" id="sb-route-h">项目路线 S1-S6</div>
+    <div class="route" id="route"></div>
+
+    <div class="sidebar-divider"></div>
+    <div class="sidebar-section" id="sb-goal-h">本关任务</div>
+    <div class="sidebar-goal" id="sb-goal">设计一次<b>公平对照</b>实验：同算法、同数据划分，只换"用谁的脑数据训练"。证明个人模型真的更懂你。</div>
+
+    <div class="unlock-row" id="unlock">
+      <div class="unlock-dot"></div>
+      <div class="unlock-txt" id="unlock-txt">未解锁：对照实验师</div>
+    </div>
+
+    <div class="mc-anchor" aria-hidden="true">
+      <svg viewBox="0 0 32 32">
+        <rect x="6" y="6" width="9" height="9" fill="var(--depth)"/>
+        <rect x="17" y="6" width="9" height="9" fill="var(--core)"/>
+        <rect x="6" y="17" width="9" height="9" fill="var(--core)"/>
+        <rect x="17" y="17" width="9" height="9" fill="var(--depth)"/>
+        <rect x="11" y="11" width="10" height="10" fill="none" stroke="var(--cs)" stroke-width="1.5"/>
+      </svg>
+      <span id="mc-txt">终点：脑控 Minecraft<br>S4 训练你自己的脑</span>
+    </div>
+
+    <button class="lang-btn" id="langBtn">中 / EN</button>
+  </aside>
+
+  <!-- ───────── Main ───────── -->
+  <main class="game-main">
+    <div class="game-hud">
+      <div class="hud-q" id="hud-q">用<span class="accent">你自己</span>的脑数据训，真的比通用模型好吗？公平比一比。</div>
+      <div class="hud-items">
+        <div class="hud-item">
+          <div class="hud-label" id="hl-fair">对照公平度</div>
+          <div class="hud-val" id="hv-fair">--</div>
+        </div>
+        <div class="hud-item">
+          <div class="hud-label" id="hl-lead">个人模型领先</div>
+          <div class="hud-val" id="hv-lead">--</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="game-body">
+      <div class="lab">
+        <!-- A 组：个人模型 -->
+        <section class="arm personal">
+          <div class="arm-head">
+            <div class="arm-name" id="armP-name">A 组 · 个人模型</div>
+            <div class="arm-tag" id="armP-tag">用你的脑数据</div>
+          </div>
+          <div class="arm-body" id="armP-body"></div>
+        </section>
+
+        <!-- 控制台 -->
+        <section class="control">
+          <div class="control-title" id="ctrl-title">对照检查清单</div>
+          <div class="check-list" id="check-list"></div>
+          <button class="run-btn" id="runBtn" disabled>运行对照实验</button>
+          <button class="reset-btn" id="resetBtn">重置设计</button>
+          <div class="verdict" id="verdict">先把两组配置好。<b>变量只许差一个</b>：训练用谁的脑数据。其他全锁死才算公平。</div>
+          <div class="result-bars" id="result-bars" style="display:none;">
+            <div class="bar-row">
+              <div class="bar-top">
+                <div class="bar-name p" id="rb-p">个人模型</div>
+                <div class="bar-pct p" id="rp-p">--</div>
+              </div>
+              <div class="bar-track"><div class="bar-fill p" id="rf-p"></div></div>
+            </div>
+            <div class="bar-row">
+              <div class="bar-top">
+                <div class="bar-name g" id="rb-g">通用模型</div>
+                <div class="bar-pct g" id="rp-g">--</div>
+              </div>
+              <div class="bar-track"><div class="bar-fill g" id="rf-g"></div></div>
+            </div>
+            <div class="lead-tag" id="lead-tag"></div>
+          </div>
+          <div class="fair-note" id="fair-note">提示：让 A 组偷偷用更多数据或更强算法，领先会更大——但那不是公平比较，结论作废。</div>
+        </section>
+
+        <!-- B 组：通用模型 -->
+        <section class="arm generic">
+          <div class="arm-head">
+            <div class="arm-name" id="armG-name">B 组 · 通用模型</div>
+            <div class="arm-tag" id="armG-tag">用别人的脑数据</div>
+          </div>
+          <div class="arm-body" id="armG-body"></div>
+        </section>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script>
+var LANG='cn';
+var I18N={
+  sb_title:{cn:'对照实验师',en:'Control Designer'},
+  sb_sub:{cn:'M42 · Personal vs Generic',en:'M42 · Personal vs Generic'},
+  sb_route_h:{cn:'项目路线 S1-S6',en:'Project Route S1-S6'},
+  sb_goal_h:{cn:'本关任务',en:'Mission'},
+  sb_goal:{cn:'设计一次<b>公平对照</b>实验：同算法、同数据划分，只换"用谁的脑数据训练"。证明个人模型真的更懂你。',
+           en:'Design a <b>fair controlled</b> trial: same algorithm, same split, change only "whose brain data trains it". Prove the personal model truly fits you.'},
+  unlock_locked:{cn:'未解锁：对照实验师',en:'Locked: Control Designer'},
+  unlock_done:{cn:'已解锁：对照实验师！',en:'Unlocked: Control Designer!'},
+  mc_txt:{cn:'终点：脑控 Minecraft<br>S4 训练你自己的脑',en:'Goal: brain-controlled Minecraft<br>S4 train your own brain'},
+  hud_q:{cn:'用<span class="accent">你自己</span>的脑数据训，真的比通用模型好吗？公平比一比。',
+         en:'Does training on <span class="accent">your own</span> brain beat a generic model? Compare fairly.'},
+  hl_fair:{cn:'对照公平度',en:'Fairness'},
+  hl_lead:{cn:'个人模型领先',en:'Personal lead'},
+  armP_name:{cn:'A 组 · 个人模型',en:'Arm A · Personal'},
+  armP_tag:{cn:'用你的脑数据',en:'your brain data'},
+  armG_name:{cn:'B 组 · 通用模型',en:'Arm B · Generic'},
+  armG_tag:{cn:'用别人的脑数据',en:'others\' brain data'},
+  ctrl_title:{cn:'对照检查清单',en:'Control Checklist'},
+  run:{cn:'运行对照实验',en:'Run Trial'},
+  reset:{cn:'重置设计',en:'Reset'},
+  verdict_init:{cn:'先把两组配置好。<b>变量只许差一个</b>：训练用谁的脑数据。其他全锁死才算公平。',
+                en:'Configure both arms. <b>Only one variable may differ</b>: whose brain data. Lock everything else for a fair test.'},
+  verdict_partial:{cn:'每个设置项两组都要选。还差一些。',en:'Both arms need every field set. A few left.'},
+  fair_note:{cn:'提示：让 A 组偷偷用更多数据或更强算法，领先会更大——但那不是公平比较，结论作废。',
+             en:'Tip: secretly give A more data or a stronger algorithm and the lead grows — but it is not a fair test, the result is void.'},
+  bar_p:{cn:'个人模型',en:'Personal'},
+  bar_g:{cn:'通用模型',en:'Generic'},
+  // checklist labels
+  chk_alg:{cn:'同算法（控制变量）',en:'Same algorithm (controlled)'},
+  chk_split:{cn:'同训练/测试划分',en:'Same train/test split'},
+  chk_amt:{cn:'同数据量',en:'Same data amount'},
+  chk_feat:{cn:'同特征（频带）',en:'Same features (bands)'},
+  chk_diff:{cn:'只差「用谁的脑训练」',en:'Differs only by whose brain'},
+  // config field labels
+  f_alg:{cn:'算法',en:'Algorithm'},
+  f_split:{cn:'训练/测试划分',en:'Train/Test split'},
+  f_amt:{cn:'训练数据量',en:'Training amount'},
+  f_feat:{cn:'输入特征',en:'Input features'},
+  f_src:{cn:'训练脑数据来源',en:'Training brain source'},
+  // verdicts
+  v_valid:{cn:'公平对照成立。同算法同划分，只换训练脑数据——个人模型领先 <b id="vlead"></b>pts。结论可信：你自己的脑训出来的模型，确实更懂你。',
+           en:'Fair control holds. Same algorithm & split, only the training brain changed — personal model leads <b id="vlead"></b>pts. Valid: your own brain makes a model that fits you better.'},
+  v_invalid:{cn:'不公平！两组除了"训练脑来源"还差了别的 (<b id="vwhy"></b>)。这下分不清领先是因为"更懂你"还是因为"占了便宜"——结论作废，重新控变量。',
+             en:'Unfair! Besides the brain source, the arms also differ in (<b id="vwhy"></b>). Now you cannot tell if the lead came from "fitting you" or "an unfair edge" — result void, control your variables.'},
+  lead_valid:{cn:'公平结论：个人模型领先 +PTS pts',en:'Fair result: personal model leads +PTS pts'},
+  lead_invalid:{cn:'结论作废：未控变量',en:'Result void: uncontrolled variables'},
+  // route stations
+  route:{cn:['S1 采脑电','S2 看信号','S3 拆特征','S4 训练你的脑','S5 解码动作','S6 接 Minecraft'],
+         en:['S1 record EEG','S2 read signal','S3 features','S4 train your brain','S5 decode','S6 to Minecraft']},
+  // option meta
+  why_diff:{cn:'两组不同',en:'arms differ'}
+};
+function t(k){return (I18N[k]&&I18N[k][LANG])||(I18N[k]&&I18N[k].en)||k;}
+
+// ── config fields ──
+// each field has options; "value" key is what must MATCH between arms to be controlled
+// the ONLY field allowed to differ is "src"
+var FIELDS=[
+  {id:'alg', label:'f_alg', controlled:true,
+    opts:[
+      {v:'lda', cn:'LDA 线性判别', en:'LDA', strength:0},
+      {v:'svm', cn:'SVM 支持向量机', en:'SVM', strength:6},
+      {v:'csp_lda', cn:'CSP+LDA', en:'CSP+LDA', strength:3}
+    ]},
+  {id:'split', label:'f_split', controlled:true,
+    opts:[
+      {v:'80_20', cn:'80% 训 / 20% 测', en:'80/20', strength:0},
+      {v:'50_50', cn:'50% 训 / 50% 测', en:'50/50', strength:-4},
+      {v:'leak',  cn:'测试集也拿来训', en:'test leaks in', strength:12}
+    ]},
+  {id:'amt', label:'f_amt', controlled:true,
+    opts:[
+      {v:'40', cn:'40 次试次', en:'40 trials', strength:0},
+      {v:'120', cn:'120 次试次', en:'120 trials', strength:5},
+      {v:'200', cn:'200 次试次', en:'200 trials', strength:8}
+    ]},
+  {id:'feat', label:'f_feat', controlled:true,
+    opts:[
+      {v:'mu', cn:'mu 节律 (8-12Hz)', en:'mu (8-12Hz)', strength:0},
+      {v:'mu_beta', cn:'mu+beta (8-30Hz)', en:'mu+beta', strength:4},
+      {v:'all', cn:'全频带 (1-40Hz)', en:'all 1-40Hz', strength:2}
+    ]},
+  {id:'src', label:'f_src', controlled:false,
+    opts:[
+      {v:'self', cn:'你自己的脑', en:'your own brain', strength:0},
+      {v:'others', cn:'别人的脑（通用）', en:'others (generic)', strength:0}
+    ]}
+];
+
+// state: choices for arm A (personal) and arm B (generic)
+var stateA={}, stateB={};
+
+function fieldOptLabel(o){return LANG==='cn'?o.cn:o.en;}
+
+function buildArm(armId, store){
+  var body=document.getElementById(armId);
+  body.innerHTML='';
+  FIELDS.forEach(function(f){
+    var wrap=document.createElement('div');
+    wrap.className='cfg';
+    var lab=document.createElement('div');
+    lab.className='cfg-label';
+    lab.textContent=t(f.label);
+    wrap.appendChild(lab);
+    var opts=document.createElement('div');
+    opts.className='cfg-opts';
+    f.opts.forEach(function(o){
+      var btn=document.createElement('div');
+      btn.className='opt';
+      btn.setAttribute('data-field',f.id);
+      btn.setAttribute('data-val',o.v);
+      if(store[f.id]===o.v) btn.classList.add('sel');
+      var nm=document.createElement('span');
+      nm.textContent=fieldOptLabel(o);
+      btn.appendChild(nm);
+      btn.addEventListener('click',function(){
+        store[f.id]=o.v;
+        buildArm(armId, store);
+        refreshChecks();
+        hideResult();
+      });
+      opts.appendChild(btn);
+    });
+    wrap.appendChild(opts);
+    body.appendChild(wrap);
+  });
+}
+
+function allSet(){
+  return FIELDS.every(function(f){return stateA[f.id]!==undefined && stateB[f.id]!==undefined;});
+}
+
+// fairness: controlled fields must match; src must differ
+function evalDesign(){
+  var mismatched=[]; // controlled fields that differ -> unfair
+  FIELDS.forEach(function(f){
+    if(f.controlled && stateA[f.id]!==stateB[f.id]) mismatched.push(f);
+  });
+  var srcDiffers = stateA.src!==undefined && stateB.src!==undefined && stateA.src!==stateB.src;
+  var fair = mismatched.length===0 && srcDiffers;
+  return {mismatched:mismatched, srcDiffers:srcDiffers, fair:fair};
+}
+
+function refreshChecks(){
+  var cl=document.getElementById('check-list');
+  cl.innerHTML='';
+  var ev=evalDesign();
+  // per-controlled-field checks
+  var checks=[
+    {key:'chk_alg', field:'alg'},
+    {key:'chk_split', field:'split'},
+    {key:'chk_amt', field:'amt'},
+    {key:'chk_feat', field:'feat'},
+    {key:'chk_diff', field:'__src'}
+  ];
+  checks.forEach(function(c){
+    var row=document.createElement('div');
+    row.className='check';
+    var ok=false;
+    if(c.field==='__src'){
+      ok=ev.srcDiffers;
+    }else{
+      ok = stateA[c.field]!==undefined && stateB[c.field]!==undefined && stateA[c.field]===stateB[c.field];
+      if(stateA[c.field]!==undefined && stateB[c.field]!==undefined && !ok) row.classList.add('bad');
+    }
+    if(ok) row.classList.add('ok');
+    var box=document.createElement('div'); box.className='box';
+    var txt=document.createElement('div'); txt.textContent=t(c.key);
+    row.appendChild(box); row.appendChild(txt);
+    cl.appendChild(row);
+  });
+  // fairness HUD
+  var fairEl=document.getElementById('hv-fair');
+  if(!allSet()){
+    fairEl.textContent='--'; fairEl.className='hud-val';
+  }else if(ev.fair){
+    fairEl.textContent='100%'; fairEl.className='hud-val good';
+  }else{
+    var bad = ev.mismatched.length + (ev.srcDiffers?0:1);
+    var pct = Math.max(0, Math.round((1 - bad/5)*100));
+    fairEl.textContent=pct+'%'; fairEl.className='hud-val bad';
+  }
+  // run button
+  document.getElementById('runBtn').disabled = !allSet();
+  // verdict baseline (only if result hidden)
+  if(document.getElementById('result-bars').style.display==='none'){
+    var v=document.getElementById('verdict');
+    v.className='verdict';
+    v.innerHTML = allSet()? t('verdict_init') : t('verdict_partial');
+  }
+}
+
+function hideResult(){
+  document.getElementById('result-bars').style.display='none';
+  document.getElementById('hv-lead').textContent='--';
+  document.getElementById('hv-lead').className='hud-val';
+}
+
+// accuracy model: base + sum(strength of chosen controlled opts) + personal bonus
+function armScore(store, isPersonal){
+  var base=55;
+  FIELDS.forEach(function(f){
+    if(f.id==='src') return;
+    var o=f.opts.find(function(x){return x.v===store[f.id];});
+    if(o) base+=o.strength;
+  });
+  // the genuine "personal fits you" effect — only applies when source = self
+  if(store.src==='self') base+=15;
+  // clamp
+  return Math.max(45, Math.min(96, base));
+}
+
+function runTrial(){
+  if(!allSet()) return;
+  var ev=evalDesign();
+  // determine which arm is personal by src=self
+  var pStore = stateA.src==='self'?stateA:(stateB.src==='self'?stateB:stateA);
+  var gStore = pStore===stateA?stateB:stateA;
+  var pAcc=armScore(pStore,true);
+  var gAcc=armScore(gStore,false);
+  var lead = pAcc - gAcc;
+
+  // show bars
+  var rb=document.getElementById('result-bars');
+  rb.style.display='flex';
+  document.getElementById('rp-p').textContent=pAcc+'%';
+  document.getElementById('rp-g').textContent=gAcc+'%';
+  // animate
+  document.getElementById('rf-p').style.width='0';
+  document.getElementById('rf-g').style.width='0';
+  requestAnimationFrame(function(){
+    requestAnimationFrame(function(){
+      document.getElementById('rf-p').style.width=pAcc+'%';
+      document.getElementById('rf-g').style.width=gAcc+'%';
+    });
+  });
+
+  var leadEl=document.getElementById('hv-lead');
+  var leadTag=document.getElementById('lead-tag');
+  var verdict=document.getElementById('verdict');
+
+  if(ev.fair){
+    leadEl.textContent='+'+lead+'pts';
+    leadEl.className='hud-val good';
+    leadTag.className='lead-tag valid';
+    leadTag.textContent=t('lead_valid').replace('PTS', lead);
+    verdict.className='verdict valid';
+    verdict.innerHTML=t('v_valid');
+    var vl=document.getElementById('vlead'); if(vl) vl.textContent=lead;
+    // unlock
+    setUnlock(true);
+  }else{
+    leadEl.textContent='void';
+    leadEl.className='hud-val bad';
+    leadTag.className='lead-tag invalid';
+    leadTag.textContent=t('lead_invalid');
+    verdict.className='verdict invalid';
+    verdict.innerHTML=t('v_invalid');
+    // explain why
+    var reasons=ev.mismatched.map(function(f){return t(f.label);});
+    if(!ev.srcDiffers) reasons.push(LANG==='cn'?'两组训练脑来源相同':'same brain source');
+    var vw=document.getElementById('vwhy'); if(vw) vw.textContent=reasons.join(', ');
+  }
+}
+
+var unlocked=false;
+function setUnlock(on){
+  unlocked=on;
+  var u=document.getElementById('unlock');
+  var ut=document.getElementById('unlock-txt');
+  if(on){u.classList.add('cleared'); ut.textContent=t('unlock_done')+ (LANG==='cn'?' 个人模型确实更懂你，冲 70% 有戏。':' Personal model truly fits you — 70% is in reach.');}
+  else{u.classList.remove('cleared'); ut.textContent=t('unlock_locked');}
+}
+
+function resetDesign(){
+  stateA={}; stateB={};
+  unlocked=false;
+  buildArm('armP-body', stateA);
+  buildArm('armG-body', stateB);
+  hideResult();
+  setUnlock(false);
+  refreshChecks();
+}
+
+function buildRoute(){
+  var r=document.getElementById('route');
+  r.innerHTML='';
+  var labels=I18N.route[LANG];
+  labels.forEach(function(lab,i){
+    var row=document.createElement('div');
+    row.className='route-row';
+    if(i<3) row.classList.add('done');
+    if(i===3) row.classList.add('here');
+    var dot=document.createElement('div'); dot.className='route-dot';
+    var txt=document.createElement('div'); txt.className='route-txt'; txt.textContent=lab;
+    row.appendChild(dot); row.appendChild(txt);
+    r.appendChild(row);
+  });
+}
+
+function applyLang(){
+  document.getElementById('sb-title').textContent=t('sb_title');
+  document.getElementById('sb-sub').textContent=t('sb_sub');
+  document.getElementById('sb-route-h').textContent=t('sb_route_h');
+  document.getElementById('sb-goal-h').textContent=t('sb_goal_h');
+  document.getElementById('sb-goal').innerHTML=t('sb_goal');
+  document.getElementById('mc-txt').innerHTML=t('mc_txt');
+  document.getElementById('hud-q').innerHTML=t('hud_q');
+  document.getElementById('hl-fair').textContent=t('hl_fair');
+  document.getElementById('hl-lead').textContent=t('hl_lead');
+  document.getElementById('armP-name').textContent=t('armP_name');
+  document.getElementById('armP-tag').textContent=t('armP_tag');
+  document.getElementById('armG-name').textContent=t('armG_name');
+  document.getElementById('armG-tag').textContent=t('armG_tag');
+  document.getElementById('ctrl-title').textContent=t('ctrl_title');
+  document.getElementById('runBtn').textContent=t('run');
+  document.getElementById('resetBtn').textContent=t('reset');
+  document.getElementById('fair-note').textContent=t('fair_note');
+  document.getElementById('rb-p').textContent=t('bar_p');
+  document.getElementById('rb-g').textContent=t('bar_g');
+  buildRoute();
+  buildArm('armP-body', stateA);
+  buildArm('armG-body', stateB);
+  setUnlock(unlocked);
+  refreshChecks();
+}
+
+document.getElementById('langBtn').addEventListener('click',function(){
+  LANG = LANG==='cn'?'en':'cn';
+  applyLang();
+});
+document.getElementById('runBtn').addEventListener('click', runTrial);
+document.getElementById('resetBtn').addEventListener('click', resetDesign);
+
+// init
+buildRoute();
+buildArm('armP-body', stateA);
+buildArm('armG-body', stateB);
+refreshChecks();
+setUnlock(false);
+</script>
+</body>
+</html>

@@ -1,0 +1,671 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>洗净你自己录的数据 — S2 流水线连续清洁自录脏数据</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&family=Noto+Sans+SC:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    /* 第1层 共享深空底 (所有 26 套统一) */
+    --bg-0: oklch(0.14 0.035 265);
+    --bg-1: oklch(0.18 0.04 265);
+    --bg-2: oklch(0.22 0.045 265);
+    --bg-3: oklch(0.28 0.05 265);
+    --line: oklch(0.35 0.05 265 / 0.35);
+    --line-strong: oklch(0.55 0.08 265 / 0.55);
+    --fg: oklch(0.96 0.01 265);
+    --fg-dim: oklch(0.75 0.02 265);
+    --fg-mute: oklch(0.55 0.03 265);
+    --gold: oklch(0.85 0.14 85);
+    /* 第2层 cs accent (cyan) */
+    --cs: oklch(0.75 0.17 200);
+    /* 第3层 cs 5色 palette */
+    --signal: oklch(0.75 0.17 200);
+    --core:   oklch(0.55 0.16 200);
+    --depth:  oklch(0.35 0.10 210);
+    --flash:  oklch(0.92 0.08 190);
+    --query:  oklch(0.85 0.14 85);
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;height:100vh;overflow:hidden;}
+  body{
+    background:var(--bg-0);
+    color:var(--fg);
+    font-family:'Inter','Noto Sans SC',system-ui,sans-serif;
+    display:flex;
+    -webkit-font-smoothing:antialiased;
+  }
+  .mono{font-family:'JetBrains Mono',ui-monospace,Menlo,monospace;}
+
+  /* ---------- Sidebar ---------- */
+  .sidebar{
+    width:200px;flex-shrink:0;height:100vh;
+    background:var(--bg-1);
+    border-right:1px solid var(--line);
+    display:flex;flex-direction:column;
+    padding:20px 16px;gap:15px;
+  }
+  .brand{
+    font-size:13px;font-weight:700;letter-spacing:.02em;color:var(--fg);
+    padding-bottom:13px;border-bottom:1px solid var(--line);
+  }
+  .brand-sub{display:block;margin-top:6px;font-size:11px;font-weight:500;color:var(--fg-dim);}
+  .deco{
+    width:100%;height:108px;
+    background:var(--bg-2);
+    border:1px solid var(--line);
+    border-radius:8px;
+    display:flex;align-items:center;justify-content:center;
+  }
+  .deco svg{width:96px;height:96px;}
+  .guide{display:flex;flex-direction:column;gap:9px;margin-top:2px;list-style:none;padding:0;}
+  .guide-li{
+    font-size:11.5px;line-height:1.5;color:var(--fg-dim);
+    padding:2px 0 2px 10px;border-left:2px solid var(--line-strong);
+    transition:color .25s,border-color .25s;
+  }
+  .guide-li.hl{border-left-color:var(--cs);color:var(--fg);}
+
+  /* ---------- 项目进度路线图 (S1-S6) ---------- */
+  .route{display:flex;flex-direction:column;gap:0;margin-top:2px;}
+  .route-ttl{
+    font-size:10px;font-weight:700;letter-spacing:.08em;color:var(--fg-mute);
+    font-family:'JetBrains Mono',monospace;margin-bottom:7px;text-transform:uppercase;
+  }
+  .route-step{
+    display:flex;align-items:center;gap:8px;
+    font-size:10.5px;line-height:1.25;color:var(--fg-mute);
+    padding:3px 0;position:relative;
+  }
+  .route-dot{
+    width:8px;height:8px;border-radius:50%;flex-shrink:0;
+    background:var(--bg-3);border:1.5px solid var(--line-strong);
+  }
+  .route-step.done .route-dot{background:var(--core);border-color:var(--core);}
+  .route-step.cur{color:var(--fg);font-weight:700;}
+  .route-step.cur .route-dot{
+    background:var(--cs);border-color:var(--flash);
+    box-shadow:0 0 0 3px oklch(0.75 0.17 200 / 0.25);
+  }
+  .route-step::before{
+    content:'';position:absolute;left:3.5px;top:-6px;width:1.5px;height:12px;
+    background:var(--line);
+  }
+  .route-step:first-of-type::before{display:none;}
+  .route-step.done::before{background:var(--core);}
+  .route-here{
+    font-size:8.5px;font-family:'JetBrains Mono',monospace;font-weight:700;
+    color:var(--cs);margin-left:auto;letter-spacing:.04em;
+  }
+
+  .lang-btn{
+    margin-top:auto;
+    font-family:'JetBrains Mono',monospace;
+    font-size:11px;font-weight:600;letter-spacing:.06em;
+    padding:8px 12px;cursor:pointer;
+    background:var(--bg-2);color:var(--fg);
+    border:1px solid var(--line-strong);
+    border-radius:6px;
+    box-shadow:3px 3px 0 var(--bg-0);
+    transition:transform .1s, background .12s;
+  }
+  .lang-btn:hover{background:var(--bg-3);transform:translate(-1px,-1px);}
+  .lang-btn:active{transform:translate(1px,1px);box-shadow:1px 1px 0 var(--bg-0);}
+
+  /* ---------- Main stage ---------- */
+  .main{
+    flex:1;height:100vh;position:relative;overflow:hidden;
+    background:var(--bg-0);
+  }
+  #stage{position:absolute;inset:0;width:100%;height:100%;display:block;}
+
+  .hud{
+    position:absolute;top:16px;right:16px;z-index:5;
+    background:oklch(0.18 0.04 265 / 0.82);
+    border:1px solid var(--line-strong);
+    border-radius:8px;padding:10px 13px;
+    font-family:'JetBrains Mono',monospace;font-size:11px;
+    min-width:172px;box-shadow:3px 3px 0 var(--bg-0);
+    backdrop-filter:blur(2px);
+  }
+  .hud-row{display:flex;justify-content:space-between;gap:14px;line-height:1.7;}
+  .hud-lbl{color:var(--fg-dim);}
+  .hud-val{color:var(--cs);font-weight:700;}
+  .hud-val.gold{color:var(--gold);}
+
+  .sub{
+    position:absolute;left:50%;bottom:24px;transform:translateX(-50%);
+    z-index:5;text-align:center;width:88%;max-width:820px;pointer-events:none;
+  }
+  .sub-zh{
+    display:inline-block;font-size:19px;font-weight:700;color:var(--fg);
+    background:oklch(0.18 0.04 265 / 0.86);
+    border:1px solid var(--line-strong);
+    padding:7px 20px;border-radius:8px;
+    box-shadow:3px 3px 0 var(--bg-0);
+  }
+  .sub-en{margin-top:6px;font-size:12.5px;font-style:italic;color:var(--fg-dim);}
+
+  /* ---------- 终点徽记 (Minecraft 角色剪影, 右下角) ---------- */
+  .goal-badge{
+    position:absolute;right:16px;bottom:108px;z-index:6;
+    display:flex;align-items:center;gap:9px;
+    background:oklch(0.18 0.04 265 / 0.78);
+    border:1px solid var(--line-strong);
+    border-radius:8px;padding:7px 11px 7px 8px;
+    box-shadow:3px 3px 0 var(--bg-0);backdrop-filter:blur(2px);
+  }
+  .goal-badge svg{width:24px;height:28px;flex-shrink:0;}
+  .goal-badge .gtxt{font-size:10px;line-height:1.35;color:var(--fg-dim);max-width:128px;}
+  .goal-badge .gtxt b{color:var(--fg);font-weight:700;}
+</style>
+</head>
+<body>
+
+<aside class="sidebar">
+  <div class="brand">SystemEdu<span class="brand-sub" id="brandSub">洗净自录数据 · EEG M41</span></div>
+  <!-- mascot: Bit — 悬浮立方精灵 (cs) -->
+  <div class="deco">
+    <svg viewBox="0 0 96 96" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <g opacity="0.9">
+        <path d="M48 14 L74 27 L74 57 L48 70 L22 57 L22 27 Z" fill="var(--depth)" stroke="var(--core)" stroke-width="2"/>
+        <path d="M48 14 L74 27 L48 40 L22 27 Z" fill="var(--core)" stroke="var(--signal)" stroke-width="1.6"/>
+        <path d="M48 40 L48 70 L22 57 L22 27 Z" fill="var(--depth)" stroke="var(--core)" stroke-width="1.2" opacity="0.85"/>
+        <path d="M48 40 L48 70 L74 57 L74 27 Z" fill="var(--bg-2)" stroke="var(--core)" stroke-width="1.2" opacity="0.85"/>
+      </g>
+      <!-- 内部像素重排 (cs mascot 特征) -->
+      <rect x="33" y="30" width="6" height="6" rx="1" fill="var(--signal)"/>
+      <rect x="55" y="30" width="6" height="6" rx="1" fill="var(--flash)"/>
+      <rect x="43" y="50" width="6" height="6" rx="1" fill="var(--query)"/>
+      <rect x="33" y="56" width="6" height="6" rx="1" fill="var(--core)"/>
+      <rect x="55" y="56" width="6" height="6" rx="1" fill="var(--signal)"/>
+      <!-- 眼 -->
+      <rect x="40" y="44" width="4" height="4" fill="var(--flash)"/>
+      <rect x="52" y="44" width="4" height="4" fill="var(--flash)"/>
+    </svg>
+  </div>
+  <ul class="guide" id="guide">
+    <li class="guide-li hl" data-f="0">你自己录的数据比公开数据脏</li>
+    <li class="guide-li" data-f="1">同一批数据流进 S2 流水线</li>
+    <li class="guide-li" data-f="2">坏 epoch 被连续识别、剔除</li>
+    <li class="guide-li" data-f="3">干净数据从噪声里浮出来</li>
+  </ul>
+
+  <!-- 项目进度路线图: 高亮 S4 (你在这) -->
+  <nav class="route" id="route" aria-label="project route">
+    <div class="route-ttl" id="routeTtl">BCI 项目路线</div>
+    <div class="route-step done"><span class="route-dot"></span><span data-s="1">S1 认识脑波</span></div>
+    <div class="route-step done"><span class="route-dot"></span><span data-s="2">S2 清洁信号</span></div>
+    <div class="route-step done"><span class="route-dot"></span><span data-s="3">S3 找特征训分类器</span></div>
+    <div class="route-step cur"><span class="route-dot"></span><span data-s="4">S4 自录冲准</span><span class="route-here" id="routeHere">你在这</span></div>
+    <div class="route-step"><span class="route-dot"></span><span data-s="5">S5 接 Minecraft</span></div>
+    <div class="route-step"><span class="route-dot"></span><span data-s="6">S6 分享</span></div>
+  </nav>
+
+  <button id="langBtn" class="lang-btn">中 / EN</button>
+</aside>
+
+<main class="main">
+  <canvas id="stage"></canvas>
+
+  <div class="hud">
+    <div class="hud-row"><span class="hud-lbl">stage</span><span class="hud-val" id="hStage">capture</span></div>
+    <div class="hud-row"><span class="hud-lbl">source</span><span class="hud-val" id="hSrc">self</span></div>
+    <div class="hud-row"><span class="hud-lbl">epochs in</span><span class="hud-val" id="hIn">0</span></div>
+    <div class="hud-row"><span class="hud-lbl">dropped</span><span class="hud-val" id="hDrop">0</span></div>
+    <div class="hud-row"><span class="hud-lbl">kept clean</span><span class="hud-val" id="hKeep">0</span></div>
+  </div>
+
+  <div class="sub">
+    <div class="sub-zh" id="subZh">你录的数据带着真实环境噪声，用 S2 学的流水线洗干净</div>
+    <div class="sub-en" id="subEn">Your own recording carries real noise — clean it with the S2 pipeline</div>
+  </div>
+
+  <!-- 终点徽记: Minecraft 角色剪影 -->
+  <div class="goal-badge" aria-label="project goal">
+    <svg viewBox="0 0 24 28" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <rect x="5" y="1" width="13" height="12" rx="1" fill="var(--core)" stroke="var(--flash)" stroke-width="1"/>
+      <rect x="8" y="4.5" width="2.4" height="2.4" fill="var(--bg-0)"/>
+      <rect x="13" y="4.5" width="2.4" height="2.4" fill="var(--bg-0)"/>
+      <rect x="9" y="8.5" width="5" height="1.5" fill="var(--bg-0)" opacity="0.7"/>
+      <rect x="6" y="14" width="11" height="9" rx="1" fill="var(--depth)" stroke="var(--line-strong)" stroke-width="0.8"/>
+      <rect x="2.5" y="15" width="3.2" height="7.4" rx="0.6" fill="var(--depth)"/>
+      <rect x="17.5" y="15" width="3.2" height="7.4" rx="0.6" fill="var(--depth)"/>
+      <rect x="8" y="23" width="2.8" height="4" fill="var(--depth)"/>
+      <rect x="12.5" y="23" width="2.8" height="4" fill="var(--depth)"/>
+    </svg>
+    <span class="gtxt" id="goalTxt">终点：<b>用念头让它动</b></span>
+  </div>
+</main>
+
+<script>
+/* ===================== i18n ===================== */
+var LANG = 'cn';
+var I18N = {
+  brandSub: {cn:'洗净自录数据 · EEG M41', en:'Clean Your Data · EEG M41'},
+  guide: {
+    cn:['你自己录的数据比公开数据脏','同一批数据流进 S2 流水线','坏 epoch 被连续识别、剔除','干净数据从噪声里浮出来'],
+    en:['Your recording is dirtier than public data','The same batch flows into the S2 pipeline','Bad epochs are flagged and dropped, one by one','Clean data emerges from the noise']
+  },
+  /* subCues — 跟随同一批数据的清洁进程 */
+  s0:{cn:'你录的数据带着真实环境噪声，用 S2 学的流水线洗干净',
+      en:'Your own recording carries real noise — clean it with the S2 pipeline'},
+  s1:{cn:'自录比公开数据脏：动作多、环境噪大，眨眼和肌电更频繁',
+      en:'Self-recorded is dirtier: more movement, more ambient noise, more blinks and muscle bursts'},
+  s2:{cn:'还是 S2 那条流水线：滤波 → 切片 → ICA → 剔伪迹，逐段处理',
+      en:'Same S2 pipeline: filter → epoch → ICA → drop artifacts, segment by segment'},
+  s3:{cn:'坏 epoch 被连续识别、剔除，幅度超标的一个接一个被丢掉',
+      en:'Bad epochs are caught and dropped continuously — over-amplitude ones removed one after another'},
+  s4:{cn:'数据洗净，下一步用它训你的专属分类器',
+      en:'Data is clean — next, use it to train your own classifier'},
+  routeTtl:{cn:'BCI 项目路线', en:'BCI Project Route'},
+  routeHere:{cn:'你在这', en:'YOU'},
+  route:{
+    cn:['S1 认识脑波','S2 清洁信号','S3 找特征训分类器','S4 自录冲准','S5 接 Minecraft','S6 分享'],
+    en:['S1 Read EEG','S2 Clean signal','S3 Feature + classifier','S4 Self-train','S5 To Minecraft','S6 Share']
+  },
+  goalTxt:{cn:'终点：用念头让它动', en:'Goal: move it with thought'}
+};
+function tt(o){return (o&&o[LANG])||(o&&o.en)||'';}
+
+function refreshI18N(){
+  document.getElementById('brandSub').textContent = tt(I18N.brandSub);
+  var g = document.querySelectorAll('#guide .guide-li');
+  for(var i=0;i<g.length;i++){ g[i].textContent = I18N.guide[LANG][i]; }
+  document.getElementById('routeTtl').textContent = tt(I18N.routeTtl);
+  document.getElementById('routeHere').textContent = tt(I18N.routeHere);
+  var rs = document.querySelectorAll('#route .route-step span[data-s]');
+  for(var j=0;j<rs.length;j++){ rs[j].textContent = I18N.route[LANG][j]; }
+  if(LANG==='cn'){ document.getElementById('goalTxt').innerHTML = '终点：<b>用念头让它动</b>'; }
+  else { document.getElementById('goalTxt').innerHTML = 'Goal: <b>move it with thought</b>'; }
+  document.getElementById('langBtn').textContent = LANG==='cn' ? '中 / EN' : 'EN / 中';
+  syncSub();
+}
+document.getElementById('langBtn').addEventListener('click', function(){
+  LANG = LANG==='cn' ? 'en' : 'cn';
+  refreshI18N();
+});
+
+/* ===================== Canvas ===================== */
+var canvas = document.getElementById('stage');
+var ctx = canvas.getContext('2d');
+var W=0,H=0,DPR=1;
+function resize(){
+  var rect = canvas.parentElement.getBoundingClientRect();
+  if(rect.width<1||rect.height<1) return;
+  DPR = window.devicePixelRatio||1;
+  canvas.width = rect.width*DPR; canvas.height = rect.height*DPR;
+  canvas.style.width = rect.width+'px'; canvas.style.height = rect.height+'px';
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  W = rect.width; H = rect.height;
+}
+window.addEventListener('resize', resize);
+resize();
+setTimeout(resize,200); setTimeout(resize,600);
+if(document.fonts&&document.fonts.ready){document.fonts.ready.then(resize);}
+
+/* ===================== Palette (canvas) — deep space + cs cyan ===================== */
+var C = {
+  bg0:'#0c0f1c', bg1:'#141a2e', bg2:'#1b2238', bg3:'#262d44',
+  line:'rgba(150,160,210,0.30)', lineStrong:'rgba(170,180,225,0.55)',
+  fg:'#eef0f8', fgDim:'#aab0c8', fgMute:'#7b8198',
+  cs:'#3fc8e0', signal:'#3fc8e0', core:'#2a8ea6', depth:'#1c5566',
+  flash:'#bdf0fa', query:'#f2cf6e', gold:'#f2cf6e',
+  dirty:'#c87a55', dirtyDim:'#8a5238'    // 脏数据/坏 epoch 暖警示色 (非主色, 仅警示)
+};
+
+/* ----- 一镜到底: 同一批自录数据沿流水线连续推进 -----
+   核心对象 = 一条自录脏信号 -> 切成 N 个 epoch -> 流水线连续清洁 -> 坏 epoch 连续被剔除 -> 干净数据浮现
+   全程一个数据集在变形, 不切换不同主题. */
+
+var animStart = performance.now();
+var CYCLE = 30000;          // 30s 连续循环
+/* 数据集: 固定 12 个 epoch, 标记哪些是坏的 (自录脏 => 坏的偏多) */
+var N_EP = 12;
+var EPOCHS = [];
+(function seedEpochs(){
+  // 确定性种子: 自录脏数据 -> 约 1/3 是坏 epoch
+  var badIdx = {1:1,4:1,5:1,8:1};   // 第 2,5,6,9 段是坏 epoch
+  for(var i=0;i<N_EP;i++){
+    EPOCHS.push({
+      bad: !!badIdx[i],
+      ph: i*1.7,                       // 波形相位偏移
+      noise: badIdx[i] ? 1.0 : 0.18    // 坏段噪声大
+    });
+  }
+})();
+
+/* 四个流水线工位的横向位置 (归一化 x), 数据从左流到右 */
+var GUIDE_BREAK = [0.0, 0.18, 0.40, 0.80];  // 各阶段在循环中的起点比例 (用于左栏 guide 高亮 & subCue)
+
+function syncSub(){
+  var phase = guidePhase();
+  var o = I18N['s'+phase];
+  document.getElementById('subZh').textContent = LANG==='cn' ? o.cn : o.en;
+  document.getElementById('subEn').textContent = o.en;
+}
+var lastGuide = -1;
+function guidePhase(){
+  var t = ((performance.now()-animStart)%CYCLE)/CYCLE;
+  // 0..0.16 引入(脏) ; 0.16..0.42 流入流水线 ; 0.42..0.80 连续剔坏 ; 0.80..1 干净浮现
+  if(t<0.16) return 0;
+  if(t<0.42) return 1;
+  if(t<0.80) return 2;
+  return 3;
+}
+function syncGuideHL(g){
+  var lis = document.querySelectorAll('#guide .guide-li');
+  for(var i=0;i<lis.length;i++){ lis[i].classList.toggle('hl', i===g); }
+}
+
+/* ===================== draw helpers ===================== */
+function rr(x,y,w,h,r){
+  ctx.beginPath();
+  ctx.moveTo(x+r,y);
+  ctx.arcTo(x+w,y,x+w,y+h,r);
+  ctx.arcTo(x+w,y+h,x,y+h,r);
+  ctx.arcTo(x,y+h,x,y,r);
+  ctx.arcTo(x,y,x+w,y,r);
+  ctx.closePath();
+}
+function bgFill(){ ctx.fillStyle = C.bg0; ctx.fillRect(0,0,W,H); }
+function mainTitle(s){
+  ctx.save();
+  ctx.fillStyle = C.fg;
+  ctx.font = '700 19px Inter, sans-serif';
+  ctx.textAlign='center'; ctx.textBaseline='alphabetic';
+  ctx.fillText(s, (LEFT+RIGHT)/2, 36);
+  ctx.restore();
+}
+
+/* 画一段 epoch 波形到给定矩形, clean=true 用 cs cyan, dirty 用暖警示 + 尖刺 */
+function drawEpochWave(x,y,w,h,ep,opts){
+  opts = opts||{};
+  var clean = opts.clean;
+  var t = (performance.now()-animStart)/1000;
+  var color = clean ? C.signal : (ep.bad ? C.dirty : C.signal);
+  var amp = clean ? 0.30 : (ep.bad ? 0.46 : 0.34);
+  var mid = y+h/2;
+  ctx.save();
+  ctx.globalAlpha = opts.alpha==null?1:opts.alpha;
+  // 框
+  ctx.fillStyle = clean ? 'rgba(63,200,224,0.06)' : (ep.bad?'rgba(200,122,85,0.07)':C.bg1);
+  ctx.strokeStyle = clean ? C.core : (ep.bad?C.dirtyDim:C.line);
+  ctx.lineWidth = 1.1;
+  rr(x,y,w,h,4); ctx.fill(); ctx.stroke();
+  // 波
+  ctx.strokeStyle = color; ctx.lineWidth = clean?1.6:1.3;
+  ctx.beginPath();
+  var Npts=46;
+  for(var i=0;i<=Npts;i++){
+    var u=i/Npts;
+    var fx=x+2+ (w-4)*u;
+    var carrier=Math.sin(u*Math.PI*2*5 + ep.ph + t*1.4);
+    var n = ep.bad
+      ? (Math.sin(u*Math.PI*2*1.3+ep.ph)* (clean?0.10:0.7) + Math.sin(u*47+ep.ph*3+t*5)*(clean?0.04:0.5))
+      : (Math.sin(u*23+ep.ph)*0.12);
+    // 坏 epoch 中段一个大尖刺 (眨眼/动作伪迹)
+    var spike=0;
+    if(ep.bad && !clean){
+      var d=Math.abs(u-0.5);
+      spike = Math.exp(-d*d*60)* (0.9+0.25*Math.sin(t*6));
+    }
+    var val = carrier + n - spike*1.8;
+    var fy = mid - val*(h*amp);
+    fy=Math.max(y+2,Math.min(y+h-2,fy));
+    if(i===0)ctx.moveTo(fx,fy);else ctx.lineTo(fx,fy);
+  }
+  ctx.stroke();
+  ctx.restore();
+}
+
+/* 红叉 (用 X 线条, 非 emoji) 标记坏 epoch 被剔除 */
+function markDrop(x,y,w,h,a){
+  ctx.save();
+  ctx.globalAlpha=a;
+  ctx.strokeStyle=C.dirty; ctx.lineWidth=2.2; ctx.lineCap='round';
+  var p=6;
+  ctx.beginPath();
+  ctx.moveTo(x+p,y+p); ctx.lineTo(x+w-p,y+h-p);
+  ctx.moveTo(x+w-p,y+p); ctx.lineTo(x+p,y+h-p);
+  ctx.stroke();
+  ctx.restore();
+}
+function markKeep(x,y,w,h,a){
+  ctx.save();
+  ctx.globalAlpha=a;
+  ctx.strokeStyle=C.flash; ctx.lineWidth=2.2; ctx.lineCap='round'; ctx.lineJoin='round';
+  ctx.beginPath();
+  ctx.moveTo(x+w*0.30,y+h*0.52);
+  ctx.lineTo(x+w*0.45,y+h*0.68);
+  ctx.lineTo(x+w*0.72,y+h*0.32);
+  ctx.stroke();
+  ctx.restore();
+}
+
+/* 流水线工位标签条 (滤波/切片/ICA/剔伪迹) */
+function pipelineRail(x0,x1,y){
+  var labs = LANG==='cn'
+    ? ['带通滤波','切片 epoch','ICA 分解','剔伪迹']
+    : ['band-pass','epoching','ICA','drop artifact'];
+  var srcs = ['M13','M06','M16','M17'];
+  ctx.save();
+  // 主线
+  var grad=ctx.createLinearGradient(x0,0,x1,0);
+  grad.addColorStop(0,C.depth); grad.addColorStop(0.5,C.cs); grad.addColorStop(1,C.core);
+  ctx.strokeStyle=grad; ctx.lineWidth=3; ctx.lineCap='round';
+  ctx.beginPath(); ctx.moveTo(x0,y); ctx.lineTo(x1,y); ctx.stroke();
+  // 四个工位结点
+  var n=labs.length;
+  for(var i=0;i<n;i++){
+    var gx = x0 + (x1-x0)*(i+0.5)/n;
+    // 当前流过该工位时高亮
+    var t=((performance.now()-animStart)%CYCLE)/CYCLE;
+    var flowX = x0 + (x1-x0)*Math.min(1,Math.max(0,(t-0.16)/0.30));
+    var on = Math.abs(flowX-gx) < (x1-x0)/n*0.55 && t>=0.16 && t<0.55;
+    ctx.fillStyle = on?C.cs:C.bg3;
+    ctx.strokeStyle = on?C.flash:C.lineStrong;
+    ctx.lineWidth=1.6;
+    ctx.beginPath(); ctx.arc(gx,y,7,0,Math.PI*2); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = on?C.flash:C.fgDim;
+    ctx.font='600 11px Inter, sans-serif'; ctx.textAlign='center'; ctx.textBaseline='top';
+    ctx.fillText(labs[i], gx, y+12);
+    ctx.fillStyle=C.fgMute; ctx.font='600 8.5px JetBrains Mono, monospace';
+    ctx.fillText(srcs[i], gx, y+27);
+  }
+  // 流动光点
+  var t2=((performance.now()-animStart)%CYCLE)/CYCLE;
+  if(t2>=0.16 && t2<0.55){
+    var fx=x0+(x1-x0)*Math.min(1,(t2-0.16)/0.30);
+    ctx.fillStyle=C.flash;
+    ctx.beginPath(); ctx.arc(fx,y,4,0,Math.PI*2); ctx.fill();
+    ctx.globalAlpha=0.4;
+    ctx.beginPath(); ctx.arc(fx,y,8,0,Math.PI*2); ctx.fill();
+  }
+  ctx.restore();
+}
+
+/* ===================== layout ===================== */
+var LEFT=0, RIGHT=0, GX=12;
+function layout(){ LEFT=GX; RIGHT=W-GX; }
+
+/* ===================== 连续渲染: 同一批数据从脏到净 ===================== */
+function render(){
+  layout();
+  ctx.clearRect(0,0,W,H);
+  bgFill();
+  var t = ((performance.now()-animStart)%CYCLE)/CYCLE;   // 0..1
+  var phase = guidePhase();
+  if(phase!==lastGuide){ lastGuide=phase; syncGuideHL(phase); syncSub(); }
+
+  // ---- HUD 标题随阶段, 但描述的是同一批数据 ----
+  var titleZH, titleEN;
+  if(phase===0){ titleZH='这是你自己录的一批数据 — 比公开数据脏'; titleEN='This is YOUR recorded batch — dirtier than public data'; }
+  else if(phase===1){ titleZH='同一批数据流进 S2 那条预处理流水线'; titleEN='The same batch flows into the S2 preprocessing pipeline'; }
+  else if(phase===2){ titleZH='流水线连续判断每段：坏 epoch 一个接一个被剔除'; titleEN='The pipeline judges each segment: bad epochs dropped one by one'; }
+  else { titleZH='干净数据从噪声里浮现 — 可以拿去训分类器了'; titleEN='Clean data emerges — ready to train your classifier'; }
+  mainTitle(LANG==='cn'?titleZH:titleEN);
+
+  var fullW = RIGHT-LEFT;
+  var colTop = H*0.135;
+  var gridY = H*0.20;
+
+  /* ---------- 上区: 自录数据来源 (头皮 + 噪声标注), phase 0 引入, 之后淡为小图 ---------- */
+  var srcShrink = Math.min(1, Math.max(0,(t-0.10)/0.10));  // 引入后缩到角
+  var srcAlpha = 1 - srcShrink*0.45;
+  drawSourceCard(LEFT+fullW*0.02, colTop-6, fullW*0.30, H*0.30, srcAlpha, srcShrink, t);
+
+  /* ---------- 中区: 流水线主线 ---------- */
+  var railY = H*0.52;
+  var railX0 = LEFT + fullW*0.06, railX1 = RIGHT - fullW*0.04;
+  pipelineRail(railX0, railX1, railY);
+
+  /* ---------- 下区: 12 个 epoch 网格, 同一批数据连续变形/被剔 ---------- */
+  var gx0 = LEFT + fullW*0.06;
+  var gw = (railX1-gx0);
+  var cols = N_EP;
+  var cellW = gw/cols - 4;
+  var cellH = H*0.155;
+  var cellY = railY + H*0.10;
+
+  // 进度: 流水线扫描指针, 越过的 epoch 进入"已判定"状态
+  // t in 0.42..0.80 => 连续逐个判定 (剔坏/留好)
+  var judgeT = Math.min(1, Math.max(0,(t-0.42)/0.38));
+  var judgedCount = Math.floor(judgeT * N_EP + 0.0001);
+  var partial = (judgeT*N_EP) - judgedCount;   // 当前正在判定那一段的进度
+
+  var droppedSoFar=0, keptSoFar=0;
+  // epoch 出现: phase>=1 切片淡入
+  var epAppear = Math.min(1, Math.max(0,(t-0.30)/0.10));
+
+  for(var i=0;i<N_EP;i++){
+    var ep=EPOCHS[i];
+    var cx = gx0 + i*(cellW+4);
+    var judged = i<judgedCount;
+    var judging = i===judgedCount && t>=0.42 && t<0.80;
+    var dropAnim = judged ? 1 : (judging? partial : 0);
+
+    // 坏 epoch 被剔除 -> 下沉+淡出; 好 epoch -> 上浮成 clean cyan
+    var yOff=0, alpha=epAppear;
+    var clean=false;
+    if(ep.bad){
+      if(judged||judging){ yOff = 28*dropAnim; alpha = epAppear*(1-0.85*dropAnim); }
+      if(judged) droppedSoFar++;
+    } else {
+      if(judged){ clean=true; keptSoFar++; }
+      else if(judging){ clean = partial>0.5; }
+    }
+
+    drawEpochWave(cx, cellY+yOff, cellW, cellH, ep, {clean:clean, alpha:alpha});
+
+    // 段号
+    ctx.save();
+    ctx.fillStyle=C.fgMute; ctx.font='600 8px JetBrains Mono, monospace';
+    ctx.textAlign='center'; ctx.textBaseline='top';
+    ctx.globalAlpha=alpha;
+    ctx.fillText('e'+(i+1), cx+cellW/2, cellY+yOff+cellH+3);
+    ctx.restore();
+
+    // 判定标记
+    if(ep.bad && (judged||judging) && dropAnim>0.15){
+      markDrop(cx, cellY+yOff, cellW, cellH, Math.min(1,dropAnim*1.4)*alpha + 0.0);
+    }
+    if(!ep.bad && clean){
+      markKeep(cx, cellY, cellW, cellH, Math.min(1,(judged?1:partial)*1.4));
+    }
+  }
+
+  // 区标签
+  ctx.save();
+  ctx.fillStyle=C.fgDim; ctx.font='600 11px Inter, sans-serif';
+  ctx.textAlign='left'; ctx.textBaseline='alphabetic';
+  ctx.globalAlpha=epAppear;
+  ctx.fillText(LANG==='cn'?'切成 12 段 epoch（同一批自录数据）':'sliced into 12 epochs (your one recorded batch)', gx0, cellY-8);
+  ctx.restore();
+
+  /* ---------- 右侧/底部: 干净 epoch 计数浮现 (phase 3 收束, gold) ---------- */
+  // 干净计数随判定推进
+  document.getElementById('hStage').textContent =
+    phase===0?'capture':phase===1?'pipeline':phase===2?'reject':'clean';
+  document.getElementById('hSrc').textContent = 'self-rec';
+  document.getElementById('hIn').textContent = (epAppear>0.5? N_EP : Math.round(epAppear*N_EP));
+  document.getElementById('hDrop').textContent = droppedSoFar;
+  document.getElementById('hKeep').textContent = keptSoFar;
+  var keepEl=document.getElementById('hKeep');
+  keepEl.className = (t>=0.80)?'hud-val gold':'hud-val';
+
+  // phase 3: gold 收束横幅 — "数据洗净, 下一步训分类器"
+  if(t>=0.80){
+    var ba=Math.min(1,(t-0.80)/0.06);
+    var bw=Math.min(fullW*0.80,640), bh=58, bx=(LEFT+RIGHT)/2-bw/2, by=H-118;
+    ctx.save(); ctx.globalAlpha=ba;
+    ctx.fillStyle='rgba(20,26,46,0.92)';
+    ctx.strokeStyle=C.gold; ctx.lineWidth=1.6;
+    rr(bx,by,bw,bh,10); ctx.fill(); ctx.stroke();
+    ctx.fillStyle=C.gold; ctx.font='800 16px Inter, sans-serif';
+    ctx.textAlign='center'; ctx.textBaseline='alphabetic';
+    ctx.fillText(LANG==='cn'?'同一条 S2 流水线，把你自录的脏数据洗成了干净 epoch'
+                            :'The same S2 pipeline cleaned your dirty recording into clean epochs',
+                 (LEFT+RIGHT)/2, by+24);
+    ctx.fillStyle=C.fgDim; ctx.font='500 12px Inter, sans-serif';
+    ctx.fillText(LANG==='cn'?'数据洗净，下一步用它训你的专属分类器'
+                            :'Data is clean — next, use it to train your own classifier',
+                 (LEFT+RIGHT)/2, by+42);
+    ctx.restore();
+  }
+
+  requestAnimationFrame(render);
+}
+
+/* 自录数据来源卡: 头皮俯视 + "自录" 标注 + 噪声尖刺, 强调比公开数据脏 */
+function drawSourceCard(x,y,w,h,alpha,shrink,t){
+  ctx.save();
+  ctx.globalAlpha=alpha;
+  ctx.fillStyle=C.bg1; ctx.strokeStyle=C.line; ctx.lineWidth=1.2;
+  rr(x,y,w,h,10); ctx.fill(); ctx.stroke();
+
+  ctx.fillStyle=C.cs; ctx.font='700 11px JetBrains Mono, monospace';
+  ctx.textAlign='left'; ctx.textBaseline='top';
+  ctx.fillText(LANG==='cn'?'你的录制 SELF-REC':'YOUR RECORDING', x+12, y+10);
+
+  // 头皮俯视小图
+  var cx=x+w*0.30, cy=y+h*0.56, R=Math.min(w*0.16,h*0.24);
+  ctx.fillStyle=C.bg3; ctx.strokeStyle=C.lineStrong; ctx.lineWidth=1.6;
+  ctx.beginPath(); ctx.ellipse(cx,cy,R,R*1.1,0,0,Math.PI*2); ctx.fill(); ctx.stroke();
+  // 电极
+  var els=[[-0.5,0],[0.5,0],[0,-0.5],[0,0.5]];
+  for(var i=0;i<els.length;i++){
+    ctx.fillStyle=C.core; ctx.beginPath();
+    ctx.arc(cx+els[i][0]*R, cy+els[i][1]*R*1.1, 4,0,Math.PI*2); ctx.fill();
+  }
+  // 噪声来源标注 (动作/眨眼/工频) — 强调环境噪大
+  var noiseLabs = LANG==='cn'?['眨眼','动作','工频']:['blink','motion','mains'];
+  ctx.font='600 9.5px Inter, sans-serif';
+  for(var j=0;j<noiseLabs.length;j++){
+    var ny=y+h*0.30 + j*15;
+    var nx=x+w*0.58;
+    // 警示尖刺脉冲
+    var pulse=0.5+0.5*Math.sin(t*6+j*1.5);
+    ctx.fillStyle=C.dirty; ctx.globalAlpha=alpha*(0.55+0.45*pulse);
+    ctx.beginPath(); ctx.arc(nx-8,ny-3,2.6,0,Math.PI*2); ctx.fill();
+    ctx.globalAlpha=alpha;
+    ctx.fillStyle=C.fgDim; ctx.textAlign='left'; ctx.textBaseline='middle';
+    ctx.fillText(noiseLabs[j], nx, ny-3);
+  }
+  // 对比注脚
+  ctx.fillStyle=C.dirtyDim; ctx.font='600 9px JetBrains Mono, monospace';
+  ctx.textAlign='left'; ctx.textBaseline='bottom';
+  ctx.fillText(LANG==='cn'?'噪声 > 公开数据集':'noise > public dataset', x+12, y+h-8);
+  ctx.restore();
+}
+
+/* init */
+refreshI18N();
+syncGuideHL(0);
+requestAnimationFrame(render);
+</script>
+</body>
+</html>

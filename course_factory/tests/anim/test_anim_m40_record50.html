@@ -1,0 +1,531 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>录满 50 次 — 样本量怎样把准确率曲线推上去</title>
+<style>
+  :root{
+    /* 第 1 层 — 共享深空底 (26 套统一, 不换) */
+    --bg-0: oklch(0.14 0.035 265);
+    --bg-1: oklch(0.18 0.04 265);
+    --bg-2: oklch(0.22 0.045 265);
+    --bg-3: oklch(0.28 0.05 265);
+    --line: oklch(0.35 0.05 265 / 0.35);
+    --line-strong: oklch(0.55 0.08 265 / 0.55);
+    --fg: oklch(0.96 0.01 265);
+    --fg-dim: oklch(0.75 0.02 265);
+    --fg-mute: oklch(0.55 0.03 265);
+    --gold: oklch(0.85 0.14 85);
+
+    /* 第 2 层 — neuro signature accent (cortex-coral) */
+    --neuro: oklch(0.75 0.17 25);
+
+    /* 第 3 层 — neuro 5 色 palette (theme_style/themes.js neuro 段) */
+    --syn:  oklch(0.75 0.17 25);  /* SYNAPTIC */
+    --dend: oklch(0.55 0.15 25);  /* DENDRITE */
+    --axon: oklch(0.32 0.10 25);  /* AXON */
+    --fire: oklch(0.92 0.08 25);  /* FIRING */
+    --mem:  oklch(0.85 0.14 85);  /* MEMORY (= gold) */
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  html,body{height:100%;}
+  body{
+    background:var(--bg-0);
+    color:var(--fg);
+    font-family:'JetBrains Mono','SF Mono',ui-monospace,monospace;
+    height:100vh;width:100vw;overflow:hidden;display:flex;
+  }
+  body.lang-en .cn{display:none;}
+  body:not(.lang-en) .en{display:none;}
+
+  /* ---- 200px 左侧栏 ---- */
+  .sidebar{
+    width:200px;min-width:200px;height:100vh;
+    background:var(--bg-1);
+    border-right:1px solid var(--line);
+    display:flex;flex-direction:column;
+    padding:18px 16px;gap:16px;
+  }
+  .brand{display:flex;flex-direction:column;gap:4px;}
+  .brand .code{font-size:10px;letter-spacing:.18em;color:var(--neuro);}
+  .brand .ttl{font-size:14px;font-weight:700;line-height:1.25;color:var(--fg);
+    font-family:'Inter','Noto Sans SC',sans-serif;}
+  .brand .sub{font-size:10px;color:var(--fg-mute);line-height:1.4;}
+
+  .mascot-wrap{display:flex;align-items:center;gap:8px;}
+  .mascot-wrap svg{width:42px;height:42px;}
+  .mascot-wrap .m-name{font-size:10px;color:var(--fg-dim);line-height:1.3;}
+  .mascot-wrap .m-name b{color:var(--neuro);}
+
+  /* 项目路线图 S1-S6 (项目锚 机制 B) */
+  .rail{display:flex;flex-direction:column;gap:7px;}
+  .rail-h{font-size:9px;letter-spacing:.16em;color:var(--fg-mute);}
+  .rail-row{display:flex;align-items:center;gap:8px;position:relative;}
+  .rail-dot{width:7px;height:7px;flex:0 0 auto;border:1px solid var(--line-strong);
+    background:transparent;border-radius:50%;}
+  .rail-row.done .rail-dot{background:var(--dend);border-color:var(--dend);}
+  .rail-row.now .rail-dot{background:var(--neuro);border-color:var(--neuro);
+    box-shadow:0 0 0 3px oklch(0.75 0.17 25 / 0.25);}
+  .rail-tag{font-size:9px;color:var(--fg-mute);margin-right:5px;
+    font-family:'JetBrains Mono',monospace;}
+  .rail-name{font-size:10px;color:var(--fg-dim);
+    font-family:'Inter','Noto Sans SC',sans-serif;}
+  .rail-row.now .rail-tag{color:var(--neuro);}
+  .rail-row.now .rail-name{color:var(--fg);font-weight:700;}
+  .rail-here{display:block;font-size:8px;color:var(--neuro);letter-spacing:.1em;margin-top:1px;}
+
+  .spacer{flex:1;}
+  .lang-btn{
+    align-self:flex-start;
+    background:transparent;color:var(--fg-dim);
+    border:1px solid var(--line-strong);
+    font-family:'JetBrains Mono',monospace;font-size:11px;
+    letter-spacing:.1em;padding:6px 14px;cursor:pointer;
+    box-shadow:3px 3px 0 var(--bg-0);
+  }
+  .lang-btn:hover{color:var(--fg);border-color:var(--neuro);}
+
+  /* ---- 右侧主舞台 ---- */
+  .stage{position:relative;flex:1;height:100vh;}
+  #c{display:block;width:100%;height:100%;}
+
+  .stage-tag{
+    position:absolute;top:16px;left:20px;
+    font-size:10px;letter-spacing:.14em;color:var(--fg-mute);max-width:60%;
+  }
+  .stage-tag b{color:var(--neuro);}
+
+  .hud{
+    position:absolute;top:14px;right:18px;
+    display:flex;gap:18px;
+    background:oklch(0.18 0.04 265 / 0.78);
+    border:1px solid var(--line);padding:9px 16px;
+    backdrop-filter:blur(4px);
+  }
+  .hud .cell{display:flex;flex-direction:column;gap:2px;min-width:62px;}
+  .hud .lab{font-size:9px;letter-spacing:.12em;color:var(--fg-mute);}
+  .hud .val{font-size:15px;font-weight:700;color:var(--neuro);
+    font-family:'JetBrains Mono',monospace;}
+  .hud .val.gold{color:var(--gold);}
+
+  /* 终点常驻徽记 — Minecraft 剪影 (项目锚 机制 A) */
+  .endgame{
+    position:absolute;bottom:16px;right:18px;
+    display:flex;align-items:center;gap:7px;opacity:0.72;
+  }
+  .endgame svg{width:26px;height:26px;}
+  .endgame .eg-t{font-size:9px;color:var(--fg-mute);line-height:1.3;text-align:right;}
+  .endgame .eg-t b{color:var(--fg-dim);}
+
+  /* 字幕 — 辅助点睛, 画面才是主体 */
+  .sub{
+    position:absolute;bottom:18px;left:50%;transform:translateX(-50%);
+    text-align:center;width:74%;pointer-events:none;
+  }
+  .sub-zh{font-size:18px;font-weight:700;color:var(--fg);
+    background:oklch(0.14 0.035 265 / 0.82);padding:6px 18px;display:inline-block;
+    border:1px solid var(--line);font-family:'Inter','Noto Sans SC',sans-serif;}
+  .sub-en{font-size:12px;color:var(--fg-mute);margin-top:4px;font-style:italic;}
+</style>
+</head>
+<body>
+  <!-- ====== 左侧栏 ====== -->
+  <aside class="sidebar">
+    <div class="brand">
+      <span class="code">NRO-20 · M40 · S4</span>
+      <span class="ttl"><span class="cn">录满 50 次想象</span><span class="en">Record 50 trials</span></span>
+      <span class="sub"><span class="cn">样本量怎样把准确率曲线推上去</span><span class="en">How sample size lifts the accuracy curve</span></span>
+    </div>
+
+    <div class="mascot-wrap">
+      <!-- mascot Spark: 想法连接时成波点亮的分叉树突小生物 -->
+      <svg viewBox="0 0 48 48" aria-hidden="true">
+        <g fill="none" stroke="var(--dend)" stroke-width="2" stroke-linecap="round">
+          <line x1="24" y1="30" x2="24" y2="40"/>
+          <line x1="24" y1="30" x2="14" y2="18"/>
+          <line x1="24" y1="30" x2="34" y2="18"/>
+          <line x1="14" y1="18" x2="9" y2="11"/>
+          <line x1="14" y1="18" x2="18" y2="9"/>
+          <line x1="34" y1="18" x2="39" y2="11"/>
+          <line x1="34" y1="18" x2="30" y2="9"/>
+        </g>
+        <circle cx="24" cy="30" r="5" fill="var(--syn)"/>
+        <circle cx="9" cy="11" r="2.6" fill="var(--fire)"/>
+        <circle cx="18" cy="9" r="2.6" fill="var(--fire)"/>
+        <circle cx="39" cy="11" r="2.6" fill="var(--fire)"/>
+        <circle cx="30" cy="9" r="2.6" fill="var(--fire)"/>
+      </svg>
+      <span class="m-name"><b>Spark</b><br><span class="cn">树突小生物</span><span class="en">dendrite sprite</span></span>
+    </div>
+
+    <!-- 项目路线图 (项目锚, 高亮 S4) -->
+    <div class="rail">
+      <div class="rail-h"><span class="cn">学习路线</span><span class="en">Roadmap</span></div>
+      <div class="rail-row done"><span class="rail-dot"></span>
+        <span><span class="rail-tag">S1</span><span class="rail-name"><span class="cn">认识脑波</span><span class="en">Meet waves</span></span></span></div>
+      <div class="rail-row done"><span class="rail-dot"></span>
+        <span><span class="rail-tag">S2</span><span class="rail-name"><span class="cn">清洁信号</span><span class="en">Clean signal</span></span></span></div>
+      <div class="rail-row done"><span class="rail-dot"></span>
+        <span><span class="rail-tag">S3</span><span class="rail-name"><span class="cn">找特征训分类器</span><span class="en">Train classifier</span></span></span></div>
+      <div class="rail-row now"><span class="rail-dot"></span>
+        <span><span class="rail-tag">S4</span><span class="rail-name"><span class="cn">用自己的脑实战</span><span class="en">Run on your brain</span></span>
+          <span class="rail-here"><span class="cn">你在这 · 自录冲准</span><span class="en">you are here</span></span></span></div>
+      <div class="rail-row"><span class="rail-dot"></span>
+        <span><span class="rail-tag">S5</span><span class="rail-name"><span class="cn">接 Minecraft</span><span class="en">Connect Minecraft</span></span></span></div>
+      <div class="rail-row"><span class="rail-dot"></span>
+        <span><span class="rail-tag">S6</span><span class="rail-name"><span class="cn">分享作品</span><span class="en">Share it</span></span></span></div>
+    </div>
+
+    <div class="spacer"></div>
+    <button class="lang-btn" id="langBtn" type="button">EN</button>
+  </aside>
+
+  <!-- ====== 主舞台 ====== -->
+  <main class="stage">
+    <span class="stage-tag"><b class="cn">核心</b><b class="en">CORE</b> · <span class="cn">为什么要录满 50 次? 数据越多, 模型越准</span><span class="en">Why record 50 trials? More data, more accurate</span></span>
+
+    <div class="hud">
+      <div class="cell">
+        <span class="lab"><span class="cn">已录 TRIALS</span><span class="en">RECORDED</span></span>
+        <span class="val" id="vTrial">0</span>
+      </div>
+      <div class="cell">
+        <span class="lab"><span class="cn">准确率 ACC</span><span class="en">ACCURACY</span></span>
+        <span class="val gold" id="vAcc">50%</span>
+      </div>
+      <div class="cell">
+        <span class="lab"><span class="cn">边际收益</span><span class="en">MARGINAL</span></span>
+        <span class="val" id="vGain">--</span>
+      </div>
+    </div>
+
+    <canvas id="c"></canvas>
+
+    <!-- 终点徽记: Minecraft 剪影 (项目锚 机制 A) -->
+    <div class="endgame">
+      <svg viewBox="0 0 32 32" fill="none" aria-hidden="true">
+        <rect x="6" y="6" width="20" height="20" fill="var(--axon)" stroke="var(--line-strong)" stroke-width="1"/>
+        <rect x="10" y="10" width="5" height="5" fill="var(--dend)"/>
+        <rect x="17" y="10" width="5" height="5" fill="var(--dend)"/>
+        <rect x="11" y="19" width="10" height="3" fill="var(--neuro)"/>
+      </svg>
+      <span class="eg-t"><b class="cn">终点</b><b class="en">GOAL</b><br><span class="cn">脑控 Minecraft</span><span class="en">mind-control MC</span></span>
+    </div>
+
+    <div class="sub">
+      <div class="sub-zh" id="subZh">为什么要录满 50 次? 数据越多, 模型越准.</div>
+      <div class="sub-en" id="subEn">Why 50 trials? More data, more accurate.</div>
+    </div>
+  </main>
+
+<script>
+'use strict';
+(function(){
+  // ---------- i18n ----------
+  var I18N = {
+    cue0:{zh:'为什么要录满 50 次? 数据越多, 模型越准.',
+          en:'Why record 50 trials? More data makes the model more accurate.'},
+    cue1:{zh:'一次次录下你想左/想右的脑波, 试验数沿横轴累积.',
+          en:'Each imagined left/right trial gets recorded — trial count grows along X.'},
+    cue2:{zh:'每多录一批, 就拿现有数据训一次分类器, 测准确率.',
+          en:'Every batch retrains the classifier and measures its accuracy.'},
+    cue3:{zh:'只有 10 次时: 准确率低且乱跳 — 数据太少, 模型靠运气.',
+          en:'At only 10 trials: accuracy is low and jittery — too little data, mostly luck.'},
+    cue4:{zh:'录到 50 次: 曲线爬上来并趋稳, 模型真的学会了区分.',
+          en:'By 50 trials: the curve has climbed and settled — the model truly learned.'},
+    cue5:{zh:'再往后录: 还在涨, 但每次只涨一点点 — 边际收益递减.',
+          en:'Beyond that: still rising, but each trial adds less — diminishing returns.'},
+    cue6:{zh:'同一条曲线: 样本量决定准确率. 录够 50, 性价比的甜点.',
+          en:'One curve: sample size sets accuracy. 50 is the sweet spot.'},
+    cue7:{zh:'录够数据了, 下一步用你的数据训专属分类器, 直奔 Minecraft.',
+          en:'Data is enough — next, train YOUR classifier and head to Minecraft.'}
+  };
+  var LANG='cn';
+  function applyLang(){
+    document.body.classList.toggle('lang-en', LANG==='en');
+    document.getElementById('langBtn').textContent = LANG==='cn' ? 'EN' : '中';
+  }
+  document.getElementById('langBtn').addEventListener('click', function(){
+    LANG = LANG==='cn' ? 'en' : 'cn';
+    applyLang(); refreshSub();
+  });
+  function setSub(key){
+    document.getElementById('subZh').textContent = I18N[key].zh;
+    document.getElementById('subEn').textContent = I18N[key].en;
+    curSubKey = key;
+  }
+  var curSubKey='cue0';
+  function refreshSub(){ setSub(curSubKey); }
+
+  // ---------- color helpers ----------
+  function cssVar(n){ return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
+  var COL={};
+  function loadColors(){
+    COL.neuro=cssVar('--neuro'); COL.syn=cssVar('--syn'); COL.dend=cssVar('--dend');
+    COL.axon=cssVar('--axon');   COL.fire=cssVar('--fire'); COL.gold=cssVar('--gold');
+    COL.bg0=cssVar('--bg-0'); COL.bg1=cssVar('--bg-1'); COL.bg2=cssVar('--bg-2');
+    COL.line=cssVar('--line'); COL.lineS=cssVar('--line-strong');
+    COL.fg=cssVar('--fg'); COL.fgDim=cssVar('--fg-dim'); COL.fgMute=cssVar('--fg-mute');
+  }
+
+  // ---------- canvas ----------
+  var canvas=document.getElementById('c'), ctx=canvas.getContext('2d');
+  var W=0,H=0,DPR=1;
+  function resize(){
+    var r=canvas.parentElement.getBoundingClientRect();
+    if(r.width<1||r.height<1) return;
+    DPR=window.devicePixelRatio||1;
+    canvas.width=r.width*DPR; canvas.height=r.height*DPR;
+    canvas.style.width=r.width+'px'; canvas.style.height=r.height+'px';
+    ctx.setTransform(DPR,0,0,DPR,0,0);
+    W=r.width; H=r.height;
+  }
+  window.addEventListener('resize',resize); resize();
+  setTimeout(resize,200); setTimeout(resize,600);
+  if(document.fonts&&document.fonts.ready) document.fonts.ready.then(function(){loadColors();resize();});
+  loadColors();
+
+  // ---------- 学习曲线模型 (科学严谨: 样本量 -> 准确率, 边际递减) ----------
+  // 真实准确率随样本量上升, 服从典型学习曲线: acc(N) = plateau - (plateau-chance)*exp(-N/tau)
+  // chance = 0.50 (二分类), plateau ~ 0.85, tau ~ 16 -> 50 trial 后接近渐近, 边际递减.
+  var CHANCE=0.50, PLATEAU=0.855, TAU=16, MAXN=80;
+  function trueAcc(n){ return PLATEAU - (PLATEAU-CHANCE)*Math.exp(-n/TAU); }
+  // 有限样本估计的抖动: 标准误 ~ sqrt(p(1-p)/n_test). 样本越少抖越大.
+  // 用确定性伪随机(基于 n 的正弦组合)保证每帧可复现且无 Math.random 闪烁.
+  function jitter(n){
+    if(n<=0) return 0;
+    var p=trueAcc(n);
+    var se=Math.sqrt(p*(1-p)/Math.max(3,n));        // 标准误, n 小则大 (统计上真实)
+    var wob=Math.sin(n*2.39)*0.6 + Math.sin(n*0.91+1.7)*0.4; // [-1,1] 确定性
+    // 抖动幅度随样本量强衰减: 早期(<=10)大而乱, 50 次后基本贴合趋势线
+    var decay = 1/(1+Math.pow(n/9,1.6));
+    return wob*se*decay*9.0;
+  }
+  function measuredAcc(n){
+    var v=trueAcc(n)+jitter(n);
+    return Math.max(CHANCE-0.04, Math.min(0.93, v));
+  }
+
+  // 预生成每个 trial 数的测量点 (1..MAXN)
+  var PTS=[];
+  for(var i=1;i<=MAXN;i++) PTS.push({n:i, acc:measuredAcc(i), tru:trueAcc(i)});
+
+  // ---------- 时间轴: 一镜到底连续累积 (无翻页) ----------
+  // 0-3s   开场: 轴出现, 第一个 trial 录入 (cue0/1)
+  // 3-22s  trial 1->80 连续录入, 曲线点点爬升 (cue2..5 随累积切换)
+  // 22-30s 收束: 完整曲线定格, 甜点标注闪 gold, 回扣结尾 (cue6/7)
+  var DUR=30000, animStart=performance.now();
+
+  function nAt(t){
+    // t in ms. 录入窗 [2500, 22000] 把 trial 从 1 推到 MAXN, 缓动(先快后慢, 呼应边际递减观感)
+    var t0=2500, t1=22000;
+    if(t<=t0) return Math.max(0, (t/t0)); // <1, 还没第一个完整 trial
+    if(t>=t1) return MAXN;
+    var u=(t-t0)/(t1-t0);                 // 0..1
+    var eased=1-Math.pow(1-u,1.35);       // 略微 ease-out
+    return eased*MAXN;
+  }
+
+  function fmtPct(x){ return Math.round(x*100)+'%'; }
+
+  function draw(){
+    var now=performance.now();
+    var t=(now-animStart)%DUR;
+    var nf=nAt(t);              // 浮点 trial 数 (含部分录入中那个)
+    var nInt=Math.floor(nf);
+
+    ctx.clearRect(0,0,W,H);
+    ctx.fillStyle=COL.bg0; ctx.fillRect(0,0,W,H);
+
+    // ---- 绘图区 (主舞台中央: 学习曲线) ----
+    var padL=88, padR=54, padT=86, padB=72;
+    var gx=padL, gy=padT, gw=W-padL-padR, gh=H-padT-padB;
+    if(gw<60||gh<60){ requestAnimationFrame(draw); return; }
+
+    // 坐标映射
+    function X(n){ return gx + (n/MAXN)*gw; }
+    function Y(a){ // acc 区间 [0.45, 0.92] 映射到 [底, 顶]
+      var lo=0.45, hi=0.92;
+      return gy+gh - ((a-lo)/(hi-lo))*gh;
+    }
+
+    // ---- 网格 + 轴 ----
+    ctx.strokeStyle=COL.line; ctx.lineWidth=1;
+    ctx.font='10px JetBrains Mono, monospace'; ctx.fillStyle=COL.fgMute;
+    // 横向网格 (准确率刻度)
+    var accTicks=[0.50,0.60,0.70,0.80,0.90];
+    for(var a=0;a<accTicks.length;a++){
+      var yy=Y(accTicks[a]);
+      ctx.beginPath(); ctx.moveTo(gx,yy); ctx.lineTo(gx+gw,yy); ctx.stroke();
+      ctx.textAlign='right'; ctx.textBaseline='middle';
+      ctx.fillText(Math.round(accTicks[a]*100)+'%', gx-10, yy);
+    }
+    // chance 基线 (50%) 强调
+    ctx.strokeStyle=COL.lineS; ctx.setLineDash([5,5]);
+    ctx.beginPath(); ctx.moveTo(gx,Y(CHANCE)); ctx.lineTo(gx+gw,Y(CHANCE)); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle=COL.fgMute; ctx.textAlign='left'; ctx.textBaseline='bottom';
+    ctx.fillText(LANG==='cn'?'瞎猜基线 50%':'chance 50%', gx+8, Y(CHANCE)-4);
+
+    // plateau 渐近线 (天花板)
+    ctx.strokeStyle='oklch(0.55 0.15 25 / 0.5)'; ctx.setLineDash([2,4]);
+    ctx.beginPath(); ctx.moveTo(gx,Y(PLATEAU)); ctx.lineTo(gx+gw,Y(PLATEAU)); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle=COL.dend; ctx.textAlign='right'; ctx.textBaseline='bottom';
+    ctx.fillText(LANG==='cn'?'天花板 ~85%':'ceiling ~85%', gx+gw, Y(PLATEAU)-4);
+
+    // 纵向网格 (trial 刻度) + 关键 10 / 50 标注
+    var trialTicks=[10,20,30,40,50,60,70,80];
+    ctx.font='10px JetBrains Mono, monospace';
+    for(var tk=0;tk<trialTicks.length;tk++){
+      var xx=X(trialTicks[tk]);
+      ctx.strokeStyle=COL.line; ctx.lineWidth=1;
+      ctx.beginPath(); ctx.moveTo(xx,gy); ctx.lineTo(xx,gy+gh); ctx.stroke();
+      ctx.fillStyle=COL.fgMute; ctx.textAlign='center'; ctx.textBaseline='top';
+      ctx.fillText(trialTicks[tk], xx, gy+gh+8);
+    }
+    // 轴标题
+    ctx.fillStyle=COL.fgDim; ctx.textAlign='center'; ctx.textBaseline='top';
+    ctx.font='11px JetBrains Mono, monospace';
+    ctx.fillText(LANG==='cn'?'已录想象试验数  trials recorded ->':'trials recorded ->', gx+gw/2, gy+gh+30);
+    ctx.save();
+    ctx.translate(gx-58, gy+gh/2); ctx.rotate(-Math.PI/2);
+    ctx.textAlign='center'; ctx.textBaseline='bottom';
+    ctx.fillText(LANG==='cn'?'分类器准确率 accuracy':'classifier accuracy', 0, 0);
+    ctx.restore();
+
+    // ---- 区域底色: 早期不稳区(<=10) vs 趋稳区 ----
+    ctx.fillStyle='oklch(0.32 0.10 25 / 0.16)';
+    ctx.fillRect(gx, gy, X(10)-gx, gh);
+    ctx.fillStyle=COL.fgMute; ctx.font='10px JetBrains Mono, monospace';
+    ctx.textAlign='center'; ctx.textBaseline='top';
+    ctx.fillText(LANG==='cn'?'数据太少':'too few', (gx+X(10))/2, gy+6);
+
+    // ---- 学习曲线: 连续画到当前 trial (核心对象) ----
+    // 1) 真实曲线(平滑参照, 暗 dend) 画到当前
+    ctx.strokeStyle='oklch(0.55 0.15 25 / 0.55)'; ctx.lineWidth=2;
+    ctx.beginPath();
+    var started=false;
+    for(var s=1;s<=Math.max(1,nf);s+=0.5){
+      var xx2=X(s), yy2=Y(trueAcc(s));
+      if(!started){ ctx.moveTo(xx2,yy2); started=true; } else ctx.lineTo(xx2,yy2);
+    }
+    ctx.stroke();
+
+    // 2) 测量点折线(实测, neuro accent) — 早期抖, 后期稳
+    ctx.strokeStyle=COL.neuro; ctx.lineWidth=2.4;
+    ctx.beginPath(); started=false;
+    var lastX=gx, lastY=Y(CHANCE), curAcc=CHANCE;
+    for(var p=0;p<PTS.length;p++){
+      if(PTS[p].n>nf) break;
+      var px=X(PTS[p].n), py=Y(PTS[p].acc);
+      if(!started){ ctx.moveTo(px,py); started=true; } else ctx.lineTo(px,py);
+      lastX=px; lastY=py; curAcc=PTS[p].acc;
+    }
+    // 续到当前部分录入位置
+    if(nf>nInt && nInt>=1){
+      var px2=X(nf), py2=Y(measuredAcc(nf));
+      ctx.lineTo(px2,py2); lastX=px2; lastY=py2; curAcc=measuredAcc(nf);
+    }
+    ctx.stroke();
+
+    // 3) 测量散点 (fire 小点, 早期分散)
+    for(var q=0;q<PTS.length;q++){
+      if(PTS[q].n>nf) break;
+      var qx=X(PTS[q].n), qy=Y(PTS[q].acc);
+      var early = PTS[q].n<=10;
+      ctx.fillStyle = early ? COL.fire : 'oklch(0.92 0.08 25 / 0.55)';
+      ctx.beginPath(); ctx.arc(qx,qy, early?2.6:1.8, 0, Math.PI*2); ctx.fill();
+    }
+
+    // 4) 当前游标点 (正在录入的那个 trial, neuro 实心 + 脉冲环)
+    if(nf>=1){
+      var pulse=0.5+0.5*Math.sin(now/180);
+      ctx.fillStyle=COL.neuro;
+      ctx.beginPath(); ctx.arc(lastX,lastY,5,0,Math.PI*2); ctx.fill();
+      ctx.strokeStyle='oklch(0.75 0.17 25 / '+(0.5*pulse).toFixed(3)+')';
+      ctx.lineWidth=2;
+      ctx.beginPath(); ctx.arc(lastX,lastY,8+pulse*5,0,Math.PI*2); ctx.stroke();
+    }
+
+    // ---- trial 录入流: 沿 X 轴底部一个个堆积的小竖条 (录满的可视证据) ----
+    var stripY=gy+gh+50;
+    for(var b=1;b<=Math.min(nInt,MAXN);b++){
+      var bx=X(b)-1.4;
+      // 左/右想象交替 (block 伪随机感): 用 neuro / dend 两色
+      ctx.fillStyle = ((b*7)%3===0) ? COL.dend : COL.neuro;
+      ctx.fillRect(bx, stripY, 2.8, 6);
+    }
+
+    // ---- 关键标注: 50 trial 甜点 (gold key moment) ----
+    if(nf>=50){
+      var hit=Math.min(1,(nf-50)/4);
+      var sx=X(50), sy=Y(measuredAcc(50));
+      ctx.save();
+      ctx.globalAlpha=hit;
+      ctx.strokeStyle=COL.gold; ctx.lineWidth=1.4; ctx.setLineDash([3,3]);
+      ctx.beginPath(); ctx.moveTo(sx,gy+gh); ctx.lineTo(sx,sy); ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle=COL.gold;
+      ctx.beginPath(); ctx.arc(sx,sy,4,0,Math.PI*2); ctx.fill();
+      ctx.font='700 11px JetBrains Mono, monospace';
+      ctx.textAlign='left'; ctx.textBaseline='bottom';
+      ctx.fillText(LANG==='cn'?'50 次 · 趋稳甜点':'50 · sweet spot', sx+8, sy-10);
+      ctx.restore();
+    }
+
+    // ---- 边际收益小图示 (右下, 当数据多了显现递减) ----
+    // 用相邻 10-trial 的 acc 增量条对比, 直观"越后涨越少"
+    if(nf>=20){
+      var ma=Math.min(1,(nf-20)/10);
+      var bw=14, bgap=6, bbx=gx+gw*0.46, bby=gy+gh-150, bbh=46;
+      ctx.save(); ctx.globalAlpha=ma*0.95;
+      ctx.fillStyle=COL.fgMute; ctx.font='9px JetBrains Mono, monospace';
+      ctx.textAlign='left'; ctx.textBaseline='bottom';
+      ctx.fillText(LANG==='cn'?'每 +10 次带来的准确率提升':'acc gain per +10 trials', bbx, bby-6);
+      var spans=[[0,10],[10,20],[20,30],[30,40],[40,50],[50,60],[60,70],[70,80]];
+      var maxGain=trueAcc(10)-trueAcc(0);
+      for(var g=0;g<spans.length;g++){
+        var lo2=spans[g][0], hi2=spans[g][1];
+        if(lo2>=nf) break;
+        var gain=trueAcc(Math.min(hi2,nf))-trueAcc(lo2);
+        var hbar=Math.max(2,(gain/maxGain)*bbh);
+        ctx.fillStyle = g<=4 ? COL.neuro : 'oklch(0.32 0.10 25 / 0.85)';
+        ctx.fillRect(bbx+g*(bw+bgap), bby+bbh-hbar, bw, hbar);
+      }
+      ctx.fillStyle=COL.fgMute; ctx.font='9px JetBrains Mono, monospace';
+      ctx.textAlign='center'; ctx.textBaseline='top';
+      ctx.fillText(LANG==='cn'?'递减':'shrinking', bbx+5.5*(bw+bgap), bby+bbh+4);
+      ctx.restore();
+    }
+
+    // ---- HUD 更新 ----
+    document.getElementById('vTrial').textContent = Math.min(nInt,MAXN);
+    document.getElementById('vAcc').textContent = fmtPct(curAcc);
+    // 边际: 最近 10 trial 真实增益
+    var lo3=Math.max(0,nInt-10);
+    var gainNow = nInt>=2 ? (trueAcc(nInt)-trueAcc(lo3)) : 0;
+    document.getElementById('vGain').textContent = nInt<10 ? '--' : '+'+(gainNow*100).toFixed(1)+'%';
+
+    // ---- 字幕跟随累积阶段切换 (辅助点睛, 非主体) ----
+    var key;
+    if(t<2500) key='cue0';
+    else if(nInt<3) key='cue1';
+    else if(nInt<10) key='cue2';
+    else if(nInt<22) key='cue3';
+    else if(nInt<52) key='cue4';
+    else if(nInt<MAXN) key='cue5';
+    else if(t<26500) key='cue6';
+    else key='cue7';
+    if(key!==curSubKey) setSub(key);
+
+    requestAnimationFrame(draw);
+  }
+
+  applyLang();
+  requestAnimationFrame(draw);
+})();
+</script>
+</body>
+</html>

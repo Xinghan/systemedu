@@ -1,0 +1,517 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>个人模型优势 — 用你自己的数据训, 同算法多拉开 +10~25 个百分点</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;700&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+  /* ---- 第 1 层: 共享深空底 (所有 26 套统一) ---- */
+  :root{
+    --bg-0: oklch(0.14 0.035 265);
+    --bg-1: oklch(0.18 0.04 265);
+    --bg-2: oklch(0.22 0.045 265);
+    --bg-3: oklch(0.28 0.05 265);
+    --line: oklch(0.35 0.05 265 / 0.35);
+    --line-strong: oklch(0.55 0.08 265 / 0.55);
+    --fg:      oklch(0.96 0.01 265);
+    --fg-dim:  oklch(0.75 0.02 265);
+    --fg-mute: oklch(0.55 0.03 265);
+    --gold:    oklch(0.85 0.14 85);
+    /* ---- 第 2 层: cs 学科 signature accent ---- */
+    --cs:      oklch(0.75 0.17 200);
+    /* ---- 第 3 层: cs 5 色 palette (themes.js cs 段) ---- */
+    --cs-signal: oklch(0.75 0.17 200);
+    --cs-core:   oklch(0.55 0.16 200);
+    --cs-depth:  oklch(0.35 0.10 210);
+    --cs-flash:  oklch(0.92 0.08 190);
+    --cs-query:  oklch(0.85 0.14 85);
+    /* 通用模型用中性灰青 (借来的, 不贴合你), 与个人模型 cyan 形成对比 */
+    --generic: oklch(0.62 0.03 250);
+  }
+  html,body{margin:0;padding:0;height:100vh;overflow:hidden;background:var(--bg-0);
+    font-family:'Noto Sans SC',sans-serif;color:var(--fg);}
+  body{display:flex;}
+  /* ---- sidebar ---- */
+  .sidebar{width:200px;height:100vh;flex-shrink:0;background:var(--bg-1);
+    border-right:1px solid var(--line);display:flex;flex-direction:column;gap:14px;padding:18px 16px;box-sizing:border-box;}
+  .brand{font-size:15px;font-weight:700;line-height:1.35;}
+  .brand small{display:block;font-size:10px;font-weight:400;color:var(--fg-mute);margin-top:3px;font-family:'JetBrains Mono',monospace;}
+  .guide{font-size:11.5px;line-height:1.7;color:var(--fg-dim);}
+  .guide b{color:var(--cs-signal);font-weight:700;}
+  /* ---- 进度路线图 ---- */
+  .route{margin-top:2px;}
+  .route-title{font-size:9.5px;color:var(--fg-mute);font-family:'JetBrains Mono',monospace;letter-spacing:.05em;margin-bottom:7px;}
+  .route-line{display:flex;flex-direction:column;gap:0;position:relative;padding-left:14px;}
+  .route-line::before{content:'';position:absolute;left:4px;top:6px;bottom:6px;width:1.5px;background:var(--line);}
+  .stop{display:flex;align-items:center;gap:8px;font-size:10.5px;line-height:1.9;color:var(--fg-mute);position:relative;font-family:'JetBrains Mono',monospace;}
+  .stop::before{content:'';position:absolute;left:-13px;width:7px;height:7px;border-radius:50%;background:var(--bg-3);border:1.5px solid var(--line-strong);}
+  .stop.here{color:var(--cs-signal);font-weight:700;font-size:11.5px;}
+  .stop.here::before{background:var(--cs-signal);border-color:var(--cs-flash);box-shadow:0 0 8px var(--cs-signal);width:9px;height:9px;left:-14px;}
+  .stop.done{color:var(--fg-dim);}
+  .stop.done::before{background:var(--cs-core);border-color:var(--cs-core);}
+  .lang-btn{margin-top:auto;padding:8px 12px;font-size:12px;font-family:'JetBrains Mono',monospace;
+    background:var(--bg-2);color:var(--fg);border:1px solid var(--line-strong);cursor:pointer;
+    box-shadow:3px 3px 0 var(--bg-0);transition:transform .1s,box-shadow .1s;}
+  .lang-btn:hover{transform:translate(-1px,-1px);box-shadow:4px 4px 0 var(--bg-0);}
+  .lang-btn:active{transform:translate(1px,1px);box-shadow:1px 1px 0 var(--bg-0);}
+  /* ---- 主舞台 ---- */
+  .stage{flex:1;height:100vh;position:relative;overflow:hidden;}
+  canvas#c{position:absolute;inset:0;width:100%;height:100%;}
+  /* ---- HUD ---- */
+  .hud{position:absolute;top:18px;right:18px;background:var(--bg-1);border:1px solid var(--line-strong);
+    padding:11px 15px;font-family:'JetBrains Mono',monospace;font-size:11px;min-width:208px;
+    box-shadow:3px 3px 0 var(--bg-0);}
+  .hud-row{display:flex;justify-content:space-between;gap:14px;line-height:1.78;}
+  .hud-lbl{color:var(--fg-mute);}
+  .hud-val{color:var(--cs-signal);font-weight:700;}
+  .hud-val.gen{color:var(--generic);}
+  .hud-val.gain{color:var(--gold);}
+  /* ---- 字幕 ---- */
+  .sub{position:absolute;bottom:26px;left:50%;transform:translateX(-50%);text-align:center;width:80%;pointer-events:none;}
+  .sub-zh{font-size:20px;font-weight:700;color:var(--fg);background:var(--bg-1);
+    padding:7px 20px;display:inline-block;border:1px solid var(--line-strong);box-shadow:3px 3px 0 var(--bg-0);}
+  .sub-en{font-size:12px;font-style:italic;color:var(--fg-dim);margin-top:6px;font-family:'JetBrains Mono',monospace;}
+</style>
+</head>
+<body>
+<aside class="sidebar">
+  <div class="brand" id="brand">个人模型优势<small>CS-01 / train-your-own</small></div>
+  <div class="guide" id="guide">
+    同一套 <b>CSP+LDA</b> 算法, 一边用通用数据训, 一边用<b>你自己的数据</b>训 —
+    个人模型连续超过通用 <b>+10~25 个百分点</b>。
+  </div>
+  <div class="route">
+    <div class="route-title" id="routeTitle">PROJECT ROUTE</div>
+    <div class="route-line">
+      <div class="stop done" id="s1">S1 认识脑波</div>
+      <div class="stop done" id="s2">S2 清洁信号</div>
+      <div class="stop done" id="s3">S3 训分类器</div>
+      <div class="stop here" id="s4">S4 自录冲准</div>
+      <div class="stop" id="s5">S5 接 Minecraft</div>
+      <div class="stop" id="s6">S6 分享</div>
+    </div>
+  </div>
+  <button class="lang-btn" id="langBtn">中 / EN</button>
+</aside>
+<main class="stage">
+  <canvas id="c"></canvas>
+  <div class="hud">
+    <div class="hud-row"><span class="hud-lbl" id="hl0">algorithm</span><span class="hud-val" id="hAlg">CSP + LDA</span></div>
+    <div class="hud-row"><span class="hud-lbl" id="hl1">trained on</span><span class="hud-val" id="hData">YOUR data</span></div>
+    <div class="hud-row"><span class="hud-lbl" id="hl2">generic acc</span><span class="hud-val gen" id="hGen">68.0%</span></div>
+    <div class="hud-row"><span class="hud-lbl" id="hl3">personal acc</span><span class="hud-val" id="hPer">68.0%</span></div>
+    <div class="hud-row"><span class="hud-lbl" id="hl4">gain</span><span class="hud-val gain" id="hGain">+0.0 pts</span></div>
+  </div>
+  <div class="sub">
+    <div class="sub-zh" id="subZh"></div>
+    <div class="sub-en" id="subEn"></div>
+  </div>
+</main>
+<script>
+"use strict";
+const cv = document.getElementById('c');
+const ctx = cv.getContext('2d');
+let W = 0, H = 0, DPR = Math.min(window.devicePixelRatio || 1, 2);
+function resize(){
+  const r = cv.getBoundingClientRect();
+  W = r.width; H = r.height;
+  cv.width = W * DPR; cv.height = H * DPR;
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+}
+window.addEventListener('resize', resize); resize();
+
+// ---- 取 CSS 变量颜色 ----
+const css = getComputedStyle(document.documentElement);
+const C = {
+  signal: css.getPropertyValue('--cs-signal').trim() || 'oklch(0.75 0.17 200)',
+  core:   css.getPropertyValue('--cs-core').trim()   || 'oklch(0.55 0.16 200)',
+  depth:  css.getPropertyValue('--cs-depth').trim()  || 'oklch(0.35 0.10 210)',
+  flash:  css.getPropertyValue('--cs-flash').trim()  || 'oklch(0.92 0.08 190)',
+  query:  css.getPropertyValue('--cs-query').trim()  || 'oklch(0.85 0.14 85)',
+  gold:   css.getPropertyValue('--gold').trim()      || 'oklch(0.85 0.14 85)',
+  gen:    css.getPropertyValue('--generic').trim()   || 'oklch(0.62 0.03 250)',
+  fg:     css.getPropertyValue('--fg').trim(),
+  fgDim:  css.getPropertyValue('--fg-dim').trim(),
+  fgMute: css.getPropertyValue('--fg-mute').trim(),
+  line:   css.getPropertyValue('--line').trim(),
+  lineS:  css.getPropertyValue('--line-strong').trim(),
+  bg1:    css.getPropertyValue('--bg-1').trim(),
+  bg2:    css.getPropertyValue('--bg-2').trim(),
+};
+
+// ===========================================================================
+// 唯一核心对象: "个人模型优势" — 同一团"你自己的"脑波点云上, 两条用同一套
+//   CSP+LDA 算法训出的决策边界:
+//     · 通用边界 (generic): 用别人/通用数据训, 方向是通用平均运动区, 不贴合你 -> 灰青, 几乎不动
+//     · 个人边界 (personal): 用你自己的数据训, 随训练进度 p 连续旋转/平移去贴合你的点云 -> cyan
+//   随 p: 0 -> 1, 个人边界连续贴合, 准确率从通用基线连续拉开 +10~25 pts;
+//   同时 CSP topomap (C3/C4 头皮权重图) 上"你自己的运动区"连续显形, 跟通用略不同。
+//   全程围绕"个人模型 vs 通用模型"一个对比, 同算法控变量, 不翻页。
+// ===========================================================================
+
+// 你自己的脑波点云 (想象左手 cls0 / 想象右手 cls1), 在 CSP 特征平面上.
+// 这是"你"个体特有的分布: 两类沿一条略斜的真轴分开 (你的真运动轴 trueAng).
+const N = 56;
+const RNG = (function(){ let s = 20240542; return ()=>{ s = (s*1103515245+12345)&0x7fffffff; return s/0x7fffffff; }; })();
+function gauss(){ return (RNG()+RNG()+RNG()+RNG()-2)/2; }
+
+// 你的真分类轴 (个体特有): 两类沿这个方向分开. 类间连线方向 = (axx,axy).
+const trueAng = -0.62;          // 你自己运动轴的角度 (rad)
+const SEP     = 0.34;           // 两类沿真轴的分离 (有重叠 -> 准确率非 100%, 更真实)
+const axx = Math.cos(trueAng + Math.PI/2), axy = Math.sin(trueAng + Math.PI/2); // 类间连线方向
+const points = [];
+for(let i=0;i<N;i++){
+  const cls = i < N/2 ? 0 : 1;
+  const along = (cls===0 ? -SEP : SEP) + gauss()*0.42;   // 沿类间连线 (噪声大 -> 两类有交叠)
+  const perp  = gauss()*0.34;                            // 垂直方向散布
+  const x = along*axx + perp*(-axy);
+  const y = along*axy + perp*( axx);
+  points.push({cls, x, y});
+}
+
+// 决策边界 = 法向角 ang + 偏置 b. predict = sign(nx*x + ny*y + b).
+// 个人模型: 法向沿你真分类方向 (axx,axy 即 trueAng+90), 几乎对齐 -> 准确率高.
+// 通用模型: 法向偏离你的真方向 (借的别人平均运动轴) + 阈值也对不上你的中心 (偏置) -> 双重错.
+function normalOf(ang){ return {nx:Math.cos(ang), ny:Math.sin(ang)}; }
+function predict(ang, b, x, y){ const n=normalOf(ang); return (n.nx*x + n.ny*y + b) >= 0 ? 1 : 0; }
+function accuracy(ang, b){
+  let c=0; for(const p of points){ if(predict(ang,b,p.x,p.y)===p.cls) c++; } return c/points.length;
+}
+
+// 个人模型最终配置 (训到你自己的最优, 留少量真实误差不到 100%)
+const PER_ANG = trueAng + Math.PI/2,  PER_B = 0.20;
+// 通用模型配置 (法向偏离 0.6 rad + 偏置 0.30 错位) -> 固定基线, 切不准你
+const GEN_ANG = trueAng + Math.PI/2 + 0.60,  GEN_B = 0.30;
+const ACC_GEN = accuracy(GEN_ANG, GEN_B);
+
+// ---- 坐标: 特征空间 -> canvas 像素 (左侧散点区) ----
+function plotGeom(){
+  const left = 70, right = W*0.60;
+  const topY = 118, bot = H - 120;
+  const size = Math.min(right-left, bot-topY);
+  const cx = (left+right)/2, cy = (topY+bot)/2;
+  const scale = size/2 * 0.80;
+  return {cx, cy, scale, size, top: topY, bot, left, right};
+}
+function toPx(g, x, y){ return {px: g.cx + x*g.scale, py: g.cy - y*g.scale}; }
+
+function lerp(a,b,t){ return a+(b-a)*t; }
+function easeInOut(t){ return t<0.5 ? 2*t*t : 1-Math.pow(-2*t+2,2)/2; }
+
+// ===========================================================================
+// 时间轴 (rAF 连续, 一镜到底): 训练进度 p 在 0..1 之间连续来回演化
+//   阶段 (承接同一对象, 连续不切):
+//     A 引入  : 你的点云 + 通用边界落上来 (切不准, 多点错侧)
+//     B 训练  : 个人边界从通用方向连续旋转贴合你的点云 (核心连续演化)
+//     C 拉开  : 准确率双读数连续分叉, gain 累积到 +10~25
+//     D 显形  : CSP topomap "你自己的运动区"显出, 跟通用略不同; gold key moment
+//   循环用单调 p (0->1->hold->0), 始终是同一对两条边界 + 同一团你的点
+// ===========================================================================
+let t0 = performance.now();
+const CYCLE = 13.5;  // 一轮 13.5s
+
+// 字幕脚本 (跟随画面点睛, 画面为主体)
+const SUBS = [
+  {zh:'M35 看到别人模型在你身上掉准 — 现在用你自己的数据训, 看会好多少', en:'M35: shared models lose accuracy on YOU — now train on YOUR data, see how much better'},
+  {zh:'同一团你自己的脑波: 想左手 / 想右手, 沿你特有的运动轴分开', en:'your own brain waves: left vs right, split along YOUR motor axis'},
+  {zh:'先放通用模型的边界 — 方向是大众平均, 切不准你, 一堆点落错侧', en:'drop the generic boundary — it points the average way, misses you, many points wrong'},
+  {zh:'同一套 CSP+LDA, 改喂你自己的数据 — 边界开始连续旋转去贴合你', en:'same CSP+LDA, fed YOUR data — the boundary rotates to fit you'},
+  {zh:'个人边界越转越贴你的真分割轴, 错侧点一个个被收回正侧', en:'personal boundary aligns to your true axis, wrong points pulled back'},
+  {zh:'同算法、同评测, 个人模型的准确率连续拉开通用 +10~25 个百分点', en:'same algorithm, same test: personal beats generic by +10~25 points'},
+  {zh:'CSP 头皮图显出"你自己的"运动区 — 跟通用略偏, 这就是个体差异', en:'CSP topomap shows YOUR motor area — slightly off the generic, your individuality'},
+  {zh:'个人模型更懂你 — 这是冲 70% 的基础', en:'a personal model understands you — this is the foundation to break 70%'},
+];
+let curSub = -1;
+function setSub(i){
+  if(i===curSub) return; curSub = i;
+  document.getElementById('subZh').textContent = LANG==='zh' ? SUBS[i].zh : '';
+  document.getElementById('subEn').textContent = SUBS[i].en;
+}
+
+// 画特征轴
+function axes(g){
+  ctx.strokeStyle = C.line; ctx.lineWidth = 1; ctx.setLineDash([3,5]);
+  ctx.beginPath(); ctx.moveTo(g.cx, g.top); ctx.lineTo(g.cx, g.bot); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(g.left, g.cy); ctx.lineTo(g.right, g.cy); ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle = C.fgMute; ctx.font = "10px 'JetBrains Mono', monospace";
+  ctx.textAlign='left';
+  ctx.fillText('CSP feat 1', g.right-72, g.cy-8);
+  ctx.fillText('CSP feat 2', g.cx+8, g.top-2);
+}
+
+// 画一条决策边界 (法向角 ang + 偏置 bias): 边界线方向 = 垂直于法向, 偏置沿法向平移
+function boundary(g, ang, bias, color, lw, glow, label){
+  const n = normalOf(ang);
+  const dirx = -n.ny, diry = n.nx;     // 边界方向
+  // 边界过点 -bias*n (法向方程 n.p + bias = 0)
+  const ox = -bias*n.nx, oy = -bias*n.ny;
+  const L = 1.7;
+  const a = toPx(g, ox - dirx*L, oy - diry*L);
+  const b = toPx(g, ox + dirx*L, oy + diry*L);
+  ctx.save();
+  ctx.lineWidth = lw;
+  ctx.strokeStyle = color;
+  if(glow){ ctx.shadowColor = color; ctx.shadowBlur = 14; }
+  ctx.beginPath(); ctx.moveTo(a.px,a.py); ctx.lineTo(b.px,b.py); ctx.stroke();
+  ctx.restore();
+  if(label){
+    ctx.fillStyle = color; ctx.font = "600 11px 'JetBrains Mono', monospace"; ctx.textAlign='left';
+    // 取落在散点区内、靠右的那个端点放标签, 避免被左边栏裁切
+    const cand = (a.px >= b.px) ? a : b;
+    let lx = Math.max(g.left+4, Math.min(cand.px, g.right-90));
+    let ly = Math.max(g.top+24, Math.min(cand.py, g.bot-6));
+    ctx.fillText(label, lx+6, ly - 6);
+  }
+}
+
+// 画一个脑波点 (按某边界 ang 判定对错: 错的描暖警示环)
+function dot(px, py, color, r, wrong){
+  ctx.beginPath(); ctx.arc(px,py,r,0,Math.PI*2);
+  ctx.fillStyle = color; ctx.fill();
+  if(wrong){ ctx.lineWidth=1.6; ctx.strokeStyle=C.query; ctx.stroke(); }
+}
+
+// ---- 右侧: 双准确率柱 + gain, 连续分叉 ----
+function accBars(g, accGen, accPer){
+  const bx = g.right + 56, by = g.top + 60;
+  const bw = W - bx - 40;
+  const barH = 150;
+  ctx.save();
+  ctx.fillStyle=C.fgMute; ctx.font="11px 'JetBrains Mono', monospace"; ctx.textAlign='left';
+  ctx.fillText(LANG==='zh'?'同算法, 不同训练数据':'same algorithm, different data', bx, by);
+  const base = by + 28, h = barH;
+  const yFor = a => base + h - (a-0.45)/(0.95-0.45)*h;   // 0.45..0.95 映射
+  // chance 50% 参考
+  ctx.strokeStyle=C.fgMute; ctx.setLineDash([2,3]); ctx.lineWidth=1;
+  ctx.beginPath(); ctx.moveTo(bx, yFor(0.5)); ctx.lineTo(bx+bw, yFor(0.5)); ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle=C.fgMute; ctx.font="9px 'JetBrains Mono', monospace";
+  ctx.fillText('chance 50%', bx+bw-66, yFor(0.5)-4);
+  const colW = 56, gap = (bw - colW*2)/3;
+  const gX = bx + gap, pX = bx + gap*2 + colW;
+  // 通用柱 (灰青, 固定)
+  const gTop = yFor(accGen);
+  ctx.fillStyle=C.gen; ctx.fillRect(gX, gTop, colW, base+h-gTop);
+  ctx.fillStyle=C.fg; ctx.font="700 13px 'JetBrains Mono', monospace"; ctx.textAlign='center';
+  ctx.fillText((accGen*100).toFixed(0)+'%', gX+colW/2, gTop-6);
+  ctx.fillStyle=C.fgMute; ctx.font="10px 'Noto Sans SC', sans-serif";
+  ctx.fillText(LANG==='zh'?'通用':'generic', gX+colW/2, base+h+16);
+  // 个人柱 (cyan, 随 p 上升)
+  const pTop = yFor(accPer);
+  ctx.fillStyle=C.signal; ctx.fillRect(pX, pTop, colW, base+h-pTop);
+  ctx.fillStyle=C.flash; ctx.font="700 13px 'JetBrains Mono', monospace";
+  ctx.fillText((accPer*100).toFixed(0)+'%', pX+colW/2, pTop-6);
+  ctx.fillStyle=C.signal; ctx.font="10px 'Noto Sans SC', sans-serif";
+  ctx.fillText(LANG==='zh'?'个人':'personal', pX+colW/2, base+h+16);
+  // gain 标注 (两柱之间, 连续累积)
+  const gainPts = (accPer-accGen)*100;
+  if(gainPts > 0.5){
+    const midX = (gX+colW+pX)/2;
+    const yA = gTop, yB = pTop;
+    ctx.strokeStyle=C.gold; ctx.lineWidth=1.5; ctx.setLineDash([4,3]);
+    ctx.beginPath(); ctx.moveTo(gX+colW, yA); ctx.lineTo(pX, yB); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle=C.gold; ctx.font="700 14px 'JetBrains Mono', monospace"; ctx.textAlign='center';
+    ctx.fillText('+'+gainPts.toFixed(0)+' pts', midX, (yA+yB)/2 - 8);
+  }
+  ctx.restore();
+}
+
+// ---- 右下: CSP topomap (你自己的运动区 vs 通用), 头皮俯视权重图 ----
+// 简化头皮: 圆 + C3(左) C4(右) 两个运动电极热点. 你的热点位置/强度随 p 显形, 跟通用略偏.
+function topomap(g, p){
+  const r = 52;
+  const tx = g.right + 56 + 60, ty = H - 118;
+  ctx.save();
+  ctx.fillStyle=C.fgMute; ctx.font="11px 'JetBrains Mono', monospace"; ctx.textAlign='left';
+  ctx.fillText(LANG==='zh'?'CSP 头皮权重图':'CSP scalp pattern', tx - r, ty - r - 14);
+  // 头皮轮廓 + 鼻尖
+  ctx.strokeStyle=C.lineS; ctx.lineWidth=1.5;
+  ctx.beginPath(); ctx.arc(tx,ty,r,0,Math.PI*2); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(tx-6,ty-r); ctx.lineTo(tx,ty-r-9); ctx.lineTo(tx+6,ty-r); ctx.stroke();
+  // 通用运动区热点 (淡灰青, 居中标准 C3/C4)
+  const genHot = [{x:-0.42,y:0.02},{x:0.42,y:0.02}];
+  for(const h of genHot){
+    const hx=tx+h.x*r, hy=ty-h.y*r;
+    ctx.beginPath(); ctx.arc(hx,hy,12,0,Math.PI*2);
+    ctx.fillStyle=C.gen; ctx.globalAlpha=0.30; ctx.fill(); ctx.globalAlpha=1;
+    ctx.strokeStyle=C.gen; ctx.lineWidth=1; ctx.stroke();
+  }
+  // 你自己的运动区热点 (cyan, 随 p 显形, 位置跟通用略偏 -> 个体差异)
+  const yourHot = [{x:-0.50,y:0.14},{x:0.36,y:-0.08}];
+  for(const h of yourHot){
+    const hx=tx+h.x*r, hy=ty-h.y*r;
+    const rad = 4 + 9*p;
+    ctx.beginPath(); ctx.arc(hx,hy,rad,0,Math.PI*2);
+    ctx.fillStyle=C.signal; ctx.globalAlpha=0.20+0.45*p; ctx.fill(); ctx.globalAlpha=1;
+    ctx.strokeStyle=C.flash; ctx.lineWidth=1.4; ctx.stroke();
+  }
+  // 电极名
+  ctx.fillStyle=C.fgMute; ctx.font="8px 'JetBrains Mono', monospace"; ctx.textAlign='center';
+  ctx.fillText('C3', tx-0.42*r, ty+0.02*r+22);
+  ctx.fillText('C4', tx+0.42*r, ty+0.02*r+22);
+  // 图例
+  ctx.textAlign='left'; ctx.font="8px 'JetBrains Mono', monospace";
+  ctx.fillStyle=C.gen;    ctx.fillText('generic', tx+r+10, ty-6);
+  ctx.fillStyle=C.signal; ctx.fillText('yours',   tx+r+10, ty+8);
+  ctx.restore();
+}
+
+let LANG = 'zh';
+let raf = null;
+
+function frame(now){
+  const t = (now - t0)/1000;
+  const g = plotGeom();
+  ctx.clearRect(0,0,W,H);
+
+  // ---- 连续训练进度 p (0->1->hold->回0), 一镜到底, 不切帧 ----
+  const lt = t % CYCLE;
+  let p, phase;
+  if(lt < 1.6){ p = 0; phase='A'; }                                 // 引入: 你的点 + 通用边界
+  else if(lt < 7.0){ p = easeInOut((lt-1.6)/5.4); phase='B'; }       // 训练: 个人边界连续贴合
+  else if(lt < 11.5){ p = 1; phase='C'; }                            // 拉开 + topomap 显形
+  else { p = 1 - easeInOut((lt-11.5)/2.0); phase='D'; }              // 缓慢回放, 准备下一轮
+
+  // 个人边界: 从通用配置 (GEN_ANG,GEN_B) 连续旋转/平移到你的最优 (PER_ANG,PER_B)
+  const perAng = lerp(GEN_ANG, PER_ANG, p);
+  const perB   = lerp(GEN_B,   PER_B,   p);
+  const accPer = accuracy(perAng, perB);
+  const accGen = ACC_GEN;
+
+  // ---- 标题 ----
+  ctx.fillStyle = C.fg; ctx.font = "700 17px 'Noto Sans SC', sans-serif"; ctx.textAlign='left';
+  ctx.fillText(LANG==='zh' ? '个人模型 vs 通用模型: 同一套算法, 喂谁的数据?' : 'Personal vs generic: same algorithm, whose data?', 26, 56);
+  ctx.fillStyle = C.fgMute; ctx.font = "11px 'JetBrains Mono', monospace";
+  ctx.fillText('points = YOUR brain waves (fixed) · two boundaries, both CSP+LDA', 26, 76);
+
+  // ---- 特征轴 ----
+  axes(g);
+
+  // ---- 通用边界 (灰青, 固定不动; 它是参照系) ----
+  boundary(g, GEN_ANG, GEN_B, C.gen, 2.2, false, LANG==='zh'?'通用模型':'generic model');
+
+  // ---- 你自己的点云 (核心对象, 固定不动) ----
+  // 用"当前个人边界"判定对错 -> 训练中错点连续变正
+  for(const pt of points){
+    const wrong = predict(perAng, perB, pt.x, pt.y) !== pt.cls;
+    const px = toPx(g, pt.x, pt.y);
+    const baseColor = pt.cls===0 ? C.core : C.flash;
+    dot(px.px, px.py, baseColor, wrong?5.0:4.4, wrong);
+  }
+
+  // ---- 个人边界 (核心: 随 p 连续旋转+平移贴合你的数据) ----
+  const glow = phase==='C';
+  boundary(g, perAng, perB, C.signal, 3.0, glow, LANG==='zh'?'你的个人模型':'YOUR personal model');
+
+  // ---- 右侧双准确率柱 (连续分叉) ----
+  accBars(g, accGen, accPer);
+
+  // ---- 右下 CSP topomap (你自己的运动区显形) ----
+  topomap(g, p);
+
+  // ---- key moment: 拉开到位, gold 一闪 ----
+  if(phase==='C'){
+    const gainPts = (accPer-accGen)*100;
+    ctx.save();
+    ctx.globalAlpha = 0.55 + 0.45*Math.abs(Math.sin(t*3));
+    ctx.fillStyle = C.gold; ctx.font="700 15px 'Noto Sans SC', sans-serif"; ctx.textAlign='center';
+    ctx.fillText((LANG==='zh'?'个人模型领先 +':'personal leads +')+gainPts.toFixed(0)+(LANG==='zh'?' 个百分点':' pts'), g.cx, 100);
+    ctx.restore();
+  }
+
+  // ---- 角落 Bit mascot + Minecraft 终点剪影 ----
+  drawMascotBit(W-58, H-58, t);
+  drawMinecraftHint(74, H-44);
+
+  // ---- HUD ----
+  document.getElementById('hData').textContent = p>0.05 ? 'YOUR data' : 'generic data';
+  document.getElementById('hGen').textContent = (accGen*100).toFixed(1)+'%';
+  document.getElementById('hPer').textContent = (accPer*100).toFixed(1)+'%';
+  const gainPts = (accPer-accGen)*100;
+  document.getElementById('hGain').textContent = (gainPts>=0?'+':'')+gainPts.toFixed(1)+' pts';
+
+  // ---- 字幕脚本 (跟随阶段) ----
+  let si;
+  if(phase==='A') si = lt<0.8 ? 0 : (lt<1.3? 1 : 2);
+  else if(phase==='B'){ si = p<0.25? 3 : (p<0.7? 4 : 5); }
+  else if(phase==='C'){ si = lt<9.3? 5 : 6; }
+  else si = 7;
+  setSub(si);
+
+  raf = requestAnimationFrame(frame);
+}
+
+// ---- Bit mascot: 悬浮立方体精灵 (cs themes.js mascot), 像素随训练微抖 ----
+function drawMascotBit(x, y, t){
+  ctx.save();
+  ctx.translate(x, y + Math.sin(t*1.6)*4);
+  const s=11;
+  ctx.fillStyle=C.core;  ctx.beginPath(); ctx.moveTo(0,-s);ctx.lineTo(s,-s/2);ctx.lineTo(s,s/2);ctx.lineTo(0,s);ctx.closePath();ctx.fill();
+  ctx.fillStyle=C.signal;ctx.beginPath(); ctx.moveTo(0,-s);ctx.lineTo(-s,-s/2);ctx.lineTo(-s,s/2);ctx.lineTo(0,s);ctx.closePath();ctx.fill();
+  ctx.fillStyle=C.flash; ctx.beginPath(); ctx.moveTo(0,-s);ctx.lineTo(s,-s/2);ctx.lineTo(0,0);ctx.lineTo(-s,-s/2);ctx.closePath();ctx.fill();
+  for(let i=0;i<3;i++){
+    const a=t*2+i*2.1;
+    ctx.fillStyle=C.query; ctx.fillRect(Math.cos(a)*(s+6)-1.5, Math.sin(a)*(s+6)-1.5+(i-1)*3, 3,3);
+  }
+  ctx.fillStyle=C.fgMute; ctx.font="8px 'JetBrains Mono', monospace"; ctx.textAlign='center';
+  ctx.fillText('Bit', 0, s+15);
+  ctx.restore();
+}
+
+// ---- Minecraft 终点剪影 (项目终点常驻徽记) ----
+function drawMinecraftHint(x, y){
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.globalAlpha=0.55;
+  const u=4;
+  ctx.fillStyle=C.depth;
+  ctx.fillRect(-3*u,-3*u,6*u,6*u);
+  ctx.fillStyle=C.bg2;
+  ctx.fillRect(-2*u,-2*u,2*u,2*u);
+  ctx.fillRect( 0,   -2*u,2*u,2*u);
+  ctx.fillRect(-1*u, 0, 2*u,3*u);
+  ctx.globalAlpha=0.7;
+  ctx.fillStyle=C.fgMute; ctx.font="8px 'JetBrains Mono', monospace"; ctx.textAlign='center';
+  ctx.fillText(LANG==='zh'?'终点: 脑控 Minecraft':'goal: mind-control Minecraft', 0, 5*u+10);
+  ctx.restore();
+}
+
+// ---- i18n ----
+const I18N = {
+  zh:{
+    brand:'个人模型优势', guide:'同一套 <b>CSP+LDA</b> 算法, 一边用通用数据训, 一边用<b>你自己的数据</b>训 — 个人模型连续超过通用 <b>+10~25 个百分点</b>。',
+    routeTitle:'项目路线', hl0:'算法', hl1:'训练数据', hl2:'通用准确率', hl3:'个人准确率', hl4:'领先',
+    s1:'S1 认识脑波', s2:'S2 清洁信号', s3:'S3 训分类器', s4:'S4 自录冲准', s5:'S5 接 Minecraft', s6:'S6 分享',
+  },
+  en:{
+    brand:'Personal model', guide:'Same <b>CSP+LDA</b> algorithm — one trained on generic data, one on <b>YOUR data</b>. The personal model wins by <b>+10~25 points</b>.',
+    routeTitle:'PROJECT ROUTE', hl0:'algorithm', hl1:'trained on', hl2:'generic acc', hl3:'personal acc', hl4:'gain',
+    s1:'S1 know waves', s2:'S2 clean', s3:'S3 classifier', s4:'S4 self-record', s5:'S5 Minecraft', s6:'S6 share',
+  }
+};
+function refreshI18N(){
+  const d = I18N[LANG];
+  document.getElementById('brand').innerHTML = d.brand + '<small>CS-01 / train-your-own</small>';
+  document.getElementById('guide').innerHTML = d.guide;
+  document.getElementById('routeTitle').textContent = d.routeTitle;
+  ['hl0','hl1','hl2','hl3','hl4','s1','s2','s3','s4','s5','s6'].forEach(id=>{
+    const el=document.getElementById(id); if(el) el.textContent = d[id];
+  });
+  document.getElementById('hAlg').textContent = 'CSP + LDA';
+  if(curSub>=0){
+    document.getElementById('subZh').textContent = LANG==='zh' ? SUBS[curSub].zh : '';
+    document.getElementById('subEn').textContent = SUBS[curSub].en;
+  }
+}
+document.getElementById('langBtn').addEventListener('click', ()=>{
+  LANG = LANG==='zh' ? 'en' : 'zh';
+  refreshI18N();
+});
+
+refreshI18N();
+raf = requestAnimationFrame(frame);
+</script>
+</body>
+</html>

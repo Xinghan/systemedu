@@ -1,0 +1,606 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>录制规划师 — 把有限精力分配出 50 次好数据</title>
+<style>
+  :root{
+    --bg-0:oklch(0.15 0.03 25);
+    --bg-1:oklch(0.20 0.04 25);
+    --bg-2:oklch(0.26 0.05 25);
+    --neuro:oklch(0.75 0.17 25);      /* SYNAPTIC accent */
+    --synaptic:oklch(0.75 0.17 25);
+    --dendrite:oklch(0.55 0.15 25);
+    --axon:oklch(0.32 0.10 25);
+    --firing:oklch(0.92 0.08 25);
+    --memory:oklch(0.85 0.14 85);
+    --ink:oklch(0.96 0.02 30);
+    --ink-dim:oklch(0.76 0.03 30);
+    --ink-mute:oklch(0.58 0.04 28);
+    --alert:oklch(0.66 0.20 25);
+    --good:oklch(0.78 0.16 150);
+    --warn:oklch(0.82 0.15 80);
+    --mono:'JetBrains Mono','SFMono-Regular',Consolas,'Liberation Mono',monospace;
+    --sans:'Inter','Segoe UI','Helvetica Neue',Arial,sans-serif;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;height:100vh;overflow:hidden;background:var(--bg-0);color:var(--ink);font-family:var(--sans);}
+  body{display:flex;}
+
+  /* ---------- sidebar ---------- */
+  .game-sidebar{width:200px;flex-shrink:0;height:100vh;background:var(--bg-1);
+    border-right:1.5px solid var(--axon);display:flex;flex-direction:column;gap:11px;padding:14px;overflow-y:auto;}
+  .mascot{display:flex;align-items:center;gap:8px;}
+  .mascot-orb{width:30px;height:30px;flex-shrink:0;}
+  .mascot-name{font-family:var(--mono);font-size:11px;color:var(--synaptic);letter-spacing:.5px;}
+  .mascot-role{font-size:10px;color:var(--ink-mute);}
+  .side-title{font-size:14px;font-weight:800;line-height:1.3;color:var(--ink);}
+  .side-sub{font-size:10.5px;line-height:1.5;color:var(--ink-dim);}
+
+  .route{display:flex;flex-direction:column;gap:3px;margin-top:2px;}
+  .route-lbl{font-family:var(--mono);font-size:9px;color:var(--ink-mute);letter-spacing:1px;}
+  .stop{display:flex;align-items:center;gap:6px;font-family:var(--mono);font-size:10px;color:var(--ink-mute);}
+  .stop .dot{width:8px;height:8px;border-radius:50%;background:var(--axon);flex-shrink:0;}
+  .stop.done .dot{background:var(--dendrite);}
+  .stop.here{color:var(--firing);font-weight:700;}
+  .stop.here .dot{background:var(--synaptic);box-shadow:0 0 0 3px color-mix(in oklch,var(--synaptic) 30%,transparent);}
+
+  .pool{background:var(--bg-2);border:1.5px solid var(--axon);box-shadow:3px 3px 0 var(--bg-0);padding:9px 10px;}
+  .pool-h{font-family:var(--mono);font-size:9.5px;color:var(--ink-mute);letter-spacing:.5px;margin-bottom:6px;}
+  .pool-bar{height:11px;background:var(--bg-0);border:1px solid var(--axon);overflow:hidden;margin-bottom:5px;}
+  .pool-bar-fill{height:100%;background:var(--synaptic);width:100%;transition:width .35s,background .35s;}
+  .pool-row{display:flex;justify-content:space-between;font-family:var(--mono);font-size:10.5px;}
+  .pool-row .k{color:var(--ink-mute);}
+  .pool-row .v{color:var(--synaptic);font-weight:700;}
+
+  .lang-btn{margin-top:auto;background:var(--bg-2);border:1.5px solid var(--dendrite);color:var(--ink);
+    font-family:var(--mono);font-size:11px;padding:7px;cursor:pointer;box-shadow:2px 2px 0 var(--bg-0);transition:transform .08s;}
+  .lang-btn:hover{transform:translate(-1px,-1px);}
+  .lang-btn:active{transform:translate(1px,1px);}
+
+  /* ---------- main ---------- */
+  .game-main{flex:1;height:100vh;display:flex;flex-direction:column;gap:9px;padding:14px 18px;position:relative;overflow:hidden;}
+  .brief{background:var(--bg-1);border:1.5px solid var(--axon);border-left:3px solid var(--synaptic);padding:8px 13px;}
+  .brief h2{margin:0 0 2px;font-size:13.5px;color:var(--firing);}
+  .brief p{margin:0;font-size:11.5px;color:var(--ink-dim);line-height:1.5;}
+
+  .stage{flex:1;display:flex;gap:14px;min-height:0;}
+  .col{display:flex;flex-direction:column;gap:9px;min-height:0;}
+  .col.alloc{width:312px;flex-shrink:0;overflow-y:auto;}
+  .col.sim{flex:1;}
+  .col-h{font-family:var(--mono);font-size:10.5px;color:var(--ink-mute);letter-spacing:.5px;}
+
+  /* allocation rows */
+  .arow{background:var(--bg-1);border:1.5px solid var(--axon);box-shadow:3px 3px 0 var(--bg-0);padding:9px 11px;}
+  .arow-top{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:3px;}
+  .arow-name{font-size:12px;font-weight:700;color:var(--ink);}
+  .arow-cost{font-family:var(--mono);font-size:9px;color:var(--ink-mute);}
+  .arow-desc{font-size:10px;color:var(--ink-dim);line-height:1.4;margin-bottom:7px;}
+  .stepper{display:flex;align-items:center;gap:8px;}
+  .step-btn{width:30px;height:30px;flex-shrink:0;background:var(--bg-2);border:1.5px solid var(--dendrite);color:var(--ink);
+    font-family:var(--mono);font-size:16px;line-height:1;cursor:pointer;box-shadow:2px 2px 0 var(--bg-0);transition:transform .08s;}
+  .step-btn:hover{transform:translate(-1px,-1px);}
+  .step-btn:active{transform:translate(1px,1px);}
+  .step-btn:disabled{opacity:.35;cursor:not-allowed;box-shadow:none;transform:none;}
+  .step-val{flex:1;text-align:center;font-family:var(--mono);}
+  .step-val .num{font-size:18px;font-weight:700;color:var(--synaptic);}
+  .step-val .unit{font-size:9.5px;color:var(--ink-mute);display:block;margin-top:1px;}
+
+  .energy-need{margin-top:7px;}
+  .en-h{display:flex;justify-content:space-between;font-family:var(--mono);font-size:9.5px;margin-bottom:3px;}
+  .en-h .nm{color:var(--ink-mute);}
+  .en-h .pc{font-weight:700;color:var(--synaptic);}
+  .en-track{height:9px;background:var(--bg-0);border:1px solid var(--axon);overflow:hidden;}
+  .en-fill{height:100%;width:0;background:var(--synaptic);transition:width .3s,background .3s;}
+  .en-fill.over{background:var(--alert);}
+
+  .runbtn{margin-top:1px;background:var(--synaptic);border:1.5px solid var(--firing);color:var(--bg-0);
+    font-family:var(--mono);font-weight:700;font-size:12px;padding:11px;cursor:pointer;box-shadow:3px 3px 0 var(--bg-0);transition:transform .08s;}
+  .runbtn:hover{transform:translate(-1px,-1px);}
+  .runbtn:active{transform:translate(1px,1px);}
+  .runbtn:disabled{background:var(--axon);border-color:var(--axon);color:var(--ink-mute);cursor:not-allowed;box-shadow:none;transform:none;}
+
+  /* simulation panel */
+  .sim-wrap{flex:1;background:var(--bg-1);border:1.5px solid var(--axon);display:flex;flex-direction:column;min-height:0;padding:11px 13px;}
+  .sim-canvas-box{flex:1;display:flex;flex-direction:column;min-height:0;}
+  canvas{flex:1;width:100%;display:block;}
+
+  .result{background:var(--bg-1);border:1.5px solid var(--axon);padding:9px 12px;}
+  .res-grid{display:flex;gap:10px;}
+  .res-cell{flex:1;background:var(--bg-2);border:1.5px solid var(--axon);padding:7px 9px;text-align:center;}
+  .res-cell .rk{font-family:var(--mono);font-size:9px;color:var(--ink-mute);letter-spacing:.5px;}
+  .res-cell .rv{font-family:var(--mono);font-size:18px;font-weight:700;margin-top:2px;}
+  .verdict{margin-top:8px;font-size:11px;line-height:1.5;color:var(--ink-dim);}
+  .verdict b{color:var(--firing);}
+  .verdict.bad b{color:var(--alert);}
+  .verdict.warn b{color:var(--warn);}
+  .verdict.ok b{color:var(--good);}
+  .res-empty{font-family:var(--mono);font-size:10.5px;color:var(--ink-mute);line-height:1.7;text-align:center;padding:8px 2px;}
+
+  .toast{position:absolute;top:12px;left:50%;transform:translateX(-50%);background:var(--bg-2);
+    border:1.5px solid var(--synaptic);color:var(--ink);font-family:var(--mono);font-size:11px;padding:7px 14px;
+    box-shadow:3px 3px 0 var(--bg-0);opacity:0;transition:opacity .25s;pointer-events:none;z-index:15;}
+  .toast.show{opacity:1;}
+
+  .endpoint{position:absolute;right:14px;bottom:10px;display:flex;align-items:center;gap:7px;opacity:.5;pointer-events:none;}
+  .endpoint span{font-family:var(--mono);font-size:9px;color:var(--ink-mute);max-width:140px;line-height:1.4;}
+
+  .overlay{position:absolute;inset:0;background:color-mix(in oklch,var(--bg-0) 88%,transparent);
+    display:none;align-items:center;justify-content:center;flex-direction:column;gap:10px;text-align:center;z-index:20;padding:30px;}
+  .overlay.show{display:flex;}
+  .badge{font-family:var(--mono);font-size:11px;color:var(--memory);letter-spacing:2px;}
+  .overlay h2{margin:0;font-size:22px;color:var(--firing);}
+  .overlay p{margin:0;max-width:460px;font-size:12.5px;color:var(--ink-dim);line-height:1.6;}
+  .overlay p b{color:var(--firing);}
+  .overlay button{margin-top:6px;background:var(--bg-2);border:1.5px solid var(--synaptic);color:var(--ink);
+    font-family:var(--mono);font-size:11px;padding:8px 16px;cursor:pointer;box-shadow:2px 2px 0 var(--bg-0);}
+</style>
+</head>
+<body>
+
+<aside class="game-sidebar">
+  <div class="mascot">
+    <svg class="mascot-orb" viewBox="0 0 30 30">
+      <circle cx="15" cy="16" r="2.4" fill="var(--synaptic)"/>
+      <line x1="15" y1="16" x2="8" y2="9" stroke="var(--dendrite)" stroke-width="1.3"/>
+      <line x1="15" y1="16" x2="23" y2="8" stroke="var(--dendrite)" stroke-width="1.3"/>
+      <line x1="15" y1="16" x2="9" y2="23" stroke="var(--dendrite)" stroke-width="1.3"/>
+      <line x1="15" y1="16" x2="22" y2="23" stroke="var(--dendrite)" stroke-width="1.3"/>
+      <circle cx="8" cy="9" r="1.8" fill="var(--firing)"/>
+      <circle cx="23" cy="8" r="1.8" fill="var(--memory)"/>
+      <circle cx="9" cy="23" r="1.8" fill="var(--memory)"/>
+      <circle cx="22" cy="23" r="1.8" fill="var(--firing)"/>
+    </svg>
+    <div>
+      <div class="mascot-name">SPARK</div>
+      <div class="mascot-role" id="mRole">录制搭档</div>
+    </div>
+  </div>
+
+  <div class="side-title" id="title">录制规划师</div>
+  <div class="side-sub" id="goal">把有限的精力分配出 50 次干净数据。</div>
+
+  <div class="route">
+    <div class="route-lbl" id="routeLbl">脑控 MINECRAFT 路线</div>
+    <div class="stop done"><span class="dot"></span><span data-s="1">S1 信号基础</span></div>
+    <div class="stop done"><span class="dot"></span><span data-s="2">S2 信号清洗</span></div>
+    <div class="stop done"><span class="dot"></span><span data-s="3">S3 分类与方法</span></div>
+    <div class="stop here"><span class="dot"></span><span data-s="4">S4 数据采集</span></div>
+    <div class="stop"><span class="dot"></span><span data-s="5">S5 训练专属模型</span></div>
+    <div class="stop"><span class="dot"></span><span data-s="6">S6 脑控成型</span></div>
+  </div>
+
+  <div class="pool">
+    <div class="pool-h" id="poolH">精力池</div>
+    <div class="pool-bar"><div class="pool-bar-fill" id="poolFill"></div></div>
+    <div class="pool-row"><span class="k" id="poolK">剩余 / 总</span><span class="v"><span id="poolLeft">100</span> / 100</span></div>
+  </div>
+
+  <button class="lang-btn" id="langBtn">中 / EN</button>
+</aside>
+
+<main class="game-main">
+  <div class="brief">
+    <h2 id="briefH">录 50 次很累，怎么分配精力录到最好的数据？</h2>
+    <p id="briefP">S4 你要采够 50+ 次「想象左手 / 右手」的脑电，喂给 S5 训练你的专属模型。但你只有 100 点录制精力——分到几场？每场录几次？留多少去做质检？分配方式决定你最后拿到多少「干净」数据。</p>
+  </div>
+
+  <div class="stage">
+    <div class="col alloc">
+      <div class="col-h" id="colAlloc">分配精力</div>
+
+      <div class="arow" data-row="sessions">
+        <div class="arow-top"><span class="arow-name" id="n_sessions">分几场录</span><span class="arow-cost" id="c_sessions">每场 6 精力</span></div>
+        <div class="arow-desc" id="d_sessions">分多场可以休息，避免越录越累、信号变差（疲劳伪迹）。</div>
+        <div class="stepper">
+          <button class="step-btn" data-step="sessions" data-dir="-1">-</button>
+          <div class="step-val"><span class="num" id="v_sessions">2</span><span class="unit" id="u_sessions">场</span></div>
+          <button class="step-btn" data-step="sessions" data-dir="1">+</button>
+        </div>
+      </div>
+
+      <div class="arow" data-row="trials">
+        <div class="arow-top"><span class="arow-name" id="n_trials">每场录几次</span><span class="arow-cost" id="c_trials">每次 1 精力</span></div>
+        <div class="arow-desc" id="d_trials">每场录得越多采集越快，但一场里越往后越累，后段数据质量会掉。</div>
+        <div class="stepper">
+          <button class="step-btn" data-step="trials" data-dir="-1">-</button>
+          <div class="step-val"><span class="num" id="v_trials">20</span><span class="unit" id="u_trials">次/场</span></div>
+          <button class="step-btn" data-step="trials" data-dir="1">+</button>
+        </div>
+      </div>
+
+      <div class="arow" data-row="qc">
+        <div class="arow-top"><span class="arow-name" id="n_qc">留多少质检</span><span class="arow-cost" id="c_qc">每档 8 精力</span></div>
+        <div class="arow-desc" id="d_qc">留精力当场回看波形、剔掉眨眼/乱动的脏数据。不质检 = 脏数据混进训练。</div>
+        <div class="stepper">
+          <button class="step-btn" data-step="qc" data-dir="-1">-</button>
+          <div class="step-val"><span class="num" id="v_qc">2</span><span class="unit" id="u_qc">档</span></div>
+          <button class="step-btn" data-step="qc" data-dir="1">+</button>
+        </div>
+      </div>
+
+      <div class="energy-need">
+        <div class="en-h"><span class="nm" id="enNm">本方案需精力</span><span class="pc" id="enPc">0 / 100</span></div>
+        <div class="en-track"><div class="en-fill" id="enFill"></div></div>
+      </div>
+
+      <button class="runbtn" id="runBtn">开始录制 / Record</button>
+
+      <div class="result" id="result">
+        <div class="res-empty" id="resEmpty">分配好精力，<br>点「开始录制」看结果</div>
+      </div>
+    </div>
+
+    <div class="col sim">
+      <div class="col-h" id="colSim">录制模拟 — 每场采集 × 疲劳 × 质检</div>
+      <div class="sim-wrap">
+        <div class="sim-canvas-box"><canvas id="sim"></canvas></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="endpoint">
+    <svg width="26" height="26" viewBox="0 0 26 26">
+      <rect x="3" y="3" width="9" height="9" fill="var(--dendrite)"/>
+      <rect x="14" y="3" width="9" height="9" fill="var(--axon)"/>
+      <rect x="3" y="14" width="9" height="9" fill="var(--axon)"/>
+      <rect x="14" y="14" width="9" height="9" fill="var(--dendrite)"/>
+    </svg>
+    <span id="epTxt">终点：意念搭建方块</span>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <div class="overlay" id="overlay">
+    <div class="badge" id="ovBadge">解锁</div>
+    <h2 id="ovH">录制规划师</h2>
+    <p id="ovP"></p>
+    <button id="ovBtn">继续 / Next</button>
+  </div>
+</main>
+
+<script>
+(function(){
+  const T = {
+    cn:{
+      mRole:'录制搭档', title:'录制规划师',
+      goal:'把有限的精力分配出 50 次干净数据。',
+      routeLbl:'脑控 MINECRAFT 路线',
+      poolH:'精力池', poolK:'剩余 / 总',
+      briefH:'录 50 次很累，怎么分配精力录到最好的数据？',
+      briefP:'S4 你要采够 50+ 次「想象左手 / 右手」的脑电，喂给 S5 训练你的专属模型。但你只有 100 点录制精力——分到几场？每场录几次？留多少去做质检？分配方式决定你最后拿到多少「干净」数据。',
+      colAlloc:'分配精力', colSim:'录制模拟 — 每场采集 × 疲劳 × 质检',
+      run:'开始录制 / Record', langBtn:'中 / EN',
+      stops:['S1 信号基础','S2 信号清洗','S3 分类与方法','S4 数据采集','S5 训练专属模型','S6 脑控成型'],
+      n_sessions:'分几场录', c_sessions:'每场 6 精力',
+      d_sessions:'分多场可以休息，避免越录越累、信号变差（疲劳伪迹）。', u_sessions:'场',
+      n_trials:'每场录几次', c_trials:'每次 1 精力',
+      d_trials:'每场录得越多采集越快，但一场里越往后越累，后段数据质量会掉。', u_trials:'次/场',
+      n_qc:'留多少质检', c_qc:'每档 8 精力',
+      d_qc:'留精力当场回看波形、剔掉眨眼/乱动的脏数据。不质检 = 脏数据混进训练。', u_qc:'档',
+      enNm:'本方案需精力',
+      epTxt:'终点：意念搭建方块',
+      resEmpty:'分配好精力，\n点「开始录制」看结果',
+      kRaw:'录到总数', kClean:'干净可用', kQual:'数据质量',
+      qualHigh:'优', qualMid:'中', qualLow:'差',
+      toastOver:'精力超了！先减少某一项再录',
+      // sim labels
+      simSession:'场', simFatigue:'疲劳', simYield:'本场可用',
+      verdicts:{
+        over:{cls:'bad', t:'精力超支——总和已超过 100，先把某一项调小。'},
+        few:{cls:'bad', t:'只录到 <b>__CLEAN__</b> 次干净数据，<b>不够 50</b>。样本太少，S5 模型学不准，上线会乱跳。再多分点精力到采集。'},
+        fatigue:{cls:'warn', t:'录到 __RAW__ 次，但全挤在一两场里——<b>越录越累，后段全是疲劳伪迹</b>，质检剔掉一大半，只剩 <b>__CLEAN__</b> 次干净。把它分到更多场、每场少录点。'},
+        noqc:{cls:'bad', t:'录了 __RAW__ 次却<b>几乎没质检</b>——眨眼、乱动的脏数据混进来，S5 会被带歪。留点精力做质检，干净的只算 <b>__CLEAN__</b> 次。'},
+        ok:{cls:'ok', t:'拿到 <b>__CLEAN__</b> 次<b>干净</b>数据（共录 __RAW__ 次）——多场分摊不疲劳，又留了质检剔脏。这批数据 S5 训得出靠谱的专属模型。'},
+      },
+      ovWin:'你录够了 <b>__CLEAN__ 次干净数据</b>。诀窍不是猛录，而是<b>把精力分到多场 + 留出质检</b>：分场避开疲劳伪迹，质检剔掉眨眼乱动的脏数据。下一步 S5 就拿这批好数据，训练出<b>只属于你</b>的脑控模型——这是你意念搭方块前最后一块拼图。',
+      ovHint:'还没拿到 50 次干净数据。试试：把「分几场」调到 3-4 场、每场别录太多、再留 1-2 档质检，让疲劳和脏数据都降下来。',
+    },
+    en:{
+      mRole:'Recording buddy', title:'Recording Planner',
+      goal:'Allocate limited energy into 50 clean recordings.',
+      routeLbl:'BRAIN-MINECRAFT ROUTE',
+      poolH:'Energy pool', poolK:'left / total',
+      briefH:'Recording 50 times is tiring — how do you spend energy to get the best data?',
+      briefP:'For S4 you must collect 50+ left/right-hand imagined-movement trials to feed S5 and train your own model. But you only have 100 energy points — how many sessions? How many trials each? How much held back for quality checks? Your allocation decides how much CLEAN data you end up with.',
+      colAlloc:'Allocate energy', colSim:'Recording sim — collection x fatigue x QC',
+      run:'Record / 录制', langBtn:'EN / 中',
+      stops:['S1 Signal basics','S2 Cleaning','S3 Classify & methods','S4 Collect data','S5 Train your model','S6 Brain control'],
+      n_sessions:'Sessions', c_sessions:'6 energy each',
+      d_sessions:'More sessions let you rest, avoiding fatigue artifacts as you tire.', u_sessions:'sessions',
+      n_trials:'Trials per session', c_trials:'1 energy each',
+      d_trials:'More per session collects faster, but late trials in a session get noisy as you tire.', u_trials:'/session',
+      n_qc:'Quality-check reserve', c_qc:'8 energy / level',
+      d_qc:'Energy held back to review waveforms and drop blink/motion junk. No QC = dirty data in training.', u_qc:'levels',
+      enNm:'This plan needs',
+      epTxt:'Goal: build blocks by thought',
+      resEmpty:'Allocate energy,\nthen hit Record',
+      kRaw:'Total recorded', kClean:'Clean usable', kQual:'Data quality',
+      qualHigh:'High', qualMid:'Mid', qualLow:'Low',
+      toastOver:'Over budget! Reduce something first',
+      simSession:'S', simFatigue:'fatigue', simYield:'usable',
+      verdicts:{
+        over:{cls:'bad', t:'Over budget — total exceeds 100, turn one of them down.'},
+        few:{cls:'bad', t:'Only <b>__CLEAN__</b> clean trials — <b>under 50</b>. Too few samples; the S5 model can\'t learn and will jitter live. Put more energy into collection.'},
+        fatigue:{cls:'warn', t:'Recorded __RAW__, but crammed into one or two sessions — <b>fatigue artifacts pile up late</b>, QC drops most of them, leaving only <b>__CLEAN__</b> clean. Spread across more sessions, fewer trials each.'},
+        noqc:{cls:'bad', t:'Recorded __RAW__ but <b>barely any QC</b> — blink/motion junk slips in and skews S5. Reserve some QC energy; only <b>__CLEAN__</b> count as clean.'},
+        ok:{cls:'ok', t:'Got <b>__CLEAN__</b> <b>clean</b> trials (recorded __RAW__) — spread across sessions to dodge fatigue, with QC to drop junk. S5 can train a solid personal model on this.'},
+      },
+      ovWin:'You collected <b>__CLEAN__ clean trials</b>. The trick is not recording harder — it\'s <b>spreading energy across sessions + reserving QC</b>: sessions dodge fatigue artifacts, QC drops blink/motion junk. Next, S5 takes this good data and trains a model that\'s <b>uniquely yours</b> — the last piece before you build blocks with your mind.',
+      ovHint:'Not 50 clean trials yet. Try: set sessions to 3-4, fewer trials each, keep 1-2 QC levels, so both fatigue and junk drop.',
+    }
+  };
+
+  // -------- allocation model --------
+  const COST = { sessionsEach:6, trialEach:1, qcEach:8 };
+  const BUDGET = 100;
+  const LIMITS = { sessions:[1,4], trials:[5,32], qc:[0,3] };
+  const STEP = { sessions:1, trials:4, qc:1 };
+
+  let lang='cn';
+  let unlocked=false;
+  let lastResult=null;   // for lang re-render
+
+  const alloc = { sessions:2, trials:21, qc:1 };
+
+  const $=id=>document.getElementById(id);
+  const runBtn=$('runBtn'), overlay=$('overlay'), toastEl=$('toast'), resultEl=$('result');
+  const canvas=$('sim'), ctx=canvas.getContext('2d');
+
+  function energyCost(a){
+    return a.sessions*COST.sessionsEach + a.sessions*a.trials*COST.trialEach + a.qc*COST.qcEach;
+  }
+
+  // -------- core simulation: returns per-session usable + totals --------
+  function simulate(a){
+    // per-session fatigue: within a session, quality of trial i decays as it goes on.
+    // late trials in a big single session are mostly fatigue artifacts.
+    const sessions=[];
+    let rawTotal=0;
+    let preQcClean=0; // trials that are physically usable (not fatigue-junk) before QC selection
+    for(let s=0;s<a.sessions;s++){
+      const perTrial=[];
+      let sessUsable=0;
+      for(let i=0;i<a.trials;i++){
+        rawTotal++;
+        // fatigue grows along the session; first ~12 trials fresh, then quality decays
+        const frac=i/Math.max(1,a.trials-1);
+        // quality of this trial 0..1 — stays high early, decays late, harder past ~15 trials
+        const fresh = i<12 ? 1 : Math.max(0, 1 - (i-12)*0.07);
+        const q = fresh;
+        const usable = q>0.45;   // fatigue-junk below threshold
+        if(usable) sessUsable++;
+        perTrial.push({q, usable});
+      }
+      preQcClean+=sessUsable;
+      sessions.push({perTrial, usable:sessUsable});
+    }
+    // QC: each QC level can catch dirty (blink/motion) data. Without QC, dirty data passes through
+    // and contaminates training -> counts as NOT clean. With QC the non-fatigue-junk survives.
+    // qcFactor: fraction of physically-usable trials that pass as truly clean.
+    const qcFactor = a.qc>=2 ? 1 : (a.qc===1 ? 0.65 : 0.30);
+    const clean = Math.round(preQcClean*qcFactor);
+    return { sessions, rawTotal, preQcClean, clean, qcFactor };
+  }
+
+  function classify(a, sim){
+    if(energyCost(a)>BUDGET) return 'over';
+    // figure dominant failure
+    const fatigueLost = sim.rawTotal - sim.preQcClean; // lost to fatigue
+    const fatigueRatio = sim.rawTotal? fatigueLost/sim.rawTotal : 0;
+    const qcLost = sim.preQcClean - sim.clean;          // lost to no/low QC
+    if(sim.clean>=50 && a.qc>=2 && fatigueRatio<0.22) return 'ok';
+    if(a.qc<=1 && qcLost>=10) return 'noqc';
+    if(fatigueRatio>=0.22 && sim.rawTotal>=40) return 'fatigue';
+    if(sim.clean<50) return 'few';
+    return 'ok';
+  }
+
+  function qualLabel(sim){
+    const tt=T[lang];
+    const ratio = sim.rawTotal? sim.clean/sim.rawTotal : 0;
+    if(sim.clean>=50 && ratio>=0.75) return {txt:tt.qualHigh, col:'var(--good)'};
+    if(ratio>=0.5) return {txt:tt.qualMid, col:'var(--warn)'};
+    return {txt:tt.qualLow, col:'var(--alert)'};
+  }
+
+  // -------- UI rendering --------
+  function refreshSteppers(){
+    ['sessions','trials','qc'].forEach(k=>{
+      $('v_'+k).textContent=alloc[k];
+    });
+    document.querySelectorAll('.step-btn').forEach(b=>{
+      const k=b.dataset.step, dir=+b.dataset.dir;
+      const next=alloc[k]+dir*STEP[k];
+      b.disabled = next<LIMITS[k][0] || next>LIMITS[k][1];
+    });
+    const cost=energyCost(alloc);
+    const over=cost>BUDGET;
+    $('enPc').textContent=cost+' / '+BUDGET;
+    $('enPc').style.color = over?'var(--alert)':'var(--synaptic)';
+    const enFill=$('enFill');
+    enFill.style.width=Math.min(100, cost/BUDGET*100)+'%';
+    enFill.classList.toggle('over', over);
+    // sidebar pool
+    const left=Math.max(0, BUDGET-cost);
+    $('poolLeft').textContent=left;
+    const pf=$('poolFill');
+    pf.style.width=Math.max(0,Math.min(100, left/BUDGET*100))+'%';
+    pf.style.background= over?'var(--alert)':(left<20?'var(--warn)':'var(--synaptic)');
+    runBtn.disabled = over;
+  }
+
+  function step(k, dir){
+    const next=alloc[k]+dir*STEP[k];
+    if(next<LIMITS[k][0]||next>LIMITS[k][1]) return;
+    alloc[k]=next;
+    refreshSteppers();
+    drawSim(lastResult ? lastResult.sim : simulate(alloc), false);
+  }
+
+  function toast(msg){
+    toastEl.textContent=msg;
+    toastEl.classList.add('show');
+    clearTimeout(toast._t);
+    toast._t=setTimeout(()=>toastEl.classList.remove('show'),1800);
+  }
+
+  function record(){
+    if(energyCost(alloc)>BUDGET){ toast(T[lang].toastOver); return; }
+    const sim=simulate(alloc);
+    const verdictKey=classify(alloc, sim);
+    lastResult={ alloc:Object.assign({},alloc), sim, verdictKey };
+    showResult();
+    drawSim(sim, true);
+    if(verdictKey==='ok' && !unlocked){
+      unlocked=true;
+      setTimeout(()=>showOverlay(true),1000);
+    }
+  }
+
+  function showResult(){
+    if(!lastResult){
+      resultEl.innerHTML='<div class="res-empty">'+T[lang].resEmpty.replace('\n','<br>')+'</div>';
+      return;
+    }
+    const tt=T[lang], sim=lastResult.sim;
+    const q=qualLabel(sim);
+    const v=tt.verdicts[lastResult.verdictKey];
+    const txt=v.t.replace('__CLEAN__', sim.clean).replace(/__RAW__/g, sim.rawTotal);
+    const cleanCol = sim.clean>=50?'var(--good)':'var(--alert)';
+    resultEl.innerHTML=
+      '<div class="res-grid">'+
+        '<div class="res-cell"><div class="rk">'+tt.kRaw+'</div><div class="rv" style="color:var(--ink-dim)">'+sim.rawTotal+'</div></div>'+
+        '<div class="res-cell"><div class="rk">'+tt.kClean+'</div><div class="rv" style="color:'+cleanCol+'">'+sim.clean+'</div></div>'+
+        '<div class="res-cell"><div class="rk">'+tt.kQual+'</div><div class="rv" style="color:'+q.col+'">'+q.txt+'</div></div>'+
+      '</div>'+
+      '<div class="verdict '+v.cls+'">'+txt+'</div>';
+  }
+
+  // -------- canvas: each session as a column of trial cells; fatigue late, then QC band --------
+  function sizeCanvas(){
+    const box=canvas.parentElement;
+    const r=box.getBoundingClientRect();
+    const dpr=window.devicePixelRatio||1;
+    canvas.width=Math.max(10,Math.floor(r.width*dpr));
+    canvas.height=Math.max(10,Math.floor(r.height*dpr));
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    return {w:r.width, h:r.height};
+  }
+  function css(v){ return getComputedStyle(document.documentElement).getPropertyValue(v).trim(); }
+
+  function drawSim(sim, recorded){
+    const {w,h}=sizeCanvas();
+    ctx.clearRect(0,0,w,h);
+    const tt=T[lang];
+    const padL=14, padR=14, padT=20, padB=46;
+    const plotW=w-padL-padR, plotH=h-padT-padB;
+    const n=sim.sessions.length;
+    const gap=14;
+    const colW=(plotW-gap*(n-1))/n;
+    const monoF=css('--mono').replace(/['"]/g,'');
+
+    // header
+    ctx.fillStyle=css('--ink-mute');
+    ctx.font='10px '+monoF;
+    ctx.textAlign='left'; ctx.textBaseline='top';
+    ctx.fillText(lang==='cn'?'每一格 = 一次录制 · 越往上越累 · 暗格=疲劳伪迹':'each cell = one trial · higher = more tired · dim = fatigue junk', padL, 2);
+
+    sim.sessions.forEach((s,si)=>{
+      const x=padL + si*(colW+gap);
+      const cells=s.perTrial.length;
+      const cellH=Math.min(16, plotH/Math.max(1,cells));
+      const stackH=cellH*cells;
+      const baseY=padT + plotH - stackH;
+      // column frame
+      ctx.strokeStyle=css('--axon'); ctx.lineWidth=1;
+      ctx.strokeRect(x, padT, colW, plotH);
+      // trial cells bottom-up: trial 0 at bottom (fresh)
+      s.perTrial.forEach((tr,i)=>{
+        const cy = padT + plotH - (i+1)*cellH;
+        ctx.fillStyle = tr.usable ? css('--synaptic') : css('--axon');
+        ctx.globalAlpha = tr.usable ? (0.55 + tr.q*0.45) : 0.55;
+        ctx.fillRect(x+3, cy+1, colW-6, cellH-1.5);
+        ctx.globalAlpha=1;
+      });
+      // session label
+      ctx.fillStyle=css('--ink-dim');
+      ctx.font='bold 11px '+monoF;
+      ctx.textAlign='center'; ctx.textBaseline='top';
+      ctx.fillText(tt.simSession+(si+1), x+colW/2, padT+plotH+6);
+      // usable count this session
+      ctx.fillStyle=css('--synaptic');
+      ctx.font='10px '+monoF;
+      ctx.fillText(s.usable+'', x+colW/2, padT+plotH+22);
+    });
+
+    // QC band indicator across bottom
+    ctx.fillStyle=css('--ink-mute');
+    ctx.font='9px '+monoF;
+    ctx.textAlign='right'; ctx.textBaseline='bottom';
+    const qcTxt = (lang==='cn'?'质检 ':'QC ') + (lastResult?Math.round(lastResult.sim.qcFactor*100):Math.round(qcFactorOf(alloc)*100)) + '%';
+    ctx.fillStyle = (alloc.qc>=2)?css('--good'):(alloc.qc===1?css('--warn'):css('--alert'));
+    ctx.fillText(qcTxt, w-padR, h-4);
+
+    // clean total marker (left)
+    if(recorded){
+      ctx.fillStyle=css('--firing');
+      ctx.font='bold 11px '+monoF;
+      ctx.textAlign='left'; ctx.textBaseline='bottom';
+      ctx.fillText((lang==='cn'?'干净 ':'clean ')+sim.clean+(sim.clean>=50?(lang==='cn'?' 达标50':' >=50'):''), padL, h-4);
+    }
+  }
+  function qcFactorOf(a){ return a.qc>=2?1:(a.qc===1?0.65:0.30); }
+
+  function showOverlay(win){
+    const tt=T[lang];
+    $('ovBadge').textContent= lang==='cn'?'解锁':'UNLOCKED';
+    $('ovH').textContent=tt.title;
+    const clean=lastResult?lastResult.sim.clean:50;
+    $('ovP').innerHTML=(win?tt.ovWin:tt.ovHint).replace('__CLEAN__', clean);
+    $('ovBtn').textContent= win?(lang==='cn'?'继续 / Next':'Next / 继续'):(lang==='cn'?'再试 / Replay':'Replay / 再试');
+    overlay.classList.add('show');
+  }
+
+  function applyLang(){
+    const tt=T[lang];
+    $('mRole').textContent=tt.mRole;
+    $('title').textContent=tt.title;
+    $('goal').textContent=tt.goal;
+    $('routeLbl').textContent=tt.routeLbl;
+    $('poolH').textContent=tt.poolH; $('poolK').textContent=tt.poolK;
+    $('briefH').textContent=tt.briefH; $('briefP').textContent=tt.briefP;
+    $('colAlloc').textContent=tt.colAlloc; $('colSim').textContent=tt.colSim;
+    $('runBtn').textContent=tt.run;
+    $('langBtn').textContent=tt.langBtn;
+    $('epTxt').textContent=tt.epTxt;
+    $('enNm').textContent=tt.enNm;
+    ['sessions','trials','qc'].forEach(k=>{
+      $('n_'+k).textContent=tt['n_'+k];
+      $('c_'+k).textContent=tt['c_'+k];
+      $('d_'+k).textContent=tt['d_'+k];
+      $('u_'+k).textContent=tt['u_'+k];
+    });
+    document.querySelectorAll('.stop span[data-s]').forEach(s=>{
+      const i=+s.dataset.s-1; s.textContent=tt.stops[i];
+    });
+    refreshSteppers();
+    showResult();
+    drawSim(lastResult?lastResult.sim:simulate(alloc), !!lastResult);
+    document.documentElement.lang = lang==='cn'?'zh-CN':'en';
+  }
+
+  // -------- events --------
+  document.querySelectorAll('.step-btn').forEach(b=>{
+    b.addEventListener('click',()=>step(b.dataset.step, +b.dataset.dir));
+  });
+  runBtn.addEventListener('click', record);
+  $('langBtn').addEventListener('click',()=>{ lang=lang==='cn'?'en':'cn'; applyLang(); });
+  $('ovBtn').addEventListener('click',()=>{ overlay.classList.remove('show'); });
+  window.addEventListener('resize',()=>{ drawSim(lastResult?lastResult.sim:simulate(alloc), !!lastResult); });
+
+  applyLang();
+})();
+</script>
+</body>
+</html>

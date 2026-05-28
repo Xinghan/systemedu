@@ -1,0 +1,524 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>过拟合缺口 — 模型说它 95% 准, 是真懂还是背了答案</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;700&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+  /* ---- 第 1 层: 共享深空底 (所有 26 套统一) ---- */
+  :root{
+    --bg-0: oklch(0.14 0.035 265);
+    --bg-1: oklch(0.18 0.04 265);
+    --bg-2: oklch(0.22 0.045 265);
+    --bg-3: oklch(0.28 0.05 265);
+    --line: oklch(0.35 0.05 265 / 0.35);
+    --line-strong: oklch(0.55 0.08 265 / 0.55);
+    --fg:      oklch(0.96 0.01 265);
+    --fg-dim:  oklch(0.75 0.02 265);
+    --fg-mute: oklch(0.55 0.03 265);
+    --gold:    oklch(0.85 0.14 85);
+    /* ---- 第 2 层: cs 学科 signature accent ---- */
+    --cs:      oklch(0.75 0.17 200);
+    /* ---- 第 3 层: cs 5 色 palette (themes.js cs 段) ---- */
+    --cs-signal: oklch(0.75 0.17 200);
+    --cs-core:   oklch(0.55 0.16 200);
+    --cs-depth:  oklch(0.35 0.10 210);
+    --cs-flash:  oklch(0.92 0.08 190);
+    --cs-query:  oklch(0.85 0.14 85);
+    /* 缺口警示色 (背答案越严重越偏暖红) */
+    --warn:    oklch(0.70 0.18 30);
+  }
+  html,body{margin:0;padding:0;height:100vh;overflow:hidden;background:var(--bg-0);
+    font-family:'Noto Sans SC',sans-serif;color:var(--fg);}
+  body{display:flex;}
+  /* ---- sidebar ---- */
+  .sidebar{width:200px;height:100vh;flex-shrink:0;background:var(--bg-1);
+    border-right:1px solid var(--line);display:flex;flex-direction:column;gap:14px;padding:18px 16px;box-sizing:border-box;}
+  .brand{font-size:15px;font-weight:700;line-height:1.35;}
+  .brand small{display:block;font-size:10px;font-weight:400;color:var(--fg-mute);margin-top:3px;font-family:'JetBrains Mono',monospace;}
+  .guide{font-size:11.5px;line-height:1.7;color:var(--fg-dim);}
+  .guide b{color:var(--cs-signal);font-weight:700;}
+  .guide i{color:var(--warn);font-style:normal;font-weight:700;}
+  /* ---- 进度路线图 ---- */
+  .route{margin-top:2px;}
+  .route-title{font-size:9.5px;color:var(--fg-mute);font-family:'JetBrains Mono',monospace;letter-spacing:.05em;margin-bottom:7px;}
+  .route-line{display:flex;flex-direction:column;gap:0;position:relative;padding-left:14px;}
+  .route-line::before{content:'';position:absolute;left:4px;top:6px;bottom:6px;width:1.5px;background:var(--line);}
+  .stop{display:flex;align-items:center;gap:8px;font-size:10.5px;line-height:1.9;color:var(--fg-mute);position:relative;font-family:'JetBrains Mono',monospace;}
+  .stop::before{content:'';position:absolute;left:-13px;width:7px;height:7px;border-radius:50%;background:var(--bg-3);border:1.5px solid var(--line-strong);}
+  .stop.here{color:var(--cs-signal);font-weight:700;font-size:11.5px;}
+  .stop.here::before{background:var(--cs-signal);border-color:var(--cs-flash);box-shadow:0 0 8px var(--cs-signal);width:9px;height:9px;left:-14px;}
+  .stop.done{color:var(--fg-dim);}
+  .stop.done::before{background:var(--cs-core);border-color:var(--cs-core);}
+  .lang-btn{margin-top:auto;padding:8px 12px;font-size:12px;font-family:'JetBrains Mono',monospace;
+    background:var(--bg-2);color:var(--fg);border:1px solid var(--line-strong);cursor:pointer;
+    box-shadow:3px 3px 0 var(--bg-0);transition:transform .1s,box-shadow .1s;}
+  .lang-btn:hover{transform:translate(-1px,-1px);box-shadow:4px 4px 0 var(--bg-0);}
+  .lang-btn:active{transform:translate(1px,1px);box-shadow:1px 1px 0 var(--bg-0);}
+  /* ---- 主舞台 ---- */
+  .stage{flex:1;height:100vh;position:relative;overflow:hidden;}
+  canvas#c{position:absolute;inset:0;width:100%;height:100%;}
+  /* ---- HUD ---- */
+  .hud{position:absolute;top:18px;right:18px;background:var(--bg-1);border:1px solid var(--line-strong);
+    padding:11px 15px;font-family:'JetBrains Mono',monospace;font-size:11px;min-width:214px;
+    box-shadow:3px 3px 0 var(--bg-0);}
+  .hud-row{display:flex;justify-content:space-between;gap:14px;line-height:1.78;}
+  .hud-lbl{color:var(--fg-mute);}
+  .hud-val{color:var(--cs-signal);font-weight:700;}
+  .hud-val.hold{color:var(--cs-flash);}
+  .hud-val.gap{color:var(--gold);font-weight:700;}
+  .hud-val.gap.warn{color:var(--warn);}
+  .hud-row.verdict{margin-top:6px;padding-top:6px;border-top:1px solid var(--line);}
+  /* ---- 字幕 ---- */
+  .sub{position:absolute;bottom:24px;left:calc(50% - 30px);transform:translateX(-50%);text-align:center;width:72%;pointer-events:none;}
+  .sub-zh{font-size:19px;font-weight:700;color:var(--fg);background:var(--bg-1);
+    padding:7px 20px;display:inline-block;border:1px solid var(--line-strong);box-shadow:3px 3px 0 var(--bg-0);}
+  .sub-en{font-size:12px;font-style:italic;color:var(--fg-dim);margin-top:6px;font-family:'JetBrains Mono',monospace;}
+</style>
+</head>
+<body>
+<aside class="sidebar">
+  <div class="brand" id="brand">过拟合缺口<small>CS-01 / overfit-gap</small></div>
+  <div class="guide" id="guide">
+    模型越复杂, <b>训练准确率</b>越爬越高, 但<b>留出准确率</b>反而往下掉 —
+    两条线连续岔开成<i>过拟合缺口</i>。缺口越大 = 越在背答案。
+  </div>
+  <div class="route">
+    <div class="route-title" id="routeTitle">PROJECT ROUTE</div>
+    <div class="route-line">
+      <div class="stop done" id="s1">S1 认识脑波</div>
+      <div class="stop done" id="s2">S2 清洁信号</div>
+      <div class="stop done" id="s3">S3 训分类器</div>
+      <div class="stop here" id="s4">S4 自录冲准</div>
+      <div class="stop" id="s5">S5 接 Minecraft</div>
+      <div class="stop" id="s6">S6 分享</div>
+    </div>
+  </div>
+  <button class="lang-btn" id="langBtn">中 / EN</button>
+</aside>
+<main class="stage">
+  <canvas id="c"></canvas>
+  <div class="hud">
+    <div class="hud-row"><span class="hud-lbl" id="hl0">complexity</span><span class="hud-val" id="hCplx">--</span></div>
+    <div class="hud-row"><span class="hud-lbl" id="hl1">train acc</span><span class="hud-val" id="hTrain">--</span></div>
+    <div class="hud-row"><span class="hud-lbl" id="hl2">held-out acc</span><span class="hud-val hold" id="hHold">--</span></div>
+    <div class="hud-row"><span class="hud-lbl" id="hl3">gap (train - held)</span><span class="hud-val gap" id="hGap">--</span></div>
+    <div class="hud-row verdict"><span class="hud-lbl" id="hl4">verdict</span><span class="hud-val" id="hVerdict">--</span></div>
+  </div>
+  <div class="sub">
+    <div class="sub-zh" id="subZh"></div>
+    <div class="sub-en" id="subEn"></div>
+  </div>
+</main>
+<script>
+"use strict";
+const cv = document.getElementById('c');
+const ctx = cv.getContext('2d');
+let W = 0, H = 0, DPR = Math.min(window.devicePixelRatio || 1, 2);
+function resize(){
+  const r = cv.getBoundingClientRect();
+  W = r.width; H = r.height;
+  cv.width = W * DPR; cv.height = H * DPR;
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+}
+window.addEventListener('resize', resize); resize();
+
+// ---- 取 CSS 变量颜色 ----
+const css = getComputedStyle(document.documentElement);
+const C = {
+  signal: css.getPropertyValue('--cs-signal').trim() || 'oklch(0.75 0.17 200)',
+  core:   css.getPropertyValue('--cs-core').trim()   || 'oklch(0.55 0.16 200)',
+  depth:  css.getPropertyValue('--cs-depth').trim()  || 'oklch(0.35 0.10 210)',
+  flash:  css.getPropertyValue('--cs-flash').trim()  || 'oklch(0.92 0.08 190)',
+  query:  css.getPropertyValue('--cs-query').trim()  || 'oklch(0.85 0.14 85)',
+  gold:   css.getPropertyValue('--gold').trim()      || 'oklch(0.85 0.14 85)',
+  warn:   css.getPropertyValue('--warn').trim()      || 'oklch(0.70 0.18 30)',
+  fg:     css.getPropertyValue('--fg').trim(),
+  fgDim:  css.getPropertyValue('--fg-dim').trim(),
+  fgMute: css.getPropertyValue('--fg-mute').trim(),
+  line:   css.getPropertyValue('--line').trim(),
+  lineS:  css.getPropertyValue('--line-strong').trim(),
+  bg1:    css.getPropertyValue('--bg-1').trim(),
+  bg2:    css.getPropertyValue('--bg-2').trim(),
+};
+
+// ===========================================================================
+// 唯一核心对象: "过拟合缺口" —— 训练准确率曲线与留出准确率曲线之间那道
+//   持续张开的竖直缺口 (gap = train_acc - held_acc)。
+//
+// 全程围绕这一个现象连续演化, 镜头不切到别的对象:
+//   · x = 模型复杂度 cplx (0..1), y = 准确率
+//   · 训练曲线 trainAcc(c): 随复杂度单调上升, 逼近 ~98% (越复杂越能把训练集"背"下来)
+//   · 留出曲线 heldAcc(c):  先升后降, 在甜点 c* 处达峰, 之后下滑 (开始背答案)
+//   · 一根复杂度光标连续从左扫到右, 把两条曲线逐点画出, 同时实时拉出它们之间
+//     的竖直"缺口"标尺 —— gap 越大缺口填色越偏暖红 (背答案), 越小越偏 gold (真懂)
+//   · 然后两个连续修复操作让同一道缺口收拢:
+//       修复 A 加数据: 留出曲线整体连续上抬 (高复杂度区抬得最多), 缺口收拢
+//       修复 B 减复杂度: 光标连续回退到甜点 c*, 缺口连续闭合
+//   始终是同一对曲线 + 同一道缺口被拉开→测量→收拢, 不翻页。
+// ===========================================================================
+
+// 留出曲线的"加数据增益": data=0 原始, data=1 数据翻倍 -> 高复杂度区抬升、峰右移
+// trainAcc 几乎不受加数据影响 (训练集总能被高复杂度模型背下来), 留出受益。
+function trainAcc(c){
+  // 单调上升, 凹向上逼近 0.985 (复杂模型把训练集背得越来越死)
+  return 0.55 + 0.435 * (1 - Math.exp(-3.4*c));
+}
+function heldAcc(c, data){
+  // 先升后降: 升段来自学到真规律, 降段来自背训练集噪声 -> 倒 U
+  // 加数据(data 0..1): 整体上抬, 降段被压平 (更多数据更难被背), 峰右移
+  const base = 0.55;
+  const rise = 0.40 * (1 - Math.exp(-4.0*c));            // 学真规律的收益
+  const peakShift = 0.42 + 0.20*data;                    // 甜点随数据右移
+  const overfitDrop = (0.34 - 0.26*data) * Math.max(0, c - peakShift)/(1-peakShift); // 背答案的惩罚, 加数据后变小
+  let v = base + rise - overfitDrop * Math.max(0, c-peakShift);
+  return Math.max(0.50, Math.min(0.97, v));
+}
+function bestComplexity(data){
+  // 数值找留出曲线峰位 (甜点 c*)
+  let bc=0, bv=-1;
+  for(let c=0;c<=1.0001;c+=0.005){ const v=heldAcc(c,data); if(v>bv){bv=v;bc=c;} }
+  return {c:bc, acc:bv};
+}
+
+function lerp(a,b,t){ return a+(b-a)*t; }
+function clamp(v,a,b){ return Math.max(a,Math.min(b,v)); }
+function easeInOut(t){ return t<0.5 ? 2*t*t : 1-Math.pow(-2*t+2,2)/2; }
+
+// ---- 绘图坐标系 (准确率 vs 复杂度) ----
+function plotGeom(){
+  const left = 96, right = W - 56;
+  const topY = 108, bot = H - 112;
+  return {left, right, top: topY, bot, w: right-left, h: bot-topY};
+}
+// 复杂度 c(0..1) -> x ; 准确率 a(0.45..1.0) -> y
+function cx(g, c){ return g.left + c * g.w; }
+function ay(g, a){ return g.bot - (a - 0.45)/(1.0 - 0.45) * g.h; }
+
+// ===========================================================================
+// 时间轴 (rAF 连续, 一镜到底)。单轮 CYCLE 秒, 连续阶段承接同一道缺口:
+//   A 引入 (扫出曲线): 复杂度光标从 0 连续扫到 1, 边扫边画出训练线+留出线,
+//                      竖直缺口标尺一路跟随拉开 (核心连续演化)
+//   B 测量 (缺口张到最大): 光标停在高复杂度处, 缺口最大 -> 判定"严重背答案"
+//   C 修复1 加数据: data 0->1 连续, 留出曲线整体上抬, 缺口连续收拢
+//   D 修复2 减复杂度: 光标从高复杂度连续回退到甜点 c*, 缺口连续闭合 -> "真懂"
+//   E 回放: 缓慢复位, 准备下一轮 (同一对曲线)
+// ===========================================================================
+let t0 = performance.now();
+const CYCLE = 22.0;
+
+// 字幕脚本 (跟随画面点睛, 画面为主体)
+const SUBS = [
+  {zh:'模型说它 95% 准 — 是真懂了脑波, 还是把训练样本背了下来?', en:'the model claims 95% — does it truly understand, or just memorize the training set?'},
+  {zh:'让模型越变越复杂, 看两条准确率: 训练集 vs 没见过的留出集', en:'crank up model complexity, watch two curves: training set vs unseen held-out set'},
+  {zh:'训练准确率一路爬高 — 复杂模型总能把训练样本背下来', en:'training accuracy keeps climbing — a complex model can always memorize training samples'},
+  {zh:'但留出准确率先升后降 — 过了甜点, 模型开始背答案, 留出反而掉', en:'but held-out accuracy rises then falls — past the sweet spot it memorizes, held-out drops'},
+  {zh:'两条线连续岔开的这道竖直距离, 就是"过拟合缺口"', en:'the vertical distance where the two lines split apart is the "overfitting gap"'},
+  {zh:'缺口 > 15 个点 = 严重背答案: 训练好看, 一换新数据就崩', en:'gap > 15 pts = severe memorization: great on training, collapses on new data'},
+  {zh:'修复一 · 加数据: 更多样本更难被背, 留出曲线整体抬起, 缺口收拢', en:'fix 1 · more data: harder to memorize, held-out lifts, the gap shrinks'},
+  {zh:'修复二 · 减复杂度: 退回甜点, 模型只学真规律, 缺口连续闭合', en:'fix 2 · less complexity: back to the sweet spot, learn only real patterns, gap closes'},
+  {zh:'缺口 < 5 个点才是真懂 — 这样脑控才稳, 换天换状态都不崩', en:'gap < 5 pts means truly understood — only then is mind-control stable across days'},
+];
+let curSub = -1;
+function setSub(i){
+  if(i===curSub) return; curSub = i;
+  document.getElementById('subZh').textContent = LANG==='zh' ? SUBS[i].zh : '';
+  document.getElementById('subEn').textContent = SUBS[i].en;
+}
+
+// gap 颜色: <0.05 真懂(gold) / 0.05-0.15 轻微(signal->介于) / >0.15 严重(warn)
+function gapColor(gap){
+  if(gap < 0.05) return C.gold;
+  if(gap > 0.15) return C.warn;
+  return C.signal;
+}
+function verdictText(gap){
+  if(gap < 0.05) return LANG==='zh' ? '真懂' : 'understands';
+  if(gap > 0.15) return LANG==='zh' ? '背答案' : 'memorizing';
+  return LANG==='zh' ? '轻微过拟合' : 'slight overfit';
+}
+
+// 画一条准确率曲线 (复杂度 0..cMax 区间, 已画出的部分)
+function drawCurve(g, accFn, color, lw, cMax, dashed){
+  ctx.save();
+  ctx.strokeStyle = color; ctx.lineWidth = lw; ctx.lineJoin='round';
+  if(dashed) ctx.setLineDash([5,5]);
+  ctx.beginPath();
+  let first=true;
+  for(let c=0;c<=cMax+1e-6;c+=0.01){
+    const x=cx(g,c), y=ay(g,accFn(c));
+    if(first){ ctx.moveTo(x,y); first=false; } else ctx.lineTo(x,y);
+  }
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.restore();
+}
+
+// 画坐标轴 + 网格 + 参考线
+function drawAxes(g){
+  ctx.save();
+  // y 轴刻度 (50/70/90%)
+  ctx.font="10px 'JetBrains Mono', monospace"; ctx.fillStyle=C.fgMute; ctx.textAlign='right';
+  [0.50,0.60,0.70,0.80,0.90,1.00].forEach(a=>{
+    const y=ay(g,a);
+    ctx.strokeStyle=C.line; ctx.lineWidth=1; ctx.setLineDash([2,5]);
+    ctx.beginPath(); ctx.moveTo(g.left,y); ctx.lineTo(g.right,y); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillText((a*100).toFixed(0)+'%', g.left-8, y+3);
+  });
+  // x 轴
+  ctx.strokeStyle=C.lineS; ctx.lineWidth=1.5;
+  ctx.beginPath(); ctx.moveTo(g.left,g.bot); ctx.lineTo(g.right,g.bot); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(g.left,g.top); ctx.lineTo(g.left,g.bot); ctx.stroke();
+  // 轴标题
+  ctx.fillStyle=C.fgDim; ctx.textAlign='center'; ctx.font="11px 'Noto Sans SC', sans-serif";
+  ctx.fillText(LANG==='zh'?'模型复杂度 (越右越复杂) ->':'model complexity ->', (g.left+g.right)/2, g.bot+34);
+  ctx.save();
+  ctx.translate(g.left-52, (g.top+g.bot)/2); ctx.rotate(-Math.PI/2);
+  ctx.fillText(LANG==='zh'?'准确率':'accuracy', 0, 0);
+  ctx.restore();
+  ctx.restore();
+}
+
+// 画过拟合缺口竖直标尺 (核心): 在复杂度 c 处, 连接训练点和留出点, 缺口填色
+function drawGap(g, c, data, emphasize){
+  const aT = trainAcc(c), aH = heldAcc(c, data);
+  const x = cx(g,c), yT = ay(g,aT), yH = ay(g,aH);
+  const gap = aT - aH;
+  const col = gapColor(gap);
+  ctx.save();
+  // 缺口填充带 (半透明, 宽度随强调微动)
+  const bw = emphasize ? 14 : 9;
+  ctx.globalAlpha = 0.22;
+  ctx.fillStyle = col;
+  ctx.fillRect(x - bw/2, yT, bw, yH - yT);
+  ctx.globalAlpha = 1;
+  // 竖直双箭头标尺
+  ctx.strokeStyle = col; ctx.lineWidth = emphasize?2.6:2;
+  ctx.beginPath(); ctx.moveTo(x, yT); ctx.lineTo(x, yH); ctx.stroke();
+  // 上下短横 (标尺端帽)
+  ctx.beginPath(); ctx.moveTo(x-6,yT); ctx.lineTo(x+6,yT);
+  ctx.moveTo(x-6,yH); ctx.lineTo(x+6,yH); ctx.stroke();
+  // 两端点
+  ctx.fillStyle=C.signal; ctx.beginPath(); ctx.arc(x,yT,4.2,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle=C.flash;  ctx.beginPath(); ctx.arc(x,yH,4.2,0,Math.PI*2); ctx.fill();
+  // 缺口数值标签
+  ctx.fillStyle=col; ctx.font="700 14px 'JetBrains Mono', monospace"; ctx.textAlign='left';
+  const midY=(yT+yH)/2;
+  ctx.fillText('gap '+(gap*100).toFixed(0)+'pt', x+11, midY+5);
+  // "过拟合缺口" 标注 (强调时)
+  if(emphasize){
+    ctx.fillStyle=C.fg; ctx.font="700 12px 'Noto Sans SC', sans-serif";
+    ctx.fillText(LANG==='zh'?'<- 过拟合缺口':'<- overfitting gap', x+11, midY+22);
+  }
+  ctx.restore();
+  return {x, yT, yH, gap, aT, aH};
+}
+
+// 标记甜点 c* (留出峰)
+function drawSweetSpot(g, data, alpha){
+  const bs = bestComplexity(data);
+  const x=cx(g,bs.c), y=ay(g,bs.acc);
+  ctx.save();
+  ctx.globalAlpha=alpha;
+  ctx.strokeStyle=C.gold; ctx.lineWidth=1.4; ctx.setLineDash([3,4]);
+  ctx.beginPath(); ctx.moveTo(x,g.bot); ctx.lineTo(x,y); ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle=C.gold; ctx.beginPath(); ctx.arc(x,y,5,0,Math.PI*2); ctx.fill();
+  ctx.font="9px 'JetBrains Mono', monospace"; ctx.textAlign='center';
+  ctx.fillText(LANG==='zh'?'甜点 c*':'sweet spot', x, y-12);
+  ctx.restore();
+  return bs;
+}
+
+let LANG = 'zh';
+let raf = null;
+let lastHud = {c:'',t:'',h:'',g:'',v:''};
+
+function frame(now){
+  const t = (now - t0)/1000;
+  const g = plotGeom();
+  ctx.clearRect(0,0,W,H);
+
+  // ---- 标题 ----
+  ctx.fillStyle=C.fg; ctx.font="700 17px 'Noto Sans SC', sans-serif"; ctx.textAlign='left';
+  ctx.fillText(LANG==='zh'?'过拟合缺口: 训练线高、留出线低, 两线连续岔开':'the overfitting gap: train high, held-out low, lines split apart', 26, 54);
+  ctx.fillStyle=C.fgMute; ctx.font="11px 'JetBrains Mono', monospace";
+  ctx.fillText('train acc (memorize) vs held-out acc (real understanding)', 26, 74);
+
+  // ---- 连续时间轴 ----
+  const lt = t % CYCLE;
+  let phase, sweep, data, emphasize=false, p=0;
+  // 阶段时长: A 6.5 / B 2.5 / C 4.5 / D 5.0 / E 3.5
+  if(lt < 6.5){                       // A 引入: 光标连续从 0 扫到 1, 边扫边画
+    phase='A'; p = easeInOut(lt/6.5); sweep = p; data = 0;
+  } else if(lt < 9.0){                // B 测量: 停在高复杂度, 缺口最大
+    phase='B'; sweep = 1.0; data = 0; emphasize = true;
+  } else if(lt < 13.5){              // C 修复1 加数据: data 0->1, 留出抬升
+    phase='C'; p = easeInOut((lt-9.0)/4.5); sweep = 1.0; data = p; emphasize=true;
+  } else if(lt < 18.5){             // D 修复2 减复杂度: 光标从 1 退回甜点 c*
+    phase='D'; p = easeInOut((lt-13.5)/5.0); data = 1;
+    const cstar = bestComplexity(1).c;
+    sweep = lerp(1.0, cstar, p); emphasize = true;
+  } else {                          // E 回放: 复位
+    phase='E'; p = easeInOut((lt-18.5)/3.5);
+    const cstar = bestComplexity(1).c;
+    data = lerp(1, 0, p);
+    sweep = lerp(cstar, 0.0, p);
+  }
+
+  // ---- 坐标轴 + 网格 ----
+  drawAxes(g);
+
+  // ---- 已扫出的两条曲线 (核心对象, 持续在画) ----
+  // 训练曲线随光标画到 sweep (扫描阶段), 修复阶段已是整条
+  const curveMax = (phase==='A') ? sweep : 1.0;
+  // 留出曲线 (随 data 上抬, 整条连续变形)
+  drawCurve(g, c=>heldAcc(c,data), C.flash, 3.0, curveMax, false);
+  // 训练曲线
+  drawCurve(g, trainAcc, C.signal, 3.0, curveMax, false);
+
+  // 曲线端点标签 (右端)
+  if(curveMax > 0.92){
+    ctx.font="600 11px 'JetBrains Mono', monospace"; ctx.textAlign='left';
+    ctx.fillStyle=C.signal; ctx.fillText(LANG==='zh'?'训练':'train', cx(g,1.0)+6, ay(g,trainAcc(1.0))+4);
+    ctx.fillStyle=C.flash;  ctx.fillText(LANG==='zh'?'留出':'held-out', cx(g,1.0)+6, ay(g,heldAcc(1.0,data))+4);
+  }
+
+  // ---- 甜点 c* (修复阶段渐显, 引导光标回退目标) ----
+  if(phase==='C'||phase==='D'){
+    drawSweetSpot(g, data, clamp((phase==='C'?p:1.0),0,1)*0.9);
+  }
+
+  // ---- 过拟合缺口竖直标尺 (核心: 始终在当前 sweep 处测量这道缺口) ----
+  const gp = drawGap(g, sweep, data, emphasize);
+
+  // ---- 光标底部三角 (复杂度位置指示) ----
+  ctx.save();
+  ctx.fillStyle=C.fgDim;
+  const xc=cx(g,sweep);
+  ctx.beginPath(); ctx.moveTo(xc,g.bot+6); ctx.lineTo(xc-6,g.bot+16); ctx.lineTo(xc+6,g.bot+16); ctx.closePath(); ctx.fill();
+  ctx.restore();
+
+  // ---- key moment: 缺口闭合到真懂, gold 一闪 ----
+  if(phase==='D' && gp.gap < 0.06){
+    ctx.save();
+    ctx.globalAlpha=0.5+0.5*Math.abs(Math.sin(t*3));
+    ctx.fillStyle=C.gold; ctx.font="700 15px 'Noto Sans SC', sans-serif"; ctx.textAlign='center';
+    ctx.fillText(LANG==='zh'?'缺口收拢 -> 真懂':'gap closed -> truly understands', (g.left+g.right)/2, 98);
+    ctx.restore();
+  }
+  if(phase==='B'){
+    ctx.save();
+    ctx.globalAlpha=0.5+0.5*Math.abs(Math.sin(t*3));
+    ctx.fillStyle=C.warn; ctx.font="700 15px 'Noto Sans SC', sans-serif"; ctx.textAlign='center';
+    ctx.fillText(LANG==='zh'?'缺口 > 15pt -> 在背答案':'gap > 15pt -> memorizing', (g.left+g.right)/2, 98);
+    ctx.restore();
+  }
+
+  // ---- 角落 Bit mascot + Minecraft 终点剪影 ----
+  drawMascotBit(W-50, H-54, t);
+  drawMinecraftHint(70, H-44);
+
+  // ---- HUD (只在变化时写 DOM, 减少回流) ----
+  const cVal=(sweep).toFixed(2), tVal=(gp.aT*100).toFixed(1)+'%', hVal=(gp.aH*100).toFixed(1)+'%';
+  const gVal=(gp.gap>=0?'+':'')+(gp.gap*100).toFixed(1)+'pt', vVal=verdictText(gp.gap);
+  if(cVal!==lastHud.c){ document.getElementById('hCplx').textContent=cVal; lastHud.c=cVal; }
+  if(tVal!==lastHud.t){ document.getElementById('hTrain').textContent=tVal; lastHud.t=tVal; }
+  if(hVal!==lastHud.h){ document.getElementById('hHold').textContent=hVal; lastHud.h=hVal; }
+  if(gVal!==lastHud.g){
+    const el=document.getElementById('hGap'); el.textContent=gVal;
+    el.classList.toggle('warn', gp.gap>0.15); lastHud.g=gVal;
+  }
+  if(vVal!==lastHud.v){
+    const el=document.getElementById('hVerdict'); el.textContent=vVal;
+    el.style.color = gapColor(gp.gap); lastHud.v=vVal;
+  }
+
+  // ---- 字幕 (跟随阶段) ----
+  let si;
+  if(phase==='A'){ si = lt<1.2?0 : (p<0.45?1 : (p<0.7?2:3)); }
+  else if(phase==='B'){ si = (lt<7.7)?4:5; }
+  else if(phase==='C'){ si = 6; }
+  else if(phase==='D'){ si = 7; }
+  else si = 8;
+  setSub(si);
+
+  raf = requestAnimationFrame(frame);
+}
+
+// ---- Bit mascot: 悬浮立方体精灵 (cs themes.js mascot) ----
+function drawMascotBit(x, y, t){
+  ctx.save();
+  ctx.translate(x, y + Math.sin(t*1.6)*4);
+  const s=11;
+  ctx.fillStyle=C.core;  ctx.beginPath(); ctx.moveTo(0,-s);ctx.lineTo(s,-s/2);ctx.lineTo(s,s/2);ctx.lineTo(0,s);ctx.closePath();ctx.fill();
+  ctx.fillStyle=C.signal;ctx.beginPath(); ctx.moveTo(0,-s);ctx.lineTo(-s,-s/2);ctx.lineTo(-s,s/2);ctx.lineTo(0,s);ctx.closePath();ctx.fill();
+  ctx.fillStyle=C.flash; ctx.beginPath(); ctx.moveTo(0,-s);ctx.lineTo(s,-s/2);ctx.lineTo(0,0);ctx.lineTo(-s,-s/2);ctx.closePath();ctx.fill();
+  for(let i=0;i<3;i++){
+    const a=t*2+i*2.1;
+    ctx.fillStyle=C.query; ctx.fillRect(Math.cos(a)*(s+6)-1.5, Math.sin(a)*(s+6)-1.5+(i-1)*3, 3,3);
+  }
+  ctx.fillStyle=C.fgMute; ctx.font="8px 'JetBrains Mono', monospace"; ctx.textAlign='center';
+  ctx.fillText('Bit', 0, s+15);
+  ctx.restore();
+}
+
+// ---- Minecraft 终点剪影 (项目终点常驻徽记) ----
+function drawMinecraftHint(x, y){
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.globalAlpha=0.55;
+  const u=4;
+  ctx.fillStyle=C.depth;
+  ctx.fillRect(-3*u,-3*u,6*u,6*u);
+  ctx.fillStyle=C.bg2;
+  ctx.fillRect(-2*u,-2*u,2*u,2*u);
+  ctx.fillRect( 0,   -2*u,2*u,2*u);
+  ctx.fillRect(-1*u, 0, 2*u,3*u);
+  ctx.globalAlpha=0.7;
+  ctx.fillStyle=C.fgMute; ctx.font="8px 'JetBrains Mono', monospace"; ctx.textAlign='center';
+  ctx.fillText(LANG==='zh'?'终点: 脑控 Minecraft':'goal: mind-control Minecraft', 0, 5*u+10);
+  ctx.restore();
+}
+
+// ---- i18n ----
+const I18N = {
+  zh:{
+    brand:'过拟合缺口',
+    guide:'模型越复杂, <b>训练准确率</b>越爬越高, 但<b>留出准确率</b>反而往下掉 — 两条线连续岔开成<i>过拟合缺口</i>。缺口越大 = 越在背答案。',
+    routeTitle:'项目路线', hl0:'模型复杂度', hl1:'训练准确率', hl2:'留出准确率', hl3:'缺口 (训练-留出)', hl4:'判定',
+    s1:'S1 认识脑波', s2:'S2 清洁信号', s3:'S3 训分类器', s4:'S4 自录冲准', s5:'S5 接 Minecraft', s6:'S6 分享',
+  },
+  en:{
+    brand:'Overfitting gap',
+    guide:'The more complex the model, <b>training accuracy</b> climbs, but <b>held-out accuracy</b> falls — the lines split into an <i>overfitting gap</i>. Bigger gap = more memorizing.',
+    routeTitle:'PROJECT ROUTE', hl0:'complexity', hl1:'train acc', hl2:'held-out acc', hl3:'gap (train-held)', hl4:'verdict',
+    s1:'S1 know waves', s2:'S2 clean', s3:'S3 classifier', s4:'S4 self-record', s5:'S5 Minecraft', s6:'S6 share',
+  }
+};
+function refreshI18N(){
+  const d = I18N[LANG];
+  document.getElementById('brand').innerHTML = d.brand + '<small>CS-01 / overfit-gap</small>';
+  document.getElementById('guide').innerHTML = d.guide;
+  document.getElementById('routeTitle').textContent = d.routeTitle;
+  ['hl0','hl1','hl2','hl3','hl4','s1','s2','s3','s4','s5','s6'].forEach(id=>{
+    const el=document.getElementById(id); if(el) el.textContent = d[id];
+  });
+  // 强制下一帧重写 HUD value
+  lastHud = {c:'',t:'',h:'',g:'',v:''};
+  if(curSub>=0){
+    document.getElementById('subZh').textContent = LANG==='zh' ? SUBS[curSub].zh : '';
+    document.getElementById('subEn').textContent = SUBS[curSub].en;
+  }
+}
+document.getElementById('langBtn').addEventListener('click', ()=>{
+  LANG = LANG==='zh' ? 'en' : 'zh';
+  refreshI18N();
+});
+
+refreshI18N();
+raf = requestAnimationFrame(frame);
+</script>
+</body>
+</html>

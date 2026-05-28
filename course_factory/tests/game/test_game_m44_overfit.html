@@ -1,0 +1,534 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>M44 · 过拟合诊断师 — 模型是真懂还是背答案</title>
+<style>
+  /* ===== cs 主题 (CS-01) — B 类深空底 ===== */
+  :root{
+    --bg-0: oklch(0.18 0.03 215);      /* 深空底 */
+    --bg-1: oklch(0.23 0.04 212);      /* 面板 */
+    --bg-2: oklch(0.28 0.05 210);      /* 卡片 */
+    --accent: oklch(0.75 0.17 200);    /* SIGNAL */
+    --signal: oklch(0.75 0.17 200);
+    --core:   oklch(0.55 0.16 200);
+    --depth:  oklch(0.35 0.10 210);
+    --flash:  oklch(0.92 0.08 190);
+    --query:  oklch(0.85 0.14 85);
+    --ink: oklch(0.95 0.02 210);
+    --ink-dim: oklch(0.70 0.03 210);
+    --line: oklch(0.40 0.05 210);
+    --good: oklch(0.78 0.15 150);
+    --bad:  oklch(0.68 0.18 25);
+    --mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  html,body{height:100%;}
+  body{
+    background: var(--bg-0);
+    color: var(--ink);
+    font-family: var(--mono);
+    overflow:hidden;
+  }
+  .wrapper{display:flex;height:100vh;width:100vw;}
+
+  /* ===== 200px sidebar ===== */
+  .game-sidebar{
+    width:200px;min-width:200px;
+    background: var(--bg-1);
+    border-right:1px solid var(--line);
+    display:flex;flex-direction:column;
+    padding:16px 14px;
+  }
+  .mascot{
+    display:flex;flex-direction:column;align-items:center;gap:6px;
+    padding-bottom:12px;border-bottom:1px solid var(--line);
+  }
+  .mascot svg{width:54px;height:54px;}
+  .mascot .name{font-size:12px;color:var(--accent);letter-spacing:1.5px;}
+  .mascot .sub{font-size:9.5px;color:var(--ink-dim);}
+
+  /* 路线图 */
+  .route{margin-top:14px;}
+  .route .rt-title{font-size:9.5px;color:var(--ink-dim);letter-spacing:1px;margin-bottom:8px;}
+  .route .rt-step{display:flex;align-items:center;gap:8px;font-size:10px;color:var(--ink-dim);margin:5px 0;}
+  .route .rt-step .dot{width:8px;height:8px;border:1px solid var(--line);flex:0 0 8px;}
+  .route .rt-step.done .dot{background:var(--core);border-color:var(--core);}
+  .route .rt-step.now{color:var(--accent);font-weight:600;}
+  .route .rt-step.now .dot{background:var(--accent);border-color:var(--accent);box-shadow:0 0 0 3px oklch(0.75 0.17 200 / 0.25);}
+
+  .progress-wrap{margin-top:16px;}
+  .progress-label{font-size:9.5px;color:var(--ink-dim);margin-bottom:5px;letter-spacing:.5px;}
+  .progress-bar{height:7px;background:var(--depth);border:1px solid var(--line);position:relative;}
+  .progress-fill{height:100%;width:0%;background:var(--accent);transition:width .35s ease;}
+
+  .spacer{flex:1;}
+
+  .lang-btn{
+    margin-top:12px;
+    background:transparent;color:var(--ink-dim);
+    border:1px solid var(--line);
+    font-family:var(--mono);font-size:10.5px;letter-spacing:1px;
+    padding:7px 0;cursor:pointer;width:100%;
+    transition:.18s;
+  }
+  .lang-btn:hover{color:var(--accent);border-color:var(--accent);}
+
+  /* ===== main ===== */
+  .game-main{flex:1;display:flex;flex-direction:column;min-width:0;}
+
+  .topbar{
+    display:flex;align-items:flex-start;justify-content:space-between;
+    padding:12px 22px;border-bottom:1px solid var(--line);flex:0 0 auto;gap:18px;
+  }
+  .topbar h1{font-size:14px;font-weight:600;letter-spacing:.3px;}
+  .topbar .hook{font-size:10.5px;color:var(--ink-dim);margin-top:4px;line-height:1.5;max-width:520px;}
+  .topbar .hud{display:flex;gap:18px;font-size:10px;color:var(--ink-dim);text-align:right;flex:0 0 auto;}
+  .topbar .hud span b{color:var(--flash);font-size:14px;display:block;}
+
+  .stage{flex:1;display:flex;flex-direction:column;min-height:0;padding:16px 22px;gap:14px;overflow:hidden;}
+
+  /* 患者卡: train vs holdout 对比 */
+  .case-row{display:flex;gap:16px;flex:0 0 auto;align-items:stretch;}
+  .case-card{
+    flex:1;background:var(--bg-1);border:1px solid var(--line);
+    display:flex;flex-direction:column;min-height:0;position:relative;
+    padding:12px 14px;
+  }
+  .case-card .cardlabel{font-size:9.5px;color:var(--ink-dim);letter-spacing:1px;}
+  .case-card .casebody{font-size:11px;color:var(--ink);margin-top:6px;line-height:1.5;}
+
+  /* 双柱对比图 (canvas 父容器 flex) */
+  .scope{
+    flex:1;display:flex;flex-direction:column;min-height:0;
+    border:1px solid var(--line);background:var(--bg-1);position:relative;
+  }
+  .scope .cap{
+    position:absolute;top:8px;left:12px;font-size:10px;
+    color:var(--ink-dim);letter-spacing:.5px;z-index:2;pointer-events:none;
+  }
+  .scope canvas{flex:1;width:100%;height:100%;display:block;}
+
+  /* 诊断选项 */
+  .diag{flex:0 0 auto;}
+  .diag .dq{font-size:11px;color:var(--accent);margin-bottom:8px;letter-spacing:.3px;}
+  .opt-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;}
+  .opt{
+    background:var(--bg-2);color:var(--ink-dim);
+    border:1px solid var(--line);
+    font-family:var(--mono);font-size:10.5px;line-height:1.45;
+    padding:11px 12px;cursor:pointer;transition:.15s;text-align:left;
+  }
+  .opt b{display:block;color:var(--ink);font-size:11.5px;margin-bottom:3px;}
+  .opt:hover:not(:disabled){border-color:var(--accent);color:var(--ink);}
+  .opt.pick{border-color:var(--accent);box-shadow:3px 3px 0 var(--bg-0);}
+  .opt.correct{border-color:var(--good);color:var(--good);box-shadow:3px 3px 0 var(--bg-0);}
+  .opt.wrong{border-color:var(--bad);color:var(--bad);}
+  .opt:disabled{cursor:default;opacity:.45;}
+
+  .feedback{
+    margin-top:12px;font-size:11px;line-height:1.6;min-height:34px;
+    padding:0;color:var(--ink-dim);
+  }
+  .feedback.ok{color:var(--good);}
+  .feedback.no{color:var(--bad);}
+  .feedback b{color:var(--ink);}
+
+  .nextbtn{
+    margin-top:8px;background:var(--accent);color:var(--bg-0);
+    border:1px solid var(--accent);font-family:var(--mono);font-size:11px;font-weight:600;
+    padding:9px 20px;cursor:pointer;box-shadow:3px 3px 0 var(--bg-0);letter-spacing:.5px;
+    display:none;
+  }
+  .nextbtn:hover{background:var(--flash);}
+
+  /* 项目终点剪影 (角落) */
+  .anchor{
+    position:absolute;right:18px;bottom:14px;z-index:3;
+    display:flex;align-items:center;gap:7px;opacity:.5;pointer-events:none;
+  }
+  .anchor svg{width:26px;height:26px;}
+  .anchor span{font-size:9px;color:var(--ink-dim);letter-spacing:.5px;}
+
+  /* 结算 */
+  .verdict{
+    position:absolute;inset:0;display:none;flex-direction:column;
+    align-items:center;justify-content:center;text-align:center;
+    background:oklch(0.18 0.03 215 / 0.94);z-index:8;gap:12px;padding:0 24px;
+  }
+  .verdict.show{display:flex;}
+  .verdict .badge{font-size:19px;color:var(--query);font-weight:600;letter-spacing:1.5px;}
+  .verdict .desc{font-size:12px;color:var(--ink-dim);line-height:1.7;max-width:440px;}
+  .verdict .desc b{color:var(--flash);}
+  .verdict button{
+    margin-top:8px;background:transparent;color:var(--ink);border:1px solid var(--line);
+    font-family:var(--mono);font-size:11px;padding:8px 22px;cursor:pointer;letter-spacing:1px;
+  }
+  .verdict button:hover{border-color:var(--accent);color:var(--accent);}
+</style>
+</head>
+<body>
+<div class="wrapper">
+
+  <!-- ===== sidebar ===== -->
+  <aside class="game-sidebar">
+    <div class="mascot">
+      <!-- Bit — 悬浮立方精灵 (SVG, 无 emoji) -->
+      <svg viewBox="0 0 64 64" fill="none" stroke="var(--accent)" stroke-width="2.2" stroke-linejoin="round">
+        <path d="M32 8 L54 20 L54 44 L32 56 L10 44 L10 20 Z" fill="var(--bg-2)"/>
+        <path d="M32 8 L54 20 L32 32 L10 20 Z" fill="var(--core)" stroke="none" opacity="0.9"/>
+        <path d="M32 32 L54 20 L54 44 L32 56 Z" fill="var(--depth)" stroke="none" opacity="0.9"/>
+        <path d="M32 8 L54 20 L54 44 L32 56 L10 44 L10 20 Z"/>
+        <line x1="32" y1="32" x2="32" y2="56"/>
+        <rect x="27" y="20" width="4" height="4" fill="var(--flash)" stroke="none"/>
+        <rect x="35" y="24" width="4" height="4" fill="var(--query)" stroke="none"/>
+      </svg>
+      <span class="name" id="mascotName">BIT</span>
+      <span class="sub" id="mascotSub">诊断助手</span>
+    </div>
+
+    <div class="route">
+      <div class="rt-title" id="rtTitle">脑控之路</div>
+      <div class="rt-step done"><span class="dot"></span><span id="rt1">S1 记录脑波</span></div>
+      <div class="rt-step done"><span class="dot"></span><span id="rt2">S2 清洗信号</span></div>
+      <div class="rt-step done"><span class="dot"></span><span id="rt3">S3 提取特征</span></div>
+      <div class="rt-step now"><span class="dot"></span><span id="rt4">S4 训练解码</span></div>
+      <div class="rt-step"><span class="dot"></span><span id="rt5">S5 实时控制</span></div>
+      <div class="rt-step"><span class="dot"></span><span id="rt6">S6 脑控 MC</span></div>
+    </div>
+
+    <div class="progress-wrap">
+      <div class="progress-label" id="progLabel">诊断进度 0/4</div>
+      <div class="progress-bar"><div class="progress-fill" id="progFill"></div></div>
+    </div>
+
+    <div class="spacer"></div>
+    <button id="langBtn" class="lang-btn">中 / EN</button>
+  </aside>
+
+  <!-- ===== main ===== -->
+  <main class="game-main">
+    <div class="topbar">
+      <div>
+        <h1 id="hTitle">过拟合诊断师 · 4 个待上线模型</h1>
+        <div class="hook" id="hHook">模型是真懂还是背答案? 看训练和留出的差距。差距小 = 真懂; 差距大 = 背了训练集的答案, 一上线就翻车。给每个模型下诊断、开处方。</div>
+      </div>
+      <div class="hud">
+        <span id="hudCorrect"><b id="hudC">0</b>诊断正确</span>
+        <span id="hudShipped"><b id="hudS">0</b>安全上线</span>
+      </div>
+    </div>
+
+    <div class="stage">
+      <div class="case-row">
+        <div class="case-card">
+          <div class="cardlabel" id="lblPatient">送检模型</div>
+          <div class="casebody" id="caseText">—</div>
+        </div>
+        <div class="scope">
+          <div class="cap" id="scopeCap">训练集 vs 留出集 准确率</div>
+          <canvas id="bars"></canvas>
+          <div class="anchor">
+            <!-- Minecraft 方块剪影 -->
+            <svg viewBox="0 0 32 32" fill="none" stroke="var(--ink-dim)" stroke-width="2">
+              <rect x="5" y="5" width="22" height="22"/>
+              <line x1="5" y1="13" x2="27" y2="13"/>
+              <line x1="13" y1="5" x2="13" y2="27"/>
+              <line x1="20" y1="13" x2="20" y2="27"/>
+            </svg>
+            <span id="anchorTxt">终点 · 脑控 Minecraft</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="diag">
+        <div class="dq" id="diagQ">诊断这个模型, 并开出处方:</div>
+        <div class="opt-grid" id="optGrid"></div>
+        <div class="feedback" id="feedback"></div>
+        <button id="nextBtn" class="nextbtn">下一个</button>
+      </div>
+    </div>
+
+    <!-- 结算 -->
+    <div class="verdict" id="verdict">
+      <div class="badge" id="vBadge">过拟合诊断师</div>
+      <div class="desc" id="vDesc"></div>
+      <button id="restartBtn" class="lang-btn" style="width:auto;">再来一轮</button>
+    </div>
+  </main>
+</div>
+
+<script>
+var LANG='cn';
+
+// ---- 4 个待诊断模型 (train / holdout 准确率对) ----
+// diag: overfit_bad / overfit_mild / good / underfit
+var CASES=[
+  {train:98, holdout:72, diag:'overfit_bad',
+   cn:'解码器在你录的 200 条 trial 上准确率冲到 98%, 但换一批没见过的留出 trial 只有 72%。',
+   en:'Decoder hits 98% on your 200 recorded trials, but only 72% on unseen holdout trials.'},
+  {train:88, holdout:85, diag:'good',
+   cn:'解码器在训练 trial 上 88%, 留出 trial 上 85%。两个数字咬得很紧。',
+   en:'Decoder is 88% on train trials and 85% on holdout. The two numbers stay close.'},
+  {train:60, holdout:58, diag:'underfit',
+   cn:'解码器在训练 trial 上才 60%, 留出 trial 上 58%。连训练集都学不好。',
+   en:'Decoder is only 60% on train trials, 58% on holdout. It fails even on training data.'},
+  {train:92, holdout:80, diag:'overfit_mild',
+   cn:'解码器训练 92%, 留出 80%。有差距, 但还没到背答案那种夸张程度。',
+   en:'Decoder is 92% on train, 80% on holdout. There is a gap, but not a memorizing-everything gap.'}
+];
+
+// ---- 4 个处方选项 ----
+var OPTS=[
+  {key:'good',        cn_t:'真懂', cn_d:'差距 < 5, 直接上线', en_t:'Truly learned', en_d:'gap < 5, ship it'},
+  {key:'overfit_mild',cn_t:'轻微过拟合', cn_d:'差距 5-15, 加点数据', en_t:'Mild overfit', en_d:'gap 5-15, add data'},
+  {key:'overfit_bad', cn_t:'严重背答案', cn_d:'差距 > 15, 减复杂度', en_t:'Memorizing', en_d:'gap > 15, simplify'},
+  {key:'underfit',    cn_t:'欠拟合', cn_d:'训练也低, 加复杂度', en_t:'Underfit', en_d:'train low too, add power'}
+];
+
+var idx=0, picked=null, answered=false;
+var correctCount=0, shippedSafe=0;
+var pickedDiags=[]; // 记录每个模型最终诊断 (用于结算)
+
+var T={
+  cn:{title:'过拟合诊断师 · 4 个待上线模型',
+      hook:'模型是真懂还是背答案? 看训练和留出的差距。差距小 = 真懂; 差距大 = 背了训练集的答案, 一上线就翻车。给每个模型下诊断、开处方。',
+      rtTitle:'脑控之路', mascotSub:'诊断助手', anchorTxt:'终点 · 脑控 Minecraft',
+      lblPatient:'送检模型', scopeCap:'训练集 vs 留出集 准确率', diagQ:'诊断这个模型, 并开出处方:',
+      hudCorrect:'诊断正确', hudShipped:'安全上线', next:'下一个', restart:'再来一轮',
+      rt:['S1 记录脑波','S2 清洗信号','S3 提取特征','S4 训练解码','S5 实时控制','S6 脑控 MC'],
+      gap:'差距', train:'训练集', holdout:'留出集',
+      progress:function(n){return '诊断进度 '+n+'/4';}},
+  en:{title:'Overfit Doctor · 4 models awaiting launch',
+      hook:'Truly learned, or memorizing answers? Read the gap between train and holdout. Small gap = real; big gap = memorized the training set and crashes on launch. Diagnose each model and prescribe.',
+      rtTitle:'Road to BCI', mascotSub:'diagnostic aide', anchorTxt:'goal · brain-controlled Minecraft',
+      lblPatient:'model in review', scopeCap:'train vs holdout accuracy', diagQ:'Diagnose this model and prescribe:',
+      hudCorrect:'correct dx', hudShipped:'shipped safe', next:'next', restart:'play again',
+      rt:['S1 record','S2 clean','S3 features','S4 train decode','S5 live control','S6 BCI MC'],
+      gap:'gap', train:'train', holdout:'holdout',
+      progress:function(n){return 'progress '+n+'/4';}}
+};
+
+function L(){return T[LANG];}
+
+// ---- i18n 刷新 ----
+function refreshI18N(){
+  var t=L();
+  document.getElementById('langBtn').textContent = LANG==='cn'?'中 / EN':'EN / 中';
+  document.getElementById('hTitle').textContent=t.title;
+  document.getElementById('hHook').textContent=t.hook;
+  document.getElementById('rtTitle').textContent=t.rtTitle;
+  document.getElementById('mascotSub').textContent=t.mascotSub;
+  document.getElementById('anchorTxt').textContent=t.anchorTxt;
+  document.getElementById('lblPatient').textContent=t.lblPatient;
+  document.getElementById('scopeCap').textContent=t.scopeCap;
+  document.getElementById('diagQ').textContent=t.diagQ;
+  document.getElementById('hudCorrect').innerHTML='<b id="hudC">'+correctCount+'</b>'+t.hudCorrect;
+  document.getElementById('hudShipped').innerHTML='<b id="hudS">'+shippedSafe+'</b>'+t.hudShipped;
+  document.getElementById('nextBtn').textContent=t.next;
+  document.getElementById('restartBtn').textContent=t.restart;
+  for(var i=0;i<6;i++){document.getElementById('rt'+(i+1)).textContent=t.rt[i];}
+  document.getElementById('progLabel').textContent=t.progress(idx>=CASES.length?CASES.length:idx);
+  renderCase();
+  renderBars();
+}
+
+// ---- 渲染当前模型卡 + 选项 ----
+function renderCase(){
+  if(idx>=CASES.length) return;
+  var c=CASES[idx], t=L();
+  document.getElementById('caseText').textContent = LANG==='cn'?c.cn:c.en;
+  var grid=document.getElementById('optGrid');
+  grid.innerHTML='';
+  OPTS.forEach(function(o){
+    var b=document.createElement('button');
+    b.className='opt';
+    b.setAttribute('data-key',o.key);
+    b.innerHTML='<b>'+(LANG==='cn'?o.cn_t:o.en_t)+'</b>'+(LANG==='cn'?o.cn_d:o.en_d);
+    if(answered){
+      b.disabled=true;
+      if(o.key===c.diag) b.className='opt correct';
+      else if(o.key===picked) b.className='opt wrong';
+    } else if(o.key===picked){
+      b.className='opt pick';
+    }
+    b.addEventListener('click',function(){onPick(o.key);});
+    grid.appendChild(b);
+  });
+  // feedback 文案随语言重渲
+  if(answered) showFeedback();
+}
+
+function onPick(key){
+  if(answered) return;
+  picked=key;
+  answered=true;
+  var c=CASES[idx];
+  var ok=(key===c.diag);
+  pickedDiags.push({correct:ok, diag:c.diag});
+  if(ok){
+    correctCount++;
+    // 真懂 (good) 且诊断正确 => 安全上线一个
+    if(c.diag==='good') shippedSafe++;
+  }
+  document.getElementById('hudC').textContent=correctCount;
+  document.getElementById('hudS').textContent=shippedSafe;
+  renderCase();
+  showFeedback();
+  document.getElementById('nextBtn').style.display='inline-block';
+}
+
+function showFeedback(){
+  var c=CASES[idx];
+  var ok=(picked===c.diag);
+  var fb=document.getElementById('feedback');
+  var gap=c.train-c.holdout;
+  var msgCN, msgEN;
+  if(ok){
+    if(c.diag==='good') {msgCN='诊断正确。差距 '+gap+' < 5, 模型是真懂的, 可以安全上线脑控。'; msgEN='Correct. Gap '+gap+' < 5, the model truly learned. Safe to ship to the BCI.';}
+    else if(c.diag==='overfit_mild'){msgCN='诊断正确。差距 '+gap+' 落在 5-15, 轻微过拟合, 多录几十条 trial 喂数据就能拉近。'; msgEN='Correct. Gap '+gap+' is 5-15, mild overfit; record more trials and it closes.';}
+    else if(c.diag==='overfit_bad'){msgCN='诊断正确。差距 '+gap+' > 15, 模型在背训练集的答案。减复杂度或加数据, 否则一上线就翻车。'; msgEN='Correct. Gap '+gap+' > 15, the model memorized the train set. Simplify or add data, or it crashes live.';}
+    else {msgCN='诊断正确。训练集才 '+c.train+'%, 连见过的题都做不好 = 欠拟合, 给模型加点复杂度。'; msgEN='Correct. Only '+c.train+'% on train; it cannot even fit seen data = underfit. Add model capacity.';}
+    fb.className='feedback ok'; fb.innerHTML='<b>'+(LANG==='cn'?'诊断成立。':'Diagnosis stands.')+'</b> '+(LANG==='cn'?msgCN:msgEN);
+  } else {
+    // 误判后果: 上线翻车
+    var crashCN, crashEN;
+    if(c.diag==='overfit_bad'){crashCN='这其实是严重背答案 (差距 '+gap+')。你放它上线, 真戴 EEG 玩 Minecraft 时角色乱走, 准确率从 98% 暴跌。'; crashEN='It was actually memorizing (gap '+gap+'). You shipped it; live on EEG the avatar wanders and accuracy collapses.';}
+    else if(c.diag==='underfit'){crashCN='这其实是欠拟合 (训练才 '+c.train+'%)。再加数据也没用, 模型本身太弱。'; crashEN='It was underfit (train only '+c.train+'%). More data won\'t help; the model is too weak.';}
+    else if(c.diag==='good'){crashCN='这其实是真懂的 (差距 '+gap+')。你白白拒了一个能用的模型, 项目被拖慢。'; crashEN='It was actually fine (gap '+gap+'). You rejected a usable model and slowed the project.';}
+    else {crashCN='这其实只是轻微过拟合 (差距 '+gap+')。你处理过度, 反而把好不容易学到的东西削没了。'; crashEN='It was only mild overfit (gap '+gap+'). You over-corrected and erased what it learned.';}
+    fb.className='feedback no'; fb.innerHTML='<b>'+(LANG==='cn'?'误判, 上线翻车。':'Misdiagnosis — it crashed.')+'</b> '+(LANG==='cn'?crashCN:crashEN);
+  }
+  // 进度更新
+  document.getElementById('progFill').style.width=((idx+1)/CASES.length*100)+'%';
+  document.getElementById('progLabel').textContent=L().progress(idx+1);
+}
+
+document.getElementById('nextBtn').addEventListener('click',function(){
+  idx++;
+  if(idx>=CASES.length){ finish(); return; }
+  picked=null; answered=false;
+  document.getElementById('feedback').innerHTML=''; document.getElementById('feedback').className='feedback';
+  this.style.display='none';
+  renderCase(); renderBars();
+});
+
+function finish(){
+  var t=L();
+  var v=document.getElementById('verdict');
+  var badge=document.getElementById('vBadge');
+  var desc=document.getElementById('vDesc');
+  if(correctCount===CASES.length){
+    badge.textContent=LANG==='cn'?'称号解锁: 过拟合诊断师':'Unlocked: Overfit Doctor';
+    desc.innerHTML=LANG==='cn'
+      ? '4 个模型全部诊断正确。你现在一眼就能看出<b>模型是真懂还是背答案</b> —— 训练和留出的差距就是体温计。通关这一关, 你离脑控更近了: 上线的解码器更可信, 戴上 EEG 玩 Minecraft 时不会因为它"背了答案"而乱走。'
+      : 'All 4 models diagnosed correctly. You can now read at a glance whether a model <b>truly learned or just memorized</b> — the train-holdout gap is your thermometer. The decoder you ship is now trustworthy: when you wear the EEG to play Minecraft, it won\'t wander because it "memorized answers".';
+  } else {
+    badge.textContent=LANG==='cn'?('诊断 '+correctCount+'/4'):('Diagnosed '+correctCount+'/4');
+    desc.innerHTML=LANG==='cn'
+      ? '还有 '+(CASES.length-correctCount)+' 个误判。记住口诀: 差距 < 5 真懂; 5-15 加数据; > 15 减复杂度; 训练也低就加复杂度。再来一轮拿下诊断师称号, 让上线的脑控模型更可信。'
+      : (CASES.length-correctCount)+' misdiagnoses. Rule of thumb: gap < 5 fine; 5-15 add data; > 15 simplify; train also low, add capacity. Play again to earn the Doctor title and ship a trustworthy BCI model.';
+  }
+  v.classList.add('show');
+}
+
+document.getElementById('restartBtn').addEventListener('click',function(){
+  idx=0; picked=null; answered=false; correctCount=0; shippedSafe=0; pickedDiags=[];
+  document.getElementById('verdict').classList.remove('show');
+  document.getElementById('feedback').innerHTML=''; document.getElementById('feedback').className='feedback';
+  document.getElementById('nextBtn').style.display='none';
+  document.getElementById('hudC').textContent='0'; document.getElementById('hudS').textContent='0';
+  document.getElementById('progFill').style.width='0%';
+  document.getElementById('progLabel').textContent=L().progress(0);
+  renderCase(); renderBars();
+});
+
+document.getElementById('langBtn').addEventListener('click',function(){
+  LANG=LANG==='cn'?'en':'cn';
+  refreshI18N();
+});
+
+// ---- 双柱对比 canvas ----
+var canvas=document.getElementById('bars'), ctx=canvas.getContext('2d');
+var W=0,H=0,DPR=1;
+function resize(){
+  var r=canvas.parentElement.getBoundingClientRect();
+  if(r.width<1||r.height<1) return;
+  DPR=window.devicePixelRatio||1;
+  canvas.width=r.width*DPR; canvas.height=r.height*DPR;
+  canvas.style.width=r.width+'px'; canvas.style.height=r.height+'px';
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  W=r.width; H=r.height;
+  renderBars();
+}
+window.addEventListener('resize',resize);
+setTimeout(resize,50); setTimeout(resize,200); setTimeout(resize,600);
+if(document.fonts&&document.fonts.ready) document.fonts.ready.then(resize);
+
+function cssvar(n){return getComputedStyle(document.documentElement).getPropertyValue(n).trim();}
+
+function renderBars(){
+  if(!W||!H||idx>=CASES.length) return;
+  var c=CASES[idx], t=L();
+  ctx.clearRect(0,0,W,H);
+  ctx.fillStyle=cssvar('--bg-1'); ctx.fillRect(0,0,W,H);
+
+  var padL=64, padR=40, padT=44, padB=46;
+  var plotW=W-padL-padR, plotH=H-padT-padB;
+  if(plotW<60||plotH<40) return;
+
+  // y 轴网格 (0-100%)
+  ctx.strokeStyle=cssvar('--line'); ctx.lineWidth=1;
+  ctx.fillStyle=cssvar('--ink-dim'); ctx.font='10px '+cssvar('--mono');
+  ctx.textAlign='right'; ctx.textBaseline='middle';
+  for(var p=0;p<=100;p+=25){
+    var y=padT+plotH*(1-p/100);
+    ctx.globalAlpha=0.35; ctx.beginPath(); ctx.moveTo(padL,y); ctx.lineTo(W-padR,y); ctx.stroke();
+    ctx.globalAlpha=1; ctx.fillText(p+'%', padL-8, y);
+  }
+
+  // 两根柱: train / holdout
+  var bars=[
+    {label:t.train, val:c.train, color:cssvar('--core')},
+    {label:t.holdout, val:c.holdout, color:cssvar('--accent')}
+  ];
+  var bw=Math.min(plotW*0.26, 110);
+  var slot=plotW/2;
+  ctx.textAlign='center';
+  bars.forEach(function(b,i){
+    var cx=padL+slot*(i+0.5);
+    var bh=plotH*b.val/100;
+    var bx=cx-bw/2, by=padT+plotH-bh;
+    // 柱
+    ctx.fillStyle=b.color; ctx.fillRect(bx,by,bw,bh);
+    ctx.strokeStyle=cssvar('--bg-0'); ctx.lineWidth=2; ctx.strokeRect(bx,by,bw,bh);
+    // 数值
+    ctx.fillStyle=cssvar('--flash'); ctx.font='700 22px '+cssvar('--mono'); ctx.textBaseline='bottom';
+    ctx.fillText(b.val+'%', cx, by-6);
+    // 标签
+    ctx.fillStyle=cssvar('--ink-dim'); ctx.font='11px '+cssvar('--mono'); ctx.textBaseline='top';
+    ctx.fillText(b.label, cx, padT+plotH+8);
+  });
+
+  // 差距标注 (连接两柱顶端)
+  var gap=c.train-c.holdout;
+  var cx0=padL+slot*0.5, cx1=padL+slot*1.5;
+  var y0=padT+plotH*(1-c.train/100), y1=padT+plotH*(1-c.holdout/100);
+  ctx.strokeStyle=cssvar('--query'); ctx.lineWidth=1.5;
+  ctx.setLineDash([4,3]);
+  ctx.beginPath(); ctx.moveTo(cx0, y0); ctx.lineTo(cx1, y0); ctx.lineTo(cx1, y1); ctx.stroke();
+  ctx.setLineDash([]);
+  var gapColor = gap>15?cssvar('--bad'):(gap<5?cssvar('--good'):cssvar('--query'));
+  ctx.fillStyle=gapColor; ctx.font='700 14px '+cssvar('--mono');
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.fillText(t.gap+' '+gap, (cx0+cx1)/2, (y0+y1)/2 - 14);
+}
+
+refreshI18N();
+renderCase();
+function loop(){ renderBars(); requestAnimationFrame(loop); }
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
