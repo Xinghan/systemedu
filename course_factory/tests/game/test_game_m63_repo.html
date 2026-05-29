@@ -1,0 +1,594 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Open-Source Your BCI Repo</title>
+<style>
+@font-face{font-family:'JBM';src:local('JetBrains Mono'),local('Menlo'),local('Consolas');}
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --paper:#FAF9F5; --paper-2:#F1EDDF; --card:#FFFFFF; --ink:#191814; --sub:#6B6557;
+  --border:#EBE5D6; --hairline:#F2EDE0;
+  --primary:#D97757; --primary-ink:#9A4A2E; --primary-soft:#F8EDE5; --primary-line:#ECCFB8;
+  --computing:#C04E68; --computing-soft:#F4DDE3; --computing-line:#E4B7C2;
+  --ok:#3F7D58; --ok-soft:#E6F0E6; --warn:#B7791F; --warn-soft:#FBF1DC;
+  --mono:'JetBrains Mono','JBM',ui-monospace,Menlo,Consolas,monospace;
+  --sans:'Segoe UI',-apple-system,'PingFang SC','Microsoft YaHei',sans-serif;
+}
+html,body{width:100%;height:100vh;overflow:hidden;background:var(--paper);
+  font-family:var(--sans);color:var(--ink);font-size:13px;}
+.shell{display:flex;height:100vh;width:100%;}
+
+/* ---------- sidebar ---------- */
+.game-sidebar{width:200px;flex-shrink:0;background:var(--paper-2);border-right:1px solid var(--border);
+  display:flex;flex-direction:column;padding:12px 12px 10px;overflow-y:auto;gap:12px;}
+.side-top{display:flex;align-items:center;justify-content:space-between;}
+.brand{font-family:var(--mono);font-size:11px;font-weight:700;letter-spacing:.5px;color:var(--primary-ink);line-height:1.3;}
+#langBtn{font-family:var(--mono);font-size:11px;font-weight:700;padding:3px 9px;cursor:pointer;
+  border:1px solid var(--primary-line);background:var(--card);color:var(--primary-ink);border-radius:5px;}
+#langBtn:hover{background:var(--primary-soft);}
+.side-h{font-size:11px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--sub);margin-bottom:5px;}
+.box{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:9px 10px;
+  box-shadow:0 1px 2px rgba(25,24,20,.04);}
+.goal{font-size:12px;line-height:1.55;color:var(--ink);}
+.goal b{color:var(--primary-ink);}
+.guide{list-style:none;font-size:11.5px;line-height:1.5;color:var(--sub);}
+.guide li{padding:2px 0 2px 13px;position:relative;}
+.guide li::before{content:"";position:absolute;left:0;top:8px;width:5px;height:5px;border-radius:50%;background:var(--primary);}
+/* roadmap */
+.road{list-style:none;font-family:var(--mono);font-size:10.5px;}
+.road li{display:flex;align-items:center;gap:6px;padding:3px 0;color:var(--sub);}
+.road li .dot{width:8px;height:8px;border-radius:50%;border:1.5px solid var(--border);background:var(--card);flex-shrink:0;}
+.road li.done .dot{background:var(--ok);border-color:var(--ok);}
+.road li.here{color:var(--primary-ink);font-weight:700;}
+.road li.here .dot{background:var(--primary);border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-soft);}
+.anchor{font-size:10.5px;line-height:1.5;color:var(--sub);border-top:1px dashed var(--border);padding-top:8px;}
+.anchor b{color:var(--primary-ink);}
+
+/* ---------- main ---------- */
+.game-main{flex:1;min-width:0;display:flex;flex-direction:column;padding:12px 14px;gap:10px;overflow:hidden;}
+.topbar{display:flex;align-items:center;justify-content:space-between;flex-shrink:0;gap:12px;}
+.title-wrap h1{font-size:16px;font-weight:700;letter-spacing:.3px;}
+.title-wrap p{font-size:11.5px;color:var(--sub);margin-top:2px;}
+.round-tag{font-family:var(--mono);font-size:11px;color:var(--primary-ink);background:var(--primary-soft);
+  border:1px solid var(--primary-line);border-radius:6px;padding:4px 9px;font-weight:700;white-space:nowrap;}
+
+.work{flex:1;min-height:0;display:flex;gap:10px;}
+.col{display:flex;flex-direction:column;gap:9px;min-height:0;min-width:0;}
+.col.palette{width:208px;flex-shrink:0;}
+.col.build{flex:1;}
+.col.terminal{width:300px;flex-shrink:0;}
+
+.panel{background:var(--card);border:1px solid var(--border);border-radius:9px;
+  box-shadow:0 1px 3px rgba(25,24,20,.05);display:flex;flex-direction:column;min-height:0;}
+.panel-h{font-size:11px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:var(--sub);
+  padding:8px 10px 6px;border-bottom:1px solid var(--hairline);display:flex;justify-content:space-between;align-items:center;}
+.panel-h .hint{font-family:var(--mono);font-weight:400;text-transform:none;letter-spacing:0;font-size:10px;color:var(--sub);}
+.panel-body{padding:8px 9px;overflow-y:auto;flex:1;min-height:0;}
+
+/* file chips */
+.chip-grid{display:flex;flex-direction:column;gap:5px;}
+.chip{font-family:var(--mono);font-size:11px;padding:6px 8px;border-radius:6px;cursor:grab;user-select:none;
+  border:1px solid var(--border);background:var(--paper);color:var(--ink);display:flex;align-items:center;gap:6px;
+  transition:transform .08s, box-shadow .12s;}
+.chip:hover{box-shadow:0 2px 5px rgba(25,24,20,.08);}
+.chip:active{cursor:grabbing;}
+.chip.dragging{opacity:.35;}
+.chip .gly{width:13px;height:13px;flex-shrink:0;}
+.chip .tag{margin-left:auto;font-size:9px;padding:1px 5px;border-radius:4px;letter-spacing:.3px;}
+.chip.req .tag{background:var(--primary-soft);color:var(--primary-ink);border:1px solid var(--primary-line);}
+.chip.opt .tag{background:var(--paper-2);color:var(--sub);border:1px solid var(--border);}
+.chip.placed{opacity:.4;pointer-events:none;}
+
+/* repo tree drop */
+.tree{font-family:var(--mono);font-size:11.5px;}
+.repo-root{border:1.5px dashed var(--primary-line);border-radius:8px;padding:8px;min-height:100%;background:var(--paper);
+  transition:background .15s, border-color .15s;}
+.repo-root.over{background:var(--primary-soft);border-color:var(--primary);}
+.repo-name{color:var(--primary-ink);font-weight:700;margin-bottom:6px;display:flex;align-items:center;gap:6px;}
+.tree-item{display:flex;align-items:center;gap:7px;padding:4px 6px;margin:2px 0 2px 12px;border-radius:5px;
+  background:var(--card);border:1px solid var(--border);}
+.tree-item.miss{opacity:.55;background:transparent;border-style:dashed;}
+.tree-item .gly{width:13px;height:13px;flex-shrink:0;}
+.tree-item .nm{flex:1;}
+.tree-item .req-mark{font-size:9px;color:var(--primary-ink);}
+.tree-item .x{cursor:pointer;color:var(--sub);font-family:var(--mono);font-weight:700;padding:0 3px;border-radius:3px;}
+.tree-item .x:hover{background:var(--computing-soft);color:var(--computing);}
+.placeholder{color:var(--sub);font-size:11px;text-align:center;padding:18px 6px;font-family:var(--sans);}
+
+/* CI pipeline */
+.ci-wrap{display:flex;flex-direction:column;gap:8px;}
+.ci-bank{display:flex;flex-wrap:wrap;gap:5px;padding-bottom:6px;border-bottom:1px dashed var(--border);}
+.ci-bank .step-blk{cursor:grab;}
+.pipeline{display:flex;flex-direction:column;gap:5px;min-height:96px;padding:6px;border:1.5px dashed var(--computing-line);
+  border-radius:8px;background:var(--paper);transition:background .15s,border-color .15s;}
+.pipeline.over{background:var(--computing-soft);border-color:var(--computing);}
+.step-blk{font-family:var(--mono);font-size:11px;padding:6px 9px;border-radius:6px;display:flex;align-items:center;gap:7px;
+  border:1px solid var(--computing-line);background:var(--card);color:var(--ink);user-select:none;position:relative;}
+.step-blk.dragging{opacity:.35;}
+.step-blk .num{font-size:9px;background:var(--computing-soft);color:var(--computing);border-radius:4px;padding:1px 5px;font-weight:700;}
+.step-blk .arr{cursor:pointer;color:var(--sub);font-weight:700;padding:0 2px;}
+.step-blk .arr:hover{color:var(--computing);}
+.step-blk .x{margin-left:auto;cursor:pointer;color:var(--sub);font-weight:700;padding:0 4px;}
+.step-blk .x:hover{color:var(--computing);}
+.pipe-empty{color:var(--sub);font-size:10.5px;text-align:center;padding:14px 4px;font-family:var(--sans);}
+
+/* run button */
+.runbar{display:flex;gap:8px;align-items:center;flex-shrink:0;}
+.run-btn{font-family:var(--mono);font-size:13px;font-weight:700;letter-spacing:.4px;padding:9px 16px;cursor:pointer;
+  border:none;border-radius:8px;background:var(--primary);color:#fff;box-shadow:0 2px 5px rgba(217,119,87,.32);
+  transition:transform .08s,box-shadow .12s;}
+.run-btn:hover{box-shadow:0 4px 10px rgba(217,119,87,.4);}
+.run-btn:active{transform:translateY(1px);}
+.reset-btn{font-family:var(--mono);font-size:11px;font-weight:700;padding:9px 12px;cursor:pointer;
+  border:1px solid var(--border);border-radius:8px;background:var(--card);color:var(--sub);}
+.reset-btn:hover{background:var(--paper-2);}
+
+/* terminal */
+.term{font-family:var(--mono);font-size:11px;line-height:1.55;color:var(--ink);white-space:pre-wrap;}
+.term .ln{padding:1px 0;}
+.term .p{color:var(--ok);}
+.term .f{color:var(--computing);}
+.term .w{color:var(--warn);}
+.term .d{color:var(--sub);}
+.term .cmd{color:var(--primary-ink);font-weight:700;}
+.status-badge{font-family:var(--mono);font-size:11px;font-weight:700;border-radius:6px;padding:3px 8px;}
+.status-badge.idle{background:var(--paper-2);color:var(--sub);}
+.status-badge.green{background:var(--ok-soft);color:var(--ok);}
+.status-badge.red{background:var(--computing-soft);color:var(--computing);}
+
+.col.build{overflow:hidden;}
+.build-stack{display:flex;flex-direction:column;gap:9px;flex:1;min-height:0;}
+.build-stack .panel{flex:1;}
+.build-stack .panel.ci-panel{flex:0 0 auto;max-height:42%;}
+</style>
+</head>
+<body>
+<div class="shell">
+  <!-- ===== SIDEBAR ===== -->
+  <aside class="game-sidebar">
+    <div class="side-top">
+      <div class="brand" id="brand">BCI&nbsp;REPO<br>RELEASE</div>
+      <button id="langBtn">EN</button>
+    </div>
+    <div>
+      <div class="side-h" id="goalH">本关目标</div>
+      <div class="box goal" id="goalBox"></div>
+    </div>
+    <div>
+      <div class="side-h" id="guideH">操作说明</div>
+      <ul class="guide" id="guideList"></ul>
+    </div>
+    <div>
+      <div class="side-h" id="roadH">项目路线</div>
+      <ul class="road" id="roadList"></ul>
+    </div>
+    <div class="anchor" id="anchorBox"></div>
+  </aside>
+
+  <!-- ===== MAIN ===== -->
+  <main class="game-main">
+    <div class="topbar">
+      <div class="title-wrap">
+        <h1 id="mainTitle"></h1>
+        <p id="mainSub"></p>
+      </div>
+      <div class="round-tag" id="roundTag"></div>
+    </div>
+
+    <div class="work">
+      <!-- palette -->
+      <div class="col palette">
+        <div class="panel" style="flex:1;">
+          <div class="panel-h"><span id="palH"></span><span class="hint" id="palHint"></span></div>
+          <div class="panel-body"><div class="chip-grid" id="fileBank"></div></div>
+        </div>
+      </div>
+
+      <!-- build (repo tree + ci) -->
+      <div class="col build">
+        <div class="build-stack">
+          <div class="panel">
+            <div class="panel-h"><span id="repoH"></span><span class="hint" id="repoHint"></span></div>
+            <div class="panel-body">
+              <div class="tree"><div class="repo-root" id="repoRoot"></div></div>
+            </div>
+          </div>
+          <div class="panel ci-panel">
+            <div class="panel-h"><span id="ciH"></span><span class="hint" id="ciHint"></span></div>
+            <div class="panel-body">
+              <div class="ci-wrap">
+                <div class="ci-bank" id="ciBank"></div>
+                <div class="pipeline" id="pipeline"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- terminal -->
+      <div class="col terminal">
+        <div class="panel" style="flex:1;">
+          <div class="panel-h"><span id="termH"></span><span class="status-badge idle" id="statusBadge">IDLE</span></div>
+          <div class="panel-body"><div class="term" id="term"></div></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="runbar">
+      <button class="run-btn" id="runBtn"></button>
+      <button class="reset-btn" id="resetBtn"></button>
+    </div>
+  </main>
+</div>
+
+<script>
+(function(){
+"use strict";
+var LANG='cn';
+
+/* ---------------- i18n ---------------- */
+var T={
+  brand:{cn:'BCI 仓库<br>开源发布',en:'BCI&nbsp;REPO<br>RELEASE'},
+  goalH:{cn:'本关目标',en:'GOAL'},
+  guideH:{cn:'操作说明',en:'HOW TO PLAY'},
+  roadH:{cn:'项目路线',en:'PROJECT MAP'},
+  goal:{cn:'把你的<b>脑控 Minecraft</b> 代码整理成一个标准开源仓库：拖必备文件进 repo，再拼对 CI 流水线顺序，让<b>陌生人 clone 后能复现 + CI 跑绿</b>。',
+        en:'Turn your <b>brain-controlled Minecraft</b> code into a standard open-source repo: drag the required files into the repo, then order the CI pipeline correctly so a <b>stranger can clone, reproduce, and CI passes green</b>.'},
+  guide:{cn:['从左侧文件库拖文件到中间 repo 树','把 CI 步骤块拖进流水线，用 ▲▼ 排顺序','点「模拟 git clone + CI」看陌生人能否复现','缺必备文件 / CI 顺序错 → 看终端真实后果','补全到全绿即通关'],
+         en:['Drag files from the bank into the repo tree','Drag CI step blocks into the pipeline, reorder with the arrows','Click "Simulate git clone + CI" to test a stranger','Missing required files / wrong CI order shows real consequences','Fix everything to pass green and win']},
+  road:{cn:['采集脑电','清洁信号','训练分类器','实时解码','接入 Minecraft','开源复现'],
+        en:['Record EEG','Clean signal','Train classifier','Real-time decode','Hook Minecraft','Open-source it']},
+  anchor:{cn:'<b>项目终点：</b>别人在自己电脑上 clone 你的仓库，几条命令就跑起同一套脑控系统。这一关就是把整个项目交付给世界。',
+          en:'<b>Project finish line:</b> others clone your repo and run the same brain-control system in a few commands. This level ships the whole project to the world.'},
+  title:{cn:'整理代码开源到 GitHub',en:'Open-Source Your Code to GitHub'},
+  sub:{cn:'搭出能复现的 repo 结构 + 一条能跑绿的 CI',en:'Build a reproducible repo + a CI pipeline that passes'},
+  palH:{cn:'文件库',en:'FILE BANK'},
+  palHint:{cn:'拖→repo',en:'drag→repo'},
+  repoH:{cn:'仓库结构 bci-minecraft/',en:'REPO  bci-minecraft/'},
+  repoHint:{cn:'必备项缺一不可',en:'all required'},
+  ciH:{cn:'CI 流水线 .github/workflows/test.yml',en:'CI PIPELINE  test.yml'},
+  ciHint:{cn:'顺序要对',en:'order matters'},
+  termH:{cn:'陌生人的终端',en:"STRANGER'S TERMINAL"},
+  run:{cn:'模拟 git clone + CI',en:'Simulate git clone + CI'},
+  reset:{cn:'重置',en:'Reset'},
+  round:{cn:'回合',en:'Round'},
+  termIdle:{cn:'$ 把仓库搭好，点上面的按钮，\n  模拟一个陌生人 clone 你的项目。',
+            en:'$ Build the repo, then click the button\n  to simulate a stranger cloning it.'},
+  reqMark:{cn:'必备',en:'req'},
+  placeholder:{cn:'把文件拖到这里 →',en:'Drag files here →'},
+  pipeEmpty:{cn:'把 CI 步骤块拖进来排顺序',en:'Drag CI steps here & order them'},
+  win:{cn:'仓库已开源，任何人都能复现！',en:'Repo shipped — anyone can reproduce it!'},
+  winSub:{cn:'你把整个脑控 Minecraft 项目交付给了世界。这是 BCI 项目的终点：一行 git clone，别人就能跑起你做的一切。',
+          en:'You shipped the whole brain-control Minecraft project. This is the finish line: one git clone and anyone runs everything you built.'}
+};
+function tr(k){var v=T[k];return v?(v[LANG]||v.cn):k;}
+
+/* ---------------- data ---------------- */
+// 文件积木：required 决定 repo 是否合格；consequence 是缺它的真实后果
+var FILE_DEFS=[
+  {id:'readme', nm:'README.md', req:true, gly:'doc'},
+  {id:'license', nm:'LICENSE', req:true, gly:'doc'},
+  {id:'reqs', nm:'requirements.txt', req:true, gly:'list'},
+  {id:'gitignore', nm:'.gitignore', req:true, gly:'list'},
+  {id:'src', nm:'src/bci/', req:true, gly:'folder'},
+  {id:'tests', nm:'tests/', req:true, gly:'folder'},
+  {id:'workflow', nm:'.github/workflows/test.yml', req:true, gly:'ci'},
+  {id:'examples', nm:'examples/demo.py', req:true, gly:'play'},
+  {id:'notes', nm:'scratch_notes.txt', req:false, gly:'doc'},
+  {id:'bigdata', nm:'raw_eeg_8GB.edf', req:false, gly:'list'}
+];
+var REQUIRED_IDS=FILE_DEFS.filter(function(f){return f.req;}).map(function(f){return f.id;});
+
+// 缺某必备文件的后果文案
+var MISS_MSG={
+  readme:{cn:'  没有 README：陌生人打开仓库一脸茫然，不知道这是干嘛的。',en:'  No README: a stranger has no idea what this project does.'},
+  license:{cn:'  没有 LICENSE：别人不敢用——法律上不知道能不能改、能不能商用。',en:'  No LICENSE: nobody dares use it — unclear legal terms.'},
+  reqs:{cn:'  缺 requirements.txt：pip 不知道装什么，import numpy 直接报 ModuleNotFoundError。',en:'  No requirements.txt: pip can\'t install deps — import numpy fails with ModuleNotFoundError.'},
+  gitignore:{cn:'  缺 .gitignore：.venv/ 和 config_secret.key 被误传上传，密钥泄露！',en:'  No .gitignore: .venv/ and config_secret.key got committed — secret leaked!'},
+  src:{cn:'  缺 src/bci/：仓库里根本没有源代码，clone 下来是空壳。',en:'  No src/bci/: there is no source code — the clone is an empty shell.'},
+  tests:{cn:'  缺 tests/：CI 没有测试可跑，pytest 收集到 0 个用例。',en:'  No tests/: CI has nothing to run — pytest collects 0 tests.'},
+  workflow:{cn:'  缺 .github/workflows/test.yml：GitHub 不会自动跑 CI，没有 passing 徽章。',en:'  No workflow file: GitHub runs no CI, no passing badge.'},
+  examples:{cn:'  缺 examples/demo.py：装好了也不知道怎么启动脑控，没有入口。',en:'  No examples/demo.py: even after install, nobody knows the entry point.'}
+};
+
+// CI 步骤块
+var CI_DEFS=[
+  {id:'checkout', nm:'checkout code', cmd:'actions/checkout@v4'},
+  {id:'setup',    nm:'setup python',  cmd:'actions/setup-python@v5'},
+  {id:'install',  nm:'pip install -r requirements.txt', cmd:'install deps'},
+  {id:'pytest',   nm:'run pytest',    cmd:'pytest -q'}
+];
+var CI_ORDER=['checkout','setup','install','pytest']; // 正确顺序
+
+/* glyphs (inline svg, COL 字面色) */
+var GLY={
+  doc:'<svg class="gly" viewBox="0 0 16 16"><path d="M3 1.5h6l4 4V14a.5.5 0 0 1-.5.5h-9A.5.5 0 0 1 3 14z" fill="none" stroke="#6B6557" stroke-width="1.1"/><path d="M9 1.5v4h4" fill="none" stroke="#6B6557" stroke-width="1.1"/></svg>',
+  list:'<svg class="gly" viewBox="0 0 16 16"><rect x="2.5" y="2.5" width="11" height="11" rx="1.5" fill="none" stroke="#6B6557" stroke-width="1.1"/><path d="M5 6h6M5 8.5h6M5 11h4" stroke="#6B6557" stroke-width="1.1" stroke-linecap="round"/></svg>',
+  folder:'<svg class="gly" viewBox="0 0 16 16"><path d="M2 4a1 1 0 0 1 1-1h3l1.5 1.5H13a1 1 0 0 1 1 1V12a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1z" fill="none" stroke="#D97757" stroke-width="1.1"/></svg>',
+  ci:'<svg class="gly" viewBox="0 0 16 16"><circle cx="8" cy="8" r="5.3" fill="none" stroke="#C04E68" stroke-width="1.1"/><path d="M8 5.2v3l2 1.4" stroke="#C04E68" stroke-width="1.1" stroke-linecap="round" fill="none"/></svg>',
+  play:'<svg class="gly" viewBox="0 0 16 16"><circle cx="8" cy="8" r="5.5" fill="none" stroke="#3F7D58" stroke-width="1.1"/><path d="M6.6 5.5 11 8l-4.4 2.5z" fill="#3F7D58"/></svg>'
+};
+
+/* ---------------- state ---------------- */
+var gameState={ placed:[], pipe:[], round:1, won:false };
+var dragKind=null, dragId=null;
+
+/* ---------------- DOM ---------------- */
+var $=function(id){return document.getElementById(id);};
+var fileBank=$('fileBank'), repoRoot=$('repoRoot'), ciBank=$('ciBank'),
+    pipeline=$('pipeline'), term=$('term'), statusBadge=$('statusBadge');
+
+/* ---------------- render ---------------- */
+function fileDef(id){for(var i=0;i<FILE_DEFS.length;i++){if(FILE_DEFS[i].id===id)return FILE_DEFS[i];}return null;}
+function ciDef(id){for(var i=0;i<CI_DEFS.length;i++){if(CI_DEFS[i].id===id)return CI_DEFS[i];}return null;}
+
+function renderBank(){
+  fileBank.innerHTML='';
+  FILE_DEFS.forEach(function(f){
+    var placed=gameState.placed.indexOf(f.id)>=0;
+    var el=document.createElement('div');
+    el.className='chip '+(f.req?'req':'opt')+(placed?' placed':'');
+    el.setAttribute('draggable',placed?'false':'true');
+    el.dataset.fid=f.id;
+    el.innerHTML=GLY[f.gly]+'<span>'+f.nm+'</span><span class="tag">'+(f.req?tr('reqMark'):'opt')+'</span>';
+    fileBank.appendChild(el);
+  });
+}
+
+function renderRepo(){
+  repoRoot.innerHTML='';
+  var head=document.createElement('div');
+  head.className='repo-name';
+  head.innerHTML=GLY.folder+'<span>bci-minecraft/</span>';
+  repoRoot.appendChild(head);
+  if(gameState.placed.length===0){
+    var ph=document.createElement('div');ph.className='placeholder';ph.textContent=tr('placeholder');
+    repoRoot.appendChild(ph);
+  }
+  gameState.placed.forEach(function(id){
+    var f=fileDef(id);
+    var it=document.createElement('div');it.className='tree-item';it.dataset.fid=id;
+    it.innerHTML=GLY[f.gly]+'<span class="nm">'+f.nm+'</span>'+
+      (f.req?'<span class="req-mark">'+tr('reqMark')+'</span>':'')+
+      '<span class="x" data-rm="'+id+'">x</span>';
+    repoRoot.appendChild(it);
+  });
+}
+
+function renderCiBank(){
+  ciBank.innerHTML='';
+  CI_DEFS.forEach(function(s){
+    if(gameState.pipe.indexOf(s.id)>=0)return;
+    var el=document.createElement('div');
+    el.className='step-blk';el.setAttribute('draggable','true');el.dataset.cid=s.id;
+    el.innerHTML='<span class="num">+</span><span>'+s.nm+'</span>';
+    ciBank.appendChild(el);
+  });
+}
+
+function renderPipe(){
+  pipeline.innerHTML='';
+  if(gameState.pipe.length===0){
+    var pe=document.createElement('div');pe.className='pipe-empty';pe.textContent=tr('pipeEmpty');
+    pipeline.appendChild(pe);return;
+  }
+  gameState.pipe.forEach(function(id,i){
+    var s=ciDef(id);
+    var el=document.createElement('div');el.className='step-blk';el.dataset.cid=id;
+    el.innerHTML='<span class="num">'+(i+1)+'</span><span>'+s.nm+'</span>'+
+      '<span class="arr" data-up="'+i+'">&#9650;</span>'+
+      '<span class="arr" data-dn="'+i+'">&#9660;</span>'+
+      '<span class="x" data-pop="'+id+'">x</span>';
+    pipeline.appendChild(el);
+  });
+}
+
+function renderAll(){renderBank();renderRepo();renderCiBank();renderPipe();updateRound();}
+function updateRound(){$('roundTag').textContent=tr('round')+' '+gameState.round;}
+
+/* ---------------- drag: files ---------------- */
+function attachFileDrag(){
+  fileBank.addEventListener('dragstart',function(e){
+    var c=e.target.closest('.chip');if(!c||c.classList.contains('placed'))return;
+    dragKind='file';dragId=c.dataset.fid;c.classList.add('dragging');
+    if(e.dataTransfer)e.dataTransfer.setData('text/plain',dragId);
+  });
+  fileBank.addEventListener('dragend',function(e){
+    var c=e.target.closest('.chip');if(c)c.classList.remove('dragging');dragKind=null;dragId=null;
+  });
+}
+repoRoot.addEventListener('dragover',function(e){if(dragKind==='file'){e.preventDefault();repoRoot.classList.add('over');}});
+repoRoot.addEventListener('dragleave',function(){repoRoot.classList.remove('over');});
+repoRoot.addEventListener('drop',function(e){
+  e.preventDefault();repoRoot.classList.remove('over');
+  if(dragKind==='file'&&dragId&&gameState.placed.indexOf(dragId)<0){
+    gameState.placed.push(dragId);renderAll();
+  }
+});
+repoRoot.addEventListener('click',function(e){
+  var rm=e.target.getAttribute('data-rm');
+  if(rm){gameState.placed=gameState.placed.filter(function(x){return x!==rm;});renderAll();}
+});
+
+/* ---------------- drag: ci steps ---------------- */
+function attachCiDrag(){
+  ciBank.addEventListener('dragstart',function(e){
+    var b=e.target.closest('.step-blk');if(!b)return;
+    dragKind='ci';dragId=b.dataset.cid;b.classList.add('dragging');
+    if(e.dataTransfer)e.dataTransfer.setData('text/plain',dragId);
+  });
+  ciBank.addEventListener('dragend',function(e){
+    var b=e.target.closest('.step-blk');if(b)b.classList.remove('dragging');dragKind=null;dragId=null;
+  });
+}
+pipeline.addEventListener('dragover',function(e){if(dragKind==='ci'){e.preventDefault();pipeline.classList.add('over');}});
+pipeline.addEventListener('dragleave',function(){pipeline.classList.remove('over');});
+pipeline.addEventListener('drop',function(e){
+  e.preventDefault();pipeline.classList.remove('over');
+  if(dragKind==='ci'&&dragId&&gameState.pipe.indexOf(dragId)<0){
+    gameState.pipe.push(dragId);renderAll();
+  }
+});
+pipeline.addEventListener('click',function(e){
+  var up=e.target.getAttribute('data-up'), dn=e.target.getAttribute('data-dn'), pop=e.target.getAttribute('data-pop');
+  if(up!==null){var i=+up;if(i>0){var a=gameState.pipe;var t=a[i-1];a[i-1]=a[i];a[i]=t;renderPipe();}return;}
+  if(dn!==null){var j=+dn;var b=gameState.pipe;if(j<b.length-1){var u=b[j+1];b[j+1]=b[j];b[j]=u;renderPipe();}return;}
+  if(pop){gameState.pipe=gameState.pipe.filter(function(x){return x!==pop;});renderAll();}
+});
+
+/* ---------------- touch fallback (tap to add) ---------------- */
+function touchAdd(container,attr,target){
+  container.addEventListener('touchend',function(e){
+    var el=e.target.closest('[data-'+attr+']');if(!el)return;
+    if(el.getAttribute('draggable')==='false')return;
+    var id=el.dataset[attr==='fid'?'fid':'cid'];
+    e.preventDefault();
+    if(target==='repo'){if(gameState.placed.indexOf(id)<0){gameState.placed.push(id);renderAll();}}
+    else{if(gameState.pipe.indexOf(id)<0){gameState.pipe.push(id);renderAll();}}
+  },{passive:false});
+}
+touchAdd(fileBank,'fid','repo');
+touchAdd(ciBank,'cid','pipe');
+
+/* ---------------- simulate clone + CI ---------------- */
+function setStatus(kind,txt){statusBadge.className='status-badge '+kind;statusBadge.textContent=txt;}
+function line(cls,txt){var d=document.createElement('div');d.className='ln'+(cls?' '+cls:'');d.textContent=txt;term.appendChild(d);term.parentNode.scrollTop=term.parentNode.scrollHeight;}
+
+function simulate(){
+  term.innerHTML='';gameState.round++;updateRound();setStatus('idle','RUN...');
+  line('cmd','$ git clone https://github.com/you/bci-minecraft');
+  line('d','  Cloning into \'bci-minecraft\'...');
+
+  var missing=REQUIRED_IDS.filter(function(id){return gameState.placed.indexOf(id)<0;});
+  var leakage=gameState.placed.indexOf('gitignore')<0;
+  var fatal=false;
+
+  // gitignore 后果（即使在场也可能其他都齐）
+  if(leakage){
+    line('w','  warning: .venv/ and config_secret.key were committed.');
+  }
+
+  // 报告每个缺失必备文件的后果
+  missing.forEach(function(id){
+    var m=MISS_MSG[id];if(m){line('f',m[LANG]||m.cn);}
+  });
+
+  if(missing.length>0){
+    line('f','  -> 陌生人无法复现你的项目。');
+    if(LANG==='en'){/* keep cn line as-is removed */}
+    setStatus('red','REPRODUCE: FAIL');
+    fatal=true;
+  } else {
+    line('p','  ok. Repo structure complete, deps & entry point present.');
+  }
+
+  // ---- CI ----
+  line('',' ');
+  line('cmd','$ GitHub Actions: running .github/workflows/test.yml');
+  var pipe=gameState.pipe;
+  var hasWorkflowFile=gameState.placed.indexOf('workflow')>=0;
+
+  if(!hasWorkflowFile){
+    line('f','  no workflow file -> CI does not run, no green badge.');
+    setStatus('red','CI: NOT RUN');
+    finish(false);return;
+  }
+  if(pipe.length===0){
+    line('f','  workflow has no steps -> nothing to execute.');
+    setStatus('red','CI: EMPTY');
+    finish(false);return;
+  }
+
+  var ciOk=true, reason='';
+  // checkout 必须最前
+  if(pipe[0]!=='checkout'){ciOk=false;reason='checkout not first: no source code in runner -> file not found.';}
+  // install 必须在 pytest 之前
+  var iInstall=pipe.indexOf('install'), iPytest=pipe.indexOf('pytest'), iSetup=pipe.indexOf('setup');
+  if(ciOk&&iPytest<0){ciOk=false;reason='no "run pytest" step -> tests never execute, CI is meaningless.';}
+  if(ciOk&&iInstall<0){ciOk=false;reason='no "pip install" step -> import numpy fails: ModuleNotFoundError.';}
+  if(ciOk&&iSetup<0){ciOk=false;reason='no "setup python" step -> python not available on runner.';}
+  if(ciOk&&iInstall>iPytest){ciOk=false;reason='pytest runs before install -> ModuleNotFoundError (deps missing).';}
+  if(ciOk&&iSetup>iInstall){ciOk=false;reason='install runs before python setup -> pip not found.';}
+
+  pipe.forEach(function(id,i){
+    var s=ciDef(id);
+    line('d','  ['+(i+1)+'/'+pipe.length+'] '+s.nm+'  ('+s.cmd+')');
+  });
+
+  if(!ciOk){
+    line('f','  CI red X: '+reason);
+    setStatus('red','CI: FAILED');
+    finish(false);return;
+  }
+
+  line('p','  All steps passed. collected 9 tests, 9 passed.');
+  setStatus('green','CI: PASSING');
+
+  if(!fatal){
+    line('',' ');
+    line('p','  '+(LANG==='en'?'A stranger cloned, installed, ran your demo, and CI is green.':'陌生人成功 clone、装好依赖、跑通 demo，CI 绿勾。'));
+    finish(true);
+  } else {
+    finish(false);
+  }
+}
+
+function finish(win){
+  if(win&&!gameState.won){
+    gameState.won=true;
+    line('',' ');
+    line('p','  *** '+tr('win')+' ***');
+    line('d','  '+tr('winSub'));
+    statusBadge.classList.add('green');statusBadge.textContent='SHIPPED';
+  }
+}
+
+/* ---------------- buttons ---------------- */
+$('runBtn').addEventListener('click',simulate);
+$('resetBtn').addEventListener('click',function(){
+  gameState={placed:[],pipe:[],round:1,won:false};
+  term.innerHTML='';setStatus('idle','IDLE');
+  term.appendChild(mkIdle());
+  renderAll();
+});
+function mkIdle(){var d=document.createElement('div');d.className='term';d.textContent=tr('termIdle');return d;}
+
+/* ---------------- lang ---------------- */
+function applyLang(){
+  document.documentElement.lang=(LANG==='cn'?'zh':'en');
+  $('langBtn').textContent=(LANG==='cn'?'EN':'中文');
+  $('brand').innerHTML=tr('brand');
+  $('goalH').textContent=tr('goalH');$('goalBox').innerHTML=tr('goal');
+  $('guideH').textContent=tr('guideH');
+  var gl=$('guideList');gl.innerHTML='';tr('guide').forEach(function(s){var li=document.createElement('li');li.textContent=s;gl.appendChild(li);});
+  $('roadH').textContent=tr('roadH');
+  var rl=$('roadList');rl.innerHTML='';var labels=tr('road');
+  labels.forEach(function(s,i){
+    var li=document.createElement('li');
+    if(i<5)li.className='done';if(i===5)li.className='here';
+    li.innerHTML='<span class="dot"></span><span>'+(i+1)+'. '+s+'</span>';rl.appendChild(li);
+  });
+  $('anchorBox').innerHTML=tr('anchor');
+  $('mainTitle').textContent=tr('title');$('mainSub').textContent=tr('sub');
+  $('palH').textContent=tr('palH');$('palHint').textContent=tr('palHint');
+  $('repoH').textContent=tr('repoH');$('repoHint').textContent=tr('repoHint');
+  $('ciH').textContent=tr('ciH');$('ciHint').textContent=tr('ciHint');
+  $('termH').textContent=tr('termH');
+  $('runBtn').textContent=tr('run');$('resetBtn').textContent=tr('reset');
+  renderAll();
+}
+$('langBtn').addEventListener('click',function(){LANG=(LANG==='cn'?'en':'cn');applyLang();
+  // refresh idle terminal text if empty-ish
+  if(term.children.length<=1){term.innerHTML='';term.appendChild(mkIdle());}
+});
+
+/* ---------------- init ---------------- */
+attachFileDrag();attachCiDrag();
+applyLang();
+term.innerHTML='';term.appendChild(mkIdle());
+})();
+</script>
+</body>
+</html>
