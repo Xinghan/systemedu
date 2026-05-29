@@ -1,555 +1,1062 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>CSP 头皮图判读师</title>
-<script src="https://cdn.tailwindcss.com"></script>
-<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;700&family=Inter:wght@400;600;800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>M30 · CSP 验证侦探 — Cortex Detective</title>
 <style>
-  /* C 类 — Industrial Atelier 暖纸 (warm cream + robotics accent) */
   :root{
-    --paper:#FAF9F5;            /* body 暖纸 (硬要求) */
-    --paper-shade:#F0EDE3;      /* sidebar */
-    --card:#FFFFFF;             /* 卡片白底 */
-    --ink:#2A2520;
-    --ink-dim:#6A625A;
-    --ink-mute:#A39C92;
-    --line:#D9D2C5;
-    --line-strong:#B8AE9C;
-    --primary:#7C4569;          /* robotics accent (硬要求) */
-    --primary-soft:#9B6488;
-    --alert:#C8553D;
-    --success:#5E8C61;
-    --warning:#C98A3E;
-    --cool:#4F7CAC;             /* 枕叶 / 非运动 提示色 */
+    /* Layer 1 — shared deep space canvas (math hue 255) */
+    --bg-0: oklch(0.14 0.03 255);
+    --bg-1: oklch(0.18 0.038 255);
+    --bg-2: oklch(0.22 0.045 255);
+    --bg-3: oklch(0.28 0.05 255);
+    --line: oklch(0.42 0.06 255 / 0.35);
+    --line-strong: oklch(0.60 0.10 255 / 0.55);
+    --fg:      oklch(0.96 0.012 255);
+    --fg-dim:  oklch(0.78 0.03 255);
+    --fg-mute: oklch(0.58 0.04 255);
+
+    /* Layer 2 — math electric-blue accent (primary) + neuro coral (secondary) */
+    --accent: oklch(0.72 0.17 245);
+    --neuro:  oklch(0.75 0.17 25);
+
+    /* Layer 3 — palette */
+    --left:  oklch(0.72 0.17 25);    /* left-hand class — coral */
+    --right: oklch(0.75 0.17 200);   /* right-hand class — cyan */
+    --gold:  oklch(0.85 0.14 85);
+    --ok:    oklch(0.82 0.17 125);
+    --err:   oklch(0.62 0.20 25);
+
+    --good: var(--ok);
+    --bad:  var(--err);
   }
-  html,body{margin:0;padding:0;height:100vh;overflow:hidden;background:var(--paper);
-    font-family:'Noto Sans SC','Inter',sans-serif;color:var(--ink);}
-  .game-sidebar{background:var(--paper-shade);border-right:1.5px solid var(--line-strong);}
-  .panel{background:var(--card);border:1px solid var(--line-strong);
-    box-shadow:0 2px 8px rgba(42,37,32,0.06);border-radius:8px;}
-  .lang-btn,.btn{background:var(--card);border:1px solid var(--line-strong);color:var(--ink);
-    font-weight:600;border-radius:7px;transition:all .12s;cursor:pointer;
-    box-shadow:0 1px 3px rgba(42,37,32,0.08);}
-  .lang-btn:hover,.btn:hover{transform:translateY(-1px);box-shadow:0 3px 8px rgba(42,37,32,0.12);}
-  .lang-btn:active,.btn:active{transform:translateY(0);box-shadow:0 1px 2px rgba(42,37,32,0.1);}
-  .mono{font-family:'JetBrains Mono',monospace;}
-  .hud-row{display:flex;justify-content:space-between;gap:8px;line-height:1.55;align-items:baseline;}
-  .hud-lbl{color:var(--ink-dim);font-size:11px;font-family:'JetBrains Mono',monospace;}
-  .hud-val{color:var(--primary);font-weight:700;font-size:14px;font-family:'JetBrains Mono',monospace;}
 
-  /* 路线图 */
-  .route{display:flex;flex-direction:column;gap:0;}
-  .route-step{display:flex;align-items:center;gap:8px;padding:4px 0;position:relative;}
-  .route-dot{width:11px;height:11px;border-radius:50%;border:2px solid var(--line-strong);
-    background:var(--card);flex-shrink:0;z-index:1;}
-  .route-step.done .route-dot{background:var(--success);border-color:var(--success);}
-  .route-step.here .route-dot{background:var(--primary);border-color:var(--primary);
-    box-shadow:0 0 0 4px rgba(124,69,105,0.18);}
-  .route-step.todo .route-dot{background:var(--card);border-color:var(--line-strong);}
-  .route-lbl{font-size:11px;font-family:'JetBrains Mono',monospace;color:var(--ink-mute);}
-  .route-step.done .route-lbl{color:var(--ink-dim);}
-  .route-step.here .route-lbl{color:var(--primary);font-weight:700;}
-  .route-line{position:absolute;left:5px;top:18px;width:2px;height:14px;background:var(--line);}
-  .route-step.done .route-line{background:var(--success);}
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%;width:100%;
+    font-family:'Inter','PingFang SC',sans-serif;
+    color:var(--fg);background:var(--bg-0);overflow:hidden}
 
-  /* 5 题进度点 */
-  .prog{display:flex;gap:6px;}
-  .prog-pip{width:22px;height:22px;border-radius:6px;border:1.5px solid var(--line-strong);
-    display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;
-    font-family:'JetBrains Mono',monospace;color:var(--ink-mute);background:var(--card);}
-  .prog-pip.cur{border-color:var(--primary);color:var(--primary);box-shadow:0 0 0 3px rgba(124,69,105,0.15);}
-  .prog-pip.ok{border-color:var(--success);background:var(--success);color:#fff;}
-  .prog-pip.bad{border-color:var(--alert);background:var(--alert);color:#fff;}
+  .stage{display:flex;flex-direction:row;height:100vh;width:100vw}
 
-  /* 判读选项卡 */
-  .verdict{background:var(--card);border:1.5px solid var(--line-strong);border-radius:9px;
-    padding:11px 13px;cursor:pointer;transition:all .12s;text-align:left;width:100%;
-    box-shadow:0 1px 3px rgba(42,37,32,0.06);}
-  .verdict:hover{border-color:var(--primary-soft);transform:translateY(-1px);
-    box-shadow:0 4px 10px rgba(42,37,32,0.1);}
-  .verdict:disabled{cursor:default;opacity:0.55;transform:none;box-shadow:none;}
-  .verdict.picked{border-color:var(--primary);box-shadow:0 0 0 2px rgba(124,69,105,0.2);}
-  .verdict.right{border-color:var(--success);background:#F1F6EF;opacity:1;}
-  .verdict.wrong{border-color:var(--alert);background:#FBEDEA;opacity:1;}
-  .verdict-key{font-family:'JetBrains Mono',monospace;font-weight:700;color:var(--primary);font-size:12px;}
-  .verdict-txt{font-size:13px;font-weight:600;color:var(--ink);line-height:1.4;}
-  .verdict-sub{font-size:11px;color:var(--ink-dim);line-height:1.4;margin-top:2px;}
+  /* ============ 200px sidebar ============ */
+  .game-sidebar{
+    width:200px;flex:0 0 200px;
+    background:var(--bg-1);
+    border-right:1px solid var(--line);
+    display:flex;flex-direction:column;
+    padding:14px 12px;gap:10px;
+    overflow-y:auto;
+  }
+  .brand{display:flex;flex-direction:column;gap:2px;
+    border-bottom:1px solid var(--line);padding-bottom:8px}
+  .brand .code{font-family:'JetBrains Mono',monospace;font-size:10px;
+    color:var(--fg-mute);letter-spacing:1.2px}
+  .brand .title{font-size:13px;color:var(--fg);font-weight:600}
+  .brand .sub{font-size:10px;color:var(--fg-dim);margin-top:2px}
 
-  .feedback{border-radius:9px;padding:12px 14px;font-size:13px;line-height:1.55;}
-  .feedback.good{background:#F1F6EF;border:1.5px solid var(--success);color:#2f4a30;}
-  .feedback.bad{background:#FBEDEA;border:1.5px solid var(--alert);color:#7a2418;}
+  .mascot{
+    width:100%;height:72px;display:flex;align-items:center;justify-content:center;
+    background:var(--bg-2);border:1px solid var(--line);position:relative;
+  }
+  .mascot svg{width:100%;height:100%}
+  .mascot .mname{position:absolute;left:8px;bottom:5px;
+    font-family:'JetBrains Mono',monospace;font-size:8px;
+    color:var(--fg-mute);letter-spacing:1px}
 
-  .badge{font-size:10px;font-family:'JetBrains Mono',monospace;padding:3px 8px;border-radius:5px;
-    border:1px solid var(--line-strong);color:var(--ink-mute);}
-  .badge.on{border-color:var(--success);color:#fff;background:var(--success);}
+  /* ---- project roadmap ---- */
+  .route{
+    background:var(--bg-2);border:1px solid var(--line);
+    padding:8px;display:flex;flex-direction:column;gap:5px;
+  }
+  .route-title{font-family:'JetBrains Mono',monospace;font-size:9px;
+    color:var(--accent);letter-spacing:1px}
+  .route-list{display:flex;flex-direction:column;gap:3px}
+  .route-step{
+    display:flex;align-items:center;gap:6px;
+    font-family:'JetBrains Mono',monospace;font-size:9px;
+    color:var(--fg-mute);line-height:1.2;
+  }
+  .route-step .dot{
+    width:8px;height:8px;flex:0 0 8px;border-radius:50%;
+    background:var(--bg-3);border:1px solid var(--line-strong);
+  }
+  .route-step.done .dot{background:var(--accent);border-color:var(--accent);opacity:.65}
+  .route-step.here{color:var(--fg);font-weight:600}
+  .route-step.here .dot{
+    background:var(--accent);border-color:var(--gold);
+    box-shadow:0 0 0 3px oklch(0.72 0.17 245 / 0.25);
+  }
+  .route-step .sname{font-size:8.5px}
 
-  .electrode-lbl{font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:600;fill:var(--ink-dim);}
-  .electrode-lbl.key{fill:var(--primary);font-weight:700;}
+  /* ---- case progress ---- */
+  .progress-block{
+    background:var(--bg-2);border:1px solid var(--line);padding:8px;
+    display:flex;flex-direction:column;gap:6px;
+  }
+  .progress-title{font-family:'JetBrains Mono',monospace;font-size:9px;
+    color:var(--fg-dim);letter-spacing:1px}
+  .progress-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:4px}
+  .case-cell{
+    height:24px;background:var(--bg-3);border:1px solid var(--line);
+    display:flex;align-items:center;justify-content:center;
+    font-family:'JetBrains Mono',monospace;font-size:9px;
+    color:var(--fg-mute);transition:background .25s,border-color .25s;
+  }
+  .case-cell.cur{border-color:var(--accent);color:var(--accent)}
+  .case-cell.solved{background:var(--bg-2);border-color:var(--ok);color:var(--ok)}
+  .case-cell.miss{background:var(--bg-2);border-color:var(--err);color:var(--err)}
+  .streak-text{font-family:'JetBrains Mono',monospace;font-size:10px;
+    color:var(--fg-mute)}
+  .streak-text .nv{color:var(--gold);font-weight:600}
 
-  .consequence{background:#FBEDEA;border:1px dashed var(--alert);border-radius:8px;
-    padding:8px 11px;font-size:12px;color:#7a2418;line-height:1.5;}
+  .guide{
+    background:var(--bg-2);border:1px solid var(--line);
+    padding:8px;display:flex;flex-direction:column;gap:4px;
+  }
+  .guide-title{font-family:'JetBrains Mono',monospace;font-size:9px;
+    color:var(--accent);letter-spacing:1px}
+  .guide-line{font-size:9.5px;color:var(--fg-dim);line-height:1.4}
+
+  .sidebar-spacer{flex:1;min-height:6px}
+
+  .lang-btn{
+    width:100%;padding:7px 8px;background:var(--bg-3);
+    color:var(--fg);border:1px solid var(--line-strong);
+    font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:1px;
+    cursor:pointer;box-shadow:3px 3px 0 var(--bg-0);
+  }
+  .lang-btn:hover{background:var(--accent);color:var(--bg-0)}
+
+  /* ============ main ============ */
+  .game-main{
+    flex:1;display:flex;flex-direction:column;
+    background:var(--bg-0);min-width:0;position:relative;
+  }
+  .main-header{
+    height:46px;border-bottom:1px solid var(--line);
+    display:flex;align-items:center;justify-content:space-between;
+    padding:0 18px;background:var(--bg-1);flex:0 0 46px;
+  }
+  .header-left{font-family:'JetBrains Mono',monospace;font-size:11px;
+    color:var(--fg-dim);letter-spacing:1.3px}
+  .header-right{display:flex;gap:16px;font-family:'JetBrains Mono',monospace}
+  .hud-cell{display:flex;flex-direction:column;align-items:flex-end}
+  .hud-cell .label{font-size:9px;color:var(--fg-mute);letter-spacing:1px}
+  .hud-cell .val{color:var(--accent);font-size:13px;font-weight:600}
+  .hud-cell .val.gold{color:var(--gold)}
+
+  /* corner minecraft silhouette */
+  .endgame{
+    position:absolute;right:20px;top:58px;z-index:6;
+    display:flex;align-items:center;gap:8px;
+    background:var(--bg-1);border:1px solid var(--line);
+    padding:6px 10px;opacity:.92;pointer-events:none;
+  }
+  .endgame svg{width:26px;height:26px;flex:0 0 26px}
+  .endgame .etxt{font-family:'JetBrains Mono',monospace;font-size:8.5px;
+    color:var(--fg-mute);line-height:1.35;max-width:150px}
+  .endgame .etxt .hl{color:var(--accent)}
+
+  .main-body{flex:1;display:flex;flex-direction:column;
+    min-height:0;padding:14px 18px;gap:12px}
+
+  /* task / case brief card */
+  .task-card{
+    background:var(--bg-1);border:1px solid var(--line);
+    border-left:3px solid var(--accent);
+    padding:10px 14px;display:flex;flex-direction:column;gap:3px;
+    flex:0 0 auto;
+  }
+  .task-card .tprompt{font-size:12.5px;color:var(--fg);line-height:1.45}
+  .task-card .tprompt b{color:var(--accent)}
+  .task-card .twhy{font-size:10px;color:var(--fg-dim);line-height:1.4}
+
+  /* layout: evidence row (3 panels) + verdict row */
+  .work{flex:1;display:flex;flex-direction:column;gap:12px;min-height:0}
+
+  .evidence-row{flex:1;display:flex;gap:12px;min-height:0}
+  .evi{
+    flex:1;display:flex;flex-direction:column;min-height:0;min-width:0;
+    background:var(--bg-1);border:1px solid var(--line);
+    transition:border-color .2s;
+  }
+  .evi.seen{border-color:var(--accent)}
+  .evi-head{
+    padding:7px 12px;border-bottom:1px solid var(--line);background:var(--bg-2);
+    display:flex;align-items:center;justify-content:space-between;
+  }
+  .evi-head .etitle{font-family:'JetBrains Mono',monospace;font-size:9.5px;
+    color:var(--fg-dim);letter-spacing:1px}
+  .evi-head .estat{font-family:'JetBrains Mono',monospace;font-size:8px;
+    color:var(--fg-mute);letter-spacing:.5px}
+  .evi-head .estat.on{color:var(--ok)}
+  .evi-body{flex:1;position:relative;display:flex;flex-direction:column;min-height:0}
+  .evi-canvas-wrap{flex:1;display:flex;flex-direction:column;min-height:0;position:relative}
+  .evi-canvas-wrap canvas{width:100%;height:100%;display:block}
+  .reveal-btn{
+    position:absolute;inset:0;z-index:3;
+    background:var(--bg-2);
+    border:none;cursor:pointer;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;
+    color:var(--fg-dim);
+  }
+  .reveal-btn:hover{background:var(--bg-3)}
+  .reveal-btn.hidden{display:none}
+  .reveal-btn .ricon{width:34px;height:34px}
+  .reveal-btn .rlbl{font-family:'JetBrains Mono',monospace;font-size:10px;
+    letter-spacing:1px;color:var(--accent)}
+  .reveal-btn .rsub{font-size:9px;color:var(--fg-mute);max-width:160px;text-align:center;line-height:1.4}
+
+  /* verdict box */
+  .verdict{
+    flex:0 0 auto;background:var(--bg-1);border:1px solid var(--line);
+    border-left:3px solid var(--accent);
+    padding:11px 14px;display:flex;align-items:center;gap:14px;flex-wrap:wrap;
+  }
+  .verdict .vq{font-size:12px;color:var(--fg);flex:1 1 220px;line-height:1.4}
+  .verdict .vq b{color:var(--accent)}
+  .verdict-btns{display:flex;gap:10px}
+  .vbtn{
+    padding:11px 18px;background:var(--bg-2);
+    border:1px solid var(--line-strong);
+    color:var(--fg);cursor:pointer;
+    display:flex;flex-direction:column;gap:2px;align-items:flex-start;
+    box-shadow:3px 3px 0 var(--bg-0);min-width:130px;
+    transition:transform .1s, background .15s, border-color .15s;
+  }
+  .vbtn:hover:not(:disabled){background:var(--bg-3)}
+  .vbtn:active:not(:disabled){transform:translate(2px,2px);box-shadow:1px 1px 0 var(--bg-0)}
+  .vbtn:disabled{opacity:.4;cursor:not-allowed}
+  .vbtn .vl{font-size:13px;font-weight:600}
+  .vbtn .vh{font-family:'JetBrains Mono',monospace;font-size:8.5px;color:var(--fg-mute);line-height:1.3}
+  .vbtn[data-v="real"] .vl{color:var(--ok)}
+  .vbtn[data-v="fake"] .vl{color:var(--err)}
+  .verdict .lockhint{font-family:'JetBrains Mono',monospace;font-size:9px;
+    color:var(--fg-mute);flex:1 1 100%;margin-top:2px}
+  .verdict .lockhint.warn{color:var(--gold)}
+
+  /* feedback panel */
+  .feedback{
+    flex:0 0 auto;background:var(--bg-1);border:1px solid var(--line);
+    padding:12px 14px;display:flex;flex-direction:column;gap:7px;
+  }
+  .feedback.hidden{display:none}
+  .feedback.good{border-left:3px solid var(--ok)}
+  .feedback.bad{border-left:3px solid var(--err)}
+  .feedback .ftag{font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:1.3px}
+  .feedback.good .ftag{color:var(--ok)}
+  .feedback.bad .ftag{color:var(--err)}
+  .feedback .fbody{font-size:11px;color:var(--fg-dim);line-height:1.55}
+  .feedback .fbody b{color:var(--gold)}
+  .feedback .fnext{display:flex;justify-content:flex-end}
+  .next-btn{
+    padding:9px 18px;background:var(--accent);color:var(--bg-0);
+    border:1px solid var(--gold);
+    font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:600;letter-spacing:1px;
+    cursor:pointer;box-shadow:3px 3px 0 var(--bg-0);
+  }
+  .next-btn:hover{background:var(--gold)}
+  .next-btn:active{transform:translate(2px,2px);box-shadow:1px 1px 0 var(--bg-0)}
+
+  /* end overlay */
+  .end-overlay{
+    position:absolute;inset:0;z-index:20;
+    background:oklch(0.14 0.03 255 / 0.95);
+    display:flex;align-items:center;justify-content:center;
+    flex-direction:column;gap:14px;padding:30px;text-align:center;
+  }
+  .end-overlay.hidden{display:none}
+  .end-overlay .badge{
+    width:96px;height:96px;display:flex;align-items:center;justify-content:center;
+    background:var(--bg-1);border:2px solid var(--gold);
+    box-shadow:4px 4px 0 var(--bg-0);
+  }
+  .end-overlay .badge svg{width:64px;height:64px}
+  .end-overlay .etitle{font-size:20px;font-weight:700;color:var(--gold)}
+  .end-overlay .esub{font-size:12.5px;color:var(--fg-dim);line-height:1.6;max-width:460px}
+  .end-overlay .esub b{color:var(--accent)}
+  .end-overlay .ebtns{display:flex;gap:12px;margin-top:6px}
+
+  .mono{font-family:'JetBrains Mono',monospace}
 </style>
 </head>
-<body class="h-screen overflow-hidden flex">
+<body>
+<div class="stage">
 
-<!-- ===================== SIDEBAR ===================== -->
-<aside class="game-sidebar w-[200px] h-screen flex-shrink-0 flex flex-col gap-3 p-3 overflow-y-auto">
-  <div class="flex items-center gap-2">
-    <!-- robotics 探针图标 -->
-    <svg width="30" height="30" viewBox="0 0 32 32" aria-hidden="true">
-      <circle cx="16" cy="16" r="13" fill="none" stroke="var(--primary)" stroke-width="1.6"/>
-      <circle cx="16" cy="16" r="5.5" fill="var(--primary)" opacity="0.18"/>
-      <circle cx="11" cy="13" r="2.4" fill="var(--alert)"/>
-      <circle cx="21" cy="13" r="2.4" fill="var(--cool)"/>
-      <line x1="16" y1="3" x2="16" y2="29" stroke="var(--line-strong)" stroke-width="0.8"/>
-    </svg>
-    <h1 class="text-sm font-bold leading-tight" id="title">CSP 头皮图判读师</h1>
-  </div>
-
-  <!-- 项目路线图 S1-S6, 高亮 S3 -->
-  <div class="panel p-2.5">
-    <div class="text-[10px] mono font-bold mb-1.5" style="color:var(--ink-dim);" id="lblRoute">项目路线 · 脑控 Minecraft</div>
-    <div class="route" id="routeBox"></div>
-  </div>
-
-  <!-- 5 题进度 -->
-  <div class="panel p-2.5">
-    <div class="text-[10px] mono font-bold mb-1.5" style="color:var(--ink-dim);" id="lblProg">判读进度 5 例</div>
-    <div class="prog" id="progBox"></div>
-    <div class="hud-row mt-2"><span class="hud-lbl" id="lblScore">判对</span><span class="hud-val" id="vScore">0 / 5</span></div>
-  </div>
-
-  <!-- 解锁徽记 -->
-  <div class="panel p-2.5">
-    <div class="text-[10px] mono mb-1" style="color:var(--ink-dim);" id="lblUnlock">认证</div>
-    <span class="badge" id="badge">未解锁 / locked</span>
-  </div>
-
-  <!-- 终点剪影 -->
-  <div class="panel p-2.5 flex items-center gap-2">
-    <svg width="26" height="26" viewBox="0 0 24 24" aria-hidden="true" style="flex-shrink:0;">
-      <!-- Minecraft 风格方块剪影 -->
-      <rect x="3" y="3" width="6" height="6" fill="var(--ink-mute)"/>
-      <rect x="10" y="3" width="6" height="6" fill="var(--ink-dim)"/>
-      <rect x="3" y="10" width="6" height="6" fill="var(--ink-dim)"/>
-      <rect x="10" y="10" width="6" height="6" fill="var(--ink-mute)"/>
-      <rect x="17" y="10" width="4" height="4" fill="var(--primary)"/>
-      <rect x="6" y="17" width="6" height="4" fill="var(--ink-mute)"/>
-    </svg>
-    <span class="text-[10px] leading-snug" style="color:var(--ink-dim);" id="endNote">终点: 用自己的脑放方块</span>
-  </div>
-
-  <button id="langBtn" class="lang-btn mt-auto px-2 py-2 text-xs">中 / EN</button>
-</aside>
-
-<!-- ===================== MAIN ===================== -->
-<main class="flex-1 h-screen relative overflow-y-auto p-5 flex flex-col gap-4">
-
-  <!-- 任务卡: 回扣 -->
-  <div class="panel p-3" style="border-left:4px solid var(--primary);">
-    <div class="text-xs font-bold mb-1" style="color:var(--primary);" id="briefTitle">为什么要做这关</div>
-    <p class="text-sm leading-relaxed" style="color:var(--ink-dim);" id="brief">
-      CSP 给了你一组空间滤波器。但要验证 CSP 真找对了运动区, 而不是追着眼动或噪声跑。
-      把每个 CSP 模式画成头皮热力图 (topomap), 看热点落在哪——落在 C3/C4 运动区才说明算法找对了。
-      你是判读师: 验证 5 个 CSP 模式, 别让坏滤波器混进脑控系统。
-    </p>
-  </div>
-
-  <div class="flex-1 grid gap-4" style="grid-template-columns: minmax(320px, 1.05fr) 1fr; min-height:0;">
-
-    <!-- 头皮 topomap -->
-    <div class="panel p-4 flex flex-col" style="min-height:0;">
-      <div class="flex items-center justify-between mb-2">
-        <h2 class="text-sm font-bold" id="mapTitle" style="color:var(--ink);">CSP 模式 #1 头皮热力图</h2>
-        <span class="text-[11px] mono px-2 py-0.5 rounded" id="caseTag"
-          style="background:var(--paper-shade);color:var(--ink-dim);">CASE 1 / 5</span>
-      </div>
-      <div class="flex-1 flex items-center justify-center" style="min-height:0;">
-        <svg id="topomap" viewBox="0 0 320 340" style="width:100%;max-width:340px;height:auto;"></svg>
-      </div>
-      <div class="flex items-center gap-3 mt-2 text-[11px] mono" style="color:var(--ink-dim);">
-        <span id="legLbl">权重:</span>
-        <span style="display:inline-flex;align-items:center;gap:4px;">
-          <span style="width:14px;height:10px;background:var(--alert);display:inline-block;border-radius:2px;"></span>
-          <span id="legHigh">高</span>
-        </span>
-        <span style="display:inline-flex;align-items:center;gap:4px;">
-          <span style="width:14px;height:10px;background:var(--cool);display:inline-block;border-radius:2px;"></span>
-          <span id="legLow">低/反相</span>
-        </span>
-        <span id="legHint" style="margin-left:auto;color:var(--ink-mute);">C3=左脑 · C4=右脑</span>
-      </div>
+  <!-- ============ SIDEBAR ============ -->
+  <aside class="game-sidebar">
+    <div class="brand">
+      <div class="code mono">MATH-245 · M30</div>
+      <div class="title" data-i18n="brandTitle">CSP 验证侦探</div>
+      <div class="sub" data-i18n="brandSub">这方向真有意义吗?</div>
     </div>
 
-    <!-- 判读区 -->
-    <div class="flex flex-col gap-3" style="min-height:0;">
-      <div class="panel p-3">
-        <div class="text-xs font-bold mb-1" style="color:var(--ink);" id="clueTitle">观察线索</div>
-        <p class="text-sm leading-relaxed" style="color:var(--ink-dim);" id="clueText">--</p>
-      </div>
-
-      <div class="text-xs font-bold" style="color:var(--ink);" id="qText">这个 CSP 模式对应什么? 选一个判读:</div>
-      <div class="flex flex-col gap-2" id="verdictBox"></div>
-
-      <div id="feedbackBox"></div>
-
-      <div class="flex gap-2 mt-auto">
-        <button id="btnNext" class="btn px-4 py-2 text-sm font-bold" style="display:none;color:var(--primary);">下一例 →</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- 通关弹层 -->
-  <div id="winOverlay" style="display:none;position:absolute;inset:0;background:rgba(250,249,245,0.94);
-    z-index:60;align-items:center;justify-content:center;padding:24px;">
-    <div class="panel" style="max-width:520px;padding:28px;text-align:center;border:2px solid var(--primary);">
-      <svg width="48" height="48" viewBox="0 0 32 32" style="margin:0 auto 12px;">
-        <circle cx="16" cy="16" r="14" fill="none" stroke="var(--primary)" stroke-width="2"/>
-        <path d="M9 16 l5 5 l9 -11" fill="none" stroke="var(--success)" stroke-width="3"
-          stroke-linecap="round" stroke-linejoin="round"/>
+    <div class="mascot">
+      <svg viewBox="0 0 120 72" aria-hidden="true">
+        <g fill="none" stroke="var(--accent)" stroke-width="2.4" stroke-linecap="round">
+          <circle cx="52" cy="34" r="15"/>
+          <path d="M63 45 L80 60"/>
+        </g>
+        <circle cx="52" cy="34" r="8" fill="var(--bg-3)" stroke="var(--neuro)" stroke-width="1.6"/>
+        <circle cx="48" cy="32" r="2.4" fill="var(--left)"/>
+        <circle cx="56" cy="36" r="2.4" fill="var(--right)"/>
       </svg>
-      <h2 class="text-xl font-bold mb-2" style="color:var(--primary);" id="winTitle">CSP 头皮判读师 认证通过</h2>
-      <p class="text-sm leading-relaxed mb-4" style="color:var(--ink-dim);" id="winBody">--</p>
-      <div class="consequence text-left mb-4" id="winEnd">--</div>
-      <button id="btnRestart" class="btn px-5 py-2 text-sm font-bold" style="color:var(--primary);">重新判读 / Replay</button>
+      <span class="mname mono">PROBE</span>
     </div>
-  </div>
-</main>
+
+    <!-- project roadmap -->
+    <div class="route">
+      <div class="route-title mono" data-i18n="routeTitle">项目路线</div>
+      <div class="route-list">
+        <div class="route-step done"><span class="dot"></span><span class="sname" data-i18n="s1">S1 读懂脑电</span></div>
+        <div class="route-step done"><span class="dot"></span><span class="sname" data-i18n="s2">S2 清洗信号</span></div>
+        <div class="route-step here"><span class="dot"></span><span class="sname" data-i18n="s3">S3 解码左右</span></div>
+        <div class="route-step"><span class="dot"></span><span class="sname" data-i18n="s4">S4 稳定上线</span></div>
+        <div class="route-step"><span class="dot"></span><span class="sname" data-i18n="s5">S5 接入游戏</span></div>
+        <div class="route-step"><span class="dot"></span><span class="sname" data-i18n="s6">S6 脑控通关</span></div>
+      </div>
+    </div>
+
+    <!-- case progress -->
+    <div class="progress-block">
+      <div class="progress-title mono" data-i18n="caseTitle">案卷进度</div>
+      <div class="progress-grid" id="caseGrid"></div>
+      <div class="streak-text mono">
+        <span data-i18n="solvedLbl">破案</span> <span class="nv" id="solvedVal">0</span> / <span id="totalVal">4</span>
+      </div>
+    </div>
+
+    <div class="guide">
+      <div class="guide-title mono" data-i18n="guideTitle">怎么玩</div>
+      <div class="guide-line" data-i18n="guide1">你是 CSP 验证侦探。</div>
+      <div class="guide-line" data-i18n="guide2">点开三块证据: 头皮图 / 散点 / 准确率。</div>
+      <div class="guide-line" data-i18n="guide3">三证交叉, 判这组方向真有效还是过拟合假象。</div>
+      <div class="guide-line" data-i18n="guide4">只看一块就下结论, 会被打脸。</div>
+    </div>
+
+    <div class="sidebar-spacer"></div>
+    <button class="lang-btn mono" id="langBtn">EN / 中文</button>
+  </aside>
+
+  <!-- ============ MAIN ============ -->
+  <main class="game-main">
+    <div class="main-header">
+      <div class="header-left mono" data-i18n="hdrLeft">CSP 方向判读 · 三重证据侦探</div>
+      <div class="header-right">
+        <div class="hud-cell">
+          <span class="label" data-i18n="hudCase">CASE</span>
+          <span class="val" id="hudCase">1 / 4</span>
+        </div>
+        <div class="hud-cell">
+          <span class="label" data-i18n="hudEvi">已查证据</span>
+          <span class="val gold" id="hudEvi">0 / 3</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- corner minecraft silhouette + endpoint -->
+    <div class="endgame">
+      <svg viewBox="0 0 32 32" aria-hidden="true">
+        <g fill="none" stroke="var(--accent)" stroke-width="1.6">
+          <rect x="6" y="10" width="20" height="16"/>
+          <path d="M6 14 H26 M14 14 V26 M6 18 H14 M18 10 V26 M18 18 H26"/>
+        </g>
+      </svg>
+      <div class="etxt">
+        <span data-i18n="endLbl">终点</span>: <span class="hl" data-i18n="endName">脑控 Minecraft</span><br>
+        <span data-i18n="endTail">先确认 CSP 抓的是真信号</span>
+      </div>
+    </div>
+
+    <div class="main-body">
+      <div class="task-card">
+        <div class="tprompt" id="casePrompt">第 <b>A</b> 号案卷</div>
+        <div class="twhy" data-i18n="introWhy">这关你在替项目把关: S3 解码左右是脑控的核心积木, 如果 CSP 找的方向是假的, 后面准确率全是空中楼阁。学会用头皮图+散点+训练/测试准确率三重证据交叉, 才敢信这个方向。</div>
+      </div>
+
+      <div class="work">
+        <div class="evidence-row">
+          <!-- evidence 1: topomap -->
+          <div class="evi" id="evi0">
+            <div class="evi-head">
+              <span class="etitle mono" data-i18n="evi0Title">证据1 · 头皮能量图</span>
+              <span class="estat mono" id="stat0" data-i18n="statHidden">未查</span>
+            </div>
+            <div class="evi-body">
+              <div class="evi-canvas-wrap">
+                <canvas id="cvTopo"></canvas>
+                <button class="reveal-btn" id="reveal0" data-evi="0">
+                  <svg class="ricon" viewBox="0 0 32 32" aria-hidden="true">
+                    <circle cx="16" cy="16" r="11" fill="none" stroke="var(--accent)" stroke-width="2"/>
+                    <circle cx="11" cy="14" r="2" fill="var(--left)"/><circle cx="21" cy="14" r="2" fill="var(--right)"/>
+                  </svg>
+                  <span class="rlbl mono" data-i18n="reveal0">查看头皮图</span>
+                  <span class="rsub" data-i18n="reveal0sub">看 CSP 方向的能量聚在头皮哪里 — 该聚在 C3/C4 运动区。</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- evidence 2: 2D scatter -->
+          <div class="evi" id="evi1">
+            <div class="evi-head">
+              <span class="etitle mono" data-i18n="evi1Title">证据2 · 投影散点</span>
+              <span class="estat mono" id="stat1" data-i18n="statHidden">未查</span>
+            </div>
+            <div class="evi-body">
+              <div class="evi-canvas-wrap">
+                <canvas id="cvScatter"></canvas>
+                <button class="reveal-btn" id="reveal1" data-evi="1">
+                  <svg class="ricon" viewBox="0 0 32 32" aria-hidden="true">
+                    <circle cx="10" cy="20" r="2.4" fill="var(--left)"/><circle cx="13" cy="16" r="2.4" fill="var(--left)"/>
+                    <circle cx="22" cy="12" r="2.4" fill="var(--right)"/><circle cx="19" cy="16" r="2.4" fill="var(--right)"/>
+                  </svg>
+                  <span class="rlbl mono" data-i18n="reveal1">查看散点</span>
+                  <span class="rsub" data-i18n="reveal1sub">把每段试次投到 CSP 方向 — 左右两簇该明显分开。</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- evidence 3: accuracy -->
+          <div class="evi" id="evi2">
+            <div class="evi-head">
+              <span class="etitle mono" data-i18n="evi2Title">证据3 · 训练/测试准确率</span>
+              <span class="estat mono" id="stat2" data-i18n="statHidden">未查</span>
+            </div>
+            <div class="evi-body">
+              <div class="evi-canvas-wrap">
+                <canvas id="cvAcc"></canvas>
+                <button class="reveal-btn" id="reveal2" data-evi="2">
+                  <svg class="ricon" viewBox="0 0 32 32" aria-hidden="true">
+                    <rect x="8" y="10" width="6" height="14" fill="var(--accent)"/>
+                    <rect x="18" y="14" width="6" height="10" fill="var(--gold)"/>
+                  </svg>
+                  <span class="rlbl mono" data-i18n="reveal2">查看准确率</span>
+                  <span class="rsub" data-i18n="reveal2sub">训练集 vs 没见过的测试集 — 两者都该高才算真。</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- verdict row -->
+        <div class="verdict" id="verdictBox">
+          <div class="vq">你的判决: 这组 CSP 方向 <b>真有效</b> 还是 <b>过拟合假象</b>?</div>
+          <div class="verdict-btns">
+            <button class="vbtn" data-v="real" id="btnReal" disabled>
+              <span class="vl" data-i18n="realLabel">真有效</span>
+              <span class="vh mono" data-i18n="realHint">三证一致, 抓到真生理信号</span>
+            </button>
+            <button class="vbtn" data-v="fake" id="btnFake" disabled>
+              <span class="vl" data-i18n="fakeLabel">过拟合假象</span>
+              <span class="vh mono" data-i18n="fakeHint">至少一证露馅, 是凑巧</span>
+            </button>
+          </div>
+          <div class="lockhint mono" id="lockHint" data-i18n="lockHint">先把三块证据都查一遍, 才能下判决。</div>
+        </div>
+
+        <!-- feedback -->
+        <div class="feedback hidden" id="feedback">
+          <div class="ftag mono" id="fbTag">VERDICT</div>
+          <div class="fbody" id="fbBody"></div>
+          <div class="fnext">
+            <button class="next-btn mono" id="nextBtn" data-i18n="nextBtn">下一案卷</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- end overlay -->
+    <div class="end-overlay hidden" id="endOverlay">
+      <div class="badge" id="endBadge">
+        <svg viewBox="0 0 64 64" aria-hidden="true">
+          <g fill="none" stroke="var(--gold)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="26" cy="26" r="15"/>
+            <path d="M37 37 L52 52"/>
+            <path d="M20 26 l4 5 l10 -11"/>
+          </g>
+        </svg>
+      </div>
+      <div class="etitle" id="endTitle"></div>
+      <div class="esub" id="endSub"></div>
+      <div class="ebtns">
+        <button class="next-btn mono" id="replayBtn" data-i18n="replayBtn">重新办案</button>
+      </div>
+    </div>
+  </main>
+</div>
 
 <script>
-var LANG='cn';
+(function(){
+  "use strict";
 
-/* ---------------- i18n ---------------- */
-var I18N = {
-  title:{cn:'CSP 头皮图判读师', en:'CSP Topomap Detective'},
-  lblRoute:{cn:'项目路线 · 脑控 Minecraft', en:'Roadmap · Mind-controlled Minecraft'},
-  lblProg:{cn:'判读进度 5 例', en:'Cases: 5'},
-  lblScore:{cn:'判对', en:'correct'},
-  lblUnlock:{cn:'认证', en:'cert'},
-  endNote:{cn:'终点: 用自己的脑放方块', en:'Goal: place blocks with your mind'},
-  badgeLocked:{cn:'未解锁 / locked', en:'locked'},
-  badgeOn:{cn:'CSP 头皮判读师', en:'CSP Topomap Detective'},
-  briefTitle:{cn:'为什么要做这关', en:'Why this stage'},
-  brief:{cn:'CSP 给了你一组空间滤波器。但要验证 CSP 真找对了运动区, 而不是追着眼动或噪声跑。把每个 CSP 模式画成头皮热力图 (topomap), 看热点落在哪——落在 C3/C4 运动区才说明算法找对了。你是判读师: 验证 5 个 CSP 模式, 别让坏滤波器混进脑控系统。',
-        en:'CSP handed you spatial filters. But you must verify CSP truly found motor cortex, not eye movement or noise. Render each CSP pattern as a scalp topomap and read where the hotspot lands — only C3/C4 means the algorithm found the right region. You are the detective: validate 5 CSP patterns, keep bad filters out of the BCI.'},
-  legLbl:{cn:'权重:', en:'weight:'},
-  legHigh:{cn:'高', en:'high'},
-  legLow:{cn:'低/反相', en:'low/anti'},
-  legHint:{cn:'C3=左脑 · C4=右脑', en:'C3=left · C4=right'},
-  clueTitle:{cn:'观察线索', en:'Observed clue'},
-  qText:{cn:'这个 CSP 模式对应什么? 选一个判读:', en:'What does this CSP pattern mean? Pick a verdict:'},
-  next:{cn:'下一例 →', en:'Next case →'},
-  seeResult:{cn:'看判读结果 →', en:'See result →'},
-  restart:{cn:'重新判读 / Replay', en:'Replay'},
-  winTitle:{cn:'CSP 头皮判读师 认证通过', en:'CSP Topomap Detective certified'},
-  winTitleFail:{cn:'判读未通过 — 复盘后重试', en:'Not certified — review & retry'},
-  winBodyPass:{cn:'5 例全判对! 你能从头皮图认出 CSP 到底找的是运动区还是噪声。这正是把数学结果接回大脑的最后一道闸——CSP 验证通过。',
-               en:'All 5 right! You can read a topomap and tell whether CSP grabbed motor cortex or noise. That is the final gate tying the math back to a real brain — CSP validated.'},
-  winBodyFail:{cn:'有判读出错。判错就意味着你可能放行一个追着眼动/噪声的坏滤波器, 让脑控系统误信坏 CSP。再看一遍热点位置规则。',
-               en:'Some verdicts were wrong. A wrong call means you might pass a filter chasing eye movement or noise — the BCI would then trust a bad CSP. Review the hotspot rules and retry.'},
-  winEndPass:{cn:'CSP 验证通过, S3 数学长征到此收官 (方差 → 协方差 → 投影 → CSP → 头皮验证)。下一站 S4: 不再用别人的数据, 开始用你自己的脑。',
-              en:'CSP validated. S3 (the math marathon: variance → covariance → projection → CSP → scalp check) is done. Next is S4: stop using other people’s data, start using your own brain.'},
-  winEndFail:{cn:'坏 CSP 一旦放行, 脑控关卡会把眼动当成「想象左手」, 你想放方块它却乱动。先在这里挡住它。',
-              en:'A bad CSP slipping through makes the control level read eye movement as “imagine left hand” — you try to place a block and it twitches. Stop it here first.'},
-  correct:{cn:'判读正确。', en:'Correct verdict.'},
-  wrongPre:{cn:'判读有误。正确答案: ', en:'Wrong. Correct: '},
-};
-function t(k){return (I18N[k]&&I18N[k][LANG])||(I18N[k]&&I18N[k]['en'])||k;}
+  /* ===== canvas literal color constants (no var(--x) in canvas) ===== */
+  const COL = {
+    bg1:    "oklch(0.18 0.038 255)",
+    bg2:    "oklch(0.22 0.045 255)",
+    bg3:    "oklch(0.28 0.05 255)",
+    line:   "oklch(0.42 0.06 255 / 0.40)",
+    lineSt: "oklch(0.60 0.10 255 / 0.55)",
+    fg:     "oklch(0.96 0.012 255)",
+    fgDim:  "oklch(0.78 0.03 255)",
+    fgMute: "oklch(0.58 0.04 255)",
+    accent: "oklch(0.72 0.17 245)",
+    left:   "oklch(0.72 0.17 25)",
+    right:  "oklch(0.75 0.17 200)",
+    gold:   "oklch(0.85 0.14 85)",
+    ok:     "oklch(0.82 0.17 125)",
+    err:    "oklch(0.62 0.20 25)"
+  };
 
-/* ---------------- 项目路线 S1-S6 ---------------- */
-var ROUTE = [
-  {id:'S1', cn:'信号与采集', en:'Signal & capture', st:'done'},
-  {id:'S2', cn:'清洗与特征', en:'Clean & features', st:'done'},
-  {id:'S3', cn:'数学 → CSP 验证', en:'Math → CSP check', st:'here'},
-  {id:'S4', cn:'用你自己的脑', en:'Your own brain', st:'todo'},
-  {id:'S5', cn:'实时解码', en:'Live decode', st:'todo'},
-  {id:'S6', cn:'脑控 Minecraft', en:'Mind Minecraft', st:'todo'},
-];
+  // ---------- i18n ----------
+  const I18N = {
+    zh:{
+      brandTitle:"CSP 验证侦探", brandSub:"这方向真有意义吗?",
+      routeTitle:"项目路线",
+      s1:"S1 读懂脑电", s2:"S2 清洗信号", s3:"S3 解码左右",
+      s4:"S4 稳定上线", s5:"S5 接入游戏", s6:"S6 脑控通关",
+      caseTitle:"案卷进度", solvedLbl:"破案",
+      guideTitle:"怎么玩",
+      guide1:"你是 CSP 验证侦探。",
+      guide2:"点开三块证据: 头皮图 / 散点 / 准确率。",
+      guide3:"三证交叉, 判这组方向真有效还是过拟合假象。",
+      guide4:"只看一块就下结论, 会被打脸。",
+      hdrLeft:"CSP 方向判读 · 三重证据侦探",
+      hudCase:"CASE", hudEvi:"已查证据",
+      endLbl:"终点", endName:"脑控 Minecraft", endTail:"先确认 CSP 抓的是真信号",
+      introWhy:"这关你在替项目把关: S3 解码左右是脑控的核心积木, 如果 CSP 找的方向是假的, 后面准确率全是空中楼阁。学会用头皮图+散点+训练/测试准确率三重证据交叉, 才敢信这个方向。",
+      evi0Title:"证据1 · 头皮能量图", evi1Title:"证据2 · 投影散点", evi2Title:"证据3 · 训练/测试准确率",
+      statHidden:"未查", statSeen:"已查看",
+      reveal0:"查看头皮图", reveal0sub:"看 CSP 方向的能量聚在头皮哪里 — 该聚在 C3/C4 运动区。",
+      reveal1:"查看散点", reveal1sub:"把每段试次投到 CSP 方向 — 左右两簇该明显分开。",
+      reveal2:"查看准确率", reveal2sub:"训练集 vs 没见过的测试集 — 两者都该高才算真。",
+      realLabel:"真有效", realHint:"三证一致, 抓到真生理信号",
+      fakeLabel:"过拟合假象", fakeHint:"至少一证露馅, 是凑巧",
+      lockHint:"先把三块证据都查一遍, 才能下判决。",
+      lockReady:"三证齐了, 交叉对一下再下判决。",
+      nextBtn:"下一案卷", replayBtn:"重新办案"
+    },
+    en:{
+      brandTitle:"CSP Verification Detective", brandSub:"Is this direction real?",
+      routeTitle:"PROJECT ROUTE",
+      s1:"S1 Read EEG", s2:"S2 Clean Signal", s3:"S3 Decode L/R",
+      s4:"S4 Stay Stable", s5:"S5 Hook Game", s6:"S6 Beat It Brain-Only",
+      caseTitle:"CASE FILES", solvedLbl:"Solved",
+      guideTitle:"HOW TO PLAY",
+      guide1:"You are the CSP verification detective.",
+      guide2:"Open all three evidences: topomap / scatter / accuracy.",
+      guide3:"Cross-check them: real signal, or overfit illusion?",
+      guide4:"Judge from one panel alone and you get fooled.",
+      hdrLeft:"CSP direction reading · Triple-evidence detective",
+      hudCase:"CASE", hudEvi:"Evidence",
+      endLbl:"Goal", endName:"Brain-control Minecraft", endTail:"Confirm CSP caught a real signal first",
+      introWhy:"This case is you guarding the project: decoding L/R in S3 is the core brain-control brick. If CSP's direction is fake, all later accuracy is a house of cards. Cross-check topomap + scatter + train/test accuracy before you trust a direction.",
+      evi0Title:"E1 · Scalp Power Map", evi1Title:"E2 · Projection Scatter", evi2Title:"E3 · Train/Test Accuracy",
+      statHidden:"hidden", statSeen:"seen",
+      reveal0:"Open topomap", reveal0sub:"Where the CSP direction's power sits — should be over C3/C4 motor cortex.",
+      reveal1:"Open scatter", reveal1sub:"Each trial projected onto the CSP axis — the two classes should separate.",
+      reveal2:"Open accuracy", reveal2sub:"Training set vs unseen test set — both should be high to be real.",
+      realLabel:"Real signal", realHint:"All three agree, true physiology",
+      fakeLabel:"Overfit illusion", fakeHint:"At least one tells on it",
+      lockHint:"Open all three evidences before you can rule.",
+      lockReady:"All three are in — cross-check them, then rule.",
+      nextBtn:"Next case", replayBtn:"Re-open files"
+    }
+  };
+  let lang = "zh";
 
-/* ---------------- 5 个判读类别 ---------------- */
-var VERDICTS = [
-  {key:'L', cn:'左手运动想象', en:'Left-hand motor imagery', subCn:'对侧: C4 右脑热', subEn:'contralateral: C4 right hot'},
-  {key:'R', cn:'右手运动想象', en:'Right-hand motor imagery', subCn:'对侧: C3 左脑热', subEn:'contralateral: C3 left hot'},
-  {key:'N', cn:'非运动 (alpha/眼动)', en:'Non-motor (alpha/eye)', subCn:'枕叶 O1/O2 热, CSP 没找对', subEn:'occipital hot, CSP missed'},
-  {key:'B', cn:'双手 / 不清晰', en:'Both hands / unclear', subCn:'双侧对称, 难以区分', subEn:'bilateral, hard to tell'},
-  {key:'A', cn:'伪迹 (噪声带偏)', en:'Artifact (noise)', subCn:'边缘散乱热, CSP 被噪声带偏', subEn:'scattered edge, noise-driven'},
-];
+  /* ===== cases: designed so single-evidence reasoning gets fooled ===== */
+  const CASES = [
+    {
+      id:"A", truth:"real",
+      topo:"focus", scatter:"sep", trainAcc:84, testAcc:81,
+      brief:{ zh:"CSP 在这位玩家的数据上找到了一个'最能分开左右手'的方向。它真抓到了运动皮层的生理信号, 还是只是凑巧分开了噪声?",
+              en:"CSP found a 'best L/R-separating' direction on this player. Did it catch real motor-cortex physiology, or just luckily split noise?" },
+      tell:{ zh:"头皮能量干净地聚在左右 C3/C4 运动区, 散点两簇分得开, 而且<b>没见过的测试集</b>准确率也高。三证一致 — 这是真信号。",
+             en:"Power concentrates cleanly over left/right C3/C4 motor cortex, the two clusters separate, and accuracy stays high on the <b>unseen test set</b>. All three agree — a real signal." }
+    },
+    {
+      id:"B", truth:"fake",
+      topo:"eye", scatter:"sep", trainAcc:80, testAcc:62,
+      brief:{ zh:"这组散点看着也分得开, 训练准确率不低。但别急着信 — 先看看能量到底聚在头皮哪里。",
+              en:"This one's scatter also separates and training accuracy isn't low. But don't trust it yet — check where the power actually sits." },
+      tell:{ zh:"散点确实分开了, 可<b>头皮能量聚在额头眼睛附近</b>, 不在运动区。CSP 抓到的是眨眼/眼动伪迹, 不是想象左右手。测试集也掉到 62%。只看散点就会上当 — 头皮图露了馅。",
+             en:"The scatter does separate, but <b>power concentrates near the forehead/eyes</b>, not motor cortex. CSP latched onto blink/eye-movement artifacts, not motor imagery. Test accuracy also drops to 62%. Judging by scatter alone fools you — the topomap tells on it." }
+    },
+    {
+      id:"C", truth:"fake",
+      topo:"focus", scatter:"overlap", trainAcc:96, testAcc:55,
+      brief:{ zh:"头皮图看着挺聚焦, 训练准确率高得吓人 (96%)。这就是真信号吗? 把另外两块证据也调出来。",
+              en:"The topomap looks fairly focused and training accuracy is scary-high (96%). Is that a real signal? Pull up the other two evidences." },
+      tell:{ zh:"陷阱在这: 训练准确率 96% 很诱人, 头皮图也像样, 但<b>散点其实两簇重叠</b>, 而且<b>没见过的测试集只有 55%</b> — 训练高、测试崩, 正是过拟合。它背下了训练数据, 没学到真方向。",
+             en:"Here's the trap: 96% training accuracy is seductive and the topomap looks fine, but <b>the scatter clusters actually overlap</b> and <b>the unseen test set is only 55%</b> — high train, crashed test, textbook overfitting. It memorized the training data, didn't learn a real direction." }
+    },
+    {
+      id:"D", truth:"real",
+      topo:"focus", scatter:"sep", trainAcc:78, testAcc:76,
+      brief:{ zh:"最后一卷: 训练准确率没破 80%, 看着不如 C 号亮眼。可亮眼的不一定是真的。三证交叉看看。",
+              en:"Final file: training accuracy doesn't even hit 80%, less flashy than case C. But flashy isn't real. Cross-check all three." },
+      tell:{ zh:"训练 78% 不算高, 但<b>测试集 76% 几乎一样</b> — 没有训练测试鸿沟。头皮聚在 C3/C4, 散点也分得开。朴实但诚实, 这是真方向。比 C 号那种'训练 96/测试 55'可信得多。",
+             en:"Training 78% isn't high, but <b>test set 76% is almost identical</b> — no train/test gap. Power sits over C3/C4 and clusters separate. Humble but honest — a real direction, far more trustworthy than case C's '96 train / 55 test'." }
+    }
+  ];
+  const TOTAL = CASES.length;
 
-/* ---------------- 5 个 CSP 模式案例 ---------------- */
-var CASES = [
-  {
-    answer:'L',
-    hotspots:[ {e:'C4', w: 1.0}, {e:'CP4', w:0.45}, {e:'FC4', w:0.4}, {e:'C3', w:-0.18} ],
-    clueCn:'热点紧紧落在 C4 (右脑感觉运动区), 左脑几乎没有。运动控制是对侧的——右脑管左手。',
-    clueEn:'A tight hotspot sits on C4 (right sensorimotor cortex), left side near zero. Motor control is contralateral — right brain drives the left hand.',
-    whyCn:'C4 右脑热 → 对侧的左手运动想象。CSP 这一模式确实抓住了运动皮层, 可信。',
-    whyEn:'C4 right-hemisphere hot → contralateral left-hand imagery. This CSP pattern truly grabbed motor cortex. Trustworthy.'
-  },
-  {
-    answer:'R',
-    hotspots:[ {e:'C3', w:1.0}, {e:'CP3', w:0.5}, {e:'FC3', w:0.42}, {e:'C4', w:-0.15} ],
-    clueCn:'热点集中在 C3 (左脑感觉运动区)。左脑控制右半身, 所以这是右手的运动想象。',
-    clueEn:'The hotspot concentrates on C3 (left sensorimotor cortex). The left brain controls the right side, so this is right-hand imagery.',
-    whyCn:'C3 左脑热 → 对侧的右手运动想象。又一个对准运动区的好滤波器。',
-    whyEn:'C3 left-hemisphere hot → contralateral right-hand imagery. Another filter aimed straight at motor cortex.'
-  },
-  {
-    answer:'N',
-    hotspots:[ {e:'O1', w:0.95}, {e:'O2', w:0.92}, {e:'Oz', w:0.7}, {e:'PO3', w:0.4}, {e:'PO4', w:0.4} ],
-    clueCn:'热点全堆在后脑枕叶 O1/O2/Oz——那是视觉皮层与 alpha 波/眼动的地盘, 不是手的运动区。',
-    clueEn:'Everything piles up at the occipital region O1/O2/Oz — that is visual cortex and alpha/eye-movement territory, not the hand motor area.',
-    whyCn:'枕叶热不是运动。CSP 这次找到的是 alpha 波或眼动差异, 不是左右手。这个滤波器不能用来解码动作。',
-    whyEn:'Occipital is not motor. CSP latched onto alpha or eye-movement differences, not left vs right hand. This filter cannot decode movement.'
-  },
-  {
-    answer:'B',
-    hotspots:[ {e:'C3', w:0.85}, {e:'C4', w:0.83}, {e:'Cz', w:0.6}, {e:'CP3', w:0.45}, {e:'CP4', w:0.45} ],
-    clueCn:'C3 和 C4 几乎一样亮, 左右对称。两手运动区同时强, 无法区分是哪只手——边界不清晰。',
-    clueEn:'C3 and C4 are nearly equally bright and symmetric. Both hand areas fire together, so you cannot tell which hand — the boundary is unclear.',
-    whyCn:'双侧对称热 → 双手/不清晰。运动区是对的, 但没有分出左右, 直接拿去解码会左右手混淆。',
-    whyEn:'Bilateral symmetric hot → both hands / unclear. The region is motor, but it does not separate left from right; decoding with it would confuse the hands.'
-  },
-  {
-    answer:'A',
-    hotspots:[ {e:'Fp1', w:0.9}, {e:'F8', w:-0.8}, {e:'T7', w:0.75}, {e:'O2', w:-0.6}, {e:'F7', w:0.5} ],
-    clueCn:'热点散落在额角、颞侧、枕缘, 红蓝乱跳, 没有任何皮层结构。这是噪声/伪迹的指纹, 不是脑活动。',
-    clueEn:'Hotspots scatter across the frontal corners, temples and edge, red and blue jumping with no cortical structure. That is the fingerprint of noise/artifact, not brain activity.',
-    whyCn:'边缘散乱热 → 伪迹。CSP 被噪声带偏了, 把随机干扰当成了类别差异。坚决拒绝这个模式。',
-    whyEn:'Scattered edge hot → artifact. CSP was dragged off by noise, mistaking random interference for a class difference. Reject this pattern outright.'
-  },
-];
+  // ---------- state ----------
+  const gameState = {
+    caseIdx: 0,
+    seen: [false,false,false],
+    decided: false,
+    results: [],
+    finished: false
+  };
 
-/* 10-20 电极布局 (相对头模 SVG) */
-var HEAD = {cx:160, cy:178, r:120};
-var ELEC = {
-  Fp1:{x:-40,y:-110}, Fpz:{x:0,y:-118}, Fp2:{x:40,y:-110},
-  F7:{x:-92,y:-72}, F3:{x:-50,y:-66}, Fz:{x:0,y:-64}, F4:{x:50,y:-66}, F8:{x:92,y:-72},
-  FC3:{x:-58,y:-32}, FC4:{x:58,y:-32},
-  T7:{x:-116,y:0}, C3:{x:-62,y:0}, Cz:{x:0,y:0}, C4:{x:62,y:0}, T8:{x:116,y:0},
-  CP3:{x:-58,y:34}, CP4:{x:58,y:34},
-  P7:{x:-92,y:72}, P3:{x:-50,y:66}, Pz:{x:0,y:64}, P4:{x:50,y:66}, P8:{x:92,y:72},
-  PO3:{x:-40,y:96}, PO4:{x:40,y:96},
-  O1:{x:-40,y:110}, Oz:{x:0,y:118}, O2:{x:40,y:110},
-};
-var KEY_ELEC = {C3:1,C4:1,O1:1,O2:1,Oz:1};
+  // ---------- DOM ----------
+  const el = (id)=>document.getElementById(id);
+  const caseGrid = el("caseGrid");
+  const solvedVal= el("solvedVal");
+  const totalVal = el("totalVal");
+  const hudCase  = el("hudCase");
+  const hudEvi   = el("hudEvi");
+  const casePrompt = el("casePrompt");
+  const btnReal  = el("btnReal");
+  const btnFake  = el("btnFake");
+  const lockHint = el("lockHint");
+  const feedback = el("feedback");
+  const fbTag    = el("fbTag");
+  const fbBody   = el("fbBody");
+  const nextBtn  = el("nextBtn");
+  const endOverlay = el("endOverlay");
+  const endTitle = el("endTitle");
+  const endSub   = el("endSub");
+  const replayBtn= el("replayBtn");
 
-var caseIdx=0, results=[null,null,null,null,null], picked=null, locked=false;
+  // ---------- canvases ----------
+  const cvTopo = el("cvTopo"), ctxTopo = cvTopo.getContext("2d");
+  const cvScat = el("cvScatter"), ctxScat = cvScat.getContext("2d");
+  const cvAcc  = el("cvAcc"), ctxAcc = cvAcc.getContext("2d");
+  let dpr = 1;
+  const dims = { topo:{w:0,h:0}, scat:{w:0,h:0}, acc:{w:0,h:0} };
+  let idleRaf = null, idleT = 0;
 
-/* ---------------- sidebar 渲染 ---------------- */
-function renderRoute(){
-  var box=document.getElementById('routeBox'); box.innerHTML='';
-  ROUTE.forEach(function(s,i){
-    var row=document.createElement('div');
-    row.className='route-step '+s.st;
-    var line = i<ROUTE.length-1 ? '<span class="route-line"></span>' : '';
-    row.innerHTML='<span class="route-dot"></span>'+line+
-      '<span class="route-lbl">'+s.id+' '+(LANG==='cn'?s.cn:s.en)+'</span>';
-    box.appendChild(row);
+  function sizeOne(canvas, key){
+    const wrap = canvas.parentElement;
+    const r = wrap.getBoundingClientRect();
+    const w = Math.max(80, r.width), h = Math.max(80, r.height);
+    dpr = window.devicePixelRatio || 1;
+    canvas.width = Math.floor(w*dpr);
+    canvas.height = Math.floor(h*dpr);
+    canvas.getContext("2d").setTransform(dpr,0,0,dpr,0,0);
+    dims[key].w = w; dims[key].h = h;
+  }
+  function sizeAll(){
+    sizeOne(cvTopo,"topo"); sizeOne(cvScat,"scat"); sizeOne(cvAcc,"acc");
+  }
+
+  // small deterministic RNG so scatter is stable per case
+  function rng(seed){ let s = seed%2147483647; if(s<=0) s+=2147483646;
+    return ()=>{ s = (s*16807)%2147483647; return (s-1)/2147483646; }; }
+
+  // heat ramp for topomap (discrete oklch bands cold->hot)
+  function heatColor(t){
+    if (t < 0.18) return "oklch(0.28 0.10 250)";
+    if (t < 0.38) return "oklch(0.40 0.13 245)";
+    if (t < 0.55) return "oklch(0.55 0.13 200)";
+    if (t < 0.70) return "oklch(0.72 0.14 120)";
+    if (t < 0.85) return "oklch(0.80 0.16 70)";
+    return "oklch(0.66 0.22 28)";
+  }
+
+  // ===== evidence 1: topomap =====
+  function drawTopo(mode){
+    const W = dims.topo.w, H = dims.topo.h, ctx = ctxTopo;
+    ctx.clearRect(0,0,W,H);
+    ctx.fillStyle = COL.bg2; ctx.fillRect(0,0,W,H);
+    const cx = W/2, cy = H*0.52, R = Math.min(W,H)*0.36;
+
+    let spots;
+    if (mode === "focus"){
+      spots = [ {x:-0.55,y:-0.05,a:1.0}, {x:0.55,y:-0.05,a:1.0} ];
+    } else { // eye: frontal near eyes + diffuse
+      spots = [ {x:-0.30,y:-0.78,a:1.0}, {x:0.30,y:-0.78,a:1.0}, {x:0.0,y:0.5,a:0.25} ];
+    }
+
+    const step = Math.max(4, R/22);
+    for (let py=cy-R; py<=cy+R; py+=step){
+      for (let px=cx-R; px<=cx+R; px+=step){
+        const nx = (px-cx)/R, ny = (py-cy)/R;
+        if (nx*nx+ny*ny > 1) continue;
+        let v = 0;
+        for (const s of spots){
+          const d2 = (nx-s.x)*(nx-s.x)+(ny-s.y)*(ny-s.y);
+          v += s.a*Math.exp(-d2/0.10);
+        }
+        if (mode === "eye") v += 0.06;
+        v = Math.min(1, v);
+        ctx.fillStyle = heatColor(v);
+        ctx.globalAlpha = 0.9;
+        ctx.fillRect(px-step/2, py-step/2, step+1, step+1);
+      }
+    }
+    ctx.globalAlpha = 1;
+
+    // head outline + nose + ears
+    ctx.strokeStyle = COL.fgDim; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(cx,cy,R,0,Math.PI*2); ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(cx-R*0.16, cy-R); ctx.lineTo(cx, cy-R*1.16); ctx.lineTo(cx+R*0.16, cy-R); ctx.stroke();
+    ctx.beginPath(); ctx.arc(cx-R, cy, R*0.12, Math.PI*0.5, Math.PI*1.5); ctx.stroke();
+    ctx.beginPath(); ctx.arc(cx+R, cy, R*0.12, -Math.PI*0.5, Math.PI*0.5); ctx.stroke();
+
+    // C3 / C4 reference marks
+    ctx.font = "10px 'JetBrains Mono', monospace"; ctx.textAlign="center";
+    function mark(nx,ny,label){
+      const mx = cx+nx*R, my = cy+ny*R;
+      ctx.strokeStyle = COL.lineSt; ctx.lineWidth=1.2;
+      ctx.beginPath(); ctx.arc(mx,my,3,0,Math.PI*2); ctx.stroke();
+      ctx.fillStyle = COL.fg; ctx.fillText(label, mx, my-7);
+    }
+    mark(-0.55,-0.05,"C3"); mark(0.55,-0.05,"C4");
+
+    ctx.textAlign="left"; ctx.font = "10px 'JetBrains Mono', monospace";
+    if (mode === "focus"){
+      ctx.fillStyle = COL.ok;
+      ctx.fillText(lang==="zh"?"能量聚在 C3/C4 运动区":"power over C3/C4 motor cortex", 10, H-12);
+    } else {
+      ctx.fillStyle = COL.err;
+      ctx.fillText(lang==="zh"?"能量聚在前额眼睛区 (眼动伪迹)":"power at frontal/eye region (artifact)", 10, H-12);
+    }
+  }
+
+  // ===== evidence 2: scatter =====
+  function drawScatter(mode, caseId){
+    const W = dims.scat.w, H = dims.scat.h, ctx = ctxScat;
+    ctx.clearRect(0,0,W,H);
+    ctx.fillStyle = COL.bg2; ctx.fillRect(0,0,W,H);
+    const pad = 26, x0=pad, x1=W-pad, y0=H-pad, y1=pad;
+    ctx.strokeStyle = COL.line; ctx.lineWidth=1;
+    ctx.beginPath(); ctx.moveTo(x0,y1); ctx.lineTo(x0,y0); ctx.lineTo(x1,y0); ctx.stroke();
+    ctx.fillStyle = COL.fgMute; ctx.font="9px 'JetBrains Mono',monospace"; ctx.textAlign="left";
+    ctx.fillText(lang==="zh"?"CSP 方向1 (左手能量)":"CSP comp 1 (L power)", x0+2, y0+14);
+    ctx.save(); ctx.translate(x0-14, y1+4); ctx.rotate(-Math.PI/2);
+    ctx.fillText(lang==="zh"?"CSP 方向2 (右手能量)":"CSP comp 2 (R power)", 0, 0); ctx.restore();
+
+    const r = rng(caseId.charCodeAt(0)*131 + 7);
+    function plotCluster(meanX, meanY, spread, color){
+      ctx.fillStyle = color;
+      for (let i=0;i<34;i++){
+        const u = r(), v = r();
+        const g1 = Math.cos(2*Math.PI*u)*Math.sqrt(-2*Math.log(v+1e-6));
+        const g2 = Math.sin(2*Math.PI*u)*Math.sqrt(-2*Math.log(v+1e-6));
+        const fx = meanX + g1*spread, fy = meanY + g2*spread;
+        const px = x0 + fx*(x1-x0), py = y0 - fy*(y0-y1);
+        ctx.globalAlpha = 0.85;
+        ctx.beginPath(); ctx.arc(px, py, 3.2, 0, Math.PI*2); ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+    }
+    const sep = (mode === "sep");
+    if (sep){
+      plotCluster(0.28, 0.30, 0.085, COL.left);
+      plotCluster(0.70, 0.70, 0.085, COL.right);
+    } else {
+      plotCluster(0.48, 0.50, 0.135, COL.left);
+      plotCluster(0.54, 0.52, 0.135, COL.right);
+    }
+    ctx.font="9px 'JetBrains Mono',monospace";
+    ctx.fillStyle=COL.left; ctx.beginPath(); ctx.arc(x1-92, y1+6, 4,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle=COL.fgDim; ctx.fillText(lang==="zh"?"想象左手":"imagine L", x1-84, y1+9);
+    ctx.fillStyle=COL.right; ctx.beginPath(); ctx.arc(x1-92, y1+20, 4,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle=COL.fgDim; ctx.fillText(lang==="zh"?"想象右手":"imagine R", x1-84, y1+23);
+    ctx.font="10px 'JetBrains Mono',monospace";
+    if (sep){ ctx.fillStyle=COL.ok; ctx.fillText(lang==="zh"?"两簇明显分开":"two clusters separate", x0+2, y0-6); }
+    else { ctx.fillStyle=COL.err; ctx.fillText(lang==="zh"?"两簇严重重叠":"clusters overlap heavily", x0+2, y0-6); }
+  }
+
+  // ===== evidence 3: accuracy bars =====
+  function drawAcc(trainAcc, testAcc){
+    const W = dims.acc.w, H = dims.acc.h, ctx = ctxAcc;
+    ctx.clearRect(0,0,W,H);
+    ctx.fillStyle = COL.bg2; ctx.fillRect(0,0,W,H);
+    const pad=24, baseY=H-pad-14, topY=pad+10, fullH = baseY - topY;
+    function yFor(p){ return baseY - (p/100)*fullH; }
+    ctx.strokeStyle = COL.fgMute; ctx.setLineDash([4,4]); ctx.lineWidth=1;
+    ctx.beginPath(); ctx.moveTo(pad, yFor(50)); ctx.lineTo(W-pad, yFor(50)); ctx.stroke();
+    ctx.strokeStyle = COL.gold;
+    ctx.beginPath(); ctx.moveTo(pad, yFor(70)); ctx.lineTo(W-pad, yFor(70)); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle=COL.fgMute; ctx.font="8px 'JetBrains Mono',monospace"; ctx.textAlign="left";
+    ctx.fillText("50% "+(lang==="zh"?"瞎猜":"chance"), pad+2, yFor(50)-3);
+    ctx.fillStyle=COL.gold;
+    ctx.fillText("70% "+(lang==="zh"?"可用线":"usable"), pad+2, yFor(70)-3);
+
+    const barW = Math.min(56, (W-pad*2)/3.2);
+    const gap = barW*0.7, totalW = barW*2+gap, startX = (W-totalW)/2;
+    function bar(x, p, color, label){
+      const h = (p/100)*fullH;
+      ctx.fillStyle = color; ctx.fillRect(x, baseY-h, barW, h);
+      ctx.strokeStyle = COL.lineSt; ctx.lineWidth=1; ctx.strokeRect(x, baseY-h, barW, h);
+      ctx.fillStyle = COL.fg; ctx.font="13px 'JetBrains Mono',monospace"; ctx.textAlign="center";
+      ctx.fillText(p+"%", x+barW/2, baseY-h-6);
+      ctx.fillStyle = COL.fgDim; ctx.font="9px 'JetBrains Mono',monospace";
+      ctx.fillText(label, x+barW/2, baseY+13);
+    }
+    bar(startX, trainAcc, COL.accent, lang==="zh"?"训练集":"train");
+    const gapBig = testAcc < trainAcc-15;
+    bar(startX+barW+gap, testAcc, gapBig?COL.err:COL.gold, lang==="zh"?"测试集":"test");
+
+    ctx.font="9px 'JetBrains Mono',monospace"; ctx.textAlign="center";
+    const gapV = trainAcc - testAcc;
+    if (gapBig){
+      ctx.fillStyle=COL.err;
+      ctx.fillText((lang==="zh"?"训练-测试鸿沟 ":"train-test gap ")+gapV+"pt", W/2, topY-1);
+    } else {
+      ctx.fillStyle=COL.ok;
+      ctx.fillText((lang==="zh"?"训练≈测试 (差 ":"train≈test (gap ")+gapV+"pt)", W/2, topY-1);
+    }
+  }
+
+  // ---------- redraw revealed evidences ----------
+  function redrawSeen(){
+    const c = CASES[gameState.caseIdx];
+    if (gameState.seen[0]) drawTopo(c.topo);
+    if (gameState.seen[1]) drawScatter(c.scatter, c.id);
+    if (gameState.seen[2]) drawAcc(c.trainAcc, c.testAcc);
+  }
+
+  // ---------- sidebar / hud ----------
+  function buildCaseGrid(){
+    caseGrid.innerHTML="";
+    for (let i=0;i<TOTAL;i++){
+      const cell=document.createElement("div");
+      cell.className="case-cell mono"; cell.id="cc"+i;
+      cell.textContent = CASES[i].id;
+      caseGrid.appendChild(cell);
+    }
+    totalVal.textContent = TOTAL;
+  }
+  function refreshSidebar(){
+    for (let i=0;i<TOTAL;i++){
+      const cell=el("cc"+i); if(!cell) continue;
+      cell.className="case-cell mono";
+      const res = gameState.results[i];
+      if (res==="win") cell.classList.add("solved");
+      else if (res==="lose") cell.classList.add("miss");
+      if (i===gameState.caseIdx && !gameState.finished) cell.classList.add("cur");
+    }
+    solvedVal.textContent = gameState.results.filter(r=>r==="win").length;
+  }
+  function refreshHud(){
+    hudCase.textContent = (gameState.caseIdx+1)+" / "+TOTAL;
+    hudEvi.textContent = gameState.seen.filter(Boolean).length+" / 3";
+  }
+
+  // ---------- evidence reveal ----------
+  function revealEvidence(i){
+    if (gameState.decided || gameState.finished) return;
+    if (gameState.seen[i]) return;
+    gameState.seen[i] = true;
+    el("reveal"+i).classList.add("hidden");
+    el("evi"+i).classList.add("seen");
+    const st = el("stat"+i); st.textContent = I18N[lang].statSeen; st.classList.add("on");
+    sizeAll();
+    redrawSeen();
+    refreshHud();
+    if (gameState.seen.every(Boolean)){
+      btnReal.disabled = false; btnFake.disabled = false;
+      lockHint.textContent = I18N[lang].lockReady; lockHint.classList.add("warn");
+    }
+  }
+
+  // ---------- verdict ----------
+  function submitVerdict(v){
+    if (gameState.decided || gameState.finished) return;
+    if (!gameState.seen.every(Boolean)) return;
+    gameState.decided = true;
+    const c = CASES[gameState.caseIdx];
+    const win = (v === c.truth);
+    gameState.results[gameState.caseIdx] = win ? "win" : "lose";
+
+    btnReal.disabled = true; btnFake.disabled = true;
+    (v==="real"?btnReal:btnFake).style.borderColor = win ? "var(--ok)" : "var(--err)";
+
+    feedback.classList.remove("hidden","good","bad");
+    feedback.classList.add(win?"good":"bad");
+    renderFeedbackText(c, win);
+
+    nextBtn.textContent = (gameState.caseIdx < TOTAL-1)
+      ? I18N[lang].nextBtn
+      : (lang==="zh"?"看结案报告":"See case report");
+    refreshSidebar();
+  }
+
+  function renderFeedbackText(c, win){
+    fbTag.textContent = win
+      ? (lang==="zh"? (c.truth==="real"?"判对 · 真有效":"判对 · 过拟合假象") : (c.truth==="real"?"CORRECT · REAL":"CORRECT · OVERFIT"))
+      : (lang==="zh"?"判错了":"WRONG CALL");
+    let body = c.tell[lang];
+    if (!win){
+      const corr = c.truth==="real"
+        ? (lang==="zh"?"它其实是<b>真有效</b>。":"It was actually <b>real</b>.")
+        : (lang==="zh"?"它其实是<b>过拟合假象</b>。":"It was actually an <b>overfit illusion</b>.");
+      const scold = lang==="zh"?"别被单块证据带跑 — ":"Don't let one panel fool you — ";
+      body = corr+" "+scold+body;
+    }
+    fbBody.innerHTML = body;
+  }
+
+  function nextCase(){
+    if (gameState.caseIdx >= TOTAL-1){ finish(); return; }
+    gameState.caseIdx += 1;
+    gameState.seen = [false,false,false];
+    gameState.decided = false;
+    feedback.classList.add("hidden");
+    btnReal.disabled = true; btnFake.disabled = true;
+    btnReal.style.borderColor = ""; btnFake.style.borderColor = "";
+    lockHint.textContent = I18N[lang].lockHint; lockHint.classList.remove("warn");
+    for (let i=0;i<3;i++){
+      el("reveal"+i).classList.remove("hidden");
+      el("evi"+i).classList.remove("seen");
+      const st=el("stat"+i); st.textContent=I18N[lang].statHidden; st.classList.remove("on");
+    }
+    clearCanvases();
+    setCaseBrief();
+    refreshHud(); refreshSidebar();
+    startIdle();
+  }
+
+  function setCaseBrief(){
+    const c = CASES[gameState.caseIdx];
+    casePrompt.innerHTML = (lang==="zh"?"第 <b>"+c.id+"</b> 号案卷: ":"Case <b>"+c.id+"</b>: ") + c.brief[lang];
+  }
+
+  function clearCanvases(){
+    ctxTopo.clearRect(0,0,dims.topo.w,dims.topo.h);
+    ctxScat.clearRect(0,0,dims.scat.w,dims.scat.h);
+    ctxAcc.clearRect(0,0,dims.acc.w,dims.acc.h);
+  }
+
+  function finish(){
+    gameState.finished = true;
+    stopIdle();
+    const wins = gameState.results.filter(r=>r==="win").length;
+    const allWin = wins === TOTAL;
+    endOverlay.classList.remove("hidden");
+    if (allWin){
+      endTitle.textContent = lang==="zh"?"金牌验证侦探":"Master Verification Detective";
+      endSub.innerHTML = lang==="zh"
+        ? "四卷全破。你没被'训练 96% 高得吓人'骗到, 也没被'散点分开'蒙住 — 你学会了让<b>头皮图 + 散点 + 训练/测试准确率</b>三证交叉。这就是回答'电脑找的方向真有意义吗'的方法。<br>你刚替项目守住了 S3 解码左右的命门 — 离 <b>脑控通关 Minecraft</b> 又稳了一步。"
+        : "Four files cracked. You weren't fooled by a scary '96% training accuracy', nor by 'clusters that separate' — you learned to cross-check <b>topomap + scatter + train/test accuracy</b>. That's how you answer 'is the computer's direction real?'<br>You just guarded the heart of S3 decoding L/R — one solid step closer to <b>beating Minecraft brain-only</b>.";
+    } else {
+      endTitle.textContent = lang==="zh"?"破案 "+wins+"/"+TOTAL+" · 还得练眼力":"Solved "+wins+"/"+TOTAL+" · keep training";
+      endSub.innerHTML = lang==="zh"
+        ? "你被某块证据带偏了至少一次。记住核心: 单看头皮图会被眼动伪迹骗, 单看训练准确率会被过拟合骗, 单看散点会被巧合骗。<b>必须三证交叉</b>才敢信 CSP 找的方向。再办一遍把眼力练扎实。"
+        : "At least once you were led astray by one panel. Remember: the topomap alone gets fooled by eye artifacts, training accuracy alone by overfitting, and the scatter alone by coincidence. <b>You must cross-check all three</b> before trusting a CSP direction. Re-open the files and sharpen your eye.";
+    }
+  }
+
+  function resetGame(){
+    gameState.caseIdx = 0;
+    gameState.seen = [false,false,false];
+    gameState.decided = false;
+    gameState.results = [];
+    gameState.finished = false;
+    endOverlay.classList.add("hidden");
+    feedback.classList.add("hidden");
+    btnReal.disabled = true; btnFake.disabled = true;
+    btnReal.style.borderColor=""; btnFake.style.borderColor="";
+    lockHint.textContent = I18N[lang].lockHint; lockHint.classList.remove("warn");
+    for (let i=0;i<3;i++){
+      el("reveal"+i).classList.remove("hidden");
+      el("evi"+i).classList.remove("seen");
+      const st=el("stat"+i); st.textContent=I18N[lang].statHidden; st.classList.remove("on");
+    }
+    sizeAll(); clearCanvases();
+    setCaseBrief(); refreshHud(); refreshSidebar();
+    startIdle();
+  }
+
+  // ---------- idle micro-animation on unopened panels ----------
+  function startIdle(){ stopIdle(); idleT = 0; idleLoop(); }
+  function stopIdle(){ if (idleRaf){ cancelAnimationFrame(idleRaf); idleRaf=null; } }
+  function idleLoop(){
+    idleRaf = requestAnimationFrame(idleLoop);
+    idleT += 0.03;
+    const ctxs = [ ctxTopo, ctxScat, ctxAcc ];
+    const keys = [ "topo", "scat", "acc" ];
+    for (let i=0;i<3;i++){
+      if (gameState.seen[i]) continue;
+      const ctx = ctxs[i], k = keys[i];
+      const W = dims[k].w, H = dims[k].h;
+      if (W<=0||H<=0) continue;
+      ctx.clearRect(0,0,W,H);
+      ctx.fillStyle = COL.bg2; ctx.fillRect(0,0,W,H);
+      const pulse = 0.5 + 0.5*Math.sin(idleT + i*1.7);
+      ctx.beginPath(); ctx.arc(W/2, H/2, 6 + pulse*5, 0, Math.PI*2);
+      ctx.fillStyle = "oklch(0.72 0.17 245 / "+(0.12+pulse*0.20).toFixed(3)+")";
+      ctx.fill();
+      ctx.strokeStyle = "oklch(0.72 0.17 245 / 0.4)"; ctx.lineWidth=1;
+      ctx.beginPath(); ctx.arc(W/2, H/2, 14, 0, Math.PI*2); ctx.stroke();
+    }
+  }
+
+  // ---------- i18n apply ----------
+  function applyI18n(){
+    document.documentElement.lang = lang==="zh"?"zh-CN":"en";
+    document.querySelectorAll("[data-i18n]").forEach(elm=>{
+      const k = elm.getAttribute("data-i18n");
+      if (I18N[lang][k] !== undefined) elm.textContent = I18N[lang][k];
+    });
+    document.querySelector(".vq").innerHTML = lang==="zh"
+      ? "你的判决: 这组 CSP 方向 <b>真有效</b> 还是 <b>过拟合假象</b>?"
+      : "Your verdict: is this CSP direction <b>REAL</b> or an <b>OVERFIT</b> illusion?";
+    for (let i=0;i<3;i++){
+      const st=el("stat"+i);
+      st.textContent = gameState.seen[i] ? I18N[lang].statSeen : I18N[lang].statHidden;
+    }
+    lockHint.textContent = gameState.seen.every(Boolean) ? I18N[lang].lockReady : I18N[lang].lockHint;
+    setCaseBrief();
+    redrawSeen();
+    if (gameState.decided && !gameState.finished){
+      const c = CASES[gameState.caseIdx];
+      const win = (gameState.results[gameState.caseIdx]==="win");
+      renderFeedbackText(c, win);
+      nextBtn.textContent = (gameState.caseIdx<TOTAL-1) ? I18N[lang].nextBtn : (lang==="zh"?"看结案报告":"See case report");
+    }
+    if (gameState.finished) finish();
+    refreshHud();
+  }
+
+  // ---------- listeners ----------
+  function bindPress(node, fn){
+    node.addEventListener("click", fn);
+    node.addEventListener("touchend", (e)=>{ e.preventDefault(); fn(e); }, {passive:false});
+  }
+  for (let i=0;i<3;i++){
+    (function(idx){ bindPress(el("reveal"+idx), ()=> revealEvidence(idx)); })(i);
+  }
+  bindPress(btnReal, ()=> submitVerdict("real"));
+  bindPress(btnFake, ()=> submitVerdict("fake"));
+  bindPress(nextBtn, nextCase);
+  bindPress(replayBtn, resetGame);
+  el("langBtn").addEventListener("click", ()=>{
+    lang = (lang==="zh")?"en":"zh";
+    applyI18n();
   });
-}
-function renderProg(){
-  var box=document.getElementById('progBox'); box.innerHTML='';
-  for(var i=0;i<5;i++){
-    var pip=document.createElement('div'); pip.className='prog-pip';
-    if(results[i]==='ok') pip.className+=' ok';
-    else if(results[i]==='bad') pip.className+=' bad';
-    else if(i===caseIdx) pip.className+=' cur';
-    pip.textContent=(i+1);
-    box.appendChild(pip);
-  }
-  var good=results.filter(function(r){return r==='ok';}).length;
-  document.getElementById('vScore').textContent=good+' / 5';
-}
+  window.addEventListener("resize", ()=>{ sizeAll(); redrawSeen(); });
 
-/* ---------------- topomap 热力图 ---------------- */
-function colorFor(val){
-  // val in [-1,1]; 正=alert 红, 负=cool 蓝, 0=纸色
-  var alert=[200,85,61], cool=[79,124,172], base=[240,237,227];
-  var a = Math.min(1, Math.abs(val));
-  var tgt = val>=0 ? alert : cool;
-  var r=Math.round(base[0]+(tgt[0]-base[0])*a);
-  var g=Math.round(base[1]+(tgt[1]-base[1])*a);
-  var b=Math.round(base[2]+(tgt[2]-base[2])*a);
-  return 'rgb('+r+','+g+','+b+')';
-}
-function fieldAt(px,py,hotspots){
-  // 反距离加权插值 (IDW)
-  var num=0, den=0;
-  for(var k in ELEC){
-    var ex=HEAD.cx+ELEC[k].x, ey=HEAD.cy+ELEC[k].y;
-    var w=0;
-    for(var h=0;h<hotspots.length;h++){ if(hotspots[h].e===k){ w=hotspots[h].w; break; } }
-    var d=Math.hypot(px-ex,py-ey)+6;
-    var inv=1/(d*d);
-    num+=w*inv; den+=inv;
-  }
-  return den>0 ? num/den : 0;
-}
-function drawTopomap(){
-  var svg=document.getElementById('topomap');
-  var cs=CASES[caseIdx];
-  var H=HEAD, grid='';
-  var step=11;
-  for(var py=H.cy-H.r; py<=H.cy+H.r; py+=step){
-    for(var px=H.cx-H.r; px<=H.cx+H.r; px+=step){
-      var dx=px+step/2-H.cx, dy=py+step/2-H.cy;
-      if(dx*dx+dy*dy > H.r*H.r) continue;
-      var v=fieldAt(px+step/2,py+step/2,cs.hotspots);
-      grid+='<rect x="'+px+'" y="'+py+'" width="'+(step+0.6)+'" height="'+(step+0.6)+
-        '" fill="'+colorFor(v)+'"/>';
-    }
-  }
-  var head='<circle cx="'+H.cx+'" cy="'+H.cy+'" r="'+H.r+'" fill="none" stroke="var(--ink)" stroke-width="2"/>'+
-    '<path d="M'+(H.cx-13)+' '+(H.cy-H.r)+' Q'+H.cx+' '+(H.cy-H.r-20)+' '+(H.cx+13)+' '+(H.cy-H.r)+
-      '" fill="var(--paper)" stroke="var(--ink)" stroke-width="2"/>'+
-    '<path d="M'+(H.cx-H.r)+' '+(H.cy-22)+' Q'+(H.cx-H.r-14)+' '+H.cy+' '+(H.cx-H.r)+' '+(H.cy+22)+
-      '" fill="var(--paper)" stroke="var(--ink)" stroke-width="2"/>'+
-    '<path d="M'+(H.cx+H.r)+' '+(H.cy-22)+' Q'+(H.cx+H.r+14)+' '+H.cy+' '+(H.cx+H.r)+' '+(H.cy+22)+
-      '" fill="var(--paper)" stroke="var(--ink)" stroke-width="2"/>';
-  var dots='';
-  for(var k in ELEC){
-    var ex=H.cx+ELEC[k].x, ey=H.cy+ELEC[k].y;
-    var key=KEY_ELEC[k];
-    dots+='<circle cx="'+ex+'" cy="'+ey+'" r="'+(key?3.2:2.2)+'" fill="'+
-      (key?'var(--primary)':'var(--ink-dim)')+'" stroke="var(--paper)" stroke-width="1"/>';
-    if(key){
-      dots+='<text x="'+ex+'" y="'+(ey-6)+'" text-anchor="middle" class="electrode-lbl key">'+k+'</text>';
-    }
-  }
-  svg.innerHTML='<defs><clipPath id="headclip"><circle cx="'+H.cx+'" cy="'+H.cy+'" r="'+(H.r-1)+'"/></clipPath></defs>'+
-    '<g clip-path="url(#headclip)">'+grid+'</g>'+head+dots;
-}
+  // ---------- init ----------
+  buildCaseGrid();
+  applyI18n();
+  sizeAll();
+  setCaseBrief();
+  refreshHud();
+  refreshSidebar();
+  startIdle();
 
-/* ---------------- 判读选项 ---------------- */
-function renderVerdicts(){
-  var box=document.getElementById('verdictBox'); box.innerHTML='';
-  VERDICTS.forEach(function(v){
-    var btn=document.createElement('button');
-    btn.className='verdict'; btn.setAttribute('data-key',v.key);
-    btn.innerHTML='<span class="verdict-key">['+v.key+']</span> '+
-      '<span class="verdict-txt">'+(LANG==='cn'?v.cn:v.en)+'</span>'+
-      '<div class="verdict-sub">'+(LANG==='cn'?v.subCn:v.subEn)+'</div>';
-    btn.addEventListener('click', function(){ onPick(v.key); });
-    if(locked){
-      btn.disabled=true;
-      if(v.key===CASES[caseIdx].answer) btn.classList.add('right');
-      else if(v.key===picked) btn.classList.add('wrong');
-    }
-    box.appendChild(btn);
-  });
-}
-
-function verdictName(key){
-  for(var i=0;i<VERDICTS.length;i++) if(VERDICTS[i].key===key) return LANG==='cn'?VERDICTS[i].cn:VERDICTS[i].en;
-  return key;
-}
-
-function renderFeedback(){
-  var cs=CASES[caseIdx], correct=picked===cs.answer;
-  var head = correct ? t('correct') : (t('wrongPre')+verdictName(cs.answer)+(LANG==='cn'?'。':'.'));
-  document.getElementById('feedbackBox').innerHTML='<div class="feedback '+(correct?'good':'bad')+'">'+
-    '<b>'+head+'</b><br>'+(LANG==='cn'?cs.whyCn:cs.whyEn)+'</div>';
-  document.getElementById('btnNext').textContent = caseIdx<4 ? t('next') : t('seeResult');
-}
-
-function onPick(key){
-  if(locked) return;
-  picked=key; locked=true;
-  var cs=CASES[caseIdx];
-  results[caseIdx] = (key===cs.answer) ? 'ok' : 'bad';
-  renderVerdicts();
-  renderProg();
-  renderFeedback();
-  document.getElementById('btnNext').style.display='inline-block';
-}
-
-function loadCase(){
-  var cs=CASES[caseIdx];
-  picked=null; locked=false;
-  document.getElementById('mapTitle').textContent=
-    (LANG==='cn'?'CSP 模式 #'+(caseIdx+1)+' 头皮热力图':'CSP pattern #'+(caseIdx+1)+' scalp topomap');
-  document.getElementById('caseTag').textContent='CASE '+(caseIdx+1)+' / 5';
-  document.getElementById('clueText').textContent=LANG==='cn'?cs.clueCn:cs.clueEn;
-  document.getElementById('feedbackBox').innerHTML='';
-  document.getElementById('btnNext').style.display='none';
-  drawTopomap();
-  renderVerdicts();
-  renderProg();
-}
-
-function nextCase(){
-  if(caseIdx<4){ caseIdx++; loadCase(); }
-  else showWin();
-}
-
-function showWin(){
-  var good=results.filter(function(r){return r==='ok';}).length;
-  var pass = good===5;
-  document.getElementById('winOverlay').style.display='flex';
-  document.getElementById('winTitle').textContent = pass? t('winTitle') : t('winTitleFail');
-  document.getElementById('winTitle').style.color = pass? 'var(--primary)' : 'var(--alert)';
-  document.getElementById('winBody').textContent = pass? t('winBodyPass') : t('winBodyFail');
-  document.getElementById('winEnd').textContent = pass? t('winEndPass') : t('winEndFail');
-  if(pass){
-    var b=document.getElementById('badge'); b.className='badge on'; b.textContent=t('badgeOn');
-  }
-}
-
-function restart(){
-  caseIdx=0; results=[null,null,null,null,null]; picked=null; locked=false;
-  document.getElementById('winOverlay').style.display='none';
-  var b=document.getElementById('badge'); b.className='badge'; b.textContent=t('badgeLocked');
-  loadCase();
-}
-
-/* ---------------- i18n 刷新 ---------------- */
-function refreshI18N(){
-  document.getElementById('title').textContent=t('title');
-  document.getElementById('lblRoute').textContent=t('lblRoute');
-  document.getElementById('lblProg').textContent=t('lblProg');
-  document.getElementById('lblScore').textContent=t('lblScore');
-  document.getElementById('lblUnlock').textContent=t('lblUnlock');
-  document.getElementById('endNote').textContent=t('endNote');
-  document.getElementById('briefTitle').textContent=t('briefTitle');
-  document.getElementById('brief').textContent=t('brief');
-  document.getElementById('legLbl').textContent=t('legLbl');
-  document.getElementById('legHigh').textContent=t('legHigh');
-  document.getElementById('legLow').textContent=t('legLow');
-  document.getElementById('legHint').textContent=t('legHint');
-  document.getElementById('clueTitle').textContent=t('clueTitle');
-  document.getElementById('qText').textContent=t('qText');
-  document.getElementById('btnRestart').textContent=t('restart');
-  document.getElementById('langBtn').textContent= LANG==='cn'?'中 / EN':'EN / 中';
-  var bd=document.getElementById('badge');
-  bd.textContent = bd.classList.contains('on') ? t('badgeOn') : t('badgeLocked');
-  renderRoute();
-  document.getElementById('clueText').textContent=LANG==='cn'?CASES[caseIdx].clueCn:CASES[caseIdx].clueEn;
-  document.getElementById('mapTitle').textContent=
-    (LANG==='cn'?'CSP 模式 #'+(caseIdx+1)+' 头皮热力图':'CSP pattern #'+(caseIdx+1)+' scalp topomap');
-  renderVerdicts();
-  if(locked) renderFeedback();
-  // 若结算页打开, 刷新结算文案
-  if(document.getElementById('winOverlay').style.display==='flex'){
-    var good=results.filter(function(r){return r==='ok';}).length, pass=good===5;
-    document.getElementById('winTitle').textContent = pass? t('winTitle') : t('winTitleFail');
-    document.getElementById('winBody').textContent = pass? t('winBodyPass') : t('winBodyFail');
-    document.getElementById('winEnd').textContent = pass? t('winEndPass') : t('winEndFail');
-  }
-}
-
-/* ---------------- events ---------------- */
-document.getElementById('btnNext').addEventListener('click', nextCase);
-document.getElementById('btnRestart').addEventListener('click', restart);
-document.getElementById('langBtn').addEventListener('click', function(){
-  LANG = LANG==='cn'?'en':'cn';
-  refreshI18N();
-});
-
-/* ---------------- init ---------------- */
-renderRoute();
-loadCase();
-refreshI18N();
+})();
 </script>
 </body>
 </html>
