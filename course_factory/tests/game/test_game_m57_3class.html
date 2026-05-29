@@ -1,0 +1,1173 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>M57 · 从 2 类扩到 3 类（加静息） — Pipeline Forge</title>
+<style>
+  :root{
+    /* Layer 1 — shared deep space canvas (neuro hue 25) */
+    --bg-0: oklch(0.14 0.035 265);
+    --bg-1: oklch(0.18 0.04 265);
+    --bg-2: oklch(0.22 0.045 265);
+    --bg-3: oklch(0.28 0.05 265);
+    --line: oklch(0.42 0.06 265 / 0.35);
+    --line-strong: oklch(0.60 0.10 265 / 0.55);
+    --fg:      oklch(0.96 0.01 265);
+    --fg-dim:  oklch(0.78 0.03 265);
+    --fg-mute: oklch(0.58 0.04 265);
+
+    /* Layer 2 — neuro accent (coral) + cs accent (cyan) */
+    --accent: oklch(0.75 0.17 25);   /* neuro coral, main interactive */
+    --cs:     oklch(0.75 0.17 200);  /* cs cyan, secondary */
+
+    /* Layer 3 — neuro 5-color palette */
+    --SYNAPTIC: oklch(0.75 0.17 25);
+    --DENDRITE: oklch(0.55 0.15 25);
+    --AXON:     oklch(0.32 0.10 25);
+    --FIRING:   oklch(0.92 0.08 25);
+    --MEMORY:   oklch(0.85 0.14 85);
+
+    /* 3-class colors */
+    --cl-left:  oklch(0.75 0.17 25);    /* left = coral */
+    --cl-right: oklch(0.75 0.17 200);   /* right = cyan */
+    --cl-rest:  oklch(0.65 0.03 265);   /* rest = neutral */
+
+    --good: oklch(0.82 0.17 125);
+    --bad:  oklch(0.62 0.20 25);
+    --gold: oklch(0.85 0.14 85);
+  }
+
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%;width:100%;
+    font-family:'Inter','PingFang SC',sans-serif;
+    color:var(--fg);background:var(--bg-0);overflow:hidden}
+
+  .stage{display:flex;flex-direction:row;height:100vh;width:100vw}
+
+  /* ============ 200px sidebar ============ */
+  .game-sidebar{
+    width:200px;flex:0 0 200px;
+    background:linear-gradient(180deg, var(--bg-1), var(--bg-0));
+    border-right:1px solid var(--line);
+    display:flex;flex-direction:column;
+    padding:14px 12px;gap:10px;overflow-y:auto;
+  }
+  .brand{display:flex;flex-direction:column;gap:2px;
+    border-bottom:1px solid var(--line);padding-bottom:8px}
+  .brand .code{font-family:'JetBrains Mono',monospace;font-size:10px;
+    color:var(--fg-mute);letter-spacing:1.2px}
+  .brand .title{font-size:13px;color:var(--fg);font-weight:600}
+  .brand .sub{font-size:10px;color:var(--fg-dim);margin-top:2px}
+
+  .mascot{
+    width:100%;height:68px;display:flex;align-items:center;justify-content:center;
+    background:var(--bg-2);border:1px solid var(--line);position:relative;
+  }
+  .mascot svg{width:100%;height:100%}
+  .mascot .mname{position:absolute;left:8px;bottom:5px;
+    font-family:'JetBrains Mono',monospace;font-size:8px;
+    color:var(--fg-mute);letter-spacing:1px}
+
+  /* roadmap */
+  .route{background:var(--bg-2);border:1px solid var(--line);
+    padding:8px;display:flex;flex-direction:column;gap:5px}
+  .route-title{font-family:'JetBrains Mono',monospace;font-size:9px;
+    color:var(--accent);letter-spacing:1px}
+  .route-list{display:flex;flex-direction:column;gap:3px}
+  .route-step{display:flex;align-items:center;gap:6px;
+    font-family:'JetBrains Mono',monospace;font-size:9px;
+    color:var(--fg-mute);line-height:1.2}
+  .route-step .dot{width:8px;height:8px;flex:0 0 8px;border-radius:50%;
+    background:var(--bg-3);border:1px solid var(--line-strong)}
+  .route-step.done .dot{background:var(--DENDRITE);border-color:var(--DENDRITE)}
+  .route-step.here{color:var(--fg);font-weight:600}
+  .route-step.here .dot{background:var(--accent);border-color:var(--FIRING);
+    box-shadow:0 0 0 3px oklch(0.75 0.17 25 / 0.25)}
+  .route-step .sname{font-size:8.5px}
+
+  /* level / mission */
+  .level-block{background:var(--bg-2);border:1px solid var(--line);padding:8px;
+    display:flex;flex-direction:column;gap:6px}
+  .level-title{font-family:'JetBrains Mono',monospace;font-size:9px;
+    color:var(--fg-dim);letter-spacing:1px}
+  .level-list{display:flex;flex-direction:column;gap:4px}
+  .level-pill{display:flex;align-items:center;gap:6px;
+    font-family:'JetBrains Mono',monospace;font-size:9.5px;color:var(--fg-mute);
+    padding:4px 6px;border:1px solid var(--line);background:var(--bg-3);
+    transition:border-color .2s,color .2s}
+  .level-pill .ln{width:14px;height:14px;flex:0 0 14px;border-radius:2px;
+    border:1px solid var(--line-strong);display:flex;align-items:center;
+    justify-content:center;font-size:8px;color:var(--fg-mute)}
+  .level-pill.here{color:var(--fg);border-color:var(--accent)}
+  .level-pill.here .ln{background:var(--accent);color:var(--bg-0);border-color:var(--FIRING)}
+  .level-pill.done .ln{background:var(--good);color:var(--bg-0);border-color:var(--good)}
+  .level-pill.done{color:var(--fg-dim)}
+
+  .guide{background:var(--bg-2);border:1px solid var(--line);
+    padding:8px;display:flex;flex-direction:column;gap:4px}
+  .guide-title{font-family:'JetBrains Mono',monospace;font-size:9px;
+    color:var(--cs);letter-spacing:1px}
+  .guide-line{font-size:9.5px;color:var(--fg-dim);line-height:1.4}
+
+  .sidebar-spacer{flex:1;min-height:6px}
+  .lang-btn{width:100%;padding:7px 8px;background:var(--bg-3);
+    color:var(--fg);border:1px solid var(--line-strong);
+    font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:1px;
+    cursor:pointer;box-shadow:3px 3px 0 var(--bg-0)}
+  .lang-btn:hover{background:var(--DENDRITE);color:var(--FIRING)}
+
+  /* ============ main ============ */
+  .game-main{flex:1;display:flex;flex-direction:column;
+    background:var(--bg-0);min-width:0;position:relative}
+  .main-header{height:46px;border-bottom:1px solid var(--line);
+    display:flex;align-items:center;justify-content:space-between;
+    padding:0 18px;background:var(--bg-1);flex:0 0 46px}
+  .header-left{font-family:'JetBrains Mono',monospace;font-size:11px;
+    color:var(--fg-dim);letter-spacing:1.3px}
+  .header-right{display:flex;gap:16px;font-family:'JetBrains Mono',monospace}
+  .hud-cell{display:flex;flex-direction:column;align-items:flex-end}
+  .hud-cell .label{font-size:9px;color:var(--fg-mute);letter-spacing:1px}
+  .hud-cell .val{color:var(--accent);font-size:13px;font-weight:600}
+  .hud-cell .val.cyan{color:var(--cs)}
+
+  .endgame{position:absolute;right:18px;top:54px;z-index:6;
+    display:flex;align-items:center;gap:8px;
+    background:var(--bg-1);border:1px solid var(--line);
+    padding:6px 10px;opacity:.92;pointer-events:none}
+  .endgame svg{width:24px;height:24px;flex:0 0 24px}
+  .endgame .etxt{font-family:'JetBrains Mono',monospace;font-size:8.5px;
+    color:var(--fg-mute);line-height:1.35;max-width:150px}
+  .endgame .etxt .hl{color:var(--accent)}
+
+  .main-body{flex:1;display:flex;flex-direction:column;
+    min-height:0;padding:12px 18px;gap:10px}
+
+  .task-card{background:var(--bg-1);border:1px solid var(--line);
+    border-left:3px solid var(--accent);padding:9px 14px;
+    display:flex;flex-direction:column;gap:3px;flex:0 0 auto}
+  .task-card .tprompt{font-size:12px;color:var(--fg);line-height:1.4}
+  .task-card .twhy{font-size:10px;color:var(--fg-dim);line-height:1.4}
+  .task-card .twhy b{color:var(--gold)}
+
+  /* build + test split */
+  .forge{flex:1;display:flex;gap:12px;min-height:0}
+
+  /* left: parts library */
+  .lib-pane{flex:0 0 184px;display:flex;flex-direction:column;min-height:0;
+    background:var(--bg-1);border:1px solid var(--line)}
+  .pane-title{padding:7px 12px;font-family:'JetBrains Mono',monospace;font-size:10px;
+    color:var(--cs);letter-spacing:1.2px;border-bottom:1px solid var(--line);
+    background:var(--bg-2)}
+  .lib-body{flex:1;overflow-y:auto;padding:10px;display:flex;flex-direction:column;gap:9px}
+  .part{padding:8px 9px;background:var(--bg-2);border:1px solid var(--line-strong);
+    cursor:grab;box-shadow:3px 3px 0 var(--bg-0);user-select:none;
+    display:flex;flex-direction:column;gap:3px;transition:transform .1s,border-color .15s}
+  .part:hover{border-color:var(--accent)}
+  .part:active{cursor:grabbing}
+  .part.dragging{opacity:.45}
+  .part.placed{opacity:.3;cursor:default;border-style:dashed}
+  .part .pname{font-size:11px;font-weight:600;color:var(--fg)}
+  .part .pdesc{font-family:'JetBrains Mono',monospace;font-size:8.5px;
+    color:var(--fg-mute);line-height:1.35}
+  .part[data-kind="rest"] .pname{color:var(--cl-rest)}
+  .part[data-kind="ovr"]  .pname{color:var(--cs)}
+  .part[data-kind="lda3"] .pname{color:var(--accent)}
+  .part[data-kind="hold"] .pname{color:var(--good)}
+
+  /* middle: pipeline canvas */
+  .pipe-pane{flex:1.25;display:flex;flex-direction:column;min-height:0;min-width:0;
+    background:var(--bg-1);border:1px solid var(--line)}
+  .pipe-body{flex:1;position:relative;display:flex;flex-direction:column;min-height:0}
+  #pipeCanvas{width:100%;height:100%;display:block}
+  /* drop slots overlaid via HTML for hit-testing */
+  .slots{position:absolute;inset:0;pointer-events:none}
+  .slot{position:absolute;pointer-events:auto;border:2px dashed var(--line-strong);
+    background:oklch(0.18 0.04 265 / 0.6);display:flex;align-items:center;
+    justify-content:center;text-align:center;
+    font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--fg-mute);
+    line-height:1.3;padding:4px;transition:border-color .15s,background .15s}
+  .slot.over{border-color:var(--accent);background:oklch(0.28 0.05 265 / 0.85)}
+  .slot.filled{border-style:solid;border-color:var(--good);color:var(--fg);
+    background:oklch(0.22 0.045 265 / 0.9)}
+  .slot .stxt{font-size:9px}
+  .slot.filled .stxt{color:var(--good);font-weight:600}
+
+  /* config toggle slot (CSP) */
+  .cfg-toggle{position:absolute;pointer-events:auto;display:flex;
+    flex-direction:column;gap:3px;align-items:center;
+    background:oklch(0.18 0.04 265 / 0.85);border:1px solid var(--line-strong);
+    padding:6px 8px}
+  .cfg-toggle .ctitle{font-family:'JetBrains Mono',monospace;font-size:8.5px;
+    color:var(--cs);letter-spacing:.5px}
+  .cfg-seg{display:flex;border:1px solid var(--line-strong)}
+  .cfg-seg button{padding:4px 8px;background:var(--bg-3);color:var(--fg-mute);
+    border:none;cursor:pointer;font-family:'JetBrains Mono',monospace;font-size:9px}
+  .cfg-seg button.on{background:var(--cs);color:var(--bg-0);font-weight:600}
+  .cfg-seg button:first-child{border-right:1px solid var(--line-strong)}
+
+  /* right: test pane */
+  .test-pane{flex:1;display:flex;flex-direction:column;gap:10px;min-height:0;min-width:0}
+  .avatar-box{flex:1;min-height:0;display:flex;flex-direction:column;
+    background:var(--bg-1);border:1px solid var(--line)}
+  .avatar-body{flex:1;position:relative;display:flex;flex-direction:column;min-height:0}
+  #testCanvas{width:100%;height:100%;display:block}
+
+  .ctrl-box{flex:0 0 auto;background:var(--bg-1);border:1px solid var(--line);
+    padding:10px 12px;display:flex;flex-direction:column;gap:9px}
+  .build-status{font-family:'JetBrains Mono',monospace;font-size:9.5px;
+    color:var(--fg-dim);line-height:1.5}
+  .build-status .ok{color:var(--good)}
+  .build-status .miss{color:var(--bad)}
+  .run-row{display:flex;gap:8px}
+  .run-btn{flex:1;padding:11px 10px;background:var(--accent);color:var(--bg-0);
+    border:1px solid var(--FIRING);font-family:'JetBrains Mono',monospace;
+    font-size:11px;font-weight:600;letter-spacing:1px;cursor:pointer;
+    box-shadow:3px 3px 0 var(--bg-0)}
+  .run-btn:hover:not(:disabled){background:var(--FIRING)}
+  .run-btn:active:not(:disabled){transform:translate(2px,2px);box-shadow:1px 1px 0 var(--bg-0)}
+  .run-btn:disabled{opacity:.35;cursor:not-allowed;background:var(--bg-3);color:var(--fg-mute);border-color:var(--line)}
+  .reset-btn{padding:11px 12px;background:var(--bg-3);color:var(--fg);
+    border:1px solid var(--line-strong);font-family:'JetBrains Mono',monospace;
+    font-size:10px;cursor:pointer;box-shadow:3px 3px 0 var(--bg-0)}
+  .reset-btn:hover{border-color:var(--accent)}
+
+  .verdict{font-size:10.5px;line-height:1.5;color:var(--fg-dim);min-height:14px}
+  .verdict b{color:var(--gold)}
+  .verdict.good{color:var(--good)}
+  .verdict.bad{color:var(--bad)}
+
+  /* end overlay */
+  .end-overlay{position:absolute;inset:0;z-index:20;
+    background:oklch(0.14 0.035 265 / 0.95);display:flex;align-items:center;
+    justify-content:center;flex-direction:column;gap:14px;padding:30px;text-align:center}
+  .end-overlay.hidden{display:none}
+  .end-overlay .badge{width:92px;height:92px;display:flex;align-items:center;
+    justify-content:center;background:var(--bg-1);border:2px solid var(--gold);
+    box-shadow:4px 4px 0 var(--bg-0)}
+  .end-overlay .badge svg{width:60px;height:60px}
+  .end-overlay .etitle{font-size:19px;font-weight:700;color:var(--gold)}
+  .end-overlay .esub{font-size:12px;color:var(--fg-dim);line-height:1.6;max-width:440px}
+  .end-overlay .esub b{color:var(--accent)}
+  .end-overlay .ebtns{display:flex;gap:12px;margin-top:6px}
+  .mono{font-family:'JetBrains Mono',monospace}
+</style>
+</head>
+<body>
+<div class="stage">
+
+  <!-- ============ SIDEBAR ============ -->
+  <aside class="game-sidebar">
+    <div class="brand">
+      <div class="code mono">NRO/CS · M57</div>
+      <div class="title" data-i18n="brandTitle">从 2 类扩到 3 类</div>
+      <div class="sub" data-i18n="brandSub">给解码器加个"静息"挡位</div>
+    </div>
+
+    <div class="mascot">
+      <svg viewBox="0 0 120 68" aria-hidden="true">
+        <g stroke="var(--accent)" stroke-width="2.4" fill="none" stroke-linecap="round">
+          <circle cx="60" cy="34" r="11" fill="var(--AXON)" stroke="var(--FIRING)"/>
+          <path d="M60 23 L60 9 M60 9 L52 4 M60 9 L68 4"/>
+          <path d="M71 34 L90 28" stroke="var(--cs)"/>
+          <path d="M49 34 L30 28"/>
+          <path d="M60 45 L60 60" stroke="var(--cl-rest)"/>
+        </g>
+        <circle cx="55" cy="32" r="2" fill="var(--FIRING)"/>
+        <circle cx="65" cy="32" r="2" fill="var(--FIRING)"/>
+      </svg>
+      <span class="mname mono">SPARK</span>
+    </div>
+
+    <div class="route">
+      <div class="route-title mono" data-i18n="routeTitle">项目路线</div>
+      <div class="route-list">
+        <div class="route-step done"><span class="dot"></span><span class="sname" data-i18n="s1">S1 读懂脑电</span></div>
+        <div class="route-step done"><span class="dot"></span><span class="sname" data-i18n="s2">S2 清洗信号</span></div>
+        <div class="route-step done"><span class="dot"></span><span class="sname" data-i18n="s3">S3 解码左右</span></div>
+        <div class="route-step done"><span class="dot"></span><span class="sname" data-i18n="s4">S4 稳定上线</span></div>
+        <div class="route-step here"><span class="dot"></span><span class="sname" data-i18n="s5">S5 接入游戏</span></div>
+        <div class="route-step"><span class="dot"></span><span class="sname" data-i18n="s6">S6 脑控通关</span></div>
+      </div>
+    </div>
+
+    <div class="level-block">
+      <div class="level-title mono" data-i18n="lvlTitle">关卡</div>
+      <div class="level-list">
+        <div class="level-pill here" id="lvlPill1"><span class="ln mono">1</span><span data-i18n="lvl1">单独验静息识别</span></div>
+        <div class="level-pill" id="lvlPill2"><span class="ln mono">2</span><span data-i18n="lvl2">整管线闭环测试</span></div>
+      </div>
+    </div>
+
+    <div class="guide">
+      <div class="guide-title mono" data-i18n="guideTitle">怎么玩</div>
+      <div class="guide-line" id="guideDyn1" data-i18n="guide1">把右边零件拖进管线空槽。</div>
+      <div class="guide-line" id="guideDyn2" data-i18n="guide2">把 CSP 切到 OVR、装上 3 类分类器。</div>
+      <div class="guide-line" id="guideDyn3" data-i18n="guide3">拼好点"测试"，看你放空时角色停不停。</div>
+    </div>
+
+    <div class="sidebar-spacer"></div>
+    <button class="lang-btn mono" id="langBtn">EN / 中文</button>
+  </aside>
+
+  <!-- ============ MAIN ============ -->
+  <main class="game-main">
+    <div class="main-header">
+      <div class="header-left mono" data-i18n="hdrLeft">建造 3 类解码管线 · 拖件 + 测试</div>
+      <div class="header-right">
+        <div class="hud-cell">
+          <span class="label" data-i18n="hudLvl">关卡</span>
+          <span class="val" id="hudLvl">1 / 2</span>
+        </div>
+        <div class="hud-cell">
+          <span class="label" data-i18n="hudParts">已接零件</span>
+          <span class="val cyan" id="hudParts">0 / 4</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="endgame">
+      <svg viewBox="0 0 32 32" aria-hidden="true">
+        <g fill="none" stroke="var(--accent)" stroke-width="1.6">
+          <rect x="6" y="10" width="20" height="16"/>
+          <path d="M6 14 H26 M14 14 V26 M6 18 H14 M18 10 V26 M18 18 H26"/>
+        </g>
+      </svg>
+      <div class="etxt">
+        <span data-i18n="endLbl">终点</span>: <span class="hl" data-i18n="endName">脑控 Minecraft</span><br>
+        <span data-i18n="endTail">想停就停才好操作</span>
+      </div>
+    </div>
+
+    <div class="main-body">
+      <div class="task-card">
+        <div class="tprompt" data-i18n="introPrompt">你的解码器只会"左/右"——它永远从这两个里挑一个。所以你想放空发呆时，它照样硬判一个方向，角色就乱动。</div>
+        <div class="twhy" id="introWhy" data-i18n="introWhy">这一关给管线加第三类"<b>静息</b>"：拖入静息采集块、把 CSP 改成 OVR、换 3 类分类器、在发指令前加 <b>if 静息: hold</b> 守卫。装好后，你放空时角色才会老老实实停住——这是脑控好操作的关键一步。</div>
+      </div>
+
+      <div class="forge">
+        <!-- parts library -->
+        <div class="lib-pane">
+          <div class="pane-title mono" data-i18n="libTitle">零件库</div>
+          <div class="lib-body" id="libBody"><!-- parts injected --></div>
+        </div>
+
+        <!-- pipeline canvas + slots -->
+        <div class="pipe-pane">
+          <div class="pane-title mono" data-i18n="pipeTitle">解码管线</div>
+          <div class="pipe-body">
+            <canvas id="pipeCanvas"></canvas>
+            <div class="slots" id="slots"><!-- slot divs injected --></div>
+          </div>
+        </div>
+
+        <!-- test -->
+        <div class="test-pane">
+          <div class="avatar-box">
+            <div class="pane-title mono" data-i18n="testTitle">预录序列测试 · 角色</div>
+            <div class="avatar-body">
+              <canvas id="testCanvas"></canvas>
+            </div>
+          </div>
+          <div class="ctrl-box">
+            <div class="build-status mono" id="buildStatus"></div>
+            <div class="run-row">
+              <button class="run-btn mono" id="runBtn" data-i18n="runBtn" disabled>测试管线</button>
+              <button class="reset-btn mono" id="resetBtn" data-i18n="resetBtn">重置</button>
+            </div>
+            <div class="verdict" id="verdict" data-i18n="verdictIdle">拖齐零件后点"测试"，跑一段含静息的预录序列。</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="end-overlay hidden" id="endOverlay">
+      <div class="badge">
+        <svg viewBox="0 0 64 64" aria-hidden="true">
+          <g fill="none" stroke="var(--gold)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="32" cy="26" r="16"/>
+            <path d="M24 26 l6 6 l10 -12"/>
+            <path d="M22 42 l-4 16 l14 -8 l14 8 l-4 -16"/>
+          </g>
+        </svg>
+      </div>
+      <div class="etitle" id="endTitle"></div>
+      <div class="esub" id="endSub"></div>
+      <div class="ebtns">
+        <button class="run-btn mono" id="replayBtn" data-i18n="replayBtn">再玩一遍</button>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  // ===== canvas literal palette (NO css var in canvas) =====
+  const COL = {
+    bg0:"oklch(0.14 0.035 265)", bg1:"oklch(0.18 0.04 265)",
+    bg2:"oklch(0.22 0.045 265)", bg3:"oklch(0.28 0.05 265)",
+    line:"oklch(0.42 0.06 265 / 0.4)", lineS:"oklch(0.60 0.10 265 / 0.6)",
+    fg:"oklch(0.96 0.01 265)", fgDim:"oklch(0.78 0.03 265)", fgMute:"oklch(0.58 0.04 265)",
+    accent:"oklch(0.75 0.17 25)", cs:"oklch(0.75 0.17 200)",
+    firing:"oklch(0.92 0.08 25)", gold:"oklch(0.85 0.14 85)",
+    left:"oklch(0.75 0.17 25)", right:"oklch(0.75 0.17 200)", rest:"oklch(0.65 0.03 265)",
+    good:"oklch(0.82 0.17 125)", bad:"oklch(0.62 0.20 25)"
+  };
+
+  // ===== i18n =====
+  const I18N = {
+    zh:{
+      brandTitle:"从 2 类扩到 3 类", brandSub:'给解码器加个"静息"挡位',
+      routeTitle:"项目路线",
+      s1:"S1 读懂脑电", s2:"S2 清洗信号", s3:"S3 解码左右",
+      s4:"S4 稳定上线", s5:"S5 接入游戏", s6:"S6 脑控通关",
+      lvlTitle:"关卡", lvl1:"单独验静息识别", lvl2:"整管线闭环测试",
+      guideTitle:"怎么玩",
+      guide1:"把右边零件拖进管线空槽。",
+      guide2:"把 CSP 切到 OVR、装上 3 类分类器。",
+      guide3:'拼好点"测试"，看你放空时角色停不停。',
+      hdrLeft:"建造 3 类解码管线 · 拖件 + 测试",
+      hudLvl:"关卡", hudParts:"已接零件",
+      endLbl:"终点", endName:"脑控 Minecraft", endTail:"想停就停才好操作",
+      introPrompt:'你的解码器只会"左/右"——它永远从这两个里挑一个。所以你想放空发呆时，它照样硬判一个方向，角色就乱动。',
+      libTitle:"零件库", pipeTitle:"解码管线", testTitle:"预录序列测试 · 角色",
+      runBtn:"测试管线", resetBtn:"重置",
+      verdictIdle:'拖齐零件后点"测试"，跑一段含静息的预录序列。',
+      replayBtn:"再玩一遍",
+      // part names/desc
+      p_rest_n:"静息数据采集", p_rest_d:"30 trial rest cue\n采集放空时的脑波",
+      p_ovr_n:"OVR 改造", p_ovr_d:"CSP: binary -> OVR\n每类各算一组空间滤波",
+      p_lda_n:"3 类分类器", p_lda_d:"LDA: 2-class -> 3-class\n输出 左/右/静息",
+      p_hold_n:"hold 守卫", p_hold_d:"if cls==rest:\n  hold  // 不发指令",
+      // slot labels (empty)
+      slotData:"数据采集\n[空]", slotCsp:"空间滤波 CSP", slotClf:"分类器\n[空]", slotGuard:"闭环守卫\n[空]",
+      // build status
+      bsHead:"管线检查",
+      // verdict messages
+      v_run:"运行预录序列中…",
+    },
+    en:{
+      brandTitle:"From 2 Classes to 3", brandSub:'Add a "rest" gear to the decoder',
+      routeTitle:"PROJECT ROUTE",
+      s1:"S1 Read EEG", s2:"S2 Clean Signal", s3:"S3 Decode L/R",
+      s4:"S4 Stay Stable", s5:"S5 Hook Game", s6:"S6 Beat It Brain-Only",
+      lvlTitle:"LEVELS", lvl1:"Verify rest alone", lvl2:"Full closed loop",
+      guideTitle:"HOW TO PLAY",
+      guide1:"Drag parts from the right into the empty slots.",
+      guide2:"Switch CSP to OVR, install the 3-class classifier.",
+      guide3:'Hit "Test" and watch if the avatar stops when you idle.',
+      hdrLeft:"Build a 3-class decode pipeline · Drag + Test",
+      hudLvl:"LEVEL", hudParts:"Parts wired",
+      endLbl:"Goal", endName:"Brain-control Minecraft", endTail:"Stop-on-demand = playable",
+      introPrompt:'Your decoder only knows "left/right" — it always picks one of the two. So when you want to zone out, it still forces a direction and the avatar wanders.',
+      libTitle:"PARTS", pipeTitle:"DECODE PIPELINE", testTitle:"Prerecorded test · Avatar",
+      runBtn:"Test pipeline", resetBtn:"Reset",
+      verdictIdle:'Wire all parts, hit "Test", run a sequence containing a rest segment.',
+      replayBtn:"Play again",
+      p_rest_n:"Rest data capture", p_rest_d:"30 trial rest cue\nrecord idle EEG",
+      p_ovr_n:"OVR rework", p_ovr_d:"CSP: binary -> OVR\nfilters per class",
+      p_lda_n:"3-class classifier", p_lda_d:"LDA: 2-class -> 3-class\noutputs left/right/rest",
+      p_hold_n:"hold guard", p_hold_d:"if cls==rest:\n  hold  // send nothing",
+      slotData:"Data capture\n[empty]", slotCsp:"Spatial filter CSP", slotClf:"Classifier\n[empty]", slotGuard:"Loop guard\n[empty]",
+      bsHead:"PIPELINE CHECK",
+      v_run:"Running prerecorded sequence…",
+    }
+  };
+  let lang = "zh";
+
+  // ===== game state =====
+  const gameState = {
+    level:1,                 // 1 = rest-only verify, 2 = full loop
+    cspMode:"binary",        // "binary" | "ovr"
+    running:false,
+    finished:false,
+  };
+  // slot fill: which part kind sits in each slot (null if empty)
+  const parts = { data:null, clf:null, guard:null };
+  // CSP handled separately via cspMode toggle
+
+  const el = (id)=>document.getElementById(id);
+
+  // ===== part defs =====
+  const PART_DEFS = [
+    { kind:"rest", slot:"data",  nameKey:"p_rest_n", descKey:"p_rest_d" },
+    { kind:"lda3", slot:"clf",   nameKey:"p_lda_n",  descKey:"p_lda_d" },
+    { kind:"hold", slot:"guard", nameKey:"p_hold_n", descKey:"p_hold_d" },
+  ];
+
+  // ===== build parts library =====
+  function buildLib(){
+    const lib = el("libBody");
+    lib.innerHTML = "";
+    PART_DEFS.forEach(p=>{
+      const d = document.createElement("div");
+      d.className = "part";
+      d.setAttribute("data-kind", p.kind);
+      d.setAttribute("data-slot", p.slot);
+      d.setAttribute("draggable","true");
+      d.id = "part_"+p.kind;
+      const nm = document.createElement("div"); nm.className="pname"; nm.id="pn_"+p.kind;
+      const ds = document.createElement("div"); ds.className="pdesc mono"; ds.id="pd_"+p.kind;
+      d.appendChild(nm); d.appendChild(ds);
+      lib.appendChild(d);
+      wireDrag(d, p.slot, p.kind);
+    });
+    refreshPartLabels();
+  }
+  function refreshPartLabels(){
+    PART_DEFS.forEach(p=>{
+      const nm = el("pn_"+p.kind), ds = el("pd_"+p.kind);
+      if(nm) nm.textContent = I18N[lang][p.nameKey];
+      if(ds) ds.textContent = I18N[lang][p.descKey];
+    });
+  }
+
+  // ===== build slots (HTML overlay, positioned on resize) =====
+  // slot ids: data, csp, clf, guard  (csp is the toggle)
+  function buildSlots(){
+    const wrap = el("slots");
+    wrap.innerHTML = "";
+    // data slot
+    const sData = document.createElement("div");
+    sData.className="slot"; sData.id="slot_data"; sData.setAttribute("data-slot","data");
+    sData.innerHTML = '<span class="stxt mono" id="stxt_data"></span>';
+    wrap.appendChild(sData);
+    // csp toggle
+    const cspT = document.createElement("div");
+    cspT.className="cfg-toggle"; cspT.id="slot_csp";
+    cspT.innerHTML =
+      '<span class="ctitle mono">CSP</span>'+
+      '<div class="cfg-seg">'+
+        '<button class="mono on" id="cspBin">binary</button>'+
+        '<button class="mono" id="cspOvr">OVR</button>'+
+      '</div>';
+    wrap.appendChild(cspT);
+    // clf slot
+    const sClf = document.createElement("div");
+    sClf.className="slot"; sClf.id="slot_clf"; sClf.setAttribute("data-slot","clf");
+    sClf.innerHTML = '<span class="stxt mono" id="stxt_clf"></span>';
+    wrap.appendChild(sClf);
+    // guard slot
+    const sGuard = document.createElement("div");
+    sGuard.className="slot"; sGuard.id="slot_guard"; sGuard.setAttribute("data-slot","guard");
+    sGuard.innerHTML = '<span class="stxt mono" id="stxt_guard"></span>';
+    wrap.appendChild(sGuard);
+
+    [sData,sClf,sGuard].forEach(s=>wireDrop(s));
+    el("cspBin").addEventListener("click", ()=>setCsp("binary"));
+    el("cspOvr").addEventListener("click", ()=>setCsp("ovr"));
+    layoutSlots();
+    refreshSlots();
+  }
+
+  function setCsp(mode){
+    if(gameState.running) return;
+    gameState.cspMode = mode;
+    el("cspBin").classList.toggle("on", mode==="binary");
+    el("cspOvr").classList.toggle("on", mode==="ovr");
+    refreshBuild();
+  }
+
+  // position slots over the canvas (4 nodes in a horizontal flow)
+  function layoutSlots(){
+    const pb = el("pipeCanvas").parentElement.getBoundingClientRect();
+    const W = pb.width, H = pb.height;
+    const cy = H*0.46;
+    const nodeW = Math.min(120, Math.max(78, W*0.20));
+    const nodeH = Math.min(64, Math.max(46, H*0.18));
+    const xs = [W*0.13, W*0.385, W*0.64, W*0.875];
+    const place=(node,cx)=>{
+      node.style.left = (cx - nodeW/2)+"px";
+      node.style.top  = (cy - nodeH/2)+"px";
+      node.style.width = nodeW+"px";
+      node.style.height = nodeH+"px";
+    };
+    place(el("slot_data"),  xs[0]);
+    const csp = el("slot_csp");
+    csp.style.left=(xs[1]-nodeW/2)+"px"; csp.style.top=(cy-nodeH/2-2)+"px";
+    csp.style.width=nodeW+"px"; csp.style.minHeight=nodeH+"px";
+    place(el("slot_clf"),   xs[2]);
+    place(el("slot_guard"), xs[3]);
+  }
+
+  function refreshSlots(){
+    // data
+    fillSlot("data", parts.data, "rest");
+    // clf
+    fillSlot("clf", parts.clf, "lda3");
+    // guard
+    fillSlot("guard", parts.guard, "hold");
+    // csp toggle handled by setCsp classes
+  }
+  function fillSlot(slotName, val, kind){
+    const s = el("slot_"+slotName);
+    const t = el("stxt_"+slotName);
+    if(val){
+      s.classList.add("filled");
+      t.textContent = I18N[lang][PART_DEFS.find(p=>p.kind===kind).nameKey];
+    } else {
+      s.classList.remove("filled","over");
+      const map = {data:"slotData", clf:"slotClf", guard:"slotGuard"};
+      t.textContent = I18N[lang][map[slotName]];
+    }
+  }
+
+  // ===== drag & drop (mouse + touch) =====
+  let dragKind=null, dragSlot=null, dragGhost=null, dragEl=null;
+
+  function wireDrag(node, slot, kind){
+    // native HTML5 drag
+    node.addEventListener("dragstart", (e)=>{
+      if(node.classList.contains("placed")||gameState.running) { e.preventDefault(); return; }
+      dragKind=kind; dragSlot=slot;
+      node.classList.add("dragging");
+      try{ e.dataTransfer.setData("text/plain", kind); }catch(_){}
+    });
+    node.addEventListener("dragend", ()=>{ node.classList.remove("dragging"); clearOver(); });
+
+    // touch fallback
+    node.addEventListener("touchstart", (e)=>{
+      if(node.classList.contains("placed")||gameState.running) return;
+      dragKind=kind; dragSlot=slot; dragEl=node;
+      node.classList.add("dragging");
+      makeGhost(node, e.touches[0]);
+    }, {passive:true});
+    node.addEventListener("touchmove", (e)=>{
+      if(!dragGhost) return;
+      const t=e.touches[0];
+      moveGhost(t);
+      highlightUnder(t.clientX,t.clientY);
+    }, {passive:true});
+    node.addEventListener("touchend", (e)=>{
+      if(!dragGhost) return;
+      const t=e.changedTouches[0];
+      const slotEl = slotUnder(t.clientX,t.clientY);
+      if(slotEl) tryPlace(slotEl, dragKind, dragSlot);
+      killGhost(); node.classList.remove("dragging"); clearOver();
+    });
+  }
+
+  function wireDrop(slotEl){
+    slotEl.addEventListener("dragover",(e)=>{ e.preventDefault();
+      if(slotEl.getAttribute("data-slot")===dragSlot) slotEl.classList.add("over"); });
+    slotEl.addEventListener("dragleave",()=>slotEl.classList.remove("over"));
+    slotEl.addEventListener("drop",(e)=>{ e.preventDefault();
+      tryPlace(slotEl, dragKind, dragSlot); clearOver(); });
+  }
+
+  function tryPlace(slotEl, kind, slot){
+    if(gameState.running) return;
+    const target = slotEl.getAttribute("data-slot");
+    if(target!==slot) return;          // wrong slot, reject
+    parts[slot] = kind;
+    const p = el("part_"+kind);
+    if(p) p.classList.add("placed");
+    refreshSlots(); refreshBuild();
+  }
+
+  function clearOver(){
+    document.querySelectorAll(".slot.over").forEach(s=>s.classList.remove("over"));
+    dragKind=null; dragSlot=null;
+  }
+  function slotUnder(x,y){
+    const list = document.querySelectorAll(".slot");
+    for(const s of list){
+      const r=s.getBoundingClientRect();
+      if(x>=r.left&&x<=r.right&&y>=r.top&&y<=r.bottom) return s;
+    }
+    return null;
+  }
+  function highlightUnder(x,y){
+    document.querySelectorAll(".slot").forEach(s=>s.classList.remove("over"));
+    const s=slotUnder(x,y);
+    if(s && s.getAttribute("data-slot")===dragSlot) s.classList.add("over");
+  }
+  function makeGhost(node,t){
+    dragGhost=node.cloneNode(true);
+    dragGhost.style.position="fixed"; dragGhost.style.zIndex="999";
+    dragGhost.style.pointerEvents="none"; dragGhost.style.width=node.offsetWidth+"px";
+    dragGhost.style.opacity="0.85";
+    document.body.appendChild(dragGhost);
+    moveGhost(t);
+  }
+  function moveGhost(t){ if(dragGhost){ dragGhost.style.left=(t.clientX-40)+"px"; dragGhost.style.top=(t.clientY-20)+"px"; } }
+  function killGhost(){ if(dragGhost){ dragGhost.remove(); dragGhost=null; } dragEl=null; }
+
+  // ===== build correctness check =====
+  // level 1: only requires rest data + ovr + 3class (verify rest can be *recognized*)
+  // level 2: also requires hold guard (full closed loop)
+  function buildSpec(){
+    if(gameState.level===1){
+      return { need:{data:"rest", csp:"ovr", clf:"lda3"}, useGuard:false };
+    }
+    return { need:{data:"rest", csp:"ovr", clf:"lda3", guard:"hold"}, useGuard:true };
+  }
+
+  function statusFlags(){
+    const spec=buildSpec();
+    return {
+      data: parts.data==="rest",
+      csp:  gameState.cspMode==="ovr",
+      clf:  parts.clf==="lda3",
+      guard: spec.useGuard ? parts.guard==="hold" : true,
+      useGuard: spec.useGuard,
+      // also track partial wrong states for feedback
+      cspBinary: gameState.cspMode==="binary",
+      noGuard: spec.useGuard && parts.guard!=="hold",
+    };
+  }
+
+  function refreshBuild(){
+    const f=statusFlags();
+    const okMark = (b)=> b ? '<span class="ok">[ok]</span>' : '<span class="miss">[..]</span>';
+    const L = lang;
+    const lines = [];
+    lines.push((L==="zh"?"管线检查":"PIPELINE CHECK"));
+    lines.push((L==="zh"?"静息采集 ":"rest data  ")+okMark(f.data));
+    lines.push((L==="zh"?"CSP=OVR  ":"CSP=OVR    ")+okMark(f.csp));
+    lines.push((L==="zh"?"3类分类器":"3-cls clf  ")+okMark(f.clf));
+    if(f.useGuard) lines.push((L==="zh"?"hold守卫 ":"hold guard ")+okMark(f.guard));
+    el("buildStatus").innerHTML = lines.join("<br>");
+
+    // count
+    let placed = (parts.data?1:0)+(parts.clf?1:0)+(gameState.cspMode==="ovr"?1:0);
+    let total = 3;
+    if(buildSpec().useGuard){ total=4; if(parts.guard) placed++; }
+    el("hudParts").textContent = placed+" / "+total;
+
+    // run enabled when all required parts placed (csp need ovr OR binary both "placed"
+    // for run; but binary leads to a consequence-fail, so allow run once data+clf present)
+    const ready = parts.data && parts.clf && (!f.useGuard || true);
+    el("runBtn").disabled = !(parts.data && parts.clf) || gameState.running;
+    redrawPipe();
+  }
+
+  // ===== pipeline canvas render =====
+  const pipe = el("pipeCanvas");
+  const pctx = pipe.getContext("2d");
+  let pdpr=1,pw=0,ph=0;
+  let pipeAnimT=0, pipeRaf=null, pipeT0=0;
+  function resizePipe(){
+    const r=pipe.parentElement.getBoundingClientRect();
+    pdpr=window.devicePixelRatio||1;
+    pw=Math.max(160,r.width); ph=Math.max(160,r.height);
+    pipe.width=Math.floor(pw*pdpr); pipe.height=Math.floor(ph*pdpr);
+    pctx.setTransform(pdpr,0,0,pdpr,0,0);
+  }
+  function redrawPipe(){
+    if(pw<=0) return;
+    pctx.clearRect(0,0,pw,ph);
+    // bg flow lanes
+    const cy=ph*0.46;
+    const xs=[pw*0.13,pw*0.385,pw*0.64,pw*0.875];
+    const tt = pipeAnimT; // idle animation clock (seconds)
+    // connectors (data->csp->clf->guard->send)
+    pctx.lineWidth=2.5;
+    const f=statusFlags();
+    for(let i=0;i<xs.length-1;i++){
+      pctx.strokeStyle = COL.lineS;
+      pctx.beginPath(); pctx.moveTo(xs[i]+40,cy); pctx.lineTo(xs[i+1]-40,cy); pctx.stroke();
+      // arrowhead
+      pctx.fillStyle=COL.lineS;
+      pctx.beginPath();
+      pctx.moveTo(xs[i+1]-40,cy); pctx.lineTo(xs[i+1]-46,cy-4); pctx.lineTo(xs[i+1]-46,cy+4);
+      pctx.closePath(); pctx.fill();
+      // idle: data packets flowing along each connector (always animating)
+      const x0=xs[i]+40, x1=xs[i+1]-46, span=x1-x0;
+      for(let k=0;k<3;k++){
+        let prog=((tt*0.34)+ i*0.27 + k*0.333) % 1;
+        const px=x0+span*prog;
+        const pulse=0.5+0.5*Math.sin(tt*4 + i + k*2.1);
+        const rad=2.0+pulse*2.4;
+        pctx.fillStyle = i%2===0 ? COL.cs : COL.firing;
+        pctx.globalAlpha=0.35+0.5*pulse;
+        pctx.beginPath(); pctx.arc(px, cy, rad, 0, Math.PI*2); pctx.fill();
+      }
+      pctx.globalAlpha=1;
+    }
+    // idle: EEG input pulses pooling at the left, waiting to be processed
+    {
+      const ix=6, iyc=cy;
+      for(let k=0;k<4;k++){
+        const ph2=tt*2.2 + k*1.3;
+        const yy=iyc + Math.sin(ph2)*10;
+        const a=0.25+0.45*(0.5+0.5*Math.sin(ph2*1.3));
+        pctx.globalAlpha=a;
+        pctx.fillStyle = COL.left;
+        pctx.beginPath(); pctx.arc(ix+10+k*9, yy, 2.4, 0, Math.PI*2); pctx.fill();
+      }
+      pctx.globalAlpha=1;
+    }
+    // "send to game" output node at far right
+    const sendX = pw*0.875, sendY = ph*0.78;
+    pctx.strokeStyle = (f.useGuard? COL.good : COL.lineS);
+    pctx.beginPath(); pctx.moveTo(xs[3],cy+34); pctx.lineTo(sendX, sendY-16); pctx.stroke();
+    // send box
+    pctx.fillStyle=COL.bg2; pctx.strokeStyle=COL.line;
+    pctx.fillRect(sendX-46,sendY-14,92,28); pctx.strokeRect(sendX-46,sendY-14,92,28);
+    pctx.fillStyle=COL.fgDim; pctx.font="10px 'JetBrains Mono',monospace"; pctx.textAlign="center";
+    pctx.fillText(lang==="zh"?"发给游戏":"send -> game", sendX, sendY+3);
+
+    // input label (left)
+    pctx.fillStyle=COL.cs; pctx.font="10px 'JetBrains Mono',monospace"; pctx.textAlign="left";
+    pctx.fillText(lang==="zh"?"EEG 输入":"EEG in", 6, cy-Math.min(64,ph*0.18)/2-8);
+
+    // 3-class legend (top-right)
+    const lg = [
+      [COL.left, lang==="zh"?"左手":"left"],
+      [COL.right,lang==="zh"?"右手":"right"],
+      [COL.rest, lang==="zh"?"静息":"rest"]
+    ];
+    pctx.textAlign="left"; pctx.font="9px 'JetBrains Mono',monospace";
+    let lx=pw-118, ly=14;
+    lg.forEach((g,i)=>{
+      pctx.fillStyle=g[0]; pctx.fillRect(lx, ly+i*14, 9,9);
+      pctx.fillStyle=COL.fgDim; pctx.fillText(g[1], lx+14, ly+i*14+8);
+    });
+    pctx.textAlign="left";
+  }
+
+  // ===== persistent idle animation on pipe canvas =====
+  // keeps the pipeline visually alive (flowing data packets) even with no user
+  // action, so frame-to-frame diff is always non-trivial. does NOT touch gameplay.
+  function pipeIdleLoop(now){
+    pipeRaf=requestAnimationFrame(pipeIdleLoop);
+    if(!pipeT0) pipeT0=now;
+    pipeAnimT=(now-pipeT0)/1000;
+    redrawPipe();
+  }
+
+  // ===== test sequence (prerecorded) =====
+  // segments: each {cls:'left'|'right'|'rest', dur:ms}
+  const TEST_SEQ = [
+    {cls:"right", dur:1100},
+    {cls:"left",  dur:1100},
+    {cls:"rest",  dur:1700},   // the key: player "zones out"
+    {cls:"right", dur:1100},
+    {cls:"rest",  dur:1300},
+    {cls:"left",  dur:1000},
+  ];
+
+  const test = el("testCanvas");
+  const tctx = test.getContext("2d");
+  let tdpr=1,tw=0,th=0,raf=null,tStart=0;
+  let runResult=null; // {ok, restHeld, wanderedOnRest, reason}
+  let avatar={x:0,y:0};
+
+  function resizeTest(){
+    const r=test.parentElement.getBoundingClientRect();
+    tdpr=window.devicePixelRatio||1;
+    tw=Math.max(140,r.width); th=Math.max(140,r.height);
+    test.width=Math.floor(tw*tdpr); test.height=Math.floor(th*tdpr);
+    tctx.setTransform(tdpr,0,0,tdpr,0,0);
+  }
+
+  // compute how the pipeline decodes a true segment class
+  function decode(trueCls, f){
+    // If CSP still binary: no 3-class separation -> rest gets forced to left/right
+    if(!f.csp){
+      if(trueCls==="rest") return (Math.random()<0.5?"left":"right"); // misread
+      return trueCls; // L/R still ok-ish
+    }
+    // CSP ovr + 3-class clf -> recognizes rest correctly
+    if(!f.clf){
+      // ovr filters but still 2-class clf: can't output rest label
+      if(trueCls==="rest") return (Math.random()<0.5?"left":"right");
+      return trueCls;
+    }
+    return trueCls; // recognized correctly incl rest
+  }
+  // whether a decoded class actually produces motion (guard logic)
+  function emits(decodedCls, f){
+    if(decodedCls==="rest"){
+      // if guard present and required -> hold (no motion). If no guard -> still sends move?
+      // semantics: rest decoded; without hold guard the loop has no case for rest and may map to "no key" anyway,
+      // but the game scenario: missing guard means the send still fires last command -> drift. Model as motion.
+      if(f.useGuard) return f.guard ? false : true; // guard installed -> hold; missing -> drifts
+      return false; // level1 has no guard requirement; rest recognized just means no L/R -> hold
+    }
+    return true; // left/right always move
+  }
+
+  function startTest(){
+    if(gameState.running) return;
+    const f=statusFlags();
+    gameState.running=true;
+    el("runBtn").disabled=true;
+    document.querySelectorAll(".part").forEach(p=>p.setAttribute("draggable","false"));
+    el("verdict").className="verdict";
+    el("verdict").textContent = I18N[lang].v_run;
+    // precompute decode for each segment
+    runResult={restSegs:0, restHeld:0, restWandered:0, lrOk:0, lrTotal:0, f:f, decoded:[]};
+    TEST_SEQ.forEach(seg=>{
+      const dec=decode(seg.cls,f);
+      const moves=emits(dec,f);
+      runResult.decoded.push({seg, dec, moves});
+      if(seg.cls==="rest"){
+        runResult.restSegs++;
+        if(dec==="rest" && !moves) runResult.restHeld++;
+        else runResult.restWandered++;
+      } else {
+        runResult.lrTotal++;
+        if(dec===seg.cls) runResult.lrOk++;
+      }
+    });
+    avatar.x=tw*0.5; avatar.y=th*0.5;
+    tStart=performance.now();
+    if(raf) cancelAnimationFrame(raf);
+    runLoop();
+  }
+
+  function seqAt(elapsed){
+    let acc=0;
+    for(let i=0;i<TEST_SEQ.length;i++){
+      acc+=TEST_SEQ[i].dur;
+      if(elapsed<acc) return {idx:i, segStart:acc-TEST_SEQ[i].dur, total:acc};
+    }
+    return {idx:-1, segStart:0, total:acc};
+  }
+
+  function runLoop(){
+    raf=requestAnimationFrame(runLoop);
+    if(tw<=0) return;
+    const now=performance.now();
+    const elapsed=now-tStart;
+    const at=seqAt(elapsed);
+    const done = at.idx<0;
+
+    // background
+    tctx.clearRect(0,0,tw,th);
+    drawArena();
+
+    if(!done){
+      const r=runResult.decoded[at.idx];
+      const trueCls=r.seg.cls, dec=r.dec, moves=r.moves;
+      // move avatar according to decoded command
+      const sp = 0.85;
+      if(moves){
+        if(dec==="left")  avatar.x -= sp;
+        else if(dec==="right") avatar.x += sp;
+        else { // decoded rest but emits (no guard): jitter/drift
+          avatar.x += Math.sin(elapsed*0.02)*0.9;
+        }
+      } else {
+        // hold: tiny breathing only
+        avatar.y += Math.sin(elapsed*0.006)*0.05;
+      }
+      avatar.x=Math.max(tw*0.12, Math.min(tw*0.88, avatar.x));
+      avatar.y=Math.max(th*0.30, Math.min(th*0.66, avatar.y));
+
+      // draw current-class banner
+      drawCue(trueCls, dec, moves);
+    }
+    drawAvatar(done);
+
+    if(done){
+      cancelAnimationFrame(raf); raf=null;
+      finishTest();
+    }
+  }
+
+  function drawArena(){
+    // grid floor
+    tctx.strokeStyle="oklch(0.42 0.06 265 / 0.22)"; tctx.lineWidth=1;
+    const cell=Math.max(24,tw/12);
+    for(let gx=0;gx<=tw;gx+=cell){tctx.beginPath();tctx.moveTo(gx,0);tctx.lineTo(gx,th);tctx.stroke();}
+    for(let gy=0;gy<=th;gy+=cell){tctx.beginPath();tctx.moveTo(0,gy);tctx.lineTo(tw,gy);tctx.stroke();}
+    // center "stand still" zone marker
+    tctx.strokeStyle="oklch(0.65 0.03 265 / 0.5)"; tctx.setLineDash([5,5]);
+    tctx.strokeRect(tw*0.40, th*0.30, tw*0.20, th*0.36); tctx.setLineDash([]);
+    tctx.fillStyle="oklch(0.58 0.04 265)"; tctx.font="9px 'JetBrains Mono',monospace"; tctx.textAlign="center";
+    tctx.fillText(lang==="zh"?"静止区":"hold zone", tw*0.5, th*0.30-5);
+    tctx.textAlign="left";
+  }
+
+  function drawCue(trueCls, dec, moves){
+    const colMap={left:COL.left,right:COL.right,rest:COL.rest};
+    const nameMap={
+      left:lang==="zh"?"想象左手":"imagine LEFT",
+      right:lang==="zh"?"想象右手":"imagine RIGHT",
+      rest:lang==="zh"?"放空 (静息)":"idle (REST)"
+    };
+    // top banner: what the player is doing (true cue)
+    tctx.fillStyle=colMap[trueCls];
+    tctx.fillRect(0,0,tw,22);
+    tctx.fillStyle=COL.bg0; tctx.font="11px 'JetBrains Mono',monospace"; tctx.textAlign="center";
+    tctx.fillText(nameMap[trueCls], tw*0.5, 15);
+    // decode readout (bottom)
+    const decTxt = (lang==="zh"?"解码=":"decode=")+
+      (dec==="rest"?(lang==="zh"?"静息":"rest"):dec)+
+      (moves?(lang==="zh"?" -> 发指令(动)":" -> send(move)"):(lang==="zh"?" -> hold(停)":" -> hold(stay)"));
+    tctx.fillStyle = (trueCls==="rest" && moves)?COL.bad : (trueCls==="rest"?COL.good:COL.fgDim);
+    tctx.font="10px 'JetBrains Mono',monospace"; tctx.textAlign="left";
+    tctx.fillText(decTxt, 8, th-10);
+    tctx.textAlign="left";
+  }
+
+  function drawAvatar(done){
+    const ax=avatar.x, ay=avatar.y;
+    tctx.fillStyle=COL.accent;
+    tctx.fillRect(ax-8,ay-11,16,22);
+    tctx.fillStyle=COL.firing;
+    tctx.fillRect(ax-8,ay-11,16,8);
+    tctx.fillStyle=COL.bg0;
+    tctx.fillRect(ax-4,ay-9,3,3); tctx.fillRect(ax+2,ay-9,3,3);
+    if(done){
+      tctx.fillStyle=COL.fgDim; tctx.font="11px 'JetBrains Mono',monospace"; tctx.textAlign="center";
+      tctx.fillText(lang==="zh"?"序列结束":"sequence done", tw*0.5, th*0.92);
+      tctx.textAlign="left";
+    }
+  }
+
+  function finishTest(){
+    gameState.running=false;
+    document.querySelectorAll(".part").forEach(p=>{
+      if(!p.classList.contains("placed")) p.setAttribute("draggable","true");
+    });
+    const R=runResult, f=R.f;
+    const v=el("verdict");
+    // level 1 pass: all rest segments recognized (dec==rest, held). CSP must be ovr + 3class clf.
+    // level 2 pass: same + guard installed so rest -> hold (no motion) reliably.
+    const restPerfect = (R.restWandered===0 && R.restHeld===R.restSegs);
+
+    if(gameState.level===1){
+      if(restPerfect && f.csp && f.clf){
+        v.className="verdict good";
+        v.innerHTML = lang==="zh"
+          ? `第三类<b>静息</b>被认出来了！你放空时解码器输出 rest 而不是硬猜左右——关卡 1 通过。`
+          : `The third class <b>rest</b> is recognized! When you idle the decoder outputs rest instead of forcing L/R — Level 1 passed.`;
+        passLevel1();
+      } else {
+        v.className="verdict bad";
+        v.innerHTML = failMsg(f, R);
+      }
+    } else {
+      // level 2 full loop
+      const guardOk = f.guard;
+      if(restPerfect && f.csp && f.clf && guardOk){
+        v.className="verdict good";
+        v.innerHTML = lang==="zh"
+          ? `闭环成功！静息段角色稳稳停在静止区，左右段正常走——3 类控制上线。`
+          : `Closed loop works! The avatar holds still on rest segments and walks on L/R — 3-class control is live.`;
+        win();
+      } else {
+        v.className="verdict bad";
+        v.innerHTML = failMsg(f, R);
+      }
+    }
+  }
+
+  function failMsg(f, R){
+    const L=lang;
+    if(!f.csp){
+      return L==="zh"
+        ? `CSP 还是 <b>binary</b>——只会算"左 vs 右"两组滤波，第 3 类分不出来。静息被硬判成左/右，角色还在乱动。把 CSP 切到 <b>OVR</b>。`
+        : `CSP is still <b>binary</b> — only "left vs right" filters, no 3rd class. Rest got forced to L/R and the avatar wandered. Switch CSP to <b>OVR</b>.`;
+    }
+    if(!f.clf){
+      return L==="zh"
+        ? `分类器还是 2 类 LDA，没有"静息"这个输出标签，rest 被映射成左/右。换成 <b>3 类分类器</b>。`
+        : `Classifier is still 2-class LDA — no "rest" output label, so rest maps to L/R. Install the <b>3-class classifier</b>.`;
+    }
+    if(f.useGuard && !f.guard){
+      return L==="zh"
+        ? `分类对了——解码出了 <b>rest</b>，可闭环里没有 <b>if cls==rest: hold</b> 守卫，命令照样发出去，角色还在动。把 <b>hold 守卫</b>接到发指令前。`
+        : `Classification is right — it decoded <b>rest</b>, but the loop has no <b>if cls==rest: hold</b> guard, so it still sends a command and the avatar moves. Wire the <b>hold guard</b> before send.`;
+    }
+    return L==="zh" ? `还差点——检查每个零件是否接对。` : `Almost — check each part is wired right.`;
+  }
+
+  function passLevel1(){
+    el("lvlPill1").classList.remove("here"); el("lvlPill1").classList.add("done");
+    el("lvlPill2").classList.add("here");
+    setTimeout(()=>{
+      gameState.level=2;
+      el("hudLvl").textContent="2 / 2";
+      // keep placed parts, now require guard. reset hold part as available.
+      refreshBuild();
+      const v=el("verdict");
+      v.className="verdict";
+      v.innerHTML = lang==="zh"
+        ? `关卡 2：现在装上 <b>hold 守卫</b>，让 rest 真正变成"角色停住"，再测整管线闭环。`
+        : `Level 2: now install the <b>hold guard</b> so rest truly means "avatar stops", then test the full loop.`;
+    }, 1400);
+  }
+
+  function win(){
+    gameState.finished=true;
+    const ov=el("endOverlay"); ov.classList.remove("hidden");
+    el("endTitle").textContent = lang==="zh" ? "3 类控制上线" : "3-Class Control Live";
+    el("endSub").innerHTML = lang==="zh"
+      ? `你给只会"左/右"的管线加了第三类<b>静息</b>：OVR 让 CSP 分得出 3 类、3 类分类器能输出 rest、<b>hold 守卫</b>让 rest 变成"不动"。现在你放空时角色老老实实待着，想动才动。<br>这正是脑控好操作的关键一步——离 <b>S6 脑控通关 Minecraft</b> 又近了。`
+      : `You added a third class <b>rest</b> to a left/right-only pipeline: OVR lets CSP separate 3 classes, the 3-class classifier outputs rest, and the <b>hold guard</b> turns rest into "no motion". Now the avatar stays put when you idle, and moves only when you want.<br>This is the key step toward playable brain-control — one step closer to <b>S6, beating Minecraft brain-only</b>.`;
+  }
+
+  // ===== reset =====
+  function resetAll(full){
+    if(raf){cancelAnimationFrame(raf); raf=null;}
+    gameState.running=false;
+    parts.data=null; parts.clf=null; parts.guard=null;
+    gameState.cspMode="binary";
+    if(full){
+      gameState.level=1; gameState.finished=false;
+      el("hudLvl").textContent="1 / 2";
+      el("lvlPill1").classList.add("here"); el("lvlPill1").classList.remove("done");
+      el("lvlPill2").classList.remove("here");
+      el("endOverlay").classList.add("hidden");
+    }
+    document.querySelectorAll(".part").forEach(p=>{p.classList.remove("placed");p.setAttribute("draggable","true");});
+    el("cspBin").classList.add("on"); el("cspOvr").classList.remove("on");
+    el("verdict").className="verdict";
+    el("verdict").textContent=I18N[lang].verdictIdle;
+    resizeAll();
+    refreshSlots(); refreshBuild();
+    // clear test canvas with arena
+    tctx.clearRect(0,0,tw,th); drawArena();
+    avatar.x=tw*0.5; avatar.y=th*0.5; drawAvatar(false);
+  }
+
+  // ===== i18n apply =====
+  function applyI18n(){
+    document.documentElement.lang = lang==="zh"?"zh-CN":"en";
+    document.querySelectorAll("[data-i18n]").forEach(elx=>{
+      const k=elx.getAttribute("data-i18n");
+      if(I18N[lang][k]!==undefined) elx.textContent=I18N[lang][k];
+    });
+    el("runBtn").textContent=I18N[lang].runBtn;
+    refreshPartLabels(); refreshSlots(); refreshBuild();
+    redrawPipe();
+    if(gameState.finished) win();
+    else if(!gameState.running){
+      tctx.clearRect(0,0,tw,th); drawArena(); drawAvatar(false);
+    }
+  }
+
+  // ===== resize =====
+  function resizeAll(){ resizePipe(); resizeTest(); layoutSlots(); redrawPipe(); }
+
+  // ===== listeners =====
+  el("runBtn").addEventListener("click", startTest);
+  el("resetBtn").addEventListener("click", ()=>resetAll(false));
+  el("replayBtn").addEventListener("click", ()=>resetAll(true));
+  el("langBtn").addEventListener("click", ()=>{ lang=(lang==="zh")?"en":"zh"; applyI18n(); });
+  window.addEventListener("resize", ()=>{ resizeAll();
+    if(!gameState.running){ tctx.clearRect(0,0,tw,th); drawArena(); avatar.x=tw*0.5;avatar.y=th*0.5; drawAvatar(false);} });
+
+  // ===== init =====
+  buildLib();
+  buildSlots();
+  resizeAll();
+  applyI18n();
+  refreshBuild();
+  // idle arena frame
+  setTimeout(()=>{ resizeTest(); tctx.clearRect(0,0,tw,th); drawArena();
+    avatar.x=tw*0.5; avatar.y=th*0.5; drawAvatar(false); layoutSlots(); redrawPipe(); }, 80);
+  // start persistent idle animation on pipe canvas (keeps frame diff alive)
+  pipeRaf=requestAnimationFrame(pipeIdleLoop);
+
+})();
+</script>
+</body>
+</html>

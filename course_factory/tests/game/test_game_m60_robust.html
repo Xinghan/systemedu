@@ -1,0 +1,713 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>M60 · 现场校准与扩展演练 — Robustness Lab</title>
+<style>
+  :root{
+    --paper:#FAF9F5; --paper-2:#F1EDDF; --card:#FFFFFF; --ink:#191814; --sub:#6B6557;
+    --border:#EBE5D6; --hairline:#F2EDE0;
+    --primary:#D97757; --primary-ink:#9A4A2E; --primary-soft:#F8EDE5; --primary-line:#ECCFB8;
+    --computing:#C04E68; --computing-soft:#F4DDE3; --computing-line:#E4B7C2;
+    --good:#3E7C5A; --good-soft:#E4F0E8;
+    --shadow:0 2px 6px rgba(25,24,20,.06), 0 6px 18px rgba(25,24,20,.05);
+    --shadow-lg:0 4px 12px rgba(25,24,20,.10), 0 12px 32px rgba(25,24,20,.07);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%;width:100%;overflow:hidden;
+    font-family:'Inter','PingFang SC','Microsoft YaHei',sans-serif;
+    color:var(--ink);background:var(--paper)}
+  .mono{font-family:'JetBrains Mono','SFMono-Regular',Consolas,monospace}
+
+  .stage{display:flex;flex-direction:row;height:100vh;width:100vw}
+
+  /* ============ 200px sidebar ============ */
+  .game-sidebar{
+    width:200px;flex:0 0 200px;background:var(--paper-2);
+    border-right:1px solid var(--border);
+    display:flex;flex-direction:column;padding:13px 12px;gap:10px;
+    overflow-y:auto;
+  }
+  .brand{border-bottom:1px solid var(--border);padding-bottom:8px}
+  .brand .code{font-family:'JetBrains Mono',monospace;font-size:10px;
+    color:var(--sub);letter-spacing:1.2px}
+  .brand .title{font-size:13px;font-weight:700;margin-top:2px}
+  .brand .sub{font-size:10px;color:var(--sub);margin-top:2px;line-height:1.35}
+
+  .card{background:var(--card);border:1px solid var(--border);border-radius:8px;
+    padding:9px 10px;box-shadow:var(--shadow)}
+  .card h4{font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:1px;
+    color:var(--primary-ink);text-transform:uppercase;margin-bottom:6px}
+
+  .route-list{display:flex;flex-direction:column;gap:4px}
+  .route-step{display:flex;align-items:center;gap:7px;
+    font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--sub);line-height:1.2}
+  .route-step .dot{width:8px;height:8px;flex:0 0 8px;border-radius:50%;
+    background:var(--card);border:1px solid var(--border)}
+  .route-step.done .dot{background:var(--good);border-color:var(--good)}
+  .route-step.here{color:var(--ink);font-weight:700}
+  .route-step.here .dot{background:var(--primary);border-color:var(--primary);
+    box-shadow:0 0 0 3px var(--primary-soft)}
+
+  .obj{font-size:10.5px;line-height:1.45;color:var(--ink)}
+  .obj b{color:var(--primary-ink)}
+
+  .dim-group{display:flex;flex-direction:column;gap:5px}
+  .dim-label{font-size:9px;color:var(--sub);font-family:'JetBrains Mono',monospace;
+    letter-spacing:.5px}
+  .chip-row{display:flex;flex-wrap:wrap;gap:5px}
+  .chip{font-family:'JetBrains Mono',monospace;font-size:9.5px;
+    padding:4px 8px;border-radius:14px;border:1px solid var(--border);
+    background:var(--card);color:var(--sub);cursor:pointer;user-select:none;
+    transition:all .12s}
+  .chip.base{cursor:default;background:var(--good-soft);color:var(--good);
+    border-color:var(--good)}
+  .chip.on{background:var(--primary-soft);color:var(--primary-ink);
+    border-color:var(--primary-line);font-weight:700}
+  .chip:not(.base):hover{border-color:var(--primary-line)}
+
+  .baseline-row{display:flex;align-items:center;gap:7px;cursor:pointer;user-select:none}
+  .switch{width:30px;height:17px;border-radius:9px;background:var(--border);
+    position:relative;flex:0 0 30px;transition:background .15s}
+  .switch::after{content:'';position:absolute;top:2px;left:2px;width:13px;height:13px;
+    border-radius:50%;background:var(--card);box-shadow:0 1px 2px rgba(0,0,0,.2);
+    transition:left .15s}
+  .switch.on{background:var(--good)}
+  .switch.on::after{left:15px}
+  .baseline-row .lab{font-size:10px;color:var(--ink)}
+
+  .rep-val{font-family:'JetBrains Mono',monospace;font-size:20px;font-weight:700;
+    color:var(--primary-ink);text-align:center;line-height:1}
+  .rep-unit{font-size:9px;color:var(--sub);text-align:center;
+    font-family:'JetBrains Mono',monospace}
+  input[type=range]#repSlider{-webkit-appearance:none;appearance:none;width:100%;
+    height:7px;border-radius:4px;background:var(--primary-line);outline:none;cursor:pointer}
+  input[type=range]#repSlider::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;
+    width:15px;height:15px;border-radius:50%;background:var(--primary);
+    border:2px solid var(--card);box-shadow:0 1px 3px rgba(0,0,0,.25);cursor:grab}
+  input[type=range]#repSlider::-moz-range-thumb{width:15px;height:15px;border-radius:50%;
+    background:var(--primary);border:2px solid var(--card);cursor:grab}
+  .rep-hint{font-size:8.5px;color:var(--sub);line-height:1.3;margin-top:3px}
+  .rep-hint.warn{color:var(--computing)}
+
+  .btn{font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;
+    letter-spacing:.5px;border:none;border-radius:7px;padding:9px;cursor:pointer;
+    transition:transform .1s,filter .12s;width:100%}
+  .btn:active{transform:translateY(1px)}
+  .btn-run{background:var(--primary);color:#fff;box-shadow:var(--shadow)}
+  .btn-run:hover{filter:brightness(1.04)}
+  .btn-reset{background:var(--card);color:var(--sub);border:1px solid var(--border);
+    font-size:10px;padding:7px}
+
+  #langBtn{font-family:'JetBrains Mono',monospace;font-size:10px;
+    background:var(--card);color:var(--ink);border:1px solid var(--border);
+    border-radius:6px;padding:6px 8px;cursor:pointer;letter-spacing:.5px}
+  #langBtn:hover{border-color:var(--primary-line)}
+
+  .guide{font-size:9.5px;color:var(--sub);line-height:1.5}
+  .guide b{color:var(--primary-ink)}
+
+  /* ============ main ============ */
+  .game-main{flex:1;display:flex;flex-direction:column;min-width:0;
+    padding:16px 18px;gap:12px;overflow:hidden}
+  .main-head{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}
+  .main-head h1{font-size:18px;font-weight:800;letter-spacing:-.3px}
+  .main-head .q{font-size:11.5px;color:var(--sub);font-style:italic}
+  .main-head .endgoal{margin-left:auto;font-family:'JetBrains Mono',monospace;
+    font-size:9px;color:var(--primary-ink);background:var(--primary-soft);
+    border:1px solid var(--primary-line);border-radius:14px;padding:4px 10px}
+
+  .main-body{flex:1;display:flex;flex-direction:row;gap:14px;min-height:0}
+  .canvas-col{flex:1;display:flex;flex-direction:column;min-width:0;
+    background:var(--card);border:1px solid var(--border);border-radius:10px;
+    box-shadow:var(--shadow);overflow:hidden}
+  .canvas-head{display:flex;align-items:center;gap:8px;padding:9px 12px;
+    border-bottom:1px solid var(--hairline)}
+  .canvas-head .ct{font-size:11px;font-weight:700}
+  .canvas-head .cs{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--sub);
+    margin-left:auto}
+  .canvas-wrap{flex:1;display:flex;flex-direction:column;min-height:0;position:relative}
+  canvas{flex:1;width:100%;display:block;min-height:0}
+
+  .verdict-col{flex:0 0 260px;display:flex;flex-direction:column;gap:11px;overflow-y:auto}
+  .vcard{background:var(--card);border:1px solid var(--border);border-radius:10px;
+    padding:12px;box-shadow:var(--shadow)}
+  .vcard.accent{border-left:3px solid var(--primary)}
+  .vcard h3{font-size:11px;font-weight:700;margin-bottom:7px;
+    display:flex;align-items:center;gap:6px}
+  .vcard h3 .tag{font-family:'JetBrains Mono',monospace;font-size:8px;
+    color:var(--sub);font-weight:400}
+  .anova-row{display:flex;justify-content:space-between;align-items:baseline;
+    font-family:'JetBrains Mono',monospace;font-size:10px;padding:3px 0;
+    border-bottom:1px dashed var(--hairline)}
+  .anova-row:last-child{border-bottom:none}
+  .anova-row .dn{color:var(--sub)}
+  .anova-row .dv{font-weight:700}
+  .anova-row .dv.big{color:var(--computing)}
+  .anova-row .dv.mid{color:var(--primary-ink)}
+  .anova-row .dv.sm{color:var(--good)}
+  .sigflag{font-family:'JetBrains Mono',monospace;font-size:8px;padding:1px 5px;
+    border-radius:8px;margin-left:5px}
+  .sigflag.yes{background:var(--computing-soft);color:var(--computing)}
+  .sigflag.no{background:var(--good-soft);color:var(--good)}
+
+  .concl{font-size:11px;line-height:1.55;color:var(--ink)}
+  .concl .miss{color:var(--computing);font-weight:600}
+  .concl b{color:var(--primary-ink)}
+  .border-list{display:flex;flex-direction:column;gap:5px;margin-top:4px}
+  .border-item{display:flex;align-items:center;gap:7px;font-size:10px}
+  .border-item .bdot{width:9px;height:9px;border-radius:2px;flex:0 0 9px}
+  .border-item .bdot.ok{background:var(--good)}
+  .border-item .bdot.warn{background:var(--primary)}
+  .border-item .bdot.fail{background:var(--computing)}
+  .border-item .bv{margin-left:auto;font-family:'JetBrains Mono',monospace;
+    font-weight:700;font-size:10px}
+
+  .placeholder{flex:1;display:flex;flex-direction:column;align-items:center;
+    justify-content:center;gap:8px;color:var(--sub);text-align:center;padding:24px}
+  .placeholder .pi{font-family:'JetBrains Mono',monospace;font-size:11px;
+    color:var(--primary-ink)}
+  .placeholder .pd{font-size:11px;line-height:1.5;max-width:240px}
+
+  @media (max-width:900px){
+    .main-body{flex-direction:column}
+    .verdict-col{flex:0 0 auto}
+  }
+</style>
+</head>
+<body>
+<div class="stage">
+  <aside class="game-sidebar">
+    <div class="brand">
+      <div class="code">M60 · S5 CAPSTONE</div>
+      <div class="title" data-i18n="brandTitle">现场校准与扩展演练</div>
+      <div class="sub" data-i18n="brandSub">脑控 Minecraft — 鲁棒性验证实验台</div>
+    </div>
+
+    <button id="langBtn">EN / 中文</button>
+
+    <div class="card">
+      <h4 data-i18n="objH">本关任务</h4>
+      <div class="obj" data-i18n="objBody">把你的脑控系统拉到<b>真实现场</b>：换时段、换地点、换人测一遍。设计一个能回答 <b>"我的系统边界在哪"</b> 的验证实验。</div>
+    </div>
+
+    <div class="card">
+      <h4 data-i18n="routeH">项目路线</h4>
+      <div class="route-list" id="routeList"></div>
+    </div>
+
+    <div class="card">
+      <h4 data-i18n="step1H">① 选要测的变化</h4>
+      <div class="dim-group">
+        <div class="dim-label" data-i18n="dimTime">时段 TIME</div>
+        <div class="chip-row" data-dim="time"></div>
+        <div class="dim-label" data-i18n="dimPlace">地点 PLACE</div>
+        <div class="chip-row" data-dim="place"></div>
+        <div class="dim-label" data-i18n="dimPerson">测试者 PERSON</div>
+        <div class="chip-row" data-dim="person"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h4 data-i18n="step2H">② 设对照基线</h4>
+      <div class="baseline-row" id="baseToggle">
+        <div class="switch on" id="baseSwitch"></div>
+        <div class="lab" data-i18n="baseLab">本人 / 家 / 白天 = 基线</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h4 data-i18n="step3H">③ 每条件重复次数</h4>
+      <div class="rep-val mono" id="repVal">20</div>
+      <div class="rep-unit" data-i18n="repUnit">trials / 条件</div>
+      <input type="range" id="repSlider" min="4" max="60" step="2" value="20" />
+      <div class="rep-hint" id="repHint" data-i18n="repHintOk">够稳：结论可信。</div>
+    </div>
+
+    <div class="card">
+      <h4 data-i18n="step4H">④ 运行验证</h4>
+      <button class="btn btn-run" id="runBtn" data-i18n="runBtn">运行验证实验</button>
+      <button class="btn btn-reset" id="resetBtn" data-i18n="resetBtn" style="margin-top:6px">重新设计</button>
+    </div>
+
+    <div class="card">
+      <h4 data-i18n="guideH">操作说明</h4>
+      <div class="guide" data-i18n="guideBody"><b>勾选</b>每个维度里要测的取值 → 保留<b>基线</b>对照 → 拖滑块定<b>重复次数</b> → 点<b>运行</b>。系统按真实规律生成准确率，你来判断哪个维度影响最大、边界在哪。</div>
+    </div>
+  </aside>
+
+  <main class="game-main">
+    <div class="main-head">
+      <h1 data-i18n="mainTitle">鲁棒性验证实验台</h1>
+      <span class="q" data-i18n="mainQ">"换个时间、换个地方、甚至换个人，我的脑控系统还能跑起来吗？"</span>
+      <span class="endgoal" data-i18n="endGoal">终点：交付一份可信的鲁棒性报告</span>
+    </div>
+
+    <div class="main-body">
+      <div class="canvas-col">
+        <div class="canvas-head">
+          <span class="ct" data-i18n="canvasT">准确率矩阵 / 条件对比</span>
+          <span class="cs mono" id="canvasStatus">未运行 · idle</span>
+        </div>
+        <div class="canvas-wrap">
+          <canvas id="cv"></canvas>
+        </div>
+      </div>
+
+      <div class="verdict-col" id="verdictCol"></div>
+    </div>
+  </main>
+</div>
+
+<script>
+"use strict";
+(function(){
+  const COL={
+    paper:'#FAF9F5', paper2:'#F1EDDF', card:'#FFFFFF', ink:'#191814', sub:'#6B6557',
+    border:'#EBE5D6', hair:'#F2EDE0',
+    primary:'#D97757', primaryInk:'#9A4A2E', primarySoft:'#F8EDE5', primaryLine:'#ECCFB8',
+    computing:'#C04E68', computingSoft:'#F4DDE3',
+    good:'#3E7C5A', goodSoft:'#E4F0E8'
+  };
+
+  let lang='cn';
+  const I={
+    brandTitle:{cn:'现场校准与扩展演练',en:'Field Calibration & Stress Test'},
+    brandSub:{cn:'脑控 Minecraft — 鲁棒性验证实验台',en:'BCI Minecraft — Robustness Lab'},
+    objH:{cn:'本关任务',en:'MISSION'},
+    objBody:{cn:'把你的脑控系统拉到<b>真实现场</b>：换时段、换地点、换人测一遍。设计一个能回答 <b>"我的系统边界在哪"</b> 的验证实验。',
+      en:'Take your BCI to the <b>real field</b>: test across time, place and people. Design an experiment that answers <b>"where are my system\'s limits?"</b>'},
+    routeH:{cn:'项目路线',en:'PROJECT ROUTE'},
+    step1H:{cn:'① 选要测的变化',en:'① PICK VARIATIONS'},
+    dimTime:{cn:'时段 TIME',en:'TIME'},
+    dimPlace:{cn:'地点 PLACE',en:'PLACE'},
+    dimPerson:{cn:'测试者 PERSON',en:'PERSON'},
+    step2H:{cn:'② 设对照基线',en:'② CONTROL BASELINE'},
+    baseLab:{cn:'本人 / 家 / 白天 = 基线',en:'me / home / day = baseline'},
+    step3H:{cn:'③ 每条件重复次数',en:'③ TRIALS PER CONDITION'},
+    repUnit:{cn:'trials / 条件',en:'trials / condition'},
+    repHintOk:{cn:'够稳：结论可信。',en:'Stable: results trustworthy.'},
+    repHintWarn:{cn:'太少！准确率波动大，结论不可信。',en:'Too few! High variance, unreliable.'},
+    step4H:{cn:'④ 运行验证',en:'④ RUN'},
+    runBtn:{cn:'运行验证实验',en:'RUN EXPERIMENT'},
+    resetBtn:{cn:'重新设计',en:'RE-DESIGN'},
+    guideH:{cn:'操作说明',en:'HOW TO PLAY'},
+    guideBody:{cn:'<b>勾选</b>每个维度里要测的取值 → 保留<b>基线</b>对照 → 拖滑块定<b>重复次数</b> → 点<b>运行</b>。系统按真实规律生成准确率，你来判断哪个维度影响最大、边界在哪。',
+      en:'<b>Toggle</b> values per dimension → keep the <b>baseline</b> → set <b>trials</b> → hit <b>Run</b>. The system generates accuracies by real rules; you judge which dimension hurts most and where the limit is.'},
+    mainTitle:{cn:'鲁棒性验证实验台',en:'Robustness Lab'},
+    mainQ:{cn:'"换个时间、换个地方、甚至换个人，我的脑控系统还能跑起来吗？"',
+      en:'"Different time, place, even person — will my BCI still run?"'},
+    endGoal:{cn:'终点：交付一份可信的鲁棒性报告',en:'Goal: deliver a credible robustness report'},
+    canvasT:{cn:'准确率矩阵 / 条件对比',en:'Accuracy Matrix / Conditions'},
+    phI:{cn:'ANOVA / 结论待生成',en:'ANOVA / verdict pending'},
+    phD:{cn:'在左侧设计好实验后点"运行验证"，这里会给出方差分析、显著性判定和系统边界结论。',
+      en:'Design the experiment on the left and hit Run. ANOVA, significance and the limit verdict appear here.'},
+    statIdle:{cn:'未运行 · idle',en:'not run · idle'},
+    statRun:{cn:'已运行',en:'completed'},
+    anovaH:{cn:'方差分析 (按维度)',en:'ANOVA (by dimension)'},
+    anovaTag:{cn:'与基线之差',en:'drop vs baseline'},
+    rowTime:{cn:'时段效应',en:'TIME effect'},
+    rowPlace:{cn:'地点效应',en:'PLACE effect'},
+    rowPerson:{cn:'测试者效应',en:'PERSON effect'},
+    sigYes:{cn:'显著',en:'sig.'},
+    sigNo:{cn:'不显著',en:'n.s.'},
+    borderH:{cn:'系统边界',en:'SYSTEM LIMITS'},
+    conclH:{cn:'结论',en:'VERDICT'},
+    baseTitle:{cn:'基线',en:'baseline'},
+    untested:{cn:'未测',en:'untested'},
+    noBase:{cn:'缺基线',en:'no baseline'},
+  };
+  function t(k){const e=I[k];return e?e[lang]:k;}
+
+  const DIMS={
+    time:[
+      {id:'morning', cn:'早', en:'morning', base:false},
+      {id:'day',     cn:'白天', en:'day',   base:true},
+      {id:'night',   cn:'晚',  en:'night',  base:false},
+    ],
+    place:[
+      {id:'home',    cn:'家',   en:'home',    base:true},
+      {id:'class',   cn:'教室', en:'class',   base:false},
+      {id:'outdoor', cn:'户外', en:'outdoor', base:false},
+    ],
+    person:[
+      {id:'me',      cn:'本人',   en:'me',       base:true},
+      {id:'friendA', cn:'朋友A',  en:'friend A', base:false},
+      {id:'friendB', cn:'朋友B',  en:'friend B', base:false},
+    ],
+  };
+  // 真实规律: 跨人 >> 跨地点 > 跨时段
+  const PENALTY={
+    morning:5, day:0, night:8,
+    home:0, class:11, outdoor:20,
+    me:0, friendA:24, friendB:31,
+  };
+  const BASE_ACC=88;
+
+  const gameState={
+    selTime:new Set(['day']),
+    selPlace:new Set(['home']),
+    selPerson:new Set(['me']),
+    baseline:true,
+    reps:20,
+    ran:false,
+  };
+  let expRuns=null;
+
+  function hashStr(s){let h=2166136261>>>0;for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619)>>>0;}return h>>>0;}
+  function rng(seed){let x=(seed>>>0)||1;return ()=>{x^=x<<13;x>>>=0;x^=x>>17;x^=x<<5;x>>>=0;return x/4294967296;};}
+
+  function buildChips(){
+    document.querySelectorAll('.chip-row').forEach(row=>{
+      const dim=row.getAttribute('data-dim');
+      row.innerHTML='';
+      DIMS[dim].forEach(v=>{
+        const chip=document.createElement('div');
+        chip.className='chip';
+        chip.dataset.dim=dim; chip.dataset.id=v.id;
+        if(v.base) chip.classList.add('base');
+        row.appendChild(chip);
+      });
+    });
+    refreshChips();
+  }
+  function selSet(dim){return dim==='time'?gameState.selTime:dim==='place'?gameState.selPlace:gameState.selPerson;}
+  function refreshChips(){
+    document.querySelectorAll('.chip').forEach(chip=>{
+      const dim=chip.dataset.dim, id=chip.dataset.id;
+      const v=DIMS[dim].find(x=>x.id===id);
+      chip.textContent=lang==='cn'?v.cn:v.en;
+      const set=selSet(dim);
+      if(v.base){ chip.classList.toggle('on', gameState.baseline); chip.title=t('baseTitle'); }
+      else chip.classList.toggle('on', set.has(id));
+    });
+  }
+
+  const ROUTE=[
+    {s:'S1',cn:'装信号',en:'Hardware',st:'done'},
+    {s:'S2',cn:'清信号',en:'Clean',st:'done'},
+    {s:'S3',cn:'建分类器',en:'Classify',st:'done'},
+    {s:'S4',cn:'自录冲准',en:'Self-data',st:'done'},
+    {s:'S5',cn:'实时脑控',en:'Live BCI',st:'here'},
+    {s:'S6',cn:'交付演示',en:'Deliver',st:'todo'},
+  ];
+  function buildRoute(){
+    const el=document.getElementById('routeList'); el.innerHTML='';
+    ROUTE.forEach(r=>{
+      const d=document.createElement('div');
+      d.className='route-step '+(r.st==='done'?'done':r.st==='here'?'here':'');
+      d.innerHTML='<span class="dot"></span><span>'+r.s+' '+(lang==='cn'?r.cn:r.en)+'</span>';
+      el.appendChild(d);
+    });
+  }
+
+  function listConditions(){
+    const conds=[];
+    const times=[...gameState.selTime], places=[...gameState.selPlace], persons=[...gameState.selPerson];
+    times.forEach(ti=>places.forEach(pl=>persons.forEach(pe=>{
+      const isBase=ti==='day'&&pl==='home'&&pe==='me';
+      conds.push({time:ti,place:pl,person:pe,isBase});
+    })));
+    return conds;
+  }
+
+  function runExperiment(){
+    const conds=listConditions();
+    const reps=gameState.reps;
+    const noiseScale = reps>=24?2.5 : reps>=14?4.5 : reps>=8?7.5 : 12;
+    const seedBase=Date.now()&0xffff;
+    const results=conds.map(c=>{
+      const center=BASE_ACC - (PENALTY[c.time]+PENALTY[c.place]+PENALTY[c.person]);
+      const r=rng(hashStr(c.time+c.place+c.person)+seedBase);
+      let s=0;
+      for(let i=0;i<reps;i++){ s += center + (r()-0.5)*2*noiseScale*2.2; }
+      let acc=s/reps;
+      acc=Math.max(28,Math.min(99,acc));
+      const se=noiseScale/Math.sqrt(reps)*1.8;
+      return {time:c.time,place:c.place,person:c.person,isBase:c.isBase, acc:acc, se:se, center:center};
+    });
+    expRuns={conds:results, reps:reps, baseline:gameState.baseline, noiseScale:noiseScale};
+    gameState.ran=true;
+    computeVerdict();
+    renderVerdict();
+    renderCanvas();
+    document.getElementById('canvasStatus').textContent=
+      t('statRun')+' · '+results.length+(lang==='cn'?' 条件':' cond');
+  }
+
+  function dimDrop(dimKey){
+    const baseRun = expRuns.conds.find(c=>c.isBase);
+    if(!baseRun) return null;
+    const sel = dimKey==='time'?[...gameState.selTime]:dimKey==='place'?[...gameState.selPlace]:[...gameState.selPerson];
+    const baseVal = dimKey==='time'?'day':dimKey==='place'?'home':'me';
+    const others=sel.filter(v=>v!==baseVal);
+    if(others.length===0) return {drop:0, tested:false};
+    let totDrop=0, n=0, maxSe=0;
+    others.forEach(v=>{
+      const target=expRuns.conds.find(c=>c[dimKey]===v && c.isBase===false &&
+        (dimKey==='time'? (c.place==='home'&&c.person==='me') :
+         dimKey==='place'? (c.time==='day'&&c.person==='me') :
+         (c.time==='day'&&c.place==='home')));
+      if(target){ totDrop+=baseRun.acc-target.acc; n++; maxSe=Math.max(maxSe,target.se,baseRun.se); }
+      else { totDrop += PENALTY[v]; n++; }
+    });
+    const drop = n? totDrop/n : 0;
+    const sig = drop > Math.max(4, 2.2*(maxSe||3));
+    return {drop:drop, tested:true, sig:sig};
+  }
+
+  function computeVerdict(){
+    expRuns.verdict={ time:dimDrop('time'), place:dimDrop('place'), person:dimDrop('person') };
+    expRuns.zones=expRuns.conds.map(c=>({
+      label: condLabel(c), acc:c.acc,
+      zone: c.acc>=70?'ok': c.acc>=60?'warn':'fail'
+    }));
+  }
+
+  function condLabel(c){
+    const f=(dim,id)=>{const v=DIMS[dim].find(x=>x.id===id);return lang==='cn'?v.cn:v.en;};
+    return f('time',c.time)+'/'+f('place',c.place)+'/'+f('person',c.person);
+  }
+
+  function renderVerdict(){
+    const col=document.getElementById('verdictCol');
+    col.innerHTML='';
+    if(!expRuns){ resetVerdictPlaceholder(); return; }
+
+    const v=expRuns.verdict;
+    const baseMissing=!gameState.baseline || !expRuns.conds.some(c=>c.isBase);
+    const a=document.createElement('div');
+    a.className='vcard accent';
+    function rowHtml(name,d,cls){
+      if(!d || !d.tested) return '<div class="anova-row"><span class="dn">'+name+'</span><span class="dv" style="color:var(--sub)">'+t('untested')+'</span></div>';
+      const flag = baseMissing? '' : '<span class="sigflag '+(d.sig?'yes':'no')+'">'+(d.sig?t('sigYes'):t('sigNo'))+'</span>';
+      const dv = baseMissing? '?' : ('-'+d.drop.toFixed(1)+'%');
+      return '<div class="anova-row"><span class="dn">'+name+'</span><span><span class="dv '+cls+'">'+dv+'</span>'+flag+'</span></div>';
+    }
+    a.innerHTML='<h3>'+t('anovaH')+' <span class="tag">'+(baseMissing?t('noBase'):t('anovaTag'))+'</span></h3>'+
+      rowHtml(t('rowTime'), v.time,'sm')+rowHtml(t('rowPlace'), v.place,'mid')+rowHtml(t('rowPerson'), v.person,'big');
+    col.appendChild(a);
+
+    const b=document.createElement('div');
+    b.className='vcard';
+    let bl='<h3>'+t('borderH')+'</h3><div class="border-list">';
+    expRuns.zones.slice().sort((x,y)=>y.acc-x.acc).forEach(z=>{
+      const cc=z.zone==='ok'?'var(--good)':z.zone==='warn'?'var(--primary)':'var(--computing)';
+      bl+='<div class="border-item"><span class="bdot '+z.zone+'"></span><span>'+z.label+'</span><span class="bv" style="color:'+cc+'">'+z.acc.toFixed(0)+'%</span></div>';
+    });
+    bl+='</div>'; b.innerHTML=bl; col.appendChild(b);
+
+    const c=document.createElement('div');
+    c.className='vcard';
+    c.innerHTML='<h3>'+t('conclH')+'</h3><div class="concl">'+conclusionText(baseMissing)+'</div>';
+    col.appendChild(c);
+  }
+
+  function conclusionText(baseMissing){
+    const issues=[];
+    if(baseMissing){
+      issues.push('<span class="miss">'+(lang==='cn'?'报告残缺：没有基线对照，说不出"下降了多少"。请在左侧打开基线。':'Incomplete: no baseline control — cannot say "how much it dropped". Turn baseline on.')+'</span>');
+    }
+    if(gameState.reps<14){
+      issues.push('<span class="miss">'+(lang==='cn'?'重复太少：准确率上下乱跳，结论不可信。调高 trials。':'Too few trials: accuracy bounces, verdict not credible. Raise trials.')+'</span>');
+    }
+    if(gameState.selPerson.size<=1){
+      issues.push('<span class="miss">'+(lang==='cn'?'没测"换个人"：无法回答核心问题——换人能不能跑。加上朋友A/B。':'No "different person" tested: cannot answer the core question. Add friend A/B.')+'</span>');
+    }
+    if(issues.length) return issues.join('<br><br>');
+
+    const v=expRuns.verdict;
+    const drops=[
+      {k:lang==='cn'?'测试者':'person', d:v.person?v.person.drop:0},
+      {k:lang==='cn'?'地点':'place', d:v.place?v.place.drop:0},
+      {k:lang==='cn'?'时段':'time', d:v.time?v.time.drop:0},
+    ].sort((a,b)=>b.d-a.d);
+    const worst=drops[0], best=drops[2];
+    const failCount=expRuns.zones.filter(z=>z.zone==='fail').length;
+    const okCount=expRuns.zones.filter(z=>z.zone==='ok').length;
+    if(lang==='cn'){
+      return '实验完整。影响最大的是 <b>'+worst.k+'</b>（下降 '+worst.d.toFixed(1)+'%），'+best.k+' 几乎无影响（'+best.d.toFixed(1)+'%）。<br><br>系统边界：<b>'+okCount+' 个</b>条件仍可用(>70%)，<span class="miss">'+failCount+' 个</span>跌破(<60%)。结论：<b>跨人是最大瓶颈</b>，要换人用必须重新校准/重训；同人换时段地点基本够稳。';
+    }
+    return 'Experiment complete. Biggest effect: <b>'+worst.k+'</b> (-'+worst.d.toFixed(1)+'%); '+best.k+' barely matters ('+best.d.toFixed(1)+'%).<br><br>Limits: <b>'+okCount+'</b> usable (>70%), <span class="miss">'+failCount+'</span> broken (<60%). Verdict: <b>cross-person is the bottleneck</b> — recalibrate per user; same person across time/place stays stable.';
+  }
+
+  // ---------- CANVAS ----------
+  const cv=document.getElementById('cv');
+  const ctx=cv.getContext('2d');
+  let W=0,H=0,dpr=1;
+  function resize(){
+    const wrap=cv.parentElement;
+    const r=wrap.getBoundingClientRect();
+    dpr=Math.max(1,Math.min(2,window.devicePixelRatio||1));
+    W=Math.max(120,r.width); H=Math.max(120,r.height);
+    cv.width=Math.round(W*dpr); cv.height=Math.round(H*dpr);
+    cv.style.width=W+'px'; cv.style.height=H+'px';
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    renderCanvas();
+  }
+  window.addEventListener('resize',resize);
+
+  let idlePhase=0;
+  function renderCanvas(){
+    ctx.clearRect(0,0,W,H);
+    ctx.fillStyle=COL.card; ctx.fillRect(0,0,W,H);
+    if(!expRuns){ drawIdle(); return; }
+    drawBars();
+  }
+
+  function drawIdle(){
+    const pad=40;
+    ctx.strokeStyle=COL.hair; ctx.lineWidth=1;
+    for(let i=0;i<=5;i++){
+      const y=pad+(H-2*pad)*i/5;
+      ctx.beginPath();ctx.moveTo(pad,y);ctx.lineTo(W-pad,y);ctx.stroke();
+    }
+    const conds=listConditions();
+    const n=Math.max(1,conds.length);
+    const gap=(W-2*pad)/n;
+    const bw=Math.min(46, gap*0.55);
+    const breathe=0.5+0.5*Math.sin(idlePhase);
+    conds.forEach((c,i)=>{
+      const x=pad+gap*i+gap/2-bw/2;
+      const est=BASE_ACC-(PENALTY[c.time]+PENALTY[c.place]+PENALTY[c.person]);
+      const hh=(H-2*pad)*(est/100)*(0.40+0.22*breathe);
+      ctx.fillStyle=c.isBase?COL.goodSoft:COL.primarySoft;
+      ctx.fillRect(x,H-pad-hh,bw,hh);
+      ctx.strokeStyle=c.isBase?COL.good:COL.primaryLine;
+      ctx.strokeRect(x,H-pad-hh,bw,hh);
+    });
+    ctx.fillStyle=COL.sub;
+    ctx.font="13px 'JetBrains Mono',monospace"; ctx.textAlign='center';
+    const msg=lang==='cn'?'设计好实验后点"运行验证"':'design then hit Run';
+    ctx.fillText(msg, W/2, pad+(H-2*pad)*0.16);
+    ctx.fillStyle=COL.primaryInk;
+    ctx.font="11px 'JetBrains Mono',monospace";
+    ctx.fillText((lang==='cn'?'当前 ':'now ')+conds.length+(lang==='cn'?' 个条件 · ':' conditions · ')+gameState.reps+' trials', W/2, pad+(H-2*pad)*0.16+18);
+  }
+
+  function drawBars(){
+    const data=expRuns.conds.slice().sort((a,b)=>b.acc-a.acc);
+    const padL=44, padR=18, padT=22, padB=58;
+    const plotW=W-padL-padR, plotH=H-padT-padB;
+    ctx.strokeStyle=COL.hair; ctx.lineWidth=1;
+    ctx.fillStyle=COL.sub; ctx.font="10px 'JetBrains Mono',monospace"; ctx.textAlign='right';
+    for(let v=0;v<=100;v+=20){
+      const y=padT+plotH*(1-v/100);
+      ctx.beginPath();ctx.moveTo(padL,y);ctx.lineTo(W-padR,y);ctx.stroke();
+      ctx.fillText(v+'%', padL-6, y+3);
+    }
+    function thline(v,col,label){
+      const y=padT+plotH*(1-v/100);
+      ctx.strokeStyle=col; ctx.setLineDash([5,4]); ctx.lineWidth=1.5;
+      ctx.beginPath();ctx.moveTo(padL,y);ctx.lineTo(W-padR,y);ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle=col; ctx.textAlign='left'; ctx.font="9px 'JetBrains Mono',monospace";
+      ctx.fillText(label, W-padR-66, y-3);
+    }
+    thline(70, COL.good, '70% usable');
+    thline(60, COL.computing, '60% broken');
+
+    const n=data.length, slot=plotW/n, bw=Math.min(54, slot*0.62);
+    data.forEach((c,i)=>{
+      const x=padL+slot*i+slot/2-bw/2;
+      const h=plotH*(c.acc/100), y=padT+plotH-h;
+      const zone=c.acc>=70?'ok':c.acc>=60?'warn':'fail';
+      const fill=c.isBase?COL.good : zone==='ok'?COL.primary : zone==='warn'?COL.primaryLine : COL.computing;
+      ctx.fillStyle=fill; ctx.fillRect(x,y,bw,h);
+      const seH=plotH*(c.se/100), cx=x+bw/2;
+      ctx.strokeStyle=COL.ink; ctx.lineWidth=1.5;
+      ctx.beginPath();
+      ctx.moveTo(cx,y-seH);ctx.lineTo(cx,y+seH);
+      ctx.moveTo(cx-4,y-seH);ctx.lineTo(cx+4,y-seH);
+      ctx.moveTo(cx-4,y+seH);ctx.lineTo(cx+4,y+seH);
+      ctx.stroke();
+      ctx.fillStyle=COL.ink; ctx.font="bold 11px 'JetBrains Mono',monospace"; ctx.textAlign='center';
+      ctx.fillText(c.acc.toFixed(0)+'%', cx, y-seH-5);
+      if(c.isBase){
+        ctx.fillStyle=COL.good; ctx.font="8px 'JetBrains Mono',monospace";
+        ctx.fillText(t('baseTitle'), cx, padT+plotH+34);
+      }
+      ctx.save();
+      ctx.translate(cx, padT+plotH+8);
+      ctx.rotate(-Math.PI/7);
+      ctx.fillStyle=COL.sub; ctx.font="8.5px 'JetBrains Mono',monospace"; ctx.textAlign='right';
+      const lab=condLabel(c);
+      ctx.fillText(lab.length>16?lab.slice(0,15)+'…':lab, 0,0);
+      ctx.restore();
+    });
+    ctx.fillStyle=COL.primaryInk; ctx.font="10px 'JetBrains Mono',monospace"; ctx.textAlign='left';
+    ctx.fillText((lang==='cn'?'误差棒越长 = 重复越少越不稳 · trials=':'error bars: fewer trials = wider · trials=')+expRuns.reps, padL, 14);
+  }
+
+  function loop(){
+    if(!expRuns){ idlePhase+=0.045; renderCanvas(); }
+    requestAnimationFrame(loop);
+  }
+
+  // ---------- events ----------
+  document.querySelectorAll('.chip-row').forEach(row=>{
+    row.addEventListener('click',e=>{
+      const chip=e.target.closest('.chip'); if(!chip) return;
+      if(chip.classList.contains('base')) return;
+      const dim=chip.dataset.dim, id=chip.dataset.id;
+      const set=selSet(dim);
+      if(set.has(id)) set.delete(id); else set.add(id);
+      refreshChips();
+      if(!expRuns) renderCanvas();
+    });
+  });
+
+  document.getElementById('baseToggle').addEventListener('click',()=>{
+    gameState.baseline=!gameState.baseline;
+    document.getElementById('baseSwitch').classList.toggle('on',gameState.baseline);
+    if(gameState.baseline){ gameState.selTime.add('day');gameState.selPlace.add('home');gameState.selPerson.add('me'); }
+    refreshChips();
+    if(expRuns){ computeVerdict(); renderVerdict(); renderCanvas(); }
+  });
+
+  const repSlider=document.getElementById('repSlider');
+  function updateRep(){
+    gameState.reps=parseInt(repSlider.value,10);
+    document.getElementById('repVal').textContent=gameState.reps;
+    const hint=document.getElementById('repHint');
+    if(gameState.reps<14){ hint.textContent=t('repHintWarn'); hint.classList.add('warn'); }
+    else { hint.textContent=t('repHintOk'); hint.classList.remove('warn'); }
+    if(!expRuns) renderCanvas();
+  }
+  repSlider.addEventListener('input',updateRep);
+
+  document.getElementById('runBtn').addEventListener('click',runExperiment);
+  document.getElementById('resetBtn').addEventListener('click',()=>{
+    expRuns=null; gameState.ran=false;
+    document.getElementById('canvasStatus').textContent=t('statIdle');
+    resetVerdictPlaceholder();
+    renderCanvas();
+  });
+
+  function resetVerdictPlaceholder(){
+    const col=document.getElementById('verdictCol');
+    col.innerHTML='<div class="vcard"><div class="placeholder"><div class="pi">'+t('phI')+'</div><div class="pd">'+t('phD')+'</div></div></div>';
+  }
+
+  function applyLang(){
+    document.documentElement.lang=lang==='cn'?'zh-CN':'en';
+    document.querySelectorAll('[data-i18n]').forEach(el=>{
+      const k=el.getAttribute('data-i18n'); if(I[k]) el.innerHTML=I[k][lang];
+    });
+    buildRoute(); refreshChips(); updateRep();
+    document.getElementById('canvasStatus').textContent= expRuns? (t('statRun')+' · '+expRuns.conds.length+(lang==='cn'?' 条件':' cond')) : t('statIdle');
+    if(expRuns){ computeVerdict(); renderVerdict(); } else resetVerdictPlaceholder();
+    renderCanvas();
+  }
+  document.getElementById('langBtn').addEventListener('click',()=>{
+    lang=lang==='cn'?'en':'cn'; applyLang();
+  });
+
+  // ---------- init ----------
+  buildChips(); buildRoute(); resetVerdictPlaceholder();
+  requestAnimationFrame(()=>{ resize(); loop(); });
+})();
+</script>
+</body>
+</html>

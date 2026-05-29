@@ -1,0 +1,795 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>M58 · 调阈值减少误触发 — Confidence Gate</title>
+<style>
+  :root{
+    /* Layer 1 — shared deep space canvas (cs hue 265) */
+    --bg-0: oklch(0.14 0.035 265);
+    --bg-1: oklch(0.18 0.04 265);
+    --bg-2: oklch(0.22 0.045 265);
+    --bg-3: oklch(0.28 0.05 265);
+    --line: oklch(0.42 0.05 265 / 0.35);
+    --line-strong: oklch(0.60 0.08 265 / 0.55);
+    --fg:      oklch(0.96 0.01 265);
+    --fg-dim:  oklch(0.78 0.035 265);
+    --fg-mute: oklch(0.58 0.045 265);
+
+    /* Layer 2 — cs accent (cyan) + math (electric blue) */
+    --accent: oklch(0.75 0.17 200);
+    --math:   oklch(0.72 0.17 245);
+
+    /* Layer 3 — signal palette */
+    --ok:   oklch(0.82 0.17 125);  /* true positive green */
+    --err:  oklch(0.62 0.20 25);   /* false positive red */
+    --warn: oklch(0.80 0.15 75);   /* gold accent */
+    --signal: oklch(0.88 0.06 200);
+
+    --gold: oklch(0.80 0.15 75);
+  }
+
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%;width:100%;
+    font-family:'Inter','PingFang SC',sans-serif;
+    color:var(--fg);background:var(--bg-0);overflow:hidden}
+
+  .stage{display:flex;flex-direction:row;height:100vh;width:100vw}
+
+  /* ============ 200px sidebar ============ */
+  .game-sidebar{
+    width:200px;flex:0 0 200px;
+    background:var(--bg-1);
+    border-right:1px solid var(--line);
+    display:flex;flex-direction:column;
+    padding:14px 12px;gap:10px;
+    overflow-y:auto;
+  }
+  .brand{display:flex;flex-direction:column;gap:2px;
+    border-bottom:1px solid var(--line);padding-bottom:8px}
+  .brand .code{font-family:'JetBrains Mono',monospace;font-size:10px;
+    color:var(--fg-mute);letter-spacing:1.2px}
+  .brand .title{font-size:13px;color:var(--fg);font-weight:600}
+  .brand .sub{font-size:10px;color:var(--fg-dim);margin-top:2px}
+
+  .mascot{
+    width:100%;height:64px;display:flex;align-items:center;justify-content:center;
+    background:var(--bg-2);border:1px solid var(--line);position:relative;
+  }
+  .mascot svg{width:100%;height:100%}
+  .mascot .mname{position:absolute;left:8px;bottom:5px;
+    font-family:'JetBrains Mono',monospace;font-size:8px;
+    color:var(--fg-mute);letter-spacing:1px}
+
+  /* ---- project roadmap S1..S6 ---- */
+  .route{
+    background:var(--bg-2);border:1px solid var(--line);
+    padding:8px;display:flex;flex-direction:column;gap:5px;
+  }
+  .route-title{font-family:'JetBrains Mono',monospace;font-size:9px;
+    color:var(--accent);letter-spacing:1px}
+  .route-list{display:flex;flex-direction:column;gap:3px}
+  .route-step{
+    display:flex;align-items:center;gap:6px;
+    font-family:'JetBrains Mono',monospace;font-size:9px;
+    color:var(--fg-mute);line-height:1.2;
+  }
+  .route-step .dot{
+    width:8px;height:8px;flex:0 0 8px;border-radius:50%;
+    background:var(--bg-3);border:1px solid var(--line-strong);
+  }
+  .route-step.done .dot{background:var(--math);border-color:var(--math)}
+  .route-step.here{color:var(--fg);font-weight:600}
+  .route-step.here .dot{
+    background:var(--accent);border-color:var(--signal);
+    box-shadow:0 0 0 3px oklch(0.75 0.17 200 / 0.25);
+  }
+  .route-step .sname{font-size:8.5px}
+
+  /* ---- threshold control (CORE interaction lives here) ---- */
+  .ctrl{
+    background:var(--bg-2);border:1px solid var(--line);
+    border-left:3px solid var(--accent);
+    padding:9px;display:flex;flex-direction:column;gap:7px;
+  }
+  .ctrl-title{font-family:'JetBrains Mono',monospace;font-size:9px;
+    color:var(--accent);letter-spacing:1px}
+  .ctrl-val{font-family:'JetBrains Mono',monospace;font-size:22px;
+    color:var(--accent);font-weight:700;line-height:1;text-align:center}
+  input[type=range]#threshSlider{
+    -webkit-appearance:none;appearance:none;width:100%;height:8px;
+    background:linear-gradient(90deg,var(--err) 0%,var(--ok) 50%,var(--err) 100%);
+    border:1px solid var(--line-strong);outline:none;cursor:pointer;
+  }
+  input[type=range]#threshSlider::-webkit-slider-thumb{
+    -webkit-appearance:none;appearance:none;width:14px;height:22px;
+    background:var(--accent);border:2px solid var(--signal);cursor:grab;
+    box-shadow:2px 2px 0 var(--bg-0);
+  }
+  input[type=range]#threshSlider::-moz-range-thumb{
+    width:14px;height:22px;background:var(--accent);border:2px solid var(--signal);
+    cursor:grab;box-shadow:2px 2px 0 var(--bg-0);
+  }
+  .ctrl-scale{display:flex;justify-content:space-between;
+    font-family:'JetBrains Mono',monospace;font-size:8px;color:var(--fg-mute)}
+  .ctrl-zone{font-family:'JetBrains Mono',monospace;font-size:9px;
+    text-align:center;line-height:1.3;padding:3px;border:1px solid var(--line)}
+  .ctrl-zone.low{color:var(--err)}
+  .ctrl-zone.sweet{color:var(--ok)}
+  .ctrl-zone.high{color:var(--warn)}
+
+  .guide{
+    background:var(--bg-2);border:1px solid var(--line);
+    padding:8px;display:flex;flex-direction:column;gap:4px;
+  }
+  .guide-title{font-family:'JetBrains Mono',monospace;font-size:9px;
+    color:var(--accent);letter-spacing:1px}
+  .guide-line{font-size:9.5px;color:var(--fg-dim);line-height:1.4}
+
+  .sidebar-spacer{flex:1;min-height:6px}
+
+  .lang-btn{
+    width:100%;padding:7px 8px;background:var(--bg-3);
+    color:var(--fg);border:1px solid var(--line-strong);
+    font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:1px;
+    cursor:pointer;box-shadow:3px 3px 0 var(--bg-0);
+  }
+  .lang-btn:hover{background:var(--math);color:var(--bg-0)}
+
+  /* ============ main ============ */
+  .game-main{
+    flex:1;display:flex;flex-direction:column;
+    background:var(--bg-0);min-width:0;position:relative;
+  }
+  .main-header{
+    height:46px;border-bottom:1px solid var(--line);
+    display:flex;align-items:center;justify-content:space-between;
+    padding:0 18px;background:var(--bg-1);flex:0 0 46px;
+  }
+  .header-left{font-family:'JetBrains Mono',monospace;font-size:11px;
+    color:var(--fg-dim);letter-spacing:1.3px}
+  .header-right{display:flex;gap:16px;font-family:'JetBrains Mono',monospace}
+  .hud-cell{display:flex;flex-direction:column;align-items:flex-end}
+  .hud-cell .label{font-size:9px;color:var(--fg-mute);letter-spacing:1px}
+  .hud-cell .val{color:var(--accent);font-size:13px;font-weight:600}
+  .hud-cell .val.tp{color:var(--ok)}
+  .hud-cell .val.fp{color:var(--err)}
+  .hud-cell .val.f1{color:var(--gold)}
+
+  /* corner minecraft silhouette */
+  .endgame{
+    position:absolute;right:20px;top:58px;z-index:6;
+    display:flex;align-items:center;gap:8px;
+    background:var(--bg-1);border:1px solid var(--line);
+    padding:6px 10px;opacity:.92;pointer-events:none;
+  }
+  .endgame svg{width:26px;height:26px;flex:0 0 26px}
+  .endgame .etxt{font-family:'JetBrains Mono',monospace;font-size:8.5px;
+    color:var(--fg-mute);line-height:1.35;max-width:150px}
+  .endgame .etxt .hl{color:var(--accent)}
+
+  .main-body{flex:1;display:flex;flex-direction:column;
+    min-height:0;padding:14px 18px;gap:12px}
+
+  /* task card */
+  .task-card{
+    background:var(--bg-1);border:1px solid var(--line);
+    border-left:3px solid var(--accent);
+    padding:10px 14px;display:flex;flex-direction:column;gap:3px;
+    flex:0 0 auto;
+  }
+  .task-card .tprompt{font-size:12.5px;color:var(--fg);line-height:1.45}
+  .task-card .twhy{font-size:10px;color:var(--fg-dim);line-height:1.4}
+
+  /* two-pane scene: track + ROC */
+  .scene{flex:1;display:flex;gap:12px;min-height:0}
+
+  .track-pane{
+    flex:1.25;display:flex;flex-direction:column;min-height:0;min-width:0;
+    background:var(--bg-1);border:1px solid var(--line);
+  }
+  .roc-pane{
+    flex:1;display:flex;flex-direction:column;min-height:0;min-width:0;
+    background:var(--bg-1);border:1px solid var(--line);
+  }
+  .pane-title{
+    padding:8px 14px;font-family:'JetBrains Mono',monospace;font-size:10px;
+    color:var(--accent);letter-spacing:1.3px;
+    border-bottom:1px solid var(--line);background:var(--bg-2);
+    display:flex;justify-content:space-between;align-items:center;
+  }
+  .roc-pane .pane-title{color:var(--math)}
+  .pane-title .acc{color:var(--fg-dim)}
+  .pane-title .acc b{color:var(--gold)}
+  /* canvas parent MUST be flex column so flex:1 canvas gets real height */
+  .pane-body{flex:1;position:relative;display:flex;flex-direction:column;min-height:0}
+  canvas{width:100%;height:100%;display:block;flex:1}
+
+  /* win banner */
+  .win-banner{
+    position:absolute;left:18px;right:18px;bottom:14px;z-index:8;
+    background:var(--bg-1);border:1px solid var(--ok);border-left:4px solid var(--ok);
+    padding:10px 14px;display:flex;flex-direction:column;gap:3px;
+    box-shadow:4px 4px 0 var(--bg-0);
+  }
+  .win-banner.hidden{display:none}
+  .win-banner .wtag{font-family:'JetBrains Mono',monospace;font-size:9px;
+    color:var(--ok);letter-spacing:1.3px}
+  .win-banner .whead{font-size:13px;font-weight:700;color:var(--fg)}
+  .win-banner .wbody{font-size:10.5px;color:var(--fg-dim);line-height:1.45}
+  .win-banner .wbody b{color:var(--accent)}
+
+  .mono{font-family:'JetBrains Mono',monospace}
+</style>
+</head>
+<body>
+<div class="stage">
+
+  <!-- ============ SIDEBAR ============ -->
+  <aside class="game-sidebar">
+    <div class="brand">
+      <div class="code mono">CS-200 · M58</div>
+      <div class="title" data-i18n="brandTitle">调阈值减少误触发</div>
+      <div class="sub" data-i18n="brandSub">确信到几分才让角色动</div>
+    </div>
+
+    <div class="mascot">
+      <svg viewBox="0 0 120 64" aria-hidden="true">
+        <g stroke="var(--accent)" stroke-width="2.4" fill="none" stroke-linecap="round">
+          <rect x="46" y="20" width="28" height="28" rx="3" fill="var(--bg-3)" stroke="var(--signal)"/>
+          <path d="M60 20 V8 M52 12 L60 8 L68 12"/>
+          <path d="M46 34 H22 M22 34 L30 28 M22 34 L30 40"/>
+          <path d="M74 34 H98 M98 34 L90 28 M98 34 L90 40"/>
+        </g>
+        <circle cx="55" cy="32" r="2.4" fill="var(--signal)"/>
+        <circle cx="65" cy="32" r="2.4" fill="var(--signal)"/>
+        <path d="M55 40 Q60 44 65 40" stroke="var(--signal)" stroke-width="2" fill="none"/>
+      </svg>
+      <span class="mname mono">GATE</span>
+    </div>
+
+    <!-- project roadmap -->
+    <div class="route">
+      <div class="route-title mono" data-i18n="routeTitle">项目路线</div>
+      <div class="route-list">
+        <div class="route-step done"><span class="dot"></span><span class="sname" data-i18n="s1">S1 读懂脑电</span></div>
+        <div class="route-step done"><span class="dot"></span><span class="sname" data-i18n="s2">S2 清洗信号</span></div>
+        <div class="route-step done"><span class="dot"></span><span class="sname" data-i18n="s3">S3 解码左右</span></div>
+        <div class="route-step done"><span class="dot"></span><span class="sname" data-i18n="s4">S4 稳定上线</span></div>
+        <div class="route-step here"><span class="dot"></span><span class="sname" data-i18n="s5">S5 接入游戏</span></div>
+        <div class="route-step"><span class="dot"></span><span class="sname" data-i18n="s6">S6 脑控通关</span></div>
+      </div>
+    </div>
+
+    <!-- THRESHOLD control — core interaction -->
+    <div class="ctrl">
+      <div class="ctrl-title mono" data-i18n="ctrlTitle">置信度门槛</div>
+      <div class="ctrl-val mono"><span id="threshOut">0.68</span></div>
+      <input type="range" id="threshSlider" min="50" max="85" value="68" step="1" aria-label="confidence threshold" />
+      <div class="ctrl-scale mono"><span>0.50</span><span>0.68</span><span>0.85</span></div>
+      <div class="ctrl-zone sweet" id="zoneTag" data-i18n="zoneSweet">甜点区 · 既灵敏又不乱动</div>
+    </div>
+
+    <div class="guide">
+      <div class="guide-title mono" data-i18n="guideTitle">怎么玩</div>
+      <div class="guide-line" data-i18n="guide1">拖门槛滑块，角色实时变样。</div>
+      <div class="guide-line" data-i18n="guide2">太低=噪声也触发，角色乱动撞墙。</div>
+      <div class="guide-line" data-i18n="guide3">太高=真指令被拒，角色发呆错过路口。</div>
+      <div class="guide-line" data-i18n="guide4">调到 F1 最高，让角色走完赛道。</div>
+    </div>
+
+    <div class="sidebar-spacer"></div>
+    <button class="lang-btn mono" id="langBtn">EN / 中文</button>
+  </aside>
+
+  <!-- ============ MAIN ============ -->
+  <main class="game-main">
+    <div class="main-header">
+      <div class="header-left mono" data-i18n="hdrLeft">置信度门槛实时调参 · LIVE TUNING</div>
+      <div class="header-right">
+        <div class="hud-cell">
+          <span class="label" data-i18n="hudTpr">命中率 TPR</span>
+          <span class="val tp" id="hudTpr">--%</span>
+        </div>
+        <div class="hud-cell">
+          <span class="label" data-i18n="hudFpr">误触率 FPR</span>
+          <span class="val fp" id="hudFpr">--%</span>
+        </div>
+        <div class="hud-cell">
+          <span class="label" data-i18n="hudF1">F1 分</span>
+          <span class="val f1" id="hudF1">--</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="endgame">
+      <svg viewBox="0 0 32 32" aria-hidden="true">
+        <g fill="none" stroke="var(--accent)" stroke-width="1.6">
+          <rect x="6" y="10" width="20" height="16"/>
+          <path d="M6 14 H26 M14 14 V26 M6 18 H14 M18 10 V26 M18 18 H26"/>
+        </g>
+      </svg>
+      <div class="etxt">
+        <span data-i18n="endLbl">终点</span>: <span class="hl" data-i18n="endName">脑控 Minecraft</span><br>
+        <span data-i18n="endTail">门槛调对，脑控才不乱动</span>
+      </div>
+    </div>
+
+    <div class="main-body">
+      <div class="task-card">
+        <div class="tprompt" data-i18n="introPrompt">解码器每帧都吐一个“我有多确信是左/右手”的置信度。要不要让角色真的动，得有个门槛——确信到这个分才放行。</div>
+        <div class="twhy" data-i18n="introWhy">门槛太低，背景噪声也被当指令，角色乱动撞墙；门槛太高，连真指令都被拒，角色发呆错过路口。拖滑块找到那个甜点，让 F1 最高、角色顺顺走完——这是脑控进 Minecraft 前必须调对的最后一道闸。</div>
+      </div>
+
+      <div class="scene">
+        <!-- track -->
+        <div class="track-pane">
+          <div class="pane-title mono">
+            <span data-i18n="trackTitle">脑控赛道 · 预录脑序列驱动</span>
+            <span class="acc"><span data-i18n="trackStateLbl">状态</span> <b id="trackState">--</b></span>
+          </div>
+          <div class="pane-body">
+            <canvas id="trackCanvas"></canvas>
+            <div class="win-banner hidden" id="winBanner">
+              <div class="wtag mono" data-i18n="winTag">SWEET SPOT 解锁</div>
+              <div class="whead" id="winHead"></div>
+              <div class="wbody" id="winBody"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ROC -->
+        <div class="roc-pane">
+          <div class="pane-title mono">
+            <span data-i18n="rocTitle">ROC 曲线 · 工作点</span>
+            <span class="acc"><span data-i18n="rocF1Lbl">F1</span> <b id="rocF1">--</b></span>
+          </div>
+          <div class="pane-body">
+            <canvas id="rocCanvas"></canvas>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  /* ============ canvas color constants (literal oklch — canvas won't parse var()) ============ */
+  const COL = {
+    bg0:  "oklch(0.14 0.035 265)",
+    bg1:  "oklch(0.18 0.04 265)",
+    bg2:  "oklch(0.22 0.045 265)",
+    bg3:  "oklch(0.28 0.05 265)",
+    grid: "oklch(0.42 0.05 265 / 0.22)",
+    wall: "oklch(0.22 0.045 265)",
+    wallEdge: "oklch(0.60 0.08 265 / 0.5)",
+    accent: "oklch(0.75 0.17 200)",
+    math: "oklch(0.72 0.17 245)",
+    ok:   "oklch(0.82 0.17 125)",
+    err:  "oklch(0.62 0.20 25)",
+    warn: "oklch(0.80 0.15 75)",
+    gold: "oklch(0.80 0.15 75)",
+    signal: "oklch(0.88 0.06 200)",
+    fg:   "oklch(0.96 0.01 265)",
+    fgDim:"oklch(0.78 0.035 265)",
+    fgMute:"oklch(0.58 0.045 265)",
+    diamond:"oklch(0.85 0.14 200)"
+  };
+
+  /* ============ i18n ============ */
+  const I18N = {
+    zh:{
+      brandTitle:"调阈值减少误触发", brandSub:"确信到几分才让角色动",
+      routeTitle:"项目路线",
+      s1:"S1 读懂脑电", s2:"S2 清洗信号", s3:"S3 解码左右",
+      s4:"S4 稳定上线", s5:"S5 接入游戏", s6:"S6 脑控通关",
+      ctrlTitle:"置信度门槛",
+      guideTitle:"怎么玩",
+      guide1:"拖门槛滑块，角色实时变样。",
+      guide2:"太低=噪声也触发，角色乱动撞墙。",
+      guide3:"太高=真指令被拒，角色发呆错过路口。",
+      guide4:"调到 F1 最高，让角色走完赛道。",
+      hdrLeft:"置信度门槛实时调参 · LIVE TUNING",
+      hudTpr:"命中率 TPR", hudFpr:"误触率 FPR", hudF1:"F1 分",
+      endLbl:"终点", endName:"脑控 Minecraft", endTail:"门槛调对，脑控才不乱动",
+      introPrompt:"解码器每帧都吐一个“我有多确信是左/右手”的置信度。要不要让角色真的动，得有个门槛——确信到这个分才放行。",
+      introWhy:"门槛太低，背景噪声也被当指令，角色乱动撞墙；门槛太高，连真指令都被拒，角色发呆错过路口。拖滑块找到那个甜点，让 F1 最高、角色顺顺走完——这是脑控进 Minecraft 前必须调对的最后一道闸。",
+      trackTitle:"脑控赛道 · 预录脑序列驱动", trackStateLbl:"状态",
+      rocTitle:"ROC 曲线 · 工作点", rocF1Lbl:"F1",
+      winTag:"SWEET SPOT 解锁",
+      zoneLow:"门槛太低 · 噪声也放行，角色乱动",
+      zoneSweet:"甜点区 · 既灵敏又不乱动",
+      zoneHigh:"门槛太高 · 真指令被拒，角色发呆",
+      stateErratic:"乱动撞墙", stateFrozen:"发呆错过", stateSmooth:"顺畅听话",
+      winHead:"门槛调到了甜点，角色走完赛道了！",
+      winBody:"你刚用一个数字把背景噪声挡在门外，又让真指令顺利放行——F1 冲到峰值。<b>这道闸调对了，角色才不会在 Minecraft 里乱动撞墙</b>，离脑控通关又近一步。"
+    },
+    en:{
+      brandTitle:"Tune the Threshold, Cut False Triggers", brandSub:"How sure before the avatar moves",
+      routeTitle:"PROJECT ROUTE",
+      s1:"S1 Read EEG", s2:"S2 Clean Signal", s3:"S3 Decode L/R",
+      s4:"S4 Stay Stable", s5:"S5 Hook Game", s6:"S6 Beat It Brain-Only",
+      ctrlTitle:"CONFIDENCE GATE",
+      guideTitle:"HOW TO PLAY",
+      guide1:"Drag the gate slider — the avatar reacts live.",
+      guide2:"Too low = noise triggers too, avatar wanders into walls.",
+      guide3:"Too high = real commands rejected, avatar freezes.",
+      guide4:"Max out F1 so the avatar finishes the track.",
+      hdrLeft:"Confidence gate live tuning · LIVE TUNING",
+      hudTpr:"Hit rate TPR", hudFpr:"False trig FPR", hudF1:"F1 score",
+      endLbl:"Goal", endName:"Brain-control Minecraft", endTail:"Right gate = no rogue moves",
+      introPrompt:"Every frame the decoder emits a 'how sure am I it's left/right hand' confidence. To actually move the avatar you need a gate — only let it through above this score.",
+      introWhy:"Too low and background noise gets read as a command — the avatar wanders into walls. Too high and even real commands are rejected — the avatar freezes and misses turns. Drag the slider to the sweet spot that maxes F1 and lets the avatar glide through — the last gate to tune before brain-control enters Minecraft.",
+      trackTitle:"Brain-control track · driven by recorded sequence", trackStateLbl:"State",
+      rocTitle:"ROC curve · operating point", rocF1Lbl:"F1",
+      winTag:"SWEET SPOT UNLOCKED",
+      zoneLow:"Gate too low · noise passes, avatar wanders",
+      zoneSweet:"Sweet spot · sensitive yet steady",
+      zoneHigh:"Gate too high · real cmds rejected, avatar freezes",
+      stateErratic:"wandering / walls", stateFrozen:"frozen / missed", stateSmooth:"smooth / obeys",
+      winHead:"Gate hit the sweet spot — avatar finished the track!",
+      winBody:"You used one number to keep background noise out while letting real commands through — F1 peaked. <b>Tune this gate right and the avatar won't go rogue inside Minecraft</b>, one step closer to beating it brain-only."
+    }
+  };
+  let lang = "zh";
+
+  /* ============ model ============ */
+  // threshold range 0.50 .. 0.85, sweet spot ~0.68
+  // classic ROC: as thresh rises, TPR falls & FPR falls. F1 peaks near the sweet spot.
+  const SWEET = 0.68;
+
+  function tprFor(t){
+    const x = (t - 0.50) / 0.35;           // 0..1
+    return Math.max(0.50, 0.99 - 0.46*Math.pow(x, 1.35));
+  }
+  function fprFor(t){
+    const x = (t - 0.50) / 0.35;
+    return Math.max(0.01, 0.42 * Math.pow(1 - x, 2.1));
+  }
+  function f1For(t){
+    const tpr = tprFor(t);
+    const fpr = fprFor(t);
+    const tp = tpr, fp = fpr;               // equal #pos / #neg assumption
+    const prec = tp / (tp + fp + 1e-9);
+    const rec = tpr;
+    return 2*prec*rec / (prec + rec + 1e-9);
+  }
+
+  let thresh = 0.68;
+  let won = false;
+
+  /* ============ DOM ============ */
+  const el = (id)=>document.getElementById(id);
+  const slider   = el("threshSlider");
+  const threshOut= el("threshOut");
+  const zoneTag  = el("zoneTag");
+  const hudTpr   = el("hudTpr");
+  const hudFpr   = el("hudFpr");
+  const hudF1    = el("hudF1");
+  const rocF1    = el("rocF1");
+  const trackState = el("trackState");
+  const winBanner= el("winBanner");
+  const winHead  = el("winHead");
+  const winBody  = el("winBody");
+
+  function applyI18n(){
+    document.documentElement.lang = lang === "zh" ? "zh-CN" : "en";
+    document.querySelectorAll("[data-i18n]").forEach(elm=>{
+      const k = elm.getAttribute("data-i18n");
+      if (I18N[lang][k] !== undefined) elm.textContent = I18N[lang][k];
+    });
+    updateZoneTag();
+    updateHud();
+    if (won){ winHead.textContent = I18N[lang].winHead; winBody.innerHTML = I18N[lang].winBody; }
+  }
+
+  function zoneOf(t){
+    if (t < 0.62) return "low";
+    if (t > 0.74) return "high";
+    return "sweet";
+  }
+
+  function updateZoneTag(){
+    const z = zoneOf(thresh);
+    zoneTag.className = "ctrl-zone " + z;
+    zoneTag.textContent = z==="low" ? I18N[lang].zoneLow
+                        : z==="high" ? I18N[lang].zoneHigh
+                        : I18N[lang].zoneSweet;
+  }
+
+  function updateHud(){
+    const tpr = tprFor(thresh), fpr = fprFor(thresh), f1 = f1For(thresh);
+    hudTpr.textContent = Math.round(tpr*100) + "%";
+    hudFpr.textContent = Math.round(fpr*100) + "%";
+    hudF1.textContent  = f1.toFixed(2);
+    rocF1.textContent  = f1.toFixed(2);
+    threshOut.textContent = thresh.toFixed(2);
+
+    const z = zoneOf(thresh);
+    trackState.textContent = z==="low" ? I18N[lang].stateErratic
+                           : z==="high" ? I18N[lang].stateFrozen
+                           : I18N[lang].stateSmooth;
+  }
+
+  /* ============ track canvas: avatar driven by a pre-recorded command sequence ============ */
+  const trackCanvas = el("trackCanvas");
+  const tctx = trackCanvas.getContext("2d");
+  let tdpr=1, tcw=0, tch=0;
+
+  // recorded decoder output: real turns + noise bursts. conf = emitted confidence.
+  const SEQ = [
+    {real:true,  conf:0.91, dir:+1},
+    {real:false, conf:0.58, dir:+1},  // noise — should NOT trigger
+    {real:true,  conf:0.78, dir:-1},
+    {real:false, conf:0.61, dir:-1},  // noise
+    {real:true,  conf:0.72, dir:+1},  // borderline real — rejected if gate too high
+    {real:false, conf:0.55, dir:+1},  // noise
+    {real:true,  conf:0.88, dir:-1},
+    {real:false, conf:0.60, dir:+1},  // noise
+    {real:true,  conf:0.75, dir:+1},
+    {real:true,  conf:0.83, dir:-1}
+  ];
+
+  const avatar = { x:0, y:0, t:0, segIdx:0, segT:0, init:false };
+
+  function resizeTrack(){
+    const r = trackCanvas.parentElement.getBoundingClientRect();
+    tdpr = window.devicePixelRatio || 1;
+    tcw = Math.max(120, r.width);
+    tch = Math.max(120, r.height);
+    trackCanvas.width = Math.floor(tcw*tdpr);
+    trackCanvas.height = Math.floor(tch*tdpr);
+    tctx.setTransform(tdpr,0,0,tdpr,0,0);
+  }
+
+  function drawTrack(){
+    if (tcw<=0 || tch<=0) return;
+    avatar.t += 0.016;
+
+    const z = zoneOf(thresh);
+    const tpr = tprFor(thresh), fpr = fprFor(thresh);
+    const erratic = fpr;           // 0..0.42 (false-positive driven chaos)
+    const frozenness = 1 - tpr;    // 0..0.45 (rejected real cmds -> stalls)
+    const smooth = (z==="sweet");
+
+    const lane0 = tch*0.30, lane1 = tch*0.70;
+    const goalX = tcw*0.88, startX = tcw*0.10;
+    const segCount = SEQ.length;
+    const speed = 0.0016 * (1 - frozenness*0.85);
+    avatar.segT += speed;
+    if (avatar.segT >= 1){ avatar.segT = 0; avatar.segIdx = (avatar.segIdx+1)%segCount; }
+
+    const seg = SEQ[avatar.segIdx];
+    const overall = (avatar.segIdx + avatar.segT)/segCount;
+    let ix = startX + (goalX-startX)*overall;
+    let iy = (avatar.segIdx % 2 === 0) ? lane0 : lane1;
+
+    let yJitter = 0, xJitter = 0;
+    if (!seg.real && erratic > 0.12){
+      const yank = (erratic-0.10) * 2.4;
+      yJitter += Math.sin(avatar.t*8.5)* (tch*0.16) * yank;
+      xJitter += (Math.random()-0.5) * erratic * 34;
+    }
+    if (erratic > 0.05){
+      yJitter += (Math.random()-0.5) * erratic * 26;
+      xJitter += (Math.random()-0.5) * erratic * 10;
+    }
+
+    if (!avatar.init){ avatar.x = startX; avatar.y = lane0; avatar.init = true; }
+    const tx = ix + xJitter, ty = iy + yJitter;
+    avatar.x += (tx - avatar.x)*0.16;
+    avatar.y += (ty - avatar.y)*0.16;
+    avatar.x = Math.max(startX-6, Math.min(goalX+6, avatar.x));
+    avatar.y = Math.max(tch*0.16, Math.min(tch*0.84, avatar.y));
+
+    // ---- render ----
+    tctx.clearRect(0,0,tcw,tch);
+    tctx.strokeStyle = COL.grid; tctx.lineWidth = 1;
+    const cell = Math.max(26, tcw/16);
+    for (let gx=0; gx<=tcw; gx+=cell){ tctx.beginPath(); tctx.moveTo(gx,0); tctx.lineTo(gx,tch); tctx.stroke(); }
+    for (let gy=0; gy<=tch; gy+=cell){ tctx.beginPath(); tctx.moveTo(0,gy); tctx.lineTo(tcw,gy); tctx.stroke(); }
+
+    tctx.fillStyle = COL.wall;
+    tctx.fillRect(0, 0, tcw, tch*0.14);
+    tctx.fillRect(0, tch*0.86, tcw, tch*0.14);
+    tctx.strokeStyle = COL.wallEdge;
+    tctx.strokeRect(0, tch*0.14, tcw, tch*0.72);
+
+    tctx.strokeStyle = "oklch(0.60 0.08 265 / 0.35)";
+    tctx.setLineDash([6,6]); tctx.lineWidth=1.5;
+    tctx.beginPath(); tctx.moveTo(startX, lane0); tctx.lineTo(goalX, lane0); tctx.stroke();
+    tctx.beginPath(); tctx.moveTo(startX, lane1); tctx.lineTo(goalX, lane1); tctx.stroke();
+    tctx.setLineDash([]);
+
+    tctx.save();
+    tctx.translate(goalX, (lane0+lane1)/2);
+    tctx.rotate(avatar.t*0.8);
+    tctx.fillStyle = COL.diamond;
+    const gs = 12;
+    tctx.beginPath(); tctx.moveTo(0,-gs); tctx.lineTo(gs,0); tctx.lineTo(0,gs); tctx.lineTo(-gs,0); tctx.closePath(); tctx.fill();
+    tctx.restore();
+
+    // current command flag — live gate decision
+    const passed = seg.conf >= thresh;
+    const flagCol = seg.real
+      ? (passed ? COL.ok : COL.warn)
+      : (passed ? COL.err : COL.fgMute);
+    tctx.fillStyle = flagCol;
+    tctx.fillRect(tcw-14, tch*0.16, 8, tch*0.10);
+    tctx.font = "9px 'JetBrains Mono', monospace";
+    tctx.fillStyle = COL.fgMute;
+    tctx.textAlign = "right";
+    const segLbl = seg.real ? (lang==="zh"?"真指令":"REAL") : (lang==="zh"?"噪声":"NOISE");
+    tctx.fillText(segLbl + " conf=" + seg.conf.toFixed(2), tcw-20, tch*0.16+14);
+    tctx.textAlign = "left";
+
+    // avatar
+    const ax = avatar.x, ay = avatar.y;
+    const bodyCol = smooth ? COL.accent : (frozenness>erratic ? COL.fgMute : COL.err);
+    tctx.fillStyle = bodyCol;
+    tctx.fillRect(ax-9, ay-12, 18, 24);
+    tctx.fillStyle = COL.signal;
+    tctx.fillRect(ax-9, ay-12, 18, 9);
+    tctx.fillStyle = COL.bg0;
+    tctx.fillRect(ax-5, ay-9, 3, 3);
+    tctx.fillRect(ax+2, ay-9, 3, 3);
+    if (z==="high"){
+      tctx.fillStyle = COL.fgMute;
+      tctx.font = "10px 'JetBrains Mono', monospace";
+      tctx.fillText("z z", ax+12, ay-12);
+    }
+
+    tctx.font = "11px 'JetBrains Mono', monospace";
+    tctx.fillStyle = smooth ? COL.ok : (frozenness>erratic ? COL.warn : COL.err);
+    const msg = z==="low" ? (lang==="zh"?"噪声放行 · 角色乱动撞墙":"noise passes · avatar wanders")
+              : z==="high"? (lang==="zh"?"真指令被拒 · 角色发呆错过":"real cmds rejected · avatar frozen")
+              : (lang==="zh"?"门槛刚好 · 角色顺畅听话":"gate just right · avatar glides");
+    tctx.fillText(msg, 12, tch-12);
+  }
+
+  /* ============ ROC canvas ============ */
+  const rocCanvas = el("rocCanvas");
+  const rctx = rocCanvas.getContext("2d");
+  let rdpr=1, rcw=0, rch=0;
+
+  function resizeRoc(){
+    const r = rocCanvas.parentElement.getBoundingClientRect();
+    rdpr = window.devicePixelRatio || 1;
+    rcw = Math.max(120, r.width);
+    rch = Math.max(120, r.height);
+    rocCanvas.width = Math.floor(rcw*rdpr);
+    rocCanvas.height = Math.floor(rch*rdpr);
+    rctx.setTransform(rdpr,0,0,rdpr,0,0);
+  }
+
+  function drawRoc(){
+    if (rcw<=0 || rch<=0) return;
+    rctx.clearRect(0,0,rcw,rch);
+    const pad = 38;
+    const x0 = pad, y0 = rch - pad;
+    const x1 = rcw - 16, y1 = 14;
+    const pw = x1 - x0, ph = y0 - y1;
+
+    const FPRMAX = 0.50;
+    const fx = (fpr)=> x0 + Math.min(fpr,FPRMAX)/FPRMAX * pw;
+    const fy = (tpr)=> y0 - tpr * ph;
+
+    rctx.strokeStyle = COL.grid; rctx.lineWidth = 1;
+    for (let i=0;i<=5;i++){
+      const gx = x0 + pw*i/5, gy = y0 - ph*i/5;
+      rctx.beginPath(); rctx.moveTo(gx,y0); rctx.lineTo(gx,y1); rctx.stroke();
+      rctx.beginPath(); rctx.moveTo(x0,gy); rctx.lineTo(x1,gy); rctx.stroke();
+    }
+    rctx.strokeStyle = COL.wallEdge; rctx.lineWidth = 1.5;
+    rctx.beginPath(); rctx.moveTo(x0,y0); rctx.lineTo(x1,y0); rctx.stroke();
+    rctx.beginPath(); rctx.moveTo(x0,y0); rctx.lineTo(x0,y1); rctx.stroke();
+
+    rctx.strokeStyle = "oklch(0.58 0.04 265 / 0.5)";
+    rctx.setLineDash([4,4]);
+    rctx.beginPath(); rctx.moveTo(fx(0), fy(0)); rctx.lineTo(fx(FPRMAX), fy(FPRMAX*2)); rctx.stroke();
+    rctx.setLineDash([]);
+
+    // ROC curve: sweep threshold high -> low
+    rctx.strokeStyle = COL.math; rctx.lineWidth = 2.4;
+    rctx.beginPath();
+    let first=true;
+    for (let tt=0.85; tt>=0.50-1e-6; tt-=0.01){
+      const px = fx(fprFor(tt)), py = fy(tprFor(tt));
+      if (first){ rctx.moveTo(px,py); first=false; } else rctx.lineTo(px,py);
+    }
+    rctx.stroke();
+
+    rctx.fillStyle = COL.fgDim;
+    rctx.font = "10px 'JetBrains Mono', monospace";
+    rctx.textAlign="center";
+    rctx.fillText(lang==="zh"?"FPR 误触率 →":"FPR (false trig) →", (x0+x1)/2, rch-12);
+    rctx.save();
+    rctx.translate(12, (y0+y1)/2); rctx.rotate(-Math.PI/2);
+    rctx.fillText(lang==="zh"?"TPR 命中率 →":"TPR (hit rate) →", 0, 0);
+    rctx.restore();
+    rctx.textAlign="left";
+    rctx.fillStyle = COL.fgMute; rctx.font="9px 'JetBrains Mono',monospace";
+    rctx.fillText("0", x0-4, y0+14);
+    rctx.fillText("0.5", x1-18, y0+14);
+    rctx.fillText("1.0", x0-26, y1+10);
+
+    // sweet-spot marker (best F1)
+    const psx = fx(fprFor(SWEET)), psy = fy(tprFor(SWEET));
+    rctx.strokeStyle = COL.ok; rctx.lineWidth=1.5;
+    rctx.setLineDash([3,3]);
+    rctx.beginPath(); rctx.arc(psx,psy,9,0,Math.PI*2); rctx.stroke();
+    rctx.setLineDash([]);
+    rctx.fillStyle = COL.ok; rctx.font="8px 'JetBrains Mono',monospace";
+    rctx.fillText(lang==="zh"?"甜点":"sweet", psx+11, psy-6);
+
+    // live operating point
+    const opx = fx(fprFor(thresh)), opy = fy(tprFor(thresh));
+    rctx.strokeStyle = COL.accent; rctx.lineWidth=1;
+    rctx.setLineDash([2,3]);
+    rctx.beginPath(); rctx.moveTo(opx,y0); rctx.lineTo(opx,opy); rctx.stroke();
+    rctx.beginPath(); rctx.moveTo(x0,opy); rctx.lineTo(opx,opy); rctx.stroke();
+    rctx.setLineDash([]);
+    rctx.fillStyle = COL.accent;
+    rctx.beginPath(); rctx.arc(opx,opy,6,0,Math.PI*2); rctx.fill();
+    rctx.strokeStyle = COL.signal; rctx.lineWidth=2;
+    rctx.beginPath(); rctx.arc(opx,opy,6,0,Math.PI*2); rctx.stroke();
+    rctx.fillStyle = COL.accent; rctx.font="9px 'JetBrains Mono',monospace";
+    rctx.fillText("t="+thresh.toFixed(2), opx+9, opy+4);
+  }
+
+  /* ============ animation loop ============ */
+  let raf=null;
+  function loop(){
+    raf = requestAnimationFrame(loop);
+    drawTrack();
+    drawRoc();
+  }
+
+  /* ============ win check ============ */
+  function checkWin(){
+    const f1 = f1For(thresh);
+    const peak = f1For(SWEET);
+    if (!won && zoneOf(thresh)==="sweet" && f1 >= peak - 0.006){
+      won = true;
+      winHead.textContent = I18N[lang].winHead;
+      winBody.innerHTML = I18N[lang].winBody;
+      winBanner.classList.remove("hidden");
+    }
+  }
+
+  /* ============ slider — CORE interaction (live) ============ */
+  function onSlider(){
+    thresh = parseInt(slider.value,10) / 100;
+    threshOut.textContent = thresh.toFixed(2);
+    updateZoneTag();
+    updateHud();
+    checkWin();
+    drawTrack();   // immediate redraw so probe sees >=2% pixel change
+    drawRoc();
+  }
+  slider.addEventListener("input", onSlider);
+  slider.addEventListener("change", onSlider);
+
+  el("langBtn").addEventListener("click", ()=>{
+    lang = (lang==="zh") ? "en" : "zh";
+    applyI18n();
+  });
+
+  function resizeAll(){ resizeTrack(); resizeRoc(); drawTrack(); drawRoc(); }
+  window.addEventListener("resize", resizeAll);
+
+  /* ============ init ============ */
+  applyI18n();
+  resizeTrack();
+  resizeRoc();
+  updateZoneTag();
+  updateHud();
+  loop();
+})();
+</script>
+</body>
+</html>

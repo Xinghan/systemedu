@@ -1,0 +1,1006 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>M56 · 测真玩起来好不好用 — UX Lab</title>
+<style>
+  :root{
+    /* Layer 1 — shared deep space canvas (cs hue 200) */
+    --bg-0: oklch(0.14 0.03 200);
+    --bg-1: oklch(0.18 0.035 200);
+    --bg-2: oklch(0.22 0.04 200);
+    --bg-3: oklch(0.28 0.045 200);
+    --line: oklch(0.42 0.06 200 / 0.35);
+    --line-strong: oklch(0.60 0.10 200 / 0.55);
+    --fg:      oklch(0.96 0.01 200);
+    --fg-dim:  oklch(0.78 0.03 200);
+    --fg-mute: oklch(0.58 0.04 200);
+
+    /* Layer 2 — cs signature accent (cyan) */
+    --accent: oklch(0.75 0.17 200);
+
+    /* Layer 3 — cs 5-color palette */
+    --signal: oklch(0.75 0.17 200);
+    --port:   oklch(0.70 0.15 230);
+    --node:   oklch(0.78 0.13 160);
+    --packet: oklch(0.88 0.10 200);
+    --ok:     oklch(0.82 0.17 125);
+    --warn:   oklch(0.80 0.15 75);
+    --err:    oklch(0.62 0.20 25);
+  }
+
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%;width:100%;
+    font-family:'Inter','PingFang SC',sans-serif;
+    color:var(--fg);background:var(--bg-0);overflow:hidden}
+
+  .stage{display:flex;flex-direction:row;height:100vh;width:100vw}
+
+  /* ============ 200px sidebar ============ */
+  .game-sidebar{
+    width:200px;flex:0 0 200px;
+    background:var(--bg-1);
+    border-right:1px solid var(--line);
+    display:flex;flex-direction:column;
+    padding:14px 12px;gap:10px;
+    overflow-y:auto;
+  }
+  .brand{display:flex;flex-direction:column;gap:2px;
+    border-bottom:1px solid var(--line);padding-bottom:8px}
+  .brand .code{font-family:'JetBrains Mono',monospace;font-size:10px;
+    color:var(--fg-mute);letter-spacing:1.2px}
+  .brand .title{font-size:13px;color:var(--fg);font-weight:600}
+  .brand .sub{font-size:10px;color:var(--fg-dim);margin-top:2px}
+
+  .mascot{
+    width:100%;height:64px;display:flex;align-items:center;justify-content:center;
+    background:var(--bg-2);border:1px solid var(--line);position:relative;
+  }
+  .mascot svg{width:100%;height:100%}
+  .mascot .mname{position:absolute;left:8px;bottom:5px;
+    font-family:'JetBrains Mono',monospace;font-size:8px;
+    color:var(--fg-mute);letter-spacing:1px}
+
+  /* ---- project roadmap ---- */
+  .route{
+    background:var(--bg-2);border:1px solid var(--line);
+    padding:8px;display:flex;flex-direction:column;gap:5px;
+  }
+  .route-title{font-family:'JetBrains Mono',monospace;font-size:9px;
+    color:var(--accent);letter-spacing:1px}
+  .route-list{display:flex;flex-direction:column;gap:3px}
+  .route-step{
+    display:flex;align-items:center;gap:6px;
+    font-family:'JetBrains Mono',monospace;font-size:9px;
+    color:var(--fg-mute);line-height:1.2;
+  }
+  .route-step .dot{
+    width:8px;height:8px;flex:0 0 8px;border-radius:50%;
+    background:var(--bg-3);border:1px solid var(--line-strong);
+  }
+  .route-step.done .dot{background:var(--port);border-color:var(--port)}
+  .route-step.here{color:var(--fg);font-weight:600}
+  .route-step.here .dot{
+    background:var(--accent);border-color:var(--packet);
+    box-shadow:0 0 0 3px oklch(0.75 0.17 200 / 0.25);
+  }
+  .route-step .sname{font-size:8.5px}
+
+  /* ---- experiment design controls ---- */
+  .panel{
+    background:var(--bg-2);border:1px solid var(--line);padding:8px;
+    display:flex;flex-direction:column;gap:7px;
+  }
+  .panel-title{font-family:'JetBrains Mono',monospace;font-size:9px;
+    color:var(--accent);letter-spacing:1px}
+  .seg{display:flex;gap:5px}
+  .seg button{
+    flex:1;padding:6px 4px;background:var(--bg-3);
+    border:1px solid var(--line-strong);color:var(--fg-dim);
+    font-family:'JetBrains Mono',monospace;font-size:9px;
+    cursor:pointer;
+  }
+  .seg button.sel{background:var(--accent);color:var(--bg-0);border-color:var(--packet);font-weight:600}
+  .seg button:hover:not(.sel){background:var(--bg-1);border-color:var(--accent)}
+
+  .metric-row{display:flex;flex-direction:column;gap:4px}
+  .chk{
+    display:flex;align-items:center;gap:6px;cursor:pointer;
+    font-size:10px;color:var(--fg-dim);user-select:none;
+  }
+  .chk .box{
+    width:14px;height:14px;flex:0 0 14px;background:var(--bg-3);
+    border:1px solid var(--line-strong);position:relative;
+  }
+  .chk.on .box{background:var(--node);border-color:var(--node)}
+  .chk.on .box::after{
+    content:"";position:absolute;left:4px;top:1px;width:4px;height:8px;
+    border:solid var(--bg-0);border-width:0 2px 2px 0;transform:rotate(40deg);
+  }
+  .chk.on{color:var(--fg)}
+
+  .toggle-row{display:flex;align-items:center;justify-content:space-between;gap:6px}
+  .toggle-lbl{font-size:10px;color:var(--fg-dim);line-height:1.3}
+  .toggle{
+    width:40px;height:20px;flex:0 0 40px;background:var(--bg-3);
+    border:1px solid var(--line-strong);position:relative;cursor:pointer;
+  }
+  .toggle .knob{
+    position:absolute;top:2px;left:2px;width:14px;height:14px;
+    background:var(--fg-mute);transition:left .18s, background .18s;
+  }
+  .toggle.on{background:oklch(0.78 0.13 160 / 0.4);border-color:var(--node)}
+  .toggle.on .knob{left:23px;background:var(--node)}
+
+  .slider-row{display:flex;flex-direction:column;gap:4px}
+  .slider-head{display:flex;justify-content:space-between;
+    font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--fg-dim)}
+  .slider-head .v{color:var(--accent);font-weight:600}
+  input[type=range]{width:100%;accent-color:oklch(0.75 0.17 200);height:18px;cursor:pointer}
+
+  .run-btn{
+    width:100%;padding:9px;background:var(--accent);color:var(--bg-0);
+    border:1px solid var(--packet);
+    font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:600;letter-spacing:1px;
+    cursor:pointer;box-shadow:3px 3px 0 var(--bg-0);
+  }
+  .run-btn:hover{background:var(--packet)}
+  .run-btn:active{transform:translate(2px,2px);box-shadow:1px 1px 0 var(--bg-0)}
+  .run-btn:disabled{opacity:.4;cursor:not-allowed}
+
+  .sidebar-spacer{flex:1;min-height:6px}
+
+  .lang-btn{
+    width:100%;padding:7px 8px;background:var(--bg-3);
+    color:var(--fg);border:1px solid var(--line-strong);
+    font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:1px;
+    cursor:pointer;box-shadow:3px 3px 0 var(--bg-0);
+  }
+  .lang-btn:hover{background:var(--port);color:var(--bg-0)}
+
+  /* ============ main ============ */
+  .game-main{
+    flex:1;display:flex;flex-direction:column;
+    background:var(--bg-0);min-width:0;position:relative;
+  }
+  .main-header{
+    height:46px;border-bottom:1px solid var(--line);
+    display:flex;align-items:center;justify-content:space-between;
+    padding:0 18px;background:var(--bg-1);flex:0 0 46px;
+  }
+  .header-left{font-family:'JetBrains Mono',monospace;font-size:11px;
+    color:var(--fg-dim);letter-spacing:1.3px}
+  .header-right{display:flex;gap:16px;font-family:'JetBrains Mono',monospace}
+  .hud-cell{display:flex;flex-direction:column;align-items:flex-end}
+  .hud-cell .label{font-size:9px;color:var(--fg-mute);letter-spacing:1px}
+  .hud-cell .val{color:var(--accent);font-size:13px;font-weight:600}
+  .hud-cell .val.gold{color:var(--warn)}
+
+  .endgame{
+    position:absolute;right:20px;top:58px;z-index:6;
+    display:flex;align-items:center;gap:8px;
+    background:var(--bg-1);border:1px solid var(--line);
+    padding:6px 10px;opacity:.92;pointer-events:none;
+  }
+  .endgame svg{width:26px;height:26px;flex:0 0 26px}
+  .endgame .etxt{font-family:'JetBrains Mono',monospace;font-size:8.5px;
+    color:var(--fg-mute);line-height:1.35;max-width:150px}
+  .endgame .etxt .hl{color:var(--accent)}
+
+  .main-body{flex:1;display:flex;flex-direction:column;
+    min-height:0;padding:14px 18px;gap:12px}
+
+  .task-card{
+    background:var(--bg-1);border:1px solid var(--line);
+    border-left:3px solid var(--accent);
+    padding:10px 14px;display:flex;flex-direction:column;gap:3px;
+    flex:0 0 auto;
+  }
+  .task-card .tprompt{font-size:12.5px;color:var(--fg);line-height:1.45}
+  .task-card .twhy{font-size:10px;color:var(--fg-dim);line-height:1.4}
+
+  .lab-scene{flex:1;display:flex;gap:12px;min-height:0}
+
+  .play-pane{
+    flex:1.35;display:flex;flex-direction:column;min-height:0;min-width:0;
+    background:var(--bg-1);border:1px solid var(--line);
+  }
+  .pane-title{
+    padding:8px 14px;font-family:'JetBrains Mono',monospace;font-size:10px;
+    color:var(--accent);letter-spacing:1.3px;
+    border-bottom:1px solid var(--line);background:var(--bg-2);
+    display:flex;justify-content:space-between;align-items:center;
+  }
+  .pane-title .acc{color:var(--fg-dim)}
+  .pane-title .acc b{color:var(--warn)}
+  .play-body{flex:1;position:relative;display:flex;flex-direction:column;min-height:0}
+  #labCanvas{width:100%;height:100%;display:block}
+
+  .side-pane{
+    flex:1;display:flex;flex-direction:column;gap:12px;min-height:0;min-width:0;
+  }
+
+  .report{
+    flex:1;min-height:0;overflow-y:auto;
+    background:var(--bg-1);border:1px solid var(--line);
+    border-left:3px solid var(--accent);
+    padding:12px;display:flex;flex-direction:column;gap:9px;
+  }
+  .report.invalid{border-left-color:var(--err)}
+  .report.valid{border-left-color:var(--ok)}
+  .report .rtag{font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:1.3px;color:var(--accent)}
+  .report.invalid .rtag{color:var(--err)}
+  .report.valid .rtag{color:var(--ok)}
+  .report .rhead{font-size:13px;font-weight:600;color:var(--fg)}
+  .report .rbody{font-size:11px;color:var(--fg-dim);line-height:1.5}
+  .report .rbody b{color:var(--warn)}
+  .report .empty{font-size:11px;color:var(--fg-mute);line-height:1.5}
+
+  .stat-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .stat{
+    background:var(--bg-2);border:1px solid var(--line);padding:7px 9px;
+    display:flex;flex-direction:column;gap:2px;
+  }
+  .stat .slabel{font-family:'JetBrains Mono',monospace;font-size:8.5px;color:var(--fg-mute);letter-spacing:.5px}
+  .stat .sval{font-family:'JetBrains Mono',monospace;font-size:16px;font-weight:600}
+  .stat.kbd .sval{color:var(--signal)}
+  .stat.bci .sval{color:var(--warn)}
+  .stat.full{grid-column:1 / -1}
+  .stat.full .sval{color:var(--node)}
+
+  .findings{display:flex;flex-direction:column;gap:5px;margin-top:2px}
+  .finding{display:flex;gap:6px;align-items:flex-start;
+    font-size:10px;color:var(--fg-dim);line-height:1.4}
+  .finding .ic{width:12px;height:12px;flex:0 0 12px;margin-top:2px}
+  .finding.ok .ic{background:var(--ok)}
+  .finding.bad .ic{background:var(--err)}
+
+  .next-row{display:flex;gap:10px;align-items:center;margin-top:4px}
+  .next-btn{
+    padding:9px 16px;background:var(--accent);color:var(--bg-0);
+    border:1px solid var(--packet);
+    font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:600;letter-spacing:1px;
+    cursor:pointer;box-shadow:3px 3px 0 var(--bg-0);
+  }
+  .next-btn:hover{background:var(--packet)}
+  .next-btn:active{transform:translate(2px,2px);box-shadow:1px 1px 0 var(--bg-0)}
+  .next-btn.ghost{background:var(--bg-2);color:var(--fg);border-color:var(--line-strong)}
+  .next-btn.ghost:hover{background:var(--bg-3)}
+
+  .end-overlay{
+    position:absolute;inset:0;z-index:20;
+    background:oklch(0.14 0.03 200 / 0.94);
+    display:flex;align-items:center;justify-content:center;
+    flex-direction:column;gap:14px;padding:30px;text-align:center;
+  }
+  .end-overlay.hidden{display:none}
+  .end-overlay .badge{
+    width:96px;height:96px;display:flex;align-items:center;justify-content:center;
+    background:var(--bg-1);border:2px solid var(--ok);
+    box-shadow:4px 4px 0 var(--bg-0);
+  }
+  .end-overlay .badge svg{width:64px;height:64px}
+  .end-overlay .etitle{font-size:20px;font-weight:700;color:var(--ok)}
+  .end-overlay .esub{font-size:12.5px;color:var(--fg-dim);line-height:1.6;max-width:440px}
+  .end-overlay .esub b{color:var(--accent)}
+  .end-overlay .ebtns{display:flex;gap:12px;margin-top:6px}
+
+  .mono{font-family:'JetBrains Mono',monospace}
+</style>
+</head>
+<body>
+<div class="stage">
+
+  <!-- ============ SIDEBAR ============ -->
+  <aside class="game-sidebar">
+    <div class="brand">
+      <div class="code mono">CS · M56</div>
+      <div class="title" data-i18n="brandTitle">测真玩起来好不好用</div>
+      <div class="sub" data-i18n="brandSub">设计一个可用性对照实验</div>
+    </div>
+
+    <div class="mascot">
+      <svg viewBox="0 0 120 64" aria-hidden="true">
+        <g stroke="var(--accent)" stroke-width="2.2" fill="none" stroke-linecap="round">
+          <rect x="42" y="18" width="36" height="26" rx="3" fill="var(--bg-3)" stroke="var(--packet)"/>
+          <path d="M50 26 h20 M50 32 h14 M50 38 h18"/>
+          <path d="M30 31 h12 M78 31 h12"/>
+          <circle cx="24" cy="31" r="4" fill="var(--node)" stroke="none"/>
+          <circle cx="96" cy="31" r="4" fill="var(--warn)" stroke="none"/>
+        </g>
+      </svg>
+      <span class="mname mono">PROBE</span>
+    </div>
+
+    <!-- project roadmap -->
+    <div class="route">
+      <div class="route-title mono" data-i18n="routeTitle">项目路线</div>
+      <div class="route-list">
+        <div class="route-step done"><span class="dot"></span><span class="sname" data-i18n="s1">S1 读懂脑电</span></div>
+        <div class="route-step done"><span class="dot"></span><span class="sname" data-i18n="s2">S2 清洗信号</span></div>
+        <div class="route-step done"><span class="dot"></span><span class="sname" data-i18n="s3">S3 解码左右</span></div>
+        <div class="route-step done"><span class="dot"></span><span class="sname" data-i18n="s4">S4 稳定上线</span></div>
+        <div class="route-step here"><span class="dot"></span><span class="sname" data-i18n="s5">S5 接入游戏</span></div>
+        <div class="route-step"><span class="dot"></span><span class="sname" data-i18n="s6">S6 脑控通关</span></div>
+      </div>
+    </div>
+
+    <!-- experiment design panel -->
+    <div class="panel">
+      <div class="panel-title mono" data-i18n="pTask">1 · 任务</div>
+      <div class="seg" id="taskSeg">
+        <button data-task="maze" class="sel" data-i18n="taskMaze">走迷宫</button>
+        <button data-task="stars" data-i18n="taskStars">收 3 星</button>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title mono" data-i18n="pMetric">2 · 测什么指标</div>
+      <div class="metric-row" id="metricRow">
+        <div class="chk on" data-metric="time"><span class="box"></span><span data-i18n="mTime">完成时间</span></div>
+        <div class="chk" data-metric="errors"><span class="box"></span><span data-i18n="mErr">错误次数</span></div>
+        <div class="chk" data-metric="success"><span class="box"></span><span data-i18n="mSucc">成功率</span></div>
+        <div class="chk" data-metric="sus"><span class="box"></span><span data-i18n="mSus">SUS 满意度</span></div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title mono" data-i18n="pControl">3 · 对照组</div>
+      <div class="toggle-row">
+        <span class="toggle-lbl" data-i18n="ctrlLbl">同时跑键盘组做基线</span>
+        <div class="toggle on" id="ctrlToggle"><span class="knob"></span></div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title mono" data-i18n="pRepeat">4 · 重复次数</div>
+      <div class="slider-row">
+        <div class="slider-head mono">
+          <span data-i18n="repLbl">每组跑</span>
+          <span class="v" id="repVal">2</span>
+        </div>
+        <input type="range" id="repSlider" min="1" max="5" step="1" value="2" />
+      </div>
+    </div>
+
+    <button class="run-btn mono" id="runBtn" data-i18n="runBtn">运行实验</button>
+
+    <div class="sidebar-spacer"></div>
+    <button class="lang-btn mono" id="langBtn">EN / 中文</button>
+  </aside>
+
+  <!-- ============ MAIN ============ -->
+  <main class="game-main">
+    <div class="main-header">
+      <div class="header-left mono" data-i18n="hdrLeft">可用性实验设计 · UX 研究员</div>
+      <div class="header-right">
+        <div class="hud-cell">
+          <span class="label" data-i18n="hudRun">已运行</span>
+          <span class="val" id="hudRun">0</span>
+        </div>
+        <div class="hud-cell">
+          <span class="label" data-i18n="hudValid">有效结论</span>
+          <span class="val gold" id="hudValid">--</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="endgame">
+      <svg viewBox="0 0 32 32" aria-hidden="true">
+        <g fill="none" stroke="var(--accent)" stroke-width="1.6">
+          <rect x="6" y="10" width="20" height="16"/>
+          <path d="M6 14 H26 M14 14 V26 M6 18 H14 M18 10 V26 M18 18 H26"/>
+        </g>
+      </svg>
+      <div class="etxt">
+        <span data-i18n="endLbl">终点</span>: <span class="hl" data-i18n="endName">脑控 Minecraft</span><br>
+        <span data-i18n="endTail">先用数据说清它好不好用</span>
+      </div>
+    </div>
+
+    <div class="main-body">
+      <div class="task-card">
+        <div class="tprompt" data-i18n="introPrompt">脑控能让角色动起来了——可它玩起来到底顺不顺手？光说“感觉还行”不算数。你是 UX 研究员，要设计一个对照实验，用数字说话。</div>
+        <div class="twhy" data-i18n="introWhy">在左边把实验配好：选任务、勾要测的指标、决定要不要跑键盘组做基线、设每组重复几次，再点运行。系统会真的跑出两组数据。设计得好才能得出“脑控比键盘慢 X 倍、SUS=Y”的可信结论——这是 S6 脑控通关前必须先答的问题。</div>
+      </div>
+
+      <div class="lab-scene">
+        <!-- play viewport -->
+        <div class="play-pane">
+          <div class="pane-title mono">
+            <span data-i18n="playTitle">实验跑动 · 两组对照</span>
+            <span class="acc"><span data-i18n="playRunLbl">本次</span> <b id="paneRun">--</b></span>
+          </div>
+          <div class="play-body">
+            <canvas id="labCanvas"></canvas>
+          </div>
+        </div>
+
+        <!-- report -->
+        <div class="side-pane">
+          <div class="report" id="report">
+            <div class="rtag mono" data-i18n="rtagWait">REPORT</div>
+            <div class="empty" data-i18n="reportEmpty">还没运行。在左边设计实验，然后点“运行实验”，这里会出报告。</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- end overlay -->
+    <div class="end-overlay hidden" id="endOverlay">
+      <div class="badge">
+        <svg viewBox="0 0 64 64" aria-hidden="true">
+          <g fill="none" stroke="var(--ok)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="32" cy="26" r="15"/>
+            <path d="M24 26 l6 6 l10 -12"/>
+            <path d="M20 44 h24 M20 52 h16"/>
+          </g>
+        </svg>
+      </div>
+      <div class="etitle" id="endTitle"></div>
+      <div class="esub" id="endSub"></div>
+      <div class="ebtns">
+        <button class="next-btn ghost mono" id="replayBtn" data-i18n="replayBtn">再设计一个实验</button>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  // ===== canvas-only literal colors (canvas can't read CSS vars) =====
+  const COL = {
+    bg0:   "oklch(0.14 0.03 200)",
+    bg2:   "oklch(0.22 0.04 200)",
+    grid:  "oklch(0.42 0.06 200 / 0.22)",
+    wall:  "oklch(0.60 0.10 200 / 0.5)",
+    accent:"oklch(0.75 0.17 200)",
+    signal:"oklch(0.75 0.17 200)",
+    port:  "oklch(0.70 0.15 230)",
+    node:  "oklch(0.78 0.13 160)",
+    packet:"oklch(0.88 0.10 200)",
+    ok:    "oklch(0.82 0.17 125)",
+    warn:  "oklch(0.80 0.15 75)",
+    err:   "oklch(0.62 0.20 25)",
+    fgmute:"oklch(0.58 0.04 200)",
+    fgdim: "oklch(0.78 0.03 200)",
+    fg:    "oklch(0.96 0.01 200)",
+  };
+
+  // ---------- i18n ----------
+  const I18N = {
+    zh:{
+      brandTitle:"测真玩起来好不好用", brandSub:"设计一个可用性对照实验",
+      routeTitle:"项目路线",
+      s1:"S1 读懂脑电", s2:"S2 清洗信号", s3:"S3 解码左右",
+      s4:"S4 稳定上线", s5:"S5 接入游戏", s6:"S6 脑控通关",
+      pTask:"1 · 任务", taskMaze:"走迷宫", taskStars:"收 3 星",
+      pMetric:"2 · 测什么指标",
+      mTime:"完成时间", mErr:"错误次数", mSucc:"成功率", mSus:"SUS 满意度",
+      pControl:"3 · 对照组", ctrlLbl:"同时跑键盘组做基线",
+      pRepeat:"4 · 重复次数", repLbl:"每组跑",
+      runBtn:"运行实验",
+      hdrLeft:"可用性实验设计 · UX 研究员",
+      hudRun:"已运行", hudValid:"有效结论",
+      endLbl:"终点", endName:"脑控 Minecraft", endTail:"先用数据说清它好不好用",
+      introPrompt:"脑控能让角色动起来了——可它玩起来到底顺不顺手？光说“感觉还行”不算数。你是 UX 研究员，要设计一个对照实验，用数字说话。",
+      introWhy:"在左边把实验配好：选任务、勾要测的指标、决定要不要跑键盘组做基线、设每组重复几次，再点运行。系统会真的跑出两组数据。设计得好才能得出“脑控比键盘慢 X 倍、SUS=Y”的可信结论——这是 S6 脑控通关前必须先答的问题。",
+      playTitle:"实验跑动 · 两组对照", playRunLbl:"本次",
+      rtagWait:"REPORT",
+      reportEmpty:"还没运行。在左边设计实验，然后点“运行实验”，这里会出报告。",
+      replayBtn:"再设计一个实验"
+    },
+    en:{
+      brandTitle:"Is It Actually Usable?", brandSub:"Design a usability A/B experiment",
+      routeTitle:"PROJECT ROUTE",
+      s1:"S1 Read EEG", s2:"S2 Clean Signal", s3:"S3 Decode L/R",
+      s4:"S4 Stay Stable", s5:"S5 Hook Game", s6:"S6 Beat It Brain-Only",
+      pTask:"1 · TASK", taskMaze:"Maze", taskStars:"Collect 3",
+      pMetric:"2 · METRICS TO MEASURE",
+      mTime:"Completion time", mErr:"Error count", mSucc:"Success rate", mSus:"SUS score",
+      pControl:"3 · CONTROL GROUP", ctrlLbl:"Run keyboard group as baseline",
+      pRepeat:"4 · REPETITIONS", repLbl:"Runs / group",
+      runBtn:"RUN EXPERIMENT",
+      hdrLeft:"Usability experiment design · UX researcher",
+      hudRun:"RUNS", hudValid:"VALID?",
+      endLbl:"Goal", endName:"Brain-control Minecraft", endTail:"First prove with data it's usable",
+      introPrompt:"Brain-control can move the avatar now — but is it actually smooth to play? 'Feels okay' doesn't count. You're the UX researcher: design a controlled experiment and let the numbers speak.",
+      introWhy:"Configure the experiment on the left: pick a task, check the metrics to measure, decide whether to run a keyboard baseline, set how many runs per group, then hit Run. The system really generates two data sets. Only a good design yields a credible conclusion like 'brain-control is X times slower, SUS=Y' — the question you must answer before S6.",
+      playTitle:"Experiment run · two groups", playRunLbl:"run",
+      rtagWait:"REPORT",
+      reportEmpty:"Nothing run yet. Design the experiment on the left, then hit Run Experiment — the report appears here.",
+      replayBtn:"Design another experiment"
+    }
+  };
+  let lang = "zh";
+
+  // ---------- design state ----------
+  const gameState = {
+    task: "maze",
+    metrics: { time:true, errors:false, success:false, sus:false },
+    control: true,
+    repeats: 2,
+    runCount: 0,
+    validReached: false,
+    lastResult: null,   // cached for re-render on lang switch
+  };
+  const expRuns = [];   // per-rep raw samples for last experiment
+
+  const el = (id)=>document.getElementById(id);
+
+  function applyI18n(){
+    document.documentElement.lang = lang==="zh" ? "zh-CN" : "en";
+    document.querySelectorAll("[data-i18n]").forEach(node=>{
+      const k = node.getAttribute("data-i18n");
+      if (I18N[lang][k] !== undefined) node.textContent = I18N[lang][k];
+    });
+    el("hudValid").textContent = gameState.validReached ? (lang==="zh"?"有效":"VALID") : "--";
+    if (gameState.lastResult) renderReport(gameState.lastResult);
+  }
+
+  // ---------- design control listeners ----------
+  el("taskSeg").querySelectorAll("button").forEach(b=>{
+    b.addEventListener("click", ()=>{
+      el("taskSeg").querySelectorAll("button").forEach(x=>x.classList.remove("sel"));
+      b.classList.add("sel");
+      gameState.task = b.getAttribute("data-task");
+      previewDesign();
+    });
+  });
+  el("metricRow").querySelectorAll(".chk").forEach(c=>{
+    c.addEventListener("click", ()=>{
+      const m = c.getAttribute("data-metric");
+      gameState.metrics[m] = !gameState.metrics[m];
+      c.classList.toggle("on", gameState.metrics[m]);
+      previewDesign();
+    });
+  });
+  el("ctrlToggle").addEventListener("click", ()=>{
+    gameState.control = !gameState.control;
+    el("ctrlToggle").classList.toggle("on", gameState.control);
+    previewDesign();
+  });
+  el("repSlider").addEventListener("input", (e)=>{
+    gameState.repeats = parseInt(e.target.value,10);
+    el("repVal").textContent = gameState.repeats;
+    previewDesign();
+  });
+
+  // ---------- experiment model ----------
+  // keyboard: fast & consistent; brain-control: slower, higher variance, more errors.
+  function sampleRun(group){
+    // base completion time in seconds
+    if (group === "kbd"){
+      const t = 14 + (Math.random()*3 - 1.5);          // ~12.5-15.5s
+      const errs = Math.random()<0.15 ? 1 : 0;
+      const success = 1;                                // keyboard always succeeds
+      return { t, errs, success };
+    } else {
+      const t = 46 + (Math.random()*18 - 9);            // ~37-55s, high variance
+      const errs = 2 + Math.floor(Math.random()*4);     // 2-5 misdecodes
+      const success = Math.random()<0.82 ? 1 : 0;       // sometimes gives up
+      return { t, errs, success };
+    }
+  }
+  function mean(arr){ return arr.reduce((a,b)=>a+b,0)/arr.length; }
+  function std(arr){ const m=mean(arr); return Math.sqrt(mean(arr.map(x=>(x-m)**2))); }
+
+  function runExperiment(){
+    expRuns.length = 0;
+    const reps = gameState.repeats;
+    const bci = [];
+    for (let i=0;i<reps;i++){ const s = sampleRun("bci"); bci.push(s); }
+    let kbd = null;
+    if (gameState.control){
+      kbd = [];
+      for (let i=0;i<reps;i++){ kbd.push(sampleRun("kbd")); }
+    }
+    // aggregate
+    const bciT = bci.map(s=>s.t);
+    const agg = {
+      task: gameState.task,
+      reps,
+      control: gameState.control,
+      metrics: Object.assign({}, gameState.metrics),
+      bci:{
+        timeMean: mean(bciT), timeStd: std(bciT),
+        errMean: mean(bci.map(s=>s.errs)),
+        succ: mean(bci.map(s=>s.success)),
+      },
+      kbd: null, ratio:null,
+    };
+    if (kbd){
+      const kbdT = kbd.map(s=>s.t);
+      agg.kbd = {
+        timeMean: mean(kbdT), timeStd: std(kbdT),
+        errMean: mean(kbd.map(s=>s.errs)),
+        succ: mean(kbd.map(s=>s.success)),
+      };
+      agg.ratio = agg.bci.timeMean / agg.kbd.timeMean;
+    }
+    // SUS: synthesize a plausible score for brain-control (lower because slow/errors).
+    // higher errors / more variance => lower SUS. range ~ 45-72.
+    const susBase = 78 - agg.bci.errMean*5 - (agg.bci.timeStd/agg.bci.timeMean)*40;
+    agg.bci.sus = Math.max(38, Math.min(80, Math.round(susBase)));
+    if (kbd) agg.kbd.sus = 86;
+
+    // ---- validity evaluation ----
+    const issues = [];
+    if (!gameState.control) issues.push("noControl");
+    if (reps < 3) issues.push("fewReps");
+    if (!gameState.metrics.time) issues.push("noTime");
+    if (!gameState.metrics.sus) issues.push("noSus");
+    if (!gameState.metrics.success && !gameState.metrics.errors) issues.push("noQuality");
+    agg.issues = issues;
+    agg.valid = issues.length === 0;
+
+    gameState.runCount += 1;
+    gameState.lastResult = agg;
+    el("hudRun").textContent = gameState.runCount;
+    el("paneRun").textContent = gameState.runCount;
+
+    renderReport(agg);
+    startAnim(agg);
+
+    if (agg.valid && !gameState.validReached){
+      gameState.validReached = true;
+      el("hudValid").textContent = lang==="zh"?"有效":"VALID";
+      setTimeout(()=>showEnd(agg), 1900);
+    }
+  }
+
+  // ---------- report rendering ----------
+  function fnum(x,d){ return x.toFixed(d===undefined?1:d); }
+  function renderReport(agg){
+    const r = el("report");
+    r.classList.remove("invalid","valid");
+    r.innerHTML = "";
+
+    const tag = document.createElement("div");
+    tag.className = "rtag mono";
+
+    const head = document.createElement("div");
+    head.className = "rhead";
+
+    if (!agg.valid){
+      r.classList.add("invalid");
+      tag.textContent = lang==="zh"?"实验设计有缺陷":"FLAWED DESIGN";
+      head.textContent = lang==="zh"?"这个结论不可信":"This conclusion can't be trusted";
+    } else {
+      r.classList.add("valid");
+      tag.textContent = lang==="zh"?"有效实验":"VALID EXPERIMENT";
+      head.textContent = lang==="zh"?"可信结论已得出":"A credible conclusion";
+    }
+    r.appendChild(tag); r.appendChild(head);
+
+    // stat grid (only show metrics the user chose to measure)
+    const grid = document.createElement("div");
+    grid.className = "stat-grid";
+    const M = agg.metrics;
+
+    function statCell(cls, label, val){
+      const d = document.createElement("div");
+      d.className = "stat "+cls;
+      d.innerHTML = `<span class="slabel">${label}</span><span class="sval">${val}</span>`;
+      grid.appendChild(d);
+    }
+
+    if (M.time){
+      statCell("bci", lang==="zh"?"脑控 时间":"BCI time", fnum(agg.bci.timeMean,1)+"s");
+      if (agg.control) statCell("kbd", lang==="zh"?"键盘 时间":"KBD time", fnum(agg.kbd.timeMean,1)+"s");
+    }
+    if (M.errors){
+      statCell("bci", lang==="zh"?"脑控 错误":"BCI errors", fnum(agg.bci.errMean,1));
+      if (agg.control) statCell("kbd", lang==="zh"?"键盘 错误":"KBD errors", fnum(agg.kbd.errMean,1));
+    }
+    if (M.success){
+      statCell("bci", lang==="zh"?"脑控 成功率":"BCI success", Math.round(agg.bci.succ*100)+"%");
+      if (agg.control) statCell("kbd", lang==="zh"?"键盘 成功率":"KBD success", Math.round(agg.kbd.succ*100)+"%");
+    }
+    if (M.sus){
+      statCell("bci", "SUS · "+(lang==="zh"?"脑控":"BCI"), agg.bci.sus);
+      if (agg.control) statCell("kbd", "SUS · "+(lang==="zh"?"键盘":"KBD"), agg.kbd.sus);
+    }
+    if (M.time && agg.control){
+      statCell("full", lang==="zh"?"脑控比键盘慢":"BCI slower by", fnum(agg.ratio,1)+"x");
+    }
+    r.appendChild(grid);
+
+    // findings (validity diagnostics)
+    const findings = document.createElement("div");
+    findings.className = "findings";
+    const issueText = {
+      zh:{
+        noControl:"没设键盘对照组：只有脑控数据，你说不出“慢几倍”，没法跟基线比。",
+        fewReps:"只跑了 "+agg.reps+" 次，样本太少：换个人结果就翻，时间标准差 ±"+fnum(agg.bci.timeStd,1)+"s 很大。",
+        noTime:"没测完成时间：可用性最核心的指标缺了，报告残缺。",
+        noSus:"没测 SUS 满意度：只有客观时间，不知道用户主观觉得好不好用。",
+        noQuality:"没测错误数也没测成功率：不知道脑控跑偏多严重。",
+      },
+      en:{
+        noControl:"No keyboard control group: with BCI data alone you can't say 'X times slower' — nothing to compare against.",
+        fewReps:"Only "+agg.reps+" run(s): sample too small — a different person flips the result; time std ±"+fnum(agg.bci.timeStd,1)+"s is large.",
+        noTime:"Completion time not measured: the core usability metric is missing, report is incomplete.",
+        noSus:"SUS not measured: only objective time — you don't know how usable it subjectively feels.",
+        noQuality:"Neither errors nor success rate measured: you don't know how badly the BCI strays.",
+      }
+    };
+    if (agg.valid){
+      const f = document.createElement("div");
+      f.className = "finding ok";
+      const ratioTxt = lang==="zh"
+        ? `结论：脑控比键盘慢 <b>${fnum(agg.ratio,1)}x</b>，SUS=<b>${agg.bci.sus}</b>（键盘 ${agg.kbd.sus}）。有对照、有重复、指标齐——可信。`
+        : `Conclusion: brain-control is <b>${fnum(agg.ratio,1)}x</b> slower, SUS=<b>${agg.bci.sus}</b> (keyboard ${agg.kbd.sus}). Has control, repeats, full metrics — credible.`;
+      f.innerHTML = `<span class="ic"></span><span>${ratioTxt}</span>`;
+      findings.appendChild(f);
+    } else {
+      agg.issues.forEach(code=>{
+        const f = document.createElement("div");
+        f.className = "finding bad";
+        f.innerHTML = `<span class="ic"></span><span>${issueText[lang][code]}</span>`;
+        findings.appendChild(f);
+      });
+      const hint = document.createElement("div");
+      hint.className = "finding ok";
+      hint.innerHTML = `<span class="ic"></span><span>${lang==="zh"?"修好上面的问题，再运行一次。":"Fix the issues above, then run again."}</span>`;
+      findings.appendChild(hint);
+    }
+    r.appendChild(findings);
+  }
+
+  // ---------- canvas: two avatars racing the task ----------
+  const canvas = el("labCanvas");
+  const ctx = canvas.getContext("2d");
+  let raf = null, dpr=1, cw=0, ch=0;
+  let anim = null;
+
+  function resizeCanvas(){
+    const rect = canvas.parentElement.getBoundingClientRect();
+    dpr = window.devicePixelRatio || 1;
+    cw = Math.max(160, rect.width);
+    ch = Math.max(160, rect.height);
+    canvas.width = Math.floor(cw*dpr);
+    canvas.height = Math.floor(ch*dpr);
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+  }
+
+  function startAnim(agg){
+    anim = {
+      t:0,
+      control: agg.control,
+      task: agg.task,
+      // normalize speeds: keyboard reaches goal ~ in time proportional to its mean
+      kbdSpeed: agg.control ? 1/Math.max(8, agg.kbd.timeMean) : 0,
+      bciSpeed: 1/Math.max(20, agg.bci.timeMean),
+      bciErr: agg.bci.errMean,
+      kbdPos: 0, bciPos: 0,
+      kbdJ:0, bciJ:0,
+      kbdDone:false, bciDone:false,
+    };
+    if (raf) cancelAnimationFrame(raf);
+    drawLoop();
+  }
+
+  function drawLoop(){
+    raf = requestAnimationFrame(drawLoop);
+    if (cw<=0 || ch<=0 || !anim) return;
+    anim.t += 0.016;
+
+    // advance positions (0..1 along a left->right lane)
+    const dt = 0.016 * 14; // scale so runs finish in a few seconds
+    if (anim.control && !anim.kbdDone){
+      anim.kbdPos += anim.kbdSpeed * dt;
+      if (anim.kbdPos >= 1){ anim.kbdPos = 1; anim.kbdDone = true; }
+    }
+    if (!anim.bciDone){
+      // bci wobbles: occasional backward stutter on misdecode
+      let step = anim.bciSpeed * dt;
+      const wob = Math.sin(anim.t*7 + 1) * (anim.bciErr*0.0008);
+      anim.bciPos += step - Math.max(0, -wob);
+      anim.bciJ = Math.sin(anim.t*9)*anim.bciErr*1.6;
+      anim.bciPos = Math.max(0, anim.bciPos);
+      if (anim.bciPos >= 1){ anim.bciPos = 1; anim.bciDone = true; }
+    }
+
+    render();
+  }
+
+  function laneGeom(){
+    const padX = cw*0.10, goalX = cw*0.86;
+    const laneSpan = goalX - padX;
+    return { padX, goalX, laneSpan };
+  }
+
+  function render(){
+    ctx.clearRect(0,0,cw,ch);
+    // grid
+    ctx.strokeStyle = COL.grid; ctx.lineWidth=1;
+    const cell = Math.max(28, cw/16);
+    for (let gx=0; gx<=cw; gx+=cell){ ctx.beginPath(); ctx.moveTo(gx,0); ctx.lineTo(gx,ch); ctx.stroke(); }
+    for (let gy=0; gy<=ch; gy+=cell){ ctx.beginPath(); ctx.moveTo(0,gy); ctx.lineTo(cw,gy); ctx.stroke(); }
+
+    const { padX, goalX, laneSpan } = laneGeom();
+    const lanes = anim && anim.control ? 2 : 1;
+    const topY = ch*0.30, gap = ch*0.30;
+
+    // goal markers (diamond for stars, flag for maze) at right
+    function drawGoal(y){
+      ctx.save(); ctx.translate(goalX, y);
+      if (anim && anim.task==="stars"){
+        ctx.fillStyle = COL.warn;
+        const gs=11; ctx.beginPath();
+        for (let k=0;k<5;k++){
+          const a=-Math.PI/2 + k*2*Math.PI/5;
+          ctx.lineTo(Math.cos(a)*gs, Math.sin(a)*gs);
+          const a2=a+Math.PI/5;
+          ctx.lineTo(Math.cos(a2)*gs*0.45, Math.sin(a2)*gs*0.45);
+        }
+        ctx.closePath(); ctx.fill();
+      } else {
+        ctx.fillStyle = COL.node;
+        ctx.fillRect(-3,-14,3,28);
+        ctx.beginPath(); ctx.moveTo(0,-14); ctx.lineTo(12,-9); ctx.lineTo(0,-4); ctx.closePath(); ctx.fill();
+      }
+      ctx.restore();
+    }
+
+    function drawLane(y, label, color, pos, jitter, isBci){
+      // lane track
+      ctx.strokeStyle = COL.wall; ctx.lineWidth=1.5;
+      ctx.beginPath(); ctx.moveTo(padX, y); ctx.lineTo(goalX, y); ctx.stroke();
+      // intended dashed guide
+      ctx.setLineDash([5,5]); ctx.strokeStyle = COL.grid;
+      ctx.beginPath(); ctx.moveTo(padX, y); ctx.lineTo(goalX, y); ctx.stroke();
+      ctx.setLineDash([]);
+      drawGoal(y);
+      // avatar
+      const ax = padX + laneSpan*pos;
+      const ay = y + (isBci ? jitter : 0);
+      ctx.fillStyle = color;
+      ctx.fillRect(ax-8, ay-10, 16, 20);
+      ctx.fillStyle = COL.packet;
+      ctx.fillRect(ax-8, ay-10, 16, 7);
+      ctx.fillStyle = COL.bg0;
+      ctx.fillRect(ax-4, ay-8, 3, 3);
+      ctx.fillRect(ax+2, ay-8, 3, 3);
+      // label
+      ctx.font = "10px 'JetBrains Mono', monospace";
+      ctx.fillStyle = color;
+      ctx.fillText(label, padX, y-18);
+    }
+
+    if (lanes === 2){
+      drawLane(topY,        lang==="zh"?"键盘组":"KEYBOARD", COL.signal, anim.kbdPos, 0, false);
+      drawLane(topY+gap,    lang==="zh"?"脑控组":"BRAIN-CTRL", COL.warn,  anim.bciPos, anim.bciJ, true);
+    } else if (anim){
+      drawLane(ch*0.48,     lang==="zh"?"脑控组（无对照）":"BRAIN-CTRL (no control)", COL.warn, anim.bciPos, anim.bciJ, true);
+      // "missing baseline" ghost lane
+      ctx.setLineDash([4,6]); ctx.strokeStyle = COL.err; ctx.lineWidth=1.2;
+      ctx.beginPath(); ctx.moveTo(padX, ch*0.78); ctx.lineTo(goalX, ch*0.78); ctx.stroke(); ctx.setLineDash([]);
+      ctx.font = "10px 'JetBrains Mono', monospace"; ctx.fillStyle = COL.err;
+      ctx.fillText(lang==="zh"?"键盘基线 缺失 — 无法对比" : "keyboard baseline MISSING — no comparison", padX, ch*0.78-8);
+    }
+
+    // status footer
+    ctx.font = "11px 'JetBrains Mono', monospace";
+    if (anim){
+      let msg;
+      if (gameState.lastResult && !gameState.lastResult.valid){
+        ctx.fillStyle = COL.err;
+        msg = lang==="zh"?"数据跑出来了，但设计有缺陷 — 看右侧报告":"data is in, but the design is flawed — see report";
+      } else {
+        ctx.fillStyle = COL.ok;
+        msg = lang==="zh"?"两组都跑完，对照清晰 — 看右侧可信结论":"both groups done, clean comparison — see the credible conclusion";
+      }
+      ctx.fillText(msg, padX, ch-14);
+    }
+  }
+
+  function idleFrame(){
+    resizeCanvas();
+    previewDesign();
+  }
+
+  // live "design blueprint" — reflects current control settings so every
+  // checkbox / toggle / slider change visibly redraws the canvas (no run needed yet)
+  function previewDesign(){
+    if (anim) return;           // an experiment animation owns the canvas
+    if (cw<=0 || ch<=0) resizeCanvas();
+    ctx.clearRect(0,0,cw,ch);
+    // grid
+    ctx.strokeStyle = COL.grid; ctx.lineWidth=1;
+    const cell = Math.max(28, cw/16);
+    for (let gx=0; gx<=cw; gx+=cell){ ctx.beginPath(); ctx.moveTo(gx,0); ctx.lineTo(gx,ch); ctx.stroke(); }
+    for (let gy=0; gy<=ch; gy+=cell){ ctx.beginPath(); ctx.moveTo(0,gy); ctx.lineTo(cw,gy); ctx.stroke(); }
+
+    const { padX, goalX, laneSpan } = laneGeom();
+    ctx.font = "11px 'JetBrains Mono', monospace";
+    ctx.fillStyle = COL.fgdim;
+    ctx.fillText(lang==="zh"?"实验蓝图（点“运行实验”开跑）":"Experiment blueprint (hit Run to start)", padX, ch*0.12);
+
+    // planned lanes: keyboard (if control) + brain-control
+    const lanes = [];
+    if (gameState.control) lanes.push({ y: ch*0.30, c: COL.signal, l: lang==="zh"?"键盘组（基线）":"keyboard (baseline)" });
+    lanes.push({ y: gameState.control ? ch*0.58 : ch*0.44, c: COL.warn, l: lang==="zh"?"脑控组":"brain-control" });
+
+    lanes.forEach(L=>{
+      ctx.setLineDash([5,5]); ctx.strokeStyle = L.c; ctx.lineWidth=1.4;
+      ctx.beginPath(); ctx.moveTo(padX, L.y); ctx.lineTo(goalX, L.y); ctx.stroke();
+      ctx.setLineDash([]);
+      // start block
+      ctx.fillStyle = L.c; ctx.fillRect(padX-8, L.y-10, 16, 20);
+      ctx.fillStyle = COL.packet; ctx.fillRect(padX-8, L.y-10, 16, 6);
+      // rep dots along the lane — count == repeats slider, so slider changes pixels
+      const n = gameState.repeats;
+      for (let i=0;i<n;i++){
+        const dx = padX + laneSpan*((i+1)/(n+1));
+        ctx.fillStyle = L.c;
+        ctx.beginPath(); ctx.arc(dx, L.y, 4, 0, Math.PI*2); ctx.fill();
+      }
+      ctx.font = "10px 'JetBrains Mono', monospace";
+      ctx.fillStyle = L.c;
+      ctx.fillText(L.l + " x" + gameState.repeats, padX, L.y-16);
+    });
+
+    // missing-baseline warning if no control
+    if (!gameState.control){
+      ctx.setLineDash([4,6]); ctx.strokeStyle = COL.err; ctx.lineWidth=1.2;
+      ctx.beginPath(); ctx.moveTo(padX, ch*0.74); ctx.lineTo(goalX, ch*0.74); ctx.stroke(); ctx.setLineDash([]);
+      ctx.font = "10px 'JetBrains Mono', monospace"; ctx.fillStyle = COL.err;
+      ctx.fillText(lang==="zh"?"无键盘对照 — 跑出来也没法说快慢":"no keyboard control — can't say faster/slower", padX, ch*0.74-8);
+    }
+
+    // chosen-metrics chips footer
+    const chosen = Object.keys(gameState.metrics).filter(k=>gameState.metrics[k]);
+    const mLabel = { time:lang==="zh"?"时间":"time", errors:lang==="zh"?"错误":"errors",
+                     success:lang==="zh"?"成功率":"success", sus:"SUS" };
+    let cx = padX;
+    const cy = ch*0.90;
+    ctx.font = "10px 'JetBrains Mono', monospace";
+    ctx.fillStyle = COL.fgmute;
+    const pfx = (lang==="zh"?"测量: ":"metrics: ");
+    ctx.fillText(pfx, cx, cy+4); cx += ctx.measureText(pfx).width + 4;
+    chosen.forEach(k=>{
+      const txt = mLabel[k];
+      const w = ctx.measureText(txt).width + 12;
+      ctx.fillStyle = COL.bg2; ctx.fillRect(cx, cy-9, w, 16);
+      ctx.strokeStyle = COL.node; ctx.lineWidth=1; ctx.strokeRect(cx, cy-9, w, 16);
+      ctx.fillStyle = COL.node; ctx.fillText(txt, cx+6, cy+4);
+      cx += w + 6;
+    });
+    if (chosen.length===0){
+      ctx.fillStyle = COL.err; ctx.fillText(lang==="zh"?"没勾任何指标 — 报告会残缺":"no metrics — report will be empty", cx, cy+4);
+    }
+  }
+
+  // ---------- end overlay ----------
+  function showEnd(agg){
+    const ov = el("endOverlay");
+    ov.classList.remove("hidden");
+    el("endTitle").textContent = lang==="zh"?"实验设计师达成":"Experiment Designer Unlocked";
+    el("endSub").innerHTML = lang==="zh"
+      ? `你设计出了一个有效实验：设了键盘对照、重复了 ${agg.reps} 次、测齐了时间和 SUS。得出可信结论——脑控比键盘慢 <b>${fnum(agg.ratio,1)}x</b>，SUS=<b>${agg.bci.sus}</b>。<br>你现在能用数字说清“脑控到底好不好用”，而不是凭感觉。<b>这一步让你离 S6 脑控通关又近一步</b>：知道慢在哪、满意度多少，才知道接下来该优化什么。`
+      : `You designed a valid experiment: keyboard control set, ${agg.reps} repetitions, time and SUS both measured. Credible conclusion — brain-control is <b>${fnum(agg.ratio,1)}x</b> slower, SUS=<b>${agg.bci.sus}</b>.<br>Now you can say in numbers how usable brain-control is, not by gut feel. <b>One step closer to S6</b>: knowing where it's slow and how satisfying it is tells you what to optimize next.`;
+  }
+
+  // ---------- listeners ----------
+  el("runBtn").addEventListener("click", runExperiment);
+  el("replayBtn").addEventListener("click", ()=>{ el("endOverlay").classList.add("hidden"); });
+  el("langBtn").addEventListener("click", ()=>{
+    lang = (lang==="zh")?"en":"zh";
+    applyI18n();
+  });
+  window.addEventListener("resize", ()=>{ resizeCanvas(); if(!anim) idleFrame(); });
+
+  // ---------- init ----------
+  applyI18n();
+  resizeCanvas();
+  setTimeout(idleFrame, 60);
+
+})();
+</script>
+</body>
+</html>

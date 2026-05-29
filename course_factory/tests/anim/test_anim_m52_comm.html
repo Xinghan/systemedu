@@ -1,0 +1,767 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>M52 · 跑通通信</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Noto+Sans+SC:wght@400;500;700&family=Space+Grotesk:wght@500;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    /* 第 1 层 — 共享深空底 (所有 26 套统一) */
+    --bg-0: oklch(0.14 0.035 265);
+    --bg-1: oklch(0.18 0.04 265);
+    --bg-2: oklch(0.22 0.045 265);
+    --bg-3: oklch(0.28 0.05 265);
+    --line: oklch(0.35 0.05 265 / 0.35);
+    --line-strong: oklch(0.55 0.08 265 / 0.55);
+    --fg:      oklch(0.96 0.01 265);
+    --fg-dim:  oklch(0.75 0.02 265);
+    --fg-mute: oklch(0.55 0.03 265);
+    --gold:    oklch(0.85 0.14 85);
+
+    /* 第 2 层 — cs signature accent (cyan) + elec 辅 (indigo) */
+    --accent: oklch(0.75 0.17 200);
+    --elec:   oklch(0.72 0.17 275);
+
+    /* 第 3 层 — cs 5 色 palette (数据流/端口/节点/数据包/成功) */
+    --signal: oklch(0.75 0.17 200);
+    --port:   oklch(0.72 0.17 275);
+    --node:   oklch(0.55 0.15 200);
+    --packet: oklch(0.92 0.10 200);
+    --ok:     oklch(0.82 0.17 125);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    height: 100vh; overflow: hidden;
+    background: var(--bg-0); color: var(--fg);
+    font-family: 'Inter', 'Noto Sans SC', 'PingFang SC', sans-serif;
+    font-size: 14px; line-height: 1.5;
+    display: flex;
+  }
+  .mono { font-family: 'JetBrains Mono', monospace; }
+
+  /* ============ Sidebar 200px ============ */
+  .sidebar {
+    width: 200px; flex-shrink: 0; height: 100vh;
+    background: var(--bg-1);
+    border-right: 1px solid var(--line);
+    display: flex; flex-direction: column;
+    padding: 22px 18px 18px;
+    position: relative;
+  }
+  .brand-row { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+  .brand-dot {
+    width: 10px; height: 10px; border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 0 4px oklch(0.75 0.17 200 / 0.18);
+    animation: pulse 2.4s ease-in-out infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { box-shadow: 0 0 0 4px oklch(0.75 0.17 200 / 0.18); }
+    50%      { box-shadow: 0 0 0 7px oklch(0.75 0.17 200 / 0.10); }
+  }
+  .brand-tag {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; letter-spacing: 0.08em;
+    color: var(--fg-dim); font-weight: 600;
+  }
+  .brand-title { font-family:'Space Grotesk','Inter',sans-serif; font-size: 15px; font-weight: 700; color: var(--fg); line-height: 1.35; margin-bottom: 4px; }
+  .brand-sub { font-size: 11px; color: var(--fg-mute); line-height: 1.5; font-family: 'JetBrains Mono', monospace; }
+
+  /* 概念简介 (本节在演什么) */
+  .intro-box {
+    margin: 14px 0 4px; padding: 9px 10px;
+    background: var(--bg-2); border: 1px solid var(--line);
+    border-left: 2px solid var(--accent); border-radius: 5px;
+  }
+  .intro-box p { margin: 0; font-size: 10.5px; color: var(--fg-dim); line-height: 1.5; }
+
+  /* mascot Pipe */
+  .mascot { margin: 14px 0 4px; display: flex; align-items: center; gap: 8px; }
+  .mascot .m-name {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px; letter-spacing: 0.06em; color: var(--fg-mute); line-height: 1.3;
+  }
+  .mascot .m-name b { color: var(--signal); font-weight: 700; }
+
+  /* guide 2 条 */
+  .guide-h {
+    font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.12em;
+    color: var(--fg-mute); margin: 14px 0 7px; text-transform: uppercase;
+  }
+  .guide { list-style: none; padding: 0; margin: 0; }
+  .guide li {
+    font-size: 11px; color: var(--fg-dim); line-height: 1.4;
+    padding: 4px 0 4px 14px; position: relative;
+  }
+  .guide li::before {
+    content: ''; position: absolute; left: 0; top: 9px;
+    width: 5px; height: 5px; border-radius: 50%; background: var(--node);
+  }
+
+  /* roadmap S1-S6 */
+  .road-h {
+    font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.12em;
+    color: var(--fg-mute); margin: 16px 0 8px; text-transform: uppercase;
+  }
+  .road { list-style: none; padding: 0; margin: 0; }
+  .road li {
+    position: relative; font-size: 11px; color: var(--fg-mute); line-height: 1.35;
+    padding: 4px 0 4px 18px; border-left: 2px solid var(--line);
+  }
+  .road li::before {
+    content: ''; position: absolute; left: -5px; top: 8px;
+    width: 7px; height: 7px; border-radius: 50%; background: var(--bg-3);
+  }
+  .road li .st {
+    font-family: 'JetBrains Mono', monospace; font-weight: 700; font-size: 10px;
+    margin-right: 5px; color: var(--fg-mute);
+  }
+  .road li.done { color: var(--fg-dim); }
+  .road li.done::before { background: var(--node); }
+  .road li.done .st { color: var(--node); }
+  .road li.cur { color: var(--fg); font-weight: 700; border-left-color: var(--accent); }
+  .road li.cur::before {
+    background: var(--accent);
+    box-shadow: 0 0 0 3px oklch(0.75 0.17 200 / 0.20);
+    animation: pulse 2.4s ease-in-out infinite;
+  }
+  .road li.cur .st { color: var(--signal); }
+  .road li .badge {
+    display: inline-block; font-family: 'JetBrains Mono', monospace;
+    font-size: 8px; font-weight: 700; letter-spacing: 0.05em;
+    background: oklch(0.75 0.17 200 / 0.18); color: var(--signal);
+    padding: 1px 5px; border-radius: 3px; margin-left: 4px;
+  }
+
+  /* Minecraft silhouette corner (终点徽记) */
+  .mc-corner { margin-top: 12px; opacity: 0.62; display: flex; align-items: center; gap: 6px; }
+  .mc-corner svg { display: block; }
+  .mc-corner .mc-label {
+    font-family: 'JetBrains Mono', monospace; font-size: 8px;
+    letter-spacing: 0.05em; color: var(--fg-mute); line-height: 1.3;
+  }
+
+  .lang-btn {
+    margin-top: auto;
+    border: 1px solid var(--line-strong);
+    background: var(--bg-2); color: var(--fg); cursor: pointer;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; font-weight: 600;
+    padding: 9px 12px; border-radius: 6px;
+    transition: all 160ms ease; letter-spacing: 0.06em;
+    box-shadow: 3px 3px 0 var(--bg-0);
+  }
+  .lang-btn:hover { border-color: var(--accent); color: var(--signal); }
+
+  /* ============ Main stage ============ */
+  .main { flex: 1; height: 100vh; position: relative; overflow: hidden; }
+  #stage { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+
+  /* HUD 右上 */
+  .hud {
+    position: absolute; top: 18px; right: 18px;
+    background: oklch(0.18 0.04 265 / 0.85);
+    border: 1px solid var(--line-strong);
+    border-radius: 8px; padding: 10px 14px;
+    font-family: 'JetBrains Mono', monospace; font-size: 11px;
+    min-width: 188px; box-shadow: 3px 3px 0 var(--bg-0);
+    backdrop-filter: blur(2px); -webkit-backdrop-filter: blur(2px);
+  }
+  .hud-row { display: flex; justify-content: space-between; gap: 14px; line-height: 1.7; }
+  .hud-lbl { color: var(--fg-mute); }
+  .hud-val { color: var(--signal); font-weight: 700; }
+  .hud-val.gold { color: var(--gold); }
+  .hud-val.ok { color: var(--ok); }
+
+  /* subtitle 辅助点睛 */
+  .sub {
+    position: absolute; bottom: 24px; left: 50%; transform: translateX(-50%);
+    text-align: center; width: 80%; pointer-events: none;
+  }
+  .sub-zh {
+    font-size: 18px; font-weight: 700; color: var(--fg);
+    background: oklch(0.14 0.035 265 / 0.72);
+    padding: 6px 18px; display: inline-block; border-radius: 6px;
+    border: 1px solid var(--line); line-height: 1.45;
+  }
+  .sub-zh .hi { color: var(--signal); }
+  .sub-zh .pt { color: var(--port); }
+  .sub-zh .gd { color: var(--gold); }
+  .sub-zh .ok { color: var(--ok); }
+  .sub-en {
+    font-size: 12px; font-style: italic; color: var(--fg-dim);
+    margin-top: 6px; font-family: 'Inter', sans-serif;
+  }
+</style>
+</head>
+<body>
+
+<aside class="sidebar">
+  <div class="brand-row">
+    <span class="brand-dot"></span>
+    <span class="brand-tag" id="brandTag">M52 · 跑通通信</span>
+  </div>
+  <div class="brand-title" id="brandTitle">指令如何让角色动</div>
+  <div class="brand-sub" id="brandSub">python -&gt; socket -&gt; mod</div>
+
+  <div class="intro-box">
+    <p id="introP">一条 Python 指令穿过 TCP 端口，被游戏里的 mod 接住，最后让方块小人迈出一步。</p>
+  </div>
+
+  <div class="mascot">
+    <svg width="34" height="34" viewBox="0 0 34 34" aria-hidden="true">
+      <!-- Pipe: 一个数据包顺着管道流动 -->
+      <rect x="3" y="14" width="28" height="6" rx="3" fill="oklch(0.55 0.15 200)"/>
+      <rect x="3" y="14" width="28" height="6" rx="3" fill="none" stroke="oklch(0.72 0.17 275)" stroke-width="1"/>
+      <rect x="13" y="13" width="8" height="8" rx="2" fill="oklch(0.92 0.10 200)"/>
+      <circle cx="5"  cy="17" r="2.4" fill="oklch(0.75 0.17 200)"/>
+      <circle cx="29" cy="17" r="2.4" fill="oklch(0.82 0.17 125)"/>
+    </svg>
+    <span class="m-name"><b>Pipe</b><br>link guide</span>
+  </div>
+
+  <div class="guide-h" id="guideH">看什么</div>
+  <ul class="guide">
+    <li id="g1">一个数据包从左走到右</li>
+    <li id="g2">每过一段，那段就亮起来</li>
+  </ul>
+
+  <div class="road-h" id="roadH">脑控 Minecraft 长征</div>
+  <ul class="road">
+    <li class="done"><span class="st">S1</span><span id="r1">采脑波</span></li>
+    <li class="done"><span class="st">S2</span><span id="r2">看懂信号</span></li>
+    <li class="done"><span class="st">S3</span><span id="r3">建模型</span></li>
+    <li class="done"><span class="st">S4</span><span id="r4">自录冲准</span></li>
+    <li class="cur"><span class="st">S5</span><span id="r5">接进游戏</span><span class="badge" id="r5b">你在这</span></li>
+    <li><span class="st">S6</span><span id="r6">脑控真玩</span></li>
+  </ul>
+
+  <div class="mc-corner">
+    <svg width="42" height="38" viewBox="0 0 42 38" aria-hidden="true">
+      <rect x="2"  y="20" width="13" height="13" fill="oklch(0.32 0.10 200)"/>
+      <rect x="15" y="20" width="13" height="13" fill="oklch(0.55 0.15 200)"/>
+      <rect x="2"  y="20" width="13" height="13" fill="none" stroke="oklch(0.55 0.08 265 / 0.55)" stroke-width="0.7"/>
+      <rect x="15" y="20" width="13" height="13" fill="none" stroke="oklch(0.55 0.08 265 / 0.55)" stroke-width="0.7"/>
+      <path d="M21 2 L38 8 L36 12 L23 9 L21 13 L19 9 L20 5 Z" fill="oklch(0.55 0.15 200)"/>
+      <rect x="19" y="9" width="3" height="15" fill="oklch(0.32 0.10 200)" transform="rotate(8 20 16)"/>
+    </svg>
+    <span class="mc-label" id="mcLabel">终点<br>Minecraft</span>
+  </div>
+
+  <button class="lang-btn" id="langBtn" type="button">中文 / EN</button>
+</aside>
+
+<main class="main">
+  <canvas id="stage"></canvas>
+  <div class="hud">
+    <div class="hud-row"><span class="hud-lbl" id="hStageL">stage</span><span class="hud-val" id="hStage">send</span></div>
+    <div class="hud-row"><span class="hud-lbl">port</span><span class="hud-val mono" id="hPort">30000</span></div>
+    <div class="hud-row"><span class="hud-lbl">bytes</span><span class="hud-val mono" id="hBytes">6C 65 66 74 0A</span></div>
+    <div class="hud-row"><span class="hud-lbl">cmd</span><span class="hud-val mono" id="hCmd">left</span></div>
+  </div>
+  <div class="sub">
+    <div class="sub-zh" id="subZh">想让角色听念头动，先得让 Python 能命令游戏：一条 send 走完整条管道。</div>
+    <div class="sub-en" id="subEn">To make the avatar obey your mind, Python must first command the game: one send walks the whole pipe.</div>
+  </div>
+</main>
+
+<script>
+(function () {
+  "use strict";
+
+  var LANG = 'cn';
+
+  /* ---------- i18n: sidebar / hud labels ---------- */
+  var I18N = {
+    brandTag:   { cn: 'M52 · 跑通通信',     en: 'M52 · WIRE IT UP' },
+    brandTitle: { cn: '指令如何让角色动',     en: 'How a Command Moves the Avatar' },
+    brandSub:   { cn: 'python -> socket -> mod', en: 'python -> socket -> mod' },
+    introP: {
+      cn: "一条 Python 指令穿过 TCP 端口，被游戏里的 mod 接住，最后让方块小人迈出一步。",
+      en: "One Python line crosses a TCP port, gets caught by the in-game mod, and steps the blocky avatar."
+    },
+    guideH:     { cn: '看什么', en: 'WATCH' },
+    g1: { cn: '一个数据包从左走到右', en: 'one packet travels left to right' },
+    g2: { cn: '每过一段，那段就亮起来', en: 'each leg lights up as it passes' },
+    roadH: { cn: '脑控 Minecraft 长征', en: 'BRAIN-MINECRAFT ROADMAP' },
+    r1: { cn: '采脑波',   en: 'Record EEG' },
+    r2: { cn: '看懂信号', en: 'Read signal' },
+    r3: { cn: '建模型',   en: 'Build model' },
+    r4: { cn: '自录冲准', en: 'Self-record' },
+    r5: { cn: '接进游戏', en: 'Wire to game' },
+    r5b:{ cn: '你在这',   en: 'YOU ARE HERE' },
+    r6: { cn: '脑控真玩', en: 'Play by mind' },
+    mcLabel: { cn: '终点<br>Minecraft', en: 'Goal<br>Minecraft' },
+    hStageL: { cn: 'stage', en: 'stage' }
+  };
+
+  /* ---------- subtitle script keyed by stage ---------- */
+  var SUB = {
+    intro: {
+      zh: '想让角色听念头动，先得让 Python 能<span class="hi">命令游戏</span>：一条 send 走完整条管道。',
+      en: 'To make the avatar obey your mind, Python must first command the game: one send walks the whole pipe.'
+    },
+    send: {
+      zh: 'Python 里执行 <span class="hi">s.send(b\'left\\n\')</span>，一个数据包从进程里冒出来。',
+      en: "Run s.send(b'left\\n') in Python — a packet pops out of the process."
+    },
+    socket: {
+      zh: '数据包顺着 <span class="pt">TCP socket</span> 流向 <span class="pt">localhost:30000</span>，发的其实是字节 <span class="hi">6C 65 66 74 0A</span>。',
+      en: 'The packet flows along the TCP socket to localhost:30000 — really just bytes 6C 65 66 74 0A.'
+    },
+    mod: {
+      zh: 'Minetest 的 <span class="pt">Lua mod</span> 监听这个端口，把字节读回文本，解析出指令 <span class="hi">left</span>。',
+      en: "Minetest's Lua mod listens on that port, reads the bytes back to text, and parses the command left."
+    },
+    move: {
+      zh: 'mod 调 <span class="ok">move_left</span>，方块小人<span class="ok">真的向左迈了一格</span>！',
+      en: 'The mod calls move_left and the blocky avatar actually steps one block to the left!'
+    },
+    settle: {
+      zh: 'Python 一个 <span class="gd">send</span>，走完 socket -&gt; mod -&gt; 角色，<span class="gd">链路通了</span>。下一步把脑波接上来。',
+      en: 'One Python send, end-to-end through socket -> mod -> avatar: the link is live. Next we feed it your brain waves.'
+    }
+  };
+
+  function setHTML(id, html) { var el = document.getElementById(id); if (el) el.innerHTML = html; }
+  function setText(id, t) { var el = document.getElementById(id); if (el) el.textContent = t; }
+
+  function refreshI18N() {
+    var keys = ['brandTag','brandTitle','brandSub','introP','guideH','g1','g2','roadH',
+                'r1','r2','r3','r4','r5','r5b','r6','mcLabel','hStageL'];
+    for (var i = 0; i < keys.length; i++) if (I18N[keys[i]]) setHTML(keys[i], I18N[keys[i]][LANG]);
+    setText('langBtn', LANG === 'cn' ? '中文 / EN' : 'EN / 中文');
+    document.documentElement.setAttribute('lang', LANG === 'cn' ? 'zh-CN' : 'en');
+    applySub();
+  }
+
+  var curStage = 'intro';
+  function applySub() {
+    var s = SUB[curStage] || SUB.intro;
+    if (LANG === 'en') { setHTML('subZh', s.en); setHTML('subEn', s.zh); }
+    else { setHTML('subZh', s.zh); setHTML('subEn', s.en); }
+  }
+
+  document.getElementById('langBtn').addEventListener('click', function () {
+    LANG = (LANG === 'cn') ? 'en' : 'cn';
+    refreshI18N();
+  });
+
+  /* ====================================================================
+     CANVAS — 唯一核心对象: 一个 cyan 数据包, 从左侧 Python 进程诞生,
+       沿一条横贯画面的通信管道连续流向右侧 Minetest, 驱动方块小人移动.
+     一镜到底: packetProg 用 ease 平滑推进, 管道经过段点亮.
+       不是 5 张并列图, 是同一个包走完全程.
+     ==================================================================== */
+  var canvas = document.getElementById('stage');
+  var c = canvas.getContext('2d');
+  var W = 0, H = 0, DPR = 1;
+
+  function resize() {
+    var r = canvas.parentElement.getBoundingClientRect();
+    if (r.width < 1 || r.height < 1) return;
+    DPR = window.devicePixelRatio || 1;
+    canvas.width = Math.round(r.width * DPR);
+    canvas.height = Math.round(r.height * DPR);
+    canvas.style.width = r.width + 'px';
+    canvas.style.height = r.height + 'px';
+    c.setTransform(DPR, 0, 0, DPR, 0, 0);
+    W = r.width; H = r.height;
+  }
+  window.addEventListener('resize', resize);
+
+  var COL = {
+    bg0: getComputedStyle(document.documentElement).getPropertyValue('--bg-0').trim(),
+    signal: 'oklch(0.75 0.17 200)',
+    port:   'oklch(0.72 0.17 275)',
+    node:   'oklch(0.55 0.15 200)',
+    packet: 'oklch(0.92 0.10 200)',
+    ok:     'oklch(0.82 0.17 125)',
+    gold:   'oklch(0.85 0.14 85)',
+    fg:     'oklch(0.96 0.01 265)',
+    fgDim:  'oklch(0.75 0.02 265)',
+    fgMute: 'oklch(0.55 0.03 265)',
+    line:   'oklch(0.40 0.05 265 / 0.45)',
+    grid:   'oklch(0.30 0.04 265 / 0.5)'
+  };
+
+  /* ====================================================================
+     时间轴 — 一个完整循环 ~ 30s.
+       同一个数据包的 X 进度连续推进:
+       intro 0-3   预告整条链路
+       send  3-7   在 Python 框内孕育, 包从 send 行冒出
+       socket 7-16 沿 socket 管道横穿 (0 -> 1)
+       mod   16-21 进入 mod 框被解析出 "left"
+       move  21-25 触发 move_left, 角色向左迈一格
+       settle 25-30 全链路点亮 takeaway
+     ==================================================================== */
+  var CYCLE = 30.0;
+  function stageAt(t) {
+    if (t < 3)   return 'intro';
+    if (t < 7)   return 'send';
+    if (t < 16)  return 'socket';
+    if (t < 21)  return 'mod';
+    if (t < 25)  return 'move';
+    return 'settle';
+  }
+  // 包沿管道的归一化进度 0..1 (socket 段连续单调)
+  function packetProg(t) {
+    if (t < 7)  return 0;
+    if (t < 16) return (t - 7) / 9;
+    return 1;
+  }
+  // send 阶段包从进程冒出的局部进度
+  function emergeProg(t) {
+    if (t < 3) return 0;
+    if (t < 7) return (t - 3) / 4;
+    return 1;
+  }
+  function parseProg(t) {
+    if (t < 16) return 0;
+    if (t < 21) return (t - 16) / 5;
+    return 1;
+  }
+  function moveProg(t) {
+    if (t < 21) return 0;
+    if (t < 25) return (t - 21) / 4;
+    return 1;
+  }
+  function ease(x) { return x * x * (3 - 2 * x); }
+
+  function geo() {
+    var pyX = W * 0.06, pyW = W * 0.255, boxY = H * 0.28, boxH = H * 0.40;
+    var modX = W * 0.70, modW = W * 0.255;
+    var pipeY = boxY + boxH * 0.5;
+    var pipeX0 = pyX + pyW;
+    var pipeX1 = modX;
+    return { pyX:pyX, pyW:pyW, modX:modX, modW:modW, boxY:boxY, boxH:boxH,
+             pipeY:pipeY, pipeX0:pipeX0, pipeX1:pipeX1 };
+  }
+
+  function roundRect(x, y, w, h, r) {
+    c.beginPath();
+    c.moveTo(x + r, y);
+    c.arcTo(x + w, y, x + w, y + h, r);
+    c.arcTo(x + w, y + h, x, y + h, r);
+    c.arcTo(x, y + h, x, y, r);
+    c.arcTo(x, y, x + w, y, r);
+    c.closePath();
+  }
+
+  /* ---- starfield ---- */
+  var stars = [];
+  (function () {
+    for (var i = 0; i < 60; i++) stars.push({ x: Math.random(), y: Math.random(), r: Math.random() * 1.1 + 0.3, ph: Math.random() * 6.28 });
+  })();
+  function drawStars(t) {
+    c.save();
+    for (var i = 0; i < stars.length; i++) {
+      var s = stars[i];
+      var tw = 0.18 + 0.22 * (0.5 + 0.5 * Math.sin(t * 0.8 + s.ph));
+      c.fillStyle = 'oklch(0.85 0.05 265 / ' + tw + ')';
+      c.beginPath(); c.arc(s.x * W, s.y * H, s.r, 0, Math.PI * 2); c.fill();
+    }
+    c.restore();
+  }
+
+  /* ---- the pipe (常驻主体, 经过段点亮) ---- */
+  function drawPipe(g, prog, t) {
+    var x0 = g.pipeX0, x1 = g.pipeX1, y = g.pipeY;
+    var litX = x0 + (x1 - x0) * prog;
+    c.save();
+    c.lineCap = 'round';
+    c.lineWidth = 10;
+    c.strokeStyle = 'oklch(0.30 0.08 275 / 0.55)';
+    c.beginPath(); c.moveTo(x0, y); c.lineTo(x1, y); c.stroke();
+    if (prog > 0) {
+      var grad = c.createLinearGradient(x0, 0, litX, 0);
+      grad.addColorStop(0, 'oklch(0.55 0.15 200)');
+      grad.addColorStop(1, 'oklch(0.78 0.17 200)');
+      c.lineWidth = 10;
+      c.strokeStyle = grad;
+      c.beginPath(); c.moveTo(x0, y); c.lineTo(litX, y); c.stroke();
+    }
+    c.fillStyle = COL.port; c.font = '11px "JetBrains Mono", monospace'; c.textAlign = 'center';
+    c.fillText('TCP  localhost:30000', (x0 + x1) / 2, y - 18);
+    c.fillStyle = COL.fgMute; c.font = '10px "JetBrains Mono", monospace';
+    c.fillText(LANG === 'cn' ? '单向字节流 byte stream' : 'one-way byte stream', (x0 + x1) / 2, y + 24);
+    c.strokeStyle = 'oklch(0.72 0.17 275 / 0.45)'; c.lineWidth = 1.4;
+    c.setLineDash([4, 10]);
+    c.lineDashOffset = -(t * 40 % 14);
+    c.beginPath(); c.moveTo(x0, y); c.lineTo(x1, y); c.stroke();
+    c.setLineDash([]);
+    c.restore();
+  }
+
+  /* ---- Python 进程框 (左) ---- */
+  function drawPython(g, st, em, t) {
+    var x = g.pyX, y = g.boxY, w = g.pyW, h = g.boxH;
+    var active = (st === 'send');
+    c.save();
+    roundRect(x, y, w, h, 10);
+    var bg = c.createLinearGradient(x, y, x, y + h);
+    bg.addColorStop(0, 'oklch(0.20 0.045 265)');
+    bg.addColorStop(1, 'oklch(0.16 0.04 265)');
+    c.fillStyle = bg; c.fill();
+    c.lineWidth = active ? 2 : 1.3;
+    c.strokeStyle = active ? COL.signal : COL.line;
+    c.stroke();
+    c.fillStyle = COL.fgDim; c.font = '12px "JetBrains Mono", monospace'; c.textAlign = 'left';
+    c.fillText('python  client.py', x + 14, y + 22);
+    c.fillStyle = 'oklch(0.55 0.15 200 / 0.6)';
+    c.beginPath(); c.arc(x + w - 30, y + 18, 3, 0, 6.28); c.fill();
+    c.beginPath(); c.arc(x + w - 20, y + 18, 3, 0, 6.28); c.fill();
+    c.beginPath(); c.arc(x + w - 10, y + 18, 3, 0, 6.28); c.fill();
+    c.font = '12px "JetBrains Mono", monospace';
+    var ly = y + 50, lh = 20;
+    c.fillStyle = COL.fgMute; c.fillText('import socket', x + 14, ly);
+    c.fillStyle = COL.fgDim;  c.fillText('s = socket.socket()', x + 14, ly + lh);
+    var cSeg1 = "s.connect(('127.0.0.1', ";
+    c.fillText(cSeg1, x + 14, ly + lh * 2);
+    var cx = x + 14 + c.measureText(cSeg1).width;
+    c.fillStyle = COL.port;   c.fillText('30000', cx, ly + lh * 2);
+    cx += c.measureText('30000').width;
+    c.fillStyle = COL.fgDim;  c.fillText('))', cx, ly + lh * 2);
+    if (active) { c.fillStyle = 'oklch(0.75 0.17 200 / 0.16)'; c.fillRect(x + 8, ly + lh * 3 - 14, w - 16, 19); }
+    c.fillStyle = active ? COL.signal : COL.fgDim;
+    var sSeg1 = "s.send(b'";
+    c.fillText(sSeg1, x + 14, ly + lh * 3);
+    var sx = x + 14 + c.measureText(sSeg1).width;
+    c.fillStyle = active ? COL.packet : COL.fgDim;
+    c.fillText("left", sx, ly + lh * 3);
+    sx += c.measureText("left").width;
+    c.fillStyle = active ? COL.signal : COL.fgDim;
+    c.fillText("\\n')", sx, ly + lh * 3);
+    c.restore();
+  }
+
+  /* ---- Minetest mod 框 (右) ---- */
+  function drawMod(g, st, parse, t) {
+    var x = g.modX, y = g.boxY, w = g.modW, h = g.boxH;
+    var active = (st === 'mod' || st === 'move' || st === 'settle');
+    c.save();
+    roundRect(x, y, w, h, 10);
+    var bg = c.createLinearGradient(x, y, x, y + h);
+    bg.addColorStop(0, 'oklch(0.20 0.045 265)');
+    bg.addColorStop(1, 'oklch(0.16 0.04 265)');
+    c.fillStyle = bg; c.fill();
+    c.lineWidth = active ? 2 : 1.3;
+    c.strokeStyle = active ? COL.port : COL.line;
+    c.stroke();
+    c.fillStyle = COL.fgDim; c.font = '12px "JetBrains Mono", monospace'; c.textAlign = 'left';
+    c.fillText('minetest  bci.lua', x + 14, y + 22);
+    c.font = '11.5px "JetBrains Mono", monospace';
+    var ly = y + 50, lh = 19;
+    c.fillStyle = COL.fgMute; c.fillText('socket listen :30000', x + 14, ly);
+    c.fillStyle = COL.fgDim;  c.fillText('msg = conn:receive()', x + 14, ly + lh);
+    c.fillStyle = COL.fgDim; c.fillText('if msg ==', x + 14, ly + lh * 2);
+    if (parse > 0.3) {
+      c.fillStyle = 'oklch(0.75 0.17 200 / ' + (0.10 + 0.10 * Math.sin(t * 4)) + ')';
+      c.fillRect(x + 14 + 62, ly + lh * 2 - 13, 42, 17);
+      c.fillStyle = COL.signal; c.fillText('"left"', x + 14 + 66, ly + lh * 2);
+    } else {
+      c.fillStyle = COL.fgMute; c.fillText('"left"', x + 14 + 66, ly + lh * 2);
+    }
+    c.fillStyle = COL.fgDim; c.fillText('then', x + 14 + 118, ly + lh * 2);
+    var calling = (st === 'move' || st === 'settle');
+    c.fillStyle = calling ? COL.ok : COL.fgMute;
+    c.fillText('player:move_left()', x + 28, ly + lh * 3);
+    c.restore();
+  }
+
+  /* ---- Minetest 角色 (方块小人) — move 阶段向左迈一格 ---- */
+  function drawAvatar(g, mp, st, t) {
+    var sx = g.modX + g.modW * 0.5;
+    var groundY = g.boxY + g.boxH + H * 0.16;
+    var step = g.modW * 0.22;
+    var dx = -ease(mp) * step;
+    var bob = (mp > 0 && mp < 1) ? Math.abs(Math.sin(mp * Math.PI * 2)) * 6 : 0;
+    var cx = sx + dx, cy = groundY - bob;
+    var done = (st === 'settle') || mp >= 1;
+    c.save();
+    var bw = g.modW * 0.16;
+    for (var i = -2; i <= 2; i++) {
+      var gx = sx + i * bw - bw / 2;
+      c.strokeStyle = (i === -1 && done) ? 'oklch(0.82 0.17 125 / 0.5)' : 'oklch(0.40 0.05 265 / 0.4)';
+      c.lineWidth = 1;
+      c.strokeRect(gx, groundY + 6, bw, bw * 0.5);
+    }
+    if (mp > 0 && mp < 1) {
+      c.globalAlpha = 0.3;
+      drawBlockMan(sx, groundY, bw * 0.7, COL.node, false);
+      c.globalAlpha = 1;
+    }
+    drawBlockMan(cx, cy, bw * 0.7, done ? COL.ok : COL.signal, mp > 0);
+    if (st === 'move' || st === 'settle') {
+      c.strokeStyle = COL.ok; c.lineWidth = 2.4; c.lineCap = 'round';
+      var ax = cx - bw * 0.9, ay = cy - bw * 0.8;
+      c.beginPath(); c.moveTo(ax + 22, ay); c.lineTo(ax, ay); c.stroke();
+      c.beginPath(); c.moveTo(ax + 7, ay - 6); c.lineTo(ax, ay); c.lineTo(ax + 7, ay + 6); c.stroke();
+      c.fillStyle = COL.ok; c.font = '11px "JetBrains Mono", monospace'; c.textAlign = 'right';
+      c.fillText(LANG === 'cn' ? 'move_left  向左一格' : 'move_left  one block', ax + 22, ay - 12);
+    }
+    c.restore();
+  }
+  function drawBlockMan(cx, baseY, s, col, lookLeft) {
+    c.save();
+    c.fillStyle = col;
+    c.fillRect(cx - s * 0.5, baseY - s * 2.4, s, s);
+    c.fillStyle = 'oklch(0.45 0.12 200)';
+    c.fillRect(cx - s * 0.45, baseY - s * 1.4, s * 0.9, s * 1.0);
+    c.fillStyle = 'oklch(0.32 0.10 200)';
+    c.fillRect(cx - s * 0.45, baseY - s * 0.4, s * 0.4, s * 0.5);
+    c.fillRect(cx + s * 0.05, baseY - s * 0.4, s * 0.4, s * 0.5);
+    c.fillStyle = COL.bg0;
+    var ex = lookLeft ? cx - s * 0.28 : cx - s * 0.1;
+    c.fillRect(ex, baseY - s * 2.05, s * 0.18, s * 0.18);
+    c.fillRect(ex + s * 0.30, baseY - s * 2.05, s * 0.18, s * 0.18);
+    c.restore();
+  }
+
+  /* ---- 数据包 (主角, 同一个包走全程) ---- */
+  function drawPacket(g, t, st, prog, em) {
+    if (st === 'intro') return;
+    var x, y, glow;
+    if (st === 'send') {
+      var sy = g.boxY + 50 + 60;
+      var sxp = g.pyX + g.pyW * 0.45;
+      var e = ease(em);
+      x = sxp + (g.pipeX0 - sxp) * e;
+      y = sy + (g.pipeY - sy) * e;
+      glow = 0.5 + 0.5 * e;
+    } else if (st === 'socket') {
+      x = g.pipeX0 + (g.pipeX1 - g.pipeX0) * prog;
+      y = g.pipeY;
+      glow = 1;
+    } else {
+      x = g.pipeX1; y = g.pipeY;
+      glow = (st === 'mod') ? 1 : 0.35;
+    }
+    c.save();
+    if (st === 'socket') {
+      for (var k = 1; k <= 5; k++) {
+        var tx = x - k * 14;
+        if (tx < g.pipeX0) break;
+        c.fillStyle = 'oklch(0.75 0.17 200 / ' + (0.18 - k * 0.03) + ')';
+        c.beginPath(); c.arc(tx, y, 8 - k, 0, 6.28); c.fill();
+      }
+    }
+    var sz = 13;
+    roundRect(x - sz / 2, y - sz / 2, sz, sz, 3);
+    var pg = c.createLinearGradient(x - sz/2, y - sz/2, x + sz/2, y + sz/2);
+    pg.addColorStop(0, 'oklch(0.92 0.10 200)');
+    pg.addColorStop(1, 'oklch(0.72 0.17 200)');
+    c.fillStyle = pg; c.fill();
+    c.lineWidth = 1.2; c.strokeStyle = 'oklch(0.96 0.06 200 / ' + glow + ')'; c.stroke();
+    var pr = sz * 0.9 + 3 * Math.abs(Math.sin(t * 5));
+    c.strokeStyle = 'oklch(0.85 0.14 200 / ' + (0.4 * glow) + ')'; c.lineWidth = 1.4;
+    c.beginPath(); c.arc(x, y, pr + 4, 0, 6.28); c.stroke();
+    if (st === 'socket') {
+      c.fillStyle = COL.packet; c.font = '10px "JetBrains Mono", monospace'; c.textAlign = 'center';
+      c.fillText("b'left\\n'", x, y - 16);
+    }
+    c.restore();
+  }
+
+  /* ---- 顶部标题 + 链路指示灯 (画面自身, 非字幕) ---- */
+  function drawHeader(t, st) {
+    c.save();
+    c.font = '13px "Space Grotesk", sans-serif'; c.textAlign = 'left';
+    c.fillStyle = COL.fgDim;
+    c.fillText(LANG === 'cn' ? '一条 send 的旅程  ·  Python -> socket -> mod -> 角色'
+                             : "one send's journey  ·  Python -> socket -> mod -> avatar", W * 0.06, H * 0.12);
+    var stages = ['send', 'socket', 'mod', 'move'];
+    var labels = { send: 'send', socket: 'socket', mod: 'parse', move: 'move' };
+    var order = { intro:-1, send:0, socket:1, mod:2, move:3, settle:4 };
+    var cur = order[st];
+    var bx = W * 0.06, by = H * 0.16, gap = 86;
+    for (var i = 0; i < stages.length; i++) {
+      var on = (cur >= i);
+      var done = cur > i || st === 'settle';
+      c.fillStyle = done ? COL.ok : (on ? COL.signal : 'oklch(0.40 0.05 265 / 0.6)');
+      c.beginPath(); c.arc(bx + i * gap, by, 5, 0, 6.28); c.fill();
+      if (i < stages.length - 1) {
+        c.strokeStyle = (cur > i) ? COL.signal : 'oklch(0.40 0.05 265 / 0.5)';
+        c.lineWidth = 2;
+        c.beginPath(); c.moveTo(bx + i * gap + 6, by); c.lineTo(bx + (i + 1) * gap - 6, by); c.stroke();
+      }
+      c.fillStyle = (cur === i && st !== 'settle') ? COL.signal : COL.fgMute;
+      c.font = '9px "JetBrains Mono", monospace'; c.textAlign = 'center';
+      c.fillText(labels[stages[i]], bx + i * gap, by + 18);
+    }
+    c.restore();
+  }
+
+  /* ---- HUD update ---- */
+  function updateHUD(st) {
+    var stageNames = {
+      intro:  { cn: '准备', en: 'ready' },
+      send:   { cn: 'send 发出', en: 'send' },
+      socket: { cn: '管道传输', en: 'on socket' },
+      mod:    { cn: 'mod 解析', en: 'mod parse' },
+      move:   { cn: '角色移动', en: 'avatar move' },
+      settle: { cn: '链路通了', en: 'link live' }
+    };
+    setText('hStage', stageNames[st][LANG]);
+    setText('hPort', '30000');
+    setText('hBytes', '6C 65 66 74 0A');
+    setText('hCmd', 'left');
+    var hs = document.getElementById('hStage');
+    var hc = document.getElementById('hCmd');
+    if (st === 'settle') { hs.classList.remove('ok'); hs.classList.add('gold'); hc.classList.add('ok'); }
+    else if (st === 'move') { hs.classList.remove('gold'); hs.classList.add('ok'); hc.classList.add('ok'); }
+    else { hs.classList.remove('ok'); hs.classList.remove('gold'); hc.classList.remove('ok'); }
+  }
+
+  /* ---- main loop ---- */
+  var startTime = null, lastStage = '';
+  function frame(now) {
+    if (startTime === null) startTime = now;
+    var t = ((now - startTime) / 1000) % CYCLE;
+
+    c.clearRect(0, 0, W, H);
+    c.fillStyle = COL.bg0; c.fillRect(0, 0, W, H);
+    drawStars(t);
+
+    var st = stageAt(t);
+    var g = geo();
+    var prog = packetProg(t);
+    var em = emergeProg(t);
+    var parse = parseProg(t);
+    var mp = moveProg(t);
+
+    drawHeader(t, st);
+    drawPipe(g, prog, t);
+    drawPython(g, st, em, t);
+    drawMod(g, st, parse, t);
+    drawAvatar(g, mp, st, t);
+    drawPacket(g, t, st, prog, em);
+
+    updateHUD(st);
+
+    if (st !== lastStage) {
+      lastStage = st;
+      curStage = st;
+      applySub();
+    }
+
+    requestAnimationFrame(frame);
+  }
+
+  function boot() {
+    resize();
+    refreshI18N();
+    curStage = 'intro';
+    applySub();
+    requestAnimationFrame(frame);
+  }
+
+  if (document.readyState === 'complete') boot();
+  else window.addEventListener('load', boot);
+  setTimeout(function () { if (startTime === null) boot(); }, 300);
+})();
+</script>
+</body>
+</html>

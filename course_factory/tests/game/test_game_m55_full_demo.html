@@ -1,0 +1,565 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>M55 First Mind Control</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;700&family=Inter:wght@400;500;700&family=Noto+Sans+SC:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#FAF9F5; --paper-2:#F1EDDF; --card:#FFFFFF;
+  --ink:#191814; --ink-2:#2B2924; --sub:#6B6557; --sub-2:#9D978A;
+  --border:#EBE5D6; --border-2:#D9D1BD; --hairline:#F2EDE0;
+  --primary:#D97757; --primary-ink:#9A4A2E; --primary-soft:#F8EDE5; --primary-line:#ECCFB8;
+  --computing:#C04E68; --computing-soft:#F4DDE3; --computing-line:#E4B7C2; --computing-ink:#7A2F44;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:100%;height:100vh;overflow:hidden;background:var(--paper);
+  font-family:'Noto Sans SC','Inter',sans-serif;color:var(--ink)}
+.mono{font-family:'JetBrains Mono',monospace}
+.app{display:flex;height:100vh;width:100%}
+
+/* ---------- sidebar ---------- */
+.game-sidebar{width:200px;flex-shrink:0;background:var(--card);border-right:1px solid var(--border);
+  display:flex;flex-direction:column;padding:14px 12px;gap:12px;overflow-y:auto}
+.brand{font-size:11px;letter-spacing:1px;color:var(--sub-2);font-weight:700}
+.brand .mono{color:var(--primary);font-size:11px}
+.s-title{font-size:15px;font-weight:700;line-height:1.3;color:var(--ink)}
+.s-title .em{color:var(--primary)}
+.sec{border-top:1px solid var(--hairline);padding-top:10px}
+.sec h4{font-size:10px;letter-spacing:1px;color:var(--sub-2);font-weight:700;text-transform:uppercase;margin-bottom:6px}
+.sec p{font-size:11px;line-height:1.55;color:var(--sub)}
+.road{display:flex;flex-direction:column;gap:3px}
+.road .st{display:flex;align-items:center;gap:6px;font-size:10.5px;color:var(--sub-2);padding:2px 0}
+.road .st .dot{width:7px;height:7px;border-radius:50%;background:var(--border-2);flex-shrink:0}
+.road .st.done .dot{background:var(--primary-line)}
+.road .st.here{color:var(--ink);font-weight:700}
+.road .st.here .dot{background:var(--primary);box-shadow:0 0 0 3px var(--primary-soft)}
+.ops{display:flex;flex-direction:column;gap:7px}
+.op{display:flex;align-items:center;gap:8px;font-size:11px;color:var(--ink-2)}
+.key{font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;min-width:30px;text-align:center;
+  padding:3px 0;border:1px solid var(--border-2);border-radius:5px;background:var(--paper-2);color:var(--ink)}
+.langbtn{margin-top:auto;font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;
+  padding:7px 0;cursor:pointer;border:1px solid var(--border-2);background:var(--card);color:var(--ink);
+  border-radius:7px;letter-spacing:1px}
+.langbtn:hover{background:var(--paper-2)}
+
+/* ---------- main ---------- */
+.game-main{flex:1;min-width:0;display:flex;flex-direction:column;background:var(--paper)}
+.hudbar{display:flex;gap:10px;padding:10px 14px;flex-shrink:0}
+.hcard{flex:1;background:var(--card);border:1px solid var(--border);border-radius:10px;
+  padding:8px 10px;box-shadow:0 1px 3px rgba(60,50,30,.05)}
+.hcard .hl{font-size:9px;letter-spacing:1px;color:var(--sub-2);font-weight:700;text-transform:uppercase}
+.hcard .hv{font-family:'JetBrains Mono',monospace;font-size:18px;font-weight:700;color:var(--ink);margin-top:2px}
+.hcard.accent .hv{color:var(--primary)}
+.hcard .hv small{font-size:10px;color:var(--sub);font-weight:500}
+
+/* imagine strength bars */
+.strip{display:flex;gap:10px;padding:0 14px 8px;flex-shrink:0}
+.imgcell{flex:1;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:8px 12px;
+  box-shadow:0 1px 3px rgba(60,50,30,.05)}
+.imgcell .lab{display:flex;justify-content:space-between;align-items:center;margin-bottom:5px}
+.imgcell .lab span{font-size:10.5px;font-weight:700;color:var(--sub)}
+.imgcell .lab .mono{font-size:11px;color:var(--ink)}
+.imgcell.armed{border-color:var(--primary-line);background:var(--primary-soft)}
+.imgcell.armed .lab span{color:var(--primary-ink)}
+.bar{height:12px;border-radius:6px;background:var(--paper-2);overflow:hidden;position:relative}
+.bar .fill{height:100%;width:0%;border-radius:6px}
+.imgcell.left .fill{background:linear-gradient(90deg,#E4B7C2,var(--computing))}
+.imgcell.right .fill{background:linear-gradient(90deg,var(--primary-line),var(--primary))}
+.bar .thr{position:absolute;top:0;bottom:0;width:2px;background:var(--ink-2);opacity:.35}
+
+/* stage canvas */
+.stage{flex:1;min-height:0;display:flex;flex-direction:column;position:relative;
+  margin:0 14px 12px;border:1px solid var(--border);border-radius:12px;overflow:hidden;background:var(--card);
+  box-shadow:0 2px 8px rgba(60,50,30,.06)}
+canvas{display:block;flex:1;width:100%;min-height:0}
+
+/* touch hold buttons */
+.touchrow{display:flex;gap:10px;padding:10px 14px 14px;flex-shrink:0}
+.holdbtn{flex:1;font-family:'JetBrains Mono',monospace;font-weight:700;font-size:13px;
+  padding:13px 0;cursor:pointer;border:1px solid var(--border-2);border-radius:10px;background:var(--card);
+  color:var(--ink);letter-spacing:1px;user-select:none;-webkit-user-select:none;touch-action:none}
+.holdbtn .hint{display:block;font-family:'Noto Sans SC',sans-serif;font-size:10px;font-weight:500;color:var(--sub-2);margin-top:2px}
+.holdbtn:active,.holdbtn.pressing{background:var(--primary-soft);border-color:var(--primary-line);color:var(--primary-ink)}
+.startbtn{flex:0 0 150px;font-family:'JetBrains Mono',monospace;font-weight:700;font-size:13px;
+  padding:13px 0;cursor:pointer;border:1px solid var(--primary);border-radius:10px;background:var(--primary);
+  color:#fff;letter-spacing:1px}
+.startbtn:hover{background:var(--primary-ink);border-color:var(--primary-ink)}
+.resetbtn{flex:0 0 90px;font-family:'JetBrains Mono',monospace;font-weight:700;font-size:12px;
+  padding:13px 0;cursor:pointer;border:1px solid var(--border-2);border-radius:10px;background:var(--card);color:var(--sub)}
+.resetbtn:hover{background:var(--paper-2)}
+
+/* celebration overlay */
+.overlay{position:absolute;inset:0;background:rgba(250,249,245,.95);display:none;flex-direction:column;
+  align-items:center;justify-content:center;text-align:center;padding:24px;z-index:20}
+.overlay.show{display:flex}
+.medal{width:64px;height:64px;border-radius:50%;background:var(--primary);display:flex;align-items:center;
+  justify-content:center;margin-bottom:14px;box-shadow:0 6px 18px rgba(217,119,87,.35)}
+.medal .mono{color:#fff;font-size:24px;font-weight:700}
+.overlay h2{font-size:22px;color:var(--primary-ink);margin-bottom:8px}
+.overlay .big{font-family:'JetBrains Mono',monospace;font-size:14px;color:var(--ink);margin-bottom:6px}
+.overlay p{font-size:13px;color:var(--sub);line-height:1.6;max-width:420px;margin-bottom:16px}
+.overlay button{font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:700;padding:9px 26px;cursor:pointer;
+  border:1px solid var(--primary);border-radius:8px;background:var(--card);color:var(--primary-ink);letter-spacing:1px}
+.banner{position:absolute;top:10px;left:50%;transform:translateX(-50%);z-index:10;
+  background:var(--card);border:1px solid var(--border);border-radius:8px;padding:6px 14px;
+  font-size:11.5px;color:var(--ink-2);box-shadow:0 2px 6px rgba(60,50,30,.08);max-width:80%;text-align:center}
+.banner.win{background:var(--primary-soft);border-color:var(--primary-line);color:var(--primary-ink);font-weight:700}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="game-sidebar">
+    <div class="brand">EEG &middot; MINETEST <span class="mono">BCI</span></div>
+    <div class="s-title" id="sTitle">用<span class="em">念头</span>让角色动起来</div>
+
+    <div class="sec">
+      <h4 id="goalH">本关目标</h4>
+      <p id="goalP">不碰键盘控制角色，只靠"想象左/右手"经过解码让角色走完整条路到终点。脱手脑控约 60 秒。</p>
+    </div>
+
+    <div class="sec">
+      <h4 id="whyH">为什么做这关</h4>
+      <p id="whyP">这是项目终点：前 5 步把脑电变成左右指令，这一关把指令真正喂给角色——你第一次完全脱手用念头玩游戏。</p>
+    </div>
+
+    <div class="sec">
+      <h4 id="roadH">项目进度</h4>
+      <div class="road" id="road"></div>
+    </div>
+
+    <div class="sec">
+      <h4 id="opH">操作说明</h4>
+      <div class="ops" id="ops">
+        <div class="op"><span class="key">A</span><span id="opL">长按=想象左手</span></div>
+        <div class="op"><span class="key">D</span><span id="opR">长按=想象右手</span></div>
+      </div>
+    </div>
+
+    <button class="langbtn" id="langBtn">EN</button>
+  </aside>
+
+  <main class="game-main">
+    <div class="hudbar">
+      <div class="hcard"><div class="hl" id="huDecL">解码 CLASS</div><div class="hv" id="huDec">--</div></div>
+      <div class="hcard"><div class="hl" id="huConfL">置信度 CONF</div><div class="hv mono" id="huConf">--<small>%</small></div></div>
+      <div class="hcard accent"><div class="hl" id="huHandsL">已脱手 HANDS-FREE</div><div class="hv mono" id="huHands">0.0<small>s</small></div></div>
+      <div class="hcard"><div class="hl" id="huProgL">路程 PROGRESS</div><div class="hv mono" id="huProg">0<small>/7</small></div></div>
+    </div>
+
+    <div class="strip">
+      <div class="imgcell left" id="cellL">
+        <div class="lab"><span id="labL">想象 左手 转左</span><span class="mono" id="valL">0</span></div>
+        <div class="bar"><div class="thr" id="thrL"></div><div class="fill" id="fillL"></div></div>
+      </div>
+      <div class="imgcell right" id="cellR">
+        <div class="lab"><span id="labR">想象 右手 转右</span><span class="mono" id="valR">0</span></div>
+        <div class="bar"><div class="thr" id="thrR"></div><div class="fill" id="fillR"></div></div>
+      </div>
+    </div>
+
+    <div class="stage" id="stage">
+      <div class="banner" id="banner">长按 A / D（或左右方向键）想象，让强度条蓄满 即可解码出动作</div>
+      <canvas id="c"></canvas>
+      <div class="overlay" id="overlay">
+        <div class="medal"><span class="mono">4</span></div>
+        <h2 id="ovTitle">哇时刻 4 达成</h2>
+        <div class="big mono" id="ovStat"></div>
+        <p id="ovText">你刚刚只用念头控制了角色走完全程。手一直没碰方向——脑电变成了游戏里的左右转。这就是脑机接口。</p>
+        <button id="ovBtn">再来一次</button>
+      </div>
+    </div>
+
+    <div class="touchrow">
+      <button class="holdbtn" id="holdL">想象 左手<span class="hint" id="hintL">长按 / 键盘 A</span></button>
+      <button class="startbtn" id="btnStart">开始脑控</button>
+      <button class="resetbtn" id="btnReset">重置</button>
+      <button class="holdbtn" id="holdR">想象 右手<span class="hint" id="hintR">长按 / 键盘 D</span></button>
+    </div>
+  </main>
+</div>
+
+<script>
+(function(){
+"use strict";
+
+/* ===== canvas literal colors (no CSS vars in canvas) ===== */
+var COL={
+  grassA:'#CFE0B0', grassB:'#C2D69E',
+  path:'#E7DFC8', pathEdge:'#D2C49E', pathDash:'#BCAA7C',
+  goalGlow:'#F8EDE5', goalPost:'#D97757', goalPost2:'#9A4A2E',
+  block1:'#A9C081', block2:'#8FB36A', tree:'#6E8B4A', trunk:'#9A7B4F',
+  ava:'#D97757', avaDark:'#9A4A2E', avaFace:'#FAF9F5',
+  ink:'#2B2924', think:'#C04E68', thinkSoft:'rgba(192,78,104,0.18)',
+  ok:'#7FA45A', warn:'#C9A23F', shadow:'rgba(70,55,30,0.16)'
+};
+
+var I18N={
+  sTitle:{cn:'用<span class="em">念头</span>让角色动起来',en:'Move the avatar with your <span class="em">mind</span>'},
+  goalH:{cn:'本关目标',en:'GOAL'},
+  goalP:{cn:'不碰键盘控制角色，只靠"想象左/右手"经过解码让角色走完整条路到终点。脱手脑控约 60 秒。',en:'Do not steer the avatar directly. Only "imagine left/right hand" — the decoder turns it into moves. Stay hands-free ~60s to reach the goal.'},
+  whyH:{cn:'为什么做这关',en:'WHY THIS LEVEL'},
+  whyP:{cn:'这是项目终点：前 5 步把脑电变成左右指令，这一关把指令真正喂给角色——你第一次完全脱手用念头玩游戏。',en:'The finale: stages 1-5 turned EEG into L/R commands; here those commands finally drive the avatar — your first fully hands-free, mind-controlled play.'},
+  roadH:{cn:'项目进度',en:'PROJECT MAP'},
+  opH:{cn:'操作说明',en:'CONTROLS'},
+  opL:{cn:'长按=想象左手',en:'hold = imagine LEFT'},
+  opR:{cn:'长按=想象右手',en:'hold = imagine RIGHT'},
+  huDecL:{cn:'解码 CLASS',en:'DECODED CLASS'},
+  huConfL:{cn:'置信度 CONF',en:'CONFIDENCE'},
+  huHandsL:{cn:'已脱手 HANDS-FREE',en:'HANDS-FREE'},
+  huProgL:{cn:'路程 PROGRESS',en:'PROGRESS'},
+  labL:{cn:'想象 左手 转左',en:'imagine L hand -> turn LEFT'},
+  labR:{cn:'想象 右手 转右',en:'imagine R hand -> turn RIGHT'},
+  hintL:{cn:'长按 / 键盘 A',en:'hold / key A'},
+  hintR:{cn:'长按 / 键盘 D',en:'hold / key D'},
+  btnStart:{cn:'开始脑控',en:'START MIND-CTRL'},
+  btnReset:{cn:'重置',en:'RESET'},
+  ovTitle:{cn:'哇时刻 4 达成',en:'WOW MOMENT 4'},
+  ovText:{cn:'你刚刚只用念头控制了角色走完全程。手一直没碰方向——脑电变成了游戏里的左右转。这就是脑机接口。',en:'You just guided the avatar to the end using only your mind. Your hands never steered — EEG became in-game turns. That is a brain-computer interface.'},
+  ovBtn:{cn:'再来一次',en:'PLAY AGAIN'},
+  bIdle:{cn:'长按 A / D（或左右方向键）想象，让强度条蓄满 即可解码出动作',en:'Hold A / D (or arrow keys) to imagine; fill a bar -> the decoder fires a move'},
+  bRun:{cn:'脑控中…专注想象同一只手，断断续续会蓄不满',en:'Mind-control on... focus on one hand; choppy imagery never fills the bar'},
+  bDecodeL:{cn:'解码 LEFT 角色左转前进',en:'Decoded: LEFT -> avatar turns left & steps'},
+  bDecodeR:{cn:'解码 RIGHT 角色右转前进',en:'Decoded: RIGHT -> avatar turns right & steps'},
+  bMiss:{cn:'置信度太低，解码放弃这次输出——角色发呆没动',en:'Confidence too low — decoder skipped this output; avatar idled'},
+  bWrong:{cn:'误识别！解码方向反了，要靠下一次想象纠正',en:'Misclassified! Wrong turn decoded — fix it with your next imagery'},
+  bStart:{cn:'计时开始：现在起完全脱手，只用念头！',en:'Timer started: fully hands-free from now — mind only!'},
+  segWin:{cn:'走对一格！离终点更近',en:'Correct step! Closer to the goal'},
+  bWinCn:'到达终点！完全脱手脑控成功', bWinEn:'Reached the goal — fully hands-free!'
+};
+I18N.ovStat={cn:function(s,a){return '脱手 '+s+' 秒 · 平均置信度 '+a+'%';},en:function(s,a){return s+'s hands-free · avg conf '+a+'%';}};
+
+var STAGES=[
+  {cn:'S1 读懂脑电',en:'S1 Read EEG',done:true},
+  {cn:'S2 清洗信号',en:'S2 Clean Signal',done:true},
+  {cn:'S3 解码左右',en:'S3 Decode L/R',done:true},
+  {cn:'S4 稳定上线',en:'S4 Stay Stable',done:true},
+  {cn:'S5 接入游戏',en:'S5 Hook Game',done:true},
+  {cn:'S6 脑控通关',en:'S6 Mind Clear',done:false,here:true}
+];
+
+var LANG='cn';
+function t(k){var e=I18N[k];return e?e[LANG]:k;}
+function $(id){return document.getElementById(id);}
+
+function buildRoad(){
+  var r=$('road');r.innerHTML='';
+  STAGES.forEach(function(s){
+    var d=document.createElement('div');
+    d.className='st'+(s.done?' done':'')+(s.here?' here':'');
+    d.innerHTML='<span class="dot"></span><span>'+(s[LANG])+'</span>';
+    r.appendChild(d);
+  });
+}
+
+function applyLang(){
+  $('sTitle').innerHTML=t('sTitle');
+  ['goalH','goalP','whyH','whyP','roadH','opH','opL','opR','huDecL','huConfL','huHandsL','huProgL',
+   'labL','labR','hintL','hintR','btnStart','btnReset','ovTitle','ovText','ovBtn'].forEach(function(id){
+    var el=$(id);if(el)el.textContent=t(id);
+  });
+  $('holdL').childNodes[0].nodeValue=(LANG==='cn'?'想象 左手':'IMAGINE LEFT');
+  $('holdR').childNodes[0].nodeValue=(LANG==='cn'?'想象 右手':'IMAGINE RIGHT');
+  $('langBtn').textContent=LANG==='cn'?'EN':'CN';
+  buildRoad();
+  if(!gameState.running && !gameState.won) $('banner').textContent=t('bIdle');
+}
+
+/* ===================== game core ===================== */
+var canvas=$('c'), ctx=canvas.getContext('2d');
+var W=0,H=0,DPR=Math.min(window.devicePixelRatio||1,2);
+
+function resize(){
+  var rect=$('stage').getBoundingClientRect();
+  W=Math.max(rect.width-2,80);
+  H=Math.max(rect.height-2,80);
+  canvas.width=Math.round(W*DPR);
+  canvas.height=Math.round(H*DPR);
+  canvas.style.width=W+'px';canvas.style.height=H+'px';
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+}
+window.addEventListener('resize',resize);
+
+var PATH=[
+  {x:0.14,y:0.82},{x:0.14,y:0.56},{x:0.38,y:0.56},{x:0.38,y:0.30},
+  {x:0.64,y:0.30},{x:0.64,y:0.58},{x:0.86,y:0.58},{x:0.86,y:0.20}
+];
+var NSEG=PATH.length-1; // 7
+var TURNS=['right','right','left','right','right','left','right']; // imagery class that advances each segment
+
+var gameState={
+  running:false, won:false, seg:0,
+  pos:{x:0,y:0}, facing:'right',
+  handsFreeMs:0, confSum:0, confCount:0,
+  lastDecode:'--', lastConf:0, bannerKey:'bIdle'
+};
+var imagine={left:0,right:0};
+var holding={left:false,right:false};
+var decodeBusy=false, celebrateT=0;
+
+var THRESH=72, DECODE_DELAY=800, DECAY=42, RISE=58;
+
+function resetGame(){
+  gameState.running=false;gameState.won=false;gameState.seg=0;
+  gameState.facing='right';gameState.handsFreeMs=0;
+  gameState.confSum=0;gameState.confCount=0;
+  gameState.lastDecode='--';gameState.lastConf=0;gameState.bannerKey='bIdle';
+  imagine.left=0;imagine.right=0;decodeBusy=false;celebrateT=0;confetti=null;
+  gameState.pos={x:PATH[0].x,y:PATH[0].y};
+  $('overlay').classList.remove('show');
+  $('banner').classList.remove('win');
+  $('banner').textContent=t('bIdle');
+  setHold('left',false);setHold('right',false);
+  updateHUD();
+}
+
+function startGame(){
+  if(gameState.won)resetGame();
+  gameState.running=true;
+  gameState.bannerKey='bStart';
+  $('banner').textContent=t('bStart');
+  setTimeout(function(){
+    if(gameState.running&&gameState.bannerKey==='bStart'){
+      gameState.bannerKey='bRun';$('banner').textContent=t('bRun');
+    }
+  },1400);
+}
+
+function tryDecode(cls){
+  if(decodeBusy||!gameState.running||gameState.won)return;
+  decodeBusy=true;
+  imagine[cls]=0;
+  setTimeout(function(){
+    if(!gameState.running||gameState.won){decodeBusy=false;return;}
+    var contamination=cls==='left'?imagine.right:imagine.left;
+    var conf=Math.round(88 - contamination*0.55 - Math.random()*22);
+    if(conf<0)conf=0;if(conf>99)conf=99;
+    gameState.lastConf=conf;
+    gameState.confSum+=conf;gameState.confCount++;
+    if(conf<48){
+      gameState.lastDecode='--';
+      gameState.bannerKey='bMiss';$('banner').textContent=t('bMiss');
+      decodeBusy=false;updateHUD();return;
+    }
+    var misP=(70-conf)/120; if(misP<0)misP=0;
+    var actual=cls;
+    if(Math.random()<misP){ actual=cls==='left'?'right':'left'; }
+    gameState.lastDecode=actual==='left'?'LEFT':'RIGHT';
+    applyMove(actual,cls);
+    decodeBusy=false;updateHUD();
+  },DECODE_DELAY);
+}
+
+function applyMove(actual,intended){
+  gameState.facing=actual;
+  var need=TURNS[gameState.seg];
+  if(actual===need){
+    gameState.seg++;
+    if(actual===intended){
+      gameState.bannerKey=actual==='left'?'bDecodeL':'bDecodeR';
+      $('banner').textContent=t(gameState.bannerKey);
+    }else{ $('banner').textContent=t('segWin'); }
+    if(gameState.seg>=NSEG){ winGame(); }
+  }else{
+    gameState.bannerKey='bWrong';$('banner').textContent=t('bWrong');
+  }
+}
+
+function winGame(){
+  gameState.won=true;gameState.running=false;celebrateT=0;
+  var secs=(gameState.handsFreeMs/1000).toFixed(1);
+  var avg=gameState.confCount?Math.round(gameState.confSum/gameState.confCount):0;
+  $('ovStat').textContent=I18N.ovStat[LANG](secs,avg);
+  $('overlay').classList.add('show');
+  $('banner').classList.add('win');
+  $('banner').textContent=LANG==='cn'?I18N.bWinCn:I18N.bWinEn;
+}
+
+/* ---------- input ---------- */
+function setHold(cls,on){
+  holding[cls]=on;
+  $(cls==='left'?'holdL':'holdR').classList.toggle('pressing',on);
+  $(cls==='left'?'cellL':'cellR').classList.toggle('armed',on);
+}
+function onKey(e,on){
+  var k=e.key.toLowerCase();
+  if(k==='a'||k==='arrowleft'){setHold('left',on);e.preventDefault();}
+  else if(k==='d'||k==='arrowright'){setHold('right',on);e.preventDefault();}
+}
+window.addEventListener('keydown',function(e){onKey(e,true);});
+window.addEventListener('keyup',function(e){onKey(e,false);});
+
+function bindHold(btn,cls){
+  btn.addEventListener('mousedown',function(e){e.preventDefault();setHold(cls,true);});
+  btn.addEventListener('mouseup',function(){setHold(cls,false);});
+  btn.addEventListener('mouseleave',function(){setHold(cls,false);});
+  btn.addEventListener('touchstart',function(e){e.preventDefault();setHold(cls,true);},{passive:false});
+  btn.addEventListener('touchend',function(e){e.preventDefault();setHold(cls,false);},{passive:false});
+  btn.addEventListener('touchcancel',function(){setHold(cls,false);});
+}
+bindHold($('holdL'),'left');
+bindHold($('holdR'),'right');
+
+$('btnStart').addEventListener('click',startGame);
+$('btnReset').addEventListener('click',resetGame);
+$('ovBtn').addEventListener('click',function(){resetGame();startGame();});
+$('langBtn').addEventListener('click',function(){LANG=LANG==='cn'?'en':'cn';applyLang();updateHUD();});
+
+/* ---------- HUD ---------- */
+function updateHUD(){
+  $('huDec').textContent=gameState.lastDecode;
+  $('huConf').innerHTML=(gameState.running||gameState.won?gameState.lastConf:0)+'<small>%</small>';
+  $('huHands').innerHTML=(gameState.handsFreeMs/1000).toFixed(1)+'<small>s</small>';
+  $('huProg').innerHTML=gameState.seg+'<small>/'+NSEG+'</small>';
+}
+
+/* ---------- update loop ---------- */
+var lastT=performance.now();
+function update(now){
+  var dt=(now-lastT)/1000; if(dt>0.1)dt=0.1; lastT=now;
+
+  ['left','right'].forEach(function(cls){
+    if(holding[cls]&&gameState.running&&!gameState.won){
+      imagine[cls]=Math.min(100,imagine[cls]+RISE*dt);
+    }else{
+      imagine[cls]=Math.max(0,imagine[cls]-DECAY*dt);
+    }
+  });
+  if(gameState.running&&!gameState.won&&!decodeBusy){
+    if(imagine.left>=THRESH) tryDecode('left');
+    else if(imagine.right>=THRESH) tryDecode('right');
+  }
+  if(gameState.running&&!gameState.won){ gameState.handsFreeMs+=dt*1000; }
+
+  var tgt=PATH[Math.min(gameState.seg,NSEG)];
+  gameState.pos.x+=(tgt.x-gameState.pos.x)*Math.min(1,dt*5);
+  gameState.pos.y+=(tgt.y-gameState.pos.y)*Math.min(1,dt*5);
+
+  if(gameState.won)celebrateT+=dt;
+
+  $('fillL').style.width=imagine.left+'%';
+  $('fillR').style.width=imagine.right+'%';
+  $('valL').textContent=Math.round(imagine.left);
+  $('valR').textContent=Math.round(imagine.right);
+  $('thrL').style.left=THRESH+'%';
+  $('thrR').style.left=THRESH+'%';
+  if(gameState.running) updateHUD();
+
+  draw(now);
+  requestAnimationFrame(update);
+}
+
+/* ---------- draw ---------- */
+function px(nx){return nx*W;} function py(ny){return ny*H;}
+
+function draw(now){
+  ctx.clearRect(0,0,W,H);
+  var cell=Math.max(26,Math.min(W,H)/12);
+  for(var gy=0;gy<H+cell;gy+=cell){
+    for(var gx=0;gx<W+cell;gx+=cell){
+      var even=((Math.floor(gx/cell)+Math.floor(gy/cell))%2)===0;
+      ctx.fillStyle=even?COL.grassA:COL.grassB;
+      ctx.fillRect(gx,gy,cell,cell);
+    }
+  }
+  drawTree(0.50,0.82,cell); drawTree(0.24,0.20,cell*0.9); drawTree(0.74,0.80,cell*0.85);
+
+  ctx.lineCap='round';ctx.lineJoin='round';
+  ctx.strokeStyle=COL.pathEdge;ctx.lineWidth=Math.max(18,cell*0.62);strokePath();
+  ctx.strokeStyle=COL.path;ctx.lineWidth=Math.max(12,cell*0.46);strokePath();
+  ctx.setLineDash([6,9]);ctx.strokeStyle=COL.pathDash;ctx.lineWidth=2;strokePath();ctx.setLineDash([]);
+
+  for(var i=0;i<PATH.length;i++){
+    var p=PATH[i];
+    ctx.beginPath();ctx.arc(px(p.x),py(p.y),i<=gameState.seg?5:3.5,0,Math.PI*2);
+    ctx.fillStyle=i<gameState.seg?COL.goalPost:(i===gameState.seg?COL.think:COL.pathEdge);
+    ctx.fill();
+  }
+  drawGoal(PATH[NSEG],now);
+  drawAvatar(now);
+  if(gameState.won) drawConfetti();
+}
+
+function strokePath(){
+  ctx.beginPath();
+  ctx.moveTo(px(PATH[0].x),py(PATH[0].y));
+  for(var i=1;i<PATH.length;i++)ctx.lineTo(px(PATH[i].x),py(PATH[i].y));
+  ctx.stroke();
+}
+
+function drawTree(nx,ny,cell){
+  var x=px(nx),y=py(ny),r=cell*0.42;
+  ctx.fillStyle=COL.trunk;ctx.fillRect(x-cell*0.07,y,cell*0.14,cell*0.34);
+  ctx.fillStyle=COL.tree;ctx.fillRect(x-r,y-r*1.1,r*2,r*1.6);
+  ctx.fillStyle=COL.block1;ctx.fillRect(x-r*0.6,y-r*1.5,r*1.2,r*0.7);
+}
+
+function drawGoal(p,now){
+  var x=px(p.x),y=py(p.y);
+  var pulse=4+Math.sin(now/300)*3;
+  ctx.beginPath();ctx.arc(x,y,18+pulse,0,Math.PI*2);ctx.fillStyle=COL.goalGlow;ctx.fill();
+  ctx.fillStyle=COL.goalPost2;ctx.fillRect(x-2.5,y-26,5,30);
+  ctx.fillStyle=COL.goalPost;
+  ctx.beginPath();ctx.moveTo(x+2.5,y-26);ctx.lineTo(x+22,y-20);ctx.lineTo(x+2.5,y-14);ctx.closePath();ctx.fill();
+}
+
+function drawAvatar(now){
+  var x=px(gameState.pos.x),y=py(gameState.pos.y);
+  var bob=gameState.running?Math.sin(now/180)*2:Math.sin(now/600)*1.2;
+  y+=bob;
+  var s=Math.max(13,Math.min(W,H)/22);
+  var act=Math.max(imagine.left,imagine.right);
+  if(act>8&&!gameState.won){
+    var br=s*0.5+act*0.06;
+    ctx.fillStyle=COL.thinkSoft;
+    ctx.beginPath();ctx.arc(x,y-s*1.8,br,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle=COL.think;ctx.font='bold '+(s*0.55)+"px 'JetBrains Mono',monospace";
+    ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.globalAlpha=Math.min(1,act/60);
+    ctx.fillText(imagine.left>imagine.right?'L':'R',x,y-s*1.8);
+    ctx.globalAlpha=1;
+  }
+  ctx.fillStyle=COL.shadow;
+  ctx.beginPath();ctx.ellipse(x,y+s*0.95,s*0.7,s*0.26,0,0,Math.PI*2);ctx.fill();
+  ctx.fillStyle=COL.avaDark;ctx.fillRect(x-s*0.55,y-s*0.1,s*1.1,s*1.0);
+  ctx.fillStyle=COL.ava;ctx.fillRect(x-s*0.55,y-s*0.95,s*1.1,s*0.9);
+  ctx.fillStyle=COL.avaFace;
+  var fx=gameState.facing==='left'?-s*0.18:(gameState.facing==='right'?s*0.18:0);
+  ctx.fillRect(x-s*0.3+fx,y-s*0.7,s*0.18,s*0.18);
+  ctx.fillRect(x+fx+s*0.12,y-s*0.7,s*0.18,s*0.18);
+  if(gameState.running||gameState.won){
+    ctx.strokeStyle=COL.ink;ctx.lineWidth=2;ctx.beginPath();
+    var ay=y-s*1.25;
+    if(gameState.facing==='left'){ctx.moveTo(x+6,ay);ctx.lineTo(x-8,ay);ctx.lineTo(x-3,ay-5);ctx.moveTo(x-8,ay);ctx.lineTo(x-3,ay+5);}
+    else{ctx.moveTo(x-6,ay);ctx.lineTo(x+8,ay);ctx.lineTo(x+3,ay-5);ctx.moveTo(x+8,ay);ctx.lineTo(x+3,ay+5);}
+    ctx.stroke();
+  }
+}
+
+var confetti=null;
+function drawConfetti(){
+  if(!confetti){
+    confetti=[];var cols=[COL.goalPost,COL.think,COL.ok,COL.warn,COL.block2];
+    for(var i=0;i<70;i++)confetti.push({x:Math.random()*W,y:Math.random()*-H,vx:(Math.random()-0.5)*40,
+      vy:60+Math.random()*90,s:4+Math.random()*5,c:cols[i%cols.length],r:Math.random()*6});
+  }
+  for(var j=0;j<confetti.length;j++){
+    var p=confetti[j];p.y+=p.vy*0.016;p.x+=p.vx*0.016;p.r+=0.1;
+    if(p.y>H+10){p.y=-10;p.x=Math.random()*W;}
+    ctx.save();ctx.translate(p.x,p.y);ctx.rotate(p.r);
+    ctx.fillStyle=p.c;ctx.fillRect(-p.s/2,-p.s/2,p.s,p.s*0.6);ctx.restore();
+  }
+}
+
+/* ---------- boot ---------- */
+applyLang();
+resize();
+resetGame();
+requestAnimationFrame(update);
+setTimeout(resize,120);
+setTimeout(resize,500);
+})();
+</script>
+</body>
+</html>

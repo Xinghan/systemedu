@@ -1,0 +1,1051 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>M52 · 接通这条管道 — Pipe Builder</title>
+<style>
+  :root{
+    /* Layer 1 — shared deep space canvas (hue 265) */
+    --bg-0: oklch(0.14 0.035 265);
+    --bg-1: oklch(0.18 0.04 265);
+    --bg-2: oklch(0.22 0.045 265);
+    --bg-3: oklch(0.28 0.05 265);
+    --line: oklch(0.35 0.05 265 / 0.35);
+    --line-strong: oklch(0.55 0.08 265 / 0.55);
+    --fg:      oklch(0.96 0.01 265);
+    --fg-dim:  oklch(0.75 0.02 265);
+    --fg-mute: oklch(0.55 0.03 265);
+    --gold:    oklch(0.85 0.14 85);
+
+    /* Layer 2 — accent (cs / elec) */
+    --accent: oklch(0.75 0.17 200);
+    --elec:   oklch(0.72 0.17 275);
+
+    /* Layer 3 — cs palette */
+    --signal: oklch(0.75 0.17 200);
+    --port:   oklch(0.72 0.17 275);
+    --node:   oklch(0.55 0.15 200);
+    --packet: oklch(0.92 0.10 200);
+    --ok:     oklch(0.82 0.17 125);
+    --err:    oklch(0.62 0.20 25);
+  }
+
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%;width:100%;
+    font-family:'Inter','Noto Sans SC','PingFang SC',sans-serif;
+    color:var(--fg);background:var(--bg-0);overflow:hidden}
+  body{height:100vh}
+
+  .stage{display:flex;flex-direction:row;height:100vh;width:100vw}
+
+  /* ============ 200px sidebar ============ */
+  .game-sidebar{
+    width:200px;flex:0 0 200px;
+    background:linear-gradient(180deg,var(--bg-1),var(--bg-0));
+    border-right:1px solid var(--line);
+    display:flex;flex-direction:column;
+    padding:14px 12px;gap:10px;overflow-y:auto;
+  }
+  .brand{display:flex;flex-direction:column;gap:2px;
+    border-bottom:1px solid var(--line);padding-bottom:8px}
+  .brand .code{font-family:'JetBrains Mono',monospace;font-size:10px;
+    color:var(--fg-mute);letter-spacing:1.2px}
+  .brand .title{font-size:13px;color:var(--fg);font-weight:600;
+    font-family:'Space Grotesk','Inter',sans-serif}
+  .brand .sub{font-size:10px;color:var(--fg-dim);margin-top:2px}
+
+  .mascot{
+    width:100%;height:70px;display:flex;align-items:center;justify-content:center;
+    background:radial-gradient(circle at 50% 40%,var(--bg-3),var(--bg-2));
+    border:1px solid var(--line);position:relative;
+  }
+  .mascot svg{width:100%;height:100%}
+  .mascot .mname{position:absolute;left:8px;bottom:5px;
+    font-family:'JetBrains Mono',monospace;font-size:8px;
+    color:var(--fg-mute);letter-spacing:1px}
+
+  /* roadmap */
+  .route{background:var(--bg-2);border:1px solid var(--line);
+    padding:8px;display:flex;flex-direction:column;gap:5px}
+  .route-title{font-family:'JetBrains Mono',monospace;font-size:9px;
+    color:var(--accent);letter-spacing:1px}
+  .route-list{display:flex;flex-direction:column;gap:3px}
+  .route-step{display:flex;align-items:center;gap:6px;
+    font-family:'JetBrains Mono',monospace;font-size:9px;
+    color:var(--fg-mute);line-height:1.2}
+  .route-step .dot{width:8px;height:8px;flex:0 0 8px;border-radius:50%;
+    background:var(--bg-3);border:1px solid var(--line-strong)}
+  .route-step.done .dot{background:var(--node);border-color:var(--node)}
+  .route-step.here{color:var(--fg);font-weight:600}
+  .route-step.here .dot{background:var(--accent);border-color:var(--packet);
+    box-shadow:0 0 0 3px oklch(0.75 0.17 200 / 0.25)}
+  .route-step .sname{font-size:8.5px}
+
+  /* level selector */
+  .lvl-block{background:var(--bg-2);border:1px solid var(--line);padding:8px;
+    display:flex;flex-direction:column;gap:6px}
+  .lvl-title{font-family:'JetBrains Mono',monospace;font-size:9px;
+    color:var(--fg-dim);letter-spacing:1px}
+  .lvl-row{display:flex;gap:5px}
+  .lvl-cell{flex:1;height:30px;background:var(--bg-3);border:1px solid var(--line);
+    display:flex;align-items:center;justify-content:center;
+    font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--fg-mute);
+    cursor:pointer;transition:background .2s,border-color .2s,color .2s}
+  .lvl-cell:hover:not(:disabled){border-color:var(--accent)}
+  .lvl-cell.cur{border-color:var(--accent);color:var(--accent);background:var(--bg-2)}
+  .lvl-cell.cleared{background:oklch(0.82 0.17 125 / 0.12);border-color:var(--ok);color:var(--ok)}
+  .lvl-cell.locked{opacity:.4;cursor:not-allowed}
+
+  .guide{background:var(--bg-2);border:1px solid var(--line);
+    padding:8px;display:flex;flex-direction:column;gap:4px}
+  .guide-title{font-family:'JetBrains Mono',monospace;font-size:9px;
+    color:var(--accent);letter-spacing:1px}
+  .guide-line{font-size:9.5px;color:var(--fg-dim);line-height:1.4}
+
+  .sidebar-spacer{flex:1;min-height:6px}
+
+  .lang-btn{width:100%;padding:7px 8px;background:var(--bg-3);
+    color:var(--fg);border:1px solid var(--line-strong);
+    font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:1px;
+    cursor:pointer;box-shadow:3px 3px 0 var(--bg-0)}
+  .lang-btn:hover{background:var(--node);color:var(--packet)}
+
+  /* ============ main ============ */
+  .game-main{flex:1;display:flex;flex-direction:column;
+    background:var(--bg-0);min-width:0;position:relative}
+  .main-header{height:46px;border-bottom:1px solid var(--line);
+    display:flex;align-items:center;justify-content:space-between;
+    padding:0 18px;background:var(--bg-1);flex:0 0 46px}
+  .header-left{font-family:'JetBrains Mono',monospace;font-size:11px;
+    color:var(--fg-dim);letter-spacing:1.3px}
+  .header-right{display:flex;gap:16px;font-family:'JetBrains Mono',monospace}
+  .hud-cell{display:flex;flex-direction:column;align-items:flex-end}
+  .hud-cell .label{font-size:9px;color:var(--fg-mute);letter-spacing:1px}
+  .hud-cell .val{color:var(--accent);font-size:13px;font-weight:600}
+  .hud-cell .val.gold{color:var(--gold)}
+
+  /* corner endpoint silhouette */
+  .endgame{position:absolute;right:18px;top:56px;z-index:6;
+    display:flex;align-items:center;gap:8px;
+    background:var(--bg-1);border:1px solid var(--line);
+    padding:6px 10px;opacity:.92;pointer-events:none}
+  .endgame svg{width:26px;height:26px;flex:0 0 26px}
+  .endgame .etxt{font-family:'JetBrains Mono',monospace;font-size:8.5px;
+    color:var(--fg-mute);line-height:1.35;max-width:150px}
+  .endgame .etxt .hl{color:var(--accent)}
+
+  .main-body{flex:1;display:flex;flex-direction:column;
+    min-height:0;padding:12px 18px;gap:10px}
+
+  .task-card{background:var(--bg-1);border:1px solid var(--line);
+    border-left:3px solid var(--accent);
+    padding:9px 14px;display:flex;flex-direction:column;gap:3px;flex:0 0 auto}
+  .task-card .tprompt{font-size:12px;color:var(--fg);line-height:1.4}
+  .task-card .twhy{font-size:10px;color:var(--fg-dim);line-height:1.4}
+
+  /* build zone: parts bin (left) + canvas pipe (right) */
+  .build-area{flex:1;display:flex;gap:12px;min-height:0}
+
+  .bin-pane{flex:0 0 224px;display:flex;flex-direction:column;min-height:0;
+    background:var(--bg-1);border:1px solid var(--line)}
+  .pane-title{padding:7px 12px;font-family:'JetBrains Mono',monospace;font-size:10px;
+    color:var(--accent);letter-spacing:1.2px;
+    border-bottom:1px solid var(--line);background:var(--bg-2)}
+  .bin-list{flex:1;overflow-y:auto;padding:10px;display:flex;flex-direction:column;gap:8px}
+  .part{
+    background:linear-gradient(135deg,var(--bg-2),var(--bg-3));
+    border:1px solid var(--line-strong);
+    padding:8px 9px;cursor:grab;user-select:none;
+    box-shadow:3px 3px 0 var(--bg-0);
+    display:flex;flex-direction:column;gap:3px;touch-action:none;
+    transition:transform .08s,border-color .15s;
+  }
+  .part:active{cursor:grabbing}
+  .part.dragging{opacity:.45;border-color:var(--accent)}
+  .part.distract{border-style:dashed;border-color:oklch(0.55 0.08 25 / 0.6)}
+  .part .pkind{font-family:'JetBrains Mono',monospace;font-size:8px;
+    letter-spacing:.6px;color:var(--fg-mute)}
+  .part .pcode{font-family:'JetBrains Mono',monospace;font-size:10px;
+    color:var(--fg);line-height:1.3;word-break:break-all}
+  .part[data-side="py"] .pkind{color:var(--signal)}
+  .part[data-side="net"] .pkind{color:var(--gold)}
+  .part[data-side="lua"] .pkind{color:var(--port)}
+  .bin-empty{font-family:'JetBrains Mono',monospace;font-size:10px;
+    color:var(--fg-mute);text-align:center;padding:20px 6px;line-height:1.6;white-space:pre-line}
+
+  /* pipe stage */
+  .pipe-pane{flex:1;display:flex;flex-direction:column;min-height:0;min-width:0;
+    background:var(--bg-1);border:1px solid var(--line)}
+  .pipe-body{flex:1;position:relative;display:flex;flex-direction:column;min-height:0}
+  #pipeCanvas{width:100%;height:100%;display:block}
+
+  /* slot overlay row above canvas */
+  .slot-row{display:flex;gap:6px;padding:8px 10px;border-bottom:1px solid var(--line);
+    background:var(--bg-2);overflow-x:auto;flex:0 0 auto}
+  .slot{
+    flex:1 1 0;min-width:108px;min-height:56px;
+    border:1.5px dashed var(--line-strong);
+    background:var(--bg-1);
+    display:flex;flex-direction:column;justify-content:center;gap:3px;
+    padding:6px 7px;position:relative;transition:border-color .15s,background .15s;
+  }
+  .slot.over{border-color:var(--accent);background:var(--bg-2)}
+  .slot.filled{border-style:solid;cursor:pointer}
+  .slot .snum{position:absolute;top:3px;right:5px;
+    font-family:'JetBrains Mono',monospace;font-size:8px;color:var(--fg-mute)}
+  .slot .splaceholder{font-family:'JetBrains Mono',monospace;font-size:9px;
+    color:var(--fg-mute);text-align:center}
+  .slot .pkind{font-family:'JetBrains Mono',monospace;font-size:8px;letter-spacing:.6px}
+  .slot .pcode{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--fg);
+    line-height:1.25;word-break:break-all}
+  .slot.ok-slot{border-color:var(--ok);background:oklch(0.82 0.17 125 / 0.1)}
+  .slot.err-slot{border-color:var(--err);background:oklch(0.62 0.20 25 / 0.12);
+    animation:shakeSlot .35s}
+  @keyframes shakeSlot{0%,100%{transform:translateX(0)}25%{transform:translateX(-4px)}75%{transform:translateX(4px)}}
+  .slot .pkind[data-s="py"]{color:var(--signal)}
+  .slot .pkind[data-s="net"]{color:var(--gold)}
+  .slot .pkind[data-s="lua"]{color:var(--port)}
+
+  /* controls under canvas */
+  .ctrl-row{display:flex;align-items:center;gap:10px;padding:8px 10px;
+    border-top:1px solid var(--line);background:var(--bg-2);flex:0 0 auto}
+  .run-btn{padding:9px 22px;background:var(--accent);color:var(--bg-0);
+    border:1px solid var(--packet);
+    font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:600;letter-spacing:1.5px;
+    cursor:pointer;box-shadow:3px 3px 0 var(--bg-0)}
+  .run-btn:hover:not(:disabled){background:var(--packet)}
+  .run-btn:active:not(:disabled){transform:translate(2px,2px);box-shadow:1px 1px 0 var(--bg-0)}
+  .run-btn:disabled{opacity:.4;cursor:not-allowed}
+  .clear-btn{padding:9px 14px;background:var(--bg-3);color:var(--fg-dim);
+    border:1px solid var(--line-strong);
+    font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:1px;cursor:pointer}
+  .clear-btn:hover{border-color:var(--err);color:var(--err)}
+  .status-msg{flex:1;font-family:'JetBrains Mono',monospace;font-size:10px;
+    color:var(--fg-dim);line-height:1.35;min-width:0}
+  .status-msg.ok{color:var(--ok)}
+  .status-msg.err{color:var(--err)}
+
+  /* end overlay */
+  .end-overlay{position:absolute;inset:0;z-index:20;
+    background:oklch(0.14 0.035 265 / 0.94);
+    display:flex;align-items:center;justify-content:center;
+    flex-direction:column;gap:14px;padding:30px;text-align:center}
+  .end-overlay.hidden{display:none}
+  .end-overlay .badge{width:96px;height:96px;display:flex;align-items:center;justify-content:center;
+    background:var(--bg-1);border:2px solid var(--gold);box-shadow:4px 4px 0 var(--bg-0)}
+  .end-overlay .badge svg{width:64px;height:64px}
+  .end-overlay .etitle{font-size:20px;font-weight:700;color:var(--gold);
+    font-family:'Space Grotesk','Inter',sans-serif}
+  .end-overlay .esub{font-size:12px;color:var(--fg-dim);line-height:1.6;max-width:440px}
+  .end-overlay .esub b{color:var(--accent)}
+  .end-overlay .ebtns{display:flex;gap:12px;margin-top:6px}
+
+  .mono{font-family:'JetBrains Mono',monospace}
+</style>
+</head>
+<body>
+<div class="stage">
+
+  <!-- ============ SIDEBAR ============ -->
+  <aside class="game-sidebar">
+    <div class="brand">
+      <div class="code mono">CS-NET · M52</div>
+      <div class="title" data-i18n="brandTitle">接通这条管道</div>
+      <div class="sub" data-i18n="brandSub">Python 命令 Minecraft 角色</div>
+    </div>
+
+    <div class="mascot">
+      <svg viewBox="0 0 120 70" aria-hidden="true">
+        <g fill="none" stroke="var(--accent)" stroke-width="2.4" stroke-linecap="round">
+          <rect x="14" y="26" width="20" height="18" fill="var(--bg-3)" stroke="var(--signal)"/>
+          <rect x="86" y="26" width="20" height="18" fill="var(--bg-3)" stroke="var(--port)"/>
+          <path d="M34 35 H86"/>
+        </g>
+        <rect x="56" y="31" width="8" height="8" fill="var(--packet)"/>
+        <circle cx="20" cy="32" r="1.6" fill="var(--packet)"/>
+        <circle cx="20" cy="38" r="1.6" fill="var(--packet)"/>
+      </svg>
+      <span class="mname mono">PIPE</span>
+    </div>
+
+    <div class="route">
+      <div class="route-title mono" data-i18n="routeTitle">项目路线</div>
+      <div class="route-list">
+        <div class="route-step done"><span class="dot"></span><span class="sname" data-i18n="s1">S1 读懂脑电</span></div>
+        <div class="route-step done"><span class="dot"></span><span class="sname" data-i18n="s2">S2 清洗信号</span></div>
+        <div class="route-step done"><span class="dot"></span><span class="sname" data-i18n="s3">S3 解码左右</span></div>
+        <div class="route-step done"><span class="dot"></span><span class="sname" data-i18n="s4">S4 稳定上线</span></div>
+        <div class="route-step here"><span class="dot"></span><span class="sname" data-i18n="s5">S5 接入游戏</span></div>
+        <div class="route-step"><span class="dot"></span><span class="sname" data-i18n="s6">S6 脑控通关</span></div>
+      </div>
+    </div>
+
+    <div class="lvl-block">
+      <div class="lvl-title mono" data-i18n="lvlTitle">关卡</div>
+      <div class="lvl-row" id="lvlRow"></div>
+    </div>
+
+    <div class="guide">
+      <div class="guide-title mono" data-i18n="guideTitle">怎么玩</div>
+      <div class="guide-line" data-i18n="guide1">把左边零件拖进上方管道槽。</div>
+      <div class="guide-line" data-i18n="guide2">按数据真正流动的顺序排好。</div>
+      <div class="guide-line" data-i18n="guide3">点 RUN，看数据包能否走到角色。</div>
+    </div>
+
+    <div class="sidebar-spacer"></div>
+    <button class="lang-btn mono" id="langBtn">EN / 中文</button>
+  </aside>
+
+  <!-- ============ MAIN ============ -->
+  <main class="game-main">
+    <div class="main-header">
+      <div class="header-left mono" data-i18n="hdrLeft">通信链建造 · BUILD &amp; TEST</div>
+      <div class="header-right">
+        <div class="hud-cell">
+          <span class="label" data-i18n="hudLvl">LEVEL</span>
+          <span class="val" id="hudLvl">1 / 3</span>
+        </div>
+        <div class="hud-cell">
+          <span class="label" data-i18n="hudLink">链路</span>
+          <span class="val gold" id="hudLink">断开</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="endgame">
+      <svg viewBox="0 0 32 32" aria-hidden="true">
+        <g fill="none" stroke="var(--accent)" stroke-width="1.6">
+          <rect x="6" y="10" width="20" height="16"/>
+          <path d="M6 14 H26 M14 14 V26 M6 18 H14 M18 10 V26 M18 18 H26"/>
+        </g>
+      </svg>
+      <div class="etxt">
+        <span data-i18n="endLbl">终点</span>: <span class="hl" data-i18n="endName">脑控 Minecraft</span><br>
+        <span data-i18n="endTail">先让程序能命令角色</span>
+      </div>
+    </div>
+
+    <div class="main-body">
+      <div class="task-card">
+        <div class="tprompt" data-i18n="introPrompt">解码器已经能输出“left”了。可这个字怎么从你的 Python 程序，跨过去让 Minecraft 里的角色真的迈一步？</div>
+        <div class="twhy" id="introWhy" data-i18n="introWhy">这是 S5 第一关：接通 Python 到游戏的通信管道。链路一通，后面所有脑控指令都能照走——你离脑控通关又近一步。</div>
+      </div>
+
+      <div class="build-area">
+        <!-- parts bin -->
+        <div class="bin-pane">
+          <div class="pane-title mono" data-i18n="binTitle">零件库 · 拖到管道</div>
+          <div class="bin-list" id="binList"></div>
+        </div>
+
+        <!-- pipe stage -->
+        <div class="pipe-pane">
+          <div class="slot-row" id="slotRow"></div>
+          <div class="pipe-body">
+            <canvas id="pipeCanvas"></canvas>
+          </div>
+          <div class="ctrl-row">
+            <button class="run-btn mono" id="runBtn" data-i18n="runBtn">RUN</button>
+            <button class="clear-btn mono" id="clearBtn" data-i18n="clearBtn">清空</button>
+            <span class="status-msg mono" id="statusMsg" data-i18n="statusIdle">把零件按顺序拖进管道，再点 RUN。</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- end overlay -->
+    <div class="end-overlay hidden" id="endOverlay">
+      <div class="badge">
+        <svg viewBox="0 0 64 64" aria-hidden="true">
+          <g fill="none" stroke="var(--gold)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="10" y="22" width="14" height="14"/>
+            <rect x="40" y="22" width="14" height="14"/>
+            <path d="M24 29 H40"/>
+            <path d="M30 44 l4 12 l-12 -6"/>
+            <circle cx="32" cy="14" r="4"/>
+          </g>
+        </svg>
+      </div>
+      <div class="etitle" id="endTitle"></div>
+      <div class="esub" id="endSub"></div>
+      <div class="ebtns">
+        <button class="run-btn mono" id="replayBtn" data-i18n="replayBtn">重新建造</button>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  /* canvas 2D context 不解析 CSS var(--xxx), 必须用字面 oklch 字符串 */
+  const COL = {
+    ok:'oklch(0.82 0.17 125)', err:'oklch(0.62 0.20 25)',
+    packet:'oklch(0.92 0.10 200)', signal:'oklch(0.75 0.17 200)',
+    port:'oklch(0.72 0.17 275)', node:'oklch(0.55 0.15 200)',
+    bg0:'oklch(0.14 0.035 265)', bg1:'oklch(0.18 0.04 265)',
+    fg:'oklch(0.96 0.01 265)', fgDim:'oklch(0.75 0.02 265)',
+    fgMute:'oklch(0.55 0.03 265)', gold:'oklch(0.85 0.14 85)'
+  };
+
+  /* ---------------- i18n ---------------- */
+  const I18N = {
+    zh:{
+      brandTitle:"接通这条管道", brandSub:"Python 命令 Minecraft 角色",
+      routeTitle:"项目路线",
+      s1:"S1 读懂脑电", s2:"S2 清洗信号", s3:"S3 解码左右",
+      s4:"S4 稳定上线", s5:"S5 接入游戏", s6:"S6 脑控通关",
+      lvlTitle:"关卡", guideTitle:"怎么玩",
+      guide1:"把左边零件拖进上方管道槽。",
+      guide2:"按数据真正流动的顺序排好。",
+      guide3:"点 RUN，看数据包能否走到角色。",
+      hdrLeft:"通信链建造 · BUILD & TEST",
+      hudLvl:"LEVEL", hudLink:"链路",
+      endLbl:"终点", endName:"脑控 Minecraft", endTail:"先让程序能命令角色",
+      introPrompt:"解码器已经能输出“left”了。可这个字怎么从你的 Python 程序，跨过去让 Minecraft 里的角色真的迈一步？",
+      introWhy:"这是 S5 第一关：接通 Python 到游戏的通信管道。链路一通，后面所有脑控指令都能照走——你离脑控通关又近一步。",
+      binTitle:"零件库 · 拖到管道",
+      runBtn:"RUN", clearBtn:"清空",
+      statusIdle:"把零件按顺序拖进管道，再点 RUN。",
+      replayBtn:"重新建造",
+      linkBroken:"断开", linkOk:"接通"
+    },
+    en:{
+      brandTitle:"Connect This Pipe", brandSub:"Python commands the Minecraft avatar",
+      routeTitle:"PROJECT ROUTE",
+      s1:"S1 Read EEG", s2:"S2 Clean Signal", s3:"S3 Decode L/R",
+      s4:"S4 Stay Stable", s5:"S5 Hook Game", s6:"S6 Beat It Brain-Only",
+      lvlTitle:"LEVELS", guideTitle:"HOW TO PLAY",
+      guide1:"Drag parts from the left into the pipe slots.",
+      guide2:"Order them as the data actually flows.",
+      guide3:"Hit RUN, see if the packet reaches the avatar.",
+      hdrLeft:"Comm-chain build · BUILD & TEST",
+      hudLvl:"LEVEL", hudLink:"LINK",
+      endLbl:"Goal", endName:"Brain-control Minecraft", endTail:"First, let code command the avatar",
+      introPrompt:"The decoder can already output 'left'. But how does that word cross over from your Python program to make the Minecraft avatar actually step?",
+      introWhy:"This is S5 level 1: connect the Python-to-game comm pipe. Once it's live, every later brain-control command flows the same way — one step closer to beating it brain-only.",
+      binTitle:"PARTS BIN · drag to pipe",
+      runBtn:"RUN", clearBtn:"Clear",
+      statusIdle:"Drag parts into the pipe in order, then hit RUN.",
+      replayBtn:"Rebuild",
+      linkBroken:"BROKEN", linkOk:"LIVE"
+    }
+  };
+  let lang = "zh";
+
+  /* ---------------- part catalogue ---------------- */
+  const PARTS = {
+    connect:{ id:"connect", side:"py",  order:1,
+      kind:{zh:"PYTHON · 建立连接",en:"PYTHON · CONNECT"},
+      code:"socket.connect(('localhost',30000))" },
+    send:{    id:"send",    side:"py",  order:2,
+      kind:{zh:"PYTHON · 发送指令",en:"PYTHON · SEND"},
+      code:"socket.send(b'left\\n')" },
+    tcp:{     id:"tcp",     side:"net", order:3,
+      kind:{zh:"网络 · 传输通道",en:"NETWORK · CHANNEL"},
+      code:"TCP socket  :30000" },
+    listen:{  id:"listen",  side:"lua", order:4,
+      kind:{zh:"LUA MOD · 监听端口",en:"LUA MOD · LISTEN"},
+      code:"socket listener :30000" },
+    move:{    id:"move",    side:"lua", order:5,
+      kind:{zh:"LUA MOD · 执行移动",en:"LUA MOD · MOVE"},
+      code:"minetest:move_player('left')" },
+    /* distractors */
+    http:{    id:"http",    side:"net", order:0, distract:true,
+      kind:{zh:"干扰 · 用不上",en:"NOISE · unused"},
+      code:"HTTP GET /move?dir=left" },
+    print:{   id:"print",   side:"py",  order:0, distract:true,
+      kind:{zh:"干扰 · 用不上",en:"NOISE · unused"},
+      code:"print('left')" }
+  };
+
+  /* level defs */
+  const LEVELS = [
+    { slots:3, pool:["tcp","connect","listen"],        chain:["connect","tcp","listen"] },
+    { slots:5, pool:["move","connect","listen","send","tcp"], chain:["connect","send","tcp","listen","move"] },
+    { slots:5, pool:["http","move","print","listen","connect","tcp","send"], chain:["connect","send","tcp","listen","move"] }
+  ];
+  /* per-level the "expected order at slot i" (1..slots) maps to part.order projected onto the level chain */
+  function expectedAt(idx, slotIdx){
+    // the correct part at slotIdx is LEVELS[idx].chain[slotIdx]
+    return LEVELS[idx].chain[slotIdx];
+  }
+
+  /* ---------------- state ---------------- */
+  const stateGame = {
+    lvl:0,
+    cleared:[false,false,false],
+    slots:[],
+    bin:[],
+    running:false,
+    finished:false
+  };
+
+  const el = (id)=>document.getElementById(id);
+  const binList   = el("binList");
+  const slotRow   = el("slotRow");
+  const lvlRow    = el("lvlRow");
+  const runBtn    = el("runBtn");
+  const clearBtn  = el("clearBtn");
+  const statusMsg = el("statusMsg");
+  const hudLvl    = el("hudLvl");
+  const hudLink   = el("hudLink");
+  const endOverlay= el("endOverlay");
+  const endTitle  = el("endTitle");
+  const endSub    = el("endSub");
+  const replayBtn = el("replayBtn");
+
+  function shuffle(a){const r=a.slice();for(let i=r.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[r[i],r[j]]=[r[j],r[i]];}return r;}
+
+  /* ---------------- build level ---------------- */
+  function loadLevel(idx){
+    stateGame.lvl = idx;
+    const L = LEVELS[idx];
+    stateGame.slots = new Array(L.slots).fill(null);
+    stateGame.bin = shuffle(L.pool.slice());
+    stateGame.running = false;
+    avatar.cellX = 0;
+    avatar.flashUntil = 0;
+    renderSlots();
+    renderBin();
+    renderLevelTabs();
+    hudLvl.textContent = (idx+1)+" / "+LEVELS.length;
+    setLink(false);
+    setStatus("idle","statusIdle");
+    runBtn.disabled = false;
+    clearBtn.disabled = false;
+    drawIdle();
+  }
+
+  function setLink(live){
+    hudLink.textContent = live ? I18N[lang].linkOk : I18N[lang].linkBroken;
+    hudLink.style.color = live ? "var(--ok)" : "var(--gold)";
+  }
+
+  function setStatus(kind, key, custom){
+    statusMsg.className = "status-msg mono" + (kind==="ok"?" ok":kind==="err"?" err":"");
+    if (custom){ statusMsg.textContent = custom; statusMsg.removeAttribute("data-i18n"); }
+    else { statusMsg.setAttribute("data-i18n", key); statusMsg.textContent = I18N[lang][key]; }
+  }
+
+  function renderLevelTabs(){
+    lvlRow.innerHTML="";
+    for (let i=0;i<LEVELS.length;i++){
+      const c=document.createElement("button");
+      c.className="lvl-cell mono";
+      c.textContent=String(i+1);
+      const unlocked = i===0 || stateGame.cleared[i-1] || stateGame.cleared[i];
+      if (i===stateGame.lvl) c.classList.add("cur");
+      if (stateGame.cleared[i]) c.classList.add("cleared");
+      if (!unlocked){ c.classList.add("locked"); c.disabled=true; }
+      c.addEventListener("click",()=>{ if(!c.disabled && !stateGame.running) loadLevel(i); });
+      lvlRow.appendChild(c);
+    }
+  }
+
+  function partEl(pid, inSlot){
+    const p = PARTS[pid];
+    const d = document.createElement("div");
+    d.className = "part" + (p.distract?" distract":"");
+    d.setAttribute("data-pid", pid);
+    d.setAttribute("data-side", p.side);
+    if (!inSlot){ d.setAttribute("draggable","true"); }
+    const k = document.createElement("div"); k.className="pkind"; k.textContent=p.kind[lang];
+    const c = document.createElement("div"); c.className="pcode"; c.textContent=p.code;
+    d.appendChild(k); d.appendChild(c);
+    return d;
+  }
+
+  function renderBin(){
+    binList.innerHTML="";
+    if (stateGame.bin.length===0){
+      const e=document.createElement("div"); e.className="bin-empty mono";
+      e.textContent = lang==="zh"?"零件都拖出去了\n点 RUN 试运行":"All parts placed.\nHit RUN to test.";
+      binList.appendChild(e);
+      return;
+    }
+    stateGame.bin.forEach(pid=>{
+      const d = partEl(pid,false);
+      bindDragSource(d, pid, "bin");
+      binList.appendChild(d);
+    });
+  }
+
+  function renderSlots(){
+    slotRow.innerHTML="";
+    stateGame.slots.forEach((pid,i)=>{
+      const s=document.createElement("div");
+      s.className="slot";
+      s.setAttribute("data-slot",String(i));
+      const num=document.createElement("div"); num.className="snum mono"; num.textContent="#"+(i+1);
+      s.appendChild(num);
+      if (pid){
+        s.classList.add("filled");
+        const p=PARTS[pid];
+        const k=document.createElement("div"); k.className="pkind"; k.setAttribute("data-s",p.side); k.textContent=p.kind[lang];
+        const c=document.createElement("div"); c.className="pcode"; c.textContent=p.code;
+        s.appendChild(k); s.appendChild(c);
+        s.addEventListener("click",()=>{ if(stateGame.running) return; returnToBin(i); });
+      } else {
+        const ph=document.createElement("div"); ph.className="splaceholder mono";
+        ph.textContent = lang==="zh"?"拖零件到此":"drop here";
+        s.appendChild(ph);
+      }
+      bindDropTarget(s,i);
+      slotRow.appendChild(s);
+    });
+  }
+
+  function returnToBin(slotIdx){
+    const pid = stateGame.slots[slotIdx];
+    if (!pid) return;
+    stateGame.slots[slotIdx]=null;
+    stateGame.bin.push(pid);
+    setLink(false);
+    setStatus("idle","statusIdle");
+    renderSlots(); renderBin();
+    drawIdle();
+  }
+
+  function placePart(pid, fromKind, fromIdx, slotIdx){
+    if (stateGame.running) return;
+    const occupant = stateGame.slots[slotIdx];
+    if (fromKind==="bin"){
+      const bi = stateGame.bin.indexOf(pid);
+      if (bi>=0) stateGame.bin.splice(bi,1);
+    } else if (fromKind==="slot"){
+      stateGame.slots[fromIdx]=null;
+    }
+    if (occupant){ stateGame.bin.push(occupant); }
+    stateGame.slots[slotIdx]=pid;
+    setLink(false);
+    setStatus("idle","statusIdle");
+    renderSlots(); renderBin();
+    drawIdle();
+  }
+
+  /* ---------------- drag & drop (mouse + touch) ---------------- */
+  let dragData = null;
+  function bindDragSource(node, pid, fromKind, fromIdx){
+    node.addEventListener("dragstart",(e)=>{
+      if (stateGame.running){ e.preventDefault(); return; }
+      dragData={pid,fromKind,fromIdx};
+      node.classList.add("dragging");
+      e.dataTransfer.setData("text/plain",pid);
+      e.dataTransfer.effectAllowed="move";
+    });
+    node.addEventListener("dragend",()=>{ node.classList.remove("dragging"); dragData=null; });
+    node.addEventListener("touchstart",(e)=>{
+      if (stateGame.running) return;
+      dragData={pid,fromKind,fromIdx};
+      node.classList.add("dragging");
+      makeGhost(node,e.touches[0]);
+    },{passive:true});
+    node.addEventListener("touchmove",(e)=>{
+      if (!dragData) return;
+      e.preventDefault();
+      moveGhost(e.touches[0]);
+      highlightSlotUnder(e.touches[0]);
+    },{passive:false});
+    node.addEventListener("touchend",(e)=>{
+      node.classList.remove("dragging");
+      const t = e.changedTouches[0];
+      const slot = slotUnder(t);
+      killGhost();
+      if (dragData && slot!=null){ placePart(dragData.pid,dragData.fromKind,dragData.fromIdx,slot); }
+      clearSlotOver();
+      dragData=null;
+    });
+  }
+
+  function bindDropTarget(slot, idx){
+    slot.addEventListener("dragover",(e)=>{ e.preventDefault(); slot.classList.add("over"); e.dataTransfer.dropEffect="move"; });
+    slot.addEventListener("dragleave",()=>{ slot.classList.remove("over"); });
+    slot.addEventListener("drop",(e)=>{
+      e.preventDefault(); slot.classList.remove("over");
+      if (!dragData) return;
+      placePart(dragData.pid,dragData.fromKind,dragData.fromIdx,idx);
+    });
+    if (stateGame.slots[idx]){
+      slot.setAttribute("draggable","true");
+      bindDragSource(slot, stateGame.slots[idx], "slot", idx);
+    }
+  }
+
+  /* touch ghost */
+  let ghostEl=null;
+  function makeGhost(node,touch){
+    ghostEl=node.cloneNode(true);
+    ghostEl.style.position="fixed";ghostEl.style.zIndex="999";ghostEl.style.pointerEvents="none";
+    ghostEl.style.width=node.offsetWidth+"px";ghostEl.style.opacity="0.85";
+    document.body.appendChild(ghostEl);moveGhost(touch);
+  }
+  function moveGhost(t){ if(ghostEl){ghostEl.style.left=(t.clientX-40)+"px";ghostEl.style.top=(t.clientY-20)+"px";} }
+  function killGhost(){ if(ghostEl){ghostEl.remove();ghostEl=null;} }
+  function slotUnder(t){
+    const e=document.elementFromPoint(t.clientX,t.clientY);
+    const s=e&&e.closest?e.closest(".slot"):null;
+    return s?parseInt(s.getAttribute("data-slot"),10):null;
+  }
+  function highlightSlotUnder(t){ clearSlotOver(); const i=slotUnder(t); if(i!=null){const s=slotRow.children[i]; if(s)s.classList.add("over");} }
+  function clearSlotOver(){ [...slotRow.children].forEach(s=>s.classList.remove("over")); }
+
+  /* ---------------- canvas: pipe + flowing packet + avatar ---------------- */
+  const canvas = el("pipeCanvas");
+  const cx = canvas.getContext("2d");
+  let dpr=1, cw=0, ch=0, raf=null;
+  const avatar={ cellX:0, flashUntil:0 };
+
+  function resizeCanvas(){
+    const r = canvas.parentElement.getBoundingClientRect();
+    dpr = window.devicePixelRatio || 1;
+    cw = Math.max(120, r.width);
+    ch = Math.max(120, r.height);
+    canvas.width = Math.floor(cw*dpr);
+    canvas.height= Math.floor(ch*dpr);
+    cx.setTransform(dpr,0,0,dpr,0,0);
+  }
+
+  function nodeGeom(){
+    const n = stateGame.slots.length;
+    const padL = cw*0.10, padR = cw*0.12;
+    const usable = cw - padL - padR;
+    const y = ch*0.42;
+    const boxW = Math.min(usable/n*0.62, 86);
+    const xs=[];
+    for (let i=0;i<n;i++){ xs.push(padL + usable*( (i+0.5)/n )); }
+    const avX = cw - padR*0.45;
+    return {xs, y, boxW, avX, padL};
+  }
+
+  function roundRect(x,y,w,h,r){
+    cx.beginPath();
+    cx.moveTo(x+r,y);cx.arcTo(x+w,y,x+w,y+h,r);cx.arcTo(x+w,y+h,x,y+h,r);
+    cx.arcTo(x,y+h,x,y,r);cx.arcTo(x,y,x+w,y,r);cx.closePath();
+  }
+
+  function sideShort(side){ return side==="py"?"PY": side==="net"?"NET":"LUA"; }
+
+  function drawSeg(x1,y1,x2,y2){
+    cx.lineWidth=4; cx.strokeStyle="oklch(0.28 0.05 265)";
+    cx.beginPath();cx.moveTo(x1,y1);cx.lineTo(x2,y2);cx.stroke();
+    cx.lineWidth=1.4; cx.strokeStyle="oklch(0.55 0.08 265 / 0.45)";
+    cx.beginPath();cx.moveTo(x1,y1);cx.lineTo(x2,y2);cx.stroke();
+  }
+
+  function drawAvatar(g, groundY){
+    const flash = performance.now() < avatar.flashUntil;
+    const baseX = g.avX - 14;
+    const ax = baseX - avatar.cellX*20;
+    const ay = groundY - 26;
+    cx.fillStyle = flash ? COL.ok : "oklch(0.45 0.10 265)";
+    cx.fillRect(ax-10, ay, 20, 26);
+    cx.fillStyle = flash ? "oklch(0.92 0.10 125)" : "oklch(0.62 0.10 265)";
+    cx.fillRect(ax-10, ay, 20, 10);
+    cx.fillStyle=COL.bg0;
+    cx.fillRect(ax-6, ay+3, 3,3); cx.fillRect(ax+3, ay+3, 3,3);
+    cx.fillStyle=COL.fgMute;cx.font="8px 'JetBrains Mono',monospace";cx.textAlign="center";cx.textBaseline="alphabetic";
+    cx.fillText("AVATAR", ax, ay+26+10);
+  }
+
+  function drawBase(){
+    cx.clearRect(0,0,cw,ch);
+    cx.strokeStyle="oklch(0.35 0.05 265 / 0.16)";cx.lineWidth=1;
+    const cell=Math.max(26,cw/16);
+    for(let gx=0;gx<=cw;gx+=cell){cx.beginPath();cx.moveTo(gx,0);cx.lineTo(gx,ch);cx.stroke();}
+    for(let gy=0;gy<=ch;gy+=cell){cx.beginPath();cx.moveTo(0,gy);cx.lineTo(cw,gy);cx.stroke();}
+
+    const g=nodeGeom();
+    const n=stateGame.slots.length;
+    const groundY = ch*0.80;
+    cx.strokeStyle="oklch(0.55 0.08 265 / 0.4)";cx.lineWidth=2;
+    cx.beginPath();cx.moveTo(0,groundY);cx.lineTo(cw,groundY);cx.stroke();
+
+    const startX = g.padL*0.5;
+    // python source -> node0
+    drawSeg(startX, g.y, g.xs[0]-g.boxW/2, g.y);
+    for (let i=0;i<n-1;i++){ drawSeg(g.xs[i]+g.boxW/2, g.y, g.xs[i+1]-g.boxW/2, g.y); }
+    drawSeg(g.xs[n-1]+g.boxW/2, g.y, g.avX-14-10, g.y);
+
+    for (let i=0;i<n;i++){
+      const pid = stateGame.slots[i];
+      const cxn = g.xs[i], cyn = g.y, w=g.boxW, h=Math.min(g.boxW*0.72,44);
+      const correct = pid && PARTS[pid].order===( PARTS[expectedAt(stateGame.lvl,i)].order );
+      const filled = !!pid;
+      cx.lineWidth=2;
+      cx.strokeStyle = !filled ? "oklch(0.35 0.05 265 / 0.6)"
+                      : (stateGame.running ? (correct?"var(--ok)":"var(--err)") : "var(--node)");
+      cx.fillStyle = !filled ? "oklch(0.18 0.04 265)" : "oklch(0.22 0.045 265)";
+      roundRect(cxn-w/2, cyn-h/2, w, h, 4); cx.fill(); cx.stroke();
+      cx.fillStyle = filled? COL.fgDim : COL.fgMute;
+      cx.font="9px 'JetBrains Mono',monospace";cx.textAlign="center";cx.textBaseline="middle";
+      cx.fillText(pid ? sideShort(PARTS[pid].side) : "?", cxn, cyn);
+      cx.fillStyle=COL.fgMute;cx.font="8px 'JetBrains Mono',monospace";
+      cx.fillText("#"+(i+1), cxn, cyn-h/2-8);
+    }
+
+    drawAvatar(g, groundY);
+
+    cx.fillStyle=COL.signal;cx.font="10px 'JetBrains Mono',monospace";cx.textAlign="left";cx.textBaseline="alphabetic";
+    cx.fillText(lang==="zh"?"Python 程序":"Python prog", startX-4, g.y-g.boxW*0.55);
+    // source dot
+    cx.fillStyle=COL.packet;cx.beginPath();cx.arc(startX,g.y,4,0,Math.PI*2);cx.fill();
+  }
+
+  function drawPacket(px,py,broken){
+    cx.save();
+    cx.shadowColor = broken? COL.err:COL.packet;
+    cx.shadowBlur = 10;
+    cx.fillStyle = broken? COL.err:COL.packet;
+    cx.fillRect(px-6,py-6,12,12);
+    cx.restore();
+    if (broken){
+      cx.fillStyle=COL.err;cx.font="10px 'JetBrains Mono',monospace";cx.textAlign="center";cx.textBaseline="alphabetic";
+      cx.fillText(lang==="zh"?"卡住":"STUCK", px, py-14);
+    }
+  }
+
+  function drawIdle(){
+    if (cw<=0||ch<=0) resizeCanvas();
+    if (raf){cancelAnimationFrame(raf);raf=null;}
+    idlePulse();
+  }
+  /* 待命态: 源端有一颗待发数据包持续脉动 + 一道扫描沿源端漂移, 表示"程序已就绪, 等你接通管道" */
+  function idlePulse(){
+    if (stateGame.running) return;
+    drawBase();
+    const now=performance.now();
+    const g=nodeGeom();
+    const startX=g.padL*0.5;
+    const span=(g.xs.length? (g.xs[0]-startX) : cw*0.1)*0.8;
+    const ph=(now % 1400)/1400;
+    const x=startX + span*ph;
+    cx.save();
+    cx.globalAlpha=0.85*(1-ph)+0.15;
+    cx.shadowColor=COL.signal; cx.shadowBlur=8;
+    cx.fillStyle=COL.signal;
+    cx.beginPath();cx.arc(x,g.y,3.5,0,Math.PI*2);cx.fill();
+    cx.restore();
+    // 源端待命包脉动
+    const pulse=0.5+0.5*Math.sin(now/320);
+    cx.save();
+    cx.globalAlpha=0.55+0.45*pulse;
+    cx.fillStyle=COL.packet;
+    cx.beginPath();cx.arc(startX,g.y,3+2*pulse,0,Math.PI*2);cx.fill();
+    cx.restore();
+    raf=requestAnimationFrame(idlePulse);
+  }
+
+  /* ---------------- RUN simulation ---------------- */
+  function evaluateChain(){
+    const n = stateGame.slots.length;
+    for (let i=0;i<n;i++){
+      if (!stateGame.slots[i]) return {ok:false, firstBad:i, reason:"empty"};
+    }
+    for (let i=0;i<n;i++){
+      const pid = stateGame.slots[i];
+      const p = PARTS[pid];
+      if (p.distract) return {ok:false, firstBad:i, reason:"distract"};
+      if (pid !== expectedAt(stateGame.lvl, i)) return {ok:false, firstBad:i, reason:"order"};
+    }
+    return {ok:true, firstBad:-1, reason:"ok"};
+  }
+
+  let runAnim={t0:0, breakAt:-1, ok:false, durPerSeg:480};
+  let finalized=false;
+
+  function runPipe(){
+    if (stateGame.running) return;
+    const res = evaluateChain();
+    stateGame.running = true;
+    runBtn.disabled = true;
+    clearBtn.disabled = true;
+    finalized=false;
+    runAnim.t0=performance.now();
+    runAnim.ok=res.ok;
+    runAnim.breakAt = res.firstBad;
+    [...slotRow.children].forEach(s=>s.classList.remove("err-slot","ok-slot"));
+    setStatus("idle","",lang==="zh"?"数据包发出…":"packet sent…");
+    setLink(false);
+    if (raf) cancelAnimationFrame(raf);
+    animateRun();
+  }
+
+  function buildWaypoints(g){
+    const n=stateGame.slots.length;
+    const startX = g.padL*0.5;
+    const wpts=[{x:startX,y:g.y}];
+    for(let i=0;i<n;i++) wpts.push({x:g.xs[i],y:g.y});
+    wpts.push({x:g.avX-14,y:g.y});
+    return wpts;
+  }
+
+  function animateRun(){
+    raf = requestAnimationFrame(animateRun);
+    const g = nodeGeom();
+    const n = stateGame.slots.length;
+    const now = performance.now();
+    const elapsed = now - runAnim.t0;
+    const reached = elapsed / runAnim.durPerSeg; // float, # waypoints advanced from source
+
+    const wpts = buildWaypoints(g);
+    // terminal waypoint index: success -> last (avatar). break -> the bad node (wpt index = firstBad+1)
+    const terminalIdx = runAnim.ok ? (wpts.length-1) : (runAnim.breakAt+1);
+
+    drawBase();
+
+    if (reached >= terminalIdx){
+      const term = wpts[terminalIdx];
+      // lit trail up to terminal
+      cx.lineWidth=4; cx.strokeStyle = runAnim.ok? COL.ok:COL.signal;
+      cx.beginPath();cx.moveTo(wpts[0].x,wpts[0].y);
+      for(let k=1;k<=terminalIdx;k++) cx.lineTo(wpts[k].x,wpts[k].y);
+      cx.stroke();
+      drawPacket(term.x, term.y, !runAnim.ok);
+      finalizeRun(!runAnim.ok, runAnim.breakAt);
+      return;
+    }
+
+    const seg = Math.floor(reached);
+    const frac = reached - seg;
+    const a=wpts[seg], b=wpts[Math.min(seg+1,wpts.length-1)];
+    const px = a.x + (b.x-a.x)*frac;
+    const py = a.y + (b.y-a.y)*frac;
+    // lit trail
+    cx.lineWidth=4; cx.strokeStyle=COL.signal;
+    cx.beginPath();cx.moveTo(wpts[0].x,wpts[0].y);
+    for(let k=1;k<=seg;k++) cx.lineTo(wpts[k].x,wpts[k].y);
+    cx.lineTo(px,py);cx.stroke();
+    drawPacket(px,py,false);
+  }
+
+  function finalizeRun(broken, stopNode){
+    if (finalized) return;
+    finalized=true;
+    stateGame.running=false;
+    clearBtn.disabled=false;
+    if (raf){cancelAnimationFrame(raf);raf=null;}
+
+    if (!broken){
+      setLink(true);
+      avatar.cellX = Math.min(avatar.cellX+1, 5);
+      avatar.flashUntil = performance.now()+1000;
+      stateGame.cleared[stateGame.lvl]=true;
+      setStatus("ok","",lang==="zh"
+        ? "链路接通！数据包走到 Lua mod，角色向左迈了一步。"
+        : "Link live! Packet reached the Lua mod — the avatar stepped left.");
+      renderLevelTabs();
+      drawSuccessFrame();
+      setTimeout(()=>{
+        if (stateGame.lvl < LEVELS.length-1){ loadLevel(stateGame.lvl+1); }
+        else { finishGame(); }
+      }, 1800);
+    } else {
+      setLink(false);
+      setStatus("err","",brokenReason(stopNode));
+      runBtn.disabled=false;
+      markBadSlot(stopNode);
+    }
+  }
+
+  function brokenReason(stopNode){
+    const n=stateGame.slots.length;
+    if (stopNode<0 || stopNode>=n) return lang==="zh"?"未知断点":"unknown break";
+    const pid=stateGame.slots[stopNode];
+    if (!pid) return lang==="zh"
+      ? `#${stopNode+1} 槽是空的——管道在这里就断了，没零件传下去。`
+      : `Slot #${stopNode+1} is empty — the pipe breaks here, nothing to pass on.`;
+    const p=PARTS[pid];
+    if (p.distract) return lang==="zh"
+      ? `#${stopNode+1} 放了用不上的「${p.code}」——它不在通信链里，数据包卡死。剔除它。`
+      : `Slot #${stopNode+1} holds the unused "${p.code}" — not in the chain. Remove it.`;
+    return lang==="zh"
+      ? `#${stopNode+1} 顺序错了，这一步该是别的环节。数据包到这里没人接，卡住变红。`
+      : `Slot #${stopNode+1} is out of order. The packet hits a dead end and stalls.`;
+  }
+
+  function markBadSlot(stopNode){
+    [...slotRow.children].forEach(s=>s.classList.remove("err-slot","ok-slot"));
+    for (let i=0;i<stopNode;i++){ const s=slotRow.children[i]; if(s)s.classList.add("ok-slot"); }
+    const bad=slotRow.children[stopNode];
+    if (bad) bad.classList.add("err-slot");
+  }
+
+  function drawSuccessFrame(){
+    drawBase();
+    const g=nodeGeom();
+    const wpts=buildWaypoints(g);
+    cx.lineWidth=4;cx.strokeStyle=COL.ok;
+    cx.beginPath();cx.moveTo(wpts[0].x,wpts[0].y);
+    wpts.forEach(p=>cx.lineTo(p.x,p.y));cx.stroke();
+    drawPacket(wpts[wpts.length-1].x,wpts[wpts.length-1].y,false);
+    [...slotRow.children].forEach(s=>{s.classList.remove("err-slot");s.classList.add("ok-slot");});
+  }
+
+  /* ---------------- finish ---------------- */
+  function finishGame(){
+    stateGame.finished=true;
+    endOverlay.classList.remove("hidden");
+    endTitle.textContent = lang==="zh"?"管道打通工程师":"Pipe Engineer";
+    endSub.innerHTML = lang==="zh"
+      ? "三关全清——你亲手把 <b>Python → TCP → Lua mod → 角色</b> 这条链拼通了，还学会剔除用不上的零件。现在程序说一声 'left'，Minecraft 里的角色就真迈一步。<br>这正是脑控的<b>最后一段路</b>：S6 把解码器接到这条管道上，你就能用脑子指挥角色通关。"
+      : "All three cleared — you wired the <b>Python → TCP → Lua mod → avatar</b> chain yourself, and learned to drop the parts that don't belong. Now when code says 'left', the Minecraft avatar truly steps.<br>This is the <b>final stretch</b> of brain-control: in S6 you plug the decoder into this very pipe and command the avatar with your mind.";
+  }
+
+  function resetGame(){
+    stateGame.cleared=[false,false,false];
+    stateGame.finished=false;
+    endOverlay.classList.add("hidden");
+    runBtn.disabled=false; clearBtn.disabled=false;
+    loadLevel(0);
+  }
+
+  /* ---------------- listeners ---------------- */
+  runBtn.addEventListener("click", runPipe);
+  clearBtn.addEventListener("click", ()=>{
+    if (stateGame.running) return;
+    const L=LEVELS[stateGame.lvl];
+    stateGame.slots = new Array(L.slots).fill(null);
+    stateGame.bin = shuffle(L.pool.slice());
+    setLink(false);
+    setStatus("idle","statusIdle");
+    [...slotRow.children].forEach(s=>s.classList.remove("err-slot","ok-slot"));
+    renderSlots(); renderBin(); drawIdle();
+  });
+  replayBtn.addEventListener("click", resetGame);
+
+  el("langBtn").addEventListener("click", ()=>{
+    const wasOk = statusMsg.classList.contains("ok");
+    const wasErr = statusMsg.classList.contains("err");
+    lang = (lang==="zh")?"en":"zh";
+    applyI18n();
+    renderSlots(); renderBin(); renderLevelTabs();
+    setLink(hudLink.textContent === I18N[lang==="zh"?"en":"zh"].linkOk);
+    if (!wasOk && !wasErr) setStatus("idle","statusIdle");
+    if (stateGame.finished) finishGame();
+    drawIdle();
+  });
+
+  function applyI18n(){
+    document.documentElement.lang = lang==="zh"?"zh-CN":"en";
+    document.querySelectorAll("[data-i18n]").forEach(e=>{
+      const k=e.getAttribute("data-i18n");
+      if (I18N[lang][k]!==undefined) e.textContent=I18N[lang][k];
+    });
+    hudLvl.textContent = (stateGame.lvl+1)+" / "+LEVELS.length;
+  }
+
+  window.addEventListener("resize", ()=>{ resizeCanvas(); if(!stateGame.running) drawIdle(); });
+
+  /* ---------------- init ---------------- */
+  applyI18n();
+  resizeCanvas();
+  loadLevel(0);
+  setTimeout(()=>{ resizeCanvas(); drawIdle(); }, 60);
+
+})();
+</script>
+</body>
+</html>

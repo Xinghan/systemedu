@@ -1,0 +1,712 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>M54 · 闭环主循环</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Noto+Sans+SC:wght@400;500;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    /* 第 1 层 — 共享深空底 (所有 26 套统一) */
+    --bg-0: oklch(0.14 0.035 265);
+    --bg-1: oklch(0.18 0.04 265);
+    --bg-2: oklch(0.22 0.045 265);
+    --bg-3: oklch(0.28 0.05 265);
+    --line: oklch(0.35 0.05 265 / 0.35);
+    --line-strong: oklch(0.55 0.08 265 / 0.55);
+    --fg:      oklch(0.96 0.01 265);
+    --fg-dim:  oklch(0.75 0.02 265);
+    --fg-mute: oklch(0.55 0.03 265);
+    --gold:    oklch(0.85 0.14 85);
+
+    /* 第 2 层 — cs signature accent (cyan) */
+    --accent: oklch(0.75 0.17 200);
+
+    /* 第 3 层 — cs 5 色 palette */
+    --signal: oklch(0.75 0.17 200);
+    --port:   oklch(0.72 0.17 275);
+    --node:   oklch(0.55 0.15 200);
+    --packet: oklch(0.92 0.10 200);
+    --ok:     oklch(0.82 0.17 125);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    height: 100vh; overflow: hidden;
+    background: var(--bg-0); color: var(--fg);
+    font-family: 'Inter', 'Noto Sans SC', 'PingFang SC', sans-serif;
+    font-size: 14px; line-height: 1.5;
+    display: flex;
+  }
+  .mono { font-family: 'JetBrains Mono', monospace; }
+
+  /* ============ Sidebar 200px ============ */
+  .sidebar {
+    width: 200px; flex-shrink: 0; height: 100vh;
+    background: var(--bg-1);
+    border-right: 1px solid var(--line);
+    display: flex; flex-direction: column;
+    padding: 22px 18px 18px;
+    position: relative;
+  }
+  .brand-row { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+  .brand-dot {
+    width: 10px; height: 10px; border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 0 4px oklch(0.75 0.17 200 / 0.18);
+    animation: pulse 2.4s ease-in-out infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { box-shadow: 0 0 0 4px oklch(0.75 0.17 200 / 0.18); }
+    50%      { box-shadow: 0 0 0 7px oklch(0.75 0.17 200 / 0.10); }
+  }
+  .brand-tag {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; letter-spacing: 0.08em;
+    color: var(--fg-dim); font-weight: 600;
+  }
+  .brand-title { font-size: 15px; font-weight: 700; color: var(--fg); line-height: 1.35; margin-bottom: 4px; }
+  .brand-sub { font-size: 11px; color: var(--fg-mute); line-height: 1.5; font-family: 'JetBrains Mono', monospace; }
+
+  /* mascot Loopy */
+  .mascot { margin: 14px 0 4px; display: flex; align-items: center; gap: 8px; }
+  .mascot .m-name {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px; letter-spacing: 0.06em; color: var(--fg-mute); line-height: 1.3;
+  }
+  .mascot .m-name b { color: var(--signal); font-weight: 700; }
+
+  /* guide */
+  .guide-h {
+    font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.12em;
+    color: var(--fg-mute); margin: 14px 0 7px; text-transform: uppercase;
+  }
+  .guide { list-style: none; padding: 0; margin: 0; }
+  .guide li {
+    font-size: 11px; color: var(--fg-dim); line-height: 1.4;
+    padding: 4px 0 4px 14px; position: relative;
+  }
+  .guide li::before {
+    content: ''; position: absolute; left: 0; top: 9px;
+    width: 5px; height: 5px; border-radius: 50%; background: var(--node);
+  }
+
+  /* roadmap S1-S6 */
+  .road-h {
+    font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.12em;
+    color: var(--fg-mute); margin: 16px 0 8px; text-transform: uppercase;
+  }
+  .road { list-style: none; padding: 0; margin: 0; }
+  .road li {
+    position: relative; font-size: 11px; color: var(--fg-mute); line-height: 1.35;
+    padding: 4px 0 4px 18px; border-left: 2px solid var(--line);
+  }
+  .road li::before {
+    content: ''; position: absolute; left: -5px; top: 8px;
+    width: 7px; height: 7px; border-radius: 50%; background: var(--bg-3);
+  }
+  .road li .st {
+    font-family: 'JetBrains Mono', monospace; font-weight: 700; font-size: 10px;
+    margin-right: 5px; color: var(--fg-mute);
+  }
+  .road li.done { color: var(--fg-dim); }
+  .road li.done::before { background: var(--node); }
+  .road li.done .st { color: var(--node); }
+  .road li.cur { color: var(--fg); font-weight: 700; border-left-color: var(--accent); }
+  .road li.cur::before {
+    background: var(--accent);
+    box-shadow: 0 0 0 3px oklch(0.75 0.17 200 / 0.20);
+    animation: pulse 2.4s ease-in-out infinite;
+  }
+  .road li.cur .st { color: var(--signal); }
+  .road li .badge {
+    display: inline-block; font-family: 'JetBrains Mono', monospace;
+    font-size: 8px; font-weight: 700; letter-spacing: 0.05em;
+    background: oklch(0.75 0.17 200 / 0.18); color: var(--signal);
+    padding: 1px 5px; border-radius: 3px; margin-left: 4px;
+  }
+
+  /* Minecraft silhouette corner (终点徽记) */
+  .mc-corner { margin-top: 12px; opacity: 0.65; display: flex; align-items: center; gap: 6px; }
+  .mc-corner svg { display: block; }
+  .mc-corner .mc-label {
+    font-family: 'JetBrains Mono', monospace; font-size: 8px;
+    letter-spacing: 0.05em; color: var(--fg-mute); line-height: 1.3;
+  }
+
+  .lang-btn {
+    margin-top: auto;
+    border: 1px solid var(--line-strong);
+    background: var(--bg-2); color: var(--fg); cursor: pointer;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; font-weight: 600;
+    padding: 9px 12px; border-radius: 6px;
+    transition: all 160ms ease; letter-spacing: 0.06em;
+    box-shadow: 3px 3px 0 var(--bg-0);
+  }
+  .lang-btn:hover { border-color: var(--accent); color: var(--signal); }
+
+  /* ============ Main stage ============ */
+  .main { flex: 1; height: 100vh; position: relative; overflow: hidden; }
+  #stage { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+
+  /* HUD 右上 */
+  .hud {
+    position: absolute; top: 18px; right: 18px;
+    background: oklch(0.18 0.04 265 / 0.85);
+    border: 1px solid var(--line-strong);
+    border-radius: 8px; padding: 10px 14px;
+    font-family: 'JetBrains Mono', monospace; font-size: 11px;
+    min-width: 178px; box-shadow: 3px 3px 0 var(--bg-0);
+    backdrop-filter: blur(2px);
+  }
+  .hud-row { display: flex; justify-content: space-between; gap: 14px; line-height: 1.7; }
+  .hud-lbl { color: var(--fg-mute); }
+  .hud-val { color: var(--signal); font-weight: 700; }
+  .hud-val.gold { color: var(--gold); }
+  .hud-val.ok { color: var(--ok); }
+
+  /* subtitle */
+  .sub {
+    position: absolute; bottom: 24px; left: 50%; transform: translateX(-50%);
+    text-align: center; width: 78%; pointer-events: none;
+  }
+  .sub-zh {
+    font-size: 18px; font-weight: 700; color: var(--fg);
+    background: oklch(0.14 0.035 265 / 0.72);
+    padding: 6px 18px; display: inline-block; border-radius: 6px;
+    border: 1px solid var(--line); line-height: 1.45;
+  }
+  .sub-zh .hi { color: var(--signal); }
+  .sub-zh .gd { color: var(--gold); }
+  .sub-en {
+    font-size: 12px; font-style: italic; color: var(--fg-dim);
+    margin-top: 6px; font-family: 'Inter', sans-serif;
+  }
+</style>
+</head>
+<body>
+
+<aside class="sidebar">
+  <div class="brand-row">
+    <span class="brand-dot"></span>
+    <span class="brand-tag" id="brandTag">M54 · 接进游戏</span>
+  </div>
+  <div class="brand-title" id="brandTitle">闭环主循环</div>
+  <div class="brand-sub" id="brandSub">closing the loop</div>
+
+  <div class="mascot">
+    <svg width="34" height="34" viewBox="0 0 34 34" aria-hidden="true">
+      <circle cx="17" cy="17" r="11" fill="none" stroke="oklch(0.55 0.15 200)" stroke-width="1.6"/>
+      <circle cx="17" cy="6"  r="2.6" fill="oklch(0.75 0.17 200)"/>
+      <circle cx="28" cy="17" r="2.6" fill="oklch(0.72 0.17 275)"/>
+      <circle cx="17" cy="28" r="2.6" fill="oklch(0.82 0.17 125)"/>
+      <circle cx="6"  cy="17" r="2.6" fill="oklch(0.85 0.14 85)"/>
+      <circle cx="25.5" cy="8.5" r="3" fill="oklch(0.92 0.10 200)"/>
+    </svg>
+    <span class="m-name"><b>Loopy</b><br>loop runner</span>
+  </div>
+
+  <div class="guide-h" id="guideH">看什么</div>
+  <ul class="guide">
+    <li id="g1">一个数据点绕环不停转</li>
+    <li id="g2">EEG.解码.映射.角色 单向流</li>
+    <li id="g3">看到角色动.反馈回起点闭环</li>
+  </ul>
+
+  <div class="road-h" id="roadH">脑控 Minecraft 长征</div>
+  <ul class="road">
+    <li class="done"><span class="st">S1</span><span id="r1">采脑波</span></li>
+    <li class="done"><span class="st">S2</span><span id="r2">看懂信号</span></li>
+    <li class="done"><span class="st">S3</span><span id="r3">建模型</span></li>
+    <li class="done"><span class="st">S4</span><span id="r4">自录冲准</span></li>
+    <li class="cur"><span class="st">S5</span><span id="r5">接进游戏</span><span class="badge" id="r5b">你在这</span></li>
+    <li><span class="st">S6</span><span id="r6">脑控真玩</span></li>
+  </ul>
+
+  <div class="mc-corner">
+    <svg width="42" height="38" viewBox="0 0 42 38" aria-hidden="true">
+      <rect x="2"  y="20" width="13" height="13" fill="oklch(0.32 0.10 200)"/>
+      <rect x="15" y="20" width="13" height="13" fill="oklch(0.55 0.15 200)"/>
+      <rect x="2"  y="20" width="13" height="13" fill="none" stroke="oklch(0.55 0.08 265 / 0.55)" stroke-width="0.7"/>
+      <rect x="15" y="20" width="13" height="13" fill="none" stroke="oklch(0.55 0.08 265 / 0.55)" stroke-width="0.7"/>
+      <path d="M21 2 L38 8 L36 12 L23 9 L21 13 L19 9 L20 5 Z" fill="oklch(0.55 0.15 200)"/>
+      <rect x="19" y="9" width="3" height="15" fill="oklch(0.32 0.10 200)" transform="rotate(8 20 16)"/>
+    </svg>
+    <span class="mc-label" id="mcLabel">终点<br>Minecraft</span>
+  </div>
+
+  <button class="lang-btn" id="langBtn" type="button">中文 / EN</button>
+</aside>
+
+<main class="main">
+  <canvas id="stage"></canvas>
+  <div class="hud">
+    <div class="hud-row"><span class="hud-lbl">loop</span><span class="hud-val mono gold" id="hLoop">#0</span></div>
+    <div class="hud-row"><span class="hud-lbl" id="hStageL">stage</span><span class="hud-val mono" id="hStage">read</span></div>
+    <div class="hud-row"><span class="hud-lbl">class</span><span class="hud-val mono" id="hClass">--</span></div>
+    <div class="hud-row"><span class="hud-lbl">conf</span><span class="hud-val mono" id="hConf">--</span></div>
+    <div class="hud-row"><span class="hud-lbl" id="hRejL">rejected</span><span class="hud-val mono" id="hRej">3%</span></div>
+  </div>
+  <div class="sub">
+    <div class="sub-zh" id="subZh">想让角色听念头动，得先把"录脑波"和"控游戏"接成一个不停转的环。</div>
+    <div class="sub-en" id="subEn">To make the avatar obey your mind, first wire recording and control into one looping ring.</div>
+  </div>
+</main>
+
+<script>
+(function () {
+  "use strict";
+
+  var LANG = 'cn';
+
+  var I18N = {
+    brandTag:   { cn: 'M54 · 接进游戏',   en: 'M54 · WIRE TO GAME' },
+    brandTitle: { cn: '闭环主循环',        en: 'Closed Loop' },
+    brandSub:   { cn: 'closing the loop',  en: 'closing the loop' },
+    guideH:     { cn: '看什么',            en: 'WATCH' },
+    g1: { cn: '一个数据点绕环不停转',       en: 'one packet circles forever' },
+    g2: { cn: 'EEG.解码.映射.角色 单向流',  en: 'EEG.decode.map.avatar one way' },
+    g3: { cn: '看到角色动.反馈回起点闭环',  en: 'see it move, feedback closes ring' },
+    roadH: { cn: '脑控 Minecraft 长征',    en: 'BRAIN-MINECRAFT ROADMAP' },
+    r1: { cn: '采脑波',   en: 'Record EEG' },
+    r2: { cn: '看懂信号', en: 'Read signal' },
+    r3: { cn: '建模型',   en: 'Build model' },
+    r4: { cn: '自录冲准', en: 'Self-record' },
+    r5: { cn: '接进游戏', en: 'Wire to game' },
+    r5b:{ cn: '你在这',   en: 'YOU ARE HERE' },
+    r6: { cn: '脑控真玩', en: 'Play by mind' },
+    mcLabel: { cn: '终点<br>Minecraft', en: 'Goal<br>Minecraft' },
+    hStageL: { cn: 'stage', en: 'stage' },
+    hRejL:   { cn: 'rejected', en: 'rejected' }
+  };
+
+  var SUB = {
+    intro: {
+      zh: '想让角色听念头动，得先把"录脑波"和"控游戏"接成一个<span class="hi">不停转的环</span>。',
+      en: 'To make the avatar obey, wire recording and control into one looping ring.'
+    },
+    read: {
+      zh: '<span class="hi">EEG stream</span> 读到一个 sample，一个青色数据点冒出来，开始绕环。',
+      en: 'EEG stream reads one sample, a cyan packet pops out and starts circling.'
+    },
+    decode: {
+      zh: 'sample 流进 <span class="hi">BCI Module</span>，解码器 predict 出 class=left, conf=0.82。',
+      en: 'The sample flows into the BCI Module; the decoder predicts class=left, conf=0.82.'
+    },
+    map: {
+      zh: '流进 <span class="hi">Mapping</span>，把 left 翻成游戏指令 move_left + forward。',
+      en: 'Into Mapping: left becomes the game command move_left + forward.'
+    },
+    act: {
+      zh: '指令送进 <span class="hi">Minetest</span>，角色真的左转前进了！',
+      en: 'The command hits Minetest, the avatar actually turns left and walks!'
+    },
+    feedback: {
+      zh: '你看到角色动了，<span class="gd">反馈回路</span>绕回 EEG：想.动.看.再想。',
+      en: 'You see it move; the feedback loop returns to EEG: think, move, see, think again.'
+    },
+    settle: {
+      zh: '环闭合，主循环不停跳 <span class="gd">loop #1.#2.#3</span>——脑控系统真的转起来了！',
+      en: 'Ring closed, the main loop keeps ticking #1 #2 #3, the BCI system is alive!'
+    }
+  };
+
+  function setHTML(id, html) { var el = document.getElementById(id); if (el) el.innerHTML = html; }
+  function setText(id, t) { var el = document.getElementById(id); if (el) el.textContent = t; }
+
+  function refreshI18N() {
+    var keys = ['brandTag','brandTitle','brandSub','guideH','g1','g2','g3','roadH',
+                'r1','r2','r3','r4','r5','r5b','r6','mcLabel','hStageL','hRejL'];
+    for (var i = 0; i < keys.length; i++) if (I18N[keys[i]]) setHTML(keys[i], I18N[keys[i]][LANG]);
+    setText('langBtn', LANG === 'cn' ? '中文 / EN' : 'EN / 中文');
+    document.documentElement.setAttribute('lang', LANG === 'cn' ? 'zh-CN' : 'en');
+    applySub();
+  }
+
+  var curStage = 'intro';
+  function applySub() {
+    var s = SUB[curStage] || SUB.intro;
+    if (LANG === 'en') { setHTML('subZh', s.en); setHTML('subEn', s.zh); }
+    else { setHTML('subZh', s.zh); setHTML('subEn', s.en); }
+  }
+
+  document.getElementById('langBtn').addEventListener('click', function () {
+    LANG = (LANG === 'cn') ? 'en' : 'cn';
+    refreshI18N();
+  });
+
+  /* ====================================================================
+     CANVAS — 唯一核心对象: 一个数据 packet 顺时针绕一个 4 层闭环。
+       N0 EEG stream (顶) . N1 BCI Module (右) . N2 Mapping (下) . N3 Minetest (左)
+       packet angle 0->2pi 绕一整圈回 N0 = 一次 loop。
+       N3 点亮时角色左转前进; 学生视觉反馈 = gold 弧从 N3 绕回 N0。
+       rAF 连续推进 dataAngle, 永不停。
+     ==================================================================== */
+  var canvas = document.getElementById('stage');
+  var c = canvas.getContext('2d');
+  var W = 0, H = 0, DPR = 1;
+
+  function resize() {
+    var r = canvas.parentElement.getBoundingClientRect();
+    if (r.width < 1 || r.height < 1) return;
+    DPR = window.devicePixelRatio || 1;
+    canvas.width = Math.round(r.width * DPR);
+    canvas.height = Math.round(r.height * DPR);
+    canvas.style.width = r.width + 'px';
+    canvas.style.height = r.height + 'px';
+    c.setTransform(DPR, 0, 0, DPR, 0, 0);
+    W = r.width; H = r.height;
+  }
+  window.addEventListener('resize', resize);
+
+  var COL = {
+    bg0: 'oklch(0.14 0.035 265)',
+    accent: 'oklch(0.75 0.17 200)',
+    signal: 'oklch(0.75 0.17 200)',
+    port:   'oklch(0.72 0.17 275)',
+    node:   'oklch(0.55 0.15 200)',
+    packet: 'oklch(0.92 0.10 200)',
+    ok:     'oklch(0.82 0.17 125)',
+    gold:   'oklch(0.85 0.14 85)',
+    fg:     'oklch(0.96 0.01 265)',
+    fgDim:  'oklch(0.75 0.02 265)',
+    fgMute: 'oklch(0.55 0.03 265)',
+    line:   'oklch(0.40 0.05 265 / 0.45)',
+    grid:   'oklch(0.30 0.04 265 / 0.5)'
+  };
+
+  function ringCenter() { return { cx: W * 0.50 + 8, cy: H * 0.46 }; }
+  function ringRadius() { return Math.min(W * 0.50, H * 0.62) * 0.46; }
+
+  // angle 0=top, 顺时针
+  function ringPoint(angle) {
+    var ctr = ringCenter(), R = ringRadius();
+    var sa = -Math.PI / 2 + angle;
+    return { x: ctr.cx + Math.cos(sa) * R, y: ctr.cy + Math.sin(sa) * R };
+  }
+
+  var NODES = [
+    { ang: 0,                key: 'eeg',  zh: 'EEG stream', en: 'EEG stream', sub: { cn: 'read()',    en: 'read()' },    col: 'signal' },
+    { ang: Math.PI / 2,      key: 'bci',  zh: 'BCI Module', en: 'BCI Module', sub: { cn: 'predict()', en: 'predict()' }, col: 'port' },
+    { ang: Math.PI,          key: 'map',  zh: 'Mapping',    en: 'Mapping',    sub: { cn: 'map()',     en: 'map()' },     col: 'node' },
+    { ang: 3 * Math.PI / 2,  key: 'mc',   zh: 'Minetest',   en: 'Minetest',   sub: { cn: 'send()',    en: 'send()' },    col: 'ok' }
+  ];
+
+  var LOOP_SEC = 6.4;
+  var loopN = 0;
+  var dataAngle = 0;
+
+  function stageAt(ang) {
+    var seg = Math.floor(ang / (Math.PI / 2));
+    if (seg === 0) return 'read';
+    if (seg === 1) return 'decode';
+    if (seg === 2) return 'map';
+    return 'act';
+  }
+
+  var nodeAct = [0, 0, 0, 0];
+  var fbGlow = 0;
+  var avatarMove = 0;
+  var curClass = 'left', curConf = 0.82, curCmd = 'move_left+fwd';
+  var rejectedPct = 3;
+
+  function lerp(a, b, k) { return a + (b - a) * k; }
+  function alpha(col, a) { return col.slice(0, -1) + ' / ' + a + ')'; }
+
+  function drawRingPipe() {
+    var ctr = ringCenter(), R = ringRadius();
+    c.save();
+    c.strokeStyle = 'oklch(0.40 0.06 265 / 0.5)';
+    c.lineWidth = 9;
+    c.beginPath(); c.arc(ctr.cx, ctr.cy, R, 0, Math.PI * 2); c.stroke();
+    c.strokeStyle = 'oklch(0.55 0.15 200 / 0.55)';
+    c.lineWidth = 2;
+    c.beginPath(); c.arc(ctr.cx, ctr.cy, R, 0, Math.PI * 2); c.stroke();
+    c.restore();
+  }
+
+  function drawFlowArrows(t) {
+    var n = 16;
+    for (var i = 0; i < n; i++) {
+      var ang = (i / n) * Math.PI * 2 + (t * 0.6) % (Math.PI * 2);
+      var p = ringPoint(ang);
+      var sa = -Math.PI / 2 + ang;
+      var tx = -Math.sin(sa), ty = Math.cos(sa);
+      c.save();
+      c.translate(p.x, p.y);
+      c.rotate(Math.atan2(ty, tx));
+      c.fillStyle = 'oklch(0.75 0.17 200 / 0.30)';
+      c.beginPath();
+      c.moveTo(5, 0); c.lineTo(-3, 3); c.lineTo(-3, -3); c.closePath();
+      c.fill();
+      c.restore();
+    }
+  }
+
+  function roundRect(x, y, w, h, r) {
+    c.beginPath();
+    c.moveTo(x + r, y);
+    c.arcTo(x + w, y, x + w, y + h, r);
+    c.arcTo(x + w, y + h, x, y + h, r);
+    c.arcTo(x, y + h, x, y, r);
+    c.arcTo(x, y, x + w, y, r);
+    c.closePath();
+  }
+
+  function drawNode(i) {
+    var nd = NODES[i];
+    var p = ringPoint(nd.ang);
+    var act = nodeAct[i];
+    var baseCol = COL[nd.col];
+    var w = 132, h = 52;
+    c.save();
+    var bg = act > 0.5 ? 'oklch(0.22 0.045 265)' : 'oklch(0.18 0.04 265)';
+    roundRect(p.x - w / 2, p.y - h / 2, w, h, 9);
+    c.fillStyle = bg; c.fill();
+    c.strokeStyle = act > 0.05 ? alpha(baseCol, (0.55 + 0.45 * act).toFixed(2)) : 'oklch(0.55 0.08 265 / 0.55)';
+    c.lineWidth = 1.4 + 2.4 * act;
+    roundRect(p.x - w / 2, p.y - h / 2, w, h, 9);
+    c.stroke();
+    if (act > 0.08) {
+      c.strokeStyle = alpha(baseCol, (0.30 * act).toFixed(2));
+      c.lineWidth = 2;
+      roundRect(p.x - w / 2 - 5 - 3 * act, p.y - h / 2 - 5 - 3 * act, w + 10 + 6 * act, h + 10 + 6 * act, 12);
+      c.stroke();
+    }
+    c.fillStyle = act > 0.3 ? COL.fg : COL.fgDim;
+    c.font = '700 13px "JetBrains Mono", monospace';
+    c.textAlign = 'center'; c.textBaseline = 'middle';
+    c.fillText(LANG === 'cn' ? nd.zh : nd.en, p.x, p.y - 8);
+    c.fillStyle = act > 0.3 ? baseCol : COL.fgMute;
+    c.font = '10px "JetBrains Mono", monospace';
+    c.fillText(nd.sub[LANG], p.x, p.y + 11);
+    c.restore();
+  }
+
+  function drawAvatar() {
+    var p = ringPoint(NODES[3].ang);
+    var gx = p.x - 46, gy = p.y + 36, gw = 92, gh = 60;
+    c.save();
+    roundRect(gx, gy, gw, gh, 6);
+    c.fillStyle = 'oklch(0.16 0.035 265)'; c.fill();
+    c.strokeStyle = nodeAct[3] > 0.2 ? alpha(COL.ok, '0.7') : 'oklch(0.55 0.08 265 / 0.45)';
+    c.lineWidth = 1.4; roundRect(gx, gy, gw, gh, 6); c.stroke();
+    c.strokeStyle = 'oklch(0.30 0.04 265 / 0.5)'; c.lineWidth = 0.6;
+    for (var i = 1; i < 4; i++) { c.beginPath(); c.moveTo(gx + i * gw / 4, gy); c.lineTo(gx + i * gw / 4, gy + gh); c.stroke(); }
+    for (var j = 1; j < 3; j++) { c.beginPath(); c.moveTo(gx, gy + j * gh / 3); c.lineTo(gx + gw, gy + j * gh / 3); c.stroke(); }
+    var ax = gx + gw * 0.62 - avatarMove * 22;
+    var ay = gy + gh * 0.55;
+    c.fillStyle = COL.ok;
+    c.fillRect(ax - 6, ay - 8, 12, 14);
+    c.fillStyle = COL.packet;
+    var hd = ax - 10 - avatarMove * 2;
+    c.beginPath();
+    c.moveTo(hd, ay - 1); c.lineTo(hd + 6, ay - 5); c.lineTo(hd + 6, ay + 3); c.closePath();
+    c.fill();
+    c.fillStyle = COL.fgMute; c.font = '8px "JetBrains Mono", monospace'; c.textAlign = 'center';
+    c.fillText(LANG === 'cn' ? '角色左转前进' : 'turn left + walk', gx + gw / 2, gy + gh + 11);
+    c.restore();
+  }
+
+  function drawFeedback(t) {
+    if (fbGlow <= 0.02) return;
+    var ctr = ringCenter(), R = ringRadius();
+    var Ro = R + 30;
+    var a0 = 3 * Math.PI / 2, a1 = 2 * Math.PI;
+    c.save();
+    c.strokeStyle = alpha(COL.gold, (0.35 + 0.5 * fbGlow).toFixed(2));
+    c.lineWidth = 2.4; c.setLineDash([7, 5]);
+    c.lineDashOffset = -(t * 30) % 24;
+    c.beginPath();
+    var steps = 28;
+    for (var i = 0; i <= steps; i++) {
+      var ang = a0 + (a1 - a0) * (i / steps);
+      var sa = -Math.PI / 2 + ang;
+      var x = ctr.cx + Math.cos(sa) * Ro, y = ctr.cy + Math.sin(sa) * Ro;
+      if (i === 0) c.moveTo(x, y); else c.lineTo(x, y);
+    }
+    c.stroke();
+    c.setLineDash([]);
+    var midAng = (a0 + a1) / 2;
+    var sam = -Math.PI / 2 + midAng;
+    var ex = ctr.cx + Math.cos(sam) * (Ro + 30), ey = ctr.cy + Math.sin(sam) * (Ro + 30);
+    c.fillStyle = alpha(COL.gold, (0.7 + 0.3 * fbGlow).toFixed(2));
+    c.beginPath(); c.ellipse(ex, ey, 11, 7, 0, 0, Math.PI * 2); c.fill();
+    c.fillStyle = COL.bg0;
+    c.beginPath(); c.arc(ex, ey, 3.4, 0, Math.PI * 2); c.fill();
+    c.fillStyle = COL.fgMute; c.font = '9px "JetBrains Mono", monospace'; c.textAlign = 'center';
+    c.fillText(LANG === 'cn' ? '你看到了' : 'you see it', ex, ey + 20);
+    c.restore();
+  }
+
+  function drawCore() {
+    var ctr = ringCenter();
+    var st = curStage;
+    c.save();
+    c.textAlign = 'center';
+    c.fillStyle = COL.gold;
+    c.font = '700 30px "JetBrains Mono", monospace';
+    c.fillText('loop #' + loopN, ctr.cx, ctr.cy - 14);
+    var lines = [
+      { k: 'while',  txt: 'while running:',   stg: null },
+      { k: 'read',   txt: '  s = read()',     stg: 'read' },
+      { k: 'decode', txt: '  p = predict(s)', stg: 'decode' },
+      { k: 'map',    txt: '  cmd = map(p)',   stg: 'map' },
+      { k: 'act',    txt: '  send(cmd)',      stg: 'act' }
+    ];
+    c.font = '11px "JetBrains Mono", monospace';
+    var ly = ctr.cy + 12;
+    for (var i = 0; i < lines.length; i++) {
+      var ln = lines[i];
+      var hot = (ln.stg === st) || (st === 'feedback' && ln.stg === 'act') || (st === 'settle' && ln.k === 'while');
+      c.fillStyle = hot ? COL.packet : COL.fgMute;
+      if (ln.k === 'while' && !hot) c.fillStyle = COL.fgDim;
+      c.fillText(ln.txt, ctr.cx, ly + i * 15);
+    }
+    c.restore();
+  }
+
+  function drawPacket(t) {
+    var p = ringPoint(dataAngle);
+    for (var i = 1; i <= 6; i++) {
+      var ta = dataAngle - i * 0.10;
+      var tp = ringPoint(ta);
+      c.fillStyle = alpha(COL.signal, (0.30 * (1 - i / 7)).toFixed(2));
+      c.beginPath(); c.arc(tp.x, tp.y, 5 - i * 0.5, 0, Math.PI * 2); c.fill();
+    }
+    var pr = 7 + 1.5 * Math.sin(t * 6);
+    c.save();
+    c.shadowColor = COL.packet; c.shadowBlur = 14;
+    c.fillStyle = COL.packet;
+    c.beginPath(); c.arc(p.x, p.y, pr, 0, Math.PI * 2); c.fill();
+    c.restore();
+    c.strokeStyle = COL.signal; c.lineWidth = 1.6;
+    c.beginPath(); c.arc(p.x, p.y, pr + 4, 0, Math.PI * 2); c.stroke();
+    var lbl = '';
+    if (curStage === 'read') lbl = 'sample';
+    else if (curStage === 'decode') lbl = curClass + ' ' + curConf.toFixed(2);
+    else if (curStage === 'map') lbl = curCmd;
+    else lbl = '->game';
+    c.fillStyle = COL.packet; c.font = '700 10px "JetBrains Mono", monospace';
+    c.textAlign = 'center';
+    var ctr = ringCenter();
+    // 沿径向(远离环心)推出固定距离, 保证标签落在节点框(半高26+余量)之外, 不压节点副标题
+    var dx = p.x - ctr.cx, dy = p.y - ctr.cy;
+    var dlen = Math.sqrt(dx * dx + dy * dy) || 1;
+    var push = 64;
+    var ox = p.x + (dx / dlen) * push;
+    var oy = p.y + (dy / dlen) * push;
+    c.fillText(lbl, ox, oy);
+  }
+
+  var stars = [];
+  (function () {
+    for (var i = 0; i < 55; i++) stars.push({ x: Math.random(), y: Math.random(), r: Math.random() * 1.1 + 0.3, ph: Math.random() * 6.28 });
+  })();
+  function drawStars(t) {
+    for (var i = 0; i < stars.length; i++) {
+      var s = stars[i];
+      var tw = 0.20 + 0.22 * (0.5 + 0.5 * Math.sin(t * 0.8 + s.ph));
+      c.fillStyle = 'oklch(0.85 0.05 265 / ' + tw.toFixed(3) + ')';
+      c.beginPath(); c.arc(s.x * W, s.y * H, s.r, 0, Math.PI * 2); c.fill();
+    }
+  }
+
+  function updateHUD() {
+    var stageNames = {
+      intro:   { cn: '准备',   en: 'ready' },
+      read:    { cn: 'read',   en: 'read' },
+      decode:  { cn: 'predict',en: 'predict' },
+      map:     { cn: 'map',    en: 'map' },
+      act:     { cn: 'send',   en: 'send' },
+      feedback:{ cn: '反馈',   en: 'feedback' },
+      settle:  { cn: '运转中', en: 'running' }
+    };
+    setText('hLoop', '#' + loopN);
+    setText('hStage', stageNames[curStage] ? stageNames[curStage][LANG] : curStage);
+    var hcl = document.getElementById('hClass');
+    var hcf = document.getElementById('hConf');
+    if (curStage === 'read' || curStage === 'intro') {
+      setText('hClass', '--'); setText('hConf', '--');
+      hcl.classList.remove('ok'); hcf.classList.remove('ok');
+    } else {
+      setText('hClass', curClass);
+      setText('hConf', curConf.toFixed(2));
+      hcl.classList.add('ok'); hcf.classList.add('ok');
+    }
+    setText('hRej', rejectedPct + '%');
+  }
+
+  var startTime = null, prevT = 0;
+  function frame(now) {
+    if (startTime === null) { startTime = now; prevT = now; }
+    var dt = Math.min(0.05, (now - prevT) / 1000);
+    prevT = now;
+    var t = (now - startTime) / 1000;
+
+    var speed;
+    if (t < 2.4) speed = (Math.PI * 2) / LOOP_SEC * (t / 2.4);
+    else speed = (Math.PI * 2) / LOOP_SEC;
+    dataAngle += speed * dt;
+    while (dataAngle >= Math.PI * 2) {
+      dataAngle -= Math.PI * 2;
+      loopN += 1;
+      if (loopN % 3 === 0) { curClass = 'right'; curConf = 0.79; curCmd = 'move_right+fwd'; }
+      else if (loopN % 3 === 1) { curClass = 'left'; curConf = 0.82; curCmd = 'move_left+fwd'; }
+      else { curClass = 'left'; curConf = 0.88; curCmd = 'move_left+fwd'; }
+      rejectedPct = 2 + (loopN % 4);
+    }
+
+    var stg;
+    if (t < 1.2 && loopN === 0) stg = 'intro';
+    else stg = stageAt(dataAngle);
+    if (stg === 'act' && dataAngle > 3 * Math.PI / 2 + Math.PI / 4) stg = 'feedback';
+    if (loopN >= 2 && dataAngle < 0.2) stg = 'settle';
+    if (stg !== curStage) { curStage = stg; applySub(); }
+
+    var targetAct = [0, 0, 0, 0];
+    for (var i = 0; i < 4; i++) {
+      var na = NODES[i].ang;
+      var d = Math.abs(dataAngle - na);
+      d = Math.min(d, Math.PI * 2 - d);
+      targetAct[i] = Math.max(0, 1 - d / (Math.PI / 3));
+    }
+    var smooth = 1 - Math.pow(0.001, dt);
+    for (var j = 0; j < 4; j++) nodeAct[j] = lerp(nodeAct[j], targetAct[j], smooth);
+
+    var avTarget = nodeAct[3] > 0.4 ? 1 : 0;
+    avatarMove = lerp(avatarMove, avTarget, 1 - Math.pow(0.004, dt));
+
+    var fbTarget = (curStage === 'feedback' || curStage === 'settle' || dataAngle > 3 * Math.PI / 2) ? 1 : 0.12;
+    fbGlow = lerp(fbGlow, fbTarget, 1 - Math.pow(0.01, dt));
+
+    c.clearRect(0, 0, W, H);
+    c.fillStyle = COL.bg0; c.fillRect(0, 0, W, H);
+    drawStars(t);
+    drawRingPipe();
+    drawFlowArrows(t);
+    drawFeedback(t);
+    drawCore();
+    for (var n = 0; n < 4; n++) drawNode(n);
+    drawAvatar();
+    drawPacket(t);
+
+    updateHUD();
+    requestAnimationFrame(frame);
+  }
+
+  function boot() {
+    resize();
+    refreshI18N();
+    curStage = 'intro';
+    applySub();
+    requestAnimationFrame(frame);
+  }
+  if (document.readyState === 'complete') boot();
+  else window.addEventListener('load', boot);
+  setTimeout(function () { if (startTime === null) boot(); }, 300);
+})();
+</script>
+</body>
+</html>

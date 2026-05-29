@@ -1,0 +1,468 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>M59 · 设计并通关一个脑控解谜关卡</title>
+<!-- type=static_infographic (C 类静态信息图, 非 autoplay) -->
+<style>
+:root{
+  --paper:#FAF9F5; --paper-2:#F1EDDF; --card:#FFFFFF;
+  --ink:#191814; --ink-2:#2B2924; --sub:#6B6557; --sub-2:#9D978A;
+  --border:#EBE5D6; --border-2:#D9D1BD; --hairline:#F2EDE0;
+  --primary:#D97757; --primary-ink:#9A4A2E; --primary-soft:#F8EDE5; --primary-line:#ECCFB8;
+  --computing:#C04E68; --computing-soft:#F4DDE3; --computing-line:#E4B7C2; --computing-ink:#7A2F44;
+  --shadow-sm:0 1px 2px 0 rgba(25,24,20,.04);
+  --shadow:0 1px 3px 0 rgba(25,24,20,.06),0 1px 2px -1px rgba(25,24,20,.04);
+  --shadow-md:0 4px 8px -2px rgba(25,24,20,.06),0 2px 4px -2px rgba(25,24,20,.04);
+  --shadow-lg:0 12px 24px -6px rgba(25,24,20,.1),0 4px 8px -4px rgba(25,24,20,.05);
+  --mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  --sans:"PingFang SC","Inter","Noto Sans SC",-apple-system,system-ui,sans-serif;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100%}
+body{
+  background:var(--paper); color:var(--ink); font-family:var(--sans);
+  overflow:hidden; display:flex; height:100vh;
+}
+/* ---------- sidebar ---------- */
+.sidebar{
+  width:200px; flex:0 0 200px; height:100vh; background:var(--paper-2);
+  border-right:1px solid var(--border); display:flex; flex-direction:column;
+  padding:18px 16px;
+}
+.brand{display:flex; flex-direction:column; gap:4px; margin-bottom:22px}
+.brand .mk{
+  width:30px; height:30px; border-radius:8px; background:var(--card);
+  border:1px solid var(--border-2); display:flex; align-items:center; justify-content:center;
+  box-shadow:var(--shadow-sm); margin-bottom:6px;
+}
+.brand .t1{font-size:13px; font-weight:700; letter-spacing:.2px}
+.brand .t2{font-size:10px; color:var(--sub); font-family:var(--mono); letter-spacing:.4px}
+.guide{display:flex; flex-direction:column; gap:10px; margin-top:4px}
+.guide .g{
+  display:flex; gap:8px; align-items:flex-start; font-size:11px; color:var(--sub-2);
+  line-height:1.45;
+}
+.guide .gn{
+  flex:0 0 18px; height:18px; border-radius:5px; background:var(--card);
+  border:1px solid var(--border); display:flex; align-items:center; justify-content:center;
+  font-family:var(--mono); font-size:10px; color:var(--computing); font-weight:700;
+}
+.guide .gt b{color:var(--sub); font-weight:600}
+.spacer{flex:1}
+.lang-btn{
+  border:1px solid var(--border-2); background:var(--card); color:var(--ink);
+  border-radius:8px; padding:8px 10px; font-size:11px; font-family:var(--mono);
+  cursor:pointer; display:flex; align-items:center; justify-content:space-between;
+  box-shadow:var(--shadow-sm); transition:background .2s,border-color .2s;
+}
+.lang-btn:hover{background:var(--primary-soft); border-color:var(--primary-line)}
+.lang-btn .dot{width:6px; height:6px; border-radius:50%; background:var(--primary)}
+
+/* ---------- main ---------- */
+.main{flex:1; height:100vh; display:flex; flex-direction:column; padding:14px 18px 14px 18px; min-width:0}
+.hud{
+  display:flex; align-items:center; gap:10px; font-family:var(--mono); font-size:10.5px;
+  color:var(--sub); margin-bottom:8px; flex-wrap:wrap;
+}
+.hud .pill{
+  display:inline-flex; align-items:center; gap:6px; background:var(--card);
+  border:1px solid var(--border); border-radius:999px; padding:3px 9px; box-shadow:var(--shadow-sm);
+}
+.hud .pill b{color:var(--ink-2); font-weight:600}
+.hud .s5{color:var(--computing-ink); border-color:var(--computing-line); background:var(--computing-soft)}
+
+.titlerow{display:flex; align-items:center; gap:14px; margin-bottom:10px}
+.titlerow h1{font-size:21px; font-weight:800; letter-spacing:.2px; line-height:1.1}
+.titlerow .q{font-size:11px; color:var(--sub); margin-top:3px; line-height:1.3}
+/* wow_3 印章 — coral key moment + 温和呼吸 */
+.stamp{flex:0 0 auto; margin-left:auto; position:relative; width:74px; height:74px}
+.stamp svg{display:block}
+.stamp .ring{transform-origin:50% 50%; animation:stampPulse 2.6s ease-in-out infinite}
+@keyframes stampPulse{
+  0%,100%{opacity:.55; transform:scale(.92)}
+  50%{opacity:1; transform:scale(1.05)}
+}
+
+.grid{flex:1; display:grid; grid-template-columns:1.15fr .85fr; grid-template-rows:1fr 1fr; gap:12px; min-height:0}
+.card{
+  background:var(--card); border:1px solid var(--border); border-radius:14px;
+  box-shadow:var(--shadow); padding:13px 15px; display:flex; flex-direction:column; min-height:0; overflow:hidden;
+}
+.card h2{font-size:13px; font-weight:700; display:flex; align-items:center; gap:8px; margin-bottom:3px}
+.card h2 .tag{
+  font-family:var(--mono); font-size:9px; font-weight:600; color:var(--computing-ink);
+  background:var(--computing-soft); border:1px solid var(--computing-line); border-radius:5px; padding:1px 6px;
+}
+.card .sub{font-size:10px; color:var(--sub-2); margin-bottom:9px}
+
+/* ---- 4 原则 ---- */
+.principles{display:grid; grid-template-columns:1fr 1fr; gap:8px; flex:1; min-height:0}
+.prin{
+  border:1px solid var(--border); border-radius:10px; padding:9px 10px; cursor:pointer;
+  background:var(--paper); transition:border-color .22s,background .22s,box-shadow .22s,transform .22s;
+  display:flex; flex-direction:column; gap:3px; position:relative;
+}
+.prin:hover{border-color:var(--computing-line); background:var(--computing-soft); box-shadow:var(--shadow-sm); transform:translateY(-1px)}
+.prin.active{border-color:var(--primary-line); background:var(--primary-soft); box-shadow:var(--shadow-md)}
+.prin .pi{display:flex; align-items:center; gap:7px}
+.prin .pn{
+  width:18px; height:18px; flex:0 0 18px; border-radius:5px; background:var(--card);
+  border:1px solid var(--border-2); font-family:var(--mono); font-size:10px; font-weight:700;
+  display:flex; align-items:center; justify-content:center; color:var(--computing);
+}
+.prin.active .pn{color:var(--primary-ink); border-color:var(--primary-line); background:var(--card)}
+.prin .pt{font-size:11.5px; font-weight:700}
+.prin .pd{font-size:9.5px; color:var(--sub); line-height:1.35}
+.prin .bad{font-size:9px; color:var(--sub-2); line-height:1.3; padding-top:2px; border-top:1px dashed var(--hairline); margin-top:1px}
+.prin .bad em{font-style:normal; color:var(--computing-ink); font-weight:600}
+
+/* click 明细 panel */
+.detail{
+  margin-top:9px; border:1px solid var(--primary-line); background:var(--primary-soft);
+  border-radius:10px; padding:9px 11px; font-size:10px; color:var(--ink-2); line-height:1.5; display:none;
+}
+.detail.show{display:block}
+.detail b{color:var(--primary-ink)}
+
+/* ---- 3 物理约束 ---- */
+.cons{display:flex; flex-direction:column; gap:8px; flex:1; min-height:0}
+.con{
+  display:flex; gap:9px; align-items:flex-start; border:1px solid var(--border);
+  border-radius:10px; padding:8px 10px; background:var(--paper);
+  transition:border-color .22s,background .22s;
+}
+.con:hover{border-color:var(--computing-line); background:var(--computing-soft)}
+.con .ci{flex:0 0 56px}
+.con .num{font-family:var(--mono); font-size:14px; font-weight:700; color:var(--computing-ink); line-height:1.05}
+.con .num small{font-size:8px; color:var(--sub-2); font-weight:500; display:block; letter-spacing:.3px; margin-top:1px}
+.con .cx .ct{font-size:11px; font-weight:700}
+.con .cx .cd{font-size:9.5px; color:var(--sub); line-height:1.35}
+.con .cx .cr{font-size:9px; color:var(--computing-ink); font-weight:600; margin-top:2px}
+
+/* ---- 3 关递进 ---- */
+.levels{display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; flex:1; min-height:0; align-items:stretch}
+.lvl{
+  border:1px solid var(--border); border-radius:10px; padding:8px; background:var(--paper);
+  display:flex; flex-direction:column; gap:5px; transition:border-color .22s,box-shadow .22s,transform .22s;
+}
+.lvl:hover{border-color:var(--computing-line); box-shadow:var(--shadow-sm); transform:translateY(-1px)}
+.lvl .lh{display:flex; align-items:center; justify-content:space-between}
+.lvl .lname{font-size:10px; font-weight:700}
+.lvl .ldiff{font-family:var(--mono); font-size:8.5px; color:var(--computing-ink); background:var(--computing-soft);
+  border:1px solid var(--computing-line); border-radius:5px; padding:1px 5px}
+.lvl .map{flex:1; border-radius:7px; overflow:hidden; border:1px solid var(--hairline); background:#F6F1E6; min-height:0}
+.lvl .map svg{display:block; width:100%; height:100%}
+.lvl .meta{display:flex; gap:8px; font-family:var(--mono); font-size:8px; color:var(--sub)}
+.lvl .meta b{color:var(--ink-2); font-weight:600}
+
+/* ---- flow 图 ---- */
+.flowwrap{flex:1; display:flex; gap:12px; min-height:0}
+.flowchart{flex:1; min-width:0; display:flex; flex-direction:column}
+.flowchart svg{flex:1; width:100%; height:100%; display:block}
+.flownote{flex:0 0 142px; display:flex; flex-direction:column; gap:7px; justify-content:center}
+.fnote{font-size:9.5px; color:var(--sub); line-height:1.4; display:flex; gap:6px; align-items:flex-start}
+.fnote .sw{width:9px; height:9px; flex:0 0 9px; border-radius:2px; margin-top:2px}
+.fnote b{color:var(--ink-2)}
+.fhi{border:1px solid var(--primary-line); background:var(--primary-soft); border-radius:8px;
+  padding:7px 9px; font-size:9.5px; color:var(--primary-ink); line-height:1.45; font-weight:600}
+.fzone{animation:zoneGlow 3s ease-in-out infinite}
+@keyframes zoneGlow{0%,100%{opacity:.72}50%{opacity:1}}
+</style>
+</head>
+<body>
+<div class="sidebar">
+  <div class="brand">
+    <div class="mk">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M2 11 L5 6 L8 9 L11 3 L14 7" stroke="#D97757" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><circle cx="11" cy="3" r="1.6" fill="#C04E68"/></svg>
+    </div>
+    <div class="t1" data-i18n="brand">脑控关卡设计</div>
+    <div class="t2">EEG-MINECRAFT-BCI</div>
+  </div>
+  <div class="guide">
+    <div class="g"><div class="gn">1</div><div class="gt" data-i18n="g1"><b>4 原则</b>：点卡片看反例</div></div>
+    <div class="g"><div class="gn">2</div><div class="gt" data-i18n="g2"><b>3 约束</b>：BCI 为何特殊</div></div>
+    <div class="g"><div class="gn">3</div><div class="gt" data-i18n="g3"><b>心流区</b>：通关率 60-70%</div></div>
+  </div>
+  <div class="spacer"></div>
+  <button class="lang-btn" id="langBtn" type="button"><span id="langLabel">EN / 中</span><span class="dot"></span></button>
+</div>
+
+<div class="main">
+  <div class="hud">
+    <span class="pill"><b data-i18n="hudProj">项目</b>·EEG-Minecraft-BCI</span>
+    <span class="pill s5">stage S5</span>
+    <span class="pill">wow_3 · <b>importance 5/5</b></span>
+    <span class="pill" data-i18n="hudType">静态信息图 · 关卡设计</span>
+  </div>
+
+  <div class="titlerow">
+    <div>
+      <h1 data-i18n="title">设计并通关一个脑控解谜关卡</h1>
+      <div class="q" data-i18n="q">核心问题：我能不能设计一个真正可玩的小关卡，全程只用脑子通关？</div>
+    </div>
+    <div class="stamp" title="wow_3">
+      <svg width="74" height="74" viewBox="0 0 74 74" fill="none">
+        <g class="ring">
+          <circle cx="37" cy="37" r="33" stroke="#D97757" stroke-width="2" stroke-dasharray="3 4"/>
+          <circle cx="37" cy="37" r="26" stroke="#ECCFB8" stroke-width="1.5"/>
+        </g>
+        <circle cx="37" cy="37" r="22" fill="#F8EDE5"/>
+        <text x="37" y="33" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="9" font-weight="700" fill="#9A4A2E">WOW 3</text>
+        <text x="37" y="46" text-anchor="middle" font-family="PingFang SC,sans-serif" font-size="8.5" font-weight="700" fill="#9A4A2E" data-i18n="stamp">里程碑</text>
+      </svg>
+    </div>
+  </div>
+
+  <div class="grid">
+    <!-- 4 原则 -->
+    <div class="card">
+      <h2 data-i18n="c1h">BCI 关卡设计 4 原则<span class="tag">CORE</span></h2>
+      <div class="sub" data-i18n="c1s">点任意卡片 → 看反例明细。每条都为"用脑子玩"而生</div>
+      <div class="principles" id="principles"></div>
+      <div class="detail" id="detail"></div>
+    </div>
+
+    <!-- 3 物理约束 -->
+    <div class="card">
+      <h2 data-i18n="c2h">3 个物理约束<span class="tag">WHY</span></h2>
+      <div class="sub" data-i18n="c2s">脑机接口的硬限制，决定了关卡不能照搬普通游戏</div>
+      <div class="cons" id="cons"></div>
+    </div>
+
+    <!-- 3 关递进 -->
+    <div class="card">
+      <h2 data-i18n="c3h">3 关递进难度<span class="tag">LV1-3</span></h2>
+      <div class="sub" data-i18n="c3s">钥匙=取得点，门=终点；第 1 关教操作，后两关加难</div>
+      <div class="levels" id="levels"></div>
+    </div>
+
+    <!-- flow -->
+    <div class="card">
+      <h2 data-i18n="c4h">心流平衡（Flow）<span class="tag">60-70%</span></h2>
+      <div class="sub" data-i18n="c4s">难度 vs 技能：太难=焦虑，太易=无聊，flow=刚好</div>
+      <div class="flowwrap">
+        <div class="flowchart" id="flowchart"></div>
+        <div class="flownote" id="flownote"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+"use strict";
+
+var pageState = { lang:"zh", activePrin:-1 };
+
+var I18N = {
+  zh:{
+    brand:"脑控关卡设计", g1:"<b>4 原则</b>：点卡片看反例", g2:"<b>3 约束</b>：BCI 为何特殊",
+    g3:"<b>心流区</b>：通关率 60-70%", hudProj:"项目", hudType:"静态信息图 · 关卡设计",
+    title:"设计并通关一个脑控解谜关卡",
+    q:"核心问题：我能不能设计一个真正可玩的小关卡，全程只用脑子通关？", stamp:"里程碑",
+    c1h:"BCI 关卡设计 4 原则", c1s:"点任意卡片 → 看反例明细。每条都为\"用脑子玩\"而生",
+    c2h:"3 个物理约束", c2s:"脑机接口的硬限制，决定了关卡不能照搬普通游戏",
+    c3h:"3 关递进难度", c3s:"钥匙=取得点，门=终点；第 1 关教操作，后两关加难",
+    c4h:"心流平衡（Flow）", c4s:"难度 vs 技能：太难=焦虑，太易=无聊，flow=刚好",
+    langLabel:"EN / 中"
+  },
+  en:{
+    brand:"BCI Level Design", g1:"<b>4 rules</b>: tap a card for anti-pattern", g2:"<b>3 limits</b>: why BCI is special",
+    g3:"<b>Flow zone</b>: 60-70% clear rate", hudProj:"PROJECT", hudType:"Static infographic · Level design",
+    title:"Design & beat a brain-controlled puzzle level",
+    q:"Core question: can I design a truly playable level and beat it using only my mind?", stamp:"MILESTONE",
+    c1h:"4 Rules of BCI Level Design", c1s:"Tap any card to see the anti-pattern. Every rule serves \"play with your brain\"",
+    c2h:"3 Physical Constraints", c2s:"Hard limits of the brain-computer interface — can't copy normal games",
+    c3h:"3 Levels, Rising Difficulty", c3s:"Key=pickup, door=goal; level 1 teaches, levels 2-3 add challenge",
+    c4h:"Flow Balance", c4s:"Difficulty vs skill: too hard=anxiety, too easy=boredom, flow=just right",
+    langLabel:"中 / EN"
+  }
+};
+
+// ---- 4 原则数据 ----
+var PRIN = [
+  { n:"01",
+    t:{zh:"简单",en:"Simple"},
+    d:{zh:"一关 1-3 分钟能通；目标一眼看懂。",en:"1-3 min per level; goal obvious at a glance."},
+    bad:{zh:"反例：30 分钟马拉松大地图",en:"Anti: a 30-min marathon megamap"},
+    det:{zh:"<b>为什么</b>：脑控操作慢且费神，长关卡会让 alpha 波升高、注意力崩。把谜题拆成可在 1-3 分钟内解决的小块，让玩家频繁获得\"我赢了\"的快感。",
+         en:"<b>Why</b>: brain control is slow and tiring; long levels raise alpha and break focus. Cut puzzles into 1-3 min chunks so the player frequently gets the \"I won\" hit."} },
+  { n:"02",
+    t:{zh:"容错",en:"Forgiving"},
+    d:{zh:"死/误触发后 retry，不永久失败。",en:"Die/misfire then retry, never permanent fail."},
+    bad:{zh:"反例：魂系一次死从头来",en:"Anti: souls-like one-death restart"},
+    det:{zh:"<b>为什么</b>：解码误触发率 20-30% 是常态，玩家会无辜\"误操作\"。永久失败=惩罚正常使用。设计即时 retry / 回到上一安全点，把误触发变成可恢复的小挫折。",
+         en:"<b>Why</b>: 20-30% misfire is normal; players get punished for nothing. Permanent fail punishes normal use. Add instant retry / last-safe-spot so misfires stay recoverable."} },
+  { n:"03",
+    t:{zh:"渐进",en:"Progressive"},
+    d:{zh:"第 1 关教操作，后面才加难。",en:"Level 1 teaches; difficulty rises after."},
+    bad:{zh:"反例：一上来就放最难的关",en:"Anti: hardest level first, no onboarding"},
+    det:{zh:"<b>为什么</b>：脑控是一门新技能，没人天生会。第 1 关只用一个动作、零干扰，让玩家先建立\"我能控制它\"的信心，再逐关叠加分支、时限、干扰物。",
+         en:"<b>Why</b>: brain control is a new skill nobody is born with. Level 1 uses one action, zero noise to build \"I can control it\" confidence, then layer branches/timers/distractors."} },
+  { n:"04",
+    t:{zh:"反馈明显",en:"Clear Feedback"},
+    d:{zh:"钥匙/终点高亮，命中即响应。",en:"Key/goal highlighted; hit = instant cue."},
+    bad:{zh:"反例：灰色物体要自己找",en:"Anti: grey objects, hunt them yourself"},
+    det:{zh:"<b>为什么</b>：玩家无法用手验证，只能靠屏幕确认\"脑子起作用了\"。把目标做成发光/脉冲，命中时给颜色+声音，让每次成功的意图被立刻看见——这就是闭环的信心来源。",
+         en:"<b>Why</b>: players can't verify with hands; the screen must confirm \"my brain worked\". Make goals glow/pulse, fire color+sound on hit, so every successful intent is seen instantly — the source of closed-loop confidence."} }
+];
+
+// ---- 3 约束 ----
+var CONS = [
+  { num:"1-2s", lab:{zh:"每次预测",en:"per predict"},
+    t:{zh:"解码慢",en:"Decoding is slow"},
+    d:{zh:"分类器每 1-2 秒才出一次结果。",en:"Classifier yields a result only every 1-2s."},
+    r:{zh:"→ 设计：不能做反应竞速，要静态解谜",en:"→ Design: no reaction races; static puzzles"} },
+  { num:"20-30%", lab:{zh:"误触发率",en:"misfire rate"},
+    t:{zh:"错误率不低",en:"Error rate stays high"},
+    d:{zh:"误识别在所难免，会触发错动作。",en:"Misclassification is inevitable, fires wrong moves."},
+    r:{zh:"→ 设计：必须给 retry，不能永久失败",en:"→ Design: must allow retry, no permanent fail"} },
+  { num:"10-15min", lab:{zh:"后疲劳",en:"to fatigue"},
+    t:{zh:"学生疲劳",en:"Player fatigues"},
+    d:{zh:"持续专注后 alpha 升高，准度下滑。",en:"Sustained focus raises alpha, accuracy drops."},
+    r:{zh:"→ 设计：单关 ≤ 3 分钟，留呼吸点",en:"→ Design: ≤3 min per level, leave breathers"} }
+];
+
+// ---- 3 关地图缩略图 (SVG, 钥匙=圆, 门=方块) ----
+function mapSVG(level){
+  var grid='';
+  for(var i=1;i<6;i++){ grid+='<line x1="'+(i*16)+'" y1="2" x2="'+(i*16)+'" y2="78" stroke="#EBE5D6" stroke-width=".7"/>'; }
+  for(var j=1;j<5;j++){ grid+='<line x1="2" y1="'+(j*16)+'" x2="94" y2="'+(j*16)+'" stroke="#EBE5D6" stroke-width=".7"/>'; }
+  var path, keys, walls='';
+  if(level===1){
+    path='M14 64 L80 64'; keys='<circle cx="14" cy="64" r="5" fill="#D97757"/>';
+  } else if(level===2){
+    path='M14 64 L14 24 L80 24 L80 56'; keys='<circle cx="14" cy="64" r="5" fill="#C04E68"/>';
+    walls='<rect x="38" y="40" width="14" height="6" rx="2" fill="#D9D1BD"/>';
+  } else {
+    path='M14 64 L14 24 L46 24 L46 56 L80 56 L80 20';
+    keys='<circle cx="14" cy="64" r="5" fill="#C04E68"/><circle cx="46" cy="24" r="4" fill="#C04E68"/>';
+    walls='<rect x="26" y="40" width="12" height="6" rx="2" fill="#D9D1BD"/><rect x="58" y="34" width="6" height="14" rx="2" fill="#D9D1BD"/>';
+  }
+  var goal = level===1 ? '<rect x="76" y="60" width="9" height="9" rx="2" fill="#9A4A2E"/>' :
+             level===2 ? '<rect x="76" y="52" width="9" height="9" rx="2" fill="#9A4A2E"/>' :
+                         '<rect x="76" y="16" width="9" height="9" rx="2" fill="#9A4A2E"/>';
+  return '<svg viewBox="0 0 96 80" preserveAspectRatio="none">'+grid+walls+
+    '<path d="'+path+'" stroke="#ECCFB8" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round" opacity=".9"/>'+
+    keys+goal+'</svg>';
+}
+var LEVELS = [
+  { name:{zh:"第 1 关 · 直线",en:"Lv1 · Straight"}, diff:{zh:"易",en:"Easy"},
+    m1:{zh:"1 动作",en:"1 action"}, m2:{zh:"无干扰",en:"no noise"} },
+  { name:{zh:"第 2 关 · 转弯",en:"Lv2 · Turn"}, diff:{zh:"中",en:"Med"},
+    m1:{zh:"2 转向",en:"2 turns"}, m2:{zh:"1 墙",en:"1 wall"} },
+  { name:{zh:"第 3 关 · 分支",en:"Lv3 · Branch"}, diff:{zh:"难",en:"Hard"},
+    m1:{zh:"2 钥匙",en:"2 keys"}, m2:{zh:"绕路",en:"detour"} }
+];
+
+// ---- flow note ----
+var FNOTE = [
+  { type:"sw", c:"#C04E68", zh:"<b>太难</b> → 焦虑（通关率 < 40%）", en:"<b>Too hard</b> → anxiety (clear < 40%)" },
+  { type:"sw", c:"#D9D1BD", zh:"<b>太易</b> → 无聊（通关率 > 90%）", en:"<b>Too easy</b> → boredom (clear > 90%)" },
+  { type:"hi", zh:"调难度，让朋友的通关率落进 <b>60-70%</b> 的心流带——既能赢、又有挑战。", en:"Tune difficulty so a friend's clear rate lands in the <b>60-70%</b> flow band — winnable yet challenging." }
+];
+
+// ---- flow chart SVG ----
+function flowSVG(){
+  var ax = AXIS;
+  return '<svg viewBox="0 0 240 180" preserveAspectRatio="xMidYMid meet">'+
+    '<rect x="34" y="10" width="196" height="138" fill="#FAF9F5" stroke="#EBE5D6" stroke-width="1"/>'+
+    '<path d="M34 10 L230 10 L34 148 Z" fill="#F4DDE3" opacity=".5"/>'+
+    '<path d="M230 10 L230 148 L34 148 Z" fill="#F1EDDF" opacity=".7"/>'+
+    '<path class="fzone" d="M34 10 L78 10 L230 124 L230 148 L186 148 L34 34 Z" fill="#F8EDE5" stroke="#ECCFB8" stroke-width="1.4"/>'+
+    '<line x1="34" y1="22" x2="230" y2="136" stroke="#D97757" stroke-width="1.6" stroke-dasharray="4 3" opacity=".85"/>'+
+    '<circle cx="132" cy="79" r="5.5" fill="#D97757" stroke="#FFFFFF" stroke-width="1.6"/>'+
+    '<text x="140" y="75" font-family="JetBrains Mono,monospace" font-size="8" font-weight="700" fill="#9A4A2E">60-70%</text>'+
+    '<text x="58" y="30" font-family="PingFang SC,sans-serif" font-size="8.5" fill="#7A2F44">'+ax.anx[pageState.lang]+'</text>'+
+    '<text x="176" y="142" font-family="PingFang SC,sans-serif" font-size="8.5" fill="#9D978A">'+ax.bor[pageState.lang]+'</text>'+
+    '<text x="116" y="106" font-family="PingFang SC,sans-serif" font-size="8" font-weight="700" fill="#9A4A2E">'+ax.flow[pageState.lang]+'</text>'+
+    '<line x1="34" y1="148" x2="230" y2="148" stroke="#9D978A" stroke-width="1"/>'+
+    '<line x1="34" y1="10" x2="34" y2="148" stroke="#9D978A" stroke-width="1"/>'+
+    '<text x="132" y="170" text-anchor="middle" font-family="PingFang SC,sans-serif" font-size="9" fill="#6B6557">'+ax.x[pageState.lang]+'</text>'+
+    '<text x="14" y="80" text-anchor="middle" font-family="PingFang SC,sans-serif" font-size="9" fill="#6B6557" transform="rotate(-90 14 80)">'+ax.y[pageState.lang]+'</text>'+
+    '</svg>';
+}
+var AXIS = {
+  anx:{zh:"焦虑",en:"Anxiety"}, bor:{zh:"无聊",en:"Boredom"}, flow:{zh:"心流",en:"Flow"},
+  x:{zh:"玩家技能 →",en:"Player skill"}, y:{zh:"关卡难度 →",en:"Difficulty"}
+};
+
+// ---------- render ----------
+function L(){ return pageState.lang; }
+
+function renderPrinciples(){
+  var host = document.getElementById("principles");
+  host.innerHTML = "";
+  PRIN.forEach(function(p, idx){
+    var el = document.createElement("div");
+    el.className = "prin" + (pageState.activePrin===idx ? " active" : "");
+    el.innerHTML =
+      '<div class="pi"><div class="pn">'+p.n+'</div><div class="pt">'+p.t[L()]+'</div></div>'+
+      '<div class="pd">'+p.d[L()]+'</div>'+
+      '<div class="bad"><em>'+p.bad[L()]+'</em></div>';
+    el.addEventListener("click", function(){
+      pageState.activePrin = (pageState.activePrin===idx) ? -1 : idx;
+      renderPrinciples(); renderDetail();
+    });
+    host.appendChild(el);
+  });
+}
+function renderDetail(){
+  var d = document.getElementById("detail");
+  if(pageState.activePrin<0){ d.className="detail"; d.innerHTML=""; return; }
+  d.className = "detail show";
+  d.innerHTML = PRIN[pageState.activePrin].det[L()];
+}
+function renderCons(){
+  var host = document.getElementById("cons"); host.innerHTML="";
+  CONS.forEach(function(c){
+    var el=document.createElement("div"); el.className="con";
+    el.innerHTML='<div class="ci"><div class="num">'+c.num+'<small>'+c.lab[L()]+'</small></div></div>'+
+      '<div class="cx"><div class="ct">'+c.t[L()]+'</div><div class="cd">'+c.d[L()]+'</div><div class="cr">'+c.r[L()]+'</div></div>';
+    host.appendChild(el);
+  });
+}
+function renderLevels(){
+  var host=document.getElementById("levels"); host.innerHTML="";
+  LEVELS.forEach(function(lv, i){
+    var el=document.createElement("div"); el.className="lvl";
+    el.innerHTML='<div class="lh"><span class="lname">'+lv.name[L()]+'</span><span class="ldiff">'+lv.diff[L()]+'</span></div>'+
+      '<div class="map">'+mapSVG(i+1)+'</div>'+
+      '<div class="meta"><span><b>'+lv.m1[L()]+'</b></span><span><b>'+lv.m2[L()]+'</b></span></div>';
+    host.appendChild(el);
+  });
+}
+function renderFlow(){
+  document.getElementById("flowchart").innerHTML = flowSVG();
+  var note=document.getElementById("flownote"); note.innerHTML="";
+  FNOTE.forEach(function(f){
+    var el=document.createElement("div");
+    if(f.type==="hi"){ el.className="fhi"; el.innerHTML=f[L()]; }
+    else { el.className="fnote"; el.innerHTML='<span class="sw" style="background:'+f.c+'"></span><span>'+f[L()]+'</span>'; }
+    note.appendChild(el);
+  });
+}
+function applyI18n(){
+  var dict=I18N[L()];
+  document.querySelectorAll("[data-i18n]").forEach(function(el){
+    var k=el.getAttribute("data-i18n"); if(dict[k]!=null) el.innerHTML=dict[k];
+  });
+  document.getElementById("langLabel").textContent = dict.langLabel;
+  document.documentElement.lang = (L()==="zh") ? "zh" : "en";
+}
+function renderAll(){
+  applyI18n(); renderPrinciples(); renderDetail(); renderCons(); renderLevels(); renderFlow();
+}
+
+document.getElementById("langBtn").addEventListener("click", function(){
+  pageState.lang = (pageState.lang==="zh") ? "en" : "zh";
+  renderAll();
+});
+
+renderAll();
+})();
+</script>
+</body>
+</html>

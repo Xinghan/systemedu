@@ -1,0 +1,921 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>M53 · 设计"想左=左转"的控制映射 — Cortex Map</title>
+<style>
+  :root{
+    /* Layer 1 — shared deep space canvas (hue 265, 26 套共享) */
+    --bg-0: oklch(0.14 0.035 265);
+    --bg-1: oklch(0.18 0.04 265);
+    --bg-2: oklch(0.22 0.045 265);
+    --bg-3: oklch(0.28 0.05 265);
+    --line: oklch(0.35 0.05 265 / 0.35);
+    --line-strong: oklch(0.55 0.08 265 / 0.55);
+    --fg:      oklch(0.96 0.01 265);
+    --fg-dim:  oklch(0.75 0.02 265);
+    --fg-mute: oklch(0.55 0.03 265);
+
+    /* Layer 2 — neuro signature accent + cs cyan for tuning panel */
+    --accent: oklch(0.75 0.17 25);
+    --cs:     oklch(0.75 0.17 200);
+
+    /* Layer 3 — neuro 5-color palette */
+    --SYNAPTIC: oklch(0.75 0.17 25);
+    --DENDRITE: oklch(0.55 0.15 25);
+    --AXON:     oklch(0.32 0.10 25);
+    --FIRING:   oklch(0.92 0.08 25);
+    --MEMORY:   oklch(0.85 0.14 85);
+
+    --ok:  oklch(0.82 0.17 125);
+    --err: oklch(0.62 0.20 25);
+  }
+
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%;width:100%;
+    font-family:'Inter','PingFang SC',sans-serif;
+    color:var(--fg);background:var(--bg-0);overflow:hidden}
+
+  .stage{display:flex;flex-direction:row;height:100vh;width:100vw}
+
+  /* ============ 200px sidebar ============ */
+  .game-sidebar{
+    width:200px;flex:0 0 200px;
+    background:var(--bg-1);
+    border-right:1px solid var(--line);
+    display:flex;flex-direction:column;
+    padding:14px 12px;gap:10px;
+    overflow-y:auto;
+  }
+  .brand{display:flex;flex-direction:column;gap:2px;
+    border-bottom:1px solid var(--line);padding-bottom:8px}
+  .brand .code{font-family:'JetBrains Mono',monospace;font-size:10px;
+    color:var(--fg-mute);letter-spacing:1.2px}
+  .brand .title{font-size:13px;color:var(--fg);font-weight:600;line-height:1.3}
+  .brand .sub{font-size:10px;color:var(--fg-dim);margin-top:2px}
+
+  /* ---- project roadmap S1..S6 ---- */
+  .route{
+    background:var(--bg-2);border:1px solid var(--line);
+    padding:8px;display:flex;flex-direction:column;gap:5px;
+  }
+  .route-title{font-family:'JetBrains Mono',monospace;font-size:9px;
+    color:var(--accent);letter-spacing:1px}
+  .route-list{display:flex;flex-direction:column;gap:3px}
+  .route-step{
+    display:flex;align-items:center;gap:6px;
+    font-family:'JetBrains Mono',monospace;font-size:9px;
+    color:var(--fg-mute);line-height:1.2;
+  }
+  .route-step .dot{
+    width:8px;height:8px;flex:0 0 8px;border-radius:50%;
+    background:var(--bg-3);border:1px solid var(--line-strong);
+  }
+  .route-step.done .dot{background:var(--DENDRITE);border-color:var(--DENDRITE)}
+  .route-step.here{color:var(--fg);font-weight:600}
+  .route-step.here .dot{
+    background:var(--accent);border-color:var(--FIRING);
+    box-shadow:0 0 0 3px oklch(0.75 0.17 25 / 0.25);
+  }
+  .route-step .sname{font-size:8.5px}
+
+  /* ---- tuning controls ---- */
+  .ctrl-block{
+    background:var(--bg-2);border:1px solid var(--line);
+    border-left:3px solid var(--cs);
+    padding:9px 8px;display:flex;flex-direction:column;gap:9px;
+  }
+  .ctrl-block .blk-title{font-family:'JetBrains Mono',monospace;font-size:9px;
+    color:var(--cs);letter-spacing:1px}
+  .ctrl{display:flex;flex-direction:column;gap:3px}
+  .ctrl-head{display:flex;justify-content:space-between;align-items:baseline}
+  .ctrl-name{font-size:10px;color:var(--fg-dim);line-height:1.2}
+  .ctrl-val{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--cs);font-weight:600}
+  input[type=range]{
+    -webkit-appearance:none;appearance:none;width:100%;height:4px;
+    background:var(--bg-3);border:1px solid var(--line);outline:none;cursor:pointer;
+  }
+  input[type=range]::-webkit-slider-thumb{
+    -webkit-appearance:none;appearance:none;width:14px;height:14px;
+    background:var(--cs);border:1px solid var(--FIRING);cursor:pointer;
+  }
+  input[type=range]::-moz-range-thumb{
+    width:14px;height:14px;background:var(--cs);border:1px solid var(--FIRING);
+    cursor:pointer;border-radius:0;
+  }
+  /* toggle switch (compound forward) */
+  .toggle-row{display:flex;align-items:center;justify-content:space-between;gap:8px}
+  .toggle{
+    width:40px;height:20px;flex:0 0 40px;background:var(--bg-3);
+    border:1px solid var(--line-strong);position:relative;cursor:pointer;
+  }
+  .toggle .knob{
+    position:absolute;top:1px;left:1px;width:16px;height:16px;
+    background:var(--fg-mute);transition:left .15s, background .15s;
+  }
+  .toggle.on{background:oklch(0.75 0.17 200 / 0.3);border-color:var(--cs)}
+  .toggle.on .knob{left:21px;background:var(--cs)}
+
+  .guide{
+    background:var(--bg-2);border:1px solid var(--line);
+    padding:8px;display:flex;flex-direction:column;gap:4px;
+  }
+  .guide-title{font-family:'JetBrains Mono',monospace;font-size:9px;
+    color:var(--accent);letter-spacing:1px}
+  .guide-line{font-size:9.5px;color:var(--fg-dim);line-height:1.4}
+
+  .sidebar-spacer{flex:1;min-height:6px}
+
+  .lang-btn{
+    width:100%;padding:7px 8px;background:var(--bg-3);
+    color:var(--fg);border:1px solid var(--line-strong);
+    font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:1px;
+    cursor:pointer;box-shadow:3px 3px 0 var(--bg-0);
+  }
+  .lang-btn:hover{background:var(--DENDRITE);color:var(--FIRING)}
+
+  /* ============ main ============ */
+  .game-main{
+    flex:1;display:flex;flex-direction:column;
+    background:var(--bg-0);min-width:0;position:relative;
+  }
+  .main-header{
+    height:46px;border-bottom:1px solid var(--line);
+    display:flex;align-items:center;justify-content:space-between;
+    padding:0 18px;background:var(--bg-1);flex:0 0 46px;
+  }
+  .header-left{font-family:'JetBrains Mono',monospace;font-size:11px;
+    color:var(--fg-dim);letter-spacing:1.3px}
+  .header-right{display:flex;gap:16px;font-family:'JetBrains Mono',monospace}
+  .hud-cell{display:flex;flex-direction:column;align-items:flex-end}
+  .hud-cell .label{font-size:9px;color:var(--fg-mute);letter-spacing:1px}
+  .hud-cell .val{color:var(--accent);font-size:13px;font-weight:600}
+  .hud-cell .val.gold{color:var(--MEMORY)}
+
+  /* corner minecraft silhouette */
+  .endgame{
+    position:absolute;right:20px;top:58px;z-index:6;
+    display:flex;align-items:center;gap:8px;
+    background:var(--bg-1);border:1px solid var(--line);
+    padding:6px 10px;opacity:.92;pointer-events:none;
+  }
+  .endgame svg{width:26px;height:26px;flex:0 0 26px}
+  .endgame .etxt{font-family:'JetBrains Mono',monospace;font-size:8.5px;
+    color:var(--fg-mute);line-height:1.35;max-width:150px}
+  .endgame .etxt .hl{color:var(--accent)}
+
+  .main-body{flex:1;display:flex;flex-direction:column;
+    min-height:0;padding:14px 18px;gap:12px}
+
+  /* task / intro card */
+  .task-card{
+    background:var(--bg-1);border:1px solid var(--line);
+    border-left:3px solid var(--accent);
+    padding:10px 14px;display:flex;flex-direction:column;gap:3px;
+    flex:0 0 auto;
+  }
+  .task-card .tprompt{font-size:12.5px;color:var(--fg);line-height:1.45}
+  .task-card .twhy{font-size:10px;color:var(--fg-dim);line-height:1.4}
+
+  /* track viewport */
+  .track-pane{
+    flex:1;display:flex;flex-direction:column;min-height:0;min-width:0;
+    background:var(--bg-1);border:1px solid var(--line);
+  }
+  .pane-title{
+    padding:8px 14px;font-family:'JetBrains Mono',monospace;font-size:10px;
+    color:var(--accent);letter-spacing:1.3px;
+    border-bottom:1px solid var(--line);background:var(--bg-2);
+    display:flex;justify-content:space-between;align-items:center;
+  }
+  .pane-title .seqcell{color:var(--fg-dim);display:flex;align-items:center;gap:6px}
+  .pane-title .seqcell b{color:var(--cs)}
+  .track-body{flex:1;position:relative;display:flex;flex-direction:column;min-height:0}
+  #trackCanvas{width:100%;height:100%;display:block}
+
+  /* result strip below canvas */
+  .runbar{
+    flex:0 0 auto;display:flex;align-items:center;gap:14px;
+    padding:9px 14px;border-top:1px solid var(--line);background:var(--bg-2);
+  }
+  .run-btn{
+    padding:9px 18px;background:var(--accent);color:var(--bg-0);
+    border:1px solid var(--FIRING);
+    font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:600;letter-spacing:1px;
+    cursor:pointer;box-shadow:3px 3px 0 var(--bg-0);
+  }
+  .run-btn:hover:not(:disabled){background:var(--FIRING)}
+  .run-btn:active:not(:disabled){transform:translate(2px,2px);box-shadow:1px 1px 0 var(--bg-0)}
+  .run-btn:disabled{opacity:.4;cursor:not-allowed}
+  .run-stats{display:flex;gap:18px;font-family:'JetBrains Mono',monospace;font-size:10px}
+  .run-stat{display:flex;flex-direction:column;gap:1px}
+  .run-stat .rl{font-size:8.5px;color:var(--fg-mute);letter-spacing:1px}
+  .run-stat .rv{font-size:13px;font-weight:600;color:var(--fg-dim)}
+  .run-stat .rv.ok{color:var(--ok)}
+  .run-stat .rv.err{color:var(--err)}
+  .run-msg{flex:1;font-size:10.5px;color:var(--fg-dim);line-height:1.4;text-align:right}
+  .run-msg b{color:var(--MEMORY)}
+
+  /* win overlay */
+  .end-overlay{
+    position:absolute;inset:0;z-index:20;
+    background:oklch(0.14 0.035 265 / 0.94);
+    display:flex;align-items:center;justify-content:center;
+    flex-direction:column;gap:14px;padding:30px;text-align:center;
+  }
+  .end-overlay.hidden{display:none}
+  .end-overlay .badge{
+    width:96px;height:96px;display:flex;align-items:center;justify-content:center;
+    background:var(--bg-1);border:2px solid var(--MEMORY);
+    box-shadow:4px 4px 0 var(--bg-0);
+  }
+  .end-overlay .badge svg{width:64px;height:64px}
+  .end-overlay .etitle{font-size:20px;font-weight:700;color:var(--MEMORY)}
+  .end-overlay .esub{font-size:12.5px;color:var(--fg-dim);line-height:1.6;max-width:460px}
+  .end-overlay .esub b{color:var(--accent)}
+  .end-overlay .ebtns{display:flex;gap:12px;margin-top:6px}
+
+  .mono{font-family:'JetBrains Mono',monospace}
+</style>
+</head>
+<body>
+<div class="stage">
+
+  <!-- ============ SIDEBAR ============ -->
+  <aside class="game-sidebar">
+    <div class="brand">
+      <div class="code mono">NRO-20 · M53</div>
+      <div class="title" data-i18n="brandTitle">设计"想左=左转"</div>
+      <div class="sub" data-i18n="brandSub">你是操控设计师</div>
+    </div>
+
+    <!-- project roadmap -->
+    <div class="route">
+      <div class="route-title mono" data-i18n="routeTitle">项目路线</div>
+      <div class="route-list">
+        <div class="route-step done"><span class="dot"></span><span class="sname" data-i18n="s1">S1 读懂脑电</span></div>
+        <div class="route-step done"><span class="dot"></span><span class="sname" data-i18n="s2">S2 清洗信号</span></div>
+        <div class="route-step done"><span class="dot"></span><span class="sname" data-i18n="s3">S3 解码左右</span></div>
+        <div class="route-step done"><span class="dot"></span><span class="sname" data-i18n="s4">S4 稳定上线</span></div>
+        <div class="route-step here"><span class="dot"></span><span class="sname" data-i18n="s5">S5 接入游戏</span></div>
+        <div class="route-step"><span class="dot"></span><span class="sname" data-i18n="s6">S6 脑控通关</span></div>
+      </div>
+    </div>
+
+    <!-- tuning controls -->
+    <div class="ctrl-block">
+      <div class="blk-title mono" data-i18n="ctrlTitle">映射方案</div>
+
+      <div class="ctrl">
+        <div class="ctrl-head">
+          <span class="ctrl-name" data-i18n="gainName">转角增益</span>
+          <span class="ctrl-val mono" id="gainVal">0.15</span>
+        </div>
+        <input type="range" id="gainSlider" min="0.05" max="0.30" step="0.01" value="0.15">
+      </div>
+
+      <div class="ctrl">
+        <div class="ctrl-head">
+          <span class="ctrl-name" data-i18n="threshName">置信阈值</span>
+          <span class="ctrl-val mono" id="threshVal">0.60</span>
+        </div>
+        <input type="range" id="threshSlider" min="0.50" max="0.80" step="0.01" value="0.60">
+      </div>
+
+      <div class="ctrl">
+        <div class="ctrl-head">
+          <span class="ctrl-name" data-i18n="coolName">冷却时长</span>
+          <span class="ctrl-val mono" id="coolVal">250ms</span>
+        </div>
+        <input type="range" id="coolSlider" min="100" max="600" step="10" value="250">
+      </div>
+
+      <div class="ctrl">
+        <div class="toggle-row">
+          <span class="ctrl-name" data-i18n="fwdName">复合前进</span>
+          <div class="toggle on" id="fwdToggle" role="switch" aria-checked="true" tabindex="0">
+            <div class="knob"></div>
+          </div>
+        </div>
+        <span class="ctrl-val mono" id="fwdVal" style="color:var(--fg-mute);font-size:8.5px" data-i18n="fwdOn">想左 = 左转 + 自动前进</span>
+      </div>
+    </div>
+
+    <div class="guide">
+      <div class="guide-title mono" data-i18n="guideTitle">怎么玩</div>
+      <div class="guide-line" data-i18n="guide1">调好 4 个映射参数。</div>
+      <div class="guide-line" data-i18n="guide2">点"试跑",角色按预录脑序列自动开。</div>
+      <div class="guide-line" data-i18n="guide3">让它不撞墙、不冲出,过完 3 个弯。</div>
+    </div>
+
+    <div class="sidebar-spacer"></div>
+    <button class="lang-btn mono" id="langBtn">EN / 中文</button>
+  </aside>
+
+  <!-- ============ MAIN ============ -->
+  <main class="game-main">
+    <div class="main-header">
+      <div class="header-left mono" data-i18n="hdrLeft">控制映射设计 · 角色扮演</div>
+      <div class="header-right">
+        <div class="hud-cell">
+          <span class="label" data-i18n="hudRun">试跑次数</span>
+          <span class="val" id="hudRun">0</span>
+        </div>
+        <div class="hud-cell">
+          <span class="label" data-i18n="hudBest">最佳完成度</span>
+          <span class="val gold" id="hudBest">--%</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- corner minecraft silhouette + endpoint -->
+    <div class="endgame">
+      <svg viewBox="0 0 32 32" aria-hidden="true">
+        <g fill="none" stroke="var(--accent)" stroke-width="1.6">
+          <rect x="6" y="10" width="20" height="16"/>
+          <path d="M6 14 H26 M14 14 V26 M6 18 H14 M18 10 V26 M18 18 H26"/>
+        </g>
+      </svg>
+      <div class="etxt">
+        <span data-i18n="endLbl">终点</span>: <span class="hl" data-i18n="endName">脑控 Minecraft</span><br>
+        <span data-i18n="endTail">想左手就让角色左转</span>
+      </div>
+    </div>
+
+    <div class="main-body">
+      <div class="task-card">
+        <div class="tprompt" data-i18n="introPrompt">解码器已经能稳定判出你想象的是左手还是右手了。可"判出左手"只是一个标签——电脑收到它之后,角色到底该做什么动作?</div>
+        <div class="twhy" id="introWhy" data-i18n="introWhy">你是操控设计师。调好转角增益、置信阈值、冷却、复合前进,定下"想左=左转"的具体映射,再用一段预录的脑分类输出喂进去,看角色能不能顺畅过完赛道。这是让脑信号真正驱动 Minecraft 的最后一块拼图。</div>
+      </div>
+
+      <!-- track viewport -->
+      <div class="track-pane">
+        <div class="pane-title mono">
+          <span data-i18n="trackTitle">俯视赛道 · 角色按脑序列行进</span>
+          <span class="seqcell"><span data-i18n="seqLbl">脑指令</span> <b id="seqProg">0 / 0</b></span>
+        </div>
+        <div class="track-body">
+          <canvas id="trackCanvas"></canvas>
+        </div>
+        <div class="runbar">
+          <button class="run-btn mono" id="runBtn" data-i18n="runBtn">试跑</button>
+          <div class="run-stats">
+            <div class="run-stat">
+              <span class="rl" data-i18n="statDone">完成度</span>
+              <span class="rv" id="statDone">--%</span>
+            </div>
+            <div class="run-stat">
+              <span class="rl" data-i18n="statHit">撞墙</span>
+              <span class="rv" id="statHit">--</span>
+            </div>
+            <div class="run-stat">
+              <span class="rl" data-i18n="statDrop">丢弃指令</span>
+              <span class="rv" id="statDrop">--</span>
+            </div>
+          </div>
+          <div class="run-msg" id="runMsg" data-i18n="runMsgIdle">调好参数,点试跑看角色怎么开。</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- win overlay -->
+    <div class="end-overlay hidden" id="endOverlay">
+      <div class="badge">
+        <svg viewBox="0 0 64 64" aria-hidden="true">
+          <g fill="none" stroke="var(--MEMORY)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="32" cy="26" r="16"/>
+            <path d="M24 26 l6 6 l10 -12"/>
+            <path d="M22 42 l-4 16 l14 -8 l14 8 l-4 -16"/>
+          </g>
+        </svg>
+      </div>
+      <div class="etitle" id="endTitle"></div>
+      <div class="esub" id="endSub"></div>
+      <div class="ebtns">
+        <button class="run-btn mono" id="replayBtn" data-i18n="replayBtn">继续微调</button>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  // ---------- i18n ----------
+  const I18N = {
+    zh:{
+      brandTitle:'设计"想左=左转"', brandSub:"你是操控设计师",
+      routeTitle:"项目路线",
+      s1:"S1 读懂脑电", s2:"S2 清洗信号", s3:"S3 解码左右",
+      s4:"S4 稳定上线", s5:"S5 接入游戏", s6:"S6 脑控通关",
+      ctrlTitle:"映射方案",
+      gainName:"转角增益", threshName:"置信阈值", coolName:"冷却时长", fwdName:"复合前进",
+      fwdOn:"想左 = 左转 + 自动前进", fwdOff:"想左 = 纯左转(不前进)",
+      guideTitle:"怎么玩",
+      guide1:"调好 4 个映射参数。",
+      guide2:'点"试跑",角色按预录脑序列自动开。',
+      guide3:"让它不撞墙、不冲出,过完 3 个弯。",
+      hdrLeft:"控制映射设计 · 角色扮演",
+      hudRun:"试跑次数", hudBest:"最佳完成度",
+      endLbl:"终点", endName:"脑控 Minecraft", endTail:"想左手就让角色左转",
+      introPrompt:'解码器已经能稳定判出你想象的是左手还是右手了。可"判出左手"只是一个标签——电脑收到它之后,角色到底该做什么动作?',
+      introWhy:'你是操控设计师。调好转角增益、置信阈值、冷却、复合前进,定下"想左=左转"的具体映射,再用一段预录的脑分类输出喂进去,看角色能不能顺畅过完赛道。这是让脑信号真正驱动 Minecraft 的最后一块拼图。',
+      trackTitle:"俯视赛道 · 角色按脑序列行进", seqLbl:"脑指令",
+      runBtn:"试跑", runBtnRunning:"行进中…",
+      statDone:"完成度", statHit:"撞墙", statDrop:"丢弃指令",
+      runMsgIdle:"调好参数,点试跑看角色怎么开。",
+      replayBtn:"继续微调"
+    },
+    en:{
+      brandTitle:'Design "left = turn-left"', brandSub:"You are the control designer",
+      routeTitle:"PROJECT ROUTE",
+      s1:"S1 Read EEG", s2:"S2 Clean Signal", s3:"S3 Decode L/R",
+      s4:"S4 Stay Stable", s5:"S5 Hook Game", s6:"S6 Beat It Brain-Only",
+      ctrlTitle:"MAPPING SCHEME",
+      gainName:"Turn gain", threshName:"Conf. threshold", coolName:"Cooldown", fwdName:"Auto-forward",
+      fwdOn:"left = turn-left + auto-forward", fwdOff:"left = pure turn (no forward)",
+      guideTitle:"HOW TO PLAY",
+      guide1:"Tune the 4 mapping parameters.",
+      guide2:'Hit "Test run" — avatar drives on a prerecorded brain stream.',
+      guide3:"Get it through 3 corners without crashing or flying out.",
+      hdrLeft:"Control-mapping design · Role-play",
+      hudRun:"Test runs", hudBest:"Best completion",
+      endLbl:"Goal", endName:"Brain-control Minecraft", endTail:"imagine left hand = avatar turns left",
+      introPrompt:'The decoder reliably tells whether you imagine your left or right hand. But "left detected" is just a label — once the computer gets it, what should the avatar actually DO?',
+      introWhy:'You are the control designer. Set the turn gain, confidence threshold, cooldown and auto-forward to define the real "left = turn-left" mapping, then feed a prerecorded classifier stream in and watch the avatar run the track. This is the last puzzle piece that makes brain signals truly drive Minecraft.',
+      trackTitle:"Top-down track · avatar drives on brain stream", seqLbl:"Brain cmds",
+      runBtn:"Test run", runBtnRunning:"Running…",
+      statDone:"Completion", statHit:"Crashes", statDrop:"Dropped cmds",
+      runMsgIdle:"Tune the params, hit Test run to see the avatar drive.",
+      replayBtn:"Keep tuning"
+    }
+  };
+  let lang = "zh";
+
+  // ---------- mapping params (the design under test) ----------
+  const mapping = {
+    gain: 0.15,      // turn = base + gain*4*conf  (radians per accepted cmd)
+    thresh: 0.60,    // confidence below this => command dropped
+    cool: 250,       // ms cooldown between accepted commands
+    forward: true,   // left/right also auto-advances
+  };
+
+  // ---------- prerecorded brain command stream (cmdSeq) ----------
+  // grouped by corner. each corner needs a net ~90deg (HALF_PI) turn to follow
+  // the corridor. brain outputs arrive in bursts as the avatar reaches the corner
+  // turn-zone; confidences vary (a few low ~0.55-0.58 to exercise the threshold).
+  // 'cornerIdx' = which track waypoint (index into trackPts) this burst steers around.
+  const HALF_PI = Math.PI/2;
+  const cmdSeq = [
+    // corner 1: LEFT (around waypoint 1) — 4 outputs, one low-conf
+    {dir:'L', conf:0.82, cornerIdx:1}, {dir:'L', conf:0.80, cornerIdx:1},
+    {dir:'L', conf:0.78, cornerIdx:1}, {dir:'L', conf:0.55, cornerIdx:1},
+    // corner 2: RIGHT (around waypoint 2)
+    {dir:'R', conf:0.83, cornerIdx:2}, {dir:'R', conf:0.79, cornerIdx:2},
+    {dir:'R', conf:0.81, cornerIdx:2}, {dir:'R', conf:0.58, cornerIdx:2},
+    // corner 3: LEFT (around waypoint 3)
+    {dir:'L', conf:0.84, cornerIdx:3}, {dir:'L', conf:0.79, cornerIdx:3},
+    {dir:'L', conf:0.82, cornerIdx:3}, {dir:'L', conf:0.56, cornerIdx:3},
+  ];
+  const CMD_INTERVAL = 130;   // ms between successive brain outputs within a burst
+
+  // ---------- track definition (top-down) ----------
+  // Built by a turtle that uses the SAME +-90deg turn convention as the sim's
+  // 'L' (heading -= turn) / 'R' (heading += turn), guaranteeing the corridor
+  // geometry matches the L/R/L command stream. Start facing +x (heading 0).
+  const trackPts = (function(){
+    let x=0.10, y=0.85, h=0;                 // start bottom-left, heading right (+x)
+    const pts=[{x,y}];
+    const segs=[
+      {len:0.32, turnAfter:'L'},  // straight right, then LEFT turns upward (corner @ pts[1])
+      {len:0.40, turnAfter:'R'},  // up, then RIGHT turns rightward (corner @ pts[2])
+      {len:0.32, turnAfter:'L'},  // right, then LEFT turns upward (corner @ pts[3])
+      {len:0.28, turnAfter:null}, // straight up to finish
+    ];
+    for(const s of segs){
+      x += Math.cos(h)*s.len; y += Math.sin(h)*s.len;
+      pts.push({x,y});
+      if(s.turnAfter==='L') h -= HALF_PI;
+      else if(s.turnAfter==='R') h += HALF_PI;
+    }
+    return pts;
+  })();
+  const TRACK_HALF = 0.075; // corridor half-width (normalized to min dim)
+  // turn-zone trigger radius: a corner's command burst fires when avatar is this
+  // close to the corner waypoint.
+  const TURN_ZONE = 0.060;
+
+  // run state
+  const runs = { count:0, best:0, running:false };
+
+  // ---------- DOM ----------
+  const el = (id)=>document.getElementById(id);
+  const gainSlider = el("gainSlider"), threshSlider = el("threshSlider"), coolSlider = el("coolSlider");
+  const gainVal = el("gainVal"), threshVal = el("threshVal"), coolVal = el("coolVal");
+  const fwdToggle = el("fwdToggle"), fwdVal = el("fwdVal");
+  const runBtn = el("runBtn"), runMsg = el("runMsg");
+  const statDone = el("statDone"), statHit = el("statHit"), statDrop = el("statDrop");
+  const seqProg = el("seqProg");
+  const hudRun = el("hudRun"), hudBest = el("hudBest");
+  const endOverlay = el("endOverlay"), endTitle = el("endTitle"), endSub = el("endSub");
+  const replayBtn = el("replayBtn");
+
+  let lastResult = null;
+
+  function applyI18n(){
+    document.documentElement.lang = lang === "zh" ? "zh-CN" : "en";
+    document.querySelectorAll("[data-i18n]").forEach(elm=>{
+      const k = elm.getAttribute("data-i18n");
+      if (I18N[lang][k] !== undefined) elm.textContent = I18N[lang][k];
+    });
+    fwdVal.textContent = mapping.forward ? I18N[lang].fwdOn : I18N[lang].fwdOff;
+    runBtn.textContent = runs.running ? I18N[lang].runBtnRunning : I18N[lang].runBtn;
+    if (!lastResult) runMsg.textContent = I18N[lang].runMsgIdle;
+    else renderResultMsg();
+  }
+
+  // ---------- canvas ----------
+  const canvas = el("trackCanvas");
+  const cctx = canvas.getContext("2d");
+  let dpr=1, cw=0, ch=0, minD=0;
+  let raf = null;
+
+  function resizeCanvas(){
+    const r = canvas.parentElement.getBoundingClientRect();
+    dpr = window.devicePixelRatio || 1;
+    const availW = Math.max(80, r.width);
+    const availH = Math.max(80, r.height);
+    cw = availW; ch = availH;
+    minD = Math.max(80, Math.min(availW, availH));
+    canvas.width = Math.floor(cw*dpr);
+    canvas.height = Math.floor(ch*dpr);
+    cctx.setTransform(dpr,0,0,dpr,0,0);
+  }
+
+  function pxX(nx){ return nx*cw; }
+  function pxY(ny){ return ny*ch; }
+  function halfPx(){ return TRACK_HALF*minD; }
+
+  // ---------- avatar physics ----------
+  const sim = {
+    x:0, y:0, heading:0, alive:true, finished:false,
+    crashes:0, dropped:0, progress:0,
+    burstCorner:-1, burstPtr:0, burstStartT:0, lastAcceptT:-1e9, lastHandledCorner:-1,
+    cmdsSeen:0, simT:0, trail:[],
+  };
+
+  function resetSim(){
+    sim.x = trackPts[0].x; sim.y = trackPts[0].y;
+    sim.heading = Math.atan2(trackPts[1].y-trackPts[0].y, trackPts[1].x-trackPts[0].x);
+    sim.alive = true; sim.finished = false;
+    sim.crashes = 0; sim.dropped = 0; sim.progress = 0;
+    sim.burstCorner = -1; sim.burstPtr = 0; sim.burstStartT = 0; sim.lastAcceptT = -1e9;
+    sim.lastHandledCorner = -1;
+    sim.cmdsSeen = 0; sim.simT = 0; sim.trail = [];
+  }
+
+  // commands grouped by their cornerIdx, in stream order
+  function cmdsForCorner(ci){ return cmdSeq.filter(c=>c.cornerIdx===ci); }
+  // the ordered list of corners the stream addresses
+  const cornerOrder = (function(){
+    const seen=[]; cmdSeq.forEach(c=>{ if(seen.indexOf(c.cornerIdx)<0) seen.push(c.cornerIdx); });
+    return seen;
+  })();
+
+  function distToSeg(px0,py0, ax,ay, bx,by){
+    const dx=bx-ax, dy=by-ay; const l2=dx*dx+dy*dy||1e-9;
+    let t=((px0-ax)*dx+(py0-ay)*dy)/l2; t=Math.max(0,Math.min(1,t));
+    const cxp=ax+t*dx, cyp=ay+t*dy;
+    return {d:Math.hypot(px0-cxp,py0-cyp), t};
+  }
+  function trackProximity(x,y){
+    let best=1e9, bestSeg=0, bestT=0;
+    for(let i=0;i<trackPts.length-1;i++){
+      const r=distToSeg(x,y, trackPts[i].x,trackPts[i].y, trackPts[i+1].x,trackPts[i+1].y);
+      if(r.d<best){ best=r.d; bestSeg=i; bestT=r.t; }
+    }
+    return {d:best, seg:bestSeg, t:bestT};
+  }
+  function segLen(i){
+    const a=trackPts[i], b=trackPts[i+1];
+    return Math.hypot(b.x-a.x, b.y-a.y);
+  }
+  function trackTotalLen(){
+    let s=0; for(let i=0;i<trackPts.length-1;i++) s+=segLen(i); return s;
+  }
+
+  function runSimulation(){
+    resetSim();
+    runs.running = true;
+    runBtn.disabled = true;
+    runBtn.textContent = I18N[lang].runBtnRunning;
+    runMsg.textContent = lang==="zh" ? "角色行进中…" : "Avatar driving…";
+
+    const speed = 0.00017;          // normalized units per ms forward speed
+    const halfW = TRACK_HALF;
+    const totalLen = trackTotalLen();
+    let lastTs = performance.now();
+
+    if (raf) cancelAnimationFrame(raf);
+    function step(){
+      const now = performance.now();
+      let dt = now - lastTs; lastTs = now;
+      if (dt>60) dt=60;
+      sim.simT += dt;
+
+      // ---- forward motion (no auto-steer; heading only changes on brain cmds) ----
+      const moving = mapping.forward;
+      if (moving && sim.alive && !sim.finished){
+        const v = speed * dt;
+        sim.x += Math.cos(sim.heading)*v;
+        sim.y += Math.sin(sim.heading)*v;
+      }
+
+      // ---- position-gated brain command bursts ----
+      // arm the next corner's burst when avatar enters its turn-zone
+      if (sim.burstCorner < 0){
+        for (const ci of cornerOrder){
+          // only arm corners that come after corners already handled (stream order)
+          if (ci <= sim.lastHandledCorner) continue;
+          const wp = trackPts[ci];
+          if (Math.hypot(sim.x-wp.x, sim.y-wp.y) < TURN_ZONE){
+            sim.burstCorner = ci; sim.burstPtr = 0; sim.burstStartT = sim.simT;
+            break;
+          }
+        }
+      }
+      // feed the armed burst's commands, spaced by CMD_INTERVAL
+      if (sim.burstCorner >= 0){
+        const burst = cmdsForCorner(sim.burstCorner);
+        while (sim.burstPtr < burst.length &&
+               sim.burstStartT + sim.burstPtr*CMD_INTERVAL <= sim.simT){
+          const c = burst[sim.burstPtr];
+          sim.burstPtr++; sim.cmdsSeen++;
+          if (c.conf < mapping.thresh){ sim.dropped++; continue; }            // threshold gate
+          if (sim.simT - sim.lastAcceptT < mapping.cool){ sim.dropped++; continue; } // cooldown gate
+          sim.lastAcceptT = sim.simT;
+          // turn applied per accepted command: angle = base + gain*conf
+          const turn = (0.14 + mapping.gain*3.6*c.conf);
+          sim.heading += (c.dir==='L' ? -turn : turn);
+        }
+        if (sim.burstPtr >= burst.length){
+          sim.lastHandledCorner = sim.burstCorner;
+          sim.burstCorner = -1;
+        }
+      }
+
+      sim.trail.push({x:sim.x,y:sim.y});
+      if (sim.trail.length>900) sim.trail.shift();
+
+      // ---- progress + collision ----
+      const prox = trackProximity(sim.x, sim.y);
+      let segAccum=0;
+      for(let i=0;i<prox.seg;i++) segAccum += segLen(i);
+      const along = (segAccum + prox.t*segLen(prox.seg)) / totalLen;
+      sim.progress = Math.max(sim.progress, along);
+
+      if (prox.d > halfW && sim.alive){ sim.crashes++; sim.alive = false; }
+      if (sim.x<-0.05 || sim.x>1.05 || sim.y<-0.05 || sim.y>1.05){
+        if (sim.alive){ sim.crashes++; }
+        sim.alive=false; sim.finished=true;
+      }
+      const fin = trackPts[trackPts.length-1];
+      if (Math.hypot(sim.x-fin.x, sim.y-fin.y) < halfW*1.1){
+        sim.finished = true; sim.progress = 1;
+      }
+
+      drawTrack();
+      seqProg.textContent = Math.min(sim.cmdsSeen,cmdSeq.length) + " / " + cmdSeq.length;
+
+      // end when finished, crashed, or stalled too long (no forward progress / out of time)
+      const stalled = sim.simT > 16000;
+      const ended = sim.finished || (!sim.alive) || stalled;
+      if (!ended){
+        raf = requestAnimationFrame(step);
+      } else {
+        raf = requestAnimationFrame(finalizeRun);
+      }
+    }
+    raf = requestAnimationFrame(step);
+  }
+
+  function finalizeRun(){
+    runs.running = false;
+    runBtn.disabled = false;
+    runBtn.textContent = I18N[lang].runBtn;
+    runs.count++;
+    const donePct = Math.round(sim.progress*100);
+    const won = sim.finished && sim.crashes===0 && sim.progress>=0.985;
+    runs.best = Math.max(runs.best, donePct);
+
+    lastResult = { done:donePct, crashes:sim.crashes, dropped:sim.dropped, won };
+
+    hudRun.textContent = runs.count;
+    hudBest.textContent = runs.best + "%";
+    statDone.textContent = donePct + "%";
+    statDone.className = "rv " + (won?"ok":(donePct>=70?"":"err"));
+    statHit.textContent = sim.crashes;
+    statHit.className = "rv " + (sim.crashes===0?"ok":"err");
+    statDrop.textContent = sim.dropped;
+    statDrop.className = "rv " + (sim.dropped<=2?"":"err");
+
+    renderResultMsg();
+    drawTrack();
+    if (won) showWin();
+  }
+
+  function renderResultMsg(){
+    if (!lastResult){ runMsg.textContent = I18N[lang].runMsgIdle; return; }
+    const r = lastResult;
+    let m;
+    if (r.won){
+      m = lang==="zh"
+        ? "顺畅过完 3 个弯,<b>0 撞墙</b>!这套映射手感正好。"
+        : "Through all 3 corners, <b>0 crashes</b>! This mapping feels just right.";
+    } else if (r.crashes>0 && mapping.gain>0.22){
+      m = lang==="zh"
+        ? "增益太大,角色<b>转过了头</b>撞上外墙。把转角增益调小些。"
+        : "Gain too high — avatar <b>overshot</b> into the wall. Lower the turn gain.";
+    } else if (r.dropped>=4 && mapping.thresh>0.68){
+      m = lang==="zh"
+        ? "阈值太高,很多脑指令被<b>丢弃</b>,角色在弯道前没转够。降低置信阈值。"
+        : "Threshold too high — many cmds <b>dropped</b>, avatar under-turned at the corner. Lower the threshold.";
+    } else if (r.crashes>0 && mapping.cool>=450){
+      m = lang==="zh"
+        ? "冷却太长,一个弯需要的连续指令被<b>挡掉</b>,角色错过弯道冲出去。缩短冷却。"
+        : "Cooldown too long — successive corner cmds got <b>blocked</b>, avatar missed the turn. Shorten cooldown.";
+    } else if (r.crashes>0){
+      m = lang==="zh"
+        ? `撞墙 <b>${r.crashes}</b> 次,弯没拐准。微调增益和冷却再试。`
+        : `<b>${r.crashes}</b> crash(es), corners not hit cleanly. Tweak gain & cooldown, retry.`;
+    } else {
+      m = lang==="zh"
+        ? `只走了 <b>${r.done}%</b>。角色没撞,但前进/转向配合还差点。`
+        : `Only reached <b>${r.done}%</b>. No crash, but forward/turn balance is off.`;
+    }
+    runMsg.innerHTML = m;
+  }
+
+  // ---------- rendering ----------
+  function drawTrack(){
+    if (cw<=0||ch<=0) return;
+    cctx.clearRect(0,0,cw,ch);
+
+    // floor grid
+    cctx.strokeStyle = "oklch(0.35 0.05 265 / 0.18)";
+    cctx.lineWidth = 1;
+    const cell = Math.max(28, cw/16);
+    for(let gx=0; gx<=cw; gx+=cell){ cctx.beginPath(); cctx.moveTo(gx,0); cctx.lineTo(gx,ch); cctx.stroke(); }
+    for(let gy=0; gy<=ch; gy+=cell){ cctx.beginPath(); cctx.moveTo(0,gy); cctx.lineTo(cw,gy); cctx.stroke(); }
+
+    const hw = halfPx();
+
+    // drivable corridor floor (thick polyline)
+    cctx.lineJoin = "round"; cctx.lineCap = "round";
+    cctx.strokeStyle = "oklch(0.22 0.045 265)";
+    cctx.lineWidth = hw*2;
+    cctx.beginPath();
+    cctx.moveTo(pxX(trackPts[0].x), pxY(trackPts[0].y));
+    for(let i=1;i<trackPts.length;i++) cctx.lineTo(pxX(trackPts[i].x), pxY(trackPts[i].y));
+    cctx.stroke();
+    // corridor edge highlight
+    cctx.strokeStyle = "oklch(0.55 0.08 265 / 0.5)";
+    cctx.lineWidth = hw*2;
+    cctx.globalAlpha = 0.0;
+    cctx.stroke();
+    cctx.globalAlpha = 1;
+
+    // center dashed guide line
+    cctx.setLineDash([7,7]);
+    cctx.strokeStyle = "oklch(0.55 0.08 265 / 0.45)";
+    cctx.lineWidth = 1.5;
+    cctx.beginPath();
+    cctx.moveTo(pxX(trackPts[0].x), pxY(trackPts[0].y));
+    for(let i=1;i<trackPts.length;i++) cctx.lineTo(pxX(trackPts[i].x), pxY(trackPts[i].y));
+    cctx.stroke();
+    cctx.setLineDash([]);
+
+    // start marker
+    cctx.fillStyle = "oklch(0.55 0.15 25)";
+    cctx.beginPath(); cctx.arc(pxX(trackPts[0].x), pxY(trackPts[0].y), 5, 0, Math.PI*2); cctx.fill();
+
+    // finish diamond (gold)
+    const fin = trackPts[trackPts.length-1];
+    cctx.save();
+    cctx.translate(pxX(fin.x), pxY(fin.y));
+    cctx.rotate((sim.simT*0.002)||0);
+    cctx.fillStyle = "oklch(0.85 0.14 85)";
+    const gs = 11;
+    cctx.beginPath();
+    cctx.moveTo(0,-gs); cctx.lineTo(gs,0); cctx.lineTo(0,gs); cctx.lineTo(-gs,0); cctx.closePath();
+    cctx.fill();
+    cctx.restore();
+
+    // corner labels (L/R)
+    cctx.font = "10px 'JetBrains Mono', monospace";
+    cctx.fillStyle = "oklch(0.55 0.03 265)";
+    [{i:1,t:'L'},{i:2,t:'R'},{i:3,t:'L'}].forEach(ci=>{
+      const p = trackPts[ci.i];
+      cctx.fillText(ci.t, pxX(p.x)+10, pxY(p.y)-8);
+    });
+
+    // trail
+    if (sim.trail.length>1){
+      cctx.strokeStyle = sim.alive ? "oklch(0.75 0.17 25 / 0.55)" : "oklch(0.62 0.20 25 / 0.55)";
+      cctx.lineWidth = 2;
+      cctx.beginPath();
+      cctx.moveTo(pxX(sim.trail[0].x), pxY(sim.trail[0].y));
+      for(let i=1;i<sim.trail.length;i++) cctx.lineTo(pxX(sim.trail[i].x), pxY(sim.trail[i].y));
+      cctx.stroke();
+    }
+
+    // avatar (blocky), oriented by heading
+    const ax = pxX(sim.x), ay = pxY(sim.y);
+    cctx.save();
+    cctx.translate(ax, ay);
+    cctx.rotate(sim.heading);
+    cctx.fillStyle = sim.alive ? "oklch(0.75 0.17 25)" : "oklch(0.62 0.20 25)";
+    cctx.fillRect(-11, -8, 22, 16);
+    cctx.fillStyle = "oklch(0.92 0.08 25)";
+    cctx.fillRect(4, -8, 7, 16); // front face
+    cctx.fillStyle = "oklch(0.14 0.035 265)";
+    cctx.fillRect(6, -2, 3, 4);
+    cctx.restore();
+    if (!sim.alive){
+      cctx.font = "11px 'JetBrains Mono', monospace";
+      cctx.fillStyle = "oklch(0.62 0.20 25)";
+      cctx.fillText(lang==="zh"?"撞墙 / 冲出":"crashed / flew out", ax+14, ay-12);
+    }
+
+    // idle hint
+    if (runs.count===0 && !runs.running){
+      cctx.font = "12px 'JetBrains Mono', monospace";
+      cctx.fillStyle = "oklch(0.55 0.03 265)";
+      cctx.fillText(lang==="zh"?"调好映射,点试跑":"Tune mapping, hit Test run", 16, ch-16);
+    }
+  }
+
+  function showWin(){
+    endOverlay.classList.remove("hidden");
+    endTitle.textContent = lang==="zh" ? "映射手感调成了" : "Mapping Dialed In";
+    endSub.innerHTML = lang==="zh"
+      ? `你用 <b>${runs.count}</b> 次试跑,调出了一组让角色顺畅过弯的映射:增益不过头、阈值不丢指令、冷却不卡弯、复合前进让它边转边走。<b>"想左手"现在真的等于"角色左转"</b>——这条从脑信号到游戏动作的映射通了,你离 S6 脑控通关 Minecraft 只差临门一脚。`
+      : `In <b>${runs.count}</b> test run(s) you tuned a mapping that drives the avatar cleanly through every corner: gain that doesn't overshoot, a threshold that keeps the cmds, a cooldown that doesn't stall turns, plus auto-forward to move while turning. <b>"Imagine left hand" now truly equals "avatar turns left"</b> — the brain-to-action mapping is wired, one step from S6: beating Minecraft brain-only.`;
+  }
+
+  // ---------- control listeners ----------
+  gainSlider.addEventListener("input", ()=>{
+    mapping.gain = parseFloat(gainSlider.value);
+    gainVal.textContent = mapping.gain.toFixed(2);
+  });
+  threshSlider.addEventListener("input", ()=>{
+    mapping.thresh = parseFloat(threshSlider.value);
+    threshVal.textContent = mapping.thresh.toFixed(2);
+  });
+  coolSlider.addEventListener("input", ()=>{
+    mapping.cool = parseInt(coolSlider.value,10);
+    coolVal.textContent = mapping.cool + "ms";
+  });
+  function toggleForward(){
+    mapping.forward = !mapping.forward;
+    fwdToggle.classList.toggle("on", mapping.forward);
+    fwdToggle.setAttribute("aria-checked", mapping.forward ? "true":"false");
+    fwdVal.textContent = mapping.forward ? I18N[lang].fwdOn : I18N[lang].fwdOff;
+  }
+  fwdToggle.addEventListener("click", toggleForward);
+  fwdToggle.addEventListener("keydown", (e)=>{
+    if (e.key===" "||e.key==="Enter"){ e.preventDefault(); toggleForward(); }
+  });
+
+  runBtn.addEventListener("click", ()=>{
+    if (runs.running) return;
+    endOverlay.classList.add("hidden");
+    runSimulation();
+  });
+  replayBtn.addEventListener("click", ()=>{
+    endOverlay.classList.add("hidden");
+  });
+
+  el("langBtn").addEventListener("click", ()=>{
+    lang = (lang==="zh") ? "en" : "zh";
+    applyI18n();
+    if (!endOverlay.classList.contains("hidden") && lastResult && lastResult.won) showWin();
+    drawTrack();
+  });
+
+  window.addEventListener("resize", ()=>{ resizeCanvas(); drawTrack(); });
+
+  // ---------- init ----------
+  applyI18n();
+  resizeCanvas();
+  resetSim();
+  sim.trail = [];
+  drawTrack();
+  setTimeout(()=>{ resizeCanvas(); drawTrack(); }, 80);
+
+})();
+</script>
+</body>
+</html>

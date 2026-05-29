@@ -1,0 +1,1054 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>M54 · 接成闭环 — Loop Debugger</title>
+<style>
+  :root{
+    /* Layer 1 — shared deep space canvas (cs hue 220) */
+    --bg-0: oklch(0.14 0.03 220);
+    --bg-1: oklch(0.18 0.035 220);
+    --bg-2: oklch(0.22 0.04 220);
+    --bg-3: oklch(0.28 0.05 220);
+    --line: oklch(0.42 0.06 220 / 0.35);
+    --line-strong: oklch(0.58 0.10 220 / 0.55);
+    --fg:      oklch(0.96 0.01 220);
+    --fg-dim:  oklch(0.76 0.03 220);
+    --fg-mute: oklch(0.56 0.04 220);
+
+    /* Layer 2 — cs accent (cyan) */
+    --accent: oklch(0.75 0.17 200);
+
+    /* Layer 3 — cs 5-color palette */
+    --signal: oklch(0.75 0.17 200);
+    --port:   oklch(0.72 0.17 275);
+    --node:   oklch(0.55 0.15 200);
+    --packet: oklch(0.92 0.10 200);
+    --ok:     oklch(0.82 0.17 125);
+    --err:    oklch(0.62 0.20 25);
+    --gold:   oklch(0.85 0.14 85);
+  }
+
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%;width:100%;
+    font-family:'Inter','PingFang SC',sans-serif;
+    color:var(--fg);background:var(--bg-0);overflow:hidden}
+
+  .stage{display:flex;flex-direction:row;height:100vh;width:100vw}
+
+  /* ============ 200px sidebar ============ */
+  .game-sidebar{
+    width:200px;flex:0 0 200px;
+    background:var(--bg-1);
+    border-right:1px solid var(--line);
+    display:flex;flex-direction:column;
+    padding:14px 12px;gap:10px;
+    overflow-y:auto;
+  }
+  .brand{display:flex;flex-direction:column;gap:2px;
+    border-bottom:1px solid var(--line);padding-bottom:8px}
+  .brand .code{font-family:'JetBrains Mono',monospace;font-size:10px;
+    color:var(--fg-mute);letter-spacing:1.2px}
+  .brand .title{font-size:13px;color:var(--fg);font-weight:600}
+  .brand .sub{font-size:10px;color:var(--fg-dim);margin-top:2px}
+
+  .mascot{
+    width:100%;height:70px;display:flex;align-items:center;justify-content:center;
+    background:var(--bg-2);border:1px solid var(--line);position:relative;
+  }
+  .mascot svg{width:100%;height:100%}
+  .mascot .mname{position:absolute;left:8px;bottom:5px;
+    font-family:'JetBrains Mono',monospace;font-size:8px;
+    color:var(--fg-mute);letter-spacing:1px}
+
+  /* ---- project roadmap S1..S6 ---- */
+  .route{
+    background:var(--bg-2);border:1px solid var(--line);
+    padding:8px;display:flex;flex-direction:column;gap:5px;
+  }
+  .route-title{font-family:'JetBrains Mono',monospace;font-size:9px;
+    color:var(--accent);letter-spacing:1px}
+  .route-list{display:flex;flex-direction:column;gap:3px}
+  .route-step{
+    display:flex;align-items:center;gap:6px;
+    font-family:'JetBrains Mono',monospace;font-size:9px;
+    color:var(--fg-mute);line-height:1.2;
+  }
+  .route-step .dot{
+    width:8px;height:8px;flex:0 0 8px;border-radius:50%;
+    background:var(--bg-3);border:1px solid var(--line-strong);
+  }
+  .route-step.done .dot{background:var(--node);border-color:var(--node)}
+  .route-step.here{color:var(--fg);font-weight:600}
+  .route-step.here .dot{
+    background:var(--accent);border-color:var(--packet);
+    box-shadow:0 0 0 3px oklch(0.75 0.17 200 / 0.25);
+  }
+  .route-step .sname{font-size:8.5px}
+
+  /* ---- level selector ---- */
+  .level-block{
+    background:var(--bg-2);border:1px solid var(--line);padding:8px;
+    display:flex;flex-direction:column;gap:6px;
+  }
+  .level-title{font-family:'JetBrains Mono',monospace;font-size:9px;
+    color:var(--fg-dim);letter-spacing:1px}
+  .level-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:4px}
+  .lvl-cell{
+    height:28px;background:var(--bg-3);border:1px solid var(--line);
+    display:flex;align-items:center;justify-content:center;
+    font-family:'JetBrains Mono',monospace;font-size:11px;
+    color:var(--fg-mute);cursor:pointer;
+    transition:background .2s,border-color .2s,color .2s;
+  }
+  .lvl-cell:hover{border-color:var(--accent);color:var(--fg)}
+  .lvl-cell.cur{background:var(--node);border-color:var(--accent);color:var(--packet);font-weight:600}
+  .lvl-cell.solved{border-color:var(--ok);color:var(--ok)}
+  .lvl-cell.locked{opacity:.35;cursor:not-allowed}
+
+  .guide{
+    background:var(--bg-2);border:1px solid var(--line);
+    padding:8px;display:flex;flex-direction:column;gap:4px;
+  }
+  .guide-title{font-family:'JetBrains Mono',monospace;font-size:9px;
+    color:var(--accent);letter-spacing:1px}
+  .guide-line{font-size:9.5px;color:var(--fg-dim);line-height:1.4}
+  .guide-line b{color:var(--signal)}
+
+  .sidebar-spacer{flex:1;min-height:6px}
+
+  .lang-btn{
+    width:100%;padding:7px 8px;background:var(--bg-3);
+    color:var(--fg);border:1px solid var(--line-strong);
+    font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:1px;
+    cursor:pointer;box-shadow:3px 3px 0 var(--bg-0);
+  }
+  .lang-btn:hover{background:var(--node);color:var(--packet)}
+
+  /* ============ main ============ */
+  .game-main{
+    flex:1;display:flex;flex-direction:column;
+    background:var(--bg-0);min-width:0;position:relative;
+  }
+  .main-header{
+    height:46px;border-bottom:1px solid var(--line);
+    display:flex;align-items:center;justify-content:space-between;
+    padding:0 18px;background:var(--bg-1);flex:0 0 46px;
+  }
+  .header-left{font-family:'JetBrains Mono',monospace;font-size:11px;
+    color:var(--fg-dim);letter-spacing:1.3px}
+  .header-right{display:flex;gap:16px;font-family:'JetBrains Mono',monospace}
+  .hud-cell{display:flex;flex-direction:column;align-items:flex-end}
+  .hud-cell .label{font-size:9px;color:var(--fg-mute);letter-spacing:1px}
+  .hud-cell .val{color:var(--accent);font-size:13px;font-weight:600}
+  .hud-cell .val.gold{color:var(--gold)}
+  .hud-cell .val.err{color:var(--err)}
+  .hud-cell .val.ok{color:var(--ok)}
+
+  /* corner minecraft silhouette */
+  .endgame{
+    position:absolute;right:20px;top:58px;z-index:6;
+    display:flex;align-items:center;gap:8px;
+    background:var(--bg-1);border:1px solid var(--line);
+    padding:6px 10px;opacity:.92;pointer-events:none;
+  }
+  .endgame svg{width:26px;height:26px;flex:0 0 26px}
+  .endgame .etxt{font-family:'JetBrains Mono',monospace;font-size:8.5px;
+    color:var(--fg-mute);line-height:1.35;max-width:150px}
+  .endgame .etxt .hl{color:var(--accent)}
+
+  .main-body{flex:1;display:flex;flex-direction:column;
+    min-height:0;padding:12px 16px;gap:10px}
+
+  /* task / intro card */
+  .task-card{
+    background:var(--bg-1);border:1px solid var(--line);
+    border-left:3px solid var(--accent);
+    padding:9px 13px;display:flex;flex-direction:column;gap:3px;
+    flex:0 0 auto;
+  }
+  .task-card .tprompt{font-size:12px;color:var(--fg);line-height:1.4}
+  .task-card .twhy{font-size:10px;color:var(--fg-dim);line-height:1.4}
+  .task-card .twhy b{color:var(--gold)}
+
+  .scene{flex:1;display:flex;gap:12px;min-height:0}
+
+  /* loop viewport (canvas) */
+  .loop-pane{
+    flex:1.55;display:flex;flex-direction:column;min-height:0;min-width:0;
+    background:var(--bg-1);border:1px solid var(--line);
+  }
+  .pane-title{
+    padding:7px 13px;font-family:'JetBrains Mono',monospace;font-size:10px;
+    color:var(--accent);letter-spacing:1.3px;
+    border-bottom:1px solid var(--line);background:var(--bg-2);
+    display:flex;justify-content:space-between;align-items:center;
+  }
+  .pane-title .stat{color:var(--fg-dim)}
+  .pane-title .stat b{color:var(--err)}
+  .pane-title .stat b.ok{color:var(--ok)}
+  /* parent of canvas: flex column so canvas flex:1 resolves */
+  .loop-body{flex:1;position:relative;display:flex;flex-direction:column;min-height:0}
+  #loopCanvas{flex:1;width:100%;display:block;cursor:pointer}
+
+  /* right column: probe readout + fix library */
+  .side-pane{
+    flex:1;display:flex;flex-direction:column;gap:10px;min-height:0;min-width:0;
+  }
+
+  .probe-box{
+    flex:1.1;min-height:0;display:flex;flex-direction:column;
+    background:var(--bg-1);border:1px solid var(--line);
+    border-left:3px solid var(--port);
+  }
+  .pbox-title{
+    padding:7px 12px;font-family:'JetBrains Mono',monospace;font-size:10px;
+    color:var(--port);letter-spacing:1.2px;border-bottom:1px solid var(--line);
+    background:var(--bg-2);display:flex;justify-content:space-between;
+  }
+  .pbox-title .pnode{color:var(--fg)}
+  .pbox-body{flex:1;overflow-y:auto;padding:11px 12px;
+    display:flex;flex-direction:column;gap:7px}
+  .pb-empty{font-size:11px;color:var(--fg-mute);line-height:1.5}
+  .pb-line{font-family:'JetBrains Mono',monospace;font-size:10.5px;line-height:1.5}
+  .pb-line .k{color:var(--fg-mute)}
+  .pb-line .v{color:var(--signal)}
+  .pb-line .v.bad{color:var(--err);font-weight:600}
+  .pb-line .v.good{color:var(--ok)}
+  .pb-verdict{margin-top:4px;padding:7px 9px;background:var(--bg-2);
+    border:1px solid var(--line);font-size:10.5px;line-height:1.45;color:var(--fg-dim)}
+  .pb-verdict.bad{border-color:var(--err);color:var(--fg)}
+  .pb-verdict.bad b{color:var(--err)}
+  .pb-verdict.good{border-color:var(--ok)}
+  .pb-verdict.good b{color:var(--ok)}
+
+  /* fix library */
+  .fix-box{
+    flex:1;min-height:0;display:flex;flex-direction:column;
+    background:var(--bg-1);border:1px solid var(--line);
+  }
+  .fbox-title{
+    padding:7px 12px;font-family:'JetBrains Mono',monospace;font-size:10px;
+    color:var(--signal);letter-spacing:1.2px;border-bottom:1px solid var(--line);
+    background:var(--bg-2);
+  }
+  .fix-list{flex:1;overflow-y:auto;padding:9px;display:flex;flex-direction:column;gap:7px}
+  .fix-card{
+    background:var(--bg-2);border:1px solid var(--line-strong);
+    padding:8px 10px;cursor:grab;user-select:none;
+    display:flex;flex-direction:column;gap:2px;
+    box-shadow:3px 3px 0 var(--bg-0);touch-action:none;
+    transition:transform .1s,border-color .15s,background .15s;
+  }
+  .fix-card:hover{border-color:var(--signal);background:var(--bg-3)}
+  .fix-card.dragging{opacity:.55;border-color:var(--accent)}
+  .fix-card.used{opacity:.3;cursor:not-allowed}
+  .fix-card .fname{font-size:11.5px;color:var(--fg);font-weight:600}
+  .fix-card .fcode{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--fg-mute)}
+
+  /* floating drag ghost */
+  .drag-ghost{
+    position:fixed;z-index:50;pointer-events:none;
+    background:var(--bg-3);border:1px solid var(--accent);
+    padding:6px 10px;font-size:11px;color:var(--fg);
+    box-shadow:3px 3px 0 var(--bg-0);font-weight:600;
+  }
+
+  /* end overlay */
+  .end-overlay{
+    position:absolute;inset:0;z-index:20;
+    background:oklch(0.14 0.03 220 / 0.94);
+    display:flex;align-items:center;justify-content:center;
+    flex-direction:column;gap:14px;padding:30px;text-align:center;
+  }
+  .end-overlay.hidden{display:none}
+  .end-overlay .badge{
+    width:96px;height:96px;display:flex;align-items:center;justify-content:center;
+    background:var(--bg-1);border:2px solid var(--gold);
+    box-shadow:4px 4px 0 var(--bg-0);
+  }
+  .end-overlay .badge svg{width:64px;height:64px}
+  .end-overlay .etitle{font-size:20px;font-weight:700;color:var(--gold)}
+  .end-overlay .esub{font-size:12.5px;color:var(--fg-dim);line-height:1.6;max-width:460px}
+  .end-overlay .esub b{color:var(--accent)}
+  .end-overlay .ebtns{display:flex;gap:12px;margin-top:6px}
+  .next-btn{
+    padding:9px 16px;background:var(--accent);color:var(--bg-0);
+    border:1px solid var(--packet);
+    font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:600;letter-spacing:1px;
+    cursor:pointer;box-shadow:3px 3px 0 var(--bg-0);
+  }
+  .next-btn:hover{background:var(--packet)}
+  .next-btn:active{transform:translate(2px,2px);box-shadow:1px 1px 0 var(--bg-0)}
+
+  .mono{font-family:'JetBrains Mono',monospace}
+</style>
+</head>
+<body>
+<div class="stage">
+
+  <!-- ============ SIDEBAR ============ -->
+  <aside class="game-sidebar">
+    <div class="brand">
+      <div class="code mono">CS · M54</div>
+      <div class="title" data-i18n="brandTitle">接成闭环</div>
+      <div class="sub" data-i18n="brandSub">追数据流，修好主循环</div>
+    </div>
+
+    <div class="mascot">
+      <svg viewBox="0 0 120 70" aria-hidden="true">
+        <!-- Loopy: a packet-bot circling a ring -->
+        <g fill="none" stroke="var(--accent)" stroke-width="2.4" stroke-linecap="round">
+          <circle cx="60" cy="35" r="22" stroke-dasharray="5 6"/>
+        </g>
+        <g fill="var(--node)" stroke="var(--packet)" stroke-width="1.6">
+          <rect x="50" y="11" width="20" height="16" rx="2"/>
+        </g>
+        <circle cx="56" cy="19" r="2.2" fill="var(--packet)"/>
+        <circle cx="64" cy="19" r="2.2" fill="var(--packet)"/>
+        <rect x="80" y="46" width="9" height="9" fill="var(--packet)"/>
+        <rect x="31" y="46" width="9" height="9" fill="var(--signal)"/>
+      </svg>
+      <span class="mname mono">LOOPY</span>
+    </div>
+
+    <!-- project roadmap -->
+    <div class="route">
+      <div class="route-title mono" data-i18n="routeTitle">项目路线</div>
+      <div class="route-list">
+        <div class="route-step done"><span class="dot"></span><span class="sname" data-i18n="s1">S1 读懂脑电</span></div>
+        <div class="route-step done"><span class="dot"></span><span class="sname" data-i18n="s2">S2 清洗信号</span></div>
+        <div class="route-step done"><span class="dot"></span><span class="sname" data-i18n="s3">S3 解码左右</span></div>
+        <div class="route-step done"><span class="dot"></span><span class="sname" data-i18n="s4">S4 稳定上线</span></div>
+        <div class="route-step here"><span class="dot"></span><span class="sname" data-i18n="s5">S5 接入游戏</span></div>
+        <div class="route-step"><span class="dot"></span><span class="sname" data-i18n="s6">S6 脑控通关</span></div>
+      </div>
+    </div>
+
+    <!-- level selector -->
+    <div class="level-block">
+      <div class="level-title mono" data-i18n="levelTitle">故障关卡</div>
+      <div class="level-grid" id="levelGrid"></div>
+    </div>
+
+    <div class="guide">
+      <div class="guide-title mono" data-i18n="guideTitle">怎么玩</div>
+      <div class="guide-line" data-i18n="guide1">闭环卡住了，角色不动。点环节插探针看 in/out。</div>
+      <div class="guide-line" data-i18n="guide2">沿数据流找到输出异常的那一环——那就是断点。</div>
+      <div class="guide-line" data-i18n="guide3">拖修复到断点环节。修对了，数据包绕环跑起来。</div>
+    </div>
+
+    <div class="sidebar-spacer"></div>
+    <button class="lang-btn mono" id="langBtn">EN / 中文</button>
+  </aside>
+
+  <!-- ============ MAIN ============ -->
+  <main class="game-main">
+    <div class="main-header">
+      <div class="header-left mono" data-i18n="hdrLeft">闭环调试 · 追数据流</div>
+      <div class="header-right">
+        <div class="hud-cell">
+          <span class="label" data-i18n="hudLvl">LEVEL</span>
+          <span class="val" id="hudLvl">1 / 4</span>
+        </div>
+        <div class="hud-cell">
+          <span class="label" data-i18n="hudLoop">闭环状态</span>
+          <span class="val err" id="hudLoop">STALLED</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="endgame">
+      <svg viewBox="0 0 32 32" aria-hidden="true">
+        <g fill="none" stroke="var(--accent)" stroke-width="1.6">
+          <rect x="6" y="10" width="20" height="16"/>
+          <path d="M6 14 H26 M14 14 V26 M6 18 H14 M18 10 V26 M18 18 H26"/>
+        </g>
+      </svg>
+      <div class="etxt">
+        <span data-i18n="endLbl">终点</span>: <span class="hl" data-i18n="endName">脑控 Minecraft</span><br>
+        <span data-i18n="endTail">这一环转起来才能脑控走路</span>
+      </div>
+    </div>
+
+    <div class="main-body">
+      <div class="task-card">
+        <div class="tprompt" data-i18n="introPrompt">脑控系统是个闭环：脑波被读进来 → 解码器分类 → 映射成走路指令 → 送进 Minetest，角色一动又产生新脑波。任何一环断了，整条流就卡死，角色就僵在原地。</div>
+        <div class="twhy" id="introWhy">现在闭环卡住了。像调试工程师一样：点环节插探针，找断点，拖对应修复。</div>
+      </div>
+
+      <div class="scene">
+        <!-- loop viewport -->
+        <div class="loop-pane">
+          <div class="pane-title mono">
+            <span data-i18n="loopTitle">主循环 · 数据流</span>
+            <span class="stat"><span data-i18n="loopStatLbl">数据包</span> <b id="paneLoop">卡在断点</b></span>
+          </div>
+          <div class="loop-body">
+            <canvas id="loopCanvas"></canvas>
+          </div>
+        </div>
+
+        <!-- probe + fix library -->
+        <div class="side-pane">
+          <div class="probe-box">
+            <div class="pbox-title mono">
+              <span data-i18n="probeTitle">探针读数</span>
+              <span class="pnode" id="probeNode">--</span>
+            </div>
+            <div class="pbox-body" id="probeBody">
+              <div class="pb-empty" data-i18n="probeEmpty">点左侧任意一环，给它插上探针，看它收进什么、吐出什么。沿着箭头一环一环往下查。</div>
+            </div>
+          </div>
+
+          <div class="fix-box">
+            <div class="fbox-title mono" data-i18n="fixTitle">修复库 · 拖到断点</div>
+            <div class="fix-list" id="fixList"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- end overlay -->
+    <div class="end-overlay hidden" id="endOverlay">
+      <div class="badge">
+        <svg viewBox="0 0 64 64" aria-hidden="true">
+          <g fill="none" stroke="var(--gold)" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="32" cy="32" r="20" stroke-dasharray="6 7"/>
+            <path d="M24 32 l6 6 l12 -14"/>
+          </g>
+        </svg>
+      </div>
+      <div class="etitle" id="endTitle"></div>
+      <div class="esub" id="endSub"></div>
+      <div class="ebtns">
+        <button class="next-btn mono" id="replayBtn" data-i18n="replayBtn">重玩四关</button>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  /* ===== canvas literal colors (context can't read var()) ===== */
+  const COL = {
+    bg0:"oklch(0.14 0.03 220)",
+    bg1:"oklch(0.18 0.035 220)",
+    bg2:"oklch(0.22 0.04 220)",
+    bg3:"oklch(0.28 0.05 220)",
+    grid:"oklch(0.42 0.06 220 / 0.22)",
+    line:"oklch(0.58 0.10 220 / 0.5)",
+    fg:"oklch(0.96 0.01 220)",
+    fgDim:"oklch(0.76 0.03 220)",
+    fgMute:"oklch(0.56 0.04 220)",
+    accent:"oklch(0.75 0.17 200)",
+    signal:"oklch(0.75 0.17 200)",
+    port:"oklch(0.72 0.17 275)",
+    node:"oklch(0.55 0.15 200)",
+    packet:"oklch(0.92 0.10 200)",
+    ok:"oklch(0.82 0.17 125)",
+    err:"oklch(0.62 0.20 25)",
+    gold:"oklch(0.85 0.14 85)",
+  };
+
+  /* ===== i18n static ===== */
+  const I18N = {
+    zh:{
+      brandTitle:"接成闭环", brandSub:"追数据流，修好主循环",
+      routeTitle:"项目路线",
+      s1:"S1 读懂脑电", s2:"S2 清洗信号", s3:"S3 解码左右",
+      s4:"S4 稳定上线", s5:"S5 接入游戏", s6:"S6 脑控通关",
+      levelTitle:"故障关卡",
+      guideTitle:"怎么玩",
+      guide1:"闭环卡住了，角色不动。点环节插探针看 in/out。",
+      guide2:"沿数据流找到输出异常的那一环——那就是断点。",
+      guide3:"拖修复到断点环节。修对了，数据包绕环跑起来。",
+      hdrLeft:"闭环调试 · 追数据流",
+      hudLvl:"LEVEL", hudLoop:"闭环状态",
+      endLbl:"终点", endName:"脑控 Minecraft", endTail:"这一环转起来才能脑控走路",
+      introPrompt:"脑控系统是个闭环：脑波被读进来 → 解码器分类 → 映射成走路指令 → 送进 Minetest，角色一动又产生新脑波。任何一环断了，整条流就卡死，角色就僵在原地。",
+      loopTitle:"主循环 · 数据流", loopStatLbl:"数据包",
+      loopStalled:"卡在断点", loopRunning:"绕环流动中",
+      probeTitle:"探针读数", probeEmpty:"点左侧任意一环，给它插上探针，看它收进什么、吐出什么。沿着箭头一环一环往下查。",
+      fixTitle:"修复库 · 拖到断点",
+      replayBtn:"重玩四关",
+    },
+    en:{
+      brandTitle:"Close the Loop", brandSub:"Trace the data, fix the main loop",
+      routeTitle:"PROJECT ROUTE",
+      s1:"S1 Read EEG", s2:"S2 Clean Signal", s3:"S3 Decode L/R",
+      s4:"S4 Stay Stable", s5:"S5 Hook Game", s6:"S6 Beat It Brain-Only",
+      levelTitle:"FAULT LEVELS",
+      guideTitle:"HOW TO PLAY",
+      guide1:"Loop is stalled, avatar frozen. Click a stage to probe its in/out.",
+      guide2:"Trace the flow: the stage that should emit but outputs empty is the break.",
+      guide3:"Drag a fix onto the broken stage. Right fix = packets circle again.",
+      hdrLeft:"Loop debugging · Trace the data flow",
+      hudLvl:"LEVEL", hudLoop:"LOOP STATE",
+      endLbl:"Goal", endName:"Brain-control Minecraft", endTail:"This loop must spin to walk by mind",
+      introPrompt:"The brain-control system is a closed loop: EEG read in -> decoder classifies -> mapped to a walk command -> sent into Minetest; the avatar moves and makes new EEG. Break any stage and the whole flow stalls, freezing the avatar.",
+      loopTitle:"Main loop · Data flow", loopStatLbl:"Packets",
+      loopStalled:"stalled at break", loopRunning:"circling the loop",
+      probeTitle:"PROBE READOUT", probeEmpty:"Click any stage on the left to attach a probe and see what it takes in and emits. Follow the arrows stage by stage.",
+      fixTitle:"FIX LIBRARY · drag to break",
+      replayBtn:"Replay 4 levels",
+    }
+  };
+  let lang = "zh";
+
+  /* ===== loop stages (fixed order around ring) ===== */
+  const STAGES = ["EEG","BCI","MAP","MINE"]; // EEG read, decoder, mapping, minetest
+  const STAGE_LABEL = {
+    zh:{ EEG:"EEG 采集", BCI:"BCI 解码", MAP:"指令映射", MINE:"Minetest" },
+    en:{ EEG:"EEG read", BCI:"BCI decode", MAP:"Mapping", MINE:"Minetest" },
+  };
+  const STAGE_SUB = {
+    zh:{ EEG:"读脑波样本", BCI:"分类左/右", MAP:"类别→走路", MINE:"驱动角色" },
+    en:{ EEG:"read samples", BCI:"classify L/R", MAP:"class->walk", MINE:"drive avatar" },
+  };
+
+  /* ===== fix library (each fix targets a stage + a fault tag) =====
+     correct fix must match the BROKEN stage AND its faultKind */
+  const FIXES = [
+    { id:"reconnect", stage:"EEG",  fault:"stream",
+      zh:{n:"重连 EEG 采集", c:"board.start_stream()"}, en:{n:"Reconnect EEG", c:"board.start_stream()"} },
+    { id:"retry",     stage:"BCI",  fault:"timeout",
+      zh:{n:"加超时重试", c:"decode(retry=2, t=120ms)"}, en:{n:"Add timeout retry", c:"decode(retry=2, t=120ms)"} },
+    { id:"lowerthr",  stage:"BCI",  fault:"lowconf",
+      zh:{n:"降低置信阈值", c:"conf_thr 0.9 -> 0.6"}, en:{n:"Lower conf threshold", c:"conf_thr 0.9 -> 0.6"} },
+    { id:"fallback",  stage:"MAP",  fault:"nomap",
+      zh:{n:"补 fallback 指令", c:"cmd = MAP.get(c,'stop')"}, en:{n:"Add fallback cmd", c:"cmd = MAP.get(c,'stop')"} },
+    { id:"resocket",  stage:"MINE", fault:"socket",
+      zh:{n:"重启游戏 socket", c:"sock.reconnect(:30000)"}, en:{n:"Restart game socket", c:"sock.reconnect(:30000)"} },
+  ];
+
+  /* ===== levels: which stage breaks + faultKind =====
+     L4 has 2 breaks; L3 is disguised (BCI lowconf makes MAP look empty) */
+  const LEVELS = [
+    { breaks:[{stage:"EEG", fault:"stream"}],
+      zh:"L1 · 探针沿环走一圈，找到第一个吐空的环节。",
+      en:"L1 · Probe around the ring, find the first stage emitting empty." },
+    { breaks:[{stage:"MINE", fault:"socket"}],
+      zh:"L2 · 前三环看着都正常，问题在最后送进游戏那一步。",
+      en:"L2 · First three stages look fine; the break is the last hop into the game." },
+    { breaks:[{stage:"BCI", fault:"lowconf"}],
+      zh:"L3 · MAP 输出空，像是 MAP 坏了——回头查它的输入，真凶在上游。",
+      en:"L3 · MAP outputs empty, looks like MAP — check its input; the culprit is upstream." },
+    { breaks:[{stage:"BCI", fault:"timeout"},{stage:"MAP", fault:"nomap"}],
+      zh:"L4 · 两环同时坏。逐环排查，分别注入对应修复才能闭环。",
+      en:"L4 · Two stages broken at once. Probe each, inject the matching fix for both." },
+  ];
+
+  /* ===== game state ===== */
+  const gameState = {
+    level: 0,            // 0-based
+    solved: [false,false,false,false],
+    broken: [],          // [{stage,fault,fixed}]
+    probed: null,        // currently probed stage key
+    probedSet: {},       // stages probed this level
+    running: false,      // loop spinning
+    finished: false,
+  };
+
+  const el = (id)=>document.getElementById(id);
+
+  /* ----- canvas ----- */
+  const canvas = el("loopCanvas");
+  const cctx = canvas.getContext("2d");
+  let dpr=1, cw=0, ch=0;
+  let raf=null, tAnim=0;
+  let nodePos = {}; // stage -> {x,y,r}
+
+  function resizeCanvas(){
+    const r = canvas.parentElement.getBoundingClientRect();
+    dpr = window.devicePixelRatio || 1;
+    const availW = Math.max(160, r.width);
+    const availH = Math.max(160, r.height);
+    cw = availW; ch = availH;
+    canvas.width = Math.floor(cw*dpr);
+    canvas.height = Math.floor(ch*dpr);
+    cctx.setTransform(dpr,0,0,dpr,0,0);
+    layoutNodes();
+  }
+
+  function layoutNodes(){
+    const cx = cw*0.5, cy = ch*0.5;
+    const rx = Math.min(cw*0.34, 260);
+    const ry = Math.min(ch*0.30, 150);
+    const nr = Math.max(34, Math.min(cw,ch)*0.085);
+    // EEG top, BCI right, MAP bottom, MINE left (clockwise data flow)
+    const angles = { EEG:-Math.PI/2, BCI:0, MAP:Math.PI/2, MINE:Math.PI };
+    STAGES.forEach(s=>{
+      nodePos[s] = { x: cx + rx*Math.cos(angles[s]), y: cy + ry*Math.sin(angles[s]), r:nr };
+    });
+  }
+
+  function isBroken(stage){
+    const b = gameState.broken.find(x=>x.stage===stage);
+    return !!(b && !b.fixed);
+  }
+  function brokenIndexAlong(){
+    // flow EEG->BCI->MAP->MINE; first broken is where packet stalls
+    for (let i=0;i<STAGES.length;i++){ if (isBroken(STAGES[i])) return i; }
+    return -1;
+  }
+
+  function drawLoop(){
+    raf = requestAnimationFrame(drawLoop);
+    if (cw<=0||ch<=0) return;
+    tAnim += 0.016;
+    cctx.clearRect(0,0,cw,ch);
+
+    cctx.strokeStyle = COL.grid; cctx.lineWidth=1;
+    const cell = Math.max(30, cw/16);
+    for(let gx=0;gx<=cw;gx+=cell){cctx.beginPath();cctx.moveTo(gx,0);cctx.lineTo(gx,ch);cctx.stroke();}
+    for(let gy=0;gy<=ch;gy+=cell){cctx.beginPath();cctx.moveTo(0,gy);cctx.lineTo(cw,gy);cctx.stroke();}
+
+    const stallIdx = brokenIndexAlong();
+
+    for (let i=0;i<STAGES.length;i++){
+      const a = nodePos[STAGES[i]];
+      const b = nodePos[STAGES[(i+1)%STAGES.length]];
+      const blocked = (stallIdx>=0) && (i>=stallIdx);
+      drawArrow(a,b, blocked);
+    }
+    drawPackets(stallIdx);
+    STAGES.forEach(s=>drawNode(s));
+    drawCenterAvatar(stallIdx);
+  }
+
+  function drawArrow(a,b,blocked){
+    const dx=b.x-a.x, dy=b.y-a.y, d=Math.hypot(dx,dy)||1;
+    const ux=dx/d, uy=dy/d;
+    const sx=a.x+ux*a.r, sy=a.y+uy*a.r;
+    const ex=b.x-ux*b.r, ey=b.y-uy*b.r;
+    cctx.strokeStyle = blocked ? COL.err : COL.line;
+    cctx.lineWidth = blocked ? 2.4 : 2;
+    cctx.setLineDash(blocked?[5,5]:[]);
+    cctx.beginPath(); cctx.moveTo(sx,sy); cctx.lineTo(ex,ey); cctx.stroke();
+    cctx.setLineDash([]);
+    const ah=8;
+    cctx.fillStyle = blocked ? COL.err : COL.line;
+    cctx.beginPath();
+    cctx.moveTo(ex,ey);
+    cctx.lineTo(ex-ux*ah-uy*ah*0.6, ey-uy*ah+ux*ah*0.6);
+    cctx.lineTo(ex-ux*ah+uy*ah*0.6, ey-uy*ah-ux*ah*0.6);
+    cctx.closePath(); cctx.fill();
+  }
+
+  function drawPackets(stallIdx){
+    const speed = 0.32;
+    for (let i=0;i<STAGES.length;i++){
+      const a = nodePos[STAGES[i]];
+      const b = nodePos[STAGES[(i+1)%STAGES.length]];
+      const blocked = (stallIdx>=0) && (i>=stallIdx);
+      if (blocked) continue;
+      for (let k=0;k<2;k++){
+        let p = (tAnim*speed + i*0.5 + k*0.5) % 1;
+        const dx=b.x-a.x, dy=b.y-a.y, d=Math.hypot(dx,dy)||1;
+        const ux=dx/d, uy=dy/d;
+        const sx=a.x+ux*a.r, sy=a.y+uy*a.r;
+        const ex=b.x-ux*b.r, ey=b.y-uy*b.r;
+        const px=sx+(ex-sx)*p, py=sy+(ey-sy)*p;
+        cctx.fillStyle = COL.packet;
+        cctx.fillRect(px-4,py-4,8,8);
+      }
+    }
+    if (stallIdx>=0){
+      const bn = nodePos[STAGES[stallIdx]];
+      const prev = nodePos[STAGES[(stallIdx-1+STAGES.length)%STAGES.length]];
+      const dx=bn.x-prev.x, dy=bn.y-prev.y, d=Math.hypot(dx,dy)||1;
+      const ux=dx/d, uy=dy/d;
+      const px=bn.x-ux*(bn.r+6), py=bn.y-uy*(bn.r+6);
+      const pulse = Math.abs(Math.sin(tAnim*5))*2;
+      cctx.fillStyle = COL.err;
+      cctx.fillRect(px-5-pulse*0.3, py-5-pulse*0.3, 10+pulse*0.6, 10+pulse*0.6);
+    }
+  }
+
+  function drawNode(s){
+    const n = nodePos[s];
+    const broken = isBroken(s);
+    const probed = (gameState.probed===s);
+    const fixedHere = gameState.broken.some(x=>x.stage===s && x.fixed);
+    cctx.beginPath(); cctx.arc(n.x,n.y,n.r,0,Math.PI*2);
+    cctx.fillStyle = COL.bg2; cctx.fill();
+    cctx.lineWidth = probed?3.2:2.2;
+    cctx.strokeStyle = broken ? COL.err : (fixedHere ? COL.ok : (probed?COL.port:COL.node));
+    cctx.stroke();
+    if (broken){
+      const pr = n.r + 4 + Math.abs(Math.sin(tAnim*4))*3;
+      cctx.beginPath(); cctx.arc(n.x,n.y,pr,0,Math.PI*2);
+      cctx.strokeStyle = COL.err; cctx.lineWidth=1.2; cctx.setLineDash([4,4]);
+      cctx.stroke(); cctx.setLineDash([]);
+    }
+    cctx.fillStyle = broken?COL.err:(fixedHere?COL.ok:COL.fg);
+    cctx.font = "bold 13px 'JetBrains Mono', monospace";
+    cctx.textAlign="center"; cctx.textBaseline="middle";
+    cctx.fillText(STAGE_LABEL[lang][s], n.x, n.y-6);
+    cctx.fillStyle = COL.fgMute;
+    cctx.font = "9px 'JetBrains Mono', monospace";
+    cctx.fillText(STAGE_SUB[lang][s], n.x, n.y+9);
+    cctx.font = "8px 'JetBrains Mono', monospace";
+    cctx.fillStyle = broken?COL.err:(fixedHere?COL.ok:COL.fgDim);
+    const st = broken ? (lang==="zh"?"故障":"FAULT") : (fixedHere?(lang==="zh"?"已修":"FIXED"):(lang==="zh"?"正常":"OK"));
+    cctx.fillText(st, n.x, n.y+n.r-9);
+    cctx.textAlign="start"; cctx.textBaseline="alphabetic";
+  }
+
+  function drawCenterAvatar(stallIdx){
+    const cx=cw*0.5, cy=ch*0.5;
+    const running = (stallIdx<0);
+    let ax=cx;
+    if (running){ ax = cx + Math.sin(tAnim*2)*16; }
+    cctx.fillStyle = running?COL.signal:COL.err;
+    cctx.fillRect(ax-8, cy-10, 16, 20);
+    cctx.fillStyle = COL.packet;
+    cctx.fillRect(ax-8, cy-10, 16, 8);
+    cctx.fillStyle = COL.bg0;
+    cctx.fillRect(ax-5, cy-8, 3, 3);
+    cctx.fillRect(ax+2, cy-8, 3, 3);
+    cctx.font = "10px 'JetBrains Mono', monospace";
+    cctx.textAlign="center";
+    cctx.fillStyle = running?COL.ok:COL.err;
+    const cap = running
+      ? (lang==="zh"?"角色在走 · 闭环转起来了":"avatar walking · loop spinning")
+      : (lang==="zh"?"角色僵住 · 闭环卡死":"avatar frozen · loop stalled");
+    cctx.fillText(cap, cx, cy+ Math.min(ch*0.30,150) + 24);
+    cctx.textAlign="start";
+  }
+
+  /* ----- probe readout ----- */
+  function buildProbe(stage){
+    gameState.probed = stage;
+    gameState.probedSet[stage] = true;
+    el("probeNode").textContent = STAGE_LABEL[lang][stage];
+    const body = el("probeBody");
+    body.innerHTML = "";
+    const broken = gameState.broken.find(x=>x.stage===stage && !x.fixed);
+    const stallIdx = brokenIndexAlong();
+    const myIdx = STAGES.indexOf(stage);
+    const upstreamStalled = (stallIdx>=0 && myIdx>stallIdx);
+
+    const lines = stageReadout(stage, broken, upstreamStalled);
+    lines.forEach(l=>{
+      const div = document.createElement("div");
+      div.className = "pb-line";
+      div.innerHTML = l;
+      body.appendChild(div);
+    });
+    const v = document.createElement("div");
+    v.className = "pb-verdict " + (broken ? "bad" : (upstreamStalled?"":"good"));
+    v.innerHTML = verdictText(stage, broken, upstreamStalled);
+    body.appendChild(v);
+  }
+
+  function L(k,v,cls){ return '<span class="k">'+k+'</span> <span class="v '+(cls||'')+'">'+v+'</span>'; }
+
+  function stageReadout(stage, broken, upstreamStalled){
+    const z = (lang==="zh");
+    if (stage==="EEG"){
+      if (broken && broken.fault==="stream")
+        return [ L("in:", z?"电极板 (连接已断)":"electrode board (link down)"),
+                 L("out:", "None  &larr; "+(z?"采集流断了":"stream dropped"), "bad") ];
+      return [ L("in:", z?"电极板 250Hz":"board 250Hz"),
+               L("out:", "sample[250 x 8ch]", "good") ];
+    }
+    if (stage==="BCI"){
+      if (broken && broken.fault==="timeout")
+        return [ L("in:", "sample[250 x 8ch]"),
+                 L("out:", "None  &larr; "+(z?"解码超时 >150ms":"decode timeout >150ms"), "bad") ];
+      if (broken && broken.fault==="lowconf")
+        return [ L("in:", "sample[250 x 8ch]"),
+                 L("class:", "L conf=0.42"),
+                 L("thr:", z?"conf_thr=0.90 &rarr; 全被丢弃":"conf_thr=0.90 -> all dropped", "bad"),
+                 L("out:", "None", "bad") ];
+      if (upstreamStalled) return [ L("in:", "None  &larr; "+(z?"上游没喂数据":"no data upstream"), "bad"),
+                 L("out:", "None", "bad") ];
+      return [ L("in:", "sample[250 x 8ch]"),
+               L("out:", "class=R conf=0.88", "good") ];
+    }
+    if (stage==="MAP"){
+      if (broken && broken.fault==="nomap")
+        return [ L("in:", "class=R conf=0.88"),
+                 L("lookup:", z?"MAP['R'] &rarr; KeyError":"MAP['R'] -> KeyError", "bad"),
+                 L("out:", "None", "bad") ];
+      if (upstreamStalled) return [ L("in:", "None  &larr; "+(z?"上游(BCI)没吐分类":"BCI emitted nothing"), "bad"),
+                 L("out:", "None", "bad") ];
+      return [ L("in:", "class=R conf=0.88"),
+               L("out:", "cmd='walk_right'", "good") ];
+    }
+    // MINE
+    if (broken && broken.fault==="socket")
+      return [ L("in:", "cmd='walk_right'"),
+               L("send:", z?"sock :30000 &rarr; ConnRefused":"sock :30000 -> ConnRefused", "bad"),
+               L("out:", "None", "bad") ];
+    if (upstreamStalled) return [ L("in:", "None  &larr; "+(z?"上游没给指令":"no cmd upstream"), "bad"),
+               L("out:", "None", "bad") ];
+    return [ L("in:", "cmd='walk_right'"),
+             L("out:", z?"角色右移 + 新脑波 &rarr; EEG":"avatar moves + new EEG -> EEG", "good") ];
+  }
+
+  function verdictText(stage, broken, upstreamStalled){
+    const z=(lang==="zh");
+    if (broken){
+      const tip = {
+        stream: z?"<b>断点在这</b>：该输出样本却吐 None，采集流断了。需要重连 EEG。"
+                  :"<b>Break is here</b>: should emit samples but outputs None — stream dropped. Reconnect EEG.",
+        timeout:z?"<b>断点在这</b>：收到样本却解码超时输出 None。需要加超时重试。"
+                  :"<b>Break is here</b>: got samples but decode timed out to None. Add a timeout retry.",
+        lowconf:z?"<b>断点在这</b>：它其实有分类，但 conf 全低于阈值被丢，所以 emit=None。真凶不是下游 MAP，是这里阈值太高。"
+                  :"<b>Break is here</b>: it does classify, but conf is below threshold so all dropped, emit=None. The culprit isn't downstream MAP — it's this threshold.",
+        nomap:  z?"<b>断点在这</b>：收到分类却查不到对应指令 (KeyError)。需要补 fallback 指令。"
+                  :"<b>Break is here</b>: got a class but no matching command (KeyError). Add a fallback command.",
+        socket: z?"<b>断点在这</b>：有指令却发不进游戏(连接被拒)。需要重启游戏 socket。"
+                  :"<b>Break is here</b>: has a command but can't reach the game (refused). Restart the game socket.",
+      }[broken.fault];
+      return tip;
+    }
+    if (upstreamStalled)
+      return z?"它的 <b>in 是 None</b> —— 自己没坏，是被上游断点饿着了。继续往上游查。"
+              :"Its <b>in is None</b> — not broken itself, starved by an upstream break. Keep tracing upstream.";
+    return z?"in/out 都正常，数据顺利通过这一环。"
+            :"in/out both healthy; data passes through fine.";
+  }
+
+  /* ----- fix library ----- */
+  function buildFixList(){
+    const list = el("fixList"); list.innerHTML="";
+    FIXES.forEach(f=>{
+      const card = document.createElement("div");
+      card.className="fix-card"; card.dataset.fix=f.id;
+      card.innerHTML = '<span class="fname">'+f[lang].n+'</span><span class="fcode mono">'+f[lang].c+'</span>';
+      attachDrag(card, f);
+      list.appendChild(card);
+    });
+  }
+
+  /* drag-drop: ghost follows pointer; drop on a node applies fix */
+  let dragData=null, ghost=null;
+  function attachDrag(card, fix){
+    const start = (clientX, clientY, e)=>{
+      if (card.classList.contains("used") || gameState.finished) return;
+      dragData = fix;
+      card.classList.add("dragging");
+      ghost = document.createElement("div");
+      ghost.className="drag-ghost";
+      ghost.textContent = fix[lang].n;
+      document.body.appendChild(ghost);
+      moveGhost(clientX, clientY);
+      if (e) e.preventDefault();
+    };
+    card.addEventListener("mousedown",(e)=>start(e.clientX,e.clientY,e));
+    card.addEventListener("touchstart",(e)=>{
+      const t=e.touches[0]; start(t.clientX,t.clientY,e);
+    },{passive:false});
+  }
+  function moveGhost(x,y){ if(ghost){ ghost.style.left=(x+12)+"px"; ghost.style.top=(y+10)+"px"; } }
+
+  function onMove(x,y){ if(dragData) moveGhost(x,y); }
+  function onUp(x,y){
+    if(!dragData) return;
+    const rect = canvas.getBoundingClientRect();
+    const lx = x-rect.left, ly = y-rect.top;
+    let hit=null;
+    STAGES.forEach(s=>{
+      const n=nodePos[s];
+      if (n && Math.hypot(lx-n.x, ly-n.y) <= n.r+6) hit=s;
+    });
+    const fix = dragData;
+    cleanupDrag();
+    if (hit) applyFix(fix, hit);
+  }
+  function cleanupDrag(){
+    dragData=null;
+    if(ghost){ ghost.remove(); ghost=null; }
+    document.querySelectorAll(".fix-card.dragging").forEach(c=>c.classList.remove("dragging"));
+  }
+
+  document.addEventListener("mousemove",(e)=>onMove(e.clientX,e.clientY));
+  document.addEventListener("mouseup",(e)=>onUp(e.clientX,e.clientY));
+  document.addEventListener("touchmove",(e)=>{ if(dragData){const t=e.touches[0];onMove(t.clientX,t.clientY);e.preventDefault();} },{passive:false});
+  document.addEventListener("touchend",(e)=>{ if(dragData){const t=e.changedTouches[0];onUp(t.clientX,t.clientY);} });
+
+  function applyFix(fix, stage){
+    const z=(lang==="zh");
+    const target = gameState.broken.find(x=>x.stage===stage && !x.fixed);
+    if (!target){
+      flashProbe(stage, z
+        ? "你把"+fix[lang].n+"注入了 <b>"+STAGE_LABEL[lang][stage]+"</b>，但这一环本来就没坏 —— 闭环还是卡住。先用探针找到真正吐空的断点。"
+        : "You injected '"+fix[lang].n+"' into <b>"+STAGE_LABEL[lang][stage]+"</b>, but this stage isn't broken — the loop is still stalled. Probe to find the stage that truly outputs empty.", "bad");
+      return;
+    }
+    if (fix.fault !== target.fault){
+      flashProbe(stage, z
+        ? fix[lang].n+" 不对症。<b>"+STAGE_LABEL[lang][stage]+"</b> 的输出还是异常 —— 这一环的故障类型跟这个修复不匹配。回去看探针读数它到底卡在哪一步。"
+        : "'"+fix[lang].n+"' doesn't match. <b>"+STAGE_LABEL[lang][stage]+"</b> still outputs wrong — its fault type doesn't fit this fix. Re-read the probe to see exactly where it jams.", "bad");
+      return;
+    }
+    target.fixed = true;
+    document.querySelectorAll(".fix-card").forEach(c=>{ if(c.dataset.fix===fix.id) c.classList.add("used"); });
+    flashProbe(stage, z
+      ? "修对了！<b>"+STAGE_LABEL[lang][stage]+"</b> 重新吐出正常输出，数据包又能往下游流了。"
+      : "Correct! <b>"+STAGE_LABEL[lang][stage]+"</b> emits valid output again; packets flow downstream.", "good");
+
+    if (gameState.broken.every(x=>x.fixed)){
+      gameState.running = true;
+      gameState.solved[gameState.level] = true;
+      updateLoopHud(true);
+      refreshLevelGrid();
+      setTimeout(()=>{
+        if (gameState.solved.every(Boolean)) finishAll();
+        else advanceLevel();
+      }, 1400);
+    } else {
+      updateLoopHud(false);
+    }
+  }
+
+  function flashProbe(stage, msg, kind){
+    buildProbe(stage);
+    const body = el("probeBody");
+    const note = document.createElement("div");
+    note.className = "pb-verdict " + (kind==="good"?"good":"bad");
+    note.innerHTML = msg;
+    body.appendChild(note);
+    body.scrollTop = body.scrollHeight;
+  }
+
+  function updateLoopHud(running){
+    const h = el("hudLoop");
+    const p = el("paneLoop");
+    if (running){
+      h.textContent="RUNNING"; h.className="val ok";
+      p.textContent = I18N[lang].loopRunning; p.classList.add("ok");
+    } else {
+      h.textContent="STALLED"; h.className="val err";
+      p.textContent = I18N[lang].loopStalled; p.classList.remove("ok");
+    }
+  }
+
+  /* ----- levels ----- */
+  function loadLevel(idx){
+    gameState.level = idx;
+    gameState.broken = LEVELS[idx].breaks.map(b=>({stage:b.stage, fault:b.fault, fixed:false}));
+    gameState.probed = null;
+    gameState.probedSet = {};
+    gameState.running = false;
+    el("hudLvl").textContent = (idx+1)+" / "+LEVELS.length;
+    updateLoopHud(false);
+    el("probeNode").textContent="--";
+    el("probeBody").innerHTML = '<div class="pb-empty">'+I18N[lang].probeEmpty+'</div>';
+    buildFixList();
+    setIntro();
+    refreshLevelGrid();
+  }
+
+  function setIntro(){
+    const idx = gameState.level;
+    el("introWhy").innerHTML = (lang==="zh"?LEVELS[idx].zh:LEVELS[idx].en)
+      + " " + (lang==="zh"
+        ? "像调试工程师一样：点环节插探针，找断点，拖对应修复。修通这一关，你离把脑波接进游戏的终点更近一步。"
+        : "Debug like an engineer: probe stages, find the break, drag the matching fix. Solve it and you get one step closer to wiring EEG into the game.");
+  }
+
+  function advanceLevel(){
+    const next = gameState.level+1;
+    if (next < LEVELS.length) loadLevel(next);
+  }
+
+  function buildLevelGrid(){
+    const g = el("levelGrid"); g.innerHTML="";
+    for (let i=0;i<LEVELS.length;i++){
+      const c=document.createElement("div");
+      c.className="lvl-cell mono"; c.dataset.lvl=i;
+      c.textContent="L"+(i+1);
+      c.addEventListener("click",()=>{
+        if (gameState.finished) return;
+        if (i>0 && !gameState.solved[i-1] && !gameState.solved[i]) return; // lock until prev solved
+        loadLevel(i);
+      });
+      g.appendChild(c);
+    }
+  }
+  function refreshLevelGrid(){
+    document.querySelectorAll(".lvl-cell").forEach((c)=>{
+      const i = +c.dataset.lvl;
+      c.classList.remove("cur","solved","locked");
+      if (gameState.solved[i]) c.classList.add("solved");
+      if (i===gameState.level && !gameState.finished) c.classList.add("cur");
+      if (i>0 && !gameState.solved[i-1] && !gameState.solved[i] && i!==gameState.level) c.classList.add("locked");
+    });
+  }
+
+  /* ----- node click = probe ----- */
+  canvas.addEventListener("click",(e)=>{
+    if (gameState.finished) return;
+    const rect = canvas.getBoundingClientRect();
+    const lx=e.clientX-rect.left, ly=e.clientY-rect.top;
+    let hit=null;
+    STAGES.forEach(s=>{ const n=nodePos[s]; if(n && Math.hypot(lx-n.x,ly-n.y)<=n.r+4) hit=s; });
+    if (hit) buildProbe(hit);
+  });
+
+  /* ----- finish ----- */
+  function finishAll(){
+    gameState.finished = true;
+    const ov = el("endOverlay");
+    ov.classList.remove("hidden");
+    el("endTitle").textContent = lang==="zh" ? "闭环工程师 · 系统转起来了" : "Loop Engineer · System Spinning";
+    el("endSub").innerHTML = lang==="zh"
+      ? "五种故障你都靠<b>追数据流</b>定位、对症修好了：EEG 断流、解码超时、置信被全丢、映射查无、socket 拒连。你没靠猜——而是一环环看 in/out，找到真正吐空的断点再注入对应修复。<br>现在“录脑波”和“控游戏”被接成了一个会自己转的闭环，角色靠你的脑子在走。<b>S5 接入游戏打通</b>，离 S6 脑控通关只差临门一脚。"
+      : "You located and matched-fixed all five fault types by <b>tracing the data flow</b>: EEG dropout, decode timeout, all-confidence-dropped, missing mapping, refused socket. No guessing — you read each stage's in/out, found the true empty break, then injected the matching fix.<br>'Record EEG' and 'control game' now form a self-spinning closed loop; the avatar walks by your mind. <b>S5 hook-up is complete</b> — one step from beating it brain-only in S6.";
+  }
+
+  function resetAll(){
+    gameState.finished=false;
+    gameState.solved=[false,false,false,false];
+    el("endOverlay").classList.add("hidden");
+    document.querySelectorAll(".fix-card").forEach(c=>c.classList.remove("used"));
+    loadLevel(0);
+  }
+
+  /* ----- i18n apply ----- */
+  function applyI18n(){
+    document.documentElement.lang = lang==="zh"?"zh-CN":"en";
+    document.querySelectorAll("[data-i18n]").forEach(el2=>{
+      const k=el2.getAttribute("data-i18n");
+      if (I18N[lang][k]!==undefined) el2.textContent=I18N[lang][k];
+    });
+    buildFixList();
+    updateLoopHud(gameState.running);
+    if (gameState.probed) buildProbe(gameState.probed);
+    else el("probeBody").innerHTML = '<div class="pb-empty">'+I18N[lang].probeEmpty+'</div>';
+    el("probeNode").textContent = gameState.probed?STAGE_LABEL[lang][gameState.probed]:"--";
+    // re-apply used flags after rebuild
+    gameState.broken.filter(x=>x.fixed).forEach(x=>{
+      const f = FIXES.find(ff=>ff.stage===x.stage && ff.fault===x.fault);
+      if(f) document.querySelectorAll(".fix-card").forEach(c=>{ if(c.dataset.fix===f.id) c.classList.add("used"); });
+    });
+    setIntro();
+    if (gameState.finished) finishAll();
+  }
+
+  el("langBtn").addEventListener("click",()=>{
+    lang = (lang==="zh")?"en":"zh";
+    applyI18n();
+  });
+  el("replayBtn").addEventListener("click", resetAll);
+  window.addEventListener("resize",()=>resizeCanvas());
+
+  /* ----- init ----- */
+  buildLevelGrid();
+  resizeCanvas();
+  loadLevel(0);
+  applyI18n();
+  drawLoop();
+
+})();
+</script>
+</body>
+</html>

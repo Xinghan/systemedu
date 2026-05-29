@@ -1,0 +1,794 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>M58 · 调阈值减少误触发</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Noto+Sans+SC:wght@400;500;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    /* 第 1 层 — 共享深空底 (所有 26 套统一) */
+    --bg-0: oklch(0.14 0.035 265);
+    --bg-1: oklch(0.18 0.04 265);
+    --bg-2: oklch(0.22 0.045 265);
+    --bg-3: oklch(0.28 0.05 265);
+    --line: oklch(0.35 0.05 265 / 0.35);
+    --line-strong: oklch(0.55 0.08 265 / 0.55);
+    --fg:      oklch(0.96 0.01 265);
+    --fg-dim:  oklch(0.75 0.02 265);
+    --fg-mute: oklch(0.55 0.03 265);
+    --gold:    oklch(0.85 0.14 85);
+
+    /* 第 2 层 — cs signature accent (cyan) + math 辅 (electric blue) */
+    --accent: oklch(0.75 0.17 200);
+    --math:   oklch(0.72 0.17 245);
+
+    /* 第 3 层 — palette: 置信度判定专用 */
+    --signal: oklch(0.75 0.17 200);   /* 信号/置信度流 cyan */
+    --ok:     oklch(0.82 0.17 125);   /* 真阳性 绿 */
+    --err:    oklch(0.62 0.20 25);    /* 假阳性 红 */
+    --warn:   oklch(0.80 0.15 75);    /* 边界/警示 amber */
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    height: 100vh; overflow: hidden;
+    background: var(--bg-0); color: var(--fg);
+    font-family: 'Inter', 'Noto Sans SC', 'PingFang SC', sans-serif;
+    font-size: 14px; line-height: 1.5;
+    display: flex;
+  }
+  .mono { font-family: 'JetBrains Mono', monospace; }
+
+  /* ============ Sidebar 200px ============ */
+  .sidebar {
+    width: 200px; flex-shrink: 0; height: 100vh;
+    background: var(--bg-1);
+    border-right: 1px solid var(--line);
+    display: flex; flex-direction: column;
+    padding: 22px 18px 18px;
+    position: relative;
+  }
+  .brand-row { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+  .brand-dot {
+    width: 10px; height: 10px; border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 0 4px oklch(0.75 0.17 200 / 0.18);
+    animation: pulse 2.4s ease-in-out infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { box-shadow: 0 0 0 4px oklch(0.75 0.17 200 / 0.18); }
+    50%      { box-shadow: 0 0 0 7px oklch(0.75 0.17 200 / 0.10); }
+  }
+  .brand-tag {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; letter-spacing: 0.08em;
+    color: var(--fg-dim); font-weight: 600;
+  }
+  .brand-title { font-size: 15px; font-weight: 700; color: var(--fg); line-height: 1.35; margin-bottom: 4px; }
+  .brand-sub { font-size: 11px; color: var(--fg-mute); line-height: 1.5; font-family: 'JetBrains Mono', monospace; }
+
+  /* mascot Gate (置信度门卫) */
+  .mascot { margin: 14px 0 4px; display: flex; align-items: center; gap: 8px; }
+  .mascot .m-name {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px; letter-spacing: 0.06em; color: var(--fg-mute); line-height: 1.3;
+  }
+  .mascot .m-name b { color: var(--signal); font-weight: 700; }
+
+  /* guide */
+  .guide-h {
+    font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.12em;
+    color: var(--fg-mute); margin: 14px 0 7px; text-transform: uppercase;
+  }
+  .guide { list-style: none; padding: 0; margin: 0; }
+  .guide li {
+    font-size: 11px; color: var(--fg-dim); line-height: 1.4;
+    padding: 4px 0 4px 14px; position: relative;
+  }
+  .guide li::before {
+    content: ''; position: absolute; left: 0; top: 9px;
+    width: 5px; height: 5px; border-radius: 50%; background: var(--math);
+  }
+
+  /* roadmap S1-S6 */
+  .road-h {
+    font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.12em;
+    color: var(--fg-mute); margin: 16px 0 8px; text-transform: uppercase;
+  }
+  .road { list-style: none; padding: 0; margin: 0; }
+  .road li {
+    position: relative; font-size: 11px; color: var(--fg-mute); line-height: 1.35;
+    padding: 4px 0 4px 18px; border-left: 2px solid var(--line);
+  }
+  .road li::before {
+    content: ''; position: absolute; left: -5px; top: 8px;
+    width: 7px; height: 7px; border-radius: 50%; background: var(--bg-3);
+  }
+  .road li .st {
+    font-family: 'JetBrains Mono', monospace; font-weight: 700; font-size: 10px;
+    margin-right: 5px; color: var(--fg-mute);
+  }
+  .road li.done { color: var(--fg-dim); }
+  .road li.done::before { background: var(--math); }
+  .road li.done .st { color: var(--math); }
+  .road li.cur { color: var(--fg); font-weight: 700; border-left-color: var(--accent); }
+  .road li.cur::before {
+    background: var(--accent);
+    box-shadow: 0 0 0 3px oklch(0.75 0.17 200 / 0.20);
+    animation: pulse 2.4s ease-in-out infinite;
+  }
+  .road li.cur .st { color: var(--signal); }
+  .road li .badge {
+    display: inline-block; font-family: 'JetBrains Mono', monospace;
+    font-size: 8px; font-weight: 700; letter-spacing: 0.05em;
+    background: oklch(0.75 0.17 200 / 0.18); color: var(--signal);
+    padding: 1px 5px; border-radius: 3px; margin-left: 4px;
+  }
+
+  /* Minecraft silhouette corner (终点徽记) */
+  .mc-corner { margin-top: 12px; opacity: 0.6; display: flex; align-items: center; gap: 6px; }
+  .mc-corner svg { display: block; }
+  .mc-corner .mc-label {
+    font-family: 'JetBrains Mono', monospace; font-size: 8px;
+    letter-spacing: 0.05em; color: var(--fg-mute); line-height: 1.3;
+  }
+
+  .lang-btn {
+    margin-top: auto;
+    border: 1px solid var(--line-strong);
+    background: var(--bg-2); color: var(--fg); cursor: pointer;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; font-weight: 600;
+    padding: 9px 12px; border-radius: 6px;
+    transition: all 160ms ease; letter-spacing: 0.06em;
+    box-shadow: 3px 3px 0 var(--bg-0);
+  }
+  .lang-btn:hover { border-color: var(--accent); color: var(--signal); }
+
+  /* ============ Main stage ============ */
+  .main { flex: 1; height: 100vh; position: relative; overflow: hidden; }
+  #stage { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+
+  /* HUD 右上 */
+  .hud {
+    position: absolute; top: 18px; right: 18px;
+    background: oklch(0.18 0.04 265 / 0.85);
+    border: 1px solid var(--line-strong);
+    border-radius: 8px; padding: 10px 14px;
+    font-family: 'JetBrains Mono', monospace; font-size: 11px;
+    min-width: 178px; box-shadow: 3px 3px 0 var(--bg-0);
+    backdrop-filter: blur(2px);
+  }
+  .hud-row { display: flex; justify-content: space-between; gap: 14px; line-height: 1.7; }
+  .hud-lbl { color: var(--fg-mute); }
+  .hud-val { color: var(--signal); font-weight: 700; }
+  .hud-val.gold { color: var(--gold); }
+  .hud-val.ok   { color: var(--ok); }
+  .hud-val.err  { color: var(--err); }
+
+  /* subtitle 辅助点睛 */
+  .sub {
+    position: absolute; bottom: 24px; left: 50%; transform: translateX(-50%);
+    text-align: center; width: 76%; pointer-events: none;
+  }
+  .sub-zh {
+    font-size: 18px; font-weight: 700; color: var(--fg);
+    background: oklch(0.14 0.035 265 / 0.72);
+    padding: 6px 18px; display: inline-block; border-radius: 6px;
+    border: 1px solid var(--line); line-height: 1.45;
+  }
+  .sub-zh .hi { color: var(--signal); }
+  .sub-zh .gd { color: var(--gold); }
+  .sub-zh .er { color: var(--err); }
+  .sub-en {
+    font-size: 12px; font-style: italic; color: var(--fg-dim);
+    margin-top: 6px; font-family: 'Inter', sans-serif;
+  }
+</style>
+</head>
+<body>
+
+<aside class="sidebar">
+  <div class="brand-row">
+    <span class="brand-dot"></span>
+    <span class="brand-tag" id="brandTag">M58 · 接进游戏</span>
+  </div>
+  <div class="brand-title" id="brandTitle">调阈值减少误触发</div>
+  <div class="brand-sub" id="brandSub">confidence threshold</div>
+
+  <div class="mascot">
+    <svg width="34" height="34" viewBox="0 0 34 34" aria-hidden="true">
+      <!-- Gate: 置信度门卫 - 一道竖闸门 + 通过(绿)/拦截(红) -->
+      <rect x="15" y="3" width="4" height="28" rx="1.4" fill="oklch(0.75 0.17 200)"/>
+      <circle cx="7"  cy="10" r="2.6" fill="oklch(0.82 0.17 125)"/>
+      <circle cx="7"  cy="20" r="2.6" fill="oklch(0.82 0.17 125)"/>
+      <circle cx="27" cy="13" r="2.6" fill="oklch(0.62 0.20 25)"/>
+      <circle cx="27" cy="24" r="2.6" fill="oklch(0.62 0.20 25)"/>
+      <line x1="9" y1="10" x2="14" y2="10" stroke="oklch(0.82 0.17 125 / 0.6)" stroke-width="1.2"/>
+      <line x1="9" y1="20" x2="14" y2="20" stroke="oklch(0.82 0.17 125 / 0.6)" stroke-width="1.2"/>
+      <line x1="20" y1="13" x2="25" y2="13" stroke="oklch(0.62 0.20 25 / 0.6)" stroke-width="1.2" stroke-dasharray="2 2"/>
+      <line x1="20" y1="24" x2="25" y2="24" stroke="oklch(0.62 0.20 25 / 0.6)" stroke-width="1.2" stroke-dasharray="2 2"/>
+    </svg>
+    <span class="m-name"><b>Gate</b><br>threshold keeper</span>
+  </div>
+
+  <div class="guide-h" id="guideH">看什么</div>
+  <ul class="guide">
+    <li id="g1">同一批信号，一条阈值线在滑</li>
+    <li id="g2">线越高，乱动越少 但漏动变多</li>
+    <li id="g3">F1 曲线的金色峰值 = 甜点</li>
+  </ul>
+
+  <div class="road-h" id="roadH">脑控 Minecraft 长征</div>
+  <ul class="road">
+    <li class="done"><span class="st">S1</span><span id="r1">采脑波</span></li>
+    <li class="done"><span class="st">S2</span><span id="r2">看懂信号</span></li>
+    <li class="done"><span class="st">S3</span><span id="r3">建模型</span></li>
+    <li class="done"><span class="st">S4</span><span id="r4">自录冲准</span></li>
+    <li class="cur"><span class="st">S5</span><span id="r5">接进游戏</span><span class="badge" id="r5b">你在这</span></li>
+    <li><span class="st">S6</span><span id="r6">脑控真玩</span></li>
+  </ul>
+
+  <div class="mc-corner">
+    <svg width="42" height="38" viewBox="0 0 42 38" aria-hidden="true">
+      <rect x="2"  y="20" width="13" height="13" fill="oklch(0.40 0.10 200)"/>
+      <rect x="15" y="20" width="13" height="13" fill="oklch(0.55 0.13 200)"/>
+      <rect x="2"  y="20" width="13" height="13" fill="none" stroke="oklch(0.55 0.08 265 / 0.55)" stroke-width="0.7"/>
+      <rect x="15" y="20" width="13" height="13" fill="none" stroke="oklch(0.55 0.08 265 / 0.55)" stroke-width="0.7"/>
+      <path d="M21 2 L38 8 L36 12 L23 9 L21 13 L19 9 L20 5 Z" fill="oklch(0.55 0.13 200)"/>
+      <rect x="19" y="9" width="3" height="15" fill="oklch(0.40 0.10 200)" transform="rotate(8 20 16)"/>
+    </svg>
+    <span class="mc-label" id="mcLabel">终点<br>Minecraft</span>
+  </div>
+
+  <button class="lang-btn" id="langBtn" type="button">中文 / EN</button>
+</aside>
+
+<main class="main">
+  <canvas id="stage"></canvas>
+  <div class="hud">
+    <div class="hud-row"><span class="hud-lbl" id="hPhaseL">phase</span><span class="hud-val" id="hPhase">scan</span></div>
+    <div class="hud-row"><span class="hud-lbl">threshold</span><span class="hud-val mono gold" id="hThr">0.50</span></div>
+    <div class="hud-row"><span class="hud-lbl">TPR</span><span class="hud-val mono ok" id="hTpr">0.95</span></div>
+    <div class="hud-row"><span class="hud-lbl">FPR</span><span class="hud-val mono err" id="hFpr">0.60</span></div>
+    <div class="hud-row"><span class="hud-lbl">F1</span><span class="hud-val mono" id="hF1">0.71</span></div>
+  </div>
+  <div class="sub">
+    <div class="sub-zh" id="subZh">想让角色听念头动，得先定个门槛：确信到几分才让它动？</div>
+    <div class="sub-en" id="subEn">To make the avatar move by thought, first set a bar: how sure before we act?</div>
+  </div>
+</main>
+
+<script>
+(function () {
+  "use strict";
+
+  var LANG = 'cn';
+
+  /* ---------- i18n: sidebar / hud labels ---------- */
+  var I18N = {
+    brandTag:   { cn: 'M58 · 接进游戏',          en: 'M58 · WIRE TO GAME' },
+    brandTitle: { cn: '调阈值减少误触发',         en: 'Tune Threshold' },
+    brandSub:   { cn: 'confidence threshold',    en: 'confidence threshold' },
+    guideH:     { cn: '看什么',                  en: 'WATCH' },
+    g1: { cn: '同一批信号，一条阈值线在滑',       en: 'one sample set, one sliding threshold' },
+    g2: { cn: '线越高，乱动越少 但漏动变多',      en: 'higher line: fewer false fires, more misses' },
+    g3: { cn: 'F1 曲线的金色峰值 = 甜点',         en: 'F1 peak (gold) = the sweet spot' },
+    roadH: { cn: '脑控 Minecraft 长征',          en: 'BRAIN-MINECRAFT ROADMAP' },
+    r1: { cn: '采脑波',   en: 'Record EEG' },
+    r2: { cn: '看懂信号', en: 'Read signal' },
+    r3: { cn: '建模型',   en: 'Build model' },
+    r4: { cn: '自录冲准', en: 'Self-record' },
+    r5: { cn: '接进游戏', en: 'Wire to game' },
+    r5b:{ cn: '你在这',   en: 'YOU ARE HERE' },
+    r6: { cn: '脑控真玩', en: 'Play by mind' },
+    mcLabel: { cn: '终点<br>Minecraft', en: 'Goal<br>Minecraft' },
+    hPhaseL: { cn: 'phase', en: 'phase' }
+  };
+
+  /* ---------- subtitle script keyed by phase ---------- */
+  var SUB = {
+    intro: {
+      zh: '想让角色听念头动，先定个<span class="hi">门槛</span>：解码器确信到几分，才真让它动？',
+      en: 'To move the avatar by thought, set a bar: how confident before we let it act?'
+    },
+    low: {
+      zh: '阈值 <span class="hi">0.50</span> 太低：什么信号都放行，角色很灵敏 但<span class="er">乱动一片</span>（误触发多）。',
+      en: 'Threshold 0.50 too low: everything passes — sensitive but jittery (many false fires).'
+    },
+    mid: {
+      zh: '升到 <span class="hi">0.65</span>：<span class="er">误触发</span>明显少了，角色变稳，偶尔该动没动。',
+      en: 'Raise to 0.65: false fires drop, avatar steadies, occasionally misses a real move.'
+    },
+    high: {
+      zh: '拉到 <span class="hi">0.80</span> 太严：几乎不动，连真该动的也被<span class="er">拒掉</span>了。',
+      en: 'Push to 0.80 too strict: barely moves — even real intentions get rejected.'
+    },
+    roc: {
+      zh: '阈值从低扫到高，画出 <span class="hi">TPR vs FPR</span> 的 ROC 曲线：每个点 = 一个阈值。',
+      en: 'Sweep threshold low to high, plot TPR vs FPR — the ROC curve. Each point = one threshold.'
+    },
+    f1: {
+      zh: 'F1 = 2·P·R/(P+R)，随阈值<span class="hi">先升后降</span>，<span class="gd">金色峰值</span>就是最优阈值。',
+      en: 'F1 = 2PR/(P+R) rises then falls with threshold — the gold peak is the optimal one.'
+    },
+    settle: {
+      zh: '阈值太低乱动，太高发呆，<span class="gd">F1 峰值是甜点</span>。脑控这才既灵敏又不乱动。',
+      en: 'Too low jitters, too high freezes — the F1 peak is the sweet spot. Control is sharp yet calm.'
+    }
+  };
+
+  function setHTML(id, html) { var el = document.getElementById(id); if (el) el.innerHTML = html; }
+  function setText(id, t) { var el = document.getElementById(id); if (el) el.textContent = t; }
+
+  function refreshI18N() {
+    var keys = ['brandTag','brandTitle','brandSub','guideH','g1','g2','g3','roadH',
+                'r1','r2','r3','r4','r5','r5b','r6','mcLabel','hPhaseL'];
+    for (var i = 0; i < keys.length; i++) if (I18N[keys[i]]) setHTML(keys[i], I18N[keys[i]][LANG]);
+    setText('langBtn', LANG === 'cn' ? '中文 / EN' : 'EN / 中文');
+    document.documentElement.setAttribute('lang', LANG === 'cn' ? 'zh-CN' : 'en');
+    applySub();
+  }
+
+  var curPhase = 'intro';
+  function applySub() {
+    var s = SUB[curPhase] || SUB.intro;
+    if (LANG === 'en') {
+      setHTML('subZh', s.en);
+      setHTML('subEn', s.zh);
+    } else {
+      setHTML('subZh', s.zh);
+      setHTML('subEn', s.en);
+    }
+  }
+
+  document.getElementById('langBtn').addEventListener('click', function () {
+    LANG = (LANG === 'cn') ? 'en' : 'cn';
+    refreshI18N();
+  });
+
+  /* ====================================================================
+     CANVAS — 唯一核心对象: 一条「阈值横线」+ 同一批置信度样本点
+     阈值从 0.50 连续滑到 ~0.92 再 settle 回 F1 峰值, 样本点红绿归类实时翻转,
+     同步在 ROC 曲线推动一个点, F1 曲线下方累积描点找峰值. 三视图联动, 非翻页.
+     ==================================================================== */
+  var canvas = document.getElementById('stage');
+  var c = canvas.getContext('2d');
+  var W = 0, H = 0, DPR = 1;
+
+  function resize() {
+    var r = canvas.parentElement.getBoundingClientRect();
+    if (r.width < 1 || r.height < 1) return;
+    DPR = window.devicePixelRatio || 1;
+    canvas.width = Math.round(r.width * DPR);
+    canvas.height = Math.round(r.height * DPR);
+    canvas.style.width = r.width + 'px';
+    canvas.style.height = r.height + 'px';
+    c.setTransform(DPR, 0, 0, DPR, 0, 0);
+    W = r.width; H = r.height;
+  }
+  window.addEventListener('resize', resize);
+
+  /* ---- 字面 oklch 常量 (canvas 禁 var) ---- */
+  var COL = {
+    bg0:    'oklch(0.14 0.035 265)',
+    signal: 'oklch(0.75 0.17 200)',   // cs cyan
+    math:   'oklch(0.72 0.17 245)',   // electric blue
+    ok:     'oklch(0.82 0.17 125)',   // 真阳性 绿
+    err:    'oklch(0.62 0.20 25)',    // 假阳性 红
+    warn:   'oklch(0.80 0.15 75)',
+    gold:   'oklch(0.85 0.14 85)',
+    fg:     'oklch(0.96 0.01 265)',
+    fgDim:  'oklch(0.75 0.02 265)',
+    fgMute: 'oklch(0.55 0.03 265)',
+    line:   'oklch(0.40 0.05 265 / 0.45)',
+    grid:   'oklch(0.30 0.04 265 / 0.5)'
+  };
+
+  /* ====================================================================
+     时间轴: 一个完整循环 ~ 35s. 阈值整段连续上滑, 字幕跟随分段.
+     ==================================================================== */
+  var CYCLE = 35.0;
+  var THR_LO = 0.50, THR_HI = 0.92;
+  var REC_LO = 0.65, REC_HI = 0.75; // 推荐范围
+
+  /* 两类样本的置信度分布 (固定一批数据, 始终同一批)
+     POS = 真的想动(该动); NEG = 没想动(不该动). conf = 解码器对"想动"打分 0..1
+     正类偏高(~0.82), 负类有不少落在中段(~0.55) -> 低阈值时大量假阳性, trade-off 明显
+     -> F1 随阈值真正"先升后降", 峰值落在推荐 0.65-0.75 带内 */
+  var POS = [], NEG = [];
+  (function () {
+    var rng = 1234567;
+    function rand() { rng = (rng * 1103515245 + 12345) & 0x7fffffff; return rng / 0x7fffffff; }
+    function gauss(m, s) { var u = rand(), v = rand(); return m + s * Math.sqrt(-2*Math.log(u+1e-9)) * Math.cos(6.2832*v); }
+    var i;
+    for (i = 0; i < 26; i++) { var p = gauss(0.82, 0.10); POS.push({ conf: Math.max(0.04, Math.min(0.98, p)), slot: i, fy: (i % 5) }); }
+    for (i = 0; i < 26; i++) { var n = gauss(0.55, 0.15); NEG.push({ conf: Math.max(0.02, Math.min(0.96, n)), slot: i, fy: (i % 5) }); }
+  })();
+
+  function metricsAt(thr) {
+    var tp = 0, fn = 0, fp = 0, tn = 0, i;
+    for (i = 0; i < POS.length; i++) { if (POS[i].conf >= thr) tp++; else fn++; }
+    for (i = 0; i < NEG.length; i++) { if (NEG[i].conf >= thr) fp++; else tn++; }
+    var tpr = tp / (tp + fn);
+    var fpr = fp / (fp + tn);
+    var prec = (tp + fp) > 0 ? tp / (tp + fp) : 1;
+    var rec = tpr;
+    var f1 = (prec + rec) > 0 ? 2 * prec * rec / (prec + rec) : 0;
+    return { tp: tp, fn: fn, fp: fp, tn: tn, tpr: tpr, fpr: fpr, prec: prec, rec: rec, f1: f1 };
+  }
+
+  // 预扫 F1 峰值阈值 (gold 标注)
+  var BEST = (function () {
+    var bestF1 = -1, bestThr = 0.5;
+    for (var t = 0.30; t <= 0.95; t += 0.005) {
+      var m = metricsAt(t);
+      if (m.f1 > bestF1) { bestF1 = m.f1; bestThr = t; }
+    }
+    return { thr: bestThr, f1: bestF1 };
+  })();
+
+  // 当前阈值: 连续滑动 (lerp 由连续函数 + ease 保证平滑)
+  function thrAt(t) {
+    if (t < 4) return THR_LO;
+    if (t < 26) {
+      var f = (t - 4) / 22;
+      f = f * f * (3 - 2 * f);
+      return THR_LO + (THR_HI - THR_LO) * f;
+    }
+    if (t < 29) {
+      var g = (t - 26) / 3; g = g*g*(3-2*g);
+      return THR_HI + (BEST.thr - THR_HI) * g;   // settle 回到峰值
+    }
+    return BEST.thr;
+  }
+
+  function phaseAt(t) {
+    if (t < 4)  return 'intro';
+    if (t < 9)  return 'low';
+    if (t < 15) return 'mid';
+    if (t < 20) return 'high';
+    if (t < 26) return 'roc';
+    return 'settle';
+  }
+
+  function layout() {
+    return {
+      bandX0: W * 0.06, bandX1: W * 0.50,
+      bandY0: H * 0.20, bandY1: H * 0.74,
+      rocX0: W * 0.575, rocX1: W * 0.745,
+      rocY0: H * 0.16,  rocY1: H * 0.45,
+      f1X0: W * 0.575,  f1X1: W * 0.955,
+      f1Y0: H * 0.56,   f1Y1: H * 0.80
+    };
+  }
+
+  /* ---------- 样本带: 同一批点, 阈值横线滑过, 红绿翻转 ---------- */
+  function drawBand(t, thr, mt, L) {
+    var bx0 = L.bandX0, bx1 = L.bandX1, by0 = L.bandY0, by1 = L.bandY1;
+    function cyv(conf) { return by1 - conf * (by1 - by0); }
+    var midX = (bx0 + bx1) / 2;
+    function colX(isPos, slot, fy) {
+      var laneW = (bx1 - bx0) * 0.42;
+      var base = isPos ? bx0 + 6 : midX + 14;
+      return base + (slot % 6) * (laneW / 6) + fy * 2;
+    }
+
+    c.save();
+    c.strokeStyle = COL.grid; c.lineWidth = 1;
+    c.font = '10px "JetBrains Mono", monospace'; c.textAlign = 'right';
+    var ys = [0.0, 0.25, 0.5, 0.75, 1.0], i;
+    for (i = 0; i < ys.length; i++) {
+      var yy = cyv(ys[i]);
+      c.strokeStyle = 'oklch(0.30 0.04 265 / 0.30)';
+      c.beginPath(); c.moveTo(bx0, yy); c.lineTo(bx1, yy); c.stroke();
+      c.fillStyle = COL.fgMute; c.fillText(ys[i].toFixed(2), bx0 - 6, yy + 3.5);
+    }
+    c.textAlign = 'left'; c.fillStyle = COL.fgDim; c.font = '11px "JetBrains Mono", monospace';
+    c.fillText(LANG === 'cn' ? '解码器置信度 (同一批 trial)' : 'decoder confidence (same trials)', bx0, by0 - 26);
+    c.font = '10px "JetBrains Mono", monospace'; c.textAlign = 'center';
+    c.fillStyle = COL.ok;  c.fillText(LANG === 'cn' ? '真想动 (该动)' : 'real intent', (bx0 + midX) / 2, by0 - 8);
+    c.fillStyle = COL.err; c.fillText(LANG === 'cn' ? '没想动 (不该动)' : 'no intent', (midX + bx1) / 2, by0 - 8);
+    c.strokeStyle = 'oklch(0.40 0.05 265 / 0.35)'; c.lineWidth = 1;
+    c.beginPath(); c.moveTo(midX + 4, by0); c.lineTo(midX + 4, by1); c.stroke();
+    c.restore();
+
+    // 放行区淡 gold (阈值上方)
+    var ty = cyv(thr);
+    c.save();
+    c.fillStyle = 'oklch(0.85 0.14 85 / 0.05)';
+    c.fillRect(bx0, by0, bx1 - bx0, ty - by0);
+    c.restore();
+
+    function plot(arr, isPos) {
+      for (var i2 = 0; i2 < arr.length; i2++) {
+        var s = arr[i2];
+        var x = colX(isPos, s.slot, s.fy);
+        var y = cyv(s.conf);
+        var passed = s.conf >= thr;
+        var r = 4.2;
+        if (isPos) {
+          if (passed) { // TP
+            c.fillStyle = COL.ok;
+            c.beginPath(); c.arc(x, y, r, 0, 6.2832); c.fill();
+          } else { // FN 漏动
+            c.fillStyle = 'oklch(0.45 0.08 125 / 0.5)';
+            c.beginPath(); c.arc(x, y, r - 0.6, 0, 6.2832); c.fill();
+            c.strokeStyle = 'oklch(0.55 0.10 125 / 0.6)'; c.lineWidth = 1;
+            c.beginPath(); c.arc(x, y, r + 1.6, 0, 6.2832); c.stroke();
+          }
+        } else {
+          if (passed) { // FP 误触发 -> 脉动红
+            var ppr = r + 2.2 * Math.abs(Math.sin(t * 4 + i2));
+            c.fillStyle = 'oklch(0.62 0.20 25 / 0.35)';
+            c.beginPath(); c.arc(x, y, ppr + 2, 0, 6.2832); c.fill();
+            c.fillStyle = COL.err;
+            c.beginPath(); c.arc(x, y, r, 0, 6.2832); c.fill();
+          } else { // TN 正确拒绝
+            c.fillStyle = 'oklch(0.40 0.05 265 / 0.45)';
+            c.beginPath(); c.arc(x, y, r - 0.8, 0, 6.2832); c.fill();
+          }
+        }
+      }
+    }
+    plot(POS, true);
+    plot(NEG, false);
+
+    // 阈值横线 (主角, gold, 滑动)
+    c.save();
+    c.strokeStyle = COL.gold; c.lineWidth = 2.4; c.setLineDash([7, 4]);
+    c.beginPath(); c.moveTo(bx0 - 4, ty); c.lineTo(bx1 + 4, ty); c.stroke();
+    c.setLineDash([]);
+    c.fillStyle = COL.gold;
+    c.beginPath();
+    c.moveTo(bx1 + 4, ty); c.lineTo(bx1 + 14, ty - 6); c.lineTo(bx1 + 14, ty + 6);
+    c.closePath(); c.fill();
+    c.font = '12px "JetBrains Mono", monospace'; c.textAlign = 'left'; c.fillStyle = COL.gold;
+    c.fillText('thr ' + thr.toFixed(2), bx1 + 18, ty + 4);
+    c.restore();
+
+    // 区内统计角标
+    c.save();
+    c.font = '11px "JetBrains Mono", monospace'; c.textAlign = 'left';
+    c.fillStyle = COL.ok;  c.fillText('TP ' + mt.tp + '  ' + (LANG==='cn'?'正确动':'hits'), bx0, by1 + 18);
+    c.fillStyle = COL.err; c.fillText('FP ' + mt.fp + '  ' + (LANG==='cn'?'误触发':'false fires'), bx0, by1 + 34);
+    c.fillStyle = 'oklch(0.55 0.10 125)'; c.fillText('FN ' + mt.fn + '  ' + (LANG==='cn'?'漏动':'misses'), midX + 14, by1 + 18);
+    c.restore();
+  }
+
+  /* ---------- ROC 曲线 (math) + 滑动点 ---------- */
+  function drawROC(t, thr, mt, L) {
+    var x0 = L.rocX0, x1 = L.rocX1, y0 = L.rocY0, y1 = L.rocY1;
+    function px(fpr) { return x0 + fpr * (x1 - x0); }
+    function py(tpr) { return y1 - tpr * (y1 - y0); }
+    c.save();
+    c.strokeStyle = COL.line; c.lineWidth = 1.2;
+    c.strokeRect(x0, y0, x1 - x0, y1 - y0);
+    c.strokeStyle = 'oklch(0.40 0.05 265 / 0.4)'; c.lineWidth = 1; c.setLineDash([4, 4]);
+    c.beginPath(); c.moveTo(px(0), py(0)); c.lineTo(px(1), py(1)); c.stroke();
+    c.setLineDash([]);
+    c.font = '10px "JetBrains Mono", monospace'; c.fillStyle = COL.math; c.textAlign = 'left';
+    c.fillText('ROC', x0, y0 - 8);
+    c.fillStyle = COL.fgMute;
+    c.fillText(LANG==='cn'?'FPR (误) .':'FPR .', x0, y1 + 14);
+    c.save(); c.translate(x0 - 8, (y0+y1)/2); c.rotate(-1.5708);
+    c.textAlign = 'center'; c.fillText('TPR', 0, 0); c.restore();
+    c.restore();
+
+    var pts = [], tt;
+    for (tt = 0.0; tt <= 1.001; tt += 0.02) {
+      var m = metricsAt(tt);
+      pts.push({ thr: tt, fpr: m.fpr, tpr: m.tpr });
+    }
+    pts.sort(function (a, b) { return a.fpr - b.fpr || a.tpr - b.tpr; });
+    // 整条淡
+    c.save();
+    c.strokeStyle = 'oklch(0.72 0.17 245 / 0.30)'; c.lineWidth = 2; c.lineJoin = 'round';
+    c.beginPath();
+    for (var i = 0; i < pts.length; i++) { var X = px(pts[i].fpr), Y = py(pts[i].tpr); if (i===0) c.moveTo(X,Y); else c.lineTo(X,Y); }
+    c.stroke();
+    // 高于当前阈值那段高亮 (随阈值上升, 高亮段缩短, 点从右上往左下)
+    c.strokeStyle = COL.math; c.lineWidth = 2.6;
+    c.beginPath(); var started = false;
+    for (var k = 0; k < pts.length; k++) {
+      if (pts[k].thr >= thr) {
+        var X2 = px(pts[k].fpr), Y2 = py(pts[k].tpr);
+        if (!started) { c.moveTo(X2, Y2); started = true; } else c.lineTo(X2, Y2);
+      }
+    }
+    c.stroke();
+    c.restore();
+
+    var cx = px(mt.fpr), cyp = py(mt.tpr);
+    var isBest = Math.abs(thr - BEST.thr) < 0.02;
+    c.save();
+    c.fillStyle = isBest ? COL.gold : COL.signal;
+    c.beginPath(); c.arc(cx, cyp, 5, 0, 6.2832); c.fill();
+    c.strokeStyle = isBest ? COL.gold : COL.signal; c.lineWidth = 1.5;
+    var pr = 6 + 2 * Math.abs(Math.sin(t * 3));
+    c.beginPath(); c.arc(cx, cyp, pr + 2, 0, 6.2832); c.stroke();
+    c.restore();
+  }
+
+  /* ---------- F1 曲线 (先升后降, gold 峰值) ---------- */
+  function drawF1(t, thr, mt, L) {
+    var x0 = L.f1X0, x1 = L.f1X1, y0 = L.f1Y0, y1 = L.f1Y1;
+    function px(th) { return x0 + (th - 0.30) / (0.95 - 0.30) * (x1 - x0); }
+    function py(f) { return y1 - f * (y1 - y0); }
+    c.save();
+    c.strokeStyle = COL.line; c.lineWidth = 1.2;
+    c.beginPath(); c.moveTo(x0, y0); c.lineTo(x0, y1); c.lineTo(x1, y1); c.stroke();
+    c.font = '10px "JetBrains Mono", monospace'; c.fillStyle = COL.math; c.textAlign = 'left';
+    c.fillText('F1 = 2PR/(P+R)', x0, y0 - 8);
+    c.fillStyle = COL.fgMute; c.textAlign = 'center';
+    var txs = [0.4, 0.55, 0.65, 0.75, 0.85], i;
+    for (i = 0; i < txs.length; i++) c.fillText(txs[i].toFixed(2), px(txs[i]), y1 + 14);
+    c.textAlign = 'right'; c.fillText(LANG==='cn'?'阈值 .':'threshold .', x1, y1 + 26);
+    // 推荐带
+    c.fillStyle = 'oklch(0.75 0.17 200 / 0.07)';
+    c.fillRect(px(REC_LO), y0, px(REC_HI) - px(REC_LO), y1 - y0);
+    c.fillStyle = 'oklch(0.75 0.17 200 / 0.65)'; c.font = '9px "JetBrains Mono", monospace'; c.textAlign = 'center';
+    c.fillText(LANG==='cn'?'推荐 0.65-0.75':'rec 0.65-0.75', (px(REC_LO)+px(REC_HI))/2, y0 + 11);
+    c.restore();
+
+    c.save();
+    c.lineJoin = 'round'; c.lineCap = 'round';
+    // 淡整条
+    c.strokeStyle = 'oklch(0.72 0.17 245 / 0.25)'; c.lineWidth = 2.8;
+    c.beginPath(); var f0 = true, th;
+    for (th = 0.30; th <= 0.95001; th += 0.01) {
+      var m = metricsAt(th); var X = px(th), Y = py(m.f1);
+      if (f0) { c.moveTo(X, Y); f0 = false; } else c.lineTo(X, Y);
+    }
+    c.stroke();
+    // 已扫亮段 0.30..thr
+    c.strokeStyle = COL.signal; c.lineWidth = 3;
+    c.beginPath(); var f1b = true, th2;
+    for (th2 = 0.30; th2 <= thr + 0.0001; th2 += 0.01) {
+      var m2 = metricsAt(th2); var X2 = px(th2), Y2 = py(m2.f1);
+      if (f1b) { c.moveTo(X2, Y2); f1b = false; } else c.lineTo(X2, Y2);
+    }
+    c.stroke();
+    c.restore();
+
+    // 当前 F1 读数点
+    var ccx = px(thr), ccy = py(mt.f1);
+    c.save();
+    c.fillStyle = COL.signal;
+    c.beginPath(); c.arc(ccx, ccy, 4.5, 0, 6.2832); c.fill();
+    c.restore();
+
+    // gold 峰值标注
+    var ph = phaseAt(t);
+    var reveal = (ph === 'settle' || thr >= BEST.thr - 0.01);
+    if (reveal) {
+      var bm = metricsAt(BEST.thr);
+      var bx = px(BEST.thr), byp = py(bm.f1);
+      c.save();
+      c.strokeStyle = 'oklch(0.85 0.14 85 / 0.55)'; c.lineWidth = 1.2; c.setLineDash([4, 3]);
+      c.beginPath(); c.moveTo(bx, byp); c.lineTo(bx, y1); c.stroke();
+      c.setLineDash([]);
+      var pr = 6 + 2.4 * Math.abs(Math.sin(t * 3));
+      c.fillStyle = COL.gold;
+      c.beginPath(); c.arc(bx, byp, 5.5, 0, 6.2832); c.fill();
+      c.strokeStyle = COL.gold; c.lineWidth = 1.6;
+      c.beginPath(); c.arc(bx, byp, pr + 3, 0, 6.2832); c.stroke();
+      c.font = '12px "JetBrains Mono", monospace'; c.textAlign = 'center'; c.fillStyle = COL.gold;
+      c.fillText((LANG==='cn'?'最优 ':'best ') + BEST.thr.toFixed(2), bx, byp - 17);
+      c.fillText('F1 ' + bm.f1.toFixed(2), bx, byp - 3);
+      c.restore();
+    }
+  }
+
+  /* ---- 角色镜像 (终点预演): 低=乱抖 高=发呆 甜点=稳准 ---- */
+  function drawAvatar(t, thr, mt) {
+    var ax = W * 0.27, ay = H * 0.86, sz = 13;
+    var jitter = mt.fpr;
+    var freeze = mt.tpr < 0.45;
+    var dx = jitter * 7 * Math.sin(t * 9);
+    var dy = jitter * 4 * Math.cos(t * 11);
+    if (freeze) { dx = 0; dy = 0; }
+    var sweet = Math.abs(thr - BEST.thr) < 0.03;
+    var bodyCol = sweet ? COL.gold : (jitter > 0.3 ? COL.err : (freeze ? COL.fgMute : COL.signal));
+    c.save();
+    c.fillStyle = bodyCol;
+    c.fillRect(ax - sz/2 + dx, ay - sz + dy, sz, sz);
+    c.fillRect(ax - sz/2 + dx, ay + dy, sz, sz * 0.9);
+    var lab;
+    if (sweet) lab = LANG==='cn'?'稳准':'sharp';
+    else if (freeze) lab = LANG==='cn'?'发呆':'frozen';
+    else if (jitter > 0.3) lab = LANG==='cn'?'乱动':'jitter';
+    else lab = LANG==='cn'?'还行':'ok';
+    c.font = '10px "JetBrains Mono", monospace'; c.textAlign = 'center';
+    c.fillStyle = bodyCol;
+    c.fillText(lab, ax, ay + sz * 2.2 + 4);
+    c.restore();
+  }
+
+  /* ---- starfield ---- */
+  var stars = [];
+  (function () {
+    for (var i = 0; i < 60; i++) stars.push({ x: Math.random(), y: Math.random(), r: Math.random()*1.1+0.3, ph: Math.random()*6.28 });
+  })();
+  function drawStars(t) {
+    c.save();
+    for (var i = 0; i < stars.length; i++) {
+      var s = stars[i];
+      var tw = 0.22 + 0.22 * (0.5 + 0.5 * Math.sin(t * 0.8 + s.ph));
+      c.fillStyle = 'oklch(0.85 0.05 265 / ' + tw + ')';
+      c.beginPath(); c.arc(s.x * W, s.y * H, s.r, 0, 6.2832); c.fill();
+    }
+    c.restore();
+  }
+
+  /* ---- HUD ---- */
+  function updateHUD(thr, mt, ph) {
+    var phaseNames = {
+      intro:  { cn: '设门槛', en: 'set bar' },
+      low:    { cn: '太低乱动', en: 'too low' },
+      mid:    { cn: '变稳', en: 'steadier' },
+      high:   { cn: '太严', en: 'too strict' },
+      roc:    { cn: 'ROC扫描', en: 'ROC sweep' },
+      settle: { cn: 'F1甜点', en: 'F1 peak' }
+    };
+    setText('hPhase', phaseNames[ph][LANG]);
+    setText('hThr', thr.toFixed(2));
+    setText('hTpr', mt.tpr.toFixed(2));
+    setText('hFpr', mt.fpr.toFixed(2));
+    setText('hF1', mt.f1.toFixed(2));
+    var f1el = document.getElementById('hF1');
+    if (Math.abs(thr - BEST.thr) < 0.025) f1el.classList.add('gold'); else f1el.classList.remove('gold');
+  }
+
+  /* ---- main loop ---- */
+  var startTime = null, lastPhase = '';
+  function frame(now) {
+    if (startTime === null) startTime = now;
+    var t = ((now - startTime) / 1000) % CYCLE;
+
+    c.clearRect(0, 0, W, H);
+    c.fillStyle = COL.bg0; c.fillRect(0, 0, W, H);
+    drawStars(t);
+
+    var thr = thrAt(t);
+    var mt = metricsAt(thr);
+    var ph = phaseAt(t);
+    var L = layout();
+
+    drawBand(t, thr, mt, L);
+    drawROC(t, thr, mt, L);
+    drawF1(t, thr, mt, L);
+    drawAvatar(t, thr, mt);
+
+    updateHUD(thr, mt, ph);
+
+    if (ph !== lastPhase) {
+      lastPhase = ph;
+      curPhase = ph;
+      applySub();
+    }
+    // settle 内部: 前半讲 f1 含义, 后半讲 settle takeaway
+    if (ph === 'settle') {
+      var want = (t < 31) ? 'f1' : 'settle';
+      if (curPhase !== want) { curPhase = want; applySub(); }
+    }
+
+    requestAnimationFrame(frame);
+  }
+
+  function boot() {
+    resize();
+    refreshI18N();
+    curPhase = 'intro';
+    applySub();
+    requestAnimationFrame(frame);
+  }
+
+  if (document.readyState === 'complete') boot();
+  else window.addEventListener('load', boot);
+  setTimeout(function () { if (startTime === null) boot(); }, 300);
+})();
+</script>
+</body>
+</html>
