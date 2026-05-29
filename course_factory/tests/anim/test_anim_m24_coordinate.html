@@ -1,0 +1,818 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>M24 · 坐标系与向量</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Noto+Sans+SC:wght@400;500;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    /* 第 1 层 — 共享深空底 (所有 26 套统一) */
+    --bg-0: oklch(0.14 0.035 265);
+    --bg-1: oklch(0.18 0.04 265);
+    --bg-2: oklch(0.22 0.045 265);
+    --bg-3: oklch(0.28 0.05 265);
+    --line: oklch(0.35 0.05 265 / 0.35);
+    --line-strong: oklch(0.55 0.08 265 / 0.55);
+    --fg:      oklch(0.96 0.01 265);
+    --fg-dim:  oklch(0.75 0.02 265);
+    --fg-mute: oklch(0.55 0.03 265);
+    --gold:    oklch(0.85 0.14 85);
+
+    /* 第 2 层 — math signature accent (electric blue) */
+    --accent: oklch(0.72 0.17 245);
+
+    /* 第 3 层 — math palette + 双轴学科色 */
+    --vec:    oklch(0.72 0.17 245);  /* 点/箭头 electric blue */
+    --c3:     oklch(0.75 0.17 25);   /* C3 横轴 coral */
+    --c4:     oklch(0.75 0.17 200);  /* C4 纵轴 cyan */
+    --memory: oklch(0.85 0.14 85);   /* gold key moment */
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    height: 100vh; overflow: hidden;
+    background: var(--bg-0); color: var(--fg);
+    font-family: 'Inter', 'Noto Sans SC', 'PingFang SC', sans-serif;
+    font-size: 14px; line-height: 1.5;
+    display: flex;
+  }
+  .mono { font-family: 'JetBrains Mono', monospace; }
+
+  /* ============ Sidebar 200px ============ */
+  .sidebar {
+    width: 200px; flex-shrink: 0; height: 100vh;
+    background: var(--bg-1);
+    border-right: 1px solid var(--line);
+    display: flex; flex-direction: column;
+    padding: 22px 18px 18px;
+    position: relative;
+  }
+  .brand-row { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+  .brand-dot {
+    width: 10px; height: 10px; border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 0 4px oklch(0.72 0.17 245 / 0.18);
+    animation: pulse 2.4s ease-in-out infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { box-shadow: 0 0 0 4px oklch(0.72 0.17 245 / 0.18); }
+    50%      { box-shadow: 0 0 0 7px oklch(0.72 0.17 245 / 0.10); }
+  }
+  .brand-tag {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; letter-spacing: 0.08em;
+    color: var(--fg-dim); font-weight: 600;
+  }
+  .brand-title { font-size: 15px; font-weight: 700; color: var(--fg); line-height: 1.35; margin-bottom: 4px; }
+  .brand-sub { font-size: 11px; color: var(--fg-mute); line-height: 1.5; font-family: 'JetBrains Mono', monospace; }
+
+  /* mascot Plotty — 方格纸上的小光点 */
+  .mascot { margin: 14px 0 4px; display: flex; align-items: center; gap: 8px; }
+  .mascot .m-name {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px; letter-spacing: 0.06em; color: var(--fg-mute); line-height: 1.3;
+  }
+  .mascot .m-name b { color: var(--vec); font-weight: 700; }
+
+  /* 概念简介 */
+  .guide-h {
+    font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.12em;
+    color: var(--fg-mute); margin: 14px 0 7px; text-transform: uppercase;
+  }
+  .intro-txt { font-size: 11px; color: var(--fg-dim); line-height: 1.5; margin: 0 0 6px; }
+  .intro-txt .hi { color: var(--vec); font-weight: 700; }
+
+  .guide { list-style: none; padding: 0; margin: 0; }
+  .guide li {
+    font-size: 11px; color: var(--fg-dim); line-height: 1.4;
+    padding: 4px 0 4px 14px; position: relative;
+  }
+  .guide li::before {
+    content: ''; position: absolute; left: 0; top: 9px;
+    width: 5px; height: 5px; border-radius: 50%; background: var(--accent);
+  }
+
+  /* roadmap S1-S6 */
+  .road-h {
+    font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.12em;
+    color: var(--fg-mute); margin: 16px 0 8px; text-transform: uppercase;
+  }
+  .road { list-style: none; padding: 0; margin: 0; }
+  .road li {
+    position: relative; font-size: 11px; color: var(--fg-mute); line-height: 1.35;
+    padding: 4px 0 4px 18px; border-left: 2px solid var(--line);
+  }
+  .road li::before {
+    content: ''; position: absolute; left: -5px; top: 8px;
+    width: 7px; height: 7px; border-radius: 50%; background: var(--bg-3);
+  }
+  .road li .st {
+    font-family: 'JetBrains Mono', monospace; font-weight: 700; font-size: 10px;
+    margin-right: 5px; color: var(--fg-mute);
+  }
+  .road li.done { color: var(--fg-dim); }
+  .road li.done::before { background: var(--accent); }
+  .road li.done .st { color: var(--accent); }
+  .road li.cur { color: var(--fg); font-weight: 700; border-left-color: var(--accent); }
+  .road li.cur::before {
+    background: var(--accent);
+    box-shadow: 0 0 0 3px oklch(0.72 0.17 245 / 0.20);
+    animation: pulse 2.4s ease-in-out infinite;
+  }
+  .road li.cur .st { color: var(--vec); }
+  .road li .badge {
+    display: inline-block; font-family: 'JetBrains Mono', monospace;
+    font-size: 8px; font-weight: 700; letter-spacing: 0.05em;
+    background: oklch(0.72 0.17 245 / 0.18); color: var(--vec);
+    padding: 1px 5px; border-radius: 3px; margin-left: 4px;
+  }
+
+  /* Minecraft silhouette corner (终点徽记) */
+  .mc-corner { margin-top: 12px; opacity: 0.6; display: flex; align-items: center; gap: 6px; }
+  .mc-corner svg { display: block; }
+  .mc-corner .mc-label {
+    font-family: 'JetBrains Mono', monospace; font-size: 8px;
+    letter-spacing: 0.05em; color: var(--fg-mute); line-height: 1.3;
+  }
+
+  .lang-btn {
+    margin-top: auto;
+    border: 1px solid var(--line-strong);
+    background: var(--bg-2); color: var(--fg); cursor: pointer;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; font-weight: 600;
+    padding: 9px 12px; border-radius: 6px;
+    transition: all 160ms ease; letter-spacing: 0.06em;
+    box-shadow: 3px 3px 0 var(--bg-0);
+  }
+  .lang-btn:hover { border-color: var(--accent); color: var(--vec); }
+
+  /* ============ Main stage ============ */
+  .main { flex: 1; height: 100vh; position: relative; overflow: hidden; }
+  #stage { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+
+  /* HUD 右上 */
+  .hud {
+    position: absolute; top: 18px; right: 18px;
+    background: oklch(0.18 0.04 265 / 0.85);
+    border: 1px solid var(--line-strong);
+    border-radius: 8px; padding: 10px 14px;
+    font-family: 'JetBrains Mono', monospace; font-size: 11px;
+    min-width: 172px; box-shadow: 3px 3px 0 var(--bg-0);
+    backdrop-filter: blur(2px);
+  }
+  .hud-row { display: flex; justify-content: space-between; gap: 14px; line-height: 1.7; }
+  .hud-lbl { color: var(--fg-mute); }
+  .hud-val { color: var(--vec); font-weight: 700; }
+  .hud-val.gold { color: var(--gold); }
+
+  /* subtitle 辅助点睛 */
+  .sub {
+    position: absolute; bottom: 24px; left: 50%; transform: translateX(-50%);
+    text-align: center; width: 78%; pointer-events: none;
+  }
+  .sub-zh {
+    font-size: 18px; font-weight: 700; color: var(--fg);
+    background: oklch(0.14 0.035 265 / 0.72);
+    padding: 6px 18px; display: inline-block; border-radius: 6px;
+    border: 1px solid var(--line); line-height: 1.45;
+  }
+  .sub-zh .hi { color: var(--vec); }
+  .sub-zh .gd { color: var(--gold); }
+  .sub-en {
+    font-size: 12px; font-style: italic; color: var(--fg-dim);
+    margin-top: 6px; font-family: 'Inter', sans-serif;
+  }
+</style>
+</head>
+<body>
+
+<aside class="sidebar">
+  <div class="brand-row">
+    <span class="brand-dot"></span>
+    <span class="brand-tag" id="brandTag">M24 · 一起抖吗</span>
+  </div>
+  <div class="brand-title" id="brandTitle">坐标系与向量</div>
+  <div class="brand-sub" id="brandSub">grid &amp; vector</div>
+
+  <div class="mascot">
+    <svg width="34" height="34" viewBox="0 0 34 34" aria-hidden="true">
+      <!-- Plotty: 方格纸 + 一个点 + 一支箭头 -->
+      <line x1="4" y1="6"  x2="4"  y2="30" stroke="oklch(0.35 0.05 265 / 0.7)" stroke-width="1"/>
+      <line x1="4" y1="30" x2="30" y2="30" stroke="oklch(0.35 0.05 265 / 0.7)" stroke-width="1"/>
+      <line x1="13" y1="6" x2="13" y2="30" stroke="oklch(0.35 0.05 265 / 0.4)" stroke-width="0.7"/>
+      <line x1="22" y1="6" x2="22" y2="30" stroke="oklch(0.35 0.05 265 / 0.4)" stroke-width="0.7"/>
+      <line x1="4" y1="21" x2="30" y2="21" stroke="oklch(0.35 0.05 265 / 0.4)" stroke-width="0.7"/>
+      <line x1="4" y1="12" x2="30" y2="12" stroke="oklch(0.35 0.05 265 / 0.4)" stroke-width="0.7"/>
+      <line x1="4" y1="30" x2="24" y2="11" stroke="oklch(0.72 0.17 245)" stroke-width="1.8"/>
+      <path d="M24 11 L19.5 12.5 L22 16 Z" fill="oklch(0.72 0.17 245)"/>
+      <circle cx="24" cy="11" r="3" fill="oklch(0.85 0.14 85)"/>
+    </svg>
+    <span class="m-name"><b>Plotty</b><br>grid guide</span>
+  </div>
+
+  <div class="guide-h" id="introH">这一节</div>
+  <p class="intro-txt" id="introTxt"><span class="hi">两个数</span>能在方格纸上精确指出一个点；<span class="hi">一列数</span>就是从原点出发的一支箭头。</p>
+
+  <div class="guide-h" id="guideH">看什么</div>
+  <ul class="guide">
+    <li id="g1">一对数怎么走成纸上一个点</li>
+    <li id="g2">C3 当横、C4 当竖 -> 一个点</li>
+  </ul>
+
+  <div class="road-h" id="roadH">脑控 Minecraft 长征</div>
+  <ul class="road">
+    <li class="done"><span class="st">S1</span><span id="r1">采脑波</span></li>
+    <li class="done"><span class="st">S2</span><span id="r2">看懂信号</span></li>
+    <li class="cur"><span class="st">S3</span><span id="r3">建模型</span><span class="badge" id="r3b">你在这</span></li>
+    <li><span class="st">S4</span><span id="r4">自录冲准</span></li>
+    <li><span class="st">S5</span><span id="r5">接进游戏</span></li>
+    <li><span class="st">S6</span><span id="r6">脑控真玩</span></li>
+  </ul>
+
+  <div class="mc-corner">
+    <svg width="42" height="38" viewBox="0 0 42 38" aria-hidden="true">
+      <rect x="2"  y="20" width="13" height="13" fill="oklch(0.32 0.10 245)"/>
+      <rect x="15" y="20" width="13" height="13" fill="oklch(0.55 0.15 245)"/>
+      <rect x="2"  y="20" width="13" height="13" fill="none" stroke="oklch(0.55 0.08 265 / 0.55)" stroke-width="0.7"/>
+      <rect x="15" y="20" width="13" height="13" fill="none" stroke="oklch(0.55 0.08 265 / 0.55)" stroke-width="0.7"/>
+      <path d="M21 2 L38 8 L36 12 L23 9 L21 13 L19 9 L20 5 Z" fill="oklch(0.55 0.15 245)"/>
+      <rect x="19" y="9" width="3" height="15" fill="oklch(0.32 0.10 245)" transform="rotate(8 20 16)"/>
+    </svg>
+    <span class="mc-label" id="mcLabel">终点<br>Minecraft</span>
+  </div>
+
+  <button class="lang-btn" id="langBtn" type="button">中文 / EN</button>
+</aside>
+
+<main class="main">
+  <canvas id="stage"></canvas>
+  <div class="hud">
+    <div class="hud-row"><span class="hud-lbl" id="hPhaseL">phase</span><span class="hud-val" id="hPhase">grid</span></div>
+    <div class="hud-row"><span class="hud-lbl" id="hXL">x</span><span class="hud-val mono" id="hX">0</span></div>
+    <div class="hud-row"><span class="hud-lbl" id="hYL">y</span><span class="hud-val mono" id="hY">0</span></div>
+    <div class="hud-row"><span class="hud-lbl" id="hNoteL">point</span><span class="hud-val mono gold" id="hNote">(-,-)</span></div>
+  </div>
+  <div class="sub">
+    <div class="sub-zh" id="subZh">两个数，就能在方格纸上精确指出一个位置。</div>
+    <div class="sub-en" id="subEn">Just two numbers can pin an exact spot on grid paper.</div>
+  </div>
+</main>
+
+<script>
+(function () {
+  "use strict";
+
+  var LANG = 'cn';
+
+  /* ---------- i18n: sidebar / hud labels ---------- */
+  var I18N = {
+    brandTag:   { cn: 'M24 · 一起抖吗',     en: 'M24 · DO THEY MOVE' },
+    brandTitle: { cn: '坐标系与向量',        en: 'Grid & Vector' },
+    brandSub:   { cn: 'grid & vector',       en: 'grid & vector' },
+    introH:     { cn: '这一节',              en: 'THIS LESSON' },
+    introTxt:   {
+      cn: '<span class="hi">两个数</span>能在方格纸上精确指出一个点；<span class="hi">一列数</span>就是从原点出发的一支箭头。',
+      en: '<span class="hi">Two numbers</span> pin an exact dot on grid paper; <span class="hi">a list of numbers</span> is an arrow from the origin.'
+    },
+    guideH:     { cn: '看什么',              en: 'WATCH' },
+    g1: { cn: '一对数怎么走成纸上一个点',     en: 'how a pair walks to a dot' },
+    g2: { cn: 'C3 当横、C4 当竖 -> 一个点',    en: 'C3 across, C4 up -> one dot' },
+    roadH: { cn: '脑控 Minecraft 长征',       en: 'BRAIN-MINECRAFT ROADMAP' },
+    r1: { cn: '采脑波',   en: 'Record EEG' },
+    r2: { cn: '看懂信号', en: 'Read signal' },
+    r3: { cn: '建模型',   en: 'Build model' },
+    r3b:{ cn: '你在这',   en: 'YOU ARE HERE' },
+    r4: { cn: '自录冲准', en: 'Self-record' },
+    r5: { cn: '接进游戏', en: 'Wire to game' },
+    r6: { cn: '脑控真玩', en: 'Play by mind' },
+    mcLabel: { cn: '终点<br>Minecraft', en: 'Goal<br>Minecraft' },
+    hPhaseL: { cn: 'phase', en: 'phase' },
+    hXL:     { cn: 'x (->)', en: 'x (->)' },
+    hYL:     { cn: 'y (^)',  en: 'y (^)' },
+    hNoteL:  { cn: 'point', en: 'point' }
+  };
+
+  /* ---------- subtitle script keyed by phase ---------- */
+  var SUB = {
+    grid: {
+      zh: '想让电脑看懂脑波，先学会<span class="hi">用数字定位</span>：两个数，就能在方格纸上精确指出一个点。',
+      en: 'To let the computer read brainwaves, first learn to locate with numbers: two numbers pin an exact spot.'
+    },
+    point: {
+      zh: '一对数 <span class="hi">(3, 4)</span>：从原点先往右走 3 格、再往上走 4 格，就<span class="gd">落到这一个点</span>。',
+      en: 'A pair (3, 4): from the origin go right 3, then up 4 — you land on exactly this dot.'
+    },
+    order: {
+      zh: '换成 <span class="hi">(4, 3)</span> 落到<span class="hi">另一个点</span>！顺序不一样，位置就不一样——像电影院「7 排 12 号」。',
+      en: '(4, 3) lands on a different dot! Order matters — like cinema seat "row 7, no. 12".'
+    },
+    vector: {
+      zh: '从原点向那个点画一支<span class="hi">箭头</span>：一列数 = 一支<span class="gd">指方向的箭头</span>，像寻宝「往东 3、往北 4」。',
+      en: 'Draw an arrow from origin to the dot: a list of numbers = an arrow pointing a direction, like "east 3, north 4".'
+    },
+    eeg: {
+      zh: '现在把横轴换成 <span class="hi">C3</span>、竖轴换成 <span class="hi">C4</span>：一个时刻两个电极的读数 = 纸上<span class="gd">一个点</span>。',
+      en: 'Now make x = C3, y = C4: at one instant the two electrode readings make one dot on the grid.'
+    },
+    scatter: {
+      zh: '连续好多时刻 -> 点出<span class="gd">一团散点图</span>。一对读数 = 一个点，一串读数 = 一团点——<span class="gd">这就是 M24 要看的图！</span>',
+      en: 'Many instants -> a cloud of dots. One pair = one dot, a stream = a cloud — this is the scatter plot M24 will read!'
+    }
+  };
+
+  function setHTML(id, html) { var el = document.getElementById(id); if (el) el.innerHTML = html; }
+  function setText(id, t) { var el = document.getElementById(id); if (el) el.textContent = t; }
+
+  function refreshI18N() {
+    var keys = ['brandTag','brandTitle','brandSub','introH','introTxt','guideH','g1','g2','roadH',
+                'r1','r2','r3','r3b','r4','r5','r6','mcLabel','hPhaseL','hXL','hYL','hNoteL'];
+    for (var i = 0; i < keys.length; i++) if (I18N[keys[i]]) setHTML(keys[i], I18N[keys[i]][LANG]);
+    setText('langBtn', LANG === 'cn' ? '中文 / EN' : 'EN / 中文');
+    document.documentElement.setAttribute('lang', LANG === 'cn' ? 'zh-CN' : 'en');
+    applySub();
+  }
+
+  var curPhase = 'grid';
+  function applySub() {
+    var s = SUB[curPhase] || SUB.grid;
+    if (LANG === 'en') {
+      setHTML('subZh', s.en);
+      setHTML('subEn', s.zh);
+    } else {
+      setHTML('subZh', s.zh);
+      setHTML('subEn', s.en);
+    }
+  }
+
+  document.getElementById('langBtn').addEventListener('click', function () {
+    LANG = (LANG === 'cn') ? 'en' : 'cn';
+    refreshI18N();
+  });
+
+  /* ====================================================================
+     CANVAS — 唯一核心对象: 同一张方格纸坐标系
+       一镜到底: 立轴 -> 一对数走到点 -> 换序对比 -> 拉出箭头摆方向
+       -> 轴改名 C3/C4 -> 连续读数累积成散点团 (M24 散点图前置)
+     ==================================================================== */
+  var canvas = document.getElementById('stage');
+  var c = canvas.getContext('2d');
+  var W = 0, H = 0, DPR = 1;
+
+  function resize() {
+    var r = canvas.parentElement.getBoundingClientRect();
+    if (r.width < 1 || r.height < 1) return;
+    DPR = window.devicePixelRatio || 1;
+    canvas.width = Math.round(r.width * DPR);
+    canvas.height = Math.round(r.height * DPR);
+    canvas.style.width = r.width + 'px';
+    canvas.style.height = r.height + 'px';
+    c.setTransform(DPR, 0, 0, DPR, 0, 0);
+    W = r.width; H = r.height;
+  }
+  window.addEventListener('resize', resize);
+
+  /* ---- color helpers (canvas 用字面 oklch, 禁 var) ---- */
+  var COL = {
+    bg0:    'oklch(0.14 0.035 265)',
+    vec:    'oklch(0.72 0.17 245)',
+    vecDim: 'oklch(0.55 0.13 245)',
+    c3:     'oklch(0.75 0.17 25)',
+    c4:     'oklch(0.75 0.17 200)',
+    gold:   'oklch(0.85 0.14 85)',
+    fg:     'oklch(0.96 0.01 265)',
+    fgDim:  'oklch(0.75 0.02 265)',
+    fgMute: 'oklch(0.55 0.03 265)',
+    line:   'oklch(0.40 0.05 265 / 0.45)',
+    grid:   'oklch(0.35 0.05 265 / 0.40)',
+    gridFine:'oklch(0.30 0.04 265 / 0.28)'
+  };
+
+  /* ====================================================================
+     时间轴: 一个完整循环 ~ 35s.
+       grid    0-5   立轴 (空白方格纸)
+       point   5-12  一对数 (3,4) 从原点走位: 先右 3, 再上 4
+       order   12-18 换 (4,3) 落到不同点, 两点并存对比
+       vector  18-24 从原点向点拉箭头, 箭头摆几个方向
+       eeg     24-29 轴改名 C3(横)/C4(竖), 一个时刻 = 一个点
+       scatter 29-35 连续读数累积成散点团 (settle)
+     ==================================================================== */
+  var CYCLE = 35.0;
+
+  function phaseAt(t) {
+    if (t < 5)  return 'grid';
+    if (t < 12) return 'point';
+    if (t < 18) return 'order';
+    if (t < 24) return 'vector';
+    if (t < 29) return 'eeg';
+    return 'scatter';
+  }
+
+  // 共享几何: 方格纸坐标系映射 (网格单位 -> 像素). 原点在主舞台中心偏左下.
+  function gridGeo() {
+    var ox = W * 0.40;          // 原点 x
+    var oy = H * 0.66;          // 原点 y
+    var unit = Math.min(W, H) * 0.072; // 每格像素
+    return { ox: ox, oy: oy, unit: unit };
+  }
+  function gx(geo, gxUnits) { return geo.ox + gxUnits * geo.unit; }
+  function gy(geo, gyUnits) { return geo.oy - gyUnits * geo.unit; } // 上为正
+
+  // 平滑插值
+  function ease(x) { return x * x * (3 - 2 * x); }
+  function clamp01(x) { return x < 0 ? 0 : x > 1 ? 1 : x; }
+
+  /* ---- 画方格纸 + 轴 ---- */
+  function drawGridPaper(t, geo, axisFade, eegMode) {
+    var nRight = 7, nLeft = 1, nUp = 6, nDown = 1;
+    c.save();
+    // 细网格线
+    c.lineWidth = 1;
+    for (var i = -nLeft; i <= nRight; i++) {
+      c.strokeStyle = (i === 0) ? COL.grid : COL.gridFine;
+      c.beginPath();
+      c.moveTo(gx(geo, i), gy(geo, nUp));
+      c.lineTo(gx(geo, i), gy(geo, -nDown));
+      c.stroke();
+    }
+    for (var j = -nDown; j <= nUp; j++) {
+      c.strokeStyle = (j === 0) ? COL.grid : COL.gridFine;
+      c.beginPath();
+      c.moveTo(gx(geo, -nLeft), gy(geo, j));
+      c.lineTo(gx(geo, nRight), gy(geo, j));
+      c.stroke();
+    }
+
+    // 轴 (随 axisFade 出现)
+    var aAlpha = axisFade;
+    // 横轴 (->)
+    c.strokeStyle = eegMode ? COL.c3 : 'oklch(0.96 0.01 265 / ' + (0.85 * aAlpha) + ')';
+    c.lineWidth = 2.4;
+    c.beginPath();
+    c.moveTo(gx(geo, -nLeft), gy(geo, 0));
+    c.lineTo(gx(geo, nRight + 0.4), gy(geo, 0));
+    c.stroke();
+    // 横轴箭头
+    var ax = gx(geo, nRight + 0.4), ay = gy(geo, 0);
+    c.fillStyle = eegMode ? COL.c3 : 'oklch(0.96 0.01 265 / ' + (0.85 * aAlpha) + ')';
+    c.beginPath(); c.moveTo(ax, ay); c.lineTo(ax - 11, ay - 6); c.lineTo(ax - 11, ay + 6); c.closePath(); c.fill();
+
+    // 纵轴 (^)
+    c.strokeStyle = eegMode ? COL.c4 : 'oklch(0.96 0.01 265 / ' + (0.85 * aAlpha) + ')';
+    c.beginPath();
+    c.moveTo(gx(geo, 0), gy(geo, -nDown));
+    c.lineTo(gx(geo, 0), gy(geo, nUp + 0.4));
+    c.stroke();
+    var bx = gx(geo, 0), by = gy(geo, nUp + 0.4);
+    c.fillStyle = eegMode ? COL.c4 : 'oklch(0.96 0.01 265 / ' + (0.85 * aAlpha) + ')';
+    c.beginPath(); c.moveTo(bx, by); c.lineTo(bx - 6, by + 11); c.lineTo(bx + 6, by + 11); c.closePath(); c.fill();
+
+    // 刻度数字
+    c.font = '11px "JetBrains Mono", monospace';
+    c.fillStyle = 'oklch(0.55 0.03 265 / ' + (aAlpha) + ')';
+    c.textAlign = 'center';
+    for (var k = 1; k <= nRight; k++) c.fillText(k, gx(geo, k), gy(geo, 0) + 16);
+    c.textAlign = 'right';
+    for (var m = 1; m <= nUp; m++) c.fillText(m, gx(geo, 0) - 8, gy(geo, m) + 4);
+    // 原点 0
+    c.textAlign = 'right';
+    c.fillStyle = 'oklch(0.75 0.02 265 / ' + aAlpha + ')';
+    c.fillText('0', gx(geo, 0) - 8, gy(geo, 0) + 16);
+
+    // 轴标签
+    c.font = '13px "JetBrains Mono", monospace';
+    if (eegMode) {
+      c.fillStyle = COL.c3; c.textAlign = 'left';
+      c.fillText(LANG === 'cn' ? 'C3 (横)' : 'C3 (x)', gx(geo, nRight) - 6, gy(geo, 0) + 30);
+      c.fillStyle = COL.c4; c.textAlign = 'left';
+      c.fillText(LANG === 'cn' ? 'C4 (竖)' : 'C4 (y)', gx(geo, 0) + 10, gy(geo, nUp));
+    } else if (aAlpha > 0.3) {
+      c.fillStyle = 'oklch(0.75 0.02 265 / ' + aAlpha + ')'; c.textAlign = 'left';
+      c.fillText(LANG === 'cn' ? '横 (往右)' : 'x (right)', gx(geo, nRight) - 30, gy(geo, 0) + 30);
+      c.fillText(LANG === 'cn' ? '竖 (往上)' : 'y (up)', gx(geo, 0) + 10, gy(geo, nUp));
+    }
+    c.restore();
+  }
+
+  /* ---- 画一个落点 (带光环) ---- */
+  function drawDot(geo, ux, uy, col, t, label, big) {
+    var X = gx(geo, ux), Y = gy(geo, uy);
+    var pr = (big ? 7 : 5) + 2 * Math.abs(Math.sin(t * 3));
+    c.save();
+    c.fillStyle = col;
+    c.beginPath(); c.arc(X, Y, big ? 7 : 5, 0, Math.PI * 2); c.fill();
+    c.strokeStyle = col; c.lineWidth = 1.5;
+    c.beginPath(); c.arc(X, Y, pr + 4, 0, Math.PI * 2); c.stroke();
+    if (label) {
+      c.fillStyle = col; c.font = '14px "JetBrains Mono", monospace'; c.textAlign = 'left';
+      c.fillText(label, X + 12, Y - 10);
+    }
+    c.restore();
+  }
+
+  /* ---- 走位虚线 (先右后上) ---- */
+  function drawWalk(geo, ux, uy, prog, col) {
+    // prog 0..1: 0-0.5 走横向, 0.5-1 走纵向
+    c.save();
+    c.strokeStyle = col; c.lineWidth = 2; c.setLineDash([5, 4]);
+    var p1 = clamp01(prog / 0.5);
+    var p2 = clamp01((prog - 0.5) / 0.5);
+    var curX = ux * p1;
+    // 横向段
+    c.beginPath();
+    c.moveTo(gx(geo, 0), gy(geo, 0));
+    c.lineTo(gx(geo, curX), gy(geo, 0));
+    c.stroke();
+    // 纵向段
+    if (p2 > 0) {
+      var curY = uy * p2;
+      c.beginPath();
+      c.moveTo(gx(geo, ux), gy(geo, 0));
+      c.lineTo(gx(geo, ux), gy(geo, curY));
+      c.stroke();
+    }
+    c.setLineDash([]);
+    // 走动光点
+    var wx, wy;
+    if (p2 <= 0) { wx = curX; wy = 0; } else { wx = ux; wy = uy * p2; }
+    c.fillStyle = COL.gold;
+    c.beginPath(); c.arc(gx(geo, wx), gy(geo, wy), 5, 0, Math.PI * 2); c.fill();
+    // 步注解
+    c.font = '12px "JetBrains Mono", monospace'; c.fillStyle = COL.fgDim; c.textAlign = 'center';
+    if (p1 < 1 || p2 <= 0) {
+      c.fillText((LANG === 'cn' ? '往右 ' : 'right ') + ux, gx(geo, ux / 2), gy(geo, 0) + 32);
+    }
+    if (p2 > 0) {
+      c.save(); c.translate(gx(geo, ux) + 16, gy(geo, uy / 2));
+      c.fillStyle = COL.fgDim; c.textAlign = 'left';
+      c.fillText((LANG === 'cn' ? '再往上 ' : 'up ') + uy, 0, 4);
+      c.restore();
+    }
+    c.restore();
+  }
+
+  /* ---- 箭头 (向量) ---- */
+  function drawVector(geo, ux, uy, col, alpha) {
+    var X = gx(geo, ux), Y = gy(geo, uy);
+    var O = { x: gx(geo, 0), y: gy(geo, 0) };
+    c.save();
+    c.globalAlpha = alpha;
+    c.strokeStyle = col; c.lineWidth = 3.4; c.lineCap = 'round';
+    c.beginPath(); c.moveTo(O.x, O.y); c.lineTo(X, Y); c.stroke();
+    // 箭头头
+    var ang = Math.atan2(Y - O.y, X - O.x);
+    var hl = 14;
+    c.fillStyle = col;
+    c.beginPath();
+    c.moveTo(X, Y);
+    c.lineTo(X - hl * Math.cos(ang - 0.42), Y - hl * Math.sin(ang - 0.42));
+    c.lineTo(X - hl * Math.cos(ang + 0.42), Y - hl * Math.sin(ang + 0.42));
+    c.closePath(); c.fill();
+    c.restore();
+  }
+
+  /* ---- 散点种子 (eeg/scatter 用): 模拟 C3/C4 正相关一团点 ---- */
+  var scatterSeeds = [];
+  (function () {
+    for (var i = 0; i < 46; i++) {
+      // 正相关云: 围绕一条斜线 + 噪声, 单位坐标 1.2..5.5
+      var base = 1.3 + Math.random() * 3.8;
+      var noise = (Math.random() - 0.5) * 1.6;
+      scatterSeeds.push({
+        x: clampU(base + noise * 0.5),
+        y: clampU(base - noise * 0.5 + (Math.random() - 0.5) * 0.8),
+        ord: Math.random()
+      });
+    }
+    function clampU(v) { return v < 0.4 ? 0.4 : v > 6 ? 6 : v; }
+  })();
+
+  /* ---- starfield ---- */
+  var stars = [];
+  (function () {
+    for (var i = 0; i < 55; i++) {
+      stars.push({ x: Math.random(), y: Math.random(), r: Math.random() * 1.0 + 0.3, ph: Math.random() * 6.28 });
+    }
+  })();
+  function drawStars(t) {
+    c.save();
+    for (var i = 0; i < stars.length; i++) {
+      var s = stars[i];
+      var tw = 0.18 + 0.18 * (0.5 + 0.5 * Math.sin(t * 0.8 + s.ph));
+      c.fillStyle = 'oklch(0.85 0.05 265 / ' + tw + ')';
+      c.beginPath(); c.arc(s.x * W, s.y * H, s.r, 0, Math.PI * 2); c.fill();
+    }
+    c.restore();
+  }
+
+  /* ---- 大场景标题文字 (画面自身, 非字幕) ---- */
+  function sceneLabel(txt, col) {
+    c.save();
+    c.font = '13px "JetBrains Mono", monospace'; c.textAlign = 'left';
+    c.fillStyle = col;
+    c.fillText(txt, W * 0.42, H * 0.12);
+    c.restore();
+  }
+
+  /* ---- 主绘制: 返回当前 HUD 状态 ---- */
+  function draw(t) {
+    var geo = gridGeo();
+    var ph = phaseAt(t);
+    var st = { x: 0, y: 0, note: '(-,-)', phase: ph };
+
+    // 轴淡入 (grid 阶段)
+    var axisFade = clamp01((t - 0.6) / 2.2);
+    if (ph !== 'grid') axisFade = 1;
+    var eegMode = (ph === 'eeg' || ph === 'scatter');
+
+    drawGridPaper(t, geo, axisFade, eegMode);
+
+    if (ph === 'grid') {
+      sceneLabel(LANG === 'cn' ? '空白方格纸 + 横轴 + 竖轴 + 原点' : 'blank grid + x-axis + y-axis + origin', COL.fgDim);
+      // 原点高亮
+      var of = ease(clamp01((t - 2.6) / 1.5));
+      if (of > 0) {
+        c.save();
+        c.fillStyle = COL.gold; c.globalAlpha = of;
+        c.beginPath(); c.arc(gx(geo, 0), gy(geo, 0), 5, 0, Math.PI * 2); c.fill();
+        c.font = '12px "JetBrains Mono", monospace'; c.textAlign = 'right';
+        c.fillText(LANG === 'cn' ? '原点 (0,0)' : 'origin (0,0)', gx(geo, 0) - 16, gy(geo, 0) - 10);
+        c.restore();
+      }
+      st.x = 0; st.y = 0; st.note = '(0,0)';
+    }
+
+    else if (ph === 'point') {
+      sceneLabel(LANG === 'cn' ? '一对数 (3, 4) -> 先往右 3, 再往上 4' : 'pair (3,4) -> right 3, then up 4', COL.vec);
+      var wp = ease(clamp01((t - 5.4) / 4.0));
+      drawWalk(geo, 3, 4, wp, COL.vec);
+      if (wp >= 0.999) {
+        drawDot(geo, 3, 4, COL.gold, t, '(3, 4)', true);
+        st.x = 3; st.y = 4; st.note = '(3,4)';
+      } else {
+        var p1 = clamp01(wp / 0.5), p2 = clamp01((wp - 0.5) / 0.5);
+        st.x = +(3 * p1).toFixed(1);
+        st.y = +(4 * p2).toFixed(1);
+        st.note = '(' + st.x + ',' + st.y + ')';
+      }
+    }
+
+    else if (ph === 'order') {
+      sceneLabel(LANG === 'cn' ? '(3,4) vs (4,3) -> 顺序不同, 位置不同' : '(3,4) vs (4,3) -> order matters', COL.vec);
+      // (3,4) 已在 (稍暗)
+      drawDot(geo, 3, 4, COL.vec, t, '(3, 4)', false);
+      // (4,3) 走位
+      var wp2 = ease(clamp01((t - 12.3) / 3.2));
+      drawWalk(geo, 4, 3, wp2, COL.c4);
+      if (wp2 >= 0.999) {
+        drawDot(geo, 4, 3, COL.gold, t, '(4, 3)', true);
+        // 对比连线
+        c.save();
+        c.strokeStyle = 'oklch(0.85 0.14 85 / 0.5)'; c.lineWidth = 1.2; c.setLineDash([4, 4]);
+        c.beginPath(); c.moveTo(gx(geo, 3), gy(geo, 4)); c.lineTo(gx(geo, 4), gy(geo, 3)); c.stroke();
+        c.setLineDash([]);
+        // 电影院类比文字
+        c.font = '12px "JetBrains Mono", monospace'; c.fillStyle = COL.fgDim; c.textAlign = 'left';
+        c.fillText(LANG === 'cn' ? '像电影院: 7 排 12 号 != 12 排 7 号' : 'like cinema: row7 seat12 != row12 seat7', W * 0.42, H * 0.86);
+        c.restore();
+        st.x = 4; st.y = 3; st.note = '(4,3)';
+      } else {
+        st.x = 3; st.y = 4; st.note = '(3,4)';
+      }
+    }
+
+    else if (ph === 'vector') {
+      sceneLabel(LANG === 'cn' ? '一列数 = 从原点出发的一支箭头 (向量)' : 'a list = an arrow from origin (vector)', COL.vec);
+      // 点保留
+      drawDot(geo, 3, 4, COL.fgMute, t, null, false);
+      // 箭头摆方向: 在 (3,4) 与几个方向间摆动
+      var dirs = [ [3,4], [5,2], [2,5], [4,4], [3,4] ];
+      var seg = (t - 18) / 6 * (dirs.length - 1);
+      var si = Math.min(dirs.length - 2, Math.floor(seg));
+      var fr = ease(clamp01(seg - si));
+      var ax = dirs[si][0] + (dirs[si+1][0] - dirs[si][0]) * fr;
+      var ay = dirs[si][1] + (dirs[si+1][1] - dirs[si][1]) * fr;
+      drawVector(geo, ax, ay, COL.vec, 1);
+      drawDot(geo, ax, ay, COL.gold, t, '[' + ax.toFixed(1) + ', ' + ay.toFixed(1) + ']', true);
+      // 寻宝注解
+      c.save();
+      c.font = '12px "JetBrains Mono", monospace'; c.fillStyle = COL.fgDim; c.textAlign = 'left';
+      c.fillText(LANG === 'cn' ? '像寻宝: 往东 ' + ax.toFixed(0) + ' 步, 往北 ' + ay.toFixed(0) + ' 步'
+                               : 'treasure: east ' + ax.toFixed(0) + ', north ' + ay.toFixed(0), W * 0.42, H * 0.86);
+      c.restore();
+      st.x = +ax.toFixed(1); st.y = +ay.toFixed(1); st.note = '[' + st.x + ',' + st.y + ']';
+    }
+
+    else if (ph === 'eeg') {
+      sceneLabel(LANG === 'cn' ? 'C3 此刻读数当横, C4 当竖 -> 一个时刻 = 一个点' : 'C3 now = x, C4 = y -> one instant = one dot', COL.gold);
+      // 一个时刻读数点逐个出现 (取前几个种子)
+      var nShow = Math.floor(clamp01((t - 24) / 5) * 6) + 1;
+      var last = null;
+      for (var i = 0; i < nShow && i < scatterSeeds.length; i++) {
+        var s = scatterSeeds[i];
+        var col = (i === nShow - 1) ? COL.gold : COL.vec;
+        drawDot(geo, s.x, s.y, col, t, null, i === nShow - 1);
+        if (i === nShow - 1) last = s;
+      }
+      if (last) {
+        // 当前点的 C3/C4 投影虚线
+        c.save();
+        c.strokeStyle = 'oklch(0.75 0.17 25 / 0.5)'; c.lineWidth = 1.2; c.setLineDash([3, 4]);
+        c.beginPath(); c.moveTo(gx(geo, last.x), gy(geo, last.y)); c.lineTo(gx(geo, last.x), gy(geo, 0)); c.stroke();
+        c.strokeStyle = 'oklch(0.75 0.17 200 / 0.5)';
+        c.beginPath(); c.moveTo(gx(geo, last.x), gy(geo, last.y)); c.lineTo(gx(geo, 0), gy(geo, last.y)); c.stroke();
+        c.setLineDash([]);
+        c.restore();
+        st.x = +last.x.toFixed(1); st.y = +last.y.toFixed(1);
+        st.note = 'C3=' + st.x + ' C4=' + st.y;
+      }
+    }
+
+    else { // scatter
+      sceneLabel(LANG === 'cn' ? '一串读数 -> 一团散点图 (这就是 M24 要看的图)' : 'a stream -> a scatter cloud (the M24 plot)', COL.gold);
+      var grow = ease(clamp01((t - 29) / 4.2));
+      var nDots = Math.floor(grow * scatterSeeds.length);
+      for (var k = 0; k < nDots; k++) {
+        var sp = scatterSeeds[k];
+        c.save();
+        c.fillStyle = COL.vec;
+        c.beginPath(); c.arc(gx(geo, sp.x), gy(geo, sp.y), 4, 0, Math.PI * 2); c.fill();
+        c.restore();
+      }
+      // 趋势虚线 (正相关 -> 一起抖) 在散点长完后浮现
+      if (grow > 0.85) {
+        c.save();
+        c.strokeStyle = 'oklch(0.85 0.14 85 / 0.6)'; c.lineWidth = 2; c.setLineDash([6, 5]);
+        c.beginPath(); c.moveTo(gx(geo, 0.6), gy(geo, 0.6)); c.lineTo(gx(geo, 5.6), gy(geo, 5.6)); c.stroke();
+        c.setLineDash([]);
+        c.font = '12px "JetBrains Mono", monospace'; c.fillStyle = COL.gold; c.textAlign = 'left';
+        c.fillText(LANG === 'cn' ? '点排成一条斜线 -> C3 C4 一起抖!' : 'dots line up -> C3 & C4 move together!', W * 0.42, H * 0.86);
+        c.restore();
+      }
+      st.x = scatterSeeds.length ? +scatterSeeds[Math.max(0,nDots-1)].x.toFixed(1) : 0;
+      st.y = scatterSeeds.length ? +scatterSeeds[Math.max(0,nDots-1)].y.toFixed(1) : 0;
+      st.note = nDots + ' dots';
+    }
+
+    return st;
+  }
+
+  /* ---- HUD ---- */
+  function updateHUD(st) {
+    var phaseNames = {
+      grid:    { cn: '立方格纸', en: 'grid' },
+      point:   { cn: '走成点',   en: 'pair->dot' },
+      order:   { cn: '看顺序',   en: 'order' },
+      vector:  { cn: '拉箭头',   en: 'vector' },
+      eeg:     { cn: 'C3/C4 点', en: 'C3/C4 dot' },
+      scatter: { cn: '散点图',   en: 'scatter' }
+    };
+    setText('hPhase', phaseNames[st.phase][LANG]);
+    setText('hX', st.x);
+    setText('hY', st.y);
+    setText('hNote', st.note);
+    var hn = document.getElementById('hNote');
+    if (st.phase === 'point' || st.phase === 'order' || st.phase === 'scatter' || st.phase === 'eeg') hn.classList.add('gold');
+    else hn.classList.remove('gold');
+  }
+
+  /* ---- main loop ---- */
+  var startTime = null, lastPhase = '';
+  function frame(now) {
+    if (startTime === null) startTime = now;
+    var t = ((now - startTime) / 1000) % CYCLE;
+
+    c.clearRect(0, 0, W, H);
+    c.fillStyle = COL.bg0;
+    c.fillRect(0, 0, W, H);
+    drawStars(t);
+
+    var st = draw(t);
+    updateHUD(st);
+
+    var ph = st.phase;
+    if (ph !== lastPhase) {
+      lastPhase = ph;
+      curPhase = ph;
+      applySub();
+    }
+
+    requestAnimationFrame(frame);
+  }
+
+  function boot() {
+    resize();
+    refreshI18N();
+    curPhase = 'grid';
+    applySub();
+    requestAnimationFrame(frame);
+  }
+
+  if (document.readyState === 'complete') boot();
+  else window.addEventListener('load', boot);
+  setTimeout(function () { if (startTime === null) boot(); }, 300);
+})();
+</script>
+</body>
+</html>
