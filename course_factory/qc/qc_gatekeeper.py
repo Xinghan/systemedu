@@ -149,31 +149,21 @@ def check_c1_browser_verify(slug: str, mid: str) -> dict:
     sections = json.loads(sections_path.read_text())
     rendered = sections.get("rendered_sections", {})
 
-    # 找每个 mode 的 html 文件 (验证用的源 html 在 tests/anim 或 tests/game)
-    anim_paths = sorted((TESTS / "anim").glob(f"test_anim_{mid.lower()}_*.html"),
-                        key=lambda p: p.stat().st_mtime, reverse=True)
-    game_paths = sorted((TESTS / "game").glob(f"test_game_{mid.lower()}_*.html"),
-                        key=lambda p: p.stat().st_mtime, reverse=True)
-    threed_paths = sorted((TESTS / "3d_object").glob(f"test_3d_{mid.lower()}_*.html"),
-                          key=lambda p: p.stat().st_mtime, reverse=True) if (TESTS / "3d_object").exists() else []
+    # 项目隔离解析本节实际用的源文件 (按内联 HTML 内容指纹反查, 不靠文件名前缀+黑名单)
+    media = _resolve_media_paths(slug, mid)
+    anim_path = media["anim"]
+    game_path = media["game"]
+    threed_path = media["threed"]
 
-    # 过滤掉旧 EEG/alpha/ant 项目残留
-    excl = ("_eeg_", "_alpha_", "_ant_", "_bandpass", "_chain", "_timeseries",
-            "_datashape", "_multichannel", "_epoch", "_superposition", "_spectrum",
-            "_window", "_wavetoy", "_slicer", "_synchrony", "_electrodes",
-            "_pipeline", "_artifact", "_unmix", "_ica", "_noise_remover")
-    anim_paths = [p for p in anim_paths if not any(s in p.name for s in excl)]
-    game_paths = [p for p in game_paths if not any(s in p.name for s in excl)]
-
-    if not anim_paths:
-        issues.append("no anim HTML found in tests/anim/")
-    if not game_paths:
-        issues.append("no game HTML found in tests/game/")
+    if anim_path is None:
+        issues.append("no anim HTML matched in tests/anim/ (内联指纹未命中)")
+    if game_path is None:
+        issues.append("no game HTML matched in tests/game/ (内联指纹未命中)")
 
     # 跑 verify
     for label, path, script in [
-        ("anim", anim_paths[0] if anim_paths else None, "animation.mjs"),
-        ("game", game_paths[0] if game_paths else None, "game.mjs"),
+        ("anim", anim_path, "animation.mjs"),
+        ("game", game_path, "game.mjs"),
     ]:
         if not path:
             continue
@@ -191,8 +181,8 @@ def check_c1_browser_verify(slug: str, mid: str) -> dict:
             issues.append(f"{label} verify error: {e}")
 
     # 3D 选做
-    if threed_paths:
-        details["threed_path"] = str(threed_paths[0])
+    if threed_path:
+        details["threed_path"] = str(threed_path)
         details["threed_verified"] = "skipped (no 3D verify script yet)"
 
     return {
@@ -224,20 +214,10 @@ def check_c2_code_review(slug: str, mid: str) -> dict:
     if not knode_dir:
         return {"check": "C2", "status": "fail", "issues": ["knode dir not found"], "details": {}}
 
-    # 找 anim + game (用 C1 同方法)
-    anim_paths = sorted((TESTS / "anim").glob(f"test_anim_{mid.lower()}_*.html"),
-                        key=lambda p: p.stat().st_mtime, reverse=True)
-    game_paths = sorted((TESTS / "game").glob(f"test_game_{mid.lower()}_*.html"),
-                        key=lambda p: p.stat().st_mtime, reverse=True)
-    excl = ("_eeg_", "_alpha_", "_ant_", "_bandpass", "_chain", "_timeseries",
-            "_datashape", "_multichannel", "_epoch", "_superposition", "_spectrum",
-            "_window", "_wavetoy", "_slicer", "_synchrony", "_electrodes",
-            "_pipeline", "_artifact", "_unmix", "_ica", "_noise_remover")
-    anim_paths = [p for p in anim_paths if not any(s in p.name for s in excl)]
-    game_paths = [p for p in game_paths if not any(s in p.name for s in excl)]
+    # 项目隔离解析 (按内联 HTML 指纹反查, 不靠文件名前缀+黑名单)
+    media = _resolve_media_paths(slug, mid)
 
-    for label, path in [("anim", anim_paths[0] if anim_paths else None),
-                        ("game", game_paths[0] if game_paths else None)]:
+    for label, path in [("anim", media["anim"]), ("game", media["game"])]:
         if not path:
             continue
         content = path.read_text()
@@ -314,19 +294,10 @@ def check_c3_theme_style_26(slug: str, mid: str) -> dict:
     issues: list[str] = []
     details: dict[str, Any] = {}
 
-    anim_paths = sorted((TESTS / "anim").glob(f"test_anim_{mid.lower()}_*.html"),
-                        key=lambda p: p.stat().st_mtime, reverse=True)
-    game_paths = sorted((TESTS / "game").glob(f"test_game_{mid.lower()}_*.html"),
-                        key=lambda p: p.stat().st_mtime, reverse=True)
-    excl = ("_eeg_", "_alpha_", "_ant_", "_bandpass", "_chain", "_timeseries",
-            "_datashape", "_multichannel", "_epoch", "_superposition", "_spectrum",
-            "_window", "_wavetoy", "_slicer", "_synchrony", "_electrodes",
-            "_pipeline", "_artifact", "_unmix", "_ica", "_noise_remover")
-    anim_paths = [p for p in anim_paths if not any(s in p.name for s in excl)]
-    game_paths = [p for p in game_paths if not any(s in p.name for s in excl)]
+    # 项目隔离解析 (按内联 HTML 指纹反查, 不靠文件名前缀+黑名单)
+    media = _resolve_media_paths(slug, mid)
 
-    for label, path in [("anim", anim_paths[0] if anim_paths else None),
-                        ("game", game_paths[0] if game_paths else None)]:
+    for label, path in [("anim", media["anim"]), ("game", media["game"])]:
         if not path:
             continue
         content = path.read_text()
@@ -420,20 +391,21 @@ def check_c4_3d_decision(slug: str, mid: str) -> dict:
             "details": {},
         }
 
-    # 如果 should=True, 看 tests/3d_object/ 有没有对应文件
+    # 如果 should=True, 找对应 3D 文件 (test_3d_<mid>_*.html)。
+    # 历史惯例放 tests/anim/, SKILL F3 名义目录 tests/3d_object/, 两处都找。
     if details["should_generate"]:
-        threed_dir = TESTS / "3d_object"
-        if not threed_dir.exists():
-            issues.append("F3: should_generate=True 但 tests/3d_object/ 目录不存在")
+        threed_files: list = []
+        for sub in ("anim", "3d_object"):
+            d = TESTS / sub
+            if d.exists():
+                threed_files += list(d.glob(f"test_3d_{mid.lower()}_*.html"))
+        if not threed_files:
+            issues.append(
+                f"F3: should_generate=True (object={details['object_name_hint']}), "
+                f"但 tests/anim/ 或 tests/3d_object/ 下 test_3d_{mid.lower()}_*.html 不存在 — 必须生成"
+            )
         else:
-            threed_files = list(threed_dir.glob(f"test_3d_{mid.lower()}_*.html"))
-            if not threed_files:
-                issues.append(
-                    f"F3: should_generate=True (object={details['object_name_hint']}), "
-                    f"但 tests/3d_object/test_3d_{mid.lower()}_*.html 不存在 — 必须生成"
-                )
-            else:
-                details["threed_file"] = str(threed_files[0])
+            details["threed_file"] = str(threed_files[0])
 
     return {
         "check": "C4",
@@ -907,6 +879,113 @@ def _find_knode_dir(slug: str, mid: str) -> Path | None:
     return None
 
 
+def _normalize_html(s: str) -> str:
+    """去掉空白做内容指纹比对 (内联与源文件可能换行/缩进略不同)."""
+    return re.sub(r"\s+", "", s or "")
+
+
+def _resolve_media_paths(slug: str, mid: str) -> dict[str, Path | None]:
+    """项目隔离地解析本节实际用的 anim/game/3D 源文件.
+
+    根因修复 (替代全目录 glob + 文件名黑名单): 多个项目共用 tests/{anim,game,
+    3d_object} 且编号 M01-M64 重叠, 靠文件名前缀猜归属会误撞别项目残留 (例
+    eeg-minecraft-bci 的 test_anim_m10_openbci_record), 文件名黑名单又会误杀
+    合法文件 (例 _chain 误杀 solder_action_chain)。
+
+    正确做法: 从本项目本节 sections.json 里内联的 HTML 内容, 反查 tests 目录
+    中内容一致的源文件。匹配的是"这个项目这个节点实际渲染的那段 HTML", 跟文件名、
+    跟其他项目的同号残留完全无关。
+    """
+    out: dict[str, Path | None] = {"anim": None, "game": None, "threed": None}
+    knode_dir = _find_knode_dir(slug, mid)
+    if not knode_dir:
+        return out
+    sections_path = knode_dir / "sections.json"
+    if not sections_path.exists():
+        return out
+    try:
+        sections = json.loads(sections_path.read_text())
+    except Exception:
+        return out
+    rendered = sections.get("rendered_sections", {})
+
+    # 收集本节内联的 anim / game html 指纹 (按 idea_id 前缀分流)
+    inline = {"anim": None, "game": None}
+    for idea_id, payload in rendered.items():
+        if not isinstance(payload, dict):
+            continue
+        html = payload.get("html")
+        if not html:
+            continue
+        mode = (payload.get("mode") or "").lower()
+        if idea_id.startswith("anim_") or mode == "animation":
+            inline["anim"] = _normalize_html(html)
+        elif idea_id.startswith("game_") or mode == "game":
+            inline["game"] = _normalize_html(html)
+
+    # 3D 内联 (如有, 存在 sections 顶层或 knode_dir/object_3d.html)
+    threed_inline = _normalize_html(sections.get("object_3d_html", "")) or None
+
+    def _match(dir_name: str, fp_prefix: str, target: str | None) -> Path | None:
+        d = TESTS / dir_name
+        if not d.exists() or not target:
+            return None
+        # 先按内容指纹精确匹配 (项目隔离的关键)
+        for p in d.glob(f"{fp_prefix}_{mid.lower()}_*.html"):
+            if _normalize_html(p.read_text()) == target:
+                return p
+        return None
+
+    out["anim"] = _match("anim", "test_anim", inline["anim"])
+    out["game"] = _match("game", "test_game", inline["game"])
+    out["threed"] = _match("3d_object", "test_3d", threed_inline)
+    return out
+
+
+def check_c12_north_star(slug: str, mid: str) -> dict:
+    """C12 — 每节 lesson.md 必须有"这一步在通向哪 (北极星)"项目对齐模块 (用户钢印).
+
+    检查 lesson.md 顶部 (第一个 ## 之前) 是否含该 blockquote callout +
+    4 个必填字段, 且"还差几步"不用绝对节点号 (重排后会失效)。
+    """
+    issues: list[str] = []
+    knode_dir = _find_knode_dir(slug, mid)
+    if not knode_dir:
+        return {"check": "C12", "status": "fail", "issues": ["knode dir not found"], "details": {}}
+    lesson = knode_dir / "lesson.md"
+    if not lesson.exists():
+        return {"check": "C12", "status": "fail", "issues": ["lesson.md 不存在"], "details": {}}
+    text = lesson.read_text(encoding="utf-8")
+    # 北极星块必须在第一个 ## 段标题之前
+    head = text.split("\n## ", 1)[0]
+    if "这一步在通向哪" not in head:
+        return {
+            "check": "C12",
+            "status": "fail",
+            "issues": [
+                "缺少'这一步在通向哪 (北极星)'项目对齐模块 (必须在 lesson.md 顶部、"
+                "第一个 ## 段之前)。见 SKILL.md Step 1 该块 4 行结构 (我们最终要做出的 / "
+                "这一节你亲手做出的那块积木 / 它通向 / 离终点还差几步)。"
+            ],
+            "details": {},
+        }
+    required = ["我们最终要做出的", "这一节你亲手做出的那块积木", "它通向", "离终点还差几步"]
+    missing = [r for r in required if r not in head]
+    if missing:
+        issues.append(f"北极星块缺字段: {missing}")
+    # "还差几步"不应用绝对节点号 (例 '还差 40 节' / '到 M55')，避免重排后失效
+    import re as _re
+    far = _re.search(r"离终点还差几步\*\*:\s*(.+)", head)
+    if far and _re.search(r"还差\s*\d+\s*节|到\s*M\d", far.group(1)):
+        issues.append("'离终点还差几步'用了绝对节点号/节数, 应改用 stage 里程碑 (重排后绝对号会失效)")
+    return {
+        "check": "C12",
+        "status": "pass" if not issues else "fail",
+        "issues": issues,
+        "details": {"has_north_star": True},
+    }
+
+
 # ---------------------------------------------------------------------------
 # 入口
 # ---------------------------------------------------------------------------
@@ -925,6 +1004,7 @@ def run_all_checks(slug: str, mid: str, skip_c10: bool = False) -> dict:
         check_c9_slides(slug, mid),
         check_c10_chat_checklist(slug, mid, skip=skip_c10),
         check_c11_node_kind_anim_form(slug, mid),
+        check_c12_north_star(slug, mid),
     ]
 
     pass_count = sum(1 for c in checks if c["status"] == "pass")
