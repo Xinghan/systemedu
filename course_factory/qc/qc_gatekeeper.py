@@ -99,6 +99,8 @@ STYLE_TOKENS_26 = {
     "MOTOR", "CIRCUIT", "ALLOY", "MICRON", "FAUNA", "FLORA", "TIMBER", "HARVEST",
     # math / quant / nuke / paleo / geo / meteo / astro
     "AXIOM", "QUANTA", "ATOM", "FOSSIL", "STRATA", "STORM", "NEBULA",
+    # geo Strata Vault: CLAY/RUST/BASALT/CHALK/MAGMA
+    "CLAY", "RUST", "BASALT", "CHALK", "MAGMA",
     # 等等 — 这是宽匹配列表
 }
 
