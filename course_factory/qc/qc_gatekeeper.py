@@ -789,12 +789,19 @@ def check_c11_node_kind_anim_form(slug: str, mid: str) -> dict:
 
     C_KIND_KEYWORDS = [
         "路线图", "总览", "介绍", "仪式", "安全条款", "选型", "工具准备",
-        "项目终点", "doi", "zenodo", "阅读", "论文", "overview", "roadmap",
+        "项目终点", "阅读", "论文", "overview", "roadmap",
         "目标墙", "26 周", "起点", "checklist",
     ]
+    # "doi"/"zenodo" 太宽: 它们既可能是"路线图节点顺带提一句以后要挂 DOI"(C 类),
+    # 也可能是"本节核心就是教 DOI 解析机制"(B 类机制, 链接腐烂->转接台重定向是看得见的
+    # 时间因果过程, F4.0 归 B 类, autoplay 多帧合法). 只有当它们与真正的总览/路线图信号
+    # 同现时才按 C 类处理; 单独出现不强制 C 类.
+    C_WEAK_KEYWORDS = ["doi", "zenodo"]
     D_KIND_KEYWORDS = ["反思", "家访", "采访", "写感想", "讨论会"]
 
     matched_c = [k for k in C_KIND_KEYWORDS if k.lower() in blob]
+    if matched_c:
+        matched_c += [k for k in C_WEAK_KEYWORDS if k.lower() in blob]
     matched_d = [k for k in D_KIND_KEYWORDS if k.lower() in blob]
 
     if matched_d:
