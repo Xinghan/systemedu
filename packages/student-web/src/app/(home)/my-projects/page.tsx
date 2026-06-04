@@ -709,6 +709,7 @@ function CoverPhoto({ slug, dClass }: { slug: string; dClass: string }) {
         borderBottom: "1px solid var(--border)",
       }}
     >
+      {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         src={library.coverUrl(slug)}
         alt=""
@@ -719,6 +720,16 @@ function CoverPhoto({ slug, dClass }: { slug: string; dClass: string }) {
           objectFit: "cover",
           objectPosition: "center 48%",
           display: "block",
+        }}
+      />
+      {/* 底部柔和渐变, 让卡片内容区过渡自然 */}
+      <div
+        style={{
+          position: "absolute",
+          inset: 0,
+          background:
+            "linear-gradient(180deg, rgba(21,17,13,0) 55%, rgba(21,17,13,0.5) 100%)",
+          pointerEvents: "none",
         }}
       />
     </div>
