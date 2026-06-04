@@ -370,16 +370,54 @@ export default function HomePage() {
               {/* right: my project list */}
               <div style={{ padding: 22 }}>
                 <div
-                  className="mono"
-                  style={{ fontSize: 11.5, color: "var(--sub)", marginBottom: 14 }}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    marginBottom: 14,
+                  }}
                 >
-                  ALL PROJECTS · {items.length}
+                  <span
+                    className="mono"
+                    style={{ fontSize: 11.5, color: "var(--sub)" }}
+                  >
+                    ALL PROJECTS · {items.length}
+                  </span>
+                  <Link
+                    href="/my-projects"
+                    className="mono"
+                    style={{
+                      fontSize: 11,
+                      color: "var(--violet)",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 4,
+                    }}
+                  >
+                    查看全部
+                    <ArrowRight size={11} strokeWidth={1.5} />
+                  </Link>
                 </div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
                   {items.slice(0, 5).map((p) => (
                     <ProjectRow key={p.slug} project={p} active={p.slug === activeProject.slug} />
                   ))}
                 </div>
+                {items.length > 5 && (
+                  <Link
+                    href="/my-projects"
+                    className="mono"
+                    style={{
+                      display: "block",
+                      marginTop: 10,
+                      fontSize: 11,
+                      color: "var(--sub)",
+                      textAlign: "center",
+                    }}
+                  >
+                    还有 {items.length - 5} 个项目 →
+                  </Link>
+                )}
               </div>
             </div>
 
@@ -590,10 +628,13 @@ function DashStat({
 }
 
 function ProjectRow({ project, active }: { project: MyProjectItem; active: boolean }) {
-  const target = project.last_module_id || "M01"
+  // 已开始学的(有 last_module_id)直接续学; 还没开始的先回项目主页, 不直接钻进学习页
+  const href = project.last_module_id
+    ? `/learn/${encodeURIComponent(project.slug)}/${encodeURIComponent(project.last_module_id)}`
+    : `/library/${encodeURIComponent(project.slug)}`
   return (
     <Link
-      href={`/learn/${encodeURIComponent(project.slug)}/${encodeURIComponent(target)}`}
+      href={href}
       style={{
         display: "flex",
         alignItems: "center",
