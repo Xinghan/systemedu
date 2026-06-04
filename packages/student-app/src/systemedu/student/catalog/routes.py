@@ -193,8 +193,37 @@ async def api_my_progress_put(request: Request) -> JSONResponse:
     })
 
 
+def _backfill_section_html_paths(rendered_sections) -> None:
+    """spec 033 起的兼容: 把 idea.{mode}_path 回填到 rendered_sections[id].html_path,
+    让前端 inlineHtmlPaths() 能找到 HTML 文件。原地修改 dict。
+
+    library /v1 返回 sections.json 原样, 不含 html_path, 所以代理后在这里补。
+    """
+    if not isinstance(rendered_sections, dict):
+        return
+    rendered = rendered_sections.get("rendered_sections") or {}
+    if not isinstance(rendered, dict):
+        return
+    for idea in rendered_sections.get("ideas", []) or []:
+        if not isinstance(idea, dict):
+            continue
+        idea_id = idea.get("idea_id")
+        mode = idea.get("mode")
+        if not idea_id or not mode:
+            continue
+        path = idea.get(f"{mode}_path")
+        section = rendered.get(idea_id)
+        if (
+            path
+            and isinstance(section, dict)
+            and not section.get("html_path")
+            and not section.get("html")
+        ):
+            section["html_path"] = path
+
+
 async def api_my_project_knode(request: Request) -> JSONResponse:
-    """spec 033: 学习时从本地读 knode 数据 (不再实时访问 library)."""
+    """cloud 版本 (spec 037): 学习时实时代理 library /v1 knode, 不再读本地."""
     slug = request.path_params["slug"]
     knode_id = request.path_params["knode_id"]
     user_id, err = await require_login(request)
@@ -203,117 +232,20 @@ async def api_my_project_knode(request: Request) -> JSONResponse:
 
     up = get_user_project(user_id, slug)
     if up is None or up.removed_at is not None:
-        return JSONResponse(
-            {"error": "not_pulled", "slug": slug}, status_code=403
-        )
-    if not up.local_path or not up.cloned_version:
-        # 老式 pull (spec 033 前) 没真下载, 提示重新 Pull
-        return JSONResponse(
-            {
-                "error": "needs_reclone",
-                "slug": slug,
-                "hint": "请重新 Pull 项目以更新到新版下载方式",
-            },
-            status_code=409,
-        )
-    local = Path(up.local_path)
-    if not local.exists() or not (local / "manifest.json").exists():
-        return JSONResponse(
-            {
-                "error": "local_missing",
-                "slug": slug,
-                "hint": "本地项目文件已丢失, 请重新 Pull",
-            },
-            status_code=410,
-        )
+        return JSONResponse({"error": "not_pulled", "slug": slug}, status_code=403)
 
     try:
-        manifest = json.loads((local / "manifest.json").read_text(encoding="utf-8"))
-    except Exception as e:
-        logger.exception("manifest read failed for %s", slug)
-        return JSONResponse(
-            {"error": "manifest_corrupt", "detail": str(e)}, status_code=500
-        )
-
-    entry = next(
-        (k for k in manifest.get("knodes", []) if k.get("module_id") == knode_id),
-        None,
-    )
-    if entry is None:
+        k = await get_library_client().get_knode(slug, knode_id)
+    except LibraryNotFound:
         return JSONResponse(
             {"error": "knode_not_found", "knode_id": knode_id}, status_code=404
         )
+    except Exception as e:
+        return _lib_error_response(e)
 
-    knode_dir = local / entry["knode_dir"]
-    if not knode_dir.exists():
-        return JSONResponse(
-            {"error": "knode_dir_missing", "knode_dir": entry["knode_dir"]},
-            status_code=410,
-        )
-
-    def _read_text(p: Path, default: str = "") -> str:
-        return p.read_text(encoding="utf-8") if p.exists() else default
-
-    def _read_json(p: Path, default):
-        if not p.exists():
-            return default
-        try:
-            return json.loads(p.read_text(encoding="utf-8"))
-        except Exception:
-            return default
-
-    lesson_md = _read_text(knode_dir / "lesson.md")
-    assignment_md = _read_text(knode_dir / "assignment.md")
-    sections = _read_json(knode_dir / "sections.json", default={})
-    theories = _read_json(knode_dir / "theories.json", default=[])
-    audio_scripts = _read_json(knode_dir / "audio_scripts.json", default={})
-
-    # spec 033 关键修复: 把 idea.{mode}_path 回填到 rendered_sections[id].html_path,
-    # 让前端 inlineHtmlPaths() 能找到 HTML 文件。
-    rendered = sections.get("rendered_sections") or {}
-    if isinstance(rendered, dict):
-        for idea in sections.get("ideas", []) or []:
-            if not isinstance(idea, dict):
-                continue
-            idea_id = idea.get("idea_id")
-            mode = idea.get("mode")
-            if not idea_id or not mode:
-                continue
-            path = idea.get(f"{mode}_path")
-            section = rendered.get(idea_id)
-            if (
-                path
-                and isinstance(section, dict)
-                and not section.get("html_path")
-                and not section.get("html")
-            ):
-                section["html_path"] = path
-
-    # 该 knode 的文件清单 (从 manifest filter)
-    knode_files = [
-        f
-        for f in manifest.get("files", [])
-        if f.get("path", "").startswith(entry["knode_dir"] + "/")
-    ]
-
-    return JSONResponse(
-        {
-            "project_slug": slug,
-            "knode_id": knode_id,
-            "title": entry.get("title"),
-            "week": entry.get("week"),
-            "stage": entry.get("stage"),
-            "duration_minutes": entry.get("duration_minutes"),
-            "knode_dir": entry["knode_dir"],
-            "plan_markdown": lesson_md,
-            "rendered_sections": sections,  # 保持跟 library API 一致 (整个 sections.json)
-            "audio_scripts": audio_scripts,
-            "assignment_md": assignment_md,
-            "theories": theories,
-            "files": knode_files,
-            "version": up.cloned_version,
-        }
-    )
+    data = dict(k.__dict__)
+    _backfill_section_html_paths(data.get("rendered_sections"))
+    return JSONResponse(data)
 
 
 async def api_my_project_file(request: Request):

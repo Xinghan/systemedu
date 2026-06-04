@@ -120,3 +120,25 @@ def test_remove_no_filesystem_touch(client, services):
     # remove 同步清进度 (delete_last_visited)
     prog = client.get(f"/api/my/progress/{services['slug']}", headers=H)
     assert prog.json()["last_module_id"] is None
+
+
+def test_knode_proxy_when_pulled(client, services):
+    """已 pull: /api/my/projects/{slug}/knodes/{id} 实时代理 library 内容."""
+    token = _register(client, "cat_knode_ok")
+    H = {"Authorization": f"Bearer {token}"}
+    client.post(f"/api/my/projects/{services['slug']}", headers=H)
+    r = client.get(f"/api/my/projects/{services['slug']}/knodes/M01", headers=H)
+    assert r.status_code == 200
+    body = r.json()
+    assert body["knode_id"] == "M01"
+    assert body["project_slug"] == services["slug"]
+    # library 测试项目 M01 lesson.md 含 "M01 Intro"
+    assert "M01 Intro" in body["plan_markdown"]
+
+
+def test_knode_403_when_not_pulled(client, services):
+    """未 pull: knode 返回 403."""
+    token = _register(client, "cat_knode_403")
+    H = {"Authorization": f"Bearer {token}"}
+    r = client.get(f"/api/my/projects/{services['slug']}/knodes/M01", headers=H)
+    assert r.status_code == 403
