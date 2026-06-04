@@ -98,7 +98,7 @@ export default function HomePage() {
   const completedCount = activeProject?.last_module_id
     ? parseInt(activeProject.last_module_id.replace(/[^\d]/g, "")) || 0
     : 0
-  const totalKnodes = activeProject?.knode_count ?? 30
+  const totalKnodes = activeProject?.knode_count ?? 0
   const pct =
     totalKnodes > 0 ? Math.round((completedCount / totalKnodes) * 100) : 0
   const nextModuleId = activeProject?.last_module_id
@@ -173,7 +173,7 @@ export default function HomePage() {
         <DashStat
           icon={<Layers size={13} strokeWidth={1.5} />}
           label="Modules done"
-          value={`${completedCount} / ${totalKnodes}`}
+          value={activeProject ? `${completedCount} / ${totalKnodes}` : "—"}
           sub={
             activeProject?.last_module_id
               ? `last: ${activeProject.last_module_id}`
