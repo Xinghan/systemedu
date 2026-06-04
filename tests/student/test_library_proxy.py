@@ -85,6 +85,19 @@ def test_file_unpulled_403(client, services):
     assert r.status_code == 403
 
 
+def test_file_missing_propagates_404(client, services):
+    """已 pull 但 library 端文件不存在: 必须传播 404, 不能是 200 + 空 body."""
+    token = _register(client, "lp_jack")
+    H = {"Authorization": f"Bearer {token}"}
+    client.post(f"/api/my/projects/{services['slug']}", headers=H)
+    r = client.get(
+        f"/api/library/projects/{services['slug']}/files/knodes/M01-w1-intro/nope.html",
+        headers=H,
+    )
+    assert r.status_code == 404
+    assert r.json()["error"] == "file_not_found"
+
+
 def test_removed_user_loses_access(client, services):
     """已 Pull 又 remove 后, knodes 应 403。"""
     token = _register(client, "lp_iris")

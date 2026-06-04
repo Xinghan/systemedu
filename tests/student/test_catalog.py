@@ -175,3 +175,20 @@ def test_file_403_when_not_pulled(client, services):
         headers=H,
     )
     assert r.status_code == 403
+
+
+def test_file_404_when_library_missing(client, services):
+    """已 pull 但 library 端文件不存在: 必须传播 404, 不能是 200 + 空 body.
+
+    回归: 修复前 _stream 在上游非 200 时直接 return, StreamingResponse 已以
+    200 发出, 客户端拿到 200 空 body, 无法区分"文件不存在"和"文件正常但空"。
+    """
+    token = _register(client, "cat_file_404")
+    H = {"Authorization": f"Bearer {token}"}
+    client.post(f"/api/my/projects/{services['slug']}", headers=H)
+    r = client.get(
+        f"/api/my/projects/{services['slug']}/files/knodes/M01-w1-intro/does-not-exist.html",
+        headers=H,
+    )
+    assert r.status_code == 404
+    assert r.json()["error"] == "file_not_found"

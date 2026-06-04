@@ -12,13 +12,10 @@ from __future__ import annotations
 import asyncio
 import copy
 import logging
-import mimetypes
-import os
 from typing import Any
 
-import httpx
 from starlette.requests import Request
-from starlette.responses import JSONResponse, StreamingResponse
+from starlette.responses import JSONResponse
 from starlette.routing import Route
 
 from systemedu.core.library_client import (
@@ -40,6 +37,7 @@ from ..db import (
     upsert_user_project,
 )
 from ..library_proxy.client import get_library_client
+from ..library_proxy.stream import stream_library_file
 
 
 logger = logging.getLogger(__name__)
@@ -261,28 +259,7 @@ async def api_my_project_file(request: Request):
         return JSONResponse({"error": "not_pulled", "slug": slug}, status_code=403)
 
     url = get_library_client().get_file_url(slug, file_path)
-    license_token = os.environ.get(
-        "LIBRARY_LICENSE_TOKEN", "dev-only-license-token-change-me"
-    )
-    base_url = os.environ.get("LIBRARY_BASE_URL") or os.environ.get(
-        "LIBRARY_URL", "http://127.0.0.1:18821"
-    )
-    trust_env = "127.0.0.1" not in base_url and "localhost" not in base_url
-
-    async def _stream():
-        async with httpx.AsyncClient(timeout=60.0, trust_env=trust_env) as client:
-            async with client.stream(
-                "GET", url, headers={"Authorization": f"Bearer {license_token}"}
-            ) as r:
-                if r.status_code != 200:
-                    return
-                async for chunk in r.aiter_bytes():
-                    yield chunk
-
-    ct, _ = mimetypes.guess_type(file_path)
-    if not ct:
-        ct = "application/octet-stream"
-    return StreamingResponse(_stream(), media_type=ct)
+    return await stream_library_file(url, file_path)
 
 
 ROUTES = [

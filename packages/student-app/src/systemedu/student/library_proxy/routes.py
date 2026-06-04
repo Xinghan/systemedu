@@ -7,8 +7,6 @@
 from __future__ import annotations
 
 import logging
-import mimetypes
-import os
 
 import httpx
 from starlette.requests import Request
@@ -23,7 +21,8 @@ from systemedu.core.library_client import (
 
 from ..auth.deps import require_login
 from ..db import user_has_pulled
-from .client import get_library_client
+from .client import get_library_client, library_request_env
+from .stream import stream_library_file
 
 
 logger = logging.getLogger(__name__)
@@ -130,13 +129,7 @@ async def api_library_cover(request: Request):
     slug = request.path_params["slug"]
 
     url = get_library_client().get_cover_url(slug)
-    license_token = os.environ.get(
-        "LIBRARY_LICENSE_TOKEN", "dev-only-license-token-change-me"
-    )
-    base_url = os.environ.get("LIBRARY_BASE_URL") or os.environ.get(
-        "LIBRARY_URL", "http://127.0.0.1:18821"
-    )
-    trust_env = "127.0.0.1" not in base_url and "localhost" not in base_url
+    _, license_token, trust_env = library_request_env()
 
     # 先发一个 HEAD-like 请求拿到 content-type + 确认 200 (draft 也放行)。
     # library /cover 端点用 FileResponse, content-type 已按文件后缀正确设置。
@@ -178,28 +171,7 @@ async def api_library_file(request: Request):
         )
 
     url = get_library_client().get_file_url(slug, file_path)
-    license_token = os.environ.get(
-        "LIBRARY_LICENSE_TOKEN", "dev-only-license-token-change-me"
-    )
-    base_url = os.environ.get("LIBRARY_BASE_URL") or os.environ.get(
-        "LIBRARY_URL", "http://127.0.0.1:18821"
-    )
-    trust_env = "127.0.0.1" not in base_url and "localhost" not in base_url
-
-    async def _stream():
-        async with httpx.AsyncClient(timeout=60.0, trust_env=trust_env) as client:
-            async with client.stream(
-                "GET", url, headers={"Authorization": f"Bearer {license_token}"}
-            ) as r:
-                if r.status_code != 200:
-                    return
-                async for chunk in r.aiter_bytes():
-                    yield chunk
-
-    ct, _ = mimetypes.guess_type(file_path)
-    if not ct:
-        ct = "application/octet-stream"
-    return StreamingResponse(_stream(), media_type=ct)
+    return await stream_library_file(url, file_path)
 
 
 ROUTES = [
