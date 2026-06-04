@@ -4,24 +4,42 @@ import { useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
 import { auth } from "@/lib/api"
 
-const FEATURES = [
-  {
-    title: "多 Agent 智能导师",
-    desc: "苏格拉底提问、错因诊断、脚手架引导，按岗位经验档自适应教学。",
-  },
-  {
-    title: "真实工业级项目",
-    desc: "从零基础参与真实产线项目，在实战中沉淀岗位能力。",
-  },
-  {
-    title: "动态知识树驱动",
-    desc: "DAG 前置依赖编排学习路径，记忆系统跨会话追踪你的卡点。",
-  },
+/**
+ * 登录页 — Industrial Atelier 设计语言 (main_design/UI/styles.css)
+ * 暖米白纸面 + Claude 珊瑚橙 + Inter。色值内联, 不依赖整站 token
+ * (生产 web/ 当前是紫色主题), 保证登录页独立呈现设计稿风格。
+ */
+
+// 设计稿权威调色板
+const C = {
+  paper: "#FAF9F5",
+  paper2: "#F1EDDF",
+  card: "#FFFFFF",
+  ink: "#191814",
+  ink2: "#2B2924",
+  sub: "#6B6557",
+  sub2: "#9D978A",
+  border: "#EBE5D6",
+  border2: "#D9D1BD",
+  primary: "#D97757",
+  primaryInk: "#9A4A2E",
+  primarySoft: "#F8EDE5",
+  primaryLine: "#ECCFB8",
+  shadowSm: "0 1px 2px 0 rgba(25,24,20,.04)",
+  shadow: "0 1px 3px 0 rgba(25,24,20,.06), 0 1px 2px -1px rgba(25,24,20,.04)",
+  shadowMd: "0 4px 8px -2px rgba(25,24,20,.06), 0 2px 4px -2px rgba(25,24,20,.04)",
+}
+
+const SANS =
+  '"Inter", ui-sans-serif, system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif'
+const MONO = '"JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace'
+
+const HIGHLIGHTS = [
+  "多 Agent 智能导师",
+  "真实工业级项目",
+  "动态知识树驱动",
 ]
 
 export default function LoginPage() {
@@ -29,6 +47,7 @@ export default function LoginPage() {
   const [username, setUsername] = useState("")
   const [password, setPassword] = useState("")
   const [loading, setLoading] = useState(false)
+  const [focus, setFocus] = useState<string | null>(null)
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -44,149 +63,247 @@ export default function LoginPage() {
     }
   }
 
+  const inputStyle = (id: string): React.CSSProperties => ({
+    width: "100%",
+    height: 40,
+    padding: "0 12px",
+    fontSize: 14,
+    fontFamily: SANS,
+    color: C.ink,
+    background: C.card,
+    border: `1px solid ${focus === id ? C.primary : C.border2}`,
+    borderRadius: 8,
+    outline: "none",
+    boxShadow: focus === id ? `0 0 0 3px ${C.primarySoft}` : "none",
+    transition: "border-color 120ms, box-shadow 120ms",
+  })
+
   return (
-    <main className="min-h-screen grid lg:grid-cols-2 bg-bg">
-      {/* 左栏: 深色品牌区, 小屏隐藏 */}
-      <aside className="relative hidden lg:flex flex-col justify-between overflow-hidden p-12 text-white">
-        {/* 渐变底 + 网格纹理 */}
-        <div
-          className="absolute inset-0 -z-10"
-          style={{
-            background:
-              "linear-gradient(155deg, oklch(0.42 0.13 262) 0%, oklch(0.30 0.10 268) 55%, oklch(0.22 0.06 270) 100%)",
-          }}
-        />
-        <div
-          className="absolute inset-0 -z-10 opacity-[0.18]"
-          style={{
-            backgroundImage:
-              "linear-gradient(oklch(1 0 0 / 0.6) 1px, transparent 1px), linear-gradient(90deg, oklch(1 0 0 / 0.6) 1px, transparent 1px)",
-            backgroundSize: "40px 40px",
-            maskImage:
-              "radial-gradient(ellipse 90% 70% at 30% 25%, black, transparent 75%)",
-          }}
-        />
-        {/* 光晕 */}
-        <div
-          className="absolute -top-24 -left-24 h-96 w-96 rounded-full -z-10 blur-3xl opacity-40"
-          style={{ background: "oklch(0.62 0.18 250)" }}
-        />
-
-        {/* 顶部 logo */}
-        <div className="flex items-center gap-2.5">
+    <div
+      style={{
+        minHeight: "100vh",
+        display: "flex",
+        flexDirection: "column",
+        background: C.paper,
+        fontFamily: SANS,
+        color: C.ink,
+        WebkitFontSmoothing: "antialiased",
+      }}
+    >
+      {/* ── 顶部导航 ── */}
+      <header
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 28,
+          padding: "14px 32px",
+          borderBottom: `1px solid ${C.border}`,
+          background: "rgba(250,249,245,.85)",
+          backdropFilter: "blur(10px)",
+          position: "sticky",
+          top: 0,
+          zIndex: 60,
+        }}
+      >
+        <Link
+          href="/"
+          style={{ display: "flex", alignItems: "center", gap: 10, fontWeight: 600, fontSize: 14.5, color: C.ink }}
+        >
           <BrandMark />
-          <span className="text-[17px] font-semibold tracking-tight">SystemEdu</span>
-        </div>
+          <span style={{ letterSpacing: "-0.01em" }}>SystemEdu</span>
+        </Link>
+        <div style={{ flex: 1 }} />
+        <span style={{ fontSize: 13, color: C.sub }}>
+          还没有账号?{" "}
+          <Link href="/register" style={{ color: C.primary, fontWeight: 500 }}>
+            注册
+          </Link>
+        </span>
+      </header>
 
-        {/* 中部 slogan */}
-        <div className="max-w-md">
-          <h1 className="text-3xl font-semibold leading-tight tracking-tight">
-            AI 驱动的
-            <br />
+      {/* ── 主体: 居中表单卡片 ── */}
+      <main
+        style={{
+          flex: 1,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: "48px 24px",
+        }}
+      >
+        <div style={{ width: "100%", maxWidth: 380 }}>
+          {/* eyebrow */}
+          <div
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 8,
+              fontFamily: MONO,
+              fontSize: 11,
+              letterSpacing: "0.06em",
+              textTransform: "uppercase",
+              color: C.sub,
+              marginBottom: 14,
+            }}
+          >
+            <span style={{ width: 6, height: 6, borderRadius: 999, background: C.primary }} />
             岗位能力培训平台
+          </div>
+
+          <h1 style={{ fontSize: 28, fontWeight: 600, letterSpacing: "-0.028em", lineHeight: 1.15, margin: 0 }}>
+            欢迎回来
           </h1>
-          <p className="mt-4 text-[15px] leading-relaxed text-white/70">
-            面向企业在职员工，从零基础参与真实工业级项目，在多 Agent 智能导师的引导下逐步掌握岗位技能。
+          <p style={{ fontSize: 14, lineHeight: 1.55, color: C.sub, margin: "8px 0 0" }}>
+            登录以继续你的岗位实战培训
           </p>
 
-          <ul className="mt-9 space-y-5">
-            {FEATURES.map((f) => (
-              <li key={f.title} className="flex gap-3.5">
-                <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-white/80" />
-                <div>
-                  <div className="text-[14px] font-medium">{f.title}</div>
-                  <div className="mt-0.5 text-[13px] leading-relaxed text-white/60">
-                    {f.desc}
-                  </div>
-                </div>
-              </li>
+          {/* 卡片 */}
+          <div
+            style={{
+              marginTop: 24,
+              background: C.card,
+              border: `1px solid ${C.border}`,
+              borderRadius: 12,
+              boxShadow: C.shadowMd,
+              padding: 24,
+            }}
+          >
+            <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                <label htmlFor="username" style={{ fontSize: 13, fontWeight: 500, color: C.ink2 }}>
+                  用户名
+                </label>
+                <input
+                  id="username"
+                  type="text"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  onFocus={() => setFocus("username")}
+                  onBlur={() => setFocus(null)}
+                  autoComplete="username"
+                  placeholder="请输入用户名"
+                  required
+                  style={inputStyle("username")}
+                />
+              </div>
+
+              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                <label htmlFor="password" style={{ fontSize: 13, fontWeight: 500, color: C.ink2 }}>
+                  密码
+                </label>
+                <input
+                  id="password"
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  onFocus={() => setFocus("password")}
+                  onBlur={() => setFocus(null)}
+                  autoComplete="current-password"
+                  placeholder="请输入密码"
+                  required
+                  style={inputStyle("password")}
+                />
+              </div>
+
+              <button
+                type="submit"
+                disabled={loading}
+                style={{
+                  height: 44,
+                  marginTop: 4,
+                  border: 0,
+                  borderRadius: 8,
+                  background: C.primary,
+                  color: "#fff",
+                  fontSize: 14.5,
+                  fontWeight: 500,
+                  fontFamily: SANS,
+                  boxShadow: C.shadowSm,
+                  opacity: loading ? 0.6 : 1,
+                  transition: "background 120ms, box-shadow 120ms",
+                }}
+                onMouseEnter={(e) => {
+                  if (!loading) e.currentTarget.style.background = C.primaryInk
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = C.primary
+                }}
+              >
+                {loading ? "登录中..." : "登录"}
+              </button>
+            </form>
+          </div>
+
+          {/* 特性要点 (mono tag 风格) */}
+          <div style={{ marginTop: 20, display: "flex", flexWrap: "wrap", gap: 8 }}>
+            {HIGHLIGHTS.map((h) => (
+              <span
+                key={h}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 6,
+                  fontSize: 11.5,
+                  fontFamily: MONO,
+                  letterSpacing: "0.02em",
+                  padding: "5px 9px",
+                  borderRadius: 6,
+                  border: `1px solid ${C.primaryLine}`,
+                  background: C.primarySoft,
+                  color: C.primaryInk,
+                }}
+              >
+                {h}
+              </span>
             ))}
-          </ul>
-        </div>
-
-        {/* 底部版权 */}
-        <div className="text-[12px] text-white/45">
-          本地优先的 AI Agent Sandbox 企业培训平台
-        </div>
-      </aside>
-
-      {/* 右栏: 登录表单 */}
-      <section className="flex items-center justify-center px-6 py-12">
-        <div className="w-full max-w-sm">
-          {/* 小屏顶部 logo (左栏隐藏时仍可见品牌) */}
-          <div className="mb-8 flex items-center gap-2.5 lg:hidden">
-            <BrandMark className="text-accent" />
-            <span className="text-[17px] font-semibold tracking-tight text-fg">
-              SystemEdu
-            </span>
           </div>
-
-          <div className="mb-7">
-            <h2 className="text-2xl font-semibold tracking-tight text-fg">欢迎回来</h2>
-            <p className="mt-1.5 text-[14px] text-muted">登录以继续你的培训</p>
-          </div>
-
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="space-y-1.5">
-              <Label htmlFor="username">用户名</Label>
-              <Input
-                id="username"
-                type="text"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                autoComplete="username"
-                placeholder="请输入用户名"
-                required
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="password">密码</Label>
-              <Input
-                id="password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                autoComplete="current-password"
-                placeholder="请输入密码"
-                required
-              />
-            </div>
-            <Button type="submit" disabled={loading} size="lg" className="w-full">
-              {loading ? "登录中..." : "登录"}
-            </Button>
-          </form>
-
-          <p className="mt-6 text-[13px] text-muted text-center">
-            还没有账号?{" "}
-            <Link href="/register" className="font-medium text-accent hover:underline">
-              立即注册
-            </Link>
-          </p>
         </div>
-      </section>
-    </main>
+      </main>
+    </div>
   )
 }
 
-/** 纯几何 SVG 品牌标识 (项目禁用 emoji)。三层叠放方块隐喻知识树 DAG。 */
-function BrandMark({ className }: { className?: string }) {
+/**
+ * 品牌标识 — 复刻设计稿 .brand-mark:
+ * 墨黑圆角方块 + 珊瑚橙对角线纹理 + 字母 S。
+ */
+function BrandMark() {
   return (
-    <svg
-      width="26"
-      height="26"
-      viewBox="0 0 26 26"
-      fill="none"
+    <span
+      style={{
+        position: "relative",
+        width: 26,
+        height: 26,
+        borderRadius: 6,
+        background: "#191814",
+        overflow: "hidden",
+        display: "grid",
+        placeItems: "center",
+      }}
       aria-hidden="true"
-      className={className}
     >
-      <rect x="2" y="2" width="22" height="22" rx="6" fill="currentColor" opacity="0.14" />
-      <path
-        d="M13 6.5L18.5 9.75V16.25L13 19.5L7.5 16.25V9.75L13 6.5Z"
-        stroke="currentColor"
-        strokeWidth="1.6"
-        strokeLinejoin="round"
+      <span
+        style={{
+          position: "absolute",
+          inset: 0,
+          background:
+            "linear-gradient(135deg, transparent 40%, #D97757 40% 60%, transparent 60%)",
+          opacity: 0.85,
+        }}
       />
-      <circle cx="13" cy="13" r="2.1" fill="currentColor" />
-    </svg>
+      <span
+        style={{
+          position: "relative",
+          zIndex: 2,
+          fontFamily: '"JetBrains Mono", ui-monospace, monospace',
+          fontWeight: 600,
+          fontSize: 11,
+          color: "#fff",
+          mixBlendMode: "difference",
+        }}
+      >
+        S
+      </span>
+    </span>
   )
 }
