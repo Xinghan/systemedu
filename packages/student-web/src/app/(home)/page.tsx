@@ -429,7 +429,19 @@ function FeaturedCard({ project }: { project: LibraryProjectSummary }) {
         <div className="mono" style={{ color: "var(--sub-2)", fontSize: 11 }}>
           {project.slug}
         </div>
-        <h3 className="h3" style={{ fontSize: 16, lineHeight: 1.35 }}>
+        <h3
+          className="h3"
+          style={{
+            fontSize: 16,
+            lineHeight: 1.35,
+            // 锁定 2 行高度, 多卡片并排时标题区对齐统一
+            minHeight: "calc(16px * 1.35 * 2)",
+            display: "-webkit-box",
+            WebkitLineClamp: 2,
+            WebkitBoxOrient: "vertical",
+            overflow: "hidden",
+          }}
+        >
           {project.title_zh || project.title}
         </h3>
         {project.description && (

@@ -316,19 +316,34 @@ function ProjectCard({
         <div className="mono" style={{ color: "var(--sub-2)", fontSize: 11 }}>
           {project.slug}
         </div>
-        <h3 className="h3" style={{ fontSize: 16, lineHeight: 1.35 }}>
+        <h3
+          className="h3"
+          style={{
+            fontSize: 16,
+            lineHeight: 1.35,
+            // 锁定标题区为 2 行高度 (16px * 1.35 * 2), 1 行标题也占满 2 行空间,
+            // 保证不同卡片的分割线起点统一对齐, 标题换行不再挤压下方。
+            minHeight: "calc(16px * 1.35 * 2)",
+            display: "-webkit-box",
+            WebkitLineClamp: 2,
+            WebkitBoxOrient: "vertical",
+            overflow: "hidden",
+          }}
+        >
           {project.title_zh || project.title}
         </h3>
         {project.description && (
           <p
             className="body"
-            style={{ fontSize: 13.5, color: "var(--sub)", flex: 1 }}
+            style={{ fontSize: 13.5, color: "var(--sub)" }}
           >
             {project.description.length > 90
               ? project.description.slice(0, 90) + "…"
               : project.description}
           </p>
         )}
+        {/* 撑开器: 把分割线 + meta 行始终推到卡片底部, 跟其他卡片对齐 */}
+        <div style={{ flex: 1 }} />
         <div
           style={{
             display: "flex",
