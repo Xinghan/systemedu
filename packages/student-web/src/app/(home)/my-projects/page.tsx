@@ -17,7 +17,7 @@ import {
   Wind,
   FlaskConical,
 } from "lucide-react"
-import { myProjects, type MyProjectItem } from "@/lib/api"
+import { library, myProjects, type MyProjectItem } from "@/lib/api"
 import { useAuthStore } from "@/lib/stores/auth-store"
 
 type Status = "active" | "paused" | "shipped"
@@ -441,7 +441,11 @@ function ForkCard({ f, onRemove }: { f: ForkItem; onRemove: () => void }) {
         href={`/library/${encodeURIComponent(f.slug)}`}
         style={{ position: "relative", textDecoration: "none" }}
       >
-        <CoverArt kind={dClass} />
+        {f.cover_image_path ? (
+          <CoverPhoto slug={f.slug} dClass={dClass} />
+        ) : (
+          <CoverArt kind={dClass} />
+        )}
         <div style={{ position: "absolute", top: 12, right: 12 }}>
           {statusPip(f.status)}
         </div>
@@ -684,6 +688,39 @@ function EmptyShelf() {
       <Link href="/library" className="btn btn-violet" style={{ marginTop: 6 }}>
         <Download size={14} strokeWidth={1.5} /> 去 Library 看看
       </Link>
+    </div>
+  )
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// 真封面图(有 cover_image_path 时使用),加载失败降级回 CoverArt
+// ──────────────────────────────────────────────────────────────────────────
+
+function CoverPhoto({ slug, dClass }: { slug: string; dClass: string }) {
+  const [failed, setFailed] = useState(false)
+  if (failed) return <CoverArt kind={dClass} />
+  return (
+    <div
+      style={{
+        height: 168,
+        position: "relative",
+        overflow: "hidden",
+        background: "#15110d",
+        borderBottom: "1px solid var(--border)",
+      }}
+    >
+      <img
+        src={library.coverUrl(slug)}
+        alt=""
+        onError={() => setFailed(true)}
+        style={{
+          width: "100%",
+          height: "100%",
+          objectFit: "cover",
+          objectPosition: "center 48%",
+          display: "block",
+        }}
+      />
     </div>
   )
 }
