@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { Suspense, useEffect, useState } from "react"
 import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
 import { toast } from "sonner"
@@ -8,7 +8,16 @@ import { auth } from "@/lib/api"
 import { useT } from "@/lib/hooks/use-t"
 import { useAuthStore } from "@/lib/stores/auth-store"
 
+// useSearchParams 需要 Suspense 边界 (Next.js 静态预渲染要求)
 export default function LoginPage() {
+  return (
+    <Suspense fallback={null}>
+      <LoginForm />
+    </Suspense>
+  )
+}
+
+function LoginForm() {
   const t = useT()
   const router = useRouter()
   const params = useSearchParams()
@@ -32,7 +41,7 @@ export default function LoginPage() {
     try {
       const res = await auth.login(username, password)
       setAuth(res.token, res.username)
-      toast.success(t("auth.login.submit") + " ✓")
+      toast.success(t("auth.login.submit"))
       router.replace(next)
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : t("auth.error_generic"))

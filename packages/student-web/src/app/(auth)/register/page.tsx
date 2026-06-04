@@ -29,7 +29,7 @@ export default function RegisterPage() {
     try {
       const res = await auth.register(username, password)
       setAuth(res.token, res.username)
-      toast.success(t("auth.register.submit") + " ✓")
+      toast.success(t("auth.register.submit"))
       router.replace("/home")
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : t("auth.error_generic"))

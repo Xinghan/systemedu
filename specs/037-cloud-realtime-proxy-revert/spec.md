@@ -1,6 +1,6 @@
 # 037-cloud-realtime-proxy-revert
 
-**Status**: draft (2026-06-04)
+**Status**: shipped (2026-06-04)
 **Owner**: Xinghan Cui
 **Created**: 2026-06-04
 **Reverts**: 033-library-clone (catalog 落盘部分)
