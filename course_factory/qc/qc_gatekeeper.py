@@ -747,6 +747,42 @@ def check_c10_chat_checklist(slug: str, mid: str, skip: bool = False) -> dict:
     }
 
 
+# F4.0 节点性质关键词 (模块级, 便于单测)
+# C 类强信号: 总览 / 路线图 / 介绍 / 仪式 / 选型 / 安全 — 没有过程可看, 必须 static_infographic
+C_KIND_KEYWORDS = [
+    "路线图", "总览", "介绍", "仪式", "安全条款", "选型", "工具准备",
+    "项目终点", "overview", "roadmap",
+    "目标墙", "26 周", "起点", "checklist",
+]
+# 弱信号: "doi"/"zenodo"/"阅读"/"论文" 太宽, 既可能是 C 类(路线图顺带提一句以后要挂 DOI/去读
+# 论文), 也可能是 B 类机制(本节核心就是教某个看得见的机制/过程):
+#   - "doi/zenodo": 链接腐烂->转接台重定向是时间因果过程, F4.0 归 B 类
+#   - "论文/阅读": "按科研论文格式写报告 (IMRaD)" 是教写作机制 (散落成果流进四抽屉、解读句被
+#     拦回是看得见的搭建过程), F4.0 归 B 类; 只有"阅读一篇论文"这类才是 C 类
+# 只有当弱信号与真正的总览/路线图强信号同现时才按 C 类处理; 单独出现不强制 C 类.
+C_WEAK_KEYWORDS = ["doi", "zenodo", "阅读", "论文"]
+D_KIND_KEYWORDS = ["反思", "家访", "采访", "写感想", "讨论会"]
+
+
+def _classify_node_kind(blob: str) -> tuple[str, list[str]]:
+    """按 F4.0 关键词把节点分成 C(总览) / D(纯文本) / AB(现象/机制).
+
+    返回 (kind, matched_keywords)。kind ∈ {"C", "D", "AB"}。
+    弱关键词 (C_WEAK_KEYWORDS) 只在与 C 强关键词同现时才追加, 单独出现不触发 C 类。
+    D 优先于 C (反思类即使蹭到 C 词也按纯文本处理)。
+    """
+    b = (blob or "").lower()
+    matched_c = [k for k in C_KIND_KEYWORDS if k.lower() in b]
+    if matched_c:
+        matched_c += [k for k in C_WEAK_KEYWORDS if k.lower() in b]
+    matched_d = [k for k in D_KIND_KEYWORDS if k.lower() in b]
+    if matched_d:
+        return "D", matched_d
+    if matched_c:
+        return "C", matched_c
+    return "AB", []
+
+
 def check_c11_node_kind_anim_form(slug: str, mid: str) -> dict:
     """C11 — 节点性质 (F4.0) 与 animation 形式一致性.
 
@@ -787,22 +823,9 @@ def check_c11_node_kind_anim_form(slug: str, mid: str) -> dict:
     summary = (knode.get("summary", "") or "")
     blob = f"{title} {core_q} {summary}".lower()
 
-    C_KIND_KEYWORDS = [
-        "路线图", "总览", "介绍", "仪式", "安全条款", "选型", "工具准备",
-        "项目终点", "阅读", "论文", "overview", "roadmap",
-        "目标墙", "26 周", "起点", "checklist",
-    ]
-    # "doi"/"zenodo" 太宽: 它们既可能是"路线图节点顺带提一句以后要挂 DOI"(C 类),
-    # 也可能是"本节核心就是教 DOI 解析机制"(B 类机制, 链接腐烂->转接台重定向是看得见的
-    # 时间因果过程, F4.0 归 B 类, autoplay 多帧合法). 只有当它们与真正的总览/路线图信号
-    # 同现时才按 C 类处理; 单独出现不强制 C 类.
-    C_WEAK_KEYWORDS = ["doi", "zenodo"]
-    D_KIND_KEYWORDS = ["反思", "家访", "采访", "写感想", "讨论会"]
-
-    matched_c = [k for k in C_KIND_KEYWORDS if k.lower() in blob]
-    if matched_c:
-        matched_c += [k for k in C_WEAK_KEYWORDS if k.lower() in blob]
-    matched_d = [k for k in D_KIND_KEYWORDS if k.lower() in blob]
+    kind, matched = _classify_node_kind(blob)
+    matched_d = matched if kind == "D" else []
+    matched_c = matched if kind == "C" else []
 
     if matched_d:
         details["kind"] = "D (纯文本)"
