@@ -476,14 +476,11 @@ def upsert_user_project(
     user_id: str,
     library_slug: str,
     library_version: str | None = None,
-    *,
-    cloned_version: str | None = None,
-    local_path: str | None = None,
-    cloned_at: datetime | None = None,
 ) -> tuple[UserProject, bool]:
     """Pull: 如果存在 (即便 removed) 则 removed_at=NULL + 刷 version; 否则新建.
 
-    spec 033: 可选传 cloned_version / local_path / cloned_at 表示已完成本地 clone.
+    cloud 版本 (spec 037): pull 仅记一行关联, 不落盘, 不写 cloned_* 列。
+    cloned_version / local_path / cloned_at 列保留在表里但不再写入 (无 migration)。
 
     Returns: (project, created) — created=True 表示是新行。
     """
@@ -498,12 +495,6 @@ def upsert_user_project(
             existing.removed_at = None
             if library_version:
                 existing.library_version = library_version
-            if cloned_version is not None:
-                existing.cloned_version = cloned_version
-            if local_path is not None:
-                existing.local_path = local_path
-            if cloned_at is not None:
-                existing.cloned_at = cloned_at
             existing.pulled_at = datetime.utcnow()
             session.commit()
             session.refresh(existing)
@@ -512,9 +503,6 @@ def upsert_user_project(
             user_id=user_id,
             library_slug=library_slug,
             library_version=library_version,
-            cloned_version=cloned_version,
-            local_path=local_path,
-            cloned_at=cloned_at,
         )
         session.add(p)
         session.commit()
