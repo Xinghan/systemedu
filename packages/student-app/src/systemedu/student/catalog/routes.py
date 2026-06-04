@@ -150,6 +150,7 @@ async def api_my_projects_pull(request: Request) -> JSONResponse:
 
 
 async def api_my_projects_remove(request: Request) -> JSONResponse:
+    """cloud 版本 (spec 037): 软删关联 + 清进度, 不触碰本地文件。"""
     slug = request.path_params["slug"]
     user_id, err = await require_login(request)
     if err:
