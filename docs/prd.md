@@ -2,12 +2,12 @@
 
 ## 1. Product Vision
 
-**SystemEdu** 是一款**本地优先的 AI Agent Sandbox 平台**，教育为核心定位，Agent 为底层架构。
+**SystemEdu** 是一款 **cloud 优先的 AI Agent 教育平台**，教育为核心定位，Agent 为底层架构。
 
-类似 OpenClaw 模式：本地运行 agent daemon，配置 LLM、MCP server、skills，通过 IM 通信，通过 Hub 共享项目。面向儿童到青少年（6-18 岁），让零基础用户直接参与真实工业级项目，在 AI 导师引导下完成学习。
+课程内容由 library 服务统一托管，学生在浏览器里 pull 项目 (仅在 DB 记一行关联)，学习时实时代理 library 内容；所有学习进度 / 行为 / agent chat 数据存 student-app 的 PostgreSQL。面向儿童到青少年（6-18 岁），让零基础用户直接参与真实工业级项目，在 AI 导师引导下完成学习。(早期为本地优先 OpenClaw 模式，已于 cloud 化后演进，见 spec 037。)
 
 **核心差异化**：
-- 本地优先：agent 在本地运行，数据存本地 SQLite
+- cloud 优先：内容 library 托管 + 学习时实时代理，用户数据存 PostgreSQL
 - 多 LLM：支持 Qwen/Claude/Ollama 等任意 OpenAI-compatible 端点
 - MCP 集成：通过 MCP server 扩展工具能力
 - Skills 系统：SKILL.md 格式，兼容 OpenClaw
@@ -588,5 +588,5 @@ systemedu hub login/search/pull/push # Hub 操作 (Phase 4)
 | **安全** | 沙箱隔离, 命令黑名单, 文件访问控制 |
 | **性能** | AI 对话首 token < 1s |
 | **可扩展** | 支持任意 MCP server, 自定义 skills/agents |
-| **本地优先** | 所有数据存本地, Hub 可选 |
+| **cloud 优先** | 内容 library 托管, 用户数据存 PostgreSQL (见 spec 037) |
 | **国际化** | 初期中文, 架构支持多语言 |

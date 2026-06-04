@@ -11,7 +11,7 @@
 
 ### 1.1 背景
 
-SystemEdu 是本地优先的 AI Agent Sandbox 教育平台。当前 tutor 运行时基于 `deepagents` 包，存在以下局限：
+SystemEdu 是 cloud 优先的 AI Agent 教育平台 (已 cloud 化，见 spec 037)。当前 tutor 运行时基于 `deepagents` 包，存在以下局限：
 
 - **无状态恢复**：对话状态只存文本（`messages` 表），浏览器刷新 / 重启即丢失图级中间状态
 - **无结构化学生模型**：Mem0 只做向量召回，无法精确追踪"学生在某 knode 卡在哪"

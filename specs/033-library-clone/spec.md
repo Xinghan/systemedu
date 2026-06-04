@@ -1,6 +1,6 @@
 # 033-library-clone
 
-**Status**: shipped (2026-05-19)
+**Status**: reverted by spec 037 (2026-06-04) — catalog 本地落盘部分已回退为纯 cloud 实时代理; library 只暴露元信息的想法保留待后续 spec
 **Owner**: Xinghan Cui
 **Created**: 2026-05-19
 

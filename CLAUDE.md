@@ -6,7 +6,7 @@
 
 ## Project Overview
 
-SystemEdu 是一款**本地优先的 AI Agent Sandbox 平台**，教育为核心定位，Agent 为底层架构。类似 OpenClaw 模式：本地运行 agent daemon，配置 LLM、MCP server、skills，通过 IM 通信，通过 Hub 共享项目。
+SystemEdu 是一款 **cloud 优先的 AI Agent 教育平台**，教育为核心定位，Agent 为底层架构。课程内容由 library 服务统一托管，学生在浏览器里 pull 项目 (仅在 DB 记一行关联)，学习时实时代理 library 内容；所有用户学习进度 / 行为数据 / agent chat 数据存 student-app 的 PostgreSQL。
 
 面向儿童到青少年（6-18岁）的 AI Agent 驱动项目制学习平台。用户可以从零基础开始参与真实工业级项目，在多 Agent 智能导师系统的引导下，逐步掌握并完成工业级别的项目。
 
@@ -286,9 +286,9 @@ Internet -> nginx:80 -> /api/*  -> uvicorn:18820 (Python gateway)
 | 2026-03-12 | Mem0 for AI memory | Vector+graph hybrid, self-hosted |
 | 2026-03-12 | DAG-based knowledge tree | Prerequisite dependencies, non-linear learning |
 | 2026-03-12 | Qwen (DashScope) as LLM | OpenAI-compatible API，国内访问稳定 |
-| 2026-03-14 | Architecture pivot to local-first Agent Sandbox | 类似 OpenClaw，本地运行 agent，Hub 共享项目 |
+| 2026-03-14 | Architecture pivot to local-first Agent Sandbox | 类似 OpenClaw (注: 已于 cloud 化后废弃, 见 spec 037 — 现 library 托管内容 + student 仅存关联/行为) |
 | 2026-03-14 | Python package with Typer CLI | `pip install systemedu`, CLI entry point |
 | 2026-03-14 | Multi-provider LLM support | 支持 Qwen/Claude/Ollama 等任意 OpenAI-compatible API |
-| 2026-03-14 | SQLite for local storage | 本地优先，无需安装数据库服务器 |
+| 2026-03-14 | SQLite for local storage | 本地优先，无需安装数据库服务器 (注: cloud 版本改 PostgreSQL, 本地 SQLite 仅 pytest 用) |
 | 2026-03-14 | SKILL.md format | 兼容 OpenClaw，YAML frontmatter + markdown body |
 | 2026-03-14 | Pydantic models (no Django ORM) | 核心包不依赖 Django，轻量化 |
