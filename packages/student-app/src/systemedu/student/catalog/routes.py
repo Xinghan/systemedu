@@ -40,7 +40,6 @@ from ..db import (
     upsert_user_project,
 )
 from ..library_proxy.client import get_library_client
-from .storage import cleanup_local_project
 
 
 logger = logging.getLogger(__name__)
@@ -156,16 +155,10 @@ async def api_my_projects_remove(request: Request) -> JSONResponse:
     if err:
         return err
     existed = soft_remove_user_project(user_id, slug)
-    # spec 033: 卸载时真删本地目录, 释放磁盘
-    local_removed = cleanup_local_project(user_id, slug)
-    # 同步清掉学习进度, 避免"卸载 -> 重新 clone"后旧 last_module_id 复活
+    # cloud 版本: 无本地文件可清; 仅同步清学习进度, 避免"卸载->重新 pull"后
+    # 旧 last_module_id 复活。
     delete_last_visited(user_id, slug)
-    if not existed and not local_removed:
-        return JSONResponse({"removed": False}, status_code=200)
-    return JSONResponse(
-        {"removed": True, "local_cleaned": local_removed},
-        status_code=200,
-    )
+    return JSONResponse({"removed": existed}, status_code=200)
 
 
 async def api_my_progress_get(request: Request) -> JSONResponse:

@@ -104,3 +104,15 @@ def test_pull_creates_no_local_dir(client, services):
     assert "cloned" not in body
     assert "cloned_version" not in body
     assert "local_path" not in body
+
+
+def test_remove_no_filesystem_touch(client, services):
+    """cloud 版本: remove 软删关联, 返回体不含 local_cleaned 字段."""
+    token = _register(client, "cat_rm_nofs")
+    H = {"Authorization": f"Bearer {token}"}
+    client.post(f"/api/my/projects/{services['slug']}", headers=H)
+    r = client.delete(f"/api/my/projects/{services['slug']}", headers=H)
+    assert r.status_code == 200
+    body = r.json()
+    assert body["removed"] is True
+    assert "local_cleaned" not in body
