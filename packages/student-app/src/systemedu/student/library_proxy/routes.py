@@ -124,18 +124,12 @@ async def api_library_cover(request: Request):
     """公开 (无需登录/Pull). 流式透传项目封面图.
 
     封面图是项目橱窗资源, 列表页/详情页未登录也要能看, 所以不走 file 端点的
-    登录+Pull 鉴权。从项目摘要取 cover_image_path 再透传, 没有封面则 404。
+    登录+Pull 鉴权。直连 library 的 /cover 端点 — 该端点对 draft 也放行, 所以
+    草稿项目 (status=draft) 的封面在 library 也能正常展示 (前端只加「草稿」徽章)。
     """
     slug = request.path_params["slug"]
-    try:
-        meta = await get_library_client().get_project(slug)
-    except Exception as e:
-        return _lib_error_response(e)
-    cover_path = getattr(meta, "cover_image_path", None)
-    if not cover_path:
-        return JSONResponse({"error": "no_cover", "slug": slug}, status_code=404)
 
-    url = get_library_client().get_file_url(slug, cover_path)
+    url = get_library_client().get_cover_url(slug)
     license_token = os.environ.get(
         "LIBRARY_LICENSE_TOKEN", "dev-only-license-token-change-me"
     )
@@ -144,22 +138,29 @@ async def api_library_cover(request: Request):
     )
     trust_env = "127.0.0.1" not in base_url and "localhost" not in base_url
 
-    async def _stream():
+    # 先发一个 HEAD-like 请求拿到 content-type + 确认 200 (draft 也放行)。
+    # library /cover 端点用 FileResponse, content-type 已按文件后缀正确设置。
+    content_type = "image/png"
+    try:
         async with httpx.AsyncClient(timeout=60.0, trust_env=trust_env) as client:
-            async with client.stream(
-                "GET", url, headers={"Authorization": f"Bearer {license_token}"}
-            ) as r:
-                if r.status_code != 200:
-                    return
-                async for chunk in r.aiter_bytes():
-                    yield chunk
+            probe = await client.get(
+                url, headers={"Authorization": f"Bearer {license_token}"}
+            )
+            if probe.status_code != 200:
+                return JSONResponse(
+                    {"error": "no_cover", "slug": slug}, status_code=404
+                )
+            content_type = probe.headers.get("content-type") or "image/png"
+            body = probe.content
+    except Exception as e:
+        return _lib_error_response(e)
 
-    ct, _ = mimetypes.guess_type(cover_path)
-    if not ct:
-        ct = "application/octet-stream"
+    async def _stream():
+        yield body
+
     return StreamingResponse(
         _stream(),
-        media_type=ct,
+        media_type=content_type,
         headers={"Cache-Control": "public, max-age=3600"},
     )
 

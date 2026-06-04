@@ -248,6 +248,34 @@ def get_file(slug: str, file_path: str):
     return FileResponse(target)
 
 
+@router.get("/projects/{slug}/cover")
+def get_cover(slug: str):
+    """项目封面图.
+
+    spec 036: 封面是橱窗资源, **不过滤 status** — draft 项目在 library 也要
+    显示封面 (前端按 status 加「草稿」徽章但仍展示封面图)。这是唯一对 draft
+    放行的资源; 详情/树/knodes/download/其它媒体仍硬过滤 published。
+    """
+    db = get_session()
+    try:
+        p = db.query(Project).filter_by(slug=slug).first()
+    finally:
+        db.close()
+    if not p:
+        raise HTTPException(status_code=404, detail="project not found")
+    if not p.cover_image_path:
+        raise HTTPException(status_code=404, detail="no cover")
+
+    target = PROJECTS_MEDIA_DIR / slug / p.cover_image_path
+    if not target.exists() or not target.is_file():
+        raise HTTPException(status_code=404, detail="cover file not found")
+    try:
+        target.resolve().relative_to((PROJECTS_MEDIA_DIR / slug).resolve())
+    except ValueError:
+        raise HTTPException(status_code=403, detail="path traversal blocked")
+    return FileResponse(target)
+
+
 @router.get("/projects/{slug}/download")
 def download_project(slug: str):
     """spec 033: 下载完整项目 tarball.

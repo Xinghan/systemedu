@@ -243,6 +243,10 @@ class LibraryClient:
         """返回完整 URL, 调用方拿去直接给前端 (或 server-side 再 fetch)."""
         return _build_path(self.base_url, "v1", "projects", slug, "files", path)
 
+    def get_cover_url(self, slug: str) -> str:
+        """封面图 URL (对 draft 也放行, 不需要先 get_project)."""
+        return _build_path(self.base_url, "v1", "projects", slug, "cover")
+
     def fetch_file(self, slug: str, path: str) -> bytes:
         """下载文件二进制内容 (server-side 用; 前端通常直接拿 URL)."""
         r = self._client.get(self.get_file_url(slug, path))
@@ -344,6 +348,10 @@ class AsyncLibraryClient:
 
     def get_file_url(self, slug: str, path: str) -> str:
         return _build_path(self.base_url, "v1", "projects", slug, "files", path)
+
+    def get_cover_url(self, slug: str) -> str:
+        """封面图 URL (对 draft 也放行, 不需要先 get_project)."""
+        return _build_path(self.base_url, "v1", "projects", slug, "cover")
 
     async def fetch_file(self, slug: str, path: str) -> bytes:
         r = await self._client.get(self.get_file_url(slug, path))
