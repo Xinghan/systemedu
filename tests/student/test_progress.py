@@ -48,14 +48,24 @@ def test_put_progress_requires_pull(client, services):
     assert r.status_code == 403
 
 
-def test_progress_survives_remove_and_repull(client, services):
-    """移除后再 Pull, 进度保留."""
-    H = _register_and_pull(client, services, "prog_survives")
+def test_remove_clears_progress(client, services):
+    """卸载项目即清学习进度 (卸载 = 彻底移除)."""
+    H = _register_and_pull(client, services, "prog_cleared_on_remove")
     client.put(f"/api/my/progress/{services['slug']}/M01", headers=H)
+    # 卸载后读进度应为空
+    client.delete(f"/api/my/projects/{services['slug']}", headers=H)
+    r = client.get(f"/api/my/progress/{services['slug']}", headers=H)
+    assert r.json()["last_module_id"] is None
+
+
+def test_repull_after_remove_starts_fresh(client, services):
+    """卸载后再 Pull, 进度从零开始 (旧 last_module_id 不复活)."""
+    H = _register_and_pull(client, services, "prog_fresh_repull")
+    client.put(f"/api/my/progress/{services['slug']}/M05", headers=H)
     client.delete(f"/api/my/projects/{services['slug']}", headers=H)
     client.post(f"/api/my/projects/{services['slug']}", headers=H)
     r = client.get(f"/api/my/progress/{services['slug']}", headers=H)
-    assert r.json()["last_module_id"] == "M01"
+    assert r.json()["last_module_id"] is None
 
 
 def test_progress_per_user(client, services):

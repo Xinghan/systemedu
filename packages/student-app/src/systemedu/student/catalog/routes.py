@@ -33,6 +33,7 @@ from systemedu.core.library_client import (
 from ..auth.deps import require_login
 from ..db import (
     UserProject,
+    delete_last_visited,
     get_last_visited,
     get_user_project,
     list_user_projects,
@@ -225,6 +226,8 @@ async def api_my_projects_remove(request: Request) -> JSONResponse:
     existed = soft_remove_user_project(user_id, slug)
     # spec 033: 卸载时真删本地目录, 释放磁盘
     local_removed = cleanup_local_project(user_id, slug)
+    # 同步清掉学习进度, 避免"卸载 -> 重新 clone"后旧 last_module_id 复活
+    delete_last_visited(user_id, slug)
     if not existed and not local_removed:
         return JSONResponse({"removed": False}, status_code=200)
     return JSONResponse(

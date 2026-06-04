@@ -591,6 +591,25 @@ def upsert_last_visited(user_id: str, library_slug: str, module_id: str) -> Last
         return _detach_last_visited(lv)  # type: ignore[return-value]
 
 
+def delete_last_visited(user_id: str, library_slug: str) -> bool:
+    """删除某用户某项目的学习进度记录. 返回是否真删了.
+
+    卸载项目时调用, 避免"移除 -> 重新 clone"后旧进度 (last_module_id) 复活。
+    """
+    with get_session() as session:
+        existing = session.execute(
+            select(LastVisited).where(
+                LastVisited.user_id == user_id,
+                LastVisited.library_slug == library_slug,
+            )
+        ).scalar_one_or_none()
+        if existing is None:
+            return False
+        session.delete(existing)
+        session.commit()
+        return True
+
+
 # ---------------------------------------------------------------------------
 # spec 031: ExerciseAttempt DAO
 # ---------------------------------------------------------------------------
