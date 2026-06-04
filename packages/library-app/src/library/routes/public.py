@@ -24,6 +24,7 @@ def _public_project_view(p: Project) -> dict:
         "title": p.title,
         "title_zh": p.title_zh,
         "description": p.description,
+        "status": p.status.value if p.status else "draft",
         "version": p.version,
         "knode_count": p.knode_count,
         "stage_count": p.stage_count,
@@ -40,17 +41,32 @@ def _public_project_view(p: Project) -> dict:
 
 
 @router.get("/projects")
-def list_projects() -> list[dict]:
-    """列出 published 项目."""
+def list_projects(include_draft: bool = Query(True)) -> list[dict]:
+    """列出项目.
+
+    spec 036: 默认同时返回 published + draft 项目, 让 library 能展示
+    "草稿/重新生成中" 项目 (前端按 status 字段加徽章并禁止拉取/进入).
+    draft 项目排在 published 之后. include_draft=false 可只返回 published.
+    """
     db = get_session()
     try:
-        ps = (
-            db.query(Project)
-            .filter_by(status=ProjectStatus.published)
-            .order_by(Project.published_at.desc())
-            .all()
+        q = db.query(Project)
+        if not include_draft:
+            q = q.filter_by(status=ProjectStatus.published)
+        ps = q.all()
+        # published 在前 (按 published_at 倒序, 无日期的排末尾), draft 在后 (按 slug)
+        from datetime import datetime
+
+        published = sorted(
+            (p for p in ps if p.status == ProjectStatus.published),
+            key=lambda p: p.published_at or datetime.min,
+            reverse=True,
         )
-        return [_public_project_view(p) for p in ps]
+        drafts = sorted(
+            (p for p in ps if p.status != ProjectStatus.published),
+            key=lambda p: p.slug,
+        )
+        return [_public_project_view(p) for p in (published + drafts)]
     finally:
         db.close()
 

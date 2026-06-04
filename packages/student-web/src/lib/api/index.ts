@@ -61,6 +61,7 @@ export interface LibraryProjectSummary {
   title: string
   title_zh?: string | null
   description?: string
+  status?: "published" | "draft"
   version?: string
   knode_count?: number
   stage_count?: number

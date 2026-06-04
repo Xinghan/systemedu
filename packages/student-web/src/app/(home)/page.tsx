@@ -33,7 +33,8 @@ export default function Homepage() {
     void (async () => {
       try {
         const all = await library.listProjects()
-        setFeatured(all.slice(0, 3))
+        // 落地页只展示已发布项目, 草稿不进 featured
+        setFeatured(all.filter((p) => p.status !== "draft").slice(0, 3))
       } catch {
         /* 不阻塞落地页渲染 */
       }

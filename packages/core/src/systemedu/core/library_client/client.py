@@ -43,6 +43,7 @@ class ProjectMeta:
     title: str
     title_zh: str | None = None
     description: str = ""
+    status: str = "published"
     version: str = ""
     knode_count: int = 0
     stage_count: int = 0
@@ -66,6 +67,7 @@ class ProjectMeta:
             title=d.get("title", ""),
             title_zh=d.get("title_zh"),
             description=d.get("description", "") or "",
+            status=d.get("status", "published") or "published",
             version=d.get("version", "") or "",
             knode_count=d.get("knode_count", 0) or 0,
             stage_count=d.get("stage_count", 0) or 0,

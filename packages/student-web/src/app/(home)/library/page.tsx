@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useState, type CSSProperties } from "react"
 import { toast } from "sonner"
 import {
   ArrowRight,
@@ -266,24 +266,29 @@ function ProjectCard({
   pulled: boolean
 }) {
   const dClass = domainClass(project.domain)
-  return (
-    <Link
-      href={`/library/${encodeURIComponent(project.slug)}`}
-      style={{
-        padding: 0,
-        overflow: "hidden",
-        display: "flex",
-        flexDirection: "column",
-        cursor: "pointer",
-        border: "1px solid var(--border)",
-        borderRadius: 12,
-        background: "var(--card)",
-        boxShadow: "var(--shadow-sm)",
-        textDecoration: "none",
-        color: "var(--ink-2)",
-        transition: "transform var(--t-med), box-shadow var(--t-med)",
-      }}
-    >
+  const isDraft = project.status === "draft"
+
+  // 草稿项目: 不可进入 (详情页会 404), 卡片整体降透明度 + 改为 div (非链接) + 不响应 hover。
+  // 已发布项目: 正常 Link 可点进入。
+  const cardStyle: CSSProperties = {
+    padding: 0,
+    overflow: "hidden",
+    display: "flex",
+    flexDirection: "column",
+    cursor: isDraft ? "default" : "pointer",
+    border: "1px solid var(--border)",
+    borderRadius: 12,
+    background: "var(--card)",
+    boxShadow: "var(--shadow-sm)",
+    textDecoration: "none",
+    color: "var(--ink-2)",
+    transition: "transform var(--t-med), box-shadow var(--t-med)",
+    opacity: isDraft ? 0.62 : 1,
+    position: "relative",
+  }
+
+  const inner = (
+    <>
       {project.cover_image_path ? (
         <CoverPhoto slug={project.slug} dClass={dClass} />
       ) : (
@@ -299,6 +304,19 @@ function ProjectCard({
         }}
       >
         <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
+          {isDraft && (
+            <span
+              className="tag"
+              style={{
+                background: "var(--paper-2)",
+                color: "var(--sub)",
+                border: "1px solid var(--border-2)",
+                fontWeight: 600,
+              }}
+            >
+              草稿 · 重新生成中
+            </span>
+          )}
           {project.domain && <span className={`tag ${dClass}`}>{project.domain}</span>}
           {project.duration_weeks != null && (
             <span className="tag">{project.duration_weeks}w</span>
@@ -306,7 +324,7 @@ function ProjectCard({
           {project.difficulty != null && (
             <span className="tag">diff {project.difficulty}</span>
           )}
-          {pulled && (
+          {pulled && !isDraft && (
             <span className="tag violet">
               <Sparkles size={11} strokeWidth={1.5} style={{ marginRight: 2 }} />
               在我的书架
@@ -359,20 +377,49 @@ function ProjectCard({
           >
             {project.stage_count ?? 0}S · {project.knode_count ?? 0}K
           </span>
-          <span
-            style={{
-              color: "var(--violet)",
-              fontSize: 13,
-              fontWeight: 500,
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 4,
-            }}
-          >
-            Open <ArrowRight size={13} strokeWidth={1.5} />
-          </span>
+          {isDraft ? (
+            <span
+              style={{
+                color: "var(--sub-2)",
+                fontSize: 13,
+                fontWeight: 500,
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 4,
+              }}
+            >
+              暂未开放
+            </span>
+          ) : (
+            <span
+              style={{
+                color: "var(--violet)",
+                fontSize: 13,
+                fontWeight: 500,
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 4,
+              }}
+            >
+              Open <ArrowRight size={13} strokeWidth={1.5} />
+            </span>
+          )}
         </div>
       </div>
+    </>
+  )
+
+  if (isDraft) {
+    // 草稿: 非链接, 不可进入
+    return (
+      <div style={cardStyle} aria-disabled="true">
+        {inner}
+      </div>
+    )
+  }
+  return (
+    <Link href={`/library/${encodeURIComponent(project.slug)}`} style={cardStyle}>
+      {inner}
     </Link>
   )
 }
