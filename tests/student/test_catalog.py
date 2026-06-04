@@ -92,13 +92,10 @@ def test_pull_nonexistent_project_404(client):
 
 def test_pull_creates_no_local_dir(client, services):
     """cloud 版本 (spec 037): Pull 只在 DB 记一行关联, 响应体不含任何本地落盘字段。"""
-    r = client.post(
-        "/api/auth/register", json={"username": "pull_no_disk", "password": "passw0rd"}
-    )
-    token = r.json()["token"]
+    token = _register(client, "pull_no_disk")
     H = {"Authorization": f"Bearer {token}"}
     resp = client.post(f"/api/my/projects/{services['slug']}", headers=H)
-    assert resp.status_code in (200, 201)
+    assert resp.status_code == 201
     body = resp.json()
     # 关联行已建
     assert body["created"] is True
