@@ -20,7 +20,7 @@ import {
   Waves,
   Wind,
 } from "lucide-react"
-import { myProjects, type MyProjectItem } from "@/lib/api"
+import { library, myProjects, type MyProjectItem } from "@/lib/api"
 import { useAuthStore } from "@/lib/stores/auth-store"
 
 // 设计稿的 Crumbs
@@ -274,6 +274,11 @@ export default function HomePage() {
                 </Link>
               </div>
             </div>
+
+            <CoverBanner
+              slug={activeProject.slug}
+              hasCover={!!activeProject.cover_image_path}
+            />
 
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr" }}>
               {/* left: project meta */}
@@ -672,6 +677,50 @@ function ProjectRow({ project, active }: { project: MyProjectItem; active: boole
         {project.knode_count ?? 0}k
       </span>
     </Link>
+  )
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// active 项目真封面横幅; 无封面或加载失败返回 null(不占位)
+// ──────────────────────────────────────────────────────────────────────────
+
+function CoverBanner({ slug, hasCover }: { slug: string; hasCover: boolean }) {
+  const [failed, setFailed] = useState(false)
+  if (!hasCover || failed) return null
+  return (
+    <div
+      style={{
+        height: 120,
+        position: "relative",
+        overflow: "hidden",
+        background: "#15110d",
+        borderBottom: "1px solid var(--border)",
+      }}
+    >
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={library.coverUrl(slug)}
+        alt=""
+        onError={() => setFailed(true)}
+        style={{
+          width: "100%",
+          height: "100%",
+          objectFit: "cover",
+          objectPosition: "center 48%",
+          display: "block",
+        }}
+      />
+      {/* 底部柔和渐变, 让封面到内容区过渡自然 */}
+      <div
+        style={{
+          position: "absolute",
+          inset: 0,
+          background:
+            "linear-gradient(180deg, rgba(21,17,13,0) 55%, rgba(21,17,13,0.5) 100%)",
+          pointerEvents: "none",
+        }}
+      />
+    </div>
   )
 }
 
