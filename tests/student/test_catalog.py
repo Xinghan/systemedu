@@ -88,3 +88,22 @@ def test_pull_nonexistent_project_404(client):
     H = {"Authorization": f"Bearer {token}"}
     r = client.post("/api/my/projects/does-not-exist", headers=H)
     assert r.status_code == 404
+
+
+def test_pull_creates_no_local_dir(client, services):
+    """cloud 版本 (spec 037): Pull 只在 DB 记一行关联, 响应体不含任何本地落盘字段。"""
+    r = client.post(
+        "/api/auth/register", json={"username": "pull_no_disk", "password": "passw0rd"}
+    )
+    token = r.json()["token"]
+    H = {"Authorization": f"Bearer {token}"}
+    resp = client.post(f"/api/my/projects/{services['slug']}", headers=H)
+    assert resp.status_code in (200, 201)
+    body = resp.json()
+    # 关联行已建
+    assert body["created"] is True
+    assert body["slug"] == services["slug"]
+    # 不再有任何本地落盘相关字段
+    assert "cloned" not in body
+    assert "cloned_version" not in body
+    assert "local_path" not in body

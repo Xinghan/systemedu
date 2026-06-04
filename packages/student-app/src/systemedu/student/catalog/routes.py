@@ -13,8 +13,6 @@ import asyncio
 import json
 import logging
 import mimetypes
-import shutil
-from datetime import datetime
 from pathlib import Path
 
 from starlette.responses import FileResponse
@@ -42,11 +40,7 @@ from ..db import (
     upsert_user_project,
 )
 from ..library_proxy.client import get_library_client
-from .storage import (
-    cleanup_local_project,
-    extract_tarball_safely,
-    project_local_dir,
-)
+from .storage import cleanup_local_project
 
 
 logger = logging.getLogger(__name__)
@@ -136,7 +130,7 @@ async def api_my_projects_list(request: Request) -> JSONResponse:
 
 
 async def api_my_projects_pull(request: Request) -> JSONResponse:
-    """spec 033: Pull = 真把 tarball 解压到本地, 不再只是 DB 记一行."""
+    """cloud 版本 (spec 037): Pull = 只在 DB 记一行关联, 不下载/解压任何文件."""
     slug = request.path_params["slug"]
     user_id, err = await require_login(request)
     if err:
@@ -149,72 +143,10 @@ async def api_my_projects_pull(request: Request) -> JSONResponse:
         return _lib_error_response(e)
 
     target_version = meta.version or ""
-    target_dir = project_local_dir(user_id, slug, target_version)
-
-    # 检查是否已 clone 同版本
-    existing = get_user_project(user_id, slug)
-    same_version_already_cloned = (
-        existing is not None
-        and existing.cloned_version == target_version
-        and existing.local_path
-        and Path(existing.local_path).exists()
-        and (Path(existing.local_path) / "manifest.json").exists()
-    )
-
-    if same_version_already_cloned:
-        # 直接 resurrect (清 removed_at), 不重新下载
-        project, created = upsert_user_project(
-            user_id, slug, library_version=target_version
-        )
-        lv = get_last_visited(user_id, slug)
-        body = _project_to_dict(project, meta, lv.last_module_id if lv else None)
-        body["created"] = created
-        body["cloned"] = False  # 没真下载, 复用本地
-        return JSONResponse(body, status_code=200)
-
-    # 真下载 + 解压
-    try:
-        tarball = await get_library_client().download_project(slug)
-    except LibraryNotFound:
-        return JSONResponse({"error": "archive_not_found"}, status_code=404)
-    except Exception as e:
-        return _lib_error_response(e)
-
-    tmp_dir = target_dir.parent / f".{target_version}.tmp"
-    try:
-        if tmp_dir.exists():
-            shutil.rmtree(tmp_dir)
-        tmp_dir.mkdir(parents=True, exist_ok=True)
-        extract_tarball_safely(tarball, tmp_dir)
-        # atomic rename
-        if target_dir.exists():
-            shutil.rmtree(target_dir)
-        tmp_dir.rename(target_dir)
-    except Exception as e:
-        # 清理半成品
-        if tmp_dir.exists():
-            shutil.rmtree(tmp_dir, ignore_errors=True)
-        if target_dir.exists() and not (target_dir / "manifest.json").exists():
-            shutil.rmtree(target_dir, ignore_errors=True)
-        logger.exception("pull failed for %s", slug)
-        return JSONResponse(
-            {"error": "extract_failed", "detail": str(e)}, status_code=500
-        )
-
-    project, created = upsert_user_project(
-        user_id,
-        slug,
-        library_version=target_version,
-        cloned_version=target_version,
-        local_path=str(target_dir),
-        cloned_at=datetime.utcnow(),
-    )
+    project, created = upsert_user_project(user_id, slug, library_version=target_version)
     lv = get_last_visited(user_id, slug)
     body = _project_to_dict(project, meta, lv.last_module_id if lv else None)
     body["created"] = created
-    body["cloned"] = True
-    body["cloned_version"] = target_version
-    body["local_path"] = str(target_dir)
     return JSONResponse(body, status_code=201 if created else 200)
 
 
