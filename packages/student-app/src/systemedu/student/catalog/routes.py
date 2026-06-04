@@ -11,17 +11,14 @@ from __future__ import annotations
 
 import asyncio
 import copy
-import json
 import logging
 import mimetypes
-from pathlib import Path
-
+import os
 from typing import Any
 
-from starlette.responses import FileResponse
-
+import httpx
 from starlette.requests import Request
-from starlette.responses import JSONResponse
+from starlette.responses import JSONResponse, StreamingResponse
 from starlette.routing import Route
 
 from systemedu.core.library_client import (
@@ -252,7 +249,7 @@ async def api_my_project_knode(request: Request) -> JSONResponse:
 
 
 async def api_my_project_file(request: Request):
-    """spec 033: 流出本地媒体文件 (anim/game/diagram HTML, 图片, 音频)."""
+    """cloud 版本 (spec 037): 流式代理 library /v1 媒体文件, 不再读本地."""
     slug = request.path_params["slug"]
     file_path = request.path_params["path"]
     user_id, err = await require_login(request)
@@ -261,31 +258,31 @@ async def api_my_project_file(request: Request):
 
     up = get_user_project(user_id, slug)
     if up is None or up.removed_at is not None:
-        return JSONResponse(
-            {"error": "not_pulled", "slug": slug}, status_code=403
-        )
-    if not up.local_path:
-        return JSONResponse(
-            {"error": "needs_reclone", "slug": slug}, status_code=409
-        )
+        return JSONResponse({"error": "not_pulled", "slug": slug}, status_code=403)
 
-    local = Path(up.local_path)
-    if not local.exists():
-        return JSONResponse({"error": "local_missing"}, status_code=410)
+    url = get_library_client().get_file_url(slug, file_path)
+    license_token = os.environ.get(
+        "LIBRARY_LICENSE_TOKEN", "dev-only-license-token-change-me"
+    )
+    base_url = os.environ.get("LIBRARY_BASE_URL") or os.environ.get(
+        "LIBRARY_URL", "http://127.0.0.1:18821"
+    )
+    trust_env = "127.0.0.1" not in base_url and "localhost" not in base_url
 
-    # 安全 path resolve, 防止 ../ 越界
-    try:
-        target = (local / file_path).resolve()
-        local_resolved = local.resolve()
-        target.relative_to(local_resolved)
-    except (ValueError, OSError):
-        return JSONResponse({"error": "forbidden"}, status_code=403)
+    async def _stream():
+        async with httpx.AsyncClient(timeout=60.0, trust_env=trust_env) as client:
+            async with client.stream(
+                "GET", url, headers={"Authorization": f"Bearer {license_token}"}
+            ) as r:
+                if r.status_code != 200:
+                    return
+                async for chunk in r.aiter_bytes():
+                    yield chunk
 
-    if not target.exists() or not target.is_file():
-        return JSONResponse({"error": "file_not_found"}, status_code=404)
-
-    ct, _ = mimetypes.guess_type(str(target))
-    return FileResponse(target, media_type=ct or "application/octet-stream")
+    ct, _ = mimetypes.guess_type(file_path)
+    if not ct:
+        ct = "application/octet-stream"
+    return StreamingResponse(_stream(), media_type=ct)
 
 
 ROUTES = [

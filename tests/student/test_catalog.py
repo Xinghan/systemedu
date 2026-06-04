@@ -151,3 +151,27 @@ def test_knode_404_when_invalid_id(client, services):
     client.post(f"/api/my/projects/{services['slug']}", headers=H)
     r = client.get(f"/api/my/projects/{services['slug']}/knodes/M99", headers=H)
     assert r.status_code == 404
+
+
+def test_file_proxy_when_pulled(client, services):
+    """已 pull: /api/my/projects/{slug}/files/{path} 流式代理 library 文件."""
+    token = _register(client, "cat_file_ok")
+    H = {"Authorization": f"Bearer {token}"}
+    client.post(f"/api/my/projects/{services['slug']}", headers=H)
+    r = client.get(
+        f"/api/my/projects/{services['slug']}/files/knodes/M01-w1-intro/lesson.md",
+        headers=H,
+    )
+    assert r.status_code == 200
+    assert "M01 Intro" in r.text
+
+
+def test_file_403_when_not_pulled(client, services):
+    """未 pull: file 返回 403."""
+    token = _register(client, "cat_file_403")
+    H = {"Authorization": f"Bearer {token}"}
+    r = client.get(
+        f"/api/my/projects/{services['slug']}/files/knodes/M01-w1-intro/lesson.md",
+        headers=H,
+    )
+    assert r.status_code == 403
