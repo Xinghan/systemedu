@@ -46,7 +46,9 @@ function domainClass(domain?: string | null): string {
 }
 
 function deriveStatus(item: MyProjectItem, days: number): Status {
-  if (!item.last_module_id) return "paused" // 没开始算 paused
+  // 还没开始学 (刚 pull) 算 active 待开始, 不是 paused;
+  // paused 专指"学过一半但久未触碰"
+  if (!item.last_module_id) return "active"
   const total = item.knode_count ?? 0
   const completed = parseInt(item.last_module_id.replace(/[^\d]/g, "")) || 0
   if (total > 0 && completed >= total) return "shipped"
@@ -449,7 +451,7 @@ function ForkCard({ f, onRemove }: { f: ForkItem; onRemove: () => void }) {
       >
         <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
           {f.domain && <span className={`tag ${dClass}`}>{f.domain}</span>}
-          {f.duration_weeks != null && <span className="tag">{f.duration_weeks}w</span>}
+          {f.age_band && <span className="tag">{f.age_band}</span>}
         </div>
         <div className="mono" style={{ color: "var(--sub-2)", fontSize: 11 }}>
           {f.slug}
