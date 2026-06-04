@@ -10,10 +10,13 @@ PUT    /api/my/progress/{slug}/{module_id}   — 标记最后访问
 from __future__ import annotations
 
 import asyncio
+import copy
 import json
 import logging
 import mimetypes
 from pathlib import Path
+
+from typing import Any
 
 from starlette.responses import FileResponse
 
@@ -193,7 +196,7 @@ async def api_my_progress_put(request: Request) -> JSONResponse:
     })
 
 
-def _backfill_section_html_paths(rendered_sections) -> None:
+def _backfill_section_html_paths(rendered_sections: Any) -> None:
     """spec 033 起的兼容: 把 idea.{mode}_path 回填到 rendered_sections[id].html_path,
     让前端 inlineHtmlPaths() 能找到 HTML 文件。原地修改 dict。
 
@@ -243,7 +246,7 @@ async def api_my_project_knode(request: Request) -> JSONResponse:
     except Exception as e:
         return _lib_error_response(e)
 
-    data = dict(k.__dict__)
+    data = copy.deepcopy(k.__dict__)
     _backfill_section_html_paths(data.get("rendered_sections"))
     return JSONResponse(data)
 

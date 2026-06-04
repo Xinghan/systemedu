@@ -142,3 +142,12 @@ def test_knode_403_when_not_pulled(client, services):
     H = {"Authorization": f"Bearer {token}"}
     r = client.get(f"/api/my/projects/{services['slug']}/knodes/M01", headers=H)
     assert r.status_code == 403
+
+
+def test_knode_404_when_invalid_id(client, services):
+    """已 pull 但 knode_id 不存在: library 404 转成 knode_not_found 404."""
+    token = _register(client, "cat_knode_404")
+    H = {"Authorization": f"Bearer {token}"}
+    client.post(f"/api/my/projects/{services['slug']}", headers=H)
+    r = client.get(f"/api/my/projects/{services['slug']}/knodes/M99", headers=H)
+    assert r.status_code == 404
