@@ -36,6 +36,9 @@
 | 知识树 DAG + 进度增长 (M01→M02→M03) | test_e2e5_dag_and_progress | A HTTP + 数据 | PASS |
 | safety gate 触发 | test_e2e6_safety_gate | B 进程内 | PASS |
 | catalog route 行覆盖 (进程内 ASGI) | test_route_asgi.py (7 用例) | 进程内 ASGI | PASS, catalog/routes 59% |
+| 跨 session 记忆召回 (抽取入库→新 session 召回/user 隔离/抽取前为空) | test_memory_recall_e2e.py (3 用例) | B 进程内 | PASS |
+| router continue 无 active 回退 | test_continue_with_no_active_skill_falls_back | L1 单元 | PASS |
+| ROUTER_PROMPT 误区规则守卫 | test_prompt_has_misconception_rule | L1 单元 | PASS |
 
 ## L3 质量（--quality，judge = Claude Code）
 
@@ -50,7 +53,8 @@ artifact 现含每轮 `active_skill` 字段，质量问题可归因到路由 vs 
 - **苏格拉底合规率: 20% → ~100%**（门槛 80%，**达标**；改 ROUTER_PROMPT 规则 4a 误区句优先 socratic）
 - 副带修复: continue + 无 active_skill 空回复 bug (router 回退 direct-instruction)
 - 残留: qwen 路由偶发波动 (LLM 能力限制，非 prompt 缺陷)，缓解方向见报告
-- 记忆召回 Q4: recalled_facts 实时路径仍待端到端验证 (跨 session)，见 todolist
+- 记忆召回 Q4: 已端到端验证 (test_memory_recall_e2e.py) — 抽取入库后**跨 session 召回正常**；
+  对话当下为空是**异步抽取的设计时序**(worker 跑完才入库)，非 bug
 
 ## 已知缺口（不计入"功能未覆盖"，是架构限制）
 
@@ -69,7 +73,7 @@ artifact 现含每轮 `active_skill` 字段，质量问题可归因到路由 vs 
 | Mem0Adapter import 名错 (实际类名 Mem0AsyncAdapter)，search_memory 永久 ImportError 退化，L4 语义召回从未生效 | core/tutor/tools/memory.py:54 | 高 | Task 5 | 已修 (42f83153) |
 | tutor 苏格拉底合规率仅 20% (router 误判误区句为事实问题) | skill_router.py ROUTER_PROMPT | 中 | L3 Task 8 | 已修 (规则 4a，→~100%) |
 | continue + 无 active_skill → 空回复 (graph fan-out 到 __finish__) | skill_router.py | 中 | 苏格拉底复测 | 已修 (回退 direct) |
-| 记忆召回实时路径无效 (recalled_facts 单对话内恒空) | fact 抽取走异步 worker，单对话不入库 | 中-高 | L3 Task 8 | 待验证 (跨 session) |
+| 记忆召回实时路径无效 (recalled_facts 单对话内恒空) | fact 抽取走异步 worker，单对话不入库 | 中-高 | L3 Task 8 | 已澄清: 设计时序非 bug，跨 session 召回已端到端验证 (test_memory_recall_e2e) |
 
 ## 总览
 

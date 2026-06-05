@@ -308,3 +308,21 @@ class TestLegacyShim:
         out = await skill_router_node(TutorState(user_id="u1"))
         assert out["skill_decision"]["action"] == "switch"
         assert out["skill_decision"]["target_skill"] == "direct-instruction"
+
+
+# ---------------------------------------------------------------------------
+# ROUTER_PROMPT 内容守卫 (防回归误删苏格拉底误区判别规则)
+# ---------------------------------------------------------------------------
+class TestRouterPromptGuard:
+    """规则 4a (误区句优先 socratic) 的有效性由 L3 真 LLM 验证;
+    这里只防回归: 确保关键约束文本仍在 prompt 里, 不被误删。"""
+
+    def test_prompt_has_misconception_rule(self):
+        from systemedu.core.tutor.nodes.skill_router import ROUTER_PROMPT
+        # 4a 误区优先判别必须存在
+        assert "4a" in ROUTER_PROMPT
+        assert "错误前提" in ROUTER_PROMPT
+        assert "socratic-questioning" in ROUTER_PROMPT
+        # 关键反指令: 短问句带"是不是"也不归 direct
+        assert "是不是" in ROUTER_PROMPT
+        assert "验证一个结论" in ROUTER_PROMPT
