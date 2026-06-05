@@ -131,64 +131,59 @@ class TestMemoryGaps:
             out = await search_student_facts.ainvoke({})
         assert out == {"error": "db not configured"}
 
-    async def test_search_memory_not_configured(self, ctx, monkeypatch):
-        """adapter.enabled is False -> note 'mem0 not configured'.
+    def _set_mem0_enabled(self, monkeypatch, enabled):
+        """patch get_config().memory.enabled (search_memory 据此判断是否配置)。"""
+        class _Mem:
+            pass
+        mem = _Mem()
+        mem.enabled = enabled
 
-        Note: the production module exposes ``Mem0AsyncAdapter`` (not
-        ``Mem0Adapter``), so memory.py's ``from ... import Mem0Adapter`` always
-        raises ImportError in real runs. We inject a ``Mem0Adapter`` attribute
-        (raising=False) to exercise the configured/enabled branches.
-        """
-        class _FakeAdapter:
-            enabled = False
+        class _Cfg:
+            memory = mem
 
         monkeypatch.setattr(
-            "systemedu.core.tutor.memory.mem0_adapter.Mem0Adapter",
-            _FakeAdapter,
-            raising=False,
+            "systemedu.core.config.get_config", lambda: _Cfg(), raising=True
         )
+
+    async def test_search_memory_not_configured(self, ctx, monkeypatch):
+        """config.memory.enabled False -> note 'mem0 not configured'."""
+        self._set_mem0_enabled(monkeypatch, False)
         with push_tool_context(ctx):
             out = await search_memory.ainvoke({"query": "rockets"})
         assert out == {"results": [], "note": "mem0 not configured"}
 
     async def test_search_memory_enabled_returns_results(self, ctx, monkeypatch):
-        """adapter.enabled True + search returns a list -> {results: [...]}."""
+        """enabled + Mem0AsyncAdapter.search 返回 list -> {results: [...]}."""
+        self._set_mem0_enabled(monkeypatch, True)
         fixed = [{"memory": "loves rockets", "score": 0.9}]
 
         class _FakeAdapter:
-            enabled = True
-
             async def search(self, query, user_id, limit):
                 assert query == "rockets"
                 assert user_id == "u-test"
                 return fixed
 
         monkeypatch.setattr(
-            "systemedu.core.tutor.memory.mem0_adapter.Mem0Adapter",
+            "systemedu.core.tutor.memory.mem0_adapter.Mem0AsyncAdapter",
             _FakeAdapter,
-            raising=False,
+            raising=True,
         )
         with push_tool_context(ctx):
             out = await search_memory.ainvoke({"query": "rockets"})
         assert out == {"results": fixed}
 
-    async def test_search_memory_import_error(self, ctx):
-        """Real module exposes Mem0AsyncAdapter, so the in-function import of
-        Mem0Adapter raises ImportError -> note 'mem0 not installed'."""
-        with push_tool_context(ctx):
-            out = await search_memory.ainvoke({"query": "anything"})
-        assert out == {"results": [], "note": "mem0 not installed"}
-
     async def test_search_memory_exception(self, ctx, monkeypatch):
-        """adapter raises -> {results: [], error: str}."""
+        """enabled 但 adapter 构造/search 抛异常 -> {results: [], error: str}."""
+        self._set_mem0_enabled(monkeypatch, True)
+
         class _Boom:
             def __init__(self):
                 raise RuntimeError("kaboom")
 
         monkeypatch.setattr(
-            "systemedu.core.tutor.memory.mem0_adapter.Mem0Adapter",
+            "systemedu.core.tutor.memory.mem0_adapter.Mem0AsyncAdapter",
             _Boom,
-            raising=False,
+            raising=True,
         )
         with push_tool_context(ctx):
             out = await search_memory.ainvoke({"query": "x"})

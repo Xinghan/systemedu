@@ -51,11 +51,14 @@ async def search_memory(query: str) -> dict[str, Any]:
     ctx = require_tool_context()
     # Mem0 is optional — if not wired, return empty results gracefully.
     try:
-        from systemedu.core.tutor.memory.mem0_adapter import Mem0Adapter
+        from systemedu.core.config import get_config
+        from systemedu.core.tutor.memory.mem0_adapter import Mem0AsyncAdapter
 
-        adapter = Mem0Adapter()
-        if not adapter.enabled:
+        # 适配器本身无 .enabled, 禁用状态由 config.memory.enabled 决定
+        # (retrieve_memories 内部据此返回空); 提前短路给出明确 note。
+        if not get_config().memory.enabled:
             return {"results": [], "note": "mem0 not configured"}
+        adapter = Mem0AsyncAdapter()
         results = await adapter.search(query=query, user_id=ctx.user_id, limit=5)
         return {"results": results}
     except ImportError:
