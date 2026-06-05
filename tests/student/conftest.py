@@ -18,6 +18,7 @@ from pathlib import Path
 
 import httpx
 import pytest
+import pytest_asyncio
 
 
 def _free_port() -> int:
@@ -129,9 +130,11 @@ def _wait_http(base: str, deadline_seconds: float = 25.0) -> None:
     raise RuntimeError(f"service at {base} not ready in {deadline_seconds}s")
 
 
-@pytest.fixture(scope="module")
-def services(tmp_path_factory):
-    """library-app:port_lib + student-app:port_stu, 注入 1 个 published 项目."""
+def _spin_services(tmp_path_factory, make_tarball_fn):
+    """起 library-app + student-app 双进程并注入 make_tarball_fn 造的项目。
+
+    generator: yield {student, library, slug, license_token, db_path}。
+    """
     home_lib = tmp_path_factory.mktemp("lib-027")
     student_home = tmp_path_factory.mktemp("student-027")
     student_db = student_home / "student.db"
@@ -177,7 +180,7 @@ def services(tmp_path_factory):
             admin_token = r.json()["token"]
 
             with tempfile.TemporaryDirectory() as tmp:
-                tarball, slug = _make_tarball(Path(tmp))
+                tarball, slug = make_tarball_fn(Path(tmp))
                 with tarball.open("rb") as f:
                     r = c.post(
                         f"{base_lib}/admin/projects/import",
@@ -241,7 +244,56 @@ def services(tmp_path_factory):
             proc_lib.kill()
 
 
+@pytest.fixture(scope="module")
+def services(tmp_path_factory):
+    """library-app:port_lib + student-app:port_stu, 注入 1 个 published 项目."""
+    yield from _spin_services(tmp_path_factory, _make_tarball)
+
+
 @pytest.fixture
 def client(services):
     """Pre-made httpx Client for student-app, trust_env=False to bypass http proxy."""
     return httpx.Client(base_url=services["student"], timeout=15.0, trust_env=False)
+
+
+from tests.student._fixtures.eeg_project import build_eeg_tarball
+
+
+@pytest.fixture(scope="module")
+def eeg_services(tmp_path_factory):
+    """与 services 同构，但注入复杂 EEG 项目；供 L2/L3 使用。"""
+    yield from _spin_services(tmp_path_factory, build_eeg_tarball)
+
+
+@pytest.fixture
+def eeg_client(eeg_services):
+    """httpx Client 指向 eeg_services 的 student-app, trust_env=False 绕代理."""
+    return httpx.Client(base_url=eeg_services["student"], timeout=20.0, trust_env=False)
+
+
+@pytest.fixture
+def asgi_app(monkeypatch, tmp_path):
+    """进程内 student app，DB 走临时 SQLite，library client 由测试 mock。
+
+    用于 route 行覆盖（主进程内可被 coverage 采集）。
+    """
+    monkeypatch.setenv("STUDENT_DB_PATH", str(tmp_path / "asgi.db"))
+    monkeypatch.setenv("STUDENT_JWT_SECRET", "asgi-secret")
+    monkeypatch.setenv("STUDENT_SKIP_TUTOR_PRELOAD", "1")
+    monkeypatch.setenv("LIBRARY_BASE_URL", "http://lib.invalid")
+    monkeypatch.setenv("LIBRARY_LICENSE_TOKEN", "asgi-tok")
+    from systemedu.student.server import create_app
+    return create_app()
+
+
+@pytest_asyncio.fixture
+async def asgi_client(asgi_app):
+    """进程内 httpx AsyncClient，用 ASGITransport 直接挂 create_app()。
+
+    httpx 0.28 的 ASGITransport 只实现 handle_async_request，故必须用 AsyncClient。
+    """
+    transport = httpx.ASGITransport(app=asgi_app)
+    async with httpx.AsyncClient(
+        transport=transport, base_url="http://asgi.test", timeout=10.0
+    ) as c:
+        yield c
