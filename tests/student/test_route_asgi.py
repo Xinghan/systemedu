@@ -24,21 +24,7 @@ def _fake_meta(slug="eeg-signals-test") -> ProjectMeta:
 
 
 @pytest.fixture
-def _db_ready(asgi_app):
-    """建表: httpx ASGITransport 不触发 Starlette lifespan, 故手动 init_db。
-
-    依赖 asgi_app 确保 STUDENT_DB_PATH 已被 monkeypatch 设好, 再重置引擎并建表。
-    """
-    from systemedu.student.db import init_db, reset_engine_for_tests
-
-    reset_engine_for_tests()
-    init_db()
-    yield
-    reset_engine_for_tests()
-
-
-@pytest.fixture
-def mock_lib(monkeypatch, _db_ready):
+def mock_lib(monkeypatch):
     """mock catalog routes 用的 library client.get_project。"""
     meta = _fake_meta()
 
@@ -53,7 +39,7 @@ def mock_lib(monkeypatch, _db_ready):
     return meta
 
 
-async def test_list_requires_login(asgi_client, _db_ready):
+async def test_list_requires_login(asgi_client):
     r = await asgi_client.get("/api/my/projects")
     assert r.status_code == 401
 

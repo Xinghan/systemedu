@@ -283,7 +283,15 @@ def asgi_app(monkeypatch, tmp_path):
     monkeypatch.setenv("LIBRARY_BASE_URL", "http://lib.invalid")
     monkeypatch.setenv("LIBRARY_LICENSE_TOKEN", "asgi-tok")
     from systemedu.student.server import create_app
-    return create_app()
+    # httpx ASGITransport 不触发 Starlette lifespan, 而 init_db 只在 lifespan
+    # startup 里跑; 故在此手动重置引擎(使 STUDENT_DB_PATH 生效)并建表,
+    # 让所有进程内 ASGI 测试无需各自重复建表。
+    from systemedu.student.db import init_db, reset_engine_for_tests
+    reset_engine_for_tests()
+    init_db()
+    app = create_app()
+    yield app
+    reset_engine_for_tests()
 
 
 @pytest_asyncio.fixture
