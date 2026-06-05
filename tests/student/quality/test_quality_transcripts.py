@@ -74,7 +74,8 @@ def _run_dialogue(eeg_client, token, knode_id, utterances):
         }
         if session_id:
             body["session_id"] = session_id
-        r = eeg_client.post("/api/chat", json=body, headers=h)
+        # 真实 LLM 多轮对话慢, 且首轮要 lazy build graph; 给足超时 (默认 20s 不够)。
+        r = eeg_client.post("/api/chat", json=body, headers=h, timeout=120.0)
         r.raise_for_status()
         data = r.json()
         session_id = data.get("session_id") or session_id
