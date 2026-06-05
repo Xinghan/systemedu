@@ -1,0 +1,532 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>目标墙 · Goal Wall</title>
+<style>
+:root{
+  --paper:#FAF9F5; --paper-2:#F1EDDF; --card:#FFFFFF;
+  --ink:#191814; --ink-2:#2B2924; --sub:#6B6557; --sub-2:#9D978A;
+  --border:#EBE5D6; --border-2:#D9D1BD; --hairline:#F2EDE0;
+  --primary:#D97757; --primary-ink:#9A4A2E; --primary-soft:#F8EDE5; --primary-line:#ECCFB8;
+  --robotics:#7C4569; --robotics-soft:#E9DBE3;
+  --shadow-sm:0 1px 2px 0 rgba(25,24,20,.04);
+  --shadow:0 1px 3px 0 rgba(25,24,20,.06),0 1px 2px -1px rgba(25,24,20,.04);
+  --shadow-md:0 4px 8px -2px rgba(25,24,20,.06),0 2px 4px -2px rgba(25,24,20,.04);
+  --mono:"JetBrains Mono","SF Mono",ui-monospace,Menlo,Consolas,monospace;
+  --sans:"PingFang SC","Inter","Noto Sans SC",-apple-system,"Segoe UI",sans-serif;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100%}
+body{
+  font-family:var(--sans);
+  background:var(--paper);
+  color:var(--ink);
+  width:100vw;height:100vh;overflow:hidden;
+  display:flex;
+}
+
+/* ---------- Sidebar ---------- */
+.game-sidebar{
+  width:200px;min-width:200px;height:100%;
+  background:var(--paper-2);
+  border-right:1px solid var(--border);
+  display:flex;flex-direction:column;
+  padding:14px 12px;gap:12px;
+  overflow-y:auto;
+}
+.sb-head{display:flex;align-items:center;justify-content:space-between;gap:6px}
+.sb-title{font-size:12px;font-weight:700;color:var(--ink-2);letter-spacing:.02em}
+#langBtn{
+  font-family:var(--mono);font-size:10px;font-weight:600;
+  background:var(--card);color:var(--ink-2);
+  border:1px solid var(--border-2);border-radius:6px;
+  padding:4px 7px;cursor:pointer;line-height:1;
+}
+#langBtn:hover{border-color:var(--primary-line);color:var(--primary-ink)}
+
+.sb-block{
+  background:var(--card);border:1px solid var(--border);border-radius:10px;
+  padding:10px;box-shadow:var(--shadow-sm);
+}
+.sb-label{font-size:10px;font-weight:700;color:var(--sub);letter-spacing:.06em;text-transform:uppercase;margin-bottom:7px;font-family:var(--mono)}
+
+/* roadmap */
+.road{display:flex;flex-direction:column;gap:5px}
+.road-step{display:flex;align-items:center;gap:7px;font-size:10.5px;color:var(--sub-2);line-height:1.25}
+.road-dot{width:7px;height:7px;border-radius:50%;background:var(--border-2);flex:none}
+.road-step.here{color:var(--ink-2);font-weight:700}
+.road-step.here .road-dot{background:var(--primary);box-shadow:0 0 0 3px var(--primary-soft)}
+
+/* candidate cards */
+.cand-list{display:flex;flex-direction:column;gap:7px}
+.cand{
+  text-align:left;cursor:pointer;
+  background:var(--card);border:1px solid var(--border);border-radius:8px;
+  padding:8px 9px;font-size:11px;line-height:1.35;color:var(--ink-2);
+  position:relative;transition:border-color .12s,background .12s,transform .08s;
+}
+.cand:hover{border-color:var(--primary-line);background:var(--primary-soft)}
+.cand:active{transform:translateY(1px)}
+.cand.used{opacity:.42;pointer-events:none;border-style:dashed}
+.cand .cand-tag{
+  display:inline-block;font-family:var(--mono);font-size:8.5px;font-weight:600;
+  color:var(--robotics);background:var(--robotics-soft);
+  border-radius:4px;padding:1px 5px;margin-top:5px;
+}
+
+/* input */
+.sb-input-wrap{display:flex;flex-direction:column;gap:7px}
+#ownInput{
+  font-family:var(--sans);font-size:11px;color:var(--ink);
+  background:var(--paper);border:1px solid var(--border-2);border-radius:8px;
+  padding:7px 8px;resize:none;min-height:46px;line-height:1.35;
+}
+#ownInput:focus{outline:none;border-color:var(--primary);background:var(--card)}
+#ownInput::placeholder{color:var(--sub-2)}
+#addOwnBtn{
+  font-family:var(--sans);font-size:11px;font-weight:700;cursor:pointer;
+  background:var(--ink);color:var(--paper);border:none;border-radius:8px;
+  padding:8px;transition:background .12s;
+}
+#addOwnBtn:hover{background:var(--primary-ink)}
+#addOwnBtn:disabled{background:var(--border-2);color:var(--sub-2);cursor:not-allowed}
+
+.sb-hint{font-size:10px;color:var(--sub);line-height:1.5}
+
+/* ---------- Main ---------- */
+.game-main{
+  flex:1;height:100%;display:flex;flex-direction:column;
+  padding:18px 22px;gap:14px;overflow:hidden;position:relative;
+}
+.main-head{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex:none}
+.mh-left h1{font-size:19px;font-weight:800;color:var(--ink);letter-spacing:-.01em}
+.mh-left p{font-size:12px;color:var(--sub);margin-top:4px;max-width:540px;line-height:1.5}
+.hud{
+  font-family:var(--mono);font-size:11px;color:var(--ink-2);
+  background:var(--card);border:1px solid var(--border);border-radius:10px;
+  padding:8px 12px;text-align:center;box-shadow:var(--shadow-sm);flex:none;
+}
+.hud b{font-size:20px;color:var(--primary-ink);display:block;line-height:1.05}
+.hud.done b{color:var(--primary)}
+.hud .hud-sub{font-size:9px;color:var(--sub-2);letter-spacing:.05em}
+
+/* the wall */
+.wall-frame{
+  flex:1;min-height:0;display:flex;flex-direction:column;
+  background:var(--paper-2);
+  border:1px solid var(--border-2);border-radius:14px;
+  box-shadow:var(--shadow);
+  position:relative;overflow:hidden;
+  transition:box-shadow .35s,border-color .35s;
+}
+.wall-frame::before{
+  content:"";position:absolute;inset:0;
+  background-image:radial-gradient(var(--border-2) .8px,transparent .8px);
+  background-size:18px 18px;opacity:.5;pointer-events:none;
+}
+.wall-frame.lit{border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-soft),var(--shadow-md)}
+.wall-banner{
+  flex:none;display:flex;align-items:center;gap:10px;
+  padding:9px 16px;border-bottom:1px solid var(--border);
+  background:var(--card);position:relative;z-index:2;
+}
+.wall-banner .pin{width:9px;height:9px;border-radius:50%;background:var(--robotics);flex:none}
+.wall-banner .wb-title{font-size:12px;font-weight:700;color:var(--ink-2)}
+.wall-banner .wb-cta{
+  margin-left:auto;font-family:var(--mono);font-size:10px;color:var(--sub-2);
+  opacity:0;transform:translateX(8px);transition:opacity .4s,transform .4s,color .4s;
+}
+.wall-frame.lit .wall-banner .wb-cta{opacity:1;transform:none;color:var(--primary-ink);font-weight:600}
+
+.wall-grid{
+  flex:1;min-height:0;overflow-y:auto;position:relative;z-index:1;
+  padding:18px;
+  display:flex;flex-wrap:wrap;align-content:flex-start;gap:14px;
+}
+.wall-empty{
+  position:absolute;inset:0;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;gap:6px;
+  color:var(--sub-2);font-size:13px;text-align:center;pointer-events:none;padding:0 30px;
+}
+.wall-empty .we-big{font-size:14px;font-weight:600;color:var(--sub)}
+
+/* sticky note */
+.note{
+  width:200px;min-height:96px;
+  background:var(--card);border:1px solid var(--border);border-radius:4px;
+  box-shadow:var(--shadow);
+  padding:14px 12px 30px;position:relative;cursor:pointer;
+  transition:transform .14s,box-shadow .14s;
+  animation:pop .26s cubic-bezier(.2,.9,.3,1.3);
+}
+.note:nth-child(3n+1){transform:rotate(-1.4deg)}
+.note:nth-child(3n+2){transform:rotate(1.2deg)}
+.note:nth-child(3n+3){transform:rotate(.4deg)}
+.note:hover{box-shadow:var(--shadow-md);transform:rotate(0) translateY(-2px);z-index:3}
+.note.own{background:var(--primary-soft);border-color:var(--primary-line)}
+.note .note-pin{
+  position:absolute;top:-7px;left:50%;transform:translateX(-50%);
+  width:13px;height:13px;border-radius:50%;background:var(--robotics);
+  border:2px solid var(--card);box-shadow:var(--shadow-sm);
+}
+.note.own .note-pin{background:var(--primary)}
+.note .note-text{font-size:12px;line-height:1.42;color:var(--ink-2);font-weight:500}
+.note .note-stage{
+  position:absolute;left:12px;bottom:9px;
+  font-family:var(--mono);font-size:8.5px;font-weight:600;
+  color:var(--robotics);opacity:0;transition:opacity .2s;
+}
+.note.show-stage .note-stage{opacity:1}
+.note .note-x{
+  position:absolute;top:6px;right:6px;width:18px;height:18px;border-radius:5px;
+  border:none;background:transparent;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+  color:var(--sub-2);opacity:0;transition:opacity .14s,background .14s,color .14s;
+}
+.note:hover .note-x{opacity:1}
+.note .note-x:hover{background:var(--paper-2);color:var(--primary-ink)}
+.note .note-x svg{width:11px;height:11px}
+
+@keyframes pop{from{opacity:0;transform:scale(.85)}to{opacity:1}}
+
+/* celebration ribbon */
+.lit-bar{
+  flex:none;display:flex;align-items:center;gap:10px;
+  padding:11px 16px;border-radius:12px;margin-top:2px;
+  background:var(--primary-soft);border:1px solid var(--primary-line);
+  opacity:0;transform:translateY(8px);transition:opacity .4s,transform .4s;
+  pointer-events:none;
+}
+.lit-bar.on{opacity:1;transform:none}
+.lit-bar .lb-spark{
+  width:22px;height:22px;flex:none;
+}
+.lit-bar .lb-spark svg{width:22px;height:22px;display:block}
+.lit-bar .lb-text b{font-size:13px;color:var(--primary-ink);font-weight:800}
+.lit-bar .lb-text span{display:block;font-size:11px;color:var(--sub);margin-top:2px}
+
+/* confetti dots (CSS only) */
+.confetti{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:5;overflow:hidden;display:none}
+.confetti.go{display:block}
+.confetti i{
+  position:absolute;top:-12px;width:8px;height:8px;border-radius:2px;
+  animation:fall 1.5s ease-in forwards;
+}
+@keyframes fall{
+  0%{transform:translateY(0) rotate(0);opacity:1}
+  100%{transform:translateY(86vh) rotate(420deg);opacity:0}
+}
+</style>
+</head>
+<body>
+  <aside class="game-sidebar">
+    <div class="sb-head">
+      <span class="sb-title" data-i18n="brand">蚁群目标墙</span>
+      <button id="langBtn">EN</button>
+    </div>
+
+    <div class="sb-block">
+      <div class="sb-label" data-i18n="roadLabel">项目路线</div>
+      <div class="road">
+        <div class="road-step here"><span class="road-dot"></span><span data-i18n="r1">M01 立目标墙 · 现在</span></div>
+        <div class="road-step"><span class="road-dot"></span><span data-i18n="r2">搭 RFID 蚂蚁门</span></div>
+        <div class="road-step"><span class="road-dot"></span><span data-i18n="r3">设计扰动实验</span></div>
+        <div class="road-step"><span class="road-dot"></span><span data-i18n="r4">LLM 写田野笔记</span></div>
+        <div class="road-step"><span class="road-dot"></span><span data-i18n="r5">发布蚁群报告</span></div>
+      </div>
+    </div>
+
+    <div class="sb-block">
+      <div class="sb-label" data-i18n="candLabel">候选问题 · 点击贴墙</div>
+      <div class="cand-list" id="candList"></div>
+    </div>
+
+    <div class="sb-block">
+      <div class="sb-label" data-i18n="ownLabel">写你自己的问题</div>
+      <div class="sb-input-wrap">
+        <textarea id="ownInput" maxlength="80" data-i18n-ph="ownPh" placeholder="你最想知道蚂蚁的什么？"></textarea>
+        <button id="addOwnBtn" data-i18n="addBtn">加到墙上</button>
+      </div>
+    </div>
+
+    <div class="sb-block">
+      <div class="sb-label" data-i18n="howLabel">怎么玩</div>
+      <p class="sb-hint" data-i18n="hint">点候选卡或写自己的问题，把它们贴上目标墙。凑满 3 条，墙会亮起来——那就是你 6 个月的方向盘。点便利贴看它通向哪一关，点叉号取下。</p>
+    </div>
+  </aside>
+
+  <main class="game-main">
+    <div class="main-head">
+      <div class="mh-left">
+        <h1 data-i18n="title">我想知道蚂蚁的什么？</h1>
+        <p data-i18n="sub">接下来 6 个月，你要当蚁群行为学家。先把你最好奇的问题钉上墙——它们会决定你接下来每一关要造什么、测什么。</p>
+      </div>
+      <div class="hud" id="hud">
+        <b><span id="cnt">0</span>/3</b>
+        <span class="hud-sub" data-i18n="hudSub">已贴问题</span>
+      </div>
+    </div>
+
+    <div class="wall-frame" id="wallFrame">
+      <div class="wall-banner">
+        <span class="pin"></span>
+        <span class="wb-title" data-i18n="wallTitle">我的研究目标墙</span>
+        <span class="wb-cta" data-i18n="wallCta">这就是你 6 个月的方向盘</span>
+      </div>
+      <div class="wall-grid" id="wallGrid">
+        <div class="wall-empty" id="wallEmpty">
+          <span class="we-big" data-i18n="emptyBig">墙还是空的</span>
+          <span data-i18n="emptySmall">从左边挑 3 个问题，或写下你自己的</span>
+        </div>
+      </div>
+      <div class="confetti" id="confetti"></div>
+    </div>
+
+    <div class="lit-bar" id="litBar">
+      <span class="lb-spark">
+        <svg viewBox="0 0 24 24" fill="none"><path d="M12 2l2.4 6.6L21 11l-6.6 2.4L12 20l-2.4-6.6L3 11l6.6-2.4z" fill="#D97757"/></svg>
+      </span>
+      <span class="lb-text">
+        <b data-i18n="litB">目标墙已点亮</b>
+        <span data-i18n="litS">这就是你 6 个月的方向盘 · 接下来每一关都在回答这几个问题</span>
+      </span>
+    </div>
+  </main>
+
+<script>
+(function(){
+  "use strict";
+
+  var stateGame = { notes: [], idSeq: 0 };
+  var GOAL = 3;
+  var curLang = "zh";
+
+  // candidate research questions  -> which stage they lead to
+  var CANDIDATES = [
+    { zh:"蚁群里有没有'明星'个体——总是第一个发现食物的那只？", en:"Is there a 'star' ant — always the first to find food?", stageZh:"→ 第 3 关 数个体身份", stageEn:"→ Stage 3 ID individuals" },
+    { zh:"有没有蚂蚁在'摸鱼'，几乎不出门？", en:"Are some ants 'slackers' that barely leave the nest?", stageZh:"→ 第 5 关 算出门率", stageEn:"→ Stage 5 trip counts" },
+    { zh:"把蚂蚁常走的一条路封住，它们多久能找到新路？", en:"Block a busy ant route — how fast do they find a new one?", stageZh:"→ 第 4 关 扰动实验", stageEn:"→ Stage 4 disturbance" },
+    { zh:"白天和晚上，蚂蚁的活跃程度一样吗？", en:"Are ants equally active by day and by night?", stageZh:"→ 第 6 关 时间分析", stageEn:"→ Stage 6 time patterns" },
+    { zh:"蚁群里不同的门，使用频率一样吗？", en:"Do different nest doors get used equally?", stageZh:"→ 第 2 关 多门 RFID", stageEn:"→ Stage 2 multi-door RFID" }
+  ];
+
+  var I18N = {
+    brand:["蚁群目标墙","Goal Wall"],
+    roadLabel:["项目路线","ROADMAP"],
+    r1:["M01 立目标墙 · 现在","M01 Goal wall · now"],
+    r2:["搭 RFID 蚂蚁门","Build RFID ant door"],
+    r3:["设计扰动实验","Design disturbance test"],
+    r4:["LLM 写田野笔记","LLM field notes"],
+    r5:["发布蚁群报告","Publish colony report"],
+    candLabel:["候选问题 · 点击贴墙","QUESTIONS · CLICK TO PIN"],
+    ownLabel:["写你自己的问题","YOUR OWN QUESTION"],
+    addBtn:["加到墙上","Pin to wall"],
+    howLabel:["怎么玩","HOW TO PLAY"],
+    hint:["点候选卡或写自己的问题，把它们贴上目标墙。凑满 3 条，墙会亮起来——那就是你 6 个月的方向盘。点便利贴看它通向哪一关，点叉号取下。",
+          "Tap a candidate card or write your own, then pin it to the wall. Reach 3 and the wall lights up — that's your compass for the next 6 months. Tap a note to see which stage it leads to, tap the x to remove it."],
+    title:["我想知道蚂蚁的什么？","What do I want to know about ants?"],
+    sub:["接下来 6 个月，你要当蚁群行为学家。先把你最好奇的问题钉上墙——它们会决定你接下来每一关要造什么、测什么。",
+         "For the next 6 months you're a colony ethologist. Pin your most curious questions first — they decide what you build and measure in every stage ahead."],
+    hudSub:["已贴问题","PINNED"],
+    wallTitle:["我的研究目标墙","My research goal wall"],
+    wallCta:["这就是你 6 个月的方向盘","Your compass for 6 months"],
+    emptyBig:["墙还是空的","The wall is empty"],
+    emptySmall:["从左边挑 3 个问题，或写下你自己的","Pick 3 from the left, or write your own"],
+    litB:["目标墙已点亮","Goal wall is lit"],
+    litS:["这就是你 6 个月的方向盘 · 接下来每一关都在回答这几个问题",
+          "Your compass for 6 months · every stage ahead answers these"],
+    ownPh:["你最想知道蚂蚁的什么？","What do you most want to know about ants?"],
+    ownStageZh:["→ 你的原创问题","→ your own question"]
+  };
+
+  var candList = document.getElementById("candList");
+  var wallGrid = document.getElementById("wallGrid");
+  var wallEmpty = document.getElementById("wallEmpty");
+  var wallFrame = document.getElementById("wallFrame");
+  var litBar = document.getElementById("litBar");
+  var confetti = document.getElementById("confetti");
+  var cntEl = document.getElementById("cnt");
+  var hud = document.getElementById("hud");
+  var ownInput = document.getElementById("ownInput");
+  var addOwnBtn = document.getElementById("addOwnBtn");
+  var langBtn = document.getElementById("langBtn");
+
+  // build candidate cards
+  CANDIDATES.forEach(function(c, idx){
+    var btn = document.createElement("button");
+    btn.className = "cand";
+    btn.dataset.idx = String(idx);
+    var txt = document.createElement("span");
+    txt.className = "cand-txt";
+    txt.textContent = curLang === "zh" ? c.zh : c.en;
+    var tag = document.createElement("span");
+    tag.className = "cand-tag";
+    tag.textContent = curLang === "zh" ? c.stageZh : c.stageEn;
+    tag.style.display = "block";
+    btn.appendChild(txt);
+    btn.appendChild(tag);
+    btn.addEventListener("click", function(){
+      addNote({
+        textZh:c.zh, textEn:c.en,
+        stageZh:c.stageZh, stageEn:c.stageEn,
+        own:false, candIdx:idx
+      });
+      btn.classList.add("used");
+    });
+    candList.appendChild(btn);
+  });
+
+  function pinSvg(){
+    return ""; // pin via css
+  }
+
+  function addNote(data){
+    data.id = ++stateGame.idSeq;
+    stateGame.notes.push(data);
+    renderNote(data);
+    syncState();
+  }
+
+  function renderNote(data){
+    var note = document.createElement("div");
+    note.className = "note" + (data.own ? " own" : "");
+    note.dataset.id = String(data.id);
+
+    var pin = document.createElement("div");
+    pin.className = "note-pin";
+
+    var x = document.createElement("button");
+    x.className = "note-x";
+    x.setAttribute("aria-label","remove");
+    x.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>';
+    x.addEventListener("click", function(ev){
+      ev.stopPropagation();
+      removeNote(data);
+      note.remove();
+    });
+
+    var t = document.createElement("div");
+    t.className = "note-text";
+    t.textContent = curLang === "zh" ? data.textZh : data.textEn;
+
+    var st = document.createElement("div");
+    st.className = "note-stage";
+    st.textContent = curLang === "zh" ? data.stageZh : data.stageEn;
+
+    note.appendChild(pin);
+    note.appendChild(x);
+    note.appendChild(t);
+    note.appendChild(st);
+
+    note.addEventListener("click", function(){
+      note.classList.toggle("show-stage");
+    });
+
+    wallGrid.appendChild(note);
+  }
+
+  function removeNote(data){
+    var i = stateGame.notes.indexOf(data);
+    if(i >= 0) stateGame.notes.splice(i,1);
+    if(!data.own && typeof data.candIdx === "number"){
+      var btn = candList.querySelector('.cand[data-idx="'+data.candIdx+'"]');
+      if(btn) btn.classList.remove("used");
+    }
+    syncState();
+  }
+
+  function syncState(){
+    var n = stateGame.notes.length;
+    cntEl.textContent = String(n);
+    wallEmpty.style.display = n === 0 ? "flex" : "none";
+
+    var lit = n >= GOAL;
+    wallFrame.classList.toggle("lit", lit);
+    hud.classList.toggle("done", lit);
+
+    if(lit && !litBar.classList.contains("on")){
+      litBar.classList.add("on");
+      burst();
+    } else if(!lit){
+      litBar.classList.remove("on");
+    }
+  }
+
+  function burst(){
+    confetti.innerHTML = "";
+    var colors = ["#D97757","#7C4569","#ECCFB8","#9A4A2E","#D9D1BD"];
+    for(var i=0;i<26;i++){
+      var p = document.createElement("i");
+      p.style.left = (4 + Math.random()*92) + "%";
+      p.style.background = colors[i % colors.length];
+      p.style.animationDelay = (Math.random()*0.35) + "s";
+      p.style.animationDuration = (1.1 + Math.random()*0.7) + "s";
+      confetti.appendChild(p);
+    }
+    confetti.classList.add("go");
+    setTimeout(function(){ confetti.classList.remove("go"); confetti.innerHTML=""; }, 2200);
+  }
+
+  // own question
+  function tryAddOwn(){
+    var v = ownInput.value.trim();
+    if(!v) return;
+    addNote({
+      textZh:v, textEn:v,
+      stageZh: I18N.ownStageZh[0], stageEn: I18N.ownStageZh[1],
+      own:true
+    });
+    ownInput.value = "";
+    updateAddBtn();
+  }
+  function updateAddBtn(){
+    addOwnBtn.disabled = ownInput.value.trim().length === 0;
+  }
+  ownInput.addEventListener("input", updateAddBtn);
+  ownInput.addEventListener("keydown", function(ev){
+    if((ev.metaKey || ev.ctrlKey) && ev.key === "Enter"){ tryAddOwn(); }
+  });
+  addOwnBtn.addEventListener("click", tryAddOwn);
+  updateAddBtn();
+
+  // i18n
+  function applyLang(){
+    document.documentElement.lang = curLang === "zh" ? "zh" : "en";
+    var k = curLang === "zh" ? 0 : 1;
+    document.querySelectorAll("[data-i18n]").forEach(function(el){
+      var key = el.getAttribute("data-i18n");
+      if(I18N[key]) el.textContent = I18N[key][k];
+    });
+    document.querySelectorAll("[data-i18n-ph]").forEach(function(el){
+      var key = el.getAttribute("data-i18n-ph");
+      if(I18N[key]) el.setAttribute("placeholder", I18N[key][k]);
+    });
+    // candidate cards
+    candList.querySelectorAll(".cand").forEach(function(btn){
+      var c = CANDIDATES[+btn.dataset.idx];
+      btn.querySelector(".cand-txt").textContent = curLang==="zh" ? c.zh : c.en;
+      btn.querySelector(".cand-tag").textContent = curLang==="zh" ? c.stageZh : c.stageEn;
+    });
+    // notes
+    wallGrid.querySelectorAll(".note").forEach(function(note){
+      var id = +note.dataset.id;
+      var d = stateGame.notes.filter(function(x){return x.id===id;})[0];
+      if(!d) return;
+      note.querySelector(".note-text").textContent = curLang==="zh" ? d.textZh : d.textEn;
+      note.querySelector(".note-stage").textContent = curLang==="zh" ? d.stageZh : d.stageEn;
+    });
+    langBtn.textContent = curLang === "zh" ? "EN" : "中文";
+  }
+  langBtn.addEventListener("click", function(){
+    curLang = curLang === "zh" ? "en" : "zh";
+    applyLang();
+  });
+
+  applyLang();
+  syncState();
+})();
+</script>
+</body>
+</html>
