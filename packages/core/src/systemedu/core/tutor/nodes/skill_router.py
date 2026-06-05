@@ -62,22 +62,28 @@ ROUTER_PROMPT = """你是教学策略调度器。
 1. active_skill 未超 max_turns → continue (但若学生明确要求"直接告诉我"则强制 switch)
 2. 话题切换 / skill 目标达成 → switch
 3. 学生想结束 → exit
-4. **首要判别 — 学生问的是「事实问题」还是「思辨问题」？**
+4. **首要判别（按 4a → 4b → 4c 顺序，命中即停）**
 
-   **事实问题 → direct-instruction**（直接给答案 + 例子 + 一道验证题）
-   特征:
+   **4a. 学生的话里藏着「错误前提 / 待验证的猜测」吗？→ socratic-questioning（最高优先）**
+   这是带着一个（可能错的）结论来求确认，不是来问定义。绝不能直接给答案/直接否定，
+   必须先用一个问题让学生自己检验这个前提。典型信号:
+   - 验证猜测句式: "X 是不是越…越好?" / "…是不是就说明 Y?" / "X 能不能直接…?"
+     / "我觉得是 X，对吗?" / "…不就行了吗?"
+   - 学生陈述里有一个明显或可疑的因果/绝对化判断 (越多越好、一定、就等于、直接就能)
+   - 当前课程内容(下方 knode_content)正好覆盖这个概念，且记录的常见误区与学生说法吻合
+   即使句子很短、带"是不是/为什么"，只要它在「验证一个结论」而非「问一个定义」，
+   就走 socratic-questioning，不要因为短问句而归到 direct-instruction。
+
+   **4b. 纯事实问题 → direct-instruction**（直接给答案 + 例子 + 一道验证题）
+   学生没有预设结论，只想知道一个明确答案:
    - "X 是什么?" / "X 和 Y 有什么区别?" / "X 的原理是?" / "怎么 X?"
-   - "需要买什么?" / "应该用哪个?"
-   - "你了解我什么?" / "你知道 X 吗?"
-   - 学生只想知道一个明确的答案 (定义/对比/步骤/清单/资源)
-   - 关键词: "什么意思" "是什么" "区别" "怎么做" "需要什么" "为什么" + 短问句
+   - "需要买什么?" / "应该用哪个?" / "你了解我什么?" / "你知道 X 吗?"
+   - 想要的是定义/对比/步骤/清单/资源，而非检验自己的判断
 
-   **思辨问题 / 设计问题 → pbl-driving-question 或 socratic-questioning**
-   特征:
+   **4c. 思辨 / 设计问题 → pbl-driving-question 或 socratic-questioning**
    - "我应该做什么项目?" "这个项目我能学到什么?" (引导动机)
-   - "我现在应该学哪一步?" (要参考进度做规划，不是抛新任务)
-   - 学生在表达自己的思考、设计、推理过程
-   - 学生在"卡住但有想法"的状态
+   - "我现在应该学哪一步?" (参考进度做规划)
+   - 学生在表达自己的思考、设计、推理过程，或"卡住但有想法"
 
    **混合 — 学生先要事实再要思考** → direct-instruction (先把事实给清楚)
 
@@ -276,6 +282,16 @@ def make_skill_router_node(
         decision = await _ask_llm(
             llm, state, skills, active_skill, turn_count, max_turns or 0,
         )
+        # 健壮性: 无 active_skill 时 continue 没有可继续的目标 (会 fan-out
+        # 到 __finish__ 产生空回复)。强制回退到默认 skill, 保证每轮都有产出。
+        if decision.get("action") == "continue" and not active_skill:
+            log.info(
+                "skill_router: continue with no active_skill; "
+                "falling back to direct-instruction"
+            )
+            decision = _fallback_decision(
+                "continue requested but no active skill; default skill"
+            )
         update["skill_decision"] = decision
         return update
 

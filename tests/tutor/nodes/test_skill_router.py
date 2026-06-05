@@ -102,6 +102,24 @@ class TestLLMDecision:
         assert d["target_skill"] is None
 
     @pytest.mark.asyncio
+    async def test_continue_with_no_active_skill_falls_back(self):
+        """首轮无 active_skill 时 LLM 返回 continue -> 回退默认 skill。
+
+        否则 graph 的 route_to_skill 会把 continue+无 target 直接送到
+        __finish__, 不运行任何 skill, 产生空回复 (真实 bug)。
+        """
+        llm = FakeLLM(['{"action":"continue","target_skill":null,"reason":"仅闲聊"}'])
+        node = make_skill_router_node(loader=StubLoader(_skills_catalog()), llm=llm)
+        out = await node(TutorState(
+            user_id="u1", knode_id="k1",
+            active_skill=None, skill_turn_count=0,
+            messages=[HumanMessage(content="我之前说过我喜欢打游戏")],
+        ))
+        d = out["skill_decision"]
+        assert d["action"] == "switch"
+        assert d["target_skill"] == "direct-instruction"
+
+    @pytest.mark.asyncio
     async def test_switch(self):
         llm = FakeLLM(['{"action":"switch","target_skill":"scaffolding","reason":"前置未过"}'])
         node = make_skill_router_node(loader=StubLoader(_skills_catalog()), llm=llm)

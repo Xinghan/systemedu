@@ -80,7 +80,12 @@ def _run_dialogue(eeg_client, token, knode_id, utterances):
         data = r.json()
         session_id = data.get("session_id") or session_id
         turns.append({"role": "user", "content": utt})
-        turns.append({"role": "assistant", "content": data.get("response") or ""})
+        # 存 active_skill 供 judge 归因路由 (苏格拉底 vs 讲授); 缺则 None。
+        turns.append({
+            "role": "assistant",
+            "content": data.get("response") or "",
+            "active_skill": data.get("active_skill"),
+        })
 
     # recalled facts: 对话后查当前 user 的 facts (抽取/召回结果)。
     recalled_facts: list = []

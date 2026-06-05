@@ -100,6 +100,7 @@
 
 ## Tutor 质量改进 (2026-06-05 L3 质量评估发现)
 
-- [ ] **tutor 苏格拉底引导**: L3 实测合规率仅 20% (门槛 80%)，tutor 偏"先给结论再讲授"。调 tutor skill prompt：遇学生错误概念先用引导性问题，不直接否定/给答案。改后用 `pytest tests/student/quality/ --quality` + Claude judge 重测验合规率
+- [x] **tutor 苏格拉底引导** (2026-06-05 已修): 根因是 router 把"X是不是越…越好?""能不能直接…?"等隐含错误前提的验证句误判为事实问题→direct-instruction 讲授。改 ROUTER_PROMPT 规则 4a (误区句最高优先 socratic) + 修 continue 无 active_skill 空回复 bug。L3 复测合规率 20%→~100% 达标 (quality_report_2026-06-05b.md)。残留: qwen 路由偶发波动
+- [ ] **router 误区判别确定性兜底**: qwen3.6-flash 对误区句路由仍偶发波动 (判 direct 而非 socratic)。考虑对"命中 knode 误区锚点 + 验证句式"的输入加非 LLM 的确定性兜底，或升级系统 LLM 降波动
 - [x] **修 Mem0Adapter import bug** (2026-06-05 已修, commit 42f83153): `core/tutor/tools/memory.py` import 改 `Mem0AsyncAdapter`，`.enabled` 检查改 `get_config().memory.enabled`，测试同步更新。真实运行验证 search_memory 不再恒 ImportError，Mem0 召回链路打通。注：打通后暴露独立配置问题 `embedding-3 model not found`，待 embedding 模型配置修正
 - [ ] **记忆召回端到端验证**: L3 发现 recalled_facts 单对话内恒空 (fact 抽取走 5min worker，不实时入库)。补一个"对话→等 worker 抽取→新 session 召回"的 L3 场景，验证跨 session 记忆链路；评估是否需要实时抽取路径
