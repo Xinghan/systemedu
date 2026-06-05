@@ -97,3 +97,9 @@
 - [ ] Loading 超时提示 — 加载超过 5 秒后显示"加载时间较长，请检查网络"提示
 - [ ] purpleair-airquality-node 30 节 assignment.md / audio_scripts.json 是 spec 034 改造前 LLM 自动跑出, 质量未人工 review。下次 v0.5.0 升级时由 Claude 按新规范 (SKILL.md Step 6.5 / 6.6) 手写覆盖
 - [ ] purpleair-airquality-node M01-M30 slides.json (老师讲课 slide) Claude 手写补完 — Batch B 滚动 (spec 034)
+
+## Tutor 质量改进 (2026-06-05 L3 质量评估发现)
+
+- [ ] **tutor 苏格拉底引导**: L3 实测合规率仅 20% (门槛 80%)，tutor 偏"先给结论再讲授"。调 tutor skill prompt：遇学生错误概念先用引导性问题，不直接否定/给答案。改后用 `pytest tests/student/quality/ --quality` + Claude judge 重测验合规率
+- [ ] **修 Mem0Adapter import bug**: `core/tutor/tools/memory.py:54` import `Mem0Adapter` 但实际类名是 `Mem0AsyncAdapter`，search_memory 永久 ImportError 退化，L4 语义召回从未生效。已有测试 `test_search_memory_import_error` 锁住现状，修复后改断言
+- [ ] **记忆召回端到端验证**: L3 发现 recalled_facts 单对话内恒空 (fact 抽取走 5min worker，不实时入库)。补一个"对话→等 worker 抽取→新 session 召回"的 L3 场景，验证跨 session 记忆链路；评估是否需要实时抽取路径

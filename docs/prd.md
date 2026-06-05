@@ -590,3 +590,18 @@ systemedu hub login/search/pull/push # Hub 操作 (Phase 4)
 | **可扩展** | 支持任意 MCP server, 自定义 skills/agents |
 | **cloud 优先** | 内容 library 托管, 用户数据存 PostgreSQL (见 spec 037) |
 | **国际化** | 初期中文, 架构支持多语言 |
+
+## 10. 学生端 + Tutor 测试金字塔 (2026-06-05)
+
+学生端常规功能(pull/学习/进度)与 tutor(agent+记忆+苏格拉底)采用三层测试，详见
+`docs/testing/student-tutor-coverage-matrix.md` (回归基线):
+
+- **L1 单元/契约** (CI 必跑, 进程内): tools / memory_layers / safety / graph 等核心逻辑，多数 89-100%。
+- **L2 机制 E2E** (CI 必跑, 确定性, 不依赖真 LLM): 复杂 EEG 合成项目(7 knode/3 stage/DAG)驱动，
+  验证 pull→学习→context 注入→记忆召回→知识树 DAG 增长→safety 的机制正确性。
+- **L3 质量评估** (`--quality`, 隔离, judge = Claude Code): 真实 tutor 对话落盘 artifact，
+  Claude (强于系统所用 qwen) 按 rubric 评苏格拉底合规/准确、反馈质量、记忆召回、context 落地、安全。
+  软门槛(苏格拉底合规率≥80%、各项均分≥2.0)告警不 fail CI。
+
+整体 student+tutor 行覆盖 73%→82%。L3 首次实跑已测出 tutor 质量缺陷(苏格拉底合规率 20%、
+记忆召回实时路径无效)，见 `docs/testing/quality_report_2026-06-05.md` 与 todolist「Tutor 质量改进」。
