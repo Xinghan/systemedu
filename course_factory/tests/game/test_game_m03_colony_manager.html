@@ -1,0 +1,795 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>蚁群分工模拟 · Colony Division Manager</title>
+<style>
+:root{
+  --bg-0: oklch(0.14 0.035 265);
+  --bg-1: oklch(0.18 0.04 265);
+  --bg-2: oklch(0.22 0.045 265);
+  --fg: oklch(0.96 0.01 265);
+  --fg-dim: oklch(0.75 0.02 265);
+  --gold: oklch(0.85 0.14 85);
+  --bio: oklch(0.75 0.17 155);
+  /* bio 5 色 palette */
+  --LIFE: oklch(0.75 0.17 155);
+  --MOSS: oklch(0.55 0.16 155);
+  --SHADOW: oklch(0.35 0.10 160);
+  --BLOOM: oklch(0.92 0.08 150);
+  --MUTATE: oklch(0.85 0.14 85);
+  --danger: oklch(0.62 0.20 28);
+  --mono: "JetBrains Mono","SF Mono",ui-monospace,Menlo,Consolas,monospace;
+  --sans: system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+html,body{height:100%;}
+body{
+  background:var(--bg-0);
+  color:var(--fg);
+  font-family:var(--sans);
+  display:flex;
+  height:100vh;
+  overflow:hidden;
+}
+.en .cn-only{display:none!important;}
+.zh .en-only{display:none!important;}
+
+/* ===== sidebar ===== */
+.game-sidebar{
+  width:200px;
+  flex:0 0 200px;
+  background:var(--bg-1);
+  border-right:2px solid var(--SHADOW);
+  display:flex;
+  flex-direction:column;
+  padding:14px 12px;
+  gap:12px;
+  overflow-y:auto;
+}
+.side-title{
+  font-family:var(--mono);
+  font-size:13px;
+  letter-spacing:.5px;
+  color:var(--gold);
+  line-height:1.3;
+}
+.side-sub{font-size:11px;color:var(--fg-dim);line-height:1.4;}
+#langBtn{
+  font-family:var(--mono);
+  font-size:12px;
+  background:var(--bg-2);
+  color:var(--bio);
+  border:1px solid var(--bio);
+  border-radius:4px;
+  padding:6px 8px;
+  cursor:pointer;
+  box-shadow:3px 3px 0 var(--bg-0);
+}
+#langBtn:active{transform:translate(3px,3px);box-shadow:0 0 0 var(--bg-0);}
+
+.roadmap{display:flex;flex-direction:column;gap:4px;}
+.rm-label{font-size:10px;color:var(--fg-dim);font-family:var(--mono);letter-spacing:.5px;}
+.rm-step{
+  font-size:10.5px;
+  font-family:var(--mono);
+  color:var(--fg-dim);
+  padding:3px 6px;
+  border-left:2px solid var(--SHADOW);
+  line-height:1.3;
+}
+.rm-step.done{color:var(--MOSS);border-left-color:var(--MOSS);}
+.rm-step.cur{
+  color:var(--bg-0);
+  background:var(--bio);
+  border-left-color:var(--gold);
+  border-radius:3px;
+  font-weight:700;
+}
+
+.guide{font-size:10.5px;color:var(--fg-dim);line-height:1.5;}
+.guide b{color:var(--fg);}
+
+.hud-box{
+  font-family:var(--mono);
+  font-size:11px;
+  background:var(--bg-2);
+  border:1px solid var(--SHADOW);
+  border-radius:5px;
+  padding:8px;
+  line-height:1.6;
+}
+.hud-box .big{font-size:20px;color:var(--bio);font-weight:700;}
+.hud-box .warn{color:var(--gold);}
+
+#resetBtn{
+  margin-top:auto;
+  font-family:var(--mono);
+  font-size:12px;
+  background:var(--bg-2);
+  color:var(--gold);
+  border:1px solid var(--gold);
+  border-radius:4px;
+  padding:8px;
+  cursor:pointer;
+  box-shadow:3px 3px 0 var(--bg-0);
+}
+#resetBtn:active{transform:translate(3px,3px);box-shadow:0 0 0 var(--bg-0);}
+
+.endpoint{
+  font-size:9.5px;color:var(--fg-dim);line-height:1.3;
+  border-top:1px dashed var(--SHADOW);padding-top:8px;
+}
+.endpoint b{color:var(--MUTATE);}
+
+/* ===== main ===== */
+.game-main{
+  flex:1;
+  display:flex;
+  flex-direction:column;
+  padding:14px 18px;
+  gap:12px;
+  min-width:0;
+  position:relative;
+}
+.main-head{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;}
+.main-head h1{font-size:18px;color:var(--fg);font-weight:700;}
+.main-head .q{font-size:12px;color:var(--gold);font-family:var(--mono);}
+
+.survive-row{display:flex;align-items:center;gap:10px;}
+.survive-label{font-family:var(--mono);font-size:11px;color:var(--fg-dim);white-space:nowrap;}
+.survive-track{
+  flex:1;height:14px;background:var(--bg-2);border-radius:7px;overflow:hidden;
+  border:1px solid var(--SHADOW);
+}
+.survive-fill{height:100%;width:0%;background:linear-gradient(90deg,var(--MOSS),var(--bio),var(--BLOOM));transition:width .2s;}
+.survive-num{font-family:var(--mono);font-size:12px;color:var(--bio);min-width:54px;text-align:right;}
+
+/* 蚁巢舞台 */
+.stage-wrap{
+  flex:1;
+  display:flex;
+  flex-direction:column;
+  background:var(--bg-1);
+  border:1px solid var(--SHADOW);
+  border-radius:10px;
+  padding:10px;
+  min-height:0;
+  position:relative;
+  overflow:hidden;
+}
+#nestCanvas{flex:1;width:100%;display:block;border-radius:6px;}
+
+/* 事件横幅 */
+.event-banner{
+  position:absolute;top:14px;left:50%;transform:translateX(-50%);
+  background:var(--danger);color:var(--fg);
+  font-family:var(--mono);font-size:12.5px;font-weight:700;
+  padding:8px 16px;border-radius:6px;
+  box-shadow:3px 3px 0 var(--bg-0);
+  opacity:0;pointer-events:none;transition:opacity .3s;
+  max-width:80%;text-align:center;z-index:5;
+}
+.event-banner.show{opacity:1;}
+
+/* 需求条区 */
+.needs-row{display:flex;gap:10px;}
+.need-card{
+  flex:1;background:var(--bg-1);border:1px solid var(--SHADOW);
+  border-radius:8px;padding:8px 10px;
+}
+.need-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:5px;}
+.need-name{font-size:12px;font-weight:700;}
+.need-pct{font-family:var(--mono);font-size:11px;color:var(--fg-dim);}
+.need-bar{height:10px;background:var(--bg-2);border-radius:5px;overflow:hidden;border:1px solid var(--SHADOW);}
+.need-bar-fill{height:100%;width:60%;transition:width .25s,background .25s;border-radius:5px;}
+.need-card.low{animation:pulseLow .8s ease-in-out infinite;}
+@keyframes pulseLow{0%,100%{border-color:var(--SHADOW);}50%{border-color:var(--danger);}}
+
+/* 分配区 */
+.alloc-row{display:flex;gap:10px;}
+.alloc-card{
+  flex:1;background:var(--bg-2);border:1px solid var(--SHADOW);
+  border-radius:8px;padding:8px 10px;display:flex;flex-direction:column;gap:6px;
+}
+.alloc-top{display:flex;align-items:center;gap:7px;}
+.alloc-dot{width:12px;height:12px;border-radius:50%;flex:0 0 12px;}
+.alloc-name{font-size:12px;font-weight:700;flex:1;}
+.alloc-count{font-family:var(--mono);font-size:16px;font-weight:700;min-width:22px;text-align:center;}
+.alloc-slider{width:100%;accent-color:var(--bio);cursor:pointer;}
+.alloc-btns{display:flex;gap:6px;}
+.alloc-btns button{
+  flex:1;font-family:var(--mono);font-size:15px;font-weight:700;
+  background:var(--bg-1);color:var(--bio);border:1px solid var(--bio);
+  border-radius:4px;padding:2px 0;cursor:pointer;
+}
+.alloc-btns button:active{transform:translateY(1px);}
+.alloc-btns button:disabled{opacity:.3;cursor:not-allowed;}
+.alloc-job{font-size:9.5px;color:var(--fg-dim);line-height:1.2;}
+
+/* 胜利/失败 banner */
+.end-banner{
+  position:absolute;inset:0;
+  display:none;flex-direction:column;align-items:center;justify-content:center;
+  gap:14px;background:oklch(0.14 0.035 265 / 0.92);
+  z-index:20;text-align:center;padding:30px;
+}
+.end-banner.show{display:flex;}
+.end-banner h2{font-size:30px;color:var(--gold);}
+.end-banner.lose h2{color:var(--danger);}
+.end-banner p{font-size:14px;color:var(--fg-dim);max-width:440px;line-height:1.6;}
+.end-banner button{
+  font-family:var(--mono);font-size:14px;
+  background:var(--bio);color:var(--bg-0);border:none;
+  padding:10px 24px;border-radius:6px;cursor:pointer;font-weight:700;
+  box-shadow:4px 4px 0 var(--SHADOW);
+}
+.end-banner button:active{transform:translate(4px,4px);box-shadow:0 0 0 var(--SHADOW);}
+.end-medal{font-size:46px;color:var(--bio);font-family:var(--mono);}
+</style>
+</head>
+<body class="zh">
+
+<aside class="game-sidebar">
+  <button id="langBtn">中 / EN</button>
+
+  <div class="side-title">
+    <span class="cn-only">蚁群分工模拟</span>
+    <span class="en-only">Colony Manager</span>
+  </div>
+  <div class="side-sub">
+    <span class="cn-only">M03 · 看懂蚂蚁社会分工</span>
+    <span class="en-only">M03 · Ant division of labor</span>
+  </div>
+
+  <div class="roadmap">
+    <div class="rm-label">PROJECT MAP</div>
+    <div class="rm-step done"><span class="cn-only">M01 认识一窝蚂蚁</span><span class="en-only">M01 Meet a colony</span></div>
+    <div class="rm-step done"><span class="cn-only">M02 蚂蚁的身体</span><span class="en-only">M02 Ant body</span></div>
+    <div class="rm-step cur"><span class="cn-only">M03 谁负责什么 (你在这)</span><span class="en-only">M03 Who does what (you)</span></div>
+    <div class="rm-step"><span class="cn-only">M04 信息素轨迹</span><span class="en-only">M04 Pheromone trails</span></div>
+    <div class="rm-step"><span class="cn-only">… AI 行为学家</span><span class="en-only">… AI ethologist</span></div>
+  </div>
+
+  <div class="guide">
+    <span class="cn-only"><b>怎么玩:</b> 一窝蚂蚁没有总指挥。用滑块或 +/− 把 <b>12 只工蚁</b> 分到 4 种工作。让 4 个需求条都待在 <b>绿色健康区</b>，撑满进度条就繁荣了。出事件时要赶紧重新调配!</span>
+    <span class="en-only"><b>How to play:</b> A colony has no boss. Use sliders or +/− to split <b>12 ants</b> across 4 jobs. Keep all 4 need bars in the <b>green healthy zone</b>. Fill the survive bar to win. Re-assign fast when events hit!</span>
+  </div>
+
+  <div class="hud-box">
+    <span class="cn-only">空闲工蚁</span><span class="en-only">Idle ants</span><br>
+    <span class="big" id="idleNum">12</span> / 12<br>
+    <span id="statusTxt" class="warn"></span>
+  </div>
+
+  <button id="resetBtn"><span class="cn-only">重置分工</span><span class="en-only">Reset</span></button>
+
+  <div class="endpoint">
+    <span class="cn-only">终点: <b>你的 AI 蚁群行为学家</b> 能读懂蚁群行为。看懂分工是第一块积木。</span>
+    <span class="en-only">Goal: <b>Your AI ant-ethologist</b> reads colony behavior. Understanding labor is the first brick.</span>
+  </div>
+</aside>
+
+<main class="game-main">
+  <div class="main-head">
+    <div>
+      <h1><span class="cn-only">让你的蚁群繁荣起来</span><span class="en-only">Make your colony thrive</span></h1>
+    </div>
+    <div class="q"><span class="cn-only">一窝蚂蚁里都一样吗? 谁负责什么?</span><span class="en-only">Are all ants the same? Who does what?</span></div>
+  </div>
+
+  <div class="survive-row">
+    <span class="survive-label"><span class="cn-only">蚁群存活</span><span class="en-only">SURVIVE</span></span>
+    <div class="survive-track"><div class="survive-fill" id="surviveFill"></div></div>
+    <span class="survive-num" id="surviveNum">0%</span>
+  </div>
+
+  <div class="stage-wrap">
+    <canvas id="nestCanvas"></canvas>
+    <div class="event-banner" id="eventBanner"></div>
+  </div>
+
+  <div class="needs-row" id="needsRow"></div>
+
+  <div class="alloc-row" id="allocRow"></div>
+
+  <div class="end-banner" id="endBanner">
+    <div class="end-medal" id="endMedal"></div>
+    <h2 id="endTitle"></h2>
+    <p id="endMsg"></p>
+    <button id="endBtn"></button>
+  </div>
+</main>
+
+<script>
+(function(){
+"use strict";
+
+/* ---------- i18n ---------- */
+var curLang = "zh";
+var T = {
+  jobs: {
+    forage: {zh:"觅食",   en:"Forage",  desc_zh:"出去找食物", desc_en:"Bring food home", color:"var(--LIFE)"},
+    nurse:  {zh:"育幼",   en:"Nurse",   desc_zh:"照顾饿肚子的幼虫", desc_en:"Feed the larvae", color:"var(--BLOOM)"},
+    repair: {zh:"修补",   en:"Repair",  desc_zh:"修补巢穴隧道", desc_en:"Fix the tunnels", color:"var(--MOSS)"},
+    guard:  {zh:"守卫",   en:"Guard",   desc_zh:"挡住入侵者", desc_en:"Stop invaders", color:"var(--MUTATE)"}
+  },
+  needs: {
+    food:  {zh:"食物储备", en:"Food"},
+    brood: {zh:"幼虫照顾", en:"Brood"},
+    nest:  {zh:"巢穴完整", en:"Nest"},
+    def:   {zh:"防卫",     en:"Defense"}
+  },
+  statusOk:  {zh:"分工正常", en:"Balanced"},
+  statusLow: {zh:"有需求告急!", en:"A need is failing!"},
+  statusOver:{zh:"还有空闲蚂蚁", en:"Idle ants left"},
+  winTitle:  {zh:"你的蚁群繁荣了!", en:"Your colony thrives!"},
+  winMsg:    {zh:"没有总指挥, 你靠合理分工让整窝蚂蚁活了下来。你刚发现: 一窝蚂蚁里的每只都干着不一样的活 —— 这正是 AI 蚁群行为学家要读懂的第一件事。",
+              en:"With no boss, you kept the whole colony alive by smart division of labor. You just discovered: every ant does a different job — exactly the first thing an AI ant-ethologist must read."},
+  loseTitle: {zh:"蚁群崩溃了", en:"Colony collapsed"},
+  loseMsg:   {zh:"有个需求跌到了 0 太久。试试: 觅食养食物、育幼救幼虫、守卫挡入侵、修补保巢穴 —— 看清谁该多、谁该少。再来一次!",
+              en:"A need stayed at zero too long. Try: forage feeds food, nurse saves larvae, guard blocks invaders, repair holds the nest. See who needs more. Try again!"},
+  again:     {zh:"再来一次", en:"Play again"},
+  events: {
+    hatch:   {zh:"一群幼虫孵化了! 需要更多育幼蚁!", en:"Larvae hatched! Need more nurses!"},
+    invade:  {zh:"入侵者来了! 快派守卫!", en:"Invaders! Send guards now!"},
+    collapse:{zh:"隧道塌方! 需要修补蚁!", en:"Tunnel collapse! Need repairers!"},
+    hungry:  {zh:"食物快没了! 多派觅食蚁!", en:"Food running low! More foragers!"}
+  }
+};
+function t(o){return o[curLang];}
+
+/* ---------- state ---------- */
+var TOTAL = 12;
+var WIN_SECONDS = 24;
+var jobKeys = ["forage","nurse","repair","guard"];
+var needKeys = ["food","brood","nest","def"];
+
+var stateGame;
+function freshState(){
+  return {
+    alloc: {forage:3, nurse:3, repair:3, guard:3},
+    needs: {food:62, brood:62, nest:62, def:62},
+    // 每个需求受哪个工作供给, 以及自然消耗
+    surviveT: 0,        // 累计健康秒
+    danger: {food:0,brood:0,nest:0,def:0}, // 某需求连续在 0 的时长
+    event: null,        // {key, need, mult, ttl}
+    eventCooldown: 6,
+    nextEventIn: 7,
+    over: false,
+    win: false,
+    ants: [],           // 画面里游走的蚂蚁
+    t: 0
+  };
+}
+
+/* 需求 <- 工作映射 + 基础消耗 */
+var supplyMap = {food:"forage", brood:"nurse", nest:"repair", def:"guard"};
+var baseDrain = {food:5.5, brood:5.5, nest:4.0, def:3.5}; // 每秒自然下降
+
+/* ---------- DOM build ---------- */
+var allocRow = document.getElementById("allocRow");
+var needsRow = document.getElementById("needsRow");
+var allocEls = {}, needEls = {};
+
+function buildUI(){
+  allocRow.innerHTML = "";
+  needsRow.innerHTML = "";
+  allocEls = {}; needEls = {};
+
+  jobKeys.forEach(function(jk){
+    var j = T.jobs[jk];
+    var card = document.createElement("div");
+    card.className = "alloc-card";
+    card.innerHTML =
+      '<div class="alloc-top">'+
+        '<span class="alloc-dot" style="background:'+j.color+'"></span>'+
+        '<span class="alloc-name"></span>'+
+        '<span class="alloc-count">0</span>'+
+      '</div>'+
+      '<input type="range" class="alloc-slider" min="0" max="12" value="0">'+
+      '<div class="alloc-btns"><button class="minus">&#8722;</button><button class="plus">+</button></div>'+
+      '<div class="alloc-job"></div>';
+    allocRow.appendChild(card);
+    var el = {
+      card: card,
+      name: card.querySelector(".alloc-name"),
+      count: card.querySelector(".alloc-count"),
+      slider: card.querySelector(".alloc-slider"),
+      minus: card.querySelector(".minus"),
+      plus: card.querySelector(".plus"),
+      job: card.querySelector(".alloc-job")
+    };
+    allocEls[jk] = el;
+
+    el.slider.addEventListener("input", function(){
+      if(stateGame.over) return;
+      setAlloc(jk, parseInt(el.slider.value,10));
+    });
+    el.plus.addEventListener("click", function(){
+      if(stateGame.over) return;
+      setAlloc(jk, stateGame.alloc[jk]+1);
+    });
+    el.minus.addEventListener("click", function(){
+      if(stateGame.over) return;
+      setAlloc(jk, stateGame.alloc[jk]-1);
+    });
+  });
+
+  needKeys.forEach(function(nk){
+    var card = document.createElement("div");
+    card.className = "need-card";
+    card.innerHTML =
+      '<div class="need-top"><span class="need-name"></span><span class="need-pct">0%</span></div>'+
+      '<div class="need-bar"><div class="need-bar-fill"></div></div>';
+    needsRow.appendChild(card);
+    needEls[nk] = {
+      card: card,
+      name: card.querySelector(".need-name"),
+      pct: card.querySelector(".need-pct"),
+      fill: card.querySelector(".need-bar-fill")
+    };
+  });
+}
+
+function setAlloc(jk, val){
+  val = Math.max(0, Math.min(TOTAL, val));
+  // 限制总数 <= TOTAL: 其它工作占用的不能超
+  var others = 0;
+  jobKeys.forEach(function(k){ if(k!==jk) others += stateGame.alloc[k]; });
+  if(val + others > TOTAL) val = TOTAL - others;
+  stateGame.alloc[jk] = val;
+  syncAllocUI();
+  syncAnts();
+}
+
+function idleCount(){
+  var used = 0;
+  jobKeys.forEach(function(k){ used += stateGame.alloc[k]; });
+  return TOTAL - used;
+}
+
+/* ---------- text refresh (lang-aware) ---------- */
+function refreshLabels(){
+  jobKeys.forEach(function(jk){
+    var j = T.jobs[jk], el = allocEls[jk];
+    el.name.textContent = curLang==="zh"? j.zh : j.en;
+    el.job.textContent = curLang==="zh"? j.desc_zh : j.desc_en;
+  });
+  needKeys.forEach(function(nk){
+    needEls[nk].name.textContent = t(T.needs[nk]);
+  });
+  document.getElementById("resetBtn"); // noop, handled by spans
+}
+
+function syncAllocUI(){
+  jobKeys.forEach(function(jk){
+    var el = allocEls[jk], v = stateGame.alloc[jk];
+    el.count.textContent = v;
+    el.slider.value = v;
+    var idle = idleCount();
+    el.plus.disabled = (idle<=0) || stateGame.over;
+    el.minus.disabled = (v<=0) || stateGame.over;
+    // slider max 动态: 当前值 + 空闲
+    el.slider.max = v + idle;
+  });
+  var idle = idleCount();
+  document.getElementById("idleNum").textContent = idle;
+  var st = document.getElementById("statusTxt");
+  if(idle>0){ st.textContent = t(T.statusOver); }
+  else { st.textContent = ""; }
+}
+
+/* ---------- need color ---------- */
+function needColor(v){
+  if(v >= 50) return "var(--bio)";        // healthy emerald
+  if(v >= 25) return "var(--gold)";       // warning
+  return "var(--danger)";                 // critical
+}
+
+/* ---------- ants on canvas ---------- */
+function syncAnts(){
+  // 重建蚂蚁列表, 每只带 job 颜色 + 巢内区域
+  var list = [];
+  // 4 个区域中心 (相对比例)
+  var zones = {
+    forage: {x:0.18, y:0.30},
+    nurse:  {x:0.5,  y:0.66},
+    repair: {x:0.82, y:0.30},
+    guard:  {x:0.5,  y:0.16}
+  };
+  jobKeys.forEach(function(jk){
+    var n = stateGame.alloc[jk];
+    for(var i=0;i<n;i++){
+      list.push({
+        job: jk,
+        cx: zones[jk].x, cy: zones[jk].y,
+        ox: (Math.random()-0.5)*0.16,
+        oy: (Math.random()-0.5)*0.16,
+        ph: Math.random()*Math.PI*2,
+        sp: 0.6+Math.random()*0.8
+      });
+    }
+  });
+  stateGame.ants = list;
+}
+
+var canvas = document.getElementById("nestCanvas");
+var ctx = canvas.getContext("2d");
+function fitCanvas(){
+  var p = canvas.parentElement.getBoundingClientRect();
+  var w = Math.max(40, p.width-20), h = Math.max(40, p.height-20);
+  var dpr = window.devicePixelRatio||1;
+  canvas.width = Math.floor(w*dpr);
+  canvas.height = Math.floor(h*dpr);
+  canvas.style.height = h+"px";
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+}
+
+function jobColorHex(jk){
+  // 解析 css 变量为实色 (canvas 不吃 oklch 旧引擎兜底)
+  var map = {forage:"#3fd28a", nurse:"#cdf2c9", repair:"#3a9d6e", guard:"#e8c14a"};
+  return map[jk];
+}
+
+function drawNest(){
+  var w = canvas.clientWidth, h = canvas.clientHeight;
+  ctx.clearRect(0,0,w,h);
+  // 巢穴背景: 深色土壤 + 隧道圈
+  ctx.fillStyle = "#1c2238";
+  ctx.fillRect(0,0,w,h);
+  // 几个隧道腔室
+  var zones = [
+    {x:0.18,y:0.30,r:0.14,job:"forage"},
+    {x:0.82,y:0.30,r:0.14,job:"repair"},
+    {x:0.5, y:0.16,r:0.12,job:"guard"},
+    {x:0.5, y:0.66,r:0.18,job:"nurse"}
+  ];
+  // 连线隧道
+  ctx.strokeStyle = "#2a3354";
+  ctx.lineWidth = 10;
+  ctx.beginPath();
+  ctx.moveTo(0.18*w,0.30*h); ctx.lineTo(0.5*w,0.66*h);
+  ctx.moveTo(0.82*w,0.30*h); ctx.lineTo(0.5*w,0.66*h);
+  ctx.moveTo(0.5*w,0.16*h);  ctx.lineTo(0.5*w,0.66*h);
+  ctx.stroke();
+  zones.forEach(function(z){
+    ctx.beginPath();
+    ctx.arc(z.x*w, z.y*h, z.r*Math.min(w,h), 0, Math.PI*2);
+    ctx.fillStyle = "#222a44";
+    ctx.fill();
+    ctx.strokeStyle = jobColorHex(z.job);
+    ctx.globalAlpha = 0.35;
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+  });
+  // 中央育幼区画幼虫 (随 brood 需求)
+  var broodN = Math.round(stateGame.needs.brood/100*6);
+  for(var b=0;b<6;b++){
+    var bx = 0.5*w + (b-2.5)*0.045*w;
+    var by = 0.66*h + 0.05*Math.min(w,h);
+    ctx.beginPath();
+    ctx.ellipse(bx, by, 5, 7, 0, 0, Math.PI*2);
+    ctx.fillStyle = b<broodN ? "#cdf2c9" : "#3a3a44";
+    ctx.fill();
+  }
+  // 蚂蚁
+  var tt = stateGame.t;
+  stateGame.ants.forEach(function(a){
+    var wob = Math.sin(tt*a.sp + a.ph)*0.03;
+    var ax = (a.cx + a.ox + Math.cos(tt*a.sp+a.ph)*0.025)*w;
+    var ay = (a.cy + a.oy + wob)*h;
+    var col = jobColorHex(a.job);
+    // 身体 3 段
+    ctx.fillStyle = col;
+    [[0,0,2.6],[3.2,0,3.0],[-3.6,0,2.2]].forEach(function(seg){
+      ctx.beginPath();
+      ctx.arc(ax+seg[0], ay+seg[1], seg[2], 0, Math.PI*2);
+      ctx.fill();
+    });
+    // 腿
+    ctx.strokeStyle = col;
+    ctx.globalAlpha = 0.7;
+    ctx.lineWidth = 1;
+    for(var L=-1;L<=1;L++){
+      ctx.beginPath();
+      ctx.moveTo(ax+L*2, ay);
+      ctx.lineTo(ax+L*2, ay + (L%2===0?5:-5));
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+  });
+  // 入侵者 (def 事件时)
+  if(stateGame.event && stateGame.event.key==="invade"){
+    var ix = 0.5*w + Math.sin(tt*2)*0.05*w;
+    var iy = 0.04*h + 0.02*Math.min(w,h);
+    ctx.fillStyle = "#e0563a";
+    [[0,0,4],[5,0,3.4],[-5,0,3]].forEach(function(seg){
+      ctx.beginPath(); ctx.arc(ix+seg[0],iy+seg[1],seg[2],0,Math.PI*2); ctx.fill();
+    });
+  }
+}
+
+/* ---------- events ---------- */
+var eventBanner = document.getElementById("eventBanner");
+function maybeSpawnEvent(dt){
+  if(stateGame.event){
+    stateGame.event.ttl -= dt;
+    if(stateGame.event.ttl <= 0){
+      stateGame.event = null;
+      eventBanner.classList.remove("show");
+    }
+    return;
+  }
+  stateGame.nextEventIn -= dt;
+  if(stateGame.nextEventIn <= 0){
+    var pool = [
+      {key:"hatch",  need:"brood", mult:2.1},
+      {key:"invade", need:"def",   mult:2.4},
+      {key:"collapse",need:"nest", mult:2.0},
+      {key:"hungry", need:"food",  mult:2.1}
+    ];
+    var pick = pool[Math.floor(Math.random()*pool.length)];
+    stateGame.event = {key:pick.key, need:pick.need, mult:pick.mult, ttl:7};
+    showEvent(pick.key);
+    stateGame.nextEventIn = 8 + Math.random()*4;
+  }
+}
+function showEvent(key){
+  eventBanner.textContent = t(T.events[key]);
+  eventBanner.classList.add("show");
+}
+function refreshEventText(){
+  if(stateGame.event){ eventBanner.textContent = t(T.events[stateGame.event.key]); }
+}
+
+/* ---------- simulation step ---------- */
+function step(dt){
+  if(stateGame.over) return;
+  stateGame.t += dt;
+  maybeSpawnEvent(dt);
+
+  var allHealthy = true;
+  needKeys.forEach(function(nk){
+    var jk = supplyMap[nk];
+    var workers = stateGame.alloc[jk];
+    // 每只工蚁的供给力
+    var supply = workers * 6.2; // per ant per sec
+    var drain = baseDrain[nk];
+    if(stateGame.event && stateGame.event.need===nk){
+      drain *= stateGame.event.mult;
+    }
+    var delta = (supply - drain) * dt;
+    // 收益递减: 已经高的时候涨慢
+    if(delta>0 && stateGame.needs[nk]>80) delta *= 0.4;
+    stateGame.needs[nk] = Math.max(0, Math.min(100, stateGame.needs[nk] + delta));
+
+    if(stateGame.needs[nk] < 22) allHealthy = false;
+    // 危险计时
+    if(stateGame.needs[nk] <= 0.5){
+      stateGame.danger[nk] += dt;
+      if(stateGame.danger[nk] > 4.5){ lose(); }
+    } else {
+      stateGame.danger[nk] = Math.max(0, stateGame.danger[nk]-dt*2);
+    }
+  });
+
+  // 存活进度: 全部健康才累计
+  if(allHealthy){
+    stateGame.surviveT += dt;
+  } else {
+    stateGame.surviveT = Math.max(0, stateGame.surviveT - dt*0.4);
+  }
+  if(stateGame.surviveT >= WIN_SECONDS){ win(); }
+
+  // 蚂蚁数量可能因 alloc 改变, 已在 setAlloc 同步; 保险一次
+  if(stateGame.ants.length !== TOTAL - idleCount()){ syncAnts(); }
+
+  renderNeeds();
+  renderSurvive();
+}
+
+function renderNeeds(){
+  needKeys.forEach(function(nk){
+    var v = stateGame.needs[nk];
+    var el = needEls[nk];
+    el.fill.style.width = v + "%";
+    el.fill.style.background = needColor(v);
+    el.pct.textContent = Math.round(v) + "%";
+    if(v < 22){ el.card.classList.add("low"); }
+    else { el.card.classList.remove("low"); }
+  });
+  var st = document.getElementById("statusTxt");
+  var anyLow = needKeys.some(function(nk){ return stateGame.needs[nk] < 22; });
+  if(idleCount()>0){ st.textContent = t(T.statusOver); st.className="warn"; }
+  else if(anyLow){ st.textContent = t(T.statusLow); st.className="warn"; }
+  else { st.textContent = t(T.statusOk); st.className=""; }
+}
+function renderSurvive(){
+  var pct = Math.round(stateGame.surviveT / WIN_SECONDS * 100);
+  pct = Math.max(0, Math.min(100, pct));
+  document.getElementById("surviveFill").style.width = pct + "%";
+  document.getElementById("surviveNum").textContent = pct + "%";
+}
+
+/* ---------- win / lose ---------- */
+var endBanner = document.getElementById("endBanner");
+function win(){
+  stateGame.over = true; stateGame.win = true;
+  endBanner.classList.remove("lose"); endBanner.classList.add("show");
+  document.getElementById("endMedal").textContent = "◈";
+  renderEndText();
+}
+function lose(){
+  stateGame.over = true; stateGame.win = false;
+  endBanner.classList.add("lose"); endBanner.classList.add("show");
+  document.getElementById("endMedal").textContent = "◌";
+  renderEndText();
+}
+function renderEndText(){
+  if(stateGame.win){
+    document.getElementById("endTitle").textContent = t(T.winTitle);
+    document.getElementById("endMsg").textContent = t(T.winMsg);
+  } else {
+    document.getElementById("endTitle").textContent = t(T.loseTitle);
+    document.getElementById("endMsg").textContent = t(T.loseMsg);
+  }
+  document.getElementById("endBtn").textContent = t(T.again);
+}
+
+/* ---------- reset ---------- */
+function resetGame(){
+  stateGame = freshState();
+  endBanner.classList.remove("show");
+  eventBanner.classList.remove("show");
+  syncAllocUI();
+  refreshLabels();
+  syncAnts();
+  renderNeeds();
+  renderSurvive();
+}
+
+/* ---------- lang toggle ---------- */
+function toggleLang(){
+  curLang = (curLang==="zh") ? "en" : "zh";
+  document.body.className = curLang;
+  refreshLabels();
+  renderNeeds();
+  refreshEventText();
+  if(stateGame.over) renderEndText();
+  document.documentElement.lang = (curLang==="zh")?"zh":"en";
+}
+
+/* ---------- rAF loop ---------- */
+var lastTs = 0;
+function loop(ts){
+  if(!lastTs) lastTs = ts;
+  var dt = (ts - lastTs)/1000;
+  lastTs = ts;
+  if(dt > 0.1) dt = 0.1; // 防卡顿大跳
+  step(dt);
+  drawNest();
+  requestAnimationFrame(loop);
+}
+
+/* ---------- init ---------- */
+function init(){
+  buildUI();
+  resetGame();
+  fitCanvas();
+  document.getElementById("langBtn").addEventListener("click", toggleLang);
+  document.getElementById("resetBtn").addEventListener("click", resetGame);
+  document.getElementById("endBtn").addEventListener("click", resetGame);
+  window.addEventListener("resize", fitCanvas);
+  requestAnimationFrame(loop);
+}
+if(document.readyState==="loading"){
+  document.addEventListener("DOMContentLoaded", init);
+} else { init(); }
+
+})();
+</script>
+</body>
+</html>
