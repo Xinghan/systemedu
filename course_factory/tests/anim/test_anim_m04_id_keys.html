@@ -1,0 +1,764 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>M04 - Identify Safe Ant Species</title>
+<style>
+:root{
+  --bg-0:oklch(0.14 0.035 265); --bg-1:oklch(0.18 0.04 265); --bg-2:oklch(0.22 0.045 265);
+  --line:oklch(0.35 0.05 265 / 0.35); --line-strong:oklch(0.55 0.08 265 / 0.55);
+  --fg:oklch(0.96 0.01 265); --fg-dim:oklch(0.75 0.02 265); --fg-mute:oklch(0.55 0.03 265);
+  --gold:oklch(0.85 0.14 85);
+  --bio:oklch(0.75 0.17 155);
+  --LIFE:oklch(0.75 0.17 155); --MOSS:oklch(0.55 0.16 155); --SHADOW:oklch(0.35 0.10 160);
+  --BLOOM:oklch(0.92 0.08 150); --MUTATE:oklch(0.85 0.14 85);
+  --danger:oklch(0.62 0.20 25);
+}
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;}
+html,body{width:100%;height:100vh;overflow:hidden;}
+body{background:var(--bg-0);color:var(--fg);
+  font-family:'Inter','Noto Sans SC','PingFang SC',sans-serif;}
+.wrapper{display:flex;flex-direction:row;height:100vh;overflow:hidden;}
+/* ---- Sidebar (200px) ---- */
+.sidebar{width:200px;min-width:200px;max-width:200px;display:flex;flex-direction:column;
+  gap:8px;padding:12px 11px;background:var(--bg-1);
+  border-right:1px solid var(--line);overflow-y:auto;}
+.brand{display:flex;align-items:center;gap:7px;}
+.brand svg{flex-shrink:0;}
+.brand .bt{font-family:'JetBrains Mono','Courier New',monospace;font-size:11px;font-weight:700;
+  color:var(--bio);letter-spacing:0.04em;line-height:1.2;text-transform:uppercase;}
+.lang-btn{align-self:flex-start;font-family:'JetBrains Mono','Courier New',monospace;
+  font-size:10px;font-weight:700;padding:3px 9px;cursor:pointer;
+  border:1px solid var(--line-strong);background:transparent;color:var(--bio);
+  letter-spacing:1px;}
+.lang-btn:hover{background:oklch(0.75 0.17 155 / 0.12);}
+.s-title{font-family:'JetBrains Mono','Courier New',monospace;font-size:11px;font-weight:700;
+  color:var(--fg);line-height:1.35;text-transform:uppercase;letter-spacing:0.03em;margin-top:2px;}
+.s-sub{font-size:10px;color:var(--fg-mute);line-height:1.4;}
+.sec-label{font-family:'JetBrains Mono','Courier New',monospace;font-size:8px;font-weight:700;
+  letter-spacing:0.14em;text-transform:uppercase;color:var(--bio);margin-top:6px;}
+.guide{font-size:10.5px;color:var(--fg-dim);line-height:1.5;}
+.guide ul{padding-left:14px;margin:0;}
+.guide li{margin-bottom:2px;}
+/* ---- Roadmap ---- */
+.road{display:flex;flex-direction:column;gap:3px;margin-top:2px;}
+.road .stop{display:flex;align-items:center;gap:6px;font-size:9.5px;color:var(--fg-mute);line-height:1.25;}
+.road .dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;
+  background:var(--bg-2);border:1px solid var(--line-strong);}
+.road .stop.here .dot{background:var(--bio);border-color:var(--bio);
+  box-shadow:0 0 0 3px oklch(0.75 0.17 155 / 0.18);}
+.road .stop.here{color:var(--bio);font-weight:700;}
+.road .stop.done .dot{background:var(--MOSS);border-color:var(--MOSS);}
+.endgoal{display:flex;align-items:center;gap:6px;margin-top:4px;padding:5px 6px;
+  border:1px dashed var(--line-strong);border-radius:5px;}
+.endgoal .et{font-size:9px;color:var(--fg-mute);line-height:1.3;}
+/* ---- Main stage ---- */
+.anim-main{flex:1;display:flex;flex-direction:column;min-width:0;}
+.canvas-wrap{flex:1;min-height:0;position:relative;display:flex;flex-direction:column;}
+canvas{width:100%;height:100%;display:block;}
+.hud{height:38px;display:flex;align-items:center;justify-content:space-around;
+  background:var(--bg-1);border-top:1px solid var(--line);padding:0 16px;flex-shrink:0;}
+.hud-item{text-align:center;}
+.hud-label{font-family:'JetBrains Mono','Courier New',monospace;font-size:7px;
+  letter-spacing:0.15em;text-transform:uppercase;color:var(--fg-mute);}
+.hud-val{font-family:'JetBrains Mono','Courier New',monospace;font-size:12px;font-weight:700;
+  color:var(--bio);margin-top:1px;}
+</style>
+</head>
+<body>
+<div class="wrapper">
+  <div class="sidebar">
+    <div class="brand">
+      <!-- mascot: magnifier ant -->
+      <svg id="mascot" width="30" height="30" viewBox="0 0 40 40" aria-hidden="true">
+        <circle cx="16" cy="16" r="11" fill="none" stroke="oklch(0.75 0.17 155)" stroke-width="2.4"/>
+        <circle cx="16" cy="16" r="11" fill="oklch(0.75 0.17 155 / 0.10)"/>
+        <line x1="24" y1="24" x2="35" y2="35" stroke="oklch(0.75 0.17 155)" stroke-width="3.4" stroke-linecap="round"/>
+        <!-- tiny ant inside lens -->
+        <ellipse cx="12" cy="16" rx="2.4" ry="1.7" fill="oklch(0.55 0.16 155)"/>
+        <circle cx="16.5" cy="15.4" r="1.6" fill="oklch(0.55 0.16 155)"/>
+        <circle cx="20" cy="16" r="2.1" fill="oklch(0.55 0.16 155)"/>
+        <circle cx="17" cy="13" r="1" fill="oklch(0.85 0.14 85)"/>
+        <line x1="17" y1="14" x2="19" y2="11.5" stroke="oklch(0.85 0.14 85)" stroke-width="0.8"/>
+      </svg>
+      <div class="bt">AI Ant<br>Ethologist</div>
+    </div>
+    <button class="lang-btn" id="langBtn">CN</button>
+    <div class="s-title" id="sTitle"></div>
+    <div class="s-sub" id="sSub"></div>
+
+    <div class="sec-label" id="lblStage"></div>
+    <div class="guide" id="stageNow"></div>
+
+    <div class="sec-label" id="lblRoad"></div>
+    <div class="road" id="road"></div>
+
+    <div class="sec-label" id="lblGuide"></div>
+    <div class="guide" id="guide"></div>
+
+    <div class="endgoal">
+      <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true">
+        <rect x="4" y="4" width="16" height="16" rx="2" fill="none" stroke="oklch(0.85 0.14 85)" stroke-width="1.6"/>
+        <rect x="8" y="8" width="3" height="3" fill="oklch(0.85 0.14 85)"/>
+        <rect x="13" y="8" width="3" height="3" fill="oklch(0.85 0.14 85)"/>
+        <rect x="8" y="14" width="8" height="2" fill="oklch(0.85 0.14 85)"/>
+      </svg>
+      <div class="et" id="endGoal"></div>
+    </div>
+  </div>
+
+  <div class="anim-main">
+    <div class="canvas-wrap"><canvas id="c"></canvas></div>
+    <div class="hud">
+      <div class="hud-item"><div class="hud-label" id="hudL1"></div><div class="hud-val" id="hudV1"></div></div>
+      <div class="hud-item"><div class="hud-label" id="hudL2"></div><div class="hud-val" id="hudV2"></div></div>
+      <div class="hud-item"><div class="hud-label" id="hudL3"></div><div class="hud-val" id="hudV3"></div></div>
+      <div class="hud-item"><div class="hud-label" id="hudL4"></div><div class="hud-val" id="hudV4"></div></div>
+    </div>
+  </div>
+</div>
+
+<script>
+// =====================================================================
+// M04 — One concept: identify a safe local ant species by stepping
+// through its key body features. ONE ant stays on stage the whole time;
+// the magnifier zooms in, features (waist node / antenna elbow / body
+// size) are annotated one at a time onto the SAME ant, then it is sorted
+// into safe vs danger. Continuous rAF autoplay, ~30s cycle, no buttons.
+// =====================================================================
+
+// ---------- i18n ----------
+var LANG = 'cn';
+var I18N = {
+  title:   {cn:'放大镜下认蚂蚁', en:'ID ANTS UNDER THE LENS'},
+  sub:     {cn:'看关键特征，一步步认种', en:'Read key features, ID step by step'},
+  lblStage:{cn:'当前在演', en:'NOW SHOWING'},
+  lblRoad: {cn:'项目路线', en:'PROJECT ROUTE'},
+  lblGuide:{cn:'看点', en:'WATCH FOR'},
+  endGoal: {cn:'终点：让 AI 自己认出蚁种、读懂蚁群', en:'Goal: an AI that IDs ants & reads the colony'},
+  g1:{cn:'同一只蚂蚁，越放越大', en:'Same ant, zoomed closer'},
+  g2:{cn:'特征逐个标到它身上', en:'Features tagged one by one'},
+  g3:{cn:'最后归类：能用 / 别碰', en:'Then sort: usable / hands off'},
+  // roadmap stops
+  r1:{cn:'S1 认识蚂蚁', en:'S1 Meet ants'},
+  r2:{cn:'S2 认安全蚁种', en:'S2 ID safe species'},
+  r3:{cn:'S3 拍照建数据', en:'S3 Photo dataset'},
+  r4:{cn:'S4 训 AI 分类器', en:'S4 Train classifier'},
+  r5:{cn:'S5 读懂蚁群行为', en:'S5 Read behaviour'},
+  // stage cues (one ant, deepening)
+  c0:{cn:'光看「黑黑小小」，分不出哪种', en:'Just a tiny black blob — can\'t tell species'},
+  c1:{cn:'放大镜对焦：从模糊到清晰', en:'Lens focuses: blurry to sharp'},
+  c2:{cn:'看腰：腹柄结有几个？这只 1 个', en:'Waist: how many nodes? This one: 1'},
+  c3:{cn:'看触角：有个大弯，像胳膊肘（膝状）', en:'Antenna: a big bend, like an elbow'},
+  c4:{cn:'量体型：拿米粒比一比，约 11mm', en:'Size: compare to a rice grain, ~11mm'},
+  c5:{cn:'对照特征卡：1 结 + 膝状触角 + 大', en:'Match the key: 1 node + elbow + large'},
+  c6:{cn:'木匠蚁 Camponotus：大、温和 — 能用', en:'Carpenter ant: big, gentle — usable'},
+  c7:{cn:'火蚁红、会群咬 — 绝对别碰', en:'Fire ant: red, swarm-stings — hands off'},
+  c8:{cn:'安全第一：拿不准就让大人确认', en:'Safety first: unsure? ask an adult'},
+  // labels on canvas
+  lWaist:{cn:'腹柄结', en:'WAIST NODE'},
+  lOne:{cn:'1 个结', en:'1 NODE'},
+  lTwo:{cn:'(有的种 2 个)', en:'(some have 2)'},
+  lAnt:{cn:'触角', en:'ANTENNA'},
+  lElbow:{cn:'膝状大弯', en:'ELBOW BEND'},
+  lScale:{cn:'米粒 ~7mm', en:'rice grain ~7mm'},
+  lSize:{cn:'体型 ~11mm', en:'body ~11mm'},
+  lRule:{cn:'4-6mm 标签贴在 10-15mm 的中大型工蚁上', en:'4-6mm tag goes on 10-15mm mid/large worker'},
+  lCarp:{cn:'木匠蚁 Camponotus', en:'Carpenter ant Camponotus'},
+  lFire:{cn:'火蚁 Solenopsis', en:'Fire ant Solenopsis'},
+  lUse:{cn:'能用', en:'USABLE'},
+  lNo:{cn:'别碰', en:'HANDS OFF'},
+  lFocus:{cn:'对焦中', en:'FOCUSING'},
+  lKey:{cn:'识种三看', en:'3 CHECKS'},
+  // hud
+  hL1:{cn:'阶段', en:'STAGE'},
+  hL2:{cn:'放大', en:'ZOOM'},
+  hL3:{cn:'已读特征', en:'FEATURES'},
+  hL4:{cn:'判定', en:'VERDICT'},
+  hZoomBlur:{cn:'对焦', en:'FOCUS'},
+  hVpending:{cn:'判定中', en:'PENDING'},
+  hVuse:{cn:'能用', en:'USABLE'},
+  hVno:{cn:'别碰', en:'AVOID'},
+  st0:{cn:'引入', en:'INTRO'},
+  st1:{cn:'看腰结', en:'WAIST'},
+  st2:{cn:'看触角', en:'ANTENNA'},
+  st3:{cn:'量体型', en:'SIZE'},
+  st4:{cn:'核对', en:'MATCH'},
+  st5:{cn:'分类', en:'SORT'},
+};
+function t(k){ var e=I18N[k]; return e?(e[LANG]||e.en):k; }
+
+// ---------- colors ----------
+var COL = {
+  bg0:'oklch(0.14 0.035 265)', bg1:'oklch(0.18 0.04 265)', bg2:'oklch(0.22 0.045 265)',
+  fg:'oklch(0.96 0.01 265)', dim:'oklch(0.75 0.02 265)', mute:'oklch(0.55 0.03 265)',
+  line:'oklch(0.35 0.05 265 / 0.45)', gold:'oklch(0.85 0.14 85)',
+  bio:'oklch(0.75 0.17 155)', moss:'oklch(0.55 0.16 155)', shadow:'oklch(0.35 0.10 160)',
+  bloom:'oklch(0.92 0.08 150)', mutate:'oklch(0.85 0.14 85)',
+  danger:'oklch(0.62 0.20 25)', dangerDim:'oklch(0.45 0.16 25)',
+};
+
+// ---------- timeline (seconds), continuous evolution of ONE ant ----------
+// total cycle ~31s then loops
+var DUR = 31.0;
+var SEG = [
+  {k:'st0', cue:'c0', a:0.0,  b:2.4},   // tiny blob
+  {k:'st0', cue:'c1', a:2.4,  b:5.2},   // focus blur->sharp
+  {k:'st1', cue:'c2', a:5.2,  b:10.0},  // waist node
+  {k:'st2', cue:'c3', a:10.0, b:14.6},  // antenna elbow
+  {k:'st3', cue:'c4', a:14.6, b:19.4},  // body size vs rice
+  {k:'st4', cue:'c5', a:19.4, b:22.6},  // match key card
+  {k:'st5', cue:'c6', a:22.6, b:25.6},  // carpenter usable
+  {k:'st5', cue:'c7', a:25.6, b:28.4},  // fire ant danger
+  {k:'st5', cue:'c8', a:28.4, b:31.0},  // safety first
+];
+function segAt(time){ for(var i=0;i<SEG.length;i++){ if(time>=SEG[i].a && time<SEG[i].b) return SEG[i]; } return SEG[SEG.length-1]; }
+function clamp01(x){ return x<0?0:x>1?1:x; }
+function ramp(time,a,b){ return clamp01((time-a)/(b-a)); }
+function eio(x){ return x<0.5?2*x*x:1-Math.pow(-2*x+2,2)/2; }
+function lerp(a,b,p){ return a+(b-a)*p; }
+
+// =====================================================================
+// Canvas setup
+// =====================================================================
+var cv = document.getElementById('c');
+var ctx = cv.getContext('2d');
+var DPR = Math.min(window.devicePixelRatio||1, 2);
+var W=900, H=440;
+function resize(){
+  var wrap = cv.parentElement;
+  var r = wrap.getBoundingClientRect();
+  if(r.width<1||r.height<1) return;
+  W=r.width; H=r.height;
+  cv.width=W*DPR; cv.height=H*DPR;
+  cv.style.width=W+'px'; cv.style.height=H+'px';
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+}
+window.addEventListener('resize', resize);
+
+// =====================================================================
+// Drawing helpers
+// =====================================================================
+function bg(){
+  var g = ctx.createLinearGradient(0,0,0,H);
+  g.addColorStop(0, COL.bg1); g.addColorStop(1, COL.bg0);
+  ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
+  // faint grid
+  ctx.strokeStyle='oklch(0.75 0.17 155 / 0.05)'; ctx.lineWidth=1;
+  for(var x=0;x<W;x+=64){ ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke(); }
+  for(var y=0;y<H;y+=64){ ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke(); }
+  // soft radial bloom top
+  var rg = ctx.createRadialGradient(W*0.5,H*0.34,0,W*0.5,H*0.34,W*0.55);
+  rg.addColorStop(0,'oklch(0.75 0.17 155 / 0.07)'); rg.addColorStop(1,'transparent');
+  ctx.fillStyle=rg; ctx.fillRect(0,0,W,H);
+}
+
+function txt(s,x,y,size,color,align,bold,blur){
+  ctx.save();
+  ctx.fillStyle=color||COL.fg;
+  ctx.font=(bold?'bold ':'')+size+"px 'Inter','Noto Sans SC',sans-serif";
+  ctx.textAlign=align||'center'; ctx.textBaseline='middle';
+  if(blur){ ctx.shadowColor=blur; ctx.shadowBlur=10; }
+  ctx.fillText(s,x,y);
+  ctx.restore();
+}
+function mono(s,x,y,size,color,align,bold){
+  ctx.save();
+  ctx.fillStyle=color||COL.dim;
+  ctx.font=(bold?'700 ':'')+size+"px 'JetBrains Mono','Courier New',monospace";
+  ctx.textAlign=align||'left'; ctx.textBaseline='middle';
+  ctx.fillText(s,x,y);
+  ctx.restore();
+}
+
+// caption bar (bottom) — semi-transparent deep-space band so it never
+// collides with scene elements above it
+function caption(seg, alpha){
+  var bh=46;
+  ctx.save();
+  ctx.globalAlpha=0.92*alpha;
+  ctx.fillStyle='oklch(0.16 0.04 265 / 0.96)';
+  ctx.fillRect(0,H-bh,W,bh);
+  ctx.fillStyle=COL.bio;
+  ctx.fillRect(0,H-bh,3,bh);
+  ctx.restore();
+  ctx.save();
+  ctx.globalAlpha=alpha;
+  txt(t(seg.cue), W/2, H-bh/2, Math.min(15, W*0.018), COL.fg, 'center', false);
+  ctx.restore();
+}
+
+// ---- THE ANT (drawn in a local coord, scale s, centered at ox,oy) ----
+// orientation: head to the right. color = body fill. fireMode tweaks hue.
+// Returns key anchor points (in screen coords) for annotations.
+function drawAnt(ox, oy, s, opt){
+  opt = opt||{};
+  var body = opt.body || COL.moss;
+  var legCol = opt.leg || COL.shadow;
+  var tWalk = opt.walk!==undefined?opt.walk:0;
+  ctx.save();
+  ctx.translate(ox,oy);
+  // legs (3 pairs) — subtle walk wiggle
+  ctx.strokeStyle=legCol; ctx.lineWidth=Math.max(1.4, s*2.0); ctx.lineCap='round';
+  var legX=[-2*s, 1.5*s, 5*s];
+  for(var i=0;i<3;i++){
+    var w = Math.sin(tWalk*4 + i)*0.12;
+    // down-left and down-right of each thorax point
+    ctx.beginPath();
+    ctx.moveTo(legX[i], 1*s);
+    ctx.lineTo(legX[i]-6*s, (8+w*6)*s);
+    ctx.lineTo(legX[i]-9*s, (12-w*4)*s);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(legX[i], 1*s);
+    ctx.lineTo(legX[i]-6*s, (-8-w*6)*s);
+    ctx.lineTo(legX[i]-9*s, (-12+w*4)*s);
+    ctx.stroke();
+  }
+  // gaster (abdomen) — left
+  ctx.fillStyle=body;
+  ctx.beginPath(); ctx.ellipse(-9*s, 0, 7.5*s, 5.5*s, 0, 0, Math.PI*2); ctx.fill();
+  // petiole node(s) between gaster and thorax — THE WAIST. carpenter=1 node
+  var nodeCol = opt.nodeHL ? COL.gold : body;
+  ctx.fillStyle=nodeCol;
+  ctx.beginPath(); ctx.ellipse(-2.6*s, 0, 1.7*s, 2.4*s, 0, 0, Math.PI*2); ctx.fill();
+  // thorax
+  ctx.fillStyle=body;
+  ctx.beginPath(); ctx.ellipse(2.4*s, 0, 4.6*s, 3.8*s, 0, 0, Math.PI*2); ctx.fill();
+  // head — right
+  ctx.beginPath(); ctx.ellipse(9.5*s, 0, 4.2*s, 4.0*s, 0, 0, Math.PI*2); ctx.fill();
+  // mandibles
+  ctx.strokeStyle=body; ctx.lineWidth=Math.max(1, s*1.4);
+  ctx.beginPath(); ctx.moveTo(13*s,-1.4*s); ctx.lineTo(15.6*s,-2.4*s); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(13*s, 1.4*s); ctx.lineTo(15.6*s, 2.4*s); ctx.stroke();
+  // antennae — GENICULATE (elbow). scape from head then sharp bend.
+  var antCol = opt.antHL ? COL.gold : (opt.antBase||COL.bio);
+  ctx.strokeStyle=antCol; ctx.lineWidth=Math.max(1.3, s*1.7); ctx.lineCap='round';
+  // upper antenna
+  ctx.beginPath();
+  ctx.moveTo(11.5*s,-2.6*s);
+  var ebx=17*s, eby=-7.5*s;            // elbow joint
+  ctx.lineTo(ebx, eby);                // scape
+  ctx.lineTo(23*s, -10.5*s);           // funiculus
+  ctx.stroke();
+  // elbow joint dot
+  if(opt.antHL){ ctx.fillStyle=COL.gold; ctx.beginPath(); ctx.arc(ebx,eby,2.0*s,0,Math.PI*2); ctx.fill(); }
+  // lower antenna
+  ctx.beginPath();
+  ctx.moveTo(11.5*s, 2.6*s);
+  ctx.lineTo(17*s, 7.5*s);
+  ctx.lineTo(23*s, 10.5*s);
+  ctx.stroke();
+  // eye
+  ctx.fillStyle=COL.bg0; ctx.beginPath(); ctx.arc(10.5*s,-1.6*s, 0.9*s,0,Math.PI*2); ctx.fill();
+  ctx.restore();
+
+  return {
+    waist:{x:ox-2.6*s, y:oy},
+    antenna:{x:ox+17*s, y:oy-7.5*s},
+    headTip:{x:ox+15.6*s, y:oy},
+    gasterEnd:{x:ox-16.5*s, y:oy},   // left extreme
+    s:s
+  };
+}
+
+// magnifier ring overlay
+function magnifier(cx,cy,R,alpha){
+  ctx.save();
+  ctx.globalAlpha=alpha;
+  ctx.strokeStyle=COL.bio; ctx.lineWidth=3.5;
+  ctx.beginPath(); ctx.arc(cx,cy,R,0,Math.PI*2); ctx.stroke();
+  ctx.strokeStyle='oklch(0.92 0.08 150 / 0.6)'; ctx.lineWidth=1.4;
+  ctx.beginPath(); ctx.arc(cx,cy,R-5,0,Math.PI*2); ctx.stroke();
+  // glass tint
+  ctx.fillStyle='oklch(0.75 0.17 155 / 0.05)';
+  ctx.beginPath(); ctx.arc(cx,cy,R-2,0,Math.PI*2); ctx.fill();
+  // handle (lower-right)
+  var a=Math.PI*0.25;
+  ctx.strokeStyle=COL.moss; ctx.lineWidth=8; ctx.lineCap='round';
+  ctx.beginPath();
+  ctx.moveTo(cx+Math.cos(a)*R, cy+Math.sin(a)*R);
+  ctx.lineTo(cx+Math.cos(a)*(R+38), cy+Math.sin(a)*(R+38));
+  ctx.stroke();
+  ctx.restore();
+}
+
+// annotation: anchor dot + leader line + boxed label (placed safely)
+function annot(ax,ay, lx,ly, label, sub, color, alpha){
+  ctx.save();
+  ctx.globalAlpha=alpha;
+  // leader
+  ctx.strokeStyle=color; ctx.lineWidth=1.5; ctx.setLineDash([4,3]);
+  ctx.beginPath(); ctx.moveTo(ax,ay); ctx.lineTo(lx,ly); ctx.stroke();
+  ctx.setLineDash([]);
+  // anchor dot
+  ctx.fillStyle=color; ctx.beginPath(); ctx.arc(ax,ay,3.5,0,Math.PI*2); ctx.fill();
+  ctx.strokeStyle='oklch(0.14 0.035 265)'; ctx.lineWidth=1; ctx.stroke();
+  // label text (no box bg needed; sits over deep space)
+  ctx.restore();
+  ctx.save();
+  ctx.globalAlpha=alpha;
+  mono(label, lx, ly-6, 12, color, 'center', true);
+  if(sub) txt(sub, lx, ly+9, 11, COL.dim, 'center', false);
+  ctx.restore();
+}
+
+// HUD update
+function setHUD(seg, time, zoomP, featCount, verdict){
+  document.getElementById('hudL1').textContent=t('hL1');
+  document.getElementById('hudL2').textContent=t('hL2');
+  document.getElementById('hudL3').textContent=t('hL3');
+  document.getElementById('hudL4').textContent=t('hL4');
+  document.getElementById('hudV1').textContent=t(seg.k);
+  document.getElementById('hudV2').textContent = zoomP<0.99 ? t('hZoomBlur') : (zoomP>=1?'x8':'x'+(1+Math.round(zoomP*7)));
+  document.getElementById('hudV3').textContent = featCount+' / 3';
+  var vEl=document.getElementById('hudV4');
+  vEl.textContent = verdict;
+  vEl.style.color = (verdict===t('hVno')) ? COL.danger : (verdict===t('hVuse')?COL.bio:COL.mute);
+}
+
+// =====================================================================
+// MAIN RENDER — one continuous timeline; the SAME ant is zoomed,
+// annotated, then classified. Nothing here is a discrete "slide".
+// =====================================================================
+function render(time){
+  bg();
+  var seg = segAt(time);
+  var cx = W*0.46, cy = H*0.46;
+
+  // ---- global zoom of the ant: grows from tiny blob (t0) to big (t5) ----
+  // base scale ramps up across the focus + feature phases, then settles.
+  var zoomBlur = ramp(time, 2.4, 5.0);                 // 0..1 focus sharpness
+  var grow = lerp(0.55, 1.0, eio(ramp(time, 0.0, 6.0)));
+  // pull-in toward waist during waist phase, toward head during antenna
+  var antScale = lerp(2.2, 5.6, eio(ramp(time, 0.0, 8.0)));
+  var s = antScale * grow;
+
+  // count features read so far (for HUD)
+  var featCount = 0;
+  if(time>=8.0) featCount=1;
+  if(time>=13.0) featCount=2;
+  if(time>=18.0) featCount=3;
+
+  // verdict
+  var verdict = t('hVpending');
+  if(time>=22.6 && time<25.6) verdict=t('hVuse');
+  else if(time>=25.6 && time<28.4) verdict=t('hVno');
+  else if(time>=28.4) verdict=t('hVuse');
+
+  // ===== SORT PHASE (st5): split screen carpenter vs fire =====
+  if(time>=22.6){
+    drawSortPhase(time);
+    caption(seg, ramp(time, 22.6, 23.1));
+    setHUD(seg, time, 1, featCount, verdict);
+    // top title strip
+    titleStrip();
+    return;
+  }
+
+  // ===== single-ant inspection phases =====
+  // small reference blob in corner before focus to motivate "can't tell"
+  if(time<2.4){
+    // a tiny black ant far away + question
+    var blobAlpha = 1;
+    drawAnt(W*0.5, H*0.5, 2.0, {body:'oklch(0.28 0.03 265)', leg:'oklch(0.24 0.03 265)', antBase:'oklch(0.30 0.03 265)'});
+    txt('?', W*0.5, H*0.5-46, 30, COL.mute, 'center', true);
+    mono(t('lFocus'), W*0.5, H*0.5+52, 11, COL.mute, 'center', false);
+  } else {
+    // sharpen: draw a blurred ghost fading out as the sharp ant fades in
+    var sharp = eio(zoomBlur);
+    if(sharp<1){
+      ctx.save(); ctx.globalAlpha=(1-sharp)*0.5; ctx.filter='blur(4px)';
+      drawAnt(cx, cy, s, {body:COL.shadow, leg:COL.shadow, antBase:COL.shadow, walk:time});
+      ctx.restore();
+    }
+    ctx.save(); ctx.globalAlpha=sharp;
+    var anchors = drawAnt(cx, cy, s, {
+      body:COL.moss, leg:COL.shadow, antBase:COL.bio, walk:time,
+      nodeHL: (time>=5.2 && time<10.0),
+      antHL:  (time>=10.0 && time<14.6),
+    });
+    ctx.restore();
+
+    // ---- WAIST phase: highlight petiole node, show "1 vs 2 nodes" ----
+    if(time>=5.2 && time<10.0){
+      var wa = ramp(time, 5.4, 6.4);
+      magnifier(anchors.waist.x, anchors.waist.y, lerp(28,46,eio(ramp(time,5.2,6.2))), wa);
+      annot(anchors.waist.x, anchors.waist.y,
+            anchors.waist.x-6, cy-92,
+            t('lWaist'), t('lOne'), COL.gold, wa);
+      // mini compare diagram top-right: 1 node vs 2 nodes
+      drawNodeCompare(W-176, 70, ramp(time, 6.6, 7.6));
+    }
+
+    // ---- ANTENNA phase: highlight geniculate elbow ----
+    if(time>=10.0 && time<14.6){
+      var aa = ramp(time, 10.2, 11.2);
+      magnifier(anchors.antenna.x, anchors.antenna.y, lerp(26,40,eio(ramp(time,10.0,11.0))), aa);
+      annot(anchors.antenna.x, anchors.antenna.y,
+            anchors.antenna.x+18, cy-96,
+            t('lAnt'), t('lElbow'), COL.gold, aa);
+      drawElbowDiagram(W-176, 64, ramp(time, 11.4, 12.4));
+    }
+
+    // ---- SIZE phase: rice-grain scale bar beside the ant ----
+    if(time>=14.6 && time<19.4){
+      var za = ramp(time, 14.8, 15.8);
+      drawScaleBar(cx, cy, s, anchors, za, time);
+    }
+
+    // ---- MATCH phase: the 3-check key card lights up ----
+    if(time>=19.4 && time<22.6){
+      drawKeyCard(W*0.5, H*0.18, ramp(time, 19.6, 21.0), time);
+    }
+  }
+
+  caption(seg, ramp(time, seg.a, seg.a+0.4));
+  setHUD(seg, time, time<2.4?0:eio(zoomBlur), featCount, verdict);
+  titleStrip();
+}
+
+// top strip with stage title (kept clear of ant & caption)
+function titleStrip(){
+  ctx.save();
+  mono(t('lKey'), 16, 22, 10, COL.bio, 'left', true);
+  ctx.restore();
+}
+
+// mini: 1-node vs 2-node petiole compare
+function drawNodeCompare(x,y,p){
+  if(p<=0) return;
+  ctx.save(); ctx.globalAlpha=p;
+  ctx.fillStyle='oklch(0.20 0.04 265 / 0.85)';
+  roundRect(x-10,y-14,164,84,8); ctx.fill();
+  ctx.strokeStyle=COL.line; ctx.lineWidth=1; roundRect(x-10,y-14,164,84,8); ctx.stroke();
+  // left: 1 node (highlighted = this ant)
+  mono('1', x+24, y+4, 13, COL.gold, 'center', true);
+  ctx.fillStyle=COL.shadow; ctx.beginPath(); ctx.ellipse(x+4,y+26,12,8,0,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle=COL.gold; ctx.beginPath(); ctx.ellipse(x+20,y+26,4,6,0,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle=COL.shadow; ctx.beginPath(); ctx.ellipse(x+34,y+26,7,6,0,0,Math.PI*2); ctx.fill();
+  txt(t('lOne'), x+19, y+44, 10, COL.gold, 'center', false);
+  // right: 2 nodes
+  mono('2', x+108, y+4, 13, COL.dim, 'center', true);
+  ctx.fillStyle=COL.shadow; ctx.beginPath(); ctx.ellipse(x+88,y+26,11,7,0,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle=COL.moss; ctx.beginPath(); ctx.ellipse(x+102,y+26,3.5,5,0,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle=COL.moss; ctx.beginPath(); ctx.ellipse(x+110,y+26,3.5,5,0,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle=COL.shadow; ctx.beginPath(); ctx.ellipse(x+124,y+26,6,5,0,0,Math.PI*2); ctx.fill();
+  txt(t('lTwo'), x+106, y+44, 9.5, COL.mute, 'center', false);
+  ctx.restore();
+}
+
+// mini: straight vs elbow antenna
+function drawElbowDiagram(x,y,p){
+  if(p<=0) return;
+  ctx.save(); ctx.globalAlpha=p;
+  ctx.fillStyle='oklch(0.20 0.04 265 / 0.85)';
+  roundRect(x-10,y-10,164,80,8); ctx.fill();
+  ctx.strokeStyle=COL.line; ctx.lineWidth=1; roundRect(x-10,y-10,164,80,8); ctx.stroke();
+  // elbow shape (this ant)
+  ctx.strokeStyle=COL.gold; ctx.lineWidth=2.6; ctx.lineCap='round';
+  ctx.beginPath(); ctx.moveTo(x+8,y+18); ctx.lineTo(x+42,y+18); ctx.lineTo(x+58,y+48); ctx.stroke();
+  ctx.fillStyle=COL.gold; ctx.beginPath(); ctx.arc(x+42,y+18,3.4,0,Math.PI*2); ctx.fill();
+  txt(t('lElbow'), x+34, y+62, 10, COL.gold, 'center', false);
+  ctx.restore();
+}
+
+// rice-grain scale bar comparing body size
+function drawScaleBar(cx, cy, s, anchors, p, time){
+  if(p<=0) return;
+  ctx.save(); ctx.globalAlpha=p;
+  // measurement bracket across the ant body length (head tip to gaster end)
+  var x1 = anchors.gasterEnd.x, x2 = anchors.headTip.x;
+  var by = cy + s*7.2 + 16;
+  ctx.strokeStyle=COL.bio; ctx.lineWidth=2;
+  ctx.beginPath(); ctx.moveTo(x1,by-6); ctx.lineTo(x1,by+6); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(x2,by-6); ctx.lineTo(x2,by+6); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(x1,by); ctx.lineTo(x2,by); ctx.stroke();
+  mono(t('lSize'), (x1+x2)/2, by+16, 12, COL.bio, 'center', true);
+
+  // rice grain reference, drawn to scale (~7mm vs ~11mm body)
+  var grainLen = (x2-x1) * (7/11);
+  var gx = cx, gy = cy - s*7.2 - 30;
+  ctx.fillStyle=COL.bloom;
+  ctx.beginPath(); ctx.ellipse(gx, gy, grainLen/2, grainLen*0.18, 0, 0, Math.PI*2); ctx.fill();
+  ctx.strokeStyle=COL.dim; ctx.lineWidth=1;
+  ctx.beginPath(); ctx.moveTo(gx-grainLen/2,gy-14); ctx.lineTo(gx-grainLen/2,gy-8); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(gx+grainLen/2,gy-14); ctx.lineTo(gx+grainLen/2,gy-8); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(gx-grainLen/2,gy-11); ctx.lineTo(gx+grainLen/2,gy-11); ctx.stroke();
+  mono(t('lScale'), gx, gy-26, 11, COL.dim, 'center', false);
+
+  // the 4-6mm / 10-15mm rule note (bottom-left, above caption)
+  if(time>=16.4){
+    var ra=ramp(time,16.4,17.4);
+    ctx.globalAlpha=p*ra;
+    ctx.fillStyle='oklch(0.20 0.04 265 / 0.85)';
+    roundRect(14, H-118, 330, 40, 7); ctx.fill();
+    ctx.strokeStyle=COL.line; ctx.lineWidth=1; roundRect(14, H-118, 330, 40, 7); ctx.stroke();
+    txt(t('lRule'), 14+165, H-98, 11, COL.gold, 'center', false);
+  }
+  ctx.restore();
+}
+
+// 3-check key card
+function drawKeyCard(cx, cy, p, time){
+  if(p<=0) return;
+  ctx.save();
+  var cw=420, ch=92;
+  ctx.globalAlpha=p;
+  ctx.fillStyle='oklch(0.20 0.045 265 / 0.92)';
+  roundRect(cx-cw/2, cy-ch/2, cw, ch, 10); ctx.fill();
+  ctx.strokeStyle=COL.bio; ctx.lineWidth=1.5; roundRect(cx-cw/2, cy-ch/2, cw, ch, 10); ctx.stroke();
+  mono(t('lKey'), cx, cy-ch/2+16, 12, COL.bio, 'center', true);
+  var items=[t('lOne'), t('lElbow'), t('lSize')];
+  var checkAt=[19.8, 20.6, 21.4];
+  for(var i=0;i<3;i++){
+    var ix = cx - cw/2 + 70 + i*140;
+    var iy = cy + 8;
+    var lit = time>=checkAt[i];
+    // check ring (no glyph symbol — use a filled ring = "read")
+    ctx.strokeStyle=lit?COL.gold:COL.line; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.arc(ix-44, iy, 8, 0, Math.PI*2); ctx.stroke();
+    if(lit){ ctx.fillStyle=COL.gold; ctx.beginPath(); ctx.arc(ix-44, iy, 4, 0, Math.PI*2); ctx.fill(); }
+    txt(items[i], ix+4, iy, 11, lit?COL.fg:COL.mute, 'center', false);
+  }
+  ctx.restore();
+}
+
+// ===== SORT PHASE: carpenter (usable) vs fire (danger) =====
+function drawSortPhase(time){
+  var midX = W*0.5;
+  // divider
+  ctx.save();
+  ctx.strokeStyle=COL.line; ctx.lineWidth=1.5; ctx.setLineDash([6,5]);
+  ctx.beginPath(); ctx.moveTo(midX, 60); ctx.lineTo(midX, H-58); ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.restore();
+
+  // LEFT: carpenter ant — appears 22.6
+  var lp = eio(ramp(time, 22.6, 23.4));
+  var lx = W*0.25, ly = H*0.46;
+  ctx.save(); ctx.globalAlpha=lp;
+  // green "usable" panel glow
+  ctx.fillStyle='oklch(0.75 0.17 155 / 0.07)'; roundRect(20, 56, midX-40, H-114, 12); ctx.fill();
+  ctx.strokeStyle=COL.bio; ctx.lineWidth=1.5; roundRect(20, 56, midX-40, H-114, 12); ctx.stroke();
+  drawAnt(lx, ly, 4.4, {body:COL.moss, leg:COL.shadow, antBase:COL.bio, walk:time});
+  mono(t('lCarp'), lx, 86, 12, COL.bio, 'center', true);
+  // verdict tag
+  var tagY=H-92;
+  ctx.fillStyle=COL.bio; roundRect(lx-44, tagY, 88, 26, 13); ctx.fill();
+  txt(t('lUse'), lx, tagY+13, 13, COL.bg0, 'center', true);
+  // size note
+  txt('10-15 mm', lx, ly+78, 11, COL.dim, 'center', false);
+  ctx.restore();
+
+  // RIGHT: fire ant — appears 25.6 with danger red
+  var rp = eio(ramp(time, 25.6, 26.4));
+  var rx = W*0.75, ry = H*0.46;
+  ctx.save(); ctx.globalAlpha=rp;
+  ctx.fillStyle='oklch(0.62 0.20 25 / 0.08)'; roundRect(midX+20, 56, midX-40, H-114, 12); ctx.fill();
+  ctx.strokeStyle=COL.danger; ctx.lineWidth=1.5; roundRect(midX+20, 56, midX-40, H-114, 12); ctx.stroke();
+  drawAnt(rx, ry, 3.2, {body:COL.danger, leg:COL.dangerDim, antBase:COL.danger, walk:time});
+  // a couple more fire ants (swarm hint)
+  ctx.globalAlpha=rp*0.7;
+  drawAnt(rx+46, ry-30, 1.8, {body:COL.danger, leg:COL.dangerDim, antBase:COL.danger, walk:time+1});
+  drawAnt(rx-40, ry+34, 1.7, {body:COL.danger, leg:COL.dangerDim, antBase:COL.danger, walk:time+2});
+  ctx.globalAlpha=rp;
+  mono(t('lFire'), rx, 86, 12, COL.danger, 'center', true);
+  // danger hazard mark (triangle, no emoji)
+  var hy=H-92;
+  ctx.fillStyle=COL.danger;
+  ctx.beginPath(); ctx.moveTo(rx-58,hy+22); ctx.lineTo(rx-46,hy); ctx.lineTo(rx-34,hy+22); ctx.closePath(); ctx.fill();
+  ctx.fillStyle=COL.bg0; ctx.fillRect(rx-47.5,hy+5,3,9); ctx.fillRect(rx-47.5,hy+16,3,3);
+  ctx.fillStyle=COL.danger; roundRect(rx-26, hy, 92, 26, 13); ctx.fill();
+  txt(t('lNo'), rx+20, hy+13, 13, COL.fg, 'center', true);
+  txt('3-6 mm', rx, ry+72, 11, COL.dim, 'center', false);
+  ctx.restore();
+
+  // safety-first banner — appears 28.4 (gold key moment)
+  if(time>=28.4){
+    var bp=ramp(time,28.4,29.2);
+    var byB=H*0.5-18;
+    ctx.save(); ctx.globalAlpha=bp;
+    ctx.fillStyle='oklch(0.16 0.045 265 / 0.96)';
+    roundRect(W*0.5-200, byB, 400, 38, 9); ctx.fill();
+    ctx.fillStyle='oklch(0.85 0.14 85 / 0.16)';
+    roundRect(W*0.5-200, byB, 400, 38, 9); ctx.fill();
+    ctx.strokeStyle=COL.gold; ctx.lineWidth=1.5;
+    roundRect(W*0.5-200, byB, 400, 38, 9); ctx.stroke();
+    txt(t('c8'), W*0.5, byB+19, 13, COL.gold, 'center', true);
+    ctx.restore();
+  }
+}
+
+function roundRect(x,y,w,h,r){
+  ctx.beginPath();
+  ctx.moveTo(x+r,y);
+  ctx.arcTo(x+w,y,x+w,y+h,r);
+  ctx.arcTo(x+w,y+h,x,y+h,r);
+  ctx.arcTo(x,y+h,x,y,r);
+  ctx.arcTo(x,y,x+w,y,r);
+  ctx.closePath();
+}
+
+// =====================================================================
+// Sidebar build + i18n refresh
+// =====================================================================
+function buildSidebar(){
+  document.getElementById('sTitle').textContent=t('title');
+  document.getElementById('sSub').textContent=t('sub');
+  document.getElementById('lblStage').textContent=t('lblStage');
+  document.getElementById('lblRoad').textContent=t('lblRoad');
+  document.getElementById('lblGuide').textContent=t('lblGuide');
+  document.getElementById('endGoal').textContent=t('endGoal');
+  document.getElementById('langBtn').textContent=LANG.toUpperCase();
+
+  document.getElementById('guide').innerHTML=
+    '<ul><li>'+t('g1')+'</li><li>'+t('g2')+'</li><li>'+t('g3')+'</li></ul>';
+
+  // roadmap: S1 done, S2 = here, rest pending
+  var stops=[
+    {k:'r1', cls:'done'}, {k:'r2', cls:'here'}, {k:'r3', cls:''},
+    {k:'r4', cls:''}, {k:'r5', cls:''}
+  ];
+  var html='';
+  stops.forEach(function(st){
+    html+='<div class="stop '+st.cls+'"><span class="dot"></span><span>'+t(st.k)+'</span></div>';
+  });
+  document.getElementById('road').innerHTML=html;
+}
+// "now showing" hint in sidebar, updated each frame's stage
+function setStageNow(seg){
+  document.getElementById('stageNow').textContent=t(seg.cue);
+}
+
+document.getElementById('langBtn').addEventListener('click', function(){
+  LANG = LANG==='cn' ? 'en' : 'cn';
+  buildSidebar();
+  lastSeg=null;  // 强制下一帧重设 stageNow 文字, 修复切语言后 sidebar 当前在演残留
+});
+
+// =====================================================================
+// rAF loop — autoplay, continuous, loops the 31s cycle
+// =====================================================================
+var t0=null;
+var lastSeg=null;
+function loop(ts){
+  if(t0===null) t0=ts;
+  var time = ((ts-t0)/1000) % DUR;
+  render(time);
+  var seg=segAt(time);
+  if(seg!==lastSeg){ setStageNow(seg); lastSeg=seg; }
+  requestAnimationFrame(loop);
+}
+
+// boot
+buildSidebar();
+resize();
+setTimeout(resize, 120);
+setTimeout(resize, 500);
+if(document.fonts && document.fonts.ready){ document.fonts.ready.then(resize); }
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>

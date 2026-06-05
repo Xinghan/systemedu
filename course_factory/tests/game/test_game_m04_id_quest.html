@@ -1,0 +1,841 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>蚂蚁识种侦探 — 放大镜下认本地安全蚁种</title>
+<style>
+  :root {
+    --bg-0: oklch(0.14 0.035 265);
+    --bg-1: oklch(0.18 0.04 265);
+    --bg-2: oklch(0.22 0.045 265);
+    --bg-3: oklch(0.28 0.05 265);
+    --line: oklch(0.35 0.05 265 / 0.35);
+    --line-strong: oklch(0.55 0.08 265 / 0.55);
+    --fg: oklch(0.96 0.01 265);
+    --fg-dim: oklch(0.75 0.02 265);
+    --fg-mute: oklch(0.55 0.03 265);
+    --gold: oklch(0.85 0.14 85);
+    /* bio accent + 5 色 palette */
+    --bio:    oklch(0.75 0.17 155);   /* LIFE — accent 主交互 */
+    --bio-dim:oklch(0.55 0.16 155);   /* MOSS */
+    --LIFE:   oklch(0.75 0.17 155);
+    --MOSS:   oklch(0.55 0.16 155);
+    --SHADOW: oklch(0.35 0.10 160);
+    --BLOOM:  oklch(0.92 0.08 150);
+    --MUTATE: oklch(0.85 0.14 85);
+    --danger: oklch(0.62 0.21 25);    /* 火蚁危险暖红 */
+    --mono: 'JetBrains Mono', ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    background: var(--bg-0);
+    color: var(--fg);
+    font-family: var(--mono);
+    display: flex;
+    height: 100vh;
+    overflow: hidden;
+    font-size: 13px;
+  }
+
+  /* ===== language gating ===== */
+  body.lang-cn .en-only { display: none !important; }
+  body.lang-en .cn-only { display: none !important; }
+
+  /* ===== sidebar ===== */
+  .game-sidebar {
+    width: 200px;
+    flex-shrink: 0;
+    background: var(--bg-1);
+    border-right: 1px solid var(--line);
+    display: flex;
+    flex-direction: column;
+    padding: 13px 11px;
+    gap: 10px;
+    overflow-y: auto;
+  }
+  .sb-title { font-size: 13px; font-weight: 700; color: var(--bio); letter-spacing: 0.4px; line-height: 1.3; }
+  .sb-sub { font-size: 9.5px; color: var(--fg-mute); line-height: 1.45; }
+  #langBtn {
+    align-self: flex-start;
+    background: var(--bg-3);
+    color: var(--fg);
+    border: 1px solid var(--line-strong);
+    font-family: var(--mono);
+    font-size: 11px;
+    padding: 4px 11px;
+    cursor: pointer;
+    border-radius: 3px;
+  }
+  #langBtn:hover { border-color: var(--bio); color: var(--bio); }
+
+  .roadmap { background: var(--bg-2); border: 1px solid var(--line); border-radius: 4px; padding: 8px; }
+  .rm-label { font-size: 9px; color: var(--gold); letter-spacing: 0.5px; margin-bottom: 6px; }
+  .rm-step { display: flex; align-items: center; gap: 6px; font-size: 9px; color: var(--fg-mute); padding: 2px 0; line-height: 1.25; }
+  .rm-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--bg-3); flex-shrink: 0; border: 1px solid var(--line-strong); }
+  .rm-step.here { color: var(--fg); }
+  .rm-step.here .rm-dot { background: var(--bio); border-color: var(--bio); box-shadow: 0 0 0 2px oklch(0.75 0.17 155 / 0.25); }
+  .rm-step.done .rm-dot { background: var(--MOSS); border-color: var(--MOSS); }
+
+  .panel { background: var(--bg-2); border: 1px solid var(--line); border-radius: 4px; padding: 9px 8px; }
+  .panel-head { font-size: 10px; color: var(--bio); margin-bottom: 7px; letter-spacing: 0.4px; }
+
+  /* 二歧检索表 */
+  .key-node { font-size: 9px; line-height: 1.4; color: var(--fg-dim); padding: 3px 0; border-bottom: 1px dashed var(--line); }
+  .key-node:last-child { border-bottom: none; }
+  .key-node b { color: var(--gold); font-weight: 700; }
+  .key-node .sp { color: var(--bio); }
+
+  .guide { font-size: 9px; color: var(--fg-mute); line-height: 1.5; }
+  .guide b { color: var(--fg-dim); }
+
+  .sb-btn {
+    margin-top: auto;
+    background: var(--bg-3);
+    color: var(--fg-dim);
+    border: 1px solid var(--line-strong);
+    font-family: var(--mono);
+    font-size: 10px;
+    padding: 6px 10px;
+    cursor: pointer;
+    border-radius: 3px;
+  }
+  .sb-btn:hover { border-color: var(--bio); color: var(--bio); }
+
+  /* ===== main ===== */
+  .game-main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    padding: 14px 18px;
+    gap: 12px;
+    overflow: hidden;
+    min-width: 0;
+  }
+
+  .hud {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    flex-shrink: 0;
+  }
+  .hud-left { display: flex; flex-direction: column; gap: 3px; }
+  .hud-title { font-size: 15px; font-weight: 700; color: var(--fg); letter-spacing: 0.3px; }
+  .hud-q { font-size: 10px; color: var(--fg-dim); }
+  .progress-dots { display: flex; gap: 7px; align-items: center; }
+  .pdot {
+    width: 13px; height: 13px; border-radius: 50%;
+    background: var(--bg-2); border: 1.5px solid var(--line-strong);
+    display: flex; align-items: center; justify-content: center;
+  }
+  .pdot.done { background: var(--bio); border-color: var(--bio); }
+  .pdot.cur { border-color: var(--gold); box-shadow: 0 0 0 2px oklch(0.85 0.14 85 / 0.3); }
+  .pcount { font-size: 11px; color: var(--gold); font-weight: 700; }
+
+  .stage {
+    flex: 1;
+    display: flex;
+    gap: 14px;
+    min-height: 0;
+  }
+
+  /* 左: 放大镜舞台 */
+  .scope-wrap {
+    flex: 1.2;
+    background: var(--bg-1);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    min-width: 0;
+    overflow: hidden;
+  }
+  .scope-label {
+    position: absolute; top: 9px; left: 12px;
+    font-size: 9px; color: var(--fg-mute); letter-spacing: 0.5px;
+  }
+  .scope-svg { width: 88%; max-width: 460px; height: auto; }
+  .specimen-tag {
+    position: absolute; bottom: 9px; left: 12px;
+    font-size: 9px; color: var(--bio); letter-spacing: 0.4px;
+  }
+  .scope-ring { stroke: var(--line-strong); stroke-width: 3; fill: none; }
+  .scope-glass { fill: oklch(0.75 0.05 200 / 0.05); }
+
+  /* 右: 工具+推断面板 */
+  .panel-col {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    min-width: 0;
+    overflow-y: auto;
+  }
+  .pc-block { background: var(--bg-1); border: 1px solid var(--line); border-radius: 7px; padding: 11px 12px; }
+  .pc-head { font-size: 10px; color: var(--bio); letter-spacing: 0.5px; margin-bottom: 9px; }
+  .pc-head .num { color: var(--gold); }
+
+  .tool-row { display: flex; flex-direction: column; gap: 7px; }
+  .tool-btn {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 8px;
+    background: var(--bg-2);
+    border: 1px solid var(--line-strong);
+    color: var(--fg);
+    font-family: var(--mono);
+    font-size: 11px;
+    padding: 8px 10px;
+    cursor: pointer;
+    border-radius: 4px;
+    text-align: left;
+  }
+  .tool-btn:hover:not(.used) { border-color: var(--bio); color: var(--bio); }
+  .tool-btn.used { cursor: default; border-color: var(--MOSS); }
+  .tool-btn .reading {
+    font-size: 10px; color: var(--fg-mute); font-weight: 700;
+  }
+  .tool-btn.used .reading { color: var(--BLOOM); }
+
+  .feat-found { font-size: 10px; color: var(--gold); margin-top: 8px; line-height: 1.5; min-height: 14px; }
+
+  .id-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
+  .id-btn {
+    background: var(--bg-2);
+    border: 1px solid var(--line-strong);
+    color: var(--fg);
+    font-family: var(--mono);
+    font-size: 11px;
+    padding: 9px 6px;
+    cursor: pointer;
+    border-radius: 4px;
+  }
+  .id-btn:hover:not(:disabled) { border-color: var(--bio); color: var(--bio); }
+  .id-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .id-btn.locked-hint { border-style: dashed; }
+
+  .lock-note { font-size: 9px; color: var(--fg-mute); margin-top: 8px; line-height: 1.4; }
+
+  .safe-row { display: flex; gap: 8px; }
+  .safe-btn {
+    flex: 1;
+    background: var(--bg-2);
+    border: 1px solid var(--line-strong);
+    color: var(--fg);
+    font-family: var(--mono);
+    font-size: 11px;
+    padding: 10px 6px;
+    cursor: pointer;
+    border-radius: 4px;
+  }
+  .safe-btn[data-v="use"]:hover:not(:disabled) { border-color: var(--bio); color: var(--bio); }
+  .safe-btn[data-v="skip"]:hover:not(:disabled) { border-color: var(--danger); color: var(--danger); }
+  .safe-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  .verdict {
+    font-size: 10px; line-height: 1.55; padding: 9px 10px; border-radius: 5px;
+    margin-top: 9px; min-height: 16px; display: none;
+  }
+  .verdict.show { display: block; }
+  .verdict.ok  { background: oklch(0.75 0.17 155 / 0.12); border: 1px solid var(--bio); color: var(--BLOOM); }
+  .verdict.bad { background: oklch(0.62 0.21 25 / 0.12); border: 1px solid var(--danger); color: oklch(0.82 0.12 25); }
+
+  .next-btn {
+    margin-top: 9px;
+    width: 100%;
+    background: var(--bio);
+    color: var(--bg-0);
+    border: none;
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 700;
+    padding: 9px;
+    cursor: pointer;
+    border-radius: 4px;
+    display: none;
+    box-shadow: 3px 3px 0 var(--bg-0);
+  }
+  .next-btn.show { display: block; }
+  .next-btn:hover { background: var(--BLOOM); }
+
+  /* 通关弹层 */
+  .win-overlay {
+    position: absolute; inset: 0;
+    background: oklch(0.14 0.035 265 / 0.94);
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+    text-align: center;
+    padding: 24px;
+    z-index: 10;
+  }
+  .win-overlay.show { display: flex; }
+  .win-title { font-size: 22px; font-weight: 700; color: var(--gold); }
+  .win-body { font-size: 12px; color: var(--fg-dim); line-height: 1.7; max-width: 440px; }
+  .win-body b { color: var(--bio); }
+  .win-btn {
+    background: var(--bio); color: var(--bg-0); border: none;
+    font-family: var(--mono); font-size: 12px; font-weight: 700;
+    padding: 9px 22px; cursor: pointer; border-radius: 4px;
+    box-shadow: 3px 3px 0 var(--bg-0);
+  }
+  .win-btn:hover { background: var(--BLOOM); }
+
+  .dim { opacity: 0.5; pointer-events: none; }
+</style>
+</head>
+<body class="lang-cn">
+
+  <aside class="game-sidebar">
+    <div class="sb-title">
+      <span class="cn-only">蚂蚁识种侦探</span>
+      <span class="en-only">Ant ID Detective</span>
+    </div>
+    <div class="sb-sub">
+      <span class="cn-only">放大镜下查特征，认出本地安全蚁种</span>
+      <span class="en-only">Read features under the lens, ID safe local ants</span>
+    </div>
+    <button id="langBtn">EN / 中</button>
+
+    <div class="roadmap">
+      <div class="rm-label">PROJECT MAP</div>
+      <div class="rm-step done"><span class="rm-dot"></span><span class="cn-only">M01 北极星：建蚁群数据集</span><span class="en-only">M01 North star</span></div>
+      <div class="rm-step done"><span class="rm-dot"></span><span class="cn-only">M02 蚂蚁是什么</span><span class="en-only">M02 What is an ant</span></div>
+      <div class="rm-step done"><span class="rm-dot"></span><span class="cn-only">M03 蚂蚁怎么动</span><span class="en-only">M03 How ants move</span></div>
+      <div class="rm-step here"><span class="rm-dot"></span><span class="cn-only">M04 认安全蚁种 (你在这)</span><span class="en-only">M04 ID safe ants (you)</span></div>
+      <div class="rm-step"><span class="rm-dot"></span><span class="cn-only">M05 给蚂蚁贴标签</span><span class="en-only">M05 Tag the ants</span></div>
+      <div class="rm-step"><span class="rm-dot"></span><span class="cn-only">M06 录第一段行为</span><span class="en-only">M06 First recording</span></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head"><span class="cn-only">为什么做这关</span><span class="en-only">Why this level</span></div>
+      <div class="guide">
+        <span class="cn-only">要建蚁群行为数据集，先得挑出 <b>能贴标签又不咬人</b> 的安全蚂蚁。认错种会被火蚁咬，太小的种贴不上标签。这关教你像科学家一样查特征。</span>
+        <span class="en-only">To build the ant dataset you must first pick ants that are <b>safe and taggable</b>. Misreading means fire-ant stings; tiny ants can't hold a tag. Learn to read features like a scientist.</span>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head"><span class="cn-only">二歧检索表</span><span class="en-only">Dichotomous key</span></div>
+      <div class="key-node"><b>1.</b> <span class="cn-only">腰结 <b>1 个</b> &rarr; 看体型</span><span class="en-only">Waist node = <b>1</b> &rarr; size</span></div>
+      <div class="key-node" style="padding-left:8px"><span class="cn-only">体型 <b>10-15mm</b> + 触角<b>膝状</b> = <span class="sp">木匠蚁</span></span><span class="en-only"><b>10-15mm</b> + <b>elbowed</b> = <span class="sp">Carpenter</span></span></div>
+      <div class="key-node" style="padding-left:8px"><span class="cn-only">体型 <b>2-3mm</b> = <span class="sp">小黑蚁</span></span><span class="en-only"><b>2-3mm</b> = <span class="sp">Little black</span></span></div>
+      <div class="key-node"><b>2.</b> <span class="cn-only">腰结 <b>2 个</b> &rarr; 看触角</span><span class="en-only">Waist node = <b>2</b> &rarr; antenna</span></div>
+      <div class="key-node" style="padding-left:8px"><span class="cn-only">触角<b>膝状</b>+体型 3-6mm = <span class="sp">火蚁</span></span><span class="en-only"><b>elbowed</b> 3-6mm = <span class="sp">Fire ant</span></span></div>
+      <div class="key-node" style="padding-left:8px"><span class="cn-only">背上有<b>刺</b> = <span class="sp">棘蚁</span></span><span class="en-only">back <b>spines</b> = <span class="sp">Spiny ant</span></span></div>
+    </div>
+
+    <button class="sb-btn" id="resetBtn"><span class="cn-only">重新开始</span><span class="en-only">Restart</span></button>
+  </aside>
+
+  <main class="game-main">
+    <div class="hud">
+      <div class="hud-left">
+        <div class="hud-title"><span class="cn-only">放大镜下的未知蚂蚁</span><span class="en-only">Unknown ant under the lens</span></div>
+        <div class="hud-q"><span class="cn-only">先查特征，再用检索表推断 —— 不许靠猜</span><span class="en-only">Read features first, then infer with the key — no guessing</span></div>
+      </div>
+      <div class="progress-dots">
+        <div id="pdots" style="display:flex;gap:7px"></div>
+        <span class="pcount" id="pcount">0 / 5</span>
+      </div>
+    </div>
+
+    <div class="stage">
+      <div class="scope-wrap">
+        <div class="scope-label"><span class="cn-only">标本</span><span class="en-only">SPECIMEN</span> #<span id="specNo">1</span></div>
+        <svg class="scope-svg" id="antSvg" viewBox="0 0 460 360" aria-label="ant"></svg>
+        <div class="specimen-tag" id="specTag"></div>
+
+        <div class="win-overlay" id="winOverlay">
+          <div class="win-title"><span class="cn-only">你成了识种侦探！</span><span class="en-only">You are an ID Detective!</span></div>
+          <div class="win-body">
+            <span class="cn-only">5 只蚂蚁全查清。你已经能<b>用特征推断种类</b>、并判断哪种<b>安全又能贴标签</b>。这就是建蚁群数据集的第一块积木 —— 下一关你要给挑中的安全蚂蚁<b>贴上追踪标签</b>。<br><br>科学家守则：最后一关永远是<b>请大人确认</b>，再去靠近真蚂蚁。</span>
+            <span class="en-only">All 5 ants solved. You can now <b>infer species from features</b> and judge which is <b>safe and taggable</b>. That's the first brick of your ant dataset — next you'll <b>tag the chosen safe ants</b> for tracking.<br><br>Scientist's rule: the last step is always <b>ask a grown-up to confirm</b> before going near real ants.</span>
+          </div>
+          <button class="win-btn" id="winBtn"><span class="cn-only">再玩一轮</span><span class="en-only">Play again</span></button>
+        </div>
+      </div>
+
+      <div class="panel-col">
+        <!-- 1. 检查工具 -->
+        <div class="pc-block">
+          <div class="pc-head"><span class="num">1.</span> <span class="cn-only">用工具查特征</span><span class="en-only">Inspect features</span></div>
+          <div class="tool-row">
+            <button class="tool-btn" data-tool="waist">
+              <span><span class="cn-only">看腰结</span><span class="en-only">Check waist</span></span>
+              <span class="reading" data-r="waist"><span class="cn-only">点一下查看</span><span class="en-only">tap to read</span></span>
+            </button>
+            <button class="tool-btn" data-tool="antenna">
+              <span><span class="cn-only">看触角</span><span class="en-only">Check antenna</span></span>
+              <span class="reading" data-r="antenna"><span class="cn-only">点一下查看</span><span class="en-only">tap to read</span></span>
+            </button>
+            <button class="tool-btn" data-tool="size">
+              <span><span class="cn-only">量体型</span><span class="en-only">Measure size</span></span>
+              <span class="reading" data-r="size"><span class="cn-only">点一下查看</span><span class="en-only">tap to read</span></span>
+            </button>
+            <button class="tool-btn" data-tool="spine">
+              <span><span class="cn-only">看背刺</span><span class="en-only">Check spines</span></span>
+              <span class="reading" data-r="spine"><span class="cn-only">点一下查看</span><span class="en-only">tap to read</span></span>
+            </button>
+          </div>
+          <div class="feat-found" id="featFound"></div>
+        </div>
+
+        <!-- 2. 推断种类 -->
+        <div class="pc-block">
+          <div class="pc-head"><span class="num">2.</span> <span class="cn-only">推断它是哪种</span><span class="en-only">Infer the species</span></div>
+          <div class="id-grid" id="idGrid">
+            <button class="id-btn" data-sp="carpenter" disabled><span class="cn-only">木匠蚁</span><span class="en-only">Carpenter</span></button>
+            <button class="id-btn" data-sp="spiny" disabled><span class="cn-only">棘蚁</span><span class="en-only">Spiny</span></button>
+            <button class="id-btn" data-sp="fire" disabled><span class="cn-only">火蚁</span><span class="en-only">Fire ant</span></button>
+            <button class="id-btn" data-sp="little" disabled><span class="cn-only">小黑蚁</span><span class="en-only">Little black</span></button>
+          </div>
+          <div class="lock-note" id="lockNote"><span class="cn-only">先用上面的工具至少查 3 个特征，按钮才会解锁。</span><span class="en-only">Read at least 3 features above to unlock these.</span></div>
+        </div>
+
+        <!-- 3. 安全判断 -->
+        <div class="pc-block" id="safeBlock">
+          <div class="pc-head"><span class="num">3.</span> <span class="cn-only">能用吗？(安全 + 能贴标签)</span><span class="en-only">Can we use it? (safe + taggable)</span></div>
+          <div class="safe-row">
+            <button class="safe-btn" data-v="use" disabled><span class="cn-only">能用，选它</span><span class="en-only">Use it</span></button>
+            <button class="safe-btn" data-v="skip" disabled><span class="cn-only">不行，跳过</span><span class="en-only">Skip it</span></button>
+          </div>
+          <div class="verdict" id="verdict"></div>
+          <button class="next-btn" id="nextBtn"><span class="cn-only">下一只 &rarr;</span><span class="en-only">Next ant &rarr;</span></button>
+        </div>
+      </div>
+    </div>
+  </main>
+
+<script>
+(function () {
+  'use strict';
+  var stateGame = {
+    lang: 'cn',
+    round: 0,          // 0-based index into queue
+    queue: [],
+    cur: null,
+    inspected: {},     // tool -> true
+    speciesPicked: null,
+    solved: 0,
+    total: 5
+  };
+
+  // ---- species definitions ----
+  // waist: 1|2 nodes ; antenna: 'elbow'|'straight' ; size mm ; spine: bool ; color hue
+  var SPECIES = {
+    carpenter: {
+      cn: '木匠蚁', en: 'Carpenter ant',
+      waist: 1, antenna: 'elbow', sizeMin: 10, sizeMax: 15, spine: false,
+      bodyHue: 28, dark: true,
+      use: true,
+      okMsg: { cn: '对！木匠蚁腰结 1 个、触角膝状、10-15mm —— 温和不爱咬人，体型大正好贴 4-6mm 标签。完美的数据集主角。', en: 'Right! Carpenter ant: 1 waist node, elbowed antenna, 10-15mm — gentle and big enough to hold a 4-6mm tag. A perfect dataset star.' },
+      badUse: { cn: '其实木匠蚁能用：温和又够大。跳过它就少了最好的对象。', en: 'Actually carpenter ants are usable: gentle and big. Skipping loses your best subject.' }
+    },
+    little: {
+      cn: '小黑蚁', en: 'Little black ant',
+      waist: 1, antenna: 'elbow', sizeMin: 2, sizeMax: 3, spine: false,
+      bodyHue: 265, dark: true,
+      use: false,
+      okMsg: { cn: '对！小黑蚁腰结 1 个，但只有 2-3mm —— 太小了，4-6mm 标签根本贴不上。安全但不能用，跳过。', en: 'Right! Little black ant has 1 waist node but is only 2-3mm — too tiny for a 4-6mm tag. Safe but unusable, skip it.' },
+      badUse: { cn: '小黑蚁安全，但 2-3mm 太小，标签贴不上去，没法追踪。应该跳过。', en: 'Little black ants are safe but only 2-3mm — a tag won\'t fit, no tracking. Should skip.' }
+    },
+    fire: {
+      cn: '火蚁', en: 'Fire ant',
+      waist: 2, antenna: 'elbow', sizeMin: 3, sizeMax: 6, spine: false,
+      bodyHue: 25, dark: false,
+      use: false,
+      okMsg: { cn: '对！火蚁腰结 2 个、触角膝状、3-6mm —— 它会蜇人很疼！绝对不能碰，跳过，离远点。', en: 'Right! Fire ant: 2 waist nodes, elbowed, 3-6mm — it stings and hurts! Never touch it, skip and stay away.' },
+      badUse: { cn: '危险！火蚁会蜇人，绝不能去抓。无论如何都要跳过它。', en: 'Danger! Fire ants sting — never grab one. Always skip it.' }
+    },
+    spiny: {
+      cn: '棘蚁', en: 'Spiny ant',
+      waist: 2, antenna: 'straight', sizeMin: 5, sizeMax: 8, spine: true,
+      bodyHue: 150, dark: true,
+      use: false,
+      okMsg: { cn: '对！棘蚁腰结 2 个、背上长刺 —— 那些刺会扎手，不好处理。安全度低，这只跳过。', en: 'Right! Spiny ant: 2 waist nodes with back spines — the spines poke your hand, hard to handle. Skip this one.' },
+      badUse: { cn: '棘蚁背上有刺，抓它会扎手不好处理。这只应该跳过。', en: 'Spiny ants have back spines that poke — hard to handle. Should skip.' }
+    }
+  };
+  var SP_KEYS = ['carpenter', 'little', 'fire', 'spiny'];
+
+  // ---- DOM refs ----
+  var $ = function (s) { return document.querySelector(s); };
+  var body = document.body;
+  var antSvg = $('#antSvg');
+  var featFound = $('#featFound');
+  var verdict = $('#verdict');
+  var nextBtn = $('#nextBtn');
+  var lockNote = $('#lockNote');
+  var specNo = $('#specNo');
+  var specTag = $('#specTag');
+  var pdots = $('#pdots');
+  var pcount = $('#pcount');
+  var winOverlay = $('#winOverlay');
+
+  // ---- helpers ----
+  function txt(cn, en) { return stateGame.lang === 'cn' ? cn : en; }
+
+  function buildQueue() {
+    // 5 rounds: ensure carpenter (the usable one) appears, fill rest randomly, shuffle
+    var pool = SP_KEYS.slice();
+    var q = ['carpenter'];
+    for (var i = 0; i < 4; i++) {
+      q.push(pool[Math.floor(Math.random() * pool.length)]);
+    }
+    // shuffle
+    for (var j = q.length - 1; j > 0; j--) {
+      var k = Math.floor(Math.random() * (j + 1));
+      var t = q[j]; q[j] = q[k]; q[k] = t;
+    }
+    return q;
+  }
+
+  // random size within species range (integer)
+  function randSize(sp) {
+    return sp.sizeMin + Math.floor(Math.random() * (sp.sizeMax - sp.sizeMin + 1));
+  }
+
+  // ---- SVG ant drawing (DOM, deterministic per specimen) ----
+  function drawAnt(key, sizeMm) {
+    var sp = SPECIES[key];
+    var hue = sp.bodyHue;
+    var L = sp.dark ? 0.42 : 0.6;
+    var bodyCol = 'oklch(' + L + ' 0.13 ' + hue + ')';
+    var bodyDark = 'oklch(' + (L - 0.12) + ' 0.13 ' + hue + ')';
+    var legCol = 'oklch(' + (L - 0.05) + ' 0.1 ' + hue + ')';
+    // scale segment sizes a touch by mm so big ants look bigger
+    var sc = 0.8 + (sizeMm / 15) * 0.4;
+    var parts = [];
+    parts.push('<defs></defs>');
+    // magnifier ring
+    parts.push('<circle class="scope-glass" cx="230" cy="180" r="158"/>');
+    parts.push('<circle class="scope-ring" cx="230" cy="180" r="158"/>');
+
+    var cx = 230, cy = 185;
+    // legs (6) — drawn first behind body
+    var legPairs = [[-1, -34], [0, 0], [1, 38]];
+    var lp;
+    for (var i = 0; i < legPairs.length; i++) {
+      lp = legPairs[i];
+      var ox = lp[1];
+      // left
+      parts.push('<path d="M' + (cx + ox) + ' ' + cy + ' Q' + (cx + ox - 36) + ' ' + (cy - 24) + ' ' + (cx + ox - 70) + ' ' + (cy + 46) + '" stroke="' + legCol + '" stroke-width="3.5" fill="none" stroke-linecap="round"/>');
+      // right
+      parts.push('<path d="M' + (cx + ox) + ' ' + cy + ' Q' + (cx + ox + 36) + ' ' + (cy - 24) + ' ' + (cx + ox + 70) + ' ' + (cy + 46) + '" stroke="' + legCol + '" stroke-width="3.5" fill="none" stroke-linecap="round"/>');
+    }
+
+    // abdomen (gaster, rear)
+    parts.push('<ellipse cx="' + (cx + 70) + '" cy="' + cy + '" rx="' + (52 * sc) + '" ry="' + (38 * sc) + '" fill="' + bodyCol + '"/>');
+    // waist node(s) — petiole. position between thorax & gaster
+    if (sp.waist === 1) {
+      parts.push('<circle cx="' + (cx + 22) + '" cy="' + cy + '" r="9" fill="' + bodyDark + '" stroke="' + 'var(--gold)' + '" stroke-width="0" data-node="1"/>');
+    } else {
+      parts.push('<circle cx="' + (cx + 24) + '" cy="' + cy + '" r="8" fill="' + bodyDark + '" data-node="1"/>');
+      parts.push('<circle cx="' + (cx + 8) + '" cy="' + cy + '" r="8" fill="' + bodyDark + '" data-node="2"/>');
+    }
+    // thorax (mesosoma)
+    parts.push('<ellipse cx="' + (cx - 18) + '" cy="' + cy + '" rx="' + (30 * sc) + '" ry="' + (24 * sc) + '" fill="' + bodyCol + '"/>');
+    // back spines (棘蚁)
+    if (sp.spine) {
+      parts.push('<path d="M' + (cx - 30) + ' ' + (cy - 22) + ' L' + (cx - 40) + ' ' + (cy - 48) + ' L' + (cx - 18) + ' ' + (cy - 26) + ' Z" fill="var(--gold)"/>');
+      parts.push('<path d="M' + (cx - 10) + ' ' + (cy - 22) + ' L' + (cx - 18) + ' ' + (cy - 46) + ' L' + (cx + 2) + ' ' + (cy - 26) + ' Z" fill="var(--gold)"/>');
+    }
+    // head
+    var hx = cx - 70, hy = cy - 4;
+    parts.push('<circle cx="' + hx + '" cy="' + hy + '" r="' + (26 * sc) + '" fill="' + bodyCol + '"/>');
+    // mandibles
+    parts.push('<path d="M' + (hx - 22) + ' ' + (hy + 4) + ' q-14 2 -20 12" stroke="' + bodyDark + '" stroke-width="3" fill="none" stroke-linecap="round"/>');
+    parts.push('<path d="M' + (hx - 22) + ' ' + (hy + 10) + ' q-14 6 -16 16" stroke="' + bodyDark + '" stroke-width="3" fill="none" stroke-linecap="round"/>');
+    // antennae — elbowed vs straight
+    if (sp.antenna === 'elbow') {
+      parts.push('<path d="M' + (hx - 6) + ' ' + (hy - 14) + ' L' + (hx - 30) + ' ' + (hy - 40) + ' L' + (hx - 64) + ' ' + (hy - 46) + '" stroke="' + bodyDark + '" stroke-width="3" fill="none" stroke-linecap="round"/>');
+      parts.push('<path d="M' + (hx - 2) + ' ' + (hy - 18) + ' L' + (hx - 18) + ' ' + (hy - 48) + ' L' + (hx - 50) + ' ' + (hy - 60) + '" stroke="' + bodyDark + '" stroke-width="3" fill="none" stroke-linecap="round"/>');
+    } else {
+      parts.push('<path d="M' + (hx - 6) + ' ' + (hy - 14) + ' Q' + (hx - 40) + ' ' + (hy - 50) + ' ' + (hx - 78) + ' ' + (hy - 52) + '" stroke="' + bodyDark + '" stroke-width="3" fill="none" stroke-linecap="round"/>');
+      parts.push('<path d="M' + (hx - 2) + ' ' + (hy - 18) + ' Q' + (hx - 36) + ' ' + (hy - 58) + ' ' + (hx - 70) + ' ' + (hy - 66) + '" stroke="' + bodyDark + '" stroke-width="3" fill="none" stroke-linecap="round"/>');
+    }
+    // eye
+    parts.push('<circle cx="' + (hx - 8) + '" cy="' + (hy - 6) + '" r="4" fill="var(--bg-0)"/>');
+
+    antSvg.innerHTML = parts.join('');
+  }
+
+  // highlight feature on svg when inspected
+  function flashFeature(tool) {
+    var nodes;
+    if (tool === 'waist') {
+      nodes = antSvg.querySelectorAll('[data-node]');
+      nodes.forEach(function (n) { n.setAttribute('stroke', 'var(--gold)'); n.setAttribute('stroke-width', '3'); });
+    }
+  }
+
+  // ---- round lifecycle ----
+  function renderProgress() {
+    pdots.innerHTML = '';
+    for (var i = 0; i < stateGame.total; i++) {
+      var d = document.createElement('div');
+      d.className = 'pdot' + (i < stateGame.solved ? ' done' : (i === stateGame.solved ? ' cur' : ''));
+      pdots.appendChild(d);
+    }
+    pcount.textContent = stateGame.solved + ' / ' + stateGame.total;
+  }
+
+  function startRound() {
+    var key = stateGame.queue[stateGame.round];
+    var sp = SPECIES[key];
+    stateGame.cur = { key: key, size: randSize(sp) };
+    stateGame.inspected = {};
+    stateGame.speciesPicked = null;
+
+    specNo.textContent = (stateGame.round + 1);
+    specTag.textContent = txt('未知标本 — 等你查清', 'Unknown — solve me');
+
+    drawAnt(key, stateGame.cur.size);
+
+    // reset tool buttons
+    document.querySelectorAll('.tool-btn').forEach(function (b) {
+      b.classList.remove('used');
+      var r = b.querySelector('.reading');
+      r.innerHTML = '<span class="cn-only">点一下查看</span><span class="en-only">tap to read</span>';
+    });
+    featFound.textContent = '';
+    // reset id buttons
+    document.querySelectorAll('.id-btn').forEach(function (b) { b.disabled = true; b.classList.remove('locked-hint'); });
+    lockNote.style.display = '';
+    lockNote.innerHTML = '<span class="cn-only">先用上面的工具至少查 3 个特征，按钮才会解锁。</span><span class="en-only">Read at least 3 features above to unlock these.</span>';
+    // reset safety
+    document.querySelectorAll('.safe-btn').forEach(function (b) { b.disabled = true; });
+    verdict.className = 'verdict';
+    verdict.innerHTML = '';
+    nextBtn.classList.remove('show');
+
+    renderProgress();
+  }
+
+  function inspectedCount() {
+    return Object.keys(stateGame.inspected).length;
+  }
+
+  function toolReadingText(tool) {
+    var sp = SPECIES[stateGame.cur.key];
+    if (tool === 'waist') {
+      return sp.waist === 1 ? txt('腰结 1 个', '1 node') : txt('腰结 2 个', '2 nodes');
+    }
+    if (tool === 'antenna') {
+      return sp.antenna === 'elbow' ? txt('膝状弯折', 'elbowed') : txt('直的', 'straight');
+    }
+    if (tool === 'size') {
+      return stateGame.cur.size + ' mm';
+    }
+    if (tool === 'spine') {
+      return sp.spine ? txt('背上有刺', 'has spines') : txt('背上光滑', 'no spines');
+    }
+    return '';
+  }
+
+  function onInspect(tool, btn) {
+    if (stateGame.inspected[tool]) return;
+    stateGame.inspected[tool] = true;
+    btn.classList.add('used');
+    var r = btn.querySelector('.reading');
+    r.textContent = toolReadingText(tool);
+    flashFeature(tool);
+    updateFeatFound();
+
+    if (inspectedCount() >= 3) {
+      document.querySelectorAll('.id-btn').forEach(function (b) { b.disabled = false; });
+      lockNote.innerHTML = '<span class="cn-only">特征够了！对照左边检索表，推断它是哪种。</span><span class="en-only">Enough features! Use the key on the left to infer the species.</span>';
+    }
+  }
+
+  function updateFeatFound() {
+    var keys = Object.keys(stateGame.inspected);
+    if (!keys.length) { featFound.textContent = ''; return; }
+    var labelMap = {
+      waist: txt('腰结', 'waist'), antenna: txt('触角', 'antenna'),
+      size: txt('体型', 'size'), spine: txt('背刺', 'spines')
+    };
+    var parts = keys.map(function (k) { return labelMap[k] + ': ' + toolReadingText(k); });
+    featFound.textContent = txt('已查到 -> ', 'Found -> ') + parts.join('  |  ');
+  }
+
+  function onPickSpecies(spKey, btn) {
+    var correct = stateGame.cur.key;
+    document.querySelectorAll('.id-btn').forEach(function (b) { b.disabled = true; });
+    if (spKey === correct) {
+      stateGame.speciesPicked = spKey;
+      btn.style.borderColor = 'var(--bio)';
+      btn.style.color = 'var(--bio)';
+      lockNote.style.display = 'none';
+      verdict.className = 'verdict show ok';
+      verdict.setAttribute('data-state', 'speciesok');
+      verdict.innerHTML = txt(
+        '种类对了 &rarr; ' + SPECIES[correct].cn + '。现在判断：这种蚂蚁能不能用进我们的数据集？',
+        'Species correct &rarr; ' + SPECIES[correct].en + '. Now decide: can this ant join our dataset?'
+      );
+      document.querySelectorAll('.safe-btn').forEach(function (b) { b.disabled = false; });
+    } else {
+      // wrong species — targeted feedback, let them retry
+      btn.style.borderColor = 'var(--danger)';
+      btn.style.color = 'var(--danger)';
+      verdict.className = 'verdict show bad';
+      verdict.removeAttribute('data-state');
+      verdict.innerHTML = wrongSpeciesHint(spKey, correct);
+      // re-enable id buttons except the wrong one already styled
+      setTimeout(function () {
+        document.querySelectorAll('.id-btn').forEach(function (b) {
+          if (b !== btn) b.disabled = false;
+        });
+      }, 30);
+    }
+  }
+
+  function wrongSpeciesHint(picked, correct) {
+    var cur = SPECIES[correct];
+    var p = SPECIES[picked];
+    // point to a feature that distinguishes them
+    var hintCn, hintEn;
+    if (p.waist !== cur.waist) {
+      hintCn = '再看腰结：你查到的是 ' + cur.waist + ' 个，而 ' + p.cn + ' 是 ' + p.waist + ' 个。对不上。';
+      hintEn = 'Re-check the waist: you read ' + cur.waist + ' node(s), but ' + p.en + ' has ' + p.waist + '. Mismatch.';
+    } else if (p.spine !== cur.spine) {
+      hintCn = '看背刺：这只 ' + (cur.spine ? '有刺' : '没刺') + '，而 ' + p.cn + ' ' + (p.spine ? '有刺' : '没刺') + '。对不上。';
+      hintEn = 'Check spines: this one ' + (cur.spine ? 'has' : 'has no') + ' spines, but ' + p.en + ' ' + (p.spine ? 'has' : 'has no') + '. Mismatch.';
+    } else if (p.antenna !== cur.antenna) {
+      hintCn = '看触角：这只是 ' + (cur.antenna === 'elbow' ? '膝状' : '直的') + '，而 ' + p.cn + ' 是 ' + (p.antenna === 'elbow' ? '膝状' : '直的') + '。对不上。';
+      hintEn = 'Check antenna: this one is ' + (cur.antenna === 'elbow' ? 'elbowed' : 'straight') + ', but ' + p.en + ' is ' + (p.antenna === 'elbow' ? 'elbowed' : 'straight') + '. Mismatch.';
+    } else {
+      hintCn = '看体型：' + cur.cn + ' 和 ' + p.cn + ' 大小范围不同，量一下 mm 再判断。';
+      hintEn = 'Check size: ' + cur.en + ' and ' + p.en + ' differ in mm. Measure again.';
+    }
+    return txt('不对。' + hintCn + ' 对照检索表再选。', 'Nope. ' + hintEn + ' Use the key and retry.');
+  }
+
+  function onSafety(choiceUse, btn) {
+    var correct = stateGame.cur.key;
+    var sp = SPECIES[correct];
+    document.querySelectorAll('.safe-btn').forEach(function (b) { b.disabled = true; });
+    var right = (choiceUse === sp.use);
+    if (right) {
+      verdict.className = 'verdict show ok';
+      verdict.setAttribute('data-state', 'safeok');
+      verdict.innerHTML = txt(sp.okMsg.cn, sp.okMsg.en);
+      specTag.textContent = txt('已破解：' + sp.cn, 'Solved: ' + sp.en);
+      stateGame.solved++;
+      renderProgress();
+      if (stateGame.solved >= stateGame.total) {
+        nextBtn.textContent = '';
+        setTimeout(showWin, 350);
+      } else {
+        nextBtn.classList.add('show');
+      }
+    } else {
+      verdict.className = 'verdict show bad';
+      verdict.removeAttribute('data-state');
+      verdict.innerHTML = txt(sp.badUse.cn, sp.badUse.en) + ' ' + txt('再想想，重选一次。', 'Think again, retry.');
+      // re-enable safety buttons to retry
+      setTimeout(function () {
+        document.querySelectorAll('.safe-btn').forEach(function (b) { b.disabled = false; });
+      }, 30);
+    }
+  }
+
+  function showWin() {
+    winOverlay.classList.add('show');
+  }
+
+  function nextRound() {
+    stateGame.round++;
+    if (stateGame.round >= stateGame.queue.length) { showWin(); return; }
+    startRound();
+  }
+
+  function fullReset() {
+    winOverlay.classList.remove('show');
+    stateGame.queue = buildQueue();
+    stateGame.round = 0;
+    stateGame.solved = 0;
+    startRound();
+  }
+
+  // ---- language ----
+  function applyLang() {
+    if (stateGame.lang === 'cn') { body.classList.add('lang-cn'); body.classList.remove('lang-en'); }
+    else { body.classList.add('lang-en'); body.classList.remove('lang-cn'); }
+    // re-render dynamic texts that are not span-gated
+    // tool readings
+    document.querySelectorAll('.tool-btn').forEach(function (b) {
+      var tool = b.getAttribute('data-tool');
+      if (stateGame.inspected[tool]) {
+        b.querySelector('.reading').textContent = toolReadingText(tool);
+      }
+    });
+    updateFeatFound();
+    // specimen tag
+    if (stateGame.speciesPicked || (verdict.classList.contains('ok') && !nextBtn.classList.contains('show') && !winOverlay.classList.contains('show'))) {
+      // best-effort; recompute below
+    }
+    // re-render verdict if currently shown and species solved
+    refreshVerdictLang();
+    refreshSpecTagLang();
+  }
+
+  function refreshSpecTagLang() {
+    var sp = stateGame.cur ? SPECIES[stateGame.cur.key] : null;
+    if (!sp) return;
+    if (specTag.textContent.indexOf(txt('已破解', 'Solved')) === 0 ||
+        /Solved|已破解/.test(specTag.textContent)) {
+      specTag.textContent = txt('已破解：' + sp.cn, 'Solved: ' + sp.en);
+    } else {
+      specTag.textContent = txt('未知标本 — 等你查清', 'Unknown — solve me');
+    }
+  }
+
+  function refreshVerdictLang() {
+    if (!verdict.classList.contains('show')) return;
+    var sp = stateGame.cur ? SPECIES[stateGame.cur.key] : null;
+    if (!sp) return;
+    // If safety verdict (ok with okMsg) — easiest robust approach: only re-render the
+    // clear stable states. We detect by stored flags.
+    if (verdict.getAttribute('data-state') === 'safeok') {
+      verdict.innerHTML = txt(sp.okMsg.cn, sp.okMsg.en);
+    } else if (verdict.getAttribute('data-state') === 'speciesok') {
+      verdict.innerHTML = txt(
+        '种类对了 &rarr; ' + sp.cn + '。现在判断：这种蚂蚁能不能用进我们的数据集？',
+        'Species correct &rarr; ' + sp.en + '. Now decide: can this ant join our dataset?'
+      );
+    }
+  }
+
+  // ---- wire events ----
+  document.querySelectorAll('.tool-btn').forEach(function (b) {
+    b.addEventListener('click', function () { onInspect(b.getAttribute('data-tool'), b); });
+  });
+  document.querySelectorAll('.id-btn').forEach(function (b) {
+    b.addEventListener('click', function () { onPickSpecies(b.getAttribute('data-sp'), b); });
+  });
+  document.querySelectorAll('.safe-btn').forEach(function (b) {
+    b.addEventListener('click', function () { onSafety(b.getAttribute('data-v') === 'use', b); });
+  });
+  nextBtn.addEventListener('click', nextRound);
+  $('#resetBtn').addEventListener('click', fullReset);
+  $('#winBtn').addEventListener('click', fullReset);
+  $('#langBtn').addEventListener('click', function () {
+    stateGame.lang = (stateGame.lang === 'cn') ? 'en' : 'cn';
+    applyLang();
+  });
+
+  // init
+  stateGame.queue = buildQueue();
+  startRound();
+})();
+</script>
+</body>
+</html>
