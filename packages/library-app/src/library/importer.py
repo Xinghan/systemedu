@@ -141,6 +141,12 @@ def import_tarball(tarball_path: Path, allow_overwrite: bool = True) -> Manifest
                     lesson.rendered_sections = _read_json_safely(knode_dir / "sections.json", default={})
                     lesson.audio_scripts = _read_json_safely(knode_dir / "audio_scripts.json", default={})
                     lesson.theories = _read_json_safely(knode_dir / "theories.json", default=[])
+                    _slides_doc = _read_json_safely(knode_dir / "slides.json", default={})
+                    lesson.slides = (
+                        _slides_doc.get("slides", [])
+                        if isinstance(_slides_doc, dict)
+                        else (_slides_doc if isinstance(_slides_doc, list) else [])
+                    )
                     # 该 knode 的所有文件
                     lesson.files = [
                         f.model_dump() for f in manifest.files

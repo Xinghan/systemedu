@@ -129,6 +129,7 @@ class Lesson(Base):
     audio_scripts = Column(JSON, nullable=False, default=dict)
     assignment_md = Column(Text, nullable=False, default="")
     theories = Column(JSON, nullable=False, default=list)
+    slides = Column(JSON, nullable=False, default=list)  # slides.json 的 slides 数组
 
     # 文件清单 (位置 + sha256, 实际文件在 media/)
     files = Column(JSON, nullable=False, default=list)    # [{path, sha256, size}]

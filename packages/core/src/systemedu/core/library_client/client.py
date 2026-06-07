@@ -100,6 +100,7 @@ class KnodeContent:
     audio_scripts: Any = None
     assignment_md: str = ""
     theories: Any = None
+    slides: Any = None
     files: list[dict] = field(default_factory=list)
     version: str = ""
 
@@ -119,6 +120,7 @@ class KnodeContent:
             audio_scripts=d.get("audio_scripts"),
             assignment_md=d.get("assignment_md", "") or "",
             theories=d.get("theories"),
+            slides=d.get("slides"),
             files=d.get("files") or [],
             version=d.get("version", "") or "",
         )

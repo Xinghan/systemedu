@@ -220,6 +220,7 @@ def get_knode(slug: str, knode_id: str) -> dict:
             "audio_scripts": lesson.audio_scripts,
             "assignment_md": lesson.assignment_md,
             "theories": lesson.theories,
+            "slides": lesson.slides,
             "files": lesson.files,
             "version": lesson.version,
         }
