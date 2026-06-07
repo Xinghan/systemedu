@@ -97,6 +97,7 @@
 - [ ] Loading 超时提示 — 加载超过 5 秒后显示"加载时间较长，请检查网络"提示
 - [ ] purpleair-airquality-node 30 节 assignment.md / audio_scripts.json 是 spec 034 改造前 LLM 自动跑出, 质量未人工 review。下次 v0.5.0 升级时由 Claude 按新规范 (SKILL.md Step 6.5 / 6.6) 手写覆盖
 - [ ] purpleair-airquality-node M01-M30 slides.json (老师讲课 slide) Claude 手写补完 — Batch B 滚动 (spec 034)
+- [ ] **老师讲课 slides 音频文件生成 + 接入播放** (2026-06-06): slides 链路已通 (spec 2026-06-06-teacher-slides-playback), 前端音频是占位 (禁用"音频生成中")。待生成各 slide 的 audio_script 配音文件 (TTS), 约定路径放 media, 前端 TeacherSceneView 接 `<audio>` 启用播放。用户单独处理音频生成
 
 ## Tutor 质量改进 (2026-06-05 L3 质量评估发现)
 
