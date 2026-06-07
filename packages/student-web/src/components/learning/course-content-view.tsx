@@ -2784,6 +2784,7 @@ export function CourseContentView({
               knode={knode}
               projectName={projectName}
               nodeId={nodeId}
+              moduleId={knode?.module_id ?? String(nodeId)}
               versionLabel={
                 v3SelectedVersion ||
                 v3Versions.find((v) => v.is_active)?.version_label ||

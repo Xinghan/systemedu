@@ -92,6 +92,7 @@ export interface LibraryKnodeContent {
   theories?: unknown
   files?: Array<{ path: string; size: number; sha256: string }>
   version?: string
+  slides?: import("../types/api").SlideEntry[]
 }
 
 // spec 035: 平台知识树
