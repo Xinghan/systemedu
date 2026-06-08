@@ -19,6 +19,7 @@ interface SendOptions {
   module_id?: string | null
   page_kind?: PageKind
   confirm_response?: Record<string, unknown>
+  source?: string
 }
 
 export function useWebSocketChat() {
@@ -207,6 +208,7 @@ export function useWebSocketChat() {
           library_slug: options?.library_slug,
           module_id: options?.module_id,
           page_kind: options?.page_kind || "global",
+          source: options?.source || "chat",
           confirm_response: options?.confirm_response,
         }),
       )

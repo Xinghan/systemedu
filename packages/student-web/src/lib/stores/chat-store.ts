@@ -47,6 +47,8 @@ interface ChatState {
   // selectors / actions
   setActiveSession: (id: string | null) => void
   setContext: (ctx: ChatContext) => void
+  pendingAsk: string | null
+  setPendingAsk: (text: string | null) => void
   addSession: (session: ChatSession) => void
   replaceSession: (oldId: string, session: ChatSession) => void
   removeSession: (id: string) => void
@@ -71,8 +73,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
   streamToolCalls: [],
   currentSkill: null,
   hydrated: false,
+  pendingAsk: null,
   setActiveSession: (id) => set({ activeSessionId: id }),
   setContext: (ctx) => set({ context: ctx }),
+  setPendingAsk: (text) => set({ pendingAsk: text }),
   addSession: (session) =>
     set((s) => ({ sessions: [session, ...s.sessions] })),
   replaceSession: (oldId, session) =>

@@ -48,6 +48,8 @@ export function ChatPanel({ librarySlug, moduleId }: ChatPanelProps) {
     setMessagesFor,
     setContext,
     setCurrentSkill,
+    pendingAsk,
+    setPendingAsk,
   } = useChatStore()
   const { connect, sendMessage, disconnect } = useWebSocketChat()
   const bottomRef = useRef<HTMLDivElement>(null)
@@ -130,7 +132,7 @@ export function ChatPanel({ librarySlug, moduleId }: ChatPanelProps) {
 
   const pageCtx = usePageKind()
 
-  const handleSend = (message: string) => {
+  const handleSend = (message: string, source = "chat") => {
     // spec 031: page_kind 由 usePageKind 按 pathname 推;
     // librarySlug/moduleId 优先用 props (ChatPanel 调用方传的精确值),
     // 否则用 hook 推出来的 (站在哪一页就是哪一页).
@@ -138,8 +140,18 @@ export function ChatPanel({ librarySlug, moduleId }: ChatPanelProps) {
       library_slug: librarySlug ?? pageCtx.library_slug,
       module_id: moduleId ?? pageCtx.module_id,
       page_kind: pageCtx.page_kind,
+      source,
     })
   }
+
+  // 高亮"深入学习"触发: pendingAsk 有值时自动发送 (source=highlight_ask) 并清空
+  useEffect(() => {
+    if (!pendingAsk) return
+    handleSend(pendingAsk, "highlight_ask")
+    setPendingAsk(null)
+    bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingAsk])
 
   const handleNewSession = async () => {
     try {
