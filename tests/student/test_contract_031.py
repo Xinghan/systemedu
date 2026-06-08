@@ -10,6 +10,7 @@ import pytest
 EXPECTED_PAYLOAD_FIELDS = {
     "message", "session_id", "library_slug", "module_id",
     "page_kind", "confirm_response",
+    "source",  # spec 2026-06-08: 高亮深入学习 (chat | highlight_ask)
 }
 
 
