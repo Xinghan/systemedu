@@ -16,6 +16,7 @@ import "katex/dist/katex.min.css"
 import { gateway, exercise } from "@/lib/api"
 import { getCourseFactoryVariant } from "@/data/course-factory-variants"
 import { TeacherSceneView } from "@/components/learning/teacher-scene-view"
+import { HighlightAskButton } from "./HighlightAskButton"
 import type {
   CourseContent,
   CourseContentData,
@@ -2336,6 +2337,8 @@ export function CourseContentView({
   const [error, setError] = useState<string | null>(null)
   const abortRef = useRef(false)
   const loadIdRef = useRef(0)
+  // 高亮课文"深入学习"按钮的课文容器 ref (spec 2026-06-08)
+  const contentRef = useRef<HTMLDivElement>(null)
 
   const backendContent = courseData?.course_content as CourseContent | undefined
   const courseFactoryVariant = getCourseFactoryVariant(projectName, nodeId)
@@ -2835,7 +2838,7 @@ export function CourseContentView({
           )}
 
           {content && (!generating || showingCourseFactory) && (
-            <div className="max-w-4xl mx-auto px-8 py-12 space-y-16">
+            <div ref={contentRef} className="relative max-w-4xl mx-auto px-8 py-12 space-y-16">
               <EditorialHeader knode={knode} />
 
               {/* Content sections */}
@@ -2846,6 +2849,9 @@ export function CourseContentView({
               )}
 
               {agentLogs.length > 0 && <AgentDebugPanel logs={agentLogs} />}
+
+              {/* 高亮课文 → 浮"深入学习"按钮 (fixed 定位, 不影响布局) */}
+              <HighlightAskButton containerRef={contentRef} />
             </div>
           )}
         </div>
