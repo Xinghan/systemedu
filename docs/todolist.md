@@ -105,3 +105,7 @@
 - [ ] **router 误区判别确定性兜底**: qwen3.6-flash 对误区句路由仍偶发波动 (判 direct 而非 socratic)。考虑对"命中 knode 误区锚点 + 验证句式"的输入加非 LLM 的确定性兜底，或升级系统 LLM 降波动
 - [x] **修 Mem0Adapter import bug** (2026-06-05 已修, commit 42f83153): `core/tutor/tools/memory.py` import 改 `Mem0AsyncAdapter`，`.enabled` 检查改 `get_config().memory.enabled`，测试同步更新。真实运行验证 search_memory 不再恒 ImportError，Mem0 召回链路打通。注：打通后暴露独立配置问题 `embedding-3 model not found`，待 embedding 模型配置修正
 - [x] **记忆召回端到端验证** (2026-06-05 已验): test_memory_recall_e2e.py 确定性验证完整链路 (对话→enqueue→extract_session 抽取入库→新 session injector 召回)。结论: 跨 session 召回正常工作；对话当下 recalled_facts 为空是**异步抽取的设计时序** (worker 跑完才入库)，非 bug。含 user 隔离 + 抽取前为空两个对照用例
+
+## 高亮深入学习 后续 (2026-06-08 shipped)
+
+- [ ] "用户询问"回顾列表: 已落 ChatMessage.source=highlight_ask (spec 2026-06-08-highlight-deep-learn)。可做一个聚合视图 (按 source 筛选), 展示学生在课文里问过的所有问题, 供学生回顾 / 老师端分析高频疑问点
