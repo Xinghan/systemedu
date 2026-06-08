@@ -25,6 +25,7 @@ class ChatPayload(BaseModel):
     library_slug: str | None = None
     module_id: str | None = None
     page_kind: PageKind = "global"
+    source: str = "chat"  # chat | highlight_ask (spec 2026-06-08)
     confirm_response: dict[str, Any] | None = None
 
     @model_validator(mode="after")

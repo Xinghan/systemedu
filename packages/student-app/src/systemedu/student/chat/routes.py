@@ -72,6 +72,7 @@ async def api_chat(request: Request) -> JSONResponse:
         module_id=payload.module_id,
         role="user",
         content=payload.message,
+        source=payload.source,
     )
 
     try:
@@ -133,6 +134,7 @@ async def ws_chat_stream(websocket: WebSocket) -> None:
                 module_id=payload.module_id,
                 role="user",
                 content=payload.message,
+                source=payload.source,
             )
             await websocket.send_json({
                 "type": "session",

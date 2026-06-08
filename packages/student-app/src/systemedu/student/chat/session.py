@@ -134,6 +134,7 @@ def append_message(
     content: str,
     tool_calls: Any | None = None,
     skill: str | None = None,
+    source: str = "chat",
 ) -> dict:
     with _get_db_session() as session:
         m = ChatMessage(
@@ -145,6 +146,7 @@ def append_message(
             content=content,
             tool_calls=json.dumps(tool_calls, ensure_ascii=False) if tool_calls else None,
             skill=skill,
+            source=source,
         )
         session.add(m)
         # 同时刷 session.updated_at

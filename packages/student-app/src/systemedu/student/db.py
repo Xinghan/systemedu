@@ -218,6 +218,7 @@ class ChatMessage(Base):
     content = Column(Text, nullable=False)
     tool_calls = Column(Text, nullable=True)  # JSON string
     skill = Column(String(64), nullable=True)
+    source = Column(String(32), nullable=False, default="chat")  # chat | highlight_ask
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
 
