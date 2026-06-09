@@ -15,9 +15,11 @@ import { DrillModal } from "./DrillModal"
 interface Props {
   librarySlug: string
   moduleId: string
+  /** bump 此值 (如新钻取后) 触发列表重新拉取 */
+  refreshKey?: number
 }
 
-export function DrillRecords({ librarySlug, moduleId }: Props) {
+export function DrillRecords({ librarySlug, moduleId, refreshKey = 0 }: Props) {
   const [records, setRecords] = useState<DrillRecord[]>([])
   const [expanded, setExpanded] = useState(false)
   const [active, setActive] = useState<DrillRecord | null>(null)
@@ -30,7 +32,7 @@ export function DrillRecords({ librarySlug, moduleId }: Props) {
       .then((r) => { if (!cancelled) setRecords(r.drills ?? []) })
       .catch(() => { if (!cancelled) setRecords([]) })
     return () => { cancelled = true }
-  }, [librarySlug, moduleId])
+  }, [librarySlug, moduleId, refreshKey])
 
   if (records.length === 0) return null
 

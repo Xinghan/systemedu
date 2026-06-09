@@ -2343,6 +2343,7 @@ export function CourseContentView({
   const contentRef = useRef<HTMLDivElement>(null)
   // 知识钻取: 选区文本 (spec 2026-06-09), 非空 → 打开新钻取弹窗
   const [drillText, setDrillText] = useState<string | null>(null)
+  const [drillRefresh, setDrillRefresh] = useState(0)
 
   const backendContent = courseData?.course_content as CourseContent | undefined
   const courseFactoryVariant = getCourseFactoryVariant(projectName, nodeId)
@@ -2848,7 +2849,7 @@ export function CourseContentView({
                 return (
                   <>
                     {/* 本节钻取记录回访列表 (spec 2026-06-09) */}
-                    <DrillRecords librarySlug={projectName} moduleId={mid} />
+                    <DrillRecords librarySlug={projectName} moduleId={mid} refreshKey={drillRefresh} />
 
                     <EditorialHeader knode={knode} />
 
@@ -2867,7 +2868,7 @@ export function CourseContentView({
                     {/* 知识钻取新弹窗 (spec 2026-06-09) */}
                     <DrillModal
                       open={!!drillText}
-                      onClose={() => setDrillText(null)}
+                      onClose={() => { setDrillText(null); setDrillRefresh((n) => n + 1) }}
                       librarySlug={projectName}
                       moduleId={mid}
                       highlightText={drillText ?? undefined}
