@@ -464,16 +464,30 @@ function MarkdownBlock({ content }: { content: string }) {
         td: ({ children }) => (
           <td className="border border-outline-variant/30 px-3 py-2 text-on-surface">{children}</td>
         ),
+        // 围栏代码块容器 (```python 等); react-markdown 结构是 pre>code,
+        // 自定义 pre 做容器, code 只渲染内容, 避免双重 pre 嵌套。
+        pre: ({ children }) => (
+          <pre
+            className="my-4 overflow-x-auto rounded-lg border border-[var(--border)] bg-[var(--paper-2)] p-4 text-sm leading-relaxed"
+            style={{ fontFamily: "var(--mono)" }}
+          >
+            {children}
+          </pre>
+        ),
         code: ({ children, className }) => {
-          const isBlock = !!className
-          if (isBlock) {
-            return (
-              <pre className="bg-surface-container rounded-lg p-3 my-3 overflow-x-auto">
-                <code className="text-sm text-on-surface">{children}</code>
-              </pre>
-            )
+          // 代码块内的 code (在自定义 pre 内): className 形如 language-python; 不再包 pre。
+          if (className) {
+            return <code className="text-[var(--ink)]" style={{ fontFamily: "var(--mono)" }}>{children}</code>
           }
-          return <code className="bg-surface-container px-1.5 py-0.5 rounded text-sm text-on-surface">{children}</code>
+          // 行内 code
+          return (
+            <code
+              className="rounded bg-[var(--paper-2)] px-1.5 py-0.5 text-[0.85em] text-[var(--ink)]"
+              style={{ fontFamily: "var(--mono)" }}
+            >
+              {children}
+            </code>
+          )
         },
         hr: () => <hr className="my-6 border-outline-variant/20" />,
       }}
