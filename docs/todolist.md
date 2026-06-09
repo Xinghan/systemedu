@@ -109,3 +109,9 @@
 ## 高亮深入学习 后续 (2026-06-08 shipped)
 
 - [ ] "用户询问"回顾列表: 已落 ChatMessage.source=highlight_ask (spec 2026-06-08-highlight-deep-learn)。可做一个聚合视图 (按 source 筛选), 展示学生在课文里问过的所有问题, 供学生回顾 / 老师端分析高频疑问点
+
+## 知识钻取 后续 (2026-06-09 shipped)
+
+- [ ] 钻取弹窗"转问 AI 导师"联动 (A2): 弹窗底部按钮把该知识点丢给 chatbot 苏格拉底引导 (复用 highlight-ask pendingAsk)
+- [ ] 钻取"重新生成" (A3): 对已存钻取不满意可重新调 LLM
+- [ ] 全局"我的钻取"列表: 跨 knode 汇总用户所有钻取记录, 独立页面供回顾
