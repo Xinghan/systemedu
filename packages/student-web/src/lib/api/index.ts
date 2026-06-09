@@ -374,4 +374,34 @@ export const exercise = {
     api.post<{ ok: boolean; id: string }>("/api/exercise/attempt", body),
 }
 
+// ---------------------------------------------------------------------------
+// 知识钻取 (spec 2026-06-09): 高亮课文 → 结构化下钻知识
+// ---------------------------------------------------------------------------
+
+export interface DrillContent {
+  simple_explanation: string
+  why_matters: string
+  analogy: string
+  key_points: string[]
+  go_deeper: string
+}
+
+export interface DrillRecord {
+  id: string
+  highlight_text: string
+  content: DrillContent
+  created_at: string | null
+}
+
+export const knowledgeDrill = {
+  create: (librarySlug: string, moduleId: string, highlightText: string) =>
+    api.post<DrillRecord>("/api/knowledge/drill", {
+      library_slug: librarySlug, module_id: moduleId, highlight_text: highlightText,
+    }),
+  list: (librarySlug: string, moduleId: string) =>
+    api.get<{ drills: DrillRecord[] }>(
+      `/api/knowledge/drill?library_slug=${encodeURIComponent(librarySlug)}&module_id=${encodeURIComponent(moduleId)}`,
+    ),
+}
+
 export { STUDENT_API_URL }
