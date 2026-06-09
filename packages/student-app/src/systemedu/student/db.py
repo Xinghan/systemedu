@@ -18,6 +18,7 @@ from datetime import datetime
 from pathlib import Path
 
 from sqlalchemy import (
+    JSON,
     Boolean,
     Column,
     DateTime,
@@ -184,6 +185,23 @@ class UserKnodeComplete(Base):
     knode_id = Column(String(64), nullable=False)
     library_version = Column(String(64), nullable=True)
     completed_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class KnowledgeDrill(Base):
+    """知识钻取: 用户对某 knode 课文的高亮片段生成的结构化下钻知识 (spec 2026-06-09)."""
+
+    __tablename__ = "knowledge_drills"
+    __table_args__ = (
+        Index("ix_knowledge_drills_user_slug_module", "user_id", "library_slug", "module_id"),
+    )
+
+    id = Column(String(36), primary_key=True, default=_uuid)
+    user_id = Column(String(36), ForeignKey("users.id"), index=True, nullable=False)
+    library_slug = Column(String(128), nullable=False)
+    module_id = Column(String(64), nullable=False)
+    highlight_text = Column(Text, nullable=False)
+    content = Column(JSON, nullable=False, default=dict)  # {simple_explanation, why_matters, analogy, key_points, go_deeper}
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
 
 # ---------------------------------------------------------------------------
@@ -905,3 +923,47 @@ def mark_extraction_failed(
         p.processed_at = datetime.utcnow()
         p.status = "dead" if p.attempts >= max_attempts else "failed"
         sess.commit()
+
+
+# ---------------------------------------------------------------------------
+# spec 2026-06-09: 知识钻取 DAO
+# ---------------------------------------------------------------------------
+
+def create_drill(user_id: str, library_slug: str, module_id: str,
+                 highlight_text: str, content: dict) -> dict:
+    with get_session() as s:
+        d = KnowledgeDrill(
+            user_id=user_id, library_slug=library_slug, module_id=module_id,
+            highlight_text=highlight_text, content=content,
+        )
+        s.add(d); s.commit(); s.refresh(d)
+        return _drill_to_dict(d)
+
+
+def get_drill_by_highlight(user_id: str, library_slug: str, module_id: str,
+                           highlight_text: str) -> dict | None:
+    with get_session() as s:
+        d = (s.query(KnowledgeDrill)
+             .filter_by(user_id=user_id, library_slug=library_slug,
+                        module_id=module_id, highlight_text=highlight_text)
+             .order_by(KnowledgeDrill.created_at.desc())
+             .first())
+        return _drill_to_dict(d) if d else None
+
+
+def list_drills(user_id: str, library_slug: str, module_id: str) -> list[dict]:
+    with get_session() as s:
+        rows = (s.query(KnowledgeDrill)
+                .filter_by(user_id=user_id, library_slug=library_slug, module_id=module_id)
+                .order_by(KnowledgeDrill.created_at.asc())
+                .all())
+        return [_drill_to_dict(d) for d in rows]
+
+
+def _drill_to_dict(d: "KnowledgeDrill") -> dict:
+    return {
+        "id": d.id,
+        "highlight_text": d.highlight_text,
+        "content": d.content,
+        "created_at": d.created_at.isoformat() if d.created_at else None,
+    }
