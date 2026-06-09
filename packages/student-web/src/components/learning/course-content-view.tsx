@@ -2613,27 +2613,11 @@ export function CourseContentView({
     return () => { abortRef.current = true }
   }, [projectName, nodeId, versionMode, v3SelectedVersion]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // 静默探测 v3 版本列表 (决定是否显示 toggle 按钮 + 填充下拉框)
+  // 课文不再有版本之分 (v2/v3): 永不显示版本切换 UI, 始终走默认课文。
   useEffect(() => {
-    let cancelled = false
-    setV3SelectedVersion(null)  // 切节点时回到 active 版本
-    gateway.listCourseV3Versions(projectName, nodeId)
-      .then((data) => {
-        if (cancelled) return
-        // 只要有任何版本(包括 generating/failed)就显示 toggle, 让用户能切换看
-        const versions = data.versions || []
-        setV3Versions(versions)
-        setV3Available(versions.length > 0)
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setV3Versions([])
-          setV3Available(false)
-        }
-      })
-    return () => {
-      cancelled = true
-    }
+    setV3SelectedVersion(null)
+    setV3Versions([])
+    setV3Available(false)
   }, [projectName, nodeId])
 
   // 切换 active 版本(写到后端, 然后刷新)
