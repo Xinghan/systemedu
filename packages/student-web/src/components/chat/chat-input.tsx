@@ -45,7 +45,9 @@ export function ChatInput({ onSend, disabled, placeholder }: ChatInputProps) {
     el.style.height = Math.min(el.scrollHeight, 128) + "px"
   }, [])
 
-  const effectivePlaceholder = placeholder ?? t("chat.input_placeholder") ?? "Ask the Architect anything..."
+  const _t = t("chat.input_placeholder")
+  const effectivePlaceholder =
+    placeholder ?? (_t && _t !== "chat.input_placeholder" ? _t : "问我任何问题...")
 
   return (
     <div>
@@ -96,10 +98,6 @@ export function ChatInput({ onSend, disabled, placeholder }: ChatInputProps) {
         </div>
       </div>
 
-      {/* Footer label */}
-      <p className="text-center text-[10px] mt-3 font-[var(--font-manrope)] text-muted-foreground/50 uppercase tracking-[0.2em]">
-        {t("chat.neural_engine")}
-      </p>
     </div>
   )
 }

@@ -414,19 +414,6 @@ export function ChatPanel({ librarySlug, moduleId }: ChatPanelProps) {
         }}
       >
         <ChatInput onSend={handleSend} disabled={streaming} />
-        <div
-          className="mono"
-          style={{
-            fontSize: 10,
-            color: "var(--sub-2)",
-            marginTop: 8,
-            display: "flex",
-            justifyContent: "space-between",
-          }}
-        >
-          <span>GLM-5.1 · {moduleId ? `scoped to ${moduleId}` : "global"}</span>
-          <span>{activeSession?.messages.length ?? 0} msgs</span>
-        </div>
       </div>
     </div>
   )
