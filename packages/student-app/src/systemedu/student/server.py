@@ -32,6 +32,7 @@ from .catalog.user_lit_routes import ROUTES as _user_lit_routes
 from .chat import ROUTES as _chat_routes
 from .chat import preload_graph as _preload_tutor, shutdown_graph as _shutdown_tutor
 from .db import init_db
+from .drill import ROUTES as _drill_routes
 from .library_proxy.routes import ROUTES as _lib_routes
 
 
@@ -65,6 +66,7 @@ def create_app() -> Starlette:
         *_catalog_routes,
         *_user_lit_routes,
         *_chat_routes,
+        *_drill_routes,
     ]
 
     middleware = [

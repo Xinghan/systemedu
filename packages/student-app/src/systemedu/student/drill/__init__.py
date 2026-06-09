@@ -1,1 +1,3 @@
-__all__: list[str] = []
+from .routes import ROUTES
+
+__all__ = ["ROUTES"]
