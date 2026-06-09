@@ -17,6 +17,8 @@ import { gateway, exercise } from "@/lib/api"
 import { getCourseFactoryVariant } from "@/data/course-factory-variants"
 import { TeacherSceneView } from "@/components/learning/teacher-scene-view"
 import { HighlightAskButton } from "./HighlightAskButton"
+import { DrillRecords } from "./DrillRecords"
+import { DrillModal } from "./DrillModal"
 import type {
   CourseContent,
   CourseContentData,
@@ -2339,6 +2341,8 @@ export function CourseContentView({
   const loadIdRef = useRef(0)
   // 高亮课文"深入学习"按钮的课文容器 ref (spec 2026-06-08)
   const contentRef = useRef<HTMLDivElement>(null)
+  // 知识钻取: 选区文本 (spec 2026-06-09), 非空 → 打开新钻取弹窗
+  const [drillText, setDrillText] = useState<string | null>(null)
 
   const backendContent = courseData?.course_content as CourseContent | undefined
   const courseFactoryVariant = getCourseFactoryVariant(projectName, nodeId)
@@ -2839,19 +2843,38 @@ export function CourseContentView({
 
           {content && (!generating || showingCourseFactory) && (
             <div ref={contentRef} className="relative max-w-4xl mx-auto px-8 py-12 space-y-16">
-              <EditorialHeader knode={knode} />
+              {(() => {
+                const mid = knode?.module_id ?? String(nodeId)
+                return (
+                  <>
+                    {/* 本节钻取记录回访列表 (spec 2026-06-09) */}
+                    <DrillRecords librarySlug={projectName} moduleId={mid} />
 
-              {/* Content sections */}
-              {content.sections && content.sections.length > 0 ? (
-                <PlanWithSections content={content} />
-              ) : (
-                <PlanWithIdeas content={content} />
-              )}
+                    <EditorialHeader knode={knode} />
 
-              {agentLogs.length > 0 && <AgentDebugPanel logs={agentLogs} />}
+                    {/* Content sections */}
+                    {content.sections && content.sections.length > 0 ? (
+                      <PlanWithSections content={content} />
+                    ) : (
+                      <PlanWithIdeas content={content} />
+                    )}
 
-              {/* 高亮课文 → 浮"深入学习"按钮 (fixed 定位, 不影响布局) */}
-              <HighlightAskButton containerRef={contentRef} />
+                    {agentLogs.length > 0 && <AgentDebugPanel logs={agentLogs} />}
+
+                    {/* 高亮课文 → 浮"深入学习" + "知识钻取"按钮 (fixed 定位, 不影响布局) */}
+                    <HighlightAskButton containerRef={contentRef} onDrill={(t) => setDrillText(t)} />
+
+                    {/* 知识钻取新弹窗 (spec 2026-06-09) */}
+                    <DrillModal
+                      open={!!drillText}
+                      onClose={() => setDrillText(null)}
+                      librarySlug={projectName}
+                      moduleId={mid}
+                      highlightText={drillText ?? undefined}
+                    />
+                  </>
+                )
+              })()}
             </div>
           )}
         </div>

@@ -7,14 +7,20 @@
  */
 
 import { useEffect, useState, useCallback } from "react"
-import { Sparkles } from "lucide-react"
+import { Sparkles, BookOpen } from "lucide-react"
 
 import { useChatStore } from "@/lib/stores/chat-store"
 import { isValidSelection, buildAskMessage } from "@/lib/highlight-ask"
 
 interface Pos { top: number; left: number; text: string }
 
-export function HighlightAskButton({ containerRef }: { containerRef: React.RefObject<HTMLElement | null> }) {
+export function HighlightAskButton({
+  containerRef,
+  onDrill,
+}: {
+  containerRef: React.RefObject<HTMLElement | null>
+  onDrill?: (text: string) => void
+}) {
   const [pos, setPos] = useState<Pos | null>(null)
   const setPendingAsk = useChatStore((s) => s.setPendingAsk)
 
@@ -49,15 +55,32 @@ export function HighlightAskButton({ containerRef }: { containerRef: React.RefOb
     window.getSelection()?.removeAllRanges()
   }
 
+  const onDrillClick = () => {
+    onDrill?.(pos.text)
+    setPos(null)
+    window.getSelection()?.removeAllRanges()
+  }
+
   return (
-    <button
-      type="button"
+    <div
       onMouseDown={(e) => e.preventDefault()}
-      onClick={onAsk}
-      style={{ position: "fixed", top: pos.top, left: pos.left, transform: "translateX(-50%)", zIndex: 50 }}
-      className="inline-flex items-center gap-1 rounded-full bg-[var(--primary)] px-3 py-1.5 text-xs font-medium text-white shadow-lg hover:bg-[var(--primary-ink)]"
+      style={{ position: "fixed", top: pos.top, left: pos.left, transform: "translateX(-50%)", zIndex: 50, gap: 8 }}
+      className="inline-flex items-center"
     >
-      <Sparkles size={13} /> 深入学习
-    </button>
+      <button
+        type="button"
+        onClick={onAsk}
+        className="inline-flex items-center gap-1 rounded-full bg-[var(--primary)] px-3 py-1.5 text-xs font-medium text-white shadow-lg hover:bg-[var(--primary-ink)]"
+      >
+        <Sparkles size={13} /> 深入学习
+      </button>
+      <button
+        type="button"
+        onClick={onDrillClick}
+        className="inline-flex items-center gap-1 rounded-full border border-[var(--primary)] bg-[var(--card)] px-3 py-1.5 text-xs font-medium text-[var(--primary)] shadow-lg hover:bg-[var(--paper-2)]"
+      >
+        <BookOpen size={13} /> 知识钻取
+      </button>
+    </div>
   )
 }
