@@ -801,10 +801,10 @@ function TheoryBlock({ theory }: { theory: TheoryEntry }) {
       {/* Modal overlay */}
       {open && createPortal(
         <div
-          className="fixed inset-0 z-[200] flex items-center justify-center p-4 sm:p-8 bg-foreground/10 backdrop-blur-sm"
+          className="fixed inset-0 z-[200] flex items-center justify-center p-4 sm:p-8 bg-black/50"
           onClick={(e) => { if (e.target === e.currentTarget) setOpen(false) }}
         >
-          <div className="glass-surface w-full max-w-5xl max-h-[85vh] rounded-xl shadow-[0_32px_64px_-16px_rgba(25,34,125,0.15)] flex flex-col overflow-hidden border border-white/40 dark:border-white/10">
+          <div className="w-full max-w-5xl max-h-[85vh] rounded-xl shadow-2xl flex flex-col overflow-hidden border border-[var(--border)] bg-[var(--card)]">
             {/* Header */}
             <div className="flex items-center justify-between px-8 py-6 border-b border-foreground/5">
               <div className="flex flex-col">
