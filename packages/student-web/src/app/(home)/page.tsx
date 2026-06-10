@@ -416,16 +416,16 @@ export default function Homepage() {
           }}
           className="how-grid"
         >
-          <Step n="01" icon={<Sparkles size={18} strokeWidth={1.5} />}
+          <Step n="01" icon={<Sparkles size={18} strokeWidth={1.5} />} img="/landing/extinct-sound.webp"
             t={lang === "zh" ? "挑一个项目" : "Pick a project"}
             body={lang === "zh" ? "从项目库选一个让你心动的, 看清它的目标和清单。" : "Choose one that excites you; see its goal and parts list."} />
-          <Step n="02" icon={<Bot size={18} strokeWidth={1.5} />}
+          <Step n="02" icon={<Bot size={18} strokeWidth={1.5} />} img="/landing/agent.webp"
             t={lang === "zh" ? "跟着学 (AI 陪)" : "Learn (with AI)"}
             body={lang === "zh" ? "短模块一步步来, 卡住了 AI agent 随时把难点讲清。" : "Short modules, step by step; the AI agent unblocks the hard parts."} />
-          <Step n="03" icon={<Network size={18} strokeWidth={1.5} />}
+          <Step n="03" icon={<Network size={18} strokeWidth={1.5} />} img="/landing/mars-rover.webp"
             t={lang === "zh" ? "动手造" : "Build it"}
             body={lang === "zh" ? "焊接、烧录、接线、组装 — 真硬件, 真失败, 真修好。" : "Solder, flash, wire, assemble — real hardware, real fixes."} />
-          <Step n="04" icon={<Rocket size={18} strokeWidth={1.5} />}
+          <Step n="04" icon={<Rocket size={18} strokeWidth={1.5} />} img="/landing/tree-v1.webp"
             t={lang === "zh" ? "发布作品" : "Ship it"}
             body={lang === "zh" ? "把成品发布出来, 提交真实数据, 让世界看到你造的东西。" : "Publish your build, submit real data, show the world what you made."}
             last />
@@ -738,31 +738,46 @@ function Step({
   icon,
   t,
   body,
+  img,
   last,
 }: {
   n: string
   icon: React.ReactNode
   t: string
   body: string
+  img?: string
   last?: boolean
 }) {
   return (
     <div
       style={{
-        padding: 24,
         borderRight: last ? "0" : "1px solid var(--border)",
         display: "flex",
         flexDirection: "column",
-        gap: 14,
         minHeight: 200,
       }}
     >
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <span className="mono" style={{ color: "var(--sub-2)" }}>{n}</span>
-        <span style={{ color: "var(--violet)" }}>{icon}</span>
+      {img && (
+        <div
+          style={{
+            position: "relative",
+            aspectRatio: "16 / 10",
+            // 顶部图: 底部向下渐隐进卡片背景 (与节奏一致的融合)
+            WebkitMaskImage: "linear-gradient(to bottom, #000 58%, transparent 100%)",
+            maskImage: "linear-gradient(to bottom, #000 58%, transparent 100%)",
+          }}
+        >
+          <Image src={img} alt="" fill sizes="(max-width: 820px) 50vw, 25vw" style={{ objectFit: "cover" }} />
+        </div>
+      )}
+      <div style={{ padding: img ? "4px 22px 24px" : 24, display: "flex", flexDirection: "column", gap: 12 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <span className="mono" style={{ color: "var(--sub-2)" }}>{n}</span>
+          <span style={{ color: "var(--violet)" }}>{icon}</span>
+        </div>
+        <h4 className="h3" style={{ fontSize: 15 }}>{t}</h4>
+        <p className="body" style={{ fontSize: 13.5 }}>{body}</p>
       </div>
-      <h4 className="h3" style={{ fontSize: 15 }}>{t}</h4>
-      <p className="body" style={{ fontSize: 13.5 }}>{body}</p>
     </div>
   )
 }
