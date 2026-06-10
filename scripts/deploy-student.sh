@@ -83,7 +83,7 @@ Restart=always
 [Install]
 WantedBy=multi-user.target
 EOF"
-  remote "systemctl daemon-reload && systemctl enable --now systemedu-library && sleep 3 && systemctl is-active systemedu-library"
+  remote "systemctl daemon-reload && systemctl enable systemedu-library && systemctl restart systemedu-library && sleep 3 && systemctl is-active systemedu-library"
   echo "[library] 上传两门课 tarball..."
   copy "$HOME/.systemedu-library/media/projects/eeg-minecraft-bci/_archive/eeg-minecraft-bci-0.1.0.tar.gz" /tmp/
   copy "$HOME/.systemedu-library/media/projects/purpleair-airquality-node/_archive/purpleair-airquality-node-0.14.1.tar.gz" /tmp/
@@ -150,7 +150,7 @@ Restart=always
 [Install]
 WantedBy=multi-user.target
 EOF"
-  remote "systemctl daemon-reload && systemctl enable --now systemedu-student-backend systemedu-student-worker && sleep 5 && systemctl is-active systemedu-student-backend"
+  remote "systemctl daemon-reload && systemctl enable systemedu-student-backend systemedu-student-worker && systemctl restart systemedu-student-backend systemedu-student-worker && sleep 5 && systemctl is-active systemedu-student-backend"
 }
 
 do_web() {
@@ -171,7 +171,8 @@ Restart=always
 [Install]
 WantedBy=multi-user.target
 EOF"
-  remote "systemctl daemon-reload && systemctl enable --now systemedu-student-web && sleep 6 && systemctl is-active systemedu-student-web"
+  # enable (开机自启) + restart (强制用新 build; --now 在已 active 时不会重启, 会跑旧产物)
+  remote "systemctl daemon-reload && systemctl enable systemedu-student-web && systemctl restart systemedu-student-web && sleep 6 && systemctl is-active systemedu-student-web"
 }
 
 do_nginx() {
