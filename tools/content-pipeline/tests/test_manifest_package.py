@@ -65,6 +65,25 @@ def test_regenerate_manifest_populates_files_and_size(
         assert f["size"] >= 0
 
 
+def test_regenerate_manifest_detects_cover(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    """项目根有 cover.png 时, manifest 自动设 cover_image_path."""
+    gen = _setup_compiled(tmp_path, monkeypatch)
+    (gen / "cover.png").write_bytes(b"\x89PNG\r\n\x1a\n fake png")
+    manifest = manifest_mod.regenerate_manifest(gen, version="1.0.0")
+    assert manifest.get("cover_image_path") == "cover.png"
+
+
+def test_regenerate_manifest_no_cover(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    """无封面文件时, 不设 cover_image_path (保持 None/缺失)."""
+    gen = _setup_compiled(tmp_path, monkeypatch)
+    manifest = manifest_mod.regenerate_manifest(gen, version="1.0.0")
+    assert not manifest.get("cover_image_path")
+
+
 def test_package_creates_tarball(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     _setup_compiled(tmp_path, monkeypatch)
 

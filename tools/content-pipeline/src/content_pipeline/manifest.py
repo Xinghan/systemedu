@@ -81,6 +81,14 @@ def regenerate_manifest(project_dir: Path, version: str | None = None) -> dict:
         manifest["version"] = version
         manifest["version_tag"] = "release"
 
+    # 封面: manifest 未显式设时, 自动检测项目根下的 cover.{png,jpg,jpeg,webp}
+    # (library importer 据此填 Project.cover_image_path; 不设则前端无封面)
+    if not manifest.get("cover_image_path"):
+        for name in ("cover.png", "cover.jpg", "cover.jpeg", "cover.webp"):
+            if (project_dir / name).is_file():
+                manifest["cover_image_path"] = name
+                break
+
     manifest_path.write_text(
         json.dumps(manifest, ensure_ascii=False, indent=2),
         encoding="utf-8",
