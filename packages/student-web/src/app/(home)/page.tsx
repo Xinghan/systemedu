@@ -6,7 +6,6 @@ import { useEffect, useState } from "react"
 import {
   ArrowRight,
   Bot,
-  CircleCheck,
   Cpu,
   Languages,
   Network,
@@ -15,10 +14,10 @@ import {
 } from "lucide-react"
 import { useAuthStore } from "@/lib/stores/auth-store"
 
-// Public landing page — GitHub 式长滚动营销页: Hero + 逐节功能展示。
+// Public landing page — 长滚动营销页, 从精神层面切节: 好奇心 / 科技感 / 陪伴 / 记忆 / 路径。
 // 设计: docs/superpowers/specs/2026-06-10-landing-page-redesign-design.md
-// 手绘水彩科普书插画风 (public/landing/*.webp) + Industrial Atelier 暖纸色 UI。
-// 双语: 首页自带局部语言切换 (useState, 不动全局 i18n)。
+// 手绘水彩科普书插画风 (public/landing/*.webp), 图片 mask 渐隐与暖纸色背景融为一体。
+// 项目只在"好奇心"节用一行例子带过; 双语首页局部切换 (useState, 不动全局 i18n)。
 
 type Lang = "zh" | "en"
 
@@ -40,35 +39,51 @@ const COPY = {
     stat1: "33 个天马行空的项目",
     stat2: "真硬件 · 真数据 · 真标准",
     stat3: "AI agent 随时教",
-    valuesTitle: "为什么孩子能做成",
-    streamTitle: "挑一个, 开始造",
-    streamEyebrow: "项目库",
     comingSoon: "即将上线",
     live: "现在就能学",
-    howEyebrow: "怎么运转",
-    howTitle: "一个项目是怎么活起来的",
-    agentEyebrow: "AI agent",
-    agentTitle: "数学超纲了? agent 接住。",
-    agentBody:
-      "六年级的孩子做卫星轨道、做脑信号解码 — 数学一定会超纲。AI agent 不降低项目难度, 而是在你卡住的那一刻, 就地把那一小块知识讲清楚, 然后你继续造。它是随叫随到的私人导师, 不是替你做完的外包。",
-    agentMore: "了解 AI 导师",
-    // 真硬件节
-    hwEyebrow: "真实工程",
+
+    // ① 好奇心
+    curiEyebrow: "好奇心",
+    curiTitle: "那些你以为只有大人能碰的东西。",
+    curiBody:
+      "脑波控制游戏、给地球防御小行星、复活一只灭绝动物的叫声 — 这些不是科普视频里看看而已的东西, 而是你亲手从零做出来的真项目。好奇心有多大, 能造的就有多大。",
+    curiMore: "看看全部 33 个项目",
+
+    // ② 科技感
+    hwEyebrow: "科技感",
     hwTitle: "真硬件 · 真数据 · 真标准。",
     hwBody:
       "不是模拟、不是玩具。你用真实的传感器和电路, 接 NASA、EPA、GBIF 级别的公开数据集, 跑学界都在用的标准库。做出来的东西, 是本科论文级别的真工作。",
     hwMore: "看真实数据源",
-    // 知识树节
-    treeEyebrow: "知识树",
-    treeTitle: "像树一样长的知识。",
+
+    // ③ 陪伴 (AI agent tutor)
+    agentEyebrow: "陪伴",
+    agentTitle: "永远有人接住你。",
+    agentBody:
+      "六年级的孩子做卫星轨道、做脑信号解码 — 数学一定会超纲。AI agent 导师不降低难度, 而是在你卡住的那一刻, 就地把那一小块讲清, 然后你继续造。随叫随到的私人导师, 不是替你做完的外包。",
+    agentMore: "了解 AI 导师",
+
+    // ④ 记忆 (memory)
+    memEyebrow: "记忆",
+    memTitle: "它记得你走过的每一步。",
+    memBody:
+      "你上周焊过的电路、卡过的那道公式、做成的那个小东西 — AI 都记得。它认得你, 接得上你, 不会每次都从头问起。你的学习是一条连续生长的线, 不是一次次断片。",
+    memMore: "了解记忆系统",
+
+    // ⑤ 路径 (知识树)
+    treeEyebrow: "路径",
+    treeTitle: "像树一样长出来的知识。",
     treeBody:
       "不是从第一课排到最后一课的线性课程。知识树是一张 DAG: 你当前的项目需要哪块知识, 它就解锁哪块。你永远在为眼前要造的东西学习, 而不是为了考试囤积。",
     treeMore: "了解知识树",
-    // 项目展示节
+
+    // 项目一行例子 (好奇心节内)
     projEyebrow: "项目库",
-    projTitle: "天马行空, 但都是真的。",
-    projBody: "从 33 个工业级项目里挑一个让你心动的, 开始造。",
-    // 大 CTA 节
+    projExamples: "一行例子, 还有 30 个在库里",
+
+    // How / CTA
+    howEyebrow: "怎么运转",
+    howTitle: "一个项目是怎么活起来的",
     ctaTitle: "准备好造点真东西了吗?",
     ctaBody: "免费注册, 把第一个项目 Pull 到你的书架。AI agent 全程陪你。",
     ctaStart: "免费开始",
@@ -91,31 +106,44 @@ const COPY = {
     stat1: "33 wildly ambitious projects",
     stat2: "Real hardware · real data · real standards",
     stat3: "AI agent always on call",
-    valuesTitle: "Why a kid can pull this off",
-    streamTitle: "Pick one, start building",
-    streamEyebrow: "Project library",
     comingSoon: "Coming soon",
     live: "Learn it now",
-    howEyebrow: "How it works",
-    howTitle: "How a project comes to life",
-    agentEyebrow: "AI agent",
-    agentTitle: "Math over your head? The agent catches you.",
-    agentBody:
-      "A sixth-grader doing satellite orbits or decoding brain signals will hit math that's over their head — guaranteed. The AI agent doesn't dumb the project down. It explains that one small piece, right at the moment you're stuck, then you keep building. A private tutor on call, not an outsourcer that does it for you.",
-    agentMore: "Meet the AI tutor",
-    hwEyebrow: "Real engineering",
+
+    curiEyebrow: "Curiosity",
+    curiTitle: "The stuff you thought only grown-ups could touch.",
+    curiBody:
+      "Control a game with your brainwaves, defend Earth from asteroids, bring an extinct animal's call back to life — not videos you watch, but real projects you build from scratch with your own hands. How far you go is how far your curiosity reaches.",
+    curiMore: "See all 33 projects",
+
+    hwEyebrow: "Real tech",
     hwTitle: "Real hardware. Real data. Real standards.",
     hwBody:
       "Not simulations, not toys. You use real sensors and circuits, plug into NASA / EPA / GBIF-grade open datasets, and run the same standard libraries academics use. What you build is genuine undergraduate-thesis-level work.",
     hwMore: "See the data sources",
-    treeEyebrow: "Knowledge tree",
+
+    agentEyebrow: "Always with you",
+    agentTitle: "Someone always catches you.",
+    agentBody:
+      "A sixth-grader doing satellite orbits or brain signals will hit math over their head — guaranteed. The AI tutor doesn't dumb things down. It explains that one small piece the moment you're stuck, then you keep building. A private tutor on call, not an outsourcer.",
+    agentMore: "Meet the AI tutor",
+
+    memEyebrow: "Memory",
+    memTitle: "It remembers every step you've taken.",
+    memBody:
+      "The circuit you soldered last week, the equation that stumped you, the little thing you finished — the AI remembers it all. It knows you, picks up where you left off, never starts from zero. Your learning is one continuous, growing thread.",
+    memMore: "How memory works",
+
+    treeEyebrow: "Your path",
     treeTitle: "Knowledge that grows like a tree.",
     treeBody:
       "Not a course that runs lesson 1 to lesson N. The knowledge tree is a DAG: it unlocks exactly the piece your current project needs. You always learn for the thing in front of you, never hoarding for an exam.",
     treeMore: "How the tree works",
+
     projEyebrow: "Project library",
-    projTitle: "Wildly ambitious — and all real.",
-    projBody: "Pick one of 33 industry-grade projects that excites you, and start building.",
+    projExamples: "A taste — 30 more in the library",
+
+    howEyebrow: "How it works",
+    howTitle: "How a project comes to life",
     ctaTitle: "Ready to build a real thing?",
     ctaBody: "Sign up free and pull your first project onto your shelf. The AI agent is with you the whole way.",
     ctaStart: "Start free",
@@ -208,9 +236,9 @@ export default function Homepage() {
   const t = COPY[lang]
 
   return (
-    <main style={{ width: "100%" }}>
-      {/* ── ① Hero ── */}
-      <section style={{ maxWidth: 1100, margin: "0 auto", padding: "64px 32px 72px", position: "relative" }}>
+    <main style={{ width: "100%", overflow: "hidden" }}>
+      {/* ── Hero ── */}
+      <section style={{ maxWidth: 1100, margin: "0 auto", padding: "64px 32px 64px", position: "relative" }}>
         <div style={{ position: "absolute", top: 20, right: 32, zIndex: 3 }}>
           <LangToggle lang={lang} onChange={setLang} />
         </div>
@@ -219,10 +247,7 @@ export default function Homepage() {
           <div className="eyebrow" style={{ marginBottom: 22, justifyContent: "center" }}>
             <span className="dot" /> {t.eyebrow}
           </div>
-          <h1
-            className="display"
-            style={{ fontSize: 60, lineHeight: 1.04, margin: "0 auto" }}
-          >
+          <h1 className="display" style={{ fontSize: 60, lineHeight: 1.04, margin: "0 auto" }}>
             {t.heroTitle1}
             <span style={{ color: "var(--primary)" }}>{t.heroTitleHi}</span>
             {t.heroTitle2}
@@ -231,47 +256,31 @@ export default function Homepage() {
             <span style={{ color: "var(--aerospace)" }}>{t.heroLine2hi}</span>
             {t.heroLine2post}
           </h1>
-          <p
-            style={{
-              maxWidth: 560,
-              margin: "22px auto 0",
-              fontSize: 16,
-              lineHeight: 1.6,
-              color: "var(--sub)",
-            }}
-          >
+          <p style={{ maxWidth: 560, margin: "22px auto 0", fontSize: 16, lineHeight: 1.6, color: "var(--sub)" }}>
             {t.heroBody}
           </p>
           <div style={{ display: "flex", gap: 12, marginTop: 30, justifyContent: "center" }}>
-            {loggedIn ? (
-              <Link href="/home" className="btn btn-violet btn-lg">
-                {t.ctaDash}
-                <ArrowRight size={15} strokeWidth={1.5} />
-              </Link>
-            ) : (
-              <Link href="/register" className="btn btn-violet btn-lg">
-                {t.ctaStart}
-                <ArrowRight size={15} strokeWidth={1.5} />
-              </Link>
-            )}
+            <Link href={loggedIn ? "/home" : "/register"} className="btn btn-violet btn-lg">
+              {loggedIn ? t.ctaDash : t.ctaStart}
+              <ArrowRight size={15} strokeWidth={1.5} />
+            </Link>
             <Link href="/library" className="btn btn-ghost btn-lg">
               {t.ctaBrowse}
             </Link>
           </div>
         </div>
 
-        {/* hero 大插画 */}
+        {/* hero 大插画 — 底部 mask 渐隐融入背景 */}
         <div
           style={{
             position: "relative",
-            maxWidth: 900,
-            margin: "48px auto 0",
+            maxWidth: 920,
+            margin: "44px auto 0",
             aspectRatio: "16 / 10",
-            borderRadius: 16,
-            overflow: "hidden",
-            border: "1px solid var(--border)",
-            background: "var(--paper)",
-            boxShadow: "var(--shadow-lg)",
+            WebkitMaskImage:
+              "radial-gradient(120% 100% at 50% 38%, #000 55%, transparent 92%)",
+            maskImage:
+              "radial-gradient(120% 100% at 50% 38%, #000 55%, transparent 92%)",
           }}
         >
           <Image
@@ -279,19 +288,18 @@ export default function Homepage() {
             alt=""
             fill
             priority
-            sizes="(max-width: 940px) 100vw, 900px"
-            style={{ objectFit: "cover" }}
+            sizes="(max-width: 940px) 100vw, 920px"
+            style={{ objectFit: "contain" }}
           />
         </div>
 
-        {/* 信任条 */}
         <div
           style={{
             display: "flex",
             flexWrap: "wrap",
             gap: "12px 28px",
             justifyContent: "center",
-            marginTop: 34,
+            marginTop: 8,
             fontFamily: "var(--mono)",
             fontSize: 12,
             color: "var(--sub)",
@@ -303,7 +311,36 @@ export default function Homepage() {
         </div>
       </section>
 
-      {/* ── ② AI agent 节 (左文右图) ── */}
+      {/* ── ① 好奇心 (右图) + 项目一行例子 ── */}
+      <FeatureSection
+        eyebrow={t.curiEyebrow}
+        title={t.curiTitle}
+        body={t.curiBody}
+        more={t.curiMore}
+        moreHref="/library"
+        img="/landing/extinct-sound.webp"
+        ratio="4 / 5"
+        imgSide="right"
+        accent="var(--computing)"
+        icon={<Sparkles size={18} strokeWidth={1.5} />}
+      >
+        <ProjectStrip lang={lang} t={t} />
+      </FeatureSection>
+
+      {/* ── ② 科技感 (左图) ── */}
+      <FeatureSection
+        eyebrow={t.hwEyebrow}
+        title={t.hwTitle}
+        body={t.hwBody}
+        more={t.hwMore}
+        img="/landing/mars-rover.webp"
+        ratio="3 / 2"
+        imgSide="left"
+        accent="var(--climate)"
+        icon={<Cpu size={18} strokeWidth={1.5} />}
+      />
+
+      {/* ── ③ 陪伴 / AI agent tutor (右图) ── */}
       <FeatureSection
         eyebrow={t.agentEyebrow}
         title={t.agentTitle}
@@ -316,21 +353,20 @@ export default function Homepage() {
         icon={<Bot size={18} strokeWidth={1.5} />}
       />
 
-      {/* ── ③ 真硬件真数据 节 (右文左图) ── */}
+      {/* ── ④ 记忆 / memory (左图) ── */}
       <FeatureSection
-        eyebrow={t.hwEyebrow}
-        title={t.hwTitle}
-        body={t.hwBody}
-        more={t.hwMore}
-        img="/landing/mars-rover.webp"
+        eyebrow={t.memEyebrow}
+        title={t.memTitle}
+        body={t.memBody}
+        more={t.memMore}
+        img="/landing/memory-v2.webp"
         ratio="3 / 2"
         imgSide="left"
-        accent="var(--climate)"
-        icon={<Cpu size={18} strokeWidth={1.5} />}
-        tinted
+        accent="var(--energy)"
+        icon={<Sparkles size={18} strokeWidth={1.5} />}
       />
 
-      {/* ── ④ 知识树 节 (左文右图) ── */}
+      {/* ── ⑤ 路径 / 知识树 (右图) ── */}
       <FeatureSection
         eyebrow={t.treeEyebrow}
         title={t.treeTitle}
@@ -343,43 +379,8 @@ export default function Homepage() {
         icon={<Network size={18} strokeWidth={1.5} />}
       />
 
-      {/* ── ⑤ 项目展示 节 ── */}
-      <section style={{ background: "var(--paper-2)" }}>
-        <div style={{ maxWidth: 1100, margin: "0 auto", padding: "72px 32px" }}>
-          <div style={{ textAlign: "center", maxWidth: 620, margin: "0 auto 40px" }}>
-            <div className="eyebrow" style={{ marginBottom: 12, justifyContent: "center" }}>
-              <span className="dot" /> {t.projEyebrow}
-            </div>
-            <h2 style={{ fontSize: 32, fontWeight: 600, letterSpacing: "-.03em", lineHeight: 1.15 }}>
-              {t.projTitle}
-            </h2>
-            <p style={{ marginTop: 14, fontSize: 15, color: "var(--sub)", lineHeight: 1.6 }}>
-              {t.projBody}
-            </p>
-          </div>
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(3, 1fr)",
-              gap: 18,
-            }}
-            className="proj-grid"
-          >
-            {PROJECTS.map((p) => (
-              <ProjectCard key={p.slug} project={p} lang={lang} t={t} />
-            ))}
-          </div>
-          <div style={{ textAlign: "center", marginTop: 36 }}>
-            <Link href="/library" className="btn btn-ghost btn-lg">
-              {t.ctaBrowse}
-              <ArrowRight size={15} strokeWidth={1.5} />
-            </Link>
-          </div>
-        </div>
-      </section>
-
-      {/* ── ⑥ How it works 节 ── */}
-      <section style={{ maxWidth: 1100, margin: "0 auto", padding: "72px 32px" }}>
+      {/* ── How it works ── */}
+      <section style={{ maxWidth: 1100, margin: "0 auto", padding: "64px 32px" }}>
         <div style={{ textAlign: "center", maxWidth: 620, margin: "0 auto 36px" }}>
           <div className="eyebrow" style={{ marginBottom: 12, justifyContent: "center" }}>
             <span className="dot" /> {t.howEyebrow}
@@ -416,7 +417,7 @@ export default function Homepage() {
         </div>
       </section>
 
-      {/* ── ⑦ 大 CTA 节 ── */}
+      {/* ── 大 CTA ── */}
       <section style={{ maxWidth: 1100, margin: "0 auto", padding: "16px 32px 80px" }}>
         <div
           style={{
@@ -448,7 +449,7 @@ export default function Homepage() {
         </div>
       </section>
 
-      {/* ── ⑧ Footer ── */}
+      {/* ── Footer ── */}
       <footer style={{ borderTop: "1px solid var(--border)", background: "var(--card)" }}>
         <div
           style={{
@@ -474,15 +475,13 @@ export default function Homepage() {
             </div>
           </div>
           <FootCol t={lang === "zh" ? "项目库" : "Library"} items={["Aerospace", "Robotics", "Bioscience", "Climate"]} />
-          <FootCol t={lang === "zh" ? "平台" : "Platform"} items={lang === "zh" ? ["知识树", "AI 导师", "硬件套件"] : ["Knowledge tree", "AI tutor", "Hardware kits"]} />
+          <FootCol t={lang === "zh" ? "平台" : "Platform"} items={lang === "zh" ? ["知识树", "AI 导师", "记忆系统"] : ["Knowledge tree", "AI tutor", "Memory"]} />
           <FootCol t={lang === "zh" ? "关于" : "Company"} items={lang === "zh" ? ["关于我们", "开源", "加入我们"] : ["About", "Open source", "Careers"]} />
         </div>
       </footer>
 
-      {/* 响应式 */}
       <style jsx>{`
         @media (max-width: 820px) {
-          .proj-grid { grid-template-columns: 1fr !important; }
           .how-grid { grid-template-columns: 1fr 1fr !important; }
           .foot-grid { grid-template-columns: 1fr 1fr !important; }
         }
@@ -493,42 +492,52 @@ export default function Homepage() {
 
 // ── 子组件 ──────────────────────────────────────────────────────
 
+// 功能节: 左右文图交替, 图片用 mask 朝文字侧渐隐, 与背景融为一体 (无卡片边框)
 function FeatureSection({
   eyebrow,
   title,
   body,
   more,
+  moreHref,
   img,
   ratio,
   imgSide,
   accent,
   icon,
-  tinted,
+  children,
 }: {
   eyebrow: string
   title: string
   body: string
   more: string
+  moreHref?: string
   img: string
   ratio: string
   imgSide: "left" | "right"
   accent: string
   icon: React.ReactNode
-  tinted?: boolean
+  children?: React.ReactNode
 }) {
+  // 四周径向羽化 + 朝文字侧更强渐隐, 让插画无硬边地溶进暖纸色背景。
+  // 椭圆中心略偏离文字侧, 使靠文字一边淡出更早、衔接文字区。
+  const cx = imgSide === "right" ? "62%" : "38%"
+  const mask =
+    `radial-gradient(115% 130% at ${cx} 50%, #000 38%, rgba(0,0,0,.6) 62%, transparent 86%)`
+
   const text = (
-    <div style={{ display: "flex", flexDirection: "column", justifyContent: "center" }}>
+    <div style={{ display: "flex", flexDirection: "column", justifyContent: "center", padding: "8px 0" }}>
       <div
         style={{
-          width: 40,
-          height: 40,
-          borderRadius: 10,
+          width: 42,
+          height: 42,
+          borderRadius: 11,
           background: "var(--card)",
           border: "1px solid var(--border)",
           display: "grid",
           placeItems: "center",
           color: accent,
           marginBottom: 18,
+          boxShadow: "var(--shadow-sm)",
         }}
       >
         {icon}
@@ -536,24 +545,18 @@ function FeatureSection({
       <div className="eyebrow" style={{ marginBottom: 10 }}>
         <span className="dot" style={{ background: accent }} /> {eyebrow}
       </div>
-      <h2 style={{ fontSize: 30, fontWeight: 600, letterSpacing: "-.03em", lineHeight: 1.15, marginBottom: 16 }}>
+      <h2 style={{ fontSize: 30, fontWeight: 600, letterSpacing: "-.03em", lineHeight: 1.18, marginBottom: 16 }}>
         {title}
       </h2>
       <p style={{ fontSize: 15.5, lineHeight: 1.7, color: "var(--sub)", maxWidth: 460 }}>{body}</p>
+      {children}
       <div style={{ marginTop: 22 }}>
-        <span
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 7,
-            fontSize: 14,
-            fontWeight: 500,
-            color: accent,
-          }}
-        >
-          {more}
-          <ArrowRight size={15} strokeWidth={1.8} />
-        </span>
+        <OptionalLink href={moreHref}>
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 7, fontSize: 14, fontWeight: 500, color: accent }}>
+            {more}
+            <ArrowRight size={15} strokeWidth={1.8} />
+          </span>
+        </OptionalLink>
       </div>
     </div>
   )
@@ -563,27 +566,24 @@ function FeatureSection({
       style={{
         position: "relative",
         aspectRatio: ratio,
-        borderRadius: 14,
-        overflow: "hidden",
-        border: "1px solid var(--border)",
-        background: "var(--paper)",
-        boxShadow: "var(--shadow-md)",
+        WebkitMaskImage: mask,
+        maskImage: mask,
       }}
     >
-      <Image src={img} alt="" fill sizes="(max-width: 820px) 100vw, 540px" style={{ objectFit: "cover" }} />
+      <Image src={img} alt="" fill sizes="(max-width: 820px) 100vw, 560px" style={{ objectFit: "cover" }} />
     </div>
   )
 
   return (
-    <section style={{ background: tinted ? "var(--paper-2)" : "transparent" }}>
+    <section>
       <div
         style={{
           maxWidth: 1100,
           margin: "0 auto",
-          padding: "72px 32px",
+          padding: "56px 32px",
           display: "grid",
           gridTemplateColumns: "1fr 1fr",
-          gap: 56,
+          gap: 48,
           alignItems: "center",
         }}
         className="feat-grid"
@@ -604,11 +604,75 @@ function FeatureSection({
         @media (max-width: 820px) {
           .feat-grid {
             grid-template-columns: 1fr !important;
-            gap: 28px !important;
+            gap: 20px !important;
           }
         }
       `}</style>
     </section>
+  )
+}
+
+function OptionalLink({ href, children }: { href?: string; children: React.ReactNode }) {
+  if (href) {
+    return (
+      <Link href={href} style={{ textDecoration: "none" }}>
+        {children}
+      </Link>
+    )
+  }
+  return <>{children}</>
+}
+
+// 好奇心节里的项目一行例子 (3 个小卡, 紧凑)
+function ProjectStrip({ lang, t }: { lang: Lang; t: Copy }) {
+  return (
+    <div style={{ marginTop: 24 }}>
+      <div className="mono" style={{ fontSize: 11, color: "var(--sub-2)", marginBottom: 10 }}>
+        {t.projExamples}
+      </div>
+      <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+        {PROJECTS.map((p) => {
+          const chip = (
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 10,
+                padding: "8px 12px 8px 8px",
+                border: "1px solid var(--border)",
+                borderRadius: 999,
+                background: "var(--card)",
+                boxShadow: "var(--shadow-sm)",
+              }}
+            >
+              <span
+                style={{
+                  position: "relative",
+                  width: 30,
+                  height: 30,
+                  borderRadius: 999,
+                  overflow: "hidden",
+                  flexShrink: 0,
+                  background: "var(--paper-2)",
+                }}
+              >
+                <Image src={p.img} alt="" fill sizes="30px" style={{ objectFit: "cover" }} />
+              </span>
+              <span style={{ fontSize: 13, fontWeight: 500, color: "var(--ink-2)", whiteSpace: "nowrap" }}>
+                {p.title[lang]}
+              </span>
+            </div>
+          )
+          return p.live ? (
+            <Link key={p.slug} href={`/library/${encodeURIComponent(p.slug)}`} style={{ textDecoration: "none" }}>
+              {chip}
+            </Link>
+          ) : (
+            <div key={p.slug}>{chip}</div>
+          )
+        })}
+      </div>
+    </div>
   )
 }
 
@@ -657,90 +721,6 @@ function TrustItem({ icon, text }: { icon: React.ReactNode; text: string }) {
       {text}
     </span>
   )
-}
-
-function ProjectCard({
-  project,
-  lang,
-  t,
-}: {
-  project: Project
-  lang: Lang
-  t: Copy
-}) {
-  const inner = (
-    <div
-      className="card"
-      style={{
-        padding: 0,
-        overflow: "hidden",
-        display: "flex",
-        flexDirection: "column",
-        height: "100%",
-        cursor: project.live ? "pointer" : "default",
-      }}
-    >
-      <div style={{ position: "relative", aspectRatio: "4 / 3", background: "var(--paper-2)" }}>
-        <Image src={project.img} alt="" fill sizes="(max-width: 820px) 100vw, 340px" style={{ objectFit: "cover" }} />
-        <span
-          className="tag"
-          style={{
-            position: "absolute",
-            top: 12,
-            left: 12,
-            background: project.live ? "var(--emerald-soft)" : "rgba(255,255,255,.85)",
-            borderColor: project.live ? "var(--emerald)" : "var(--border-2)",
-            color: project.live ? "var(--bio-ink)" : "var(--sub)",
-            backdropFilter: "blur(6px)",
-          }}
-        >
-          {project.live ? (
-            <>
-              <CircleCheck size={11} strokeWidth={1.8} /> {t.live}
-            </>
-          ) : (
-            t.comingSoon
-          )}
-        </span>
-      </div>
-      <div style={{ padding: 18, display: "flex", flexDirection: "column", gap: 11, flex: 1 }}>
-        <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
-          <span className={`tag ${project.domainClass}`}>{project.domain}</span>
-          <span className="tag">{project.age}</span>
-          <span className="tag" aria-label={`difficulty ${project.difficulty} of 5`}>
-            <span style={{ display: "inline-flex", gap: 3, alignItems: "center" }}>
-              {Array.from({ length: 5 }).map((_, i) => (
-                <span
-                  key={i}
-                  style={{
-                    width: 5,
-                    height: 5,
-                    borderRadius: 999,
-                    background: i < project.difficulty ? "var(--primary)" : "var(--border-2)",
-                  }}
-                />
-              ))}
-            </span>
-          </span>
-        </div>
-        <h3 style={{ fontSize: 17, lineHeight: 1.35, fontWeight: 600, letterSpacing: "-.015em" }}>
-          {project.title[lang]}
-        </h3>
-        <p className="body" style={{ fontSize: 13.5, color: "var(--sub)" }}>
-          {project.hook[lang]}
-        </p>
-      </div>
-    </div>
-  )
-
-  if (project.live) {
-    return (
-      <Link href={`/library/${encodeURIComponent(project.slug)}`} style={{ textDecoration: "none", color: "inherit", display: "block", height: "100%" }}>
-        {inner}
-      </Link>
-    )
-  }
-  return inner
 }
 
 function Step({
