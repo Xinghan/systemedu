@@ -21,6 +21,24 @@ import { useAuthStore } from "@/lib/stores/auth-store"
 
 type Lang = "zh" | "en"
 
+// 四边羽化遮罩: 让插画无硬边地溶进暖纸色背景。
+// 实现: 水平方向 linear mask ∩ 垂直方向 linear mask (maskComposite intersect),
+// 四条边都从实色渐隐到透明; 朝文字侧 (towards) 那条边羽化范围更大, 与文字区衔接。
+function edgeFadeMask(towards?: "left" | "right"): React.CSSProperties {
+  // 朝文字侧更早淡出 (该侧 35% 起羽化), 其余三边 12% 边距起羽化
+  const left = towards === "right" ? "35%" : "12%"
+  const right = towards === "left" ? "35%" : "12%"
+  const horiz = `linear-gradient(to right, transparent 0%, #000 ${left}, #000 calc(100% - ${right}), transparent 100%)`
+  const vert = `linear-gradient(to bottom, transparent 0%, #000 12%, #000 88%, transparent 100%)`
+  const mask = `${horiz}, ${vert}`
+  return {
+    WebkitMaskImage: mask,
+    maskImage: mask,
+    WebkitMaskComposite: "source-in", // Safari 旧语法
+    maskComposite: "intersect",
+  } as React.CSSProperties
+}
+
 // ── 文案 (中英双份) ──────────────────────────────────────────────
 const COPY = {
   zh: {
@@ -238,7 +256,7 @@ export default function Homepage() {
   return (
     <main style={{ width: "100%", overflow: "hidden" }}>
       {/* ── Hero ── */}
-      <section style={{ maxWidth: 1100, margin: "0 auto", padding: "64px 32px 64px", position: "relative" }}>
+      <section style={{ maxWidth: 1200, margin: "0 auto", padding: "64px 32px 64px", position: "relative" }}>
         <div style={{ position: "absolute", top: 20, right: 32, zIndex: 3 }}>
           <LangToggle lang={lang} onChange={setLang} />
         </div>
@@ -270,17 +288,14 @@ export default function Homepage() {
           </div>
         </div>
 
-        {/* hero 大插画 — 底部 mask 渐隐融入背景 */}
+        {/* hero 大插画 — 四周羽化融入背景 (mask 作用在填满容器的图上) */}
         <div
           style={{
             position: "relative",
-            maxWidth: 920,
-            margin: "44px auto 0",
-            aspectRatio: "16 / 10",
-            WebkitMaskImage:
-              "radial-gradient(120% 100% at 50% 38%, #000 55%, transparent 92%)",
-            maskImage:
-              "radial-gradient(120% 100% at 50% 38%, #000 55%, transparent 92%)",
+            maxWidth: 1120,
+            margin: "36px auto 0",
+            aspectRatio: "16 / 9",
+            ...edgeFadeMask(),
           }}
         >
           <Image
@@ -289,7 +304,7 @@ export default function Homepage() {
             fill
             priority
             sizes="(max-width: 940px) 100vw, 920px"
-            style={{ objectFit: "contain" }}
+            style={{ objectFit: "cover" }}
           />
         </div>
 
@@ -372,8 +387,8 @@ export default function Homepage() {
         title={t.treeTitle}
         body={t.treeBody}
         more={t.treeMore}
-        img="/landing/robot-fish.webp"
-        ratio="4 / 3"
+        img="/landing/tree-v1.webp"
+        ratio="3 / 2"
         imgSide="right"
         accent="var(--robotics)"
         icon={<Network size={18} strokeWidth={1.5} />}
@@ -518,12 +533,6 @@ function FeatureSection({
   icon: React.ReactNode
   children?: React.ReactNode
 }) {
-  // 四周径向羽化 + 朝文字侧更强渐隐, 让插画无硬边地溶进暖纸色背景。
-  // 椭圆中心略偏离文字侧, 使靠文字一边淡出更早、衔接文字区。
-  const cx = imgSide === "right" ? "62%" : "38%"
-  const mask =
-    `radial-gradient(115% 130% at ${cx} 50%, #000 38%, rgba(0,0,0,.6) 62%, transparent 86%)`
-
   const text = (
     <div style={{ display: "flex", flexDirection: "column", justifyContent: "center", padding: "8px 0" }}>
       <div
@@ -566,24 +575,25 @@ function FeatureSection({
       style={{
         position: "relative",
         aspectRatio: ratio,
-        WebkitMaskImage: mask,
-        maskImage: mask,
+        ...edgeFadeMask(imgSide),
       }}
     >
       <Image src={img} alt="" fill sizes="(max-width: 820px) 100vw, 560px" style={{ objectFit: "cover" }} />
     </div>
   )
 
+  // 图侧占比加大 (图更大, 覆盖范围更广), 文侧收窄
+  const cols = imgSide === "left" ? "1.4fr 1fr" : "1fr 1.4fr"
   return (
     <section>
       <div
         style={{
-          maxWidth: 1100,
+          maxWidth: 1240,
           margin: "0 auto",
-          padding: "56px 32px",
+          padding: "44px 32px",
           display: "grid",
-          gridTemplateColumns: "1fr 1fr",
-          gap: 48,
+          gridTemplateColumns: cols,
+          gap: 36,
           alignItems: "center",
         }}
         className="feat-grid"
