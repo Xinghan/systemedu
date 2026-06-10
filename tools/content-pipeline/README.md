@@ -71,6 +71,36 @@ systemedu-content import content-workspace/dist/ai-ant-ethologist-1.0.0.tar.gz \
     --admin-token=$LIBRARY_ADMIN_TOKEN
 ```
 
+## 发布到生产 (47.106.220.119)
+
+新生产跑 student-app 新架构, library 在 `:18821` (本机, 经 nginx 内部访问)。
+对外只暴露 nginx:80; library admin API 在服务器本机, 上传 tarball 走 `127.0.0.1:18821`。
+
+**封面**: 课程根目录放 `cover.png` (或 .jpg/.jpeg/.webp), `publish`/`export` 打包时
+manifest 会自动写 `cover_image_path`, library import 后前端即有封面。**别忘了放 cover.png**。
+
+发布步骤:
+
+```bash
+# 1. 确认课程目录含封面
+ls content-workspace/generated/<slug>/cover.png
+
+# 2. 拿生产 library admin token (在服务器 /root/.systemedu-library-secrets)
+#    LIBRARY_BOOTSTRAP_ADMIN=admin:<密码>  → 用它登录拿 JWT
+SSHPASS='<服务器密码>' ./scripts/server-ssh.sh "cat /root/.systemedu-library-secrets"
+
+# 3a. 一键 (打包+上传+发布) — 若能从本地直连生产 library:
+#     生产 library 默认只本机可达, 通常走 3b。
+
+# 3b. 推荐: 本地 export tarball → scp 到服务器 → 服务器侧 import+publish
+systemedu-content export <slug> --version=<ver>
+#   → content-workspace/dist/<slug>-<ver>.tar.gz (含 cover.png)
+#   scp 上传 + 服务器侧 import/publish 可参照 scripts/_import_courses.sh
+```
+
+> 生产 import/publish 的脚本化范例见 `scripts/_import_courses.sh` (deploy-student.sh 用它导课)。
+> 服务器地址/端口在 `scripts/deploy.env` (单一配置源)。
+
 ## 边界
 
 - **不属于 packages/{core, cloud-app, library-app}**, 是 tools/* 之一
