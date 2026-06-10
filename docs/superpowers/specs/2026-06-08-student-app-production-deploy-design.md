@@ -1,9 +1,13 @@
 # student-app 新架构生产部署 设计文档
 
-- Status: approved (2026-06-08)
+- Status: shipped (2026-06-10)
+- 验收结果: 新架构上线 47.106.220.119 — docker PG/Redis + library(两门课) + student-app(alembic 038) + student-web, nginx:80 切新栈, 老 cloud-app disable 保留可回滚。公网 http://47.106.220.119 注册/health/library 全通。部署中修两 bug: docker 镜像加速(daocloud)+ tar 防 macOS AppleDouble(alembic null bytes)。
 - Date: 2026-06-08
 - 关联: spec 027/031/032 (student-app/web), spec 023 (library), 替代废弃 cloud-app (deploy.sh)
-- 服务器: 47.92.200.21 (Ubuntu 24.04, 7.1G RAM, 64G 空闲, Docker 29, Python 3.12)
+- **服务器 (新)**: 47.106.220.119 (Ubuntu 24.04.4, 14G RAM, 40G 磁盘/30G 空闲, **无 Docker**, Python 3.12.3, Node v20.20.2, nginx 已装)
+  - SSH: root, 密码登录, 需 `-o PreferredAuthentications=password -o PubkeyAuthentication=no` (否则先试 publickey 失败)
+  - 现状: 同样跑着废弃 cloud-app (systemedu-backend:18820 + frontend:3000), /opt/systemedu 有老代码
+  - (旧服务器 47.92.200.21 已弃用)
 
 ## 1. 背景与问题
 
@@ -17,11 +21,13 @@
 
 1. **数据**: 全新开始，不迁老 cloud-app 数据 (老数据是测试数据，schema 不同，迁移不值)。
 2. **切换**: 直接替换。停老 cloud-app + 老 web，nginx 80 指向新栈。老 systemd unit + 代码保留不删 (回滚用)。
-3. **内存**: 不上 Qdrant/Mem0 (省 1-2G; L4 因 embedding 配置未就绪本就不生效)。
-   student-app 配 `memory.enabled=false`，L4 优雅降级返回空 (代码已支持)。L1/L2/L3/L5 正常。
+3. **内存**: 不上 Qdrant/Mem0 (虽然新服务器 14G 宽裕, 但 L4 因 embedding 配置未就绪本就不生效, 上了也白上)。
+   student-app 配 `memory.enabled=false`，L4 优雅降级返回空 (代码已支持)。L1/L2/L3/L5 正常。等 embedding 修好再上 L4。
 4. **内容**: 导入 eeg-minecraft-bci + purpleair-airquality-node 两门。tarball 已含 slides.json
    (eeg 65 / purpleair 48)，生产全新 import 自动有 slides，**无需回填脚本**。
-5. **代码**: 部署 main 分支代码。故 feat/highlight-ask 先合并 main 再部署。
+5. **代码**: 部署 main 分支代码 (highlight-ask 已合并 main, c97e435f)。
+6. **PG/Redis (新)**: 新服务器无 Docker → 先 `apt install docker.io docker-compose-plugin` 装 Docker, 再用仓库 docker-compose.yml 起 PG+Redis (与本地开发一致, 不起 Qdrant)。
+7. **部署信息集中 (新)**: 建 `scripts/deploy.env` 单一配置源 (SERVER_HOST/USER/端口/路径), 所有部署脚本 source 它读 IP。以后换服务器只改一处。仅活跃脚本读它; 历史 specs/0xx 里的旧 IP 是过往记录, 不动。
 
 ## 3. 目标架构 (生产)
 
