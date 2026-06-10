@@ -2,13 +2,12 @@
 
 import Image from "next/image"
 import Link from "next/link"
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useState } from "react"
 import {
   ArrowRight,
   Bot,
   CircleCheck,
   Cpu,
-  GitBranch,
   Languages,
   Network,
   Rocket,
@@ -16,7 +15,7 @@ import {
 } from "lucide-react"
 import { useAuthStore } from "@/lib/stores/auth-store"
 
-// Public landing page — 瀑布流功能介绍, 突出天马行空的项目 / AI agent / 10 岁也能做。
+// Public landing page — GitHub 式长滚动营销页: Hero + 逐节功能展示。
 // 设计: docs/superpowers/specs/2026-06-10-landing-page-redesign-design.md
 // 手绘水彩科普书插画风 (public/landing/*.webp) + Industrial Atelier 暖纸色 UI。
 // 双语: 首页自带局部语言切换 (useState, 不动全局 i18n)。
@@ -52,6 +51,27 @@ const COPY = {
     agentTitle: "数学超纲了? agent 接住。",
     agentBody:
       "六年级的孩子做卫星轨道、做脑信号解码 — 数学一定会超纲。AI agent 不降低项目难度, 而是在你卡住的那一刻, 就地把那一小块知识讲清楚, 然后你继续造。它是随叫随到的私人导师, 不是替你做完的外包。",
+    agentMore: "了解 AI 导师",
+    // 真硬件节
+    hwEyebrow: "真实工程",
+    hwTitle: "真硬件 · 真数据 · 真标准。",
+    hwBody:
+      "不是模拟、不是玩具。你用真实的传感器和电路, 接 NASA、EPA、GBIF 级别的公开数据集, 跑学界都在用的标准库。做出来的东西, 是本科论文级别的真工作。",
+    hwMore: "看真实数据源",
+    // 知识树节
+    treeEyebrow: "知识树",
+    treeTitle: "像树一样长的知识。",
+    treeBody:
+      "不是从第一课排到最后一课的线性课程。知识树是一张 DAG: 你当前的项目需要哪块知识, 它就解锁哪块。你永远在为眼前要造的东西学习, 而不是为了考试囤积。",
+    treeMore: "了解知识树",
+    // 项目展示节
+    projEyebrow: "项目库",
+    projTitle: "天马行空, 但都是真的。",
+    projBody: "从 33 个工业级项目里挑一个让你心动的, 开始造。",
+    // 大 CTA 节
+    ctaTitle: "准备好造点真东西了吗?",
+    ctaBody: "免费注册, 把第一个项目 Pull 到你的书架。AI agent 全程陪你。",
+    ctaStart: "免费开始",
     footTagline:
       "AI Agent 驱动的项目制学习平台。给 10–18 岁的造物者做工业级真实项目, AI 导师全程苏格拉底式陪伴。",
   },
@@ -82,6 +102,23 @@ const COPY = {
     agentTitle: "Math over your head? The agent catches you.",
     agentBody:
       "A sixth-grader doing satellite orbits or decoding brain signals will hit math that's over their head — guaranteed. The AI agent doesn't dumb the project down. It explains that one small piece, right at the moment you're stuck, then you keep building. A private tutor on call, not an outsourcer that does it for you.",
+    agentMore: "Meet the AI tutor",
+    hwEyebrow: "Real engineering",
+    hwTitle: "Real hardware. Real data. Real standards.",
+    hwBody:
+      "Not simulations, not toys. You use real sensors and circuits, plug into NASA / EPA / GBIF-grade open datasets, and run the same standard libraries academics use. What you build is genuine undergraduate-thesis-level work.",
+    hwMore: "See the data sources",
+    treeEyebrow: "Knowledge tree",
+    treeTitle: "Knowledge that grows like a tree.",
+    treeBody:
+      "Not a course that runs lesson 1 to lesson N. The knowledge tree is a DAG: it unlocks exactly the piece your current project needs. You always learn for the thing in front of you, never hoarding for an exam.",
+    treeMore: "How the tree works",
+    projEyebrow: "Project library",
+    projTitle: "Wildly ambitious — and all real.",
+    projBody: "Pick one of 33 industry-grade projects that excites you, and start building.",
+    ctaTitle: "Ready to build a real thing?",
+    ctaBody: "Sign up free and pull your first project onto your shelf. The AI agent is with you the whole way.",
+    ctaStart: "Start free",
     footTagline:
       "An AI-agent-driven, project-based learning platform. Industry-grade real projects for builders aged 10–18, with a Socratic AI tutor by your side.",
   },
@@ -158,51 +195,7 @@ const PROJECTS: Project[] = [
   },
 ]
 
-// ── 能力卡 (穿插在瀑布流里) ─────────────────────────────────────
-type Capability = {
-  icon: React.ReactNode
-  tint: string
-  soft: string
-  line: string
-  title: { zh: string; en: string }
-  body: { zh: string; en: string }
-}
-
-const CAPABILITIES: Capability[] = [
-  {
-    icon: <Bot size={18} strokeWidth={1.5} />,
-    tint: "var(--primary)",
-    soft: "var(--primary-soft)",
-    line: "var(--primary-line)",
-    title: { zh: "AI agent 随时教", en: "AI agent, always on call" },
-    body: {
-      zh: "卡住、报错、数学超纲 — agent 就地讲清那一块, 你继续造。",
-      en: "Stuck, an error, math over your head — the agent explains that piece on the spot.",
-    },
-  },
-  {
-    icon: <Cpu size={18} strokeWidth={1.5} />,
-    tint: "var(--climate)",
-    soft: "var(--climate-soft)",
-    line: "var(--climate-line)",
-    title: { zh: "真硬件 · 真数据 · 真标准", en: "Real hardware, data & standards" },
-    body: {
-      zh: "真实传感器、NASA / EPA 级数据集、学界标准库 — 不是玩具。",
-      en: "Real sensors, NASA / EPA-grade datasets, academic-standard libraries — not toys.",
-    },
-  },
-  {
-    icon: <Network size={18} strokeWidth={1.5} />,
-    tint: "var(--robotics)",
-    soft: "var(--robotics-soft)",
-    line: "var(--robotics-line)",
-    title: { zh: "像树一样长的知识", en: "Knowledge that grows like a tree" },
-    body: {
-      zh: "知识树 DAG: 你需要什么它解锁什么, 不是从头排到尾的线性课程。",
-      en: "A knowledge-tree DAG: it unlocks what you need, not a linear course front to back.",
-    },
-  },
-]
+type Copy = (typeof COPY)[Lang]
 
 export default function Homepage() {
   const { loggedIn, hydrate } = useAuthStore()
@@ -214,327 +207,284 @@ export default function Homepage() {
 
   const t = COPY[lang]
 
-  // 瀑布流条目: 错落穿插, 刻意打破 proj/cap 等高配对 → 列高不齐, 出真瀑布感。
-  // 顺序: proj, cap, proj, proj, cap, cap (3 列下首屏每列起手不同类型)
-  const streamItems = useMemo<
-    Array<{ kind: "project"; data: Project } | { kind: "capability"; data: Capability }>
-  >(() => {
-    const P = PROJECTS
-    const C = CAPABILITIES
-    return [
-      { kind: "project", data: P[0] },
-      { kind: "capability", data: C[0] },
-      { kind: "project", data: P[1] },
-      { kind: "project", data: P[2] },
-      { kind: "capability", data: C[1] },
-      { kind: "capability", data: C[2] },
-    ]
-  }, [])
-
   return (
-    <main className="page" style={{ paddingTop: 14 }}>
-      {/* ── Hero ── */}
-      <section
-        style={{
-          position: "relative",
-          overflow: "hidden",
-          border: "1px solid var(--border)",
-          borderRadius: 16,
-          background:
-            "linear-gradient(135deg, #FFFFFF 0%, #FBF8F1 55%, #F4ECDC 100%)",
-          padding: "44px 48px",
-          marginBottom: 20,
-          boxShadow: "var(--shadow-sm)",
-        }}
-      >
-        {/* 语言切换 */}
-        <div style={{ position: "absolute", top: 18, right: 22, zIndex: 3 }}>
+    <main style={{ width: "100%" }}>
+      {/* ── ① Hero ── */}
+      <section style={{ maxWidth: 1100, margin: "0 auto", padding: "64px 32px 72px", position: "relative" }}>
+        <div style={{ position: "absolute", top: 20, right: 32, zIndex: 3 }}>
           <LangToggle lang={lang} onChange={setLang} />
         </div>
 
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "1.05fr 1fr",
-            gap: 40,
-            alignItems: "center",
-          }}
-        >
-          <div>
-            <div className="eyebrow" style={{ marginBottom: 22 }}>
-              <span className="dot" /> {t.eyebrow}
-            </div>
-            <h1 className="display" style={{ maxWidth: 640, fontSize: 52 }}>
-              {t.heroTitle1}
-              <span style={{ color: "var(--primary)" }}>{t.heroTitleHi}</span>
-              {t.heroTitle2}
-              <br />
-              {t.heroLine2pre}
-              <span style={{ color: "var(--aerospace)" }}>{t.heroLine2hi}</span>
-              {t.heroLine2post}
-            </h1>
-            <p
-              style={{
-                maxWidth: 520,
-                marginTop: 20,
-                fontSize: 15,
-                lineHeight: 1.6,
-                color: "var(--sub)",
-              }}
-            >
-              {t.heroBody}
-            </p>
-            <div style={{ display: "flex", gap: 10, marginTop: 26 }}>
-              <Link href="/library" className="btn btn-violet btn-lg">
-                {t.ctaBrowse}
-                <ArrowRight size={15} strokeWidth={1.5} />
-              </Link>
-              {loggedIn ? (
-                <Link href="/home" className="btn btn-ghost btn-lg">
-                  {t.ctaDash}
-                </Link>
-              ) : (
-                <Link href="/login" className="btn btn-ghost btn-lg">
-                  {t.ctaSignIn}
-                </Link>
-              )}
-            </div>
-
-            {/* mono 数字条 */}
-            <div
-              style={{
-                display: "flex",
-                flexWrap: "wrap",
-                gap: "10px 22px",
-                marginTop: 30,
-                fontFamily: "var(--mono)",
-                fontSize: 11.5,
-                color: "var(--sub)",
-              }}
-            >
-              <HeroStat icon={<Sparkles size={12} strokeWidth={1.5} />} text={t.stat1} />
-              <HeroStat icon={<Cpu size={12} strokeWidth={1.5} />} text={t.stat2} />
-              <HeroStat icon={<Bot size={12} strokeWidth={1.5} />} text={t.stat3} />
-            </div>
+        <div style={{ textAlign: "center", maxWidth: 760, margin: "0 auto" }}>
+          <div className="eyebrow" style={{ marginBottom: 22, justifyContent: "center" }}>
+            <span className="dot" /> {t.eyebrow}
           </div>
-
-          {/* 英雄插画 */}
-          <div
+          <h1
+            className="display"
+            style={{ fontSize: 60, lineHeight: 1.04, margin: "0 auto" }}
+          >
+            {t.heroTitle1}
+            <span style={{ color: "var(--primary)" }}>{t.heroTitleHi}</span>
+            {t.heroTitle2}
+            <br />
+            {t.heroLine2pre}
+            <span style={{ color: "var(--aerospace)" }}>{t.heroLine2hi}</span>
+            {t.heroLine2post}
+          </h1>
+          <p
             style={{
-              position: "relative",
-              borderRadius: 12,
-              overflow: "hidden",
-              aspectRatio: "16 / 10",
-              border: "1px solid var(--border)",
-              background: "var(--paper)",
-              boxShadow: "0 12px 28px -18px rgba(0,0,0,.18)",
+              maxWidth: 560,
+              margin: "22px auto 0",
+              fontSize: 16,
+              lineHeight: 1.6,
+              color: "var(--sub)",
             }}
           >
-            <Image
-              src="/landing/hero.webp"
-              alt=""
-              fill
-              priority
-              sizes="(max-width: 900px) 100vw, 640px"
-              style={{ objectFit: "cover" }}
-            />
+            {t.heroBody}
+          </p>
+          <div style={{ display: "flex", gap: 12, marginTop: 30, justifyContent: "center" }}>
+            {loggedIn ? (
+              <Link href="/home" className="btn btn-violet btn-lg">
+                {t.ctaDash}
+                <ArrowRight size={15} strokeWidth={1.5} />
+              </Link>
+            ) : (
+              <Link href="/register" className="btn btn-violet btn-lg">
+                {t.ctaStart}
+                <ArrowRight size={15} strokeWidth={1.5} />
+              </Link>
+            )}
+            <Link href="/library" className="btn btn-ghost btn-lg">
+              {t.ctaBrowse}
+            </Link>
+          </div>
+        </div>
+
+        {/* hero 大插画 */}
+        <div
+          style={{
+            position: "relative",
+            maxWidth: 900,
+            margin: "48px auto 0",
+            aspectRatio: "16 / 10",
+            borderRadius: 16,
+            overflow: "hidden",
+            border: "1px solid var(--border)",
+            background: "var(--paper)",
+            boxShadow: "var(--shadow-lg)",
+          }}
+        >
+          <Image
+            src="/landing/hero.webp"
+            alt=""
+            fill
+            priority
+            sizes="(max-width: 940px) 100vw, 900px"
+            style={{ objectFit: "cover" }}
+          />
+        </div>
+
+        {/* 信任条 */}
+        <div
+          style={{
+            display: "flex",
+            flexWrap: "wrap",
+            gap: "12px 28px",
+            justifyContent: "center",
+            marginTop: 34,
+            fontFamily: "var(--mono)",
+            fontSize: 12,
+            color: "var(--sub)",
+          }}
+        >
+          <TrustItem icon={<Sparkles size={13} strokeWidth={1.5} />} text={t.stat1} />
+          <TrustItem icon={<Cpu size={13} strokeWidth={1.5} />} text={t.stat2} />
+          <TrustItem icon={<Bot size={13} strokeWidth={1.5} />} text={t.stat3} />
+        </div>
+      </section>
+
+      {/* ── ② AI agent 节 (左文右图) ── */}
+      <FeatureSection
+        eyebrow={t.agentEyebrow}
+        title={t.agentTitle}
+        body={t.agentBody}
+        more={t.agentMore}
+        img="/landing/agent.webp"
+        ratio="16 / 9"
+        imgSide="right"
+        accent="var(--primary)"
+        icon={<Bot size={18} strokeWidth={1.5} />}
+      />
+
+      {/* ── ③ 真硬件真数据 节 (右文左图) ── */}
+      <FeatureSection
+        eyebrow={t.hwEyebrow}
+        title={t.hwTitle}
+        body={t.hwBody}
+        more={t.hwMore}
+        img="/landing/mars-rover.webp"
+        ratio="3 / 2"
+        imgSide="left"
+        accent="var(--climate)"
+        icon={<Cpu size={18} strokeWidth={1.5} />}
+        tinted
+      />
+
+      {/* ── ④ 知识树 节 (左文右图) ── */}
+      <FeatureSection
+        eyebrow={t.treeEyebrow}
+        title={t.treeTitle}
+        body={t.treeBody}
+        more={t.treeMore}
+        img="/landing/robot-fish.webp"
+        ratio="4 / 3"
+        imgSide="right"
+        accent="var(--robotics)"
+        icon={<Network size={18} strokeWidth={1.5} />}
+      />
+
+      {/* ── ⑤ 项目展示 节 ── */}
+      <section style={{ background: "var(--paper-2)" }}>
+        <div style={{ maxWidth: 1100, margin: "0 auto", padding: "72px 32px" }}>
+          <div style={{ textAlign: "center", maxWidth: 620, margin: "0 auto 40px" }}>
+            <div className="eyebrow" style={{ marginBottom: 12, justifyContent: "center" }}>
+              <span className="dot" /> {t.projEyebrow}
+            </div>
+            <h2 style={{ fontSize: 32, fontWeight: 600, letterSpacing: "-.03em", lineHeight: 1.15 }}>
+              {t.projTitle}
+            </h2>
+            <p style={{ marginTop: 14, fontSize: 15, color: "var(--sub)", lineHeight: 1.6 }}>
+              {t.projBody}
+            </p>
+          </div>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(3, 1fr)",
+              gap: 18,
+            }}
+            className="proj-grid"
+          >
+            {PROJECTS.map((p) => (
+              <ProjectCard key={p.slug} project={p} lang={lang} t={t} />
+            ))}
+          </div>
+          <div style={{ textAlign: "center", marginTop: 36 }}>
+            <Link href="/library" className="btn btn-ghost btn-lg">
+              {t.ctaBrowse}
+              <ArrowRight size={15} strokeWidth={1.5} />
+            </Link>
           </div>
         </div>
       </section>
 
-      {/* ── 价值标题 ── */}
-      <SectionRule eyebrow={t.streamEyebrow} title={t.streamTitle} />
-
-      {/* ── 主体瀑布流 (CSS columns) ── */}
-      <div
-        style={{
-          marginTop: 20,
-          columnGap: 16,
-        }}
-        className="masonry"
-      >
-        {streamItems.map((it, idx) =>
-          it.kind === "project" ? (
-            <ProjectCard key={`p-${it.data.slug}`} project={it.data} lang={lang} t={t} />
-          ) : (
-            <CapabilityCard key={`c-${idx}`} cap={it.data} lang={lang} />
-          ),
-        )}
-      </div>
-
-      {/* ── How it works ── */}
-      <section style={{ marginTop: 52 }}>
-        <SectionRule eyebrow={t.howEyebrow} title={t.howTitle} />
+      {/* ── ⑥ How it works 节 ── */}
+      <section style={{ maxWidth: 1100, margin: "0 auto", padding: "72px 32px" }}>
+        <div style={{ textAlign: "center", maxWidth: 620, margin: "0 auto 36px" }}>
+          <div className="eyebrow" style={{ marginBottom: 12, justifyContent: "center" }}>
+            <span className="dot" /> {t.howEyebrow}
+          </div>
+          <h2 style={{ fontSize: 32, fontWeight: 600, letterSpacing: "-.03em", lineHeight: 1.15 }}>
+            {t.howTitle}
+          </h2>
+        </div>
         <div
           style={{
             display: "grid",
             gridTemplateColumns: "repeat(4, 1fr)",
             gap: 0,
-            marginTop: 18,
             border: "1px solid var(--border)",
-            borderRadius: 12,
+            borderRadius: 14,
             overflow: "hidden",
             background: "var(--card)",
           }}
+          className="how-grid"
         >
-          <Step
-            n="01"
-            icon={<Sparkles size={18} strokeWidth={1.5} />}
+          <Step n="01" icon={<Sparkles size={18} strokeWidth={1.5} />}
             t={lang === "zh" ? "挑一个项目" : "Pick a project"}
-            body={
-              lang === "zh"
-                ? "从项目库选一个让你心动的, 看清它的目标和清单。"
-                : "Choose one that excites you; see its goal and parts list."
-            }
-          />
-          <Step
-            n="02"
-            icon={<Bot size={18} strokeWidth={1.5} />}
+            body={lang === "zh" ? "从项目库选一个让你心动的, 看清它的目标和清单。" : "Choose one that excites you; see its goal and parts list."} />
+          <Step n="02" icon={<Bot size={18} strokeWidth={1.5} />}
             t={lang === "zh" ? "跟着学 (AI 陪)" : "Learn (with AI)"}
-            body={
-              lang === "zh"
-                ? "短模块一步步来, 卡住了 AI agent 随时把难点讲清。"
-                : "Short modules, step by step; the AI agent unblocks the hard parts."
-            }
-          />
-          <Step
-            n="03"
-            icon={<Network size={18} strokeWidth={1.5} />}
+            body={lang === "zh" ? "短模块一步步来, 卡住了 AI agent 随时把难点讲清。" : "Short modules, step by step; the AI agent unblocks the hard parts."} />
+          <Step n="03" icon={<Network size={18} strokeWidth={1.5} />}
             t={lang === "zh" ? "动手造" : "Build it"}
-            body={
-              lang === "zh"
-                ? "焊接、烧录、接线、组装 — 真硬件, 真失败, 真修好。"
-                : "Solder, flash, wire, assemble — real hardware, real fixes."
-            }
-          />
-          <Step
-            n="04"
-            icon={<Rocket size={18} strokeWidth={1.5} />}
+            body={lang === "zh" ? "焊接、烧录、接线、组装 — 真硬件, 真失败, 真修好。" : "Solder, flash, wire, assemble — real hardware, real fixes."} />
+          <Step n="04" icon={<Rocket size={18} strokeWidth={1.5} />}
             t={lang === "zh" ? "发布作品" : "Ship it"}
-            body={
-              lang === "zh"
-                ? "把成品发布出来, 提交真实数据, 让世界看到你造的东西。"
-                : "Publish your build, submit real data, show the world what you made."
-            }
-            last
-          />
+            body={lang === "zh" ? "把成品发布出来, 提交真实数据, 让世界看到你造的东西。" : "Publish your build, submit real data, show the world what you made."}
+            last />
         </div>
       </section>
 
-      {/* ── AI agent 聚焦带 ── */}
-      <section
-        style={{
-          marginTop: 52,
-          display: "grid",
-          gridTemplateColumns: "1fr 1.15fr",
-          gap: 36,
-          alignItems: "center",
-          border: "1px solid var(--border)",
-          borderRadius: 16,
-          overflow: "hidden",
-          background:
-            "linear-gradient(135deg, #FFFFFF 0%, #FBF8F1 100%)",
-          padding: "8px 8px 8px 40px",
-        }}
-      >
-        <div style={{ padding: "28px 0" }}>
-          <div className="eyebrow" style={{ marginBottom: 14 }}>
-            <span className="dot" /> {t.agentEyebrow}
-          </div>
-          <h2
-            style={{
-              fontSize: 26,
-              fontWeight: 600,
-              letterSpacing: "-.025em",
-              lineHeight: 1.2,
-              marginBottom: 14,
-            }}
-          >
-            {t.agentTitle}
-          </h2>
-          <p style={{ fontSize: 14.5, lineHeight: 1.65, color: "var(--sub)", maxWidth: 460 }}>
-            {t.agentBody}
-          </p>
-        </div>
+      {/* ── ⑦ 大 CTA 节 ── */}
+      <section style={{ maxWidth: 1100, margin: "0 auto", padding: "16px 32px 80px" }}>
         <div
           style={{
             position: "relative",
-            aspectRatio: "16 / 9",
-            borderRadius: 12,
             overflow: "hidden",
-            border: "1px solid var(--border)",
-            background: "var(--paper)",
+            borderRadius: 20,
+            border: "1px solid var(--primary-line)",
+            background: "linear-gradient(135deg, #FFFFFF 0%, #FBF1E9 60%, #F4D9C9 100%)",
+            padding: "56px 48px",
+            textAlign: "center",
+            boxShadow: "var(--shadow-md)",
           }}
         >
-          <Image
-            src="/landing/agent.webp"
-            alt=""
-            fill
-            sizes="(max-width: 900px) 100vw, 720px"
-            style={{ objectFit: "cover" }}
-          />
+          <h2 style={{ fontSize: 34, fontWeight: 600, letterSpacing: "-.03em", lineHeight: 1.12, maxWidth: 640, margin: "0 auto" }}>
+            {t.ctaTitle}
+          </h2>
+          <p style={{ marginTop: 16, fontSize: 15.5, color: "var(--sub)", maxWidth: 520, margin: "16px auto 0", lineHeight: 1.6 }}>
+            {t.ctaBody}
+          </p>
+          <div style={{ display: "flex", gap: 12, marginTop: 30, justifyContent: "center" }}>
+            <Link href={loggedIn ? "/home" : "/register"} className="btn btn-violet btn-lg">
+              {loggedIn ? t.ctaDash : t.ctaStart}
+              <ArrowRight size={15} strokeWidth={1.5} />
+            </Link>
+            <Link href="/library" className="btn btn-ghost btn-lg">
+              {t.ctaBrowse}
+            </Link>
+          </div>
         </div>
       </section>
 
-      {/* ── Footer ── */}
-      <footer
-        style={{
-          marginTop: 64,
-          paddingTop: 28,
-          borderTop: "1px solid var(--border)",
-          display: "grid",
-          gridTemplateColumns: "2fr 1fr 1fr 1fr",
-          gap: 32,
-          color: "var(--sub)",
-          fontSize: 13,
-        }}
-      >
-        <div>
-          <div className="brand" style={{ marginBottom: 10 }}>
-            <span className="brand-mark">
-              <span>SE</span>
-            </span>
-            <span style={{ color: "var(--ink)", fontWeight: 600 }}>SystemEdu</span>
+      {/* ── ⑧ Footer ── */}
+      <footer style={{ borderTop: "1px solid var(--border)", background: "var(--card)" }}>
+        <div
+          style={{
+            maxWidth: 1100,
+            margin: "0 auto",
+            padding: "40px 32px 48px",
+            display: "grid",
+            gridTemplateColumns: "2fr 1fr 1fr 1fr",
+            gap: 32,
+            color: "var(--sub)",
+            fontSize: 13,
+          }}
+          className="foot-grid"
+        >
+          <div>
+            <div className="brand" style={{ marginBottom: 10 }}>
+              <span className="brand-mark"><span>SE</span></span>
+              <span style={{ color: "var(--ink)", fontWeight: 600 }}>SystemEdu</span>
+            </div>
+            <p style={{ marginTop: 10, maxWidth: 340, color: "var(--sub)" }}>{t.footTagline}</p>
+            <div className="mono" style={{ marginTop: 14, color: "var(--sub-2)", fontSize: 11 }}>
+              © 2026 SystemEdu Labs
+            </div>
           </div>
-          <p style={{ marginTop: 10, maxWidth: 340, color: "var(--sub)" }}>
-            {t.footTagline}
-          </p>
-          <div className="mono" style={{ marginTop: 14, color: "var(--sub-2)", fontSize: 11 }}>
-            © 2026 SystemEdu Labs
-          </div>
+          <FootCol t={lang === "zh" ? "项目库" : "Library"} items={["Aerospace", "Robotics", "Bioscience", "Climate"]} />
+          <FootCol t={lang === "zh" ? "平台" : "Platform"} items={lang === "zh" ? ["知识树", "AI 导师", "硬件套件"] : ["Knowledge tree", "AI tutor", "Hardware kits"]} />
+          <FootCol t={lang === "zh" ? "关于" : "Company"} items={lang === "zh" ? ["关于我们", "开源", "加入我们"] : ["About", "Open source", "Careers"]} />
         </div>
-        <FootCol
-          t={lang === "zh" ? "项目库" : "Library"}
-          items={["Aerospace", "Robotics", "Bioscience", "Climate"]}
-        />
-        <FootCol
-          t={lang === "zh" ? "平台" : "Platform"}
-          items={
-            lang === "zh"
-              ? ["知识树", "AI 导师", "硬件套件"]
-              : ["Knowledge tree", "AI tutor", "Hardware kits"]
-          }
-        />
-        <FootCol
-          t={lang === "zh" ? "关于" : "Company"}
-          items={lang === "zh" ? ["关于我们", "开源", "加入我们"] : ["About", "Open source", "Careers"]}
-        />
       </footer>
 
-      {/* masonry 响应式 */}
+      {/* 响应式 */}
       <style jsx>{`
-        .masonry {
-          column-count: 3;
-        }
-        @media (max-width: 1000px) {
-          .masonry {
-            column-count: 2;
-          }
-        }
-        @media (max-width: 640px) {
-          .masonry {
-            column-count: 1;
-          }
+        @media (max-width: 820px) {
+          .proj-grid { grid-template-columns: 1fr !important; }
+          .how-grid { grid-template-columns: 1fr 1fr !important; }
+          .foot-grid { grid-template-columns: 1fr 1fr !important; }
         }
       `}</style>
     </main>
@@ -542,6 +492,125 @@ export default function Homepage() {
 }
 
 // ── 子组件 ──────────────────────────────────────────────────────
+
+function FeatureSection({
+  eyebrow,
+  title,
+  body,
+  more,
+  img,
+  ratio,
+  imgSide,
+  accent,
+  icon,
+  tinted,
+}: {
+  eyebrow: string
+  title: string
+  body: string
+  more: string
+  img: string
+  ratio: string
+  imgSide: "left" | "right"
+  accent: string
+  icon: React.ReactNode
+  tinted?: boolean
+}) {
+  const text = (
+    <div style={{ display: "flex", flexDirection: "column", justifyContent: "center" }}>
+      <div
+        style={{
+          width: 40,
+          height: 40,
+          borderRadius: 10,
+          background: "var(--card)",
+          border: "1px solid var(--border)",
+          display: "grid",
+          placeItems: "center",
+          color: accent,
+          marginBottom: 18,
+        }}
+      >
+        {icon}
+      </div>
+      <div className="eyebrow" style={{ marginBottom: 10 }}>
+        <span className="dot" style={{ background: accent }} /> {eyebrow}
+      </div>
+      <h2 style={{ fontSize: 30, fontWeight: 600, letterSpacing: "-.03em", lineHeight: 1.15, marginBottom: 16 }}>
+        {title}
+      </h2>
+      <p style={{ fontSize: 15.5, lineHeight: 1.7, color: "var(--sub)", maxWidth: 460 }}>{body}</p>
+      <div style={{ marginTop: 22 }}>
+        <span
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 7,
+            fontSize: 14,
+            fontWeight: 500,
+            color: accent,
+          }}
+        >
+          {more}
+          <ArrowRight size={15} strokeWidth={1.8} />
+        </span>
+      </div>
+    </div>
+  )
+
+  const picture = (
+    <div
+      style={{
+        position: "relative",
+        aspectRatio: ratio,
+        borderRadius: 14,
+        overflow: "hidden",
+        border: "1px solid var(--border)",
+        background: "var(--paper)",
+        boxShadow: "var(--shadow-md)",
+      }}
+    >
+      <Image src={img} alt="" fill sizes="(max-width: 820px) 100vw, 540px" style={{ objectFit: "cover" }} />
+    </div>
+  )
+
+  return (
+    <section style={{ background: tinted ? "var(--paper-2)" : "transparent" }}>
+      <div
+        style={{
+          maxWidth: 1100,
+          margin: "0 auto",
+          padding: "72px 32px",
+          display: "grid",
+          gridTemplateColumns: "1fr 1fr",
+          gap: 56,
+          alignItems: "center",
+        }}
+        className="feat-grid"
+      >
+        {imgSide === "left" ? (
+          <>
+            {picture}
+            {text}
+          </>
+        ) : (
+          <>
+            {text}
+            {picture}
+          </>
+        )}
+      </div>
+      <style jsx>{`
+        @media (max-width: 820px) {
+          .feat-grid {
+            grid-template-columns: 1fr !important;
+            gap: 28px !important;
+          }
+        }
+      `}</style>
+    </section>
+  )
+}
 
 function LangToggle({ lang, onChange }: { lang: Lang; onChange: (l: Lang) => void }) {
   return (
@@ -581,7 +650,7 @@ function LangToggle({ lang, onChange }: { lang: Lang; onChange: (l: Lang) => voi
   )
 }
 
-function HeroStat({ icon, text }: { icon: React.ReactNode; text: string }) {
+function TrustItem({ icon, text }: { icon: React.ReactNode; text: string }) {
   return (
     <span style={{ display: "inline-flex", alignItems: "center", gap: 7 }}>
       <span style={{ color: "var(--primary)" }}>{icon}</span>
@@ -589,38 +658,6 @@ function HeroStat({ icon, text }: { icon: React.ReactNode; text: string }) {
     </span>
   )
 }
-
-function SectionRule({
-  eyebrow,
-  title,
-  right,
-}: {
-  eyebrow: string
-  title: string
-  right?: React.ReactNode
-}) {
-  return (
-    <div
-      style={{
-        display: "flex",
-        alignItems: "flex-end",
-        justifyContent: "space-between",
-        paddingBottom: 12,
-        borderBottom: "1px solid var(--border)",
-      }}
-    >
-      <div>
-        <div className="eyebrow" style={{ marginBottom: 6 }}>
-          <span className="dot" /> {eyebrow}
-        </div>
-        <h2 style={{ fontSize: 22, fontWeight: 600, letterSpacing: "-.025em" }}>{title}</h2>
-      </div>
-      {right}
-    </div>
-  )
-}
-
-type Copy = (typeof COPY)[Lang]
 
 function ProjectCard({
   project,
@@ -639,21 +676,12 @@ function ProjectCard({
         overflow: "hidden",
         display: "flex",
         flexDirection: "column",
-        breakInside: "avoid",
-        marginBottom: 16,
+        height: "100%",
         cursor: project.live ? "pointer" : "default",
-        transition: "box-shadow var(--t-med), transform var(--t-med)",
       }}
     >
-      <div style={{ position: "relative", aspectRatio: project.ratio, background: "var(--paper-2)" }}>
-        <Image
-          src={project.img}
-          alt=""
-          fill
-          sizes="(max-width: 640px) 100vw, 33vw"
-          style={{ objectFit: "cover" }}
-        />
-        {/* 状态角标 */}
+      <div style={{ position: "relative", aspectRatio: "4 / 3", background: "var(--paper-2)" }}>
+        <Image src={project.img} alt="" fill sizes="(max-width: 820px) 100vw, 340px" style={{ objectFit: "cover" }} />
         <span
           className="tag"
           style={{
@@ -675,7 +703,7 @@ function ProjectCard({
           )}
         </span>
       </div>
-      <div style={{ padding: 18, display: "flex", flexDirection: "column", gap: 11 }}>
+      <div style={{ padding: 18, display: "flex", flexDirection: "column", gap: 11, flex: 1 }}>
         <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
           <span className={`tag ${project.domainClass}`}>{project.domain}</span>
           <span className="tag">{project.age}</span>
@@ -688,8 +716,7 @@ function ProjectCard({
                     width: 5,
                     height: 5,
                     borderRadius: 999,
-                    background:
-                      i < project.difficulty ? "var(--primary)" : "var(--border-2)",
+                    background: i < project.difficulty ? "var(--primary)" : "var(--border-2)",
                   }}
                 />
               ))}
@@ -708,52 +735,12 @@ function ProjectCard({
 
   if (project.live) {
     return (
-      <Link
-        href={`/library/${encodeURIComponent(project.slug)}`}
-        style={{ textDecoration: "none", color: "inherit", display: "block" }}
-      >
+      <Link href={`/library/${encodeURIComponent(project.slug)}`} style={{ textDecoration: "none", color: "inherit", display: "block", height: "100%" }}>
         {inner}
       </Link>
     )
   }
   return inner
-}
-
-function CapabilityCard({ cap, lang }: { cap: Capability; lang: Lang }) {
-  return (
-    <div
-      className="card"
-      style={{
-        padding: 22,
-        breakInside: "avoid",
-        marginBottom: 16,
-        background: cap.soft,
-        borderColor: cap.line,
-        display: "flex",
-        flexDirection: "column",
-        gap: 14,
-      }}
-    >
-      <div
-        style={{
-          width: 38,
-          height: 38,
-          borderRadius: 10,
-          background: "rgba(255,255,255,.6)",
-          border: `1px solid ${cap.line}`,
-          display: "grid",
-          placeItems: "center",
-          color: cap.tint,
-        }}
-      >
-        {cap.icon}
-      </div>
-      <h3 style={{ fontSize: 17, fontWeight: 600, letterSpacing: "-.015em", color: "var(--ink)" }}>
-        {cap.title[lang]}
-      </h3>
-      <p style={{ fontSize: 13.5, lineHeight: 1.6, color: "var(--ink-2)" }}>{cap.body[lang]}</p>
-    </div>
-  )
 }
 
 function Step({
@@ -772,26 +759,20 @@ function Step({
   return (
     <div
       style={{
-        padding: 22,
+        padding: 24,
         borderRight: last ? "0" : "1px solid var(--border)",
         display: "flex",
         flexDirection: "column",
         gap: 14,
-        minHeight: 196,
+        minHeight: 200,
       }}
     >
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <span className="mono" style={{ color: "var(--sub-2)" }}>
-          {n}
-        </span>
+        <span className="mono" style={{ color: "var(--sub-2)" }}>{n}</span>
         <span style={{ color: "var(--violet)" }}>{icon}</span>
       </div>
-      <h4 className="h3" style={{ fontSize: 15 }}>
-        {t}
-      </h4>
-      <p className="body" style={{ fontSize: 13.5 }}>
-        {body}
-      </p>
+      <h4 className="h3" style={{ fontSize: 15 }}>{t}</h4>
+      <p className="body" style={{ fontSize: 13.5 }}>{body}</p>
     </div>
   )
 }
@@ -800,20 +781,9 @@ function FootCol({ t, items }: { t: string; items: string[] }) {
   return (
     <div>
       <div style={{ color: "var(--ink)", fontWeight: 600, fontSize: 13, marginBottom: 12 }}>{t}</div>
-      <ul
-        style={{
-          listStyle: "none",
-          padding: 0,
-          margin: 0,
-          display: "flex",
-          flexDirection: "column",
-          gap: 7,
-        }}
-      >
+      <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "flex", flexDirection: "column", gap: 7 }}>
         {items.map((i, k) => (
-          <li key={k} style={{ fontSize: 13, color: "var(--sub)" }}>
-            {i}
-          </li>
+          <li key={k} style={{ fontSize: 13, color: "var(--sub)" }}>{i}</li>
         ))}
       </ul>
     </div>

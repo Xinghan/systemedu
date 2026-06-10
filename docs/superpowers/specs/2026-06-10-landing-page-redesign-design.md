@@ -1,8 +1,11 @@
-# 首页 (landing page) 瀑布流改造 设计文档
+# 首页 (landing page) 改造 设计文档
 
 - Status: shipped (2026-06-10)
 - 验收结果: 新首页上线 (本地 :4000 验证, 中英双语可切, build 通过, `/` 静态预渲染)。
-  瀑布流错落、5 张手绘水彩插画加载正常、专业感与儿童趣味平衡。
+  GitHub 式长滚动营销页 (一屏一节, 左右文图交替), 5 张手绘水彩插画 (webp 优化, 首屏
+  传输 ~266KB), 专业感与儿童趣味平衡。
+- 历次迭代: ① 瀑布流 (masonry) → ② 图片压缩 webp → ③ 改为 GitHub 式长滚动分节布局
+  (用户需求澄清: 要的是 github.com 首页那种长滚动营销页, 不是瀑布流)。
 - Date: 2026-06-10
 - 关联: `packages/student-web/src/app/(home)/page.tsx` (整体重写)
 - 范围: 仅访客首页 `/` (路由组 `(home)/page.tsx`), 不动 `/home` (登录后 dashboard)
@@ -33,18 +36,23 @@
    钢笔线稿 + 暖水彩 + 米白底 + 虚线标注), 用户用外部大模型生成, 落 `public/landing/`。
 6. **视觉风格**: 专业为骨 + 手绘点缀。整体 Industrial Atelier 暖纸色不变。
 
-## 3. 页面骨架 (从上到下)
+## 3. 页面骨架 (GitHub 式长滚动, 一屏一节)
 
 ```
 TopNav (复用 StudentHeader)
-① Hero      — 左: eyebrow + 大标题 + 副文 + 双 CTA + mono 数字条; 右: hero.png
-              右上角: 中/EN 语言切换
-② 瀑布流     — SectionRule("项目库 / 挑一个, 开始造")
-              + masonry: 3 项目卡 + 3 能力卡 错落穿插
-③ How it works — 4 步 (挑一个 → 跟着学(AI 陪) → 动手造 → 发布作品)
-④ AI agent 聚焦带 — 左文(数学超纲 agent 接住) + 右图 agent.png
-⑤ Footer    — 品牌 + 3 列链接
+① Hero          — 居中超大标题 + 副文 + 双 CTA (免费开始 / 浏览全部项目)
+                  + 大 hero 插画 + mono 信任条; 右上角 中/EN 语言切换
+② AI agent 节    — 左文 / 右图 (agent.webp), 招牌功能打头
+③ 真硬件真数据 节 — 右文 / 左图 (mars-rover.webp), 浅色底块 (paper-2)
+④ 知识树 节       — 左文 / 右图 (robot-fish.webp)
+⑤ 项目展示 节     — 浅色底, 居中标题 + 3 项目卡一行 (火星车/灭绝声音/机器鱼)
+⑥ How it works   — 4 步 (挑一个 → 跟着学(AI 陪) → 动手造 → 发布作品)
+⑦ 大 CTA 节       — 珊瑚渐变块, 居中"准备好造点真东西了吗" + 按钮
+⑧ Footer        — 品牌 + 3 列链接
 ```
+
+每节宽屏 (max-width 1100)、上下大留白 (padding 72px)、左右文图交替, 滚动逐节展开 —
+即 github.com 首页的节奏。功能节用 `<FeatureSection imgSide="left|right" tinted?>` 复用。
 
 ## 4. 策展项目 (3 个) + 图片
 
