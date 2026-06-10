@@ -4,7 +4,7 @@
 #
 # 依赖环境变量 (从 deploy.sh 传):
 #   REPO_ROOT  - /opt/systemedu (仓库根)
-#   HOST       - 对外 IP/域名 (47.92.200.21)
+#   HOST       - 对外 IP/域名 (见 deploy.env SERVER_HOST)
 #   LIBRARY_JWT_SECRET    - JWT 签名密钥 (生产必须设)
 #   LIBRARY_LICENSE_TOKEN - 公开 API 服务间共享 token
 #   LIBRARY_BOOTSTRAP_ADMIN - 首次部署 admin bootstrap, 形如 user:pass (可空)
