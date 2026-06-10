@@ -21,9 +21,14 @@ do_pack() {
   echo "[pack] 打包 main 代码..."
   cd "$ROOT"
   git rev-parse --abbrev-ref HEAD | grep -qx 'main' || echo "  (警告: 当前不在 main, 确认这是你要部署的代码)"
-  tar --exclude='.venv' --exclude='.git' --exclude='node_modules' \
-      --exclude='content-workspace' --exclude='.data' --exclude='.run' \
-      --exclude='packages/student-web/.next' \
+  # 排除: venv/git/所有 node_modules/构建产物/本地数据/废弃老前端 web/数字人/设计稿/课程工作区
+  tar \
+      --exclude='.venv' --exclude='.git' --exclude='.run' --exclude='.data' \
+      --exclude='node_modules' --exclude='*/node_modules' --exclude='*/*/node_modules' \
+      --exclude='.next' --exclude='*/.next' --exclude='*/*/.next' \
+      --exclude='content-workspace' --exclude='web' --exclude='dighuman' \
+      --exclude='stitch_systemedu_dashboard' --exclude='*.tar.gz' \
+      --exclude='packages/cloud-app' \
       -czf /tmp/systemedu_student.tar.gz .
   echo "[pack] 包大小: $(du -sh /tmp/systemedu_student.tar.gz | cut -f1)"
 }
