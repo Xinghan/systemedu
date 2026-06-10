@@ -18,7 +18,7 @@ import { useAuthStore } from "@/lib/stores/auth-store"
 
 // Public landing page — 瀑布流功能介绍, 突出天马行空的项目 / AI agent / 10 岁也能做。
 // 设计: docs/superpowers/specs/2026-06-10-landing-page-redesign-design.md
-// 手绘水彩科普书插画风 (public/landing/*.png) + Industrial Atelier 暖纸色 UI。
+// 手绘水彩科普书插画风 (public/landing/*.webp) + Industrial Atelier 暖纸色 UI。
 // 双语: 首页自带局部语言切换 (useState, 不动全局 i18n)。
 
 type Lang = "zh" | "en"
@@ -109,7 +109,7 @@ const PROJECTS: Project[] = [
     age: "10–12",
     difficulty: 4,
     live: false,
-    img: "/landing/mars-rover.png",
+    img: "/landing/mars-rover.webp",
     ratio: "3 / 2", // 火星车横构图
     title: {
       zh: "用 NASA 影像训练的火星探测车",
@@ -127,7 +127,7 @@ const PROJECTS: Project[] = [
     age: "10–12",
     difficulty: 4,
     live: false,
-    img: "/landing/extinct-sound.png",
+    img: "/landing/extinct-sound.webp",
     ratio: "4 / 5", // 渡渡鸟竖构图
     title: {
       zh: "复活灭绝物种的声音",
@@ -145,7 +145,7 @@ const PROJECTS: Project[] = [
     age: "13–15",
     difficulty: 5,
     live: false,
-    img: "/landing/robot-fish.png",
+    img: "/landing/robot-fish.webp",
     ratio: "4 / 3", // 机器鱼横构图
     title: {
       zh: "仿生软体机器鱼",
@@ -331,7 +331,7 @@ export default function Homepage() {
             }}
           >
             <Image
-              src="/landing/hero.png"
+              src="/landing/hero.webp"
               alt=""
               fill
               priority
@@ -467,7 +467,7 @@ export default function Homepage() {
           }}
         >
           <Image
-            src="/landing/agent.png"
+            src="/landing/agent.webp"
             alt=""
             fill
             sizes="(max-width: 900px) 100vw, 720px"
