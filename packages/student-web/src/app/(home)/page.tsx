@@ -9,7 +9,6 @@ import {
   Cpu,
   Languages,
   Network,
-  Rocket,
   Sparkles,
 } from "lucide-react"
 import { useAuthStore } from "@/lib/stores/auth-store"
@@ -243,6 +242,38 @@ const PROJECTS: Project[] = [
 
 type Copy = (typeof COPY)[Lang]
 
+// How 节四阶段文字标签 (对齐流程大图 how-v1.webp 里的四个阶段)
+const HOW_STEPS: { title: { zh: string; en: string }; body: { zh: string; en: string } }[] = [
+  {
+    title: { zh: "挑一个项目", en: "Pick a project" },
+    body: {
+      zh: "从项目库选一个让你心动的, 看清它的目标和清单。",
+      en: "Choose one that excites you; see its goal and parts list.",
+    },
+  },
+  {
+    title: { zh: "跟着学 (AI 陪)", en: "Learn (with AI)" },
+    body: {
+      zh: "短模块一步步来, 卡住了 AI agent 随时把难点讲清。",
+      en: "Short modules, step by step; the AI agent unblocks the hard parts.",
+    },
+  },
+  {
+    title: { zh: "动手造", en: "Build it" },
+    body: {
+      zh: "焊接、烧录、接线、组装 — 真硬件, 真失败, 真修好。",
+      en: "Solder, flash, wire, assemble — real hardware, real fixes.",
+    },
+  },
+  {
+    title: { zh: "发布作品", en: "Ship it" },
+    body: {
+      zh: "把成品发布出来, 提交真实数据, 让世界看到你造的东西。",
+      en: "Publish your build, submit real data, show the world what you made.",
+    },
+  },
+]
+
 export default function Homepage() {
   const { loggedIn, hydrate } = useAuthStore()
   const [lang, setLang] = useState<Lang>("zh")
@@ -394,9 +425,9 @@ export default function Homepage() {
         icon={<Network size={18} strokeWidth={1.5} />}
       />
 
-      {/* ── How it works ── */}
-      <section style={{ maxWidth: 1100, margin: "0 auto", padding: "64px 32px" }}>
-        <div style={{ textAlign: "center", maxWidth: 620, margin: "0 auto 36px" }}>
+      {/* ── How it works — 一张横向流程大图 + 下方四阶段文字标签 ── */}
+      <section style={{ maxWidth: 1200, margin: "0 auto", padding: "56px 32px" }}>
+        <div style={{ textAlign: "center", maxWidth: 620, margin: "0 auto 24px" }}>
           <div className="eyebrow" style={{ marginBottom: 12, justifyContent: "center" }}>
             <span className="dot" /> {t.howEyebrow}
           </div>
@@ -404,31 +435,51 @@ export default function Homepage() {
             {t.howTitle}
           </h2>
         </div>
+
+        {/* 流程大图 (无文字), 四边羽化融入背景 */}
+        <div
+          style={{
+            position: "relative",
+            width: "100%",
+            aspectRatio: "3 / 1",
+            ...edgeFadeMask(),
+          }}
+        >
+          <Image
+            src="/landing/how-v1.webp"
+            alt=""
+            fill
+            sizes="(max-width: 1240px) 100vw, 1200px"
+            style={{ objectFit: "cover" }}
+          />
+        </div>
+
+        {/* 图下方对齐四阶段的文字标签 */}
         <div
           style={{
             display: "grid",
             gridTemplateColumns: "repeat(4, 1fr)",
-            gap: 0,
-            border: "1px solid var(--border)",
-            borderRadius: 14,
-            overflow: "hidden",
-            background: "var(--card)",
+            gap: 24,
+            marginTop: 8,
           }}
-          className="how-grid"
+          className="how-labels"
         >
-          <Step n="01" icon={<Sparkles size={18} strokeWidth={1.5} />} img="/landing/extinct-sound.webp"
-            t={lang === "zh" ? "挑一个项目" : "Pick a project"}
-            body={lang === "zh" ? "从项目库选一个让你心动的, 看清它的目标和清单。" : "Choose one that excites you; see its goal and parts list."} />
-          <Step n="02" icon={<Bot size={18} strokeWidth={1.5} />} img="/landing/agent.webp"
-            t={lang === "zh" ? "跟着学 (AI 陪)" : "Learn (with AI)"}
-            body={lang === "zh" ? "短模块一步步来, 卡住了 AI agent 随时把难点讲清。" : "Short modules, step by step; the AI agent unblocks the hard parts."} />
-          <Step n="03" icon={<Network size={18} strokeWidth={1.5} />} img="/landing/mars-rover.webp"
-            t={lang === "zh" ? "动手造" : "Build it"}
-            body={lang === "zh" ? "焊接、烧录、接线、组装 — 真硬件, 真失败, 真修好。" : "Solder, flash, wire, assemble — real hardware, real fixes."} />
-          <Step n="04" icon={<Rocket size={18} strokeWidth={1.5} />} img="/landing/tree-v1.webp"
-            t={lang === "zh" ? "发布作品" : "Ship it"}
-            body={lang === "zh" ? "把成品发布出来, 提交真实数据, 让世界看到你造的东西。" : "Publish your build, submit real data, show the world what you made."}
-            last />
+          {HOW_STEPS.map((s, i) => (
+            <div key={i} style={{ textAlign: "center", padding: "0 8px" }}>
+              <div
+                className="mono"
+                style={{ color: "var(--primary)", fontSize: 12, fontWeight: 500, marginBottom: 6 }}
+              >
+                {String(i + 1).padStart(2, "0")}
+              </div>
+              <h4 className="h3" style={{ fontSize: 15.5, marginBottom: 6 }}>
+                {s.title[lang]}
+              </h4>
+              <p style={{ fontSize: 13, lineHeight: 1.55, color: "var(--sub)" }}>
+                {s.body[lang]}
+              </p>
+            </div>
+          ))}
         </div>
       </section>
 
@@ -497,7 +548,7 @@ export default function Homepage() {
 
       <style jsx>{`
         @media (max-width: 820px) {
-          .how-grid { grid-template-columns: 1fr 1fr !important; }
+          .how-labels { grid-template-columns: 1fr 1fr !important; row-gap: 28px !important; }
           .foot-grid { grid-template-columns: 1fr 1fr !important; }
         }
       `}</style>
@@ -730,55 +781,6 @@ function TrustItem({ icon, text }: { icon: React.ReactNode; text: string }) {
       <span style={{ color: "var(--primary)" }}>{icon}</span>
       {text}
     </span>
-  )
-}
-
-function Step({
-  n,
-  icon,
-  t,
-  body,
-  img,
-  last,
-}: {
-  n: string
-  icon: React.ReactNode
-  t: string
-  body: string
-  img?: string
-  last?: boolean
-}) {
-  return (
-    <div
-      style={{
-        borderRight: last ? "0" : "1px solid var(--border)",
-        display: "flex",
-        flexDirection: "column",
-        minHeight: 200,
-      }}
-    >
-      {img && (
-        <div
-          style={{
-            position: "relative",
-            aspectRatio: "16 / 10",
-            // 顶部图: 底部向下渐隐进卡片背景 (与节奏一致的融合)
-            WebkitMaskImage: "linear-gradient(to bottom, #000 58%, transparent 100%)",
-            maskImage: "linear-gradient(to bottom, #000 58%, transparent 100%)",
-          }}
-        >
-          <Image src={img} alt="" fill sizes="(max-width: 820px) 50vw, 25vw" style={{ objectFit: "cover" }} />
-        </div>
-      )}
-      <div style={{ padding: img ? "4px 22px 24px" : 24, display: "flex", flexDirection: "column", gap: 12 }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <span className="mono" style={{ color: "var(--sub-2)" }}>{n}</span>
-          <span style={{ color: "var(--violet)" }}>{icon}</span>
-        </div>
-        <h4 className="h3" style={{ fontSize: 15 }}>{t}</h4>
-        <p className="body" style={{ fontSize: 13.5 }}>{body}</p>
-      </div>
-    </div>
   )
 }
 
