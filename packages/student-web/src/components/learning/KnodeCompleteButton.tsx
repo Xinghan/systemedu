@@ -62,11 +62,11 @@ export function KnodeCompleteButton({ slug, knodeId, initialCompleted, onChange 
   }
 
   if (completed === null) {
-    // 加载中, 显示占位
+    // 加载中, 占位与 .btn-sm 同尺寸, 保持头部控件对齐
     return (
-      <div className="inline-flex h-9 w-32 items-center justify-center rounded-full border border-[var(--border)] bg-[var(--paper-2)] text-xs text-[var(--sub)]">
+      <span className="btn btn-ghost btn-sm" style={{ opacity: 0.6 }}>
         ...
-      </div>
+      </span>
     )
   }
 
@@ -75,20 +75,30 @@ export function KnodeCompleteButton({ slug, knodeId, initialCompleted, onChange 
       type="button"
       disabled={busy}
       onClick={handleClick}
-      className={`inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-medium transition-all ${
-        completed
-          ? "border-[var(--primary-ink)] bg-[var(--primary)] text-white hover:bg-[var(--primary-ink)]"
-          : "border-[var(--border)] bg-[var(--card)] text-[var(--ink)] hover:border-[var(--primary)]"
-      } ${busy ? "opacity-60 cursor-wait" : ""}`}
+      // 复用 .btn .btn-sm 体系, 与同排 Tree / 翻页按钮同高同圆角;
+      // completed 用 coral 实心, 未完成用 ghost (与 Tree 一致)。
+      className={`btn btn-sm ${completed ? "" : "btn-ghost"} ${
+        busy ? "cursor-wait" : ""
+      }`}
+      style={{
+        ...(completed
+          ? {
+              background: "var(--primary)",
+              color: "#fff",
+              borderColor: "var(--primary-ink)",
+            }
+          : {}),
+        ...(busy ? { opacity: 0.6 } : {}),
+      }}
     >
       {completed ? (
         <>
-          <Check size={16} strokeWidth={2.5} />
+          <Check size={14} strokeWidth={2.5} />
           <span>已完成</span>
         </>
       ) : (
         <>
-          <Circle size={16} strokeWidth={2} />
+          <Circle size={14} strokeWidth={2} />
           <span>标记完成</span>
         </>
       )}

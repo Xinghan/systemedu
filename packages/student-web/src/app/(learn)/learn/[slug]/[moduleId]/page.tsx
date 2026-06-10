@@ -472,7 +472,7 @@ export default function LearnPage() {
               </span>
             ) : null}
           </div>
-          <div style={{ display: "flex", gap: 8 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             {prev && (
               <Link
                 href={`/learn/${encodeURIComponent(slug)}/${encodeURIComponent(prev.module_id)}`}
