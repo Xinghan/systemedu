@@ -22,7 +22,9 @@ do_pack() {
   cd "$ROOT"
   git rev-parse --abbrev-ref HEAD | grep -qx 'main' || echo "  (警告: 当前不在 main, 确认这是你要部署的代码)"
   # 排除: venv/git/所有 node_modules/构建产物/本地数据/废弃老前端 web/数字人/设计稿/课程工作区
-  tar \
+  # COPYFILE_DISABLE=1: 防止 macOS tar 带 AppleDouble ._* 文件 (会被 alembic 当 .py 误读 → null bytes)
+  COPYFILE_DISABLE=1 tar \
+      --exclude='._*' \
       --exclude='.venv' --exclude='.git' --exclude='.run' --exclude='.data' \
       --exclude='node_modules' --exclude='*/node_modules' --exclude='*/*/node_modules' \
       --exclude='.next' --exclude='*/.next' --exclude='*/*/.next' \
