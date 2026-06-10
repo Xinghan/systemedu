@@ -47,7 +47,7 @@ do_code() {
 
 do_infra() {
   echo "[infra] 装 Docker (若无)..."
-  remote "which docker >/dev/null 2>&1 || (apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq docker.io docker-compose-plugin)"
+  remote "which docker >/dev/null 2>&1 || (apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq docker.io docker-compose-v2)"
   remote "systemctl enable --now docker"
   echo "[infra] 起 PG + Redis (不起 qdrant)..."
   remote "cd $REPO_ROOT && docker compose up -d postgres redis"
