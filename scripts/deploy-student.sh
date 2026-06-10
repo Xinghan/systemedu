@@ -48,7 +48,13 @@ do_code() {
 do_infra() {
   echo "[infra] 装 Docker (若无)..."
   remote "which docker >/dev/null 2>&1 || (apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq docker.io docker-compose-v2)"
-  remote "systemctl enable --now docker"
+  # 国内服务器 docker.io 直连超时, 配可用镜像加速 (daocloud/1panel)
+  remote "mkdir -p /etc/docker && cat > /etc/docker/daemon.json <<EOF
+{
+  \"registry-mirrors\": [\"https://docker.m.daocloud.io\", \"https://docker.1panel.live\"]
+}
+EOF"
+  remote "systemctl enable docker && systemctl restart docker && sleep 3"
   echo "[infra] 起 PG + Redis (不起 qdrant)..."
   remote "cd $REPO_ROOT && docker compose up -d postgres redis"
   sleep 8
