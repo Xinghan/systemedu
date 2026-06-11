@@ -9,8 +9,22 @@
  */
 
 import { useMemo, useState } from "react"
-import { ChevronRight } from "lucide-react"
+import dynamic from "next/dynamic"
+import { ChevronRight, LayoutGrid, Orbit } from "lucide-react"
 import { subdomainName } from "@/lib/subdomain-names"
+
+// three.js 依赖 window, 必须 ssr:false 懒加载 (也避免 600KB 进首屏 bundle)
+const KnowledgeGalaxy3D = dynamic(() => import("./KnowledgeGalaxy3D"), {
+  ssr: false,
+  loading: () => (
+    <div
+      className="rounded-2xl border border-[var(--border)]"
+      style={{ height: 540, display: "grid", placeItems: "center", background: "#15110d", color: "#8a8170" }}
+    >
+      正在生成知识宇宙…
+    </div>
+  ),
+})
 
 import type {
   DepthLevel,
@@ -113,6 +127,7 @@ export function KnowledgeTreeView({
   const [activeSubject, setActiveSubject] = useState<string>(
     subjectChips[0]?.id || "",
   )
+  const [viewMode, setViewMode] = useState<"2d" | "3d">("2d")
 
   const activeSubjectData = useMemo(
     () => platformTree.subjects.find((s) => s.id === activeSubject) || null,
@@ -140,39 +155,71 @@ export function KnowledgeTreeView({
 
   return (
     <div className="flex flex-col gap-4">
-      {/* Chips: 学科切换 */}
-      <div className="flex flex-wrap gap-2">
-        {subjectChips.map((s) => {
-          const active = s.id === activeSubject
-          return (
+      {/* 2D / 3D 视图切换 */}
+      <div style={{ display: "flex", justifyContent: "flex-end" }}>
+        <div
+          style={{
+            display: "inline-flex", gap: 2, padding: 3,
+            border: "1px solid var(--border-2)", borderRadius: 999, background: "var(--card)",
+          }}
+        >
+          {([
+            { m: "2d", icon: <LayoutGrid size={13} strokeWidth={1.6} />, label: "分层" },
+            { m: "3d", icon: <Orbit size={13} strokeWidth={1.6} />, label: "知识宇宙" },
+          ] as const).map((o) => (
             <button
-              key={s.id}
-              onClick={() => setActiveSubject(s.id)}
-              className={`flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-medium transition-all ${
-                active
-                  ? "border-[var(--primary)] bg-[var(--primary-soft)] text-[var(--primary-ink)]"
-                  : "border-[var(--border)] bg-[var(--card)] text-[var(--ink)] hover:border-[var(--border-2)]"
-              }`}
+              key={o.m}
+              type="button"
+              onClick={() => setViewMode(o.m)}
+              style={{
+                display: "inline-flex", alignItems: "center", gap: 6,
+                border: 0, borderRadius: 999, padding: "5px 12px", cursor: "pointer",
+                fontSize: 12.5, fontWeight: 500,
+                background: viewMode === o.m ? "var(--ink)" : "transparent",
+                color: viewMode === o.m ? "#fff" : "var(--sub)",
+                transition: "background var(--t-fast), color var(--t-fast)",
+              }}
             >
-              <span
-                className="h-2 w-2 rounded-full"
-                style={{ backgroundColor: s.color }}
-              />
-              <span>{s.name_zh}</span>
-              <span className="text-xs text-[var(--sub)]">
-                {s.lit}/{s.total}
-              </span>
+              {o.icon}{o.label}
             </button>
-          )
-        })}
+          ))}
+        </div>
       </div>
 
-      {/* 子域分组 + 概念叶下钻 (多层) */}
-      <SubjectGroupedView
-        subject={activeSubjectData}
-        litByNodeId={litByNodeId}
-        onNodeClick={onNodeClick}
-      />
+      {viewMode === "3d" ? (
+        <KnowledgeGalaxy3D platformTree={platformTree} litByNodeId={litByNodeId} />
+      ) : (
+        <>
+          {/* Chips: 学科切换 */}
+          <div className="flex flex-wrap gap-2">
+            {subjectChips.map((s) => {
+              const active = s.id === activeSubject
+              return (
+                <button
+                  key={s.id}
+                  onClick={() => setActiveSubject(s.id)}
+                  className={`flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-medium transition-all ${
+                    active
+                      ? "border-[var(--primary)] bg-[var(--primary-soft)] text-[var(--primary-ink)]"
+                      : "border-[var(--border)] bg-[var(--card)] text-[var(--ink)] hover:border-[var(--border-2)]"
+                  }`}
+                >
+                  <span className="h-2 w-2 rounded-full" style={{ backgroundColor: s.color }} />
+                  <span>{s.name_zh}</span>
+                  <span className="text-xs text-[var(--sub)]">{s.lit}/{s.total}</span>
+                </button>
+              )
+            })}
+          </div>
+
+          {/* 子域分组 + 概念叶下钻 (多层) */}
+          <SubjectGroupedView
+            subject={activeSubjectData}
+            litByNodeId={litByNodeId}
+            onNodeClick={onNodeClick}
+          />
+        </>
+      )}
     </div>
   )
 }
