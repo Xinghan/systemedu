@@ -84,9 +84,11 @@ Restart=always
 WantedBy=multi-user.target
 EOF"
   remote "systemctl daemon-reload && systemctl enable systemedu-library && systemctl restart systemedu-library && sleep 3 && systemctl is-active systemedu-library"
-  echo "[library] 上传两门课 tarball..."
+  echo "[library] 上传课程 tarball..."
   copy "$HOME/.systemedu-library/media/projects/eeg-minecraft-bci/_archive/eeg-minecraft-bci-0.1.0.tar.gz" /tmp/
   copy "$HOME/.systemedu-library/media/projects/purpleair-airquality-node/_archive/purpleair-airquality-node-0.14.1.tar.gz" /tmp/
+  # spec 040: mars 带开篇连环画 (story/) 的包
+  copy "$HOME/.systemedu-library/media/projects/mars-analog-rover/_archive/mars-analog-rover-1.0.1.tar.gz" /tmp/
   echo "[library] import + publish (服务器侧)..."
   copy "$DIR/_import_courses.sh" /tmp/_import_courses.sh
   remote "LIBRARY_PORT=$LIBRARY_PORT bash /tmp/_import_courses.sh"

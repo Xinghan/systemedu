@@ -35,6 +35,8 @@ import_publish() {
 
 import_publish /tmp/eeg-minecraft-bci-0.1.0.tar.gz
 import_publish /tmp/purpleair-airquality-node-0.14.1.tar.gz
+# spec 040: mars 带开篇连环画 (story/)
+import_publish /tmp/mars-analog-rover-1.0.1.tar.gz
 
 echo "[import] 验证 published projects:"
 curl -s --noproxy '*' "$BASE/v1/projects" | python3 -c "import sys,json; print('  count:', len(json.load(sys.stdin)))" 2>/dev/null || echo "  (v1/projects 查询失败)"
