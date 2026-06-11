@@ -155,12 +155,22 @@ export interface SubjectSummary {
   percent: number
 }
 
+/** spec 039: 用户个人树生长节点 (平台树第三层之下的动态深层节点) */
+export interface GrownNodeEntry {
+  node_id: string
+  parent_id: string
+  name_zh: string
+  depth: number
+  lit: boolean
+}
+
 export interface UserKnowledgeTreeResponse {
   user_id: string
   lit_nodes: UserLitNodeEntry[]
   subjects_summary: SubjectSummary[]
   total_lit: number
   total_platform_nodes: number
+  grown_nodes?: GrownNodeEntry[]
 }
 
 export interface ProjectRecommendation {

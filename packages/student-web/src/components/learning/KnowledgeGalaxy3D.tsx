@@ -22,9 +22,12 @@ interface LitInfo {
   detail: string
 }
 
+type GrownChild = { node_id: string; name_zh: string; depth: number; lit: boolean }
+
 interface Props {
   platformTree: PlatformTree
   litByNodeId: Map<string, LitInfo>
+  grownByParent?: Map<string, GrownChild[]>
   height?: number
   onNodeClick?: (knodeId: string, slug?: string) => void
 }
@@ -51,7 +54,7 @@ interface SelInfo {
   y: number
 }
 
-export default function KnowledgeGalaxy3D({ platformTree, litByNodeId, height = 560, onNodeClick }: Props) {
+export default function KnowledgeGalaxy3D({ platformTree, litByNodeId, grownByParent, height = 560, onNodeClick }: Props) {
   const mountRef = useRef<HTMLDivElement>(null)
   const [sel, setSel] = useState<SelInfo | null>(null)
   const onClickRef = useRef(onNodeClick)
@@ -106,6 +109,8 @@ export default function KnowledgeGalaxy3D({ platformTree, litByNodeId, height = 
     const metas: NodeMeta[] = []
     const positions: THREE.Vector3[] = []
     const subjectCenters: { name: string; pos: THREE.Vector3; color: string }[] = []
+    // id → {位置, 学科名, 色} — 供生长节点挂在父附近
+    const posById = new Map<string, { pos: THREE.Vector3; subjectName: string; color: string }>()
 
     subjects.forEach((s, si) => {
       const ang = (si / nSub) * Math.PI * 2
@@ -119,23 +124,50 @@ export default function KnowledgeGalaxy3D({ platformTree, litByNodeId, height = 
         const rad = 3 + hash01(n.id, 3) * 4.5
         const theta = u * Math.PI * 2
         const phi = Math.acos(2 * v - 1)
-        positions.push(new THREE.Vector3(
+        const pos = new THREE.Vector3(
           cx + rad * Math.sin(phi) * Math.cos(theta),
           cy + rad * Math.sin(phi) * Math.sin(theta),
           cz + rad * Math.cos(phi),
-        ))
+        )
+        positions.push(pos)
         const li = litByNodeId.get(n.id)
         metas.push({
-          id: n.id,
-          name: n.name_zh,
-          subjectName: s.name_zh,
-          color: s.color || "#cccccc",
-          lit: !!li,
-          detail: li?.detail || "",
-          sources: li?.sources || [],
+          id: n.id, name: n.name_zh, subjectName: s.name_zh,
+          color: s.color || "#cccccc", lit: !!li,
+          detail: li?.detail || "", sources: li?.sources || [],
         })
+        posById.set(n.id, { pos, subjectName: s.name_zh, color: s.color || "#cccccc" })
       })
     })
+
+    // spec 039: 挂生长节点 — 位置在父节点附近 (id hash 偏移), 递归任意深度
+    if (grownByParent) {
+      const mountGrown = (parentId: string) => {
+        const kids = grownByParent.get(parentId) || []
+        const pinfo = posById.get(parentId)
+        if (!pinfo) return
+        kids.forEach((c) => {
+          const off = 1.6
+          const pos = new THREE.Vector3(
+            pinfo.pos.x + (hash01(c.node_id, 1) - 0.5) * off * 2,
+            pinfo.pos.y + (hash01(c.node_id, 2) - 0.5) * off * 2,
+            pinfo.pos.z + (hash01(c.node_id, 3) - 0.5) * off * 2,
+          )
+          positions.push(pos)
+          metas.push({
+            id: c.node_id, name: c.name_zh, subjectName: pinfo.subjectName,
+            color: pinfo.color, lit: c.lit,
+            detail: c.lit ? "你深入学到的知识点 (个人生长)" : "待点亮 (个人生长)",
+            sources: [],
+          })
+          posById.set(c.node_id, { pos, subjectName: pinfo.subjectName, color: pinfo.color })
+          mountGrown(c.node_id)  // 递归更深
+        })
+      }
+      // 从平台节点启动 (递归覆盖深层生长; 不直接遍历 keys 以保证父先于子挂载)
+      const platformIds = [...posById.keys()]
+      for (const pid of platformIds) mountGrown(pid)
+    }
 
     const N = metas.length
 
@@ -295,7 +327,7 @@ export default function KnowledgeGalaxy3D({ platformTree, litByNodeId, height = 
       renderer.dispose()
       if (renderer.domElement.parentNode === mount) mount.removeChild(renderer.domElement)
     }
-  }, [platformTree, litByNodeId, height])
+  }, [platformTree, litByNodeId, grownByParent, height])
 
   return (
     <div style={{ position: "relative" }}>

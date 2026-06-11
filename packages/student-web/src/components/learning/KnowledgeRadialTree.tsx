@@ -18,9 +18,12 @@ interface LitInfo {
   detail: string
 }
 
+type GrownChild = { node_id: string; name_zh: string; depth: number; lit: boolean }
+
 interface Props {
   subject: PlatformSubject
   litByNodeId: Map<string, LitInfo>
+  grownByParent?: Map<string, GrownChild[]>
   onNodeClick?: (knodeId: string, slug?: string) => void
 }
 
@@ -28,16 +31,27 @@ interface Props {
 interface TNode {
   id: string
   name: string
-  kind: "subject" | "subdomain" | "leaf"
+  kind: "subject" | "subdomain" | "leaf" | "grown"
   lit?: boolean
   litCount?: number
   total?: number
   children?: TNode[]
 }
 
-export function KnowledgeRadialTree({ subject, litByNodeId, onNodeClick }: Props) {
-  // 构建完整三层数据
+export function KnowledgeRadialTree({ subject, litByNodeId, grownByParent, onNodeClick }: Props) {
+  // 构建完整数据 (三层 + 生长节点任意深度)
   const fullData = useMemo<TNode>(() => {
+    // 递归把某节点的生长子节点建成 TNode children
+    const buildGrown = (parentId: string): TNode[] => {
+      const kids = grownByParent?.get(parentId) || []
+      return kids.map((c) => ({
+        id: c.node_id,
+        name: c.name_zh,
+        kind: "grown" as const,
+        lit: c.lit,
+        children: buildGrown(c.node_id),
+      }))
+    }
     const groups = new Map<string, typeof subject.nodes>()
     for (const n of subject.nodes) {
       const sub = n.id.split(".")[1] || "_"
@@ -51,6 +65,7 @@ export function KnowledgeRadialTree({ subject, litByNodeId, onNodeClick }: Props
           name: n.name_zh,
           kind: "leaf" as const,
           lit: litByNodeId.has(n.id),
+          children: buildGrown(n.id),  // spec 039: 概念叶下挂生长节点
         }))
         const litCount = leaves.filter((l) => l.lit).length
         return {
@@ -64,7 +79,7 @@ export function KnowledgeRadialTree({ subject, litByNodeId, onNodeClick }: Props
       })
       .sort((a, b) => (b.litCount || 0) - (a.litCount || 0) || (b.total || 0) - (a.total || 0))
     return { id: subject.id, name: subject.name_zh, kind: "subject", children: subdomains }
-  }, [subject, litByNodeId])
+  }, [subject, litByNodeId, grownByParent])
 
   // 展开状态: 默认展开根 + 有点亮的子域
   const [expanded, setExpanded] = useState<Set<string>>(() => {
@@ -76,10 +91,12 @@ export function KnowledgeRadialTree({ subject, litByNodeId, onNodeClick }: Props
   // 按展开状态裁剪 children → d3 布局
   const { nodes, links, width, height } = useMemo(() => {
     const prune = (n: TNode): TNode => {
-      if (n.kind === "leaf" || !expanded.has(n.id)) {
+      // 无 children 的节点 (叶/无生长) 直接返回; 有 children 但未展开 → 折叠 (砍 children)
+      const kids = n.children || []
+      if (!kids.length || !expanded.has(n.id)) {
         return { ...n, children: undefined }
       }
-      return { ...n, children: (n.children || []).map(prune) }
+      return { ...n, children: kids.map(prune) }
     }
     const root = hierarchy(prune(fullData))
     // 行高随叶子数; 横向树
@@ -94,8 +111,17 @@ export function KnowledgeRadialTree({ subject, litByNodeId, onNodeClick }: Props
 
   const color = subject.color || "#888"
 
-  function toggle(id: string, kind: TNode["kind"]) {
-    if (kind === "leaf") return
+  // 哪些节点有子 (可展开) — 从完整 fullData 收集 (prune 后的 children 不可靠)
+  const hasKids = useMemo(() => {
+    const s = new Set<string>()
+    const walk = (n: TNode) => {
+      if (n.children && n.children.length) { s.add(n.id); n.children.forEach(walk) }
+    }
+    walk(fullData)
+    return s
+  }, [fullData])
+
+  function toggle(id: string) {
     setExpanded((prev) => {
       const next = new Set(prev)
       next.has(id) ? next.delete(id) : next.add(id)
@@ -117,9 +143,10 @@ export function KnowledgeRadialTree({ subject, litByNodeId, onNodeClick }: Props
       <svg width={width} height={height} style={{ maxWidth: "100%", minWidth: width }}>
         {/* 连线 */}
         {links.map((l, i) => {
-          const litLink = l.target.data.kind === "leaf"
-            ? l.target.data.lit
-            : (l.target.data.litCount || 0) > 0
+          const td = l.target.data
+          const litLink = (td.kind === "leaf" || td.kind === "grown")
+            ? td.lit
+            : (td.litCount || 0) > 0
           const x1 = l.source.y + OX, y1 = l.source.x + OY
           const x2 = l.target.y + OX, y2 = l.target.x + OY
           const mx = (x1 + x2) / 2
@@ -138,39 +165,45 @@ export function KnowledgeRadialTree({ subject, litByNodeId, onNodeClick }: Props
         {nodes.map((n, i) => {
           const d = n.data
           const x = n.y + OX, y = n.x + OY
-          const isLeaf = d.kind === "leaf"
           const isSubject = d.kind === "subject"
-          const lit = isLeaf ? d.lit : (d.litCount || 0) > 0
-          const canExpand = !isLeaf && (d.children?.length || 0) > 0
+          const isSub = d.kind === "subdomain"
+          const isGrown = d.kind === "grown"
+          const isLeafLike = d.kind === "leaf" || isGrown
+          const lit = isLeafLike ? !!d.lit : (d.litCount || 0) > 0
+          const canExpand = hasKids.has(d.id)
           const open = expanded.has(d.id)
-          const r = isSubject ? 9 : isLeaf ? (d.lit ? 5.5 : 3.5) : 6.5
+          const r = isSubject ? 9 : isSub ? 6.5 : isGrown ? 4 : (d.lit ? 5.5 : 3.5)
           return (
-            <g key={d.id + i} transform={`translate(${x},${y})`} style={{ cursor: isLeaf ? (d.lit ? "pointer" : "default") : "pointer" }}
-               onClick={() => { if (isLeaf) { if (d.lit && onNodeClick) onNodeClick(d.id) } else toggle(d.id, d.kind) }}>
+            <g key={d.id + i} transform={`translate(${x},${y})`}
+               style={{ cursor: canExpand || (isLeafLike && d.lit) ? "pointer" : "default" }}
+               onClick={() => {
+                 if (canExpand) toggle(d.id)
+                 else if (isLeafLike && d.lit && onNodeClick) onNodeClick(d.id)
+               }}>
               <circle
                 r={r}
-                fill={isLeaf ? (d.lit ? color : "var(--card)") : (lit ? color : "var(--card)")}
-                stroke={isLeaf ? (d.lit ? "#fff" : "var(--border-2)") : color}
-                strokeWidth={isLeaf ? (d.lit ? 1 : 1) : 1.6}
+                fill={lit ? color : "var(--card)"}
+                stroke={isGrown ? (lit ? color : "var(--border-2)") : (isLeafLike ? (d.lit ? "#fff" : "var(--border-2)") : color)}
+                strokeWidth={isGrown ? 1.2 : (isLeafLike ? 1 : 1.6)}
+                strokeDasharray={isGrown ? "2 2" : undefined}  /* 虚线 = 个人生长 */
               />
-              {/* 折叠指示 (子域/学科未展开且有 children) */}
               {canExpand && !open && (
                 <text x={0} y={3.5} textAnchor="middle" style={{ fontSize: 9, fontWeight: 700, fill: lit ? "#fff" : color, pointerEvents: "none" }}>+</text>
               )}
-              {/* 文字标签 */}
               <text
                 x={isSubject ? -14 : r + 6}
-                y={isSubject ? 4 : isLeaf ? 3.5 : 3.5}
+                y={isSubject ? 4 : 3.5}
                 textAnchor={isSubject ? "end" : "start"}
                 style={{
-                  fontSize: isSubject ? 13.5 : isLeaf ? 12 : 12.5,
-                  fontWeight: isSubject || (!isLeaf) ? 600 : (d.lit ? 500 : 400),
-                  fill: isLeaf ? (d.lit ? "var(--ink)" : "var(--sub-2)") : "var(--ink-2)",
+                  fontSize: isSubject ? 13.5 : isLeafLike ? 12 : 12.5,
+                  fontWeight: isSubject || isSub ? 600 : (d.lit ? 500 : 400),
+                  fontStyle: isGrown ? "italic" : "normal",
+                  fill: isLeafLike ? (d.lit ? "var(--ink)" : "var(--sub-2)") : "var(--ink-2)",
                   pointerEvents: "none",
                 }}
               >
                 {d.name}
-                {!isLeaf && !isSubject && (
+                {isSub && (
                   <tspan dx={6} style={{ fontSize: 10.5, fill: "var(--sub)", fontWeight: 400 }}>
                     {d.litCount}/{d.total}
                   </tspan>

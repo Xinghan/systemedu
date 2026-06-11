@@ -88,6 +88,10 @@ export function KnowledgeTreeView({
           .join(" · ")
         map.set(n.node_id, { sources, detail })
       }
+      // spec 039: 生长节点中点亮的, 并进 litByNodeId
+      for (const g of userTree.grown_nodes || []) {
+        if (g.lit) map.set(g.node_id, { sources: [], detail: "你深入学到的知识点" })
+      }
     } else if (projectTree) {
       for (const n of projectTree.lit_nodes) {
         map.set(n.node_id, {
@@ -98,6 +102,16 @@ export function KnowledgeTreeView({
     }
     return map
   }, [mode, projectTree, userTree])
+
+  // spec 039: 生长节点按 parent_id 索引 (三视图挂任意深度子节点用)
+  const grownByParent = useMemo(() => {
+    const map = new Map<string, { node_id: string; name_zh: string; depth: number; lit: boolean }[]>()
+    for (const g of userTree?.grown_nodes || []) {
+      if (!map.has(g.parent_id)) map.set(g.parent_id, [])
+      map.get(g.parent_id)!.push({ node_id: g.node_id, name_zh: g.name_zh, depth: g.depth, lit: g.lit })
+    }
+    return map
+  }, [userTree])
 
   // 学科 chip
   const subjectChips = useMemo(() => {
@@ -189,7 +203,7 @@ export function KnowledgeTreeView({
       </div>
 
       {viewMode === "3d" ? (
-        <KnowledgeGalaxy3D platformTree={platformTree} litByNodeId={litByNodeId} onNodeClick={onNodeClick} />
+        <KnowledgeGalaxy3D platformTree={platformTree} litByNodeId={litByNodeId} grownByParent={grownByParent} onNodeClick={onNodeClick} />
       ) : (
         <>
           {/* Chips: 学科切换 */}
@@ -218,12 +232,14 @@ export function KnowledgeTreeView({
             <KnowledgeRadialTree
               subject={activeSubjectData}
               litByNodeId={litByNodeId}
+              grownByParent={grownByParent}
               onNodeClick={onNodeClick}
             />
           ) : (
             <SubjectGroupedView
               subject={activeSubjectData}
               litByNodeId={litByNodeId}
+              grownByParent={grownByParent}
               onNodeClick={onNodeClick}
             />
           )}
@@ -233,14 +249,17 @@ export function KnowledgeTreeView({
   )
 }
 
+type GrownChild = { node_id: string; name_zh: string; depth: number; lit: boolean }
+
 interface GroupedProps {
   subject: PlatformSubject
   litByNodeId: Map<string, UnifiedLitInfo>
+  grownByParent: Map<string, GrownChild[]>
   onNodeClick?: (knodeId: string, slug?: string) => void
 }
 
-/** 子域分组视图: 学科 → 子域 (可折叠) → 概念叶 (亮/灰)。多层下钻。 */
-function SubjectGroupedView({ subject, litByNodeId, onNodeClick }: GroupedProps) {
+/** 子域分组视图: 学科 → 子域 (可折叠) → 概念叶 → 生长子节点 (任意深度)。 */
+function SubjectGroupedView({ subject, litByNodeId, grownByParent, onNodeClick }: GroupedProps) {
   // 按 id 第 2 段 (子域) 分组
   const groups = useMemo(() => {
     const map = new Map<string, PlatformTreeNode[]>()
@@ -328,40 +347,80 @@ function SubjectGroupedView({ subject, litByNodeId, onNodeClick }: GroupedProps)
                 {g.nodes.map((n) => {
                   const lit = litByNodeId.get(n.id)
                   const isLit = !!lit
-                  return (
-                    <button
-                      key={n.id}
-                      type="button"
-                      title={isLit ? lit!.detail : "尚未点亮"}
-                      onClick={() => {
-                        if (isLit && lit!.sources[0] && onNodeClick) {
-                          const src = lit!.sources[0]
-                          // user mode source 形如 "slug·knode"; project mode 直接 knode
-                          const [a, b] = src.includes("·") ? src.split("·") : [undefined, src]
-                          onNodeClick(b || src, a)
-                        }
-                      }}
-                      style={{
-                        padding: "6px 11px",
-                        borderRadius: 8,
-                        fontSize: 12.5,
-                        cursor: isLit ? "pointer" : "default",
-                        border: "1px solid",
-                        borderColor: isLit ? subject.color : "var(--border)",
-                        background: isLit ? `${subject.color}1a` : "var(--paper)",
-                        color: isLit ? "var(--ink)" : "var(--sub-2)",
-                        fontWeight: isLit ? 500 : 400,
-                      }}
-                    >
-                      {n.name_zh}
-                    </button>
-                  )
+                  const onLeafClick = () => {
+                    if (isLit && lit!.sources[0] && onNodeClick) {
+                      const src = lit!.sources[0]
+                      const [a, b] = src.includes("·") ? src.split("·") : [undefined, src]
+                      onNodeClick(b || src, a)
+                    }
+                  }
+                  const children = grownByParent.get(n.id)
+                  // 有生长子节点 → 概念叶 + 其生长子链整组占一行 (纵向)
+                  if (children && children.length) {
+                    return (
+                      <div key={n.id} style={{ display: "flex", flexDirection: "column", gap: 6, width: "100%" }}>
+                        <ConceptChip name={n.name_zh} isLit={isLit} color={subject.color} onClick={onLeafClick} />
+                        <GrownChain parentId={n.id} grownByParent={grownByParent} color={subject.color} depth={1} />
+                      </div>
+                    )
+                  }
+                  return <ConceptChip key={n.id} name={n.name_zh} isLit={isLit} color={subject.color} onClick={onLeafClick} />
                 })}
               </div>
             )}
           </div>
         )
       })}
+    </div>
+  )
+}
+
+/** 概念叶 chip (平台树第三层) */
+function ConceptChip({ name, isLit, color, onClick }: { name: string; isLit: boolean; color: string; onClick?: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={{
+        padding: "6px 11px", borderRadius: 8, fontSize: 12.5,
+        cursor: isLit ? "pointer" : "default", border: "1px solid",
+        borderColor: isLit ? color : "var(--border)",
+        background: isLit ? `${color}1a` : "var(--paper)",
+        color: isLit ? "var(--ink)" : "var(--sub-2)", fontWeight: isLit ? 500 : 400,
+        alignSelf: "flex-start",
+      }}
+    >
+      {name}
+    </button>
+  )
+}
+
+/** 生长子链 (递归): 个人生长节点, 虚线边区分平台审定; 任意深度缩进。 */
+function GrownChain({
+  parentId, grownByParent, color, depth,
+}: { parentId: string; grownByParent: Map<string, GrownChild[]>; color: string; depth: number }) {
+  const children = grownByParent.get(parentId)
+  if (!children || !children.length) return null
+  return (
+    <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginLeft: depth * 16, alignItems: "flex-start" }}>
+      {children.map((c) => (
+        <div key={c.node_id} style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          <span
+            title={c.lit ? "你深入学到的知识点" : "待点亮"}
+            style={{
+              padding: "5px 10px", borderRadius: 8, fontSize: 12,
+              border: "1px dashed", // 虚线 = 个人生长 (区分平台审定的实线)
+              borderColor: c.lit ? color : "var(--border-2)",
+              background: c.lit ? `${color}14` : "transparent",
+              color: c.lit ? "var(--ink-2)" : "var(--sub-2)",
+              alignSelf: "flex-start",
+            }}
+          >
+            {c.name_zh}
+          </span>
+          <GrownChain parentId={c.node_id} grownByParent={grownByParent} color={color} depth={depth + 1} />
+        </div>
+      ))}
     </div>
   )
 }
