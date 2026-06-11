@@ -9,6 +9,8 @@
  */
 
 import { useMemo, useState } from "react"
+import { ChevronRight } from "lucide-react"
+import { subdomainName } from "@/lib/subdomain-names"
 
 import type {
   DepthLevel,
@@ -165,12 +167,145 @@ export function KnowledgeTreeView({
         })}
       </div>
 
-      {/* 子树 SVG */}
-      <SubjectTreeSvg
+      {/* 子域分组 + 概念叶下钻 (多层) */}
+      <SubjectGroupedView
         subject={activeSubjectData}
         litByNodeId={litByNodeId}
         onNodeClick={onNodeClick}
       />
+    </div>
+  )
+}
+
+interface GroupedProps {
+  subject: PlatformSubject
+  litByNodeId: Map<string, UnifiedLitInfo>
+  onNodeClick?: (knodeId: string, slug?: string) => void
+}
+
+/** 子域分组视图: 学科 → 子域 (可折叠) → 概念叶 (亮/灰)。多层下钻。 */
+function SubjectGroupedView({ subject, litByNodeId, onNodeClick }: GroupedProps) {
+  // 按 id 第 2 段 (子域) 分组
+  const groups = useMemo(() => {
+    const map = new Map<string, PlatformTreeNode[]>()
+    for (const n of subject.nodes) {
+      const parts = n.id.split(".")
+      const sub = parts.length >= 3 ? parts[1] : "_"
+      if (!map.has(sub)) map.set(sub, [])
+      map.get(sub)!.push(n)
+    }
+    // 按点亮数降序 (有进展的子域排前)
+    return [...map.entries()]
+      .map(([sub, nodes]) => ({
+        sub,
+        nodes,
+        lit: nodes.filter((n) => litByNodeId.has(n.id)).length,
+        total: nodes.length,
+      }))
+      .sort((a, b) => b.lit - a.lit || b.total - a.total)
+  }, [subject.nodes, litByNodeId])
+
+  // 默认展开有点亮的子域 (让用户先看到自己的进展); 其余折叠
+  const [expanded, setExpanded] = useState<Set<string>>(() => {
+    const s = new Set<string>()
+    for (const g of groups) if (g.lit > 0) s.add(g.sub)
+    return s
+  })
+
+  function toggle(sub: string) {
+    setExpanded((prev) => {
+      const next = new Set(prev)
+      next.has(sub) ? next.delete(sub) : next.add(sub)
+      return next
+    })
+  }
+
+  return (
+    <div className="flex flex-col gap-2">
+      {groups.map((g) => {
+        const open = expanded.has(g.sub)
+        const pct = g.total ? Math.round((g.lit * 100) / g.total) : 0
+        return (
+          <div
+            key={g.sub}
+            className="rounded-xl border border-[var(--border)] bg-[var(--card)] overflow-hidden"
+          >
+            {/* 子域 header (可折叠) */}
+            <button
+              type="button"
+              onClick={() => toggle(g.sub)}
+              className="flex w-full items-center gap-3 px-4 py-3 text-left"
+              style={{ cursor: "pointer", background: "transparent", border: 0 }}
+            >
+              <ChevronRight
+                size={15}
+                strokeWidth={1.8}
+                style={{
+                  transition: "transform 150ms",
+                  transform: open ? "rotate(90deg)" : "none",
+                  color: "var(--sub-2)",
+                  flexShrink: 0,
+                }}
+              />
+              <span
+                className="h-2.5 w-2.5 rounded-full"
+                style={{ backgroundColor: g.lit > 0 ? subject.color : "var(--border-2)" }}
+              />
+              <span style={{ fontWeight: 600, fontSize: 14.5, color: "var(--ink)" }}>
+                {subdomainName(subject.id, g.sub)}
+              </span>
+              <span className="mono" style={{ fontSize: 11.5, color: "var(--sub)", marginLeft: "auto" }}>
+                {g.lit}/{g.total}
+              </span>
+              {/* 进度条 */}
+              <span style={{ width: 56, height: 4, borderRadius: 999, background: "var(--paper-2)", overflow: "hidden", flexShrink: 0 }}>
+                <span style={{ display: "block", height: "100%", width: `${pct}%`, background: subject.color, borderRadius: 999 }} />
+              </span>
+            </button>
+
+            {/* 概念叶 (展开时) */}
+            {open && (
+              <div
+                className="flex flex-wrap gap-2 px-4 pb-4 pt-1"
+                style={{ borderTop: "1px solid var(--hairline)" }}
+              >
+                {g.nodes.map((n) => {
+                  const lit = litByNodeId.get(n.id)
+                  const isLit = !!lit
+                  return (
+                    <button
+                      key={n.id}
+                      type="button"
+                      title={isLit ? lit!.detail : "尚未点亮"}
+                      onClick={() => {
+                        if (isLit && lit!.sources[0] && onNodeClick) {
+                          const src = lit!.sources[0]
+                          // user mode source 形如 "slug·knode"; project mode 直接 knode
+                          const [a, b] = src.includes("·") ? src.split("·") : [undefined, src]
+                          onNodeClick(b || src, a)
+                        }
+                      }}
+                      style={{
+                        padding: "6px 11px",
+                        borderRadius: 8,
+                        fontSize: 12.5,
+                        cursor: isLit ? "pointer" : "default",
+                        border: "1px solid",
+                        borderColor: isLit ? subject.color : "var(--border)",
+                        background: isLit ? `${subject.color}1a` : "var(--paper)",
+                        color: isLit ? "var(--ink)" : "var(--sub-2)",
+                        fontWeight: isLit ? 500 : 400,
+                      }}
+                    >
+                      {n.name_zh}
+                    </button>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        )
+      })}
     </div>
   )
 }
