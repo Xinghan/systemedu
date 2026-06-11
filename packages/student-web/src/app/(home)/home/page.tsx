@@ -6,7 +6,7 @@ import { useEffect, useState } from "react"
 import { toast } from "sonner"
 import {
   ArrowUpRight,
-  Bot,
+  Brain,
   ChevronRight,
   CirclePlay,
   Layers,
@@ -116,7 +116,30 @@ export default function HomePage() {
       >
         <StatCard icon={<Layers size={15} strokeWidth={1.5} />} label="在学项目" value={String(projectCount)} sub="书架上的项目数" />
         <StatCard icon={<Sparkles size={15} strokeWidth={1.5} />} label="已掌握知识点" value={String(totalDone)} sub="完成的节点总数" />
-        <StatCard icon={<Bot size={15} strokeWidth={1.5} />} label="AI 助教" value="待命中" sub="进入章节即可对话" />
+        <Link
+          href="/brain"
+          style={{
+            border: "1px solid var(--primary-line)",
+            borderRadius: 14,
+            padding: "16px 18px",
+            background: "linear-gradient(135deg, var(--card) 0%, var(--primary-soft) 130%)",
+            display: "flex",
+            flexDirection: "column",
+            justifyContent: "space-between",
+            textDecoration: "none",
+            color: "inherit",
+            transition: "box-shadow var(--t-med), transform var(--t-med)",
+          }}
+          className="brain-card"
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: 7, color: "var(--primary-ink)", fontSize: 12.5, marginBottom: 8 }}>
+            <Brain size={15} strokeWidth={1.5} /> {t("brain.card.title")}
+          </div>
+          <div style={{ fontSize: 18, fontWeight: 600, color: "var(--ink)", letterSpacing: "-0.01em", display: "flex", alignItems: "center", gap: 6 }}>
+            {t("brain.card.sub")}
+            <ArrowUpRight size={16} strokeWidth={1.6} style={{ color: "var(--primary)" }} />
+          </div>
+        </Link>
       </div>
 
       {/* 我的项目网格 */}

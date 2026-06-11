@@ -4,13 +4,13 @@ import Link from "next/link"
 import { useRouter, usePathname } from "next/navigation"
 import { useEffect, useState } from "react"
 import {
+  Brain,
   ChevronDown,
   Command,
   GitBranch,
   Home,
   Library as LibraryIcon,
   LogOut,
-  MessageSquare,
   Search,
   Sparkles,
 } from "lucide-react"
@@ -160,20 +160,12 @@ export function StudentHeader() {
               }}
             >
               <Link
-                href="/memory"
+                href="/brain"
                 onClick={() => setMenuOpen(false)}
                 style={menuItemStyle}
               >
-                <Sparkles size={14} strokeWidth={1.5} />
-                {t("nav.memory")}
-              </Link>
-              <Link
-                href="/sessions"
-                onClick={() => setMenuOpen(false)}
-                style={menuItemStyle}
-              >
-                <MessageSquare size={14} strokeWidth={1.5} />
-                {t("nav.sessions")}
+                <Brain size={14} strokeWidth={1.5} />
+                {t("nav.brain")}
               </Link>
               <div style={{ height: 1, background: "var(--border)", margin: "2px 0" }} />
               <button
