@@ -7,10 +7,12 @@ import { toast } from "sonner"
 import { ChevronRight, MessageSquare } from "lucide-react"
 import { chatSessions, type ChatSessionDTO } from "@/lib/api"
 import { useAuthStore } from "@/lib/stores/auth-store"
+import { useT } from "@/lib/i18n/use-t"
 
 export default function SessionsPage() {
   const router = useRouter()
   const { loggedIn, hydrate } = useAuthStore()
+  const t = useT()
   const [items, setItems] = useState<ChatSessionDTO[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -44,13 +46,13 @@ export default function SessionsPage() {
 
   return (
     <main className="page-wide">
-      <Crumbs items={[{ label: "SystemEdu" }, { label: "Sessions" }]} />
+      <Crumbs items={[{ label: "SystemEdu" }, { label: t("nav.sessions") }]} />
 
       <header style={{ marginTop: 18, marginBottom: 28 }}>
         <div className="eyebrow"><span className="dot" /> dialog history</div>
-        <h1 className="h1" style={{ marginTop: 8 }}>历史对话</h1>
+        <h1 className="h1" style={{ marginTop: 8 }}>{t("sessions.title")}</h1>
         <p className="sub" style={{ marginTop: 6 }}>
-          你跟 AI 导师的所有对话, 按项目分组
+          {t("sessions.subtitle")}
         </p>
       </header>
 
@@ -61,8 +63,8 @@ export default function SessionsPage() {
       ) : items.length === 0 ? (
         <div className="card-elevated" style={{ padding: 56, textAlign: "center" }}>
           <MessageSquare size={36} strokeWidth={1.5} style={{ color: "var(--sub-2)", margin: "0 auto 12px" }} />
-          <p className="body" style={{ color: "var(--sub)" }}>还没有对话</p>
-          <p className="sub" style={{ marginTop: 4 }}>进入学习页跟 AI 导师聊聊吧</p>
+          <p className="body" style={{ color: "var(--sub)" }}>{t("sessions.empty.title")}</p>
+          <p className="sub" style={{ marginTop: 4 }}>{t("sessions.empty.desc")}</p>
         </div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 32 }}>

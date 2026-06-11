@@ -16,6 +16,7 @@ import {
 } from "lucide-react"
 import { library, myProjects, type LibraryProjectSummary } from "@/lib/api"
 import { useAuthStore } from "@/lib/stores/auth-store"
+import { useT } from "@/lib/i18n/use-t"
 
 // Crumbs
 function Crumbs({ items }: { items: { label: string }[] }) {
@@ -68,6 +69,7 @@ function domainClass(domain?: string | null): string {
 }
 
 export default function LibraryListPage() {
+  const t = useT()
   const { loggedIn, hydrate } = useAuthStore()
   const [projects, setProjects] = useState<LibraryProjectSummary[]>([])
   const [pulled, setPulled] = useState<Set<string>>(new Set())
@@ -120,7 +122,7 @@ export default function LibraryListPage() {
 
   return (
     <main className="page-wide" style={{ paddingTop: 20 }}>
-      <Crumbs items={[{ label: "Home" }, { label: "Library" }]} />
+      <Crumbs items={[{ label: "Home" }, { label: t("nav.library") }]} />
 
       {/* heading */}
       <div
@@ -139,7 +141,7 @@ export default function LibraryListPage() {
             {projects.length} projects · {Object.keys(counts).length} domains
           </div>
           <h1 className="h1" style={{ fontSize: 30 }}>
-            Project library
+            {t("library.title")}
           </h1>
         </div>
         <div style={{ display: "flex", gap: 10 }}>
@@ -178,7 +180,7 @@ export default function LibraryListPage() {
               className={"nav-tab " + (filter === c ? "active" : "")}
               onClick={() => setFilter(c)}
             >
-              {c}
+              {c === "All" ? t("library.filter.all") : c}
               {c !== "All" && (
                 <span
                   style={{
@@ -196,10 +198,10 @@ export default function LibraryListPage() {
         })}
         <div style={{ flex: 1 }} />
         <span className="mono" style={{ fontSize: 11.5, color: "var(--sub)" }}>
-          SORT
+          {t("library.sort")}
         </span>
         <button className="btn btn-ghost btn-sm">
-          Most recent
+          {t("library.sort.recent")}
           <ChevronDown size={12} strokeWidth={1.5} />
         </button>
       </div>
@@ -242,16 +244,16 @@ export default function LibraryListPage() {
         }}
       >
         <div>
-          <h3 className="h3">没找到想做的?</h3>
+          <h3 className="h3">{t("library.request.title")}</h3>
           <p
             className="body"
             style={{ color: "var(--sub)", fontSize: 13, marginTop: 2 }}
           >
-            导师会跟行业作者一起为你定一个项目。
+            {t("library.request.desc")}
           </p>
         </div>
         <button className="btn btn-ghost">
-          <Plus size={14} strokeWidth={1.5} /> Request a project
+          <Plus size={14} strokeWidth={1.5} /> {t("library.request.cta")}
         </button>
       </div>
     </main>

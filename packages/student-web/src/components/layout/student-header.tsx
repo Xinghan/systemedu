@@ -16,13 +16,15 @@ import {
 } from "lucide-react"
 import { useAuthStore } from "@/lib/stores/auth-store"
 import { auth } from "@/lib/api"
+import { useT } from "@/lib/i18n/use-t"
+import { LangSwitch } from "@/components/layout/lang-switch"
 
 const TABS = [
-  { id: "home",     label: "Home",         icon: Home,        href: "/home" },
-  { id: "library",  label: "Library",      icon: LibraryIcon, href: "/library" },
-  { id: "projects", label: "My Projects",  icon: GitBranch,   href: "/my-projects" },
-  { id: "sessions", label: "Sessions",     icon: MessageSquare, href: "/sessions" },
-  { id: "memory",   label: "Memory",       icon: Sparkles,    href: "/memory" },
+  { id: "home",     labelKey: "nav.home",        icon: Home,        href: "/home" },
+  { id: "library",  labelKey: "nav.library",     icon: LibraryIcon, href: "/library" },
+  { id: "projects", labelKey: "nav.my_projects", icon: GitBranch,   href: "/my-projects" },
+  { id: "sessions", labelKey: "nav.sessions",    icon: MessageSquare, href: "/sessions" },
+  { id: "memory",   labelKey: "nav.memory",      icon: Sparkles,    href: "/memory" },
 ]
 
 function initials(name?: string | null): string {
@@ -39,6 +41,7 @@ export function StudentHeader() {
   const pathname = usePathname() || "/"
   const { loggedIn, username, hydrate, logout } = useAuthStore()
   const [menuOpen, setMenuOpen] = useState(false)
+  const t = useT()
 
   useEffect(() => {
     hydrate()
@@ -83,16 +86,16 @@ export function StudentHeader() {
       </Link>
 
       <nav className="nav-tabs">
-        {TABS.map((t) => {
-          const Icon = t.icon
+        {TABS.map((tab) => {
+          const Icon = tab.icon
           return (
             <Link
-              key={t.id}
-              href={t.href}
-              className={"nav-tab " + (isActive(t.href) ? "active" : "")}
+              key={tab.id}
+              href={tab.href}
+              className={"nav-tab " + (isActive(tab.href) ? "active" : "")}
             >
               <Icon size={15} strokeWidth={1.5} />
-              {t.label}
+              {t(tab.labelKey)}
             </Link>
           )
         })}
@@ -106,18 +109,20 @@ export function StudentHeader() {
         onClick={() => {
           // TODO spec 030: 全局搜索
         }}
-        aria-label="搜索"
+        aria-label={t("nav.search")}
       >
         <Search size={15} strokeWidth={1.5} />
-        <span>Search projects, modules, concepts…</span>
+        <span>{t("nav.search")}</span>
         <span className="kbd">
           <Command size={10} strokeWidth={1.5} style={{ verticalAlign: -1 }} /> K
         </span>
       </button>
 
       <button type="button" className="btn btn-ghost btn-sm" style={{ height: 32 }}>
-        <Sparkles size={14} strokeWidth={1.5} /> Assistant
+        <Sparkles size={14} strokeWidth={1.5} /> {t("nav.assistant")}
       </button>
+
+      <LangSwitch />
 
       {loggedIn ? (
         <div style={{ position: "relative" }}>
@@ -162,7 +167,7 @@ export function StudentHeader() {
                 }}
               >
                 <LogOut size={14} strokeWidth={1.5} />
-                退出登录
+                {t("nav.logout")}
               </button>
             </div>
           )}
@@ -170,10 +175,10 @@ export function StudentHeader() {
       ) : (
         <div style={{ display: "flex", gap: 8 }}>
           <Link href="/login" className="btn btn-ghost btn-sm">
-            登录
+            {t("nav.login")}
           </Link>
           <Link href="/register" className="btn btn-violet btn-sm">
-            注册
+            {t("nav.register")}
           </Link>
         </div>
       )}

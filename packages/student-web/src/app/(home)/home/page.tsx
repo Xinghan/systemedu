@@ -14,6 +14,7 @@ import {
 } from "lucide-react"
 import { library, myKnodes, myProjects, type MyProjectItem } from "@/lib/api"
 import { useAuthStore } from "@/lib/stores/auth-store"
+import { useT } from "@/lib/i18n/use-t"
 
 // ── 面包屑 ──
 function Crumbs({ items }: { items: { label: string }[] }) {
@@ -46,6 +47,7 @@ type ProgressMap = Record<string, number>
 
 export default function HomePage() {
   const router = useRouter()
+  const t = useT()
   const { loggedIn, username, hydrate } = useAuthStore()
   const [items, setItems] = useState<MyProjectItem[]>([])
   const [progress, setProgress] = useState<ProgressMap>({})
@@ -91,12 +93,12 @@ export default function HomePage() {
 
   return (
     <main className="page-wide" style={{ paddingTop: 20 }}>
-      <Crumbs items={[{ label: "Home" }, { label: "学习面板" }]} />
+      <Crumbs items={[{ label: t("nav.home") }, { label: "学习面板" }]} />
 
       {/* 欢迎 */}
       <div style={{ margin: "12px 0 24px" }}>
         <h1 style={{ fontSize: 30, fontWeight: 700, letterSpacing: "-0.02em", color: "var(--ink)" }}>
-          欢迎回来，{username || "同学"}
+          {t("home.welcome_back")}，{username || "同学"}
         </h1>
         <p style={{ marginTop: 6, color: "var(--sub)", fontSize: 14 }}>
           {projectCount > 0 ? `你正在学 ${projectCount} 个项目` : "开始你的第一个项目吧"}
@@ -119,7 +121,7 @@ export default function HomePage() {
 
       {/* 我的项目网格 */}
       <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 14 }}>
-        <h2 className="h2">我的项目{projectCount > 0 ? ` (${projectCount})` : ""}</h2>
+        <h2 className="h2">{t("home.my_projects")}{projectCount > 0 ? ` (${projectCount})` : ""}</h2>
         <Link href="/library" className="btn btn-ghost btn-sm">
           浏览全部项目 <ArrowUpRight size={13} strokeWidth={1.5} />
         </Link>
@@ -137,9 +139,9 @@ export default function HomePage() {
             background: "var(--paper-2)",
           }}
         >
-          <p style={{ color: "var(--ink-2)", fontSize: 15, marginBottom: 14 }}>你还没有项目</p>
+          <p style={{ color: "var(--ink-2)", fontSize: 15, marginBottom: 14 }}>{t("home.empty.title")}</p>
           <Link href="/library" className="btn btn-primary">
-            去 Library 挑一个 <ArrowUpRight size={14} strokeWidth={1.5} />
+            {t("home.empty.cta")} <ArrowUpRight size={14} strokeWidth={1.5} />
           </Link>
         </div>
       )}

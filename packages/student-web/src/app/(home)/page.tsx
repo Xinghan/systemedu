@@ -2,16 +2,17 @@
 
 import Image from "next/image"
 import Link from "next/link"
-import { useEffect, useState } from "react"
+import { useEffect } from "react"
 import {
   ArrowRight,
   Bot,
   Cpu,
-  Languages,
   Network,
   Sparkles,
 } from "lucide-react"
 import { useAuthStore } from "@/lib/stores/auth-store"
+import { useLocale } from "@/lib/i18n/use-t"
+import { useLocaleStore } from "@/lib/i18n/store"
 
 // Public landing page — 长滚动营销页, 从精神层面切节: 好奇心 / 科技感 / 陪伴 / 记忆 / 路径。
 // 设计: docs/superpowers/specs/2026-06-10-landing-page-redesign-design.md
@@ -276,22 +277,20 @@ const HOW_STEPS: { title: { zh: string; en: string }; body: { zh: string; en: st
 
 export default function Homepage() {
   const { loggedIn, hydrate } = useAuthStore()
-  const [lang, setLang] = useState<Lang>("zh")
+  const lang = useLocale()
+  const hydrateLocale = useLocaleStore((s) => s.hydrate)
 
   useEffect(() => {
     hydrate()
-  }, [hydrate])
+    hydrateLocale()
+  }, [hydrate, hydrateLocale])
 
   const t = COPY[lang]
 
   return (
     <main style={{ width: "100%", overflow: "hidden" }}>
-      {/* ── Hero ── */}
+      {/* ── Hero ── (语言切换在顶栏全局 LangSwitch) */}
       <section style={{ maxWidth: 1200, margin: "0 auto", padding: "64px 32px 64px", position: "relative" }}>
-        <div style={{ position: "absolute", top: 20, right: 32, zIndex: 3 }}>
-          <LangToggle lang={lang} onChange={setLang} />
-        </div>
-
         <div style={{ textAlign: "center", maxWidth: 760, margin: "0 auto" }}>
           <div className="eyebrow" style={{ marginBottom: 22, justifyContent: "center" }}>
             <span className="dot" /> {t.eyebrow}
@@ -733,44 +732,6 @@ function ProjectStrip({ lang, t }: { lang: Lang; t: Copy }) {
           )
         })}
       </div>
-    </div>
-  )
-}
-
-function LangToggle({ lang, onChange }: { lang: Lang; onChange: (l: Lang) => void }) {
-  return (
-    <div
-      style={{
-        display: "inline-flex",
-        alignItems: "center",
-        gap: 2,
-        padding: 3,
-        border: "1px solid var(--border-2)",
-        borderRadius: 999,
-        background: "rgba(255,255,255,.7)",
-        backdropFilter: "blur(8px)",
-      }}
-    >
-      <Languages size={13} strokeWidth={1.5} style={{ color: "var(--sub-2)", margin: "0 4px" }} />
-      {(["zh", "en"] as const).map((l) => (
-        <button
-          key={l}
-          onClick={() => onChange(l)}
-          style={{
-            border: 0,
-            borderRadius: 999,
-            padding: "4px 11px",
-            fontFamily: "var(--mono)",
-            fontSize: 11.5,
-            fontWeight: 500,
-            background: lang === l ? "var(--ink)" : "transparent",
-            color: lang === l ? "#fff" : "var(--sub)",
-            transition: "background var(--t-fast), color var(--t-fast)",
-          }}
-        >
-          {l === "zh" ? "中" : "EN"}
-        </button>
-      ))}
     </div>
   )
 }

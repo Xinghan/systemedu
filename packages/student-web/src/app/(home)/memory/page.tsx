@@ -7,6 +7,7 @@ import { ChevronRight, Lock, Sparkles, Trash2, Network } from "lucide-react"
 import { memory, type MemoryFact } from "@/lib/api"
 import { useAuthStore } from "@/lib/stores/auth-store"
 import { UserKnowledgeTreeView } from "@/components/learning/UserKnowledgeTreeView"
+import { useT } from "@/lib/i18n/use-t"
 
 const CATEGORY_LABEL: Record<string, string> = {
   interest: "兴趣",
@@ -19,6 +20,7 @@ const CATEGORY_LABEL: Record<string, string> = {
 }
 
 export default function MemoryPage() {
+  const t = useT()
   const router = useRouter()
   const { loggedIn, hydrate } = useAuthStore()
   const [byCategory, setByCategory] = useState<Record<string, MemoryFact[]>>({})
@@ -67,15 +69,15 @@ export default function MemoryPage() {
       <div style={{ display: "flex", alignItems: "center", gap: 8, color: "var(--sub)", fontSize: 12.5 }}>
         <span>SystemEdu</span>
         <ChevronRight size={12} style={{ color: "var(--sub-2)" }} />
-        <span style={{ color: "var(--ink-2)" }}>Memory</span>
+        <span style={{ color: "var(--ink-2)" }}>{t("nav.memory")}</span>
       </div>
 
       <header style={{ marginTop: 18, marginBottom: 20 }}>
         <div className="eyebrow"><span className="dot" /> {activeTab === "memory" ? "what AI remembers about you" : "your knowledge map"}</div>
-        <h1 className="h1" style={{ marginTop: 8 }}>{activeTab === "memory" ? "我的记忆" : "我的知识图谱"}</h1>
+        <h1 className="h1" style={{ marginTop: 8 }}>{activeTab === "memory" ? t("memory.title") : "我的知识图谱"}</h1>
         <p className="sub" style={{ marginTop: 6 }}>
           {activeTab === "memory"
-            ? `AI 导师记住了关于你的 ${total} 条事实, 用于个性化回答 · 仅你可见 · 可随时删除`
+            ? `${t("memory.subtitle")} · ${t("memory.fact_count", { n: total })}`
             : "你完成的每个 knode 会点亮平台理论知识树上对应的节点, 跨项目自动聚合"}
         </p>
       </header>
@@ -123,9 +125,9 @@ export default function MemoryPage() {
       ) : cats.length === 0 ? (
         <div className="card-elevated" style={{ padding: 56, textAlign: "center" }}>
           <Sparkles size={36} strokeWidth={1.5} style={{ color: "var(--sub-2)", margin: "0 auto 12px" }} />
-          <p className="body" style={{ color: "var(--sub)" }}>还没有记忆</p>
+          <p className="body" style={{ color: "var(--sub)" }}>{t("memory.empty.title")}</p>
           <p className="sub" style={{ marginTop: 4 }}>
-            跟 AI 导师聊一段时间后, 它会自动记住关于你的画像
+            {t("memory.empty.desc")}
           </p>
         </div>
       ) : (

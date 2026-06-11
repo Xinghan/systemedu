@@ -19,6 +19,7 @@ import {
 } from "lucide-react"
 import { library, myProjects, type MyProjectItem } from "@/lib/api"
 import { useAuthStore } from "@/lib/stores/auth-store"
+import { useT } from "@/lib/i18n/use-t"
 
 type Status = "active" | "paused" | "shipped"
 type FilterKey = Status | "all"
@@ -63,6 +64,7 @@ function daysAgo(iso: string | null | undefined): number {
 }
 
 export default function MyProjectsPage() {
+  const t = useT()
   const router = useRouter()
   const { loggedIn, hydrate } = useAuthStore()
   const [items, setItems] = useState<MyProjectItem[]>([])
@@ -147,7 +149,7 @@ export default function MyProjectsPage() {
 
   return (
     <main className="page-wide" style={{ paddingTop: 20 }}>
-      <Crumbs items={[{ label: "Home" }, { label: "My Projects" }]} />
+      <Crumbs items={[{ label: "Home" }, { label: t("nav.my_projects") }]} />
 
       <div
         style={{
@@ -164,7 +166,7 @@ export default function MyProjectsPage() {
             <span className="dot" /> {forks.length} forks · {groups.shipped.length} shipped
           </div>
           <h1 className="h1" style={{ fontSize: 30 }}>
-            My projects
+            {t("myproj.title")}
           </h1>
         </div>
         <div style={{ display: "flex", gap: 10 }}>
@@ -423,6 +425,7 @@ function statusPip(s: Status) {
 }
 
 function ForkCard({ f, onRemove }: { f: ForkItem; onRemove: () => void }) {
+  const t = useT()
   const target = f.last_module_id || "M01"
   const dClass = domainClass(f.domain)
   return (
@@ -560,7 +563,7 @@ function ForkCard({ f, onRemove }: { f: ForkItem; onRemove: () => void }) {
               href={`/learn/${encodeURIComponent(f.slug)}/${encodeURIComponent(target)}`}
               className="btn btn-violet btn-sm"
             >
-              {f.last_module_id ? "Continue" : "Start"}
+              {f.last_module_id ? t("myproj.continue") : t("myproj.start")}
               <ArrowRight size={12} strokeWidth={1.5} />
             </Link>
           </div>
@@ -667,6 +670,7 @@ function ForkListRow({ f, last }: { f: ForkItem; last: boolean }) {
 }
 
 function EmptyShelf() {
+  const t = useT()
   return (
     <div
       className="card"
@@ -683,10 +687,10 @@ function EmptyShelf() {
         <span className="dot" />
         empty shelf
       </div>
-      <h2 className="h2">你的书架还是空的</h2>
-      <p className="sub">去 Library 看看，把感兴趣的项目 Pull 到这里开始学习。</p>
+      <h2 className="h2">{t("myproj.empty.title")}</h2>
+      <p className="sub">{t("myproj.empty.desc")}</p>
       <Link href="/library" className="btn btn-violet" style={{ marginTop: 6 }}>
-        <Download size={14} strokeWidth={1.5} /> 去 Library 看看
+        <Download size={14} strokeWidth={1.5} /> {t("myproj.empty.cta")}
       </Link>
     </div>
   )
