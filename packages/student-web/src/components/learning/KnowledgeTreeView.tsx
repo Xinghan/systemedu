@@ -20,7 +20,7 @@ const KnowledgeGalaxy3D = dynamic(() => import("./KnowledgeGalaxy3D"), {
   loading: () => (
     <div
       className="rounded-2xl border border-[var(--border)]"
-      style={{ height: 540, display: "grid", placeItems: "center", background: "#151b35", color: "#9aa6d4" }}
+      style={{ height: 540, display: "grid", placeItems: "center", background: "#1e1a2b", color: "#c7b2cc" }}
     >
       正在生成知识宇宙…
     </div>

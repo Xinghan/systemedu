@@ -73,13 +73,14 @@ export default function KnowledgeGalaxy3D({ platformTree, litByNodeId, grownByPa
     bgCanvas.height = 256
     const bgctx = bgCanvas.getContext("2d")!
     const grad = bgctx.createLinearGradient(0, 0, 0, 256)
-    grad.addColorStop(0, "#202a4d")   // 深空蓝紫 — 衬托发光线/节点对比更好
-    grad.addColorStop(0.5, "#151b35")
-    grad.addColorStop(1, "#0c0f22")
+    // 暖炭紫深空 — 呼应站点珊瑚主题 (非冷蓝), 衬托珊瑚/琥珀发光对比
+    grad.addColorStop(0, "#2a2438")
+    grad.addColorStop(0.5, "#1e1a2b")
+    grad.addColorStop(1, "#13101e")
     bgctx.fillStyle = grad
     bgctx.fillRect(0, 0, 2, 256)
     scene.background = new THREE.CanvasTexture(bgCanvas)
-    scene.fog = new THREE.FogExp2(0x0c0f22, 0.010)
+    scene.fog = new THREE.FogExp2(0x13101e, 0.009)
 
     const camera = new THREE.PerspectiveCamera(55, W / H, 0.1, 1000)
     camera.position.set(0, 8, 48)
@@ -211,7 +212,7 @@ export default function KnowledgeGalaxy3D({ platformTree, litByNodeId, grownByPa
       const g = new THREE.BufferGeometry()
       g.setAttribute("position", new THREE.Float32BufferAttribute(dimEdge, 3))
       scene.add(new THREE.LineSegments(g, new THREE.LineBasicMaterial({
-        color: 0x6c7cb0, transparent: true, opacity: 0.32,  /* 冷蓝, 深空底上可见 */
+        color: 0xc2a8b8, transparent: true, opacity: 0.5,  /* 暖紫粉灰, 深底上清晰可见 */
       })))
     }
     if (litEdge.length) {
@@ -219,7 +220,7 @@ export default function KnowledgeGalaxy3D({ platformTree, litByNodeId, grownByPa
       g.setAttribute("position", new THREE.Float32BufferAttribute(litEdge, 3))
       g.setAttribute("color", new THREE.Float32BufferAttribute(litEdgeCol, 3))
       scene.add(new THREE.LineSegments(g, new THREE.LineBasicMaterial({
-        vertexColors: true, transparent: true, opacity: 0.6, blending: THREE.AdditiveBlending, depthWrite: false,
+        vertexColors: true, transparent: true, opacity: 0.78, blending: THREE.AdditiveBlending, depthWrite: false,
       })))
     }
 
@@ -245,7 +246,7 @@ export default function KnowledgeGalaxy3D({ platformTree, litByNodeId, grownByPa
       dummy.updateMatrix()
       mesh.setMatrixAt(i, dummy.matrix)
       if (m.lit) col.set(m.color)
-      else col.setRGB(0.42, 0.46, 0.62)  /* 未亮球: 蓝灰, 深空底上能看见 */
+      else col.setRGB(0.62, 0.54, 0.60)  /* 未亮球: 暖紫灰, 深底上清晰 */
       mesh.setColorAt(i, col)
     }
     mesh.instanceMatrix.needsUpdate = true
@@ -279,7 +280,7 @@ export default function KnowledgeGalaxy3D({ platformTree, litByNodeId, grownByPa
     const dgeo = new THREE.BufferGeometry()
     dgeo.setAttribute("position", new THREE.Float32BufferAttribute(dust, 3))
     scene.add(new THREE.Points(dgeo, new THREE.PointsMaterial({
-      color: 0x9aa6d4, size: 0.5, transparent: true, opacity: 0.4, map: makeGlowTexture(),
+      color: 0xc7b2cc, size: 0.5, transparent: true, opacity: 0.45, map: makeGlowTexture(),
     })))
 
     // ── raycaster 拾取 ──
@@ -389,7 +390,7 @@ export default function KnowledgeGalaxy3D({ platformTree, litByNodeId, grownByPa
         ref={mountRef}
         style={{
           width: "100%", height, borderRadius: 16, overflow: "hidden",
-          border: "1px solid var(--border)", background: "#151b35", cursor: "grab",
+          border: "1px solid var(--border)", background: "#1e1a2b", cursor: "grab",
           position: "relative",
         }}
       />
