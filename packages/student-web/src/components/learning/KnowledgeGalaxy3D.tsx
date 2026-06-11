@@ -169,6 +169,60 @@ export default function KnowledgeGalaxy3D({ platformTree, litByNodeId, grownByPa
       for (const pid of platformIds) mountGrown(pid)
     }
 
+    // ── 关系连线 (前置依赖 + 树骨架) ──
+    const litIds = new Set(metas.filter((m) => m.lit).map((m) => m.id))
+    const dimEdge: number[] = []   // 普通边
+    const litEdge: number[] = []   // 两端都点亮的边 (高亮)
+    const litEdgeCol: number[] = []
+    const pushEdge = (aId: string, bId: string, color: string) => {
+      const a = posById.get(aId), b = posById.get(bId)
+      if (!a || !b) return
+      if (litIds.has(aId) && litIds.has(bId)) {
+        litEdge.push(a.pos.x, a.pos.y, a.pos.z, b.pos.x, b.pos.y, b.pos.z)
+        const c = new THREE.Color(color)
+        litEdgeCol.push(c.r, c.g, c.b, c.r, c.g, c.b)
+      } else {
+        dimEdge.push(a.pos.x, a.pos.y, a.pos.z, b.pos.x, b.pos.y, b.pos.z)
+      }
+    }
+    // 1) 前置依赖边 (node ← prerequisites)
+    subjects.forEach((s) => {
+      s.nodes.forEach((n) => {
+        let pr = (n as { prerequisites?: string[] }).prerequisites || []
+        if (typeof pr === "string") { try { pr = JSON.parse(pr) } catch { pr = [] } }
+        for (const p of pr) pushEdge(p, n.id, s.color || "#888")
+      })
+    })
+    // 2) 树骨架边: 学科中心 → 该学科每个节点 (学科归属辐射)
+    subjects.forEach((s, si) => {
+      const ang = (si / nSub) * Math.PI * 2
+      const center = new THREE.Vector3(Math.cos(ang) * RING, (hash01(s.id, 7) - 0.5) * 12 + 8, Math.sin(ang) * RING)
+      s.nodes.forEach((n) => {
+        const a = posById.get(n.id)
+        if (a) dimEdge.push(center.x, center.y, center.z, a.pos.x, a.pos.y, a.pos.z)
+      })
+    })
+    // 3) 生长节点 parent→child 边
+    if (grownByParent) {
+      for (const [pid, kids] of grownByParent) for (const c of kids) pushEdge(pid, c.node_id, "#D97757")
+    }
+    // 渲染线
+    if (dimEdge.length) {
+      const g = new THREE.BufferGeometry()
+      g.setAttribute("position", new THREE.Float32BufferAttribute(dimEdge, 3))
+      scene.add(new THREE.LineSegments(g, new THREE.LineBasicMaterial({
+        color: 0x4a4136, transparent: true, opacity: 0.16,
+      })))
+    }
+    if (litEdge.length) {
+      const g = new THREE.BufferGeometry()
+      g.setAttribute("position", new THREE.Float32BufferAttribute(litEdge, 3))
+      g.setAttribute("color", new THREE.Float32BufferAttribute(litEdgeCol, 3))
+      scene.add(new THREE.LineSegments(g, new THREE.LineBasicMaterial({
+        vertexColors: true, transparent: true, opacity: 0.6, blending: THREE.AdditiveBlending, depthWrite: false,
+      })))
+    }
+
     const N = metas.length
 
     // ── InstancedMesh 球 ──
