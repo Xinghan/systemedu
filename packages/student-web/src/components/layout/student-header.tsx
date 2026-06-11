@@ -23,9 +23,18 @@ const TABS = [
   { id: "home",     labelKey: "nav.home",        icon: Home,        href: "/home" },
   { id: "library",  labelKey: "nav.library",     icon: LibraryIcon, href: "/library" },
   { id: "projects", labelKey: "nav.my_projects", icon: GitBranch,   href: "/my-projects" },
-  { id: "sessions", labelKey: "nav.sessions",    icon: MessageSquare, href: "/sessions" },
-  { id: "memory",   labelKey: "nav.memory",      icon: Sparkles,    href: "/memory" },
 ]
+
+const menuItemStyle: React.CSSProperties = {
+  padding: "10px 12px",
+  display: "flex",
+  alignItems: "center",
+  gap: 8,
+  color: "var(--ink-2)",
+  fontSize: 13,
+  textAlign: "left",
+  textDecoration: "none",
+}
 
 function initials(name?: string | null): string {
   if (!name) return "?"
@@ -150,21 +159,27 @@ export function StudentHeader() {
                 zIndex: 100,
               }}
             >
+              <Link
+                href="/memory"
+                onClick={() => setMenuOpen(false)}
+                style={menuItemStyle}
+              >
+                <Sparkles size={14} strokeWidth={1.5} />
+                {t("nav.memory")}
+              </Link>
+              <Link
+                href="/sessions"
+                onClick={() => setMenuOpen(false)}
+                style={menuItemStyle}
+              >
+                <MessageSquare size={14} strokeWidth={1.5} />
+                {t("nav.sessions")}
+              </Link>
+              <div style={{ height: 1, background: "var(--border)", margin: "2px 0" }} />
               <button
                 type="button"
                 onClick={handleLogout}
-                style={{
-                  width: "100%",
-                  padding: "10px 12px",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 8,
-                  border: 0,
-                  background: "transparent",
-                  color: "var(--ink-2)",
-                  fontSize: 13,
-                  textAlign: "left",
-                }}
+                style={{ ...menuItemStyle, border: 0, background: "transparent", width: "100%", cursor: "pointer" }}
               >
                 <LogOut size={14} strokeWidth={1.5} />
                 {t("nav.logout")}
