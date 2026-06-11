@@ -166,7 +166,7 @@ export function KnowledgeTreeView({
         >
           {([
             { m: "2d", icon: <LayoutGrid size={13} strokeWidth={1.6} />, label: "分层" },
-            { m: "tree", icon: <Share2 size={13} strokeWidth={1.6} />, label: "放射树" },
+            { m: "tree", icon: <Share2 size={13} strokeWidth={1.6} />, label: "树形" },
             { m: "3d", icon: <Orbit size={13} strokeWidth={1.6} />, label: "知识宇宙" },
           ] as const).map((o) => (
             <button
