@@ -6,13 +6,10 @@ import { useEffect, useState } from "react"
 import {
   Brain,
   ChevronDown,
-  Command,
   GitBranch,
   Home,
   Library as LibraryIcon,
   LogOut,
-  Search,
-  Sparkles,
 } from "lucide-react"
 import { useAuthStore } from "@/lib/stores/auth-store"
 import { auth } from "@/lib/api"
@@ -111,25 +108,6 @@ export function StudentHeader() {
       </nav>
 
       <div className="nav-spacer" />
-
-      <button
-        type="button"
-        className="kbar"
-        onClick={() => {
-          // TODO spec 030: 全局搜索
-        }}
-        aria-label={t("nav.search")}
-      >
-        <Search size={15} strokeWidth={1.5} />
-        <span>{t("nav.search")}</span>
-        <span className="kbd">
-          <Command size={10} strokeWidth={1.5} style={{ verticalAlign: -1 }} /> K
-        </span>
-      </button>
-
-      <button type="button" className="btn btn-ghost btn-sm" style={{ height: 32 }}>
-        <Sparkles size={14} strokeWidth={1.5} /> {t("nav.assistant")}
-      </button>
 
       <LangSwitch />
 
