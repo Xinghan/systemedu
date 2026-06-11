@@ -8,7 +8,7 @@
  * 组件名保留 KnowledgeRadialTree (调用方 KnowledgeTreeView 不变)。
  */
 
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { hierarchy, tree as d3tree, type HierarchyPointNode } from "d3-hierarchy"
 import type { PlatformSubject } from "@/lib/api"
 import { subdomainName } from "@/lib/subdomain-names"
@@ -87,6 +87,21 @@ export function KnowledgeRadialTree({ subject, litByNodeId, grownByParent, onNod
     for (const sd of fullData.children || []) if ((sd.litCount || 0) > 0) s.add(sd.id)
     return s
   })
+
+  // 数据异步到达后补充展开 (初始 state 算时 litByNodeId 可能为空)。幂等, 只增不减。
+  const litSubKey = (fullData.children || [])
+    .filter((sd) => (sd.litCount || 0) > 0).map((sd) => sd.id).join(",")
+  useEffect(() => {
+    setExpanded((prev) => {
+      const next = new Set(prev)
+      let changed = false
+      if (!next.has(subject.id)) { next.add(subject.id); changed = true }
+      for (const id of litSubKey ? litSubKey.split(",") : []) {
+        if (!next.has(id)) { next.add(id); changed = true }
+      }
+      return changed ? next : prev
+    })
+  }, [subject.id, litSubKey])
 
   // 按展开状态裁剪 children → d3 布局
   const { nodes, links, width, height } = useMemo(() => {

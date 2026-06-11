@@ -8,7 +8,7 @@
  * 点亮节点 coral 实色 + 未点亮 hairline 灰. hover 显示 "本项目 M_X 教了这个".
  */
 
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import dynamic from "next/dynamic"
 import { ChevronRight, LayoutGrid, Orbit, Share2 } from "lucide-react"
 import { subdomainName } from "@/lib/subdomain-names"
@@ -286,6 +286,20 @@ function SubjectGroupedView({ subject, litByNodeId, grownByParent, onNodeClick }
     for (const g of groups) if (g.lit > 0) s.add(g.sub)
     return s
   })
+
+  // 数据异步到达后 (初始 state 算时 litByNodeId 可能为空), 把有点亮的子域并入展开。
+  // 幂等且只增不减 — 不覆盖用户手动折叠的其它子域。
+  const litSubKey = groups.filter((g) => g.lit > 0).map((g) => g.sub).join(",")
+  useEffect(() => {
+    const litSubs = litSubKey ? litSubKey.split(",") : []
+    if (!litSubs.length) return
+    setExpanded((prev) => {
+      const next = new Set(prev)
+      let changed = false
+      for (const sub of litSubs) if (!next.has(sub)) { next.add(sub); changed = true }
+      return changed ? next : prev
+    })
+  }, [litSubKey])
 
   function toggle(sub: string) {
     setExpanded((prev) => {
