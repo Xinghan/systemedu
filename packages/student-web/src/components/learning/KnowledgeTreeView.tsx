@@ -85,8 +85,8 @@ export function KnowledgeTreeView({
   // 学科 chip
   const subjectChips = useMemo(() => {
     if (mode === "user" && userTree) {
+      // 显示所有学科 (含 0 点亮的) — 让用户看到整片待探索的学科大陆 (灰树地图感)
       return userTree.subjects_summary
-        .filter((s) => s.lit_count > 0)  // 只显示有点亮的学科
         .map((s) => ({
           id: s.subject_id,
           name_zh: s.subject_name_zh,
@@ -117,13 +117,13 @@ export function KnowledgeTreeView({
     [platformTree.subjects, activeSubject],
   )
 
+  // user 模式: 即使 0 点亮也铺出整棵灰树 (地图感 — 看到全部待探索的学科大陆)。
+  // project 模式: 没跑映射 = 真无数据, 保留空态。
   const hasAnyLit = (mode === "user" ? userTree?.lit_nodes : projectTree?.lit_nodes)?.length || 0
-  if (hasAnyLit === 0) {
+  if (mode !== "user" && hasAnyLit === 0) {
     return (
       <div className="rounded-2xl border border-[var(--border)] bg-[var(--card)] p-8 text-center">
-        <p className="text-[var(--sub)]">
-          {mode === "user" ? "你还没有完成任何 knode, 完成后再来看你的知识图谱。" : "本项目还未跑知识树映射。请稍后再来。"}
-        </p>
+        <p className="text-[var(--sub)]">本项目还未跑知识树映射。请稍后再来。</p>
       </div>
     )
   }

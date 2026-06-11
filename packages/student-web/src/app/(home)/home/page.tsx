@@ -119,25 +119,28 @@ export default function HomePage() {
         <Link
           href="/brain"
           style={{
-            border: "1px solid var(--primary-line)",
+            border: "1px solid var(--border)",
             borderRadius: 14,
             padding: "16px 18px",
-            background: "linear-gradient(135deg, var(--card) 0%, var(--primary-soft) 130%)",
-            display: "flex",
-            flexDirection: "column",
-            justifyContent: "space-between",
+            background: "var(--card)",
             textDecoration: "none",
             color: "inherit",
-            transition: "box-shadow var(--t-med), transform var(--t-med)",
+            display: "block",
+            transition: "box-shadow var(--t-med), border-color var(--t-med)",
           }}
           className="brain-card"
         >
-          <div style={{ display: "flex", alignItems: "center", gap: 7, color: "var(--primary-ink)", fontSize: 12.5, marginBottom: 8 }}>
-            <Brain size={15} strokeWidth={1.5} /> {t("brain.card.title")}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", color: "var(--sub)", fontSize: 12.5, marginBottom: 8 }}>
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 7 }}>
+              <Brain size={15} strokeWidth={1.5} /> {t("brain.card.title")}
+            </span>
+            <ArrowUpRight size={15} strokeWidth={1.6} style={{ color: "var(--sub-2)" }} />
           </div>
-          <div style={{ fontSize: 18, fontWeight: 600, color: "var(--ink)", letterSpacing: "-0.01em", display: "flex", alignItems: "center", gap: 6 }}>
+          <div style={{ fontSize: 24, fontWeight: 700, color: "var(--ink)", letterSpacing: "-0.01em" }}>
+            {t("nav.brain")}
+          </div>
+          <div style={{ marginTop: 4, fontSize: 11.5, color: "var(--sub-2)" }}>
             {t("brain.card.sub")}
-            <ArrowUpRight size={16} strokeWidth={1.6} style={{ color: "var(--primary)" }} />
           </div>
         </Link>
       </div>
@@ -182,6 +185,13 @@ export default function HomePage() {
           ))}
         </div>
       )}
+
+      <style jsx>{`
+        .brain-card:hover {
+          border-color: var(--primary-line) !important;
+          box-shadow: var(--shadow-md);
+        }
+      `}</style>
     </main>
   )
 }
