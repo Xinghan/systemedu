@@ -122,7 +122,7 @@ export default function LibraryListPage() {
 
   return (
     <main className="page-wide" style={{ paddingTop: 20 }}>
-      <Crumbs items={[{ label: "Home" }, { label: t("nav.library") }]} />
+      <Crumbs items={[{ label: t("nav.home") }, { label: t("nav.library") }]} />
 
       {/* heading */}
       <div
@@ -138,7 +138,7 @@ export default function LibraryListPage() {
         <div>
           <div className="eyebrow" style={{ marginBottom: 8 }}>
             <span className="dot" />
-            {projects.length} projects · {Object.keys(counts).length} domains
+            {t("library.stats", { p: projects.length, d: Object.keys(counts).length })}
           </div>
           <h1 className="h1" style={{ fontSize: 30 }}>
             {t("library.title")}
@@ -146,10 +146,10 @@ export default function LibraryListPage() {
         </div>
         <div style={{ display: "flex", gap: 10 }}>
           <button className="btn btn-ghost">
-            <Filter size={14} strokeWidth={1.5} /> Filters
+            <Filter size={14} strokeWidth={1.5} /> {t("library.filters")}
           </button>
           <button className="btn btn-ghost">
-            <Grid3X3 size={14} strokeWidth={1.5} /> Grid
+            <Grid3X3 size={14} strokeWidth={1.5} /> {t("library.grid")}
           </button>
         </div>
       </div>
@@ -180,7 +180,7 @@ export default function LibraryListPage() {
               className={"nav-tab " + (filter === c ? "active" : "")}
               onClick={() => setFilter(c)}
             >
-              {c === "All" ? t("library.filter.all") : c}
+              {c === "All" ? t("library.filter.all") : t(`domain.${c.toLowerCase()}`)}
               {c !== "All" && (
                 <span
                   style={{
@@ -267,6 +267,7 @@ function ProjectCard({
   project: LibraryProjectSummary
   pulled: boolean
 }) {
+  const t = useT()
   const dClass = domainClass(project.domain)
   const isDraft = project.status === "draft"
 
@@ -316,7 +317,7 @@ function ProjectCard({
                 fontWeight: 600,
               }}
             >
-              草稿 · 重新生成中
+              {t("card.draft")}
             </span>
           )}
           {project.domain && <span className={`tag ${dClass}`}>{project.domain}</span>}
@@ -329,7 +330,7 @@ function ProjectCard({
           {pulled && !isDraft && (
             <span className="tag violet">
               <Sparkles size={11} strokeWidth={1.5} style={{ marginRight: 2 }} />
-              在我的书架
+              {t("card.on_shelf")}
             </span>
           )}
         </div>
@@ -390,7 +391,7 @@ function ProjectCard({
                 gap: 4,
               }}
             >
-              暂未开放
+              {t("card.unavailable")}
             </span>
           ) : (
             <span
@@ -403,7 +404,7 @@ function ProjectCard({
                 gap: 4,
               }}
             >
-              Open <ArrowRight size={13} strokeWidth={1.5} />
+              {t("card.open")} <ArrowRight size={13} strokeWidth={1.5} />
             </span>
           )}
         </div>
