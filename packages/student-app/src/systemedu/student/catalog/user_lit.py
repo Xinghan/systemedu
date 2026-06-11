@@ -142,12 +142,17 @@ async def compute_user_lit_nodes(user_id: str) -> dict[str, Any]:
             "percent": percent,
         })
 
+    # spec 039: 用户个人树生长节点 (第四层+, 挂在平台树叶或彼此下)
+    from ..db import get_user_grown_nodes
+    grown_nodes = get_user_grown_nodes(user_id)
+
     return {
         "user_id": user_id,
         "lit_nodes": list(user_lit_map.values()),
         "subjects_summary": subjects_summary,
         "total_lit": len(user_lit_map),
         "total_platform_nodes": sum(s["total_count"] for s in subjects_summary),
+        "grown_nodes": grown_nodes,  # [{node_id, parent_id, name_zh, depth, lit}]
     }
 
 

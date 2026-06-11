@@ -70,12 +70,31 @@ async def tick(extractor: StudentFactExtractor, batch: int = 5) -> int:
     return len(pending)
 
 
+async def growth_tick(evaluator: Any, batch: int = 5) -> int:
+    """spec 039: 跑一轮知识树生长评估."""
+    pending = _db.list_pending_growth(limit=batch)
+    for p in pending:
+        gid = p["id"]
+        try:
+            _db.mark_growth_processing(gid)
+            stats = await evaluator.evaluate(gid)
+            _db.mark_growth_done(gid)
+            if not stats.skipped:
+                log.info("growth: pending=%s grown=%d reused=%d", gid, stats.grown, stats.reused)
+        except Exception as e:
+            log.exception("growth: pending=%s failed", gid)
+            _db.mark_growth_failed(gid, str(e))
+    return len(pending)
+
+
 async def run_forever(interval_sec: int = 300, batch: int = 5) -> None:
     """主循环 (默认 5min tick)."""
     _db.init_db()  # 确保表存在 (worker 先于 web server 启时)
     llm = _make_llm()
     mem0 = _make_mem0()
     extractor = StudentFactExtractor(llm=llm, mem0_client=mem0)
+    from systemedu.student.chat.growth_evaluator import GrowthEvaluator
+    growth_evaluator = GrowthEvaluator(llm=llm)  # spec 039
     log.info(
         "fact_extractor_worker started: interval=%ds batch=%d mem0=%s",
         interval_sec, batch, mem0 is not None,
@@ -97,10 +116,14 @@ async def run_forever(interval_sec: int = 300, batch: int = 5) -> None:
             ne = _db.enqueue_inactive_sessions(inactive_minutes=inactive_min, limit=50)
             if ne:
                 log.info("auto-enqueued %d inactive sessions (>%dmin)", ne, inactive_min)
-            # 2) 处理 pending
+            # 2) 处理 pending facts
             n = await tick(extractor, batch=batch)
             if n:
                 log.info("tick processed %d pending rows", n)
+            # 3) spec 039: 处理知识树生长
+            ng = await growth_tick(growth_evaluator, batch=batch)
+            if ng:
+                log.info("growth_tick processed %d rows", ng)
         except Exception:
             log.exception("tick failed (continuing)")
         try:

@@ -55,6 +55,16 @@ async def api_knode_toggle_complete(request: Request) -> JSONResponse:
         logger.exception("toggle_complete failed")
         return JSONResponse({"error": "internal", "detail": str(e)}, status_code=500)
 
+    # spec 039: 完成 knode → 入队知识树生长评估 (异步, 不拖慢响应)。
+    # content 存轻量标识 knode:<slug>:<knode_id>, evaluator 异步反查 library 取概念。
+    if completed:
+        try:
+            from ..db import enqueue_growth
+            enqueue_growth(user_id=user_id, source="complete_knode",
+                           content=f"knode:{slug}:{knode_id}")
+        except Exception:
+            logger.warning("enqueue_growth failed (non-fatal)", exc_info=True)
+
     return JSONResponse({
         "slug": slug,
         "knode_id": knode_id,

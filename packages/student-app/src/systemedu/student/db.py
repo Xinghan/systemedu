@@ -362,6 +362,61 @@ class PendingExtraction(Base):
 
 
 # ---------------------------------------------------------------------------
+# spec 039: 动态知识树生长 (per-user 个人树第四层+)
+# ---------------------------------------------------------------------------
+
+class GrownNode(Base):
+    """用户个人知识树生长节点 — 平台树第三层概念叶之下的动态深层节点.
+
+    平台树 (425 节点) 固定三层; 用户深入学习/提问时 LLM 评估生长出第四层+。
+    挂在平台树叶 (cs.ai.cnn) 或另一 GrownNode 下。中间层若缺则补出 lit=false (灰)。
+    """
+
+    __tablename__ = "grown_nodes"
+
+    id = Column(String(36), primary_key=True, default=_uuid)
+    user_id = Column(String(36), ForeignKey("users.id"), index=True, nullable=False)
+    node_id = Column(String(128), nullable=False)   # 生长路径 id, 如 cs.ai.cnn.kernel
+    parent_id = Column(String(128), nullable=False)  # 父节点 id (平台树叶 或 另一 GrownNode.node_id)
+    name_zh = Column(String(128), nullable=False)
+    depth = Column(Integer, nullable=False)          # 4 / 5 / ...
+    lit = Column(Boolean, default=False, nullable=False)  # 灰=补出中间层 / 亮=真学到
+    source = Column(String(32), nullable=True)       # complete_knode | question | drill
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    __table_args__ = (
+        UniqueConstraint("user_id", "node_id", name="uq_grown_node_user_node"),
+        Index("ix_grown_nodes_user", "user_id"),
+    )
+
+
+class PendingGrowth(Base):
+    """生长评估队列 — 学完/提问/下钻后入队, grown worker 异步批量评估 (仿 PendingExtraction)."""
+
+    __tablename__ = "pending_growth"
+
+    id = Column(String(36), primary_key=True, default=_uuid)
+    user_id = Column(String(36), ForeignKey("users.id"), index=True, nullable=False)
+    source = Column(String(32), nullable=False)      # complete_knode | question | drill
+    content = Column(Text, nullable=False)           # 触发内容 (knode 概念 / 问题 / drill 高亮)
+    subject_hint = Column(String(32), nullable=True) # 可选: 已知学科
+    enqueued_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    processed_at = Column(DateTime, nullable=True)
+    status = Column(String(16), default="pending", nullable=False)  # pending|processing|done|failed|dead
+    error = Column(Text, nullable=True)
+    attempts = Column(Integer, default=0, nullable=False)
+
+    __table_args__ = (
+        Index(
+            "idx_pg_status_enqueued",
+            "status",
+            "enqueued_at",
+            postgresql_where=text("status IN ('pending','failed')"),
+        ),
+    )
+
+
+# ---------------------------------------------------------------------------
 # init
 # ---------------------------------------------------------------------------
 
@@ -923,6 +978,76 @@ def mark_extraction_failed(
         p.processed_at = datetime.utcnow()
         p.status = "dead" if p.attempts >= max_attempts else "failed"
         sess.commit()
+
+
+# ---------------------------------------------------------------------------
+# spec 039: 生长队列 (pending_growth)
+# ---------------------------------------------------------------------------
+
+def enqueue_growth(user_id: str, source: str, content: str, subject_hint: str | None = None) -> str:
+    """入队一条生长评估. 返回 pending_growth.id."""
+    with get_session() as sess:
+        row = PendingGrowth(
+            user_id=user_id, source=source, content=content[:4000],
+            subject_hint=subject_hint, status="pending",
+        )
+        sess.add(row)
+        sess.commit()
+        return row.id
+
+
+def list_pending_growth(limit: int = 10) -> list[dict]:
+    with get_session() as sess:
+        stmt = (
+            select(PendingGrowth)
+            .where(PendingGrowth.status == "pending")
+            .order_by(PendingGrowth.enqueued_at)
+            .limit(limit)
+        )
+        rows = sess.execute(stmt).scalars().all()
+        return [{"id": r.id, "user_id": r.user_id} for r in rows]
+
+
+def mark_growth_processing(gid: str) -> None:
+    with get_session() as sess:
+        p = sess.get(PendingGrowth, gid)
+        if p is None:
+            return
+        p.status = "processing"
+        p.attempts += 1
+        sess.commit()
+
+
+def mark_growth_done(gid: str) -> None:
+    with get_session() as sess:
+        p = sess.get(PendingGrowth, gid)
+        if p is None:
+            return
+        p.status = "done"
+        p.processed_at = datetime.utcnow()
+        sess.commit()
+
+
+def mark_growth_failed(gid: str, error: str, max_attempts: int = 3) -> None:
+    with get_session() as sess:
+        p = sess.get(PendingGrowth, gid)
+        if p is None:
+            return
+        p.error = error[:1000]
+        p.processed_at = datetime.utcnow()
+        p.status = "dead" if p.attempts >= max_attempts else "failed"
+        sess.commit()
+
+
+def get_user_grown_nodes(user_id: str) -> list[dict]:
+    """用户全部生长节点 (供知识树 API merge)."""
+    with get_session() as sess:
+        rows = sess.query(GrownNode).filter_by(user_id=user_id).all()
+        return [
+            {"node_id": r.node_id, "parent_id": r.parent_id, "name_zh": r.name_zh,
+             "depth": r.depth, "lit": r.lit}
+            for r in rows
+        ]
 
 
 # ---------------------------------------------------------------------------
