@@ -66,6 +66,21 @@ class MissingConceptEntry(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
 
+class StoryFrame(BaseModel):
+    """spec 040: 项目开篇连环画的一帧 (图 + 双语文案叠加).
+
+    图为纯插画 (无字), 文案前端 HTML 渲染 (可双语、改文案不重生图)。
+    image 是相对项目包根的路径 (例 "story/story-1.png")。
+    """
+    image: str                        # "story/story-1.png"
+    title_zh: str = ""
+    title_en: str = ""
+    caption_zh: str = ""
+    caption_en: str = ""
+
+    model_config = ConfigDict(extra="ignore")
+
+
 class Manifest(BaseModel):
     """完整 manifest.json schema."""
     schema_version: str = "1.0"
@@ -90,6 +105,9 @@ class Manifest(BaseModel):
     # spec 035: 项目级知识点亮 (向后兼容, 老 manifest 缺这两字段 = 空 list)
     lit_nodes: list[LitNodeEntry] = Field(default_factory=list)
     missing_concepts: list[MissingConceptEntry] = Field(default_factory=list)
+
+    # spec 040: 项目开篇连环画 (向后兼容, 老 manifest 缺 = 空 list)
+    story: list[StoryFrame] = Field(default_factory=list)
 
     model_config = ConfigDict(extra="ignore")
 

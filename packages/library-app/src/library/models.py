@@ -87,6 +87,9 @@ class Project(Base):
 
     cover_image_path = Column(String(256), nullable=True)   # 相对 media/projects/<slug>/
 
+    # spec 040: 项目开篇连环画 (manifest.story 映射; list[StoryFrame] dict)
+    story = Column(JSON, nullable=True)                      # [{image,title_zh,title_en,caption_zh,caption_en}]
+
     # version + 索引
     version = Column(String(64), nullable=False, default="1.0.0")
     knode_count = Column(Integer, nullable=False, default=0)
@@ -166,6 +169,33 @@ def get_session():
     return _SessionLocal()
 
 
+def _ensure_columns() -> None:
+    """轻量 idempotent 迁移: 给已存在的 SQLite 表补新增列.
+
+    library 用 SQLite + create_all (只建不改), 所以新加列对已有 DB 不生效。
+    这里用 PRAGMA 检查 + ALTER TABLE ADD COLUMN 补齐, 避免引入 alembic。
+    """
+    from sqlalchemy import text
+
+    engine = get_engine()
+    # 表名 -> {列名: SQL 类型}
+    expected = {
+        "projects": {"story": "JSON"},
+    }
+    with engine.begin() as conn:
+        for table, cols in expected.items():
+            existing = {
+                row[1]  # PRAGMA table_info 第二列是 name
+                for row in conn.execute(text(f"PRAGMA table_info({table})")).fetchall()
+            }
+            if not existing:
+                continue  # 表还没建 (create_all 会建), 跳过
+            for col, sql_type in cols.items():
+                if col not in existing:
+                    conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {col} {sql_type}"))
+
+
 def init_db() -> None:
-    """启动时调一次, 创建表."""
+    """启动时调一次, 创建表 + 补新增列."""
     Base.metadata.create_all(bind=get_engine())
+    _ensure_columns()

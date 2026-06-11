@@ -7,6 +7,7 @@ import { toast } from "sonner"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 import {
+  BookOpen,
   ChevronDown,
   ChevronRight,
   CirclePlay,
@@ -33,6 +34,8 @@ import {
 import { useAuthStore } from "@/lib/stores/auth-store"
 import { KnowledgeTreeModal } from "@/components/learning/knowledge-tree-modal"
 import { KnowledgeTreeView } from "@/components/learning/KnowledgeTreeView"
+import { StoryModal } from "@/components/library/StoryModal"
+import { useT } from "@/lib/i18n/use-t"
 import type { PlatformTree, ProjectKnowledgeTree } from "@/lib/api"
 
 type Stage = { stage_id: string; title: string; stage_goal?: string }
@@ -118,6 +121,7 @@ function moduleStatus(
 // ──────────────────────────────────────────────────────────────────────────
 
 export default function ProjectHome() {
+  const t = useT()
   const router = useRouter()
   const params = useParams<{ slug: string }>()
   const slug = decodeURIComponent(params.slug)
@@ -130,6 +134,7 @@ export default function ProjectHome() {
   const [loading, setLoading] = useState(true)
   const [pulling, setPulling] = useState(false)
   const [treeOpen, setTreeOpen] = useState(false)
+  const [storyOpen, setStoryOpen] = useState(false) // spec 040: 开篇连环画弹窗
   // spec 036: 用户完成 knode 列表 (用于 Curriculum 显示勾)
   const [completedKnodeIds, setCompletedKnodeIds] = useState<string[]>([])
 
@@ -439,6 +444,34 @@ export default function ProjectHome() {
                 </>
               )}
             </div>
+
+            {/* spec 040: 看项目故事 (开篇连环画), 仅当项目有 story 时显示 */}
+            {Array.isArray(project.story) && project.story.length > 0 && (
+              <button
+                onClick={() => setStoryOpen(true)}
+                style={{
+                  marginTop: 18,
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 8,
+                  alignSelf: "flex-start",
+                  padding: "9px 16px",
+                  borderRadius: 999,
+                  fontSize: 13.5,
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  border: hasCover
+                    ? "1px solid rgba(255,255,255,0.4)"
+                    : "1px solid var(--primary)",
+                  background: hasCover ? "rgba(255,255,255,0.16)" : "var(--primary-soft)",
+                  color: hasCover ? "#fff" : "var(--primary-ink)",
+                  backdropFilter: hasCover ? "blur(8px)" : undefined,
+                }}
+              >
+                <BookOpen size={15} strokeWidth={1.8} />
+                {t("story.view")}
+              </button>
+            )}
           </div>
 
           {/* Right column: action panel (封面已作为整块 hero 背景, 不再放独立图) */}
@@ -706,6 +739,15 @@ export default function ProjectHome() {
           lastModuleId={lastModuleId}
           pulled={pulled}
           onClose={() => setTreeOpen(false)}
+        />
+      )}
+
+      {/* spec 040: 开篇连环画弹窗 */}
+      {storyOpen && Array.isArray(project.story) && project.story.length > 0 && (
+        <StoryModal
+          slug={slug}
+          frames={project.story}
+          onClose={() => setStoryOpen(false)}
         />
       )}
     </main>

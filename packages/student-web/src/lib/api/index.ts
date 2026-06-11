@@ -56,6 +56,15 @@ export interface FinalOutcome {
   related_stage_id?: string | null
 }
 
+// spec 040: 项目开篇连环画的一帧 (图 + 双语文案叠加)
+export interface StoryFrame {
+  image: string // 相对项目包路径, 例 "story/story-1.png"
+  title_zh?: string
+  title_en?: string
+  caption_zh?: string
+  caption_en?: string
+}
+
 export interface LibraryProjectSummary {
   slug: string
   title: string
@@ -74,6 +83,7 @@ export interface LibraryProjectSummary {
   published_at?: string | null
   knowledge_tree?: Record<string, unknown> | null
   final_outcomes?: FinalOutcome[] | null
+  story?: StoryFrame[] | null // spec 040: 开篇连环画 (空/缺 = 不显示)
 }
 
 export interface LibraryKnodeContent {

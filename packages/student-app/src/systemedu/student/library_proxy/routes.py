@@ -159,16 +159,24 @@ async def api_library_cover(request: Request):
 
 
 async def api_library_file(request: Request):
-    """需登录 + 已 Pull. 流式透传媒体文件 (anim html / 图片 / 音频)."""
+    """需登录 + 已 Pull. 流式透传媒体文件 (anim html / 图片 / 音频).
+
+    例外 (spec 040): story/ 下的开篇连环画图是橱窗资源, 跟封面同性质 —
+    列表页/详情页未登录也要能看, 所以不走登录+Pull 鉴权。
+    """
     slug = request.path_params["slug"]
     file_path = request.path_params["path"]
-    user_id, err = await require_login(request)
-    if err:
-        return err
-    if not user_has_pulled(user_id, slug):
-        return JSONResponse(
-            {"error": "pull_required", "slug": slug}, status_code=403
-        )
+
+    # spec 040: 开篇连环画图公开 (橱窗资源, 无需登录/Pull)
+    is_story = file_path.startswith("story/")
+    if not is_story:
+        user_id, err = await require_login(request)
+        if err:
+            return err
+        if not user_has_pulled(user_id, slug):
+            return JSONResponse(
+                {"error": "pull_required", "slug": slug}, status_code=403
+            )
 
     url = get_library_client().get_file_url(slug, file_path)
     return await stream_library_file(url, file_path)

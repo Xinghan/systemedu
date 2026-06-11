@@ -37,6 +37,8 @@ def _public_project_view(p: Project) -> dict:
         "cover_image_path": p.cover_image_path,
         "published_at": p.published_at.isoformat() if p.published_at else None,
         "final_outcomes": final_outcomes,
+        # spec 040: 项目开篇连环画 (列表 + 详情都带, 前端按是否非空决定显示 icon/按钮)
+        "story": p.story or [],
     }
 
 

@@ -63,6 +63,13 @@ export const zh = {
   "card.on_shelf": "在我的书架",
   "card.unavailable": "暂未开放",
   "card.open": "进入",
+  // 项目开篇连环画 (spec 040)
+  "story.view": "看项目故事",
+  "story.title": "项目故事",
+  "story.prev": "上一页",
+  "story.next": "下一页",
+  "story.close": "关闭",
+  "story.frame_of": "第 {cur} / {total} 页",
 
   // ── My Projects ──
   "myproj.title": "我的项目",
@@ -162,6 +169,12 @@ export const en: Record<TranslationKey, string> = {
   "card.on_shelf": "On your shelf",
   "card.unavailable": "Coming soon",
   "card.open": "Open",
+  "story.view": "Project Story",
+  "story.title": "Project Story",
+  "story.prev": "Previous",
+  "story.next": "Next",
+  "story.close": "Close",
+  "story.frame_of": "{cur} / {total}",
 
   "myproj.title": "My Projects",
   "myproj.subtitle": "Projects you've pulled to your shelf",

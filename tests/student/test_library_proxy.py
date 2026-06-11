@@ -108,3 +108,28 @@ def test_removed_user_loses_access(client, services):
         f"/api/library/projects/{services['slug']}/knodes/M01", headers=H
     )
     assert r.status_code == 403
+
+def test_story_field_in_list(client, services):
+    """spec 040: 列表 API 透传 story 字段。"""
+    r = client.get("/api/library/projects")
+    assert r.status_code == 200
+    proj = next(p for p in r.json() if p["slug"] == services["slug"])
+    assert "story" in proj
+    assert len(proj["story"]) == 1
+    assert proj["story"][0]["title_zh"] == "开篇一"
+
+
+def test_story_field_in_detail(client, services):
+    """spec 040: 详情 API 透传 story 字段。"""
+    r = client.get(f"/api/library/projects/{services['slug']}")
+    assert r.status_code == 200
+    assert r.json()["story"][0]["image"] == "story/story-1.png"
+
+
+def test_story_image_public_no_login(client, services):
+    """spec 040: story 图是橱窗资源, 未登录/未 Pull 也能取 (跟 cover 同性质)。"""
+    r = client.get(
+        f"/api/library/projects/{services['slug']}/files/story/story-1.png"
+    )
+    assert r.status_code == 200
+    assert r.content.startswith(b"\x89PNG")

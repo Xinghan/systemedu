@@ -47,6 +47,9 @@ def _make_tarball(tmp: Path, slug: str = "p027-test") -> tuple[Path, str]:
     (root / "blueprint" / "README.zh.md").write_text(
         "# 027 测试项目\n", encoding="utf-8"
     )
+    # spec 040: 开篇连环画图 (橱窗资源, 反代下应公开无需登录/Pull)
+    (root / "story").mkdir()
+    (root / "story" / "story-1.png").write_bytes(b"\x89PNG\r\n\x1a\nfake-story-image")
     (root / "tree" / "knowledge_tree.json").write_text(
         json.dumps({
             "schema_version": "5.0",
@@ -105,6 +108,15 @@ def _make_tarball(tmp: Path, slug: str = "p027-test") -> tuple[Path, str]:
             },
         ],
         "tags": ["test"],
+        "story": [
+            {
+                "image": "story/story-1.png",
+                "title_zh": "开篇一",
+                "title_en": "Opening One",
+                "caption_zh": "这是开篇连环画第一帧",
+                "caption_en": "This is the first story frame",
+            }
+        ],
     }
     (root / "manifest.json").write_text(
         json.dumps(manifest, ensure_ascii=False), encoding="utf-8"

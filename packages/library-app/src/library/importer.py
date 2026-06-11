@@ -110,6 +110,8 @@ def import_tarball(tarball_path: Path, allow_overwrite: bool = True) -> Manifest
             project.difficulty = fm.difficulty
             project.tags = manifest.tags
             project.cover_image_path = manifest.cover_image_path
+            # spec 040: 项目开篇连环画 (manifest.story -> Project.story dict list)
+            project.story = [s.model_dump() for s in manifest.story] or None
             project.version = manifest.version
             project.knode_count = manifest.knode_count
             project.stage_count = manifest.stage_count

@@ -59,6 +59,8 @@ class ProjectMeta:
     knowledge_tree: dict | None = None
     # spec 030: 项目级产出物 (顶层透传)
     final_outcomes: list[dict] = field(default_factory=list)
+    # spec 040: 项目开篇连环画 (list[{image,title_zh,title_en,caption_zh,caption_en}])
+    story: list[dict] = field(default_factory=list)
 
     @classmethod
     def from_dict(cls, d: dict) -> "ProjectMeta":
@@ -81,6 +83,7 @@ class ProjectMeta:
             published_at=d.get("published_at"),
             knowledge_tree=d.get("knowledge_tree"),
             final_outcomes=d.get("final_outcomes") or [],
+            story=d.get("story") or [],
         )
 
 

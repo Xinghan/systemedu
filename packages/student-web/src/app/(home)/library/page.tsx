@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState, type CSSProperties } from "react"
 import { toast } from "sonner"
 import {
   ArrowRight,
+  BookOpen,
   ChevronDown,
   ChevronRight,
   Filter,
@@ -17,6 +18,7 @@ import {
 import { library, myProjects, type LibraryProjectSummary } from "@/lib/api"
 import { useAuthStore } from "@/lib/stores/auth-store"
 import { useT } from "@/lib/i18n/use-t"
+import { StoryModal } from "@/components/library/StoryModal"
 
 // Crumbs
 function Crumbs({ items }: { items: { label: string }[] }) {
@@ -270,6 +272,9 @@ function ProjectCard({
   const t = useT()
   const dClass = domainClass(project.domain)
   const isDraft = project.status === "draft"
+  const [storyOpen, setStoryOpen] = useState(false)
+  // spec 040: 仅当项目有开篇连环画时显示 icon/弹窗
+  const hasStory = Array.isArray(project.story) && project.story.length > 0
 
   // 草稿项目: 不可进入 (详情页会 404), 卡片整体降透明度 + 改为 div (非链接) + 不响应 hover。
   // 已发布项目: 正常 Link 可点进入。
@@ -296,6 +301,37 @@ function ProjectCard({
         <CoverPhoto slug={project.slug} dClass={dClass} />
       ) : (
         <CoverArt kind={dClass} />
+      )}
+      {/* spec 040: 开篇连环画入口 (cover 右上角小 icon, 仅有 story 时显示) */}
+      {hasStory && (
+        <button
+          onClick={(e) => {
+            // 卡片本体是 Link, 阻止跳转, 改为打开连环画弹窗
+            e.preventDefault()
+            e.stopPropagation()
+            setStoryOpen(true)
+          }}
+          aria-label={t("story.view")}
+          title={t("story.view")}
+          style={{
+            position: "absolute",
+            top: 10,
+            right: 10,
+            zIndex: 3,
+            width: 32,
+            height: 32,
+            borderRadius: 999,
+            border: "1px solid rgba(255,255,255,0.55)",
+            background: "rgba(20,15,11,0.55)",
+            backdropFilter: "blur(6px)",
+            display: "grid",
+            placeItems: "center",
+            cursor: "pointer",
+            color: "#fff",
+          }}
+        >
+          <BookOpen size={16} strokeWidth={1.7} />
+        </button>
       )}
       <div
         style={{
@@ -412,18 +448,31 @@ function ProjectCard({
     </>
   )
 
+  const story =
+    hasStory && storyOpen ? (
+      <StoryModal
+        slug={project.slug}
+        frames={project.story!}
+        onClose={() => setStoryOpen(false)}
+      />
+    ) : null
+
   if (isDraft) {
     // 草稿: 非链接, 不可进入
     return (
       <div style={cardStyle} aria-disabled="true">
         {inner}
+        {story}
       </div>
     )
   }
   return (
-    <Link href={`/library/${encodeURIComponent(project.slug)}`} style={cardStyle}>
-      {inner}
-    </Link>
+    <>
+      <Link href={`/library/${encodeURIComponent(project.slug)}`} style={cardStyle}>
+        {inner}
+      </Link>
+      {story}
+    </>
   )
 }
 
