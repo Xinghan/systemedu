@@ -10,8 +10,9 @@
 
 import { useMemo, useState } from "react"
 import dynamic from "next/dynamic"
-import { ChevronRight, LayoutGrid, Orbit } from "lucide-react"
+import { ChevronRight, LayoutGrid, Orbit, Share2 } from "lucide-react"
 import { subdomainName } from "@/lib/subdomain-names"
+import { KnowledgeRadialTree } from "./KnowledgeRadialTree"
 
 // three.js 依赖 window, 必须 ssr:false 懒加载 (也避免 600KB 进首屏 bundle)
 const KnowledgeGalaxy3D = dynamic(() => import("./KnowledgeGalaxy3D"), {
@@ -127,7 +128,7 @@ export function KnowledgeTreeView({
   const [activeSubject, setActiveSubject] = useState<string>(
     subjectChips[0]?.id || "",
   )
-  const [viewMode, setViewMode] = useState<"2d" | "3d">("2d")
+  const [viewMode, setViewMode] = useState<"2d" | "tree" | "3d">("2d")
 
   const activeSubjectData = useMemo(
     () => platformTree.subjects.find((s) => s.id === activeSubject) || null,
@@ -165,6 +166,7 @@ export function KnowledgeTreeView({
         >
           {([
             { m: "2d", icon: <LayoutGrid size={13} strokeWidth={1.6} />, label: "分层" },
+            { m: "tree", icon: <Share2 size={13} strokeWidth={1.6} />, label: "放射树" },
             { m: "3d", icon: <Orbit size={13} strokeWidth={1.6} />, label: "知识宇宙" },
           ] as const).map((o) => (
             <button
@@ -187,7 +189,7 @@ export function KnowledgeTreeView({
       </div>
 
       {viewMode === "3d" ? (
-        <KnowledgeGalaxy3D platformTree={platformTree} litByNodeId={litByNodeId} />
+        <KnowledgeGalaxy3D platformTree={platformTree} litByNodeId={litByNodeId} onNodeClick={onNodeClick} />
       ) : (
         <>
           {/* Chips: 学科切换 */}
@@ -212,12 +214,19 @@ export function KnowledgeTreeView({
             })}
           </div>
 
-          {/* 子域分组 + 概念叶下钻 (多层) */}
-          <SubjectGroupedView
-            subject={activeSubjectData}
-            litByNodeId={litByNodeId}
-            onNodeClick={onNodeClick}
-          />
+          {viewMode === "tree" ? (
+            <KnowledgeRadialTree
+              subject={activeSubjectData}
+              litByNodeId={litByNodeId}
+              onNodeClick={onNodeClick}
+            />
+          ) : (
+            <SubjectGroupedView
+              subject={activeSubjectData}
+              litByNodeId={litByNodeId}
+              onNodeClick={onNodeClick}
+            />
+          )}
         </>
       )}
     </div>
