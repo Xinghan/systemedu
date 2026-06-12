@@ -829,11 +829,9 @@ function TheoryBlock({ theory }: { theory: TheoryEntry }) {
                 <div className="grid gap-10 grid-cols-1 lg:grid-cols-12">
                   {/* Simulation column (7/12) */}
                   <div className="lg:col-span-7 flex flex-col gap-6">
-                    <div className="relative aspect-video rounded-xl overflow-hidden shadow-[0_8px_32px_-8px_rgba(25,34,125,0.12)]">
-                      <iframe
-                        srcDoc={theory.animation_html}
-                        sandbox="allow-scripts allow-same-origin"
-                        className="w-full h-full border-0"
+                    <div className="relative aspect-[16/10] rounded-xl overflow-hidden shadow-[0_8px_32px_-8px_rgba(25,34,125,0.12)] bg-[#0a0e14]">
+                      <ScaledIframe
+                        html={theory.animation_html}
                         title={`${theory.title} animation`}
                       />
                     </div>
@@ -956,6 +954,67 @@ function backendBadgeLabel(backend?: string): string {
 // IdeaIframeBlock (animation / game)
 // ---------------------------------------------------------------------------
 
+/**
+ * ScaledIframe — 固定设计视口 + 等比缩放 (2026-06-12 重写, 彻底解决"动画比弹窗大").
+ *
+ * 契约: 所有 animation/game HTML 按 1280x800 逻辑视口设计与 QC 验证
+ * (course_factory 的 game.mjs/animation.mjs 就在 1280x800 跑)。
+ * 前端不再让生成 HTML 自己适配任意尺寸 (几百个生成物布局各异, 自适应是软约束,
+ * 小视口必溢出被 overflow:hidden 裁掉) — 而是 iframe 永远以 1280x800 渲染,
+ * 外层实时测量可用空间, transform: scale 等比缩放居中 (letterbox)。
+ * 效果: QC 验证时什么样, 弹窗里就什么样, 数学上不可能溢出。
+ */
+const DESIGN_VIEWPORT_W = 1280
+const DESIGN_VIEWPORT_H = 800
+
+function ScaledIframe({
+  html, title, resetKey,
+}: {
+  html: string
+  title: string
+  resetKey?: number
+}) {
+  const boxRef = useRef<HTMLDivElement>(null)
+  const [scale, setScale] = useState(0) // 0 = 尚未测量, 不渲染 iframe 避免闪烁
+
+  useEffect(() => {
+    const el = boxRef.current
+    if (!el) return
+    const update = () => {
+      const r = el.getBoundingClientRect()
+      if (r.width > 0 && r.height > 0) {
+        setScale(Math.min(r.width / DESIGN_VIEWPORT_W, r.height / DESIGN_VIEWPORT_H))
+      }
+    }
+    update()
+    const ro = new ResizeObserver(update)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
+
+  return (
+    <div ref={boxRef} className="relative h-full w-full overflow-hidden">
+      {scale > 0 && (
+        <iframe
+          key={resetKey}
+          srcDoc={html}
+          sandbox="allow-scripts allow-same-origin"
+          title={title}
+          style={{
+            position: "absolute",
+            left: "50%",
+            top: "50%",
+            width: DESIGN_VIEWPORT_W,
+            height: DESIGN_VIEWPORT_H,
+            border: "none",
+            transform: `translate(-50%, -50%) scale(${scale})`,
+          }}
+        />
+      )}
+    </div>
+  )
+}
+
 /** Full-screen modal for iframe content */
 function IframeModal({
   open, onClose, html, title, resetKey,
@@ -988,25 +1047,20 @@ function IframeModal({
       />
       {/* Modal container */}
       <div className="relative w-[96vw] h-[92vh] flex flex-col rounded-2xl overflow-hidden shadow-2xl bg-[#0a0e14] border border-white/10">
-        {/* Header bar */}
-        <div className="flex items-center justify-between px-5 py-3 bg-white/5 border-b border-white/10 shrink-0">
-          <span className="text-sm font-semibold text-white/80">{title}</span>
+        {/* Header bar — 标题单行截断, 不允许超长 topic 撑高 header */}
+        <div className="flex items-center justify-between gap-4 px-5 py-3 bg-white/5 border-b border-white/10 shrink-0">
+          <span className="text-sm font-semibold text-white/80 truncate min-w-0">{title}</span>
           <button
             onClick={onClose}
-            className="w-8 h-8 rounded-lg flex items-center justify-center text-white/60 hover:text-white hover:bg-white/10 transition-colors"
+            className="w-8 h-8 shrink-0 rounded-lg flex items-center justify-center text-white/60 hover:text-white hover:bg-white/10 transition-colors"
           >
             <X className="h-4 w-4" />
           </button>
         </div>
-        {/* Iframe fills remaining space */}
-        <iframe
-          key={resetKey}
-          srcDoc={html}
-          sandbox="allow-scripts allow-same-origin"
-          className="flex-1 w-full block"
-          style={{ border: "none" }}
-          title={title}
-        />
+        {/* 内容区: 固定设计视口等比缩放, 永不溢出 */}
+        <div className="flex-1 min-h-0">
+          <ScaledIframe html={html} title={title} resetKey={resetKey} />
+        </div>
       </div>
     </div>,
     document.body,
