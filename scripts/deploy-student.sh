@@ -84,14 +84,23 @@ Restart=always
 WantedBy=multi-user.target
 EOF"
   remote "systemctl daemon-reload && systemctl enable systemedu-library && systemctl restart systemedu-library && sleep 3 && systemctl is-active systemedu-library"
-  echo "[library] 上传课程 tarball..."
-  copy "$HOME/.systemedu-library/media/projects/eeg-minecraft-bci/_archive/eeg-minecraft-bci-0.1.0.tar.gz" /tmp/
-  copy "$HOME/.systemedu-library/media/projects/purpleair-airquality-node/_archive/purpleair-airquality-node-0.14.1.tar.gz" /tmp/
-  # spec 040: mars 带开篇连环画 (story/) 的包
-  copy "$HOME/.systemedu-library/media/projects/mars-analog-rover/_archive/mars-analog-rover-1.0.1.tar.gz" /tmp/
+  echo "[library] 从最新源现打包课程 tarball..."
+  # 根因 (2026-06-12): 旧版从 _archive/<slug>-<写死版本>.tar.gz 上传, 是导入时的
+  # 旧快照, 跟项目最新源脱节 — 封面/story 等后续更新会丢 (purpleair/eeg 封面消失即此)。
+  # 改为部署时从 COURSE_SRC 最新源现打包: 部署什么 = 源目录里有什么, 永不丢更新。
+  : "${COURSE_SRC:=$HOME/Dev/systemeduidea/projects_data}"
+  for slug in $COURSE_SLUGS; do
+    src="$COURSE_SRC/$slug"
+    [ -d "$src" ] || { echo "  ERROR: 源目录不存在 $src"; exit 1; }
+    [ -f "$src/manifest.json" ] || { echo "  ERROR: $src 无 manifest.json"; exit 1; }
+    echo "  打包 $slug (从 $src)..."
+    COPYFILE_DISABLE=1 tar --exclude='._*' --exclude='_archive' \
+        -czf "/tmp/$slug.tar.gz" -C "$(dirname "$src")" "$slug"
+    copy "/tmp/$slug.tar.gz" /tmp/
+  done
   echo "[library] import + publish (服务器侧)..."
   copy "$DIR/_import_courses.sh" /tmp/_import_courses.sh
-  remote "LIBRARY_PORT=$LIBRARY_PORT bash /tmp/_import_courses.sh"
+  remote "LIBRARY_PORT=$LIBRARY_PORT COURSE_SLUGS='$COURSE_SLUGS' bash /tmp/_import_courses.sh"
 }
 
 do_student() {
@@ -180,7 +189,54 @@ EOF"
 do_nginx() {
   echo "[nginx] 停老 cloud-app + 切 nginx (这步起对外生效)..."
   remote "systemctl disable --now systemedu-backend systemedu-frontend 2>/dev/null || true"
-  remote "cat > /etc/nginx/sites-available/systemedu <<EOF
+  # 证书齐全 (SSL_DOMAIN 非空 + pem/key 都在 SSL_CERT_DIR) -> 生成 HTTPS 配置, 否则纯 HTTP。
+  # 在服务器侧判断证书是否存在, 据此写两种配置之一。证书需人工上传 (不进 git)。
+  remote "
+    PEM='$SSL_CERT_DIR/$SSL_DOMAIN.pem'; KEY='$SSL_CERT_DIR/$SSL_DOMAIN.key'
+    if [ -n '$SSL_DOMAIN' ] && [ -f \"\$PEM\" ] && [ -f \"\$KEY\" ]; then
+      echo '[nginx] 检测到证书 -> 写 HTTPS 配置'
+      cat > /etc/nginx/sites-available/systemedu <<EOF
+server {
+  listen 80 default_server;
+  server_name $SSL_DOMAIN $SSL_DOMAIN_ALT _;
+  return 301 https://\\\$host\\\$request_uri;
+}
+server {
+  listen 443 ssl http2 default_server;
+  server_name $SSL_DOMAIN $SSL_DOMAIN_ALT;
+  ssl_certificate     $SSL_CERT_DIR/$SSL_DOMAIN.pem;
+  ssl_certificate_key $SSL_CERT_DIR/$SSL_DOMAIN.key;
+  ssl_protocols       TLSv1.2 TLSv1.3;
+  ssl_ciphers         ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:DHE-RSA-AES128-GCM-SHA256:DHE-RSA-AES256-GCM-SHA384;
+  ssl_prefer_server_ciphers off;
+  ssl_session_cache   shared:SSL:10m;
+  ssl_session_timeout 1d;
+  ssl_session_tickets off;
+  add_header Strict-Transport-Security \"max-age=15768000; includeSubDomains\" always;
+  client_max_body_size 50m;
+  location /api/ {
+    proxy_pass http://127.0.0.1:$STUDENT_BACKEND_PORT;
+    proxy_set_header Host \\\$host;
+    proxy_set_header X-Real-IP \\\$remote_addr;
+    proxy_set_header X-Forwarded-For \\\$proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto \\\$scheme;
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade \\\$http_upgrade;
+    proxy_set_header Connection \"upgrade\";
+    proxy_read_timeout 300s;
+  }
+  location / {
+    proxy_pass http://127.0.0.1:$STUDENT_WEB_PORT;
+    proxy_set_header Host \\\$host;
+    proxy_set_header X-Real-IP \\\$remote_addr;
+    proxy_set_header X-Forwarded-For \\\$proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto \\\$scheme;
+  }
+}
+EOF
+    else
+      echo '[nginx] 无证书 -> 写纯 HTTP 配置 (上传证书到 $SSL_CERT_DIR 后重跑 nginx 步骤启 HTTPS)'
+      cat > /etc/nginx/sites-available/systemedu <<EOF
 server {
   listen 80 default_server;
   server_name _;
@@ -200,7 +256,9 @@ server {
     proxy_set_header X-Real-IP \\\$remote_addr;
   }
 }
-EOF"
+EOF
+    fi
+  "
   remote "ln -sf /etc/nginx/sites-available/systemedu /etc/nginx/sites-enabled/systemedu && rm -f /etc/nginx/sites-enabled/default && nginx -t && systemctl reload nginx"
 }
 
