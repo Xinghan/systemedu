@@ -194,12 +194,37 @@ do_nginx() {
   remote "
     PEM='$SSL_CERT_DIR/$SSL_DOMAIN.pem'; KEY='$SSL_CERT_DIR/$SSL_DOMAIN.key'
     if [ -n '$SSL_DOMAIN' ] && [ -f \"\$PEM\" ] && [ -f \"\$KEY\" ]; then
-      echo '[nginx] 检测到证书 -> 写 HTTPS 配置'
+      echo '[nginx] 检测到证书 -> 写 HTTPS 配置 (+ IP 直连开放, 域名未备案期间暂用)'
       cat > /etc/nginx/sites-available/systemedu <<EOF
+# 域名 80 -> 跳 HTTPS (ICP 备案通过后生效)
+server {
+  listen 80;
+  server_name $SSL_DOMAIN $SSL_DOMAIN_ALT;
+  return 301 https://\\\$host\\\$request_uri;
+}
+# IP / 其它 80 -> 直接反代 (域名未备案被阿里云 SNI 阻断期间, 用 http://IP 直连)
 server {
   listen 80 default_server;
-  server_name $SSL_DOMAIN $SSL_DOMAIN_ALT _;
-  return 301 https://\\\$host\\\$request_uri;
+  server_name _;
+  client_max_body_size 50m;
+  location /api/ {
+    proxy_pass http://127.0.0.1:$STUDENT_BACKEND_PORT;
+    proxy_set_header Host \\\$host;
+    proxy_set_header X-Real-IP \\\$remote_addr;
+    proxy_set_header X-Forwarded-For \\\$proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto \\\$scheme;
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade \\\$http_upgrade;
+    proxy_set_header Connection \"upgrade\";
+    proxy_read_timeout 300s;
+  }
+  location / {
+    proxy_pass http://127.0.0.1:$STUDENT_WEB_PORT;
+    proxy_set_header Host \\\$host;
+    proxy_set_header X-Real-IP \\\$remote_addr;
+    proxy_set_header X-Forwarded-For \\\$proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto \\\$scheme;
+  }
 }
 server {
   listen 443 ssl http2 default_server;
