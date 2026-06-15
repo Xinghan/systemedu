@@ -60,3 +60,37 @@ def test_send_sms_code_calls_aliyun(monkeypatch):
     assert aliyun.send_sms_code("13800138000", "123456") is True
     assert calls["phone"] == "13800138000"
     assert "123456" in calls["param"]
+
+
+# ---------------------------------------------------------------------------
+# 手机号 + profile DB 列/函数 (TDD 第 4 任务)
+# ---------------------------------------------------------------------------
+
+@pytest.fixture
+def student_db(tmp_path, monkeypatch):
+    """SQLite 临时库, 照 test_user_knode_complete.py 的同步 DB 测试模式."""
+    db_file = tmp_path / "student.db"
+    monkeypatch.setenv("STUDENT_DB_URL", f"sqlite:///{db_file}")
+    from systemedu.student import db
+    db.reset_engine_for_tests()
+    db.init_db()
+    yield db
+    db.reset_engine_for_tests()
+
+
+def test_create_and_get_user_by_phone(student_db):
+    from systemedu.student import db
+    u = db.create_user_by_phone("13800138000")
+    assert u.phone == "13800138000"
+    assert u.profile_completed is False
+    got = db.get_user_by_phone("13800138000")
+    assert got is not None and got.id == u.id
+
+
+def test_update_profile(student_db):
+    from systemedu.student import db
+    u = db.create_user_by_phone("13800138001")
+    db.update_profile(u.id, display_name="小明", student_age=12, gender="male")
+    got = db.get_user_by_id(u.id)
+    assert got.display_name == "小明" and got.student_age == 12
+    assert got.gender == "male" and got.profile_completed is True

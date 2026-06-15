@@ -114,8 +114,13 @@ class User(Base):
     __tablename__ = "users"
 
     id = Column(String(36), primary_key=True, default=_uuid)
-    username = Column(String(64), unique=True, index=True, nullable=False)
-    password_hash = Column(String(255), nullable=False)
+    phone = Column(String(11), unique=True, index=True, nullable=True)  # 新登录凭证 (迁移期 nullable)
+    username = Column(String(64), index=True, nullable=True)            # 去唯一约束, 老数据保留
+    display_name = Column(String(64), nullable=True)                    # profile 显示名
+    student_age = Column(Integer, nullable=True)
+    gender = Column(String(16), nullable=True)
+    profile_completed = Column(Boolean, default=False, nullable=False)
+    password_hash = Column(String(255), nullable=True)                  # 不再使用, 保留列
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     last_login_at = Column(DateTime, nullable=True)
 
@@ -463,7 +468,12 @@ def _detach_user(u: User | None) -> User | None:
         return None
     return User(
         id=u.id,
+        phone=u.phone,
         username=u.username,
+        display_name=u.display_name,
+        student_age=u.student_age,
+        gender=u.gender,
+        profile_completed=u.profile_completed,
         password_hash=u.password_hash,
         created_at=u.created_at,
         last_login_at=u.last_login_at,
@@ -497,6 +507,42 @@ def update_last_login(user_id: str) -> None:
         u = session.get(User, user_id)
         if u:
             u.last_login_at = datetime.utcnow()
+            session.commit()
+
+
+def create_user_by_phone(phone: str) -> User:
+    """短信登录: 用手机号建新 User (profile 待补)."""
+    with get_session() as session:
+        u = User(phone=phone, profile_completed=False)
+        session.add(u)
+        session.commit()
+        session.refresh(u)
+        return _detach_user(u)  # type: ignore[return-value]
+
+
+def get_user_by_phone(phone: str) -> User | None:
+    with get_session() as session:
+        u = session.execute(
+            select(User).where(User.phone == phone)
+        ).scalar_one_or_none()
+        return _detach_user(u)
+
+
+def update_profile(
+    user_id: str,
+    *,
+    display_name: str,
+    student_age: int,
+    gender: str,
+) -> None:
+    """补全 profile 并置 profile_completed=True."""
+    with get_session() as session:
+        u = session.get(User, user_id)
+        if u:
+            u.display_name = display_name
+            u.student_age = student_age
+            u.gender = gender
+            u.profile_completed = True
             session.commit()
 
 
