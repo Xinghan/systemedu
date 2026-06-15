@@ -1,0 +1,57 @@
+# SystemEdu Web (Next.js 16, Node 22)
+#
+# Build (from repo root):
+#   docker build -f docker/Dockerfile.web -t systemedu-web .
+#
+# Run:
+#   docker run --rm -p 3000:3000 \
+#     -e NEXT_PUBLIC_GATEWAY_URL=http://localhost:18820 \
+#     systemedu-web
+#
+# NOTE: NEXT_PUBLIC_GATEWAY_URL 是构建时变量 (前端代码 inline),
+# 生产部署如果想直接 http://gateway:18820 在浏览器侧不可达, 应该走 nginx
+# 把 /api/* 反代到 backend, NEXT_PUBLIC_GATEWAY_URL 留空或填外部域名.
+
+# -------- Stage 1: deps --------
+FROM node:22-alpine AS deps
+WORKDIR /app
+
+# 仅 copy package.json 做依赖缓存
+COPY web/package.json web/package-lock.json* ./
+RUN npm ci --no-audit --no-fund
+
+# -------- Stage 2: build --------
+FROM node:22-alpine AS builder
+WORKDIR /app
+
+# 构建期能 inline 的公开 env (默认走 nginx /api, 部署侧可覆盖)
+ARG NEXT_PUBLIC_GATEWAY_URL=""
+ENV NEXT_PUBLIC_GATEWAY_URL=$NEXT_PUBLIC_GATEWAY_URL
+
+COPY --from=deps /app/node_modules ./node_modules
+COPY web/ ./
+
+RUN npm run build
+
+# -------- Stage 3: runner --------
+FROM node:22-alpine AS runner
+WORKDIR /app
+
+ENV NODE_ENV=production \
+    PORT=3000 \
+    HOSTNAME=0.0.0.0
+
+RUN addgroup -g 1001 -S nodejs \
+ && adduser -S -u 1001 -G nodejs nextjs
+
+# 直接 copy build 产物 + node_modules (项目没开 standalone output, 用最简单方式)
+COPY --from=builder --chown=nextjs:nodejs /app/.next ./.next
+COPY --from=builder --chown=nextjs:nodejs /app/public ./public
+COPY --from=builder --chown=nextjs:nodejs /app/package.json ./package.json
+COPY --from=builder --chown=nextjs:nodejs /app/node_modules ./node_modules
+COPY --from=builder --chown=nextjs:nodejs /app/next.config.ts ./next.config.ts
+
+USER nextjs
+EXPOSE 3000
+
+CMD ["npm", "run", "start"]
