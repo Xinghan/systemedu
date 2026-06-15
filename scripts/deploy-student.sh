@@ -112,6 +112,9 @@ STUDENT_REDIS_URL=redis://127.0.0.1:6379/0
 LIBRARY_BASE_URL=http://127.0.0.1:$LIBRARY_PORT
 EOF"
   remote "grep -q LIBRARY_LICENSE_TOKEN /root/.systemedu-student-secrets || grep LIBRARY_LICENSE_TOKEN /root/.systemedu-library-secrets >> /root/.systemedu-student-secrets"
+  # 阿里云短信 ALIYUN_SMS_* (KEY/SECRET/ENDPOINT/SIGN/TEMPLATE/DEBUG) 不在此脚本管理:
+  # 含 AccessKey, 由人工一次性手动写进服务器 /root/.systemedu-student-secrets (不进 git)。
+  # 缺失时 send_sms_code 在 DEBUG=false 下会失败; 部署后用 verify 步骤确认登录可用。
   echo "[student] 复制本地 config.yaml (LLM key) + 关 memory..."
   # 本地 config 含可用 LLM key; 复制到生产, memory.enabled 改 false (无 Qdrant)
   remote "mkdir -p /root/.systemedu"
