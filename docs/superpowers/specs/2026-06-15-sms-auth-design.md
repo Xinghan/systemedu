@@ -23,13 +23,13 @@
 
 ## 密钥管理 (已与用户确认)
 
-- 阿里云 AccessKey **写进生产 secrets 文件** `/root/.systemedu-student-secrets`
-  (服务器上 root 权限、git 忽略)，由部署脚本注入 systemd Environment。
-  **代码库任何文件不含明文密钥** (grep 验收)，代码只用 `os.environ` 读取。
-- 部署脚本 do_student/secrets 步骤补写 ALIYUN_SMS_* 五个 env (key/secret/sign/template
-  默认值可写 deploy.env 非敏感项，key/secret 仅写服务器 secrets 文件)。
+- 阿里云 AccessKey **纯人工手动写进生产 secrets 文件** `/root/.systemedu-student-secrets`
+  (服务器上 root 权限、权限 600、git 忽略)，systemd unit 的 EnvironmentFile 自动注入。
+  **git 任何文件 (含部署脚本) 不含明文密钥** (grep 验收)，代码只用 `os.environ` 读取。
+  ALIYUN_SMS_* 6 项 (KEY/SECRET/ENDPOINT/SIGN/TEMPLATE/DEBUG) 已于 2026-06-15 手动写入。
+- 部署脚本不管理密钥，仅注释说明其来源。
 - 提示: 用户在对话里明文贴过这对 AccessKey，已暴露在历史中；是否轮换由用户决定 (本设计
-  按"直接用现有 key 写进生产"执行)。
+  按"直接用现有 key 手动写进生产"执行)。
 
 ## 数据模型 (DB migration)
 
