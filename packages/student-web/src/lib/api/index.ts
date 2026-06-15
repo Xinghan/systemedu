@@ -1,30 +1,44 @@
 /** student-app typed API. 只暴露学生端用到的接口。 */
 
 import { api, STUDENT_API_URL } from "./client"
-import { setToken, clearToken, setUsername, clearUsername } from "@/lib/auth"
+import { setToken, clearToken, clearUsername } from "@/lib/auth"
 
 // ---------------------------------------------------------------------------
-// auth
+// auth (spec sms-auth: 手机号 + 短信验证码登录)
 // ---------------------------------------------------------------------------
 
-export interface AuthResponse {
-  token: string
-  username: string
+export interface MeResponse {
   user_id: string
+  phone: string
+  display_name: string | null
+  student_age: number | null
+  gender: "male" | "female" | "other" | null
+  profile_completed: boolean
+  created_at?: string
+  last_login_at?: string
 }
 
 export const auth = {
-  register: async (username: string, password: string): Promise<AuthResponse> => {
-    const data = await api.post<AuthResponse>("/api/auth/register", { username, password })
+  sendCode: async (phone: string): Promise<{ ok: boolean; cooldown_sec: number }> => {
+    return api.post("/api/auth/send-code", { phone })
+  },
+  verify: async (
+    phone: string,
+    code: string,
+  ): Promise<{ token: string; user_id: string; profile_completed: boolean }> => {
+    const data = await api.post<{ token: string; user_id: string; profile_completed: boolean }>(
+      "/api/auth/verify",
+      { phone, code },
+    )
     setToken(data.token)
-    setUsername(data.username)
     return data
   },
-  login: async (username: string, password: string): Promise<AuthResponse> => {
-    const data = await api.post<AuthResponse>("/api/auth/login", { username, password })
-    setToken(data.token)
-    setUsername(data.username)
-    return data
+  updateProfile: async (p: {
+    display_name: string
+    student_age: number
+    gender: string
+  }): Promise<void> => {
+    await api.patch("/api/auth/profile", p)
   },
   logout: async (): Promise<void> => {
     try {
@@ -35,10 +49,7 @@ export const auth = {
     clearToken()
     clearUsername()
   },
-  me: () =>
-    api.get<{ username: string; user_id: string; created_at?: string; last_login_at?: string }>(
-      "/api/auth/me",
-    ),
+  me: () => api.get<MeResponse>("/api/auth/me"),
 }
 
 // ---------------------------------------------------------------------------

@@ -308,7 +308,7 @@ export default function Homepage() {
             {t.heroBody}
           </p>
           <div style={{ display: "flex", gap: 12, marginTop: 30, justifyContent: "center" }}>
-            <Link href={loggedIn ? "/home" : "/register"} className="btn btn-violet btn-lg">
+            <Link href={loggedIn ? "/home" : "/login"} className="btn btn-violet btn-lg">
               {loggedIn ? t.ctaDash : t.ctaStart}
               <ArrowRight size={15} strokeWidth={1.5} />
             </Link>
@@ -503,7 +503,7 @@ export default function Homepage() {
             {t.ctaBody}
           </p>
           <div style={{ display: "flex", gap: 12, marginTop: 30, justifyContent: "center" }}>
-            <Link href={loggedIn ? "/home" : "/register"} className="btn btn-violet btn-lg">
+            <Link href={loggedIn ? "/home" : "/login"} className="btn btn-violet btn-lg">
               {loggedIn ? t.ctaDash : t.ctaStart}
               <ArrowRight size={15} strokeWidth={1.5} />
             </Link>

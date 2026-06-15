@@ -53,6 +53,8 @@ export const api = {
     fetchAPI<T>(path, { method: "POST", body: JSON.stringify(body) }),
   put: <T>(path: string, body: unknown = {}) =>
     fetchAPI<T>(path, { method: "PUT", body: JSON.stringify(body) }),
+  patch: <T>(path: string, body: unknown = {}) =>
+    fetchAPI<T>(path, { method: "PATCH", body: JSON.stringify(body) }),
   delete: <T>(path: string) => fetchAPI<T>(path, { method: "DELETE" }),
 }
 
