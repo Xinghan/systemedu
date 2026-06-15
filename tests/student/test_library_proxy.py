@@ -3,46 +3,52 @@
 from __future__ import annotations
 
 
-def _register(client, username):
-    r = client.post(
-        "/api/auth/register", json={"username": username, "password": "passw0rd"}
-    )
-    return r.json()["token"]
+import hashlib
 
 
-def test_library_list_public(client, services):
+def _phone_for(name: str) -> str:
+    """把测试用的 name 稳定映射成唯一虚拟手机号 (138 + 8 位)。"""
+    digits = int(hashlib.sha1(name.encode()).hexdigest(), 16) % 10**8
+    return f"138{digits:08d}"
+
+
+def _register(make_token, name):
+    return make_token(_phone_for(name))
+
+
+def test_library_list_public(client, services, make_token):
     r = client.get("/api/library/projects")
     assert r.status_code == 200
     projects = r.json()
     assert any(p["slug"] == services["slug"] for p in projects)
 
 
-def test_library_get_public(client, services):
+def test_library_get_public(client, services, make_token):
     r = client.get(f"/api/library/projects/{services['slug']}")
     assert r.status_code == 200
     assert r.json()["slug"] == services["slug"]
 
 
-def test_library_tree_public(client, services):
+def test_library_tree_public(client, services, make_token):
     r = client.get(f"/api/library/projects/{services['slug']}/tree")
     assert r.status_code == 200
     tree = r.json()
     assert tree["schema_version"] == "5.0"
 
 
-def test_library_blueprint_public(client, services):
+def test_library_blueprint_public(client, services, make_token):
     r = client.get(f"/api/library/projects/{services['slug']}/blueprint")
     assert r.status_code == 200
     assert "027 测试项目" in r.json()["content"]
 
 
-def test_knode_unauthenticated_401(client, services):
+def test_knode_unauthenticated_401(client, services, make_token):
     r = client.get(f"/api/library/projects/{services['slug']}/knodes/M01")
     assert r.status_code == 401
 
 
-def test_knode_unpulled_403(client, services):
-    token = _register(client, "lp_eve")
+def test_knode_unpulled_403(client, services, make_token):
+    token = _register(make_token, "lp_eve")
     r = client.get(
         f"/api/library/projects/{services['slug']}/knodes/M01",
         headers={"Authorization": f"Bearer {token}"},
@@ -51,8 +57,8 @@ def test_knode_unpulled_403(client, services):
     assert r.json()["error"] == "pull_required"
 
 
-def test_knode_pulled_200(client, services):
-    token = _register(client, "lp_frank")
+def test_knode_pulled_200(client, services, make_token):
+    token = _register(make_token, "lp_frank")
     H = {"Authorization": f"Bearer {token}"}
     r = client.post(f"/api/my/projects/{services['slug']}", headers=H)
     assert r.status_code == 201
@@ -63,8 +69,8 @@ def test_knode_pulled_200(client, services):
     assert r2.json()["plan_markdown"].startswith("# M01 Intro")
 
 
-def test_file_pulled_200(client, services):
-    token = _register(client, "lp_grace")
+def test_file_pulled_200(client, services, make_token):
+    token = _register(make_token, "lp_grace")
     H = {"Authorization": f"Bearer {token}"}
     client.post(f"/api/my/projects/{services['slug']}", headers=H)
     r = client.get(
@@ -75,8 +81,8 @@ def test_file_pulled_200(client, services):
     assert "M01 Intro" in r.text
 
 
-def test_file_unpulled_403(client, services):
-    token = _register(client, "lp_hank")
+def test_file_unpulled_403(client, services, make_token):
+    token = _register(make_token, "lp_hank")
     H = {"Authorization": f"Bearer {token}"}
     r = client.get(
         f"/api/library/projects/{services['slug']}/files/knodes/M01-w1-intro/lesson.md",
@@ -85,9 +91,9 @@ def test_file_unpulled_403(client, services):
     assert r.status_code == 403
 
 
-def test_file_missing_propagates_404(client, services):
+def test_file_missing_propagates_404(client, services, make_token):
     """已 pull 但 library 端文件不存在: 必须传播 404, 不能是 200 + 空 body."""
-    token = _register(client, "lp_jack")
+    token = _register(make_token, "lp_jack")
     H = {"Authorization": f"Bearer {token}"}
     client.post(f"/api/my/projects/{services['slug']}", headers=H)
     r = client.get(
@@ -98,9 +104,9 @@ def test_file_missing_propagates_404(client, services):
     assert r.json()["error"] == "file_not_found"
 
 
-def test_removed_user_loses_access(client, services):
+def test_removed_user_loses_access(client, services, make_token):
     """已 Pull 又 remove 后, knodes 应 403。"""
-    token = _register(client, "lp_iris")
+    token = _register(make_token, "lp_iris")
     H = {"Authorization": f"Bearer {token}"}
     client.post(f"/api/my/projects/{services['slug']}", headers=H)
     client.delete(f"/api/my/projects/{services['slug']}", headers=H)
@@ -109,7 +115,7 @@ def test_removed_user_loses_access(client, services):
     )
     assert r.status_code == 403
 
-def test_story_field_in_list(client, services):
+def test_story_field_in_list(client, services, make_token):
     """spec 040: 列表 API 透传 story 字段。"""
     r = client.get("/api/library/projects")
     assert r.status_code == 200
@@ -119,14 +125,14 @@ def test_story_field_in_list(client, services):
     assert proj["story"][0]["title_zh"] == "开篇一"
 
 
-def test_story_field_in_detail(client, services):
+def test_story_field_in_detail(client, services, make_token):
     """spec 040: 详情 API 透传 story 字段。"""
     r = client.get(f"/api/library/projects/{services['slug']}")
     assert r.status_code == 200
     assert r.json()["story"][0]["image"] == "story/story-1.png"
 
 
-def test_story_image_public_no_login(client, services):
+def test_story_image_public_no_login(client, services, make_token):
     """spec 040: story 图是橱窗资源, 未登录/未 Pull 也能取 (跟 cover 同性质)。"""
     r = client.get(
         f"/api/library/projects/{services['slug']}/files/story/story-1.png"

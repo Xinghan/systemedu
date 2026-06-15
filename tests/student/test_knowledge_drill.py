@@ -1,7 +1,35 @@
 """知识钻取测试 (spec 2026-06-09)。"""
 from __future__ import annotations
 
+import importlib
 import json
+
+import fakeredis.aioredis
+import pytest
+
+from systemedu.student import cache
+from systemedu.student.sms import aliyun
+
+
+@pytest.fixture(autouse=True)
+def _redis():
+    cache.replace_client_for_tests(fakeredis.aioredis.FakeRedis())
+    yield
+
+
+@pytest.fixture(autouse=True)
+def _sms_debug(monkeypatch):
+    monkeypatch.setenv("ALIYUN_SMS_DEBUG", "true")  # 绝不真发短信
+    importlib.reload(aliyun)
+    yield
+
+
+async def _login(asgi_client, phone="13800138300") -> str:
+    """手机号 + 验证码登录 (新号自动建), 返回 token。"""
+    await asgi_client.post("/api/auth/send-code", json={"phone": phone})
+    code = (await cache.get_cache().get(f"sms:code:{phone}")).decode()
+    r = await asgi_client.post("/api/auth/verify", json={"phone": phone, "code": code})
+    return r.json()["token"]
 
 
 def test_parse_drill_valid_json():
@@ -34,9 +62,6 @@ def test_parse_drill_non_json_degrades():
     assert "why_matters" in out and "analogy" in out and "go_deeper" in out
 
 
-import pytest
-
-
 @pytest.fixture
 def mock_drill_deps(monkeypatch):
     # mock generate_drill 不调真 LLM
@@ -54,9 +79,7 @@ def mock_drill_deps(monkeypatch):
 
 
 async def test_drill_create_and_reuse(asgi_client, mock_drill_deps):
-    # register
-    await asgi_client.post("/api/auth/register", json={"username": "drilluser", "password": "pw123456"})
-    tok = (await asgi_client.post("/api/auth/login", json={"username": "drilluser", "password": "pw123456"})).json()["token"]
+    tok = await _login(asgi_client, "13800138300")
     H = {"Authorization": f"Bearer {tok}"}
     body = {"library_slug": "eeg", "module_id": "M01", "highlight_text": "奈奎斯特"}
     r1 = await asgi_client.post("/api/knowledge/drill", json=body, headers=H)

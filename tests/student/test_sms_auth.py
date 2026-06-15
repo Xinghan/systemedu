@@ -94,3 +94,129 @@ def test_update_profile(student_db):
     got = db.get_user_by_id(u.id)
     assert got.display_name == "小明" and got.student_age == 12
     assert got.gender == "male" and got.profile_completed is True
+
+
+# ---------------------------------------------------------------------------
+# /api/auth/* 端点 (TDD 第 6 任务) — 进程内 asgi_client (async)
+#
+# asgi_client 是进程内 ASGITransport (httpx AsyncClient), 与测试同进程, 故:
+#   - 上面 autouse 的 _redis 注入的 fakeredis 单例被路由内部 cache.get_cache() 命中;
+#   - 验证码可直接从同一 fakeredis 读出。
+# ---------------------------------------------------------------------------
+
+import importlib  # noqa: E402
+
+from systemedu.student.sms import aliyun  # noqa: E402
+
+
+@pytest.fixture(autouse=True)
+def _sms_debug(monkeypatch):
+    """发码走 debug 不真发。reload 会就地刷新 aliyun 模块 __dict__ 里的 DEBUG,
+    routes 持有的 send_sms_code 引用闭包同一 __dict__, 故仍返 True。"""
+    monkeypatch.setenv("ALIYUN_SMS_DEBUG", "true")
+    importlib.reload(aliyun)
+    yield
+
+
+async def test_send_code_then_verify_new_user(asgi_client):
+    r = await asgi_client.post("/api/auth/send-code", json={"phone": "13800138000"})
+    assert r.status_code == 200 and r.json()["ok"] is True
+    raw = await cache.get_cache().get("sms:code:13800138000")
+    code = raw.decode()
+    r2 = await asgi_client.post(
+        "/api/auth/verify", json={"phone": "13800138000", "code": code}
+    )
+    assert r2.status_code == 200
+    body = r2.json()
+    assert body["token"] and body["profile_completed"] is False
+
+
+async def test_send_code_bad_phone(asgi_client):
+    r = await asgi_client.post("/api/auth/send-code", json={"phone": "12345"})
+    assert r.status_code == 400
+
+
+async def test_send_code_cooldown(asgi_client):
+    await asgi_client.post("/api/auth/send-code", json={"phone": "13800138002"})
+    r = await asgi_client.post("/api/auth/send-code", json={"phone": "13800138002"})
+    assert r.status_code == 429
+
+
+async def test_verify_wrong_code(asgi_client):
+    await asgi_client.post("/api/auth/send-code", json={"phone": "13800138003"})
+    r = await asgi_client.post(
+        "/api/auth/verify", json={"phone": "13800138003", "code": "000000"}
+    )
+    assert r.status_code == 401
+
+
+async def test_verify_existing_user_keeps_profile(asgi_client):
+    """已建号且 profile 已补全的用户再次验证登录, profile_completed 应保持 True。"""
+    await asgi_client.post("/api/auth/send-code", json={"phone": "13800138004"})
+    code = (await cache.get_cache().get("sms:code:13800138004")).decode()
+    r = await asgi_client.post(
+        "/api/auth/verify", json={"phone": "13800138004", "code": code}
+    )
+    token = r.json()["token"]
+    H = {"Authorization": f"Bearer {token}"}
+    rp = await asgi_client.patch(
+        "/api/auth/profile",
+        headers=H,
+        json={"display_name": "小红", "student_age": 11, "gender": "female"},
+    )
+    assert rp.status_code == 200 and rp.json()["profile_completed"] is True
+    # me 返回 phone + profile
+    rm = await asgi_client.get("/api/auth/me", headers=H)
+    assert rm.status_code == 200
+    me = rm.json()
+    assert me["phone"] == "13800138004"
+    assert me["display_name"] == "小红" and me["student_age"] == 11
+    assert me["gender"] == "female" and me["profile_completed"] is True
+    # 二次登录 (同手机号, 走 existing-user 分支) profile_completed 仍 True。
+    # 清掉 60s 冷却键再重发 (否则同一测试内 send-code 命中 429)。
+    await cache.get_cache().delete("sms:cooldown:13800138004")
+    await asgi_client.post("/api/auth/send-code", json={"phone": "13800138004"})
+    code2 = (await cache.get_cache().get("sms:code:13800138004")).decode()
+    r2 = await asgi_client.post(
+        "/api/auth/verify", json={"phone": "13800138004", "code": code2}
+    )
+    assert r2.json()["profile_completed"] is True
+
+
+async def test_profile_requires_login(asgi_client):
+    r = await asgi_client.patch(
+        "/api/auth/profile",
+        json={"display_name": "x", "student_age": 10, "gender": "male"},
+    )
+    assert r.status_code == 401
+
+
+async def test_profile_bad_age(asgi_client):
+    await asgi_client.post("/api/auth/send-code", json={"phone": "13800138005"})
+    code = (await cache.get_cache().get("sms:code:13800138005")).decode()
+    token = (
+        await asgi_client.post(
+            "/api/auth/verify", json={"phone": "13800138005", "code": code}
+        )
+    ).json()["token"]
+    H = {"Authorization": f"Bearer {token}"}
+    r = await asgi_client.patch(
+        "/api/auth/profile",
+        headers=H,
+        json={"display_name": "x", "student_age": 99, "gender": "male"},
+    )
+    assert r.status_code == 400
+
+
+async def test_old_register_removed(asgi_client):
+    r = await asgi_client.post(
+        "/api/auth/register", json={"username": "x", "password": "yyyyyy"}
+    )
+    assert r.status_code in (404, 405)
+
+
+async def test_old_login_removed(asgi_client):
+    r = await asgi_client.post(
+        "/api/auth/login", json={"username": "x", "password": "yyyyyy"}
+    )
+    assert r.status_code in (404, 405)
