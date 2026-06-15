@@ -26,6 +26,7 @@ function LoginForm() {
   const next = params.get("next") || "/home"
   const { setAuth, setDisplayName, hydrate, loggedIn } = useAuthStore()
 
+  const [mode, setMode] = useState<"register" | "login">("register")
   const [phone, setPhone] = useState("")
   const [code, setCode] = useState("")
   const [cooldown, setCooldown] = useState(0)
@@ -114,8 +115,26 @@ function LoginForm() {
 
   return (
     <div className="w-full rounded-2xl border border-border/60 bg-card p-8 shadow-sm">
-      <h1 className="text-xl font-semibold tracking-tight">{t("auth.login.title")}</h1>
-      <p className="mt-1.5 text-sm text-muted-foreground">{t("auth.login.subtitle")}</p>
+      {/* 注册 / 登录 tab 切换 — 两 tab 后端逻辑完全相同, 仅文案区分 */}
+      <div className="mb-6 grid grid-cols-2 gap-1 rounded-lg border border-border/60 bg-background p-1">
+        {(["register", "login"] as const).map((m) => (
+          <button
+            key={m}
+            type="button"
+            onClick={() => setMode(m)}
+            className={`rounded-md px-3 py-1.5 text-sm font-medium transition ${
+              mode === m
+                ? "bg-primary text-primary-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            {t(`auth.tab.${m}`)}
+          </button>
+        ))}
+      </div>
+
+      <h1 className="text-xl font-semibold tracking-tight">{t(`auth.${mode}.title`)}</h1>
+      <p className="mt-1.5 text-sm text-muted-foreground">{t(`auth.${mode}.subtitle`)}</p>
       <form onSubmit={handleSubmit} className="mt-6 space-y-4">
         <div className="space-y-1.5">
           <label htmlFor="phone" className="text-sm font-medium text-foreground">
@@ -168,7 +187,7 @@ function LoginForm() {
           disabled={loading || code.length < 6}
           className="inline-flex w-full items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition hover:bg-primary/90 disabled:opacity-60"
         >
-          {loading ? "..." : t("auth.login.submit")}
+          {loading ? "..." : t(`auth.${mode}.submit`)}
         </button>
       </form>
 
