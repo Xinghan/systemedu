@@ -17,18 +17,26 @@ import pytest
 # 这里只测 sessions CRUD + auth 鉴权; 真 LLM 调用留给 P3 e2e.
 
 
-def _register(client, username):
-    r = client.post("/api/auth/register", json={"username": username, "password": "passw0rd"})
-    return r.json()["token"]
+import hashlib
 
 
-def test_sessions_unauthed_401(client):
+def _phone_for(name: str) -> str:
+    """把测试用的 name 稳定映射成唯一虚拟手机号 (138 + 8 位)。"""
+    digits = int(hashlib.sha1(name.encode()).hexdigest(), 16) % 10**8
+    return f"138{digits:08d}"
+
+
+def _register(make_token, name):
+    return make_token(_phone_for(name))
+
+
+def test_sessions_unauthed_401(client, make_token):
     r = client.get("/api/chat/sessions")
     assert r.status_code == 401
 
 
-def test_create_list_get_delete(client):
-    token = _register(client, "chat_user_a")
+def test_create_list_get_delete(client, make_token):
+    token = _register(make_token, "chat_user_a")
     H = {"Authorization": f"Bearer {token}"}
 
     # 空列表
@@ -67,9 +75,9 @@ def test_create_list_get_delete(client):
     assert client.get("/api/chat/sessions", headers=H).json() == []
 
 
-def test_sessions_isolated_per_user(client):
-    ta = _register(client, "chat_user_b")
-    tb = _register(client, "chat_user_c")
+def test_sessions_isolated_per_user(client, make_token):
+    ta = _register(make_token, "chat_user_b")
+    tb = _register(make_token, "chat_user_c")
     HA = {"Authorization": f"Bearer {ta}"}
     HB = {"Authorization": f"Bearer {tb}"}
 
@@ -84,8 +92,8 @@ def test_sessions_isolated_per_user(client):
     assert client.delete(f"/api/chat/sessions/{sid}", headers=HB).status_code == 404
 
 
-def test_sessions_filter_by_slug_module(client):
-    token = _register(client, "chat_filter_user")
+def test_sessions_filter_by_slug_module(client, make_token):
+    token = _register(make_token, "chat_filter_user")
     H = {"Authorization": f"Bearer {token}"}
     client.post("/api/chat/sessions", headers=H, json={"library_slug": "slug-a", "module_id": "M01"})
     client.post("/api/chat/sessions", headers=H, json={"library_slug": "slug-a", "module_id": "M02"})
@@ -96,13 +104,13 @@ def test_sessions_filter_by_slug_module(client):
     assert len(client.get("/api/chat/sessions?library_slug=slug-b", headers=H).json()) == 1
 
 
-def test_post_chat_unauthed_401(client):
+def test_post_chat_unauthed_401(client, make_token):
     r = client.post("/api/chat", json={"message": "hi"})
     assert r.status_code == 401
 
 
-def test_post_chat_bad_payload_400(client):
-    token = _register(client, "chat_bad_user")
+def test_post_chat_bad_payload_400(client, make_token):
+    token = _register(make_token, "chat_bad_user")
     H = {"Authorization": f"Bearer {token}"}
     # module_id 没 slug
     r = client.post("/api/chat", headers=H, json={"message": "hi", "module_id": "M01"})

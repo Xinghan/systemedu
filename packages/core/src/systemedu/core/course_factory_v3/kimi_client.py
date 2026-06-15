@@ -125,7 +125,9 @@ async def astream_html(
     target = ROLE_TO_PROVIDER.get(role, "coding")
     provider_name = resolve_role_provider(target)
     prov = cfg.llm.providers.get(provider_name)
-    if not prov or not prov.api_key:
+    api_key = cfg.llm.effective_api_key(provider_name)
+    base_url = cfg.llm.effective_base_url(provider_name)
+    if not prov or not api_key or not base_url:
         raise LLMNotConfigured(provider_name)
 
     # push/pop proxy env (避免本机 proxy 拦截 Moonshot)
@@ -136,8 +138,8 @@ async def astream_html(
     async def _attempt_once() -> str:
         no_proxy_async = httpx.AsyncClient(trust_env=False, timeout=httpx.Timeout(timeout_s))
         client = AsyncOpenAI(
-            api_key=prov.api_key,
-            base_url=prov.base_url,
+            api_key=api_key,
+            base_url=base_url,
             http_client=no_proxy_async,
             timeout=timeout_s,
         )

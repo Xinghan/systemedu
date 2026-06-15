@@ -61,8 +61,8 @@ def _build_config() -> dict:
             "provider": "openai",
             "config": {
                 "model": provider.model,
-                "api_key": provider.api_key,
-                "openai_base_url": provider.base_url,  # Mem0 用 openai_base_url
+                "api_key": config.llm.effective_api_key(provider_name),
+                "openai_base_url": config.llm.effective_base_url(provider_name),
                 "temperature": 0.1,
                 "max_tokens": 2000,
             },
@@ -71,8 +71,8 @@ def _build_config() -> dict:
             "provider": "openai",
             "config": {
                 "model": mem_cfg.embed_model,
-                "api_key": embed_provider.api_key,
-                "openai_base_url": embed_provider.base_url,  # Mem0 用 openai_base_url
+                "api_key": config.llm.effective_api_key(embed_provider_name),
+                "openai_base_url": config.llm.effective_base_url(embed_provider_name),
                 "embedding_dims": mem_cfg.embed_dims,
             },
         },

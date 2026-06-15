@@ -143,9 +143,10 @@ async def api_config(request: Request) -> JSONResponse:
     providers = {}
     for name, prov in config.llm.providers.items():
         providers[name] = {
-            "base_url": prov.base_url,
+            # spec 028: 给前端返 effective 值, 让 UI 不必关心继承细节
+            "base_url": config.llm.effective_base_url(name),
             "model": prov.model,
-            "api_key": _mask_api_key(prov.api_key),
+            "api_key": _mask_api_key(config.llm.effective_api_key(name)),
             "temperature": prov.temperature,
             "max_tokens": prov.max_tokens,
         }
@@ -154,6 +155,8 @@ async def api_config(request: Request) -> JSONResponse:
         {
             "llm": {
                 "default": config.llm.default,
+                "base_url": config.llm.base_url or "",
+                "api_key": _mask_api_key(config.llm.api_key or ""),
                 "user_editable": list(LLM_USER_EDITABLE_PROVIDERS),
                 "providers": providers,
             },
@@ -2364,6 +2367,12 @@ async def api_config_update(request: Request) -> JSONResponse:
             if isinstance(prov_fields, dict) and "api_key" in prov_fields:
                 if _looks_like_mask(prov_fields["api_key"]) or prov_fields["api_key"] == "":
                     del prov_fields["api_key"]
+
+    # spec 028: 顶层 llm.api_key 同样保护
+    llm_patch = body.get("llm")
+    if isinstance(llm_patch, dict) and "api_key" in llm_patch:
+        if _looks_like_mask(llm_patch["api_key"]) or llm_patch["api_key"] == "":
+            del llm_patch["api_key"]
 
     # spec 019: tts.api_key 同样保护
     tts_patch = body.get("tts")

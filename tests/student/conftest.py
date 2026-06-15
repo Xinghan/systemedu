@@ -216,6 +216,9 @@ def _spin_services(tmp_path_factory, make_tarball_fn):
             "LIBRARY_LICENSE_TOKEN": license_tok,
             # spec 028: 测试时跳过 tutor preload (省 5-10s, 不用 LLM)
             "STUDENT_SKIP_TUTOR_PRELOAD": "1",
+            # 安全红线: 子进程绝不真发短信。子进程测试不走 send-code (经
+            # make_token 直建号), 这里仍显式 debug 作纵深防御, 防将来误用。
+            "ALIYUN_SMS_DEBUG": "true",
         })
         proc_stu = subprocess.Popen(
             [
@@ -241,6 +244,7 @@ def _spin_services(tmp_path_factory, make_tarball_fn):
                 "slug": slug,
                 "license_token": license_tok,
                 "db_path": str(student_db),
+                "jwt_secret": jwt_secret,
             }
         finally:
             proc_stu.terminate()
@@ -268,6 +272,55 @@ def client(services):
     return httpx.Client(base_url=services["student"], timeout=15.0, trust_env=False)
 
 
+def _make_token_for(services: dict, phone: str) -> str:
+    """子进程登录辅助: 直接在子进程的 SQLite 建手机号用户并签 JWT。
+
+    auth 改为 手机号 + 短信验证码 后, 子进程 student-app 与测试进程隔离,
+    验证码落在子进程的 Redis, 本进程读不到 (且测试绝不真发短信)。故这里
+    完全绕开 SMS/Redis: 直接对子进程共享的 SQLite 文件建号 + 用同一 JWT
+    secret 签 token (HS256, 与 auth/jwt.py 一致), 等价于"已登录"。
+    """
+    from datetime import datetime, timedelta, timezone
+
+    from jose import jwt as _jwt
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import Session
+
+    from systemedu.student.db import User
+
+    engine = create_engine(f"sqlite:///{services['db_path']}")
+    try:
+        with Session(engine) as session:
+            user = session.execute(
+                User.__table__.select().where(User.phone == phone)
+            ).first()
+            if user is None:
+                u = User(phone=phone, profile_completed=False)
+                session.add(u)
+                session.commit()
+                user_id = u.id
+            else:
+                user_id = user.id
+    finally:
+        engine.dispose()
+
+    exp = datetime.now(timezone.utc) + timedelta(days=30)
+    return _jwt.encode(
+        {"sub": user_id, "username": phone, "exp": int(exp.timestamp())},
+        services["jwt_secret"],
+        algorithm="HS256",
+    )
+
+
+@pytest.fixture
+def make_token(services):
+    """返回 make_token(phone) -> JWT, 用于子进程 client 测试免 SMS 登录。"""
+    def _factory(phone: str) -> str:
+        return _make_token_for(services, phone)
+
+    return _factory
+
+
 from tests.student._fixtures.eeg_project import build_eeg_tarball
 
 
@@ -281,6 +334,15 @@ def eeg_services(tmp_path_factory):
 def eeg_client(eeg_services):
     """httpx Client 指向 eeg_services 的 student-app, trust_env=False 绕代理."""
     return httpx.Client(base_url=eeg_services["student"], timeout=20.0, trust_env=False)
+
+
+@pytest.fixture
+def make_token_eeg(eeg_services):
+    """返回 make_token(phone) -> JWT, 针对 eeg_services 子进程 (免 SMS 登录)。"""
+    def _factory(phone: str) -> str:
+        return _make_token_for(eeg_services, phone)
+
+    return _factory
 
 
 @pytest.fixture

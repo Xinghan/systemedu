@@ -75,7 +75,7 @@ def resolve_role_provider(role: str) -> str:
     cfg = get_config()
     for name in chain:
         prov = cfg.llm.providers.get(name)
-        if prov and prov.api_key:
+        if prov and cfg.llm.effective_api_key(name):
             return name
     # 全都没配 → 返回链头, get_llm 会抛 LLMNotConfigured
     return chain[0]
@@ -103,10 +103,16 @@ def get_llm(
             max_retries=3 包装).
         **kwargs: Extra kwargs passed to ChatOpenAI.
     """
-    prov = get_provider_config(provider)
+    cfg = get_config()
+    provider_name = provider or cfg.llm.default
+    prov = get_provider_config(provider_name)
 
-    if not prov.api_key:
-        raise LLMNotConfigured(provider or get_config().llm.default)
+    api_key = cfg.llm.effective_api_key(provider_name)
+    base_url = cfg.llm.effective_base_url(provider_name)
+    if not api_key:
+        raise LLMNotConfigured(provider_name)
+    if not base_url:
+        raise LLMNotConfigured(provider_name)
 
     # Bypass system HTTP proxy to avoid SSL errors with LLM API endpoints
     # proxy=None does NOT disable env vars; trust_env=False is required
@@ -117,8 +123,8 @@ def get_llm(
 
     llm_kwargs = {
         "model": model or prov.model,
-        "api_key": prov.api_key,
-        "base_url": prov.base_url,
+        "api_key": api_key,
+        "base_url": base_url,
         "temperature": temperature if temperature is not None else prov.temperature,
         "streaming": streaming,
         "http_client": no_proxy_client,

@@ -1,0 +1,76 @@
+# SystemEdu Gateway (Python 3.12, uv workspace)
+#
+# Build (from repo root):
+#   docker build -f docker/Dockerfile.backend -t systemedu-backend .
+#
+# Run:
+#   docker run --rm -p 18820:18820 \
+#     -v systemedu-home:/data \
+#     -e SYSTEMEDU_HOME=/data \
+#     systemedu-backend
+
+# -------- Stage 1: build venv with uv --------
+FROM python:3.12-slim AS builder
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    UV_LINK_MODE=copy \
+    UV_PROJECT_ENVIRONMENT=/opt/venv
+
+# 系统依赖: build-essential 用于编译 sqlite-vec / bcrypt;
+# curl + ca-certificates 装 uv
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    curl \
+    ca-certificates \
+    git \
+ && rm -rf /var/lib/apt/lists/*
+
+# 装 uv (官方 standalone installer)
+RUN curl -LsSf https://astral.sh/uv/install.sh | sh \
+ && cp /root/.local/bin/uv /usr/local/bin/uv
+
+WORKDIR /app
+
+# 先 copy pyproject 文件做依赖缓存层
+COPY pyproject.toml /app/pyproject.toml
+COPY packages/core/pyproject.toml /app/packages/core/pyproject.toml
+COPY packages/cloud-app/pyproject.toml /app/packages/cloud-app/pyproject.toml
+COPY packages/library-app/pyproject.toml /app/packages/library-app/pyproject.toml
+
+# 再 copy 源码
+COPY packages/core/src /app/packages/core/src
+COPY packages/cloud-app/src /app/packages/cloud-app/src
+COPY packages/library-app/src /app/packages/library-app/src
+
+# 安装 workspace (生成 /opt/venv)
+RUN uv sync --no-dev --frozen 2>/dev/null || uv sync --no-dev
+
+# -------- Stage 2: runtime --------
+FROM python:3.12-slim AS runtime
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PATH="/opt/venv/bin:$PATH" \
+    SYSTEMEDU_HOME=/data
+
+# 运行时只装 libgomp1 (某些 ml 依赖) + ca-certs
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    libgomp1 \
+ && rm -rf /var/lib/apt/lists/* \
+ && useradd -m -u 1000 systemedu \
+ && mkdir -p /data \
+ && chown -R systemedu:systemedu /data
+
+COPY --from=builder /opt/venv /opt/venv
+COPY --from=builder /app /app
+
+WORKDIR /app
+USER systemedu
+
+EXPOSE 18820
+
+# host 必须 0.0.0.0 才能被容器外访问; SYSTEMEDU_HOME 指向挂载卷
+CMD ["python", "-m", "systemedu.cloud.gateway.server", "--host", "0.0.0.0", "--port", "18820"]

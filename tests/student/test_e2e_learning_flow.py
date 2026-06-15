@@ -22,12 +22,17 @@ from tests.student._fixtures.eeg_project import KNODES, SLUG
 # 共用 helper (A 类)
 # ====================================================================
 
-def _register_and_login(client, username: str, password: str = "pw123456") -> str:
-    """注册并登录, 返回 Bearer token。username 3-32 位, password>=6。"""
-    client.post("/api/auth/register", json={"username": username, "password": password})
-    r = client.post("/api/auth/login", json={"username": username, "password": password})
-    r.raise_for_status()
-    return r.json()["token"]
+import hashlib
+
+
+def _phone_for(name: str) -> str:
+    digits = int(hashlib.sha1(name.encode()).hexdigest(), 16) % 10**8
+    return f"138{digits:08d}"
+
+
+def _register_and_login(make_token, name: str) -> str:
+    """免 SMS 登录: 直接建手机号用户并签 token (绝不真发短信)。返回 Bearer token。"""
+    return make_token(_phone_for(name))
 
 
 def _auth(token: str) -> dict:
@@ -35,7 +40,7 @@ def _auth(token: str) -> dict:
 
 
 def _uname(tag: str) -> str:
-    # 不同测试用不同 username 避免 409
+    # 不同测试用不同 name 派生不同手机号, 避免撞号
     return f"e2e{tag}{uuid.uuid4().hex[:6]}"
 
 
@@ -43,8 +48,8 @@ def _uname(tag: str) -> str:
 # E2E-1 pull 生命周期 (A 类, HTTP)
 # ====================================================================
 
-def test_e2e1_pull_lifecycle(eeg_client):
-    token = _register_and_login(eeg_client, _uname("a"))
+def test_e2e1_pull_lifecycle(eeg_client, make_token_eeg):
+    token = _register_and_login(make_token_eeg, _uname("a"))
     h = _auth(token)
 
     # 首次 pull -> 201 + knode_count=7 + stage_count=3
@@ -76,8 +81,8 @@ def test_e2e1_pull_lifecycle(eeg_client):
 # E2E-2 学习内容代理 (A 类, HTTP)
 # ====================================================================
 
-def test_e2e2_learn_content_proxy(eeg_client):
-    token = _register_and_login(eeg_client, _uname("b"))
+def test_e2e2_learn_content_proxy(eeg_client, make_token_eeg):
+    token = _register_and_login(make_token_eeg, _uname("b"))
     h = _auth(token)
 
     # 未 pull 的新用户 GET knode -> 403 not_pulled
@@ -96,8 +101,8 @@ def test_e2e2_learn_content_proxy(eeg_client):
 # E2E-5 DAG / 进度增长 (A 类, HTTP + 数据断言)
 # ====================================================================
 
-def test_e2e5_dag_and_progress(eeg_client):
-    token = _register_and_login(eeg_client, _uname("e"))
+def test_e2e5_dag_and_progress(eeg_client, make_token_eeg):
+    token = _register_and_login(make_token_eeg, _uname("e"))
     h = _auth(token)
     eeg_client.post(f"/api/my/projects/{SLUG}", headers=h)
 
@@ -114,7 +119,7 @@ def test_e2e5_dag_and_progress(eeg_client):
     assert r.json()["last_module_id"] == "M01"
 
     # 未 pull 用户 PUT 进度 -> 403 pull_required
-    token2 = _register_and_login(eeg_client, _uname("e2"))
+    token2 = _register_and_login(make_token_eeg, _uname("e2"))
     r = eeg_client.put(f"/api/my/progress/{SLUG}/M01", headers=_auth(token2))
     assert r.status_code == 403
     assert r.json()["error"] == "pull_required"

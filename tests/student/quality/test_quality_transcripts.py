@@ -25,12 +25,17 @@ from tests.student._fixtures.eeg_project import SLUG
 # 共用 helper
 # ====================================================================
 
-def _register_and_login(client, username: str, password: str = "pw123456") -> str:
-    """注册并登录, 返回 Bearer token。"""
-    client.post("/api/auth/register", json={"username": username, "password": password})
-    r = client.post("/api/auth/login", json={"username": username, "password": password})
-    r.raise_for_status()
-    return r.json()["token"]
+import hashlib
+
+
+def _phone_for(name: str) -> str:
+    digits = int(hashlib.sha1(name.encode()).hexdigest(), 16) % 10**8
+    return f"138{digits:08d}"
+
+
+def _register_and_login(make_token, name: str) -> str:
+    """免 SMS 登录: 直接建手机号用户并签 token (绝不真发短信)。返回 Bearer token。"""
+    return make_token(_phone_for(name))
 
 
 def _auth(token: str) -> dict:
@@ -114,9 +119,11 @@ SCENARIOS = [
 
 @pytest.mark.quality
 @pytest.mark.parametrize("scenario,knode_id,utterances", SCENARIOS, ids=[s[0] for s in SCENARIOS])
-def test_quality_transcript(eeg_client, dump_artifact, scenario, knode_id, utterances):
+def test_quality_transcript(
+    eeg_client, make_token_eeg, dump_artifact, scenario, knode_id, utterances
+):
     """跑真实 tutor 对话并落 artifact; 断言结构完整 (不评质量)。"""
-    token = _register_and_login(eeg_client, _uname(scenario[:3]))
+    token = _register_and_login(make_token_eeg, _uname(scenario[:3]))
     h = _auth(token)
 
     # pull EEG 项目 (learn 页对话 + GET knode context 都需先 pull)。

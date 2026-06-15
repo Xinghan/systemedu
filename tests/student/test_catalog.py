@@ -1,29 +1,38 @@
-"""catalog 测试 — /api/my/projects, /api/my/progress."""
+"""catalog 测试 — /api/my/projects, /api/my/progress.
+
+auth 改为 手机号 + 短信验证码 后, 子进程 client 测试经 make_token 直接建号签
+token (免 SMS/Redis, 绝不真发短信); name 仅用于派生唯一手机号。
+"""
 
 from __future__ import annotations
 
-
-def _register(client, username):
-    r = client.post(
-        "/api/auth/register", json={"username": username, "password": "passw0rd"}
-    )
-    return r.json()["token"]
+import hashlib
 
 
-def test_my_projects_empty(client):
-    token = _register(client, "cat_empty")
+def _phone_for(name: str) -> str:
+    """把测试用的 name 稳定映射成唯一虚拟手机号 (138 + 8 位)。"""
+    digits = int(hashlib.sha1(name.encode()).hexdigest(), 16) % 10**8
+    return f"138{digits:08d}"
+
+
+def _register(make_token, name):
+    return make_token(_phone_for(name))
+
+
+def test_my_projects_empty(client, make_token):
+    token = _register(make_token, "cat_empty")
     r = client.get("/api/my/projects", headers={"Authorization": f"Bearer {token}"})
     assert r.status_code == 200
     assert r.json() == []
 
 
-def test_my_projects_requires_login(client):
+def test_my_projects_requires_login(client, make_token):
     r = client.get("/api/my/projects")
     assert r.status_code == 401
 
 
-def test_pull_creates_row(client, services):
-    token = _register(client, "cat_pull")
+def test_pull_creates_row(client, services, make_token):
+    token = _register(make_token, "cat_pull")
     H = {"Authorization": f"Bearer {token}"}
     r = client.post(f"/api/my/projects/{services['slug']}", headers=H)
     assert r.status_code == 201
@@ -34,9 +43,9 @@ def test_pull_creates_row(client, services):
     assert body["title_zh"] == "027 测试项目"
 
 
-def test_pull_existing_unremoves(client, services):
+def test_pull_existing_unremoves(client, services, make_token):
     """第二次 Pull 同 slug → 201/200 都行, 但 created=False 且 removed_at=None。"""
-    token = _register(client, "cat_re_pull")
+    token = _register(make_token, "cat_re_pull")
     H = {"Authorization": f"Bearer {token}"}
     client.post(f"/api/my/projects/{services['slug']}", headers=H)
     client.delete(f"/api/my/projects/{services['slug']}", headers=H)
@@ -47,8 +56,8 @@ def test_pull_existing_unremoves(client, services):
     assert body["removed_at"] is None
 
 
-def test_list_includes_library_metadata(client, services):
-    token = _register(client, "cat_list_meta")
+def test_list_includes_library_metadata(client, services, make_token):
+    token = _register(make_token, "cat_list_meta")
     H = {"Authorization": f"Bearer {token}"}
     client.post(f"/api/my/projects/{services['slug']}", headers=H)
     r = client.get("/api/my/projects", headers=H)
@@ -62,8 +71,8 @@ def test_list_includes_library_metadata(client, services):
     assert item["last_module_id"] is None
 
 
-def test_remove_soft_deletes(client, services):
-    token = _register(client, "cat_remove")
+def test_remove_soft_deletes(client, services, make_token):
+    token = _register(make_token, "cat_remove")
     H = {"Authorization": f"Bearer {token}"}
     client.post(f"/api/my/projects/{services['slug']}", headers=H)
     r = client.delete(f"/api/my/projects/{services['slug']}", headers=H)
@@ -74,25 +83,25 @@ def test_remove_soft_deletes(client, services):
     assert r2.json() == []
 
 
-def test_remove_unowned_idempotent(client, services):
+def test_remove_unowned_idempotent(client, services, make_token):
     """移除一个未 Pull 的 slug → 200 + removed=False (idempotent)."""
-    token = _register(client, "cat_rm_unowned")
+    token = _register(make_token, "cat_rm_unowned")
     H = {"Authorization": f"Bearer {token}"}
     r = client.delete(f"/api/my/projects/{services['slug']}", headers=H)
     assert r.status_code == 200
     assert r.json()["removed"] is False
 
 
-def test_pull_nonexistent_project_404(client):
-    token = _register(client, "cat_404")
+def test_pull_nonexistent_project_404(client, make_token):
+    token = _register(make_token, "cat_404")
     H = {"Authorization": f"Bearer {token}"}
     r = client.post("/api/my/projects/does-not-exist", headers=H)
     assert r.status_code == 404
 
 
-def test_pull_creates_no_local_dir(client, services):
+def test_pull_creates_no_local_dir(client, services, make_token):
     """cloud 版本 (spec 037): Pull 只在 DB 记一行关联, 响应体不含任何本地落盘字段。"""
-    token = _register(client, "pull_no_disk")
+    token = _register(make_token, "pull_no_disk")
     H = {"Authorization": f"Bearer {token}"}
     resp = client.post(f"/api/my/projects/{services['slug']}", headers=H)
     assert resp.status_code == 201
@@ -106,9 +115,9 @@ def test_pull_creates_no_local_dir(client, services):
     assert "local_path" not in body
 
 
-def test_remove_no_filesystem_touch(client, services):
+def test_remove_no_filesystem_touch(client, services, make_token):
     """cloud 版本: remove 软删关联 + 清进度, 返回体不含 local_cleaned 字段."""
-    token = _register(client, "cat_rm_nofs")
+    token = _register(make_token, "cat_rm_nofs")
     H = {"Authorization": f"Bearer {token}"}
     client.post(f"/api/my/projects/{services['slug']}", headers=H)
     client.put(f"/api/my/progress/{services['slug']}/M01", headers=H)
@@ -122,9 +131,9 @@ def test_remove_no_filesystem_touch(client, services):
     assert prog.json()["last_module_id"] is None
 
 
-def test_knode_proxy_when_pulled(client, services):
+def test_knode_proxy_when_pulled(client, services, make_token):
     """已 pull: /api/my/projects/{slug}/knodes/{id} 实时代理 library 内容."""
-    token = _register(client, "cat_knode_ok")
+    token = _register(make_token, "cat_knode_ok")
     H = {"Authorization": f"Bearer {token}"}
     client.post(f"/api/my/projects/{services['slug']}", headers=H)
     r = client.get(f"/api/my/projects/{services['slug']}/knodes/M01", headers=H)
@@ -136,26 +145,26 @@ def test_knode_proxy_when_pulled(client, services):
     assert "M01 Intro" in body["plan_markdown"]
 
 
-def test_knode_403_when_not_pulled(client, services):
+def test_knode_403_when_not_pulled(client, services, make_token):
     """未 pull: knode 返回 403."""
-    token = _register(client, "cat_knode_403")
+    token = _register(make_token, "cat_knode_403")
     H = {"Authorization": f"Bearer {token}"}
     r = client.get(f"/api/my/projects/{services['slug']}/knodes/M01", headers=H)
     assert r.status_code == 403
 
 
-def test_knode_404_when_invalid_id(client, services):
+def test_knode_404_when_invalid_id(client, services, make_token):
     """已 pull 但 knode_id 不存在: library 404 转成 knode_not_found 404."""
-    token = _register(client, "cat_knode_404")
+    token = _register(make_token, "cat_knode_404")
     H = {"Authorization": f"Bearer {token}"}
     client.post(f"/api/my/projects/{services['slug']}", headers=H)
     r = client.get(f"/api/my/projects/{services['slug']}/knodes/M99", headers=H)
     assert r.status_code == 404
 
 
-def test_file_proxy_when_pulled(client, services):
+def test_file_proxy_when_pulled(client, services, make_token):
     """已 pull: /api/my/projects/{slug}/files/{path} 流式代理 library 文件."""
-    token = _register(client, "cat_file_ok")
+    token = _register(make_token, "cat_file_ok")
     H = {"Authorization": f"Bearer {token}"}
     client.post(f"/api/my/projects/{services['slug']}", headers=H)
     r = client.get(
@@ -166,9 +175,9 @@ def test_file_proxy_when_pulled(client, services):
     assert "M01 Intro" in r.text
 
 
-def test_file_403_when_not_pulled(client, services):
+def test_file_403_when_not_pulled(client, services, make_token):
     """未 pull: file 返回 403."""
-    token = _register(client, "cat_file_403")
+    token = _register(make_token, "cat_file_403")
     H = {"Authorization": f"Bearer {token}"}
     r = client.get(
         f"/api/my/projects/{services['slug']}/files/knodes/M01-w1-intro/lesson.md",
@@ -177,13 +186,13 @@ def test_file_403_when_not_pulled(client, services):
     assert r.status_code == 403
 
 
-def test_file_404_when_library_missing(client, services):
+def test_file_404_when_library_missing(client, services, make_token):
     """已 pull 但 library 端文件不存在: 必须传播 404, 不能是 200 + 空 body.
 
     回归: 修复前 _stream 在上游非 200 时直接 return, StreamingResponse 已以
     200 发出, 客户端拿到 200 空 body, 无法区分"文件不存在"和"文件正常但空"。
     """
-    token = _register(client, "cat_file_404")
+    token = _register(make_token, "cat_file_404")
     H = {"Authorization": f"Bearer {token}"}
     client.post(f"/api/my/projects/{services['slug']}", headers=H)
     r = client.get(

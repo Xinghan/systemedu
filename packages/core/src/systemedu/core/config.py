@@ -42,10 +42,17 @@ def _expand_env_recursive(obj):
 
 
 class LLMProviderConfig(BaseModel):
-    """Configuration for a single LLM provider."""
+    """Configuration for a single LLM provider (role-level).
 
-    base_url: str
-    api_key: str = ""
+    spec 028 (2026-05-20): base_url / api_key 改为 optional, 不填则从顶层
+    LLMConfig.base_url / .api_key 继承. 单一 OpenAI-compatible endpoint
+    通常只需在顶层填一次, 每个 role 只填 model.
+
+    某 role 想用不同厂商时, 在该 provider 里覆盖 base_url + api_key 即可.
+    """
+
+    base_url: str | None = None
+    api_key: str | None = None
     model: str
     temperature: float = 0.7
     max_tokens: int | None = None
@@ -57,10 +64,29 @@ class LLMConfig(BaseModel):
     spec 021: default = "thinking"。用户在 web /config 配 3 张 LLM 卡片
     (Thinking / Coding / Fast) + 1 张 TTS 卡片。代码层按角色路由到
     对应 provider, 没配 key 时按 fallback 链向后退档。
+
+    spec 028: 顶层 base_url + api_key 作为默认值, provider 不填时继承.
+    单 (url, key) 适配所有 OpenAI-compatible 模型.
     """
 
     default: str = "thinking"
+    base_url: str | None = None
+    api_key: str | None = None
     providers: dict[str, LLMProviderConfig] = Field(default_factory=dict)
+
+    def effective_base_url(self, provider_name: str) -> str:
+        """spec 028: provider.base_url ?? llm.base_url. None → "" (调用方判空)."""
+        prov = self.providers.get(provider_name)
+        if prov and prov.base_url:
+            return prov.base_url
+        return self.base_url or ""
+
+    def effective_api_key(self, provider_name: str) -> str:
+        """spec 028: provider.api_key ?? llm.api_key. None → "" (调用方判空)."""
+        prov = self.providers.get(provider_name)
+        if prov and prov.api_key:
+            return prov.api_key
+        return self.api_key or ""
 
 
 class SandboxConfig(BaseModel):
