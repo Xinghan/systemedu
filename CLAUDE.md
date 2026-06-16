@@ -222,6 +222,10 @@ Internet -> nginx:80 -> /api/*  -> uvicorn:18820 (Python gateway)
 
 ### Git Workflow
 - **Every code change must be committed** after the request is completed
+- **commit 后必须立即 `git push` 到远程** — 这是硬性要求，不允许只 commit 不 push、把工作积压在本地。
+  远程 (GitHub) 是唯一可靠的保险；本地长期领先远程会在任何一次 git 整理/reset 时面临丢失风险
+  (2026-06-16 曾因本地积压数天未 push 的工作 + 一次 reset 误判，险些丢失，靠 reflog 才找回)。
+  做完一段就 commit + push，不攒着。
 - Commit messages follow conventional commits: `feat:`, `fix:`, `refactor:`, `docs:`, `chore:`
 - Always include `Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>`
 - Never force push or amend unless explicitly asked
