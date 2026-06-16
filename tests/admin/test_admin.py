@@ -72,3 +72,31 @@ def test_user_detail(admin_db):
     assert len(d["questions"]) == 1 and d["questions"][0]["content"] == "EEG 是什么"
     empty = queries.user_detail("no-such-id")
     assert empty is None
+
+
+def test_admin_endpoints(admin_db, monkeypatch):
+    monkeypatch.setenv("ADMIN_USER", "boss")
+    monkeypatch.setenv("ADMIN_PASSWORD", "pw123456")
+    monkeypatch.setenv("ADMIN_JWT_SECRET", "s")
+    import importlib
+    from systemedu.admin import auth, routes, server
+    importlib.reload(auth); importlib.reload(routes); importlib.reload(server)
+    from starlette.testclient import TestClient
+    c = TestClient(server.app)
+
+    # 未登录访问 /sysadmin -> 跳登录 (302/303) 或 401
+    r = c.get("/sysadmin", follow_redirects=False)
+    assert r.status_code in (302, 303, 401)
+
+    # 错密码登录失败
+    r = c.post("/sysadmin/login", data={"user": "boss", "password": "wrong"}, follow_redirects=False)
+    assert "管理员登录" in r.text or r.status_code == 401
+
+    # 对密码登录 -> set cookie
+    r = c.post("/sysadmin/login", data={"user": "boss", "password": "pw123456"}, follow_redirects=False)
+    assert r.status_code in (302, 303)
+    assert "admin_session" in r.cookies or "admin_session" in r.headers.get("set-cookie", "")
+
+    # 带 cookie 访问用户列表 -> 200
+    r = c.get("/sysadmin")
+    assert r.status_code == 200 and "注册用户" in r.text
