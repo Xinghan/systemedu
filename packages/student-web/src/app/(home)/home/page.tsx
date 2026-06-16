@@ -80,7 +80,7 @@ export default function HomePage() {
         )
         setProgress(Object.fromEntries(entries))
       } catch (err) {
-        toast.error(err instanceof Error ? err.message : "加载失败")
+        toast.error(err instanceof Error ? err.message : t("home.load_failed"))
       } finally {
         setLoading(false)
       }
@@ -93,15 +93,15 @@ export default function HomePage() {
 
   return (
     <main className="page-wide" style={{ paddingTop: 20 }}>
-      <Crumbs items={[{ label: t("nav.home") }, { label: "学习面板" }]} />
+      <Crumbs items={[{ label: t("nav.home") }, { label: t("home.breadcrumb") }]} />
 
       {/* 欢迎 */}
       <div style={{ margin: "12px 0 24px" }}>
         <h1 style={{ fontSize: 30, fontWeight: 700, letterSpacing: "-0.02em", color: "var(--ink)" }}>
-          {t("home.welcome_back")}，{username || "同学"}
+          {t("home.welcome_back")}，{username || t("home.default_name")}
         </h1>
         <p style={{ marginTop: 6, color: "var(--sub)", fontSize: 14 }}>
-          {projectCount > 0 ? `你正在学 ${projectCount} 个项目` : "开始你的第一个项目吧"}
+          {projectCount > 0 ? t("home.studying_n", { n: projectCount }) : t("home.empty_subtitle")}
         </p>
       </div>
 
@@ -114,8 +114,8 @@ export default function HomePage() {
           marginBottom: 28,
         }}
       >
-        <StatCard icon={<Layers size={15} strokeWidth={1.5} />} label="在学项目" value={String(projectCount)} sub="书架上的项目数" />
-        <StatCard icon={<Sparkles size={15} strokeWidth={1.5} />} label="已掌握知识点" value={String(totalDone)} sub="完成的节点总数" />
+        <StatCard icon={<Layers size={15} strokeWidth={1.5} />} label={t("home.stat_active")} value={String(projectCount)} sub={t("home.stat_active_sub")} />
+        <StatCard icon={<Sparkles size={15} strokeWidth={1.5} />} label={t("home.stat_mastered")} value={String(totalDone)} sub={t("home.stat_mastered_sub")} />
         <Link
           href="/brain"
           style={{
@@ -149,11 +149,11 @@ export default function HomePage() {
       <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 14 }}>
         <h2 className="h2">{t("home.my_projects")}{projectCount > 0 ? ` (${projectCount})` : ""}</h2>
         <Link href="/library" className="btn btn-ghost btn-sm">
-          浏览全部项目 <ArrowUpRight size={13} strokeWidth={1.5} />
+          {t("home.browse_all")} <ArrowUpRight size={13} strokeWidth={1.5} />
         </Link>
       </div>
 
-      {loading && <p style={{ color: "var(--sub)", fontSize: 14, padding: "32px 0" }}>加载中...</p>}
+      {loading && <p style={{ color: "var(--sub)", fontSize: 14, padding: "32px 0" }}>{t("home.loading")}</p>}
 
       {!loading && items.length === 0 && (
         <div
@@ -209,6 +209,7 @@ function StatCard({ icon, label, value, sub }: { icon: React.ReactNode; label: s
 }
 
 function ProjectCard({ project: p, done }: { project: MyProjectItem; done: number }) {
+  const t = useT()
   const total = p.knode_count ?? 0
   const pct = total > 0 ? Math.round((done / total) * 100) : 0
   const nextModuleId = p.last_module_id || "M01"
@@ -234,7 +235,7 @@ function ProjectCard({ project: p, done }: { project: MyProjectItem; done: numbe
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8, flexWrap: "wrap" }}>
           {p.domain && <span className={`tag ${dcls}`}>{p.domain}</span>}
           {p.age_band && <span className="tag" style={{ background: "var(--paper-2)" }}>{p.age_band}</span>}
-          {p.upgrade_available && <span className="tag violet">有更新</span>}
+          {p.upgrade_available && <span className="tag violet">{t("home.tag_update")}</span>}
         </div>
 
         <h3 style={{ fontSize: 15, fontWeight: 600, color: "var(--ink)", lineHeight: 1.35, marginBottom: 12 }}>
@@ -244,7 +245,7 @@ function ProjectCard({ project: p, done }: { project: MyProjectItem; done: numbe
         {/* 真实进度 */}
         <div style={{ marginTop: "auto" }}>
           <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: "var(--sub)", marginBottom: 5 }}>
-            <span>{done} / {total} 节点</span>
+            <span>{done} / {total} {t("home.nodes_suffix")}</span>
             <span>{pct}%</span>
           </div>
           <div style={{ height: 6, borderRadius: 999, background: "var(--paper-2)", overflow: "hidden", marginBottom: 12 }}>
@@ -253,7 +254,7 @@ function ProjectCard({ project: p, done }: { project: MyProjectItem; done: numbe
 
           {unavailable ? (
             <div className="btn btn-ghost btn-sm" style={{ width: "100%", justifyContent: "center", opacity: 0.6, cursor: "default" }}>
-              项目暂不可用
+              {t("home.project_unavailable")}
             </div>
           ) : (
             <div style={{ display: "flex", gap: 8 }}>
@@ -262,14 +263,14 @@ function ProjectCard({ project: p, done }: { project: MyProjectItem; done: numbe
                 className="btn btn-primary btn-sm"
                 style={{ flex: 1, justifyContent: "center" }}
               >
-                <CirclePlay size={13} strokeWidth={1.5} /> 继续 {nextModuleId}
+                <CirclePlay size={13} strokeWidth={1.5} /> {t("home.continue")} {nextModuleId}
               </Link>
               <Link
                 href={`/library/${encodeURIComponent(p.slug)}`}
                 className="btn btn-ghost btn-sm"
                 style={{ justifyContent: "center" }}
               >
-                详情
+                {t("home.details")}
               </Link>
             </div>
           )}
