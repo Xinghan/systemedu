@@ -168,9 +168,11 @@ EOF"
 }
 
 do_web() {
-  echo "[web] npm ci + build (API 指向生产)..."
+  echo "[web] npm ci + build (API 走相对路径 /api, 同源经 nginx)..."
   remote "cd $REPO_ROOT/packages/student-web && npm ci --silent 2>&1 | tail -2"
-  remote "cd $REPO_ROOT/packages/student-web && NEXT_PUBLIC_STUDENT_API_URL=$PUBLIC_URL npm run build 2>&1 | tail -6"
+  # NEXT_PUBLIC_STUDENT_API_URL="" (空) → 前端用相对路径 /api/..., 自动跟随访问页面的
+  # 协议+域名 (HTTP/HTTPS、IP/域名都对), 不再写死绝对地址 (修协议错配/跨域/ICP 拦截)。
+  remote "cd $REPO_ROOT/packages/student-web && NEXT_PUBLIC_STUDENT_API_URL='' NEXT_PUBLIC_GATEWAY_URL='' npm run build 2>&1 | tail -6"
   echo "[web] systemd unit..."
   remote "cat > /etc/systemd/system/systemedu-student-web.service <<EOF
 [Unit]
@@ -179,7 +181,8 @@ After=network.target
 [Service]
 WorkingDirectory=$REPO_ROOT/packages/student-web
 Environment=PORT=$STUDENT_WEB_PORT
-Environment=NEXT_PUBLIC_STUDENT_API_URL=$PUBLIC_URL
+Environment=NEXT_PUBLIC_STUDENT_API_URL=
+Environment=NEXT_PUBLIC_GATEWAY_URL=
 ExecStart=/usr/bin/npm run start
 Restart=always
 [Install]

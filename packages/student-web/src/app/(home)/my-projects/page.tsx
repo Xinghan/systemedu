@@ -90,7 +90,7 @@ export default function MyProjectsPage() {
         const list = await myProjects.list()
         setItems(list)
       } catch (err) {
-        toast.error(err instanceof Error ? err.message : "加载失败")
+        toast.error(err instanceof Error ? err.message : t("myprojects.load_failed"))
       } finally {
         setLoading(false)
       }
@@ -141,15 +141,15 @@ export default function MyProjectsPage() {
     try {
       await myProjects.remove(slug)
       setItems((prev) => prev.filter((x) => x.slug !== slug))
-      toast.success("已从书架移除")
+      toast.success(t("myprojects.remove_success"))
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "移除失败")
+      toast.error(err instanceof Error ? err.message : t("myprojects.remove_failed"))
     }
   }
 
   return (
     <main className="page-wide" style={{ paddingTop: 20 }}>
-      <Crumbs items={[{ label: "Home" }, { label: t("nav.my_projects") }]} />
+      <Crumbs items={[{ label: t("nav.home") }, { label: t("nav.my_projects") }]} />
 
       <div
         style={{
@@ -163,7 +163,11 @@ export default function MyProjectsPage() {
       >
         <div>
           <div className="eyebrow" style={{ marginBottom: 8 }}>
-            <span className="dot" /> {forks.length} forks · {groups.shipped.length} shipped
+            <span className="dot" />{" "}
+            {t("myprojects.forks_shipped", {
+              forks: forks.length,
+              shipped: groups.shipped.length,
+            })}
           </div>
           <h1 className="h1" style={{ fontSize: 30 }}>
             {t("myproj.title")}
@@ -171,10 +175,10 @@ export default function MyProjectsPage() {
         </div>
         <div style={{ display: "flex", gap: 10 }}>
           <Link href="/library" className="btn btn-ghost">
-            <LibraryIcon size={14} strokeWidth={1.5} /> Library
+            <LibraryIcon size={14} strokeWidth={1.5} /> {t("myprojects.library")}
           </Link>
           <Link href="/library" className="btn btn-violet">
-            <GitFork size={14} strokeWidth={1.5} /> Pull new
+            <GitFork size={14} strokeWidth={1.5} /> {t("myprojects.pull_new")}
           </Link>
         </div>
       </div>
@@ -192,24 +196,32 @@ export default function MyProjectsPage() {
           marginBottom: 20,
         }}
       >
-        <MiniStat label="Pulled" value={String(forks.length)} sub="all-time" />
         <MiniStat
-          label="Active"
+          label={t("myprojects.stat_pulled")}
+          value={String(forks.length)}
+          sub={t("myprojects.stat_all_time")}
+        />
+        <MiniStat
+          label={t("myprojects.stat_active")}
           value={String(groups.active.length)}
-          sub="recently studied"
+          sub={t("myprojects.stat_recently_studied")}
         />
         <MiniStat
-          label="Modules"
+          label={t("myprojects.stat_modules")}
           value={totalModules > 0 ? `${doneModules}/${totalModules}` : "—"}
-          sub={totalModules > 0 ? `${overallPct}% across all forks` : "no data"}
+          sub={
+            totalModules > 0
+              ? t("myprojects.stat_across_all_forks", { pct: overallPct })
+              : t("myprojects.stat_no_data")
+          }
         />
         <MiniStat
-          label="Shipped"
+          label={t("myprojects.stat_shipped")}
           value={String(groups.shipped.length)}
           sub={
             groups.shipped[0]?.slug
               ? groups.shipped[0].slug
-              : "未完成"
+              : t("myprojects.stat_incomplete")
           }
           last
         />
@@ -227,30 +239,30 @@ export default function MyProjectsPage() {
           flexWrap: "wrap",
         }}
       >
-        <FilterTab id="active" current={filter} onClick={setFilter} label="Active" n={groups.active.length} />
-        <FilterTab id="paused" current={filter} onClick={setFilter} label="Paused" n={groups.paused.length} />
-        <FilterTab id="shipped" current={filter} onClick={setFilter} label="Shipped" n={groups.shipped.length} />
-        <FilterTab id="all" current={filter} onClick={setFilter} label="All" n={forks.length} />
+        <FilterTab id="active" current={filter} onClick={setFilter} label={t("myprojects.tab_active")} n={groups.active.length} />
+        <FilterTab id="paused" current={filter} onClick={setFilter} label={t("myprojects.tab_paused")} n={groups.paused.length} />
+        <FilterTab id="shipped" current={filter} onClick={setFilter} label={t("myprojects.tab_shipped")} n={groups.shipped.length} />
+        <FilterTab id="all" current={filter} onClick={setFilter} label={t("myprojects.tab_all")} n={forks.length} />
         <div style={{ flex: 1 }} />
         <button
           type="button"
           className={"nav-tab " + (view === "grid" ? "active" : "")}
           onClick={() => setView("grid")}
         >
-          <Grid3X3 size={13} strokeWidth={1.5} /> Grid
+          <Grid3X3 size={13} strokeWidth={1.5} /> {t("myprojects.view_grid")}
         </button>
         <button
           type="button"
           className={"nav-tab " + (view === "list" ? "active" : "")}
           onClick={() => setView("list")}
         >
-          <Menu size={13} strokeWidth={1.5} /> List
+          <Menu size={13} strokeWidth={1.5} /> {t("myprojects.view_list")}
         </button>
       </div>
 
       {loading ? (
         <div className="card" style={{ padding: 32, textAlign: "center", color: "var(--sub)" }}>
-          加载中…
+          {t("myprojects.loading")}
         </div>
       ) : forks.length === 0 ? (
         <EmptyShelf />
@@ -263,14 +275,14 @@ export default function MyProjectsPage() {
             borderRadius: 12,
           }}
         >
-          <div style={{ color: "var(--sub)", fontSize: 13 }}>这一类还是空的</div>
+          <div style={{ color: "var(--sub)", fontSize: 13 }}>{t("myprojects.category_empty")}</div>
           <button
             type="button"
             className="btn btn-ghost btn-sm"
             style={{ marginTop: 12 }}
             onClick={() => setFilter("all")}
           >
-            显示所有
+            {t("myprojects.show_all")}
           </button>
         </div>
       ) : view === "grid" ? (
@@ -404,22 +416,22 @@ function FilterTab({
   )
 }
 
-function statusPip(s: Status) {
+function statusPip(s: Status, t: (key: string, vars?: Record<string, string | number>) => string) {
   if (s === "active")
     return (
       <span className="pip run" style={{ fontSize: 10.5 }}>
-        ACTIVE
+        {t("myprojects.pip_active")}
       </span>
     )
   if (s === "paused")
     return (
       <span className="pip warn" style={{ fontSize: 10.5 }}>
-        PAUSED
+        {t("myprojects.pip_paused")}
       </span>
     )
   return (
     <span className="pip ok" style={{ fontSize: 10.5 }}>
-      SHIPPED
+      {t("myprojects.pip_shipped")}
     </span>
   )
 }
@@ -450,7 +462,7 @@ function ForkCard({ f, onRemove }: { f: ForkItem; onRemove: () => void }) {
           <CoverArt kind={dClass} />
         )}
         <div style={{ position: "absolute", top: 12, right: 12 }}>
-          {statusPip(f.status)}
+          {statusPip(f.status, t)}
         </div>
       </Link>
       <div
@@ -487,7 +499,7 @@ function ForkCard({ f, onRemove }: { f: ForkItem; onRemove: () => void }) {
                 fontWeight: 600,
               }}
             >
-              <Check size={13} strokeWidth={1.8} /> 全部章节完成
+              <Check size={13} strokeWidth={1.8} /> {t("myprojects.all_chapters_done")}
             </div>
           </div>
         ) : (
@@ -521,7 +533,7 @@ function ForkCard({ f, onRemove }: { f: ForkItem; onRemove: () => void }) {
                 whiteSpace: "nowrap",
               }}
             >
-              {f.status === "paused" ? "paused · " : "next · "}
+              {(f.status === "paused" ? t("myprojects.paused_at") : t("myprojects.next")) + " · "}
               {f.last_module_id || "M01"}
             </div>
           </div>
@@ -539,16 +551,18 @@ function ForkCard({ f, onRemove }: { f: ForkItem; onRemove: () => void }) {
           }}
         >
           <span className="mono" style={{ fontSize: 10.5, color: "var(--sub)" }}>
-            pulled {f.forkedDays === 0 ? "today" : `${f.forkedDays}d ago`}
+            {f.forkedDays === 0
+              ? t("myprojects.pulled_today")
+              : t("myprojects.pulled_days_ago", { n: f.forkedDays })}
           </span>
           <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
             <button
               type="button"
               onClick={(e) => {
                 e.preventDefault()
-                if (confirm("从书架移除这个项目?")) onRemove()
+                if (confirm(t("myprojects.remove_confirm"))) onRemove()
               }}
-              aria-label="移除"
+              aria-label={t("myprojects.remove")}
               style={{
                 border: 0,
                 background: "transparent",
@@ -574,6 +588,7 @@ function ForkCard({ f, onRemove }: { f: ForkItem; onRemove: () => void }) {
 }
 
 function ForkListHead() {
+  const t = useT()
   return (
     <div
       style={{
@@ -588,17 +603,18 @@ function ForkListHead() {
         borderBottom: "1px solid var(--border)",
       }}
     >
-      <span>PROJECT</span>
-      <span>DOMAIN</span>
-      <span>PROGRESS</span>
-      <span>STATUS</span>
-      <span style={{ textAlign: "right" }}>PULLED</span>
+      <span>{t("myprojects.col_project")}</span>
+      <span>{t("myprojects.col_domain")}</span>
+      <span>{t("myprojects.col_progress")}</span>
+      <span>{t("myprojects.col_status")}</span>
+      <span style={{ textAlign: "right" }}>{t("myprojects.col_pulled")}</span>
       <span />
     </div>
   )
 }
 
 function ForkListRow({ f, last }: { f: ForkItem; last: boolean }) {
+  const t = useT()
   const target = f.last_module_id || "M01"
   const dClass = domainClass(f.domain)
   return (
@@ -653,12 +669,14 @@ function ForkListRow({ f, last }: { f: ForkItem; last: boolean }) {
           <i style={{ width: `${f.progress}%` }} />
         </div>
       </div>
-      <span>{statusPip(f.status)}</span>
+      <span>{statusPip(f.status, t)}</span>
       <span
         className="mono"
         style={{ fontSize: 10.5, color: "var(--sub)", textAlign: "right" }}
       >
-        {f.forkedDays === 0 ? "today" : `${f.forkedDays}d ago`}
+        {f.forkedDays === 0
+          ? t("myprojects.today")
+          : t("myprojects.days_ago", { n: f.forkedDays })}
       </span>
       <ArrowRight
         size={13}
@@ -685,7 +703,7 @@ function EmptyShelf() {
     >
       <div className="eyebrow">
         <span className="dot" />
-        empty shelf
+        {t("myprojects.empty_shelf")}
       </div>
       <h2 className="h2">{t("myproj.empty.title")}</h2>
       <p className="sub">{t("myproj.empty.desc")}</p>

@@ -73,22 +73,13 @@ export function StudentHeader() {
     <header className="topnav">
       {/* brand 永远跳整站首页 / */}
       <Link className="brand" href="/">
-        <span className="brand-mark"><span>SE</span></span>
-        <span>SystemEdu</span>
-        <span
-          style={{
-            fontFamily: "var(--mono)",
-            fontSize: 10.5,
-            padding: "2px 6px",
-            background: "var(--paper-2)",
-            borderRadius: 4,
-            color: "var(--sub)",
-            marginLeft: 2,
-            border: "1px solid var(--border)",
-          }}
-        >
-          v2.4
+        <span className="brand-mark" aria-label="SystemEdu">
+          <svg width="26" height="26" viewBox="0 0 26 26" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-hidden="true">
+            <rect width="26" height="26" rx="6" fill="var(--ink)" />
+            <path d="M18.5 9 C18.5 6.4 10.8 6 9 8.6 C7.2 11.2 10.8 12 13 12.9 C15.6 13.8 19 14.7 17.2 17.7 C15.4 20.4 8.6 20 8.2 16.9" fill="none" stroke="var(--violet)" strokeWidth="2.1" strokeLinecap="round" />
+          </svg>
         </span>
+        <span>SystemEdu</span>
       </Link>
 
       <nav className="nav-tabs">

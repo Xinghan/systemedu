@@ -160,7 +160,7 @@ function AudioProvider({ children }: { children: React.ReactNode }) {
     }
 
     stop()
-    const gatewayBase = process.env.NEXT_PUBLIC_GATEWAY_URL || "http://localhost:18820"
+    const gatewayBase = (process.env.NEXT_PUBLIC_GATEWAY_URL ?? "http://localhost:18820")
     const audio = new Audio(`${gatewayBase}/api/media/${url}`)
     audio.preload = "metadata"
     audioRef.current = audio
@@ -1196,7 +1196,7 @@ function StoryBlock({
             <div key={idx} className="flex gap-6 p-6">
               {para.image_url ? (
                 <img
-                  src={`${process.env.NEXT_PUBLIC_GATEWAY_URL || "http://localhost:18820"}${para.image_url}`}
+                  src={`${(process.env.NEXT_PUBLIC_GATEWAY_URL ?? "http://localhost:18820")}${para.image_url}`}
                   alt={`故事插图 ${idx + 1}`}
                   className="w-36 h-28 rounded-xl object-cover shrink-0"
                 />
@@ -1426,7 +1426,7 @@ function ImageBlock({
   // Local gateway paths (/api/...) must be prefixed with the gateway base URL,
   // because the Next.js dev server on :3000 doesn't proxy to the backend on :18820.
   const gatewayBase =
-    process.env.NEXT_PUBLIC_GATEWAY_URL || "http://localhost:18820"
+    (process.env.NEXT_PUBLIC_GATEWAY_URL ?? "http://localhost:18820")
   const src = rawSrc.startsWith("/api/") ? `${gatewayBase}${rawSrc}` : rawSrc
   const alt = section.alt || idea.topic || ""
   const caption = section.caption || ""
