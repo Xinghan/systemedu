@@ -5,7 +5,7 @@
 # 用法 (密码经 SSHPASS env, 不进命令行历史):
 #   export SSHPASS='密码'
 #   ./scripts/deploy-student.sh <step>
-# steps: pack | code | infra | library | student | web | nginx | verify | all
+# steps: pack | code | infra | library | student | web | admin | nginx | verify | all
 #
 # 动生产: 建议逐 step 跑 + 每步看结果, 别直接 all。
 set -euo pipefail
@@ -192,6 +192,29 @@ EOF"
   remote "systemctl daemon-reload && systemctl enable systemedu-student-web && systemctl restart systemedu-student-web && sleep 6 && systemctl is-active systemedu-student-web"
 }
 
+do_admin() {
+  echo "[admin] 装 student-admin 包..."
+  remote "cd $REPO_ROOT && .venv/bin/pip install -q -e packages/student-admin 2>&1 | tail -2"
+  # ADMIN_USER / ADMIN_PASSWORD / ADMIN_JWT_SECRET 由人工一次性手动写进
+  # /root/.systemedu-student-secrets (不进 git)。该文件已含 STUDENT_DB_URL (复用同库只读)。
+  echo "[admin] systemd unit (复用 student-secrets: STUDENT_DB_URL + ADMIN_*)..."
+  remote "cat > /etc/systemd/system/systemedu-student-admin.service <<EOF
+[Unit]
+Description=SystemEdu Student Admin (read-only)
+After=network.target docker.service
+[Service]
+WorkingDirectory=$REPO_ROOT
+EnvironmentFile=/root/.systemedu-student-secrets
+Environment=ADMIN_PORT=$ADMIN_PORT
+Environment=ADMIN_BIND_HOST=127.0.0.1
+ExecStart=$REPO_ROOT/.venv/bin/python -m systemedu.admin.server
+Restart=always
+[Install]
+WantedBy=multi-user.target
+EOF"
+  remote "systemctl daemon-reload && systemctl enable systemedu-student-admin && systemctl restart systemedu-student-admin && sleep 4 && systemctl is-active systemedu-student-admin"
+}
+
 do_nginx() {
   echo "[nginx] 停老 cloud-app + 切 nginx (这步起对外生效)..."
   remote "systemctl disable --now systemedu-backend systemedu-frontend 2>/dev/null || true"
@@ -213,6 +236,17 @@ server {
   listen 80 default_server;
   server_name _;
   client_max_body_size 50m;
+  # 学生管理后台 (独立只读服务 :$ADMIN_PORT)。nginx 前缀按最长匹配, /api/admin 优先于 /api/。
+  location /sysadmin {
+    proxy_pass http://127.0.0.1:$ADMIN_PORT;
+    proxy_set_header Host \\\$host;
+    proxy_set_header X-Real-IP \\\$remote_addr;
+  }
+  location /api/admin {
+    proxy_pass http://127.0.0.1:$ADMIN_PORT;
+    proxy_set_header Host \\\$host;
+    proxy_set_header X-Real-IP \\\$remote_addr;
+  }
   location /api/ {
     proxy_pass http://127.0.0.1:$STUDENT_BACKEND_PORT;
     proxy_set_header Host \\\$host;
@@ -245,6 +279,17 @@ server {
   ssl_session_tickets off;
   add_header Strict-Transport-Security \"max-age=15768000; includeSubDomains\" always;
   client_max_body_size 50m;
+  # 学生管理后台 (独立只读服务 :$ADMIN_PORT)。nginx 前缀按最长匹配, /api/admin 优先于 /api/。
+  location /sysadmin {
+    proxy_pass http://127.0.0.1:$ADMIN_PORT;
+    proxy_set_header Host \\\$host;
+    proxy_set_header X-Real-IP \\\$remote_addr;
+  }
+  location /api/admin {
+    proxy_pass http://127.0.0.1:$ADMIN_PORT;
+    proxy_set_header Host \\\$host;
+    proxy_set_header X-Real-IP \\\$remote_addr;
+  }
   location /api/ {
     proxy_pass http://127.0.0.1:$STUDENT_BACKEND_PORT;
     proxy_set_header Host \\\$host;
@@ -272,6 +317,17 @@ server {
   listen 80 default_server;
   server_name _;
   client_max_body_size 50m;
+  # 学生管理后台 (独立只读服务 :$ADMIN_PORT)。nginx 前缀按最长匹配, /api/admin 优先于 /api/。
+  location /sysadmin {
+    proxy_pass http://127.0.0.1:$ADMIN_PORT;
+    proxy_set_header Host \\\$host;
+    proxy_set_header X-Real-IP \\\$remote_addr;
+  }
+  location /api/admin {
+    proxy_pass http://127.0.0.1:$ADMIN_PORT;
+    proxy_set_header Host \\\$host;
+    proxy_set_header X-Real-IP \\\$remote_addr;
+  }
   location /api/ {
     proxy_pass http://127.0.0.1:$STUDENT_BACKEND_PORT;
     proxy_set_header Host \\\$host;
@@ -298,6 +354,7 @@ do_verify() {
   echo "[verify] web:"; remote "curl -s --noproxy '*' -o /dev/null -w 'web:%{http_code}\n' http://127.0.0.1:$STUDENT_WEB_PORT/"
   echo "[verify] library projects (经反代):"; remote "curl -s --noproxy '*' http://127.0.0.1:$STUDENT_BACKEND_PORT/api/library/projects | head -c 200; echo"
   echo "[verify] 对外 nginx:"; remote "curl -s --noproxy '*' -o /dev/null -w 'public:%{http_code}\n' http://127.0.0.1/api/health"
+  echo "[verify] admin 登录页 (经 nginx /sysadmin):"; remote "curl -s --noproxy '*' -o /dev/null -w 'admin:%{http_code}\n' http://127.0.0.1/sysadmin/login"
 }
 
 case "${1:-}" in
@@ -307,8 +364,9 @@ case "${1:-}" in
   library) do_library;;
   student) do_student;;
   web) do_web;;
+  admin) do_admin;;
   nginx) do_nginx;;
   verify) do_verify;;
-  all) do_pack; do_code; do_infra; do_library; do_student; do_web; do_nginx; do_verify;;
-  *) echo "usage: SSHPASS=... $0 {pack|code|infra|library|student|web|nginx|verify|all}"; exit 1;;
+  all) do_pack; do_code; do_infra; do_library; do_student; do_web; do_admin; do_nginx; do_verify;;
+  *) echo "usage: SSHPASS=... $0 {pack|code|infra|library|student|web|admin|nginx|verify|all}"; exit 1;;
 esac
