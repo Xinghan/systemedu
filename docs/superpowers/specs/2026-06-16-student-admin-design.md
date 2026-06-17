@@ -1,6 +1,7 @@
 # 学生管理后台 student-admin 设计文档
 
-- Status: approved (2026-06-16), 待实现
+- Status: shipped (2026-06-17) — 生产 47.106.220.119 已上线, http://47.106.220.119/sysadmin 登录验证 12 用户; 账号 admin (密码经 env 写生产 secrets, 不进 git)
+  - 实现差异: 复用 student-app 的 db model (from systemedu.student.db), 非 core; auth 折叠进 routes 的 _authed 而非独立 deps.py
 - Owner: Xinghan Cui
 - 影响仓: ~/Dev/systemedu (新 package packages/student-admin)
 - 关联: student-app (共用其 PostgreSQL), core (复用 db model)

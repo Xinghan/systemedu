@@ -52,7 +52,8 @@ def user_detail(user_id: str) -> dict | None:
             select(UserKnodeComplete).where(UserKnodeComplete.user_id == user_id).order_by(UserKnodeComplete.completed_at.desc())
         ).scalars().all()
         msgs = s.execute(
-            select(ChatMessage).where(ChatMessage.user_id == user_id).order_by(ChatMessage.created_at.asc())
+            select(ChatMessage).where(ChatMessage.user_id == user_id)
+            .order_by(ChatMessage.created_at.asc(), ChatMessage.id.asc())  # id 兜底: 同时间戳消息也有确定序, 保证问答配对稳定
         ).scalars().all()
         questions = []
         for i, m in enumerate(msgs):
