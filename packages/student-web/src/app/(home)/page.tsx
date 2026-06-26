@@ -17,9 +17,6 @@ import { useLocaleStore } from "@/lib/i18n/store"
 // Public landing page — 长滚动营销页, 从精神层面切节: 好奇心 / 科技感 / 陪伴 / 记忆 / 路径。
 // 设计: docs/superpowers/specs/2026-06-10-landing-page-redesign-design.md
 // 手绘水彩科普书插画风 (public/landing/*.webp), 图片 mask 渐隐与暖纸色背景融为一体。
-// 项目只在"好奇心"节用一行例子带过; 双语首页局部切换 (useState, 不动全局 i18n)。
-
-type Lang = "zh" | "en"
 
 // 四边羽化遮罩: 让插画无硬边地溶进暖纸色背景。
 // 实现: 水平方向 linear mask ∩ 垂直方向 linear mask (maskComposite intersect),
@@ -51,9 +48,6 @@ const COPY = {
     ctaBrowse: "浏览全部项目",
     ctaDash: "我的书架",
     ctaSignIn: "登录",
-    stat1: "33 个天马行空的项目",
-    stat2: "真硬件 · 真数据 · 真标准",
-    stat3: "AI agent 随时教",
     comingSoon: "即将上线",
     live: "现在就能学",
 
@@ -94,7 +88,6 @@ const COPY = {
 
     // 项目一行例子 (好奇心节内)
     projEyebrow: "项目库",
-    projExamples: "一行例子, 还有 30 个在库里",
 
     // How / CTA
     howEyebrow: "怎么运转",
@@ -115,9 +108,6 @@ const COPY = {
     ctaBrowse: "Browse all projects",
     ctaDash: "My shelf",
     ctaSignIn: "Sign in",
-    stat1: "33 wildly ambitious projects",
-    stat2: "Real hardware · real data · real standards",
-    stat3: "AI agent always on call",
     comingSoon: "Coming soon",
     live: "Learn it now",
 
@@ -152,7 +142,6 @@ const COPY = {
     treeMore: "How the tree works",
 
     projEyebrow: "Project library",
-    projExamples: "A taste — 30 more in the library",
 
     howEyebrow: "How it works",
     howTitle: "How a project comes to life",
@@ -163,79 +152,6 @@ const COPY = {
       "An AI-agent-driven, project-based learning platform. Industry-grade real projects for builders aged 10–18, with a Socratic AI tutor by your side.",
   },
 } as const
-
-// ── 策展项目 (从 systemeduidea 挑) ──────────────────────────────
-type Project = {
-  slug: string
-  domain: string
-  domainClass: string
-  age: string
-  difficulty: number
-  live: boolean
-  img: string
-  ratio: string // 图片宽高比, 差异化制造瀑布错落
-  title: { zh: string; en: string }
-  hook: { zh: string; en: string }
-}
-
-const PROJECTS: Project[] = [
-  {
-    slug: "mars-analog-rover",
-    domain: "Aerospace",
-    domainClass: "aerospace",
-    age: "10–12",
-    difficulty: 4,
-    live: false,
-    img: "/landing/mars-rover.webp",
-    ratio: "3 / 2", // 火星车横构图
-    title: {
-      zh: "用 NASA 影像训练的火星探测车",
-      en: "A Mars rover trained on NASA imagery",
-    },
-    hook: {
-      zh: "用 NASA HiRISE 真实火星影像, 训练你自己的越野探测车。",
-      en: "Train your own off-road rover on real NASA HiRISE Mars imagery.",
-    },
-  },
-  {
-    slug: "extinct-species-soundscape",
-    domain: "CS",
-    domainClass: "computing",
-    age: "10–12",
-    difficulty: 4,
-    live: false,
-    img: "/landing/extinct-sound.webp",
-    ratio: "4 / 5", // 渡渡鸟竖构图
-    title: {
-      zh: "复活灭绝物种的声音",
-      en: "Bring extinct species' sounds back",
-    },
-    hook: {
-      zh: "用 AI 从骨骼与近亲, 重建一只已灭绝动物可能的叫声。",
-      en: "Use AI to reconstruct how an extinct animal might have sounded.",
-    },
-  },
-  {
-    slug: "bioinspired-sofi-fish",
-    domain: "Robotics",
-    domainClass: "robotics",
-    age: "13–15",
-    difficulty: 5,
-    live: false,
-    img: "/landing/robot-fish.webp",
-    ratio: "4 / 3", // 机器鱼横构图
-    title: {
-      zh: "仿生软体机器鱼",
-      en: "A bio-inspired soft robotic fish",
-    },
-    hook: {
-      zh: "造一条会游的软体机器鱼, 潜进池塘做真实生态调查。",
-      en: "Build a swimming soft robotic fish to survey a real pond ecosystem.",
-    },
-  },
-]
-
-type Copy = (typeof COPY)[Lang]
 
 // How 节四阶段文字标签 (对齐流程大图 how-v1.webp 里的四个阶段)
 const HOW_STEPS: { title: { zh: string; en: string }; body: { zh: string; en: string } }[] = [
@@ -326,22 +242,6 @@ export default function Homepage() {
           />
         </div>
 
-        <div
-          style={{
-            display: "flex",
-            flexWrap: "wrap",
-            gap: "12px 28px",
-            justifyContent: "center",
-            marginTop: 8,
-            fontFamily: "var(--mono)",
-            fontSize: 12,
-            color: "var(--sub)",
-          }}
-        >
-          <TrustItem icon={<Sparkles size={13} strokeWidth={1.5} />} text={t.stat1} />
-          <TrustItem icon={<Cpu size={13} strokeWidth={1.5} />} text={t.stat2} />
-          <TrustItem icon={<Bot size={13} strokeWidth={1.5} />} text={t.stat3} />
-        </div>
       </section>
 
       {/* ── ① 好奇心 (右图) + 项目一行例子 ── */}
@@ -356,9 +256,7 @@ export default function Homepage() {
         imgSide="right"
         accent="var(--computing)"
         icon={<Sparkles size={18} strokeWidth={1.5} />}
-      >
-        <ProjectStrip lang={lang} t={t} />
-      </FeatureSection>
+      />
 
       {/* ── ② 科技感 (左图) ── */}
       <FeatureSection
@@ -669,68 +567,6 @@ function OptionalLink({ href, children }: { href?: string; children: React.React
     )
   }
   return <>{children}</>
-}
-
-// 好奇心节里的项目一行例子 (3 个小卡, 紧凑)
-function ProjectStrip({ lang, t }: { lang: Lang; t: Copy }) {
-  return (
-    <div style={{ marginTop: 24 }}>
-      <div className="mono" style={{ fontSize: 11, color: "var(--sub-2)", marginBottom: 10 }}>
-        {t.projExamples}
-      </div>
-      <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-        {PROJECTS.map((p) => {
-          const chip = (
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 10,
-                padding: "8px 12px 8px 8px",
-                border: "1px solid var(--border)",
-                borderRadius: 999,
-                background: "var(--card)",
-                boxShadow: "var(--shadow-sm)",
-              }}
-            >
-              <span
-                style={{
-                  position: "relative",
-                  width: 30,
-                  height: 30,
-                  borderRadius: 999,
-                  overflow: "hidden",
-                  flexShrink: 0,
-                  background: "var(--paper-2)",
-                }}
-              >
-                <Image src={p.img} alt="" fill sizes="30px" style={{ objectFit: "cover" }} />
-              </span>
-              <span style={{ fontSize: 13, fontWeight: 500, color: "var(--ink-2)", whiteSpace: "nowrap" }}>
-                {p.title[lang]}
-              </span>
-            </div>
-          )
-          return p.live ? (
-            <Link key={p.slug} href={`/library/${encodeURIComponent(p.slug)}`} style={{ textDecoration: "none" }}>
-              {chip}
-            </Link>
-          ) : (
-            <div key={p.slug}>{chip}</div>
-          )
-        })}
-      </div>
-    </div>
-  )
-}
-
-function TrustItem({ icon, text }: { icon: React.ReactNode; text: string }) {
-  return (
-    <span style={{ display: "inline-flex", alignItems: "center", gap: 7 }}>
-      <span style={{ color: "var(--primary)" }}>{icon}</span>
-      {text}
-    </span>
-  )
 }
 
 function FootCol({ t, items }: { t: string; items: string[] }) {
