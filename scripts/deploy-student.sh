@@ -15,7 +15,10 @@ set -euo pipefail
 DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(dirname "$DIR")"
 source "$DIR/deploy.env"
-[ -z "${SSHPASS:-}" ] && { echo "need: export SSHPASS='...'"; exit 1; }
+# 本地密码文件 (gitignored, 绝不进仓库): 存在就 source 它设 SSHPASS, 免去每次手动 export。
+# 内容: 一行 export SSHPASS='你的生产密码'。手动 export SSHPASS 仍优先 (已设则不覆盖)。
+[ -z "${SSHPASS:-}" ] && [ -f "$DIR/deploy-secret.local" ] && source "$DIR/deploy-secret.local"
+[ -z "${SSHPASS:-}" ] && { echo "need: export SSHPASS='...' 或建 scripts/deploy-secret.local (一行 export SSHPASS='...')"; exit 1; }
 
 remote() { sshpass -e ssh $SSH_OPTS "${SERVER_USER}@${SERVER_HOST}" "$@"; }
 copy()   { sshpass -e scp $SSH_OPTS "$1" "${SERVER_USER}@${SERVER_HOST}:$2"; }
