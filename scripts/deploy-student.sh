@@ -5,7 +5,10 @@
 # 用法 (密码经 SSHPASS env, 不进命令行历史):
 #   export SSHPASS='密码'
 #   ./scripts/deploy-student.sh <step>
-# steps: pack | code | infra | library | student | web | admin | nginx | verify | all
+# steps: pack | code | infra | library | course [slug] | student | web | admin | nginx | verify | all
+#   course [slug]: 单/多课程增量上架 (只打包+import+publish, 不重启 library 服务)。
+#                  slug 省略 = 上架全部 COURSE_SLUGS; 传 slug = 只上架那一个。
+#                  例: ./scripts/deploy-student.sh course molecule-monster-hunter
 #
 # 动生产: 建议逐 step 跑 + 每步看结果, 别直接 all。
 set -euo pipefail
@@ -101,6 +104,29 @@ EOF"
   echo "[library] import + publish (服务器侧)..."
   copy "$DIR/_import_courses.sh" /tmp/_import_courses.sh
   remote "LIBRARY_PORT=$LIBRARY_PORT COURSE_SLUGS='$COURSE_SLUGS' bash /tmp/_import_courses.sh"
+}
+
+# 单/多课程上架: 只打包 + import + publish 指定课程, 不碰 library 服务本身 (不重启)。
+# import 是增量的 (库里其他课不受影响)。用于"上架一个新课/更新一门课的内容或封面"。
+#   ./deploy.sh course molecule-monster-hunter   # 只上架这一个
+#   ./deploy.sh course                            # 上架全部 COURSE_SLUGS (= do_library 的课程部分)
+do_course() {
+  local slugs="${1:-$COURSE_SLUGS}"
+  [ -n "$slugs" ] || { echo "  ERROR: 未指定 slug 且 COURSE_SLUGS 为空"; exit 1; }
+  : "${COURSE_SRC:=$HOME/Dev/systemeduidea/projects_data}"
+  echo "[course] 上架: $slugs (从 $COURSE_SRC)"
+  for slug in $slugs; do
+    src="$COURSE_SRC/$slug"
+    [ -d "$src" ] || { echo "  ERROR: 源目录不存在 $src"; exit 1; }
+    [ -f "$src/manifest.json" ] || { echo "  ERROR: $src 无 manifest.json"; exit 1; }
+    echo "  打包 $slug (从 $src)..."
+    COPYFILE_DISABLE=1 tar --exclude='._*' --exclude='_archive' \
+        -czf "/tmp/$slug.tar.gz" -C "$(dirname "$src")" "$slug"
+    copy "/tmp/$slug.tar.gz" /tmp/
+  done
+  echo "[course] import + publish (服务器侧, 仅指定课程)..."
+  copy "$DIR/_import_courses.sh" /tmp/_import_courses.sh
+  remote "LIBRARY_PORT=$LIBRARY_PORT COURSE_SLUGS='$slugs' bash /tmp/_import_courses.sh"
 }
 
 do_student() {
@@ -362,11 +388,12 @@ case "${1:-}" in
   code) do_code;;
   infra) do_infra;;
   library) do_library;;
+  course) do_course "${2:-}";;
   student) do_student;;
   web) do_web;;
   admin) do_admin;;
   nginx) do_nginx;;
   verify) do_verify;;
   all) do_pack; do_code; do_infra; do_library; do_student; do_web; do_admin; do_nginx; do_verify;;
-  *) echo "usage: SSHPASS=... $0 {pack|code|infra|library|student|web|admin|nginx|verify|all}"; exit 1;;
+  *) echo "usage: SSHPASS=... $0 {pack|code|infra|library|course [slug]|student|web|admin|nginx|verify|all}"; echo "       course [slug]: 单/多课程增量上架 (不重启 library, slug 省略=全部 COURSE_SLUGS)"; exit 1;;
 esac
