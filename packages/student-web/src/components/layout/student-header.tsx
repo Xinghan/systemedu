@@ -9,12 +9,14 @@ import {
   GitBranch,
   Home,
   Library as LibraryIcon,
+  Lightbulb,
   LogOut,
 } from "lucide-react"
 import { useAuthStore } from "@/lib/stores/auth-store"
 import { auth } from "@/lib/api"
 import { useT } from "@/lib/i18n/use-t"
 import { LangSwitch } from "@/components/layout/lang-switch"
+import { ApplyProjectModal } from "@/components/layout/apply-project-modal"
 
 const TABS = [
   { id: "home",     labelKey: "nav.home",        icon: Home,        href: "/home" },
@@ -47,6 +49,7 @@ export function StudentHeader() {
   const pathname = usePathname() || "/"
   const { loggedIn, username, hydrate, logout } = useAuthStore()
   const [menuOpen, setMenuOpen] = useState(false)
+  const [applyOpen, setApplyOpen] = useState(false)
   const t = useT()
 
   useEffect(() => {
@@ -99,6 +102,18 @@ export function StudentHeader() {
       </nav>
 
       <div className="nav-spacer" />
+
+      {loggedIn && (
+        <button
+          type="button"
+          onClick={() => setApplyOpen(true)}
+          className="btn btn-ghost btn-sm"
+          style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
+        >
+          <Lightbulb size={14} strokeWidth={1.5} />
+          {t("nav.apply_project")}
+        </button>
+      )}
 
       <LangSwitch />
 
@@ -158,6 +173,8 @@ export function StudentHeader() {
           </Link>
         </div>
       )}
+
+      <ApplyProjectModal open={applyOpen} onClose={() => setApplyOpen(false)} />
     </header>
   )
 }

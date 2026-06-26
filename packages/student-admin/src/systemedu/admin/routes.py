@@ -55,11 +55,25 @@ async def api_users(request: Request) -> Response:
     return JSONResponse(queries.list_users())
 
 
+async def project_requests_list(request: Request) -> Response:
+    if not _authed(request):
+        return RedirectResponse("/sysadmin/login", status_code=303)
+    return HTMLResponse(templates.project_requests_page(queries.list_project_requests()))
+
+
+async def api_project_requests(request: Request) -> Response:
+    if not _authed(request):
+        return JSONResponse({"error": "unauthorized"}, status_code=401)
+    return JSONResponse(queries.list_project_requests())
+
+
 ROUTES = [
     Route("/sysadmin/login", login_get, methods=["GET"]),
     Route("/sysadmin/login", login_post, methods=["POST"]),
     Route("/sysadmin/logout", logout, methods=["GET", "POST"]),
     Route("/sysadmin", users_list, methods=["GET"]),
     Route("/sysadmin/users/{uid}", user_detail, methods=["GET"]),
+    Route("/sysadmin/project-requests", project_requests_list, methods=["GET"]),
     Route("/api/admin/users", api_users, methods=["GET"]),
+    Route("/api/admin/project-requests", api_project_requests, methods=["GET"]),
 ]

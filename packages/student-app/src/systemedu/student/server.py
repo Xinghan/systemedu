@@ -34,6 +34,7 @@ from .chat import preload_graph as _preload_tutor, shutdown_graph as _shutdown_t
 from .db import init_db
 from .drill import ROUTES as _drill_routes
 from .library_proxy.routes import ROUTES as _lib_routes
+from .project_request import ROUTES as _project_request_routes
 
 
 logger = logging.getLogger(__name__)
@@ -67,6 +68,7 @@ def create_app() -> Starlette:
         *_user_lit_routes,
         *_chat_routes,
         *_drill_routes,
+        *_project_request_routes,
     ]
 
     middleware = [

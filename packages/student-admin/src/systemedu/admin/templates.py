@@ -25,8 +25,14 @@ _STYLE = """
 
 
 def _page(title: str, body: str, show_logout: bool = True) -> str:
-    logout = '<a href="/sysadmin/logout">退出</a>' if show_logout else ""
-    return f"<!doctype html><html><head><meta charset='utf-8'><title>{e(title)}</title>{_STYLE}</head><body><header><span>SystemEdu 管理后台</span>{logout}</header><main>{body}</main></body></html>"
+    if show_logout:
+        nav = ('<span style="display:flex;gap:16px;align-items:center">'
+               '<a href="/sysadmin">用户</a>'
+               '<a href="/sysadmin/project-requests">项目申请</a>'
+               '<a href="/sysadmin/logout">退出</a></span>')
+    else:
+        nav = ""
+    return f"<!doctype html><html><head><meta charset='utf-8'><title>{e(title)}</title>{_STYLE}</head><body><header><span>SystemEdu 管理后台</span>{nav}</header><main>{body}</main></body></html>"
 
 
 def login_page(error: str = "") -> str:
@@ -51,6 +57,21 @@ def users_page(rows: list[dict]) -> str:
     body = (f"<h2>注册用户 ({len(rows)})</h2><table><tr><th>手机号</th><th>用户名</th><th>年龄</th>"
             f"<th>性别</th><th>注册时间</th><th>最后登录</th><th>项目</th><th>节点</th><th>提问</th></tr>{trs}</table>")
     return _page("用户列表", body)
+
+
+def project_requests_page(rows: list[dict]) -> str:
+    items = ""
+    for r in rows:
+        who = e(r["display_name"] or "-")
+        phone = e(r["phone"] or "-")
+        when = e((r["created_at"] or "")[:19])
+        idea = e(r["idea_text"] or "")
+        items += (f"<div style='border-bottom:1px solid #eee;padding:12px 0'>"
+                  f"<div style='color:#999;font-size:12px'>{who} · {phone} · {when}</div>"
+                  f"<div style='white-space:pre-wrap;margin-top:4px'>{idea}</div></div>")
+    body = (f"<h2>项目申请 ({len(rows)})</h2>"
+            f"<div class='card'>{items or '<p>暂无申请</p>'}</div>")
+    return _page("项目申请", body)
 
 
 def detail_page(d: dict) -> str:

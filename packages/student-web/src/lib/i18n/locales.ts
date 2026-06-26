@@ -20,6 +20,18 @@ export const zh = {
   "nav.register": "注册",
   "nav.search": "搜索项目、模块、概念…",
   "nav.assistant": "AI 助手",
+  "nav.apply_project": "申请项目",
+
+  // ── 申请项目弹窗 (spec 038) ──
+  "apply.title": "申请一个项目",
+  "apply.desc": "把你想做的项目 idea 写下来，我们会认真看每一条。",
+  "apply.placeholder": "我想做一个……（描述你想做的项目、想学的东西、想解决的问题）",
+  "apply.submit": "提交申请",
+  "apply.submitting": "提交中…",
+  "apply.cancel": "取消",
+  "apply.empty": "请先写一点你的 idea",
+  "apply.success": "申请已提交，谢谢你的 idea！",
+  "apply.error": "提交失败，请稍后再试",
 
   // ── /home ──
   "home.welcome_back": "欢迎回来",
@@ -219,6 +231,17 @@ export const en: Record<TranslationKey, string> = {
   "nav.register": "Sign up",
   "nav.search": "Search projects, modules, concepts…",
   "nav.assistant": "Assistant",
+  "nav.apply_project": "Apply for a project",
+
+  "apply.title": "Apply for a project",
+  "apply.desc": "Write down the project idea you want to build — we read every one.",
+  "apply.placeholder": "I want to build… (describe the project, what you want to learn, the problem you want to solve)",
+  "apply.submit": "Submit",
+  "apply.submitting": "Submitting…",
+  "apply.cancel": "Cancel",
+  "apply.empty": "Write a bit about your idea first",
+  "apply.success": "Submitted — thanks for your idea!",
+  "apply.error": "Submit failed, please try again later",
 
   "home.welcome_back": "Welcome back",
   "home.my_projects": "My Projects",

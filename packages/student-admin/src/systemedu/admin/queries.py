@@ -6,6 +6,7 @@ from sqlalchemy import func, select
 from systemedu.student.db import (
     ChatMessage,
     LastVisited,
+    ProjectRequest,
     User,
     UserKnodeComplete,
     UserProject,
@@ -85,3 +86,32 @@ def user_detail(user_id: str) -> dict | None:
             } for k in knodes],
             "questions": questions,
         }
+
+
+def list_project_requests(limit: int = 200, offset: int = 0) -> list[dict]:
+    """所有项目申请 + 申请人信息, 按提交时间倒序 (spec 038)。只读。"""
+    with get_session() as s:
+        reqs = s.execute(
+            select(ProjectRequest)
+            .order_by(ProjectRequest.created_at.desc())
+            .limit(limit).offset(offset)
+        ).scalars().all()
+        # 一次性取出涉及的用户, 避免 N+1
+        uids = {r.user_id for r in reqs}
+        users = {}
+        if uids:
+            for u in s.execute(select(User).where(User.id.in_(uids))).scalars().all():
+                users[u.id] = u
+        out = []
+        for r in reqs:
+            u = users.get(r.user_id)
+            out.append({
+                "id": r.id,
+                "user_id": r.user_id,
+                "display_name": (u.display_name if u else None),
+                "phone": (u.phone if u else None),
+                "idea_text": r.idea_text,
+                "status": r.status,
+                "created_at": r.created_at.isoformat() if r.created_at else None,
+            })
+        return out

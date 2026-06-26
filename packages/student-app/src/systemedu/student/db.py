@@ -421,6 +421,32 @@ class PendingGrowth(Base):
     )
 
 
+class ProjectRequest(Base):
+    """spec 038: 学生提交的"申请项目" idea。最小形态: 只存一段文本 + 申请人。
+
+    status 预留 (当前不流转), student-admin 只读展示。
+    """
+
+    __tablename__ = "project_requests"
+
+    id = Column(String(36), primary_key=True, default=_uuid)
+    user_id = Column(String(36), ForeignKey("users.id"), index=True, nullable=False)
+    idea_text = Column(Text, nullable=False)
+    status = Column(String(16), default="pending", nullable=False)  # 预留, 当前不流转
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+def create_project_request(user_id: str, idea_text: str) -> ProjectRequest:
+    """插一条项目申请, 返回持久化后的对象 (含 id)。"""
+    with get_session() as s:
+        req = ProjectRequest(user_id=user_id, idea_text=idea_text)
+        s.add(req)
+        s.commit()
+        s.refresh(req)
+        s.expunge(req)
+        return req
+
+
 # ---------------------------------------------------------------------------
 # init
 # ---------------------------------------------------------------------------

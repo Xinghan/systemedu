@@ -435,4 +435,15 @@ export const knowledgeDrill = {
     ),
 }
 
+// ---------------------------------------------------------------------------
+// project request (spec 038: 学生申请想做的项目)
+// ---------------------------------------------------------------------------
+
+export const projectRequest = {
+  submit: (ideaText: string) =>
+    api.post<{ ok: boolean; id: string }>("/api/project-requests", {
+      idea_text: ideaText,
+    }),
+}
+
 export { STUDENT_API_URL }
