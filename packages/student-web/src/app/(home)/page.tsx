@@ -47,8 +47,8 @@ const COPY = {
     heroTitleHi: "大人的工程",
     heroTitle2: "。",
     heroLine2pre: "",
-    heroLine2hi: "AI",
-    heroLine2post: " 说，从 10 岁开始。",
+    heroLine2hi: "AI 纪元",
+    heroLine2post: "，从 10 岁开始。",
     heroBody:
       "真火星车、会游的机器鱼、复活灭绝动物的声音 — 你亲手造。卡住时, AI agent 就地把超纲的那一块讲清, 不替你动手。",
     ctaBrowse: "浏览全部项目",
@@ -113,9 +113,9 @@ const COPY = {
     heroTitle1: "They call it ",
     heroTitleHi: "grown-up engineering",
     heroTitle2: ".",
-    heroLine2pre: "",
-    heroLine2hi: "AI",
-    heroLine2post: " says: start at 10.",
+    heroLine2pre: "The ",
+    heroLine2hi: "AI era",
+    heroLine2post: " starts at 10.",
     heroBody:
       "A real Mars rover, a swimming robotic fish, the resurrected sound of extinct animals — built by your own hands. When you get stuck, the AI agent explains the over-your-head part right there, without doing it for you.",
     ctaBrowse: "Browse all projects",
