@@ -42,15 +42,12 @@ function edgeFadeMask(towards?: "left" | "right"): React.CSSProperties {
 // ── 文案 (中英双份) ──────────────────────────────────────────────
 const COPY = {
   zh: {
-    eyebrow: "给 10 岁起步的造物者",
     heroTitle1: "他们说，这是",
     heroTitleHi: "大人的工程",
     heroTitle2: "。",
     heroLine2pre: "",
     heroLine2hi: "AI 纪元",
     heroLine2post: "，从 10 岁开始。",
-    heroBody:
-      "真火星车、会游的机器鱼、复活灭绝动物的声音 — 你亲手造。卡住时, AI agent 就地把超纲的那一块讲清, 不替你动手。",
     ctaBrowse: "浏览全部项目",
     ctaDash: "我的书架",
     ctaSignIn: "登录",
@@ -109,15 +106,12 @@ const COPY = {
       "AI Agent 驱动的项目制学习平台。给 10–18 岁的造物者做工业级真实项目, AI 导师全程苏格拉底式陪伴。",
   },
   en: {
-    eyebrow: "For builders starting at age 10",
     heroTitle1: "They call it ",
     heroTitleHi: "grown-up engineering",
     heroTitle2: ".",
     heroLine2pre: "The ",
     heroLine2hi: "AI era",
     heroLine2post: " starts at 10.",
-    heroBody:
-      "A real Mars rover, a swimming robotic fish, the resurrected sound of extinct animals — built by your own hands. When you get stuck, the AI agent explains the over-your-head part right there, without doing it for you.",
     ctaBrowse: "Browse all projects",
     ctaDash: "My shelf",
     ctaSignIn: "Sign in",
@@ -292,9 +286,6 @@ export default function Homepage() {
       {/* ── Hero ── (语言切换在顶栏全局 LangSwitch) */}
       <section style={{ maxWidth: 1200, margin: "0 auto", padding: "64px 32px 64px", position: "relative" }}>
         <div style={{ textAlign: "center", maxWidth: 760, margin: "0 auto" }}>
-          <div className="eyebrow" style={{ marginBottom: 22, justifyContent: "center" }}>
-            <span className="dot" /> {t.eyebrow}
-          </div>
           <h1 className="display" style={{ fontSize: 60, lineHeight: 1.04, margin: "0 auto" }}>
             {t.heroTitle1}
             <span style={{ color: "var(--primary)" }}>{t.heroTitleHi}</span>
@@ -304,9 +295,6 @@ export default function Homepage() {
             <span style={{ color: "var(--aerospace)" }}>{t.heroLine2hi}</span>
             {t.heroLine2post}
           </h1>
-          <p style={{ maxWidth: 560, margin: "22px auto 0", fontSize: 16, lineHeight: 1.6, color: "var(--sub)" }}>
-            {t.heroBody}
-          </p>
           <div style={{ display: "flex", gap: 12, marginTop: 30, justifyContent: "center" }}>
             <Link href={loggedIn ? "/home" : "/login"} className="btn btn-violet btn-lg">
               {loggedIn ? t.ctaDash : t.ctaStart}
