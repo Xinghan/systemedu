@@ -19,6 +19,7 @@ import { library, myProjects, type LibraryProjectSummary } from "@/lib/api"
 import { useAuthStore } from "@/lib/stores/auth-store"
 import { useT } from "@/lib/i18n/use-t"
 import { StoryModal } from "@/components/library/StoryModal"
+import { ApplyProjectModal } from "@/components/layout/apply-project-modal"
 
 // Crumbs
 function Crumbs({ items }: { items: { label: string }[] }) {
@@ -77,6 +78,7 @@ export default function LibraryListPage() {
   const [pulled, setPulled] = useState<Set<string>>(new Set())
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState<string>("All")
+  const [applyOpen, setApplyOpen] = useState(false)
 
   useEffect(() => {
     hydrate()
@@ -254,10 +256,12 @@ export default function LibraryListPage() {
             {t("library.request.desc")}
           </p>
         </div>
-        <button className="btn btn-ghost">
+        <button className="btn btn-ghost" onClick={() => setApplyOpen(true)}>
           <Plus size={14} strokeWidth={1.5} /> {t("library.request.cta")}
         </button>
       </div>
+
+      <ApplyProjectModal open={applyOpen} onClose={() => setApplyOpen(false)} />
     </main>
   )
 }
