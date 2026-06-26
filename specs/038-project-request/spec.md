@@ -1,6 +1,11 @@
 # Spec 038: 项目申请 (Project Request)
 
-Status: draft (2026-06-26)
+Status: shipped (2026-06-26)
+
+验收结果: 4 例 pytest 全过 (未登录401/空idea400/成功201落库/超长400)。
+生产 47.106.220.119 已部署: alembic 042 建 project_requests 表, 三端点鉴权
+验证通过 (/sysadmin/project-requests 303跳登录, POST /api/project-requests 401,
+/api/admin/project-requests 401), 前端"申请项目"按钮文案已上线。
 
 ## WHAT
 
