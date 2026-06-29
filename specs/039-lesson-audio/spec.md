@@ -1,6 +1,13 @@
 # Spec 039: 教案讲稿语音 (Lesson Audio)
 
-Status: draft (2026-06-27)
+Status: shipped molecule (2026-06-27)
+
+验收结果 (molecule-monster-hunter): 47 knode × ~9 slide = 437 段, 全部合成成功
+0 失败, 均有效 WAV。源是 slides.json 每张 slide 的 audio_script (前端教案播放器
+翻的就是 slides), 不是 audio_scripts.json。音频 532MB 不进 git (gitignore),
+随 publish tarball 上线。生产验证: /v1 取音频 200 (audio/x-wav), knode 接口
+slides 带 audio_path, student-app file 代理透传 content-type, 前端 <audio> 播放器
+已部署。其余 5 项目用同脚本批量推 (后续)。
 
 ## WHAT
 
