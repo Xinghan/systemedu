@@ -1,6 +1,15 @@
 # Spec 040: 用户级 LLM 配置 (User LLM Config)
 
-Status: draft (2026-06-29)
+Status: shipped (2026-06-29)
+
+验收结果 (2026-06-29 部署到生产 47.106.220.119):
+- alembic 043 迁移成功建 user_llm_config 表 (042 -> 043)
+- STUDENT_LLM_CONFIG_KEY 已生成写入 /root/.systemedu-student-secrets
+- 生产 config.yaml thinking provider = qwen3.7-max (系统默认模型一致)
+- 后端 8 个测试 passed; 生产 GET /api/settings/llm 未登录返回 401 (路由已挂)
+- 前端构建产物含 /settings 路由; 头像菜单 → 系统配置入口可达
+- custom 保存硬校验 (invalid_key/model_not_found/endpoint_unreachable + 非 https 400) 已实现
+- 运行期 custom 不可用回退系统默认图 + WS llm_fallback toast
 
 ## WHAT
 
