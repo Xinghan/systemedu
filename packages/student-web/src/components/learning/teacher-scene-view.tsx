@@ -10,6 +10,7 @@ import { useEffect, useState } from "react"
 import { ChevronLeft, ChevronRight } from "lucide-react"
 
 import { myProjects } from "@/lib/api"
+import { getToken } from "@/lib/auth"
 import type { SlideEntry } from "@/lib/types/api"
 
 interface TeacherSceneViewProps {
@@ -25,6 +26,9 @@ export function TeacherSceneView({ projectName, moduleId }: TeacherSceneViewProp
   const [slides, setSlides] = useState<SlideEntry[] | null>(null)
   const [idx, setIdx] = useState(0)
   const [err, setErr] = useState(false)
+  // 当前 slide 音频的 blob URL。<audio src> 是浏览器原生请求, 带不上 JWT,
+  // 而文件代理端点要登录, 故用 fetch (带 Bearer) 取字节再转 blob URL。
+  const [audioSrc, setAudioSrc] = useState<string | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -41,6 +45,29 @@ export function TeacherSceneView({ projectName, moduleId }: TeacherSceneViewProp
       })
     return () => { cancelled = true }
   }, [projectName, moduleId])
+
+  // 取当前 slide 音频 (带 JWT fetch -> blob URL), 切换/卸载时 revoke 防泄漏
+  const audioPath = slides?.[idx]?.audio_path || null
+  useEffect(() => {
+    if (!audioPath) { setAudioSrc(null); return }
+    let revoked = false
+    let url: string | null = null
+    const token = getToken()
+    fetch(myProjects.fileUrl(projectName, audioPath), {
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    })
+      .then((r) => (r.ok ? r.blob() : Promise.reject(new Error(`audio ${r.status}`))))
+      .then((blob) => {
+        if (revoked) return
+        url = URL.createObjectURL(blob)
+        setAudioSrc(url)
+      })
+      .catch(() => { if (!revoked) setAudioSrc(null) })
+    return () => {
+      revoked = true
+      if (url) URL.revokeObjectURL(url)
+    }
+  }, [projectName, audioPath])
 
   if (slides === null) {
     return (
@@ -72,15 +99,19 @@ export function TeacherSceneView({ projectName, moduleId }: TeacherSceneViewProp
       <div className="rounded-xl border border-[var(--border)] bg-[var(--paper-2)] p-4">
         <div className="mb-2 flex items-center gap-2">
           {slide.audio_path ? (
-            <audio
-              key={slide.slide_id}
-              controls
-              preload="none"
-              src={myProjects.fileUrl(projectName, slide.audio_path)}
-              className="h-8 w-full max-w-md"
-            >
-              你的浏览器不支持音频播放。
-            </audio>
+            audioSrc ? (
+              <audio
+                key={slide.slide_id}
+                controls
+                autoPlay
+                src={audioSrc}
+                className="h-8 w-full max-w-md"
+              >
+                你的浏览器不支持音频播放。
+              </audio>
+            ) : (
+              <span className="text-xs text-[var(--sub)]">语音加载中...</span>
+            )
           ) : (
             <span className="text-xs text-[var(--sub)]">本张暂无语音</span>
           )}
