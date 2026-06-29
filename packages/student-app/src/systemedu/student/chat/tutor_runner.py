@@ -42,34 +42,26 @@ def _checkpoint_path() -> str:
     return str(Path.home() / ".systemedu" / "tutor-checkpoint-student.db")
 
 
-async def _get_graph():
-    """Build or return the cached tutor graph."""
-    global _graph, _checkpointer, _checkpointer_cm
+# spec 040: 按用户 LLM 配置缓存的 graph (custom 用户专属; default 用户共享 _graph)
+_user_graphs: dict[str, Any] = {}
+_shared_deps: dict[str, Any] = {}  # loader / injector / checkpointer, 跨 graph 复用
 
-    if _graph is not None:
-        return _graph
+
+async def _ensure_shared_deps() -> dict[str, Any]:
+    """构建 skills loader / memory injector / checkpointer (一次, 跨所有 graph 复用)。"""
+    global _checkpointer, _checkpointer_cm
+    if _shared_deps:
+        return _shared_deps
 
     from systemedu.core.config import TutorConfig, get_config
-    from systemedu.core.llm_client import get_llm
     from systemedu.core.tutor.checkpoint import get_checkpointer
-    from systemedu.core.tutor.graph import build_tutor_graph
     from systemedu.core.tutor.skills import SkillLoader
-    from systemedu.core.library_client import AsyncLibraryClient
     from .memory_layers import CloudInjectorAdapter, StudentMemoryInjector
 
-    # LLM
-    try:
-        llm = get_llm()
-    except Exception as e:
-        log.warning("tutor_runner(student): LLM not configured (%s); graph runs sans LLM", e)
-        llm = None
-
-    # Skills
     loader = SkillLoader([_skills_root()])
     loader.scan()
     log.info("tutor_runner(student): loaded %d skills", len(loader.list_all()))
 
-    # Checkpointer — 独立 SQLite db, 不跟 cloud-app 混
     tutor_cfg = TutorConfig(
         checkpoint_backend="sqlite",
         checkpoint_sqlite_path=_checkpoint_path(),
@@ -77,8 +69,6 @@ async def _get_graph():
     _checkpointer_cm = get_checkpointer(tutor_cfg)
     _checkpointer = await _checkpointer_cm.__aenter__()
 
-    # spec 031: Memory injector — student-app 版本 5 层
-    # L4 用 Mem0 (若 config.memory.enabled), L3 knode 内容用 library API
     mem0_client = None
     cfg = get_config()
     if cfg.memory.enabled:
@@ -88,25 +78,92 @@ async def _get_graph():
         except Exception as e:
             log.warning("Mem0 init failed (%s); L4 disabled", e)
 
-    # library client (复用 library_proxy 已有 singleton)
     from ..library_proxy.client import get_library_client
     library_client = get_library_client()
-
-    student_injector = StudentMemoryInjector(
-        mem0_client=mem0_client,
-        library_client=library_client,
+    injector = CloudInjectorAdapter(
+        StudentMemoryInjector(mem0_client=mem0_client, library_client=library_client)
     )
-    # 用 adapter 适配 core/tutor MemoryInjector 接口
-    injector = CloudInjectorAdapter(student_injector)
+    _shared_deps.update(loader=loader, injector=injector, checkpointer=_checkpointer)
+    return _shared_deps
 
-    _graph = build_tutor_graph(
-        loader=loader,
+
+def _build_graph_with_llm(llm: Any):
+    """用给定 llm 构建一个 tutor graph (复用共享 deps)。"""
+    from systemedu.core.tutor.graph import build_tutor_graph
+
+    return build_tutor_graph(
+        loader=_shared_deps["loader"],
         llm=llm,
-        checkpointer=_checkpointer,
-        memory_injector=injector,
+        checkpointer=_shared_deps["checkpointer"],
+        memory_injector=_shared_deps["injector"],
     )
-    log.info("tutor_runner(student): graph built, checkpoint=%s", _checkpoint_path())
+
+
+async def _get_graph():
+    """默认共享 graph (系统默认 provider). 预热 + default 用户用。"""
+    global _graph
+    if _graph is not None:
+        return _graph
+
+    from systemedu.core.llm_client import get_llm
+
+    await _ensure_shared_deps()
+    try:
+        llm = get_llm()
+    except Exception as e:
+        log.warning("tutor_runner(student): LLM not configured (%s); graph runs sans LLM", e)
+        llm = None
+    _graph = _build_graph_with_llm(llm)
+    log.info("tutor_runner(student): default graph built, checkpoint=%s", _checkpoint_path())
     return _graph
+
+
+async def _resolve_user_graph(user_id: str) -> tuple[Any, bool]:
+    """按用户 LLM 配置返回 (graph, fell_back)。
+
+    - default / 无配置 → 共享默认 graph, fell_back=False
+    - custom → 按配置指纹缓存/构建专属 graph; 构建或校验失败 → 回退默认 graph, fell_back=True
+    """
+    from ..db import get_user_llm_config
+
+    try:
+        cfg = get_user_llm_config(user_id)
+    except Exception:
+        log.exception("read user llm config failed user=%s; use default", user_id)
+        return await _get_graph(), False
+
+    if cfg is None or cfg.mode != "custom":
+        return await _get_graph(), False
+
+    # custom: 解密 key + 构造 llm, 按指纹缓存
+    return await _resolve_custom_graph(cfg)
+
+
+async def _resolve_custom_graph(cfg) -> tuple[Any, bool]:
+    from systemedu.core.llm_client import build_custom_llm
+    from ..settings.crypto import LLMConfigCryptoUnavailable, decrypt_key
+
+    cache_key = f"{cfg.base_url}|{cfg.model}|{cfg.api_key_enc}"
+    cached = _user_graphs.get(cache_key)
+    if cached is not None:
+        return cached, False
+
+    try:
+        await _ensure_shared_deps()
+        api_key = decrypt_key(cfg.api_key_enc) if cfg.api_key_enc else ""
+        if not api_key:
+            raise LLMConfigCryptoUnavailable("no key")
+        llm = build_custom_llm(
+            base_url=cfg.base_url, api_key=api_key, model=cfg.model,
+            streaming=True, request_timeout=300,
+        )
+        graph = _build_graph_with_llm(llm)
+        _user_graphs[cache_key] = graph
+        log.info("tutor_runner(student): custom graph built model=%s", cfg.model)
+        return graph, False
+    except Exception as e:
+        log.warning("custom graph build failed (%s); fall back to default", e)
+        return await _get_graph(), True
 
 
 async def preload_graph() -> None:
@@ -128,6 +185,8 @@ async def shutdown_graph() -> None:
         _checkpointer_cm = None
         _checkpointer = None
     _graph = None
+    _user_graphs.clear()
+    _shared_deps.clear()
 
 
 def _build_input(payload: ChatPayload, user_id: str) -> dict[str, Any]:
@@ -172,7 +231,7 @@ def _build_config(payload: ChatPayload, user_id: str) -> dict[str, Any]:
 
 async def invoke(payload: ChatPayload, user_id: str) -> dict[str, Any]:
     """Run one turn through the tutor graph (non-streaming)."""
-    graph = await _get_graph()
+    graph, fell_back = await _resolve_user_graph(user_id)
     state_input = _build_input(payload, user_id)
     config = _build_config(payload, user_id)
     result = await graph.ainvoke(state_input, config=config)
@@ -184,6 +243,7 @@ async def invoke(payload: ChatPayload, user_id: str) -> dict[str, Any]:
         "skill_decision": result.get("skill_decision"),
         "confirm_required": result.get("confirm_required"),
         "_safety_triggered": result.get("_safety_triggered", False),
+        "llm_fallback": fell_back,
     }
 
 
@@ -196,7 +256,10 @@ async def stream(payload: ChatPayload, user_id: str) -> AsyncIterator[dict[str, 
       {"type": "tool_confirm", "confirm_id": str, "tool": str, "args": dict}
       {"type": "escalation", "severity": "urgent", "contact_info": str}
     """
-    graph = await _get_graph()
+    graph, fell_back = await _resolve_user_graph(user_id)
+    if fell_back:
+        # spec 040: 用户 custom 配置不可用, 已回退默认模型, 通知前端
+        yield {"type": "llm_fallback"}
     state_input = _build_input(payload, user_id)
     config = _build_config(payload, user_id)
 

@@ -138,3 +138,37 @@ def get_llm(
 
     llm_kwargs.update(kwargs)
     return ChatOpenAI(**llm_kwargs)
+
+
+def build_custom_llm(
+    base_url: str,
+    api_key: str,
+    model: str,
+    *,
+    streaming: bool = True,
+    temperature: float = 1.0,
+    max_retries: int | None = None,
+    request_timeout: int = 60,
+    **kwargs,
+) -> ChatOpenAI:
+    """spec 040: 用用户自填的 base_url + api_key + model 构造 ChatOpenAI。
+
+    不依赖 config (绕开 provider 体系), 复用 get_llm 的 no-proxy httpx client。
+    供 settings 保存校验 + tutor custom 模式共用, 保证 custom LLM 构造逻辑单一。
+    """
+    no_proxy_client = httpx.Client(trust_env=False)
+    no_proxy_async_client = httpx.AsyncClient(trust_env=False)
+    llm_kwargs = {
+        "model": model,
+        "api_key": api_key,
+        "base_url": base_url,
+        "temperature": temperature,
+        "streaming": streaming,
+        "http_client": no_proxy_client,
+        "http_async_client": no_proxy_async_client,
+        "request_timeout": request_timeout,
+    }
+    if max_retries is not None:
+        llm_kwargs["max_retries"] = max_retries
+    llm_kwargs.update(kwargs)
+    return ChatOpenAI(**llm_kwargs)

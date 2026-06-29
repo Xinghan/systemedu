@@ -445,6 +445,7 @@ export interface WSMessage {
     | "skill"            // spec 028: agent 切了 skill
     | "tool_confirm"     // spec 028: 等学生确认工具调用
     | "escalation"       // spec 028: 安全护栏触发, 推送家长热线
+    | "llm_fallback"     // spec 040: 用户自定义模型不可用, 已回退默认
   content?: string
   session_id?: string
   thread_id?: string

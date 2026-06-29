@@ -107,6 +107,11 @@ export function useWebSocketChat() {
         }
       } else if (data.type === "skill" && data.target_skill) {
         setCurrentSkill(data.target_skill)
+      } else if (data.type === "llm_fallback") {
+        // spec 040: 用户自定义模型不可用, 已临时回退系统默认
+        toast.warning("你的模型配置暂不可用，已临时用系统默认模型", {
+          duration: 6000,
+        })
       } else if (data.type === "escalation") {
         toast.warning(
           `[安全提示] 请联系: ${data.contact_info ?? "12355 青少年心理热线"}`,

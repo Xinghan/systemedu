@@ -141,6 +141,8 @@ STUDENT_REDIS_URL=redis://127.0.0.1:6379/0
 LIBRARY_BASE_URL=http://127.0.0.1:$LIBRARY_PORT
 EOF"
   remote "grep -q LIBRARY_LICENSE_TOKEN /root/.systemedu-student-secrets || grep LIBRARY_LICENSE_TOKEN /root/.systemedu-library-secrets >> /root/.systemedu-student-secrets"
+  # spec 040: 用户自填 LLM api_key 的 Fernet 加密密钥 (一次性生成, 不进 git)
+  remote "grep -q STUDENT_LLM_CONFIG_KEY /root/.systemedu-student-secrets || echo \"STUDENT_LLM_CONFIG_KEY=\$($REPO_ROOT/.venv/bin/python -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())')\" >> /root/.systemedu-student-secrets"
   # 阿里云短信 ALIYUN_SMS_* (KEY/SECRET/ENDPOINT/SIGN/TEMPLATE/DEBUG) 不在此脚本管理:
   # 含 AccessKey, 由人工一次性手动写进服务器 /root/.systemedu-student-secrets (不进 git)。
   # 缺失时 send_sms_code 在 DEBUG=false 下会失败; 部署后用 verify 步骤确认登录可用。

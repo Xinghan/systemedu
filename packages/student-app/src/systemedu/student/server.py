@@ -35,6 +35,7 @@ from .db import init_db
 from .drill import ROUTES as _drill_routes
 from .library_proxy.routes import ROUTES as _lib_routes
 from .project_request import ROUTES as _project_request_routes
+from .settings import ROUTES as _settings_routes
 
 
 logger = logging.getLogger(__name__)
@@ -69,6 +70,7 @@ def create_app() -> Starlette:
         *_chat_routes,
         *_drill_routes,
         *_project_request_routes,
+        *_settings_routes,
     ]
 
     middleware = [

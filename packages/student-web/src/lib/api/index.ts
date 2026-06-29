@@ -446,4 +446,30 @@ export const projectRequest = {
     }),
 }
 
+// ---------------------------------------------------------------------------
+// settings: 用户级 LLM 配置 (spec 040)
+// ---------------------------------------------------------------------------
+
+export interface LlmSettings {
+  mode: "default" | "custom"
+  default_model: string
+  custom_crypto_available: boolean
+  base_url?: string
+  model?: string
+  has_key?: boolean
+}
+
+export interface PutLlmBody {
+  mode: "default" | "custom"
+  base_url?: string
+  api_key?: string // 留空=保留原 key
+  model?: string
+}
+
+export const settings = {
+  getLlm: () => api.get<LlmSettings>("/api/settings/llm"),
+  putLlm: (body: PutLlmBody) =>
+    api.put<{ ok: boolean; mode: string; model?: string }>("/api/settings/llm", body),
+}
+
 export { STUDENT_API_URL }

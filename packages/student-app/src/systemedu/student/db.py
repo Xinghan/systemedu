@@ -447,6 +447,75 @@ def create_project_request(user_id: str, idea_text: str) -> ProjectRequest:
         return req
 
 
+class UserLLMConfig(Base):
+    """spec 040: 每用户的 chat (tutor) LLM 配置。
+
+    mode=default: 不存 model/key, 运行时用系统默认 provider。
+    mode=custom:  base_url + 加密 api_key + model (OpenAI-compatible)。
+    """
+
+    __tablename__ = "user_llm_config"
+    __table_args__ = (
+        UniqueConstraint("user_id", name="uq_user_llm_config"),
+    )
+
+    id = Column(String(36), primary_key=True, default=_uuid)
+    user_id = Column(String(36), ForeignKey("users.id"), index=True, nullable=False)
+    mode = Column(String(16), default="default", nullable=False)  # default | custom
+    base_url = Column(String(512), nullable=True)
+    api_key_enc = Column(Text, nullable=True)   # Fernet 密文, 仅 custom
+    model = Column(String(128), nullable=True)
+    updated_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+def get_user_llm_config(user_id: str) -> UserLLMConfig | None:
+    """取用户 LLM 配置, 不存在返 None (= 用系统默认)。返回脱离 session 的副本。"""
+    with get_session() as s:
+        cfg = s.execute(
+            select(UserLLMConfig).where(UserLLMConfig.user_id == user_id)
+        ).scalar_one_or_none()
+        if cfg is not None:
+            s.expunge(cfg)
+        return cfg
+
+
+def upsert_user_llm_config(
+    user_id: str,
+    mode: str,
+    base_url: str | None = None,
+    api_key_enc: str | None = None,
+    model: str | None = None,
+    keep_existing_key: bool = False,
+) -> UserLLMConfig:
+    """写入用户 LLM 配置。
+
+    mode=default 时清空 custom 字段。
+    keep_existing_key=True (custom 保存且未传新 key) 时保留原 api_key_enc。
+    """
+    with get_session() as s:
+        cfg = s.execute(
+            select(UserLLMConfig).where(UserLLMConfig.user_id == user_id)
+        ).scalar_one_or_none()
+        if cfg is None:
+            cfg = UserLLMConfig(user_id=user_id)
+            s.add(cfg)
+        cfg.mode = mode
+        if mode == "default":
+            cfg.base_url = None
+            cfg.api_key_enc = None
+            cfg.model = None
+        else:  # custom
+            cfg.base_url = base_url
+            cfg.model = model
+            if not keep_existing_key:
+                cfg.api_key_enc = api_key_enc
+        cfg.updated_at = datetime.utcnow()
+        s.commit()
+        s.refresh(cfg)
+        s.expunge(cfg)
+        return cfg
+
+
 # ---------------------------------------------------------------------------
 # init
 # ---------------------------------------------------------------------------

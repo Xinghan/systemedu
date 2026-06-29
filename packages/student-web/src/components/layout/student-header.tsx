@@ -10,6 +10,7 @@ import {
   Home,
   Library as LibraryIcon,
   LogOut,
+  Settings,
 } from "lucide-react"
 import { useAuthStore } from "@/lib/stores/auth-store"
 import { auth } from "@/lib/api"
@@ -135,6 +136,14 @@ export function StudentHeader() {
               >
                 <Brain size={14} strokeWidth={1.5} />
                 {t("nav.brain")}
+              </Link>
+              <Link
+                href="/settings"
+                onClick={() => setMenuOpen(false)}
+                style={menuItemStyle}
+              >
+                <Settings size={14} strokeWidth={1.5} />
+                {t("nav.settings")}
               </Link>
               <div style={{ height: 1, background: "var(--border)", margin: "2px 0" }} />
               <button
