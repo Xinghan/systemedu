@@ -724,6 +724,7 @@ export interface SlideEntry {
   title: string
   body_markdown: string
   audio_script: string
+  audio_path?: string | null // spec 039: 讲稿语音文件相对路径 (经 fileUrl 代理取)
   payload: SlidePayload
   generated_at: string | null
 }

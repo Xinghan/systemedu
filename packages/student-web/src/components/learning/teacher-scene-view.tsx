@@ -7,7 +7,7 @@
  */
 
 import { useEffect, useState } from "react"
-import { ChevronLeft, ChevronRight, Play } from "lucide-react"
+import { ChevronLeft, ChevronRight } from "lucide-react"
 
 import { myProjects } from "@/lib/api"
 import type { SlideEntry } from "@/lib/types/api"
@@ -74,15 +74,19 @@ export function TeacherSceneView({ projectName, moduleId }: TeacherSceneViewProp
 
       <div className="rounded-xl border border-[var(--border)] bg-[var(--paper-2)] p-4">
         <div className="mb-2 flex items-center gap-2">
-          <button
-            type="button"
-            disabled
-            title="音频生成中"
-            className="inline-flex items-center gap-1 rounded-full border border-[var(--border)] bg-[var(--card)] px-3 py-1 text-xs text-[var(--sub)] opacity-60 cursor-not-allowed"
-          >
-            <Play size={12} /> 播放 (音频生成中)
-          </button>
-          <span className="text-xs text-[var(--sub)]">讲稿</span>
+          {slide.audio_path ? (
+            <audio
+              key={slide.slide_id}
+              controls
+              preload="none"
+              src={myProjects.fileUrl(projectName, slide.audio_path)}
+              className="h-8 w-full max-w-md"
+            >
+              你的浏览器不支持音频播放。
+            </audio>
+          ) : (
+            <span className="text-xs text-[var(--sub)]">本张暂无语音</span>
+          )}
         </div>
         <p className="text-sm leading-relaxed text-[var(--ink)] whitespace-pre-wrap">
           {slide.audio_script || "(本张无讲稿)"}
