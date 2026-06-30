@@ -28,3 +28,40 @@ def test_qid_exists_false(monkeypatch):
     ok, label = qid_exists("Q999999999")
     assert ok is False
     assert label is None
+
+
+from kg_builder.gate import gate_candidate, GateResult
+
+
+def test_gate_passes_valid_candidate(monkeypatch):
+    monkeypatch.setattr("kg_builder.gate.qid_exists", lambda q: (True, "linear algebra"))
+    cand = {"node_id": "math.algebra.new_concept", "qid": "Q190524", "std_codes": []}
+    res = gate_candidate(cand, existing_ids={"math.arith.add"})
+    assert res.passed is True
+    assert res.verified is True
+
+
+def test_gate_rejects_fake_qid_no_stdcode(monkeypatch):
+    # QID 回查失败 + 无标准码 -> 拒
+    monkeypatch.setattr("kg_builder.gate.qid_exists", lambda q: (False, None))
+    cand = {"node_id": "math.algebra.fake", "qid": "Q999999999", "std_codes": []}
+    res = gate_candidate(cand, existing_ids=set())
+    assert res.passed is False
+    assert "no_anchor" in res.reason
+
+
+def test_gate_rejects_duplicate(monkeypatch):
+    monkeypatch.setattr("kg_builder.gate.qid_exists", lambda q: (True, "linear algebra"))
+    cand = {"node_id": "math.arith.add", "qid": "Q190524", "std_codes": []}
+    res = gate_candidate(cand, existing_ids={"math.arith.add"})
+    assert res.passed is False
+    assert "duplicate" in res.reason
+
+
+def test_gate_passes_stdcode_only_when_qid_fails(monkeypatch):
+    # QID 回查失败但有标准码 -> 仍过 (锚点=标准码), verified=False
+    monkeypatch.setattr("kg_builder.gate.qid_exists", lambda q: (False, None))
+    cand = {"node_id": "math.algebra.x", "qid": "", "std_codes": ["CCSS.Math.8.EE.C.7"]}
+    res = gate_candidate(cand, existing_ids=set())
+    assert res.passed is True
+    assert res.verified is False
