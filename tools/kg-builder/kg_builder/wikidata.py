@@ -37,9 +37,12 @@ def _search_entities(term: str, limit: int) -> list[dict]:
 
 
 # spec 041 里程碑3: search_qid 重试退避 + 进程内缓存 (防 Wikidata 限流丢结果)
+# spec 041 第1步优化: 11 agent 并行打 Wikidata 必触发限流, 原 3s*线性*4 = 最坏 18s/词,
+# 20 词候选生成步超 10min 工具超时被杀。降退避 + 加单词总预算上限, 保单步不超时。
 _search_cache: dict[str, list[dict]] = {}
-_RETRY_SLEEP = 3.0   # 被限流时退避基数 (秒); 测试 monkeypatch 为 0
-_MAX_RETRY = 4
+_RETRY_SLEEP = 1.5   # 被限流时退避基数 (秒); 测试 monkeypatch 为 0
+_MAX_RETRY = 3       # 最坏退避 1.5+3 = 4.5s/词 (原 18s)
+_WORD_BUDGET = 8.0   # 单个词累计退避超此预算就放弃 (返回空走 broader), 不无限拖
 
 
 def search_qid(term: str, limit: int = 5) -> list[dict]:
@@ -48,12 +51,15 @@ def search_qid(term: str, limit: int = 5) -> list[dict]:
     比凭记忆给 QID 号可靠: LLM 和人都常记错号 (spec 041 实测), 但按名搜
     第一条通常正确。调用方仍需核对 label 语义匹配。
     带重试退避(被限流时等待重试而非丢结果) + 进程内缓存(重复词不重打网络)。
+    单词退避有总预算 (_WORD_BUDGET): 超预算放弃返回空, 让调用方走 broader,
+    避免单步候选生成因累计退避超 10min 工具超时被杀 (spec 041 第1步实测)。
     """
     if not term:
         return []
     if term in _search_cache:
         return _search_cache[term]
     hits = []
+    spent = 0.0
     for attempt in range(_MAX_RETRY):
         try:
             raw = _search_entities(term, limit)
@@ -62,7 +68,11 @@ def search_qid(term: str, limit: int = 5) -> list[dict]:
             break
         except Exception:
             if attempt < _MAX_RETRY - 1:
-                time.sleep(_RETRY_SLEEP * (attempt + 1))  # 线性退避
+                wait = _RETRY_SLEEP * (attempt + 1)  # 线性退避
+                if spent + wait > _WORD_BUDGET:
+                    break  # 超总预算, 放弃 (返回空, 走 broader)
+                time.sleep(wait)
+                spent += wait
     _search_cache[term] = hits
     return hits
 
