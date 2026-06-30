@@ -31,6 +31,12 @@ class TreeNode(BaseModel):
     depth_level: DepthLevel
     prerequisites: list[str] = Field(default_factory=list)
     description: str
+    # spec 041: 外部体系锚点字段 (全部可选, 向后兼容旧 JSON)
+    wikidata_qid: str | None = None
+    std_codes: list[str] = Field(default_factory=list)
+    mapping_type: Literal["exact", "broader", "composite", "none"] | None = None
+    provenance: Literal["seed", "kg-builder-v1"] | None = None
+    verified: bool = False
 
 
 class Subject(BaseModel):
