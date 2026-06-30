@@ -72,6 +72,35 @@ def qid_exists(qid: str) -> tuple[bool, str | None]:
     return result
 
 
+def _get_entities(ids: list[str]) -> dict:
+    """真实网络: wbgetentities 一次批量取多个实体的 labels (最多50)."""
+    url = ("https://www.wikidata.org/w/api.php?action=wbgetentities"
+           f"&ids={'|'.join(ids)}&props=labels&languages=en&format=json")
+    req = urllib.request.Request(url, headers={"User-Agent": UA})
+    with urllib.request.urlopen(req, timeout=25) as r:
+        data = json.loads(r.read().decode("utf-8"))
+    time.sleep(0.2)
+    return data
+
+
+def batch_labels(qids: list[str]) -> dict[str, str]:
+    """批量取一组 QID 的英文 label, 返回 {qid: label}. 比逐个 qid_exists 快 ~50x.
+
+    自动分批 50 个/请求 (Wikidata wbgetentities 上限)。
+    """
+    out: dict[str, str] = {}
+    uniq = [q for q in dict.fromkeys(qids) if q and q.startswith("Q")]
+    for i in range(0, len(uniq), 50):
+        batch = uniq[i:i + 50]
+        try:
+            data = _get_entities(batch)
+        except Exception:
+            continue
+        for qid, ent in data.get("entities", {}).items():
+            out[qid] = ent.get("labels", {}).get("en", {}).get("value", "")
+    return out
+
+
 # Wikidata 本体论关系属性 -> 我们的 rel_type (spec 041 里程碑3)
 _REL_PROPS = {
     "P279": "subclass_of",

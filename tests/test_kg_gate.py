@@ -41,6 +41,19 @@ def test_search_qid_returns_top_match(monkeypatch):
     assert hits[0]["label"] == "operational amplifier"
 
 
+def test_batch_labels_maps_ids(monkeypatch):
+    from kg_builder.wikidata import batch_labels
+    def fake_get(ids):
+        return {"entities": {
+            "Q17278": {"labels": {"en": {"value": "circle"}}},
+            "Q11348": {"labels": {"en": {"value": "equation"}}},
+        }}
+    monkeypatch.setattr("kg_builder.wikidata._get_entities", fake_get)
+    out = batch_labels(["Q17278", "Q11348"])
+    assert out["Q17278"] == "circle"
+    assert out["Q11348"] == "equation"
+
+
 def test_fetch_relations_parses_p279_p527(monkeypatch):
     from kg_builder.wikidata import fetch_relations
     def fake_fetch(qid):
