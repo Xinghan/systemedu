@@ -26,8 +26,12 @@
 - [x] **关系二 related** (本体论, Wikidata P279/P361/P527): relations.py+batch_labels. math 9内部边+202悬空边
 - [x] **关系一 prerequisites** (学习顺序DAG): prerequisites.py LLM推断. math 20新节点全补出无环前置
 - [x] **pipeline 固化**: `python -m kg_builder <subj>` / `--merge` / `--relations` / `--prereq` / `--status`. 35测试过
-- [ ] **其余10学科** (phys/chem/bio/cs/elec/env/astro/med/eng/geo) 用 pipeline 逐个跑
-- 关键发现: 人工审QID必需(歧义词被同名游戏/姓氏抢); 悬空边高频目标=补全优先级
+- [x] **phys** 手动跑通(50→73), 验证模板+限流优化(search_qid重试退避+缓存+去冗余回查)
+- [x] **其余9学科** workflow we8e6pd33 并行扩建(worktree隔离, 18分钟, 0失败):
+      chem56/bio63/cs60/elec46/env53/astro37/med41/eng36/geo44
+- [x] **全11学科完成**: platform_tree 425→589节点, 每学科都有节点+QID+两类关系
+- 关键发现: 人工审QID必需(search_qid top1易被同名学术论文/期刊/软件/游戏抢词,
+  agent自检修正18处错配); 悬空边高频目标=补全优先级; broader节点不参与related
 
 ## 里程碑 4 (首版收官, 待10学科跑完)
 
