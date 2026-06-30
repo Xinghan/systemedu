@@ -30,6 +30,35 @@ def test_qid_exists_false(monkeypatch):
     assert label is None
 
 
+def test_search_qid_retries_on_failure(monkeypatch):
+    from kg_builder import wikidata
+    wikidata._search_cache.clear()
+    calls = {"n": 0}
+    def flaky(term, limit):
+        calls["n"] += 1
+        if calls["n"] < 3:
+            raise OSError("rate limited")
+        return [{"id": "Q178947", "label": "operational amplifier", "description": "x"}]
+    monkeypatch.setattr("kg_builder.wikidata._search_entities", flaky)
+    monkeypatch.setattr("kg_builder.wikidata._RETRY_SLEEP", 0)  # 测试不真等
+    hits = wikidata.search_qid("operational amplifier")
+    assert hits[0]["id"] == "Q178947"
+    assert calls["n"] == 3  # 重试到第3次成功
+
+
+def test_search_qid_caches_result(monkeypatch):
+    from kg_builder import wikidata
+    wikidata._search_cache.clear()
+    calls = {"n": 0}
+    def counting(term, limit):
+        calls["n"] += 1
+        return [{"id": "Q1", "label": "x", "description": ""}]
+    monkeypatch.setattr("kg_builder.wikidata._search_entities", counting)
+    wikidata.search_qid("foo")
+    wikidata.search_qid("foo")  # 第二次应命中缓存
+    assert calls["n"] == 1
+
+
 def test_search_qid_returns_top_match(monkeypatch):
     from kg_builder.wikidata import search_qid
     def fake_search(term, limit):

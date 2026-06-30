@@ -17,8 +17,13 @@ class GateResult:
     qid_label: str | None = None
 
 
-def gate_candidate(cand: dict, existing_ids: set[str]) -> GateResult:
-    """对一个候选节点跑三道闸. cand 需含 node_id / qid / std_codes."""
+def gate_candidate(cand: dict, existing_ids: set[str],
+                   qid_prechecked: bool = False) -> GateResult:
+    """对一个候选节点跑三道闸. cand 需含 node_id / qid / std_codes.
+
+    qid_prechecked=True: 调用方已确认 qid 存在 (如来自 search_qid 的返回),
+    跳过 qid_exists 回查 — 避免每候选重复打网络 (spec 041 限流优化)。
+    """
     nid = cand["node_id"]
     # 闸3: 去重 (放最前, 省掉对重复节点的网络回查)
     if nid in existing_ids:
@@ -27,10 +32,13 @@ def gate_candidate(cand: dict, existing_ids: set[str]) -> GateResult:
     qid = (cand.get("qid") or "").strip()
     std_codes = cand.get("std_codes") or []
 
-    # 闸1: QID 回查
+    # 闸1: QID 回查 (search_qid 已证存在则跳过)
     verified, label = (False, None)
     if qid:
-        verified, label = qid_exists(qid)
+        if qid_prechecked:
+            verified = True
+        else:
+            verified, label = qid_exists(qid)
 
     # 闸2: 有锚点 (verified QID 或 标准码 至少其一)
     if not verified and not std_codes:

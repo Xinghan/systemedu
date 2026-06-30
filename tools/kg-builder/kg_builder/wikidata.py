@@ -36,20 +36,35 @@ def _search_entities(term: str, limit: int) -> list[dict]:
     return data.get("search", [])
 
 
+# spec 041 里程碑3: search_qid 重试退避 + 进程内缓存 (防 Wikidata 限流丢结果)
+_search_cache: dict[str, list[dict]] = {}
+_RETRY_SLEEP = 3.0   # 被限流时退避基数 (秒); 测试 monkeypatch 为 0
+_MAX_RETRY = 4
+
+
 def search_qid(term: str, limit: int = 5) -> list[dict]:
     """按英文概念名搜 Wikidata, 返回候选 [{id,label,description}, ...] 按相关度排序。
 
     比凭记忆给 QID 号可靠: LLM 和人都常记错号 (spec 041 实测), 但按名搜
     第一条通常正确。调用方仍需核对 label 语义匹配。
+    带重试退避(被限流时等待重试而非丢结果) + 进程内缓存(重复词不重打网络)。
     """
     if not term:
         return []
-    try:
-        hits = _search_entities(term, limit)
-    except Exception:
-        return []
-    return [{"id": h.get("id"), "label": h.get("label"),
-             "description": h.get("description", "")} for h in hits]
+    if term in _search_cache:
+        return _search_cache[term]
+    hits = []
+    for attempt in range(_MAX_RETRY):
+        try:
+            raw = _search_entities(term, limit)
+            hits = [{"id": h.get("id"), "label": h.get("label"),
+                     "description": h.get("description", "")} for h in raw]
+            break
+        except Exception:
+            if attempt < _MAX_RETRY - 1:
+                time.sleep(_RETRY_SLEEP * (attempt + 1))  # 线性退避
+    _search_cache[term] = hits
+    return hits
 
 
 def qid_exists(qid: str) -> tuple[bool, str | None]:

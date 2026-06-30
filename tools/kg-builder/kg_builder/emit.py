@@ -28,16 +28,17 @@ def enrich_and_gate(candidates: list[dict], existing_ids: set[str],
         name_en = c.get("name_en", "")
         std_code = c.get("std_code", "") or ""
 
-        # 按英文名搜真实 QID (取 top 候选)
+        # 按英文名搜真实 QID (取 top 候选). search_qid 自带重试退避+缓存。
         hits = search_qid(name_en, limit=3) if name_en else []
         time.sleep(sleep)
         qid = hits[0]["id"] if hits else ""
         qid_label = hits[0]["label"] if hits else ""
 
-        # 过三道闸 (gate 内部会再 qid_exists 回查确认)
+        # 过三道闸. search_qid 搜到 = QID 已证存在, gate 跳过冗余回查 (限流优化, 网络减半)。
         gres = gate_candidate(
             {"node_id": nid, "qid": qid, "std_codes": [std_code] if std_code else []},
             existing_ids,
+            qid_prechecked=bool(hits),
         )
         row = {
             "proposed_id": nid, "name_zh": c.get("name_zh", ""), "name_en": name_en,
