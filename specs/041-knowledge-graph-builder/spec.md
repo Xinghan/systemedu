@@ -1,6 +1,6 @@
 # Spec 041: 独立完整知识图谱构建工具 (kg-builder)
 
-Status: draft (2026-06-30)
+Status: planned (2026-06-30) — plan.md + tasks.md 就绪, 实现里程碑1-2
 作者: Claude (brainstorming with 用户)
 关联探索: `docs/explore/2026-06-29-knowledge-graph-external-mapping.md`
 
