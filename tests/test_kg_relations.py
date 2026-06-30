@@ -36,11 +36,12 @@ def test_enrich_relations_maps_internal_and_dangling():
                 {"rel_type": "subclass_of", "target_qid": "Q999", "source": "wikidata:P279"},
             ]
         return []
-    def fake_label(qid):
-        return (True, {"Q17278": "circle", "Q999": "external thing"}.get(qid))
+    def fake_batch(qids):
+        m = {"Q17278": "circle", "Q999": "external thing"}
+        return {q: m.get(q, "") for q in qids}
 
     tree = _tree()
-    stats = enrich_relations(tree, fetch_fn=fake_fetch, label_fn=fake_label)
+    stats = enrich_relations(tree, fetch_fn=fake_fetch, label_batch_fn=fake_batch)
 
     conic = tree["subjects"][0]["nodes"][0]
     rels = conic["related"]
@@ -56,7 +57,7 @@ def test_enrich_relations_maps_internal_and_dangling():
 
 def test_enrich_skips_nodes_without_qid():
     tree = _tree()
-    stats = enrich_relations(tree, fetch_fn=lambda q: [], label_fn=lambda q: (True, "x"))
+    stats = enrich_relations(tree, fetch_fn=lambda q: [], label_batch_fn=lambda qs: {})
     # 无 qid 的节点不拉关系, 不报错
     assert tree["subjects"][0]["nodes"][2].get("related", []) == []
     assert stats["nodes_processed"] == 2  # 只处理有qid的2个

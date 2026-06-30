@@ -8,32 +8,33 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from kg_builder.wikidata import fetch_relations, qid_exists
+from kg_builder.wikidata import batch_labels, fetch_relations
 
 
-def enrich_relations(tree: dict, fetch_fn=fetch_relations, label_fn=qid_exists) -> dict:
+def enrich_relations(tree: dict, fetch_fn=fetch_relations, label_batch_fn=batch_labels,
+                     only_subjects: set[str] | None = None) -> dict:
     """给 tree(dict) 所有有 qid 的节点填 related 字段。原地修改 tree, 返回统计。
 
-    fetch_fn/label_fn 可注入便于测试 (默认真实拉网络)。
-    label_fn(qid) -> (exists, label)。
+    两阶段 (避免逐 target 打网络): 先拉所有节点的关系收集 target_qid,
+    再 batch_labels 一次性取全部 label, 最后填 label 写 related。
+    only_subjects: 限定只对这些学科的节点拉关系 (None=全部); 但 qid 索引始终用全图,
+                   故跨学科关系也能连上。便于逐学科推进。
+    fetch_fn/label_batch_fn 可注入便于测试。label_batch_fn(qids) -> {qid: label}。
     """
-    # qid -> node_id 索引 (图谱内有哪些 QID)
+    # qid -> node_id 索引 (始终用全图, 跨学科 target 也能映射)
     qid_to_node = {}
     for s in tree["subjects"]:
         for n in s["nodes"]:
             if n.get("wikidata_qid"):
                 qid_to_node[n["wikidata_qid"]] = n["id"]
 
-    label_cache: dict[str, str | None] = {}
-
-    def get_label(qid):
-        if qid not in label_cache:
-            _ok, lbl = label_fn(qid)
-            label_cache[qid] = lbl
-        return label_cache[qid]
-
-    processed = internal = dangling = 0
+    # 阶段1: 拉节点关系 (暂不填 label), 收集所有 target_qid
+    node_edges: dict[str, list] = {}
+    all_targets: set[str] = set()
+    processed = 0
     for s in tree["subjects"]:
+        if only_subjects is not None and s["id"] not in only_subjects:
+            continue
         for n in s["nodes"]:
             qid = n.get("wikidata_qid")
             if not qid:
@@ -45,18 +46,31 @@ def enrich_relations(tree: dict, fetch_fn=fetch_relations, label_fn=qid_exists) 
                 tnode = qid_to_node.get(tqid)
                 if tnode == n["id"]:
                     continue  # 自环跳过
-                edges.append({
-                    "target_qid": tqid,
-                    "target_label": get_label(tqid) or "",
-                    "target_node_id": tnode,
-                    "rel_type": rel["rel_type"],
-                    "source": rel["source"],
-                })
-                if tnode:
+                edges.append({"target_qid": tqid, "target_node_id": tnode,
+                              "rel_type": rel["rel_type"], "source": rel["source"]})
+                all_targets.add(tqid)
+            node_edges[n["id"]] = edges
+
+    # 阶段2: 批量取所有 target 的 label
+    labels = label_batch_fn(sorted(all_targets)) if all_targets else {}
+
+    # 阶段3: 填 label 写回节点
+    internal = dangling = 0
+    for s in tree["subjects"]:
+        for n in s["nodes"]:
+            if n["id"] not in node_edges:
+                continue
+            edges = node_edges[n["id"]]
+            for e in edges:
+                e["target_label"] = labels.get(e["target_qid"], "")
+                if e["target_node_id"]:
                     internal += 1
                 else:
                     dangling += 1
-            n["related"] = edges
+            # 字段顺序整理
+            n["related"] = [{"target_qid": e["target_qid"], "target_label": e["target_label"],
+                             "target_node_id": e["target_node_id"], "rel_type": e["rel_type"],
+                             "source": e["source"]} for e in edges]
 
     return {"nodes_processed": processed, "internal_edges": internal,
             "dangling_edges": dangling}
