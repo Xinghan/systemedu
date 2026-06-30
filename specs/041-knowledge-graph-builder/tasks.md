@@ -20,7 +20,16 @@
 - [x] 全部 pytest 通过 (schema/gate/merge, 24 passed)
 - [x] platform_tree.json 仍 425 节点过校验, 424 有 QID, 142 verified, 0 NOTFOUND (唯一无QID=chem.lab.safety 合理none)
 
-## 里程碑 3-4 (本计划验收后另起)
+## 里程碑 3: 逐学科扩建 + 节点间关系 (进行中)
 
-- 逐学科 LLM 列候选 → 闸门 → 产待审清单 → 人工审 → 合入 (math 首发 → 其余 10 学科)
-- 首版完成: platform_tree.json 达 ~1420 节点, 每节点带可验证锚点
+- [x] **math 首发** 60→80节点(总445): candidates(LLM列候选)+emit(search_qid+闸门)+merge合入
+- [x] **关系二 related** (本体论, Wikidata P279/P361/P527): relations.py+batch_labels. math 9内部边+202悬空边
+- [x] **关系一 prerequisites** (学习顺序DAG): prerequisites.py LLM推断. math 20新节点全补出无环前置
+- [x] **pipeline 固化**: `python -m kg_builder <subj>` / `--merge` / `--relations` / `--prereq` / `--status`. 35测试过
+- [ ] **其余10学科** (phys/chem/bio/cs/elec/env/astro/med/eng/geo) 用 pipeline 逐个跑
+- 关键发现: 人工审QID必需(歧义词被同名游戏/姓氏抢); 悬空边高频目标=补全优先级
+
+## 里程碑 4 (首版收官, 待10学科跑完)
+
+- platform_tree.json 达 ~1420 节点, 每节点带可验证锚点 + 两类关系
+- CCSS/NGSS 标准码本地数据集 (std_code 目前靠LLM给未机器校验)
