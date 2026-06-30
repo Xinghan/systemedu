@@ -23,6 +23,35 @@ def _fetch_entity(qid: str) -> dict:
     return data
 
 
+def _search_entities(term: str, limit: int) -> list[dict]:
+    """真实网络: Wikidata wbsearchentities 按名搜实体。"""
+    import urllib.parse
+    q = urllib.parse.quote(term)
+    url = (f"https://www.wikidata.org/w/api.php?action=wbsearchentities"
+           f"&search={q}&language=en&format=json&limit={limit}")
+    req = urllib.request.Request(url, headers={"User-Agent": UA})
+    with urllib.request.urlopen(req, timeout=20) as r:
+        data = json.loads(r.read().decode("utf-8"))
+    time.sleep(0.2)
+    return data.get("search", [])
+
+
+def search_qid(term: str, limit: int = 5) -> list[dict]:
+    """按英文概念名搜 Wikidata, 返回候选 [{id,label,description}, ...] 按相关度排序。
+
+    比凭记忆给 QID 号可靠: LLM 和人都常记错号 (spec 041 实测), 但按名搜
+    第一条通常正确。调用方仍需核对 label 语义匹配。
+    """
+    if not term:
+        return []
+    try:
+        hits = _search_entities(term, limit)
+    except Exception:
+        return []
+    return [{"id": h.get("id"), "label": h.get("label"),
+             "description": h.get("description", "")} for h in hits]
+
+
 def qid_exists(qid: str) -> tuple[bool, str | None]:
     """回查 QID 是否真实存在于 Wikidata, 返回 (存在?, 英文label)."""
     if not qid or not qid.startswith("Q"):

@@ -30,6 +30,17 @@ def test_qid_exists_false(monkeypatch):
     assert label is None
 
 
+def test_search_qid_returns_top_match(monkeypatch):
+    from kg_builder.wikidata import search_qid
+    def fake_search(term, limit):
+        return [{"id": "Q178947", "label": "operational amplifier",
+                 "description": "high-gain voltage amplifier"}]
+    monkeypatch.setattr("kg_builder.wikidata._search_entities", fake_search)
+    hits = search_qid("operational amplifier")
+    assert hits[0]["id"] == "Q178947"
+    assert hits[0]["label"] == "operational amplifier"
+
+
 from kg_builder.gate import gate_candidate, GateResult
 
 
