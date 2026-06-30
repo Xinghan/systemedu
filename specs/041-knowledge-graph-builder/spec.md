@@ -140,6 +140,43 @@ python -m kg_builder --status                      # 各学科覆盖进度
 3. 逐学科跑: math 首发 → 审 → 合 → 验证前端 → 其余 10 学科
 4. 首版完成: platform_tree.json 达 ~1420 节点, 每个带可验证锚点
 
+## 里程碑3 补充: 节点间关系 (2026-06-30 用户提出)
+
+里程碑3 首版 (math 20 新节点) 暴露问题: 新节点 prerequisites 全空 = 孤岛, 且
+Wikidata 丰富的关系结构 (P279/P361/P527) 完全没用上 —— 图谱退化成"带标签的清单"。
+补两类关系 (用户定: 两者都要, 先 math 后其他学科):
+
+### 关系一: prerequisites (学习顺序) — 复用现有字段
+- 含义: "学X前要先会Y", 学习路径用。同学科 + 无环 (schema 已约束)。
+- 补法: LLM 给每个新节点推断本学科内前置节点, 校验后写 prerequisites。
+
+### 关系二: related (本体论知识结构) — 新增字段
+- 含义: "圆锥曲线 has-part 圆"、"二项分布 subclass-of 离散分布", 知识结构展示。
+- 来源: 拉节点 QID 的 Wikidata P279(subclass of)/P361(part of)/P527(has part)。
+- 可跨学科、可成环 (本体论非 DAG), 故**不能塞进 prerequisites**, 单独存 related。
+- 范围 (用户定): **保留全量** Wikidata 关系, 含指向图谱外实体的悬空边 —— 悬空边
+  是"该补这个上位/相关节点"的扩展信号, 不是噪声。每条边标注 target 是否在图谱内。
+
+### schema 扩展
+```python
+class RelatedEdge(BaseModel):
+    target_qid: str           # Wikidata QID (关系另一端)
+    target_label: str         # 该 QID 英文 label
+    target_node_id: str | None  # 若该 QID 对应图谱内某节点的 id, 否则 None (悬空边)
+    rel_type: Literal["subclass_of", "part_of", "has_part"]
+    source: str               # "wikidata:P279" 等
+
+class TreeNode(BaseModel):
+    ...
+    prerequisites: list[str]              # 关系一, 现有, LLM 补
+    related: list[RelatedEdge] = []       # 关系二, 新增, Wikidata 继承
+```
+
+### 关系管线 (并入 kg-builder)
+- `wikidata.py` 加 `fetch_relations(qid)`: 拉 P279/P361/P527, 返回 [(rel_type, target_qid, label)]。
+- 合入后批处理: 对图谱所有有 QID 的节点拉关系, 建 qid→node_id 索引把 target 映射到图谱内节点 (映射不到则 target_node_id=None 悬空边)。
+- LLM 推断 prerequisites: 给新节点 + 本学科现有节点清单, LLM 选前置 (校验同学科+存在+无环)。
+
 ## 明确不做 (YAGNI)
 - 研究生层 (K15/K17) — 管线预留 depth 参数,首版不实现
 - 课程点亮 / 对应率 — 图建好后课程消费图的事,本工具不碰 (旧方向已废)

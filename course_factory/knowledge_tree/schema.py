@@ -24,6 +24,19 @@ SubjectId = Literal[
 ]
 
 
+class RelatedEdge(BaseModel):
+    """spec 041 里程碑3: 节点的本体论关系 (从 Wikidata P279/P361/P527 继承).
+
+    与 prerequisites 不同: related 可跨学科、可成环 (本体论非 DAG);
+    target_node_id 为 None = 悬空边 (指向图谱外实体, 是"该补此节点"的扩展信号)。
+    """
+    target_qid: str
+    target_label: str
+    target_node_id: str | None = None
+    rel_type: Literal["subclass_of", "part_of", "has_part"]
+    source: str
+
+
 class TreeNode(BaseModel):
     id: str = Field(..., description="<subject>.<category>.<name>, snake_case")
     name_zh: str
@@ -37,6 +50,8 @@ class TreeNode(BaseModel):
     mapping_type: Literal["exact", "broader", "composite", "none"] | None = None
     provenance: Literal["seed", "kg-builder-v1"] | None = None
     verified: bool = False
+    # spec 041 里程碑3: 本体论关系 (Wikidata 继承, 可跨学科/成环/悬空)
+    related: list[RelatedEdge] = Field(default_factory=list)
 
 
 class Subject(BaseModel):

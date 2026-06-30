@@ -1,5 +1,30 @@
 """TreeNode 锚点字段测试 (spec 041)."""
-from course_factory.knowledge_tree.schema import TreeNode, load_platform_tree
+from course_factory.knowledge_tree.schema import TreeNode, RelatedEdge, load_platform_tree
+
+
+def test_treenode_accepts_related_edges():
+    n = TreeNode(
+        id="math.geom.conic_sections", name_zh="圆锥曲线", name_en="conic section",
+        depth_level="K11", description="圆锥曲线",
+        related=[{"target_qid": "Q17278", "target_label": "circle",
+                  "target_node_id": "math.geom.circle", "rel_type": "has_part",
+                  "source": "wikidata:P527"}],
+    )
+    assert len(n.related) == 1
+    assert n.related[0].target_qid == "Q17278"
+    assert n.related[0].target_node_id == "math.geom.circle"
+    assert n.related[0].rel_type == "has_part"
+
+
+def test_related_default_empty_and_dangling_allowed():
+    # 默认空 + 悬空边 (target_node_id=None) 允许
+    n = TreeNode(id="math.x.y", name_zh="x", name_en="x", depth_level="K7", description="x")
+    assert n.related == []
+    n2 = TreeNode(id="math.x.z", name_zh="z", name_en="z", depth_level="K7", description="z",
+                  related=[{"target_qid": "Q999", "target_label": "external",
+                            "target_node_id": None, "rel_type": "subclass_of",
+                            "source": "wikidata:P279"}])
+    assert n2.related[0].target_node_id is None
 
 
 def test_treenode_accepts_anchor_fields():

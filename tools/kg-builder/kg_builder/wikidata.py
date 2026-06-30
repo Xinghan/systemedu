@@ -70,3 +70,34 @@ def qid_exists(qid: str) -> tuple[bool, str | None]:
         result = (False, None)
     _cache[qid] = result
     return result
+
+
+# Wikidata 本体论关系属性 -> 我们的 rel_type (spec 041 里程碑3)
+_REL_PROPS = {
+    "P279": "subclass_of",
+    "P361": "part_of",
+    "P527": "has_part",
+}
+
+
+def fetch_relations(qid: str) -> list[dict]:
+    """拉 QID 的本体论关系 (P279/P361/P527), 返回 [{rel_type, target_qid, source}, ...].
+
+    target_label/target_node_id 由调用方批处理时用 qid->node 索引补 (避免逐边再打网络)。
+    """
+    if not qid or not qid.startswith("Q"):
+        return []
+    try:
+        data = _fetch_entity(qid)
+    except Exception:
+        return []
+    claims = data.get("entities", {}).get(qid, {}).get("claims", {})
+    out = []
+    for prop, rel_type in _REL_PROPS.items():
+        for v in claims.get(prop, []):
+            try:
+                tgt = v["mainsnak"]["datavalue"]["value"]["id"]
+            except (KeyError, TypeError):
+                continue
+            out.append({"rel_type": rel_type, "target_qid": tgt, "source": f"wikidata:{prop}"})
+    return out

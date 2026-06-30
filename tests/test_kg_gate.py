@@ -41,6 +41,27 @@ def test_search_qid_returns_top_match(monkeypatch):
     assert hits[0]["label"] == "operational amplifier"
 
 
+def test_fetch_relations_parses_p279_p527(monkeypatch):
+    from kg_builder.wikidata import fetch_relations
+    def fake_fetch(qid):
+        return {"entities": {qid: {"claims": {
+            "P279": [{"mainsnak": {"datavalue": {"value": {"id": "Q11348"}}}}],
+            "P527": [{"mainsnak": {"datavalue": {"value": {"id": "Q17278"}}}}],
+        }}}}
+    monkeypatch.setattr("kg_builder.wikidata._fetch_entity", fake_fetch)
+    rels = fetch_relations("Q124255")
+    types = {(r["rel_type"], r["target_qid"]) for r in rels}
+    assert ("subclass_of", "Q11348") in types
+    assert ("has_part", "Q17278") in types
+
+
+def test_fetch_relations_empty_when_no_claims(monkeypatch):
+    from kg_builder.wikidata import fetch_relations
+    monkeypatch.setattr("kg_builder.wikidata._fetch_entity",
+                        lambda qid: {"entities": {qid: {"claims": {}}}})
+    assert fetch_relations("Q1") == []
+
+
 from kg_builder.gate import gate_candidate, GateResult
 
 
