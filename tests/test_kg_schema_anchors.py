@@ -26,4 +26,6 @@ def test_treenode_anchor_fields_optional():
 def test_existing_platform_tree_still_loads():
     # 现有 425 节点 platform_tree.json 不带新字段, 必须仍能 load
     tree = load_platform_tree()
-    assert tree.total_node_count() == 425
+    # 图谱随 kg-builder 持续扩建增长 (spec 041 里程碑3起), 不锁死节点数;
+    # 425 是种子基线, 只断言不低于基线 + 能正常 load。
+    assert tree.total_node_count() >= 425
