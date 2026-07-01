@@ -10,7 +10,10 @@ import {
   ChevronRight,
   Filter,
   FlaskConical,
+  Gauge,
   Grid3X3,
+  Layers,
+  ListChecks,
   Plus,
   Sparkles,
   Wind,
@@ -360,12 +363,16 @@ function ProjectCard({
               {t("card.draft")}
             </span>
           )}
-          {project.domain && <span className={`tag ${dClass}`}>{project.domain}</span>}
-          {project.duration_weeks != null && (
-            <span className="tag">{project.duration_weeks}w</span>
+          {project.domain && (
+            <span className={`tag ${dClass}`}>
+              {t(`domain.${project.domain.toLowerCase()}`)}
+            </span>
           )}
           {project.difficulty != null && (
-            <span className="tag">diff {project.difficulty}</span>
+            <span className="tag" title={t("card.difficulty")}>
+              <Gauge size={11} strokeWidth={1.7} />
+              {project.difficulty}
+            </span>
           )}
           {pulled && !isDraft && (
             <span className="tag violet">
@@ -373,9 +380,6 @@ function ProjectCard({
               {t("card.on_shelf")}
             </span>
           )}
-        </div>
-        <div className="mono" style={{ color: "var(--sub-2)", fontSize: 11 }}>
-          {project.slug}
         </div>
         <h3
           className="h3"
@@ -416,9 +420,16 @@ function ProjectCard({
         >
           <span
             className="mono"
-            style={{ fontSize: 11, color: "var(--sub)" }}
+            style={{ display: "inline-flex", alignItems: "center", gap: 10, fontSize: 11, color: "var(--sub)" }}
           >
-            {project.stage_count ?? 0}S · {project.knode_count ?? 0}K
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 3 }} title={t("card.stages")}>
+              <Layers size={12} strokeWidth={1.6} />
+              {project.stage_count ?? 0}
+            </span>
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 3 }} title={t("card.knodes")}>
+              <ListChecks size={12} strokeWidth={1.6} />
+              {project.knode_count ?? 0}
+            </span>
           </span>
           {isDraft ? (
             <span
