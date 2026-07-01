@@ -207,6 +207,18 @@ export default function KnowledgeGalaxy3D({ platformTree, litByNodeId, grownByPa
     if (grownByParent) {
       for (const [pid, kids] of grownByParent) for (const c of kids) pushEdge(pid, c.node_id, "#D97757")
     }
+    // 4) 本体论关系边 (related, spec 041 第二轮): 只连图谱内节点 (target_node_id 非 null)
+    const relEdge: number[] = []
+    subjects.forEach((s) => {
+      s.nodes.forEach((n) => {
+        const rels = (n as { related?: { target_node_id: string | null }[] }).related || []
+        for (const r of rels) {
+          if (!r.target_node_id) continue  // 悬空边 (指向图谱外) 跳过
+          const a = posById.get(n.id), b = posById.get(r.target_node_id)
+          if (a && b) relEdge.push(a.pos.x, a.pos.y, a.pos.z, b.pos.x, b.pos.y, b.pos.z)
+        }
+      })
+    })
     // 渲染线
     if (dimEdge.length) {
       const g = new THREE.BufferGeometry()
@@ -221,6 +233,14 @@ export default function KnowledgeGalaxy3D({ platformTree, litByNodeId, grownByPa
       g.setAttribute("color", new THREE.Float32BufferAttribute(litEdgeCol, 3))
       scene.add(new THREE.LineSegments(g, new THREE.LineBasicMaterial({
         vertexColors: true, transparent: true, opacity: 0.78, blending: THREE.AdditiveBlending, depthWrite: false,
+      })))
+    }
+    // 本体论关系边 (related): 青色系, 区别于前置依赖边(暖紫粉灰)
+    if (relEdge.length) {
+      const g = new THREE.BufferGeometry()
+      g.setAttribute("position", new THREE.Float32BufferAttribute(relEdge, 3))
+      scene.add(new THREE.LineSegments(g, new THREE.LineBasicMaterial({
+        color: 0x5eb8b0, transparent: true, opacity: 0.35,  /* 青绿, 知识结构关系 */
       })))
     }
 

@@ -119,6 +119,14 @@ export interface LibraryKnodeContent {
 // spec 035: 平台知识树
 export type DepthLevel = "K1" | "K3" | "K5" | "K7" | "K9" | "K11" | "K13"
 
+export interface RelatedEdge {
+  target_qid: string
+  target_label: string
+  target_node_id: string | null   // 图谱内节点 id; null = 悬空边(指向图谱外), 渲染时过滤
+  rel_type: string                // subclass_of / part_of / has_part
+  source: string                  // wikidata:P279 等
+}
+
 export interface PlatformTreeNode {
   id: string
   name_zh: string
@@ -126,6 +134,12 @@ export interface PlatformTreeNode {
   depth_level: DepthLevel
   prerequisites: string[]
   description: string
+  // spec 041 里程碑3/第二轮: 外部锚点 + 本体论关系
+  wikidata_qid?: string
+  std_codes?: string[]
+  mapping_type?: string
+  verified?: boolean
+  related?: RelatedEdge[]
 }
 
 export interface PlatformSubject {
