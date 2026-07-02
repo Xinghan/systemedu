@@ -192,6 +192,47 @@ class UserKnodeComplete(Base):
     completed_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
 
+class UserBadge(Base):
+    """先驱者协会徽章 (spec 042). 一行 = 一枚徽章实例 (掉落或合成产出)。
+
+    合成消耗的徽章标 consumed=True 而非物理删除, 保留获得历史供徽章墙展示可追溯。
+    """
+
+    __tablename__ = "user_badges"
+    __table_args__ = (
+        Index("ix_user_badges_user_chapter", "user_id", "chapter", "tier"),
+    )
+
+    id = Column(String(36), primary_key=True, default=_uuid)
+    user_id = Column(String(36), ForeignKey("users.id"), index=True, nullable=False)
+    chapter = Column(String(32), nullable=False)   # bio-forge / skyward / ...
+    tier = Column(String(16), nullable=False)      # bronze / silver / gold / master
+    source = Column(String(16), nullable=False)    # drop / synthesis
+    project_slug = Column(String(128), nullable=True)
+    knode_id = Column(String(64), nullable=True)
+    consumed = Column(Boolean, default=False, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class UserKnodeBadgeDrop(Base):
+    """徽章掉落去重表 (spec 042). 一个 knode 对一个用户一辈子只掉落一次徽章,
+    防止 complete/incomplete 反复 toggle 时重复刷徽章。"""
+
+    __tablename__ = "user_knode_badge_drops"
+    __table_args__ = (
+        UniqueConstraint(
+            "user_id", "project_slug", "knode_id",
+            name="uq_user_knode_badge_drop",
+        ),
+    )
+
+    id = Column(String(36), primary_key=True, default=_uuid)
+    user_id = Column(String(36), ForeignKey("users.id"), index=True, nullable=False)
+    project_slug = Column(String(128), nullable=False)
+    knode_id = Column(String(64), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+
 class KnowledgeDrill(Base):
     """知识钻取: 用户对某 knode 课文的高亮片段生成的结构化下钻知识 (spec 2026-06-09)."""
 

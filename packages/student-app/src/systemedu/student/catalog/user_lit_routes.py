@@ -43,6 +43,10 @@ async def api_knode_toggle_complete(request: Request) -> JSONResponse:
 
     library_version = body.get("library_version")
 
+    # spec 042: 徽章掉落只关心"这次调用是否让状态从未完成变为完成", 调用前先查一次
+    # 原始状态, 不改动 toggle_complete 本身 (避免破坏既有测试对其 bool 返回值的断言)。
+    was_completed = knode_id in get_completed_knode_ids(user_id, slug)
+
     try:
         completed = toggle_complete(
             user_id=user_id,
@@ -57,6 +61,7 @@ async def api_knode_toggle_complete(request: Request) -> JSONResponse:
 
     # spec 039: 完成 knode → 入队知识树生长评估 (异步, 不拖慢响应)。
     # content 存轻量标识 knode:<slug>:<knode_id>, evaluator 异步反查 library 取概念。
+    new_badges: list[dict] = []
     if completed:
         try:
             from ..db import enqueue_growth
@@ -65,10 +70,19 @@ async def api_knode_toggle_complete(request: Request) -> JSONResponse:
         except Exception:
             logger.warning("enqueue_growth failed (non-fatal)", exc_info=True)
 
+        # spec 042: 首次完成 (未完成→完成) 才触发徽章掉落, 撤销/重复完成不掉落。
+        if not was_completed:
+            try:
+                from ..badges.drop import maybe_drop_badges
+                new_badges = await maybe_drop_badges(user_id, slug, knode_id)
+            except Exception:
+                logger.warning("maybe_drop_badges failed (non-fatal)", exc_info=True)
+
     return JSONResponse({
         "slug": slug,
         "knode_id": knode_id,
         "completed": completed,
+        "new_badges": new_badges,
     })
 
 

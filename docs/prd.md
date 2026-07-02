@@ -277,8 +277,12 @@
 - [x] **Step 6.6 - 讲课稿生成**: `generate_audio_scripts()` 按 section 生成口语化讲解，存入 `sections[].audio_script`
 - [x] **工具函数**: `course_factory.py` -- load_knode_context / research_knode / merge_resources_into_plan / make_exercises / preflight_v41 / generate_assignment / generate_audio_scripts
 
-#### 3q: 升级路线 (Career Path) -- Phase 1 数据层 ✅
+#### 3q: 升级路线 (Career Path) -- Phase 1 数据层 ✅ (deprecated, 见 spec 042)
 把松散项目串成有身份感的成长主线（如"成为火箭科学家"需完成多个项目），沿途获得勋章，卡通形象进化。
+
+**注**: 本条是老 `packages/core` (cloud-app 时代) 的 Phase 1 数据层设计，API/前端从未实施，
+未迁移到当前主架构 student-app。徽章体系已由 spec 042「先驱者协会」在 student-app 重新
+设计并实现（八大分会 + 铜银金大师晋级），见下方 3u。本条保留作历史记录，不再演进。
 
 - [x] **Pydantic 模型**: `CareerPath`, `PathStage`, `PathBadge`, `AvatarStage` (`models.py`)
 - [x] **DB 表**: `career_paths` (路线注册), `career_path_progress` (用户进度), `earned_badges` (已获勋章)
@@ -287,9 +291,27 @@
 - [x] **进度派生**: 读取 enrollments 表 completed 记录，项目完成时自动触发路线进度重算和勋章发放
 - [x] **示例路线**: `paths/rocket-scientist/path.yaml` (4 阶段, 3 形象进化)
 - [x] **测试**: 17 个测试全部通过 (scan/load/enroll/progress/badge/hook)
-- [ ] **API 端点**: GET/POST /api/career-paths (Phase 2 待实施)
-- [ ] **前端页面**: /career-paths 列表 + /career-paths/[name] 详情 (Phase 3 待实施)
-- [ ] **勋章/形象 SVG 素材**: 待制作
+- [ ] **API 端点**: GET/POST /api/career-paths (未实施, 已被 spec 042 取代)
+- [ ] **前端页面**: /career-paths 列表 + /career-paths/[name] 详情 (未实施, 已被 spec 042 取代)
+- [ ] **勋章/形象 SVG 素材**: 未制作 (spec 042 已有 32 张独立美术资源)
+
+#### 3u: 先驱者协会徽章体系 (spec 042) ✅
+student-app 侧全新徽章激励体系: 完成节点掉落徽章, 10 换 1 晋级, 徽章墙展示。世界观「先驱者
+协会」下设八大分会对应项目领域, 每分会铜/银/金/大师四级各自独立美术设计 (非同图换色)。
+
+- [x] **世界观**: 生物机所(Biotech)/穹际分会(Aerospace)/绿萌盟(Climate)/机械之心(Robotics)/
+  心智工坊(AI)/算境阁(CS)/神经回廊(Neuroscience)/深时秘境(Paleontology) 八大分会
+- [x] **掉落规则**: knode 无 difficulty_level 字段, 改用 `knowledge_tree_json` 的 stage 相对
+  位置推导 (前半段掉铜/后半段掉银); stage 内最后一个 knode (里程碑收尾) 额外多掉 1 枚
+- [x] **DB 表**: `user_badges` (徽章实例, 含 consumed 标记支持合成溯源), `user_knode_badge_drops`
+  (掉落去重, 一个 knode 对一用户一辈子只掉落一次)
+- [x] **晋级兑换**: 10 枚同色徽章自动合成 1 枚上一级, 支持连续多级合成, master 顶级不可再合成
+- [x] **API**: `GET /api/my/badges` 徽章墙; `POST /api/my/knodes/{slug}/{id}/complete` 响应体
+  新增 `new_badges` 字段
+- [x] **前端**: `BadgeWall.tsx` 接入 `/my-projects` 页面, `KnodeCompleteButton.tsx` 掉落 toast 提示
+- [x] **美术资源**: 32 张 (8 分会 x 4 级) AI 生图 + 圆形抠透明处理, 存
+  `packages/student-web/public/badges/`, prompt 存档见 `resources/badges/badge_prompts.md`
+- [x] **测试**: 15 个测试全部通过 (掉落规则/晋级合成/API 路由)
 
 #### 3r: 大作业提交 + AI 批改 (Capstone Submission)
 大作业节点 (module_role=capstone) 的完整提交 -> 批改 -> 反馈闭环。

@@ -56,6 +56,15 @@ export function KnodeCompleteButton({ slug, knodeId, initialCompleted, onChange 
       setCompleted(r.completed)
       onChange?.(r.completed)
       toast.success(r.completed ? t("knode.mark_completed") : t("knode.mark_uncompleted"))
+      for (const drop of r.new_badges ?? []) {
+        toast(
+          t("badges.drop_toast", {
+            count: drop.count,
+            chapter: t(`badges.chapter.${drop.chapter}`),
+            tier: t(`badges.tier.${drop.tier}`),
+          }),
+        )
+      }
     } catch (e) {
       toast.error(t("knode.action_failed"))
     } finally {

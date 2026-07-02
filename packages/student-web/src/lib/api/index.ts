@@ -2,7 +2,7 @@
 
 import { api, STUDENT_API_URL } from "./client"
 import { setToken, clearToken, clearUsername } from "@/lib/auth"
-import type { CourseIdeaSummary, RenderedSection } from "@/lib/types/api"
+import type { BadgeDrop, BadgeWallData, CourseIdeaSummary, RenderedSection } from "@/lib/types/api"
 
 // ---------------------------------------------------------------------------
 // auth (spec sms-auth: 手机号 + 短信验证码登录)
@@ -264,7 +264,7 @@ export const myKnodes = {
   toggleComplete: (slug: string, knodeId: string,
                    action: "toggle" | "complete" | "incomplete" = "toggle",
                    libraryVersion?: string) =>
-    api.post<{ slug: string; knode_id: string; completed: boolean }>(
+    api.post<{ slug: string; knode_id: string; completed: boolean; new_badges: BadgeDrop[] }>(
       `/api/my/knodes/${encodeURIComponent(slug)}/${encodeURIComponent(knodeId)}/complete`,
       { action, library_version: libraryVersion },
     ),
@@ -278,6 +278,14 @@ export const userKnowledgeTree = {
   get: () => api.get<UserKnowledgeTreeResponse>(`/api/user/knowledge-tree`),
   recommendations: (limit = 3) =>
     api.get<RecommendationsResponse>(`/api/user/recommendations?limit=${limit}`),
+}
+
+// ---------------------------------------------------------------------------
+// spec 042: 先驱者协会徽章体系
+// ---------------------------------------------------------------------------
+
+export const myBadges = {
+  getWall: () => api.get<BadgeWallData>(`/api/my/badges`),
 }
 
 // ---------------------------------------------------------------------------

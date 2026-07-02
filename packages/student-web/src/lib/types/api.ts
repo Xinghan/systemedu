@@ -908,3 +908,26 @@ export interface QaEvaluationResponse {
   error_analysis: string
   attempt_id: number | null
 }
+
+// ---------------------------------------------------------------------------
+// spec 042: 先驱者协会徽章体系
+// ---------------------------------------------------------------------------
+
+export type BadgeTier = "bronze" | "silver" | "gold" | "master"
+
+export interface BadgeDrop {
+  chapter: string
+  tier: BadgeTier
+  count: number
+}
+
+export interface BadgeChapterWall {
+  chapter: string
+  display_name: string
+  counts: Record<BadgeTier, number>
+  highest_tier: BadgeTier | null
+}
+
+export interface BadgeWallData {
+  chapters: BadgeChapterWall[]
+}

@@ -579,6 +579,24 @@ export const zh = {
   "learnpage.collapse_ai_tutor": "折叠 AI 助教",
   "learnpage.expand_ai_tutor": "展开 AI 助教",
   "chat.input_placeholder": "问我任何问题...",
+
+  // ── spec 042: 先驱者协会徽章体系 ──
+  "badges.wall_title": "先驱者协会 · 我的徽章",
+  "badges.loading": "加载徽章中...",
+  "badges.load_failed": "徽章加载失败",
+  "badges.tier.bronze": "铜",
+  "badges.tier.silver": "银",
+  "badges.tier.gold": "金",
+  "badges.tier.master": "大师",
+  "badges.chapter.bio-forge": "生物机所",
+  "badges.chapter.skyward": "穹际分会",
+  "badges.chapter.verdant": "绿萌盟",
+  "badges.chapter.mecha-core": "机械之心",
+  "badges.chapter.mind-forge": "心智工坊",
+  "badges.chapter.codex": "算境阁",
+  "badges.chapter.neural-spire": "神经回廊",
+  "badges.chapter.deep-time": "深时秘境",
+  "badges.drop_toast": "获得 {count} 枚 {chapter} {tier} 徽章",
 } as const
 
 export type TranslationKey = keyof typeof zh
@@ -1132,6 +1150,24 @@ export const en: Record<TranslationKey, string> = {
   "learnpage.collapse_ai_tutor": "Collapse AI tutor",
   "learnpage.expand_ai_tutor": "Expand AI tutor",
   "chat.input_placeholder": "Ask me anything...",
+
+  // ── spec 042: The Pioneers Guild badge system ──
+  "badges.wall_title": "The Pioneers Guild · My Badges",
+  "badges.loading": "Loading badges...",
+  "badges.load_failed": "Failed to load badges",
+  "badges.tier.bronze": "Bronze",
+  "badges.tier.silver": "Silver",
+  "badges.tier.gold": "Gold",
+  "badges.tier.master": "Master",
+  "badges.chapter.bio-forge": "Bio-Forge",
+  "badges.chapter.skyward": "Skyward",
+  "badges.chapter.verdant": "Verdant",
+  "badges.chapter.mecha-core": "Mecha Core",
+  "badges.chapter.mind-forge": "Mind Forge",
+  "badges.chapter.codex": "Codex",
+  "badges.chapter.neural-spire": "Neural Spire",
+  "badges.chapter.deep-time": "Deep Time",
+  "badges.drop_toast": "Earned {count} {chapter} {tier} badge(s)",
 }
 
 export const tables: Record<Locale, Record<string, string>> = { zh, en }

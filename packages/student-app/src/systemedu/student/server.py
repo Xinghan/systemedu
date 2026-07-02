@@ -27,6 +27,7 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse
 
 from .auth.routes import ROUTES as _auth_routes
+from .badges.routes import ROUTES as _badges_routes
 from .catalog.routes import ROUTES as _catalog_routes
 from .catalog.user_lit_routes import ROUTES as _user_lit_routes
 from .chat import ROUTES as _chat_routes
@@ -67,6 +68,7 @@ def create_app() -> Starlette:
         *_lib_routes,
         *_catalog_routes,
         *_user_lit_routes,
+        *_badges_routes,
         *_chat_routes,
         *_drill_routes,
         *_project_request_routes,
