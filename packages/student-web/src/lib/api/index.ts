@@ -2,6 +2,7 @@
 
 import { api, STUDENT_API_URL } from "./client"
 import { setToken, clearToken, clearUsername } from "@/lib/auth"
+import type { CourseIdeaSummary, RenderedSection } from "@/lib/types/api"
 
 // ---------------------------------------------------------------------------
 // auth (spec sms-auth: 手机号 + 短信验证码登录)
@@ -107,7 +108,13 @@ export interface LibraryKnodeContent {
   duration_minutes?: number | null
   knode_dir?: string
   plan_markdown?: string
-  rendered_sections?: { ideas?: Array<Record<string, unknown>>; [k: string]: unknown }
+  // ideas 数组是 CourseIdeaSummary[]; rendered_sections 是 idea_id -> RenderedSection 的映射
+  // (跟 CourseContent 里的形状一致, 供 TeacherSceneView 关联 slide.payload.idea_id 用)
+  rendered_sections?: {
+    ideas?: CourseIdeaSummary[]
+    rendered_sections?: Record<string, RenderedSection>
+    [k: string]: unknown
+  }
   audio_scripts?: unknown
   assignment_md?: string
   theories?: unknown

@@ -1685,7 +1685,7 @@ function HandsOnKitBlock({
 // ---------------------------------------------------------------------------
 // IdeaBlock (dispatcher)
 // ---------------------------------------------------------------------------
-function IdeaBlock({
+export function IdeaBlock({
   idea, section,
 }: {
   idea: CourseIdeaSummary

@@ -6,14 +6,15 @@
  * 音频占位: 禁用的播放按钮 (音频文件由用户单独生成后接入)。
  */
 
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { ChevronLeft, ChevronRight } from "lucide-react"
 
 import { myProjects } from "@/lib/api"
 import { getToken } from "@/lib/auth"
-import type { SlideEntry } from "@/lib/types/api"
+import type { CourseIdeaSummary, RenderedSection, SlideEntry } from "@/lib/types/api"
 import { useT } from "@/lib/i18n/use-t"
 import { LoadingSpinner } from "@/components/ui/loading-spinner"
+import { IdeaBlock } from "./course-content-view"
 
 interface TeacherSceneViewProps {
   knode: unknown
@@ -27,6 +28,8 @@ interface TeacherSceneViewProps {
 export function TeacherSceneView({ projectName, moduleId }: TeacherSceneViewProps) {
   const t = useT()
   const [slides, setSlides] = useState<SlideEntry[] | null>(null)
+  const [ideas, setIdeas] = useState<CourseIdeaSummary[]>([])
+  const [renderedSections, setRenderedSections] = useState<Record<string, RenderedSection>>({})
   const [idx, setIdx] = useState(0)
   const [err, setErr] = useState(false)
   // 当前 slide 音频的 blob URL。<audio src> 是浏览器原生请求, 带不上 JWT,
@@ -41,6 +44,10 @@ export function TeacherSceneView({ projectName, moduleId }: TeacherSceneViewProp
       .then((k) => {
         if (cancelled) return
         setSlides((k.slides as SlideEntry[]) ?? [])
+        // rendered_sections 顶层字段自带 ideas + idea_id->渲染结果的映射,
+        // 用来把 animation/game slide 的 idea_id 关联回真实生成的 html。
+        setIdeas(k.rendered_sections?.ideas ?? [])
+        setRenderedSections(k.rendered_sections?.rendered_sections ?? {})
       })
       .catch(() => {
         if (cancelled) return
@@ -48,6 +55,8 @@ export function TeacherSceneView({ projectName, moduleId }: TeacherSceneViewProp
       })
     return () => { cancelled = true }
   }, [projectName, moduleId])
+
+  const ideaMap = useMemo(() => new Map(ideas.map((i) => [i.idea_id, i])), [ideas])
 
   // 取当前 slide 音频 (带 JWT fetch -> blob URL), 切换/卸载时 revoke 防泄漏
   const audioPath = slides?.[idx]?.audio_path || null
@@ -96,7 +105,7 @@ export function TeacherSceneView({ projectName, moduleId }: TeacherSceneViewProp
     <div className="flex h-full flex-col gap-4 p-6">
       <div className="flex-1 min-h-0 overflow-y-auto rounded-2xl border border-[var(--border)] bg-[var(--card)] p-8">
         <h2 className="mb-4 text-2xl font-semibold text-[var(--ink)]">{slide.title}</h2>
-        <SlideBody slide={slide} />
+        <SlideBody slide={slide} ideaMap={ideaMap} renderedSections={renderedSections} />
       </div>
 
       <div className="rounded-xl border border-[var(--border)] bg-[var(--paper-2)] p-4">
@@ -140,7 +149,13 @@ export function TeacherSceneView({ projectName, moduleId }: TeacherSceneViewProp
 
 /** 按 slide.kind 渲染 payload 正文 + inline_svg 配图。
  *  数据里 body_markdown 一直为空, 真内容在 payload (spec 039 修)。 */
-function SlideBody({ slide }: { slide: SlideEntry }) {
+function SlideBody({
+  slide, ideaMap, renderedSections,
+}: {
+  slide: SlideEntry
+  ideaMap: Map<string, CourseIdeaSummary>
+  renderedSections: Record<string, RenderedSection>
+}) {
   const t = useT()
   const p = slide.payload || {}
   const svg = p.inline_svg ? (
@@ -212,7 +227,14 @@ function SlideBody({ slide }: { slide: SlideEntry }) {
         </div>
       )
     case "animation":
-    case "game":
+    case "game": {
+      // idea_id 关联回真实生成的 course_content, 复用 IdeaBlock 打开同一套
+      // iframe 弹窗; 拿不到数据(老版本 slide/生成失败)才退回纯文字兜底。
+      const idea = p.idea_id ? ideaMap.get(p.idea_id) : undefined
+      const section = p.idea_id ? renderedSections[p.idea_id] : undefined
+      if (idea && section) {
+        return <IdeaBlock idea={idea} section={section} />
+      }
       return (
         <div className="text-[var(--ink)]">
           {p.short_desc && <p>{p.short_desc}</p>}
@@ -222,6 +244,7 @@ function SlideBody({ slide }: { slide: SlideEntry }) {
           {svg}
         </div>
       )
+    }
     default:
       return svg || <p className="text-sm text-[var(--sub)]">{t("teacher.no_content")}</p>
   }
