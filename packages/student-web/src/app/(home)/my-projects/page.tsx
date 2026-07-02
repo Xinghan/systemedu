@@ -9,6 +9,7 @@ import {
   Check,
   ChevronRight,
   Download,
+  Gauge,
   GitFork,
   Grid3X3,
   Library as LibraryIcon,
@@ -469,8 +470,13 @@ function ForkCard({ f, onRemove }: { f: ForkItem; onRemove: () => void }) {
         style={{ padding: 16, display: "flex", flexDirection: "column", gap: 8, flex: 1 }}
       >
         <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
-          {f.domain && <span className={`tag ${dClass}`}>{f.domain}</span>}
-          {f.age_band && <span className="tag">{f.age_band}</span>}
+          {f.domain && <span className={`tag ${dClass}`}>{t(`domain.${f.domain.toLowerCase()}`)}</span>}
+          {f.difficulty != null && (
+            <span className="tag" title={t("card.difficulty")}>
+              <Gauge size={11} strokeWidth={1.7} />
+              {f.difficulty}
+            </span>
+          )}
         </div>
         <div className="mono" style={{ color: "var(--sub-2)", fontSize: 11 }}>
           {f.slug}

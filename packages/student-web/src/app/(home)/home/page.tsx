@@ -9,6 +9,7 @@ import {
   Brain,
   ChevronRight,
   CirclePlay,
+  Gauge,
   Layers,
   Sparkles,
 } from "lucide-react"
@@ -238,8 +239,13 @@ function ProjectCard({ project: p, done }: { project: MyProjectItem; done: numbe
 
       <div style={{ padding: "14px 16px 16px", display: "flex", flexDirection: "column", flex: 1 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8, flexWrap: "wrap" }}>
-          {p.domain && <span className={`tag ${dcls}`}>{p.domain}</span>}
-          {p.age_band && <span className="tag" style={{ background: "var(--paper-2)" }}>{p.age_band}</span>}
+          {p.domain && <span className={`tag ${dcls}`}>{t(`domain.${p.domain.toLowerCase()}`)}</span>}
+          {p.difficulty != null && (
+            <span className="tag" title={t("card.difficulty")}>
+              <Gauge size={11} strokeWidth={1.7} />
+              {p.difficulty}
+            </span>
+          )}
           {p.upgrade_available && <span className="tag violet">{t("home.tag_update")}</span>}
         </div>
 
