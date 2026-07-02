@@ -17,6 +17,7 @@ import {
   Download,
   FileText,
   Flag,
+  Gauge,
   Globe,
   GraduationCap,
   Lock,
@@ -338,22 +339,13 @@ export default function ProjectHome() {
                         className={hasCover ? "tag" : `tag ${dClass}`}
                         style={tagStyle}
                       >
-                        {project.domain}
-                      </span>
-                    )}
-                    {project.age_band && (
-                      <span className="tag" style={tagStyle}>
-                        {project.age_band}
-                      </span>
-                    )}
-                    {project.duration_weeks != null && (
-                      <span className="tag" style={tagStyle}>
-                        {project.duration_weeks}w
+                        {t(`domain.${project.domain.toLowerCase()}`)}
                       </span>
                     )}
                     {project.difficulty != null && (
-                      <span className="tag" style={tagStyle}>
-                        diff {project.difficulty}/10
+                      <span className="tag" style={tagStyle} title={t("card.difficulty")}>
+                        <Gauge size={11} strokeWidth={1.7} />
+                        {project.difficulty}
                       </span>
                     )}
                   </>
@@ -384,73 +376,12 @@ export default function ProjectHome() {
               {project.title_zh || project.title}
             </h1>
 
-            {/* meta line */}
-            <div
-              style={{
-                marginTop: 18,
-                display: "flex",
-                alignItems: "center",
-                gap: 12,
-                color: hasCover ? "rgba(255,255,255,0.7)" : "var(--sub)",
-                flexWrap: "wrap",
-              }}
-            >
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <div
-                  style={{
-                    width: 24,
-                    height: 24,
-                    borderRadius: 999,
-                    background: hasCover
-                      ? "rgba(255,255,255,0.18)"
-                      : "var(--primary-soft)",
-                    display: "grid",
-                    placeItems: "center",
-                    fontFamily: "var(--mono)",
-                    fontSize: 9.5,
-                    color: hasCover ? "#fff" : "var(--primary-ink)",
-                    fontWeight: 600,
-                  }}
-                >
-                  SE
-                </div>
-                <span
-                  style={{
-                    fontSize: 13,
-                    color: hasCover ? "rgba(255,255,255,0.8)" : "var(--ink-2)",
-                  }}
-                >
-                  by{" "}
-                  <strong style={{ color: hasCover ? "#fff" : "var(--ink)" }}>
-                    SystemEdu Library
-                  </strong>
-                </span>
-              </div>
-              {project.published_at && (
-                <>
-                  <span style={{ opacity: 0.5 }}>·</span>
-                  <span className="mono" style={{ fontSize: 11.5 }}>
-                    published{" "}
-                    {new Date(project.published_at).toLocaleDateString("zh-CN")}
-                  </span>
-                </>
-              )}
-              {project.version && (
-                <>
-                  <span style={{ opacity: 0.5 }}>·</span>
-                  <span className="mono" style={{ fontSize: 11.5 }}>
-                    v{project.version}
-                  </span>
-                </>
-              )}
-            </div>
-
             {/* spec 040: 看项目故事 (开篇连环画), 仅当项目有 story 时显示 */}
             {Array.isArray(project.story) && project.story.length > 0 && (
               <button
                 onClick={() => setStoryOpen(true)}
                 style={{
-                  marginTop: 18,
+                  marginTop: 22,
                   display: "inline-flex",
                   alignItems: "center",
                   gap: 8,
@@ -511,11 +442,11 @@ export default function ProjectHome() {
               </div>
               {pulled ? (
                 <span className="pip run" style={{ fontSize: 10.5 }}>
-                  IN PROGRESS
+                  {t("library.pip_in_progress")}
                 </span>
               ) : (
                 <span className="pip idle" style={{ fontSize: 10.5 }}>
-                  NOT ADDED
+                  {t("library.pip_not_added")}
                 </span>
               )}
             </div>
@@ -533,7 +464,7 @@ export default function ProjectHome() {
                   }}
                 >
                   <span>
-                    {completed} / {modules.length} modules
+                    {completed} / {t("library.modules_count", { n: modules.length })}
                   </span>
                   <span>{pct}%</span>
                 </div>
@@ -549,7 +480,7 @@ export default function ProjectHome() {
                 className="btn btn-violet btn-lg"
                 style={{ justifyContent: "center" }}
               >
-                <Lock size={14} strokeWidth={1.5} /> 登录后加入
+                <Lock size={14} strokeWidth={1.5} /> {t("library.login_first")}
               </Link>
             ) : !pulled ? (
               <button
@@ -568,8 +499,8 @@ export default function ProjectHome() {
                 className="btn btn-violet btn-lg"
                 style={{ justifyContent: "center" }}
               >
-                <CirclePlay size={15} strokeWidth={1.5} /> Continue ·{" "}
-                {targetModuleId}
+                <CirclePlay size={15} strokeWidth={1.5} />{" "}
+                {t("library.continue_module", { m: targetModuleId })}
               </Link>
             ) : null}
 
@@ -589,7 +520,7 @@ export default function ProjectHome() {
               onClick={() => setTreeOpen(true)}
               disabled={modules.length === 0}
             >
-              <Network size={14} strokeWidth={1.5} /> Open knowledge tree
+              <Network size={14} strokeWidth={1.5} /> {t("library.open_knowledge_tree")}
             </button>
           </div>
           </div>
@@ -634,7 +565,7 @@ export default function ProjectHome() {
                     marginBottom: 12,
                   }}
                 >
-                  展开完整介绍
+                  {t("project_detail.expand_intro")}
                 </summary>
                 <article
                   className="prose prose-stone prose-sm max-w-none prose-headings:font-semibold prose-h1:text-2xl prose-h2:mt-6 prose-h2:text-xl prose-h3:text-base prose-p:leading-relaxed prose-pre:overflow-x-auto prose-pre:rounded-lg prose-pre:bg-muted prose-code:rounded prose-code:bg-muted prose-code:px-1 prose-code:py-0.5 prose-code:font-normal prose-code:before:content-none prose-code:after:content-none"
@@ -647,7 +578,7 @@ export default function ProjectHome() {
             </>
           ) : (
             <p className="body" style={{ color: "var(--sub)" }}>
-              暂无介绍
+              {t("project_detail.no_intro")}
             </p>
           )}
         </Block>
@@ -1237,7 +1168,7 @@ function KnowledgeTreeSection({ slug }: { slug: string }) {
   if (loading) {
     return (
       <p className="body" style={{ color: "var(--sub)" }}>
-        正在加载平台知识树...
+        {t("project_detail.loading_platform_tree")}
       </p>
     )
   }
@@ -1254,7 +1185,7 @@ function KnowledgeTreeSection({ slug }: { slug: string }) {
   if (projectTree.lit_nodes.length === 0) {
     return (
       <p className="body" style={{ color: "var(--sub)" }}>
-        本项目还未跑知识树映射 (lit_tree CLI 未运行过). 内容作者跑后再回来。
+        {t("project_detail.tree_not_mapped_cli")}
       </p>
     )
   }
