@@ -1137,21 +1137,24 @@ function IdeaIframeBlock({
   // Game card
   return (
     <>
-      <section className="rounded-2xl overflow-hidden shadow-lg bg-surface-container-low border border-outline-variant/10">
+      <section className="rounded-2xl overflow-hidden shadow-lg bg-[var(--card)] border border-[var(--border)]">
         <div
-          className="flex items-center justify-between p-8 bg-white/50 cursor-pointer hover:bg-white/70 transition-colors"
+          className="flex items-center justify-between p-8 cursor-pointer transition-colors hover:bg-[var(--paper-2)]"
           onClick={() => setModalOpen(true)}
         >
           <div className="flex items-center gap-6">
-            <div className="w-14 h-14 rounded-xl bg-secondary/10 flex items-center justify-center border border-secondary/20 shrink-0">
-              <Gamepad2 className="h-7 w-7 text-secondary" />
+            <div
+              className="w-14 h-14 rounded-xl flex items-center justify-center shrink-0"
+              style={{ background: "var(--primary-soft)", border: "1px solid var(--primary-line)" }}
+            >
+              <Gamepad2 className="h-7 w-7" style={{ color: "var(--primary-ink)" }} />
             </div>
             <div className="text-left min-w-0">
-              <h3 className="font-bold text-on-surface text-xl leading-tight mb-0.5">{t("course.interactive_game")}</h3>
-              <p className="text-on-surface-variant text-sm truncate">{idea.topic}</p>
+              <h3 className="font-bold text-[var(--ink)] text-xl leading-tight mb-0.5">{t("course.interactive_game")}</h3>
+              <p className="text-[var(--sub)] text-sm truncate">{idea.topic}</p>
             </div>
           </div>
-          <div className="flex items-center gap-2 text-on-surface-variant/50 text-xs shrink-0">
+          <div className="flex items-center gap-2 text-[var(--sub-2)] text-xs shrink-0">
             <span>{t("course.click_to_open")}</span>
             <Gamepad2 className="h-4 w-4" />
           </div>
