@@ -7,6 +7,7 @@ import { toast } from "sonner"
 import { ArrowLeft, ChevronRight, Trash2 } from "lucide-react"
 import { chatSessions, type ChatSessionDTO, type ChatMessageDTO } from "@/lib/api"
 import { useAuthStore } from "@/lib/stores/auth-store"
+import { useT } from "@/lib/i18n/use-t"
 
 export default function SessionDetailPage({
   params,
@@ -15,6 +16,7 @@ export default function SessionDetailPage({
 }) {
   const { id } = use(params)
   const router = useRouter()
+  const t = useT()
   const { loggedIn, hydrate } = useAuthStore()
   const [session, setSession] = useState<ChatSessionDTO | null>(null)
   const [messages, setMessages] = useState<ChatMessageDTO[]>([])
@@ -34,7 +36,7 @@ export default function SessionDetailPage({
         setSession(r.session)
         setMessages(r.messages)
       } catch (e) {
-        toast.error((e as Error).message || "加载失败")
+        toast.error((e as Error).message || t("session.load_failed"))
       } finally {
         setLoading(false)
       }
@@ -42,24 +44,24 @@ export default function SessionDetailPage({
   }, [id, loggedIn])
 
   async function handleDelete() {
-    if (!confirm("删除这个对话?")) return
+    if (!confirm(t("session.delete_confirm"))) return
     try {
       await chatSessions.delete(id)
-      toast.success("已删除")
+      toast.success(t("session.deleted"))
       router.replace("/sessions")
     } catch (e) {
-      toast.error((e as Error).message || "删除失败")
+      toast.error((e as Error).message || t("session.delete_failed"))
     }
   }
 
   if (loading) {
-    return <main className="page-wide"><p className="sub">加载中...</p></main>
+    return <main className="page-wide"><p className="sub">{t("session.loading")}</p></main>
   }
   if (!session) {
     return (
       <main className="page-wide">
         <p className="sub">
-          会话不存在 · <Link href="/sessions" style={{ color: "var(--primary)" }}>返回</Link>
+          {t("session.not_found")} · <Link href="/sessions" style={{ color: "var(--primary)" }}>{t("session.back")}</Link>
         </p>
       </main>
     )
@@ -70,7 +72,7 @@ export default function SessionDetailPage({
       <div style={{ display: "flex", alignItems: "center", gap: 8, color: "var(--sub)", fontSize: 12.5, marginBottom: 8 }}>
         <span>SystemEdu</span>
         <ChevronRight size={12} style={{ color: "var(--sub-2)" }} />
-        <Link href="/sessions" style={{ color: "var(--sub)" }}>Sessions</Link>
+        <Link href="/sessions" style={{ color: "var(--sub)" }}>{t("nav.sessions")}</Link>
         <ChevronRight size={12} style={{ color: "var(--sub-2)" }} />
         <span style={{ color: "var(--ink-2)" }}>{session.title.slice(0, 30)}</span>
       </div>
@@ -81,7 +83,7 @@ export default function SessionDetailPage({
             href="/sessions"
             style={{ display: "inline-flex", alignItems: "center", gap: 4, color: "var(--sub)", fontSize: 12, marginBottom: 6 }}
           >
-            <ArrowLeft size={12} /> 对话列表
+            <ArrowLeft size={12} /> {t("session.back_to_list")}
           </Link>
           <h1 className="h1">{session.title}</h1>
           <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 8, flexWrap: "wrap" }}>
@@ -101,13 +103,13 @@ export default function SessionDetailPage({
           onClick={handleDelete}
           style={{ color: "var(--computing)" }}
         >
-          <Trash2 size={14} /> 删除
+          <Trash2 size={14} /> {t("session.delete")}
         </button>
       </div>
 
       <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
         {messages.length === 0 ? (
-          <p className="sub" style={{ textAlign: "center", padding: 40 }}>没有消息</p>
+          <p className="sub" style={{ textAlign: "center", padding: 40 }}>{t("session.no_messages")}</p>
         ) : (
           messages.map((m) => <MessageBubble key={m.id} m={m} />)
         )}

@@ -102,7 +102,7 @@ export default function LibraryListPage() {
           }
         }
       } catch (err) {
-        toast.error(err instanceof Error ? err.message : "加载失败")
+        toast.error(err instanceof Error ? err.message : t("session.load_failed"))
       } finally {
         setLoading(false)
       }

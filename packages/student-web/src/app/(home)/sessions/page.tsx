@@ -29,7 +29,7 @@ export default function SessionsPage() {
         const list = await chatSessions.list()
         setItems(list)
       } catch (e) {
-        toast.error((e as Error).message || "加载失败")
+        toast.error((e as Error).message || t("session.load_failed"))
       } finally {
         setLoading(false)
       }
@@ -58,7 +58,7 @@ export default function SessionsPage() {
 
       {loading ? (
         <div className="card-elevated" style={{ padding: 56, textAlign: "center", color: "var(--sub)" }}>
-          加载中...
+          {t("home.loading")}
         </div>
       ) : items.length === 0 ? (
         <div className="card-elevated" style={{ padding: 56, textAlign: "center" }}>

@@ -16,6 +16,7 @@ import { useEffect, useRef, useState } from "react"
 import * as THREE from "three"
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js"
 import type { PlatformTree } from "@/lib/api"
+import { useT, useLocale } from "@/lib/i18n/use-t"
 
 interface LitInfo {
   sources: string[]
@@ -55,6 +56,8 @@ interface SelInfo {
 }
 
 export default function KnowledgeGalaxy3D({ platformTree, litByNodeId, grownByParent, height = 560, onNodeClick }: Props) {
+  const t = useT()
+  const locale = useLocale()
   const mountRef = useRef<HTMLDivElement>(null)
   const [sel, setSel] = useState<SelInfo | null>(null)
   const onClickRef = useRef(onNodeClick)
@@ -158,7 +161,7 @@ export default function KnowledgeGalaxy3D({ platformTree, litByNodeId, grownByPa
           metas.push({
             id: c.node_id, name: c.name_zh, subjectName: pinfo.subjectName,
             color: pinfo.color, lit: c.lit,
-            detail: c.lit ? "你深入学到的知识点 (个人生长)" : "待点亮 (个人生长)",
+            detail: c.lit ? t("ktree.grown_detail_full") : t("ktree.grown_pending_full"),
             sources: [],
           })
           posById.set(c.node_id, { pos, subjectName: pinfo.subjectName, color: pinfo.color })
@@ -402,7 +405,7 @@ export default function KnowledgeGalaxy3D({ platformTree, litByNodeId, grownByPa
       renderer.dispose()
       if (renderer.domElement.parentNode === mount) mount.removeChild(renderer.domElement)
     }
-  }, [platformTree, litByNodeId, grownByParent, height])
+  }, [platformTree, litByNodeId, grownByParent, height, locale])
 
   return (
     <div style={{ position: "relative" }}>
@@ -427,15 +430,15 @@ export default function KnowledgeGalaxy3D({ platformTree, litByNodeId, grownByPa
             <span style={{ fontWeight: 600, fontSize: 14, color: "var(--ink)" }}>{sel.meta.name}</span>
           </div>
           <div className="mono" style={{ fontSize: 11, color: "var(--sub-2)", marginBottom: 6 }}>
-            {sel.meta.subjectName} · {sel.meta.lit ? "已点亮" : "未学"}
+            {sel.meta.subjectName} · {sel.meta.lit ? t("galaxy.lit") : t("galaxy.unlearned")}
           </div>
           {sel.meta.lit ? (
             <p style={{ fontSize: 12.5, color: "var(--sub)", lineHeight: 1.5, margin: 0 }}>
-              {sel.meta.detail || "你已学过这个知识点。"}
+              {sel.meta.detail || t("galaxy.learned_default")}
             </p>
           ) : (
             <p style={{ fontSize: 12.5, color: "var(--sub-2)", margin: 0 }}>
-              还没点亮 — 学相关项目就会亮起来。
+              {t("galaxy.not_lit_yet")}
             </p>
           )}
           <button
@@ -443,7 +446,7 @@ export default function KnowledgeGalaxy3D({ platformTree, litByNodeId, grownByPa
             onClick={() => setSel(null)}
             style={{ marginTop: 8, fontSize: 11.5, color: "var(--primary)", background: "none", border: 0, cursor: "pointer", padding: 0 }}
           >
-            关闭
+            {t("galaxy.close")}
           </button>
         </div>
       )}

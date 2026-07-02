@@ -13,6 +13,7 @@ import {
 import type { KnodeInfo, NodeProgress, ExerciseAttemptPayload } from "@/lib/types/api"
 import { gateway } from "@/lib/api"
 import { CapstoneSubmissionPanel } from "./capstone-submission-panel"
+import { useT } from "@/lib/i18n/use-t"
 
 interface AssignmentViewProps {
   content: string
@@ -169,11 +170,15 @@ function parseAssignment(raw: string): ParsedBlock[] {
 // Interactive choice question component
 // ---------------------------------------------------------------------------
 
-function buildChoiceErrorAnalysis(q: ParsedChoice, wrongLetter: string): string {
+function buildChoiceErrorAnalysis(
+  q: ParsedChoice,
+  wrongLetter: string,
+  t: (key: string, vars?: Record<string, string | number>) => string,
+): string {
   const wrongOpt = q.options.find(o => o.letter === wrongLetter)
   const correctOpt = q.options.find(o => o.letter === q.answer)
   if (!wrongOpt || !correctOpt) return ""
-  return `你选了 ${wrongLetter}（${wrongOpt.content}），但正确答案是 ${q.answer}（${correctOpt.content}）。`
+  return `${t("assignment.you_chose")} ${wrongLetter}（${wrongOpt.content}），${t("assignment.incorrect_prefix")} ${q.answer}（${correctOpt.content}）。`
 }
 
 function ChoiceQuestion({ q, projectName, knodeId }: {
@@ -181,6 +186,7 @@ function ChoiceQuestion({ q, projectName, knodeId }: {
   projectName?: string
   knodeId?: number
 }) {
+  const t = useT()
   const [selected, setSelected] = useState<string | null>(null)
   const [submitted, setSubmitted] = useState(false)
   const [attemptSeq, setAttemptSeq] = useState(1)
@@ -211,7 +217,7 @@ function ChoiceQuestion({ q, projectName, knodeId }: {
     if (!selected) return
     setSubmitted(true)
     const correct = selected === q.answer
-    const analysis = correct ? null : buildChoiceErrorAnalysis(q, selected)
+    const analysis = correct ? null : buildChoiceErrorAnalysis(q, selected, t)
     setErrorAnalysis(analysis)
     submitToApi(selected, attemptSeq, correct, analysis)
   }, [selected, q, attemptSeq, submitToApi])
@@ -295,7 +301,7 @@ function ChoiceQuestion({ q, projectName, knodeId }: {
             onClick={handleSubmit}
             className="px-4 py-1.5 rounded-lg bg-blue-600 text-white text-xs font-medium hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
           >
-            提交答案
+            {t("assignment.submit")}
           </button>
         ) : (
           <div className="space-y-2">
@@ -305,9 +311,9 @@ function ChoiceQuestion({ q, projectName, knodeId }: {
                 : "bg-red-50 dark:bg-red-950/30 text-red-700 dark:text-red-300"
             }`}>
               {isCorrect ? (
-                <><CheckCircle2 className="h-3.5 w-3.5" /> 回答正确</>
+                <><CheckCircle2 className="h-3.5 w-3.5" /> {t("assignment.correct")}</>
               ) : (
-                <><XCircle className="h-3.5 w-3.5" /> 回答错误，正确答案是 {q.answer}</>
+                <><XCircle className="h-3.5 w-3.5" /> {t("assignment.incorrect_prefix")} {q.answer}</>
               )}
             </div>
             {errorAnalysis && (
@@ -320,7 +326,7 @@ function ChoiceQuestion({ q, projectName, knodeId }: {
                 onClick={handleRetry}
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/30 transition-colors"
               >
-                <RotateCcw className="h-3 w-3" /> 再试一次
+                <RotateCcw className="h-3 w-3" /> {t("assignment.retry")}
               </button>
             )}
           </div>
@@ -419,6 +425,7 @@ function QaQuestion({ qa, projectName, knodeId }: {
   projectName?: string
   knodeId?: number
 }) {
+  const t = useT()
   const [answer, setAnswer] = useState("")
   const [grading, setGrading] = useState(false)
   const [evalResult, setEvalResult] = useState<QaEvalResult | null>(null)
@@ -452,7 +459,7 @@ function QaQuestion({ qa, projectName, knodeId }: {
       } catch {
         setEvalResult({
           score: 0, maxScore: 10, isCorrect: false,
-          feedback: "AI 评价服务暂时不可用，请稍后重试。",
+          feedback: t("assignment.eval_unavailable"),
           errorAnalysis: "",
         })
       }
@@ -486,7 +493,7 @@ function QaQuestion({ qa, projectName, knodeId }: {
             <textarea
               value={answer}
               onChange={e => setAnswer(e.target.value)}
-              placeholder="在这里写下你的答案..."
+              placeholder={t("assignment.answer_placeholder")}
               rows={4}
               className="w-full px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900/50 text-sm leading-relaxed placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-blue-400/50 focus:border-blue-400 resize-y"
             />
@@ -495,19 +502,19 @@ function QaQuestion({ qa, projectName, knodeId }: {
               onClick={handleSubmit}
               className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-blue-600 text-white text-xs font-medium hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
             >
-              <Send className="h-3 w-3" /> 提交答案
+              <Send className="h-3 w-3" /> {t("assignment.submit")}
             </button>
           </>
         ) : grading ? (
           <div className="flex items-center gap-3 py-6 justify-center">
             <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-            <span className="text-sm text-muted-foreground">AI 正在批改你的答案...</span>
+            <span className="text-sm text-muted-foreground">{t("assignment.grading")}</span>
           </div>
         ) : evalResult && (
           <>
             {/* Student answer */}
             <div className="px-3 py-2 rounded-lg bg-secondary/30 border border-border/40">
-              <p className="text-[11px] text-muted-foreground font-medium mb-1">我的回答</p>
+              <p className="text-[11px] text-muted-foreground font-medium mb-1">{t("assignment.my_answer")}</p>
               <p className="text-sm text-foreground/80 leading-relaxed whitespace-pre-wrap">{answer}</p>
             </div>
 
@@ -528,15 +535,15 @@ function QaQuestion({ qa, projectName, knodeId }: {
                   <div className="flex items-center gap-2 mb-1">
                     {evalResult.isCorrect ? (
                       <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700 dark:text-emerald-300">
-                        <CheckCircle2 className="h-3.5 w-3.5" /> 通过
+                        <CheckCircle2 className="h-3.5 w-3.5" /> {t("assignment.passed")}
                       </span>
                     ) : (
                       <span className="inline-flex items-center gap-1 text-xs font-medium text-amber-700 dark:text-amber-300">
-                        <AlertTriangle className="h-3.5 w-3.5" /> 需要改进
+                        <AlertTriangle className="h-3.5 w-3.5" /> {t("assignment.needs_improvement")}
                       </span>
                     )}
                     <span className="text-[10px] text-muted-foreground">
-                      {evalResult.score}/{evalResult.maxScore} 分
+                      {evalResult.score}/{evalResult.maxScore} {t("assignment.score_unit")}
                     </span>
                   </div>
                   <p className="text-sm text-foreground/80 leading-relaxed">{evalResult.feedback}</p>
@@ -546,7 +553,7 @@ function QaQuestion({ qa, projectName, knodeId }: {
               {/* Error analysis */}
               {evalResult.errorAnalysis && (
                 <div className="px-4 py-2.5 border-t border-amber-200/40 dark:border-amber-800/30 bg-amber-50/30 dark:bg-amber-950/10">
-                  <p className="text-[11px] font-medium text-amber-700 dark:text-amber-400 mb-0.5">不足之处</p>
+                  <p className="text-[11px] font-medium text-amber-700 dark:text-amber-400 mb-0.5">{t("assignment.weakness")}</p>
                   <p className="text-xs text-amber-800 dark:text-amber-300 leading-relaxed">{evalResult.errorAnalysis}</p>
                 </div>
               )}
@@ -558,7 +565,7 @@ function QaQuestion({ qa, projectName, knodeId }: {
                 onClick={handleRetry}
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/30 transition-colors"
               >
-                <RotateCcw className="h-3 w-3" /> 修改后重新提交
+                <RotateCcw className="h-3 w-3" /> {t("assignment.resubmit")}
               </button>
             )}
 
@@ -570,7 +577,7 @@ function QaQuestion({ qa, projectName, knodeId }: {
                   className="flex items-center gap-1.5 text-xs text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 transition-colors"
                 >
                   {showRef ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
-                  {showRef ? "收起参考答案" : "查看参考答案"}
+                  {showRef ? t("assignment.hide_reference") : t("assignment.show_reference")}
                 </button>
                 {showRef && (
                   <div className="mt-2 px-3 py-2 rounded-lg bg-blue-50/60 dark:bg-blue-950/30 border border-blue-100 dark:border-blue-900">
@@ -910,6 +917,7 @@ function CapstoneAssignmentView({ content }: { content: string }) {
 export function AssignmentView({
   content, knode, progress, projectName, onStatusChange,
 }: AssignmentViewProps) {
+  const t = useT()
   const normalComponents = useNormalComponents()
 
   const isCapstone = knode?.module_role === "capstone"
@@ -923,7 +931,7 @@ export function AssignmentView({
   if (!hasContent && !isCapstone) {
     return (
       <div className="flex items-center justify-center h-32 text-muted-foreground text-sm">
-        暂无大作业内容
+        {t("assignment.no_content")}
       </div>
     )
   }

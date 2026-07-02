@@ -12,6 +12,7 @@ import { useEffect, useState } from "react"
 import { X, Sparkles } from "lucide-react"
 
 import { knowledgeDrill, type DrillContent, type DrillRecord } from "@/lib/api"
+import { useT } from "@/lib/i18n/use-t"
 
 interface Props {
   open: boolean
@@ -23,6 +24,7 @@ interface Props {
 }
 
 export function DrillModal({ open, onClose, librarySlug, moduleId, highlightText, record }: Props) {
+  const t = useT()
   const [content, setContent] = useState<DrillContent | null>(record?.content ?? null)
   const [title, setTitle] = useState<string>(record?.highlight_text ?? highlightText ?? "")
   const [loading, setLoading] = useState(false)
@@ -49,7 +51,7 @@ export function DrillModal({ open, onClose, librarySlug, moduleId, highlightText
       <div className="relative w-full max-w-2xl max-h-[85vh] overflow-y-auto rounded-2xl bg-[var(--card)] p-6 shadow-2xl">
         <div className="mb-4 flex items-start justify-between gap-4">
           <h3 className="flex items-center gap-2 text-lg font-semibold text-[var(--ink)]">
-            <Sparkles size={18} className="text-[var(--primary)]" /> 知识钻取
+            <Sparkles size={18} className="text-[var(--primary)]" /> {t("drill.title")}
           </h3>
           <button type="button" onClick={onClose} className="text-[var(--sub)] hover:text-[var(--ink)]">
             <X size={20} />
@@ -59,22 +61,22 @@ export function DrillModal({ open, onClose, librarySlug, moduleId, highlightText
           "{title}"
         </p>
 
-        {loading && <p className="py-8 text-center text-sm text-[var(--sub)]">正在为你钻取这个知识点...</p>}
-        {err && <p className="py-8 text-center text-sm text-red-500">钻取失败, 请重试</p>}
+        {loading && <p className="py-8 text-center text-sm text-[var(--sub)]">{t("drill.loading")}</p>}
+        {err && <p className="py-8 text-center text-sm text-red-500">{t("drill.failed")}</p>}
         {content && (
           <div className="space-y-5 text-[var(--ink)]">
-            <Section label="这是什么">{content.simple_explanation}</Section>
-            <Section label="为什么重要">{content.why_matters}</Section>
-            <Section label="打个比方">{content.analogy}</Section>
+            <Section label={t("drill.what_is_it")}>{content.simple_explanation}</Section>
+            <Section label={t("drill.why_matters")}>{content.why_matters}</Section>
+            <Section label={t("drill.analogy")}>{content.analogy}</Section>
             {content.key_points?.length > 0 && (
               <div>
-                <div className="mb-1.5 text-sm font-semibold text-[var(--primary)]">关键点</div>
+                <div className="mb-1.5 text-sm font-semibold text-[var(--primary)]">{t("drill.key_points")}</div>
                 <ul className="list-disc space-y-1 pl-5 text-sm leading-relaxed">
                   {content.key_points.map((k, i) => <li key={i}>{k}</li>)}
                 </ul>
               </div>
             )}
-            <Section label="想更深一点">{content.go_deeper}</Section>
+            <Section label={t("drill.go_deeper")}>{content.go_deeper}</Section>
           </div>
         )}
       </div>

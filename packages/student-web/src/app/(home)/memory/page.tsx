@@ -9,14 +9,14 @@ import { useAuthStore } from "@/lib/stores/auth-store"
 import { UserKnowledgeTreeView } from "@/components/learning/UserKnowledgeTreeView"
 import { useT } from "@/lib/i18n/use-t"
 
-const CATEGORY_LABEL: Record<string, string> = {
-  interest: "兴趣",
-  goal: "目标",
-  skill_level: "技能水平",
-  family: "家庭背景",
-  preference: "学习偏好",
-  misconception: "错误概念",
-  other: "其他",
+const CATEGORY_LABEL_KEY: Record<string, string> = {
+  interest: "memory.category.interest",
+  goal: "memory.category.goal",
+  skill_level: "memory.category.skill_level",
+  family: "memory.category.family",
+  preference: "memory.category.preference",
+  misconception: "memory.category.misconception",
+  other: "memory.category.other",
 }
 
 export default function MemoryPage() {
@@ -41,7 +41,7 @@ export default function MemoryPage() {
       setByCategory(r.by_category)
       setTotal(r.total)
     } catch (e) {
-      toast.error((e as Error).message || "加载失败")
+      toast.error((e as Error).message || t("session.load_failed"))
     } finally {
       setLoading(false)
     }
@@ -52,13 +52,13 @@ export default function MemoryPage() {
   }, [loggedIn])
 
   async function handleRetire(id: string) {
-    if (!confirm("删除这条记忆? AI 将不再用它来回答你.")) return
+    if (!confirm(t("memory.retire_confirm"))) return
     try {
       await memory.retireFact(id)
-      toast.success("已删除")
+      toast.success(t("session.deleted"))
       await reload()
     } catch (e) {
-      toast.error((e as Error).message || "删除失败")
+      toast.error((e as Error).message || t("session.delete_failed"))
     }
   }
 
@@ -73,12 +73,12 @@ export default function MemoryPage() {
       </div>
 
       <header style={{ marginTop: 18, marginBottom: 20 }}>
-        <div className="eyebrow"><span className="dot" /> {activeTab === "memory" ? "what AI remembers about you" : "your knowledge map"}</div>
-        <h1 className="h1" style={{ marginTop: 8 }}>{activeTab === "memory" ? t("memory.title") : "我的知识图谱"}</h1>
+        <div className="eyebrow"><span className="dot" /> {activeTab === "memory" ? t("memory.eyebrow.memory") : t("memory.eyebrow.knowledge")}</div>
+        <h1 className="h1" style={{ marginTop: 8 }}>{activeTab === "memory" ? t("memory.title") : t("memory.knowledge_title")}</h1>
         <p className="sub" style={{ marginTop: 6 }}>
           {activeTab === "memory"
             ? `${t("memory.subtitle")} · ${t("memory.fact_count", { n: total })}`
-            : "你完成的每个 knode 会点亮平台理论知识树上对应的节点, 跨项目自动聚合"}
+            : t("memory.knowledge_subtitle")}
         </p>
       </header>
 
@@ -97,7 +97,7 @@ export default function MemoryPage() {
           }}
         >
           <Sparkles size={14} strokeWidth={1.7} />
-          Memory
+          {t("memory.tab.memory")}
         </button>
         <button
           type="button"
@@ -112,7 +112,7 @@ export default function MemoryPage() {
           }}
         >
           <Network size={14} strokeWidth={1.7} />
-          知识图谱
+          {t("memory.tab.knowledge")}
         </button>
       </div>
 
@@ -120,7 +120,7 @@ export default function MemoryPage() {
         <UserKnowledgeTreeView />
       ) : loading ? (
         <div className="card-elevated" style={{ padding: 56, textAlign: "center", color: "var(--sub)" }}>
-          加载中...
+          {t("home.loading")}
         </div>
       ) : cats.length === 0 ? (
         <div className="card-elevated" style={{ padding: 56, textAlign: "center" }}>
@@ -136,7 +136,7 @@ export default function MemoryPage() {
             <section key={cat}>
               <div className="eyebrow" style={{ marginBottom: 12 }}>
                 <span className="dot" />
-                {CATEGORY_LABEL[cat] || cat}
+                {CATEGORY_LABEL_KEY[cat] ? t(CATEGORY_LABEL_KEY[cat]) : cat}
                 <span className="tag" style={{ marginLeft: 6 }}>{byCategory[cat].length}</span>
               </div>
               <div className="card-elevated" style={{ overflow: "hidden" }}>
@@ -187,7 +187,7 @@ export default function MemoryPage() {
                         cursor: "pointer", transition: "all 220ms cubic-bezier(.2,.7,.3,1)",
                       }}
                       className="fact-del"
-                      title="删除"
+                      title={t("session.delete")}
                     >
                       <Trash2 size={14} />
                     </button>
@@ -205,8 +205,7 @@ export default function MemoryPage() {
       }}>
         <Lock size={12} style={{ marginTop: 3, flexShrink: 0 }} />
         <span>
-          这些记忆只供 AI 导师在跟你对话时使用, 不会分享给其他用户.
-          删除后立即从 AI 上下文中移除.
+          {t("memory.privacy_note_full")}
         </span>
       </div>
 

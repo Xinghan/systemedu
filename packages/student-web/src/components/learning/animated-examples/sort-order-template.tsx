@@ -4,8 +4,10 @@ import { useState, useMemo, useCallback } from "react"
 import { ChevronUp, ChevronDown, Check } from "lucide-react"
 import { shuffleArray, GameComplete } from "./game-shared"
 import type { SortOrderData } from "./types"
+import { useT } from "@/lib/i18n/use-t"
 
 export function SortOrderTemplate({ data }: { data: SortOrderData }) {
+  const t = useT()
   const correctOrder = data.items ?? []
 
   const initialOrder = useMemo(
@@ -89,7 +91,7 @@ export function SortOrderTemplate({ data }: { data: SortOrderData }) {
                   onClick={() => moveItem(i, -1)}
                   disabled={i === 0}
                   className="p-0.5 rounded hover:bg-muted disabled:opacity-20 transition-colors"
-                  aria-label="上移"
+                  aria-label={t("game.move_up")}
                 >
                   <ChevronUp className="h-3.5 w-3.5" />
                 </button>
@@ -97,7 +99,7 @@ export function SortOrderTemplate({ data }: { data: SortOrderData }) {
                   onClick={() => moveItem(i, 1)}
                   disabled={i === items.length - 1}
                   className="p-0.5 rounded hover:bg-muted disabled:opacity-20 transition-colors"
-                  aria-label="下移"
+                  aria-label={t("game.move_down")}
                 >
                   <ChevronDown className="h-3.5 w-3.5" />
                 </button>
@@ -112,7 +114,7 @@ export function SortOrderTemplate({ data }: { data: SortOrderData }) {
           onClick={handleCheck}
           className="px-4 py-2 text-sm rounded-md bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
         >
-          检查顺序
+          {t("game.check_order")}
         </button>
       </div>
 
@@ -121,7 +123,7 @@ export function SortOrderTemplate({ data }: { data: SortOrderData }) {
           className="mt-2 px-3 py-2 rounded-md text-sm bg-amber-500/10 border border-amber-500/20 text-amber-700 dark:text-amber-400"
           style={{ animation: "slideDown 0.3s ease forwards" }}
         >
-          还有一些位置不对，绿色的已经正确，红色的需要调整。
+          {t("game.order_incorrect")}
         </div>
       )}
 

@@ -19,8 +19,10 @@ import {
 } from "@/lib/api"
 import { KnowledgeTreeView } from "./KnowledgeTreeView"
 import { RecommendNextProjects } from "./RecommendNextProjects"
+import { useT } from "@/lib/i18n/use-t"
 
 export function UserKnowledgeTreeView() {
+  const t = useT()
   const router = useRouter()
   const [platformTree, setPlatformTree] = useState<PlatformTree | null>(null)
   const [userTree, setUserTree] = useState<UserKnowledgeTreeResponse | null>(null)
@@ -39,7 +41,7 @@ export function UserKnowledgeTreeView() {
       })
       .catch((e: unknown) => {
         if (cancelled) return
-        setErr(e instanceof Error ? e.message : "加载失败")
+        setErr(e instanceof Error ? e.message : t("session.load_failed"))
       })
       .finally(() => {
         if (!cancelled) setLoading(false)
@@ -50,7 +52,7 @@ export function UserKnowledgeTreeView() {
   }, [])
 
   if (loading) {
-    return <p className="text-sm text-[var(--sub)]">正在加载你的知识图谱...</p>
+    return <p className="text-sm text-[var(--sub)]">{t("usertree.loading")}</p>
   }
   if (err) {
     return <p className="text-sm text-[var(--sub)]">{err}</p>
@@ -72,11 +74,11 @@ export function UserKnowledgeTreeView() {
             {totalLit}
           </span>
           <span className="text-base text-[var(--sub)]">
-            / {totalNodes} 节点 · 平台覆盖 {percent}%
+            / {totalNodes} {t("usertree.coverage", { percent })}
           </span>
         </div>
         <p className="mt-1 text-sm text-[var(--sub)]">
-          每完成一个 knode, 它对应的平台知识树节点就会点亮. 切换学科 chip 看不同领域的覆盖.
+          {t("usertree.desc")}
         </p>
       </div>
 
@@ -93,7 +95,7 @@ export function UserKnowledgeTreeView() {
       {/* 推荐 */}
       <div className="flex flex-col gap-3">
         <h3 className="text-base font-semibold text-[var(--ink)]">
-          推荐你下一个项目
+          {t("usertree.recommend_title")}
         </h3>
         <RecommendNextProjects limit={3} />
       </div>

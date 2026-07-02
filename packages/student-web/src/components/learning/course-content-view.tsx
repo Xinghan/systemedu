@@ -267,6 +267,7 @@ function YouTubeModal({
   title: string
   onClose: () => void
 }) {
+  const t = useT()
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose() }
     document.addEventListener("keydown", handleKey)
@@ -289,7 +290,7 @@ function YouTubeModal({
           <button
             onClick={onClose}
             className="w-8 h-8 rounded-lg flex items-center justify-center text-white/70 hover:text-white hover:bg-white/15 transition-colors shrink-0"
-            aria-label="关闭视频"
+            aria-label={t("course.close_video")}
           >
             <X className="h-4 w-4" />
           </button>
@@ -312,6 +313,7 @@ function YouTubeModal({
 // Markdown renderer — ReactMarkdown + GFM (tables, strikethrough, etc.)
 // ---------------------------------------------------------------------------
 function MarkdownBlock({ content }: { content: string }) {
+  const t = useT()
   const [ytModal, setYtModal] = useState<{ videoId: string; title: string } | null>(null)
 
   if (!content?.trim()) return null
@@ -410,10 +412,10 @@ function MarkdownBlock({ content }: { content: string }) {
                   type="button"
                   onClick={(e) => {
                     e.preventDefault()
-                    setYtModal({ videoId, title: title || "YouTube video" })
+                    setYtModal({ videoId, title: title || t("course.default_video_title") })
                   }}
                   className="group inline-block relative my-2 rounded-xl overflow-hidden border border-outline-variant/25 hover:border-primary/50 hover:shadow-lg transition-all cursor-pointer bg-transparent p-0"
-                  title={`播放：${title || "YouTube 视频"}`}
+                  title={t("course.play_video", { title: title || t("course.default_video_title") })}
                 >
                   {children}
                   <span className="absolute inset-0 flex items-center justify-center pointer-events-none">
@@ -430,7 +432,7 @@ function MarkdownBlock({ content }: { content: string }) {
                 href={href}
                 onClick={(e) => {
                   e.preventDefault()
-                  setYtModal({ videoId, title: title || "YouTube video" })
+                  setYtModal({ videoId, title: title || t("course.default_video_title") })
                 }}
                 className="text-primary underline decoration-primary/40 hover:decoration-primary transition-colors cursor-pointer"
               >
@@ -508,14 +510,18 @@ function MarkdownBlock({ content }: { content: string }) {
 // ---------------------------------------------------------------------------
 // TheoryBlock — collapsible panel for fundamental theory knowledge
 // ---------------------------------------------------------------------------
-const SUBJECT_LABELS: Record<string, string> = {
-  math: "数学",
-  physics: "物理",
-  chemistry: "化学",
-  biology: "生物",
-  cs: "计算机科学",
-  geography: "地理",
-  other: "基础理论",
+function subjectLabel(t: ReturnType<typeof useT>, subject: string): string {
+  const key = `course.subject.${subject}` as const
+  const known = ["math", "physics", "chemistry", "biology", "cs", "geography", "other"]
+  return known.includes(subject) ? t(key) : t("course.subject.other")
+}
+
+/** "Pro Insight" 鼓励语 — 按学科挑选一句科普点评 */
+function theoryInsight(t: ReturnType<typeof useT>, subject: string): string {
+  if (subject === "physics") return t("course.insight_physics")
+  if (subject === "math") return t("course.insight_math")
+  if (subject === "chemistry") return t("course.insight_chemistry")
+  return t("course.insight_default")
 }
 
 // Strip leading heading that duplicates the modal title (e.g. K3 body starts with "## 硬度与支撑力").
@@ -547,18 +553,19 @@ interface QuizItemState {
   shownAt: number
 }
 
-function buildErrorAnalysis(ex: NonNullable<TheoryEntry["exercises"]>[number], wrongIdx: number): string {
+function buildErrorAnalysis(t: ReturnType<typeof useT>, ex: NonNullable<TheoryEntry["exercises"]>[number], wrongIdx: number): string {
   const wrongOpt = ex.options[wrongIdx]
   const correctOpt = ex.options[ex.correct]
-  let analysis = `你选择了 "${wrongOpt}"，这个选项不正确。`
+  let analysis = t("course.quiz_wrong_chose", { wrong: wrongOpt })
   if (ex.explanation) {
     analysis += ` ${ex.explanation}`
   }
-  analysis += ` 正确答案是 "${correctOpt}"。`
+  analysis += ` ${t("course.quiz_correct_is", { correct: correctOpt })}`
   return analysis
 }
 
 function TheoryQuiz({ theoryId, exercises }: { theoryId: string; exercises: NonNullable<TheoryEntry["exercises"]> }) {
+  const t = useT()
   const { projectName, knodeId } = useContext(CourseIdentityContext)
   const storageKey = `theory_quiz_${theoryId}`
 
@@ -586,7 +593,7 @@ function TheoryQuiz({ theoryId, exercises }: { theoryId: string; exercises: NonN
   const submitToBackend = (qi: number, state: QuizItemState, ex: NonNullable<TheoryEntry["exercises"]>[number]) => {
     if (!projectName) return
     const timeMs = Date.now() - state.shownAt
-    const errorAnalysis = state.isCorrect ? null : buildErrorAnalysis(ex, state.selected!)
+    const errorAnalysis = state.isCorrect ? null : buildErrorAnalysis(t, ex, state.selected!)
     gateway.submitExerciseAttempts(projectName, [{
       knode_id: knodeId,
       quiz_type: "theory",
@@ -657,7 +664,7 @@ function TheoryQuiz({ theoryId, exercises }: { theoryId: string; exercises: NonN
       >
         {expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
         <ClipboardList className="h-4 w-4" />
-        <span>自测一下 ({exercises.length} 题)</span>
+        <span>{t("course.quiz_self_test", { n: exercises.length })}</span>
       </button>
 
       {expanded && (
@@ -672,7 +679,7 @@ function TheoryQuiz({ theoryId, exercises }: { theoryId: string; exercises: NonN
                   </p>
                   {item.attemptSeq > 1 && (
                     <span className="text-[10px] text-muted-foreground ml-2 whitespace-nowrap">
-                      第 {item.attemptSeq} 次
+                      {t("course.quiz_attempt_n", { n: item.attemptSeq })}
                     </span>
                   )}
                 </div>
@@ -719,7 +726,7 @@ function TheoryQuiz({ theoryId, exercises }: { theoryId: string; exercises: NonN
                     onClick={() => handleSubmit(qi)}
                     className="mt-3 px-4 py-1.5 rounded-md text-xs font-semibold bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                   >
-                    提交
+                    {t("course.quiz_submit")}
                   </button>
                 )}
 
@@ -728,19 +735,19 @@ function TheoryQuiz({ theoryId, exercises }: { theoryId: string; exercises: NonN
                   <div className="mt-3 space-y-2">
                     {item.isCorrect ? (
                       <p className="text-xs text-emerald-600 dark:text-emerald-400 leading-relaxed">
-                        回答正确!{ex.explanation ? ` ${ex.explanation}` : ""}
+                        {t("course.quiz_correct_feedback")}{ex.explanation ? ` ${ex.explanation}` : ""}
                       </p>
                     ) : (
                       <>
                         <p className="text-xs text-red-500 dark:text-red-400 leading-relaxed">
-                          {buildErrorAnalysis(ex, item.selected!)}
+                          {buildErrorAnalysis(t, ex, item.selected!)}
                         </p>
                         <button
                           type="button"
                           onClick={() => handleRetry(qi)}
                           className="px-3 py-1 rounded-md text-xs font-semibold border border-primary/40 text-primary hover:bg-primary/10 transition-colors"
                         >
-                          再试一次
+                          {t("course.quiz_retry")}
                         </button>
                       </>
                     )}
@@ -756,8 +763,9 @@ function TheoryQuiz({ theoryId, exercises }: { theoryId: string; exercises: NonN
 }
 
 function TheoryBlock({ theory }: { theory: TheoryEntry }) {
+  const t = useT()
   const [open, setOpen] = useState(false)
-  const label = SUBJECT_LABELS[theory.subject] || SUBJECT_LABELS.other
+  const label = subjectLabel(t, theory.subject)
   const knowledgeLevel = useContext(KnowledgeLevelContext)
 
   // Pick the body_markdown matching the current knowledge level.
@@ -847,10 +855,7 @@ function TheoryBlock({ theory }: { theory: TheoryEntry }) {
                       <div>
                         <h5 className="text-sm font-bold text-foreground">Pro Insight</h5>
                         <p className="text-xs text-muted-foreground leading-relaxed mt-1">
-                          {theory.subject === "physics" && "理解这个公式后，你就能解释为什么不同地面走起来感觉不同——一切都和系数有关。"}
-                          {theory.subject === "math" && "量化是科学思维的起点：只有把感觉变成数字，不同人的观察才能互相比较。"}
-                          {theory.subject === "chemistry" && "化学反应的本质是原子间键的断裂和形成，理解这个就理解了变化的根源。"}
-                          {!["physics", "math", "chemistry"].includes(theory.subject) && "掌握基础理论后，你会发现工程问题背后都有简洁的科学规律。"}
+                          {theoryInsight(t, theory.subject)}
                         </p>
                       </div>
                     </div>
@@ -868,10 +873,7 @@ function TheoryBlock({ theory }: { theory: TheoryEntry }) {
                     <div>
                       <h5 className="text-sm font-bold text-foreground">Pro Insight</h5>
                       <p className="text-xs text-muted-foreground leading-relaxed mt-1">
-                        {theory.subject === "physics" && "理解这个公式后，你就能解释为什么不同地面走起来感觉不同——一切都和系数有关。"}
-                        {theory.subject === "math" && "量化是科学思维的起点：只有把感觉变成数字，不同人的观察才能互相比较。"}
-                        {theory.subject === "chemistry" && "化学反应的本质是原子间键的断裂和形成，理解这个就理解了变化的根源。"}
-                        {!["physics", "math", "chemistry"].includes(theory.subject) && "掌握基础理论后，你会发现工程问题背后都有简洁的科学规律。"}
+                        {theoryInsight(t, theory.subject)}
                       </p>
                     </div>
                   </div>
@@ -899,6 +901,7 @@ function formatAudioTime(seconds: number): string {
 }
 
 function SectionAudioButton({ sectionId, audioUrl }: { sectionId: string; audioUrl: string }) {
+  const t = useT()
   const { activeSectionId, isPlaying, currentTime, duration, toggle } = useContext(AudioPlayContext)
   const isActive = activeSectionId === sectionId
   const progress = isActive && duration > 0
@@ -906,13 +909,14 @@ function SectionAudioButton({ sectionId, audioUrl }: { sectionId: string; audioU
     : 0
 
   if (!audioUrl) return null
+  const audioLabel = isPlaying && isActive ? t("course.pause_audio") : t("course.play_audio")
 
   return (
     <div className="w-full flex items-center gap-3 py-1.5">
       <button
         onClick={() => toggle(sectionId, audioUrl)}
-        title={isPlaying && isActive ? "暂停讲解音频" : "播放讲解音频"}
-        aria-label={isPlaying && isActive ? "暂停讲解音频" : "播放讲解音频"}
+        title={audioLabel}
+        aria-label={audioLabel}
         className={[
           "w-7 h-7 shrink-0 rounded-full flex items-center justify-center transition-all duration-200",
           isActive
@@ -1075,10 +1079,13 @@ function IdeaIframeBlock({
   darkMode: boolean
   backend?: string
 }) {
+  const t = useT()
   const [resetKey, setResetKey] = useState(0)
   const [modalOpen, setModalOpen] = useState(false)
   const backendLabel = backendBadgeLabel(backend)
-  const modalTitle = darkMode ? `动画演示 - ${idea.topic}` : `互动游戏 - ${idea.topic}`
+  const modalTitle = darkMode
+    ? t("course.animation_modal_title", { topic: idea.topic })
+    : t("course.game_modal_title", { topic: idea.topic })
 
   if (darkMode) {
     // Animation card
@@ -1099,7 +1106,7 @@ function IdeaIframeBlock({
               </div>
               <div className="text-left">
                 <div className="flex items-center gap-2 mb-0.5">
-                  <h3 className="font-bold text-white text-xl leading-tight">动画演示</h3>
+                  <h3 className="font-bold text-white text-xl leading-tight">{t("course.animation_demo")}</h3>
                   {backendLabel && (
                     <span className="inline-flex items-center rounded-full border border-primary/30 bg-primary/15 px-2 py-0.5 text-[11px] font-semibold text-primary">
                       {backendLabel}
@@ -1110,7 +1117,7 @@ function IdeaIframeBlock({
               </div>
             </div>
             <div className="flex items-center gap-2 text-white/40 text-xs">
-              <span>点击打开</span>
+              <span>{t("course.click_to_open")}</span>
               <Play className="h-4 w-4" />
             </div>
           </div>
@@ -1139,12 +1146,12 @@ function IdeaIframeBlock({
               <Gamepad2 className="h-7 w-7 text-secondary" />
             </div>
             <div className="text-left">
-              <h3 className="font-bold text-on-surface text-xl leading-tight mb-0.5">互动游戏</h3>
+              <h3 className="font-bold text-on-surface text-xl leading-tight mb-0.5">{t("course.interactive_game")}</h3>
               <p className="text-on-surface-variant text-sm">{idea.topic}</p>
             </div>
           </div>
           <div className="flex items-center gap-2 text-on-surface-variant/50 text-xs">
-            <span>点击打开</span>
+            <span>{t("course.click_to_open")}</span>
             <Gamepad2 className="h-4 w-4" />
           </div>
         </div>
@@ -1169,6 +1176,7 @@ function StoryBlock({
   idea: CourseIdeaSummary
   section: RenderedSection
 }) {
+  const t = useT()
   const [expanded, setExpanded] = useState(false)
 
   return (
@@ -1182,7 +1190,7 @@ function StoryBlock({
             <BookMarked className="h-7 w-7 text-tertiary" />
           </div>
           <div className="text-left">
-            <h3 className="font-bold text-on-surface text-xl leading-tight mb-0.5">故事引入</h3>
+            <h3 className="font-bold text-on-surface text-xl leading-tight mb-0.5">{t("course.story_intro")}</h3>
             <p className="text-on-surface-variant text-sm">{idea.topic}</p>
           </div>
         </div>
@@ -1197,7 +1205,7 @@ function StoryBlock({
               {para.image_url ? (
                 <img
                   src={`${(process.env.NEXT_PUBLIC_GATEWAY_URL ?? "http://localhost:18820")}${para.image_url}`}
-                  alt={`故事插图 ${idx + 1}`}
+                  alt={t("course.story_illustration_n", { n: idx + 1 })}
                   className="w-36 h-28 rounded-xl object-cover shrink-0"
                 />
               ) : (
@@ -1211,7 +1219,7 @@ function StoryBlock({
         </div>
       )}
       {!expanded && (
-        <div className="px-8 py-4 text-on-surface-variant text-sm opacity-60">点击展开阅读故事</div>
+        <div className="px-8 py-4 text-on-surface-variant text-sm opacity-60">{t("course.click_to_read_story")}</div>
       )}
     </section>
   )
@@ -1226,6 +1234,7 @@ function ExerciseBlock({
   idea: CourseIdeaSummary
   exercises: InlineExercise[]
 }) {
+  const t = useT()
   // Filter to choice questions only — inline exercises are lightweight
   const choiceExercises = exercises.filter((e) => e.type === "choice")
   const [open, setOpen] = useState(false)
@@ -1283,9 +1292,9 @@ function ExerciseBlock({
         {/* Text */}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
-            <span className="text-xs font-bold uppercase tracking-wider text-violet-600">即时检测</span>
+            <span className="text-xs font-bold uppercase tracking-wider text-violet-600">{t("course.instant_check")}</span>
             <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-violet-100 text-violet-700 font-semibold">
-              {total} 题
+              {t("course.n_questions", { n: total })}
             </span>
           </div>
           <p className="text-sm font-medium text-gray-800 mt-0.5 truncate">{idea.topic}</p>
@@ -1293,7 +1302,7 @@ function ExerciseBlock({
 
         {/* Arrow */}
         <div className="flex items-center gap-1.5 text-violet-500 group-hover:text-violet-700 transition-colors shrink-0">
-          <span className="text-xs font-semibold">开始答题</span>
+          <span className="text-xs font-semibold">{t("course.start_quiz")}</span>
           <svg width="16" height="16" viewBox="0 0 16 16" fill="none" className="group-hover:translate-x-0.5 transition-transform">
             <path d="M6 12L10 8L6 4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
           </svg>
@@ -1344,16 +1353,16 @@ function ExerciseBlock({
                     <CheckCircle className="h-8 w-8 text-violet-600" />
                   </div>
                   <p className="text-xl font-bold text-gray-900">
-                    {score} / {total} 答对
+                    {t("course.score_of_total", { score, total })}
                   </p>
                   <p className="text-sm text-gray-500">
-                    {score === total ? "全部答对，掌握得很好！" : score >= total / 2 ? "做得不错，继续加油！" : "可以再回顾一下上方的内容哦"}
+                    {score === total ? t("course.feedback_all_correct") : score >= total / 2 ? t("course.feedback_good") : t("course.feedback_review")}
                   </p>
                   <button
                     onClick={() => setOpen(false)}
                     className="mt-1 px-7 h-10 rounded-xl bg-violet-600 text-white font-semibold text-sm hover:bg-violet-700 transition-colors"
                   >
-                    继续学习
+                    {t("course.continue_learning")}
                   </button>
                 </div>
               ) : ex ? (
@@ -1398,7 +1407,7 @@ function ExerciseBlock({
                         onClick={handleNext}
                         className="px-5 h-9 rounded-xl bg-violet-600 text-white text-sm font-semibold hover:bg-violet-700 transition-colors"
                       >
-                        {current + 1 < total ? "下一题" : "查看结果"}
+                        {current + 1 < total ? t("course.next_question") : t("course.view_result")}
                       </button>
                     </div>
                   )}
@@ -1422,6 +1431,7 @@ function ImageBlock({
   idea: CourseIdeaSummary
   section: RenderedSection
 }) {
+  const t = useT()
   const rawSrc = section.src || ""
   // Local gateway paths (/api/...) must be prefixed with the gateway base URL,
   // because the Next.js dev server on :3000 doesn't proxy to the backend on :18820.
@@ -1457,7 +1467,7 @@ function ImageBlock({
                   rel="noopener noreferrer"
                   className="underline hover:text-primary"
                 >
-                  来源
+                  {t("course.image_source")}
                 </a>
               )}
               {sourceUrl && license && <span> · </span>}
@@ -1483,6 +1493,7 @@ function DiagramBlock({
   html: string
   caption: string
 }) {
+  const t = useT()
   const [modalOpen, setModalOpen] = useState(false)
 
   return (
@@ -1498,13 +1509,13 @@ function DiagramBlock({
             </div>
             <div className="text-left">
               <h3 className="font-semibold text-on-surface text-lg leading-tight mb-0.5">
-                示意图
+                {t("course.diagram_title")}
               </h3>
               <p className="text-on-surface-variant text-sm">{idea.topic}</p>
             </div>
           </div>
           <div className="flex items-center gap-2 text-on-surface-variant/50 text-xs">
-            <span>点击放大</span>
+            <span>{t("course.click_to_zoom")}</span>
           </div>
         </div>
         {caption && (
@@ -1515,7 +1526,7 @@ function DiagramBlock({
         open={modalOpen}
         onClose={() => setModalOpen(false)}
         html={html}
-        title={`示意图 - ${idea.topic}`}
+        title={t("course.diagram_modal_title", { topic: idea.topic })}
         resetKey={0}
       />
     </>
@@ -1532,6 +1543,7 @@ function HandsOnKitBlock({
   idea: CourseIdeaSummary
   section: RenderedSection
 }) {
+  const t = useT()
   const components = section.components ?? []
   const tools = section.tools ?? []
   const steps = section.steps ?? []
@@ -1545,9 +1557,9 @@ function HandsOnKitBlock({
     high: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400",
   }
   const safetyLabels: Record<string, string> = {
-    low: "独立操作",
-    medium: "建议家长陪同",
-    high: "需家长全程陪同",
+    low: t("course.safety_low"),
+    medium: t("course.safety_medium"),
+    high: t("course.safety_high"),
   }
 
   return (
@@ -1560,7 +1572,7 @@ function HandsOnKitBlock({
           </div>
           <div className="text-left">
             <h3 className="font-semibold text-foreground text-base leading-tight mb-0.5">
-              实物动手套件
+              {t("course.hands_on_kit_title")}
             </h3>
             <p className="text-muted-foreground text-sm">{idea.topic}</p>
           </div>
@@ -1570,7 +1582,7 @@ function HandsOnKitBlock({
             {safetyLabels[safetyLevel]}
           </span>
           <span className="text-xs text-muted-foreground">
-            {ageMin}+ 岁
+            {t("course.age_min_suffix", { n: ageMin })}
           </span>
         </div>
       </div>
@@ -1578,16 +1590,16 @@ function HandsOnKitBlock({
       {/* 元器件清单 */}
       {components.length > 0 && (
         <div className="px-5 py-4 border-b border-border/30">
-          <h4 className="text-sm font-semibold text-foreground mb-3">元器件清单</h4>
+          <h4 className="text-sm font-semibold text-foreground mb-3">{t("course.components_list")}</h4>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-left text-xs text-muted-foreground border-b border-border/30">
-                  <th className="pb-2 pr-4">名称</th>
-                  <th className="pb-2 pr-4">型号/规格</th>
-                  <th className="pb-2 pr-4 text-center">数量</th>
-                  <th className="pb-2 pr-4 text-right">参考价</th>
-                  <th className="pb-2">搜索关键词</th>
+                  <th className="pb-2 pr-4">{t("course.col_name")}</th>
+                  <th className="pb-2 pr-4">{t("course.col_spec")}</th>
+                  <th className="pb-2 pr-4 text-center">{t("course.col_qty")}</th>
+                  <th className="pb-2 pr-4 text-right">{t("course.col_price")}</th>
+                  <th className="pb-2">{t("course.col_search_keyword")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -1614,13 +1626,13 @@ function HandsOnKitBlock({
       {/* 工具 */}
       {tools.length > 0 && (
         <div className="px-5 py-3 border-b border-border/30">
-          <h4 className="text-sm font-semibold text-foreground mb-2">所需工具</h4>
+          <h4 className="text-sm font-semibold text-foreground mb-2">{t("course.tools_needed")}</h4>
           <div className="flex flex-wrap gap-2">
-            {tools.map((t, i) => (
+            {tools.map((tool, i) => (
               <span key={i} className="inline-flex items-center gap-1 text-xs px-3 py-1.5 rounded-full bg-secondary/40 text-foreground">
-                {t.name}
-                {!t.included && <span className="text-muted-foreground">(¥{t.price_cny.toFixed(1)})</span>}
-                {t.included && <span className="text-green-600 dark:text-green-400">(已含)</span>}
+                {tool.name}
+                {!tool.included && <span className="text-muted-foreground">(¥{tool.price_cny.toFixed(1)})</span>}
+                {tool.included && <span className="text-green-600 dark:text-green-400">{t("course.tool_included")}</span>}
               </span>
             ))}
           </div>
@@ -1630,7 +1642,7 @@ function HandsOnKitBlock({
       {/* 操作步骤 */}
       {steps.length > 0 && (
         <div className="px-5 py-4 border-b border-border/30">
-          <h4 className="text-sm font-semibold text-foreground mb-4">动手步骤</h4>
+          <h4 className="text-sm font-semibold text-foreground mb-4">{t("course.steps_title")}</h4>
           <ol className="space-y-4">
             {steps.map((s) => (
               <li key={s.step} className="flex gap-4">
@@ -1648,7 +1660,7 @@ function HandsOnKitBlock({
                   )}
                   {s.expected_result && (
                     <p className="mt-1 text-xs text-muted-foreground italic">
-                      预期结果: {s.expected_result}
+                      {t("course.expected_result_prefix")}: {s.expected_result}
                     </p>
                   )}
                 </div>
@@ -1660,7 +1672,7 @@ function HandsOnKitBlock({
 
       {/* 费用汇总 */}
       <div className="px-5 py-3 flex items-center justify-between">
-        <span className="text-sm text-muted-foreground">预估总费用</span>
+        <span className="text-sm text-muted-foreground">{t("course.total_cost_estimate")}</span>
         <span className="text-lg font-bold text-orange-600 dark:text-orange-400">
           ¥{totalCost.toFixed(0)}
         </span>
@@ -1678,6 +1690,7 @@ function IdeaBlock({
   idea: CourseIdeaSummary
   section: RenderedSection | null
 }) {
+  const t = useT()
   if (!section) {
     return (
       <div className="rounded-2xl border border-border/50 overflow-hidden animate-pulse">
@@ -1697,7 +1710,7 @@ function IdeaBlock({
           <span className="text-sm text-muted-foreground">{idea.topic}</span>
         </div>
         <div className="h-14 flex items-center justify-center text-sm text-muted-foreground">
-          内容生成失败
+          {t("course.content_gen_failed")}
         </div>
       </div>
     )
@@ -1857,16 +1870,17 @@ function PlanWithSections({ content }: { content: CourseContent }) {
 // PlanWithIdeas: fallback for old data (no sections)
 // ---------------------------------------------------------------------------
 function PlanWithIdeas({ content }: { content: CourseContent }) {
+  const t = useT()
   const parts = (content.plan_markdown ?? "").split(/(\[\[(?:IDEA|THEORY):[^\]]+\]\])/g)
   const ideaMap = new Map(content.ideas.map((i) => [i.idea_id, i]))
-  const theoryMap = new Map((content.theories ?? []).map((t) => [t.theory_id, t]))
+  const theoryMap = new Map((content.theories ?? []).map((entry) => [entry.theory_id, entry]))
 
   return (
     <div className="space-y-10">
       {/* Upgrade notice */}
       <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-outline-variant/20 bg-surface-container-low text-on-surface-variant text-xs">
         <Play className="h-3 w-3" />
-        点击「重新生成」以获得分段音频讲解
+        {t("course.regenerate_hint_audio")}
       </div>
       {parts.map((part, idx) => {
         const ideaMatch = part.match(/^\[\[IDEA:([^\]]+)\]\]$/)
@@ -1903,11 +1917,12 @@ function PlanWithIdeas({ content }: { content: CourseContent }) {
 // EditorialHeader
 // ---------------------------------------------------------------------------
 function EditorialHeader({ knode }: { knode: KnodeInfo | null }) {
+  const t = useT()
   if (!knode) return null
   return (
     <header className="space-y-6">
       <div className="inline-flex items-center gap-2 px-3 py-1 bg-secondary-container rounded-full text-on-secondary-container text-xs font-bold tracking-widest uppercase">
-        难度 {knode.difficulty_level} / 10 · {knode.estimated_minutes} 分钟
+        {t("course.difficulty_minutes", { level: knode.difficulty_level, minutes: knode.estimated_minutes })}
       </div>
       <h1 className="font-extrabold text-3xl tracking-tight leading-[1.2] text-primary pb-1">
         {knode.title}
@@ -2036,7 +2051,7 @@ function GeneratingProgress({
               }}
             >
               <Square className="h-3 w-3 fill-current" />
-              停止
+              {t("course.stop")}
             </button>
           )}
         </div>
@@ -2351,6 +2366,7 @@ function AgentLogRow({ log, defaultExpanded = false }: { log: AgentLogEntry; def
 // AgentDebugPanel
 // ---------------------------------------------------------------------------
 function AgentDebugPanel({ logs }: { logs: AgentLogEntry[] }) {
+  const t = useT()
   const [collapsed, setCollapsed] = useState(false)
 
   return (
@@ -2360,8 +2376,8 @@ function AgentDebugPanel({ logs }: { logs: AgentLogEntry[] }) {
         className="w-full flex items-center gap-2 px-4 py-3 bg-secondary/30 hover:bg-secondary/50 transition-colors border-b border-border/30"
       >
         <Terminal className="h-3.5 w-3.5 text-muted-foreground" />
-        <span className="text-xs font-semibold text-muted-foreground">Agent Debug Log</span>
-        <span className="text-[10px] text-muted-foreground/60 ml-1">({logs.length} 条)</span>
+        <span className="text-xs font-semibold text-muted-foreground">{t("course.agent_debug_log")}</span>
+        <span className="text-[10px] text-muted-foreground/60 ml-1">{t("course.log_count", { n: logs.length })}</span>
         <div className="flex-1" />
         {collapsed ? <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" /> : <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />}
       </button>
@@ -2387,6 +2403,7 @@ export function CourseContentView({
   onMediaStats,
   onOutline,
 }: CourseContentViewProps) {
+  const t = useT()
   const [courseData, setCourseData] = useState<CourseContentData | null>(null)
   const [contentVariant, setContentVariant] = useState<"default" | "course_factory">("default")
   // v3 (kimi-k2.6) 版本切换 — toggle 显示哪个版本的 course_content
@@ -2594,7 +2611,7 @@ export function CourseContentView({
         } else if (evt === "done") {
           setStage("done")
         } else if (evt === "error") {
-          throw new Error((data.message as string) || "生成失败")
+          throw new Error((data.message as string) || t("course.gen_stop_error"))
         }
       }
 
@@ -2627,7 +2644,7 @@ export function CourseContentView({
       }
     } catch (e) {
       if (!abortRef.current && loadIdRef.current === myLoadId) {
-        setError(e instanceof Error ? e.message : "生成失败")
+        setError(e instanceof Error ? e.message : t("course.gen_stop_error"))
       }
     } finally {
       if (!abortRef.current && loadIdRef.current === myLoadId) setGenerating(false)
@@ -2712,7 +2729,7 @@ export function CourseContentView({
         />
         <div className="flex-1 flex flex-col items-center justify-center gap-3 text-muted-foreground">
           <Loader2 className="h-6 w-6 animate-spin text-primary/50" />
-          <p className="text-xs">正在检查课程内容...</p>
+          <p className="text-xs">{t("course.checking_content")}</p>
         </div>
       </div>
     )
@@ -2742,7 +2759,7 @@ export function CourseContentView({
         />
         <div className="flex-1 flex flex-col items-center justify-center gap-3 text-muted-foreground">
           <p className="text-sm">{error}</p>
-          <button onClick={() => load(true)} className="text-xs text-primary hover:underline">重试</button>
+          <button onClick={() => load(true)} className="text-xs text-primary hover:underline">{t("course.retry")}</button>
         </div>
       </div>
     )
@@ -2778,21 +2795,21 @@ export function CourseContentView({
             </div>
             <div className="space-y-2">
               <h2 className="text-lg font-bold text-foreground">
-                {knode?.title ?? "本节课程"}
+                {knode?.title ?? t("course.default_knode_title")}
               </h2>
               <p className="text-sm text-muted-foreground leading-relaxed">
-                课程内容尚未生成。点击下方按钮，AI 将为你生成包含讲解文本、动画演示和互动游戏的完整课程，整个过程大约需要 1-3 分钟。
+                {t("course.not_generated_title")}
               </p>
             </div>
             {knode && (
               <div className="flex items-center justify-center gap-4 text-xs text-muted-foreground">
                 <span className="flex items-center gap-1">
                   <Zap className="h-3 w-3" />
-                  难度 {knode.difficulty_level}/10
+                  {t("course.difficulty_n_of_10", { n: knode.difficulty_level })}
                 </span>
                 <span className="flex items-center gap-1">
                   <Clock className="h-3 w-3" />
-                  {knode.estimated_minutes} 分钟
+                  {t("course.minutes_suffix", { n: knode.estimated_minutes })}
                 </span>
               </div>
             )}
@@ -2801,10 +2818,10 @@ export function CourseContentView({
               className="inline-flex items-center gap-2 px-8 h-12 rounded-2xl bg-primary text-primary-foreground text-sm font-bold hover:bg-primary/90 active:scale-95 transition-all shadow-lg shadow-primary/20"
             >
               <Sparkles className="h-4 w-4" />
-              开始生成课程
+              {t("course.start_generating")}
             </button>
             <p className="text-[11px] text-muted-foreground/60">
-              生成过程中可以随时停止
+              {t("course.stop_anytime_hint")}
             </p>
           </div>
         </div>
@@ -2873,8 +2890,8 @@ export function CourseContentView({
                 <Square className="h-6 w-6 text-amber-500" />
               </div>
               <div>
-                <p className="text-sm font-semibold text-on-surface">生成已停止</p>
-                <p className="text-xs text-muted-foreground mt-1">后台任务已取消，点击恢复重新生成</p>
+                <p className="text-sm font-semibold text-on-surface">{t("course.gen_stopped")}</p>
+                <p className="text-xs text-muted-foreground mt-1">{t("course.gen_stopped_desc")}</p>
               </div>
               <div className="flex gap-3">
                 <button
@@ -2882,13 +2899,13 @@ export function CourseContentView({
                   className="flex items-center gap-2 px-5 h-10 rounded-xl bg-primary text-white text-sm font-semibold hover:bg-primary/90 transition-colors"
                 >
                   <Play className="h-4 w-4 fill-current" />
-                  恢复生成
+                  {t("course.resume_gen")}
                 </button>
                 <button
                   onClick={onClose}
                   className="flex items-center gap-2 px-5 h-10 rounded-xl border border-border text-sm text-muted-foreground hover:text-foreground transition-colors"
                 >
-                  关闭
+                  {t("course.close")}
                 </button>
               </div>
             </div>
@@ -2937,33 +2954,33 @@ export function CourseContentView({
             {showingCourseFactory ? (
               <>
                 <p className="text-xs text-muted-foreground mr-auto">
-                  当前显示的是 course_factory 候选课程版本，原节点数据没有被覆盖。
+                  {t("course.showing_factory_notice")}
                 </p>
                 <button
                   onClick={() => setContentVariant("default")}
                   className="flex items-center gap-1.5 px-4 h-9 rounded-xl border border-border text-xs text-muted-foreground hover:text-foreground hover:border-foreground/40 transition-colors"
                 >
-                  查看当前课程
+                  {t("course.view_current")}
                 </button>
               </>
             ) : (
               <>
                 <p className="text-xs text-muted-foreground mr-auto">
-                  学完后，点击右侧面板的「标记完成」继续下一节
+                  {t("course.mark_complete_hint")}
                 </p>
                 {hasCourseFactoryVariant && (
                   <button
                     onClick={() => setContentVariant("course_factory")}
                     className="flex items-center gap-1.5 px-4 h-9 rounded-xl border border-emerald-200 bg-emerald-50 text-xs text-emerald-700 hover:bg-emerald-100 transition-colors"
                   >
-                    切换到新课程内容
+                    {t("course.switch_to_new_content")}
                   </button>
                 )}
                 <button
                   onClick={() => load(true)}
                   className="flex items-center gap-1.5 px-4 h-9 rounded-xl border border-border text-xs text-muted-foreground hover:text-foreground hover:border-foreground/40 transition-colors"
                 >
-                  重新生成
+                  {t("course.regenerate")}
                 </button>
               </>
             )}
@@ -3011,6 +3028,7 @@ function Header({
   sceneMode?: "course" | "teacher"
   onSwitchScene?: (m: "course" | "teacher") => void
 }) {
+  const t = useT()
   // v3 模式当前显示的版本: 优先用 selected, 否则用 active
   const activeVersion = v3Versions.find((v) => v.is_active)?.version_label || null
   const currentLabel = v3SelectedVersion || activeVersion
@@ -3023,7 +3041,7 @@ function Header({
         <h2 className="text-sm font-semibold text-foreground truncate">{knode?.title}</h2>
         {showingCourseFactory && (
           <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-[11px] font-semibold shrink-0">
-            {courseFactoryLabel ?? "新课程内容"}
+            {courseFactoryLabel ?? t("course.default_content_title")}
           </span>
         )}
         {versionMode === "v3" && (
@@ -3045,9 +3063,9 @@ function Header({
                   ? "bg-background text-foreground shadow-sm"
                   : "text-muted-foreground hover:text-foreground",
               ].join(" ")}
-              title="查看课程内容 (动画/游戏/练习/diagram)"
+              title={t("course.view_content_title")}
             >
-              课程内容
+              {t("course.course_content_tab")}
             </button>
             <button
               type="button"
@@ -3058,9 +3076,9 @@ function Header({
                   ? "bg-amber-100 text-amber-800 shadow-sm"
                   : "text-muted-foreground hover:text-amber-700",
               ].join(" ")}
-              title="切换到蜥蜴老师讲课场景"
+              title={t("course.switch_teacher_title")}
             >
-              老师讲课
+              {t("course.teacher_lecture_tab")}
             </button>
           </div>
         )}
@@ -3097,7 +3115,7 @@ function Header({
               value={currentLabel || ""}
               onChange={(e) => onSelectV3Version?.(e.target.value || null)}
               className="h-8 px-2 text-xs rounded-lg border border-purple-200 bg-purple-50 text-purple-800 hover:bg-purple-100 focus:outline-none focus:ring-2 focus:ring-purple-300 max-w-[180px]"
-              title="切换 v3 课程版本"
+              title={t("course.switch_v3_title")}
             >
               {v3Versions.map((v) => (
                 <option key={v.version_label} value={v.version_label}>
@@ -3109,9 +3127,9 @@ function Header({
               <button
                 onClick={() => onSetActiveV3Version(currentLabel)}
                 className="h-8 px-2 text-xs rounded-lg border border-purple-200 bg-white text-purple-700 hover:bg-purple-50"
-                title="将该版本设为默认显示"
+                title={t("course.set_default_version_title")}
               >
-                设为默认
+                {t("course.set_default_version")}
               </button>
             )}
           </div>
@@ -3126,7 +3144,7 @@ function Header({
                 : "bg-emerald-50 text-emerald-700 hover:bg-emerald-100",
             ].join(" ")}
           >
-            {showingCourseFactory ? "查看当前课程" : "新课程内容"}
+            {showingCourseFactory ? t("course.view_current") : t("course.default_content_title")}
           </button>
         )}
         <button onClick={onClose} className="ml-1 p-1 rounded-lg hover:bg-secondary transition-colors">

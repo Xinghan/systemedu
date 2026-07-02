@@ -15,14 +15,14 @@ import { useT } from "@/lib/i18n/use-t"
 
 type Tab = "memory" | "knowledge" | "sessions"
 
-const CATEGORY_LABEL: Record<string, string> = {
-  interest: "兴趣",
-  goal: "目标",
-  skill_level: "技能水平",
-  family: "家庭背景",
-  preference: "学习偏好",
-  misconception: "错误概念",
-  other: "其他",
+const CATEGORY_LABEL_KEY: Record<string, string> = {
+  interest: "memory.category.interest",
+  goal: "memory.category.goal",
+  skill_level: "memory.category.skill_level",
+  family: "memory.category.family",
+  preference: "memory.category.preference",
+  misconception: "memory.category.misconception",
+  other: "memory.category.other",
 }
 
 export default function BrainPage() {
@@ -52,7 +52,7 @@ export default function BrainPage() {
       setByCategory(r.by_category)
       setTotal(r.total)
     } catch (e) {
-      toast.error((e as Error).message || "加载失败")
+      toast.error((e as Error).message || t("session.load_failed"))
     } finally {
       setMemLoading(false)
     }
@@ -66,7 +66,7 @@ export default function BrainPage() {
       try {
         setSessions(await chatSessions.list())
       } catch (e) {
-        toast.error((e as Error).message || "加载失败")
+        toast.error((e as Error).message || t("session.load_failed"))
       } finally {
         setSessLoading(false)
       }
@@ -74,13 +74,13 @@ export default function BrainPage() {
   }, [loggedIn])
 
   async function handleRetire(id: string) {
-    if (!confirm("删除这条记忆? AI 将不再用它来回答你.")) return
+    if (!confirm(t("memory.retire_confirm"))) return
     try {
       await memory.retireFact(id)
-      toast.success("已删除")
+      toast.success(t("session.deleted"))
       await reloadMemory()
     } catch (e) {
-      toast.error((e as Error).message || "删除失败")
+      toast.error((e as Error).message || t("session.delete_failed"))
     }
   }
 
@@ -142,7 +142,7 @@ export default function BrainPage() {
       {/* ── 记忆 ── */}
       {activeTab === "memory" && (
         memLoading ? (
-          <div className="card-elevated" style={{ padding: 56, textAlign: "center", color: "var(--sub)" }}>加载中...</div>
+          <div className="card-elevated" style={{ padding: 56, textAlign: "center", color: "var(--sub)" }}>{t("home.loading")}</div>
         ) : cats.length === 0 ? (
           <div className="card-elevated" style={{ padding: 56, textAlign: "center" }}>
             <Sparkles size={36} strokeWidth={1.5} style={{ color: "var(--sub-2)", margin: "0 auto 12px" }} />
@@ -155,7 +155,7 @@ export default function BrainPage() {
               <section key={cat}>
                 <div className="eyebrow" style={{ marginBottom: 12 }}>
                   <span className="dot" />
-                  {CATEGORY_LABEL[cat] || cat}
+                  {CATEGORY_LABEL_KEY[cat] ? t(CATEGORY_LABEL_KEY[cat]) : cat}
                   <span className="tag" style={{ marginLeft: 6 }}>{byCategory[cat].length}</span>
                 </div>
                 <div className="card-elevated" style={{ overflow: "hidden" }}>
@@ -179,7 +179,7 @@ export default function BrainPage() {
                           <span style={{ margin: "0 8px", opacity: 0.6 }}>·</span>{new Date(f.created_at).toLocaleDateString("zh-CN")}
                         </p>
                       </div>
-                      <button onClick={() => handleRetire(f.id)} style={{ border: "none", background: "transparent", padding: "6px", borderRadius: 6, color: "var(--sub-2)", cursor: "pointer" }} className="fact-del" title="删除">
+                      <button onClick={() => handleRetire(f.id)} style={{ border: "none", background: "transparent", padding: "6px", borderRadius: 6, color: "var(--sub-2)", cursor: "pointer" }} className="fact-del" title={t("session.delete")}>
                         <Trash2 size={14} />
                       </button>
                     </div>
@@ -194,7 +194,7 @@ export default function BrainPage() {
       {/* ── 学习记录 ── */}
       {activeTab === "sessions" && (
         sessLoading ? (
-          <div className="card-elevated" style={{ padding: 56, textAlign: "center", color: "var(--sub)" }}>加载中...</div>
+          <div className="card-elevated" style={{ padding: 56, textAlign: "center", color: "var(--sub)" }}>{t("home.loading")}</div>
         ) : sessions.length === 0 ? (
           <div className="card-elevated" style={{ padding: 56, textAlign: "center" }}>
             <MessageSquare size={36} strokeWidth={1.5} style={{ color: "var(--sub-2)", margin: "0 auto 12px" }} />
@@ -242,7 +242,7 @@ export default function BrainPage() {
 
       <div style={{ display: "flex", alignItems: "flex-start", gap: 8, marginTop: 32, color: "var(--sub-2)", fontSize: 12 }}>
         <Lock size={12} style={{ marginTop: 3, flexShrink: 0 }} />
-        <span>这些数据只供 AI 导师在跟你对话时使用, 不会分享给其他用户.</span>
+        <span>{t("memory.privacy_note")}</span>
       </div>
 
       <style jsx>{`

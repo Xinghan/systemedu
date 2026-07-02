@@ -4,8 +4,10 @@ import { useState, useCallback } from "react"
 import { Check, X } from "lucide-react"
 import { GameComplete, GameProgress, FeedbackBadge } from "./game-shared"
 import type { QuizChoiceData } from "./types"
+import { useT } from "@/lib/i18n/use-t"
 
 export function QuizChoiceTemplate({ data }: { data: QuizChoiceData }) {
+  const t = useT()
   const questions = data.questions ?? []
   const [current, setCurrent] = useState(0)
   const [selected, setSelected] = useState<number | null>(null)
@@ -99,7 +101,7 @@ export function QuizChoiceTemplate({ data }: { data: QuizChoiceData }) {
             onClick={handleNext}
             className="px-4 py-2 text-sm rounded-md bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
           >
-            {current + 1 >= questions.length ? "查看结果" : "下一题"}
+            {current + 1 >= questions.length ? t("game.see_results") : t("game.next_question")}
           </button>
         </div>
       )}

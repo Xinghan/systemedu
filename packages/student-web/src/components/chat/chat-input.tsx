@@ -45,9 +45,7 @@ export function ChatInput({ onSend, disabled, placeholder }: ChatInputProps) {
     el.style.height = Math.min(el.scrollHeight, 128) + "px"
   }, [])
 
-  const _t = t("chat.input_placeholder")
-  const effectivePlaceholder =
-    placeholder ?? (_t && _t !== "chat.input_placeholder" ? _t : "问我任何问题...")
+  const effectivePlaceholder = placeholder ?? t("chat.input_placeholder")
 
   return (
     <div>

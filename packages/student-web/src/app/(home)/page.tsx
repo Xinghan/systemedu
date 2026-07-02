@@ -2,7 +2,7 @@
 
 import Image from "next/image"
 import Link from "next/link"
-import { useEffect } from "react"
+import { useEffect, useState } from "react"
 import {
   ArrowRight,
   Bot,
@@ -10,6 +10,7 @@ import {
   Network,
   Sparkles,
 } from "lucide-react"
+import { library } from "@/lib/api"
 import { useAuthStore } from "@/lib/stores/auth-store"
 import { useLocale } from "@/lib/i18n/use-t"
 import { useLocaleStore } from "@/lib/i18n/store"
@@ -45,7 +46,8 @@ const COPY = {
     heroLine2pre: "",
     heroLine2hi: "AI 纪元",
     heroLine2post: "，从 10 岁开始。",
-    heroSubtitle: "33 个真实工业项目 + AI 私人导师，10 岁也能从零做出机器人、AI 药物发现、脑机接口这样的东西。",
+    heroSubtitle: (n: number) => `${n} 个真实工业项目 + AI 私人导师，10 岁也能从零做出机器人、AI 药物发现、脑机接口这样的东西。`,
+    heroSubtitleFallback: "真实工业项目 + AI 私人导师，10 岁也能从零做出机器人、AI 药物发现、脑机接口这样的东西。",
     ctaBrowse: "浏览全部项目",
     ctaDash: "我的项目",
     ctaSignIn: "登录",
@@ -57,7 +59,8 @@ const COPY = {
     curiTitle: "那些你以为只有大人能碰的东西。",
     curiBody:
       "脑波控制游戏、给地球防御小行星、复活一只灭绝动物的叫声 — 这些不是科普视频里看看而已的东西, 而是你亲手从零做出来的真项目。好奇心有多大, 能造的就有多大。",
-    curiMore: "看看全部 33 个项目",
+    curiMore: (n: number) => `看看全部 ${n} 个项目`,
+    curiMoreFallback: "看看全部项目",
 
     // ② 科技感
     hwEyebrow: "科技感",
@@ -88,7 +91,7 @@ const COPY = {
     treeMore: "了解知识树",
 
     // 项目一行例子 (好奇心节内)
-    projEyebrow: "项目库",
+    projEyebrow: "实验室",
 
     // How / CTA
     howEyebrow: "怎么运转",
@@ -106,7 +109,8 @@ const COPY = {
     heroLine2pre: "The ",
     heroLine2hi: "AI era",
     heroLine2post: " starts at 10.",
-    heroSubtitle: "33 real industry projects + a private AI mentor — kids as young as 10 build things like robots, AI drug discovery, and brain-computer interfaces, from scratch.",
+    heroSubtitle: (n: number) => `${n} real industry projects + a private AI mentor — kids as young as 10 build things like robots, AI drug discovery, and brain-computer interfaces, from scratch.`,
+    heroSubtitleFallback: "Real industry projects + a private AI mentor — kids as young as 10 build things like robots, AI drug discovery, and brain-computer interfaces, from scratch.",
     ctaBrowse: "Browse all projects",
     ctaDash: "My Projects",
     ctaSignIn: "Sign in",
@@ -117,7 +121,8 @@ const COPY = {
     curiTitle: "The stuff you thought only grown-ups could touch.",
     curiBody:
       "Control a game with your brainwaves, defend Earth from asteroids, bring an extinct animal's call back to life — not videos you watch, but real projects you build from scratch with your own hands. How far you go is how far your curiosity reaches.",
-    curiMore: "See all 33 projects",
+    curiMore: (n: number) => `See all ${n} projects`,
+    curiMoreFallback: "See all projects",
 
     hwEyebrow: "Real tech",
     hwTitle: "Real hardware. Real data. Real standards.",
@@ -143,7 +148,7 @@ const COPY = {
       "Not a course that runs lesson 1 to lesson N. The knowledge tree is a DAG: it unlocks exactly the piece your current project needs. You always learn for the thing in front of you, never hoarding for an exam.",
     treeMore: "How the tree works",
 
-    projEyebrow: "Project library",
+    projEyebrow: "Lab",
 
     howEyebrow: "How it works",
     howTitle: "How a project comes to life",
@@ -160,7 +165,7 @@ const HOW_STEPS: { title: { zh: string; en: string }; body: { zh: string; en: st
   {
     title: { zh: "挑一个项目", en: "Pick a project" },
     body: {
-      zh: "从项目库选一个让你心动的, 看清它的目标和清单。",
+      zh: "从实验室选一个让你心动的, 看清它的目标和清单。",
       en: "Choose one that excites you; see its goal and parts list.",
     },
   },
@@ -191,11 +196,20 @@ export default function Homepage() {
   const { loggedIn, hydrate } = useAuthStore()
   const lang = useLocale()
   const hydrateLocale = useLocaleStore((s) => s.hydrate)
+  // 项目总数: 真实拉取, 避免文案里写死过时的数字 (spec: 首页价值主张要跟真实项目数一致)
+  const [projectCount, setProjectCount] = useState<number | null>(null)
 
   useEffect(() => {
     hydrate()
     hydrateLocale()
   }, [hydrate, hydrateLocale])
+
+  useEffect(() => {
+    library
+      .listProjects()
+      .then((all) => setProjectCount(all.length))
+      .catch(() => setProjectCount(null))
+  }, [])
 
   const t = COPY[lang]
 
@@ -214,7 +228,7 @@ export default function Homepage() {
             {t.heroLine2post}
           </h1>
           <p style={{ fontSize: 17, lineHeight: 1.6, color: "var(--sub)", marginTop: 18, maxWidth: 620, marginLeft: "auto", marginRight: "auto" }}>
-            {t.heroSubtitle}
+            {projectCount != null ? t.heroSubtitle(projectCount) : t.heroSubtitleFallback}
           </p>
           <div style={{ display: "flex", gap: 12, marginTop: 30, justifyContent: "center" }}>
             <Link href={loggedIn ? "/home" : "/login"} className="btn btn-violet btn-lg">
@@ -254,7 +268,7 @@ export default function Homepage() {
         eyebrow={t.curiEyebrow}
         title={t.curiTitle}
         body={t.curiBody}
-        more={t.curiMore}
+        more={projectCount != null ? t.curiMore(projectCount) : t.curiMoreFallback}
         moreHref="/library"
         img="/landing/extinct-sound.webp"
         ratio="4 / 5"
@@ -430,7 +444,7 @@ export default function Homepage() {
               © 2026 SystemEdu Labs
             </div>
           </div>
-          <FootCol t={lang === "zh" ? "项目库" : "Library"} items={["Aerospace", "Robotics", "Bioscience", "Climate"]} />
+          <FootCol t={lang === "zh" ? "实验室" : "Lab"} items={["Aerospace", "Robotics", "Bioscience", "Climate"]} />
           <FootCol t={lang === "zh" ? "平台" : "Platform"} items={lang === "zh" ? ["知识树", "AI 导师", "记忆系统"] : ["Knowledge tree", "AI tutor", "Memory"]} />
           <FootCol t={lang === "zh" ? "关于" : "Company"} items={lang === "zh" ? ["关于我们", "开源", "加入我们"] : ["About", "Open source", "Careers"]} />
         </div>

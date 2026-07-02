@@ -12,6 +12,7 @@ import {
   Plus,
   X,
 } from "lucide-react"
+import { useT } from "@/lib/i18n/use-t"
 
 // ──────────────────────────────────────────────────────────────────────────
 // Types
@@ -642,11 +643,12 @@ function ConceptDetail({
   onJumpSelect: (id: string) => void
   onClose: () => void
 }) {
+  const t = useT()
   const statusLabels: Record<NodeStatus, { t: string; pip: string; sub: string }> = {
-    mastered: { t: "Mastered", pip: "ok", sub: "已学完" },
-    active: { t: "In progress", pip: "run", sub: "你的当前进度" },
-    available: { t: "Available", pip: "warn", sub: "前置都满足, 可以开始" },
-    locked: { t: "Locked", pip: "idle", sub: "未 Pull 或前置未完成" },
+    mastered: { t: "Mastered", pip: "ok", sub: t("ktreemodal.status.mastered") },
+    active: { t: "In progress", pip: "run", sub: t("ktreemodal.status.active") },
+    available: { t: "Available", pip: "warn", sub: t("ktreemodal.status.available") },
+    locked: { t: "Locked", pip: "idle", sub: t("ktreemodal.status.locked") },
   }
   const sl = statusLabels[node.status]
 

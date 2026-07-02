@@ -10,6 +10,7 @@ import { chatSessions } from "@/lib/api"
 import { randomUUID } from "@/lib/utils/uuid"
 import { ChatInput } from "./chat-input"
 import { MessageBubble, StreamingBubble, ToolCallIndicator, TypingIndicator } from "./message-bubble"
+import { useT } from "@/lib/i18n/use-t"
 
 interface ChatPanelProps {
   librarySlug?: string
@@ -17,22 +18,24 @@ interface ChatPanelProps {
 }
 
 // 学生端默认走苏格拉底问答, 不预设 quick prompt 引导词
+// 注: prompt 字段是发给 AI 导师的实际问题内容 (业务数据), 保持中文; labelKey 才是 UI 展示文案
 const QUICK_PROMPTS = [
-  { label: "解释一下这一节的核心概念", prompt: "请用苏格拉底式问答帮我理解这一节的核心概念" },
-  { label: "我刚才的回答对不对?", prompt: "我刚才的回答对不对? 帮我分析一下" },
-  { label: "出一道练习题", prompt: "针对这一节的内容,出一道适合我现在水平的练习题" },
+  { labelKey: "chat.quick.explain_concept", prompt: "请用苏格拉底式问答帮我理解这一节的核心概念" },
+  { labelKey: "chat.quick.check_answer", prompt: "我刚才的回答对不对? 帮我分析一下" },
+  { labelKey: "chat.quick.give_exercise", prompt: "针对这一节的内容,出一道适合我现在水平的练习题" },
 ]
 
-const SKILL_LABELS: Record<string, string> = {
-  "socratic-questioning": "苏格拉底",
-  "direct-instruction": "直接讲解",
-  scaffolding: "脚手架",
-  "pbl-driving-question": "PBL 驱动",
-  "reflection-prompt": "反思",
-  "error-diagnosis": "纠错",
+const SKILL_LABEL_KEYS: Record<string, string> = {
+  "socratic-questioning": "chat.skill.socratic",
+  "direct-instruction": "chat.skill.direct",
+  scaffolding: "chat.skill.scaffolding",
+  "pbl-driving-question": "chat.skill.pbl",
+  "reflection-prompt": "chat.skill.reflection",
+  "error-diagnosis": "chat.skill.error_diagnosis",
 }
 
 export function ChatPanel({ librarySlug, moduleId }: ChatPanelProps) {
+  const t = useT()
   const {
     sessions,
     activeSessionId,
@@ -158,7 +161,7 @@ export function ChatPanel({ librarySlug, moduleId }: ChatPanelProps) {
       const s = await chatSessions.create({
         library_slug: librarySlug,
         module_id: moduleId ?? undefined,
-        title: "新对话",
+        title: t("chat.new_conversation"),
       })
       addSession({
         id: s.id,
@@ -171,7 +174,7 @@ export function ChatPanel({ librarySlug, moduleId }: ChatPanelProps) {
       setActiveSession(s.id)
       setSessionMenuOpen(false)
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "新建会话失败")
+      toast.error(e instanceof Error ? e.message : t("chat.new_session_failed"))
     }
   }
 
@@ -180,12 +183,13 @@ export function ChatPanel({ librarySlug, moduleId }: ChatPanelProps) {
       await chatSessions.delete(id)
       removeSession(id)
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "删除失败")
+      toast.error(e instanceof Error ? e.message : t("session.delete_failed"))
     }
   }
 
   const hasMessages = (activeSession?.messages.length ?? 0) > 0 || streaming
-  const skillLabel = currentSkill ? SKILL_LABELS[currentSkill] ?? currentSkill : null
+  const skillLabelKey = currentSkill ? SKILL_LABEL_KEYS[currentSkill] : null
+  const skillLabel = currentSkill ? (skillLabelKey ? t(skillLabelKey) : currentSkill) : null
 
   return (
     <div style={{ display: "flex", height: "100%", minHeight: 0, flexDirection: "column" }}>
@@ -228,7 +232,7 @@ export function ChatPanel({ librarySlug, moduleId }: ChatPanelProps) {
                 whiteSpace: "nowrap",
               }}
             >
-              {activeSession?.title || "未选择"}
+              {activeSession?.title || t("chat.no_selection")}
             </span>
             <ChevronDown size={11} strokeWidth={1.5} />
           </button>
@@ -267,12 +271,12 @@ export function ChatPanel({ librarySlug, moduleId }: ChatPanelProps) {
                 }}
               >
                 <Plus size={13} strokeWidth={1.5} />
-                新建对话
+                {t("chat.new_conversation")}
               </button>
               <div style={{ maxHeight: 240, overflowY: "auto" }}>
                 {relevantSessions.length === 0 ? (
                   <div style={{ padding: 12, fontSize: 12, color: "var(--sub)" }}>
-                    还没有对话
+                    {t("chat.no_conversations")}
                   </div>
                 ) : (
                   relevantSessions.map((s) => (
@@ -315,10 +319,10 @@ export function ChatPanel({ librarySlug, moduleId }: ChatPanelProps) {
                         type="button"
                         onClick={(e) => {
                           e.stopPropagation()
-                          if (confirm("确定删除这条对话?"))
+                          if (confirm(t("session.delete_confirm")))
                             handleDeleteSession(s.id)
                         }}
-                        aria-label="删除"
+                        aria-label={t("session.delete")}
                         style={{
                           border: 0,
                           background: "transparent",
@@ -352,10 +356,10 @@ export function ChatPanel({ librarySlug, moduleId }: ChatPanelProps) {
           <div style={{ display: "flex", flexDirection: "column", gap: 14, padding: "12px 0" }}>
             <div style={{ textAlign: "left" }}>
               <p style={{ fontSize: 13, color: "var(--ink-2)", lineHeight: 1.55 }}>
-                我是你的 AI 助教。不直接给答案，通过提问帮你思考。
+                {t("chat.intro")}
               </p>
               <p style={{ marginTop: 4, fontSize: 11, color: "var(--sub)", fontFamily: "var(--mono)" }}>
-                试试问我:
+                {t("chat.try_asking")}
               </p>
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
@@ -383,7 +387,7 @@ export function ChatPanel({ librarySlug, moduleId }: ChatPanelProps) {
                     strokeWidth={1.5}
                     style={{ color: "var(--violet)", flexShrink: 0 }}
                   />
-                  {qp.label}
+                  {t(qp.labelKey)}
                 </button>
               ))}
             </div>

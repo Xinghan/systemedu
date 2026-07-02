@@ -13,18 +13,22 @@ import dynamic from "next/dynamic"
 import { ChevronRight, LayoutGrid, Orbit, Share2 } from "lucide-react"
 import { subdomainName } from "@/lib/subdomain-names"
 import { KnowledgeRadialTree } from "./KnowledgeRadialTree"
+import { useT } from "@/lib/i18n/use-t"
 
 // three.js 依赖 window, 必须 ssr:false 懒加载 (也避免 600KB 进首屏 bundle)
 const KnowledgeGalaxy3D = dynamic(() => import("./KnowledgeGalaxy3D"), {
   ssr: false,
-  loading: () => (
-    <div
-      className="rounded-2xl border border-[var(--border)]"
-      style={{ height: 540, display: "grid", placeItems: "center", background: "#1e1a2b", color: "#c7b2cc" }}
-    >
-      正在生成知识宇宙…
-    </div>
-  ),
+  loading: () => {
+    const t = useT()
+    return (
+      <div
+        className="rounded-2xl border border-[var(--border)]"
+        style={{ height: 540, display: "grid", placeItems: "center", background: "#1e1a2b", color: "#c7b2cc" }}
+      >
+        {t("ktree.generating_galaxy")}
+      </div>
+    )
+  },
 })
 
 import type {
@@ -40,14 +44,14 @@ import type {
 
 const DEPTH_ORDER: DepthLevel[] = ["K1", "K3", "K5", "K7", "K9", "K11", "K13"]
 
-const DEPTH_LABEL: Record<DepthLevel, string> = {
-  K1: "小1-2",
-  K3: "小3-4",
-  K5: "小5-6",
-  K7: "初1-2",
-  K9: "初3-高1",
-  K11: "高2-高3",
-  K13: "本科",
+const DEPTH_LABEL_KEY: Record<DepthLevel, string> = {
+  K1: "ktree.depth.k1",
+  K3: "ktree.depth.k3",
+  K5: "ktree.depth.k5",
+  K7: "ktree.depth.k7",
+  K9: "ktree.depth.k9",
+  K11: "ktree.depth.k11",
+  K13: "ktree.depth.k13",
 }
 
 // Unified internal lit info shape (兼容 project + user 两种数据)
@@ -75,6 +79,7 @@ export function KnowledgeTreeView({
   mode = "project",
   onNodeClick,
 }: Props) {
+  const t = useT()
   // 统一构造 litByNodeId map
   const litByNodeId = useMemo(() => {
     const map = new Map<string, UnifiedLitInfo>()
@@ -90,7 +95,7 @@ export function KnowledgeTreeView({
       }
       // spec 039: 生长节点中点亮的, 并进 litByNodeId
       for (const g of userTree.grown_nodes || []) {
-        if (g.lit) map.set(g.node_id, { sources: [], detail: "你深入学到的知识点" })
+        if (g.lit) map.set(g.node_id, { sources: [], detail: t("ktree.grown_detail") })
       }
     } else if (projectTree) {
       for (const n of projectTree.lit_nodes) {
@@ -155,7 +160,7 @@ export function KnowledgeTreeView({
   if (mode !== "user" && hasAnyLit === 0) {
     return (
       <div className="rounded-2xl border border-[var(--border)] bg-[var(--card)] p-8 text-center">
-        <p className="text-[var(--sub)]">本项目还未跑知识树映射。请稍后再来。</p>
+        <p className="text-[var(--sub)]">{t("ktree.no_mapping")}</p>
       </div>
     )
   }
@@ -163,7 +168,7 @@ export function KnowledgeTreeView({
   if (!activeSubjectData) {
     return (
       <div className="rounded-2xl border border-[var(--border)] bg-[var(--card)] p-8 text-center">
-        <p className="text-[var(--sub)]">未找到学科数据。</p>
+        <p className="text-[var(--sub)]">{t("ktree.no_subject_data")}</p>
       </div>
     )
   }
@@ -179,9 +184,9 @@ export function KnowledgeTreeView({
           }}
         >
           {([
-            { m: "2d", icon: <LayoutGrid size={13} strokeWidth={1.6} />, label: "分层" },
-            { m: "tree", icon: <Share2 size={13} strokeWidth={1.6} />, label: "树形" },
-            { m: "3d", icon: <Orbit size={13} strokeWidth={1.6} />, label: "知识宇宙" },
+            { m: "2d", icon: <LayoutGrid size={13} strokeWidth={1.6} />, label: t("ktree.view.layered") },
+            { m: "tree", icon: <Share2 size={13} strokeWidth={1.6} />, label: t("ktree.view.tree") },
+            { m: "3d", icon: <Orbit size={13} strokeWidth={1.6} />, label: t("ktree.view.galaxy") },
           ] as const).map((o) => (
             <button
               key={o.m}
@@ -413,6 +418,7 @@ function ConceptChip({ name, isLit, color, onClick }: { name: string; isLit: boo
 function GrownChain({
   parentId, grownByParent, color, depth,
 }: { parentId: string; grownByParent: Map<string, GrownChild[]>; color: string; depth: number }) {
+  const t = useT()
   const children = grownByParent.get(parentId)
   if (!children || !children.length) return null
   return (
@@ -420,7 +426,7 @@ function GrownChain({
       {children.map((c) => (
         <div key={c.node_id} style={{ display: "flex", flexDirection: "column", gap: 6 }}>
           <span
-            title={c.lit ? "你深入学到的知识点" : "待点亮"}
+            title={c.lit ? t("ktree.grown_detail") : t("ktree.grown_pending")}
             style={{
               padding: "5px 10px", borderRadius: 8, fontSize: 12,
               border: "1px dashed", // 虚线 = 个人生长 (区分平台审定的实线)
@@ -446,6 +452,7 @@ interface SubjectTreeProps {
 }
 
 function SubjectTreeSvg({ subject, litByNodeId, onNodeClick }: SubjectTreeProps) {
+  const t = useT()
   // 按 depth_level 分组
   const nodesByDepth = useMemo(() => {
     const map = new Map<DepthLevel, PlatformTreeNode[]>()
@@ -499,7 +506,7 @@ function SubjectTreeSvg({ subject, litByNodeId, onNodeClick }: SubjectTreeProps)
             className="fill-[var(--sub)] font-mono"
             style={{ fontSize: 11, fontWeight: 600 }}
           >
-            {DEPTH_LABEL[d]}
+            {t(DEPTH_LABEL_KEY[d])}
           </text>
         ))}
 
@@ -587,9 +594,9 @@ function SubjectTreeSvg({ subject, litByNodeId, onNodeClick }: SubjectTreeProps)
           const lit = litByNodeId.get(n.id)
           const tipText = lit
             ? lit.sources.length > 1
-              ? `在 ${lit.sources.slice(0, 3).join(" / ")} 学过`
-              : `在 ${lit.sources[0]} 学过`
-            : "未涉及"
+              ? t("ktree.tip_multi", { sources: lit.sources.slice(0, 3).join(" / ") })
+              : t("ktree.tip_single", { source: lit.sources[0] })
+            : t("ktree.tip_none")
           const tipY = pos.y - 8
           return (
             <g style={{ pointerEvents: "none" }}>
@@ -624,7 +631,7 @@ function SubjectTreeSvg({ subject, litByNodeId, onNodeClick }: SubjectTreeProps)
           <div className="mt-2 rounded-xl border border-[var(--border)] bg-[var(--paper-2)] p-3 text-sm">
             <div className="flex items-baseline gap-2">
               <span className="font-semibold text-[var(--ink)]">{n.name_zh}</span>
-              <span className="text-xs text-[var(--sub)]">{n.name_en} · {DEPTH_LABEL[n.depth_level]}</span>
+              <span className="text-xs text-[var(--sub)]">{n.name_en} · {t(DEPTH_LABEL_KEY[n.depth_level])}</span>
             </div>
             <p className="mt-1 text-xs text-[var(--sub)]">{n.description}</p>
             {lit && (

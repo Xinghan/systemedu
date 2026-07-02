@@ -13,6 +13,7 @@ import { Check, Circle } from "lucide-react"
 import { toast } from "sonner"
 
 import { myKnodes } from "@/lib/api"
+import { useT } from "@/lib/i18n/use-t"
 
 interface Props {
   slug: string
@@ -23,6 +24,7 @@ interface Props {
 }
 
 export function KnodeCompleteButton({ slug, knodeId, initialCompleted, onChange }: Props) {
+  const t = useT()
   const [completed, setCompleted] = useState<boolean | null>(
     initialCompleted ?? null,
   )
@@ -53,9 +55,9 @@ export function KnodeCompleteButton({ slug, knodeId, initialCompleted, onChange 
       const r = await myKnodes.toggleComplete(slug, knodeId, "toggle")
       setCompleted(r.completed)
       onChange?.(r.completed)
-      toast.success(r.completed ? "已标记完成" : "已撤销完成")
+      toast.success(r.completed ? t("knode.mark_completed") : t("knode.mark_uncompleted"))
     } catch (e) {
-      toast.error("操作失败, 请重试")
+      toast.error(t("knode.action_failed"))
     } finally {
       setBusy(false)
     }
@@ -94,12 +96,12 @@ export function KnodeCompleteButton({ slug, knodeId, initialCompleted, onChange 
       {completed ? (
         <>
           <Check size={14} strokeWidth={2.5} />
-          <span>已完成</span>
+          <span>{t("knode.completed")}</span>
         </>
       ) : (
         <>
           <Circle size={14} strokeWidth={2} />
-          <span>标记完成</span>
+          <span>{t("knode.mark_complete")}</span>
         </>
       )}
     </button>

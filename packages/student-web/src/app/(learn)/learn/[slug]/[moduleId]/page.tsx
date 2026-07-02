@@ -25,6 +25,7 @@ import { ChatPanel } from "@/components/chat/chat-panel"
 import { KnowledgeTreeModal } from "@/components/learning/knowledge-tree-modal"
 import { KnodeCompleteButton } from "@/components/learning/KnodeCompleteButton"
 import type { KnodeInfo } from "@/lib/types/api"
+import { useT } from "@/lib/i18n/use-t"
 
 interface ProjectTreeModule {
   module_id: string
@@ -48,6 +49,7 @@ function moduleIdToInt(s: string): number {
 }
 
 export default function LearnPage() {
+  const t = useT()
   const params = useParams<{ slug: string; moduleId: string }>()
   const slug = decodeURIComponent(params.slug)
   const moduleId = decodeURIComponent(params.moduleId)
@@ -116,10 +118,10 @@ export default function LearnPage() {
         }).catch(() => {})
         myProjects.setProgress(slug, moduleId).catch(() => {})
       } catch (err) {
-        const msg = err instanceof Error ? err.message : "加载失败"
+        const msg = err instanceof Error ? err.message : t("session.load_failed")
         setError(msg)
         if (msg.includes("pull_required") || msg === "Unauthorized") {
-          toast.error("请先 Pull 该项目")
+          toast.error(t("learnpage.pull_required"))
           router.replace(`/library/${encodeURIComponent(slug)}`)
         } else {
           toast.error(msg)
@@ -212,7 +214,7 @@ export default function LearnPage() {
           fontSize: 14,
         }}
       >
-        加载中…
+        {t("home.loading")}
       </main>
     )
   }
@@ -220,10 +222,10 @@ export default function LearnPage() {
     return (
       <main style={{ padding: 48, textAlign: "center" }}>
         <p style={{ marginBottom: 12, color: "var(--sub)" }}>
-          {error || "无法加载"}
+          {error || t("learnpage.load_failed")}
         </p>
         <Link href={`/library/${encodeURIComponent(slug)}`} className="btn btn-ghost btn-sm">
-          <ChevronLeft size={13} strokeWidth={1.5} /> 返回项目页
+          <ChevronLeft size={13} strokeWidth={1.5} /> {t("learnpage.back_to_project")}
         </Link>
       </main>
     )
@@ -341,7 +343,7 @@ export default function LearnPage() {
         <div style={{ flex: 1, padding: "4px 0 30px" }}>
           {filteredStages.length === 0 && stages.length === 0 && (
             <div style={{ padding: "20px 18px", color: "var(--sub)", fontSize: 12 }}>
-              无章节数据
+              {t("project_detail.no_chapters")}
             </div>
           )}
           {filteredStages.map((sec) => (
@@ -589,7 +591,7 @@ export default function LearnPage() {
                 href={`/library/${encodeURIComponent(slug)}`}
                 className="btn btn-violet"
               >
-                返回项目首页
+                {t("learnpage.back_to_project_home")}
               </Link>
             )}
           </div>
@@ -633,7 +635,7 @@ export default function LearnPage() {
                   <Bot size={15} strokeWidth={1.5} />
                 </div>
                 <div>
-                  <div style={{ fontSize: 13, fontWeight: 600 }}>AI 助教</div>
+                  <div style={{ fontSize: 13, fontWeight: 600 }}>{t("learnpage.ai_tutor")}</div>
                   <div className="mono" style={{ fontSize: 10, color: "var(--sub)" }}>
                     GLM · 6 skills · soc/dir/scaff/pbl/refl/err
                   </div>
@@ -642,7 +644,7 @@ export default function LearnPage() {
               <button
                 type="button"
                 onClick={() => setAgentOpen(false)}
-                aria-label="折叠 AI 助教"
+                aria-label={t("learnpage.collapse_ai_tutor")}
                 style={{
                   border: 0,
                   background: "transparent",
@@ -662,7 +664,7 @@ export default function LearnPage() {
           <button
             type="button"
             onClick={() => setAgentOpen(true)}
-            aria-label="展开 AI 助教"
+            aria-label={t("learnpage.expand_ai_tutor")}
             style={{
               width: 56,
               padding: "16px 0",

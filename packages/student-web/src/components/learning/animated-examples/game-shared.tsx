@@ -2,6 +2,7 @@
 
 import { type ReactNode } from "react"
 import { Trophy, PartyPopper, RotateCcw } from "lucide-react"
+import { useT } from "@/lib/i18n/use-t"
 
 /**
  * Deterministic shuffle using a string seed (title hash).
@@ -51,15 +52,16 @@ export function GameComplete({
   total: number
   onReset: () => void
 }) {
+  const t = useT()
   const pct = total > 0 ? Math.round((correct / total) * 100) : 0
   const message =
     pct === 100
-      ? "太棒了！全部正确！"
+      ? t("game.encourage.perfect")
       : pct >= 70
-      ? "做得不错！继续加油！"
+      ? t("game.encourage.good")
       : pct >= 40
-      ? "还不错，再试试看？"
-      : "别灰心，多练习几次！"
+      ? t("game.encourage.okay")
+      : t("game.encourage.keep_trying")
 
   return (
     <div
@@ -74,7 +76,7 @@ export function GameComplete({
         className="mt-2 flex items-center gap-1.5 px-4 py-2 text-sm rounded-md border hover:bg-muted/50 transition-colors"
       >
         <RotateCcw className="h-3.5 w-3.5" />
-        再来一次
+        {t("game.retry")}
       </button>
 
       <style jsx>{`

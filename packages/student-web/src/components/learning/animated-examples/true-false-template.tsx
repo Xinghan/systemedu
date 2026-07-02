@@ -4,8 +4,10 @@ import { useState, useCallback } from "react"
 import { Check, X } from "lucide-react"
 import { GameComplete, GameProgress, FeedbackBadge } from "./game-shared"
 import type { TrueFalseData } from "./types"
+import { useT } from "@/lib/i18n/use-t"
 
 export function TrueFalseTemplate({ data }: { data: TrueFalseData }) {
+  const t = useT()
   const statements = data.statements ?? []
   const [current, setCurrent] = useState(0)
   const [answered, setAnswered] = useState(false)
@@ -73,7 +75,7 @@ export function TrueFalseTemplate({ data }: { data: TrueFalseData }) {
             }`}
           >
             <Check className="h-4 w-4" />
-            正确
+            {t("game.true")}
           </button>
           <button
             onClick={() => handleAnswer(false)}
@@ -89,7 +91,7 @@ export function TrueFalseTemplate({ data }: { data: TrueFalseData }) {
             }`}
           >
             <X className="h-4 w-4" />
-            错误
+            {t("game.false")}
           </button>
         </div>
 
@@ -106,7 +108,7 @@ export function TrueFalseTemplate({ data }: { data: TrueFalseData }) {
             onClick={handleNext}
             className="px-4 py-2 text-sm rounded-md bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
           >
-            {current + 1 >= statements.length ? "查看结果" : "下一题"}
+            {current + 1 >= statements.length ? t("game.see_results") : t("game.next_question")}
           </button>
         </div>
       )}

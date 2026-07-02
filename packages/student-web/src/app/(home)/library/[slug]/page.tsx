@@ -172,7 +172,7 @@ export default function ProjectHome() {
           }
         }
       } catch (err) {
-        toast.error(err instanceof Error ? err.message : "加载失败")
+        toast.error(err instanceof Error ? err.message : t("session.load_failed"))
       } finally {
         setLoading(false)
       }
@@ -213,10 +213,10 @@ export default function ProjectHome() {
     try {
       await myProjects.pull(slug)
       setPulled(true)
-      toast.success("已加入我的项目")
+      toast.success(t("library.pulled_toast"))
       router.push("/home")
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "加入失败")
+      toast.error(err instanceof Error ? err.message : t("library.pull_failed"))
     } finally {
       setPulling(false)
     }
@@ -226,7 +226,7 @@ export default function ProjectHome() {
     return (
       <main className="page-wide" style={{ maxWidth: 1100, paddingTop: 18 }}>
         <div className="card" style={{ padding: 32, textAlign: "center", color: "var(--sub)" }}>
-          加载中…
+          {t("home.loading")}
         </div>
       </main>
     )
@@ -235,9 +235,9 @@ export default function ProjectHome() {
     return (
       <main className="page-wide" style={{ maxWidth: 1100, paddingTop: 18 }}>
         <div className="card" style={{ padding: 32, textAlign: "center" }}>
-          <p style={{ color: "var(--sub)", marginBottom: 12 }}>项目不存在</p>
+          <p style={{ color: "var(--sub)", marginBottom: 12 }}>{t("library.not_found")}</p>
           <Link href="/library" className="btn btn-ghost btn-sm">
-            返回 Library
+            {t("library.back_to_library")}
           </Link>
         </div>
       </main>
@@ -251,8 +251,8 @@ export default function ProjectHome() {
     <main className="page-wide" style={{ paddingTop: 18, maxWidth: 1100 }}>
       <Crumbs
         items={[
-          { label: "Home" },
-          { label: "Library" },
+          { label: t("nav.home") },
+          { label: t("library.title") },
           { label: project.slug, mono: true },
         ]}
       />
@@ -507,7 +507,7 @@ export default function ProjectHome() {
                 style={hasCover ? { color: "rgba(255,255,255,0.7)" } : undefined}
               >
                 <span className="dot" />
-                {pulled ? "My Projects" : "Library"}
+                {pulled ? t("nav.my_projects") : t("library.title")}
               </div>
               {pulled ? (
                 <span className="pip run" style={{ fontSize: 10.5 }}>
@@ -560,7 +560,7 @@ export default function ProjectHome() {
                 style={{ justifyContent: "center" }}
               >
                 <Download size={15} strokeWidth={1.5} />
-                {pulling ? "加入中..." : "加入我的项目"}
+                {pulling ? t("library.pulling") : t("library.pull")}
               </button>
             ) : targetModuleId ? (
               <Link
@@ -683,21 +683,21 @@ export default function ProjectHome() {
               <Outcome
                 t={
                   modules.length > 0
-                    ? `${modules.length} 个章节走完`
-                    : "全部章节走完"
+                    ? t("project_detail.outcome.chapters_done", { n: modules.length })
+                    : t("project_detail.outcome.all_chapters_done")
                 }
-                sub="按知识树顺序完成"
+                sub={t("project_detail.outcome.tree_order_sub")}
               />
-              <Outcome t="AI 助教共学记录" sub="苏格拉底式问答陪伴整个项目" />
+              <Outcome t={t("project_detail.outcome.ai_record")} sub={t("project_detail.outcome.ai_record_sub")} />
               <Outcome
                 t={
                   project.duration_weeks
-                    ? `${project.duration_weeks} 周完整学习路径`
-                    : "完整学习路径"
+                    ? t("project_detail.outcome.weeks_path", { n: project.duration_weeks })
+                    : t("project_detail.outcome.full_path")
                 }
-                sub="按节奏 weekly 推进"
+                sub={t("project_detail.outcome.weekly_sub")}
               />
-              <Outcome t="项目成果交付" sub="动手输出 + 作业提交" />
+              <Outcome t={t("project_detail.outcome.delivery")} sub={t("project_detail.outcome.delivery_sub")} />
             </ul>
           )}
         </Block>
@@ -709,7 +709,7 @@ export default function ProjectHome() {
         >
           {stages.length === 0 ? (
             <p className="body" style={{ color: "var(--sub)" }}>
-              暂无章节数据
+              {t("project_detail.no_chapters")}
             </p>
           ) : (
             <Curriculum
@@ -725,7 +725,7 @@ export default function ProjectHome() {
         </Block>
 
         {/* §04 Knowledge Tree (spec 035) */}
-        <Block n="04" t="Knowledge Tree · 本项目点亮的平台知识点" last>
+        <Block n="04" t={`Knowledge Tree · ${t("project_detail.knowledge_tree_sub")}`} last>
           <KnowledgeTreeSection slug={slug} />
         </Block>
       </div>
@@ -864,31 +864,32 @@ const KIND_META: Record<
 > = {
   capability: {
     Icon: GraduationCap,
-    label: "能力",
+    label: "project_detail.kind.capability",
     tint: "var(--computing)",
     soft: "var(--computing-soft)",
   },
   artifact: {
     Icon: Wrench,
-    label: "制品",
+    label: "project_detail.kind.artifact",
     tint: "var(--aerospace)",
     soft: "var(--aerospace-soft)",
   },
   service: {
     Icon: Globe,
-    label: "服务",
+    label: "project_detail.kind.service",
     tint: "var(--climate)",
     soft: "var(--climate-soft)",
   },
   publication: {
     Icon: FileText,
-    label: "出版",
+    label: "project_detail.kind.publication",
     tint: "var(--bio)",
     soft: "var(--bio-soft)",
   },
 }
 
 function FinalOutcomeCard({ outcome }: { outcome: FinalOutcome }) {
+  const t = useT()
   const meta = KIND_META[outcome.kind] || KIND_META.artifact
   const Icon = meta.Icon
   return (
@@ -932,7 +933,7 @@ function FinalOutcomeCard({ outcome }: { outcome: FinalOutcome }) {
               className="mono"
               style={{ fontSize: 10.5, color: meta.tint, fontWeight: 500 }}
             >
-              {meta.label.toUpperCase()}
+              {t(meta.label).toUpperCase()}
             </span>
             {outcome.related_stage_id && (
               <span
@@ -1200,6 +1201,7 @@ function Curriculum({
 // ──────────────────────────────────────────────────────────────────────────
 
 function KnowledgeTreeSection({ slug }: { slug: string }) {
+  const t = useT()
   const router = useRouter()
   const [platformTree, setPlatformTree] = useState<PlatformTree | null>(null)
   const [projectTree, setProjectTree] = useState<ProjectKnowledgeTree | null>(null)
@@ -1221,7 +1223,7 @@ function KnowledgeTreeSection({ slug }: { slug: string }) {
       })
       .catch((e: unknown) => {
         if (cancelled) return
-        const msg = e instanceof Error ? e.message : "无法加载知识树"
+        const msg = e instanceof Error ? e.message : t("project_detail.tree_load_failed")
         setErr(msg)
       })
       .finally(() => {
