@@ -213,10 +213,10 @@ export default function ProjectHome() {
     try {
       await myProjects.pull(slug)
       setPulled(true)
-      toast.success("已加入我的书架")
+      toast.success("已加入我的项目")
       router.push("/home")
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Pull 失败")
+      toast.error(err instanceof Error ? err.message : "加入失败")
     } finally {
       setPulling(false)
     }
@@ -507,7 +507,7 @@ export default function ProjectHome() {
                 style={hasCover ? { color: "rgba(255,255,255,0.7)" } : undefined}
               >
                 <span className="dot" />
-                {pulled ? "Your shelf" : "Library"}
+                {pulled ? "My Projects" : "Library"}
               </div>
               {pulled ? (
                 <span className="pip run" style={{ fontSize: 10.5 }}>
@@ -515,7 +515,7 @@ export default function ProjectHome() {
                 </span>
               ) : (
                 <span className="pip idle" style={{ fontSize: 10.5 }}>
-                  NOT PULLED
+                  NOT ADDED
                 </span>
               )}
             </div>
@@ -549,7 +549,7 @@ export default function ProjectHome() {
                 className="btn btn-violet btn-lg"
                 style={{ justifyContent: "center" }}
               >
-                <Lock size={14} strokeWidth={1.5} /> 登录后 Pull
+                <Lock size={14} strokeWidth={1.5} /> 登录后加入
               </Link>
             ) : !pulled ? (
               <button
@@ -560,7 +560,7 @@ export default function ProjectHome() {
                 style={{ justifyContent: "center" }}
               >
                 <Download size={15} strokeWidth={1.5} />
-                {pulling ? "Pulling..." : "Pull to my shelf"}
+                {pulling ? "加入中..." : "加入我的项目"}
               </button>
             ) : targetModuleId ? (
               <Link

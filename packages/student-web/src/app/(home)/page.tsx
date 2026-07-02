@@ -45,8 +45,9 @@ const COPY = {
     heroLine2pre: "",
     heroLine2hi: "AI 纪元",
     heroLine2post: "，从 10 岁开始。",
+    heroSubtitle: "33 个真实工业项目 + AI 私人导师，10 岁也能从零做出机器人、AI 药物发现、脑机接口这样的东西。",
     ctaBrowse: "浏览全部项目",
-    ctaDash: "我的书架",
+    ctaDash: "我的项目",
     ctaSignIn: "登录",
     comingSoon: "即将上线",
     live: "现在就能学",
@@ -93,7 +94,7 @@ const COPY = {
     howEyebrow: "怎么运转",
     howTitle: "一个项目是怎么活起来的",
     ctaTitle: "准备好造点真东西了吗?",
-    ctaBody: "免费注册, 把第一个项目 Pull 到你的书架。AI agent 全程陪你。",
+    ctaBody: "免费注册, 加入你的第一个项目。AI agent 全程陪你。",
     ctaStart: "免费开始",
     footTagline:
       "AI Agent 驱动的项目制学习平台。给 10–18 岁的造物者做工业级真实项目, AI 导师全程苏格拉底式陪伴。",
@@ -105,8 +106,9 @@ const COPY = {
     heroLine2pre: "The ",
     heroLine2hi: "AI era",
     heroLine2post: " starts at 10.",
+    heroSubtitle: "33 real industry projects + a private AI mentor — kids as young as 10 build things like robots, AI drug discovery, and brain-computer interfaces, from scratch.",
     ctaBrowse: "Browse all projects",
-    ctaDash: "My shelf",
+    ctaDash: "My Projects",
     ctaSignIn: "Sign in",
     comingSoon: "Coming soon",
     live: "Learn it now",
@@ -146,7 +148,7 @@ const COPY = {
     howEyebrow: "How it works",
     howTitle: "How a project comes to life",
     ctaTitle: "Ready to build a real thing?",
-    ctaBody: "Sign up free and pull your first project onto your shelf. The AI agent is with you the whole way.",
+    ctaBody: "Sign up free and add your first project. The AI agent is with you the whole way.",
     ctaStart: "Start free",
     footTagline:
       "An AI-agent-driven, project-based learning platform. Industry-grade real projects for builders aged 10–18, with a Socratic AI tutor by your side.",
@@ -211,6 +213,9 @@ export default function Homepage() {
             <span style={{ color: "var(--aerospace)" }}>{t.heroLine2hi}</span>
             {t.heroLine2post}
           </h1>
+          <p style={{ fontSize: 17, lineHeight: 1.6, color: "var(--sub)", marginTop: 18, maxWidth: 620, marginLeft: "auto", marginRight: "auto" }}>
+            {t.heroSubtitle}
+          </p>
           <div style={{ display: "flex", gap: 12, marginTop: 30, justifyContent: "center" }}>
             <Link href={loggedIn ? "/home" : "/login"} className="btn btn-violet btn-lg">
               {loggedIn ? t.ctaDash : t.ctaStart}
