@@ -6,7 +6,7 @@ import {
   X, CheckCircle2, BookOpen, Zap, Gamepad2, BookMarked,
   Terminal, ChevronDown, ChevronRight, Circle, Play, Pause, Square,
   ClipboardList, CheckCircle, XCircle, Lightbulb, Sparkles, Clock,
-  Atom, Image as ImageIcon, Package, AlertTriangle,
+  Atom, Image as ImageIcon, Package, AlertTriangle, ExternalLink,
 } from "lucide-react"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
@@ -313,6 +313,134 @@ function YouTubeModal({
 // ---------------------------------------------------------------------------
 // Markdown renderer — ReactMarkdown + GFM (tables, strikethrough, etc.)
 // ---------------------------------------------------------------------------
+interface ExternalLinkItem {
+  title: string
+  url: string
+  description: string
+}
+
+/** 从形如 "- [**title**](url) — desc" 的 markdown bullet 列表里解析结构化条目。
+ *  解析失败(格式不符预期)时返回 null, 调用方原样走普通 markdown 渲染兜底。 */
+function parseExternalLinkList(body: string): ExternalLinkItem[] | null {
+  const lines = body.split("\n").map((l) => l.trim()).filter(Boolean)
+  const bulletLines = lines.filter((l) => l.startsWith("-"))
+  if (bulletLines.length === 0) return null
+  const items: ExternalLinkItem[] = []
+  const re = /^-\s*\[\*\*(.+?)\*\*\]\((\S+?)\)\s*(?:—|-)?\s*(.*)$/
+  for (const line of bulletLines) {
+    const m = line.match(re)
+    if (!m) return null // 有一行不符合预期格式, 整段退回普通 markdown 渲染
+    items.push({ title: m[1], url: m[2], description: m[3] || "" })
+  }
+  return items
+}
+
+/** "延伸阅读" / "推荐互动资源" 专用: 带图标的可点击卡片列表, 替代纯 markdown bullet。
+ *  kind 决定图标(网页用 ExternalLink, LabXchange 用 BookOpen)。 */
+function ExternalLinksSection({ items, kind }: { items: ExternalLinkItem[]; kind: "web" | "labxchange" }) {
+  const Icon = kind === "labxchange" ? BookOpen : ExternalLink
+  return (
+    <div className="flex flex-col gap-2 my-3">
+      {items.map((item, i) => (
+        <a
+          key={i}
+          href={item.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="group flex items-start gap-3 rounded-xl border p-3 transition-colors"
+          style={{ borderColor: "var(--border)", background: "var(--card)" }}
+        >
+          <div
+            className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 mt-0.5"
+            style={{ background: "var(--primary-soft)" }}
+          >
+            <Icon className="h-4 w-4" style={{ color: "var(--primary-ink)" }} />
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-semibold group-hover:underline" style={{ color: "var(--ink)" }}>
+              {item.title}
+            </p>
+            {item.description && (
+              <p className="text-xs mt-0.5 line-clamp-2" style={{ color: "var(--sub)" }}>
+                {item.description}
+              </p>
+            )}
+          </div>
+        </a>
+      ))}
+    </div>
+  )
+}
+
+/** 把 content 按 "## 延伸阅读" / "## 推荐互动资源" 切分成若干段, 特殊段落用
+ *  ExternalLinksSection 结构化渲染, 其余段落仍走普通 MarkdownBlock。 */
+function ContentWithLinkSections({ content }: { content: string }) {
+  const t = useT()
+  const SPECIAL_HEADINGS: Array<{ zh: string; kind: "web" | "labxchange" }> = [
+    { zh: "延伸阅读", kind: "web" },
+    { zh: "推荐互动资源", kind: "labxchange" },
+  ]
+
+  // 找到所有 "## xxx" heading 的位置, 按顺序切成 [heading?, body][]
+  const headingRe = /^## (.+)$/gm
+  const matches = [...content.matchAll(headingRe)]
+  if (matches.length === 0) return <MarkdownBlock content={content} />
+
+  const segments: Array<{ heading: string | null; body: string }> = []
+  let prevEnd = 0
+  if (matches[0].index! > 0) {
+    segments.push({ heading: null, body: content.slice(0, matches[0].index) })
+  }
+  for (let i = 0; i < matches.length; i++) {
+    const start = matches[i].index!
+    const end = i + 1 < matches.length ? matches[i + 1].index! : content.length
+    segments.push({ heading: matches[i][1].trim(), body: content.slice(start, end) })
+    prevEnd = end
+  }
+  void prevEnd
+
+  return (
+    <>
+      {segments.map((seg, idx) => {
+        const special = seg.heading
+          ? SPECIAL_HEADINGS.find((h) => seg.heading === h.zh || seg.heading?.includes(h.zh))
+          : null
+        if (special) {
+          // body 含 "## heading" 本行 + 引用说明 + bullet 列表; 剥掉 heading 行后解析
+          const withoutHeading = seg.body.replace(/^## .+\n?/, "")
+          const items = parseExternalLinkList(withoutHeading)
+          const HEADING_IDS: Record<string, string> = {
+            "推荐视频": "section-youtube",
+            "推荐互动资源": "section-labxchange",
+            "延伸阅读": "section-web",
+          }
+          const aliasId = Object.entries(HEADING_IDS).find(([k]) => seg.heading?.includes(k))?.[1]
+          if (items) {
+            return (
+              <div key={idx} className="space-y-3">
+                <h2
+                  id={slugifyHeading(seg.heading!)}
+                  className="text-2xl font-bold mt-8 mb-1 text-on-surface tracking-tight scroll-mt-20"
+                >
+                  {aliasId && <span id={aliasId} className="block h-0 -mt-20 pt-20" aria-hidden="true" />}
+                  {seg.heading}
+                </h2>
+                <p className="text-sm" style={{ color: "var(--sub)" }}>
+                  {special.kind === "labxchange" ? t("course.labxchange_hint") : t("course.web_reading_hint")}
+                </p>
+                <ExternalLinksSection items={items} kind={special.kind} />
+              </div>
+            )
+          }
+          // 解析失败(格式不符预期) — 退回普通 markdown 渲染整段(含 heading)
+          return <MarkdownBlock key={idx} content={seg.body} />
+        }
+        return <MarkdownBlock key={idx} content={seg.body} />
+      })}
+    </>
+  )
+}
+
 function MarkdownBlock({ content }: { content: string }) {
   const t = useT()
   const [ytModal, setYtModal] = useState<{ videoId: string; title: string } | null>(null)
@@ -1857,7 +1985,7 @@ function SectionBlock({
           // Text content -> render markdown
           const stripped = part.replace(/^##\s+.+\n?/, "")
           if (!stripped.trim()) return null
-          return <MarkdownBlock key={idx} content={stripped} />
+          return <ContentWithLinkSections key={idx} content={stripped} />
         })}
       </div>
     </div>
@@ -1927,7 +2055,7 @@ function PlanWithIdeas({ content }: { content: CourseContent }) {
           )
         }
         if (!part.trim()) return null
-        return <MarkdownBlock key={idx} content={part} />
+        return <ContentWithLinkSections key={idx} content={part} />
       })}
     </div>
   )
