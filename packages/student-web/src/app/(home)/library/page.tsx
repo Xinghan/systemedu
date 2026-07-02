@@ -23,6 +23,7 @@ import { useAuthStore } from "@/lib/stores/auth-store"
 import { useT } from "@/lib/i18n/use-t"
 import { StoryModal } from "@/components/library/StoryModal"
 import { ApplyProjectModal } from "@/components/layout/apply-project-modal"
+import { InlineLoading } from "@/components/ui/page-loading"
 
 // Crumbs
 function Crumbs({ items }: { items: { label: string }[] }) {
@@ -215,12 +216,12 @@ export default function LibraryListPage() {
 
       {/* Project grid */}
       {loading ? (
-        <div className="card" style={{ padding: 32, textAlign: "center", color: "var(--sub)" }}>
-          加载中…
+        <div className="card">
+          <InlineLoading label={t("home.loading")} />
         </div>
       ) : filtered.length === 0 ? (
         <div className="card" style={{ padding: 32, textAlign: "center", color: "var(--sub)" }}>
-          没有匹配项目
+          {t("library.no_match")}
         </div>
       ) : (
         <div

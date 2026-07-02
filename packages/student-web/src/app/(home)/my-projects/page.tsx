@@ -21,6 +21,7 @@ import {
 import { library, myProjects, type MyProjectItem } from "@/lib/api"
 import { useAuthStore } from "@/lib/stores/auth-store"
 import { useT } from "@/lib/i18n/use-t"
+import { InlineLoading } from "@/components/ui/page-loading"
 
 type Status = "active" | "paused" | "shipped"
 type FilterKey = Status | "all"
@@ -262,8 +263,8 @@ export default function MyProjectsPage() {
       </div>
 
       {loading ? (
-        <div className="card" style={{ padding: 32, textAlign: "center", color: "var(--sub)" }}>
-          {t("myprojects.loading")}
+        <div className="card">
+          <InlineLoading label={t("myprojects.loading")} />
         </div>
       ) : forks.length === 0 ? (
         <EmptyShelf />

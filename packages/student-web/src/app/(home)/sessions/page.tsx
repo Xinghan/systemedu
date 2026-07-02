@@ -8,6 +8,7 @@ import { ChevronRight, MessageSquare } from "lucide-react"
 import { chatSessions, type ChatSessionDTO } from "@/lib/api"
 import { useAuthStore } from "@/lib/stores/auth-store"
 import { useT } from "@/lib/i18n/use-t"
+import { InlineLoading } from "@/components/ui/page-loading"
 
 export default function SessionsPage() {
   const router = useRouter()
@@ -57,8 +58,8 @@ export default function SessionsPage() {
       </header>
 
       {loading ? (
-        <div className="card-elevated" style={{ padding: 56, textAlign: "center", color: "var(--sub)" }}>
-          {t("home.loading")}
+        <div className="card-elevated">
+          <InlineLoading label={t("home.loading")} />
         </div>
       ) : items.length === 0 ? (
         <div className="card-elevated" style={{ padding: 56, textAlign: "center" }}>

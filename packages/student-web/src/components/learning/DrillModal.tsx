@@ -13,6 +13,7 @@ import { X, Sparkles } from "lucide-react"
 
 import { knowledgeDrill, type DrillContent, type DrillRecord } from "@/lib/api"
 import { useT } from "@/lib/i18n/use-t"
+import { InlineLoading } from "@/components/ui/page-loading"
 
 interface Props {
   open: boolean
@@ -61,7 +62,7 @@ export function DrillModal({ open, onClose, librarySlug, moduleId, highlightText
           "{title}"
         </p>
 
-        {loading && <p className="py-8 text-center text-sm text-[var(--sub)]">{t("drill.loading")}</p>}
+        {loading && <InlineLoading label={t("drill.loading")} padding={32} />}
         {err && <p className="py-8 text-center text-sm text-red-500">{t("drill.failed")}</p>}
         {content && (
           <div className="space-y-5 text-[var(--ink)]">

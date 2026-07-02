@@ -16,6 +16,7 @@ import {
 import { library, myKnodes, myProjects, type MyProjectItem } from "@/lib/api"
 import { useAuthStore } from "@/lib/stores/auth-store"
 import { useT } from "@/lib/i18n/use-t"
+import { InlineLoading } from "@/components/ui/page-loading"
 
 // ── 面包屑 ──
 function Crumbs({ items }: { items: { label: string }[] }) {
@@ -154,7 +155,7 @@ export default function HomePage() {
         </Link>
       </div>
 
-      {loading && <p style={{ color: "var(--sub)", fontSize: 14, padding: "32px 0" }}>{t("home.loading")}</p>}
+      {loading && <InlineLoading label={t("home.loading")} padding={40} />}
 
       {!loading && items.length === 0 && (
         <div

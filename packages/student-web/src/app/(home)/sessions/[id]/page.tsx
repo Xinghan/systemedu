@@ -8,6 +8,7 @@ import { ArrowLeft, ChevronRight, Trash2 } from "lucide-react"
 import { chatSessions, type ChatSessionDTO, type ChatMessageDTO } from "@/lib/api"
 import { useAuthStore } from "@/lib/stores/auth-store"
 import { useT } from "@/lib/i18n/use-t"
+import { InlineLoading } from "@/components/ui/page-loading"
 
 export default function SessionDetailPage({
   params,
@@ -55,7 +56,7 @@ export default function SessionDetailPage({
   }
 
   if (loading) {
-    return <main className="page-wide"><p className="sub">{t("session.loading")}</p></main>
+    return <main className="page-wide"><InlineLoading label={t("session.loading")} /></main>
   }
   if (!session) {
     return (

@@ -26,6 +26,7 @@ import { KnowledgeTreeModal } from "@/components/learning/knowledge-tree-modal"
 import { KnodeCompleteButton } from "@/components/learning/KnodeCompleteButton"
 import type { KnodeInfo } from "@/lib/types/api"
 import { useT } from "@/lib/i18n/use-t"
+import { LoadingSpinner } from "@/components/ui/loading-spinner"
 
 interface ProjectTreeModule {
   module_id: string
@@ -210,11 +211,9 @@ export default function LearnPage() {
           height: "calc(100vh - 57px)",
           display: "grid",
           placeItems: "center",
-          color: "var(--sub)",
-          fontSize: 14,
         }}
       >
-        {t("home.loading")}
+        <LoadingSpinner size="lg" label={t("home.loading")} />
       </main>
     )
   }

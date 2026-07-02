@@ -20,6 +20,7 @@ import {
 import { KnowledgeTreeView } from "./KnowledgeTreeView"
 import { RecommendNextProjects } from "./RecommendNextProjects"
 import { useT } from "@/lib/i18n/use-t"
+import { InlineLoading } from "@/components/ui/page-loading"
 
 export function UserKnowledgeTreeView() {
   const t = useT()
@@ -52,7 +53,7 @@ export function UserKnowledgeTreeView() {
   }, [])
 
   if (loading) {
-    return <p className="text-sm text-[var(--sub)]">{t("usertree.loading")}</p>
+    return <InlineLoading label={t("usertree.loading")} padding={40} />
   }
   if (err) {
     return <p className="text-sm text-[var(--sub)]">{err}</p>

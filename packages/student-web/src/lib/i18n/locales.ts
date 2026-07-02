@@ -120,6 +120,7 @@ export const zh = {
   "library.stats": "{p} 个项目 · {d} 个领域",
   "library.filters": "筛选",
   "library.grid": "网格",
+  "library.no_match": "没有匹配项目",
   // 学科领域 (tab 显示用; filter 匹配仍用英文 key)
   "domain.climate": "气候",
   "domain.aerospace": "航空航天",
@@ -688,6 +689,7 @@ export const en: Record<TranslationKey, string> = {
   "library.stats": "{p} projects · {d} domains",
   "library.filters": "Filters",
   "library.grid": "Grid",
+  "library.no_match": "No matching projects",
   "domain.climate": "Climate",
   "domain.aerospace": "Aerospace",
   "domain.bioscience": "Bioscience",

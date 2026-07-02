@@ -8,6 +8,7 @@ import { memory, type MemoryFact } from "@/lib/api"
 import { useAuthStore } from "@/lib/stores/auth-store"
 import { UserKnowledgeTreeView } from "@/components/learning/UserKnowledgeTreeView"
 import { useT } from "@/lib/i18n/use-t"
+import { InlineLoading } from "@/components/ui/page-loading"
 
 const CATEGORY_LABEL_KEY: Record<string, string> = {
   interest: "memory.category.interest",
@@ -119,8 +120,8 @@ export default function MemoryPage() {
       {activeTab === "knowledge" ? (
         <UserKnowledgeTreeView />
       ) : loading ? (
-        <div className="card-elevated" style={{ padding: 56, textAlign: "center", color: "var(--sub)" }}>
-          {t("home.loading")}
+        <div className="card-elevated">
+          <InlineLoading label={t("home.loading")} />
         </div>
       ) : cats.length === 0 ? (
         <div className="card-elevated" style={{ padding: 56, textAlign: "center" }}>

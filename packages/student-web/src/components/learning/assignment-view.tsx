@@ -14,6 +14,7 @@ import type { KnodeInfo, NodeProgress, ExerciseAttemptPayload } from "@/lib/type
 import { gateway } from "@/lib/api"
 import { CapstoneSubmissionPanel } from "./capstone-submission-panel"
 import { useT } from "@/lib/i18n/use-t"
+import { LoadingSpinner } from "@/components/ui/loading-spinner"
 
 interface AssignmentViewProps {
   content: string
@@ -507,7 +508,7 @@ function QaQuestion({ qa, projectName, knodeId }: {
           </>
         ) : grading ? (
           <div className="flex items-center gap-3 py-6 justify-center">
-            <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+            <LoadingSpinner size="xs" inline />
             <span className="text-sm text-muted-foreground">{t("assignment.grading")}</span>
           </div>
         ) : evalResult && (

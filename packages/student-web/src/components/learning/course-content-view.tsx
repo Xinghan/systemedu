@@ -3,7 +3,7 @@
 import { createContext, useContext, useEffect, useRef, useState } from "react"
 import { createPortal } from "react-dom"
 import {
-  X, CheckCircle2, Loader2, BookOpen, Zap, Gamepad2, BookMarked,
+  X, CheckCircle2, BookOpen, Zap, Gamepad2, BookMarked,
   Terminal, ChevronDown, ChevronRight, Circle, Play, Pause, Square,
   ClipboardList, CheckCircle, XCircle, Lightbulb, Sparkles, Clock,
   Atom, Image as ImageIcon, Package, AlertTriangle,
@@ -19,6 +19,7 @@ import { TeacherSceneView } from "@/components/learning/teacher-scene-view"
 import { HighlightAskButton } from "./HighlightAskButton"
 import { DrillRecords } from "./DrillRecords"
 import { DrillModal } from "./DrillModal"
+import { LoadingSpinner } from "@/components/ui/loading-spinner"
 import type {
   CourseContent,
   CourseContentData,
@@ -2728,7 +2729,7 @@ export function CourseContentView({
           }}
         />
         <div className="flex-1 flex flex-col items-center justify-center gap-3 text-muted-foreground">
-          <Loader2 className="h-6 w-6 animate-spin text-primary/50" />
+          <LoadingSpinner size="sm" />
           <p className="text-xs">{t("course.checking_content")}</p>
         </div>
       </div>

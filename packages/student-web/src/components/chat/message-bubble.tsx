@@ -1,8 +1,9 @@
 "use client"
 
-import { Wrench, Check, Loader2 } from "lucide-react"
+import { Wrench, Check } from "lucide-react"
 import { MarkdownRenderer } from "./markdown-renderer"
 import type { ChatMessage, ToolCallInfo } from "@/lib/stores/chat-store"
+import { LoadingSpinner } from "@/components/ui/loading-spinner"
 
 // AI avatar — Industrial Atelier coral (var(--primary) #D97757)
 function AIAvatar() {
@@ -142,7 +143,7 @@ export function ToolCallIndicator({ toolCalls }: { toolCalls: ToolCallInfo[] }) 
             <Wrench className="h-3 w-3" />
             <span>{tc.name}</span>
             {tc.status === "calling" ? (
-              <Loader2 className="h-3 w-3 animate-spin" />
+              <LoadingSpinner size="xs" inline />
             ) : (
               <Check className="h-3 w-3 text-cyan-500" />
             )}

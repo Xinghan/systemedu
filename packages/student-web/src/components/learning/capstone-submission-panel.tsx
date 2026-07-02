@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react"
 import {
-  CheckCircle, Circle, Upload, FileText, Loader2,
+  CheckCircle, Circle, Upload, FileText,
   ChevronDown, ChevronUp, AlertCircle, Send, RotateCcw,
   ClipboardCheck, PenLine, Paperclip, Trophy, XCircle,
 } from "lucide-react"
@@ -11,6 +11,7 @@ import type {
   KnodeInfo, NodeProgress, CapstoneSubmissionDetail, CapstoneFeedbackItem,
 } from "@/lib/types/api"
 import { useT } from "@/lib/hooks/use-t"
+import { LoadingSpinner } from "@/components/ui/loading-spinner"
 
 interface CapstoneSubmissionPanelProps {
   projectName: string
@@ -315,7 +316,7 @@ export function CapstoneSubmissionPanel({
         >
           {uploading ? (
             <>
-              <Loader2 className="h-4 w-4 animate-spin" />
+              <LoadingSpinner size="xs" inline />
               {t("capstone.submitting")}
             </>
           ) : (
@@ -337,7 +338,7 @@ export function CapstoneSubmissionPanel({
       <div className="mt-8">
         <div className="rounded-xl border border-border/60 bg-card p-8 flex flex-col items-center justify-center gap-4">
           <div className="h-12 w-12 rounded-2xl bg-primary/10 flex items-center justify-center">
-            <Loader2 className="h-6 w-6 animate-spin text-primary" />
+            <LoadingSpinner size="sm" />
           </div>
           <div className="text-center">
             <p className="text-sm font-semibold font-[var(--font-manrope)] text-foreground">

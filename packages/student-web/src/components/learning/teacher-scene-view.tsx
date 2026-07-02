@@ -13,6 +13,7 @@ import { myProjects } from "@/lib/api"
 import { getToken } from "@/lib/auth"
 import type { SlideEntry } from "@/lib/types/api"
 import { useT } from "@/lib/i18n/use-t"
+import { LoadingSpinner } from "@/components/ui/loading-spinner"
 
 interface TeacherSceneViewProps {
   knode: unknown
@@ -73,8 +74,8 @@ export function TeacherSceneView({ projectName, moduleId }: TeacherSceneViewProp
 
   if (slides === null) {
     return (
-      <div className="flex h-full items-center justify-center text-sm text-[var(--sub)]">
-        {t("teacher.loading_slides")}
+      <div className="flex h-full items-center justify-center">
+        <LoadingSpinner size="md" label={t("teacher.loading_slides")} />
       </div>
     )
   }
@@ -112,7 +113,7 @@ export function TeacherSceneView({ projectName, moduleId }: TeacherSceneViewProp
                 {t("teacher.audio_unsupported")}
               </audio>
             ) : (
-              <span className="text-xs text-[var(--sub)]">{t("teacher.audio_loading")}</span>
+              <LoadingSpinner size="xs" inline label={t("teacher.audio_loading")} />
             )
           ) : (
             <span className="text-xs text-[var(--sub)]">{t("teacher.no_audio")}</span>

@@ -9,6 +9,7 @@ import { memory, type MemoryFact, chatSessions, type ChatSessionDTO } from "@/li
 import { useAuthStore } from "@/lib/stores/auth-store"
 import { UserKnowledgeTreeView } from "@/components/learning/UserKnowledgeTreeView"
 import { useT } from "@/lib/i18n/use-t"
+import { InlineLoading } from "@/components/ui/page-loading"
 
 // 学习大脑 — 聚合页: 记忆 / 知识图谱 / 学习记录 三 tab。
 // 替代散落的 /memory + /sessions, 统一入口 (home 卡片进入)。/memory /sessions 路由保留兼容。
@@ -142,7 +143,7 @@ export default function BrainPage() {
       {/* ── 记忆 ── */}
       {activeTab === "memory" && (
         memLoading ? (
-          <div className="card-elevated" style={{ padding: 56, textAlign: "center", color: "var(--sub)" }}>{t("home.loading")}</div>
+          <div className="card-elevated"><InlineLoading label={t("home.loading")} /></div>
         ) : cats.length === 0 ? (
           <div className="card-elevated" style={{ padding: 56, textAlign: "center" }}>
             <Sparkles size={36} strokeWidth={1.5} style={{ color: "var(--sub-2)", margin: "0 auto 12px" }} />
@@ -194,7 +195,7 @@ export default function BrainPage() {
       {/* ── 学习记录 ── */}
       {activeTab === "sessions" && (
         sessLoading ? (
-          <div className="card-elevated" style={{ padding: 56, textAlign: "center", color: "var(--sub)" }}>{t("home.loading")}</div>
+          <div className="card-elevated"><InlineLoading label={t("home.loading")} /></div>
         ) : sessions.length === 0 ? (
           <div className="card-elevated" style={{ padding: 56, textAlign: "center" }}>
             <MessageSquare size={36} strokeWidth={1.5} style={{ color: "var(--sub-2)", margin: "0 auto 12px" }} />

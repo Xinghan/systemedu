@@ -37,6 +37,7 @@ import { KnowledgeTreeModal } from "@/components/learning/knowledge-tree-modal"
 import { KnowledgeTreeView } from "@/components/learning/KnowledgeTreeView"
 import { StoryModal } from "@/components/library/StoryModal"
 import { useT } from "@/lib/i18n/use-t"
+import { InlineLoading } from "@/components/ui/page-loading"
 import type { PlatformTree, ProjectKnowledgeTree } from "@/lib/api"
 
 type Stage = { stage_id: string; title: string; stage_goal?: string }
@@ -226,8 +227,8 @@ export default function ProjectHome() {
   if (loading) {
     return (
       <main className="page-wide" style={{ maxWidth: 1100, paddingTop: 18 }}>
-        <div className="card" style={{ padding: 32, textAlign: "center", color: "var(--sub)" }}>
-          {t("home.loading")}
+        <div className="card">
+          <InlineLoading label={t("home.loading")} />
         </div>
       </main>
     )
@@ -1166,11 +1167,7 @@ function KnowledgeTreeSection({ slug }: { slug: string }) {
   }, [slug])
 
   if (loading) {
-    return (
-      <p className="body" style={{ color: "var(--sub)" }}>
-        {t("project_detail.loading_platform_tree")}
-      </p>
-    )
+    return <InlineLoading label={t("project_detail.loading_platform_tree")} padding={24} />
   }
   if (err) {
     return (
