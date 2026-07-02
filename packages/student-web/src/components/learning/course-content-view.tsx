@@ -1054,7 +1054,7 @@ function IframeModal({
       <div className="relative w-[96vw] h-[92vh] flex flex-col rounded-2xl overflow-hidden shadow-2xl bg-[#0a0e14] border border-white/10">
         {/* Header bar — 标题单行截断, 不允许超长 topic 撑高 header */}
         <div className="flex items-center justify-between gap-4 px-5 py-3 bg-white/5 border-b border-white/10 shrink-0">
-          <span className="text-sm font-semibold text-white/80 truncate min-w-0">{title}</span>
+          <span className="text-sm font-semibold text-white/80 truncate block min-w-0">{title}</span>
           <button
             onClick={onClose}
             className="w-8 h-8 shrink-0 rounded-lg flex items-center justify-center text-white/60 hover:text-white hover:bg-white/10 transition-colors"
@@ -1105,7 +1105,7 @@ function IdeaIframeBlock({
               <div className="w-14 h-14 rounded-xl bg-primary/20 flex items-center justify-center border border-primary/30 shrink-0">
                 <Zap className="h-7 w-7 text-primary" />
               </div>
-              <div className="text-left">
+              <div className="text-left min-w-0">
                 <div className="flex items-center gap-2 mb-0.5">
                   <h3 className="font-bold text-white text-xl leading-tight">{t("course.animation_demo")}</h3>
                   {backendLabel && (
@@ -1114,10 +1114,10 @@ function IdeaIframeBlock({
                     </span>
                   )}
                 </div>
-                <p className="text-white/60 text-sm">{idea.topic}</p>
+                <p className="text-white/60 text-sm truncate">{idea.topic}</p>
               </div>
             </div>
-            <div className="flex items-center gap-2 text-white/40 text-xs">
+            <div className="flex items-center gap-2 text-white/40 text-xs shrink-0">
               <span>{t("course.click_to_open")}</span>
               <Play className="h-4 w-4" />
             </div>
@@ -1146,12 +1146,12 @@ function IdeaIframeBlock({
             <div className="w-14 h-14 rounded-xl bg-secondary/10 flex items-center justify-center border border-secondary/20 shrink-0">
               <Gamepad2 className="h-7 w-7 text-secondary" />
             </div>
-            <div className="text-left">
+            <div className="text-left min-w-0">
               <h3 className="font-bold text-on-surface text-xl leading-tight mb-0.5">{t("course.interactive_game")}</h3>
-              <p className="text-on-surface-variant text-sm">{idea.topic}</p>
+              <p className="text-on-surface-variant text-sm truncate">{idea.topic}</p>
             </div>
           </div>
-          <div className="flex items-center gap-2 text-on-surface-variant/50 text-xs">
+          <div className="flex items-center gap-2 text-on-surface-variant/50 text-xs shrink-0">
             <span>{t("course.click_to_open")}</span>
             <Gamepad2 className="h-4 w-4" />
           </div>
@@ -1190,13 +1190,13 @@ function StoryBlock({
           <div className="w-14 h-14 rounded-xl bg-tertiary/10 flex items-center justify-center border border-tertiary/20 shrink-0">
             <BookMarked className="h-7 w-7 text-tertiary" />
           </div>
-          <div className="text-left">
+          <div className="text-left min-w-0">
             <h3 className="font-bold text-on-surface text-xl leading-tight mb-0.5">{t("course.story_intro")}</h3>
-            <p className="text-on-surface-variant text-sm">{idea.topic}</p>
+            <p className="text-on-surface-variant text-sm truncate">{idea.topic}</p>
           </div>
         </div>
         <ChevronDown
-          className={`h-5 w-5 text-on-surface-variant/40 transition-transform duration-200 ${expanded ? "rotate-180" : ""}`}
+          className={`h-5 w-5 text-on-surface-variant/40 transition-transform duration-200 shrink-0 ${expanded ? "rotate-180" : ""}`}
         />
       </button>
       {expanded && section.story_paragraphs && (
@@ -1319,14 +1319,14 @@ function ExerciseBlock({
         >
           <div className="w-full max-w-md rounded-3xl shadow-2xl overflow-hidden bg-white">
             {/* Header */}
-            <div className="flex items-center justify-between px-6 py-4 bg-violet-600">
-              <div className="flex items-center gap-2.5">
-                <div className="w-7 h-7 rounded-lg bg-white/20 flex items-center justify-center">
+            <div className="flex items-center justify-between px-6 py-4 bg-violet-600 gap-3">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="w-7 h-7 rounded-lg bg-white/20 flex items-center justify-center shrink-0">
                   <ClipboardList className="h-4 w-4 text-white" />
                 </div>
-                <span className="font-semibold text-sm text-white">{idea.topic}</span>
+                <span className="font-semibold text-sm text-white truncate block min-w-0">{idea.topic}</span>
               </div>
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-3 shrink-0">
                 {!finished && (
                   <span className="text-xs text-white/70 font-medium">{current + 1} / {total}</span>
                 )}
@@ -1508,14 +1508,14 @@ function DiagramBlock({
             <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center border border-primary/20 shrink-0">
               <ImageIcon className="h-6 w-6 text-primary" />
             </div>
-            <div className="text-left">
+            <div className="text-left min-w-0">
               <h3 className="font-semibold text-on-surface text-lg leading-tight mb-0.5">
                 {t("course.diagram_title")}
               </h3>
-              <p className="text-on-surface-variant text-sm">{idea.topic}</p>
+              <p className="text-on-surface-variant text-sm truncate">{idea.topic}</p>
             </div>
           </div>
-          <div className="flex items-center gap-2 text-on-surface-variant/50 text-xs">
+          <div className="flex items-center gap-2 text-on-surface-variant/50 text-xs shrink-0">
             <span>{t("course.click_to_zoom")}</span>
           </div>
         </div>
@@ -1571,14 +1571,14 @@ function HandsOnKitBlock({
           <div className="w-11 h-11 rounded-xl bg-orange-500/10 flex items-center justify-center border border-orange-500/20 shrink-0">
             <Package className="h-5 w-5 text-orange-600 dark:text-orange-400" />
           </div>
-          <div className="text-left">
+          <div className="text-left min-w-0">
             <h3 className="font-semibold text-foreground text-base leading-tight mb-0.5">
               {t("course.hands_on_kit_title")}
             </h3>
-            <p className="text-muted-foreground text-sm">{idea.topic}</p>
+            <p className="text-muted-foreground text-sm truncate">{idea.topic}</p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 shrink-0">
           <span className={`text-xs px-2 py-1 rounded-full font-medium ${safetyColors[safetyLevel]}`}>
             {safetyLabels[safetyLevel]}
           </span>
@@ -1708,7 +1708,7 @@ function IdeaBlock({
     return (
       <div className="rounded-2xl border border-border/50 overflow-hidden">
         <div className="flex items-center gap-3 px-5 py-4 bg-secondary/30">
-          <span className="text-sm text-muted-foreground">{idea.topic}</span>
+          <span className="text-sm text-muted-foreground truncate block min-w-0">{idea.topic}</span>
         </div>
         <div className="h-14 flex items-center justify-center text-sm text-muted-foreground">
           {t("course.content_gen_failed")}
