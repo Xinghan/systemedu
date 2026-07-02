@@ -441,7 +441,8 @@ function ForkCard({ f, onRemove }: { f: ForkItem; onRemove: () => void }) {
   const target = f.last_module_id || "M01"
   const dClass = domainClass(f.domain)
   return (
-    <div
+    <Link
+      href={`/library/${encodeURIComponent(f.slug)}`}
       style={{
         border: "1px solid var(--border)",
         borderRadius: 12,
@@ -450,12 +451,11 @@ function ForkCard({ f, onRemove }: { f: ForkItem; onRemove: () => void }) {
         display: "flex",
         flexDirection: "column",
         boxShadow: "var(--shadow-sm)",
+        textDecoration: "none",
+        color: "inherit",
       }}
     >
-      <Link
-        href={`/library/${encodeURIComponent(f.slug)}`}
-        style={{ position: "relative", textDecoration: "none" }}
-      >
+      <div style={{ position: "relative" }}>
         {f.cover_image_path ? (
           <CoverPhoto slug={f.slug} dClass={dClass} />
         ) : (
@@ -464,7 +464,7 @@ function ForkCard({ f, onRemove }: { f: ForkItem; onRemove: () => void }) {
         <div style={{ position: "absolute", top: 12, right: 12 }}>
           {statusPip(f.status, t)}
         </div>
-      </Link>
+      </div>
       <div
         style={{ padding: 16, display: "flex", flexDirection: "column", gap: 8, flex: 1 }}
       >
@@ -560,6 +560,7 @@ function ForkCard({ f, onRemove }: { f: ForkItem; onRemove: () => void }) {
               type="button"
               onClick={(e) => {
                 e.preventDefault()
+                e.stopPropagation()
                 if (confirm(t("myprojects.remove_confirm"))) onRemove()
               }}
               aria-label={t("myprojects.remove")}
@@ -576,6 +577,7 @@ function ForkCard({ f, onRemove }: { f: ForkItem; onRemove: () => void }) {
             <Link
               href={`/learn/${encodeURIComponent(f.slug)}/${encodeURIComponent(target)}`}
               className="btn btn-violet btn-sm"
+              onClick={(e) => e.stopPropagation()}
             >
               {f.last_module_id ? t("myproj.continue") : t("myproj.start")}
               <ArrowRight size={12} strokeWidth={1.5} />
@@ -583,7 +585,7 @@ function ForkCard({ f, onRemove }: { f: ForkItem; onRemove: () => void }) {
           </div>
         </div>
       </div>
-    </div>
+    </Link>
   )
 }
 

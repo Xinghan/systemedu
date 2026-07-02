@@ -218,7 +218,8 @@ function ProjectCard({ project: p, done }: { project: MyProjectItem; done: numbe
   const unavailable = p.unavailable
 
   return (
-    <div
+    <Link
+      href={`/library/${encodeURIComponent(p.slug)}`}
       style={{
         border: "1px solid var(--border)",
         borderRadius: 14,
@@ -226,7 +227,11 @@ function ProjectCard({ project: p, done }: { project: MyProjectItem; done: numbe
         background: "var(--card)",
         display: "flex",
         flexDirection: "column",
+        textDecoration: "none",
+        color: "inherit",
+        cursor: "pointer",
       }}
+      className="my-project-card"
     >
       {/* 封面 */}
       <Cover slug={p.slug} hasCover={!!p.cover_image_path} />
@@ -262,21 +267,21 @@ function ProjectCard({ project: p, done }: { project: MyProjectItem; done: numbe
                 href={`/learn/${encodeURIComponent(p.slug)}/${encodeURIComponent(nextModuleId)}`}
                 className="btn btn-primary btn-sm"
                 style={{ flex: 1, justifyContent: "center" }}
+                onClick={(e) => e.stopPropagation()}
               >
                 <CirclePlay size={13} strokeWidth={1.5} /> {t("home.continue")} {nextModuleId}
               </Link>
-              <Link
-                href={`/library/${encodeURIComponent(p.slug)}`}
+              <span
                 className="btn btn-ghost btn-sm"
                 style={{ justifyContent: "center" }}
               >
                 {t("home.details")}
-              </Link>
+              </span>
             </div>
           )}
         </div>
       </div>
-    </div>
+    </Link>
   )
 }
 
