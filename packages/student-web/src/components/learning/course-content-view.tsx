@@ -1094,7 +1094,7 @@ function IdeaIframeBlock({
       <>
         <section
           className="rounded-2xl overflow-hidden shadow-2xl border border-white/10"
-          style={{ background: "#000341" }}
+          style={{ background: "#15110d" }}
         >
           <div
             className="flex items-center justify-between p-8 cursor-pointer hover:bg-white/5 transition-colors"
@@ -1181,26 +1181,26 @@ function StoryBlock({
   const [expanded, setExpanded] = useState(false)
 
   return (
-    <section className="rounded-2xl overflow-hidden shadow-lg bg-surface-container-low border border-outline-variant/10">
+    <section className="rounded-2xl overflow-hidden shadow-lg bg-[var(--card)] border border-[var(--border)]">
       <button
         onClick={() => setExpanded((e) => !e)}
-        className="w-full flex items-center justify-between p-8 bg-white/50 hover:bg-white transition-colors"
+        className="w-full flex items-center justify-between p-8 hover:bg-[var(--paper-2)] transition-colors"
       >
         <div className="flex items-center gap-6">
-          <div className="w-14 h-14 rounded-xl bg-tertiary/10 flex items-center justify-center border border-tertiary/20 shrink-0">
-            <BookMarked className="h-7 w-7 text-tertiary" />
+          <div className="w-14 h-14 rounded-xl bg-[var(--primary-soft)] flex items-center justify-center border border-[var(--primary-line)] shrink-0">
+            <BookMarked className="h-7 w-7 text-[var(--primary-ink)]" />
           </div>
           <div className="text-left min-w-0">
-            <h3 className="font-bold text-on-surface text-xl leading-tight mb-0.5">{t("course.story_intro")}</h3>
-            <p className="text-on-surface-variant text-sm truncate">{idea.topic}</p>
+            <h3 className="font-bold text-[var(--ink)] text-xl leading-tight mb-0.5">{t("course.story_intro")}</h3>
+            <p className="text-[var(--sub)] text-sm truncate">{idea.topic}</p>
           </div>
         </div>
         <ChevronDown
-          className={`h-5 w-5 text-on-surface-variant/40 transition-transform duration-200 shrink-0 ${expanded ? "rotate-180" : ""}`}
+          className={`h-5 w-5 text-[var(--sub-2)] transition-transform duration-200 shrink-0 ${expanded ? "rotate-180" : ""}`}
         />
       </button>
       {expanded && section.story_paragraphs && (
-        <div className="divide-y divide-outline-variant/20">
+        <div className="divide-y divide-[var(--hairline)]">
           {section.story_paragraphs.map((para, idx) => (
             <div key={idx} className="flex gap-6 p-6">
               {para.image_url ? (
@@ -1210,17 +1210,17 @@ function StoryBlock({
                   className="w-36 h-28 rounded-xl object-cover shrink-0"
                 />
               ) : (
-                <div className="w-36 h-28 rounded-xl bg-surface-container shrink-0 flex items-center justify-center">
-                  <BookMarked className="h-7 w-7 text-on-surface-variant/20" />
+                <div className="w-36 h-28 rounded-xl bg-[var(--paper-2)] shrink-0 flex items-center justify-center">
+                  <BookMarked className="h-7 w-7 text-[var(--sub-2)]" />
                 </div>
               )}
-              <p className="text-base text-on-surface leading-relaxed">{para.text}</p>
+              <p className="text-base text-[var(--ink)] leading-relaxed">{para.text}</p>
             </div>
           ))}
         </div>
       )}
       {!expanded && (
-        <div className="px-8 py-4 text-on-surface-variant text-sm opacity-60">{t("course.click_to_read_story")}</div>
+        <div className="px-8 py-4 text-[var(--sub)] text-sm opacity-60">{t("course.click_to_read_story")}</div>
       )}
     </section>
   )
@@ -1280,29 +1280,31 @@ function ExerciseBlock({
     <>
       {/* Inline trigger — compact strip */}
       <div
-        className="group flex items-center gap-4 px-5 py-3.5 rounded-2xl cursor-pointer transition-all duration-200
-          bg-gradient-to-r from-violet-50 to-indigo-50 border border-violet-200/60
-          hover:from-violet-100 hover:to-indigo-100 hover:border-violet-300/80 hover:shadow-sm"
+        className="group flex items-center gap-4 px-5 py-3.5 rounded-2xl cursor-pointer transition-all duration-200"
+        style={{ background: "var(--primary-soft)", border: "1px solid var(--primary-line)" }}
         onClick={handleOpen}
       >
         {/* Icon badge */}
-        <div className="w-10 h-10 rounded-xl bg-violet-600 flex items-center justify-center shrink-0 shadow-sm group-hover:bg-violet-700 transition-colors">
+        <div
+          className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 shadow-sm transition-colors"
+          style={{ background: "var(--primary)" }}
+        >
           <ClipboardList className="text-white" style={{ width: 18, height: 18 }} />
         </div>
 
         {/* Text */}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
-            <span className="text-xs font-bold uppercase tracking-wider text-violet-600">{t("course.instant_check")}</span>
-            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-violet-100 text-violet-700 font-semibold">
+            <span className="text-xs font-bold uppercase tracking-wider" style={{ color: "var(--primary-ink)" }}>{t("course.instant_check")}</span>
+            <span className="text-[10px] px-1.5 py-0.5 rounded-full font-semibold" style={{ background: "var(--card)", color: "var(--primary-ink)" }}>
               {t("course.n_questions", { n: total })}
             </span>
           </div>
-          <p className="text-sm font-medium text-gray-800 mt-0.5 truncate">{idea.topic}</p>
+          <p className="text-sm font-medium mt-0.5 truncate" style={{ color: "var(--ink-2)" }}>{idea.topic}</p>
         </div>
 
         {/* Arrow */}
-        <div className="flex items-center gap-1.5 text-violet-500 group-hover:text-violet-700 transition-colors shrink-0">
+        <div className="flex items-center gap-1.5 transition-colors shrink-0" style={{ color: "var(--primary-ink)" }}>
           <span className="text-xs font-semibold">{t("course.start_quiz")}</span>
           <svg width="16" height="16" viewBox="0 0 16 16" fill="none" className="group-hover:translate-x-0.5 transition-transform">
             <path d="M6 12L10 8L6 4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
@@ -1317,9 +1319,9 @@ function ExerciseBlock({
           style={{ background: "rgba(0,0,0,0.35)", backdropFilter: "blur(6px)" }}
           onClick={(e) => { if (e.target === e.currentTarget) setOpen(false) }}
         >
-          <div className="w-full max-w-md rounded-3xl shadow-2xl overflow-hidden bg-white">
+          <div className="w-full max-w-md rounded-3xl shadow-2xl overflow-hidden" style={{ background: "var(--card)" }}>
             {/* Header */}
-            <div className="flex items-center justify-between px-6 py-4 bg-violet-600 gap-3">
+            <div className="flex items-center justify-between px-6 py-4 gap-3" style={{ background: "var(--primary)" }}>
               <div className="flex items-center gap-2.5 min-w-0">
                 <div className="w-7 h-7 rounded-lg bg-white/20 flex items-center justify-center shrink-0">
                   <ClipboardList className="h-4 w-4 text-white" />
@@ -1338,10 +1340,10 @@ function ExerciseBlock({
 
             {/* Progress bar */}
             {!finished && (
-              <div className="h-1 bg-violet-100">
+              <div className="h-1" style={{ background: "var(--primary-soft)" }}>
                 <div
-                  className="h-full bg-violet-500 transition-all duration-300"
-                  style={{ width: `${((current) / total) * 100}%` }}
+                  className="h-full transition-all duration-300"
+                  style={{ width: `${((current) / total) * 100}%`, background: "var(--primary)" }}
                 />
               </div>
             )}
@@ -1350,30 +1352,34 @@ function ExerciseBlock({
             <div className="px-6 py-5">
               {finished ? (
                 <div className="text-center py-3 space-y-3">
-                  <div className="w-16 h-16 rounded-full bg-violet-100 border-2 border-violet-200 flex items-center justify-center mx-auto">
-                    <CheckCircle className="h-8 w-8 text-violet-600" />
+                  <div
+                    className="w-16 h-16 rounded-full border-2 flex items-center justify-center mx-auto"
+                    style={{ background: "var(--primary-soft)", borderColor: "var(--primary-line)" }}
+                  >
+                    <CheckCircle className="h-8 w-8" style={{ color: "var(--primary-ink)" }} />
                   </div>
-                  <p className="text-xl font-bold text-gray-900">
+                  <p className="text-xl font-bold" style={{ color: "var(--ink)" }}>
                     {t("course.score_of_total", { score, total })}
                   </p>
-                  <p className="text-sm text-gray-500">
+                  <p className="text-sm" style={{ color: "var(--sub)" }}>
                     {score === total ? t("course.feedback_all_correct") : score >= total / 2 ? t("course.feedback_good") : t("course.feedback_review")}
                   </p>
                   <button
                     onClick={() => setOpen(false)}
-                    className="mt-1 px-7 h-10 rounded-xl bg-violet-600 text-white font-semibold text-sm hover:bg-violet-700 transition-colors"
+                    className="mt-1 px-7 h-10 rounded-xl text-white font-semibold text-sm transition-colors"
+                    style={{ background: "var(--primary)" }}
                   >
                     {t("course.continue_learning")}
                   </button>
                 </div>
               ) : ex ? (
                 <div className="space-y-4">
-                  <p className="text-base font-semibold text-gray-900 leading-relaxed">{ex.question}</p>
+                  <p className="text-base font-semibold leading-relaxed" style={{ color: "var(--ink)" }}>{ex.question}</p>
                   <div className="space-y-2">
                     {(ex.options ?? []).map((opt, i) => {
                       const isCorrect = i === ex.correct
                       const isSelected = selected === i
-                      let cls = "bg-gray-50 border-gray-200 text-gray-800 hover:border-violet-300 hover:bg-violet-50"
+                      let cls = "opt-neutral"
                       if (answered && isCorrect) cls = "bg-green-50 border-green-400 text-green-800"
                       else if (answered && isSelected && !isCorrect) cls = "bg-red-50 border-red-400 text-red-800"
                       return (
@@ -1382,11 +1388,14 @@ function ExerciseBlock({
                           onClick={() => handleChoice(i)}
                           disabled={answered}
                           className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl border-2 text-sm text-left transition-all ${cls}`}
+                          style={cls === "opt-neutral" ? { background: "var(--paper-2)", borderColor: "var(--border)", color: "var(--ink-2)" } : undefined}
                         >
                           <span className={`w-6 h-6 rounded-full border-2 flex items-center justify-center text-xs font-bold shrink-0
                             ${answered && isCorrect ? "border-green-500 bg-green-500 text-white"
                               : answered && isSelected ? "border-red-400 bg-red-100 text-red-700"
-                              : "border-gray-300 text-gray-500"}`}>
+                              : ""}`}
+                            style={!answered || (!isCorrect && !isSelected) ? { borderColor: "var(--border-2)", color: "var(--sub)" } : undefined}
+                          >
                             {String.fromCharCode(65 + i)}
                           </span>
                           <span className="flex-1">{opt.replace(/^[A-D]\.\s*/, "")}</span>
@@ -1406,7 +1415,8 @@ function ExerciseBlock({
                     <div className="flex justify-end">
                       <button
                         onClick={handleNext}
-                        className="px-5 h-9 rounded-xl bg-violet-600 text-white text-sm font-semibold hover:bg-violet-700 transition-colors"
+                        className="px-5 h-9 rounded-xl text-white text-sm font-semibold transition-colors"
+                        style={{ background: "var(--primary)" }}
                       >
                         {current + 1 < total ? t("course.next_question") : t("course.view_result")}
                       </button>
@@ -1418,6 +1428,12 @@ function ExerciseBlock({
           </div>
         </div>
       )}
+      <style jsx>{`
+        .opt-neutral:hover:not(:disabled) {
+          border-color: var(--primary-line);
+          background: var(--primary-soft);
+        }
+      `}</style>
     </>
   )
 }
