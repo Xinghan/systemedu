@@ -13,15 +13,10 @@ import { useEffect, useState } from "react"
 import { Lock } from "lucide-react"
 
 import { myBadges } from "@/lib/api"
-import type { BadgeChapterWall, BadgeTier } from "@/lib/types/api"
+import type { BadgeChapterWall } from "@/lib/types/api"
 import { useT } from "@/lib/i18n/use-t"
 import { LoadingSpinner } from "@/components/ui/loading-spinner"
-
-const TIER_ORDER: BadgeTier[] = ["bronze", "silver", "gold", "master"]
-
-function badgeImageUrl(chapter: string, tier: BadgeTier): string {
-  return `/badges/${chapter}-${tier}.png`
-}
+import { BADGE_TIERS as TIER_ORDER, badgeImageUrl } from "@/lib/constants/badges"
 
 function ChapterCard({ chapter }: { chapter: BadgeChapterWall }) {
   const t = useT()

@@ -53,3 +53,11 @@
 - [x] T23. 32 张徽章图片已由用户提供拼版图，裁剪+抠透明+按 chapter 常量命名后放入
       `packages/student-web/public/badges/`，浏览器截图验证 8 分会图片正确加载 +
       锁图标占位态正常。spec.md 状态更新为 shipped。
+
+## 增量 (shipped 后追加)
+
+- [x] T24. 项目详情页展示"完成后可获得的徽章"：新建前端映射常量
+      `lib/constants/badges.ts`（CHAPTER_BY_DOMAIN 与后端 chapters.py 一致），在
+      `library/[slug]/page.tsx` 的 §02 与 §03 之间插入 `BadgeRewardCard`，按项目 domain
+      归属分会横排展示铜/银/金/大师 4 级徽章（映射不到分会则不渲染）。补 3 个 i18n key。
+      `BadgeWall.tsx` 复用同一常量去重。浏览器验证渲染 + 图片加载正常。

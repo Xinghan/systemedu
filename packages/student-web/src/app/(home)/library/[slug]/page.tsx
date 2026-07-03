@@ -7,6 +7,7 @@ import { toast } from "sonner"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 import {
+  Award,
   BookOpen,
   ChevronDown,
   ChevronRight,
@@ -33,6 +34,8 @@ import {
   type LibraryProjectSummary,
 } from "@/lib/api"
 import { useAuthStore } from "@/lib/stores/auth-store"
+import type { BadgeTier } from "@/lib/types/api"
+import { BADGE_TIERS, badgeImageUrl, chapterForDomain } from "@/lib/constants/badges"
 import { KnowledgeTreeModal } from "@/components/learning/knowledge-tree-modal"
 import { KnowledgeTreeView } from "@/components/learning/KnowledgeTreeView"
 import { StoryModal } from "@/components/library/StoryModal"
@@ -634,6 +637,9 @@ export default function ProjectHome() {
           )}
         </Block>
 
+        {/* spec 042: 完成后可获得的先驱者协会徽章 (按项目 domain 归属分会) */}
+        <BadgeRewardCard domain={project.domain} />
+
         {/* §03 Curriculum */}
         <Block
           n="03"
@@ -786,6 +792,85 @@ function Outcome({ t, sub }: { t: string; sub: string }) {
         </div>
       </div>
     </li>
+  )
+}
+
+// spec 042: 完成本项目可获得的先驱者协会徽章 (按 domain 归属分会, 映射不到则不渲染)
+function BadgeRewardCard({ domain }: { domain?: string | null }) {
+  const t = useT()
+  const chapter = chapterForDomain(domain)
+  if (!chapter) return null
+  const chapterName = t(`badges.chapter.${chapter}`)
+  return (
+    <Block n="02+" t={t("project_detail.badge_reward_title")}>
+      <div
+        style={{
+          padding: 16,
+          border: "1px solid var(--border)",
+          borderRadius: 10,
+          background: "var(--card)",
+        }}
+      >
+        <p
+          className="body"
+          style={{ fontSize: 13, color: "var(--ink-2)", marginBottom: 14, lineHeight: 1.55 }}
+        >
+          {t("project_detail.badge_reward_intro", { chapter: chapterName })}
+        </p>
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(4, 1fr)",
+            gap: 12,
+          }}
+        >
+          {BADGE_TIERS.map((tier) => (
+            <BadgeRewardTier key={tier} chapter={chapter} tier={tier} />
+          ))}
+        </div>
+        <p
+          className="body"
+          style={{ fontSize: 12, color: "var(--sub)", marginTop: 14, lineHeight: 1.5 }}
+        >
+          {t("project_detail.badge_reward_hint")}
+        </p>
+      </div>
+    </Block>
+  )
+}
+
+function BadgeRewardTier({ chapter, tier }: { chapter: string; tier: BadgeTier }) {
+  const t = useT()
+  const [imgFailed, setImgFailed] = useState(false)
+  return (
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
+      <div
+        style={{
+          width: "100%",
+          aspectRatio: "1",
+          borderRadius: 999,
+          overflow: "hidden",
+          background: "var(--paper-2)",
+          display: "grid",
+          placeItems: "center",
+        }}
+      >
+        {imgFailed ? (
+          <Award size={22} strokeWidth={1.5} style={{ color: "var(--sub-2)" }} />
+        ) : (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={badgeImageUrl(chapter, tier)}
+            alt={t(`badges.tier.${tier}`)}
+            style={{ width: "100%", height: "100%", objectFit: "cover" }}
+            onError={() => setImgFailed(true)}
+          />
+        )}
+      </div>
+      <span className="mono" style={{ fontSize: 10.5, color: "var(--sub-2)" }}>
+        {t(`badges.tier.${tier}`)}
+      </span>
+    </div>
   )
 }
 
