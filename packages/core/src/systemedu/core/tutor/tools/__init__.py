@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from langchain_core.tools import BaseTool
 
+from .binding import bind_tutor_tools, is_dashscope_llm, tutor_tool_bind_kwargs
 from .data_provider import TutorDataProvider
 from .decorator import (
     ToolContext,
@@ -59,8 +60,11 @@ __all__ = [
     "ToolRegistry",
     "TutorDataProvider",
     "all_builtin_tools",
+    "bind_tutor_tools",
     "build_default_registry",
     "current_tool_context",
+    "is_dashscope_llm",
+    "tutor_tool_bind_kwargs",
     "get_tool_meta",
     "get_tool_raw_fn",
     "push_tool_context",

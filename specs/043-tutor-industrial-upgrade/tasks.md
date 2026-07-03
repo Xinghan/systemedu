@@ -11,13 +11,13 @@ Status: draft (2026-07-03) · 重点 P1→P2→P4→P3；P5 安全合规后置�
 
 ### 1A. 第一步：现有图内手工接通（最小侵入，可独立上线回滚）
 
-- [ ] T1.1 `graph.py` build 时实例化 `ToolRegistry`，`register_many` 注册 10 个现有工具（memory/practice/progress/meta），per-skill `filter_by_whitelist(skill.config.tools)`
-- [ ] T1.2 重写 `skills/_common.py`：`call_llm` → `llm.bind_tools(whitelisted)`；`build_simple_skill_subgraph` 从单节点 respond→END 改为标准 tool 循环（agent 节点 → `tools_condition` → `ToolNode(tools, handle_tool_errors=True)` → 回 agent）
-- [ ] T1.3 Qwen 参数落实：tool-calling 请求 `enable_thinking=False`；`parallel_tool_calls` 保持关闭（`build_custom_llm` 与默认 LLM 构造处统一）
-- [ ] T1.4 **工具输出 Spotlighting 定界**：ToolNode 返回的 ToolMessage 内容用 `<tool_output>...</tool_output>` 定界标记包裹再入 prompt（防间接注入/恶意 knode 内容污染）— 属正确性
-- [ ] T1.5 接通审计：`audit/tool_call_log.make_log_sink` 在工具执行处调用，落 `tool_call_log` 表（含 tool 名/入参/结果/耗时）
-- [ ] T1.6 先接 3 个读类工具全链路验证：`get_progress` / `get_knode_content` / `get_practice_exercises`（免确认直接放行）
-- [ ] T1.7 测试：工具循环单测（mock LLM 返回 tool_call → 验证执行 → 结果回灌 → 二次 invoke）；真实 Qwen 跑「查我的进度」用例，观察实际 tool_call 触发与回答
+- [x] T1.1 `graph.py` build 时实例化 `ToolRegistry`，`register_many` 注册 9 个现有工具（memory/practice/progress/meta），per-skill `filter_by_whitelist(skill.config.tools)`
+- [x] T1.2 重写 `skills/_common.py`：新增 `build_tool_loop_subgraph`（agent 节点 → `tools_condition` → `ToolNode(tools, handle_tool_errors=True)` → 回 agent）；scaffolding/pbl 切 tool 循环；`_wrap_subgraph` 只回传最终纯文本 AIMessage
+- [x] T1.3 Qwen 参数落实：新增 `tools/binding.py` `bind_tutor_tools`——`parallel_tool_calls=False`（全 OpenAI 兼容）；DashScope 端点额外 `extra_body={enable_thinking:False}`（防御 Qwen3 thinking 机型）；非 ChatOpenAI/fake 走 bare bind 兜底。真实 Qwen 验证: 双意图问题裸bind吐2并行 vs 改造后串行1
+- [x] T1.4 **工具输出 Spotlighting 定界**：`_spotlight_tool_messages` 把 ToolMessage 用 `<tool_output tool=...>...</tool_output>` 包裹再入 prompt（防间接注入）；幂等
+- [~] T1.5 数据层抽象已做（`TutorDataProvider` Protocol + `StudentDataProvider` + `push_tool_context` 注入）；**审计 log_sink 落表仍待做**（core `make_log_sink` 用 core `ToolCallLog` 表 vs student-app 自有 schema 不匹配，tool 循环不依赖，audit follow-up）
+- [x] T1.6 3 个读类工具全链路验证：真实 Qwen 跑 `get_progress` 通过（据结果答"已完成3关/共30关/剩26关"，未编造）
+- [x] T1.7 测试：`test_tool_loop`（fake LLM tool_call→执行→回灌→最终纯文本，3 passed）+ `test_tool_binding`（provider 参数决策 15 passed）+ `tests/tutor/manual/real_qwen_tool_loop.py`（真实 Qwen 端到端，功能场景硬门禁 PASS）
 
 ### 1B. 第二步：迁 `create_agent` 子图（拿官方 middleware 体系）
 

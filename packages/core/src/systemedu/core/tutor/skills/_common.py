@@ -164,7 +164,12 @@ def build_tool_loop_subgraph(
     if not tools or not callable(bind):
         return build_simple_skill_subgraph(skill, llm, summary_prefix=summary_prefix)
 
-    llm_with_tools = bind(tools)
+    # spec 043 T1.3: bind with provider-aware params (parallel_tool_calls
+    # off for all OpenAI-compatible models; enable_thinking off for
+    # DashScope/Qwen). Validated against a real Qwen model.
+    from systemedu.core.tutor.tools.binding import bind_tutor_tools
+
+    llm_with_tools = bind_tutor_tools(llm, tools)
     body = skill.config.body or skill.config.description
     tool_node = ToolNode(tools, handle_tool_errors=True)
 
