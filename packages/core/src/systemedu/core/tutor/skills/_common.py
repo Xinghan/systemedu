@@ -125,6 +125,29 @@ def build_simple_skill_subgraph(
 # ---------------------------------------------------------------------------
 # Tool-calling loop (spec 043 P1)
 # ---------------------------------------------------------------------------
+_FENCE_OPEN = "<tool_output"
+_FENCE_CLOSE = "</tool_output>"
+
+
+def _neutralize_fence_markers(content: str) -> str:
+    """Defang any `<tool_output …>` / `</tool_output>` literals in a payload.
+
+    Red-team finding (spec 043 T1.4): a malicious tool payload can embed a
+    fake `</tool_output>` to *close the fence early*, so everything after
+    it reads as a top-level instruction ("fence escape"). Verified against
+    a real Qwen model — the `fake_tool_result` attack leaked the canary
+    with naive fencing. We break the tag by inserting a zero-width space
+    after the angle bracket, so the model sees inert text, not a delimiter,
+    while a human reading the log still recognises it.
+    """
+    zwsp = "​"
+    return (
+        content
+        .replace(_FENCE_CLOSE, f"<{zwsp}/tool_output>")
+        .replace(_FENCE_OPEN, f"<{zwsp}tool_output")
+    )
+
+
 def _spotlight_tool_messages(messages: list[BaseMessage]) -> None:
     """Wrap ToolMessage content in `<tool_output>` delimiters in place.
 
@@ -132,15 +155,18 @@ def _spotlight_tool_messages(messages: list[BaseMessage]) -> None:
     instructions. Fencing them makes prompt-injection inside a tool
     payload (e.g. a malicious knode body saying "ignore previous
     instructions") legible to the model as *data*, blunting indirect
-    injection. Idempotent — skips messages already fenced.
+    injection. The payload's own fence markers are neutralized first so a
+    smuggled `</tool_output>` can't escape the fence. Idempotent — skips
+    messages already fenced.
     """
     for m in messages:
         if not isinstance(m, ToolMessage):
             continue
         content = m.content if isinstance(m.content, str) else str(m.content)
-        if content.startswith("<tool_output"):
+        if content.startswith(_FENCE_OPEN):
             continue
-        m.content = f'<tool_output tool="{m.name}">\n{content}\n</tool_output>'
+        safe = _neutralize_fence_markers(content)
+        m.content = f'<tool_output tool="{m.name}">\n{safe}\n</tool_output>'
 
 
 def build_tool_loop_subgraph(
