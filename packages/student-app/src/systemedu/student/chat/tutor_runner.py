@@ -229,12 +229,45 @@ def _build_config(payload: ChatPayload, user_id: str) -> dict[str, Any]:
     }
 
 
+def _make_tool_context(payload: ChatPayload, user_id: str):
+    """Build the ToolContext installed for the duration of a graph run.
+
+    spec 043 P1: this is what lets the skills' tool loops actually
+    execute — `require_tool_context()` raises without it. We inject:
+      - the authenticated user_id (never trust an LLM-supplied one)
+      - a StudentDataProvider (tools read/write via `ctx.data.*`)
+      - the active project/knode for scope-aware tools
+
+    NOTE: the audit log_sink is intentionally not wired yet. The core
+    `make_log_sink` writes to `core.storage`'s `ToolCallLog` table via a
+    bare session factory, but student-app uses a contextmanager session
+    and its own schema (no `tool_call_log` table). Persisting tool-call
+    audit into student-app's DB is a follow-up (T1.5 audit) — the tool
+    loop itself does not depend on it.
+    """
+    from systemedu.core.tutor.tools import ToolContext
+
+    from ..library_proxy.client import get_library_client
+    from .tool_data import StudentDataProvider
+
+    return ToolContext(
+        user_id=user_id,
+        session_id=payload.session_id,
+        project_name=payload.library_slug,
+        knode_id=payload.module_id,
+        data=StudentDataProvider(library_client=get_library_client()),
+    )
+
+
 async def invoke(payload: ChatPayload, user_id: str) -> dict[str, Any]:
     """Run one turn through the tutor graph (non-streaming)."""
+    from systemedu.core.tutor.tools import push_tool_context
+
     graph, fell_back = await _resolve_user_graph(user_id)
     state_input = _build_input(payload, user_id)
     config = _build_config(payload, user_id)
-    result = await graph.ainvoke(state_input, config=config)
+    with push_tool_context(_make_tool_context(payload, user_id)):
+        result = await graph.ainvoke(state_input, config=config)
     ai_msgs = [m for m in result.get("messages", []) if isinstance(m, AIMessage)]
     reply = ai_msgs[-1].content if ai_msgs else ""
     return {
@@ -256,6 +289,8 @@ async def stream(payload: ChatPayload, user_id: str) -> AsyncIterator[dict[str, 
       {"type": "tool_confirm", "confirm_id": str, "tool": str, "args": dict}
       {"type": "escalation", "severity": "urgent", "contact_info": str}
     """
+    from systemedu.core.tutor.tools import push_tool_context
+
     graph, fell_back = await _resolve_user_graph(user_id)
     if fell_back:
         # spec 040: 用户 custom 配置不可用, 已回退默认模型, 通知前端
@@ -265,22 +300,25 @@ async def stream(payload: ChatPayload, user_id: str) -> AsyncIterator[dict[str, 
 
     final_state: dict[str, Any] = {}
 
-    async for event in graph.astream_events(state_input, config=config, version="v2"):
-        kind = event.get("event")
+    # spec 043 P1: install ToolContext for the whole graph run so skill
+    # tool loops can execute (require_tool_context raises otherwise).
+    with push_tool_context(_make_tool_context(payload, user_id)):
+        async for event in graph.astream_events(state_input, config=config, version="v2"):
+            kind = event.get("event")
 
-        if kind == "on_chain_end" and event.get("name") == "LangGraph":
-            final_state = event.get("data", {}).get("output", {})
+            if kind == "on_chain_end" and event.get("name") == "LangGraph":
+                final_state = event.get("data", {}).get("output", {})
 
-        if kind == "on_chat_model_stream":
-            tags = event.get("tags") or []
-            meta = event.get("metadata") or {}
-            node = meta.get("langgraph_node") or ""
-            # skill_router 的 LLM 调用是 JSON 决策, 不是给学生看的
-            if any("skill_router" in t for t in tags) or node == "skill_router":
-                continue
-            chunk = event.get("data", {}).get("chunk")
-            if chunk and hasattr(chunk, "content") and chunk.content:
-                yield {"type": "chunk", "content": chunk.content}
+            if kind == "on_chat_model_stream":
+                tags = event.get("tags") or []
+                meta = event.get("metadata") or {}
+                node = meta.get("langgraph_node") or ""
+                # skill_router 的 LLM 调用是 JSON 决策, 不是给学生看的
+                if any("skill_router" in t for t in tags) or node == "skill_router":
+                    continue
+                chunk = event.get("data", {}).get("chunk")
+                if chunk and hasattr(chunk, "content") and chunk.content:
+                    yield {"type": "chunk", "content": chunk.content}
 
     # 流末尾, 把结构化事件追加发出
     decision = final_state.get("skill_decision") or {}
