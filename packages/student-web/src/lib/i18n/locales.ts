@@ -11,6 +11,7 @@ export const zh = {
   "nav.home": "首页",
   "nav.library": "实验室",
   "nav.my_projects": "我的项目",
+  "nav.badges": "我的徽章",
   "nav.sessions": "学习记录",
   "nav.memory": "记忆",
   "nav.account": "账户",
@@ -136,6 +137,7 @@ export const zh = {
   "card.unavailable": "暂未开放",
   "card.open": "进入",
   "card.difficulty": "难度",
+  "card.badge_mark_tooltip": "完成本项目可获得{chapter}分会徽章",
   "card.stages": "阶段",
   "card.knodes": "知识点",
   // 项目开篇连环画 (spec 040)
@@ -585,6 +587,9 @@ export const zh = {
 
   // ── spec 042: 先驱者协会徽章体系 ──
   "badges.wall_title": "先驱者协会 · 我的徽章",
+  "badges.page_title": "我的徽章",
+  "badges.page_subtitle": "完成项目知识节点即可获得先驱者协会各分会的徽章，攒够 10 枚同级可合成上一级。",
+  "badges.total_earned": "已获徽章",
   "badges.loading": "加载徽章中...",
   "badges.load_failed": "徽章加载失败",
   "badges.tier.bronze": "铜",
@@ -608,6 +613,7 @@ export const en: Record<TranslationKey, string> = {
   "nav.home": "Home",
   "nav.library": "Lab",
   "nav.my_projects": "My Projects",
+  "nav.badges": "My Badges",
   "nav.sessions": "Sessions",
   "nav.memory": "Memory",
   "nav.account": "Account",
@@ -724,6 +730,7 @@ export const en: Record<TranslationKey, string> = {
   "card.draft": "Draft · regenerating",
   "card.on_shelf": "Added",
   "card.difficulty": "Difficulty",
+  "card.badge_mark_tooltip": "Complete this project to earn {chapter} chapter badges",
   "card.stages": "Stages",
   "card.knodes": "Knowledge points",
   "card.unavailable": "Coming soon",
@@ -1159,6 +1166,9 @@ export const en: Record<TranslationKey, string> = {
 
   // ── spec 042: The Pioneers Guild badge system ──
   "badges.wall_title": "The Pioneers Guild · My Badges",
+  "badges.page_title": "My Badges",
+  "badges.page_subtitle": "Complete project knodes to earn badges from The Pioneers Guild's chapters; collect 10 of the same tier to synthesize the next.",
+  "badges.total_earned": "Badges earned",
   "badges.loading": "Loading badges...",
   "badges.load_failed": "Failed to load badges",
   "badges.tier.bronze": "Bronze",

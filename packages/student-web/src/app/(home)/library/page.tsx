@@ -24,6 +24,7 @@ import { useT } from "@/lib/i18n/use-t"
 import { StoryModal } from "@/components/library/StoryModal"
 import { ApplyProjectModal } from "@/components/layout/apply-project-modal"
 import { InlineLoading } from "@/components/ui/page-loading"
+import { ChapterBadgeMark } from "@/components/badges/ChapterBadgeMark"
 
 // Crumbs
 function Crumbs({ items }: { items: { label: string }[] }) {
@@ -310,6 +311,8 @@ function ProjectCard({
       ) : (
         <CoverArt kind={dClass} />
       )}
+      {/* spec 042: 分会角标 (左上角, 避开右上角 story 按钮) */}
+      <ChapterBadgeMark domain={project.domain} corner="top-left" />
       {/* spec 040: 开篇连环画入口 (cover 右上角小 icon, 仅有 story 时显示) */}
       {hasStory && (
         <button
