@@ -14,9 +14,16 @@ from __future__ import annotations
 
 from typing import Annotated, Any, TypedDict
 
-from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
+from langchain_core.messages import (
+    AIMessage,
+    BaseMessage,
+    HumanMessage,
+    SystemMessage,
+    ToolMessage,
+)
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.message import add_messages
+from langgraph.prebuilt import ToolNode, tools_condition
 
 from .base import SkillBase
 
@@ -115,9 +122,84 @@ def build_simple_skill_subgraph(
     return g.compile()
 
 
+# ---------------------------------------------------------------------------
+# Tool-calling loop (spec 043 P1)
+# ---------------------------------------------------------------------------
+def _spotlight_tool_messages(messages: list[BaseMessage]) -> None:
+    """Wrap ToolMessage content in `<tool_output>` delimiters in place.
+
+    Spotlighting (spec 043 T1.4): tool results are untrusted data, not
+    instructions. Fencing them makes prompt-injection inside a tool
+    payload (e.g. a malicious knode body saying "ignore previous
+    instructions") legible to the model as *data*, blunting indirect
+    injection. Idempotent — skips messages already fenced.
+    """
+    for m in messages:
+        if not isinstance(m, ToolMessage):
+            continue
+        content = m.content if isinstance(m.content, str) else str(m.content)
+        if content.startswith("<tool_output"):
+            continue
+        m.content = f'<tool_output tool="{m.name}">\n{content}\n</tool_output>'
+
+
+def build_tool_loop_subgraph(
+    skill: SkillBase,
+    llm: Any,
+    tools: list[Any],
+    *,
+    summary_prefix: str = "",
+):
+    """Build a bind_tools -> agent -> ToolNode loop subgraph.
+
+    The agent node renders memory + the skill body as system prompt,
+    invokes the tool-bound LLM, and appends its (possibly tool-calling)
+    AIMessage. `tools_condition` routes to ToolNode while the LLM keeps
+    emitting tool_calls; once it answers in plain text the loop ends.
+
+    Falls back to the simple single-node subgraph when `tools` is empty
+    or the LLM can't bind tools (e.g. a test fake without bind_tools).
+    """
+    bind = getattr(llm, "bind_tools", None)
+    if not tools or not callable(bind):
+        return build_simple_skill_subgraph(skill, llm, summary_prefix=summary_prefix)
+
+    llm_with_tools = bind(tools)
+    body = skill.config.body or skill.config.description
+    tool_node = ToolNode(tools, handle_tool_errors=True)
+
+    async def agent(state: SimpleSkillState) -> dict:
+        messages = list(state.get("messages") or [])
+        # Spotlight any tool outputs already in the running list before
+        # the model reads them again.
+        _spotlight_tool_messages(messages)
+        memory_block = render_memory_block(state.get("memory"))
+        sys_text = f"{body}\n\n## 学生上下文\n{memory_block}"
+        convo: list[BaseMessage] = [SystemMessage(content=sys_text), *messages]
+        resp = await llm_with_tools.ainvoke(convo)
+        turn = (state.get("turn_count") or 0) + 1
+        has_calls = bool(getattr(resp, "tool_calls", None))
+        summary = f"{summary_prefix}turn={turn}" if summary_prefix else f"turn={turn}"
+        return {
+            "messages": [resp],
+            "turn_count": turn,
+            "summary": summary,
+            "last_step": ("tool_call" if has_calls else f"reply_{turn}"),
+        }
+
+    g = StateGraph(SimpleSkillState)
+    g.add_node("agent", agent)
+    g.add_node("tools", tool_node)
+    g.add_edge(START, "agent")
+    g.add_conditional_edges("agent", tools_condition)
+    g.add_edge("tools", "agent")
+    return g.compile()
+
+
 __all__ = [
     "SimpleSkillState",
     "render_memory_block",
     "call_llm",
     "build_simple_skill_subgraph",
+    "build_tool_loop_subgraph",
 ]

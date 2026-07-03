@@ -12,6 +12,10 @@ from systemedu.core.tutor.tools.decorator import require_tool_context, tutor_too
 @tutor_tool(access="read", scope="user_self", description="查询学生在指定项目的学习进度")
 async def get_progress(project_name: str) -> dict[str, Any]:
     ctx = require_tool_context()
+    # spec 043 P1 (direction A): prefer the injected data provider.
+    if ctx.data is not None:
+        return await ctx.data.get_progress(ctx.user_id, project_name)
+    # Legacy fallback: query the cloud-app ProgressRecord schema directly.
     if ctx.db is None:
         return {"error": "db not configured"}
     db = ctx.db()
@@ -52,6 +56,8 @@ async def get_progress(project_name: str) -> dict[str, Any]:
 )
 async def complete_node(project_name: str, knode_id: str) -> dict[str, Any]:
     ctx = require_tool_context()
+    if ctx.data is not None:
+        return await ctx.data.mark_complete(ctx.user_id, project_name, knode_id)
     if ctx.db is None:
         return {"error": "db not configured"}
     from datetime import datetime
@@ -93,6 +99,8 @@ async def complete_node(project_name: str, knode_id: str) -> dict[str, Any]:
 @tutor_tool(access="read", scope="project", description="查询知识节点的前置依赖及其状态")
 async def get_knode_prerequisites(project_name: str, knode_id: str) -> dict[str, Any]:
     ctx = require_tool_context()
+    if ctx.data is not None:
+        return await ctx.data.get_knode_prerequisites(project_name, knode_id)
     if ctx.db is None:
         return {"error": "db not configured"}
     db = ctx.db()
@@ -126,6 +134,8 @@ async def get_knode_prerequisites(project_name: str, knode_id: str) -> dict[str,
 @tutor_tool(access="read", scope="project", description="读取知识节点的课程内容")
 async def get_knode_content(project_name: str, knode_id: str) -> dict[str, Any]:
     ctx = require_tool_context()
+    if ctx.data is not None:
+        return await ctx.data.get_knode_content(project_name, knode_id)
     if ctx.db is None:
         return {"error": "db not configured"}
     db = ctx.db()

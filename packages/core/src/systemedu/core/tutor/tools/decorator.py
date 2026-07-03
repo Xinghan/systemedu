@@ -63,9 +63,14 @@ class ToolContext:
     # Optional hook so the decorator can write audit rows. Wired by
     # T4.4. Signature: `(record: dict) -> None`.
     log_sink: Callable[[dict[str, Any]], Any] | None = None
-    # DB session factory for tools that query business tables. The
-    # tool itself calls `ctx.db()` to get a short-lived session.
+    # DB session factory for tools that query business tables directly.
+    # Legacy path (cloud-app schema) — prefer `data` below.
     db: Callable[[], Any] | None = None
+    # spec 043 P1 (direction A): abstract data-access provider the host
+    # app injects. Tools call `ctx.data.*` so they don't hard-depend on
+    # any one storage schema. Typed as Any here to avoid importing the
+    # protocol into this low-level module; see tools/data_provider.py.
+    data: Any | None = None
 
 
 @dataclass

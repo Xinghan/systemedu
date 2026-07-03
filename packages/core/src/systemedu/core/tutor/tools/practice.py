@@ -40,6 +40,8 @@ def _collect_exercises(cc: dict) -> list[dict]:
 @tutor_tool(access="read", scope="project", description="获取练习题(自动剔除正确答案)")
 async def get_practice_exercises(project_name: str, knode_id: str) -> dict[str, Any]:
     ctx = require_tool_context()
+    if ctx.data is not None:
+        return await ctx.data.get_practice_exercises(project_name, knode_id)
     if ctx.db is None:
         return {"error": "db not configured"}
     db = ctx.db()
@@ -92,6 +94,10 @@ async def grade_submission(
     student_answer: str,
 ) -> dict[str, Any]:
     ctx = require_tool_context()
+    if ctx.data is not None:
+        return await ctx.data.grade_submission(
+            ctx.user_id, project_name, knode_id, exercise_id, student_answer,
+        )
     if ctx.db is None:
         return {"error": "db not configured"}
     db = ctx.db()

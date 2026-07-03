@@ -59,16 +59,19 @@ def _skill_node_name(skill_name: str) -> str:
     return f"skill__{safe}"
 
 
-def _wrap_subgraph(skill: SkillBase, llm: Any) -> Callable[[TutorState], Any]:
+def _wrap_subgraph(skill: SkillBase, llm: Any, tools: list[Any]) -> Callable[[TutorState], Any]:
     """Adapter: main TutorState -> skill subgraph state -> main TutorState.
 
     The skill's subgraph owns its own state schema, but it needs to see
     the conversation + memory and its carried `skill_state`. We pass
     those in, run the subgraph, and fold the resulting skill_state +
     any new AIMessages back into the main state.
+
+    `tools` are the resolved `BaseTool` objects for this skill (already
+    filtered to the skill's SKILL.md whitelist by `build_tutor_graph`).
     """
     # Pre-compile once. Skill subgraphs are pure — re-invocation is safe.
-    compiled = skill.build_subgraph(llm, list(skill.config.tools or []))
+    compiled = skill.build_subgraph(llm, tools)
 
     async def _node(state: TutorState) -> dict:
         # On a `switch`, the previous skill's private state should not
@@ -97,12 +100,16 @@ def _wrap_subgraph(skill: SkillBase, llm: Any) -> Callable[[TutorState], Any]:
 
         # Extract the AIMessage(s) the skill appended (delta from what we
         # fed in) so we can merge them back into the main messages.
+        # In a tool loop the delta also contains intermediate tool-calling
+        # AIMessages and ToolMessages — those are internal plumbing, not
+        # tutor speech. Only final plain-text AIMessage(s) (no tool_calls)
+        # reach the student-facing conversation.
         prior_ids = {id(m) for m in (state.get("messages") or [])}
         new_msgs: list[BaseMessage] = []
         for m in sub_out.get("messages") or []:
             if id(m) in prior_ids:
                 continue
-            if isinstance(m, AIMessage):
+            if isinstance(m, AIMessage) and not getattr(m, "tool_calls", None):
                 new_msgs.append(m)
 
         # Everything the skill wrote except `messages` is its private state.
@@ -203,8 +210,17 @@ def build_tutor_graph(
         skill_names = {s.config.name for s in skills}
         skill_name_to_node = {s.config.name: _skill_node_name(s.config.name) for s in skills}
 
+        # spec 043 P1: resolve each skill's SKILL.md tool whitelist
+        # (names) to concrete BaseTool objects via a populated registry,
+        # then hand those objects to the skill's subgraph so its LLM can
+        # actually bind + call them.
+        from systemedu.core.tutor.tools import build_default_registry
+
+        registry = build_default_registry()
+
         for s in skills:
-            g.add_node(_skill_node_name(s.config.name), _wrap_subgraph(s, llm))
+            skill_tools = registry.filter_by_whitelist(s.config.tools)
+            g.add_node(_skill_node_name(s.config.name), _wrap_subgraph(s, llm, skill_tools))
             g.add_edge(_skill_node_name(s.config.name), "output_stream")
 
         g.add_conditional_edges(

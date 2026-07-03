@@ -14,6 +14,10 @@ async def search_student_facts(
     knode_id: str = "",
 ) -> dict[str, Any]:
     ctx = require_tool_context()
+    if ctx.data is not None:
+        return await ctx.data.search_student_facts(
+            ctx.user_id, category=category or None, knode=knode_id or None,
+        )
     if ctx.db is None:
         return {"error": "db not configured"}
     db = ctx.db()
