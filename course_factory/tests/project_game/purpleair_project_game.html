@@ -1,0 +1,1475 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=1280, initial-scale=1">
+<title>我的空气质量节点 / My Air Quality Node</title>
+<style>
+  :root{
+    /* deep space base — shared canvas */
+    --bg-0: oklch(0.14 0.035 265);
+    --bg-1: oklch(0.18 0.04 265);
+    --bg-2: oklch(0.22 0.045 265);
+    --bg-3: oklch(0.28 0.05 265);
+    --line: oklch(0.35 0.05 265 / 0.35);
+    --line-strong: oklch(0.55 0.08 265 / 0.55);
+    --fg: oklch(0.96 0.01 265);
+    --fg-dim: oklch(0.75 0.02 265);
+    --fg-mute: oklch(0.55 0.03 265);
+    --gold: oklch(0.85 0.14 85);
+    /* env-10 Biosphere Dome palette */
+    --canopy: oklch(0.72 0.15 140);
+    --loam:   oklch(0.52 0.13 140);
+    --abyss:  oklch(0.35 0.10 140);
+    --dawn:   oklch(0.92 0.08 140);
+    --sun:    oklch(0.85 0.14 85);
+    /* EPA AQI semantic colors (functional exception, desaturated for dark bg) */
+    --aqi-good:  oklch(0.72 0.15 145);
+    --aqi-mod:   oklch(0.82 0.14 95);
+    --aqi-usg:   oklch(0.75 0.15 55);
+    --aqi-unh:   oklch(0.62 0.18 25);
+    --aqi-vunh:  oklch(0.55 0.16 320);
+    --aqi-haz:   oklch(0.45 0.12 20);
+    --mono: 'JetBrains Mono','SF Mono',ui-monospace,Menlo,Consolas,monospace;
+    --sans: 'Inter','PingFang SC','Microsoft YaHei',system-ui,sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{
+    background:var(--bg-0); color:var(--fg);
+    font-family:var(--sans);
+    width:100vw; height:100vh; overflow:hidden;
+    display:flex;
+  }
+  .hidden{display:none !important;}
+
+  /* ---------- left sidebar 200px ---------- */
+  .game-sidebar{
+    width:200px; flex:0 0 200px; height:100%;
+    background:var(--bg-1);
+    border-right:1.5px solid var(--line-strong);
+    display:flex; flex-direction:column;
+    padding:14px 13px; gap:12px; overflow-y:auto;
+  }
+  .brand{font-family:var(--mono); font-size:11px; letter-spacing:.05em; color:var(--fg-mute); line-height:1.4;}
+  .brand b{display:block; color:var(--canopy); font-size:13px; letter-spacing:.04em;}
+  #langBtn{
+    font-family:var(--mono); font-size:11px; cursor:pointer;
+    background:var(--bg-3); color:var(--fg); border:1.5px solid var(--line-strong);
+    padding:5px 9px; box-shadow:3px 3px 0 var(--bg-0); align-self:flex-start;
+  }
+  #langBtn:active{transform:translate(2px,2px); box-shadow:1px 1px 0 var(--bg-0);}
+  .side-h{font-family:var(--mono); font-size:10px; letter-spacing:.08em; color:var(--canopy); text-transform:uppercase; margin-bottom:5px;}
+  .road{display:flex; flex-direction:column; font-size:10.5px;}
+  .road-step{display:flex; align-items:center; gap:6px; padding:3px 0; color:var(--fg-mute); line-height:1.25;}
+  .road-dot{width:9px; height:9px; flex:0 0 9px; border:1.5px solid var(--line-strong); background:transparent;}
+  .road-step.done .road-dot{background:var(--loam); border-color:var(--loam);}
+  .road-step.now{color:var(--fg);}
+  .road-step.now .road-dot{background:var(--gold); border-color:var(--gold); box-shadow:0 0 0 3px oklch(0.85 0.14 85 / .25);}
+  .road-line{width:1.5px; height:8px; margin-left:3.5px; background:var(--line);}
+  .task{background:var(--bg-2); border:1.5px solid var(--line); padding:9px 9px; font-size:11px; line-height:1.5; color:var(--fg-dim);}
+  .task b{color:var(--gold);}
+  .guide{font-size:10.5px; line-height:1.55; color:var(--fg-mute);}
+  .guide b{color:var(--fg-dim);}
+  .guide .why{margin-top:6px; padding:6px 7px; background:var(--bg-2); border-left:2px solid var(--canopy); color:var(--fg-mute); display:block;}
+  .endmark{margin-top:auto; font-size:9.5px; color:var(--fg-mute); line-height:1.5; border-top:1px solid var(--line); padding-top:8px; font-family:var(--mono);}
+  .endmark span{color:var(--canopy);}
+
+  /* ---------- right main ---------- */
+  .game-main{flex:1; height:100%; display:flex; flex-direction:column; min-width:0; padding:12px 14px; gap:10px;}
+  .hud{display:flex; align-items:stretch; gap:10px; flex:0 0 auto;}
+  .hud-title{flex:1; min-width:0;}
+  .hud-title h1{font-size:17px; letter-spacing:.01em;}
+  .hud-title h1 small{font-family:var(--mono); font-size:11px; color:var(--fg-mute); letter-spacing:.02em; margin-left:8px;}
+  .hud-read{font-size:11.5px; color:var(--fg-dim); margin-top:3px; line-height:1.4;}
+  .goal-chip{flex:0 0 auto; align-self:center; display:flex; gap:8px;}
+  .chip{font-family:var(--mono); font-size:10px; padding:5px 8px; border:1.5px solid var(--line-strong); background:var(--bg-2); color:var(--fg-dim); display:flex; flex-direction:column; gap:2px; min-width:88px;}
+  .chip .ck{color:var(--fg-mute); font-size:9px; letter-spacing:.05em;}
+  .chip .cv{font-size:12px; color:var(--fg);}
+  .chip.ok{border-color:var(--gold); background:oklch(0.85 0.14 85 / .08);}
+  .chip.ok .cv{color:var(--gold);}
+
+  .stage{flex:1; min-height:0; display:flex; gap:12px; position:relative;}
+  .panel{background:var(--bg-1); border:1.5px solid var(--line); display:flex; flex-direction:column; min-height:0; min-width:0;}
+  .panel-h{font-family:var(--mono); font-size:10px; letter-spacing:.07em; color:var(--canopy); text-transform:uppercase; padding:7px 10px; border-bottom:1px solid var(--line); flex:0 0 auto; display:flex; justify-content:space-between; align-items:center;}
+  .panel-b{flex:1; min-height:0; padding:10px; overflow-y:auto; display:flex; flex-direction:column; gap:8px;}
+
+  .btn{
+    font-family:var(--mono); font-size:11px; cursor:pointer;
+    background:var(--bg-3); color:var(--fg); border:1.5px solid var(--line-strong);
+    padding:6px 12px; box-shadow:3px 3px 0 var(--bg-0);
+  }
+  .btn:active{transform:translate(2px,2px); box-shadow:1px 1px 0 var(--bg-0);}
+  .btn.primary{background:var(--loam); border-color:var(--canopy); color:var(--dawn);}
+  .btn.gold{background:oklch(0.85 0.14 85 / .15); border-color:var(--gold); color:var(--gold);}
+  .btn:disabled{opacity:.35; cursor:not-allowed; transform:none; box-shadow:3px 3px 0 var(--bg-0);}
+  .btn.small{font-size:10px; padding:4px 8px; box-shadow:2px 2px 0 var(--bg-0);}
+
+  /* ---------- chapter 1 bench ---------- */
+  .part{border:1.5px solid var(--line); background:var(--bg-2); padding:8px 9px; display:flex; flex-direction:column; gap:4px;}
+  .part .pn{font-size:11.5px; color:var(--fg); display:flex; justify-content:space-between; align-items:center;}
+  .part .pn i{font-family:var(--mono); font-style:normal; font-size:9px; color:var(--fg-mute);}
+  .part .pd{font-size:10px; color:var(--fg-mute); line-height:1.45;}
+  .part.mounted{border-color:var(--canopy);}
+  .part.mounted .pn{color:var(--canopy);}
+  .part .req{font-family:var(--mono); font-size:9px; color:var(--gold);}
+  .wire-tabs{display:flex; gap:6px; flex:0 0 auto; flex-wrap:wrap;}
+  .wire-tab{font-family:var(--mono); font-size:10px; padding:4px 9px; border:1.5px solid var(--line); background:var(--bg-2); color:var(--fg-mute); cursor:pointer;}
+  .wire-tab.on{border-color:var(--canopy); color:var(--canopy);}
+  .wire-stage{flex:1; min-height:0; position:relative; display:flex; align-items:stretch;}
+  .pin-col{width:118px; flex:0 0 118px; display:flex; flex-direction:column; justify-content:center; gap:10px;}
+  .pin-col.right{align-items:flex-end;}
+  .pin{display:flex; align-items:center; gap:6px; font-family:var(--mono); font-size:10.5px; color:var(--fg-dim); cursor:pointer; user-select:none;}
+  .pin .pad{width:14px; height:14px; border:1.5px solid var(--line-strong); background:var(--bg-3); flex:0 0 14px;}
+  .pin.fixed{opacity:.45; cursor:default;}
+  .pin.sel .pad{border-color:var(--gold); background:oklch(0.85 0.14 85/.3); box-shadow:0 0 0 3px oklch(0.85 0.14 85/.2);}
+  .pin.wired .pad{border-color:var(--canopy); background:var(--abyss);}
+  .wire-svg{flex:1; min-width:0; height:100%;}
+  .wire-hint{font-size:10px; color:var(--fg-mute); line-height:1.5; flex:0 0 auto; padding-top:6px; border-top:1px solid var(--line);}
+  .enc{border:1.5px solid var(--line); background:var(--bg-2); padding:8px; cursor:pointer; display:flex; gap:8px; align-items:center;}
+  .enc.on{border-color:var(--canopy); background:oklch(0.35 0.10 140/.25);}
+  .enc svg{flex:0 0 44px;}
+  .enc .en{font-size:11px; color:var(--fg);}
+  .enc .ed{font-size:9.5px; color:var(--fg-mute); line-height:1.4;}
+  .console{font-family:var(--mono); font-size:9.5px; line-height:1.6; background:var(--bg-0); border:1px solid var(--line); padding:8px; color:var(--fg-dim); white-space:pre-wrap; min-height:88px; max-height:150px; overflow-y:auto;}
+  .console .ok{color:var(--canopy);} .console .err{color:var(--aqi-unh);} .console .dim{color:var(--fg-mute);}
+
+  /* ---------- chapter 2 site ---------- */
+  .site-wrap{flex:1; min-height:0; display:flex; flex-direction:column;}
+  .site-wrap svg{flex:1; min-height:0; width:100%;}
+  .hotspot{cursor:pointer;}
+  .hotspot circle.ring{fill:none; stroke:var(--gold); stroke-width:1.5; opacity:.75;}
+  .hotspot.on circle.core{fill:var(--gold);}
+  .hotspot text{font-family:var(--mono); font-size:10px; fill:var(--fg-dim);}
+  .site-info{border-top:1px solid var(--line); padding:9px 10px; flex:0 0 auto; display:flex; gap:14px; align-items:center; min-height:64px;}
+  .site-info .sn{font-size:12px; color:var(--fg); min-width:120px;}
+  .site-info .sd{font-size:10.5px; color:var(--fg-mute); line-height:1.5; flex:1;}
+  .site-stat{font-family:var(--mono); font-size:9.5px; color:var(--fg-dim); display:flex; flex-direction:column; gap:3px; min-width:130px;}
+
+  /* ---------- chapter 3 dashboard ---------- */
+  .dash-col{flex:1; min-width:0; display:flex; flex-direction:column; gap:10px;}
+  .dash-top{display:flex; gap:10px; flex:0 0 210px; min-height:0;}
+  .dial-wrap{flex:0 0 288px; display:flex; flex-direction:column;}
+  .dial-body{flex:1; min-height:0; display:flex; flex-direction:column; align-items:center; justify-content:center; position:relative;}
+  .dial-body canvas{display:block;}
+  .cur-vals{flex:1; min-width:0;}
+  .cv-grid{display:grid; grid-template-columns:1fr 1fr; gap:8px;}
+  .cv-cell{background:var(--bg-2); border:1.5px solid var(--line); padding:8px 10px;}
+  .cv-cell .k{font-family:var(--mono); font-size:9px; color:var(--fg-mute); letter-spacing:.06em;}
+  .cv-cell .v{font-family:var(--mono); font-size:20px; margin-top:2px;}
+  .cv-cell .u{font-size:9px; color:var(--fg-mute); font-family:var(--mono);}
+  .timec{display:flex; gap:6px; align-items:center; margin-top:8px; flex-wrap:wrap;}
+  .timec .btn.on{border-color:var(--gold); color:var(--gold);}
+  .chart-wrap{flex:1; min-height:0; display:flex; flex-direction:column;}
+  .chart-body{flex:1; min-height:0; display:flex; flex-direction:column; padding:4px;}
+  .chart-body canvas{flex:1; min-height:0; width:100%;}
+  .dash-bot{display:flex; gap:10px; flex:0 0 168px; min-height:0;}
+  .pipe-card{border:1.5px solid var(--line); background:var(--bg-2); padding:7px 9px; display:flex; flex-direction:column; gap:4px;}
+  .pipe-card .k{font-size:11px; color:var(--fg); display:flex; justify-content:space-between; align-items:center;}
+  .pipe-card .f{font-family:var(--mono); font-size:8.5px; color:var(--fg-mute); line-height:1.5; white-space:pre-wrap;}
+  .pipe-card.inst{border-color:var(--canopy);}
+  .pipe-card.inst .k{color:var(--canopy);}
+  .evt{border:1.5px solid var(--line); background:var(--bg-2); padding:7px 9px; font-size:10.5px; line-height:1.45; color:var(--fg-dim);}
+  .evt b{color:var(--gold); font-family:var(--mono); font-size:9.5px; display:block; margin-bottom:2px;}
+  .evt.smoke{border-color:var(--aqi-usg);}
+  .evt select{width:100%; background:var(--bg-3); color:var(--fg); border:1px solid var(--line-strong); font-size:10px; padding:3px; margin:4px 0; font-family:var(--sans);}
+
+  /* ---------- chapter 4 validate ---------- */
+  .scat-wrap{flex:1.25; display:flex; flex-direction:column;}
+  .scat-body{flex:1; min-height:0; display:flex; flex-direction:column; padding:4px;}
+  .scat-body canvas{flex:1; min-height:0; width:100%;}
+  .met-wrap{flex:1;}
+  .met-big{display:flex; gap:8px;}
+  .met-cell{flex:1; background:var(--bg-2); border:1.5px solid var(--line); padding:9px 10px;}
+  .met-cell .k{font-family:var(--mono); font-size:9px; color:var(--fg-mute); letter-spacing:.06em;}
+  .met-cell .v{font-family:var(--mono); font-size:22px; margin-top:2px;}
+  .met-cell .th{font-family:var(--mono); font-size:9px; color:var(--fg-mute); margin-top:3px;}
+  .met-cell.pass{border-color:var(--canopy);} .met-cell.pass .v{color:var(--canopy);}
+  .met-cell.fail{border-color:var(--aqi-unh);} .met-cell.fail .v{color:var(--aqi-unh);}
+  .diag-chip{border:1.5px solid var(--aqi-usg); background:oklch(0.75 0.15 55/.08); padding:8px 9px; font-size:10.5px; line-height:1.5; color:var(--fg-dim); display:flex; flex-direction:column; gap:6px;}
+  .diag-chip b{color:var(--aqi-usg); font-size:10px; font-family:var(--mono);}
+  .diag-chip.warn{border-color:var(--fg-mute); background:transparent;}
+  .diag-chip.warn b{color:var(--fg-mute);}
+  .verdict{font-family:var(--mono); font-size:11px; padding:8px 10px; border:1.5px solid var(--line-strong); background:var(--bg-2); line-height:1.5;}
+  .verdict.pass{border-color:var(--canopy); color:var(--canopy);}
+  .verdict.fail{border-color:var(--aqi-unh); color:var(--aqi-unh);}
+
+  /* publish overlay */
+  .pub-overlay{position:absolute; inset:0; background:var(--bg-0); border:1.5px solid var(--line-strong); display:flex; z-index:30;}
+  .pub-map{flex:1.4; min-width:0; display:flex; flex-direction:column; border-right:1.5px solid var(--line);}
+  .pub-map canvas{flex:1; min-height:0; width:100%;}
+  .pub-side{flex:1; min-width:0; display:flex; flex-direction:column; gap:10px; padding:14px; overflow-y:auto;}
+  .pub-card{border:1.5px solid var(--line-strong); background:var(--bg-1); padding:11px 12px; opacity:0; transform:translateY(8px); transition:opacity .5s, transform .5s;}
+  .pub-card.show{opacity:1; transform:none;}
+  .pub-card .ph{font-family:var(--mono); font-size:9.5px; letter-spacing:.08em; color:var(--canopy); text-transform:uppercase; margin-bottom:6px;}
+  .pub-card .row{display:flex; justify-content:space-between; font-size:11px; padding:2.5px 0; color:var(--fg-dim);}
+  .pub-card .row .rv{font-family:var(--mono); color:var(--fg);}
+  .pub-card .live{display:inline-block; font-family:var(--mono); font-size:9.5px; color:var(--aqi-good); border:1.5px solid var(--aqi-good); padding:2px 7px; letter-spacing:.08em;}
+  .pub-card .doi{font-family:var(--mono); font-size:13px; color:var(--gold); letter-spacing:.03em;}
+  .toast{position:absolute; left:50%; top:14px; transform:translateX(-50%); background:var(--bg-3); border:1.5px solid var(--gold); color:var(--gold); font-family:var(--mono); font-size:11px; padding:7px 14px; z-index:60; box-shadow:4px 4px 0 var(--bg-0); opacity:0; transition:opacity .3s; pointer-events:none;}
+  .toast.show{opacity:1;}
+  .aqi-cat{font-family:var(--mono); font-size:11px; letter-spacing:.04em;}
+</style>
+</head>
+<body>
+
+<aside class="game-sidebar">
+  <div class="brand"><b>AIR NODE</b><span data-zh="空气质量节点 · ENV-10" data-en="Air Quality Node · ENV-10">空气质量节点 · ENV-10</span></div>
+  <button id="langBtn">EN</button>
+  <div>
+    <div class="side-h" data-zh="项目路线" data-en="Roadmap">项目路线</div>
+    <div class="road" id="roadmap"></div>
+  </div>
+  <div class="task" id="taskCard"></div>
+  <div class="guide" id="guideCard"></div>
+  <div class="endmark" id="endmark"></div>
+</aside>
+
+<main class="game-main">
+  <div class="hud">
+    <div class="hud-title">
+      <h1><span data-zh="我的空气质量节点" data-en="My Air Quality Node">我的空气质量节点</span><small>PurpleAir / OpenAQ · EPA NowCast</small></h1>
+      <div class="hud-read" id="hudRead"></div>
+    </div>
+    <div class="goal-chip">
+      <div class="chip"><span class="ck" data-zh="模拟时钟" data-en="SIM CLOCK">模拟时钟</span><span class="cv" id="chipClock">DAY 0 · 00:00</span></div>
+      <div class="chip"><span class="ck">PM2.5</span><span class="cv" id="chipPM">--</span></div>
+      <div class="chip" id="chipAqiBox"><span class="ck">AQI</span><span class="cv" id="chipAqi">--</span></div>
+      <div class="chip" id="chipStatBox"><span class="ck" data-zh="节点状态" data-en="STATUS">节点状态</span><span class="cv" id="chipStat">OFFLINE</span></div>
+    </div>
+  </div>
+
+  <!-- ============ CHAPTER 1 : BUILD ============ -->
+  <section class="stage" id="ch1">
+    <div class="panel" style="flex:0 0 236px">
+      <div class="panel-h"><span data-zh="零件架" data-en="Parts Rack">零件架</span></div>
+      <div class="panel-b" id="partsRack"></div>
+    </div>
+    <div class="panel" style="flex:1">
+      <div class="panel-h"><span data-zh="接线台" data-en="Wiring Bench">接线台</span><span id="wireStatus" style="font-size:9px;color:var(--fg-mute)"></span></div>
+      <div class="panel-b">
+        <div class="wire-tabs" id="wireTabs"></div>
+        <div class="wire-stage" id="wireStage">
+          <div class="pin-col" id="pinLeft"></div>
+          <svg class="wire-svg" id="wireSvg"></svg>
+          <div class="pin-col right" id="pinRight"></div>
+        </div>
+        <div class="wire-hint" id="wireHint"></div>
+      </div>
+    </div>
+    <div class="panel" style="flex:0 0 300px">
+      <div class="panel-h"><span data-zh="外壳与通电" data-en="Enclosure & Power">外壳与通电</span></div>
+      <div class="panel-b">
+        <div id="encList" style="display:flex;flex-direction:column;gap:8px"></div>
+        <button class="btn primary" id="powerBtn" disabled data-zh="通电测试" data-en="Power-on Test">通电测试</button>
+        <div class="console" id="bootConsole" data-zh-ph="等待通电..." data-en-ph="awaiting power...">等待通电...</div>
+        <button class="btn gold hidden" id="toCh2Btn" data-zh="进入选址" data-en="Go to Deploy">进入选址</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ CHAPTER 2 : DEPLOY ============ -->
+  <section class="stage hidden" id="ch2">
+    <div class="panel" style="flex:1">
+      <div class="panel-h"><span data-zh="社区剖面 — 点击一个安装点位" data-en="Neighborhood — pick a mounting spot">社区剖面 — 点击一个安装点位</span></div>
+      <div class="site-wrap">
+        <svg id="siteSvg" viewBox="0 0 940 420" preserveAspectRatio="xMidYMid meet"></svg>
+        <div class="site-info">
+          <div class="sn" id="siteName" data-zh="未选择点位" data-en="No spot selected">未选择点位</div>
+          <div class="sd" id="siteDesc" data-zh="将鼠标悬停在金色点位上查看环境信息, 点击选定。" data-en="Hover a gold spot to inspect its environment, click to select.">将鼠标悬停在金色点位上查看环境信息, 点击选定。</div>
+          <div class="site-stat" id="siteStat"></div>
+          <button class="btn primary" id="confirmSiteBtn" disabled data-zh="确认安装" data-en="Confirm Mount">确认安装</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ CHAPTER 3 : OPERATE ============ -->
+  <section class="stage hidden" id="ch3">
+    <div class="dash-col">
+      <div class="dash-top">
+        <div class="panel dial-wrap">
+          <div class="panel-h"><span>NOWCAST AQI</span><span id="dialBadge" style="font-size:9px;color:var(--aqi-usg)">RAW ONLY</span></div>
+          <div class="dial-body"><canvas id="dialCanvas" width="560" height="330" style="width:280px;height:165px"></canvas>
+            <div class="aqi-cat" id="aqiCat" style="margin-top:2px">--</div>
+          </div>
+        </div>
+        <div class="panel cur-vals">
+          <div class="panel-h"><span data-zh="实时读数" data-en="Live Readings">实时读数</span>
+            <div class="timec" style="margin:0">
+              <button class="btn small" id="spdPause">||</button>
+              <button class="btn small on" id="spd1">1x</button>
+              <button class="btn small" id="spd4">4x</button>
+              <button class="btn small" id="spd16">16x</button>
+            </div>
+          </div>
+          <div class="panel-b">
+            <div class="cv-grid">
+              <div class="cv-cell"><div class="k" data-zh="原始 PM2.5" data-en="RAW PM2.5">原始 PM2.5</div><div class="v" id="vRaw" style="color:var(--fg-dim)">--</div><div class="u">ug/m3</div></div>
+              <div class="cv-cell"><div class="k" data-zh="EPA 校正 PM2.5" data-en="EPA CORR PM2.5">EPA 校正 PM2.5</div><div class="v" id="vCorr" style="color:var(--canopy)">--</div><div class="u">ug/m3</div></div>
+              <div class="cv-cell"><div class="k" data-zh="相对湿度" data-en="REL HUMIDITY">相对湿度</div><div class="v" id="vRh" style="color:var(--fg-dim)">--</div><div class="u">%RH</div></div>
+              <div class="cv-cell"><div class="k" data-zh="数据完整率" data-en="COMPLETENESS">数据完整率</div><div class="v" id="vComp" style="color:var(--fg-dim)">--</div><div class="u">%</div></div>
+            </div>
+            <div class="timec" id="sandboxCtl" style="display:none">
+              <span style="font-family:var(--mono);font-size:9px;color:var(--fg-mute)" data-zh="沙盒:" data-en="SANDBOX:">沙盒:</span>
+              <button class="btn small" id="sbSmoke" data-zh="触发烟雾日" data-en="Trigger smoke">触发烟雾日</button>
+              <button class="btn small" id="sbWind" data-zh="触发大风日" data-en="Trigger wind">触发大风日</button>
+            </div>
+            <button class="btn gold hidden" id="toCh4Btn" style="margin-top:8px" data-zh="30 天完成 — 进入交叉验证" data-en="30 days done — go validate">30 天完成 — 进入交叉验证</button>
+          </div>
+        </div>
+      </div>
+      <div class="panel chart-wrap">
+        <div class="panel-h"><span data-zh="30 天序列 — 原始(灰) / 校正(绿) / 湿度(虚线)" data-en="30-day series — raw(grey) / corrected(green) / RH(dashed)">30 天序列 — 原始(灰) / 校正(绿) / 湿度(虚线)</span></div>
+        <div class="chart-body"><canvas id="chartCanvas"></canvas></div>
+      </div>
+      <div class="dash-bot">
+        <div class="panel" style="flex:1.15">
+          <div class="panel-h"><span data-zh="数据管线 — 三块卡装齐才是完整节点" data-en="Data pipeline — install all 3 cards">数据管线 — 三块卡装齐才是完整节点</span></div>
+          <div class="panel-b" id="pipeList" style="flex-direction:row; gap:8px;"></div>
+        </div>
+        <div class="panel" style="flex:1">
+          <div class="panel-h"><span data-zh="事件日志" data-en="Event Log">事件日志</span></div>
+          <div class="panel-b" id="evtLog"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ CHAPTER 4 : VALIDATE & PUBLISH ============ -->
+  <section class="stage hidden" id="ch4">
+    <div class="panel scat-wrap">
+      <div class="panel-h"><span data-zh="交叉验证 — x: EPA AirNow 官方站 · y: 我的节点(校正后)" data-en="Cross-validation — x: EPA AirNow station · y: my node (corrected)">交叉验证 — x: EPA AirNow 官方站 · y: 我的节点(校正后)</span></div>
+      <div class="scat-body"><canvas id="scatCanvas"></canvas></div>
+    </div>
+    <div class="panel met-wrap">
+      <div class="panel-h"><span data-zh="验证报告" data-en="Validation Report">验证报告</span></div>
+      <div class="panel-b">
+        <div class="met-big">
+          <div class="met-cell" id="metR"><div class="k" data-zh="相关系数 r" data-en="PEARSON r">相关系数 r</div><div class="v" id="mR">--</div><div class="th">&ge; 0.90</div></div>
+          <div class="met-cell" id="metMae"><div class="k">MAE</div><div class="v" id="mMae">--</div><div class="th">&le; 5.0 ug/m3</div></div>
+          <div class="met-cell" id="metBias"><div class="k" data-zh="平均偏差" data-en="MEAN BIAS">平均偏差</div><div class="v" id="mBias">--</div><div class="th">info</div></div>
+        </div>
+        <div class="verdict" id="verdict"></div>
+        <div id="diagList" style="display:flex;flex-direction:column;gap:8px"></div>
+        <button class="btn gold" id="publishBtn" disabled data-zh="注册上图 — PurpleAir + OpenAQ" data-en="Register — PurpleAir + OpenAQ">注册上图 — PurpleAir + OpenAQ</button>
+      </div>
+    </div>
+
+    <div class="pub-overlay hidden" id="pubOverlay">
+      <div class="pub-map">
+        <div class="panel-h"><span data-zh="社区空气质量网络 — 公开地图" data-en="Community AQ network — public map">社区空气质量网络 — 公开地图</span></div>
+        <canvas id="mapCanvas"></canvas>
+      </div>
+      <div class="pub-side">
+        <div class="pub-card" id="pc1">
+          <div class="ph" data-zh="节点注册" data-en="Node Registration">节点注册</div>
+          <div class="row"><span data-zh="节点 ID" data-en="Node ID">节点 ID</span><span class="rv" id="regId">PA-000000</span></div>
+          <div class="row"><span data-zh="坐标" data-en="Coordinates">坐标</span><span class="rv">36.5521 N, 117.1201 E</span></div>
+          <div class="row"><span data-zh="传感器" data-en="Sensor">传感器</span><span class="rv">PMS5003 + BME280</span></div>
+          <div class="row"><span data-zh="状态" data-en="Status">状态</span><span class="live">PUBLIC · LIVE</span></div>
+        </div>
+        <div class="pub-card" id="pc2">
+          <div class="ph" data-zh="数据集发布 — Zenodo" data-en="Dataset — Zenodo">数据集发布 — Zenodo</div>
+          <div class="row"><span data-zh="30 天数据集" data-en="30-day dataset">30 天数据集</span><span class="rv">dataset.csv</span></div>
+          <div class="row"><span>DOI</span><span class="doi" id="doiText">10.5281/zenodo.8675309</span></div>
+        </div>
+        <div class="pub-card" id="pc3">
+          <div class="ph" data-zh="最终结算" data-en="Final Scorecard">最终结算</div>
+          <div id="scoreRows"></div>
+        </div>
+        <div class="pub-card" id="pc4" style="display:flex;gap:8px;border:none;background:transparent;padding:0">
+          <button class="btn primary" id="freeRunBtn" data-zh="自由运行模式" data-en="Free-run mode">自由运行模式</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div class="toast" id="toast"></div>
+</main>
+
+<script>
+'use strict';
+/* =====================================================================
+   My Air Quality Node — project-level simulation game
+   All numbers are computed with real formulas:
+   - EPA/Barkjohn PurpleAir correction: c = 0.524*raw - 0.0862*RH + 5.75
+   - EPA NowCast 12h weighted average, w = max(1 - range/max, 0.5)
+   - EPA 2024 PM2.5 AQI breakpoints, linear interpolation
+   - Pearson r / MAE / mean bias vs simulated AirNow station
+   ===================================================================== */
+
+/* ---------------- deterministic per-hour noise ---------------- */
+function hash01(x, s){ const v = Math.sin(x*127.1 + s*311.7 + 74.7)*43758.5453; return v - Math.floor(v); }
+function n11(x, s){ return hash01(x, s)*2 - 1; }
+function smoothstep(a, b, x){ const t = Math.min(1, Math.max(0, (x-a)/(b-a))); return t*t*(3-2*t); }
+
+/* ---------------- global state ---------------- */
+const S = {
+  lang:'zh',
+  chapter:1,
+  parts:{pms5003:false, bme280:false, pms7003:false, mq135:false},
+  wires:{pms5003:{}, bme280:{}, pms7003:{}},   // leftPinIdx -> rightPinIdx
+  enclosure:null,          // 'sealed' | 'mesh' | 'vent'
+  site:null,               // 'roof' | 'bbq' | 'drive' | 'wall' | 'indoor'
+  pipeline:{corr:false, nowcast:false, aqi:false},
+  clock:0,                 // simulated hour
+  speed:1, paused:false,
+  dynEvents:[],
+  loggedEvents:{}, smokeNote:null,
+  reworks:0,
+  published:false, freeRun:false,
+  refit:false,             // returning from a ch4-triggered fix
+  serie:{truth:[], rh:[], raw:[], corr:[], now:[], air:[]},
+};
+const HOURS = 720; // 30 days
+
+/* ---------------- i18n ---------------- */
+const T = {
+  zh:{
+    roadmap:['第1章 搭建','第2章 选址','第3章 运行 30 天','第4章 验证上图'],
+    task1:'<b>任务:</b> 把 PMS5003 和 BME280 接上 Pi Zero, 选一个外壳, 然后通电测试。备份传感器可选。',
+    task2:'<b>任务:</b> 在社区里为节点选一个安装点位。提示: 官方建议是离地视线高度、气流开阔处。',
+    task3:'<b>任务:</b> 运行 30 天。装配三块数据管线卡, 熬过烟雾日, 记录事件日志。',
+    task4:'<b>任务:</b> 与最近的 EPA AirNow 官方站交叉验证: r &ge; 0.90 且 MAE &le; 5。不达标就诊断、返工、再验证。',
+    guide1:'点击零件卡装上主板, 再到接线台连数据线: 点一个左边引脚, 再点一个右边引脚。<span class="why"><b>为什么 UART 要交叉?</b> 我说的 TX(发送)正是你要听的, 所以我的 TX 接你的 RX。I2C 是共享总线, SDA 对 SDA 即可。</span>',
+    guide2:'悬停查看每个点位的环境, 再点击选定。选错也能继续 —— 但偏差会写进你 30 天的数据里。<span class="why"><b>为什么不装屋顶?</b> 白天暴晒 + 大风稀释, 读数系统性偏低; EPA 建议呼吸高度(1-2m)。</span>',
+    guide3:'传感器原始值会骗人: 湿度大时激光把吸了水长大的颗粒当成大颗粒。装上 EPA 校正卡试试看阴雨天的变化。<span class="why"><b>NowCast 为什么加权?</b> 空气突变时(野火)旧数据不可信, 权重 w 自动变小, AQI 响应更快。</span>',
+    guide4:'散点越贴近 y=x 越好。不达标时看诊断芯片: 每种工程失误都有独特的散点形状。<span class="why"><b>为什么要交叉验证?</b> 没有对照的传感器只是玩具; 跟官方站对齐后, 你的数据才有公共价值。</span>',
+    hud1:'工作台: 一堆 230 美金的零件, 和一台还不存在的空气质量节点。',
+    hud2:'节点已通电。现在, 位置决定数据的命运。',
+    hud3:'节点上线。目标: 30 天连续数据 + 完整数据管线。',
+    hud4:'最后一关: 证明你的传感器靠得住。',
+    parts:{
+      pms5003:{n:'PMS5003', d:'激光 PM 传感器 · UART · 与 PurpleAir 同款', req:'必装'},
+      bme280:{n:'BME280', d:'温 / 湿 / 气压 · I2C · EPA 校正公式需要湿度', req:'必装'},
+      pms7003:{n:'PMS7003 备份', d:'第二只 PM 传感器 · 工业冗余做法', req:'可选'},
+      mq135:{n:'MQ-135', d:'气体传感器(CO/NOx 语境) · 模拟输出', req:'可选'},
+    },
+    mount:'装上主板', mounted:'已装上',
+    encs:{
+      sealed:{n:'全密封防水盒', d:'防水一流, 但空气进不来 — 读数会又钝又低'},
+      mesh:{n:'开放网罩', d:'气流极好, 但雨天传感器进水 — 数据出现缺口'},
+      vent:{n:'带挡板通风防水盒', d:'挡雨 + 气流通道 — PurpleAir 官方同款思路'},
+    },
+    wireHint:{pms5003:'PMS5003 走 UART: 两根数据线。想想谁该听谁说话。VCC/GND 已预接。',
+      bme280:'BME280 走 I2C: 共享总线, 同名相接。VCC/GND 已预接。',
+      pms7003:'备份传感器接第二组 UART, 规则同 PMS5003。'},
+    needPins:'(数据线未接完)',
+    boot:{power:'[ 0.000] 上电... Pi Zero 2 W 启动', i2cOk:'[ 1.204] i2cdetect: 0x76 = BME280 <span class="ok">OK</span>', i2cBad:'[ 1.204] i2cdetect: <span class="err">未发现任何设备</span> — 检查 SDA/SCL 是否接对', uart:'[ 2.011] 串口首帧字节:', uartNote:'<span class="dim">帧头应为 42 4D ("BM")。看起来对吗? 系统不会替你检查。</span>', ok:'[ 3.500] 系统就绪。', enc:'请先选择一个外壳。'},
+    toCh2:'进入选址', rerun:'重跑 30 天并返回验证',
+    sites:{
+      roof:{n:'屋顶', d:'白天暴晒 + 强风。看起来很高很专业, 但 EPA 不这么想。', s:['高度 6.5m','白天温度 +12C','风速 高']},
+      bbq:{n:'后院烧烤炉旁', d:'插座很近, 接电方便。就是家里人每天傍晚要烤肉。', s:['高度 1.4m','污染源距离 0.8m','气流 中']},
+      drive:{n:'临街车道边', d:'离马路 3 米, 早晚高峰车流密集。', s:['高度 1.5m','车流 早晚高峰','气流 中']},
+      wall:{n:'开阔外墙 1.5m', d:'离地视线高度, 四周开阔, 避开直射与污染源。EPA 教科书选址。', s:['高度 1.5m','污染源距离 >10m','气流 好']},
+      indoor:{n:'室内窗台', d:'不怕风吹雨打, 但测的是屋里的空气。', s:['高度 1.2m','室内环境','气流 差']},
+    },
+    confirmSite:'确认安装', gps:'GPS 已记录: 36.5521 N, 117.1201 E',
+    pipes:{
+      corr:{k:'EPA 校正', f:'c = 0.524*raw\n  - 0.0862*RH + 5.75\n(Barkjohn 2021)'},
+      nowcast:{k:'NowCast', f:'w = max(1-range/max, 0.5)\nNC = sum(w^i*c_i)/sum(w^i)\n12h 加权'},
+      aqi:{k:'AQI 换算', f:'EPA 2024 分段线性\n0-9.0 绿 / 9.1-35.4 黄\n35.5+ 橙红紫褐'},
+    },
+    install:'安装', installed:'已装',
+    rawOnly:'RAW ONLY', pipeOk:'PIPELINE OK',
+    aqiCats:['优','良','对敏感人群不健康','不健康','非常不健康','危险'],
+    evts:{
+      humid:{t:'DAY 5-7 湿雾天', d:'RH 冲上 90%。注意原始读数 — 它在撒谎。'},
+      wind:{t:'DAY 12 大风清洁日', d:'强风把颗粒物吹散, 这是全月最干净的一天。'},
+      smoke:{t:'DAY 18 野火烟雾抵达', d:'上风向野火烟羽过境, AQI 正在冲向紫色段。写一条事件日志:'},
+      smokeDone:{t:'烟雾事件已记录', d:'这条日志会进入你的验证报告。'},
+      bbq:{t:'规律性尖峰?', d:'每天 18-20 时都有一个尖峰。想想传感器旁边有什么。'},
+      rain:{t:'雨天数据缺口', d:'开放网罩进水, 传感器停机。数据完整率下降。'},
+      s720:{t:'DAY 30 达成', d:'30 天连续观测完成。可以进入交叉验证了。'},
+    },
+    smokeOpts:['选择一条日志...','18日 06:00 起 PM2.5 快速抬升, NowCast 权重降至 0.5, AQI 进入紫色段','18日天气晴, 一切正常, 无异常记录','传感器坏了, 读数全是错的'],
+    smokeConfirm:'记录日志',
+    logNice:'日志已记录 — 写得像个科学家。', logBad:'确定吗? 官方站也测到了同样的抬升... (可重选)',
+    verdictPass:'验证通过: 你的节点与 EPA 官方站一致。可以注册上图了。',
+    verdictFail:'未达标: 数据与官方站不一致。逐条查看下方诊断。',
+    diag:{
+      corr:{b:'散点在 y=x 上方整体弯起, 阴雨天最严重', d:'原始读数含湿度虚高, 你还没装 EPA 校正卡。', a:'安装校正卡并重算'},
+      wiring:{b:'散点无结构 — 纯噪声', d:'串口数据是乱码。回想通电时那串帧头字节: 是 42 4D 吗? UART 需要交叉。', a:'回工作台检查接线'},
+      site_bbq:{b:'18-20 时的点单独成簇偏高', d:'烧烤炉每天晚饭时段污染传感器。这是选址偏差, 校正公式救不了。', a:'迁址'},
+      site_roof:{b:'白天的点系统性偏低', d:'屋顶暴晒 + 大风稀释。EPA 建议呼吸高度安装。', a:'迁址'},
+      site_drive:{b:'早晚高峰的点成簇偏高', d:'你测的是马路, 不是社区背景空气。', a:'迁址'},
+      site_indoor:{b:'相关性接近零', d:'室内空气和室外站根本是两个世界。', a:'迁址'},
+      enc_sealed:{b:'散点滞后成环, 整体偏低', d:'密封盒挡住了气流, 传感器闻到的是几小时前的旧空气。', a:'换成通风防水盒'},
+      enc_mesh:{b:'雨天数据缺口 (仅警告)', d:'网罩进水导致停机。指标按有效点计算, 但完整率受损。', a:'换成通风防水盒'},
+    },
+    fixDone:'已修复, 30 天数据已重算。返工 +1。',
+    score:{comp:'数据完整率', r:'相关系数 r', mae:'MAE', evt:'已记录事件', rework:'返工次数', redun:'双传感器冗余', yes:'已配置', no:'未配置'},
+    freeToast:'自由运行: 时间继续, 用沙盒按钮随意触发事件。',
+    sbSmoke:'沙盒烟雾事件已注入 (2 小时后抵达)', sbWind:'沙盒大风事件已注入',
+    statusMap:{OFFLINE:'OFFLINE', BUILD:'组装中', DEPLOY:'待安装', LIVE:'运行中', VALID:'验证中', PUBLIC:'PUBLIC · LIVE'},
+    day:'第', dayU:'天', pts:'数据点',
+  },
+  en:{
+    roadmap:['Ch1 Build','Ch2 Deploy','Ch3 Operate 30 days','Ch4 Validate & Publish'],
+    task1:'<b>Task:</b> Wire the PMS5003 and BME280 to the Pi Zero, pick an enclosure, then power on. Backup sensors optional.',
+    task2:'<b>Task:</b> Pick a mounting spot. Hint: official guidance says breathing height, open airflow.',
+    task3:'<b>Task:</b> Run 30 days. Install all 3 pipeline cards, survive the smoke event, log what happens.',
+    task4:'<b>Task:</b> Cross-validate vs the nearest EPA AirNow station: r &ge; 0.90 and MAE &le; 5. Diagnose, rework, revalidate.',
+    guide1:'Click a part to mount it, then wire the data lines: click a left pin, then a right pin.<span class="why"><b>Why does UART cross?</b> What I transmit is what you receive: my TX goes to your RX. I2C is a shared bus — SDA to SDA.</span>',
+    guide2:'Hover each spot to inspect it, click to select. Wrong spots still work — the bias just gets baked into your 30 days of data.<span class="why"><b>Why not the roof?</b> Heat + wind dilution biases readings low; EPA recommends breathing height (1-2m).</span>',
+    guide3:'Raw readings lie: in humid air the laser counts water-swollen particles as big ones. Install the EPA correction card and watch the foggy days.<span class="why"><b>Why is NowCast weighted?</b> When air changes fast (wildfire), old hours lose weight automatically — AQI responds faster.</span>',
+    guide4:'The closer to y=x the better. Each engineering mistake leaves a unique scatter signature — read the diagnosis chips.<span class="why"><b>Why cross-validate?</b> An uncalibrated sensor is a toy. Aligned with the official station, your data gains public value.</span>',
+    hud1:'The bench: $230 of parts, and a node that does not exist yet.',
+    hud2:'Node powered. Now location decides the fate of your data.',
+    hud3:'Node online. Goal: 30 continuous days + a full data pipeline.',
+    hud4:'Final gate: prove your sensor can be trusted.',
+    parts:{
+      pms5003:{n:'PMS5003', d:'Laser PM sensor · UART · same as PurpleAir', req:'REQUIRED'},
+      bme280:{n:'BME280', d:'Temp/RH/pressure · I2C · EPA formula needs RH', req:'REQUIRED'},
+      pms7003:{n:'PMS7003 backup', d:'Second PM sensor · industrial redundancy', req:'OPTIONAL'},
+      mq135:{n:'MQ-135', d:'Gas sensor (CO/NOx context) · analog out', req:'OPTIONAL'},
+    },
+    mount:'Mount', mounted:'Mounted',
+    encs:{
+      sealed:{n:'Fully sealed box', d:'Great waterproofing, zero airflow — readings go dull and low'},
+      mesh:{n:'Open mesh cage', d:'Great airflow, but rain gets in — data gaps'},
+      vent:{n:'Baffled vented weatherproof box', d:'Rain-shielded + airflow path — the PurpleAir way'},
+    },
+    wireHint:{pms5003:'PMS5003 is UART: two data lines. Think about who should listen to whom. VCC/GND prewired.',
+      bme280:'BME280 is I2C: shared bus, same-name to same-name. VCC/GND prewired.',
+      pms7003:'Backup sensor uses a second UART, same rule as PMS5003.'},
+    needPins:'(data pins incomplete)',
+    boot:{power:'[ 0.000] power on... Pi Zero 2 W booting', i2cOk:'[ 1.204] i2cdetect: 0x76 = BME280 <span class="ok">OK</span>', i2cBad:'[ 1.204] i2cdetect: <span class="err">no device found</span> — check SDA/SCL', uart:'[ 2.011] first UART frame bytes:', uartNote:'<span class="dim">frame header should be 42 4D ("BM"). Does it look right? The system will not check for you.</span>', ok:'[ 3.500] system ready.', enc:'Pick an enclosure first.'},
+    toCh2:'Go to Deploy', rerun:'Re-run 30 days & return to validation',
+    sites:{
+      roof:{n:'Rooftop', d:'Baking sun + strong wind. Looks professional; EPA disagrees.', s:['height 6.5m','day temp +12C','wind high']},
+      bbq:{n:'Backyard, next to BBQ', d:'Power outlet nearby. Family grills every evening though.', s:['height 1.4m','source dist 0.8m','airflow mid']},
+      drive:{n:'Driveway by the street', d:'3m from the road, heavy rush-hour traffic.', s:['height 1.5m','traffic rush-hour','airflow mid']},
+      wall:{n:'Open wall, 1.5m', d:'Breathing height, open on all sides, away from sources. Textbook EPA siting.', s:['height 1.5m','source dist >10m','airflow good']},
+      indoor:{n:'Indoor windowsill', d:'Safe from weather. Measures indoor air though.', s:['height 1.2m','indoor env','airflow poor']},
+    },
+    confirmSite:'Confirm Mount', gps:'GPS recorded: 36.5521 N, 117.1201 E',
+    pipes:{
+      corr:{k:'EPA correction', f:'c = 0.524*raw\n  - 0.0862*RH + 5.75\n(Barkjohn 2021)'},
+      nowcast:{k:'NowCast', f:'w = max(1-range/max, 0.5)\nNC = sum(w^i*c_i)/sum(w^i)\n12h weighted'},
+      aqi:{k:'AQI mapping', f:'EPA 2024 piecewise linear\n0-9.0 green / 9.1-35.4 yellow\n35.5+ orange red purple maroon'},
+    },
+    install:'Install', installed:'Installed',
+    rawOnly:'RAW ONLY', pipeOk:'PIPELINE OK',
+    aqiCats:['Good','Moderate','Unhealthy for Sensitive','Unhealthy','Very Unhealthy','Hazardous'],
+    evts:{
+      humid:{t:'DAY 5-7 humid fog', d:'RH hits 90%. Watch the raw line — it is lying.'},
+      wind:{t:'DAY 12 windy clean day', d:'Strong wind disperses particles: cleanest day of the month.'},
+      smoke:{t:'DAY 18 wildfire smoke arrives', d:'An upwind smoke plume is passing. AQI is heading purple. Write a log entry:'},
+      smokeDone:{t:'Smoke event logged', d:'This entry goes into your validation report.'},
+      bbq:{t:'A periodic spike?', d:'A spike every day at 18-20h. Think about what sits next to the sensor.'},
+      rain:{t:'Rain data gap', d:'Mesh cage let water in, sensor down. Completeness drops.'},
+      s720:{t:'DAY 30 reached', d:'30 continuous days done. Cross-validation unlocked.'},
+    },
+    smokeOpts:['Pick a log entry...','From 06:00 day 18, PM2.5 rose fast; NowCast weight fell to 0.5; AQI entered the purple band','Day 18 was sunny and normal, nothing to report','Sensor is broken, all readings are wrong'],
+    smokeConfirm:'Log it',
+    logNice:'Logged — written like a scientist.', logBad:'Sure? The official station saw the same rise... (you can re-pick)',
+    verdictPass:'PASS: your node agrees with the EPA station. Registration unlocked.',
+    verdictFail:'FAIL: data disagrees with the official station. Read the diagnosis below.',
+    diag:{
+      corr:{b:'Scatter bends above y=x, worst on humid days', d:'Raw readings carry humidity inflation and you have no EPA correction card installed.', a:'Install card & recompute'},
+      wiring:{b:'Scatter has no structure — pure noise', d:'The serial stream is garbage. Remember the boot frame header: was it 42 4D? UART must cross.', a:'Back to bench, fix wiring'},
+      site_bbq:{b:'18-20h points form their own high cluster', d:'The grill pollutes the sensor every dinner. Siting bias — no formula can fix it.', a:'Relocate'},
+      site_roof:{b:'Daytime points biased low', d:'Roof heat + wind dilution. EPA says breathing height.', a:'Relocate'},
+      site_drive:{b:'Rush-hour points cluster high', d:'You are measuring the road, not neighborhood background.', a:'Relocate'},
+      site_indoor:{b:'Correlation near zero', d:'Indoor air and the outdoor station are two different worlds.', a:'Relocate'},
+      enc_sealed:{b:'Scatter loops with lag, biased low', d:'The sealed box blocks airflow; the sensor smells hours-old air.', a:'Switch to vented box'},
+      enc_mesh:{b:'Rain gaps (warning only)', d:'Water shut the sensor down. Metrics use valid points, completeness suffers.', a:'Switch to vented box'},
+    },
+    fixDone:'Fixed — 30 days recomputed. Rework +1.',
+    score:{comp:'Completeness', r:'Pearson r', mae:'MAE', evt:'Events logged', rework:'Reworks', redun:'Dual-sensor redundancy', yes:'configured', no:'not configured'},
+    freeToast:'Free run: time continues; use sandbox buttons to trigger events.',
+    sbSmoke:'Sandbox smoke injected (arrives in 2h)', sbWind:'Sandbox wind injected',
+    statusMap:{OFFLINE:'OFFLINE', BUILD:'BUILDING', DEPLOY:'DEPLOYING', LIVE:'LIVE', VALID:'VALIDATING', PUBLIC:'PUBLIC · LIVE'},
+    day:'DAY', dayU:'', pts:'pts',
+  }
+};
+function tt(){ return T[S.lang]; }
+
+/* ---------------- data model (pure functions) ---------------- */
+function baseSmoke(h){
+  let a = 0;
+  const evs = [{s:408, e:480}].concat(S.dynEvents.filter(e=>e.type==='smoke').map(e=>({s:e.s, e:e.e})));
+  for(const ev of evs){
+    if(h >= ev.s && h < ev.e){
+      const up = smoothstep(ev.s, ev.s+14, h), down = 1 - smoothstep(ev.e-14, ev.e, h);
+      a += 195 * up * down * (0.85 + 0.3*hash01(Math.floor(h/6), 9));
+    }
+  }
+  return a;
+}
+function windFactor(h){
+  const evs = [{s:264, e:288}].concat(S.dynEvents.filter(e=>e.type==='wind').map(e=>({s:e.s, e:e.e})));
+  for(const ev of evs){ if(h >= ev.s && h < ev.e) return 0.3; }
+  return 1;
+}
+function isHumid(h){ return (h >= 96 && h < 168); }
+function isSmoky(h){ return baseSmoke(h) > 10; }
+function rhAt(h){
+  if(isHumid(h)) return Math.min(98, Math.max(70, 88 + 6*n11(h,3)));
+  if(isSmoky(h)) return Math.max(22, 34 + 6*n11(h,3));
+  const hh = h % 24;
+  return Math.min(95, Math.max(25, 58 + 16*Math.cos((hh-4)/24*2*Math.PI) + 8*Math.sin(h/55) + 5*n11(h,4)));
+}
+function truthAt(h){
+  const hh = h % 24;
+  const diurnal = 7*Math.exp(-((hh-8)**2)/5) + 9*Math.exp(-((hh-19)**2)/6);
+  const slow = 4*Math.sin(h/38) + 3*Math.sin(h/91 + 2);
+  const base = 9 + diurnal + slow + 1.6*n11(h,1);
+  return Math.max(1.5, (base + baseSmoke(h)) * windFactor(h));
+}
+function siteTruthAt(h){
+  const t = truthAt(h), hh = h % 24;
+  switch(S.site){
+    case 'bbq':    return (hh >= 18 && hh < 20) ? t + 52 + 12*n11(h,5) : t;
+    case 'drive':  return ((hh >= 7 && hh < 9)||(hh >= 17 && hh < 19)) ? t + 20 + 6*n11(h,5) : t;
+    case 'roof':   return (hh >= 10 && hh < 16) ? t*0.72 : t*0.9;
+    case 'indoor': return Math.max(2, 9 + 2*Math.sin(h/30) + 0.15*t + 1.5*n11(h,5));
+    default:       return t; // wall
+  }
+}
+function concAt(h){ // what actually reaches the sensor, after enclosure
+  if(S.enclosure === 'mesh' && isHumid(h)) return NaN;      // rain ingress => sensor down
+  if(S.enclosure === 'sealed'){
+    let s = 0; for(let i = 0; i < 8; i++) s += siteTruthAt(Math.max(0, h-i));
+    return (s/8) * 0.7;
+  }
+  return siteTruthAt(h);
+}
+function uartOk(){ const w = S.wires.pms5003; return w[0] === 1 && w[1] === 0; } // TX->RX, RX->TX
+function bmeOk(){ const w = S.wires.bme280; return w[0] === 0 && w[1] === 1; }   // SDA->SDA, SCL->SCL
+function rawAt(h, rh){
+  if(!uartOk()) return 500*hash01(h, 7);          // garbled serial stream
+  const c = concAt(h);
+  if(isNaN(c)) return NaN;
+  return Math.max(0, (c - 5.75 + 0.0862*rh) / 0.524) * (1 + 0.06*n11(h, 2));
+}
+function corrOf(raw, rh){
+  if(isNaN(raw)) return NaN;
+  if(!S.pipeline.corr) return raw;
+  return Math.max(0, 0.524*raw - 0.0862*rh + 5.75);
+}
+function airnowAt(h){ return Math.max(1, truthAt(h) + 1.6*n11(h, 8)); }
+function nowcastAt(h, arr){
+  const vals = [];
+  for(let i = 0; i < 12; i++){ const c = arr[h-i]; if(h-i >= 0 && !isNaN(c) && c !== undefined) vals.push(c); }
+  if(vals.length < 3) return NaN;
+  const cmax = Math.max(...vals), cmin = Math.min(...vals);
+  const w = cmax > 0 ? Math.max(0.5, 1 - (cmax-cmin)/cmax) : 1;
+  let num = 0, den = 0;
+  for(let i = 0; i < vals.length; i++){ num += vals[i]*Math.pow(w, i); den += Math.pow(w, i); }
+  return num/den;
+}
+/* EPA 2024 PM2.5 breakpoints */
+const BP = [
+  {cl:0.0,   ch:9.0,   al:0,   ah:50},
+  {cl:9.1,   ch:35.4,  al:51,  ah:100},
+  {cl:35.5,  ch:55.4,  al:101, ah:150},
+  {cl:55.5,  ch:125.4, al:151, ah:200},
+  {cl:125.5, ch:225.4, al:201, ah:300},
+  {cl:225.5, ch:325.4, al:301, ah:500},
+];
+const AQI_COLORS = ['--aqi-good','--aqi-mod','--aqi-usg','--aqi-unh','--aqi-vunh','--aqi-haz'];
+function aqiOf(c){
+  if(isNaN(c)) return {aqi:NaN, cat:-1};
+  const x = Math.min(325.4, Math.floor(c*10)/10);
+  for(let i = 0; i < BP.length; i++){
+    const b = BP[i];
+    if(x <= b.ch) return {aqi:Math.round((b.ah-b.al)/(b.ch-b.cl)*(x-b.cl)+b.al), cat:i};
+  }
+  return {aqi:500, cat:5};
+}
+function cssv(name){ return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
+
+/* series cache */
+function computeTo(H){
+  const s = S.serie;
+  for(let h = s.truth.length; h <= H; h++){
+    s.truth[h] = truthAt(h);
+    s.rh[h]   = rhAt(h);
+    s.raw[h]  = rawAt(h, s.rh[h]);
+    s.corr[h] = corrOf(s.raw[h], s.rh[h]);
+    s.air[h]  = airnowAt(h);
+    s.now[h]  = S.pipeline.nowcast ? nowcastAt(h, s.corr) : s.corr[h];
+  }
+}
+function recomputeAll(){
+  S.serie = {truth:[], rh:[], raw:[], corr:[], now:[], air:[]};
+  computeTo(S.clock);
+}
+function pearson(a, b){
+  let n = 0, sa = 0, sb = 0, saa = 0, sbb = 0, sab = 0;
+  for(let i = 0; i < a.length; i++){
+    if(isNaN(a[i]) || isNaN(b[i])) continue;
+    n++; sa += a[i]; sb += b[i]; saa += a[i]*a[i]; sbb += b[i]*b[i]; sab += a[i]*b[i];
+  }
+  if(n < 3) return 0;
+  const cov = sab/n - (sa/n)*(sb/n), va = saa/n - (sa/n)**2, vb = sbb/n - (sb/n)**2;
+  if(va <= 0 || vb <= 0) return 0;
+  return cov/Math.sqrt(va*vb);
+}
+function maeOf(a, b){
+  let n = 0, s = 0;
+  for(let i = 0; i < a.length; i++){ if(isNaN(a[i])||isNaN(b[i])) continue; n++; s += Math.abs(a[i]-b[i]); }
+  return n ? s/n : 999;
+}
+function biasOf(a, b){
+  let n = 0, s = 0;
+  for(let i = 0; i < a.length; i++){ if(isNaN(a[i])||isNaN(b[i])) continue; n++; s += (a[i]-b[i]); }
+  return n ? s/n : 0;
+}
+function metrics(){
+  const H = Math.min(S.clock, HOURS);
+  const node = S.serie.corr.slice(0, H), air = S.serie.air.slice(0, H);
+  let valid = 0; for(let i = 0; i < H; i++) if(!isNaN(node[i])) valid++;
+  return {r:pearson(node, air), mae:maeOf(node, air), bias:biasOf(node, air), comp:H ? valid/H : 0};
+}
+
+/* ---------------- shared UI helpers ---------------- */
+const $ = id => document.getElementById(id);
+let toastTimer = null;
+function toast(msg){
+  const el = $('toast'); el.textContent = msg; el.classList.add('show');
+  clearTimeout(toastTimer); toastTimer = setTimeout(()=>el.classList.remove('show'), 2600);
+}
+function applyStatic(){
+  document.querySelectorAll('[data-zh]').forEach(el=>{
+    el.textContent = el.getAttribute(S.lang === 'zh' ? 'data-zh' : 'data-en');
+  });
+  $('langBtn').textContent = S.lang === 'zh' ? 'EN' : '中文';
+}
+function renderSidebar(){
+  const L = tt();
+  $('roadmap').innerHTML = L.roadmap.map((r, i)=>{
+    const n = i+1;
+    const cls = n < S.chapter || (S.published && n <= 4) ? 'done' : (n === S.chapter ? 'now' : '');
+    return `<div class="road-step ${cls}"><div class="road-dot"></div><span>${r}</span></div>` +
+           (i < 3 ? '<div class="road-line"></div>' : '');
+  }).join('');
+  $('taskCard').innerHTML = L['task'+S.chapter];
+  $('guideCard').innerHTML = L['guide'+S.chapter];
+  $('hudRead').textContent = L['hud'+S.chapter];
+  updEndmark();
+}
+function updEndmark(){
+  const hh = S.clock % 24;
+  const L = tt();
+  $('endmark').innerHTML =
+    `<span>DAY ${Math.max(0, Math.min(999, Math.floor(S.clock/24)))}</span> · ${String(hh).padStart(2,'0')}:00<br>` +
+    `${S.serie.corr.length} ${L.pts} · ${S.site || '--'} · ${S.enclosure || '--'}`;
+}
+function setStatus(k){
+  $('chipStat').textContent = tt().statusMap[k];
+  $('chipStatBox').classList.toggle('ok', k === 'PUBLIC' || k === 'LIVE');
+}
+function gotoChapter(n){
+  S.chapter = n;
+  for(let i = 1; i <= 4; i++) $('ch'+i).classList.toggle('hidden', i !== n);
+  renderSidebar();
+  if(n === 1) setStatus('BUILD');
+  if(n === 2) setStatus('DEPLOY');
+  if(n === 3) setStatus('LIVE');
+  if(n === 4){ setStatus('VALID'); enterValidation(); }
+}
+
+/* =====================================================================
+   CHAPTER 1 — BUILD
+   ===================================================================== */
+const PART_IDS = ['pms5003','bme280','pms7003','mq135'];
+const WIRE_SPECS = {
+  pms5003:{left:['PMS TX','PMS RX'], right:['PI TX','PI RX'], fixed:['VCC 5V','GND']},
+  bme280:{left:['BME SDA','BME SCL'], right:['PI SDA','PI SCL'], fixed:['VCC 3V3','GND']},
+  pms7003:{left:['PMS2 TX','PMS2 RX'], right:['PI TX2','PI RX2'], fixed:['VCC 5V','GND']},
+};
+let wireTab = 'pms5003', selPin = -1;
+
+function renderParts(){
+  const L = tt();
+  $('partsRack').innerHTML = PART_IDS.map(id=>{
+    const p = L.parts[id], on = S.parts[id];
+    return `<div class="part ${on?'mounted':''}" id="part_${id}">
+      <div class="pn">${p.n}<i>${on ? L.mounted : ''}</i></div>
+      <div class="pd">${p.d}</div>
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <span class="req">${p.req}</span>
+        ${on ? '' : `<button class="btn small" data-mount="${id}">${L.mount}</button>`}
+      </div></div>`;
+  }).join('');
+  $('partsRack').querySelectorAll('[data-mount]').forEach(b=>{
+    b.onclick = ()=>{
+      const id = b.getAttribute('data-mount');
+      S.parts[id] = true;
+      if(WIRE_SPECS[id]) wireTab = id;
+      renderParts(); renderWiring(); checkPower();
+    };
+  });
+}
+function renderWiring(){
+  const L = tt();
+  const tabs = Object.keys(WIRE_SPECS).filter(id=>S.parts[id]);
+  $('wireTabs').innerHTML = tabs.length
+    ? tabs.map(id=>`<div class="wire-tab ${id===wireTab?'on':''}" data-tab="${id}">${L.parts[id].n}</div>`).join('')
+    : `<span style="font-size:10px;color:var(--fg-mute)">${S.lang==='zh'?'先从零件架装上一个传感器':'Mount a sensor from the rack first'}</span>`;
+  $('wireTabs').querySelectorAll('[data-tab]').forEach(el=>{
+    el.onclick = ()=>{ wireTab = el.getAttribute('data-tab'); selPin = -1; renderWiring(); };
+  });
+  const spec = WIRE_SPECS[wireTab];
+  if(!spec || !S.parts[wireTab]){ $('pinLeft').innerHTML = ''; $('pinRight').innerHTML = ''; $('wireSvg').innerHTML=''; $('wireHint').textContent=''; return; }
+  const conn = S.wires[wireTab];
+  $('pinLeft').innerHTML =
+    spec.fixed.map(f=>`<div class="pin fixed"><div class="pad"></div>${f}</div>`).join('') +
+    spec.left.map((p,i)=>{
+      const cls = (selPin===i?'sel':'') + (conn[i]!==undefined?' wired':'');
+      return `<div class="pin ${cls}" data-l="${i}"><div class="pad"></div>${p}</div>`;
+    }).join('');
+  $('pinRight').innerHTML =
+    spec.fixed.map(f=>`<div class="pin fixed">${f}<div class="pad"></div></div>`).join('') +
+    spec.right.map((p,i)=>{
+      const wired = Object.values(conn).includes(i);
+      return `<div class="pin ${wired?'wired':''}" data-r="${i}">${p}<div class="pad"></div></div>`;
+    }).join('');
+  $('pinLeft').querySelectorAll('[data-l]').forEach(el=>{
+    el.onclick = ()=>{
+      const i = +el.getAttribute('data-l');
+      if(conn[i] !== undefined){ delete conn[i]; selPin = -1; }
+      else selPin = (selPin === i ? -1 : i);
+      renderWiring(); checkPower();
+    };
+  });
+  $('pinRight').querySelectorAll('[data-r]').forEach(el=>{
+    el.onclick = ()=>{
+      if(selPin < 0) return;
+      const r = +el.getAttribute('data-r');
+      for(const k of Object.keys(conn)) if(conn[k] === r) delete conn[k];
+      conn[selPin] = r; selPin = -1;
+      renderWiring(); checkPower();
+    };
+  });
+  drawWires(spec, conn);
+  $('wireHint').textContent = L.wireHint[wireTab];
+  const done = Object.keys(conn).length >= 2;
+  $('wireStatus').textContent = done ? '' : L.needPins;
+}
+function drawWires(spec, conn){
+  const svg = $('wireSvg');
+  const box = svg.getBoundingClientRect();
+  if(box.width < 10){ requestAnimationFrame(()=>drawWires(spec, conn)); return; }
+  const nRows = spec.fixed.length + spec.left.length;
+  const rowY = i => box.height/2 + (i - (nRows-1)/2) * 34;
+  let out = '';
+  // prewired power lines (faint)
+  for(let i = 0; i < spec.fixed.length; i++){
+    out += `<line x1="0" y1="${rowY(i)}" x2="${box.width}" y2="${rowY(i)}" stroke="${cssv('--line')}" stroke-width="1.5"/>`;
+  }
+  for(const [l, r] of Object.entries(conn)){
+    const y1 = rowY(spec.fixed.length + (+l)), y2 = rowY(spec.fixed.length + r);
+    out += `<path d="M 0 ${y1} C ${box.width*0.4} ${y1}, ${box.width*0.6} ${y2}, ${box.width} ${y2}" fill="none" stroke="${cssv('--canopy')}" stroke-width="2"/>`;
+  }
+  svg.setAttribute('viewBox', `0 0 ${box.width} ${box.height}`);
+  svg.innerHTML = out;
+}
+const ENC_SVGS = {
+  sealed:'<svg width="44" height="34" viewBox="0 0 44 34"><rect x="4" y="4" width="36" height="26" fill="none" stroke="currentColor" stroke-width="2"/><rect x="10" y="10" width="24" height="14" fill="currentColor" opacity=".25"/></svg>',
+  mesh:'<svg width="44" height="34" viewBox="0 0 44 34"><rect x="4" y="4" width="36" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-dasharray="3 3"/><line x1="4" y1="12" x2="40" y2="12" stroke="currentColor" stroke-dasharray="3 3"/><line x1="4" y1="20" x2="40" y2="20" stroke="currentColor" stroke-dasharray="3 3"/></svg>',
+  vent:'<svg width="44" height="34" viewBox="0 0 44 34"><rect x="4" y="4" width="36" height="26" fill="none" stroke="currentColor" stroke-width="2"/><path d="M 8 24 h6 M8 20 h6 M8 16 h6" stroke="currentColor" stroke-width="2"/><path d="M 30 24 h6 M30 20 h6 M30 16 h6" stroke="currentColor" stroke-width="2"/><path d="M14 10 h16" stroke="currentColor" stroke-width="2"/></svg>',
+};
+function renderEnc(){
+  const L = tt();
+  $('encList').innerHTML = ['sealed','mesh','vent'].map(k=>
+    `<div class="enc ${S.enclosure===k?'on':''}" data-enc="${k}" style="color:${S.enclosure===k?'var(--canopy)':'var(--fg-mute)'}">
+      ${ENC_SVGS[k]}<div><div class="en">${L.encs[k].n}</div><div class="ed">${L.encs[k].d}</div></div></div>`).join('');
+  $('encList').querySelectorAll('[data-enc]').forEach(el=>{
+    el.onclick = ()=>{ S.enclosure = el.getAttribute('data-enc'); renderEnc(); checkPower(); };
+  });
+}
+function wiredOk(id){ return Object.keys(S.wires[id]).length >= 2; }
+function checkPower(){
+  const ready = S.parts.pms5003 && S.parts.bme280 && wiredOk('pms5003') && wiredOk('bme280') && !!S.enclosure;
+  $('powerBtn').disabled = !ready;
+}
+function powerOn(){
+  const L = tt(); const con = $('bootConsole');
+  const lines = [L.boot.power];
+  if(bmeOk()) lines.push(L.boot.i2cOk);
+  else lines.push(L.boot.i2cBad);
+  let bytes;
+  if(uartOk()) bytes = '42 4D 00 1C 00 0B 00 12 00 15 ...';
+  else { bytes = ''; for(let i = 0; i < 10; i++) bytes += Math.floor(hash01(i, 77)*256).toString(16).padStart(2,'0').toUpperCase()+' '; bytes += '...'; }
+  lines.push(L.boot.uart + ' <span style="color:var(--gold)">' + bytes + '</span>');
+  lines.push(L.boot.uartNote);
+  if(bmeOk()) lines.push(L.boot.ok);
+  con.innerHTML = lines.join('\n');
+  if(bmeOk()){
+    $('toCh2Btn').classList.remove('hidden');
+    $('toCh2Btn').textContent = S.refit ? L.rerun : L.toCh2;
+  } else {
+    $('toCh2Btn').classList.add('hidden');
+  }
+}
+
+/* =====================================================================
+   CHAPTER 2 — DEPLOY
+   ===================================================================== */
+const SITE_POS = {roof:[318,64], bbq:[476,300], drive:[812,318], wall:[236,232], indoor:[398,208]};
+let hoverSite = null;
+function renderSiteScene(){
+  const c = cssv('--line-strong'), dim = cssv('--fg-mute'), acc = cssv('--canopy');
+  let svgContent = `
+    <defs>
+      <linearGradient id="skyg" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="oklch(0.17 0.04 265)"/><stop offset="1" stop-color="oklch(0.14 0.035 265)"/>
+      </linearGradient>
+    </defs>
+    <rect x="0" y="0" width="940" height="420" fill="url(#skyg)"/>
+    <circle cx="850" cy="60" r="22" fill="none" stroke="${dim}" stroke-width="1.5"/>
+    <line x1="0" y1="360" x2="940" y2="360" stroke="${c}" stroke-width="2"/>
+    <!-- house -->
+    <rect x="220" y="140" width="240" height="220" fill="oklch(0.20 0.04 265)" stroke="${c}" stroke-width="2"/>
+    <path d="M 200 140 L 340 60 L 480 140 Z" fill="oklch(0.24 0.045 265)" stroke="${c}" stroke-width="2"/>
+    <rect x="370" y="180" width="56" height="56" fill="oklch(0.16 0.04 265)" stroke="${c}" stroke-width="2"/>
+    <line x1="370" y1="208" x2="426" y2="208" stroke="${c}"/><line x1="398" y1="180" x2="398" y2="236" stroke="${c}"/>
+    <rect x="262" y="280" width="44" height="80" fill="oklch(0.16 0.04 265)" stroke="${c}" stroke-width="2"/>
+    <!-- chimney -->
+    <rect x="404" y="80" width="22" height="46" fill="oklch(0.24 0.045 265)" stroke="${c}" stroke-width="1.5"/>
+    <!-- bbq grill -->
+    <rect x="452" y="296" width="48" height="22" rx="0" fill="oklch(0.22 0.045 265)" stroke="${c}" stroke-width="2"/>
+    <line x1="460" y1="318" x2="456" y2="352" stroke="${c}" stroke-width="2"/>
+    <line x1="492" y1="318" x2="496" y2="352" stroke="${c}" stroke-width="2"/>
+    <path d="M 462 288 q 4 -8 0 -14 M 476 288 q 4 -8 0 -14 M 490 288 q 4 -8 0 -14" fill="none" stroke="${dim}" stroke-width="1.5"/>
+    <!-- street -->
+    <rect x="700" y="360" width="240" height="18" fill="oklch(0.20 0.04 265)"/>
+    <line x1="706" y1="369" x2="930" y2="369" stroke="${dim}" stroke-dasharray="12 10" stroke-width="1.5"/>
+    <rect x="760" y="330" width="70" height="24" fill="oklch(0.22 0.045 265)" stroke="${c}" stroke-width="1.5"/>
+    <circle cx="775" cy="357" r="7" fill="none" stroke="${c}" stroke-width="1.5"/>
+    <circle cx="815" cy="357" r="7" fill="none" stroke="${c}" stroke-width="1.5"/>
+    <!-- wall mount arm -->
+    <line x1="220" y1="232" x2="240" y2="232" stroke="${acc}" stroke-width="2"/>
+    <!-- tree -->
+    <line x1="120" y1="360" x2="120" y2="300" stroke="${c}" stroke-width="3"/>
+    <circle cx="120" cy="278" r="30" fill="none" stroke="${acc}" stroke-width="1.5"/>
+    <circle cx="100" cy="292" r="18" fill="none" stroke="${acc}" stroke-width="1.5" opacity=".6"/>
+  `;
+  for(const [k, [x, y]] of Object.entries(SITE_POS)){
+    svgContent += `<g class="hotspot ${S.site===k?'on':''}" data-site="${k}">
+      <circle class="ring" cx="${x}" cy="${y}" r="13"><animate attributeName="r" values="11;16;11" dur="2.2s" repeatCount="indefinite"/></circle>
+      <circle class="core" cx="${x}" cy="${y}" r="5.5" fill="oklch(0.85 0.14 85 / .5)"/>
+      <circle cx="${x}" cy="${y}" r="20" fill="transparent"/>
+      <text x="${x+18}" y="${y+4}">${tt().sites[k].n}</text>
+    </g>`;
+  }
+  $('siteSvg').innerHTML = svgContent;
+  $('siteSvg').querySelectorAll('.hotspot').forEach(g=>{
+    const k = g.getAttribute('data-site');
+    g.addEventListener('mouseenter', ()=>{ hoverSite = k; updSiteInfo(k); });
+    g.addEventListener('click', ()=>{ S.site = k; renderSiteScene(); updSiteInfo(k); $('confirmSiteBtn').disabled = false; });
+  });
+}
+function updSiteInfo(k){
+  const L = tt(), s = L.sites[k];
+  $('siteName').textContent = s.n + (S.site === k ? (S.lang==='zh' ? ' (已选)' : ' (selected)') : '');
+  $('siteDesc').textContent = s.d;
+  $('siteStat').innerHTML = s.s.map(x=>`<span>${x}</span>`).join('');
+}
+
+/* =====================================================================
+   CHAPTER 3 — OPERATE
+   ===================================================================== */
+let tickTimer = null;
+function startClock(){
+  stopClock();
+  tickTimer = setInterval(()=>{
+    if(S.paused) return;
+    advance(S.speed);
+  }, 500);
+}
+function stopClock(){ if(tickTimer){ clearInterval(tickTimer); tickTimer = null; } }
+function advance(dh){
+  const wasBelow = S.clock < HOURS;
+  S.clock = S.clock + dh;
+  if(!S.freeRun && S.clock >= HOURS){ S.clock = HOURS; }
+  computeTo(S.clock);
+  checkEvents();
+  if(!S.freeRun && wasBelow && S.clock >= HOURS){
+    S.paused = true;
+    pushEvent('s720', 'gold');
+    $('toCh4Btn').classList.remove('hidden');
+  }
+  renderDash();
+}
+function setSpeed(sp){
+  S.speed = sp; S.paused = (sp === 0);
+  [['spdPause',0],['spd1',1],['spd4',4],['spd16',16]].forEach(([id, v])=>{
+    $(id).classList.toggle('on', (sp === 0 && v === 0) || (sp === v && sp !== 0));
+  });
+}
+function renderPipes(){
+  const L = tt();
+  $('pipeList').innerHTML = ['corr','nowcast','aqi'].map(k=>{
+    const inst = S.pipeline[k], p = L.pipes[k];
+    return `<div class="pipe-card ${inst?'inst':''}" style="flex:1">
+      <div class="k">${p.k}<span style="font-family:var(--mono);font-size:9px;color:${inst?'var(--canopy)':'var(--fg-mute)'}">${inst?L.installed:''}</span></div>
+      <div class="f">${p.f}</div>
+      ${inst ? '' : `<button class="btn small primary" data-pipe="${k}">${L.install}</button>`}
+    </div>`;
+  }).join('');
+  $('pipeList').querySelectorAll('[data-pipe]').forEach(b=>{
+    b.onclick = ()=>{
+      const k = b.getAttribute('data-pipe');
+      S.pipeline[k] = true;
+      recomputeAll();           // pipeline is a pure function: reruns history instantly
+      renderPipes(); renderDash();
+    };
+  });
+  const full = S.pipeline.corr && S.pipeline.nowcast && S.pipeline.aqi;
+  $('dialBadge').textContent = full ? L.pipeOk : L.rawOnly;
+  $('dialBadge').style.color = full ? cssv('--canopy') : cssv('--aqi-usg');
+}
+function pushEvent(key, tone){
+  if(S.loggedEvents[key]) return;
+  S.loggedEvents[key] = true;
+  const L = tt(), e = L.evts[key];
+  const div = document.createElement('div');
+  div.className = 'evt' + (key === 'smoke' ? ' smoke' : '');
+  if(key === 'smoke'){
+    div.innerHTML = `<b>${e.t}</b>${e.d}
+      <select id="smokeSel">${L.smokeOpts.map((o,i)=>`<option value="${i}">${o}</option>`).join('')}</select>
+      <button class="btn small gold" id="smokeLogBtn">${L.smokeConfirm}</button>`;
+  } else {
+    div.innerHTML = `<b>${e.t}</b>${e.d}`;
+  }
+  $('evtLog').prepend(div);
+  if(key === 'smoke'){
+    div.querySelector('#smokeLogBtn').onclick = ()=>{
+      const v = +div.querySelector('#smokeSel').value;
+      if(v === 1){
+        S.smokeNote = 1;
+        div.innerHTML = `<b>${L.evts.smokeDone.t}</b>${L.evts.smokeDone.d}`;
+        div.classList.remove('smoke');
+        toast(L.logNice);
+      } else if(v > 0){
+        toast(L.logBad);
+      }
+    };
+  }
+}
+function checkEvents(){
+  const h = S.clock;
+  if(h >= 100 && S.enclosure === 'mesh') pushEvent('rain');
+  if(h >= 100) pushEvent('humid');
+  if(h >= 266) pushEvent('wind');
+  if(h >= 414) pushEvent('smoke');
+  if(h >= 60 && S.site === 'bbq') pushEvent('bbq');
+}
+/* dial */
+function drawDial(){
+  const cv = $('dialCanvas'), ctx = cv.getContext('2d');
+  const W = cv.width, H = cv.height;
+  ctx.clearRect(0, 0, W, H);
+  const cx = W/2, cy = H*0.86, R = Math.min(W, H*1.7)*0.40;
+  const segs = [0, 50, 100, 150, 200, 300, 500];
+  const a0 = Math.PI, a1 = 2*Math.PI;
+  const aqiToAng = a => a0 + (a1-a0) * (a <= 300 ? a/300*0.85 : 0.85 + (a-300)/200*0.15);
+  for(let i = 0; i < 6; i++){
+    ctx.beginPath();
+    ctx.arc(cx, cy, R, aqiToAng(segs[i]), aqiToAng(segs[i+1]));
+    ctx.lineWidth = 26; ctx.strokeStyle = cssv(AQI_COLORS[i]); ctx.globalAlpha = 0.85; ctx.stroke();
+  }
+  ctx.globalAlpha = 1;
+  // ticks + labels
+  ctx.font = '17px JetBrains Mono, monospace'; ctx.fillStyle = cssv('--fg-mute'); ctx.textAlign = 'center';
+  for(const v of [0, 50, 100, 150, 200, 300]){
+    const a = aqiToAng(v);
+    const tx = cx + Math.cos(a)*(R+30), ty = cy + Math.sin(a)*(R+30) + 6;
+    ctx.fillText(String(v), tx, ty);
+  }
+  // needle + value
+  const h = S.clock;
+  let val = NaN, cat = -1, label = '--';
+  const srcConc = S.pipeline.nowcast ? S.serie.now[h] : S.serie.corr[h];
+  if(S.pipeline.aqi){
+    const q = aqiOf(srcConc); val = q.aqi; cat = q.cat; label = isNaN(val) ? '--' : String(val);
+  } else {
+    val = NaN; label = isNaN(srcConc) ? '--' : srcConc.toFixed(0);
+  }
+  if(S.pipeline.aqi && !isNaN(val)){
+    const a = aqiToAng(Math.min(500, val));
+    ctx.beginPath(); ctx.moveTo(cx, cy);
+    ctx.lineTo(cx + Math.cos(a)*(R-20), cy + Math.sin(a)*(R-20));
+    ctx.lineWidth = 4; ctx.strokeStyle = cssv('--fg'); ctx.stroke();
+    ctx.beginPath(); ctx.arc(cx, cy, 8, 0, 7); ctx.fillStyle = cssv('--fg'); ctx.fill();
+  }
+  ctx.font = 'bold 52px JetBrains Mono, monospace'; ctx.textAlign = 'center';
+  ctx.fillStyle = cat >= 0 ? cssv(AQI_COLORS[cat]) : cssv('--fg-dim');
+  ctx.fillText(label, cx, cy - 24);
+  ctx.font = '15px JetBrains Mono, monospace'; ctx.fillStyle = cssv('--fg-mute');
+  ctx.fillText(S.pipeline.aqi ? 'AQI' : 'ug/m3', cx, cy + 2);
+  const catEl = $('aqiCat');
+  if(cat >= 0){ catEl.textContent = tt().aqiCats[cat]; catEl.style.color = cssv(AQI_COLORS[cat]); }
+  else { catEl.textContent = S.pipeline.aqi ? '--' : (S.lang==='zh'?'未装 AQI 换算卡':'AQI card not installed'); catEl.style.color = cssv('--fg-mute'); }
+}
+/* chart */
+function fitCanvas(cv){
+  const r = cv.getBoundingClientRect();
+  if(r.width < 4 || r.height < 4) return false;
+  const dpr = window.devicePixelRatio || 1;
+  if(cv.width !== Math.round(r.width*dpr)){ cv.width = Math.round(r.width*dpr); cv.height = Math.round(r.height*dpr); }
+  const ctx = cv.getContext('2d'); ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  return {w:r.width, h:r.height, ctx};
+}
+function drawChart(){
+  const cv = $('chartCanvas'); const f = fitCanvas(cv); if(!f) return;
+  const {w, h, ctx} = f;
+  ctx.clearRect(0, 0, w, h);
+  const padL = 40, padR = 34, padT = 12, padB = 20;
+  const Hmax = Math.max(HOURS, S.clock);
+  const X = hh => padL + (w-padL-padR) * hh/Hmax;
+  let ymax = 60;
+  for(let i = 0; i < S.serie.corr.length; i++){
+    if(!isNaN(S.serie.raw[i])) ymax = Math.max(ymax, S.serie.raw[i]);
+    if(!isNaN(S.serie.corr[i])) ymax = Math.max(ymax, S.serie.corr[i]);
+  }
+  ymax = Math.ceil(ymax*1.08/50)*50;
+  const Y = v => padT + (h-padT-padB) * (1 - v/ymax);
+  const Yr = v => padT + (h-padT-padB) * (1 - v/100);
+  // smoke shading
+  ctx.fillStyle = cssv('--aqi-usg'); ctx.globalAlpha = 0.08;
+  const smokeEvs = [{s:408,e:480}].concat(S.dynEvents.filter(e=>e.type==='smoke'));
+  for(const ev of smokeEvs){ if(ev.s < S.clock) ctx.fillRect(X(ev.s), padT, X(Math.min(ev.e, S.clock)) - X(ev.s), h-padT-padB); }
+  ctx.globalAlpha = 1;
+  // grid + labels
+  ctx.strokeStyle = cssv('--line'); ctx.lineWidth = 1;
+  ctx.font = '9.5px JetBrains Mono, monospace'; ctx.fillStyle = cssv('--fg-mute');
+  for(let v = 0; v <= ymax; v += ymax/4){
+    ctx.beginPath(); ctx.moveTo(padL, Y(v)); ctx.lineTo(w-padR, Y(v)); ctx.stroke();
+    ctx.textAlign = 'right'; ctx.fillText(String(Math.round(v)), padL-5, Y(v)+3);
+  }
+  for(let d = 0; d <= Hmax/24; d += 5){
+    if(d === 0) continue;
+    ctx.beginPath(); ctx.moveTo(X(d*24), padT); ctx.lineTo(X(d*24), h-padB); ctx.stroke();
+    ctx.textAlign = 'center'; ctx.fillText('D'+d, X(d*24), h-6);
+  }
+  ctx.textAlign = 'left'; ctx.fillText('RH%', w-padR+4, padT+8);
+  const path = (arr, mapY, color, width, dash, alpha)=>{
+    ctx.beginPath(); ctx.strokeStyle = color; ctx.lineWidth = width;
+    ctx.globalAlpha = alpha || 1;
+    ctx.setLineDash(dash || []);
+    let pen = false;
+    for(let i = 0; i <= Math.min(S.clock, arr.length-1); i++){
+      const v = arr[i];
+      if(isNaN(v)){ pen = false; continue; }
+      const x = X(i), y = mapY(v);
+      if(!pen){ ctx.moveTo(x, y); pen = true; } else ctx.lineTo(x, y);
+    }
+    ctx.stroke(); ctx.setLineDash([]); ctx.globalAlpha = 1;
+  };
+  path(S.serie.rh, Yr, cssv('--fg-mute'), 1, [4,4], 0.35);
+  path(S.serie.raw, Y, cssv('--fg-mute'), 1.2, null, 0.8);
+  path(S.serie.corr, Y, cssv('--canopy'), 1.8);
+  // clock cursor
+  ctx.strokeStyle = cssv('--gold'); ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(X(S.clock), padT); ctx.lineTo(X(S.clock), h-padB); ctx.stroke();
+}
+function renderDash(){
+  const h = S.clock, L = tt();
+  const raw = S.serie.raw[h], corr = S.serie.corr[h], rh = S.serie.rh[h];
+  $('vRaw').textContent = isNaN(raw) ? '--' : raw.toFixed(1);
+  $('vCorr').textContent = isNaN(corr) ? '--' : corr.toFixed(1);
+  $('vRh').textContent = isNaN(rh) ? '--' : rh.toFixed(0);
+  const m = metrics();
+  $('vComp').textContent = (m.comp*100).toFixed(0);
+  const d = Math.floor(h/24), hh = h % 24;
+  $('chipClock').textContent = `DAY ${d} · ${String(hh).padStart(2,'0')}:00`;
+  $('chipPM').textContent = isNaN(corr) ? '--' : corr.toFixed(1);
+  const srcConc = S.pipeline.nowcast ? S.serie.now[h] : corr;
+  if(S.pipeline.aqi && !isNaN(srcConc)){
+    const q = aqiOf(srcConc);
+    $('chipAqi').textContent = q.aqi;
+    $('chipAqi').style.color = cssv(AQI_COLORS[q.cat]);
+  } else { $('chipAqi').textContent = '--'; $('chipAqi').style.color = ''; }
+  drawDial(); drawChart(); updEndmark();
+}
+
+/* =====================================================================
+   CHAPTER 4 — VALIDATE & PUBLISH
+   ===================================================================== */
+function enterValidation(){
+  S.paused = true;
+  renderDash();               // refresh HUD chips after any recompute
+  const m = metrics();
+  renderMetrics(m);
+  requestAnimationFrame(()=>drawScatter());
+}
+function renderMetrics(m){
+  const L = tt();
+  const rP = m.r >= 0.90, maeP = m.mae <= 5.0;
+  $('mR').textContent = m.r.toFixed(3);
+  $('mMae').textContent = m.mae > 99 ? '>99' : m.mae.toFixed(2);
+  $('mBias').textContent = (m.bias >= 0 ? '+' : '') + m.bias.toFixed(2);
+  $('metR').className = 'met-cell ' + (rP ? 'pass' : 'fail');
+  $('metMae').className = 'met-cell ' + (maeP ? 'pass' : 'fail');
+  $('metBias').className = 'met-cell';
+  const pass = rP && maeP;
+  $('verdict').className = 'verdict ' + (pass ? 'pass' : 'fail');
+  $('verdict').textContent = pass ? L.verdictPass : L.verdictFail;
+  $('publishBtn').disabled = !pass;
+  renderDiags(pass);
+}
+function renderDiags(pass){
+  const L = tt(); const list = [];
+  if(!uartOk()) list.push({k:'wiring', fix:'wiring'});
+  if(!S.pipeline.corr && uartOk()) list.push({k:'corr', fix:'corr'});
+  if(S.site && S.site !== 'wall' && uartOk()) list.push({k:'site_'+S.site, fix:'site'});
+  if(S.enclosure === 'sealed' && uartOk()) list.push({k:'enc_sealed', fix:'enc'});
+  if(S.enclosure === 'mesh') list.push({k:'enc_mesh', fix:'enc', warn:true});
+  $('diagList').innerHTML = (pass && !list.length) ? '' :
+    list.map((d, i)=>{
+      const dd = L.diag[d.k];
+      return `<div class="diag-chip ${d.warn?'warn':''}"><b>${dd.b}</b><span>${dd.d}</span>
+        <button class="btn small" data-fix="${d.fix}">${dd.a}</button></div>`;
+    }).join('');
+  $('diagList').querySelectorAll('[data-fix]').forEach(b=>{
+    b.onclick = ()=>applyFix(b.getAttribute('data-fix'));
+  });
+}
+function applyFix(kind){
+  const L = tt();
+  S.reworks++;
+  if(kind === 'corr'){
+    S.pipeline.corr = true;
+    recomputeAll(); renderPipes();
+    toast(L.fixDone);
+    enterValidation();
+  } else if(kind === 'enc'){
+    S.enclosure = 'vent'; renderEnc();
+    recomputeAll();
+    toast(L.fixDone);
+    enterValidation();
+  } else if(kind === 'site'){
+    S.refit = true;
+    gotoChapter(2);
+    renderSiteScene();
+    $('confirmSiteBtn').textContent = L.rerun;
+    $('confirmSiteBtn').disabled = !S.site;
+  } else if(kind === 'wiring'){
+    S.refit = true;
+    gotoChapter(1);
+    renderParts(); renderWiring(); renderEnc(); checkPower();
+    $('powerBtn').disabled = false;
+    $('bootConsole').innerHTML = S.lang==='zh' ? '重新检查 PMS5003 的两根数据线, 然后再次通电测试。' : 'Re-check the two PMS5003 data lines, then power on again.';
+  }
+}
+function drawScatter(){
+  const cv = $('scatCanvas'); const f = fitCanvas(cv); if(!f) return;
+  const {w, h, ctx} = f;
+  ctx.clearRect(0, 0, w, h);
+  const padL = 44, padR = 16, padT = 14, padB = 30;
+  const H = Math.min(S.clock, HOURS);
+  let vmax = 40;
+  for(let i = 0; i < H; i++){
+    if(!isNaN(S.serie.corr[i])) vmax = Math.max(vmax, S.serie.corr[i]);
+    if(!isNaN(S.serie.air[i])) vmax = Math.max(vmax, S.serie.air[i]);
+  }
+  vmax = Math.ceil(vmax*1.06/25)*25;
+  const X = v => padL + (w-padL-padR)*v/vmax;
+  const Y = v => padT + (h-padT-padB)*(1 - v/vmax);
+  ctx.strokeStyle = cssv('--line'); ctx.lineWidth = 1;
+  ctx.font = '9.5px JetBrains Mono, monospace'; ctx.fillStyle = cssv('--fg-mute');
+  for(let v = 0; v <= vmax; v += vmax/4){
+    ctx.beginPath(); ctx.moveTo(X(v), padT); ctx.lineTo(X(v), h-padB); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(padL, Y(v)); ctx.lineTo(w-padR, Y(v)); ctx.stroke();
+    ctx.textAlign = 'center'; ctx.fillText(String(Math.round(v)), X(v), h-14);
+    ctx.textAlign = 'right'; ctx.fillText(String(Math.round(v)), padL-5, Y(v)+3);
+  }
+  ctx.textAlign = 'center'; ctx.fillText('AirNow ug/m3', padL + (w-padL-padR)/2, h-3);
+  ctx.save(); ctx.translate(11, padT+(h-padT-padB)/2); ctx.rotate(-Math.PI/2); ctx.fillText('Node ug/m3', 0, 0); ctx.restore();
+  // y = x
+  ctx.strokeStyle = cssv('--gold'); ctx.setLineDash([5,5]); ctx.lineWidth = 1.2;
+  ctx.beginPath(); ctx.moveTo(X(0), Y(0)); ctx.lineTo(X(vmax), Y(vmax)); ctx.stroke();
+  ctx.setLineDash([]);
+  // points
+  for(let i = 0; i < H; i++){
+    const a = S.serie.air[i], c = S.serie.corr[i];
+    if(isNaN(a) || isNaN(c)) continue;
+    const hh = i % 24;
+    const dinner = (hh >= 18 && hh < 20) && S.site === 'bbq';
+    ctx.fillStyle = dinner ? cssv('--aqi-usg') : cssv('--canopy');
+    ctx.globalAlpha = dinner ? 0.85 : 0.45;
+    ctx.beginPath(); ctx.arc(X(Math.min(a, vmax)), Y(Math.min(c, vmax)), 2.2, 0, 7); ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+}
+/* publish ceremony */
+let mapAnim = null;
+function publish(){
+  S.published = true;
+  const L = tt();
+  $('pubOverlay').classList.remove('hidden');
+  const m = metrics();
+  const evCount = (S.smokeNote ? 1 : 0) + (S.loggedEvents.humid ? 1 : 0) + (S.loggedEvents.wind ? 1 : 0);
+  $('regId').textContent = 'PA-' + String(147000 + Math.floor(hash01(1, 42)*9000));
+  $('doiText').textContent = '10.5281/zenodo.' + String(8600000 + Math.floor(hash01(2, 42)*99999));
+  const sc = L.score;
+  $('scoreRows').innerHTML = [
+    [sc.comp, (m.comp*100).toFixed(1) + ' %'],
+    [sc.r, m.r.toFixed(3)],
+    [sc.mae, m.mae.toFixed(2) + ' ug/m3'],
+    [sc.evt, evCount + ' / 3'],
+    [sc.rework, String(S.reworks)],
+    [sc.redun, S.parts.pms7003 ? sc.yes : sc.no],
+  ].map(([k, v])=>`<div class="row"><span>${k}</span><span class="rv">${v}</span></div>`).join('');
+  ['pc1','pc2','pc3','pc4'].forEach((id, i)=>{
+    setTimeout(()=>$(id).classList.add('show'), 500 + i*700);
+  });
+  setStatus('PUBLIC');
+  startMapAnim();
+  renderSidebar();
+}
+/* stylized regional map */
+const MAP_DOTS = (()=>{
+  const dots = [];
+  for(let i = 0; i < 88; i++){
+    const x = hash01(i, 11), y = hash01(i, 22);
+    const q = hash01(i, 33);
+    const cat = q < 0.68 ? 0 : q < 0.88 ? 1 : q < 0.97 ? 2 : 3;
+    dots.push({x, y, cat, ph: hash01(i, 44)*6.28});
+  }
+  return dots;
+})();
+function startMapAnim(){
+  const cv = $('mapCanvas');
+  let t0 = null;
+  const draw = (ts)=>{
+    if(!t0) t0 = ts;
+    const t = (ts - t0)/1000;
+    const f = fitCanvas(cv); if(!f){ mapAnim = requestAnimationFrame(draw); return; }
+    const {w, h, ctx} = f;
+    ctx.clearRect(0, 0, w, h);
+    // water
+    ctx.fillStyle = 'oklch(0.16 0.045 250)'; ctx.fillRect(0, 0, w, h);
+    // land mass (stylized coastline)
+    ctx.fillStyle = 'oklch(0.19 0.04 265)';
+    ctx.beginPath();
+    ctx.moveTo(w*0.18, 0);
+    ctx.bezierCurveTo(w*0.10, h*0.25, w*0.24, h*0.42, w*0.14, h*0.62);
+    ctx.bezierCurveTo(w*0.08, h*0.78, w*0.22, h*0.92, w*0.16, h);
+    ctx.lineTo(w, h); ctx.lineTo(w, 0); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = cssv('--line-strong'); ctx.lineWidth = 1.5; ctx.stroke();
+    // faint street grid on land
+    ctx.strokeStyle = cssv('--line'); ctx.lineWidth = 0.5; ctx.globalAlpha = 0.5;
+    for(let gx = 0.3; gx < 1; gx += 0.09){ ctx.beginPath(); ctx.moveTo(w*gx, 0); ctx.lineTo(w*gx, h); ctx.stroke(); }
+    for(let gy = 0.08; gy < 1; gy += 0.12){ ctx.beginPath(); ctx.moveTo(w*0.2, h*gy); ctx.lineTo(w, h*gy); ctx.stroke(); }
+    ctx.globalAlpha = 1;
+    // sensor dots
+    const catColor = [cssv('--aqi-good'), cssv('--aqi-mod'), cssv('--aqi-usg'), cssv('--aqi-unh')];
+    for(const d of MAP_DOTS){
+      const x = w*(0.24 + d.x*0.72), y = h*(0.05 + d.y*0.9);
+      ctx.beginPath(); ctx.arc(x, y, 4, 0, 7);
+      ctx.fillStyle = catColor[d.cat]; ctx.globalAlpha = 0.75 + 0.2*Math.sin(t*1.5 + d.ph); ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+    // player node: center, pulse rings
+    const px = w*0.58, py = h*0.48;
+    const pr = (t*26) % 46;
+    ctx.beginPath(); ctx.arc(px, py, 8 + pr, 0, 7);
+    ctx.strokeStyle = cssv('--canopy'); ctx.globalAlpha = Math.max(0, 1 - pr/46); ctx.lineWidth = 2; ctx.stroke();
+    ctx.globalAlpha = 1;
+    ctx.beginPath(); ctx.arc(px, py, 7, 0, 7); ctx.fillStyle = cssv('--canopy'); ctx.fill();
+    ctx.beginPath(); ctx.arc(px, py, 7, 0, 7); ctx.strokeStyle = cssv('--dawn'); ctx.lineWidth = 2; ctx.stroke();
+    ctx.font = '11px JetBrains Mono, monospace'; ctx.fillStyle = cssv('--dawn'); ctx.textAlign = 'left';
+    ctx.fillText('YOU', px + 14, py + 4);
+    if(!$('pubOverlay').classList.contains('hidden')) mapAnim = requestAnimationFrame(draw);
+  };
+  if(mapAnim) cancelAnimationFrame(mapAnim);
+  mapAnim = requestAnimationFrame(draw);
+}
+
+/* =====================================================================
+   wire-up & init
+   ===================================================================== */
+$('langBtn').onclick = ()=>{
+  S.lang = S.lang === 'zh' ? 'en' : 'zh';
+  applyStatic(); renderSidebar();
+  renderParts(); renderWiring(); renderEnc();
+  if(S.chapter === 2){ renderSiteScene(); if(S.site || hoverSite) updSiteInfo(S.site || hoverSite); }
+  renderPipes();
+  if(S.chapter === 3) renderDash();
+  if(S.chapter === 4){ renderMetrics(metrics()); drawScatter(); }
+};
+$('powerBtn').onclick = powerOn;
+$('toCh2Btn').onclick = ()=>{
+  if(S.refit){ // returning from ch4 wiring fix
+    S.refit = false;
+    recomputeAll();
+    toast(tt().fixDone);
+    gotoChapter(4);
+    return;
+  }
+  gotoChapter(2);
+  renderSiteScene();
+};
+$('confirmSiteBtn').onclick = ()=>{
+  if(!S.site) return;
+  toast(tt().gps);
+  if(S.refit){
+    S.refit = false;
+    recomputeAll();
+    $('confirmSiteBtn').textContent = tt().confirmSite;
+    toast(tt().fixDone);
+    gotoChapter(4);
+    return;
+  }
+  gotoChapter(3);
+  renderPipes();
+  computeTo(S.clock);
+  renderDash();
+  setSpeed(1);
+  startClock();
+};
+$('spdPause').onclick = ()=>setSpeed(0);
+$('spd1').onclick = ()=>setSpeed(1);
+$('spd4').onclick = ()=>setSpeed(4);
+$('spd16').onclick = ()=>setSpeed(16);
+$('toCh4Btn').onclick = ()=>gotoChapter(4);
+$('publishBtn').onclick = publish;
+$('freeRunBtn').onclick = ()=>{
+  $('pubOverlay').classList.add('hidden');
+  if(mapAnim){ cancelAnimationFrame(mapAnim); mapAnim = null; }
+  S.freeRun = true;
+  $('sandboxCtl').style.display = 'flex';
+  $('toCh4Btn').classList.add('hidden');
+  gotoChapter(3);
+  setSpeed(4); S.paused = false;
+  startClock();
+  toast(tt().freeToast);
+};
+$('sbSmoke').onclick = ()=>{
+  S.dynEvents.push({type:'smoke', s:S.clock + 2, e:S.clock + 50});
+  S.serie.truth.length = Math.min(S.serie.truth.length, S.clock + 1); // future re-gen
+  ['rh','raw','corr','now','air'].forEach(k=>S.serie[k].length = S.serie.truth.length);
+  toast(tt().sbSmoke);
+};
+$('sbWind').onclick = ()=>{
+  S.dynEvents.push({type:'wind', s:S.clock + 1, e:S.clock + 20});
+  S.serie.truth.length = Math.min(S.serie.truth.length, S.clock + 1);
+  ['rh','raw','corr','now','air'].forEach(k=>S.serie[k].length = S.serie.truth.length);
+  toast(tt().sbWind);
+};
+window.addEventListener('resize', ()=>{
+  if(S.chapter === 3) renderDash();
+  if(S.chapter === 4) drawScatter();
+  renderWiring();
+});
+
+/* boot */
+applyStatic();
+renderSidebar();
+renderParts();
+renderWiring();
+renderEnc();
+renderPipes();
+setStatus('BUILD');
+gotoChapter(1);
+</script>
+</body>
+</html>
