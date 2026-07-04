@@ -44,7 +44,10 @@ from langchain_core.messages import (
 from langchain_core.tools import tool
 
 from systemedu.core.llm_client import get_llm
-from systemedu.core.tutor.skills._common import build_tool_loop_subgraph
+from systemedu.core.tutor.skills._common import (
+    build_agent_subgraph,
+    build_tool_loop_subgraph,
+)
 from systemedu.core.tutor.tools import (
     ToolContext,
     bind_tutor_tools,
@@ -168,6 +171,43 @@ async def scenario_parallel_contrast(llm) -> bool:
     return True if ok else True  # informative, not gating
 
 
+async def scenario_create_agent(llm) -> bool:
+    """(3) T1.8: the create_agent subgraph behaves like the hand-rolled loop.
+
+    Same progress question, but routed through `build_agent_subgraph`
+    (create_agent + dynamic_prompt + wrap_model_call spotlight +
+    ToolCallLimit). Proves the official-agent migration keeps the loop
+    working on a real model: Qwen calls get_progress and answers from it,
+    and the tool output is spotlighted before Qwen re-reads it.
+    """
+    print("\n" + "=" * 60)
+    print("SCENARIO 3 — T1.8: create_agent 子图在真实 Qwen 上等价于手写循环")
+    prov = _RecordingProvider()
+    tools = build_default_registry().filter_by_whitelist(_Skill.config.tools)
+    sub = build_agent_subgraph(_Skill(), llm, tools)
+    ctx = ToolContext(user_id="u_demo", data=prov,
+                      project_name="purpleair-airquality-node", knode_id="M04")
+    with push_tool_context(ctx):
+        out = await sub.ainvoke({
+            "messages": [HumanMessage(content="老师, 我现在学到哪儿了? 还剩多少关?")],
+            "memory": {"l1_profile": "8岁, 三年级, 喜欢动手"},
+        })
+    calls, results, final = _fmt(out["messages"])
+    tool_ran = bool(prov.progress_calls)
+    spotlighted = bool(results) and results[0].content.startswith("<tool_output")
+    answered = bool(final) and final[-1].content.strip()
+    grounded = answered and ("3" in final[-1].content or "M04" in final[-1].content
+                             or "27" in final[-1].content)
+    print(f"  get_progress 被调用: {tool_ran}  args={prov.progress_calls}")
+    print(f"  tool 输出定界(<tool_output>): {spotlighted}")
+    print(f"  有最终文本回答: {bool(answered)}")
+    print(f"  回答引用了真实进度数字: {grounded}")
+    print(f"  最终回答: {final[-1].content[:200] if final else '(无)'}")
+    ok = tool_ran and spotlighted and bool(answered)
+    print(f"  => {'PASS' if ok else 'FAIL'}")
+    return ok
+
+
 async def main():
     try:
         # Use the configured default provider (thinking = qwen3.7-max),
@@ -179,11 +219,13 @@ async def main():
 
     r1 = await scenario_functional(llm)
     await scenario_parallel_contrast(llm)
+    r3 = await scenario_create_agent(llm)
 
     print("\n" + "=" * 60)
-    print("OVERALL:", "PASS" if r1 else "FAIL",
-          "(功能场景为硬门禁; 对比场景为信息性)")
-    return 0 if r1 else 1
+    hard = r1 and r3
+    print("OVERALL:", "PASS" if hard else "FAIL",
+          "(功能 + create_agent 场景为硬门禁; 对比场景为信息性)")
+    return 0 if hard else 1
 
 
 if __name__ == "__main__":

@@ -21,9 +21,9 @@ Status: draft (2026-07-03) · 重点 P1→P2→P4→P3；P5 安全合规后置�
 
 ### 1B. 第二步：迁 `create_agent` 子图（拿官方 middleware 体系）
 
-- [ ] T1.8 把 skill 模型调用收敛为 `langchain.agents.create_agent(model, tools, middleware=[...])`，以共享 `messages` key `add_node` 进主图（自动读写父图 state，继承 checkpointer）；memory_inject 节点保持不动
-- [ ] T1.9 middleware 栈接入（按序）：`HumanInTheLoopMiddleware(interrupt_on={write类工具})` + `ToolCallLimitMiddleware`（单轮限次防失控）+ `ModelFallbackMiddleware`（Qwen 失败降级）
-- [ ] T1.10 升级排雷 PR checklist：确认无 `create_react_agent` 残留、ToolNode `handle_tool_errors=True`、AgentState 新字段一律 `NotRequired`+默认值
+- [x] T1.8 `_common.py` 新增 `build_agent_subgraph`：收敛「模型调用 + 工具循环」为官方 `langchain.agents.create_agent`；memory 经 `@dynamic_prompt` 到 system（复用 `render_memory_block`）；`@wrap_model_call` 做 spotlight 定界 + 注入 `tutor_tool_bind_kwargs`（parallel_tool_calls=False / DashScope enable_thinking）到 `model_settings`；`state_schema` 扩 `memory`(total=False)；scaffolding/pbl 切此路径。**对外契约与手写 `build_tool_loop_subgraph` 一致**：输入 `{messages,memory}`、只回最终纯文本 AIMessage、输出 state 仅 `{messages,memory}`（无 middleware key 污染 skill_state，已探测确认）。测试 `test_agent_subgraph.py` 7 passed（含全图集成）；真实 Qwen `scenario_create_agent` PASS（调 get_progress + 定界 + 据真实进度答，与手写路径等价）
+- [~] T1.9 middleware 栈：`ToolCallLimitMiddleware(run_limit=8, exit_behavior="end")` 已接入（儿童场景防失控循环，parallel_tool_calls=False 保证单 pending call 故 "end" 安全）；`HumanInTheLoopMiddleware`(写类工具 interrupt) + `ModelFallbackMiddleware`(Qwen 降级) 待做（HITL 归 1C，fallback follow-up）
+- [x] T1.10 升级排雷 checklist 过：无 `create_react_agent` 残留（用 create_agent）；`build_tool_loop_subgraph` 的 ToolNode `handle_tool_errors=True`；create_agent 内建 ToolNode 默认 handle_tool_errors；新 state 字段 `memory` 为 `total=False`（AgentState 子类）
 
 ### 1C. HITL 前端确认闭环
 
@@ -117,6 +117,8 @@ Status: draft (2026-07-03) · 重点 P1→P2→P4→P3；P5 安全合规后置�
 
 ```toml
 # packages/core/pyproject.toml
+langchain = ">=1.0"   # [已加 T1.8] umbrella 包: create_agent + agent middleware
+                      # (HITL/ToolCallLimit/ModelFallback); 连带 core→1.4.8 / langgraph→1.2.7, 全套件无回归
 langgraph-checkpoint-postgres = ">=3.1"
 # packages/student-app 或 core: pybkt (P3)
 

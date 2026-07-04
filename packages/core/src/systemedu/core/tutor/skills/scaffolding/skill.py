@@ -1,22 +1,22 @@
-"""Scaffolding skill (spec 014 T3.6).
+"""Scaffolding skill (spec 014 T3.6, tool loop spec 043 P1).
 
-Text-only subgraph for Phase 3 — calls the LLM with the SKILL.md body
-and a memory-aware prompt. Phase 4 will wire in `get_knode_prerequisites`
-to actually pull the prerequisite list; until then the LLM reasons off
-the L3 knode_state string in memory.
+Tool-calling skill: the LLM can pull the prerequisite list / knode content
+via its whitelisted tools while reasoning off the L3 knode_state in memory.
+Built on `create_agent` (spec 043 T1.8) so official middleware (tool-call
+limit, later HITL / model fallback) applies.
 """
 
 from __future__ import annotations
 
 from typing import Any
 
-from systemedu.core.tutor.skills._common import build_tool_loop_subgraph
+from systemedu.core.tutor.skills._common import build_agent_subgraph
 from systemedu.core.tutor.skills.base import SkillBase
 
 
 class ScaffoldingSkill(SkillBase):
     def build_subgraph(self, llm: Any, tools: list[Any]) -> Any:
-        return build_tool_loop_subgraph(self, llm, tools, summary_prefix="scaffolding ")
+        return build_agent_subgraph(self, llm, tools, summary_prefix="scaffolding ")
 
 
 SKILL_CLASS = ScaffoldingSkill

@@ -227,10 +227,117 @@ def build_tool_loop_subgraph(
     return g.compile()
 
 
+# ---------------------------------------------------------------------------
+# create_agent-based subgraph (spec 043 T1.8)
+# ---------------------------------------------------------------------------
+# T1.8 收敛「模型调用 + 工具循环」为官方 `langchain.agents.create_agent`，以拿
+# 到 middleware 体系（HITL / ToolCallLimit / ModelFallback / PII …）。相比手写
+# 的 `build_tool_loop_subgraph`，行为等价但可挂 middleware：
+#
+#   - memory → system prompt：`@dynamic_prompt` 读 state["memory"]，复用
+#     `render_memory_block`，与手写路径的 system 文案一致；
+#   - spotlighting + provider 参数：一个 `@wrap_model_call` 在**每次调模型前**
+#     (1) 把 request.messages 里的 ToolMessage 用 `<tool_output>` 定界（复用
+#     `_spotlight_tool_messages`，含 fence-escape 中和），(2) 把
+#     `tutor_tool_bind_kwargs(llm)` 注入 request.model_settings，让 create_agent
+#     的 bind_tools 透传 parallel_tool_calls=False / DashScope enable_thinking；
+#   - `ToolCallLimitMiddleware(run_limit=…)` 防儿童场景失控循环。
+#
+# create_agent 的默认 AgentState 只有 messages；我们扩一个带 `memory` 的
+# state_schema，主图 `_wrap_subgraph` 把 memory 塞进子图 input。输出 state 的
+# messages 里含中间 tool-calling AIMessage + ToolMessage + 最终纯文本
+# AIMessage——`_wrap_subgraph` 只挑最终纯文本回主图，与手写路径完全一致。
+
+
+def build_agent_subgraph(
+    skill: SkillBase,
+    llm: Any,
+    tools: list[Any],
+    *,
+    summary_prefix: str = "",
+    run_limit: int = 8,
+):
+    """Build a `create_agent`-backed tool-loop subgraph for a skill.
+
+    Behaviour-compatible with `build_tool_loop_subgraph` (same input
+    `{messages, memory}`, same "only final plain-text AIMessage reaches
+    the student" contract) but built on the official agent so middleware
+    can be layered on. Falls back to the simple single-node subgraph when
+    `tools` is empty or the LLM can't bind tools (test fakes / local
+    wrappers without `bind_tools`).
+
+    Args:
+        skill: the owning skill (its `config.body` becomes the prompt base).
+        llm: chat model (OpenAI-compatible in prod; fakes in tests).
+        tools: resolved `BaseTool` objects (already whitelist-filtered).
+        summary_prefix: prefix for the L5 `summary` line.
+        run_limit: max tool calls per run before the loop is force-stopped.
+    """
+    bind = getattr(llm, "bind_tools", None)
+    if not tools or not callable(bind):
+        return build_simple_skill_subgraph(skill, llm, summary_prefix=summary_prefix)
+
+    from langchain.agents import create_agent
+    from langchain.agents.middleware import (
+        AgentState,
+        ModelRequest,
+        ModelResponse,
+        ToolCallLimitMiddleware,
+        dynamic_prompt,
+        wrap_model_call,
+    )
+
+    from systemedu.core.tutor.tools.binding import tutor_tool_bind_kwargs
+
+    body = skill.config.body or skill.config.description
+    bind_kwargs = tutor_tool_bind_kwargs(llm)
+
+    class _AgentSkillState(AgentState, total=False):
+        # Handed in by the main graph's `_wrap_subgraph`; read by the
+        # dynamic prompt. `total=False` so callers may omit it.
+        memory: dict[str, Any]
+
+    @dynamic_prompt
+    def _memory_prompt(request: ModelRequest) -> str:
+        memory_block = render_memory_block(request.state.get("memory"))
+        return f"{body}\n\n## 学生上下文\n{memory_block}"
+
+    @wrap_model_call
+    async def _spotlight_and_params(
+        request: ModelRequest,
+        handler: Any,
+    ) -> ModelResponse:
+        # Fence any tool outputs already in the batch before the model
+        # re-reads them (indirect-injection defence, spec 043 T1.4).
+        _spotlight_tool_messages(request.messages)
+        # Forward Qwen/OpenAI tool-calling params through create_agent's
+        # bind_tools via model_settings (spec 043 T1.3).
+        if bind_kwargs:
+            request.model_settings.update(bind_kwargs)
+        return await handler(request)
+
+    return create_agent(
+        llm,
+        tools=tools,
+        state_schema=_AgentSkillState,
+        middleware=[
+            _memory_prompt,
+            _spotlight_and_params,
+            # exit_behavior="end": hard-stop the run once run_limit tool calls
+            # are reached (child-safety: a misbehaving model that never stops
+            # tool-calling must not loop to the recursion limit). Safe here
+            # because parallel_tool_calls=False guarantees one call per turn —
+            # "end" raises NotImplementedError only on parallel pending calls.
+            ToolCallLimitMiddleware(run_limit=run_limit, exit_behavior="end"),
+        ],
+    )
+
+
 __all__ = [
     "SimpleSkillState",
     "render_memory_block",
     "call_llm",
     "build_simple_skill_subgraph",
     "build_tool_loop_subgraph",
+    "build_agent_subgraph",
 ]
