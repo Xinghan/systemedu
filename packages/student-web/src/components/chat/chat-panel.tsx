@@ -9,7 +9,13 @@ import { usePageKind } from "@/lib/hooks/use-page-kind"
 import { chatSessions } from "@/lib/api"
 import { randomUUID } from "@/lib/utils/uuid"
 import { ChatInput } from "./chat-input"
-import { MessageBubble, StreamingBubble, ToolCallIndicator, TypingIndicator } from "./message-bubble"
+import {
+  MessageBubble,
+  StreamingBubble,
+  ToolCallIndicator,
+  ToolConfirmCard,
+  TypingIndicator,
+} from "./message-bubble"
 import { useT } from "@/lib/i18n/use-t"
 
 interface ChatPanelProps {
@@ -53,8 +59,9 @@ export function ChatPanel({ librarySlug, moduleId }: ChatPanelProps) {
     setCurrentSkill,
     pendingAsk,
     setPendingAsk,
+    pendingConfirm,
   } = useChatStore()
-  const { connect, sendMessage, disconnect } = useWebSocketChat()
+  const { connect, sendMessage, sendDecision, disconnect } = useWebSocketChat()
   const bottomRef = useRef<HTMLDivElement>(null)
   const [sessionMenuOpen, setSessionMenuOpen] = useState(false)
   const connectRef = useRef(connect)
@@ -401,8 +408,20 @@ export function ChatPanel({ librarySlug, moduleId }: ChatPanelProps) {
               <ToolCallIndicator toolCalls={streamToolCalls} />
             )}
             {streaming && streamContent && <StreamingBubble content={streamContent} />}
-            {streaming && !streamContent && streamToolCalls.length === 0 && (
+            {streaming && !streamContent && streamToolCalls.length === 0 && !pendingConfirm && (
               <TypingIndicator />
+            )}
+            {pendingConfirm && (
+              <ToolConfirmCard
+                confirm={pendingConfirm}
+                onApprove={() => sendDecision(pendingConfirm.confirmId, { type: "approve" })}
+                onReject={() =>
+                  sendDecision(pendingConfirm.confirmId, {
+                    type: "reject",
+                    message: "学生选择先不执行这个操作。",
+                  })
+                }
+              />
             )}
             <div ref={bottomRef} />
           </div>

@@ -39,6 +39,7 @@ export function useWebSocketChat() {
     addStreamToolCall,
     updateStreamToolResult,
     setCurrentSkill,
+    setPendingConfirm,
   } = useChatStore()
 
   const scheduleReconnect = useCallback((connectFn: () => void) => {
@@ -107,6 +108,15 @@ export function useWebSocketChat() {
         }
       } else if (data.type === "skill" && data.target_skill) {
         setCurrentSkill(data.target_skill)
+      } else if (data.type === "tool_confirm" && data.confirm_id) {
+        // spec 043 1C: 写工具需要学生确认。暂停流, 弹确认卡片; 决策经
+        // sendDecision 回传, server 用 Command(resume) 续跑同一 thread。
+        setPendingConfirm({
+          confirmId: data.confirm_id,
+          tool: data.tool ?? "",
+          args: data.args,
+          description: data.description,
+        })
       } else if (data.type === "llm_fallback") {
         // spec 040: 用户自定义模型不可用, 已临时回退系统默认
         toast.warning("你的模型配置暂不可用，已临时用系统默认模型", {
@@ -135,12 +145,14 @@ export function useWebSocketChat() {
         }
         resetStreamContent()
         setStreaming(false)
+        setPendingConfirm(null)
         if (!state.activeSessionId) {
           setActiveSession(data.session_id)
         }
       } else if (data.type === "error") {
         setStreaming(false)
         resetStreamContent()
+        setPendingConfirm(null)
         toast.error(`AI 响应错误: ${data.content ?? data.message ?? "未知错误"}`)
       }
     }
@@ -166,6 +178,7 @@ export function useWebSocketChat() {
     scheduleReconnect,
     addStreamToolCall,
     updateStreamToolResult,
+    setPendingConfirm,
   ])
 
   const sendMessage = useCallback(
@@ -229,6 +242,26 @@ export function useWebSocketChat() {
     ],
   )
 
+  const sendDecision = useCallback(
+    (confirmId: string, decision: { type: "approve" } | { type: "reject"; message?: string }) => {
+      const ws = wsRef.current
+      // Clear the card immediately so the UI can't double-submit; the resume
+      // continuation streams back over the same open socket.
+      setPendingConfirm(null)
+      if (!ws || ws.readyState !== WebSocket.OPEN) {
+        // The socket dropped while the card was up. The interrupt is still
+        // checkpointed server-side; surface it rather than silently losing it.
+        setStreaming(false)
+        toast.error("连接已断开，确认未送达。请重发消息。")
+        return
+      }
+      ws.send(
+        JSON.stringify({ type: "tool_decision", confirm_id: confirmId, decision }),
+      )
+    },
+    [setPendingConfirm, setStreaming],
+  )
+
   const disconnect = useCallback(() => {
     intentionalCloseRef.current = true
     if (retryTimerRef.current) {
@@ -240,5 +273,5 @@ export function useWebSocketChat() {
     wsRef.current = null
   }, [])
 
-  return { connect, sendMessage, disconnect }
+  return { connect, sendMessage, sendDecision, disconnect }
 }

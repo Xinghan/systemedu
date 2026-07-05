@@ -1,8 +1,8 @@
 "use client"
 
-import { Wrench, Check } from "lucide-react"
+import { Wrench, Check, ShieldQuestion } from "lucide-react"
 import { MarkdownRenderer } from "./markdown-renderer"
-import type { ChatMessage, ToolCallInfo } from "@/lib/stores/chat-store"
+import type { ChatMessage, ToolCallInfo, PendingConfirm } from "@/lib/stores/chat-store"
 import { LoadingSpinner } from "@/components/ui/loading-spinner"
 
 // AI avatar — Industrial Atelier coral (var(--primary) #D97757)
@@ -149,6 +149,82 @@ export function ToolCallIndicator({ toolCalls }: { toolCalls: ToolCallInfo[] }) 
             )}
           </div>
         ))}
+      </div>
+    </div>
+  )
+}
+
+// Friendly, kid-facing labels for the write tools that require confirmation.
+// Falls back to the tool name + server description if we don't recognize it.
+const CONFIRM_TOOL_LABELS: Record<string, { title: string; verb: string }> = {
+  complete_node: { title: "标记这一关为完成", verb: "标记完成" },
+  grade_submission: { title: "提交你的答案去评分", verb: "提交评分" },
+  escalate_to_human: { title: "把这件事告诉大人", verb: "通知大人" },
+}
+
+function _summarizeArgs(args?: Record<string, unknown>): string | null {
+  if (!args) return null
+  const parts = Object.entries(args)
+    .filter(([k]) => k !== "user_id" && k !== "session_id")
+    .map(([k, v]) => `${k}: ${typeof v === "object" ? JSON.stringify(v) : String(v)}`)
+  return parts.length ? parts.join(" · ") : null
+}
+
+export function ToolConfirmCard({
+  confirm,
+  onApprove,
+  onReject,
+}: {
+  confirm: PendingConfirm
+  onApprove: () => void
+  onReject: () => void
+}) {
+  const label = CONFIRM_TOOL_LABELS[confirm.tool]
+  const title = label?.title ?? confirm.description ?? `执行操作: ${confirm.tool}`
+  const argsSummary = _summarizeArgs(confirm.args)
+
+  return (
+    <div className="flex flex-col items-start gap-3">
+      <div className="flex items-center gap-3">
+        <AIAvatar />
+        <span className="text-[10px] font-extrabold text-primary uppercase tracking-widest font-[var(--font-manrope)]">
+          AI 导师
+        </span>
+      </div>
+      <div
+        className="ml-11 max-w-[95%] rounded-2xl rounded-tl-none px-6 py-5 shadow-sm"
+        style={{ background: "var(--paper-2)", border: "1px solid var(--primary)" }}
+      >
+        <div className="flex items-center gap-2 mb-2">
+          <ShieldQuestion className="h-4 w-4 text-primary" />
+          <span className="text-[13px] font-bold text-foreground font-[var(--font-manrope)]">
+            需要你确认
+          </span>
+        </div>
+        <p className="text-[14px] text-foreground leading-relaxed mb-1">{title}</p>
+        {argsSummary && (
+          <p className="text-[11px] text-muted-foreground mb-3 font-[var(--font-mono)]">
+            {argsSummary}
+          </p>
+        )}
+        <div className="flex gap-2 mt-3">
+          <button
+            type="button"
+            onClick={onApprove}
+            className="inline-flex items-center gap-1.5 rounded-lg bg-primary text-white px-4 py-2 text-[13px] font-semibold shadow-sm hover:opacity-90"
+          >
+            <Check className="h-3.5 w-3.5" />
+            {label?.verb ?? "确认"}
+          </button>
+          <button
+            type="button"
+            onClick={onReject}
+            className="inline-flex items-center rounded-lg px-4 py-2 text-[13px] font-semibold hover:bg-black/5"
+            style={{ border: "1px solid var(--border-2)", color: "var(--sub)" }}
+          >
+            先不要
+          </button>
+        </div>
       </div>
     </div>
   )

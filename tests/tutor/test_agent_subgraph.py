@@ -510,3 +510,87 @@ async def test_full_graph_scaffolding_create_agent_path():
     assert "光合作用" in ai_msgs[0].content
     assert not any(isinstance(m, _TM) for m in result["messages"]), "no ToolMessage in main convo"
     assert all(not getattr(m, "tool_calls", None) for m in ai_msgs), "no tool_calls leak"
+
+
+class _RouterToDirectWriteLLM:
+    """Router → direct-instruction; then the skill emits a complete_node (write)
+    tool_call. Proves the HITL interrupt fires end-to-end through the real graph
+    when a routed skill invokes a write tool."""
+
+    def __init__(self):
+        self._skill_calls = 0
+
+    def bind_tools(self, tools, **kwargs):
+        return self
+
+    def bind(self, **kwargs):
+        return self
+
+    def with_config(self, *a, **k):
+        return self
+
+    async def ainvoke(self, messages, **kwargs):
+        from langchain_core.messages import SystemMessage as _Sys
+
+        has_system = any(isinstance(m, _Sys) for m in messages)
+        joined = " ".join(
+            (m.content if isinstance(m.content, str) else str(m.content)) for m in messages
+        )
+        if not has_system and "教学策略调度器" in joined:
+            return AIMessage(
+                content='{"action": "switch", "target_skill": "direct-instruction", "reason": "t"}'
+            )
+        self._skill_calls += 1
+        if self._skill_calls == 1:
+            return AIMessage(content="", tool_calls=[{
+                "name": "complete_node",
+                "args": {"project_name": "mars", "knode_id": "M01"},
+                "id": "call_1",
+            }])
+        return AIMessage(content="好, 已经帮你标记完成了。")
+
+
+@pytest.mark.asyncio
+async def test_full_graph_direct_instruction_write_tool_interrupts():
+    """Route to direct-instruction → it calls complete_node → the whole graph
+    must interrupt for confirmation (A1: 写类工具触发确认), and the write side
+    effect must NOT fire before approval."""
+    from langgraph.checkpoint.memory import InMemorySaver
+
+    from systemedu.core.tutor.graph import build_tutor_graph
+    from systemedu.core.tutor.skills import SkillLoader
+
+    loader = SkillLoader([_SKILLS_ROOT])
+    loader.scan()
+
+    provider = _WriteProvider()
+    llm = _RouterToDirectWriteLLM()
+    # A checkpointer is required for interrupts to persist/resume.
+    graph = build_tutor_graph(loader=loader, llm=llm, checkpointer=InMemorySaver())
+    cfg = {"configurable": {"thread_id": "full-hitl-1"}}
+
+    with push_tool_context(ToolContext(user_id="u-bob", data=provider)):
+        async for _ in graph.astream_events({
+            "user_id": "u-bob",
+            "session_id": "s-1",
+            "project_name": "mars",
+            "knode_id": "M01",
+            "messages": [HumanMessage(content="我学完了, 帮我标记完成")],
+        }, config=cfg, version="v2"):
+            pass
+        state = await graph.aget_state(cfg)
+
+    assert state.next, "graph should be interrupted awaiting confirmation"
+    assert provider.marked == [], "complete_node must NOT run before approval"
+    assert state.interrupts, "an interrupt should be pending"
+    assert state.interrupts[0].value["action_requests"][0]["name"] == "complete_node"
+
+    # Approve → the write runs and the graph finishes.
+    from langgraph.types import Command
+
+    with push_tool_context(ToolContext(user_id="u-bob", data=provider)):
+        async for _ in graph.astream_events(
+            Command(resume={"decisions": [{"type": "approve"}]}), config=cfg, version="v2"):
+            pass
+
+    assert provider.marked == [("u-bob", "mars", "M01")], "approve must run complete_node"

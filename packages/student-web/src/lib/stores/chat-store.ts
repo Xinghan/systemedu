@@ -9,6 +9,15 @@ export interface ToolCallInfo {
   status: "calling" | "done"
 }
 
+// spec 043 1C: a pending write-tool confirmation (HITL). The chat pauses and
+// shows an approve/reject card until the student decides.
+export interface PendingConfirm {
+  confirmId: string
+  tool: string
+  args?: Record<string, unknown>
+  description?: string
+}
+
 export interface ChatMessage {
   id: string
   role: "user" | "assistant"
@@ -44,11 +53,13 @@ interface ChatState {
   streamToolCalls: ToolCallInfo[]
   currentSkill: string | null
   hydrated: boolean
+  pendingConfirm: PendingConfirm | null
   // selectors / actions
   setActiveSession: (id: string | null) => void
   setContext: (ctx: ChatContext) => void
   pendingAsk: string | null
   setPendingAsk: (text: string | null) => void
+  setPendingConfirm: (confirm: PendingConfirm | null) => void
   addSession: (session: ChatSession) => void
   replaceSession: (oldId: string, session: ChatSession) => void
   removeSession: (id: string) => void
@@ -73,10 +84,12 @@ export const useChatStore = create<ChatState>((set, get) => ({
   streamToolCalls: [],
   currentSkill: null,
   hydrated: false,
+  pendingConfirm: null,
   pendingAsk: null,
   setActiveSession: (id) => set({ activeSessionId: id }),
   setContext: (ctx) => set({ context: ctx }),
   setPendingAsk: (text) => set({ pendingAsk: text }),
+  setPendingConfirm: (confirm) => set({ pendingConfirm: confirm }),
   addSession: (session) =>
     set((s) => ({ sessions: [session, ...s.sessions] })),
   replaceSession: (oldId, session) =>

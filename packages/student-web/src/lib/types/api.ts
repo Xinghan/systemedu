@@ -457,12 +457,20 @@ export interface WSMessage {
   action?: string
   target_skill?: string
   reason?: string
-  // tool_confirm
+  // tool_confirm (spec 043 1C: 写工具 HITL 确认)
   confirm_id?: string
   tool?: string
+  description?: string
   // escalation
   severity?: string
   contact_info?: string
+}
+
+// spec 043 1C: 客户端 -> 服务端的工具确认决策 (approve/reject)。
+export interface ToolDecisionMessage {
+  type: "tool_decision"
+  confirm_id: string
+  decision: { type: "approve" } | { type: "reject"; message?: string }
 }
 
 

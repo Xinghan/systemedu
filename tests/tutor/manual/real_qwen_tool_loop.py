@@ -35,6 +35,8 @@ import sys
 
 os.environ.setdefault("NO_PROXY", "127.0.0.1,localhost,dashscope.aliyuncs.com")
 
+from typing import Annotated
+
 from langchain_core.messages import (
     AIMessage,
     HumanMessage,
@@ -42,6 +44,16 @@ from langchain_core.messages import (
     ToolMessage,
 )
 from langchain_core.tools import tool
+from langgraph.graph.message import add_messages
+from typing_extensions import TypedDict
+
+
+class _HitlParentState(TypedDict, total=False):
+    """Parent state for the HITL scenario's checkpointed wrapper (module-level so
+    `Annotated[...]` resolves under `from __future__ import annotations`)."""
+
+    messages: Annotated[list, add_messages]
+    memory: dict
 
 from systemedu.core.llm_client import get_llm
 from systemedu.core.tutor.skills._common import (
@@ -62,6 +74,7 @@ class _RecordingProvider:
         self.progress_calls: list = []
         self.content_calls: list = []
         self.exercise_calls: list = []
+        self.complete_calls: list = []
 
     async def get_progress(self, user_id, project):
         self.progress_calls.append((user_id, project))
@@ -80,6 +93,10 @@ class _RecordingProvider:
         self.exercise_calls.append((project, knode))
         return {"found": True, "knode": knode,
                 "exercises": [{"exercise_id": "e1", "question": "PM2.5 的单位是?"}]}
+
+    async def mark_complete(self, user_id, project, knode):
+        self.complete_calls.append((user_id, project, knode))
+        return {"ok": True, "knode_id": knode, "status": "passed"}
 
 
 class _Skill:
@@ -208,6 +225,85 @@ async def scenario_create_agent(llm) -> bool:
     return ok
 
 
+class _WriteSkill:
+    class config:
+        name = "direct-instruction"
+        body = (
+            "你是耐心的项目制学习导师。学生已经答对了当前这一关的检验题, 确实掌握了。"
+            "现在你应该调用 complete_node 工具把这一关标记为完成"
+            "(系统会先弹卡片让学生确认, 你只管发起调用)。"
+            "项目 slug=purpleair-airquality-node, 当前 knode=M04。"
+        )
+        description = "direct-instruction"
+        tools = ["complete_node", "get_practice_exercises", "get_knode_content"]
+
+
+async def scenario_hitl_write_tool(llm) -> bool:
+    """(4) T1.9/1C: real Qwen calls the write tool complete_node → the graph
+    INTERRUPTS for confirmation (side effect NOT run) → approve runs it.
+
+    Wraps build_agent_subgraph in a checkpointer-backed parent (mirrors the
+    real graph's _wrap_subgraph) so the HITL interrupt has somewhere to persist.
+    """
+    print("\n" + "=" * 60)
+    print("SCENARIO 4 — T1.9/1C: 写工具 complete_node 触发 HITL 中断 + approve 后执行")
+
+    from langgraph.checkpoint.memory import InMemorySaver
+    from langgraph.graph import END, START, StateGraph
+    from langgraph.types import Command
+
+    prov = _RecordingProvider()
+    tools = build_default_registry().filter_by_whitelist(_WriteSkill.config.tools)
+    sub = build_agent_subgraph(_WriteSkill(), llm, tools)
+
+    async def _node(state):
+        out = await sub.ainvoke({"messages": list(state.get("messages") or []),
+                                 "memory": state.get("memory") or {}})
+        new = [m for m in out.get("messages", [])
+               if isinstance(m, AIMessage) and not getattr(m, "tool_calls", None)]
+        return {"messages": new}
+
+    g = StateGraph(_HitlParentState)
+    g.add_node("skill", _node)
+    g.add_edge(START, "skill")
+    g.add_edge("skill", END)
+    parent = g.compile(checkpointer=InMemorySaver())
+    cfg = {"configurable": {"thread_id": "qwen-hitl-1"}}
+
+    ctx = ToolContext(user_id="u_demo", data=prov,
+                      project_name="purpleair-airquality-node", knode_id="M04")
+    with push_tool_context(ctx):
+        async for _ in parent.astream_events(
+            {"messages": [HumanMessage(content="我答对了! 这一关我学完了, 帮我标记完成吧。")],
+             "memory": {}}, config=cfg, version="v2"):
+            pass
+        state = await parent.aget_state(cfg)
+        interrupted = bool(getattr(state, "next", None)) and bool(getattr(state, "interrupts", None))
+        called_before = bool(prov.complete_calls)
+        pending_tool = None
+        if interrupted and state.interrupts:
+            reqs = state.interrupts[0].value.get("action_requests") or []
+            pending_tool = reqs[0].get("name") if reqs else None
+
+        print(f"  Qwen 发起了 complete_node 调用: {pending_tool == 'complete_node'} (pending={pending_tool})")
+        print(f"  图已中断等确认: {interrupted}")
+        print(f"  中断时写副作用尚未执行(mark_complete 未调): {not called_before}")
+
+        # approve → the write must actually run now
+        ran_after = False
+        if interrupted:
+            async for _ in parent.astream_events(
+                Command(resume={"decisions": [{"type": "approve"}]}),
+                config=cfg, version="v2"):
+                pass
+            ran_after = bool(prov.complete_calls)
+        print(f"  approve 后 mark_complete 执行: {ran_after}  args={prov.complete_calls}")
+
+    ok = (pending_tool == "complete_node") and interrupted and (not called_before) and ran_after
+    print(f"  => {'PASS' if ok else 'FAIL'}")
+    return ok
+
+
 async def main():
     try:
         # Use the configured default provider (thinking = qwen3.7-max),
@@ -220,11 +316,12 @@ async def main():
     r1 = await scenario_functional(llm)
     await scenario_parallel_contrast(llm)
     r3 = await scenario_create_agent(llm)
+    r4 = await scenario_hitl_write_tool(llm)
 
     print("\n" + "=" * 60)
-    hard = r1 and r3
+    hard = r1 and r3 and r4
     print("OVERALL:", "PASS" if hard else "FAIL",
-          "(功能 + create_agent 场景为硬门禁; 对比场景为信息性)")
+          "(功能 + create_agent + HITL 写工具场景为硬门禁; 对比场景为信息性)")
     return 0 if hard else 1
 
 

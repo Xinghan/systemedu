@@ -173,45 +173,24 @@ class TestSocraticEssence:
 # 2. Direct Instruction — "结论先行三段式 + 推送练习"
 # ===========================================================================
 class TestDirectInstructionEssence:
-    """Direct instruction's essence: structured explanation (conclusion /
-    mechanism / example) on turn 1, then a check question on turn 2."""
+    """Direct instruction's essence (now a tool-loop skill, spec 043): the first
+    turn gives a substantive structured explanation (conclusion / mechanism /
+    example), not just a question. The explain→check→complete flow + complete_node
+    HITL is covered offline in test_agent_subgraph.py; here we sanity-check that a
+    real model, given the SKILL.md body, actually explains."""
 
     async def test_first_turn_is_structured_explanation(self, real_llm, loader):
-        """Turn 1 (stage=explain) should give a substantive explanation,
-        not a question."""
         skill = _get_skill(loader, "direct-instruction")
+        # Empty tools → simple reply path; enough to check the explanation essence
+        # without depending on the model choosing to call a tool.
         subgraph = skill.build_subgraph(real_llm, [])
 
-        result = await subgraph.ainvoke(
-            _base_state("牛顿第三定律是什么？")
-        )
+        result = await subgraph.ainvoke(_base_state("牛顿第三定律是什么？"))
         reply = _ai_text(result)
 
-        assert result.get("stage") == "explain"
         assert len(reply) > 30, "Explanation should be substantive"
-        # Should contain factual content, not just a question
-        assert result.get("should_push_exercise") is not True
-
-    async def test_second_turn_pushes_check_question(self, real_llm, loader):
-        """Turn 2 (stage=check) should generate a verification question
-        or exercise, and set should_push_exercise=True."""
-        skill = _get_skill(loader, "direct-instruction")
-        subgraph = skill.build_subgraph(real_llm, [])
-
-        result = await subgraph.ainvoke(_base_state(
-            "明白了，力是相互的",
-            turn_count=1,
-            stage="explain",
-        ))
-        reply = _ai_text(result)
-
-        assert result.get("stage") == "check"
-        assert result.get("should_push_exercise") is True
-        # Check question should contain a question marker
-        has_q = "？" in reply or "?" in reply or "选" in reply or "填" in reply
-        assert has_q, (
-            f"Check stage should produce a question/exercise, got: {reply[:80]}"
-        )
+        # Should read as an explanation, not open with a bare counter-question.
+        assert not reply.lstrip().startswith(("你觉得", "你认为", "你能"))
 
 
 # ===========================================================================

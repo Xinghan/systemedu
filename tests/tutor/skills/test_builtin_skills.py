@@ -214,27 +214,21 @@ class TestDirectInstruction:
         assert "complete_node" in s.config.tools
 
     @pytest.mark.asyncio
-    async def test_turn1_explains_structured(self, loader):
+    async def test_simple_reply_without_bindable_tools(self, loader):
+        """direct-instruction is now a tool-loop skill (build_agent_subgraph).
+        A FakeLLM lacking bind_tools falls back to the simple single-node
+        subgraph, so it still produces one plain-text reply. The explain→check
+        →complete flow (and complete_node HITL) is exercised in
+        test_agent_subgraph.py; here we just confirm the skill still answers and
+        the SKILL.md body reaches the model as a system prompt."""
         s = self._skill(loader)
         llm = FakeLLM(["核心是加速度等于合力除以质量。机制：...。例：推车"])
         graph = s.build_subgraph(llm, [])
         result = await graph.ainvoke(_state())
-        assert result["turn_count"] == 1
-        assert result["stage"] == "explain"
-        assert result["should_push_exercise"] is False
-        assert "结论" in llm.calls[0][1] or "三段" in llm.calls[0][1]
-
-    @pytest.mark.asyncio
-    async def test_turn2_pushes_check_question(self, loader):
-        s = self._skill(loader)
-        llm = FakeLLM(["如果合力是 10N 质量 2kg，加速度是多少？"])
-        graph = s.build_subgraph(llm, [])
-        result = await graph.ainvoke(_state(turn_count=1))
-        assert result["turn_count"] == 2
-        assert result["stage"] == "check"
-        assert result["should_push_exercise"] is True
-        # Prompt should ask LLM to emit a check question without answer
-        assert "检验" in llm.calls[0][1] or "不要给答案" in llm.calls[0][1]
+        ai = [m for m in result["messages"] if isinstance(m, AIMessage)]
+        assert ai and "加速度" in ai[-1].content
+        # SKILL.md body ("结构化"/"结论") reached the model as the system prompt
+        assert "结构化" in llm.calls[0][0] or "结论" in llm.calls[0][0]
 
 
 # ===========================================================================

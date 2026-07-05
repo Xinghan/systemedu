@@ -50,12 +50,21 @@ Status: draft (2026-07-03) · 重点 P1→P2→P4→P3；P5 安全合规后置�
   WS handler(`routes.py`) 传 `_await_decision`(读客户端 `tool_decision` 帧, 陈旧/非法帧
   fail-safe reject)。测试: `test_agent_subgraph`(interrupt/approve/reject 3 例) +
   `test_tutor_runner_hitl`(stream 编排+mapper 10 例) + `test_chat_ws_hitl`(WS 往返 3 例)
-- [ ] T1.12 前端 `student-web` FloatingChat：渲染工具确认卡片（approve/reject），回传决策
+- [x] T1.12 前端 `student-web`：`ToolConfirmCard`(message-bubble.tsx) 暖纸色+coral 边卡片,
+  写工具友好文案(complete_node→"标记这一关为完成"/grade_submission/escalate)+args 摘要+
+  approve("标记完成")/reject("先不要")；chat-store 加 `pendingConfirm`；use-websocket-chat
+  处理 `tool_confirm`→弹卡 + `sendDecision` 发 `tool_decision`(socket 断则报错不静默丢)；
+  done/error 清卡。真实 Next 运行时渲染已截图验证。**同时把 direct-instruction 迁到
+  build_agent_subgraph**——原来它(+error_diagnosis)是唯一带写工具的 skill 却用手写 call_llm
+  文本子图不调工具, 卡片无处触发; 迁后能真调 complete_node 走 HITL(explain→check→complete
+  流程移进 SKILL.md prompt, 弃用无人消费的 should_push_exercise/stage)
 - [x] T1.13 HITL 纪律自检：interrupt 由 middleware 拥有(非手写)；写工具副作用在 interrupt
   之后才跑(幂等无需, 因根本没执行)；WS 的 interrupt 等待不被裸 try/except 吞(WebSocketDisconnect
   单独 catch 干净退出, 保留 checkpoint)；不在循环里 interrupt(单 pending call)
-- [~] T1.14 测试：后端 e2e 三层(subgraph/stream/WS)已覆盖 approve+reject+fail-safe；前端卡片
-  + 真实对话验证待 T1.12 后补
+- [x] T1.14 测试：后端 e2e 三层(subgraph/stream/WS)覆盖 approve+reject+fail-safe；全图集成
+  `test_full_graph_direct_instruction_write_tool_interrupts`(routed→di→complete_node→interrupt
+  →approve→执行)；**真实 Qwen `scenario_hitl_write_tool` PASS**——Qwen 自主调 complete_node,
+  图中断, 中断时 mark_complete 未跑, approve 后才跑(args 正确)。前端卡片真实运行时渲染截图验证
 
 ### 1D. checkpoint 加固（随手做）
 
