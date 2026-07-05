@@ -315,10 +315,10 @@ class TestProgressDbNone:
         assert out == {"error": "db not configured"}
 
     async def test_complete_node_db_none(self, ctx_no_db):
-        approved = ToolContext(
-            user_id="u-test", session_id="s-1", approved=True, db=None
-        )
-        with push_tool_context(approved):
+        # complete_node runs directly now (HITL gates it upstream, not the
+        # decorator); with no db wired it reports the config error.
+        no_db = ToolContext(user_id="u-test", session_id="s-1", db=None)
+        with push_tool_context(no_db):
             out = await progress.complete_node.ainvoke(
                 {"project_name": "mars", "knode_id": "3"}
             )

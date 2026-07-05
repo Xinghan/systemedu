@@ -2,7 +2,8 @@
 
 Covers:
 - log_call writes a row with correct fields
-- confirm tool: pending row (approved=None) then approved=True row
+- approved column round-trips both None (read tool) and True (write tool
+  run after HITL approval)
 - error in tool body: error field populated, latency_ms still present
 - make_log_sink wires into decorator via ToolContext.log_sink
 """
@@ -62,15 +63,17 @@ class TestLogCall:
         assert row.latency_ms == 12
         assert row.error is None
 
-    def test_confirm_pending_then_approved(self, dao, db_session):
+    def test_approved_column_round_trips(self, dao, db_session):
+        """A read tool logs approved=None; a write tool that ran (HITL already
+        approved it) logs approved=True. Both persist and read back."""
         dao.log_call(
             user_id="u1",
             session_id="s1",
-            tool_name="complete_node",
-            args={"knode_id": "k-1"},
-            result={"action": "pending_confirm"},
+            tool_name="get_progress",
+            args={"project": "mars"},
+            result={"pct": 10},
             approved=None,
-            latency_ms=0,
+            latency_ms=5,
         )
         dao.log_call(
             user_id="u1",
@@ -166,30 +169,26 @@ class TestMakeLogSink:
         assert rows[0].error == "ValueError: nope"
         db.close()
 
-    async def test_confirm_flow_two_rows(self, tmp_path):
+    async def test_write_tool_logs_single_approved_row(self, tmp_path):
+        """A write tool runs once (HITL gates it upstream, not the decorator)
+        and the sink records one row with approved=True."""
         engine = create_engine("sqlite:///:memory:")
         Base.metadata.create_all(engine)
         factory = sessionmaker(bind=engine)
 
-        @tutor_tool(access="write", confirm=True)
+        @tutor_tool(access="write")
         async def _write_thing(x: str) -> dict:
             return {"wrote": x}
 
         sink = make_log_sink(factory)
-
-        ctx1 = ToolContext(user_id="u1", session_id="s1", log_sink=sink)
-        with push_tool_context(ctx1):
-            r1 = await _write_thing.ainvoke({"x": "data"})
-        assert r1["action"] == "pending_confirm"
-
-        ctx2 = ToolContext(user_id="u1", session_id="s1", approved=True, log_sink=sink)
-        with push_tool_context(ctx2):
-            r2 = await _write_thing.ainvoke({"x": "data"})
-        assert r2 == {"wrote": "data"}
+        ctx = ToolContext(user_id="u1", session_id="s1", log_sink=sink)
+        with push_tool_context(ctx):
+            r = await _write_thing.ainvoke({"x": "data"})
+        assert r == {"wrote": "data"}
 
         db = factory()
         rows = db.query(ToolCallLog).order_by(ToolCallLog.id).all()
-        assert len(rows) == 2
-        assert rows[0].approved is None
-        assert rows[1].approved is True
+        assert len(rows) == 1
+        assert rows[0].approved is True
+        assert rows[0].result_json == {"wrote": "data"}
         db.close()

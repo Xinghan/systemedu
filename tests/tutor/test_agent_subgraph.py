@@ -16,8 +16,12 @@ fake LLM 记录它每次实际收到的 messages，以便断言 spotlight + syst
 
 from __future__ import annotations
 
+from typing import Annotated
+
 import pytest
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
+from langgraph.graph.message import add_messages
+from typing_extensions import TypedDict
 
 from systemedu.core.tutor.skills._common import build_agent_subgraph
 from systemedu.core.tutor.tools import (
@@ -25,6 +29,14 @@ from systemedu.core.tutor.tools import (
     build_default_registry,
     push_tool_context,
 )
+
+
+class _HITLParentState(TypedDict, total=False):
+    """Parent-graph state for the HITL tests' checkpointed wrapper (module-level
+    so annotations resolve under `from __future__ import annotations`)."""
+
+    messages: Annotated[list, add_messages]
+    memory: dict
 
 
 class _FakeSkill:
@@ -237,6 +249,165 @@ async def test_agent_subgraph_run_limit_caps_runaway_loop():
     # a runaway and produced *some* terminal state.
     assert llm._calls <= 5, f"run_limit should cap the loop, saw {llm._calls} calls"
     assert out.get("messages"), "subgraph must return a state even when capped"
+
+
+# ===========================================================================
+# HITL — write-class tools pause for confirmation (spec 043 T1.9/1C)
+# ===========================================================================
+# A write tool (complete_node) must interrupt the graph before running. We wrap
+# the subgraph in a checkpointer-backed parent (mirroring _wrap_subgraph) so the
+# interrupt has somewhere to persist, then drive approve / reject and assert the
+# tool's side effect (provider.mark_complete) only fires on approve.
+
+
+class _WriteSkill:
+    class config:
+        name = "direct_instruction"
+        body = "你是讲解老师"
+        description = "di"
+        tools = ["complete_node"]
+
+
+class _WriteProvider:
+    """Records whether the write side effect (mark_complete) actually ran."""
+
+    def __init__(self):
+        self.marked: list[tuple] = []
+
+    async def mark_complete(self, user_id, project, knode):
+        self.marked.append((user_id, project, knode))
+        return {"ok": True, "knode_id": knode, "status": "passed"}
+
+
+class _WriteLLM:
+    """1st turn → complete_node tool_call; later → plain-text answer."""
+
+    def __init__(self):
+        self._n = 0
+
+    def bind_tools(self, tools, **kw):
+        return self
+
+    def bind(self, **kw):
+        return self
+
+    def with_config(self, *a, **k):
+        return self
+
+    async def ainvoke(self, messages, **kw):
+        self._n += 1
+        if self._n == 1:
+            return AIMessage(content="", tool_calls=[{
+                "name": "complete_node",
+                "args": {"project_name": "mars", "knode_id": "M01"},
+                "id": "call_1",
+            }])
+        return AIMessage(content="好的, 已经帮你处理了。")
+
+
+def _wrap_in_checkpointed_parent(sub):
+    """Mirror graph._wrap_subgraph: call the subgraph inside a parent node so an
+    interrupt bubbles to a parent that has a checkpointer (interrupts need one).
+
+    `_HITLParentState` is module-level so `get_type_hints` (used by StateGraph)
+    can resolve its `Annotated[...]` under `from __future__ import annotations`.
+    """
+    from langgraph.checkpoint.memory import InMemorySaver
+    from langgraph.graph import END, START, StateGraph
+
+    async def _node(state):
+        out = await sub.ainvoke({"messages": list(state.get("messages") or []),
+                                 "memory": state.get("memory") or {}})
+        new = [m for m in out.get("messages", [])
+               if isinstance(m, AIMessage) and not getattr(m, "tool_calls", None)]
+        return {"messages": new}
+
+    g = StateGraph(_HITLParentState)
+    g.add_node("skill", _node)
+    g.add_edge(START, "skill")
+    g.add_edge("skill", END)
+    return g.compile(checkpointer=InMemorySaver())
+
+
+@pytest.mark.asyncio
+async def test_agent_subgraph_write_tool_interrupts_before_running():
+    """complete_node (write) must pause the graph — the tool does NOT run until
+    a decision arrives."""
+    provider = _WriteProvider()
+    tools = build_default_registry().filter_by_whitelist(["complete_node"])
+    sub = build_agent_subgraph(_WriteSkill(), _WriteLLM(), tools)
+    parent = _wrap_in_checkpointed_parent(sub)
+    cfg = {"configurable": {"thread_id": "hitl-1"}}
+
+    with push_tool_context(ToolContext(user_id="u1", data=provider)):
+        async for _ in parent.astream_events(
+            {"messages": [HumanMessage(content="帮我把 M01 标记完成")], "memory": {}},
+            config=cfg, version="v2"):
+            pass
+        state = await parent.aget_state(cfg)
+
+    # Paused mid-graph, tool not yet executed.
+    assert state.next, "graph should be interrupted (state.next non-empty)"
+    assert provider.marked == [], "write tool must NOT run before approval"
+    # The interrupt carries the pending action for the frontend card.
+    assert state.interrupts, "an interrupt should be pending"
+    val = state.interrupts[0].value
+    assert val["action_requests"][0]["name"] == "complete_node"
+
+
+@pytest.mark.asyncio
+async def test_agent_subgraph_write_tool_runs_on_approve():
+    from langgraph.types import Command
+
+    provider = _WriteProvider()
+    tools = build_default_registry().filter_by_whitelist(["complete_node"])
+    sub = build_agent_subgraph(_WriteSkill(), _WriteLLM(), tools)
+    parent = _wrap_in_checkpointed_parent(sub)
+    cfg = {"configurable": {"thread_id": "hitl-approve"}}
+
+    with push_tool_context(ToolContext(user_id="u1", data=provider)):
+        async for _ in parent.astream_events(
+            {"messages": [HumanMessage(content="标记 M01 完成")], "memory": {}},
+            config=cfg, version="v2"):
+            pass
+        # approve → resume value must be {"decisions": [...]}, not a bare list
+        final = None
+        async for ev in parent.astream_events(
+            Command(resume={"decisions": [{"type": "approve"}]}), config=cfg, version="v2"):
+            if ev.get("event") == "on_chain_end" and ev.get("name") == "LangGraph":
+                final = ev.get("data", {}).get("output")
+
+    assert provider.marked == [("u1", "mars", "M01")], "approve must run the tool"
+    ai = [m for m in (final or {}).get("messages", []) if isinstance(m, AIMessage)]
+    assert ai and "好的" in ai[-1].content
+
+
+@pytest.mark.asyncio
+async def test_agent_subgraph_write_tool_skipped_on_reject():
+    from langgraph.types import Command
+
+    provider = _WriteProvider()
+    tools = build_default_registry().filter_by_whitelist(["complete_node"])
+    sub = build_agent_subgraph(_WriteSkill(), _WriteLLM(), tools)
+    parent = _wrap_in_checkpointed_parent(sub)
+    cfg = {"configurable": {"thread_id": "hitl-reject"}}
+
+    with push_tool_context(ToolContext(user_id="u1", data=provider)):
+        async for _ in parent.astream_events(
+            {"messages": [HumanMessage(content="标记 M01 完成")], "memory": {}},
+            config=cfg, version="v2"):
+            pass
+        final = None
+        async for ev in parent.astream_events(
+            Command(resume={"decisions": [{"type": "reject", "message": "先别标记"}]}),
+            config=cfg, version="v2"):
+            if ev.get("event") == "on_chain_end" and ev.get("name") == "LangGraph":
+                final = ev.get("data", {}).get("output")
+
+    assert provider.marked == [], "reject must NOT run the tool"
+    # The model still produces a closing message after the reject.
+    ai = [m for m in (final or {}).get("messages", []) if isinstance(m, AIMessage)]
+    assert ai, "model should answer after a reject"
 
 
 # ===========================================================================

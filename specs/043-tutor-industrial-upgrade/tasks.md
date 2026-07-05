@@ -22,15 +22,40 @@ Status: draft (2026-07-03) · 重点 P1→P2→P4→P3；P5 安全合规后置�
 ### 1B. 第二步：迁 `create_agent` 子图（拿官方 middleware 体系）
 
 - [x] T1.8 `_common.py` 新增 `build_agent_subgraph`：收敛「模型调用 + 工具循环」为官方 `langchain.agents.create_agent`；memory 经 `@dynamic_prompt` 到 system（复用 `render_memory_block`）；`@wrap_model_call` 做 spotlight 定界 + 注入 `tutor_tool_bind_kwargs`（parallel_tool_calls=False / DashScope enable_thinking）到 `model_settings`；`state_schema` 扩 `memory`(total=False)；scaffolding/pbl 切此路径。**对外契约与手写 `build_tool_loop_subgraph` 一致**：输入 `{messages,memory}`、只回最终纯文本 AIMessage、输出 state 仅 `{messages,memory}`（无 middleware key 污染 skill_state，已探测确认）。测试 `test_agent_subgraph.py` 7 passed（含全图集成）；真实 Qwen `scenario_create_agent` PASS（调 get_progress + 定界 + 据真实进度答，与手写路径等价）
-- [~] T1.9 middleware 栈：`ToolCallLimitMiddleware(run_limit=8, exit_behavior="end")` 已接入（儿童场景防失控循环，parallel_tool_calls=False 保证单 pending call 故 "end" 安全）；`HumanInTheLoopMiddleware`(写类工具 interrupt) + `ModelFallbackMiddleware`(Qwen 降级) 待做（HITL 归 1C，fallback follow-up）
+- [~] T1.9 middleware 栈：`ToolCallLimitMiddleware(run_limit=8, exit_behavior="end")` + `HumanInTheLoopMiddleware`(写类工具 interrupt, 按 `meta.access=="write"` 自动选 interrupt_on, 见 1C) 已接入；`ModelFallbackMiddleware`(Qwen 降级) 待做（fallback follow-up）
 - [x] T1.10 升级排雷 checklist 过：无 `create_react_agent` 残留（用 create_agent）；`build_tool_loop_subgraph` 的 ToolNode `handle_tool_errors=True`；create_agent 内建 ToolNode 默认 handle_tool_errors；新 state 字段 `memory` 为 `total=False`（AgentState 子类）
 
 ### 1C. HITL 前端确认闭环
 
-- [ ] T1.11 后端：interrupt payload 经 `astream_events` 流出 → `tutor_runner.stream()` 转发已预留的 WS `tool_confirm` 事件；`Command(resume=decision)` 恢复同一 thread_id
+**设计决策（2026-07-04 定，方案A）**：用 LangGraph 原生 `interrupt` + 官方
+`HumanInTheLoopMiddleware`，不激活自研 `confirm=True` 短路（后者非真暂停、模型会
+继续、与 T1.9 official middleware 要求不符）。已用真实 middleware 探测确认契约：
+- **interrupt 触发**：写类工具执行前，`after_model` 调 `interrupt(req)` 暂停；
+  `astream_events` 吐 `on_chain_stream`(name=LangGraph) 的 chunk 含 `__interrupt__`；
+  更稳的判据是流停后 `graph.aget_state(cfg).next` 非空 + `.interrupts[0].value`。
+- **interrupt payload**：`{action_requests:[{name,args,description}], review_configs:
+  [{action_name, allowed_decisions}]}` → 转成 WS `tool_confirm`（含 confirm_id）。
+- **resume 格式（关键坑）**：middleware 内部 `interrupt(req)["decisions"]`，故 resume
+  值必须是 `Command(resume={"decisions":[{"type":"approve"}|{"type":"reject","message":..}]})`，
+  **不是裸 list**（裸 list 会 `TypeError: list indices must be integers`）。
+- **approve** → 工具真执行 → 模型据结果答；**reject** → 工具不执行 → 合成一条
+  reject ToolMessage 喂模型 → 模型换个说法答。
+
+- [x] T1.11 后端：`build_agent_subgraph` 挂 `HumanInTheLoopMiddleware`（按工具
+  `meta.access=="write"` 自动选 interrupt_on）；`tutor_runner.stream(resume_provider=)` 检测
+  interrupt(`aget_state().next` + `.interrupts`)→ 发 WS `tool_confirm` → 经 resume_provider
+  拿决策 → `Command(resume={"decisions":[..]})` 续跑同一 thread_id。**同时彻底拆掉旧自研
+  confirm 子系统**（decorator `confirm=True` + `confirm_handler_node` + `confirm_required`
+  state + 两 tutor_runner 读取）——实测二者并存会静默吞掉 approve 后的写工具执行。
+  WS handler(`routes.py`) 传 `_await_decision`(读客户端 `tool_decision` 帧, 陈旧/非法帧
+  fail-safe reject)。测试: `test_agent_subgraph`(interrupt/approve/reject 3 例) +
+  `test_tutor_runner_hitl`(stream 编排+mapper 10 例) + `test_chat_ws_hitl`(WS 往返 3 例)
 - [ ] T1.12 前端 `student-web` FloatingChat：渲染工具确认卡片（approve/reject），回传决策
-- [ ] T1.13 HITL 纪律自检：interrupt 前副作用幂等、不裸 try/except 包 interrupt、不在循环里 interrupt
-- [ ] T1.14 测试：写类工具（`complete_node`）触发 → 前端确认卡片 → resume 继续的 e2e；真实对话验证
+- [x] T1.13 HITL 纪律自检：interrupt 由 middleware 拥有(非手写)；写工具副作用在 interrupt
+  之后才跑(幂等无需, 因根本没执行)；WS 的 interrupt 等待不被裸 try/except 吞(WebSocketDisconnect
+  单独 catch 干净退出, 保留 checkpoint)；不在循环里 interrupt(单 pending call)
+- [~] T1.14 测试：后端 e2e 三层(subgraph/stream/WS)已覆盖 approve+reject+fail-safe；前端卡片
+  + 真实对话验证待 T1.12 后补
 
 ### 1D. checkpoint 加固（随手做）
 

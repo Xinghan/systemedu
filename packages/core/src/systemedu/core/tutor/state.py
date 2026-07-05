@@ -11,8 +11,10 @@ Semantics:
   `memory_inject` each turn.
 - skill_*: skill_router decides continue/switch/exit; skill subgraphs
   mutate skill_state; skill_turn_count bounds recursion.
-- pending_tool_calls / confirm_required / stream_events: outputs
-  consumed by the gateway SSE layer.
+
+Write-tool confirmation is no longer a state field: `HumanInTheLoopMiddleware`
+interrupts the graph and the interrupt/resume value lives in the checkpoint,
+not in `TutorState` (spec 043 T1.9/1C removed the old `confirm_required`).
 """
 
 from __future__ import annotations
@@ -69,11 +71,6 @@ class TutorState(TypedDict, total=False):
     skill_decision: SkillDecision
     # 最近一次 skill_router 观察到的 knode_id，用于检测 knode 切换并重置 active_skill
     last_routed_knode_id: str | None
-
-    # === 输出轴 ===
-    pending_tool_calls: list[Any]
-    confirm_required: dict[str, Any] | None
-    stream_events: list[Any]
 
     # === 内部标志 ===
     # safety_gate 命中敏感模式时置 True,_after_safety 据此短路到 output_stream

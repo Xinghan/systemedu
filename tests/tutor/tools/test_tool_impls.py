@@ -132,20 +132,14 @@ class TestGetProgress:
 
 
 # ---------------------------------------------------------------------------
-# T4.3b complete_node (confirm=True)
+# T4.3b complete_node (write; confirmation gated upstream by HITL middleware)
 # ---------------------------------------------------------------------------
+# The decorator's old confirm short-circuit is gone (spec 043 T1.9/1C) — when
+# complete_node's body runs here it marks the knode directly. The pause-for-
+# approval behaviour is tested at the subgraph level in test_agent_subgraph.py.
 class TestCompleteNode:
-    async def test_first_call_returns_pending(self, ctx, db_factory):
-        """confirm=True tool returns pending on first call."""
+    async def test_marks_passed(self, ctx, db_factory):
         with push_tool_context(ctx):
-            out = await complete_node.ainvoke({"project_name": "mars", "knode_id": "3"})
-        assert out["action"] == "pending_confirm"
-
-    async def test_approved_call_marks_passed(self, ctx, db_factory):
-        approved_ctx = ToolContext(
-            user_id="u-test", session_id="s-1", approved=True, db=db_factory
-        )
-        with push_tool_context(approved_ctx):
             out = await complete_node.ainvoke({"project_name": "mars", "knode_id": "3"})
         assert out["ok"] is True
         assert out["status"] == "passed"
@@ -160,10 +154,7 @@ class TestCompleteNode:
 
     async def test_re_complete_increments_attempts(self, ctx, db_factory):
         _seed_progress(db_factory)
-        approved_ctx = ToolContext(
-            user_id="u-test", session_id="s-1", approved=True, db=db_factory
-        )
-        with push_tool_context(approved_ctx):
+        with push_tool_context(ctx):
             await complete_node.ainvoke({"project_name": "mars", "knode_id": "1"})
         db = db_factory()
         row = db.query(ProgressRecord).filter(

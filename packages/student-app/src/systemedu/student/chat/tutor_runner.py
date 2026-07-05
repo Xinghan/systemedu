@@ -259,6 +259,59 @@ def _make_tool_context(payload: ChatPayload, user_id: str):
     )
 
 
+# ---------------------------------------------------------------------------
+# HITL (spec 043 T1.9/1C): interrupt payload <-> WS `tool_confirm` event
+# ---------------------------------------------------------------------------
+def _extract_interrupt_value(obj: Any) -> dict[str, Any] | None:
+    """Pull the HumanInTheLoopMiddleware interrupt value out of a graph result.
+
+    `graph.ainvoke(...)` returns a dict that carries `__interrupt__` (a tuple
+    of `Interrupt` objects) when the run paused. `astream_events` surfaces the
+    same under an `on_chain_stream`/`on_chain_end` chunk. In both cases we want
+    the first interrupt's `.value`, which HITL shapes as
+    `{"action_requests": [{name, args, description}], "review_configs": [...]}`.
+    """
+    if not isinstance(obj, dict):
+        return None
+    interrupts = obj.get("__interrupt__")
+    if not interrupts:
+        return None
+    first = interrupts[0] if isinstance(interrupts, (list, tuple)) else interrupts
+    value = getattr(first, "value", None)
+    if value is None and isinstance(first, dict):
+        value = first.get("value")
+    return value if isinstance(value, dict) else None
+
+
+def _confirm_from_interrupt_value(value: dict[str, Any]) -> dict[str, Any] | None:
+    """Turn a HITL interrupt value into a `tool_confirm` WS event payload.
+
+    We surface the first pending action (parallel_tool_calls=False guarantees at
+    most one). `confirm_id` is the thread's resume token from the frontend's POV
+    — a fresh id per pause so a stale card can't resume the wrong interrupt.
+    """
+    requests = value.get("action_requests") or []
+    if not requests:
+        return None
+    req = requests[0]
+    import uuid
+
+    return {
+        "confirm_id": f"c-{uuid.uuid4().hex[:12]}",
+        "tool": req.get("name"),
+        "args": req.get("args") or {},
+        "description": req.get("description") or "",
+    }
+
+
+def _interrupt_to_confirm(result: dict[str, Any]) -> dict[str, Any] | None:
+    """Convenience: result dict -> `tool_confirm` payload (or None)."""
+    value = _extract_interrupt_value(result)
+    if value is None:
+        return None
+    return _confirm_from_interrupt_value(value)
+
+
 async def invoke(payload: ChatPayload, user_id: str) -> dict[str, Any]:
     """Run one turn through the tutor graph (non-streaming)."""
     from systemedu.core.tutor.tools import push_tool_context
@@ -270,81 +323,140 @@ async def invoke(payload: ChatPayload, user_id: str) -> dict[str, Any]:
         result = await graph.ainvoke(state_input, config=config)
     ai_msgs = [m for m in result.get("messages", []) if isinstance(m, AIMessage)]
     reply = ai_msgs[-1].content if ai_msgs else ""
+    # HITL note (spec 043 1C): a write tool interrupts the graph and `ainvoke`
+    # returns with `__interrupt__` in the result instead of a final answer.
+    # The non-streaming POST path can't do a pause→confirm→resume round-trip in
+    # one request, so it surfaces the pending confirmation for the caller to
+    # handle (the WS path in `stream()` drives the full interactive loop).
+    confirm = _interrupt_to_confirm(result)
     return {
         "response": reply,
         "active_skill": result.get("active_skill"),
         "skill_decision": result.get("skill_decision"),
-        "confirm_required": result.get("confirm_required"),
+        "confirm_required": confirm,
         "_safety_triggered": result.get("_safety_triggered", False),
         "llm_fallback": fell_back,
     }
 
 
-async def stream(payload: ChatPayload, user_id: str) -> AsyncIterator[dict[str, Any]]:
-    """Stream LangGraph events as gateway-format dicts.
+async def _stream_one_segment(
+    graph: Any, graph_input: Any, config: dict[str, Any]
+) -> AsyncIterator[dict[str, Any]]:
+    """Stream chunk events for one graph segment (initial run OR a resume).
+
+    Yields only student-facing `chunk` events here; structured trailer events
+    (skill / escalation) are emitted by the caller from the post-run state so
+    they fire exactly once per turn, not once per segment.
+    """
+    async for event in graph.astream_events(graph_input, config=config, version="v2"):
+        if event.get("event") != "on_chat_model_stream":
+            continue
+        tags = event.get("tags") or []
+        meta = event.get("metadata") or {}
+        node = meta.get("langgraph_node") or ""
+        # skill_router 的 LLM 调用是 JSON 决策, 不是给学生看的
+        if any("skill_router" in t for t in tags) or node == "skill_router":
+            continue
+        chunk = event.get("data", {}).get("chunk")
+        if chunk and hasattr(chunk, "content") and chunk.content:
+            yield {"type": "chunk", "content": chunk.content}
+
+
+def _decision_to_resume(decision: dict[str, Any] | None) -> dict[str, Any]:
+    """Map a frontend decision to a HITL resume value.
+
+    HITL middleware does `interrupt(req)["decisions"]`, so the resume value is
+    `{"decisions": [<one decision per pending call>]}`. parallel_tool_calls=False
+    means at most one pending call, so we always send a single-element list.
+    A missing/unknown decision is treated as a reject (fail safe: never run a
+    write tool the student didn't approve).
+    """
+    dtype = (decision or {}).get("type")
+    if dtype == "approve":
+        return {"decisions": [{"type": "approve"}]}
+    msg = (decision or {}).get("message") or "学生未确认该操作。"
+    return {"decisions": [{"type": "reject", "message": msg}]}
+
+
+async def stream(
+    payload: ChatPayload,
+    user_id: str,
+    resume_provider: Any = None,
+) -> AsyncIterator[dict[str, Any]]:
+    """Stream LangGraph events as gateway-format dicts, with HITL support.
 
     Event types:
       {"type": "chunk", "content": str}
       {"type": "skill", "action": str, "target_skill": str, "reason": str}
       {"type": "tool_confirm", "confirm_id": str, "tool": str, "args": dict}
       {"type": "escalation", "severity": "urgent", "contact_info": str}
+
+    HITL (spec 043 1C): when a write tool interrupts the graph, we emit a
+    `tool_confirm` event. If `resume_provider` is given (the WS handler passes
+    one), we `await resume_provider(confirm_payload)` for the student's decision
+    and resume the SAME thread with `Command(resume=...)`, streaming the
+    continuation. Without a provider (e.g. simple callers), the stream ends at
+    `tool_confirm` and the caller must re-drive the resume itself.
+
+    `resume_provider` signature: `async (confirm: dict) -> dict | None`, returning
+    a decision like `{"type": "approve"}` / `{"type": "reject", "message": str}`.
     """
+    from langgraph.types import Command
+
     from systemedu.core.tutor.tools import push_tool_context
 
     graph, fell_back = await _resolve_user_graph(user_id)
     if fell_back:
         # spec 040: 用户 custom 配置不可用, 已回退默认模型, 通知前端
         yield {"type": "llm_fallback"}
-    state_input = _build_input(payload, user_id)
     config = _build_config(payload, user_id)
 
-    final_state: dict[str, Any] = {}
+    # First segment runs the fresh input; later segments resume the same thread.
+    graph_input: Any = _build_input(payload, user_id)
 
     # spec 043 P1: install ToolContext for the whole graph run so skill
     # tool loops can execute (require_tool_context raises otherwise).
     with push_tool_context(_make_tool_context(payload, user_id)):
-        async for event in graph.astream_events(state_input, config=config, version="v2"):
-            kind = event.get("event")
+        while True:
+            async for chunk_event in _stream_one_segment(graph, graph_input, config):
+                yield chunk_event
 
-            if kind == "on_chain_end" and event.get("name") == "LangGraph":
-                final_state = event.get("data", {}).get("output", {})
+            # After a segment, either the graph finished or it interrupted for a
+            # write-tool confirmation. Read the persisted state to tell which.
+            state = await graph.aget_state(config)
+            interrupted = bool(getattr(state, "next", None)) and bool(
+                getattr(state, "interrupts", None)
+            )
 
-            if kind == "on_chat_model_stream":
-                tags = event.get("tags") or []
-                meta = event.get("metadata") or {}
-                node = meta.get("langgraph_node") or ""
-                # skill_router 的 LLM 调用是 JSON 决策, 不是给学生看的
-                if any("skill_router" in t for t in tags) or node == "skill_router":
-                    continue
-                chunk = event.get("data", {}).get("chunk")
-                if chunk and hasattr(chunk, "content") and chunk.content:
-                    yield {"type": "chunk", "content": chunk.content}
+            if interrupted:
+                confirm = _confirm_from_interrupt_value(state.interrupts[0].value)
+                if confirm:
+                    yield {"type": "tool_confirm", **confirm}
+                # No way to collect a decision inline → stop here; the caller
+                # re-drives resume on a later call.
+                if resume_provider is None:
+                    return
+                decision = await resume_provider(confirm)
+                graph_input = Command(resume=_decision_to_resume(decision))
+                continue  # stream the continuation segment
 
-    # 流末尾, 把结构化事件追加发出
-    decision = final_state.get("skill_decision") or {}
-    if decision:
-        yield {
-            "type": "skill",
-            "action": decision.get("action"),
-            "target_skill": decision.get("target_skill"),
-            "reason": decision.get("reason"),
-        }
-
-    confirm = final_state.get("confirm_required")
-    if confirm:
-        yield {
-            "type": "tool_confirm",
-            "confirm_id": confirm.get("confirm_id"),
-            "tool": confirm.get("tool"),
-            "args": confirm.get("args"),
-        }
-
-    if final_state.get("_safety_triggered"):
-        yield {
-            "type": "escalation",
-            "severity": "urgent",
-            "contact_info": "12355 青少年心理热线",
-        }
+            # Graph finished this turn — emit trailer events from final state.
+            final_state = getattr(state, "values", None) or {}
+            skill_decision = final_state.get("skill_decision") or {}
+            if skill_decision:
+                yield {
+                    "type": "skill",
+                    "action": skill_decision.get("action"),
+                    "target_skill": skill_decision.get("target_skill"),
+                    "reason": skill_decision.get("reason"),
+                }
+            if final_state.get("_safety_triggered"):
+                yield {
+                    "type": "escalation",
+                    "severity": "urgent",
+                    "contact_info": "12355 青少年心理热线",
+                }
+            return
 
 
 __all__ = ["invoke", "stream", "preload_graph", "shutdown_graph"]

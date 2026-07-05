@@ -3,7 +3,7 @@
 Phase 3 completion: wires the six built-in skill subgraphs under the
 router. The edge topology is:
 
-    START -> confirm_handler -> safety_gate
+    START -> safety_gate
           -> memory_inject -> skill_router
           -> (conditional route_to_skill)
           -> skill:<name>      \\
@@ -12,6 +12,12 @@ router. The edge topology is:
 
 Safety short-circuit: when `_safety_triggered` is set, we jump from
 safety_gate straight to output_stream, skipping memory + skill work.
+
+Write-tool confirmation (spec 043 T1.9/1C) is not a graph node — it's
+`HumanInTheLoopMiddleware` inside the skill subgraph, which interrupts
+the whole graph before a write tool runs and resumes on the student's
+decision (replacing the old `confirm_handler` node + `confirm_required`
+state field).
 
 Skill subgraph integration:
 - Each `SkillLoader.list_all()` entry becomes a `skill:<name>` node.
@@ -33,7 +39,6 @@ from langgraph.graph import END, START, StateGraph
 
 from systemedu.core.tutor.memory import MemoryInjector
 from systemedu.core.tutor.nodes import (
-    confirm_handler_node,
     make_memory_inject_node,
     output_stream_node,
     safety_gate_node,
@@ -183,7 +188,6 @@ def build_tutor_graph(
     """
     g = StateGraph(TutorState)
 
-    g.add_node("confirm_handler", confirm_handler_node)
     g.add_node("safety_gate", safety_gate_node)
     g.add_node("memory_inject", make_memory_inject_node(memory_injector))
 
@@ -197,8 +201,7 @@ def build_tutor_graph(
     g.add_node("skill_router", router)
     g.add_node("output_stream", output_stream_node)
 
-    g.add_edge(START, "confirm_handler")
-    g.add_edge("confirm_handler", "safety_gate")
+    g.add_edge(START, "safety_gate")
     g.add_conditional_edges(
         "safety_gate",
         _after_safety,

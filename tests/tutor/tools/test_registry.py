@@ -19,7 +19,7 @@ async def _read_b() -> str:
     return "b"
 
 
-@tutor_tool(access="write", confirm=True)
+@tutor_tool(access="write")
 async def _write_c(arg: str) -> str:
     return f"c:{arg}"
 

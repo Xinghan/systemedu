@@ -144,13 +144,35 @@ async def ws_chat_stream(websocket: WebSocket) -> None:
 
             collected: list[str] = []
             active_skill = None
+
+            # HITL (spec 043 1C): when a write tool interrupts, stream() emits
+            # `tool_confirm` and calls this to get the student's decision. We
+            # read the next WS frame, which the client sends as
+            # `{"type": "tool_decision", "confirm_id": ..., "decision": {...}}`.
+            # A mismatched confirm_id or a non-decision frame is treated as a
+            # reject (fail safe — never run an unapproved write tool).
+            async def _await_decision(confirm: dict) -> dict:
+                frame = await websocket.receive_json()
+                if frame.get("type") != "tool_decision":
+                    return {"type": "reject", "message": "学生未确认（收到非确认消息）。"}
+                if frame.get("confirm_id") != confirm.get("confirm_id"):
+                    return {"type": "reject", "message": "确认已过期。"}
+                decision = frame.get("decision") or {}
+                return decision if isinstance(decision, dict) else {"type": "reject"}
+
             try:
-                async for event in tutor_runner.stream(payload, user_id):
+                async for event in tutor_runner.stream(
+                    payload, user_id, resume_provider=_await_decision
+                ):
                     await websocket.send_json(event)
                     if event.get("type") == "chunk" and event.get("content"):
                         collected.append(event["content"])
                     if event.get("type") == "skill" and event.get("target_skill"):
                         active_skill = event["target_skill"]
+            except WebSocketDisconnect:
+                # Client vanished mid-turn (e.g. during a HITL wait). Stop
+                # cleanly — the interrupt stays checkpointed for a later resume.
+                return
             except Exception as e:
                 log.exception("ws_chat_stream tutor.stream error")
                 await websocket.send_json({"type": "error", "message": str(e)})

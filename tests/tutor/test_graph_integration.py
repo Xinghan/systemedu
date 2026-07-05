@@ -10,8 +10,9 @@ Covers the 7 scenarios enumerated in design §12.3:
    same sqlite path, the 4th turn sees the prior messages.
 4. Safety gate short-circuit — `_safety_triggered=True` skips memory
    + skill work and lands directly in output_stream.
-5. Confirm flow — `confirm_required` set by a (future) skill persists
-   through the turn; here we assert the field round-trips.
+5. (removed) The old `confirm_required` round-trip — write-tool
+   confirmation is now HumanInTheLoopMiddleware (interrupt/resume),
+   tested in test_agent_subgraph.py.
 6. Tool whitelist overreach — skill declares no tools → wrapper
    receives empty tool list (asserted via the FakeLLM's seen tools).
 7. max_turns override — router observes max_turns and forces a
@@ -274,34 +275,10 @@ class TestScenario4_SafetyShortCircuit:
 
 
 # ===========================================================================
-# Scenario 5 — confirm flow round-trip
+# (Scenario 5 removed) — the old `confirm_required` state-field round-trip is
+# gone. Write-tool confirmation now uses HumanInTheLoopMiddleware (graph
+# interrupt/resume), covered in test_agent_subgraph.py + the HITL e2e tests.
 # ===========================================================================
-class TestScenario5_ConfirmFlow:
-    async def test_confirm_required_persists_through_graph(self, loader):
-        """A confirm_required payload set upstream should survive the
-        main-graph pipeline unchanged, so the gateway SSE layer can
-        surface it to the user."""
-        llm = ScriptedLLM(
-            router_replies=[_router_reply("exit", None, "awaiting confirm")],
-            skill_replies=[],
-        )
-        graph = build_tutor_graph(loader=loader, llm=llm)
-        result = await graph.ainvoke(
-            _initial_state(
-                confirm_required={
-                    "tool": "complete_node",
-                    "args": {"knode_id": "m-001"},
-                    "confirm_id": "c-42",
-                }
-            )
-        )
-        assert result.get("confirm_required") == {
-            "tool": "complete_node",
-            "args": {"knode_id": "m-001"},
-            "confirm_id": "c-42",
-        }
-        # With action=exit, no skill ran.
-        assert not [m for m in result["messages"] if isinstance(m, AIMessage)]
 
 
 # ===========================================================================

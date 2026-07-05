@@ -51,7 +51,7 @@ async def get_progress(project_name: str) -> dict[str, Any]:
 
 
 @tutor_tool(
-    access="write", confirm=True, scope="user_self",
+    access="write", scope="user_self",
     description="标记知识节点为已通过(需要学生确认)",
 )
 async def complete_node(project_name: str, knode_id: str) -> dict[str, Any]:

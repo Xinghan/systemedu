@@ -8,15 +8,20 @@ ContextVar before the skill subgraph runs. The decorator then:
 1. overrides any LLM-supplied `user_id` / `session_id` with the
    ContextVar's value (defence in depth — the tool also refuses to
    run when the ContextVar is missing);
-2. for `confirm=True` tools, short-circuits on the first call and
-   returns a `pending_confirm` payload — `confirm_handler` replays
-   the call with `_approved=True` on the next turn to actually run
-   the body;
-3. logs each invocation to ToolCallLog (T4.4 hook — the helper is
+2. logs each invocation to ToolCallLog (T4.4 hook — the helper is
    optional right now so decorator tests don't need a DB).
 
 The decorator returns a LangChain `BaseTool` so the result plugs
 straight into `llm.bind_tools(...)`.
+
+Confirmation of write-class tools (spec 043 T1.9/1C) is owned by the
+official `HumanInTheLoopMiddleware` in `build_agent_subgraph`, which
+interrupts the graph *before* a write tool runs and resumes on the
+student's decision. The decorator no longer carries its own
+`confirm=True` short-circuit — the two mechanisms collided (the
+short-circuit would swallow the call even after the middleware
+approved it). Write intent is still declared via `access="write"`,
+which is what the middleware selects on.
 """
 
 from __future__ import annotations
@@ -27,7 +32,6 @@ import functools
 import inspect
 import logging
 import time
-import uuid
 from contextvars import ContextVar
 from dataclasses import dataclass, field
 from typing import Any, Awaitable, Callable, Iterator, Literal
@@ -57,9 +61,6 @@ class ToolContext:
     active_skill: str | None = None
     project_name: str | None = None
     knode_id: str | None = None
-    # Populated by `confirm_handler` on the second call so write tools
-    # know they're re-running after user approval.
-    approved: bool | None = None
     # Optional hook so the decorator can write audit rows. Wired by
     # T4.4. Signature: `(record: dict) -> None`.
     log_sink: Callable[[dict[str, Any]], Any] | None = None
@@ -79,7 +80,6 @@ class ToolMeta:
 
     name: str
     access: Access = "read"
-    confirm: bool = False
     scope: Scope = "user_self"
     description: str = ""
     # Arguments the LLM is not allowed to supply — will be overridden
@@ -145,20 +145,6 @@ def _strip_reserved(kwargs: dict[str, Any], reserved: tuple[str, ...]) -> None:
         kwargs.pop(name, None)
 
 
-def _pending_confirm_payload(
-    tool_name: str, args: dict[str, Any], ctx: ToolContext
-) -> dict[str, Any]:
-    """Payload returned on the first call of a `confirm=True` tool."""
-    return {
-        "action": "pending_confirm",
-        "tool": tool_name,
-        "args": args,
-        "confirm_id": f"c-{uuid.uuid4().hex[:12]}",
-        "user_id": ctx.user_id,
-        "session_id": ctx.session_id,
-    }
-
-
 def _log_safely(ctx: ToolContext, record: dict[str, Any]) -> None:
     """Fire the audit sink but never raise out of tool execution."""
     sink = ctx.log_sink
@@ -177,7 +163,6 @@ def _log_safely(ctx: ToolContext, record: dict[str, Any]) -> None:
 def tutor_tool(
     *,
     access: Access = "read",
-    confirm: bool = False,
     scope: Scope = "user_self",
     name: str | None = None,
     description: str | None = None,
@@ -195,11 +180,10 @@ def tutor_tool(
     The resulting object is a `langchain_core.tools.BaseTool` and can
     be passed to `llm.bind_tools`, or to `SkillBase.build_subgraph`.
 
-    `ctx.approved` semantics:
-    - write tool with `confirm=True`: first call returns
-      `pending_confirm` regardless of approval; a replay with
-      `ctx.approved=True` actually runs the body.
-    - read tools ignore `approved`.
+    `access="write"` declares a mutating tool. Confirmation of write
+    tools is enforced upstream by `HumanInTheLoopMiddleware` (the graph
+    pauses before the tool runs); the decorator itself no longer
+    short-circuits on confirmation.
     """
 
     def _decorate(fn: Callable[..., Awaitable[Any]]) -> BaseTool:
@@ -212,7 +196,6 @@ def tutor_tool(
         meta = ToolMeta(
             name=tool_name,
             access=access,
-            confirm=confirm,
             scope=scope,
             description=description or (fn.__doc__ or "").strip().split("\n", 1)[0],
             reserved_args=reserved_args,
@@ -223,26 +206,6 @@ def tutor_tool(
             ctx = require_tool_context()
             # Pillar 3: LLM-supplied user_id / session_id are discarded.
             _strip_reserved(kwargs, meta.reserved_args)
-
-            # Pillar 2: confirm short-circuit. The decorator runs *before*
-            # the function body so no side-effect can leak.
-            if meta.confirm and not (ctx.approved is True):
-                payload = _pending_confirm_payload(meta.name, dict(kwargs), ctx)
-                _log_safely(
-                    ctx,
-                    {
-                        "tool_name": meta.name,
-                        "user_id": ctx.user_id,
-                        "session_id": ctx.session_id,
-                        "active_skill": ctx.active_skill,
-                        "args": dict(kwargs),
-                        "result": payload,
-                        "approved": None,  # awaiting user
-                        "latency_ms": 0,
-                        "error": None,
-                    },
-                )
-                return payload
 
             started = time.perf_counter()
             error: str | None = None
@@ -264,7 +227,9 @@ def tutor_tool(
                         "active_skill": ctx.active_skill,
                         "args": dict(kwargs),
                         "result": result if error is None else None,
-                        "approved": True if meta.confirm else None,
+                        # If a write tool's body ran, HITL already approved it
+                        # upstream; read tools have no approval concept.
+                        "approved": True if meta.access == "write" else None,
                         "latency_ms": latency_ms,
                         "error": error,
                     },

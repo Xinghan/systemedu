@@ -1,7 +1,8 @@
 """Reflection-prompt skill (spec 014 T3.9).
 
 Two-phase: (1) ask reflection questions, (2) when the student gives a
-coherent self-summary, suggest `complete_node` with confirm=True.
+coherent self-summary, suggest completing the node (the actual
+`complete_node` call, if any, is gated by HITL confirmation upstream).
 Detection of "coherent summary" is delegated to the LLM — we ask it to
 return a `ready_to_complete: yes|no` marker that we parse.
 """

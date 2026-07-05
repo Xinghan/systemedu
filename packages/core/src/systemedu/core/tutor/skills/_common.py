@@ -280,6 +280,7 @@ def build_agent_subgraph(
     from langchain.agents import create_agent
     from langchain.agents.middleware import (
         AgentState,
+        HumanInTheLoopMiddleware,
         ModelRequest,
         ModelResponse,
         ToolCallLimitMiddleware,
@@ -288,9 +289,21 @@ def build_agent_subgraph(
     )
 
     from systemedu.core.tutor.tools.binding import tutor_tool_bind_kwargs
+    from systemedu.core.tutor.tools.decorator import get_tool_meta
 
     body = skill.config.body or skill.config.description
     bind_kwargs = tutor_tool_bind_kwargs(llm)
+
+    # spec 043 T1.9/1C: write-class tools (progress/grade/escalate) pause the
+    # graph for student confirmation before they run. We pick them off the
+    # tool's own `access` metadata so the whitelist stays the single source of
+    # truth — no hand-maintained name list to drift. approve → tool runs;
+    # reject → tool skipped, a synthetic ToolMessage tells the model why.
+    interrupt_on = {
+        t.name: {"allowed_decisions": ["approve", "reject"]}
+        for t in tools
+        if (m := get_tool_meta(t)) is not None and m.access == "write"
+    }
 
     class _AgentSkillState(AgentState, total=False):
         # Handed in by the main graph's `_wrap_subgraph`; read by the
@@ -316,20 +329,26 @@ def build_agent_subgraph(
             request.model_settings.update(bind_kwargs)
         return await handler(request)
 
+    middleware: list[Any] = [
+        _memory_prompt,
+        _spotlight_and_params,
+        # exit_behavior="end": hard-stop the run once run_limit tool calls
+        # are reached (child-safety: a misbehaving model that never stops
+        # tool-calling must not loop to the recursion limit). Safe here
+        # because parallel_tool_calls=False guarantees one call per turn —
+        # "end" raises NotImplementedError only on parallel pending calls.
+        ToolCallLimitMiddleware(run_limit=run_limit, exit_behavior="end"),
+    ]
+    # Only add HITL when this skill actually holds a write tool — a middleware
+    # with an empty interrupt_on still adds an after_model hop for nothing.
+    if interrupt_on:
+        middleware.append(HumanInTheLoopMiddleware(interrupt_on=interrupt_on))
+
     return create_agent(
         llm,
         tools=tools,
         state_schema=_AgentSkillState,
-        middleware=[
-            _memory_prompt,
-            _spotlight_and_params,
-            # exit_behavior="end": hard-stop the run once run_limit tool calls
-            # are reached (child-safety: a misbehaving model that never stops
-            # tool-calling must not loop to the recursion limit). Safe here
-            # because parallel_tool_calls=False guarantees one call per turn —
-            # "end" raises NotImplementedError only on parallel pending calls.
-            ToolCallLimitMiddleware(run_limit=run_limit, exit_behavior="end"),
-        ],
+        middleware=middleware,
     )
 
 
