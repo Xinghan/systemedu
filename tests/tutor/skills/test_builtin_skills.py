@@ -281,55 +281,27 @@ class TestErrorDiagnosis:
         s = self._skill(loader)
         assert s.config.max_turns == 2
         assert "grade_submission" in s.config.tools
+        assert "get_practice_exercises" in s.config.tools
 
     @pytest.mark.asyncio
-    async def test_classify_concept(self, loader):
+    async def test_simple_reply_without_bindable_tools(self, loader):
+        """error-diagnosis is now a tool-loop skill (build_agent_subgraph): the
+        LLM can call grade_submission / get_practice_exercises for the formative
+        loop. A FakeLLM lacking bind_tools falls back to the simple single-node
+        subgraph, so it still gives one diagnostic reply. The tool-driving
+        diagnose→verify→re-teach flow + grade_submission HITL is covered in
+        test_agent_subgraph.py; here we confirm it still answers and the SKILL.md
+        body (with the concept/calc/strategy framing) reaches the model."""
         s = self._skill(loader)
-        llm = FakeLLM(
-            [
-                "你把质量当成力了，属于概念混淆。\n"
-                "error_type: concept"
-            ]
-        )
+        llm = FakeLLM(["你把质量当成力了，属于概念混淆。换一道类似的再试。"])
         graph = s.build_subgraph(llm, [])
         result = await graph.ainvoke(
             _state(messages=[HumanMessage(content="F=mass × acceleration 所以 F 就是 mass")])
         )
-        assert result["error_type"] == "concept"
-        assert result["turn_count"] == 1
-        assert "diagnosed concept" in result["summary"]
-
-    @pytest.mark.asyncio
-    async def test_classify_calc(self, loader):
-        s = self._skill(loader)
-        llm = FakeLLM(["计算有误：2*5 不是 12。\nerror_type: calc"])
-        graph = s.build_subgraph(llm, [])
-        result = await graph.ainvoke(_state())
-        assert result["error_type"] == "calc"
-
-    @pytest.mark.asyncio
-    async def test_classify_strategy(self, loader):
-        s = self._skill(loader)
-        llm = FakeLLM(["你从结论出发了。\nerror_type: strategy"])
-        graph = s.build_subgraph(llm, [])
-        result = await graph.ainvoke(_state())
-        assert result["error_type"] == "strategy"
-
-    @pytest.mark.asyncio
-    async def test_unknown_when_marker_missing(self, loader):
-        s = self._skill(loader)
-        llm = FakeLLM(["嗯我看不出来哪里错。"])
-        graph = s.build_subgraph(llm, [])
-        result = await graph.ainvoke(_state())
-        assert result["error_type"] == "unknown"
-
-    @pytest.mark.asyncio
-    async def test_fullwidth_colon_also_parses(self, loader):
-        s = self._skill(loader)
-        llm = FakeLLM(["诊断:单位换算错误。\nerror_type：calc"])
-        graph = s.build_subgraph(llm, [])
-        result = await graph.ainvoke(_state())
-        assert result["error_type"] == "calc"
+        ai = [m for m in result["messages"] if isinstance(m, AIMessage)]
+        assert ai and "概念" in ai[-1].content
+        # SKILL.md body reached the model as the system prompt
+        assert "错因" in llm.calls[0][0] or "诊断" in llm.calls[0][0]
 
 
 # ===========================================================================

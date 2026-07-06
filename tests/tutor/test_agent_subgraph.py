@@ -269,14 +269,20 @@ class _WriteSkill:
 
 
 class _WriteProvider:
-    """Records whether the write side effect (mark_complete) actually ran."""
+    """Records whether write side effects (mark_complete / grade_submission) ran."""
 
     def __init__(self):
         self.marked: list[tuple] = []
+        self.graded: list[tuple] = []
 
     async def mark_complete(self, user_id, project, knode):
         self.marked.append((user_id, project, knode))
         return {"ok": True, "knode_id": knode, "status": "passed"}
+
+    async def grade_submission(self, user_id, project, knode, exercise_id, student_answer):
+        self.graded.append((user_id, project, knode, exercise_id, student_answer))
+        return {"graded": True, "exercise_id": exercise_id, "is_correct": False,
+                "correct_answer": "1000N"}
 
 
 class _WriteLLM:
@@ -594,3 +600,90 @@ async def test_full_graph_direct_instruction_write_tool_interrupts():
             pass
 
     assert provider.marked == [("u-bob", "mars", "M01")], "approve must run complete_node"
+
+
+class _RouterToErrorDiagGradeLLM:
+    """Router → error-diagnosis; then the skill calls grade_submission (write).
+    Proves the P2 formative loop routes to error-diagnosis and its grading tool
+    is HITL-gated end-to-end through the real graph."""
+
+    def __init__(self):
+        self._skill_calls = 0
+
+    def bind_tools(self, tools, **kwargs):
+        return self
+
+    def bind(self, **kwargs):
+        return self
+
+    def with_config(self, *a, **k):
+        return self
+
+    async def ainvoke(self, messages, **kwargs):
+        from langchain_core.messages import SystemMessage as _Sys
+
+        has_system = any(isinstance(m, _Sys) for m in messages)
+        joined = " ".join(
+            (m.content if isinstance(m.content, str) else str(m.content)) for m in messages
+        )
+        if not has_system and "教学策略调度器" in joined:
+            return AIMessage(
+                content='{"action": "switch", "target_skill": "error-diagnosis", "reason": "答错"}'
+            )
+        self._skill_calls += 1
+        if self._skill_calls == 1:
+            return AIMessage(content="", tool_calls=[{
+                "name": "grade_submission",
+                "args": {"project_name": "mars", "knode_id": "M01",
+                         "exercise_id": "e1", "student_answer": "10000N"},
+                "id": "call_1",
+            }])
+        return AIMessage(content="你把 F 算成 10000 了, 这是计算错误, 正确是 1000N。再试一道类似的。")
+
+
+@pytest.mark.asyncio
+async def test_full_graph_error_diagnosis_grade_submission_interrupts():
+    """Route to error-diagnosis → it calls grade_submission (write) → the whole
+    graph interrupts for confirmation, and grading does NOT run before approval;
+    approve runs it (P2 判分反哺 + HITL)."""
+    from langgraph.checkpoint.memory import InMemorySaver
+    from langgraph.types import Command
+
+    from systemedu.core.tutor.graph import build_tutor_graph
+    from systemedu.core.tutor.skills import SkillLoader
+
+    loader = SkillLoader([_SKILLS_ROOT])
+    loader.scan()
+
+    provider = _WriteProvider()
+    llm = _RouterToErrorDiagGradeLLM()
+    graph = build_tutor_graph(loader=loader, llm=llm, checkpointer=InMemorySaver())
+    cfg = {"configurable": {"thread_id": "full-hitl-grade-1"}}
+
+    with push_tool_context(ToolContext(user_id="u-cara", data=provider)):
+        async for _ in graph.astream_events({
+            "user_id": "u-cara",
+            "session_id": "s-1",
+            "project_name": "mars",
+            "knode_id": "M01",
+            "messages": [HumanMessage(content="我算出来 F=10000N 对吗?")],
+        }, config=cfg, version="v2"):
+            pass
+        state = await graph.aget_state(cfg)
+
+        # Interrupted mid-skill-node: active_skill update hasn't folded back yet,
+        # so we assert on the interrupt itself + that grading hasn't run.
+        assert state.next, "graph should be interrupted awaiting confirmation"
+        assert provider.graded == [], "grade_submission must NOT run before approval"
+        assert state.interrupts[0].value["action_requests"][0]["name"] == "grade_submission"
+
+        async for _ in graph.astream_events(
+            Command(resume={"decisions": [{"type": "approve"}]}), config=cfg, version="v2"):
+            pass
+        final = await graph.aget_state(cfg)
+
+    # After resume the skill node completes: it was error-diagnosis, and grading ran.
+    assert (final.values or {}).get("active_skill") == "error-diagnosis"
+    assert provider.graded and provider.graded[0][:4] == (
+        "u-cara", "mars", "M01", "e1"
+    ), "approve must run grade_submission"

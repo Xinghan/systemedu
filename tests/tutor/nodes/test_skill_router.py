@@ -326,3 +326,56 @@ class TestRouterPromptGuard:
         # 关键反指令: 短问句带"是不是"也不归 direct
         assert "是不是" in ROUTER_PROMPT
         assert "验证一个结论" in ROUTER_PROMPT
+
+    def test_prompt_has_recent_answers_slot(self):
+        """T2.4: 路由必须有 foregrounded 的最近答题正误槽位。"""
+        from systemedu.core.tutor.nodes.skill_router import ROUTER_PROMPT
+        assert "最近答题正误" in ROUTER_PROMPT
+        assert "{recent_answers}" in ROUTER_PROMPT
+
+
+# ---------------------------------------------------------------------------
+# T2.4 最近答题正误信号提取 + 注入路由 prompt
+# ---------------------------------------------------------------------------
+class TestRecentAnswerSignal:
+    def test_empty_memory(self):
+        from systemedu.core.tutor.nodes.skill_router import _recent_answer_signal
+        assert _recent_answer_signal({}) == "(暂无答题记录)"
+
+    def test_extracts_tally_and_wrongs_drops_course_text(self):
+        from systemedu.core.tutor.nodes.skill_router import _recent_answer_signal
+        content = (
+            "PM2.5 是直径<=2.5微米的颗粒物, 能进入肺泡。这段是课程正文, 不该进信号。\n"
+            "M04 答题: 3 题, 对 1 错 2\n"
+            '  错题: "PM2.5 的单位是?"  你答: "米"\n'
+            "项目近期错点:\n"
+            '  (M02) "光合作用在哪发生?"'
+        )
+        sig = _recent_answer_signal({"l3_knode_content": content})
+        assert "M04 答题: 3 题, 对 1 错 2" in sig
+        assert "PM2.5 的单位是?" in sig
+        assert "项目近期错点:" in sig
+        # 课程正文不该混进来
+        assert "颗粒物" not in sig
+
+    def test_no_answer_lines_returns_placeholder(self):
+        from systemedu.core.tutor.nodes.skill_router import _recent_answer_signal
+        assert _recent_answer_signal(
+            {"l3_knode_content": "纯课程内容, 没有任何答题记录行。"}
+        ) == "(暂无答题记录)"
+
+    @pytest.mark.asyncio
+    async def test_signal_reaches_router_prompt(self):
+        """答题历史应作为 foregrounded 信号进 router 的 LLM prompt。"""
+        llm = FakeLLM(['{"action": "switch", "target_skill": "error-diagnosis", "reason": "连续答错"}'])
+        node = make_skill_router_node(loader=StubLoader(_skills_catalog()), llm=llm)
+        state: TutorState = {
+            "messages": [HumanMessage(content="再来一题")],
+            "active_skill": None,
+            "skill_turn_count": 0,
+            "memory": {"l3_knode_content": "M04 答题: 4 题, 对 0 错 4\n  错题: \"x?\"  你答: \"y\""},
+        }
+        await node(state)
+        prompt = llm.calls[0][0].content
+        assert "最近答题正误" in prompt
+        assert "对 0 错 4" in prompt

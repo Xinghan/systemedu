@@ -52,6 +52,9 @@ ROUTER_PROMPT = """你是教学策略调度器。
 # 最近对话（最后 3 条）
 {recent_messages}
 
+# 最近答题正误（用于「连续答错→error-diagnosis」判断）
+{recent_answers}
+
 # 学生当前卡点（L3 记忆）
 {knode_state}
 
@@ -134,6 +137,26 @@ def _recent_messages(messages: list[BaseMessage], n: int = 3) -> str:
             role = getattr(m, "type", "system")
             parts.append(f"{role}: {content}")
     return "\n".join(parts)
+
+
+def _recent_answer_signal(memory: dict[str, Any]) -> str:
+    """Foreground the recent answer-correctness lines for the router.
+
+    The L3 exercise history is already folded into `l3_knode_content` by the
+    memory layer, but buried under course text where the "连续答错2次" rule can
+    miss it. The layer formats it deterministically ("<mod> 答题: N 题, 对 X 错 Y",
+    "  错题: ...", "项目近期错点:"), so we lift just those lines to the top.
+    Returns "(暂无答题记录)" when there's nothing — never raises.
+    """
+    text = memory.get("l3_knode_content") or memory.get("l3_knode_state") or ""
+    if not isinstance(text, str) or not text:
+        return "(暂无答题记录)"
+    keep: list[str] = []
+    for line in text.splitlines():
+        s = line.strip()
+        if ("答题:" in s) or s.startswith("错题:") or ("错点" in s):
+            keep.append(line.rstrip())
+    return "\n".join(keep) if keep else "(暂无答题记录)"
 
 
 def _strip_code_fence(text: str) -> str:
@@ -314,6 +337,7 @@ async def _ask_llm(
         turn_count=turn_count,
         max_turns=max_turns or 0,
         recent_messages=_recent_messages(state.get("messages") or []),
+        recent_answers=_recent_answer_signal(memory),
         knode_state=memory.get("l3_knode_state") or "(empty)",
         knode_content=memory.get("l3_knode_content") or "(empty)",
     )

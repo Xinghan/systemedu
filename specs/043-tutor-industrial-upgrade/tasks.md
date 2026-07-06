@@ -79,17 +79,30 @@ Status: draft (2026-07-03) · 重点 P1→P2→P4→P3；P5 安全合规后置�
 
 ### 2A. 判分反哺（ITS 核心闭环）
 
-- [ ] T2.1 `grade_submission` 工具接通（P1 已 bind），结果写 `exercise_attempt` 表（复用已有 POST 链路）
-- [ ] T2.2 验证 L3 练习历史注入贯通（memory_layers 已读此表）：判分结果能到达下一轮 prompt
-- [ ] T2.3 `error_diagnosis` / `scaffolding` skill prompt 显式要求：引用最近错误点 + 调 `get_practice_exercises` 取下一题
-- [ ] T2.4 `skill_router` 路由信号加入「最近答题正误」
-- [ ] T2.5 测试：真实 Qwen 跑「学生答错→下一轮」用例，验证回复引用了错误点
+- [x] T2.1 `grade_submission` 接通并落 `exercise_attempt`：**关键前置——把 error_diagnosis 从
+  手写 call_llm 文本子图迁到 `build_agent_subgraph`**(原来它是唯一带 grade_submission 的 skill
+  却根本不调工具, 判分反哺无从触发)。`StudentDataProvider.grade_submission` 已判分 + best-effort
+  `record_exercise_attempt` 写表(先前已建)。grade_submission 是写工具→HITL 确认后才判分。
+- [x] T2.2 L3 练习历史注入贯通：`memory_layers._l3_history_query` 读 `list_exercise_attempts`
+  (当前 module 全部 + 项目级最近 5 条错的), 格式化成"答题 N 题对 X 错 Y + 错题+你答"进
+  `l3_knode_content` → 到达下一轮 prompt(已验证)。
+- [x] T2.3 `error_diagnosis`/`scaffolding` SKILL.md 显式要求引用学生**具体**最近错题(不泛泛),
+  error_diagnosis 三段(诊断→验证猜想调 grade_submission→取下一题 get_practice_exercises);
+  scaffolding 从最近错处切入降阶。
+- [x] T2.4 `skill_router` ROUTER_PROMPT 加 foregrounded「最近答题正误」槽位：`_recent_answer_signal`
+  从 l3 记忆抽答题 tally + 错题行(丢课程正文), 让「连续答错2次→error-diagnosis」可靠触发。
+- [x] T2.5 测试：全图集成 `test_full_graph_error_diagnosis_grade_submission_interrupts`(routed→
+  error-diagnosis→grade_submission→HITL 中断→approve 后判分)；**真实 Qwen `scenario_formative_
+  reference_error` PASS**——L3 放"PM2.5单位答'米'"错题, Qwen 回复引用了该具体错题 + 取了下一题。
 
 ### 2B. Skill 真差异化（回应红队「6 段文案」批评）
 
 - [ ] T2.6 `socratic_questioning` 升级为多节点状态机：追问链状态（questions_asked / breakthrough 检测 → 升降脚手架），override `build_subgraph`
-- [ ] T2.7 `error_diagnosis` 升级为三段：诊断 → 验证猜想（调工具取题）→ 针对性讲解
-- [ ] T2.8 其余 4 个 skill 保持 simple 子图（避免过度工程）
+- [~] T2.7 `error_diagnosis` 三段（诊断→验证猜想调 grade_submission→取下一题 get_practice_exercises）：
+  **走 tool 循环(build_agent_subgraph) 实现而非硬状态机**（2026-07-06 定, 避免过度工程 cf T2.8）——
+  三段靠 SKILL.md prompt 引导 + 真实工具调用, 已随 T2.1 落地并真实 Qwen 验证。若后续证明 prompt
+  引导不稳再升硬状态机。
+- [ ] T2.8 其余 skill 保持 simple 子图（避免过度工程）；socratic 是唯一计划的硬状态机(T2.6)
 - [ ] T2.9 测试：socratic/error_diagnosis 的状态机行为单测；真实对话对比 simple skill 的行为差异
 
 ### 2C. 内容 grounding

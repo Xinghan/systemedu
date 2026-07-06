@@ -51,8 +51,8 @@ class ScriptedLLM:
 
     The router expects JSON in the form
     `{"action": "...", "target_skill": "...", "reason": "..."}`.
-    Each skill expects free-form text (some with trailing markers like
-    `error_type: concept` or `ready_to_complete: yes`). We dispatch
+    Each skill expects free-form text (reflection-prompt still uses a
+    trailing `ready_to_complete: yes|no` marker). We dispatch
     based on the system prompt: the router prompt starts with
     `你是教学策略调度器`, skill prompts come from the SKILL.md body.
     """

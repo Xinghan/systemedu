@@ -304,6 +304,64 @@ async def scenario_hitl_write_tool(llm) -> bool:
     return ok
 
 
+class _ErrorDiagSkill:
+    """Mirrors the error-diagnosis SKILL.md intent for the P2 formative test."""
+
+    class config:
+        name = "error-diagnosis"
+        body = (
+            "你是错因诊断导师。学生刚答错了一道题。必须引用他**具体**的错题和他写的答案"
+            "(见下方学生上下文的答题历史), 针对那个错处讲清错在哪、属于概念/计算/策略哪类, "
+            "不要泛泛而谈。讲完后可调 get_practice_exercises 取一道同类题让他再练。"
+            "项目 slug=purpleair-airquality-node, 当前 knode=M04。"
+        )
+        description = "error-diagnosis"
+        tools = ["grade_submission", "get_practice_exercises", "search_student_facts"]
+
+
+async def scenario_formative_reference_error(llm) -> bool:
+    """(5) T2.3/T2.5: 学生答错 → 下一轮 error-diagnosis 回复引用具体错误点。
+
+    L3 答题历史(memory)里放一道明确错题, 验证真实 Qwen 的回复确实点到了那个错处,
+    而不是泛泛安慰。这是形成性闭环的可观测证据(判分反哺已由数据层落地)。
+    """
+    print("\n" + "=" * 60)
+    print("SCENARIO 5 — T2.3/T2.5: error-diagnosis 引用学生具体错题(答错→下一轮)")
+    prov = _RecordingProvider()
+    tools = build_default_registry().filter_by_whitelist(_ErrorDiagSkill.config.tools)
+    sub = build_agent_subgraph(_ErrorDiagSkill(), llm, tools)
+    # L3 exercise history — a concrete wrong answer the reply should reference.
+    memory = {
+        "l1_profile": "12 岁, 爱足球",
+        "l3_knode_content": (
+            "M04 答题: 2 题, 对 0 错 2\n"
+            '  错题: "PM2.5 的单位是什么?"  你答: "米"\n'
+            '  错题: "AQI 数值越高说明空气越?"  你答: "干净"'
+        ),
+    }
+    ctx = ToolContext(user_id="u_demo", data=prov,
+                      project_name="purpleair-airquality-node", knode_id="M04")
+    with push_tool_context(ctx):
+        out = await sub.ainvoke({
+            "messages": [HumanMessage(content="老师我这次是不是又错了? 帮我看看")],
+            "memory": memory,
+        })
+    _, _, final = _fmt(out["messages"])
+    reply = final[-1].content if final else ""
+    # References the concrete error: the unit mistake ("米"/单位/微克) or the
+    # AQI direction mistake ("干净"/越高/污染).
+    refs_unit = any(k in reply for k in ("单位", "米", "微克", "μg", "PM2.5"))
+    refs_aqi = any(k in reply for k in ("AQI", "越高", "干净", "污染", "越差"))
+    referenced = refs_unit or refs_aqi
+    answered = bool(reply.strip())
+    print(f"  有回答: {answered}")
+    print(f"  引用了具体错题(单位错 or AQI 方向错): {referenced}  (unit={refs_unit} aqi={refs_aqi})")
+    print(f"  回复: {reply[:220]}")
+    ok = answered and referenced
+    print(f"  => {'PASS' if ok else 'FAIL'}")
+    return ok
+
+
 async def main():
     try:
         # Use the configured default provider (thinking = qwen3.7-max),
@@ -317,11 +375,12 @@ async def main():
     await scenario_parallel_contrast(llm)
     r3 = await scenario_create_agent(llm)
     r4 = await scenario_hitl_write_tool(llm)
+    r5 = await scenario_formative_reference_error(llm)
 
     print("\n" + "=" * 60)
-    hard = r1 and r3 and r4
+    hard = r1 and r3 and r4 and r5
     print("OVERALL:", "PASS" if hard else "FAIL",
-          "(功能 + create_agent + HITL 写工具场景为硬门禁; 对比场景为信息性)")
+          "(功能 + create_agent + HITL + 形成性引用错题 为硬门禁; 对比场景为信息性)")
     return 0 if hard else 1
 
 

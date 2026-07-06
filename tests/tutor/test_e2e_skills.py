@@ -194,15 +194,16 @@ class TestDirectInstructionEssence:
 
 
 # ===========================================================================
-# 3. Error Diagnosis — "分类错因: concept/calc/strategy"
+# 3. Error Diagnosis — 诊断错因 (concept/calc/strategy), tool-loop skill (043 P2)
 # ===========================================================================
 class TestErrorDiagnosisEssence:
-    """Error diagnosis must classify the error type (concept/calc/strategy)
-    and output it in a parseable `error_type:` marker."""
+    """Error diagnosis (now a tool-loop skill) must, in its reply, identify what
+    the student got wrong and frame it as a concept/calc/strategy error. The
+    tool-driven verify + next-question flow is covered offline in
+    test_agent_subgraph.py; here we check the diagnostic essence on a real model
+    (empty tools → simple reply path, no dependence on the model calling a tool)."""
 
     async def test_concept_error_diagnosed(self, real_llm, loader):
-        """A fundamentally wrong understanding should be diagnosed as
-        concept error."""
         skill = _get_skill(loader, "error-diagnosis")
         subgraph = skill.build_subgraph(real_llm, [])
 
@@ -211,21 +212,20 @@ class TestErrorDiagnosisEssence:
             memory={
                 "l1_profile": "12 岁男生",
                 "l2_project_ctx": "项目: 火箭设计",
-                "l3_knode_state": "当前 knode: 火箭推力原理。"
+                "l3_knode_content": "当前 knode: 火箭推力原理。"
                     "正确概念：牛顿第三定律，气体喷射的反作用力",
                 "l4_semantic_recall": [],
                 "l5_skill_ctx": "",
             },
         ))
         reply = _ai_text(result)
-
-        assert result.get("error_type") in ("concept", "unknown"), (
-            f"Expected concept error, got: {result.get('error_type')}"
-        )
+        # Substantive diagnosis that names the conceptual nature of the mistake.
         assert len(reply) > 10
+        assert ("概念" in reply or "牛顿" in reply or "反作用" in reply), (
+            f"concept-error diagnosis should address the misconception, got: {reply[:120]}"
+        )
 
     async def test_calc_error_diagnosed(self, real_llm, loader):
-        """A numerical calculation mistake should be diagnosed as calc error."""
         skill = _get_skill(loader, "error-diagnosis")
         subgraph = skill.build_subgraph(real_llm, [])
 
@@ -234,18 +234,17 @@ class TestErrorDiagnosisEssence:
             memory={
                 "l1_profile": "14 岁学生",
                 "l2_project_ctx": "物理项目",
-                "l3_knode_state": "当前 knode: 牛顿第二定律计算。"
-                    "正确：F=100*10=1000N",
+                "l3_knode_content": "当前 knode: 牛顿第二定律计算。正确：F=100*10=1000N",
                 "l4_semantic_recall": [],
                 "l5_skill_ctx": "",
             },
         ))
         reply = _ai_text(result)
-
-        # Should contain error_type marker in the response
-        has_marker = "error_type" in reply.lower() or result.get("error_type") is not None
-        assert has_marker, f"Should contain error_type diagnosis, got: {reply[:100]}"
+        # Should point at the arithmetic slip (计算 / 1000 / the wrong 10000).
         assert len(reply) > 10
+        assert ("计算" in reply or "1000" in reply or "10000" in reply), (
+            f"calc-error diagnosis should address the arithmetic, got: {reply[:120]}"
+        )
 
 
 # ===========================================================================
