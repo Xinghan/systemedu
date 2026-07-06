@@ -444,6 +444,7 @@ export interface WSMessage {
     | "session"          // spec 028: server 回告 session_id (新建/复用)
     | "skill"            // spec 028: agent 切了 skill
     | "tool_confirm"     // spec 028: 等学生确认工具调用
+    | "safety_blocked"   // spec 043 P5: tutor 回复被输出侧安全过滤拦截并替换
     | "escalation"       // spec 028: 安全护栏触发, 推送家长热线
     | "llm_fallback"     // spec 040: 用户自定义模型不可用, 已回退默认
   content?: string
@@ -461,6 +462,9 @@ export interface WSMessage {
   confirm_id?: string
   tool?: string
   description?: string
+  // safety_blocked (spec 043 P5: 输出侧过滤命中的类别 + 是否需升级)
+  categories?: string[]
+  escalate?: boolean
   // escalation
   severity?: string
   contact_info?: string

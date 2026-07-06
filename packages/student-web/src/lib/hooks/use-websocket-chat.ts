@@ -117,6 +117,15 @@ export function useWebSocketChat() {
           args: data.args,
           description: data.description,
         })
+      } else if (data.type === "safety_blocked") {
+        // spec 043 P5: tutor 的回复被输出侧安全过滤替换成了兜底文案(已作为
+        // chunk 到达)。严重类别(自伤/被索取隐私)额外提示找信任的大人; 一般
+        // 拦截不弹惊吓提示, 兜底文案本身已温和引导。
+        if (data.escalate) {
+          toast.warning("如果你遇到让你难受或危险的事，记得找信任的大人聊聊。", {
+            duration: 10000,
+          })
+        }
       } else if (data.type === "llm_fallback") {
         // spec 040: 用户自定义模型不可用, 已临时回退系统默认
         toast.warning("你的模型配置暂不可用，已临时用系统默认模型", {

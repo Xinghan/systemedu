@@ -312,6 +312,33 @@ def _interrupt_to_confirm(result: dict[str, Any]) -> dict[str, Any] | None:
     return _confirm_from_interrupt_value(value)
 
 
+# ---------------------------------------------------------------------------
+# Output-side safety (spec 043 P5 A6): the tutor's OWN final reply is checked
+# before it reaches the student. Symmetric to the input-side safety_gate.
+# ---------------------------------------------------------------------------
+def _safe_reply(reply: str) -> tuple[str, dict[str, Any] | None]:
+    """Return (reply_to_send, safety_blocked_event_or_None).
+
+    Runs the local output filter. On a block, swaps in SAFE_FALLBACK and returns
+    an event describing what was caught (for the frontend + audit). Never raises
+    — the filter fails open, so a normal reply always flows.
+    """
+    from systemedu.core.tutor.safety import SAFE_FALLBACK, check_output_safety
+
+    verdict = check_output_safety(reply)
+    if not verdict.blocked:
+        return reply, None
+    log.warning(
+        "output safety blocked a tutor reply: categories=%s", verdict.categories
+    )
+    event = {
+        "type": "safety_blocked",
+        "categories": verdict.categories,
+        "escalate": verdict.should_escalate,
+    }
+    return SAFE_FALLBACK, event
+
+
 async def invoke(payload: ChatPayload, user_id: str) -> dict[str, Any]:
     """Run one turn through the tutor graph (non-streaming)."""
     from systemedu.core.tutor.tools import push_tool_context
@@ -323,13 +350,15 @@ async def invoke(payload: ChatPayload, user_id: str) -> dict[str, Any]:
         result = await graph.ainvoke(state_input, config=config)
     ai_msgs = [m for m in result.get("messages", []) if isinstance(m, AIMessage)]
     reply = ai_msgs[-1].content if ai_msgs else ""
+    # Output-side safety (spec 043 P5 A6): swap a dangerous reply for the fallback.
+    reply, safety_event = _safe_reply(reply if isinstance(reply, str) else str(reply))
     # HITL note (spec 043 1C): a write tool interrupts the graph and `ainvoke`
     # returns with `__interrupt__` in the result instead of a final answer.
     # The non-streaming POST path can't do a pause→confirm→resume round-trip in
     # one request, so it surfaces the pending confirmation for the caller to
     # handle (the WS path in `stream()` drives the full interactive loop).
     confirm = _interrupt_to_confirm(result)
-    return {
+    out = {
         "response": reply,
         "active_skill": result.get("active_skill"),
         "skill_decision": result.get("skill_decision"),
@@ -337,6 +366,9 @@ async def invoke(payload: ChatPayload, user_id: str) -> dict[str, Any]:
         "_safety_triggered": result.get("_safety_triggered", False),
         "llm_fallback": fell_back,
     }
+    if safety_event is not None:
+        out["safety_blocked"] = safety_event
+    return out
 
 
 async def _stream_one_segment(
@@ -389,7 +421,14 @@ async def stream(
       {"type": "chunk", "content": str}
       {"type": "skill", "action": str, "target_skill": str, "reason": str}
       {"type": "tool_confirm", "confirm_id": str, "tool": str, "args": dict}
+      {"type": "safety_blocked", "categories": [str], "escalate": bool}
       {"type": "escalation", "severity": "urgent", "contact_info": str}
+
+    Output safety (spec 043 P5 A6): the student-facing reply is BUFFERED and run
+    through the output filter before emission; a dangerous reply is swapped for a
+    safe fallback and a `safety_blocked` event is emitted. This trades the
+    token-by-token typing effect for the guarantee that unsafe content never
+    leaves the backend.
 
     HITL (spec 043 1C): when a write tool interrupts the graph, we emit a
     `tool_confirm` event. If `resume_provider` is given (the WS handler passes
@@ -416,10 +455,20 @@ async def stream(
 
     # spec 043 P1: install ToolContext for the whole graph run so skill
     # tool loops can execute (require_tool_context raises otherwise).
+    #
+    # Output-side safety (spec 043 P5 A6) forces a design choice: to guarantee a
+    # dangerous reply never reaches the student, the final reply must be checked
+    # BEFORE it leaves the backend. So we BUFFER each segment's student-facing
+    # tokens instead of streaming them live, run check_output_safety on the
+    # assembled text, then emit it as one chunk (or the fallback). Mid-turn
+    # control events (tool_confirm) are still emitted immediately — they aren't
+    # the tutor's spoken reply.
     with push_tool_context(_make_tool_context(payload, user_id)):
         while True:
+            buffered: list[str] = []
             async for chunk_event in _stream_one_segment(graph, graph_input, config):
-                yield chunk_event
+                if chunk_event.get("type") == "chunk" and chunk_event.get("content"):
+                    buffered.append(chunk_event["content"])
 
             # After a segment, either the graph finished or it interrupted for a
             # write-tool confirmation. Read the persisted state to tell which.
@@ -429,6 +478,13 @@ async def stream(
             )
 
             if interrupted:
+                # Any partial pre-interrupt text still gets safety-checked before
+                # it's shown, then the confirm card follows.
+                if buffered:
+                    safe_text, safety_event = _safe_reply("".join(buffered))
+                    yield {"type": "chunk", "content": safe_text}
+                    if safety_event is not None:
+                        yield safety_event
                 confirm = _confirm_from_interrupt_value(state.interrupts[0].value)
                 if confirm:
                     yield {"type": "tool_confirm", **confirm}
@@ -440,7 +496,15 @@ async def stream(
                 graph_input = Command(resume=_decision_to_resume(decision))
                 continue  # stream the continuation segment
 
-            # Graph finished this turn — emit trailer events from final state.
+            # Graph finished this turn — safety-check the assembled reply, then
+            # emit it (or the fallback) as one chunk.
+            if buffered:
+                safe_text, safety_event = _safe_reply("".join(buffered))
+                yield {"type": "chunk", "content": safe_text}
+                if safety_event is not None:
+                    yield safety_event
+
+            # Trailer events from final state.
             final_state = getattr(state, "values", None) or {}
             skill_decision = final_state.get("skill_decision") or {}
             if skill_decision:

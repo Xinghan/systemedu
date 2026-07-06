@@ -174,6 +174,34 @@ socratic 硬状态机 vs simple/tool-loop skill 运行时行为差异, 真实 Qw
 
 ---
 
+## Phase 5 — 儿童安全（原后置，2026-07-06 起第一片）
+
+红队把"Safety 输出侧 0 过滤"列为儿童产品最大风险(critical)。本片先把输出侧从 0→1
+(本地规则层)，语义 judge / 阿里云审核作为第二层后续叠加。
+
+### 5A. 输出侧过滤（A6 第一片）
+
+- [x] T5.1 `core/tutor/safety/output_filter.py`：纯函数 `check_output_safety(text)->OutputSafetyVerdict`
+  本地规则层，6 类危险模式(self_harm/weapons_explosives/dangerous_procedure/adult_sexual/
+  solicit_pii/jailbreak_leak)。**键在"可操作的伤害"形态(方法/指令/索取)而非敏感名词**，避免误伤
+  教学内容(摩擦力/化学反应/历史暴力讨论/含能材料原理 均不拦)。self_harm/solicit_pii 触发
+  escalation。`SAFE_FALLBACK` 兜底文案(对称输入侧)。**异常 fail-open**(放行+log, 检查器崩了不能
+  拦所有回复)。judge 挂点预留未实现。
+- [x] T5.2 `tutor_runner`：**决策——缓冲学生可见最终回复+出口前检查**(流式逐 token 会让危险内容
+  离开后端才拦)。stream() 攒完整段→check_output_safety→通过发原文/命中发 SAFE_FALLBACK +
+  `safety_blocked` 事件(不发原文);中间态(tool_confirm)照常即时发。invoke() 同样检查。
+  代价:失去逐字打字机效果(换成整段出现)——儿童安全优先于打字机效果。
+- [x] T5.3 前端 `use-websocket-chat`：处理 `safety_blocked` 事件(escalate 类提示找信任大人;
+  一般拦截不弹惊吓,兜底文案已温和引导);types/api.ts 补事件类型。
+- [x] T5.4 测试：`test_output_filter`(6 类命中 + 11 条教学内容不误伤 + escalation + fail-open, 32 例);
+  `test_tutor_runner_output_safety`(stream/invoke 危险替换+正常放行+分段危险整条替换不泄漏, 5 例);
+  真实 Qwen `scenario_output_safety`(真实教学回复不误拦 + 合成危险内容被拦, PASS)。
+
+**P5 验收 A6(第一片)**：输出侧危险内容在离开后端前被拦并替换(本地规则层);真实 Qwen 教学回复
+0 误伤。语义 judge(Qwen3Guard)/阿里云审核/越狱红队集≥95%/escalation 落库 = 后续第二片。
+
+---
+
 ## 依赖变更（本轮）
 
 ```toml
