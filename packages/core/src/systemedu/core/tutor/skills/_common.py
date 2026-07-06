@@ -12,6 +12,8 @@ Tool integration lands in Phase 4 once `@tutor_tool` exists.
 
 from __future__ import annotations
 
+import logging
+import re
 from typing import Annotated, Any, TypedDict
 
 from langchain_core.messages import (
@@ -26,6 +28,8 @@ from langgraph.graph.message import add_messages
 from langgraph.prebuilt import ToolNode, tools_condition
 
 from .base import SkillBase
+
+log = logging.getLogger(__name__)
 
 
 class SimpleSkillState(TypedDict, total=False):
@@ -64,6 +68,72 @@ def render_memory_block(memory: dict[str, Any] | None) -> str:
     return "\n\n".join(parts) if parts else "(memory empty)"
 
 
+# ---------------------------------------------------------------------------
+# Content grounding (spec 043 T2.10 / T2.11)
+# ---------------------------------------------------------------------------
+# Knowledge-giving skills (they assert facts) append this to their prompt so the
+# model grounds knowledge claims in the injected course content instead of
+# free-styling — a child-safety "don't make things up" guard. Question-asking
+# skills (socratic / pbl / reflection) don't get it: they pose questions, not
+# assertions, so a citation demand there is noise.
+GROUNDING_INSTRUCTION = (
+    "\n\n## 内容依据（重要）\n"
+    "1. 讲知识点时只依据上面【当前课程内容】里给出的信息，不要凭空编造课程里没有的"
+    "事实、数字或结论。\n"
+    "2. 如果课程内容里没有回答学生所需的依据，就如实说\"这一节的材料里还没有讲到\"，"
+    "并回到你能确定的部分，不要猜。\n"
+    "3. 只在【当前课程内容】里确实出现过某个知识节点编号（如 M04）时才引用它；"
+    "不要编造不存在的小节编号。"
+)
+
+# knode-id token: an uppercase letter (module prefix) followed by digits, e.g.
+# M04 / S3 / P12. Loose enough to catch fabricated refs, tight enough to skip
+# ordinary words.
+_KNODE_ID_RE = re.compile(r"\b([A-Z]\d{1,3})\b")
+
+
+def _memory_grounding_text(memory: dict[str, Any] | None) -> str:
+    """The injected content a grounded reply is allowed to cite from."""
+    if not memory:
+        return ""
+    parts = [
+        str(memory.get("l3_knode_content") or ""),
+        str(memory.get("l3_knode_state") or ""),
+        str(memory.get("l2_project_ctx") or ""),
+    ]
+    return "\n".join(p for p in parts if p)
+
+
+def check_knode_grounding(reply: str, memory: dict[str, Any] | None) -> list[str]:
+    """Return knode-id tokens the reply cites that are NOT in injected content.
+
+    A lightweight hallucination signal (spec 043 T2.11): if the tutor names a
+    lesson section like "M07" that never appeared in the memory it was given, it
+    likely fabricated the reference. Non-empty result → suspicious. Never raises.
+    """
+    if not reply:
+        return []
+    cited = set(_KNODE_ID_RE.findall(reply))
+    if not cited:
+        return []
+    grounded = _memory_grounding_text(memory)
+    return sorted(c for c in cited if c not in grounded)
+
+
+def warn_if_ungrounded(reply: str, memory: dict[str, Any] | None, *, skill: str) -> None:
+    """Log a warning when a reply cites knode ids absent from injected content.
+
+    Flagging only (not blocking / retry) — keeps the loop simple; the signal can
+    later feed an eval or a retry policy.
+    """
+    bad = check_knode_grounding(reply, memory)
+    if bad:
+        log.warning(
+            "grounding: skill=%s cited knode ids not in injected content: %s",
+            skill, ", ".join(bad),
+        )
+
+
 def _last_student_message(messages: list[BaseMessage]) -> str:
     for m in reversed(messages):
         if isinstance(m, HumanMessage):
@@ -91,21 +161,31 @@ def build_simple_skill_subgraph(
     llm: Any,
     *,
     summary_prefix: str = "",
+    ground_knowledge: bool = False,
 ):
     """Generic single-node subgraph: LLM-in → AIMessage-out.
 
     The LLM receives the skill's SKILL.md body as system prompt, plus
     the rendered memory + last student message as the user block.
+
+    `ground_knowledge` (spec 043 T2.10/11): append the grounding instruction to
+    the system prompt and warn when the reply cites knode ids not in memory.
     """
 
     async def generate_response(state: SimpleSkillState) -> dict:
         messages = state.get("messages") or []
-        memory_block = render_memory_block(state.get("memory"))
+        memory = state.get("memory")
+        memory_block = render_memory_block(memory)
         user_block = (
             f"{memory_block}\n\n"
             f"## 当前学生消息\n{_last_student_message(messages)}"
         )
-        reply = await call_llm(llm, skill.config.body or skill.config.description, user_block)
+        system = skill.config.body or skill.config.description
+        if ground_knowledge:
+            system = system + GROUNDING_INSTRUCTION
+        reply = await call_llm(llm, system, user_block)
+        if ground_knowledge:
+            warn_if_ungrounded(reply, memory, skill=skill.config.name)
         turn = (state.get("turn_count") or 0) + 1
         summary = f"{summary_prefix}turn={turn}" if summary_prefix else f"turn={turn}"
         return {
@@ -256,6 +336,7 @@ def build_agent_subgraph(
     *,
     summary_prefix: str = "",
     run_limit: int = 8,
+    ground_knowledge: bool = False,
 ):
     """Build a `create_agent`-backed tool-loop subgraph for a skill.
 
@@ -272,10 +353,15 @@ def build_agent_subgraph(
         tools: resolved `BaseTool` objects (already whitelist-filtered).
         summary_prefix: prefix for the L5 `summary` line.
         run_limit: max tool calls per run before the loop is force-stopped.
+        ground_knowledge: for knowledge-giving skills (spec 043 T2.10/11) — append
+            the grounding instruction to the prompt and warn when a final reply
+            cites knode ids absent from the injected content.
     """
     bind = getattr(llm, "bind_tools", None)
     if not tools or not callable(bind):
-        return build_simple_skill_subgraph(skill, llm, summary_prefix=summary_prefix)
+        return build_simple_skill_subgraph(
+            skill, llm, summary_prefix=summary_prefix, ground_knowledge=ground_knowledge,
+        )
 
     from langchain.agents import create_agent
     from langchain.agents.middleware import (
@@ -310,10 +396,12 @@ def build_agent_subgraph(
         # dynamic prompt. `total=False` so callers may omit it.
         memory: dict[str, Any]
 
+    prompt_base = body + (GROUNDING_INSTRUCTION if ground_knowledge else "")
+
     @dynamic_prompt
     def _memory_prompt(request: ModelRequest) -> str:
         memory_block = render_memory_block(request.state.get("memory"))
-        return f"{body}\n\n## 学生上下文\n{memory_block}"
+        return f"{prompt_base}\n\n## 学生上下文\n{memory_block}"
 
     @wrap_model_call
     async def _spotlight_and_params(
@@ -327,7 +415,19 @@ def build_agent_subgraph(
         # bind_tools via model_settings (spec 043 T1.3).
         if bind_kwargs:
             request.model_settings.update(bind_kwargs)
-        return await handler(request)
+        response = await handler(request)
+        # Grounding check (T2.11): only inspect a FINAL plain-text answer — skip
+        # intermediate tool-calling turns. Flag-only; never blocks the reply.
+        if ground_knowledge:
+            ai = getattr(response, "result", None)
+            msgs = ai if isinstance(ai, list) else ([ai] if ai is not None else [])
+            for m in msgs:
+                if isinstance(m, AIMessage) and not getattr(m, "tool_calls", None):
+                    text = m.content if isinstance(m.content, str) else str(m.content)
+                    warn_if_ungrounded(
+                        text, request.state.get("memory"), skill=skill.config.name,
+                    )
+        return response
 
     middleware: list[Any] = [
         _memory_prompt,
@@ -359,4 +459,7 @@ __all__ = [
     "build_simple_skill_subgraph",
     "build_tool_loop_subgraph",
     "build_agent_subgraph",
+    "GROUNDING_INSTRUCTION",
+    "check_knode_grounding",
+    "warn_if_ungrounded",
 ]

@@ -362,6 +362,119 @@ async def scenario_formative_reference_error(llm) -> bool:
     return ok
 
 
+def _load_skill(name: str):
+    """Load a real built-in skill by name from the skills dir."""
+    from pathlib import Path
+
+    from systemedu.core.tutor.skills import SkillLoader
+
+    root = (
+        Path(__file__).resolve().parents[3]
+        / "packages" / "core" / "src" / "systemedu" / "core" / "tutor" / "skills"
+    )
+    loader = SkillLoader([root])
+    loader.scan()
+    return loader.get(name)
+
+
+async def scenario_socratic_state_machine(llm) -> bool:
+    """(6) T2.6: real socratic state machine behaves DIFFERENTLY per state.
+
+    - exploring reply → asks a question (no answer given).
+    - 2x stuck → scaffold_down: a genuinely easier, helpful reply, and the
+      internal routing hint is NOT leaked to the student (it lives in skill_state).
+    Proves the red-team "6 段文案同构" critique is answered: same skill, different
+    runtime behaviour driven by LLM-classified state.
+    """
+    print("\n" + "=" * 60)
+    print("SCENARIO 6 — T2.6: socratic 状态机分支行为可区分 + 不泄漏路由 hint")
+    skill = _load_skill("socratic-questioning")
+    if skill is None:
+        print("  socratic skill not found => FAIL")
+        return False
+    sub = skill.build_subgraph(llm, [])
+    mem = {"l1_profile": "12 岁", "l3_knode_content": "当前 knode: 牛顿第三定律。"}
+
+    # (a) exploring → a question, not an answer
+    out_a = await sub.ainvoke({
+        "messages": [HumanMessage(content="我觉得推力可能和火箭喷气有关，但说不清")],
+        "memory": mem,
+    })
+    reply_a = _fmt(out_a["messages"])[2][-1].content if _fmt(out_a["messages"])[2] else ""
+    prog_a = out_a.get("progress")
+    asks_question = "?" in reply_a or "？" in reply_a
+    print(f"  (a) exploring: progress={prog_a}, 是提问={asks_question}")
+    print(f"      回复: {reply_a[:120]}")
+
+    # (b) 2x stuck → scaffold_down, real help, no leaked routing hint
+    out_b = await sub.ainvoke({
+        "messages": [HumanMessage(content="完全不懂，一点头绪都没有")],
+        "memory": mem,
+        "stuck_streak": 1,  # this reply makes it 2
+    })
+    reply_b = _fmt(out_b["messages"])[2][-1].content if _fmt(out_b["messages"])[2] else ""
+    prog_b = out_b.get("progress")
+    hint_b = out_b.get("escalation_hint")
+    leaked = ("建议切" in reply_b) or ("scaffolding" in reply_b) or ("direct-instruction" in reply_b)
+    hint_in_state = bool(hint_b)
+    real_help = len(reply_b.strip()) > 15
+    print(f"  (b) 2x stuck: progress={prog_b}, hint在state={hint_in_state}, 泄漏给学生={leaked}")
+    print(f"      回复: {reply_b[:140]}")
+
+    ok = (prog_a == "exploring") and asks_question and (prog_b == "stuck") \
+        and hint_in_state and (not leaked) and real_help
+    print(f"  => {'PASS' if ok else 'FAIL'}")
+    return ok
+
+
+async def scenario_grounding_no_fabrication(llm) -> bool:
+    """(7) T2.10/11: a grounded knowledge skill, asked about something NOT in the
+    injected content, must not fabricate a knode id / made-up fact — it should
+    say the material doesn't cover it (or answer only from given content).
+    """
+    print("\n" + "=" * 60)
+    print("SCENARIO 7 — T2.10/11: 内容 grounding — 材料没讲的不编造(含假 knode id)")
+    from systemedu.core.tutor.skills._common import check_knode_grounding
+
+    skill = _load_skill("direct-instruction")
+    if skill is None:
+        print("  direct-instruction skill not found => FAIL")
+        return False
+    # empty tools → simple grounded reply path (no dependence on tool calls)
+    sub = skill.build_subgraph(llm, [])
+    mem = {
+        "l1_profile": "12 岁",
+        # content only covers PM2.5 basics; the question asks something outside it
+        "l3_knode_content": "当前 knode M04: PM2.5 是直径<=2.5微米的颗粒物, 会进入肺。",
+    }
+    out = await sub.ainvoke({
+        "messages": [HumanMessage(content="那臭氧层空洞是怎么形成的？是不是第 M12 节讲的？")],
+        "memory": mem,
+    })
+    reply = _fmt(out["messages"])[2][-1].content if _fmt(out["messages"])[2] else ""
+    # The desired behaviour is: don't AFFIRM out-of-scope content. Admitting
+    # "the material doesn't cover 臭氧层/M12" is correct even though the denial
+    # echoes "M12" — so the pass signal is "admits not covered", not the literal
+    # absence of the token. (check_knode_grounding is the offline flag; here we
+    # judge the pedagogical behaviour.)
+    admits_not_covered = any(
+        k in reply for k in ("没有讲", "没讲", "还没", "没讲到", "还没有讲", "材料里", "这一节")
+    )
+    # Must NOT fabricate a mechanism for the ozone hole (out of scope). A safe
+    # reply either declines or pivots back to PM2.5; an unsafe one explains ozone
+    # chemistry (氯氟烃/紫外线) as if it were in the lesson.
+    fabricated_ozone = any(k in reply for k in ("氯氟烃", "氟利昂", "紫外线分解", "臭氧分子被"))
+    answered = bool(reply.strip())
+    print(f"  有回答: {answered}")
+    print(f"  如实说材料没讲: {admits_not_covered}")
+    print(f"  未编造臭氧机理(越界): {not fabricated_ozone}")
+    print(f"  (offline check_knode_grounding: {check_knode_grounding(reply, mem)})")
+    print(f"  回复: {reply[:200]}")
+    ok = answered and admits_not_covered and (not fabricated_ozone)
+    print(f"  => {'PASS' if ok else 'FAIL'}")
+    return ok
+
+
 async def main():
     try:
         # Use the configured default provider (thinking = qwen3.7-max),
@@ -376,11 +489,13 @@ async def main():
     r3 = await scenario_create_agent(llm)
     r4 = await scenario_hitl_write_tool(llm)
     r5 = await scenario_formative_reference_error(llm)
+    r6 = await scenario_socratic_state_machine(llm)
+    r7 = await scenario_grounding_no_fabrication(llm)
 
     print("\n" + "=" * 60)
-    hard = r1 and r3 and r4 and r5
+    hard = r1 and r3 and r4 and r5 and r6 and r7
     print("OVERALL:", "PASS" if hard else "FAIL",
-          "(功能 + create_agent + HITL + 形成性引用错题 为硬门禁; 对比场景为信息性)")
+          "(功能 + create_agent + HITL + 形成性 + socratic状态机 + grounding 为硬门禁; 对比场景信息性)")
     return 0 if hard else 1
 
 

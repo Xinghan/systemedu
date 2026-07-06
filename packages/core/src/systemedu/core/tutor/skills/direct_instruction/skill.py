@@ -22,7 +22,9 @@ from systemedu.core.tutor.skills.base import SkillBase
 
 class DirectInstructionSkill(SkillBase):
     def build_subgraph(self, llm: Any, tools: list[Any]) -> Any:
-        return build_agent_subgraph(self, llm, tools, summary_prefix="direct ")
+        return build_agent_subgraph(
+            self, llm, tools, summary_prefix="direct ", ground_knowledge=True,
+        )
 
 
 SKILL_CLASS = DirectInstructionSkill

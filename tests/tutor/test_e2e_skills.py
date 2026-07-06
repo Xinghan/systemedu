@@ -136,13 +136,13 @@ class TestSocraticEssence:
                 f"Got: {text[:80]}"
             )
 
-    async def test_stuck_detection_triggers_escalation(self, real_llm, loader):
-        """When student says '不知道' twice, stuck_streak >= 2 triggers
-        set_escalation node instead of ask_question."""
+    async def test_stuck_detection_scaffolds_down_without_leaking_hint(self, real_llm, loader):
+        """Two rounds stuck (stuck_streak>=2) → scaffold_down: escalation_hint is
+        set in skill_state for the router, but the STUDENT-facing message must be a
+        real helpful reply, never the internal routing hint (spec 043 T2.6 fix)."""
         skill = _get_skill(loader, "socratic-questioning")
         subgraph = skill.build_subgraph(real_llm, [])
 
-        # Simulate stuck_streak = 1, student says "不知道" again
         result = await subgraph.ainvoke(_base_state(
             "不知道啊，完全没头绪",
             turn_count=2,
@@ -153,6 +153,10 @@ class TestSocraticEssence:
         assert result.get("escalation_hint") is not None
         assert "scaffolding" in (result.get("escalation_hint") or "").lower() or \
                "direct" in (result.get("escalation_hint") or "").lower()
+        # The routing hint must NOT bleed into what the student sees.
+        reply = _ai_text(result)
+        assert "建议切" not in reply and "scaffolding" not in reply
+        assert len(reply) > 10, "student should get a real scaffolded reply"
 
     async def test_early_exit_on_demand(self, real_llm, loader):
         """When student says '直接告诉我', progress becomes 'breakthrough'

@@ -24,7 +24,9 @@ from systemedu.core.tutor.skills.base import SkillBase
 
 class ErrorDiagnosisSkill(SkillBase):
     def build_subgraph(self, llm: Any, tools: list[Any]) -> Any:
-        return build_agent_subgraph(self, llm, tools, summary_prefix="error-diag ")
+        return build_agent_subgraph(
+            self, llm, tools, summary_prefix="error-diag ", ground_knowledge=True,
+        )
 
 
 SKILL_CLASS = ErrorDiagnosisSkill

@@ -97,20 +97,34 @@ Status: draft (2026-07-03) · 重点 P1→P2→P4→P3；P5 安全合规后置�
 
 ### 2B. Skill 真差异化（回应红队「6 段文案」批评）
 
-- [ ] T2.6 `socratic_questioning` 升级为多节点状态机：追问链状态（questions_asked / breakthrough 检测 → 升降脚手架），override `build_subgraph`
+- [x] T2.6 `socratic_questioning` 多节点状态机加固：assess→(ask_question|scaffold_down)。
+  **breakthrough/stuck 检测从 keyword 换成 LLM 分类**(`_llm_classify`, keyword 兜底; "直接告诉我"
+  硬 fast-path)；**修掉旧缺陷**——原 set_escalation 把内部 routing hint 当学生消息发出, 现
+  scaffold_down 给学生**真正的降阶帮助**(先给小例子+线索再问小问题), escalation_hint 只进
+  skill_state 供 router **不泄漏给学生**；升降脚手架显式(单轮卡→拆更小/类比, 突破→收敛)。
 - [~] T2.7 `error_diagnosis` 三段（诊断→验证猜想调 grade_submission→取下一题 get_practice_exercises）：
   **走 tool 循环(build_agent_subgraph) 实现而非硬状态机**（2026-07-06 定, 避免过度工程 cf T2.8）——
   三段靠 SKILL.md prompt 引导 + 真实工具调用, 已随 T2.1 落地并真实 Qwen 验证。若后续证明 prompt
   引导不稳再升硬状态机。
-- [ ] T2.8 其余 skill 保持 simple 子图（避免过度工程）；socratic 是唯一计划的硬状态机(T2.6)
-- [ ] T2.9 测试：socratic/error_diagnosis 的状态机行为单测；真实对话对比 simple skill 的行为差异
+- [x] T2.8 其余 skill 保持 simple/tool-loop 子图（避免过度工程）；socratic 是唯一硬状态机。
+  pbl_driving_question/reflection_prompt 仍 simple；direct_instruction/error_diagnosis/scaffolding
+  走 tool 循环。
+- [x] T2.9 测试：socratic 状态机行为单测(assess LLM 分类 + keyword 兜底 + scaffold_down 不泄漏 hint,
+  test_builtin_skills 8 例)；grounding 单测(test_grounding 12 例)；真实 Qwen `scenario_socratic_
+  state_machine`(exploring 提问 vs 2x-stuck scaffold_down 真帮助+不泄漏) + `scenario_grounding_
+  no_fabrication`(材料没讲不编造臭氧机理) 均 PASS。
 
 ### 2C. 内容 grounding
 
-- [ ] T2.10 skill prompt 加引用约束：知识性回答须标注来源 knode 段落
-- [ ] T2.11 简单幻觉检测：校验所引 knode id 真实存在于 L3 注入内容（不存在则标记/重试）
+- [x] T2.10 skill prompt 加引用约束：`GROUNDING_INSTRUCTION` 追加到知识性 skill(direct_instruction/
+  scaffolding/error_diagnosis, `ground_knowledge=True`)的 prompt——只依据【当前课程内容】、没讲的
+  如实说没讲、不编造小节编号。问答类 skill(socratic/pbl/reflection)不加(它们提问非断言)。
+- [x] T2.11 简单幻觉检测：`check_knode_grounding` 抽回答里的 knode-id token(如 M07)校验是否在 L3
+  注入内容里, 不在则 `warn_if_ungrounded` 记 WARNING(flag-only 不阻断/重试, 后续可喂 eval)。
+  接进 build_agent_subgraph 的 wrap_model_call(只查最终纯文本回复)+ simple 子图。
 
-**P2 验收 A2+A3**：答错后下一轮引用判分结果并取下一题；≥2 skill 状态机行为可区分。
+**P2 验收 A2+A3**：答错后下一轮引用判分结果并取下一题 (A2 ✓)；≥2 skill 行为可区分 (A3 ✓:
+socratic 硬状态机 vs simple/tool-loop skill 运行时行为差异, 真实 Qwen 佐证)。
 
 ---
 

@@ -137,7 +137,8 @@ class TestScenario1_NewSessionFullChain:
             router_replies=[
                 _router_reply("switch", "socratic-questioning", "first turn"),
             ],
-            skill_replies=["你觉得摩擦力和什么有关？"],
+            # socratic is a state machine: assess (classification) then ask_question.
+            skill_replies=["exploring", "你觉得摩擦力和什么有关？"],
         )
         graph = build_tutor_graph(loader=loader, llm=llm)
         result = await graph.ainvoke(_initial_state())
@@ -206,7 +207,13 @@ class TestScenario3_CheckpointResume:
                 _router_reply("continue", "socratic-questioning", "t3"),
                 _router_reply("continue", "socratic-questioning", "t4"),
             ],
-            skill_replies=["问1?", "问2?", "问3?", "问4?"],
+            # socratic state machine: each turn = assess (classification) + question.
+            skill_replies=[
+                "exploring", "问1?",
+                "exploring", "问2?",
+                "exploring", "问3?",
+                "exploring", "问4?",
+            ],
         )
 
         async with get_checkpointer(cfg) as saver:

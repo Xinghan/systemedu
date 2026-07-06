@@ -111,8 +111,9 @@ class TestSocraticQuestioning:
 
     @pytest.mark.asyncio
     async def test_exploring_asks_question(self, loader):
+        # assess LLM call classifies "exploring", then ask_question asks.
         s = self._skill(loader)
-        llm = FakeLLM(["你觉得这个力的方向可能是哪边？"])
+        llm = FakeLLM(["exploring", "你觉得这个力的方向可能是哪边？"])
         graph = s.build_subgraph(llm, [])
         result = await graph.ainvoke(
             _state(messages=[HumanMessage(content="我试过但不确定")])
@@ -122,13 +123,13 @@ class TestSocraticQuestioning:
         assert len(result["questions_asked"]) == 1
         assert "方向" in result["questions_asked"][0]
         assert result["stuck_streak"] == 0
-        # Single question issued (AIMessage appended)
         ai_msgs = [m for m in result["messages"] if isinstance(m, AIMessage)]
         assert len(ai_msgs) == 1
 
     @pytest.mark.asyncio
     async def test_early_exit_on_direct_answer_request(self, loader):
-        """'直接告诉我' marks progress=breakthrough (exit-worthy)."""
+        """'直接告诉我' is a hard exit: progress=breakthrough WITHOUT spending an
+        assess LLM call (deterministic fast-path)."""
         s = self._skill(loader)
         llm = FakeLLM(["好，让我们直接看结论。"])
         graph = s.build_subgraph(llm, [])
@@ -136,38 +137,63 @@ class TestSocraticQuestioning:
             _state(messages=[HumanMessage(content="别问了，直接告诉我答案")])
         )
         assert result["progress"] == "breakthrough"
-        assert len(llm.calls) == 1  # still ran LLM once before exit
+        # assess did NOT call the LLM (fast-path); only ask_question did.
+        assert len(llm.calls) == 1
+        assert "收敛" in llm.calls[0][1]  # breakthrough → converge ladder
 
     @pytest.mark.asyncio
-    async def test_stuck_streak_increments(self, loader):
-        """One "不知道" → stuck_streak=1, stays exploring; follow-up LLM call still fires."""
+    async def test_llm_classifies_stuck_lowers_scaffold(self, loader):
+        """LLM says 'stuck' (1st round) → stays in ask_question but the prompt
+        carries the scaffold-down hint. Proves classification is LLM-driven, not
+        just keyword: the student text has no stuck keyword."""
         s = self._skill(loader)
-        llm = FakeLLM(["换个角度：如果这个球不动呢？"])
+        llm = FakeLLM(["stuck", "换个角度：如果这个球不动呢？"])
+        graph = s.build_subgraph(llm, [])
+        result = await graph.ainvoke(
+            _state(messages=[HumanMessage(content="嗯……那个……大概是这样吧")])
+        )
+        assert result["stuck_streak"] == 1
+        assert result["progress"] == "exploring"  # single stuck stays exploring
+        # ask_question's 2nd LLM call (index 1) carries the down-scaffold hint
+        assert "降阶" in llm.calls[1][1]
+
+    @pytest.mark.asyncio
+    async def test_keyword_fallback_when_llm_classify_garbage(self, loader):
+        """If the assess LLM returns an unparseable label, fall back to keywords:
+        '我不知道' → stuck."""
+        s = self._skill(loader)
+        llm = FakeLLM(["<garbage-not-a-label>", "换个角度：如果这个球不动呢？"])
         graph = s.build_subgraph(llm, [])
         result = await graph.ainvoke(
             _state(messages=[HumanMessage(content="我不知道")])
         )
         assert result["stuck_streak"] == 1
-        assert result["progress"] == "exploring"
-        # The LLM prompt should carry the difficulty-down hint
-        assert "卡壳" in llm.calls[0][1] or "降低" in llm.calls[0][1]
 
     @pytest.mark.asyncio
-    async def test_two_rounds_stuck_triggers_escalation(self, loader):
-        """stuck_streak=1 coming in + new 'i don't know' → stuck → escalation node."""
+    async def test_two_rounds_stuck_scaffolds_down_without_leaking_hint(self, loader):
+        """stuck_streak=1 in + LLM says stuck → scaffold_down: the student gets a
+        REAL easier prompt (LLM-generated), and the routing escalation_hint is in
+        skill_state ONLY (never in the student message)."""
         s = self._skill(loader)
-        llm = FakeLLM([])  # escalation path doesn't call LLM
+        llm = FakeLLM(["stuck", "别急，我先给你个例子：一个静止的球受力平衡。那你说，它动不动？"])
         graph = s.build_subgraph(llm, [])
         result = await graph.ainvoke(
-            _state(
-                messages=[HumanMessage(content="还是不会")],
-                stuck_streak=1,
-            )
+            _state(messages=[HumanMessage(content="还是不会")], stuck_streak=1)
         )
         assert result["progress"] == "stuck"
+        assert result["last_step"] == "scaffold_down"
+        # Router-facing hint present in skill_state
         assert result["escalation_hint"] is not None
         assert "scaffolding" in result["escalation_hint"]
-        assert result["last_step"] == "set_escalation"
+        # ...but the STUDENT-facing message must NOT contain the routing hint.
+        ai_msgs = [m for m in result["messages"] if isinstance(m, AIMessage)]
+        assert len(ai_msgs) == 1
+        student_msg = ai_msgs[0].content
+        assert "建议切" not in student_msg
+        assert "scaffolding" not in student_msg
+        assert "direct-instruction" not in student_msg
+        # It IS a real helpful reply (the scripted example)
+        assert "例子" in student_msg or "球" in student_msg
 
     def test_summarize_state_mentions_progress(self, loader):
         s = self._skill(loader)
