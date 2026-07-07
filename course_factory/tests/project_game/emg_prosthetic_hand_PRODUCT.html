@@ -1,0 +1,763 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=1280, initial-scale=1">
+<title>我的仿生手 / My Bionic Hand</title>
+<style>
+  :root{
+    --bg-0: oklch(0.15 0.03 265);
+    --bg-1: oklch(0.19 0.035 265);
+    --bg-2: oklch(0.23 0.04 265);
+    --bg-3: oklch(0.29 0.045 265);
+    --line: oklch(0.38 0.05 265 / 0.4);
+    --line-strong: oklch(0.58 0.08 265 / 0.55);
+    --fg: oklch(0.97 0.01 265);
+    --fg-dim: oklch(0.78 0.02 265);
+    --fg-mute: oklch(0.58 0.03 265);
+    --gold: oklch(0.85 0.14 85);
+    /* ROB-10 Living Prosthesis */
+    --myo:    oklch(0.68 0.18 22);   /* muscle red — effort/intent */
+    --sinew:  oklch(0.80 0.13 48);   /* tendon orange — hand */
+    --neural: oklch(0.74 0.14 232);  /* neural blue — UI */
+    --force:  oklch(0.82 0.16 142);  /* force green — grip/safe */
+    --dawn:   oklch(0.94 0.05 48);
+    --warnc:  oklch(0.82 0.15 85);
+    --crush:  oklch(0.62 0.21 25);
+    --mono: 'JetBrains Mono','SF Mono',ui-monospace,Menlo,Consolas,monospace;
+    --sans: 'Inter','PingFang SC','Microsoft YaHei',system-ui,sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{background:var(--bg-0); color:var(--fg); font-family:var(--sans); width:100vw; height:100vh; overflow:hidden; display:flex; flex-direction:column;}
+  .hidden{display:none !important;}
+
+  /* top HUD */
+  .hud{flex:0 0 auto; display:flex; align-items:center; gap:14px; padding:11px 16px; border-bottom:1.5px solid var(--line-strong); background:var(--bg-1);}
+  .hud .brand{font-family:var(--mono); font-size:12px; color:var(--fg-mute); line-height:1.35;}
+  .hud .brand b{display:block; color:var(--myo); font-size:15px; letter-spacing:.03em;}
+  .hud .tagline{font-size:12px; color:var(--fg-dim); flex:1; min-width:0;}
+  .hud .tagline b{color:var(--sinew);}
+  #langBtn{font-family:var(--mono); font-size:11px; cursor:pointer; background:var(--bg-3); color:var(--fg); border:1.5px solid var(--line-strong); padding:5px 9px; box-shadow:3px 3px 0 var(--bg-0);}
+  #langBtn:active{transform:translate(2px,2px); box-shadow:1px 1px 0 var(--bg-0);}
+  .hud-chip{font-family:var(--mono); font-size:10px; padding:5px 9px; border:1.5px solid var(--line-strong); background:var(--bg-2); color:var(--fg-dim); display:flex; flex-direction:column; gap:2px; min-width:84px;}
+  .hud-chip .ck{color:var(--fg-mute); font-size:9px; letter-spacing:.05em;}
+  .hud-chip .cv{font-size:13px; color:var(--fg);}
+  .hud-chip.hot .cv{color:var(--myo);} .hud-chip.grip .cv{color:var(--force);}
+
+  /* body: left controls | stage | right info */
+  .wrap{flex:1; min-height:0; display:flex;}
+  .col-left{flex:0 0 216px; background:var(--bg-1); border-right:1.5px solid var(--line-strong); display:flex; flex-direction:column; padding:14px 13px; gap:13px; overflow-y:auto;}
+  .col-stage{flex:1; min-width:0; display:flex; flex-direction:column; position:relative;}
+  .col-right{flex:0 0 244px; background:var(--bg-1); border-left:1.5px solid var(--line-strong); display:flex; flex-direction:column; padding:14px 13px; gap:12px; overflow-y:auto;}
+
+  .side-h{font-family:var(--mono); font-size:10px; letter-spacing:.08em; color:var(--neural); text-transform:uppercase; margin-bottom:7px;}
+
+  /* clench control */
+  .clench-btn{font-family:var(--mono); font-size:14px; cursor:pointer; user-select:none; background:var(--bg-3); color:var(--fg-dim); border:1.5px solid var(--line-strong); padding:16px 12px; box-shadow:4px 4px 0 var(--bg-0); text-align:center; line-height:1.3; letter-spacing:.03em;}
+  .clench-btn.active{background:oklch(0.68 0.18 22 / .32); border-color:var(--myo); color:var(--dawn); box-shadow:1px 1px 0 var(--bg-0); transform:translate(3px,3px);}
+  .clench-sub{font-family:var(--mono); font-size:9px; color:var(--fg-mute); text-align:center; margin-top:5px;}
+  .effort-bar{height:12px; background:var(--bg-2); border:1.5px solid var(--line-strong); margin-top:8px; position:relative; overflow:hidden;}
+  .effort-fill{position:absolute; left:0; top:0; bottom:0; background:linear-gradient(90deg,var(--myo),var(--sinew)); width:0%;}
+
+  /* gesture buttons */
+  .gesture-grid{display:grid; grid-template-columns:1fr 1fr; gap:7px;}
+  .gesture-btn{font-family:var(--mono); font-size:10.5px; cursor:pointer; background:var(--bg-2); color:var(--fg-mute); border:1.5px solid var(--line); padding:9px 6px; display:flex; flex-direction:column; align-items:center; gap:5px; text-align:center;}
+  .gesture-btn.on{border-color:var(--neural); color:var(--neural); background:oklch(0.74 0.14 232 / .12);}
+  .gesture-btn svg{width:30px; height:30px;}
+
+  .move-row{display:flex; gap:7px;}
+  .move-btn{flex:1; font-family:var(--mono); font-size:14px; cursor:pointer; background:var(--bg-3); color:var(--fg-dim); border:1.5px solid var(--line-strong); padding:7px; box-shadow:3px 3px 0 var(--bg-0); text-align:center;}
+  .move-btn:active{transform:translate(2px,2px); box-shadow:1px 1px 0 var(--bg-0);}
+
+  .hint-line{font-size:10.5px; line-height:1.55; color:var(--fg-mute);}
+  .hint-line b{color:var(--fg-dim);}
+
+  /* stage canvas */
+  .stage-canvas-host{flex:1; min-height:0; display:flex; flex-direction:column;}
+  .stage-canvas-host canvas{flex:1; min-height:0; width:100%;}
+  .stage-foot{flex:0 0 auto; padding:7px 14px; border-top:1px solid var(--line); font-family:var(--mono); font-size:10px; color:var(--fg-mute); display:flex; gap:16px; align-items:center; background:var(--bg-1);}
+  .stage-foot .lg{display:flex; align-items:center; gap:5px;} .stage-foot .lg i{width:10px;height:10px;display:inline-block;border-radius:2px;}
+
+  /* right info: grip meter */
+  .grip-meter{border:1.5px solid var(--line-strong); background:var(--bg-2); padding:10px 11px;}
+  .grip-meter .gm-k{font-family:var(--mono); font-size:9px; color:var(--fg-mute); letter-spacing:.05em;}
+  .grip-meter .gm-v{font-family:var(--mono); font-size:26px; color:var(--force); margin-top:2px;}
+  .grip-track{height:14px; background:var(--bg-1); border:1.5px solid var(--line); margin-top:8px; position:relative; overflow:hidden;}
+  .grip-safe{position:absolute; top:0; bottom:0; background:oklch(0.82 0.16 142 / .22); border-left:1.5px solid var(--force); border-right:1.5px solid var(--force);}
+  .grip-fill{position:absolute; left:0; top:0; bottom:0; background:var(--force); width:0%;}
+  .grip-note{font-size:9.5px; line-height:1.5; color:var(--force); margin-top:6px; min-height:26px;}
+  .grip-note.warn{color:var(--warnc);}
+
+  /* product spec plate */
+  .spec-plate{border:1.5px solid var(--line); background:var(--bg-2); padding:10px 11px; display:flex; flex-direction:column; gap:5px;}
+  .spec-plate .sp-h{font-family:var(--mono); font-size:9.5px; letter-spacing:.07em; color:var(--sinew); text-transform:uppercase;}
+  .spec-plate .sp-row{display:flex; justify-content:space-between; font-size:10px; color:var(--fg-dim); gap:8px;}
+  .spec-plate .sp-row .v{font-family:var(--mono); color:var(--fg);}
+
+  /* task card */
+  .task-card{border:1.5px solid var(--line-strong); background:var(--bg-2); padding:10px 11px; display:flex; flex-direction:column; gap:7px;}
+  .task-card .tc-h{font-family:var(--mono); font-size:9.5px; letter-spacing:.06em; color:var(--gold); text-transform:uppercase; display:flex; justify-content:space-between; align-items:center;}
+  .task-item{font-size:10.5px; line-height:1.5; color:var(--fg-dim); display:flex; gap:7px; align-items:flex-start; cursor:pointer;}
+  .task-item .box{width:13px; height:13px; flex:0 0 13px; border:1.5px solid var(--line-strong); margin-top:1px;}
+  .task-item.done{color:var(--force);} .task-item.done .box{background:var(--force); border-color:var(--force);}
+  .task-item.active .box{border-color:var(--gold); box-shadow:0 0 0 3px oklch(0.85 0.14 85 / .2);}
+
+  .adv-toggle{display:flex; align-items:center; gap:8px; font-family:var(--mono); font-size:10px; color:var(--fg-mute);}
+  .adv-toggle button{font-family:var(--mono); font-size:9.5px; padding:4px 9px; border:1.5px solid var(--line); background:var(--bg-3); color:var(--fg-mute); cursor:pointer;}
+  .adv-toggle button.on{border-color:var(--sinew); color:var(--sinew);}
+
+  /* bubble callout (built-in force control gift) */
+  .bubble{position:absolute; background:var(--bg-3); border:1.5px solid var(--force); color:var(--force); font-size:11px; line-height:1.45; padding:8px 11px; max-width:230px; box-shadow:4px 4px 0 var(--bg-0); z-index:20; opacity:0; transition:opacity .35s; pointer-events:none;}
+  .bubble.show{opacity:1;}
+  .bubble b{color:var(--dawn);}
+
+  .toast{position:absolute; left:50%; top:16px; transform:translateX(-50%); background:var(--bg-3); border:1.5px solid var(--gold); color:var(--gold); font-family:var(--mono); font-size:11px; padding:8px 15px; z-index:60; box-shadow:4px 4px 0 var(--bg-0); opacity:0; transition:opacity .3s; pointer-events:none; max-width:72%; text-align:center; line-height:1.4;}
+  .toast.show{opacity:1;} .toast.ok{border-color:var(--force); color:var(--force);} .toast.warn{border-color:var(--warnc); color:var(--warnc);}
+</style>
+</head>
+<body>
+
+<div class="hud">
+  <div class="brand"><b>MY BIONIC HAND</b><span data-zh="我的仿生手 · ROB-10" data-en="My Bionic Hand · ROB-10">我的仿生手 · ROB-10</span></div>
+  <div class="tagline" id="tagline"></div>
+  <div class="hud-chip"><span class="ck" data-zh="手势" data-en="GESTURE">手势</span><span class="cv" id="hudGesture">—</span></div>
+  <div class="hud-chip hot"><span class="ck" data-zh="发力" data-en="EFFORT">发力</span><span class="cv" id="hudEffort">0%</span></div>
+  <div class="hud-chip grip"><span class="ck" data-zh="握力" data-en="GRIP">握力</span><span class="cv" id="hudGrip">0.0N</span></div>
+  <button id="langBtn">EN</button>
+</div>
+
+<div class="wrap">
+  <!-- LEFT: controls -->
+  <div class="col-left">
+    <div>
+      <div class="side-h" data-zh="你的肌肉" data-en="Your Muscle">你的肌肉</div>
+      <div class="clench-btn" id="clenchBtn" data-zh="按住 = 发力握拳" data-en="HOLD = flex/clench">按住 = 发力握拳</div>
+      <div class="clench-sub" data-zh="按住鼠标或空格键 · 发力越大手合越紧" data-en="hold mouse or SPACE · more effort = tighter">按住鼠标或空格键 · 发力越大手合越紧</div>
+      <div class="effort-bar"><div class="effort-fill" id="effortFill"></div></div>
+    </div>
+    <div>
+      <div class="side-h" data-zh="抓握手势" data-en="Grip Gesture">抓握手势</div>
+      <div class="gesture-grid" id="gestureGrid"></div>
+    </div>
+    <div>
+      <div class="side-h" data-zh="移动手" data-en="Move Hand">移动手</div>
+      <div class="move-row">
+        <div class="move-btn" id="moveL">◀</div>
+        <div class="move-btn" id="moveR">▶</div>
+      </div>
+      <div class="hint-line" style="margin-top:7px;" data-zh="移到物体上方 → 握拳抓起 → 移到目标 → 松手放下" data-en="move over an object → clench to grab → move to target → release">移到物体上方 → 握拳抓起 → 移到目标 → 松手放下</div>
+    </div>
+    <div class="hint-line" id="leftHint"></div>
+  </div>
+
+  <!-- CENTER: the bionic hand + table -->
+  <div class="col-stage">
+    <div class="stage-canvas-host">
+      <canvas id="stageCanvas"></canvas>
+    </div>
+    <div class="stage-foot" id="stageFoot"></div>
+    <div class="bubble" id="bubble"></div>
+    <div class="toast" id="toast"></div>
+  </div>
+
+  <!-- RIGHT: info -->
+  <div class="col-right">
+    <div>
+      <div class="side-h" data-zh="实时握力" data-en="Live Grip Force">实时握力</div>
+      <div class="grip-meter">
+        <div class="gm-k" data-zh="当前握持力" data-en="current grip force">当前握持力</div>
+        <div class="gm-v" id="gripVal">0.0 N</div>
+        <div class="grip-track"><div class="grip-safe" id="gripSafe"></div><div class="grip-fill" id="gripFill"></div></div>
+        <div class="grip-note" id="gripNote"></div>
+      </div>
+    </div>
+    <div class="spec-plate">
+      <div class="sp-h" data-zh="成品规格" data-en="Product Spec">成品规格</div>
+      <div class="sp-row"><span data-zh="结构" data-en="Structure">结构</span><span class="v" data-zh="5 指腱驱动" data-en="5-finger tendon">5 指腱驱动</span></div>
+      <div class="sp-row"><span data-zh="控制" data-en="Control">控制</span><span class="v">sEMG</span></div>
+      <div class="sp-row"><span data-zh="力反馈" data-en="Force FB">力反馈</span><span class="v" data-zh="内置闭环" data-en="built-in loop">内置闭环</span></div>
+      <div class="sp-row"><span data-zh="打印" data-en="Print">打印</span><span class="v">PLA + TPU</span></div>
+    </div>
+    <div class="task-card">
+      <div class="tc-h"><span data-zh="试试看" data-en="Try It">试试看</span><span id="taskProgress" style="color:var(--fg-mute)"></span></div>
+      <div id="taskList"></div>
+    </div>
+    <div class="adv-toggle">
+      <span data-zh="高级模式" data-en="Advanced">高级模式</span>
+      <button id="advBtn" data-zh="关" data-en="OFF">关</button>
+    </div>
+    <div class="hint-line" id="rightHint"></div>
+  </div>
+</div>
+
+<script>
+"use strict";
+/* =====================================================================
+   MY BIONIC HAND — product-USE experience (not a build process).
+   You are the wearer of a finished 3D-printed myoelectric hand. Flex your
+   muscle, the hand grabs things off the table. Built-in force control (the
+   thing you tuned when you *made* it) quietly protects fragile objects.
+   Single file, zero deps. Physics computed for real to give real feel.
+   ===================================================================== */
+function hash01(x,s){ const v=Math.sin(x*127.1+s*311.7+74.7)*43758.5453; return v-Math.floor(v); }
+function n11(x,s){ return hash01(x,s)*2-1; }
+function clamp(v,a,b){ return Math.min(b,Math.max(a,v)); }
+function lerp(a,b,t){ return a+(b-a)*t; }
+function smoothstep(a,b,x){ const t=clamp((x-a)/(b-a),0,1); return t*t*(3-2*t); }
+
+/* ---------- object catalog: each has weight, size, safe-force window, best gesture ---------- */
+const OBJ_TYPES = {
+  egg:    {type:'egg',  zh:'鸡蛋',   en:'egg',        w:0.6, size:24, hold:1.0, crush:3.0, grip:'fist',  fragile:true,  color:'#f0e6c8'},
+  cup:    {type:'cup',  zh:'水杯',   en:'cup',        w:1.2, size:30, hold:1.2, crush:9.0, grip:'fist',  fragile:false, color:'#7db0d8'},
+  steel:  {type:'steel',zh:'钢块',   en:'steel block',w:2.6, size:26, hold:3.2, crush:99,  grip:'fist',  fragile:false, color:'#9aa0ad'},
+  pen:    {type:'pen',  zh:'笔',     en:'pen',        w:0.3, size:14, hold:0.5, crush:6.0, grip:'pinch', fragile:false, color:'#d89060'},
+  block:  {type:'block',zh:'方块',   en:'block',      w:0.9, size:22, hold:0.9, crush:20,  grip:'three', fragile:false, color:'#c8a0e0'},
+};
+/* placement targets on the table */
+const TARGETS = {
+  bowl: {zh:'碗',  en:'bowl',    accepts:'egg'},
+  coaster:{zh:'杯垫',en:'coaster', accepts:'cup'},
+};
+
+/* =====================================================================
+   STATE
+   ===================================================================== */
+const S = {
+  lang:'zh',
+  gesture:'fist',          // fist | pinch | three | point
+  effort:0,                // 0..1 smoothed muscle effort
+  clenching:false,
+  handX:0.5,               // hand horizontal position 0..1 across the table
+  handClosure:0,           // 0 open .. 1 closed (from effort+gesture dynamics)
+  held:null,               // object id currently grasped, or null
+  force:0,                 // current grip force (N) after built-in control
+  objects:[],              // {id,type,x,onTable,held,placed,vy,y}
+  tasks:[],                // {id, key, done}
+  advancedMode:false,
+  bubbleShown:{},          // which one-time callouts already shown
+  _slipCooldown:0,
+};
+
+/* the 4 gestures: which fingers participate + how they close */
+const GESTURES = {
+  fist:  {zh:'握拳抓握', en:'fist grip',  fingers:[1,1,1,1], thumb:1},
+  pinch: {zh:'两指捏取', en:'pinch',      fingers:[1,0,0,0], thumb:1},
+  three: {zh:'三指握',   en:'tripod',     fingers:[1,1,1,0], thumb:1},
+  point: {zh:'指向',     en:'point',      fingers:[0,1,1,1], thumb:0},
+};
+
+/* =====================================================================
+   PURE FUNCTIONS — kinematics, contact force, BUILT-IN force control
+   ===================================================================== */
+/* gesture + effort -> target closure per finger (0..1). Non-participating
+   fingers stay extended (point) or curl (fist). */
+function fingerTargets(gesture, effort){
+  const g=GESTURES[gesture]||GESTURES.fist;
+  return { fingers:g.fingers.map(on=> on?effort:(gesture==='point'?0:0.08)), thumb:g.thumb?effort:0.1 };
+}
+/* one finger's 3 joint angles (rad) from its closure 0..1 */
+function fingerJoints(c){ const k=clamp(c,0,1); return [k*1.05, k*1.45, k*1.15]; }
+
+/* contact force: hand closure vs object. Force rises past the contact point.
+   contactAt smaller for bigger objects (touch sooner). */
+function contactForce(closure, obj){
+  const contactAt = 1 - (obj.size/42);
+  const pen = closure - contactAt;
+  const stiff = obj.fragile? 12 : (obj.type==='steel'?60:16);
+  return pen>0 ? stiff*pen : 0;
+}
+/* BUILT-IN force control — the finished product's own closed loop. Given the
+   wearer's intent (0..1) and the object, it automatically caps grip force in
+   the object's safe window: gentle on fragile things, firm on heavy ones.
+   Returns the ACTUAL grip force delivered. This is the "invisible gift" the
+   student tuned when they built the hand — the user just enjoys the result. */
+function builtinForceControl(intent, obj){
+  // desired force scales with intent but is capped just under crush and floored
+  // to reliably hold. The loop keeps fragile objects well below crush.
+  const ceil = obj.fragile ? Math.min(obj.crush*0.8, obj.hold+1.2) : Math.min(obj.crush*0.85, obj.hold+ (obj.type==='steel'?2.0:2.5));
+  const floorF = obj.hold + 0.15;                 // always enough to hold
+  const desired = lerp(floorF, ceil, clamp(intent,0,1));
+  return clamp(desired, 0, ceil);                 // never reaches crush
+}
+/* is the grasp stable (won't slip)? needs force >= hold AND gesture suits object. */
+function graspStable(force, obj, gesture){
+  const gestureOk = (obj.grip===gesture) || (gesture==='fist' && !obj.fragile && obj.type!=='pen');
+  return force >= obj.hold && gestureOk;
+}
+
+/* =====================================================================
+   i18n
+   ===================================================================== */
+const T = {
+  zh:{
+    tagline:'你戴上了<b>自己做的仿生手</b>。用你的肌肉去操作它 —— 抓起桌上的东西, 感受它能为你做什么。',
+    gestures:{fist:'握拳抓握',pinch:'两指捏取',three:'三指握',point:'指向'},
+    objects:{egg:'鸡蛋',cup:'水杯',steel:'钢块',pen:'笔',block:'方块'},
+    leftHint:'不同东西适合不同手势: <b>鸡蛋/杯子/钢块</b>用握拳, <b>笔</b>用捏取, <b>方块</b>用三指握。',
+    rightHint:'这只手<b>内置了力反馈</b> —— 抓鸡蛋会自动轻柔, 抓钢块会自动用力。你只管抓, 它替你控制力道。',
+    gripHold:'轻柔握持 · 安全',
+    gripFirm:'稳稳抓牢',
+    gripEmpty:'手空着',
+    gripSlip:'没夹稳 · 换个手势或握紧点',
+    gripFragile:'内置力反馈: 易碎物自动限力, 不会捏碎',
+    foot:['◀▶ 移动手','按住发力 = 握拳','放松 = 松开'],
+    footHeld:'抓着东西了 · 移到目标区松手放下',
+    tasks:{
+      grabEgg:'握拳抓起鸡蛋(不会捏碎)',
+      eggBowl:'把鸡蛋放进碗里',
+      cupCoaster:'把水杯端到杯垫上',
+      liftSteel:'举起钢块(证明它有力气)',
+      pinchPen:'用捏取手势夹起笔',
+    },
+    bubbleForce:'<b>感受到了吗?</b> 你把鸡蛋攥得再用力, 它也没碎 —— 这只手内置的力反馈自动把力道limited在安全区。这正是你做这个项目要调出来的本事。',
+    bubbleGesture:'<b>换手势了。</b> 不同东西适合不同抓法, 就像真手一样。',
+    toastGrab:'抓起来了!',
+    toastPlace:'放好了!',
+    toastCrushSafe:'力反馈保护 · 鸡蛋没碎',
+    toastSlip:'滑落了 · 再试一次',
+    taskDone:'完成!',
+    advOn:'开', advOff:'关',
+    advNote:'高级模式: 双肌肉传感器 + 更细腻手势(呼应项目 stretch goal) —— 让你看到这只手还能更强。',
+  },
+  en:{
+    tagline:'You put on <b>the bionic hand you built</b>. Drive it with your muscle — grab things off the table and feel what it can do for you.',
+    gestures:{fist:'fist grip',pinch:'pinch',three:'tripod',point:'point'},
+    objects:{egg:'egg',cup:'cup',steel:'steel block',pen:'pen',block:'block'},
+    leftHint:'Different things suit different grips: <b>egg/cup/steel</b> use fist, <b>pen</b> uses pinch, <b>block</b> uses tripod.',
+    rightHint:'This hand has <b>built-in force feedback</b> — gentle on the egg, firm on the steel. You just grab; it controls the force for you.',
+    gripHold:'gentle hold · safe',
+    gripFirm:'firm grip',
+    gripEmpty:'hand empty',
+    gripSlip:'not secure · change gesture or grip harder',
+    gripFragile:'built-in force loop: auto-limits on fragile items, never crushes',
+    foot:['◀▶ move hand','hold = clench','release = open'],
+    footHeld:'holding · move over a target and release to place',
+    tasks:{
+      grabEgg:'clench to grab the egg (no crush)',
+      eggBowl:'place the egg into the bowl',
+      cupCoaster:'carry the cup onto the coaster',
+      liftSteel:'lift the steel block (show its strength)',
+      pinchPen:'pinch to pick up the pen',
+    },
+    bubbleForce:'<b>Feel that?</b> No matter how hard you squeeze, the egg does not crack — the hand’s built-in force loop auto-limits the grip to a safe range. That is exactly the skill you build in this project.',
+    bubbleGesture:'<b>Gesture changed.</b> Different objects suit different grips, just like a real hand.',
+    toastGrab:'grabbed it!',
+    toastPlace:'placed!',
+    toastCrushSafe:'force loop protected · egg intact',
+    toastSlip:'slipped · try again',
+    taskDone:'done!',
+    advOn:'ON', advOff:'OFF',
+    advNote:'Advanced: dual muscle sensors + finer gestures (the project stretch goal) — a glimpse of how far this hand can go.',
+  }
+};
+function tt(){ return T[S.lang]; }
+
+/* ---------- DOM helpers ---------- */
+function $(id){ return document.getElementById(id); }
+function el(tag,cls,html){ const e=document.createElement(tag); if(cls)e.className=cls; if(html!=null)e.innerHTML=html; return e; }
+function L(zh,en){ return S.lang==='zh'?zh:en; }
+function cssv(name){ return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
+let _toastT=null;
+function toast(msg,kind){ const t=$('toast'); t.textContent=msg; t.className='toast show'+(kind?' '+kind:''); clearTimeout(_toastT); _toastT=setTimeout(()=>{ t.className='toast'+(kind?' '+kind:''); },2200); }
+let _bubbleT=null;
+function bubble(html,x,y){ const b=$('bubble'); b.innerHTML=html; b.style.left=x+'px'; b.style.top=y+'px'; b.className='bubble show'; clearTimeout(_bubbleT); _bubbleT=setTimeout(()=>{ b.className='bubble'; },5200); }
+
+/* ---------- setup objects + tasks ---------- */
+function setupWorld(){
+  S.objects=[
+    {id:'o_egg', type:'egg',   x:0.16, onTable:true, held:false, placed:false, y:0, vy:0},
+    {id:'o_pen', type:'pen',   x:0.30, onTable:true, held:false, placed:false, y:0, vy:0},
+    {id:'o_cup', type:'cup',   x:0.45, onTable:true, held:false, placed:false, y:0, vy:0},
+    {id:'o_block',type:'block',x:0.60, onTable:true, held:false, placed:false, y:0, vy:0},
+    {id:'o_steel',type:'steel',x:0.74, onTable:true, held:false, placed:false, y:0, vy:0},
+  ];
+  S.tasks=[
+    {key:'grabEgg', done:false},
+    {key:'eggBowl', done:false},
+    {key:'cupCoaster', done:false},
+    {key:'pinchPen', done:false},
+    {key:'liftSteel', done:false},
+  ];
+}
+
+/* =====================================================================
+   REAL-TIME LOOP
+   ===================================================================== */
+let simT=0; const DT=1/60;
+function simStep(){
+  simT+=DT;
+  // muscle effort dynamics
+  const tgt=S.clenching?1:0;
+  S.effort += (tgt - S.effort) * (S.clenching?0.14:0.12);
+  S.effort=clamp(S.effort,0,1);
+  // hand closure follows effort (gesture shapes which fingers, closure magnitude = effort)
+  S.handClosure = S.effort;
+
+  // find object under the hand (nearest on table within reach), or the held one
+  const obj = currentObject();
+  if(S.held){
+    // holding: force from built-in control; object follows hand
+    const o=S.objects.find(o=>o.id===S.held); const ot=OBJ_TYPES[o.type];
+    S.force = builtinForceControl(S.effort, ot);
+    // release when effort drops low -> place or drop
+    if(S.effort<0.18){ releaseHeld(); }
+    else if(!graspStable(S.force,ot,S.gesture) && S._slipCooldown<=0){
+      // gesture wrong -> slips out
+      dropHeld(true);
+    }
+  } else {
+    // not holding: can we grab? need hand roughly closed onto an in-reach object
+    if(obj){
+      const ot=OBJ_TYPES[obj.type];
+      const rawForce=contactForce(S.handClosure, ot);
+      // built-in control takes over the instant we make contact with enough closure
+      if(rawForce>0 && S.effort>0.35){
+        const deliver=builtinForceControl(S.effort, ot);
+        if(graspStable(deliver, ot, S.gesture)){
+          grab(obj.id);
+        } else {
+          // touching but gesture unsuitable -> can't secure; show slip hint occasionally
+          S.force=0;
+        }
+      } else { S.force=0; }
+    } else { S.force=0; }
+  }
+  if(S._slipCooldown>0) S._slipCooldown-=DT;
+
+  // fragile-grip callout: first time you hold the egg firmly, reveal the gift
+  if(S.held){
+    const o=S.objects.find(o=>o.id===S.held);
+    if(o && OBJ_TYPES[o.type].fragile && S.effort>0.7 && !S.bubbleShown.force){
+      S.bubbleShown.force=true;
+      const c=$('stageCanvas'); bubble(tt().bubbleForce, c.clientWidth*0.30, c.clientHeight*0.16);
+    }
+  }
+  checkTasks();
+}
+/* object currently under the hand & within grabbing reach */
+function currentObject(){
+  if(S.held) return S.objects.find(o=>o.id===S.held);
+  let best=null, bd=0.06;
+  S.objects.forEach(o=>{ if(!o.onTable||o.placed) return; const d=Math.abs(o.x - S.handX); if(d<bd){ bd=d; best=o; } });
+  return best;
+}
+function grab(id){
+  const o=S.objects.find(o=>o.id===id); if(!o) return;
+  S.held=id; o.held=true; o.onTable=false;
+  toast(tt().toastGrab,'ok');
+}
+function releaseHeld(){
+  const o=S.objects.find(o=>o.id===S.held); if(!o){ S.held=null; return; }
+  const ot=OBJ_TYPES[o.type];
+  // check placement target near hand
+  const placed=tryPlace(o);
+  o.held=false; o.onTable=true; S.held=null; S.force=0;
+  if(!placed){ o.x=clamp(S.handX,0.05,0.95); }
+}
+function dropHeld(slip){
+  const o=S.objects.find(o=>o.id===S.held); if(!o){ S.held=null; return; }
+  o.held=false; o.onTable=true; o.x=clamp(S.handX,0.05,0.95); S.held=null; S.force=0;
+  S._slipCooldown=0.8;
+  if(slip){ toast(tt().toastSlip,'warn'); }
+}
+/* placement targets live at fixed x on the table */
+const TARGET_X = { bowl:0.30, coaster:0.62 };
+function tryPlace(o){
+  const ot=OBJ_TYPES[o.type];
+  for(const [tk,tx] of Object.entries(TARGET_X)){
+    if(Math.abs(S.handX - tx) < 0.06){
+      const target=TARGETS[tk];
+      if(target.accepts===o.type){ o.placed=true; o.x=tx; toast(tt().toastPlace,'ok'); return true; }
+    }
+  }
+  return false;
+}
+function checkTasks(){
+  const eggO=S.objects.find(o=>o.type==='egg'), cupO=S.objects.find(o=>o.type==='cup'),
+        steelO=S.objects.find(o=>o.type==='steel'), penO=S.objects.find(o=>o.type==='pen');
+  const mark=(key,cond)=>{ const t=S.tasks.find(t=>t.key===key); if(t&&!t.done&&cond){ t.done=true; toast(tt().tasks[key]+' · '+tt().taskDone,'ok'); renderTasks(); } };
+  mark('grabEgg', S.held && S.objects.find(o=>o.id===S.held)?.type==='egg');
+  mark('eggBowl', eggO && eggO.placed);
+  mark('cupCoaster', cupO && cupO.placed);
+  mark('pinchPen', S.held && penO && penO.held && S.gesture==='pinch');
+  mark('liftSteel', S.held && steelO && steelO.held);
+}
+
+let _raf=null;
+function loop(){ simStep(); renderLive(); _raf=requestAnimationFrame(loop); }
+function renderLive(){
+  drawStage();
+  $('hudEffort').textContent=Math.round(S.effort*100)+'%';
+  $('hudGrip').textContent=S.force.toFixed(1)+'N';
+  $('hudGesture').textContent=tt().gestures[S.gesture];
+  $('effortFill').style.width=(S.effort*100)+'%';
+  updateGripMeter();
+  // foot hint
+  const foot=$('stageFoot');
+  foot.innerHTML = (S.held? '<span style="color:var(--force)">'+tt().footHeld+'</span>' :
+    tt().foot.map(f=>'<span>'+f+'</span>').join('')) ;
+}
+function updateGripMeter(){
+  const tr=tt();
+  $('gripVal').textContent=S.force.toFixed(1)+' N';
+  const o=S.held?S.objects.find(o=>o.id===S.held):currentObject();
+  const ot=o?OBJ_TYPES[o.type]:null;
+  const maxF = ot? (ot.crush>50?8:ot.crush) : 8;
+  $('gripFill').style.width=clamp(S.force/maxF*100,0,100)+'%';
+  const note=$('gripNote'); note.className='grip-note';
+  if(ot){
+    const safeL=ot.hold/maxF*100, safeR=Math.min(ot.crush,maxF)/maxF*100;
+    $('gripSafe').style.left=safeL+'%'; $('gripSafe').style.width=(safeR-safeL)+'%';
+    if(S.held){ note.textContent = ot.fragile? tr.gripFragile : tr.gripFirm; }
+    else { note.textContent = ot.fragile? tr.gripFragile : ''; }
+  } else {
+    $('gripSafe').style.width='0%';
+    note.textContent = S.held? tr.gripFirm : tr.gripEmpty;
+  }
+}
+
+/* =====================================================================
+   STAGE DRAWING — table, objects, targets, the bionic hand
+   ===================================================================== */
+function fitCanvas(cv){
+  const dpr=window.devicePixelRatio||1; const w=cv.clientWidth, h=cv.clientHeight;
+  cv.width=w*dpr; cv.height=h*dpr; const g=cv.getContext('2d'); g.setTransform(dpr,0,0,dpr,0,0);
+  return {g,w,h};
+}
+function drawStage(){
+  const cv=$('stageCanvas'); const {g,w,h}=fitCanvas(cv);
+  g.clearRect(0,0,w,h);
+  // soft vignette background
+  const grad=g.createLinearGradient(0,0,0,h); grad.addColorStop(0,'oklch(0.19 0.035 265)'); grad.addColorStop(1,'oklch(0.15 0.03 265)');
+  g.fillStyle=grad; g.fillRect(0,0,w,h);
+  const tableY=h*0.72;                 // table surface line
+  // table
+  g.fillStyle='oklch(0.30 0.03 60)'; g.fillRect(0,tableY,w,h-tableY);
+  g.strokeStyle='oklch(0.45 0.05 60)'; g.lineWidth=2; g.beginPath(); g.moveTo(0,tableY); g.lineTo(w,tableY); g.stroke();
+  // wood grain hint
+  g.strokeStyle='oklch(0.34 0.03 60 / 0.6)'; g.lineWidth=1;
+  for(let i=1;i<5;i++){ const yy=tableY+(h-tableY)*i/5; g.beginPath(); g.moveTo(0,yy); g.lineTo(w,yy); g.stroke(); }
+  // placement targets (bowl, coaster)
+  drawTarget(g,w,h,tableY,'bowl',TARGET_X.bowl);
+  drawTarget(g,w,h,tableY,'coaster',TARGET_X.coaster);
+  // objects on the table
+  S.objects.forEach(o=>{ if(o.held) return; drawObject(g,w,h,tableY,o); });
+  // the hand (holds object if any)
+  drawBionicHand(g,w,h,tableY);
+  // held object drawn with the hand
+  if(S.held){ const o=S.objects.find(o=>o.id===S.held); if(o) drawObject(g,w,h,tableY,o,true); }
+}
+function drawTarget(g,w,h,tableY,key,tx){
+  const x=tx*w, y=tableY+6;
+  g.save();
+  if(key==='bowl'){
+    g.strokeStyle=cssv('--neural'); g.fillStyle='oklch(0.74 0.14 232 / 0.12)'; g.lineWidth=2;
+    g.beginPath(); g.ellipse(x,y+14,34,10,0,0,Math.PI*2); g.fill();
+    g.beginPath(); g.arc(x,y+8,32,0.15*Math.PI,0.85*Math.PI,false); g.stroke();
+    g.beginPath(); g.ellipse(x,y+2,32,9,0,0,Math.PI*2); g.stroke();
+  } else {
+    g.strokeStyle=cssv('--sinew'); g.fillStyle='oklch(0.80 0.13 48 / 0.12)'; g.lineWidth=2;
+    g.beginPath(); g.ellipse(x,y+12,30,8,0,0,Math.PI*2); g.fill(); g.stroke();
+  }
+  g.fillStyle=cssv('--fg-mute'); g.font='10px '+cssv('--mono'); g.textAlign='center';
+  g.fillText(tt().objects? (TARGETS[key][S.lang]) : key, x, y+34);
+  g.restore(); g.textAlign='left';
+}
+function drawObject(g,w,h,tableY,o,withHand){
+  const ot=OBJ_TYPES[o.type];
+  let x,y;
+  if(withHand){
+    // position in the hand's grasp
+    const hx=S.handX*w; x=hx; y=tableY - 70 - S.handClosure*4;
+  } else {
+    x=o.x*w; y=tableY - ot.size*0.5 - 2 + (o.placed&&o.type==='egg'?6:0);
+  }
+  g.save();
+  const col=ot.color;
+  g.fillStyle=col; g.strokeStyle='oklch(0.45 0.04 60)'; g.lineWidth=1.5;
+  if(o.type==='egg'){
+    g.beginPath(); g.ellipse(x,y,ot.size*0.42,ot.size*0.54,0,0,Math.PI*2); g.fill(); g.stroke();
+    // sheen
+    g.fillStyle='oklch(1 0 0 / 0.25)'; g.beginPath(); g.ellipse(x-ot.size*0.14,y-ot.size*0.18,ot.size*0.12,ot.size*0.18,0,0,Math.PI*2); g.fill();
+  } else if(o.type==='cup'){
+    const s=ot.size; g.beginPath(); g.moveTo(x-s*0.4,y-s*0.5); g.lineTo(x-s*0.32,y+s*0.5); g.lineTo(x+s*0.32,y+s*0.5); g.lineTo(x+s*0.4,y-s*0.5); g.closePath(); g.fill(); g.stroke();
+    g.fillStyle='oklch(0.55 0.1 232 / 0.6)'; g.fillRect(x-s*0.34,y-s*0.35,s*0.68,s*0.3);
+  } else if(o.type==='steel'){
+    const s=ot.size; g.fillRect(x-s*0.5,y-s*0.5,s,s); g.strokeRect(x-s*0.5,y-s*0.5,s,s);
+    g.strokeStyle='oklch(0.55 0.02 265 / 0.7)'; g.beginPath(); g.moveTo(x-s*0.5,y-s*0.2); g.lineTo(x+s*0.5,y-s*0.2); g.stroke();
+    g.fillStyle='oklch(0.8 0.01 265 / 0.4)'; g.fillRect(x-s*0.5,y-s*0.5,s,s*0.15);
+  } else if(o.type==='pen'){
+    const s=ot.size; g.save(); g.translate(x,y); g.rotate(-0.5);
+    g.fillRect(-s*0.12,-s*1.4,s*0.24,s*2.8); g.strokeRect(-s*0.12,-s*1.4,s*0.24,s*2.8);
+    g.fillStyle='oklch(0.5 0.1 30)'; g.beginPath(); g.moveTo(-s*0.12,s*1.4); g.lineTo(s*0.12,s*1.4); g.lineTo(0,s*1.7); g.closePath(); g.fill();
+    g.restore();
+  } else if(o.type==='block'){
+    const s=ot.size; g.fillRect(x-s*0.5,y-s*0.5,s,s); g.strokeRect(x-s*0.5,y-s*0.5,s,s);
+    g.fillStyle='oklch(1 0 0 / 0.15)'; g.fillRect(x-s*0.5,y-s*0.5,s,s*0.2);
+  }
+  // reach indicator: object under the hand & grabbable -> subtle ring
+  if(!withHand && !o.placed && currentObject()===o && !S.held){
+    g.strokeStyle=cssv('--gold'); g.lineWidth=1.5; g.setLineDash([3,3]);
+    g.beginPath(); g.arc(x,y,ot.size*0.7,0,Math.PI*2); g.stroke(); g.setLineDash([]);
+  }
+  g.restore();
+}
+
+/* the bionic hand, side view, hovering over the table; forearm socket at top */
+function drawBionicHand(g,w,h,tableY){
+  const hx=S.handX*w;
+  const wristY=tableY-118;            // wrist/servo hub height
+  const fingerBaseY=wristY+22;
+  g.save();
+  // forearm socket coming from top
+  g.fillStyle='oklch(0.32 0.04 45)'; g.strokeStyle=cssv('--sinew'); g.lineWidth=1.5;
+  g.beginPath(); g.roundRect(hx-22, wristY-60, 44, 62, 8); g.fill(); g.stroke();
+  // strap lines
+  g.strokeStyle='oklch(0.5 0.05 45 / 0.6)'; g.lineWidth=3;
+  g.beginPath(); g.moveTo(hx-22,wristY-46); g.lineTo(hx+22,wristY-46); g.moveTo(hx-22,wristY-26); g.lineTo(hx+22,wristY-26); g.stroke();
+  // servo hub / palm
+  g.fillStyle='oklch(0.30 0.05 232)'; g.strokeStyle=cssv('--neural'); g.lineWidth=1.5;
+  g.beginPath(); g.roundRect(hx-24, wristY-2, 48, 30, 7); g.fill(); g.stroke();
+  // small servo disc that rotates with closure
+  g.save(); g.translate(hx,wristY+13); g.rotate(S.handClosure*2.0);
+  g.strokeStyle=cssv('--dawn'); g.lineWidth=2; g.beginPath(); g.moveTo(0,0); g.lineTo(9,0); g.stroke();
+  g.fillStyle='oklch(0.4 0.06 232)'; g.beginPath(); g.arc(0,0,4,0,Math.PI*2); g.fill(); g.restore();
+
+  // fingers: 4 fingers + thumb. side view, pointing down toward table.
+  const targets=fingerTargets(S.gesture, S.handClosure);
+  const fingerX=[hx-15, hx-6, hx+4, hx+14];   // 4 fingers across
+  const fingerLen=[[16,13,10],[18,14,11],[17,13,10],[15,12,9]];
+  targets.fingers.forEach((c,fi)=>{
+    const joints=fingerJoints(c);
+    let jx=fingerX[fi], jy=fingerBaseY, ang=Math.PI*0.5; // pointing down
+    // tendon line
+    g.strokeStyle=cssv('--sinew'); g.lineWidth=1; g.globalAlpha=0.4;
+    g.beginPath(); g.moveTo(hx,wristY+13);
+    let tx=jx,ty=jy,ta=Math.PI*0.5;
+    for(let s=0;s<3;s++){ ta+=joints[s]; tx+=Math.cos(ta)*fingerLen[fi][s]; ty+=Math.sin(ta)*fingerLen[fi][s]; }
+    g.lineTo(jx,jy); g.lineTo(tx,ty); g.stroke(); g.globalAlpha=1;
+    // segments
+    ang=Math.PI*0.5;
+    for(let s=0;s<3;s++){
+      ang+=joints[s];
+      const nx=jx+Math.cos(ang)*fingerLen[fi][s], ny=jy+Math.sin(ang)*fingerLen[fi][s];
+      g.strokeStyle= s===0?'oklch(0.60 0.06 45)':'oklch(0.54 0.05 45)';
+      g.lineWidth=6.5; g.lineCap='round'; g.beginPath(); g.moveTo(jx,jy); g.lineTo(nx,ny); g.stroke();
+      g.fillStyle=cssv('--sinew'); g.beginPath(); g.arc(jx,jy,2.6,0,Math.PI*2); g.fill();
+      jx=nx; jy=ny;
+    }
+    g.fillStyle=cssv('--sinew'); g.beginPath(); g.arc(jx,jy,3,0,Math.PI*2); g.fill();
+  });
+  // thumb (opposing, from left of palm)
+  {
+    const tc=targets.thumb; const tj=fingerJoints(tc);
+    let jx=hx-22, jy=wristY+20, ang=Math.PI*0.15;
+    for(let s=0;s<2;s++){ ang+=tj[s]*0.8; const nx=jx+Math.cos(ang)*13, ny=jy+Math.sin(ang)*13;
+      g.strokeStyle='oklch(0.58 0.06 45)'; g.lineWidth=7; g.lineCap='round'; g.beginPath(); g.moveTo(jx,jy); g.lineTo(nx,ny); g.stroke();
+      g.fillStyle=cssv('--sinew'); g.beginPath(); g.arc(jx,jy,2.6,0,Math.PI*2); g.fill(); jx=nx; jy=ny; }
+  }
+  g.lineCap='butt';
+  g.restore();
+}
+window.drawStage=drawStage;
+
+/* =====================================================================
+   CONTROLS + INFO RENDERING + BINDING
+   ===================================================================== */
+// simple SVG glyphs for the 4 gestures (hand silhouettes)
+const GESTURE_SVG={
+  fist:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="6" y="9" width="12" height="9" rx="3"/><path d="M8 9V7M11 9V6M14 9V6M17 9V8"/></svg>',
+  pinch:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M9 14c-1-3 0-8 1-8s1 4 1 6"/><path d="M13 12c1-2 3-3 3-1s-2 4-3 5"/><circle cx="11" cy="15" r="1.4"/></svg>',
+  three:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M8 15V6M12 15V5M16 15V7"/><path d="M6 15c0 3 2 4 6 4s6-1 6-4"/></svg>',
+  point:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 3v10"/><rect x="7" y="12" width="10" height="7" rx="3"/></svg>',
+};
+function renderGestures(){
+  const host=$('gestureGrid'); host.innerHTML='';
+  Object.keys(GESTURES).forEach(k=>{
+    const b=el('div','gesture-btn'+(S.gesture===k?' on':''));
+    b.innerHTML=GESTURE_SVG[k]+'<span>'+tt().gestures[k]+'</span>';
+    b.addEventListener('click',()=>{
+      S.gesture=k; renderGestures();
+      if(!S.bubbleShown.gesture && k!=='fist'){ S.bubbleShown.gesture=true; }
+    });
+    host.appendChild(b);
+  });
+}
+function renderTasks(){
+  const host=$('taskList'); host.innerHTML='';
+  S.tasks.forEach((t,i)=>{
+    const active = !t.done && (i===0 || S.tasks[i-1].done);
+    const item=el('div','task-item'+(t.done?' done':'')+(active?' active':''));
+    item.innerHTML='<span class="box"></span><span>'+tt().tasks[t.key]+'</span>';
+    host.appendChild(item);
+  });
+  const done=S.tasks.filter(t=>t.done).length;
+  $('taskProgress').textContent=done+'/'+S.tasks.length;
+}
+function applyStatic(){
+  document.querySelectorAll('[data-zh]').forEach(e=>{ e.textContent=e.getAttribute(S.lang==='zh'?'data-zh':'data-en'); });
+  $('langBtn').textContent=S.lang==='zh'?'EN':'中文';
+  $('tagline').innerHTML=tt().tagline;
+  $('leftHint').innerHTML=tt().leftHint;
+  $('rightHint').innerHTML=tt().rightHint;
+  $('advBtn').textContent=S.advancedMode?tt().advOn:tt().advOff;
+  document.documentElement.lang=S.lang;
+}
+function refreshAll(){ applyStatic(); renderGestures(); renderTasks(); }
+
+/* ---- clench (mouse + keyboard) ---- */
+function bindClench(){
+  const btn=$('clenchBtn');
+  const down=()=>{ S.clenching=true; btn.classList.add('active'); };
+  const up=()=>{ S.clenching=false; btn.classList.remove('active'); };
+  btn.addEventListener('mousedown',down); btn.addEventListener('mouseup',up); btn.addEventListener('mouseleave',up);
+  btn.addEventListener('touchstart',e=>{e.preventDefault();down();}); btn.addEventListener('touchend',e=>{e.preventDefault();up();});
+  window.addEventListener('keydown',e=>{ if(e.code==='Space'&&!e.repeat){ e.preventDefault(); S.clenching=true; btn.classList.add('active'); } });
+  window.addEventListener('keyup',e=>{ if(e.code==='Space'){ e.preventDefault(); S.clenching=false; btn.classList.remove('active'); } });
+}
+/* ---- move hand ---- */
+function bindMove(){
+  const step=0.055;
+  const mv=(d)=>{ if(S.held){ S.handX=clamp(S.handX+d,0.05,0.95); } else { S.handX=clamp(S.handX+d,0.05,0.95); } };
+  let hL=null,hR=null;
+  const startL=()=>{ mv(-step); hL=setInterval(()=>mv(-step),90); };
+  const startR=()=>{ mv(step); hR=setInterval(()=>mv(step),90); };
+  const stop=()=>{ clearInterval(hL); clearInterval(hR); };
+  $('moveL').addEventListener('mousedown',startL); $('moveR').addEventListener('mousedown',startR);
+  window.addEventListener('mouseup',stop);
+  $('moveL').addEventListener('mouseleave',stop); $('moveR').addEventListener('mouseleave',stop);
+  window.addEventListener('keydown',e=>{ if(e.code==='ArrowLeft'){mv(-step);} if(e.code==='ArrowRight'){mv(step);} });
+  // click an object on canvas -> move hand over it
+  $('stageCanvas').addEventListener('click',(ev)=>{
+    const cv=$('stageCanvas'); const r=cv.getBoundingClientRect(); const x=(ev.clientX-r.left)/cv.clientWidth;
+    S.handX=clamp(x,0.05,0.95);
+  });
+}
+/* ---- advanced mode ---- */
+$('advBtn').addEventListener('click',()=>{
+  S.advancedMode=!S.advancedMode; $('advBtn').textContent=S.advancedMode?tt().advOn:tt().advOff;
+  $('rightHint').innerHTML = S.advancedMode? tt().advNote : tt().rightHint;
+  toast(tt().advNote.replace(/<[^>]+>/g,'').slice(0,40)+'…', S.advancedMode?'ok':'');
+});
+/* ---- language ---- */
+$('langBtn').addEventListener('click',()=>{ S.lang=S.lang==='zh'?'en':'zh'; refreshAll(); });
+
+/* resize redraw */
+let _rt=null; window.addEventListener('resize',()=>{ clearTimeout(_rt); _rt=setTimeout(()=>drawStage(),120); });
+
+/* =====================================================================
+   BOOT
+   ===================================================================== */
+window.S=S; window.tt=tt;
+window.OBJ_TYPES=OBJ_TYPES; window.GESTURES=GESTURES;
+window.fingerTargets=fingerTargets; window.fingerJoints=fingerJoints;
+window.contactForce=contactForce; window.builtinForceControl=builtinForceControl; window.graspStable=graspStable;
+window.currentObject=currentObject; window.grab=grab;
+setupWorld();
+refreshAll();
+bindClench(); bindMove();
+loop();
+</script>
+</body>
+</html>
