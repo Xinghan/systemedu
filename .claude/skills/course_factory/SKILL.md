@@ -807,6 +807,17 @@ result = save_knowledge_tree_to_workspace("ai-ant-ethologist", tree)
 # 展示给用户, 等用户确认 (或要求修改) 后才进入下一阶段。
 # 不要自动闷头进 Step 1+。
 
+# === Step P3.5: 项目级产出物模拟游戏 (调用 project_product_game skill) ===
+# 知识树已确认 → 项目的最终产出物 (final_outcomes) 已明确 → 生成一个"项目级产出物
+# 模拟游戏": 单个全屏 3D 交互 HTML, 让学生在开始学习前就"玩到"整个项目 N 周后将做出的
+# 最终成品 (成品使用体验, 不是制作过程)。这是**一项目一个**, 区别于逐 knode 的 game/3d_object。
+#
+# 触发: 用 Skill 工具调用 `project_product_game`, 传项目 slug。
+# 它按两步流程 (蓝图+cover → 详细设计 prompt → 实现 3D HTML)、真算引擎 + node 单测 +
+# Playwright e2e + 截图 eyeball 验证, 产物落 course_factory/tests/project_game/<slug>_3D.html。
+# 已验收范式: emg/mars/satellite/molecule 四领域 (见该 skill 附表)。
+# 该游戏用于项目详情页的 "What you'll ship" 预览, 供 final_outcomes 引用。
+
 # === Step 1..6.6 + Step 7: 逐 module 跑单 knode 流程 ===
 for module_id in ["M01", "M02", ..., "MNN"]:
     ctx = load_knode_context_from_workspace("ai-ant-ethologist", module_id)
