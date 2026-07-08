@@ -6,6 +6,7 @@ import { useEffect, useState } from "react"
 import { toast } from "sonner"
 import {
   ArrowUpRight,
+  Award,
   Brain,
   ChevronRight,
   CirclePlay,
@@ -13,10 +14,11 @@ import {
   Layers,
   Sparkles,
 } from "lucide-react"
-import { library, myKnodes, myProjects, type MyProjectItem } from "@/lib/api"
+import { library, myBadges, myKnodes, myProjects, type MyProjectItem } from "@/lib/api"
 import { useAuthStore } from "@/lib/stores/auth-store"
 import { useT } from "@/lib/i18n/use-t"
 import { InlineLoading } from "@/components/ui/page-loading"
+import { ChapterBadgeMark } from "@/components/badges/ChapterBadgeMark"
 
 // ── 面包屑 ──
 function Crumbs({ items }: { items: { label: string }[] }) {
@@ -53,6 +55,7 @@ export default function HomePage() {
   const { loggedIn, username, hydrate } = useAuthStore()
   const [items, setItems] = useState<MyProjectItem[]>([])
   const [progress, setProgress] = useState<ProgressMap>({})
+  const [badgeCount, setBadgeCount] = useState(0)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => { hydrate() }, [hydrate])
@@ -81,6 +84,17 @@ export default function HomePage() {
           }),
         )
         setProgress(Object.fromEntries(entries))
+        // 徽章总数 (次要信息, 失败静默, 不阻断首页)
+        try {
+          const wall = await myBadges.getWall()
+          const total = wall.chapters.reduce(
+            (sum, c) => sum + Object.values(c.counts).reduce((a, b) => a + b, 0),
+            0,
+          )
+          setBadgeCount(total)
+        } catch {
+          setBadgeCount(0)
+        }
       } catch (err) {
         toast.error(err instanceof Error ? err.message : t("home.load_failed"))
       } finally {
@@ -107,17 +121,44 @@ export default function HomePage() {
         </p>
       </div>
 
-      {/* 真实统计 3 格 */}
+      {/* 真实统计 4 格 */}
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "repeat(3, 1fr)",
+          gridTemplateColumns: "repeat(4, 1fr)",
           gap: 14,
           marginBottom: 28,
         }}
       >
         <StatCard icon={<Layers size={15} strokeWidth={1.5} />} label={t("home.stat_active")} value={String(projectCount)} sub={t("home.stat_active_sub")} />
         <StatCard icon={<Sparkles size={15} strokeWidth={1.5} />} label={t("home.stat_mastered")} value={String(totalDone)} sub={t("home.stat_mastered_sub")} />
+        <Link
+          href="/badges"
+          style={{
+            border: "1px solid var(--border)",
+            borderRadius: 14,
+            padding: "16px 18px",
+            background: "var(--card)",
+            textDecoration: "none",
+            color: "inherit",
+            display: "block",
+            transition: "box-shadow var(--t-med), border-color var(--t-med)",
+          }}
+          className="brain-card"
+        >
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", color: "var(--sub)", fontSize: 12.5, marginBottom: 8 }}>
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 7 }}>
+              <Award size={15} strokeWidth={1.5} /> {t("badges.total_earned")}
+            </span>
+            <ArrowUpRight size={15} strokeWidth={1.6} style={{ color: "var(--sub-2)" }} />
+          </div>
+          <div style={{ fontSize: 24, fontWeight: 700, color: "var(--ink)", letterSpacing: "-0.01em" }}>
+            {badgeCount}
+          </div>
+          <div style={{ marginTop: 4, fontSize: 11.5, color: "var(--sub-2)" }}>
+            {t("nav.badges")}
+          </div>
+        </Link>
         <Link
           href="/brain"
           style={{
@@ -235,8 +276,11 @@ function ProjectCard({ project: p, done }: { project: MyProjectItem; done: numbe
       }}
       className="my-project-card"
     >
-      {/* 封面 */}
-      <Cover slug={p.slug} hasCover={!!p.cover_image_path} />
+      {/* 封面 + 分会角标 */}
+      <div style={{ position: "relative" }}>
+        <Cover slug={p.slug} hasCover={!!p.cover_image_path} />
+        <ChapterBadgeMark domain={p.domain} />
+      </div>
 
       <div style={{ padding: "14px 16px 16px", display: "flex", flexDirection: "column", flex: 1 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8, flexWrap: "wrap" }}>

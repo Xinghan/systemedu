@@ -23,6 +23,7 @@ import { useAuthStore } from "@/lib/stores/auth-store"
 import { useT } from "@/lib/i18n/use-t"
 import { InlineLoading } from "@/components/ui/page-loading"
 import { BadgeWall } from "@/components/badges/BadgeWall"
+import { ChapterBadgeMark } from "@/components/badges/ChapterBadgeMark"
 
 type Status = "active" | "paused" | "shipped"
 type FilterKey = Status | "all"
@@ -475,6 +476,8 @@ function ForkCard({ f, onRemove }: { f: ForkItem; onRemove: () => void }) {
         <div style={{ position: "absolute", top: 12, right: 12 }}>
           {statusPip(f.status, t)}
         </div>
+        {/* spec 042: 分会角标 (左上角, 避开右上角状态标记) */}
+        <ChapterBadgeMark domain={f.domain} corner="top-left" />
       </div>
       <div
         style={{ padding: 16, display: "flex", flexDirection: "column", gap: 8, flex: 1 }}

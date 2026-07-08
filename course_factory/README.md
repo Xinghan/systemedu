@@ -12,6 +12,10 @@ SystemEdu 的富媒体课程内容生成组件。包含：
 
 **Skill 手册**：`.claude/skills/course_factory/SKILL.md`（本目录下的 `SKILL.md` 是 symlink 指向它）。
 
+**关联 skill**：`project_product_game`（`.claude/skills/project_product_game/`）—— 为一个项目生成
+"项目级产出物模拟游戏"（单个全屏 3D 交互 HTML，模拟项目最终成品，成品使用体验）。course_factory
+项目级流程在 Step P3.5（知识树确认后）调用它；也可独立按 slug 调用。产物落 `tests/project_game/<slug>_3D.html`。
+
 **用法**：
 ```python
 from course_factory import load_context, make_course_content, save_knode

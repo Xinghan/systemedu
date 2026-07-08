@@ -1,0 +1,1694 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=1280, initial-scale=1">
+<title>肌电义肢手 / Myoelectric Hand</title>
+<style>
+  :root{
+    /* deep space base — shared canvas */
+    --bg-0: oklch(0.14 0.035 265);
+    --bg-1: oklch(0.18 0.04 265);
+    --bg-2: oklch(0.22 0.045 265);
+    --bg-3: oklch(0.28 0.05 265);
+    --line: oklch(0.35 0.05 265 / 0.35);
+    --line-strong: oklch(0.55 0.08 265 / 0.55);
+    --fg: oklch(0.96 0.01 265);
+    --fg-dim: oklch(0.75 0.02 265);
+    --fg-mute: oklch(0.55 0.03 265);
+    --gold: oklch(0.85 0.14 85);
+    /* ROB-10 Living Prosthesis palette */
+    --myo:    oklch(0.70 0.17 20);   /* muscle red — EMG signal / effort */
+    --sinew:  oklch(0.78 0.13 45);   /* tendon orange — hand structure */
+    --neural: oklch(0.72 0.14 230);  /* neural blue — UI / servo command */
+    --force:  oklch(0.80 0.15 140);  /* force green — measured grip / safe window */
+    --dawn:   oklch(0.93 0.05 45);   /* highlight text */
+    /* functional semantic (allowed exceptions) */
+    --crush:  oklch(0.60 0.20 25);   /* crushed red */
+    --warnc:  oklch(0.80 0.15 85);   /* over-threshold amber */
+    --mono: 'JetBrains Mono','SF Mono',ui-monospace,Menlo,Consolas,monospace;
+    --sans: 'Inter','PingFang SC','Microsoft YaHei',system-ui,sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{
+    background:var(--bg-0); color:var(--fg);
+    font-family:var(--sans);
+    width:100vw; height:100vh; overflow:hidden;
+    display:flex;
+  }
+  .hidden{display:none !important;}
+
+  /* ---------- left sidebar 200px ---------- */
+  .game-sidebar{
+    width:200px; flex:0 0 200px; height:100%;
+    background:var(--bg-1);
+    border-right:1.5px solid var(--line-strong);
+    display:flex; flex-direction:column;
+    padding:14px 13px; gap:12px; overflow-y:auto;
+  }
+  .brand{font-family:var(--mono); font-size:11px; letter-spacing:.05em; color:var(--fg-mute); line-height:1.4;}
+  .brand b{display:block; color:var(--myo); font-size:13px; letter-spacing:.04em;}
+  #langBtn{
+    font-family:var(--mono); font-size:11px; cursor:pointer;
+    background:var(--bg-3); color:var(--fg); border:1.5px solid var(--line-strong);
+    padding:5px 9px; box-shadow:3px 3px 0 var(--bg-0); align-self:flex-start;
+  }
+  #langBtn:active{transform:translate(2px,2px); box-shadow:1px 1px 0 var(--bg-0);}
+  .side-h{font-family:var(--mono); font-size:10px; letter-spacing:.08em; color:var(--myo); text-transform:uppercase; margin-bottom:5px;}
+  .road{display:flex; flex-direction:column; font-size:10.5px;}
+  .road-step{display:flex; align-items:center; gap:6px; padding:3px 0; color:var(--fg-mute); line-height:1.25;}
+  .road-dot{width:9px; height:9px; flex:0 0 9px; border:1.5px solid var(--line-strong); background:transparent;}
+  .road-step.done .road-dot{background:var(--sinew); border-color:var(--sinew);}
+  .road-step.now{color:var(--fg);}
+  .road-step.now .road-dot{background:var(--gold); border-color:var(--gold); box-shadow:0 0 0 3px oklch(0.85 0.14 85 / .25);}
+  .road-line{width:1.5px; height:8px; margin-left:3.5px; background:var(--line);}
+  .task{background:var(--bg-2); border:1.5px solid var(--line); padding:9px 9px; font-size:11px; line-height:1.5; color:var(--fg-dim);}
+  .task b{color:var(--gold);}
+  .guide{font-size:10.5px; line-height:1.55; color:var(--fg-mute);}
+  .guide b{color:var(--fg-dim);}
+  .guide .why{margin-top:6px; padding:6px 7px; background:var(--bg-2); border-left:2px solid var(--myo); color:var(--fg-mute); display:block;}
+  .endmark{margin-top:auto; font-size:9.5px; color:var(--fg-mute); line-height:1.5; border-top:1px solid var(--line); padding-top:8px; font-family:var(--mono);}
+  .endmark span{color:var(--myo);}
+
+  /* ---------- right main ---------- */
+  .game-main{flex:1; height:100%; display:flex; flex-direction:column; min-width:0; padding:12px 14px; gap:10px;}
+  .hud{display:flex; align-items:stretch; gap:10px; flex:0 0 auto;}
+  .hud-title{flex:1; min-width:0;}
+  .hud-title h1{font-size:17px; letter-spacing:.01em;}
+  .hud-title h1 small{font-family:var(--mono); font-size:11px; color:var(--fg-mute); letter-spacing:.02em; margin-left:8px;}
+  .hud-read{font-size:11.5px; color:var(--fg-dim); margin-top:3px; line-height:1.4;}
+  .goal-chip{flex:0 0 auto; align-self:center; display:flex; gap:8px;}
+  .chip{font-family:var(--mono); font-size:10px; padding:5px 8px; border:1.5px solid var(--line-strong); background:var(--bg-2); color:var(--fg-dim); display:flex; flex-direction:column; gap:2px; min-width:80px;}
+  .chip .ck{color:var(--fg-mute); font-size:9px; letter-spacing:.05em;}
+  .chip .cv{font-size:12px; color:var(--fg);}
+  .chip.ok{border-color:var(--force); background:oklch(0.80 0.15 140 / .08);}
+  .chip.ok .cv{color:var(--force);}
+  .chip.hot{border-color:var(--myo); background:oklch(0.70 0.17 20 / .1);}
+  .chip.hot .cv{color:var(--myo);}
+
+  .stage{flex:1; min-height:0; display:flex; gap:12px; position:relative;}
+  .panel{background:var(--bg-1); border:1.5px solid var(--line); display:flex; flex-direction:column; min-height:0; min-width:0;}
+  .panel-h{font-family:var(--mono); font-size:10px; letter-spacing:.07em; color:var(--neural); text-transform:uppercase; padding:7px 10px; border-bottom:1px solid var(--line); flex:0 0 auto; display:flex; justify-content:space-between; align-items:center; gap:8px;}
+  .panel-b{flex:1; min-height:0; padding:10px; overflow-y:auto; display:flex; flex-direction:column; gap:8px;}
+
+  .btn{
+    font-family:var(--mono); font-size:11px; cursor:pointer;
+    background:var(--bg-3); color:var(--fg); border:1.5px solid var(--line-strong);
+    padding:6px 12px; box-shadow:3px 3px 0 var(--bg-0);
+  }
+  .btn:active{transform:translate(2px,2px); box-shadow:1px 1px 0 var(--bg-0);}
+  .btn.primary{background:var(--neural); border-color:var(--dawn); color:var(--bg-0);}
+  .btn.gold{background:oklch(0.85 0.14 85 / .15); border-color:var(--gold); color:var(--gold);}
+  .btn.myo{background:oklch(0.70 0.17 20 / .18); border-color:var(--myo); color:var(--myo);}
+  .btn:disabled{opacity:.35; cursor:not-allowed; transform:none; box-shadow:3px 3px 0 var(--bg-0);}
+  .btn.small{font-size:10px; padding:4px 8px; box-shadow:2px 2px 0 var(--bg-0);}
+
+  /* clench button (big, held) */
+  .clench-btn{
+    font-family:var(--mono); font-size:12px; cursor:pointer; user-select:none;
+    background:var(--bg-3); color:var(--fg-dim); border:1.5px solid var(--line-strong);
+    padding:10px 14px; box-shadow:3px 3px 0 var(--bg-0); text-align:center; line-height:1.3;
+  }
+  .clench-btn.active{background:oklch(0.70 0.17 20 / .3); border-color:var(--myo); color:var(--dawn); box-shadow:1px 1px 0 var(--bg-0); transform:translate(2px,2px);}
+
+  /* pipeline slot cards */
+  .pipe-flow{display:flex; align-items:stretch; gap:6px; flex-wrap:wrap;}
+  .pipe-slot{flex:1; min-width:96px; border:1.5px dashed var(--line-strong); background:var(--bg-2); padding:8px; display:flex; flex-direction:column; gap:4px; cursor:pointer; min-height:64px; justify-content:center;}
+  .pipe-slot.filled{border-style:solid; border-color:var(--sinew); background:oklch(0.78 0.13 45/.1);}
+  .pipe-slot .pk{font-family:var(--mono); font-size:10.5px; color:var(--fg); display:flex; justify-content:space-between; align-items:center;}
+  .pipe-slot.filled .pk{color:var(--sinew);}
+  .pipe-slot .pf{font-family:var(--mono); font-size:8.5px; color:var(--fg-mute); line-height:1.45; white-space:pre-wrap;}
+  .pipe-arrow{align-self:center; color:var(--fg-mute); font-family:var(--mono); font-size:14px;}
+
+  input[type=range]{width:100%; accent-color:var(--neural);}
+  .rng-row{display:flex; align-items:center; gap:8px;}
+  .rng-row label{font-family:var(--mono); font-size:9.5px; color:var(--fg-mute); flex:0 0 auto; min-width:52px;}
+  .rng-row .rv{font-family:var(--mono); font-size:10px; color:var(--neural); flex:0 0 auto; min-width:38px; text-align:right;}
+
+  .toggle{display:flex; gap:8px; align-items:center; flex-wrap:wrap;}
+  .toggle button{font-family:var(--mono); font-size:10px; padding:4px 10px; border:1.5px solid var(--line); background:var(--bg-3); color:var(--fg-mute); cursor:pointer;}
+  .toggle button.on{border-color:var(--neural); color:var(--neural); background:oklch(0.72 0.14 230/.12);}
+
+  /* signal strength bar */
+  .strength-wrap{display:flex; flex-direction:column; gap:4px;}
+  .strength-bar{height:26px; background:var(--bg-2); border:1.5px solid var(--line-strong); position:relative; overflow:hidden;}
+  .strength-fill{position:absolute; left:0; top:0; bottom:0; background:linear-gradient(90deg, var(--myo), var(--sinew)); width:0%; transition:width .05s linear;}
+  .strength-lbl{position:absolute; right:6px; top:50%; transform:translateY(-50%); font-family:var(--mono); font-size:11px; color:var(--dawn); z-index:2;}
+  .strength-raw{position:absolute; left:6px; top:50%; transform:translateY(-50%); font-family:var(--mono); font-size:9px; color:var(--warnc); z-index:2;}
+
+  /* generic canvas host */
+  .cv-host{flex:1; min-height:0; display:flex; flex-direction:column; padding:5px;}
+  .cv-host canvas{flex:1; min-height:0; width:100%;}
+  .scope-cap{font-family:var(--mono); font-size:9px; color:var(--fg-mute); padding:4px 8px; border-top:1px solid var(--line); line-height:1.5; flex:0 0 auto;}
+
+  /* forearm electrode column (ch1) */
+  .elec-list{display:flex; flex-direction:column; gap:6px;}
+  .elec-item{border:1.5px solid var(--line); background:var(--bg-2); padding:6px 8px; display:flex; align-items:center; gap:8px; cursor:pointer;}
+  .elec-item.sel{border-color:var(--gold);}
+  .elec-item .ed{width:14px;height:14px;flex:0 0 14px;border:1.5px solid var(--line-strong);}
+  .elec-item.signal .ed{background:var(--myo);border-color:var(--myo);}
+  .elec-item.ref .ed{background:var(--neural);border-color:var(--neural);}
+  .elec-item.gnd .ed{background:var(--fg-mute);border-color:var(--fg-mute);}
+  .elec-item .en{font-family:var(--mono);font-size:10.5px;color:var(--fg-dim);}
+  .elec-item .es{font-family:var(--mono);font-size:9px;margin-left:auto;}
+
+  /* metrics cells */
+  .metrics-row{display:flex; gap:7px; flex-wrap:wrap;}
+  .m-cell{flex:1; background:var(--bg-2); border:1.5px solid var(--line); padding:7px 8px; text-align:center; min-width:70px;}
+  .m-cell .mk{font-family:var(--mono); font-size:8.5px; color:var(--fg-mute); letter-spacing:.04em;}
+  .m-cell .mv{font-family:var(--mono); font-size:17px; margin-top:2px;}
+  .m-cell.good .mv{color:var(--force);}
+  .m-cell.bad .mv{color:var(--crush);}
+  .m-cell.hl .mv{color:var(--neural);}
+
+  /* intent lamp */
+  .lamp{display:flex; align-items:center; gap:10px; padding:8px 10px; border:1.5px solid var(--line-strong); background:var(--bg-2);}
+  .lamp .dot{width:18px;height:18px;border-radius:50%;background:var(--bg-3);border:1.5px solid var(--line-strong);}
+  .lamp.clench{border-color:var(--myo);} .lamp.clench .dot{background:var(--myo);box-shadow:0 0 12px var(--myo);}
+  .lamp .lt{font-family:var(--mono);font-size:13px;color:var(--fg);}
+
+  /* diagnostic chip */
+  .diag-chip{border:1.5px solid var(--warnc); background:oklch(0.80 0.15 85/.08); padding:8px 9px; font-size:10.5px; line-height:1.5; color:var(--fg-dim); display:flex; flex-direction:column; gap:6px;}
+  .diag-chip b{color:var(--warnc); font-size:10px; font-family:var(--mono);}
+  .diag-chip.info{border-color:var(--fg-mute); background:transparent;}
+  .diag-chip.info b{color:var(--fg-mute);}
+
+  /* control stage (ch4) */
+  .grasp-stage{flex:1;min-height:0;display:flex;gap:12px;}
+  .hand-col{flex:1.2;min-width:0;display:flex;flex-direction:column;}
+  .ctrl-col{flex:1;min-width:0;display:flex;flex-direction:column;}
+  .obj-pick{display:flex;gap:6px;flex-wrap:wrap;}
+  .obj-btn{font-family:var(--mono);font-size:10px;padding:5px 9px;border:1.5px solid var(--line);background:var(--bg-3);color:var(--fg-mute);cursor:pointer;}
+  .obj-btn.on{border-color:var(--force);color:var(--force);background:oklch(0.80 0.15 140/.1);}
+  .stage-step{border:1.5px solid var(--line);background:var(--bg-2);padding:7px 9px;display:flex;flex-direction:column;gap:5px;}
+  .stage-step.on{border-color:var(--neural);}
+  .stage-step.done{border-color:var(--force);}
+  .stage-step .sh{font-family:var(--mono);font-size:10px;color:var(--fg-dim);display:flex;justify-content:space-between;align-items:center;}
+  .stage-step.done .sh{color:var(--force);}
+  .force-win{font-family:var(--mono);font-size:9px;color:var(--fg-mute);line-height:1.5;}
+
+  /* discovery / settle overlay */
+  .fin-overlay{position:absolute;inset:0;background:var(--bg-0);border:1.5px solid var(--line-strong);display:flex;z-index:30;}
+  .fin-vis{flex:1.3;min-width:0;display:flex;flex-direction:column;border-right:1.5px solid var(--line);}
+  .fin-vis canvas{flex:1;min-height:0;width:100%;}
+  .fin-side{flex:1;min-width:0;display:flex;flex-direction:column;gap:10px;padding:14px;overflow-y:auto;}
+  .fin-card{border:1.5px solid var(--line-strong);background:var(--bg-1);padding:11px 12px;opacity:0;transform:translateY(8px);transition:opacity .5s,transform .5s;}
+  .fin-card.show{opacity:1;transform:none;}
+  .fin-card .ph{font-family:var(--mono);font-size:9.5px;letter-spacing:.08em;color:var(--neural);text-transform:uppercase;margin-bottom:6px;}
+  .fin-card .row{display:flex;justify-content:space-between;font-size:11px;padding:2.5px 0;color:var(--fg-dim);gap:10px;}
+  .fin-card .row .rv{font-family:var(--mono);color:var(--fg);text-align:right;}
+  .fin-card .live{display:inline-block;font-family:var(--mono);font-size:9.5px;color:var(--force);border:1.5px solid var(--force);padding:2px 7px;letter-spacing:.08em;}
+  .fin-card .badge{display:inline-block;font-family:var(--mono);font-size:10px;color:var(--sinew);border:1.5px solid var(--sinew);padding:3px 8px;letter-spacing:.02em;margin-top:4px;}
+  .decision-log{font-size:10px;line-height:1.6;color:var(--fg-dim);}
+  .decision-log .dl{display:flex;gap:6px;align-items:baseline;}
+  .decision-log .dl .m{font-family:var(--mono);font-size:9px;flex:0 0 auto;}
+  .decision-log .dl .ok{color:var(--force);}
+  .decision-log .dl .rw{color:var(--warnc);}
+
+  .toast{position:absolute;left:50%;top:14px;transform:translateX(-50%);background:var(--bg-3);border:1.5px solid var(--gold);color:var(--gold);font-family:var(--mono);font-size:11px;padding:7px 14px;z-index:60;box-shadow:4px 4px 0 var(--bg-0);opacity:0;transition:opacity .3s;pointer-events:none;max-width:70%;text-align:center;line-height:1.4;}
+  .toast.show{opacity:1;}
+  .toast.err{border-color:var(--crush);color:var(--crush);}
+  .toast.ok{border-color:var(--force);color:var(--force);}
+</style>
+</head>
+<body>
+
+<aside class="game-sidebar">
+  <div class="brand"><b>MYO HAND</b><span data-zh="肌电义肢手 · ROB-10" data-en="Myoelectric Hand · ROB-10">肌电义肢手 · ROB-10</span></div>
+  <button id="langBtn">EN</button>
+  <div>
+    <div class="side-h" data-zh="项目路线" data-en="Roadmap">项目路线</div>
+    <div class="road" id="roadmap"></div>
+  </div>
+  <div class="task" id="taskCard"></div>
+  <div class="guide" id="guideCard"></div>
+  <div class="endmark" id="endmark"></div>
+</aside>
+
+<main class="game-main">
+  <div class="hud">
+    <div class="hud-title">
+      <h1><span data-zh="肌电义肢手" data-en="Myoelectric Hand">肌电义肢手</span><small>sEMG · Open Bionics · e-NABLE</small></h1>
+      <div class="hud-read" id="hudRead"></div>
+    </div>
+    <div class="goal-chip">
+      <div class="chip"><span class="ck" data-zh="阶段" data-en="PHASE">阶段</span><span class="cv" id="chipPhase">SIGNAL</span></div>
+      <div class="chip hot" id="chipEmgBox"><span class="ck" data-zh="发力" data-en="EFFORT">发力</span><span class="cv" id="chipEmg">--</span></div>
+      <div class="chip" id="chipForceBox"><span class="ck" data-zh="握力" data-en="GRIP">握力</span><span class="cv" id="chipForce">--</span></div>
+      <div class="chip" id="chipStatBox"><span class="ck" data-zh="状态" data-en="STATUS">状态</span><span class="cv" id="chipStat">SETUP</span></div>
+    </div>
+  </div>
+
+  <!-- ============ CHAPTER 1 : SIGNAL ============ -->
+  <div class="stage" id="ch1">
+    <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:10px;">
+      <div class="panel" style="flex:1.1;min-height:0;">
+        <div class="panel-h">
+          <span data-zh="肌电示波器 · 实时波形" data-en="EMG Oscilloscope · Live">肌电示波器 · 实时波形</span>
+          <span id="scopeMode" style="font-family:var(--mono);font-size:9px;color:var(--fg-mute)"></span>
+        </div>
+        <div class="cv-host"><canvas id="scopeCanvas"></canvas></div>
+        <div class="scope-cap" id="scopeCap"></div>
+      </div>
+      <div class="panel" style="flex:0 0 auto;">
+        <div class="panel-h"><span data-zh="信号处理链 · 组装" data-en="Signal Chain · Assemble">信号处理链 · 组装</span></div>
+        <div class="panel-b" style="gap:10px;">
+          <div class="pipe-flow" id="pipeFlow"></div>
+          <div id="pipeCtl"></div>
+          <div class="strength-wrap">
+            <div style="font-family:var(--mono);font-size:9.5px;color:var(--fg-mute);" data-zh="发力强度输出" data-en="Effort Strength Output">发力强度输出</div>
+            <div class="strength-bar"><div class="strength-fill" id="strengthFill"></div><span class="strength-raw" id="strengthRaw"></span><span class="strength-lbl" id="strengthLbl">--</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="panel" style="flex:0 0 320px;">
+      <div class="panel-h"><span data-zh="前臂电极贴放" data-en="Forearm Electrodes">前臂电极贴放</span></div>
+      <div class="panel-b">
+        <div class="cv-host" style="flex:0 0 200px;"><canvas id="armCanvas"></canvas></div>
+        <div class="elec-list" id="elecList"></div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:2px;">
+          <span style="font-family:var(--mono);font-size:9px;color:var(--fg-mute);" data-zh="握拳:" data-en="Clench:">握拳:</span>
+          <div class="clench-btn" id="clenchBtn" data-zh="按住 = 握拳" data-en="HOLD = clench">按住 = 握拳</div>
+        </div>
+        <button class="btn primary" id="ch1Next" disabled data-zh="进入意图决策 →" data-en="To Intent →">进入意图决策 →</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ CHAPTER 2 : INTENT ============ -->
+  <div class="stage hidden" id="ch2">
+    <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:10px;">
+      <div class="panel" style="flex:1;min-height:0;">
+        <div class="panel-h">
+          <span data-zh="强度曲线 + 阈值决策" data-en="Strength + Threshold">强度曲线 + 阈值决策</span>
+          <span id="intentLampMini" style="font-family:var(--mono);font-size:9px;"></span>
+        </div>
+        <div class="cv-host"><canvas id="decideCanvas"></canvas></div>
+        <div class="scope-cap" id="decideCap"></div>
+      </div>
+    </div>
+    <div class="panel" style="flex:0 0 340px;">
+      <div class="panel-h"><span data-zh="决策控制台" data-en="Decision Console">决策控制台</span></div>
+      <div class="panel-b" id="intentPanel"></div>
+    </div>
+  </div>
+
+  <!-- ============ CHAPTER 3 : HAND ============ -->
+  <div class="stage hidden" id="ch3">
+    <div class="panel" style="flex:1.2;min-width:0;">
+      <div class="panel-h">
+        <span data-zh="腱驱动手 · 侧面" data-en="Tendon-Driven Hand">腱驱动手 · 侧面</span>
+        <span id="handMode" style="font-family:var(--mono);font-size:9px;color:var(--fg-mute)"></span>
+      </div>
+      <div class="cv-host"><canvas id="handCanvas"></canvas></div>
+      <div class="scope-cap" id="handCap"></div>
+    </div>
+    <div class="panel" style="flex:0 0 340px;">
+      <div class="panel-h"><span data-zh="舵机控制台" data-en="Servo Console">舵机控制台</span></div>
+      <div class="panel-b" id="handPanel"></div>
+    </div>
+  </div>
+
+  <!-- ============ CHAPTER 4 : GRASP ============ -->
+  <div class="stage hidden" id="ch4">
+    <div class="grasp-stage">
+      <div class="panel hand-col">
+        <div class="panel-h">
+          <span data-zh="系统台 · 抓取" data-en="System · Grasp">系统台 · 抓取</span>
+          <span id="graspMode" style="font-family:var(--mono);font-size:9px;color:var(--fg-mute)"></span>
+        </div>
+        <div class="cv-host"><canvas id="graspCanvas"></canvas></div>
+        <div class="scope-cap" id="graspCap"></div>
+      </div>
+      <div class="panel ctrl-col">
+        <div class="panel-h"><span data-zh="控制链 + PID 力闭环" data-en="Control + PID Force Loop">控制链 + PID 力闭环</span></div>
+        <div class="panel-b" id="graspPanel"></div>
+      </div>
+      <div class="fin-overlay hidden" id="finOverlay">
+        <div class="fin-vis">
+          <div class="panel-h"><span data-zh="EMG 信号 vs 实测握力 · 同步验证" data-en="EMG vs Measured Grip · Sync Proof">EMG 信号 vs 实测握力 · 同步验证</span></div>
+          <div style="flex:1;min-height:0;display:flex;flex-direction:column;padding:5px;"><canvas id="finCanvas"></canvas></div>
+        </div>
+        <div class="fin-side" id="finSide"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+</main>
+
+<script>
+"use strict";
+/* =====================================================================
+   MYOELECTRIC PROSTHETIC HAND — project-level product simulation
+   Single file, zero deps. Real-time signal chain -> physical hand ->
+   PID force loop. All values computed for real; player decisions leave
+   physical consequences (jitter / crush egg / drop object).
+   ===================================================================== */
+
+/* ---------- deterministic noise primitives (same family as prior pilots) ---------- */
+function hash01(x, s){ const v = Math.sin(x*127.1 + s*311.7 + 74.7)*43758.5453; return v - Math.floor(v); }
+function n11(x, s){ return hash01(x, s)*2 - 1; }
+function smoothstep(a, b, x){ const t = Math.min(1, Math.max(0, (x-a)/(b-a))); return t*t*(3-2*t); }
+function clamp(v, a, b){ return Math.min(b, Math.max(a, v)); }
+function lerp(a, b, t){ return a + (b-a)*t; }
+
+/* ---------- graspable objects: each has a real safe-force window [hold, crush] (Newtons) ---------- */
+const OBJECTS = {
+  egg:   {zh:'鸡蛋', en:'egg',        hold:1.2, crush:3.0, stiffness:14, size:26, color:'oklch(0.90 0.06 85)'},
+  cup:   {zh:'塑料杯', en:'plastic cup', hold:0.8, crush:6.0, stiffness:9,  size:30, color:'oklch(0.80 0.05 230)'},
+  water: {zh:'水球', en:'water balloon', hold:0.6, crush:2.2, stiffness:6,  size:28, color:'oklch(0.72 0.14 200)'},
+  steel: {zh:'钢块', en:'steel block', hold:2.0, crush:99,  stiffness:60, size:24, color:'oklch(0.70 0.02 265)'},
+};
+
+/* =====================================================================
+   STATE
+   ===================================================================== */
+const S = {
+  chapter: 1,
+  lang: 'zh',
+  // ch1 electrodes: each electrode has a placement slot; correct = on flexor belly
+  electrodes: { signal:'belly', ref:'belly2', gnd:'wrist', placedOk:true, sel:'signal' },
+  clenching: false,
+  effortTarget: 0,      // 0..1 driven by clench button (with muscle rise/fall dynamics)
+  effort: 0,            // smoothed actual effort feeding EMG amplitude
+  // signal chain
+  pipeline: { rect:false, smooth:false, norm:false, notch:false },
+  smoothN: 8,
+  calib: { base:null, peak:null, done:false },
+  // ch2 decision
+  threshold: 0.42,
+  hyst: { on:false, hi:0.5, lo:0.32 },
+  debounceN: 1,
+  intent: 'RELAX',
+  hitStats: { tp:0, fp:0, fn:0, trials:0 },
+  trialRunning: false,
+  // ch3 hand
+  hand: { material:'tpu', servoCalib:[], closure:0, manualPull:0, servoAngle:0, useServo:false },
+  // ch4 control
+  ctrl: { stage:0, outSmooth:false, rateLimit:false, force:false, Kp:0, Ki:0, Kd:0, targetForce:1.6 },
+  object: 'egg',
+  force: 0, integ: 0, prevErr: 0,
+  result: { grasped:false, crushed:false, dropped:false },
+  lifting: false,
+  freeMode: false,
+  // mistake flags for the final decision log
+  _everJittered:false, _everCrushed:false, _everDropped:false, _everBadElec:false,
+  // running buffers (filled by the sim loop)
+  rawBuf: [], rectBuf: [], smoothBuf: [], strengthBuf: [], forceBuf: [], angleBuf: [], emgBuf: [],
+};
+const BUF = 240; // scope buffer length
+
+/* =====================================================================
+   PURE FUNCTIONS — EMG synthesis, signal chain, decision, kinematics, PID
+   ===================================================================== */
+
+/* raw sEMG at sim-time t (seconds), given effort 0..1 and electrode quality.
+   Physically: AC burst (high-freq carrier gated by effort) + baseline noise +
+   50Hz mains. Mean ~ 0. Amplitude scaled by electrode placement quality. */
+function emgRaw(t, effort, elecOk){
+  const q = elecOk ? 1.0 : 0.4;              // bad placement -> weak signal
+  const noiseAmp = elecOk ? 0.05 : 0.16;     // bad placement -> more noise
+  const mainsAmp = elecOk ? 0.02 : 0.09;     // bad placement -> more 50Hz pickup
+  // motor-unit burst: sum of a few high-freq carriers, amplitude ~ effort
+  const carrier = Math.sin(2*Math.PI*90*t) + 0.7*Math.sin(2*Math.PI*140*t + 1.3)
+                + 0.5*Math.sin(2*Math.PI*220*t + 2.1);
+  const burst = q * effort * carrier * (0.6 + 0.4*hash01(Math.floor(t*300), 7));
+  const noise = noiseAmp * n11(Math.floor(t*400), 3);
+  const mains = mainsAmp * Math.sin(2*Math.PI*50*t);
+  return burst + noise + mains;               // ~ [-1.5, 1.5] normalized "mV-ish"
+}
+function rectify(x){ return Math.abs(x); }
+/* moving average of the last N samples of a buffer (up to and including last) */
+function movAvg(buf, N){
+  if(!buf.length) return 0;
+  const n = Math.min(N, buf.length);
+  let s = 0; for(let i=buf.length-n; i<buf.length; i++) s += buf[i];
+  return s / n;
+}
+/* apply a simple 50Hz notch approximation on the raw sample stream is hard per-sample;
+   we model the notch as removing the mains component from the smoothed envelope. */
+function normalize(v, base, peak){
+  if(base==null || peak==null || peak<=base) return clamp(v, 0, 1);
+  return clamp((v - base) / (peak - base), 0, 1);
+}
+/* decision with threshold / hysteresis / debounce. state carries {cnt, cur}. */
+function decide(strength, S){
+  const st = decide._st || (decide._st = {cnt:0, cur:'RELAX'});
+  let want;
+  if(S.hyst.on){
+    if(st.cur==='RELAX') want = strength >= S.hyst.hi ? 'CLENCH' : 'RELAX';
+    else                 want = strength <= S.hyst.lo ? 'RELAX' : 'CLENCH';
+  } else {
+    want = strength >= S.threshold ? 'CLENCH' : 'RELAX';
+  }
+  // debounce: require N consecutive samples of the new state
+  if(want !== st.cur){
+    st.cnt++;
+    if(st.cnt >= S.debounceN){ st.cur = want; st.cnt = 0; }
+  } else st.cnt = 0;
+  return st.cur;
+}
+function decideReset(){ decide._st = {cnt:0, cur:'RELAX'}; }
+
+/* finger kinematics: tendon displacement d in [0,1] -> per-joint bend angle (rad).
+   3 joints per finger; total curl proportional to d, distributed with limits. */
+function fingerJoints(d){
+  const curl = clamp(d, 0, 1);
+  // MCP, PIP, DIP progressively bend; PIP bends most (like a real finger)
+  return [curl*1.05, curl*1.45, curl*1.15]; // radians at full curl
+}
+/* servo angle (0..180 deg) -> tendon displacement via calibration curve (piecewise
+   linear through calibration points). If uncalibrated, identity-ish default. */
+function servoToTendon(angle, calib){
+  const a = clamp(angle, 0, 180);
+  if(!calib || calib.length < 2){ return a/180; }
+  const pts = calib.slice().sort((p,q)=>p.angle-q.angle);
+  if(a <= pts[0].angle) return pts[0].disp;
+  if(a >= pts[pts.length-1].angle) return pts[pts.length-1].disp;
+  for(let i=1;i<pts.length;i++){
+    if(a <= pts[i].angle){
+      const t = (a - pts[i-1].angle)/(pts[i].angle - pts[i-1].angle + 1e-9);
+      return lerp(pts[i-1].disp, pts[i].disp, t);
+    }
+  }
+  return 1;
+}
+/* contact force: hand closure 0..1 vs object. Force rises once closure passes the
+   contact point (finger touches object surface); linear stiffness beyond. */
+function contactForce(closure, obj){
+  const contactAt = 1 - (obj.size/40); // bigger object -> contact earlier (smaller closure)
+  const pen = closure - contactAt;
+  return pen > 0 ? obj.stiffness * pen : 0;
+}
+/* one PID step. Returns {u, integ, prevErr}. dt in seconds. */
+function pidStep(target, meas, K, integ, prevErr, dt){
+  const e = target - meas;
+  const di = integ + e*dt;
+  const de = (e - prevErr)/dt;
+  const u = K.Kp*e + K.Ki*di + K.Kd*de;
+  return { u, integ:di, prevErr:e, e };
+}
+
+/* =====================================================================
+   i18n TEXT TABLE
+   ===================================================================== */
+const T = {
+  zh:{
+    phase:{1:'信号',2:'意图',3:'造手',4:'抓取'},
+    road:['1 · 净化信号','2 · 意图决策','3 · 造手标定','4 · 力闭环抓取'],
+    hud:{
+      1:'把杂乱的肌肉电信号净化成一条干净的“发力强度”曲线。',
+      2:'设阈值+迟滞,把强度曲线变成稳定的“握拳/放松”意图。',
+      3:'造一只腱驱动的手,标定舵机角度与手指弯曲的映射。',
+      4:'接入肌肉信号 + 力反馈 PID,让手握住鸡蛋而不捏碎。',
+    },
+    task:{
+      1:'贴对电极 → 按住<b>握拳</b> → 组装<b>整流/平滑/归一化</b>三卡并标定,得到发力强度。',
+      2:'拖<b>阈值线</b>、加<b>迟滞</b>,跑试验把命中率调到 ≥90% 且边界不颤动。',
+      3:'拉腱看手指弯曲 → 装舵机 → <b>标定</b>角度↔弯曲(至少 3 点)。',
+      4:'开环→加平滑限速→接力反馈→调 <b>P/I/D</b>,握住<b>鸡蛋</b>不碎不掉。',
+    },
+    guide:{
+      1:{t:'原始 EMG 是上下跳动、均值≈0 的交流信号,不能直接用。<b>整流</b>取绝对值翻正,<b>平滑</b>滑动平均出强度,<b>归一化</b>到 0-100%。电极贴错肌腹→信号弱、噪声大。',
+         w:'为什么 3 个电极? 信号-参考做差抑制共模噪声(差分),地做基准。贴在前臂屈肌肌腹上信号最强。'},
+      2:{t:'阈值太低→放松时噪声误触发;太高→轻握漏检。加<b>迟滞</b>(上下两条线)消除边界颤动,<b>去抖</b>滤掉毛刺。',
+         w:'迟滞为何消颤? 越过上线才算握、跌破下线才算松,中间保持——边界处不会来回横跳(chatter)。'},
+      3:{t:'拉腱线→手指按运动学弯曲,松线→弹性回位。<b>TPU</b>柔性关节可直接弯,PLA 刚性需铰链。舵机角经 PWM 拉腱,必须<b>标定</b>角度↔弯曲曲线。',
+         w:'为什么标定? 舵机角度是“命令值”,手指实际弯多少取决于腱几何——不标定,第4章比例控制会抓过头或抓不到。'},
+      4:{t:'开环直驱→手抖(残留噪声传到手)。加<b>输出平滑+限速</b>变柔顺。指尖 FSR 读<b>实测握力</b>,用 <b>P</b> 逼近目标力、<b>D</b> 抑超调、<b>I</b> 消稳态误差。',
+         w:'为什么要力闭环? 只按角度驱动会把鸡蛋捏碎。力是真实反馈变量:测到力→调整→稳定在“握得住不捏碎”的安全区间。'},
+    },
+    // ch1
+    elec:{signal:'信号电极',ref:'参考电极',gnd:'地电极'},
+    elecPos:{belly:'屈肌肌腹',belly2:'屈肌肌腹(旁)',wrist:'手腕(骨突)',bone:'尺骨(骨头上)',far:'远端(离肌肉远)'},
+    elecOkNote:'位置正确 · 信号强',
+    elecBadNote:'位置不佳 · 信号弱/噪声大',
+    clenchHint:'按住下方“握拳”按钮观察信号爆发',
+    pipeSlots:{raw:'原始',rect:'整流',smooth:'平滑',norm:'归一化'},
+    pipeF:{rect:'rect = |raw|\n负半周翻正',smooth:'mean(N)\n滑动平均',norm:'(v−base)\n/(peak−base)'},
+    addCard:'装上', added:'已装',
+    smoothWin:'窗口 N',
+    notch:'50Hz 陷波',
+    calibDo:'标定基线/峰值', calibBase:'记录放松基线', calibPeak:'记录全力峰值', calibDone:'标定完成',
+    calibHint:'先放松点“基线”,再全力握拳点“峰值”',
+    scopeRaw:'原始 EMG (交流, 均值≈0)',
+    scopeRect:'整流后 (全正)',
+    scopeSmooth:'平滑后 (发力强度)',
+    needChain:'装齐整流+平滑+归一化并标定',
+    // ch2
+    intentClench:'握拳 CLENCH', intentRelax:'放松 RELAX',
+    thr:'阈值', hystOn:'迟滞', hystHi:'上阈', hystLo:'下阈', debounce:'去抖 N',
+    runTrials:'跑 20 次握拳/放松试验', trialsRunning:'试验中…',
+    hit:'命中率', fp:'误触发', fn:'漏检',
+    chatterWarn:'边界颤动! 加迟滞消除',
+    needHit:'命中率需 ≥90% 且边界不颤动',
+    // ch3
+    material:'关节材料', matPLA:'PLA 刚性', matTPU:'TPU 柔性',
+    manualPull:'手动拉腱', useServo:'切换舵机驱动',
+    servoAngle:'舵机角度', recordPt:'记录标定点', calibPts:'标定点',
+    handCapManual:'拉腱线→手指弯曲,松开→弹性回位',
+    handCapServo:'舵机角度→PWM→拉腱→弯曲; 记录角度↔弯曲标定点',
+    matBadNote:'PLA 无铰链→关节卡顿',
+    needCalib:'装舵机并记录至少 3 个标定点',
+    // ch4
+    object:'物体', stageLbl:'控制链',
+    stages:['开环直驱','加输出平滑+限速','接入 FSR 力反馈','加比例控制 P','加 D 抑超调','加 I 消稳态误差'],
+    stageBtns:['开环驱动','加平滑限速','接力反馈','启用 P','启用 D','启用 I'],
+    targetForce:'目标握力',
+    startGrasp:'握拳抓取', release:'放松放下', lift:'尝试提起',
+    demoRun:'一键端到端演示',
+    resGrasp:'稳稳握住!', resCrush:'捏碎了!', resDrop:'滑落了!',
+    forceWin:'安全力窗',
+    diagTitle:'诊断',
+    diag:{
+      jitter:{t:'手在抖动/过冲',d:'开环直驱把强度曲线的残留噪声直接传到手。加输出平滑 + 限速。',b:'加平滑限速'},
+      crush:{t:'鸡蛋被捏碎',d:'握力超过安全上限。无力反馈或目标力过高或缺 D 项(超调)。接入 FSR 力反馈并加 D。',b:'接力反馈+加D'},
+      drop:{t:'物体滑落',d:'握力不足(低于保持力)。稳态误差大——只有 P 没有 I。加 I 项消除残差。',b:'加 I 项'},
+      noforce:{t:'还没接力反馈',d:'当前按角度开环驱动,握力不可控。接入 FSR 让力成为反馈变量。',b:'接力反馈'},
+    },
+    egg:'鸡蛋', done:'完成',
+    // finale
+    finTitle:'力闭环验证',
+    proved:'验证通过 · 手跟随肌肉',
+    cardOut:'产出物',
+    cardSettle:'结算 · 工程决策回顾',
+    fObj:'握住物体', fForce:'稳态握力', fTarget:'目标力', fErr:'稳态误差', fPID:'PID 参数', fHit:'意图命中率',
+    badgeRepo:'开源手模型 remix · Thingiverse 风',
+    badgeCode:'控制代码仓库 · Arduino + Python',
+    logGood:{
+      elec:'电极贴对肌腹,信号干净',
+      smooth:'平滑窗口合适,手不抖',
+      hyst:'加了迟滞,边界不颤动',
+      pid:'PID 力闭环调好,握得住不捏碎',
+    },
+    logRework:{
+      elec:'曾电极贴错(信号弱),后修正',
+      jitter:'曾开环直驱(手抖),后加平滑限速',
+      crush:'曾捏碎鸡蛋,后加力反馈+D',
+      drop:'曾握力不足滑落,后加 I 项',
+    },
+    freeMode:'自由抓取 (换物体)',
+    freeHint:'换不同物体,各有不同安全力窗,反复练力控。',
+    syncEMG:'EMG 强度', syncForce:'实测握力', syncTarget:'目标力',
+  },
+  en:{
+    phase:{1:'SIGNAL',2:'INTENT',3:'HAND',4:'GRASP'},
+    road:['1 · Clean Signal','2 · Intent','3 · Build & Calibrate','4 · Force-Loop Grasp'],
+    hud:{
+      1:'Turn a messy muscle-electric signal into a clean "effort strength" curve.',
+      2:'Set threshold + hysteresis to make a stable clench/relax intent.',
+      3:'Build a tendon-driven hand; calibrate servo angle to finger bend.',
+      4:'Add muscle signal + force-feedback PID so the hand holds an egg without crushing it.',
+    },
+    task:{
+      1:'Place electrodes → HOLD <b>clench</b> → assemble <b>rectify/smooth/normalize</b> and calibrate.',
+      2:'Drag the <b>threshold</b>, add <b>hysteresis</b>; tune hit-rate to ≥90% with no chatter.',
+      3:'Pull the tendon → mount servo → <b>calibrate</b> angle↔bend (≥3 points).',
+      4:'Open-loop→smoothing→force feedback→tune <b>P/I/D</b>; hold the <b>egg</b> without crush/drop.',
+    },
+    guide:{
+      1:{t:'Raw EMG is an AC signal swinging around 0 — unusable directly. <b>Rectify</b> flips it positive, <b>smooth</b> (moving average) makes a strength curve, <b>normalize</b> to 0-100%. Wrong electrode spot → weak, noisy signal.',
+         w:'Why 3 electrodes? Signal-minus-reference rejects common-mode noise (differential); ground sets the baseline. On the forearm flexor belly the signal is strongest.'},
+      2:{t:'Threshold too low → noise false-triggers on relax; too high → soft clench missed. Add <b>hysteresis</b> (two lines) to kill boundary chatter, and <b>debounce</b> to drop glitches.',
+         w:'Why does hysteresis kill chatter? Cross the upper line to clench, drop below the lower to relax, hold in between — the boundary never flickers back and forth.'},
+      3:{t:'Pull the tendon → finger bends by kinematics; release → elastic return. <b>TPU</b> flexible joints bend directly, rigid PLA needs a hinge. Servo pulls the tendon via PWM — you must <b>calibrate</b> angle↔bend.',
+         w:'Why calibrate? Servo angle is the "command"; how much the finger actually bends depends on tendon geometry — without calibration, Ch.4 proportional control over/under-grips.'},
+      4:{t:'Open-loop direct drive → hand jitters (residual noise reaches the hand). Add <b>output smoothing + rate limit</b>. Fingertip FSR reads <b>measured grip force</b>; use <b>P</b> to approach target, <b>D</b> to curb overshoot, <b>I</b> to remove steady-state error.',
+         w:'Why a force loop? Driving by angle alone crushes the egg. Force is a real feedback variable: measure it → adjust → settle in the "hold-not-crush" safe window.'},
+    },
+    elec:{signal:'Signal',ref:'Reference',gnd:'Ground'},
+    elecPos:{belly:'flexor belly',belly2:'flexor belly (adj.)',wrist:'wrist (bony)',bone:'ulna (on bone)',far:'distal (far from muscle)'},
+    elecOkNote:'good spot · strong signal',
+    elecBadNote:'poor spot · weak/noisy',
+    clenchHint:'hold the "clench" button to see the signal burst',
+    pipeSlots:{raw:'raw',rect:'rectify',smooth:'smooth',norm:'normalize'},
+    pipeF:{rect:'rect = |raw|\nflip negatives',smooth:'mean(N)\nmoving avg',norm:'(v−base)\n/(peak−base)'},
+    addCard:'add', added:'added',
+    smoothWin:'window N',
+    notch:'50Hz notch',
+    calibDo:'calibrate base/peak', calibBase:'record relax base', calibPeak:'record full peak', calibDone:'calibrated',
+    calibHint:'relax then click Base, full-clench then click Peak',
+    scopeRaw:'raw EMG (AC, mean≈0)',
+    scopeRect:'rectified (all positive)',
+    scopeSmooth:'smoothed (effort strength)',
+    needChain:'add rectify+smooth+normalize & calibrate',
+    intentClench:'CLENCH', intentRelax:'RELAX',
+    thr:'threshold', hystOn:'hysteresis', hystHi:'upper', hystLo:'lower', debounce:'debounce N',
+    runTrials:'run 20 clench/relax trials', trialsRunning:'running…',
+    hit:'hit rate', fp:'false+', fn:'miss',
+    chatterWarn:'boundary chatter! add hysteresis',
+    needHit:'need hit-rate ≥90% and no chatter',
+    material:'joint material', matPLA:'PLA rigid', matTPU:'TPU flexible',
+    manualPull:'manual pull', useServo:'switch to servo',
+    servoAngle:'servo angle', recordPt:'record point', calibPts:'calib points',
+    handCapManual:'pull tendon → finger bends, release → elastic return',
+    handCapServo:'servo angle→PWM→tendon→bend; record angle↔bend points',
+    matBadNote:'PLA w/o hinge → joint sticks',
+    needCalib:'mount servo & record ≥3 calibration points',
+    object:'object', stageLbl:'control chain',
+    stages:['open-loop direct','+ output smooth & rate-limit','+ FSR force feedback','+ proportional P','+ D anti-overshoot','+ I remove steady error'],
+    stageBtns:['open-loop','+smooth/limit','+force fb','enable P','enable D','enable I'],
+    targetForce:'target grip force',
+    startGrasp:'clench & grasp', release:'relax & drop', lift:'try to lift',
+    demoRun:'one-tap end-to-end demo',
+    resGrasp:'held firmly!', resCrush:'crushed!', resDrop:'dropped!',
+    forceWin:'safe window',
+    diagTitle:'Diagnosis',
+    diag:{
+      jitter:{t:'hand jitters / overshoots',d:'open-loop passes residual noise straight to the hand. Add output smoothing + rate limit.',b:'+smooth/limit'},
+      crush:{t:'egg crushed',d:'grip force exceeded the safe max. No force feedback, target too high, or missing D (overshoot). Add FSR feedback and D.',b:'+force fb & D'},
+      drop:{t:'object dropped',d:'grip force too low (below hold). Large steady-state error — P only, no I. Add I to remove the residual.',b:'+I term'},
+      noforce:{t:'no force feedback yet',d:'currently open-loop by angle; grip force is uncontrolled. Add FSR to make force a feedback variable.',b:'+force fb'},
+    },
+    egg:'egg', done:'done',
+    finTitle:'Force-Loop Validation',
+    proved:'validated · hand follows the muscle',
+    cardOut:'Deliverables',
+    cardSettle:'Settlement · Engineering Decision Review',
+    fObj:'object held', fForce:'steady grip', fTarget:'target', fErr:'steady-state error', fPID:'PID gains', fHit:'intent hit-rate',
+    badgeRepo:'open-source hand remix · Thingiverse-style',
+    badgeCode:'control code repo · Arduino + Python',
+    logGood:{
+      elec:'electrodes on the belly — clean signal',
+      smooth:'right smoothing window — no jitter',
+      hyst:'added hysteresis — no boundary chatter',
+      pid:'PID force loop tuned — holds without crushing',
+    },
+    logRework:{
+      elec:'once misplaced electrodes (weak signal), later fixed',
+      jitter:'once open-loop (jitter), later added smoothing/limit',
+      crush:'once crushed the egg, later added force feedback + D',
+      drop:'once dropped from low force, later added I',
+    },
+    freeMode:'free grasp (swap object)',
+    freeHint:'Swap objects — each has its own safe force window; practice force control.',
+    syncEMG:'EMG strength', syncForce:'measured grip', syncTarget:'target',
+  }
+};
+function tt(){ return T[S.lang]; }
+
+/* ---------- DOM helpers ---------- */
+function $(id){ return document.getElementById(id); }
+function el(tag, cls, html){ const e=document.createElement(tag); if(cls) e.className=cls; if(html!=null) e.innerHTML=html; return e; }
+function L(zh, en){ return S.lang==='zh'?zh:en; }
+function cssv(name){ return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
+let _toastT=null;
+function toast(msg, kind){
+  const t=$('toast'); t.textContent=msg; t.className='toast show'+(kind?' '+kind:'');
+  clearTimeout(_toastT); _toastT=setTimeout(()=>{ t.className='toast'+(kind?' '+kind:''); }, 2600);
+}
+
+/* =====================================================================
+   REAL-TIME SIMULATION LOOP — the heart. Advances muscle dynamics, EMG
+   synthesis, signal chain, decision, hand physics, force loop each frame.
+   ===================================================================== */
+let simT = 0;               // sim time in seconds
+const DT = 1/60;
+function pushBuf(buf, v){ buf.push(v); if(buf.length>BUF) buf.shift(); }
+
+function simStep(){
+  simT += DT;
+  // --- muscle effort dynamics: clench raises effort, release decays ---
+  S.effortTarget = S.clenching ? 1.0 : 0.0;
+  const rise = S.clenching ? 0.12 : 0.10;
+  S.effort += (S.effortTarget - S.effort) * rise;
+  S.effort = clamp(S.effort, 0, 1);
+
+  // --- raw EMG sample (a few sub-samples per frame for a lively trace) ---
+  const elecOk = S.electrodes.placedOk;
+  const raw = emgRaw(simT, S.effort, elecOk);
+  pushBuf(S.rawBuf, raw);
+  // signal chain
+  const rec = S.pipeline.rect ? rectify(raw) : raw;
+  pushBuf(S.rectBuf, S.pipeline.rect ? rec : rectify(raw)); // rectBuf always shows rectified for display
+  // smoothed envelope on the rectified stream
+  const envSource = S.rectBuf;
+  let sm = movAvg(envSource, S.pipeline.smooth ? S.smoothN : 1);
+  // notch reduces mains residue in the envelope (approx)
+  if(S.pipeline.notch) sm *= 0.92;
+  pushBuf(S.smoothBuf, sm);
+  // strength (normalized) — needs calibration; else raw envelope clamped
+  let strength;
+  if(S.pipeline.norm && S.calib.done){
+    strength = normalize(sm, S.calib.base, S.calib.peak);
+  } else {
+    strength = clamp(sm*2.2, 0, 1); // provisional pre-normalization scaling
+  }
+  pushBuf(S.strengthBuf, strength);
+  S._strength = strength;
+
+  // --- chapter-specific dynamics ---
+  if(S.chapter===2){
+    S.intent = decide(strength, S);
+    if(S.trialRunning) stepTrial(strength);
+  }
+  if(S.chapter===4){ stepGrasp(); }
+  pushBuf(S.emgBuf, strength);
+}
+
+/* master rAF loop */
+let _raf=null;
+function loop(){
+  simStep();
+  renderLive();
+  _raf = requestAnimationFrame(loop);
+}
+function renderLive(){
+  // update HUD chips
+  $('chipEmg').textContent = Math.round((S._strength||0)*100)+'%';
+  if(S.chapter===4){ $('chipForce').textContent = S.force.toFixed(1)+'N'; $('chipForceBox').classList.remove('hidden'); }
+  else { $('chipForce').textContent='--'; }
+  // draw current chapter's live canvas
+  if(S.chapter===1) drawCh1Live();
+  else if(S.chapter===2) drawCh2Live();
+  else if(S.chapter===3) drawCh3Live();
+  else if(S.chapter===4) drawCh4Live();
+  updEndmark();
+}
+
+/* =====================================================================
+   SIDEBAR / HUD / CHAPTER SWITCH
+   ===================================================================== */
+function applyStatic(){
+  document.querySelectorAll('[data-zh]').forEach(e=>{
+    e.textContent = e.getAttribute(S.lang==='zh'?'data-zh':'data-en');
+  });
+  $('langBtn').textContent = S.lang==='zh'?'EN':'中文';
+  document.documentElement.lang = S.lang;
+}
+function renderSidebar(){
+  const tr = tt();
+  const road = $('roadmap'); road.innerHTML='';
+  tr.road.forEach((label, i)=>{
+    const n=i+1;
+    const cls = n<S.chapter||S.result.grasped ? 'done' : (n===S.chapter?'now':'');
+    const step = el('div','road-step '+cls);
+    step.appendChild(el('span','road-dot'));
+    step.appendChild(el('span',null,label));
+    road.appendChild(step);
+    if(i<tr.road.length-1) road.appendChild(el('div','road-line'));
+  });
+  $('taskCard').innerHTML = tr.task[S.chapter];
+  const gd = tr.guide[S.chapter];
+  $('guideCard').innerHTML = gd.t + '<span class="why">'+gd.w+'</span>';
+}
+function updHud(){
+  const tr = tt();
+  $('hudRead').textContent = tr.hud[S.chapter];
+  $('chipPhase').textContent = tr.phase[S.chapter];
+}
+function updEndmark(){
+  let line;
+  if(S.chapter===1){ line = 'EMG '+Math.round((S._strength||0)*100)+'%'+(S.electrodes.placedOk?'':' · WEAK'); }
+  else if(S.chapter===2){ const h=S.hitStats.trials?Math.round(S.hitStats.tp/S.hitStats.trials*100):0; line='HIT '+h+'% · '+S.intent; }
+  else if(S.chapter===3){ line='SERVO '+Math.round(S.hand.servoAngle)+'° · PTS '+S.hand.servoCalib.length; }
+  else { line='GRIP '+S.force.toFixed(1)+'N · Kp'+S.ctrl.Kp.toFixed(1)+' Ki'+S.ctrl.Ki.toFixed(1)+' Kd'+S.ctrl.Kd.toFixed(1); }
+  $('endmark').innerHTML = '<span>'+(S.chapter===4?OBJECTS[S.object][S.lang]:tt().phase[S.chapter])+'</span> · '+line;
+}
+function setStat(k){ $('chipStat').textContent=k; $('chipStatBox').classList.toggle('ok', k==='HELD'||k==='LIVE'); }
+function refreshShell(){ applyStatic(); renderSidebar(); updHud(); updEndmark(); }
+
+function gotoChapter(n){
+  S.chapter=n;
+  for(let i=1;i<=4;i++) $('ch'+i).classList.toggle('hidden', i!==n);
+  if(n===1){ setStat('SETUP'); renderCh1(); }
+  if(n===2){ setStat('DECIDE'); decideReset(); renderCh2(); }
+  if(n===3){ setStat('BUILD'); renderCh3(); }
+  if(n===4){ setStat('GRASP'); renderCh4(); }
+  refreshShell();
+}
+
+/* ---------- clench button (mouse + keyboard) ---------- */
+function bindClench(){
+  const btn=$('clenchBtn');
+  const down=()=>{ S.clenching=true; btn.classList.add('active'); };
+  const up=()=>{ S.clenching=false; btn.classList.remove('active'); };
+  btn.addEventListener('mousedown', down); btn.addEventListener('mouseup', up); btn.addEventListener('mouseleave', up);
+  btn.addEventListener('touchstart', e=>{e.preventDefault();down();}); btn.addEventListener('touchend', e=>{e.preventDefault();up();});
+  window.addEventListener('keydown', e=>{ if(e.code==='Space' && !e.repeat){ e.preventDefault(); S.clenching=true; btn.classList.add('active'); } });
+  window.addEventListener('keyup', e=>{ if(e.code==='Space'){ e.preventDefault(); S.clenching=false; btn.classList.remove('active'); } });
+}
+
+/* language toggle */
+$('langBtn').addEventListener('click', ()=>{
+  S.lang = S.lang==='zh'?'en':'zh';
+  refreshShell();
+  if(S.chapter===1) renderCh1();
+  if(S.chapter===2) renderCh2();
+  if(S.chapter===3) renderCh3();
+  if(S.chapter===4) renderCh4();
+});
+
+/* ---------- canvas sizing helper ---------- */
+function fitCanvas(cv){
+  const dpr=window.devicePixelRatio||1;
+  const w=cv.clientWidth, h=cv.clientHeight;
+  cv.width=w*dpr; cv.height=h*dpr;
+  const g=cv.getContext('2d'); g.setTransform(dpr,0,0,dpr,0,0);
+  return {g,w,h};
+}
+
+/* =====================================================================
+   CHAPTER 1 — SIGNAL
+   ===================================================================== */
+// electrode placement options (drop targets on the arm)
+const ELEC_SLOTS = ['belly','belly2','wrist','bone','far'];
+// correct placement = signal & ref on flexor bellies, gnd on bony wrist
+function elecPlacementOk(){
+  const e=S.electrodes;
+  const sigOk = (e.signal==='belly'||e.signal==='belly2');
+  const refOk = (e.ref==='belly'||e.ref==='belly2') && e.ref!==e.signal;
+  const gndOk = (e.gnd==='wrist');
+  return sigOk && refOk && gndOk;
+}
+function renderCh1(){
+  const tr=tt();
+  S.electrodes.placedOk = elecPlacementOk();
+  if(!S.electrodes.placedOk) S._everBadElec = true;
+  // pipeline slots
+  const pf=$('pipeFlow'); pf.innerHTML='';
+  const slots=[
+    {key:'raw', name:tr.pipeSlots.raw, fixed:true, on:true},
+    {key:'rect', name:tr.pipeSlots.rect, f:tr.pipeF.rect, on:S.pipeline.rect},
+    {key:'smooth', name:tr.pipeSlots.smooth, f:tr.pipeF.smooth, on:S.pipeline.smooth},
+    {key:'norm', name:tr.pipeSlots.norm, f:tr.pipeF.norm, on:S.pipeline.norm},
+  ];
+  slots.forEach((s,i)=>{
+    const slot=el('div','pipe-slot'+(s.on?' filled':''));
+    let head='<div class="pk"><span>'+s.name+'</span>'+(s.fixed?'':'<span style="font-size:8px;color:var(--fg-mute)">'+(s.on?tr.added:tr.addCard)+'</span>')+'</div>';
+    slot.innerHTML=head+(s.f?'<div class="pf">'+s.f+'</div>':'');
+    if(!s.fixed){ slot.style.cursor='pointer'; slot.addEventListener('click',()=>{ S.pipeline[s.key]=!S.pipeline[s.key]; renderCh1(); }); }
+    pf.appendChild(slot);
+    if(i<slots.length-1) pf.appendChild(el('div','pipe-arrow','▶'));
+  });
+  // pipeline controls (smooth window slider, notch toggle, calibration)
+  const pc=$('pipeCtl'); pc.innerHTML='';
+  if(S.pipeline.smooth){
+    const row=el('div','rng-row');
+    row.innerHTML='<label>'+tr.smoothWin+'</label>';
+    const sl=el('input'); sl.type='range'; sl.min='1'; sl.max='30'; sl.step='1'; sl.value=S.smoothN;
+    sl.addEventListener('input',e=>{ S.smoothN=+e.target.value; $('smNv').textContent='N='+S.smoothN; });
+    row.appendChild(sl); const v=el('span','rv','N='+S.smoothN); v.id='smNv'; row.appendChild(v);
+    pc.appendChild(row);
+  }
+  const cr=el('div',null,''); cr.style.cssText='display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:6px;';
+  const notch=el('button','btn small'+(S.pipeline.notch?' myo':''), tr.notch);
+  notch.addEventListener('click',()=>{ S.pipeline.notch=!S.pipeline.notch; renderCh1(); });
+  cr.appendChild(notch);
+  if(S.pipeline.norm){
+    const bBase=el('button','btn small', tr.calibBase);
+    bBase.addEventListener('click',()=>{ S.calib.base=movAvg(S.smoothBuf,10); toast(tr.calibBase+' ✓'.replace('✓','·')+' '+(S.calib.base*1).toFixed(2)); checkCalib(); });
+    const bPeak=el('button','btn small', tr.calibPeak);
+    bPeak.addEventListener('click',()=>{ S.calib.peak=movAvg(S.smoothBuf,10); toast(tr.calibPeak+' · '+(S.calib.peak*1).toFixed(2)); checkCalib(); });
+    cr.appendChild(bBase); cr.appendChild(bPeak);
+    const cs=el('span',null,''); cs.style.cssText='font-family:var(--mono);font-size:9px;color:'+(S.calib.done?'var(--force)':'var(--fg-mute)');
+    cs.textContent = S.calib.done ? tr.calibDone : tr.calibHint;
+    cr.appendChild(cs);
+  }
+  pc.appendChild(cr);
+  // electrode list
+  renderElecList();
+  // gate
+  const chainOk = S.pipeline.rect && S.pipeline.smooth && S.pipeline.norm && S.calib.done;
+  $('ch1Next').disabled = !chainOk;
+  updHud(); updEndmark();
+}
+function checkCalib(){
+  S.calib.done = (S.calib.base!=null && S.calib.peak!=null && S.calib.peak>S.calib.base);
+  renderCh1();
+}
+function renderElecList(){
+  const tr=tt();
+  const host=$('elecList'); host.innerHTML='';
+  ['signal','ref','gnd'].forEach(k=>{
+    const item=el('div','elec-item '+k+(S.electrodes.sel===k?' sel':''));
+    const pos=S.electrodes[k];
+    const okPos = (k==='gnd') ? pos==='wrist' : (pos==='belly'||pos==='belly2');
+    item.innerHTML='<span class="ed"></span><span class="en">'+tr.elec[k]+'</span>'+
+      '<span class="es" style="color:'+(okPos?'var(--force)':'var(--warnc)')+'">'+tr.elecPos[pos]+'</span>';
+    item.addEventListener('click',()=>{ S.electrodes.sel=k; renderCh1(); });
+    host.appendChild(item);
+  });
+  // placement chooser: click a slot on the arm cycles the selected electrode's position
+  const hint=el('div',null,'');
+  hint.style.cssText='font-family:var(--mono);font-size:9px;color:var(--fg-mute);line-height:1.5;margin-top:2px;';
+  hint.textContent = S.electrodes.placedOk ? tr.elecOkNote : tr.elecBadNote;
+  hint.style.color = S.electrodes.placedOk ? 'var(--force)' : 'var(--warnc)';
+  host.appendChild(hint);
+}
+
+/* forearm cross-section with clickable electrode placement zones */
+const ARM_ZONES = [
+  {key:'belly',  x:0.32, y:0.40, r:0.09, label:{zh:'屈肌腹',en:'flexor'}},
+  {key:'belly2', x:0.50, y:0.36, r:0.09, label:{zh:'屈肌腹',en:'flexor'}},
+  {key:'bone',   x:0.42, y:0.62, r:0.08, label:{zh:'骨',en:'bone'}},
+  {key:'wrist',  x:0.76, y:0.52, r:0.08, label:{zh:'腕',en:'wrist'}},
+  {key:'far',    x:0.16, y:0.30, r:0.07, label:{zh:'远端',en:'distal'}},
+];
+function drawArm(){
+  const cv=$('armCanvas'); if(!cv) return;
+  const {g,w,h}=fitCanvas(cv);
+  g.clearRect(0,0,w,h);
+  // forearm shape (a rounded tapered limb, side view)
+  g.fillStyle='oklch(0.30 0.04 40)'; g.strokeStyle=cssv('--sinew'); g.lineWidth=1.5;
+  g.beginPath();
+  g.moveTo(w*0.05,h*0.30); g.quadraticCurveTo(w*0.5,h*0.05, w*0.9,h*0.34);
+  g.lineTo(w*0.95,h*0.5); g.quadraticCurveTo(w*0.9,h*0.68, w*0.5,h*0.72);
+  g.quadraticCurveTo(w*0.2,h*0.74, w*0.05,h*0.62); g.closePath(); g.fill(); g.stroke();
+  // muscle belly hint (subtle red mass)
+  g.fillStyle='oklch(0.55 0.14 20 / 0.30)';
+  g.beginPath(); g.ellipse(w*0.4,h*0.42,w*0.22,h*0.14,0,0,6.283); g.fill();
+  // zones
+  ARM_ZONES.forEach(z=>{
+    const zx=w*z.x, zy=h*z.y, zr=Math.min(w,h)*z.r;
+    // is any electrode here?
+    const here = ['signal','ref','gnd'].filter(k=>S.electrodes[k]===z.key);
+    g.beginPath(); g.arc(zx,zy,zr,0,6.283);
+    g.strokeStyle = here.length? cssv('--gold') : 'oklch(0.6 0.03 265 / .5)';
+    g.lineWidth = here.length? 2 : 1; g.setLineDash(here.length?[]:[3,3]); g.stroke(); g.setLineDash([]);
+    if(here.length){
+      here.forEach((k,i)=>{
+        g.fillStyle = k==='signal'?cssv('--myo'):(k==='ref'?cssv('--neural'):cssv('--fg-mute'));
+        g.beginPath(); g.arc(zx+(i-1)*8, zy, 4, 0, 6.283); g.fill();
+      });
+    }
+    g.fillStyle=cssv('--fg-mute'); g.font='8px '+cssv('--mono');
+    g.textAlign='center'; g.fillText(z.label[S.lang], zx, zy+zr+9);
+  });
+  g.textAlign='left';
+}
+// click on arm zone -> place currently-selected electrode there
+$('armCanvas').addEventListener('click', (ev)=>{
+  const cv=$('armCanvas'); const r=cv.getBoundingClientRect();
+  const w=cv.clientWidth, h=cv.clientHeight;
+  const x=(ev.clientX-r.left)/w, y=(ev.clientY-r.top)/h;
+  let best=null, bd=1e9;
+  ARM_ZONES.forEach(z=>{ const d=Math.hypot(x-z.x,y-z.y); if(d<bd){bd=d;best=z;} });
+  if(best && bd<0.12){ S.electrodes[S.electrodes.sel]=best.key; renderCh1(); }
+});
+
+/* live oscilloscope for ch1 */
+function drawScope(){
+  const cv=$('scopeCanvas'); if(!cv) return;
+  const {g,w,h}=fitCanvas(cv);
+  g.clearRect(0,0,w,h);
+  // grid
+  g.strokeStyle='oklch(0.35 0.05 265 / 0.2)'; g.lineWidth=1;
+  for(let i=1;i<4;i++){ g.beginPath(); g.moveTo(0,h*i/4); g.lineTo(w,h*i/4); g.stroke(); }
+  const mid=h*0.5;
+  // decide what to show: raw always; if rectified, overlay rectified; smoothed strength line
+  // raw trace (myo red), centered
+  const buf=S.rawBuf; const n=buf.length;
+  g.strokeStyle=cssv('--myo'); g.lineWidth=1.2; g.globalAlpha=0.85; g.beginPath();
+  for(let i=0;i<n;i++){ const x=i/BUF*w; const y=mid - buf[i]*mid*0.55; i?g.lineTo(x,y):g.moveTo(x,y); }
+  g.stroke(); g.globalAlpha=1;
+  // rectified overlay if enabled
+  if(S.pipeline.rect){
+    g.strokeStyle=cssv('--sinew'); g.lineWidth=1; g.globalAlpha=0.6; g.beginPath();
+    for(let i=0;i<S.rectBuf.length;i++){ const x=i/BUF*w; const y=h - S.rectBuf[i]*h*0.55; i?g.lineTo(x,y):g.moveTo(x,y); }
+    g.stroke(); g.globalAlpha=1;
+  }
+  // smoothed strength (force green), scaled
+  if(S.pipeline.smooth){
+    g.strokeStyle=cssv('--force'); g.lineWidth=2; g.beginPath();
+    for(let i=0;i<S.smoothBuf.length;i++){ const x=i/BUF*w; const y=h - S.smoothBuf[i]*h*1.1; i?g.lineTo(x,y):g.moveTo(x,y); }
+    g.stroke();
+  }
+  // zero line
+  g.strokeStyle='oklch(0.55 0.03 265 / 0.4)'; g.setLineDash([4,4]); g.beginPath(); g.moveTo(0,mid); g.lineTo(w,mid); g.stroke(); g.setLineDash([]);
+}
+function drawCh1Live(){
+  drawScope(); drawArm();
+  // strength bar
+  const s=S._strength||0;
+  $('strengthFill').style.width=(s*100)+'%';
+  const showNum = (S.pipeline.norm && S.calib.done);
+  $('strengthLbl').textContent = showNum ? Math.round(s*100)+'%' : 'RAW';
+  $('strengthRaw').textContent = showNum ? '' : L('未标定','uncalibrated');
+  // scope caption
+  const tr=tt();
+  let cap = tr.scopeRaw;
+  if(S.pipeline.smooth) cap = tr.scopeSmooth;
+  else if(S.pipeline.rect) cap = tr.scopeRect;
+  $('scopeCap').innerHTML = '<span style="color:var(--myo)">■</span> '+tr.scopeRaw
+    + (S.pipeline.rect?'  <span style="color:var(--sinew)">■</span> '+tr.scopeRect:'')
+    + (S.pipeline.smooth?'  <span style="color:var(--force)">■</span> '+tr.scopeSmooth:'');
+  $('scopeMode').textContent = S.clenching ? L('握拳中','clenching') : L('放松','relaxed');
+}
+$('ch1Next').addEventListener('click', ()=> gotoChapter(2));
+
+/* =====================================================================
+   CHAPTER 2 — INTENT
+   ===================================================================== */
+let chatterCount = 0, lastIntent='RELAX', chatterWindow=[];
+function renderCh2(){
+  const tr=tt();
+  const host=$('intentPanel'); host.innerHTML='';
+  // intent lamp
+  const lamp=el('div','lamp'+(S.intent==='CLENCH'?' clench':''));
+  lamp.id='intentLamp';
+  lamp.innerHTML='<span class="dot"></span><span class="lt">'+(S.intent==='CLENCH'?tr.intentClench:tr.intentRelax)+'</span>';
+  host.appendChild(lamp);
+  // threshold slider
+  const t1=el('div','rng-row'); t1.innerHTML='<label>'+tr.thr+'</label>';
+  const sl=el('input'); sl.type='range'; sl.min='0.1'; sl.max='0.9'; sl.step='0.01'; sl.value=S.threshold;
+  sl.addEventListener('input',e=>{ S.threshold=+e.target.value; $('thrV').textContent=S.threshold.toFixed(2); });
+  t1.appendChild(sl); const tv=el('span','rv',S.threshold.toFixed(2)); tv.id='thrV'; t1.appendChild(tv);
+  host.appendChild(t1);
+  // hysteresis toggle + two lines
+  const hg=el('div','toggle'); hg.innerHTML='<span style="font-family:var(--mono);font-size:9.5px;color:var(--fg-mute)">'+tr.hystOn+'</span>';
+  const hOn=el('button',(S.hyst.on?'on':''),'ON'); const hOff=el('button',(!S.hyst.on?'on':''),'OFF');
+  hOn.addEventListener('click',()=>{ S.hyst.on=true; renderCh2(); }); hOff.addEventListener('click',()=>{ S.hyst.on=false; renderCh2(); });
+  hg.appendChild(hOn); hg.appendChild(hOff); host.appendChild(hg);
+  if(S.hyst.on){
+    const h1=el('div','rng-row'); h1.innerHTML='<label>'+tr.hystHi+'</label>';
+    const s1=el('input'); s1.type='range'; s1.min='0.2'; s1.max='0.9'; s1.step='0.01'; s1.value=S.hyst.hi;
+    s1.addEventListener('input',e=>{ S.hyst.hi=Math.max(+e.target.value,S.hyst.lo+0.05); $('hhi').textContent=S.hyst.hi.toFixed(2); });
+    h1.appendChild(s1); const v1=el('span','rv',S.hyst.hi.toFixed(2)); v1.id='hhi'; h1.appendChild(v1); host.appendChild(h1);
+    const h2=el('div','rng-row'); h2.innerHTML='<label>'+tr.hystLo+'</label>';
+    const s2=el('input'); s2.type='range'; s2.min='0.1'; s2.max='0.8'; s2.step='0.01'; s2.value=S.hyst.lo;
+    s2.addEventListener('input',e=>{ S.hyst.lo=Math.min(+e.target.value,S.hyst.hi-0.05); $('hlo').textContent=S.hyst.lo.toFixed(2); });
+    h2.appendChild(s2); const v2=el('span','rv',S.hyst.lo.toFixed(2)); v2.id='hlo'; h2.appendChild(v2); host.appendChild(h2);
+  }
+  // debounce
+  const d1=el('div','rng-row'); d1.innerHTML='<label>'+tr.debounce+'</label>';
+  const ds=el('input'); ds.type='range'; ds.min='1'; ds.max='12'; ds.step='1'; ds.value=S.debounceN;
+  ds.addEventListener('input',e=>{ S.debounceN=+e.target.value; $('dbv').textContent='N='+S.debounceN; });
+  d1.appendChild(ds); const dv=el('span','rv','N='+S.debounceN); dv.id='dbv'; d1.appendChild(dv); host.appendChild(d1);
+  // trial button + scoreboard
+  const rt=el('button','btn primary'+(S.trialRunning?' myo':''), S.trialRunning?tr.trialsRunning:tr.runTrials);
+  rt.disabled=S.trialRunning; rt.addEventListener('click', startTrials); host.appendChild(rt);
+  const mr=el('div','metrics-row'); mr.id='hitMetrics'; host.appendChild(mr);
+  renderHitMetrics();
+  // chatter warn
+  const cw=el('div',''); cw.id='chatterWarn'; host.appendChild(cw);
+  // diagnostics
+  const dg=el('div',''); dg.id='intentDiag'; host.appendChild(dg);
+  // next
+  const nb=el('button','btn gold', L('进入造手 →','To Build →')); nb.id='ch2Next';
+  const hitRate=S.hitStats.trials?S.hitStats.tp/S.hitStats.trials:0;
+  nb.disabled = !(S.hitStats.trials>=15 && hitRate>=0.9 && S.hyst.on);
+  nb.addEventListener('click',()=>{ initHandCalib(); gotoChapter(3); });
+  host.appendChild(nb);
+  updHud(); updEndmark();
+}
+function renderHitMetrics(){
+  const tr=tt(); const host=$('hitMetrics'); if(!host) return; host.innerHTML='';
+  const hs=S.hitStats;
+  const hit=hs.trials?Math.round(hs.tp/hs.trials*100):0;
+  const cells=[[tr.hit,hit+'%',hit>=90?'good':(hs.trials?'bad':'')],[tr.fp,hs.fp,''],[tr.fn,hs.fn,'']];
+  cells.forEach(([k,v,cls])=>{ const c=el('div','m-cell '+cls); c.innerHTML='<div class="mk">'+k+'</div><div class="mv">'+v+'</div>'; host.appendChild(c); });
+}
+
+/* automated trial sequence: script a series of clench/relax targets and measure
+   whether the decided intent matches ground truth. Also drives S.clenching. */
+let trialSeq=null, trialIdx=0, trialTimer=0, trialTruth='RELAX', trialSettle=0;
+function startTrials(){
+  S.hitStats={tp:0,fp:0,fn:0,trials:0}; decideReset();
+  trialSeq=[]; for(let i=0;i<20;i++){ trialSeq.push(i%2===0?'CLENCH':'RELAX'); }
+  trialIdx=0; trialTimer=0; trialSettle=0; S.trialRunning=true;
+  renderCh2();
+}
+function stepTrial(strength){
+  if(!S.trialRunning) return;
+  trialTruth = trialSeq[trialIdx];
+  S.clenching = (trialTruth==='CLENCH');
+  trialTimer += DT;
+  // let the muscle + filter settle, then sample the decision at the end of each phase
+  if(trialTimer >= 0.9){
+    // score: does decided intent match truth?
+    const ok = (S.intent===trialTruth);
+    S.hitStats.trials++;
+    if(ok) S.hitStats.tp++;
+    else if(trialTruth==='RELAX' && S.intent==='CLENCH') { S.hitStats.fp++; S._everBadElec=S._everBadElec; }
+    else if(trialTruth==='CLENCH' && S.intent==='RELAX') S.hitStats.fn++;
+    trialIdx++; trialTimer=0;
+    if(trialIdx>=trialSeq.length){ S.trialRunning=false; S.clenching=false; finishTrials(); }
+    renderHitMetrics();
+  }
+}
+function finishTrials(){
+  const tr=tt(); const hit=S.hitStats.trials?S.hitStats.tp/S.hitStats.trials:0;
+  if(hit>=0.9 && S.hyst.on) toast(tr.hit+' '+Math.round(hit*100)+'% ✓'.replace('✓','·')+' '+L('达标','pass'),'ok');
+  else if(hit<0.9) toast(tr.needHit,'err');
+  renderCh2();
+}
+function drawCh2Live(){
+  const cv=$('decideCanvas'); if(!cv) return;
+  const {g,w,h}=fitCanvas(cv);
+  g.clearRect(0,0,w,h);
+  // grid
+  g.strokeStyle='oklch(0.35 0.05 265 / 0.2)'; g.lineWidth=1;
+  for(let i=1;i<4;i++){ g.beginPath(); g.moveTo(0,h*i/4); g.lineTo(w,h*i/4); g.stroke(); }
+  const Y=v=>h - v*h*0.92 - h*0.04;
+  // strength curve
+  g.strokeStyle=cssv('--force'); g.lineWidth=2; g.beginPath();
+  for(let i=0;i<S.strengthBuf.length;i++){ const x=i/BUF*w; const y=Y(S.strengthBuf[i]); i?g.lineTo(x,y):g.moveTo(x,y); }
+  g.stroke();
+  // threshold line(s)
+  if(S.hyst.on){
+    g.strokeStyle=cssv('--myo'); g.setLineDash([5,4]); g.lineWidth=1.3;
+    g.beginPath(); g.moveTo(0,Y(S.hyst.hi)); g.lineTo(w,Y(S.hyst.hi)); g.stroke();
+    g.strokeStyle=cssv('--neural');
+    g.beginPath(); g.moveTo(0,Y(S.hyst.lo)); g.lineTo(w,Y(S.hyst.lo)); g.stroke();
+    g.setLineDash([]);
+    g.fillStyle=cssv('--myo'); g.font='9px '+cssv('--mono'); g.fillText(tt().hystHi, 4, Y(S.hyst.hi)-3);
+    g.fillStyle=cssv('--neural'); g.fillText(tt().hystLo, 4, Y(S.hyst.lo)-3);
+  } else {
+    g.strokeStyle=cssv('--warnc'); g.setLineDash([5,4]); g.lineWidth=1.3;
+    g.beginPath(); g.moveTo(0,Y(S.threshold)); g.lineTo(w,Y(S.threshold)); g.stroke(); g.setLineDash([]);
+    g.fillStyle=cssv('--warnc'); g.font='9px '+cssv('--mono'); g.fillText(tt().thr, 4, Y(S.threshold)-3);
+  }
+  // intent fill band at bottom
+  g.fillStyle = S.intent==='CLENCH'? 'oklch(0.70 0.17 20 / 0.15)':'transparent';
+  if(S.intent==='CLENCH') g.fillRect(0,0,w,h);
+  // chatter detection: count intent flips in a sliding window
+  chatterWindow.push(S.intent);
+  if(chatterWindow.length>60) chatterWindow.shift();
+  let flips=0; for(let i=1;i<chatterWindow.length;i++) if(chatterWindow[i]!==chatterWindow[i-1]) flips++;
+  const chattering = flips>6;
+  const cwEl=$('chatterWarn');
+  if(cwEl){
+    if(chattering && !S.hyst.on){ cwEl.innerHTML='<div class="diag-chip"><b>'+tt().chatterWarn+'</b></div>'; }
+    else cwEl.innerHTML='';
+  }
+  // mini lamp in header
+  $('intentLampMini').innerHTML = S.intent==='CLENCH'
+    ? '<span style="color:var(--myo)">● '+tt().intentClench+'</span>'
+    : '<span style="color:var(--fg-mute)">○ '+tt().intentRelax+'</span>';
+  // update lamp element live
+  const lamp=$('intentLamp');
+  if(lamp){ lamp.className='lamp'+(S.intent==='CLENCH'?' clench':''); lamp.querySelector('.lt').textContent = S.intent==='CLENCH'?tt().intentClench:tt().intentRelax; }
+  // diagnostics
+  renderIntentDiag(chattering);
+  // caption
+  $('decideCap').innerHTML='<span style="color:var(--force)">■</span> '+L('发力强度','effort strength')
+    +'  <span style="color:var(--warnc)">┄</span> '+L('阈值','threshold')
+    +(S.hyst.on?'  '+L('(迟滞双线)','(hysteresis)'):'');
+}
+function renderIntentDiag(chattering){
+  const tr=tt(); const host=$('intentDiag'); if(!host) return;
+  const hs=S.hitStats; const out=[];
+  if(hs.trials){
+    if(hs.fp>=3) out.push({t:L('误触发偏多','many false triggers'),d:L('阈值太低,或放松时噪声越线。提高阈值 / 加去抖 N。','threshold too low or relax noise crosses it. Raise threshold / add debounce.')});
+    if(hs.fn>=3) out.push({t:L('漏检偏多','many misses'),d:L('阈值太高,轻握不触发。降低阈值。','threshold too high; soft clench missed. Lower threshold.')});
+  }
+  if(chattering && !S.hyst.on) out.push({t:L('意图边界颤动','intent chatter'),d:L('阈值单线在边界来回横跳。开启迟滞(双线)。','single line flickers at the boundary. Enable hysteresis (two lines).')});
+  host.innerHTML = out.map(o=>'<div class="diag-chip info"><b>'+tr.diagTitle+' · '+o.t+'</b>'+o.d+'</div>').join('');
+}
+
+/* =====================================================================
+   CHAPTER 3 — HAND (tendon-driven, servo calibration)
+   ===================================================================== */
+function initHandCalib(){ if(!S.hand.servoCalib) S.hand.servoCalib=[]; }
+function renderCh3(){
+  const tr=tt();
+  const host=$('handPanel'); host.innerHTML='';
+  // material
+  const mg=el('div','toggle'); mg.innerHTML='<span style="font-family:var(--mono);font-size:9.5px;color:var(--fg-mute)">'+tr.material+'</span>';
+  const mTPU=el('button',(S.hand.material==='tpu'?'on':''),tr.matTPU);
+  const mPLA=el('button',(S.hand.material==='pla'?'on':''),tr.matPLA);
+  mTPU.addEventListener('click',()=>{ S.hand.material='tpu'; renderCh3(); });
+  mPLA.addEventListener('click',()=>{ S.hand.material='pla'; renderCh3(); });
+  mg.appendChild(mTPU); mg.appendChild(mPLA); host.appendChild(mg);
+  if(S.hand.material==='pla'){ host.appendChild(el('div','diag-chip info','<b>'+tr.matBadNote+'</b>')); }
+  // servo toggle
+  const sg=el('div','toggle'); sg.innerHTML='<span style="font-family:var(--mono);font-size:9.5px;color:var(--fg-mute)">'+tr.useServo+'</span>';
+  const sOff=el('button',(!S.hand.useServo?'on':''),tr.manualPull); const sOn=el('button',(S.hand.useServo?'on':''),'SERVO');
+  sOff.addEventListener('click',()=>{ S.hand.useServo=false; renderCh3(); }); sOn.addEventListener('click',()=>{ S.hand.useServo=true; renderCh3(); });
+  sg.appendChild(sOff); sg.appendChild(sOn); host.appendChild(sg);
+  if(!S.hand.useServo){
+    // manual pull slider
+    const p1=el('div','rng-row'); p1.innerHTML='<label>'+tr.manualPull+'</label>';
+    const sl=el('input'); sl.type='range'; sl.min='0'; sl.max='100'; sl.step='1'; sl.value=S.hand.manualPull*100;
+    sl.addEventListener('input',e=>{ S.hand.manualPull=+e.target.value/100; $('mpv').textContent=Math.round(S.hand.manualPull*100)+'%'; });
+    p1.appendChild(sl); const v=el('span','rv',Math.round(S.hand.manualPull*100)+'%'); v.id='mpv'; p1.appendChild(v); host.appendChild(p1);
+  } else {
+    // servo angle slider + record calibration point
+    const p1=el('div','rng-row'); p1.innerHTML='<label>'+tr.servoAngle+'</label>';
+    const sl=el('input'); sl.type='range'; sl.min='0'; sl.max='180'; sl.step='1'; sl.value=S.hand.servoAngle;
+    sl.addEventListener('input',e=>{ S.hand.servoAngle=+e.target.value; $('sav').textContent=Math.round(S.hand.servoAngle)+'°'; });
+    p1.appendChild(sl); const v=el('span','rv',Math.round(S.hand.servoAngle)+'°'); v.id='sav'; p1.appendChild(v); host.appendChild(p1);
+    // pwm readout
+    const pwm=1000+Math.round(S.hand.servoAngle/180*1000);
+    host.appendChild(el('div','',''+'<div style="font-family:var(--mono);font-size:9px;color:var(--fg-mute)">PWM ≈ '+pwm+' µs</div>'));
+    // record point
+    const rec=el('button','btn small primary', tr.recordPt);
+    rec.addEventListener('click',()=>{
+      const disp = S.hand.manualPull; // the "actual" bend the player reads off the hand at this angle
+      // record angle -> observed tendon displacement (we derive true disp from angle via a hidden ground truth)
+      const trueDisp = trueTendonAt(S.hand.servoAngle);
+      S.hand.servoCalib.push({angle:S.hand.servoAngle, disp:trueDisp});
+      S.hand.servoCalib.sort((a,b)=>a.angle-b.angle);
+      toast(tr.recordPt+': '+Math.round(S.hand.servoAngle)+'° → '+(trueDisp*100).toFixed(0)+'%');
+      renderCh3();
+    });
+    host.appendChild(rec);
+    // calibration point list
+    const cl=el('div',''); cl.style.cssText='font-family:var(--mono);font-size:9px;color:var(--fg-dim);line-height:1.6;';
+    cl.innerHTML='<div style="color:var(--fg-mute)">'+tr.calibPts+' ('+S.hand.servoCalib.length+'):</div>'+
+      S.hand.servoCalib.map(p=>'· '+Math.round(p.angle)+'° → '+(p.disp*100).toFixed(0)+'%').join('<br>');
+    host.appendChild(cl);
+  }
+  // gate
+  const nb=el('button','btn gold', L('接入肌肉信号 →','Connect Muscle →')); nb.id='ch3Next';
+  nb.disabled = !(S.hand.useServo && S.hand.servoCalib.length>=3);
+  nb.addEventListener('click',()=>{ initGrasp(); gotoChapter(4); });
+  host.appendChild(nb);
+  if(nb.disabled){ host.appendChild(el('div','',''+'<div style="font-family:var(--mono);font-size:9px;color:var(--fg-mute)">'+tr.needCalib+'</div>')); }
+  updHud(); updEndmark();
+}
+// hidden ground-truth angle->tendon curve (slightly nonlinear) the player calibrates against
+function trueTendonAt(angle){ const a=clamp(angle,0,180)/180; return clamp(a*0.9 + 0.1*Math.sin(a*Math.PI), 0, 1); }
+
+function drawCh3Live(){
+  // update closure from manual pull or servo angle
+  if(S.hand.useServo){ S.hand.closure = servoToTendon(S.hand.servoAngle, S.hand.servoCalib); }
+  else { S.hand.closure = S.hand.manualPull; }
+  drawHand($('handCanvas'), S.hand.closure, null);
+  const tr=tt();
+  $('handMode').textContent = S.hand.useServo ? L('舵机驱动','servo') : L('手动拉腱','manual');
+  $('handCap').innerHTML = S.hand.useServo ? tr.handCapServo : tr.handCapManual;
+}
+
+/* draw a side-view tendon-driven hand. closure 0..1. If obj given, draw object
+   and show contact/force. Returns nothing. */
+function drawHand(cv, closure, obj){
+  if(!cv) return;
+  const {g,w,h}=fitCanvas(cv);
+  g.clearRect(0,0,w,h);
+  const stick = S.hand.material==='pla' && closure>0.1 && closure<0.6; // PLA no-hinge sticks mid-range
+  const cl = stick ? 0.1 + (closure-0.1)*0.3 : closure; // sticking reduces effective bend
+  // wrist / palm base at left
+  const baseX=w*0.16, baseY=h*0.52, palmLen=w*0.26;
+  // servo disc at wrist
+  g.fillStyle='oklch(0.30 0.05 230)'; g.strokeStyle=cssv('--neural'); g.lineWidth=1.5;
+  g.beginPath(); g.arc(baseX-6, baseY, 14, 0, 6.283); g.fill(); g.stroke();
+  g.save(); g.translate(baseX-6,baseY); g.rotate(cl*2.2); g.strokeStyle=cssv('--dawn'); g.lineWidth=2; g.beginPath(); g.moveTo(0,0); g.lineTo(10,0); g.stroke(); g.restore();
+  // palm
+  g.fillStyle='oklch(0.32 0.04 45)'; g.strokeStyle=cssv('--sinew'); g.lineWidth=1.5;
+  g.beginPath(); g.roundRect(baseX, baseY-26, palmLen, 52, 8); g.fill(); g.stroke();
+  // fingers (4 + thumb), each 3 phalanges, bending with kinematics
+  const knuckleX = baseX+palmLen;
+  const fingers=[
+    {y:baseY-20, len:[w*0.10,w*0.075,w*0.055], base:0.0},
+    {y:baseY-7,  len:[w*0.11,w*0.085,w*0.06],  base:0.0},
+    {y:baseY+7,  len:[w*0.105,w*0.08,w*0.058], base:0.0},
+    {y:baseY+20, len:[w*0.09,w*0.07,w*0.05],   base:0.0},
+  ];
+  const joints=fingerJoints(cl);
+  // tendon lines drawn first (behind)
+  fingers.forEach(f=>{
+    g.strokeStyle=cssv('--sinew'); g.lineWidth=1; g.globalAlpha=0.5;
+    // (approx) tendon from servo to fingertip along the underside
+    g.beginPath(); g.moveTo(baseX-6,baseY);
+    let jx=knuckleX, jy=f.y, ang=0;
+    g.lineTo(jx,jy+4);
+    for(let s=0;s<3;s++){ ang+=joints[s]; jx+=Math.cos(ang)*f.len[s]; jy+=Math.sin(ang)*f.len[s]; g.lineTo(jx,jy+2); }
+    g.stroke(); g.globalAlpha=1;
+  });
+  // finger segments
+  fingers.forEach(f=>{
+    let jx=knuckleX, jy=f.y, ang=0;
+    g.strokeStyle=cssv('--dawn'); g.lineWidth=6; g.lineCap='round';
+    for(let s=0;s<3;s++){
+      ang+=joints[s];
+      const nx=jx+Math.cos(ang)*f.len[s], ny=jy+Math.sin(ang)*f.len[s];
+      g.strokeStyle = s===0?'oklch(0.62 0.06 45)':'oklch(0.55 0.05 45)';
+      g.beginPath(); g.moveTo(jx,jy); g.lineTo(nx,ny); g.stroke();
+      // joint dot
+      g.fillStyle=cssv('--sinew'); g.beginPath(); g.arc(jx,jy,3,0,6.283); g.fill();
+      jx=nx; jy=ny;
+    }
+    // fingertip
+    g.fillStyle=cssv('--sinew'); g.beginPath(); g.arc(jx,jy,3.5,0,6.283); g.fill();
+    f._tip={x:jx,y:jy};
+  });
+  // thumb (opposing, from lower palm)
+  {
+    const tx=baseX+palmLen*0.5, ty=baseY+26; let ang=Math.PI*0.5 - cl*0.9; let jx=tx, jy=ty;
+    const tlen=[w*0.07,w*0.05];
+    g.lineWidth=6; g.lineCap='round';
+    for(let s=0;s<2;s++){ ang-=cl*0.5; const nx=jx+Math.cos(-ang)*tlen[s], ny=jy-Math.sin(ang-Math.PI*0.5)*0;
+      const ex=jx+Math.cos(ang)*tlen[s], ey=jy-Math.sin(ang)*tlen[s];
+      g.strokeStyle='oklch(0.58 0.06 45)'; g.beginPath(); g.moveTo(jx,jy); g.lineTo(ex,ey); g.stroke();
+      g.fillStyle=cssv('--sinew'); g.beginPath(); g.arc(jx,jy,3,0,6.283); g.fill();
+      jx=ex; jy=ey; }
+  }
+  // object (ch4) between fingers and thumb
+  if(obj){
+    const ox=knuckleX+w*0.10, oy=baseY+2, or=obj.size;
+    // crushed?
+    const crushed = S.result.crushed;
+    g.fillStyle = crushed ? cssv('--crush') : obj.color;
+    g.strokeStyle = crushed? cssv('--crush') : 'oklch(0.5 0.05 45)'; g.lineWidth=1.5;
+    if(S.object==='egg'){
+      g.beginPath(); g.ellipse(ox,oy,or*0.8,or,0,0,6.283); g.fill(); g.stroke();
+      if(crushed){ g.strokeStyle=cssv('--bg-0'); g.lineWidth=1.2;
+        g.beginPath(); g.moveTo(ox-or*0.5,oy-or*0.4); g.lineTo(ox+or*0.1,oy); g.lineTo(ox-or*0.3,oy+or*0.5); g.stroke();
+        g.beginPath(); g.moveTo(ox+or*0.4,oy-or*0.5); g.lineTo(ox,oy+or*0.2); g.stroke();
+      }
+    } else {
+      g.beginPath(); g.arc(ox,oy,or,0,6.283); g.fill(); g.stroke();
+    }
+    // grip force ring
+    if(S.force>0){
+      const win=OBJECTS[S.object];
+      const inWin = S.force>=win.hold && S.force<=win.crush;
+      g.strokeStyle = crushed?cssv('--crush'):(inWin?cssv('--force'):cssv('--warnc'));
+      g.lineWidth=2; g.beginPath(); g.arc(ox,oy,or+5+S.force,0,6.283); g.globalAlpha=0.6; g.stroke(); g.globalAlpha=1;
+    }
+    obj._pos={x:ox,y:oy,r:or};
+  }
+  g.lineCap='butt';
+}
+$('ch3Next')&&$('ch3Next').addEventListener('click',()=>{});
+
+/* =====================================================================
+   CHAPTER 4 — GRASP (PID force loop + egg experiment) — CORE
+   ===================================================================== */
+function initGrasp(){
+  S.ctrl.stage=0; S.force=0; S.integ=0; S.prevErr=0;
+  S.result={grasped:false,crushed:false,dropped:false};
+  S.hand.closure=0; S.hand.commandedAngle=0; S._smoothedCmd=0; S.lifting=false;
+}
+let graspActive=false;   // whether a grasp attempt is running (clench held)
+
+/* stage map: 0 open-loop | 1 +smoothing/limit | 2 (settled) | 3 +FSR force feedback
+   | 4 +P | 5 +D | 6 +I. Force loop uses a POSITION-form plant (closure set by the
+   control law, NOT accumulated) so that pure-P leaves a real steady-state error
+   that only the I term removes — matching the project's W50-52 pedagogy. */
+function stepGrasp(){
+  const obj=OBJECTS[S.object];
+  const st=S.ctrl.stage;
+  const emg = S._strength||0;
+  const contactAt = 1 - (obj.size/40);
+
+  if(st>=3){
+    // ---- force closed-loop (position-form plant) ----
+    // only actively grip while clenching; otherwise relax open.
+    const gripping = S.clenching || S._demoGrip;
+    const tgt = gripping ? S.ctrl.targetForce : 0;
+    // gated gains per stage
+    const Kp = st>=4 ? S.ctrl.Kp : 0.6;      // before P stage, a weak fixed proportional
+    const Kd = st>=5 ? S.ctrl.Kd : 0;
+    const Ki = st>=6 ? S.ctrl.Ki : 0;
+    const e = tgt - S.force;
+    // integrate only while gripping (anti-windup: clamp integral)
+    if(gripping) S.integ = clamp(S.integ + e*DT, -3, 3); else S.integ = 0;
+    // POSITION-form control law: commanded closure = contact point + weighted terms.
+    //  P: proportional to error -> at steady state force stalls below target (Kp*e
+    //     alone can't close the gap) => a real steady-state ERROR.
+    //  I: integral of error accumulates and pushes closure further until e -> 0,
+    //     REMOVING the steady-state error.
+    //  D: damps the measured-force rate (dF/dt) -> pulls back when force rises fast,
+    //     SUPPRESSING overshoot.
+    const dForce = (S.force - (S._prevForce||S.force))/DT;
+    S._prevForce = S.force;
+    const pushP = Kp * e * 0.075;
+    const pushI = Ki * S.integ * 0.075;
+    const pushD = -Kd * dForce * 0.010;
+    let cmd = contactAt + pushP + pushI + pushD;
+    if(!gripping) cmd = 0;
+    // output smoothing + rate limit (stage>=1 always on here)
+    S._smoothedCmd = (S._smoothedCmd==null?cmd:lerp(S._smoothedCmd, cmd, 0.18));
+    const maxStep = S.ctrl.rateLimit? 0.02 : 0.05;
+    S.hand.closure = clamp(clamp(S._smoothedCmd, S.hand.closure-maxStep, S.hand.closure+maxStep), 0, 1.1);
+  } else {
+    // ---- open-loop: EMG strength maps directly to closure ----
+    let rawCmd = emg;
+    if(st>=1){
+      // output smoothing + rate limit tames the jitter
+      S._smoothedCmd = (S._smoothedCmd==null?rawCmd:lerp(S._smoothedCmd, rawCmd, 0.15));
+      let target=clamp(S._smoothedCmd, S.hand.closure-0.02, S.hand.closure+0.02);
+      S.hand.closure=clamp(target,0,1.1);
+    } else {
+      // raw direct drive: residual signal noise passes straight to the hand -> jitter
+      const jitter = 0.06*n11(Math.floor(simT*120),9)*Math.max(emg,0.2);
+      S.hand.closure = clamp(rawCmd + jitter, 0, 1.1);
+      if(emg>0.3) S._everJittered=true;
+    }
+  }
+  // contact force from closure vs object. Stages 0-2 are "drive test in the air"
+  // (open-loop / smoothing) — the hand follows the muscle but is NOT gripping an
+  // object yet, so no force/crush outcome. The object is only engaged once the
+  // force loop is active (stage>=3).
+  const gripStage = S.ctrl.stage>=3;
+  S.force = gripStage ? contactForce(S.hand.closure, obj) : 0;
+  pushBuf(S.forceBuf, S.force/ (obj.crush>50?8:obj.crush) ); // normalized for plotting
+  pushBuf(S.angleBuf, S.hand.closure);
+  // outcome checks (only while actually gripping an object)
+  if(gripStage && !S.result.crushed && S.force > obj.crush){
+    S.result.crushed=true; S._everCrushed=true; graspActive=false;
+    toast(tt().resCrush,'err');
+  }
+  // settle detection: stable force in-window for a while -> grasped
+  if(gripStage && !S.result.crushed){
+    const inWin = S.force>=obj.hold && S.force<=obj.crush;
+    if(inWin){ S._settle=(S._settle||0)+DT; } else { S._settle=0; }
+    if((S._settle||0)>1.2 && !S.result.grasped){ S.result.grasped=true; onGrasped(); }
+  }
+}
+let _graspFired=false;
+/* onGrasped defined below (finale) */
+
+function renderCh4(){
+  const tr=tt();
+  const host=$('graspPanel'); host.innerHTML='';
+  // object picker
+  const op=el('div','obj-pick');
+  Object.keys(OBJECTS).forEach(k=>{
+    const b=el('div','obj-btn'+(S.object===k?' on':''), OBJECTS[k][S.lang]);
+    b.addEventListener('click',()=>{ S.object=k; S.result={grasped:false,crushed:false,dropped:false}; S._settle=0; _graspFired=false; S.integ=0; renderCh4(); });
+    op.appendChild(b);
+  });
+  const opRow=el('div',''); opRow.innerHTML='<div style="font-family:var(--mono);font-size:9.5px;color:var(--fg-mute);margin-bottom:4px;">'+tr.object+'</div>'; opRow.appendChild(op);
+  host.appendChild(opRow);
+  // safe window readout
+  const win=OBJECTS[S.object];
+  host.appendChild(el('div','force-win','<span style="color:var(--force)">'+tr.forceWin+'</span>: '+win.hold.toFixed(1)+' – '+(win.crush>50?'∞':win.crush.toFixed(1))+' N'));
+  // control chain stages
+  tr.stages.forEach((label,i)=>{
+    const active=S.ctrl.stage===i, done=S.ctrl.stage>i;
+    const step=el('div','stage-step'+(active?' on':'')+(done?' done':''));
+    step.innerHTML='<div class="sh"><span>'+(i+1)+' · '+label+'</span>'+(done?'<span style="color:var(--force)">✓'.replace('✓','●')+'</span>':'')+'</div>';
+    if(active && i<tr.stages.length){
+      const b=el('button','btn small primary', tr.stageBtns[i]);
+      b.addEventListener('click',()=>{ advanceStage(i); }); step.appendChild(b);
+    }
+    host.appendChild(step);
+  });
+  // PID sliders (appear at their stages)
+  if(S.ctrl.stage>=3){
+    const tf=el('div','rng-row'); tf.innerHTML='<label>'+tr.targetForce+'</label>';
+    const sl=el('input'); sl.type='range'; sl.min='0.3'; sl.max=(win.crush>50?'6':(win.crush+1).toFixed(1)); sl.step='0.1'; sl.value=S.ctrl.targetForce;
+    sl.addEventListener('input',e=>{ S.ctrl.targetForce=+e.target.value; $('tfv').textContent=S.ctrl.targetForce.toFixed(1)+'N'; });
+    tf.appendChild(sl); const v=el('span','rv',S.ctrl.targetForce.toFixed(1)+'N'); v.id='tfv'; tf.appendChild(v); host.appendChild(tf);
+  }
+  if(S.ctrl.stage>=4){ addGainSlider(host,'Kp',0,6,0.1); }
+  if(S.ctrl.stage>=5){ addGainSlider(host,'Kd',0,3,0.05); }
+  if(S.ctrl.stage>=6){ addGainSlider(host,'Ki',0,3,0.05); }
+  // grasp control buttons
+  const gc=el('div',''); gc.style.cssText='display:flex;gap:6px;flex-wrap:wrap;margin-top:4px;';
+  const demo=el('button','btn myo', tr.demoRun);
+  demo.addEventListener('click', runDemo);
+  gc.appendChild(demo);
+  host.appendChild(gc);
+  // diagnostics
+  const dg=el('div',''); dg.id='graspDiag'; host.appendChild(dg);
+  updHud(); updEndmark();
+}
+function addGainSlider(host,key,min,max,step){
+  const r=el('div','rng-row'); r.innerHTML='<label>'+key+'</label>';
+  const sl=el('input'); sl.type='range'; sl.min=min; sl.max=max; sl.step=step; sl.value=S.ctrl[key];
+  sl.addEventListener('input',e=>{ S.ctrl[key]=+e.target.value; document.getElementById(key+'v').textContent=S.ctrl[key].toFixed(2); });
+  r.appendChild(sl); const v=el('span','rv',S.ctrl[key].toFixed(2)); v.id=key+'v'; r.appendChild(v); host.appendChild(r);
+}
+function advanceStage(i){
+  const tr=tt();
+  if(i===0){ S.ctrl.stage=1; }                // open-loop -> add smoothing
+  else if(i===1){ S.ctrl.stage=2; S.ctrl.outSmooth=true; S.ctrl.rateLimit=true; }
+  else if(i===2){ S.ctrl.stage=3; S.ctrl.force=true; }  // force feedback
+  else if(i===3){ S.ctrl.stage=4; S.ctrl.Kp=2.0; }      // enable P
+  else if(i===4){ S.ctrl.stage=5; S.ctrl.Kd=0.4; }      // enable D
+  else if(i===5){ S.ctrl.stage=6; S.ctrl.Ki=0.4; }      // enable I
+  S.integ=0; S.prevErr=0;
+  renderCh4();
+}
+function runDemo(){
+  // scripted: clench (grasp) hold, then release. drives S.clenching for a few seconds.
+  let t=0; S.result={grasped:false,crushed:false,dropped:false}; S._settle=0; _graspFired=false; S.integ=0; S.force=0; S.hand.closure=0;
+  const iv=setInterval(()=>{
+    t+=0.1;
+    S.clenching = (t<3.0);   // clench for 3s then release
+    if(t>4.5){ clearInterval(iv); S.clenching=false; }
+  },100);
+}
+function drawCh4Live(){
+  const obj=OBJECTS[S.object];
+  // object only engaged once the force loop is active (stage>=3); before that the
+  // hand is doing a drive-test in the air.
+  drawHand($('graspCanvas'), S.hand.closure, S.ctrl.stage>=3 ? obj : null);
+  // right-side would be triple curve — draw as small inset on the same canvas top-right? keep hand full.
+  // caption + diag
+  const tr=tt();
+  const inWin = S.force>=obj.hold && S.force<=obj.crush && !S.result.crushed;
+  $('graspMode').textContent = 'F '+S.force.toFixed(1)+'N '+(S.result.crushed?('· '+tr.resCrush):(S.result.grasped?('· '+tr.resGrasp):(inWin?'· in-window':'')));
+  $('graspCap').innerHTML='<span style="color:var(--myo)">■</span> EMG  <span style="color:var(--neural)">■</span> '+L('舵机角','angle')+'  <span style="color:var(--force)">■</span> '+L('实测握力','grip force')+'  ·  '+tr.forceWin+' '+obj.hold.toFixed(1)+'–'+(obj.crush>50?'∞':obj.crush.toFixed(1))+'N';
+  // triple curve strip along the bottom of grasp canvas is drawn inside drawGraspCurves
+  drawGraspCurves();
+  renderGraspDiag();
+}
+function drawGraspCurves(){
+  // draw the three synchronized curves as a translucent strip at the bottom of the hand canvas
+  const cv=$('graspCanvas'); if(!cv) return;
+  const dpr=window.devicePixelRatio||1; const w=cv.clientWidth, h=cv.clientHeight;
+  const g=cv.getContext('2d'); // reuse context (already transformed)
+  const stripH=h*0.28, y0=h-stripH;
+  g.fillStyle='oklch(0.14 0.035 265 / 0.82)'; g.fillRect(0,y0,w,stripH);
+  g.strokeStyle=cssv('--line'); g.lineWidth=1; g.beginPath(); g.moveTo(0,y0); g.lineTo(w,y0); g.stroke();
+  const obj=OBJECTS[S.object];
+  const plot=(buf,color,scale)=>{ g.strokeStyle=color; g.lineWidth=1.5; g.beginPath();
+    for(let i=0;i<buf.length;i++){ const x=i/BUF*w; const yy=y0+stripH - buf[i]*scale*stripH; i?g.lineTo(x,yy):g.moveTo(x,yy); } g.stroke(); };
+  plot(S.emgBuf, cssv('--myo'), 0.9);
+  plot(S.angleBuf, cssv('--neural'), 0.9);
+  plot(S.forceBuf, cssv('--force'), 0.9);
+  // target force line + safe window band
+  const fscale=1/(obj.crush>50?8:obj.crush);
+  const tgtY=y0+stripH - (S.ctrl.targetForce*fscale)*0.9*stripH;
+  if(S.ctrl.stage>=3){ g.strokeStyle=cssv('--force'); g.setLineDash([4,3]); g.globalAlpha=0.7; g.beginPath(); g.moveTo(0,tgtY); g.lineTo(w,tgtY); g.stroke(); g.setLineDash([]); g.globalAlpha=1; }
+  // crush line
+  const crushY=y0+stripH - (obj.crush*fscale)*0.9*stripH;
+  if(obj.crush<50){ g.strokeStyle=cssv('--crush'); g.globalAlpha=0.5; g.setLineDash([2,3]); g.beginPath(); g.moveTo(0,crushY); g.lineTo(w,crushY); g.stroke(); g.setLineDash([]); g.globalAlpha=1; }
+}
+function renderGraspDiag(){
+  const tr=tt(); const host=$('graspDiag'); if(!host) return;
+  const obj=OBJECTS[S.object]; const out=[];
+  if(S.result.crushed){ out.push('crush'); }
+  else if(S._everJittered && S.ctrl.stage<2){ out.push('jitter'); }
+  else if(S.ctrl.stage<3 && S.clenching && S.force>0){ out.push('noforce'); }
+  else if(S.ctrl.stage>=4 && S.ctrl.Ki===0 && S.force>0 && S.force<obj.hold && S.clenching){ out.push('drop'); }
+  // dedupe & render (only show most relevant one or two)
+  const uniq=[...new Set(out)].slice(0,2);
+  host.innerHTML = uniq.map(k=>{ const d=tr.diag[k];
+    let btn = d.b? '<button class="btn small" data-fix="'+k+'" style="align-self:flex-start">'+d.b+'</button>':'';
+    return '<div class="diag-chip"><b>'+tr.diagTitle+' · '+d.t+'</b>'+d.d+btn+'</div>';
+  }).join('');
+  host.querySelectorAll('[data-fix]').forEach(b=> b.addEventListener('click',()=> applyGraspFix(b.getAttribute('data-fix'))));
+}
+function applyGraspFix(k){
+  if(k==='jitter'){ if(S.ctrl.stage<1) S.ctrl.stage=1; advanceStage(1); toast(tt().diag.jitter.b); }
+  else if(k==='noforce'){ while(S.ctrl.stage<3) advanceStage(S.ctrl.stage); toast(tt().diag.noforce.b); }
+  else if(k==='crush'){ S.result.crushed=false; S._settle=0; while(S.ctrl.stage<5) advanceStage(S.ctrl.stage); toast(tt().diag.crush.b); }
+  else if(k==='drop'){ while(S.ctrl.stage<6) advanceStage(S.ctrl.stage); toast(tt().diag.drop.b); }
+  renderCh4();
+}
+
+/* ---------- finale: triggered when the egg is grasped for real ---------- */
+let _finaleShown=false;
+function onGrasped(){
+  if(_graspFired) return; _graspFired=true;
+  setStat('HELD'); toast(tt().resGrasp,'ok');
+  // require the hard object (egg default) & a real force loop (stage>=6 ideal, >=4 min) to celebrate
+  if(!_finaleShown && S.object==='egg' && S.ctrl.stage>=4){
+    _finaleShown=true;
+    setTimeout(()=> showFinale(), 700);
+  }
+}
+function showFinale(){
+  const tr=tt(); const obj=OBJECTS[S.object];
+  $('finOverlay').classList.remove('hidden');
+  setStat('LIVE');
+  drawFinaleCurve();
+  const side=$('finSide'); side.innerHTML=''; const cards=[];
+  // validation card
+  const c1=el('div','fin-card');
+  const err=Math.abs(S.ctrl.targetForce - S.force);
+  c1.innerHTML='<div class="ph">'+tr.finTitle+'</div>'+
+    '<div style="margin-bottom:6px;"><span class="live">● '+tr.proved+'</span></div>'+
+    row(tr.fObj, obj[S.lang])+row(tr.fForce,S.force.toFixed(2)+' N')+row(tr.fTarget,S.ctrl.targetForce.toFixed(1)+' N')+
+    row(tr.fErr,err.toFixed(2)+' N')+row(tr.fPID,'Kp'+S.ctrl.Kp.toFixed(1)+' Ki'+S.ctrl.Ki.toFixed(1)+' Kd'+S.ctrl.Kd.toFixed(1));
+  side.appendChild(c1); cards.push(c1);
+  // deliverables
+  const c2=el('div','fin-card');
+  c2.innerHTML='<div class="ph">'+tr.cardOut+'</div><div class="badge">'+tr.badgeRepo+'</div><br><div class="badge">'+tr.badgeCode+'</div>';
+  side.appendChild(c2); cards.push(c2);
+  // settlement + decision log
+  const c3=el('div','fin-card');
+  const hit=S.hitStats.trials?Math.round(S.hitStats.tp/S.hitStats.trials*100):100;
+  c3.innerHTML='<div class="ph">'+tr.cardSettle+'</div>'+
+    row(tr.fHit, hit+'%')+row(tr.fForce, S.force.toFixed(2)+' N')+row(tr.fErr, err.toFixed(2)+' N')+
+    '<div class="decision-log" style="margin-top:8px;">'+decisionLog()+'</div>';
+  side.appendChild(c3); cards.push(c3);
+  // free mode
+  const c4=el('div','fin-card');
+  c4.innerHTML='<div class="ph">'+tr.freeMode+'</div><div style="font-size:10px;color:var(--fg-mute);line-height:1.5;margin-bottom:8px;">'+tr.freeHint+'</div>';
+  const fr=el('div',''); fr.style.cssText='display:flex;gap:6px;flex-wrap:wrap;';
+  Object.keys(OBJECTS).forEach(k=>{ const b=el('button','btn small',OBJECTS[k][S.lang]); if(k===S.object)b.classList.add('gold'); b.addEventListener('click',()=>startFreeMode(k)); fr.appendChild(b); });
+  c4.appendChild(fr); side.appendChild(c4); cards.push(c4);
+  cards.forEach((c,i)=> setTimeout(()=>c.classList.add('show'), 400+i*350));
+  refreshShell();
+}
+function row(k,v){ return '<div class="row"><span>'+k+'</span><span class="rv">'+v+'</span></div>'; }
+function decisionLog(){
+  const tr=tt(); const out=[];
+  if(!S._everBadElec) out.push(['ok',tr.logGood.elec]); else out.push(['rw',tr.logRework.elec]);
+  if(!S._everJittered) out.push(['ok',tr.logGood.smooth]); else out.push(['rw',tr.logRework.jitter]);
+  if(S.hyst.on) out.push(['ok',tr.logGood.hyst]);
+  out.push(['ok',tr.logGood.pid]);
+  if(S._everCrushed) out.push(['rw',tr.logRework.crush]);
+  if(S._everDropped) out.push(['rw',tr.logRework.drop]);
+  return out.map(([k,t])=>'<div class="dl"><span class="m '+(k==='ok'?'ok':'rw')+'">'+(k==='ok'?'[OK]':'[RW]')+'</span><span>'+t+'</span></div>').join('');
+}
+function drawFinaleCurve(){
+  const cv=$('finCanvas'); if(!cv) return;
+  const {g,w,h}=fitCanvas(cv);
+  g.clearRect(0,0,w,h);
+  g.strokeStyle='oklch(0.35 0.05 265 / 0.2)'; g.lineWidth=1;
+  for(let i=1;i<4;i++){ g.beginPath(); g.moveTo(0,h*i/4); g.lineTo(w,h*i/4); g.stroke(); }
+  const obj=OBJECTS[S.object]; const fscale=1/(obj.crush>50?8:obj.crush);
+  // EMG strength (myo) and measured force (green) overlaid to show the loop follows the muscle
+  const plot=(buf,color,scale,lw)=>{ g.strokeStyle=color; g.lineWidth=lw||2; g.beginPath();
+    for(let i=0;i<buf.length;i++){ const x=i/BUF*w; const y=h - buf[i]*scale*h*0.9 - h*0.05; i?g.lineTo(x,y):g.moveTo(x,y); } g.stroke(); };
+  plot(S.emgBuf, cssv('--myo'), 0.9, 2);
+  plot(S.forceBuf, cssv('--force'), 0.9, 2.4);
+  // target force line
+  g.strokeStyle=cssv('--force'); g.setLineDash([5,4]); g.globalAlpha=0.6;
+  const ty=h - (S.ctrl.targetForce*fscale)*0.9*h - h*0.05; g.beginPath(); g.moveTo(0,ty); g.lineTo(w,ty); g.stroke(); g.setLineDash([]); g.globalAlpha=1;
+  // legend
+  g.font='10px '+cssv('--mono');
+  g.fillStyle=cssv('--myo'); g.fillText('■ '+tt().syncEMG, 8, 16);
+  g.fillStyle=cssv('--force'); g.fillText('■ '+tt().syncForce, 8, 30);
+  g.fillStyle=cssv('--fg-mute'); g.fillText('┄ '+tt().syncTarget, 8, 44);
+}
+function startFreeMode(k){
+  S.object=k; S.freeMode=true;
+  S.result={grasped:false,crushed:false,dropped:false}; S._settle=0; _graspFired=false; _finaleShown=false;
+  S.integ=0; S.force=0; S.hand.closure=0;
+  $('finOverlay').classList.add('hidden');
+  toast(L('自由抓取: ','Free grasp: ')+OBJECTS[k][S.lang]);
+  setStat('GRASP'); renderCh4();
+}
+
+/* redraw on resize */
+let _rt=null;
+window.addEventListener('resize', ()=>{ clearTimeout(_rt); _rt=setTimeout(()=>{ renderLive&&renderLive(); }, 120); });
+
+/* =====================================================================
+   BOOT
+   ===================================================================== */
+window.S=S; window.tt=tt;
+window.renderCh1=renderCh1; window.renderCh2=renderCh2; window.renderCh3=renderCh3; window.renderCh4=renderCh4;
+window.gotoChapter=gotoChapter; window.advanceStage=advanceStage; window.startTrials=startTrials;
+window.emgRaw=emgRaw; window.rectify=rectify; window.movAvg=movAvg; window.normalize=normalize;
+window.decide=decide; window.fingerJoints=fingerJoints; window.servoToTendon=servoToTendon;
+window.contactForce=contactForce; window.pidStep=pidStep; window.OBJECTS=OBJECTS;
+bindClench();
+gotoChapter(1);
+loop();
+</script>
+</body>
+</html>
