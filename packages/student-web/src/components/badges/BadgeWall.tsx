@@ -59,11 +59,11 @@ function ChapterCard({ chapter }: { chapter: BadgeChapterWall }) {
         )}
       </div>
       <h3 className="font-bold text-[var(--ink)] text-sm text-center">{chapter.display_name}</h3>
-      <div className="flex items-center gap-2 text-xs">
+      <div className="flex flex-wrap items-center justify-center gap-1.5 text-xs w-full">
         {TIER_ORDER.map((tier) => (
           <span
             key={tier}
-            className="flex items-center gap-1 px-2 py-0.5 rounded-full"
+            className="inline-flex shrink-0 items-center gap-1 px-1.5 py-0.5 rounded-full whitespace-nowrap"
             style={{ background: "var(--paper-2)", color: "var(--sub)" }}
           >
             {t(`badges.tier.${tier}`)}
