@@ -22,7 +22,7 @@ import { library, myProjects, type MyProjectItem } from "@/lib/api"
 import { useAuthStore } from "@/lib/stores/auth-store"
 import { useT } from "@/lib/i18n/use-t"
 import { InlineLoading } from "@/components/ui/page-loading"
-import { BadgeWall } from "@/components/badges/BadgeWall"
+import { BadgeWallEntry } from "@/components/badges/BadgeWallEntry"
 import { ChapterBadgeMark } from "@/components/badges/ChapterBadgeMark"
 
 type Status = "active" | "paused" | "shipped"
@@ -231,12 +231,12 @@ export default function MyProjectsPage() {
         />
       </div>
 
-      {/* spec 042: 先驱者协会徽章墙 */}
+      {/* spec 042: 先驱者协会徽章墙 (入口卡, 点击弹窗看全墙) */}
       <div style={{ marginBottom: 20 }}>
         <div className="eyebrow" style={{ marginBottom: 10 }}>
           <span className="dot" /> {t("badges.wall_title")}
         </div>
-        <BadgeWall />
+        <BadgeWallEntry />
       </div>
 
       {/* Filter rail */}

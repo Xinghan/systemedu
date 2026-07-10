@@ -22,19 +22,39 @@ function ChapterCard({ chapter }: { chapter: BadgeChapterWall }) {
   const t = useT()
   const [imgFailed, setImgFailed] = useState(false)
   const highest = chapter.highest_tier
+  // 未解锁 (还没拿到任何徽章) 时, 用最低等级(铜)图作预览, 叠灰蒙 + 去饱和,
+  // 让人隐约看到徽章长什么样、目标感更强, 而不是一个冷冰冰的锁。
+  const locked = !highest
+  const displayTier = highest ?? "bronze"
 
   return (
     <div className="rounded-2xl border border-[var(--border)] bg-[var(--card)] p-5 flex flex-col items-center gap-3">
-      <div className="w-24 h-24 rounded-full flex items-center justify-center bg-[var(--paper-2)] overflow-hidden">
-        {highest && !imgFailed ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={badgeImageUrl(chapter.chapter, highest)}
-            alt={chapter.display_name}
-            className="w-full h-full object-cover"
-            onError={() => setImgFailed(true)}
-          />
+      <div className="w-24 h-24 rounded-full flex items-center justify-center bg-[var(--paper-2)] overflow-hidden relative">
+        {!imgFailed ? (
+          <>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={badgeImageUrl(chapter.chapter, displayTier)}
+              alt={chapter.display_name}
+              className="w-full h-full object-cover"
+              style={
+                locked
+                  ? { filter: "grayscale(1) brightness(0.94)", opacity: 0.5 }
+                  : undefined
+              }
+              onError={() => setImgFailed(true)}
+            />
+            {locked && (
+              // 灰蒙层: 进一步压暗未解锁徽章, 保持"看得见轮廓、但明显是灰的"
+              <span
+                aria-hidden
+                className="absolute inset-0 rounded-full"
+                style={{ background: "var(--paper-2)", opacity: 0.4 }}
+              />
+            )}
+          </>
         ) : (
+          // 图真加载失败才回落到锁 (图片资源现已就位, 一般不会走到这里)
           <Lock className="h-8 w-8 text-[var(--sub-2)]" />
         )}
       </div>

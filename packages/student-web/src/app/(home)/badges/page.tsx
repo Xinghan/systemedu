@@ -11,7 +11,7 @@ import { ChevronRight } from "lucide-react"
 
 import { useAuthStore } from "@/lib/stores/auth-store"
 import { useT } from "@/lib/i18n/use-t"
-import { BadgeWall } from "@/components/badges/BadgeWall"
+import { BadgeWallEntry } from "@/components/badges/BadgeWallEntry"
 
 export default function BadgesPage() {
   const t = useT()
@@ -57,7 +57,7 @@ export default function BadgesPage() {
         </p>
       </div>
 
-      <BadgeWall />
+      <BadgeWallEntry />
     </main>
   )
 }
