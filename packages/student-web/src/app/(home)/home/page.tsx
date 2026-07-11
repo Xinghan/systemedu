@@ -12,6 +12,7 @@ import {
   CirclePlay,
   Gauge,
   Layers,
+  Orbit,
   Sparkles,
 } from "lucide-react"
 import { library, myBadges, myKnodes, myProjects, type MyProjectItem } from "@/lib/api"
@@ -121,11 +122,11 @@ export default function HomePage() {
         </p>
       </div>
 
-      {/* 真实统计 4 格 */}
+      {/* 真实统计 5 格 */}
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "repeat(4, 1fr)",
+          gridTemplateColumns: "repeat(5, 1fr)",
           gap: 14,
           marginBottom: 28,
         }}
@@ -184,6 +185,33 @@ export default function HomePage() {
           </div>
           <div style={{ marginTop: 4, fontSize: 11.5, color: "var(--sub-2)" }}>
             {t("brain.card.sub")}
+          </div>
+        </Link>
+        <Link
+          href="/galaxy"
+          style={{
+            border: "1px solid var(--border)",
+            borderRadius: 14,
+            padding: "16px 18px",
+            background: "var(--card)",
+            textDecoration: "none",
+            color: "inherit",
+            display: "block",
+            transition: "box-shadow var(--t-med), border-color var(--t-med)",
+          }}
+          className="brain-card"
+        >
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", color: "var(--sub)", fontSize: 12.5, marginBottom: 8 }}>
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 7 }}>
+              <Orbit size={15} strokeWidth={1.5} /> {t("galaxy.nav")}
+            </span>
+            <ArrowUpRight size={15} strokeWidth={1.6} style={{ color: "var(--sub-2)" }} />
+          </div>
+          <div style={{ fontSize: 24, fontWeight: 700, color: "var(--ink)", letterSpacing: "-0.01em" }}>
+            445
+          </div>
+          <div style={{ marginTop: 4, fontSize: 11.5, color: "var(--sub-2)" }}>
+            {t("galaxy.page.kpi_concepts")}
           </div>
         </Link>
       </div>
