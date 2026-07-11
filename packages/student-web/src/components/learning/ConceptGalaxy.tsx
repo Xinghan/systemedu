@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import type { GalaxyPayload, GradeBand } from "@/lib/galaxy/types"
 import { useT } from "@/lib/i18n/use-t"
 import styles from "@/app/(home)/galaxy/galaxy.module.css"
@@ -32,6 +32,14 @@ export function ConceptGalaxy({ payload, litByConcept, initialProject, loggedIn 
   const [activeProj, setActiveProj] = useState<string | null>(initialProject ?? null)
   const [activeSubj, setActiveSubj] = useState<string | null>(null)
   const [selId, setSelId] = useState<string | null>(null)
+
+  // 深链 ?project= 变化时同步预选 (galaxy→galaxy 客户端导航复用同一组件实例)
+  useEffect(() => {
+    if (initialProject) {
+      setActiveProj(initialProject)
+      setActiveSubj(null)
+    }
+  }, [initialProject])
 
   // 当前应高亮的概念集合: 学科筛选 > 项目选中 > 我学过
   const highlightSet = useMemo(() => {
