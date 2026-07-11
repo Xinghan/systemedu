@@ -7,7 +7,6 @@ import { toast } from "sonner"
 import { ChevronRight, Lock, Sparkles, Trash2, Network, MessageSquare } from "lucide-react"
 import { memory, type MemoryFact, chatSessions, type ChatSessionDTO } from "@/lib/api"
 import { useAuthStore } from "@/lib/stores/auth-store"
-import { UserKnowledgeTreeView } from "@/components/learning/UserKnowledgeTreeView"
 import { useT } from "@/lib/i18n/use-t"
 import { InlineLoading } from "@/components/ui/page-loading"
 
@@ -138,7 +137,14 @@ export default function BrainPage() {
       </div>
 
       {/* ── 知识图谱 ── */}
-      {activeTab === "knowledge" && <UserKnowledgeTreeView />}
+      {activeTab === "knowledge" && (
+        <div className="card-elevated" style={{ padding: 40, textAlign: "center" }}>
+          <Network size={36} strokeWidth={1.5} style={{ color: "var(--primary)", margin: "0 auto 14px" }} />
+          <p className="body" style={{ color: "var(--ink)", marginBottom: 6 }}>{t("galaxy.nav")}</p>
+          <p className="sub" style={{ marginBottom: 18, maxWidth: 460, marginLeft: "auto", marginRight: "auto" }}>{t("galaxy.page.desc")}</p>
+          <Link href="/galaxy" className="btn btn-primary">{t("galaxy.nav")} →</Link>
+        </div>
+      )}
 
       {/* ── 记忆 ── */}
       {activeTab === "memory" && (

@@ -22,7 +22,6 @@ import { library, myProjects, setCurrentModuleId } from "@/lib/api"
 import { useAuthStore } from "@/lib/stores/auth-store"
 import { CourseContentView } from "@/components/learning/course-content-view"
 import { ChatPanel } from "@/components/chat/chat-panel"
-import { KnowledgeTreeModal } from "@/components/learning/knowledge-tree-modal"
 import { KnodeCompleteButton } from "@/components/learning/KnodeCompleteButton"
 import type { KnodeInfo } from "@/lib/types/api"
 import { useT } from "@/lib/i18n/use-t"
@@ -70,7 +69,6 @@ export default function LearnPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [agentOpen, setAgentOpen] = useState(true)
-  const [treeOpen, setTreeOpen] = useState(false)
   const [search, setSearch] = useState("")
 
   useEffect(() => {
@@ -493,7 +491,7 @@ export default function LearnPage() {
             <button
               type="button"
               className="btn btn-ghost btn-sm"
-              onClick={() => setTreeOpen(true)}
+              onClick={() => router.push(`/galaxy?project=${encodeURIComponent(slug)}`)}
               disabled={modules.length === 0}
             >
               <Network size={13} strokeWidth={1.5} /> Tree
@@ -683,17 +681,6 @@ export default function LearnPage() {
         )}
       </aside>
 
-      {treeOpen && (
-        <KnowledgeTreeModal
-          slug={slug}
-          projectTitle={projectTitle || slug}
-          stages={stages}
-          modules={modules}
-          lastModuleId={lastModuleId}
-          pulled={true}
-          onClose={() => setTreeOpen(false)}
-        />
-      )}
     </main>
   )
 }

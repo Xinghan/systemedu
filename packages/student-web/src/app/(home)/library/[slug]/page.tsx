@@ -36,7 +36,6 @@ import {
 import { useAuthStore } from "@/lib/stores/auth-store"
 import type { BadgeTier } from "@/lib/types/api"
 import { BADGE_TIERS, badgeImageUrl, chapterForDomain } from "@/lib/constants/badges"
-import { KnowledgeTreeModal } from "@/components/learning/knowledge-tree-modal"
 import { KnowledgeTreeView } from "@/components/learning/KnowledgeTreeView"
 import { StoryModal } from "@/components/library/StoryModal"
 import { useT } from "@/lib/i18n/use-t"
@@ -138,7 +137,6 @@ export default function ProjectHome() {
   const [lastModuleId, setLastModuleId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [pulling, setPulling] = useState(false)
-  const [treeOpen, setTreeOpen] = useState(false)
   const [storyOpen, setStoryOpen] = useState(false) // spec 040: 开篇连环画弹窗
   // spec 036: 用户完成 knode 列表 (用于 Curriculum 显示勾)
   const [completedKnodeIds, setCompletedKnodeIds] = useState<string[]>([])
@@ -521,7 +519,7 @@ export default function ProjectHome() {
                     }
                   : {}),
               }}
-              onClick={() => setTreeOpen(true)}
+              onClick={() => router.push(`/galaxy?project=${encodeURIComponent(slug)}`)}
               disabled={modules.length === 0}
             >
               <Network size={14} strokeWidth={1.5} /> {t("library.open_knowledge_tree")}
@@ -667,18 +665,6 @@ export default function ProjectHome() {
           <KnowledgeTreeSection slug={slug} />
         </Block>
       </div>
-
-      {treeOpen && (
-        <KnowledgeTreeModal
-          slug={slug}
-          projectTitle={project.title_zh || project.title}
-          stages={stages}
-          modules={modules}
-          lastModuleId={lastModuleId}
-          pulled={pulled}
-          onClose={() => setTreeOpen(false)}
-        />
-      )}
 
       {/* spec 040: 开篇连环画弹窗 */}
       {storyOpen && Array.isArray(project.story) && project.story.length > 0 && (
