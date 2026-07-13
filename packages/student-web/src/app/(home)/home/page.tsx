@@ -208,7 +208,7 @@ export default function HomePage() {
             <ArrowUpRight size={15} strokeWidth={1.6} style={{ color: "var(--sub-2)" }} />
           </div>
           <div style={{ fontSize: 24, fontWeight: 700, color: "var(--ink)", letterSpacing: "-0.01em" }}>
-            445
+            504
           </div>
           <div style={{ marginTop: 4, fontSize: 11.5, color: "var(--sub-2)" }}>
             {t("galaxy.page.kpi_concepts")}
