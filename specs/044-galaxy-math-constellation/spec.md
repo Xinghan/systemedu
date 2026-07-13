@@ -11,8 +11,12 @@ Status: shipped (2026-07-13)
   5 个数学母概念 function/derivative/integral/vector_space/phase 防被 QID 归并进现有窄应用点)。
 - 合并: 504 概念 = 445 现有 (零改动, _verify_445_intact 通过) + 59 净新增 Mathematics;
   85 中 26 个与现有同 QID 概念合并借点 (方差/协方差/百分比等, 前置/服务边照连)。
-- 前端: 学科图例 "数学 59" (银白 #e8eaf0); 筛选聚焦/详情卡 (概念+学段+用于项目+课节+
+- 前端: 学科图例 "数学" (银白 #e8eaf0); 筛选聚焦/详情卡 (概念+学段+用于项目+课节+
   Wikidata 链接)/项目点亮 (选脑波Minecraft 点亮 88 概念含 13 数学点) 全部验证通过, 无 console 错误。
+- 学科层级归并 (上线同日用户反馈): 细分技术领域不与大领域平级, emit 呈现层 remap
+  (源切片不动): Optimization(8)->Mathematics, Signal(23)->Electronics。
+  14 学科 -> 12; 数学 67 (第 2 大学科), 电子 49。Control/Robotics 保留 (独立学科身份 +
+  项目课主题导航价值)。
 关联: spec 041 (knowledge-graph-builder, 425 节点 Wikidata 映射)
 
 ## WHAT
