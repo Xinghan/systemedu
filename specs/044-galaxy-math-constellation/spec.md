@@ -1,6 +1,18 @@
 # Spec 044: 知识星图数学星系 (Mathematics constellation)
 
-Status: draft (2026-07-13)
+Status: shipped (2026-07-13)
+
+## 验收结果 (2026-07-13)
+
+- math 切片 85 概念 (5 分支提炼 98 -> 跨分支去重 85), 354 边, 120 covers, 学段 4 段全覆盖
+  (elementary 17 / middle 23 / high 35 / university 23, 切片口径)。
+- Wikidata 锚定 78/85 (91.8%): 一轮自动 60 -> 二轮改进搜索词回填 79 -> 手工补 6 -> 85;
+  人工复核修正 14 处误命中; 7 个有意置空 (2 个教学直觉点防内部去重 +
+  5 个数学母概念 function/derivative/integral/vector_space/phase 防被 QID 归并进现有窄应用点)。
+- 合并: 504 概念 = 445 现有 (零改动, _verify_445_intact 通过) + 59 净新增 Mathematics;
+  85 中 26 个与现有同 QID 概念合并借点 (方差/协方差/百分比等, 前置/服务边照连)。
+- 前端: 学科图例 "数学 59" (银白 #e8eaf0); 筛选聚焦/详情卡 (概念+学段+用于项目+课节+
+  Wikidata 链接)/项目点亮 (选脑波Minecraft 点亮 88 概念含 13 数学点) 全部验证通过, 无 console 错误。
 关联: spec 041 (knowledge-graph-builder, 425 节点 Wikidata 映射)
 
 ## WHAT
