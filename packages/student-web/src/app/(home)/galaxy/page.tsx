@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { Suspense, useEffect, useState } from "react"
 import { useSearchParams } from "next/navigation"
 import { useAuthStore } from "@/lib/stores/auth-store"
 import { useT } from "@/lib/i18n/use-t"
@@ -9,7 +9,17 @@ import { fetchLitByConcept } from "@/lib/galaxy/lit"
 import type { GalaxyPayload } from "@/lib/galaxy/types"
 import styles from "./galaxy.module.css"
 
+// useSearchParams 需要 Suspense 边界 (Next.js 静态预渲染要求)。缺它会导致
+// `next build` 预渲染 /galaxy 时报错 → 整个 build 失败。
 export default function GalaxyPage() {
+  return (
+    <Suspense fallback={null}>
+      <GalaxyPageInner />
+    </Suspense>
+  )
+}
+
+function GalaxyPageInner() {
   const t = useT()
   const { loggedIn, hydrate } = useAuthStore()
   const searchParams = useSearchParams()
