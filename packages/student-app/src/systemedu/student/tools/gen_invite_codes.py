@@ -3,7 +3,7 @@
 用法 (需 STUDENT_DB_URL 指向目标库):
     python -m systemedu.student.tools.gen_invite_codes 200 --batch first-batch
 
-码格式: 8 位大写字母数字, 字符集去 0/O/1/I 易混字符 (32^8 空间, 碰撞可忽略)。
+码格式: 8 位纯数字 (10^8 空间, 200 量级碰撞可忽略; 纯数字便于口头传达与手机输入)。
 """
 
 from __future__ import annotations
@@ -11,7 +11,7 @@ from __future__ import annotations
 import argparse
 import secrets
 
-ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"  # 无 0 O 1 I
+ALPHABET = "0123456789"  # 纯数字 (2026-07-14 用户要求, 替代初版大写字母数字)
 
 
 def gen_code() -> str:
