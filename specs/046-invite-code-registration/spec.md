@@ -1,6 +1,6 @@
 # Spec 046: 邀请码注册机制
 
-Status: draft (2026-07-14)
+Status: shipped (2026-07-14)
 
 ## WHAT
 
