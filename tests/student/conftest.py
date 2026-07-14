@@ -356,6 +356,9 @@ def asgi_app(monkeypatch, tmp_path):
     monkeypatch.setenv("STUDENT_SKIP_TUTOR_PRELOAD", "1")
     monkeypatch.setenv("LIBRARY_BASE_URL", "http://lib.invalid")
     monkeypatch.setenv("LIBRARY_LICENSE_TOKEN", "asgi-tok")
+    # spec 046: 存量用例大量走 verify 自动建号, 全局关邀请码门槛;
+    # 邀请码专项测试 (test_invite_code.py) 自行 setenv true。
+    monkeypatch.setenv("INVITE_CODE_REQUIRED", "false")
     from systemedu.student.server import create_app
     # httpx ASGITransport 不触发 Starlette lifespan, 而 init_db 只在 lifespan
     # startup 里跑; 故在此手动重置引擎(使 STUDENT_DB_PATH 生效)并建表,

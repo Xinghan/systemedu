@@ -10,6 +10,7 @@
 
 from __future__ import annotations
 
+import os
 import re
 
 from starlette.requests import Request
@@ -18,8 +19,10 @@ from starlette.routing import Route
 
 from ..db import (
     create_user_by_phone,
+    create_user_by_phone_with_invite,
     get_user_by_id,
     get_user_by_phone,
+    is_invite_code_available,
     update_last_login,
     update_profile,
 )
@@ -49,12 +52,40 @@ async def api_verify(request: Request) -> JSONResponse:
     code = (body.get("code") or "").strip()
     if not _PHONE_RE.match(phone) or not code:
         return JSONResponse({"error": "参数错误"}, status_code=400)
+
+    # spec 046: 新用户的邀请码预检放在验证码消耗之前 —— 验证码是一次性的,
+    # 若先消耗再拒, 用户漏填/填错邀请码就得等冷却重新发码, 体验差。
+    user = get_user_by_phone(phone)
+    invite = (body.get("invite_code") or "").strip().upper()
+    invite_required = (
+        user is None
+        and os.environ.get("INVITE_CODE_REQUIRED", "true").lower() == "true"
+    )
+    if invite_required:
+        if not invite:
+            return JSONResponse(
+                {"error": "注册需要邀请码", "invite_required": True}, status_code=403
+            )
+        if not is_invite_code_available(invite):
+            return JSONResponse(
+                {"error": "邀请码无效或已被使用", "invite_required": True},
+                status_code=403,
+            )
+
     if not await codes.verify_code(phone, code):
         return JSONResponse({"error": "验证码错误或已过期"}, status_code=401)
 
-    user = get_user_by_phone(phone)
     if user is None:
-        user = create_user_by_phone(phone)
+        if invite_required:
+            # 原子领取 (预检到此处的竞态窗口极小; 被抢则拒, 验证码已耗属可接受边界)
+            user = create_user_by_phone_with_invite(phone, invite)
+            if user is None:
+                return JSONResponse(
+                    {"error": "邀请码无效或已被使用", "invite_required": True},
+                    status_code=403,
+                )
+        else:
+            user = create_user_by_phone(phone)
     else:
         update_last_login(user.id)
     token = create_access_token(user.id, user.display_name or phone)

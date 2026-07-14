@@ -29,6 +29,7 @@ function LoginForm() {
   const [mode, setMode] = useState<"register" | "login">("register")
   const [phone, setPhone] = useState("")
   const [code, setCode] = useState("")
+  const [invite, setInvite] = useState("")  // spec 046: 注册邀请码
   const [cooldown, setCooldown] = useState(0)
   const [sending, setSending] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -89,7 +90,7 @@ function LoginForm() {
     }
     setLoading(true)
     try {
-      const res = await auth.verify(phone, code)
+      const res = await auth.verify(phone, code, invite.trim() || undefined)
       if (res.profile_completed) {
         setAuth(res.token)
         // 拉 display_name 填充顶栏头像 (失败不阻塞登录)
@@ -105,7 +106,10 @@ function LoginForm() {
         setShowProfile(true)
       }
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : t("auth.error_generic"))
+      const msg = err instanceof Error ? err.message : t("auth.error_generic")
+      toast.error(msg)
+      // spec 046: 新手机号在登录 tab 撞邀请码门槛 -> 自动切注册 tab 露出邀请码框
+      if (msg.includes("邀请码") && mode === "login") setMode("register")
     } finally {
       setLoading(false)
     }
@@ -182,9 +186,28 @@ function LoginForm() {
           </div>
         </div>
 
+        {mode === "register" && (
+          <div className="space-y-1.5">
+            <label htmlFor="invite" className="text-sm font-medium text-foreground">
+              {t("auth.invite")}
+            </label>
+            <input
+              id="invite"
+              type="text"
+              value={invite}
+              onChange={(e) => setInvite(e.target.value.replace(/[^a-zA-Z0-9]/g, "").slice(0, 16).toUpperCase())}
+              placeholder={t("auth.invite.placeholder")}
+              maxLength={16}
+              required
+              className="w-full rounded-md border border-border/70 bg-background px-3 py-2 text-sm font-mono tracking-widest shadow-inner focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
+            />
+            <p className="text-xs text-muted-foreground">{t("auth.invite.hint")}</p>
+          </div>
+        )}
+
         <button
           type="submit"
-          disabled={loading || code.length < 6}
+          disabled={loading || code.length < 6 || (mode === "register" && !invite.trim())}
           className="inline-flex w-full items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition hover:bg-primary/90 disabled:opacity-60"
         >
           {loading ? "..." : t(`auth.${mode}.submit`)}

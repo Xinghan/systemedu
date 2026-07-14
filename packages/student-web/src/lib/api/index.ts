@@ -26,10 +26,12 @@ export const auth = {
   verify: async (
     phone: string,
     code: string,
+    inviteCode?: string,
   ): Promise<{ token: string; user_id: string; profile_completed: boolean }> => {
     const data = await api.post<{ token: string; user_id: string; profile_completed: boolean }>(
       "/api/auth/verify",
-      { phone, code },
+      // spec 046: 新用户注册需要邀请码; 老用户登录后端忽略该字段
+      inviteCode ? { phone, code, invite_code: inviteCode } : { phone, code },
     )
     setToken(data.token)
     return data

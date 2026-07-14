@@ -125,6 +125,18 @@ class User(Base):
     last_login_at = Column(DateTime, nullable=True)
 
 
+class InviteCode(Base):
+    """邀请码 (spec 046) — 注册门槛, 一码一用."""
+
+    __tablename__ = "invite_codes"
+
+    code = Column(String(16), primary_key=True)
+    batch = Column(String(32), nullable=True)
+    used_by = Column(String(36), ForeignKey("users.id"), nullable=True)
+    used_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+
 class UserProject(Base):
     """"我的书架" — 学生 Pull 进自己列表的 library 项目.
 
@@ -654,6 +666,50 @@ def create_user_by_phone(phone: str) -> User:
         session.commit()
         session.refresh(u)
         return _detach_user(u)  # type: ignore[return-value]
+
+
+def create_user_by_phone_with_invite(phone: str, invite_code: str) -> User | None:
+    """spec 046: 领邀请码 + 建号, 单事务原子完成。返回 None = 邀请码无效或已被使用。
+
+    领取用 UPDATE ... WHERE used_by IS NULL 的 rowcount 判定, SQLite/PG 行为一致,
+    并发下同一码只有一个事务能领到。
+    """
+    with get_session() as session:
+        u = User(phone=phone, profile_completed=False)
+        session.add(u)
+        session.flush()  # 先拿到 u.id, 事务未提交
+        claimed = session.execute(
+            text(
+                "UPDATE invite_codes SET used_by = :uid, used_at = :now "
+                "WHERE code = :code AND used_by IS NULL"
+            ),
+            {"uid": u.id, "now": datetime.utcnow(), "code": invite_code},
+        )
+        if claimed.rowcount != 1:
+            session.rollback()
+            return None
+        session.commit()
+        session.refresh(u)
+        return _detach_user(u)  # type: ignore[return-value]
+
+
+def is_invite_code_available(code: str) -> bool:
+    """spec 046: 邀请码存在且未被使用 (预检用, 不领取)。"""
+    with get_session() as session:
+        row = session.get(InviteCode, code)
+        return row is not None and row.used_by is None
+
+
+def create_invite_codes(codes: list[str], batch: str | None = None) -> int:
+    """spec 046: 批量插入邀请码 (已存在的跳过), 返回实际插入数。"""
+    n = 0
+    with get_session() as session:
+        for c in codes:
+            if session.get(InviteCode, c) is None:
+                session.add(InviteCode(code=c, batch=batch))
+                n += 1
+        session.commit()
+    return n
 
 
 def get_user_by_phone(phone: str) -> User | None:
