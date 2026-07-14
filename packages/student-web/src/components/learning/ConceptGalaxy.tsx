@@ -1,9 +1,13 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
-import type { GalaxyPayload, GradeBand } from "@/lib/galaxy/types"
+import dynamic from "next/dynamic"
+import type { GalaxyPayload } from "@/lib/galaxy/types"
 import { useT } from "@/lib/i18n/use-t"
 import styles from "@/app/(home)/galaxy/galaxy.module.css"
+
+// three.js 不可 SSR
+const Canvas3D = dynamic(() => import("./ConceptGalaxyCanvas3D"), { ssr: false })
 
 interface Props {
   payload: GalaxyPayload
@@ -12,18 +16,8 @@ interface Props {
   loggedIn: boolean
 }
 
-const NS = "http://www.w3.org/2000/svg"
-const BANDS: GradeBand[] = ["university", "high", "middle", "elementary"]
-
-// 概念中文名去括号 + 截断, 作节点标签
-function shortLabel(zh: string): string {
-  const stripped = zh.replace(/（[^）]*）|\([^)]*\)/g, "")
-  return stripped.length > 7 ? stripped.slice(0, 6) + "…" : stripped
-}
-
 export function ConceptGalaxy({ payload, litByConcept, initialProject, loggedIn }: Props) {
   const t = useT()
-  const L = payload.layout
   const byId = useMemo(
     () => Object.fromEntries(payload.concepts.map((c) => [c.id, c] as const)),
     [payload.concepts],
@@ -69,99 +63,16 @@ export function ConceptGalaxy({ payload, litByConcept, initialProject, loggedIn 
 
   return (
     <>
-      <svg
-        className={styles.galaxy}
-        viewBox={`0 0 ${L.VW} ${L.VH}`}
-        preserveAspectRatio="xMidYMid slice"
-        role="img"
-        xmlns={NS}
-      >
-        {/* 学段带 */}
-        <g>
-          {BANDS.map((b) => {
-            const y = L.bandY[b]
-            return (
-              <g key={b}>
-                <line className={styles.bandline} x1={L.VW * 0.28} y1={y - 64} x2={L.VW - 6} y2={y - 64} />
-                <text className={styles.bandtick} x={L.VW - 10} y={y - 52} textAnchor="end">
-                  {L.band_label[b]}
-                </text>
-              </g>
-            )
-          })}
-        </g>
-        {/* 边 */}
-        <g>
-          {payload.edges.map(([a, b], i) => {
-            const pa = byId[a], pb = byId[b]
-            if (!pa || !pb) return null
-            const hot = highlightSet.has(a) && highlightSet.has(b)
-            return (
-              <line
-                key={i}
-                x1={pa.x}
-                y1={pa.y}
-                x2={pb.x}
-                y2={pb.y}
-                stroke={hot ? "#D97757" : "#9D978A"}
-                strokeOpacity={hot ? 0.45 : dimOthers ? 0.04 : 0.1}
-              />
-            )
-          })}
-        </g>
-        {/* 节点 */}
-        <g>
-          {payload.concepts.map((c) => {
-            const col = payload.subj_color[c.subj] || "#888"
-            const r = 3 + Math.min(5, (c.p.length - 1) * 1.5)
-            const on = highlightSet.has(c.id)
-            const opacity = dimOthers ? (on ? 1 : 0.12) : litByConcept.has(c.id) ? 1 : 0.85
-            const rr = on && dimOthers ? r + 1.4 : r
-            return (
-              <circle
-                key={c.id}
-                cx={c.x}
-                cy={c.y}
-                r={rr}
-                fill={col}
-                opacity={opacity}
-                stroke={selId === c.id ? "#191814" : "none"}
-                strokeWidth={selId === c.id ? 1.5 : 0}
-                style={{ cursor: "pointer", transition: "opacity .3s" }}
-                onClick={() => setSelId(c.id)}
-              />
-            )
-          })}
-        </g>
-        {/* 高亮态显示标签 (被 >=2 项目共享的点) */}
-        <g>
-          {dimOthers &&
-            payload.concepts
-              .filter((c) => highlightSet.has(c.id) && c.p.length >= 2)
-              .map((c) => {
-                const r = 3 + Math.min(5, (c.p.length - 1) * 1.5)
-                return (
-                  <text
-                    key={c.id}
-                    x={c.x}
-                    y={c.y - (r + 4)}
-                    textAnchor="middle"
-                    style={{
-                      fontSize: "9.5px",
-                      fill: "#191814",
-                      paintOrder: "stroke",
-                      stroke: "#FAF9F5",
-                      strokeWidth: "3px",
-                      strokeLinejoin: "round",
-                      pointerEvents: "none",
-                    }}
-                  >
-                    {shortLabel(c.zh)}
-                  </text>
-                )
-              })}
-        </g>
-      </svg>
+      <div className={styles.galaxy}>
+        <Canvas3D
+          payload={payload}
+          highlightSet={highlightSet}
+          dimOthers={dimOthers}
+          litByConcept={litByConcept}
+          selId={selId}
+          onSelect={setSelId}
+        />
+      </div>
 
       {/* 左列: 标题 + KPI + 项目 chip + 学科图例 */}
       <div className={styles.leftcol}>

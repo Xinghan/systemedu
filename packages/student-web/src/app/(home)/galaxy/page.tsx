@@ -56,7 +56,7 @@ function GalaxyPageInner() {
   }
 
   return (
-    <main className="page-wide">
+    <main style={{ width: "100%" }}>
       <div className={styles.stage}>
         <div className={styles.brand}><span className={styles.fx} /> SYSTEMEDU · 全学科知识星图</div>
         <ConceptGalaxy payload={payload} litByConcept={litByConcept} initialProject={initialProject} loggedIn={loggedIn} />
