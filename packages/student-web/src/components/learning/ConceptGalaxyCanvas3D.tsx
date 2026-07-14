@@ -106,10 +106,8 @@ export default function ConceptGalaxyCanvas3D({ payload, highlightSet, dimOthers
     controls.minDistance = 14
     controls.maxDistance = 130
 
-    scene.add(new THREE.AmbientLight(0xffffff, 1.15))
-    const pl = new THREE.PointLight(0xfff2e0, 0.7, 300)
-    pl.position.set(20, 40, 40)
-    scene.add(pl)
+    // 无光照材质 (MeshBasicMaterial) 直接显示标称浅色, 深度感靠 fog; 光源仅备而不用
+    scene.add(new THREE.AmbientLight(0xffffff, 1.0))
 
     // ── 节点 ──
     const concepts = payload.concepts
@@ -131,7 +129,8 @@ export default function ConceptGalaxyCanvas3D({ payload, highlightSet, dimOthers
     })
 
     const geo = new THREE.SphereGeometry(1, 14, 14)
-    const mat = new THREE.MeshStandardMaterial({ roughness: 0.55, metalness: 0.05 })
+    // Basic 材质无光照: 浅色系标称色原样呈现, 不被阴影压深
+    const mat = new THREE.MeshBasicMaterial()
     const mesh = new THREE.InstancedMesh(geo, mat, N)
     mesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(N * 3), 3)
     scene.add(mesh)

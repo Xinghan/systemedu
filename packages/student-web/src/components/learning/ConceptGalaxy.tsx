@@ -376,9 +376,10 @@ export function ConceptGalaxy({ payload, litByConcept, initialProject, loggedIn 
           <span
             className={styles.subj}
             style={{
-              background: (payload.subj_color[sel.subj] || "#888") + "20",
-              color: payload.subj_color[sel.subj] || "#888",
-              border: `1px solid ${(payload.subj_color[sel.subj] || "#888")}55`,
+              // 学科色为浅色系, 徽章文字向墨色混合加深保证可读
+              background: (payload.subj_color[sel.subj] || "#888") + "38",
+              color: `color-mix(in srgb, ${payload.subj_color[sel.subj] || "#888"} 45%, #191814)`,
+              border: `1px solid ${(payload.subj_color[sel.subj] || "#888")}`,
             }}
           >
             {payload.subj_zh[sel.subj] || sel.subj}
