@@ -103,8 +103,8 @@ export function ConceptGalaxy({ payload, litByConcept, initialProject, loggedIn 
                 y1={pa.y}
                 x2={pb.x}
                 y2={pb.y}
-                stroke={hot ? "#a9c4ff" : "#8ea3c8"}
-                strokeOpacity={hot ? 0.4 : dimOthers ? 0.02 : 0.05}
+                stroke={hot ? "#D97757" : "#9D978A"}
+                strokeOpacity={hot ? 0.45 : dimOthers ? 0.04 : 0.1}
               />
             )
           })}
@@ -125,7 +125,7 @@ export function ConceptGalaxy({ payload, litByConcept, initialProject, loggedIn 
                 r={rr}
                 fill={col}
                 opacity={opacity}
-                stroke={selId === c.id ? "#fff" : "none"}
+                stroke={selId === c.id ? "#191814" : "none"}
                 strokeWidth={selId === c.id ? 1.5 : 0}
                 style={{ cursor: "pointer", transition: "opacity .3s" }}
                 onClick={() => setSelId(c.id)}
@@ -148,9 +148,9 @@ export function ConceptGalaxy({ payload, litByConcept, initialProject, loggedIn 
                     textAnchor="middle"
                     style={{
                       fontSize: "9.5px",
-                      fill: "#eef2fb",
+                      fill: "#191814",
                       paintOrder: "stroke",
-                      stroke: "#05070d",
+                      stroke: "#FAF9F5",
                       strokeWidth: "3px",
                       strokeLinejoin: "round",
                       pointerEvents: "none",
