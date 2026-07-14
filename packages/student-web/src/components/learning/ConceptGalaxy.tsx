@@ -2,7 +2,9 @@
 
 import { useEffect, useMemo, useState } from "react"
 import dynamic from "next/dynamic"
+import { useRouter } from "next/navigation"
 import type { GalaxyPayload, GradeBand } from "@/lib/galaxy/types"
+import { myProjects } from "@/lib/api"
 import { useT } from "@/lib/i18n/use-t"
 import styles from "@/app/(home)/galaxy/galaxy.module.css"
 
@@ -125,6 +127,7 @@ function Svg2D({ payload, highlightSet, dimOthers, filterMode, litByConcept, sel
 
 export function ConceptGalaxy({ payload, litByConcept, initialProject, loggedIn }: Props) {
   const t = useT()
+  const router = useRouter()
   const byId = useMemo(
     () => Object.fromEntries(payload.concepts.map((c) => [c.id, c] as const)),
     [payload.concepts],
@@ -137,6 +140,46 @@ export function ConceptGalaxy({ payload, litByConcept, initialProject, loggedIn 
   const [filterMode, setFilterMode] = useState<"dim" | "hide">("dim")
   const [spread, setSpread] = useState(1.25)
   const [activeBand, setActiveBand] = useState<GradeBand | null>(null)
+  // 我已加入的项目 slugs (决定课节点击直接进学习页还是弹加入引导)
+  const [pulledSlugs, setPulledSlugs] = useState<Set<string>>(new Set())
+  const [pullModal, setPullModal] = useState<{ slug: string; mid: string } | null>(null)
+  const [pulling, setPulling] = useState(false)
+  const [pullError, setPullError] = useState(false)
+
+  useEffect(() => {
+    if (!loggedIn) { setPulledSlugs(new Set()); return }
+    let cancelled = false
+    myProjects.list()
+      .then((mine) => { if (!cancelled) setPulledSlugs(new Set(mine.map((p) => p.slug))) })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [loggedIn])
+
+  // 课节点击: 已加入直接进学习页, 否则弹加入引导
+  function goKnode(slug: string, mid: string) {
+    if (loggedIn && pulledSlugs.has(slug)) {
+      router.push(`/learn/${encodeURIComponent(slug)}/${encodeURIComponent(mid)}`)
+    } else {
+      setPullError(false)
+      setPullModal({ slug, mid })
+    }
+  }
+
+  async function confirmPull() {
+    if (!pullModal) return
+    if (!loggedIn) { router.push("/login"); return }
+    setPulling(true)
+    setPullError(false)
+    try {
+      await myProjects.pull(pullModal.slug)
+      setPulledSlugs((prev) => new Set([...prev, pullModal.slug]))
+      router.push(`/learn/${encodeURIComponent(pullModal.slug)}/${encodeURIComponent(pullModal.mid)}`)
+    } catch {
+      setPullError(true)
+    } finally {
+      setPulling(false)
+    }
+  }
 
   // 深链 ?project= 变化时同步预选 (galaxy→galaxy 客户端导航复用同一组件实例)
   useEffect(() => {
@@ -351,17 +394,50 @@ export function ConceptGalaxy({ payload, litByConcept, initialProject, loggedIn 
             <div className={styles.projwrp}>
               {sel.p.map((s) => {
                 const pj = payload.projects.find((x) => x.slug === s)
-                return <span key={s} className={styles.pchip}>{pj ? pj.zh : s}</span>
+                return (
+                  <button
+                    key={s}
+                    className={styles.pchip}
+                    onClick={() => router.push(`/library/${encodeURIComponent(s)}`)}
+                    title={t("galaxy.card.goto_project")}
+                  >
+                    {pj ? pj.zh : s}
+                  </button>
+                )
               })}
             </div>
           </div>
           {(() => {
-            const mods = [...new Set((payload.covers[sel.id] || []).map((m) => m.slice(m.lastIndexOf(":") + 1)))].slice(0, 12)
+            // covers entry: "slug:M04" 或 "__math__:slug:M06" → (slug, mid) 对, 点击进对应课节
+            const seen = new Set<string>()
+            const mods: { slug: string; mid: string }[] = []
+            for (const entry of payload.covers[sel.id] || []) {
+              const mid = entry.slice(entry.lastIndexOf(":") + 1)
+              const pj = payload.projects.find((p) => entry.startsWith(p.slug + ":") || entry.includes(":" + p.slug + ":"))
+              if (!pj) continue
+              const key = pj.slug + ":" + mid
+              if (seen.has(key)) continue
+              seen.add(key)
+              mods.push({ slug: pj.slug, mid })
+              if (mods.length >= 12) break
+            }
             return mods.length ? (
               <div className={styles.kv}>
                 <b>{t("galaxy.card.modules")}</b>
                 <div className={styles.mods}>
-                  {mods.map((m) => <span key={m} className={styles.mc}>{m}</span>)}
+                  {mods.map(({ slug, mid }) => {
+                    const pj = payload.projects.find((p) => p.slug === slug)
+                    return (
+                      <button
+                        key={slug + mid}
+                        className={styles.mc}
+                        onClick={() => goKnode(slug, mid)}
+                        title={`${pj?.zh || slug} · ${mid}`}
+                      >
+                        {mid}
+                      </button>
+                    )
+                  })}
                 </div>
               </div>
             ) : null
@@ -378,6 +454,28 @@ export function ConceptGalaxy({ payload, litByConcept, initialProject, loggedIn 
           )}
         </div>
       )}
+
+      {/* 加入项目引导弹窗 (课节点击但未加入) */}
+      {pullModal && (() => {
+        const pj = payload.projects.find((p) => p.slug === pullModal.slug)
+        return (
+          <div className={styles.pmask} onClick={() => !pulling && setPullModal(null)}>
+            <div className={styles.pmodal} role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
+              <h4>{t("galaxy.pull.title")}</h4>
+              <p>{t("galaxy.pull.desc", { name: pj?.zh || pullModal.slug })}</p>
+              {pullError && <p className={styles.perr}>{t("galaxy.pull.failed")}</p>}
+              <div className={styles.pbtns}>
+                <button className={styles.pgo} onClick={confirmPull} disabled={pulling}>
+                  {pulling ? t("galaxy.pull.pulling") : loggedIn ? t("galaxy.pull.go") : t("galaxy.pull.login")}
+                </button>
+                <button className={styles.pcancel} onClick={() => setPullModal(null)} disabled={pulling}>
+                  {t("galaxy.pull.cancel")}
+                </button>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
 
       {!loggedIn && <span className={styles.srOnly}>{t("galaxy.page.login_cta")}</span>}
     </>
