@@ -16,6 +16,10 @@ interface Props {
   payload: GalaxyPayload
   highlightSet: Set<string>
   dimOthers: boolean
+  /** 筛选时未选中节点的处理: dim=淡化, hide=完全隐藏 */
+  filterMode: "dim" | "hide"
+  /** 节点散开系数 (水平向), 缓解 3D 星团内部遮挡 */
+  spread: number
   litByConcept: Set<string>
   selId: string | null
   onSelect: (id: string | null) => void
@@ -41,17 +45,20 @@ function to3D(c: { id: string; x: number; y: number }, L: GalaxyPayload["layout"
 
 interface SceneRefs {
   metas: { id: string; color: string; baseScale: number }[]
+  basePositions: THREE.Vector3[]
   positions: THREE.Vector3[]
   idxById: Map<string, number>
   mesh: THREE.InstancedMesh
   hotLines: THREE.LineSegments
   hotGeo: THREE.BufferGeometry
+  dimGeo: THREE.BufferGeometry
+  edgeIdx: [number, number][]
   dimLineMat: THREE.LineBasicMaterial
   selHalo: THREE.Sprite
   labelWrap: HTMLDivElement
 }
 
-export default function ConceptGalaxyCanvas3D({ payload, highlightSet, dimOthers, litByConcept, selId, onSelect }: Props) {
+export default function ConceptGalaxyCanvas3D({ payload, highlightSet, dimOthers, filterMode, spread, litByConcept, selId, onSelect }: Props) {
   const mountRef = useRef<HTMLDivElement>(null)
   const refs = useRef<SceneRefs | null>(null)
   const onSelectRef = useRef(onSelect)
@@ -108,10 +115,13 @@ export default function ConceptGalaxyCanvas3D({ payload, highlightSet, dimOthers
     const concepts = payload.concepts
     const N = concepts.length
     const metas: SceneRefs["metas"] = []
+    const basePositions: THREE.Vector3[] = []
     const positions: THREE.Vector3[] = []
     const idxById = new Map<string, number>()
     concepts.forEach((c, i) => {
-      positions.push(to3D(c, L))
+      const p = to3D(c, L)
+      basePositions.push(p)
+      positions.push(p.clone())
       metas.push({
         id: c.id,
         color: payload.subj_color[c.subj] || "#888",
@@ -126,11 +136,15 @@ export default function ConceptGalaxyCanvas3D({ payload, highlightSet, dimOthers
     mesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(N * 3), 3)
     scene.add(mesh)
 
-    // ── 边: 常规淡线 (静态) + hot 高亮线 (筛选时动态填充) ──
-    const dimPos: number[] = []
+    // ── 边: 常规淡线 (spread 变化时重填) + hot 高亮线 (筛选时动态填充) ──
+    const edgeIdx: [number, number][] = []
     for (const [a, b] of payload.edges) {
       const ia = idxById.get(a), ib = idxById.get(b)
       if (ia === undefined || ib === undefined) continue
+      edgeIdx.push([ia, ib])
+    }
+    const dimPos: number[] = []
+    for (const [ia, ib] of edgeIdx) {
       const pa = positions[ia], pb = positions[ib]
       dimPos.push(pa.x, pa.y, pa.z, pb.x, pb.y, pb.z)
     }
@@ -179,7 +193,7 @@ export default function ConceptGalaxyCanvas3D({ payload, highlightSet, dimOthers
     labelWrap.style.cssText = "position:absolute;inset:0;pointer-events:none;overflow:hidden;"
     mount.appendChild(labelWrap)
 
-    refs.current = { metas, positions, idxById, mesh, hotLines, hotGeo, dimLineMat, selHalo, labelWrap }
+    refs.current = { metas, basePositions, positions, idxById, mesh, hotLines, hotGeo, dimGeo, edgeIdx, dimLineMat, selHalo, labelWrap }
 
     // ── 拾取 ──
     const raycaster = new THREE.Raycaster()
@@ -299,11 +313,30 @@ export default function ConceptGalaxyCanvas3D({ payload, highlightSet, dimOthers
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [payload])
 
-  // ── 高亮/点亮/选中 变化: 更新颜色、缩放、hot 边、标签 (不重建场景) ──
+  // ── 散开系数变化: 重算节点位置 + 常规边几何 (声明在高亮 effect 之前, 保证其读到新 positions) ──
+  useEffect(() => {
+    const r = refs.current
+    if (!r) return
+    const { basePositions, positions, dimGeo, edgeIdx } = r
+    for (let i = 0; i < positions.length; i++) {
+      const b = basePositions[i]
+      positions[i].set(b.x * spread, b.y, b.z * spread) // 只水平散开, y 保学段语义
+    }
+    const dimPos = new Float32Array(edgeIdx.length * 6)
+    edgeIdx.forEach(([ia, ib], k) => {
+      const pa = positions[ia], pb = positions[ib]
+      dimPos.set([pa.x, pa.y, pa.z, pb.x, pb.y, pb.z], k * 6)
+    })
+    dimGeo.setAttribute("position", new THREE.BufferAttribute(dimPos, 3))
+    dimGeo.attributes.position.needsUpdate = true
+  }, [payload, spread])
+
+  // ── 高亮/点亮/选中/散开 变化: 更新颜色、缩放、hot 边、标签 (不重建场景) ──
   useEffect(() => {
     const r = refs.current
     if (!r) return
     const { metas, positions, idxById, mesh, hotGeo, hotLines, dimLineMat, selHalo, labelWrap } = r
+    const hide = dimOthers && filterMode === "hide"
     const dummy = new THREE.Object3D()
     const col = new THREE.Color()
     for (let i = 0; i < metas.length; i++) {
@@ -313,7 +346,8 @@ export default function ConceptGalaxyCanvas3D({ payload, highlightSet, dimOthers
       if (dimOthers && !on) col.lerp(PAPER, 0.86)
       else if (!dimOthers && litByConcept.size && !litByConcept.has(m.id)) col.lerp(PAPER, 0.25)
       mesh.setColorAt(i, col)
-      const s = m.baseScale * (dimOthers && on ? 1.25 : 1) * (selId === m.id ? 1.5 : 1)
+      // hide 模式: 未选中节点缩放归零 (不渲染也不可拾取)
+      const s = hide && !on ? 0 : m.baseScale * (dimOthers && on ? 1.25 : 1) * (selId === m.id ? 1.5 : 1)
       dummy.position.copy(positions[i])
       dummy.scale.setScalar(s)
       dummy.updateMatrix()
@@ -339,7 +373,7 @@ export default function ConceptGalaxyCanvas3D({ payload, highlightSet, dimOthers
     hotGeo.setAttribute("position", new THREE.Float32BufferAttribute(hot, 3))
     hotGeo.attributes.position.needsUpdate = true
     hotLines.visible = hot.length > 0
-    dimLineMat.opacity = dimOthers ? 0.05 : 0.14
+    dimLineMat.opacity = hide ? 0 : dimOthers ? 0.05 : 0.14
 
     // 选中光环
     const si = selId ? idxById.get(selId) : undefined
@@ -369,7 +403,7 @@ export default function ConceptGalaxyCanvas3D({ payload, highlightSet, dimOthers
         n++
       }
     }
-  }, [payload, highlightSet, dimOthers, litByConcept, selId])
+  }, [payload, highlightSet, dimOthers, filterMode, spread, litByConcept, selId])
 
   return <div ref={mountRef} style={{ position: "absolute", inset: 0, cursor: "grab" }} />
 }

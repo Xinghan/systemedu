@@ -16,6 +16,113 @@ interface Props {
   loggedIn: boolean
 }
 
+const BANDS_2D = ["university", "high", "middle", "elementary"] as const
+
+function shortLabel(zh: string): string {
+  const stripped = zh.replace(/（[^）]*）|\([^)]*\)/g, "")
+  return stripped.length > 7 ? stripped.slice(0, 6) + "…" : stripped
+}
+
+// 2D 平面视图 (svg, 暖纸配色) — 与 3D 共用同一份 highlight/选中状态
+function Svg2D({ payload, highlightSet, dimOthers, filterMode, litByConcept, selId, onSelect }: {
+  payload: GalaxyPayload
+  highlightSet: Set<string>
+  dimOthers: boolean
+  filterMode: "dim" | "hide"
+  litByConcept: Set<string>
+  selId: string | null
+  onSelect: (id: string | null) => void
+}) {
+  const L = payload.layout
+  const byId = useMemo(
+    () => Object.fromEntries(payload.concepts.map((c) => [c.id, c] as const)),
+    [payload.concepts],
+  )
+  const hide = dimOthers && filterMode === "hide"
+  return (
+    <svg
+      className={styles.galaxy}
+      viewBox={`0 0 ${L.VW} ${L.VH}`}
+      preserveAspectRatio="xMidYMid slice"
+      role="img"
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <g>
+        {BANDS_2D.map((b) => {
+          const y = L.bandY[b]
+          return (
+            <g key={b}>
+              <line className={styles.bandline} x1={L.VW * 0.28} y1={y - 64} x2={L.VW - 6} y2={y - 64} />
+              <text className={styles.bandtick} x={L.VW - 10} y={y - 52} textAnchor="end">
+                {L.band_label[b]}
+              </text>
+            </g>
+          )
+        })}
+      </g>
+      <g>
+        {payload.edges.map(([a, b], i) => {
+          const pa = byId[a], pb = byId[b]
+          if (!pa || !pb) return null
+          const hot = highlightSet.has(a) && highlightSet.has(b)
+          if (hide && !hot) return null
+          return (
+            <line
+              key={i}
+              x1={pa.x} y1={pa.y} x2={pb.x} y2={pb.y}
+              stroke={hot ? "#D97757" : "#9D978A"}
+              strokeOpacity={hot ? 0.45 : dimOthers ? 0.04 : 0.1}
+            />
+          )
+        })}
+      </g>
+      <g>
+        {payload.concepts.map((c) => {
+          const on = highlightSet.has(c.id)
+          if (hide && !on) return null
+          const col = payload.subj_color[c.subj] || "#888"
+          const r = 3 + Math.min(5, (c.p.length - 1) * 1.5)
+          const opacity = dimOthers ? (on ? 1 : 0.12) : litByConcept.has(c.id) ? 1 : 0.85
+          const rr = on && dimOthers ? r + 1.4 : r
+          return (
+            <circle
+              key={c.id}
+              cx={c.x} cy={c.y} r={rr}
+              fill={col}
+              opacity={opacity}
+              stroke={selId === c.id ? "#191814" : "none"}
+              strokeWidth={selId === c.id ? 1.5 : 0}
+              style={{ cursor: "pointer", transition: "opacity .3s" }}
+              onClick={() => onSelect(c.id)}
+            />
+          )
+        })}
+      </g>
+      <g>
+        {dimOthers &&
+          payload.concepts
+            .filter((c) => highlightSet.has(c.id) && c.p.length >= 2)
+            .map((c) => {
+              const r = 3 + Math.min(5, (c.p.length - 1) * 1.5)
+              return (
+                <text
+                  key={c.id}
+                  x={c.x} y={c.y - (r + 4)}
+                  textAnchor="middle"
+                  style={{
+                    fontSize: "9.5px", fill: "#191814", paintOrder: "stroke",
+                    stroke: "#FAF9F5", strokeWidth: "3px", strokeLinejoin: "round", pointerEvents: "none",
+                  }}
+                >
+                  {shortLabel(c.zh)}
+                </text>
+              )
+            })}
+      </g>
+    </svg>
+  )
+}
+
 export function ConceptGalaxy({ payload, litByConcept, initialProject, loggedIn }: Props) {
   const t = useT()
   const byId = useMemo(
@@ -26,6 +133,9 @@ export function ConceptGalaxy({ payload, litByConcept, initialProject, loggedIn 
   const [activeProj, setActiveProj] = useState<string | null>(initialProject ?? null)
   const [activeSubj, setActiveSubj] = useState<string | null>(null)
   const [selId, setSelId] = useState<string | null>(null)
+  const [viewMode, setViewMode] = useState<"3d" | "2d">("3d")
+  const [filterMode, setFilterMode] = useState<"dim" | "hide">("dim")
+  const [spread, setSpread] = useState(1.25)
 
   // 深链 ?project= 变化时同步预选 (galaxy→galaxy 客户端导航复用同一组件实例)
   useEffect(() => {
@@ -64,14 +174,67 @@ export function ConceptGalaxy({ payload, litByConcept, initialProject, loggedIn 
   return (
     <>
       <div className={styles.galaxy}>
-        <Canvas3D
-          payload={payload}
-          highlightSet={highlightSet}
-          dimOthers={dimOthers}
-          litByConcept={litByConcept}
-          selId={selId}
-          onSelect={setSelId}
-        />
+        {viewMode === "3d" ? (
+          <Canvas3D
+            payload={payload}
+            highlightSet={highlightSet}
+            dimOthers={dimOthers}
+            filterMode={filterMode}
+            spread={spread}
+            litByConcept={litByConcept}
+            selId={selId}
+            onSelect={setSelId}
+          />
+        ) : (
+          <Svg2D
+            payload={payload}
+            highlightSet={highlightSet}
+            dimOthers={dimOthers}
+            filterMode={filterMode}
+            litByConcept={litByConcept}
+            selId={selId}
+            onSelect={setSelId}
+          />
+        )}
+      </div>
+
+      {/* 视图控制条 (右下): 3D/2D 切换 + 散开滑杆 + 筛选模式 */}
+      <div className={styles.viewbar}>
+        {dimOthers && (
+          <div className={styles.vgroup} role="radiogroup" aria-label={t("galaxy.view.filter_label")}>
+            <button
+              className={styles.vbtn}
+              aria-pressed={filterMode === "dim"}
+              onClick={() => setFilterMode("dim")}
+            >
+              {t("galaxy.view.filter_dim")}
+            </button>
+            <button
+              className={styles.vbtn}
+              aria-pressed={filterMode === "hide"}
+              onClick={() => setFilterMode("hide")}
+            >
+              {t("galaxy.view.filter_hide")}
+            </button>
+          </div>
+        )}
+        {viewMode === "3d" && (
+          <label className={styles.vslider}>
+            <span>{t("galaxy.view.spread")}</span>
+            <input
+              type="range"
+              min={0.8}
+              max={2.2}
+              step={0.05}
+              value={spread}
+              onChange={(e) => setSpread(Number(e.target.value))}
+            />
+          </label>
+        )}
+        <div className={styles.vgroup} role="radiogroup" aria-label="view mode">
+          <button className={styles.vbtn} aria-pressed={viewMode === "3d"} onClick={() => setViewMode("3d")}>3D</button>
+          <button className={styles.vbtn} aria-pressed={viewMode === "2d"} onClick={() => setViewMode("2d")}>2D</button>
+        </div>
       </div>
 
       {/* 左列: 标题 + KPI + 项目 chip + 学科图例 */}
