@@ -102,16 +102,19 @@ function Svg2D({ payload, highlightSet, dimOthers, filterMode, litByConcept, sel
           if (hide && !on) return null
           const col = payload.subj_color[c.subj] || "#888"
           const r = 3 + Math.min(5, (c.p.length - 1) * 1.5)
-          const opacity = dimOthers ? (on ? 1 : 0.12) : litByConcept.has(c.id) ? 1 : 0.85
+          const lit = litByConcept.has(c.id)
+          // 无筛选 + 有点亮数据: 未点亮明显淡化, 点亮的 coral 描边
+          const opacity = dimOthers ? (on ? 1 : 0.12) : litByConcept.size ? (lit ? 1 : 0.35) : 0.85
           const rr = on && dimOthers ? r + 1.4 : r
+          const litRing = !dimOthers && lit
           return (
             <circle
               key={c.id}
               cx={c.x} cy={c.y} r={rr}
               fill={col}
               opacity={opacity}
-              stroke={selId === c.id ? "#191814" : "none"}
-              strokeWidth={selId === c.id ? 1.5 : 0}
+              stroke={selId === c.id ? "#191814" : litRing ? "#D97757" : "none"}
+              strokeWidth={selId === c.id ? 1.5 : litRing ? 1.6 : 0}
               style={{ cursor: "pointer", transition: "opacity .3s" }}
               onClick={() => onSelect(c.id)}
             />
@@ -189,6 +192,7 @@ export function ConceptGalaxy({ payload, litByConcept, initialProject, loggedIn 
 
   const [activeProj, setActiveProj] = useState<string | null>(initialProject ?? null)
   const [activeSubj, setActiveSubj] = useState<string | null>(null)
+  const [showMine, setShowMine] = useState(false)  // 只看我点亮的知识
   const [selId, setSelId] = useState<string | null>(null)
   const [viewMode, setViewMode] = useState<"3d" | "2d">("3d")
   const [filterMode, setFilterMode] = useState<"dim" | "hide">("dim")
@@ -256,20 +260,21 @@ export function ConceptGalaxy({ payload, litByConcept, initialProject, loggedIn 
     }
   }, [initialProject])
 
-  // 当前应高亮的概念集合: (学科筛选 > 项目选中) ∩ 学段筛选; 无筛选时 = 我学过
+  // 当前应高亮的概念集合: (学科筛选 > 项目选中 > 我点亮的) ∩ 学段筛选; 无筛选时 = 我学过
   const highlightSet = useMemo(() => {
     let base: Set<string> | null = null
     if (activeSubj) base = new Set(payload.concepts.filter((c) => c.subj === activeSubj).map((c) => c.id))
     else if (activeProj) base = new Set(payload.proj_concepts[activeProj] || [])
+    else if (showMine) base = litByConcept
     if (activeBand) {
       const band = new Set(payload.concepts.filter((c) => c.g === activeBand).map((c) => c.id))
       if (!base) return band
       return new Set([...base].filter((id) => band.has(id)))
     }
     return base ?? litByConcept
-  }, [activeSubj, activeProj, activeBand, payload, litByConcept])
+  }, [activeSubj, activeProj, showMine, activeBand, payload, litByConcept])
 
-  const dimOthers = !!activeProj || !!activeSubj || !!activeBand
+  const dimOthers = !!activeProj || !!activeSubj || !!activeBand || showMine
 
   // 学科统计 (图例, 按数量降序)
   const subjOrder = useMemo(() => {
@@ -303,9 +308,16 @@ export function ConceptGalaxy({ payload, litByConcept, initialProject, loggedIn 
   function toggleProj(slug: string) {
     setActiveProj(activeProj === slug ? null : slug)
     setActiveSubj(null)
+    setShowMine(false)
   }
   function toggleSubj(s: string) {
     setActiveSubj(activeSubj === s ? null : s)
+    setShowMine(false)
+  }
+  function toggleMine() {
+    setShowMine(!showMine)
+    setActiveProj(null)
+    setActiveSubj(null)
   }
 
   return (
@@ -388,6 +400,12 @@ export function ConceptGalaxy({ payload, litByConcept, initialProject, loggedIn 
           </h1>
           <p className={styles.desc}>{t("galaxy.page.desc")}</p>
           <div className={styles.kpis}>
+            {loggedIn && (
+              <div>
+                <div className={styles.n}>{litByConcept.size}<span className={styles.nsub}>/{payload.concepts.length}</span></div>
+                <div className={styles.l}>{t("galaxy.page.kpi_lit")}</div>
+              </div>
+            )}
             <div>
               <div className={styles.n}>{payload.concepts.length}</div>
               <div className={styles.l}>{t("galaxy.page.kpi_concepts")}</div>
@@ -396,10 +414,12 @@ export function ConceptGalaxy({ payload, litByConcept, initialProject, loggedIn 
               <div className={styles.n}>{subjOrder.order.length}</div>
               <div className={styles.l}>{t("galaxy.page.kpi_subjects")}</div>
             </div>
-            <div>
-              <div className={styles.n}>{payload.concepts.filter((c) => c.g === "university").length}</div>
-              <div className={styles.l}>{t("galaxy.page.kpi_university")}</div>
-            </div>
+            {!loggedIn && (
+              <div>
+                <div className={styles.n}>{payload.concepts.filter((c) => c.g === "university").length}</div>
+                <div className={styles.l}>{t("galaxy.page.kpi_university")}</div>
+              </div>
+            )}
           </div>
           {!loggedIn && (
             <p className={styles.desc} style={{ marginTop: 10 }}>{t("galaxy.page.login_cta")}</p>
@@ -421,6 +441,16 @@ export function ConceptGalaxy({ payload, litByConcept, initialProject, loggedIn 
                 {p.zh}
               </button>
             ))}
+            {loggedIn && litByConcept.size > 0 && (
+              <button
+                className={`${styles.chip} ${styles.minechip}`}
+                aria-pressed={showMine}
+                onClick={toggleMine}
+              >
+                <span className={styles.dot} />
+                {t("galaxy.page.mine", { n: litByConcept.size })}
+              </button>
+            )}
           </div>
         </div>
 

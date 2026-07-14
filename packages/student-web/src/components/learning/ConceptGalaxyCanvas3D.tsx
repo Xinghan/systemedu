@@ -50,6 +50,7 @@ function to3D(c: { id: string; x: number; y: number }, L: GalaxyPayload["layout"
 
 interface SceneRefs {
   scene: THREE.Scene
+  litGroup: THREE.Group
   metas: { id: string; color: string; baseScale: number }[]
   basePositions: THREE.Vector3[]
   positions: THREE.Vector3[]
@@ -201,6 +202,10 @@ export default function ConceptGalaxyCanvas3D({ payload, highlightSet, dimOthers
     selHalo.visible = false
     scene.add(selHalo)
 
+    // ── 我点亮的知识光环组 (coral ring, 无筛选时显示) ──
+    const litGroup = new THREE.Group()
+    scene.add(litGroup)
+
     // ── 高亮概念标签容器 (筛选时投影显示) ──
     const labelWrap = document.createElement("div")
     labelWrap.style.cssText = "position:absolute;inset:0;pointer-events:none;overflow:hidden;"
@@ -214,7 +219,7 @@ export default function ConceptGalaxyCanvas3D({ payload, highlightSet, dimOthers
     mount.appendChild(expLabelWrap)
 
     refs.current = {
-      scene, metas, basePositions, positions, idxById, mesh, hotLines, hotGeo, dimGeo, edgeIdx,
+      scene, litGroup, metas, basePositions, positions, idxById, mesh, hotLines, hotGeo, dimGeo, edgeIdx,
       dimLineMat, selHalo, labelWrap, expLabelWrap, expGroup, expSprites: [], expItems: [], expPositions: [],
     }
 
@@ -384,7 +389,7 @@ export default function ConceptGalaxyCanvas3D({ payload, highlightSet, dimOthers
   useEffect(() => {
     const r = refs.current
     if (!r) return
-    const { metas, positions, idxById, mesh, hotGeo, hotLines, dimLineMat, selHalo, labelWrap } = r
+    const { litGroup, metas, positions, idxById, mesh, hotGeo, hotLines, dimLineMat, selHalo, labelWrap } = r
     const hide = dimOthers && filterMode === "hide"
     const dummy = new THREE.Object3D()
     const col = new THREE.Color()
@@ -393,7 +398,8 @@ export default function ConceptGalaxyCanvas3D({ payload, highlightSet, dimOthers
       const on = highlightSet.has(m.id)
       col.set(m.color)
       if (dimOthers && !on) col.lerp(PAPER, 0.86)
-      else if (!dimOthers && litByConcept.size && !litByConcept.has(m.id)) col.lerp(PAPER, 0.25)
+      // 登录且有点亮数据时: 未点亮的明显淡化, 点亮的保持本色 (配合 coral 光环)
+      else if (!dimOthers && litByConcept.size && !litByConcept.has(m.id)) col.lerp(PAPER, 0.55)
       mesh.setColorAt(i, col)
       // hide 模式: 未选中节点缩放归零 (不渲染也不可拾取)
       const s = hide && !on ? 0 : m.baseScale * (dimOthers && on ? 1.25 : 1) * (selId === m.id ? 1.5 : 1)
@@ -433,6 +439,24 @@ export default function ConceptGalaxyCanvas3D({ payload, highlightSet, dimOthers
       selHalo.visible = true
     } else {
       selHalo.visible = false
+    }
+
+    // 我点亮的知识: coral 光环 (无筛选时显示; 筛选态由高亮机制表达, 光环撤下防混淆)
+    while (litGroup.children.length) {
+      const child = litGroup.children[0] as THREE.Sprite
+      litGroup.remove(child)
+      child.material.dispose()
+    }
+    if (!dimOthers && litByConcept.size) {
+      for (let i = 0; i < metas.length; i++) {
+        if (!litByConcept.has(metas[i].id)) continue
+        const halo = new THREE.Sprite(new THREE.SpriteMaterial({
+          map: makeRingTexture(), color: 0xd97757, transparent: true, opacity: 0.9, depthTest: false,
+        }))
+        halo.position.copy(positions[i])
+        halo.scale.setScalar(metas[i].baseScale * 3.4)
+        litGroup.add(halo)
+      }
     }
 
     // 高亮标签 (只给被 >=2 项目共享的点, 上限 70 防挤爆)
