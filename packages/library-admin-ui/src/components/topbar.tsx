@@ -12,6 +12,7 @@ const NAV = [
   { href: "/projects", label: "项目" },
   { href: "/projects/upload", label: "上传" },
   { href: "/stats", label: "统计" },
+  { href: "/invites", label: "邀请码" },
 ];
 
 export default function TopBar() {

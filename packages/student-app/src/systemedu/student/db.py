@@ -693,6 +693,30 @@ def create_user_by_phone_with_invite(phone: str, invite_code: str) -> User | Non
         return _detach_user(u)  # type: ignore[return-value]
 
 
+def list_invite_codes_with_users() -> list[dict]:
+    """spec 047: 全部邀请码 + 使用者账户信息 (管理端视图), 未用在前/新用在前。"""
+    with get_session() as session:
+        rows = session.execute(
+            select(InviteCode, User)
+            .outerjoin(User, InviteCode.used_by == User.id)
+            .order_by(InviteCode.used_at.desc().nullsfirst(), InviteCode.code)
+        ).all()
+        out = []
+        for inv, user in rows:
+            out.append({
+                "code": inv.code,
+                "batch": inv.batch,
+                "created_at": inv.created_at.isoformat() if inv.created_at else None,
+                "used_at": inv.used_at.isoformat() if inv.used_at else None,
+                "user": {
+                    "user_id": user.id,
+                    "phone": user.phone,
+                    "display_name": user.display_name,
+                } if user else None,
+            })
+        return out
+
+
 def is_invite_code_available(code: str) -> bool:
     """spec 046: 邀请码存在且未被使用 (预检用, 不领取)。"""
     with get_session() as session:
