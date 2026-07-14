@@ -441,10 +441,12 @@ export function ConceptGalaxy({ payload, litByConcept, initialProject, loggedIn 
                 {p.zh}
               </button>
             ))}
-            {loggedIn && litByConcept.size > 0 && (
+            {loggedIn && (
               <button
                 className={`${styles.chip} ${styles.minechip}`}
                 aria-pressed={showMine}
+                disabled={litByConcept.size === 0}
+                title={litByConcept.size === 0 ? t("galaxy.page.mine_empty") : undefined}
                 onClick={toggleMine}
               >
                 <span className={styles.dot} />
