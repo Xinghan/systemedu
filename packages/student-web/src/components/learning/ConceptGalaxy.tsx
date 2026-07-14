@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react"
 import dynamic from "next/dynamic"
-import type { GalaxyPayload } from "@/lib/galaxy/types"
+import type { GalaxyPayload, GradeBand } from "@/lib/galaxy/types"
 import { useT } from "@/lib/i18n/use-t"
 import styles from "@/app/(home)/galaxy/galaxy.module.css"
 
@@ -136,6 +136,7 @@ export function ConceptGalaxy({ payload, litByConcept, initialProject, loggedIn 
   const [viewMode, setViewMode] = useState<"3d" | "2d">("3d")
   const [filterMode, setFilterMode] = useState<"dim" | "hide">("dim")
   const [spread, setSpread] = useState(1.25)
+  const [activeBand, setActiveBand] = useState<GradeBand | null>(null)
 
   // 深链 ?project= 变化时同步预选 (galaxy→galaxy 客户端导航复用同一组件实例)
   useEffect(() => {
@@ -145,14 +146,20 @@ export function ConceptGalaxy({ payload, litByConcept, initialProject, loggedIn 
     }
   }, [initialProject])
 
-  // 当前应高亮的概念集合: 学科筛选 > 项目选中 > 我学过
+  // 当前应高亮的概念集合: (学科筛选 > 项目选中) ∩ 学段筛选; 无筛选时 = 我学过
   const highlightSet = useMemo(() => {
-    if (activeSubj) return new Set(payload.concepts.filter((c) => c.subj === activeSubj).map((c) => c.id))
-    if (activeProj) return new Set(payload.proj_concepts[activeProj] || [])
-    return litByConcept
-  }, [activeSubj, activeProj, payload, litByConcept])
+    let base: Set<string> | null = null
+    if (activeSubj) base = new Set(payload.concepts.filter((c) => c.subj === activeSubj).map((c) => c.id))
+    else if (activeProj) base = new Set(payload.proj_concepts[activeProj] || [])
+    if (activeBand) {
+      const band = new Set(payload.concepts.filter((c) => c.g === activeBand).map((c) => c.id))
+      if (!base) return band
+      return new Set([...base].filter((id) => band.has(id)))
+    }
+    return base ?? litByConcept
+  }, [activeSubj, activeProj, activeBand, payload, litByConcept])
 
-  const dimOthers = !!activeProj || !!activeSubj
+  const dimOthers = !!activeProj || !!activeSubj || !!activeBand
 
   // 学科统计 (图例, 按数量降序)
   const subjOrder = useMemo(() => {
@@ -283,8 +290,21 @@ export function ConceptGalaxy({ payload, litByConcept, initialProject, loggedIn 
 
         <div className={styles.spacer} />
 
-        {/* 学科图例 */}
+        {/* 学科图例 + 学段筛选 */}
         <div className={styles.legend}>
+          <div className={styles.cap}>{t("galaxy.page.band_cap")}</div>
+          <div className={styles.bandrow} role="radiogroup" aria-label={t("galaxy.page.band_cap")}>
+            {(["elementary", "middle", "high", "university"] as GradeBand[]).map((b) => (
+              <button
+                key={b}
+                className={styles.bandbtn}
+                aria-pressed={activeBand === b}
+                onClick={() => setActiveBand(activeBand === b ? null : b)}
+              >
+                {t(`galaxy.grade.${b}`)}
+              </button>
+            ))}
+          </div>
           <div className={styles.cap}>{t("galaxy.page.legend_cap")}</div>
           <div className={styles.lgrid}>
             {subjOrder.order.map((s) => (
