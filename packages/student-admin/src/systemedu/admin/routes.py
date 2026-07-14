@@ -67,6 +67,18 @@ async def api_project_requests(request: Request) -> Response:
     return JSONResponse(queries.list_project_requests())
 
 
+async def invites_list(request: Request) -> Response:
+    if not _authed(request):
+        return RedirectResponse("/sysadmin/login", status_code=303)
+    return HTMLResponse(templates.invites_page(queries.list_invite_codes()))
+
+
+async def api_invite_codes(request: Request) -> Response:
+    if not _authed(request):
+        return JSONResponse({"error": "unauthorized"}, status_code=401)
+    return JSONResponse(queries.list_invite_codes())
+
+
 ROUTES = [
     Route("/sysadmin/login", login_get, methods=["GET"]),
     Route("/sysadmin/login", login_post, methods=["POST"]),
@@ -74,6 +86,8 @@ ROUTES = [
     Route("/sysadmin", users_list, methods=["GET"]),
     Route("/sysadmin/users/{uid}", user_detail, methods=["GET"]),
     Route("/sysadmin/project-requests", project_requests_list, methods=["GET"]),
+    Route("/sysadmin/invites", invites_list, methods=["GET"]),
     Route("/api/admin/users", api_users, methods=["GET"]),
     Route("/api/admin/project-requests", api_project_requests, methods=["GET"]),
+    Route("/api/admin/invite-codes", api_invite_codes, methods=["GET"]),
 ]

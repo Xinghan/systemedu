@@ -29,6 +29,7 @@ def _page(title: str, body: str, show_logout: bool = True) -> str:
         nav = ('<span style="display:flex;gap:16px;align-items:center">'
                '<a href="/sysadmin">用户</a>'
                '<a href="/sysadmin/project-requests">项目申请</a>'
+               '<a href="/sysadmin/invites">邀请码</a>'
                '<a href="/sysadmin/logout">退出</a></span>')
     else:
         nav = ""
@@ -72,6 +73,30 @@ def project_requests_page(rows: list[dict]) -> str:
     body = (f"<h2>项目申请 ({len(rows)})</h2>"
             f"<div class='card'>{items or '<p>暂无申请</p>'}</div>")
     return _page("项目申请", body)
+
+
+def invites_page(rows: list[dict]) -> str:
+    """spec 047: 邀请码-账户对应表。未用码可一键复制 (textarea + 按钮)。"""
+    used = [r for r in rows if r["user"]]
+    unused = [r for r in rows if not r["user"]]
+    trs = ""
+    for r in rows:
+        u = r["user"]
+        status = "<span style='color:#9A4A2E;font-weight:600'>已使用</span>" if u else "<span style='color:#999'>未使用</span>"
+        phone = e(u["phone"] or "-") if u else "-"
+        name = e(u["display_name"] or "-") if u else "-"
+        used_at = e((r["used_at"] or "")[:19]) if r["used_at"] else "-"
+        trs += (f"<tr><td style='font-family:monospace;letter-spacing:1px'>{e(r['code'])}</td>"
+                f"<td>{e(r['batch'] or '-')}</td><td>{status}</td>"
+                f"<td>{phone}</td><td>{name}</td><td>{used_at}</td></tr>")
+    unused_text = "&#10;".join(e(r["code"]) for r in unused)
+    copy_block = (f"<div class='card'><h2>未使用的码 ({len(unused)})</h2>"
+                  f"<textarea id='unused' readonly rows='4' style='width:100%;font-family:monospace'>{unused_text}</textarea>"
+                  f"<button onclick=\"navigator.clipboard.writeText(document.getElementById('unused').value).then(()=>this.textContent='已复制')\">复制全部未用码</button></div>") if unused else ""
+    body = (f"<h2>邀请码 ({len(rows)} 总 / {len(used)} 已用 / {len(unused)} 未用)</h2>"
+            f"{copy_block}"
+            f"<table><tr><th>邀请码</th><th>批次</th><th>状态</th><th>手机号</th><th>用户名</th><th>使用时间</th></tr>{trs}</table>")
+    return _page("邀请码", body)
 
 
 def detail_page(d: dict) -> str:

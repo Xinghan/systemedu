@@ -11,7 +11,13 @@ from systemedu.student.db import (
     UserKnodeComplete,
     UserProject,
     get_session,
+    list_invite_codes_with_users,
 )
+
+
+def list_invite_codes() -> list[dict]:
+    """spec 047: 邀请码 + 使用者账户 (直接复用 student.db 的 join 查询, 只读)。"""
+    return list_invite_codes_with_users()
 
 
 def list_users(limit: int = 50, offset: int = 0) -> list[dict]:

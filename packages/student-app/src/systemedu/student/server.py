@@ -26,7 +26,6 @@ from starlette.middleware.cors import CORSMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 
-from .admin.routes import ROUTES as _admin_routes
 from .auth.routes import ROUTES as _auth_routes
 from .badges.routes import ROUTES as _badges_routes
 from .catalog.routes import ROUTES as _catalog_routes
@@ -47,14 +46,12 @@ def _build_cors_origins() -> list[str]:
     raw = os.environ.get("STUDENT_CORS_ORIGINS")
     if raw:
         return [o.strip() for o in raw.split(",") if o.strip()]
-    # dev default — student-web 开发端口 + 老 web 端口 + library-admin-ui (spec 047)
+    # dev default — student-web 开发端口 + 老 web 端口 + 通用 localhost
     return [
         "http://localhost:4000",
         "http://127.0.0.1:4000",
         "http://localhost:3000",
         "http://127.0.0.1:3000",
-        "http://localhost:3001",
-        "http://127.0.0.1:3001",
     ]
 
 
@@ -76,7 +73,6 @@ def create_app() -> Starlette:
         *_drill_routes,
         *_project_request_routes,
         *_settings_routes,
-        *_admin_routes,
     ]
 
     middleware = [

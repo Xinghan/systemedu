@@ -30,6 +30,34 @@ def admin_db(tmp_path, monkeypatch):
     db.reset_engine_for_tests()
 
 
+def test_list_invite_codes_with_user_join(admin_db):
+    """spec 047: 邀请码视图 — 已用码带账户信息, 未用码 user=None。"""
+    db = admin_db
+    from systemedu.admin import queries
+    db.create_invite_codes(["ADMQRY01", "ADMQRY02"], batch="ut-047")
+    user = db.create_user_by_phone_with_invite("13800138047", "ADMQRY01")
+    assert user is not None
+    rows = queries.list_invite_codes()
+    by_code = {r["code"]: r for r in rows}
+    assert by_code["ADMQRY01"]["user"]["phone"] == "13800138047"
+    assert by_code["ADMQRY01"]["used_at"] is not None
+    assert by_code["ADMQRY01"]["batch"] == "ut-047"
+    assert by_code["ADMQRY02"]["user"] is None
+
+
+def test_invites_page_renders(admin_db):
+    """invites_page HTML 渲染: 含码/手机号/已使用徽章/未用码复制块。"""
+    db = admin_db
+    from systemedu.admin import queries, templates
+    db.create_invite_codes(["ADMPAGE1", "ADMPAGE2"], batch="ut-047b")
+    db.create_user_by_phone_with_invite("13800138048", "ADMPAGE1")
+    html = templates.invites_page(queries.list_invite_codes())
+    assert "ADMPAGE1" in html
+    assert "13800138048" in html
+    assert "已使用" in html
+    assert "复制全部未用码" in html  # ADMPAGE2 未用
+
+
 def test_list_users_with_stats(admin_db):
     db = admin_db
     from systemedu.admin import queries
