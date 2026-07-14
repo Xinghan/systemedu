@@ -18,6 +18,20 @@ interface Props {
   loggedIn: boolean
 }
 
+/** 图外扩展邻居 (spec 045, Wikidata 一跳) */
+export interface NeighborItem {
+  q: string
+  zh: string | null
+  en: string
+  d: string
+  rel: string
+}
+
+export interface Expansion {
+  centerId: string
+  items: NeighborItem[]
+}
+
 const BANDS_2D = ["university", "high", "middle", "elementary"] as const
 
 function shortLabel(zh: string): string {
@@ -26,7 +40,7 @@ function shortLabel(zh: string): string {
 }
 
 // 2D 平面视图 (svg, 暖纸配色) — 与 3D 共用同一份 highlight/选中状态
-function Svg2D({ payload, highlightSet, dimOthers, filterMode, litByConcept, selId, onSelect }: {
+function Svg2D({ payload, highlightSet, dimOthers, filterMode, litByConcept, selId, onSelect, expansion, expSelQ, onExpSelect }: {
   payload: GalaxyPayload
   highlightSet: Set<string>
   dimOthers: boolean
@@ -34,6 +48,9 @@ function Svg2D({ payload, highlightSet, dimOthers, filterMode, litByConcept, sel
   litByConcept: Set<string>
   selId: string | null
   onSelect: (id: string | null) => void
+  expansion: Expansion | null
+  expSelQ: string | null
+  onExpSelect: (item: NeighborItem | null) => void
 }) {
   const L = payload.layout
   const byId = useMemo(
@@ -41,6 +58,7 @@ function Svg2D({ payload, highlightSet, dimOthers, filterMode, litByConcept, sel
     [payload.concepts],
   )
   const hide = dimOthers && filterMode === "hide"
+  const expCenter = expansion ? byId[expansion.centerId] : null
   return (
     <svg
       className={styles.galaxy}
@@ -121,6 +139,42 @@ function Svg2D({ payload, highlightSet, dimOthers, filterMode, litByConcept, sel
               )
             })}
       </g>
+      {/* 图外扩展 (暗物质): 空心圆 + 虚线放射 */}
+      {expCenter && expansion && (
+        <g>
+          {expansion.items.map((it, i) => {
+            const ang = (i / expansion.items.length) * Math.PI * 2 - Math.PI / 2
+            const rad = 62 + (i % 2) * 22
+            const x = expCenter.x + Math.cos(ang) * rad
+            const y = expCenter.y + Math.sin(ang) * rad
+            const on = expSelQ === it.q
+            return (
+              <g key={it.q}>
+                <line
+                  x1={expCenter.x} y1={expCenter.y} x2={x} y2={y}
+                  stroke="#8A857A" strokeOpacity={0.5} strokeDasharray="3 4"
+                />
+                <circle
+                  cx={x} cy={y} r={on ? 6.5 : 5}
+                  fill="#FAF9F5" stroke={on ? "#D97757" : "#8A857A"} strokeWidth={on ? 2 : 1.4}
+                  style={{ cursor: "pointer" }}
+                  onClick={() => onExpSelect(it)}
+                />
+                <text
+                  x={x} y={y - 10}
+                  textAnchor="middle"
+                  style={{
+                    fontSize: "9px", fill: "#6B6557", paintOrder: "stroke",
+                    stroke: "#FAF9F5", strokeWidth: "3px", strokeLinejoin: "round", pointerEvents: "none",
+                  }}
+                >
+                  {shortLabel(it.zh || it.en)}
+                </text>
+              </g>
+            )
+          })}
+        </g>
+      )}
     </svg>
   )
 }
@@ -145,6 +199,19 @@ export function ConceptGalaxy({ payload, litByConcept, initialProject, loggedIn 
   const [pullModal, setPullModal] = useState<{ slug: string; mid: string } | null>(null)
   const [pulling, setPulling] = useState(false)
   const [pullError, setPullError] = useState(false)
+  // spec 045: 图外扩展 (Wikidata 一跳邻居, 静态包后台加载)
+  const [neighborsData, setNeighborsData] = useState<Record<string, NeighborItem[]> | null>(null)
+  const [expandedFor, setExpandedFor] = useState<string | null>(null)
+  const [expSel, setExpSel] = useState<NeighborItem | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    fetch("/galaxy/galaxy-neighbors.json")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => { if (!cancelled && j) setNeighborsData(j.neighbors || {}) })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [])
 
   useEffect(() => {
     if (!loggedIn) { setPulledSlugs(new Set()); return }
@@ -213,6 +280,26 @@ export function ConceptGalaxy({ payload, litByConcept, initialProject, loggedIn 
 
   const sel = selId ? byId[selId] : null
 
+  // 选中概念变化时收起旧扩展 (避免多组扩展点混在场上)
+  useEffect(() => {
+    if (expandedFor && expandedFor !== selId) {
+      setExpandedFor(null)
+      setExpSel(null)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selId])
+
+  // 当前扩展: 选中概念的 QID 在邻居包里才有
+  const expansion: Expansion | null = useMemo(() => {
+    if (!expandedFor || !neighborsData) return null
+    const c = byId[expandedFor]
+    if (!c?.q) return null
+    const items = neighborsData[c.q]
+    return items?.length ? { centerId: expandedFor, items } : null
+  }, [expandedFor, neighborsData, byId])
+
+  const selNeighborCount = sel?.q && neighborsData ? (neighborsData[sel.q]?.length || 0) : 0
+
   function toggleProj(slug: string) {
     setActiveProj(activeProj === slug ? null : slug)
     setActiveSubj(null)
@@ -234,6 +321,9 @@ export function ConceptGalaxy({ payload, litByConcept, initialProject, loggedIn 
             litByConcept={litByConcept}
             selId={selId}
             onSelect={setSelId}
+            expansion={expansion}
+            expSelQ={expSel?.q ?? null}
+            onExpSelect={setExpSel}
           />
         ) : (
           <Svg2D
@@ -244,6 +334,9 @@ export function ConceptGalaxy({ payload, litByConcept, initialProject, loggedIn 
             litByConcept={litByConcept}
             selId={selId}
             onSelect={setSelId}
+            expansion={expansion}
+            expSelQ={expSel?.q ?? null}
+            onExpSelect={setExpSel}
           />
         )}
       </div>
@@ -369,8 +462,8 @@ export function ConceptGalaxy({ payload, litByConcept, initialProject, loggedIn 
       {/* 提示 */}
       <div className={styles.hint}>{t("galaxy.page.hint")}</div>
 
-      {/* 概念卡片 */}
-      {sel && (
+      {/* 概念卡片 (选中扩展点时让位给扩展卡) */}
+      {sel && !expSel && (
         <div className={`${styles.card} ${styles.show}`}>
           <button className={styles.x} onClick={() => setSelId(null)} aria-label="close">×</button>
           <span
@@ -444,15 +537,48 @@ export function ConceptGalaxy({ payload, litByConcept, initialProject, loggedIn 
             ) : null
           })()}
           <div className={styles.stub}>{t("galaxy.card.stub")}</div>
-          {sel.q ? (
-            <a className={styles.wd} href={`https://www.wikidata.org/wiki/${sel.q}`} target="_blank" rel="noopener">
-              Wikidata ↗ {sel.q}
-            </a>
-          ) : (
-            <a className={`${styles.wd} ${styles.disabled}`} href="#" onClick={(e) => e.preventDefault()}>
-              Wikidata ↗ {t("galaxy.card.wikidata_pending")}
-            </a>
+          <div className={styles.cardbtns}>
+            {sel.q ? (
+              <a className={styles.wd} href={`https://www.wikidata.org/wiki/${sel.q}`} target="_blank" rel="noopener">
+                Wikidata ↗ {sel.q}
+              </a>
+            ) : (
+              <a className={`${styles.wd} ${styles.disabled}`} href="#" onClick={(e) => e.preventDefault()}>
+                Wikidata ↗ {t("galaxy.card.wikidata_pending")}
+              </a>
+            )}
+            {selNeighborCount > 0 && (
+              <button
+                className={styles.expbtn}
+                aria-pressed={expandedFor === sel.id}
+                onClick={() => {
+                  setExpSel(null)
+                  setExpandedFor(expandedFor === sel.id ? null : sel.id)
+                }}
+              >
+                {expandedFor === sel.id ? t("galaxy.expand.collapse") : `${t("galaxy.expand.btn")} +${selNeighborCount}`}
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* 扩展点详情卡 (覆盖概念卡位置) */}
+      {expSel && (
+        <div className={`${styles.card} ${styles.show}`}>
+          <button className={styles.x} onClick={() => setExpSel(null)} aria-label="close">×</button>
+          <span className={`${styles.subj} ${styles.expsubj}`}>{t(`galaxy.expand.rel.${expSel.rel}`)}</span>
+          <h3>{expSel.zh || expSel.en}</h3>
+          <div className={styles.en}>{expSel.en}</div>
+          {expSel.d && (
+            <div className={styles.kv}>
+              <span>{expSel.d}</span>
+            </div>
           )}
+          <div className={styles.stub}>{t("galaxy.expand.tutor_hint")}</div>
+          <a className={styles.wd} href={`https://www.wikidata.org/wiki/${expSel.q}`} target="_blank" rel="noopener">
+            Wikidata ↗ {expSel.q}
+          </a>
         </div>
       )}
 

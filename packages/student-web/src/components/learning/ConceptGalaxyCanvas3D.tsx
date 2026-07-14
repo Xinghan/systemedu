@@ -11,6 +11,7 @@ import { useEffect, useRef } from "react"
 import * as THREE from "three"
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js"
 import type { GalaxyPayload, GradeBand } from "@/lib/galaxy/types"
+import type { Expansion, NeighborItem } from "./ConceptGalaxy"
 
 interface Props {
   payload: GalaxyPayload
@@ -23,6 +24,10 @@ interface Props {
   litByConcept: Set<string>
   selId: string | null
   onSelect: (id: string | null) => void
+  /** spec 045: 图外扩展 (暗物质节点) */
+  expansion: Expansion | null
+  expSelQ: string | null
+  onExpSelect: (item: NeighborItem | null) => void
 }
 
 const PAPER = new THREE.Color("#FAF9F5")
@@ -44,6 +49,7 @@ function to3D(c: { id: string; x: number; y: number }, L: GalaxyPayload["layout"
 }
 
 interface SceneRefs {
+  scene: THREE.Scene
   metas: { id: string; color: string; baseScale: number }[]
   basePositions: THREE.Vector3[]
   positions: THREE.Vector3[]
@@ -56,13 +62,21 @@ interface SceneRefs {
   dimLineMat: THREE.LineBasicMaterial
   selHalo: THREE.Sprite
   labelWrap: HTMLDivElement
+  expLabelWrap: HTMLDivElement
+  // 扩展组 (spec 045): sprites 供 raycast, 由扩展 effect 填充
+  expGroup: THREE.Group
+  expSprites: THREE.Sprite[]
+  expItems: NeighborItem[]
+  expPositions: THREE.Vector3[]
 }
 
-export default function ConceptGalaxyCanvas3D({ payload, highlightSet, dimOthers, filterMode, spread, litByConcept, selId, onSelect }: Props) {
+export default function ConceptGalaxyCanvas3D({ payload, highlightSet, dimOthers, filterMode, spread, litByConcept, selId, onSelect, expansion, expSelQ, onExpSelect }: Props) {
   const mountRef = useRef<HTMLDivElement>(null)
   const refs = useRef<SceneRefs | null>(null)
   const onSelectRef = useRef(onSelect)
   onSelectRef.current = onSelect
+  const onExpSelectRef = useRef(onExpSelect)
+  onExpSelectRef.current = onExpSelect
   // 高亮状态给场景 effect 里的闭包读 (label 投影)
   const hiRef = useRef({ highlightSet, dimOthers })
   hiRef.current = { highlightSet, dimOthers }
@@ -192,7 +206,17 @@ export default function ConceptGalaxyCanvas3D({ payload, highlightSet, dimOthers
     labelWrap.style.cssText = "position:absolute;inset:0;pointer-events:none;overflow:hidden;"
     mount.appendChild(labelWrap)
 
-    refs.current = { metas, basePositions, positions, idxById, mesh, hotLines, hotGeo, dimGeo, edgeIdx, dimLineMat, selHalo, labelWrap }
+    // ── 图外扩展组 (spec 045): 由扩展 effect 填充 ──
+    const expGroup = new THREE.Group()
+    scene.add(expGroup)
+    const expLabelWrap = document.createElement("div")
+    expLabelWrap.style.cssText = "position:absolute;inset:0;pointer-events:none;overflow:hidden;"
+    mount.appendChild(expLabelWrap)
+
+    refs.current = {
+      scene, metas, basePositions, positions, idxById, mesh, hotLines, hotGeo, dimGeo, edgeIdx,
+      dimLineMat, selHalo, labelWrap, expLabelWrap, expGroup, expSprites: [], expItems: [], expPositions: [],
+    }
 
     // ── 拾取 ──
     const raycaster = new THREE.Raycaster()
@@ -245,6 +269,16 @@ export default function ConceptGalaxyCanvas3D({ payload, highlightSet, dimOthers
       downXY = null
       if (moved > 5) return
       setPointer(ev)
+      raycaster.setFromCamera(pointer, camera)
+      // 扩展点 (暗物质 sprite) 优先拾取
+      const r = refs.current
+      if (r && r.expSprites.length) {
+        const hit = raycaster.intersectObjects(r.expSprites)
+        if (hit.length) {
+          const i = r.expSprites.indexOf(hit[0].object as THREE.Sprite)
+          if (i >= 0) { onExpSelectRef.current(r.expItems[i]); return }
+        }
+      }
       const idx = pick()
       onSelectRef.current(idx >= 0 ? metas[idx].id : null)
     }
@@ -277,6 +311,21 @@ export default function ConceptGalaxyCanvas3D({ payload, highlightSet, dimOthers
         el.style.left = `${(tmp.x * 0.5 + 0.5) * W}px`
         el.style.top = `${(-tmp.y * 0.5 + 0.5) * H - 12}px`
       }
+      // 扩展点标签投影
+      const r2 = refs.current
+      if (r2) {
+        const eKids = expLabelWrap.children
+        for (let k = 0; k < eKids.length; k++) {
+          const el = eKids[k] as HTMLDivElement
+          const i = Number(el.dataset.idx)
+          if (!r2.expPositions[i]) { el.style.display = "none"; continue }
+          tmp.copy(r2.expPositions[i]).project(camera)
+          if (tmp.z > 1) { el.style.display = "none"; continue }
+          el.style.display = "block"
+          el.style.left = `${(tmp.x * 0.5 + 0.5) * W}px`
+          el.style.top = `${(-tmp.y * 0.5 + 0.5) * H - 13}px`
+        }
+      }
       if (selHalo.visible) selHalo.quaternion.copy(camera.quaternion)
       renderer.render(scene, camera)
       raf = requestAnimationFrame(tick)
@@ -300,6 +349,7 @@ export default function ConceptGalaxyCanvas3D({ payload, highlightSet, dimOthers
       renderer.domElement.removeEventListener("pointerup", onUp)
       bandLabelEls.forEach(({ el }) => el.remove())
       labelWrap.remove()
+      expLabelWrap.remove()
       controls.dispose()
       geo.dispose()
       mat.dispose()
@@ -403,6 +453,71 @@ export default function ConceptGalaxyCanvas3D({ payload, highlightSet, dimOthers
       }
     }
   }, [payload, highlightSet, dimOthers, filterMode, spread, litByConcept, selId])
+
+  // ── 图外扩展变化: 重建暗物质组 (空心 sprite + 虚线放射 + 标签) ──
+  useEffect(() => {
+    const r = refs.current
+    if (!r) return
+    const { expGroup, expLabelWrap, idxById, positions } = r
+    // 清旧
+    while (expGroup.children.length) {
+      const child = expGroup.children[0] as THREE.Sprite | THREE.Line
+      expGroup.remove(child)
+      if ((child as THREE.Line).geometry) (child as THREE.Line).geometry.dispose()
+      const m = (child as THREE.Sprite).material as THREE.Material | undefined
+      if (m) m.dispose()
+    }
+    expLabelWrap.innerHTML = ""
+    r.expSprites = []
+    r.expItems = []
+    r.expPositions = []
+    if (!expansion) return
+    const ci = idxById.get(expansion.centerId)
+    if (ci === undefined) return
+    const center = positions[ci]
+    const n = expansion.items.length
+    expansion.items.forEach((it, i) => {
+      // 黄金角球面放射, 半径分两圈
+      const ang = i * 2.399963 // golden angle
+      const rad = 6.5 + (i % 2) * 2.5
+      const elev = ((i % 5) - 2) * 0.35
+      const pos = new THREE.Vector3(
+        center.x + Math.cos(ang) * rad,
+        center.y + elev * 2.2,
+        center.z + Math.sin(ang) * rad,
+      )
+      const on = expSelQ === it.q
+      const sp = new THREE.Sprite(new THREE.SpriteMaterial({
+        map: makeRingTexture(),
+        color: on ? 0xd97757 : 0x8a857a,
+        transparent: true,
+        opacity: on ? 1 : 0.85,
+        depthTest: false,
+      }))
+      sp.position.copy(pos)
+      sp.scale.setScalar(on ? 1.7 : 1.2)
+      expGroup.add(sp)
+      // 虚线边
+      const g = new THREE.BufferGeometry().setFromPoints([center, pos])
+      const line = new THREE.Line(g, new THREE.LineDashedMaterial({
+        color: 0x8a857a, transparent: true, opacity: 0.55, dashSize: 0.5, gapSize: 0.4,
+      }))
+      line.computeLineDistances()
+      expGroup.add(line)
+      r.expSprites.push(sp)
+      r.expItems.push(it)
+      r.expPositions.push(pos)
+      // 标签
+      const el = document.createElement("div")
+      el.dataset.idx = String(i)
+      const name = it.zh || it.en
+      el.textContent = name.length > 8 ? name.slice(0, 7) + "…" : name
+      el.style.cssText =
+        "position:absolute;transform:translate(-50%,-100%);font-size:10px;color:#6B6557;text-shadow:0 0 3px #FAF9F5,0 0 3px #FAF9F5;pointer-events:none;white-space:nowrap;"
+      expLabelWrap.appendChild(el)
+    })
+    void n
+  }, [expansion, expSelQ, payload, spread])
 
   return <div ref={mountRef} style={{ position: "absolute", inset: 0, cursor: "grab" }} />
 }
