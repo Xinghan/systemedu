@@ -7,12 +7,13 @@ import type { Components } from "react-markdown"
 import {
   Wrench, CheckCircle2, ListChecks, MessageSquareText,
   ChevronDown, ChevronUp, Target, ClipboardCheck, PenLine,
-  AlertTriangle, Lightbulb, Award, XCircle, Send, RotateCcw,
+  AlertTriangle, Lightbulb, Award, XCircle, Send, RotateCcw, PackageCheck, ArrowRight,
 } from "lucide-react"
 
 import type { KnodeInfo, NodeProgress, ExerciseAttemptPayload } from "@/lib/types/api"
 import { gateway } from "@/lib/api"
 import { CapstoneSubmissionPanel } from "./capstone-submission-panel"
+import { parseCapstoneBlocks } from "./capstone-assignment.mjs"
 import { useT } from "@/lib/i18n/use-t"
 import { LoadingSpinner } from "@/components/ui/loading-spinner"
 
@@ -633,15 +634,6 @@ function useNormalComponents(): Components {
 // Capstone: block-based structured rendering
 // ---------------------------------------------------------------------------
 
-interface CapstoneBlock {
-  type: "criteria" | "checklist" | "guide" | "other"
-  title: string
-  /** Sub-blocks: for criteria these are per-standard cards; for checklist per-artifact */
-  cards: { heading: string; body: string }[]
-  /** Freeform body if no cards */
-  body: string
-}
-
 const capstoneMeta: Record<string, {
   icon: typeof Target
   iconBg: string
@@ -656,12 +648,33 @@ const capstoneMeta: Record<string, {
     cardBorder: "border-indigo-200/60 dark:border-indigo-800/40",
     cardBg: "bg-indigo-50/30 dark:bg-indigo-950/10",
   },
-  checklist: {
+  stage_product: {
+    icon: PackageCheck,
+    iconBg: "bg-amber-500/10",
+    iconColor: "text-amber-700 dark:text-amber-300",
+    cardBorder: "border-amber-200/60 dark:border-amber-800/40",
+    cardBg: "bg-amber-50/30 dark:bg-amber-950/10",
+  },
+  artifacts: {
+    icon: PackageCheck,
+    iconBg: "bg-sky-500/10",
+    iconColor: "text-sky-700 dark:text-sky-300",
+    cardBorder: "border-sky-200/60 dark:border-sky-800/40",
+    cardBg: "bg-sky-50/30 dark:bg-sky-950/10",
+  },
+  self_check: {
     icon: ClipboardCheck,
     iconBg: "bg-emerald-500/10",
     iconColor: "text-emerald-600 dark:text-emerald-400",
     cardBorder: "border-emerald-200/60 dark:border-emerald-800/40",
     cardBg: "bg-emerald-50/30 dark:bg-emerald-950/10",
+  },
+  handoff: {
+    icon: ArrowRight,
+    iconBg: "bg-blue-500/10",
+    iconColor: "text-blue-700 dark:text-blue-300",
+    cardBorder: "border-blue-200/60 dark:border-blue-800/40",
+    cardBg: "bg-blue-50/30 dark:bg-blue-950/10",
   },
   guide: {
     icon: PenLine,
@@ -677,63 +690,6 @@ const capstoneMeta: Record<string, {
     cardBorder: "border-border/40",
     cardBg: "bg-secondary/20",
   },
-}
-
-function classifySection(title: string): CapstoneBlock["type"] {
-  if (/考核要点/.test(title)) return "criteria"
-  if (/自检清单/.test(title) || /交付物/.test(title)) return "checklist"
-  if (/自评/.test(title) || /写作指引/.test(title)) return "guide"
-  return "other"
-}
-
-/** Parse capstone assignment markdown into structured blocks */
-function parseCapstoneBlocks(md: string): CapstoneBlock[] {
-  const blocks: CapstoneBlock[] = []
-  // Split by h2 (## xxx)
-  const sections = md.split(/^## /m).filter(Boolean)
-
-  for (const section of sections) {
-    const firstNewline = section.indexOf("\n")
-    const title = firstNewline >= 0 ? section.slice(0, firstNewline).trim() : section.trim()
-    const body = firstNewline >= 0 ? section.slice(firstNewline + 1).trim() : ""
-    const type = classifySection(title)
-
-    if (type === "criteria") {
-      // Split by "**标准 N：xxx**" or "---"
-      const cards: { heading: string; body: string }[] = []
-      const parts = body.split(/(?=\*\*标准\s*\d+[：:])/)
-      for (const part of parts) {
-        const trimmed = part.replace(/^---\s*\n?/, "").trim()
-        if (!trimmed) continue
-        const headMatch = trimmed.match(/^\*\*(.+?)\*\*\s*\n?([\s\S]*)/)
-        if (headMatch) {
-          cards.push({ heading: headMatch[1], body: headMatch[2].trim() })
-        } else {
-          cards.push({ heading: "", body: trimmed })
-        }
-      }
-      blocks.push({ type, title, cards, body: "" })
-    } else if (type === "checklist") {
-      // Split by "**交付物：xxx**" or h3 "### 交付物"
-      const cards: { heading: string; body: string }[] = []
-      const parts = body.split(/(?=\*\*交付物[：:])|(?=### )/)
-      for (const part of parts) {
-        const trimmed = part.replace(/^---\s*\n?/, "").trim()
-        if (!trimmed) continue
-        const headMatch = trimmed.match(/^\*\*(.+?)\*\*\s*\n?([\s\S]*)/)
-          || trimmed.match(/^###\s+(.+?)\n([\s\S]*)/)
-        if (headMatch) {
-          cards.push({ heading: headMatch[1], body: headMatch[2].trim() })
-        } else {
-          cards.push({ heading: "", body: trimmed })
-        }
-      }
-      blocks.push({ type, title, cards, body: "" })
-    } else {
-      blocks.push({ type, title, cards: [], body })
-    }
-  }
-  return blocks
 }
 
 /** Markdown components for rendering card bodies (inline-safe, no div-in-p issues) */
@@ -881,7 +837,7 @@ function CapstoneAssignmentView({ content }: { content: string }) {
                         {block.type === "criteria" ? (
                           <CriterionHeading heading={card.heading} />
                         ) : (
-                          <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-secondary/30 border border-border/30">
+                          <div className={`flex items-center gap-2 px-3 py-2 rounded-lg border ${meta.cardBg} ${meta.cardBorder}`}>
                             <ClipboardCheck className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
                             <span className="text-xs font-semibold font-[var(--font-manrope)] text-foreground">
                               {card.heading}
