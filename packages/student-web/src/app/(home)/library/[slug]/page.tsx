@@ -38,12 +38,17 @@ import type { BadgeTier } from "@/lib/types/api"
 import { BADGE_TIERS, badgeImageUrl, chapterForDomain } from "@/lib/constants/badges"
 import { KnowledgeTreeView } from "@/components/learning/KnowledgeTreeView"
 import { StoryModal } from "@/components/library/StoryModal"
+import {
+  StageDeliverableCard,
+  type StageDeliverableModule,
+  type StageDeliverableStage,
+} from "@/components/library/stage-deliverable-card"
 import { useT } from "@/lib/i18n/use-t"
 import { InlineLoading } from "@/components/ui/page-loading"
 import type { PlatformTree, ProjectKnowledgeTree } from "@/lib/api"
 
-type Stage = { stage_id: string; title: string; stage_goal?: string }
-type Module = {
+type Stage = StageDeliverableStage
+type Module = StageDeliverableModule & {
   module_id: string
   title: string
   stage_id?: string
@@ -1096,6 +1101,13 @@ function Curriculum({
             </button>
             {isOpen && mods.length > 0 && (
               <div style={{ borderTop: "1px solid var(--border)" }}>
+                <StageDeliverableCard
+                  stage={s}
+                  stages={stages}
+                  modules={orderedModules}
+                  slug={slug}
+                  pulled={pulled}
+                />
                 {mods.map((m, i) => {
                   const modIdx = orderedModules.findIndex(
                     (x) => x.module_id === m.module_id,

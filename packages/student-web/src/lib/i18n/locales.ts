@@ -521,6 +521,15 @@ export const zh = {
   "project_detail.no_intro": "暂无介绍",
   "project_detail.loading_platform_tree": "正在加载平台知识树...",
   "project_detail.tree_not_mapped_cli": "本项目还未跑知识树映射, 内容作者跑后再回来。",
+  "stage_deliverable.product": "本关作品",
+  "stage_deliverable.receive": "完成时会拿到",
+  "stage_deliverable.check": "自己检查",
+  "stage_deliverable.previous": "上一关带来的材料",
+  "stage_deliverable.next": "下一关会用到它",
+  "stage_deliverable.start": "去完成阶段作品",
+  "stage_deliverable.pull_first": "加入项目后开始",
+  "stage_deliverable.artifact": "阶段作品",
+  "stage_deliverable.incomplete": "开发提示：阶段作品信息尚未补齐",
 
   // ── AI 助教对话面板 (chat-panel) ──
   "chat.quick.explain_concept": "解释一下这一节的核心概念",
@@ -1153,6 +1162,15 @@ export const en: Record<TranslationKey, string> = {
   "project_detail.no_intro": "No introduction yet",
   "project_detail.loading_platform_tree": "Loading platform knowledge tree...",
   "project_detail.tree_not_mapped_cli": "This project hasn't run knowledge-tree mapping yet — check back after the content author runs it.",
+  "stage_deliverable.product": "What you'll make",
+  "stage_deliverable.receive": "You'll take away",
+  "stage_deliverable.check": "Check it yourself",
+  "stage_deliverable.previous": "Materials from the last stage",
+  "stage_deliverable.next": "You'll use it next",
+  "stage_deliverable.start": "Complete this stage project",
+  "stage_deliverable.pull_first": "Add the project to start",
+  "stage_deliverable.artifact": "Stage project",
+  "stage_deliverable.incomplete": "Development note: stage project details are incomplete",
 
   // ── AI tutor chat panel (chat-panel) ──
   "chat.quick.explain_concept": "Explain this section's core concept",
