@@ -151,6 +151,121 @@ validate_knowledge_tree = validate_milestones_tree
 # v5 native validation
 # ---------------------------------------------------------------------------
 
+_STAGE_DELIVERABLE_REQUIRED_FIELDS = (
+    "stage_output",
+    "closing_capstone_module_id",
+    "capstone_scope",
+    "capstone_reuses_outputs_from_stages",
+    "capstone_hands_on_expectation",
+)
+
+
+def validate_stage_deliverable_contract(tree_data: dict) -> list[str]:
+    """Validate the child-visible stage product contract in a V5 tree.
+
+    This deliberately validates only tree data. Package-level checks such as the
+    closing ``assignment.md`` headings belong to the course-package validator,
+    where the assignment files are available.
+    """
+    if not isinstance(tree_data, dict):
+        return ["tree_data must be a dict"]
+
+    stages = tree_data.get("stages")
+    modules = tree_data.get("modules")
+    if not isinstance(stages, list) or not isinstance(modules, list):
+        return ["stages and modules must be lists before validating stage deliverables"]
+
+    errors: list[str] = []
+    stage_positions = {
+        stage.get("stage_id"): index
+        for index, stage in enumerate(stages)
+        if isinstance(stage, dict) and isinstance(stage.get("stage_id"), str)
+    }
+    module_by_id = {
+        module.get("module_id"): module
+        for module in modules
+        if isinstance(module, dict) and isinstance(module.get("module_id"), str)
+    }
+
+    for index, stage in enumerate(stages):
+        if not isinstance(stage, dict):
+            continue
+        stage_id = stage.get("stage_id", f"stages[{index}]")
+        for field in _STAGE_DELIVERABLE_REQUIRED_FIELDS:
+            value = stage.get(field)
+            missing = (
+                not isinstance(value, list)
+                if field == "capstone_reuses_outputs_from_stages"
+                else not isinstance(value, str) or not value.strip()
+            )
+            if missing and not (field == "capstone_reuses_outputs_from_stages" and index > 0):
+                errors.append(f"{stage_id} missing {field}")
+
+        reuse_stages = stage.get("capstone_reuses_outputs_from_stages")
+        if index > 0:
+            if not isinstance(reuse_stages, list) or not reuse_stages:
+                errors.append(f"{stage_id} missing capstone_reuses_outputs_from_stages")
+            else:
+                for source_stage_id in reuse_stages:
+                    source_position = stage_positions.get(source_stage_id)
+                    if source_position is None:
+                        errors.append(f"{stage_id} reuses unknown stage {source_stage_id}")
+                    elif source_position >= index:
+                        errors.append(f"{stage_id} must reuse an earlier stage, not {source_stage_id}")
+
+        closing_module_id = stage.get("closing_capstone_module_id")
+        closing_module = module_by_id.get(closing_module_id)
+        if not isinstance(closing_module, dict) or closing_module.get("stage_id") != stage.get("stage_id"):
+            errors.append(
+                f"{stage_id} closing_capstone_module_id {closing_module_id or '(empty)'} "
+                f"not found in stage {stage_id}"
+            )
+            continue
+
+        if closing_module.get("mission_role") != "capstone":
+            errors.append(f"{stage_id} closing module {closing_module_id} must have mission_role capstone")
+        if not closing_module.get("outputs_produced"):
+            errors.append(f"{stage_id} closing module {closing_module_id} missing outputs_produced")
+        if not closing_module.get("acceptance_artifacts"):
+            errors.append(f"{stage_id} closing module {closing_module_id} missing acceptance_artifacts")
+        standards = closing_module.get("acceptance_standard")
+        if not isinstance(standards, list) or not 3 <= len(standards) <= 5:
+            errors.append(f"{stage_id} closing module {closing_module_id} must have 3-5 acceptance_standard checks")
+        if index < len(stages) - 1 and not str(closing_module.get("what_it_passes_forward") or "").strip():
+            errors.append(f"{stage_id} closing module {closing_module_id} missing what_it_passes_forward")
+
+    forward_stage_edges: set[tuple[str, str]] = set()
+    for module in modules:
+        if not isinstance(module, dict):
+            continue
+        target_id = module.get("module_id")
+        target_stage_id = module.get("stage_id")
+        target_position = stage_positions.get(target_stage_id)
+        for source_id in module.get("depends_on") or []:
+            source_module = module_by_id.get(source_id)
+            if not isinstance(source_module, dict):
+                continue
+            source_stage_id = source_module.get("stage_id")
+            source_position = stage_positions.get(source_stage_id)
+            if source_position is None or target_position is None or source_stage_id == target_stage_id:
+                continue
+            if source_position >= target_position:
+                errors.append(
+                    f"backward cross-stage dependency {source_id} ({source_stage_id}) -> "
+                    f"{target_id} ({target_stage_id})"
+                )
+            else:
+                forward_stage_edges.add((source_stage_id, target_stage_id))
+
+    for index in range(1, len(stages)):
+        previous_stage_id = stages[index - 1].get("stage_id") if isinstance(stages[index - 1], dict) else None
+        stage_id = stages[index].get("stage_id") if isinstance(stages[index], dict) else None
+        if (previous_stage_id, stage_id) not in forward_stage_edges:
+            errors.append(f"{previous_stage_id} -> {stage_id} missing forward cross-stage dependency")
+
+    return errors
+
+
 def validate_v5_tree(tree_data: dict) -> list[str]:
     """Validate a v5-format knowledge tree dict (stages/modules/edges).
 

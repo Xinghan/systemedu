@@ -576,6 +576,13 @@ def _validate_v5_tree(tree: dict) -> list[str]:
                 f"{mid} generation_guide.key_concepts must be list[str]"
             )
 
+    # 阶段作品契约比节点生成晚一层：它要求每个 stage 都有能给儿童展示、
+    # 检查并交给下一阶段的成品。这里仅校验 tree 内可得到的元数据；
+    # assignment.md 四个标题由 course-package release validator 校验。
+    from systemedu.core.education.services import validate_stage_deliverable_contract
+
+    errors.extend(validate_stage_deliverable_contract(tree))
+
     return errors
 
 

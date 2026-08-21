@@ -7,6 +7,7 @@ from systemedu.core.education.services import (
     extract_project_brief,
     extract_project_meta,
     validate_knowledge_tree,
+    validate_stage_deliverable_contract,
     validate_v5_tree,
 )
 from systemedu.core.education.tree_adapter import v5_to_milestones_view
@@ -376,6 +377,58 @@ class TestConvertV41Tree:
         """v4.1/v5 tree should pass v5 validation."""
         errors = validate_v5_tree(V41_DATA)
         assert errors == []
+
+
+class TestStageDeliverableContract:
+    def test_requires_child_visible_output_and_forward_handoff(self):
+        tree = {
+            "stages": [
+                {
+                    "stage_id": "S1",
+                    "stage_output": "我的观察卡",
+                    "closing_capstone_module_id": "M01",
+                    "capstone_scope": "整理观察结果",
+                    "capstone_reuses_outputs_from_stages": [],
+                    "capstone_hands_on_expectation": "画图并拍照",
+                },
+                {
+                    "stage_id": "S2",
+                    "stage_output": "",
+                    "closing_capstone_module_id": "M02",
+                    "capstone_scope": "用观察卡做实验",
+                    "capstone_reuses_outputs_from_stages": [],
+                    "capstone_hands_on_expectation": "完成实验",
+                },
+            ],
+            "modules": [
+                {
+                    "module_id": "M01",
+                    "stage_id": "S1",
+                    "mission_role": "capstone",
+                    "outputs_produced": ["我的观察卡"],
+                    "what_it_passes_forward": "S2 会用观察卡选择实验条件。",
+                    "acceptance_artifacts": [{"title": "观察卡"}],
+                    "acceptance_standard": ["写清对象", "画出发现", "拍照保存"],
+                    "depends_on": ["M02"],
+                },
+                {
+                    "module_id": "M02",
+                    "stage_id": "S2",
+                    "mission_role": "capstone",
+                    "outputs_produced": ["实验结果"],
+                    "what_it_passes_forward": "",
+                    "acceptance_artifacts": [{"title": "实验结果"}],
+                    "acceptance_standard": ["用了观察卡", "记录结果", "写出发现"],
+                    "depends_on": [],
+                },
+            ],
+        }
+
+        errors = validate_stage_deliverable_contract(tree)
+
+        assert any("S2 missing stage_output" in error for error in errors)
+        assert any("S2 missing capstone_reuses_outputs_from_stages" in error for error in errors)
+        assert any("backward cross-stage dependency" in error for error in errors)
 
 
 class TestExtractProjectMetaV41:

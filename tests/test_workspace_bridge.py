@@ -297,6 +297,11 @@ def _minimal_v5_tree(modules: int = 3) -> dict:
                 "stage_id": "S1",
                 "title": "Background",
                 "stage_goal": "建立蚁群行为学基础认知",
+                "stage_output": "我的蚁群观察卡",
+                "closing_capstone_module_id": f"M{modules:02d}",
+                "capstone_scope": "把这一阶段的观察整理成一张作品卡",
+                "capstone_reuses_outputs_from_stages": [],
+                "capstone_hands_on_expectation": "画图并保存观察卡",
             },
         ],
         "modules": [
@@ -309,6 +314,30 @@ def _minimal_v5_tree(modules: int = 3) -> dict:
                 "core_question": f"模块 {i+1} 核心问题?",
                 "depends_on": [f"M{i:02d}"] if i > 0 else [],
                 "week": i + 1,
+                "mission_role": "capstone" if i == modules - 1 else "foundation",
+                "outputs_produced": ["我的蚁群观察卡"] if i == modules - 1 else [],
+                "acceptance_artifacts": [{"title": "我的蚁群观察卡", "kind": "document"}] if i == modules - 1 else [],
+                "acceptance_standard": ["写清观察对象", "画出一个发现", "保存作品卡"] if i == modules - 1 else [],
+                "what_it_passes_forward": "" if i == modules - 1 else "",
+                "generation_guide": {
+                    "importance": 4 if i == modules - 1 else 1,
+                    "wow_moment": None,
+                    "mission_role": "capstone" if i == modules - 1 else "foundation",
+                    "narrative_role": "celebration" if i == modules - 1 else "build",
+                    "theory_depth": "shallow",
+                    "handson_difficulty": "low",
+                    "expected_lengths": {
+                        "plan_chars": [100, 200],
+                        "k1_chars_per_theory": [100, 200],
+                        "k3_chars_per_theory": [50, 100],
+                        "n_theories": [1, 1],
+                        "assignment_chars": [100, 200],
+                        "n_exercises": [1, 1],
+                    },
+                    "anim_complexity": "simple",
+                    "game_complexity": "simple",
+                    "key_concepts": ["观察"],
+                },
             }
             for i in range(modules)
         ],
@@ -360,6 +389,14 @@ def test_save_claude_v5_tree_strict_rejects_invalid(ws: Path):
     }
     with pytest.raises(ValueError, match="invalid V5 tree"):
         save_knowledge_tree_to_workspace("ai-ant-ethologist", bad_tree, strict=True)
+
+
+def test_save_claude_v5_tree_strict_rejects_missing_stage_deliverable(ws: Path):
+    tree = _minimal_v5_tree(modules=2)
+    tree["stages"][0]["stage_output"] = ""
+
+    with pytest.raises(ValueError, match="stage_output"):
+        save_knowledge_tree_to_workspace("ai-ant-ethologist", tree, strict=True)
 
 
 def test_save_claude_v5_tree_validates_depends_on(ws: Path):

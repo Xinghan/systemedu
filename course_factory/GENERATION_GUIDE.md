@@ -163,6 +163,40 @@ audit_tools 优先读 generation_guide 当作 expected, 没有 guide 时退回 E
 
 ---
 
+## 阶段作品契约（儿童完成路径）
+
+除了每个 module 的 `generation_guide`，每个 Stage 必须定义一个儿童能展示、
+检查并交给下一阶段使用的作品。严格的 workspace 保存会校验以下字段：
+
+```jsonc
+{
+  "stage_output": "我的第一张脑波地图",          // 具体、可展示的名词
+  "closing_capstone_module_id": "M12",            // 本阶段收口节点
+  "capstone_scope": "把原始脑波整理成作品卡",
+  "capstone_reuses_outputs_from_stages": ["S1"],  // S1 为空，S2 起必须复用前序作品
+  "capstone_hands_on_expectation": "保存图和观察结论"
+}
+```
+
+该收口 module 必须是 `mission_role: "capstone"`，并有：
+
+- `outputs_produced`：与 `stage_output` 对齐的作品；
+- `acceptance_artifacts`：孩子能拍照、保存或录屏展示的 1–3 项证据；
+- `acceptance_standard`：3–5 条可观察、可勾选的条件；
+- `what_it_passes_forward`：非最终阶段必须明确说明下一阶段怎么使用作品。
+
+导出课程包前还必须运行文件级检查：
+
+```bash
+node course_factory/validate/verify/stage_deliverables.mjs \
+  /Users/xinghan/Dev/systemeduidea/projects_data/<slug>
+```
+
+该检查额外要求收口 `assignment.md` 使用 `阶段作品 / 交付物 / 自检清单 /
+下一关会用到它` 四个二级标题，并验证跨阶段依赖只向前。
+
+---
+
 ## 向后兼容 (已废弃 — 现在 generation_guide 是 V5 schema **必填**)
 
 历史上 `generation_guide` 字段在 V5 schema 中是可选的, validator 只发 warn 不抛
