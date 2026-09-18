@@ -11,15 +11,18 @@ import {
   Library as LibraryIcon,
   LogOut,
   Settings,
+  Telescope,
 } from "lucide-react"
 import { useAuthStore } from "@/lib/stores/auth-store"
 import { auth } from "@/lib/api"
 import { useT } from "@/lib/i18n/use-t"
 import { LangSwitch } from "@/components/layout/lang-switch"
+import styles from "./student-header.module.css"
 
 const TABS = [
   { id: "home",     labelKey: "nav.home",        icon: Home,        href: "/home" },
   { id: "library",  labelKey: "nav.library",     icon: LibraryIcon, href: "/library" },
+  { id: "project-lines", labelKey: "nav.project_lines", icon: Telescope, href: "/project-lines" },
   { id: "projects", labelKey: "nav.my_projects", icon: GitBranch,   href: "/my-projects" },
 ]
 
@@ -71,7 +74,7 @@ export function StudentHeader() {
   }
 
   return (
-    <header className="topnav">
+    <header className={`topnav ${styles.responsiveHeader}`}>
       {/* brand 永远跳整站首页 / */}
       <Link className="brand" href="/">
         <span className="brand-mark" aria-label="SystemEdu">

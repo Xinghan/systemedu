@@ -1,706 +1,136 @@
 "use client"
 
+import Image from "next/image"
 import Link from "next/link"
-import { useEffect, useMemo, useState, type CSSProperties } from "react"
-import { toast } from "sonner"
-import {
-  ArrowRight,
-  BookOpen,
-  ChevronDown,
-  ChevronRight,
-  Filter,
-  FlaskConical,
-  Gauge,
-  Grid3X3,
-  Layers,
-  ListChecks,
-  Plus,
-  Sparkles,
-  Wind,
-} from "lucide-react"
+import { useEffect, useMemo, useState } from "react"
+import { ArrowRight, ArrowUpRight, Camera, Check, Clock3, Layers3, Orbit, Plus, Search, SlidersHorizontal, Telescope, X } from "lucide-react"
 import { library, myProjects, type LibraryProjectSummary } from "@/lib/api"
 import { useAuthStore } from "@/lib/stores/auth-store"
-import { useT } from "@/lib/i18n/use-t"
-import { StoryModal } from "@/components/library/StoryModal"
+import { useLocale } from "@/lib/i18n/use-t"
+import { makeDiscoveryEntries } from "@/lib/library-discovery"
+import { PLANNED_PROJECTS, SPACE_LINE, type DiscoveryKind } from "@/lib/project-lines/catalog"
 import { ApplyProjectModal } from "@/components/layout/apply-project-modal"
-import { InlineLoading } from "@/components/ui/page-loading"
-import { ChapterBadgeMark } from "@/components/badges/ChapterBadgeMark"
+import { DiscoveryProjectCard } from "@/components/library/discovery-project-card"
+import { DISCOVERY_COPY } from "@/components/library/discovery-copy"
+import styles from "@/components/library/discovery.module.css"
 
-// Crumbs
-function Crumbs({ items }: { items: { label: string }[] }) {
-  return (
-    <div
-      style={{
-        display: "flex",
-        alignItems: "center",
-        gap: 8,
-        color: "var(--sub)",
-        fontSize: 12.5,
-      }}
-    >
-      {items.map((it, i) => (
-        <span key={i} style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
-          {i > 0 && (
-            <ChevronRight size={12} strokeWidth={1.5} style={{ color: "var(--sub-2)" }} />
-          )}
-          <span style={{ color: i === items.length - 1 ? "var(--ink-2)" : "var(--sub)" }}>
-            {it.label}
-          </span>
-        </span>
-      ))}
-    </div>
-  )
-}
-
-const DOMAIN_LABELS = [
-  "All",
-  "Climate",
-  "Aerospace",
-  "Bioscience",
-  "Robotics",
-  "Materials",
-  "Energy",
-  "Computing",
-] as const
-
-function domainClass(domain?: string | null): string {
-  if (!domain) return "violet"
-  const d = domain.toLowerCase()
-  if (d.includes("climate")) return "climate"
-  if (d.includes("aero") || d.includes("space")) return "aerospace"
-  if (d.includes("bio")) return "bio"
-  if (d.includes("robot")) return "robotics"
-  if (d.includes("comput") || d.includes("ai")) return "computing"
-  if (d.includes("material")) return "materials"
-  if (d.includes("energy")) return "energy"
-  return "violet"
-}
+const KINDS: DiscoveryKind[] = ["all", "micro", "guided", "integration", "full"]
+const KIND_ICONS = { all: Orbit, micro: Telescope, guided: Camera, integration: Layers3, full: Orbit }
 
 export default function LibraryListPage() {
-  const t = useT()
+  const locale = useLocale()
+  const c = DISCOVERY_COPY[locale]
   const { loggedIn, hydrate } = useAuthStore()
   const [projects, setProjects] = useState<LibraryProjectSummary[]>([])
   const [pulled, setPulled] = useState<Set<string>>(new Set())
   const [loading, setLoading] = useState(true)
-  const [filter, setFilter] = useState<string>("All")
+  const [loadFailed, setLoadFailed] = useState(false)
+  const [reload, setReload] = useState(0)
+  const [kind, setKind] = useState<DiscoveryKind>("all")
+  const [query, setQuery] = useState("")
+  const [domain, setDomain] = useState("all")
+  const [difficulty, setDifficulty] = useState("all")
+  const [sort, setSort] = useState("recommended")
+  const [showPlanned, setShowPlanned] = useState(false)
   const [applyOpen, setApplyOpen] = useState(false)
 
+  useEffect(() => { hydrate() }, [hydrate])
   useEffect(() => {
-    hydrate()
-  }, [hydrate])
-
+    let active = true
+    library.listProjects().then(all => {
+      if (active) { setProjects(all); setLoadFailed(false) }
+    }).catch(() => { if (active) setLoadFailed(true) }).finally(() => { if (active) setLoading(false) })
+    return () => { active = false }
+  }, [reload])
   useEffect(() => {
-    void (async () => {
-      setLoading(true)
-      try {
-        const all = await library.listProjects()
-        setProjects(all)
-        if (loggedIn) {
-          try {
-            const mine = await myProjects.list()
-            setPulled(new Set(mine.map((m) => m.slug)))
-          } catch {
-            /* 401 ignored */
-          }
-        }
-      } catch (err) {
-        toast.error(err instanceof Error ? err.message : t("session.load_failed"))
-      } finally {
-        setLoading(false)
-      }
-    })()
+    if (!loggedIn) return
+    let active = true
+    myProjects.list().then(mine => { if (active) setPulled(new Set(mine.map(item => item.slug))) }).catch(() => {})
+    return () => { active = false }
   }, [loggedIn])
 
+  const entries = useMemo(() => makeDiscoveryEntries(projects, locale), [projects, locale])
+  const availableCount = entries.filter(entry => entry.available).length
+  const listed = entries.filter(entry => showPlanned || entry.available)
   const filtered = useMemo(() => {
-    if (filter === "All") return projects
-    const f = filter.toLowerCase()
-    return projects.filter((p) =>
-      (p.domain || "").toLowerCase().includes(f.slice(0, 5)),
-    )
-  }, [projects, filter])
+    const terms = query.trim().toLowerCase().split(/\s+/).filter(Boolean)
+    const result = entries.filter(entry => {
+      if (!showPlanned && !entry.available) return false
+      if (kind !== "all" && kind !== entry.kind) return false
+      if (domain !== "all" && domain !== entry.domain) return false
+      if (difficulty === "light" && entry.kind !== "micro") return false
+      if (difficulty === "1-2" && (entry.difficulty == null || entry.difficulty > 2)) return false
+      if (difficulty === "3" && entry.difficulty !== 3) return false
+      if (difficulty === "4-5" && (entry.difficulty == null || entry.difficulty < 4)) return false
+      const domainName = c.domainNames[entry.domain as keyof typeof c.domainNames] || ""
+      return terms.every(term => `${entry.searchText} ${domainName.toLowerCase()}`.includes(term))
+    })
+    return result.sort((a, b) => {
+      if (a.available !== b.available) return a.available ? -1 : 1
+      if (sort === "recent") return b.publishedAt - a.publishedAt || a.title.localeCompare(b.title, locale)
+      // 轻量起点不映射成旧课程的 1/5 分。
+      if (a.kind !== b.kind) return a.kind === "micro" ? -1 : 1
+      if (sort === "recommended" && a.id !== b.id && (a.id === SPACE_LINE.flagshipSlug || b.id === SPACE_LINE.flagshipSlug)) return a.id === SPACE_LINE.flagshipSlug ? -1 : 1
+      return (a.difficulty ?? 99) - (b.difficulty ?? 99) || a.title.localeCompare(b.title, locale)
+    })
+  }, [entries, query, showPlanned, kind, domain, difficulty, sort, c, locale])
 
-  // 按 domain 统计
-  const counts = useMemo(() => {
-    const c: Record<string, number> = {}
-    for (const p of projects) {
-      const d = (p.domain || "Other").trim()
-      c[d] = (c[d] || 0) + 1
-    }
-    return c
-  }, [projects])
+  const planningKind = kind === "guided" || kind === "integration" ? kind : null
+  const showPlan = planningKind && !query.trim() && (domain === "all" || domain === "aerospace") && difficulty === "all"
+  const hasFilters = kind !== "all" || query !== "" || domain !== "all" || difficulty !== "all" || showPlanned || sort !== "recommended"
+  function reset() { setKind("all"); setQuery(""); setDomain("all"); setDifficulty("all"); setSort("recommended"); setShowPlanned(false) }
+  function retry() { setLoading(true); setLoadFailed(false); setReload(value => value + 1) }
 
   return (
-    <main className="page-wide" style={{ paddingTop: 20 }}>
-      <Crumbs items={[{ label: t("nav.home") }, { label: t("nav.library") }]} />
+    <main className={styles.page} data-locale={locale}>
+      <header className={styles.pageHeader}>
+        <div><p className={styles.eyebrow}>{c.eyebrow}</p><div className={styles.titleRow}><h1>{c.title}</h1><p>{c.intro}</p></div></div>
+        <span className={styles.libraryCount}><i />{loading ? c.loading : <><b>{availableCount}</b> {c.libraryCount}</>}</span>
+      </header>
+      <section className={styles.themeHero} aria-labelledby="space-line-title">
+        <div className={styles.heroArtwork} aria-hidden="true"><Image src="/landing/mars-rover.webp" alt="" fill priority sizes="(max-width: 680px) 100vw, 65vw" /><div className={styles.artFade} /><span className={styles.destination}>{c.destination}</span></div>
+        <div className={styles.heroCopy}>
+          <div className={styles.heroEyebrow}><Orbit size={15} strokeWidth={1.4} /><span>{c.lineTag}</span><span>{c.lineNumber}</span></div>
+          <h2 id="space-line-title">{c.heroTitle}<span aria-hidden="true">.</span></h2>
+          <p className={styles.heroDescription}>{c.heroDescription}</p>
+          <p className={styles.heroBody}>{c.heroBody}</p>
+          <div className={styles.heroDomains}>{c.heroDomains.map(label => <span key={label}>{label}</span>)}</div>
+          <div className={styles.heroActions}><Link href={SPACE_LINE.firstProjectHref} className={styles.primaryAction}><Clock3 size={16} />{c.start}<ArrowUpRight size={17} /></Link><Link href={SPACE_LINE.href} className={styles.secondaryAction}>{c.viewLine}<ArrowRight size={15} /></Link></div>
+          <p className={styles.startHint}><Check size={12} />{c.instant}<span />{c.browser}</p>
+        </div>
+        <Link href={SPACE_LINE.firstProjectHref} className={styles.firstStop} aria-label={`${c.firstStop} · ${c.firstWork}`}><div className={styles.miniPhoto} aria-hidden="true"><span /><i /><Camera size={12} /></div><div><small>{c.firstStop} / 3 MIN</small><strong>{c.firstWork}</strong><span>{c.firstWorkHint}</span></div><ArrowUpRight size={17} /></Link>
+      </section>
+      <ol className={styles.routeStrip} aria-label={c.viewLine}>
+        {c.steps.map((step, i) => <li key={step.title}><span className={styles.routeIndex}>{String(i + 1).padStart(2, "0")}</span><div><strong>{step.title}</strong><span>{step.detail}</span></div>{i < 3 && <ArrowRight size={14} className={styles.routeArrow} aria-hidden="true" />}</li>)}
+      </ol>
 
-      {/* heading */}
-      <div
-        style={{
-          display: "flex",
-          alignItems: "flex-end",
-          justifyContent: "space-between",
-          margin: "12px 0 20px",
-          flexWrap: "wrap",
-          gap: 16,
-        }}
-      >
-        <div>
-          <div className="eyebrow" style={{ marginBottom: 8 }}>
-            <span className="dot" />
-            {t("library.stats", { p: projects.length, d: Object.keys(counts).length })}
-          </div>
-          <h1 className="h1" style={{ fontSize: 30 }}>
-            {t("library.title")}
-          </h1>
+      <section className={styles.discovery} aria-labelledby="discovery-title">
+        <div className={styles.discoveryHeading}><div><h2 id="discovery-title">{c.discover}</h2><p>{c.discoverHint}</p></div><SlidersHorizontal size={19} strokeWidth={1.3} aria-hidden="true" /></div>
+        <div className={styles.kindTabs} role="group" aria-label={locale === "zh" ? "项目类型" : "Project type"}>
+          {KINDS.map(value => {
+            const Icon = KIND_ICONS[value]
+            const count = listed.filter(entry => value === "all" || entry.kind === value).length
+            return <button key={value} type="button" aria-pressed={kind === value} onClick={() => setKind(value)} className={styles.kindTab} data-kind-filter={value}><div><Icon size={17} strokeWidth={1.5} /><strong>{c.kinds[value]}</strong><span>{value === "guided" || value === "integration" ? c.planning : count}</span></div><small>{c.kindHints[value]}</small></button>
+          })}
         </div>
-        <div style={{ display: "flex", gap: 10 }}>
-          <button className="btn btn-ghost">
-            <Filter size={14} strokeWidth={1.5} /> {t("library.filters")}
-          </button>
-          <button className="btn btn-ghost">
-            <Grid3X3 size={14} strokeWidth={1.5} /> {t("library.grid")}
-          </button>
+        <div className={styles.filterBar}>
+          <label className={styles.search}><Search size={16} /><input type="search" value={query} onChange={event => setQuery(event.target.value)} placeholder={c.search} aria-label={c.search} />{query && <button type="button" onClick={() => setQuery("")} aria-label={locale === "zh" ? "清空搜索" : "Clear search"}><X size={14} /></button>}</label>
+          <label className={styles.select}><span>{c.domain}</span><select value={domain} onChange={event => setDomain(event.target.value)} aria-label={c.domain}><option value="all">{c.allDomains}</option>{Object.entries(c.domainNames).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></label>
+          <label className={styles.select}><span>{c.difficulty}</span><select value={difficulty} onChange={event => setDifficulty(event.target.value)} aria-label={c.difficulty}><option value="all">{c.allChallenges}</option><option value="light">{c.light}</option><option value="1-2">{c.score12}</option><option value="3">{c.score3}</option><option value="4-5">{c.score45}</option></select></label>
         </div>
-      </div>
-
-      {/* Filter rail */}
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 4,
-          marginBottom: 22,
-          paddingBottom: 14,
-          borderBottom: "1px solid var(--border)",
-          flexWrap: "wrap",
-        }}
-      >
-        {DOMAIN_LABELS.map((c) => {
-          const cnt =
-            c === "All"
-              ? projects.length
-              : projects.filter((p) =>
-                  (p.domain || "").toLowerCase().includes(c.toLowerCase().slice(0, 5)),
-                ).length
-          return (
-            <button
-              key={c}
-              type="button"
-              className={"nav-tab " + (filter === c ? "active" : "")}
-              onClick={() => setFilter(c)}
-            >
-              {c === "All" ? t("library.filter.all") : t(`domain.${c.toLowerCase()}`)}
-              {c !== "All" && (
-                <span
-                  style={{
-                    color: "var(--sub-2)",
-                    fontSize: 11,
-                    marginLeft: 4,
-                    fontFamily: "var(--mono)",
-                  }}
-                >
-                  {cnt}
-                </span>
-              )}
-            </button>
-          )
-        })}
-        <div style={{ flex: 1 }} />
-        <span className="mono" style={{ fontSize: 11.5, color: "var(--sub)" }}>
-          {t("library.sort")}
-        </span>
-        <button className="btn btn-ghost btn-sm">
-          {t("library.sort.recent")}
-          <ChevronDown size={12} strokeWidth={1.5} />
-        </button>
-      </div>
-
-      {/* Project grid */}
-      {loading ? (
-        <div className="card">
-          <InlineLoading label={t("home.loading")} />
-        </div>
-      ) : filtered.length === 0 ? (
-        <div className="card" style={{ padding: 32, textAlign: "center", color: "var(--sub)" }}>
-          {t("library.no_match")}
-        </div>
-      ) : (
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))",
-            gap: 14,
-          }}
-        >
-          {filtered.map((p) => (
-            <ProjectCard key={p.slug} project={p} pulled={pulled.has(p.slug)} />
-          ))}
-        </div>
-      )}
-
-      {/* request a project */}
-      <div
-        style={{
-          marginTop: 24,
-          border: "1px dashed var(--border-2)",
-          borderRadius: 10,
-          padding: "18px 22px",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          gap: 16,
-          flexWrap: "wrap",
-        }}
-      >
-        <div>
-          <h3 className="h3">{t("library.request.title")}</h3>
-          <p
-            className="body"
-            style={{ color: "var(--sub)", fontSize: 13, marginTop: 2 }}
-          >
-            {t("library.request.desc")}
-          </p>
-        </div>
-        <button className="btn btn-ghost" onClick={() => setApplyOpen(true)}>
-          <Plus size={14} strokeWidth={1.5} /> {t("library.request.cta")}
-        </button>
-      </div>
-
+        <div className={styles.resultBar}><p role="status" aria-live="polite"><b>{filtered.length}</b> {c.result}{hasFilters && <button type="button" onClick={reset}>{c.reset}</button>}</p><div><label className={styles.plannedToggle}><input type="checkbox" checked={showPlanned} onChange={event => setShowPlanned(event.target.checked)} />{c.showPlanned}</label><select value={sort} onChange={event => setSort(event.target.value)} aria-label={c.sort}><option value="recommended">{c.recommended}</option><option value="difficulty">{c.difficultyAsc}</option><option value="recent">{c.recent}</option></select></div></div>
+        {loadFailed && <div className={styles.error} role="alert"><p>{c.error}</p><button type="button" onClick={retry}>{c.retry}<ArrowRight size={14} /></button></div>}
+        {loading && <div className={styles.loading} role="status"><span />{c.loading}</div>}
+        {filtered.length > 0 ? <div className={styles.projectGrid}>{filtered.map(entry => <DiscoveryProjectCard key={entry.id} entry={entry} pulled={loggedIn && pulled.has(entry.id)} />)}</div>
+          : !loading && <div className={styles.emptyState}>
+            {showPlan && planningKind ? <><div className={styles.emptyIcon}><Layers3 size={27} strokeWidth={1.2} /></div><span className={styles.plannedLabel}>{SPACE_LINE.title[locale]} / {c.planning}</span><h3>{c.plannedTitle}</h3><p>{c.plannedBody}</p><div className={styles.plannedTasks}>{PLANNED_PROJECTS[planningKind][locale].map((title, i) => <span key={title}><small>{String(i + 1).padStart(2, "0")}</small>{title}</span>)}</div><Link href={SPACE_LINE.href}>{c.viewLine}<ArrowRight size={15} /></Link></>
+              : <><Search size={25} strokeWidth={1.2} /><h3>{c.emptyTitle}</h3><p>{planningKind ? c.plannedFallback : c.emptyBody}</p><button type="button" onClick={reset}>{c.reset}<ArrowRight size={15} /></button></>}
+          </div>}
+        <p className={styles.timeNote}>{c.timeNote}</p>
+      </section>
+      <aside className={styles.familyNote}><span className={styles.familyMark}><Telescope size={23} strokeWidth={1.3} /></span><div><strong>{c.familyTitle}</strong><p>{c.familyBody}</p></div><Link href={SPACE_LINE.firstProjectHref}>{c.start}<ArrowUpRight size={15} /></Link></aside>
+      <section className={styles.request}><div><h2>{c.requestTitle}</h2><p>{c.requestBody}</p></div><button type="button" onClick={() => setApplyOpen(true)}><Plus size={15} />{c.requestAction}</button></section>
       <ApplyProjectModal open={applyOpen} onClose={() => setApplyOpen(false)} />
     </main>
-  )
-}
-
-function ProjectCard({
-  project,
-  pulled,
-}: {
-  project: LibraryProjectSummary
-  pulled: boolean
-}) {
-  const t = useT()
-  const dClass = domainClass(project.domain)
-  const isDraft = project.status === "draft"
-  const [storyOpen, setStoryOpen] = useState(false)
-  // spec 040: 仅当项目有开篇连环画时显示 icon/弹窗
-  const hasStory = Array.isArray(project.story) && project.story.length > 0
-
-  // 草稿项目: 不可进入 (详情页会 404), 卡片整体降透明度 + 改为 div (非链接) + 不响应 hover。
-  // 已发布项目: 正常 Link 可点进入。
-  const cardStyle: CSSProperties = {
-    padding: 0,
-    overflow: "hidden",
-    display: "flex",
-    flexDirection: "column",
-    cursor: isDraft ? "default" : "pointer",
-    border: "1px solid var(--border)",
-    borderRadius: 12,
-    background: "var(--card)",
-    boxShadow: "var(--shadow-sm)",
-    textDecoration: "none",
-    color: "var(--ink-2)",
-    transition: "transform var(--t-med), box-shadow var(--t-med)",
-    opacity: isDraft ? 0.62 : 1,
-    position: "relative",
-  }
-
-  const inner = (
-    <>
-      {project.cover_image_path ? (
-        <CoverPhoto slug={project.slug} dClass={dClass} />
-      ) : (
-        <CoverArt kind={dClass} />
-      )}
-      {/* spec 042: 分会角标 (左上角, 避开右上角 story 按钮) */}
-      <ChapterBadgeMark domain={project.domain} corner="top-left" />
-      {/* spec 040: 开篇连环画入口 (cover 右上角小 icon, 仅有 story 时显示) */}
-      {hasStory && (
-        <button
-          onClick={(e) => {
-            // 卡片本体是 Link, 阻止跳转, 改为打开连环画弹窗
-            e.preventDefault()
-            e.stopPropagation()
-            setStoryOpen(true)
-          }}
-          aria-label={t("story.view")}
-          title={t("story.view")}
-          style={{
-            position: "absolute",
-            top: 10,
-            right: 10,
-            zIndex: 3,
-            width: 32,
-            height: 32,
-            borderRadius: 999,
-            border: "1px solid rgba(255,255,255,0.55)",
-            background: "rgba(20,15,11,0.55)",
-            backdropFilter: "blur(6px)",
-            display: "grid",
-            placeItems: "center",
-            cursor: "pointer",
-            color: "#fff",
-          }}
-        >
-          <BookOpen size={16} strokeWidth={1.7} />
-        </button>
-      )}
-      <div
-        style={{
-          padding: 18,
-          display: "flex",
-          flexDirection: "column",
-          gap: 10,
-          flex: 1,
-        }}
-      >
-        <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
-          {isDraft && (
-            <span
-              className="tag"
-              style={{
-                background: "var(--paper-2)",
-                color: "var(--sub)",
-                border: "1px solid var(--border-2)",
-                fontWeight: 600,
-              }}
-            >
-              {t("card.draft")}
-            </span>
-          )}
-          {project.domain && (
-            <span className={`tag ${dClass}`}>
-              {t(`domain.${project.domain.toLowerCase()}`)}
-            </span>
-          )}
-          {project.difficulty != null && (
-            <span className="tag" title={t("card.difficulty")}>
-              <Gauge size={11} strokeWidth={1.7} />
-              {project.difficulty}
-            </span>
-          )}
-          {pulled && !isDraft && (
-            <span className="tag violet">
-              <Sparkles size={11} strokeWidth={1.5} style={{ marginRight: 2 }} />
-              {t("card.on_shelf")}
-            </span>
-          )}
-        </div>
-        <h3
-          className="h3"
-          style={{
-            fontSize: 16,
-            lineHeight: 1.35,
-            // 锁定标题区为 2 行高度 (16px * 1.35 * 2), 1 行标题也占满 2 行空间,
-            // 保证不同卡片的分割线起点统一对齐, 标题换行不再挤压下方。
-            minHeight: "calc(16px * 1.35 * 2)",
-            display: "-webkit-box",
-            WebkitLineClamp: 2,
-            WebkitBoxOrient: "vertical",
-            overflow: "hidden",
-          }}
-        >
-          {project.title_zh || project.title}
-        </h3>
-        {project.description && (
-          <p
-            className="body"
-            style={{ fontSize: 13.5, color: "var(--sub)" }}
-          >
-            {project.description.length > 90
-              ? project.description.slice(0, 90) + "…"
-              : project.description}
-          </p>
-        )}
-        {/* 撑开器: 把分割线 + meta 行始终推到卡片底部, 跟其他卡片对齐 */}
-        <div style={{ flex: 1 }} />
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            paddingTop: 12,
-            borderTop: "1px dashed var(--border)",
-          }}
-        >
-          <span
-            className="mono"
-            style={{ display: "inline-flex", alignItems: "center", gap: 10, fontSize: 11, color: "var(--sub)" }}
-          >
-            <span style={{ display: "inline-flex", alignItems: "center", gap: 3 }} title={t("card.stages")}>
-              <Layers size={12} strokeWidth={1.6} />
-              {project.stage_count ?? 0}
-            </span>
-            <span style={{ display: "inline-flex", alignItems: "center", gap: 3 }} title={t("card.knodes")}>
-              <ListChecks size={12} strokeWidth={1.6} />
-              {project.knode_count ?? 0}
-            </span>
-          </span>
-          {isDraft ? (
-            <span
-              style={{
-                color: "var(--sub-2)",
-                fontSize: 13,
-                fontWeight: 500,
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 4,
-              }}
-            >
-              {t("card.unavailable")}
-            </span>
-          ) : (
-            <span
-              style={{
-                color: "var(--violet)",
-                fontSize: 13,
-                fontWeight: 500,
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 4,
-              }}
-            >
-              {t("card.open")} <ArrowRight size={13} strokeWidth={1.5} />
-            </span>
-          )}
-        </div>
-      </div>
-    </>
-  )
-
-  const story =
-    hasStory && storyOpen ? (
-      <StoryModal
-        slug={project.slug}
-        frames={project.story!}
-        onClose={() => setStoryOpen(false)}
-      />
-    ) : null
-
-  if (isDraft) {
-    // 草稿: 非链接, 不可进入
-    return (
-      <div style={cardStyle} aria-disabled="true">
-        {inner}
-        {story}
-      </div>
-    )
-  }
-  return (
-    <>
-      <Link href={`/library/${encodeURIComponent(project.slug)}`} style={cardStyle}>
-        {inner}
-      </Link>
-      {story}
-    </>
-  )
-}
-
-// ---- 真实封面图 ----
-// 项目带 cover_image_path 时, 用作者生成的封面图 (后端 /cover 公开端点透传)。
-// 卡片封面区 168px 横向窄条, object-fit:cover + center 取主视觉居中。
-function CoverPhoto({ slug, dClass }: { slug: string; dClass: string }) {
-  const [failed, setFailed] = useState(false)
-  if (failed) return <CoverArt kind={dClass} />
-  return (
-    <div
-      style={{
-        height: 168,
-        position: "relative",
-        overflow: "hidden",
-        background: "#15110d",
-        borderBottom: "1px solid var(--border)",
-      }}
-    >
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src={library.coverUrl(slug)}
-        alt=""
-        onError={() => setFailed(true)}
-        style={{
-          width: "100%",
-          height: "100%",
-          objectFit: "cover",
-          objectPosition: "center 48%",
-          display: "block",
-        }}
-      />
-      {/* 底部柔和渐变, 让卡片内容区过渡自然 */}
-      <div
-        style={{
-          position: "absolute",
-          inset: 0,
-          background:
-            "linear-gradient(180deg, rgba(21,17,13,0) 55%, rgba(21,17,13,0.5) 100%)",
-          pointerEvents: "none",
-        }}
-      />
-    </div>
-  )
-}
-
-// ---- 封面 (抽象 SVG 兜底) ----
-// 跟设计稿 Homepage.jsx CoverArt 同源, 但 student-app 没有项目特定数据,
-// 用 domain 选 climate/space/bio/violet 抽象图案
-function CoverArt({ kind }: { kind: string }) {
-  if (kind === "climate") {
-    return (
-      <div
-        style={{
-          height: 168,
-          background: "linear-gradient(180deg, #F8EDE5 0%, #FBF9FF 100%)",
-          position: "relative",
-          overflow: "hidden",
-          borderBottom: "1px solid var(--border)",
-        }}
-      >
-        <svg
-          viewBox="0 0 320 168"
-          width="100%"
-          height="100%"
-          preserveAspectRatio="none"
-          style={{ position: "absolute", inset: 0 }}
-        >
-          <defs>
-            <linearGradient id="aqg-climate" x1="0" x2="0" y1="0" y2="1">
-              <stop offset="0" stopColor="#D97757" stopOpacity=".25" />
-              <stop offset="1" stopColor="#D97757" stopOpacity="0" />
-            </linearGradient>
-          </defs>
-          {[40, 80, 120].map((y, i) => (
-            <line
-              key={i}
-              x1="0"
-              x2="320"
-              y1={y}
-              y2={y}
-              stroke="#ECCFB8"
-              strokeDasharray="2 4"
-            />
-          ))}
-          <path
-            d="M0 110 L30 95 L60 100 L90 80 L120 70 L150 55 L180 65 L210 45 L240 50 L270 35 L300 40 L320 30 L320 168 L0 168 Z"
-            fill="url(#aqg-climate)"
-          />
-          <path
-            d="M0 110 L30 95 L60 100 L90 80 L120 70 L150 55 L180 65 L210 45 L240 50 L270 35 L300 40 L320 30"
-            fill="none"
-            stroke="#D97757"
-            strokeWidth="1.5"
-          />
-        </svg>
-        <div
-          style={{
-            position: "absolute",
-            top: 14,
-            left: 16,
-            display: "flex",
-            gap: 6,
-            alignItems: "center",
-          }}
-        >
-          <Wind size={16} strokeWidth={1.5} style={{ color: "var(--violet-ink)" }} />
-          <span
-            style={{
-              fontFamily: "var(--mono)",
-              fontSize: 11,
-              color: "var(--violet-ink)",
-              fontWeight: 500,
-            }}
-          >
-            PM2.5 · μg/m³
-          </span>
-        </div>
-      </div>
-    )
-  }
-  if (kind === "aerospace") {
-    return (
-      <div
-        style={{
-          height: 168,
-          background: "#15131F",
-          position: "relative",
-          overflow: "hidden",
-          borderBottom: "1px solid var(--border)",
-        }}
-      >
-        <svg viewBox="0 0 320 168" width="100%" height="100%" preserveAspectRatio="none">
-          {Array.from({ length: 40 }).map((_, i) => {
-            const x = (i * 37) % 320
-            const y = (i * 23) % 168
-            const r = i % 7 === 0 ? 1.5 : 0.8
-            return (
-              <circle key={i} cx={x} cy={y} r={r} fill="#fff" opacity={r === 1.5 ? 0.9 : 0.4} />
-            )
-          })}
-          <ellipse cx="240" cy="60" rx="55" ry="55" fill="none" stroke="#D97757" strokeOpacity=".5" />
-          <ellipse cx="240" cy="60" rx="38" ry="38" fill="none" stroke="#D97757" strokeOpacity=".7" />
-          <circle cx="240" cy="60" r="14" fill="#D97757" opacity=".15" />
-          <circle cx="240" cy="60" r="3" fill="#D97757" />
-        </svg>
-      </div>
-    )
-  }
-  if (kind === "bio") {
-    return (
-      <div
-        style={{
-          height: 168,
-          background: "#EFEBDD",
-          position: "relative",
-          overflow: "hidden",
-          borderBottom: "1px solid var(--border)",
-        }}
-      >
-        <svg viewBox="0 0 320 168" width="100%" height="100%" preserveAspectRatio="none">
-          <circle cx="160" cy="84" r="74" fill="none" stroke="#A67B5B" strokeOpacity=".25" />
-          <circle cx="160" cy="84" r="55" fill="none" stroke="#A67B5B" strokeOpacity=".4" />
-          {[
-            [120, 60, 5],
-            [145, 75, 3],
-            [170, 55, 4],
-            [180, 90, 6],
-            [150, 100, 3.5],
-            [135, 90, 2.5],
-            [195, 75, 4],
-            [205, 95, 2.5],
-            [125, 105, 4],
-            [175, 115, 3],
-          ].map(([x, y, r], i) => (
-            <g key={i}>
-              <circle cx={x} cy={y} r={r} fill="#A67B5B" opacity=".15" />
-              <circle cx={x} cy={y} r={r} fill="none" stroke="#A67B5B" strokeWidth="0.8" />
-            </g>
-          ))}
-        </svg>
-        <div
-          style={{
-            position: "absolute",
-            top: 14,
-            left: 16,
-            display: "flex",
-            gap: 6,
-            alignItems: "center",
-          }}
-        >
-          <FlaskConical size={16} strokeWidth={1.5} style={{ color: "#5E412A" }} />
-          <span
-            style={{ fontFamily: "var(--mono)", fontSize: 11, color: "#5E412A" }}
-          >
-            field study
-          </span>
-        </div>
-      </div>
-    )
-  }
-  // default: 抽象斜纹
-  return (
-    <div
-      style={{
-        height: 168,
-        background: `repeating-linear-gradient(135deg, var(--paper-2) 0 12px, transparent 12px 24px), var(--paper)`,
-        borderBottom: "1px solid var(--border)",
-      }}
-    />
   )
 }
