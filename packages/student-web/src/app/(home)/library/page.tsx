@@ -2,8 +2,9 @@
 
 import Image from "next/image"
 import Link from "next/link"
-import { useEffect, useMemo, useState } from "react"
-import { ArrowRight, ArrowUpRight, Camera, Check, Clock3, Layers3, Orbit, Plus, Search, SlidersHorizontal, Telescope, X } from "lucide-react"
+import { useSearchParams } from "next/navigation"
+import { Suspense, useEffect, useMemo, useState } from "react"
+import { ArrowRight, ArrowUpRight, Camera, Check, Clock3, Layers3, LayoutGrid, Orbit, Plus, Route, Search, SlidersHorizontal, Telescope, X } from "lucide-react"
 import { library, myProjects, type LibraryProjectSummary } from "@/lib/api"
 import { useAuthStore } from "@/lib/stores/auth-store"
 import { useLocale } from "@/lib/i18n/use-t"
@@ -11,6 +12,7 @@ import { makeDiscoveryEntries } from "@/lib/library-discovery"
 import { PLANNED_PROJECTS, SPACE_LINE, type DiscoveryKind } from "@/lib/project-lines/catalog"
 import { ApplyProjectModal } from "@/components/layout/apply-project-modal"
 import { DiscoveryProjectCard } from "@/components/library/discovery-project-card"
+import { ProjectLineView } from "@/components/library/project-line-view"
 import { DISCOVERY_COPY } from "@/components/library/discovery-copy"
 import styles from "@/components/library/discovery.module.css"
 
@@ -18,8 +20,14 @@ const KINDS: DiscoveryKind[] = ["all", "micro", "guided", "integration", "full"]
 const KIND_ICONS = { all: Orbit, micro: Telescope, guided: Camera, integration: Layers3, full: Orbit }
 
 export default function LibraryListPage() {
+  return <Suspense fallback={<main className={styles.page} aria-busy="true"><div className={styles.loading}><span /></div></main>}><LibraryBrowser /></Suspense>
+}
+
+function LibraryBrowser() {
   const locale = useLocale()
   const c = DISCOVERY_COPY[locale]
+  const searchParams = useSearchParams()
+  const showLines = searchParams.get("view") === "lines"
   const { loggedIn, hydrate } = useAuthStore()
   const [projects, setProjects] = useState<LibraryProjectSummary[]>([])
   const [pulled, setPulled] = useState<Set<string>>(new Set())
@@ -85,8 +93,15 @@ export default function LibraryListPage() {
     <main className={styles.page} data-locale={locale}>
       <header className={styles.pageHeader}>
         <div><p className={styles.eyebrow}>{c.eyebrow}</p><div className={styles.titleRow}><h1>{c.title}</h1><p>{c.intro}</p></div></div>
-        <span className={styles.libraryCount}><i />{loading ? c.loading : <><b>{availableCount}</b> {c.libraryCount}</>}</span>
+        <span className={styles.libraryCount}><i />{showLines ? <><b>1</b> {c.lineCount}</> : loading ? c.loading : <><b>{availableCount}</b> {c.libraryCount}</>}</span>
       </header>
+      <div className={styles.viewBar}>
+        <nav className={styles.viewSwitch} aria-label={c.viewLabel}>
+          <Link href="/library" scroll={false} aria-current={!showLines ? "page" : undefined}><LayoutGrid size={16} aria-hidden="true" />{c.projectsView}</Link>
+          <Link href={SPACE_LINE.href} scroll={false} aria-current={showLines ? "page" : undefined}><Route size={16} aria-hidden="true" />{c.linesView}</Link>
+        </nav>
+        <p>{showLines ? c.linesHint : c.projectsHint}</p>
+      </div>
       <section className={styles.themeHero} aria-labelledby="space-line-title">
         <div className={styles.heroArtwork} aria-hidden="true"><Image src="/landing/mars-rover.webp" alt="" fill priority sizes="(max-width: 680px) 100vw, 65vw" /><div className={styles.artFade} /><span className={styles.destination}>{c.destination}</span></div>
         <div className={styles.heroCopy}>
@@ -95,11 +110,12 @@ export default function LibraryListPage() {
           <p className={styles.heroDescription}>{c.heroDescription}</p>
           <p className={styles.heroBody}>{c.heroBody}</p>
           <div className={styles.heroDomains}>{c.heroDomains.map(label => <span key={label}>{label}</span>)}</div>
-          <div className={styles.heroActions}><Link href={SPACE_LINE.firstProjectHref} className={styles.primaryAction}><Clock3 size={16} />{c.start}<ArrowUpRight size={17} /></Link><Link href={SPACE_LINE.href} className={styles.secondaryAction}>{c.viewLine}<ArrowRight size={15} /></Link></div>
+          <div className={styles.heroActions}><Link href={SPACE_LINE.firstProjectHref} className={styles.primaryAction}><Clock3 size={16} />{c.start}<ArrowUpRight size={17} /></Link><Link href={showLines ? "#space-journey" : SPACE_LINE.href} className={styles.secondaryAction}>{showLines ? c.viewJourney : c.viewLine}<ArrowRight size={15} /></Link></div>
           <p className={styles.startHint}><Check size={12} />{c.instant}<span />{c.browser}</p>
         </div>
         <Link href={SPACE_LINE.firstProjectHref} className={styles.firstStop} aria-label={`${c.firstStop} · ${c.firstWork}`}><div className={styles.miniPhoto} aria-hidden="true"><span /><i /><Camera size={12} /></div><div><small>{c.firstStop} / 3 MIN</small><strong>{c.firstWork}</strong><span>{c.firstWorkHint}</span></div><ArrowUpRight size={17} /></Link>
       </section>
+      {showLines ? <ProjectLineView locale={locale} /> : <>
       <ol className={styles.routeStrip} aria-label={c.viewLine}>
         {c.steps.map((step, i) => <li key={step.title}><span className={styles.routeIndex}>{String(i + 1).padStart(2, "0")}</span><div><strong>{step.title}</strong><span>{step.detail}</span></div>{i < 3 && <ArrowRight size={14} className={styles.routeArrow} aria-hidden="true" />}</li>)}
       </ol>
@@ -128,6 +144,7 @@ export default function LibraryListPage() {
           </div>}
         <p className={styles.timeNote}>{c.timeNote}</p>
       </section>
+      </>}
       <aside className={styles.familyNote}><span className={styles.familyMark}><Telescope size={23} strokeWidth={1.3} /></span><div><strong>{c.familyTitle}</strong><p>{c.familyBody}</p></div><Link href={SPACE_LINE.firstProjectHref}>{c.start}<ArrowUpRight size={15} /></Link></aside>
       <section className={styles.request}><div><h2>{c.requestTitle}</h2><p>{c.requestBody}</p></div><button type="button" onClick={() => setApplyOpen(true)}><Plus size={15} />{c.requestAction}</button></section>
       <ApplyProjectModal open={applyOpen} onClose={() => setApplyOpen(false)} />

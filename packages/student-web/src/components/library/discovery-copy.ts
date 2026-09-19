@@ -1,6 +1,7 @@
 export const DISCOVERY_COPY = {
   zh: {
     eyebrow: "从好奇心出发", title: "项目库", intro: "一个小发现，也可以是一场大探索的开始。",
+    viewLabel: "项目库视图", projectsView: "全部项目", linesView: "项目线", lineCount: "条主题项目线", projectsHint: "挑选一件现在想做的作品", linesHint: "围绕一个主题，一步步探索", viewJourney: "查看成长路线",
     libraryCount: "个可开始的项目", lineTag: "主题项目线", lineNumber: "远征 01", heroTitle: "太空探索",
     heroDescription: "从第一张星球照片，\n到你亲手造的火星车。", heroBody: "沿着一条主题线，认识天空、学会观察、尝试设计。每一站，都留下一件自己的作品。",
     heroDomains: ["天文", "火箭", "机械", "计算机视觉"], start: "从 3 分钟开始", viewLine: "查看项目线",
@@ -21,6 +22,7 @@ export const DISCOVERY_COPY = {
   },
   en: {
     eyebrow: "FOLLOW YOUR CURIOSITY", title: "Project library", intro: "A small discovery can begin a much bigger adventure.",
+    viewLabel: "Library view", projectsView: "All projects", linesView: "Project lines", lineCount: "themed project line", projectsHint: "Choose something to make now", linesHint: "Follow a theme, one project at a time", viewJourney: "See the journey",
     libraryCount: "projects ready to start", lineTag: "THEMED PROJECT LINE", lineNumber: "EXPEDITION 01", heroTitle: "Space exploration",
     heroDescription: "From your first world photo\nto a rover you build yourself.", heroBody: "Explore the sky, learn to observe, and try designing. Follow a shared theme and make something of your own at each stop.",
     heroDomains: ["Astronomy", "Rockets", "Mechanics", "Computer vision"], start: "Start with 3 minutes", viewLine: "Explore the project line",

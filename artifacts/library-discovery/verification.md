@@ -1,10 +1,10 @@
 # 项目库改版验收
 
-2026-09-18 本地验证。当前版本是本地实现，尚未发布生产。
+2026-09-19 本地验证。当前版本是本地实现，尚未发布生产。
 
 ## 已验证
 
-运行 `node scripts/verify-library-discovery.mjs`：8 组检查通过，浏览器运行错误列表为空。原始数据见 [verification.json](verification.json)。
+运行 `node scripts/verify-library-discovery.mjs`：10 组检查通过，浏览器运行错误列表为空。原始数据见 [verification.json](verification.json)。
 
 1. 读取真实课程列表，默认显示可开始内容；太空探索为首屏主题入口。
 2. 项目库可以直接打开三分钟观测台和主题项目线。
@@ -14,8 +14,10 @@
 6. 原有故事弹窗和完整课程详情可达。
 7. 中英文、1440 像素桌面与 390 像素窄屏通过，类型栏只在自身横向滚动；手机首屏可见开始按钮。
 8. 模拟内容 API 503 时短体验仍可用，重试能恢复课程。
+9. 顶栏只保留项目库；页内两种视图可切换，保留查询与难度筛选；键盘、浏览器前后退、刷新、未知视图参数均正常。旧项目线路由与游戏返回都进入 `/library?view=lines`。
+10. 项目线内容支持中英文与 390 像素窄屏；主项目卡片标题对比度达到 4.5:1。
 
-页面截图：`library-desktop.png`、`library-english.png`、`library-mobile.png`、`library-mobile-first-screen.png`、`guided-planning.png`。这些截图是开发验证产物，不代表儿童试用证据。
+页面截图：`library-desktop.png`、`library-english.png`、`library-mobile.png`、`library-mobile-first-screen.png`、`guided-planning.png`、`project-lines-desktop.png`、`project-lines-mobile.png`、`project-lines-english.png`。这些截图是开发验证产物，不代表儿童试用证据。
 
 ## 静态检查与限制
 

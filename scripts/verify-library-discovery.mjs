@@ -28,6 +28,8 @@ try {
     const heroStart = page.getByRole("link", { name: "从 3 分钟开始", exact: true }).first();
     const box = await heroStart.boundingBox(); expect(box.y + box.height).toBeLessThan(1050);
     await expect(cards.first()).toHaveAttribute("data-project-card", "spot-a-world");
+    await expect(page.locator(".nav-tabs").getByRole("link", { name: "项目线", exact: true })).toHaveCount(0);
+    await expect(page.getByRole("navigation", { name: "项目库视图" }).getByRole("link", { name: "全部项目", exact: true })).toHaveAttribute("aria-current", "page");
     await page.screenshot({ path: path.join(dir, "library-desktop.png"), fullPage: true });
   });
   await check("从项目库直接进入三分钟体验及项目线", async () => {
@@ -36,9 +38,55 @@ try {
     await expect(page.frameLocator("iframe").locator("#loading")).toBeHidden();
     await page.goto(origin + "/library");
     await page.getByRole("link", { name: "查看项目线", exact: true }).click();
-    await expect(page).toHaveURL(/\/project-lines$/);
+    await expect(page).toHaveURL(/\/library\?view=lines$/);
     await expect(page.getByRole("heading", { name: "一个小项目，一件自己的作品。" })).toBeVisible();
     await page.goto(origin + "/library");
+    await expect(cards).toHaveCount(apiData.filter(p => p.status !== "draft").length + 1);
+  });
+  await check("页内视图、筛选保留、历史记录与兼容跳转", async () => {
+    const views = page.getByRole("navigation", { name: "项目库视图" });
+    await page.getByRole("searchbox").fill("太空");
+    await page.getByRole("combobox", { name: "挑战程度", exact: true }).selectOption("4-5");
+    await expect(cards).toHaveCount(1);
+    await views.getByRole("link", { name: "项目线", exact: true }).click();
+    await expect(page).toHaveURL(/\/library\?view=lines$/);
+    await expect(views.getByRole("link", { name: "项目线", exact: true })).toHaveAttribute("aria-current", "page");
+    await expect(page.locator(".nav-tabs a.active")).toHaveText("项目库");
+    await expect(page.getByRole("searchbox")).toHaveCount(0);
+    await expect(page.getByRole("heading", { name: "小发现，慢慢拼成大远征。" })).toBeVisible();
+    const titleContrast = await page.getByRole("heading", { name: "我的第一张星球照片", exact: true }).evaluate(title => {
+      const lightness = color => {
+        const values = color.match(/[\d.]+/g).slice(0, 3).map(value => {
+          const channel = Number(value) / 255;
+          return channel <= .04045 ? channel / 12.92 : ((channel + .055) / 1.055) ** 2.4;
+        });
+        return values[0] * .2126 + values[1] * .7152 + values[2] * .0722;
+      };
+      const text = lightness(getComputedStyle(title).color), background = lightness(getComputedStyle(title.closest("a")).backgroundColor);
+      return (Math.max(text, background) + .05) / (Math.min(text, background) + .05);
+    });
+    expect(titleContrast).toBeGreaterThanOrEqual(4.5);
+    await page.screenshot({ path: path.join(dir, "project-lines-desktop.png"), fullPage: true });
+    await views.getByRole("link", { name: "全部项目", exact: true }).focus();
+    await page.keyboard.press("Enter");
+    await expect(page.getByRole("searchbox")).toHaveValue("太空");
+    await expect(page.getByRole("combobox", { name: "挑战程度", exact: true })).toHaveValue("4-5");
+    await expect(cards).toHaveCount(1);
+    await page.goBack();
+    await expect(page.getByRole("heading", { name: "一个小项目，一件自己的作品。" })).toBeVisible();
+    await page.goForward();
+    await expect(page.getByRole("searchbox")).toHaveValue("太空");
+    await expect(cards).toHaveCount(1);
+    await page.goto(origin + "/library?view=lines");
+    await page.reload();
+    await expect(views.getByRole("link", { name: "项目线", exact: true })).toHaveAttribute("aria-current", "page");
+    await page.goto(origin + "/project-lines");
+    await expect(page).toHaveURL(/\/library\?view=lines$/);
+    await page.getByRole("link", { name: "从 3 分钟开始", exact: true }).first().click();
+    await page.frameLocator("iframe").getByRole("link", { name: "返回项目线", exact: true }).click();
+    await expect(page).toHaveURL(/\/library\?view=lines$/);
+    await page.goto(origin + "/library?view=unknown");
+    await expect(views.getByRole("link", { name: "全部项目", exact: true })).toHaveAttribute("aria-current", "page");
     await expect(cards).toHaveCount(apiData.filter(p => p.status !== "draft").length + 1);
   });
   await check("项目类型、真实筹备状态及恢复筛选", async () => {
@@ -110,6 +158,19 @@ try {
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     await page.screenshot({ path: path.join(dir, "library-mobile.png"), fullPage: true });
     await page.screenshot({ path: path.join(dir, "library-mobile-first-screen.png") });
+  });
+  await check("项目线视图的手机布局与英文内容", async () => {
+    await page.getByRole("navigation", { name: "项目库视图" }).getByRole("link", { name: "项目线", exact: true }).click();
+    await expect(page.getByRole("heading", { name: "一个小项目，一件自己的作品。" })).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await page.screenshot({ path: path.join(dir, "project-lines-mobile.png"), fullPage: true });
+    await page.getByRole("button", { name: "EN", exact: true }).click();
+    await expect(page.getByRole("heading", { name: "Small discoveries. A bigger expedition." })).toBeVisible();
+    await expect(page.getByRole("navigation", { name: "Library view" }).getByRole("link", { name: "Project lines", exact: true })).toHaveAttribute("aria-current", "page");
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await page.setViewportSize({ width: 1440, height: 1050 });
+    await page.screenshot({ path: path.join(dir, "project-lines-english.png"), fullPage: true });
+    await page.getByRole("button", { name: "中", exact: true }).click();
   });
   await check("内容服务故障仍能体验、重试后恢复课程", async () => {
     const c = await browser.newContext({ viewport: { width: 1440, height: 1050 } });

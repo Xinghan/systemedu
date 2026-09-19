@@ -11,7 +11,6 @@ import {
   Library as LibraryIcon,
   LogOut,
   Settings,
-  Telescope,
 } from "lucide-react"
 import { useAuthStore } from "@/lib/stores/auth-store"
 import { auth } from "@/lib/api"
@@ -22,7 +21,6 @@ import styles from "./student-header.module.css"
 const TABS = [
   { id: "home",     labelKey: "nav.home",        icon: Home,        href: "/home" },
   { id: "library",  labelKey: "nav.library",     icon: LibraryIcon, href: "/library" },
-  { id: "project-lines", labelKey: "nav.project_lines", icon: Telescope, href: "/project-lines" },
   { id: "projects", labelKey: "nav.my_projects", icon: GitBranch,   href: "/my-projects" },
 ]
 

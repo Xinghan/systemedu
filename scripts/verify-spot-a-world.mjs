@@ -33,6 +33,7 @@ try {
   page.on("pageerror", error => errors.push(String(error)));
   await check("学生系统项目线入口与体验路由", async () => {
     await page.goto(origin + "/project-lines");
+    await expect(page).toHaveURL(/\/library\?view=lines$/);
     await expect(page.getByRole("heading", { name: "一个小项目，一件自己的作品。" })).toBeVisible();
     await page.screenshot({ path: path.join(dir, "project-line-desktop.png"), fullPage: true });
     await page.getByRole("link", { name: /我的第一张星球照片/ }).click();
@@ -111,7 +112,7 @@ try {
     const mobile = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
     const p = await mobile.newPage(); p.on("pageerror", error => errors.push(String(error)));
     await p.goto(origin + "/project-lines");
-    await expect(p.getByRole("link", { name: "项目线", exact: true })).toBeVisible();
+    await expect(p.getByRole("navigation", { name: "项目库视图" }).getByRole("link", { name: "项目线", exact: true })).toHaveAttribute("aria-current", "page");
     expect(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     await p.screenshot({ path: path.join(dir, "project-line-mobile.png"), fullPage: true });
     await ready(p, gamePath + "?renderer=canvas");

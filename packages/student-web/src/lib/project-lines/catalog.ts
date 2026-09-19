@@ -3,7 +3,7 @@ import type { Locale } from "@/lib/i18n/locales"
 // 这里只登记已实现的入口；规划摘要不会混入可开始的项目列表。
 export const SPACE_LINE = {
   id: "space-exploration",
-  href: "/project-lines",
+  href: "/library?view=lines",
   flagshipSlug: "mars-analog-rover",
   firstProjectHref: "/explore/space-exploration/spot-a-world",
   title: { zh: "太空探索", en: "Space exploration" },
