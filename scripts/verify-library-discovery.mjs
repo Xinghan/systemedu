@@ -23,7 +23,7 @@ try {
     const response = page.waitForResponse(r => r.url().endsWith("/api/library/projects") && r.request().method() === "GET");
     await page.goto(origin + "/library"); apiData = await (await response).json();
     expect(Array.isArray(apiData)).toBe(true);
-    await expect(cards).toHaveCount(apiData.filter(p => p.status !== "draft").length + 1);
+    await expect(cards).toHaveCount(apiData.filter(p => p.status !== "draft").length + 4);
     await expect(page.getByRole("heading", { name: "太空探索", exact: true })).toBeVisible();
     const heroStart = page.getByRole("link", { name: "从 3 分钟开始", exact: true }).first();
     const box = await heroStart.boundingBox(); expect(box.y + box.height).toBeLessThan(1050);
@@ -41,7 +41,7 @@ try {
     await expect(page).toHaveURL(/\/library\?view=lines$/);
     await expect(page.getByRole("heading", { name: "一个小项目，一件自己的作品。" })).toBeVisible();
     await page.goto(origin + "/library");
-    await expect(cards).toHaveCount(apiData.filter(p => p.status !== "draft").length + 1);
+    await expect(cards).toHaveCount(apiData.filter(p => p.status !== "draft").length + 4);
   });
   await check("页内视图、筛选保留、历史记录与兼容跳转", async () => {
     const views = page.getByRole("navigation", { name: "项目库视图" });
@@ -87,22 +87,22 @@ try {
     await expect(page).toHaveURL(/\/library\?view=lines$/);
     await page.goto(origin + "/library?view=unknown");
     await expect(views.getByRole("link", { name: "全部项目", exact: true })).toHaveAttribute("aria-current", "page");
-    await expect(cards).toHaveCount(apiData.filter(p => p.status !== "draft").length + 1);
+    await expect(cards).toHaveCount(apiData.filter(p => p.status !== "draft").length + 4);
   });
   await check("项目类型、真实筹备状态及恢复筛选", async () => {
-    await page.locator('[data-kind-filter="micro"]').click(); await expect(cards).toHaveCount(1);
+    await page.locator('[data-kind-filter="micro"]').click(); await expect(cards).toHaveCount(3);
     await expect(cards.first()).toContainText("轻量操作");
-    await page.locator('[data-kind-filter="guided"]').click(); await expect(cards).toHaveCount(0);
-    await expect(page.getByRole("heading", { name: "这一站，正在制作中。" })).toBeVisible();
+    await page.locator('[data-kind-filter="guided"]').click(); await expect(cards).toHaveCount(1);
+    await expect(page.getByRole("heading", { name: "接下来，还有这些作品正在筹备" })).toBeVisible();
     await expect(page.getByText(/给探测车制作地形样本/)).toBeVisible();
     await page.screenshot({ path: path.join(dir, "guided-planning.png"), fullPage: true });
     await page.locator('[data-kind-filter="integration"]').click();
     await expect(page.getByText(/组装我的第一辆自主探测车/)).toBeVisible();
     await reset();
-    await expect(cards).toHaveCount(apiData.filter(p => p.status !== "draft").length + 1);
+    await expect(cards).toHaveCount(apiData.filter(p => p.status !== "draft").length + 4);
   });
   await check("搜索、领域、难度、排序和空态", async () => {
-    await page.getByRole("searchbox").fill("太空"); await expect(cards).toHaveCount(2);
+    await page.getByRole("searchbox").fill("太空"); await expect(cards).toHaveCount(5);
     await page.getByRole("combobox", { name: "挑战程度", exact: true }).selectOption("4-5");
     await expect(cards).toHaveCount(1); await expect(cards.first()).toHaveAttribute("data-project-card", "mars-analog-rover");
     await page.getByRole("combobox", { name: "领域", exact: true }).selectOption("climate");
@@ -119,7 +119,7 @@ try {
   });
   await check("草稿不可启动、旧格式成果和生物领域别名", async () => {
     await page.getByRole("checkbox", { name: "显示筹备中的课程" }).check();
-    await expect(cards).toHaveCount(apiData.length + 1);
+    await expect(cards).toHaveCount(apiData.length + 4);
     for (const project of apiData.filter(p => p.status === "draft")) {
       const card = page.locator(`[data-project-card="${project.slug}"]`);
       await expect(card).toContainText("筹备中");
@@ -148,7 +148,7 @@ try {
     await page.screenshot({ path: path.join(dir, "library-english.png"), fullPage: true });
     await page.setViewportSize({ width: 390, height: 844 });
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-    await page.locator('[data-kind-filter="micro"]').click(); await expect(cards).toHaveCount(1);
+    await page.locator('[data-kind-filter="micro"]').click(); await expect(cards).toHaveCount(3);
     await page.getByRole("button", { name: "中", exact: true }).click();
     await reset();
     await page.evaluate(() => window.scrollTo({ top: 0, behavior: "instant" }));
@@ -179,7 +179,7 @@ try {
     await p.goto(origin + "/library"); await expect(p.locator("main").getByRole("alert")).toContainText("完整课程暂时没有载入");
     await expect(p.locator('[data-project-card="spot-a-world"]')).toBeVisible();
     fail = false; await p.getByRole("button", { name: "重新加载", exact: true }).click();
-    await expect(p.locator("[data-project-card]")).toHaveCount(apiData.filter(p => p.status !== "draft").length + 1);
+    await expect(p.locator("[data-project-card]")).toHaveCount(apiData.filter(p => p.status !== "draft").length + 4);
     await expect(p.locator("main").getByRole("alert")).toHaveCount(0); await c.close();
   });
   expect(errors).toEqual([]);

@@ -1,10 +1,10 @@
 import type { LibraryProjectSummary } from "@/lib/api"
 import type { Locale } from "@/lib/i18n/locales"
-import { MICRO_PROJECTS, localized, type MicroProject } from "@/lib/project-lines/catalog"
+import { LOCAL_PROJECTS, localized, type LocalProject } from "@/lib/project-lines/catalog"
 
 export type DiscoveryEntry = {
   id: string
-  kind: "micro" | "full"
+  kind: "micro" | "guided" | "full"
   title: string
   domain: string
   difficulty: number | null
@@ -12,7 +12,8 @@ export type DiscoveryEntry = {
   searchText: string
   publishedAt: number
   project?: LibraryProjectSummary
-  micro?: MicroProject
+  local?: LocalProject
+  priority?: number
 }
 
 export function normalizeDomain(raw?: string | null): string {
@@ -45,10 +46,10 @@ export function displayOutcome(project: LibraryProjectSummary): string | null {
 }
 
 export function makeDiscoveryEntries(projects: LibraryProjectSummary[], locale: Locale): DiscoveryEntry[] {
-  const micro: DiscoveryEntry[] = MICRO_PROJECTS.map((project) => ({
-    id: project.id, kind: "micro", title: localized(project.title, locale), domain: "aerospace", difficulty: null,
-    available: true, publishedAt: 0, micro: project,
-    searchText: [project.title.zh, project.title.en, project.action.zh, project.action.en, project.outcome.zh, project.outcome.en, "太空探索 space astronomy 天文 月球 火星"].join(" ").toLowerCase(),
+  const local: DiscoveryEntry[] = LOCAL_PROJECTS.map((project, priority) => ({
+    id: project.id, kind: project.kind, title: localized(project.title, locale), domain: "aerospace", difficulty: null,
+    available: true, publishedAt: 0, local: project, priority,
+    searchText: [project.title.zh, project.title.en, project.action.zh, project.action.en, project.outcome.zh, project.outcome.en, "太空探索 space exploration", project.id === "spot-a-world" ? "astronomy 天文 月球 火星" : ""].join(" ").toLowerCase(),
   }))
   const full: DiscoveryEntry[] = projects.map((project) => ({
     id: project.slug, kind: "full", title: locale === "zh" ? project.title_zh || project.title : project.title || project.title_zh || project.slug,
@@ -57,5 +58,5 @@ export function makeDiscoveryEntries(projects: LibraryProjectSummary[], locale: 
     available: project.status !== "draft", publishedAt: Date.parse(project.published_at || "") || 0, project,
     searchText: [project.title, project.title_zh, project.slug, project.domain, project.description, ...(project.tags || []), ...outcomeTitles(project), project.slug === "mars-analog-rover" ? "太空探索 space exploration" : ""].filter(Boolean).join(" ").toLowerCase(),
   }))
-  return [...micro, ...full]
+  return [...local, ...full]
 }

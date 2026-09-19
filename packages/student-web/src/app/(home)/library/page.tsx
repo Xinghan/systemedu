@@ -67,6 +67,7 @@ function LibraryBrowser() {
       if (kind !== "all" && kind !== entry.kind) return false
       if (domain !== "all" && domain !== entry.domain) return false
       if (difficulty === "light" && entry.kind !== "micro") return false
+      if (difficulty === "guided" && entry.kind !== "guided") return false
       if (difficulty === "1-2" && (entry.difficulty == null || entry.difficulty > 2)) return false
       if (difficulty === "3" && entry.difficulty !== 3) return false
       if (difficulty === "4-5" && (entry.difficulty == null || entry.difficulty < 4)) return false
@@ -77,7 +78,8 @@ function LibraryBrowser() {
       if (a.available !== b.available) return a.available ? -1 : 1
       if (sort === "recent") return b.publishedAt - a.publishedAt || a.title.localeCompare(b.title, locale)
       // 轻量起点不映射成旧课程的 1/5 分。
-      if (a.kind !== b.kind) return a.kind === "micro" ? -1 : 1
+      if (a.kind !== b.kind) return ({ micro: 0, guided: 1, full: 2 }[a.kind] - { micro: 0, guided: 1, full: 2 }[b.kind])
+      if (a.local && b.local) return (a.priority ?? 0) - (b.priority ?? 0)
       if (sort === "recommended" && a.id !== b.id && (a.id === SPACE_LINE.flagshipSlug || b.id === SPACE_LINE.flagshipSlug)) return a.id === SPACE_LINE.flagshipSlug ? -1 : 1
       return (a.difficulty ?? 99) - (b.difficulty ?? 99) || a.title.localeCompare(b.title, locale)
     })
@@ -126,13 +128,13 @@ function LibraryBrowser() {
           {KINDS.map(value => {
             const Icon = KIND_ICONS[value]
             const count = listed.filter(entry => value === "all" || entry.kind === value).length
-            return <button key={value} type="button" aria-pressed={kind === value} onClick={() => setKind(value)} className={styles.kindTab} data-kind-filter={value}><div><Icon size={17} strokeWidth={1.5} /><strong>{c.kinds[value]}</strong><span>{value === "guided" || value === "integration" ? c.planning : count}</span></div><small>{c.kindHints[value]}</small></button>
+            return <button key={value} type="button" aria-pressed={kind === value} onClick={() => setKind(value)} className={styles.kindTab} data-kind-filter={value}><div><Icon size={17} strokeWidth={1.5} /><strong>{c.kinds[value]}</strong><span>{(value === "guided" || value === "integration") && count === 0 ? c.planning : count}</span></div><small>{c.kindHints[value]}</small></button>
           })}
         </div>
         <div className={styles.filterBar}>
           <label className={styles.search}><Search size={16} /><input type="search" value={query} onChange={event => setQuery(event.target.value)} placeholder={c.search} aria-label={c.search} />{query && <button type="button" onClick={() => setQuery("")} aria-label={locale === "zh" ? "清空搜索" : "Clear search"}><X size={14} /></button>}</label>
           <label className={styles.select}><span>{c.domain}</span><select value={domain} onChange={event => setDomain(event.target.value)} aria-label={c.domain}><option value="all">{c.allDomains}</option>{Object.entries(c.domainNames).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></label>
-          <label className={styles.select}><span>{c.difficulty}</span><select value={difficulty} onChange={event => setDifficulty(event.target.value)} aria-label={c.difficulty}><option value="all">{c.allChallenges}</option><option value="light">{c.light}</option><option value="1-2">{c.score12}</option><option value="3">{c.score3}</option><option value="4-5">{c.score45}</option></select></label>
+          <label className={styles.select}><span>{c.difficulty}</span><select value={difficulty} onChange={event => setDifficulty(event.target.value)} aria-label={c.difficulty}><option value="all">{c.allChallenges}</option><option value="light">{c.light}</option><option value="guided">{c.guidedChallenge}</option><option value="1-2">{c.score12}</option><option value="3">{c.score3}</option><option value="4-5">{c.score45}</option></select></label>
         </div>
         <div className={styles.resultBar}><p role="status" aria-live="polite"><b>{filtered.length}</b> {c.result}{hasFilters && <button type="button" onClick={reset}>{c.reset}</button>}</p><div><label className={styles.plannedToggle}><input type="checkbox" checked={showPlanned} onChange={event => setShowPlanned(event.target.checked)} />{c.showPlanned}</label><select value={sort} onChange={event => setSort(event.target.value)} aria-label={c.sort}><option value="recommended">{c.recommended}</option><option value="difficulty">{c.difficultyAsc}</option><option value="recent">{c.recent}</option></select></div></div>
         {loadFailed && <div className={styles.error} role="alert"><p>{c.error}</p><button type="button" onClick={retry}>{c.retry}<ArrowRight size={14} /></button></div>}
@@ -143,6 +145,7 @@ function LibraryBrowser() {
               : <><Search size={25} strokeWidth={1.2} /><h3>{c.emptyTitle}</h3><p>{planningKind ? c.plannedFallback : c.emptyBody}</p><button type="button" onClick={reset}>{c.reset}<ArrowRight size={15} /></button></>}
           </div>}
         <p className={styles.timeNote}>{c.timeNote}</p>
+        {showPlan && planningKind && filtered.length > 0 && <aside className={styles.emptyState}><span className={styles.plannedLabel}>{c.planning}</span><h3>{c.morePlanned}</h3><div className={styles.plannedTasks}>{PLANNED_PROJECTS[planningKind][locale].map(title => <span key={title}>{title}</span>)}</div></aside>}
       </section>
       </>}
       <aside className={styles.familyNote}><span className={styles.familyMark}><Telescope size={23} strokeWidth={1.3} /></span><div><strong>{c.familyTitle}</strong><p>{c.familyBody}</p></div><Link href={SPACE_LINE.firstProjectHref}>{c.start}<ArrowUpRight size={15} /></Link></aside>
