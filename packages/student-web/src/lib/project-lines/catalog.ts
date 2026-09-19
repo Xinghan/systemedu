@@ -27,6 +27,7 @@ export const MICRO_PROJECTS: readonly LocalProject[] = [{
   domains: ["aerospace"],
   challenge: { zh: "拖动、选择、拍摄", en: "Move, choose, take a photo" },
   startLabel: { zh: "打开观测台", en: "Open the observatory" },
+  coverImage: "/project-lines/space-exploration/spot-a-world/cover-ai.png",
 }, {
   id: "land-a-probe", lineId: SPACE_LINE.id, kind: "micro", href: "/explore/space-exploration/land-a-probe", estimatedMinutes: 3,
   title: { zh: "把探测器稳稳送下去", en: "Bring a lander down safely" },
@@ -34,7 +35,7 @@ export const MICRO_PROJECTS: readonly LocalProject[] = [{
   outcome: { zh: "自己的着陆轨迹、操作回放与对比记录", en: "Your landing trajectories, controls, and comparison" },
   challenge: { zh: "观察速度、控制制动", en: "Watch the speed and brake" },
   startLabel: { zh: "开始着陆", en: "Try a landing" }, domains: ["aerospace"],
-  coverImage: "/project-lines/space-exploration/land-a-probe/cover.png",
+  coverImage: "/project-lines/space-exploration/land-a-probe/cover-ai.png",
 }, {
   id: "drive-and-frame", lineId: SPACE_LINE.id, kind: "micro", href: "/explore/space-exploration/drive-and-frame", estimatedMinutes: 3,
   title: { zh: "开车找到观察点", en: "Drive to an observation point" },
@@ -42,7 +43,7 @@ export const MICRO_PROJECTS: readonly LocalProject[] = [{
   outcome: { zh: "自己驾驶的路线与亲手取景的地形照片", en: "Your own route and a terrain photo you framed" },
   challenge: { zh: "驾驶、绕行、取景", en: "Drive, navigate, frame" },
   startLabel: { zh: "开动探测车", en: "Drive the rover" }, domains: ["aerospace"],
-  coverImage: "/project-lines/space-exploration/drive-and-frame/cover.png",
+  coverImage: "/project-lines/space-exploration/drive-and-frame/cover-ai.png",
 }]
 
 export const GUIDED_PROJECTS: readonly LocalProject[] = [{
@@ -52,7 +53,7 @@ export const GUIDED_PROJECTS: readonly LocalProject[] = [{
   outcome: { zh: "可运行的驾驶规则与两条路线的测试记录", en: "Runnable driving rules and tests on two routes" },
   challenge: { zh: "改一条规则、换路验证", en: "Edit a rule and test another route" },
   startLabel: { zh: "打开规则工作台", en: "Open the rule workbench" }, domains: ["aerospace", "computing"],
-  coverImage: "/project-lines/space-exploration/write-driving-rules/cover.png",
+  coverImage: "/project-lines/space-exploration/write-driving-rules/cover-ai.png",
 }]
 export const LOCAL_PROJECTS = [...MICRO_PROJECTS, ...GUIDED_PROJECTS]
 

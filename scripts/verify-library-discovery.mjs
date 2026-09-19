@@ -17,6 +17,28 @@ const page = await context.newPage();
 page.on("pageerror", error => errors.push(String(error)));
 const cards = page.locator("[data-project-card]");
 async function reset() { await page.getByRole("button", { name: "重置筛选", exact: true }).first().click(); }
+async function verifyCoverLayout() {
+  const covers = page.locator('img[src$="/cover-ai.png"]');
+  await expect(covers).toHaveCount(4);
+  for (const cover of await covers.all()) {
+    await expect(cover).toBeVisible();
+    const result = await cover.evaluate(async img => {
+      await img.decode();
+      const card = img.closest("article") || img.closest("a");
+      const title = card.querySelector("h3");
+      const a = img.getBoundingClientRect(), b = title.getBoundingClientRect();
+      return {
+        loaded: img.naturalWidth > 0,
+        separate: a.bottom <= b.top || a.right <= b.left || b.right <= a.left,
+        titleOnTop: title.contains(document.elementFromPoint(b.x + b.width / 2, b.y + b.height / 2)),
+        inViewport: b.top >= 0 && b.bottom < innerHeight,
+      };
+    });
+    expect(result.loaded).toBe(true);
+    expect(result.separate).toBe(true);
+    if (result.inViewport) expect(result.titleOnTop).toBe(true);
+  }
+}
 
 try {
   await check("真实课程数据、醒目主题入口和默认可开始项目", async () => {
@@ -28,6 +50,7 @@ try {
     const heroStart = page.getByRole("link", { name: "从 3 分钟开始", exact: true }).first();
     const box = await heroStart.boundingBox(); expect(box.y + box.height).toBeLessThan(1050);
     await expect(cards.first()).toHaveAttribute("data-project-card", "spot-a-world");
+    await verifyCoverLayout();
     await expect(page.locator(".nav-tabs").getByRole("link", { name: "项目线", exact: true })).toHaveCount(0);
     await expect(page.getByRole("navigation", { name: "项目库视图" }).getByRole("link", { name: "全部项目", exact: true })).toHaveAttribute("aria-current", "page");
     await page.screenshot({ path: path.join(dir, "library-desktop.png"), fullPage: true });
@@ -66,6 +89,7 @@ try {
       return (Math.max(text, background) + .05) / (Math.min(text, background) + .05);
     });
     expect(titleContrast).toBeGreaterThanOrEqual(4.5);
+    await verifyCoverLayout();
     await page.screenshot({ path: path.join(dir, "project-lines-desktop.png"), fullPage: true });
     await views.getByRole("link", { name: "全部项目", exact: true }).focus();
     await page.keyboard.press("Enter");
@@ -181,6 +205,15 @@ try {
     fail = false; await p.getByRole("button", { name: "重新加载", exact: true }).click();
     await expect(p.locator("[data-project-card]")).toHaveCount(apiData.filter(p => p.status !== "draft").length + 4);
     await expect(p.locator("main").getByRole("alert")).toHaveCount(0); await c.close();
+  });
+  await check("四张生成封面在手机、平板与宽屏均不遮挡标题", async () => {
+    await page.goto(origin + "/library?view=lines");
+    for (const width of [390, 768, 1440, 1920]) {
+      await page.setViewportSize({ width, height: 1050 });
+      await verifyCoverLayout();
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    }
+    await page.screenshot({ path: path.join(dir, "project-lines-wide.png"), fullPage: true });
   });
   expect(errors).toEqual([]);
 } catch (error) {

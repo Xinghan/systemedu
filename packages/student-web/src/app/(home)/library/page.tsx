@@ -115,7 +115,7 @@ function LibraryBrowser() {
           <div className={styles.heroActions}><Link href={SPACE_LINE.firstProjectHref} className={styles.primaryAction}><Clock3 size={16} />{c.start}<ArrowUpRight size={17} /></Link><Link href={showLines ? "#space-journey" : SPACE_LINE.href} className={styles.secondaryAction}>{showLines ? c.viewJourney : c.viewLine}<ArrowRight size={15} /></Link></div>
           <p className={styles.startHint}><Check size={12} />{c.instant}<span />{c.browser}</p>
         </div>
-        <Link href={SPACE_LINE.firstProjectHref} className={styles.firstStop} aria-label={`${c.firstStop} · ${c.firstWork}`}><div className={styles.miniPhoto} aria-hidden="true"><span /><i /><Camera size={12} /></div><div><small>{c.firstStop} / 3 MIN</small><strong>{c.firstWork}</strong><span>{c.firstWorkHint}</span></div><ArrowUpRight size={17} /></Link>
+        <Link href={SPACE_LINE.firstProjectHref} className={styles.firstStop} aria-label={`${c.firstStop} · ${c.firstWork}`}><div className={styles.miniPhoto} aria-hidden="true"><Image src="/project-lines/space-exploration/spot-a-world/cover-ai.png" alt="" fill sizes="67px" style={{ objectFit: "cover" }} /></div><div><small>{c.firstStop} / 3 MIN</small><strong>{c.firstWork}</strong><span>{c.firstWorkHint}</span></div><ArrowUpRight size={17} /></Link>
       </section>
       {showLines ? <ProjectLineView locale={locale} /> : <>
       <ol className={styles.routeStrip} aria-label={c.viewLine}>

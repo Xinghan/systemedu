@@ -7,7 +7,7 @@ import styles from "./project-line-view.module.css"
 const COPY = {
   zh: {
     first: "第一站 / 先动手试试", title: "一个小项目，一件自己的作品。", available: "3 个独立入口已开放体验",
-    domain: "天文 · 空间观察", minutes: "约 3 分钟", preview: "月球已入镜 · 等你按下快门",
+    domain: "天文 · 空间观察", minutes: "约 3 分钟",
     photoTitle: "我的第一张星球照片", photoBody: "移动镜头，拉近一个世界。带走你亲手取景的照片和观测记录。", start: "打开观测台",
     planned: "筹备中", plannedWork: "计划带走：", independent: "独立入口 · 约 3 分钟的设计目标",
     next: [
@@ -25,7 +25,7 @@ const COPY = {
   },
   en: {
     first: "FIRST STOP / TRY SOMETHING", title: "A small project. Something of your own.", available: "All 3 starting points are ready",
-    domain: "Astronomy · Observation", minutes: "About 3 min", preview: "The Moon is in frame. Your turn to take the photo.",
+    domain: "Astronomy · Observation", minutes: "About 3 min",
     photoTitle: "My first photo of a world", photoBody: "Move the telescope and bring a world closer. Take home your own photo and observation record.", start: "Open the observatory",
     planned: "In preparation", plannedWork: "Planned creation: ", independent: "An independent entry · 3-minute design target",
     next: [
@@ -57,13 +57,16 @@ export function ProjectLineView({ locale }: { locale: Locale }) {
         <div className={styles.projectGrid}>
           <Link className={styles.featured} href={SPACE_LINE.firstProjectHref}>
             <div className={styles.cardTop}><span>01 / {c.domain}</span><span>{c.minutes}</span></div>
-            <div className={styles.preview} aria-hidden="true"><span className={styles.previewMoon} /><span className={styles.previewFrame} /><span className={styles.previewCaption}>{c.preview}</span></div>
+            <div className={styles.preview}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={MICRO_PROJECTS[0].coverImage} alt="" className={styles.sceneCover} />
+            </div>
             <div className={styles.cardCopy}><h3>{c.photoTitle}</h3><p>{c.photoBody}</p><span className={styles.start}>{c.start}<ArrowUpRight size={19} aria-hidden="true" /></span></div>
           </Link>
           {MICRO_PROJECTS.slice(1).map((entry, i) => <Link className={styles.featured} href={entry.href} key={entry.id}>
             <div className={styles.cardTop}><span>0{i + 2} / {c.next[i].domain}</span><span>{c.minutes}</span></div>
             <div className={styles.preview}>
-              {/* 封面取自互动实际运行场景。 */}
+              {/* 生成插画用于项目封面，体验内的照片仍来自实际取景。 */}
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={entry.coverImage} alt="" className={styles.sceneCover} />
             </div>
@@ -75,9 +78,11 @@ export function ProjectLineView({ locale }: { locale: Locale }) {
         <p className={styles.eyebrow}>{locale === "zh" ? "下一站 / 从操作到制作" : "NEXT STOP / MAKE IT YOUR OWN"}</p>
         <h2 id="guided-title">{locale === "zh" ? "让探测车，按你的规则行动。" : "Let the rover follow your rules."}</h2>
         {GUIDED_PROJECTS.map(entry => <Link key={entry.id} href={entry.href} className={styles.guidedCard}>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={entry.coverImage} alt="" />
-          <div><small>{locale === "zh" ? "引导小项目 / 约 15 分钟" : "GUIDED PROJECT / ABOUT 15 MIN"}</small><h3>{localized(entry.title, locale)}</h3><p>{localized(entry.action, locale)}</p><strong>{localized(entry.startLabel, locale)}<ArrowUpRight size={16} /></strong></div>
+          <div className={styles.guidedPreview}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={entry.coverImage} alt="" />
+          </div>
+          <div className={styles.guidedCopy}><small>{locale === "zh" ? "引导小项目 / 约 15 分钟" : "GUIDED PROJECT / ABOUT 15 MIN"}</small><h3>{localized(entry.title, locale)}</h3><p>{localized(entry.action, locale)}</p><strong>{localized(entry.startLabel, locale)}<ArrowUpRight size={16} /></strong></div>
         </Link>)}
         <p className={styles.note}>{locale === "zh" ? "其他引导作品筹备中：" : "More guided creations in preparation: "}{PLANNED_PROJECTS.guided[locale].join(" / ")}</p>
       </section>

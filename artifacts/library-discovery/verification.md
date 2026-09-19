@@ -4,7 +4,7 @@
 
 ## 已验证
 
-运行 `node scripts/verify-library-discovery.mjs`：10 组检查通过，浏览器运行错误列表为空。原始数据见 [verification.json](verification.json)。
+运行 `node scripts/verify-library-discovery.mjs`：11 组检查通过，浏览器运行错误列表为空。原始数据见 [verification.json](verification.json)。
 
 1. 读取真实课程列表，默认显示可开始内容；太空探索为首屏主题入口。
 2. 项目库可以直接打开三分钟观测台和主题项目线。
@@ -16,6 +16,9 @@
 8. 模拟内容 API 503 时短体验仍可用，重试能恢复课程。
 9. 顶栏只保留项目库；页内两种视图可切换，保留查询与难度筛选；键盘、浏览器前后退、刷新、未知视图参数均正常。旧项目线路由与游戏返回都进入 `/library?view=lines`。
 10. 项目线内容支持中英文与 390 像素窄屏；主项目卡片标题对比度达到 4.5:1。
+11. 四张生成封面成功加载；在 390、768、1440、1920 像素视口下，图片与标题的实际边界不相交，视口内标题中心未被图片遮挡。图片和文字占据独立区域，保留标题自适应高度；宽屏记录见 project-lines-wide.png。
+
+2026-09-19 封面修正：原图片在固定高度的 grid 预览中溢出，遮住标题。改用独立定高、禁止收缩且裁切溢出的图片容器，图片绝对定位于容器内部；规则卡片也使用独立图片列/行。四个短项目封面由内置 imagegen 生成，替代截图和 CSS 月球；提示词与资源路径见 packages/student-web/public/project-lines/space-exploration/cover-art.json。插画用于展示，游戏中的实际取景与成果记录保持原有逻辑。
 
 页面截图：`library-desktop.png`、`library-english.png`、`library-mobile.png`、`library-mobile-first-screen.png`、`guided-planning.png`、`project-lines-desktop.png`、`project-lines-mobile.png`、`project-lines-english.png`。这些截图是开发验证产物，不代表儿童试用证据。
 

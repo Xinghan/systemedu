@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { useState } from "react"
-import { ArrowRight, ArrowUpRight, BookOpen, Camera, Clock3, Layers3, Orbit, Telescope } from "lucide-react"
+import { ArrowRight, ArrowUpRight, BookOpen, Clock3, Layers3, Orbit, Telescope } from "lucide-react"
 import { library } from "@/lib/api"
 import { useT, useLocale } from "@/lib/i18n/use-t"
 import { displayOutcome, type DiscoveryEntry } from "@/lib/library-discovery"
@@ -33,11 +33,10 @@ export function DiscoveryProjectCard({ entry, pulled }: { entry: DiscoveryEntry;
     <article className={`${styles.projectCard} ${isMicro ? styles.microCard : ""} ${!entry.available ? styles.draftCard : ""}`} data-project-card={entry.id} data-kind={entry.kind} data-difficulty={entry.difficulty ?? (isMicro ? "light" : "unspecified")} data-available={entry.available}>
       <div className={`${styles.cardVisual} ${isMicro ? styles.microVisual : ""}`}>
         {micro?.coverImage ? (
-          // 封面来自对应互动的实际运行画面。
+          // 项目使用独立生成的插画封面。
           // eslint-disable-next-line @next/next/no-img-element
           <img src={micro.coverImage} alt="" className={styles.coverPhoto} />
-        ) : isMicro ? <div className={styles.photoScene} aria-hidden="true"><span className={styles.photoMoon} /><span className={styles.photoFrame} /><span className={styles.photoCoords}>MOON / 01</span><Camera size={18} strokeWidth={1.2} /></div>
-          : project?.cover_image_path && !coverFailed ? (
+        ) : project?.cover_image_path && !coverFailed ? (
             // 封面由现有内容服务提供，失败时回落到领域图形。
             // eslint-disable-next-line @next/next/no-img-element
             <img src={library.coverUrl(entry.id)} alt="" onError={() => setCoverFailed(true)} className={styles.coverPhoto} />
