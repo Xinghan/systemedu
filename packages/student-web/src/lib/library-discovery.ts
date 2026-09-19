@@ -74,7 +74,7 @@ export function makeDiscoveryEntries(projects: LibraryProjectSummary[], locale: 
   const local: DiscoveryEntry[] = LOCAL_PROJECTS.map((project, priority) => ({
     id: project.id, kind: project.kind, title: localized(project.title, locale), domain: project.domains[0], difficulty: null,
     available: true, publishedAt: 0, local: project, priority, lineId: project.lineId, source: "local", coverImage: project.coverImage,
-    searchText: [project.title.zh, project.title.en, project.action.zh, project.action.en, project.outcome.zh, project.outcome.en, "太空探索 space exploration", project.id === "spot-a-world" ? "astronomy 天文 月球 火星" : ""].join(" ").toLowerCase(),
+    searchText: [project.title.zh, project.title.en, project.action.zh, project.action.en, project.outcome.zh, project.outcome.en, ...PROJECT_LINES.filter(line => line.id === project.lineId).flatMap(line => [line.title.zh, line.title.en, ...line.aliases]), project.id === "spot-a-world" ? "astronomy 天文 月球 火星" : ""].join(" ").toLowerCase(),
   }))
   const full: DiscoveryEntry[] = [...merged.values()].map((project) => ({
     id: project.slug, kind: "full", title: locale === "zh" ? project.title_zh || project.title : project.title || project.title_zh || project.slug,
@@ -83,7 +83,7 @@ export function makeDiscoveryEntries(projects: LibraryProjectSummary[], locale: 
     available: project.status !== "draft", publishedAt: Date.parse(project.published_at || "") || 0, project,
     lineId: lineForCourse(project.slug)?.id, source: serviceSlugs.has(project.slug) ? "service" : "snapshot",
     coverImage: serviceSlugs.has(project.slug) ? undefined : lineForCourse(project.slug)?.image,
-    searchText: [project.title, project.title_zh, project.slug, project.domain, project.description, ...(project.tags || []), ...outcomeTitles(project), ...PROJECT_LINES.filter(line => line.courseSlugs.includes(project.slug)).flatMap(line => [line.title.zh, line.title.en])].filter(Boolean).join(" ").toLowerCase(),
+    searchText: [project.title, project.title_zh, project.slug, project.domain, project.description, ...(project.tags || []), ...outcomeTitles(project), ...PROJECT_LINES.filter(line => line.courseSlugs.includes(project.slug)).flatMap(line => [line.title.zh, line.title.en, ...line.aliases])].filter(Boolean).join(" ").toLowerCase(),
   }))
   return [...local, ...full]
 }

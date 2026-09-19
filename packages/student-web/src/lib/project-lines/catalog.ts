@@ -13,7 +13,7 @@ export const SPACE_LINE = {
   href: "/library?view=lines&line=space-exploration",
   flagshipSlug: "mars-analog-rover",
   firstProjectHref: "/explore/space-exploration/spot-a-world",
-  title: { zh: "太空探索", en: "Space exploration" },
+  title: { zh: "星际远征队", en: "Starbound Crew" },
 } as const
 
 export type LocalProject = {

@@ -395,7 +395,7 @@ $("#download-photo").addEventListener("click", async () => {
   const ctx = output.getContext("2d"); ctx.fillStyle = "#f2eddf"; ctx.fillRect(0, 0, 840, 940); ctx.drawImage(img, 40, 40, 760, 760);
   ctx.fillStyle = "#243443"; ctx.font = "26px sans-serif"; ctx.fillText(`我的第一张星球照片 · ${WORLDS[photo.target].name}`, 40, 846);
   ctx.fillStyle = "#5b686f"; ctx.font = "17px sans-serif"; ctx.fillText(`模拟观测 / ${photo.view.zoom.toFixed(1)}× / ${photo.note || "我的取景"}`, 40, 881);
-  ctx.font = "13px sans-serif"; ctx.fillText("SystemEdu · 太空探索 · 教学场景，非天文实拍", 40, 916);
+  ctx.font = "13px sans-serif"; ctx.fillText("SystemEdu · 星际远征队 · 教学场景，非天文实拍", 40, 916);
   output.toBlob(blob => { if (blob) download(blob, `我的星球照片-${WORLDS[photo.target].name}-${photo.id.slice(0, 8)}.png`); }, "image/png");
 });
 

@@ -155,10 +155,10 @@ try {
   await check("英文主题、难度分层和手机导航可用", async () => {
     await page.setViewportSize({ width: 1440, height: 1050 }); await page.goto(origin + "/library?view=lines");
     await page.getByRole("button", { name: "EN", exact: true }).click();
-    await expect(page.getByRole("heading", { name: "Biomedical discovery", exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Life Code Lab", exact: true })).toBeVisible();
     await imagesAndTitles(); await snapshot("lines-english");
     await page.locator('[data-line-card="neuro-bionics"]').click();
-    await expect(page.getByRole("heading", { name: "Neural interfaces & bionics", exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Bionic Inventors", exact: true })).toBeVisible();
     await page.setViewportSize({ width: 390, height: 844 }); expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     await page.getByRole("navigation", { name: "Library view" }).getByRole("link", { name: "All projects", exact: true }).click();
     await ordered(); await expect(page.getByRole("heading", { name: "An easy start", exact: true })).toBeVisible();
