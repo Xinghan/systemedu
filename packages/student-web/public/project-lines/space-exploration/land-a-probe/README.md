@@ -14,14 +14,14 @@
 
 ## 运行与保存
 
-入口：/explore/space-exploration/land-a-probe；静态包：/project-lines/space-exploration/land-a-probe/index.html。项目线位于 /library?view=lines。
+入口：/explore/space-exploration/land-a-probe；静态包：/project-lines/space-exploration/land-a-probe/index.html。项目线位于 /library?view=lines&line=space-exploration。
 
-通过 HTTP 提供本目录及相邻 _shared/、spot-a-world/vendor/，不能只复制 index.html 后双击打开。3D 复用本地 Three.js 0.184.0（MIT，许可证在 vendor/LICENSE），没有运行时外部素材请求。程序建模的几何和 Canvas 绘制由本项目生成。规则项目使用 Canvas 路线图；其他项目没有 WebGL 或发生上下文丢失时改用同一状态的 Canvas 示意。
+通过 HTTP 提供本目录及相邻 _shared/、spot-a-world/vendor/，不能只复制 index.html 后双击打开。3D 复用本地 Three.js 0.184.0（MIT，许可证在 vendor/LICENSE），没有运行时外部素材请求。设备模型、材质、纹理及 SVG 由本项目制作。高细节 3D 提供跟随、全景、近看和环视；数据仪表使用 SVG。没有 WebGL 或发生上下文丢失时，使用精细 SVG 设备绘入 Canvas，保留同一操作状态。视觉方向、结构、性能分档和素材来源见 visual-brief.md。
 
-成果格式版本 land-a-probe/1，origin: simulated，场景版本 mars-training/1。本机键 systemedu:land-a-probe:v1，保存最近 6 份作品；无跨账号/浏览器同步。损坏数据不覆盖、配额失败明确提示下载，不能宣称已保存。所有提示由本地规则生成，没有在线 Agent。
+成果格式版本 land-a-probe/1，origin: simulated，逻辑场景版本 mars-training/1，新增视觉版本 visual_version: mars-expedition/2，旧作品继续兼容。本机键 systemedu:land-a-probe:v1，保存最近 6 份作品；无跨账号/浏览器同步。损坏数据不覆盖、配额失败明确提示下载，不能宣称已保存。所有提示由本地规则生成，没有在线 Agent。
 
 ## 验证与真实试用
 
-模型检查：node --test scripts/tests/space-project-models.test.mjs；浏览器检查：node scripts/verify-space-projects.mjs（systemedu 仓库，学生端需启动）。截图及样例作品来自自动操作，不是儿童成果或用时数据。完整证据见内容仓库项目线的 verification/space-batch/。
+模型检查：node --test scripts/tests/space-project-models.test.mjs；浏览器检查：node scripts/verify-space-projects.mjs（systemedu 仓库，学生端需启动）。截图及样例作品来自自动操作，不是儿童成果或用时数据。最新运行与视觉证据见内容仓库项目线的 verification/visual-quality/；视觉验证命令为 node scripts/verify-space-visual-quality.mjs。早期记录仍保留于 verification/space-batch/。
 
 儿童试用观察：能否找到第一个动作、首次卡在哪里、是否需要成人接管、能否说出自己改变了什么、是否能重新打开作品。真实平板与 Safari 尚待验证。

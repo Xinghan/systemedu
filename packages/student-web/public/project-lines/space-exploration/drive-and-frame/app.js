@@ -1,6 +1,6 @@
 import { GRID, TARGETS, moveRover, photoReady, isBlocked } from "../_shared/models.mjs";
 import { $, $$, node, createArchive, baseRecord, recordBaseValid, validImage, imageDownload, jsonDownload, setupHelp } from "../_shared/storage.js";
-import { createMarsScene } from "../_shared/mars-scene.js";
+import { createMarsScene, VISUAL_VERSION } from "../_shared/mars-scene.js";
 const project = "drive-and-frame";
 const validPose = p => p && Number.isInteger(p.x) && Number.isInteger(p.z) && !isBlocked(p.x, p.z) && Number.isFinite(p.yaw);
 const archive = createArchive(project, r => recordBaseValid(r, project, "first-drive") && validImage(r.image) && TARGETS[r.target]
@@ -29,7 +29,7 @@ $$("[data-target]").forEach(b => { b.onclick = () => {
 }; });
 for (const [id, sign] of [["look-left", -1], ["look-right", 1]]) $("#" + id).onclick = () => {
   replaying = false; pose.yaw += sign * Math.PI / 4; act("camera-turn", { yaw: pose.yaw });
-  $("#guide").textContent = photoReady(pose, target, moves) ? "目标已进入镜头，可以拍照了。" : "看右下角取景窗，试着让目标出现在画面中央。"; render();
+  $("#guide").textContent = photoReady(pose, target, moves) ? "目标已进入镜头，可以拍照了。" : "看取景窗，试着让目标出现在画面中央。"; render();
 };
 document.addEventListener("keydown", event => {
   if (["INPUT", "SELECT", "TEXTAREA"].includes(document.activeElement?.tagName)) return;
@@ -49,18 +49,18 @@ function show(record) {
 function list() {
   $("#records").replaceChildren(); archive.records.forEach((r, i) => {
     const b = node("button", TARGETS[r.target].label, "record"); b.append(node("small", r.path.length + " 个路线位置")); b.dataset.record = String(i);
-    b.onclick = () => { show(r); replaying = true; scene.render({ ...r.pose, target: r.target, path: r.path }); $("#capture").disabled = true; }; $("#records").append(b);
+    b.onclick = () => { show(r); replaying = true; scene.render({ ...r.pose, target: r.target, path: r.path, instant: true }); $("#capture").disabled = true; }; $("#records").append(b);
   });
 }
 $("#capture").onclick = () => {
   if (replaying || !photoReady(pose, target, moves)) return;
   render(); act("capture");
-  const r = { ...baseRecord(project, "first-drive"), target, pose: { ...pose }, path: path.map(p => ({ ...p })), image: scene.snapshot(), actions: [...actions], elapsed_ms: Date.now() - startTime, renderer: $("#scene").dataset.renderer };
+  const r = { ...baseRecord(project, "first-drive"), target, pose: { ...pose }, path: path.map(p => ({ ...p })), image: scene.snapshot(), actions: [...actions], elapsed_ms: Date.now() - startTime, renderer: $("#scene").dataset.renderer, visual_version: VISUAL_VERSION };
   archive.save(r); show(r); list(); $("#guide").textContent = "这张照片和路线是你决定的。可以下载，也可以换个观察点再试。";
 };
 $("#replay").oninput = () => {
   if (!active) return; replaying = true; const index = Number($("#replay").value), p = active.path[index];
-  scene.render({ ...p, target: active.target, path: active.path.slice(0, index + 1) }); $("#capture").disabled = true;
+  scene.render({ ...p, target: active.target, path: active.path.slice(0, index + 1), instant: true }); $("#capture").disabled = true;
   $("#replay-label").textContent = "回看位置 " + (index + 1) + " / " + active.path.length + "。下一次驾驶从当前任务的位置继续。";
 };
 $("#download-photo").onclick = () => { if (active) imageDownload(active.image, "my-rover-photo.jpg"); };

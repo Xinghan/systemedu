@@ -1,6 +1,6 @@
 import { LANDER, newLander, stepLander } from "../_shared/models.mjs";
 import { $, node, createArchive, baseRecord, recordBaseValid, jsonDownload, setupHelp } from "../_shared/storage.js";
-import { createMarsScene } from "../_shared/mars-scene.js";
+import { createMarsScene, VISUAL_VERSION } from "../_shared/mars-scene.js";
 
 const project = "land-a-probe";
 const valid = r => recordBaseValid(r, project, "landing-replay") && Array.isArray(r.frames) && r.frames.length > 1 && r.frames.length <= 1100
@@ -10,7 +10,7 @@ const archive = createArchive(project, valid), scene = await createMarsScene("la
 let state = newLander(), running = false, braking = false, frames = [], actions = [], activeRecord = null, startTime = 0, previous = 0, accumulator = 0, lastSample = 0;
 const statusText = { landed: "柔和着陆", hard: "落地有点快", outside: "离开练习范围", aborted: "中途重新开始" };
 function display(s, replay = false) {
-  scene.render(s); $("#height").textContent = Math.max(0, s.height).toFixed(1); $("#speed").textContent = Math.abs(s.velocity).toFixed(1);
+  scene.render({ ...s, active: running && !replay, instant: replay }); $("#height").textContent = Math.max(0, s.height).toFixed(1); $("#speed").textContent = Math.abs(s.velocity).toFixed(1);
   $("#speed-label").textContent = s.velocity > 0 ? "上升速度" : "下降速度"; $("#fuel").textContent = String(Math.round(s.fuel / LANDER.fuelSeconds * 100));
   $("#scene").dataset.status = replay ? "replay" : s.status;
 }
@@ -22,13 +22,9 @@ function listRecords() {
     b.append(node("small", r.result.impact == null ? "未触地" : r.result.impact.toFixed(1) + " m/s"));
     b.onclick = () => showRecord(r); b.dataset.record = String(i); $("#records").append(b);
   });
-  const graph = $("#comparison"), c = graph.getContext("2d"); graph.width = 560; graph.height = 160;
-  c.clearRect(0, 0, 560, 160);
+  const graph = $("#comparison");
   const records = archive.records.slice(0, 2), maxT = Math.max(1, ...records.map(r => r.frames.at(-1).t)), maxH = Math.max(65, ...records.flatMap(r => r.frames.map(f => f.height)));
-  records.forEach((r, i) => {
-    c.strokeStyle = i ? "#8faabb" : "#e1b378"; c.lineWidth = 3; c.beginPath();
-    r.frames.forEach((f, j) => { const x = 10 + f.t / maxT * 540, y = 145 - f.height / maxH * 130; if (j) c.lineTo(x, y); else c.moveTo(x, y); }); c.stroke();
-  });
+  graph.innerHTML = '<path d="M35 12V137H542M35 75H542M35 25H542" fill="none" stroke="#58716b" stroke-width="1" stroke-opacity=".5"/><g fill="#a6c0b4" font-size="13" font-family="monospace"><text x="5" y="21">m</text><text x="15" y="140">0</text><text x="508" y="156">'+ maxT.toFixed(1) +'s</text></g>' + records.map((r,i) => '<path d="' + r.frames.map((f,j) => (j ? 'L' : 'M') + (35+f.t/maxT*502).toFixed(2) + ',' + (136-f.height/maxH*119).toFixed(2)).join(' ') + '" fill="none" stroke="' + (i ? '#8fbbad' : '#e1bd85') + '" stroke-width="2.5" stroke-linejoin="round"/>').join('');
   if (records.length) $("#comparison-note").textContent = "横轴：模拟时间；纵轴：高度。金色为最新尝试" + (records.length > 1 ? "，蓝色为上一次。" : "。");
 }
 function showRecord(r) {
@@ -41,7 +37,7 @@ function showRecord(r) {
 function finish(status = state.status) {
   running = false; state.status = status; sample();
   const r = { ...baseRecord(project, "landing-replay"), model: { ...LANDER }, elapsed_ms: Date.now() - startTime,
-    actions, frames, result: { status, impact: state.impact }, renderer: $("#scene").dataset.renderer };
+    actions, frames, result: { status, impact: state.impact }, renderer: $("#scene").dataset.renderer, visual_version: VISUAL_VERSION };
   archive.save(r); $("#start").disabled = false; $("#start").textContent = "再试一次"; $("#brake").disabled = true; braking = false;
   $("#brake").setAttribute("aria-pressed", "false"); $("#brake").textContent = "开启制动"; listRecords(); showRecord(r);
   $("#guide").textContent = status === "landed" ? "你让落地轻了下来！可以回看什么时候制动，再和上一次比一比。" : "这次尝试已经留下。回看轨迹，下次只改一个制动时机试试。";

@@ -1,7 +1,7 @@
 import { chromium, expect } from "@playwright/test";
 import fs from "node:fs/promises";
 import path from "node:path";
-const origin = "http://localhost:4000", dir = path.resolve("artifacts/project-line/space-batch");
+const origin = "http://localhost:4000", dir = path.resolve(process.env.SPACE_VERIFY_DIR || "artifacts/project-line/space-batch");
 await fs.mkdir(dir, { recursive: true });
 const browser = await chromium.launch({ args: ["--no-proxy-server"] });
 const results = [], errors = [];
@@ -35,15 +35,23 @@ try {
     await download(page, "下载着陆记录", "sample-landing.json");
     await page.reload(); await expect(page.locator("#records button")).toHaveCount(1);
   });
-  await check("着陆：亲手切换制动改变结果，成功与失败一起保留", async () => {
+  await check("着陆：切换真实制动按钮改变结果，成功与失败一起保留", async () => {
     await page.locator("#start").click();
-    const began = Date.now();
-    while (Date.now() - began < 45000 && !(await page.locator("#result").isVisible())) {
-      const s = await page.evaluate(() => ({ height: Number(document.querySelector("#height").textContent), velocity: Number(document.querySelector("#speed").textContent) * (document.querySelector("#speed-label").textContent === "上升速度" ? 1 : -1), braking: document.querySelector("#brake").getAttribute("aria-pressed") === "true" }));
-      const desired = s.velocity < -1.7 && (s.height < s.velocity ** 2 / 10.6 + 4 || s.height < 6);
-      if (desired !== s.braking && await page.locator("#brake").isEnabled()) await page.locator("#brake").click();
-      await page.waitForTimeout(90);
-    }
+    // 决策和点击在同一个页面时钟内执行，避免自动化协议的往返延迟使读数过期。
+    // 仍只读取可见仪表、点击同一按钮；不访问或改写私有模型状态。
+    const completed = await page.evaluate(() => new Promise(resolve => {
+      const began = performance.now();
+      const timer = setInterval(() => {
+        if (!document.querySelector("#result").hidden) { clearInterval(timer); resolve(true); return; }
+        if (performance.now() - began > 65000) { clearInterval(timer); resolve(false); return; }
+        const height = Number(document.querySelector("#height").textContent);
+        const velocity = Number(document.querySelector("#speed").textContent) * (document.querySelector("#speed-label").textContent === "上升速度" ? 1 : -1);
+        const brake = document.querySelector("#brake"), braking = brake.getAttribute("aria-pressed") === "true";
+        const desired = velocity < -1.7 && (height < velocity ** 2 / 10.6 + 4 || height < 6);
+        if (desired !== braking && !brake.disabled) brake.click();
+      }, 90);
+    }));
+    expect(completed).toBe(true);
     await expect(page.locator("#result-title")).toHaveText("柔和着陆");
     await expect(page.locator("#records button")).toHaveCount(2);
     await page.screenshot({ path: path.join(dir, "landing-desktop.png"), fullPage: true });
