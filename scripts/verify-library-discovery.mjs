@@ -2,225 +2,187 @@ import { chromium, expect } from "@playwright/test";
 import fs from "node:fs/promises";
 import path from "node:path";
 
-const origin = "http://localhost:4000";
-const dir = path.resolve("artifacts/library-discovery");
-await fs.mkdir(dir, { recursive: true });
+const origin = "http://localhost:4000", dir = path.resolve("artifacts/themed-library");
+const lines = JSON.parse(await fs.readFile("packages/student-web/src/lib/project-lines/lines.json", "utf8"));
+const snapshots = JSON.parse(await fs.readFile("packages/student-web/src/lib/project-lines/course-snapshots.json", "utf8"));
 const browser = await chromium.launch({ args: ["--no-proxy-server"] });
-const results = [], errors = [];
-let apiData = [];
+const context = await browser.newContext({ viewport: { width: 1440, height: 1050 } });
+const page = await context.newPage(), results = [], errors = [];
+page.on("pageerror", error => errors.push(String(error)));
+let api = [], count;
+const lineUrl = id => origin + "/library?view=lines&line=" + id;
+const cards = page.locator("[data-project-card]");
+await fs.mkdir(dir, { recursive: true });
 async function check(name, fn) {
-  try { await fn(); results.push({ name, passed: true }); console.log(`PASS ${name}`); }
+  try { await fn(); results.push({ name, passed: true }); console.log("PASS " + name); }
   catch (error) { results.push({ name, passed: false, error: String(error) }); throw error; }
 }
-const context = await browser.newContext({ viewport: { width: 1440, height: 1050 } });
-const page = await context.newPage();
-page.on("pageerror", error => errors.push(String(error)));
-const cards = page.locator("[data-project-card]");
-async function reset() { await page.getByRole("button", { name: "重置筛选", exact: true }).first().click(); }
-async function verifyCoverLayout() {
-  const covers = page.locator('img[src$="/cover-ai.png"]');
-  await expect(covers).toHaveCount(4);
-  for (const cover of await covers.all()) {
-    await expect(cover).toBeVisible();
-    const result = await cover.evaluate(async img => {
-      await img.decode();
-      const card = img.closest("article") || img.closest("a");
-      const title = card.querySelector("h3");
-      const a = img.getBoundingClientRect(), b = title.getBoundingClientRect();
-      return {
-        loaded: img.naturalWidth > 0,
-        separate: a.bottom <= b.top || a.right <= b.left || b.right <= a.left,
-        titleOnTop: title.contains(document.elementFromPoint(b.x + b.width / 2, b.y + b.height / 2)),
-        inViewport: b.top >= 0 && b.bottom < innerHeight,
-      };
-    });
-    expect(result.loaded).toBe(true);
-    expect(result.separate).toBe(true);
-    if (result.inViewport) expect(result.titleOnTop).toBe(true);
-  }
+async function snapshot(name, p = page) { await p.screenshot({ path: path.join(dir, name + ".png"), fullPage: true }); }
+async function ordered(p = page) {
+  await expect(p.locator("[data-difficulty-group]").first()).toBeAttached();
+  const ranks = await p.locator("[data-difficulty-group]").evaluateAll(nodes => nodes.map(n => Number(n.dataset.difficultyGroup)));
+  expect(ranks.length).toBeGreaterThan(0); expect(ranks).toEqual([...ranks].sort((a,b) => a-b));
+  const depths = await p.locator('[data-kind="full"][data-project-card]').evaluateAll(nodes => nodes.map(n => Number(n.dataset.difficulty)).filter(Number.isFinite));
+  expect(depths).toEqual([...depths].sort((a,b) => a-b));
 }
+async function imagesAndTitles(p = page) {
+  for (const card of await p.locator("[data-line-card], [data-project-card]").all()) {
+    const image = card.locator("img").first();
+    if (!(await image.count())) continue;
+    await image.scrollIntoViewIfNeeded();
+    await expect.poll(() => image.evaluate(img => img.complete && img.naturalWidth > 0)).toBe(true);
+    const a = await image.boundingBox(), b = await card.locator("h3").boundingBox();
+    expect(a.bottom ?? a.y + a.height).toBeLessThanOrEqual(b.y + 1);
+  }
+  await p.evaluate(() => scrollTo({ top: 0, behavior: "instant" }));
+}
+async function reset() { await page.getByRole("button", { name: "重置筛选", exact: true }).first().click(); }
 
 try {
-  await check("真实课程数据、醒目主题入口和默认可开始项目", async () => {
+  await check("项目线首页只展示五个主题入口", async () => {
     const response = page.waitForResponse(r => r.url().endsWith("/api/library/projects") && r.request().method() === "GET");
-    await page.goto(origin + "/library"); apiData = await (await response).json();
-    expect(Array.isArray(apiData)).toBe(true);
-    await expect(cards).toHaveCount(apiData.filter(p => p.status !== "draft").length + 4);
-    await expect(page.getByRole("heading", { name: "太空探索", exact: true })).toBeVisible();
-    const heroStart = page.getByRole("link", { name: "从 3 分钟开始", exact: true }).first();
-    const box = await heroStart.boundingBox(); expect(box.y + box.height).toBeLessThan(1050);
-    await expect(cards.first()).toHaveAttribute("data-project-card", "spot-a-world");
-    await verifyCoverLayout();
+    await page.goto(origin + "/library?view=lines"); api = await (await response).json();
+    count = new Set([...api, ...snapshots].map(p => p.slug)).size + 4;
+    await expect(page.locator("[data-line-card]")).toHaveCount(5);
+    await expect(cards).toHaveCount(0); await expect(page.locator("[data-planned-project]")).toHaveCount(0);
     await expect(page.locator(".nav-tabs").getByRole("link", { name: "项目线", exact: true })).toHaveCount(0);
-    await expect(page.getByRole("navigation", { name: "项目库视图" }).getByRole("link", { name: "全部项目", exact: true })).toHaveAttribute("aria-current", "page");
-    await page.screenshot({ path: path.join(dir, "library-desktop.png"), fullPage: true });
+    for (const line of lines) await expect(page.locator('[data-line-card="' + line.id + '"]')).toContainText(line.title.zh);
+    await imagesAndTitles(); await snapshot("lines-desktop");
   });
-  await check("从项目库直接进入三分钟体验及项目线", async () => {
-    await page.getByRole("link", { name: "从 3 分钟开始", exact: true }).first().click();
-    await expect(page).toHaveURL(/\/explore\/space-exploration\/spot-a-world$/);
-    await expect(page.frameLocator("iframe").locator("#loading")).toBeHidden();
-    await page.goto(origin + "/library");
-    await page.getByRole("link", { name: "查看项目线", exact: true }).click();
-    await expect(page).toHaveURL(/\/library\?view=lines$/);
-    await expect(page.getByRole("heading", { name: "一个小项目，一件自己的作品。" })).toBeVisible();
-    await page.goto(origin + "/library");
-    await expect(cards).toHaveCount(apiData.filter(p => p.status !== "draft").length + 4);
+  await check("五个主题都能进入独立路线，八门已有课程都有归属", async () => {
+    const slugs = lines.flatMap(line => line.courseSlugs);
+    expect(new Set(slugs).size).toBe(8);
+    for (const line of lines) {
+      await page.locator('[data-line-card="' + line.id + '"]').click();
+      await expect(page).toHaveURL(lineUrl(line.id));
+      await expect(page.locator("[data-line-detail]")).toHaveAttribute("data-line-detail", line.id);
+      await expect(page.locator("[data-line-stage]")).toHaveCount(4);
+      for (const slug of line.courseSlugs) await expect(page.locator('[data-project-card="' + slug + '"]')).toBeVisible();
+      await expect(page.locator("[data-planned-project] a")).toHaveCount(0);
+      await imagesAndTitles(); await snapshot("detail-" + line.id);
+      await page.getByRole("link", { name: "所有项目线", exact: true }).click();
+      await expect(page.locator("[data-line-card]")).toHaveCount(5);
+    }
   });
-  await check("页内视图、筛选保留、历史记录与兼容跳转", async () => {
-    const views = page.getByRole("navigation", { name: "项目库视图" });
-    await page.getByRole("searchbox").fill("太空");
-    await page.getByRole("combobox", { name: "挑战程度", exact: true }).selectOption("4-5");
-    await expect(cards).toHaveCount(1);
-    await views.getByRole("link", { name: "项目线", exact: true }).click();
-    await expect(page).toHaveURL(/\/library\?view=lines$/);
-    await expect(views.getByRole("link", { name: "项目线", exact: true })).toHaveAttribute("aria-current", "page");
-    await expect(page.locator(".nav-tabs a.active")).toHaveText("项目库");
-    await expect(page.getByRole("searchbox")).toHaveCount(0);
-    await expect(page.getByRole("heading", { name: "小发现，慢慢拼成大远征。" })).toBeVisible();
-    const titleContrast = await page.getByRole("heading", { name: "我的第一张星球照片", exact: true }).evaluate(title => {
-      const lightness = color => {
-        const values = color.match(/[\d.]+/g).slice(0, 3).map(value => {
-          const channel = Number(value) / 255;
-          return channel <= .04045 ? channel / 12.92 : ((channel + .055) / 1.055) ** 2.4;
-        });
-        return values[0] * .2126 + values[1] * .7152 + values[2] * .0722;
-      };
-      const text = lightness(getComputedStyle(title).color), background = lightness(getComputedStyle(title.closest("a")).backgroundColor);
-      return (Math.max(text, background) + .05) / (Math.min(text, background) + .05);
-    });
-    expect(titleContrast).toBeGreaterThanOrEqual(4.5);
-    await verifyCoverLayout();
-    await page.screenshot({ path: path.join(dir, "project-lines-desktop.png"), fullPage: true });
-    await views.getByRole("link", { name: "全部项目", exact: true }).focus();
-    await page.keyboard.press("Enter");
-    await expect(page.getByRole("searchbox")).toHaveValue("太空");
-    await expect(page.getByRole("combobox", { name: "挑战程度", exact: true })).toHaveValue("4-5");
-    await expect(cards).toHaveCount(1);
-    await page.goBack();
-    await expect(page.getByRole("heading", { name: "一个小项目，一件自己的作品。" })).toBeVisible();
-    await page.goForward();
-    await expect(page.getByRole("searchbox")).toHaveValue("太空");
-    await expect(cards).toHaveCount(1);
-    await page.goto(origin + "/library?view=lines");
-    await page.reload();
-    await expect(views.getByRole("link", { name: "项目线", exact: true })).toHaveAttribute("aria-current", "page");
-    await page.goto(origin + "/project-lines");
-    await expect(page).toHaveURL(/\/library\?view=lines$/);
-    await page.getByRole("link", { name: "从 3 分钟开始", exact: true }).first().click();
-    await page.frameLocator("iframe").getByRole("link", { name: "返回项目线", exact: true }).click();
-    await expect(page).toHaveURL(/\/library\?view=lines$/);
-    await page.goto(origin + "/library?view=unknown");
-    await expect(views.getByRole("link", { name: "全部项目", exact: true })).toHaveAttribute("aria-current", "page");
-    await expect(cards).toHaveCount(apiData.filter(p => p.status !== "draft").length + 4);
+  await check("四个已有互动可打开，返回准确的太空探索详情", async () => {
+    for (const slug of ["spot-a-world", "land-a-probe", "drive-and-frame", "write-driving-rules"]) {
+      await page.goto(lineUrl("space-exploration"));
+      await page.locator('[data-project-card="' + slug + '"]').getByRole("link", { name: "开始体验", exact: true }).click();
+      await expect(page).toHaveURL(origin + "/explore/space-exploration/" + slug);
+      const frame = page.frameLocator("iframe");
+      if (slug === "spot-a-world") await expect(frame.locator("#loading")).toBeHidden();
+      else await expect(frame.locator("#render-mode")).not.toContainText("正在准备");
+      await frame.locator("header a").first().click();
+      await expect(page).toHaveURL(lineUrl("space-exploration"));
+    }
   });
-  await check("项目类型、真实筹备状态及恢复筛选", async () => {
-    await page.locator('[data-kind-filter="micro"]').click(); await expect(cards).toHaveCount(3);
-    await expect(cards.first()).toContainText("轻量操作");
-    await page.locator('[data-kind-filter="guided"]').click(); await expect(cards).toHaveCount(1);
-    await expect(page.getByRole("heading", { name: "接下来，还有这些作品正在筹备" })).toBeVisible();
-    await expect(page.getByText(/给探测车制作地形样本/)).toBeVisible();
-    await page.screenshot({ path: path.join(dir, "guided-planning.png"), fullPage: true });
-    await page.locator('[data-kind-filter="integration"]').click();
-    await expect(page.getByText(/组装我的第一辆自主探测车/)).toBeVisible();
-    await reset();
-    await expect(cards).toHaveCount(apiData.filter(p => p.status !== "draft").length + 4);
+  await check("全部项目跨线去重并由易到难分层展示", async () => {
+    await page.goto(origin + "/library"); await expect(cards).toHaveCount(count);
+    await ordered(); await expect(cards.first()).toHaveAttribute("data-project-card", "spot-a-world");
+    await expect(page.locator('[data-difficulty-group="0"] [data-project-card]')).toHaveCount(3);
+    await expect(page.locator('[data-difficulty-group="1"] [data-project-card]')).toHaveCount(1);
+    for (const p of snapshots) await expect(page.locator('[data-project-card="' + p.slug + '"]')).toHaveCount(1);
+    await imagesAndTitles(); await snapshot("projects-desktop");
   });
-  await check("搜索、领域、难度、排序和空态", async () => {
-    await page.getByRole("searchbox").fill("太空"); await expect(cards).toHaveCount(5);
-    await page.getByRole("combobox", { name: "挑战程度", exact: true }).selectOption("4-5");
-    await expect(cards).toHaveCount(1); await expect(cards.first()).toHaveAttribute("data-project-card", "mars-analog-rover");
-    await page.getByRole("combobox", { name: "领域", exact: true }).selectOption("climate");
-    await expect(page.getByRole("heading", { name: "暂时没有符合条件的项目" })).toBeVisible();
-    await reset();
-    await page.locator('[data-kind-filter="full"]').click();
-    await page.getByRole("combobox", { name: "排序", exact: true }).selectOption("difficulty");
-    const depths = await cards.evaluateAll(nodes => nodes.map(n => Number(n.dataset.difficulty)).filter(Number.isFinite));
-    expect(depths).toEqual([...depths].sort((a, b) => a - b));
+  await check("最新排序仍保留难度层次", async () => {
     await page.getByRole("combobox", { name: "排序", exact: true }).selectOption("recent");
-    const expected = apiData.filter(p => p.status !== "draft").sort((a,b) => (Date.parse(b.published_at) || 0) - (Date.parse(a.published_at) || 0) || (a.title_zh || a.title).localeCompare(b.title_zh || b.title,"zh"));
-    expect(await cards.first().getAttribute("data-project-card")).toBe(expected[0].slug);
+    await ordered(); await expect(cards.first()).toHaveAttribute("data-kind", "micro");
+    await reset();
+    const p = await context.newPage();
+    const fixture = [
+      { slug: "test-easy", title: "Easy", difficulty: 2, status: "published", published_at: "2020-01-01" },
+      { slug: "test-easiest", title: "Easiest", difficulty: 1, status: "draft", published_at: "2019-01-01" },
+      { slug: "test-hard-old", title: "Hard old", difficulty: 5, status: "published", published_at: "2024-01-01" },
+      { slug: "test-hard-new", title: "Hard new", difficulty: 5, status: "published", published_at: "2026-01-01" },
+      { slug: "test-unrated", title: "Unrated", status: "published" },
+    ];
+    await p.route("**/api/library/projects", route => route.fulfill({ json: fixture })); await p.goto(origin + "/library");
+    await p.getByRole("combobox", { name: "排序", exact: true }).selectOption("recent"); await ordered(p);
+    const ids = await p.locator("[data-project-card]").evaluateAll(nodes => nodes.map(n => n.dataset.projectCard));
+    expect(ids.indexOf("test-easy")).toBeLessThan(ids.indexOf("test-hard-new"));
+    expect(ids.indexOf("test-hard-new")).toBeLessThan(ids.indexOf("test-hard-old"));
+    expect(ids.at(-1)).toBe("test-unrated"); await p.close();
+  });
+  await check("项目线、领域、挑战与搜索筛选可组合", async () => {
+    await page.getByRole("combobox", { name: "项目线筛选", exact: true }).selectOption("biomedicine");
+    await expect(cards).toHaveCount(1); await expect(cards.first()).toHaveAttribute("data-project-card", "molecule-monster-hunter");
+    await page.getByRole("combobox", { name: "挑战程度", exact: true }).selectOption("light"); await expect(cards).toHaveCount(0);
+    await reset(); await page.getByRole("searchbox").fill("太空"); await expect(cards).toHaveCount(5);
+    await page.getByRole("combobox", { name: "挑战程度", exact: true }).selectOption("4-5"); await expect(cards).toHaveCount(1);
+    await reset(); await page.getByRole("combobox", { name: "领域", exact: true }).selectOption("bioscience");
+    await expect(page.locator('[data-project-card="molecule-monster-hunter"]')).toBeVisible();
+    await reset(); await page.locator('[data-kind-filter="guided"]').click(); await expect(cards).toHaveCount(1);
+    await page.locator('[data-kind-filter="integration"]').click(); await expect(page.getByText("组装项目正在筹备中", { exact: true })).toBeVisible();
     await reset();
   });
-  await check("草稿不可启动、旧格式成果和生物领域别名", async () => {
-    await page.getByRole("checkbox", { name: "显示筹备中的课程" }).check();
-    await expect(cards).toHaveCount(apiData.length + 4);
-    for (const project of apiData.filter(p => p.status === "draft")) {
-      const card = page.locator(`[data-project-card="${project.slug}"]`);
-      await expect(card).toContainText("筹备中");
-      await expect(card.locator(`a[href="/library/${project.slug}"]`)).toHaveCount(0);
+  await check("草稿与未接入课程显示真实状态，不提供无效启动", async () => {
+    for (const card of await page.locator('[data-project-card][data-available="false"]').all()) {
+      const slug = await card.getAttribute("data-project-card");
+      await expect(card.locator('a[href="/library/' + slug + '"]')).toHaveCount(0);
+      await expect(card).toContainText(/筹备中|待接入/);
     }
-    await page.getByRole("combobox", { name: "领域", exact: true }).selectOption("bioscience");
-    await expect(page.locator('[data-project-card="alphafold-novel-mushroom"]')).toBeVisible();
-    await expect(page.locator('[data-project-card="alphafold-novel-mushroom"]')).not.toContainText("[object Object]");
+    await page.getByRole("checkbox", { name: "显示筹备中的课程" }).uncheck();
+    await expect(cards).toHaveCount(api.filter(p => p.status !== "draft").length + 4);
     await reset();
   });
-  await check("已有开篇故事与课程详情可达", async () => {
-    const storyProject = apiData.find(p => p.status !== "draft" && p.story?.length);
-    if (storyProject) {
-      await page.locator(`[data-project-card="${storyProject.slug}"] button`).first().click();
-      await expect(page.getByRole("dialog")).toBeVisible(); await page.keyboard.press("Escape");
-      await expect(page.getByRole("dialog")).toHaveCount(0);
-    }
-    await page.locator('[data-project-card="mars-analog-rover"]').getByRole("link", { name: "查看项目", exact: true }).click();
-    await expect(page).toHaveURL(/\/library\/mars-analog-rover$/);
-    await expect(page.getByRole("heading", { level: 1 })).toContainText("火星");
-    await page.goto(origin + "/library");
+  await check("视图切换保留筛选，主题详情支持历史、刷新与未知 ID", async () => {
+    await page.getByRole("searchbox").fill("太空");
+    const views = page.getByRole("navigation", { name: "项目库视图" });
+    await views.getByRole("link", { name: "项目线", exact: true }).click();
+    await expect(page.locator("[data-line-card]")).toHaveCount(5);
+    await page.locator('[data-line-card="biomedicine"]').click();
+    await expect(page).toHaveURL(lineUrl("biomedicine"));
+    await expect(page.locator("[data-line-detail]")).toHaveAttribute("data-line-detail", "biomedicine");
+    await page.goBack(); await expect(page.locator("[data-line-card]")).toHaveCount(5);
+    await page.goForward(); await expect(page.locator("[data-line-detail]")).toHaveAttribute("data-line-detail", "biomedicine");
+    await views.getByRole("link", { name: "全部项目", exact: true }).click(); await expect(page.getByRole("searchbox")).toHaveValue("太空");
+    await page.goto(lineUrl("biomedicine")); await page.reload(); await expect(page.locator("[data-line-detail]")).toHaveAttribute("data-line-detail", "biomedicine");
+    await page.goto(lineUrl("missing")); await expect(page.getByText("这条项目线暂未收录", { exact: true })).toBeVisible();
+    await page.getByRole("link", { name: "返回所有项目线", exact: true }).click();
+    await page.goto(origin + "/project-lines"); await expect(page).toHaveURL(origin + "/library?view=lines");
+    await page.goto(origin + "/library?view=unknown"); await expect(cards).toHaveCount(count);
   });
-  await check("中英文和手机布局，不产生横向溢出", async () => {
-    await page.getByRole("button", { name: "EN", exact: true }).click();
-    await expect(page.getByRole("heading", { name: "Project library", exact: true })).toBeVisible();
-    await page.screenshot({ path: path.join(dir, "library-english.png"), fullPage: true });
-    await page.setViewportSize({ width: 390, height: 844 });
-    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-    await page.locator('[data-kind-filter="micro"]').click(); await expect(cards).toHaveCount(3);
-    await page.getByRole("button", { name: "中", exact: true }).click();
-    await reset();
-    await page.evaluate(() => window.scrollTo({ top: 0, behavior: "instant" }));
-    const box = await page.getByRole("link", { name: "从 3 分钟开始", exact: true }).first().boundingBox();
-    expect(box.y).toBeGreaterThan(0);
-    expect(box.y + box.height).toBeLessThan(844);
-    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-    await page.screenshot({ path: path.join(dir, "library-mobile.png"), fullPage: true });
-    await page.screenshot({ path: path.join(dir, "library-mobile-first-screen.png") });
-  });
-  await check("项目线视图的手机布局与英文内容", async () => {
-    await page.getByRole("navigation", { name: "项目库视图" }).getByRole("link", { name: "项目线", exact: true }).click();
-    await expect(page.getByRole("heading", { name: "一个小项目，一件自己的作品。" })).toBeVisible();
-    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-    await page.screenshot({ path: path.join(dir, "project-lines-mobile.png"), fullPage: true });
-    await page.getByRole("button", { name: "EN", exact: true }).click();
-    await expect(page.getByRole("heading", { name: "Small discoveries. A bigger expedition." })).toBeVisible();
-    await expect(page.getByRole("navigation", { name: "Library view" }).getByRole("link", { name: "Project lines", exact: true })).toHaveAttribute("aria-current", "page");
-    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-    await page.setViewportSize({ width: 1440, height: 1050 });
-    await page.screenshot({ path: path.join(dir, "project-lines-english.png"), fullPage: true });
-    await page.getByRole("button", { name: "中", exact: true }).click();
-  });
-  await check("内容服务故障仍能体验、重试后恢复课程", async () => {
-    const c = await browser.newContext({ viewport: { width: 1440, height: 1050 } });
-    const p = await c.newPage(); let fail = true;
-    await p.route("**/api/library/projects", route => fail ? route.fulfill({ status: 503, contentType: "application/json", headers: { "access-control-allow-origin": "*" }, body: JSON.stringify({ error: "test unavailable" }) }) : route.continue());
-    await p.goto(origin + "/library"); await expect(p.locator("main").getByRole("alert")).toContainText("完整课程暂时没有载入");
-    await expect(p.locator('[data-project-card="spot-a-world"]')).toBeVisible();
-    fail = false; await p.getByRole("button", { name: "重新加载", exact: true }).click();
-    await expect(p.locator("[data-project-card]")).toHaveCount(apiData.filter(p => p.status !== "draft").length + 4);
-    await expect(p.locator("main").getByRole("alert")).toHaveCount(0); await c.close();
-  });
-  await check("四张生成封面在手机、平板与宽屏均不遮挡标题", async () => {
-    await page.goto(origin + "/library?view=lines");
+  await check("四种宽度下主题与项目封面无遮挡、页面无横向溢出", async () => {
     for (const width of [390, 768, 1440, 1920]) {
       await page.setViewportSize({ width, height: 1050 });
-      await verifyCoverLayout();
-      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+      for (const url of [origin + "/library?view=lines", lineUrl("space-exploration"), lineUrl("biomedicine"), origin + "/library"]) {
+        await page.goto(url); await imagesAndTitles();
+        expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+        if (width === 390) await snapshot(url.includes("line=space") ? "detail-space-mobile" : url.includes("line=biomed") ? "detail-biomed-mobile" : url.includes("view=lines") ? "lines-mobile" : "projects-mobile");
+      }
     }
-    await page.screenshot({ path: path.join(dir, "project-lines-wide.png"), fullPage: true });
+  });
+  await check("英文主题、难度分层和手机导航可用", async () => {
+    await page.setViewportSize({ width: 1440, height: 1050 }); await page.goto(origin + "/library?view=lines");
+    await page.getByRole("button", { name: "EN", exact: true }).click();
+    await expect(page.getByRole("heading", { name: "Biomedical discovery", exact: true })).toBeVisible();
+    await imagesAndTitles(); await snapshot("lines-english");
+    await page.locator('[data-line-card="neuro-bionics"]').click();
+    await expect(page.getByRole("heading", { name: "Neural interfaces & bionics", exact: true })).toBeVisible();
+    await page.setViewportSize({ width: 390, height: 844 }); expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await page.getByRole("navigation", { name: "Library view" }).getByRole("link", { name: "All projects", exact: true }).click();
+    await ordered(); await expect(page.getByRole("heading", { name: "An easy start", exact: true })).toBeVisible();
+    await page.getByRole("button", { name: "中", exact: true }).click();
+  });
+  await check("内容服务故障不隐藏主题与本地体验，重试恢复发布状态", async () => {
+    const c = await browser.newContext({ viewport: { width: 1440, height: 1050 } }); const p = await c.newPage(); let fail = true;
+    await p.route("**/api/library/projects", route => fail ? route.fulfill({ status: 503, json: { error: "unavailable" } }) : route.continue());
+    await p.goto(origin + "/library?view=lines"); await expect(p.locator("main").getByRole("alert")).toBeVisible();
+    await expect(p.locator("[data-line-card]")).toHaveCount(5);
+    await p.locator('[data-line-card="space-exploration"]').click();
+    await expect(p.locator('[data-project-card][data-available="true"]')).toHaveCount(4);
+    await expect(p.locator('[data-project-card="mars-analog-rover"] a[href="/library/mars-analog-rover"]')).toHaveCount(0);
+    fail = false; await p.getByRole("button", { name: "重新加载", exact: true }).click();
+    await expect(p.locator('[data-project-card="mars-analog-rover"]')).toHaveAttribute("data-available", "true");
+    await expect(p.locator("main").getByRole("alert")).toHaveCount(0); await c.close();
+  });
+  await check("原课程详情与故事入口保留", async () => {
+    await page.setViewportSize({ width: 1440, height: 1050 }); await page.goto(origin + "/library");
+    const story = api.find(p => p.status !== "draft" && p.story?.length);
+    if (story) { await page.locator('[data-project-card="' + story.slug + '"] button').first().click(); await expect(page.getByRole("dialog")).toBeVisible(); await page.keyboard.press("Escape"); }
+    await page.locator('[data-project-card="mars-analog-rover"]').getByRole("link", { name: "查看项目", exact: true }).click();
+    await expect(page).toHaveURL(origin + "/library/mars-analog-rover"); await expect(page.getByRole("heading", { level: 1 })).toContainText("火星");
   });
   expect(errors).toEqual([]);
-} catch (error) {
-  console.log(await page.evaluate(() => ({ width: innerWidth, scroll: document.documentElement.scrollWidth, wide: [...document.querySelectorAll("body *")].map(node => ({ tag: node.tagName, class: node.className, left: node.getBoundingClientRect().left, right: node.getBoundingClientRect().right })).filter(node => node.right > innerWidth + 1 && node.left < innerWidth).slice(0, 20) })));
-  console.error(error); process.exitCode = 1;
-  await page.screenshot({ path: path.join(dir, "failure.png"), fullPage: true }).catch(() => {});
-} finally {
-  await fs.writeFile(path.join(dir, "verification.json"), JSON.stringify({ run_at: new Date().toISOString(), browser: browser.version(), source: "automated-browser-validation", results, errors }, null, 2));
-  await browser.close();
-}
+} catch (error) { console.error(error); process.exitCode = 1; await snapshot("failure").catch(() => {}); }
+finally { await fs.writeFile(path.join(dir, "verification.json"), JSON.stringify({ run_at: new Date().toISOString(), source: "automated-browser-not-child-trial", results, errors }, null, 2)); await browser.close(); }

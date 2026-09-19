@@ -1,6 +1,7 @@
 import type { LibraryProjectSummary } from "@/lib/api"
 import type { Locale } from "@/lib/i18n/locales"
-import { LOCAL_PROJECTS, localized, type LocalProject } from "@/lib/project-lines/catalog"
+import { LOCAL_PROJECTS, PROJECT_LINES, lineForCourse, localized, type LocalProject } from "@/lib/project-lines/catalog"
+import courseSnapshots from "@/lib/project-lines/course-snapshots.json"
 
 export type DiscoveryEntry = {
   id: string
@@ -14,6 +15,25 @@ export type DiscoveryEntry = {
   project?: LibraryProjectSummary
   local?: LocalProject
   priority?: number
+  lineId?: string
+  source?: "local" | "service" | "snapshot"
+  coverImage?: string
+}
+
+export function discoveryLevel(entry: DiscoveryEntry): number {
+  if (entry.kind === "micro") return 0
+  if (entry.kind === "guided") return 1
+  if (entry.difficulty == null) return 7
+  return entry.difficulty <= 2 ? 3 : entry.difficulty + 1
+}
+
+export function sortDiscoveryEntries(entries: DiscoveryEntry[], sort: string, locale: Locale) {
+  return [...entries].sort((a, b) => discoveryLevel(a) - discoveryLevel(b)
+    || (a.difficulty ?? 99) - (b.difficulty ?? 99)
+    || Number(b.available) - Number(a.available)
+    || (sort === "recent" ? b.publishedAt - a.publishedAt : 0)
+    || (a.priority ?? 99) - (b.priority ?? 99)
+    || a.title.localeCompare(b.title, locale))
 }
 
 export function normalizeDomain(raw?: string | null): string {
@@ -46,17 +66,24 @@ export function displayOutcome(project: LibraryProjectSummary): string | null {
 }
 
 export function makeDiscoveryEntries(projects: LibraryProjectSummary[], locale: Locale): DiscoveryEntry[] {
+  const merged = new Map<string, LibraryProjectSummary>(courseSnapshots.map(p => [p.slug, {
+    ...p, status: "draft", final_outcomes: [{ title: p.outcome, kind: "capability", description: p.outcome }],
+  }]))
+  for (const project of projects) merged.set(project.slug, project)
+  const serviceSlugs = new Set(projects.map(p => p.slug))
   const local: DiscoveryEntry[] = LOCAL_PROJECTS.map((project, priority) => ({
-    id: project.id, kind: project.kind, title: localized(project.title, locale), domain: "aerospace", difficulty: null,
-    available: true, publishedAt: 0, local: project, priority,
+    id: project.id, kind: project.kind, title: localized(project.title, locale), domain: project.domains[0], difficulty: null,
+    available: true, publishedAt: 0, local: project, priority, lineId: project.lineId, source: "local", coverImage: project.coverImage,
     searchText: [project.title.zh, project.title.en, project.action.zh, project.action.en, project.outcome.zh, project.outcome.en, "太空探索 space exploration", project.id === "spot-a-world" ? "astronomy 天文 月球 火星" : ""].join(" ").toLowerCase(),
   }))
-  const full: DiscoveryEntry[] = projects.map((project) => ({
+  const full: DiscoveryEntry[] = [...merged.values()].map((project) => ({
     id: project.slug, kind: "full", title: locale === "zh" ? project.title_zh || project.title : project.title || project.title_zh || project.slug,
     domain: normalizeDomain(project.domain),
     difficulty: typeof project.difficulty === "number" && Number.isFinite(project.difficulty) && project.difficulty >= 1 && project.difficulty <= 5 ? project.difficulty : null,
     available: project.status !== "draft", publishedAt: Date.parse(project.published_at || "") || 0, project,
-    searchText: [project.title, project.title_zh, project.slug, project.domain, project.description, ...(project.tags || []), ...outcomeTitles(project), project.slug === "mars-analog-rover" ? "太空探索 space exploration" : ""].filter(Boolean).join(" ").toLowerCase(),
+    lineId: lineForCourse(project.slug)?.id, source: serviceSlugs.has(project.slug) ? "service" : "snapshot",
+    coverImage: serviceSlugs.has(project.slug) ? undefined : lineForCourse(project.slug)?.image,
+    searchText: [project.title, project.title_zh, project.slug, project.domain, project.description, ...(project.tags || []), ...outcomeTitles(project), ...PROJECT_LINES.filter(line => line.courseSlugs.includes(project.slug)).flatMap(line => [line.title.zh, line.title.en])].filter(Boolean).join(" ").toLowerCase(),
   }))
   return [...local, ...full]
 }

@@ -135,7 +135,7 @@ try {
     }
   });
   await check("项目线入口、手机 3D、键盘及图形中断后继续操作", async () => {
-    await page.goto(origin + "/library?view=lines");
+    await page.goto(origin + "/library?view=lines&line=space-exploration");
     for (const slug of ["land-a-probe", "drive-and-frame", "write-driving-rules"]) {
       const href = "/explore/space-exploration/" + slug;
       await expect(page.locator('a[href="' + href + '"]').first()).toBeVisible();

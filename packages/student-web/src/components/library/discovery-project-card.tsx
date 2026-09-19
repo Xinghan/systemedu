@@ -6,7 +6,7 @@ import { ArrowRight, ArrowUpRight, BookOpen, Clock3, Layers3, Orbit, Telescope }
 import { library } from "@/lib/api"
 import { useT, useLocale } from "@/lib/i18n/use-t"
 import { displayOutcome, type DiscoveryEntry } from "@/lib/library-discovery"
-import { SPACE_LINE, localized } from "@/lib/project-lines/catalog"
+import { PROJECT_LINES, lineHref, localized } from "@/lib/project-lines/catalog"
 import { StoryModal } from "@/components/library/StoryModal"
 import { ChapterBadgeMark } from "@/components/badges/ChapterBadgeMark"
 import { DISCOVERY_COPY } from "./discovery-copy"
@@ -23,7 +23,8 @@ export function DiscoveryProjectCard({ entry, pulled }: { entry: DiscoveryEntry;
   const isMicro = entry.kind === "micro"
   const isLocal = Boolean(micro)
   const href = micro?.href || `/library/${encodeURIComponent(entry.id)}`
-  const inSpace = isLocal || entry.id === SPACE_LINE.flagshipSlug
+  const line = PROJECT_LINES.find(item => item.id === entry.lineId)
+  const statusLabel = entry.source === "snapshot" ? (locale === "zh" ? "待接入" : "Not connected yet") : c.planning
   const hasStory = Boolean(project?.story?.length)
   const outcome = micro ? localized(micro.outcome, locale) : project ? displayOutcome(project) : null
   const domain = c.domainNames[entry.domain as keyof typeof c.domainNames] || project?.domain || c.domainNames.other
@@ -32,10 +33,10 @@ export function DiscoveryProjectCard({ entry, pulled }: { entry: DiscoveryEntry;
   return (
     <article className={`${styles.projectCard} ${isMicro ? styles.microCard : ""} ${!entry.available ? styles.draftCard : ""}`} data-project-card={entry.id} data-kind={entry.kind} data-difficulty={entry.difficulty ?? (isMicro ? "light" : "unspecified")} data-available={entry.available}>
       <div className={`${styles.cardVisual} ${isMicro ? styles.microVisual : ""}`}>
-        {micro?.coverImage ? (
+        {entry.coverImage ? (
           // 项目使用独立生成的插画封面。
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={micro.coverImage} alt="" className={styles.coverPhoto} />
+          <img src={entry.coverImage} alt="" className={styles.coverPhoto} />
         ) : project?.cover_image_path && !coverFailed ? (
             // 封面由现有内容服务提供，失败时回落到领域图形。
             // eslint-disable-next-line @next/next/no-img-element
@@ -47,7 +48,7 @@ export function DiscoveryProjectCard({ entry, pulled }: { entry: DiscoveryEntry;
         <span className={`${styles.cardKind} ${isMicro ? styles.microKind : ""}`}>
           {isLocal ? <Telescope size={12} /> : <Layers3 size={12} />}{isMicro ? c.microTag : isLocal ? c.guidedTag : c.fullTag}
         </span>
-        {!entry.available && <span className={styles.draftTag}>{c.planning}</span>}
+        {!entry.available && <span className={styles.draftTag}>{statusLabel}</span>}
       </div>
       <div className={styles.cardContent}>
         <div className={styles.cardOverline}><span>{domain}</span>{pulled && entry.available && <span className={styles.added}>{c.onShelf}</span>}</div>
@@ -58,10 +59,10 @@ export function DiscoveryProjectCard({ entry, pulled }: { entry: DiscoveryEntry;
           <div><small>{isLocal ? isMicro ? c.light : c.guidedChallenge : c.challenge}</small><strong>{micro ? localized(micro.challenge, locale) : entry.difficulty ? <><span className={styles.depthBars} aria-hidden="true">{[1, 2, 3, 4, 5].map(n => <i key={n} data-filled={n <= entry.difficulty!} />)}</span>{entry.difficulty} / 5</> : c.unspecified}</strong></div>
         </div>
         <p className={styles.preparation}>{isLocal ? c.microPreparation : c.preparation}</p>
-        {inSpace && <Link href={SPACE_LINE.href} className={styles.lineAssociation}><Orbit size={13} />{isMicro ? c.spaceEntry : isLocal ? c.spaceGuided : c.spaceEndpoint}<ArrowUpRight size={12} /></Link>}
+        {line && <Link href={lineHref(line.id)} className={styles.lineAssociation}><Orbit size={13} />{localized(line.title, locale)}<ArrowUpRight size={12} /></Link>}
         <div className={styles.cardFooter}>
           <span>{isLocal ? c.instant : project?.knode_count ? `${project.knode_count} ${c.chapters}` : project?.age_band ? `${project.age_band} ${c.age}` : c.fullTag}</span>
-          {entry.available ? <Link href={href} className={isLocal ? styles.startCard : styles.openCard}>{isLocal ? c.startProject : pulled ? c.continueProject : c.viewProject}<ArrowRight size={14} /></Link> : <span className={styles.comingSoon}>{c.planning}</span>}
+          {entry.available ? <Link href={href} className={isLocal ? styles.startCard : styles.openCard}>{isLocal ? c.startProject : pulled ? c.continueProject : c.viewProject}<ArrowRight size={14} /></Link> : <span className={styles.comingSoon}>{statusLabel}</span>}
         </div>
       </div>
       {project && hasStory && storyOpen && <StoryModal slug={project.slug} frames={project.story!} onClose={() => setStoryOpen(false)} />}

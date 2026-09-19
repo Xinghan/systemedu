@@ -1,9 +1,16 @@
 import type { Locale } from "@/lib/i18n/locales"
+import lineData from "./lines.json"
+
+export const PROJECT_LINES = lineData
+export type ProjectLine = typeof PROJECT_LINES[number]
+export const LINES_HREF = "/library?view=lines"
+export function lineHref(id: string) { return `${LINES_HREF}&line=${encodeURIComponent(id)}` }
+export function lineForCourse(slug: string) { return PROJECT_LINES.find(line => line.courseSlugs.includes(slug)) }
 
 // 这里只登记已实现的入口；规划摘要不会混入可开始的项目列表。
 export const SPACE_LINE = {
   id: "space-exploration",
-  href: "/library?view=lines",
+  href: "/library?view=lines&line=space-exploration",
   flagshipSlug: "mars-analog-rover",
   firstProjectHref: "/explore/space-exploration/spot-a-world",
   title: { zh: "太空探索", en: "Space exploration" },
