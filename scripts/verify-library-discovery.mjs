@@ -64,11 +64,18 @@ try {
       await expect(page.locator("[data-line-card]")).toHaveCount(5);
     }
   });
-  await check("四个已有互动可打开，返回准确的太空探索详情", async () => {
+  await check("三个体验和四节点课程可打开，返回准确的太空探索详情", async () => {
     for (const slug of ["spot-a-world", "land-a-probe", "drive-and-frame", "write-driving-rules"]) {
       await page.goto(lineUrl("space-exploration"));
-      await page.locator('[data-project-card="' + slug + '"]').getByRole("link", { name: "开始体验", exact: true }).click();
+      await page.locator('[data-project-card="' + slug + '"]').getByRole("link", { name: slug === "write-driving-rules" ? "进入课程" : "开始体验", exact: true }).click();
       await expect(page).toHaveURL(origin + "/explore/space-exploration/" + slug);
+      if (slug === "write-driving-rules") {
+        await expect(page.locator('[aria-label="课程学习路径"] a')).toHaveCount(4);
+        await expect(page.locator('#lesson-references')).toBeVisible();
+        await page.locator('header a').first().click();
+        await expect(page).toHaveURL(lineUrl("space-exploration"));
+        continue;
+      }
       const frame = page.frameLocator("iframe");
       if (slug === "spot-a-world") await expect(frame.locator("#loading")).toBeHidden();
       else await expect(frame.locator("#render-mode")).not.toContainText("正在准备");

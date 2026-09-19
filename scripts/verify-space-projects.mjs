@@ -149,6 +149,11 @@ try {
       await expect(page.locator('a[href="' + href + '"]').first()).toBeVisible();
       const p = await context.newPage(); p.on("pageerror", e => errors.push(String(e)));
       await p.goto(origin + href);
+      if (slug === "write-driving-rules") {
+        await expect(p.locator('[aria-label="课程学习路径"] a')).toHaveCount(4);
+        await p.locator('[aria-label="课程学习路径"] a').nth(1).click();
+        await p.getByRole("button", { name: "打开本节实验" }).click();
+      }
       await expect(p.frameLocator("iframe").locator("#render-mode")).not.toContainText("正在准备");
       await p.close();
     }

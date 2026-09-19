@@ -46,15 +46,20 @@ function update() {
   $("#completion").textContent = rulesCanFinish(rules, runs, edits, imported) ? "这版规则通过两条路线，并在看不清地面时停下求助。可以保存了。" :
     (imported ? "导入后重新检验：" : "先观察一次不合适的动作，再修改和检验。") + " 当前版本通过 " + passed.length + " / 2 条路线。";
   $("#runs").replaceChildren();
-  runs.slice(-5).reverse().forEach(r => {
-    const li = node("li", routeNames[r.route_id] + " · " + (r.passed ? "安全到达检查点" : r.steps.at(-1).outcome));
-    li.append(node("small", r.signature === signature ? "与当前规则相同" : "旧版本记录，保留供比较")); $("#runs").append(li);
+  runs.slice().reverse().forEach(r => {
+    const li = node("li", ""), details = node("details", "");
+    details.append(node("summary", routeNames[r.route_id] + " · " + (r.passed ? "安全到达检查点" : r.steps.at(-1).outcome)));
+    details.append(node("small", (r.signature === signature ? "与当前规则相同" : "旧版本记录，保留供比较") + (r.tested_at ? " · " + new Date(r.tested_at).toLocaleString() : "")));
+    for (const t of TERRAINS) details.append(node("p", names[t] + " → " + actionNames[r.rules[t]]));
+    const log = node("ol", "");
+    r.steps.forEach(s => log.append(node("li", names[s.terrain] + " → " + actionNames[s.action] + " · " + s.outcome)));
+    details.append(log); li.append(details); $("#runs").append(li);
   });
 }
 function toggleInputs(value) {
   running = value;
   for (const t of TERRAINS) $("#rule-" + t).disabled = value;
-  $("#run-training").disabled = value; $("#run-transfer").disabled = value; $("#import").disabled = value;
+  $("#run-training").disabled = value; $("#run-transfer").disabled = value; $("#import").disabled = value; $("#baseline").disabled = value;
   document.querySelectorAll("#records button").forEach(b => b.disabled = value); update();
 }
 function showLog(result) {
@@ -84,6 +89,14 @@ async function run(id) {
   $("#scene-caption").textContent = routeNames[id] + " · " + result.steps.at(-1).outcome;
   $("#guide").textContent = result.passed ? "这条路线到达了看不清地面的检查点，并且停下来。再检验另一条路线。" : result.steps.at(-1).outcome + "。找到对应的那条规则，只改一个动作试试。";
 }
+$("#baseline").onclick = () => {
+  if (running) return;
+  rules = { ...DEFAULT_RULES }; edits++; imported = false; active = null;
+  currentTrace = [{ x: 0, z: 0, t: 0 }]; vehicle = { x: 0, z: 0 };
+  $("#result").hidden = true; $("#log").replaceChildren();
+  syncEditor(); saveDraft(); update(); draw();
+  $("#guide").textContent = "已切回只会前进的初始规则。已有测试历史和保存作品仍保留，请先预测再运行。";
+};
 $("#run-training").onclick = () => run("training"); $("#run-transfer").onclick = () => run("transfer");
 $("#save").onclick = () => {
   if (!rulesCanFinish(rules, runs, edits, imported) || running) return;

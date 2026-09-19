@@ -46,7 +46,7 @@ export function DiscoveryProjectCard({ entry, pulled }: { entry: DiscoveryEntry;
         {!isLocal && <ChapterBadgeMark domain={project?.domain} corner="top-left" />}
         {hasStory && <button type="button" className={styles.storyButton} onClick={() => setStoryOpen(true)} aria-label={`${t("story.view")} · ${entry.title}`} title={t("story.view")}><BookOpen size={17} strokeWidth={1.6} /></button>}
         <span className={`${styles.cardKind} ${isMicro ? styles.microKind : ""}`}>
-          {isLocal ? <Telescope size={12} /> : <Layers3 size={12} />}{isMicro ? c.microTag : isLocal ? c.guidedTag : c.fullTag}
+          {isMicro ? <Telescope size={12} /> : isLocal ? <BookOpen size={12} /> : <Layers3 size={12} />}{isMicro ? c.microTag : isLocal ? c.guidedTag : c.fullTag}
         </span>
         {!entry.available && <span className={styles.draftTag}>{statusLabel}</span>}
       </div>
@@ -55,14 +55,14 @@ export function DiscoveryProjectCard({ entry, pulled }: { entry: DiscoveryEntry;
         <h3>{entry.available ? <Link href={href}>{entry.title}</Link> : entry.title}</h3>
         <div className={styles.outcome}><span>{c.outcome}</span><p>{outcome || c.noOutcome}</p></div>
         <div className={styles.cardMetrics}>
-          <div><small><Clock3 size={12} />{isLocal ? c.minutesTarget : c.schedule}</small><strong>{micro ? (locale === "zh" ? `约 ${micro.estimatedMinutes} 分钟` : `About ${micro.estimatedMinutes} min`) : duration && duration > 0 ? `${duration} ${c.weeks}` : c.noSchedule}</strong></div>
+          <div><small><Clock3 size={12} />{isMicro ? c.minutesTarget : c.schedule}</small><strong>{micro ? (locale === "zh" ? `约 ${micro.estimatedMinutes} 分钟` : `About ${micro.estimatedMinutes} min`) : duration && duration > 0 ? `${duration} ${c.weeks}` : c.noSchedule}</strong></div>
           <div><small>{isLocal ? isMicro ? c.light : c.guidedChallenge : c.challenge}</small><strong>{micro ? localized(micro.challenge, locale) : entry.difficulty ? <><span className={styles.depthBars} aria-hidden="true">{[1, 2, 3, 4, 5].map(n => <i key={n} data-filled={n <= entry.difficulty!} />)}</span>{entry.difficulty} / 5</> : c.unspecified}</strong></div>
         </div>
         <p className={styles.preparation}>{isLocal ? c.microPreparation : c.preparation}</p>
         {line && <Link href={lineHref(line.id)} className={styles.lineAssociation}><Orbit size={13} />{localized(line.title, locale)}<ArrowUpRight size={12} /></Link>}
         <div className={styles.cardFooter}>
-          <span>{isLocal ? c.instant : project?.knode_count ? `${project.knode_count} ${c.chapters}` : project?.age_band ? `${project.age_band} ${c.age}` : c.fullTag}</span>
-          {entry.available ? <Link href={href} className={isLocal ? styles.startCard : styles.openCard}>{isLocal ? c.startProject : pulled ? c.continueProject : c.viewProject}<ArrowRight size={14} /></Link> : <span className={styles.comingSoon}>{statusLabel}</span>}
+          <span>{micro?.learningNodes ? `${micro.learningNodes} ${locale === "zh" ? "学习节点 · 可分次完成" : "nodes · Learn at your pace"}` : isLocal ? c.instant : project?.knode_count ? `${project.knode_count} ${c.chapters}` : project?.age_band ? `${project.age_band} ${c.age}` : c.fullTag}</span>
+          {entry.available ? <Link href={href} className={isLocal ? styles.startCard : styles.openCard}>{micro?.kind === "guided" ? (locale === "zh" ? "进入课程" : "Start course") : isLocal ? c.startProject : pulled ? c.continueProject : c.viewProject}<ArrowRight size={14} /></Link> : <span className={styles.comingSoon}>{statusLabel}</span>}
         </div>
       </div>
       {project && hasStory && storyOpen && <StoryModal slug={project.slug} frames={project.story!} onClose={() => setStoryOpen(false)} />}

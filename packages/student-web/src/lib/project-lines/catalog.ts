@@ -17,7 +17,7 @@ export const SPACE_LINE = {
 } as const
 
 export type LocalProject = {
-  id: string; lineId: string; href: string; kind: "micro" | "guided"; estimatedMinutes: number;
+  id: string; lineId: string; href: string; kind: "micro" | "guided"; estimatedMinutes: number; learningNodes?: number;
   title: { zh: string; en: string }; action: { zh: string; en: string }; outcome: { zh: string; en: string };
   challenge: { zh: string; en: string }; startLabel: { zh: string; en: string }; domains: readonly string[]; coverImage?: string;
 }
@@ -54,12 +54,12 @@ export const MICRO_PROJECTS: readonly LocalProject[] = [{
 }]
 
 export const GUIDED_PROJECTS: readonly LocalProject[] = [{
-  id: "write-driving-rules", lineId: SPACE_LINE.id, kind: "guided", href: "/explore/space-exploration/write-driving-rules", estimatedMinutes: 15,
+  id: "write-driving-rules", lineId: SPACE_LINE.id, kind: "guided", href: "/explore/space-exploration/write-driving-rules", estimatedMinutes: 50, learningNodes: 4,
   title: { zh: "写出我的第一段驾驶规则", en: "Write my first driving rules" },
-  action: { zh: "修改地形到动作的规则，在两条路线检验，遇到未知地面先停下求助。", en: "Edit terrain-to-action rules, test two routes, and stop for unknown terrain." },
+  action: { zh: "通过正文、参考资料与视频理解条件判断，再编写规则、对照测试并交付。", en: "Read, watch, write conditions, compare tests, and explain your driving rules." },
   outcome: { zh: "可运行的驾驶规则与两条路线的测试记录", en: "Runnable driving rules and tests on two routes" },
-  challenge: { zh: "改一条规则、换路验证", en: "Edit a rule and test another route" },
-  startLabel: { zh: "打开规则工作台", en: "Open the rule workbench" }, domains: ["aerospace", "computing"],
+  challenge: { zh: "理解、编写、检验、交付", en: "Edit a rule and test another route" },
+  startLabel: { zh: "进入驾驶规则课程", en: "Start the driving rules course" }, domains: ["aerospace", "computing"],
   coverImage: "/project-lines/space-exploration/write-driving-rules/cover-ai.png",
 }]
 export const LOCAL_PROJECTS = [...MICRO_PROJECTS, ...GUIDED_PROJECTS]
