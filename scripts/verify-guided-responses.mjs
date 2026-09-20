@@ -15,7 +15,7 @@ page.on('pageerror', error => errors.push(String(error)));
 async function check(name, work) { try { await work(); results.push({ name, passed: true }); console.log('PASS ' + name); } catch (error) { results.push({ name, passed: false, error: String(error) }); throw error; } }
 async function choose(p, label, value) { await p.getByRole('group', { name: label, exact: true }).getByRole('radio', { name: value, exact: true }).check(); }
 async function text(p, label, value) { await p.getByLabel(label, { exact: true }).fill(value); }
-async function ready(p, module = 'M01') { await p.goto(route + '?node=' + module); await expect(p.locator('[data-learning-status]')).not.toContainText('正在读取'); await expect(p.locator('[data-response-progress]')).toBeVisible(); }
+async function ready(p, module = 'M01') { await p.goto(route + '?node=' + module); await expect(p.locator('[data-guided-notebook] [data-learning-status]')).not.toContainText('正在读取'); await expect(p.locator('[data-response-progress]')).toBeVisible(); }
 async function firstNode(p) {
   await choose(p, '我看到的地形', '岩石');
   await text(p, '我担心……', '石块可能挡住车轮。');

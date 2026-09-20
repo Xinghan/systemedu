@@ -6,5 +6,5 @@ export function runRules(rules: DrivingRules, route: "training" | "transfer"): {
   passed: boolean;
   status: string;
   trace: unknown[];
-  steps: unknown[];
+  steps: { index: number; terrain: string; action: string; from: number; to: number; outcome: string; time: number }[];
 };

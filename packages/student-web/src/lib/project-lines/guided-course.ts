@@ -55,6 +55,12 @@ export type GuidedCourse = {
   estimated_minutes: number
   audience: string
   outcome: string
+  final_deliverable?: {
+    title: string
+    module_id: string
+    parts: string[]
+    acceptance: string[]
+  }
   stages: { stage_id: string; title: string }[]
   modules: GuidedModule[]
   lab_url: string

@@ -57,7 +57,7 @@ export const GUIDED_PROJECTS: readonly LocalProject[] = [{
   id: "write-driving-rules", lineId: SPACE_LINE.id, kind: "guided", href: "/explore/space-exploration/write-driving-rules", estimatedMinutes: 50, learningNodes: 4,
   title: { zh: "写出我的第一段驾驶规则", en: "Write my first driving rules" },
   action: { zh: "通过正文、参考资料与视频理解条件判断，再编写规则、对照测试并交付。", en: "Read, watch, write conditions, compare tests, and explain your driving rules." },
-  outcome: { zh: "可运行的驾驶规则与两条路线的测试记录", en: "Runnable driving rules and tests on two routes" },
+  outcome: { zh: "驾驶规则作品包：规则、双路线证据与说明", en: "A driving-rules bundle with tests and an explanation" },
   challenge: { zh: "理解、编写、检验、交付", en: "Edit a rule and test another route" },
   startLabel: { zh: "进入驾驶规则课程", en: "Start the driving rules course" }, domains: ["aerospace", "computing"],
   coverImage: "/project-lines/space-exploration/write-driving-rules/cover-ai.png",

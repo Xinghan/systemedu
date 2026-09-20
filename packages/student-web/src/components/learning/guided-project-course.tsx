@@ -61,6 +61,7 @@ function GuidedCourseSession({ course, token, owner }: { course: GuidedCourse; t
       <div><p className={styles.eyebrow}>从操作，走向理解与制作</p><h1>{course.title}</h1><p className={styles.subtitle}>{course.subtitle}</p><p className={styles.audience}>{course.audience}</p></div>
       <div className={styles.courseFacts}><div><strong>{course.modules.length}</strong><span>学习节点</span></div><div><strong>{course.estimated_minutes}<small> 分钟</small></strong><span>累计设计目标 · 可分次完成</span></div><p>{course.outcome}</p></div>
     </section>
+    {course.final_deliverable && <section className={styles.projectGoal} aria-label="最终作品目标"><div><p className={styles.eyebrow}>做完后，你会拥有</p><h2>{course.final_deliverable.title}</h2><ul>{course.final_deliverable.parts.map(part => <li key={part}>{part}</li>)}</ul><p className={styles.goalAcceptance}>怎样验收：{course.final_deliverable.acceptance.join("；")}。</p></div><Link href={`/explore/space-exploration/${course.id}?node=${course.final_deliverable.module_id}#project-delivery`}>查看我的最终作品<ArrowRight size={16} /></Link></section>}
     <div className={styles.layout}>
       <aside className={styles.outline} aria-label="课程学习路径">
         <p className={styles.eyebrow}>你的学习路径</p>

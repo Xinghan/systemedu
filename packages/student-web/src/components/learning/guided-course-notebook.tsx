@@ -8,6 +8,7 @@ import { learningCacheKey, type RecordState } from "@/lib/learning-record-sessio
 import type { LearningScope } from "@/lib/api/learning-records"
 import { LearningRecordStatus } from "./learning-record-status"
 import { GuidedResponsePrompt } from "./guided-response-prompt"
+import { GuidedFinalDelivery } from "./guided-final-delivery"
 import { responseComplete } from "@/lib/project-lines/guided-response"
 import styles from "./guided-project-course.module.css"
 
@@ -50,7 +51,7 @@ export function GuidedCourseNotebook({ course, node, onRecord }: {
       setImportMessage("已将本机实验作品关联到本节草稿。课程记录仍需逐节提交。")
     } catch { setImportMessage("实验作品无法读取，原数据未改动。") }
   }
-  return <div className={styles.notebook} id="lesson-notebook" data-guided-notebook={node.module_id}>
+  return <><div className={styles.notebook} id="lesson-notebook" data-guided-notebook={node.module_id}>
     <div className={styles.notebookHeading}><div><p className={styles.eyebrow}>我的学习记录 · {node.module_id}</p><h3>一步一步，留下你的发现</h3></div><span data-response-progress>{completed.filter(Boolean).length} / {node.questions.length} 步已写好</span></div>
     <p className={styles.notebookIntro}>先看一个例子，再留下自己的判断。一两句也可以，写完后随时能回来修改。</p>
     {node.questions.map((question, i) => <section key={question} className={styles.responseStep} data-response-step={i + 1}>
@@ -64,7 +65,8 @@ export function GuidedCourseNotebook({ course, node, onRecord }: {
     <LearningRecordStatus record={record}>
       {record.body.answers.every(a => !a.answer.trim()) && <div><p>旧浏览器记录未绑定账号。确认是自己的记录后，可导入本节。</p><button disabled={locked || !record.ready} onClick={importLocal}>将本机旧记录作为我的草稿</button></div>}
     </LearningRecordStatus>
-    {node.module_id === "M04" && <div className={styles.delivery}><h4>关联实验作品</h4><p>实验工具仍保存本机作品。点击后将这份作品作为本节草稿附件，随账号记录保存。</p><button onClick={associateArtifact} disabled={locked || !record.ready}>关联实验作品</button>{record.body.artifact && <p>本节已关联实验凭据。</p>}</div>}
-    {importMessage && <p role="status">{importMessage}</p>}
+    {importMessage && node.module_id !== course.final_deliverable?.module_id && <p role="status">{importMessage}</p>}
   </div>
+    {course.id === "write-driving-rules" && node.module_id === course.final_deliverable?.module_id && <GuidedFinalDelivery course={course} node={node} source={record.body} sourceReady={record.ready} associate={associateArtifact} associateDisabled={locked || !record.ready} message={importMessage} />}
+  </>
 }
