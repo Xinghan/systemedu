@@ -3,7 +3,7 @@ import fs from 'node:fs/promises';
 const expect=baseExpect.configure({timeout:20000});
 const courses=JSON.parse(await fs.readFile('packages/student-web/src/lib/project-lines/space-courses.json'));
 const {users:[user,other]}=JSON.parse(await fs.readFile('/private/tmp/learning-records-e2e.json'));
-const out='artifacts/space-courses';await fs.mkdir(out,{recursive:true});
+const out=process.env.SPACE_TEST_OUTPUT||'artifacts/space-courses';await fs.mkdir(out,{recursive:true});
 const resume=Number(process.env.SPACE_TEST_FROM||1);let checkIndex=0;
 const browser=await chromium.launch({args:['--no-proxy-server']});
 const context=await browser.newContext({viewport:{width:1440,height:1000}});await context.addInitScript(t=>localStorage.setItem('systemedu_token',t),user.token);
@@ -11,12 +11,12 @@ const page=await context.newPage(),errors=[],results=[];page.on('pageerror',e=>e
 if(resume>1)results.push(...JSON.parse(await fs.readFile(out+'/verification.json')).results.filter(r=>r.passed).slice(0,resume-1));
 const work=page.locator('[data-space-workbench]'),delivery=page.locator('[data-project-delivery]');
 async function check(name,fn){if(++checkIndex<resume)return;await fn();results.push({name,passed:true});console.log('PASS '+name)}
-async function open(id,node='M03',p=page){await p.goto(`http://localhost:4000/explore/space-exploration/${id}?node=${node}`);await expect(p.locator('[data-space-workbench] [data-learning-status]')).not.toContainText('正在读取');await expect(p.locator('[data-space-workbench] fieldset')).toBeEnabled();}
+async function open(id,node='M03',p=page){await p.goto(`http://localhost:4000/explore/space-exploration/${id}?${["assemble-a-rover","run-an-expedition"].includes(id)?"edition=1&":""}node=${node}`);await expect(p.locator('[data-space-workbench] [data-learning-status]')).not.toContainText('正在读取');await expect(p.locator('[data-space-workbench] fieldset')).toBeEnabled();}
 async function run(name='运行并留下证据'){await work.getByRole('button',{name,exact:true}).click();await expect(work.locator('[data-space-result]')).toBeVisible();}
 async function explain(){for(const [label,value] of [['我作出的关键选择','我根据本次两版结果调整配置，并保留原始失败。'],['证据支持什么，还不能证明什么','只验证了当前教学模型条件，尚未进行真实设备试验。'],['我制作与平台提供的部分','我作出选择和解释，平台提供模型、影像与工具。']])await work.getByRole('textbox',{name:label,exact:true}).fill(value)}
 async function submit(){await explain();await expect(delivery.getByRole('button',{name:'提交项目作品',exact:true})).toBeEnabled();await delivery.getByRole('button',{name:'提交项目作品',exact:true}).click();await expect(delivery.getByRole('button',{name:'当前版本已保存'})).toBeVisible();await expect(delivery.locator('[data-learning-status]')).toContainText('已提交');}
 try{
- await check('六门课程入口、18 个节点、封面、资料、视频与空交付验收',async()=>{
+ await check('四门引导课与两门旧版整合课、18 个节点、视频及交付验收',async()=>{
   for(const c of courses){for(const node of ['M01','M02','M03']){await open(c.id,node);await expect(page.locator('[data-module]')).toHaveAttribute('data-module',node);await expect(page.locator('#lesson-reading')).not.toBeEmpty();await expect(page.locator('[data-course-video]')).toHaveCount(1);await expect(page.getByRole('region',{name:'最终作品目标'})).toBeVisible();}await expect(delivery.getByRole('button',{name:'提交项目作品',exact:true})).toBeDisabled();}
   await page.goto('http://localhost:4000/library?view=lines&line=space-exploration');for(const c of courses){await expect(page.locator(`[data-project-card="${c.id}"]`)).toBeVisible();await expect.poll(()=>page.locator(`[data-project-card="${c.id}"] img`).evaluate(e=>e.complete&&e.naturalWidth>0)).toBe(true)}await expect(page.locator('[data-planned-project]')).toHaveCount(0);await page.screenshot({path:out+'/line-desktop.png',fullPage:true});
  });
@@ -51,7 +51,7 @@ try{
   expect(await frame.locator('body').evaluate(()=>{const canvas=document.querySelector('canvas').getBoundingClientRect();return [...document.querySelectorAll('button')].every(b=>b.getBoundingClientRect().bottom<=canvas.top+1)&&document.querySelector('#status').getBoundingClientRect().top>=canvas.bottom-1})).toBe(true);
   await p.locator('[data-space-workbench]').screenshot({path:out+'/tune-a-chassis-mobile.png'});
   const notebook=p.locator('[data-guided-notebook]');for(const field of await notebook.getByRole('textbox').all())await field.fill('本次观察用于验证课程之间的记录隔离。');await notebook.getByRole('button',{name:'继续下一步',exact:true}).click();for(const field of await notebook.getByRole('textbox').all())await field.fill('保留我的本课说明，下一门课程需要独立填写。');await notebook.getByRole('button',{name:'提交本节学习记录',exact:true}).click();await expect(p.locator('[data-course-progress]')).toHaveText('1 / 3');
-  await p.getByRole('link',{name:'查看我的最终作品',exact:true}).click();await p.getByRole('link',{name:'下一站：让作品继续工作',exact:true}).click();await expect(p.locator('[data-guided-course]')).toHaveAttribute('data-guided-course','assemble-a-rover');await expect(p.locator('[data-course-progress]')).toHaveText('0 / 3');await expect(p.getByLabel('本次条件')).toHaveValue('normal');await p.locator('[data-space-workbench]').screenshot({path:out+'/assemble-a-rover-mobile.png'});await c.close();
+  await p.getByRole('link',{name:'查看我的最终作品',exact:true}).click();await p.getByRole('link',{name:'下一站：让作品继续工作',exact:true}).click();await expect(p.locator('[data-guided-course]')).toHaveAttribute('data-guided-course','assemble-a-rover');await expect(p.locator('[data-course-progress]')).toHaveText('0 / 8');await expect(p.locator('[data-rover-workshop]')).toBeVisible();await p.locator('[data-rover-workshop]').screenshot({path:out+'/assemble-a-rover-mobile.png'});await c.close();
  });
  expect(errors).toEqual([]);
 }catch(error){await page.screenshot({path:out+'/failure.png',fullPage:true});results.push({error:String(error)});throw error}finally{await fs.writeFile(out+'/verification.json',JSON.stringify({date:new Date().toISOString(),results,errors},null,2));await browser.close()}

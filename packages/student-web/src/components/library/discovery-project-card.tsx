@@ -58,7 +58,7 @@ export function DiscoveryProjectCard({ entry, pulled }: { entry: DiscoveryEntry;
           <div><small><Clock3 size={12} />{isMicro ? c.minutesTarget : c.schedule}</small><strong>{micro ? (locale === "zh" ? `约 ${micro.estimatedMinutes} 分钟` : `About ${micro.estimatedMinutes} min`) : duration && duration > 0 ? `${duration} ${c.weeks}` : c.noSchedule}</strong></div>
           <div><small>{isLocal ? isMicro ? c.light : c.guidedChallenge : c.challenge}</small><strong>{micro ? localized(micro.challenge, locale) : entry.difficulty ? <><span className={styles.depthBars} aria-hidden="true">{[1, 2, 3, 4, 5].map(n => <i key={n} data-filled={n <= entry.difficulty!} />)}</span>{entry.difficulty} / 5</> : c.unspecified}</strong></div>
         </div>
-        <p className={styles.preparation}>{isLocal ? c.microPreparation : c.preparation}</p>
+        <p className={styles.preparation}>{micro?.preparation ? localized(micro.preparation, locale) : isLocal ? c.microPreparation : c.preparation}</p>
         {line && <Link href={lineHref(line.id)} className={styles.lineAssociation}><Orbit size={13} />{localized(line.title, locale)}<ArrowUpRight size={12} /></Link>}
         <div className={styles.cardFooter}>
           <span>{micro?.learningNodes ? `${micro.learningNodes} ${locale === "zh" ? "学习节点 · 可分次完成" : "nodes · Learn at your pace"}` : isLocal ? c.instant : project?.knode_count ? `${project.knode_count} ${c.chapters}` : project?.age_band ? `${project.age_band} ${c.age}` : c.fullTag}</span>

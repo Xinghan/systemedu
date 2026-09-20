@@ -21,6 +21,7 @@ export type LocalProject = {
   id: string; lineId: string; href: string; kind: "micro" | "guided" | "integration"; estimatedMinutes: number; learningNodes?: number;
   title: { zh: string; en: string }; action: { zh: string; en: string }; outcome: { zh: string; en: string };
   challenge: { zh: string; en: string }; startLabel: { zh: string; en: string }; domains: readonly string[]; coverImage?: string;
+  preparation?: { zh: string; en: string };
 }
 
 export const MICRO_PROJECTS: readonly LocalProject[] = [{

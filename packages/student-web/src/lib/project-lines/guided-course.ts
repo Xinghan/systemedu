@@ -44,6 +44,7 @@ export type GuidedModule = {
   lesson: string
   assignment: string
   resources: LearningResource[]
+  video_note?: string
 }
 
 export type GuidedCourse = {
@@ -64,4 +65,5 @@ export type GuidedCourse = {
   stages: { stage_id: string; title: string }[]
   modules: GuidedModule[]
   lab_url: string
+  legacy_edition?: boolean
 }

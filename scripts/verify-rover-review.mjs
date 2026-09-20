@@ -1,0 +1,15 @@
+import {chromium,expect as baseExpect} from '@playwright/test'
+import fs from 'node:fs/promises'
+const expect=baseExpect.configure({timeout:20000}),out='artifacts/rover-system-build',browser=await chromium.launch({args:['--no-proxy-server']})
+const {users:[user]}=JSON.parse(await fs.readFile('/private/tmp/learning-records-e2e.json'))
+try{
+  const c=await browser.newContext({viewport:{width:1440,height:1000}});await c.addInitScript(t=>localStorage.setItem('systemedu_token',t),user.token);const p=await c.newPage()
+  await p.goto('http://localhost:4000/explore/space-exploration/assemble-a-rover?node=M08');await expect(p.locator('[data-rover-workshop] pre').first()).toContainText('SystemEdu');await expect(p.locator('[data-rover-workshop] pre').nth(1)).toContainText('MAX_DUTY');await p.locator('[data-system-submission]>summary').click();await expect(p.locator('[data-system-submission] pre').first()).toContainText('SystemEdu')
+  const fresh=await browser.newContext({viewport:{width:1440,height:1000}});const page=await fresh.newPage()
+  await page.goto('http://localhost:4000/explore/space-exploration/assemble-a-rover');await expect(page.locator('[data-renderer]')).toHaveAttribute('data-renderer','webgl');await page.screenshot({path:out+'/course-desktop.png',fullPage:true})
+  await page.locator('[data-rover-workshop]').getByRole('button',{name:'展开结构',exact:true}).click();await expect(page.getByRole('button',{name:'合拢结构',exact:true})).toBeVisible();await expect(page.locator('[data-renderer]')).toHaveAttribute('data-renderer','webgl');await page.locator('[data-rover-workshop] figure').screenshot({path:out+'/exploded-view.png'})
+  for(const file of ['dimension-sheet.svg','wiring.svg']){await page.goto('http://localhost:4000/project-lines/space-exploration/assemble-a-rover/hardware/'+file);await page.screenshot({path:out+'/'+file+'.png'})}
+  await page.goto('http://localhost:4000/library?view=lines&line=space-exploration');await expect(page.locator('[data-project-card="assemble-a-rover"]')).toContainText('330');await expect(page.locator('[data-project-card="assemble-a-rover"]')).toContainText('实物');await page.locator('[data-project-card="assemble-a-rover"]').screenshot({path:out+'/library-card.png'})
+  const noGL=await browser.newContext({viewport:{width:390,height:844}});await noGL.addInitScript(()=>{const original=HTMLCanvasElement.prototype.getContext;HTMLCanvasElement.prototype.getContext=function(type,...args){return type.includes('webgl')?null:original.call(this,type,...args)}});const fp=await noGL.newPage();await fp.goto('http://localhost:4000/explore/space-exploration/assemble-a-rover?node=M03');await expect(fp.getByRole('img',{name:'当前设计的双轮底盘俯视图'})).toBeVisible();await fp.locator('[data-rover-workshop] figure').screenshot({path:out+'/vector-fallback.png'})
+  await fs.writeFile(out+'/review-verification.json',JSON.stringify({source_files_restored:true,submitted_source_snapshot:true,exploded_view:true,hardware_drawings_loaded:true,library_physical_preparation:true,webgl_fallback:true},null,2));console.log('PASS 源码数据库恢复、已交付源码快照、结构展开、工程图、项目库实物准备与无 WebGL 降级')
+}finally{await browser.close()}
