@@ -2,7 +2,7 @@ import { ApiError } from "./api/client"
 import { learningRecords, type LearningBody, type LearningScope, type LearningSubmission } from "./api/learning-records"
 
 export type RecordState = {
-  body: LearningBody; ready: boolean; busy: boolean; dirty: boolean; conflict: boolean
+  body: LearningBody; ready: boolean; busy: boolean; dirty: boolean; conflict: boolean; attention: boolean
   message: string; submittedAt?: string; history: LearningSubmission[]; pending: boolean
 }
 type Pending = { id: string; body: LearningBody; revision: number }
@@ -35,7 +35,7 @@ export class LearningRecordSession {
   readonly cacheKey: string
   constructor(readonly token: string | null, owner: string, readonly scope: LearningScope, initial: LearningBody) {
     this.cacheKey = learningCacheKey(owner, scope)
-    this.initial = this.state = { body: initial, ready: false, busy: false, dirty: false, conflict: false, message: "正在读取学习记录…", history: [], pending: false }
+    this.initial = this.state = { body: initial, ready: false, busy: false, dirty: false, conflict: false, attention: false, message: "正在读取学习记录…", history: [], pending: false }
   }
   snapshot = () => this.state
   serverSnapshot = () => this.initial
@@ -47,7 +47,7 @@ export class LearningRecordSession {
       if (this.writable) localStorage.setItem(this.cacheKey, JSON.stringify(data))
     } catch {
       this.writable = false
-      this.patch({ message: "本机草稿无法写入；请保持页面打开并下载备份，服务器保存结果会单独显示。" })
+      this.patch({ attention: true, message: "本机草稿无法写入；请保持页面打开并下载备份，服务器保存结果会单独显示。" })
     }
     memoryCache.set(this.cacheKey, { data, writable: this.writable })
     if (memoryCache.size > 100) memoryCache.delete(memoryCache.keys().next().value!)
@@ -67,10 +67,10 @@ export class LearningRecordSession {
       }
     } catch {
       this.writable = false
-      this.patch({ message: "本机旧记录无法读取，原数据未覆盖。" })
+      this.patch({ attention: true, message: "本机旧记录无法读取，原数据未覆盖。" })
     }
     if (!this.token) {
-      this.patch({ ready: true, message: this.writable ? "未登录：仅保存在当前浏览器，可下载；登录后可将本节草稿导入账号。" : "本机存储不可用，原数据未覆盖；请下载当前记录。" })
+      this.patch({ ready: true, attention: !this.writable, message: this.writable ? "未登录：记录仅保存在当前浏览器，登录后可导入账号。" : "本机存储不可用，原数据未覆盖；请下载当前记录。" })
       return
     }
     await this.refresh(false)
@@ -85,7 +85,7 @@ export class LearningRecordSession {
       const acknowledged = this.pending && remote.submissions.find(s => s.request_id === this.pending!.id)
       if (acknowledged) { this.pending = undefined; this.patch({ pending: false, dirty: false }) }
       if (!discardLocal && this.state.dirty && (remote.draft?.revision ?? 0) !== this.revision) {
-        this.patch({ ready: true, conflict: true, history: remote.submissions, message: "另一页面或设备已有新版本。当前草稿已保留，请先下载，再读取服务器版本。" })
+        this.patch({ ready: true, conflict: true, attention: true, history: remote.submissions, message: "另一页面或设备已有新版本。当前草稿已保留，请先下载，再读取服务器版本。" })
         return
       }
       if (discardLocal || !this.state.dirty) {
@@ -94,7 +94,7 @@ export class LearningRecordSession {
         this.patch({ body: remote.draft?.body ?? this.initial.body, dirty: false, pending: false,
           submittedAt: remote.draft?.status === "submitted" ? remote.submissions[0]?.created_at : undefined })
       }
-      this.patch({ ready: true, conflict: false, history: remote.submissions,
+      this.patch({ ready: true, conflict: false, attention: false, history: remote.submissions,
         message: this.state.dirty ? "本机有未同步草稿，可重试保存。" : remote.draft ? "已读取账号中的学习记录。" : "已连接账号，输入后自动保存。" })
       this.cache()
       if (this.state.dirty && !this.pending) this.schedule()
@@ -119,7 +119,7 @@ export class LearningRecordSession {
   }
   private failure(error: unknown) {
     const conflict = error instanceof ApiError && error.status === 409
-    this.patch({ conflict, message: (error instanceof Error ? error.message : "同步失败，请重试。") + " 当前内容仍保留，可下载。" })
+    this.patch({ conflict, attention: true, message: (error instanceof Error ? error.message : "同步失败，请重试。") + " 当前内容仍保留，可下载。" })
   }
   save = () => this.enqueue(async () => {
     if (!this.token || !this.state.ready || !this.state.dirty || this.pending || this.state.conflict) return
@@ -129,7 +129,7 @@ export class LearningRecordSession {
       const result = await learningRecords.save(this.token, this.scope, body, this.revision)
       this.revision = result.draft!.revision
       const dirty = !equal(body, this.state.body)
-      this.patch({ dirty, message: dirty ? "先前输入已保存，最新输入等待同步…" : "已保存到账号，可在其他设备继续。" })
+      this.patch({ dirty, attention: false, message: dirty ? "先前输入已保存，最新输入等待同步…" : "已保存到账号，可在其他设备继续。" })
       this.cache()
     } catch (error) { this.failure(error) }
     finally { this.patch({ busy: false }) }
@@ -147,7 +147,7 @@ export class LearningRecordSession {
       const result = await learningRecords.submit(this.token, this.scope, this.pending.body, this.pending.revision, this.pending.id)
       this.revision = result.draft?.revision ?? result.submission!.revision
       this.pending = undefined
-      this.patch({ pending: false, dirty: false, submittedAt: result.submission!.created_at,
+      this.patch({ pending: false, dirty: false, attention: false, submittedAt: result.submission!.created_at,
         history: [result.submission!, ...this.state.history.filter(s => s.id !== result.submission!.id)].slice(0, 50),
         message: "已提交到账号并保留历史。保存记录不代表已评分或已掌握。" })
       this.cache()

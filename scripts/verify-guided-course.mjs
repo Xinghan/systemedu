@@ -1,3 +1,4 @@
+import { freeAnswer } from './helpers/guided-records.mjs';
 import { chromium, expect } from '@playwright/test';
 import fs from 'node:fs/promises';
 import path from 'node:path';
@@ -19,7 +20,7 @@ async function node(id) { await outline.locator(`a[href="?node=${id}"]`).click()
 try {
   await check('真实四节点、正文资料视频，默认不是单个互动', async () => {
     await page.goto(route);
-    await expect(outline.locator('a')).toHaveCount(4);
+    await expect(outline.locator('a[href^="?node="]')).toHaveCount(4);
     await expect(page.locator('iframe')).toHaveCount(0);
     await expect(page.locator('#lesson-reading')).toContainText('输入是什么');
     await expect(page.locator('#lesson-references a')).toHaveAttribute('href', /science.nasa.gov/);
@@ -29,15 +30,15 @@ try {
     await page.screenshot({ path: path.join(dir, 'course-desktop.png'), fullPage: true });
   });
   await check('逐节点记录、刷新恢复，修改撤销提交标记', async () => {
-    await page.locator('textarea').nth(0).fill('输入是岩石，风险是碰撞，我选择沿已知侧道绕行。');
-    await page.locator('textarea').nth(1).fill('未知表示信息不够，需要先停下确认，而不是当作平地。');
+    await freeAnswer(page, 0, '输入是岩石，风险是碰撞，我选择沿已知侧道绕行。');
+    await freeAnswer(page, 1, '未知表示信息不够，需要先停下确认，而不是当作平地。');
     await page.getByRole('button', { name: '提交本节学习记录' }).click();
     await expect(page.locator('[data-course-progress]')).toHaveText('1 / 4');
     await page.reload(); await expect(page.locator('textarea').first()).toHaveValue(/输入是岩石/);
-    await page.locator('textarea').nth(1).fill('信息不够，要补充环境信息后再决定。');
+    await freeAnswer(page, 1, '信息不够，要补充环境信息后再决定。');
     await expect(page.locator('[data-course-progress]')).toHaveText('0 / 4');
     await page.getByRole('button', { name: '提交本节学习记录' }).click();
-    await node('M02'); await expect(page.locator('textarea').first()).toHaveValue('');
+    await node('M02'); await expect(await freeAnswer(page, 0)).toHaveValue('');
     await expect(page.locator('#lesson-reading')).toContainText('条件与动作');
   });
   await check('无法播放时有可完成的替代任务与可追溯官网', async () => {
@@ -73,7 +74,8 @@ try {
     await expect(page.getByText('本节已关联实验凭据。', { exact: false })).toBeVisible();
     await expect(page.locator('[data-course-progress]')).toHaveText('1 / 4');
     const pending = page.waitForEvent('download');
-    await page.getByRole('button', { name: '下载课程与实验交付记录' }).click();
+    await page.getByText('课程记录选项', { exact: true }).click();
+    await page.getByRole('button', { name: '下载课程记录', exact: true }).click();
     await (await pending).saveAs(path.join(dir, 'sample-course-record.json'));
     const data = JSON.parse(await fs.readFile(path.join(dir, 'sample-course-record.json')));
     expect(data.nodes.M01.answers).toHaveLength(2);
@@ -96,7 +98,7 @@ try {
         else Storage.prototype.setItem = function() { throw new DOMException('quota', 'QuotaExceededError'); };
       }, { mode, key });
       const p = await c.newPage(); await p.goto(route);
-      await p.locator('textarea').first().fill('仍保留在页面内的观察');
+      await freeAnswer(p, 0, '仍保留在页面内的观察');
       await expect(p.locator('[data-learning-status]')).toContainText('当前内容只在页面中');
       await p.locator('[aria-label="课程学习路径"] a').nth(1).click();
       await p.locator('[aria-label="课程学习路径"] a').first().click();

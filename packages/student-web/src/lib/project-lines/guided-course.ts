@@ -12,6 +12,22 @@ export type LearningResource = {
   media_url?: string
 }
 
+export type ResponseField = {
+  id: string
+  label: string
+  type: "choice" | "short" | "text"
+  placeholder?: string
+  options?: string[]
+}
+
+export type ResponsePrompt = {
+  title: string
+  hint: string
+  example: string
+  layout?: "sequence" | "comparison" | "brief"
+  fields: ResponseField[]
+}
+
 export type GuidedModule = {
   module_id: string
   title: string
@@ -22,6 +38,7 @@ export type GuidedModule = {
   objective: string
   output: string
   questions: string[]
+  response_prompts?: ResponsePrompt[]
   lab: boolean
   lesson: string
   assignment: string

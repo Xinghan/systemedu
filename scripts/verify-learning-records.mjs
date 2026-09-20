@@ -1,3 +1,4 @@
+import { freeAnswer } from './helpers/guided-records.mjs';
 import { chromium, expect } from '@playwright/test';
 import fs from 'node:fs/promises';
 import path from 'node:path';
@@ -44,8 +45,8 @@ try {
   page = await loggedIn(a);
   await check('课堂输入自动保存到账号；提交留快照；另一浏览器恢复', async () => {
     await page.goto(courseUrl); await expect(page.locator('[data-learning-status]')).toContainText('已连接账号');
-    await page.locator('textarea').nth(0).fill('岩石输入，碰撞风险，沿已知侧道绕行。');
-    await page.locator('textarea').nth(1).fill('未知表示信息不足，先停止。');
+    await freeAnswer(page, 0, '岩石输入，碰撞风险，沿已知侧道绕行。');
+    await freeAnswer(page, 1, '未知表示信息不足，先停止。');
     await expect(page.locator('[data-learning-status]')).toContainText('已保存到账号');
     expect((await read(a)).draft.body.answers[1].answer).toBe('未知表示信息不足，先停止。');
     await page.getByRole('button', { name: '提交本节学习记录', exact: true }).click();
@@ -56,15 +57,15 @@ try {
     await expect(fresh.locator('[data-course-progress]')).toHaveText('1 / 4');
     const other = await loggedIn(b); await other.goto(courseUrl);
     await expect(other.locator('[data-learning-status]')).toContainText('已连接账号');
-    await expect(other.locator('textarea').first()).toHaveValue('');
+    await expect(other.locator('[data-response-progress]')).toHaveText('0 / 2 步已写好');
     await fresh.close(); await other.close();
   });
   await check('双设备旧版本写入被拒绝，当前输入保留并可读取新版本', async () => {
     const stale = await loggedIn(a); await stale.goto(courseUrl);
     await expect(stale.locator('textarea').first()).toHaveValue(/岩石输入/);
-    await page.locator('textarea').first().fill('设备一的新观察');
+    await freeAnswer(page, 0, '设备一的新观察');
     await expect(page.locator('[data-learning-status]')).toContainText('已保存到账号');
-    await stale.locator('textarea').first().fill('设备二未同步的观察');
+    await freeAnswer(stale, 0, '设备二未同步的观察');
     await expect(stale.locator('[data-learning-status]')).toContainText('没有覆盖');
     await expect(stale.locator('textarea').first()).toHaveValue('设备二未同步的观察');
     expect((await read(a)).draft.body.answers[0].answer).toBe('设备一的新观察');
@@ -84,7 +85,7 @@ try {
   });
   await check('网络保存失败有提示，重试保存成功', async () => {
     await page.route('**/api/learning/drafts', route => route.abort(), { times: 1 });
-    await page.locator('textarea').first().fill('断线时仍保留的记录');
+    await freeAnswer(page, 0, '断线时仍保留的记录');
     await expect(page.locator('[data-learning-status]')).toContainText('当前内容仍保留');
     await page.getByRole('button', { name: '重试同步', exact: true }).click();
     await expect(page.locator('[data-learning-status]')).toContainText('已保存到账号');
@@ -93,8 +94,8 @@ try {
   await check('同一浏览器切换账号不会显示或上传上一个孩子的输入', async () => {
     await page.evaluate(token => { localStorage.setItem('systemedu_token', token); window.dispatchEvent(new Event('storage')); }, b.token);
     await expect(page.locator('[data-learning-status]')).toContainText('已连接账号');
-    await expect(page.locator('textarea').first()).toHaveValue('');
-    await page.locator('textarea').first().fill('孩子B独立记录');
+    await expect(page.locator('[data-response-progress]')).toHaveText('0 / 2 步已写好');
+    await freeAnswer(page, 0, '孩子B独立记录');
     await expect(page.locator('[data-learning-status]')).toContainText('已保存到账号');
     expect((await read(a)).draft.body.answers[0].answer).toBe('断线时仍保留的记录');
     expect((await read(b)).draft.body.answers[0].answer).toBe('孩子B独立记录');
@@ -102,8 +103,9 @@ try {
   await check('旧匿名记录不自动上传，主动导入后作为新草稿保存', async () => {
     await page.evaluate(() => localStorage.setItem('systemedu:guided-course:write-driving-rules:v1', JSON.stringify({ schema_version: 'guided-learning-record/1', course_id: 'write-driving-rules', course_version: '1.0', nodes: { M02: { answers: ['以前的条件规则','以前的预测'] } } })));
     await page.goto(courseUrl + '?node=M02'); await expect(page.locator('[data-learning-status]')).toContainText('已连接账号');
-    await expect(page.locator('textarea').first()).toHaveValue('');
+    await expect(page.locator('[data-response-progress]')).toHaveText('0 / 2 步已写好');
     expect((await read(b, { ...scope, module_id: 'M02' })).draft).toBeNull();
+    await page.locator('[data-record-options] > summary').click();
     await page.getByRole('button', { name: '将本机旧记录作为我的草稿' }).click();
     await expect(page.locator('textarea').first()).toHaveValue('以前的条件规则');
     await expect(page.locator('[data-learning-status]')).toContainText('已保存到账号');
