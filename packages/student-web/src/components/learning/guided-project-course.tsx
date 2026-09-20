@@ -5,30 +5,15 @@ import { useCallback, useEffect, useState } from "react"
 import { useSearchParams } from "next/navigation"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
-import { ArrowLeft, ArrowRight, BookOpen, Download, ExternalLink, Play, FlaskConical } from "lucide-react"
-import type { GuidedCourse, LearningResource } from "@/lib/project-lines/guided-course"
+import { ArrowLeft, ArrowRight, BookOpen, Download, ExternalLink, FlaskConical } from "lucide-react"
+import type { GuidedCourse } from "@/lib/project-lines/guided-course"
 import { newCourseRecord, type CourseRecord } from "@/lib/project-lines/guided-progress"
 import { useLearningIdentity } from "@/lib/hooks/use-learning-record"
 import { learningRecords } from "@/lib/api/learning-records"
 import { learningCacheKey, type RecordState } from "@/lib/learning-record-session"
 import { GuidedCourseNotebook, guidedScope } from "./guided-course-notebook"
+import { CourseVideoResource } from "./course-video-resource"
 import styles from "./guided-project-course.module.css"
-
-function VideoResource({ resource }: { resource: LearningResource }) {
-  const [playing, setPlaying] = useState(false)
-  const [failed, setFailed] = useState(false)
-  return <article className={styles.resource}>
-    <span className={styles.resourceKind}>VIDEO · {resource.publisher} · 英文资源 / 中文引导</span>
-    <h4>{resource.title}</h4><p>{resource.purpose}</p>
-    {!playing && (resource.youtube_id || resource.media_url) && <button className={styles.playButton} onClick={() => setPlaying(true)}><Play size={15} />播放视频</button>}
-    {playing && resource.youtube_id && <iframe className={styles.video} src={`https://www.youtube-nocookie.com/embed/${resource.youtube_id}`} title={resource.title} allow="fullscreen; picture-in-picture" allowFullScreen />}
-    {playing && resource.media_url && <video className={styles.video} controls preload="metadata" src={resource.media_url} onError={() => setFailed(true)} aria-label={resource.title}><a href={resource.url}>到来源页观看</a></video>}
-    {failed && <p role="status">此视频暂时无法播放。可打开官方来源，或先读下方中文要点继续学习。</p>}
-    <div className={styles.watchTask}><strong>带着问题看</strong><p>{resource.prompt}</p></div>
-    <details><summary>中文要点 / 视频无法播放时</summary><p>{resource.fallback}</p></details>
-    <a className={styles.sourceLink} href={resource.url} target="_blank" rel="noreferrer">打开原始视频与说明 <ExternalLink size={13} /></a>
-  </article>
-}
 
 export function GuidedProjectCourse({ course }: { course: GuidedCourse }) {
   const identity = useLearningIdentity()
@@ -88,8 +73,8 @@ function GuidedCourseSession({ course, token, owner }: { course: GuidedCourse; t
         <div className={styles.objective}><BookOpen size={19} /><div><strong>这一节你要学会</strong><p>{current.objective}</p><small>留下：{current.output}</small>{current.depends_on.length > 0 && <small>建议先完成：{current.depends_on.join("、")} 的学习与记录；也可以随时回看。</small>}</div></div>
         <nav className={styles.sectionNav} aria-label="本节内容"><a href="#lesson-reading">学习正文</a><a href="#lesson-references">参考资料</a><a href="#lesson-videos">视频与观察</a><a href="#lesson-practice">实践与记录</a></nav>
         <section id="lesson-reading" className={styles.markdown}><ReactMarkdown remarkPlugins={[remarkGfm]}>{current.lesson}</ReactMarkdown></section>
-        <section id="lesson-references" className={styles.section}><h3>带着问题读资料</h3>{current.resources.filter(r => r.kind === "reference").map(resource => <article className={styles.resource} key={resource.url}><span className={styles.resourceKind}>REFERENCE · {resource.publisher}</span><h4><a href={resource.url} target="_blank" rel="noreferrer">{resource.title} <ExternalLink size={14} /></a></h4><p>{resource.purpose}</p><div className={styles.watchTask}><strong>阅读后想一想</strong><p>{resource.prompt}</p></div><details><summary>中文阅读提示</summary><p>{resource.fallback}</p></details><small>来源核对：{resource.checked_at} · 英文资料配中文引导</small></article>)}</section>
-        <section id="lesson-videos" className={styles.section}><h3>看一次，再说出你的发现</h3>{current.resources.filter(r => r.kind === "video").map(resource => <VideoResource key={current.module_id + resource.url} resource={resource} />)}</section>
+        <section id="lesson-references" className={styles.section}><h3>带着问题读资料</h3>{current.resources.filter(r => r.kind === "reference").map(resource => <article className={styles.resource} key={resource.url}><a className={styles.referenceHeading} href={resource.url} target="_blank" rel="noreferrer"><span className={styles.resourceIcon}><BookOpen size={18} /></span><div><span className={styles.resourceKind}>参考资料 · {resource.publisher}</span><h4>{resource.title}</h4><p>{resource.purpose}</p></div><ExternalLink size={15} /></a><div className={styles.watchTask}><strong>阅读后想一想</strong><p>{resource.prompt}</p></div><details><summary>中文阅读提示</summary><p>{resource.fallback}</p></details><small>来源核对：{resource.checked_at} · 英文资料配中文引导</small></article>)}</section>
+        <section id="lesson-videos" className={styles.section}><h3>看一次，再说出你的发现</h3>{current.resources.filter(r => r.kind === "video").map(resource => <CourseVideoResource key={current.module_id + resource.url} resource={resource} />)}</section>
         <section id="lesson-practice" className={styles.section}><h3>实践与节点作品</h3><div className={styles.markdown}><ReactMarkdown remarkPlugins={[remarkGfm]}>{current.assignment}</ReactMarkdown></div>
           {current.lab && <div className={styles.lab}><div><FlaskConical size={20} /><div><h4>驾驶规则实验工具</h4><p>用它完成本节任务；实验结果和课程学习记录分别保存。</p></div></div><div className={styles.labActions}><button onClick={() => setLabOpen(!labOpen)}>{labOpen ? "收起实验工具" : "打开本节实验"}<ArrowRight size={15} /></button><a href={course.lab_url} target="_blank" rel="noreferrer">独立窗口操作 <ExternalLink size={13} /></a></div>{labOpen && <iframe src={course.lab_url} title="驾驶规则实验工具" className={styles.labFrame} />}</div>}
           <GuidedCourseNotebook key={current.module_id} course={course} node={current} onRecord={onRecord} />

@@ -18,3 +18,11 @@ Status: implemented locally (2026-09-20), pending production deployment
 变更组件 ESLint 通过。全量 TypeScript 仍报告既存 slide-demo 与课程生成接口参数错误，本轮新组件未新增类型错误。
 
 本次覆盖驾驶规则课程四节点，并形成可选 response_prompts 配置和课程制作说明。开放式长反思仍允许自由文本；已有文字恢复为自由表达，不自动改写。自动化检查不能替代儿童试用，尚未声称已经降低实测完成时间。
+
+## 视觉一致性修正（2026-09-20）
+
+已核对 https://systeme.xin/learn/molecule-monster-hunter/v2/M04 返回的生产样式资源，主样式 `/_next/static/chunks/2f1c3ffdcbd2ea42.css` 的 paper=#faf9f5、primary=#d97757、border=#ebe5d6、sans=Inter 与本地 globals.css 一致。浏览器打开生产课程超时，未声称完成线上登录课程的截图对照；视频与参考资料的行为对照本地正式课程组件 course-content-view.tsx。
+
+引导课程统一采用主站 tokens；视频采用官方封面、中央播放按钮和暗色弹层；资料卡片和课堂填写区统一文字层级、边框、配色及圆角。修复弹层关闭时焦点恢复，以及封面在 React 初始化前失败时的降级展示。
+
+新增 6 组浏览器检查全部通过，涵盖样式继承、默认不加载播放器、关闭 / Escape / 焦点返回、错误重试、封面失效与手机尺寸；7 组原课程回归通过。应用内浏览器另验证 M01 视频实际播放到 17.5 / 17.5 秒，readyState=4、error=null。其余来源可播放性仍依赖外站，不据此保证所有视频永久可用。证据见 artifacts/guided-course-style/。修改组件 ESLint 通过，全量 TypeScript 仍为原有 6 处错误。

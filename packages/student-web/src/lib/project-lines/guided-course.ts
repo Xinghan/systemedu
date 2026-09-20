@@ -10,6 +10,7 @@ export type LearningResource = {
   fallback: string
   youtube_id?: string
   media_url?: string
+  poster_url?: string
 }
 
 export type ResponseField = {

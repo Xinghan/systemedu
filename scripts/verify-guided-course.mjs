@@ -44,7 +44,9 @@ try {
   await check('无法播放时有可完成的替代任务与可追溯官网', async () => {
     await page.route('https://videos.code.org/**', request => request.abort());
     await page.getByRole('button', { name: '播放视频' }).click();
-    await expect(page.locator('#lesson-videos video')).toHaveAttribute('src', /videos.code.org/);
+    await expect(page.getByRole('dialog').locator('video')).toHaveAttribute('src', /videos.code.org/);
+    await expect(page.getByRole('dialog')).toContainText('此视频暂时无法播放');
+    await page.getByRole('button', { name: '关闭视频' }).click();
     await page.locator('#lesson-videos summary').click();
     await expect(page.locator('#lesson-videos')).toContainText('替代例子');
     await expect(page.locator('#lesson-videos a').last()).toHaveAttribute('href', /studio.code.org\/courses/);
