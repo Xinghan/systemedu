@@ -22,7 +22,8 @@ export type LearningSaved = { draft?: LearningDraft; submission?: LearningSubmis
 async function request<T>(token: string, path: string, method = "GET", body?: unknown): Promise<T> {
   const response = await fetch(`${STUDENT_API_URL}/api/learning/${path}`, {
     method, cache: "no-store",
-    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    // 与线上课程编号屏障一致；此请求独立捕获账号凭证，也需声明编号版本。
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json", "X-Course-Numbering": "consecutive-v2" },
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),
   })
   const data = await response.json().catch(() => ({}))

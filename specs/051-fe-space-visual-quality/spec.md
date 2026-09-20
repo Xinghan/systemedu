@@ -1,6 +1,6 @@
 # 短项目 SVG 与 3D 视觉质量重制
 
-Status: locally-complete (2026-09-19), pending production release
+Status: deployed to production (2026-09-20); see docs/deployments/2026-09-20-rover-project-lines.md
 
 用户反馈着陆器与火星车找路的 HTML 游戏精细程度不足，要求先改进小项目 skill，再重新生成高精度、高质量 SVG 和 3D。短体验继续强调快速上手，画面质量不能随任务时长下降。
 

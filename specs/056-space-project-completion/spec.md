@@ -1,6 +1,6 @@
 # 太空探索剩余项目
 
-Status: implemented locally, not deployed (2026-09-20)
+Status: deployed to production (2026-09-20); see docs/deployments/2026-09-20-rover-project-lines.md
 
 用户授权生成既定太空项目线剩余项目，沿用已确认的多节点课程、学习资料、视频、结构化记录和最终交付要求。
 

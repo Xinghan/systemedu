@@ -1,6 +1,6 @@
 # 03 级系统设计与实物探测车
 
-Status: implemented locally; not deployed (2026-09-20)
+Status: deployed to production (2026-09-20); see docs/deployments/2026-09-20-rover-project-lines.md
 
 用户批准半开放系统挑战，并明确：03 探测车最终必须做出实物，数字原型仅为中间成果。02 是部件与单变量实验；03 要处理模块接口、多约束取舍、证据诊断、新情景迁移和制造实测。
 

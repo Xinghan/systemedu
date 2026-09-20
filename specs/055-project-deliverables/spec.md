@@ -1,6 +1,6 @@
 # 可查看、可检验的项目最终交付物
 
-Status: implemented locally (2026-09-20), pending production deployment
+Status: deployed to production (2026-09-20); see docs/deployments/2026-09-20-rover-project-lines.md
 
 除三分钟 micro 体验外，项目必须在开始时明确最终交付物、学生贡献、验收方法与保存位置。学习笔记、游戏通关和课程节点提交不能替代项目作品。
 

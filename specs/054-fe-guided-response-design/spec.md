@@ -1,6 +1,6 @@
 # 分步课堂记录与按任务设计的输入
 
-Status: implemented locally (2026-09-20), pending production deployment
+Status: deployed to production (2026-09-20); see docs/deployments/2026-09-20-rover-project-lines.md
 
 问题：账号保存后，课程仍把下载放在主要路径；所有思考题套用大空白框，缺少例子与填写边界，孩子不知道从哪里开始。
 

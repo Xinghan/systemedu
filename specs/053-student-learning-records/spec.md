@@ -1,6 +1,6 @@
 # 学生课堂、作业与测验记录持久化
 
-Status: implemented locally (2026-09-20), pending production deployment
+Status: deployed to production (2026-09-20); see docs/deployments/2026-09-20-rover-project-lines.md
 
 用户要求检查既有保存机制并补齐作业、测验、考试等数据。审计发现聊天已落库；exercise_attempts 有写接口但页面使用不完整、缺少恢复；assignment_submissions 只有预留表；gateway 的提交和问答评判仍为空实现；引导课程使用匿名浏览器记录。
 

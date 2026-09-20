@@ -1,6 +1,6 @@
 # 项目库：主题项目线与分层入口
 
-**Status**: local-verified (2026-09-19，未部署生产)
+Status: deployed to production (2026-09-20); see docs/deployments/2026-09-20-rover-project-lines.md
 **Created**: 2026-09-18
 
 ## 背景与目标

@@ -1,6 +1,6 @@
 # 中等及以上项目使用多节点课程
 
-Status: local-complete, pending publication (2026-09-19)
+Status: deployed to production (2026-09-20); see docs/deployments/2026-09-20-rover-project-lines.md
 
 用户指出中等项目只有一个 HTML 交互，缺少原大项目中的学习资料、reference、video 和多个学习节点。本次纠正生成规则及已开放的驾驶规则项目；三分钟微体验保持直接操作。
 
