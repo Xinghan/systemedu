@@ -1,0 +1,21 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>六轮探测车结构观察</title><style>html,body{margin:0;height:100%;overflow:hidden;background:#c3b298;font-family:system-ui,sans-serif}body{display:grid;grid-template-rows:46px minmax(0,1fr) 38px}canvas{display:block;grid-row:2;min-height:0;width:100%;height:100%;touch-action:none}.tools{grid-row:1;display:flex;gap:6px;padding:8px;align-items:center}button{background:#faf9f5e8;border:1px solid #ffffff60;border-radius:5px;padding:7px 9px;white-space:nowrap;color:#293534;cursor:pointer;font-size:12px}#status{grid-row:3;margin:0;padding:4px 12px;font-size:10px;color:#25342f;line-height:1.6}.fallback{grid-row:1/3;min-height:0;width:100%;height:100%;object-fit:contain}</style></head><body><canvas aria-label="精细六轮探测车，可旋转观察轮轴、悬挂、桅杆和相机连接"></canvas><div class="tools"><button id="left">向左旋转</button><button id="right">向右旋转</button><button id="near">近看设备</button><button id="reset">恢复全貌</button></div><p id="status">正在准备结构观察…</p><script type="module">
+import * as T from '../spot-a-world/vendor/three.module.min.js';
+import {createMissionAssets} from '../_shared/mission-assets.js';
+import {createEnvironment} from '../_shared/mission-terrain.js';
+import {vehicleSVG} from '../_shared/mission-vector.js';
+const canvas=document.querySelector('canvas'),status=document.querySelector('#status');
+try{
+ if(new URLSearchParams(location.search).get('renderer')==='canvas')throw Error('兼容模式');
+ const renderer=new T.WebGLRenderer({canvas,antialias:true});renderer.setPixelRatio(Math.min(devicePixelRatio,1.5));renderer.outputColorSpace=T.SRGBColorSpace;renderer.toneMapping=T.ACESFilmicToneMapping;renderer.toneMappingExposure=1.15;renderer.shadowMap.enabled=true;renderer.shadowMap.type=T.PCFSoftShadowMap;
+ const scene=new T.Scene();scene.background=new T.Color(0xc3b298);const environment=createEnvironment(T,renderer);scene.environment=environment.texture;
+ scene.add(new T.HemisphereLight(0xe5eff4,0x795c3f,2));const sun=new T.DirectionalLight(0xffead0,3.3);sun.position.set(5,10,5);sun.castShadow=true;sun.shadow.mapSize.set(1024,1024);scene.add(sun);
+ const assets=createMissionAssets(T),rover=assets.rover();scene.add(rover.group);
+ const floor=new T.Mesh(new T.PlaneGeometry(100,100),new T.MeshStandardMaterial({color:0xb3a48a,roughness:.94}));floor.rotation.x=-Math.PI/2;floor.receiveShadow=true;scene.add(floor);
+ const camera=new T.PerspectiveCamera(38,1,.1,120);let angle=-.7,near=false,drag=null;
+ function render(){const w=canvas.clientWidth,h=canvas.clientHeight;renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix();const r=near?3.2:4.8;camera.position.set(Math.cos(angle)*r,near?1.9:2.4,Math.sin(angle)*r);camera.lookAt(0,.65,0);renderer.render(scene,camera)}
+ canvas.onpointerdown=e=>{drag=e.clientX;canvas.setPointerCapture(e.pointerId)};canvas.onpointermove=e=>{if(drag!==null){angle+=(e.clientX-drag)*.012;drag=e.clientX;render()}};canvas.onpointerup=canvas.onpointercancel=()=>{drag=null};
+ document.querySelector('#left').onclick=()=>{angle-=.3;render()};document.querySelector('#right').onclick=()=>{angle+=.3;render()};document.querySelector('#near').onclick=()=>{near=!near;render()};document.querySelector('#reset').onclick=()=>{near=false;angle=-.7;render()};
+ const resize=new ResizeObserver(render);resize.observe(document.body);render();document.body.dataset.renderer='webgl';status.textContent='结构示意 / 六轮、轮毂、悬挂连杆、相机与线束 · 拖动或用按钮旋转';
+ addEventListener('pagehide',()=>{resize.disconnect();scene.traverse(o=>{o.geometry?.dispose();if(o.material)for(const m of Array.isArray(o.material)?o.material:[o.material])m.dispose()});assets.textures.forEach(t=>t.dispose());environment.texture.dispose();renderer.dispose()},{once:true});
+}catch{canvas.remove();const img=new Image();img.src='data:image/svg+xml;charset=utf-8,'+encodeURIComponent(vehicleSVG('rover'));img.alt='六轮探测车结构的精细矢量示意';img.className='fallback';document.body.prepend(img);document.querySelector('.tools').hidden=true;document.body.dataset.renderer='vector';status.textContent='当前设备使用精细矢量结构图；所有课程实验与记录仍可继续。'}
+</script></body></html>

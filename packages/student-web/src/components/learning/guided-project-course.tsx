@@ -13,11 +13,12 @@ import { learningRecords } from "@/lib/api/learning-records"
 import { learningCacheKey, type RecordState } from "@/lib/learning-record-session"
 import { GuidedCourseNotebook, guidedScope } from "./guided-course-notebook"
 import { CourseVideoResource } from "./course-video-resource"
+import { SpaceProjectWorkspace, isSpaceCourse } from "./space-project-workspace"
 import styles from "./guided-project-course.module.css"
 
 export function GuidedProjectCourse({ course }: { course: GuidedCourse }) {
   const identity = useLearningIdentity()
-  return <GuidedCourseSession key={identity.owner} course={course} token={identity.token} owner={identity.owner} />
+  return <GuidedCourseSession key={`${course.id}:${course.version}:${identity.owner}`} course={course} token={identity.token} owner={identity.owner} />
 }
 
 function GuidedCourseSession({ course, token, owner }: { course: GuidedCourse; token: string | null; owner: string }) {
@@ -53,7 +54,7 @@ function GuidedCourseSession({ course, token, owner }: { course: GuidedCourse; t
   function download() {
     const blob = new Blob([JSON.stringify({ ...record, exported_at: new Date().toISOString() }, null, 2)], { type: "application/json" })
     const url = URL.createObjectURL(blob), link = document.createElement("a")
-    link.href = url; link.download = "my-driving-course-record.json"; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000)
+    link.href = url; link.download = `${course.id}-course-record.json`; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000)
   }
   return <main className={styles.page} data-guided-course={course.id}>
     <header className={styles.header}><Link href="/library?view=lines&line=space-exploration"><ArrowLeft size={15} />星际远征队</Link><span>引导课程 / 学习、实践、交付</span></header>
@@ -78,6 +79,7 @@ function GuidedCourseSession({ course, token, owner }: { course: GuidedCourse; t
         <section id="lesson-videos" className={styles.section}><h3>看一次，再说出你的发现</h3>{current.resources.filter(r => r.kind === "video").map(resource => <CourseVideoResource key={current.module_id + resource.url} resource={resource} />)}</section>
         <section id="lesson-practice" className={styles.section}><h3>实践与节点作品</h3><div className={styles.markdown}><ReactMarkdown remarkPlugins={[remarkGfm]}>{current.assignment}</ReactMarkdown></div>
           {current.lab && <div className={styles.lab}><div><FlaskConical size={20} /><div><h4>驾驶规则实验工具</h4><p>用它完成本节任务；实验结果和课程学习记录分别保存。</p></div></div><div className={styles.labActions}><button onClick={() => setLabOpen(!labOpen)}>{labOpen ? "收起实验工具" : "打开本节实验"}<ArrowRight size={15} /></button><a href={course.lab_url} target="_blank" rel="noreferrer">独立窗口操作 <ExternalLink size={13} /></a></div>{labOpen && <iframe src={course.lab_url} title="驾驶规则实验工具" className={styles.labFrame} />}</div>}
+          {isSpaceCourse(course.id) && <SpaceProjectWorkspace course={course} node={current} />}
           <GuidedCourseNotebook key={current.module_id} course={course} node={current} onRecord={onRecord} />
         </section>
         <footer className={styles.nodeFooter}>{index > 0 ? <Link href={`?node=${course.modules[index - 1].module_id}`} onClick={() => setLabOpen(false)}><ArrowLeft size={14} />上一节点</Link> : <span />}{index < course.modules.length - 1 ? <Link href={`?node=${course.modules[index + 1].module_id}`} onClick={() => setLabOpen(false)}>下一节点：{course.modules[index + 1].title}<ArrowRight size={14} /></Link> : <Link href="/library?view=lines&line=space-exploration">回到项目线<ArrowRight size={14} /></Link>}</footer>

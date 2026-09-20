@@ -5,7 +5,12 @@ import type { GuidedCourse, GuidedModule, LearningResource } from "./guided-cour
 
 // 读取受版本控制的本地课程包；不把本地格式当作内容服务已发布课程。
 export async function loadDrivingCourse(): Promise<GuidedCourse> {
-  const root = path.join(process.cwd(), "public/project-lines/space-exploration/write-driving-rules/course")
+  return loadSpaceCourse("write-driving-rules")
+}
+
+export async function loadSpaceCourse(id: string): Promise<GuidedCourse> {
+  if (!/^[a-z]+(?:-[a-z]+)+$/.test(id)) throw new Error("课程 ID 无效")
+  const root = path.join(process.cwd(), `public/project-lines/space-exploration/${id}/course`)
   type SourceModule = Omit<GuidedModule, "resources"> & { resources: string }
   const tree = JSON.parse(await readFile(path.join(root, "tree/knowledge_tree.json"), "utf8")) as Omit<GuidedCourse, "modules"> & { modules: SourceModule[] }
   const read = (relative: string) => {

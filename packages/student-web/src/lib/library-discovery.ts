@@ -5,7 +5,7 @@ import courseSnapshots from "@/lib/project-lines/course-snapshots.json"
 
 export type DiscoveryEntry = {
   id: string
-  kind: "micro" | "guided" | "full"
+  kind: "micro" | "guided" | "integration" | "full"
   title: string
   domain: string
   difficulty: number | null
@@ -23,6 +23,7 @@ export type DiscoveryEntry = {
 export function discoveryLevel(entry: DiscoveryEntry): number {
   if (entry.kind === "micro") return 0
   if (entry.kind === "guided") return 1
+  if (entry.kind === "integration") return 2
   if (entry.difficulty == null) return 7
   return entry.difficulty <= 2 ? 3 : entry.difficulty + 1
 }

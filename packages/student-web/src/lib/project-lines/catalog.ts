@@ -1,5 +1,6 @@
 import type { Locale } from "@/lib/i18n/locales"
 import lineData from "./lines.json"
+import spaceCourses from "./space-courses.json"
 
 export const PROJECT_LINES = lineData
 export type ProjectLine = typeof PROJECT_LINES[number]
@@ -17,7 +18,7 @@ export const SPACE_LINE = {
 } as const
 
 export type LocalProject = {
-  id: string; lineId: string; href: string; kind: "micro" | "guided"; estimatedMinutes: number; learningNodes?: number;
+  id: string; lineId: string; href: string; kind: "micro" | "guided" | "integration"; estimatedMinutes: number; learningNodes?: number;
   title: { zh: string; en: string }; action: { zh: string; en: string }; outcome: { zh: string; en: string };
   challenge: { zh: string; en: string }; startLabel: { zh: string; en: string }; domains: readonly string[]; coverImage?: string;
 }
@@ -62,19 +63,20 @@ export const GUIDED_PROJECTS: readonly LocalProject[] = [{
   startLabel: { zh: "进入驾驶规则课程", en: "Start the driving rules course" }, domains: ["aerospace", "computing"],
   coverImage: "/project-lines/space-exploration/write-driving-rules/cover-ai.png",
 }]
-export const LOCAL_PROJECTS = [...MICRO_PROJECTS, ...GUIDED_PROJECTS]
+export const SPACE_COURSES: readonly LocalProject[] = spaceCourses.map(project => ({...project, kind: project.kind as "guided" | "integration"}))
+export const LOCAL_PROJECTS = [...MICRO_PROJECTS, ...GUIDED_PROJECTS, ...SPACE_COURSES]
 
 export type DiscoveryKind = "all" | "micro" | "guided" | "integration" | "full"
 
-// 来源：systemeduidea/project_lines/space-exploration/line.json，均未开放。
+// 太空项目线本批规划已实现；其他主题规划留在 lines.json。
 export const PLANNED_PROJECTS: Record<"guided" | "integration", { zh: string[]; en: string[] }> = {
   guided: {
-    zh: ["为远征选择观察地点", "设计一次运载方案", "改造我的越野底盘", "给探测车制作地形样本"],
-    en: ["Choose an observation site", "Design a payload plan", "Improve an off-road chassis", "Label terrain for a rover"],
+    zh: [],
+    en: [],
   },
   integration: {
-    zh: ["组装我的第一辆自主探测车", "完成我的第一次火星远征"],
-    en: ["Assemble my first autonomous rover", "Complete my first Mars expedition"],
+    zh: [],
+    en: [],
   },
 }
 
