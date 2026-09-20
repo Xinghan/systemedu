@@ -578,6 +578,7 @@ def init_db() -> None:
 
     spec 031: PG 用 alembic, SQLite (pytest 兼容) 用 create_all.
     """
+    from .learning_records import models as _learning_models  # noqa: F401
     engine = _ensure_engine()
     url = str(engine.url)
     if url.startswith("sqlite"):
@@ -604,7 +605,7 @@ def _run_alembic_upgrade() -> None:
     cfg = Config(str(alembic_ini))
     # script_location 指向 student-app/alembic
     cfg.set_main_option("script_location", str(pkg_dir / "alembic"))
-    command.upgrade(cfg, "head")
+    command.upgrade(cfg, "heads")
 
 
 # ---------------------------------------------------------------------------

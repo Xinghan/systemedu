@@ -6,7 +6,7 @@
 
 入口先展示课程路径。M01 区分输入与动作，M02 编写条件规则，M03 同路对照与换路检验，M04 处理未知并交付。每节有独立正文、参考文档、官方视频与中文观看/替代任务、实践和个人学习记录。具体内容见 course/tree/knowledge_tree.json 和 course/knodes/。
 
-学习记录使用独立的 systemedu:guided-course:write-driving-rules:v1，逐节点保存、可下载；提交只代表留下记录，不是自动评定掌握。M04 可关联按当前模型重新核验的实际实验记录，单独实验通过不会完成全课程。课程包 guided-course/1 是本地预览格式，尚未导入正式内容服务或接入账号进度。
+学生网站的学习记录按节点保存：登录后写入 student-app 的 learning_drafts / learning_submissions，可跨浏览器恢复；未登录时使用按身份隔离的 systemedu:learning:v1:* 本机草稿。旧 systemedu:guided-course:write-driving-rules:v1 记录需主动导入。提交只代表留下记录，不是自动评定掌握。M04 可关联按当前模型重新核验的实验记录并随账号保存，单独实验通过不会完成全课程。课程包 guided-course/1 仍是本地内容格式，尚未导入正式内容服务。
 
 ## 操作、模型与交付
 

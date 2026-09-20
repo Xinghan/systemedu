@@ -2,7 +2,7 @@ import { chromium, expect } from '@playwright/test';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 const root = 'http://localhost:4000', route = root + '/explore/space-exploration/write-driving-rules';
-const key = 'systemedu:guided-course:write-driving-rules:v1';
+const key = 'systemedu:learning:v1:guest:' + encodeURIComponent(JSON.stringify({ library_slug: 'write-driving-rules', module_id: 'M01', activity_id: 'reflection', kind: 'classroom', content_version: '1.0' }));
 const labKey = 'systemedu:write-driving-rules:v1';
 const dir = path.resolve('artifacts/guided-course');
 await fs.mkdir(dir, { recursive: true });
@@ -25,6 +25,7 @@ try {
     await expect(page.locator('#lesson-references a')).toHaveAttribute('href', /science.nasa.gov/);
     await expect(page.locator('#lesson-videos')).toContainText('AutoNav');
     await expect(page.locator('[data-course-progress]')).toHaveText('0 / 4');
+    await expect(page.locator('[data-learning-status]')).toContainText('未登录');
     await page.screenshot({ path: path.join(dir, 'course-desktop.png'), fullPage: true });
   });
   await check('逐节点记录、刷新恢复，修改撤销提交标记', async () => {
@@ -69,7 +70,7 @@ try {
   await check('关联实际实验凭据，实验通过不冒充全课程完成，交付可下载', async () => {
     await node('M04');
     await page.getByRole('button', { name: '关联实验作品', exact: true }).click();
-    await expect(page.getByText('已关联规则与两条路线的验证记录。', { exact: false })).toBeVisible();
+    await expect(page.getByText('本节已关联实验凭据。', { exact: false })).toBeVisible();
     await expect(page.locator('[data-course-progress]')).toHaveText('1 / 4');
     const pending = page.waitForEvent('download');
     await page.getByRole('button', { name: '下载课程与实验交付记录' }).click();
@@ -84,7 +85,7 @@ try {
       localStorage.setItem(labKey, JSON.stringify(records)); localStorage.removeItem(key);
     }, { key, labKey });
     await page.reload(); await page.getByRole('button', { name: '关联实验作品', exact: true }).click();
-    await expect(page.getByText('还没找到符合当前格式', { exact: false })).toBeVisible();
+    await expect(page.getByText('还没找到实际通过两条路线', { exact: false })).toBeVisible();
     await expect(page.locator('[data-course-progress]')).toHaveText('0 / 4');
   });
   await check('存储损坏不覆盖，配额失败仍可跨节点保留和下载当前记录', async () => {
@@ -96,7 +97,7 @@ try {
       }, { mode, key });
       const p = await c.newPage(); await p.goto(route);
       await p.locator('textarea').first().fill('仍保留在页面内的观察');
-      await expect(p.getByText('未写入本机', { exact: false })).toBeVisible();
+      await expect(p.locator('[data-learning-status]')).toContainText('当前内容只在页面中');
       await p.locator('[aria-label="课程学习路径"] a').nth(1).click();
       await p.locator('[aria-label="课程学习路径"] a').first().click();
       await expect(p.locator('textarea').first()).toHaveValue('仍保留在页面内的观察');
@@ -106,6 +107,7 @@ try {
   });
   await check('手机课程布局与项目库课程入口', async () => {
     await page.setViewportSize({ width: 390, height: 844 }); await page.goto(route);
+    await expect(page.locator('[data-learning-status]')).toContainText('未登录');
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     await page.screenshot({ path: path.join(dir, 'course-mobile.png'), fullPage: true });
     await page.goto(root + '/library?view=lines&line=space-exploration');

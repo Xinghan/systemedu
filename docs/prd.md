@@ -400,6 +400,15 @@ Course Factory 手册新增第 9 类富媒体，把"可交互 3D 物体解剖 + 
 
 路由沿用 `/explore/space-exploration/write-driving-rules`，以 `?node=M01…M04` 定位学习节点；没有新增后端 API。静态实验链接兼容保留，课程包采用单独标版的 `guided-course/1` 本地格式。
 
+#### 3z: 学生课堂与作业记录（spec 053，本地完成，待发布）
+
+- [x] 登录后的课堂输入、作业、测验和考试类型记录写入 student-app PostgreSQL；按用户、课程、节点、活动和内容版本隔离。
+- [x] 草稿自动保存与跨浏览器恢复；每次提交保留不可变快照，幂等重试，双设备版本冲突明确提示。
+- [x] 驾驶规则课程、作业选择/问答、理论自测及项目交付清单、反思、成果链接接入统一保存。
+- [x] 未登录仅保留本机；旧匿名课堂记录主动导入；存储和网络故障保留草稿、可下载。练习自检不冒充正式评分。
+- [x] 保留原练习表与聊天历史；新练习提交继续提供 AI 导师上下文。26 项后端测试、8 组账号浏览器测试、7 组匿名课程回归通过。
+- [ ] 生产发布、教师评阅与成绩管理、统一作业中心、文件附件上传。考试类型持久化已验证，完整考试组织界面尚未实现。
+
 ### Phase 4: Hub
 - [ ] 项目打包/解包 (tar.gz)
 - [ ] Hub 客户端 (push/pull/search)
@@ -583,6 +592,14 @@ coding 用 coder model。
 | POST | `/api/projects/:name/nodes/:id/capstone/submit` | 提交大作业 (multipart: 文件 + 清单 + 自评说明) |
 | GET | `/api/projects/:name/nodes/:id/capstone/status` | 查询最新提交的批改状态 (3s 轮询) |
 | GET | `/api/projects/:name/nodes/:id/capstone/submissions` | 获取提交历史列表 |
+
+**学生学习记录**（spec 053，当前 student-app）
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/learning/records` | 按课程、节点、活动、类型和内容版本读取本人草稿及最近 50 次提交；更早快照保留于数据库 |
+| PUT | `/api/learning/drafts` | 带预期版本的草稿保存，旧设备写入返回 409 |
+| POST | `/api/learning/submissions` | 保存不可变提交快照；请求 ID 幂等；状态为未评阅 |
 
 **升级路线** (Career Path, 待实施)
 | Method | Path | Description |

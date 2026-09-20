@@ -14,6 +14,7 @@ from sqlalchemy import engine_from_config, pool
 from alembic import context
 
 from systemedu.student.db import Base
+from systemedu.student.learning_records import models as _learning_models  # noqa: F401
 
 config = context.config
 if config.config_file_name is not None:

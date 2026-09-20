@@ -1,5 +1,8 @@
 "use client"
 
+import { PersistentTheoryQuiz } from "./persistent-question"
+import { NodeAssignmentPanel } from "./node-assignment-panel"
+
 import { createContext, useContext, useEffect, useRef, useState } from "react"
 import { createPortal } from "react-dom"
 import {
@@ -13,7 +16,7 @@ import remarkGfm from "remark-gfm"
 import remarkMath from "remark-math"
 import rehypeKatex from "rehype-katex"
 import "katex/dist/katex.min.css"
-import { gateway, exercise } from "@/lib/api"
+import { gateway } from "@/lib/api"
 import { getCourseFactoryVariant } from "@/data/course-factory-variants"
 import { TeacherSceneView } from "@/components/learning/teacher-scene-view"
 import { HighlightAskButton } from "./HighlightAskButton"
@@ -102,7 +105,7 @@ interface AudioCtxValue {
 const KnowledgeLevelContext = createContext<import("@/lib/types/api").KnowledgeLevel>("K1")
 
 // Course identity context — lets nested TheoryQuiz submit attempts with project/knode info
-const CourseIdentityContext = createContext<{ projectName: string; knodeId: number }>({ projectName: "", knodeId: 0 })
+const CourseIdentityContext = createContext<{ projectName: string; knodeId: number; moduleId?: string }>({ projectName: "", knodeId: 0 })
 
 const AudioPlayContext = createContext<AudioCtxValue>({
   activeSectionId: null,
@@ -669,226 +672,12 @@ function stripDuplicateTitle(markdown: string, title: string): string {
 
 // ---------------------------------------------------------------------------
 // TheoryQuiz — collapsible self-test exercises inside a theory modal
-// Features: wrong-answer analysis, retry, timing, backend persistence
+// 账号草稿、练习自检、重新作答与不可变提交历史。
 // ---------------------------------------------------------------------------
 
-/** Per-question local state. */
-interface QuizItemState {
-  selected: number | null
-  submitted: boolean
-  isCorrect: boolean
-  attemptSeq: number
-  /** ms timestamp when the question was first displayed */
-  shownAt: number
-}
-
-function buildErrorAnalysis(t: ReturnType<typeof useT>, ex: NonNullable<TheoryEntry["exercises"]>[number], wrongIdx: number): string {
-  const wrongOpt = ex.options[wrongIdx]
-  const correctOpt = ex.options[ex.correct]
-  let analysis = t("course.quiz_wrong_chose", { wrong: wrongOpt })
-  if (ex.explanation) {
-    analysis += ` ${ex.explanation}`
-  }
-  analysis += ` ${t("course.quiz_correct_is", { correct: correctOpt })}`
-  return analysis
-}
-
 function TheoryQuiz({ theoryId, exercises }: { theoryId: string; exercises: NonNullable<TheoryEntry["exercises"]> }) {
-  const t = useT()
-  const { projectName, knodeId } = useContext(CourseIdentityContext)
-  const storageKey = `theory_quiz_${theoryId}`
-
-  // Load saved state from localStorage
-  const [items, setItems] = useState<QuizItemState[]>(() => {
-    if (typeof window !== "undefined") {
-      try {
-        const saved = localStorage.getItem(storageKey)
-        if (saved) {
-          const parsed = JSON.parse(saved) as QuizItemState[]
-          if (Array.isArray(parsed) && parsed.length === exercises.length) return parsed
-        }
-      } catch { /* ignore */ }
-    }
-    return exercises.map(() => ({
-      selected: null, submitted: false, isCorrect: false, attemptSeq: 1, shownAt: Date.now(),
-    }))
-  })
-  const [expanded, setExpanded] = useState(() => items.some((it) => it.submitted))
-
-  const persist = (next: QuizItemState[]) => {
-    try { localStorage.setItem(storageKey, JSON.stringify(next)) } catch { /* ignore */ }
-  }
-
-  const submitToBackend = (qi: number, state: QuizItemState, ex: NonNullable<TheoryEntry["exercises"]>[number]) => {
-    if (!projectName) return
-    const timeMs = Date.now() - state.shownAt
-    const errorAnalysis = state.isCorrect ? null : buildErrorAnalysis(t, ex, state.selected!)
-    gateway.submitExerciseAttempts(projectName, [{
-      knode_id: knodeId,
-      quiz_type: "theory",
-      exercise_id: `${theoryId}_q${qi}`,
-      question: ex.question,
-      user_answer: String(state.selected),
-      correct_answer: String(ex.correct),
-      is_correct: state.isCorrect,
-      attempt_seq: state.attemptSeq,
-      time_spent_ms: timeMs,
-      error_analysis: errorAnalysis,
-      explanation: ex.explanation || null,
-    }]).catch(() => { /* silent — localStorage is the fallback */ })
-
-    // spec 031 P5: 同步 POST 到 student-app /api/exercise/attempt
-    // (用于 L3 history layer, 供 AI 导师 "你刚做错了这题" 类回答)
-    void exercise.postAttempt({
-      library_slug: projectName,
-      module_id: knodeId,
-      idea_id: `${theoryId}_q${qi}`,
-      exercise_index: qi,
-      question: ex.question,
-      student_answer: String(state.selected),
-      correct: state.isCorrect,
-    }).catch(() => { /* silent */ })
-  }
-
-  const handleSelect = (qi: number, oi: number) => {
-    if (items[qi].submitted) return
-    setItems((prev) => {
-      const next = [...prev]
-      next[qi] = { ...next[qi], selected: oi }
-      return next
-    })
-  }
-
-  const handleSubmit = (qi: number) => {
-    const item = items[qi]
-    if (item.selected === null) return
-    const correct = item.selected === exercises[qi].correct
-    const nextItem: QuizItemState = { ...item, submitted: true, isCorrect: correct }
-    const next = [...items]
-    next[qi] = nextItem
-    setItems(next)
-    persist(next)
-    submitToBackend(qi, nextItem, exercises[qi])
-  }
-
-  const handleRetry = (qi: number) => {
-    const next = [...items]
-    next[qi] = {
-      selected: null,
-      submitted: false,
-      isCorrect: false,
-      attemptSeq: items[qi].attemptSeq + 1,
-      shownAt: Date.now(),
-    }
-    setItems(next)
-    persist(next)
-  }
-
-  return (
-    <div className="mt-6 border-t border-foreground/5 pt-4">
-      <button
-        type="button"
-        onClick={() => setExpanded((v) => !v)}
-        className="flex items-center gap-2 text-sm font-semibold text-muted-foreground hover:text-foreground transition-colors"
-      >
-        {expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-        <ClipboardList className="h-4 w-4" />
-        <span>{t("course.quiz_self_test", { n: exercises.length })}</span>
-      </button>
-
-      {expanded && (
-        <div className="mt-4 space-y-5">
-          {exercises.map((ex, qi) => {
-            const item = items[qi]
-            return (
-              <div key={qi} className="rounded-lg bg-accent/30 p-4">
-                <div className="flex items-center justify-between mb-3">
-                  <p className="text-sm font-medium text-foreground">
-                    {qi + 1}. {ex.question}
-                  </p>
-                  {item.attemptSeq > 1 && (
-                    <span className="text-[10px] text-muted-foreground ml-2 whitespace-nowrap">
-                      {t("course.quiz_attempt_n", { n: item.attemptSeq })}
-                    </span>
-                  )}
-                </div>
-                <div className="space-y-2">
-                  {ex.options.map((opt, oi) => {
-                    const isSelected = item.selected === oi
-                    const isAnswer = ex.correct === oi
-                    let ringClass = "border-border/60"
-                    let bgClass = ""
-                    if (item.submitted) {
-                      if (isAnswer) {
-                        ringClass = "border-emerald-500"
-                        bgClass = "bg-emerald-50 dark:bg-emerald-500/10"
-                      } else if (isSelected && !isAnswer) {
-                        ringClass = "border-red-400"
-                        bgClass = "bg-red-50 dark:bg-red-500/10"
-                      }
-                    } else if (isSelected) {
-                      ringClass = "border-primary"
-                      bgClass = "bg-primary/5"
-                    }
-                    return (
-                      <button
-                        key={oi}
-                        type="button"
-                        disabled={item.submitted}
-                        onClick={() => handleSelect(qi, oi)}
-                        className={`w-full text-left px-4 py-2.5 rounded-md border text-sm transition-all duration-200 ${ringClass} ${bgClass} ${item.submitted ? "cursor-default" : "hover:border-primary/50 cursor-pointer"}`}
-                      >
-                        <span className="font-medium mr-2 text-muted-foreground">{String.fromCharCode(65 + oi)}.</span>
-                        <span className="text-foreground">{opt}</span>
-                        {item.submitted && isAnswer && <CheckCircle className="inline ml-2 h-3.5 w-3.5 text-emerald-500" />}
-                        {item.submitted && isSelected && !isAnswer && <XCircle className="inline ml-2 h-3.5 w-3.5 text-red-400" />}
-                      </button>
-                    )
-                  })}
-                </div>
-
-                {/* Submit button (pre-answer) */}
-                {!item.submitted && (
-                  <button
-                    type="button"
-                    disabled={item.selected === null}
-                    onClick={() => handleSubmit(qi)}
-                    className="mt-3 px-4 py-1.5 rounded-md text-xs font-semibold bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                  >
-                    {t("course.quiz_submit")}
-                  </button>
-                )}
-
-                {/* Post-answer feedback */}
-                {item.submitted && (
-                  <div className="mt-3 space-y-2">
-                    {item.isCorrect ? (
-                      <p className="text-xs text-emerald-600 dark:text-emerald-400 leading-relaxed">
-                        {t("course.quiz_correct_feedback")}{ex.explanation ? ` ${ex.explanation}` : ""}
-                      </p>
-                    ) : (
-                      <>
-                        <p className="text-xs text-red-500 dark:text-red-400 leading-relaxed">
-                          {buildErrorAnalysis(t, ex, item.selected!)}
-                        </p>
-                        <button
-                          type="button"
-                          onClick={() => handleRetry(qi)}
-                          className="px-3 py-1 rounded-md text-xs font-semibold border border-primary/40 text-primary hover:bg-primary/10 transition-colors"
-                        >
-                          {t("course.quiz_retry")}
-                        </button>
-                      </>
-                    )}
-                  </div>
-                )}
-              </div>
-            )
-          })}
-        </div>
-      )}
-    </div>
-  )
+  const { projectName, moduleId } = useContext(CourseIdentityContext)
+  return <PersistentTheoryQuiz projectName={projectName} moduleId={moduleId} theoryId={theoryId} exercises={exercises} />
 }
 
 function TheoryBlock({ theory }: { theory: TheoryEntry }) {
@@ -2978,7 +2767,7 @@ export function CourseContentView({
   }
 
   return (
-    <CourseIdentityContext.Provider value={{ projectName, knodeId: nodeId }}>
+    <CourseIdentityContext.Provider value={{ projectName, knodeId: nodeId, moduleId: knode?.module_id }}>
     <KnowledgeLevelContext.Provider value={knowledgeLevel}>
     <AudioProvider>
       <div className="flex flex-col h-full">
@@ -3077,6 +2866,8 @@ export function CourseContentView({
                       <PlanWithIdeas content={content} />
                     )}
 
+
+                    <NodeAssignmentPanel key={`${projectName}/${knode?.module_id}`} projectName={projectName} knode={knode} />
                     {agentLogs.length > 0 && <AgentDebugPanel logs={agentLogs} />}
 
                     {/* 高亮课文 → 浮"深入学习" + "知识钻取"按钮 (fixed 定位, 不影响布局) */}

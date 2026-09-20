@@ -5,12 +5,12 @@
  * 设计:
  *  - getCourseV2/V3, getCourseV2Assignment 由 myProjects.getKnode (本地 clone) 提供数据 +
  *    转成老的 CourseContentData / CourseAssignmentData 格式
- *  - 任何"生成 / 重生成 / 评判"接口在学生端是 no-op (返回稳定空值, 让 UI 不爆)
+ *  - 内容生成接口在学生端是 no-op；答题保存使用 learning-records 专用接口
  *  - 进度调用桥到 myProjects.setProgress (学生端进度模型: slug + module_id 字符串,
  *    跟老 cloud-app 的 project_name + nodeId int 对应不上)
  *
  * 这样 CourseContentView / AssignmentView 不需要改, 直接喂数据就能显示。
- * "重新生成本节" / "提交答题统计" 这类按钮在学生端 UX 上也保留, 但实际是 noop。
+ * 作业与测验通过 PersistentQuestion 保存草稿和提交，不再走此 shim 的空提交。
  */
 
 import { STUDENT_API_URL } from "./client"
@@ -20,8 +20,6 @@ import type {
   CourseAssignmentData,
   CourseContentData,
   CourseV3VersionsData,
-  ExerciseAttemptPayload,
-  PracticeSubmissionResult,
   UpdateProgressResponse,
 } from "@/lib/types/api"
 
@@ -214,22 +212,7 @@ export const gateway = {
     return { status: "noop", project_name: "", knode_id: 0 }
   },
 
-  // === 答题 / 评判 — 学生端 noop (spec 028/029 接) ===
-  submitExerciseAttempts: async (
-    _projectName: string,
-    _attempts: ExerciseAttemptPayload[],
-    _userId = "default",
-  ): Promise<PracticeSubmissionResult> => {
-    return {
-      ok: true,
-      submitted_count: 0,
-      results: [],
-    } as unknown as PracticeSubmissionResult
-  },
-  evaluateQa: async () => {
-    return { score: 0, feedback: "(spec 028 启用 AI 评判)", ok: false } as never
-  },
-
+  // 答题、草稿与提交历史由 learning-records 处理；未接入阅卷时明确保持未评分。
   // === 进度 — 桥到 myProjects.setProgress (slug + moduleId) ===
   updateNodeProgress: async (
     projectName: string,

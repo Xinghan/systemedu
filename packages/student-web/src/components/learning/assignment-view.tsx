@@ -1,21 +1,20 @@
 "use client"
 
-import { useState, useMemo, useCallback, useRef } from "react"
+import { useMemo } from "react"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 import type { Components } from "react-markdown"
 import {
-  Wrench, CheckCircle2, ListChecks, MessageSquareText,
-  ChevronDown, ChevronUp, Target, ClipboardCheck, PenLine,
-  AlertTriangle, Lightbulb, Award, XCircle, Send, RotateCcw, PackageCheck, ArrowRight,
+  Wrench, ListChecks, MessageSquareText,
+  Target, ClipboardCheck, PenLine,
+  AlertTriangle, Lightbulb, Award, PackageCheck, ArrowRight,
 } from "lucide-react"
 
-import type { KnodeInfo, NodeProgress, ExerciseAttemptPayload } from "@/lib/types/api"
-import { gateway } from "@/lib/api"
+import type { KnodeInfo, NodeProgress } from "@/lib/types/api"
+import { PersistentQuestion } from "./persistent-question"
 import { CapstoneSubmissionPanel } from "./capstone-submission-panel"
 import { parseCapstoneBlocks } from "./capstone-assignment.mjs"
 import { useT } from "@/lib/i18n/use-t"
-import { LoadingSpinner } from "@/components/ui/loading-spinner"
 
 interface AssignmentViewProps {
   content: string
@@ -169,177 +168,7 @@ function parseAssignment(raw: string): ParsedBlock[] {
 }
 
 // ---------------------------------------------------------------------------
-// Interactive choice question component
-// ---------------------------------------------------------------------------
-
-function buildChoiceErrorAnalysis(
-  q: ParsedChoice,
-  wrongLetter: string,
-  t: (key: string, vars?: Record<string, string | number>) => string,
-): string {
-  const wrongOpt = q.options.find(o => o.letter === wrongLetter)
-  const correctOpt = q.options.find(o => o.letter === q.answer)
-  if (!wrongOpt || !correctOpt) return ""
-  return `${t("assignment.you_chose")} ${wrongLetter}（${wrongOpt.content}），${t("assignment.incorrect_prefix")} ${q.answer}（${correctOpt.content}）。`
-}
-
-function ChoiceQuestion({ q, projectName, knodeId }: {
-  q: ParsedChoice
-  projectName?: string
-  knodeId?: number
-}) {
-  const t = useT()
-  const [selected, setSelected] = useState<string | null>(null)
-  const [submitted, setSubmitted] = useState(false)
-  const [attemptSeq, setAttemptSeq] = useState(1)
-  const [errorAnalysis, setErrorAnalysis] = useState<string | null>(null)
-  const shownAt = useRef(Date.now())
-
-  const isCorrect = submitted && selected === q.answer
-  const canRetry = submitted && !isCorrect
-
-  const submitToApi = useCallback((answer: string, seq: number, correct: boolean, analysis: string | null) => {
-    if (!projectName || knodeId == null) return
-    const attempt: ExerciseAttemptPayload = {
-      knode_id: knodeId,
-      quiz_type: "assignment",
-      exercise_id: `assignment_choice_${q.number}`,
-      question: q.question,
-      user_answer: answer,
-      correct_answer: q.answer,
-      is_correct: correct,
-      attempt_seq: seq,
-      time_spent_ms: Date.now() - shownAt.current,
-      error_analysis: analysis,
-    }
-    gateway.submitExerciseAttempts(projectName, [attempt]).catch(() => {})
-  }, [projectName, knodeId, q])
-
-  const handleSubmit = useCallback(() => {
-    if (!selected) return
-    setSubmitted(true)
-    const correct = selected === q.answer
-    const analysis = correct ? null : buildChoiceErrorAnalysis(q, selected, t)
-    setErrorAnalysis(analysis)
-    submitToApi(selected, attemptSeq, correct, analysis)
-  }, [selected, q, attemptSeq, submitToApi])
-
-  const handleRetry = useCallback(() => {
-    setSubmitted(false)
-    setSelected(null)
-    setErrorAnalysis(null)
-    setAttemptSeq(s => s + 1)
-    shownAt.current = Date.now()
-  }, [])
-
-  return (
-    <div className="mt-4 mb-2 pt-3 border-t border-gray-100 dark:border-gray-800 first:border-t-0 first:pt-0">
-      {/* Question */}
-      <div className="flex items-start gap-2.5 mb-3">
-        <span className="flex items-center justify-center w-6 h-6 rounded-full bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 text-xs font-bold shrink-0 mt-0.5">
-          {q.number}
-        </span>
-        <span className="text-sm font-semibold leading-relaxed">{q.question}</span>
-      </div>
-
-      {/* Options */}
-      <div className="space-y-2 ml-8">
-        {q.options.map((opt) => {
-          let borderClass = "border-gray-200 dark:border-gray-700"
-          let bgClass = "bg-white dark:bg-gray-900/50"
-          let ringClass = ""
-
-          if (submitted) {
-            if (opt.letter === q.answer) {
-              borderClass = "border-green-400 dark:border-green-600"
-              bgClass = "bg-green-50 dark:bg-green-950/30"
-            } else if (opt.letter === selected) {
-              borderClass = "border-red-400 dark:border-red-600"
-              bgClass = "bg-red-50 dark:bg-red-950/30"
-            }
-          } else if (opt.letter === selected) {
-            borderClass = "border-blue-400 dark:border-blue-500"
-            bgClass = "bg-blue-50 dark:bg-blue-950/30"
-            ringClass = "ring-1 ring-blue-300 dark:ring-blue-600"
-          }
-
-          return (
-            <button
-              key={opt.letter}
-              disabled={submitted}
-              onClick={() => setSelected(opt.letter)}
-              className={`flex items-start gap-2.5 px-3 py-2 rounded-lg border ${borderClass} ${bgClass} ${ringClass} w-full text-left transition-colors ${
-                submitted ? "cursor-default" : "hover:border-blue-300 dark:hover:border-blue-700 cursor-pointer"
-              }`}
-            >
-              <span className={`flex items-center justify-center w-6 h-6 rounded-full text-xs font-bold shrink-0 mt-0.5 ${
-                submitted && opt.letter === q.answer
-                  ? "bg-green-200 dark:bg-green-800 text-green-800 dark:text-green-200"
-                  : submitted && opt.letter === selected
-                  ? "bg-red-200 dark:bg-red-800 text-red-800 dark:text-red-200"
-                  : opt.letter === selected
-                  ? "bg-blue-200 dark:bg-blue-800 text-blue-800 dark:text-blue-200"
-                  : "bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300"
-              }`}>
-                {opt.letter}
-              </span>
-              <span className="text-sm leading-relaxed">{opt.content}</span>
-              {submitted && opt.letter === q.answer && (
-                <CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-400 shrink-0 mt-0.5 ml-auto" />
-              )}
-              {submitted && opt.letter === selected && opt.letter !== q.answer && (
-                <XCircle className="h-4 w-4 text-red-500 dark:text-red-400 shrink-0 mt-0.5 ml-auto" />
-              )}
-            </button>
-          )
-        })}
-      </div>
-
-      {/* Submit / Result */}
-      <div className="ml-8 mt-3">
-        {!submitted ? (
-          <button
-            disabled={!selected}
-            onClick={handleSubmit}
-            className="px-4 py-1.5 rounded-lg bg-blue-600 text-white text-xs font-medium hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-          >
-            {t("assignment.submit")}
-          </button>
-        ) : (
-          <div className="space-y-2">
-            <div className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium ${
-              isCorrect
-                ? "bg-green-50 dark:bg-green-950/30 text-green-700 dark:text-green-300"
-                : "bg-red-50 dark:bg-red-950/30 text-red-700 dark:text-red-300"
-            }`}>
-              {isCorrect ? (
-                <><CheckCircle2 className="h-3.5 w-3.5" /> {t("assignment.correct")}</>
-              ) : (
-                <><XCircle className="h-3.5 w-3.5" /> {t("assignment.incorrect_prefix")} {q.answer}</>
-              )}
-            </div>
-            {errorAnalysis && (
-              <div className="px-3 py-2 rounded-lg bg-amber-50 dark:bg-amber-950/20 border border-amber-200/60 dark:border-amber-800/40 text-xs text-amber-800 dark:text-amber-300 leading-relaxed">
-                {errorAnalysis}
-              </div>
-            )}
-            {canRetry && (
-              <button
-                onClick={handleRetry}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/30 transition-colors"
-              >
-                <RotateCcw className="h-3 w-3" /> {t("assignment.retry")}
-              </button>
-            )}
-          </div>
-        )}
-      </div>
-    </div>
-  )
-}
-
-// ---------------------------------------------------------------------------
-// Normal assignment preprocessing & components
+// Assignment section rendering
 // ---------------------------------------------------------------------------
 
 function getSectionType(text: string): "choice" | "qa" | "hands_on" | "other" {
@@ -388,219 +217,6 @@ function SectionHeading({ text }: { text: string }) {
     <div className={`flex items-center gap-2.5 px-4 py-3 rounded-lg border ${config.bg} ${config.border} mt-6 mb-4 first:mt-0`}>
       <Icon className={`h-5 w-5 ${config.iconColor} shrink-0`} />
       <h2 className={`text-base font-semibold ${config.text} m-0`}>{text}</h2>
-    </div>
-  )
-}
-
-// ---------------------------------------------------------------------------
-// QA question component — textarea for student answer + gated reference answer
-// ---------------------------------------------------------------------------
-
-interface QaEvalResult {
-  score: number
-  maxScore: number
-  isCorrect: boolean
-  feedback: string
-  errorAnalysis: string
-}
-
-function ScoreRing({ score, maxScore }: { score: number; maxScore: number }) {
-  const pct = Math.round((score / maxScore) * 100)
-  const r = 20, stroke = 4, c = 2 * Math.PI * r
-  const offset = c - (c * pct) / 100
-  const color = pct >= 80 ? "text-emerald-500" : pct >= 60 ? "text-blue-500" : pct >= 40 ? "text-amber-500" : "text-red-400"
-  return (
-    <div className="relative inline-flex items-center justify-center w-14 h-14 shrink-0">
-      <svg className="w-14 h-14 -rotate-90" viewBox="0 0 48 48">
-        <circle cx="24" cy="24" r={r} fill="none" stroke="currentColor" strokeWidth={stroke} className="text-secondary" />
-        <circle cx="24" cy="24" r={r} fill="none" stroke="currentColor" strokeWidth={stroke}
-          className={color} strokeDasharray={c} strokeDashoffset={offset}
-          strokeLinecap="round" style={{ transition: "stroke-dashoffset 0.8s ease" }} />
-      </svg>
-      <span className={`absolute text-sm font-bold ${color}`}>{score}</span>
-    </div>
-  )
-}
-
-function QaQuestion({ qa, projectName, knodeId }: {
-  qa: ParsedQa
-  projectName?: string
-  knodeId?: number
-}) {
-  const t = useT()
-  const [answer, setAnswer] = useState("")
-  const [grading, setGrading] = useState(false)
-  const [evalResult, setEvalResult] = useState<QaEvalResult | null>(null)
-  const [attemptSeq, setAttemptSeq] = useState(1)
-  const [showRef, setShowRef] = useState(false)
-  const shownAt = useRef(Date.now())
-
-  const handleSubmit = useCallback(async () => {
-    if (!answer.trim()) return
-    setGrading(true)
-    setEvalResult(null)
-
-    if (projectName && knodeId != null) {
-      try {
-        const resp = await gateway.evaluateQa(projectName, {
-          knode_id: knodeId,
-          exercise_id: `assignment_qa_${qa.number}`,
-          question: qa.question,
-          user_answer: answer.trim(),
-          reference_answer: qa.referenceAnswer,
-          attempt_seq: attemptSeq,
-          time_spent_ms: Date.now() - shownAt.current,
-        })
-        setEvalResult({
-          score: resp.score,
-          maxScore: resp.max_score,
-          isCorrect: resp.is_correct,
-          feedback: resp.feedback,
-          errorAnalysis: resp.error_analysis,
-        })
-      } catch {
-        setEvalResult({
-          score: 0, maxScore: 10, isCorrect: false,
-          feedback: t("assignment.eval_unavailable"),
-          errorAnalysis: "",
-        })
-      }
-    }
-    setGrading(false)
-  }, [answer, projectName, knodeId, qa, attemptSeq])
-
-  const handleRetry = useCallback(() => {
-    setEvalResult(null)
-    setAnswer("")
-    setAttemptSeq(s => s + 1)
-    shownAt.current = Date.now()
-  }, [])
-
-  const submitted = evalResult !== null
-
-  return (
-    <div className="mt-4 mb-2 pt-3 border-t border-gray-100 dark:border-gray-800 first:border-t-0 first:pt-0">
-      {/* Question */}
-      <div className="flex items-start gap-2.5 mb-3">
-        <span className="flex items-center justify-center w-6 h-6 rounded-full bg-violet-200 dark:bg-violet-700 text-violet-700 dark:text-violet-300 text-xs font-bold shrink-0 mt-0.5">
-          {qa.number}
-        </span>
-        <span className="text-sm font-semibold leading-relaxed">{qa.question}</span>
-      </div>
-
-      {/* Answer area */}
-      <div className="ml-8 space-y-3">
-        {!submitted && !grading ? (
-          <>
-            <textarea
-              value={answer}
-              onChange={e => setAnswer(e.target.value)}
-              placeholder={t("assignment.answer_placeholder")}
-              rows={4}
-              className="w-full px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900/50 text-sm leading-relaxed placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-blue-400/50 focus:border-blue-400 resize-y"
-            />
-            <button
-              disabled={!answer.trim()}
-              onClick={handleSubmit}
-              className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-blue-600 text-white text-xs font-medium hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-            >
-              <Send className="h-3 w-3" /> {t("assignment.submit")}
-            </button>
-          </>
-        ) : grading ? (
-          <div className="flex items-center gap-3 py-6 justify-center">
-            <LoadingSpinner size="xs" inline />
-            <span className="text-sm text-muted-foreground">{t("assignment.grading")}</span>
-          </div>
-        ) : evalResult && (
-          <>
-            {/* Student answer */}
-            <div className="px-3 py-2 rounded-lg bg-secondary/30 border border-border/40">
-              <p className="text-[11px] text-muted-foreground font-medium mb-1">{t("assignment.my_answer")}</p>
-              <p className="text-sm text-foreground/80 leading-relaxed whitespace-pre-wrap">{answer}</p>
-            </div>
-
-            {/* AI evaluation card */}
-            <div className={`rounded-lg border overflow-hidden ${
-              evalResult.isCorrect
-                ? "border-emerald-200/60 dark:border-emerald-800/40"
-                : "border-amber-200/60 dark:border-amber-800/40"
-            }`}>
-              {/* Score header */}
-              <div className={`flex items-center gap-4 px-4 py-3 ${
-                evalResult.isCorrect
-                  ? "bg-emerald-50/60 dark:bg-emerald-950/20"
-                  : "bg-amber-50/60 dark:bg-amber-950/20"
-              }`}>
-                <ScoreRing score={evalResult.score} maxScore={evalResult.maxScore} />
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2 mb-1">
-                    {evalResult.isCorrect ? (
-                      <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700 dark:text-emerald-300">
-                        <CheckCircle2 className="h-3.5 w-3.5" /> {t("assignment.passed")}
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center gap-1 text-xs font-medium text-amber-700 dark:text-amber-300">
-                        <AlertTriangle className="h-3.5 w-3.5" /> {t("assignment.needs_improvement")}
-                      </span>
-                    )}
-                    <span className="text-[10px] text-muted-foreground">
-                      {evalResult.score}/{evalResult.maxScore} {t("assignment.score_unit")}
-                    </span>
-                  </div>
-                  <p className="text-sm text-foreground/80 leading-relaxed">{evalResult.feedback}</p>
-                </div>
-              </div>
-
-              {/* Error analysis */}
-              {evalResult.errorAnalysis && (
-                <div className="px-4 py-2.5 border-t border-amber-200/40 dark:border-amber-800/30 bg-amber-50/30 dark:bg-amber-950/10">
-                  <p className="text-[11px] font-medium text-amber-700 dark:text-amber-400 mb-0.5">{t("assignment.weakness")}</p>
-                  <p className="text-xs text-amber-800 dark:text-amber-300 leading-relaxed">{evalResult.errorAnalysis}</p>
-                </div>
-              )}
-            </div>
-
-            {/* Retry button (if not correct) */}
-            {!evalResult.isCorrect && (
-              <button
-                onClick={handleRetry}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/30 transition-colors"
-              >
-                <RotateCcw className="h-3 w-3" /> {t("assignment.resubmit")}
-              </button>
-            )}
-
-            {/* Reference answer toggle — only available after AI grading */}
-            {qa.referenceAnswer && (
-              <div>
-                <button
-                  onClick={() => setShowRef(!showRef)}
-                  className="flex items-center gap-1.5 text-xs text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 transition-colors"
-                >
-                  {showRef ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
-                  {showRef ? t("assignment.hide_reference") : t("assignment.show_reference")}
-                </button>
-                {showRef && (
-                  <div className="mt-2 px-3 py-2 rounded-lg bg-blue-50/60 dark:bg-blue-950/30 border border-blue-100 dark:border-blue-900">
-                    <ReactMarkdown
-                      remarkPlugins={[remarkGfm]}
-                      components={{
-                        p: ({ children }) => <p className="text-sm text-blue-900 dark:text-blue-200 leading-relaxed my-1">{children}</p>,
-                        ul: ({ children }) => <ul className="ml-4 space-y-0.5 list-disc text-sm text-blue-900 dark:text-blue-200">{children}</ul>,
-                        li: ({ children }) => <li className="leading-relaxed text-sm">{children}</li>,
-                        strong: ({ children }) => <strong className="font-semibold">{children}</strong>,
-                      }}
-                    >
-                      {qa.referenceAnswer}
-                    </ReactMarkdown>
-                  </div>
-                )}
-              </div>
-            )}
-          </>
-        )}
-      </div>
     </div>
   )
 }
@@ -906,7 +522,7 @@ export function AssignmentView({
             return (
               <div key={i}>
                 {block.choices.map((q, qi) => (
-                  <ChoiceQuestion key={qi} q={q} projectName={projectName} knodeId={knode?.id} />
+                  <PersistentQuestion key={qi} projectName={projectName || ""} moduleId={knode?.module_id} activityId={`assignment_choice_${q.number}`} question={q.question} options={q.options.map(o => ({ value: o.letter, label: `${o.letter}. ${o.content}` }))} correctAnswer={q.answer} explanation={q.explanation} />
                 ))}
               </div>
             )
@@ -915,7 +531,7 @@ export function AssignmentView({
             return (
               <div key={i}>
                 {block.qaQuestions.map((qa, qi) => (
-                  <QaQuestion key={qi} qa={qa} projectName={projectName} knodeId={knode?.id} />
+                  <PersistentQuestion key={qi} projectName={projectName || ""} moduleId={knode?.module_id} activityId={`assignment_qa_${qa.number}`} question={qa.question} referenceAnswer={qa.referenceAnswer} />
                 ))}
               </div>
             )
