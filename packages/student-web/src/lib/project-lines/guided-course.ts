@@ -48,6 +48,8 @@ export type GuidedModule = {
 }
 
 export type GuidedCourse = {
+  line_id?: string
+  level?: number
   schema_version: string
   id: string
   version: string

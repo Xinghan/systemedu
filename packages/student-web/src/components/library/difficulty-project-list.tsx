@@ -1,17 +1,10 @@
 import type { Locale } from "@/lib/i18n/locales"
 import { discoveryLevel, type DiscoveryEntry } from "@/lib/library-discovery"
 import { DiscoveryProjectCard } from "./discovery-project-card"
+import { PROJECT_LEVELS } from "@/lib/project-lines/levels"
 import styles from "./discovery.module.css"
 
-const LEVELS = [
-  { rank: 0, title: ["轻松开始", "An easy start"], hint: ["3 分钟体验 · 打开就能操作，留下第一件作品", "3-minute experiences · Try something and keep your first creation"] },
-  { rank: 1, title: ["跟着引导，做一件作品", "Make a guided creation"], hint: ["多节点引导课程 · 学习资料、视频、分步实践与交付", "Guided courses · Reading, video, practice and delivery"] },
-  { rank: 3, title: ["进入完整项目", "Begin a full project"], hint: ["工程深度 1–2 / 5 · 按课程准备材料与工具", "Project depth 1–2 / 5 · Prepare the materials and tools"] },
-  { rank: 4, title: ["多走一步，串起一个系统", "Connect a working system"], hint: ["工程深度 3 / 5 · 数据、工具与实际验证", "Project depth 3 / 5 · Data, tools and real tests"] },
-  { rank: 5, title: ["挑战复杂工程", "Take on complex engineering"], hint: ["工程深度 4 / 5 · 多个模块一起工作", "Project depth 4 / 5 · Make multiple modules work together"] },
-  { rank: 6, title: ["深入前沿研究", "Explore frontier research"], hint: ["工程深度 5 / 5 · 训练、评估与独立研究", "Project depth 5 / 5 · Training, evaluation and independent research"] },
-  { rank: 7, title: ["更多完整项目", "More full projects"], hint: ["工程深度待标注 · 先查看具体要求", "Depth not yet specified · Check the project requirements"] },
-]
+const LEVELS = PROJECT_LEVELS.map(item => ({ rank: item.level - 1, title: [String(item.level).padStart(2, "0") + " · " + item.title.zh, item.title.en], hint: [item.hint.zh, item.hint.en] }))
 export function DifficultyProjectList({ entries, locale, pulled }: { entries: DiscoveryEntry[]; locale: Locale; pulled: Set<string> }) {
   const language = locale === "zh" ? 0 : 1
   return <div className={styles.levelList}>{LEVELS.map(level => {

@@ -5,7 +5,7 @@ import { useState } from "react"
 import { ArrowRight, ArrowUpRight, BookOpen, Clock3, Layers3, Orbit, Telescope } from "lucide-react"
 import { library } from "@/lib/api"
 import { useT, useLocale } from "@/lib/i18n/use-t"
-import { displayOutcome, type DiscoveryEntry } from "@/lib/library-discovery"
+import { displayOutcome, discoveryLevel, type DiscoveryEntry } from "@/lib/library-discovery"
 import { PROJECT_LINES, lineHref, localized } from "@/lib/project-lines/catalog"
 import { StoryModal } from "@/components/library/StoryModal"
 import { ChapterBadgeMark } from "@/components/badges/ChapterBadgeMark"
@@ -41,17 +41,17 @@ export function DiscoveryProjectCard({ entry, pulled }: { entry: DiscoveryEntry;
             // 封面由现有内容服务提供，失败时回落到领域图形。
             // eslint-disable-next-line @next/next/no-img-element
             <img src={library.coverUrl(entry.id)} alt="" onError={() => setCoverFailed(true)} className={styles.coverPhoto} />
-          ) : <div className={styles.coverFallback} data-domain={entry.domain} aria-hidden="true"><Orbit size={85} strokeWidth={.55} /><span>{domain}</span></div>}
+          ) : <div className={styles.coverFallback} data-domain={entry.domain} aria-hidden="true"><Orbit size={85} strokeWidth={.55} /><span>{String(discoveryLevel(entry) + 1).padStart(2, "0")} · {domain}</span></div>}
         {entry.available && <Link href={href} className={styles.coverLink} tabIndex={-1} aria-label={entry.title} />}
         {!isLocal && <ChapterBadgeMark domain={project?.domain} corner="top-left" />}
         {hasStory && <button type="button" className={styles.storyButton} onClick={() => setStoryOpen(true)} aria-label={`${t("story.view")} · ${entry.title}`} title={t("story.view")}><BookOpen size={17} strokeWidth={1.6} /></button>}
         <span className={`${styles.cardKind} ${isMicro ? styles.microKind : ""}`}>
-          {isMicro ? <Telescope size={12} /> : isLocal ? <BookOpen size={12} /> : <Layers3 size={12} />}{isMicro ? c.microTag : entry.kind === "integration" ? (locale === "zh" ? "组装课程" : "Integration course") : isLocal ? c.guidedTag : c.fullTag}
+          {isMicro ? <Telescope size={12} /> : isLocal ? <BookOpen size={12} /> : <Layers3 size={12} />}{isMicro ? c.microTag : entry.kind === "integration" ? (discoveryLevel(entry) === 3 ? (locale === "zh" ? "独立挑战" : "Challenge") : (locale === "zh" ? "系统课程" : "System course")) : isLocal ? c.guidedTag : c.fullTag}
         </span>
         {!entry.available && <span className={styles.draftTag}>{statusLabel}</span>}
       </div>
       <div className={styles.cardContent}>
-        <div className={styles.cardOverline}><span>{domain}</span>{pulled && entry.available && <span className={styles.added}>{c.onShelf}</span>}</div>
+        <div className={styles.cardOverline}><span>{String(discoveryLevel(entry) + 1).padStart(2, "0")} · {domain}</span>{pulled && entry.available && <span className={styles.added}>{c.onShelf}</span>}</div>
         <h3>{entry.available ? <Link href={href}>{entry.title}</Link> : entry.title}</h3>
         <div className={styles.outcome}><span>{c.outcome}</span><p>{outcome || c.noOutcome}</p></div>
         <div className={styles.cardMetrics}>

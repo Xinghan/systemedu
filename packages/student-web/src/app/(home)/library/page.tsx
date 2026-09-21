@@ -7,7 +7,8 @@ import { ArrowRight, ArrowUpRight, Camera, Layers3, LayoutGrid, Orbit, Plus, Rou
 import { library, myProjects, type LibraryProjectSummary } from "@/lib/api"
 import { useAuthStore } from "@/lib/stores/auth-store"
 import { useLocale } from "@/lib/i18n/use-t"
-import { makeDiscoveryEntries, sortDiscoveryEntries } from "@/lib/library-discovery"
+import { makeDiscoveryEntries, sortDiscoveryEntries, discoveryLevel } from "@/lib/library-discovery"
+import { PROJECT_LEVELS } from "@/lib/project-lines/levels"
 import { PROJECT_LINES, LINES_HREF, SPACE_LINE, localized, type DiscoveryKind } from "@/lib/project-lines/catalog"
 import { ApplyProjectModal } from "@/components/layout/apply-project-modal"
 import { DifficultyProjectList } from "@/components/library/difficulty-project-list"
@@ -70,11 +71,7 @@ function LibraryBrowser() {
       if (kind !== "all" && kind !== entry.kind) return false
       if (lineFilter !== "all" && entry.lineId !== lineFilter) return false
       if (domain !== "all" && domain !== entry.domain) return false
-      if (difficulty === "light" && entry.kind !== "micro") return false
-      if (difficulty === "guided" && entry.kind !== "guided") return false
-      if (difficulty === "1-2" && (entry.difficulty == null || entry.difficulty > 2)) return false
-      if (difficulty === "3" && entry.difficulty !== 3) return false
-      if (difficulty === "4-5" && (entry.difficulty == null || entry.difficulty < 4)) return false
+      if (difficulty !== "all" && discoveryLevel(entry) + 1 !== Number(difficulty)) return false
       const domainName = c.domainNames[entry.domain as keyof typeof c.domainNames] || ""
       return terms.every(term => `${entry.searchText} ${domainName.toLowerCase()}`.includes(term))
     })
@@ -115,12 +112,12 @@ function LibraryBrowser() {
           <label className={styles.search}><Search size={16} /><input type="search" value={query} onChange={event => setQuery(event.target.value)} placeholder={c.search} aria-label={c.search} />{query && <button type="button" onClick={() => setQuery("")} aria-label={locale === "zh" ? "清空搜索" : "Clear search"}><X size={14} /></button>}</label>
           <label className={styles.select}><span>{locale === "zh" ? "项目线" : "Project line"}</span><select value={lineFilter} onChange={event => setLineFilter(event.target.value)} aria-label={locale === "zh" ? "项目线筛选" : "Project line filter"}><option value="all">{locale === "zh" ? "所有项目线" : "All project lines"}</option>{PROJECT_LINES.map(line => <option key={line.id} value={line.id}>{localized(line.title, locale)}</option>)}</select></label>
           <label className={styles.select}><span>{c.domain}</span><select value={domain} onChange={event => setDomain(event.target.value)} aria-label={c.domain}><option value="all">{c.allDomains}</option>{Object.entries(c.domainNames).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></label>
-          <label className={styles.select}><span>{c.difficulty}</span><select value={difficulty} onChange={event => setDifficulty(event.target.value)} aria-label={c.difficulty}><option value="all">{c.allChallenges}</option><option value="light">{c.light}</option><option value="guided">{c.guidedChallenge}</option><option value="1-2">{c.score12}</option><option value="3">{c.score3}</option><option value="4-5">{c.score45}</option></select></label>
+          <label className={styles.select}><span>{c.difficulty}</span><select value={difficulty} onChange={event => setDifficulty(event.target.value)} aria-label={c.difficulty}><option value="all">{c.allChallenges}</option>{PROJECT_LEVELS.map(level => <option key={level.level} value={level.level}>{String(level.level).padStart(2, "0")} · {localized(level.title, locale)}</option>)}</select></label>
         </div>
         <div className={styles.resultBar}><p role="status" aria-live="polite"><b>{filtered.length}</b> {c.result}{hasFilters && <button type="button" onClick={reset}>{c.reset}</button>}</p><div><label className={styles.plannedToggle}><input type="checkbox" checked={showPlanned} onChange={event => setShowPlanned(event.target.checked)} />{c.showPlanned}</label><select value={sort} onChange={event => setSort(event.target.value)} aria-label={c.sort}><option value="difficulty">{c.difficultyAsc}</option><option value="recent">{c.recent}</option></select></div></div>
         {loading && <div className={styles.loading} role="status"><span />{c.loading}</div>}
         {filtered.length > 0 ? <DifficultyProjectList entries={filtered} locale={locale} pulled={loggedIn ? pulled : new Set()} />
-          : !loading && <div className={styles.emptyState}><Search size={25} strokeWidth={1.2} /><h3>{kind === "integration" ? (locale === "zh" ? "组装项目正在筹备中" : "Assembly projects are in preparation") : c.emptyTitle}</h3><p>{kind === "integration" ? (locale === "zh" ? "进入各条主题线，可以查看将来如何组合自己的作品。" : "Explore the project lines to see how your creations will fit together.") : c.emptyBody}</p>{kind === "integration" && <Link href={LINES_HREF}>{c.viewLine}<ArrowRight size={15} /></Link>}<button type="button" onClick={reset}>{c.reset}<ArrowRight size={15} /></button></div>}
+          : !loading && <div className={styles.emptyState}><Search size={25} strokeWidth={1.2} /><h3>{c.emptyTitle}</h3><p>{c.emptyBody}</p>{kind === "integration" && <Link href={LINES_HREF}>{c.viewLine}<ArrowRight size={15} /></Link>}<button type="button" onClick={reset}>{c.reset}<ArrowRight size={15} /></button></div>}
         <p className={styles.timeNote}>{c.timeNote}</p>
       </section>
       </>}

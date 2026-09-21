@@ -2,6 +2,7 @@ import type { LibraryProjectSummary } from "@/lib/api"
 import type { Locale } from "@/lib/i18n/locales"
 import { LOCAL_PROJECTS, PROJECT_LINES, lineForCourse, localized, type LocalProject } from "@/lib/project-lines/catalog"
 import courseSnapshots from "@/lib/project-lines/course-snapshots.json"
+import { projectLevel } from "@/lib/project-lines/levels"
 
 export type DiscoveryEntry = {
   id: string
@@ -21,11 +22,7 @@ export type DiscoveryEntry = {
 }
 
 export function discoveryLevel(entry: DiscoveryEntry): number {
-  if (entry.kind === "micro") return 0
-  if (entry.kind === "guided") return 1
-  if (entry.kind === "integration") return 2
-  if (entry.difficulty == null) return 7
-  return entry.difficulty <= 2 ? 3 : entry.difficulty + 1
+  return projectLevel(entry.kind, entry.local?.level) - 1
 }
 
 export function sortDiscoveryEntries(entries: DiscoveryEntry[], sort: string, locale: Locale) {

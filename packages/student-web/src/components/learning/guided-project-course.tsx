@@ -16,6 +16,8 @@ import { CourseVideoResource } from "./course-video-resource"
 import { SpaceProjectWorkspace, isSpaceCourse } from "./space-project-workspace"
 import { ExpeditionSystemWorkspace } from "./expedition-system-workspace"
 import { RoverSystemWorkspace } from "./rover-system-workspace"
+import { PROJECT_LEVELS } from "@/lib/project-lines/levels"
+import { BiomedProjectWorkspace } from "./biomed-project-workspace"
 import styles from "./guided-project-course.module.css"
 
 export function GuidedProjectCourse({ course }: { course: GuidedCourse }) {
@@ -25,6 +27,9 @@ export function GuidedProjectCourse({ course }: { course: GuidedCourse }) {
 
 function GuidedCourseSession({ course, token, owner }: { course: GuidedCourse; token: string | null; owner: string }) {
   const search = useSearchParams()
+  const lineId = course.line_id || "space-exploration"
+  const lineHref = `/library?view=lines&line=${lineId}`
+  const lineTitle = lineId === "biomedicine" ? "生命解码局" : "星际远征队"
   const edition = course.legacy_edition ? "edition=1&" : ""
   const current = course.modules.find(node => node.module_id === search.get("node")) ?? course.modules[0]
   const index = course.modules.indexOf(current)
@@ -60,13 +65,13 @@ function GuidedCourseSession({ course, token, owner }: { course: GuidedCourse; t
     link.href = url; link.download = `${course.id}-course-record.json`; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000)
   }
   return <main className={styles.page} data-guided-course={course.id}>
-    <header className={styles.header}><Link href="/library?view=lines&line=space-exploration"><ArrowLeft size={15} />星际远征队</Link><span>引导课程 / 学习、实践、交付</span></header>
-    {["assemble-a-rover", "run-an-expedition"].includes(course.id) && <p className={styles.editionNote}>{course.legacy_edition ? "当前为旧版虚拟课程，原记录保留。" : "03 系统制作 · 数字原型可以先完成，正式交付需要实物证据。"} <Link href={`/explore/space-exploration/${course.id}${course.legacy_edition ? "" : "?edition=1"}`}>{course.legacy_edition ? "进入新版实物课程" : "查看旧版课程与原记录"}</Link></p>}
+    <header className={styles.header}><Link href={lineHref}><ArrowLeft size={15} />{lineTitle}</Link><span>引导课程 / 学习、实践、交付</span></header>
+    {["assemble-a-rover", "run-an-expedition"].includes(course.id) && <p className={styles.editionNote}>{course.legacy_edition ? "当前为旧版虚拟课程，原记录保留。" : `${course.id === "run-an-expedition" ? "04 现场挑战" : "03 系统制作"} · 数字原型可以先完成，正式交付需要实物证据。`} <Link href={`/explore/space-exploration/${course.id}${course.legacy_edition ? "" : "?edition=1"}`}>{course.legacy_edition ? "进入新版实物课程" : "查看旧版课程与原记录"}</Link></p>}
     <section className={styles.hero}>
-      <div><p className={styles.eyebrow}>从操作，走向理解与制作</p><h1>{course.title}</h1><p className={styles.subtitle}>{course.subtitle}</p><p className={styles.audience}>{course.audience}</p></div>
+      <div><p className={styles.eyebrow}>{course.level ? `0${course.level} · ${PROJECT_LEVELS.find(level => level.level === course.level)?.title.zh}` : "从操作，走向理解与制作"}</p><h1>{course.title}</h1><p className={styles.subtitle}>{course.subtitle}</p><p className={styles.audience}>{course.audience}</p></div>
       <div className={styles.courseFacts}><div><strong>{course.modules.length}</strong><span>学习节点</span></div><div><strong>{course.estimated_minutes}<small> 分钟</small></strong><span>累计设计目标 · 可分次完成</span></div><p>{course.outcome}</p></div>
     </section>
-    {course.final_deliverable && <section className={styles.projectGoal} aria-label="最终作品目标"><div><p className={styles.eyebrow}>做完后，你会拥有</p><h2>{course.final_deliverable.title}</h2><ul>{course.final_deliverable.parts.map(part => <li key={part}>{part}</li>)}</ul><p className={styles.goalAcceptance}>怎样验收：{course.final_deliverable.acceptance.join("；")}。</p></div><Link href={`/explore/space-exploration/${course.id}?${edition}node=${course.final_deliverable.module_id}#project-delivery`}>查看我的最终作品<ArrowRight size={16} /></Link></section>}
+    {course.final_deliverable && <section className={styles.projectGoal} aria-label="最终作品目标"><div><p className={styles.eyebrow}>做完后，你会拥有</p><h2>{course.final_deliverable.title}</h2><ul>{course.final_deliverable.parts.map(part => <li key={part}>{part}</li>)}</ul><p className={styles.goalAcceptance}>怎样验收：{course.final_deliverable.acceptance.join("；")}。</p></div><Link href={`/explore/${lineId}/${course.id}?${edition}node=${course.final_deliverable.module_id}#project-delivery`}>查看我的最终作品<ArrowRight size={16} /></Link></section>}
     <div className={styles.layout}>
       <aside className={styles.outline} aria-label="课程学习路径">
         <p className={styles.eyebrow}>你的学习路径</p>
@@ -84,9 +89,10 @@ function GuidedCourseSession({ course, token, owner }: { course: GuidedCourse; t
         <section id="lesson-practice" className={styles.section}><h3>实践与节点作品</h3><div className={styles.markdown}><ReactMarkdown remarkPlugins={[remarkGfm]}>{current.assignment}</ReactMarkdown></div>
           {current.lab && <div className={styles.lab}><div><FlaskConical size={20} /><div><h4>驾驶规则实验工具</h4><p>用它完成本节任务；实验结果和课程学习记录分别保存。</p></div></div><div className={styles.labActions}><button onClick={() => setLabOpen(!labOpen)}>{labOpen ? "收起实验工具" : "打开本节实验"}<ArrowRight size={15} /></button><a href={course.lab_url} target="_blank" rel="noreferrer">独立窗口操作 <ExternalLink size={13} /></a></div>{labOpen && <iframe src={course.lab_url} title="驾驶规则实验工具" className={styles.labFrame} />}</div>}
           {course.id === "assemble-a-rover" && course.version === "2.0" ? <RoverSystemWorkspace course={course} node={current} /> : course.id === "run-an-expedition" && course.version === "2.0" ? <ExpeditionSystemWorkspace course={course} node={current} /> : isSpaceCourse(course.id) && <SpaceProjectWorkspace course={course} node={current} />}
+          {lineId === "biomedicine" && <BiomedProjectWorkspace course={course} node={current} />}
           <GuidedCourseNotebook key={current.module_id} course={course} node={current} onRecord={onRecord} />
         </section>
-        <footer className={styles.nodeFooter}>{index > 0 ? <Link href={`?${edition}node=${course.modules[index - 1].module_id}`} onClick={() => setLabOpen(false)}><ArrowLeft size={14} />上一节点</Link> : <span />}{index < course.modules.length - 1 ? <Link href={`?${edition}node=${course.modules[index + 1].module_id}`} onClick={() => setLabOpen(false)}>下一节点：{course.modules[index + 1].title}<ArrowRight size={14} /></Link> : <Link href="/library?view=lines&line=space-exploration">回到项目线<ArrowRight size={14} /></Link>}</footer>
+        <footer className={styles.nodeFooter}>{index > 0 ? <Link href={`?${edition}node=${course.modules[index - 1].module_id}`} onClick={() => setLabOpen(false)}><ArrowLeft size={14} />上一节点</Link> : <span />}{index < course.modules.length - 1 ? <Link href={`?${edition}node=${course.modules[index + 1].module_id}`} onClick={() => setLabOpen(false)}>下一节点：{course.modules[index + 1].title}<ArrowRight size={14} /></Link> : <Link href={lineHref}>回到项目线<ArrowRight size={14} /></Link>}</footer>
       </article>
     </div>
   </main>

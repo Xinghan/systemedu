@@ -1,6 +1,7 @@
 import type { Locale } from "@/lib/i18n/locales"
 import lineData from "./lines.json"
 import spaceCourses from "./space-courses.json"
+import biomedCourses from "./biomed-courses.json"
 
 export const PROJECT_LINES = lineData
 export type ProjectLine = typeof PROJECT_LINES[number]
@@ -18,6 +19,7 @@ export const SPACE_LINE = {
 } as const
 
 export type LocalProject = {
+  level?: number;
   id: string; lineId: string; href: string; kind: "micro" | "guided" | "integration"; estimatedMinutes: number; learningNodes?: number;
   title: { zh: string; en: string }; action: { zh: string; en: string }; outcome: { zh: string; en: string };
   challenge: { zh: string; en: string }; startLabel: { zh: string; en: string }; domains: readonly string[]; coverImage?: string;
@@ -65,7 +67,8 @@ export const GUIDED_PROJECTS: readonly LocalProject[] = [{
   coverImage: "/project-lines/space-exploration/write-driving-rules/cover-ai.png",
 }]
 export const SPACE_COURSES: readonly LocalProject[] = spaceCourses.map(project => ({...project, kind: project.kind as "guided" | "integration"}))
-export const LOCAL_PROJECTS = [...MICRO_PROJECTS, ...GUIDED_PROJECTS, ...SPACE_COURSES]
+export const BIOMED_COURSES: readonly LocalProject[] = biomedCourses.map(project => ({...project, kind: project.kind as LocalProject['kind']}))
+export const LOCAL_PROJECTS = [...MICRO_PROJECTS, ...GUIDED_PROJECTS, ...SPACE_COURSES, ...BIOMED_COURSES]
 
 export type DiscoveryKind = "all" | "micro" | "guided" | "integration" | "full"
 
