@@ -1,6 +1,6 @@
 import {chromium,expect as baseExpect} from '@playwright/test'
 import fs from 'node:fs/promises'
-const expect=baseExpect.configure({timeout:20000}),out='artifacts/biomed-project-line',origin=process.env.BIOMED_ORIGIN||'http://localhost:4000'
+const expect=baseExpect.configure({timeout:20000}),out=process.env.BIOMED_OUT||'artifacts/biomed-project-line',origin=process.env.BIOMED_ORIGIN||'http://localhost:4000'
 const {users:[user,other]}=JSON.parse(await fs.readFile('/private/tmp/biomed-test-users.json'))
 await fs.mkdir(out,{recursive:true})
 const browser=await chromium.launch({args:['--no-proxy-server']}),context=await browser.newContext({viewport:{width:1440,height:1050}})
@@ -8,7 +8,7 @@ await context.addInitScript(token=>localStorage.setItem('systemedu_token',token)
 const page=await context.newPage(),errors=[],checks=[]
 page.on('pageerror',e=>errors.push(String(e)))
 const work=page.locator('[data-biomed-workspace]'),delivery=page.locator('[data-biomed-delivery]')
-async function check(name,fn){await fn();checks.push({name,passed:true});console.log('PASS '+name)}
+async function check(name,fn){if(process.env.BIOMED_CHECK_FILTER&&!new RegExp(process.env.BIOMED_CHECK_FILTER).test(name))return;await fn();checks.push({name,passed:true});console.log('PASS '+name)}
 async function open(id,node='M01'){await page.goto(`${origin}/explore/biomedicine/${id}?node=${node}`);await expect(work.locator('[data-learning-status]').last()).not.toContainText('正在读取');await expect(work.locator('fieldset').first()).toBeEnabled()}
 async function saved(){await expect(work.locator('[data-learning-status]').last()).toContainText('已保存到账号')}
 async function range(label,value){await work.getByLabel(label,{exact:true}).fill(String(value))}
@@ -24,6 +24,47 @@ await check('03 导入自己的作品、真实预算、诊断与同版本复测'
 await check('04 先冻结后揭晓、原结果不覆盖、失败标准可交付',async()=>{const id='challenge-an-unseen-library';await open(id,'M03');await expect(work.getByRole('button',{name:'揭开新数据并核对第一次预测'})).toHaveCount(0);await open(id);await work.getByRole('button',{name:'用验证集预演当前方法'}).click();await saved();await open(id,'M02');await work.getByLabel('我想检验的问题',{exact:true}).fill('自动化测试：均值法能否在新骨架数据上达到严格标准？');await work.getByLabel('预先声明：MAE 不超过',{exact:true}).fill('0.1');await work.getByLabel('为什么选择这个标准',{exact:true}).fill('自动化边界测试：有意设置严格标准验证失败结果可交付。');await work.getByRole('button',{name:'冻结并保存我的方案'}).click();await expect(work).toContainText('已冻结的第一次方案');await open(id,'M03');await work.getByRole('button',{name:'揭开新数据并核对第一次预测'}).click();await saved();await expect(work).toContainText('本批数据没有达到自己的标准');await work.getByLabel('选择一个需要解释的误差案例',{exact:true}).selectOption({index:1});await saved();const first=await work.locator('strong').filter({hasText:'第一次结果：MAE'}).innerText();await open(id,'M04');await work.getByLabel('预测方法',{exact:true}).selectOption('knn3');await work.getByLabel('用什么描述相似性',{exact:true}).selectOption('three');await work.getByRole('button',{name:'运行修订方案（事后探索）'}).click();await saved();await expect(work.locator('strong').filter({hasText:'第一次结果：MAE'})).toHaveText(first);await work.screenshot({path:out+'/challenge-revision.png'});await open(id,'M05');await explain();await work.getByLabel('对预先标准的判断',{exact:true}).fill('自动化验证：第一次未达到 0.1，修订属于看过答案后的探索。');await saved();await submit();await page.reload();await expect(work.locator('strong').filter({hasText:'第一次结果：MAE'})).toHaveText(first);await expect(delivery.locator('[data-biomed-submission]')).toHaveCount(1)})
 await check('第二账号隔离、首账号跨浏览器恢复',async()=>{const second=await browser.newContext();await second.addInitScript(token=>localStorage.setItem('systemedu_token',token),other.token);const p=await second.newPage();await p.goto(origin+'/explore/biomedicine/challenge-an-unseen-library?node=M05');await expect(p.locator('[data-biomed-workspace] [data-learning-status]')).not.toContainText('正在读取');await expect(p.locator('[data-biomed-submission]')).toHaveCount(0);await expect(p.getByText('第一次结果：MAE',{exact:false})).toHaveCount(0);await second.close();const fresh=await browser.newContext();await fresh.addInitScript(token=>localStorage.setItem('systemedu_token',token),user.token);const q=await fresh.newPage();await q.goto(origin+'/explore/biomedicine/challenge-an-unseen-library?node=M05');await expect(q.locator('[data-biomed-submission]')).toHaveCount(1);await fresh.close()})
 await check('19 个节点材料、手机宽度与 WebGL 回退',async()=>{for(const [id,n] of [['build-a-candidate-filter',4],['check-a-prediction',4],['assemble-a-discovery-desk',6],['challenge-an-unseen-library',5]])for(let i=1;i<=n;i++){await open(id,`M${String(i).padStart(2,'0')}`);expect((await page.locator('#lesson-reading').innerText()).length).toBeGreaterThan(350);await expect(page.locator('#lesson-references a')).not.toHaveCount(0)}await page.setViewportSize({width:390,height:844});await open('check-a-prediction','M03');expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);await work.screenshot({path:out+'/prediction-mobile.png'});await page.goto(origin+'/library?view=lines&line=biomedicine');expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);await page.screenshot({path:out+'/line-mobile.png',fullPage:true});const fallback=await browser.newContext({viewport:{width:390,height:844}});await fallback.addInitScript(()=>{const original=HTMLCanvasElement.prototype.getContext;HTMLCanvasElement.prototype.getContext=function(type,...args){if(String(type).includes('webgl'))return null;return original.call(this,type,...args)}});const q=await fallback.newPage();await q.goto(origin+'/explore/biomedicine/turn-a-molecule');await expect(q.getByText('二维结构模式',{exact:true})).toBeVisible();await q.getByRole('button',{name:'标记 O 原子 4',exact:true}).click();await q.getByRole('button',{name:'保存我的观察卡'}).click();await expect(q.locator('[data-learning-status]')).toContainText('本机');expect(await q.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);await q.screenshot({path:out+'/molecule-mobile-fallback.png',fullPage:true});await fallback.close()})
+await check('可阅读的正式报告与草稿修改隔离',async()=>{
+  await page.setViewportSize({width:1440,height:1050});await open('build-a-candidate-filter','M04')
+  await delivery.locator('[data-biomed-submission] > summary').click()
+  const report=delivery.locator('[data-biomed-report]')
+  await expect(report).toContainText('MW ≤ 450 g/mol');await expect(report).not.toContainText('MW ≤ 425 g/mol')
+  await expect(work.getByLabel('分子量上限',{exact:true})).toHaveValue('425')
+  await expect(report.locator('[data-report-comparison] tbody tr')).toHaveCount(2)
+  await expect(delivery.locator('pre')).not.toBeVisible()
+  await report.screenshot({path:out+'/readable-filter-report.png'})
+  await open('challenge-an-unseen-library','M05');await delivery.locator('[data-biomed-submission] > summary').click()
+  await expect(delivery.locator('[data-first-result]')).toContainText('本批未达到原标准')
+  await expect(delivery.locator('[data-first-result]')).toContainText('MAE ≤ 0.1')
+  await expect(delivery.locator('[data-first-result]')).toContainText('事后探索')
+  await expect(delivery.locator('[data-report-case]')).toBeVisible()
+  await delivery.locator('[data-biomed-report]').screenshot({path:out+'/readable-research-report.png'})
+})
+await check('自检错误反馈、修订历史、跨节点与新浏览器恢复',async()=>{
+  await open('build-a-candidate-filter','M01');const quiz=page.locator('[data-biomed-check]')
+  await expect(quiz.locator('fieldset')).toBeEnabled();await expect(work.getByRole('columnheader',{name:'计算 logP',exact:true}).first()).toBeVisible()
+  await quiz.getByRole('radio').nth(0).check();await quiz.getByRole('button',{name:'检查我的理解',exact:true}).click()
+  await expect(quiz.locator('[data-learning-status]')).toContainText('已提交');await expect(quiz.locator('[data-correct=false]')).toContainText('没有提供药效证据')
+  await quiz.getByRole('radio').nth(1).check();await expect(quiz.locator('[data-correct]')).toHaveCount(0)
+  await quiz.getByRole('button',{name:'检查我的理解',exact:true}).click();await expect(quiz.locator('[data-learning-status]')).toContainText('已提交')
+  await expect(quiz.locator('[data-correct=true]')).toBeVisible();await expect(quiz).toContainText('查看自检尝试 · 2 次')
+  await quiz.screenshot({path:out+'/concept-feedback.png'})
+  await open('build-a-candidate-filter','M02');await expect(quiz.locator('[data-correct]')).toHaveCount(0)
+  const fresh=await browser.newContext();await fresh.addInitScript(token=>localStorage.setItem('systemedu_token',token),user.token)
+  const p=await fresh.newPage();await p.goto(origin+'/explore/biomedicine/build-a-candidate-filter?node=M01')
+  await expect(p.locator('[data-biomed-check] [data-correct=true]')).toBeVisible();await expect(p.locator('[data-biomed-check]')).toContainText('查看自检尝试 · 2 次');await fresh.close()
+  const isolated=await browser.newContext();await isolated.addInitScript(token=>localStorage.setItem('systemedu_token',token),other.token)
+  const q=await isolated.newPage();await q.goto(origin+'/explore/biomedicine/build-a-candidate-filter?node=M01');await expect(q.locator('[data-biomed-check] fieldset')).toBeEnabled()
+  await expect(q.locator('[data-biomed-check] [data-correct]')).toHaveCount(0);await expect(q.locator('[data-biomed-check] input:checked')).toHaveCount(0);await isolated.close()
+})
+await check('自检与作品报告在手机宽度可阅读',async()=>{
+  await page.setViewportSize({width:390,height:844});await open('build-a-candidate-filter','M01');const quiz=page.locator('[data-biomed-check]')
+  await expect(quiz.locator('[data-correct=true]')).toBeVisible();expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true)
+  await quiz.screenshot({path:out+'/concept-mobile.png'})
+  await open('challenge-an-unseen-library','M05');await delivery.locator('[data-biomed-submission] > summary').click()
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true)
+  await delivery.locator('[data-biomed-report]').screenshot({path:out+'/research-report-mobile.png'})
+})
 expect(errors).toEqual([])
 await fs.writeFile(out+'/verification.json',JSON.stringify({checks,errors,scope:'自动化软件验证；不是儿童试用或真实研究结果',checkedAt:new Date().toISOString()},null,2))
 }catch(e){await page.screenshot({path:out+'/failure.png',fullPage:true}).catch(()=>{});await fs.writeFile(out+'/verification.json',JSON.stringify({checks,errors,failure:String(e)},null,2));throw e}finally{await browser.close()}

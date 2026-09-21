@@ -5,6 +5,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 PUBLIC = ROOT / 'packages/student-web/public/project-lines/biomedicine'
 TODAY = '2026-09-21'
+GUIDES = json.loads((ROOT / 'packages/student-web/src/lib/project-lines/biomed-lesson-guides.json').read_text())
 REFS = {
  'pubchem': ('PubChem 入门：结构、属性与来源', '美国国立医学图书馆 NLM', 'https://www.nlm.nih.gov/oet/ed/pubchem/tutorial/index.html', '只找结构、属性和来源所在的位置；不要把页面上所有数字看成同一种证据。', '结构描述一个分子怎样连接；计算属性来自算法；实验属性需要追溯具体记录。遇到不懂的英文先认单位与来源。'),
  'esol': ('ESOL 数据与预测任务', 'DeepChem / MoleculeNet', 'https://deepchem.readthedocs.io/en/latest/api_reference/moleculenet.html#delaney-datasets', '查找 Delaney，核对预测目标是水溶解度。', '本课预测的是实测水溶解度的十进制对数，不是药效；教学版从公开数据中固定抽取了 80 个分子。'),
@@ -263,8 +264,11 @@ for course in COURSES:
         mid=f'M{i:02d}'
         folder=root/'modules'/mid
         folder.mkdir(parents=True,exist_ok=True)
-        (folder/'lesson.md').write_text(n['lesson'].strip()+'\n')
-        (folder/'assignment.md').write_text('## 节点任务\n\n'+'\n'.join(f'{j}. {t}' for j,t in enumerate(n['tasks'],1))+'\n\n**自检**：引用自己的操作或具体数据；区分观察、解释与尚未验证的推断。\n')
+        guide = GUIDES[course['id']][mid]
+        vocabulary = '\n'.join(f"- **{term['term']}**：{term['meaning']}" for term in guide['terms'])
+        example = guide['example']
+        (folder/'lesson.md').write_text(n['lesson'].strip()+f"\n\n## 两个词，先弄明白\n\n{vocabulary}\n\n## 跟着例子想一遍：{example['title']}\n\n{example['text']}\n\n以上示例用于理解方法，不会自动填入你的作品。实际记录请使用工作台中的 ID 与结果。\n")
+        (folder/'assignment.md').write_text('## 节点任务\n\n'+guide['start']+'\n\n'+'\n'.join(f'{j}. {t}' for j,t in enumerate(guide['steps'],1))+'\n\n**完成标志**：'+guide['done']+'\n\n**自检**：引用自己的操作或具体数据；区分观察、解释与尚未验证的推断。下方理解自检可以重试，不代替作品交付或教师评阅。\n')
         resources=[]
         for ref in n['refs']:
             title,publisher,url,prompt,fallback=REFS[ref]
@@ -275,7 +279,8 @@ for course in COURSES:
         (folder/'resources.json').write_text(json.dumps(resources,ensure_ascii=False,indent=2)+'\n')
         prompts=[]
         for j,title in enumerate([n['observation'],n['decision']]):
-            prompts.append(dict(title=title,hint='用短句即可；平台示例不自动填写，也不作为你的证据。',example=n['example'],layout='brief',fields=[dict(id='evidence' if j==0 else 'reason',label='具体记录' if j==0 else '我的判断与理由',type='short',placeholder='引用自己看到的数值、ID 或操作，再说出判断。')]))
+            support = guide['notes'][j]
+            prompts.append(dict(title=title,hint=support['hint'],example=support['example'],layout='brief',fields=[dict(id='evidence' if j==0 else 'reason',label='具体记录' if j==0 else '我的判断与理由',type='short',placeholder=support['hint'])]))
         modules.append(dict(module_id=mid,title=n['title'],stage_id='S1' if i<=2 else 'S2',estimated_minutes=n['minutes'],depends_on=[] if i==1 else [f'M{i-1:02d}'],core_question=n['question'],objective=n['objective'],output=n['output'],questions=[n['observation'],n['decision']],response_prompts=prompts,lab=False,lesson=f'modules/{mid}/lesson.md',assignment=f'modules/{mid}/assignment.md',resources=f'modules/{mid}/resources.json',**({} if n['video'] else {'video_note':'这一节点以自己的实验、资料和作品检查为主，不新增与任务无关的视频；可回看前面节点的观察视频。'})))
     tree=dict(schema_version='guided-course/1',id=course['id'],line_id='biomedicine',level=course['level'],version='1.0',title=course['title'],subtitle=course['subtitle'],estimated_minutes=sum(n['minutes'] for n in course['nodes']),audience='建议 10–14 岁，能读简单表格；可分次学习，第一次由家长帮助登录。年龄和时长为设计假设，尚待儿童试用。' if course['level']==2 else '建议 12–16 岁，已有表格与基本误差概念；允许回看前置课程。年龄和时长为设计假设，尚待儿童试用。',outcome=course['outcome'],final_deliverable=dict(title=course['final'],module_id=f"M{len(modules):02d}",parts=course['parts'],acceptance=course['acceptance']),stages=[dict(stage_id='S1',title='理解问题，制作方法'),dict(stage_id='S2',title='面对证据，完成交付')],modules=modules,lab_url='')
     (root/'tree/knowledge_tree.json').write_text(json.dumps(tree,ensure_ascii=False,indent=2)+'\n')

@@ -27,6 +27,20 @@ research=m.reveal(research,reg);const first=JSON.stringify(research.firstBlind);
 reg.predictions[0].value=999;assert(!m.validRegistration(reg));
 const root=path.resolve('packages/student-web/public/project-lines/biomedicine');let nodes=0;
 const catalog=JSON.parse(fs.readFileSync('packages/student-web/src/lib/project-lines/biomed-courses.json'));
+const guides=require('../packages/student-web/src/lib/project-lines/biomed-lesson-guides.json');
+for(const project of catalog.filter(p=>p.kind!=='micro')){
+  assert.equal(Object.keys(guides[project.id]).length,project.learningNodes);
+  for(const [id,guide] of Object.entries(guides[project.id])){
+    assert.equal(guide.steps.length,3);assert.equal(guide.notes.length,2);
+    assert.equal(guide.check.options.filter(o=>o.id===guide.check.correct).length,1);
+    assert.equal(new Set(guide.check.options.map(o=>o.id)).size,3);
+    assert(guide.check.options.every(o=>o.feedback.length>10));
+    const lesson=fs.readFileSync(path.join(root,project.id,'course/modules',id,'lesson.md'),'utf8');
+    assert(lesson.includes(guide.example.text),'演示与源内容一致');
+    const assignment=fs.readFileSync(path.join(root,project.id,'course/modules',id,'assignment.md'),'utf8');
+    assert(assignment.includes(guide.done),'任务必须有可判断的完成标志');
+  }
+}
 for(const project of catalog){assert(fs.statSync(path.join('packages/student-web/public', project.coverImage.replace(/^\//, ''))).size>100000);if(project.kind==='micro')continue;const course=JSON.parse(fs.readFileSync(path.join(root,project.id,'course/tree/knowledge_tree.json')));assert.equal(course.modules.length,project.learningNodes);assert.equal(course.estimated_minutes,course.modules.reduce((n,x)=>n+x.estimated_minutes,0));let videos=0;for(const node of course.modules){nodes++;assert(fs.readFileSync(path.join(root,project.id,'course',node.lesson),'utf8').length>400);const resources=JSON.parse(fs.readFileSync(path.join(root,project.id,'course',node.resources)));assert(resources.some(r=>r.kind==='reference'));videos+=resources.filter(r=>r.kind==='video').length;assert.equal(node.response_prompts.length,2)}assert(videos>0);assert.equal(course.final_deliverable.module_id,m.LAST_NODE[m.PROJECT_KINDS[project.id]])}
 assert.equal(nodes,19);
 console.log('PASS 80 个真实样本、骨架隔离、无目标泄漏、真实筛选与预算、接口故障、旧版失效、冻结预测和原结果、19 个课程节点、6 张生成封面');
