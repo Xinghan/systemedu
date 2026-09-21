@@ -34,7 +34,7 @@ export function DiscoveryProjectCard({ entry, pulled }: { entry: DiscoveryEntry;
     <article className={`${styles.projectCard} ${isMicro ? styles.microCard : ""} ${!entry.available ? styles.draftCard : ""}`} data-project-card={entry.id} data-kind={entry.kind} data-difficulty={entry.difficulty ?? (isMicro ? "light" : "unspecified")} data-available={entry.available}>
       <div className={`${styles.cardVisual} ${isMicro ? styles.microVisual : ""}`}>
         {entry.coverImage ? (
-          // 项目使用独立生成的插画封面。
+          // 项目使用按主题独立生成的封面。
           // eslint-disable-next-line @next/next/no-img-element
           <img src={entry.coverImage} alt="" className={styles.coverPhoto} />
         ) : project?.cover_image_path && !coverFailed ? (
