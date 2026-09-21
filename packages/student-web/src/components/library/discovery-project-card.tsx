@@ -1,6 +1,7 @@
 "use client"
 
 import Link from "next/link"
+import Image from "next/image"
 import { useState } from "react"
 import { ArrowRight, ArrowUpRight, BookOpen, Clock3, Layers3, Orbit, Telescope } from "lucide-react"
 import { library } from "@/lib/api"
@@ -34,9 +35,8 @@ export function DiscoveryProjectCard({ entry, pulled }: { entry: DiscoveryEntry;
     <article className={`${styles.projectCard} ${isMicro ? styles.microCard : ""} ${!entry.available ? styles.draftCard : ""}`} data-project-card={entry.id} data-line={entry.lineId} data-kind={entry.kind} data-difficulty={entry.difficulty ?? (isMicro ? "light" : "unspecified")} data-available={entry.available}>
       <div className={`${styles.cardVisual} ${isMicro ? styles.microVisual : ""}`}>
         {entry.coverImage ? (
-          // 项目使用按主题独立生成的封面。
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={entry.coverImage} alt="" className={styles.coverPhoto} />
+          // 保留生成原图，按卡片宽度压缩并延迟加载，避免同时下载多张原始 PNG。
+          <Image src={entry.coverImage} alt="" fill sizes="(max-width: 600px) calc(100vw - 32px), (max-width: 1000px) 45vw, 384px" className={styles.coverPhoto} />
         ) : project?.cover_image_path && !coverFailed ? (
             // 封面由现有内容服务提供，失败时回落到领域图形。
             // eslint-disable-next-line @next/next/no-img-element
