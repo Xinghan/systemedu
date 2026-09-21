@@ -1,0 +1,8 @@
+const fs=require('node:fs'),path=require('node:path'),ts=require('../packages/student-web/node_modules/typescript');
+require.extensions['.ts']=(m,f)=>m._compile(ts.transpileModule(fs.readFileSync(f,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText,f);
+const {parts,cad}=require('../packages/student-web/src/lib/project-lines/renewable-geometry.ts'),{DEFAULT}=require('../packages/student-web/src/lib/project-lines/renewable-model.ts');
+const root=path.resolve('packages/student-web/public/project-lines/energy-motion/renewable-hardware');fs.mkdirSync(root,{recursive:true});
+function stl(g){const p=g.getAttribute('position'),idx=g.index;let s='solid systemedu\n';for(let i=0;i<(idx?idx.count:p.count);i+=3){const vertices=[0,1,2].map(j=>{const n=idx?idx.getX(i+j):i+j;return[p.getX(n),p.getY(n),p.getZ(n)]});s+='facet normal 0 0 0\n outer loop\n'+vertices.map(v=>'  vertex '+v.join(' ')).join('\n')+'\n endloop\nendfacet\n'}return s+'endsolid systemedu\n'}
+const manifest=[];for(const p of parts(DEFAULT)){p.geometry.computeBoundingBox();fs.writeFileSync(path.join(root,p.name+'.stl'),stl(p.geometry));manifest.push({name:p.name,quantity:p.quantity,note:p.note,bounds:p.geometry.boundingBox});p.geometry.dispose()}
+fs.writeFileSync(path.join(root,'starter-parts.scad'),cad(DEFAULT));fs.writeFileSync(path.join(root,'manifest.json'),JSON.stringify({status:'digital-templates-unprinted',units:'mm',completeAssembly:false,learnerMustDesign:['angle brackets and stops','motor-specific mount and shaft coupling','blade pitch wedges and fastening','complete guard mesh and supports','electronics tray and wire strain relief'],parts:manifest},null,2));
+console.log('7 STL templates + editable SCAD; fabrication not validated.');

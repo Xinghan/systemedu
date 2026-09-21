@@ -13,7 +13,7 @@ export async function loadSpaceCourse(id: string, legacy = false): Promise<Guide
 }
 
 export async function loadProjectCourse(lineId: string, id: string, legacy = false): Promise<GuidedCourse> {
-  if (!["space-exploration", "biomedicine"].includes(lineId)) throw new Error("项目线无效")
+  if (!["space-exploration", "biomedicine", "energy-motion"].includes(lineId)) throw new Error("项目线无效")
   if (!/^[a-z]+(?:-[a-z]+)+$/.test(id)) throw new Error("课程 ID 无效")
   const legacyEdition = lineId === "space-exploration" && legacy && ["assemble-a-rover", "run-an-expedition"].includes(id)
   const root = path.join(process.cwd(), `public/project-lines/${lineId}/${id}/${legacyEdition ? "course-v1" : "course"}`)

@@ -2,6 +2,7 @@ import type { Locale } from "@/lib/i18n/locales"
 import lineData from "./lines.json"
 import spaceCourses from "./space-courses.json"
 import biomedCourses from "./biomed-courses.json"
+import energyCourses from "./renewable-courses.json"
 
 export const PROJECT_LINES = lineData
 export type ProjectLine = typeof PROJECT_LINES[number]
@@ -68,7 +69,8 @@ export const GUIDED_PROJECTS: readonly LocalProject[] = [{
 }]
 export const SPACE_COURSES: readonly LocalProject[] = spaceCourses.map(project => ({...project, kind: project.kind as "guided" | "integration"}))
 export const BIOMED_COURSES: readonly LocalProject[] = biomedCourses.map(project => ({...project, kind: project.kind as LocalProject['kind']}))
-export const LOCAL_PROJECTS = [...MICRO_PROJECTS, ...GUIDED_PROJECTS, ...SPACE_COURSES, ...BIOMED_COURSES]
+export const ENERGY_COURSES: readonly LocalProject[] = energyCourses.map(project => ({...project, kind: project.kind as LocalProject['kind']}))
+export const LOCAL_PROJECTS = [...MICRO_PROJECTS, ...GUIDED_PROJECTS, ...SPACE_COURSES, ...BIOMED_COURSES, ...ENERGY_COURSES]
 
 export type DiscoveryKind = "all" | "micro" | "guided" | "integration" | "full"
 

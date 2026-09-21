@@ -18,6 +18,7 @@ import { ExpeditionSystemWorkspace } from "./expedition-system-workspace"
 import { RoverSystemWorkspace } from "./rover-system-workspace"
 import { PROJECT_LEVELS } from "@/lib/project-lines/levels"
 import { BiomedProjectWorkspace } from "./biomed-project-workspace"
+import { RenewableCourseWorkspace } from "./renewable-workspace"
 import styles from "./guided-project-course.module.css"
 
 export function GuidedProjectCourse({ course }: { course: GuidedCourse }) {
@@ -29,7 +30,7 @@ function GuidedCourseSession({ course, token, owner }: { course: GuidedCourse; t
   const search = useSearchParams()
   const lineId = course.line_id || "space-exploration"
   const lineHref = `/library?view=lines&line=${lineId}`
-  const lineTitle = lineId === "biomedicine" ? "生命解码局" : "星际远征队"
+  const lineTitle = lineId === "energy-motion" ? "动力发明家" : lineId === "biomedicine" ? "生命解码局" : "星际远征队"
   const edition = course.legacy_edition ? "edition=1&" : ""
   const current = course.modules.find(node => node.module_id === search.get("node")) ?? course.modules[0]
   const index = course.modules.indexOf(current)
@@ -90,6 +91,7 @@ function GuidedCourseSession({ course, token, owner }: { course: GuidedCourse; t
           {current.lab && <div className={styles.lab}><div><FlaskConical size={20} /><div><h4>驾驶规则实验工具</h4><p>用它完成本节任务；实验结果和课程学习记录分别保存。</p></div></div><div className={styles.labActions}><button onClick={() => setLabOpen(!labOpen)}>{labOpen ? "收起实验工具" : "打开本节实验"}<ArrowRight size={15} /></button><a href={course.lab_url} target="_blank" rel="noreferrer">独立窗口操作 <ExternalLink size={13} /></a></div>{labOpen && <iframe src={course.lab_url} title="驾驶规则实验工具" className={styles.labFrame} />}</div>}
           {course.id === "assemble-a-rover" && course.version === "2.0" ? <RoverSystemWorkspace course={course} node={current} /> : course.id === "run-an-expedition" && course.version === "2.0" ? <ExpeditionSystemWorkspace course={course} node={current} /> : isSpaceCourse(course.id) && <SpaceProjectWorkspace course={course} node={current} />}
           {lineId === "biomedicine" && <BiomedProjectWorkspace course={course} node={current} />}
+          {lineId === "energy-motion" && <RenewableCourseWorkspace course={course} node={current} />}
           <GuidedCourseNotebook key={current.module_id} course={course} node={current} onRecord={onRecord} />
         </section>
         <footer className={styles.nodeFooter}>{index > 0 ? <Link href={`?${edition}node=${course.modules[index - 1].module_id}`} onClick={() => setLabOpen(false)}><ArrowLeft size={14} />上一节点</Link> : <span />}{index < course.modules.length - 1 ? <Link href={`?${edition}node=${course.modules[index + 1].module_id}`} onClick={() => setLabOpen(false)}>下一节点：{course.modules[index + 1].title}<ArrowRight size={14} /></Link> : <Link href={lineHref}>回到项目线<ArrowRight size={14} /></Link>}</footer>

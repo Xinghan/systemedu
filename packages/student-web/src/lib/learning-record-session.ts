@@ -18,7 +18,10 @@ function validBody(value: unknown): value is LearningBody {
   return !!b && Array.isArray(b.answers) && b.answers.length <= 200 && b.answers.every(a => a && typeof a.question_id === "string" && typeof a.question === "string" && typeof a.answer === "string" && a.answer.length <= 20000)
 }
 function equal(a: LearningBody, b: LearningBody) {
-  return JSON.stringify({ answers: a.answers, artifact: a.artifact ?? null, client_context: a.client_context ?? {} }) === JSON.stringify({ answers: b.answers, artifact: b.artifact ?? null, client_context: b.client_context ?? {} })
+  // PostgreSQL JSONB may reorder object keys. Key order is not a learner edit.
+  const stable = (value: unknown): unknown => Array.isArray(value) ? value.map(stable) : value && typeof value === "object" ? Object.fromEntries(Object.entries(value).sort(([a], [b]) => a.localeCompare(b)).map(([key, value]) => [key, stable(value)])) : value
+  const normalize = (body: LearningBody) => stable({ answers: body.answers, artifact: body.artifact ?? null, client_context: body.client_context ?? {} })
+  return JSON.stringify(normalize(a)) === JSON.stringify(normalize(b))
 }
 
 /** 一个账号、一项活动的保存会话；请求串行，缓存只属于该身份。 */
@@ -84,6 +87,12 @@ export class LearningRecordSession {
       const remote = await learningRecords.read(this.token, this.scope)
       const acknowledged = this.pending && remote.submissions.find(s => s.request_id === this.pending!.id)
       if (acknowledged) { this.pending = undefined; this.patch({ pending: false, dirty: false }) }
+      // A navigation can interrupt the response after the server has saved the draft.
+      // A matching draft acknowledges that save, but never clears an unacknowledged submission.
+      if (!discardLocal && this.state.dirty && !this.pending && remote.draft && equal(remote.draft.body, this.state.body)) {
+        this.revision = remote.draft.revision
+        this.patch({ dirty: false })
+      }
       if (!discardLocal && this.state.dirty && (remote.draft?.revision ?? 0) !== this.revision) {
         this.patch({ ready: true, conflict: true, attention: true, history: remote.submissions, message: "另一页面或设备已有新版本。当前草稿已保留，请先下载，再读取服务器版本。" })
         return
