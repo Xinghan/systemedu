@@ -31,7 +31,7 @@ export function DiscoveryProjectCard({ entry, pulled }: { entry: DiscoveryEntry;
   const duration = project?.duration_weeks
 
   return (
-    <article className={`${styles.projectCard} ${isMicro ? styles.microCard : ""} ${!entry.available ? styles.draftCard : ""}`} data-project-card={entry.id} data-kind={entry.kind} data-difficulty={entry.difficulty ?? (isMicro ? "light" : "unspecified")} data-available={entry.available}>
+    <article className={`${styles.projectCard} ${isMicro ? styles.microCard : ""} ${!entry.available ? styles.draftCard : ""}`} data-project-card={entry.id} data-line={entry.lineId} data-kind={entry.kind} data-difficulty={entry.difficulty ?? (isMicro ? "light" : "unspecified")} data-available={entry.available}>
       <div className={`${styles.cardVisual} ${isMicro ? styles.microVisual : ""}`}>
         {entry.coverImage ? (
           // 项目使用按主题独立生成的封面。
