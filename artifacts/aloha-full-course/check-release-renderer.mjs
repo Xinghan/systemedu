@@ -12,8 +12,10 @@ const sections=JSON.parse(await fs.readFile(root+'/'+entry.knode_dir+'/sections.
 const browser=await chromium.launch({args:['--no-proxy-server']});
 const page=await browser.newPage();const errors=[],checks=[];page.on('pageerror',e=>errors.push(String(e)));
 try {
+ await page.addInitScript(()=>localStorage.setItem('systemedu_token','isolated-fixture-only'));
  await page.route('**/api/my/projects/aloha-bimanual-apprentice/knodes/M19',r=>r.fulfill({json:{slides,knode_dir:entry.knode_dir,rendered_sections:sections}}));
- await page.route('**/api/library/projects/aloha-bimanual-apprentice/files/**',async r=>{
+ await page.route('**/api/my/projects/aloha-bimanual-apprentice/files/**',async r=>{
+  assert.equal(r.request().headers().authorization,'Bearer isolated-fixture-only');
   const relative=decodeURIComponent(new URL(r.request().url()).pathname.split('/files/')[1]);
   assert(relative.startsWith(entry.knode_dir+'/')&&!relative.includes('..'));
   await r.fulfill({body:await fs.readFile(root+'/'+relative),contentType:'image/png'});
