@@ -9,6 +9,7 @@
 import { useEffect, useMemo, useState } from "react"
 import { ChevronLeft, ChevronRight } from "lucide-react"
 
+import { CourseSlideImages } from "./course-slide-images"
 import { myProjects } from "@/lib/api"
 import { getToken } from "@/lib/auth"
 import type { CourseIdeaSummary, RenderedSection, SlideEntry } from "@/lib/types/api"
@@ -30,6 +31,7 @@ export function TeacherSceneView({ projectName, moduleId }: TeacherSceneViewProp
   const [slides, setSlides] = useState<SlideEntry[] | null>(null)
   const [ideas, setIdeas] = useState<CourseIdeaSummary[]>([])
   const [renderedSections, setRenderedSections] = useState<Record<string, RenderedSection>>({})
+  const [knodeDir, setKnodeDir] = useState("")
   const [idx, setIdx] = useState(0)
   const [err, setErr] = useState(false)
   // 当前 slide 音频的 blob URL。<audio src> 是浏览器原生请求, 带不上 JWT,
@@ -44,6 +46,7 @@ export function TeacherSceneView({ projectName, moduleId }: TeacherSceneViewProp
       .then((k) => {
         if (cancelled) return
         setSlides((k.slides as SlideEntry[]) ?? [])
+        setKnodeDir(k.knode_dir || `knodes/${moduleId}`)
         // rendered_sections 顶层字段自带 ideas + idea_id->渲染结果的映射,
         // 用来把 animation/game slide 的 idea_id 关联回真实生成的 html。
         setIdeas(k.rendered_sections?.ideas ?? [])
@@ -105,7 +108,7 @@ export function TeacherSceneView({ projectName, moduleId }: TeacherSceneViewProp
     <div className="flex h-full flex-col gap-4 p-6">
       <div className="flex-1 min-h-0 overflow-y-auto rounded-2xl border border-[var(--border)] bg-[var(--card)] p-8">
         <h2 className="mb-4 text-2xl font-semibold text-[var(--ink)]">{slide.title}</h2>
-        <SlideBody slide={slide} ideaMap={ideaMap} renderedSections={renderedSections} />
+        <SlideBody slide={slide} ideaMap={ideaMap} renderedSections={renderedSections} projectName={projectName} knodeDir={knodeDir} />
       </div>
 
       <div className="rounded-xl border border-[var(--border)] bg-[var(--paper-2)] p-4">
@@ -150,20 +153,25 @@ export function TeacherSceneView({ projectName, moduleId }: TeacherSceneViewProp
 /** 按 slide.kind 渲染 payload 正文 + inline_svg 配图。
  *  数据里 body_markdown 一直为空, 真内容在 payload (spec 039 修)。 */
 function SlideBody({
-  slide, ideaMap, renderedSections,
+  slide, ideaMap, renderedSections, projectName, knodeDir,
 }: {
   slide: SlideEntry
   ideaMap: Map<string, CourseIdeaSummary>
   renderedSections: Record<string, RenderedSection>
+  projectName: string
+  knodeDir: string
 }) {
   const t = useT()
   const p = slide.payload || {}
-  const svg = p.inline_svg ? (
+  const svg = (p.inline_svg || p.images?.length) ? <>
+    <CourseSlideImages images={p.images} projectName={projectName} knodeDir={knodeDir} title={slide.title} />
+    {p.inline_svg && (
     <div
       className="my-4 flex justify-center [&_svg]:h-auto [&_svg]:max-h-[320px] [&_svg]:w-full [&_svg]:max-w-xl"
       dangerouslySetInnerHTML={{ __html: p.inline_svg }}
     />
-  ) : null
+    )}
+  </> : null
 
   switch (slide.kind) {
     case "intro":
@@ -227,11 +235,13 @@ function SlideBody({
         </div>
       )
     case "animation":
-    case "game": {
+    case "game":
+    case "diagram": {
       // idea_id 关联回真实生成的 course_content, 复用 IdeaBlock 打开同一套
       // iframe 弹窗; 拿不到数据(老版本 slide/生成失败)才退回纯文字兜底。
-      const idea = p.idea_id ? ideaMap.get(p.idea_id) : undefined
-      const section = p.idea_id ? renderedSections[p.idea_id] : undefined
+      const ideaId = p.idea_id || p.diagram_html_id
+      const idea = ideaId ? ideaMap.get(ideaId) : undefined
+      const section = ideaId ? renderedSections[ideaId] : undefined
       if (idea && section) {
         return <IdeaBlock idea={idea} section={section} />
       }
