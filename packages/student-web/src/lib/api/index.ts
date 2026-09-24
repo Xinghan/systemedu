@@ -1,6 +1,7 @@
 /** student-app typed API. 只暴露学生端用到的接口。 */
 
 import { api, STUDENT_API_URL } from "./client"
+import flagshipCovers from "@/lib/project-lines/flagship-covers.json"
 import { setToken, clearToken, clearUsername } from "@/lib/auth"
 import type { BadgeDrop, BadgeWallData, CourseIdeaSummary, RenderedSection } from "@/lib/types/api"
 
@@ -253,8 +254,9 @@ export const library = {
     api.get<PlatformTree>(`/api/library/platform/knowledge-tree`),
   fileUrl: (slug: string, path: string) =>
     `${STUDENT_API_URL}/api/library/projects/${encodeURIComponent(slug)}/files/${path}`,
-  // 公开封面图 (无需登录/pull); 后端从 manifest.cover_image_path 透传
+  // 版本化的站内封面与课程源保持一致；其它项目沿用内容服务封面。
   coverUrl: (slug: string) =>
+    (flagshipCovers as Record<string, string>)[slug] ??
     `${STUDENT_API_URL}/api/library/projects/${encodeURIComponent(slug)}/cover`,
 }
 
