@@ -73,7 +73,7 @@ def public_projects():
 
 def admin_token():
     # Load the existing deployment credential internally; never print it.
-    credentials = subprocess.check_output(['bash', '-c', 'set -a; source /root/.systemedu-library-secrets; python3 -c "import os; print(os.environ[\"LIBRARY_BOOTSTRAP_ADMIN\"])"'], text=True).strip()
+    credentials = subprocess.check_output(['bash', '-c', 'source /root/.systemedu-library-secrets; printf "%s" "$LIBRARY_BOOTSTRAP_ADMIN"'], text=True).strip()
     username, password = credentials.split(':', 1)
     return json.loads(request(BASE + '/admin/auth/login', json.dumps({'username': username, 'password': password}).encode()))['token']
 
