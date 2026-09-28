@@ -20,6 +20,20 @@ export type PvlibRecordConfig = {
 export type PvlibModule = { id: string; title: string; stage: string }
 export type PvlibStage = { id: string; title: string }
 export type PvlibArtifact = Record<string, unknown>
+
+/** Only return the saved payload for this exact lesson and experiment. */
+export function pvlibSavedArtifact(value: unknown, moduleId: string, ideaId: string): PvlibArtifact | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null
+  const saved = value as Record<string, unknown>
+  if (saved.source !== "pvlib-interactive" || saved.module_id !== moduleId || saved.idea_id !== ideaId) return null
+  return pvlibArtifactMessage({ type: PVLIB_ARTIFACT_MESSAGE, moduleId, artifact: saved.payload }, moduleId)
+}
+
+export function pvlibArtifactReady(value: unknown, moduleId: string, ideaId: string): boolean {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false
+  const message = value as Record<string, unknown>
+  return Object.keys(message).length === 3 && message.type === "systemedu-pvlib-artifact-ready" && message.module_id === moduleId && message.idea_id === ideaId
+}
 export function pvlibView(value?: string): PvlibView {
   return PVLIB_VIEWS.includes(value as PvlibView) ? value as PvlibView : "reading"
 }

@@ -9,7 +9,7 @@ import remarkMath from "remark-math"
 import rehypeKatex from "rehype-katex"
 import type { LearningScope } from "@/lib/api/learning-records"
 import { useLearningRecord } from "@/lib/hooks/use-learning-record"
-import { PVLIB_LAB_MODES, PVLIB_SLUG, pvlibArtifactMessage, pvlibHref, pvlibIdeaLabMode, pvlibLabMode, pvlibView, type PvlibArtifact, type PvlibLabMode, type PvlibModule, type PvlibQuestion, type PvlibRecordConfig, type PvlibStage, type PvlibView } from "@/lib/pvlib-preview"
+import { PVLIB_LAB_MODES, PVLIB_SLUG, pvlibArtifactMessage, pvlibArtifactReady, pvlibSavedArtifact, pvlibHref, pvlibIdeaLabMode, pvlibLabMode, pvlibView, type PvlibArtifact, type PvlibLabMode, type PvlibModule, type PvlibQuestion, type PvlibRecordConfig, type PvlibStage, type PvlibView } from "@/lib/pvlib-preview"
 import type { ResponsePrompt } from "@/lib/project-lines/guided-course"
 import { responseComplete } from "@/lib/project-lines/guided-response"
 import type { CourseContent, KnowledgeLevel, SlideEntry } from "@/lib/types/api"
@@ -28,10 +28,11 @@ function isLocked(record: RecordSession) { return !record.ready || record.pendin
 function canSubmit(record: RecordSession, complete: boolean) { return complete && !isLocked(record) && !record.busy }
 
 /** Same 1280×800 srcdoc scaling as ScaledIframe, with an opaque sandbox and a source ref. */
-function ArtifactFrame({ html, title, moduleId, onArtifact }: { html: string; title: string; moduleId: string; onArtifact?: (artifact: PvlibArtifact) => void }) {
+function ArtifactFrame({ html, title, moduleId, ideaId, savedArtifact, onArtifact }: { html: string; title: string; moduleId: string; ideaId: string; savedArtifact?: PvlibArtifact | null; onArtifact?: (artifact: PvlibArtifact) => void }) {
   const box = useRef<HTMLDivElement>(null)
   const frame = useRef<HTMLIFrameElement>(null)
   const [scale, setScale] = useState(0)
+  const [restoreReady, setRestoreReady] = useState(false)
   useEffect(() => {
     const element = box.current!
     const resize = () => { const rect = element.getBoundingClientRect(); setScale(Math.min(rect.width / 1280, rect.height / 800)) }
@@ -45,12 +46,22 @@ function ArtifactFrame({ html, title, moduleId, onArtifact }: { html: string; ti
     function receive(event: MessageEvent<unknown>) {
       // Never use origin: sandboxed srcdoc messages have origin "null".
       if (!frame.current || event.source !== frame.current.contentWindow) return
+      if (pvlibArtifactReady(event.data, moduleId, ideaId)) {
+        setRestoreReady(true)
+        return
+      }
       const artifact = pvlibArtifactMessage(event.data, moduleId)
       if (artifact) onArtifact?.(artifact)
     }
     window.addEventListener("message", receive)
     return () => window.removeEventListener("message", receive)
-  }, [moduleId, onArtifact])
+  }, [moduleId, ideaId, onArtifact])
+  useEffect(() => {
+    // The child may be ready before the account record arrives. Send only the
+    // saved payload after both are ready, never the account token or answers.
+    if (!restoreReady || !savedArtifact || !onArtifact) return
+    frame.current?.contentWindow?.postMessage({ type: "systemedu-pvlib-artifact-restore", module_id: moduleId, idea_id: ideaId, artifact: savedArtifact }, "*")
+  }, [restoreReady, savedArtifact, moduleId, ideaId, onArtifact])
   return <div ref={box} className={styles.frameBox}>{scale > 0 && <iframe ref={frame} srcDoc={html} title={title} sandbox="allow-scripts allow-downloads" style={{ width: 1280, height: 800, transform: `translate(-50%, -50%) scale(${scale})` }} />}</div>
 }
 
@@ -183,7 +194,7 @@ export function PvlibCoursePreview({ moduleId, courseTitle, modules, stages, pla
       </div>}
       {view === "lab" && <section id="interactive-lab" data-preview-lab>
         <div className={styles.labHeading}><div><p className={styles.eyebrow}>OBSERVE / TEST / RECORD</p><h2>{labIdea?.topic || "动画与实验"}</h2></div><div className={styles.actions}>{PVLIB_LAB_MODES.map(mode => <button key={mode} type="button" aria-pressed={labMode === mode} disabled={!labIdeas.some(idea => pvlibIdeaLabMode(idea) === mode)} onClick={() => setView("lab", mode)}>{mode === "object" ? "硬件 3D" : mode === "animation" ? (animationIsStatic ? "查看图解" : "观看动画") : "动手实验"}</button>)}</div></div>
-        {labIdea ? <><p className={styles.note}>{labMode === "object" ? "观察部件、连接与三层结构，按展示提示切换视角。此展示不生成实验产物；请把观察写进课堂记录。" : labIsStatic ? "对照这张图解，检查自己的文件、来源与证据。" : labMode === "animation" ? "先观察关键步骤，再暂停或回放对照课程中的解释。" : "改变参数后，使用实验里的记录按钮生成操作产物，再关联本节作业。"}横屏可以更清楚地查看坐标与控件。</p><div className={styles.labFrame}><ArtifactFrame key={`${labIdea.idea_id}:${classroom.identity.owner}`} html={content.rendered_sections[labIdea.idea_id].html!} title={labIdea.topic} moduleId={moduleId} onArtifact={labMode === "game" ? receiveArtifact : undefined} /></div>
+        {labIdea ? <><p className={styles.note}>{labMode === "object" ? "观察部件、连接与三层结构，按展示提示切换视角。此展示不生成实验产物；请把观察写进课堂记录。" : labIsStatic ? "对照这张图解，检查自己的文件、来源与证据。" : labMode === "animation" ? "先观察关键步骤，再暂停或回放对照课程中的解释。" : "改变参数后，使用实验里的记录按钮生成操作产物，再关联本节作业。"}横屏可以更清楚地查看坐标与控件。</p><div className={styles.labFrame}><ArtifactFrame key={`${labIdea.idea_id}:${delivery.identity.owner}:${contentVersion}`} html={content.rendered_sections[labIdea.idea_id].html!} title={labIdea.topic} moduleId={moduleId} ideaId={labIdea.idea_id} savedArtifact={labMode === "game" && delivery.ready ? pvlibSavedArtifact(delivery.body.artifact, moduleId, labIdea.idea_id) : null} onArtifact={labMode === "game" ? receiveArtifact : undefined} /></div>
           {labMode === "game" && <div className={styles.artifactBar}><div><strong>实验操作产物</strong><p role="status">{currentCandidate?.idea_id === labIdea.idea_id ? `已收到${typeof currentCandidate.payload.title === "string" ? `「${currentCandidate.payload.title}」` : "本次操作记录"}，尚未关联作业。` : "完成实验中的记录操作后，这里会显示可关联的产物。"}</p></div><button type="button" className={styles.primary} disabled={currentCandidate?.idea_id !== labIdea.idea_id || isLocked(delivery)} onClick={attachArtifact}>关联到本节作业</button></div>}
           {labMode === "game" && currentCandidate?.idea_id === labIdea.idea_id && <details className={styles.artifactDetails}><summary>查看待关联的操作数据</summary><pre>{JSON.stringify(currentCandidate.payload, null, 2)}</pre></details>}
         </> : <div className={styles.empty}>本节在实践包中完成操作。请阅读课程中的步骤，完成 Notebook、实验记录或作品文件，再保存作品说明。</div>}
