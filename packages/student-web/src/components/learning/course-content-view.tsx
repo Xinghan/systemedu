@@ -1806,6 +1806,16 @@ function PlanWithSections({ content }: { content: CourseContent }) {
 // ---------------------------------------------------------------------------
 // PlanWithIdeas: fallback for old data (no sections)
 // ---------------------------------------------------------------------------
+export function CourseReadingBody({ content, projectName, moduleId, knowledgeLevel = "K1" }: {
+  content: CourseContent; projectName: string; moduleId: string; knowledgeLevel?: import("@/lib/types/api").KnowledgeLevel
+}) {
+  return <KnowledgeLevelContext.Provider value={knowledgeLevel}>
+    <CourseIdentityContext.Provider value={{ projectName, moduleId, knodeId: 0 }}>
+      <AudioProvider><PlanWithIdeas content={content} /></AudioProvider>
+    </CourseIdentityContext.Provider>
+  </KnowledgeLevelContext.Provider>
+}
+
 function PlanWithIdeas({ content }: { content: CourseContent }) {
   const t = useT()
   const parts = (content.plan_markdown ?? "").split(/(\[\[(?:IDEA|THEORY):[^\]]+\]\])/g)

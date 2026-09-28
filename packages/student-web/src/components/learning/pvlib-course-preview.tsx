@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useRef, useState, type ReactNode } from "react"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 import remarkMath from "remark-math"
@@ -79,7 +79,7 @@ function FoundationBody({ markdown }: { markdown: string }) {
 function AssessmentRecord({ moduleId, contentVersion, questions, kind }: { moduleId: string; contentVersion: string; questions: PvlibQuestion[]; kind: "quiz" | "exam" }) {
   const record = useLearningRecord({ library_slug: PVLIB_SLUG, module_id: moduleId, activity_id: `pvlib-${kind}`, kind, content_version: contentVersion }, {
     answers: questions.map(question => ({ question_id: question.id, question: question.question, answer: "" })),
-    client_context: { source: "pvlib-local-preview", assessment: kind },
+    client_context: { source: "pvlib-course", assessment: kind },
   })
   const [feedback, setFeedback] = useState(false)
   const complete = questions.every(question => record.body.answers.find(answer => answer.question_id === question.id)?.answer.trim())
@@ -108,7 +108,8 @@ function AssessmentRecord({ moduleId, contentVersion, questions, kind }: { modul
   </section>
 }
 
-export function PvlibCoursePreview({ moduleId, courseTitle, modules, stages, plannedNodes, knodeDir, content, slides, images, audio, assignment, recordConfig, contentVersion, initialView = "reading", initialLabMode = "game" }: {
+export function PvlibCoursePreview({ moduleId, courseTitle, modules, stages, plannedNodes, knodeDir, content, slides, images, audio, assignment, recordConfig, contentVersion, initialView = "reading", initialLabMode = "game", published = false, downloadControl }: {
+  published?: boolean; downloadControl?: ReactNode
   moduleId: string; courseTitle: string; modules: PvlibModule[]; stages: PvlibStage[]; plannedNodes?: number; knodeDir: string
   content: CourseContent; slides: SlideEntry[]; images: Record<string, string>; audio: Record<string, string>; assignment: string
   recordConfig: PvlibRecordConfig; contentVersion: string; initialView?: PvlibView; initialLabMode?: PvlibLabMode
@@ -126,10 +127,10 @@ export function PvlibCoursePreview({ moduleId, courseTitle, modules, stages, pla
   const scope = (kind: LearningScope["kind"], activity: string): LearningScope => ({ library_slug: PVLIB_SLUG, module_id: moduleId, activity_id: activity, kind, content_version: contentVersion })
   const classroom = useLearningRecord(scope("classroom", "pvlib-notebook"), {
     answers: recordConfig.questions.map((question, index) => ({ question_id: `q${index + 1}`, question, answer: "" })),
-    client_context: { source: "pvlib-local-preview" },
+    client_context: { source: "pvlib-course" },
   })
   const delivery = useLearningRecord(scope("assignment", "pvlib-delivery"), {
-    answers: [{ question_id: "deliverable", question: recordConfig.output, answer: "" }], client_context: { source: "pvlib-local-preview" },
+    answers: [{ question_id: "deliverable", question: recordConfig.output, answer: "" }], client_context: { source: "pvlib-course" },
   })
   const index = modules.findIndex(module => module.id === moduleId)
   const current = modules[index]
@@ -145,8 +146,8 @@ export function PvlibCoursePreview({ moduleId, courseTitle, modules, stages, pla
     if (ideaId && labMode === "game") setCandidate({ payload, idea_id: ideaId, received_at: new Date().toISOString(), owner: classroom.identity.owner })
   }
   const currentCandidate = candidate?.owner === classroom.identity.owner ? candidate : null
-  const setView = (nextView: PvlibView, mode: PvlibLabMode = labMode) => window.history.replaceState(null, "", pvlibHref(moduleId, nextView, mode))
-  const href = (id: string) => pvlibHref(id, view, labMode)
+  const setView = (nextView: PvlibView, mode: PvlibLabMode = labMode) => window.history.replaceState(null, "", pvlibHref(moduleId, nextView, mode, published))
+  const href = (id: string) => pvlibHref(id, view, labMode, published)
   const notebookComplete = recordConfig.questions.every((_, questionIndex) => responseComplete(classroom.body, questionIndex, recordConfig.response_prompts?.[questionIndex]))
   function attachArtifact() {
     if (labMode !== "game" || !currentCandidate || currentCandidate.idea_id !== ideaId || isLocked(delivery)) return
@@ -169,7 +170,7 @@ export function PvlibCoursePreview({ moduleId, courseTitle, modules, stages, pla
 
   return <main className={styles.page} data-pvlib-preview={moduleId}>
     <header className={styles.header}>
-      <div className={styles.headerInner}><Link href="/library">← 项目课程</Link><span>本地课程验收 · {partial ? `已开放 ${modules.length} / ${plannedNodes} 个节点` : `${modules.length} 个节点`}</span></div>
+      <div className={styles.headerInner}><Link href="/library">← 项目课程</Link><span>{published ? "项目课程" : "本地课程验收"} · {partial ? `已开放 ${modules.length} / ${plannedNodes} 个节点` : `${modules.length} 个节点`}</span></div>
     </header>
     <section className={styles.hero}>
       <div><p className={styles.eyebrow}>PVLIB / SOLAR FORECAST</p><p className={styles.courseTitle}>{courseTitle}</p><h1><span>{moduleId}</span>{current.title}</h1><p className={styles.stage}>{stage?.title} · 第 {index + 1} / {modules.length} 节</p></div>
@@ -199,10 +200,10 @@ export function PvlibCoursePreview({ moduleId, courseTitle, modules, stages, pla
           {labMode === "game" && currentCandidate?.idea_id === labIdea.idea_id && <details className={styles.artifactDetails}><summary>查看待关联的操作数据</summary><pre>{JSON.stringify(currentCandidate.payload, null, 2)}</pre></details>}
         </> : <div className={styles.empty}>本节在实践包中完成操作。请阅读课程中的步骤，完成 Notebook、实验记录或作品文件，再保存作品说明。</div>}
       </section>}
-      {view === "slides" && <section className={styles.slides} data-preview-slides>{slides.length ? <SlideDeckPlayer deck={{ slides, ideas: content.ideas, renderedSections: content.rendered_sections, knodeDir }} projectName={PVLIB_SLUG} moduleId={moduleId} currentIndex={slideIndex} onIndexChange={setSlideIndex} layout="content" autoPlay={false} previewImageSources={images} previewAudioSources={audio} /> : <p className={styles.empty}>本节点暂无幻灯片。</p>}</section>}
+      {view === "slides" && <section className={styles.slides} data-preview-slides>{slides.length ? <SlideDeckPlayer deck={{ slides, ideas: content.ideas, renderedSections: content.rendered_sections, knodeDir }} projectName={PVLIB_SLUG} moduleId={moduleId} currentIndex={slideIndex} onIndexChange={setSlideIndex} layout="content" autoPlay={false} {...(published ? {} : { previewImageSources: images, previewAudioSources: audio })} /> : <p className={styles.empty}>本节点暂无幻灯片。</p>}</section>}
       {view === "assignment" && <section data-preview-assignment>
         <div className={styles.markdown}><ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]}>{assignment}</ReactMarkdown></div>
-        <a className={styles.download} href="/preview/pvlib/media?path=downloads%2Fpvlib-practice-kit.zip" download="pvlib-practice-kit.zip">下载 pvlib 实践包 ↓</a>
+        {downloadControl || <a className={styles.download} href="/preview/pvlib/media?path=downloads%2Fpvlib-practice-kit.zip" download="pvlib-practice-kit.zip">下载 pvlib 实践包 ↓</a>}
         <section className={styles.recordSection} data-pvlib-delivery>
           <p className={styles.eyebrow}>YOUR EVIDENCE</p><h2>提交本节作品</h2><p className={styles.note}>{recordConfig.output}</p>
           <GuidedResponsePrompt body={delivery.body} index={0} prompt={deliveryPrompt} question="作品说明与证据" locked={isLocked(delivery)} onChange={body => delivery.session.update(body)} />

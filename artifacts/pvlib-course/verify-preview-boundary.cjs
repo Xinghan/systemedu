@@ -47,7 +47,7 @@ assert.match(ui,/useLearningRecord/);checks++;
 assert.match(ui,/if \(!onArtifact\) return/);checks++;
 assert.match(ui,/onArtifact=\{labMode === "game" \? receiveArtifact : undefined\}/);checks++;
 assert.match(ui,/candidate\?\.owner === classroom\.identity\.owner/);checks++;
-assert.match(ui,/key=\{`\$\{labIdea\.idea_id\}:\$\{classroom\.identity\.owner\}`\}/);checks++;
+assert.match(ui,/key=\{`\$\{labIdea\.idea_id\}:\$\{delivery\.identity\.owner\}:\$\{contentVersion\}`\}/);checks++;
 for(const kind of ['classroom','assignment']){assert(ui.includes('scope("'+kind+'"'));checks++;}
 assert.match(ui,/activity_id: `pvlib-\$\{kind\}`/);checks++;
 assert.match(ui,/answer: ""/);checks++;

@@ -50,8 +50,8 @@ export function pvlibIdeaLabMode(idea: CourseIdeaSummary): PvlibLabMode | null {
   return idea.mode === "game" ? "game" : null
 }
 
-export function pvlibHref(moduleId: string, view: PvlibView, mode: PvlibLabMode) {
-  return `/preview/pvlib/${encodeURIComponent(moduleId)}?${new URLSearchParams({ view, mode })}`
+export function pvlibHref(moduleId: string, view: PvlibView, mode: PvlibLabMode, published = false) {
+  return `${published ? `/learn/${PVLIB_SLUG}` : "/preview/pvlib"}/${encodeURIComponent(moduleId)}?${new URLSearchParams({ view, mode })}`
 }
 
 /** A srcdoc sandbox has an opaque origin. The caller must also verify event.source. */
