@@ -7,6 +7,7 @@ export const PVLIB_PREVIEW_ROOT = path.resolve(process.cwd(), "../../../systemed
 export type PvlibManifest = {
   title?: string
   version?: string
+  planned_nodes?: number
   knodes: { module_id: string; knode_dir: string; title?: string; stage_id?: string }[]
   files: { path: string }[]
 }

@@ -97,8 +97,8 @@ function AssessmentRecord({ moduleId, contentVersion, questions, kind }: { modul
   </section>
 }
 
-export function PvlibCoursePreview({ moduleId, courseTitle, modules, stages, knodeDir, content, slides, images, audio, assignment, recordConfig, contentVersion, initialView = "reading", initialLabMode = "game" }: {
-  moduleId: string; courseTitle: string; modules: PvlibModule[]; stages: PvlibStage[]; knodeDir: string
+export function PvlibCoursePreview({ moduleId, courseTitle, modules, stages, plannedNodes, knodeDir, content, slides, images, audio, assignment, recordConfig, contentVersion, initialView = "reading", initialLabMode = "game" }: {
+  moduleId: string; courseTitle: string; modules: PvlibModule[]; stages: PvlibStage[]; plannedNodes?: number; knodeDir: string
   content: CourseContent; slides: SlideEntry[]; images: Record<string, string>; audio: Record<string, string>; assignment: string
   recordConfig: PvlibRecordConfig; contentVersion: string; initialView?: PvlibView; initialLabMode?: PvlibLabMode
 }) {
@@ -107,6 +107,9 @@ export function PvlibCoursePreview({ moduleId, courseTitle, modules, stages, kno
   const view = pvlibView(search.get("view") ?? initialView)
   const requestedLabMode = pvlibLabMode(search.get("mode") ?? initialLabMode)
   const [level, setLevel] = useState<KnowledgeLevel>("K1")
+  const offeredLevels = (["K1", "K2", "K3", "K4", "K5"] as KnowledgeLevel[]).filter(candidate => candidate === "K1" || content.theories?.some(theory => theory.level_bodies?.some(body => body.level === candidate)))
+  const levelNames: Record<KnowledgeLevel, string> = { K1: "直观理解", K2: "建立联系", K3: "基础推导与计算", K4: "进阶数学与模型", K5: "深入研究" }
+  const partial = !!plannedNodes && modules.length < plannedNodes
   const [slideIndex, setSlideIndex] = useState(0)
   const [candidate, setCandidate] = useState<ArtifactCandidate | null>(null)
   const scope = (kind: LearningScope["kind"], activity: string): LearningScope => ({ library_slug: PVLIB_SLUG, module_id: moduleId, activity_id: activity, kind, content_version: contentVersion })
@@ -155,13 +158,13 @@ export function PvlibCoursePreview({ moduleId, courseTitle, modules, stages, kno
 
   return <main className={styles.page} data-pvlib-preview={moduleId}>
     <header className={styles.header}>
-      <div className={styles.headerInner}><Link href="/library">← 项目课程</Link><span>本地课程验收 · {modules.length} 个节点</span></div>
+      <div className={styles.headerInner}><Link href="/library">← 项目课程</Link><span>本地课程验收 · {partial ? `已开放 ${modules.length} / ${plannedNodes} 个节点` : `${modules.length} 个节点`}</span></div>
     </header>
     <section className={styles.hero}>
       <div><p className={styles.eyebrow}>PVLIB / SOLAR FORECAST</p><p className={styles.courseTitle}>{courseTitle}</p><h1><span>{moduleId}</span>{current.title}</h1><p className={styles.stage}>{stage?.title} · 第 {index + 1} / {modules.length} 节</p></div>
       <div className={styles.selectors}>
         <label>课程节点<select aria-label="切换课程节点" value={moduleId} onChange={event => router.push(href(event.target.value))}>{stages.map(stage => <optgroup key={stage.id} label={stage.title}>{modules.filter(module => module.stage === stage.id).map(module => <option key={module.id} value={module.id}>{module.id} · {module.title}</option>)}</optgroup>)}</select></label>
-        <label>理论深度<select aria-label="理论深度" value={level} onChange={event => setLevel(event.target.value as KnowledgeLevel)}><option value="K1">K1 · 直观理解</option><option value="K3">K3 · 推导与计算</option></select></label>
+        <label>理论深度<select aria-label="理论深度" value={level} onChange={event => setLevel(event.target.value as KnowledgeLevel)}>{offeredLevels.map(value => <option key={value} value={value}>{value} · {levelNames[value]}</option>)}</select></label>
       </div>
     </section>
     <div className={`${styles.body} ${view === "lab" ? styles.wide : ""}`}>
@@ -199,7 +202,7 @@ export function PvlibCoursePreview({ moduleId, courseTitle, modules, stages, kno
         {!!recordConfig.quiz.length && <AssessmentRecord moduleId={moduleId} contentVersion={contentVersion} questions={recordConfig.quiz} kind="quiz" />}
         {!!recordConfig.exam?.length && <AssessmentRecord moduleId={moduleId} contentVersion={contentVersion} questions={recordConfig.exam} kind="exam" />}
       </section>}
-      <nav aria-label="顺序浏览课程" className={styles.footer}>{index > 0 ? <Link href={href(modules[index - 1].id)}>← {modules[index - 1].id} 上一节</Link> : <span />}<span>{index + 1} / {modules.length}</span>{index + 1 < modules.length ? <Link href={href(modules[index + 1].id)}>{modules[index + 1].id} 下一节 →</Link> : <span>本课程终点</span>}</nav>
+      <nav aria-label="顺序浏览课程" className={styles.footer}>{index > 0 ? <Link href={href(modules[index - 1].id)}>← {modules[index - 1].id} 上一节</Link> : <span />}<span>{index + 1} / {modules.length}</span>{index + 1 < modules.length ? <Link href={href(modules[index + 1].id)}>{modules[index + 1].id} 下一节 →</Link> : <span>{partial ? "后续节点正在制作" : "本课程终点"}</span>}</nav>
     </div>
   </main>
 }

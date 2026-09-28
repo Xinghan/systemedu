@@ -43,5 +43,5 @@ export default async function Page({ params, searchParams }: { params: Promise<{
   const stages = tree.stages.map(stage => ({ id: stage.stage_id, title: stage.title }))
   for (const node of modules) if (!stages.some(stage => stage.id === node.stage)) stages.push({ id: node.stage, title: node.stage === "course" ? "课程节点" : node.stage })
   const contentVersion = createHash("sha256").update(JSON.stringify({ record: rawRecord, assignment, plan, rawSlides, rawTheories, sections })).digest("hex").slice(0, 32)
-  return <PvlibCoursePreview key={moduleId} moduleId={moduleId} courseTitle={manifest.title || "给阳光做一份发电预报"} modules={modules} stages={stages} knodeDir={dir} content={content} slides={slides} images={images} audio={audio} assignment={assignment} recordConfig={recordConfig} contentVersion={contentVersion} initialView={pvlibView(search.view)} initialLabMode={pvlibLabMode(search.mode)} />
+  return <PvlibCoursePreview key={moduleId} moduleId={moduleId} courseTitle={manifest.title || "给阳光做一份发电预报"} modules={modules} stages={stages} plannedNodes={manifest.planned_nodes} knodeDir={dir} content={content} slides={slides} images={images} audio={audio} assignment={assignment} recordConfig={recordConfig} contentVersion={contentVersion} initialView={pvlibView(search.view)} initialLabMode={pvlibLabMode(search.mode)} />
 }
