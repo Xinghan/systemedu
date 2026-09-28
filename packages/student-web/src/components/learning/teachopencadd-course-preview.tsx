@@ -122,6 +122,7 @@ export function TeachOpenCADDCoursePreview({ moduleId, courseTitle, modules, sta
   const labIdeas = content.ideas.filter(idea => (idea.mode === "animation" || idea.mode === "game") && content.rendered_sections[idea.idea_id]?.html)
   const labIdea = labIdeas.find(idea => idea.mode === requestedLabMode) ?? labIdeas[0]
   const labMode: TeachOpenCADDLabMode = labIdea?.mode === "animation" ? "animation" : "game"
+  const labIsStatic = !!labIdea && /content=["']static_infographic["']/.test(content.rendered_sections[labIdea.idea_id]?.html || "")
   const ideaId = labIdea?.idea_id
   const receiveArtifact = (payload: TeachOpenCADDArtifact) => {
     if (ideaId) setCandidate({ payload, idea_id: ideaId, received_at: new Date().toISOString(), owner: classroom.identity.owner })
@@ -176,8 +177,8 @@ export function TeachOpenCADDCoursePreview({ moduleId, courseTitle, modules, sta
       </div>}
       {view === "lab" && <section id="interactive-lab" data-preview-lab>
         <div className={styles.labHeading}><div><p className={styles.eyebrow}>OBSERVE / TEST / RECORD</p><h2>{labIdea?.topic || "动画与实验"}</h2></div><div className={styles.actions}>{(["animation", "game"] as const).map(mode => <button key={mode} type="button" aria-pressed={labMode === mode} disabled={!labIdeas.some(idea => idea.mode === mode)} onClick={() => setView("lab", mode)}>{mode === "animation" ? "观看动画" : "动手实验"}</button>)}</div></div>
-        {labIdea ? <><p className={styles.note}>{labMode === "animation" ? "先观察关键步骤，再暂停或回放对照课程中的解释。" : "改变参数后，使用实验里的记录按钮生成操作产物，再关联本节作业。"}横屏可以更清楚地查看坐标与控件。</p><div className={styles.labFrame}><ArtifactFrame key={`${labIdea.idea_id}:${classroom.identity.owner}`} html={content.rendered_sections[labIdea.idea_id].html!} title={labIdea.topic} moduleId={moduleId} onArtifact={receiveArtifact} /></div>
-          <div className={styles.artifactBar}><div><strong>实验操作产物</strong><p role="status">{currentCandidate?.idea_id === labIdea.idea_id ? `已收到${typeof currentCandidate.payload.title === "string" ? `「${currentCandidate.payload.title}」` : "本次操作记录"}，尚未关联作业。` : "完成实验中的记录操作后，这里会显示可关联的产物。"}</p></div><button type="button" className={styles.primary} disabled={currentCandidate?.idea_id !== labIdea.idea_id || isLocked(delivery)} onClick={attachArtifact}>关联到本节作业</button></div>
+        {labIdea ? <><p className={styles.note}>{labIsStatic ? "对照这张图解，检查自己的文件、来源与证据。" : labMode === "animation" ? "先观察关键步骤，再暂停或回放对照课程中的解释。" : "改变参数后，使用实验里的记录按钮生成操作产物，再关联本节作业。"}横屏可以更清楚地查看坐标与控件。</p><div className={styles.labFrame}><ArtifactFrame key={`${labIdea.idea_id}:${classroom.identity.owner}`} html={content.rendered_sections[labIdea.idea_id].html!} title={labIdea.topic} moduleId={moduleId} onArtifact={receiveArtifact} /></div>
+          {labMode === "game" && <div className={styles.artifactBar}><div><strong>实验操作产物</strong><p role="status">{currentCandidate?.idea_id === labIdea.idea_id ? `已收到${typeof currentCandidate.payload.title === "string" ? `「${currentCandidate.payload.title}」` : "本次操作记录"}，尚未关联作业。` : "完成实验中的记录操作后，这里会显示可关联的产物。"}</p></div><button type="button" className={styles.primary} disabled={currentCandidate?.idea_id !== labIdea.idea_id || isLocked(delivery)} onClick={attachArtifact}>关联到本节作业</button></div>}
           {currentCandidate?.idea_id === labIdea.idea_id && <details className={styles.artifactDetails}><summary>查看待关联的操作数据</summary><pre>{JSON.stringify(currentCandidate.payload, null, 2)}</pre></details>}
         </> : <div className={styles.empty}>本节在实践包中完成操作。请阅读课程中的步骤，提交 Notebook、实验记录或作品文件。</div>}
       </section>}
