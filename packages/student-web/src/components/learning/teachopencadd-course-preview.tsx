@@ -53,6 +53,17 @@ function ArtifactFrame({ html, title, moduleId, onArtifact }: { html: string; ti
   return <div ref={box} className={styles.frameBox}>{scale > 0 && <iframe ref={frame} srcDoc={html} title={title} sandbox="allow-scripts allow-downloads" style={{ width: 1280, height: 800, transform: `translate(-50%, -50%) scale(${scale})` }} />}</div>
 }
 
+function FoundationBody({ markdown }: { markdown: string }) {
+  // Authored foundations use a small disclosure for worked answers. Keep raw
+  // HTML disabled; render only this known wrapper as a native React element.
+  const parts = markdown.split(/(<details>\s*<summary>[\s\S]*?<\/summary>[\s\S]*?<\/details>)/g)
+  return <>{parts.map((part, index) => {
+    const disclosure = /^<details>\s*<summary>([\s\S]*?)<\/summary>([\s\S]*?)<\/details>$/.exec(part)
+    const body = <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]}>{disclosure ? disclosure[2].trim() : part}</ReactMarkdown>
+    return disclosure ? <details key={index} className={styles.foundation}><summary>{disclosure[1].trim()}</summary>{body}</details> : <div key={index}>{body}</div>
+  })}</>
+}
+
 function AssessmentRecord({ moduleId, contentVersion, questions, kind }: { moduleId: string; contentVersion: string; questions: TeachOpenCADDQuestion[]; kind: "quiz" | "exam" }) {
   const record = useLearningRecord({ library_slug: TEACHOPENCADD_SLUG, module_id: moduleId, activity_id: `teachopencadd-${kind}`, kind, content_version: contentVersion }, {
     answers: questions.map(question => ({ question_id: question.id, question: question.question, answer: "" })),
@@ -153,7 +164,7 @@ export function TeachOpenCADDCoursePreview({ moduleId, courseTitle, modules, sta
       <nav aria-label="课程内容视图" className={styles.viewNav}>{VIEWS.map(item => <button type="button" key={item.id} aria-pressed={view === item.id} onClick={() => setView(item.id)}>{item.title}</button>)}</nav>
       {view === "reading" && <div data-preview-reading>
         <div className={styles.readingLead}><p>本节产出 · {recordConfig.output}</p><a href="#learning-notebook">前往课堂记录 ↓</a></div>
-        {!!recordConfig.foundations?.length && <section className={styles.recordSection} aria-label="按需补学基础"><h2>先确认自己会这几步</h2><p className={styles.note}>每项都有一个小检查。已经能独立完成就继续；卡住时展开例子，再按本节指引使用实践包操作。</p>{recordConfig.foundations.map(bridge => <details key={bridge.id} className={styles.foundation}><summary>{bridge.title}</summary><div className={styles.prose}><ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]}>{bridge.body_markdown}</ReactMarkdown></div></details>)}</section>}
+        {!!recordConfig.foundations?.length && <section className={styles.recordSection} aria-label="按需补学基础"><h2>先确认自己会这几步</h2><p className={styles.note}>每项都有一个小检查。已经能独立完成就继续；卡住时展开例子，再按本节指引使用实践包操作。</p>{recordConfig.foundations.map(bridge => <details key={bridge.id} className={styles.foundation}><summary>{bridge.title}</summary><div className={styles.prose}><FoundationBody markdown={bridge.body_markdown} /></div></details>)}</section>}
         <CourseReadingBody content={content} projectName={TEACHOPENCADD_SLUG} moduleId={moduleId} knowledgeLevel={level} />
         {!!recordConfig.resources?.length && <section className={styles.recordSection}><h2>带着问题看资料</h2>{recordConfig.resources.map(resource => resource.kind === "video" ? <CourseVideoResource key={resource.url} resource={resource} /> : <article key={resource.url} className={styles.resource}><p className={styles.eyebrow}>{resource.publisher}</p><h3><a href={resource.url} target="_blank" rel="noreferrer">{resource.title} ↗</a></h3><p>{resource.purpose}</p><p className={styles.note}>{resource.prompt}</p><details><summary>中文阅读要点</summary><p>{resource.fallback}</p></details></article>)}</section>}
         <section id="learning-notebook" className={styles.recordSection} data-teachopencadd-notebook>
