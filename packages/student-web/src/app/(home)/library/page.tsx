@@ -8,6 +8,7 @@ import { library, myProjects, type LibraryProjectSummary } from "@/lib/api"
 import { useAuthStore } from "@/lib/stores/auth-store"
 import { useLocale } from "@/lib/i18n/use-t"
 import { makeDiscoveryEntries, sortDiscoveryEntries, discoveryLevel } from "@/lib/library-discovery"
+import { withPvlibLibraryPreview, type PvlibLibraryPreview } from "@/lib/pvlib-library"
 import { PROJECT_LEVELS } from "@/lib/project-lines/levels"
 import { PROJECT_LINES, LINES_HREF, SPACE_LINE, localized, type DiscoveryKind } from "@/lib/project-lines/catalog"
 import { ApplyProjectModal } from "@/components/layout/apply-project-modal"
@@ -33,6 +34,7 @@ function LibraryBrowser() {
   const selectedLine = PROJECT_LINES.find(line => line.id === lineId)
   const { loggedIn, hydrate } = useAuthStore()
   const [projects, setProjects] = useState<LibraryProjectSummary[]>([])
+  const [pvlibPreview, setPvlibPreview] = useState<PvlibLibraryPreview | null>(null)
   const [pulled, setPulled] = useState<Set<string>>(new Set())
   const [loading, setLoading] = useState(true)
   const [loadFailed, setLoadFailed] = useState(false)
@@ -48,6 +50,14 @@ function LibraryBrowser() {
 
   useEffect(() => { hydrate() }, [hydrate])
   useEffect(() => {
+    if (process.env.NODE_ENV !== "development" || !["localhost", "127.0.0.1", "[::1]"].includes(window.location.hostname)) return
+    let active = true
+    fetch("/preview/pvlib/catalog").then(response => response.ok ? response.json() : null)
+      .then(preview => { if (active) setPvlibPreview(preview) })
+      .catch(() => { if (active) setPvlibPreview(null) })
+    return () => { active = false }
+  }, [reload])
+  useEffect(() => {
     let active = true
     library.listProjects().then(all => {
       if (active) { setProjects(all); setLoadFailed(false) }
@@ -61,7 +71,7 @@ function LibraryBrowser() {
     return () => { active = false }
   }, [loggedIn])
 
-  const entries = useMemo(() => makeDiscoveryEntries(projects, locale), [projects, locale])
+  const entries = useMemo(() => withPvlibLibraryPreview(makeDiscoveryEntries(projects, locale), pvlibPreview, locale), [projects, locale, pvlibPreview])
   const availableCount = entries.filter(entry => entry.available).length
   const listed = entries.filter(entry => showPlanned || entry.available)
   const filtered = useMemo(() => {

@@ -19,6 +19,10 @@ export type DiscoveryEntry = {
   lineId?: string
   source?: "local" | "service" | "snapshot"
   coverImage?: string
+  courseHref?: string
+  startLabel?: string
+  preparation?: string
+  preview?: boolean
 }
 
 export function discoveryLevel(entry: DiscoveryEntry): number {

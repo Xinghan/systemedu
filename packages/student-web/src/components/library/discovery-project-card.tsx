@@ -23,7 +23,7 @@ export function DiscoveryProjectCard({ entry, pulled }: { entry: DiscoveryEntry;
   const micro = entry.local
   const isMicro = entry.kind === "micro"
   const isLocal = Boolean(micro)
-  const href = micro?.href || `/library/${encodeURIComponent(entry.id)}`
+  const href = entry.courseHref || micro?.href || `/library/${encodeURIComponent(entry.id)}`
   const line = PROJECT_LINES.find(item => item.id === entry.lineId)
   const statusLabel = entry.source === "snapshot" ? (locale === "zh" ? "待接入" : "Not connected yet") : c.planning
   const hasStory = Boolean(project?.story?.length)
@@ -36,7 +36,7 @@ export function DiscoveryProjectCard({ entry, pulled }: { entry: DiscoveryEntry;
       <div className={`${styles.cardVisual} ${isMicro ? styles.microVisual : ""}`}>
         {entry.coverImage ? (
           // 保留生成原图，按卡片宽度压缩并延迟加载，避免同时下载多张原始 PNG。
-          <Image src={entry.coverImage} alt="" fill sizes="(max-width: 600px) calc(100vw - 32px), (max-width: 1000px) 45vw, 384px" className={styles.coverPhoto} />
+          <Image src={entry.coverImage} alt="" fill unoptimized={entry.preview} sizes="(max-width: 600px) calc(100vw - 32px), (max-width: 1000px) 45vw, 384px" className={styles.coverPhoto} />
         ) : project?.cover_image_path && !coverFailed ? (
             // 封面由现有内容服务提供，失败时回落到领域图形。
             // eslint-disable-next-line @next/next/no-img-element
@@ -49,6 +49,7 @@ export function DiscoveryProjectCard({ entry, pulled }: { entry: DiscoveryEntry;
           {isMicro ? <Telescope size={12} /> : isLocal ? <BookOpen size={12} /> : <Layers3 size={12} />}{isMicro ? c.microTag : entry.kind === "integration" ? (discoveryLevel(entry) === 3 ? (locale === "zh" ? "独立挑战" : "Challenge") : (locale === "zh" ? "系统课程" : "System course")) : isLocal ? c.guidedTag : c.fullTag}
         </span>
         {!entry.available && <span className={styles.draftTag}>{statusLabel}</span>}
+        {entry.preview && <span className={styles.draftTag}>{locale === "zh" ? "本地预览" : "Local preview"}</span>}
       </div>
       <div className={styles.cardContent}>
         <div className={styles.cardOverline}><span>{String(discoveryLevel(entry) + 1).padStart(2, "0")} · {domain}</span>{pulled && entry.available && <span className={styles.added}>{c.onShelf}</span>}</div>
@@ -58,11 +59,11 @@ export function DiscoveryProjectCard({ entry, pulled }: { entry: DiscoveryEntry;
           <div><small><Clock3 size={12} />{isMicro ? c.minutesTarget : c.schedule}</small><strong>{micro ? (locale === "zh" ? `约 ${micro.estimatedMinutes} 分钟` : `About ${micro.estimatedMinutes} min`) : duration && duration > 0 ? `${duration} ${c.weeks}` : c.noSchedule}</strong></div>
           <div><small>{isLocal ? isMicro ? c.light : c.guidedChallenge : c.challenge}</small><strong>{micro ? localized(micro.challenge, locale) : entry.difficulty ? <><span className={styles.depthBars} aria-hidden="true">{[1, 2, 3, 4, 5].map(n => <i key={n} data-filled={n <= entry.difficulty!} />)}</span>{entry.difficulty} / 5</> : c.unspecified}</strong></div>
         </div>
-        <p className={styles.preparation}>{micro?.preparation ? localized(micro.preparation, locale) : isLocal ? c.microPreparation : c.preparation}</p>
+        <p className={styles.preparation}>{entry.preparation || (micro?.preparation ? localized(micro.preparation, locale) : isLocal ? c.microPreparation : c.preparation)}</p>
         {line && <Link href={lineHref(line.id)} className={styles.lineAssociation}><Orbit size={13} />{localized(line.title, locale)}<ArrowUpRight size={12} /></Link>}
         <div className={styles.cardFooter}>
           <span>{micro?.learningNodes ? `${micro.learningNodes} ${locale === "zh" ? "学习节点 · 可分次完成" : "nodes · Learn at your pace"}` : isLocal ? c.instant : project?.knode_count ? `${project.knode_count} ${c.chapters}` : project?.age_band ? `${project.age_band} ${c.age}` : c.fullTag}</span>
-          {entry.available ? <Link href={href} className={isLocal ? styles.startCard : styles.openCard}>{micro && micro.kind !== "micro" ? (locale === "zh" ? "进入课程" : "Start course") : isLocal ? c.startProject : pulled ? c.continueProject : c.viewProject}<ArrowRight size={14} /></Link> : <span className={styles.comingSoon}>{statusLabel}</span>}
+          {entry.available ? <Link href={href} className={isLocal ? styles.startCard : styles.openCard}>{entry.startLabel || (micro && micro.kind !== "micro" ? (locale === "zh" ? "进入课程" : "Start course") : isLocal ? c.startProject : pulled ? c.continueProject : c.viewProject)}<ArrowRight size={14} /></Link> : <span className={styles.comingSoon}>{statusLabel}</span>}
         </div>
       </div>
       {project && hasStory && storyOpen && <StoryModal slug={project.slug} frames={project.story!} onClose={() => setStoryOpen(false)} />}
