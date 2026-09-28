@@ -240,7 +240,9 @@ elif action == 'verify':
     root = LIBRARY / 'media/projects' / SLUG
     manifest = json.loads((root / 'manifest.json').read_text())
     verify_course(root, manifest)
-    assert sha(root / '_archive' / f'{SLUG}-1.0.0.tar.gz') == expected['course_sha256']
+    archive_sha = (read('blueprint-correction.json')['course_sha256']
+                   if (RELEASE / 'blueprint-correction.json').exists() else expected['course_sha256'])
+    assert sha(root / '_archive' / f'{SLUG}-1.0.0.tar.gz') == archive_sha
     for suffix in ['/knodes/M01', '/files/downloads/pvlib-practice-kit.zip']:
         try:
             request(f'http://127.0.0.1:18820/api/library/projects/{SLUG}' + suffix)

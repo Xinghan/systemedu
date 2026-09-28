@@ -18,8 +18,13 @@ case "${1:-}" in
     copy "$ROOT/scripts/releases/pvlib-20260929.py" "$UP/release.py.next"
     remote "mv $UP/release.py.next $UP/release.py"
     ;;
+  correct-blueprint)
+    copy "$LOCAL/blueprint-patch.json" "$UP/blueprint-patch.json"
+    copy "$ROOT/scripts/releases/pvlib-blueprint-20260929.py" "$UP/correct-blueprint.py"
+    remote "python3 $UP/correct-blueprint.py"
+    ;;
   stage|build|preview|publish|verify|rollback|summary)
     remote "python3 $UP/release.py $1"
     ;;
-  *) echo 'upload | stage | build | preview | publish | verify | rollback | summary' >&2; exit 2;;
+  *) echo 'upload | stage | build | preview | publish | verify | correct-blueprint | rollback | summary' >&2; exit 2;;
 esac
