@@ -4,6 +4,7 @@ Course: `teachopencadd-candidate-research`. Content and the runnable student pra
 
 - `final-browser-check.json`: all 46 reading routes, 13 actual opaque-iframe artifact attachment paths, M33 guest assignment save/reload, all image/ZIP route bytes, and three mobile views.
 - `final-browser-media-delta.json`: repeats the changed final media paths after synchronization, including read-only media labels and three representative screenshots.
+- `m20-reference-integration.json`: final M20-only UI fix after the 13-game run; reference/comparison selectors, actual similarity and the attached artifact agree after a visit and another selection. Other 18 early media files remained byte-identical.
 - `records-check.json` and `preview-check.json`: separate classroom/assignment/quiz/exam records, representative reload persistence, foundations, slides and read-only diagrams.
 - `preview-boundary-report.json`: 48 development-host, file-serving and artifact-message boundary assertions.
 - `screenshots/`: local browser screenshots of the final synchronized course.

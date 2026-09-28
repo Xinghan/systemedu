@@ -1,0 +1,28 @@
+const fs=require('fs'),assert=require('assert'),crypto=require('crypto');
+const {chromium}=require('/Users/xinghan/Dev/systemedu/node_modules/playwright-core');
+(async()=>{
+ const b=await chromium.launch({headless:true}),page=await b.newPage({viewport:{width:1440,height:1100}}),errors=[];
+ page.on('pageerror',e=>errors.push(e.message));
+ await page.goto('http://127.0.0.1:4000/preview/teachopencadd/M20?view=lab&mode=game',{waitUntil:'networkidle'});
+ const f=page.frameLocator('[data-preview-lab] iframe'),select=f.locator('#controls select');
+ await select.nth(0).selectOption('4');await select.nth(1).selectOption('5');
+ await f.locator('#controls input[type=range]').focus();await page.keyboard.press('Home');
+ await f.getByRole('button',{name:'走访这个分子',exact:true}).click();
+ assert.equal(await select.nth(0).inputValue(),'5','A selector must track the visited molecule');
+ assert.equal(await select.nth(1).inputValue(),'5');
+ const frame=page.frames().find(x=>x!==page.mainFrame());
+ await page.waitForTimeout(100);const visited=await frame.evaluate(()=>getGameState());
+ assert.equal(visited.similarity.left,visited.similarity.right);assert.equal(visited.similarity.score,1);
+ await select.nth(1).selectOption('6');await page.waitForTimeout(100);
+ const compared=await frame.evaluate(()=>getGameState());assert.notEqual(compared.similarity.left,compared.similarity.right);
+ await f.getByRole('button',{name:'保存本次证据',exact:true}).click();
+ await page.getByRole('button',{name:'关联到本节作业',exact:true}).click();
+ await page.getByText('已关联实验操作产物',{exact:true}).waitFor();
+ await page.locator('[data-teachopencadd-delivery]').getByText('查看操作数据',{exact:true}).click();
+ const text=await page.locator('[data-teachopencadd-delivery] pre').innerText(),record=JSON.parse(text),saved=record.payload;
+ assert.equal(saved.source.left.moleculeId,compared.similarity.left);assert.equal(saved.source.right.moleculeId,compared.similarity.right);
+ assert.equal(saved.result.score,compared.similarity.score);assert.deepEqual(errors,[]);
+ const file='/Users/xinghan/Dev/systemeduidea/projects_data/teachopencadd-candidate-research/knodes/M20-w0-module/media/game.html';
+ fs.writeFileSync('/private/tmp/cadd-authoring/m20-reference-integration.json',JSON.stringify({status:'pass',harness_note:'Initial harness tried to read innerText from collapsed details; corrected by opening the actual data disclosure before parsing. No course change was required.',scope:'Final M20-only dropdown synchronization delta; actual local opaque iframe and attached assignment body',html_sha256:crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex'),checks:['visit updates reference selector','self similarity is1 and labels agree','next comparison selects distinct molecule','attached artifact IDs and score match displayed research state'],visited,compared,saved,errors},null,2));
+ await b.close();console.log('M20 live selectors, actual comparison and attached artifact identities agree');
+})().catch(e=>{console.error(e);process.exit(1)});
