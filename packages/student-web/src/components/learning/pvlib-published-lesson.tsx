@@ -3,6 +3,7 @@
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useEffect, useState, type ComponentProps } from "react"
+import { PageLoading } from "@/components/ui/page-loading"
 import { library, myProjects } from "@/lib/api"
 import { getToken } from "@/lib/auth"
 import { useLearningIdentity } from "@/lib/hooks/use-learning-record"
@@ -106,6 +107,8 @@ export function PvlibPublishedLesson({ moduleId }: { moduleId: string }) {
   }, [moduleId, token, owner, retry, router])
 
   if (error) return <main className={styles.page}><p role="alert">{error}</p><button type="button" onClick={() => { setError(""); setRetry(value => value + 1) }}>重新加载</button><Link href={`/library/${PVLIB_SLUG}`}>返回项目</Link></main>
-  if (!token || !loaded || loaded.owner !== owner) return <main className={styles.page}><p role="status">正在载入课程…</p></main>
+  if (!token || !loaded || loaded.owner !== owner || loaded.lesson.moduleId !== moduleId) {
+    return <main role="status" aria-busy="true"><PageLoading label="正在载入课程…" /></main>
+  }
   return <PvlibCourseLesson {...loaded.lesson} published downloadControl={<PracticeDownload key={owner} token={token} />} />
 }
