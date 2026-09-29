@@ -1,6 +1,6 @@
 # Flagship project cover release — 2026-09-29
 
-Status: published as frontend build `jWXT9095sDPvOjv2xVUXs`. Candidate checks passed; server verification confirms exactly 42 frontend source/asset changes and unchanged backend source/public catalog. Public HTTPS browser verification is in progress.
+Status: published and verified over public HTTPS as frontend build `jWXT9095sDPvOjv2xVUXs`. Candidate and production checks each passed 28 browser scenarios and byte-for-byte checks of all 27 responsive image files, with zero page exceptions. Server verification confirms exactly 42 frontend source/asset changes and unchanged backend source/public catalog. Cover implementation and candidate evidence are committed as `b177c354` and pushed to `codex/energy-project-line-20260921`.
 
 ## Problem and scope
 
