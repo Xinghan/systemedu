@@ -239,7 +239,7 @@ Internet -> nginx:80 -> /api/*  -> uvicorn:18820 (Python gateway)
 ## Development Rules
 
 ### Git Workflow
-- **Every code change must be committed** after the request is completed
+- **每次生成或修改完成后自动 commit + push，无需再次确认**：范围包括课程、项目蓝图、图片/动画、代码、文档、规则及 skill；每批及时提交，草案注明状态也要备份。具体提交范围、分支和推送核验遵循根目录 [AGENTS.md](AGENTS.md)。
 - **commit 后必须立即 `git push` 到远程** — 这是硬性要求，不允许只 commit 不 push、把工作积压在本地。
   远程 (GitHub) 是唯一可靠的保险；本地长期领先远程会在任何一次 git 整理/reset 时面临丢失风险
   (2026-06-16 曾因本地积压数天未 push 的工作 + 一次 reset 误判，险些丢失，靠 reflog 才找回)。
