@@ -1,11 +1,14 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import crypto from 'node:crypto'
-import { chromium, expect } from '@playwright/test'
+import { chromium, expect as baseExpect } from '@playwright/test'
+
+const expect = baseExpect.configure({ timeout: 30000 })
 
 const origin = process.env.PVLIB_ORIGIN || 'http://127.0.0.1:4000'
-const source = path.resolve('../systemeduidea/projects_data/pvlib-solar-forecast-station')
-const output = path.resolve('artifacts/pvlib-classroom-repair')
+const source = path.resolve(process.env.PVLIB_SOURCE || '../systemeduidea/projects_data/pvlib-solar-forecast-station')
+const output = path.resolve(process.env.PVLIB_OUTPUT || 'artifacts/pvlib-classroom-repair')
+const canonicalOnly = process.env.PVLIB_CANONICAL_ONLY === '1'
 await fs.mkdir(output, { recursive: true })
 const manifest = JSON.parse(await fs.readFile(path.join(source, 'manifest.json'), 'utf8'))
 const tree = JSON.parse(await fs.readFile(path.join(source, 'tree/knowledge_tree.json'), 'utf8'))
@@ -78,7 +81,8 @@ try {
   const tested = entries.filter(entry => !reviewedModules || reviewedModules.includes(entry.module_id))
   for (const entry of tested) {
     console.log('Checking classroom',entry.module_id)
-    await page.goto(`${origin}/learn/${slug}/${entry.module_id}`, {waitUntil:'domcontentloaded'})
+    if (entry === tested[0]) await page.goto(`${origin}/learn/${slug}/${entry.module_id}`, {waitUntil:'domcontentloaded'})
+    else await page.getByLabel('切换课程节点').selectOption(entry.module_id)
     await expect(page.locator('[data-pvlib-classroom]')).toBeVisible()
     await expect(page.locator('h1').first()).toContainText(entry.title)
     await expect(page.getByLabel('切换课程节点')).toHaveValue(entry.module_id)
@@ -92,7 +96,7 @@ try {
     for(const idea of entry.sections.ideas.filter(i=>['game','animation'].includes(i.mode))) await expect(page.locator(`[id="idea-${idea.idea_id}"]`)).toHaveCount(1)
     if(['M01','M08','M58'].includes(entry.module_id)) await page.screenshot({path:path.join(output,`${entry.module_id}-classroom.png`)})
   }
-  checks.push(`${tested.length} lessons use shared classroom, lecture carousel, inline media, notebook and assignment; no media tabs or preview download URLs.`)
+  checks.push(`${tested.length} lessons navigate through the course directory and use shared classroom, lecture carousel, inline media, notebook and assignment; no media tabs or preview download URLs.`)
   await page.goto(`${origin}/learn/${slug}/M08?view=lab&mode=game`,{waitUntil:'domcontentloaded'})
   const modal=page.getByRole('dialog').filter({has:page.locator('[data-pvlib-experiment]')})
   await expect(modal).toBeVisible()
@@ -138,6 +142,9 @@ try {
   await expect(page.locator('[data-lesson-carousel]')).toContainText('2 / 10')
   await page.getByRole('button',{name:'幻灯片',exact:true}).click()
   await expect(page.getByRole('dialog')).toBeVisible()
+  // The fitted sheet stays hidden until ResizeObserver completes layout.
+  await expect(page.getByRole('dialog').locator('[data-slide-surface] h2')).toBeVisible()
+  await expect(page.getByRole('dialog').locator('[data-slide-surface] h2')).not.toHaveText('')
   await page.screenshot({path:path.join(output,'M01-shared-slideshow.png')})
   await page.keyboard.press('Escape')
   await expect(page.locator('[data-pvlib-notebook]')).toBeVisible()
@@ -154,7 +161,7 @@ try {
   await page.screenshot({path:path.join(output,'M01-mobile.png')})
   checks.push('390px mobile has no horizontal overflow.')
   await page.setViewportSize({width:1440,height:1000})
-  await page.goto(`${origin}/preview/pvlib/M08`,{waitUntil:'domcontentloaded'})
+  await page.goto(`${origin}/${canonicalOnly ? `learn/${slug}` : 'preview/pvlib'}/M08`,{waitUntil:'domcontentloaded'})
   await expect(page.locator('[data-pvlib-classroom]')).toBeVisible()
   await expect(page.getByRole('navigation',{name:'课程内容视图'})).toHaveCount(0)
   await expect(page.locator('[data-pvlib-notebook]')).toContainText('修复前保存的课堂记录')
@@ -162,8 +169,9 @@ try {
   await page.evaluate(value=>{localStorage.setItem('systemedu_token',value);window.dispatchEvent(new Event('focus'))},otherToken)
   await expect(page.locator('[data-pvlib-notebook]')).not.toContainText('修复前保存的课堂记录')
   await expect(page.locator('[data-pvlib-delivery]')).not.toContainText('课堂实验回归记录')
-  checks.push('Local preview uses same classroom; switching account removes prior account notebook and artifacts.')
+  checks.push(`${canonicalOnly ? 'Canonical classroom' : 'Local preview'}: switching account removes prior account notebook and artifacts.`)
 
+  if (!canonicalOnly) {
   await page.goto(`${origin}/preview/lightkurve/M15`,{waitUntil:'domcontentloaded'})
   const otherCard=page.locator('[id^="idea-"] [role="button"][aria-haspopup="dialog"]').first()
   await expect(otherCard).toBeVisible()
@@ -176,8 +184,10 @@ try {
   await page.keyboard.press('Escape')
   await expect(otherDialog).toHaveCount(0)
   checks.push('Shared reader regression: another course opens media by keyboard using its original iframe, no pvlib persistence adapter.')
+  }
   expect(errors).toEqual([])
-  const report={passed:true,modules:tested.map(e=>e.module_id),checks,pageErrors:errors,recordScopesChecked:recordRequests.length,unhandledFixtureRequests:[...new Set(denied)],note:'Local app with authored files and intercepted API fixtures. No real account/API writes; not production deployment QA.'}
+  expect([...new Set(denied)]).toEqual([])
+  const report={passed:true,origin,build:process.env.PVLIB_BUILD || null,modules:tested.map(e=>e.module_id),checks,pageErrors:errors,recordScopesChecked:recordRequests.length,unhandledFixtureRequests:[...new Set(denied)],note:canonicalOnly ? 'Deployed frontend bytes with authored course fixtures and intercepted API. Tests browser save/restore contracts without real account or backend writes. Public access and server integrity are verified separately.' : 'Local app with authored files and intercepted API fixtures. No real account/API writes; not production deployment QA.'}
   await fs.writeFile(path.join(output,'verification.json'),JSON.stringify(report,null,2)+'\n')
   console.log(JSON.stringify(report,null,2))
 } finally { await browser.close() }
