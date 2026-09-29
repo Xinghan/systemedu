@@ -15,6 +15,7 @@ import { ApplyProjectModal } from "@/components/layout/apply-project-modal"
 import { DifficultyProjectList } from "@/components/library/difficulty-project-list"
 import { ProjectLineDetail } from "@/components/library/project-line-detail"
 import { ProjectLineView } from "@/components/library/project-line-view"
+import { LearningPathIntro } from "@/components/library/learning-path-intro"
 import { DISCOVERY_COPY } from "@/components/library/discovery-copy"
 import styles from "@/components/library/discovery.module.css"
 
@@ -109,6 +110,7 @@ function LibraryBrowser() {
       {showLines ? selectedLine ? <ProjectLineDetail line={selectedLine} locale={locale} entries={entries} pulled={loggedIn ? pulled : new Set()} />
         : lineId ? <div className={styles.emptyState}><h2>{locale === "zh" ? "这条项目线暂未收录" : "This project line is not available"}</h2><Link href={LINES_HREF}>{locale === "zh" ? "返回所有项目线" : "Back to all project lines"}<ArrowRight size={15} /></Link></div>
         : <ProjectLineView locale={locale} entries={entries} loading={loading} /> : <>
+      <LearningPathIntro locale={locale} />
       <section className={styles.discovery} aria-labelledby="discovery-title">
         <div className={styles.discoveryHeading}><div><h2 id="discovery-title">{c.discover}</h2><p>{c.discoverHint}</p></div><SlidersHorizontal size={19} strokeWidth={1.3} aria-hidden="true" /></div>
         <div className={styles.kindTabs} role="group" aria-label={locale === "zh" ? "项目类型" : "Project type"}>
