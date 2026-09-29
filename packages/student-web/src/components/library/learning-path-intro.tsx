@@ -11,6 +11,7 @@ const COPY = {
     body: "围绕同一个主题，边做项目边学知识。从第一件小作品，逐步走向自己的完整工程。",
     action: "发现我的项目线",
     example: "以太空探索为例",
+    process: "你会怎样一步步学会",
     note: "从适合你的起点开始，每一站都能留下自己的作品。",
     steps: [
       { phase: "先体验", title: "3 分钟体验", action: "先动手，发现兴趣", outcome: "拍下第一张星球照片" },
@@ -26,6 +27,7 @@ const COPY = {
     body: "Follow one theme and learn by making. Grow from a small first creation to a complete engineering project of your own.",
     action: "Find my project line",
     example: "An example: space exploration",
+    process: "How your learning grows",
     note: "Choose a starting point that fits. Make something of your own at every stop.",
     steps: [
       { phase: "Explore", title: "3-minute experience", action: "Try it. Find your spark.", outcome: "Take your first world photo" },
@@ -57,13 +59,19 @@ export function LearningPathIntro({ locale }: { locale: "zh" | "en" }) {
             width={2172} height={724} alt="" loading="lazy" decoding="async" />
         </div>
         <figcaption className={styles.caption}>
-          <div className={styles.example}><span>{c.example}</span><span aria-hidden="true">{locale === "zh" ? "由浅入深" : "EASY TO ADVANCED"}<ArrowRight size={14} /></span></div>
+          <div className={styles.example}><span>{c.example} · {c.process}</span><span aria-hidden="true">{locale === "zh" ? "由浅入深" : "EASY TO ADVANCED"}<ArrowRight size={14} /></span></div>
+          <div className={styles.vectorPanorama} aria-hidden="true" data-learning-process>
+            {/* A native SVG stays sharp at every screen size; captions remain selectable HTML. */}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/library/learning-path/learning-process-v1.svg" width={1200} height={240} alt="" loading="lazy" decoding="async" />
+          </div>
           <ol className={styles.steps}>
             {c.steps.map((step, index) => <li key={step.title}>
               <div className={`${styles.mobileArt} ${styles[`scene${index}`]}`} aria-hidden="true" />
               <div className={styles.stepCopy}>
                 <h3>{step.phase}</h3>
                 <p className={styles.kind}>{step.title}</p>
+                <div className={`${styles.mobileVector} ${styles[`scene${index}`]}`} aria-hidden="true" />
                 <p className={styles.outcome}>{step.outcome}</p>
               </div>
               {index < 3 && <ArrowDown className={styles.nextArrow} size={20} aria-hidden="true" />}
