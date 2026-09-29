@@ -1,6 +1,7 @@
 "use client"
 
 import Link from "next/link"
+import { projectCoverProps } from "@/lib/project-cover"
 import { useParams, useRouter } from "next/navigation"
 import { useEffect, useMemo, useState } from "react"
 import { toast } from "sonner"
@@ -285,8 +286,10 @@ export default function ProjectHome() {
             {/* 海报背景 */}
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
-              src={library.coverUrl(slug)}
+              {...projectCoverProps(slug, library.coverUrl(slug), "hero")}
               alt=""
+              decoding="async"
+              fetchPriority="high"
               aria-hidden
               style={{
                 position: "absolute",

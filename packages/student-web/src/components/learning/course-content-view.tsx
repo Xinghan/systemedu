@@ -1,5 +1,6 @@
 "use client"
 
+import { useCourseMedia } from "./course-media-context"
 import { PersistentTheoryQuiz } from "./persistent-question"
 import { NodeAssignmentPanel } from "./node-assignment-panel"
 
@@ -85,6 +86,13 @@ interface CourseContentViewProps {
   knowledgeLevel?: import("@/lib/types/api").KnowledgeLevel
   onMediaStats?: (stats: MediaStats) => void
   onOutline?: (sections: OutlineSection[]) => void
+  /** Already authorized and loaded course, using the same classroom renderer. */
+  preparedLesson?: {
+    data: CourseContentData
+    beforeContent?: React.ReactNode
+    afterContent?: React.ReactNode
+    assignment?: React.ReactNode
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -939,13 +947,14 @@ function ScaledIframe({
 
 /** Full-screen modal for iframe content */
 function IframeModal({
-  open, onClose, html, title, resetKey,
+  open, onClose, html, title, resetKey, frame,
 }: {
   open: boolean
   onClose: () => void
   html: string
   title: string
   resetKey: number
+  frame?: React.ReactNode
 }) {
   useEffect(() => {
     if (!open) return
@@ -961,7 +970,7 @@ function IframeModal({
   if (!open) return null
 
   return createPortal(
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center">
+    <div role="dialog" aria-modal="true" aria-label={title} className="fixed inset-0 z-[9999] flex items-center justify-center">
       {/* Backdrop */}
       <div
         className="absolute inset-0 bg-black/70 backdrop-blur-sm"
@@ -974,6 +983,7 @@ function IframeModal({
           <span className="text-sm font-semibold text-white/80 truncate block min-w-0">{title}</span>
           <button
             onClick={onClose}
+            aria-label="关闭互动内容"
             className="w-8 h-8 shrink-0 rounded-lg flex items-center justify-center text-white/60 hover:text-white hover:bg-white/10 transition-colors"
           >
             <X className="h-4 w-4" />
@@ -981,7 +991,7 @@ function IframeModal({
         </div>
         {/* 内容区: 固定设计视口等比缩放, 永不溢出 */}
         <div className="flex-1 min-h-0">
-          <ScaledIframe html={html} title={title} resetKey={resetKey} />
+          {frame ?? <ScaledIframe html={html} title={title} resetKey={resetKey} />}
         </div>
       </div>
     </div>,
@@ -998,8 +1008,9 @@ function IdeaIframeBlock({
   backend?: string
 }) {
   const t = useT()
+  const media = useCourseMedia()
   const [resetKey, setResetKey] = useState(0)
-  const [modalOpen, setModalOpen] = useState(false)
+  const [modalOpen, setModalOpen] = useState(media?.initialIdeaId === idea.idea_id)
   const backendLabel = backendBadgeLabel(backend)
   const modalTitle = darkMode
     ? t("course.animation_modal_title", { topic: idea.topic })
@@ -1016,6 +1027,8 @@ function IdeaIframeBlock({
           <div
             className="flex items-center justify-between p-8 cursor-pointer hover:bg-white/5 transition-colors"
             style={{ backdropFilter: "blur(20px)", background: "rgba(255,255,255,0.05)" }}
+            role="button" tabIndex={0} aria-label={idea.topic} aria-haspopup="dialog"
+            onKeyDown={event => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setModalOpen(true) } }}
             onClick={() => setModalOpen(true)}
           >
             <div className="flex items-center gap-6">
@@ -1046,6 +1059,7 @@ function IdeaIframeBlock({
           html={html}
           title={modalTitle}
           resetKey={resetKey}
+          frame={modalOpen ? media?.renderFrame?.(idea, html) : undefined}
         />
       </>
     )
@@ -1057,7 +1071,9 @@ function IdeaIframeBlock({
       <section className="rounded-2xl overflow-hidden shadow-lg bg-[var(--card)] border border-[var(--border)]">
         <div
           className="flex items-center justify-between p-8 cursor-pointer transition-colors hover:bg-[var(--paper-2)]"
-          onClick={() => setModalOpen(true)}
+          role="button" tabIndex={0} aria-label={idea.topic} aria-haspopup="dialog"
+            onKeyDown={event => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setModalOpen(true) } }}
+            onClick={() => setModalOpen(true)}
         >
           <div className="flex items-center gap-6">
             <div
@@ -1083,6 +1099,7 @@ function IdeaIframeBlock({
         html={html}
         title={modalTitle}
         resetKey={resetKey}
+        frame={modalOpen ? media?.renderFrame?.(idea, html) : undefined}
       />
     </>
   )
@@ -1431,13 +1448,16 @@ function DiagramBlock({
   caption: string
 }) {
   const t = useT()
-  const [modalOpen, setModalOpen] = useState(false)
+  const media = useCourseMedia()
+  const [modalOpen, setModalOpen] = useState(media?.initialIdeaId === idea.idea_id)
 
   return (
     <>
       <section className="rounded-2xl overflow-hidden shadow-md bg-surface-container-low border border-outline-variant/20">
         <div
           className="flex items-center justify-between p-6 cursor-pointer hover:bg-white/40 transition-colors"
+          role="button" tabIndex={0} aria-label={idea.topic} aria-haspopup="dialog"
+          onKeyDown={event => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setModalOpen(true) } }}
           onClick={() => setModalOpen(true)}
         >
           <div className="flex items-center gap-5">
@@ -1465,6 +1485,7 @@ function DiagramBlock({
         html={html}
         title={t("course.diagram_modal_title", { topic: idea.topic })}
         resetKey={0}
+        frame={modalOpen ? media?.renderFrame?.(idea, html) : undefined}
       />
     </>
   )
@@ -1868,9 +1889,9 @@ function EditorialHeader({ knode }: { knode: KnodeInfo | null }) {
   if (!knode) return null
   return (
     <header className="space-y-6">
-      <div className="inline-flex items-center gap-2 px-3 py-1 bg-secondary-container rounded-full text-on-secondary-container text-xs font-bold tracking-widest uppercase">
+      {knode.difficulty_level > 0 && <div className="inline-flex items-center gap-2 px-3 py-1 bg-secondary-container rounded-full text-on-secondary-container text-xs font-bold tracking-widest uppercase">
         {t("course.difficulty_minutes", { level: knode.difficulty_level, minutes: knode.estimated_minutes })}
-      </div>
+      </div>}
       <h1 className="font-extrabold text-3xl tracking-tight leading-[1.2] text-primary pb-1">
         {knode.title}
       </h1>
@@ -2349,9 +2370,11 @@ export function CourseContentView({
   knowledgeLevel = "K1",
   onMediaStats,
   onOutline,
+  preparedLesson,
 }: CourseContentViewProps) {
   const t = useT()
-  const [courseData, setCourseData] = useState<CourseContentData | null>(null)
+  const [loadedCourseData, setCourseData] = useState<CourseContentData | null>(null)
+  const courseData = preparedLesson?.data ?? loadedCourseData
   const [contentVariant, setContentVariant] = useState<"default" | "course_factory">("default")
   // v3 (kimi-k2.6) 版本切换 — toggle 显示哪个版本的 course_content
   const [versionMode, setVersionMode] = useState<"v2" | "v3">("v2")
@@ -2378,7 +2401,7 @@ export function CourseContentView({
   const [drillRefresh, setDrillRefresh] = useState(0)
 
   const backendContent = courseData?.course_content as CourseContent | undefined
-  const courseFactoryVariant = getCourseFactoryVariant(projectName, nodeId)
+  const courseFactoryVariant = preparedLesson ? undefined : getCourseFactoryVariant(projectName, nodeId)
   const hasCourseFactoryVariant = Boolean(courseFactoryVariant)
   const showingCourseFactory =
     contentVariant === "course_factory" && Boolean(courseFactoryVariant)
@@ -2493,6 +2516,7 @@ export function CourseContentView({
   }
 
   const load = async (regenerate = false) => {
+    if (preparedLesson) return
     // Abort any in-flight load before starting a new one
     abortRef.current = true
     const myLoadId = ++loadIdRef.current
@@ -2599,6 +2623,7 @@ export function CourseContentView({
   }
 
   useEffect(() => {
+    if (preparedLesson) return
     setError(null)
     setChecking(true)
     setNotGenerated(false)
@@ -2629,7 +2654,7 @@ export function CourseContentView({
     })
 
     return () => { abortRef.current = true }
-  }, [projectName, nodeId, versionMode, v3SelectedVersion]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [projectName, nodeId, versionMode, v3SelectedVersion, preparedLesson?.data]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // 课文不再有版本之分 (v2/v3): 永不显示版本切换 UI, 始终走默认课文。
   useEffect(() => {
@@ -2869,6 +2894,8 @@ export function CourseContentView({
 
                     <EditorialHeader knode={knode} />
 
+                    {preparedLesson?.beforeContent}
+
                     {/* Content sections */}
                     {content.sections && content.sections.length > 0 ? (
                       <PlanWithSections content={content} />
@@ -2877,7 +2904,8 @@ export function CourseContentView({
                     )}
 
 
-                    <NodeAssignmentPanel key={`${projectName}/${knode?.module_id}`} projectName={projectName} knode={knode} />
+                    {preparedLesson?.afterContent}
+                    {preparedLesson?.assignment ?? <NodeAssignmentPanel key={`${projectName}/${knode?.module_id}`} projectName={projectName} knode={knode} />}
                     {agentLogs.length > 0 && <AgentDebugPanel logs={agentLogs} />}
 
                     {/* 高亮课文 → 浮"深入学习" + "知识钻取"按钮 (fixed 定位, 不影响布局) */}
@@ -2898,7 +2926,7 @@ export function CourseContentView({
           )}
         </div>
 
-        {content && (!generating || showingCourseFactory) && (
+        {!preparedLesson && content && (!generating || showingCourseFactory) && (
           <div className="px-6 py-4 border-t border-border/50 shrink-0 flex items-center justify-end gap-3">
             {showingCourseFactory ? (
               <>

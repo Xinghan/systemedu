@@ -5,6 +5,7 @@ import Image from "next/image"
 import { useState } from "react"
 import { ArrowRight, ArrowUpRight, BookOpen, Clock3, Layers3, Orbit, Telescope } from "lucide-react"
 import { library } from "@/lib/api"
+import { projectCoverProps } from "@/lib/project-cover"
 import { useT, useLocale } from "@/lib/i18n/use-t"
 import { displayOutcome, discoveryLevel, type DiscoveryEntry } from "@/lib/library-discovery"
 import { PROJECT_LINES, lineHref, localized } from "@/lib/project-lines/catalog"
@@ -30,17 +31,18 @@ export function DiscoveryProjectCard({ entry, pulled }: { entry: DiscoveryEntry;
   const outcome = micro ? localized(micro.outcome, locale) : project ? displayOutcome(project) : null
   const domain = c.domainNames[entry.domain as keyof typeof c.domainNames] || project?.domain || c.domainNames.other
   const duration = project?.duration_weeks
+  const responsiveCover = projectCoverProps(entry.id, library.coverUrl(entry.id), "card")
 
   return (
     <article className={`${styles.projectCard} ${isMicro ? styles.microCard : ""} ${!entry.available ? styles.draftCard : ""}`} data-project-card={entry.id} data-line={entry.lineId} data-kind={entry.kind} data-difficulty={entry.difficulty ?? (isMicro ? "light" : "unspecified")} data-available={entry.available}>
       <div className={`${styles.cardVisual} ${isMicro ? styles.microVisual : ""}`}>
-        {entry.coverImage ? (
+        {entry.coverImage && !responsiveCover.srcSet ? (
           // 保留生成原图，按卡片宽度压缩并延迟加载，避免同时下载多张原始 PNG。
           <Image src={entry.coverImage} alt="" fill unoptimized={entry.preview} sizes="(max-width: 600px) calc(100vw - 32px), (max-width: 1000px) 45vw, 384px" className={styles.coverPhoto} />
-        ) : project?.cover_image_path && !coverFailed ? (
+        ) : (responsiveCover.srcSet || project?.cover_image_path) && !coverFailed ? (
             // 封面由现有内容服务提供，失败时回落到领域图形。
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={library.coverUrl(entry.id)} alt="" onError={() => setCoverFailed(true)} className={styles.coverPhoto} />
+            <img {...responsiveCover} alt="" loading="lazy" decoding="async" onError={() => setCoverFailed(true)} className={styles.coverPhoto} />
           ) : <div className={styles.coverFallback} data-domain={entry.domain} aria-hidden="true"><Orbit size={85} strokeWidth={.55} /><span>{String(discoveryLevel(entry) + 1).padStart(2, "0")} · {domain}</span></div>}
         {entry.available && <Link href={href} className={styles.coverLink} tabIndex={-1} aria-label={entry.title} />}
         {!isLocal && <ChapterBadgeMark domain={project?.domain} corner="top-left" />}

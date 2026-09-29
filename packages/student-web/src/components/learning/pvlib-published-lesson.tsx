@@ -9,12 +9,12 @@ import { useLearningIdentity } from "@/lib/hooks/use-learning-record"
 import { normalizeSlides } from "@/lib/normalize-slides"
 import { PVLIB_SLUG, type PvlibRecordConfig } from "@/lib/pvlib-preview"
 import type { CourseContent, TheoryEntry } from "@/lib/types/api"
-import { PvlibCoursePreview } from "./pvlib-course-preview"
+import { PvlibCourseLesson } from "./pvlib-course-lesson"
 import styles from "./pvlib-course-preview.module.css"
 
 type Manifest = { title: string; planned_nodes?: number; knodes: { module_id: string; title: string; knode_dir: string; stage?: string }[] }
 type Tree = { modules: { module_id: string; title: string; stage_id: string }[]; stages: { stage_id: string; title: string }[] }
-type Lesson = Omit<ComponentProps<typeof PvlibCoursePreview>, "published" | "downloadControl">
+type Lesson = Omit<ComponentProps<typeof PvlibCourseLesson>, "published" | "downloadControl">
 
 class CourseRequestError extends Error {
   constructor(public status: number) { super(`课程请求失败 (${status})`) }
@@ -107,5 +107,5 @@ export function PvlibPublishedLesson({ moduleId }: { moduleId: string }) {
 
   if (error) return <main className={styles.page}><p role="alert">{error}</p><button type="button" onClick={() => { setError(""); setRetry(value => value + 1) }}>重新加载</button><Link href={`/library/${PVLIB_SLUG}`}>返回项目</Link></main>
   if (!token || !loaded || loaded.owner !== owner) return <main className={styles.page}><p role="status">正在载入课程…</p></main>
-  return <PvlibCoursePreview {...loaded.lesson} published downloadControl={<PracticeDownload key={owner} token={token} />} />
+  return <PvlibCourseLesson {...loaded.lesson} published downloadControl={<PracticeDownload key={owner} token={token} />} />
 }
