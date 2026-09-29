@@ -19,4 +19,4 @@
 
 新增矢量图的本地中英文及 1440 / 1024 / 390 / 320px 验收记录在 `vector-review/`。
 
-当前接入本地项目库，未部署生产环境。验证使用本地浏览器与项目目录接口 fixture，不写入用户或学生数据。
+已于 2026-09-29 部署生产环境，构建 `-tVkAQAU5ol1PVAsChFxX`。本目录中的最初验收使用本地浏览器与项目目录接口 fixture，不写入用户或学生数据。正式发布检查另见 `../library-learning-path-release-20260929/` 和 `../../docs/deployments/2026-09-29-library-learning-path.md`。
