@@ -13,6 +13,7 @@ export type FuturePath = {
   id: string; lineId: string; icon: "robot" | "space" | "molecule" | "energy" | "earth"
   title: Copy; shortTitle: Copy; invitation: Copy; ambition: Copy; description: Copy
   flagship: string; imageFallback: string; imageAlt: Copy
+  creatorScene?: { src: string; srcSet: string; alt: Copy }
   abilities: Copy[]; family: Copy; preparation: Copy
   steps: { projectId: string; title: Copy; ability: Copy }[]
 }
@@ -67,6 +68,11 @@ export const FUTURE_PATHS: FuturePath[] = [
     description: text("从认出一个分子开始，建立筛选方法、检查预测，再为候选分子写出有证据的研究报告。", "Recognize a molecule, build a filter, evaluate predictions and write an evidence-based candidate report."),
     flagship: "molecule-monster-hunter", imageFallback: "/project-covers/molecule-monster-hunter/cover-editorial-v3.webp",
     imageAlt: text("分子候选筛选与研究工作台项目示意", "A molecular candidate screening and research workbench"),
+    creatorScene: {
+      src: "/library/futures/molecular-creator-v1-800.webp",
+      srcSet: "/library/futures/molecular-creator-v1-480.webp 480w, /library/futures/molecular-creator-v1-800.webp 800w, /library/futures/molecular-creator-v1-1280.webp 1280w",
+      alt: text("一位年轻创造者用触控笔比较屏幕上的分子结构，身边放着自己的研究笔记。虚构职业场景。", "A young creator compares molecular structures with a stylus beside a research notebook. An imagined career scene."),
+    },
     abilities: [text("把分子结构转化成可比较的数据", "Turn molecular structures into comparable data"), text("比较筛选方法和预测误差", "Compare screening methods and prediction errors"), text("说明研究结论的证据与局限", "Explain the evidence and limits of a conclusion")],
     family: text("看孩子能否从选出一个候选，进步到解释为什么保留它、预测哪里可能出错，以及还缺什么证据。", "Look for explanations of why a candidate was retained, where a prediction may fail and what evidence is still missing."),
     preparation: text("以计算与数据研究为主，无需购买化学品。候选筛选练习不等于药效证明；完整课程按要求准备 Python 环境。", "Primarily computational work, with no chemicals to purchase. Screening is not proof of drug efficacy; full courses specify the Python setup."),

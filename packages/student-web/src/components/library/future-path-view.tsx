@@ -13,7 +13,7 @@ const COPY = {
     eyebrow: "职业探索 · 从未来的作品，找到今天的起点",
     heading: "未来的你，想做出什么？",
     intro: "先选一个让你好奇的方向，试做一件小作品。喜欢，就再走一步。",
-    choose: "探索你的未来方向", direction: "你正在探索的职业方向", example: "这个方向的工程作品示意",
+    choose: "探索你的未来方向", direction: "你正在探索的职业方向", example: "这个方向的工程作品示意", creator: "未来的一种可能 · 职业场景示意",
     abilities: "你会练习的能力", first: "今天，只需迈出这一步", start: "先试 3 分钟", easy: "浏览器即可体验 · 无需先买器材",
     roadmap: "看看怎样一步步走到这里", stops: "件成长作品", routeHint: "这是一条建议路线，可以跨站选择。每一站都留下作品与证据，完整工程按各自课程准备。",
     evidence: "留下的作品", open: "查看项目", planned: "筹备中", loading: "正在读取开放状态…", preparation: "什么时候需要准备器材？",
@@ -24,7 +24,7 @@ const COPY = {
     eyebrow: "CAREER EXPLORATION · FROM A FUTURE CREATION TO A FIRST STEP",
     heading: "What would your future self create?",
     intro: "Choose a direction that makes you curious. Try one small creation, then decide what comes next.",
-    choose: "Explore future directions", direction: "A career direction to explore", example: "An illustrative engineering project in this direction",
+    choose: "Explore future directions", direction: "A career direction to explore", example: "An illustrative engineering project in this direction", creator: "A possible future · An imagined career scene",
     abilities: "Abilities you will practice", first: "TODAY, JUST TAKE THIS FIRST STEP", start: "Try 3 minutes", easy: "Start in your browser · No equipment to buy first",
     roadmap: "See how to grow toward this", stops: "creations along the way", routeHint: "A suggested route you can adapt. Keep creations and evidence at each stop; prepare for full projects using their own course guides.",
     evidence: "What you keep", open: "View project", planned: "In preparation", loading: "Checking availability…", preparation: "When will I need equipment?",
@@ -41,7 +41,7 @@ export function FuturePathView({ locale, roleId, entries, loading }: {
   const c = COPY[locale]
   const selected = FUTURE_PATHS.find(path => path.id === roleId) || FUTURE_PATHS[0]
   const first = entries.find(entry => entry.id === selected.steps[0].projectId && entry.available)
-  const image = projectCoverProps(selected.flagship, selected.imageFallback, "card")
+  const image = selected.creatorScene || projectCoverProps(selected.flagship, selected.imageFallback, "card")
   return <section className={styles.view} aria-labelledby="future-title" data-future-view>
     <header className={styles.intro}>
       <p className={styles.eyebrow}>{c.eyebrow}</p>
@@ -70,10 +70,10 @@ export function FuturePathView({ locale, roleId, entries, loading }: {
             <p className={styles.description}>{futureCopy(selected.description, locale)}</p>
           </div>
           <figure className={styles.visual}>
-            {/* Use existing responsive, generated project covers; no career stock portraits or large original PNGs. */}
+            {/* Career scenes are separate responsive assets; original project covers remain on course cards. */}
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img {...image} sizes="(max-width: 650px) calc(100vw - 80px), (max-width: 1050px) 34vw, 350px" alt={futureCopy(selected.imageAlt, locale)} width={800} height={533} loading="eager" decoding="async" />
-            <figcaption>{c.example}</figcaption>
+            <img {...image} sizes="(max-width: 650px) calc(100vw - 80px), (max-width: 1050px) 34vw, 350px" alt={futureCopy(selected.creatorScene?.alt || selected.imageAlt, locale)} width={800} height={533} loading="eager" decoding="async" />
+            <figcaption>{selected.creatorScene ? c.creator : c.example}</figcaption>
           </figure>
         </section>
         <section className={styles.firstStep} aria-label={c.first}>
