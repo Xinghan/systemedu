@@ -3,7 +3,7 @@
 import Link from "next/link"
 import { useSearchParams } from "next/navigation"
 import { Suspense, useEffect, useMemo, useState } from "react"
-import { ArrowRight, ArrowUpRight, Camera, Layers3, LayoutGrid, Orbit, Plus, Route, Search, SlidersHorizontal, Telescope, X } from "lucide-react"
+import { ArrowRight, ArrowUpRight, Camera, Compass, Layers3, LayoutGrid, Orbit, Plus, Route, Search, SlidersHorizontal, Telescope, X } from "lucide-react"
 import { library, myProjects, type LibraryProjectSummary } from "@/lib/api"
 import { useAuthStore } from "@/lib/stores/auth-store"
 import { useLocale } from "@/lib/i18n/use-t"
@@ -16,6 +16,8 @@ import { DifficultyProjectList } from "@/components/library/difficulty-project-l
 import { ProjectLineDetail } from "@/components/library/project-line-detail"
 import { ProjectLineView } from "@/components/library/project-line-view"
 import { LearningPathIntro } from "@/components/library/learning-path-intro"
+import { FuturePathView } from "@/components/library/future-path-view"
+import { FUTURES_HREF, FUTURE_PATHS, FUTURE_VIEW_COPY } from "@/lib/future-paths"
 import { DISCOVERY_COPY } from "@/components/library/discovery-copy"
 import styles from "@/components/library/discovery.module.css"
 
@@ -29,7 +31,9 @@ export default function LibraryListPage() {
 function LibraryBrowser() {
   const locale = useLocale()
   const c = DISCOVERY_COPY[locale]
+  const futureCopy = FUTURE_VIEW_COPY[locale]
   const searchParams = useSearchParams()
+  const showFutures = searchParams.get("view") === "futures"
   const showLines = searchParams.get("view") === "lines"
   const lineId = showLines ? searchParams.get("line") : null
   const selectedLine = PROJECT_LINES.find(line => line.id === lineId)
@@ -97,17 +101,18 @@ function LibraryBrowser() {
     <main className={styles.page} data-locale={locale}>
       <header className={styles.pageHeader}>
         <div><p className={styles.eyebrow}>{c.eyebrow}</p><div className={styles.titleRow}><h1>{c.title}</h1><p>{c.intro}</p></div></div>
-        <span className={styles.libraryCount}><i />{showLines ? <><b>{PROJECT_LINES.length}</b> {c.lineCount}</> : loading ? c.loading : <><b>{availableCount}</b> {c.libraryCount}</>}</span>
+        <span className={styles.libraryCount}><i />{showFutures ? <><b>{FUTURE_PATHS.length}</b> {futureCopy.count}</> : showLines ? <><b>{PROJECT_LINES.length}</b> {c.lineCount}</> : loading ? c.loading : <><b>{availableCount}</b> {c.libraryCount}</>}</span>
       </header>
       <div className={styles.viewBar}>
         <nav className={styles.viewSwitch} aria-label={c.viewLabel}>
-          <Link href="/library" scroll={false} aria-current={!showLines ? "page" : undefined}><LayoutGrid size={16} aria-hidden="true" />{c.projectsView}</Link>
+          <Link href={FUTURES_HREF} scroll={false} aria-current={showFutures ? "page" : undefined}><Compass size={16} aria-hidden="true" />{futureCopy.title}</Link>
+          <Link href="/library" scroll={false} aria-current={!showLines && !showFutures ? "page" : undefined}><LayoutGrid size={16} aria-hidden="true" />{c.projectsView}</Link>
           <Link href={LINES_HREF} scroll={false} aria-current={showLines ? "page" : undefined}><Route size={16} aria-hidden="true" />{c.linesView}</Link>
         </nav>
-        <p>{showLines ? c.linesHint : c.projectsHint}</p>
+        <p>{showFutures ? futureCopy.hint : showLines ? c.linesHint : c.projectsHint}</p>
       </div>
       {loadFailed && <div className={styles.error} role="alert"><p>{c.error}</p><button type="button" onClick={retry}>{c.retry}<ArrowRight size={14} /></button></div>}
-      {showLines ? selectedLine ? <ProjectLineDetail line={selectedLine} locale={locale} entries={entries} pulled={loggedIn ? pulled : new Set()} />
+      {showFutures ? <FuturePathView locale={locale} roleId={searchParams.get("role")} entries={entries} loading={loading} /> : showLines ? selectedLine ? <ProjectLineDetail line={selectedLine} locale={locale} entries={entries} pulled={loggedIn ? pulled : new Set()} />
         : lineId ? <div className={styles.emptyState}><h2>{locale === "zh" ? "这条项目线暂未收录" : "This project line is not available"}</h2><Link href={LINES_HREF}>{locale === "zh" ? "返回所有项目线" : "Back to all project lines"}<ArrowRight size={15} /></Link></div>
         : <ProjectLineView locale={locale} entries={entries} loading={loading} /> : <>
       <LearningPathIntro locale={locale} />
@@ -133,7 +138,7 @@ function LibraryBrowser() {
         <p className={styles.timeNote}>{c.timeNote}</p>
       </section>
       </>}
-      {!showLines && <aside className={styles.familyNote}><span className={styles.familyMark}><Telescope size={23} strokeWidth={1.3} /></span><div><strong>{c.familyTitle}</strong><p>{c.familyBody}</p></div><Link href={SPACE_LINE.firstProjectHref}>{c.start}<ArrowUpRight size={15} /></Link></aside>}
+      {!showLines && !showFutures && <aside className={styles.familyNote}><span className={styles.familyMark}><Telescope size={23} strokeWidth={1.3} /></span><div><strong>{c.familyTitle}</strong><p>{c.familyBody}</p></div><Link href={SPACE_LINE.firstProjectHref}>{c.start}<ArrowUpRight size={15} /></Link></aside>}
       <section className={styles.request}><div><h2>{c.requestTitle}</h2><p>{c.requestBody}</p></div><button type="button" onClick={() => setApplyOpen(true)}><Plus size={15} />{c.requestAction}</button></section>
       <ApplyProjectModal open={applyOpen} onClose={() => setApplyOpen(false)} />
     </main>
