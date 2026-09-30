@@ -8,6 +8,7 @@ import { library, myProjects, type LibraryProjectSummary } from "@/lib/api"
 import { useAuthStore } from "@/lib/stores/auth-store"
 import { useLocale } from "@/lib/i18n/use-t"
 import { makeDiscoveryEntries, sortDiscoveryEntries, discoveryLevel } from "@/lib/library-discovery"
+import { classifyDiscoveryEntries, entryInField, entryInLine, FIELD_NAMES, fieldName } from "@/lib/project-taxonomy"
 import { withPvlibLibraryPreview, type PvlibLibraryPreview } from "@/lib/pvlib-library"
 import { PROJECT_LEVELS } from "@/lib/project-lines/levels"
 import { PROJECT_LINES, LINES_HREF, SPACE_LINE, localized, type DiscoveryKind } from "@/lib/project-lines/catalog"
@@ -76,7 +77,7 @@ function LibraryBrowser() {
     return () => { active = false }
   }, [loggedIn])
 
-  const entries = useMemo(() => withPvlibLibraryPreview(makeDiscoveryEntries(projects, locale), pvlibPreview, locale), [projects, locale, pvlibPreview])
+  const entries = useMemo(() => classifyDiscoveryEntries(withPvlibLibraryPreview(makeDiscoveryEntries(projects, locale), pvlibPreview, locale)), [projects, locale, pvlibPreview])
   const availableCount = entries.filter(entry => entry.available).length
   const listed = entries.filter(entry => showPlanned || entry.available)
   const filtered = useMemo(() => {
@@ -84,14 +85,14 @@ function LibraryBrowser() {
     const result = entries.filter(entry => {
       if (!showPlanned && !entry.available) return false
       if (kind !== "all" && kind !== entry.kind) return false
-      if (lineFilter !== "all" && entry.lineId !== lineFilter) return false
-      if (domain !== "all" && domain !== entry.domain) return false
+      if (lineFilter !== "all" && !entryInLine(entry, lineFilter)) return false
+      if (domain !== "all" && !entryInField(entry, domain)) return false
       if (difficulty !== "all" && discoveryLevel(entry) + 1 !== Number(difficulty)) return false
-      const domainName = c.domainNames[entry.domain as keyof typeof c.domainNames] || ""
+      const domainName = fieldName(entry.domain, locale)
       return terms.every(term => `${entry.searchText} ${domainName.toLowerCase()}`.includes(term))
     })
     return sortDiscoveryEntries(result, sort, locale)
-  }, [entries, query, showPlanned, kind, domain, difficulty, sort, c, locale, lineFilter])
+  }, [entries, query, showPlanned, kind, domain, difficulty, sort, locale, lineFilter])
 
   const hasFilters = kind !== "all" || query !== "" || domain !== "all" || difficulty !== "all" || lineFilter !== "all" || !showPlanned || sort !== "difficulty"
   function reset() { setKind("all"); setQuery(""); setDomain("all"); setDifficulty("all"); setLineFilter("all"); setSort("difficulty"); setShowPlanned(true) }
@@ -128,7 +129,7 @@ function LibraryBrowser() {
         <div className={styles.filterBar}>
           <label className={styles.search}><Search size={16} /><input type="search" value={query} onChange={event => setQuery(event.target.value)} placeholder={c.search} aria-label={c.search} />{query && <button type="button" onClick={() => setQuery("")} aria-label={locale === "zh" ? "清空搜索" : "Clear search"}><X size={14} /></button>}</label>
           <label className={styles.select}><span>{locale === "zh" ? "项目线" : "Project line"}</span><select value={lineFilter} onChange={event => setLineFilter(event.target.value)} aria-label={locale === "zh" ? "项目线筛选" : "Project line filter"}><option value="all">{locale === "zh" ? "所有项目线" : "All project lines"}</option>{PROJECT_LINES.map(line => <option key={line.id} value={line.id}>{localized(line.title, locale)}</option>)}</select></label>
-          <label className={styles.select}><span>{c.domain}</span><select value={domain} onChange={event => setDomain(event.target.value)} aria-label={c.domain}><option value="all">{c.allDomains}</option>{Object.entries(c.domainNames).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></label>
+          <label className={styles.select}><span>{c.domain}</span><select value={domain} onChange={event => setDomain(event.target.value)} aria-label={c.domain}><option value="all">{c.allDomains}</option>{Object.entries(FIELD_NAMES[locale]).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></label>
           <label className={styles.select}><span>{c.difficulty}</span><select value={difficulty} onChange={event => setDifficulty(event.target.value)} aria-label={c.difficulty}><option value="all">{c.allChallenges}</option>{PROJECT_LEVELS.map(level => <option key={level.level} value={level.level}>{String(level.level).padStart(2, "0")} · {localized(level.title, locale)}</option>)}</select></label>
         </div>
         <div className={styles.resultBar}><p role="status" aria-live="polite"><b>{filtered.length}</b> {c.result}{hasFilters && <button type="button" onClick={reset}>{c.reset}</button>}</p><div><label className={styles.plannedToggle}><input type="checkbox" checked={showPlanned} onChange={event => setShowPlanned(event.target.checked)} />{c.showPlanned}</label><select value={sort} onChange={event => setSort(event.target.value)} aria-label={c.sort}><option value="difficulty">{c.difficultyAsc}</option><option value="recent">{c.recent}</option></select></div></div>

@@ -5,12 +5,12 @@ const text = (zh: string, en: string): Copy => ({ zh, en })
 export const FUTURES_HREF = "/library?view=futures"
 export const futureHref = (id: string) => `${FUTURES_HREF}&role=${encodeURIComponent(id)}`
 export const FUTURE_VIEW_COPY = {
-  zh: { title: "未来的我", hint: "先看想成为怎样的人，再找到今天的第一步", count: "个职业探索方向" },
-  en: { title: "Future me", hint: "Explore who you could become. Find your first step today.", count: "career directions to explore" },
+  zh: { title: "未来的我", hint: "七个领域，探索不同的职业方向，再找到今天的第一步", count: "个未来领域" },
+  en: { title: "Future me", hint: "Seven fields, different career paths, and a first step today.", count: "future fields" },
 }
 
 export type FuturePath = {
-  id: string; lineId: string; icon: "robot" | "space" | "molecule" | "energy" | "earth"
+  id: string; lineId: string; icon: "robot" | "space" | "molecule" | "energy" | "earth" | "computing" | "brain"
   title: Copy; shortTitle: Copy; invitation: Copy; ambition: Copy; description: Copy
   flagship: string; imageFallback: string; imageAlt: Copy
   creatorScene?: { src: string; srcSet: string; alt: Copy }
@@ -22,7 +22,7 @@ export type FuturePath = {
 // Availability and links come from the existing project catalog at render time.
 export const FUTURE_PATHS: FuturePath[] = [
   {
-    id: "robotics", lineId: "neuro-bionics", icon: "robot",
+    id: "robotics", lineId: "robotics", icon: "robot",
     title: text("人形机器人科学家", "Humanoid robotics scientist"),
     shortTitle: text("人形机器人科学家", "Robotics scientist"),
     invitation: text("让机器学会和人一起工作", "Teach machines to work with people"),
@@ -141,6 +141,84 @@ export const FUTURE_PATHS: FuturePath[] = [
       { projectId: "purpleair-airquality-node", title: text("空气质量观测节点", "Air-quality observation node"), ability: text("完整工程：搭建传感节点，采集并分析实测数据。", "Build a sensor node, collect measurements and analyze them.") },
     ],
   },
+  {
+    id: "computing-ai", lineId: "computing-ai", icon: "computing",
+    title: text("计算机视觉与 AI 工程师", "Computer vision & AI engineer"), shortTitle: text("计算机与 AI 工程师", "Computing & AI engineer"),
+    invitation: text("让机器从数据中学会判断", "Help machines learn from data"),
+    ambition: text("我想训练自己的 AI，让它看懂世界，也知道哪里会出错。", "I want to train AI that understands the world—and test where it fails."),
+    description: text("从整理与标记数据开始，检查模型预测，再用没见过的数据检验自己的方法。把其他领域学过的观察变成算法。", "Organize and label data, inspect predictions and test on unseen examples. Turn observations from other fields into algorithms."),
+    flagship: "ai-ant-ethologist", imageFallback: "/project-covers/ai-ant-ethologist/cover-editorial-v3.webp",
+    imageAlt: text("动物行为数据与视觉分析项目", "An animal behavior and computer vision project"),
+    creatorScene: {
+      src: "/library/futures/computing-career-v1-800.webp",
+      srcSet: "/library/futures/computing-career-v1-480.webp 480w, /library/futures/computing-career-v1-800.webp 800w, /library/futures/computing-career-v1-1280.webp 1280w",
+      alt: text("虚构的中国 AI 研究员检查动物动作的视觉标记与模型结果。AI 生成的未来职业场景。", "A fictional Chinese AI researcher reviews animal pose annotations and model results. An AI-generated future career scene."),
+    },
+    abilities: [text("把问题变成数据与评价标准", "Turn a question into data and evaluation criteria"), text("比较基线、预测与真实结果", "Compare baselines, predictions and ground truth"), text("用新样本发现错误并改进方法", "Find errors on new examples and improve the method")],
+    family: text("看孩子能否从“AI 给了答案”，进步到检查样本、解释错误，并证明改进对新数据也有效。", "Look for progress from accepting an AI answer to inspecting examples, explaining errors and testing improvements on new data."),
+    preparation: text("从浏览器的数据练习开始。视觉、模型训练与大模型项目按各自课程准备；尚在蓝图阶段的方向不会标成已开放。", "Start with browser-based data exercises. Vision, model training and language-model projects specify their own setup; blueprint-only directions are not open courses."),
+    steps: [
+      { projectId: "sort-molecule-cards", title: text("给数据分个类", "Group examples by features"), ability: text("观察：用分子卡片练习按特征比较和分类。", "Practice comparing and grouping features with molecule cards.") },
+      { projectId: "label-the-terrain", title: text("制作一份地形样本", "Label a terrain dataset"), ability: text("数据：为图像制定一致的标注规则。", "Define consistent labels for images.") },
+      { projectId: "check-a-prediction", title: text("检查模型预测", "Inspect a model prediction"), ability: text("评价：比较预测与证据，找出误差。", "Compare predictions with evidence and investigate errors.") },
+      { projectId: "challenge-an-unseen-library", title: text("用未知数据挑战方法", "Challenge a method with unseen data"), ability: text("泛化：先定方案，再打开新数据。", "Define a plan before evaluating unseen examples.") },
+      { projectId: "ai-ant-ethologist", title: text("让 AI 观察动物行为", "Use AI to observe animal behavior"), ability: text("跨领域研究：让追踪、数据与行为证据相互核查。", "Connect tracking, data and behavioral evidence in a cross-field investigation.") },
+    ],
+  },
+  {
+    id: "brain-science", lineId: "neuro-bionics", icon: "brain",
+    title: text("脑机接口与神经工程师", "Brain–computer interface & neural engineer"), shortTitle: text("脑机接口工程师", "Neural interface engineer"),
+    invitation: text("理解神经信号，连接人与机器", "Understand neural signals and connect people with machines"),
+    ambition: text("我想理解大脑的信号，设计让人更自由地与世界互动的技术。", "I want to understand brain signals and design new ways for people to interact with the world."),
+    description: text("从合成信号的判断与去噪开始，再分别探索脑电接口和肌电义肢。肌电来自肌肉，不能当作脑电。", "Start with decisions and noise in synthetic signals, then explore EEG interfaces and EMG prostheses separately. Muscle activity is not a brain recording."),
+    flagship: "eeg-minecraft-bci", imageFallback: "/project-covers/eeg-minecraft-bci/cover-editorial-v3.webp",
+    imageAlt: text("脑电信号与计算机交互项目", "An EEG and computer interaction project"),
+    creatorScene: {
+      src: "/library/futures/neuroscience-career-v1-800.webp",
+      srcSet: "/library/futures/neuroscience-career-v1-480.webp 480w, /library/futures/neuroscience-career-v1-800.webp 800w, /library/futures/neuroscience-career-v1-1280.webp 1280w",
+      alt: text("虚构的中国神经工程师观察志愿者的非侵入式脑电采集与信号曲线。AI 生成的未来职业场景。", "A fictional Chinese neural engineer reviews a volunteer's non-invasive EEG recording. An AI-generated future career scene."),
+    },
+    abilities: [text("区分有效信号、噪声与误触发", "Distinguish useful signals, noise and false triggers"), text("把信号处理接到可验证的动作", "Connect signal processing to testable actions"), text("解释脑电、肌电和模型判断的边界", "Explain the limits of EEG, EMG and model predictions")],
+    family: text("看孩子能否从触发一次动作，进步到解释误触发、做对照实验，并明确自己测到的究竟是什么。", "Look for progress from triggering an action to explaining false triggers, designing comparisons and identifying what was actually measured."),
+    preparation: text("短体验与桥梁课程使用合成信号和旋钮，不接人体电极。完整 EEG、sEMG 项目分别按课程准备设备与成人支持。", "Quick and bridge projects use synthetic signals and knobs, without body electrodes. Full EEG and sEMG courses have separate equipment and adult-support requirements."),
+    steps: [
+      { projectId: "open-a-signal-gate", title: text("用信号打开一扇门", "Open a gate with a signal"), ability: text("发现：观察阈值如何改变一次触发。", "See how a threshold changes a trigger.") },
+      { projectId: "clean-a-signal", title: text("让机器听清信号", "Clean a signal"), ability: text("方法：比较滤波前后的噪声与延迟。", "Compare noise and delay before and after filtering.") },
+      { projectId: "assemble-a-signal-controller", title: text("连接信号与动作", "Connect signals to actions"), ability: text("跨领域系统：用合成信号与打印夹爪验证控制链。", "Test a control chain with synthetic signals and a printed gripper.") },
+      { projectId: "eeg-minecraft-bci", title: text("探索真实脑电接口", "Explore an EEG interface"), ability: text("完整研究：采集、处理和检验脑电控制的证据。", "Collect, process and evaluate evidence for EEG-based control.") },
+    ],
+  },
 ]
+
+export const CAREER_BRANCHES: Record<string, { title: Copy; focus: Copy; projectId: string; blueprint?: boolean }[]> = {
+  robotics: [
+    { title: text("人形机器人科学家", "Humanoid robotics scientist"), focus: text("研究感知、示范学习与动作协作；从双臂课程练起。", "Study perception, demonstration learning and coordination, starting with two arms."), projectId: "aloha-bimanual-apprentice" },
+    { title: text("机器人机构与控制工程师", "Robot mechanism & control engineer"), focus: text("设计能够制造、控制并接受实测的机构。", "Design mechanisms that can be built, controlled and physically tested."), projectId: "design-a-printed-gripper" },
+  ],
+  space: [
+    { title: text("航天发射与探索工程师", "Launch & exploration engineer"), focus: text("关注任务、控制与可靠性；探测车是现有课程起点。", "Focus on missions, control and reliability, starting with current rover projects."), projectId: "mars-analog-rover" },
+    { title: text("系外行星研究员", "Exoplanet researcher"), focus: text("从真实星光数据中寻找周期变化，排查假信号。", "Investigate periodic changes in real starlight and rule out false signals."), projectId: "lightkurve-transit-detective" },
+  ],
+  "molecular-discovery": [
+    { title: text("AI 药物发现科学家", "AI drug-discovery scientist"), focus: text("建立候选筛选方法，解释预测的证据与局限。", "Build candidate screening methods and explain their evidence and limits."), projectId: "molecule-monster-hunter" },
+    { title: text("计算化学研究员", "Computational chemistry researcher"), focus: text("比较分子结构、描述符与活性数据，交付可复跑研究。", "Compare structures, descriptors and activity data in reproducible research."), projectId: "teachopencadd-candidate-research" },
+  ],
+  "clean-energy": [
+    { title: text("新能源系统工程师", "Clean-energy systems engineer"), focus: text("把发电、储能、负载与控制接成可靠系统。", "Integrate generation, storage, loads and control into a dependable system."), projectId: "build-a-wind-solar-station" },
+    { title: text("能源预测与调度工程师", "Energy forecasting & dispatch engineer"), focus: text("用测量检验发电预报，再据供需决定如何分配能量。", "Validate forecasts with measurements and allocate energy to demand."), projectId: "pvlib-solar-forecast-station" },
+  ],
+  "earth-research": [
+    { title: text("环境科考科学家", "Environmental field scientist"), focus: text("设计采样、核查数据，在实地调查中形成证据。", "Design sampling, check data and gather evidence through fieldwork."), projectId: "purpleair-airquality-node" },
+    { title: text("遥感与地球数据科学家", "Remote sensing & Earth data scientist"), focus: text("结合卫星影像、地图与现场证据解释地表变化。", "Connect satellite imagery, maps and field evidence to explain surface changes."), projectId: "satellite-archaeology" },
+  ],
+  "computing-ai": [
+    { title: text("计算机视觉工程师", "Computer vision engineer"), focus: text("让机器从图像中识别、定位与追踪，再检验误差。", "Build and evaluate image recognition, localization and tracking."), projectId: "ai-ant-ethologist" },
+    { title: text("大模型与智能体工程师", "Language-model & agent engineer"), focus: text("领域模型与本地 AI 已有项目蓝图，完整课程待生成。", "Domain-model and local-AI blueprints exist; their full courses are still to be created."), projectId: "domain-llm-finetune", blueprint: true },
+  ],
+  "brain-science": [
+    { title: text("脑机接口工程师", "Brain–computer interface engineer"), focus: text("研究脑电采集、信号解码与交互评价。", "Study EEG acquisition, signal decoding and interaction evaluation."), projectId: "eeg-minecraft-bci" },
+    { title: text("神经康复工程师", "Neural rehabilitation engineer"), focus: text("以肌电义肢探索人体信号与辅助机构的连接。", "Explore assistive mechanisms driven by muscle signals through an EMG prosthesis."), projectId: "emg-prosthetic-hand" },
+  ],
+}
 
 export function futureCopy(copy: Copy, locale: Locale) { return copy[locale] }

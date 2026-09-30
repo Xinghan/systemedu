@@ -2,6 +2,7 @@
 
 import Link from "next/link"
 import { projectCoverProps } from "@/lib/project-cover"
+import { fieldName, primaryProjectLine } from "@/lib/project-taxonomy"
 import { useParams, useRouter } from "next/navigation"
 import { useEffect, useMemo, useState } from "react"
 import { toast } from "sonner"
@@ -44,7 +45,7 @@ import {
   type StageDeliverableModule,
   type StageDeliverableStage,
 } from "@/components/library/stage-deliverable-card"
-import { useT } from "@/lib/i18n/use-t"
+import { useLocale, useT } from "@/lib/i18n/use-t"
 import { InlineLoading } from "@/components/ui/page-loading"
 import type { PlatformTree, ProjectKnowledgeTree } from "@/lib/api"
 
@@ -132,6 +133,7 @@ function moduleStatus(
 
 export default function ProjectHome() {
   const t = useT()
+  const locale = useLocale()
   const router = useRouter()
   const params = useParams<{ slug: string }>()
   const slug = decodeURIComponent(params.slug)
@@ -349,7 +351,7 @@ export default function ProjectHome() {
                         className={hasCover ? "tag" : `tag ${dClass}`}
                         style={tagStyle}
                       >
-                        {t(`domain.${project.domain.toLowerCase()}`)}
+                        {primaryProjectLine(project.slug) ? fieldName(primaryProjectLine(project.slug)!.fieldId, locale) : t(`domain.${project.domain.toLowerCase()}`)}
                       </span>
                     )}
                     {project.difficulty != null && (

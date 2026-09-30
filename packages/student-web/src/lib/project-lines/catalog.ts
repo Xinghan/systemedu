@@ -1,5 +1,5 @@
 import type { Locale } from "@/lib/i18n/locales"
-import lineData from "./lines.json"
+import lineData from "./taxonomy-lines.json"
 import spaceCourses from "./space-courses.json"
 import biomedCourses from "./biomed-courses.json"
 import energyCourses from "./renewable-courses.json"
@@ -17,7 +17,7 @@ export const SPACE_LINE = {
   href: "/library?view=lines&line=space-exploration",
   flagshipSlug: "mars-analog-rover",
   firstProjectHref: "/explore/space-exploration/spot-a-world",
-  title: { zh: "星际远征队", en: "Starbound Crew" },
+  title: { zh: "星际远航", en: "Beyond Earth" },
 } as const
 
 export type LocalProject = {

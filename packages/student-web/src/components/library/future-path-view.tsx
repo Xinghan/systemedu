@@ -1,13 +1,14 @@
 import Link from "next/link"
-import { ArrowDownRight, ArrowRight, ArrowUpRight, Atom, Bot, Check, ChevronDown, Clock3, Globe2, Orbit, Sun } from "lucide-react"
+import { ArrowDownRight, ArrowRight, ArrowUpRight, Atom, Bot, Brain, Check, ChevronDown, Clock3, Cpu, Globe2, Orbit, Sun } from "lucide-react"
 import type { Locale } from "@/lib/i18n/locales"
 import { displayOutcome, type DiscoveryEntry } from "@/lib/library-discovery"
-import { FUTURE_PATHS, futureCopy, futureHref } from "@/lib/future-paths"
-import { lineHref, localized } from "@/lib/project-lines/catalog"
+import { CAREER_BRANCHES, FUTURE_PATHS, futureCopy, futureHref } from "@/lib/future-paths"
+import { PROJECT_LINES, lineHref, localized } from "@/lib/project-lines/catalog"
+import { fieldName } from "@/lib/project-taxonomy"
 import { projectCoverProps } from "@/lib/project-cover"
 import styles from "./future-path-view.module.css"
 
-const ICONS = { robot: Bot, space: Orbit, molecule: Atom, energy: Sun, earth: Globe2 }
+const ICONS = { robot: Bot, space: Orbit, molecule: Atom, energy: Sun, earth: Globe2, computing: Cpu, brain: Brain }
 const COPY = {
   zh: {
     eyebrow: "职业探索 · 从未来的作品，找到今天的起点",
@@ -40,6 +41,7 @@ export function FuturePathView({ locale, roleId, entries, loading }: {
 }) {
   const c = COPY[locale]
   const selected = FUTURE_PATHS.find(path => path.id === roleId) || FUTURE_PATHS[0]
+  const selectedLine = PROJECT_LINES.find(line => line.id === selected.lineId)
   const first = entries.find(entry => entry.id === selected.steps[0].projectId && entry.available)
   const image = selected.creatorScene || projectCoverProps(selected.flagship, selected.imageFallback, "card")
   return <section className={styles.view} aria-labelledby="future-title" data-future-view>
@@ -52,10 +54,11 @@ export function FuturePathView({ locale, roleId, entries, loading }: {
       <nav className={styles.directions} aria-label={c.choose}>
         {FUTURE_PATHS.map((path, index) => {
           const Icon = ICONS[path.icon]
+          const field = PROJECT_LINES.find(line => line.id === path.lineId)?.fieldId || ""
           return <Link key={path.id} href={futureHref(path.id)} scroll={false} aria-current={path.id === selected.id ? "true" : undefined} data-future-role={path.id}>
             <span className={styles.directionNumber}>{String(index + 1).padStart(2, "0")}</span>
             <Icon size={22} strokeWidth={1.4} aria-hidden="true" />
-            <div><strong>{futureCopy(path.shortTitle, locale)}</strong><span>{futureCopy(path.invitation, locale)}</span></div>
+            <div><strong>{fieldName(field, locale)}</strong><span>{futureCopy(path.shortTitle, locale)}</span></div>
             <ArrowRight className={styles.selectionArrow} size={16} aria-hidden="true" />
           </Link>
         })}
@@ -64,7 +67,7 @@ export function FuturePathView({ locale, roleId, entries, loading }: {
       <div className={styles.detail} key={selected.id} data-future-detail={selected.id}>
         <section className={styles.ambition} aria-labelledby="future-role-title">
           <div className={styles.ambitionCopy}>
-            <p className={styles.roleLabel}>{c.direction}</p>
+            <p className={styles.roleLabel}>{selectedLine ? `${fieldName(selectedLine.fieldId, locale)} / ${localized(selectedLine.title, locale)}` : c.direction}</p>
             <h3 id="future-role-title">{futureCopy(selected.title, locale)}</h3>
             <p className={styles.quote}>{futureCopy(selected.ambition, locale)}</p>
             <p className={styles.description}>{futureCopy(selected.description, locale)}</p>
@@ -99,6 +102,16 @@ export function FuturePathView({ locale, roleId, entries, loading }: {
           })}</ol>
           <Link className={styles.lineLink} href={lineHref(selected.lineId)}>{c.more}<ArrowRight size={15} aria-hidden="true" /></Link>
         </details>
+        <section className={styles.careerBranches} aria-label={locale === "zh" ? "这个领域的职业分支" : "Career branches in this field"}>
+          <h4>{locale === "zh" ? "这个领域，可以走向哪些职业？" : "Which careers could this field lead toward?"}</h4>
+          <div>{(CAREER_BRANCHES[selected.id] || []).map(branch => {
+            const project = entries.find(entry => entry.id === branch.projectId)
+            return <article key={branch.title.en} data-career-branch={branch.projectId}>
+              <h5>{futureCopy(branch.title, locale)}</h5><p>{futureCopy(branch.focus, locale)}</p>
+              {project?.available ? <Link href={entryHref(project)}>{locale === "zh" ? "探索相关作品" : "Explore related work"}<ArrowUpRight size={13} aria-hidden="true" /></Link> : <span>{branch.blueprint ? (locale === "zh" ? "项目蓝图 · 课程待生成" : "Project blueprint · Course not yet created") : (locale === "zh" ? "课程待接入" : "Course not connected yet")}</span>}
+            </article>
+          })}</div>
+        </section>
         <aside className={styles.family}>
           <h4>{c.family}</h4><p>{futureCopy(selected.family, locale)}</p><p className={styles.familyHint}>{c.familyHint}</p>
           <details><summary>{c.preparation}<ChevronDown size={14} aria-hidden="true" /></summary><p>{futureCopy(selected.preparation, locale)}</p></details>

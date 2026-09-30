@@ -17,6 +17,7 @@ import { SpaceProjectWorkspace, isSpaceCourse } from "./space-project-workspace"
 import { ExpeditionSystemWorkspace } from "./expedition-system-workspace"
 import { RoverSystemWorkspace } from "./rover-system-workspace"
 import { PROJECT_LEVELS } from "@/lib/project-lines/levels"
+import { primaryProjectLine } from "@/lib/project-taxonomy"
 import { BiomedProjectWorkspace } from "./biomed-project-workspace"
 import { RenewableCourseWorkspace } from "./renewable-workspace"
 import { BionicsCourseWorkspace } from "./bionics-workspace"
@@ -30,8 +31,9 @@ export function GuidedProjectCourse({ course }: { course: GuidedCourse }) {
 function GuidedCourseSession({ course, token, owner }: { course: GuidedCourse; token: string | null; owner: string }) {
   const search = useSearchParams()
   const lineId = course.line_id || "space-exploration"
-  const lineHref = `/library?view=lines&line=${lineId}`
-  const lineTitle = lineId === "neuro-bionics" ? "超能机械师" : lineId === "energy-motion" ? "动力发明家" : lineId === "biomedicine" ? "生命解码局" : "星际远征队"
+  const displayLine = primaryProjectLine(course.id, lineId)
+  const lineHref = `/library?view=lines&line=${displayLine?.id || lineId}`
+  const lineTitle = displayLine?.title.zh || "项目线"
   const edition = course.legacy_edition ? "edition=1&" : ""
   const current = course.modules.find(node => node.module_id === search.get("node")) ?? course.modules[0]
   const index = course.modules.indexOf(current)

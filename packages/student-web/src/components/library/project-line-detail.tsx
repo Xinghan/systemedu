@@ -6,11 +6,12 @@ import { sortDiscoveryEntries, discoveryLevel, type DiscoveryEntry } from "@/lib
 import { LINES_HREF, localized, type ProjectLine } from "@/lib/project-lines/catalog"
 import { DiscoveryProjectCard } from "./discovery-project-card"
 import { PROJECT_LEVELS, projectLevel } from "@/lib/project-lines/levels"
+import { entryInLine } from "@/lib/project-taxonomy"
 import gridStyles from "./discovery.module.css"
 import styles from "./project-line-view.module.css"
 
 export function ProjectLineDetail({ line, locale, entries, pulled }: { line: ProjectLine; locale: Locale; entries: DiscoveryEntry[]; pulled: Set<string> }) {
-  const own = sortDiscoveryEntries(entries.filter(entry => entry.lineId === line.id), "difficulty", locale)
+  const own = sortDiscoveryEntries(entries.filter(entry => entryInLine(entry, line.id)), "difficulty", locale)
   const first = own.find(entry => entry.local && entry.available)
   const stages = PROJECT_LEVELS
   return <div data-line-detail={line.id}>
@@ -22,11 +23,11 @@ export function ProjectLineDetail({ line, locale, entries, pulled }: { line: Pro
     <div id="line-route">
       {stages.map((stage) => {
         const available = own.filter(entry => discoveryLevel(entry) + 1 === stage.level)
-        const planned = line.planned.filter(node => projectLevel(node.kind) === stage.level)
+        const planned = line.planned.filter(node => projectLevel(node.kind) === stage.level && !own.some(entry => entry.id === node.id))
         if (!available.length && !planned.length) return null
         return <section key={stage.level} className={styles.routeSection} data-line-stage={stage.level}>
           <header className={styles.routeHead}><span className={styles.stageIndex}>0{stage.level}</span><div><h3>{localized(stage.title, locale)}</h3><p>{localized(stage.hint, locale)}</p></div></header>
-          {available.length > 0 && <div className={gridStyles.projectGrid}>{available.map(entry => <DiscoveryProjectCard key={entry.id} entry={entry} pulled={pulled.has(entry.id)} />)}</div>}
+          {available.length > 0 && <div className={gridStyles.projectGrid}>{available.map(entry => <DiscoveryProjectCard key={entry.id} entry={entry} pulled={pulled.has(entry.id)} contextLineId={line.id} />)}</div>}
           {planned.length > 0 && <div className={styles.plannedGrid}>{planned.map(node => <article key={node.id} className={styles.plannedCard} data-planned-project={node.id}><div><span>{locale === "zh" ? "筹备中" : "In preparation"}</span><span>{node.learningNodes.length > 0 && `${node.learningNodes.length} ${locale === "zh" ? "学习节点 · " : "nodes · "}`}{node.estimatedMinutes} {locale === "zh" ? "分钟目标" : "min target"}</span></div><h4>{localized(node.title, locale)}</h4><p>{localized(node.outcome, locale)}</p>{locale === "zh" && node.learningNodes.length > 0 && <p>{node.learningNodes.join(" → ")}</p>}</article>)}</div>}
         </section>
       })}
