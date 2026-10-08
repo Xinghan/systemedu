@@ -1,5 +1,7 @@
 "use client"
 
+
+import { lessonPath } from "@/lib/course-numbering"
 import { useEffect, useMemo, useState } from "react"
 import dynamic from "next/dynamic"
 import { useRouter } from "next/navigation"
@@ -229,7 +231,7 @@ export function ConceptGalaxy({ payload, litByConcept, initialProject, loggedIn 
   // 课节点击: 已加入直接进学习页, 否则弹加入引导
   function goKnode(slug: string, mid: string) {
     if (loggedIn && pulledSlugs.has(slug)) {
-      router.push(`/learn/${encodeURIComponent(slug)}/${encodeURIComponent(mid)}`)
+      router.push(lessonPath(slug, mid))
     } else {
       setPullError(false)
       setPullModal({ slug, mid })
@@ -244,7 +246,7 @@ export function ConceptGalaxy({ payload, litByConcept, initialProject, loggedIn 
     try {
       await myProjects.pull(pullModal.slug)
       setPulledSlugs((prev) => new Set([...prev, pullModal.slug]))
-      router.push(`/learn/${encodeURIComponent(pullModal.slug)}/${encodeURIComponent(pullModal.mid)}`)
+      router.push(lessonPath(pullModal.slug, pullModal.mid))
     } catch {
       setPullError(true)
     } finally {

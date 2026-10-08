@@ -668,6 +668,9 @@ export interface CourseContentData {
   version_label?: string | null
   is_active?: boolean
   generated_at?: string | null
+  /** Same node/version as course_content; shared by inline visuals and playback. */
+  slides?: SlideEntry[]
+  knode_dir?: string
 }
 
 export interface CourseV3Version {
@@ -704,11 +707,193 @@ export interface SlideConceptCard {
   body: string
   icon_svg?: string
 }
+export interface SlideImageAnnotation {
+  label?: string
+  x?: number
+  y?: number
+  width?: number
+  height?: number
+  [key: string]: unknown
+}
+export interface SlideTeachingSequenceStep {
+  title: string
+  detail: string
+}
+export interface SlideTeachingSequence {
+  label?: string
+  steps: SlideTeachingSequenceStep[]
+}
+
+/**
+ * Exact scientific visual specs. The data selects a known renderer rather
+ * than carrying arbitrary executable HTML from course generation.
+ */
+export type SlideTechnicalVisual =
+  | { renderer: "pubchem-retrieval"; scene: "overview" | "names" | "record" | "syntax" | "trace" | "workbench" | "card" | "handoff"; aria_label?: string }
+  | { renderer: "molecule-reading"; scene: "overview" | "dataflow" | "groups" | "audit" | "trace" | "workbench" | "handoff"; aria_label?: string }
+  | { renderer: "smiles-reading"; scene: "overview" | "equivalence" | "tokens" | "hydrogens" | "syntax" | "validation" | "trace" | "workbench" | "handoff"; aria_label?: string }
+  | { renderer: "functional-group"; scene: "overview" | "route" | "groups" | "controls" | "phases" | "trace" | "lab" | "record" | "handoff"; aria_label?: string }
+  | { renderer: "rdkit-runtime"; scene: "goal" | "places" | "library" | "binding" | "trace" | "terminal" | "evidence" | "next"; aria_label?: string }
+  | { renderer: "discovery-brief"; scene: "overview" | "roles" | "roadmap" | "honesty" | "funnel" | "budget" | "brief" | "handoff"; aria_label?: string }
+  | { renderer: "workbench-evidence"; scene: "overview" | "acceptance" | "assembly" | "contract" | "report" | "evaluation" | "run" | "repair" | "tasks" | "handoff"; aria_label?: string }
+  | { renderer: "logp-lab"; scene: "overview" | "phases" | "partition" | "scale" | "ordering" | "code" | "exercise" | "distribution" | "evidence" | "handoff"; aria_label?: string }
+  | { renderer: "diversity-evidence"; scene: "overview" | "concentration" | "tradeoff" | "fingerprint" | "scaffold" | "maxmin" | "trace" | "lab" | "code" | "report" | "handoff"; aria_label?: string }
+  | { renderer: "rejection-evidence"; scene: "overview" | "transparent" | "audit" | "reason" | "short-circuit" | "all-checks" | "pipeline" | "trace" | "lab" | "batch" | "handoff"; aria_label?: string }
+  | {
+      renderer: "ranking-evidence"
+      scene: "overview" | "eligibility" | "scales" | "normalize" | "weighted" | "units" | "lab" | "pipeline" | "audit" | "handoff"
+      aria_label?: string
+    }
+  | {
+      renderer: "molecule-skeleton"
+      scene: "overview" | "vocabulary" | "mass" | "bonds" | "skeleton" | "aromatic" | "scan" | "lab" | "report" | "handoff"
+      aria_label?: string
+    }
+  | {
+      renderer: "molecule-skeleton-evidence"
+      scene: "overview" | "vocabulary" | "mass" | "bonds" | "skeleton" | "aromatic" | "scan" | "lab" | "report" | "handoff"
+      aria_label?: string
+    }
+  | {
+      renderer: "funnel-evidence"
+      scene: "overview" | "rules" | "pipeline" | "order" | "run" | "counts" | "waterfall" | "lab" | "report" | "handoff"
+      aria_label?: string
+    }
+  | {
+      renderer: "roc-evidence"
+      scene: "overview" | "threshold" | "rates" | "sweep" | "area" | "limits" | "lab" | "compare" | "workshop" | "code" | "report"
+      rows: Array<{ id: string; label: number; score: number }>
+      source_note: string
+      aria_label?: string
+    }
+  | {
+      renderer: "lipinski-evidence"
+      scene: "overview" | "meaning" | "rules" | "descriptors" | "library" | "sets" | "sweep" | "workshop" | "protocol" | "limits" | "report"
+      rows: Array<{ id: string; name: string; mw: number; logp: number; hbd: number; hba: number; smiles?: string; source_url?: string }>
+      source_note: string
+      aria_label?: string
+    }
+  | {
+      renderer: "tendon-torque"
+      scene: "overview" | "calibration" | "material" | "geometry" | "tradeoff" | "budget" | "rating" | "lab" | "decision" | "report" | "redesign" | "handoff"
+      aria_label?: string
+    }
+  | {
+      renderer: "regression-evidence"
+      scene: "overview" | "task" | "signed" | "scatter" | "aggregate" | "formulas" | "counterexample" | "outlier" | "workshop" | "report"
+      rows: Array<{ id: string; actual: number; predicted: number }>
+      source_note: string
+      aria_label?: string
+    }
+  | {
+      renderer: "classification-evidence"
+      scene: "overview" | "chain" | "population" | "compare" | "ranking" | "walkthrough" | "lab" | "checklist" | "prevalence" | "report"
+      total: number
+      positives: number
+      true_positives: number
+      false_positives: number
+      aria_label?: string
+    }
+  | {
+      renderer: "katex"
+      latex: string
+      aria_label?: string
+    }
+  | {
+      renderer: "rdkit-2d"
+      molecules: Array<{
+        smiles: string
+        label: string
+        highlight_atoms?: number[]
+      }>
+      aria_label?: string
+      comparison_note?: string
+      evidence?: Array<{
+        label: string
+        value: string
+        detail?: string
+      }>
+    }
+  | {
+      renderer: "matrix-explorer"
+      electrodes: string[]
+      aria_label?: string
+    }
+  | {
+      renderer: "jsxgraph"
+      scene: "pid-recovery"
+      setpoint: number
+      disturbance_value: number
+      recovery_seconds: number
+      aria_label?: string
+    }
+  | {
+      renderer: "code-trace"
+      language: "python"
+      code: string
+      steps: Array<{
+        title: string
+        detail: string
+        active_lines: number[]
+        /** Optional source/error for distinct corrected runs in an authored teaching trace. */
+        code?: string
+        error?: string
+        variables?: Array<{
+          name: string
+          value: string
+        }>
+        output?: string
+      }>
+      aria_label?: string
+    }
+  | {
+      /** A short, stateful derivation for an exact math, chemistry, or data formula. */
+      renderer: "formula-sequence"
+      topic: string
+      steps: Array<{
+        title: string
+        detail: string
+        latex: string
+        evidence?: Array<{
+          label: string
+          value: string
+        }>
+      }>
+      aria_label?: string
+    }
+  | {
+      /** A typed interface-contract visual for a source-grounded data pipeline. */
+      renderer: "pipeline-contract"
+      stages: Array<{
+        name: string
+        input: string
+        output: string
+      }>
+      expected_features: string[]
+      misordered_features: string[]
+      aria_label?: string
+    }
+  | {
+      renderer: "molecule-3d"
+      structure: string
+      format: "pdb" | "sdf" | "mol2" | "xyz"
+      aria_label?: string
+    }
+
 export interface SlidePayload {
   // intro / outro
   hero_title?: string
   hero_subtitle?: string
   inline_svg?: string
+  // When a source-grounded image supplies context but the SVG carries the
+  // precise explanation, render both surfaces in order.
+  visual_mode?: "image" | "hybrid"
+  // A compact, data-driven state sequence for slides where process order is
+  // part of the teaching claim. It complements — never replaces — exact SVG.
+  teaching_sequence?: SlideTeachingSequence
+  // A deterministic, domain-specific teaching surface. It must not carry
+  // arbitrary HTML from the course-generation pipeline.
+  technical_visual?: SlideTechnicalVisual
   key_takeaway?: string
   // bullet
   concept_cards?: SlideConceptCard[]
@@ -725,7 +910,12 @@ export interface SlidePayload {
   thumbnail_url?: string
   // image / videos / labxchange
   intro_text?: string
-  images?: { src: string; caption?: string; source_url?: string }[]
+  images?: {
+    src: string
+    caption?: string
+    source_url?: string
+    annotations?: SlideImageAnnotation[]
+  }[]
   videos?: { title: string; url: string; thumbnail?: string }[]
   labxchange?: { title: string; url: string; description?: string }[]
 }
@@ -740,6 +930,8 @@ export interface SlideEntry {
   audio_path?: string | null // spec 039: 讲稿语音文件相对路径 (经 fileUrl 代理取)
   payload: SlidePayload
   generated_at: string | null
+  /** Source association survives a replacement of the visual payload. */
+  lesson_anchor?: { kind: "theory" | "idea" | "section"; id: string }
 }
 
 export interface CourseV3SlidesData {

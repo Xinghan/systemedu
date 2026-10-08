@@ -163,8 +163,8 @@ export function StudentHeader() {
           <Link href="/login" className="btn btn-ghost btn-sm">
             {t("nav.login")}
           </Link>
-          <Link href="/login" className="btn btn-violet btn-sm">
-            {t("nav.register")}
+          <Link href="/apply-invite" className="btn btn-violet btn-sm">
+            {t("nav.apply_invite")}
           </Link>
         </div>
       )}

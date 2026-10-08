@@ -33,7 +33,9 @@ from .catalog.user_lit_routes import ROUTES as _user_lit_routes
 from .chat import ROUTES as _chat_routes
 from .chat import preload_graph as _preload_tutor, shutdown_graph as _shutdown_tutor
 from .db import init_db
+from .course_numbering import CourseNumberingMiddleware, verify_numbering_activation
 from .drill import ROUTES as _drill_routes
+from .invite_application import ROUTES as _invite_application_routes
 from .library_proxy.routes import ROUTES as _lib_routes
 from .project_request import ROUTES as _project_request_routes
 from .settings import ROUTES as _settings_routes
@@ -72,6 +74,7 @@ def create_app() -> Starlette:
         *_badges_routes,
         *_chat_routes,
         *_drill_routes,
+        *_invite_application_routes,
         *_project_request_routes,
         *_settings_routes,
         *_learning_routes,
@@ -85,11 +88,14 @@ def create_app() -> Starlette:
             allow_headers=["*"],
             allow_credentials=True,
         ),
+        Middleware(CourseNumberingMiddleware),
     ]
 
     @asynccontextmanager
     async def _lifespan(_app):
         init_db()
+        from .db import _ensure_engine
+        verify_numbering_activation(_ensure_engine())
         logger.info("student-app started, db initialized")
         # spec 028: 预热 tutor graph 避免首次 chat 请求等 5-10s
         if os.environ.get("STUDENT_SKIP_TUTOR_PRELOAD") != "1":

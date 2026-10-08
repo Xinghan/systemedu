@@ -21,6 +21,7 @@ from ..auth.deps import require_login
 from . import session as session_store
 from .auth_ws import authenticate_ws
 from .payload import ChatPayload
+from ..course_numbering import version_error
 from . import tutor_runner
 
 log = logging.getLogger(__name__)
@@ -122,6 +123,10 @@ async def ws_chat_stream(websocket: WebSocket) -> None:
             data = await websocket.receive_json()
             try:
                 payload = ChatPayload(**data)
+                mismatch = version_error(payload.library_slug, websocket.query_params.get("course_numbering"))
+                if mismatch:
+                    await websocket.send_json({"type": "error", "message": mismatch})
+                    continue
             except Exception as e:
                 await websocket.send_json({"type": "error", "message": str(e)})
                 continue

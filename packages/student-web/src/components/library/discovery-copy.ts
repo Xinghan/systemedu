@@ -19,7 +19,7 @@ export const DISCOVERY_COPY = {
     microTag: "短体验", fullTag: "完整工程", planning: "筹备中", outcome: "你会做出", observeOutcome: "一张自己的星球照片与观测记录", noOutcome: "查看项目目标与成果要求", minutes: "约 3 分钟", minutesTarget: "体验目标", weeks: "周", schedule: "课程安排", noSchedule: "按项目安排", challenge: "工程深度", unspecified: "待标注", age: "岁", preparation: "材料与工具见项目说明", microPreparation: "无需安装 · 不需要编程基础", microChallenge: "拖动、选择、拍摄", startProject: "开始体验", viewProject: "查看项目", continueProject: "继续项目", chapters: "章", onShelf: "已加入", spaceEndpoint: "星际远征队 · 终点项目", spaceEntry: "星际远征队 · 起点项目", localPhoto: "照片保存在当前浏览器，也可以下载带走。",
     requestTitle: "下一个，你想探索什么？", requestBody: "把你的好奇心告诉我们，一起找到值得动手的问题。", requestAction: "提出项目想法",
     familyTitle: "第一次陪孩子来？", familyBody: "先一起打开一个 3 分钟体验，把鼠标交给孩子。完成后，请孩子展示自己的作品。",
-    domainNames: { aerospace: "航空航天", climate: "气候与环境", bioscience: "生物科学", robotics: "机械与机器人", materials: "材料", energy: "能源", computing: "计算机与 AI", other: "其他领域" },
+    domainNames: { earth: "地球科学", aerospace: "航空航天", climate: "气候与环境", bioscience: "生物科学", robotics: "机械与机器人", materials: "材料", energy: "能源", computing: "计算机与 AI", other: "其他领域" },
   },
   en: {
     eyebrow: "FOLLOW YOUR CURIOSITY", title: "Project library", intro: "A small discovery can begin a much bigger adventure.",
@@ -41,7 +41,7 @@ export const DISCOVERY_COPY = {
     microTag: "Quick experience", fullTag: "Full project", planning: "In preparation", outcome: "YOU WILL MAKE", observeOutcome: "Your own world photo and observation record", noOutcome: "See project goals and deliverables", minutes: "About 3 min", minutesTarget: "Experience target", weeks: "weeks", schedule: "Course schedule", noSchedule: "See course schedule", challenge: "Project depth", unspecified: "Not specified", age: "years", preparation: "See materials and tools in the project guide", microPreparation: "No installation or coding needed", microChallenge: "Drag, choose, take a photo", startProject: "Start exploring", viewProject: "View project", continueProject: "Continue project", chapters: "chapters", onShelf: "Added", spaceEndpoint: "Starbound Crew · Destination", spaceEntry: "Starbound Crew · Starting point", localPhoto: "Photos stay in this browser and can also be downloaded.",
     requestTitle: "What would you like to explore next?", requestBody: "Tell us what you are curious about. Let’s find a question worth making something for.", requestAction: "Suggest a project",
     familyTitle: "Here with your child for the first time?", familyBody: "Open a 3-minute experience together, then let your child take the controls. Ask them to show you what they made.",
-    domainNames: { aerospace: "Aerospace", climate: "Climate & environment", bioscience: "Bioscience", robotics: "Robotics & mechanics", materials: "Materials", energy: "Energy", computing: "Computing & AI", other: "Other fields" },
+    domainNames: { earth: "Earth science", aerospace: "Aerospace", climate: "Climate & environment", bioscience: "Bioscience", robotics: "Robotics & mechanics", materials: "Materials", energy: "Energy", computing: "Computing & AI", other: "Other fields" },
   },
 }
 

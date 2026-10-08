@@ -1,6 +1,7 @@
 "use client"
 
 import Link from "next/link"
+import { lessonPath } from "@/lib/course-numbering"
 import { useRouter } from "next/navigation"
 import { useEffect, useMemo, useState } from "react"
 import { toast } from "sonner"
@@ -594,7 +595,7 @@ function ForkCard({ f, onRemove }: { f: ForkItem; onRemove: () => void }) {
               <Trash2 size={13} strokeWidth={1.5} />
             </button>
             <Link
-              href={`/learn/${encodeURIComponent(f.slug)}/${encodeURIComponent(target)}`}
+              href={lessonPath(f.slug, target)}
               className="btn btn-violet btn-sm"
               onClick={(e) => e.stopPropagation()}
             >
@@ -640,7 +641,7 @@ function ForkListRow({ f, last }: { f: ForkItem; last: boolean }) {
   const dClass = domainClass(f.domain)
   return (
     <Link
-      href={`/learn/${encodeURIComponent(f.slug)}/${encodeURIComponent(target)}`}
+      href={lessonPath(f.slug, target)}
       style={{
         display: "grid",
         gridTemplateColumns: "1.6fr 100px 1fr 110px 90px 80px",

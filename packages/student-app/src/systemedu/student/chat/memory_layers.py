@@ -187,7 +187,8 @@ class StudentMemoryInjector:
     async def _l3_knode_content(self, library_slug: str, module_id: str) -> str:
         from systemedu.student.cache import get_cache
         cache = get_cache()
-        key = f"knode:{library_slug}:{module_id}:summary"
+        from ..course_numbering import summary_cache_key
+        key = summary_cache_key(library_slug, module_id)
         try:
             cached = await cache.get(key)
             if cached:

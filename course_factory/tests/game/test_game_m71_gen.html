@@ -1,0 +1,640 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>M71 划线人 — 拖阈值，决定谁算怪兽</title>
+<style>
+  :root {
+    --SIGNAL: oklch(0.75 0.17 200); --CORE: oklch(0.55 0.16 200); --DEPTH: oklch(0.35 0.10 210);
+    --FLASH: oklch(0.92 0.08 190); --QUERY: oklch(0.85 0.14 85);
+    --bg-0: oklch(0.15 0.03 240); --bg-1: oklch(0.19 0.035 238); --panel: oklch(0.23 0.04 235);
+    --GOOD: oklch(0.80 0.16 165); --BAD: oklch(0.64 0.21 25); --gold: oklch(0.85 0.14 85);
+    --fg: oklch(0.95 0.02 220); --fg-dim: oklch(0.74 0.03 230);
+    --mono: "JetBrains Mono", ui-monospace, monospace;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    font-family: var(--mono), "Noto Sans SC", sans-serif;
+    background:
+      radial-gradient(120% 90% at 12% 0%, oklch(0.22 0.05 230) 0%, transparent 55%),
+      radial-gradient(120% 110% at 100% 100%, oklch(0.20 0.06 200) 0%, transparent 60%),
+      linear-gradient(160deg, var(--bg-0) 0%, oklch(0.13 0.03 245) 100%);
+    color: var(--fg);
+    overflow: hidden;
+    -webkit-font-smoothing: antialiased;
+  }
+  .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+  .game-wrap { display: flex; height: 100vh; width: 100vw; }
+
+  /* ---------- sidebar ---------- */
+  .game-sidebar {
+    width: 200px; flex: 0 0 200px; height: 100%;
+    background: linear-gradient(180deg, var(--panel) 0%, oklch(0.18 0.04 238) 100%);
+    border-right: 1px solid oklch(0.40 0.06 200 / 0.5);
+    display: flex; flex-direction: column;
+    padding: 13px 12px; gap: 10px; overflow: hidden;
+  }
+  .side-top { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+  .badge {
+    font-size: 9px; letter-spacing: 1px; color: oklch(0.18 0.04 235);
+    background: linear-gradient(90deg, var(--SIGNAL), var(--FLASH));
+    padding: 3px 7px; font-weight: 700;
+  }
+  #langBtn {
+    font-family: var(--mono); font-size: 10px; color: var(--fg);
+    background: linear-gradient(135deg, oklch(0.30 0.05 230), oklch(0.26 0.05 210));
+    border: 1px solid var(--QUERY); padding: 4px 8px; cursor: pointer; letter-spacing: 0.5px;
+  }
+  #langBtn:hover { background: linear-gradient(135deg, oklch(0.36 0.07 230), oklch(0.30 0.06 215)); }
+  .side-title { font-size: 13.5px; font-weight: 700; line-height: 1.25;
+    background: linear-gradient(90deg, var(--fg), var(--SIGNAL)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .side-sub { font-size: 9.5px; color: var(--fg-dim); line-height: 1.45; }
+
+  /* roadmap */
+  .roadmap { display: flex; flex-direction: column; gap: 3px; }
+  .rm-label { font-size: 8.5px; letter-spacing: 1.2px; color: var(--CORE); font-weight: 700; margin-bottom: 2px; }
+  .rm-row { display: flex; align-items: center; gap: 6px; font-size: 9px; color: var(--fg-dim); line-height: 1.2; }
+  .rm-dot { width: 8px; height: 8px; flex: 0 0 8px; border: 1px solid var(--DEPTH); background: transparent; }
+  .rm-row.done .rm-dot { background: var(--CORE); border-color: var(--CORE); }
+  .rm-row.here .rm-dot { background: var(--gold); border-color: var(--gold); box-shadow: 2px 2px 0 var(--bg-0); }
+  .rm-row.here { color: var(--gold); font-weight: 700; }
+
+  .side-block {
+    background: linear-gradient(160deg, oklch(0.21 0.04 235), oklch(0.17 0.035 240));
+    border: 1px solid oklch(0.34 0.05 210 / 0.45); padding: 8px 9px;
+  }
+  .blk-label { font-size: 8.5px; letter-spacing: 1.2px; color: var(--CORE); margin-bottom: 4px; font-weight: 700; }
+  .blk-body { font-size: 9.5px; color: var(--fg-dim); line-height: 1.5; }
+  .blk-body b { color: var(--SIGNAL); font-weight: 700; }
+  .blk-body i { color: var(--gold); font-style: normal; font-weight: 700; }
+
+  .slider-zone { margin-top: 1px; }
+  .slider-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px; }
+  .slider-head .lab { font-size: 9px; letter-spacing: 0.8px; color: var(--gold); font-weight: 700; }
+  .slider-head .keep { font-size: 14px; color: var(--FLASH); font-weight: 700; }
+  input[type=range] {
+    -webkit-appearance: none; appearance: none; width: 100%; height: 7px; cursor: pointer;
+    background: linear-gradient(90deg, var(--DEPTH), var(--CORE), var(--SIGNAL)); outline: none;
+  }
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none; appearance: none; width: 15px; height: 21px;
+    background: linear-gradient(180deg, var(--gold), oklch(0.70 0.13 88)); cursor: pointer;
+    border: 1px solid oklch(0.30 0.04 235);
+  }
+  input[type=range]::-moz-range-thumb {
+    width: 15px; height: 21px; border: 1px solid oklch(0.30 0.04 235);
+    background: linear-gradient(180deg, var(--gold), oklch(0.70 0.13 88)); cursor: pointer;
+  }
+  .slider-ends { display: flex; justify-content: space-between; font-size: 8px; color: var(--fg-dim); margin-top: 4px; }
+
+  .act-btn {
+    font-family: var(--mono); font-size: 10px; color: var(--fg); width: 100%;
+    background: linear-gradient(135deg, oklch(0.30 0.06 210), oklch(0.25 0.05 230));
+    border: 1px solid var(--SIGNAL); padding: 7px 6px; cursor: pointer; letter-spacing: 0.4px;
+    text-align: center;
+  }
+  .act-btn:hover { background: linear-gradient(135deg, oklch(0.36 0.08 210), oklch(0.30 0.06 230)); }
+  .act-btn .sub { display: block; font-size: 8px; color: var(--fg-dim); margin-top: 2px; letter-spacing: 0; }
+
+  .side-foot { margin-top: auto; display: flex; flex-direction: column; gap: 6px; }
+  .target-card {
+    background: linear-gradient(160deg, oklch(0.22 0.05 200), oklch(0.16 0.04 235));
+    border: 1px solid oklch(0.45 0.08 200 / 0.5); padding: 7px 8px;
+  }
+  .target-card .tc-l { font-size: 8px; letter-spacing: 1px; color: var(--SIGNAL); font-weight: 700; }
+  .target-card .tc-b { font-size: 8.5px; color: var(--fg-dim); line-height: 1.4; margin-top: 3px; }
+
+  /* ---------- main ---------- */
+  .game-main { flex: 1; height: 100%; display: flex; flex-direction: column; min-width: 0; padding: 12px; gap: 10px; }
+
+  .hud { display: flex; gap: 10px; flex: 0 0 auto; }
+  .score-card {
+    flex: 1; background: linear-gradient(160deg, oklch(0.21 0.04 235), oklch(0.16 0.03 242));
+    border: 1px solid oklch(0.34 0.05 205 / 0.5); padding: 9px 11px; position: relative; overflow: hidden;
+  }
+  .score-card .sc-head { display: flex; justify-content: space-between; align-items: baseline; }
+  .sc-name { font-size: 9.5px; letter-spacing: 0.8px; color: var(--fg-dim); font-weight: 700; }
+  .sc-val { font-size: 22px; font-weight: 700; line-height: 1; }
+  #thrVal { color: var(--gold); }
+  #monVal { color: var(--BAD); }
+  #safeVal { color: var(--SIGNAL); }
+  .sc-note { font-size: 8.5px; color: var(--fg-dim); margin-top: 6px; min-height: 12px; }
+  .goal-card.danger { border-color: var(--BAD); box-shadow: 3px 3px 0 oklch(0.30 0.10 25 / 0.5); }
+  .goal-card.ok { border-color: var(--GOOD); box-shadow: 3px 3px 0 oklch(0.30 0.10 165 / 0.4); }
+
+  .stage {
+    flex: 1; min-height: 0; display: flex; flex-direction: column;
+    background: linear-gradient(160deg, oklch(0.17 0.035 240), oklch(0.13 0.03 245));
+    border: 1px solid oklch(0.32 0.05 210 / 0.45); position: relative;
+  }
+  .stage-head {
+    flex: 0 0 auto; display: flex; justify-content: space-between; align-items: center;
+    padding: 7px 12px; border-bottom: 1px solid oklch(0.30 0.05 210 / 0.4);
+  }
+  .stage-head .sh-t { font-size: 10.5px; letter-spacing: 0.6px; color: var(--SIGNAL); font-weight: 700; }
+  .stage-head .sh-legend { display: flex; gap: 12px; font-size: 8.5px; color: var(--fg-dim); }
+  .lg { display: flex; align-items: center; gap: 4px; }
+  .lg i { width: 9px; height: 9px; display: inline-block; }
+  .lg.m i { background: var(--BAD); }
+  .lg.s i { background: var(--SIGNAL); }
+  .lg.t i { background: var(--gold); }
+  .canvas-host { flex: 1; min-height: 0; display: flex; flex-direction: column; position: relative; }
+  #probaCanvas { flex: 1; width: 100%; display: block; }
+
+  .toast {
+    position: absolute; left: 50%; top: 14px; transform: translateX(-50%) translateY(-12px);
+    background: linear-gradient(135deg, oklch(0.30 0.08 165), oklch(0.24 0.06 200));
+    border: 1px solid var(--GOOD); padding: 8px 16px; font-size: 11px; color: var(--fg);
+    font-weight: 700; letter-spacing: 0.4px; opacity: 0; pointer-events: none;
+    transition: opacity 0.4s ease, transform 0.4s ease; box-shadow: 3px 3px 0 var(--bg-0); z-index: 5;
+    max-width: 82%; text-align: center; line-height: 1.4;
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  .subtitle {
+    flex: 0 0 auto; min-height: 34px; display: flex; align-items: center;
+    background: linear-gradient(90deg, oklch(0.20 0.04 235), oklch(0.16 0.035 240));
+    border: 1px solid oklch(0.32 0.05 210 / 0.4); padding: 7px 13px;
+    font-size: 11px; color: var(--fg); line-height: 1.4;
+  }
+  .subtitle b { color: var(--gold); }
+  .subtitle .pin { color: var(--SIGNAL); font-weight: 700; margin-right: 8px; letter-spacing: 0.5px; }
+</style>
+</head>
+<body>
+<div class="game-wrap">
+  <!-- ============ SIDEBAR ============ -->
+  <aside class="game-sidebar">
+    <div class="side-top">
+      <span class="badge" data-i18n="badge">CS-01 / M71</span>
+      <button id="langBtn" type="button">EN</button>
+    </div>
+    <div class="side-title" data-i18n="title">划线人</div>
+    <div class="side-sub" data-i18n="sub">模型把每个分子的「是怪兽」把握分（0~1）都报给你了。那条「几成才算怪兽」的线，由你来划。</div>
+
+    <div class="roadmap">
+      <div class="rm-label" data-i18n="rmLabel">第4关 · AI 模型</div>
+      <div class="rm-row done"><span class="rm-dot"></span><span data-i18n="rm1">森林·提升树够准了</span></div>
+      <div class="rm-row done"><span class="rm-dot"></span><span data-i18n="rm2">骨架切分打诚实分</span></div>
+      <div class="rm-row here"><span class="rm-dot"></span><span data-i18n="rm3">M71 模型报把握分 · 你在这</span></div>
+      <div class="rm-row"><span class="rm-dot"></span><span data-i18n="rm4">M72 挑最划算的阈值</span></div>
+      <div class="rm-row"><span class="rm-dot"></span><span data-i18n="rm5">装进工作台打分排名</span></div>
+    </div>
+
+    <div class="side-block">
+      <div class="blk-label" data-i18n="taskLabel">本关任务</div>
+      <div class="blk-body" data-i18n="taskBody">拖<b>阈值线</b>：超过线的判「怪兽」。亲眼看——线一动，被算成怪兽的分子数就跟着变。试着把<i>葡萄糖、咖啡因这些低分</i>挡在线外，又不漏掉真正的高分怪兽。</div>
+    </div>
+
+    <div class="side-block slider-zone">
+      <div class="slider-head">
+        <span class="lab" data-i18n="thrLab">阈值 threshold</span>
+        <span class="keep" id="thrKeep">0.85</span>
+      </div>
+      <input id="thrSlider" type="range" min="0" max="100" step="1" value="85" aria-label="threshold">
+      <div class="slider-ends"><span data-i18n="thrMin">0 全抓</span><span data-i18n="thrMax">1 只挑最稳</span></div>
+    </div>
+
+    <button id="presetBtn" class="act-btn" type="button">
+      <span data-i18n="presetTop">跳到三档线</span>
+      <span class="sub" data-i18n="presetSub">0.30 → 0.50 → 0.85 看抓的数怎么变</span>
+    </button>
+
+    <div class="side-foot">
+      <button id="resetBtn" class="act-btn" type="button" data-i18n="resetBtn">重新开始</button>
+      <div class="target-card">
+        <div class="tc-l" data-i18n="endLabel">项目终点</div>
+        <div class="tc-b" data-i18n="endBody">分子怪兽猎人工作台 · 这条会调的阈值线是它出 go/no-go 的开关</div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ============ MAIN ============ -->
+  <main class="game-main">
+    <div class="hud">
+      <div class="score-card" id="thrCard">
+        <div class="sc-head"><span class="sc-name" data-i18n="thrName">阈值（你划的线）</span><span class="sc-val" id="thrVal">0.85</span></div>
+        <div class="sc-note" id="thrNote" data-i18n="thrNote0">线越高，门槛越严，能算怪兽的越少。</div>
+      </div>
+      <div class="score-card" id="monCard">
+        <div class="sc-head"><span class="sc-name" data-i18n="monName">判为怪兽（线上）</span><span class="sc-val" id="monVal">--</span></div>
+        <div class="sc-note" id="monNote" data-i18n="monNote0">把握分 ≥ 阈值的分子，被抓出来当怪兽。</div>
+      </div>
+      <div class="score-card goal-card" id="goalCard">
+        <div class="sc-head"><span class="sc-name" data-i18n="safeName">放过（线下）</span><span class="sc-val" id="safeVal">--</span></div>
+        <div class="sc-note" id="safeNote" data-i18n="safeNote0">线下的分子，模型这次没把它当怪兽。</div>
+      </div>
+    </div>
+
+    <div class="stage">
+      <div class="stage-head">
+        <span class="sh-t" data-i18n="stageT">七个分子 · 每个一条「是怪兽」把握分（0~1）</span>
+        <div class="sh-legend">
+          <span class="lg t"><i></i><span data-i18n="lgThr">你划的阈值线</span></span>
+          <span class="lg m"><i></i><span data-i18n="lgMon">线上 = 判怪兽</span></span>
+          <span class="lg s"><i></i><span data-i18n="lgSafe">线下 = 放过</span></span>
+        </div>
+      </div>
+      <div class="canvas-host">
+        <canvas id="probaCanvas"></canvas>
+        <div class="toast" id="toast"></div>
+      </div>
+    </div>
+
+    <div class="subtitle" id="subtitle">
+      <span class="pin" data-i18n="pinLabel">实况</span>
+      <span id="subText" data-i18n="sub0">拖动阈值线，看哪些分子被抬到线上、哪些掉到线下。注意咖啡因 0.07 和阿司匹林 0.23 都很低——它们其实「不是」。</span>
+    </div>
+  </main>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  /* ── canonical molecule set: RDKit-real descriptors + a SINGLE explainable
+     sigmoid P(monster). IDENTICAL numbers as the M71 animation.
+     z = 0.78*logP + 0.50*(MW/100) + 0.40*aromRings - 3.55 ;  p = 1/(1+e^-z) ── */
+  var MOLS = [
+    { id: "glucose",    p: 0.01, logp: -3.22, mw: 180, arR: 0, cn: "葡萄糖",   en: "glucose" },
+    { id: "caffeine",   p: 0.07, logp: -1.03, mw: 194, arR: 2, cn: "咖啡因",   en: "caffeine" },
+    { id: "aspirin",    p: 0.23, logp: 1.31,  mw: 180, arR: 1, cn: "阿司匹林", en: "aspirin" },
+    { id: "naphtha",    p: 0.53, logp: 2.84,  mw: 128, arR: 2, cn: "萘",       en: "naphthalene" },
+    { id: "ibuprofen",  p: 0.57, logp: 3.07,  mw: 206, arR: 1, cn: "布洛芬",   en: "ibuprofen" },
+    { id: "anthracene", p: 0.84, logp: 3.99,  mw: 178, arR: 3, cn: "蒽",       en: "anthracene" },
+    { id: "pyrene",     p: 0.93, logp: 4.58,  mw: 202, arR: 4, cn: "芘",       en: "pyrene" }
+  ];
+
+  // ---------------- i18n ----------------
+  var I18N = {
+    zh: {
+      badge: "CS-01 / M71", title: "划线人",
+      sub: "模型把每个分子的「是怪兽」把握分（0~1）都报给你了。那条「几成才算怪兽」的线，由你来划。",
+      rmLabel: "第4关 · AI 模型",
+      rm1: "森林·提升树够准了", rm2: "骨架切分打诚实分", rm3: "M71 模型报把握分 · 你在这",
+      rm4: "M72 挑最划算的阈值", rm5: "装进工作台打分排名",
+      taskLabel: "本关任务",
+      taskBody: "拖阈值线：超过线的判「怪兽」。亲眼看——线一动，被算成怪兽的分子数就跟着变。试着把葡萄糖、咖啡因这些低分挡在线外，又不漏掉真正的高分怪兽。",
+      thrLab: "阈值 threshold", thrMin: "0 全抓", thrMax: "1 只挑最稳",
+      presetTop: "跳到三档线", presetSub: "0.30 → 0.50 → 0.85 看抓的数怎么变",
+      resetBtn: "重新开始",
+      endLabel: "项目终点", endBody: "分子怪兽猎人工作台 · 这条会调的阈值线是它出 go/no-go 的开关",
+      thrName: "阈值（你划的线）", monName: "判为怪兽（线上）", safeName: "放过（线下）",
+      thrNote0: "线越高，门槛越严，能算怪兽的越少。",
+      monNote0: "把握分 ≥ 阈值的分子，被抓出来当怪兽。",
+      safeNote0: "线下的分子，模型这次没把它当怪兽。",
+      stageT: "七个分子 · 每个一条「是怪兽」把握分（0~1）",
+      lgThr: "你划的阈值线", lgMon: "线上 = 判怪兽", lgSafe: "线下 = 放过",
+      pinLabel: "实况",
+      sub0: "拖动阈值线，看哪些分子被抬到线上、哪些掉到线下。注意咖啡因 0.07 和阿司匹林 0.23 都很低——它们其实「不是」。",
+      // dynamic
+      subLow: "阈值 {thr}：门槛压得很低，连阿司匹林 0.23 这种偏「不是」的也被抓进来了——一共 {mon} 个判怪兽。宁可错抓，但好分子也容易误伤。",
+      subMid: "阈值 {thr}：和默认硬判决一样卡在一半附近。低分的葡萄糖、咖啡因、阿司匹林都挡在线外，{mon} 个高分上线。",
+      subHigh: "阈值 {thr}：门槛抬得很高，只剩最笃定的那 {mon} 个还在线上——抓得少，但个个铁定是怪兽。",
+      subEmpty: "阈值 {thr}：太高了，连 0.93 的芘都被挡下，一个都没抓到。线划到 1 附近，谁都算不上怪兽。",
+      subAll: "阈值 {thr}：低到几乎贴地，七个分子全被当成怪兽——线划到 0，就是不管把握分、一律先抓。",
+      noteMon: "{mon} 个上线：{names}。", noteMonNone: "没有分子越过这条线。",
+      noteSafe: "{safe} 个放过：{names}。", noteSafeNone: "线下没有分子，全被抓了。",
+      thrTip: "把握分是模型给的，这条线划哪是你说了算。",
+      winLow: "你体会到了：线压低 → 抓得多、误伤多。",
+      winHigh: "你体会到了：线抬高 → 抓得少、个个靠谱。",
+      toastWin: "你当了一回划线人！同一批把握分，线划低抓 {lo} 个、划高只剩 {hi} 个——抓多抓少全看你这条线。",
+      toastSub: "把握分是模型测的，门槛搁多高是你定的。下一节学怎么挑一条最划算的线。",
+      molNote: "{name}：把握分 {p}（logP {logp}、{ar}个芳环）"
+    },
+    en: {
+      badge: "CS-01 / M71", title: "The Line-Drawer",
+      sub: "The model reports a 0-to-1 'is-a-monster' confidence for every molecule. WHERE the 'counts as a monster' line goes is up to you.",
+      rmLabel: "Stage 4 · AI Models",
+      rm1: "forests & boosting are accurate", rm2: "honest scaffold-split score", rm3: "M71 model reports confidence · you are here",
+      rm4: "M72 pick the best threshold", rm5: "wire into the workbench to rank",
+      taskLabel: "Mission",
+      taskBody: "Drag the threshold line: anything above it is called a monster. Watch the count change as the line moves. Try keeping low-score glucose & caffeine out, without dropping the truly high-score monsters.",
+      thrLab: "threshold", thrMin: "0 catch all", thrMax: "1 only the surest",
+      presetTop: "Jump to three lines", presetSub: "0.30 → 0.50 → 0.85, watch the count",
+      resetBtn: "Restart",
+      endLabel: "Project goal", endBody: "Monster Hunter workbench · this adjustable line is its go/no-go switch",
+      thrName: "Threshold (your line)", monName: "Called monster (above)", safeName: "Let go (below)",
+      thrNote0: "Higher line = stricter bar = fewer counted as monsters.",
+      monNote0: "Molecules with confidence ≥ threshold get caught as monsters.",
+      safeNote0: "Molecules below the line were not counted as monsters this time.",
+      stageT: "Seven molecules · each with one 0-to-1 'is-a-monster' confidence",
+      lgThr: "your threshold line", lgMon: "above = monster", lgSafe: "below = let go",
+      pinLabel: "Live",
+      sub0: "Drag the line and see who rises above it and who falls below. Note caffeine 0.07 and aspirin 0.23 are both low — they are actually NO.",
+      subLow: "Threshold {thr}: the bar is very low, even aspirin at 0.23 (leaning NO) gets caught — {mon} called monsters. Catch more, but hurt good molecules too.",
+      subMid: "Threshold {thr}: same as the default hard verdict at half. Low-score glucose, caffeine, aspirin stay out; {mon} high-score ones cross.",
+      subHigh: "Threshold {thr}: the bar is very high — only the surest {mon} stay above. Catch few, but each is rock-solid.",
+      subEmpty: "Threshold {thr}: too high — even pyrene at 0.93 is blocked, nothing caught. Near 1, nobody counts as a monster.",
+      subAll: "Threshold {thr}: almost on the floor — all seven count as monsters. At 0, the score is ignored and everyone is caught.",
+      noteMon: "{mon} above: {names}.", noteMonNone: "No molecule crosses this line.",
+      noteSafe: "{safe} below: {names}.", noteSafeNone: "Nothing below — all caught.",
+      thrTip: "The confidence is the model's; where the line sits is yours.",
+      winLow: "You felt it: lower line → catch more, more collateral.",
+      winHigh: "You felt it: higher line → catch fewer, all reliable.",
+      toastWin: "You played the line-drawer! Same confidences — a low line catches {lo}, a high line only {hi}. How many you catch is all about your line.",
+      toastSub: "The model measures the confidence; you set how high the bar sits. Next lesson: how to pick the best line.",
+      molNote: "{name}: confidence {p} (logP {logp}, {ar} aromatic rings)"
+    }
+  };
+  var lang = "zh";
+
+  // ---------------- DOM ----------------
+  var canvas = document.getElementById("probaCanvas");
+  var ctx2d = canvas.getContext("2d");
+  var thrSlider = document.getElementById("thrSlider");
+  var thrKeep = document.getElementById("thrKeep");
+  var presetBtn = document.getElementById("presetBtn");
+  var resetBtn = document.getElementById("resetBtn");
+  var langBtn = document.getElementById("langBtn");
+  var toastEl = document.getElementById("toast");
+
+  var thrVal = document.getElementById("thrVal"), monVal = document.getElementById("monVal"), safeVal = document.getElementById("safeVal");
+  var thrNote = document.getElementById("thrNote"), monNote = document.getElementById("monNote"), safeNote = document.getElementById("safeNote");
+  var goalCard = document.getElementById("goalCard");
+  var subText = document.getElementById("subText");
+
+  // ---------------- colours ----------------
+  function cssVar(n) { return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
+  var COL = {};
+  function refreshColors() {
+    COL.good = cssVar("--GOOD"); COL.bad = cssVar("--BAD"); COL.gold = cssVar("--gold");
+    COL.signal = cssVar("--SIGNAL"); COL.core = cssVar("--CORE"); COL.depth = cssVar("--DEPTH");
+    COL.fg = cssVar("--fg"); COL.fgDim = cssVar("--fg-dim"); COL.bg = cssVar("--bg-0");
+    COL.flash = cssVar("--FLASH");
+  }
+  refreshColors();
+
+  // ---------------- state ----------------
+  var thr = 0.85;            // threshold 0..1 (starts high so the first drag is dramatic)
+  var animThr = 0.85;        // animated line position for smooth slide
+  var seenLow = false, seenHigh = false, won = false;
+  var hoverIdx = -1;
+  var presetCycle = [0.30, 0.50, 0.85];
+  var presetPos = 2;
+
+  // ---------------- canvas ----------------
+  function fitCanvas() {
+    var host = canvas.parentElement;
+    var r = host.getBoundingClientRect();
+    var dpr = Math.min(window.devicePixelRatio || 1, 2);
+    var w = Math.max(40, r.width), h = Math.max(40, r.height);
+    canvas.width = Math.round(w * dpr);
+    canvas.height = Math.round(h * dpr);
+    canvas.style.width = w + "px"; canvas.style.height = h + "px";
+    ctx2d.setTransform(dpr, 0, 0, dpr, 0, 0);
+    return { w: w, h: h };
+  }
+
+  function molName(m) { return lang === "zh" ? m.cn : m.en; }
+
+  function plot() {
+    var dim = fitCanvas();
+    var W = dim.w, H = dim.h;
+    ctx2d.clearRect(0, 0, W, H);
+
+    var padL = 46, padR = 18, padTop = 22, padBot = 42;
+    var chartW = W - padL - padR;
+    var chartH = H - padTop - padBot;
+    var baseY = padTop + chartH;
+
+    // y axis + gridlines at 0,.25,.5,.75,1
+    ctx2d.strokeStyle = "oklch(0.40 0.05 220 / 0.5)";
+    ctx2d.lineWidth = 1.2;
+    ctx2d.beginPath(); ctx2d.moveTo(padL, padTop); ctx2d.lineTo(padL, baseY); ctx2d.lineTo(padL + chartW, baseY); ctx2d.stroke();
+    ctx2d.font = "10px " + cssVar("--mono") + ", monospace";
+    ctx2d.textAlign = "right"; ctx2d.textBaseline = "middle";
+    [0, 0.25, 0.5, 0.75, 1].forEach(function (v) {
+      var yy = baseY - chartH * v;
+      ctx2d.strokeStyle = "oklch(0.40 0.05 220 / 0.18)";
+      ctx2d.lineWidth = 1; ctx2d.setLineDash([3, 4]);
+      ctx2d.beginPath(); ctx2d.moveTo(padL, yy); ctx2d.lineTo(padL + chartW, yy); ctx2d.stroke();
+      ctx2d.setLineDash([]);
+      ctx2d.fillStyle = COL.fgDim;
+      ctx2d.fillText(v.toFixed(2), padL - 7, yy);
+    });
+
+    var n = MOLS.length;
+    var slot = chartW / n;
+    var bw = Math.min(slot * 0.5, 70);
+
+    // bars
+    var monsters = [], safes = [];
+    for (var i = 0; i < n; i++) {
+      var m = MOLS[i];
+      var cx = padL + slot * (i + 0.5);
+      var x = cx - bw / 2;
+      var hIs = chartH * m.p;
+      var counted = m.p >= thr;
+      if (counted) monsters.push(m); else safes.push(m);
+
+      var col = counted ? "bad" : "signal";
+      var topCol = counted ? COL.bad : COL.signal;
+      // bar
+      var grad = ctx2d.createLinearGradient(x, baseY - hIs, x, baseY);
+      grad.addColorStop(0, counted ? "oklch(0.64 0.21 25)" : "oklch(0.75 0.17 200)");
+      grad.addColorStop(1, counted ? "oklch(0.40 0.14 25)" : "oklch(0.45 0.12 205)");
+      ctx2d.fillStyle = grad;
+      roundRect(ctx2d, x, baseY - hIs, bw, hIs, 5); ctx2d.fill();
+      ctx2d.lineWidth = (i === hoverIdx) ? 2.6 : 1.4;
+      ctx2d.strokeStyle = (i === hoverIdx) ? COL.gold : topCol;
+      roundRect(ctx2d, x, baseY - hIs, bw, hIs, 5); ctx2d.stroke();
+
+      // p value on top
+      ctx2d.fillStyle = counted ? COL.bad : COL.signal;
+      ctx2d.font = "700 13px " + cssVar("--mono") + ", monospace";
+      ctx2d.textAlign = "center"; ctx2d.textBaseline = "bottom";
+      ctx2d.fillText(m.p.toFixed(2), cx, baseY - hIs - 5);
+
+      // name under axis
+      ctx2d.fillStyle = COL.fgDim;
+      ctx2d.font = "600 11px 'Noto Sans SC', sans-serif";
+      ctx2d.textBaseline = "top";
+      ctx2d.fillText(molName(m), cx, baseY + 7);
+
+      m._cx = cx; m._x = x; m._bw = bw; m._hIs = hIs; m._baseY = baseY;
+    }
+
+    // threshold line (animated)
+    var ty = baseY - chartH * animThr;
+    ctx2d.strokeStyle = COL.gold;
+    ctx2d.lineWidth = 2.4; ctx2d.setLineDash([9, 6]);
+    ctx2d.beginPath(); ctx2d.moveTo(padL, ty); ctx2d.lineTo(padL + chartW, ty); ctx2d.stroke();
+    ctx2d.setLineDash([]);
+    // label box on the line
+    var lbl = (lang === "zh" ? "阈值 " : "threshold ") + thr.toFixed(2);
+    ctx2d.font = "700 12px " + cssVar("--mono") + ", monospace";
+    var lw = ctx2d.measureText(lbl).width;
+    var lx = padL + chartW - lw - 18;
+    ctx2d.fillStyle = "oklch(0.15 0.03 240 / 0.9)";
+    ctx2d.fillRect(lx - 8, ty - 19, lw + 16, 17);
+    ctx2d.strokeStyle = COL.gold; ctx2d.lineWidth = 1.2;
+    ctx2d.strokeRect(lx - 8, ty - 19, lw + 16, 17);
+    ctx2d.fillStyle = COL.gold; ctx2d.textAlign = "left"; ctx2d.textBaseline = "middle";
+    ctx2d.fillText(lbl, lx, ty - 10);
+
+    // small "above=monster / below=let go" side hints
+    ctx2d.font = "10px 'Noto Sans SC', sans-serif";
+    ctx2d.textAlign = "left"; ctx2d.textBaseline = "middle";
+    ctx2d.fillStyle = "oklch(0.64 0.21 25 / 0.85)";
+    if (ty - padTop > 16) ctx2d.fillText(lang === "zh" ? "↑ 线上 = 判怪兽" : "↑ above = monster", padL + 4, padTop + 8);
+    ctx2d.fillStyle = "oklch(0.75 0.17 200 / 0.8)";
+    if (baseY - ty > 16) ctx2d.fillText(lang === "zh" ? "↓ 线下 = 放过" : "↓ below = let go", padL + 4, baseY - 8);
+
+    return { monsters: monsters, safes: safes };
+  }
+
+  function roundRect(c, x, y, w, h, r) {
+    r = Math.min(r, Math.abs(w) / 2, Math.abs(h) / 2);
+    c.beginPath();
+    c.moveTo(x + r, y);
+    c.arcTo(x + w, y, x + w, y + h, r);
+    c.arcTo(x + w, y + h, x, y + h, r);
+    c.arcTo(x, y + h, x, y, r);
+    c.arcTo(x, y, x + w, y, r);
+    c.closePath();
+  }
+
+  // ---------------- animation loop (smooth line slide) ----------------
+  function tick() {
+    if (Math.abs(animThr - thr) > 0.002) {
+      animThr += (thr - animThr) * 0.22;
+    } else { animThr = thr; }
+    plot();
+    requestAnimationFrame(tick);
+  }
+
+  // ---------------- HUD + win ----------------
+  function fmt2(v) { return v.toFixed(2); }
+  function tpl(s, map) { return s.replace(/\{(\w+)\}/g, function (_, k) { return map[k] != null ? map[k] : ""; }); }
+  function namesOf(list) { return list.map(molName).join("、".replace("、", lang === "zh" ? "、" : ", ")); }
+
+  function updateHUD(reason) {
+    var T = I18N[lang];
+    var monsters = MOLS.filter(function (m) { return m.p >= thr; });
+    var safes = MOLS.filter(function (m) { return m.p < thr; });
+
+    thrVal.textContent = fmt2(thr);
+    monVal.textContent = monsters.length + " / " + MOLS.length;
+    safeVal.textContent = safes.length + " / " + MOLS.length;
+
+    thrNote.textContent = T.thrTip;
+    monNote.textContent = monsters.length ? tpl(T.noteMon, { mon: monsters.length, names: namesOf(monsters) }) : T.noteMonNone;
+    safeNote.textContent = safes.length ? tpl(T.noteSafe, { safe: safes.length, names: namesOf(safes) }) : T.noteSafeNone;
+
+    // goal card colour: extreme lines flagged
+    goalCard.classList.remove("danger", "ok");
+    if (thr <= 0.15 || thr >= 0.96) goalCard.classList.add("danger");
+    else if (thr >= 0.45 && thr <= 0.60) goalCard.classList.add("ok");
+
+    // live subtitle
+    if (thr <= 0.02) subText.textContent = tpl(T.subAll, { thr: fmt2(thr) });
+    else if (monsters.length === 0) subText.textContent = tpl(T.subEmpty, { thr: fmt2(thr) });
+    else if (thr <= 0.30) subText.textContent = tpl(T.subLow, { thr: fmt2(thr), mon: monsters.length });
+    else if (thr >= 0.80) subText.textContent = tpl(T.subHigh, { thr: fmt2(thr), mon: monsters.length });
+    else subText.textContent = tpl(T.subMid, { thr: fmt2(thr), mon: monsters.length });
+
+    // experience flags: felt low end AND high end → win toast
+    if (thr <= 0.32 && monsters.length >= 4) seenLow = true;
+    if (thr >= 0.82 && monsters.length >= 1 && monsters.length <= 2) seenHigh = true;
+    if (seenLow && seenHigh && !won) {
+      won = true;
+      var loCount = MOLS.filter(function (m) { return m.p >= 0.30; }).length;
+      var hiCount = MOLS.filter(function (m) { return m.p >= 0.85; }).length;
+      showToast(tpl(T.toastWin, { lo: loCount, hi: hiCount }), T.toastSub);
+    }
+  }
+
+  var toastTimer = null;
+  function showToast(line1, line2) {
+    toastEl.innerHTML = "";
+    var a = document.createElement("div"); a.textContent = line1; toastEl.appendChild(a);
+    if (line2) {
+      var b = document.createElement("div");
+      b.textContent = line2; b.style.fontWeight = "400"; b.style.fontSize = "9.5px";
+      b.style.color = "var(--fg-dim)"; b.style.marginTop = "5px";
+      toastEl.appendChild(b);
+    }
+    toastEl.classList.add("show");
+    if (toastTimer) clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { toastEl.classList.remove("show"); }, 5200);
+  }
+
+  // ---------------- interaction ----------------
+  function onThr() {
+    thr = parseInt(thrSlider.value, 10) / 100;
+    thrKeep.textContent = fmt2(thr);
+    updateHUD("thr");
+  }
+  thrSlider.addEventListener("input", onThr);
+
+  presetBtn.addEventListener("click", function () {
+    presetPos = (presetPos + 1) % presetCycle.length;
+    thr = presetCycle[presetPos];
+    thrSlider.value = Math.round(thr * 100);
+    thrKeep.textContent = fmt2(thr);
+    updateHUD("preset");
+  });
+
+  resetBtn.addEventListener("click", function () {
+    thr = 0.50; thrSlider.value = 50; thrKeep.textContent = "0.50";
+    presetPos = 1; seenLow = false; seenHigh = false; won = false;
+    updateHUD("reset");
+  });
+
+  // hover a bar → highlight + molecule note in subtitle
+  canvas.addEventListener("mousemove", function (e) {
+    var r = canvas.getBoundingClientRect();
+    var mx = e.clientX - r.left, my = e.clientY - r.top;
+    var found = -1;
+    for (var i = 0; i < MOLS.length; i++) {
+      var m = MOLS[i];
+      if (m._x == null) continue;
+      if (mx >= m._x - 6 && mx <= m._x + m._bw + 6 && my >= m._baseY - m._hIs - 10 && my <= m._baseY) { found = i; break; }
+    }
+    if (found !== hoverIdx) {
+      hoverIdx = found;
+      if (found >= 0) {
+        var mm = MOLS[found];
+        subText.textContent = tpl(I18N[lang].molNote, { name: molName(mm), p: fmt2(mm.p), logp: mm.logp.toFixed(2), ar: mm.arR });
+      } else {
+        updateHUD("hover-off");
+      }
+    }
+  });
+  canvas.addEventListener("mouseleave", function () { if (hoverIdx !== -1) { hoverIdx = -1; updateHUD("hover-off"); } });
+
+  // ---------------- i18n ----------------
+  function applyLang() {
+    var T = I18N[lang];
+    document.querySelectorAll("[data-i18n]").forEach(function (el) {
+      var k = el.getAttribute("data-i18n");
+      if (T[k] != null) el.textContent = T[k];
+    });
+    langBtn.textContent = lang === "zh" ? "EN" : "中文";
+    document.documentElement.lang = lang === "zh" ? "zh" : "en";
+    thrKeep.textContent = fmt2(thr);
+    updateHUD("lang");
+  }
+  langBtn.addEventListener("click", function () {
+    lang = (lang === "zh") ? "en" : "zh";
+    applyLang();
+  });
+
+  // ---------------- resize ----------------
+  var rT = null;
+  window.addEventListener("resize", function () {
+    if (rT) cancelAnimationFrame(rT);
+    rT = requestAnimationFrame(plot);
+  });
+
+  // ---------------- boot ----------------
+  applyLang();
+  updateHUD("init");
+  requestAnimationFrame(tick);
+})();
+</script>
+</body>
+</html>

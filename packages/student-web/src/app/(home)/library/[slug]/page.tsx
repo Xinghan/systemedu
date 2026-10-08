@@ -3,6 +3,7 @@
 import Link from "next/link"
 import { projectCoverProps } from "@/lib/project-cover"
 import { fieldName, primaryProjectLine } from "@/lib/project-taxonomy"
+import { lessonPath } from "@/lib/course-numbering"
 import { useParams, useRouter } from "next/navigation"
 import { useEffect, useMemo, useState } from "react"
 import { toast } from "sonner"
@@ -142,6 +143,7 @@ export default function ProjectHome() {
   const [project, setProject] = useState<DetailProject | null>(null)
   const [blueprint, setBlueprint] = useState("")
   const [pulled, setPulled] = useState(false)
+  const [localPreview, setLocalPreview] = useState(false)
   const [lastModuleId, setLastModuleId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [pulling, setPulling] = useState(false)
@@ -152,6 +154,10 @@ export default function ProjectHome() {
   useEffect(() => {
     hydrate()
   }, [hydrate])
+
+  useEffect(() => {
+    setLocalPreview(process.env.NODE_ENV === "development" && slug === "aloha-bimanual-apprentice" && ["localhost", "127.0.0.1", "[::1]"].includes(window.location.hostname))
+  }, [slug])
 
   useEffect(() => {
     void (async () => {
@@ -486,7 +492,11 @@ export default function ProjectHome() {
               </div>
             )}
 
-            {!loggedIn ? (
+            {localPreview ? (
+              <Link href="/preview/aloha/M01" className="btn btn-violet btn-lg" style={{ justifyContent: "center" }}>
+                <CirclePlay size={15} strokeWidth={1.5} /> 本地查看全部课程
+              </Link>
+            ) : !loggedIn ? (
               <Link
                 href={`/login?next=${encodeURIComponent(`/library/${slug}`)}`}
                 className="btn btn-violet btn-lg"
@@ -507,7 +517,7 @@ export default function ProjectHome() {
               </button>
             ) : targetModuleId ? (
               <Link
-                href={`/learn/${encodeURIComponent(slug)}/${encodeURIComponent(targetModuleId)}`}
+                href={lessonPath(slug, targetModuleId)}
                 className="btn btn-violet btn-lg"
                 style={{ justifyContent: "center" }}
               >
@@ -665,6 +675,7 @@ export default function ProjectHome() {
               orderedModules={modules}
               lastModuleId={lastModuleId}
               pulled={pulled}
+              localPreview={localPreview}
               completedKnodeIds={completedKnodeIds}
             />
           )}
@@ -1004,6 +1015,7 @@ function Curriculum({
   orderedModules,
   lastModuleId,
   pulled,
+  localPreview = false,
   completedKnodeIds = [],
 }: {
   slug: string
@@ -1012,6 +1024,7 @@ function Curriculum({
   orderedModules: Module[]
   lastModuleId: string | null
   pulled: boolean
+  localPreview?: boolean
   completedKnodeIds?: string[]
 }) {
   const completedSet = new Set(completedKnodeIds)
@@ -1120,7 +1133,8 @@ function Curriculum({
                   let status = moduleStatus(modIdx, lastModuleId, orderedModules)
                   // spec 036: 用户已 mark complete → 强制 done
                   if (completedSet.has(m.module_id)) status = "done"
-                  const clickable = pulled
+                  const clickable = pulled || localPreview
+                  if (localPreview && status === "locked") status = "available"
                   const inner = (
                     <div
                       style={{
@@ -1152,7 +1166,7 @@ function Curriculum({
                           strokeWidth={1.5}
                           style={{ color: "var(--violet)" }}
                         />
-                      ) : pulled ? (
+                      ) : clickable ? (
                         <Circle
                           size={15}
                           strokeWidth={1.5}
@@ -1181,7 +1195,7 @@ function Curriculum({
                           color:
                             status === "done"
                               ? "var(--sub)"
-                              : status === "locked" || !pulled
+                              : status === "locked" || !clickable
                                 ? "var(--sub-2)"
                                 : "var(--ink-2)",
                         }}
@@ -1198,7 +1212,7 @@ function Curriculum({
                   return clickable ? (
                     <Link
                       key={m.module_id}
-                      href={`/learn/${encodeURIComponent(slug)}/${encodeURIComponent(m.module_id)}`}
+                      href={localPreview ? `/preview/aloha/${m.module_id}` : lessonPath(slug, m.module_id)}
                       style={{ textDecoration: "none", color: "inherit" }}
                     >
                       {inner}

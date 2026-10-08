@@ -21,6 +21,7 @@ import { primaryProjectLine } from "@/lib/project-taxonomy"
 import { BiomedProjectWorkspace } from "./biomed-project-workspace"
 import { RenewableCourseWorkspace } from "./renewable-workspace"
 import { BionicsCourseWorkspace } from "./bionics-workspace"
+import { EarthCourseWorkspace } from "./earth-workspace"
 import styles from "./guided-project-course.module.css"
 
 export function GuidedProjectCourse({ course }: { course: GuidedCourse }) {
@@ -96,6 +97,7 @@ function GuidedCourseSession({ course, token, owner }: { course: GuidedCourse; t
           {lineId === "biomedicine" && <BiomedProjectWorkspace course={course} node={current} />}
           {lineId === "energy-motion" && <RenewableCourseWorkspace course={course} node={current} />}
           {lineId === "neuro-bionics" && <BionicsCourseWorkspace course={course} node={current} />}
+          {lineId === "earth-discovery" && <EarthCourseWorkspace course={course} node={current} />}
           <GuidedCourseNotebook key={current.module_id} course={course} node={current} onRecord={onRecord} />
         </section>
         <footer className={styles.nodeFooter}>{index > 0 ? <Link href={`?${edition}node=${course.modules[index - 1].module_id}`} onClick={() => setLabOpen(false)}><ArrowLeft size={14} />上一节点</Link> : <span />}{index < course.modules.length - 1 ? <Link href={`?${edition}node=${course.modules[index + 1].module_id}`} onClick={() => setLabOpen(false)}>下一节点：{course.modules[index + 1].title}<ArrowRight size={14} /></Link> : <Link href={lineHref}>回到项目线<ArrowRight size={14} /></Link>}</footer>

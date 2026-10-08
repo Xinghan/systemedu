@@ -1,0 +1,688 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Molecule Monster Hunter M85 — Lipinski Rule-of-Five & Whole-Library Pass Rate</title>
+<style>
+:root{
+  /* L1 — shared deep-space canvas */
+  --bg-0: oklch(0.14 0.035 265);
+  --bg-1: oklch(0.18 0.04 265);
+  --bg-2: oklch(0.22 0.045 265);
+  --bg-3: oklch(0.28 0.05 265);
+  --line: oklch(0.35 0.05 265 / 0.35);
+  --line-strong: oklch(0.55 0.08 265 / 0.55);
+  --fg:      oklch(0.96 0.01 265);
+  --fg-dim:  oklch(0.75 0.02 265);
+  --fg-mute: oklch(0.55 0.03 265);
+  --gold:    oklch(0.85 0.14 85);
+
+  /* L2 — chem signature accent (lime) */
+  --chem: oklch(0.82 0.17 125);
+
+  /* L3 — chem 5-colour palette (themes.js: Reaction Atrium) */
+  --CATALYST: oklch(0.82 0.17 125);
+  --BOND:     oklch(0.62 0.16 125);
+  --DEEP:     oklch(0.35 0.10 130);
+  --REACTION: oklch(0.95 0.08 120);
+  --YIELD:    oklch(0.85 0.14 85);
+
+  --GOOD: oklch(0.78 0.17 145);
+  --BAD:  oklch(0.64 0.20 25);
+
+  --panel: var(--bg-2);
+  --mono: "JetBrains Mono", ui-monospace, monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:100%;height:100vh;overflow:hidden;background:var(--bg-0);color:var(--fg);
+  font-family:'Noto Sans SC',system-ui,sans-serif}
+.app{display:flex;height:100vh;width:100%}
+
+/* ── sidebar (200px) ── */
+.sidebar{width:200px;flex-shrink:0;height:100vh;
+  background:linear-gradient(180deg, var(--bg-2), var(--bg-1));
+  border-right:1px solid var(--line);
+  display:flex;flex-direction:column;gap:11px;padding:13px 13px 14px;overflow:hidden}
+.side-top{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.brand{display:flex;align-items:center;gap:8px}
+.brand-tag{font-family:var(--mono);font-size:9px;letter-spacing:1.5px;color:var(--BOND)}
+#langBtn{font-family:var(--mono);font-size:10px;font-weight:700;letter-spacing:1px;
+  padding:4px 9px;cursor:pointer;border:1px solid color-mix(in oklch, var(--chem) 45%, transparent);
+  background:color-mix(in oklch, var(--chem) 16%, transparent);color:var(--REACTION)}
+#langBtn:hover{background:color-mix(in oklch, var(--chem) 30%, transparent)}
+.mascot-wrap{display:flex;align-items:center;gap:9px;padding:6px 0 2px}
+.mascot-wrap svg{flex-shrink:0}
+.mascot-name{font-family:var(--mono);font-size:9px;letter-spacing:1px;color:var(--chem)}
+.mascot-line{font-size:9.5px;line-height:1.4;color:var(--fg-mute)}
+.side-title{font-family:var(--mono);font-weight:700;font-size:13px;line-height:1.25;
+  color:var(--REACTION);letter-spacing:0.4px}
+.side-sub{font-size:10px;line-height:1.5;color:var(--fg-dim)}
+.side-block-label{font-family:var(--mono);font-size:8px;letter-spacing:1.4px;
+  color:var(--chem);text-transform:uppercase;margin-bottom:5px}
+.side-obs{font-size:9.5px;line-height:1.5;color:var(--fg-dim)}
+.side-obs li{margin-bottom:5px;list-style:none;padding-left:11px;position:relative}
+.side-obs li::before{content:'';position:absolute;left:0;top:6px;width:4px;height:4px;background:var(--chem)}
+
+/* ── project route map (north-star anchor) ── */
+.route{display:flex;flex-direction:column;gap:5px}
+.route-stop{display:flex;align-items:center;gap:7px;font-size:9px;line-height:1.2;color:var(--fg-mute)}
+.route-dot{width:7px;height:7px;flex-shrink:0;border:1px solid var(--line-strong);background:transparent}
+.route-stop.done .route-dot{background:var(--BOND);border-color:var(--BOND)}
+.route-stop.here .route-dot{background:var(--chem);border-color:var(--chem);
+  box-shadow:0 0 0 3px color-mix(in oklch, var(--chem) 22%, transparent)}
+.route-stop.here{color:var(--REACTION);font-weight:700}
+.route-goal{display:flex;align-items:center;gap:7px;font-size:9px;color:var(--gold);margin-top:1px}
+.route-goal svg{flex-shrink:0}
+
+.side-hud{margin-top:auto;display:flex;flex-direction:column;gap:6px;
+  border-top:1px solid var(--line);padding-top:9px}
+.hud-row{display:flex;align-items:baseline;justify-content:space-between;gap:6px}
+.hud-l{font-family:var(--mono);font-size:8px;letter-spacing:1px;color:var(--fg-mute);text-transform:uppercase}
+.hud-v{font-family:var(--mono);font-size:13px;font-weight:700;color:var(--chem)}
+
+/* ── stage ── */
+#stage{flex:1;min-width:0;height:100vh;display:flex;flex-direction:column;position:relative}
+#cWrap{flex:1;min-height:0;position:relative;display:flex;flex-direction:column}
+canvas{display:block;width:100%;height:100%;position:absolute;inset:0}
+
+/* HUD top-right */
+.hud-top{position:absolute;top:10px;right:14px;z-index:5;text-align:right;
+  font-family:var(--mono);pointer-events:none}
+.hud-top .phase{font-size:11px;font-weight:700;letter-spacing:1px;color:var(--REACTION)}
+.hud-top .phase .seq{color:var(--fg-mute);margin-right:6px}
+.hud-top .quant{font-size:9.5px;letter-spacing:0.5px;color:var(--fg-dim);margin-top:3px}
+.hud-top .quant b{color:var(--chem)}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar">
+    <div class="side-top">
+      <div class="brand"><span class="brand-tag" id="sideTag">CHEM · M85</span></div>
+      <button id="langBtn">CN</button>
+    </div>
+
+    <!-- mascot: Ion -->
+    <div class="mascot-wrap">
+      <svg width="40" height="40" viewBox="0 0 40 40" aria-hidden="true">
+        <g id="ionSprite">
+          <circle cx="20" cy="20" r="6.5" fill="var(--BOND)" stroke="var(--chem)" stroke-width="1.4"/>
+          <circle cx="20" cy="20" r="13" fill="none" stroke="var(--chem)" stroke-width="1" opacity="0.5"/>
+          <circle cx="33" cy="20" r="2.6" fill="var(--REACTION)"/>
+          <circle cx="20" cy="7" r="2.6" fill="var(--YIELD)"/>
+          <circle cx="9" cy="27" r="2.6" fill="var(--CATALYST)"/>
+          <circle cx="20" cy="20" r="2" fill="var(--REACTION)"/>
+        </g>
+      </svg>
+      <div>
+        <div class="mascot-name">ION</div>
+        <div class="mascot-line" id="mascotLine"></div>
+      </div>
+    </div>
+
+    <div class="side-title" id="sTitle"></div>
+    <div class="side-sub" id="sIntro"></div>
+
+    <div>
+      <div class="side-block-label" id="sObsLabel"></div>
+      <ul class="side-obs" id="sObs"></ul>
+    </div>
+
+    <!-- project route map -->
+    <div>
+      <div class="side-block-label" id="sRouteLabel"></div>
+      <div class="route" id="route">
+        <div class="route-stop done"><span class="route-dot"></span><span id="rs1"></span></div>
+        <div class="route-stop done"><span class="route-dot"></span><span id="rs2"></span></div>
+        <div class="route-stop here"><span class="route-dot"></span><span id="rs3"></span></div>
+        <div class="route-stop"><span class="route-dot"></span><span id="rs4"></span></div>
+        <div class="route-goal">
+          <svg width="11" height="11" viewBox="0 0 11 11" aria-hidden="true">
+            <rect x="1" y="1" width="9" height="9" fill="none" stroke="var(--gold)" stroke-width="1"/>
+            <path d="M3 5.5 L5 7.5 L8 3.5" fill="none" stroke="var(--gold)" stroke-width="1.2"/>
+          </svg>
+          <span id="rsGoal"></span>
+        </div>
+      </div>
+    </div>
+
+    <div class="side-hud">
+      <div class="hud-row"><span class="hud-l" id="hL1"></span><span class="hud-v" id="hV1">--</span></div>
+      <div class="hud-row"><span class="hud-l" id="hL2"></span><span class="hud-v" id="hV2">--</span></div>
+      <div class="hud-row"><span class="hud-l" id="hL3"></span><span class="hud-v" id="hV3">--</span></div>
+    </div>
+  </aside>
+
+  <main id="stage">
+    <div class="hud-top">
+      <div class="phase"><span class="seq" id="hudSeq"></span><span id="hudPhase"></span></div>
+      <div class="quant" id="hudQuant"></div>
+    </div>
+    <div id="cWrap"><canvas id="c"></canvas></div>
+  </main>
+</div>
+
+<script>
+(function(){
+"use strict";
+var LANG='zh';
+
+/* ── canonical molecule library: RDKit-real Lipinski descriptors.
+   口径: RDKit Descriptors.MolWt / Crippen.MolLogP / NumHDonors / NumHAcceptors.
+   IDENTICAL numbers are used in the M85 game. 10 molecules, 7 pass / 3 fail.
+   thresholds: MW<=500, LogP<=5, HBD<=5, HBA<=10 ; overall pass = <=1 violation. ── */
+var MOLS=[
+  {name:'aspirin',      cn:'阿司匹林',   mw:180.2, logp:1.31,  hbd:1, hba:3 },
+  {name:'caffeine',     cn:'咖啡因',     mw:194.2, logp:-1.03, hbd:0, hba:3 },
+  {name:'paracetamol',  cn:'扑热息痛',   mw:151.2, logp:1.35,  hbd:2, hba:2 },
+  {name:'ibuprofen',    cn:'布洛芬',     mw:206.3, logp:3.07,  hbd:1, hba:1 },
+  {name:'warfarin',     cn:'华法林',     mw:308.3, logp:3.61,  hbd:1, hba:4 },
+  {name:'amoxicillin',  cn:'阿莫西林',   mw:365.4, logp:0.02,  hbd:4, hba:6 },
+  {name:'sildenafil',   cn:'西地那非',   mw:474.6, logp:1.61,  hbd:1, hba:7 },
+  {name:'atorvastatin', cn:'阿托伐他汀', mw:558.7, logp:6.31,  hbd:4, hba:4 },
+  {name:'telmisartan',  cn:'替米沙坦',   mw:500.6, logp:6.96,  hbd:1, hba:3 },
+  {name:'digoxin',      cn:'地高辛',     mw:780.9, logp:2.22,  hbd:6, hba:14}
+];
+/* four single rules; each returns true when the molecule PASSES that rule */
+var RULES=[
+  {key:'mw',   thr:500, val:function(m){return m.mw;},   pass:function(m){return m.mw<=500;},   labCN:'分子量 ≤ 500',  labEN:'MW ≤ 500',  fmt:function(v){return v.toFixed(1);}},
+  {key:'logp', thr:5,   val:function(m){return m.logp;}, pass:function(m){return m.logp<=5;},   labCN:'油水分 ≤ 5',   labEN:'LogP ≤ 5',  fmt:function(v){return v.toFixed(2);}},
+  {key:'hbd',  thr:5,   val:function(m){return m.hbd;},  pass:function(m){return m.hbd<=5;},    labCN:'给氢手 ≤ 5',   labEN:'HBD ≤ 5',   fmt:function(v){return String(v);}},
+  {key:'hba',  thr:10,  val:function(m){return m.hba;},  pass:function(m){return m.hba<=10;},   labCN:'接氢手 ≤ 10',  labEN:'HBA ≤ 10',  fmt:function(v){return String(v);}}
+];
+function violations(m,mwThr){
+  var v=0;
+  if(m.mw>(mwThr||500))v++;
+  if(m.logp>5)v++;
+  if(m.hbd>5)v++;
+  if(m.hba>10)v++;
+  return v;
+}
+function overallPass(m,mwThr){return violations(m,mwThr)<=1;}
+function singleRate(rule){
+  var n=0; for(var i=0;i<MOLS.length;i++) if(rule.pass(MOLS[i])) n++;
+  return Math.round(n/MOLS.length*100);
+}
+function overallRate(mwThr){
+  var n=0; for(var i=0;i<MOLS.length;i++) if(overallPass(MOLS[i],mwThr)) n++;
+  return Math.round(n/MOLS.length*100);
+}
+
+var I18N={
+  mascotLine:{en:'I bundle four numbers into one rule and grade the whole library at once.',cn:'我把四个数攒成一把尺子，一口气给整库分子打分。'},
+  sTitle:{en:'LIPINSKI RULE-OF-FIVE & WHOLE-LIBRARY PASS RATE',cn:'Lipinski 五规则 · 全库通过率'},
+  sIntro:{en:'Four thresholds you already learned — MW≤500, LogP≤5, HBD≤5, HBA≤10 — fused into one drug-likeness gate. First grade ten molecules; then sweep ONE rule across the whole library and read its pass rate; line up all four rates; finally combine them (≤1 violation) and watch the joint rate drop below every single rule.',
+          cn:'四道你已学过的门槛——分子量≤500、油水分≤5、给氢手≤5、接氢手≤10——合成一把「像不像药」的尺子。先给十个分子各打一遍；再拿一条规则扫过整库、读出它的通过率；把四条通过率并排摆出；最后四条合起来（最多违反一条），看联合通过率怎样掉到每条单规则之下。'},
+  sObsLabel:{en:'WATCH FOR',cn:'观察提示'},
+  obs1:{en:'A bar over the dashed line = breaks that threshold.',cn:'柱子越过虚线 = 违反那道门槛。'},
+  obs2:{en:'Pass rate = passing count / 10, shown as a %.',cn:'通过率 = 过关数 / 10，写成百分比。'},
+  obs3:{en:'Joining four rules makes the rate fall, never rise.',cn:'四条合一，通过率只会降、不会升。'},
+  sRouteLabel:{en:'PROJECT ROUTE',cn:'项目路线'},
+  rs1:{en:'four descriptors, one by one',cn:'四个描述符，逐个算过'},
+  rs2:{en:'read structure & properties',cn:'读结构·算属性'},
+  rs3:{en:'first screening rule (you)',cn:'第一套筛选规则 (你在这)'},
+  rs4:{en:'stack more filters into a funnel',cn:'叠成多层筛选漏斗'},
+  rsGoal:{en:'Monster-Hunter workbench',cn:'分子怪兽猎人工作台'},
+  hL1:{en:'GATE',cn:'当前门槛'},
+  hL2:{en:'PASS / TOTAL',cn:'过关 / 总数'},
+  hL3:{en:'PASS RATE',cn:'通过率'},
+  /* phase names */
+  pIntro:{en:'four thresholds on ten molecules',cn:'十个分子·四道门槛'},
+  pSingle:{en:'one rule sweeps the library',cn:'一条规则扫整库'},
+  pFour:{en:'four single-rule pass rates',cn:'四条单规则通过率'},
+  pJoint:{en:'join them — and tighten MW',cn:'四条合一·再收紧分子量'},
+  /* captions */
+  capIntro:{en:'WHY NOW — you spent four lessons computing MW, LogP, HBD and HBA one at a time. Lipinski fuses them into ONE drug-likeness gate: MW≤500, LogP≤5, HBD≤5, HBA≤10. Here are ten real drugs. A bar that pokes above its dashed threshold breaks that rule. Most stay under — but watch atorvastatin, telmisartan and digoxin overshoot.',
+           cn:'为什么现在学——你花了四节课分头算分子量、油水分、给氢手、接氢手。Lipinski 把它们攒成一把「像不像药」的尺子：分子量≤500、油水分≤5、给氢手≤5、接氢手≤10。这是十个真药。柱子顶过那道虚线门槛，就是违反这条规则。多数都压在线下——但盯住阿托伐他汀、替米沙坦、地高辛冲出了头。'},
+  capSingle:{en:'Now take ONE rule — MW≤500 — and run it across the whole library, molecule by molecule, like a class health check with one ruler. Seven of ten stay at or under 500 (green = pass); atorvastatin 558.7, telmisartan 500.6 and digoxin 780.9 break it (red). Passing 7 of 10 means this single rule’s whole-library pass rate is 70%.',
+            cn:'现在只拿一条规则——分子量≤500——一个一个扫过整库，就像用同一把尺子给全班做体检。十个里有七个压在 500 及以下（绿=过）；阿托伐他汀 558.7、替米沙坦 500.6、地高辛 780.9 顶破了（红）。十个过七个，这条单规则的全库通过率就是 70%。'},
+  capFour:{en:'Do the same sweep for each of the four rules and line up the pass rates: MW≤500 → 70%, LogP≤5 → 80%, HBD≤5 → 90%, HBA≤10 → 90%. Each bar answers one question — how strict is THIS gate on THIS library. MW is the toughest here; the two hydrogen-hand rules barely cut anyone. Four numbers, four single-rule report cards.',
+          cn:'对四条规则各扫一遍，把通过率并排摆出：分子量≤500 → 70%、油水分≤5 → 80%、给氢手≤5 → 90%、接氢手≤10 → 90%。每根条只回答一个问题——这道门槛对这一库有多严。这里分子量最狠；两条「氢手」规则几乎没刷掉谁。四个数，就是四张单规则体检表。'},
+  capJoint:{en:'CLOSER TO THE GOAL — now JOIN all four (a molecule passes overall if it breaks at most one rule). The joint pass rate is 70% — at or below the loosest single rule (HBD/HBA 90%), because clearing several gates at once is harder than clearing one. Then tighten just the MW gate from ≤500 to ≤450 and watch THAT rule’s own pass rate slide 70% → 60%: stricter gate, fewer pass. You just built the funnel’s first, coarsest gate — and felt it bite.',
+           cn:'离终点更近了——现在把四条合起来（一个分子最多违反一条才算整体通过）。联合通过率是 70%——不高于最松的那条单规则（给氢手/接氢手 90%），因为同时过好几道门槛比只过一道更难。再单把分子量门槛从 ≤500 收紧到 ≤450，看这条规则自己的通过率从 70% 滑到 60%：门槛越严，过的越少。你刚搭好的，正是筛选漏斗最上、最粗的第一道闸门——还亲眼看它咬下去。'},
+  /* misc labels */
+  lblPass:{en:'pass',cn:'过关'},
+  lblFail:{en:'break',cn:'违反'},
+  lblRate:{en:'pass rate',cn:'通过率'},
+  lblThr:{en:'threshold',cn:'门槛线'},
+  lblJoint:{en:'JOINED (≤1 violation)',cn:'四条合一 (违反≤1)'},
+  lblMw450:{en:'MW rule ≤500 → ≤450',cn:'分子量单规则 ≤500→≤450'},
+  lblLower:{en:'joint ≤ loosest single rule',cn:'联合 ≤ 最松单规则'},
+  gateMw:{en:'GATE: MW ≤ 500',cn:'当前门槛：分子量 ≤ 500'},
+  gateJoint:{en:'GATE: all four joined',cn:'当前门槛：四条合一'},
+  rateOf:{en:'{p}%',cn:'{p}%'}
+};
+function dkey(){return LANG==='zh'?'cn':'en';}
+function t(k){return(I18N[k]&&I18N[k][dkey()])||(I18N[k]&&I18N[k]['en'])||k;}
+
+/* resolve oklch palette tokens into concrete sRGB */
+var CSS={};
+function buildCSS(){
+  var cs=getComputedStyle(document.documentElement);
+  var names=['CATALYST','BOND','DEEP','REACTION','YIELD','chem','bg-0','bg-1','bg-2','bg-3','panel','GOOD','BAD','gold','fg','fg-dim','fg-mute'];
+  var pc=document.createElement('canvas');pc.width=1;pc.height=1;
+  var pctx=pc.getContext('2d');
+  names.forEach(function(n){
+    var raw=cs.getPropertyValue('--'+n).trim();
+    var key=n.replace(/-/g,'_');
+    pctx.clearRect(0,0,1,1);
+    pctx.fillStyle='#000';
+    pctx.fillStyle=raw;
+    pctx.fillRect(0,0,1,1);
+    var d=pctx.getImageData(0,0,1,1).data;
+    CSS[key]=[d[0],d[1],d[2]];
+  });
+}
+function rgba(nm,a){
+  var c=CSS[nm.replace(/-/g,'_')];
+  if(!c)return 'rgba(200,200,200,'+a+')';
+  return 'rgba('+c[0]+','+c[1]+','+c[2]+','+a+')';
+}
+
+var canvas=document.getElementById('c');
+var ctx=canvas.getContext('2d');
+var cWrap=document.getElementById('cWrap');
+var W=0,H=0,DPR=Math.min(window.devicePixelRatio||1,2);
+
+function resize(){
+  var rect=cWrap.getBoundingClientRect();
+  if(rect.width<1||rect.height<1)return;
+  W=rect.width;H=rect.height;
+  canvas.width=Math.round(W*DPR);canvas.height=Math.round(H*DPR);
+  canvas.style.width=W+'px';canvas.style.height=H+'px';
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+}
+
+function lerp(a,b,p){return a+(b-a)*p;}
+function clamp01(x){return x<0?0:x>1?1:x;}
+function easeInOut(x){return x<0.5?2*x*x:1-Math.pow(-2*x+2,2)/2;}
+function easeOut(x){return 1-Math.pow(1-x,3);}
+
+var NOW=0;
+/* timeline: 4 beats, continuous loop */
+var PHASES=[
+  {name:'pIntro',  cap:'capIntro',  dur:9.5},
+  {name:'pSingle', cap:'capSingle', dur:10.5},
+  {name:'pFour',   cap:'capFour',   dur:10.0},
+  {name:'pJoint',  cap:'capJoint',  dur:11.5}
+];
+var TOTAL=0;PHASES.forEach(function(p){TOTAL+=p.dur;});
+var startT=null;
+function phaseAt(tt){
+  var acc=0;
+  for(var i=0;i<PHASES.length;i++){
+    if(tt<acc+PHASES[i].dur){return {idx:i, local:(tt-acc)/PHASES[i].dur, abs:tt};}
+    acc+=PHASES[i].dur;
+  }
+  return {idx:PHASES.length-1, local:1, abs:tt};
+}
+
+/* ── chart region for the molecule bars ── */
+function chartRect(){
+  var bx=W*0.055, by=H*0.085;
+  var bw=W*0.89, bh=H*0.575;
+  return {x:bx,y:by,w:bw,h:bh};
+}
+function colX(i,n){
+  var b=chartRect();
+  var slot=b.w/n;
+  return b.x+slot*(i+0.5);
+}
+function barW(n){var b=chartRect();return Math.min(b.w/n*0.56, 64);}
+
+function drawBg(){
+  var grad=ctx.createLinearGradient(0,0,0,H);
+  grad.addColorStop(0,rgba('bg-1',1));
+  grad.addColorStop(1,rgba('bg-0',1));
+  ctx.fillStyle=grad;ctx.fillRect(0,0,W,H);
+  ctx.strokeStyle=rgba('chem',0.04);ctx.lineWidth=1;
+  var gs=48;
+  for(var gx=gs;gx<W;gx+=gs){ctx.beginPath();ctx.moveTo(gx,0);ctx.lineTo(gx,H);ctx.stroke();}
+  for(var gy=gs;gy<H;gy+=gs){ctx.beginPath();ctx.moveTo(0,gy);ctx.lineTo(W,gy);ctx.stroke();}
+}
+
+function roundRect(x,y,w,h,r){
+  r=Math.min(r,Math.abs(w)/2,Math.abs(h)/2);
+  ctx.beginPath();
+  ctx.moveTo(x+r,y);
+  ctx.arcTo(x+w,y,x+w,y+h,r);
+  ctx.arcTo(x+w,y+h,x,y+h,r);
+  ctx.arcTo(x,y+h,x,y,r);
+  ctx.arcTo(x,y,x+w,y,r);
+  ctx.closePath();
+}
+
+function tag(x,y,txt,col,alpha){
+  if(alpha<=0.02)return;
+  ctx.globalAlpha=alpha;
+  ctx.font='700 '+Math.max(10,Math.min(W*0.0112,15))+'px '+'"JetBrains Mono", ui-monospace, monospace';
+  ctx.textAlign='center';ctx.textBaseline='middle';
+  var tw=ctx.measureText(txt).width;
+  var padX=Math.max(6,W*0.008), bh=Math.max(16,W*0.022);
+  ctx.fillStyle=rgba('bg-0',0.85);
+  ctx.fillRect(x-tw/2-padX, y-bh/2, tw+padX*2, bh);
+  ctx.lineWidth=1.3;ctx.strokeStyle=rgba(col,0.7);
+  ctx.strokeRect(x-tw/2-padX, y-bh/2, tw+padX*2, bh);
+  ctx.fillStyle=rgba(col,0.97);
+  ctx.fillText(txt, x, y+1);
+  ctx.globalAlpha=1;
+}
+
+function molName(m){return LANG==='zh'?m.cn:m.name;}
+
+/* ── PHASE 0 & 1: per-molecule bars for a single rule (intro: rule index sweeps) ── */
+function drawLibraryBars(ph, ruleIdx, revealK, showFail){
+  var b=chartRect();
+  var n=MOLS.length;
+  var bw=barW(n);
+  var baseY=b.y+b.h;
+  var maxH=b.h*0.86;
+  var rule=RULES[ruleIdx];
+  /* scale: map each rule's value to 0..1 of maxH, with threshold at a fixed fraction */
+  var thrFrac=0.62; /* threshold sits 62% up the axis so failers can overshoot */
+  var maxVal=rule.thr/thrFrac;
+
+  /* axis */
+  ctx.globalAlpha=0.9;
+  ctx.strokeStyle=rgba('fg-dim',0.4);ctx.lineWidth=1.2;
+  ctx.beginPath();ctx.moveTo(b.x-6,baseY);ctx.lineTo(b.x+b.w,baseY);ctx.stroke();
+  ctx.globalAlpha=1;
+
+  /* threshold dashed line */
+  var ty=baseY-maxH*thrFrac;
+  ctx.strokeStyle=rgba('gold',0.9);ctx.lineWidth=2;
+  ctx.setLineDash([9,6]);
+  ctx.beginPath();ctx.moveTo(b.x-6,ty);ctx.lineTo(b.x+b.w,ty);ctx.stroke();ctx.setLineDash([]);
+  tag(b.x+Math.max(70,W*0.085), ty-Math.max(13,H*0.027),
+      (LANG==='zh'?rule.labCN:rule.labEN), 'gold', 0.96);
+
+  var passCount=0;
+  for(var i=0;i<n;i++){
+    var m=MOLS[i];
+    var cx=colX(i,n);
+    var x=cx-bw/2;
+    var v=rule.val(m);
+    var frac=clamp01(v/maxVal);
+    var hh=maxH*frac*easeOut(clamp01((revealK-i*0.06)));
+    var passes=rule.pass(m);
+    if(passes)passCount++;
+    var decided = showFail && (revealK>=i*0.06+0.4);
+    var col = !decided ? 'BOND' : (passes?'GOOD':'BAD');
+    var g0=ctx.createLinearGradient(x,baseY-hh,x,baseY);
+    g0.addColorStop(0,rgba(col,0.92));g0.addColorStop(1,rgba(col,0.40));
+    ctx.fillStyle=g0;roundRect(x,baseY-hh,bw,hh,5);ctx.fill();
+    ctx.lineWidth=decided&&!passes?2.2:1.4;ctx.strokeStyle=rgba(col,decided&&!passes?0.98:0.82);
+    roundRect(x,baseY-hh,bw,hh,5);ctx.stroke();
+
+    /* value on top */
+    if(hh>6){
+      ctx.fillStyle=rgba(decided?(passes?'GOOD':'BAD'):'REACTION',0.98);
+      ctx.font='700 '+Math.max(9,Math.min(W*0.0118,15))+'px "JetBrains Mono", ui-monospace, monospace';
+      ctx.textAlign='center';ctx.textBaseline='bottom';
+      ctx.fillText(rule.fmt(v), cx, baseY-hh-5);
+    }
+    /* name under axis */
+    ctx.fillStyle=rgba('fg-dim',0.9);
+    ctx.font='600 '+Math.max(8,Math.min(W*0.0098,13))+'px "Noto Sans SC", sans-serif';
+    ctx.textAlign='center';ctx.textBaseline='top';
+    ctx.fillText(molName(m), cx, baseY+8);
+  }
+
+  /* pass-rate readout (only when fully revealed in single-rule mode) */
+  if(showFail && revealK>=0.95){
+    var rate=Math.round(passCount/n*100);
+    var rx=b.x+b.w*0.5, ryy=b.y+b.h*0.07;
+    tag(rx, ryy, (LANG==='zh'?'通过率 ':'pass rate ')+passCount+' / '+n+' = '+rate+'%', 'chem', 1);
+  }
+  return passCount;
+}
+
+/* ── PHASE 2: four single-rule pass-rate bars ── */
+function drawFourRates(ph){
+  var b=chartRect();
+  var rates=RULES.map(singleRate);
+  var n=RULES.length;
+  var slot=b.w/n;
+  var bw=Math.min(slot*0.5,W*0.12);
+  var baseY=b.y+b.h;
+  var maxH=b.h*0.84;
+
+  /* axis + 0/50/100 */
+  ctx.strokeStyle=rgba('fg-dim',0.4);ctx.lineWidth=1.2;
+  ctx.beginPath();ctx.moveTo(b.x-6,baseY);ctx.lineTo(b.x+b.w,baseY);ctx.stroke();
+  ctx.font='400 '+Math.max(8,Math.min(W*0.0092,12))+'px "JetBrains Mono", ui-monospace, monospace';
+  ctx.textAlign='right';ctx.textBaseline='middle';
+  [0,50,100].forEach(function(v){
+    var yy=baseY-maxH*(v/100);
+    ctx.strokeStyle=rgba('fg-dim',0.16);ctx.lineWidth=1;ctx.setLineDash([3,4]);
+    ctx.beginPath();ctx.moveTo(b.x,yy);ctx.lineTo(b.x+b.w,yy);ctx.stroke();ctx.setLineDash([]);
+    ctx.fillStyle=rgba('fg-mute',0.8);ctx.fillText(v+'%', b.x-9, yy);
+  });
+
+  for(var i=0;i<n;i++){
+    var rule=RULES[i];
+    var cx=b.x+slot*(i+0.5);
+    var x=cx-bw/2;
+    var grow=easeOut(clamp01((ph.local-i*0.12)/0.4));
+    var hh=maxH*(rates[i]/100)*grow;
+    var col= rates[i]<=70 ? 'YIELD' : 'chem';
+    var g0=ctx.createLinearGradient(x,baseY-hh,x,baseY);
+    g0.addColorStop(0,rgba(col,0.92));g0.addColorStop(1,rgba(col,0.42));
+    ctx.fillStyle=g0;roundRect(x,baseY-hh,bw,hh,6);ctx.fill();
+    ctx.lineWidth=1.5;ctx.strokeStyle=rgba(col,0.86);roundRect(x,baseY-hh,bw,hh,6);ctx.stroke();
+    /* rate % on top */
+    if(grow>0.4){
+      ctx.fillStyle=rgba('REACTION',0.99);
+      ctx.font='700 '+Math.max(13,Math.min(W*0.02,26))+'px "JetBrains Mono", ui-monospace, monospace';
+      ctx.textAlign='center';ctx.textBaseline='bottom';
+      ctx.fillText(rates[i]+'%', cx, baseY-hh-7);
+    }
+    /* rule label under axis */
+    ctx.fillStyle=rgba('fg-dim',0.92);
+    ctx.font='600 '+Math.max(9,Math.min(W*0.0112,15))+'px "JetBrains Mono", ui-monospace, monospace';
+    ctx.textAlign='center';ctx.textBaseline='top';
+    ctx.fillText((LANG==='zh'?rule.labCN:rule.labEN), cx, baseY+9);
+  }
+  tag(b.x+b.w*0.5, b.y+b.h*0.05, (LANG==='zh'?'四条单规则·各自的全库通过率':'four single rules · whole-library pass rate'), 'chem', easeOut(clamp01((ph.local-0.05)/0.25)));
+}
+
+/* ── PHASE 3: joint pass rate (≤ loosest single), then tighten the MW single rule ── */
+function drawJoint(ph){
+  var b=chartRect();
+  /* three bars, all RDKit-consistent:
+     A loosest single rule (HBD/HBA 90%) — joint must sit at/below this
+     B joined gate @MW≤500 (≤1 violation) = 70%
+     C the MW single rule, animated from @500 (70%) down to @450 (60%) to show tightening */
+  var singles=RULES.map(singleRate);
+  var loosestSingle=Math.max.apply(null,singles);   // 90
+  var joint500=overallRate(500);                    // 70
+  var mwSingle500=singleRate(RULES[0]);             // 70 (MW<=500 alone)
+  var mwSingle450=Math.round((function(){var n=0;for(var i=0;i<MOLS.length;i++)if(MOLS[i].mw<=450)n++;return n;})()/MOLS.length*100); // 60
+  var lc=ph.local;
+  /* timeline within phase: 0-0.5 show loosest + joint; 0.5-1 tighten the MW single rule */
+  var tighten=easeInOut(clamp01((lc-0.5)/0.4));
+  var bars=[
+    {lab:(LANG==='zh'?'最松单规则':'loosest single'), val:loosestSingle, col:'chem', appear:0.0},
+    {lab:t('lblJoint'),  val:joint500, col:'YIELD', appear:0.18},
+    {lab:t('lblMw450'),  val:lerp(mwSingle500,mwSingle450,tighten), col:'BAD', appear:0.52, dyn:true}
+  ];
+  var n=bars.length;
+  var slot=b.w/n;
+  var bw=Math.min(slot*0.46,W*0.16);
+  var baseY=b.y+b.h;
+  var maxH=b.h*0.84;
+
+  ctx.strokeStyle=rgba('fg-dim',0.4);ctx.lineWidth=1.2;
+  ctx.beginPath();ctx.moveTo(b.x-6,baseY);ctx.lineTo(b.x+b.w,baseY);ctx.stroke();
+  ctx.font='400 '+Math.max(8,Math.min(W*0.0092,12))+'px "JetBrains Mono", ui-monospace, monospace';
+  ctx.textAlign='right';ctx.textBaseline='middle';
+  [0,50,100].forEach(function(v){
+    var yy=baseY-maxH*(v/100);
+    ctx.strokeStyle=rgba('fg-dim',0.16);ctx.lineWidth=1;ctx.setLineDash([3,4]);
+    ctx.beginPath();ctx.moveTo(b.x,yy);ctx.lineTo(b.x+b.w,yy);ctx.stroke();ctx.setLineDash([]);
+    ctx.fillStyle=rgba('fg-mute',0.8);ctx.fillText(v+'%', b.x-9, yy);
+  });
+  /* faint reference line at loosestSingle to show joint sits at/below it */
+  var refY=baseY-maxH*(loosestSingle/100);
+  ctx.strokeStyle=rgba('chem',0.30);ctx.lineWidth=1.4;ctx.setLineDash([5,5]);
+  ctx.beginPath();ctx.moveTo(b.x,refY);ctx.lineTo(b.x+b.w,refY);ctx.stroke();ctx.setLineDash([]);
+
+  for(var i=0;i<n;i++){
+    var bar=bars[i];
+    var cx=b.x+slot*(i+0.5);
+    var x=cx-bw/2;
+    var grow=easeOut(clamp01((lc-bar.appear)/0.3));
+    if(grow<=0.01)continue;
+    var hh=maxH*(bar.val/100)*grow;
+    var g0=ctx.createLinearGradient(x,baseY-hh,x,baseY);
+    g0.addColorStop(0,rgba(bar.col,0.92));g0.addColorStop(1,rgba(bar.col,0.42));
+    ctx.fillStyle=g0;roundRect(x,baseY-hh,bw,hh,6);ctx.fill();
+    ctx.lineWidth=1.6;ctx.strokeStyle=rgba(bar.col,0.88);roundRect(x,baseY-hh,bw,hh,6);ctx.stroke();
+    if(grow>0.5){
+      ctx.fillStyle=rgba('REACTION',0.99);
+      ctx.font='700 '+Math.max(14,Math.min(W*0.022,28))+'px "JetBrains Mono", ui-monospace, monospace';
+      ctx.textAlign='center';ctx.textBaseline='bottom';
+      ctx.fillText(Math.round(bar.val)+'%', cx, baseY-hh-7);
+    }
+    ctx.fillStyle=rgba('fg-dim',0.92);
+    ctx.font='600 '+Math.max(9,Math.min(W*0.0108,14))+'px "Noto Sans SC", sans-serif';
+    ctx.textAlign='center';ctx.textBaseline='top';
+    ctx.fillText(bar.lab, cx, baseY+9);
+  }
+  tag(b.x+b.w*0.5, b.y+b.h*0.05, t('lblLower'), 'chem', easeOut(clamp01((lc-0.2)/0.25)));
+  if(tighten>0.3){
+    tag(b.x+b.w*0.82, b.y+b.h*0.18, (LANG==='zh'?'门槛收紧 → 通过率下降':'tighten → rate drops'), 'BAD', easeOut(clamp01((tighten-0.3)/0.4)));
+  }
+}
+
+/* ── caption ── */
+function drawCaption(capKey, alpha){
+  if(alpha<=0.02)return;
+  ctx.globalAlpha=alpha;
+  ctx.textAlign='left';ctx.textBaseline='alphabetic';
+  ctx.font='500 '+Math.max(11,Math.min(W*0.0118,16))+'px '+"'Noto Sans SC', sans-serif";
+  var txt=t(capKey);
+  var maxW=W*0.90;
+  var words=txt.split('');
+  var lines=[],cur='';
+  for(var i=0;i<words.length;i++){
+    var test=cur+words[i];
+    if(ctx.measureText(test).width>maxW && cur.length>0){lines.push(cur);cur=words[i];}
+    else cur=test;
+  }
+  if(cur)lines.push(cur);
+  var lh=Math.max(17,Math.min(W*0.0185,23));
+  var pad=10;
+  var boxH=lines.length*lh+pad*2;
+  var boxY=H-12-boxH;
+  ctx.globalAlpha=alpha*0.85;
+  ctx.fillStyle=rgba('bg-0',0.93);
+  ctx.fillRect(W*0.045, boxY, W*0.91, boxH);
+  ctx.lineWidth=1;ctx.strokeStyle=rgba('chem',0.3*alpha);
+  ctx.strokeRect(W*0.045, boxY, W*0.91, boxH);
+  ctx.globalAlpha=alpha;
+  ctx.fillStyle=rgba('fg',0.96);
+  for(var j=0;j<lines.length;j++){
+    ctx.fillText(lines[j], W*0.045+pad, boxY+pad+lh*0.78+j*lh);
+  }
+  ctx.globalAlpha=1;
+}
+
+/* ── HUD ── */
+var lastHud={a:'',b:'',c:''};
+function updateHUD(ph){
+  var gate='--', pt='--', rate='--';
+  if(ph.idx===0){ gate=(LANG==='zh'?'四道门槛':'four gates'); pt='--'; rate='--'; }
+  else if(ph.idx===1){
+    var pc=0; for(var i=0;i<MOLS.length;i++) if(RULES[0].pass(MOLS[i])) pc++;
+    gate=(LANG==='zh'?'分子量 ≤ 500':'MW ≤ 500'); pt=pc+' / '+MOLS.length; rate=Math.round(pc/MOLS.length*100)+'%';
+  } else if(ph.idx===2){
+    gate=(LANG==='zh'?'四条单规则':'four singles'); pt='10 / '+'10'; rate=singleRate(RULES[0])+'~'+90+'%';
+  } else {
+    gate=(LANG==='zh'?'四条合一':'joined');
+    var jc=0; for(var k=0;k<MOLS.length;k++) if(overallPass(MOLS[k],500)) jc++;
+    pt=jc+' / '+MOLS.length; rate=overallRate(500)+'%';
+  }
+  if(gate!==lastHud.a){document.getElementById('hV1').textContent=gate;
+    document.getElementById('hV1').style.color=rgba('gold',1);lastHud.a=gate;}
+  if(pt!==lastHud.b){document.getElementById('hV2').textContent=pt;
+    document.getElementById('hV2').style.color=rgba('chem',1);lastHud.b=pt;}
+  if(rate!==lastHud.c){document.getElementById('hV3').textContent=rate;
+    document.getElementById('hV3').style.color=rgba('REACTION',1);lastHud.c=rate;}
+  document.getElementById('hudSeq').textContent=(ph.idx+1)+'/'+PHASES.length;
+  document.getElementById('hudPhase').textContent=t(PHASES[ph.idx].name);
+  var q;
+  if(ph.idx===0) q='10 '+(LANG==='zh'?'分子':'molecules')+' &nbsp; <b>3</b> '+(LANG==='zh'?'违规':'over');
+  else if(ph.idx===1) q='MW ≤ 500 &nbsp; <b>70%</b> '+(LANG==='zh'?'通过':'pass');
+  else if(ph.idx===2) q='MW <b>70</b> · LogP <b>80</b> · HBD <b>90</b> · HBA <b>90</b>';
+  else q=(LANG==='zh'?'合一 ':'joined ')+'<b>'+overallRate(500)+'%</b> &nbsp; '+(LANG==='zh'?'MW单规则 ':'MW rule ')+'<b>'+singleRate(RULES[0])+'%</b>→<b>60%</b>';
+  document.getElementById('hudQuant').innerHTML=q;
+}
+
+/* ── main loop ── */
+function frame(ts){
+  if(startT===null)startT=ts;
+  NOW=(ts-startT)/1000;
+  var elapsed=NOW%TOTAL;
+  if(W<1||H<1){resize();}
+  var ph=phaseAt(elapsed);
+
+  drawBg();
+  if(ph.idx===0){
+    /* intro: cycle the threshold rule slowly so all 4 appear, no fail colouring yet */
+    var ri=Math.floor(ph.local*4)%4;
+    drawLibraryBars(ph, ri, clamp01(ph.local*4 - ri + 0.3), false);
+  } else if(ph.idx===1){
+    drawLibraryBars(ph, 0, clamp01(ph.local/0.6), true);
+  } else if(ph.idx===2){
+    drawFourRates(ph);
+  } else {
+    drawJoint(ph);
+  }
+
+  var fadeIn=clamp01(ph.local/0.10);
+  var fadeOut=clamp01((1-ph.local)/0.10);
+  var capAlpha=Math.min(fadeIn,fadeOut);
+  drawCaption(PHASES[ph.idx].cap, Math.max(0.18,capAlpha));
+
+  updateHUD(ph);
+  requestAnimationFrame(frame);
+}
+
+function refreshI18N(){
+  document.getElementById('langBtn').textContent=(LANG==='zh')?'EN':'CN';
+  document.getElementById('mascotLine').textContent=t('mascotLine');
+  document.getElementById('sTitle').textContent=t('sTitle');
+  document.getElementById('sIntro').textContent=t('sIntro');
+  document.getElementById('sObsLabel').textContent=t('sObsLabel');
+  document.getElementById('sObs').innerHTML='<li>'+t('obs1')+'</li><li>'+t('obs2')+'</li><li>'+t('obs3')+'</li>';
+  document.getElementById('sRouteLabel').textContent=t('sRouteLabel');
+  document.getElementById('rs1').textContent=t('rs1');
+  document.getElementById('rs2').textContent=t('rs2');
+  document.getElementById('rs3').textContent=t('rs3');
+  document.getElementById('rs4').textContent=t('rs4');
+  document.getElementById('rsGoal').textContent=t('rsGoal');
+  document.getElementById('hL1').textContent=t('hL1');
+  document.getElementById('hL2').textContent=t('hL2');
+  document.getElementById('hL3').textContent=t('hL3');
+  lastHud={a:'',b:'',c:''};
+}
+
+document.getElementById('langBtn').addEventListener('click',function(){
+  LANG=(LANG==='zh')?'en':'zh';
+  refreshI18N();
+});
+window.addEventListener('resize',resize);
+
+buildCSS();
+refreshI18N();
+resize();
+setTimeout(resize,200);
+setTimeout(resize,600);
+if(document.fonts&&document.fonts.ready){document.fonts.ready.then(function(){resize();});}
+requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

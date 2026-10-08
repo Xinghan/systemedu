@@ -37,9 +37,9 @@ export function DiscoveryProjectCard({ entry, pulled, contextLineId }: { entry: 
   return (
     <article className={`${styles.projectCard} ${isMicro ? styles.microCard : ""} ${!entry.available ? styles.draftCard : ""}`} data-project-card={entry.id} data-line={entry.lineId} data-cross-field={contextLineId && contextLineId !== entry.lineId || undefined} data-kind={entry.kind} data-difficulty={entry.difficulty ?? (isMicro ? "light" : "unspecified")} data-available={entry.available}>
       <div className={`${styles.cardVisual} ${isMicro ? styles.microVisual : ""}`}>
-        {entry.coverImage && !responsiveCover.srcSet ? (
+        {entry.coverImage && !responsiveCover.srcSet && !coverFailed ? (
           // 保留生成原图，按卡片宽度压缩并延迟加载，避免同时下载多张原始 PNG。
-          <Image src={entry.coverImage} alt="" fill unoptimized={entry.preview} sizes="(max-width: 600px) calc(100vw - 32px), (max-width: 1000px) 45vw, 384px" className={styles.coverPhoto} />
+          <Image src={entry.coverImage} alt="" fill unoptimized={entry.preview} sizes="(max-width: 600px) calc(100vw - 32px), (max-width: 1000px) 45vw, 384px" className={styles.coverPhoto} onError={() => setCoverFailed(true)} />
         ) : (responsiveCover.srcSet || project?.cover_image_path) && !coverFailed ? (
             // 封面由现有内容服务提供，失败时回落到领域图形。
             // eslint-disable-next-line @next/next/no-img-element

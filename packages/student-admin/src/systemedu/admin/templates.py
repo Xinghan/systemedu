@@ -30,6 +30,7 @@ def _page(title: str, body: str, show_logout: bool = True) -> str:
                '<a href="/sysadmin">用户</a>'
                '<a href="/sysadmin/project-requests">项目申请</a>'
                '<a href="/sysadmin/invites">邀请码</a>'
+               '<a href="/sysadmin/invite-applications">邀请码申请</a>'
                '<a href="/sysadmin/logout">退出</a></span>')
     else:
         nav = ""
@@ -97,6 +98,19 @@ def invites_page(rows: list[dict]) -> str:
             f"{copy_block}"
             f"<table><tr><th>邀请码</th><th>批次</th><th>状态</th><th>手机号</th><th>用户名</th><th>使用时间</th></tr>{trs}</table>")
     return _page("邀请码", body)
+
+
+def invite_applications_page(rows: list[dict]) -> str:
+    """公开页提交的邀请码申请；只在管理员认证后的页面展示手机号。"""
+    trs = ""
+    for r in rows:
+        status = "待处理" if r["status"] == "pending" else r["status"]
+        trs += (f"<tr><td>{e(r['phone'])}</td><td>{e(status)}</td>"
+                f"<td>{e((r['created_at'] or '')[:19])}</td></tr>")
+    body = (f"<h2>邀请码申请 ({len(rows)})</h2>"
+            f"<div class='card'>用户通过公开页面留下的手机号；每个手机号仅保留一条申请。</div>"
+            f"<table><tr><th>手机号</th><th>状态</th><th>申请时间</th></tr>{trs}</table>")
+    return _page("邀请码申请", body)
 
 
 def detail_page(d: dict) -> str:

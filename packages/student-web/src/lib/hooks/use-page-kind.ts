@@ -38,7 +38,7 @@ export function usePageKind(): PageContext {
       return { page_kind: "home" }
     }
     // /learn/[slug]/[moduleId]
-    const ml = pathname.match(/^\/learn\/([^/]+)\/([^/?#]+)/)
+    const ml = pathname.match(/^\/learn\/([^/]+)\/(?:v2\/)?([^/?#]+)\/?$/)
     if (ml) return { page_kind: "learn", library_slug: ml[1], module_id: ml[2] }
     // /library/[slug]/[knode_id]
     const mlk = pathname.match(/^\/library\/([^/]+)\/([^/?#]+)/)

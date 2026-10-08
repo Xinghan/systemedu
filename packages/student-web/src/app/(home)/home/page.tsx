@@ -1,6 +1,7 @@
 "use client"
 
 import Link from "next/link"
+import { lessonPath } from "@/lib/course-numbering"
 import { useRouter } from "next/navigation"
 import { useEffect, useState } from "react"
 import { toast } from "sonner"
@@ -343,7 +344,7 @@ function ProjectCard({ project: p, done }: { project: MyProjectItem; done: numbe
           ) : (
             <div style={{ display: "flex", gap: 8 }}>
               <Link
-                href={`/learn/${encodeURIComponent(p.slug)}/${encodeURIComponent(nextModuleId)}`}
+                href={lessonPath(p.slug, nextModuleId)}
                 className="btn btn-primary btn-sm"
                 style={{ flex: 1, justifyContent: "center" }}
                 onClick={(e) => e.stopPropagation()}

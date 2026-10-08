@@ -93,12 +93,11 @@ const COPY = {
     // 项目一行例子 (好奇心节内)
     projEyebrow: "实验室",
 
-    // How / CTA
     howEyebrow: "怎么运转",
     howTitle: "一个项目是怎么活起来的",
     ctaTitle: "准备好造点真东西了吗?",
-    ctaBody: "免费注册, 加入你的第一个项目。AI agent 全程陪你。",
-    ctaStart: "免费开始",
+    ctaBody: "内测开放申请中。留下手机号，收到邀请码后就能开始你的第一个项目。",
+    ctaStart: "申请邀请码",
     footTagline:
       "AI Agent 驱动的项目制学习平台。给 10–18 岁的造物者做工业级真实项目, AI 导师全程苏格拉底式陪伴。",
   },
@@ -153,8 +152,8 @@ const COPY = {
     howEyebrow: "How it works",
     howTitle: "How a project comes to life",
     ctaTitle: "Ready to build a real thing?",
-    ctaBody: "Sign up free and add your first project. The AI agent is with you the whole way.",
-    ctaStart: "Start free",
+    ctaBody: "Beta applications are open. Leave your phone number and start your first project once you receive an invite.",
+    ctaStart: "Request an invite",
     footTagline:
       "An AI-agent-driven, project-based learning platform. Industry-grade real projects for builders aged 10–18, with a Socratic AI tutor by your side.",
   },
@@ -231,7 +230,7 @@ export default function Homepage() {
             {projectCount != null ? t.heroSubtitle(projectCount) : t.heroSubtitleFallback}
           </p>
           <div style={{ display: "flex", gap: 12, marginTop: 30, justifyContent: "center" }}>
-            <Link href={loggedIn ? "/home" : "/login"} className="btn btn-violet btn-lg">
+            <Link href={loggedIn ? "/home" : "/apply-invite"} className="btn btn-violet btn-lg">
               {loggedIn ? t.ctaDash : t.ctaStart}
               <ArrowRight size={15} strokeWidth={1.5} />
             </Link>
@@ -408,7 +407,7 @@ export default function Homepage() {
             {t.ctaBody}
           </p>
           <div style={{ display: "flex", gap: 12, marginTop: 30, justifyContent: "center" }}>
-            <Link href={loggedIn ? "/home" : "/login"} className="btn btn-violet btn-lg">
+            <Link href={loggedIn ? "/home" : "/apply-invite"} className="btn btn-violet btn-lg">
               {loggedIn ? t.ctaDash : t.ctaStart}
               <ArrowRight size={15} strokeWidth={1.5} />
             </Link>

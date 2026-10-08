@@ -1,0 +1,550 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=1280, height=800">
+<title>加权综合排名器 — Top10</title>
+<style>
+:root{
+  /* 第1层 — 共享深空底 (26套统一, 不换) */
+  --bg-0: oklch(0.14 0.035 265);
+  --bg-1: oklch(0.18 0.04 265);
+  --bg-2: oklch(0.22 0.045 265);
+  --bg-3: oklch(0.28 0.05 265);
+  --line: oklch(0.35 0.05 265 / 0.35);
+  --line-strong: oklch(0.55 0.08 265 / 0.55);
+  --fg: oklch(0.96 0.01 265);
+  --fg-dim: oklch(0.75 0.02 265);
+  --fg-mute: oklch(0.55 0.03 265);
+  --gold: oklch(0.85 0.14 85);
+  /* 第2层 — math signature accent */
+  --math: oklch(0.72 0.17 245);
+  /* 第3层 — math 5色 palette (themes.js #06) — 给被排序的5个分子上色 */
+  --AXIS: oklch(0.72 0.17 245);
+  --PROOF: oklch(0.52 0.16 245);
+  --SHADOW: oklch(0.35 0.10 245);
+  --SOLUTION: oklch(0.92 0.08 240);
+  --QED: oklch(0.85 0.14 85);
+  /* 5 个分子专用色 (取自 palette + 邻近 hue 派生, 用于多类数据可视化) */
+  --m-asp: oklch(0.78 0.15 245);
+  --m-caf: oklch(0.74 0.15 200);
+  --m-ibu: oklch(0.74 0.16 295);
+  --m-par: oklch(0.78 0.14 160);
+  --m-dia: oklch(0.72 0.15 30);
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+html,body{width:1280px;height:800px;overflow:hidden;}
+body{
+  background:var(--bg-0); color:var(--fg);
+  font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;
+  display:flex;
+}
+.mono{font-family:"JetBrains Mono","SF Mono",Consolas,monospace;}
+
+/* ---------- sidebar ---------- */
+.sidebar{
+  width:200px; height:800px; flex:0 0 200px;
+  background:var(--bg-1); border-right:1px solid var(--line);
+  display:flex; flex-direction:column; padding:16px 14px;
+}
+.brand{font-size:13px; font-weight:700; letter-spacing:.5px; color:var(--fg);}
+.brand .sub{display:block; font-size:9px; color:var(--math); margin-top:3px; letter-spacing:1px;}
+.mascot-wrap{margin:14px auto 6px; width:84px; height:84px;}
+.mascot-name{text-align:center; font-size:9px; color:var(--fg-mute); letter-spacing:1px;}
+.route{margin-top:14px;}
+.route-title{font-size:9px; color:var(--fg-mute); letter-spacing:1px; margin-bottom:8px;}
+.route-step{display:flex; align-items:center; gap:7px; margin-bottom:7px; font-size:9.5px; color:var(--fg-mute);}
+.route-step .dot{width:8px; height:8px; border-radius:50%; background:var(--bg-3); flex:0 0 8px; border:1px solid var(--line);}
+.route-step.here{color:var(--fg);}
+.route-step.here .dot{background:var(--math); border-color:var(--math); box-shadow:0 0 0 3px oklch(0.72 0.17 245 / 0.25);}
+.route-step.done .dot{background:var(--PROOF); border-color:var(--PROOF);}
+.guide{margin-top:auto; padding-top:12px;}
+.guide-title{font-size:9px; color:var(--fg-mute); letter-spacing:1px; margin-bottom:7px;}
+.guide-item{font-size:9.5px; color:var(--fg-dim); line-height:1.5; margin-bottom:6px; display:flex; gap:6px;}
+.guide-item .gi{color:var(--math); font-weight:700;}
+.lang-btn{
+  margin-top:12px; width:100%; padding:7px 0; cursor:pointer;
+  background:var(--bg-2); color:var(--fg); border:1px solid var(--line-strong);
+  border-radius:6px; font-size:11px; font-weight:600; letter-spacing:1px;
+}
+.lang-btn:hover{border-color:var(--math); color:var(--math);}
+
+/* ---------- stage ---------- */
+.stage{flex:1; position:relative; height:800px;}
+.hud{position:absolute; top:14px; right:18px; text-align:right; z-index:5;}
+.hud .phase{font-size:11px; color:var(--math); letter-spacing:1px; font-weight:700;}
+.hud .metric{font-size:10px; color:var(--fg-dim); margin-top:3px;}
+.hud .metric b{color:var(--fg);}
+.endgoal{
+  position:absolute; bottom:14px; right:18px; z-index:5;
+  display:flex; align-items:center; gap:8px;
+  font-size:9.5px; color:var(--fg-mute); max-width:230px; text-align:right;
+}
+.subcue{
+  position:absolute; left:50%; bottom:22px; transform:translateX(-50%);
+  z-index:6; text-align:center; max-width:760px; padding:0 20px;
+}
+.subcue .c{font-size:14px; color:var(--fg); line-height:1.5; font-weight:500;}
+.subcue .ck{color:var(--gold);}
+svg{display:block;}
+.stage-title{position:absolute; top:14px; left:24px; z-index:5; font-size:12px; color:var(--fg-dim); letter-spacing:.5px;}
+.stage-title b{color:var(--fg);}
+</style>
+</head>
+<body>
+<div class="sidebar">
+  <div class="brand">分子怪兽猎人
+    <span class="sub mono">MMH · M87</span>
+  </div>
+  <div class="mascot-wrap">
+    <!-- mascot: Pi — 旋转四面体, math palette 配色 -->
+    <svg viewBox="0 0 84 84" width="84" height="84" aria-hidden="true">
+      <g id="mascot-g">
+        <polygon points="42,10 70,62 14,62" fill="none" stroke="var(--AXIS)" stroke-width="2"/>
+        <polygon points="42,10 70,62 42,44" fill="var(--PROOF)" opacity="0.55"/>
+        <polygon points="42,10 14,62 42,44" fill="var(--SHADOW)" opacity="0.7"/>
+        <polygon points="14,62 70,62 42,44" fill="var(--AXIS)" opacity="0.35"/>
+        <circle cx="42" cy="40" r="4.5" fill="var(--QED)">
+          <animate attributeName="r" values="4.5;6;4.5" dur="2.4s" repeatCount="indefinite"/>
+        </circle>
+        <text class="mono" x="42" y="76" text-anchor="middle" font-size="8" fill="var(--fg-mute)">SUM</text>
+      </g>
+    </svg>
+  </div>
+  <div class="mascot-name mono">Pi</div>
+
+  <div class="route">
+    <div class="route-title" data-i18n="routeTitle">第五关 · 路线</div>
+    <div class="route-step done"><span class="dot"></span><span data-i18n="r1">单项打分</span></div>
+    <div class="route-step done"><span class="dot"></span><span data-i18n="r2">多层漏斗筛</span></div>
+    <div class="route-step here"><span class="dot"></span><span data-i18n="r3">加权排名 Top10</span></div>
+    <div class="route-step"><span class="dot"></span><span data-i18n="r4">查近亲补多样</span></div>
+    <div class="route-step"><span class="dot"></span><span data-i18n="r5">出 go/no-go 报告</span></div>
+  </div>
+
+  <div class="guide">
+    <div class="guide-title" data-i18n="guideTitle">看点</div>
+    <div class="guide-item"><span class="gi">1</span><span data-i18n="g1">四把尺子先压成同一把</span></div>
+    <div class="guide-item"><span class="gi">2</span><span data-i18n="g2">按权重合成一个总分</span></div>
+    <div class="guide-item"><span class="gi">3</span><span data-i18n="g3">拖权重 · 榜单当场洗牌</span></div>
+    <button class="lang-btn mono" id="langBtn">EN</button>
+  </div>
+</div>
+
+<div class="stage">
+  <div class="stage-title" data-i18n="stageTitle">加权综合排名器 — 把 <b>四项分数</b> 合成一个总分, 排出 Top</div>
+  <div class="hud">
+    <div class="phase mono" id="hudPhase">PHASE</div>
+    <div class="metric mono" id="hudMetric"></div>
+  </div>
+  <div class="endgoal">
+    <svg viewBox="0 0 22 22" width="20" height="20" aria-hidden="true">
+      <rect x="2" y="2" width="18" height="18" rx="3" fill="none" stroke="var(--gold)" stroke-width="1.4"/>
+      <text class="mono" x="11" y="15" text-anchor="middle" font-size="10" fill="var(--gold)">10</text>
+    </svg>
+    <span data-i18n="endgoal">终点: 从几千个分子里替你筛出最值得试的前十名</span>
+  </div>
+
+  <svg id="scene" viewBox="0 0 1080 800" width="1080" height="800"></svg>
+
+  <div class="subcue"><div class="c" id="subcue"></div></div>
+</div>
+
+<script>
+"use strict";
+(function(){
+const SVG="http://www.w3.org/2000/svg";
+const scene=document.getElementById("scene");
+
+/* ---------- 数据: 5 个真实分子, 全部来自 RDKit 真值 ----------
+   logS 用 ESOL/Delaney 公式, TPSA/logP/MW/HBD/HBA/Lipinski viol 全 RDKit。
+   四项归一化分(0-1) 由 anim 公开的归一化公式从这些真值算得, 与脚本完全一致。 */
+const MOLS=[
+  {id:"asp", name:"Aspirin",     cn:"阿司匹林", col:"var(--m-asp)",
+   logS:-1.99, tpsa:63.6, logP:1.31, viol:0, mw:180.2,
+   SOL:0.50, TOX:0.64, ACT:0.52, LIP:1.00},
+  {id:"caf", name:"Caffeine",    cn:"咖啡因",   col:"var(--m-caf)",
+   logS:-0.87, tpsa:61.8, logP:-1.03, viol:0, mw:194.2,
+   SOL:0.78, TOX:0.62, ACT:0.00, LIP:1.00},
+  {id:"ibu", name:"Ibuprofen",   cn:"布洛芬",   col:"var(--m-ibu)",
+   logS:-3.09, tpsa:37.3, logP:3.07, viol:0, mw:206.3,
+   SOL:0.23, TOX:0.37, ACT:0.77, LIP:1.00},
+  {id:"par", name:"Paracetamol", cn:"对乙酰氨基酚", col:"var(--m-par)",
+   logS:-1.97, tpsa:49.3, logP:1.35, viol:0, mw:151.2,
+   SOL:0.51, TOX:0.49, ACT:0.54, LIP:1.00},
+  {id:"dia", name:"Diazepam",    cn:"地西泮",   col:"var(--m-dia)",
+   logS:-3.97, tpsa:32.7, logP:3.15, viol:0, mw:284.7,
+   SOL:0.01, TOX:0.33, ACT:0.74, LIP:1.00},
+];
+const COLS=[
+  {k:"SOL", cn:"溶解度", en:"Solubility", raw:m=>m.logS.toFixed(2), rawu:"logS"},
+  {k:"TOX", cn:"安全",   en:"Safety",     raw:m=>m.tpsa.toFixed(0), rawu:"TPSA"},
+  {k:"ACT", cn:"活性",   en:"Activity",   raw:m=>m.logP.toFixed(2), rawu:"logP"},
+  {k:"LIP", cn:"Lipinski",cn2:"门槛", en:"Lipinski", raw:m=>m.viol+"/4", rawu:"viol"},
+];
+/* 三套权重 — 全部能复算, 来自 _calc_reorder.py */
+const W_DEF ={SOL:0.30,TOX:0.30,ACT:0.20,LIP:0.20};
+const W_ACT ={SOL:0.10,TOX:0.10,ACT:0.70,LIP:0.10};
+function total(m,W){return W.SOL*m.SOL+W.TOX*m.TOX+W.ACT*m.ACT+W.LIP*m.LIP;}
+
+/* ---------- i18n ---------- */
+const I18N={
+  cn:{
+    routeTitle:"第五关 · 路线", r1:"单项打分", r2:"多层漏斗筛", r3:"加权排名 Top10",
+    r4:"查近亲补多样", r5:"出 go/no-go 报告",
+    guideTitle:"看点", g1:"四把尺子先压成同一把", g2:"按权重合成一个总分", g3:"拖权重 · 榜单当场洗牌",
+    stageTitle:"加权综合排名器 — 把 <b>四项分数</b> 合成一个总分, 排出 Top",
+    endgoal:"终点: 从几千个分子里替你筛出最值得试的前十名",
+    p:["原始分","归一化","加权","排名","调权重"],
+    metricRaw:"四列原始分 · 量级方向都不同",
+    metricNorm:"四列都压进 0~1 · 越接近 1 越好",
+    metricWeight:"权重 溶0.30 安0.30 活0.20 门0.20",
+    metricRank:"按总分从高到低排队",
+    metricReorder:"活性权重 → 0.70",
+    cue:[
+      "漏斗只会扔/留, 留下这一锅分子<span class='ck'>还没排过序</span>。想让工作台说出'最值得先试这个', 得给它们算一个总分。",
+      "可这四列分数<span class='ck'>各说各话</span>: 溶解度 logS 在负几、安全用 TPSA 在几十、活性 logP 有正有负, 量级方向全不同, 硬加只会让大的那项说了算。",
+      "第一步<span class='ck'>归一化</span>: 不管原来什么范围方向, 每一列都换算成同一把尺子 — 都压进 0 到 1, 越接近 1 越好, 这下四列才真的能比、能加。",
+      "第二步<span class='ck'>加权</span>: 它们一样重要吗? 通常不。给每项配一个权重, 重的乘大数、轻的乘小数 — 这装的是<span class='ck'>你的判断</span>。",
+      "把'归一化分 × 权重'四项<span class='ck'>加起来</span>, 每个分子得到一个总分。同一锅分子, 第一次长出了能比高下的<span class='ck'>一个数</span>。",
+      "按总分从高到低<span class='ck'>排队</span> — 工作台第一次能开口: 最值得先试的就是它。盖上金印, 这就是这一节交付的 <span class='ck'>Top 榜单</span>。",
+      "权重不是死的: 把<span class='ck'>活性</span>调到 0.70 看看 — 总分实时重算, 榜单当场<span class='ck'>洗牌</span>。布洛芬蹿到第一。",
+      "<span class='ck'>权重就是你的偏好</span>: 你看重什么, 榜单就替你把什么排在前面。排名这根脊梁立起来, 工作台离'替你筛出前十名'又近了一大步。"
+    ]
+  },
+  en:{
+    routeTitle:"Stage 5 · route", r1:"per-score", r2:"funnel filter", r3:"weighted rank Top10",
+    r4:"check look-alikes", r5:"go/no-go report",
+    guideTitle:"watch", g1:"squeeze 4 rulers into one", g2:"weighted into one total", g3:"drag weight · reshuffle",
+    stageTitle:"Weighted ranker — fuse <b>four scores</b> into one total, rank the Top",
+    endgoal:"goal: pick the top ten worth trying out of thousands",
+    p:["RAW","NORMALIZE","WEIGHT","RANK","REWEIGHT"],
+    metricRaw:"4 raw cols · different scale & sign",
+    metricNorm:"all squeezed to 0~1 · 1 = best",
+    metricWeight:"w  sol.30 saf.30 act.20 lip.20",
+    metricRank:"sort by total, high to low",
+    metricReorder:"activity weight -> 0.70",
+    cue:[
+      "The funnel only drops/keeps; the survivors are <span class='ck'>still unranked</span>. To say 'try this one first', the bench needs one total score.",
+      "But the four columns <span class='ck'>speak different languages</span>: solubility logS is negative, safety TPSA is tens, activity logP is +/-. Just adding lets the biggest one win.",
+      "Step 1 <span class='ck'>normalize</span>: whatever the range or sign, map every column onto one ruler — all to 0..1, closer to 1 is better. Now they're comparable and addable.",
+      "Step 2 <span class='ck'>weight</span>: are they equally important? Usually not. Give each a weight, heavy ones a big number — this carries <span class='ck'>your judgement</span>.",
+      "<span class='ck'>Add up</span> the four 'norm score x weight'. Each molecule gets one total. The same batch finally grows <span class='ck'>one number</span> you can rank by.",
+      "Sort by total, high to low — the bench can finally speak: this one is most worth trying. Stamp it gold — the <span class='ck'>Top list</span> this lesson delivers.",
+      "Weights aren't fixed: push <span class='ck'>activity</span> to 0.70 — totals recompute live and the list <span class='ck'>reshuffles</span>. Ibuprofen jumps to #1.",
+      "<span class='ck'>Weights are your preference</span>: rank what you value first. With this ranking spine standing, the bench is much closer to 'pick the top ten for you'."
+    ]
+  }
+};
+let LANG="cn";
+
+/* ---------- 布局常量 ---------- */
+const COLX=[300,440,580,720];      // 四列原始/归一 x 中心
+const ROW_Y0=190, ROW_H=72;        // 行起点 + 行距
+const NAMEX=110;                    // 分子名 x
+const BAR_W=92, BAR_H=18;          // 分数色条
+const TOTX=920;                     // 总分条 x
+const TOT_MAXW=120;
+
+function el(tag,attrs,parent){
+  const e=document.createElementNS(SVG,tag);
+  for(const k in attrs) e.setAttribute(k,attrs[k]);
+  (parent||scene).appendChild(e); return e;
+}
+function clearScene(){ while(scene.firstChild) scene.removeChild(scene.firstChild); }
+
+/* ---------- 持久状态: 每个分子一个 row 对象 ----------
+   row 包含 4 个分项色条(rect) + 总分条 + 名称, 全程复用同一批 DOM, 实现"同一对象连续演化" */
+let rows=[];   // {mol, g, name, raw[4], bars[4], totRect, totTxt, rankTxt, y}
+let headerG=null, colHdr=[], weightG=null, weightBoxes=[];
+
+function buildStaticTable(){
+  clearScene();
+  rows=[]; colHdr=[]; weightBoxes=[];
+  // 列表头
+  headerG=el("g",{});
+  for(let c=0;c<4;c++){
+    const t=el("text",{x:COLX[c],y:150,"text-anchor":"middle","font-size":13,
+      fill:"var(--fg-dim)",class:"mono"},headerG);
+    colHdr.push(t);
+  }
+  el("text",{x:TOTX,y:150,"text-anchor":"middle","font-size":13,fill:"var(--gold)",class:"mono"},headerG)
+    .textContent="TOTAL";
+  // 权重行 (初始隐藏)
+  weightG=el("g",{opacity:0});
+  for(let c=0;c<4;c++){
+    const bx=el("rect",{x:COLX[c]-30,y:108,width:60,height:24,rx:5,
+      fill:"var(--bg-2)",stroke:"var(--math)","stroke-width":1.2},weightG);
+    const tt=el("text",{x:COLX[c],y:124,"text-anchor":"middle","font-size":12,
+      fill:"var(--math)",class:"mono"},weightG);
+    weightBoxes.push({box:bx,txt:tt});
+  }
+  el("text",{x:140,y:124,"text-anchor":"end","font-size":11,fill:"var(--fg-mute)",class:"mono"},weightG)
+    .textContent="weight";
+
+  // 每个分子一行
+  MOLS.forEach((m,i)=>{
+    const y=ROW_Y0+i*ROW_H;
+    const g=el("g",{transform:`translate(0,0)`,"data-id":m.id});
+    // 名次徽
+    const rankTxt=el("text",{x:36,y:y+6,"text-anchor":"middle","font-size":15,
+      fill:"var(--fg-mute)",class:"mono",opacity:0},g);
+    // 分子小图标 (六边环代表分子)
+    el("circle",{cx:NAMEX-66,cy:y,r:9,fill:"none",stroke:m.col,"stroke-width":2},g);
+    el("circle",{cx:NAMEX-66,cy:y,r:3.5,fill:m.col},g);
+    // 分子名
+    const nameEl=el("text",{x:NAMEX-48,y:y+5,"font-size":13,fill:"var(--fg)"},g);
+    nameEl.textContent=m.cn;
+    // 四列分数: 底槽 + 分数条 + raw 文本
+    const bars=[], raws=[];
+    for(let c=0;c<4;c++){
+      const x0=COLX[c]-BAR_W/2;
+      el("rect",{x:x0,y:y-BAR_H/2,width:BAR_W,height:BAR_H,rx:4,
+        fill:"var(--bg-2)",stroke:"var(--line)","stroke-width":1},g);
+      const bar=el("rect",{x:x0,y:y-BAR_H/2,width:0,height:BAR_H,rx:4,
+        fill:m.col,opacity:0.85},g);
+      const rtxt=el("text",{x:COLX[c],y:y+4,"text-anchor":"middle","font-size":11,
+        fill:"var(--fg)",class:"mono"},g);
+      bars.push(bar); raws.push(rtxt);
+    }
+    // 总分条
+    el("rect",{x:TOTX-TOT_MAXW/2,y:y-11,width:TOT_MAXW,height:22,rx:5,
+      fill:"var(--bg-2)",stroke:"var(--line)","stroke-width":1,opacity:0},g);
+    const totRect=el("rect",{x:TOTX-TOT_MAXW/2,y:y-11,width:0,height:22,rx:5,
+      fill:"var(--gold)",opacity:0},g);
+    const totTxt=el("text",{x:TOTX,y:y+5,"text-anchor":"middle","font-size":13,
+      fill:"var(--bg-0)",class:"mono",opacity:0,"font-weight":"700"},g);
+    rows.push({mol:m,g,name:nameEl,bars,raws,totRect,totTxt,rankTxt,baseY:y,curY:y});
+  });
+}
+
+/* ---------- 渐变工具 ---------- */
+function lerp(a,b,t){return a+(b-a)*t;}
+function easeOut(t){return 1-Math.pow(1-t,3);}
+function easeInOut(t){return t<0.5?4*t*t*t:1-Math.pow(-2*t+2,3)/2;}
+
+/* ====== 阶段控制 ====== */
+const PHASE_DUR=[3600,4600,4400,4600,5200];   // 5 阶段时长(ms): raw/norm/weight/rank/reorder
+let t0=performance.now(), phase=0, phaseStart=0;
+
+function setSub(i){ document.getElementById("subcue").innerHTML=I18N[LANG].cue[i]; }
+function setHud(pname,metric){
+  document.getElementById("hudPhase").textContent=pname;
+  document.getElementById("hudMetric").innerHTML=metric;
+}
+
+/* 当前显示状态由 phase + 本阶段进度 p 共同决定 — 同一张表持续被改写 */
+function render(now){
+  const t=now-t0;
+  // 计算当前 phase 与阶段内进度
+  let acc=0, ph=0;
+  for(let i=0;i<PHASE_DUR.length;i++){ if(t<acc+PHASE_DUR[i]){ph=i;break;} acc+=PHASE_DUR[i]; if(i===PHASE_DUR.length-1) ph=i; }
+  const local=Math.min(1,(t-acc)/PHASE_DUR[ph]);
+  if(ph!==phase){ phase=ph; onPhaseEnter(ph); }
+
+  // 子提示: raw 用 cue0+1, norm cue2, weight cue3, rank cue4+5, reorder cue6+7
+  // 列表头文本随阶段切 raw单位 / 归一标签
+  const I=I18N[LANG];
+  const normMode = ph>=1;                  // 是否进入归一化展示
+  for(let c=0;c<4;c++){
+    const col=COLS[c];
+    colHdr[c].textContent = normMode ? (LANG==="cn"?col.cn:col.en) : col.rawu;
+  }
+
+  // ---- 各分子行渲染 ----
+  rows.forEach((r,i)=>{
+    const m=r.mol;
+    // 1) 名称 + 图标始终在
+    r.name.textContent = LANG==="cn"?m.cn:m.name;
+
+    // 2) 四列分数条
+    for(let c=0;c<4;c++){
+      const col=COLS[c]; const key=col.k;
+      const x0=COLX[c]-BAR_W/2;
+      let frac;      // 条占比 0..1
+      let label;     // 文本
+      if(ph===0){
+        // 原始分: 条长 = 各列在本列 min..max 内的相对位置(纯视觉, 强调"各说各话")
+        const vals=MOLS.map(mm=>rawNum(mm,key));
+        const lo=Math.min(...vals), hi=Math.max(...vals);
+        frac = hi>lo ? (rawNum(m,key)-lo)/(hi-lo) : 0.5;
+        // 第一阶段把条逐渐画出
+        frac*=easeOut(local);
+        label = col.raw(m);
+        r.bars[c].setAttribute("fill", m.col);
+        r.bars[c].setAttribute("opacity",0.55);
+        r.raws[c].setAttribute("fill","var(--fg-dim)");
+      } else {
+        // 归一化后: 条长 = 归一分 (0..1), 文本切成 0.xx
+        const nv=m[key];
+        if(ph===1){
+          // 从"原始相对位置"过渡到"归一分", 动画演示压尺
+          const vals=MOLS.map(mm=>rawNum(mm,key));
+          const lo=Math.min(...vals), hi=Math.max(...vals);
+          const rawFrac = hi>lo ? (rawNum(m,key)-lo)/(hi-lo) : 0.5;
+          frac=lerp(rawFrac,nv,easeInOut(local));
+        } else {
+          frac=nv;
+        }
+        label = frac.toFixed(2);
+        r.bars[c].setAttribute("fill","var(--AXIS)");
+        r.bars[c].setAttribute("opacity",0.9);
+        r.raws[c].setAttribute("fill","var(--bg-0)");
+      }
+      r.bars[c].setAttribute("width", Math.max(0,frac*BAR_W));
+      r.raws[c].textContent=label;
+      // raw 文本: 条够长就放条内, 否则压到 0 透明度淡入
+      r.raws[c].setAttribute("opacity", ph===0? easeOut(local): 1);
+    }
+
+    // 3) 权重块 (phase>=2 显示)
+    if(ph>=2){
+      const wp = ph===2? easeOut(local): 1;
+      weightG.setAttribute("opacity",wp);
+    } else {
+      weightG.setAttribute("opacity",0);
+    }
+
+    // 4) 总分条 (phase>=2 开始填充; phase2 是"乘权重累加"的累积动画)
+    const W = (ph>=4)? curW : W_DEF;
+    const tot = total(m,W);
+    let totFrac;
+    if(ph<2){ totFrac=0; }
+    else if(ph===2){
+      // 累积: 逐项把 norm*weight 加进来 — 用 local 控制累计到第几项
+      const prog=local*4;            // 0..4 项
+      let s=0;
+      for(let c=0;c<4;c++){
+        const part=Math.max(0,Math.min(1,prog-c));
+        s += W_DEF[COLS[c].k]*m[COLS[c].k]*part;
+      }
+      totFrac=s;
+    } else if(ph===3){ totFrac=total(m,W_DEF); }
+    else { totFrac=tot; }            // reorder: 实时随 curW
+    const showTot = ph>=2;
+    const op = showTot? (ph===2? easeOut(local):1):0;
+    r.totRect.setAttribute("opacity", showTot?0.95:0);
+    r.totRect.previousSibling; // 槽
+    r.g.querySelectorAll("rect").forEach(()=>{});
+    r.totRect.setAttribute("width", totFrac*TOT_MAXW);
+    r.totTxt.setAttribute("opacity",op);
+    r.totTxt.textContent= totFrac.toFixed(3);
+    // 总分槽透明度
+    // (槽是 totRect 前一个 rect)
+    const slot=r.totRect.previousElementSibling;
+    if(slot && slot.tagName==="rect") slot.setAttribute("opacity", showTot?0.6:0);
+
+    // 5) 排名: phase>=3 按总分排序, 行平滑移动到目标 y; 名次徽显示
+    let targetY=r.baseY;
+    let rankShow=false;
+    if(ph>=3){
+      const order=[...rows].sort((a,b)=>total(b.mol,(ph>=4?curW:W_DEF))-total(a.mol,(ph>=4?curW:W_DEF)));
+      const idx=order.indexOf(r);
+      targetY=ROW_Y0+idx*ROW_H;
+      rankShow=true;
+      r.rankTxt.textContent="#"+(idx+1);
+      r.rankTxt.setAttribute("fill", idx===0?"var(--gold)":"var(--fg-dim)");
+    }
+    // 平滑趋近
+    const ease = (ph===3? easeInOut(local): 1);
+    if(ph===3){
+      r.curY = lerp(r.baseY, targetY, ease);
+    } else if(ph>=4){
+      // reorder: 持续跟随(弹性追)
+      r.curY += (targetY-r.curY)*0.18;
+    } else {
+      r.curY = r.baseY;
+    }
+    r.g.setAttribute("transform",`translate(0,${r.curY-r.baseY})`);
+    r.rankTxt.setAttribute("opacity", rankShow? (ph===3?easeOut(local):1):0);
+
+    // 6) 金印: 第一名在 rank/reorder 高亮整行
+    const isTop = (ph>=3) && r.rankTxt.textContent==="#1";
+    r.name.setAttribute("fill", isTop?"var(--gold)":"var(--fg)");
+  });
+
+  // ---- HUD + 子提示 ----
+  const pname=I.p[ph];
+  if(ph===0){ setHud(pname, I.metricRaw); setSub(local<0.5?0:1); }
+  else if(ph===1){ setHud(pname, I.metricNorm); setSub(2); }
+  else if(ph===2){ setHud(pname, I.metricWeight); setSub(local<0.5?3:4); refreshWeightBoxes(W_DEF,false); }
+  else if(ph===3){ setHud(pname, I.metricRank); setSub(5); refreshWeightBoxes(W_DEF,false); }
+  else { // reorder
+    setHud(pname, I.metricReorder + " &nbsp; <b>act="+curW.ACT.toFixed(2)+"</b>");
+    setSub(reorderSettled?7:6);
+    driveReorder(now);
+    refreshWeightBoxes(curW,true);
+  }
+
+  requestAnimationFrame(render);
+}
+
+function rawNum(m,key){
+  if(key==="SOL")return m.logS;
+  if(key==="TOX")return m.tpsa;
+  if(key==="ACT")return m.logP;
+  return -m.viol; // Lipinski: viol 越少越好, 取负让大=好
+}
+
+function refreshWeightBoxes(W,active){
+  for(let c=0;c<4;c++){
+    const k=COLS[c].k;
+    weightBoxes[c].txt.textContent=W[k].toFixed(2);
+    weightBoxes[c].box.setAttribute("stroke", (active&&k==="ACT")?"var(--gold)":"var(--math)");
+    weightBoxes[c].txt.setAttribute("fill", (active&&k==="ACT")?"var(--gold)":"var(--math)");
+  }
+}
+
+/* reorder 阶段: 把 ACT 权重从 0.20 拉到 0.70, 其余压低, 让榜单洗牌 */
+let curW={...W_DEF};
+let reorderSettled=false, reorderT0=0;
+function driveReorder(now){
+  if(reorderT0===0) reorderT0=now;
+  const t=Math.min(1,(now-reorderT0)/2600);
+  const e=easeInOut(t);
+  curW={
+    SOL:lerp(W_DEF.SOL,W_ACT.SOL,e),
+    TOX:lerp(W_DEF.TOX,W_ACT.TOX,e),
+    ACT:lerp(W_DEF.ACT,W_ACT.ACT,e),
+    LIP:lerp(W_DEF.LIP,W_ACT.LIP,e),
+  };
+  reorderSettled = t>0.85;
+}
+
+function onPhaseEnter(ph){
+  if(ph===4){ reorderT0=0; reorderSettled=false; }
+  if(ph===0){ curW={...W_DEF}; }
+}
+
+/* ---------- i18n / lang ---------- */
+function refreshI18N(){
+  document.querySelectorAll("[data-i18n]").forEach(node=>{
+    const key=node.getAttribute("data-i18n");
+    const v=I18N[LANG][key];
+    if(typeof v==="string") node.innerHTML=v;
+  });
+  document.getElementById("langBtn").textContent = LANG==="cn"?"EN":"中";
+}
+document.getElementById("langBtn").addEventListener("click",()=>{
+  LANG = LANG==="cn"?"en":"cn";
+  refreshI18N();
+});
+
+/* ---------- start ---------- */
+buildStaticTable();
+refreshI18N();
+requestAnimationFrame(render);
+
+/* 循环: 当 t 超过总时长, 重置 t0 重头演 (autoplay loop) */
+const TOTAL=PHASE_DUR.reduce((a,b)=>a+b,0);
+setInterval(()=>{
+  if(performance.now()-t0 > TOTAL+1400){
+    t0=performance.now(); phase=0; curW={...W_DEF};
+    reorderT0=0; reorderSettled=false;
+    rows.forEach(r=>{r.curY=r.baseY;});
+  }
+}, 400);
+})();
+</script>
+</body>
+</html>

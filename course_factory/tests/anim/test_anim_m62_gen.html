@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>接力补错：提升树越补越准</title>
+<style>
+:root{
+  --bg-0: oklch(0.14 0.035 265);
+  --bg-1: oklch(0.18 0.04 265);
+  --bg-2: oklch(0.22 0.045 265);
+  --bg-3: oklch(0.28 0.05 265);
+  --line: oklch(0.35 0.05 265 / 0.45);
+  --fg: oklch(0.96 0.01 265);
+  --fg-dim: oklch(0.78 0.02 265);
+  --fg-mute: oklch(0.58 0.03 265);
+  --gold: oklch(0.85 0.14 85);
+  --SIGNAL: oklch(0.75 0.17 200);
+  --CORE: oklch(0.55 0.16 200);
+  --DEPTH: oklch(0.35 0.10 210);
+  --FLASH: oklch(0.92 0.08 190);
+  --QUERY: oklch(0.85 0.14 85);
+  --right: oklch(0.78 0.15 150);
+  --wrong: oklch(0.66 0.18 28);
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+html,body{height:100vh;overflow:hidden;background:var(--bg-0);
+  font-family:'PingFang SC','Inter','Noto Sans SC',sans-serif;color:var(--fg);}
+.mono{font-family:'JetBrains Mono','SF Mono',Menlo,monospace;}
+.wrap{display:flex;height:100vh;width:100vw;}
+
+.sidebar{width:200px;flex-shrink:0;background:var(--bg-1);border-right:1px solid var(--line);
+  display:flex;flex-direction:column;padding:18px 16px;gap:14px;}
+.brand{display:flex;align-items:center;gap:9px;}
+.brand-mark{width:30px;height:30px;flex-shrink:0;}
+.brand-name{font-size:13px;font-weight:700;line-height:1.2;}
+.brand-sub{font-size:9px;color:var(--fg-mute);margin-top:2px;letter-spacing:.6px;}
+.sb-divider{height:1px;background:var(--line);}
+.sb-label{font-size:10px;font-weight:700;color:var(--SIGNAL);letter-spacing:1.2px;text-transform:uppercase;}
+.intro-zh{font-size:11.5px;line-height:1.5;color:var(--fg-dim);}
+.intro-en{font-size:10px;line-height:1.45;color:var(--fg-mute);font-style:italic;margin-top:6px;}
+.guide{list-style:none;display:flex;flex-direction:column;gap:9px;margin-top:2px;}
+.guide li{display:flex;gap:8px;font-size:11px;line-height:1.4;color:var(--fg-dim);}
+.g-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;margin-top:5px;background:var(--SIGNAL);}
+.lang-btn{margin-top:auto;width:100%;background:var(--bg-2);border:1px solid var(--line);
+  border-radius:8px;padding:9px 0;font-size:11.5px;font-weight:600;color:var(--fg);cursor:pointer;
+  transition:all .2s ease;font-family:inherit;}
+.lang-btn:hover{border-color:var(--SIGNAL);color:var(--SIGNAL);}
+
+.main{flex:1;position:relative;display:flex;flex-direction:column;min-width:0;}
+canvas{position:absolute;inset:0;width:100%;height:100%;display:block;}
+.hud{position:absolute;top:16px;right:20px;display:flex;gap:14px;align-items:center;
+  background:var(--bg-1);border:1px solid var(--line);border-radius:8px;padding:9px 14px;}
+.hud .h-cell{display:flex;flex-direction:column;gap:2px;}
+.hud .h-k{font-size:8.5px;color:var(--fg-mute);letter-spacing:.6px;}
+.hud .h-v{font-size:15px;font-weight:700;color:var(--SIGNAL);}
+.hud .h-v.warn{color:var(--wrong);}
+.hud .h-v.ok{color:var(--right);}
+.sub-zh{position:absolute;bottom:34px;left:50%;transform:translateX(-50%);
+  font-size:19px;font-weight:700;text-align:center;width:84%;color:var(--FLASH);}
+.sub-en{position:absolute;bottom:12px;left:50%;transform:translateX(-50%);
+  font-size:12.5px;font-style:italic;text-align:center;width:84%;color:var(--fg-mute);}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <aside class="sidebar">
+    <div class="brand">
+      <svg class="brand-mark" viewBox="0 0 32 32" fill="none">
+        <rect x="1.5" y="1.5" width="29" height="29" rx="7" fill="none" stroke="oklch(0.55 0.16 200)" stroke-width="1.6"/>
+        <circle cx="9" cy="22" r="3.4" fill="oklch(0.66 0.18 28)"/>
+        <circle cx="16" cy="22" r="3.4" fill="oklch(0.78 0.15 150)"/>
+        <circle cx="23" cy="22" r="3.4" fill="oklch(0.78 0.15 150)"/>
+        <path d="M9 16 L9 9 M16 16 L16 9 M23 16 L23 9" stroke="oklch(0.75 0.17 200)" stroke-width="1.6"/>
+        <path d="M6 9 L26 9" stroke="oklch(0.85 0.14 85)" stroke-width="1.6"/>
+      </svg>
+      <div>
+        <div class="brand-name" data-i18n="brand">分子怪兽猎人</div>
+        <div class="brand-sub mono">XGBOOST · M62</div>
+      </div>
+    </div>
+    <div class="sb-divider"></div>
+    <div class="sb-label" data-i18n="introLabel">这段在讲什么</div>
+    <div>
+      <div class="intro-zh" data-i18n="introZh">提升树一棵接一棵排队种：每棵新树只盯着前面判错的分子去补。看红色的错越补越少、绿色的对越来越多。</div>
+      <div class="intro-en" data-i18n="introEn">Boosting plants trees one after another; each new tree only fixes what the previous ones got wrong. Watch the reds shrink.</div>
+    </div>
+    <ul class="guide">
+      <li><span class="g-dot"></span><span data-i18n="g1">红 = 这棵树还判错的分子</span></li>
+      <li><span class="g-dot"></span><span data-i18n="g2">绿 = 已经判对的分子</span></li>
+      <li><span class="g-dot"></span><span data-i18n="g3">新树只补红的，不碰绿的</span></li>
+    </ul>
+    <button id="langBtn" class="lang-btn">中 / EN</button>
+  </aside>
+
+  <main class="main">
+    <div class="hud">
+      <div class="h-cell"><span class="h-k mono" data-i18n="hudTree">TREE</span><span class="h-v mono" id="hTree">1</span></div>
+      <div class="h-cell"><span class="h-k mono" data-i18n="hudWrong">WRONG</span><span class="h-v mono warn" id="hWrong">3</span></div>
+      <div class="h-cell"><span class="h-k mono" data-i18n="hudAcc">ACC</span><span class="h-v mono ok" id="hAcc">81%</span></div>
+    </div>
+    <canvas id="stage"></canvas>
+    <div class="sub-zh" id="subZh"></div>
+    <div class="sub-en" id="subEn"></div>
+  </main>
+</div>
+
+<script>
+var pageState={lang:'cn'};
+var canvas=document.getElementById('stage');
+var ctx=canvas.getContext('2d');
+var DPR=Math.max(1,window.devicePixelRatio||1);
+
+// === dataset_v7 真实分子 (RDKit 真值, 溶解度化学正确) ===
+// sol: 1=可溶 0=不溶; t1=第1棵树判定; 接力 tree2/tree3 补 LogP 交叉的错
+var MOLS=[
+ {n:"葡萄糖",e:"glucose",     logp:-3.22,sol:1},
+ {n:"尿素",  e:"urea",        logp:-0.98,sol:1},
+ {n:"甲醇",  e:"methanol",    logp:-0.39,sol:1},
+ {n:"乙酸",  e:"acetic acid", logp:0.09, sol:1},
+ {n:"丙酮",  e:"acetone",     logp:0.60, sol:1},
+ {n:"吡啶",  e:"pyridine",    logp:1.08, sol:1},
+ {n:"苯酚",  e:"phenol",      logp:1.39, sol:1},
+ {n:"苯胺",  e:"aniline",     logp:1.27, sol:0},
+ {n:"阿司匹林",e:"aspirin",   logp:1.31, sol:0},
+ {n:"扑热息痛",e:"paracetamol",logp:1.35,sol:0},
+ {n:"萘",    e:"naphthalene", logp:2.84, sol:0},
+ {n:"苯",    e:"benzene",     logp:1.69, sol:0},
+ {n:"甲苯",  e:"toluene",     logp:2.0,  sol:0},
+ {n:"辛烷",  e:"octane",      logp:3.37, sol:0},
+ {n:"己烷",  e:"hexane",      logp:2.59, sol:0},
+ {n:"环己烷",e:"cyclohexane", logp:2.34, sol:0}
+];
+// 每棵树之后每个分子的"判对/判错" (true=对). 来自 design_final_v7.py:
+//   tree1 LogP<=0.3 -> 错 [丙酮,吡啶,苯酚]
+//   tree2 极性接力  -> 错 [苯酚]
+//   tree3 单羟基酚补-> 全对
+var STAGE_RIGHT=[
+ // tree1
+ MOLS.map(function(m){
+   var p1 = m.logp<=0.3 ? 1 : 0;       // tree1 预测可溶?
+   return p1===m.sol;
+ }),
+ // tree2: 丙酮 吡啶 补回, 苯酚 仍错
+ MOLS.map(function(m){
+   if(m.e==="phenol") return false;
+   return true;
+ }),
+ // tree3: 全对
+ MOLS.map(function(){return true;})
+];
+var WRONG=[3,1,0];
+var ACC=["81%","94%","100%"];
+
+var SCENES=[
+ {dur:2600,stage:0,zh:{cn:"第 1 棵树先判一遍 —— 还有 3 个分子判错(红色)",en:"Tree 1 makes a first pass — 3 molecules still wrong (red)"},
+  en:"Tree 1: first pass, 3 still wrong"},
+ {dur:2600,stage:1,zh:{cn:"第 2 棵树只补那 3 个红的 —— 丙酮、吡啶补对了，剩 1 个",en:"Tree 2 only fixes the 3 reds — acetone & pyridine corrected, 1 left"},
+  en:"Tree 2: fixes 2 of 3 reds"},
+ {dur:2600,stage:2,zh:{cn:"第 3 棵树补最后那个苯酚 —— 全部判对了！",en:"Tree 3 fixes the last one (phenol) — all correct!"},
+  en:"Tree 3: last fix, all correct"},
+ {dur:2200,stage:2,zh:{cn:"一棵接一棵接力补错，错越补越少 = 越练越准",en:"Relay one after another, fewer errors each round = sharper"},
+  en:"Relay boosting: fewer errors, sharper model"}
+];
+
+var I18N={
+ brand:{cn:'分子怪兽猎人',en:'Molecule Hunter'},
+ introLabel:{cn:'这段在讲什么',en:'WHAT THIS SHOWS'},
+ introZh:{cn:'提升树一棵接一棵排队种：每棵新树只盯着前面判错的分子去补。看红色的错越补越少、绿色的对越来越多。',
+   en:'Boosting plants trees one after another; each new tree only fixes what the previous ones got wrong. Watch the reds shrink.'},
+ introEn:{cn:'Boosting plants trees one after another; each new tree only fixes what the previous ones got wrong.',
+   en:'Each new tree fixes the previous tree’s mistakes — errors shrink round by round.'},
+ g1:{cn:'红 = 这棵树还判错的分子',en:'Red = molecule still misjudged'},
+ g2:{cn:'绿 = 已经判对的分子',en:'Green = already correct'},
+ g3:{cn:'新树只补红的，不碰绿的',en:'New tree fixes reds, leaves greens'},
+ hudTree:{cn:'TREE',en:'TREE'},
+ hudWrong:{cn:'WRONG',en:'WRONG'},
+ hudAcc:{cn:'ACC',en:'ACC'}
+};
+
+function applyI18N(){
+ var lang=pageState.lang;
+ document.querySelectorAll('[data-i18n]').forEach(function(el){
+   var k=el.getAttribute('data-i18n');
+   if(I18N[k]) el.textContent=I18N[k][lang];
+ });
+ document.getElementById('langBtn').textContent=lang==='cn'?'中 / EN':'EN / 中';
+}
+
+function resize(){
+ var r=canvas.getBoundingClientRect();
+ if(r.width<1||r.height<1) return;
+ canvas.width=r.width*DPR; canvas.height=r.height*DPR;
+ ctx.setTransform(DPR,0,0,DPR,0,0);
+}
+
+var t0=performance.now();
+var totalDur=SCENES.reduce(function(a,s){return a+s.dur;},0);
+
+function sceneAt(elapsed){
+ var acc=0;
+ for(var i=0;i<SCENES.length;i++){
+   if(elapsed<acc+SCENES[i].dur) return {idx:i,local:(elapsed-acc)/SCENES[i].dur};
+   acc+=SCENES[i].dur;
+ }
+ return {idx:SCENES.length-1,local:1};
+}
+
+function lerp(a,b,t){return a+(b-a)*t;}
+function easeInOut(t){return t<0.5?2*t*t:1-Math.pow(-2*t+2,2)/2;}
+
+function cssVar(name){return getComputedStyle(document.documentElement).getPropertyValue(name).trim();}
+
+function draw(now){
+ var r=canvas.getBoundingClientRect();
+ var W=r.width,H=r.height;
+ ctx.clearRect(0,0,W,H);
+
+ var elapsed=(now-t0)%totalDur;
+ var sc=sceneAt(elapsed);
+ var scene=SCENES[sc.idx];
+ var stage=scene.stage;
+ var prevStage=Math.max(0,stage-1);
+ // 在 scene 切换的前 0.4 进度做颜色过渡 (从上一帧的对错状态 lerp 到本帧)
+ var blend=Math.min(1,sc.local/0.4);
+
+ // 背景网格 (Data Cathedral memory grid)
+ ctx.strokeStyle=cssVar('--line');
+ ctx.lineWidth=1;
+ var gs=46;
+ for(var gx=gs;gx<W;gx+=gs){ctx.beginPath();ctx.moveTo(gx,60);ctx.lineTo(gx,H-70);ctx.stroke();}
+ for(var gy=80;gy<H-70;gy+=gs){ctx.beginPath();ctx.moveTo(40,gy);ctx.lineTo(W-40,gy);ctx.stroke();}
+
+ // 标题
+ ctx.fillStyle=cssVar('--SIGNAL');
+ ctx.font='700 21px JetBrains Mono, monospace';
+ ctx.textAlign='left';
+ ctx.fillText(pageState.lang==='cn'?'接力补错':'RELAY BOOSTING',46,46);
+
+ // 分子网格 4x4
+ var cols=4,rows=4;
+ var availW=W-340, availH=H-200;
+ var cell=Math.min(availW/cols, availH/rows);
+ var gridW=cell*cols, gridH=cell*rows;
+ var ox=(W-gridW)/2-30, oy=92;
+ var cw=gridW/cols, ch=gridH/rows;
+ var rightCol=cssVar('--right'), wrongCol=cssVar('--wrong');
+
+ var colorRight=cssVar('--right'), colorWrong=cssVar('--wrong');
+ MOLS.forEach(function(m,i){
+   var c=i%cols, rr=Math.floor(i/cols);
+   var cx=ox+c*cw+cw/2, cy=oy+rr*ch+ch/2;
+   var rad=Math.min(cw,ch)*0.30;
+   var nowRight=STAGE_RIGHT[stage][i];
+   var prevRight=STAGE_RIGHT[prevStage][i];
+   // 这一帧若分子正在从错变对, 用 blend 做高亮脉冲
+   var isFixing = (prevRight===false && nowRight===true && stage>0);
+   var col = nowRight ? colorRight : colorWrong;
+   if(stage>0 && blend<1){
+     // 过渡期: 还没补的红用旧色
+     col = (blend<0.5 && isFixing) ? colorWrong : col;
+   }
+   // 圆
+   ctx.beginPath();
+   ctx.arc(cx,cy,rad,0,Math.PI*2);
+   ctx.fillStyle=col;
+   ctx.globalAlpha=nowRight?0.92:0.96;
+   ctx.fill();
+   ctx.globalAlpha=1;
+   // 补错脉冲环
+   if(isFixing && blend<1){
+     ctx.beginPath();
+     ctx.arc(cx,cy,rad+6+blend*10,0,Math.PI*2);
+     ctx.strokeStyle=cssVar('--FLASH');
+     ctx.globalAlpha=1-blend;
+     ctx.lineWidth=2.5;
+     ctx.stroke();
+     ctx.globalAlpha=1;
+   }
+   // 分子名 (深底白字, 居中, 不重叠: 圆下方)
+   ctx.fillStyle=cssVar('--fg');
+   ctx.font='600 12px PingFang SC, sans-serif';
+   ctx.textAlign='center';
+   var label=pageState.lang==='cn'?m.n:m.e;
+   ctx.fillText(label, cx, cy+rad+16);
+   // LogP 小标 (圆内, mono)
+   ctx.fillStyle=cssVar('--bg-0');
+   ctx.font='700 10px JetBrains Mono, monospace';
+   ctx.fillText(m.logp.toFixed(1), cx, cy+3.5);
+ });
+
+ // 当前树指针条 (左侧)
+ var pillX=ox-44;
+ for(var ti=0;ti<3;ti++){
+   var py=oy+40+ti*54;
+   var on=ti===stage;
+   ctx.beginPath();
+   ctx.arc(pillX,py,13,0,Math.PI*2);
+   ctx.fillStyle=on?cssVar('--SIGNAL'):cssVar('--bg-2');
+   ctx.fill();
+   ctx.strokeStyle=on?cssVar('--FLASH'):cssVar('--line');
+   ctx.lineWidth=on?2:1;
+   ctx.stroke();
+   ctx.fillStyle=on?cssVar('--bg-0'):cssVar('--fg-mute');
+   ctx.font='700 12px JetBrains Mono, monospace';
+   ctx.textAlign='center';
+   ctx.fillText(String(ti+1),pillX,py+4);
+   if(ti<2){
+     ctx.strokeStyle=cssVar('--line');
+     ctx.beginPath();ctx.moveTo(pillX,py+13);ctx.lineTo(pillX,py+41);ctx.stroke();
+   }
+ }
+ ctx.fillStyle=cssVar('--fg-mute');
+ ctx.font='600 10px JetBrains Mono, monospace';
+ ctx.textAlign='center';
+ ctx.fillText(pageState.lang==='cn'?'第几棵':'TREE',pillX,oy+14);
+
+ // HUD 更新
+ document.getElementById('hTree').textContent=String(stage+1);
+ var we=document.getElementById('hWrong');
+ we.textContent=String(WRONG[stage]);
+ we.className='h-v mono '+(WRONG[stage]===0?'ok':'warn');
+ document.getElementById('hAcc').textContent=ACC[stage];
+
+ // 字幕
+ document.getElementById('subZh').textContent=scene.zh[pageState.lang];
+ document.getElementById('subEn').textContent=pageState.lang==='cn'?scene.en:scene.zh.en;
+
+ requestAnimationFrame(draw);
+}
+
+document.getElementById('langBtn').addEventListener('click',function(){
+ pageState.lang=pageState.lang==='cn'?'en':'cn';
+ applyI18N();
+});
+
+window.addEventListener('resize',resize);
+document.fonts&&document.fonts.ready.then(function(){resize();});
+applyI18N();
+resize();
+setTimeout(resize,200);
+setTimeout(resize,600);
+requestAnimationFrame(draw);
+</script>
+</body>
+</html>

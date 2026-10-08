@@ -4,6 +4,7 @@ import spaceCourses from "./space-courses.json"
 import biomedCourses from "./biomed-courses.json"
 import energyCourses from "./renewable-courses.json"
 import bionicsCourses from "./bionics-courses.json"
+import earthCourses from "./earth-courses.json"
 
 export const PROJECT_LINES = lineData
 export type ProjectLine = typeof PROJECT_LINES[number]
@@ -72,7 +73,8 @@ export const SPACE_COURSES: readonly LocalProject[] = spaceCourses.map(project =
 export const BIOMED_COURSES: readonly LocalProject[] = biomedCourses.map(project => ({...project, kind: project.kind as LocalProject['kind']}))
 export const ENERGY_COURSES: readonly LocalProject[] = energyCourses.map(project => ({...project, kind: project.kind as LocalProject['kind']}))
 export const BIONICS_COURSES: readonly LocalProject[] = bionicsCourses.map(project => ({...project, kind: project.kind as LocalProject['kind']}))
-export const LOCAL_PROJECTS = [...MICRO_PROJECTS, ...GUIDED_PROJECTS, ...SPACE_COURSES, ...BIOMED_COURSES, ...ENERGY_COURSES, ...BIONICS_COURSES]
+export const EARTH_COURSES: readonly LocalProject[] = earthCourses.map(project => ({...project, kind: project.kind as LocalProject['kind']}))
+export const LOCAL_PROJECTS = [...MICRO_PROJECTS, ...GUIDED_PROJECTS, ...SPACE_COURSES, ...BIOMED_COURSES, ...ENERGY_COURSES, ...BIONICS_COURSES, ...EARTH_COURSES]
 
 export type DiscoveryKind = "all" | "micro" | "guided" | "integration" | "full"
 

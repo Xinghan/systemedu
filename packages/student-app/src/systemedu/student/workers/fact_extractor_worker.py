@@ -90,6 +90,8 @@ async def growth_tick(evaluator: Any, batch: int = 5) -> int:
 async def run_forever(interval_sec: int = 300, batch: int = 5) -> None:
     """主循环 (默认 5min tick)."""
     _db.init_db()  # 确保表存在 (worker 先于 web server 启时)
+    from systemedu.student.course_numbering import verify_numbering_activation
+    verify_numbering_activation(_db._ensure_engine())
     llm = _make_llm()
     mem0 = _make_mem0()
     extractor = StudentFactExtractor(llm=llm, mem0_client=mem0)

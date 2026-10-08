@@ -1,0 +1,637 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Molecule Monster Hunter M71 — From Hard Labels to a 0-to-1 Confidence Score</title>
+<style>
+:root{
+  /* L1 — shared deep-space canvas */
+  --bg-0: oklch(0.14 0.035 265);
+  --bg-1: oklch(0.18 0.04 265);
+  --bg-2: oklch(0.22 0.045 265);
+  --bg-3: oklch(0.28 0.05 265);
+  --line: oklch(0.35 0.05 265 / 0.35);
+  --line-strong: oklch(0.55 0.08 265 / 0.55);
+  --fg:      oklch(0.96 0.01 265);
+  --fg-dim:  oklch(0.75 0.02 265);
+  --fg-mute: oklch(0.55 0.03 265);
+  --gold:    oklch(0.85 0.14 85);
+
+  /* L2 — cs signature accent (cyan) */
+  --cs: oklch(0.75 0.17 200);
+
+  /* L3 — cs 5-colour palette (themes.js: Data Cathedral) */
+  --SIGNAL: oklch(0.75 0.17 200);
+  --CORE:   oklch(0.55 0.16 200);
+  --DEPTH:  oklch(0.35 0.10 210);
+  --FLASH:  oklch(0.92 0.08 190);
+  --QUERY:  oklch(0.85 0.14 85);
+
+  --GOOD: oklch(0.75 0.17 155);
+  --BAD:  oklch(0.62 0.20 25);
+
+  --panel: var(--bg-2);
+  --mono: "JetBrains Mono", ui-monospace, monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:100%;height:100vh;overflow:hidden;background:var(--bg-0);color:var(--fg);
+  font-family:'Noto Sans SC',system-ui,sans-serif}
+.app{display:flex;height:100vh;width:100%}
+
+/* ── sidebar (200px) ── */
+.sidebar{width:200px;flex-shrink:0;height:100vh;
+  background:linear-gradient(180deg, var(--bg-2), var(--bg-1));
+  border-right:1px solid var(--line);
+  display:flex;flex-direction:column;gap:11px;padding:13px 13px 14px;overflow:hidden}
+.side-top{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.brand{display:flex;align-items:center;gap:8px}
+.brand-tag{font-family:var(--mono);font-size:9px;letter-spacing:1.5px;color:var(--CORE)}
+#langBtn{font-family:var(--mono);font-size:10px;font-weight:700;letter-spacing:1px;
+  padding:4px 9px;cursor:pointer;border:1px solid color-mix(in oklch, var(--cs) 45%, transparent);
+  background:color-mix(in oklch, var(--cs) 16%, transparent);color:var(--FLASH)}
+#langBtn:hover{background:color-mix(in oklch, var(--cs) 30%, transparent)}
+.mascot-wrap{display:flex;align-items:center;gap:9px;padding:6px 0 2px}
+.mascot-wrap svg{flex-shrink:0}
+.mascot-name{font-family:var(--mono);font-size:9px;letter-spacing:1px;color:var(--cs)}
+.mascot-line{font-size:9.5px;line-height:1.4;color:var(--fg-mute)}
+.side-title{font-family:var(--mono);font-weight:700;font-size:13px;line-height:1.25;
+  color:var(--FLASH);letter-spacing:0.4px}
+.side-sub{font-size:10px;line-height:1.5;color:var(--fg-dim)}
+.side-block-label{font-family:var(--mono);font-size:8px;letter-spacing:1.4px;
+  color:var(--cs);text-transform:uppercase;margin-bottom:5px}
+.side-obs{font-size:9.5px;line-height:1.5;color:var(--fg-dim)}
+.side-obs li{margin-bottom:5px;list-style:none;padding-left:11px;position:relative}
+.side-obs li::before{content:'';position:absolute;left:0;top:6px;width:4px;height:4px;background:var(--cs)}
+
+/* ── project route map (north-star anchor) ── */
+.route{display:flex;flex-direction:column;gap:5px}
+.route-stop{display:flex;align-items:center;gap:7px;font-size:9px;line-height:1.2;color:var(--fg-mute)}
+.route-dot{width:7px;height:7px;flex-shrink:0;border:1px solid var(--line-strong);background:transparent}
+.route-stop.done .route-dot{background:var(--CORE);border-color:var(--CORE)}
+.route-stop.here .route-dot{background:var(--cs);border-color:var(--cs);
+  box-shadow:0 0 0 3px color-mix(in oklch, var(--cs) 22%, transparent)}
+.route-stop.here{color:var(--FLASH);font-weight:700}
+.route-goal{display:flex;align-items:center;gap:7px;font-size:9px;color:var(--gold);margin-top:1px}
+.route-goal svg{flex-shrink:0}
+
+.side-hud{margin-top:auto;display:flex;flex-direction:column;gap:6px;
+  border-top:1px solid var(--line);padding-top:9px}
+.hud-row{display:flex;align-items:baseline;justify-content:space-between;gap:6px}
+.hud-l{font-family:var(--mono);font-size:8px;letter-spacing:1px;color:var(--fg-mute);text-transform:uppercase}
+.hud-v{font-family:var(--mono);font-size:13px;font-weight:700;color:var(--cs)}
+
+/* ── stage ── */
+#stage{flex:1;min-width:0;height:100vh;display:flex;flex-direction:column;position:relative}
+#cWrap{flex:1;min-height:0;position:relative;display:flex;flex-direction:column}
+canvas{display:block;width:100%;height:100%;position:absolute;inset:0}
+
+/* HUD top-right */
+.hud-top{position:absolute;top:10px;right:14px;z-index:5;text-align:right;
+  font-family:var(--mono);pointer-events:none}
+.hud-top .phase{font-size:11px;font-weight:700;letter-spacing:1px;color:var(--FLASH)}
+.hud-top .phase .seq{color:var(--fg-mute);margin-right:6px}
+.hud-top .quant{font-size:9.5px;letter-spacing:0.5px;color:var(--fg-dim);margin-top:3px}
+.hud-top .quant b{color:var(--cs)}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar">
+    <div class="side-top">
+      <div class="brand"><span class="brand-tag" id="sideTag">CS · M71</span></div>
+      <button id="langBtn">CN</button>
+    </div>
+
+    <!-- mascot: Bit -->
+    <div class="mascot-wrap">
+      <svg width="40" height="40" viewBox="0 0 40 40" aria-hidden="true">
+        <g id="bitSprite">
+          <polygon points="20,5 33,12 33,27 20,34 7,27 7,12" fill="none"
+            stroke="var(--cs)" stroke-width="1.4"/>
+          <polygon points="20,5 33,12 20,19 7,12" fill="var(--CORE)" opacity="0.55"/>
+          <polygon points="33,12 33,27 20,34 20,19" fill="var(--DEPTH)" opacity="0.7"/>
+          <polygon points="7,12 20,19 20,34 7,27" fill="var(--bg-3)" opacity="0.85"/>
+          <rect x="16" y="13" width="3" height="3" fill="var(--FLASH)"/>
+          <rect x="21" y="15" width="3" height="3" fill="var(--SIGNAL)"/>
+          <rect x="18" y="22" width="3" height="3" fill="var(--gold)"/>
+        </g>
+      </svg>
+      <div>
+        <div class="mascot-name">BIT</div>
+        <div class="mascot-line" id="mascotLine"></div>
+      </div>
+    </div>
+
+    <div class="side-title" id="sTitle"></div>
+    <div class="side-sub" id="sIntro"></div>
+
+    <div>
+      <div class="side-block-label" id="sObsLabel"></div>
+      <ul class="side-obs" id="sObs"></ul>
+    </div>
+
+    <!-- project route map -->
+    <div>
+      <div class="side-block-label" id="sRouteLabel"></div>
+      <div class="route" id="route">
+        <div class="route-stop done"><span class="route-dot"></span><span id="rs1"></span></div>
+        <div class="route-stop done"><span class="route-dot"></span><span id="rs2"></span></div>
+        <div class="route-stop here"><span class="route-dot"></span><span id="rs3"></span></div>
+        <div class="route-stop"><span class="route-dot"></span><span id="rs4"></span></div>
+        <div class="route-goal">
+          <svg width="11" height="11" viewBox="0 0 11 11" aria-hidden="true">
+            <rect x="1" y="1" width="9" height="9" fill="none" stroke="var(--gold)" stroke-width="1"/>
+            <path d="M3 5.5 L5 7.5 L8 3.5" fill="none" stroke="var(--gold)" stroke-width="1.2"/>
+          </svg>
+          <span id="rsGoal"></span>
+        </div>
+      </div>
+    </div>
+
+    <div class="side-hud">
+      <div class="hud-row"><span class="hud-l" id="hL1"></span><span class="hud-v" id="hV1">--</span></div>
+      <div class="hud-row"><span class="hud-l" id="hL2"></span><span class="hud-v" id="hV2">--</span></div>
+      <div class="hud-row"><span class="hud-l" id="hL3"></span><span class="hud-v" id="hV3">--</span></div>
+    </div>
+  </aside>
+
+  <main id="stage">
+    <div class="hud-top">
+      <div class="phase"><span class="seq" id="hudSeq"></span><span id="hudPhase"></span></div>
+      <div class="quant" id="hudQuant"></div>
+    </div>
+    <div id="cWrap"><canvas id="c"></canvas></div>
+  </main>
+</div>
+
+<script>
+(function(){
+"use strict";
+var LANG='zh';
+
+/* ── canonical molecule set: RDKit-real descriptors + a SINGLE explainable
+   sigmoid P(monster). IDENTICAL numbers are used in the M71 game.
+   z = 0.78*logP + 0.50*(MW/100) + 0.40*aromRings - 3.55 ;  p = 1/(1+e^-z)
+   caffeine logP is negative → low p (0.07); confirmed against RDKit 2026.03.3. ── */
+var MOLS=[
+  {name:'glucose',   p:0.01, logp:-3.22, mw:180, arR:0},
+  {name:'caffeine',  p:0.07, logp:-1.03, mw:194, arR:2},
+  {name:'aspirin',   p:0.23, logp:1.31,  mw:180, arR:1},
+  {name:'naphtha',   p:0.53, logp:2.84,  mw:128, arR:2},
+  {name:'ibuprofen', p:0.57, logp:3.07,  mw:206, arR:1},
+  {name:'anthracene',p:0.84, logp:3.99,  mw:178, arR:3},
+  {name:'pyrene',    p:0.93, logp:4.58,  mw:202, arR:4}
+];
+
+var I18N={
+  mascotLine:{en:'I stop shouting YES/NO and start whispering how sure I am.',cn:'我不再吼「是/不是」，改小声说「我有几成把握」。'},
+  sTitle:{en:'FROM A VERDICT TO A 0-TO-1 SCORE',cn:'从一句判决，到 0~1 的把握分'},
+  sIntro:{en:'Same seven molecules. First the model only says YES / NO — and caffeine and aspirin both shout YES, so do they look the same? Then predict_proba reveals the score it was hiding: caffeine 0.07, aspirin 0.23 — actually NO. You finally see how sure it is. Last, YOU slide the line (threshold): only above it counts as a monster.',
+          cn:'同一批七个分子。一开始模型只会说「是 / 不是」——可咖啡因和阿司匹林听起来一样吗？接着 predict_proba 把它藏起来的把握分亮出来：咖啡因 0.07、阿司匹林 0.23——其实都「不是」。你这才看清它到底有几成把握。最后，那条线（阈值）由你来划：超过它才算怪兽。'},
+  sObsLabel:{en:'WATCH FOR',cn:'观察提示'},
+  obs1:{en:'Hard label squashes 0.07 and 0.93 into the same word.',cn:'硬判决把 0.07 和 0.93 压成同一个词。'},
+  obs2:{en:'Each bar splits into NOT + IS — the two always sum to 1.',cn:'每条柱裂成「不是」+「是」——两段永远加起来 = 1。'},
+  obs3:{en:'Move the line: above = monster. The line is YOURS to set.',cn:'挪那条线：线上=怪兽。这条线由你定。'},
+  sRouteLabel:{en:'PROJECT ROUTE',cn:'项目路线'},
+  rs1:{en:'forests & boosting (准)',cn:'森林·提升树 (够准)'},
+  rs2:{en:'honest scaffold score',cn:'骨架切分打诚实分'},
+  rs3:{en:'model speaks confidence (you)',cn:'模型报把握分 (你在这)'},
+  rs4:{en:'pick the best threshold',cn:'挑最划算的阈值'},
+  rsGoal:{en:'Monster-Hunter workbench',cn:'分子怪兽猎人工作台'},
+  hL1:{en:'THRESHOLD',cn:'阈值线'},
+  hL2:{en:'COUNTED MONSTER',cn:'判为怪兽'},
+  hL3:{en:'OUTPUT',cn:'模型输出'},
+  /* phase names */
+  pHard:{en:'predict — YES / NO',cn:'predict — 是/不是'},
+  pProba:{en:'predict_proba — 0~1',cn:'predict_proba — 0~1'},
+  pSum:{en:'NOT + IS = 1',cn:'不是 + 是 = 1'},
+  pLine:{en:'YOU draw the line',cn:'你来划那条线'},
+  /* captions */
+  capHard:{en:'WHY NOW — your forest is accurate, but it only ever barks one of two words: YES or NO. Here are your seven molecules. Glucose, caffeine, aspirin get a NO; naphthalene through pyrene get a YES. A flat verdict, nothing more. But naphthalene and pyrene BOTH say YES — are they really equally monstrous? You cannot tell from one word.',
+           cn:'为什么现在学——你的森林已经够准了，可它张口只会蹦两个词：是，或不是。这是你的七个分子。葡萄糖、咖啡因、阿司匹林被判「不是」；萘到芘被判「是」。一句干巴巴的判决，没别的了。可萘和芘都说「是」——它们真的一样怪吗？光凭一个词，你看不出来。'},
+  capProba:{en:'Now swap predict for predict_proba. The model stops hiding — each YES/NO melts into the 0-to-1 score it secretly held all along. The two YES molecules split apart: naphthalene is only 0.53 (a coin-toss), pyrene is 0.93 (rock-solid). And caffeine is just 0.07, aspirin 0.23 — clearly leaning NO, not borderline. The flat words become a tall-and-short ladder of confidence.',
+            cn:'现在把 predict 换成 predict_proba。模型不再藏着——每个「是/不是」化成它一直憋着的那个 0~1 把握分。两个说「是」的立刻分了高下：萘才 0.53（跟抛硬币差不多），芘 0.93（铁定）。而咖啡因才 0.07、阿司匹林 0.23——明显偏「不是」，不是擦边。干巴巴的词，变成了一排高高矮矮的把握分。'},
+  capSum:{en:'Look closely at ONE molecule: predict_proba gives TWO numbers — the "not-a-monster" share (left) and the "is-a-monster" share (right). They are two slices of one full bar, so they ALWAYS add up to 1: aspirin is 0.77 not + 0.23 is. A molecule is one or the other, nothing left over. You only ever read the right slice — the "is-a-monster" score.',
+          cn:'盯住一个分子看：predict_proba 给的是两个数——「不是怪兽的把握」（左）和「是怪兽的把握」（右）。它们是同一根柱子的两段，所以永远加起来 = 1：阿司匹林 = 0.77 不是 + 0.23 是。一个分子非此即彼，不剩零头。你平时只看右边那段——「是怪兽」的把握分。'},
+  capLine:{en:'Last move, and it is YOURS: where does "is a monster" begin? Draw a line — the threshold. Slide it to 0.50 and 3 molecules clear it; raise it to 0.85 and only pyrene survives; drop it to 0.30 and 4 sneak in. CLOSER TO THE GOAL: the model just hands you a confidence score; how high the bar sits is your call — exactly the dial you tune next.',
+           cn:'最后一步，而且这步是你的：「算怪兽」从哪儿开始？划一条线——阈值。滑到 0.50，3 个过线；抬到 0.85，只剩芘；压到 0.30，4 个混进来。离终点更近了：模型只管递给你把握分；那道门槛搁多高，由你说了算——这正是下一节要调的旋钮。'},
+  /* misc labels */
+  lblNot:{en:'not a monster',cn:'不是怪兽'},
+  lblIs:{en:'is a monster',cn:'是怪兽'},
+  lblYes:{en:'YES',cn:'是'},
+  lblNo:{en:'NO',cn:'不是'},
+  lblProba:{en:'P(is a monster)',cn:'是怪兽的把握'},
+  lblThr:{en:'threshold (you set it)',cn:'阈值（你划的线）'},
+  lblSum:{en:'0.77 + 0.23 = 1',cn:'0.77 + 0.23 = 1'},
+  lblAbove:{en:'above the line = counted monster',cn:'线上 = 判为怪兽'},
+  lblBelow:{en:'below = not',cn:'线下 = 不是'},
+  lblPair:{en:'same word "YES", very different confidence',cn:'同一个「是」，把握差很多'},
+  outHard:{en:'YES / NO',cn:'是 / 不是'},
+  outProba:{en:'0~1 score',cn:'0~1 把握分'}
+};
+function dkey(){return LANG==='zh'?'cn':'en';}
+function t(k){return(I18N[k]&&I18N[k][dkey()])||(I18N[k]&&I18N[k]['en'])||k;}
+
+/* resolve oklch palette tokens into concrete sRGB */
+var CSS={};
+function buildCSS(){
+  var cs=getComputedStyle(document.documentElement);
+  var names=['SIGNAL','CORE','DEPTH','FLASH','QUERY','cs','bg-0','bg-1','bg-2','bg-3','panel','GOOD','BAD','gold','fg','fg-dim','fg-mute'];
+  var pc=document.createElement('canvas');pc.width=1;pc.height=1;
+  var pctx=pc.getContext('2d');
+  names.forEach(function(n){
+    var raw=cs.getPropertyValue('--'+n).trim();
+    var key=n.replace(/-/g,'_');
+    pctx.clearRect(0,0,1,1);
+    pctx.fillStyle='#000';
+    pctx.fillStyle=raw;
+    pctx.fillRect(0,0,1,1);
+    var d=pctx.getImageData(0,0,1,1).data;
+    CSS[key]=[d[0],d[1],d[2]];
+  });
+}
+function rgba(nm,a){
+  var c=CSS[nm.replace(/-/g,'_')];
+  if(!c)return 'rgba(200,200,200,'+a+')';
+  return 'rgba('+c[0]+','+c[1]+','+c[2]+','+a+')';
+}
+
+var canvas=document.getElementById('c');
+var ctx=canvas.getContext('2d');
+var cWrap=document.getElementById('cWrap');
+var W=0,H=0,DPR=Math.min(window.devicePixelRatio||1,2);
+
+function resize(){
+  var rect=cWrap.getBoundingClientRect();
+  if(rect.width<1||rect.height<1)return;
+  W=rect.width;H=rect.height;
+  canvas.width=Math.round(W*DPR);canvas.height=Math.round(H*DPR);
+  canvas.style.width=W+'px';canvas.style.height=H+'px';
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+}
+
+function lerp(a,b,p){return a+(b-a)*p;}
+function clamp01(x){return x<0?0:x>1?1:x;}
+function easeInOut(x){return x<0.5?2*x*x:1-Math.pow(-2*x+2,2)/2;}
+function easeOut(x){return 1-Math.pow(1-x,3);}
+
+var NOW=0;
+/* timeline: 4 beats, continuous loop ~37s */
+var PHASES=[
+  {name:'pHard',  cap:'capHard',  dur:9.0},
+  {name:'pProba', cap:'capProba', dur:10.0},
+  {name:'pSum',   cap:'capSum',   dur:9.0},
+  {name:'pLine',  cap:'capLine',  dur:11.0}
+];
+var TOTAL=0;PHASES.forEach(function(p){TOTAL+=p.dur;});
+var startT=null;
+function phaseAt(tt){
+  var acc=0;
+  for(var i=0;i<PHASES.length;i++){
+    if(tt<acc+PHASES[i].dur){return {idx:i, local:(tt-acc)/PHASES[i].dur, abs:tt};}
+    acc+=PHASES[i].dur;
+  }
+  return {idx:PHASES.length-1, local:1, abs:tt};
+}
+
+/* ── layout of the molecule chart ── */
+function chartRect(){
+  var bx=W*0.055, by=H*0.085;
+  var bw=W*0.89, bh=H*0.60;
+  return {x:bx,y:by,w:bw,h:bh};
+}
+function colX(i){
+  var b=chartRect();
+  var n=MOLS.length;
+  var slot=b.w/n;
+  return b.x+slot*(i+0.5);
+}
+function barW(){var b=chartRect();return Math.min(b.w/MOLS.length*0.52, 78);}
+
+function drawBg(){
+  var grad=ctx.createLinearGradient(0,0,0,H);
+  grad.addColorStop(0,rgba('bg-1',1));
+  grad.addColorStop(1,rgba('bg-0',1));
+  ctx.fillStyle=grad;ctx.fillRect(0,0,W,H);
+  ctx.strokeStyle=rgba('cs',0.04);ctx.lineWidth=1;
+  var gs=48;
+  for(var gx=gs;gx<W;gx+=gs){ctx.beginPath();ctx.moveTo(gx,0);ctx.lineTo(gx,H);ctx.stroke();}
+  for(var gy=gs;gy<H;gy+=gs){ctx.beginPath();ctx.moveTo(0,gy);ctx.lineTo(W,gy);ctx.stroke();}
+}
+
+function roundRect(x,y,w,h,r){
+  r=Math.min(r,Math.abs(w)/2,Math.abs(h)/2);
+  ctx.beginPath();
+  ctx.moveTo(x+r,y);
+  ctx.arcTo(x+w,y,x+w,y+h,r);
+  ctx.arcTo(x+w,y+h,x,y+h,r);
+  ctx.arcTo(x,y+h,x,y,r);
+  ctx.arcTo(x,y,x+w,y,r);
+  ctx.closePath();
+}
+
+function tag(x,y,txt,col,alpha){
+  if(alpha<=0.02)return;
+  ctx.globalAlpha=alpha;
+  ctx.font='700 '+Math.max(10,Math.min(W*0.0112,15))+'px '+'"JetBrains Mono", ui-monospace, monospace';
+  ctx.textAlign='center';ctx.textBaseline='middle';
+  var tw=ctx.measureText(txt).width;
+  var padX=Math.max(6,W*0.008), bh=Math.max(16,W*0.022);
+  ctx.fillStyle=rgba('bg-0',0.82);
+  ctx.fillRect(x-tw/2-padX, y-bh/2, tw+padX*2, bh);
+  ctx.lineWidth=1.3;ctx.strokeStyle=rgba(col,0.7);
+  ctx.strokeRect(x-tw/2-padX, y-bh/2, tw+padX*2, bh);
+  ctx.fillStyle=rgba(col,0.97);
+  ctx.fillText(txt, x, y+1);
+  ctx.globalAlpha=1;
+}
+
+function molName(m){
+  var map={glucose:{cn:'葡萄糖',en:'glucose'},caffeine:{cn:'咖啡因',en:'caffeine'},
+    aspirin:{cn:'阿司匹林',en:'aspirin'},naphtha:{cn:'萘',en:'naphtha'},
+    ibuprofen:{cn:'布洛芬',en:'ibuprofen'},anthracene:{cn:'蒽',en:'anthrac.'},
+    pyrene:{cn:'芘',en:'pyrene'}};
+  var e=map[m.name];return e?e[dkey()]:m.name;
+}
+
+/* ── draw the whole stage for a given blend state ──
+   s.mode: 0 hard, 1 proba, 2 sum, 3 line
+   s.split: 0..1 how much the bar has split into NOT+IS
+   s.thr: current threshold (only used in line mode), s.thrAlpha
+*/
+function drawStage(ph,s){
+  var b=chartRect();
+  var bw=barW();
+  var baseY=b.y+b.h;
+  var maxH=b.h*0.92;
+
+  /* axis */
+  ctx.globalAlpha=0.9;
+  ctx.strokeStyle=rgba('fg-dim',0.4);ctx.lineWidth=1.2;
+  ctx.beginPath();ctx.moveTo(b.x-6,baseY);ctx.lineTo(b.x+b.w,baseY);ctx.stroke();
+  /* y ticks at 0 .5 1 */
+  ctx.font='400 '+Math.max(8,Math.min(W*0.0092,12))+'px "JetBrains Mono", ui-monospace, monospace';
+  ctx.textAlign='right';ctx.textBaseline='middle';
+  [0,0.5,1].forEach(function(v){
+    var yy=baseY-maxH*v;
+    ctx.strokeStyle=rgba('fg-dim',0.16);ctx.lineWidth=1;
+    ctx.setLineDash([3,4]);ctx.beginPath();ctx.moveTo(b.x,yy);ctx.lineTo(b.x+b.w,yy);ctx.stroke();ctx.setLineDash([]);
+    ctx.fillStyle=rgba('fg-mute',0.8);
+    ctx.fillText(v.toFixed(1), b.x-9, yy);
+  });
+  ctx.globalAlpha=1;
+
+  /* threshold line (line mode) */
+  if(s.thrAlpha>0.02){
+    var ty=baseY-maxH*s.thr;
+    ctx.globalAlpha=s.thrAlpha;
+    ctx.strokeStyle=rgba('gold',0.95);ctx.lineWidth=2.2;
+    ctx.setLineDash([9,6]);
+    ctx.beginPath();ctx.moveTo(b.x-6,ty);ctx.lineTo(b.x+b.w,ty);ctx.stroke();ctx.setLineDash([]);
+    tag(b.x+b.w-Math.max(64,W*0.07), ty-Math.max(13,H*0.026),
+        t('lblThr')+' = '+s.thr.toFixed(2), 'gold', s.thrAlpha);
+    ctx.globalAlpha=1;
+  }
+
+  /* per molecule */
+  for(var i=0;i<MOLS.length;i++){
+    var m=MOLS[i];
+    var cx=colX(i);
+    var x=cx-bw/2;
+    var pIs=m.p, pNot=1-m.p;
+    var counted=(s.mode>=3) && (m.p>=s.thr);
+
+    if(s.mode===0){
+      /* hard label: full bar coloured by verdict, big YES/NO on top */
+      var yes=m.p>=0.5;
+      var hh=maxH*(yes?0.62:0.30); /* fixed heights, NOT proportional to p (hard label hides it) */
+      var col=yes?'BAD':'cs';
+      var g0=ctx.createLinearGradient(x,baseY-hh,x,baseY);
+      g0.addColorStop(0,rgba(col,0.9));g0.addColorStop(1,rgba(col,0.4));
+      ctx.fillStyle=g0;roundRect(x,baseY-hh,bw,hh,6);ctx.fill();
+      ctx.lineWidth=1.4;ctx.strokeStyle=rgba(col,0.85);roundRect(x,baseY-hh,bw,hh,6);ctx.stroke();
+      ctx.fillStyle=rgba(yes?'BAD':'cs',0.99);
+      ctx.font='700 '+Math.max(13,Math.min(W*0.018,24))+'px "JetBrains Mono", ui-monospace, monospace';
+      ctx.textAlign='center';ctx.textBaseline='bottom';
+      ctx.fillText(yes?t('lblYes'):t('lblNo'), cx, baseY-hh-7);
+    } else {
+      /* proba: bottom = NOT (dim), top = IS (cyan). split controls whether the
+         NOT segment is visible (sum mode emphasises it). */
+      var hIs=maxH*pIs, hNot=maxH*pNot;
+      /* IS segment */
+      var gi=ctx.createLinearGradient(x,baseY-hIs,x,baseY);
+      var hot=counted?'gold':'cs';
+      gi.addColorStop(0,rgba(hot,0.95));gi.addColorStop(1,rgba(hot,0.45));
+      ctx.fillStyle=gi;roundRect(x,baseY-hIs,bw,hIs,6);ctx.fill();
+      ctx.lineWidth=counted?2.2:1.4;ctx.strokeStyle=rgba(hot,counted?0.98:0.82);
+      roundRect(x,baseY-hIs,bw,hIs,6);ctx.stroke();
+      /* NOT segment stacked on top of IS (so total bar = 1) */
+      var notAlpha=s.split;
+      if(notAlpha>0.02){
+        ctx.globalAlpha=notAlpha;
+        var yNot=baseY-hIs-hNot;
+        ctx.fillStyle=rgba('DEPTH',0.55);roundRect(x,yNot,bw,hNot,6);ctx.fill();
+        ctx.lineWidth=1.2;ctx.strokeStyle=rgba('fg-dim',0.4);roundRect(x,yNot,bw,hNot,6);ctx.stroke();
+        ctx.globalAlpha=1;
+        /* the seam line where IS meets NOT */
+        ctx.strokeStyle=rgba('FLASH',0.6*notAlpha);ctx.lineWidth=1.2;
+        ctx.beginPath();ctx.moveTo(x,baseY-hIs);ctx.lineTo(x+bw,baseY-hIs);ctx.stroke();
+      }
+      /* P number on the IS segment top */
+      ctx.fillStyle=rgba(counted?'gold':'FLASH',0.99);
+      ctx.font='700 '+Math.max(11,Math.min(W*0.015,20))+'px "JetBrains Mono", ui-monospace, monospace';
+      ctx.textAlign='center';ctx.textBaseline='bottom';
+      var labelY=(notAlpha>0.5)?(baseY-hIs+Math.max(13,H*0.028)):(baseY-hIs-6);
+      ctx.textBaseline=(notAlpha>0.5)?'top':'bottom';
+      ctx.fillText(m.p.toFixed(2), cx, (notAlpha>0.5)?(baseY-hIs+5):(baseY-hIs-6));
+    }
+
+    /* molecule name under axis */
+    ctx.fillStyle=rgba('fg-dim',0.9);
+    ctx.font='600 '+Math.max(9,Math.min(W*0.0108,14))+'px "Noto Sans SC", sans-serif';
+    ctx.textAlign='center';ctx.textBaseline='top';
+    ctx.fillText(molName(m), cx, baseY+8);
+  }
+
+  /* labels per phase */
+  if(s.mode===0){
+    /* highlight naphthalene (0.53) vs pyrene (0.93): both YES, very different confidence */
+    var aIdx=6,cIdx=3;
+    var ax=colX(aIdx),cxp=colX(cIdx);
+    var midx=(ax+cxp)/2;
+    var la=easeOut(clamp01((ph.local-0.35)/0.4));
+    if(la>0.02){
+      ctx.globalAlpha=la;
+      ctx.strokeStyle=rgba('gold',0.7);ctx.lineWidth=1.4;ctx.setLineDash([4,4]);
+      ctx.beginPath();ctx.moveTo(cxp,b.y+b.h*0.12);ctx.lineTo(ax,b.y+b.h*0.12);ctx.stroke();ctx.setLineDash([]);
+      ctx.globalAlpha=1;
+      tag(midx, b.y+b.h*0.06, t('lblPair'), 'gold', la);
+    }
+  }
+  if(s.mode===1){
+    tag(b.x+b.w*0.5, b.y+b.h*0.05, t('lblProba'), 'cs', easeOut(clamp01((ph.local-0.15)/0.3)));
+  }
+  if(s.mode===2){
+    /* point at aspirin: 0.77 + 0.23 = 1 */
+    var asx=colX(2);
+    var sa=easeOut(clamp01((ph.local-0.2)/0.35));
+    tag(asx, b.y+b.h*0.10, t('lblSum'), 'FLASH', sa);
+    /* small NOT / IS legend */
+    var ly=baseY+H*0.085;
+    var lx=b.x+b.w*0.30;
+    ctx.globalAlpha=clamp01(ph.local/0.2);
+    ctx.fillStyle=rgba('DEPTH',0.8);ctx.fillRect(lx,ly-7,14,14);
+    ctx.fillStyle=rgba('fg-dim',0.92);ctx.textAlign='left';ctx.textBaseline='middle';
+    ctx.font='600 '+Math.max(9,Math.min(W*0.0105,13))+'px "Noto Sans SC",sans-serif';
+    ctx.fillText(t('lblNot'), lx+20, ly);
+    var lx2=lx+b.w*0.28;
+    ctx.fillStyle=rgba('cs',0.85);ctx.fillRect(lx2,ly-7,14,14);
+    ctx.fillStyle=rgba('fg-dim',0.92);
+    ctx.fillText(t('lblIs'), lx2+20, ly);
+    ctx.globalAlpha=1;
+  }
+  if(s.mode===3){
+    var lly=baseY+H*0.085;
+    tag(b.x+b.w*0.30, lly, t('lblAbove'), 'gold', clamp01((ph.local-0.1)/0.2));
+    tag(b.x+b.w*0.66, lly, t('lblBelow'), 'cs', clamp01((ph.local-0.1)/0.2));
+  }
+}
+
+/* ── caption ── */
+function drawCaption(capKey, alpha){
+  if(alpha<=0.02)return;
+  ctx.globalAlpha=alpha;
+  ctx.textAlign='left';ctx.textBaseline='alphabetic';
+  ctx.font='500 '+Math.max(11,Math.min(W*0.0118,16))+'px '+"'Noto Sans SC', sans-serif";
+  var txt=t(capKey);
+  var maxW=W*0.90;
+  var words=txt.split('');
+  var lines=[],cur='';
+  for(var i=0;i<words.length;i++){
+    var test=cur+words[i];
+    if(ctx.measureText(test).width>maxW && cur.length>0){lines.push(cur);cur=words[i];}
+    else cur=test;
+  }
+  if(cur)lines.push(cur);
+  var lh=Math.max(17,Math.min(W*0.0185,23));
+  var pad=10;
+  var boxH=lines.length*lh+pad*2;
+  var boxY=H-12-boxH;
+  ctx.globalAlpha=alpha*0.82;
+  ctx.fillStyle=rgba('bg-0',0.92);
+  ctx.fillRect(W*0.045, boxY, W*0.91, boxH);
+  ctx.lineWidth=1;ctx.strokeStyle=rgba('cs',0.3*alpha);
+  ctx.strokeRect(W*0.045, boxY, W*0.91, boxH);
+  ctx.globalAlpha=alpha;
+  ctx.fillStyle=rgba('fg',0.96);
+  for(var j=0;j<lines.length;j++){
+    ctx.fillText(lines[j], W*0.045+pad, boxY+pad+lh*0.78+j*lh);
+  }
+  ctx.globalAlpha=1;
+}
+
+/* ── scene state ── */
+function sceneState(ph){
+  var idx=ph.idx, lc=ph.local;
+  var s={mode:0, split:0, thr:0.5, thrAlpha:0, beat:idx};
+  if(idx===0){
+    s.mode=0; s.split=0; s.thrAlpha=0;
+  } else if(idx===1){
+    /* hard → proba morph: first half morph, then steady */
+    s.mode=1; s.split=0; s.thrAlpha=0;
+  } else if(idx===2){
+    s.mode=2; s.split=easeOut(clamp01(lc/0.4)); s.thrAlpha=0;
+  } else {
+    s.mode=3; s.split=1;
+    /* sweep threshold: 0.50 → 0.85 → 0.30 → 0.50 */
+    var seg;
+    if(lc<0.28){ s.thr=lerp(0.50,0.50,0); }
+    else if(lc<0.50){ seg=(lc-0.28)/0.22; s.thr=lerp(0.50,0.85,easeInOut(clamp01(seg))); }
+    else if(lc<0.72){ seg=(lc-0.50)/0.22; s.thr=lerp(0.85,0.30,easeInOut(clamp01(seg))); }
+    else { seg=(lc-0.72)/0.28; s.thr=lerp(0.30,0.50,easeInOut(clamp01(seg))); }
+    s.thrAlpha=easeOut(clamp01(lc/0.12));
+  }
+  return s;
+}
+
+/* ── HUD ── */
+var lastHud={a:'',b:'',c:''};
+function updateHUD(s, ph){
+  var thrTxt=(s.mode>=3)?s.thr.toFixed(2):'--';
+  var cnt;
+  if(s.mode>=3){ cnt=0; for(var i=0;i<MOLS.length;i++) if(MOLS[i].p>=s.thr) cnt++; cnt=String(cnt)+' / '+MOLS.length; }
+  else cnt='--';
+  var outTxt=(s.mode===0)?t('outHard'):t('outProba');
+  if(thrTxt!==lastHud.a){document.getElementById('hV1').textContent=thrTxt;
+    document.getElementById('hV1').style.color=rgba('gold',1);lastHud.a=thrTxt;}
+  if(cnt!==lastHud.b){document.getElementById('hV2').textContent=cnt;
+    document.getElementById('hV2').style.color=rgba('cs',1);lastHud.b=cnt;}
+  if(outTxt!==lastHud.c){document.getElementById('hV3').textContent=outTxt;
+    document.getElementById('hV3').style.color=rgba('FLASH',1);lastHud.c=outTxt;}
+  document.getElementById('hudSeq').textContent=(ph.idx+1)+'/'+PHASES.length;
+  document.getElementById('hudPhase').textContent=t(PHASES[ph.idx].name);
+  var q;
+  if(s.mode===0) q='naphtha & pyrene → <b>'+t('lblYes')+'</b> (?)';
+  else if(s.mode===3) q='line <b>'+s.thr.toFixed(2)+'</b> &nbsp; '+(function(){var c=0;for(var i=0;i<MOLS.length;i++)if(MOLS[i].p>=s.thr)c++;return c;})()+' '+ (LANG==='zh'?'判为怪兽':'monsters');
+  else q='caffeine <b>0.07</b> &nbsp; aspirin <b>0.23</b> &nbsp; pyrene <b>0.93</b>';
+  document.getElementById('hudQuant').innerHTML=q;
+}
+
+/* ── main loop ── */
+function frame(ts){
+  if(startT===null)startT=ts;
+  NOW=(ts-startT)/1000;
+  var elapsed=NOW%TOTAL;
+  if(W<1||H<1){resize();}
+  var ph=phaseAt(elapsed);
+  var s=sceneState(ph);
+
+  drawBg();
+  drawStage(ph,s);
+
+  var fadeIn=clamp01(ph.local/0.10);
+  var fadeOut=clamp01((1-ph.local)/0.10);
+  var capAlpha=Math.min(fadeIn,fadeOut);
+  drawCaption(PHASES[ph.idx].cap, Math.max(0.18,capAlpha));
+
+  updateHUD(s, ph);
+  requestAnimationFrame(frame);
+}
+
+function refreshI18N(){
+  document.getElementById('langBtn').textContent=(LANG==='zh')?'EN':'CN';
+  document.getElementById('mascotLine').textContent=t('mascotLine');
+  document.getElementById('sTitle').textContent=t('sTitle');
+  document.getElementById('sIntro').textContent=t('sIntro');
+  document.getElementById('sObsLabel').textContent=t('sObsLabel');
+  document.getElementById('sObs').innerHTML='<li>'+t('obs1')+'</li><li>'+t('obs2')+'</li><li>'+t('obs3')+'</li>';
+  document.getElementById('sRouteLabel').textContent=t('sRouteLabel');
+  document.getElementById('rs1').textContent=t('rs1');
+  document.getElementById('rs2').textContent=t('rs2');
+  document.getElementById('rs3').textContent=t('rs3');
+  document.getElementById('rs4').textContent=t('rs4');
+  document.getElementById('rsGoal').textContent=t('rsGoal');
+  document.getElementById('hL1').textContent=t('hL1');
+  document.getElementById('hL2').textContent=t('hL2');
+  document.getElementById('hL3').textContent=t('hL3');
+  lastHud={a:'',b:'',c:''};
+}
+
+document.getElementById('langBtn').addEventListener('click',function(){
+  LANG=(LANG==='zh')?'en':'zh';
+  refreshI18N();
+});
+window.addEventListener('resize',resize);
+
+buildCSS();
+refreshI18N();
+resize();
+setTimeout(resize,200);
+setTimeout(resize,600);
+if(document.fonts&&document.fonts.ready){document.fonts.ready.then(function(){resize();});}
+requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
