@@ -1,27 +1,30 @@
 "use client"
 
-/* Reuse authored scene images; no new generation is needed for mission navigation. */
 /* eslint-disable @next/next/no-img-element */
 import Link from "next/link"
 import { useEffect, useRef, useState } from "react"
 import { ArrowLeft, ArrowRight, Check, ChevronRight, Circle, Compass, FileCheck2, Flag, LoaderCircle, Map, Play, Radio, RotateCcw, Wrench, X } from "lucide-react"
-import type { GuidedCourse, GuidedModule } from "@/lib/project-lines/guided-course"
-import type { CourseRecord } from "@/lib/project-lines/guided-progress"
+import type { GuidedModule } from "@/lib/project-lines/guided-course"
 import { learningRecords, type LearningBody, type LearningScope } from "@/lib/api/learning-records"
 import { learningCacheKey } from "@/lib/learning-record-session"
 import { MISSION_STATUS_LABEL, ROVER_BRIEFS, ROVER_COURSE_PATH, ROVER_DELIVERY_SCOPE, ROVER_WORK_SCOPE, missionNodeHref, missionNodeStatus, roverEvidenceSummary } from "@/lib/project-lines/rover-mission"
 import s from "./rover-mission-center.module.css"
+import { RoverCampusMap, type RoverMapProps } from "./rover-campus-map"
 
-type MapProps = { course: GuidedCourse; record: CourseRecord; loaded: boolean; failed: string[]; current?: string }
+type MapProps = RoverMapProps
 
-export function RoverMissionMap({ course, record, loaded, failed, current }: MapProps) {
-  return <div className={s.map} aria-label="探测车任务地图">
+export function RoverMissionMap(props: MapProps) {
+  return <RoverCampusMap {...props}><RoverMissionDirectory {...props} /></RoverCampusMap>
+}
+
+function RoverMissionDirectory({ course, record, loaded, failed, current }: MapProps) {
+  return <div className={s.map} aria-label="探测车任务简洁目录">
     {course.stages.map((stage, i) => <section key={stage.stage_id} className={s.stage}>
       <header><span>0{i + 1}</span><div><small>{["MISSION CONTROL", "PROTOTYPE LAB", "FABRICATION & FIELD"][i]}</small><h3>{stage.title}</h3></div></header>
       <ol>{course.modules.filter(node => node.stage_id === stage.stage_id).map(node => {
         const status = missionNodeStatus(record.nodes[node.module_id], loaded, failed.includes(node.module_id))
         return <li key={node.module_id} data-status={status}>
-          <Link href={missionNodeHref(node.module_id)} aria-current={current === node.module_id ? "step" : undefined} data-mission-node={node.module_id}>
+          <Link href={missionNodeHref(node.module_id)} aria-current={current === node.module_id ? "step" : undefined} data-directory-node={node.module_id}>
             <span className={s.pin}>{status === "submitted" ? <Check size={15} /> : current === node.module_id ? <Compass size={16} /> : <Circle size={12} />}</span>
             <div><span className={s.nodeMeta}>{node.module_id} <i>·</i> {node.estimated_minutes} 分钟目标</span><strong>{node.title}</strong><small>{MISSION_STATUS_LABEL[status]}</small></div><ChevronRight size={15} />
           </Link>
@@ -109,7 +112,7 @@ export function RoverMissionCenter({ course, record, loaded, failed, token, owne
     <div className={s.centerBody}>
       <section className={s.dispatch}><div className={s.dispatchLabel}><Flag size={21} /><span>当前任务建议</span></div><div><p>{next.module_id} / {ROVER_BRIEFS[next.module_id].place}</p><h2>{next.title}</h2><span>{ROVER_BRIEFS[next.module_id].action}</span></div><Link href={missionNodeHref(next.module_id)}>进入任务 <ArrowRight size={18} /></Link></section>
       <section className={s.mapSection} id="mission-map"><div className={s.sectionTitle}><div><p>YOUR MISSION MAP</p><h2>从方案出发，一站一件作品。</h2></div><span className={s.count} data-mission-record-progress>{loaded ? `${count} / ${course.modules.length} 节记录已提交` : <><LoaderCircle size={15} className={s.spin} />正在读取进度</>}</span></div>
-        <p className={s.note}>按顺序推进，也可以随时回看。地图标记学习记录；作品是否齐备，请看下方的检查结果。</p>
+        <p className={s.note}>沿着基地路线，从控制室走到作品交付现场。选择一个地点，查看任务和要带回的作品。</p>
         {failed.length > 0 && <p className={s.warning} role="status">部分节点进度尚未读取，不会按未完成计入。<button onClick={retry}>重新读取节点进度</button></p>}
         <RoverMissionMap course={course} record={record} loaded={loaded} failed={failed} current={next.module_id} />
       </section>
