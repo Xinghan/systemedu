@@ -188,7 +188,7 @@ function Experience() {
     </div>
     <div className={s.shade} aria-hidden="true" />
     <header className={s.header}>
-      <Link href="/library?view=lines&line=space-exploration" className={s.back} aria-label="返回项目库"><ArrowLeft size={18} /></Link>
+      <Link href="/mission/space" className={s.back} aria-label="返回星际远航任务中心"><ArrowLeft size={18} /></Link>
       <div className={s.brand}><span className={s.mark}>S<span>•</span></span><div>晨光计划 <span className={s.brandSub}>MARS / 001</span></div></div>
       <div className={s.topActions}>
         <span className={s.simulation}>任务模拟</span>
@@ -250,7 +250,7 @@ function Experience() {
         {stage === "capture" && <div className={s.captureActions}><div className={s.aimControls} aria-label="调整取景"><button aria-label="取景向左" onClick={() => setFrame(f => ({ ...f, x: Math.max(45, f.x - 3) }))}>←</button><button aria-label="取景向右" onClick={() => setFrame(f => ({ ...f, x: Math.min(80, f.x + 3) }))}>→</button><button aria-label="取景向上" onClick={() => setFrame(f => ({ ...f, y: Math.max(20, f.y - 3) }))}>↑</button><button aria-label="取景向下" onClick={() => setFrame(f => ({ ...f, y: Math.min(55, f.y + 3) }))}>↓</button><label>拉近<input aria-label="镜头倍率" type="range" min="1.3" max="2.4" step="0.1" value={frame.zoom} onChange={e => setFrame(f => ({ ...f, zoom: Number(e.target.value) }))} /></label></div><button className={s.primary} disabled={!editable || mediaError} onClick={capture}><Camera size={19} /> 按下快门</button></div>}
         {stage === "complete" && <>
           <div className={s.evidence}><span><Check size={15} /> 3 处观察</span><span><Check size={15} /> {mission.attempts.length} 次路线尝试</span><span><Check size={15} /> 1 张岩层照片</span><button onClick={downloadPhoto}>带走我的照片 <ArrowRight size={14} /></button></div>
-          <Link href="/explore/space-exploration/write-driving-rules" className={s.nextLesson}><span><small>接下来的真实课程</small><strong>把判断，写成探测车的行动规则。</strong></span><ArrowRight size={23} /></Link>
+          <Link href="/mission/space" className={s.nextLesson}><span><small>前导体验完成 / 选择正式任务</small><strong>回到星际远航，开启你的成长路线。</strong></span><ArrowRight size={23} /></Link>
           <div className={s.otherLessons}><Link href="/explore/space-exploration/label-the-terrain">先学会识别地形</Link><Link href="/explore/space-exploration/assemble-a-rover">看看怎样制造探测车</Link><button onClick={() => setConfirmReset(true)}>再试一次</button></div>
         </>}
         {photoError && <p role="alert" className={s.errorText}>{photoError}</p>}

@@ -1,6 +1,7 @@
 "use client"
 
 import Link from "next/link"
+import { SpaceJourneyProjectBanner } from "@/components/mission/space-journey-links"
 import { projectCoverProps } from "@/lib/project-cover"
 import { fieldName, primaryProjectLine } from "@/lib/project-taxonomy"
 import { lessonPath } from "@/lib/course-numbering"
@@ -274,6 +275,7 @@ export default function ProjectHome() {
         ]}
       />
 
+      <SpaceJourneyProjectBanner projectId={slug} />
       {/* Hero header — 有封面时整幅海报做背景 + 暖色渐变蒙层, 文字反白 */}
       <header
         style={{

@@ -77,7 +77,7 @@ function EvidenceBoard({ token, owner }: { token: string | null; owner: string }
   </section>
 }
 
-function IntroFilm({ close }: { close: () => void }) {
+export function IntroFilm({ close, description, returnLabel = "回到制造任务" }: { close: () => void; description?: string; returnLabel?: string }) {
   const dialog = useRef<HTMLDialogElement>(null), video = useRef<HTMLVideoElement>(null)
   const [error, setError] = useState(false)
   useEffect(() => {
@@ -92,9 +92,9 @@ function IntroFilm({ close }: { close: () => void }) {
     <video ref={video} src="/mission/rover/video/rover-briefing-v1.mp4" poster="/mission/rover/engineer-1920.webp" controls playsInline preload="metadata" onError={() => setError(true)}>
       <track default kind="captions" src="/mission/rover/video/rover-briefing-zh.vtt" srcLang="zh" label="中文字幕" />
     </video>
-    <p>这是一次火星地形观察的模拟任务。本课程会进一步带你设计、3D 打印并测试桌面实物车。</p>
+    <p>{description || "这是一次火星地形观察的模拟任务。本课程会进一步带你设计、3D 打印并测试桌面实物车。"}</p>
     {error && <p role="alert">短片未加载成功，可以直接开始课程。<button onClick={() => { setError(false); video.current?.load() }}>重新加载短片</button></p>}
-    <div className={s.filmLinks}><Link href="/mission/rover">先体验 3 分钟前导任务 <ArrowRight size={15} /></Link><button onClick={close}>回到制造任务</button></div>
+    <div className={s.filmLinks}><Link href="/mission/rover">先体验 3 分钟前导任务 <ArrowRight size={15} /></Link><button onClick={close}>{returnLabel}</button></div>
   </dialog>
 }
 
@@ -103,7 +103,7 @@ export function RoverMissionCenter({ course, record, loaded, failed, token, owne
   const next = course.modules.find(n => !record.nodes[n.module_id]?.submitted_at) ?? course.modules.at(-1)!
   const count = course.modules.filter(n => record.nodes[n.module_id]?.submitted_at).length
   return <main className={s.center} data-mission-center>
-    <header className={s.header}><Link href="/library?view=lines&line=space-exploration"><ArrowLeft size={16} />返回航空航天项目线</Link><span><Radio size={15} /> 晨光制造任务 / MISSION CONTROL</span></header>
+    <header className={s.header}><Link href="/mission/space?station=build#journey-map"><ArrowLeft size={16} />返回星际远航任务中心</Link><span><Radio size={15} /> 03 系统建造 / 本项目任务中心</span></header>
     <section className={s.hero}>
       <img className={s.heroImage} src="/mission/rover/pointing-1920.webp" alt="虚构任务搭档林岚在控制室等你加入" fetchPriority="high" />
       <div className={s.heroCopy}><p className={s.kicker}>你的角色 / 探测车系统设计师</p><h1>{course.title}</h1><p>从控制席走进制造间。让你设计的系统，<br />变成一辆能接受真实测试的探测车。</p><div className={s.heroActions}><Link className={s.primary} href={missionNodeHref(next.module_id)}>{loaded ? `${count ? "建议继续" : "开始任务"} · ${next.title}` : "查看第一个任务"}<ArrowRight size={17} /></Link><button onClick={() => setFilm(true)}><Play size={16} />前导任务短片 · 29 秒</button></div><small>8 个节点 · 保留原课程结构 · 可分次完成</small></div>
@@ -111,7 +111,7 @@ export function RoverMissionCenter({ course, record, loaded, failed, token, owne
     </section>
     <div className={s.centerBody}>
       <section className={s.dispatch}><div className={s.dispatchLabel}><Flag size={21} /><span>当前任务建议</span></div><div><p>{next.module_id} / {ROVER_BRIEFS[next.module_id].place}</p><h2>{next.title}</h2><span>{ROVER_BRIEFS[next.module_id].action}</span></div><Link href={missionNodeHref(next.module_id)}>进入任务 <ArrowRight size={18} /></Link></section>
-      <section className={s.mapSection} id="mission-map"><div className={s.sectionTitle}><div><p>YOUR MISSION MAP</p><h2>从方案出发，一站一件作品。</h2></div><span className={s.count} data-mission-record-progress>{loaded ? `${count} / ${course.modules.length} 节记录已提交` : <><LoaderCircle size={15} className={s.spin} />正在读取进度</>}</span></div>
+      <section className={s.mapSection} id="mission-map"><div className={s.sectionTitle}><div><p>YOUR MISSION MAP</p><h2>造实物车的 8 个课程节点。</h2></div><span className={s.count} data-mission-record-progress>{loaded ? `${count} / ${course.modules.length} 节记录已提交` : <><LoaderCircle size={15} className={s.spin} />正在读取进度</>}</span></div>
         <p className={s.note}>沿着基地路线，从控制室走到作品交付现场。选择一个地点，查看任务和要带回的作品。</p>
         {failed.length > 0 && <p className={s.warning} role="status">部分节点进度尚未读取，不会按未完成计入。<button onClick={retry}>重新读取节点进度</button></p>}
         <RoverMissionMap course={course} record={record} loaded={loaded} failed={failed} current={next.module_id} />
@@ -126,7 +126,7 @@ export function RoverMissionCenter({ course, record, loaded, failed, token, owne
 export function RoverNodeBrief({ course, node, record, loaded, failed }: MapProps & { node: GuidedModule }) {
   const brief = ROVER_BRIEFS[node.module_id]
   return <section className={s.nodeBrief} data-scene={node.stage_id} aria-label="本节任务简报">
-    <div className={s.nodeBar}><Link href={ROVER_COURSE_PATH}><Map size={16} />返回任务中心</Link><span>{course.stages.find(stage => stage.stage_id === node.stage_id)?.title} / {node.module_id}</span></div>
+    <div className={s.nodeBar}><Link href={ROVER_COURSE_PATH}><Map size={16} />返回本项目任务中心</Link><span>{course.stages.find(stage => stage.stage_id === node.stage_id)?.title} / {node.module_id}</span></div>
     <div className={s.briefBody}><img src="/mission/rover/engineer-960.webp" alt="任务搭档林岚" /><div><p className={s.kicker}>{brief.place} / 林岚的简报</p><h2>{brief.message}</h2><div className={s.briefOutcome}><span>这次带回</span><strong>{node.output}</strong></div><p className={s.nodeHint}>{brief.action}</p><div className={s.briefLinks}><a href="#lesson-reading">先获取线索 <ArrowRight size={14} /></a><a href="#lesson-practice">进入任务工作台 <Wrench size={14} /></a><a href="#lesson-notebook">留下本节证据 <FileCheck2 size={14} /></a></div></div></div>
     <details className={s.inlineMap}><summary><Map size={15} />展开任务地图，查看我的进展</summary><RoverMissionMap course={course} record={record} loaded={loaded} failed={failed} current={node.module_id} /></details>
   </section>

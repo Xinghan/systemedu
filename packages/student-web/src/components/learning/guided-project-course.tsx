@@ -1,6 +1,8 @@
 "use client"
 
 import Link from "next/link"
+import { journeyHref, journeyStationFor } from "@/lib/project-lines/space-journey"
+import { SpaceJourneyProjectBanner } from "@/components/mission/space-journey-links"
 import { useCallback, useEffect, useState } from "react"
 import { useSearchParams } from "next/navigation"
 import ReactMarkdown from "react-markdown"
@@ -35,8 +37,8 @@ function GuidedCourseSession({ course, token, owner }: { course: GuidedCourse; t
   const search = useSearchParams()
   const lineId = course.line_id || "space-exploration"
   const displayLine = primaryProjectLine(course.id, lineId)
-  const lineHref = `/library?view=lines&line=${displayLine?.id || lineId}`
-  const lineTitle = displayLine?.title.zh || "项目线"
+  const lineHref = journeyStationFor(course.id) ? journeyHref(course.id) : `/library?view=lines&line=${displayLine?.id || lineId}`
+  const lineTitle = journeyStationFor(course.id) ? "星际远航 · 任务中心" : displayLine?.title.zh || "项目线"
   const edition = course.legacy_edition ? "edition=1&" : ""
   const current = course.modules.find(node => node.module_id === search.get("node")) ?? course.modules[0]
   const index = course.modules.indexOf(current)
@@ -89,6 +91,7 @@ function GuidedCourseSession({ course, token, owner }: { course: GuidedCourse; t
   if (missionEnabled && !search.get("node")) return <RoverMissionCenter course={course} record={record} loaded={loaded} failed={failedNodes} token={token} owner={owner} retry={() => setLoadAttempt(n => n + 1)} />
   return <main className={styles.page} data-guided-course={course.id}>
     <header className={styles.header}><Link href={lineHref}><ArrowLeft size={15} />{lineTitle}</Link><span>引导课程 / 学习、实践、交付</span></header>
+    <SpaceJourneyProjectBanner projectId={course.id} />
     {["assemble-a-rover", "run-an-expedition"].includes(course.id) && <p className={styles.editionNote}>{course.legacy_edition ? "当前为旧版虚拟课程，原记录保留。" : `${course.id === "run-an-expedition" ? "04 现场挑战" : "03 系统制作"} · 数字原型可以先完成，正式交付需要实物证据。`} <Link href={`/explore/space-exploration/${course.id}${course.legacy_edition ? "" : "?edition=1"}`}>{course.legacy_edition ? "进入新版实物课程" : "查看旧版课程与原记录"}</Link></p>}
     {missionEnabled && <RoverNodeBrief course={course} node={current} record={record} loaded={loaded} failed={failedNodes} />}
     {!missionEnabled && <section className={styles.hero}>

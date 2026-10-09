@@ -1,6 +1,7 @@
 "use client"
 
 import Link from "next/link"
+import { SpaceJourneyProjectBanner } from "@/components/mission/space-journey-links"
 import { lessonPath } from "@/lib/course-numbering"
 import { useParams, useRouter } from "next/navigation"
 import { useEffect, useMemo, useState } from "react"
@@ -540,6 +541,7 @@ export default function LearnPage() {
             </p>
           )}
 
+          <SpaceJourneyProjectBanner projectId={slug} />
           {/* CourseContentView 自己渲染 plan_markdown + ideas + theories + assignment */}
           <div style={{ marginTop: 24 }}>
             <CourseContentView

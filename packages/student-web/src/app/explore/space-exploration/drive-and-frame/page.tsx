@@ -1,3 +1,4 @@
+import { SpaceMicroMission } from "@/components/mission/space-journey-links"
 import type { Metadata } from "next"
 
 export const metadata: Metadata = {
@@ -6,5 +7,5 @@ export const metadata: Metadata = {
 }
 
 export default function ProjectExperiencePage() {
-  return <iframe src="/project-lines/space-exploration/drive-and-frame/index.html" title="开车找到观察点" style={{ display: "block", width: "100%", height: "100svh", border: 0, background: "#101c27" }} />
+  return <SpaceMicroMission projectId="drive-and-frame" title="开车找到观察点" />
 }
