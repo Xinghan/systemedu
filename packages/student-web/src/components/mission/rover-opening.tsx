@@ -8,9 +8,9 @@ import { ArrowLeft, ArrowRight, Camera, Check, CheckCheck, ChevronRight, Crossha
 import { useLearningRecord, useLearningIdentity } from "@/lib/hooks/use-learning-record"
 import { DIALOGUE, EMPTY_MISSION, INITIAL_BODY, MISSION_SCOPE, ROUTES, SITES, finishAttempt, missionBody, photoCrop, readMission, type Checkpoint, type Mission, type Route, type Site, type VoiceLine } from "@/lib/rover-opening"
 import s from "./rover-opening.module.css"
+import { RoverBriefingFilm } from "./rover-briefing-film"
 
 type Stage = "lobby" | "briefing" | "execute" | Checkpoint
-const BRIEFING: VoiceLine[] = ["welcome", "mission", "handover"]
 const CHAPTERS = ["任务简报", "观察地形", "制定计划", "带回证据"]
 const MEDIA = "/mission/rover"
 
@@ -24,7 +24,6 @@ function Experience() {
   const record = useLearningRecord(MISSION_SCOPE, INITIAL_BODY)
   const mission = readMission(record.body.artifact)
   const [stage, setStage] = useState<Stage>("lobby")
-  const [brief, setBrief] = useState(0)
   const [sound, setSound] = useState(false)
   const [speaking, setSpeaking] = useState(false)
   const [audioError, setAudioError] = useState(false)
@@ -46,9 +45,9 @@ function Experience() {
   const detail = SITES.find(site => site.id === focus)
   const opening = stage === "lobby" || stage === "briefing"
   const arrived = stage === "capture" || stage === "complete"
-  const scene = opening ? (stage === "briefing" && brief > 0 ? "pointing" : "engineer") : "terrain"
+  const scene = opening ? "engineer" : "terrain"
   const chapter = opening ? 0 : stage === "survey" ? 1 : ["plan", "execute", "stopped"].includes(stage) ? 2 : 3
-  const line: VoiceLine = stage === "briefing" ? BRIEFING[brief] : stage === "survey" ? focus ?? "handover" : stage === "plan" || stage === "execute" ? "plan" : stage === "stopped" ? "stopped" : arrived ? stage === "complete" ? "complete" : "arrived" : "welcome"
+  const line: VoiceLine = stage === "survey" ? focus ?? "handover" : stage === "plan" || stage === "execute" ? "plan" : stage === "stopped" ? "stopped" : arrived ? stage === "complete" ? "complete" : "arrived" : "welcome"
   const hasProgress = mission.observed.length > 0 || mission.attempts.length > 0
   const editable = !record.pending && !(record.busy && !record.ready)
   const canStart = (record.ready || record.attention) && editable
@@ -60,9 +59,7 @@ function Experience() {
   }
   function start(withSound: boolean) {
     setSound(withSound)
-    setBrief(0)
     setStage("briefing")
-    if (withSound) void audio.current?.play().catch(error => { if (error.name !== "AbortError") setAudioError(true) })
   }
   function observe(id: Site) {
     setFocus(id)
@@ -104,7 +101,7 @@ function Experience() {
   useEffect(() => {
     const node = audio.current
     if (!node) return
-    if (sound && stage !== "lobby") void node.play().catch(error => { if (error.name !== "AbortError") setAudioError(true) })
+    if (sound && stage !== "lobby" && stage !== "briefing") void node.play().catch(error => { if (error.name !== "AbortError") setAudioError(true) })
     else node.pause()
     return () => node.pause()
   }, [line, sound, stage])
@@ -119,7 +116,7 @@ function Experience() {
     return () => { active = false }
   }, [scene, mediaRetry])
   function toggleSound() {
-    if (!sound) {
+    if (!sound && !opening) {
       setAudioError(false)
       void audio.current?.play().catch(error => { if (error.name !== "AbortError") setAudioError(true) })
     }
@@ -130,10 +127,6 @@ function Experience() {
     setSound(true)
     if (audio.current) { audio.current.load(); void audio.current.play().catch(error => { if (error.name !== "AbortError") setAudioError(true) }) }
   }
-  function nextBrief() {
-    if (brief < 2) setBrief(brief + 1)
-    else save({ ...mission, checkpoint: "survey" })
-  }
   function resume() {
     setRoute(mission.route)
     if (mission.photo) setFrame(mission.photo)
@@ -141,7 +134,7 @@ function Experience() {
   }
   function reset() {
     save({ ...EMPTY_MISSION, observed: [], attempts: [] }, "briefing")
-    setBrief(0); setRoute(null); setFocus(null); setProgress(0)
+    setRoute(null); setFocus(null); setProgress(0)
     setConfirmReset(false)
   }
   function aim(clientX: number, clientY: number) {
@@ -219,19 +212,8 @@ function Experience() {
       <div className={s.namePlate}><span>你的任务搭档</span><strong>林岚</strong><small>探测车任务工程师 · 虚构角色</small></div>
     </section>}
 
-    {stage === "briefing" && <>
-      <div className={s.sceneLabel}><span className={s.dot} /> MISSION BRIEFING <span>地球控制席</span></div>
-      <div className={s.briefCount}>0{brief + 1}<span> / 03</span></div>
-      <section className={s.briefing}>
-        <div className={s.speaker}><Voice speaking={speaking} /><strong>林岚</strong><span>任务工程师</span></div>
-        <h1 ref={heading} tabIndex={-1} className={s.srOnly}>任务简报</h1>
-        <p key={line} className={s.dialogue} aria-live="polite">{DIALOGUE[line]}</p>
-        <div className={s.dialogueActions}>
-          <button className={s.reply} onClick={nextBrief} disabled={!editable}><span className={s.replyTag}>我</span>{["我准备好了。", "先观察，再决定。", "打开前视相机。"][brief]} <ChevronRight size={19} /></button>
-          <button className={s.quiet} onClick={() => save({ ...mission, checkpoint: "survey" })} disabled={!editable}>跳过简报</button>
-        </div>
-      </section>
-    </>}
+    {stage === "briefing" && <RoverBriefingFilm sound={sound} suspended={saveOpen || confirmReset} disabled={!editable}
+      onComplete={() => save({ ...mission, checkpoint: "survey" })} />}
 
     {!opening && <>
       <section className={s.missionHeading}>
@@ -276,7 +258,7 @@ function Experience() {
     </>}
 
     {stage !== "lobby" && <footer className={s.footer}><ol>{CHAPTERS.map((c, i) => <li className={i === chapter ? s.currentChapter : i < chapter ? s.doneChapter : ""} key={c}><span>{i < chapter ? <Check size={11} /> : `0${i + 1}`}</span>{c}</li>)}</ol><button onClick={() => setSaveOpen(true)} className={s.saveStatus}>{record.busy ? <LoaderCircle size={12} className={s.spin} /> : <span className={s.dot} />}{record.attention ? "保存需要处理" : !record.identity.token ? "仅存本机" : record.dirty ? "等待同步" : "账号记录"}</button></footer>}
-    {audioError && sound && <div className={s.audioNotice}>配音未能播放，字幕仍可用。<button onClick={retryAudio}>重试声音</button><button onClick={() => { setSound(false); setAudioError(false) }} aria-label="关闭声音提示"><X size={14} /></button></div>}
+    {audioError && !opening && sound && <div className={s.audioNotice}>配音未能播放，字幕仍可用。<button onClick={retryAudio}>重试声音</button><button onClick={() => { setSound(false); setAudioError(false) }} aria-label="关闭声音提示"><X size={14} /></button></div>}
     {saveOpen && <MissionDialog title="任务记录" close={() => setSaveOpen(false)}><button autoFocus className={s.close} onClick={() => setSaveOpen(false)} aria-label="关闭记录"><X /></button><FileCheck2 size={26} /><h2>你的任务记录</h2><p role="status">{record.message}</p><small>只保存这次开场的观察、路线尝试与取景参数，不会将正式课程标记为完成。场景、角色和数据均为教学模拟。</small><div className={s.modalActions}>{record.identity.token && <button className={s.primary} onClick={() => record.ready && !record.conflict ? void record.session.save() : void record.session.refresh(false)} disabled={record.busy}>重试同步</button>}<button className={s.secondary} onClick={downloadRecord}>下载当前备份</button></div>{record.conflict && <p>服务器存在另一版本。当前草稿已保留，先下载备份再决定是否读取。</p>}{record.conflict && <button className={s.quiet} onClick={() => { if (window.confirm("读取服务器版本将替换当前页面中的草稿。请确认已下载需要保留的备份。")) void record.session.refresh(true) }}>读取服务器版本</button>}<button className={s.quiet} onClick={() => { setSaveOpen(false); setStage("lobby") }}>返回开场</button></MissionDialog>}
     {confirmReset && <MissionDialog title="重新体验" close={() => setConfirmReset(false)}><RotateCcw size={26} /><h2>重新开始这次任务？</h2><p>当前开场草稿会重新计数。正式课程的学习记录不受影响。</p><div className={s.modalActions}><button autoFocus className={s.secondary} onClick={() => setConfirmReset(false)}>保留，继续任务</button><button className={s.primary} onClick={reset} disabled={!editable}>重新开始</button></div></MissionDialog>}
   </main>
