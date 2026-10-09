@@ -4,8 +4,9 @@ import Link from "next/link"
 import { SpaceJourneyProjectBanner } from "@/components/mission/space-journey-links"
 import { projectCoverProps } from "@/lib/project-cover"
 import { fieldName, primaryProjectLine } from "@/lib/project-taxonomy"
+import { missionContext, missionLessonHref, missionLibraryHref } from "@/lib/project-lines/space-curriculum"
 import { lessonPath } from "@/lib/course-numbering"
-import { useParams, useRouter } from "next/navigation"
+import { useParams, useRouter, useSearchParams } from "next/navigation"
 import { useEffect, useMemo, useState } from "react"
 import { toast } from "sonner"
 import ReactMarkdown from "react-markdown"
@@ -139,6 +140,8 @@ export default function ProjectHome() {
   const router = useRouter()
   const params = useParams<{ slug: string }>()
   const slug = decodeURIComponent(params.slug)
+  const searchParams = useSearchParams()
+  const mission = missionContext(slug, searchParams.get("node") || "", searchParams.get("mission") === "space")
   const { loggedIn, hydrate } = useAuthStore()
 
   const [project, setProject] = useState<DetailProject | null>(null)
@@ -216,7 +219,7 @@ export default function ProjectHome() {
   }, [modules])
 
   const firstModuleId = modules[0]?.module_id
-  const targetModuleId = lastModuleId || firstModuleId
+  const targetModuleId = mission?.node.module || lastModuleId || firstModuleId
   const completed = lastModuleId
     ? modules.findIndex((m) => m.module_id === lastModuleId)
     : 0
@@ -224,7 +227,7 @@ export default function ProjectHome() {
 
   async function handlePull() {
     if (!loggedIn) {
-      router.push(`/login?next=${encodeURIComponent(`/library/${slug}`)}`)
+      router.push(`/login?next=${encodeURIComponent(mission ? missionLibraryHref(mission.node.module) : `/library/${slug}`)}`)
       return
     }
     setPulling(true)
@@ -232,7 +235,7 @@ export default function ProjectHome() {
       await myProjects.pull(slug)
       setPulled(true)
       toast.success(t("library.pulled_toast"))
-      router.push("/home")
+      router.push(mission ? missionLessonHref(mission.node.ref) : "/home")
     } catch (err) {
       toast.error(err instanceof Error ? err.message : t("library.pull_failed"))
     } finally {
@@ -500,7 +503,7 @@ export default function ProjectHome() {
               </Link>
             ) : !loggedIn ? (
               <Link
-                href={`/login?next=${encodeURIComponent(`/library/${slug}`)}`}
+                href={`/login?next=${encodeURIComponent(mission ? missionLibraryHref(mission.node.module) : `/library/${slug}`)}`}
                 className="btn btn-violet btn-lg"
                 style={{ justifyContent: "center" }}
               >
@@ -519,7 +522,7 @@ export default function ProjectHome() {
               </button>
             ) : targetModuleId ? (
               <Link
-                href={lessonPath(slug, targetModuleId)}
+                href={mission ? missionLessonHref(mission.node.ref) : lessonPath(slug, targetModuleId)}
                 className="btn btn-violet btn-lg"
                 style={{ justifyContent: "center" }}
               >

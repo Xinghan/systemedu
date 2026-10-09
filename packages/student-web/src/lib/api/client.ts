@@ -39,7 +39,9 @@ async function fetchAPI<T>(path: string, init?: RequestInit): Promise<T> {
   if (res.status === 401) {
     clearToken()
     if (typeof window !== "undefined" && !path.startsWith("/api/auth/")) {
-      window.location.replace("/login")
+      const resumeMission = new URLSearchParams(window.location.search).get("mission") === "space"
+      const next = window.location.pathname + window.location.search + window.location.hash
+      window.location.replace(resumeMission ? `/login?next=${encodeURIComponent(next)}` : "/login")
     }
     throw new ApiError("Unauthorized", { status: 401 })
   }

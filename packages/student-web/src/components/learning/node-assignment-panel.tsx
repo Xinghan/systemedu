@@ -5,7 +5,7 @@ import { myProjects } from "@/lib/api"
 import { AssignmentView } from "./assignment-view"
 import type { KnodeInfo } from "@/lib/types/api"
 
-export function NodeAssignmentPanel({ projectName, knode }: { projectName: string; knode?: KnodeInfo | null }) {
+export function NodeAssignmentPanel({ projectName, knode, mergeHandsOn = false }: { projectName: string; knode?: KnodeInfo | null; mergeHandsOn?: boolean }) {
   const [content, setContent] = useState("")
   const [error, setError] = useState(false)
   const [attempt, setAttempt] = useState(0)
@@ -18,5 +18,5 @@ export function NodeAssignmentPanel({ projectName, knode }: { projectName: strin
   }, [projectName, moduleId, attempt])
   if (error) return <p className="p-6 text-sm">作业内容暂未读取。<button onClick={() => setAttempt(n => n + 1)}>重试</button></p>
   if (!content) return null
-  return <section className="mx-auto max-w-4xl px-6 py-8" data-node-assignment><h2 className="text-xl mb-4">本节作业与学习记录</h2><AssignmentView content={content} knode={knode} projectName={projectName} /></section>
+  return <section className="mx-auto max-w-4xl px-6 py-8" data-node-assignment><h2 className="text-xl mb-4">本节作业与学习记录</h2><AssignmentView mergeHandsOn={mergeHandsOn} content={content} knode={knode} projectName={projectName} /></section>
 }

@@ -35,5 +35,5 @@ export function useSpaceStageFilm(level: SpaceStage | null, enabled = true) {
 
 export function SpaceStageBriefing({ level, enabled = true }: { level: SpaceStage; enabled?: boolean }) {
   const { replay, dialog } = useSpaceStageFilm(level, enabled)
-  return <><button type="button" className={s.stageReplay} data-stage-replay={level} onClick={replay}><Play size={14} />阶段 0{level} · 任务短片</button>{dialog}</>
+  return <><button type="button" className={s.stageReplay} data-stage-replay={level} onClick={replay}><Play size={14} />场景简报 · {spaceStageFilm(level).title}</button>{dialog}</>
 }

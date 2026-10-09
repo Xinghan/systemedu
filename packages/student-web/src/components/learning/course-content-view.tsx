@@ -87,6 +87,8 @@ interface CourseContentViewProps {
   knowledgeLevel?: import("@/lib/types/api").KnowledgeLevel
   onMediaStats?: (stats: MediaStats) => void
   onOutline?: (sections: OutlineSection[]) => void
+  /** Mission references share a single existing deliverable instead of duplicating it. */
+  assignmentHandoff?: React.ReactNode
   /** Already authorized and loaded course, using the same classroom renderer. */
   preparedLesson?: {
     data: CourseContentData
@@ -2420,6 +2422,7 @@ export function CourseContentView({
   onMediaStats,
   onOutline,
   preparedLesson,
+  assignmentHandoff,
 }: CourseContentViewProps) {
   const t = useT()
   const [loadedCourseData, setCourseData] = useState<CourseContentData | null>(null)
@@ -2938,7 +2941,7 @@ export function CourseContentView({
 
 
                     {preparedLesson?.afterContent}
-                    {preparedLesson?.assignment ?? <NodeAssignmentPanel key={`${projectName}/${knode?.module_id}`} projectName={projectName} knode={knode} />}
+                    {preparedLesson?.assignment ?? <><NodeAssignmentPanel key={`${projectName}/${knode?.module_id}`} projectName={projectName} knode={knode} mergeHandsOn={!!assignmentHandoff}/>{assignmentHandoff}</>}
 
                     {agentLogs.length > 0 && <AgentDebugPanel logs={agentLogs} />}
 

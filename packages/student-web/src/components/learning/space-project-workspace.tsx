@@ -2,6 +2,8 @@
 
 import { useId, useRef, useState } from "react"
 import Link from "next/link"
+import { useSearchParams } from "next/navigation"
+import { missionContext, missionLessonHref, missionMapHref } from "@/lib/project-lines/space-curriculum"
 import { ArrowRight, Check, Circle, FlaskConical, Package, Play } from "lucide-react"
 import { useLearningRecord } from "@/lib/hooks/use-learning-record"
 import { learningRecords, type LearningScope, type LearningBody } from "@/lib/api/learning-records"
@@ -91,6 +93,7 @@ function ArtifactView({artifact,showMedia=true}:{artifact:SpaceArtifact;showMedi
 }
 
 function FinalDelivery({course,node,body,ready}:{course:GuidedCourse;node:GuidedModule;body:LearningBody;ready:boolean}) {
+  const mission=missionContext(course.id,node.module_id,useSearchParams().get("mission")==="space"&&!course.legacy_edition)
   const record=useLearningRecord(deliveryScope(course,node),{answers:[]})
   const artifact=checkedArtifact(body.artifact)?body.artifact:null
   const checks=artifact?artifactChecks(artifact):[{title:"有效的实验作品与实际记录",passed:false}]
@@ -107,7 +110,7 @@ function FinalDelivery({course,node,body,ready}:{course:GuidedCourse;node:Guided
     <button className={delivery.submit} onClick={submit} disabled={!record.ready||record.busy||record.conflict||(!record.pending&&(!complete||submitted))}>{record.pending?"重试上次交付":submitted?"当前版本已保存":record.identity.token?"提交项目作品":"保存项目作品到本机"}</button>
     {saved&&<details data-delivered-version className={delivery.savedVersion}><summary>查看已交付作品 · {new Date(saved.created_at).toLocaleString()}</summary>{checkedArtifact(saved.body.artifact)&&<ArtifactView artifact={saved.body.artifact}/>} {saved.body.answers.map(a=><div key={a.question_id} className={delivery.explanation}><strong>{a.question}</strong><p>{a.answer}</p></div>)}</details>}
     <LearningRecordStatus record={record}/>
-    <Link className={styles.nextLink} href={course.id==="run-an-expedition"?"/library/mars-analog-rover":`/explore/space-exploration/${course.id==="assemble-a-rover"?"run-an-expedition":"assemble-a-rover"}`}>{course.id==="run-an-expedition"?"继续：真实火星车课程":"下一站：让作品继续工作"}<ArrowRight size={15}/></Link>
+    <Link className={styles.nextLink} href={mission?(mission.next?missionLessonHref(mission.next):missionMapHref("delivery")):course.id==="run-an-expedition"?"/library/mars-analog-rover":`/explore/space-exploration/${course.id==="assemble-a-rover"?"run-an-expedition":"assemble-a-rover"}`}>{course.id==="run-an-expedition"?"继续：真实火星车课程":"下一站：让作品继续工作"}<ArrowRight size={15}/></Link>
   </section>
 }
 

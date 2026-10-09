@@ -159,6 +159,41 @@ def test_concurrent_duplicate_submission_is_one_snapshot(records):
     assert len(client.get('/api/learning/records', params=scope(p), headers=a).json()['submissions']) == 1
 
 
+def test_mission_dossier_references_preserve_original_work_and_identity(records):
+    client, (a, b), db = records
+    original = payload('assignment')
+    original.update(module_id='M04', activity_id='final-deliverable', request_id=str(uuid.uuid4()))
+    original['body']['artifact'] = {'rules': ['unknown -> stop']}
+    response = client.post('/api/learning/submissions', json=original, headers=a)
+    assert response.status_code == 201, response.text
+    source = response.json()['submission']
+    dossier = dict(library_slug='space-exploration', module_id='JOURNEY',
+                   activity_id='mission-dossier', kind='assignment', content_version='1.0',
+                   expected_revision=0, body={
+        'answers': [{'question_id': 'goal', 'question': '观察目标', 'answer': '比较地垫纹理'}],
+        'artifact': {'schema': 'space-mission-dossier/1', 'vehicleVersion': 'v1',
+                     'modelVersion': '', 'archiveLocation': '', 'links': [{
+                         'scope': scope(original), 'submissionId': source['id'],
+                         'createdAt': source['created_at'], 'digest': 'a' * 64,
+                         'owner': 'fixture-account', 'summary': '测试引用，非实物验收',
+                     }]},
+    })
+    assert client.put('/api/learning/drafts', json=dossier, headers=a).status_code == 200
+    dossier.update(expected_revision=1, request_id=str(uuid.uuid4()))
+    assert client.post('/api/learning/submissions', json=dossier, headers=a).status_code == 201
+    original.update(expected_revision=1, request_id=str(uuid.uuid4()))
+    original['body']['artifact']['rules'] = ['unknown -> stop and inspect']
+    assert client.post('/api/learning/submissions', json=original, headers=a).status_code == 201
+    db.reset_engine_for_tests()
+    saved = client.get('/api/learning/records', params=scope(dossier), headers=a).json()
+    assert saved['submissions'][0]['body']['artifact']['links'][0]['submissionId'] == source['id']
+    history = client.get('/api/learning/records', params=scope(original), headers=a).json()['submissions']
+    assert len(history) == 2
+    assert history[1]['body']['artifact']['rules'] == ['unknown -> stop']
+    isolated = client.get('/api/learning/records', params=scope(dossier), headers=b).json()
+    assert isolated == {'draft': None, 'submissions': []}
+
+
 def test_failed_commit_rolls_back_draft_history_and_tutor_attempt(records, monkeypatch, caplog):
     from sqlalchemy.orm import Session
     client, (a, _), _ = records

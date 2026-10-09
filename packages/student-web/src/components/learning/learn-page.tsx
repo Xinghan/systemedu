@@ -2,8 +2,11 @@
 
 import Link from "next/link"
 import { SpaceJourneyProjectBanner } from "@/components/mission/space-journey-links"
+import { missionContext, missionLessonHref, missionLibraryHref, missionMapHref } from "@/lib/project-lines/space-curriculum"
+import { MissionLessonBrief, MissionLessonOutline, MissionLessonFooter, MissionSupportingLessons, MissionReferenceAssignment } from "@/components/mission/space-mission-lesson"
+import missionStyles from "@/components/mission/space-mission-curriculum.module.css"
 import { lessonPath } from "@/lib/course-numbering"
-import { useParams, useRouter } from "next/navigation"
+import { useParams, useRouter, useSearchParams } from "next/navigation"
 import { useEffect, useMemo, useState } from "react"
 import { toast } from "sonner"
 import {
@@ -56,6 +59,10 @@ export default function LearnPage() {
   const slug = decodeURIComponent(params.slug)
   const moduleId = decodeURIComponent(params.moduleId)
   const router = useRouter()
+  const routeSearch = useSearchParams()
+  const mission = missionContext(slug, moduleId, routeSearch.get("mission") === "space")
+  const returnPath = mission ? missionLessonHref(mission.node.ref) : lessonPath(slug, moduleId)
+  const enrollmentPath = mission ? missionLibraryHref(moduleId) : `/library/${encodeURIComponent(slug)}`
   const { loggedIn, hydrate } = useAuthStore()
 
   const [knodeMeta, setKnodeMeta] = useState<{
@@ -68,20 +75,25 @@ export default function LearnPage() {
   const [lastModuleId, setLastModuleId] = useState<string | null>(null)
   const [modules, setModules] = useState<ProjectTreeModule[]>([])
   const [stages, setStages] = useState<ProjectTreeStage[]>([])
+  const [authReady, setAuthReady] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [agentOpen, setAgentOpen] = useState(true)
+  const [agentOpen, setAgentOpen] = useState(!mission)
   const [search, setSearch] = useState("")
 
   useEffect(() => {
+    let active = true
     hydrate()
+    // Wait for the external auth store update before deciding where to resume.
+    queueMicrotask(() => { if (active) setAuthReady(true) })
+    return () => { active = false }
   }, [hydrate])
 
   useEffect(() => {
-    if (loggedIn === false) {
-      router.replace(`/login?next=${encodeURIComponent(lessonPath(slug, moduleId))}`)
+    if (authReady && loggedIn === false) {
+      router.replace(`/login?next=${encodeURIComponent(returnPath)}`)
     }
-  }, [loggedIn, slug, moduleId, router])
+  }, [authReady, loggedIn, slug, moduleId, router, returnPath])
 
   useEffect(() => {
     setCurrentModuleId(moduleId)
@@ -90,6 +102,7 @@ export default function LearnPage() {
 
   useEffect(() => {
     if (!loggedIn) return
+    let active = true
     void (async () => {
       setLoading(true)
       setError(null)
@@ -99,6 +112,7 @@ export default function LearnPage() {
           library.getTree(slug).catch(() => null),
           library.getProject(slug).catch(() => null),
         ])
+        if (!active) return
         setKnodeMeta({
           title: k.title,
           summary: k.summary || "",
@@ -115,23 +129,25 @@ export default function LearnPage() {
         // 拉自己进度
         myProjects.list().then((mine) => {
           const item = mine.find((m) => m.slug === slug)
-          if (item) setLastModuleId(item.last_module_id ?? null)
+          if (active && item) setLastModuleId(item.last_module_id ?? null)
         }).catch(() => {})
         myProjects.setProgress(slug, moduleId).catch(() => {})
       } catch (err) {
+        if (!active) return
         const msg = err instanceof Error ? err.message : t("session.load_failed")
         setError(msg)
         if (msg.includes("pull_required") || msg === "Unauthorized") {
           toast.error(t("learnpage.pull_required"))
-          router.replace(`/library/${encodeURIComponent(slug)}`)
+          router.replace(enrollmentPath)
         } else {
           toast.error(msg)
         }
       } finally {
-        setLoading(false)
+        if (active) setLoading(false)
       }
     })()
-  }, [loggedIn, slug, moduleId, router])
+    return () => { active = false }
+  }, [loggedIn, slug, moduleId, router, enrollmentPath])
 
   const orderedModules = useMemo(
     () =>
@@ -232,6 +248,8 @@ export default function LearnPage() {
 
   return (
     <main
+      className={mission ? missionStyles.lessonClassroom : undefined}
+      data-mission-classroom={mission ? "space" : undefined}
       style={{
         display: "grid",
         gridTemplateColumns: `300px 1fr ${agentOpen ? "380px" : "56px"}`,
@@ -248,6 +266,7 @@ export default function LearnPage() {
           flexDirection: "column",
         }}
       >
+        {mission ? <MissionLessonOutline station={mission.station} current={mission.primary}/> : <>
         <div
           style={{ padding: "16px 18px", borderBottom: "1px solid var(--border)" }}
         >
@@ -431,6 +450,7 @@ export default function LearnPage() {
             </div>
           ))}
         </div>
+        </>}
       </aside>
 
       {/* ============ CENTER — Content ============ */}
@@ -460,7 +480,7 @@ export default function LearnPage() {
         >
           <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
             <span className="tag violet">
-              {currentStage?.stage_id || "—"} · {moduleId}
+              {mission?.station.code || currentStage?.stage_id || "—"} · {moduleId}
             </span>
             {knodeMeta?.duration_minutes ? (
               <span className="tag" style={{ background: "var(--paper-2)" }}>
@@ -474,7 +494,7 @@ export default function LearnPage() {
             ) : null}
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            {prev && (
+            {!mission && prev && (
               <Link
                 href={lessonPath(slug, prev.module_id)}
                 className="btn btn-ghost btn-sm"
@@ -482,7 +502,7 @@ export default function LearnPage() {
                 <ChevronLeft size={13} strokeWidth={1.5} /> {prev.module_id}
               </Link>
             )}
-            {next && (
+            {!mission && next && (
               <Link
                 href={lessonPath(slug, next.module_id)}
                 className="btn btn-ghost btn-sm"
@@ -499,7 +519,7 @@ export default function LearnPage() {
               <Network size={13} strokeWidth={1.5} /> Tree
             </button>
             {/* spec 036: 标记完成 toggle (会同步点亮 platform 知识树节点) */}
-            <KnodeCompleteButton slug={slug} knodeId={moduleId} />
+            {(!mission || mission.node.mode === "lesson") && <KnodeCompleteButton slug={slug} knodeId={moduleId} />}
           </div>
         </div>
 
@@ -513,7 +533,7 @@ export default function LearnPage() {
           }}
         >
           <div className="mono" style={{ fontSize: 11, color: "var(--sub)" }}>
-            {currentStage?.stage_id || "—"} · {moduleId}
+            {mission?.station.code || currentStage?.stage_id || "—"} · {moduleId}
           </div>
           <h1
             style={{
@@ -541,22 +561,24 @@ export default function LearnPage() {
             </p>
           )}
 
-          <SpaceJourneyProjectBanner projectId={slug} />
+          {mission ? <MissionLessonBrief context={mission}/> : <SpaceJourneyProjectBanner projectId={slug} />}
           {/* CourseContentView 自己渲染 plan_markdown + ideas + theories + assignment */}
           <div style={{ marginTop: 24 }}>
             <CourseContentView
+              assignmentHandoff={mission && ["support", "replaced"].includes(mission.node.mode) ? <MissionReferenceAssignment context={mission}/> : undefined}
               projectName={slug}
               nodeId={knodeForView.id}
               knode={knodeForView}
-              onClose={() => router.push(`/library/${encodeURIComponent(slug)}`)}
+              onClose={() => router.push(mission ? missionMapHref(mission.station.id) : `/library/${encodeURIComponent(slug)}`)}
               onMarkComplete={() => {
                 myProjects.setProgress(slug, moduleId).catch(() => {})
               }}
             />
           </div>
 
+          {mission && <MissionSupportingLessons context={mission}/>}
           {/* footer nav */}
-          <div
+          {mission ? <MissionLessonFooter context={mission}/> : <div
             style={{
               marginTop: 48,
               paddingTop: 18,
@@ -594,7 +616,7 @@ export default function LearnPage() {
                 {t("learnpage.back_to_project_home")}
               </Link>
             )}
-          </div>
+          </div>}
         </article>
       </section>
 
