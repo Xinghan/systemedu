@@ -11,35 +11,23 @@ import { hasJourneyEvidence, readJourneyProject, recommendJourneyProject, waitin
 import { ROVER_CAMPUS_POINTS, RoverCampusSurface, type CampusStop } from "@/components/learning/rover-campus-surface"
 import { IntroFilm } from "@/components/learning/rover-mission-center"
 import { projectCoverProps } from "@/lib/project-cover"
-import { hasSeenSpaceIntro, rememberSpaceIntro } from "@/lib/project-lines/mission-intro"
+import type { SpaceStage } from "@/lib/project-lines/space-stage-films"
+import { useSpaceStageFilm } from "./space-stage-briefing"
 import s from "./space-journey.module.css"
 
 export function SpaceJourney() {
   const identity=useLearningIdentity()
   const search=useSearchParams()
-  const [film,setFilm]=useState<false | "automatic" | "replay">(false)
-  useEffect(()=>{
-    let active=true
-    // Read the browser preference after hydration. The cancellation also handles Strict Mode.
-    const enter=()=>queueMicrotask(()=>{
-      if(active&&!document.hidden&&!hasSeenSpaceIntro()) { rememberSpaceIntro();setFilm("automatic") }
-    })
-    enter()
-    document.addEventListener("visibilitychange",enter)
-    return()=>{active=false;document.removeEventListener("visibilitychange",enter)}
-  },[])
-  function closeFilm() {
-    const automatic=film==="automatic"
-    rememberSpaceIntro()
-    setFilm(false)
-    if(automatic) requestAnimationFrame(()=>document.querySelector<HTMLAnchorElement>("[data-journey-start]")?.focus({preventScroll:true}))
-  }
+  const [film,setFilm]=useState(false)
+  const [stage,setStage]=useState<SpaceStage | null>(null)
+  const { replay, dialog }=useSpaceStageFilm(stage,!film)
   return <>
-    <JourneySession key={`${identity.owner}:${search.get("station")||""}`} {...identity} openFilm={()=>setFilm("replay")} />
-    {film&&<IntroFilm close={closeFilm} autoPlay onEnded={closeFilm} returnLabel={film==="automatic"?"跳过序章，进入任务中心":"回到星际远航任务中心"} description="这是星际远航中的火星探索序章：先观察、选择路线、带回照片。整条项目线还会走向方法设计、实物制造、自主探测与行星数据研究。"/>}
+    <JourneySession key={`${identity.owner}:${search.get("station")||""}`} {...identity} openFilm={()=>setFilm(true)} stageReady={setStage} replayStage={replay} />
+    {dialog}
+    {film&&<IntroFilm close={()=>setFilm(false)} autoPlay onEnded={()=>setFilm(false)} returnLabel="回到星际远航任务中心" description="这是星际远航中的火星探索序章：先观察、选择路线、带回照片。整条项目线还会走向方法设计、实物制造、自主探测与行星数据研究。"/>}
   </>
 }
-function JourneySession({token,owner,openFilm}:{token:string|null;owner:string;openFilm:()=>void}) {
+function JourneySession({token,owner,openFilm,stageReady,replayStage}:{token:string|null;owner:string;openFilm:()=>void;stageReady:(level:SpaceStage)=>void;replayStage:()=>void}) {
   const search=useSearchParams()
   const initial=JOURNEY_STATIONS.find(station=>station.id===search.get("station"))?.id
   const [selected,setSelected]=useState<string>(initial||"")
@@ -57,6 +45,10 @@ function JourneySession({token,owner,openFilm}:{token:string|null;owner:string;o
   const next=journeyProject(recommendJourneyProject(progress))
   const station=JOURNEY_STATIONS.find(value=>value.id===(selected||next.station.id))??JOURNEY_STATIONS[0]
   const level=JOURNEY_LEVELS.find(value=>value.level===station.level)!
+  useEffect(()=>{
+    // Explicit station arrivals need not wait for remote progress. Recommendations do.
+    if(selected||ready) stageReady(station.level)
+  },[selected,ready,station.level,stageReady])
   const choose=(id:string)=>{setSelected(id)}
   const completed=JOURNEY_IDS.filter(id=>hasJourneyEvidence(progress[id]))
   const failed=JOURNEY_IDS.filter(id=>progress[id].state==="unknown")
@@ -83,7 +75,7 @@ function JourneySession({token,owner,openFilm}:{token:string|null;owner:string;o
         <RoverCampusSurface stops={stops} current={next.station.id} selected={station.id} onSelect={choose} onUnavailable={unavailable} title="星际远航 · 全线任务地图" subtitle="从第一件作品，到完整工程与研究" mapMotto="把好奇，变成自己的探索能力。" taskId={taskId}/>
         <div className={s.mapGuide}><span>拖动探索 · ＋ / − 缩放 · 点击地点查看项目</span><span>07 自主工程 / 08 行星研究：高阶分流</span></div>
         <section id={taskId} className={s.station} aria-label="当前任务站" data-journey-station={station.id}>
-          <div className={s.stationIntro}><div className={s.operator}><img src="/mission/rover/engineer-960.webp" alt="任务搭档林岚"/><div><p>林岚的任务简报 / {level.role}</p><h3>{station.place}</h3></div></div><p className={s.message}>{station.message}</p><div className={s.handoff}><Layers size={17}/><div><strong>这一站怎样连到下一站</strong><p>{station.handoff}</p></div></div><p className={s.preparation}><Wrench size={15}/>{level.support}</p></div>
+          <div className={s.stationIntro}><div className={s.operator}><img src="/mission/rover/engineer-960.webp" alt="任务搭档林岚"/><div><p>林岚的任务简报 / {level.role}</p><h3>{station.place}</h3></div></div><button type="button" className={s.stageReplay} data-stage-replay={station.level} onClick={replayStage}><Play size={14}/>阶段 0{station.level} · 重播任务短片</button><p className={s.message}>{station.message}</p><div className={s.handoff}><Layers size={17}/><div><strong>这一站怎样连到下一站</strong><p>{station.handoff}</p></div></div><p className={s.preparation}><Wrench size={15}/>{level.support}</p></div>
           <div className={s.projects}>{station.projects.map(id=>{const p=journeyProject(id),state=progress[id];return <article key={id} data-journey-project={id}>{p.cover?<img {...projectCoverProps(id,p.cover,"card")} alt="" loading="lazy"/>:<div className={s.researchVisual}><Compass size={30}/><small>LIGHTKURVE</small><strong>真实数据<br/>行星调查</strong></div>}<div><div className={s.projectMeta}><span>{p.duration}</span><span data-progress-state={state.state}>{state.label}</span></div><h4>{p.title}</h4><p><small>带回的作品</small>{p.outcome}</p><Link href={p.href}>{p.full?"查看完整课程":p.micro?"开始 3 分钟体验":state.state==="submitted"?"查看作品与课程":"进入任务课程"}<ArrowRight size={16}/></Link></div></article>})}</div>
         </section>
       </section>

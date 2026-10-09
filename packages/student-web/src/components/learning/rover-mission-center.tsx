@@ -2,14 +2,18 @@
 
 /* eslint-disable @next/next/no-img-element */
 import Link from "next/link"
-import { useEffect, useRef, useState } from "react"
-import { ArrowLeft, ArrowRight, Check, ChevronRight, Circle, Compass, FileCheck2, Flag, LoaderCircle, Map, Play, Radio, RotateCcw, Wrench, X } from "lucide-react"
+import { useEffect, useState } from "react"
+import { ArrowLeft, ArrowRight, Check, ChevronRight, Circle, Compass, FileCheck2, Flag, LoaderCircle, Map, Play, Radio, RotateCcw, Wrench } from "lucide-react"
 import type { GuidedModule } from "@/lib/project-lines/guided-course"
 import { learningRecords, type LearningBody, type LearningScope } from "@/lib/api/learning-records"
 import { learningCacheKey } from "@/lib/learning-record-session"
 import { MISSION_STATUS_LABEL, ROVER_BRIEFS, ROVER_COURSE_PATH, ROVER_DELIVERY_SCOPE, ROVER_WORK_SCOPE, missionNodeHref, missionNodeStatus, roverEvidenceSummary } from "@/lib/project-lines/rover-mission"
 import s from "./rover-mission-center.module.css"
 import { RoverCampusMap, type RoverMapProps } from "./rover-campus-map"
+
+import { IntroFilm } from "@/components/mission/mission-film-dialog"
+import { SpaceStageBriefing } from "@/components/mission/space-stage-briefing"
+export { IntroFilm } from "@/components/mission/mission-film-dialog"
 
 type MapProps = RoverMapProps
 
@@ -77,37 +81,6 @@ function EvidenceBoard({ token, owner }: { token: string | null; owner: string }
   </section>
 }
 
-export function IntroFilm({ close, description, returnLabel = "回到制造任务", autoPlay = false, onEnded }: {
-  close: () => void; description?: string; returnLabel?: string; autoPlay?: boolean; onEnded?: () => void
-}) {
-  const dialog = useRef<HTMLDialogElement>(null), video = useRef<HTMLVideoElement>(null)
-  const [error, setError] = useState(false)
-  const [needsPlay, setNeedsPlay] = useState(false)
-  useEffect(() => {
-    let active = true
-    const d = dialog.current, v = video.current
-    d?.showModal()
-    if (autoPlay) void v?.play().catch(reason => {
-      if (active && reason?.name !== "AbortError") setNeedsPlay(true)
-    })
-    const hide = () => { if (document.hidden) v?.pause() }
-    document.addEventListener("visibilitychange", hide)
-    return () => { active = false; v?.pause(); d?.close(); document.removeEventListener("visibilitychange", hide) }
-  }, [autoPlay])
-  function play() {
-    if (error) { setError(false); video.current?.load() }
-    void video.current?.play().catch(() => setNeedsPlay(true))
-  }
-  return <dialog ref={dialog} className={s.dialog} aria-label="前导任务短片" onCancel={close} onClick={e => { if (e.target === e.currentTarget) close() }}>
-    <div className={s.filmHeader}><span>前导任务 / 和林岚坐进控制席</span><button autoFocus onClick={close} aria-label="关闭任务短片"><X size={20} /></button></div>
-    <div className={s.filmStage}><video ref={video} src="/mission/rover/video/rover-briefing-v1.mp4" poster="/mission/rover/engineer-1920.webp" controls playsInline preload="metadata" onPlay={() => setNeedsPlay(false)} onEnded={onEnded} onError={() => setError(true)}>
-      <track default kind="captions" src="/mission/rover/video/rover-briefing-zh.vtt" srcLang="zh" label="中文字幕" />
-    </video>{needsPlay && !error && <div className={s.playPrompt}><button onClick={play}><Play size={20} />播放任务序章</button><span>点击播放，和林岚一起出发</span></div>}</div>
-    <p>{description || "这是一次火星地形观察的模拟任务。本课程会进一步带你设计、3D 打印并测试桌面实物车。"}</p>
-    {error && <p role="alert">短片未加载成功，可以直接开始课程。<button onClick={play}>重新加载短片</button></p>}
-    <div className={s.filmLinks}><Link href="/mission/rover">先体验 3 分钟前导任务 <ArrowRight size={15} /></Link><button onClick={close}>{returnLabel}</button></div>
-  </dialog>
-}
 
 export function RoverMissionCenter({ course, record, loaded, failed, token, owner, retry }: MapProps & { token: string | null; owner: string; retry: () => void }) {
   const [film, setFilm] = useState(false)
@@ -121,6 +94,7 @@ export function RoverMissionCenter({ course, record, loaded, failed, token, owne
       <div className={s.operator}><span>任务搭档 / 林岚</span><small>AI 生成的虚构角色与场景</small></div>
     </section>
     <div className={s.centerBody}>
+      <SpaceStageBriefing level={3} enabled={!film} />
       <section className={s.dispatch}><div className={s.dispatchLabel}><Flag size={21} /><span>当前任务建议</span></div><div><p>{next.module_id} / {ROVER_BRIEFS[next.module_id].place}</p><h2>{next.title}</h2><span>{ROVER_BRIEFS[next.module_id].action}</span></div><Link href={missionNodeHref(next.module_id)}>进入任务 <ArrowRight size={18} /></Link></section>
       <section className={s.mapSection} id="mission-map"><div className={s.sectionTitle}><div><p>YOUR MISSION MAP</p><h2>造实物车的 8 个课程节点。</h2></div><span className={s.count} data-mission-record-progress>{loaded ? `${count} / ${course.modules.length} 节记录已提交` : <><LoaderCircle size={15} className={s.spin} />正在读取进度</>}</span></div>
         <p className={s.note}>沿着基地路线，从控制室走到作品交付现场。选择一个地点，查看任务和要带回的作品。</p>
