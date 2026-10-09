@@ -1,6 +1,7 @@
 import { LOCAL_PROJECTS } from "./catalog"
 import snapshots from "./course-snapshots.json"
 import { SPACE_MISSION_HREF } from "./mission-routes"
+import { projectCoverProps } from "../project-cover"
 
 export const SPACE_JOURNEY_HREF = SPACE_MISSION_HREF
 export const SPACE_JOURNEY_LINE = "space-exploration"
@@ -46,8 +47,10 @@ export function journeyProject(id: string) {
     coverImage: "",
   } : undefined)
   if (!local && !full) throw new Error(`Missing journey project: ${id}`)
+  // Older deployed course snapshots omit covers; use their existing optimized asset mapping.
+  const snapshotCover = full && "coverImage" in full && typeof full.coverImage === "string" ? full.coverImage : ""
   return { id, title: local?.title.zh ?? full!.title_zh, href: local?.href ?? `/library/${id}`, outcome: local?.outcome.zh ?? full!.outcome,
-    cover: local?.coverImage ?? full!.coverImage, micro: local?.kind === "micro", full: !local,
+    cover: local?.coverImage ?? projectCoverProps(id, snapshotCover, "card").src, micro: local?.kind === "micro", full: !local,
     duration: local ? `约 ${local.estimatedMinutes} 分钟 · ${local.learningNodes ? `${local.learningNodes} 个节点` : "直接操作"}` : "完整课程 · 可分阶段完成",
     preparation: local?.preparation?.zh, station: journeyStationFor(id)!,
   }
