@@ -23,6 +23,8 @@ import { RenewableCourseWorkspace } from "./renewable-workspace"
 import { BionicsCourseWorkspace } from "./bionics-workspace"
 import { EarthCourseWorkspace } from "./earth-workspace"
 import styles from "./guided-project-course.module.css"
+import { hasRoverMission } from "@/lib/project-lines/rover-mission"
+import { RoverMissionCenter, RoverNodeBrief } from "./rover-mission-center"
 
 export function GuidedProjectCourse({ course }: { course: GuidedCourse }) {
   const identity = useLearningIdentity()
@@ -42,26 +44,41 @@ function GuidedCourseSession({ course, token, owner }: { course: GuidedCourse; t
   const [loaded, setLoaded] = useState(false)
   const [labOpen, setLabOpen] = useState(false)
   const [loadMessage, setLoadMessage] = useState("")
+  const [failedNodes, setFailedNodes] = useState<string[]>([])
+  const [loadAttempt, setLoadAttempt] = useState(0)
+  const missionEnabled = hasRoverMission(course)
   const onRecord = useCallback((id: string, saved: Pick<RecordState, "body" | "submittedAt">) => {
     setRecord(previous => ({ ...previous, nodes: { ...previous.nodes, [id]: { answers: saved.body.answers.map(a => a.answer), ...(saved.submittedAt ? { submitted_at: saved.submittedAt } : {}) } }, ...(id === "M04" ? { lab_artifact: saved.body.artifact ?? undefined } : {}) }))
   }, [])
   useEffect(() => {
     let active = true
-    Promise.all(course.modules.map(async node => {
+    Promise.allSettled(course.modules.map(async node => {
       const scope = guidedScope(course, node)
       if (token) {
+        // A locally edited draft must not look completed while its save is pending.
+        try {
+          const cached = JSON.parse(localStorage.getItem(learningCacheKey(owner, scope)) || "null")
+          if (cached?.dirty && Array.isArray(cached.body?.answers) && cached.body.answers.every((a: { answer?: unknown }) => typeof a?.answer === "string")) onRecord(node.module_id, { body: cached.body })
+        } catch { /* The account read can still succeed when local storage is unavailable. */ }
         const remote = await learningRecords.read(token, scope)
         if (active && remote.draft) setRecord(previous => previous.nodes[node.module_id] ? previous : { ...previous, nodes: { ...previous.nodes, [node.module_id]: { answers: remote.draft!.body.answers.map(a => a.answer), ...(remote.draft!.status === "submitted" ? { submitted_at: remote.submissions[0]?.created_at } : {}) } }, ...(node.module_id === "M04" ? { lab_artifact: remote.draft!.body.artifact ?? undefined } : {}) })
       } else {
         const raw = localStorage.getItem(learningCacheKey(owner, scope))
         if (raw) {
           const cached = JSON.parse(raw)
-          if (active && Array.isArray(cached.body?.answers)) onRecord(node.module_id, { body: cached.body, submittedAt: cached.submittedAt })
+          if (!Array.isArray(cached.body?.answers) || !cached.body.answers.every((a: { answer?: unknown }) => typeof a?.answer === "string")) throw new Error("Invalid learning record")
+          if (active) onRecord(node.module_id, { body: cached.body, submittedAt: cached.dirty ? undefined : cached.submittedAt })
         }
       }
-    })).catch(() => { if (active) setLoadMessage("部分节点记录尚未读取，可进入节点重试；下载包含当前已读取内容。") }).finally(() => { if (active) setLoaded(true) })
+    })).then(results => {
+      if (!active) return
+      const failed = results.flatMap((result, i) => result.status === "rejected" ? [course.modules[i].module_id] : [])
+      setFailedNodes(failed)
+      setLoadMessage(failed.length ? "部分节点记录尚未读取，可进入节点重试；下载包含当前已读取内容。" : "")
+      setLoaded(true)
+    })
     return () => { active = false }
-  }, [course, token, owner, onRecord])
+  }, [course, token, owner, onRecord, loadAttempt])
   const submitted = course.modules.filter(node => record.nodes[node.module_id]?.submitted_at).length
 
   function download() {
@@ -69,14 +86,16 @@ function GuidedCourseSession({ course, token, owner }: { course: GuidedCourse; t
     const url = URL.createObjectURL(blob), link = document.createElement("a")
     link.href = url; link.download = `${course.id}-course-record.json`; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000)
   }
+  if (missionEnabled && !search.get("node")) return <RoverMissionCenter course={course} record={record} loaded={loaded} failed={failedNodes} token={token} owner={owner} retry={() => setLoadAttempt(n => n + 1)} />
   return <main className={styles.page} data-guided-course={course.id}>
     <header className={styles.header}><Link href={lineHref}><ArrowLeft size={15} />{lineTitle}</Link><span>引导课程 / 学习、实践、交付</span></header>
     {["assemble-a-rover", "run-an-expedition"].includes(course.id) && <p className={styles.editionNote}>{course.legacy_edition ? "当前为旧版虚拟课程，原记录保留。" : `${course.id === "run-an-expedition" ? "04 现场挑战" : "03 系统制作"} · 数字原型可以先完成，正式交付需要实物证据。`} <Link href={`/explore/space-exploration/${course.id}${course.legacy_edition ? "" : "?edition=1"}`}>{course.legacy_edition ? "进入新版实物课程" : "查看旧版课程与原记录"}</Link></p>}
-    <section className={styles.hero}>
+    {missionEnabled && <RoverNodeBrief course={course} node={current} record={record} loaded={loaded} failed={failedNodes} />}
+    {!missionEnabled && <section className={styles.hero}>
       <div><p className={styles.eyebrow}>{course.level ? `0${course.level} · ${PROJECT_LEVELS.find(level => level.level === course.level)?.title.zh}` : "从操作，走向理解与制作"}</p><h1>{course.title}</h1><p className={styles.subtitle}>{course.subtitle}</p><p className={styles.audience}>{course.audience}</p></div>
       <div className={styles.courseFacts}><div><strong>{course.modules.length}</strong><span>学习节点</span></div><div><strong>{course.estimated_minutes}<small> 分钟</small></strong><span>累计设计目标 · 可分次完成</span></div><p>{course.outcome}</p></div>
-    </section>
-    {course.final_deliverable && <section className={styles.projectGoal} aria-label="最终作品目标"><div><p className={styles.eyebrow}>做完后，你会拥有</p><h2>{course.final_deliverable.title}</h2><ul>{course.final_deliverable.parts.map(part => <li key={part}>{part}</li>)}</ul><p className={styles.goalAcceptance}>怎样验收：{course.final_deliverable.acceptance.join("；")}。</p></div><Link href={`/explore/${lineId}/${course.id}?${edition}node=${course.final_deliverable.module_id}#project-delivery`}>查看我的最终作品<ArrowRight size={16} /></Link></section>}
+    </section>}
+    {!missionEnabled && course.final_deliverable && <section className={styles.projectGoal} aria-label="最终作品目标"><div><p className={styles.eyebrow}>做完后，你会拥有</p><h2>{course.final_deliverable.title}</h2><ul>{course.final_deliverable.parts.map(part => <li key={part}>{part}</li>)}</ul><p className={styles.goalAcceptance}>怎样验收：{course.final_deliverable.acceptance.join("；")}。</p></div><Link href={`/explore/${lineId}/${course.id}?${edition}node=${course.final_deliverable.module_id}#project-delivery`}>查看我的最终作品<ArrowRight size={16} /></Link></section>}
     <div className={styles.layout}>
       <aside className={styles.outline} aria-label="课程学习路径">
         <p className={styles.eyebrow}>你的学习路径</p>
