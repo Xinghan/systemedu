@@ -1,7 +1,8 @@
 import { LOCAL_PROJECTS } from "./catalog"
 import snapshots from "./course-snapshots.json"
+import { SPACE_MISSION_HREF } from "./mission-routes"
 
-export const SPACE_JOURNEY_HREF = "/mission/space"
+export const SPACE_JOURNEY_HREF = SPACE_MISSION_HREF
 export const SPACE_JOURNEY_LINE = "space-exploration"
 export const JOURNEY_LEVELS = [
   { level: 1, role: "探索新人", task: "先做一次，再提出问题", evidence: "照片、着陆轨迹与路线记录", support: "浏览器即可。先选一个 3 分钟项目体验，不需要购买器材。" },

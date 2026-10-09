@@ -11,20 +11,40 @@ import { hasJourneyEvidence, readJourneyProject, recommendJourneyProject, waitin
 import { ROVER_CAMPUS_POINTS, RoverCampusSurface, type CampusStop } from "@/components/learning/rover-campus-surface"
 import { IntroFilm } from "@/components/learning/rover-mission-center"
 import { projectCoverProps } from "@/lib/project-cover"
+import { hasSeenSpaceIntro, rememberSpaceIntro } from "@/lib/project-lines/mission-intro"
 import s from "./space-journey.module.css"
 
 export function SpaceJourney() {
   const identity=useLearningIdentity()
   const search=useSearchParams()
-  return <JourneySession key={`${identity.owner}:${search.get("station")||""}`} {...identity} />
+  const [film,setFilm]=useState<false | "automatic" | "replay">(false)
+  useEffect(()=>{
+    let active=true
+    // Read the browser preference after hydration. The cancellation also handles Strict Mode.
+    const enter=()=>queueMicrotask(()=>{
+      if(active&&!document.hidden&&!hasSeenSpaceIntro()) { rememberSpaceIntro();setFilm("automatic") }
+    })
+    enter()
+    document.addEventListener("visibilitychange",enter)
+    return()=>{active=false;document.removeEventListener("visibilitychange",enter)}
+  },[])
+  function closeFilm() {
+    const automatic=film==="automatic"
+    rememberSpaceIntro()
+    setFilm(false)
+    if(automatic) requestAnimationFrame(()=>document.querySelector<HTMLAnchorElement>("[data-journey-start]")?.focus({preventScroll:true}))
+  }
+  return <>
+    <JourneySession key={`${identity.owner}:${search.get("station")||""}`} {...identity} openFilm={()=>setFilm("replay")} />
+    {film&&<IntroFilm close={closeFilm} autoPlay onEnded={closeFilm} returnLabel={film==="automatic"?"跳过序章，进入任务中心":"回到星际远航任务中心"} description="这是星际远航中的火星探索序章：先观察、选择路线、带回照片。整条项目线还会走向方法设计、实物制造、自主探测与行星数据研究。"/>}
+  </>
 }
-function JourneySession({token,owner}:{token:string|null;owner:string}) {
+function JourneySession({token,owner,openFilm}:{token:string|null;owner:string;openFilm:()=>void}) {
   const search=useSearchParams()
   const initial=JOURNEY_STATIONS.find(station=>station.id===search.get("station"))?.id
   const [selected,setSelected]=useState<string>(initial||"")
   const [progress,setProgress]=useState(waitingProgress)
   const [attempt,setAttempt]=useState(0)
-  const [film,setFilm]=useState(false)
   const [mapUnavailable,setMapUnavailable]=useState(false)
   const unavailable=useCallback(()=>setMapUnavailable(true),[])
   const taskId=useId()
@@ -50,10 +70,10 @@ function JourneySession({token,owner}:{token:string|null;owner:string}) {
   stops[6].path=undefined
   stops[5].path="M952 794 Q825 786 750 766 Q642 753 553 753 M952 794 Q773 860 535 837 Q316 807 215 655"
   return <main className={s.journey} data-space-journey>
-    <header className={s.topbar}><Link href="/library?view=lines&line=space-exploration"><ArrowLeft size={16}/>航空航天项目线</Link><span>星际远航 / 任务中心</span><a href="#journey-portfolio"><FileCheck2 size={15}/>我的作品档案</a></header>
+    <header className={s.topbar}><Link href="/library?view=lines"><ArrowLeft size={16}/>所有项目线</Link><span>星际远航 / 任务中心</span><a href="#journey-portfolio"><FileCheck2 size={15}/>我的作品档案</a></header>
     <section className={s.hero}>
       <img src="/mission/rover/pointing-1920.webp" alt="林岚在控制席邀请你加入星际远航" fetchPriority="high" />
-      <div className={s.heroCopy}><p className={s.kicker}>一条项目线，一段持续成长的旅程</p><h1>从第一张星球照片，<br/>到自己的探索工程。</h1><p>先用 3 分钟动手。再学会设计、造车、带队远征，<br/>最终挑战自主探测车，或用真实数据研究行星。</p><div className={s.heroActions}><Link href={next.href}><Compass size={18}/>{ready&&next.id!=="spot-a-world"?"继续我的下一项挑战":"从第一个 3 分钟开始"}<ArrowRight size={17}/></Link><button onClick={()=>setFilm(true)}><Play size={15}/>火星探索序章 · 29 秒</button></div><a className={s.heroMap} href="#journey-map">先看看整条成长路线 <Map size={14}/></a><small>12 个项目 · 5 段成长 · 2 条高阶方向</small></div>
+      <div className={s.heroCopy}><p className={s.kicker}>一条项目线，一段持续成长的旅程</p><h1>从第一张星球照片，<br/>到自己的探索工程。</h1><p>先用 3 分钟动手。再学会设计、造车、带队远征，<br/>最终挑战自主探测车，或用真实数据研究行星。</p><div className={s.heroActions}><Link href={next.href} data-journey-start><Compass size={18}/>{ready&&next.id!=="spot-a-world"?"继续我的下一项挑战":"从第一个 3 分钟开始"}<ArrowRight size={17}/></Link><button onClick={openFilm}><Play size={15}/>火星探索序章 · 29 秒</button></div><a className={s.heroMap} href="#journey-map">先看看整条成长路线 <Map size={14}/></a><small>12 个项目 · 5 段成长 · 2 条高阶方向</small></div>
       <div className={s.heroNote}>任务搭档 / 林岚<small>AI 生成的虚构场景与角色</small></div>
     </section>
     <div className={s.body}>
@@ -75,6 +95,5 @@ function JourneySession({token,owner}:{token:string|null;owner:string}) {
       <section className={s.parents}><div><p>给一起出发的家长</p><h2>陪他开始，逐步把决定交给他。</h2><span>先留下一个小成果，再增加阅读、设计、制作和独立判断。成长靠作品与检验，不靠看完多少视频。</span></div><ol>{JOURNEY_LEVELS.map(item=><li key={item.level}><span>0{item.level}</span><div><strong>{item.role}</strong><p>{item.support}</p><small>这一阶段看什么：{item.evidence}</small></div></li>)}</ol></section>
       <p className={s.boundary}>地图和角色表达学习挑战的深度。作品提交、课程完成标记与能力评阅是不同的；完成项目线不等于取得工程师职业资质。</p>
     </div>
-    {film&&<IntroFilm close={()=>setFilm(false)} returnLabel="回到星际远航任务中心" description="这是星际远航中的火星探索序章：先观察、选择路线、带回照片。整条项目线还会走向方法设计、实物制造、自主探测与行星数据研究。"/>}
   </main>
 }

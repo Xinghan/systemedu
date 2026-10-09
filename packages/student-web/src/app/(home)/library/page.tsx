@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { useSearchParams } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import { Suspense, useEffect, useMemo, useState } from "react"
 import { ArrowRight, ArrowUpRight, Camera, Compass, Layers3, LayoutGrid, Orbit, Plus, Route, Search, SlidersHorizontal, Telescope, X } from "lucide-react"
 import { library, myProjects, type LibraryProjectSummary } from "@/lib/api"
@@ -20,13 +20,27 @@ import { LearningPathIntro } from "@/components/library/learning-path-intro"
 import { FuturePathView } from "@/components/library/future-path-view"
 import { FUTURES_HREF, FUTURE_PATHS, FUTURE_VIEW_COPY } from "@/lib/future-paths"
 import { DISCOVERY_COPY } from "@/components/library/discovery-copy"
+import { projectLineMissionHref } from "@/lib/project-lines/mission-routes"
+import { LoadingSpinner } from "@/components/ui/loading-spinner"
 import styles from "@/components/library/discovery.module.css"
 
 const KINDS: DiscoveryKind[] = ["all", "micro", "guided", "integration", "full"]
 const KIND_ICONS = { all: Orbit, micro: Telescope, guided: Camera, integration: Layers3, full: Orbit }
 
 export default function LibraryListPage() {
-  return <Suspense fallback={<main className={styles.page} aria-busy="true"><div className={styles.loading}><span /></div></main>}><LibraryBrowser /></Suspense>
+  return <Suspense fallback={<main className={styles.page} aria-busy="true"><div className={styles.loading}><span /></div></main>}><LibraryEntry /></Suspense>
+}
+
+function LibraryEntry() {
+  const search = useSearchParams()
+  const mission = search.get("view") === "lines" ? projectLineMissionHref(search.get("line") || "") : undefined
+  return mission ? <MissionRedirect href={mission} /> : <LibraryBrowser />
+}
+
+function MissionRedirect({ href }: { href: string }) {
+  const router = useRouter()
+  useEffect(() => { router.replace(href) }, [href, router])
+  return <main className={styles.page} aria-busy="true"><LoadingSpinner label="正在进入任务中心" /></main>
 }
 
 function LibraryBrowser() {
