@@ -36,4 +36,3 @@ export function IntroFilm({ close, description, returnLabel = "回到制造任�
     <div className={s.filmLinks}>{media ? <span>林岚 / AI 生成的虚构任务搭档</span> : <Link href="/mission/rover">先体验 3 分钟前导任务 <ArrowRight size={15} /></Link>}<button onClick={close}>{returnLabel}</button></div>
   </dialog>
 }
-
