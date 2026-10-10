@@ -1,5 +1,6 @@
 "use client"
 
+/* eslint-disable @next/next/no-img-element -- Precompressed responsive scene; no runtime image transform. */
 import Link from "next/link"
 import { useSearchParams, useRouter } from "next/navigation"
 import { useEffect, useState } from "react"
@@ -59,11 +60,16 @@ function ControlSession() {
   return <main className={s.center} data-mission-control>
     <header className={s.topbar}><Link href="/mission/space"><ArrowLeft size={15}/>远征首页</Link><span><Radio size={15}/> 星际远航 / 任务中心</span><Link href="/library?view=lines&line=space-exploration">项目资料库<ArrowUpRight size={14}/></Link></header>
     <section className={s.command} aria-label="远征总览">
-      <div><p className={s.eyebrow}>MARS ANALOG EXPEDITION / 任务指挥席</p><h1>让每一步，都成为远征的一部分。</h1><p className={s.missionGoal}>设计并制造一辆探测车，为它训练视觉，再带着证据完成地面类比远征。</p><div className={s.identity}><span className={s.signal}/> {record.identity.token?"个人任务档案 · 登录账号":"个人任务档案 · 本机访客"}<span>8 个任务站 · 同一辆车持续升级</span></div></div>
+      <picture className={s.roomScene} aria-hidden="true">
+        <source media="(max-width: 760px)" srcSet="/mission/space/research-control-room-v1-640.webp 1x, /mission/space/research-control-room-v1-960.webp 2x"/>
+        <img src="/mission/space/research-control-room-v1-1536.webp" srcSet="/mission/space/research-control-room-v1-960.webp 960w, /mission/space/research-control-room-v1-1536.webp 1536w" sizes="100vw" width={1536} height={1024} alt="" fetchPriority="high" decoding="async"/>
+      </picture>
+      <div className={s.commandCopy}><p className={s.eyebrow}>MARS ANALOG RESEARCH / 星际远航研究基地</p><h1>欢迎回到<br/><span>你的任务指挥室。</span></h1><p className={s.missionGoal}>设计并制造一辆探测车，为它训练视觉，<br className={s.heroBreak}/>再带着证据完成地面类比远征。</p><div className={s.identity}><span className={s.signal}/> {record.identity.token?"个人任务档案 · 登录账号":"个人任务档案 · 本机访客"}<span>8 个任务站 · 同一辆车持续升级</span></div></div>
+      <div className={s.roomCaption}><span>ROVER RESEARCH BAY</span><small>科研场景示意 · AI 生成</small></div>
       <div className={s.stats}><div><small>主线自检完成</small><strong data-main-progress>{record.ready?progress.done:"—"}<span> / {progress.total}</span></strong><progress value={progress.done} max={progress.total} aria-label="主线自检进度"/></div><div><small>实际记录的工作时间</small><strong className={s.timeTotal} data-total-time>{record.ready?duration(total):"读取中"}</strong><span>从主动开始计时起累计</span></div><div><small>需要解决的阻碍</small><strong>{record.ready?blocked.length:"—"}<span> 项</span></strong><span>发现问题也是工程的一部分</span></div></div>
     </section>
     <div className={s.content}>
-      <nav className={s.tabs} aria-label="任务中心模块">{VIEWS.map(v=><button type="button" key={v.id} aria-current={v.id===view?"page":undefined} onClick={()=>select(task.id,v.id)}><v.icon size={17}/>{v.label}</button>)}</nav>
+      <div className={s.consoleDock}><nav className={s.tabs} aria-label="任务中心模块">{VIEWS.map(v=><button type="button" key={v.id} aria-current={v.id===view?"page":undefined} onClick={()=>select(task.id,v.id)}><v.icon size={17}/>{v.label}</button>)}</nav><div className={s.activeStation} role="status" aria-label="当前任务站"><span className={s.stationIndicator}/><span><small>当前任务站</small>{station.code} · {station.place}</span></div></div>
       {!record.ready&&<div className={s.loading}><LoadingSpinner label="正在读取个人任务记录"/></div>}
       <div className={s.saveBar}><span>{record.ready ? record.message : "读取完成后可编辑；任务说明随时可查看。"}</span><details><summary>保存与恢复</summary><LearningRecordStatus record={record}/></details></div>
       {model.message&&<p className={s.warning} role="alert">{model.message}</p>}
@@ -75,6 +81,7 @@ function ControlSession() {
             <div className={s.taskList}>{[true,false].map(primary=>{const items=shown.filter(t=>(t.role==="lesson"||t.role==="micro")===primary);return items.length>0&&<div key={String(primary)}><p>{query?"搜索结果 · ":""}{primary?"推荐推进顺序":"按需调用的任务材料"} <span>{items.length}</span></p>{items.map(t=>{const state=ops?taskState(ops,t.id):null;return <button key={t.id} data-task-choice={t.id} aria-pressed={task.id===t.id} onClick={()=>select(t.id)}><span className={s.taskSymbol} data-state={state?.status}>{state?.status==="done"?<Check size={14}/>:state?.status==="blocked"?<AlertTriangle size={14}/>:<Circle size={11}/>}</span><span><small>{t.code} · {t.category}</small><strong>{t.title}</strong><em>{state?STATUS_LABELS[state.status]:"读取记录中"}{t.role!=="lesson"?` · ${roles[t.role]}`:""}</em></span></button>})}</div>})}{shown.length===0&&<p className={s.note}>没有匹配的子任务，试试“视觉”或任务编号。</p>}</div>
           </aside>
           <article className={s.taskOrder} data-task-order={task.id} id="mission-task-order">
+            <div className={s.screenBezel}><span><ClipboardList size={13}/>电子任务单</span><small>{task.code}</small></div>
             <div className={s.orderHeader}><span>{task.code} / {roles[task.role]}</span><span>{task.category}</span></div><h2>{task.title}</h2><p className={s.taskGoal}>{task.goal}</p>
             {task.note&&<p className={s.context}>{task.note}</p>}
             <div className={s.output}><Flag size={19}/><div><h3>这一步要带回</h3>{task.outputs.map((o,i)=><p key={i}>{o}</p>)}</div></div>
