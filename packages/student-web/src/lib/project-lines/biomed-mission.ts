@@ -25,7 +25,7 @@ export function bioContext(project:string,module:string,enabled:boolean) {
  return {node,station,primary,previous:i>0?BIO_STEPS[i-1]:undefined,next:BIO_STEPS[i+1]}
 }
 export const BIO_ENGINE = createMissionOperations(BIO_TASKS,{library_slug:"biomedicine",module_id:"JOURNEY",activity_id:"mission-operations",kind:"classroom",content_version:"1.0"},"biomed-mission-operations/1",BIO_STEPS)
-export const BIO_ROOM_SKIN: MissionRoomSkin = {title:"分子寻药 / 计算发现基地",base:"/mission/biomedicine/stations",fallback:"/mission/biomedicine/stations/observation-v1",rooms:{observation:"MOLECULAR OBSERVATORY",filter:"SCREENING RULES",prediction:"PREDICTION CHECK",systems:"DISCOVERY WORKBENCH",protocol:"RESEARCH PROTOCOL",data:"DATA & BASELINE",evaluation:"MODEL EVALUATION",delivery:"CANDIDATE REVIEW"}}
+export const BIO_ROOM_SKIN: MissionRoomSkin = {title:"分子寻药 / 计算发现基地",base:"/mission/biomedicine/stations",version:"v2",fallback:"/mission/biomedicine/stations/observation-v2",rooms:{observation:"MOLECULAR OBSERVATORY",filter:"SCREENING RULES",prediction:"PREDICTION CHECK",systems:"DISCOVERY WORKBENCH",protocol:"RESEARCH PROTOCOL",data:"DATA & BASELINE",evaluation:"MODEL EVALUATION",delivery:"CANDIDATE REVIEW"}}
 
 /** Coordinates align the interactive pins with the generated campus pavilions. */
 export const BIO_CAMPUS_POINTS = [

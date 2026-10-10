@@ -6,7 +6,7 @@ import { ArrowRight } from "lucide-react"
 
 import s from "./mission-room-environment.module.css"
 
-export type MissionRoomSkin = {title:string; base:string; fallback:string; rooms:Record<string,string>}
+export type MissionRoomSkin = {title:string; base:string; fallback:string; rooms:Record<string,string>; version?:string}
 const FALLBACK = "/mission/space/research-control-room-v1"
 const ARRIVAL_DURATION = 5600
 const PANEL_START = 4300
@@ -28,7 +28,7 @@ export function MissionRoomBackdrop({ station, className, imageRef, fullViewport
 }) {
   const [failed, setFailed] = useState(false)
   const localImage = useRef<HTMLImageElement>(null)
-  const base = failed || !skin.rooms[station] ? skin.fallback : `${skin.base}/${station}-v1`
+  const base = failed || !skin.rooms[station] ? skin.fallback : `${skin.base}/${station}-${skin.version || "v1"}`
   useEffect(() => {
     let active = true
     // A server-rendered image can fail before React attaches its error listener.
