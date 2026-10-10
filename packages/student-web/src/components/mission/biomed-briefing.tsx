@@ -42,7 +42,7 @@ function BriefingSession({ stationId, owner, auto }: { stationId: string; owner:
       setPlaying({ automatic: false, autoplay: true })
     }}><Play size={15}/>任务短片 · {station.place}</button>
     {playing && <IntroFilm media={media} stationId={stationId} companion="陈澄"
-      poster="/mission/biomedicine/stations/observation-v1-1536.webp"
+      poster={media.poster}
       autoPlay={playing.autoplay} close={close} onEnded={close}
       returnLabel={playing.automatic ? "跳过短片，开始任务" : "回到当前任务"}
       description={`这一站带走：${station.handoff}。交接前检查：${station.gate}。`}
