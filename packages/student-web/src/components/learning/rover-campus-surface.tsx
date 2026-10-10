@@ -18,9 +18,9 @@ export const ROVER_CAMPUS_POINTS = [
   { id: "M08", x: 215, y: 655 },
 ] as const
 
-export function RoverCampusSurface({ stops, current, selected, onSelect, onUnavailable, title, subtitle, mapMotto, taskId }: {
+export function RoverCampusSurface({ stops, current, selected, onSelect, onUnavailable, title, subtitle, mapMotto, taskId, imageSrc = "/mission/rover/campus-map-v1.webp", imageAlt = "研发基地鸟瞰图，八个任务站由道路相连。" }: {
   stops: CampusStop[]; current: string; selected: string; onSelect: (id: string) => void; onUnavailable?: () => void
-  title: string; subtitle: string; mapMotto: string; taskId: string
+  title: string; subtitle: string; mapMotto: string; taskId: string; imageSrc?: string; imageAlt?: string
 }) {
   const [zoom, setZoom] = useState(1)
   const [width, setWidth] = useState(0)
@@ -107,7 +107,7 @@ export function RoverCampusSurface({ stops, current, selected, onSelect, onUnava
         onPointerCancel={() => { drag.current = null; suppressClick.current = false; setDragging(false) }}
         onClickCapture={e => { if (suppressClick.current && e.detail !== 0) { e.preventDefault(); e.stopPropagation() }; suppressClick.current = false }}>
         <div className={s.surface} style={{ width: mapWidth, height: mapHeight }}>
-          <img ref={background} src="/mission/rover/campus-map-v1.webp" width={1536} height={1024} alt="沙漠研发基地鸟瞰图：道路依次连接控制室、系统实验室、设计与诊断车间、户外试验场、3D 打印间、装配台和交付广场。" draggable={false} loading="lazy" onLoad={() => setImageState("ready")} onError={() => setImageState("error")} />
+          <img ref={background} src={imageSrc} width={1536} height={1024} alt={imageAlt} draggable={false} loading="lazy" onLoad={() => setImageState("ready")} onError={() => setImageState("error")} />
           <svg className={s.routes} viewBox="0 0 1536 1024" aria-hidden="true">
             <defs><marker id={`${uid}-arrow`} viewBox="0 0 10 10" refX="5" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M2 1 L8 5 L2 9" fill="none" stroke="#f5efdb" strokeWidth="1.8" /></marker></defs>
             {stops.map(station => station.path && <g key={station.id} data-submitted={station.state === "submitted"}>

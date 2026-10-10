@@ -3,10 +3,11 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react"
 import { useLearningRecord } from "./use-learning-record"
 import { learningCacheKey } from "../learning-record-session"
-import { INITIAL_OPERATIONS, OPERATIONS_SCOPE, operationsFrom, recordWork, localDay, heartbeatSeconds, type MissionOperations } from "../project-lines/space-mission-operations"
+import { SPACE_ENGINE, type MissionEngine, localDay, heartbeatSeconds, type MissionOperations } from "../project-lines/space-mission-operations"
 import type { LearningBody } from "../api/learning-records"
 
-export function useMissionOperations() {
+export function useMissionOperations(engine: MissionEngine = SPACE_ENGINE) {
+  const {scope:OPERATIONS_SCOPE,INITIAL_OPERATIONS,operationsFrom}=engine
   const record=useLearningRecord(OPERATIONS_SCOPE,INITIAL_OPERATIONS)
   const [message,setMessage]=useState("")
   const update=useCallback((change:(ops:MissionOperations)=>MissionOperations) => {
@@ -22,7 +23,7 @@ export function useMissionOperations() {
       if(new TextEncoder().encode(JSON.stringify(next)).length>240000)throw new Error("记录接近容量上限，请先导出备份并缩短备注。")
       record.session.update(next);setMessage("");return true
     }catch(e){setMessage(e instanceof Error?e.message:"记录未更新，请重试。");return false}
-  },[record.session])
+  },[record.session,operationsFrom])
   useEffect(()=>{
     const refresh=()=>{
       const state=record.session.snapshot()
@@ -33,8 +34,8 @@ export function useMissionOperations() {
     const storage=(e:StorageEvent)=>{if(e.key===record.session.cacheKey)refresh()}
     window.addEventListener("focus",refresh);window.addEventListener("storage",storage)
     return ()=>{window.removeEventListener("focus",refresh);window.removeEventListener("storage",storage)}
-  },[record.session,record.identity.owner])
-  return {record,ops:operationsFrom(record.body),update,message}
+  },[record.session,record.identity.owner,OPERATIONS_SCOPE,operationsFrom])
+  return {engine,record,ops:operationsFrom(record.body),update,message}
 }
 export type MissionRecord = ReturnType<typeof useMissionOperations>
 
@@ -48,7 +49,7 @@ export function useMissionWork(model: MissionRecord, taskId:string) {
     const block=active.current;if(!block)return true
     const now=new Date(),amount=Math.floor(block.seconds)
     if(amount===0)return true
-    const ok=current.current.update(ops=>recordWork(ops,{id:block.id,task:block.task,startedAt:block.start,endedAt:now.toISOString(),seconds:amount,reason},localDay(now)))
+    const ok=current.current.update(ops=>current.current.engine.recordWork(ops,{id:block.id,task:block.task,startedAt:block.start,endedAt:now.toISOString(),seconds:amount,reason},localDay(now)))
     if(ok)block.lastSaved=amount
     return ok
   },[])

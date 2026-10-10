@@ -3,9 +3,10 @@
 /* eslint-disable @next/next/no-img-element -- Precompressed, responsive scene assets. */
 import { useEffect, useRef, useState, type CSSProperties, type RefObject } from "react"
 import { ArrowRight } from "lucide-react"
-import type { MissionStation } from "@/lib/project-lines/space-curriculum"
+
 import s from "./mission-room-environment.module.css"
 
+export type MissionRoomSkin = {title:string; base:string; fallback:string; rooms:Record<string,string>}
 const FALLBACK = "/mission/space/research-control-room-v1"
 const ARRIVAL_DURATION = 5600
 const PANEL_START = 4300
@@ -19,14 +20,15 @@ const ROOMS: Record<string, string> = {
   expedition: "FIELD OPERATIONS",
   delivery: "MISSION REVIEW",
 }
-export const missionRoomLabel = (station: string) => ROOMS[station] || "RESEARCH CONTROL"
+export const SPACE_ROOM_SKIN: MissionRoomSkin = {title:"星际远航 / 研究基地",base:"/mission/space/stations",fallback:FALLBACK,rooms:ROOMS}
+export const missionRoomLabel = (station: string, skin = SPACE_ROOM_SKIN) => skin.rooms[station] || "RESEARCH CONTROL"
 
-export function MissionRoomBackdrop({ station, className, imageRef, fullViewport = false }: {
-  station: string; className?: string; imageRef?: RefObject<HTMLImageElement | null>; fullViewport?: boolean
+export function MissionRoomBackdrop({ station, className, imageRef, fullViewport = false, skin = SPACE_ROOM_SKIN }: {
+  station: string; className?: string; imageRef?: RefObject<HTMLImageElement | null>; fullViewport?: boolean; skin?: MissionRoomSkin
 }) {
   const [failed, setFailed] = useState(false)
   const localImage = useRef<HTMLImageElement>(null)
-  const base = failed || !ROOMS[station] ? FALLBACK : `/mission/space/stations/${station}-v1`
+  const base = failed || !skin.rooms[station] ? skin.fallback : `${skin.base}/${station}-v1`
   useEffect(() => {
     let active = true
     // A server-rendered image can fail before React attaches its error listener.
@@ -40,8 +42,8 @@ export function MissionRoomBackdrop({ station, className, imageRef, fullViewport
 }
 
 /** Only this transient visual layer remounts; forms, clocks and record hooks stay alive. */
-export function MissionRoomArrival({ station, moduleName, root }: {
-  station: MissionStation; moduleName: string; root: RefObject<HTMLElement | null>
+export function MissionRoomArrival({ station, moduleName, root, skin = SPACE_ROOM_SKIN }: {
+  station: {id:string;code:string;place:string}; skin?: MissionRoomSkin; moduleName: string; root: RefObject<HTMLElement | null>
 }) {
   const layer = useRef<HTMLDivElement>(null)
   const image = useRef<HTMLImageElement>(null)
@@ -100,14 +102,14 @@ export function MissionRoomArrival({ station, moduleName, root }: {
     }
   }, [root])
 
-  return <div ref={layer} className={s.arrival} style={{"--arrival-duration": `${ARRIVAL_DURATION}ms`} as CSSProperties} data-room-arrival={station.id} data-arrival-duration={ARRIVAL_DURATION} data-phase="preparing" aria-label="任务舱入场">
-    <MissionRoomBackdrop station={station.id} className={s.scene} imageRef={image} fullViewport />
+  return <div ref={layer} className={s.arrival} style={{"--arrival-duration": `${ARRIVAL_DURATION}ms`, backgroundImage: `url(${skin.fallback}-960.webp)`} as CSSProperties} data-room-arrival={station.id} data-arrival-duration={ARRIVAL_DURATION} data-phase="preparing" aria-label="任务舱入场">
+    <MissionRoomBackdrop station={station.id} skin={skin} className={s.scene} imageRef={image} fullViewport />
     <div className={s.displayTexture} aria-hidden="true" />
     <div className={s.scanSweep} aria-hidden="true" />
     <div className={s.frame} aria-hidden="true" />
-    <div className={s.coordinates} aria-hidden="true"><span>星际远航 / 研究基地</span><span>{station.code} — {missionRoomLabel(station.id)}</span></div>
+    <div className={s.coordinates} aria-hidden="true"><span>{skin.title}</span><span>{station.code} — {missionRoomLabel(station.id, skin)}</span></div>
     <div className={s.caption}>
-      <p>{station.code} <span>/</span> {missionRoomLabel(station.id)}</p>
+      <p>{station.code} <span>/</span> {missionRoomLabel(station.id, skin)}</p>
       <h2 aria-label={station.place}><span aria-hidden="true">{Array.from(station.place).map((letter,index)=><span className={s.glyph} style={{"--glyph-index":index} as CSSProperties} key={index}>{letter}</span>)}</span></h2>
       <div className={s.module}><span className={s.moduleRule}/><span className={s.moduleText}>进入{moduleName}</span><i className={s.cursor} aria-hidden="true"/><ArrowRight size={17} /></div>
     </div>
