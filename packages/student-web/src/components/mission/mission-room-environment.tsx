@@ -1,12 +1,14 @@
 "use client"
 
 /* eslint-disable @next/next/no-img-element -- Precompressed, responsive scene assets. */
-import { useEffect, useRef, useState, type RefObject } from "react"
+import { useEffect, useRef, useState, type CSSProperties, type RefObject } from "react"
 import { ArrowRight } from "lucide-react"
 import type { MissionStation } from "@/lib/project-lines/space-curriculum"
 import s from "./mission-room-environment.module.css"
 
 const FALLBACK = "/mission/space/research-control-room-v1"
+const ARRIVAL_DURATION = 5600
+const PANEL_START = 4300
 const ROOMS: Record<string, string> = {
   "first-contact": "OBSERVATION PORT",
   "mission-design": "MISSION PLANNING",
@@ -72,13 +74,13 @@ export function MissionRoomArrival({ station, moduleName, root }: {
       panels.forEach(panel => {
         const direction = panel.dataset.roomReveal
         const offset = direction === "left" ? "translateX(-38px)" : direction === "right" ? "translateX(38px)" : "translateY(26px)"
-        const delay = direction === "title" ? 700 : direction === "chrome" ? 800 : direction === "left" ? 950 : direction === "right" ? 1100 : 1000
+        const delay = PANEL_START + (direction === "title" ? 0 : direction === "chrome" ? 120 : direction === "left" ? 240 : direction === "right" ? 430 : 300)
         animations.push(panel.animate([
           { opacity: 0, transform: offset },
           { opacity: 1, transform: "translate(0,0)" },
-        ], { duration: 580, delay, easing: "cubic-bezier(.16,1,.3,1)", fill: "backwards" }))
+        ], { duration: 650, delay, easing: "cubic-bezier(.16,1,.3,1)", fill: "backwards" }))
       })
-      finishTimer = setTimeout(finish, 1720)
+      finishTimer = setTimeout(finish, ARRIVAL_DURATION)
     }
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "Escape" || event.key === "Tab") finish()
@@ -98,14 +100,16 @@ export function MissionRoomArrival({ station, moduleName, root }: {
     }
   }, [root])
 
-  return <div ref={layer} className={s.arrival} data-room-arrival={station.id} data-phase="preparing" aria-label="任务舱入场">
+  return <div ref={layer} className={s.arrival} style={{"--arrival-duration": `${ARRIVAL_DURATION}ms`} as CSSProperties} data-room-arrival={station.id} data-arrival-duration={ARRIVAL_DURATION} data-phase="preparing" aria-label="任务舱入场">
     <MissionRoomBackdrop station={station.id} className={s.scene} imageRef={image} fullViewport />
+    <div className={s.displayTexture} aria-hidden="true" />
+    <div className={s.scanSweep} aria-hidden="true" />
     <div className={s.frame} aria-hidden="true" />
     <div className={s.coordinates} aria-hidden="true"><span>星际远航 / 研究基地</span><span>{station.code} — {missionRoomLabel(station.id)}</span></div>
     <div className={s.caption}>
       <p>{station.code} <span>/</span> {missionRoomLabel(station.id)}</p>
-      <h2>{station.place}</h2>
-      <div className={s.module}><span />进入{moduleName}<ArrowRight size={17} /></div>
+      <h2 aria-label={station.place}><span aria-hidden="true">{Array.from(station.place).map((letter,index)=><span className={s.glyph} style={{"--glyph-index":index} as CSSProperties} key={index}>{letter}</span>)}</span></h2>
+      <div className={s.module}><span className={s.moduleRule}/><span className={s.moduleText}>进入{moduleName}</span><i className={s.cursor} aria-hidden="true"/><ArrowRight size={17} /></div>
     </div>
     <button type="button" className={s.skip} onClick={() => skip.current()}>跳过入场 <span>Esc</span></button>
     <small className={s.disclaimer}>科研场景示意 · AI 生成</small>
