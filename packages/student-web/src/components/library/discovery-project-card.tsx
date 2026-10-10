@@ -9,12 +9,13 @@ import { projectCoverProps } from "@/lib/project-cover"
 import { useT, useLocale } from "@/lib/i18n/use-t"
 import { displayOutcome, discoveryLevel, type DiscoveryEntry } from "@/lib/library-discovery"
 import { PROJECT_LINES, lineHref, localized } from "@/lib/project-lines/catalog"
+import { fieldName } from "@/lib/project-taxonomy"
 import { StoryModal } from "@/components/library/StoryModal"
 import { ChapterBadgeMark } from "@/components/badges/ChapterBadgeMark"
 import { DISCOVERY_COPY } from "./discovery-copy"
 import styles from "./discovery.module.css"
 
-export function DiscoveryProjectCard({ entry, pulled }: { entry: DiscoveryEntry; pulled: boolean }) {
+export function DiscoveryProjectCard({ entry, pulled, contextLineId }: { entry: DiscoveryEntry; pulled: boolean; contextLineId?: string }) {
   const locale = useLocale()
   const c = DISCOVERY_COPY[locale]
   const t = useT()
@@ -29,16 +30,16 @@ export function DiscoveryProjectCard({ entry, pulled }: { entry: DiscoveryEntry;
   const statusLabel = entry.source === "snapshot" ? (locale === "zh" ? "待接入" : "Not connected yet") : c.planning
   const hasStory = Boolean(project?.story?.length)
   const outcome = micro ? localized(micro.outcome, locale) : project ? displayOutcome(project) : null
-  const domain = c.domainNames[entry.domain as keyof typeof c.domainNames] || project?.domain || c.domainNames.other
+  const domain = fieldName(entry.domain, locale)
   const duration = project?.duration_weeks
   const responsiveCover = projectCoverProps(entry.id, library.coverUrl(entry.id), "card")
 
   return (
-    <article className={`${styles.projectCard} ${isMicro ? styles.microCard : ""} ${!entry.available ? styles.draftCard : ""}`} data-project-card={entry.id} data-line={entry.lineId} data-kind={entry.kind} data-difficulty={entry.difficulty ?? (isMicro ? "light" : "unspecified")} data-available={entry.available}>
+    <article className={`${styles.projectCard} ${isMicro ? styles.microCard : ""} ${!entry.available ? styles.draftCard : ""}`} data-project-card={entry.id} data-line={entry.lineId} data-cross-field={contextLineId && contextLineId !== entry.lineId || undefined} data-kind={entry.kind} data-difficulty={entry.difficulty ?? (isMicro ? "light" : "unspecified")} data-available={entry.available}>
       <div className={`${styles.cardVisual} ${isMicro ? styles.microVisual : ""}`}>
-        {entry.coverImage && !responsiveCover.srcSet ? (
+        {entry.coverImage && !responsiveCover.srcSet && !coverFailed ? (
           // 保留生成原图，按卡片宽度压缩并延迟加载，避免同时下载多张原始 PNG。
-          <Image src={entry.coverImage} alt="" fill unoptimized={entry.preview} sizes="(max-width: 600px) calc(100vw - 32px), (max-width: 1000px) 45vw, 384px" className={styles.coverPhoto} />
+          <Image src={entry.coverImage} alt="" fill unoptimized={entry.preview} sizes="(max-width: 600px) calc(100vw - 32px), (max-width: 1000px) 45vw, 384px" className={styles.coverPhoto} onError={() => setCoverFailed(true)} />
         ) : (responsiveCover.srcSet || project?.cover_image_path) && !coverFailed ? (
             // 封面由现有内容服务提供，失败时回落到领域图形。
             // eslint-disable-next-line @next/next/no-img-element
@@ -62,7 +63,7 @@ export function DiscoveryProjectCard({ entry, pulled }: { entry: DiscoveryEntry;
           <div><small>{isLocal ? isMicro ? c.light : c.guidedChallenge : c.challenge}</small><strong>{micro ? localized(micro.challenge, locale) : entry.difficulty ? <><span className={styles.depthBars} aria-hidden="true">{[1, 2, 3, 4, 5].map(n => <i key={n} data-filled={n <= entry.difficulty!} />)}</span>{entry.difficulty} / 5</> : c.unspecified}</strong></div>
         </div>
         <p className={styles.preparation}>{entry.preparation || (micro?.preparation ? localized(micro.preparation, locale) : isLocal ? c.microPreparation : c.preparation)}</p>
-        {line && <Link href={lineHref(line.id)} className={styles.lineAssociation}><Orbit size={13} />{localized(line.title, locale)}<ArrowUpRight size={12} /></Link>}
+        {line && <Link href={lineHref(line.id)} className={styles.lineAssociation}><Orbit size={13} />{contextLineId && contextLineId !== line.id && (locale === "zh" ? "跨领域 · " : "Cross-field · ")}{localized(line.title, locale)}<ArrowUpRight size={12} /></Link>}
         <div className={styles.cardFooter}>
           <span>{micro?.learningNodes ? `${micro.learningNodes} ${locale === "zh" ? "学习节点 · 可分次完成" : "nodes · Learn at your pace"}` : isLocal ? c.instant : project?.knode_count ? `${project.knode_count} ${c.chapters}` : project?.age_band ? `${project.age_band} ${c.age}` : c.fullTag}</span>
           {entry.available ? <Link href={href} className={isLocal ? styles.startCard : styles.openCard}>{entry.startLabel || (micro && micro.kind !== "micro" ? (locale === "zh" ? "进入课程" : "Start course") : isLocal ? c.startProject : pulled ? c.continueProject : c.viewProject)}<ArrowRight size={14} /></Link> : <span className={styles.comingSoon}>{statusLabel}</span>}

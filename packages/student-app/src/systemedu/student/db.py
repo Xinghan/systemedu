@@ -33,6 +33,7 @@ from sqlalchemy import (
     select,
     text,
 )
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 
@@ -134,6 +135,21 @@ class InviteCode(Base):
     batch = Column(String(32), nullable=True)
     used_by = Column(String(36), ForeignKey("users.id"), nullable=True)
     used_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class InviteApplication(Base):
+    """公开邀请码申请；手机号一人一条，供管理后台审核和联系。
+
+    这不是用户账号，也不自动发码。唯一约束既避免重复申请，也让公开接口可以
+    安全地做幂等提交而不暴露该手机号是否已经申请过。
+    """
+
+    __tablename__ = "invite_applications"
+
+    id = Column(String(36), primary_key=True, default=_uuid)
+    phone = Column(String(11), unique=True, index=True, nullable=False)
+    status = Column(String(16), default="pending", nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
 
@@ -735,6 +751,38 @@ def create_invite_codes(codes: list[str], batch: str | None = None) -> int:
                 n += 1
         session.commit()
     return n
+
+
+def submit_invite_application(phone: str) -> None:
+    """幂等记录公开的邀请码申请，不向调用方泄露此前是否已申请。"""
+    with get_session() as session:
+        existing = session.execute(
+            select(InviteApplication.id).where(InviteApplication.phone == phone)
+        ).scalar_one_or_none()
+        if existing is not None:
+            return
+        session.add(InviteApplication(phone=phone))
+        try:
+            session.commit()
+        except IntegrityError:
+            # 并发的同手机号申请由数据库唯一索引兜底；保持幂等结果。
+            session.rollback()
+
+
+def list_invite_applications(limit: int = 500) -> list[dict]:
+    """后台专用：按申请时间倒序列出邀请码申请。"""
+    with get_session() as session:
+        rows = session.execute(
+            select(InviteApplication)
+            .order_by(InviteApplication.created_at.desc())
+            .limit(limit)
+        ).scalars().all()
+        return [{
+            "id": row.id,
+            "phone": row.phone,
+            "status": row.status,
+            "created_at": row.created_at.isoformat() if row.created_at else None,
+        } for row in rows]
 
 
 def get_user_by_phone(phone: str) -> User | None:

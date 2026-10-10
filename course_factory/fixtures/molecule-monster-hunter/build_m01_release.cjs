@@ -1,0 +1,38 @@
+// Produce only the approved M01 release. Canonical and production sources are not changed.
+const fs=require('node:fs'),path=require('node:path'),crypto=require('node:crypto'),cp=require('node:child_process')
+const root=path.resolve(__dirname,'../../..'),out=path.join(root,'artifacts/molecule-m01-20260910'),web=path.join(root,'packages/student-web')
+const sha=b=>crypto.createHash('sha256').update(b).digest('hex'),write=(p,v)=>{fs.mkdirSync(path.dirname(p),{recursive:true});fs.writeFileSync(p,typeof v==='string'?v:JSON.stringify(v,null,2)+'\n')}
+const name='M01-discovery-v1',snap=path.join(__dirname,'M01-before-discovery-v1'),draft=JSON.parse(fs.readFileSync(path.join(__dirname,name+'.json'))),registry=JSON.parse(fs.readFileSync(path.join(__dirname,name+'.registry.json')))
+if(sha(fs.readFileSync(path.join(__dirname,name+'.json')))!==registry.verified_draft_sha256)throw Error('Reviewed draft changed')
+const slides=draft.slides,anchor=new Map(slides.filter(s=>s.lesson_anchor).map(s=>[s.lesson_anchor.id,s])),notes='本课程产出可追溯的软件筛选工作台与候选报告，不是获准使用的药物。生成图是设备与流程示意，数量不作定量证据。十二条候选、分数与结果是构造的教学数据，不是真实分子预测或实验；排序分不是治疗成功概率。浏览器立项卡只保存在本机，可下载备份，不自动跨设备同步。',task='写明研究问题、最终交付物与需要检查的性质，确认预测不能替代实验的边界；保存并下载自己的项目立项卡。记录一次五次预算内的教学测试，区分已测、未测与未知；进入 M02 后安装或导入真实 RDKit 并保存实际版本日志。安装步骤需家长协助。不进行药物合成、服用或真实药效验证。'
+const quiz=[['最高排序分是否保证通过实验？',['保证','不保证'],1,'排序优先级不是实验事实。'],['未测试的候选结果应该是什么？',['失败','未知','通过'],1,'缺失证据不可补成通过或失败。'],['本节立项卡在哪里保存？',['当前浏览器，可下载备份','自动同步所有设备'],0,'本页未上传服务器。']].map(([question,options,correct,explanation])=>({type:'choice',question,options,correct,explanation}))
+let lesson=`# M01 · 项目立项与证据\n\n> 本节产出：${task}\n\n## 数据与边界\n\n${notes}\n\n`
+for(const s of slides){lesson+=`## ${s.title}\n\n${s.audio_script}\n\n`;if(s.lesson_anchor)lesson+=`[[${s.lesson_anchor.kind==='theory'?'THEORY':'IDEA'}:${s.lesson_anchor.id}]]\n\n`}
+lesson+='## 知识自测\n\n[[IDEA:ex_1781593352281_dhnf]]\n\n## 完成标准\n\n'+task+'\n\n新版讲稿尚未配音，已解绑旧音频。\n'
+const theories=JSON.parse(fs.readFileSync(path.join(snap,'theories.json'))).map(t=>{const s=anchor.get(t.theory_id),body=`## ${s?.title||t.title}\n\n${s?.audio_script||notes}\n\n### 数据与边界\n\n${notes}\n\n### 动手核对\n\n${task}`;return {...t,title:s?.title||t.title,body_markdown:body,level_bodies:(t.level_bodies||[]).map(l=>({...l,body_markdown:body})),exercises:quiz}})
+const esc=s=>s.replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;')
+const sections=JSON.parse(fs.readFileSync(path.join(snap,'sections.json')))
+for(const [id,r]of Object.entries(sections.rendered_sections||{})){if(r.mode==='exercise'){r.exercises=quiz;continue}const s=anchor.get(id);r.html=`<!doctype html><html lang="zh"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>body{font:16px/1.8 sans-serif;background:#faf8f2;color:#262620;padding:24px;max-width:900px;margin:auto}aside{padding:18px;border-left:4px solid #ae6548;background:#f1ecdf}</style><h1>${esc(s?.title||'M01 证据核对')}</h1><p>${esc(s?.audio_script||notes)}</p><aside>这是正文静态参考；可操作的步骤、教学测试与立项卡位于“老师讲课”对应幻灯片。</aside><h2>数据与边界</h2><p>${esc(notes)}</p><h2>动手产出</h2><p>${esc(task)}</p></html>`;r.status='ready';r.exercises=null;r.story_paragraphs=null;r.generation_backend='reviewed-static-evidence-companion'}
+for(const i of sections.ideas||[]){i.topic=anchor.get(i.idea_id)?.title||'M01 知识自测';i.context_summary=notes;i.hands_on_ref=task;i.acceptance_ref=task;i.style_key='project-theme';i.mode_reason='正文静态参考；互动位于老师讲课对应页。'}
+sections.animation_topic='';sections.game_topic='';sections.exercise_topic=task
+const outputs={'slides.json':{slides},'lesson.md':lesson,'assignment.md':`# M01 · 动手与证据\n\n${task}\n\n## 数据与边界\n\n${notes}\n\n`+quiz.map((q,i)=>`## ${i+1}. ${q.question}\n\n${q.options.map((x,j)=>`${String.fromCharCode(65+j)}. ${x}`).join('\n\n')}\n\n答案：${String.fromCharCode(65+q.correct)}。${q.explanation}\n`).join('\n'),'theories.json':theories,'sections.json':sections,'audio_scripts.json':slides.map(s=>({section_title:s.title,audio_script:s.audio_script}))}
+const report={nodes:[{module:'M01',node:draft.node,slides:slides.length,files:Object.keys(outputs)}],updated:'2026-09-10',audio:'explicitly-unvoiced',source_sha256:{},web_sha256:{}}
+for(const [n,v]of Object.entries(outputs)){if(sha(fs.readFileSync(path.join(snap,n)))!==registry.source_sha256[n])throw Error('Source snapshot changed');write(path.join(out,'course/knodes',draft.node,n),v);report.source_sha256[`knodes/${draft.node}/${n}`]=registry.source_sha256[n]}
+const files=['src/lib/discovery-brief.ts','src/components/learning/discovery-brief-visual.tsx','src/components/learning/discovery-brief.css','public/slide-assets/molecule-monster-hunter/M01/virtual-to-experiment-v1.webp']
+for(const f of files)report.web_sha256[f]=sha(fs.readFileSync(path.join(web,f)))
+report.dependencies_sha256=Object.fromEntries(['src/components/learning/screening-common.tsx','src/components/learning/screening-evidence.css'].map(f=>[f,sha(fs.readFileSync(path.join(web,f)))]))
+report.dependencies_sha256['src/lib/rdkit.ts']='f8ae2af151dd162c3a0dd3744e5adb1156ff3c9b73f1579c314692e72ae757fb'
+write(path.join(out,'expected-source.json'),report)
+write(path.join(out,'types.txt'),fs.readFileSync(path.join(web,'src/lib/types/api.ts'),'utf8').split('\n').filter(l=>l.includes('renderer: "discovery-brief"')).join('\n'))
+cp.execFileSync('tar',['-czf','/tmp/m01-web-delta.tar.gz','-C',web,...files],{env:{...process.env,COPYFILE_DISABLE:'1'}})
+cp.execFileSync('tar',['-czf','/tmp/m01-course-delta.tar.gz','-C',path.join(out,'course'),'.'],{env:{...process.env,COPYFILE_DISABLE:'1'}})
+for(const [src,dst]of [['m38-m90-local.sh','m01-local.sh'],['m38-m90-evidence-20260909.sh','m01-evidence-20260910.sh'],['m38-m90-release.py','m01-release.py']]){
+ let s=fs.readFileSync(path.join(root,'scripts/releases',src),'utf8').replaceAll('m38-m90','m01').replaceAll('m3890','m01').replaceAll('20260909','20260910').replaceAll('M38 M90','M01').replace("'slides':20","'slides':8")
+ if(dst.endsWith('.py'))s=s.replace(/WEB_NEW=\[.*\]/,`WEB_NEW=${JSON.stringify(files)}`).replaceAll('ea4FB-hqZCwxNKu7J5oIs','KCrfpE_MVDCCx3NBZnyJ9').replaceAll('logp-lab','discovery-brief').replace('import { LogpLabVisual } from "./discovery-brief-visual"\\nimport { WorkbenchEvidenceVisual } from "./workbench-evidence-visual"','import { DiscoveryBriefVisual } from "./discovery-brief-visual"').replace('case "discovery-brief": return <LogpLabVisual key={visual.scene} visual={visual} />\\n    case "workbench-evidence": return <WorkbenchEvidenceVisual key={visual.scene} visual={visual} />','case "discovery-brief": return <DiscoveryBriefVisual key={visual.scene} visual={visual} />')
+ if(dst==='m01-evidence-20260910.sh'){
+  s=s.replace('npm ci --no-audit --no-fund > "$RELEASE/npm-ci.log" 2>&1','cmp package-lock.json "$LIVE/package-lock.json"\n  cmp package.json "$LIVE/package.json"\n  test ! -e node_modules; cp -al "$LIVE/node_modules" node_modules')
+  s=s.replace('mkdir "$RELEASE/course"; cp -a "$COURSE" "$RELEASE/course/molecule-monster-hunter"\n  tar -C /root/.systemedu-library/media/projects -czf "$RELEASE/course-before.tar.gz" molecule-monster-hunter','mkdir "$RELEASE/course"\n  cp -al "$COURSE" "$RELEASE/course-before"\n  cp -al "$COURSE" "$RELEASE/course/molecule-monster-hunter"\n  for file in slides.json lesson.md assignment.md theories.json sections.json audio_scripts.json; do unlink "$RELEASE/course/molecule-monster-hunter/knodes/M01-w0-module/$file"; done\n  unlink "$RELEASE/course/molecule-monster-hunter/manifest.json"\n  cp "$COURSE/manifest.json" "$RELEASE/course/molecule-monster-hunter/manifest.json"')
+ }
+ write(path.join(root,'scripts/releases',dst),s)
+}
+console.log(JSON.stringify({nodes:report.nodes,web_files:files.length,output:out}))

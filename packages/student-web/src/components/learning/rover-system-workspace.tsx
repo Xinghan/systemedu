@@ -1,6 +1,7 @@
 "use client"
 import {useState} from 'react'
 import Link from 'next/link'
+import {useSearchParams} from 'next/navigation'
 import {ArrowRight,Check,Circle,Package,Play,Wrench} from 'lucide-react'
 import type {GuidedCourse,GuidedModule} from '@/lib/project-lines/guided-course'
 import type {LearningBody,LearningScope} from '@/lib/api/learning-records'
@@ -23,6 +24,7 @@ const materialRoot='/project-lines/space-exploration/assemble-a-rover/hardware'
 function CheckList({checks}:{checks:{title:string;passed:boolean}[]}){return <ul className={styles.checks}>{checks.map(c=><li key={c.title} data-passed={c.passed}>{c.passed?<Check size={17}/>:<Circle size={17}/>}<span>{c.title}</span></li>)}</ul>}
 
 function SystemDelivery({course,body,ready}:{course:GuidedCourse;body:LearningBody;ready:boolean}){
+  const mission=useSearchParams().get("mission")==="space"
   const record=useLearningRecord({library_slug:course.id,module_id:'M08',activity_id:'final-deliverable',kind:'assignment',content_version:course.version},{answers:[]})
   const artifact=isRoverSystem(body.artifact)?body.artifact:null,checks=artifact?[...prototypeChecks(artifact),...physicalChecks(artifact.physical,artifact.design)]:[]
   const complete=ready&&!!artifact&&checks.every(c=>c.passed)&&body.answers.length===3&&body.answers.every(a=>a.answer.trim())
@@ -32,7 +34,7 @@ function SystemDelivery({course,body,ready}:{course:GuidedCourse;body:LearningBo
   return <section id="project-delivery" data-system-delivery className={styles.delivery}><header><Package size={22}/><div><p>03 正式交付 / 实物必需</p><h3>我的实物探测车与测试档案</h3></div></header><CheckList checks={checks}/><p>数字测试齐备后还需制作实物。这里核对作品材料与学生自测记录，提交状态是“待评阅”，不会自动认定实物已验证或知识已掌握。</p><button type="button" className={styles.primary} disabled={!record.ready||record.busy||record.conflict||(!record.pending&&(!complete||submitted))} onClick={submit}>{record.pending?'重试上次交付':submitted?'已保存实物作品 · 待评阅':record.identity.token?'提交实物作品':'保存实物作品到本机'}</button>
     {saved&&<details className={styles.saved} data-system-submission><summary>查看已交付版本 · {new Date(saved.created_at).toLocaleString()}</summary>{isRoverSystem(saved.body.artifact)&&<><details><summary>查看交付的 CAD 与程序</summary><pre className={styles.sourceCode}>{saved.body.artifact.physical.cadSource}</pre><pre className={styles.sourceCode}>{saved.body.artifact.physical.controlSource}</pre></details><p>结构宽 {saved.body.artifact.design.width} mm · {saved.body.artifact.physical.tests.length} 条实测 · {saved.body.artifact.physical.photos.length} 张照片</p><div className={styles.twoCols}>{saved.body.artifact.physical.photos.map(photo=><figure key={photo.id} className={styles.photo}>{/* eslint-disable-next-line @next/next/no-img-element */}
 <img src={photo.data} alt={photo.caption}/><figcaption>{photo.caption}</figcaption></figure>)}</div><button type="button" onClick={()=>downloadLearningRecord(saved.body,'my-physical-rover.json')}>导出这版完整作品</button></>}{saved.body.answers.map(a=><p key={a.question_id}><strong>{a.question}：</strong>{a.answer}</p>)}</details>}
-    <LearningRecordStatus record={record}/><Link className={styles.next} href="/explore/space-exploration/run-an-expedition">下一站：带着实物探测车完成远征<ArrowRight size={16}/></Link>
+    <LearningRecordStatus record={record}/><Link className={styles.next} href={mission?"/learn/mars-analog-rover/M02?mission=space":"/explore/space-exploration/run-an-expedition"}>{mission?"下一站：为同一辆车训练视觉":"下一站：带着实物探测车完成远征"}<ArrowRight size={16}/></Link>
   </section>
 }
 

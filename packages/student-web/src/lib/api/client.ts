@@ -1,6 +1,7 @@
 /** student-app API client. */
 
 import { clearToken, getToken } from "@/lib/auth"
+import { MOLECULE_NUMBERING_VERSION } from "@/lib/course-numbering"
 
 export class ApiError extends Error {
   code?: string
@@ -25,6 +26,7 @@ async function fetchAPI<T>(path: string, init?: RequestInit): Promise<T> {
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
     ...(init?.headers as Record<string, string>),
+    "X-Course-Numbering": MOLECULE_NUMBERING_VERSION,
   }
   if (token) {
     headers["Authorization"] = `Bearer ${token}`
@@ -37,14 +39,16 @@ async function fetchAPI<T>(path: string, init?: RequestInit): Promise<T> {
   if (res.status === 401) {
     clearToken()
     if (typeof window !== "undefined" && !path.startsWith("/api/auth/")) {
-      window.location.replace("/login")
+      const resumeMission = new URLSearchParams(window.location.search).get("mission") === "space"
+      const next = window.location.pathname + window.location.search + window.location.hash
+      window.location.replace(resumeMission ? `/login?next=${encodeURIComponent(next)}` : "/login")
     }
     throw new ApiError("Unauthorized", { status: 401 })
   }
 
   if (!res.ok) {
     const body = await res.json().catch(() => ({}))
-    throw new ApiError(body.error || body.message || `API error ${res.status}`, {
+    throw new ApiError(body.message || body.error || `API error ${res.status}`, {
       code: body.error,
       status: res.status,
     })

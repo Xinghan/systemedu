@@ -11,6 +11,7 @@ from systemedu.student.db import (
     UserKnodeComplete,
     UserProject,
     get_session,
+    list_invite_applications,
     list_invite_codes_with_users,
 )
 
@@ -18,6 +19,11 @@ from systemedu.student.db import (
 def list_invite_codes() -> list[dict]:
     """spec 047: 邀请码 + 使用者账户 (直接复用 student.db 的 join 查询, 只读)。"""
     return list_invite_codes_with_users()
+
+
+def list_pending_invite_applications() -> list[dict]:
+    """公开页面的手机号申请；admin 已认证后才可读取。"""
+    return list_invite_applications()
 
 
 def list_users(limit: int = 50, offset: int = 0) -> list[dict]:

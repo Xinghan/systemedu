@@ -1,8 +1,13 @@
 "use client"
 
 import Link from "next/link"
+import { SpaceJourneyProjectBanner } from "@/components/mission/space-journey-links"
 import { projectCoverProps } from "@/lib/project-cover"
-import { useParams, useRouter } from "next/navigation"
+import { fieldName, primaryProjectLine } from "@/lib/project-taxonomy"
+import { bioContext, bioLessonHref, bioLibraryHref } from "@/lib/project-lines/biomed-mission"
+import { missionContext, missionLessonHref, missionLibraryHref } from "@/lib/project-lines/space-curriculum"
+import { lessonPath } from "@/lib/course-numbering"
+import { useParams, useRouter, useSearchParams } from "next/navigation"
 import { useEffect, useMemo, useState } from "react"
 import { toast } from "sonner"
 import ReactMarkdown from "react-markdown"
@@ -44,7 +49,7 @@ import {
   type StageDeliverableModule,
   type StageDeliverableStage,
 } from "@/components/library/stage-deliverable-card"
-import { useT } from "@/lib/i18n/use-t"
+import { useLocale, useT } from "@/lib/i18n/use-t"
 import { InlineLoading } from "@/components/ui/page-loading"
 import type { PlatformTree, ProjectKnowledgeTree } from "@/lib/api"
 
@@ -132,14 +137,19 @@ function moduleStatus(
 
 export default function ProjectHome() {
   const t = useT()
+  const locale = useLocale()
   const router = useRouter()
   const params = useParams<{ slug: string }>()
   const slug = decodeURIComponent(params.slug)
+  const searchParams = useSearchParams()
+  const mission = missionContext(slug, searchParams.get("node") || "", searchParams.get("mission") === "space")
+  const bio=bioContext(slug,searchParams.get("node")||"",searchParams.get("mission")==="biomedicine")
   const { loggedIn, hydrate } = useAuthStore()
 
   const [project, setProject] = useState<DetailProject | null>(null)
   const [blueprint, setBlueprint] = useState("")
   const [pulled, setPulled] = useState(false)
+  const [localPreview, setLocalPreview] = useState(false)
   const [lastModuleId, setLastModuleId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [pulling, setPulling] = useState(false)
@@ -150,6 +160,10 @@ export default function ProjectHome() {
   useEffect(() => {
     hydrate()
   }, [hydrate])
+
+  useEffect(() => {
+    setLocalPreview(process.env.NODE_ENV === "development" && slug === "aloha-bimanual-apprentice" && ["localhost", "127.0.0.1", "[::1]"].includes(window.location.hostname))
+  }, [slug])
 
   useEffect(() => {
     void (async () => {
@@ -207,7 +221,7 @@ export default function ProjectHome() {
   }, [modules])
 
   const firstModuleId = modules[0]?.module_id
-  const targetModuleId = lastModuleId || firstModuleId
+  const targetModuleId = bio?.node.module || mission?.node.module || lastModuleId || firstModuleId
   const completed = lastModuleId
     ? modules.findIndex((m) => m.module_id === lastModuleId)
     : 0
@@ -215,7 +229,7 @@ export default function ProjectHome() {
 
   async function handlePull() {
     if (!loggedIn) {
-      router.push(`/login?next=${encodeURIComponent(`/library/${slug}`)}`)
+      router.push(`/login?next=${encodeURIComponent(bio ? bioLibraryHref(slug,bio.node.module) : mission ? missionLibraryHref(mission.node.module) : `/library/${slug}`)}`)
       return
     }
     setPulling(true)
@@ -223,7 +237,7 @@ export default function ProjectHome() {
       await myProjects.pull(slug)
       setPulled(true)
       toast.success(t("library.pulled_toast"))
-      router.push("/home")
+      router.push(bio ? bioLessonHref(bio.node.ref) : mission ? missionLessonHref(mission.node.ref) : "/home")
     } catch (err) {
       toast.error(err instanceof Error ? err.message : t("library.pull_failed"))
     } finally {
@@ -266,6 +280,7 @@ export default function ProjectHome() {
         ]}
       />
 
+      <SpaceJourneyProjectBanner projectId={slug} />
       {/* Hero header — 有封面时整幅海报做背景 + 暖色渐变蒙层, 文字反白 */}
       <header
         style={{
@@ -349,7 +364,7 @@ export default function ProjectHome() {
                         className={hasCover ? "tag" : `tag ${dClass}`}
                         style={tagStyle}
                       >
-                        {t(`domain.${project.domain.toLowerCase()}`)}
+                        {primaryProjectLine(project.slug) ? fieldName(primaryProjectLine(project.slug)!.fieldId, locale) : t(`domain.${project.domain.toLowerCase()}`)}
                       </span>
                     )}
                     {project.difficulty != null && (
@@ -484,9 +499,13 @@ export default function ProjectHome() {
               </div>
             )}
 
-            {!loggedIn ? (
+            {localPreview ? (
+              <Link href="/preview/aloha/M01" className="btn btn-violet btn-lg" style={{ justifyContent: "center" }}>
+                <CirclePlay size={15} strokeWidth={1.5} /> 本地查看全部课程
+              </Link>
+            ) : !loggedIn ? (
               <Link
-                href={`/login?next=${encodeURIComponent(`/library/${slug}`)}`}
+                href={`/login?next=${encodeURIComponent(bio ? bioLibraryHref(slug,bio.node.module) : mission ? missionLibraryHref(mission.node.module) : `/library/${slug}`)}`}
                 className="btn btn-violet btn-lg"
                 style={{ justifyContent: "center" }}
               >
@@ -505,7 +524,7 @@ export default function ProjectHome() {
               </button>
             ) : targetModuleId ? (
               <Link
-                href={`/learn/${encodeURIComponent(slug)}/${encodeURIComponent(targetModuleId)}`}
+                href={bio ? bioLessonHref(bio.node.ref) : mission ? missionLessonHref(mission.node.ref) : lessonPath(slug, targetModuleId)}
                 className="btn btn-violet btn-lg"
                 style={{ justifyContent: "center" }}
               >
@@ -663,6 +682,7 @@ export default function ProjectHome() {
               orderedModules={modules}
               lastModuleId={lastModuleId}
               pulled={pulled}
+              localPreview={localPreview}
               completedKnodeIds={completedKnodeIds}
             />
           )}
@@ -1002,6 +1022,7 @@ function Curriculum({
   orderedModules,
   lastModuleId,
   pulled,
+  localPreview = false,
   completedKnodeIds = [],
 }: {
   slug: string
@@ -1010,6 +1031,7 @@ function Curriculum({
   orderedModules: Module[]
   lastModuleId: string | null
   pulled: boolean
+  localPreview?: boolean
   completedKnodeIds?: string[]
 }) {
   const completedSet = new Set(completedKnodeIds)
@@ -1118,7 +1140,8 @@ function Curriculum({
                   let status = moduleStatus(modIdx, lastModuleId, orderedModules)
                   // spec 036: 用户已 mark complete → 强制 done
                   if (completedSet.has(m.module_id)) status = "done"
-                  const clickable = pulled
+                  const clickable = pulled || localPreview
+                  if (localPreview && status === "locked") status = "available"
                   const inner = (
                     <div
                       style={{
@@ -1150,7 +1173,7 @@ function Curriculum({
                           strokeWidth={1.5}
                           style={{ color: "var(--violet)" }}
                         />
-                      ) : pulled ? (
+                      ) : clickable ? (
                         <Circle
                           size={15}
                           strokeWidth={1.5}
@@ -1179,7 +1202,7 @@ function Curriculum({
                           color:
                             status === "done"
                               ? "var(--sub)"
-                              : status === "locked" || !pulled
+                              : status === "locked" || !clickable
                                 ? "var(--sub-2)"
                                 : "var(--ink-2)",
                         }}
@@ -1196,7 +1219,7 @@ function Curriculum({
                   return clickable ? (
                     <Link
                       key={m.module_id}
-                      href={`/learn/${encodeURIComponent(slug)}/${encodeURIComponent(m.module_id)}`}
+                      href={localPreview ? `/preview/aloha/${m.module_id}` : lessonPath(slug, m.module_id)}
                       style={{ textDecoration: "none", color: "inherit" }}
                     >
                       {inner}

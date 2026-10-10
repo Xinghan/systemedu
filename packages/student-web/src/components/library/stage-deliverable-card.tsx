@@ -1,6 +1,7 @@
 "use client"
 
 import Link from "next/link"
+import { lessonPath } from "@/lib/course-numbering"
 import { ArrowRight, CheckCircle2, PackageCheck, TriangleAlert } from "lucide-react"
 
 import { getStageDeliverable } from "./stage-deliverable.mjs"
@@ -159,7 +160,7 @@ export function StageDeliverableCard({
         </span>
         {pulled ? (
           <Link
-            href={`/learn/${encodeURIComponent(slug)}/${encodeURIComponent(deliverable.capstoneModuleId)}`}
+            href={lessonPath(slug, deliverable.capstoneModuleId)}
             className="mono"
             style={{ display: "inline-flex", alignItems: "center", gap: 4, flexShrink: 0, fontSize: 11.5, fontWeight: 600, color: "var(--violet)", textDecoration: "none" }}
           >

@@ -1,5 +1,7 @@
 "use client"
 
+
+import { lessonPath } from "@/lib/course-numbering"
 /**
  * spec 036: 用户级跨项目知识图谱视图.
  *
@@ -89,7 +91,7 @@ export function UserKnowledgeTreeView() {
         platformTree={platformTree}
         userTree={userTree}
         onNodeClick={(knodeId, slug) => {
-          if (slug) router.push(`/learn/${encodeURIComponent(slug)}/${encodeURIComponent(knodeId)}`)
+          if (slug) router.push(lessonPath(slug, knodeId))
         }}
       />
 

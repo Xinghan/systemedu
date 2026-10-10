@@ -1,0 +1,18 @@
+const fs=require('node:fs'),path=require('node:path'),crypto=require('node:crypto'),root=path.resolve(__dirname,'../../..'),src=path.resolve(root,'../systemeduidea/projects_data/molecule-monster-hunter/knodes/M05-w0-module'),snap=path.join(__dirname,'M05-before-smiles-v1'),sha=b=>crypto.createHash('sha256').update(b).digest('hex')
+fs.mkdirSync(snap,{recursive:true});const hashes={};for(const f of ['slides.json','lesson.md','assignment.md','theories.json','sections.json','audio_scripts.json']){if(!fs.existsSync(path.join(snap,f)))fs.copyFileSync(path.join(src,f),path.join(snap,f));hashes[f]=sha(fs.readFileSync(path.join(snap,f)))}
+const old=JSON.parse(fs.readFileSync(path.join(snap,'slides.json'))).slides
+const rows=[
+ ['overview','从字符串到可核对的分子结构','接续 M04 的结构比较，这一节亲自写出结构输入。CCO 经过 RDKit 解析得到两个碳、一个氧及其连接，再绘成二维结构图。字符串不是照片，也不直接包含三维坐标。最后要提交自己选择的目标分子、实际输入、结构核对结果和一次错误修正记录。'],
+ ['equivalence','写法可以不同，连接必须核对','CCO 和 OCC 以不同方向遍历同一个乙醇结构；COC 也合法，却表达二甲醚，不是乙醇。切换三个输入，比较真实结构图和同一 RDKit 版本返回的规范 SMILES。规范写法是工具相关结果，不能承诺所有软件输出完全相同；解析成功也不意味着目标正确。'],
+ ['tokens','完整的原子符号，不是一个字母一个原子','C 和 O 分别是碳与氧的符号。Cl 是氯的完整元素符号，不能拆成两个原子。方括号写法 [NH4+] 把氮所带的四个氢和正电荷一并说明。页面由 RDKit 返回原子表、附带氢数与电荷；上方分词仅帮助阅读限定例子，不是完整的 SMILES 校验器。'],
+ ['hydrogens','氢可以省略写，结构里不能凭空消失','简单中性例子 C、N、O 分别表示甲烷、氨和水，CCO 表示乙醇。二维结构、分子式、原子表和已有来源的三维模型一起解释隐式氢。切换显示氢只改变画面，不改变分子式或总数。三维坐标来自预先核验的 PubChem 计算构象；带电、芳香和方括号情况不能无条件套用 C 四价、N 三价、O 二价。'],
+ ['syntax','双键、支链、环与芳香：符号怎样改变连接','等号改变键级，括号表示从当前位置产生支链，一对相同数字闭合一条键；数字本身不是原子。C1CCCCC1 是六碳的环己烷，c1ccccc1 是芳香写法的苯，氢数不同。四组真实结构和计数帮助你看出变化；这只是入门子集，仍有立体化学、同位素和电荷等规则。'],
+ ['validation','解析通过，只是第一道检查','选择 CCO、COC 或 C1CC，分别观察目标正确、合法但不是目标、环标记未配对的解析失败。解析失败时清空旧结构图。通过 RDKit 只能支持结构表达和当前工具下的核对，不证明合成可行、药效或安全；也不能保证学生心里想的结构就是输入表达的结构。'],
+ ['trace','逐字符读苯酚：环数字只加键，不加碳','使用播放、暂停、单步和重置，观察 Oc1ccccc1 的教学读取轨迹。第一个数字一保存环端点，第二个数字一闭合一条键；最后得到七个重原子和七条重原子间的键。结构图始终由完整有效输入生成，颜色只标记已经读到的原子。这不是 RDKit 内部实现录像，也不是化学反应模拟。'],
+ ['workbench','完成自己的 SMILES 制图与修正记录','先用乙醇练习，再选择咖啡因或阿司匹林作为成果目标。输入后实际运行 RDKit 并核对规范结构；输入或目标变化后都要重新运行。保留一次失败尝试和自己的修正说明，下载实际生成的结构 SVG 与个人 JSON 记录。还可下载完整 Python 模板自行运行，但浏览器记录不会冒充已运行过 Python。所有操作仅在软件中完成，不涉及制备或用药。'],
+ ['handoff','交付结构输入、核对依据和修正过程','成果页重新读取你真正保存的输入并用 RDKit 核对目标结构；没有记录或记录不一致就提示待完成，不把示例图当作个人作品。M04 留下计算对照，M05 留下可重复解析的结构数据及修正记录。后续把结构和属性组织到同一份数据中，再开展比较和筛选。请下载本机记录备份。'],
+]
+const slides=old.map((s,i)=>({slide_id:s.slide_id||`s${i+1}`,kind:s.kind,title:rows[i][1],audio_script:rows[i][2],audio_path:null,...((s.lesson_anchor||s.payload?.theory_id||s.payload?.idea_id)?{lesson_anchor:s.lesson_anchor||(s.payload.theory_id?{kind:'theory',id:s.payload.theory_id}:{kind:'idea',id:s.payload.idea_id})}:{}),payload:{technical_visual:{renderer:'smiles-reading',scene:rows[i][0],aria_label:rows[i][1]}}}))
+const file=path.join(__dirname,'M05-smiles-v1.json');fs.writeFileSync(file,JSON.stringify({project:'molecule-monster-hunter',node:'M05-w0-module',slides},null,2)+'\n')
+const registry={project:'molecule-monster-hunter',node:'M05-w0-module',version:'smiles-v1',status:'integrated-awaiting-browser-qa',production_deployed:false,source_sha256:hashes,draft_sha256:sha(fs.readFileSync(file)),decision_record:'docs/slide-image-prompts/molecule-monster-hunter-M05-smiles-v1.md',preview_url:'http://127.0.0.1:4173/slide-preview/m05-smiles',slides:slides.map((s,i)=>({page:i+1,source_index:i,source_slide_id:old[i].slide_id||null,source_title:old[i].title,slide_id:s.slide_id,title:s.title,anchor:s.lesson_anchor,scene:rows[i][0]})),media:{generated_raster_pages:[],interactive_three_pages:[4],timed_state_pages:[7],actual_rdkit_pages:[1,2,3,4,5,6,7,8,9]},audio_status:'new narration, unvoiced'}
+fs.writeFileSync(path.join(__dirname,'M05-smiles-v1.registry.json'),JSON.stringify(registry,null,2)+'\n');console.log('M05 9 pages mapped; canonical unchanged.')

@@ -4,7 +4,7 @@ import { useCourseMedia } from "./course-media-context"
 import { PersistentTheoryQuiz } from "./persistent-question"
 import { NodeAssignmentPanel } from "./node-assignment-panel"
 
-import { createContext, useContext, useEffect, useRef, useState } from "react"
+import { createContext, useContext, useEffect, useRef, useState, useCallback } from "react"
 import { createPortal } from "react-dom"
 import {
   X, CheckCircle2, BookOpen, Zap, Gamepad2, BookMarked,
@@ -19,7 +19,8 @@ import rehypeKatex from "rehype-katex"
 import "katex/dist/katex.min.css"
 import { gateway } from "@/lib/api"
 import { getCourseFactoryVariant } from "@/data/course-factory-variants"
-import { TeacherSceneView } from "@/components/learning/teacher-scene-view"
+import { LessonSlidesProvider, LessonSlideCarousel, LessonSlideshowButton } from "./lesson-slides"
+import { firstMarkerSections, splitLessonParts } from "@/lib/lesson-slide-layout"
 import { HighlightAskButton } from "./HighlightAskButton"
 import { DrillRecords } from "./DrillRecords"
 import { DrillModal } from "./DrillModal"
@@ -86,6 +87,8 @@ interface CourseContentViewProps {
   knowledgeLevel?: import("@/lib/types/api").KnowledgeLevel
   onMediaStats?: (stats: MediaStats) => void
   onOutline?: (sections: OutlineSection[]) => void
+  /** Mission references share a single existing deliverable instead of duplicating it. */
+  assignmentHandoff?: React.ReactNode
   /** Already authorized and loaded course, using the same classroom renderer. */
   preparedLesson?: {
     data: CourseContentData
@@ -124,7 +127,7 @@ const AudioPlayContext = createContext<AudioCtxValue>({
   stop: () => {},
 })
 
-function AudioProvider({ children }: { children: React.ReactNode }) {
+export function AudioProvider({ children }: { children: React.ReactNode }) {
   const [activeSectionId, setActiveSectionId] = useState<string | null>(null)
   const [isPlaying, setIsPlaying] = useState(false)
   const [currentTime, setCurrentTime] = useState(0)
@@ -143,7 +146,7 @@ function AudioProvider({ children }: { children: React.ReactNode }) {
     audio.src = ""
   }
 
-  const stop = () => {
+  const stop = useCallback(() => {
     if (audioRef.current) {
       clearAudio(audioRef.current)
       audioRef.current = null
@@ -152,7 +155,15 @@ function AudioProvider({ children }: { children: React.ReactNode }) {
     setIsPlaying(false)
     setCurrentTime(0)
     setDuration(0)
-  }
+  }, [])
+
+  useEffect(() => {
+    const handleAudioFocus = (event: Event) => {
+      if ((event as CustomEvent).detail === "slides") stop()
+    }
+    window.addEventListener("systemedu:lesson-audio-focus", handleAudioFocus)
+    return () => window.removeEventListener("systemedu:lesson-audio-focus", handleAudioFocus)
+  }, [stop])
 
   useEffect(() => () => {
     if (audioRef.current) {
@@ -162,6 +173,7 @@ function AudioProvider({ children }: { children: React.ReactNode }) {
   }, [])
 
   const toggle = (sectionId: string, url: string) => {
+    window.dispatchEvent(new CustomEvent("systemedu:lesson-audio-focus", { detail: "section" }))
     if (audioRef.current && activeSectionId === sectionId) {
       if (audioRef.current.paused || audioRef.current.ended) {
         audioRef.current.play().catch((e) => console.error("[audio] resume failed:", e))
@@ -691,7 +703,12 @@ function TheoryQuiz({ theoryId, exercises }: { theoryId: string; exercises: NonN
 function TheoryBlock({ theory }: { theory: TheoryEntry }) {
   const t = useT()
   const [open, setOpen] = useState(false)
-  const label = subjectLabel(t, theory.subject)
+  // Older imported lessons did not always provide subject.  Keep that data
+  // renderable instead of letting the theory modal take down the whole page.
+  const subject = typeof theory.subject === "string" && theory.subject.trim()
+    ? theory.subject
+    : "other"
+  const label = subjectLabel(t, subject)
   const knowledgeLevel = useContext(KnowledgeLevelContext)
 
   // Pick the body_markdown matching the current knowledge level.
@@ -743,7 +760,7 @@ function TheoryBlock({ theory }: { theory: TheoryEntry }) {
             <div className="flex items-center justify-between px-8 py-6 border-b border-foreground/5">
               <div className="flex flex-col">
                 <span className="text-[10px] font-bold uppercase tracking-[0.15em] text-primary mb-1">
-                  {theory.subject.toUpperCase()} -- {label}
+                  {subject.toUpperCase()} -- {label}
                 </span>
                 <h1 className="text-xl sm:text-2xl font-extrabold text-foreground tracking-tight">
                   {theory.title}
@@ -781,7 +798,7 @@ function TheoryBlock({ theory }: { theory: TheoryEntry }) {
                       <div>
                         <h5 className="text-sm font-bold text-foreground">Pro Insight</h5>
                         <p className="text-xs text-muted-foreground leading-relaxed mt-1">
-                          {theoryInsight(t, theory.subject)}
+                          {theoryInsight(t, subject)}
                         </p>
                       </div>
                     </div>
@@ -799,7 +816,7 @@ function TheoryBlock({ theory }: { theory: TheoryEntry }) {
                     <div>
                       <h5 className="text-sm font-bold text-foreground">Pro Insight</h5>
                       <p className="text-xs text-muted-foreground leading-relaxed mt-1">
-                        {theoryInsight(t, theory.subject)}
+                          {theoryInsight(t, subject)}
                       </p>
                     </div>
                   </div>
@@ -897,12 +914,13 @@ function backendBadgeLabel(backend?: string): string {
 const DESIGN_VIEWPORT_W = 1280
 const DESIGN_VIEWPORT_H = 800
 
-function ScaledIframe({
-  html, title, resetKey,
+export function ScaledIframe({
+  html, title, resetKey, allowDownloads = false,
 }: {
   html: string
   title: string
   resetKey?: number
+  allowDownloads?: boolean
 }) {
   const boxRef = useRef<HTMLDivElement>(null)
   const [scale, setScale] = useState(0) // 0 = 尚未测量, 不渲染 iframe 避免闪烁
@@ -928,7 +946,7 @@ function ScaledIframe({
         <iframe
           key={resetKey}
           srcDoc={html}
-          sandbox="allow-scripts allow-same-origin"
+          sandbox={`allow-scripts allow-same-origin${allowDownloads ? " allow-downloads" : ""}`}
           title={title}
           style={{
             position: "absolute",
@@ -1494,6 +1512,18 @@ function DiagramBlock({
 // ---------------------------------------------------------------------------
 // HandsOnKitBlock: 实物动手套件（购买元器件 + 动手操作步骤）
 // ---------------------------------------------------------------------------
+function recordOrNull(value: unknown): Record<string, unknown> | null {
+  return typeof value === "object" && value !== null && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : null
+}
+
+function formatCny(value: unknown, fractionDigits: number): string | null {
+  return typeof value === "number" && Number.isFinite(value)
+    ? `¥${value.toFixed(fractionDigits)}`
+    : null
+}
+
 function HandsOnKitBlock({
   idea,
   section,
@@ -1502,10 +1532,14 @@ function HandsOnKitBlock({
   section: RenderedSection
 }) {
   const t = useT()
-  const components = section.components ?? []
-  const tools = section.tools ?? []
-  const steps = section.steps ?? []
-  const totalCost = section.total_cost_cny ?? 0
+  // Imported legacy lessons used a plain string[] for tools.  Treat all
+  // material data as untrusted so one old entry cannot crash a whole lesson.
+  const components: unknown[] = Array.isArray(section.components) ? section.components : []
+  const tools: unknown[] = Array.isArray(section.tools) ? section.tools : []
+  const steps: unknown[] = Array.isArray(section.steps) ? section.steps : []
+  const totalCost = typeof section.total_cost_cny === "number" && Number.isFinite(section.total_cost_cny)
+    ? section.total_cost_cny
+    : 0
   const safetyLevel = section.safety_level ?? "low"
   const ageMin = section.age_min ?? 8
 
@@ -1561,20 +1595,22 @@ function HandsOnKitBlock({
                 </tr>
               </thead>
               <tbody>
-                {components.map((c, i) => (
-                  <tr key={i} className="border-b border-border/20 last:border-0">
-                    <td className="py-2 pr-4">
-                      <div className="font-medium text-foreground">{c.name}</div>
-                      <div className="text-xs text-muted-foreground">{c.name_en}</div>
-                    </td>
-                    <td className="py-2 pr-4 text-muted-foreground">{c.spec}</td>
-                    <td className="py-2 pr-4 text-center">{c.qty}</td>
-                    <td className="py-2 pr-4 text-right whitespace-nowrap">
-                      ¥{c.price_cny.toFixed(1)}
-                    </td>
-                    <td className="py-2 text-xs text-muted-foreground">{c.search_keyword}</td>
-                  </tr>
-                ))}
+                {components.map((component, i) => {
+                  const c = recordOrNull(component)
+                  const price = formatCny(c?.price_cny, 1)
+                  return (
+                    <tr key={i} className="border-b border-border/20 last:border-0">
+                      <td className="py-2 pr-4">
+                        <div className="font-medium text-foreground">{typeof c?.name === "string" ? c.name : "—"}</div>
+                        {typeof c?.name_en === "string" && <div className="text-xs text-muted-foreground">{c.name_en}</div>}
+                      </td>
+                      <td className="py-2 pr-4 text-muted-foreground">{typeof c?.spec === "string" ? c.spec : "—"}</td>
+                      <td className="py-2 pr-4 text-center">{typeof c?.qty === "number" ? c.qty : "—"}</td>
+                      <td className="py-2 pr-4 text-right whitespace-nowrap">{price ?? "—"}</td>
+                      <td className="py-2 text-xs text-muted-foreground">{typeof c?.search_keyword === "string" ? c.search_keyword : "—"}</td>
+                    </tr>
+                  )
+                })}
               </tbody>
             </table>
           </div>
@@ -1586,13 +1622,20 @@ function HandsOnKitBlock({
         <div className="px-5 py-3 border-b border-border/30">
           <h4 className="text-sm font-semibold text-foreground mb-2">{t("course.tools_needed")}</h4>
           <div className="flex flex-wrap gap-2">
-            {tools.map((tool, i) => (
-              <span key={i} className="inline-flex items-center gap-1 text-xs px-3 py-1.5 rounded-full bg-secondary/40 text-foreground">
-                {tool.name}
-                {!tool.included && <span className="text-muted-foreground">(¥{tool.price_cny.toFixed(1)})</span>}
-                {tool.included && <span className="text-green-600 dark:text-green-400">{t("course.tool_included")}</span>}
-              </span>
-            ))}
+            {tools.map((tool, i) => {
+              const legacyName = typeof tool === "string" ? tool : null
+              const detail = recordOrNull(tool)
+              const name = legacyName ?? (typeof detail?.name === "string" ? detail.name : "—")
+              const included = detail?.included === true
+              const price = formatCny(detail?.price_cny, 1)
+              return (
+                <span key={i} className="inline-flex items-center gap-1 text-xs px-3 py-1.5 rounded-full bg-secondary/40 text-foreground">
+                  {name}
+                  {included && <span className="text-green-600 dark:text-green-400">{t("course.tool_included")}</span>}
+                  {!included && price && <span className="text-muted-foreground">({price})</span>}
+                </span>
+              )
+            })}
           </div>
         </div>
       )}
@@ -1602,28 +1645,37 @@ function HandsOnKitBlock({
         <div className="px-5 py-4 border-b border-border/30">
           <h4 className="text-sm font-semibold text-foreground mb-4">{t("course.steps_title")}</h4>
           <ol className="space-y-4">
-            {steps.map((s) => (
-              <li key={s.step} className="flex gap-4">
-                <div className="w-7 h-7 rounded-full bg-orange-500/10 flex items-center justify-center shrink-0 mt-0.5">
-                  <span className="text-xs font-bold text-orange-600 dark:text-orange-400">{s.step}</span>
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="font-medium text-foreground text-sm">{s.title}</p>
-                  <p className="text-sm text-muted-foreground mt-1">{s.description}</p>
-                  {s.safety_warning && (
-                    <div className="mt-2 flex items-start gap-2 text-xs bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400 rounded-lg px-3 py-2">
-                      <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
-                      <span>{s.safety_warning}</span>
-                    </div>
-                  )}
-                  {s.expected_result && (
-                    <p className="mt-1 text-xs text-muted-foreground italic">
-                      {t("course.expected_result_prefix")}: {s.expected_result}
-                    </p>
-                  )}
-                </div>
-              </li>
-            ))}
+            {steps.map((step, index) => {
+              const s = recordOrNull(step)
+              const number = typeof s?.step === "number" ? s.step : index + 1
+              const legacyText = typeof step === "string" ? step : null
+              const title = typeof s?.title === "string" ? s.title : legacyText ?? "—"
+              const description = typeof s?.description === "string" ? s.description : null
+              const safetyWarning = typeof s?.safety_warning === "string" ? s.safety_warning : null
+              const expectedResult = typeof s?.expected_result === "string" ? s.expected_result : null
+              return (
+                <li key={number} className="flex gap-4">
+                  <div className="w-7 h-7 rounded-full bg-orange-500/10 flex items-center justify-center shrink-0 mt-0.5">
+                    <span className="text-xs font-bold text-orange-600 dark:text-orange-400">{number}</span>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium text-foreground text-sm">{title}</p>
+                    {description && <p className="text-sm text-muted-foreground mt-1">{description}</p>}
+                    {safetyWarning && (
+                      <div className="mt-2 flex items-start gap-2 text-xs bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400 rounded-lg px-3 py-2">
+                        <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+                        <span>{safetyWarning}</span>
+                      </div>
+                    )}
+                    {expectedResult && (
+                      <p className="mt-1 text-xs text-muted-foreground italic">
+                        {t("course.expected_result_prefix")}: {expectedResult}
+                      </p>
+                    )}
+                  </div>
+                </li>
+              )
+            })}
           </ol>
         </div>
       )}
@@ -1723,14 +1775,16 @@ export function IdeaBlock({
 // SectionBlock: one section of plan_markdown + right-gutter audio button
 // ---------------------------------------------------------------------------
 function SectionBlock({
-  section, ideaMap, renderedSections, theoryMap,
+  section, ideaMap, renderedSections, theoryMap, sectionIndex, markerOwners,
 }: {
   section: CourseSection
   ideaMap: Map<string, CourseIdeaSummary>
   renderedSections: Record<string, RenderedSection>
   theoryMap?: Map<string, TheoryEntry>
+  sectionIndex: number
+  markerOwners: Map<string, number>
 }) {
-  const parts = section.body_markdown.split(/(\[\[(?:IDEA|THEORY):[^\]]+\]\])/g)
+  const parts = splitLessonParts(section.body_markdown)
 
   // Check if there is any real text content (for audio button)
   const textParts = parts.filter((p) => !p.match(/^\[\[(?:IDEA|THEORY):[^\]]+\]\]$/))
@@ -1770,25 +1824,25 @@ function SectionBlock({
           // Idea placeholder -> render idea block inline
           const ideaMatch = part.match(/^\[\[IDEA:([^\]]+)\]\]$/)
           if (ideaMatch) {
+            if (markerOwners.get(part) !== sectionIndex || parts.indexOf(part) !== idx) return null
             const ideaId = ideaMatch[1]
             const idea = ideaMap.get(ideaId)
-            if (!idea) return null
             const rendered = renderedSections[ideaId] ?? null
             return (
               <div key={idx} id={`idea-${ideaId}`} className="scroll-mt-20">
-                <IdeaBlock idea={idea} section={rendered} />
+                {idea && <IdeaBlock idea={idea} section={rendered} />}
               </div>
             )
           }
           // Theory placeholder -> render collapsible theory block
           const theoryMatch = part.match(/^\[\[THEORY:([^\]]+)\]\]$/)
           if (theoryMatch) {
+            if (markerOwners.get(part) !== sectionIndex || parts.indexOf(part) !== idx) return null
             const theoryId = theoryMatch[1]
             const theory = theoryMap?.get(theoryId)
-            if (!theory) return null
             return (
               <div key={idx} id={`theory-${theoryId}`} className="scroll-mt-20">
-                <TheoryBlock theory={theory} />
+                {theory && <TheoryBlock theory={theory} />}
               </div>
             )
           }
@@ -1805,19 +1859,22 @@ function SectionBlock({
 // ---------------------------------------------------------------------------
 // PlanWithSections: new layout using CourseSection[]
 // ---------------------------------------------------------------------------
-function PlanWithSections({ content }: { content: CourseContent }) {
+export function PlanWithSections({ content }: { content: CourseContent }) {
   const ideaMap = new Map(content.ideas.map((i) => [i.idea_id, i]))
   const theoryMap = new Map((content.theories ?? []).map((t) => [t.theory_id, t]))
+  const markerOwners = firstMarkerSections(content.sections || [])
 
   return (
     <div className="space-y-16">
-      {content.sections!.map((section) => (
+      {content.sections!.map((section, sectionIndex) => (
         <SectionBlock
           key={section.section_id}
           section={section}
           ideaMap={ideaMap}
           renderedSections={content.rendered_sections}
           theoryMap={theoryMap}
+          sectionIndex={sectionIndex}
+          markerOwners={markerOwners}
         />
       ))}
     </div>
@@ -1837,40 +1894,34 @@ export function CourseReadingBody({ content, projectName, moduleId, knowledgeLev
   </KnowledgeLevelContext.Provider>
 }
 
-function PlanWithIdeas({ content }: { content: CourseContent }) {
-  const t = useT()
-  const parts = (content.plan_markdown ?? "").split(/(\[\[(?:IDEA|THEORY):[^\]]+\]\])/g)
+export function PlanWithIdeas({ content }: { content: CourseContent }) {
+  const parts = splitLessonParts(content.plan_markdown ?? "")
   const ideaMap = new Map(content.ideas.map((i) => [i.idea_id, i]))
   const theoryMap = new Map((content.theories ?? []).map((entry) => [entry.theory_id, entry]))
 
   return (
     <div className="space-y-10">
-      {/* Upgrade notice */}
-      <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-outline-variant/20 bg-surface-container-low text-on-surface-variant text-xs">
-        <Play className="h-3 w-3" />
-        {t("course.regenerate_hint_audio")}
-      </div>
       {parts.map((part, idx) => {
         const ideaMatch = part.match(/^\[\[IDEA:([^\]]+)\]\]$/)
         if (ideaMatch) {
+          if (parts.indexOf(part) !== idx) return null
           const ideaId = ideaMatch[1]
           const idea = ideaMap.get(ideaId)
-          if (!idea) return null
           const section = content.rendered_sections?.[ideaId] ?? null
           return (
             <div key={idx} id={`idea-${ideaId}`} className="scroll-mt-20">
-              <IdeaBlock idea={idea} section={section} />
+              {idea && <IdeaBlock idea={idea} section={section} />}
             </div>
           )
         }
         const theoryMatch = part.match(/^\[\[THEORY:([^\]]+)\]\]$/)
         if (theoryMatch) {
+          if (parts.indexOf(part) !== idx) return null
           const theoryId = theoryMatch[1]
           const theory = theoryMap.get(theoryId)
-          if (!theory) return null
           return (
             <div key={idx} id={`theory-${theoryId}`} className="scroll-mt-20">
-              <TheoryBlock theory={theory} />
+              {theory && <TheoryBlock theory={theory} />}
             </div>
           )
         }
@@ -2371,6 +2422,7 @@ export function CourseContentView({
   onMediaStats,
   onOutline,
   preparedLesson,
+  assignmentHandoff,
 }: CourseContentViewProps) {
   const t = useT()
   const [loadedCourseData, setCourseData] = useState<CourseContentData | null>(null)
@@ -2382,8 +2434,6 @@ export function CourseContentView({
   // v3 多版本: 当前选中的 version_label (null = 让后端返回 active 版本)
   const [v3SelectedVersion, setV3SelectedVersion] = useState<string | null>(null)
   const [v3Versions, setV3Versions] = useState<CourseV3Version[]>([])
-  // 场景切换: course (现有课程内容视图) ↔ teacher (蜥蜴老师 + slide 占位)
-  const [sceneMode, setSceneMode] = useState<"course" | "teacher">("course")
   const [generating, setGenerating] = useState(false)
   const [notGenerated, setNotGenerated] = useState(false) // true when no content exists yet
   const [checking, setChecking] = useState(true)          // initial check in progress
@@ -2691,8 +2741,6 @@ export function CourseContentView({
           v3SelectedVersion={v3SelectedVersion}
           onSelectV3Version={setV3SelectedVersion}
           onSetActiveV3Version={handleSetActiveV3Version}
-          sceneMode={sceneMode}
-          onSwitchScene={setSceneMode}
           showingCourseFactory={showingCourseFactory}
           courseFactoryLabel={courseFactoryVariant?.label}
           onToggleCourseFactory={() => {
@@ -2721,8 +2769,6 @@ export function CourseContentView({
           v3SelectedVersion={v3SelectedVersion}
           onSelectV3Version={setV3SelectedVersion}
           onSetActiveV3Version={handleSetActiveV3Version}
-          sceneMode={sceneMode}
-          onSwitchScene={setSceneMode}
           showingCourseFactory={showingCourseFactory}
           courseFactoryLabel={courseFactoryVariant?.label}
           onToggleCourseFactory={() => {
@@ -2752,8 +2798,6 @@ export function CourseContentView({
           v3SelectedVersion={v3SelectedVersion}
           onSelectV3Version={setV3SelectedVersion}
           onSetActiveV3Version={handleSetActiveV3Version}
-          sceneMode={sceneMode}
-          onSwitchScene={setSceneMode}
           showingCourseFactory={showingCourseFactory}
           courseFactoryLabel={courseFactoryVariant?.label}
           onToggleCourseFactory={() => {
@@ -2804,7 +2848,16 @@ export function CourseContentView({
   return (
     <CourseIdentityContext.Provider value={{ projectName, knodeId: nodeId, moduleId: knode?.module_id }}>
     <KnowledgeLevelContext.Provider value={knowledgeLevel}>
-    <AudioProvider>
+    <AudioProvider key={`${projectName}/${knode?.module_id ?? nodeId}`}>
+    <LessonSlidesProvider
+      key={`${projectName}/${knode?.module_id ?? nodeId}/${versionMode}/${v3SelectedVersion}/${contentVariant}`}
+      content={content}
+      slides={showingCourseFactory ? undefined : courseData?.slides}
+      projectName={projectName}
+      moduleId={knode?.module_id ?? String(nodeId)}
+      knodeDir={courseData?.knode_dir}
+      title={knode?.title}
+    >
       <div className="flex flex-col h-full">
         <Header
           knode={knode}
@@ -2822,28 +2875,9 @@ export function CourseContentView({
           onToggleCourseFactory={() => {
             setContentVariant((prev) => prev === "course_factory" ? "default" : "course_factory")
           }}
-          sceneMode={sceneMode}
-          onSwitchScene={setSceneMode}
         />
 
-        {/* 老师讲课场景: 全屏 LizardScene 替代正常课程内容 */}
-        {sceneMode === "teacher" ? (
-          <div className="flex-1 min-h-0">
-            <TeacherSceneView
-              knode={knode}
-              projectName={projectName}
-              nodeId={nodeId}
-              moduleId={knode?.module_id ?? String(nodeId)}
-              versionLabel={
-                v3SelectedVersion ||
-                v3Versions.find((v) => v.is_active)?.version_label ||
-                null
-              }
-              courseContent={content as CourseContent | undefined ?? null}
-            />
-          </div>
-        ) : (
-        <>
+        {/* Continuous reading stays mounted while the slideshow floats above it. */}
         <div className="flex-1 min-h-0 overflow-y-auto">
           {generating && !showingCourseFactory && (
             <div className="max-w-4xl mx-auto px-6 py-5 w-full">
@@ -2884,7 +2918,7 @@ export function CourseContentView({
           )}
 
           {content && (!generating || showingCourseFactory) && (
-            <div ref={contentRef} className="relative max-w-4xl mx-auto px-8 py-12 space-y-16">
+            <div ref={contentRef} className="relative max-w-6xl mx-auto px-4 sm:px-8 py-12 space-y-16 [&>*:not([data-lesson-carousel])]:max-w-4xl [&>*:not([data-lesson-carousel])]:mx-auto">
               {(() => {
                 const mid = knode?.module_id ?? String(nodeId)
                 return (
@@ -2893,6 +2927,8 @@ export function CourseContentView({
                     <DrillRecords librarySlug={projectName} moduleId={mid} refreshKey={drillRefresh} />
 
                     <EditorialHeader knode={knode} />
+
+                    <LessonSlideCarousel />
 
                     {preparedLesson?.beforeContent}
 
@@ -2905,7 +2941,8 @@ export function CourseContentView({
 
 
                     {preparedLesson?.afterContent}
-                    {preparedLesson?.assignment ?? <NodeAssignmentPanel key={`${projectName}/${knode?.module_id}`} projectName={projectName} knode={knode} />}
+                    {preparedLesson?.assignment ?? <><NodeAssignmentPanel key={`${projectName}/${knode?.module_id}`} projectName={projectName} knode={knode} mergeHandsOn={!!assignmentHandoff}/>{assignmentHandoff}</>}
+
                     {agentLogs.length > 0 && <AgentDebugPanel logs={agentLogs} />}
 
                     {/* 高亮课文 → 浮"深入学习" + "知识钻取"按钮 (fixed 定位, 不影响布局) */}
@@ -2963,9 +3000,8 @@ export function CourseContentView({
             )}
           </div>
         )}
-        </>
-        )}
       </div>
+    </LessonSlidesProvider>
     </AudioProvider>
     </KnowledgeLevelContext.Provider>
     </CourseIdentityContext.Provider>
@@ -2986,8 +3022,6 @@ function Header({
   v3SelectedVersion = null,
   onSelectV3Version,
   onSetActiveV3Version,
-  sceneMode = "course",
-  onSwitchScene,
 }: {
   knode: KnodeInfo | null
   onClose: () => void
@@ -3002,8 +3036,6 @@ function Header({
   v3SelectedVersion?: string | null
   onSelectV3Version?: (label: string | null) => void
   onSetActiveV3Version?: (label: string) => void
-  sceneMode?: "course" | "teacher"
-  onSwitchScene?: (m: "course" | "teacher") => void
 }) {
   const t = useT()
   // v3 模式当前显示的版本: 优先用 selected, 否则用 active
@@ -3028,37 +3060,7 @@ function Header({
         )}
       </div>
       <div className="flex items-center gap-2 shrink-0">
-        {/* 场景切换: 课程内容 ↔ 老师讲课 (蜥蜴 + 幻灯片) */}
-        {onSwitchScene && (
-          <div className="inline-flex h-8 rounded-lg border border-border/60 bg-secondary/40 p-0.5 mr-1">
-            <button
-              type="button"
-              onClick={() => onSwitchScene("course")}
-              className={[
-                "px-3 rounded-md text-xs font-medium transition-colors",
-                sceneMode === "course"
-                  ? "bg-background text-foreground shadow-sm"
-                  : "text-muted-foreground hover:text-foreground",
-              ].join(" ")}
-              title={t("course.view_content_title")}
-            >
-              {t("course.course_content_tab")}
-            </button>
-            <button
-              type="button"
-              onClick={() => onSwitchScene("teacher")}
-              className={[
-                "px-3 rounded-md text-xs font-medium transition-colors",
-                sceneMode === "teacher"
-                  ? "bg-amber-100 text-amber-800 shadow-sm"
-                  : "text-muted-foreground hover:text-amber-700",
-              ].join(" ")}
-              title={t("course.switch_teacher_title")}
-            >
-              {t("course.teacher_lecture_tab")}
-            </button>
-          </div>
-        )}
+        <LessonSlideshowButton />
         {/* v2 / v3 版本切换 toggle (仅当 v3 已生成时显示) */}
         {v3Available && onSwitchVersion && (
           <div className="inline-flex h-8 rounded-lg border border-border/60 bg-secondary/40 p-0.5">

@@ -4,6 +4,7 @@ import { useCallback, useRef } from "react"
 import { toast } from "sonner"
 import { STUDENT_API_URL } from "@/lib/api"
 import { getToken } from "@/lib/auth"
+import { MOLECULE_NUMBERING_VERSION } from "@/lib/course-numbering"
 import { useChatStore } from "@/lib/stores/chat-store"
 import { randomUUID } from "@/lib/utils/uuid"
 import type { WSMessage } from "@/lib/types/api"
@@ -68,7 +69,7 @@ export function useWebSocketChat() {
       return // 未登录, 不建连接
     }
     const wsBase = STUDENT_API_URL.replace(/^http/, "ws") + "/api/chat/stream"
-    const wsUrl = `${wsBase}?token=${encodeURIComponent(token)}`
+    const wsUrl = `${wsBase}?token=${encodeURIComponent(token)}&course_numbering=${MOLECULE_NUMBERING_VERSION}`
     const ws = new WebSocket(wsUrl)
     wsRef.current = ws
 

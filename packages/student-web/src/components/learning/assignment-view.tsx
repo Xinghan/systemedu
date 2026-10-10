@@ -18,6 +18,7 @@ import { useT } from "@/lib/i18n/use-t"
 
 interface AssignmentViewProps {
   content: string
+  mergeHandsOn?: boolean
   knode?: KnodeInfo | null
   progress?: NodeProgress | null
   projectName?: string
@@ -488,7 +489,7 @@ function CapstoneAssignmentView({ content }: { content: string }) {
 // ---------------------------------------------------------------------------
 
 export function AssignmentView({
-  content, knode, progress, projectName, onStatusChange,
+  content, knode, progress, projectName, onStatusChange, mergeHandsOn = false,
 }: AssignmentViewProps) {
   const t = useT()
   const normalComponents = useNormalComponents()
@@ -497,8 +498,16 @@ export function AssignmentView({
   const hasContent = content && content.trim()
 
   const blocks = useMemo(
-    () => (hasContent && !isCapstone ? parseAssignment(content) : []),
-    [content, hasContent, isCapstone],
+    () => {
+      const parsed = hasContent && !isCapstone ? parseAssignment(content) : []
+      if (!mergeHandsOn) return parsed
+      let handsOn = false
+      return parsed.filter(block => {
+        if (block.type === "heading") handsOn = block.headingKind === "hands_on"
+        return !handsOn
+      })
+    },
+    [content, hasContent, isCapstone, mergeHandsOn],
   )
 
   if (!hasContent && !isCapstone) {
@@ -546,7 +555,7 @@ export function AssignmentView({
           return null
         })
       )}
-      {isCapstone && knode && projectName && (
+      {isCapstone && knode && projectName && !mergeHandsOn && (
         <CapstoneSubmissionPanel
           projectName={projectName}
           nodeId={knode.id}

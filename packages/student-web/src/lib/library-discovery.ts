@@ -4,6 +4,8 @@ import { LOCAL_PROJECTS, PROJECT_LINES, lineForCourse, localized, type LocalProj
 import courseSnapshots from "@/lib/project-lines/course-snapshots.json"
 import { projectLevel } from "@/lib/project-lines/levels"
 
+const snapshotCovers = new Map(courseSnapshots.map(project => [project.slug, project.coverImage]))
+
 export type DiscoveryEntry = {
   id: string
   kind: "micro" | "guided" | "integration" | "full"
@@ -84,7 +86,8 @@ export function makeDiscoveryEntries(projects: LibraryProjectSummary[], locale: 
     difficulty: typeof project.difficulty === "number" && Number.isFinite(project.difficulty) && project.difficulty >= 1 && project.difficulty <= 5 ? project.difficulty : null,
     available: project.status !== "draft", publishedAt: Date.parse(project.published_at || "") || 0, project,
     lineId: lineForCourse(project.slug)?.id, source: serviceSlugs.has(project.slug) ? "service" : "snapshot",
-    coverImage: serviceSlugs.has(project.slug) ? undefined : lineForCourse(project.slug)?.image,
+    // 离线课程使用各自的专属封面；项目线封面只用于主题入口。
+    coverImage: serviceSlugs.has(project.slug) && project.cover_image_path ? undefined : snapshotCovers.get(project.slug),
     searchText: [project.title, project.title_zh, project.slug, project.domain, project.description, ...(project.tags || []), ...outcomeTitles(project), ...PROJECT_LINES.filter(line => line.courseSlugs.includes(project.slug)).flatMap(line => [line.title.zh, line.title.en, ...line.aliases])].filter(Boolean).join(" ").toLowerCase(),
   }))
   return [...local, ...full]

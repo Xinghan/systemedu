@@ -1,0 +1,700 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Molecule Monster Hunter M64 — Bemis-Murcko Scaffold: shave the leaves, keep the bones</title>
+<style>
+:root{
+  /* L1 — shared deep-space canvas (26 套统一深空底) */
+  --bg-0: oklch(0.14 0.035 265);
+  --bg-1: oklch(0.18 0.04 265);
+  --bg-2: oklch(0.22 0.045 265);
+  --bg-3: oklch(0.28 0.05 265);
+  --line: oklch(0.35 0.05 265 / 0.35);
+  --line-strong: oklch(0.55 0.08 265 / 0.55);
+  --fg:      oklch(0.96 0.01 265);
+  --fg-dim:  oklch(0.75 0.02 265);
+  --fg-mute: oklch(0.55 0.03 265);
+  --gold:    oklch(0.85 0.14 85);
+
+  /* L2 — chem signature accent (Reaction Atrium · lime) */
+  --chem: oklch(0.82 0.17 125);
+
+  /* L3 — chem 5-colour palette (themes.js #08 Reaction Atrium) */
+  --CATALYST: oklch(0.82 0.17 125);
+  --BOND:     oklch(0.62 0.16 125);
+  --DEEP:     oklch(0.35 0.10 130);
+  --REACTION: oklch(0.95 0.08 120);
+  --YIELD:    oklch(0.85 0.14 85);
+
+  --GOOD: oklch(0.75 0.17 155);
+  --BAD:  oklch(0.62 0.20 25);
+
+  --panel: var(--bg-2);
+  --mono: "JetBrains Mono", ui-monospace, monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:100%;height:100vh;overflow:hidden;background:var(--bg-0);color:var(--fg);
+  font-family:'Noto Sans SC',system-ui,sans-serif}
+.app{display:flex;height:100vh;width:100%}
+
+/* ── sidebar (200px) ── */
+.sidebar{width:200px;flex-shrink:0;height:100vh;
+  background:linear-gradient(180deg, var(--bg-2), var(--bg-1));
+  border-right:1px solid var(--line);
+  display:flex;flex-direction:column;gap:11px;padding:13px 13px 14px;overflow:hidden}
+.side-top{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.brand{display:flex;align-items:center;gap:8px}
+.brand-tag{font-family:var(--mono);font-size:9px;letter-spacing:1.5px;color:var(--BOND)}
+#langBtn{font-family:var(--mono);font-size:10px;font-weight:700;letter-spacing:1px;
+  padding:4px 9px;cursor:pointer;border:1px solid color-mix(in oklch, var(--chem) 45%, transparent);
+  background:color-mix(in oklch, var(--chem) 16%, transparent);color:var(--REACTION)}
+#langBtn:hover{background:color-mix(in oklch, var(--chem) 30%, transparent)}
+.mascot-wrap{display:flex;align-items:center;gap:9px;padding:6px 0 2px}
+.mascot-wrap svg{flex-shrink:0}
+.mascot-name{font-family:var(--mono);font-size:9px;letter-spacing:1px;color:var(--chem)}
+.mascot-line{font-size:9.5px;line-height:1.4;color:var(--fg-mute)}
+.side-title{font-family:var(--mono);font-weight:700;font-size:13px;line-height:1.25;
+  color:var(--REACTION);letter-spacing:0.4px}
+.side-sub{font-size:10px;line-height:1.5;color:var(--fg-dim)}
+.side-block-label{font-family:var(--mono);font-size:8px;letter-spacing:1.4px;
+  color:var(--chem);text-transform:uppercase;margin-bottom:5px}
+.side-obs{font-size:9.5px;line-height:1.5;color:var(--fg-dim)}
+.side-obs li{margin-bottom:5px;list-style:none;padding-left:11px;position:relative}
+.side-obs li::before{content:'';position:absolute;left:0;top:6px;width:4px;height:4px;background:var(--chem)}
+
+/* ── project route map (north-star anchor) ── */
+.route{display:flex;flex-direction:column;gap:5px}
+.route-stop{display:flex;align-items:center;gap:7px;font-size:9px;line-height:1.2;color:var(--fg-mute)}
+.route-dot{width:7px;height:7px;flex-shrink:0;border:1px solid var(--line-strong);background:transparent}
+.route-stop.done .route-dot{background:var(--BOND);border-color:var(--BOND)}
+.route-stop.here .route-dot{background:var(--chem);border-color:var(--chem);
+  box-shadow:0 0 0 3px color-mix(in oklch, var(--chem) 22%, transparent)}
+.route-stop.here{color:var(--REACTION);font-weight:700}
+.route-goal{display:flex;align-items:center;gap:7px;font-size:9px;color:var(--gold);margin-top:1px}
+.route-goal svg{flex-shrink:0}
+
+.side-hud{margin-top:auto;display:flex;flex-direction:column;gap:6px;
+  border-top:1px solid var(--line);padding-top:9px}
+.hud-row{display:flex;align-items:baseline;justify-content:space-between;gap:6px}
+.hud-l{font-family:var(--mono);font-size:8px;letter-spacing:1px;color:var(--fg-mute);text-transform:uppercase}
+.hud-v{font-family:var(--mono);font-size:13px;font-weight:700;color:var(--chem)}
+
+/* ── stage ── */
+#stage{flex:1;min-width:0;height:100vh;display:flex;flex-direction:column;position:relative}
+#cWrap{flex:1;min-height:0;position:relative;display:flex;flex-direction:column}
+canvas{display:block;width:100%;height:100%;position:absolute;inset:0}
+
+.hud-top{position:absolute;top:10px;right:14px;z-index:5;text-align:right;
+  font-family:var(--mono);pointer-events:none}
+.hud-top .phase{font-size:11px;font-weight:700;letter-spacing:1px;color:var(--REACTION)}
+.hud-top .phase .seq{color:var(--fg-mute);margin-right:6px}
+.hud-top .quant{font-size:9.5px;letter-spacing:0.5px;color:var(--fg-dim);margin-top:3px}
+.hud-top .quant b{color:var(--chem)}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar">
+    <div class="side-top">
+      <div class="brand"><span class="brand-tag" id="sideTag">CHEM · M64</span></div>
+      <button id="langBtn">CN</button>
+    </div>
+
+    <!-- mascot: Ion (atom-cluster creature) -->
+    <div class="mascot-wrap">
+      <svg width="40" height="40" viewBox="0 0 40 40" aria-hidden="true">
+        <g id="ionSprite">
+          <circle cx="20" cy="20" r="6.5" fill="none" stroke="var(--chem)" stroke-width="1.5"/>
+          <circle cx="20" cy="20" r="3" fill="var(--CATALYST)"/>
+          <circle cx="8" cy="13" r="2.4" fill="var(--BOND)"/>
+          <circle cx="32" cy="13" r="2.4" fill="var(--BOND)"/>
+          <circle cx="11" cy="31" r="2.2" fill="var(--YIELD)"/>
+          <circle cx="29" cy="31" r="2.2" fill="var(--YIELD)"/>
+          <line x1="13.5" y1="17" x2="9.8" y2="14.5" stroke="var(--line-strong)" stroke-width="1.1"/>
+          <line x1="26.5" y1="17" x2="30.2" y2="14.5" stroke="var(--line-strong)" stroke-width="1.1"/>
+          <line x1="16" y1="24.5" x2="12.5" y2="29" stroke="var(--line-strong)" stroke-width="1.1"/>
+          <line x1="24" y1="24.5" x2="27.5" y2="29" stroke="var(--line-strong)" stroke-width="1.1"/>
+        </g>
+      </svg>
+      <div>
+        <div class="mascot-name">ION</div>
+        <div class="mascot-line" id="mascotLine"></div>
+      </div>
+    </div>
+
+    <div class="side-title" id="sTitle"></div>
+    <div class="side-sub" id="sIntro"></div>
+
+    <div>
+      <div class="side-block-label" id="sObsLabel"></div>
+      <ul class="side-obs" id="sObs"></ul>
+    </div>
+
+    <!-- project route map -->
+    <div>
+      <div class="side-block-label" id="sRouteLabel"></div>
+      <div class="route" id="route">
+        <div class="route-stop done"><span class="route-dot"></span><span id="rs1"></span></div>
+        <div class="route-stop done"><span class="route-dot"></span><span id="rs2"></span></div>
+        <div class="route-stop here"><span class="route-dot"></span><span id="rs3"></span></div>
+        <div class="route-stop"><span class="route-dot"></span><span id="rs4"></span></div>
+        <div class="route-goal">
+          <svg width="11" height="11" viewBox="0 0 11 11" aria-hidden="true">
+            <rect x="1" y="1" width="9" height="9" fill="none" stroke="var(--gold)" stroke-width="1"/>
+            <path d="M3 5.5 L5 7.5 L8 3.5" fill="none" stroke="var(--gold)" stroke-width="1.2"/>
+          </svg>
+          <span id="rsGoal"></span>
+        </div>
+      </div>
+    </div>
+
+    <div class="side-hud">
+      <div class="hud-row"><span class="hud-l" id="hL1"></span><span class="hud-v" id="hV1">--</span></div>
+      <div class="hud-row"><span class="hud-l" id="hL2"></span><span class="hud-v" id="hV2">--</span></div>
+      <div class="hud-row"><span class="hud-l" id="hL3"></span><span class="hud-v" id="hV3">--</span></div>
+    </div>
+  </aside>
+
+  <main id="stage">
+    <div class="hud-top">
+      <div class="phase"><span class="seq" id="hudSeq"></span><span id="hudPhase"></span></div>
+      <div class="quant" id="hudQuant"></div>
+    </div>
+    <div id="cWrap"><canvas id="c"></canvas></div>
+  </main>
+</div>
+
+<script>
+(function(){
+"use strict";
+var LANG='zh';
+
+/* ── canonical RDKit-real scaffold data (verified against RDKit 2026.03.3,
+   MurckoScaffold.GetScaffoldForMol) — IDENTICAL molecules/numbers used in the M64 game.
+   benzene family  → scaffold c1ccccc1  (6 heavy atoms, 1 ring)
+   indole  family  → scaffold c1ccc2[nH]ccc2c1 (9 heavy atoms, 2 rings)
+   paracetamol: 11 heavy atoms → scaffold benzene 6 heavy atoms (shave 5 side-chain atoms)
+   ── */
+var SCAF_BENZENE='c1ccccc1';
+var SCAF_INDOLE ='c1ccc2[nH]ccc2c1';
+
+/* hexagon ring vertices (unit, pointy-top), index 0 at top */
+function hex(cx,cy,r){
+  var pts=[];
+  for(var k=0;k<6;k++){
+    var a=-Math.PI/2 + k*Math.PI/3;
+    pts.push([cx+r*Math.cos(a), cy+r*Math.sin(a)]);
+  }
+  return pts;
+}
+
+var I18N={
+  mascotLine:{en:'Shave off the leaves — what is left is the bone everyone in the family shares.',cn:'把枝叶剃光——剩下的那根骨头，就是一家子共有的。'},
+  sTitle:{en:'BEMIS-MURCKO SCAFFOLD',cn:'Bemis-Murcko 骨架'},
+  sIntro:{en:'Take a molecule. Shave off every leaf hanging on the outside — every side-chain atom that is not in a ring and not bridging two rings. What survives is the core ring system: the scaffold. The magic: paracetamol (11 atoms), aniline, phenol, toluene all look different, yet all shave down to the SAME benzene ring c1ccccc1. Same bone = one family.',
+          cn:'拿一个分子。把挂在外面的枝叶——那些没成环、也没在连接两个环的侧链原子——全剃掉。剩下的，就是核心环系：骨架。神奇的是：对乙酰氨基酚（11 个原子）、苯胺、苯酚、甲苯长得各不一样，剃完却得到同一个苯环 c1ccccc1。同一根骨头 = 一家子。'},
+  sObsLabel:{en:'WATCH FOR',cn:'观察提示'},
+  obs1:{en:'Only ring atoms + ring-linker atoms survive the razor.',cn:'只有环上原子 + 连接环的桥保留下来。'},
+  obs2:{en:'paracetamol 11 atoms → benzene 6 atoms (5 leaves shaved).',cn:'对乙酰氨基酚 11 原子 → 苯环 6 原子（剃掉 5 片枝叶）。'},
+  obs3:{en:'Four different molecules, ONE scaffold = one family.',cn:'四个不同分子，同一个骨架 = 一家子。'},
+  sRouteLabel:{en:'PROJECT ROUTE',cn:'项目路线'},
+  rs1:{en:'forests & boosting (准)',cn:'森林·提升树 (够准)'},
+  rs2:{en:'a pretty but suspicious score',cn:'漂亮但可疑的分数'},
+  rs3:{en:'shave scaffolds, spot family (you)',cn:'剃骨架·认一家子 (你在这)'},
+  rs4:{en:'scaffold split → honest score',cn:'按骨架切分→诚实分'},
+  rsGoal:{en:'Monster-Hunter workbench',cn:'分子怪兽猎人工作台'},
+  hL1:{en:'MOL ATOMS',cn:'分子原子'},
+  hL2:{en:'SCAFFOLD ATOMS',cn:'骨架原子'},
+  hL3:{en:'SCAFFOLD',cn:'骨架记号'},
+  /* phase names */
+  pWhole:{en:'a whole molecule',cn:'一个完整分子'},
+  pShave:{en:'shave the leaves',cn:'剃掉枝叶'},
+  pFour:{en:'four mols, one bone',cn:'四个分子，一根骨头'},
+  pFamily:{en:'group into families',cn:'按骨架归一家子'},
+  /* captions */
+  capWhole:{en:'WHY NOW — your model gave a pretty score, but it is suspiciously high: look-alike molecules leaked across train and test. To fix it you must first recognise WHO is a family. Here is paracetamol — 11 heavy atoms. In the middle: a 6-carbon benzene RING. Hanging off it: a tail of 5 side-chain atoms (an -NH-C(=O)-CH3 amide and an -OH). Those dangling bits are the "leaves".',
+           cn:'为什么现在学——你的模型给了个漂亮分，可它高得可疑：长得像的分子泄漏到了考试题和练习题两边。要修它，你得先认出谁和谁是一家子。这是对乙酰氨基酚——11 个重原子。中间：一个 6 碳的苯环。挂在边上：一条 5 个原子的侧链尾巴（一个 -NH-C(=O)-CH3 酰胺 + 一个 -OH）。那些挂着的零碎，就是「枝叶」。'},
+  capShave:{en:'Now apply the Bemis-Murcko razor. Rule in three words: keep the rings, keep the bridges between rings, shave everything else. Watch the 5 side-chain atoms (NOT in any ring, NOT bridging rings) fade and float away one by one. What is left? The bare 6-carbon ring — scaffold SMILES c1ccccc1. From 11 atoms down to 6. RDKit does this in one line: MurckoScaffold.GetScaffoldForMol(mol).',
+            cn:'现在动用 Bemis-Murcko 这把剃刀。规矩三句话：环留下、连接环的桥留下、其余全剃掉。看那 5 个侧链原子（既没成环、也没在连接两个环）一个个淡掉、飘走。剩下什么？光秃秃的 6 碳环——骨架 SMILES c1ccccc1。从 11 个原子剃到 6 个。RDKit 一行就办了：MurckoScaffold.GetScaffoldForMol(mol)。'},
+  capFour:{en:'Here is the surprise. Take FOUR molecules that look nothing alike — aniline (-NH2), phenol (-OH), toluene (-CH3), paracetamol (long amide tail). Shave each one. Every single one collapses to the exact same bare benzene ring: c1ccccc1. The leaves were different; the bone was identical all along. Because the razor is a fixed rule, the same molecule always yields the same scaffold — so the scaffold is a reliable fingerprint.',
+           cn:'看这个意外。拿四个长得毫不像的分子——苯胺（-NH2）、苯酚（-OH）、甲苯（-CH3）、对乙酰氨基酚（长酰胺尾）。各剃一遍。每一个都塌成同一个光秃秃的苯环：c1ccccc1。枝叶各不同，骨头一直是同一根。因为剃刀是套死规矩，同一个分子每次都剃出同一个骨架——所以骨架能当一个可靠的记号。'},
+  capFamily:{en:'Last step — group by scaffold. Molecules whose scaffold SMILES string is exactly equal go in one pile, one FAMILY: the benzene family (aniline, phenol, toluene, paracetamol) all share c1ccccc1; the indole family (indole, tryptophan, melatonin) all share c1ccc2[nH]ccc2c1. CLOSER TO THE GOAL: same scaffold = look-alikes = a family. Next lesson you keep each family wholly on ONE side of train/test — no relative sneaks across — and the suspicious score finally drops to an honest one.',
+             cn:'最后一步——按骨架归族。骨架 SMILES 字符串完全相等的分子归成一堆，就是一个家族：苯环族（苯胺、苯酚、甲苯、对乙酰氨基酚）都顶着 c1ccccc1；吲哚族（吲哚、色氨酸、褪黑素）都顶着 c1ccc2[nH]ccc2c1。离终点更近了：同骨架 = 长得像 = 一家子。下一节你把每一家整族整族地放到训练或测试的同一边——绝不让一个亲戚溜过去——那个可疑的漂亮分，才终于掉成一个诚实的分。'},
+  /* labels */
+  lblRing:{en:'ring (kept)',cn:'环（保留）'},
+  lblLeaf:{en:'side-chain leaf (shaved)',cn:'侧链枝叶（剃掉）'},
+  lblScaf:{en:'scaffold',cn:'骨架'},
+  lblBenzFam:{en:'benzene family · c1ccccc1',cn:'苯环族 · c1ccccc1'},
+  lblIndoFam:{en:'indole family · c1ccc2[nH]ccc2c1',cn:'吲哚族 · c1ccc2[nH]ccc2c1'},
+  lblSame:{en:'same scaffold = one family',cn:'同骨架 = 一家子'},
+  lblEq:{en:'scaffold SMILES equal ⇒ same family',cn:'骨架 SMILES 相等 ⇒ 同一家'},
+  outRing:{en:'core ring',cn:'核心环'},
+  outScaf:{en:'c1ccccc1',cn:'c1ccccc1'}
+};
+function dkey(){return LANG==='zh'?'cn':'en';}
+function t(k){return(I18N[k]&&I18N[k][dkey()])||(I18N[k]&&I18N[k]['en'])||k;}
+
+/* resolve oklch palette tokens into concrete sRGB */
+var CSS={};
+function buildCSS(){
+  var cs=getComputedStyle(document.documentElement);
+  var names=['CATALYST','BOND','DEEP','REACTION','YIELD','chem','bg-0','bg-1','bg-2','bg-3','panel','GOOD','BAD','gold','fg','fg-dim','fg-mute','line-strong'];
+  var pc=document.createElement('canvas');pc.width=1;pc.height=1;
+  var pctx=pc.getContext('2d');
+  names.forEach(function(n){
+    var raw=cs.getPropertyValue('--'+n).trim();
+    var key=n.replace(/-/g,'_');
+    pctx.clearRect(0,0,1,1);
+    pctx.fillStyle='#000';
+    pctx.fillStyle=raw;
+    pctx.fillRect(0,0,1,1);
+    var d=pctx.getImageData(0,0,1,1).data;
+    CSS[key]=[d[0],d[1],d[2]];
+  });
+}
+function rgba(nm,a){
+  var c=CSS[nm.replace(/-/g,'_')];
+  if(!c)return 'rgba(200,200,200,'+a+')';
+  return 'rgba('+c[0]+','+c[1]+','+c[2]+','+a+')';
+}
+
+var canvas=document.getElementById('c');
+var ctx=canvas.getContext('2d');
+var cWrap=document.getElementById('cWrap');
+var W=0,H=0,DPR=Math.min(window.devicePixelRatio||1,2);
+
+function resize(){
+  var rect=cWrap.getBoundingClientRect();
+  if(rect.width<1||rect.height<1)return;
+  W=rect.width;H=rect.height;
+  canvas.width=Math.round(W*DPR);canvas.height=Math.round(H*DPR);
+  canvas.style.width=W+'px';canvas.style.height=H+'px';
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+}
+
+function lerp(a,b,p){return a+(b-a)*p;}
+function clamp01(x){return x<0?0:x>1?1:x;}
+function easeInOut(x){return x<0.5?2*x*x:1-Math.pow(-2*x+2,2)/2;}
+function easeOut(x){return 1-Math.pow(1-x,3);}
+
+var NOW=0;
+var PHASES=[
+  {name:'pWhole',  cap:'capWhole',  dur:9.0},
+  {name:'pShave',  cap:'capShave',  dur:10.5},
+  {name:'pFour',   cap:'capFour',   dur:10.0},
+  {name:'pFamily', cap:'capFamily', dur:11.0}
+];
+var TOTAL=0;PHASES.forEach(function(p){TOTAL+=p.dur;});
+var startT=null;
+function phaseAt(tt){
+  var acc=0;
+  for(var i=0;i<PHASES.length;i++){
+    if(tt<acc+PHASES[i].dur){return {idx:i, local:(tt-acc)/PHASES[i].dur, abs:tt};}
+    acc+=PHASES[i].dur;
+  }
+  return {idx:PHASES.length-1, local:1, abs:tt};
+}
+
+function drawBg(){
+  var grad=ctx.createLinearGradient(0,0,0,H);
+  grad.addColorStop(0,rgba('bg-1',1));
+  grad.addColorStop(1,rgba('bg-0',1));
+  ctx.fillStyle=grad;ctx.fillRect(0,0,W,H);
+  ctx.strokeStyle=rgba('chem',0.04);ctx.lineWidth=1;
+  var gs=48;
+  for(var gx=gs;gx<W;gx+=gs){ctx.beginPath();ctx.moveTo(gx,0);ctx.lineTo(gx,H);ctx.stroke();}
+  for(var gy=gs;gy<H;gy+=gs){ctx.beginPath();ctx.moveTo(0,gy);ctx.lineTo(W,gy);ctx.stroke();}
+}
+
+/* ── atom + bond primitives ── */
+function bond(x1,y1,x2,y2,col,alpha,wd,dbl){
+  if(alpha<=0.01)return;
+  ctx.globalAlpha=alpha;
+  ctx.strokeStyle=rgba(col,0.95);ctx.lineWidth=wd||3;ctx.lineCap='round';
+  ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke();
+  if(dbl){
+    var dx=x2-x1,dy=y2-y1,L=Math.hypot(dx,dy);
+    var nx=-dy/L,ny=dx/L,off=4.5;
+    ctx.lineWidth=(wd||3)*0.6;
+    ctx.beginPath();
+    ctx.moveTo(x1+nx*off+dx*0.16,y1+ny*off+dy*0.16);
+    ctx.lineTo(x2+nx*off-dx*0.16,y2+ny*off-dy*0.16);
+    ctx.stroke();
+  }
+  ctx.globalAlpha=1;
+}
+function atom(x,y,r,fill,ring,alpha,label){
+  if(alpha<=0.01)return;
+  ctx.globalAlpha=alpha;
+  ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);
+  ctx.fillStyle=rgba(fill,0.95);ctx.fill();
+  ctx.lineWidth=2;ctx.strokeStyle=rgba(ring,0.95);ctx.stroke();
+  if(label){
+    ctx.fillStyle=rgba('bg-0',0.98);
+    ctx.font='700 '+Math.round(r*1.05)+'px '+'"JetBrains Mono", ui-monospace, monospace';
+    ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.fillText(label,x,y+0.5);
+  }
+  ctx.globalAlpha=1;
+}
+
+/* draw paracetamol (benzene ring + amide + OH) at center (cx,cy) scale s.
+   shave 0..1 fades the side chain leaves (5 atoms) and bonds.
+   returns ring vertex screen coords for reuse. */
+function drawParacetamol(cx,cy,s,shave){
+  var hv=hex(cx,cy,s*1.0);
+  var leafA=clamp01(1-shave);
+  // side chain hang from ring vertex index 3 (bottom-ish) — N-C(=O)-CH3 and OH from index 0 (top)
+  var rA=s*0.30; // ring atom radius
+  var lA=s*0.27; // leaf atom radius
+  // ring bonds (alternating double for aromatic look)
+  for(var i=0;i<6;i++){
+    var a=hv[i],b=hv[(i+1)%6];
+    bond(a[0],a[1],b[0],b[1],'BOND',1,3.4,(i%2===0));
+  }
+  // --- leaves (side chain) ---
+  // amide tail hanging off vertex 4 (lower-left): N -> C(=O) -> CH3, plus =O up
+  var v4=hv[4];
+  var nN=[v4[0]-s*0.95, v4[1]+s*0.45];
+  var cC=[nN[0]-s*0.55, nN[1]+s*0.80];
+  var oDbl=[cC[0]-s*0.95, cC[1]-s*0.10];
+  var cMe=[cC[0]+s*0.25, cC[1]+s*0.95];
+  // OH off vertex 1 (upper-right)
+  var v1=hv[1];
+  var oH=[v1[0]+s*0.95, v1[1]-s*0.45];
+  if(leafA>0.01){
+    bond(v4[0],v4[1],nN[0],nN[1],'DEEP',leafA,3,false);
+    bond(nN[0],nN[1],cC[0],cC[1],'DEEP',leafA,3,false);
+    bond(cC[0],cC[1],oDbl[0],oDbl[1],'DEEP',leafA,3,true);
+    bond(cC[0],cC[1],cMe[0],cMe[1],'DEEP',leafA,3,false);
+    bond(v1[0],v1[1],oH[0],oH[1],'DEEP',leafA,3,false);
+  }
+  // ring atoms (carbons)
+  for(var j=0;j<6;j++){atom(hv[j][0],hv[j][1],rA,'CATALYST','REACTION',1,'C');}
+  // leaf atoms
+  if(leafA>0.01){
+    atom(nN[0],nN[1],lA,'DEEP','fg-mute',leafA,'N');
+    atom(cC[0],cC[1],lA,'DEEP','fg-mute',leafA,'C');
+    atom(oDbl[0],oDbl[1],lA,'DEEP','fg-mute',leafA,'O');
+    atom(cMe[0],cMe[1],lA,'DEEP','fg-mute',leafA,'C');
+    atom(oH[0],oH[1],lA,'DEEP','fg-mute',leafA,'O');
+  }
+  return {hv:hv, leaves:[nN,cC,oDbl,cMe,oH], leafA:leafA};
+}
+
+/* draw a small benzene-with-substituent glyph for the "four molecules" row.
+   sub: 'NH2','OH','CH3','amide' ; shave 0..1 fades substituent */
+function drawBenzGlyph(cx,cy,s,sub,shave){
+  var hv=hex(cx,cy,s);
+  var leafA=clamp01(1-shave);
+  for(var i=0;i<6;i++){
+    var a=hv[i],b=hv[(i+1)%6];
+    bond(a[0],a[1],b[0],b[1],'BOND',1,2.6,(i%2===0));
+  }
+  var v4=hv[4];
+  var subPos=[v4[0]-s*0.85, v4[1]+s*0.55];
+  var rA=s*0.26,lA=s*0.24;
+  if(leafA>0.01){
+    bond(v4[0],v4[1],subPos[0],subPos[1],'DEEP',leafA,2.4,false);
+    if(sub==='amide'){
+      var c2=[subPos[0]-s*0.55,subPos[1]+s*0.55];
+      bond(subPos[0],subPos[1],c2[0],c2[1],'DEEP',leafA,2.4,true);
+      atom(c2[0],c2[1],lA*0.9,'DEEP','fg-mute',leafA,'O');
+    }
+  }
+  for(var j=0;j<6;j++){atom(hv[j][0],hv[j][1],rA,'CATALYST','REACTION',1,'');}
+  if(leafA>0.01){
+    var lbl=sub==='NH2'?'N':sub==='OH'?'O':sub==='CH3'?'C':'N';
+    atom(subPos[0],subPos[1],lA,'DEEP','fg-mute',leafA,lbl);
+  }
+  return hv;
+}
+
+function tag(x,y,txt,col,alpha){
+  if(alpha<=0.02)return;
+  ctx.globalAlpha=alpha;
+  ctx.font='700 '+Math.max(10,Math.min(W*0.0112,15))+'px '+'"JetBrains Mono", ui-monospace, monospace';
+  ctx.textAlign='center';ctx.textBaseline='middle';
+  var tw=ctx.measureText(txt).width;
+  var padX=Math.max(6,W*0.008), bh=Math.max(16,W*0.022);
+  ctx.fillStyle=rgba('bg-0',0.85);
+  ctx.fillRect(x-tw/2-padX, y-bh/2, tw+padX*2, bh);
+  ctx.lineWidth=1.3;ctx.strokeStyle=rgba(col,0.7);
+  ctx.strokeRect(x-tw/2-padX, y-bh/2, tw+padX*2, bh);
+  ctx.fillStyle=rgba(col,0.97);
+  ctx.fillText(txt, x, y+1);
+  ctx.globalAlpha=1;
+}
+
+function label(x,y,txt,col,alpha,align){
+  if(alpha<=0.02)return;
+  ctx.globalAlpha=alpha;
+  ctx.font='600 '+Math.max(10,Math.min(W*0.0108,14))+'px "Noto Sans SC", sans-serif';
+  ctx.textAlign=align||'center';ctx.textBaseline='middle';
+  ctx.fillStyle=rgba(col,0.95);
+  ctx.fillText(txt,x,y);
+  ctx.globalAlpha=1;
+}
+
+/* ── phase drawing ── */
+function drawWhole(lc){
+  var cx=W*0.46, cy=H*0.40, s=Math.min(W*0.085,H*0.13);
+  drawParacetamol(cx,cy,s,0);
+  // breathing-in label
+  var a=easeOut(clamp01((lc-0.15)/0.3));
+  tag(cx, cy-s*2.2, 'paracetamol · '+(LANG==='zh'?'对乙酰氨基酚':'paracetamol'), 'REACTION', a);
+  // point at ring and leaves
+  var a2=easeOut(clamp01((lc-0.45)/0.3));
+  label(cx, cy+0.0, '', 'fg', 0);
+  tag(cx-s*2.0, cy-s*1.0, t('lblRing'), 'CATALYST', a2);
+  tag(cx-s*2.9, cy+s*2.0, t('lblLeaf'), 'DEEP', a2);
+  // arrow leaf
+  if(a2>0.05){
+    ctx.globalAlpha=a2;ctx.strokeStyle=rgba('DEEP',0.7);ctx.lineWidth=1.4;ctx.setLineDash([4,4]);
+    ctx.beginPath();ctx.moveTo(cx-s*1.9,cy+s*1.7);ctx.lineTo(cx-s*1.35,cy+s*1.25);ctx.stroke();ctx.setLineDash([]);ctx.globalAlpha=1;
+  }
+  // atom count HUD on right
+  tag(W*0.86, cy-s*1.0, '11 '+(LANG==='zh'?'重原子':'atoms'), 'gold', easeOut(clamp01((lc-0.55)/0.3)));
+}
+
+function drawShave(lc){
+  var cx=W*0.40, cy=H*0.40, s=Math.min(W*0.085,H*0.13);
+  // shave progresses 0 -> 1 over the middle of the phase
+  var shave=easeInOut(clamp01((lc-0.15)/0.6));
+  var info=drawParacetamol(cx,cy,s,shave);
+  tag(cx, cy-s*2.2, 'MurckoScaffold.GetScaffoldForMol(mol)', 'chem', easeOut(clamp01(lc/0.25)));
+  // razor sweep indicator on leaves
+  var leftAtoms=11 - Math.round(shave*5);
+  tag(W*0.84, cy-s*1.2, leftAtoms+' '+(LANG==='zh'?'原子':'atoms'), 'gold', 1);
+  // result scaffold appears on right when fully shaved
+  var done=easeOut(clamp01((shave-0.7)/0.3));
+  if(done>0.05){
+    var sx=W*0.80, sy=H*0.40, ss=s*0.85;
+    var hv=hex(sx,sy,ss);
+    ctx.globalAlpha=done;
+    for(var i=0;i<6;i++){var a=hv[i],b=hv[(i+1)%6];bond(a[0],a[1],b[0],b[1],'CATALYST',done,3,(i%2===0));}
+    for(var j=0;j<6;j++){atom(hv[j][0],hv[j][1],ss*0.30,'CATALYST','REACTION',done,'C');}
+    ctx.globalAlpha=1;
+    tag(sx, sy-ss*2.0, t('lblScaf')+' c1ccccc1', 'REACTION', done);
+    tag(sx, sy+ss*2.0, '6 '+(LANG==='zh'?'原子':'atoms'), 'gold', done);
+    // arrow from mol to scaffold
+    ctx.globalAlpha=done;ctx.strokeStyle=rgba('chem',0.65);ctx.lineWidth=2;
+    ctx.beginPath();ctx.moveTo(cx+s*1.7,cy);ctx.lineTo(sx-ss*1.7,sy);ctx.stroke();
+    // arrowhead
+    ctx.beginPath();ctx.moveTo(sx-ss*1.7,sy);ctx.lineTo(sx-ss*1.7-8,sy-5);ctx.lineTo(sx-ss*1.7-8,sy+5);ctx.closePath();
+    ctx.fillStyle=rgba('chem',0.65);ctx.fill();ctx.globalAlpha=1;
+  }
+}
+
+function drawFour(lc){
+  // four molecules in a row, each shaving to the same benzene
+  var subs=[['NH2','aniline',LANG==='zh'?'苯胺':'aniline'],
+            ['OH','phenol',LANG==='zh'?'苯酚':'phenol'],
+            ['CH3','toluene',LANG==='zh'?'甲苯':'toluene'],
+            ['amide','paracetamol',LANG==='zh'?'对乙酰氨基酚':'paracetamol']];
+  var s=Math.min(W*0.05,H*0.085);
+  var topY=H*0.27, botY=H*0.62;
+  var n=4;
+  var slot=W*0.86/n;
+  var x0=W*0.07+slot*0.5;
+  // global shave timing
+  var shave=easeInOut(clamp01((lc-0.2)/0.5));
+  for(var i=0;i<n;i++){
+    var cx=x0+slot*i;
+    drawBenzGlyph(cx,topY,s,subs[i][0],shave);
+    label(cx, topY-s*1.9, subs[i][2], 'fg-dim', easeOut(clamp01(lc/0.2)));
+    // bottom: the shaved scaffold (always benzene)
+    var resA=easeOut(clamp01((shave-0.5)/0.5));
+    if(resA>0.05){
+      var hv=hex(cx,botY,s*0.92);
+      ctx.globalAlpha=resA;
+      for(var k=0;k<6;k++){var a=hv[k],b=hv[(k+1)%6];bond(a[0],a[1],b[0],b[1],'CATALYST',resA,2.6,(k%2===0));}
+      for(var j=0;j<6;j++){atom(hv[j][0],hv[j][1],s*0.27,'CATALYST','REACTION',resA,'');}
+      ctx.globalAlpha=1;
+      // down arrow
+      ctx.globalAlpha=resA*0.7;ctx.strokeStyle=rgba('chem',0.6);ctx.lineWidth=1.8;
+      ctx.beginPath();ctx.moveTo(cx,topY+s*1.6);ctx.lineTo(cx,botY-s*1.6);ctx.stroke();
+      ctx.beginPath();ctx.moveTo(cx,botY-s*1.6);ctx.lineTo(cx-4,botY-s*1.6-7);ctx.lineTo(cx+4,botY-s*1.6-7);ctx.closePath();
+      ctx.fillStyle=rgba('chem',0.6);ctx.fill();ctx.globalAlpha=1;
+    }
+  }
+  // bottom banner: all the same scaffold
+  var bA=easeOut(clamp01((lc-0.75)/0.2));
+  tag(W*0.5, botY+s*2.4, t('lblEq')+'   →   c1ccccc1', 'gold', bA);
+}
+
+function drawFamily(lc){
+  // two family clusters
+  var s=Math.min(W*0.042,H*0.07);
+  var appear=easeOut(clamp01(lc/0.4));
+  // benzene family cluster (left)
+  var bcx=W*0.30, bcy=H*0.40;
+  var benzMembers=[[-1,-0.7],[1,-0.7],[-1.05,0.75],[1.05,0.75]];
+  // draw enclosing capsule
+  ctx.globalAlpha=appear*0.5;
+  ctx.fillStyle=rgba('CATALYST',0.10);ctx.strokeStyle=rgba('CATALYST',0.55);ctx.lineWidth=2;
+  ctx.beginPath();ctx.ellipse(bcx,bcy,s*4.2,s*3.4,0,0,Math.PI*2);ctx.fill();ctx.stroke();
+  ctx.globalAlpha=1;
+  var bsubs=['NH2','OH','CH3','amide'];
+  for(var i=0;i<4;i++){
+    var mx=bcx+benzMembers[i][0]*s*2.2, my=bcy+benzMembers[i][1]*s*1.9;
+    drawBenzGlyph(mx,my,s,bsubs[i],0); // show as full mols (family of look-alikes)
+  }
+  tag(bcx, bcy-s*4.1, t('lblBenzFam'), 'CATALYST', appear);
+  // indole family cluster (right): show indole scaffold glyphs (two fused rings)
+  var icx=W*0.68, icy=H*0.40;
+  ctx.globalAlpha=appear*0.5;
+  ctx.fillStyle=rgba('YIELD',0.09);ctx.strokeStyle=rgba('YIELD',0.55);ctx.lineWidth=2;
+  ctx.beginPath();ctx.ellipse(icx,icy,s*4.0,s*3.4,0,0,Math.PI*2);ctx.fill();ctx.stroke();
+  ctx.globalAlpha=1;
+  var indMembers=[[-1.0,-0.7],[1.0,-0.7],[0,0.85]];
+  var indNames=[LANG==='zh'?'吲哚':'indole',LANG==='zh'?'色氨酸':'tryptophan',LANG==='zh'?'褪黑素':'melatonin'];
+  for(var m=0;m<3;m++){
+    var ix=icx+indMembers[m][0]*s*2.0, iy=icy+indMembers[m][1]*s*1.9;
+    drawIndoleGlyph(ix,iy,s*0.95);
+    label(ix,iy+s*2.0,indNames[m],'fg-mute',appear*0.9);
+  }
+  tag(icx, icy-s*4.1, t('lblIndoFam'), 'YIELD', appear);
+  // closing line
+  var cA=easeOut(clamp01((lc-0.55)/0.25));
+  tag(W*0.5, H*0.80, t('lblSame'), 'gold', cA);
+}
+
+/* indole = benzene fused with a 5-membered pyrrole (N). simplified glyph. */
+function drawIndoleGlyph(cx,cy,s){
+  var hv=hex(cx-s*0.5,cy,s*0.9);
+  for(var i=0;i<6;i++){var a=hv[i],b=hv[(i+1)%6];bond(a[0],a[1],b[0],b[1],'BOND',1,2.4,(i%2===0));}
+  for(var j=0;j<6;j++){atom(hv[j][0],hv[j][1],s*0.24,'CATALYST','REACTION',1,'');}
+  // fused 5-ring on the right (share edge hv[1]-hv[2])
+  var p1=hv[1], p2=hv[2];
+  var midx=(p1[0]+p2[0])/2, midy=(p1[1]+p2[1])/2;
+  var ex=cx+s*1.4, ey1=cy-s*0.55, ey2=cy+s*0.55, apex=[cx+s*1.85,cy];
+  bond(p1[0],p1[1],ex,ey1,'BOND',1,2.4,false);
+  bond(ex,ey1,apex[0],apex[1],'BOND',1,2.4,false);
+  bond(apex[0],apex[1],ex,ey2,'BOND',1,2.4,false);
+  bond(ex,ey2,p2[0],p2[1],'BOND',1,2.4,false);
+  atom(ex,ey1,s*0.22,'CATALYST','REACTION',1,'');
+  atom(apex[0],apex[1],s*0.22,'BOND','YIELD',1,'N'); // the indole nitrogen
+  atom(ex,ey2,s*0.22,'CATALYST','REACTION',1,'');
+}
+
+/* ── caption ── */
+function drawCaption(capKey, alpha){
+  if(alpha<=0.02)return;
+  ctx.globalAlpha=alpha;
+  ctx.textAlign='left';ctx.textBaseline='alphabetic';
+  ctx.font='500 '+Math.max(11,Math.min(W*0.0118,16))+'px '+"'Noto Sans SC', sans-serif";
+  var txt=t(capKey);
+  var maxW=W*0.90;
+  var words=txt.split('');
+  var lines=[],cur='';
+  for(var i=0;i<words.length;i++){
+    var test=cur+words[i];
+    if(ctx.measureText(test).width>maxW && cur.length>0){lines.push(cur);cur=words[i];}
+    else cur=test;
+  }
+  if(cur)lines.push(cur);
+  var lh=Math.max(17,Math.min(W*0.0185,23));
+  var pad=10;
+  var boxH=lines.length*lh+pad*2;
+  var boxY=H-12-boxH;
+  ctx.globalAlpha=alpha*0.82;
+  ctx.fillStyle=rgba('bg-0',0.92);
+  ctx.fillRect(W*0.045, boxY, W*0.91, boxH);
+  ctx.lineWidth=1;ctx.strokeStyle=rgba('chem',0.3*alpha);
+  ctx.strokeRect(W*0.045, boxY, W*0.91, boxH);
+  ctx.globalAlpha=alpha;
+  ctx.fillStyle=rgba('fg',0.96);
+  for(var j=0;j<lines.length;j++){
+    ctx.fillText(lines[j], W*0.045+pad, boxY+pad+lh*0.78+j*lh);
+  }
+  ctx.globalAlpha=1;
+}
+
+/* ── HUD ── */
+var lastHud={a:'',b:'',c:''};
+function updateHUD(ph){
+  var idx=ph.idx, lc=ph.local;
+  var molAtoms='11', scafAtoms='6', scaf=t('outScaf');
+  if(idx===1){
+    var shave=easeInOut(clamp01((lc-0.15)/0.6));
+    molAtoms=String(11-Math.round(shave*5));
+  }
+  if(idx===3){ molAtoms='—'; scafAtoms='—'; scaf=LANG==='zh'?'2 个家族':'2 families'; }
+  if(molAtoms!==lastHud.a){document.getElementById('hV1').textContent=molAtoms;
+    document.getElementById('hV1').style.color=rgba('chem',1);lastHud.a=molAtoms;}
+  if(scafAtoms!==lastHud.b){document.getElementById('hV2').textContent=scafAtoms;
+    document.getElementById('hV2').style.color=rgba('gold',1);lastHud.b=scafAtoms;}
+  if(scaf!==lastHud.c){document.getElementById('hV3').textContent=scaf;
+    document.getElementById('hV3').style.color=rgba('REACTION',1);lastHud.c=scaf;}
+  document.getElementById('hudSeq').textContent=(idx+1)+'/'+PHASES.length;
+  document.getElementById('hudPhase').textContent=t(PHASES[idx].name);
+  var q;
+  if(idx===0) q='paracetamol = <b>6</b> '+(LANG==='zh'?'环原子':'ring')+' + <b>5</b> '+(LANG==='zh'?'枝叶':'leaves');
+  else if(idx===1) q=(LANG==='zh'?'剃到':'down to')+' <b>'+molAtoms+'</b> '+(LANG==='zh'?'原子 → c1ccccc1':'atoms → c1ccccc1');
+  else if(idx===2) q='4 mols → <b>c1ccccc1</b>';
+  else q=(LANG==='zh'?'苯环族':'benzene fam')+' <b>c1ccccc1</b> · '+(LANG==='zh'?'吲哚族':'indole fam')+' <b>c1ccc2[nH]ccc2c1</b>';
+  document.getElementById('hudQuant').innerHTML=q;
+}
+
+/* ── main loop ── */
+function frame(ts){
+  if(startT===null)startT=ts;
+  NOW=(ts-startT)/1000;
+  var elapsed=NOW%TOTAL;
+  if(W<1||H<1){resize();}
+  var ph=phaseAt(elapsed);
+
+  drawBg();
+  if(ph.idx===0) drawWhole(ph.local);
+  else if(ph.idx===1) drawShave(ph.local);
+  else if(ph.idx===2) drawFour(ph.local);
+  else drawFamily(ph.local);
+
+  var fadeIn=clamp01(ph.local/0.10);
+  var fadeOut=clamp01((1-ph.local)/0.10);
+  var capAlpha=Math.min(fadeIn,fadeOut);
+  drawCaption(PHASES[ph.idx].cap, Math.max(0.18,capAlpha));
+
+  updateHUD(ph);
+  requestAnimationFrame(frame);
+}
+
+function refreshI18N(){
+  document.getElementById('langBtn').textContent=(LANG==='zh')?'EN':'CN';
+  document.getElementById('mascotLine').textContent=t('mascotLine');
+  document.getElementById('sTitle').textContent=t('sTitle');
+  document.getElementById('sIntro').textContent=t('sIntro');
+  document.getElementById('sObsLabel').textContent=t('sObsLabel');
+  document.getElementById('sObs').innerHTML='<li>'+t('obs1')+'</li><li>'+t('obs2')+'</li><li>'+t('obs3')+'</li>';
+  document.getElementById('sRouteLabel').textContent=t('sRouteLabel');
+  document.getElementById('rs1').textContent=t('rs1');
+  document.getElementById('rs2').textContent=t('rs2');
+  document.getElementById('rs3').textContent=t('rs3');
+  document.getElementById('rs4').textContent=t('rs4');
+  document.getElementById('rsGoal').textContent=t('rsGoal');
+  document.getElementById('hL1').textContent=t('hL1');
+  document.getElementById('hL2').textContent=t('hL2');
+  document.getElementById('hL3').textContent=t('hL3');
+  lastHud={a:'',b:'',c:''};
+}
+
+document.getElementById('langBtn').addEventListener('click',function(){
+  LANG=(LANG==='zh')?'en':'zh';
+  refreshI18N();
+});
+window.addEventListener('resize',resize);
+
+buildCSS();
+refreshI18N();
+resize();
+setTimeout(resize,200);
+setTimeout(resize,600);
+if(document.fonts&&document.fonts.ready){document.fonts.ready.then(function(){resize();});}
+requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

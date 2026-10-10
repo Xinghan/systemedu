@@ -1,6 +1,7 @@
 "use client"
 
 import Link from "next/link"
+import { lessonPath } from "@/lib/course-numbering"
 import { useEffect, useMemo, useState } from "react"
 import {
   Bot,
@@ -756,7 +757,7 @@ function ConceptDetail({
 
       <div style={{ padding: 22, display: "flex", flexDirection: "column", gap: 10 }}>
         <Link
-          href={`/learn/${encodeURIComponent(slug)}/${encodeURIComponent(node.m.module_id)}`}
+          href={lessonPath(slug, node.m.module_id)}
           className="btn btn-violet"
           style={{ justifyContent: "center" }}
           onClick={onClose}

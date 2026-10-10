@@ -159,6 +159,41 @@ def test_concurrent_duplicate_submission_is_one_snapshot(records):
     assert len(client.get('/api/learning/records', params=scope(p), headers=a).json()['submissions']) == 1
 
 
+def test_mission_dossier_references_preserve_original_work_and_identity(records):
+    client, (a, b), db = records
+    original = payload('assignment')
+    original.update(module_id='M04', activity_id='final-deliverable', request_id=str(uuid.uuid4()))
+    original['body']['artifact'] = {'rules': ['unknown -> stop']}
+    response = client.post('/api/learning/submissions', json=original, headers=a)
+    assert response.status_code == 201, response.text
+    source = response.json()['submission']
+    dossier = dict(library_slug='space-exploration', module_id='JOURNEY',
+                   activity_id='mission-dossier', kind='assignment', content_version='1.0',
+                   expected_revision=0, body={
+        'answers': [{'question_id': 'goal', 'question': '观察目标', 'answer': '比较地垫纹理'}],
+        'artifact': {'schema': 'space-mission-dossier/1', 'vehicleVersion': 'v1',
+                     'modelVersion': '', 'archiveLocation': '', 'links': [{
+                         'scope': scope(original), 'submissionId': source['id'],
+                         'createdAt': source['created_at'], 'digest': 'a' * 64,
+                         'owner': 'fixture-account', 'summary': '测试引用，非实物验收',
+                     }]},
+    })
+    assert client.put('/api/learning/drafts', json=dossier, headers=a).status_code == 200
+    dossier.update(expected_revision=1, request_id=str(uuid.uuid4()))
+    assert client.post('/api/learning/submissions', json=dossier, headers=a).status_code == 201
+    original.update(expected_revision=1, request_id=str(uuid.uuid4()))
+    original['body']['artifact']['rules'] = ['unknown -> stop and inspect']
+    assert client.post('/api/learning/submissions', json=original, headers=a).status_code == 201
+    db.reset_engine_for_tests()
+    saved = client.get('/api/learning/records', params=scope(dossier), headers=a).json()
+    assert saved['submissions'][0]['body']['artifact']['links'][0]['submissionId'] == source['id']
+    history = client.get('/api/learning/records', params=scope(original), headers=a).json()['submissions']
+    assert len(history) == 2
+    assert history[1]['body']['artifact']['rules'] == ['unknown -> stop']
+    isolated = client.get('/api/learning/records', params=scope(dossier), headers=b).json()
+    assert isolated == {'draft': None, 'submissions': []}
+
+
 def test_failed_commit_rolls_back_draft_history_and_tutor_attempt(records, monkeypatch, caplog):
     from sqlalchemy.orm import Session
     client, (a, _), _ = records
@@ -195,3 +230,42 @@ def test_only_practice_submissions_enter_tutor_history(records):
         assert len(attempts) == 1
         assert attempts[0].correct is True
         assert '客户端练习自检' in attempts[0].explanation_shown
+
+
+def test_mission_operations_persist_timing_plan_and_account_isolation(records):
+    """Task-center operations are independent drafts, never course submissions."""
+    client, (a, b), db = records
+    task_id = 'pick-an-observation-site:M01'
+    operations = dict(library_slug='space-exploration', module_id='JOURNEY',
+                      activity_id='mission-operations', kind='classroom',
+                      content_version='1.0', expected_revision=0,
+                      body={'answers': [], 'artifact': {
+                          'schema': 'space-mission-operations/1',
+                          'tasks': {task_id: {'status': 'active', 'checks': [],
+                                             'evidence': '影像来源卡', 'blocker': '',
+                                             'next': '检查尺度', 'due': '2026-11-01',
+                                             'updatedAt': '2026-10-10T03:00:00Z'}},
+                          'plan': {'weeklyMinutes': 120,
+                                   'milestones': {'build': '2026-11-10'}},
+                          'time': {'totals': {task_id: 20},
+                                   'days': {'2026-10-10': 20},
+                                   'recent': [{'id': 'work-one', 'task': task_id,
+                                               'startedAt': '2026-10-10T03:00:00Z',
+                                               'endedAt': '2026-10-10T03:00:20Z',
+                                               'seconds': 20, 'reason': '已暂停'}]},
+                          'events': [{'task': task_id, 'status': 'active',
+                                      'at': '2026-10-10T03:00:00Z'}]}})
+    result = client.put('/api/learning/drafts', json=operations, headers=a)
+    assert result.status_code == 200, result.text
+    db.reset_engine_for_tests()
+    saved = client.get('/api/learning/records', params=scope(operations), headers=a).json()
+    assert saved['draft']['body'] == {**operations['body'], 'client_context': {}}
+    assert saved['submissions'] == []
+    assert client.get('/api/learning/records', params=scope(operations), headers=b).json()['draft'] is None
+    other = {**scope(operations), 'activity_id': 'mission-dossier', 'kind': 'assignment'}
+    assert client.get('/api/learning/records', params=other, headers=a).json()['draft'] is None
+    stale = copy.deepcopy(operations)
+    stale['body']['artifact']['time']['totals'][task_id] = 999
+    assert client.put('/api/learning/drafts', json=stale, headers=a).status_code == 409
+    saved_again = client.get('/api/learning/records', params=scope(operations), headers=a).json()
+    assert saved_again['draft']['body']['artifact']['time']['totals'][task_id] == 20

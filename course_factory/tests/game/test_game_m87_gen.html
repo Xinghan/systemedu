@@ -1,0 +1,589 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=1280, initial-scale=1">
+<title>加权综合排名器 / Weighted Ranker</title>
+<style>
+  :root{
+    /* deep space base — shared across 26 subjects */
+    --bg-0: oklch(0.14 0.035 265);
+    --bg-1: oklch(0.18 0.04 265);
+    --bg-2: oklch(0.22 0.045 265);
+    --bg-3: oklch(0.28 0.05 265);
+    --line: oklch(0.35 0.05 265 / 0.35);
+    --line-strong: oklch(0.55 0.08 265 / 0.55);
+    --fg: oklch(0.96 0.01 265);
+    --fg-dim: oklch(0.75 0.02 265);
+    --fg-mute: oklch(0.55 0.03 265);
+    --gold: oklch(0.85 0.14 85);
+    /* math signature + palette */
+    --math: oklch(0.72 0.17 245);
+    --axis: oklch(0.72 0.17 245);
+    --proof: oklch(0.52 0.16 245);
+    --shadow: oklch(0.35 0.10 245);
+    --solution: oklch(0.92 0.08 240);
+    --qed: oklch(0.85 0.14 85);
+    /* 4 项各自颜色 (用 palette 多色 token) */
+    --c-sol: oklch(0.72 0.17 200);   /* 溶解度 青 */
+    --c-tox: oklch(0.75 0.16 15);    /* 毒性 玫红 */
+    --c-act: oklch(0.75 0.17 155);   /* 活性 翠绿 */
+    --c-lip: var(--gold);            /* lipinski 金 */
+    --mono: 'JetBrains Mono','SF Mono',ui-monospace,Menlo,Consolas,monospace;
+    --sans: 'Inter','PingFang SC','Microsoft YaHei',system-ui,sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{
+    background:var(--bg-0); color:var(--fg);
+    font-family:var(--sans);
+    width:100vw; height:100vh; overflow:hidden;
+    display:flex;
+  }
+  /* ---------- left sidebar 200px ---------- */
+  .game-sidebar{
+    width:200px; flex:0 0 200px; height:100%;
+    background:var(--bg-1);
+    border-right:1.5px solid var(--line-strong);
+    display:flex; flex-direction:column;
+    padding:14px 13px; gap:12px; overflow-y:auto;
+  }
+  .brand{font-family:var(--mono); font-size:11px; letter-spacing:.05em; color:var(--fg-mute); line-height:1.4;}
+  .brand b{display:block; color:var(--axis); font-size:13px; letter-spacing:.04em;}
+  #langBtn{
+    font-family:var(--mono); font-size:11px; cursor:pointer;
+    background:var(--bg-3); color:var(--fg); border:1.5px solid var(--line-strong);
+    padding:5px 9px; box-shadow:3px 3px 0 var(--bg-0); align-self:flex-start;
+  }
+  #langBtn:active{transform:translate(2px,2px); box-shadow:1px 1px 0 var(--bg-0);}
+  .side-h{font-family:var(--mono); font-size:10px; letter-spacing:.08em; color:var(--axis); text-transform:uppercase; margin-bottom:5px;}
+  /* roadmap */
+  .road{display:flex; flex-direction:column; gap:0; font-size:10.5px;}
+  .road-step{display:flex; align-items:center; gap:6px; padding:3px 0; color:var(--fg-mute); line-height:1.25;}
+  .road-dot{width:9px; height:9px; flex:0 0 9px; border:1.5px solid var(--line-strong); background:transparent;}
+  .road-step.done .road-dot{background:var(--proof); border-color:var(--proof);}
+  .road-step.now{color:var(--fg);}
+  .road-step.now .road-dot{background:var(--gold); border-color:var(--gold); box-shadow:0 0 0 3px oklch(0.85 0.14 85 / .25);}
+  .road-line{width:1.5px; height:8px; margin-left:3.5px; background:var(--line);}
+  /* task card */
+  .task{background:var(--bg-2); border:1.5px solid var(--line); padding:9px 9px; font-size:11px; line-height:1.5; color:var(--fg-dim);}
+  .task b{color:var(--gold);}
+  /* quick slider */
+  .qslider{display:flex; flex-direction:column; gap:6px;}
+  .qslider label{font-size:10.5px; color:var(--fg-dim); display:flex; justify-content:space-between; font-family:var(--mono);}
+  input[type=range]{ -webkit-appearance:none; appearance:none; width:100%; height:5px; background:var(--bg-3); outline:none; border-radius:3px;}
+  input[type=range]::-webkit-slider-thumb{ -webkit-appearance:none; appearance:none; width:15px; height:15px; background:var(--axis); border:1.5px solid var(--fg); cursor:pointer; border-radius:2px;}
+  input[type=range]::-moz-range-thumb{ width:15px; height:15px; background:var(--axis); border:1.5px solid var(--fg); cursor:pointer; border-radius:2px;}
+  .guide{font-size:10.5px; line-height:1.55; color:var(--fg-mute);}
+  .guide b{color:var(--fg-dim);}
+  .endmark{margin-top:auto; font-size:9.5px; color:var(--fg-mute); line-height:1.4; border-top:1px solid var(--line); padding-top:8px; font-family:var(--mono);}
+  .endmark span{color:var(--axis);}
+
+  /* ---------- right main ---------- */
+  .game-main{flex:1; height:100%; display:flex; flex-direction:column; min-width:0; padding:12px 14px; gap:10px;}
+  /* HUD */
+  .hud{display:flex; align-items:stretch; gap:10px; flex:0 0 auto;}
+  .hud-title{flex:1; min-width:0;}
+  .hud-title h1{font-size:17px; letter-spacing:.01em;}
+  .hud-title h1 small{font-family:var(--mono); font-size:11px; color:var(--fg-mute); letter-spacing:.02em;}
+  .hud-read{font-size:11.5px; color:var(--fg-dim); margin-top:3px; line-height:1.4;}
+  .hud-read b{color:var(--gold);}
+  .goal-chip{flex:0 0 auto; align-self:center; display:flex; gap:8px;}
+  .chip{font-family:var(--mono); font-size:10px; padding:5px 8px; border:1.5px solid var(--line-strong); background:var(--bg-2); color:var(--fg-dim); display:flex; flex-direction:column; gap:2px; min-width:96px;}
+  .chip .ck{color:var(--fg-mute); font-size:9px; letter-spacing:.05em;}
+  .chip.ok{border-color:var(--gold); color:var(--gold); background:oklch(0.85 0.14 85 / .08);}
+  .chip .cv{font-size:11px;}
+
+  /* stage row: weights | rank */
+  .stage{flex:1; min-height:0; display:flex; gap:12px;}
+  .panel{background:var(--bg-1); border:1.5px solid var(--line); display:flex; flex-direction:column; min-height:0;}
+  .panel-h{font-family:var(--mono); font-size:10px; letter-spacing:.07em; color:var(--axis); text-transform:uppercase; padding:7px 10px; border-bottom:1px solid var(--line); flex:0 0 auto; display:flex; justify-content:space-between; align-items:center;}
+  .panel-h em{font-style:normal; color:var(--fg-mute); font-size:9px;}
+
+  /* weights panel (canvas based bars) */
+  .wpanel{flex:0 0 372px;}
+  .canvas-wrap{flex:1; min-height:0; display:flex; flex-direction:column;}
+  #wcanvas{flex:1; width:100%; min-height:0; display:block; cursor:ns-resize; touch-action:none;}
+  .wfoot{flex:0 0 auto; padding:6px 10px 8px; border-top:1px solid var(--line); display:flex; gap:6px; flex-wrap:wrap;}
+  .preset{font-family:var(--mono); font-size:10px; padding:4px 8px; background:var(--bg-3); color:var(--fg-dim); border:1.5px solid var(--line-strong); cursor:pointer; box-shadow:2px 2px 0 var(--bg-0);}
+  .preset:active{transform:translate(2px,2px); box-shadow:0 0 0 var(--bg-0);}
+  .preset.lit{border-color:var(--axis); color:var(--axis);}
+
+  /* rank panel */
+  .rpanel{flex:1; min-width:0;}
+  .rlist{flex:1; min-height:0; overflow-y:auto; padding:6px 8px; position:relative;}
+  .row{
+    display:flex; align-items:center; gap:8px; height:30px; padding:0 8px;
+    border:1.5px solid var(--line); background:var(--bg-2); margin-bottom:4px;
+    font-size:12px; position:relative;
+    transition:transform .42s cubic-bezier(.5,0,.3,1), background .3s, border-color .3s, opacity .3s;
+  }
+  .row .rk{font-family:var(--mono); font-size:12px; color:var(--fg-mute); width:24px; text-align:right; flex:0 0 24px;}
+  .row .nm{flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .row .bar{flex:0 0 96px; height:9px; background:var(--bg-3); position:relative; border:1px solid var(--line);}
+  .row .bar i{position:absolute; left:0; top:0; bottom:0; background:var(--proof); transition:width .42s ease;}
+  .row .sc{font-family:var(--mono); font-size:11px; color:var(--fg-dim); width:42px; text-align:right; flex:0 0 42px;}
+  .row.top{border-color:var(--line-strong); background:var(--bg-2);}
+  .row.top .bar i{background:var(--axis);}
+  .row.cut{opacity:.42; border-style:dashed;}
+  .row.win .bar i{background:var(--gold);}
+  .row.n1{border-color:var(--gold); box-shadow:3px 3px 0 var(--bg-0);}
+  .row.n1 .rk{color:var(--gold);}
+  .row .delta{font-family:var(--mono); font-size:10px; width:18px; flex:0 0 18px; text-align:center;}
+  .row .delta.up{color:var(--c-act);}
+  .row .delta.dn{color:var(--c-tox);}
+  .cutline{display:flex; align-items:center; gap:8px; margin:7px 4px; color:var(--gold); font-family:var(--mono); font-size:9.5px; letter-spacing:.08em;}
+  .cutline::before,.cutline::after{content:''; flex:1; height:1.5px; background:repeating-linear-gradient(90deg,var(--gold) 0 6px,transparent 6px 11px);}
+
+  /* subtitle */
+  .subt{flex:0 0 auto; min-height:34px; background:var(--bg-1); border:1.5px solid var(--line); padding:7px 12px; font-size:12px; line-height:1.45; color:var(--fg-dim); display:flex; align-items:center; gap:9px;}
+  .subt b{color:var(--gold);} .subt em{font-style:normal; color:var(--axis); font-family:var(--mono);}
+  .subt.solved{border-color:var(--gold); background:oklch(0.85 0.14 85 / .07); color:var(--fg);}
+
+  /* win overlay */
+  .winflash{position:fixed; inset:0; pointer-events:none; opacity:0; background:radial-gradient(circle at 70% 45%, oklch(0.85 0.14 85 / .22), transparent 60%); transition:opacity .5s;}
+  .winflash.on{opacity:1;}
+</style>
+</head>
+<body>
+  <aside class="game-sidebar">
+    <div class="brand"><b>MONSTER HUNTER</b><span data-i18n="brandsub">分子怪兽猎人 · 工作台</span></div>
+    <button id="langBtn" type="button">EN / 中文</button>
+
+    <div>
+      <div class="side-h" data-i18n="rmh">STAGE 5 路线</div>
+      <div class="road" id="road"></div>
+    </div>
+
+    <div class="task" id="taskCard">
+      <span data-i18n="task1">上一关漏斗只留下一<b>堆</b>幸存分子, 没排过序。</span>
+      <span data-i18n="task2">这一关你造的积木: 一个<b>加权综合排名器</b>——把 4 个各说各话的分数拢成一个总分, 排出 <b>Top10</b>。</span>
+    </div>
+
+    <div class="qslider">
+      <div class="side-h" data-i18n="qsh">快捷偏好</div>
+      <label><span data-i18n="qsL">重活性</span><span data-i18n="qsR">重无毒</span></label>
+      <input type="range" id="quickPref" min="0" max="100" value="50">
+    </div>
+
+    <div class="guide">
+      <div class="side-h" data-i18n="gh">怎么玩</div>
+      <span data-i18n="g1"><b>拖动右边 4 根权重杆</b>调高低。杆越高, 那一项在总分里越重。</span><br>
+      <span data-i18n="g2">榜单实时洗牌。把<b>毒性</b>调重, 看高毒分子掉出 Top10。</span><br>
+      <span data-i18n="g3">目标: 让 <b>Penicillin G</b> 登顶, 同时把高毒的 <b>Warfarin</b> 挤出前十。</span>
+    </div>
+
+    <div class="endmark"><span data-i18n="emk">终点</span> <span data-i18n="emt">从几千分子里筛出最值得试的前十名 — 这关让榜单第一次成真。</span></div>
+  </aside>
+
+  <main class="game-main">
+    <div class="hud">
+      <div class="hud-title">
+        <h1><span data-i18n="t1">加权综合排名器</span> <small>WEIGHTED RANKER</small></h1>
+        <div class="hud-read" id="hudRead"></div>
+      </div>
+      <div class="goal-chip">
+        <div class="chip" id="chipTop"><span class="ck" data-i18n="cTop">TOP-1</span><span class="cv" id="cvTop">—</span></div>
+        <div class="chip" id="chipWar"><span class="ck" data-i18n="cWar">WARFARIN</span><span class="cv" id="cvWar">—</span></div>
+      </div>
+    </div>
+
+    <div class="stage">
+      <section class="panel wpanel">
+        <div class="panel-h"><span data-i18n="pwh">权重杆 · 拖动调高低</span><em data-i18n="pwe">↕ 拖动</em></div>
+        <div class="canvas-wrap"><canvas id="wcanvas"></canvas></div>
+        <div class="wfoot" id="presets"></div>
+      </section>
+
+      <section class="panel rpanel">
+        <div class="panel-h"><span data-i18n="prh">实时榜单 · 12 个幸存分子</span><em id="rankMeta"></em></div>
+        <div class="rlist" id="rlist"></div>
+      </section>
+    </div>
+
+    <div class="subt" id="subt"></div>
+  </main>
+  <div class="winflash" id="winflash"></div>
+
+<script>
+(function(){
+  "use strict";
+  var stateGame = { lang:'zh', solved:false, dragIdx:-1 };
+
+  // ---- 真值数据 (sol/tox/ac/lip 已归一化到 0-1, 越大越好) ----
+  // sol = ESOL LogS(RDKit真值) min-max归一; lip = Lipinski Ro5违反数(RDKit真值)翻向;
+  // tox/ac = 数据库示意原始量归一 (hz翻向, act升序)
+  var MOL = [
+    {n:"Aspirin",      sol:0.697, tox:0.82, ac:0.244, lip:1.0, logs:-1.99, viol:0},
+    {n:"Caffeine",     sol:0.857, tox:0.65, ac:0.0,   lip:1.0, logs:-0.87, viol:0},
+    {n:"Ibuprofen",    sol:0.541, tox:0.78, ac:0.422, lip:1.0, logs:-3.09, viol:0},
+    {n:"Paracetamol",  sol:0.7,   tox:0.72, ac:0.156, lip:1.0, logs:-1.97, viol:0},
+    {n:"Penicillin G", sol:0.642, tox:0.9,  ac:0.511, lip:1.0, logs:-2.38, viol:0},
+    {n:"Diazepam",     sol:0.416, tox:0.45, ac:0.578, lip:1.0, logs:-3.97, viol:0},
+    {n:"Atorvastatin", sol:0.0,   tox:0.7,  ac:0.956, lip:0.5, logs:-6.9,  viol:2},
+    {n:"Metformin",    sol:1.0,   tox:0.85, ac:0.089, lip:1.0, logs:0.14,  viol:0},
+    {n:"Warfarin",     sol:0.372, tox:0.3,  ac:0.489, lip:1.0, logs:-4.28, viol:0},
+    {n:"Morphine",     sol:0.614, tox:0.4,  ac:0.778, lip:1.0, logs:-2.58, viol:0},
+    {n:"Sildenafil",   sol:0.459, tox:0.6,  ac:1.0,   lip:1.0, logs:-3.67, viol:0},
+    {n:"Loratadine",   sol:0.19,  tox:0.7,  ac:0.689, lip:1.0, logs:-5.56, viol:0}
+  ];
+  var KEYS = ['sol','tox','ac','lip'];
+  // 权重 0..4 整档, 默认全 1 (等权)
+  var W = {sol:1, tox:1, ac:1, lip:1};
+  var COL = {sol:'var(--c-sol)', tox:'var(--c-tox)', ac:'var(--c-act)', lip:'var(--c-lip)'};
+
+  var I18N = {
+    zh:{
+      brandsub:"分子怪兽猎人 · 工作台", rmh:"STAGE 5 路线", qsh:"快捷偏好",
+      qsL:"重活性", qsR:"重无毒", gh:"怎么玩",
+      g1:"<b>拖动右边 4 根权重杆</b>调高低。杆越高, 那一项在总分里越重。",
+      g2:"榜单实时洗牌。把<b>毒性</b>调重, 看高毒分子掉出 Top10。",
+      g3:"目标: 让 <b>Penicillin G</b> 登顶, 同时把高毒的 <b>Warfarin</b> 挤出前十。",
+      emk:"终点", emt:"从几千分子里筛出最值得试的前十名 — 这关让榜单第一次成真。",
+      t1:"加权综合排名器", cTop:"TOP-1", cWar:"WARFARIN",
+      pwh:"权重杆 · 拖动调高低", pwe:"↕ 拖动", prh:"实时榜单 · 12 个幸存分子",
+      task1:"上一关漏斗只留下一<b>堆</b>幸存分子, 没排过序。",
+      task2:"这一关你造的积木: 一个<b>加权综合排名器</b>——把 4 个各说各话的分数拢成一个总分, 排出 <b>Top10</b>。",
+      lblSol:"溶解度", lblTox:"无毒", lblAct:"活性", lblLip:"Lipinski",
+      hudEq:"总分 = (溶解度×W + 无毒×W + 活性×W + Lipinski×W) ÷ 权重和",
+      preEq:"等权", preTox:"成药·重毒性", preAct:"猛药·重活性", preBal:"均衡",
+      win:"<b>登顶达成!</b> 你给毒性配了大权重, 排名器就把<em>低毒又够活</em>的 Penicillin G 排到了第一, 高毒的 Warfarin 被挤出前十。<b>权重就是你的偏好——你看重什么, 榜单就替你把什么排在前面。</b> Top10 第一次成了真实榜单。",
+      hint0:"现在 4 项<b>等权</b>(各 1)。试着拖高某一根杆, 看 Top1 换人。",
+      hintWar:"把<b>毒性(无毒)</b>杆拖更高, 高毒的 Warfarin 会继续往下沉。",
+      hintPen:"差一点! 再把<b>毒性</b>权重拉高些, 让低毒高活的 Penicillin G 登顶。",
+      reading:function(p){return "当前你最看重 <b>"+p+"</b>。归一化把 4 把尺子压到同一把 0~1, 再按权重相加。";}
+    },
+    en:{
+      brandsub:"Molecule Monster Hunter · Bench", rmh:"STAGE 5 PATH", qsh:"Quick bias",
+      qsL:"Activity", qsR:"Low-tox", gh:"How to play",
+      g1:"<b>Drag the 4 weight bars</b> on the right. Taller = that score counts more.",
+      g2:"Ranking reshuffles live. Raise <b>toxicity</b> weight, watch toxic ones drop out.",
+      g3:"Goal: make <b>Penicillin G</b> #1 while pushing toxic <b>Warfarin</b> out of Top10.",
+      emk:"GOAL", emt:"Pick the most worth-testing top-10 from thousands — this level makes the list real.",
+      t1:"Weighted Ranker", cTop:"TOP-1", cWar:"WARFARIN",
+      pwh:"Weight bars · drag up/down", pwe:"↕ drag", prh:"Live ranking · 12 survivors",
+      task1:"Last level's funnel left a <b>pile</b> of survivors, in no order.",
+      task2:"This level's brick: a <b>weighted ranker</b>—fuse 4 disagreeing scores into one total, rank a <b>Top10</b>.",
+      lblSol:"Solubility", lblTox:"Low-tox", lblAct:"Activity", lblLip:"Lipinski",
+      hudEq:"total = (sol×W + lowtox×W + act×W + lip×W) ÷ sum of weights",
+      preEq:"Equal", preTox:"Drug·tox-heavy", preAct:"Potent·act-heavy", preBal:"Balanced",
+      win:"<b>Top reached!</b> You gave toxicity a big weight, so the ranker put <em>low-tox yet active</em> Penicillin G first, and toxic Warfarin fell out of Top10. <b>The weight IS your preference—what you value, the list ranks first.</b> Top10 is now a real list.",
+      hint0:"All 4 are <b>equal</b> (each 1). Drag one bar up and watch #1 change.",
+      hintWar:"Pull the <b>low-tox</b> bar higher; toxic Warfarin keeps sinking.",
+      hintPen:"Close! Raise <b>toxicity</b> weight a bit more to lift low-tox active Penicillin G to #1.",
+      reading:function(p){return "You weight <b>"+p+"</b> most. Normalisation squeezes 4 scales to one 0~1, then weighted-sum.";}
+    }
+  };
+  function L(){ return I18N[stateGame.lang]; }
+
+  // ---- roadmap ----
+  var ROAD = {
+    zh:["归一·配比","多层漏斗筛","加权排 Top10","查近亲换血","写拒绝理由","总装出报告"],
+    en:["Norm & weight","Funnel filter","Rank Top10","Diversity swap","Reject reasons","Assemble report"]
+  };
+  var ROAD_STATE = [1,1,2,0,0,0]; // 0 todo, 1 done, 2 now
+  function buildRoad(){
+    var el=document.getElementById('road'); el.innerHTML='';
+    var names=ROAD[stateGame.lang];
+    for(var i=0;i<names.length;i++){
+      var s=document.createElement('div');
+      s.className='road-step'+(ROAD_STATE[i]===1?' done':ROAD_STATE[i]===2?' now':'');
+      s.innerHTML='<span class="road-dot"></span><span>'+names[i]+'</span>';
+      el.appendChild(s);
+      if(i<names.length-1){var ln=document.createElement('div'); ln.className='road-line'; el.appendChild(ln);}
+    }
+  }
+
+  // ---- scoring ----
+  function total(m){
+    var sw = W.sol+W.tox+W.ac+W.lip;
+    if(sw===0) return 0;
+    return (m.sol*W.sol + m.tox*W.tox + m.ac*W.ac + m.lip*W.lip)/sw;
+  }
+  function ranked(){
+    var arr = MOL.map(function(m){ return {m:m, s:total(m)}; });
+    arr.sort(function(a,b){ return b.s-a.s; });
+    return arr;
+  }
+  var prevOrder = {}; // name -> prev rank index
+
+  // ---- canvas weight bars ----
+  var cv = document.getElementById('wcanvas');
+  var ctx = cv.getContext('2d');
+  var dpr = Math.max(1, window.devicePixelRatio||1);
+  var geo = {x0:0,bw:0,gap:0,top:0,bot:0,W:0,H:0};
+  function fitCanvas(){
+    var r = cv.getBoundingClientRect();
+    var w = Math.max(40, r.width), h = Math.max(40, r.height);
+    cv.width = Math.round(w*dpr); cv.height = Math.round(h*dpr);
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    geo.W=w; geo.H=h;
+    geo.top = 26; geo.bot = h-44;
+    var n=4, pad=18;
+    geo.gap = 14;
+    geo.bw = (w - pad*2 - geo.gap*(n-1))/n;
+    geo.x0 = pad;
+  }
+  function barX(i){ return geo.x0 + i*(geo.bw+geo.gap); }
+  function valToY(v){ // v 0..4
+    var t = v/4;
+    return geo.bot - t*(geo.bot-geo.top);
+  }
+  function yToVal(y){
+    var t = (geo.bot - y)/(geo.bot-geo.top);
+    t = Math.max(0, Math.min(1, t));
+    return Math.round(t*4);
+  }
+  function cssVar(v){
+    return getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+  }
+  var COLR = {};
+  function resolveColors(){
+    COLR.sol=cssVar('--c-sol'); COLR.tox=cssVar('--c-tox');
+    COLR.ac=cssVar('--c-act'); COLR.lip=cssVar('--c-lip');
+    COLR.line=cssVar('--line-strong'); COLR.bg3=cssVar('--bg-3');
+    COLR.fg=cssVar('--fg'); COLR.fgm=cssVar('--fg-mute'); COLR.fgd=cssVar('--fg-dim');
+  }
+  function drawBars(){
+    ctx.clearRect(0,0,geo.W,geo.H);
+    // gridlines for 0..4
+    ctx.strokeStyle = COLR.line; ctx.globalAlpha=.3; ctx.lineWidth=1;
+    ctx.font='9px '+'JetBrains Mono, monospace';
+    for(var g=0; g<=4; g++){
+      var gy = valToY(g);
+      ctx.beginPath(); ctx.moveTo(geo.x0-4,gy); ctx.lineTo(geo.W-14,gy); ctx.stroke();
+      ctx.globalAlpha=.65; ctx.fillStyle=COLR.fgm; ctx.textAlign='right';
+      ctx.fillText(g, geo.W-2, gy+3); ctx.globalAlpha=.3;
+    }
+    ctx.globalAlpha=1;
+    var labels = {sol:L().lblSol, tox:L().lblTox, ac:L().lblAct, lip:L().lblLip};
+    for(var i=0;i<4;i++){
+      var k=KEYS[i], x=barX(i), v=W[k], y=valToY(v);
+      var col = COLR[k==='ac'?'ac':k];
+      // track
+      ctx.fillStyle = COLR.bg3;
+      ctx.fillRect(x, geo.top, geo.bw, geo.bot-geo.top);
+      // fill
+      ctx.fillStyle = col;
+      ctx.fillRect(x, y, geo.bw, geo.bot-y);
+      // handle
+      var hot = stateGame.dragIdx===i;
+      ctx.fillStyle = COLR.fg;
+      ctx.fillRect(x-2, y-5, geo.bw+4, 5);
+      if(hot){ ctx.strokeStyle=col; ctx.lineWidth=2; ctx.strokeRect(x-2.5, geo.top-1, geo.bw+5, geo.bot-geo.top+2); }
+      // value number on bar
+      ctx.fillStyle = COLR.fg; ctx.textAlign='center';
+      ctx.font='bold 13px JetBrains Mono, monospace';
+      ctx.fillText(v, x+geo.bw/2, geo.top+16);
+      // label
+      ctx.fillStyle = col; ctx.font='10px Inter, sans-serif';
+      ctx.fillText(labels[k], x+geo.bw/2, geo.bot+15);
+    }
+    // title hint at top-left
+    ctx.fillStyle = COLR.fgm; ctx.textAlign='left'; ctx.font='9px JetBrains Mono, monospace';
+    ctx.fillText('W = 0 .. 4', geo.x0, 12);
+  }
+
+  function pointerVal(e){
+    var r=cv.getBoundingClientRect();
+    var px=(e.touches?e.touches[0].clientX:e.clientX)-r.left;
+    var py=(e.touches?e.touches[0].clientY:e.clientY)-r.top;
+    return {px:px, py:py};
+  }
+  function hitBar(px){
+    for(var i=0;i<4;i++){
+      var x=barX(i);
+      if(px>=x-6 && px<=x+geo.bw+6) return i;
+    }
+    return -1;
+  }
+  function onDown(e){
+    var p=pointerVal(e); var i=hitBar(p.px);
+    if(i<0) return;
+    stateGame.dragIdx=i;
+    setWeight(i, yToVal(p.py));
+    e.preventDefault();
+  }
+  function onMove(e){
+    if(stateGame.dragIdx<0) return;
+    var p=pointerVal(e);
+    setWeight(stateGame.dragIdx, yToVal(p.py));
+    e.preventDefault();
+  }
+  function onUp(){ stateGame.dragIdx=-1; drawBars(); }
+  function setWeight(i,val){
+    var k=KEYS[i];
+    if(W[k]===val){ drawBars(); return; }
+    W[k]=val;
+    syncQuickFromW();
+    clearPresetLit();
+    refresh();
+  }
+
+  cv.addEventListener('mousedown', onDown);
+  window.addEventListener('mousemove', onMove);
+  window.addEventListener('mouseup', onUp);
+  cv.addEventListener('touchstart', onDown, {passive:false});
+  cv.addEventListener('touchmove', onMove, {passive:false});
+  window.addEventListener('touchend', onUp);
+
+  // ---- presets ----
+  var PRESETS = [
+    {id:'eq',  w:{sol:1,tox:1,ac:1,lip:1}},
+    {id:'tox', w:{sol:1,tox:4,ac:1,lip:1}},
+    {id:'act', w:{sol:1,tox:1,ac:3,lip:1}},
+    {id:'bal', w:{sol:2,tox:2,ac:1,lip:1}}
+  ];
+  function buildPresets(){
+    var el=document.getElementById('presets'); el.innerHTML='';
+    var lab={eq:L().preEq,tox:L().preTox,act:L().preAct,bal:L().preBal};
+    PRESETS.forEach(function(p){
+      var b=document.createElement('button'); b.type='button';
+      b.className='preset'; b.textContent=lab[p.id]; b.dataset.pid=p.id;
+      b.addEventListener('click',function(){
+        W.sol=p.w.sol; W.tox=p.w.tox; W.ac=p.w.ac; W.lip=p.w.lip;
+        clearPresetLit(); b.classList.add('lit');
+        syncQuickFromW(); drawBars(); refresh();
+      });
+      el.appendChild(b);
+    });
+  }
+  function clearPresetLit(){
+    var ps=document.querySelectorAll('.preset'); for(var i=0;i<ps.length;i++) ps[i].classList.remove('lit');
+  }
+
+  // ---- quick slider ties tox vs ac ----
+  var quick = document.getElementById('quickPref');
+  quick.addEventListener('input', function(){
+    var t = parseInt(quick.value,10)/100; // 0 act .. 1 tox
+    W.ac = Math.max(0, Math.round((1-t)*4));
+    W.tox = Math.max(0, Math.round(t*4));
+    W.sol = 1; W.lip = 1;
+    clearPresetLit(); drawBars(); refresh();
+  });
+  function syncQuickFromW(){
+    var s=W.tox+W.ac;
+    quick.value = s>0 ? Math.round(W.tox/s*100) : 50;
+  }
+
+  // ---- rank list render ----
+  var rlist = document.getElementById('rlist');
+  function biggestKey(){
+    var best='sol', bv=-1;
+    KEYS.forEach(function(k){ if(W[k]>bv){bv=W[k]; best=k;} });
+    return best;
+  }
+  function refresh(){
+    var arr = ranked();
+    var lab={sol:L().lblSol,tox:L().lblTox,ac:L().lblAct,lip:L().lblLip};
+    // HUD reading
+    var bk = biggestKey();
+    document.getElementById('hudRead').innerHTML = L().reading(lab[bk]);
+    document.getElementById('rankMeta').textContent = 'Σw='+(W.sol+W.tox+W.ac+W.lip);
+
+    // build rows
+    rlist.innerHTML='';
+    var maxS = arr[0].s || 1;
+    for(var i=0;i<arr.length;i++){
+      if(i===10){ var cl=document.createElement('div'); cl.className='cutline'; cl.textContent='TOP 10 CUTLINE'; rlist.appendChild(cl); }
+      var it=arr[i]; var m=it.m;
+      var row=document.createElement('div');
+      var cls='row'+(i<10?' top':' cut');
+      if(i===0) cls+=' n1';
+      if(i===0 && m.n==='Penicillin G') cls+=' win';
+      row.className=cls;
+      // delta vs prev
+      var pv = prevOrder[m.n];
+      var delta='';
+      if(pv!==undefined && pv!==i){ delta = pv>i ? '<span class="delta up">▲</span>' : '<span class="delta dn">▼</span>'; }
+      else delta='<span class="delta"></span>';
+      var pct = Math.round(it.s/maxS*100);
+      row.innerHTML =
+        '<span class="rk">'+(i+1)+'</span>'+delta+
+        '<span class="nm">'+m.n+'</span>'+
+        '<span class="bar"><i style="width:'+pct+'%"></i></span>'+
+        '<span class="sc">'+it.s.toFixed(3)+'</span>';
+      rlist.appendChild(row);
+    }
+    // record order for next delta
+    prevOrder={}; for(var j=0;j<arr.length;j++) prevOrder[arr[j].m.n]=j;
+
+    // goal chips
+    var top1 = arr[0].m.n;
+    var warIdx = -1; for(var k=0;k<arr.length;k++){ if(arr[k].m.n==='Warfarin'){warIdx=k;break;} }
+    var cvTop=document.getElementById('cvTop'), cvWar=document.getElementById('cvWar');
+    cvTop.textContent = top1.length>13? top1.slice(0,12)+'…':top1;
+    var penTop = (top1==='Penicillin G');
+    document.getElementById('chipTop').classList.toggle('ok', penTop);
+    var warOut = (warIdx>=10);
+    cvWar.textContent = warOut ? ('#'+(warIdx+1)+' OUT') : ('#'+(warIdx+1));
+    document.getElementById('chipWar').classList.toggle('ok', warOut);
+
+    updateSubtitle(penTop, warOut, top1, warIdx);
+  }
+
+  function updateSubtitle(penTop, warOut, top1, warIdx){
+    var subt=document.getElementById('subt');
+    if(penTop && warOut){
+      if(!stateGame.solved){ stateGame.solved=true; flashWin(); }
+      subt.className='subt solved';
+      subt.innerHTML = L().win;
+      return;
+    }
+    subt.className='subt';
+    var eq = (W.sol===W.tox && W.tox===W.ac && W.ac===W.lip);
+    if(eq){ subt.innerHTML = L().hint0; return; }
+    if(penTop && !warOut){ subt.innerHTML = L().hintWar; return; }
+    if(!penTop && warOut){ subt.innerHTML = L().hintPen; return; }
+    subt.innerHTML = L().hintPen;
+  }
+
+  function flashWin(){
+    var f=document.getElementById('winflash'); f.classList.add('on');
+    setTimeout(function(){ f.classList.remove('on'); }, 900);
+    // mark roadmap "rank" done
+    ROAD_STATE[2]=1; if(ROAD_STATE[3]===0) ROAD_STATE[3]=2; buildRoad();
+  }
+
+  // ---- i18n apply ----
+  function applyI18N(){
+    var nodes=document.querySelectorAll('[data-i18n]');
+    var d=L();
+    nodes.forEach(function(el){
+      var k=el.getAttribute('data-i18n');
+      if(d[k]!==undefined && typeof d[k]==='string') el.innerHTML=d[k];
+    });
+    document.documentElement.lang = stateGame.lang;
+  }
+  document.getElementById('langBtn').addEventListener('click', function(){
+    stateGame.lang = stateGame.lang==='zh'?'en':'zh';
+    this.textContent = stateGame.lang==='zh'?'EN / 中文':'中文 / EN';
+    applyI18N(); buildRoad(); buildPresets(); resolveColors(); drawBars(); refresh();
+  });
+
+  // ---- init ----
+  function init(){
+    resolveColors();
+    fitCanvas();
+    buildRoad();
+    buildPresets();
+    applyI18N();
+    syncQuickFromW();
+    drawBars();
+    refresh();
+  }
+  var ro=null;
+  function onResize(){ fitCanvas(); drawBars(); }
+  window.addEventListener('resize', onResize);
+  // run after layout
+  if(document.readyState==='complete' || document.readyState==='interactive'){
+    requestAnimationFrame(function(){ init(); });
+  } else {
+    window.addEventListener('DOMContentLoaded', function(){ requestAnimationFrame(init); });
+  }
+  // safety re-fit once more after fonts/iframe settle
+  setTimeout(function(){ fitCanvas(); drawBars(); }, 260);
+})();
+</script>
+</body>
+</html>

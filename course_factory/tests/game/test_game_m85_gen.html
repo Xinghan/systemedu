@@ -1,0 +1,759 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>M85 门槛过滤器 — 拖分子量门槛，看全库通过率怎么变</title>
+<style>
+  :root {
+    /* chem signature + 5-colour palette (themes.js: Reaction Atrium) */
+    --chem: oklch(0.82 0.17 125);
+    --CATALYST: oklch(0.82 0.17 125); --BOND: oklch(0.62 0.16 125); --DEEP: oklch(0.35 0.10 130);
+    --REACTION: oklch(0.95 0.08 120); --YIELD: oklch(0.85 0.14 85);
+    --bg-0: oklch(0.14 0.035 265); --bg-1: oklch(0.18 0.04 265); --panel: oklch(0.22 0.045 265);
+    --GOOD: oklch(0.78 0.17 145); --BAD: oklch(0.64 0.21 25); --gold: oklch(0.85 0.14 85);
+    --fg: oklch(0.96 0.01 265); --fg-dim: oklch(0.75 0.02 265);
+    --mono: "JetBrains Mono", ui-monospace, monospace;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    font-family: var(--mono), "Noto Sans SC", sans-serif;
+    background:
+      radial-gradient(120% 90% at 12% 0%, oklch(0.22 0.05 130) 0%, transparent 55%),
+      radial-gradient(120% 110% at 100% 100%, oklch(0.20 0.05 265) 0%, transparent 60%),
+      linear-gradient(160deg, var(--bg-0) 0%, oklch(0.12 0.03 268) 100%);
+    color: var(--fg);
+    overflow: hidden;
+    -webkit-font-smoothing: antialiased;
+  }
+  .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+  .game-wrap { display: flex; height: 100vh; width: 100vw; }
+
+  /* ---------- sidebar ---------- */
+  .game-sidebar {
+    width: 200px; flex: 0 0 200px; height: 100%;
+    background: linear-gradient(180deg, var(--panel) 0%, oklch(0.16 0.04 265) 100%);
+    border-right: 1px solid oklch(0.40 0.06 130 / 0.45);
+    display: flex; flex-direction: column;
+    padding: 13px 12px; gap: 9px; overflow: hidden;
+  }
+  .side-top { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+  .badge {
+    font-size: 9px; letter-spacing: 1px; color: oklch(0.16 0.04 265);
+    background: linear-gradient(90deg, var(--CATALYST), var(--REACTION));
+    padding: 3px 7px; font-weight: 700;
+  }
+  #langBtn {
+    font-family: var(--mono); font-size: 10px; color: var(--fg);
+    background: linear-gradient(135deg, oklch(0.28 0.05 130), oklch(0.24 0.05 265));
+    border: 1px solid var(--YIELD); padding: 4px 8px; cursor: pointer; letter-spacing: 0.5px;
+  }
+  #langBtn:hover { background: linear-gradient(135deg, oklch(0.34 0.07 130), oklch(0.28 0.06 265)); }
+  .side-title { font-size: 13px; font-weight: 700; line-height: 1.25;
+    background: linear-gradient(90deg, var(--fg), var(--CATALYST)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .side-sub { font-size: 9.5px; color: var(--fg-dim); line-height: 1.45; }
+
+  /* roadmap */
+  .roadmap { display: flex; flex-direction: column; gap: 3px; }
+  .rm-label { font-size: 8.5px; letter-spacing: 1.2px; color: var(--BOND); font-weight: 700; margin-bottom: 2px; }
+  .rm-row { display: flex; align-items: center; gap: 6px; font-size: 9px; color: var(--fg-dim); line-height: 1.2; }
+  .rm-dot { width: 8px; height: 8px; flex: 0 0 8px; border: 1px solid var(--DEEP); background: transparent; }
+  .rm-row.done .rm-dot { background: var(--BOND); border-color: var(--BOND); }
+  .rm-row.here .rm-dot { background: var(--gold); border-color: var(--gold); box-shadow: 2px 2px 0 var(--bg-0); }
+  .rm-row.here { color: var(--gold); font-weight: 700; }
+
+  .side-block {
+    background: linear-gradient(160deg, oklch(0.21 0.045 265), oklch(0.16 0.035 268));
+    border: 1px solid oklch(0.34 0.05 130 / 0.4); padding: 8px 9px;
+  }
+  .blk-label { font-size: 8.5px; letter-spacing: 1.2px; color: var(--BOND); margin-bottom: 4px; font-weight: 700; }
+  .blk-body { font-size: 9.5px; color: var(--fg-dim); line-height: 1.5; }
+  .blk-body b { color: var(--CATALYST); font-weight: 700; }
+  .blk-body i { color: var(--gold); font-style: normal; font-weight: 700; }
+
+  .rule-tabs { display: flex; flex-wrap: wrap; gap: 4px; }
+  .rule-tab {
+    font-family: var(--mono); font-size: 9px; color: var(--fg-dim);
+    background: oklch(0.22 0.045 265); border: 1px solid oklch(0.34 0.05 130 / 0.4);
+    padding: 4px 7px; cursor: pointer; letter-spacing: 0.3px;
+  }
+  .rule-tab:hover { color: var(--CATALYST); border-color: var(--CATALYST); }
+  .rule-tab.active { color: oklch(0.16 0.04 265); background: var(--CATALYST); border-color: var(--CATALYST); font-weight: 700; }
+
+  .slider-zone { margin-top: 1px; }
+  .slider-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px; }
+  .slider-head .lab { font-size: 9px; letter-spacing: 0.8px; color: var(--gold); font-weight: 700; }
+  .slider-head .keep { font-size: 14px; color: var(--REACTION); font-weight: 700; }
+  input[type=range] {
+    -webkit-appearance: none; appearance: none; width: 100%; height: 7px; cursor: pointer;
+    background: linear-gradient(90deg, var(--DEEP), var(--BOND), var(--CATALYST)); outline: none;
+  }
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none; appearance: none; width: 15px; height: 21px;
+    background: linear-gradient(180deg, var(--gold), oklch(0.70 0.13 88)); cursor: pointer;
+    border: 1px solid oklch(0.30 0.04 265);
+  }
+  input[type=range]::-moz-range-thumb {
+    width: 15px; height: 21px; border: 1px solid oklch(0.30 0.04 265);
+    background: linear-gradient(180deg, var(--gold), oklch(0.70 0.13 88)); cursor: pointer;
+  }
+  .slider-ends { display: flex; justify-content: space-between; font-size: 8px; color: var(--fg-dim); margin-top: 4px; }
+
+  .act-btn {
+    font-family: var(--mono); font-size: 10px; color: var(--fg); width: 100%;
+    background: linear-gradient(135deg, oklch(0.28 0.05 130), oklch(0.24 0.05 265));
+    border: 1px solid var(--CATALYST); padding: 7px 6px; cursor: pointer; letter-spacing: 0.4px;
+    text-align: center;
+  }
+  .act-btn:hover { background: linear-gradient(135deg, oklch(0.34 0.07 130), oklch(0.28 0.06 265)); }
+  .act-btn .sub { display: block; font-size: 8px; color: var(--fg-dim); margin-top: 2px; letter-spacing: 0; }
+
+  .side-foot { margin-top: auto; display: flex; flex-direction: column; gap: 6px; }
+  .target-card {
+    background: linear-gradient(160deg, oklch(0.22 0.05 130), oklch(0.15 0.04 268));
+    border: 1px solid oklch(0.45 0.08 130 / 0.5); padding: 7px 8px;
+  }
+  .target-card .tc-l { font-size: 8px; letter-spacing: 1px; color: var(--CATALYST); font-weight: 700; }
+  .target-card .tc-b { font-size: 8.5px; color: var(--fg-dim); line-height: 1.4; margin-top: 3px; }
+
+  /* ---------- main ---------- */
+  .game-main { flex: 1; height: 100%; display: flex; flex-direction: column; min-width: 0; padding: 12px; gap: 10px; }
+
+  .hud { display: flex; gap: 10px; flex: 0 0 auto; }
+  .score-card {
+    flex: 1; background: linear-gradient(160deg, oklch(0.21 0.045 265), oklch(0.15 0.03 268));
+    border: 1px solid oklch(0.34 0.05 130 / 0.45); padding: 9px 11px; position: relative; overflow: hidden;
+  }
+  .score-card .sc-head { display: flex; justify-content: space-between; align-items: baseline; }
+  .sc-name { font-size: 9.5px; letter-spacing: 0.8px; color: var(--fg-dim); font-weight: 700; }
+  .sc-val { font-size: 22px; font-weight: 700; line-height: 1; }
+  #gateVal { color: var(--gold); }
+  #passVal { color: var(--GOOD); }
+  #rateVal { color: var(--REACTION); }
+  .sc-note { font-size: 8.5px; color: var(--fg-dim); margin-top: 6px; min-height: 12px; }
+  .goal-card.danger { border-color: var(--BAD); box-shadow: 3px 3px 0 oklch(0.30 0.10 25 / 0.5); }
+  .goal-card.ok { border-color: var(--GOOD); box-shadow: 3px 3px 0 oklch(0.30 0.10 145 / 0.4); }
+
+  .stage {
+    flex: 1; min-height: 0; display: flex; flex-direction: column;
+    background: linear-gradient(160deg, oklch(0.16 0.035 268), oklch(0.12 0.03 270));
+    border: 1px solid oklch(0.32 0.05 130 / 0.4); position: relative;
+  }
+  .stage-head {
+    flex: 0 0 auto; display: flex; justify-content: space-between; align-items: center;
+    padding: 7px 12px; border-bottom: 1px solid oklch(0.30 0.05 130 / 0.4);
+  }
+  .stage-head .sh-t { font-size: 10.5px; letter-spacing: 0.6px; color: var(--CATALYST); font-weight: 700; }
+  .stage-head .sh-legend { display: flex; gap: 12px; font-size: 8.5px; color: var(--fg-dim); }
+  .lg { display: flex; align-items: center; gap: 4px; }
+  .lg i { width: 9px; height: 9px; display: inline-block; }
+  .lg.p i { background: var(--GOOD); }
+  .lg.f i { background: var(--BAD); }
+  .lg.t i { background: var(--gold); }
+  .canvas-host { flex: 1; min-height: 0; display: flex; flex-direction: column; position: relative; }
+  #libCanvas { flex: 1; width: 100%; display: block; }
+
+  .toast {
+    position: absolute; left: 50%; top: 14px; transform: translateX(-50%) translateY(-12px);
+    background: linear-gradient(135deg, oklch(0.30 0.08 145), oklch(0.24 0.06 130));
+    border: 1px solid var(--GOOD); padding: 8px 16px; font-size: 11px; color: var(--fg);
+    font-weight: 700; letter-spacing: 0.4px; opacity: 0; pointer-events: none;
+    transition: opacity 0.4s ease, transform 0.4s ease; box-shadow: 3px 3px 0 var(--bg-0); z-index: 5;
+    max-width: 82%; text-align: center; line-height: 1.4;
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  .subtitle {
+    flex: 0 0 auto; min-height: 34px; display: flex; align-items: center;
+    background: linear-gradient(90deg, oklch(0.20 0.045 265), oklch(0.15 0.035 268));
+    border: 1px solid oklch(0.32 0.05 130 / 0.4); padding: 7px 13px;
+    font-size: 11px; color: var(--fg); line-height: 1.4;
+  }
+  .subtitle b { color: var(--gold); }
+  .subtitle .pin { color: var(--CATALYST); font-weight: 700; margin-right: 8px; letter-spacing: 0.5px; }
+</style>
+</head>
+<body>
+<div class="game-wrap">
+  <!-- ============ SIDEBAR ============ -->
+  <aside class="game-sidebar">
+    <div class="side-top">
+      <span class="badge" data-i18n="badge">CHEM-08 / M85</span>
+      <button id="langBtn" type="button">EN</button>
+    </div>
+    <div class="side-title" data-i18n="title">门槛过滤器</div>
+    <div class="side-sub" data-i18n="sub">十个真药一字排开。挑一条 Lipinski 门槛、拖动它的阈值，亲眼看全库通过率跟着变。</div>
+
+    <div class="roadmap">
+      <div class="rm-label" data-i18n="rmLabel">第5关 · 筛选漏斗</div>
+      <div class="rm-row done"><span class="rm-dot"></span><span data-i18n="rm1">四个描述符逐个算过</span></div>
+      <div class="rm-row done"><span class="rm-dot"></span><span data-i18n="rm2">读结构·算属性</span></div>
+      <div class="rm-row here"><span class="rm-dot"></span><span data-i18n="rm3">M85 第一套筛选规则 · 你在这</span></div>
+      <div class="rm-row"><span class="rm-dot"></span><span data-i18n="rm4">叠成多层筛选漏斗</span></div>
+      <div class="rm-row"><span class="rm-dot"></span><span data-i18n="rm5">打综合分筛出 Top10</span></div>
+    </div>
+
+    <div class="side-block">
+      <div class="blk-label" data-i18n="taskLabel">本关任务</div>
+      <div class="blk-body" data-i18n="taskBody">选一条门槛（或<b>四条合一</b>），拖阈值线。线一动，<i>过关数</i>和<i>全库通过率</i>就跟着变。把分子量从 500 收紧到 450，看通过率往哪边走。</div>
+    </div>
+
+    <div class="side-block">
+      <div class="blk-label" data-i18n="ruleLabel">选门槛</div>
+      <div class="rule-tabs" id="ruleTabs">
+        <button class="rule-tab active" data-rule="mw" type="button">MW</button>
+        <button class="rule-tab" data-rule="logp" type="button">LogP</button>
+        <button class="rule-tab" data-rule="hbd" type="button">HBD</button>
+        <button class="rule-tab" data-rule="hba" type="button">HBA</button>
+        <button class="rule-tab" data-rule="joint" type="button" data-i18n="ruleJoint">四条合一</button>
+      </div>
+    </div>
+
+    <div class="side-block slider-zone">
+      <div class="slider-head">
+        <span class="lab" id="thrLab">分子量门槛 ≤</span>
+        <span class="keep" id="thrKeep">500</span>
+      </div>
+      <input id="thrSlider" type="range" min="200" max="900" step="10" value="500" aria-label="threshold">
+      <div class="slider-ends"><span id="thrMin">200 严</span><span id="thrMax">800 松</span></div>
+    </div>
+
+    <button id="presetBtn" class="act-btn" type="button">
+      <span data-i18n="presetTop">跳到 ≤500 / ≤450</span>
+      <span class="sub" data-i18n="presetSub">收紧门槛，看通过率下降</span>
+    </button>
+
+    <div class="side-foot">
+      <button id="resetBtn" class="act-btn" type="button" data-i18n="resetBtn">重新开始</button>
+      <div class="target-card">
+        <div class="tc-l" data-i18n="endLabel">项目终点</div>
+        <div class="tc-b" data-i18n="endBody">分子怪兽猎人工作台 · 这套门槛是它筛分子漏斗最上的第一道闸门</div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ============ MAIN ============ -->
+  <main class="game-main">
+    <div class="hud">
+      <div class="score-card" id="gateCard">
+        <div class="sc-head"><span class="sc-name" id="gateName">当前门槛</span><span class="sc-val" id="gateVal">MW≤500</span></div>
+        <div class="sc-note" id="gateNote" data-i18n="gateNote0">同一把尺子，量库里每一个分子。</div>
+      </div>
+      <div class="score-card" id="passCard">
+        <div class="sc-head"><span class="sc-name" data-i18n="passName">过关 / 总数</span><span class="sc-val" id="passVal">--</span></div>
+        <div class="sc-note" id="passNote" data-i18n="passNote0">达标的分子数，除以一整库 10 个。</div>
+      </div>
+      <div class="score-card goal-card" id="goalCard">
+        <div class="sc-head"><span class="sc-name" data-i18n="rateName">全库通过率</span><span class="sc-val" id="rateVal">--</span></div>
+        <div class="sc-note" id="rateNote" data-i18n="rateNote0">这一关要交的体检报告，就是这个百分比。</div>
+      </div>
+    </div>
+
+    <div class="stage">
+      <div class="stage-head">
+        <span class="sh-t" id="stageT">十个真药 · 当前门槛下逐个量</span>
+        <div class="sh-legend">
+          <span class="lg t"><i></i><span data-i18n="lgThr">门槛线</span></span>
+          <span class="lg p"><i></i><span data-i18n="lgPass">线下/达标 = 过</span></span>
+          <span class="lg f"><i></i><span data-i18n="lgFail">越线/违反 = 不过</span></span>
+        </div>
+      </div>
+      <div class="canvas-host">
+        <canvas id="libCanvas"></canvas>
+        <div class="toast" id="toast"></div>
+      </div>
+    </div>
+
+    <div class="subtitle" id="subtitle">
+      <span class="pin" data-i18n="pinLabel">实况</span>
+      <span id="subText" data-i18n="sub0">拖动分子量门槛。门槛压低，越界的分子变多、通过率下降；松开，更多分子过关。鼠标悬在柱子上，可以看它的四个真实描述符。</span>
+    </div>
+  </main>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  /* ── canonical molecule library: RDKit-real Lipinski descriptors.
+     口径: RDKit Descriptors.MolWt / Crippen.MolLogP / NumHDonors / NumHAcceptors.
+     IDENTICAL numbers as the M85 animation. ── */
+  var MOLS = [
+    { id: "aspirin",      cn: "阿司匹林",   en: "aspirin",      mw: 180.2, logp: 1.31,  hbd: 1, hba: 3 },
+    { id: "caffeine",     cn: "咖啡因",     en: "caffeine",     mw: 194.2, logp: -1.03, hbd: 0, hba: 3 },
+    { id: "paracetamol",  cn: "扑热息痛",   en: "paracetamol",  mw: 151.2, logp: 1.35,  hbd: 2, hba: 2 },
+    { id: "ibuprofen",    cn: "布洛芬",     en: "ibuprofen",    mw: 206.3, logp: 3.07,  hbd: 1, hba: 1 },
+    { id: "warfarin",     cn: "华法林",     en: "warfarin",     mw: 308.3, logp: 3.61,  hbd: 1, hba: 4 },
+    { id: "amoxicillin",  cn: "阿莫西林",   en: "amoxicillin",  mw: 365.4, logp: 0.02,  hbd: 4, hba: 6 },
+    { id: "sildenafil",   cn: "西地那非",   en: "sildenafil",   mw: 474.6, logp: 1.61,  hbd: 1, hba: 7 },
+    { id: "atorvastatin", cn: "阿托伐他汀", en: "atorvastatin", mw: 558.7, logp: 6.31,  hbd: 4, hba: 4 },
+    { id: "telmisartan",  cn: "替米沙坦",   en: "telmisartan",  mw: 500.6, logp: 6.96,  hbd: 1, hba: 3 },
+    { id: "digoxin",      cn: "地高辛",     en: "digoxin",      mw: 780.9, logp: 2.22,  hbd: 6, hba: 14 }
+  ];
+
+  /* rule definitions; mwThr is the live, draggable threshold for the MW rule */
+  function vMw(m){return m.mw;} function vLogp(m){return m.logp;} function vHbd(m){return m.hbd;} function vHba(m){return m.hba;}
+  function violations(m, mwThr){
+    var v=0;
+    if (m.mw > mwThr) v++;
+    if (m.logp > 5) v++;
+    if (m.hbd > 5) v++;
+    if (m.hba > 10) v++;
+    return v;
+  }
+
+  // ---------------- i18n ----------------
+  var I18N = {
+    zh: {
+      badge: "CHEM-08 / M85", title: "门槛过滤器",
+      sub: "十个真药一字排开。挑一条 Lipinski 门槛、拖动它的阈值，亲眼看全库通过率跟着变。",
+      rmLabel: "第5关 · 筛选漏斗",
+      rm1: "四个描述符逐个算过", rm2: "读结构·算属性", rm3: "M85 第一套筛选规则 · 你在这",
+      rm4: "叠成多层筛选漏斗", rm5: "打综合分筛出 Top10",
+      taskLabel: "本关任务",
+      taskBody: "选一条门槛（或四条合一），拖阈值线。线一动，过关数和全库通过率就跟着变。把分子量从 500 收紧到 450，看通过率往哪边走。",
+      ruleLabel: "选门槛", ruleJoint: "四条合一",
+      presetTop: "跳到 ≤500 / ≤450", presetSub: "收紧门槛，看通过率下降",
+      resetBtn: "重新开始",
+      endLabel: "项目终点", endBody: "分子怪兽猎人工作台 · 这套门槛是它筛分子漏斗最上的第一道闸门",
+      gateName: "当前门槛", passName: "过关 / 总数", rateName: "全库通过率",
+      gateNote0: "同一把尺子，量库里每一个分子。",
+      passNote0: "达标的分子数，除以一整库 10 个。",
+      rateNote0: "这一关要交的体检报告，就是这个百分比。",
+      stageT: "十个真药 · 当前门槛下逐个量",
+      lgThr: "门槛线", lgPass: "线下/达标 = 过", lgFail: "越线/违反 = 不过",
+      pinLabel: "实况",
+      sub0: "拖动分子量门槛。门槛压低，越界的分子变多、通过率下降；松开，更多分子过关。鼠标悬在柱子上，可以看它的四个真实描述符。",
+      thrLabMw: "分子量门槛 ≤", thrLabFixed: "门槛（固定）",
+      thrMinMw: "200 严", thrMaxMw: "800 松",
+      // dynamic
+      subMw: "分子量门槛 ≤ {thr}：十个里 {pass} 个达标，全库通过率 {rate}%。{over} 个分子太重，顶过了这条线。",
+      subMw450: "收紧到 ≤ {thr}：原本压线的分子也被刷下来了——通过率掉到 {rate}%。门槛越严，过的越少。",
+      subMwLoose: "放到 ≤ {thr}：门槛松了，连重的分子也放行，通过率升到 {rate}%。",
+      subLogp: "油水分门槛 LogP ≤ 5（固定）：{pass} 个不太爱油、达标，通过率 {rate}%。太爱油的 {over} 个被刷。",
+      subHbd: "给氢手门槛 HBD ≤ 5（固定）：{pass} 个手不算多、达标，通过率 {rate}%。只有 {over} 个伸手太多。",
+      subHba: "接氢手门槛 HBA ≤ 10（固定）：{pass} 个达标，通过率 {rate}%。{over} 个接氢手太多被刷。",
+      subJoint: "四条合一（最多违反一条）：{pass} 个整体过关，联合通过率 {rate}%。比任何单条都不高——同时过四道门比过一道难。",
+      molTip: "{name}：分子量 {mw}、油水分 {logp}、给氢手 {hbd}、接氢手 {hba}（违反 {viol} 条）",
+      toastWin: "你造好了门槛过滤器！同一库分子，分子量门槛 ≤500 通过率 {r500}%、收紧到 ≤450 就掉到 {r450}%。门槛一动，全库通过率立刻跟着走。",
+      toastSub: "通过率就是你这一关交的体检报告。下一关把更多门槛叠成多层漏斗。",
+      jointFixed: "合一·违反≤1"
+    },
+    en: {
+      badge: "CHEM-08 / M85", title: "The Gate Filter",
+      sub: "Ten real drugs in a row. Pick a Lipinski gate, drag its threshold, and watch the whole-library pass rate move.",
+      rmLabel: "Stage 5 · Screening Funnel",
+      rm1: "four descriptors, one by one", rm2: "read structure & properties", rm3: "M85 first screening rule · you are here",
+      rm4: "stack filters into a funnel", rm5: "score & pick the Top 10",
+      taskLabel: "Mission",
+      taskBody: "Pick a gate (or join all four), drag the threshold. As the line moves, the pass count and whole-library pass rate move with it. Tighten MW from 500 to 450 and see which way the rate goes.",
+      ruleLabel: "Pick a gate", ruleJoint: "join all four",
+      presetTop: "Jump to ≤500 / ≤450", presetSub: "Tighten the gate, watch the rate drop",
+      resetBtn: "Restart",
+      endLabel: "Project goal", endBody: "Monster Hunter workbench · this gate is the funnel's coarse first stage",
+      gateName: "Current gate", passName: "Pass / total", rateName: "Whole-library pass rate",
+      gateNote0: "One ruler, applied to every molecule in the library.",
+      passNote0: "Passing molecules divided by the whole library of 10.",
+      rateNote0: "The report card this lesson asks for is exactly this percentage.",
+      stageT: "Ten real drugs · measured under the current gate",
+      lgThr: "gate line", lgPass: "below/within = pass", lgFail: "over/breaks = fail",
+      pinLabel: "Live",
+      sub0: "Drag the MW gate. Lower it and more molecules overshoot, dropping the pass rate; loosen it and more pass. Hover a bar to see its four real descriptors.",
+      thrLabMw: "MW gate ≤", thrLabFixed: "gate (fixed)",
+      thrMinMw: "200 strict", thrMaxMw: "800 loose",
+      subMw: "MW gate ≤ {thr}: {pass} of 10 pass, whole-library pass rate {rate}%. {over} molecules are too heavy and overshoot the line.",
+      subMw450: "Tightened to ≤ {thr}: borderline molecules now drop out — pass rate falls to {rate}%. Stricter gate, fewer pass.",
+      subMwLoose: "Loosened to ≤ {thr}: even heavy molecules clear it, pass rate rises to {rate}%.",
+      subLogp: "LogP ≤ 5 (fixed): {pass} are not too oily and pass, rate {rate}%. The {over} too-oily ones get cut.",
+      subHbd: "HBD ≤ 5 (fixed): {pass} have few enough donors and pass, rate {rate}%. Only {over} reach out too much.",
+      subHba: "HBA ≤ 10 (fixed): {pass} pass, rate {rate}%. {over} with too many acceptors get cut.",
+      subJoint: "Joined (≤1 violation): {pass} pass overall, joint rate {rate}%. No higher than any single rule — clearing four gates at once is harder than one.",
+      molTip: "{name}: MW {mw}, LogP {logp}, HBD {hbd}, HBA {hba} ({viol} broken)",
+      toastWin: "You built the gate filter! Same library — MW gate ≤500 passes {r500}%, tighten to ≤450 and it drops to {r450}%. Move the gate, the whole-library rate follows instantly.",
+      toastSub: "That pass rate is the report card this lesson hands in. Next stage stacks more gates into a funnel.",
+      jointFixed: "joined·≤1 viol"
+    }
+  };
+  var lang = "zh";
+
+  // ---------------- DOM ----------------
+  var canvas = document.getElementById("libCanvas");
+  var ctx2d = canvas.getContext("2d");
+  var thrSlider = document.getElementById("thrSlider");
+  var thrKeep = document.getElementById("thrKeep");
+  var thrLab = document.getElementById("thrLab");
+  var thrMin = document.getElementById("thrMin");
+  var thrMax = document.getElementById("thrMax");
+  var presetBtn = document.getElementById("presetBtn");
+  var resetBtn = document.getElementById("resetBtn");
+  var langBtn = document.getElementById("langBtn");
+  var toastEl = document.getElementById("toast");
+  var ruleTabs = document.getElementById("ruleTabs");
+
+  var gateVal = document.getElementById("gateVal"), passVal = document.getElementById("passVal"), rateVal = document.getElementById("rateVal");
+  var gateName = document.getElementById("gateName");
+  var gateNote = document.getElementById("gateNote"), passNote = document.getElementById("passNote"), rateNote = document.getElementById("rateNote");
+  var goalCard = document.getElementById("goalCard");
+  var subText = document.getElementById("subText");
+  var stageT = document.getElementById("stageT");
+
+  // ---------------- colours ----------------
+  function cssVar(n) { return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
+  var COL = {};
+  function refreshColors() {
+    COL.good = cssVar("--GOOD"); COL.bad = cssVar("--BAD"); COL.gold = cssVar("--gold");
+    COL.chem = cssVar("--CATALYST"); COL.bond = cssVar("--BOND"); COL.deep = cssVar("--DEEP");
+    COL.fg = cssVar("--fg"); COL.fgDim = cssVar("--fg-dim"); COL.bg = cssVar("--bg-0");
+    COL.reaction = cssVar("--REACTION"); COL.yield = cssVar("--YIELD");
+  }
+  refreshColors();
+
+  // ---------------- state ----------------
+  var rule = "mw";            // mw | logp | hbd | hba | joint
+  var mwThr = 500;            // live MW threshold (draggable)
+  var animThr = 500;         // animated line position
+  var seen500 = false, seen450 = false, won = false;
+  var hoverIdx = -1;
+
+  // fixed thresholds for the non-MW rules
+  var FIXED = { logp: 5, hbd: 5, hba: 10 };
+
+  // ---------------- per-rule helpers ----------------
+  function rulePass(m) {
+    if (rule === "mw") return m.mw <= mwThr;
+    if (rule === "logp") return m.logp <= 5;
+    if (rule === "hbd") return m.hbd <= 5;
+    if (rule === "hba") return m.hba <= 10;
+    return violations(m, mwThr) <= 1; // joint
+  }
+  function ruleVal(m) {
+    if (rule === "mw") return m.mw;
+    if (rule === "logp") return m.logp;
+    if (rule === "hbd") return m.hbd;
+    if (rule === "hba") return m.hba;
+    return violations(m, mwThr); // joint: number of violations
+  }
+  function ruleThr() {
+    if (rule === "mw") return mwThr;
+    if (rule === "logp") return 5;
+    if (rule === "hbd") return 5;
+    if (rule === "hba") return 10;
+    return 1; // joint: at most 1 violation
+  }
+  function axisMax() {
+    if (rule === "mw") return 850;
+    if (rule === "logp") return 8;
+    if (rule === "hbd") return 7;
+    if (rule === "hba") return 15;
+    return 4; // joint: up to 4 violations
+  }
+  function gateLabel() {
+    if (rule === "mw") return "MW≤" + mwThr;
+    if (rule === "logp") return "LogP≤5";
+    if (rule === "hbd") return "HBD≤5";
+    if (rule === "hba") return "HBA≤10";
+    return I18N[lang].jointFixed;
+  }
+  function passCount() {
+    var n = 0; for (var i = 0; i < MOLS.length; i++) if (rulePass(MOLS[i])) n++; return n;
+  }
+  function fmtVal(v) {
+    if (rule === "logp") return v.toFixed(2);
+    if (rule === "mw") return v.toFixed(1);
+    return String(v);
+  }
+
+  // ---------------- canvas ----------------
+  function fitCanvas() {
+    var host = canvas.parentElement;
+    var r = host.getBoundingClientRect();
+    var dpr = Math.min(window.devicePixelRatio || 1, 2);
+    var w = Math.max(40, r.width), h = Math.max(40, r.height);
+    canvas.width = Math.round(w * dpr);
+    canvas.height = Math.round(h * dpr);
+    canvas.style.width = w + "px"; canvas.style.height = h + "px";
+    ctx2d.setTransform(dpr, 0, 0, dpr, 0, 0);
+    return { w: w, h: h };
+  }
+  function molName(m) { return lang === "zh" ? m.cn : m.en; }
+
+  function roundRect(c, x, y, w, h, r) {
+    r = Math.min(r, Math.abs(w) / 2, Math.abs(h) / 2);
+    c.beginPath();
+    c.moveTo(x + r, y);
+    c.arcTo(x + w, y, x + w, y + h, r);
+    c.arcTo(x + w, y + h, x, y + h, r);
+    c.arcTo(x, y + h, x, y, r);
+    c.arcTo(x, y, x + w, y, r);
+    c.closePath();
+  }
+
+  function plot() {
+    var dim = fitCanvas();
+    var W = dim.w, H = dim.h;
+    ctx2d.clearRect(0, 0, W, H);
+
+    var padL = 52, padR = 18, padTop = 22, padBot = 44;
+    var chartW = W - padL - padR;
+    var chartH = H - padTop - padBot;
+    var baseY = padTop + chartH;
+
+    var aMax = axisMax();
+    var thrFracTarget = ruleThr() / aMax; // where the gate line sits (0..1)
+
+    // y axis + a few gridlines
+    ctx2d.strokeStyle = "oklch(0.40 0.05 130 / 0.5)";
+    ctx2d.lineWidth = 1.2;
+    ctx2d.beginPath(); ctx2d.moveTo(padL, padTop); ctx2d.lineTo(padL, baseY); ctx2d.lineTo(padL + chartW, baseY); ctx2d.stroke();
+    ctx2d.font = "10px " + cssVar("--mono") + ", monospace";
+    ctx2d.textAlign = "right"; ctx2d.textBaseline = "middle";
+    [0, 0.5, 1].forEach(function (f) {
+      var yy = baseY - chartH * f;
+      ctx2d.strokeStyle = "oklch(0.40 0.05 130 / 0.16)";
+      ctx2d.lineWidth = 1; ctx2d.setLineDash([3, 4]);
+      ctx2d.beginPath(); ctx2d.moveTo(padL, yy); ctx2d.lineTo(padL + chartW, yy); ctx2d.stroke();
+      ctx2d.setLineDash([]);
+      ctx2d.fillStyle = COL.fgDim;
+      ctx2d.fillText(Math.round(aMax * f).toString(), padL - 7, yy);
+    });
+
+    var n = MOLS.length;
+    var slot = chartW / n;
+    var bw = Math.min(slot * 0.5, 56);
+
+    var overCount = 0;
+    for (var i = 0; i < n; i++) {
+      var m = MOLS[i];
+      var cx = padL + slot * (i + 0.5);
+      var x = cx - bw / 2;
+      var v = ruleVal(m);
+      var hh = chartH * Math.min(1, v / aMax);
+      var passes = rulePass(m);
+      if (!passes) overCount++;
+
+      var grad = ctx2d.createLinearGradient(x, baseY - hh, x, baseY);
+      if (passes) { grad.addColorStop(0, "oklch(0.78 0.17 145)"); grad.addColorStop(1, "oklch(0.45 0.12 145)"); }
+      else { grad.addColorStop(0, "oklch(0.64 0.21 25)"); grad.addColorStop(1, "oklch(0.40 0.14 25)"); }
+      ctx2d.fillStyle = grad;
+      roundRect(ctx2d, x, baseY - hh, bw, hh, 5); ctx2d.fill();
+      ctx2d.lineWidth = (i === hoverIdx) ? 2.6 : 1.4;
+      ctx2d.strokeStyle = (i === hoverIdx) ? COL.gold : (passes ? COL.good : COL.bad);
+      roundRect(ctx2d, x, baseY - hh, bw, hh, 5); ctx2d.stroke();
+
+      // value on top
+      if (hh > 6) {
+        ctx2d.fillStyle = passes ? COL.good : COL.bad;
+        ctx2d.font = "700 12px " + cssVar("--mono") + ", monospace";
+        ctx2d.textAlign = "center"; ctx2d.textBaseline = "bottom";
+        ctx2d.fillText(fmtVal(v), cx, baseY - hh - 5);
+      }
+      // name under axis
+      ctx2d.fillStyle = COL.fgDim;
+      ctx2d.font = "600 10px 'Noto Sans SC', sans-serif";
+      ctx2d.textBaseline = "top";
+      ctx2d.fillText(molName(m), cx, baseY + 7);
+
+      m._cx = cx; m._x = x; m._bw = bw; m._hh = hh; m._baseY = baseY;
+    }
+
+    // gate line (animated for the MW rule, instant for fixed rules)
+    var liveThrFrac;
+    if (rule === "mw") liveThrFrac = animThr / aMax;
+    else liveThrFrac = thrFracTarget;
+    var ty = baseY - chartH * liveThrFrac;
+    ctx2d.strokeStyle = COL.gold;
+    ctx2d.lineWidth = 2.4; ctx2d.setLineDash([9, 6]);
+    ctx2d.beginPath(); ctx2d.moveTo(padL, ty); ctx2d.lineTo(padL + chartW, ty); ctx2d.stroke();
+    ctx2d.setLineDash([]);
+    // label box
+    var lbl = (lang === "zh" ? "门槛 " : "gate ") + gateLabel();
+    ctx2d.font = "700 12px " + cssVar("--mono") + ", monospace";
+    var lw = ctx2d.measureText(lbl).width;
+    var lx = padL + 16;
+    ctx2d.fillStyle = "oklch(0.14 0.035 265 / 0.92)";
+    ctx2d.fillRect(lx - 8, ty - 19, lw + 16, 17);
+    ctx2d.strokeStyle = COL.gold; ctx2d.lineWidth = 1.2;
+    ctx2d.strokeRect(lx - 8, ty - 19, lw + 16, 17);
+    ctx2d.fillStyle = COL.gold; ctx2d.textAlign = "left"; ctx2d.textBaseline = "middle";
+    ctx2d.fillText(lbl, lx, ty - 10);
+
+    // up/down hints
+    ctx2d.font = "10px 'Noto Sans SC', sans-serif";
+    ctx2d.textAlign = "left"; ctx2d.textBaseline = "middle";
+    ctx2d.fillStyle = "oklch(0.64 0.21 25 / 0.85)";
+    if (ty - padTop > 16) ctx2d.fillText(lang === "zh" ? "↑ 越线 = 违反" : "↑ over = breaks", padL + 4, padTop + 8);
+    ctx2d.fillStyle = "oklch(0.78 0.17 145 / 0.85)";
+    if (baseY - ty > 16) ctx2d.fillText(lang === "zh" ? "↓ 线下 = 达标" : "↓ within = pass", padL + 4, baseY - 8);
+  }
+
+  // ---------------- animation loop ----------------
+  function tick() {
+    if (Math.abs(animThr - mwThr) > 0.5) animThr += (mwThr - animThr) * 0.22;
+    else animThr = mwThr;
+    plot();
+    requestAnimationFrame(tick);
+  }
+
+  // ---------------- HUD ----------------
+  function tpl(s, map) { return s.replace(/\{(\w+)\}/g, function (_, k) { return map[k] != null ? map[k] : ""; }); }
+  function updateHUD(reason) {
+    var T = I18N[lang];
+    var pc = passCount();
+    var rate = Math.round(pc / MOLS.length * 100);
+    var over = MOLS.length - pc;
+
+    gateVal.textContent = gateLabel();
+    passVal.textContent = pc + " / " + MOLS.length;
+    rateVal.textContent = rate + "%";
+
+    goalCard.classList.remove("danger", "ok");
+    if (rate <= 50) goalCard.classList.add("danger");
+    else if (rate >= 80) goalCard.classList.add("ok");
+
+    if (reason !== "hover") {
+      if (rule === "mw") {
+        if (mwThr <= 450) subText.textContent = tpl(T.subMw450, { thr: mwThr, rate: rate });
+        else if (mwThr >= 600) subText.textContent = tpl(T.subMwLoose, { thr: mwThr, rate: rate });
+        else subText.textContent = tpl(T.subMw, { thr: mwThr, pass: pc, rate: rate, over: over });
+      } else if (rule === "logp") subText.textContent = tpl(T.subLogp, { pass: pc, rate: rate, over: over });
+      else if (rule === "hbd") subText.textContent = tpl(T.subHbd, { pass: pc, rate: rate, over: over });
+      else if (rule === "hba") subText.textContent = tpl(T.subHba, { pass: pc, rate: rate, over: over });
+      else subText.textContent = tpl(T.subJoint, { pass: pc, rate: rate });
+    }
+
+    // win: experienced both ≤500 and ≤450 on the MW rule
+    if (rule === "mw" && mwThr >= 490 && mwThr <= 510) seen500 = true;
+    if (rule === "mw" && mwThr >= 440 && mwThr <= 460) seen450 = true;
+    if (seen500 && seen450 && !won) {
+      won = true;
+      var r500 = Math.round(MOLS.filter(function (m) { return m.mw <= 500; }).length / MOLS.length * 100);
+      var r450 = Math.round(MOLS.filter(function (m) { return m.mw <= 450; }).length / MOLS.length * 100);
+      showToast(tpl(T.toastWin, { r500: r500, r450: r450 }), T.toastSub);
+    }
+  }
+
+  var toastTimer = null;
+  function showToast(line1, line2) {
+    toastEl.innerHTML = "";
+    var a = document.createElement("div"); a.textContent = line1; toastEl.appendChild(a);
+    if (line2) {
+      var b = document.createElement("div");
+      b.textContent = line2; b.style.fontWeight = "400"; b.style.fontSize = "9.5px";
+      b.style.color = "var(--fg-dim)"; b.style.marginTop = "5px";
+      toastEl.appendChild(b);
+    }
+    toastEl.classList.add("show");
+    if (toastTimer) clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { toastEl.classList.remove("show"); }, 5400);
+  }
+
+  // ---------------- interaction ----------------
+  function syncSliderForRule() {
+    // only the MW rule has a meaningful draggable threshold; others lock the slider
+    if (rule === "mw") {
+      thrSlider.disabled = false;
+      thrSlider.min = 200; thrSlider.max = 900; thrSlider.step = 10;
+      thrSlider.value = mwThr;
+      thrKeep.textContent = mwThr;
+      thrLab.textContent = I18N[lang].thrLabMw;
+      thrMin.textContent = I18N[lang].thrMinMw;
+      thrMax.textContent = I18N[lang].thrMaxMw;
+    } else {
+      thrSlider.disabled = true;
+      thrLab.textContent = I18N[lang].thrLabFixed;
+      thrKeep.textContent = (rule === "joint") ? "≤1" : (rule === "hba" ? "10" : "5");
+      thrMin.textContent = ""; thrMax.textContent = "";
+    }
+  }
+
+  thrSlider.addEventListener("input", function () {
+    if (rule !== "mw") return;
+    mwThr = parseInt(thrSlider.value, 10);
+    thrKeep.textContent = mwThr;
+    updateHUD("slider");
+  });
+
+  ruleTabs.addEventListener("click", function (e) {
+    var btn = e.target.closest(".rule-tab");
+    if (!btn) return;
+    rule = btn.getAttribute("data-rule");
+    ruleTabs.querySelectorAll(".rule-tab").forEach(function (t) { t.classList.toggle("active", t === btn); });
+    syncSliderForRule();
+    updateHUD("rule");
+  });
+
+  presetBtn.addEventListener("click", function () {
+    rule = "mw";
+    ruleTabs.querySelectorAll(".rule-tab").forEach(function (t) { t.classList.toggle("active", t.getAttribute("data-rule") === "mw"); });
+    mwThr = (mwThr === 500) ? 450 : 500;
+    syncSliderForRule();
+    updateHUD("preset");
+  });
+
+  resetBtn.addEventListener("click", function () {
+    rule = "mw"; mwThr = 500; animThr = 500;
+    ruleTabs.querySelectorAll(".rule-tab").forEach(function (t) { t.classList.toggle("active", t.getAttribute("data-rule") === "mw"); });
+    seen500 = false; seen450 = false; won = false;
+    syncSliderForRule();
+    updateHUD("reset");
+  });
+
+  // hover a bar → show molecule descriptors
+  canvas.addEventListener("mousemove", function (e) {
+    var r = canvas.getBoundingClientRect();
+    var mx = e.clientX - r.left, my = e.clientY - r.top;
+    var found = -1;
+    for (var i = 0; i < MOLS.length; i++) {
+      var m = MOLS[i];
+      if (m._x == null) continue;
+      if (mx >= m._x - 6 && mx <= m._x + m._bw + 6 && my >= m._baseY - m._hh - 10 && my <= m._baseY) { found = i; break; }
+    }
+    if (found !== hoverIdx) {
+      hoverIdx = found;
+      if (found >= 0) {
+        var mm = MOLS[found];
+        subText.textContent = tpl(I18N[lang].molTip, {
+          name: molName(mm), mw: mm.mw.toFixed(1), logp: mm.logp.toFixed(2),
+          hbd: mm.hbd, hba: mm.hba, viol: violations(mm, mwThr)
+        });
+      } else updateHUD("hover-off");
+    }
+  });
+  canvas.addEventListener("mouseleave", function () { if (hoverIdx !== -1) { hoverIdx = -1; updateHUD("hover-off"); } });
+
+  // ---------------- i18n ----------------
+  function applyLang() {
+    var T = I18N[lang];
+    document.querySelectorAll("[data-i18n]").forEach(function (el) {
+      var k = el.getAttribute("data-i18n");
+      if (T[k] != null) el.textContent = T[k];
+    });
+    gateName.textContent = T.gateName;
+    stageT.textContent = T.stageT;
+    langBtn.textContent = lang === "zh" ? "EN" : "中文";
+    document.documentElement.lang = lang === "zh" ? "zh" : "en";
+    syncSliderForRule();
+    updateHUD("lang");
+  }
+  langBtn.addEventListener("click", function () {
+    lang = (lang === "zh") ? "en" : "zh";
+    applyLang();
+  });
+
+  // ---------------- resize ----------------
+  var rT = null;
+  window.addEventListener("resize", function () {
+    if (rT) cancelAnimationFrame(rT);
+    rT = requestAnimationFrame(plot);
+  });
+
+  // ---------------- boot ----------------
+  syncSliderForRule();
+  applyLang();
+  updateHUD("init");
+  requestAnimationFrame(tick);
+})();
+</script>
+</body>
+</html>

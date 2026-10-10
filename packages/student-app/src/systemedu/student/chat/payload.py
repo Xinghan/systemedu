@@ -12,6 +12,7 @@ from __future__ import annotations
 from typing import Any, Literal
 
 from pydantic import BaseModel, model_validator
+from ..course_numbering import checkpoint_module_id
 
 
 PageKind = Literal["global", "home", "library_detail", "learn"]
@@ -49,7 +50,8 @@ class ChatPayload(BaseModel):
         不同 thread, agent 不混淆 module 上下文.
         """
         if self.library_slug:
-            return f"{user_id}:{self.library_slug}:{self.module_id or 'project-main'}"
+            stable_id = checkpoint_module_id(self.library_slug, self.module_id)
+            return f"{user_id}:{self.library_slug}:{stable_id or 'project-main'}"
         return f"{user_id}:global"
 
     @property

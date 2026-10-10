@@ -13,7 +13,7 @@ export function BiomedUnderstandingCheck({ project, node }: { project: string; n
   return guide ? <CheckQuestion key={`${project}/${node}`} project={project} node={node} guide={guide} /> : null
 }
 
-function CheckQuestion({ project, node, guide }: { project: string; node: string; guide: Guide }) {
+export function CheckQuestion({ project, node, guide }: { project: string; node: string; guide: Pick<Guide, 'check'> }) {
   const { check } = guide
   const record = useLearningRecord({ library_slug: project, module_id: node, activity_id: 'concept-check', kind: 'quiz', content_version: '1.0' }, { answers: [] })
   const choice = record.body.answers[0]?.answer || ''

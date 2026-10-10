@@ -1,0 +1,9 @@
+"use client"
+import {useState} from 'react'
+import type {SlideEntry} from '@/lib/types/api'
+import {LessonSlidesProvider,LessonSlideCarousel,LessonSlideshowButton} from './lesson-slides'
+const labels=['新生成图片','三种角色','五件成果','揭晓证据','动态筛选','五次预算','填写立项卡','成果交接']
+export function DiscoverySlidePreview({slides}:{slides:SlideEntry[]}){
+ const [index,setIndex]=useState(0),[width,setWidth]=useState('1152')
+ return <main className="min-h-screen bg-[var(--paper)] p-5 text-[var(--ink)]"><div className="mx-auto" style={{maxWidth:Number(width)}}><p className="text-xs font-semibold text-[var(--primary-ink)]">分子猎人 · M01 · 8 页全部新版 · 已于 2026-09-10 部署生产</p><h1 className="my-3 text-2xl font-semibold">先学会筛选与诚实，再写你的立项卡</h1><p className="mb-4 text-sm text-[var(--sub)]">第 1 页新生成图片；第 5 页可播放；第 6 页可实际消耗预算、揭晓结果；第 7/8 页填写并核对自己的立项卡。</p><label className="mb-4 flex items-center gap-3 text-sm">预览宽度<select aria-label="预览内容宽度" value={width} onChange={e=>setWidth(e.target.value)} className="rounded border bg-[var(--paper)] p-2">{[480,720,960,1152].map(w=><option key={w} value={w}>{w}px</option>)}</select></label><LessonSlidesProvider projectName="molecule-monster-hunter" moduleId="M01" knodeDir="knodes/M01-w0-module" title="M01 · 项目立项与证据" slides={slides} currentIndex={index} onIndexChange={setIndex}><div className="mb-4 flex flex-wrap gap-2"><nav aria-label="M01 新版页码" className="flex flex-1 flex-wrap gap-2">{slides.map((s,i)=><button key={s.slide_id} aria-label={`第 ${i+1} 页：${labels[i]}`} aria-current={i===index?'page':undefined} onClick={()=>setIndex(i)} className={`rounded-lg border px-3 py-2 text-xs ${i===index?'bg-[var(--primary)] text-[var(--primary-foreground)]':'bg-[var(--paper-2)]'}`}>{String(i+1).padStart(2,'0')} · {labels[i]}</button>)}</nav><LessonSlideshowButton/></div><LessonSlideCarousel/><p className="mt-4 text-xs text-[var(--sub)]">当前第 {index+1} 页 · {labels[index]}。新讲稿未配音。教学数据与真实用户填写的立项卡明确区分。</p></LessonSlidesProvider></div></main>
+}

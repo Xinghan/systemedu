@@ -1,0 +1,23 @@
+const fs=require('node:fs'),path=require('node:path'),crypto=require('node:crypto')
+const root=path.resolve(__dirname,'../../..'),node='M90-w0-workbench-go-no-go',source=path.resolve(root,'../systemeduidea/projects_data/molecule-monster-hunter/knodes',node),snapshot=path.join(__dirname,'M90-before-workbench-v1'),sha=b=>crypto.createHash('sha256').update(b).digest('hex')
+const sourceHashes={};fs.mkdirSync(snapshot,{recursive:true})
+for(const name of ['slides.json','lesson.md','assignment.md','theories.json','sections.json','audio_scripts.json']){const b=fs.readFileSync(path.join(source,name)),dst=path.join(snapshot,name);if(fs.existsSync(dst)&&!fs.readFileSync(dst).equals(b))throw Error('Snapshot source changed: '+name);if(!fs.existsSync(dst))fs.writeFileSync(dst,b);sourceHashes[name]=sha(b)}
+const records=[
+ ['overview','把同一个候选，从输入一直追到报告','真实产品界面 + RDKit','这台工作台是软件，不是实体机器。选一个熟分子，看左边的输入和结构，再看右边同一个候选的描述符、规则和理由。结构和描述符是 RDKit 计算的；模型接口值在本演示中是明确编造的教学替身，不能当成这个分子的真实性质。真正总装时，要接入你前面训练的模型。首先要做到的是，不同阶段始终认得同一个候选 ID，不把几个人的数据拼在一起。'],
+ ['acceptance','把“做成了”拆成可以检查的证据','HTML 验收矩阵','今天不是拿一个漂亮分数换毕业，而是要交出可跑通的工作台、可追溯的报告和验收记录。每个要求都对应一个文件或字段：运行日志、特征契约、理由以及评估记录。试着移除评估记录，看看系统为什么必须说需要更多证据。这里提供的是教学演示，真实模型和真实划分仍未接入，因此不能把演示通过当成自己的最终作品已验收。'],
+ ['assembly','接口不是一根箭头：它交接的是数据','可选择的接口结构图','依次点开五道工序。读通那道交出去的是带候选 ID 的分子对象，特征那道交出去的是具名、有顺序和单位的一排数，模型那道交出去的是预测与模型版本，漏斗再交出决定、理由和排名。每一道都要回答：我接收什么，检查什么，交出去什么。结构图不等于模型结果，候选 ID 也不能在半路丢失。'],
+ ['contract','八个数都在，列顺序也可能是错的','精确表格 + 故障注入','看乙醇的八列描述符。现在第一列送来 LogP，模型却按训练契约期待 MW。数量虽然同为八个，语义却已经错位。试试交换前两列、删除最后一列，再按训练顺序恢复。好的接口会在调用模型前拦住这些问题。除了顺序，还要保留方法、版本、单位和预处理配置，不能只检查数字个数。'],
+ ['report','每个推荐都要带着规则、数值和局限','交互候选报告','选不同候选，查看每条教学结论是被哪条规则决定的。滑动教学风险上限，合格名单和理由会重新计算。这里用的是编造的模型接口值，不是分子的真实毒性或溶解度；排序只是说明数据怎样接起来，并不替代前面完整的评分和多样性算法。通过几个就列几个，不能为了凑满 Top10 把拒绝候选加回来。真实研究决定仍需要更多证据。'],
+ ['evaluation','分数能算出来，不代表评估方式合格','KaTeX + 分组审计 + 数据表','先核对训练与测试分组，再看数字。四行构造数据的 AUC 可以按正负样本配对复算，MAE 可以从每行绝对误差求平均。注入重叠后，这些数不会自动消失，但这份组间评估已经不合格。移除记录时应当保留缺失，不能补零。实际 scaffold 划分按化学骨架分组，解决的是特定结构重叠问题，既不能消灭所有泄漏，也不能保证所有新分子的预测准确。'],
+ ['run','沿着执行记录，看见流程在哪一站停下','逐步与自动执行轨迹','播放正常教学流程，看候选依次交出结构、特征、教学模型接口值、规则和报告。再切换无效 SMILES、特征错序和模型缺失。每一种故障都有一个具体停止点，后面的结果不能被伪造出来。这里的正常分支使用明确标注的模型替身，目的在于练习接口，总装真实工作台时必须换成经过评估的真实模型。'],
+ ['repair','由你把特征接口重新接对','键盘可操作的接口修复练习','请把实际送入的八列排成训练时的顺序。每个位置既有列名，也有对应的数值和单位，不是只看颜色的拼图。重复列、错位列和缺少列都不能通过。检查接口后读清错误在哪一列，再改正。通过这一关代表这份教学契约对上了，不代表真实模型已经训练好或性质预测已经可靠。'],
+ ['tasks','五步总装，每一步留下下一步要用的产物','动态任务与交付物追踪','先铺好接口清单，再接结构与特征，然后接真实模型和规则，再用熟分子走完整条线，最后形成报告与验收记录。每个输出都是下一步的输入，不是五个互不相干的打勾框。熟悉乙醇的结构可以帮助检查接口，但不能因此证明毒性预测一定正确。按课文模板操作，需要家长协助，不要求从零重写整套软件。'],
+ ['handoff','交出去的不是一句 Go，而是一份可追溯报告','实际 JSON 产物与证据交付','下载这份教学报告，可以看到输入、描述符、规则、候选理由、构造的评估记录以及局限。它不会冒充你的全库结果，也不会声明真实模型已通过验收。完成自己的作品，还要接入真实模型、真实 scaffold 测试证据和完整候选筛选记录。展示给同伴或老师，记下一个问题，再选择一条公开证据继续研究。Go 只是某套规则下的研究建议，绝不是医疗或用药决定。'],
+]
+const old=JSON.parse(fs.readFileSync(path.join(source,'slides.json'))).slides
+if(old.length!==records.length)throw Error('Unexpected source count')
+const slides=records.map(([scene,title,medium,audio_script],i)=>{const s=old[i],p=s.payload||{},anchor=s.lesson_anchor||(p.theory_id?{kind:'theory',id:p.theory_id}:p.idea_id?{kind:'idea',id:p.idea_id}:undefined);return {slide_id:s.slide_id,kind:s.kind,title,body_markdown:'',audio_script,audio_path:null,payload:{technical_visual:{renderer:'workbench-evidence',scene,aria_label:title}},...(anchor?{lesson_anchor:anchor}:{})}})
+const draft={project:'molecule-monster-hunter',node,version:'workbench-v1',slides},draftText=JSON.stringify(draft,null,2)+'\n'
+fs.writeFileSync(path.join(__dirname,'M90-workbench-v1.json'),draftText)
+const registry={project:draft.project,module:'M90',node,version:draft.version,status:'implemented-awaiting-QA',production_deployed:false,source_sha256:sourceHashes,draft_sha256:sha(draftText),generated_raster_images:0,interactive_3d_pages:0,decision_record:'docs/slide-image-prompts/molecule-monster-hunter-M90-workbench-v1.md',slides:records.map(([scene,title,medium],i)=>({page:i+1,source_id:old[i].slide_id,source_title:old[i].title,slide_id:slides[i].slide_id,scene,title,medium,source_anchor:slides[i].lesson_anchor||null,implementation:'workbench-evidence',pre_generation_decision:`decision_record table row ${i+1}`,provenance:'Actual RDKit structure/descriptors; mock-model-v1 fabricated predictions and synthetic evaluation groups; never a real trained capstone result',fallback:'Accessible exact text/tables, SMILES, narration and static evidence; no silent replacement with decorative assets'}))}
+fs.writeFileSync(path.join(__dirname,'M90-workbench-v1.registry.json'),JSON.stringify(registry,null,2)+'\n');console.log(JSON.stringify({slides:slides.length,draft_sha256:registry.draft_sha256,source_unchanged:true}))

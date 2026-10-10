@@ -4,6 +4,7 @@ import { ArrowUpRight } from "lucide-react"
 import type { Locale } from "@/lib/i18n/locales"
 import type { DiscoveryEntry } from "@/lib/library-discovery"
 import { PROJECT_LINES, lineHref, localized } from "@/lib/project-lines/catalog"
+import { entryInLine, fieldName } from "@/lib/project-taxonomy"
 import styles from "./project-line-view.module.css"
 
 export function ProjectLineView({ locale, entries, loading }: { locale: Locale; entries: DiscoveryEntry[]; loading: boolean }) {
@@ -14,11 +15,13 @@ export function ProjectLineView({ locale, entries, loading }: { locale: Locale; 
     </header>
     <div className={styles.lineGrid}>
       {PROJECT_LINES.map((line, index) => {
-        const ready = entries.filter(entry => entry.lineId === line.id && entry.available).length
+        const own = entries.filter(entry => entry.lineId === line.id && entry.available).length
+        const shared = entries.filter(entry => entry.lineId !== line.id && entryInLine(entry, line.id) && entry.available).length
+        const ready = own + shared
         return <Link key={line.id} href={lineHref(line.id)} className={styles.lineCard} data-line-card={line.id}>
-          <div className={styles.lineArt}><Image src={line.image} alt="" fill sizes="(max-width: 650px) 100vw, 50vw" className={styles.cover} /><span className={styles.lineNumber}>{String(index + 1).padStart(2, "0")} / {locale === "zh" ? "主题项目线" : "PROJECT LINE"}</span></div>
+          <div className={styles.lineArt}><Image src={line.image} alt="" fill sizes="(max-width: 650px) 100vw, 50vw" className={styles.cover} /><span className={styles.lineNumber}>{String(index + 1).padStart(2, "0")} / {fieldName(line.fieldId, locale)}</span></div>
           <div className={styles.lineCopy}><p className={styles.domains}>{localized(line.domains, locale)}</p><h3>{localized(line.title, locale)}</h3><p className={styles.description}>{localized(line.description, locale)}</p>
-            <div className={styles.lineFooter}><span>{loading ? (locale === "zh" ? "正在载入开放状态…" : "Loading availability…") : ready > 0 ? (locale === "zh" ? `${ready} 个项目可开始` : `${ready} projects ready`) : (locale === "zh" ? "路线已规划 · 起点筹备中" : "Route planned · Starting points in preparation")}</span><strong>{locale === "zh" ? "进入项目线" : "Explore this line"}<ArrowUpRight size={17} /></strong></div>
+            <div className={styles.lineFooter}><span>{loading ? (locale === "zh" ? "正在载入开放状态…" : "Loading availability…") : ready > 0 ? (locale === "zh" ? `${own} 个主线项目${shared ? ` · ${shared} 个跨领域项目` : ""}可开始` : `${own} primary${shared ? ` · ${shared} cross-field` : ""} projects ready`) : (locale === "zh" ? "路线已规划 · 起点筹备中" : "Route planned · Starting points in preparation")}</span><strong>{locale === "zh" ? "进入项目线" : "Explore this line"}<ArrowUpRight size={17} /></strong></div>
           </div>
         </Link>
       })}

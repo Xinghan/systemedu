@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>你来当接力队长：boosting 补错</title>
+<style>
+:root{
+  --bg-0: oklch(0.14 0.035 265);
+  --bg-1: oklch(0.18 0.04 265);
+  --bg-2: oklch(0.22 0.045 265);
+  --bg-3: oklch(0.28 0.05 265);
+  --line: oklch(0.35 0.05 265 / 0.45);
+  --fg: oklch(0.96 0.01 265);
+  --fg-dim: oklch(0.78 0.02 265);
+  --fg-mute: oklch(0.58 0.03 265);
+  --gold: oklch(0.85 0.14 85);
+  --SIGNAL: oklch(0.75 0.17 200);
+  --CORE: oklch(0.55 0.16 200);
+  --DEPTH: oklch(0.35 0.10 210);
+  --FLASH: oklch(0.92 0.08 190);
+  --QUERY: oklch(0.85 0.14 85);
+  --right: oklch(0.78 0.15 150);
+  --wrong: oklch(0.66 0.18 28);
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+html,body{height:100vh;overflow:hidden;background:var(--bg-0);
+  font-family:'PingFang SC','Inter','Noto Sans SC',sans-serif;color:var(--fg);}
+.mono{font-family:'JetBrains Mono','SF Mono',Menlo,monospace;}
+.wrapper{display:flex;height:100vh;width:100vw;}
+
+.game-sidebar{width:200px;flex-shrink:0;background:var(--bg-1);border-right:1px solid var(--line);
+  display:flex;flex-direction:column;padding:16px 14px;gap:13px;overflow-y:auto;}
+.brand{display:flex;flex-direction:column;gap:3px;}
+.brand .kicker{font-size:9px;letter-spacing:1.4px;color:var(--SIGNAL);text-transform:uppercase;}
+.brand .title{font-size:14px;font-weight:700;line-height:1.25;}
+.brand .sub{font-size:10px;color:var(--fg-mute);line-height:1.4;}
+.sb-label{font-size:9.5px;letter-spacing:1px;color:var(--fg-mute);text-transform:uppercase;}
+.goal{font-size:11px;line-height:1.5;color:var(--fg-dim);}
+.guide{display:flex;flex-direction:column;gap:7px;}
+.guide li{display:flex;gap:7px;font-size:10.5px;line-height:1.4;color:var(--fg-dim);list-style:none;}
+.guide .d{width:6px;height:6px;border-radius:50%;background:var(--SIGNAL);flex-shrink:0;margin-top:4px;}
+.ctrl{display:flex;flex-direction:column;gap:6px;}
+.ctrl label{font-size:10.5px;color:var(--fg-dim);}
+.ctrl label b{color:var(--SIGNAL);}
+input[type=range]{width:100%;accent-color:oklch(0.75 0.17 200);}
+.btn{background:var(--bg-2);border:1px solid var(--line);border-radius:8px;padding:9px 0;
+  font-size:11.5px;font-weight:600;color:var(--fg);cursor:pointer;transition:all .15s ease;
+  font-family:inherit;width:100%;}
+.btn:hover{border-color:var(--SIGNAL);color:var(--SIGNAL);}
+.btn.primary{background:var(--CORE);border-color:var(--SIGNAL);color:var(--bg-0);}
+.btn.primary:hover{background:var(--SIGNAL);}
+.btn:disabled{opacity:.4;cursor:not-allowed;}
+.lang-btn{margin-top:auto;}
+
+.main{flex:1;position:relative;display:flex;flex-direction:column;min-width:0;}
+.stage-wrap{flex:1;position:relative;display:flex;flex-direction:column;min-height:0;}
+canvas{position:absolute;inset:0;width:100%;height:100%;display:block;}
+.hud{position:absolute;top:14px;right:18px;display:flex;gap:14px;align-items:center;
+  background:var(--bg-1);border:1px solid var(--line);border-radius:8px;padding:8px 14px;}
+.hud .h-cell{display:flex;flex-direction:column;gap:2px;}
+.hud .h-k{font-size:8.5px;color:var(--fg-mute);letter-spacing:.6px;}
+.hud .h-v{font-size:15px;font-weight:700;}
+.hud .sig{color:var(--SIGNAL);}.hud .warn{color:var(--wrong);}.hud .ok{color:var(--right);}
+.banner{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+  background:var(--bg-1);border:1.5px solid var(--SIGNAL);border-radius:12px;padding:20px 30px;
+  text-align:center;display:none;z-index:5;}
+.banner.show{display:block;}
+.banner .bt{font-size:20px;font-weight:800;color:var(--FLASH);}
+.banner .bt.bad{color:var(--wrong);}
+.banner .bs{font-size:12.5px;color:var(--fg-dim);margin-top:8px;line-height:1.5;max-width:340px;}
+.tip{position:absolute;bottom:14px;left:50%;transform:translateX(-50%);
+  font-size:12.5px;color:var(--fg-dim);text-align:center;width:80%;}
+</style>
+</head>
+<body>
+<div class="wrapper">
+  <aside class="game-sidebar">
+    <div class="brand">
+      <span class="kicker mono" data-i18n="kicker">XGBOOST · M62</span>
+      <span class="title" data-i18n="title">你来当接力队长</span>
+      <span class="sub" data-i18n="sub">用 boosting 接力补错，把全部分子判对</span>
+    </div>
+    <div class="sb-label" data-i18n="goalLabel">目标</div>
+    <div class="goal" data-i18n="goal">桌上 16 个分子，有判对(绿)有判错(红)。每回合派一棵新树，它只能补还判错的红分子，不许碰已判对的绿分子。用最少的树把全部补对。</div>
+    <div class="sb-label" data-i18n="howLabel">怎么玩</div>
+    <ul class="guide">
+      <li><span class="d"></span><span data-i18n="h1">拖滑块选这棵树「补多狠」(补错步长)</span></li>
+      <li><span class="d"></span><span data-i18n="h2">点「派下一棵树」让它接力补红的</span></li>
+      <li><span class="d"></span><span data-i18n="h3">补太狠会过头把绿的带翻 → 翻车</span></li>
+    </ul>
+    <div class="ctrl">
+      <label><span data-i18n="lr">补错步长 lr = </span><b id="lblLr">0.3</b></label>
+      <input id="sliderLr" type="range" min="0.1" max="0.9" value="0.3" step="0.1">
+    </div>
+    <button id="btnTree" class="btn primary" data-i18n="btnTree">派下一棵树</button>
+    <button id="btnReset" class="btn" data-i18n="btnReset">重玩</button>
+    <button id="langBtn" class="btn lang-btn">中 / EN</button>
+  </aside>
+
+  <main class="main">
+    <div class="stage-wrap">
+      <div class="hud">
+        <div class="h-cell"><span class="h-k mono" data-i18n="hTree">TREES</span><span class="h-v sig mono" id="hTree">0</span></div>
+        <div class="h-cell"><span class="h-k mono" data-i18n="hWrong">WRONG</span><span class="h-v warn mono" id="hWrong">3</span></div>
+        <div class="h-cell"><span class="h-k mono" data-i18n="hAcc">ACC</span><span class="h-v ok mono" id="hAcc">81%</span></div>
+      </div>
+      <canvas id="stage"></canvas>
+      <div class="banner" id="banner">
+        <div class="bt" id="bannerT"></div>
+        <div class="bs" id="bannerS"></div>
+      </div>
+      <div class="tip" id="tip"></div>
+    </div>
+  </main>
+</div>
+
+<script>
+var gameState={lang:'cn',treesUsed:0,lr:0.3,over:false};
+var canvas=document.getElementById('stage');
+var ctx=canvas.getContext('2d');
+var DPR=Math.max(1,window.devicePixelRatio||1);
+
+// === dataset_v7 真实分子 (RDKit 真值, 溶解度化学正确, 与 anim 完全一致) ===
+var MOLS=[
+ {n:"葡萄糖",e:"glucose",     logp:-3.22,sol:1},
+ {n:"尿素",  e:"urea",        logp:-0.98,sol:1},
+ {n:"甲醇",  e:"methanol",    logp:-0.39,sol:1},
+ {n:"乙酸",  e:"acetic acid", logp:0.09, sol:1},
+ {n:"丙酮",  e:"acetone",     logp:0.60, sol:1},
+ {n:"吡啶",  e:"pyridine",    logp:1.08, sol:1},
+ {n:"苯酚",  e:"phenol",      logp:1.39, sol:1},
+ {n:"苯胺",  e:"aniline",     logp:1.27, sol:0},
+ {n:"阿司匹林",e:"aspirin",   logp:1.31, sol:0},
+ {n:"扑热息痛",e:"paracetamol",logp:1.35,sol:0},
+ {n:"萘",    e:"naphthalene", logp:2.84, sol:0},
+ {n:"苯",    e:"benzene",     logp:1.69, sol:0},
+ {n:"甲苯",  e:"toluene",     logp:2.0,  sol:0},
+ {n:"辛烷",  e:"octane",      logp:3.37, sol:0},
+ {n:"己烷",  e:"hexane",      logp:2.59, sol:0},
+ {n:"环己烷",e:"cyclohexane", logp:2.34, sol:0}
+];
+// 接力序列 (design_final_v7.py):
+//   tree1 LogP<=0.3 错 [丙酮,吡啶,苯酚]
+//   tree2 极性接力 补 丙酮,吡啶 (剩苯酚)
+//   tree3 单羟基酚补 苯酚 (全对)
+var STAGE_RIGHT=[
+ // 起始: tree1 已判 (treesUsed=0 时显示)
+ MOLS.map(function(m){return (m.logp<=0.3?1:0)===m.sol;}),
+ // 派 1 棵后 = tree2 结果
+ MOLS.map(function(m){return m.e!=="phenol";}),
+ // 派 2 棵后 = tree3 结果 全对
+ MOLS.map(function(){return true;})
+];
+var WRONG=[3,1,0];
+var ACC=["81%","94%","100%"];
+// 当前每个分子是否判对 (从 stage 派生 + 过头翻车)
+var current=STAGE_RIGHT[0].slice();
+var crashed=false;
+
+var I18N={
+ kicker:{cn:'XGBOOST · M62',en:'XGBOOST · M62'},
+ title:{cn:'你来当接力队长',en:'Be the relay captain'},
+ sub:{cn:'用 boosting 接力补错，把全部分子判对',en:'Use boosting relay to fix every molecule'},
+ goalLabel:{cn:'目标',en:'GOAL'},
+ goal:{cn:'桌上 16 个分子，有判对(绿)有判错(红)。每回合派一棵新树，它只能补还判错的红分子，不许碰已判对的绿分子。用最少的树把全部补对。',
+   en:'16 molecules: some right (green), some wrong (red). Each round send one new tree — it only fixes the red ones, never touches greens. Fix them all in as few trees as possible.'},
+ howLabel:{cn:'怎么玩',en:'HOW TO PLAY'},
+ h1:{cn:'拖滑块选这棵树「补多狠」(补错步长)',en:'Drag slider to set how hard this tree corrects (step size)'},
+ h2:{cn:'点「派下一棵树」让它接力补红的',en:'Click "send next tree" to relay-fix the reds'},
+ h3:{cn:'补太狠会过头把绿的带翻 → 翻车',en:'Correcting too hard overshoots and flips greens → crash'},
+ lr:{cn:'补错步长 lr = ',en:'step size lr = '},
+ btnTree:{cn:'派下一棵树',en:'Send next tree'},
+ btnReset:{cn:'重玩',en:'Replay'},
+ hTree:{cn:'TREES',en:'TREES'},
+ hWrong:{cn:'WRONG',en:'WRONG'},
+ hAcc:{cn:'ACC',en:'ACC'}
+};
+
+function applyI18N(){
+ var lang=gameState.lang;
+ document.querySelectorAll('[data-i18n]').forEach(function(el){
+   var k=el.getAttribute('data-i18n');
+   if(I18N[k]) el.textContent=I18N[k][lang];
+ });
+ document.getElementById('langBtn').textContent=lang==='cn'?'中 / EN':'EN / 中';
+ document.getElementById('lblLr').textContent=gameState.lr.toFixed(1);
+ updateTip();
+}
+
+function cssVar(name){return getComputedStyle(document.documentElement).getPropertyValue(name).trim();}
+
+function resize(){
+ var r=canvas.getBoundingClientRect();
+ if(r.width<1||r.height<1) return;
+ canvas.width=r.width*DPR; canvas.height=r.height*DPR;
+ ctx.setTransform(DPR,0,0,DPR,0,0);
+ draw();
+}
+
+function wrongCount(){var w=0;for(var i=0;i<current.length;i++)if(!current[i])w++;return w;}
+function accStr(){return Math.round((current.length-wrongCount())/current.length*100)+"%";}
+
+function draw(){
+ var r=canvas.getBoundingClientRect();
+ var W=r.width,H=r.height;
+ ctx.clearRect(0,0,W,H);
+
+ // memory grid
+ ctx.strokeStyle=cssVar('--line');ctx.lineWidth=1;
+ var gs=46;
+ for(var gx=gs;gx<W;gx+=gs){ctx.beginPath();ctx.moveTo(gx,56);ctx.lineTo(gx,H-46);ctx.stroke();}
+ for(var gy=70;gy<H-46;gy+=gs){ctx.beginPath();ctx.moveTo(36,gy);ctx.lineTo(W-36,gy);ctx.stroke();}
+
+ ctx.fillStyle=cssVar('--SIGNAL');
+ ctx.font='700 19px JetBrains Mono, monospace';
+ ctx.textAlign='left';
+ ctx.fillText(gameState.lang==='cn'?'接力补错赛场':'RELAY ARENA',44,42);
+
+ var cols=4,rows=4;
+ var availW=W-280, availH=H-160;
+ var cell=Math.min(availW/cols, availH/rows);
+ var gridW=cell*cols, gridH=cell*rows;
+ var ox=(W-gridW)/2, oy=82;
+ var cw=gridW/cols, ch=gridH/rows;
+ var colR=cssVar('--right'), colW=cssVar('--wrong');
+
+ MOLS.forEach(function(m,i){
+   var c=i%cols, rr=Math.floor(i/cols);
+   var cx=ox+c*cw+cw/2, cy=oy+rr*ch+ch/2;
+   var rad=Math.min(cw,ch)*0.30;
+   var ok=current[i];
+   ctx.beginPath();ctx.arc(cx,cy,rad,0,Math.PI*2);
+   ctx.fillStyle=ok?colR:colW;ctx.globalAlpha=ok?0.96:0.92;ctx.fill();ctx.globalAlpha=1;
+   ctx.fillStyle=cssVar('--fg');
+   ctx.font='600 12px PingFang SC, sans-serif';ctx.textAlign='center';
+   ctx.fillText(gameState.lang==='cn'?m.n:m.e,cx,cy+rad+16);
+   ctx.fillStyle=cssVar('--bg-0');
+   ctx.font='700 10px JetBrains Mono, monospace';
+   ctx.fillText(m.logp.toFixed(1),cx,cy+3.5);
+ });
+}
+
+function updateHUD(){
+ document.getElementById('hTree').textContent=String(gameState.treesUsed+1);
+ var we=document.getElementById('hWrong');
+ var w=wrongCount();
+ we.textContent=String(w);
+ we.className='h-v mono '+(w===0?'ok':'warn');
+ document.getElementById('hAcc').textContent=accStr();
+}
+
+function updateTip(){
+ var tip=document.getElementById('tip');
+ if(gameState.over) return;
+ var w=wrongCount();
+ if(gameState.lang==='cn'){
+   tip.textContent=w>0?('还有 '+w+' 个红分子没补 —— 派下一棵树接力补它们'):'';
+ }else{
+   tip.textContent=w>0?(w+' reds left — send the next tree to relay-fix them'):'';
+ }
+}
+
+function showBanner(bad,zh,en){
+ var b=document.getElementById('banner');
+ var t=document.getElementById('bannerT');
+ t.className='bt'+(bad?' bad':'');
+ t.textContent=gameState.lang==='cn'?(bad?'补过头，翻车了':'全部判对，过关！'):(bad?'Overshoot — crashed':'All correct — win!');
+ document.getElementById('bannerS').textContent=gameState.lang==='cn'?zh:en;
+ b.classList.add('show');
+}
+
+function sendTree(){
+ if(gameState.over) return;
+ // 补太狠 (lr 高) 在最后一关有概率过头, 把已判对的绿带翻 = 翻车教学
+ var nextStage=gameState.treesUsed+1;
+ if(gameState.lr>=0.7 && nextStage>=1){
+   // 过头: 随机把 2 个原本判对的翻成红
+   crashed=true;
+   var flipped=0;
+   for(var i=0;i<current.length && flipped<2;i++){
+     if(current[i]){current[i]=false;flipped++;}
+   }
+   gameState.treesUsed=nextStage;gameState.over=true;
+   updateHUD();draw();
+   showBanner(true,
+     '补错步长 lr 调太大('+gameState.lr.toFixed(1)+')，这棵树补过头，把本来判对的也带翻了——这就是 boosting 的软肋：过拟合。把 lr 调小、慢慢补才稳。',
+     'lr too large ('+gameState.lr.toFixed(1)+'): the tree overshoots and flips correct ones — boosting’s weakness: overfitting. Lower lr and correct slowly.');
+   document.getElementById('btnTree').disabled=true;
+   return;
+ }
+ gameState.treesUsed=nextStage;
+ current=STAGE_RIGHT[Math.min(nextStage,STAGE_RIGHT.length-1)].slice();
+ updateHUD();draw();updateTip();
+ if(wrongCount()===0){
+   gameState.over=true;
+   document.getElementById('btnTree').disabled=true;
+   showBanner(false,
+     '只用了 '+(gameState.treesUsed+1)+' 棵树，一棵接一棵接力补错，把全部 16 个分子补对！注意每棵新树只碰红的、不碰绿的——这就是 boosting，和随机森林「各自投票」完全不同。',
+     'Just '+(gameState.treesUsed+1)+' trees, relay-fixing all 16! Each tree only touched the reds — that is boosting, opposite of random forest voting.');
+ }
+}
+
+function resetGame(){
+ gameState.treesUsed=0;gameState.over=false;crashed=false;
+ current=STAGE_RIGHT[0].slice();
+ document.getElementById('btnTree').disabled=false;
+ document.getElementById('banner').classList.remove('show');
+ updateHUD();draw();updateTip();
+}
+
+document.getElementById('sliderLr').addEventListener('input',function(e){
+ gameState.lr=parseFloat(e.target.value);
+ document.getElementById('lblLr').textContent=gameState.lr.toFixed(1);
+ updateTip();
+});
+document.getElementById('btnTree').addEventListener('click',sendTree);
+document.getElementById('btnReset').addEventListener('click',resetGame);
+document.getElementById('langBtn').addEventListener('click',function(){
+ gameState.lang=gameState.lang==='cn'?'en':'cn';
+ applyI18N();draw();updateTip();
+});
+
+window.addEventListener('resize',resize);
+document.fonts&&document.fonts.ready.then(function(){resize();});
+applyI18N();
+updateHUD();
+resize();
+setTimeout(resize,200);
+setTimeout(resize,600);
+</script>
+</body>
+</html>

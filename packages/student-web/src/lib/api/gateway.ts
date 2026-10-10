@@ -16,6 +16,8 @@
 import { STUDENT_API_URL } from "./client"
 import { myProjects, type LibraryKnodeContent } from "./index"
 import { getToken } from "@/lib/auth"
+import { MOLECULE_NUMBERING_VERSION } from "@/lib/course-numbering"
+import { normalizeSlides } from "@/lib/normalize-slides"
 import type {
   CourseAssignmentData,
   CourseContentData,
@@ -33,7 +35,7 @@ async function fetchInlineHtml(slug: string, path: string): Promise<string | nul
     // spec 033: 走本地 clone (/api/my/projects/) 而不是 library 代理
     const url = `${STUDENT_API_URL}/api/my/projects/${encodeURIComponent(slug)}/files/${path}`
     const res = await fetch(url, {
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      headers: { "X-Course-Numbering": MOLECULE_NUMBERING_VERSION, ...(token ? { Authorization: `Bearer ${token}` } : {}) },
     })
     if (!res.ok) return null
     return await res.text()
@@ -100,6 +102,8 @@ function knodeToCourseContent(k: LibraryKnodeContent): CourseContentData {
     status: "ready",
     version_label: k.version || "v1",
     is_active: true,
+    slides: normalizeSlides(k.slides, k.knode_id),
+    knode_dir: k.knode_dir || `knodes/${k.knode_id}`,
     course_content: {
       plan_markdown: k.plan_markdown || "",
       ideas: ideasOut as never,
