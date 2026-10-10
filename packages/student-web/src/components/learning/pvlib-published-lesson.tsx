@@ -1,7 +1,8 @@
 "use client"
 
 import Link from "next/link"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
+import { energyContext, energyLibraryHref, energyLessonHref } from "@/lib/project-lines/energy-mission"
 import { useEffect, useState, type ComponentProps } from "react"
 import { PageLoading } from "@/components/ui/page-loading"
 import { library, myProjects } from "@/lib/api"
@@ -52,13 +53,17 @@ function PracticeDownload({ token }: { token: string }) {
 
 export function PvlibPublishedLesson({ moduleId }: { moduleId: string }) {
   const router = useRouter()
+  const search = useSearchParams()
+  const energy = energyContext(PVLIB_SLUG, moduleId, search.get("mission") === "energy")
+  const returnPath = energy ? energyLessonHref(energy.node.ref) : `/learn/${PVLIB_SLUG}/${moduleId}`
+  const libraryPath = energy ? energyLibraryHref(PVLIB_SLUG, moduleId) : `/library/${PVLIB_SLUG}`
   const { token, owner } = useLearningIdentity()
   const [loaded, setLoaded] = useState<{ owner: string; lesson: Lesson } | null>(null)
   const [error, setError] = useState("")
   const [retry, setRetry] = useState(0)
   useEffect(() => {
-    if (!getToken()) router.replace(`/login?next=${encodeURIComponent(`/learn/${PVLIB_SLUG}/${moduleId}`)}`)
-  }, [router, moduleId, token])
+    if (!getToken()) router.replace(`/login?next=${encodeURIComponent(returnPath)}`)
+  }, [router, returnPath, token])
   useEffect(() => {
     if (!token) return
     const controller = new AbortController()
@@ -99,14 +104,14 @@ export function PvlibPublishedLesson({ moduleId }: { moduleId: string }) {
     }
     void load().catch(reason => {
       if (controller.signal.aborted) return
-      if (reason instanceof CourseRequestError && reason.status === 401) router.replace(`/login?next=${encodeURIComponent(`/learn/${PVLIB_SLUG}/${moduleId}`)}`)
-      else if (reason instanceof CourseRequestError && reason.status === 403) router.replace(`/library/${PVLIB_SLUG}`)
+      if (reason instanceof CourseRequestError && reason.status === 401) router.replace(`/login?next=${encodeURIComponent(returnPath)}`)
+      else if (reason instanceof CourseRequestError && reason.status === 403) router.replace(libraryPath)
       else setError("课程未能载入，请重试。")
     })
     return () => { controller.abort(); urls.forEach(url => URL.revokeObjectURL(url)) }
-  }, [moduleId, token, owner, retry, router])
+  }, [moduleId, token, owner, retry, router, returnPath, libraryPath])
 
-  if (error) return <main className={styles.page}><p role="alert">{error}</p><button type="button" onClick={() => { setError(""); setRetry(value => value + 1) }}>重新加载</button><Link href={`/library/${PVLIB_SLUG}`}>返回项目</Link></main>
+  if (error) return <main className={styles.page}><p role="alert">{error}</p><button type="button" onClick={() => { setError(""); setRetry(value => value + 1) }}>重新加载</button><Link href={libraryPath}>返回项目</Link></main>
   if (!token || !loaded || loaded.owner !== owner || loaded.lesson.moduleId !== moduleId) {
     return <main role="status" aria-busy="true"><PageLoading label="正在载入课程…" /></main>
   }

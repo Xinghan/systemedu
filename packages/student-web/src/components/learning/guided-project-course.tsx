@@ -1,6 +1,9 @@
 "use client"
 
 import Link from "next/link"
+import { energyContext, energyMapHref } from "@/lib/project-lines/energy-mission"
+import { EnergyLessonBrief, EnergyLessonOutline, EnergyLessonFooter } from "@/components/mission/energy-mission-lesson"
+
 import { bioContext, bioMapHref } from "@/lib/project-lines/biomed-mission"
 import { BiomedLessonBrief, BiomedLessonOutline, BiomedLessonFooter } from "@/components/mission/biomed-mission-lesson"
 
@@ -26,6 +29,8 @@ import { RoverSystemWorkspace } from "./rover-system-workspace"
 import { PROJECT_LEVELS } from "@/lib/project-lines/levels"
 import { primaryProjectLine } from "@/lib/project-taxonomy"
 import { BiomedProjectWorkspace } from "./biomed-project-workspace"
+import legacyEnergyCourses from "@/lib/project-lines/energy-courses.json"
+import { EnergyCourseWorkspace } from "./energy-workspace"
 import { RenewableCourseWorkspace } from "./renewable-workspace"
 import { BionicsCourseWorkspace } from "./bionics-workspace"
 import { EarthCourseWorkspace } from "./earth-workspace"
@@ -45,8 +50,9 @@ function GuidedCourseSession({ course, token, owner }: { course: GuidedCourse; t
   const current = course.modules.find(node => node.module_id === search.get("node")) ?? course.modules[0]
   const mission = missionContext(course.id, current.module_id, search.get("mission") === "space" && !course.legacy_edition)
   const bio = bioContext(course.id,current.module_id,search.get("mission")==="biomedicine")
-  const lineHref = bio ? bioMapHref(bio.station.id) : mission ? missionMapHref(mission.station.id) : journeyStationFor(course.id) ? journeyHref(course.id) : `/library?view=lines&line=${displayLine?.id || lineId}`
-  const lineTitle = bio ? "分子寻药 · 研究任务" : journeyStationFor(course.id) ? "星际远航 · 任务中心" : displayLine?.title.zh || "项目线"
+  const energy = energyContext(course.id,current.module_id,search.get("mission")==="energy")
+  const lineHref = energy ? energyMapHref(energy.station.id) : bio ? bioMapHref(bio.station.id) : mission ? missionMapHref(mission.station.id) : journeyStationFor(course.id) ? journeyHref(course.id) : `/library?view=lines&line=${displayLine?.id || lineId}`
+  const lineTitle = energy ? "未来能源 · 工程任务" : bio ? "分子寻药 · 研究任务" : journeyStationFor(course.id) ? "星际远航 · 任务中心" : displayLine?.title.zh || "项目线"
   const edition = course.legacy_edition ? "edition=1&" : ""
   const index = course.modules.indexOf(current)
   const [record, setRecord] = useState<CourseRecord>(() => newCourseRecord(course))
@@ -98,17 +104,17 @@ function GuidedCourseSession({ course, token, owner }: { course: GuidedCourse; t
   if (missionEnabled && !mission && !search.get("node")) return <RoverMissionCenter course={course} record={record} loaded={loaded} failed={failedNodes} token={token} owner={owner} retry={() => setLoadAttempt(n => n + 1)} />
   return <main className={styles.page} data-guided-course={course.id}>
     <header className={styles.header}><Link href={lineHref}><ArrowLeft size={15} />{lineTitle}</Link><span>引导课程 / 学习、实践、交付</span></header>
-    {mission ? <MissionLessonBrief context={mission}/> : bio ? <BiomedLessonBrief context={bio}/> : <SpaceJourneyProjectBanner projectId={course.id} />}
+    {mission ? <MissionLessonBrief context={mission}/> : bio ? <BiomedLessonBrief context={bio}/> : energy ? <EnergyLessonBrief context={energy}/> : <SpaceJourneyProjectBanner projectId={course.id} />}
     {["assemble-a-rover", "run-an-expedition"].includes(course.id) && <p className={styles.editionNote}>{course.legacy_edition ? "当前为旧版虚拟课程，原记录保留。" : `${course.id === "run-an-expedition" ? "04 现场挑战" : "03 系统制作"} · 数字原型可以先完成，正式交付需要实物证据。`} <Link href={`/explore/space-exploration/${course.id}${course.legacy_edition ? "" : "?edition=1"}`}>{course.legacy_edition ? "进入新版实物课程" : "查看旧版课程与原记录"}</Link></p>}
     {missionEnabled && !mission && <RoverNodeBrief course={course} node={current} record={record} loaded={loaded} failed={failedNodes} />}
-    {!missionEnabled && !mission && !bio && <section className={styles.hero}>
+    {!missionEnabled && !mission && !bio && !energy && <section className={styles.hero}>
       <div><p className={styles.eyebrow}>{course.level ? `0${course.level} · ${PROJECT_LEVELS.find(level => level.level === course.level)?.title.zh}` : "从操作，走向理解与制作"}</p><h1>{course.title}</h1><p className={styles.subtitle}>{course.subtitle}</p><p className={styles.audience}>{course.audience}</p></div>
       <div className={styles.courseFacts}><div><strong>{course.modules.length}</strong><span>学习节点</span></div><div><strong>{course.estimated_minutes}<small> 分钟</small></strong><span>累计设计目标 · 可分次完成</span></div><p>{course.outcome}</p></div>
     </section>}
-    {!missionEnabled && !mission && !bio && course.final_deliverable && <section className={styles.projectGoal} aria-label="最终作品目标"><div><p className={styles.eyebrow}>做完后，你会拥有</p><h2>{course.final_deliverable.title}</h2><ul>{course.final_deliverable.parts.map(part => <li key={part}>{part}</li>)}</ul><p className={styles.goalAcceptance}>怎样验收：{course.final_deliverable.acceptance.join("；")}。</p></div><Link href={`/explore/${lineId}/${course.id}?${edition}node=${course.final_deliverable.module_id}#project-delivery`}>查看我的最终作品<ArrowRight size={16} /></Link></section>}
+    {!missionEnabled && !mission && !bio && !energy && course.final_deliverable && <section className={styles.projectGoal} aria-label="最终作品目标"><div><p className={styles.eyebrow}>做完后，你会拥有</p><h2>{course.final_deliverable.title}</h2><ul>{course.final_deliverable.parts.map(part => <li key={part}>{part}</li>)}</ul><p className={styles.goalAcceptance}>怎样验收：{course.final_deliverable.acceptance.join("；")}。</p></div><Link href={`/explore/${lineId}/${course.id}?${edition}node=${course.final_deliverable.module_id}#project-delivery`}>查看我的最终作品<ArrowRight size={16} /></Link></section>}
     <div className={styles.layout}>
       <aside className={styles.outline} aria-label="课程学习路径">
-        {mission ? <MissionLessonOutline station={mission.station} current={mission.primary}/> : bio ? <BiomedLessonOutline context={bio}/> : <><p className={styles.eyebrow}>你的学习路径</p>
+        {mission ? <MissionLessonOutline station={mission.station} current={mission.primary}/> : bio ? <BiomedLessonOutline context={bio}/> : energy ? <EnergyLessonOutline context={energy}/> : <><p className={styles.eyebrow}>你的学习路径</p>
         {course.stages.map(stage => <section key={stage.stage_id}><h2>{stage.title}</h2>{course.modules.filter(node => node.stage_id === stage.stage_id).map(node => <Link key={node.module_id} href={`?${edition}node=${node.module_id}`} aria-current={node.module_id === current.module_id ? "step" : undefined} className={styles.nodeLink} onClick={() => setLabOpen(false)}><span>{node.module_id}</span><div><strong>{node.title}</strong><small>{node.estimated_minutes} 分钟目标 · {record.nodes[node.module_id]?.submitted_at ? "已提交记录" : "待学习记录"}</small></div><ArrowRight size={13} /></Link>)}</section>)}
         <div className={styles.progress}><span>已提交学习记录</span><strong data-course-progress>{submitted} / {course.modules.length}</strong>{loadMessage && <p role="status">{loadMessage}</p>}<p>{token ? "记录按账号自动保存，随时回来继续。" : "未登录时记录仅保存在本机。"}提交记录不等于评定掌握。</p><a className={styles.returnToNotebook} href="#lesson-notebook">回到本节记录 <ArrowRight size={14} /></a><details className={styles.courseBackup}><summary>课程记录选项</summary><p>需要离线副本时，再导出整门课程的已读取记录。</p><button onClick={download} disabled={!loaded}><Download size={14} />下载课程记录</button></details></div>
         </>}
@@ -125,13 +131,13 @@ function GuidedCourseSession({ course, token, owner }: { course: GuidedCourse; t
           {current.lab && <div className={styles.lab}><div><FlaskConical size={20} /><div><h4>驾驶规则实验工具</h4><p>用它完成本节任务；实验结果和课程学习记录分别保存。</p></div></div><div className={styles.labActions}><button onClick={() => setLabOpen(!labOpen)}>{labOpen ? "收起实验工具" : "打开本节实验"}<ArrowRight size={15} /></button><a href={course.lab_url} target="_blank" rel="noreferrer">独立窗口操作 <ExternalLink size={13} /></a></div>{labOpen && <iframe src={course.lab_url} title="驾驶规则实验工具" className={styles.labFrame} />}</div>}
           {course.id === "assemble-a-rover" && course.version === "2.0" ? <RoverSystemWorkspace course={course} node={current} /> : course.id === "run-an-expedition" && course.version === "2.0" ? <ExpeditionSystemWorkspace course={course} node={current} /> : isSpaceCourse(course.id) && <SpaceProjectWorkspace course={course} node={current} />}
           {lineId === "biomedicine" && <BiomedProjectWorkspace course={course} node={current} />}
-          {lineId === "energy-motion" && <RenewableCourseWorkspace course={course} node={current} />}
+          {lineId === "energy-motion" && (legacyEnergyCourses.some(p => p.id === course.id) ? <EnergyCourseWorkspace course={course} node={current} /> : <RenewableCourseWorkspace course={course} node={current} />)}
           {lineId === "neuro-bionics" && <BionicsCourseWorkspace course={course} node={current} />}
           {lineId === "earth-discovery" && <EarthCourseWorkspace course={course} node={current} />}
           <GuidedCourseNotebook key={current.module_id} course={course} node={current} onRecord={onRecord} />
         </section>
         {mission && <MissionSupportingLessons context={mission}/>}
-        {mission ? <MissionLessonFooter context={mission}/> : bio ? <BiomedLessonFooter context={bio}/> : <footer className={styles.nodeFooter}>{index > 0 ? <Link href={`?${edition}node=${course.modules[index - 1].module_id}`} onClick={() => setLabOpen(false)}><ArrowLeft size={14} />上一节点</Link> : <span />}{index < course.modules.length - 1 ? <Link href={`?${edition}node=${course.modules[index + 1].module_id}`} onClick={() => setLabOpen(false)}>下一节点：{course.modules[index + 1].title}<ArrowRight size={14} /></Link> : <Link href={lineHref}>回到项目线<ArrowRight size={14} /></Link>}</footer>}
+        {mission ? <MissionLessonFooter context={mission}/> : bio ? <BiomedLessonFooter context={bio}/> : energy ? <EnergyLessonFooter context={energy}/> : <footer className={styles.nodeFooter}>{index > 0 ? <Link href={`?${edition}node=${course.modules[index - 1].module_id}`} onClick={() => setLabOpen(false)}><ArrowLeft size={14} />上一节点</Link> : <span />}{index < course.modules.length - 1 ? <Link href={`?${edition}node=${course.modules[index + 1].module_id}`} onClick={() => setLabOpen(false)}>下一节点：{course.modules[index + 1].title}<ArrowRight size={14} /></Link> : <Link href={lineHref}>回到项目线<ArrowRight size={14} /></Link>}</footer>}
       </article>
     </div>
   </main>

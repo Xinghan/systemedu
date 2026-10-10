@@ -1,4 +1,8 @@
 'use client'
+import { useSearchParams } from 'next/navigation'
+import { EnergyBriefing } from '@/components/mission/energy-briefing'
+import { EnergyWorkStrip } from '@/components/mission/energy-mission-lesson'
+
 import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { STLExporter } from 'three/examples/jsm/exporters/STLExporter.js'
@@ -42,5 +46,5 @@ export function RenewableWorkspace({id,node='M01',micro=false}:{id:string;node?:
  {(micro||last)&&<>{!micro&&physical&&<EnergyDelivery id={id} a={a} ready={!locked} prototype/>}<EnergyDelivery id={id} a={a} ready={!locked} micro={micro}/></>}
  </>
 }
-export function RenewableMicroProject({id,title}:{id:string;title:string}){const identity=useLearningIdentity();return <main className={styles.microPage}><Link href="/library?view=lines&line=energy-motion">← 未来能源</Link><header><p className={styles.eyebrow}>风、光与自己的发明 / 约 3 分钟</p><h1>{title}</h1><p>打开就能开始。先试一次，再改变一个选择，留下一份自己的结果。</p></header><RenewableWorkspace key={`${id}:${identity.owner}`} id={id} micro/><nav className={styles.next}><Link href={`/explore/energy-motion/${MODES[id]==='solar'?'build-a-solar-tracker':MODES[id]==='wind'?'design-a-wind-rotor':'store-energy-for-later'}`}>下一步：把发现做成自己的装置 →</Link></nav></main>}
+export function RenewableMicroProject({id,title}:{id:string;title:string}){const identity=useLearningIdentity();const mission=useSearchParams().get("mission")==="energy";return <main className={styles.microPage}><Link href={mission?"/mission/energy":"/library?view=lines&line=energy-motion"}>← 未来能源</Link><header><p className={styles.eyebrow}>风、光与自己的发明 / 约 3 分钟</p><h1>{title}</h1><p>打开就能开始。先试一次，再改变一个选择，留下一份自己的结果。</p></header>{mission&&<><EnergyWorkStrip taskId={"micro:"+id}/><EnergyBriefing stationId="discovery"/></>}<RenewableWorkspace key={`${id}:${identity.owner}`} id={id} micro/><nav className={styles.next}><Link href={`/explore/energy-motion/${MODES[id]==='solar'?'build-a-solar-tracker':MODES[id]==='wind'?'design-a-wind-rotor':'store-energy-for-later'}${mission?'?mission=energy':''}`}>下一步：把发现做成自己的装置 →</Link></nav></main>}
 export function RenewableCourseWorkspace({course,node}:{course:GuidedCourse;node:GuidedModule}){return <RenewableWorkspace id={course.id} node={node.module_id}/>}
