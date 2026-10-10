@@ -34,9 +34,11 @@ function ControlSession({config}:{config:MissionControlConfig}) {
   const [nodes,setNodes]=useState(initialMissionProgress),[attempt,setAttempt]=useState(0)
   const [query,setQuery]=useState("")
   const root=useRef<HTMLElement>(null),[replay,setReplay]=useState(0)
+  const [arrivalReady,setArrivalReady]=useState("")
   const fallback=ops ? TASKS.find(t=>taskState(ops,t.id).status==="active") || TASKS.find(t=>t.role==="micro"&&taskState(ops,t.id).status!=="done") || taskById(MISSION_STEPS.find(id=>taskState(ops,id).status!=="done")||MISSION_STEPS[0])! : TASKS[0]
   const task=taskById(search.get("task")||"")||fallback
   const station=missionStation(task.station)!
+  const arrivalKey=`${station.id}:${view}:${replay}`
   const select=(id:string,nextView=view)=>{const q=new URLSearchParams({task:id});if(nextView!=="desk")q.set("view",nextView);router.replace(`${CONTROL_HREF}?${q}`,{scroll:false})}
   const selectStation=(id:string,nextView=view)=>{
     const options=TASKS.filter(t=>t.station===id&&(t.role==="lesson"||t.role==="micro"))
@@ -63,7 +65,7 @@ function ControlSession({config}:{config:MissionControlConfig}) {
   const nextTaskId=task.role==="micro"?MISSION_STEPS[0]:sourceNode(task)?.anchor||MISSION_STEPS[MISSION_STEPS.indexOf(task.id)+1]
   const stationDone=ops?station.steps.filter(id=>taskState(ops,id).status==="done").length:0
   return <main ref={root} className={s.center} data-mission-control data-room={station.id}>
-    <MissionRoomArrival key={`${station.id}:${view}:${replay}`} station={station} skin={config.skin} moduleName={VIEWS.find(v=>v.id===view)!.label} root={root}/>
+    <MissionRoomArrival key={arrivalKey} station={station} skin={config.skin} moduleName={VIEWS.find(v=>v.id===view)!.label} root={root} onFinished={()=>setArrivalReady(arrivalKey)}/>
     <header className={s.topbar}><Link href={config.home}><ArrowLeft size={15}/>任务首页</Link><span><Radio size={15}/> {config.title} / 任务中心</span><Link href={`/library?view=lines&line=${config.line}`}>项目资料库<ArrowUpRight size={14}/></Link></header>
     <section className={s.command} aria-label="远征总览">
       <MissionRoomBackdrop key={station.id} station={station.id} skin={config.skin} className={s.roomScene}/>
@@ -72,7 +74,7 @@ function ControlSession({config}:{config:MissionControlConfig}) {
       <div className={s.stats} data-room-reveal="chrome"><div><small>主线自检完成</small><strong data-main-progress>{record.ready?progress.done:"—"}<span> / {progress.total}</span></strong><progress value={progress.done} max={progress.total} aria-label="主线自检进度"/></div><div><small>实际记录的工作时间</small><strong className={s.timeTotal} data-total-time>{record.ready?duration(total):"读取中"}</strong><span>从主动开始计时起累计</span></div><div><small>需要解决的阻碍</small><strong>{record.ready?blocked.length:"—"}<span> 项</span></strong><span>发现问题也是工程的一部分</span></div></div>
     </section>
     <div className={s.content}>
-      {config.Briefing&&<config.Briefing stationId={station.id} auto={false}/>}
+      {config.Briefing&&<config.Briefing stationId={station.id} auto={record.ready&&arrivalReady===arrivalKey}/>}
       <div className={s.consoleDock} data-room-reveal="chrome"><nav className={s.tabs} aria-label="任务中心模块">{VIEWS.map(v=><button type="button" key={v.id} aria-current={v.id===view?"page":undefined} onClick={()=>select(task.id,v.id)}><v.icon size={17}/>{v.label}</button>)}</nav><div className={s.activeStation} role="status" aria-label="当前任务站"><span className={s.stationIndicator}/><span><small>当前任务站</small>{station.code} · {station.place}</span></div></div>
       {!record.ready&&<div className={s.loading}><LoadingSpinner label="正在读取个人任务记录"/></div>}
       <div className={s.saveBar}><span>{record.ready ? record.message : "读取完成后可编辑；任务说明随时可查看。"}</span><details><summary>保存与恢复</summary><LearningRecordStatus record={record}/></details></div>

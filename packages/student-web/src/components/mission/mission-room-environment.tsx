@@ -42,12 +42,14 @@ export function MissionRoomBackdrop({ station, className, imageRef, fullViewport
 }
 
 /** Only this transient visual layer remounts; forms, clocks and record hooks stay alive. */
-export function MissionRoomArrival({ station, moduleName, root, skin = SPACE_ROOM_SKIN }: {
-  station: {id:string;code:string;place:string}; skin?: MissionRoomSkin; moduleName: string; root: RefObject<HTMLElement | null>
+export function MissionRoomArrival({ station, moduleName, root, skin = SPACE_ROOM_SKIN, onFinished }: {
+  station: {id:string;code:string;place:string}; skin?: MissionRoomSkin; moduleName: string; root: RefObject<HTMLElement | null>; onFinished?: () => void
 }) {
   const layer = useRef<HTMLDivElement>(null)
   const image = useRef<HTMLImageElement>(null)
   const skip = useRef<() => void>(() => {})
+  const finishedCallback = useRef(onFinished)
+  useEffect(() => { finishedCallback.current = onFinished }, [onFinished])
 
   useEffect(() => {
     const element = layer.current
@@ -58,12 +60,14 @@ export function MissionRoomArrival({ station, moduleName, root, skin = SPACE_ROO
     let stopped = false, started = false
     const animations: Animation[] = []
     let finishTimer: ReturnType<typeof setTimeout> | undefined
-    const finish = () => {
+    const finish = (notify = true) => {
+      if (stopped) return
       stopped = true
       clearTimeout(finishTimer); clearTimeout(loadTimer)
       animations.forEach(animation => animation.cancel())
       element.hidden = true
       element.dataset.phase = "finished"
+      if (notify) finishedCallback.current?.()
     }
     skip.current = finish
     const start = () => {
@@ -96,7 +100,7 @@ export function MissionRoomArrival({ station, moduleName, root, skin = SPACE_ROO
     else if (image.current) void image.current.decode().then(start, start)
     else start()
     return () => {
-      finish()
+      finish(false)
       window.removeEventListener("keydown", onKey)
       motion.removeEventListener("change", onMotion)
     }
