@@ -4,7 +4,7 @@
 import Link from "next/link"
 import { useSearchParams } from "next/navigation"
 import { useEffect, useId, useState } from "react"
-import { ArrowLeft, ArrowRight, Compass, FileCheck2, Flag, Layers, Map, Play, RotateCcw, Wrench } from "lucide-react"
+import { ArrowLeft, ArrowRight, ClipboardList, Compass, FileCheck2, Flag, Layers, Map, Play, RotateCcw, Wrench } from "lucide-react"
 import { useLearningIdentity } from "@/lib/hooks/use-learning-record"
 import { JOURNEY_IDS, JOURNEY_LEVELS, JOURNEY_STATIONS, journeyProject } from "@/lib/project-lines/space-journey"
 import { hasJourneyEvidence, waitingProgress } from "@/lib/project-lines/space-journey-progress"
@@ -58,7 +58,7 @@ function JourneySession({ token, owner, openFilm, stageReady, replayStage }: { t
   })
   const resources = MISSION_MODULES.filter(m => m.station === station.id && m.mode !== "lesson")
   return <main className={s.journey} data-space-journey data-curriculum-version="1.0">
-    <header className={s.topbar}><Link href="/library?view=lines"><ArrowLeft size={16}/>所有项目线</Link><span>星际远航 / 火星地形观察远征</span><a href="#mission-dossier"><FileCheck2 size={15}/>我的远征档案</a></header>
+    <header className={s.topbar}><Link href="/library?view=lines"><ArrowLeft size={16}/>所有项目线</Link><span>星际远航 / 火星地形观察远征</span><Link href="/mission/space/control" data-mission-center-entry><ClipboardList size={15}/>任务中心</Link><a href="#mission-dossier"><FileCheck2 size={15}/>我的远征档案</a></header>
     <section className={s.hero}><img src="/mission/rover/pointing-1920.webp" alt="任务搭档林岚在控制席邀请你加入远征" fetchPriority="high"/><div className={s.heroCopy}><p className={s.kicker}>一个目标，同一辆车，持续升级。</p><h1>从第一次观察，<br/>到自己的火星探测任务。</h1><p>接下任务，设计并打印你的车。<br/>再为它训练视觉、接通控制，带着证据完成远征。</p><div className={s.heroActions}><Link href={nextHref} data-journey-start><Compass size={18}/>{next ? "接着我的任务继续" : recommended.station === "delivery" ? "复查我的任务档案" : "从 3 分钟观察开始"}<ArrowRight size={17}/></Link><button onClick={openFilm}><Play size={15}/>火星探索序章 · 29 秒</button></div><a className={s.heroMap} href="#journey-map">展开我的任务地图<Map size={14}/></a><small>8 个任务站 · 同一份工程档案 · 从观察到远征</small></div><div className={s.heroNote}>任务搭档 / 林岚<small>AI 生成的虚构场景与角色</small></div></section>
     <div className={s.body}>
       <section className={s.roleSection} aria-label="五幕远征任务"><header><span>这次远征，怎样一步步完成</span><small>从提出问题，到拿出自己的测试证据</small></header><div className={s.roles}>{JOURNEY_LEVELS.map(item => <button key={item.level} data-journey-level={item.level} aria-pressed={item.level === station.level} onClick={() => { setSelected(JOURNEY_STATIONS.find(s => s.level === item.level)!.id); document.getElementById("journey-map")?.scrollIntoView({ behavior: "smooth" }) }}><small>0{item.level}</small><strong>{item.role}</strong><span>{item.task}</span></button>)}</div></section>

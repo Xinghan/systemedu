@@ -2,6 +2,7 @@ import Link from "next/link"
 import { ArrowLeft, Map } from "lucide-react"
 import { JOURNEY_LEVELS, journeyHref, journeyStationFor } from "@/lib/project-lines/space-journey"
 import { SpaceStageBriefing } from "./space-stage-briefing"
+import { MissionWorkStrip } from "./mission-work-strip"
 import s from "./space-journey.module.css"
 
 /** The original classroom continues to own its records and deliverables. */
@@ -22,6 +23,7 @@ export function SpaceMicroMission({ projectId, title }: { projectId: string; tit
       <Link href={journeyHref(projectId)}><ArrowLeft size={14} />星际远航 · 任务地图</Link><Link href="/explore/space-exploration/pick-an-observation-site?node=M01&mission=space">已有观察，去设计任务 →</Link>
       <SpaceStageBriefing level={1} />
     </nav>
+    <MissionWorkStrip taskId={`micro:${projectId}`}/>
     <iframe src={`/project-lines/space-exploration/${projectId}/index.html`} title={title} />
   </main>
 }

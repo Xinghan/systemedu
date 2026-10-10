@@ -4,6 +4,7 @@ import Link from "next/link"
 import { ArrowLeft, ArrowRight, FileCheck2, Map } from "lucide-react"
 import { missionContext, missionLessonHref, missionMapHref, missionModule, missionSupport, sourceLessonHref, type MissionStation } from "@/lib/project-lines/space-curriculum"
 import { SpaceStageBriefing } from "./space-stage-briefing"
+import { MissionWorkStrip } from "./mission-work-strip"
 import { useLearningRecord } from "@/lib/hooks/use-learning-record"
 import { INITIAL_MISSION_BODY, MISSION_DOSSIER_SCOPE, dossierFrom } from "@/lib/project-lines/space-mission-dossier"
 import { JOURNEY_DELIVERIES } from "@/lib/project-lines/space-journey"
@@ -18,6 +19,7 @@ export function MissionLessonBrief({ context }: { context: Context }) {
     <p className={s.kicker}>火星地形观察远征 · 当前任务</p><h2>{station.message}</h2>
     <div className={s.handoffPair}><p><small>带着什么来</small>{station.input}</p><p><small>这一站带走什么</small>{station.handoff}</p></div>
     <MyMissionGoal station={station.id}/>
+    <MissionWorkStrip taskId={node.ref}/>
     <details className={s.mobileOutline}><summary>查看本站任务步骤</summary><MissionLessonOutline station={station} current={context.primary}/></details>
     {node.note && <p className={s.contextNote}>{node.note}</p>}
     {station.id === "autonomy" && <p className={s.contextNote}>本任务使用同一辆打印车升级。Pi↔Pico、供电、安装件及到点闭环尚需样机验证；旧车型操作只作参考，不据此认定新系统已通过。</p>}
