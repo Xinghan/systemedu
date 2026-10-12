@@ -19,16 +19,17 @@ assert paths and all(p.startswith('packages/student-web/') for p in paths)
 extra_prefixes = ['packages/student-web/src/components/learning/energy-workspace', 'packages/student-web/src/components/learning/energy-machine-view', 'packages/student-web/src/lib/project-lines/energy-model', 'packages/student-web/src/lib/project-lines/energy-geometry', 'packages/student-web/src/lib/project-lines/energy-guides', 'packages/student-web/src/lib/project-lines/energy-courses'] + ['packages/student-web/public/project-lines/energy-motion/'+name+'/' for name in ['compare-energy-settings','design-a-printed-transmission','build-a-printed-generator','hardware']]
 all_paths = subprocess.check_output([GIT,'ls-tree','-r','--name-only',REF],cwd=ROOT,text=True).splitlines()
 extras = {p for p in all_paths if any(p.startswith(prefix) for prefix in extra_prefixes)} - set(paths)
-paths = sorted(set(paths) | extras)
+base_overrides = {'packages/student-web/src/components/learning/biomed-understanding-check.tsx': 'b20bd498'}
+paths = sorted(set(paths) | extras | set(base_overrides))
 sha = lambda b: hashlib.sha256(b).hexdigest()
 base_paths = set(subprocess.check_output([GIT, 'ls-tree', '-r', '--name-only', BASE], cwd=ROOT, text=True).splitlines())
 files = {}
 with tarfile.open(OUT / 'frontend.tar.gz', 'w:gz') as archive:
     for p in paths:
         new = subprocess.check_output([GIT, 'show', REF + ':' + p], cwd=ROOT)
-        result = subprocess.run([GIT, 'show', BASE + ':' + p], cwd=ROOT, capture_output=True)
+        result = subprocess.run([GIT, 'show', base_overrides.get(p, BASE) + ':' + p], cwd=ROOT, capture_output=True)
         base = result.stdout if p in base_paths and p not in extras else None
-        files[p] = {'base_sha256': sha(base) if base is not None else None, 'new_sha256': sha(new)}
+        files[p] = {'base_sha256': sha(base) if base is not None else None, 'new_sha256': sha(new), 'base_ref': base_overrides.get(p, BASE)}
         for name, data in [('new/' + p, new), ('base/' + p, base)]:
             if data is None:
                 continue

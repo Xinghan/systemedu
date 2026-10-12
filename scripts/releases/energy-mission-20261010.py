@@ -95,7 +95,7 @@ expected = json.loads((UP / 'request.json').read_text())
 if action == 'restage':
     assert (RELEASE / 'stage.ok').exists() and not (RELEASE / 'switch-started.ok').exists()
     baseline()
-    CANDIDATE.rename(RELEASE / 'candidate-before-snapshot-fix')
+    CANDIDATE.rename(RELEASE / ('candidate-before-retry-' + str(time.time_ns())))
     for marker in ['stage.ok', 'build.ok']:
         (RELEASE / marker).unlink(missing_ok=True)
     action = 'stage'
@@ -176,6 +176,8 @@ if action in ['stage', 'resume-stage']:
                 output = re.sub(pattern, lambda _: next(replacements), output, flags=re.S)
                 if p.endswith('/guided-project-course.tsx'):
                     output = output.replace('displayLine?.id || lineId', 'lineId').replace('displayLine?.title.zh || "项目线"', '(lineId === "energy-motion" ? "未来能源" : lineId === "biomedicine" ? "分子寻药" : "星际远航")')
+                if p.endswith('/teacher-scene-view.tsx'):
+                    output = output.replace('previewImageSources?.[image.src] || publicSource', 'publicSource')
                 assert '<<<<<<<' not in output
                 result.stdout = output.encode()
             planned.append((current, result.stdout))

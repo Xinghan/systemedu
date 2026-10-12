@@ -41,7 +41,7 @@ try{
  report.checks.push('Eight energy stage films decode 1080p, play, load captions and accept Range; distinct indoor posters; first arrival, repeat suppression and replay');
  await expect(p.locator('[data-mission-node]')).toHaveCount(8);await p.locator('#journey-map').scrollIntoViewIfNeeded();await p.screenshot({path:out+'/energy-map.png'});
  await p.goto(origin+'/mission/energy/control?task=build-a-solar-tracker%3AM01',{waitUntil:'domcontentloaded'});
- await expect(p.locator('[data-task-order]')).toBeVisible();await expect(p.getByLabel('我的子任务状态',{exact:true})).toBeEnabled();await expect(dialog(p)).toHaveCount(0);await p.screenshot({path:out+'/energy-center.png'});
+ await expect(p.locator('[data-task-order]')).toBeVisible();await expect(p.getByLabel('我的子任务状态',{exact:true})).toBeEnabled();await expect(dialog(p)).toHaveCount(0);await expect(p.locator('[data-room-arrival]')).toBeHidden();await expect.poll(()=>p.locator('[data-room-background] img').first().evaluate(i=>i.complete&&i.naturalWidth>0),{timeout:120000}).toBe(true);await p.screenshot({path:out+'/energy-center.png'});
  for(const name of ['任务地图','时间表','工作日志','工程档案']){await p.getByRole('navigation',{name:'任务中心模块'}).getByRole('button',{name,exact:true}).click();if(name==='工程档案')await expect(p.locator('[data-energy-dossier] textarea')).toHaveCount(5)}
  await p.goto(origin+'/explore/energy-motion/build-a-solar-tracker?node=M05&mission=energy',{waitUntil:'domcontentloaded'});
  for(const id of ['lesson-reading','lesson-videos','lesson-references','lesson-notebook'])await expect(p.locator('#'+id)).toBeAttached();await expect(p.locator('[data-energy-footer] a').last()).toHaveAttribute('href',/design-a-wind-rotor\?node=M01&mission=energy/);
