@@ -9,7 +9,7 @@ DEST = ROOT.parents[1] / 'packages/student-web/public/standalone/post-training/t
 manifest = json.loads((ROOT/'course.json').read_text())
 for node in manifest['modules']:
     lesson = (ROOT/'nodes'/f'{node["id"]}.md').read_text()
-    assert lesson.count('[[LAB]]') == 1 and '```' in lesson
+    assert lesson.count('[[LAB]]') == 0 and '```' in lesson
     assert len(re.findall(r'\[\[LAB:[a-z0-9]+\]\]', lesson)) >= 2
     assert node['videos'] and node['reading'] and len(node['slides']) == 5
     assert all(v['url'].startswith('https://www.youtube.com/watch?v=') for v in node['videos'])

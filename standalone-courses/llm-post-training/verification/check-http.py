@@ -19,10 +19,13 @@ class Page(HTMLParser):
         super().__init__()
         self.algorithms = []
         self.video_links = []
+        self.spatial = []
     def handle_starttag(self, tag, attrs):
         attrs = dict(attrs)
         if 'data-algorithm' in attrs:
             self.algorithms.append(attrs['data-algorithm'])
+        if attrs.get('data-visualization') == 'spatial-explainer':
+            self.spatial.append(attrs['data-algorithm'])
         if tag == 'a' and attrs.get('href', '').startswith('https://www.youtube.com/watch?v='):
             self.video_links.append(attrs['href'])
 
@@ -34,6 +37,7 @@ for i in range(1, 6):
         page.feed(response.read().decode())
         expected = re.findall(r'\[\[LAB:([a-z0-9]+)\]\]', (ROOT/'nodes'/f'{module}.md').read_text())
         assert page.algorithms == expected, (module, page.algorithms, expected)
+        assert page.spatial == expected
         assert page.video_links
         result['pages'][module] = {'status': response.status, 'algorithms': page.algorithms, 'youtube_index': True}
 with opener.open(f'{ORIGIN}/standalone/post-training/ticketlab-course.zip', timeout=30) as response:
@@ -48,7 +52,7 @@ with opener.open(f'{ORIGIN}/standalone/post-training/ticketlab-course.zip', time
 record = {'schema': 2, 'course': 'llm-post-training-professional', 'version': '2026-10-15.2',
           'nodes': {f'M0{i}': {'notes': 'HTTP export fixture', 'checks': [False]*4, 'slide': 0} for i in range(1, 6)},
           'lab': {'rank': 8, 'angle': -25, 'quantized': True, 'maskPrompt': True, 'keepEos': True, 'signal': 0},
-          'experiments': {'nf4': {'step': 2, 'values': {'outlier': 6, 'uniform': 0, 'index': 4}}}}
+          'experiments': {'nf4': {'step': 2, 'values': {'outlier': 6, 'uniform': 0, 'index': 4}, 'view': {'time': 2.37, 'focus': 'weight:4', 'mode': 'graph'}}}}
 for form in ['json', 'markdown']:
     payload = urllib.parse.urlencode({'record': json.dumps(record), 'format': form}).encode()
     request = urllib.request.Request(ORIGIN+'/standalone/post-training/download', data=payload)

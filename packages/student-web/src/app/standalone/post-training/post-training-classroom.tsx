@@ -7,7 +7,6 @@ import { LessonSlidesProvider, LessonSlideshowButton } from "@/components/learni
 import { createRecordStore, COURSE_ID, isRecord, type ModuleId, type RecordData } from "./record"
 import { AlgorithmLab } from "./algorithm-lab"
 import { ALGORITHMS } from "./algorithm-catalog"
-import { ConceptLab } from "./labs"
 import type { CourseModule } from "./types"
 import s from "./post-training.module.css"
 
@@ -64,10 +63,11 @@ export function PostTrainingClassroom({ modules, moduleId, markdown }: { modules
           </section>
           <article id="lesson" className={s.lesson} aria-label="课程正文">
             <div className={s.lessonLabel}><span>LECTURE NOTES</span><span>{moduleId} · THEORY / CODE / EXPERIMENT</span></div>
-            <nav className={s.algorithmIndex} aria-label="本节算法实验"><strong>计算实验导航</strong>{[...markdown.matchAll(/\[\[LAB:([a-z0-9]+)\]\]/g)].map(match => <a key={match[1]} href={`#lab-${match[1]}`}>{ALGORITHMS[match[1]].title}<ArrowDown size={12} /></a>)}</nav>
+            <nav className={s.algorithmIndex} aria-label="本节算法实验"><strong>交互推演导航</strong>{[...markdown.matchAll(/\[\[LAB:([a-z0-9]+)\]\]/g)].map(match => <a key={match[1]} href={`#lab-${match[1]}`}>{ALGORITHMS[match[1]].title}<ArrowDown size={12} /></a>)}</nav>
+            <p className={s.smallNote}>点击图中的 token、矩阵元素或向量追踪来源；播放或拖动时间轴查看计算过程。右上角可展开画布，LoRA 还可切换到能旋转的几何空间。</p>
             {markdown.split(/(\[\[LAB(?::[a-z0-9]+)?\]\])/g).map((part,i) => {
               const match = part.match(/^\[\[LAB(?::([a-z0-9]+))?\]\]$/)
-              if (match) return <fieldset key={i} disabled={!ready} className={s.labFieldset}>{match[1] ? <AlgorithmLab id={match[1]} state={record.experiments?.[match[1]]} update={next => store.update({ ...record, experiments: { ...record.experiments, [match[1]]: next } })} /> : <ConceptLab moduleId={moduleId} lab={record.lab} update={lab => store.update({ ...record, lab })} />}</fieldset>
+              if (match?.[1]) return <fieldset key={i} disabled={!ready} className={s.labFieldset}><AlgorithmLab id={match[1]} state={record.experiments?.[match[1]]} update={next => store.update({ ...store.snapshot().record, experiments: { ...store.snapshot().record.experiments, [match[1]]: next } })} /></fieldset>
               return <CourseReadingBody key={i} content={{ plan_markdown: part, ideas: [], rendered_sections: {} }} projectName={COURSE_ID} moduleId={moduleId} knowledgeLevel="K3" />
             })}
           </article>
@@ -81,7 +81,7 @@ export function PostTrainingClassroom({ modules, moduleId, markdown }: { modules
           </section>
           <a className={s.downloadPanel} href="/standalone/post-training/ticketlab-course.zip" download><div><span>TAKE THE LAB WITH YOU</span><h3>课程讲义 + TicketLab 实验仓库</h3><p>详解讲义 · 视频索引 · 数值推导脚本 · train / evaluate · 环境与验收</p></div><Download size={26} /></a>
           <div className={s.nextNav}>{index > 0 ? <Link href={`/standalone/post-training/${modules[index-1].id}`}><small>上一节点</small><strong>{modules[index-1].short}</strong></Link> : <span />}{index < 4 ? <Link href={`/standalone/post-training/${modules[index+1].id}`}><small>下一节点 <ArrowRight size={14} /></small><strong>{modules[index+1].short}</strong></Link> : <Link href="/standalone/post-training/M01"><small>回到课程起点</small><strong>复核方法与评估协议</strong></Link>}</div>
-          <footer className={s.footer}>POST / TRAIN · 独立专业课程 <span>EDITION 03 · 15 ALGORITHM LABS</span></footer>
+          <footer className={s.footer}>POST / TRAIN · 独立专业课程 <span>EDITION 04 · 15 SPATIAL EXPLAINERS</span></footer>
         </main>
       </div>
     </LessonSlidesProvider>

@@ -4,7 +4,7 @@ export const MODULE_IDS = ["M01", "M02", "M03", "M04", "M05"] as const
 export type ModuleId = typeof MODULE_IDS[number]
 export type NodeRecord = { notes: string; checks: boolean[]; slide: number }
 export type RecordData = {
-  experiments?: Record<string, { step: number; values: Record<string, number> }>
+  experiments?: Record<string, { step: number; values: Record<string, number>; view?: { time: number; focus: string; mode: "graph" | "geometry" } }>
   schema: 2; course: typeof COURSE_ID; version: typeof VERSION
   nodes: Record<ModuleId, NodeRecord>
   lab: { rank: number; angle: number; quantized: boolean; maskPrompt: boolean; keepEos: boolean; signal: number }
@@ -21,6 +21,10 @@ export function isRecord(value: unknown): value is RecordData {
   const validExperiments = experiments === undefined || (experiments !== null && typeof experiments === "object" && !Array.isArray(experiments)
     && Object.keys(experiments).length <= 30 && Object.entries(experiments).every(([id, experiment]) =>
       /^[a-z0-9]{1,24}$/.test(id) && experiment && Number.isInteger(experiment.step) && experiment.step >= 0 && experiment.step < 100
+      && (experiment.view === undefined || (experiment.view && typeof experiment.view === "object"
+        && Number.isFinite(experiment.view.time) && experiment.view.time >= 0 && experiment.view.time < 100
+        && typeof experiment.view.focus === "string" && experiment.view.focus.length <= 80 && /^[a-zA-Z0-9:_-]*$/.test(experiment.view.focus)
+        && ["graph", "geometry"].includes(experiment.view.mode)))
       && experiment.values && typeof experiment.values === "object" && !Array.isArray(experiment.values)
       && Object.keys(experiment.values).length <= 12 && Object.entries(experiment.values).every(([key, value]) =>
         /^[a-z0-9]{1,24}$/.test(key) && typeof value === "number" && Number.isFinite(value) && Math.abs(value) <= 1e6)))
