@@ -4,6 +4,7 @@ export const MODULE_IDS = ["M01", "M02", "M03", "M04", "M05"] as const
 export type ModuleId = typeof MODULE_IDS[number]
 export type NodeRecord = { notes: string; checks: boolean[]; slide: number }
 export type RecordData = {
+  experiments?: Record<string, { step: number; values: Record<string, number> }>
   schema: 2; course: typeof COURSE_ID; version: typeof VERSION
   nodes: Record<ModuleId, NodeRecord>
   lab: { rank: number; angle: number; quantized: boolean; maskPrompt: boolean; keepEos: boolean; signal: number }
@@ -16,7 +17,14 @@ export function freshRecord(): RecordData {
 export function isRecord(value: unknown): value is RecordData {
   if (!value || typeof value !== "object") return false
   const r = value as RecordData
-  return r.schema === 2 && r.course === COURSE_ID && r.version === VERSION && !!r.nodes && !!r.lab
+  const experiments = r.experiments
+  const validExperiments = experiments === undefined || (experiments !== null && typeof experiments === "object" && !Array.isArray(experiments)
+    && Object.keys(experiments).length <= 30 && Object.entries(experiments).every(([id, experiment]) =>
+      /^[a-z0-9]{1,24}$/.test(id) && experiment && Number.isInteger(experiment.step) && experiment.step >= 0 && experiment.step < 100
+      && experiment.values && typeof experiment.values === "object" && !Array.isArray(experiment.values)
+      && Object.keys(experiment.values).length <= 12 && Object.entries(experiment.values).every(([key, value]) =>
+        /^[a-z0-9]{1,24}$/.test(key) && typeof value === "number" && Number.isFinite(value) && Math.abs(value) <= 1e6)))
+  return validExperiments && r.schema === 2 && r.course === COURSE_ID && r.version === VERSION && !!r.nodes && !!r.lab
     && MODULE_IDS.every(id => { const n = r.nodes[id]; return n && typeof n.notes === "string" && n.notes.length <= 12000
       && Array.isArray(n.checks) && n.checks.length === 4 && n.checks.every(x => typeof x === "boolean")
       && Number.isInteger(n.slide) && n.slide >= 0 && n.slide < 5 })

@@ -90,3 +90,10 @@ git tag -a submission-v1 -m "Reproducible post-training project"
 - [PEFT 0.18.0 quantization](https://huggingface.co/docs/peft/v0.18.0/developer_guides/quantization)
 - [Transformers 4.57.3 bitsandbytes](https://huggingface.co/docs/transformers/v4.57.3/en/quantization/bitsandbytes)
 - [PyTorch 安装版本表](https://pytorch.org/get-started/previous-versions/)
+
+
+## 算法推导的 CPU 伴随实验
+
+运行 `python numerical_walkthrough.py`，在不下载模型的情况下验证正文数值：softmax-CE 的解析梯度与中心差分、LoRA 矩阵梯度与两步初始化、token 加权累积、NF4 码字和离群值误差。`tests/test_numerical_walkthrough.py` 将这些推导纳入测试。网页的15个算法实验都可单步播放、修改参数、导出和恢复状态；这些小规模计算不代表 GPU 训练结果。
+
+加深作业：B2 交付 `reports/gradients.md`；C2 交付单层 LoRA 的输出/梯度对照；D2 交付量化前后逐权重表和输出误差。具体要求见对应节点正文。

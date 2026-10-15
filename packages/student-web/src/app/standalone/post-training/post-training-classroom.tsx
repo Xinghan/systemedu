@@ -5,6 +5,8 @@ import { ArrowDown, ArrowRight, ArrowUpRight, BookOpen, Check, ChevronRight, Cod
 import { CourseReadingBody } from "@/components/learning/course-content-view"
 import { LessonSlidesProvider, LessonSlideshowButton } from "@/components/learning/lesson-slides"
 import { createRecordStore, COURSE_ID, isRecord, type ModuleId, type RecordData } from "./record"
+import { AlgorithmLab } from "./algorithm-lab"
+import { ALGORITHMS } from "./algorithm-catalog"
 import { ConceptLab } from "./labs"
 import type { CourseModule } from "./types"
 import s from "./post-training.module.css"
@@ -21,7 +23,7 @@ export function PostTrainingClassroom({ modules, moduleId, markdown }: { modules
   useEffect(() => { store.start() }, [store])
   const node = record.nodes[moduleId]
   const updateNode = (patch: Partial<typeof node>) => store.update({ ...record, nodes: { ...record.nodes, [moduleId]: { ...node, ...patch } } })
-  const content = { plan_markdown: markdown.replace("[[LAB]]", ""), ideas: [], rendered_sections: {} }
+  const content = { plan_markdown: markdown.replace(/\[\[LAB(?::[a-z0-9]+)?\]\]/g, ""), ideas: [], rendered_sections: {} }
   const done = modules.filter(m => m.checklist.every((_,i) => record.nodes[m.id].checks[i])).length
   async function importFile(selected?: File) {
     if (!selected) return
@@ -43,7 +45,7 @@ export function PostTrainingClassroom({ modules, moduleId, markdown }: { modules
           <div className={s.courseLabel}>ENGINEERING SERIES / 001</div><h2>LLM<br />后训练工程</h2><p className={s.sidebarIntro}>从训练目标到可复现的<br />参数高效适配实验。</p>
           <div className={s.progress}><span>{done} / 5 节已自查</span><div><i style={{ width: `${done/5*100}%` }} /></div></div>
           {nav}
-          <div className={s.sidebarFoot}><span>PREREQUISITES</span><p>Python · 线性代数<br />PyTorch autograd</p><Link href="/standalone/post-training/M05#lesson">环境、项目与验收 <ArrowUpRight size={14} /></Link></div>
+          <div className={s.sidebarFoot}><span>PREREQUISITES</span><p>Python · 向量与矩阵<br />梯度基础随课补充</p><Link href="/standalone/post-training/M05#lesson">环境、项目与验收 <ArrowUpRight size={14} /></Link></div>
         </aside>
         <main className={s.main}>
           <details className={s.mobileNav}><summary>课程目录 <span>{moduleId} / 05</span></summary>{nav}</details>
@@ -62,7 +64,12 @@ export function PostTrainingClassroom({ modules, moduleId, markdown }: { modules
           </section>
           <article id="lesson" className={s.lesson} aria-label="课程正文">
             <div className={s.lessonLabel}><span>LECTURE NOTES</span><span>{moduleId} · THEORY / CODE / EXPERIMENT</span></div>
-            {markdown.split("[[LAB]]").map((part,i) => <div key={i}>{i > 0 && <fieldset disabled={!ready} className={s.labFieldset}><ConceptLab moduleId={moduleId} lab={record.lab} update={lab => store.update({ ...record, lab })} /></fieldset>}<CourseReadingBody content={{ plan_markdown: part, ideas: [], rendered_sections: {} }} projectName={COURSE_ID} moduleId={moduleId} knowledgeLevel="K3" /></div>)}
+            <nav className={s.algorithmIndex} aria-label="本节算法实验"><strong>计算实验导航</strong>{[...markdown.matchAll(/\[\[LAB:([a-z0-9]+)\]\]/g)].map(match => <a key={match[1]} href={`#lab-${match[1]}`}>{ALGORITHMS[match[1]].title}<ArrowDown size={12} /></a>)}</nav>
+            {markdown.split(/(\[\[LAB(?::[a-z0-9]+)?\]\])/g).map((part,i) => {
+              const match = part.match(/^\[\[LAB(?::([a-z0-9]+))?\]\]$/)
+              if (match) return <fieldset key={i} disabled={!ready} className={s.labFieldset}>{match[1] ? <AlgorithmLab id={match[1]} state={record.experiments?.[match[1]]} update={next => store.update({ ...record, experiments: { ...record.experiments, [match[1]]: next } })} /> : <ConceptLab moduleId={moduleId} lab={record.lab} update={lab => store.update({ ...record, lab })} />}</fieldset>
+              return <CourseReadingBody key={i} content={{ plan_markdown: part, ideas: [], rendered_sections: {} }} projectName={COURSE_ID} moduleId={moduleId} knowledgeLevel="K3" />
+            })}
           </article>
           <section className={s.readings}><div className={s.sectionHeading}><div><p className={s.eyebrow}>PRIMARY SOURCES</p><h2>讲义与技术资料</h2></div></div>{current.reading.map(r => <a key={r.url} href={r.url} target="_blank" rel="noreferrer"><BookOpen size={19} /><div><strong>{r.title}</strong><p>{r.detail}</p></div><ArrowUpRight size={17} /></a>)}</section>
           <section id="notebook" className={s.notebook}><div className={s.sectionHeading}><div><p className={s.eyebrow}>YOUR EXPERIMENT LOG</p><h2>节点作业与实验记录</h2></div><span>{node.checks.slice(0,current.checklist.length).filter(Boolean).length} / {current.checklist.length}</span></div><p className={s.smallNote}>详细作业见正文末尾。保存你的配置、结果路径和观察；自查勾选不代表自动评分。</p>
@@ -70,11 +77,11 @@ export function PostTrainingClassroom({ modules, moduleId, markdown }: { modules
             <label className={s.noteLabel}>实验笔记 / 证据链接<textarea aria-label="实验笔记" disabled={!ready} rows={6} maxLength={12000} value={node.notes} onChange={e => updateNode({ notes: e.target.value })} placeholder="记录：配置与 commit → 观察到的结果 → 解释 → 下一步。可粘贴本机产物路径或实验报告链接。" /></label>
             <p className={s.saveStatus} role="status">{message} · 仅本浏览器保存，导出可跨设备恢复。</p>
             <div className={s.exports}><form action="/standalone/post-training/download" method="post"><input type="hidden" name="record" value={JSON.stringify(record)} /><button disabled={!ready} name="format" value="json"><Download size={14} />导出 JSON</button><button disabled={!ready} name="format" value="markdown">导出笔记</button></form><button disabled={!ready} onClick={() => file.current?.click()}><Upload size={14} />恢复记录</button><input type="file" ref={file} hidden accept=".json,application/json" aria-label="导入实验记录文件" onChange={e => void importFile(e.target.files?.[0])} /></div>
-            {importMessage && <p role="status" className={s.smallNote}>{importMessage}</p>}{pending && <div className={s.importReview}><p>待恢复：5 个节点，包含 {Object.values(pending.nodes).filter(n => n.notes.trim()).length} 份笔记。</p><button onClick={() => { store.update(pending); setPending(null); setImportMessage("已恢复，请核对笔记与实验参数。") }}>确认恢复</button><button onClick={() => { setPending(null); setImportMessage("已取消恢复。") }}>取消</button></div>}
+            {importMessage && <p role="status" className={s.smallNote}>{importMessage}</p>}{pending && <div className={s.importReview}><p>待恢复：5 个节点，包含 {Object.values(pending.nodes).filter(n => n.notes.trim()).length} 份笔记、{Object.keys(pending.experiments ?? {}).length} 组算法实验状态。</p><button onClick={() => { store.update(pending); setPending(null); setImportMessage("已恢复，请核对笔记与实验参数。") }}>确认恢复</button><button onClick={() => { setPending(null); setImportMessage("已取消恢复。") }}>取消</button></div>}
           </section>
-          <a className={s.downloadPanel} href="/standalone/post-training/ticketlab-course.zip" download><div><span>TAKE THE LAB WITH YOU</span><h3>课程讲义 + TicketLab 实验仓库</h3><p>5 节正文 · 视频索引 · train / evaluate · 配置 · 测试 · 环境与验收</p></div><Download size={26} /></a>
+          <a className={s.downloadPanel} href="/standalone/post-training/ticketlab-course.zip" download><div><span>TAKE THE LAB WITH YOU</span><h3>课程讲义 + TicketLab 实验仓库</h3><p>详解讲义 · 视频索引 · 数值推导脚本 · train / evaluate · 环境与验收</p></div><Download size={26} /></a>
           <div className={s.nextNav}>{index > 0 ? <Link href={`/standalone/post-training/${modules[index-1].id}`}><small>上一节点</small><strong>{modules[index-1].short}</strong></Link> : <span />}{index < 4 ? <Link href={`/standalone/post-training/${modules[index+1].id}`}><small>下一节点 <ArrowRight size={14} /></small><strong>{modules[index+1].short}</strong></Link> : <Link href="/standalone/post-training/M01"><small>回到课程起点</small><strong>复核方法与评估协议</strong></Link>}</div>
-          <footer className={s.footer}>POST / TRAIN · 独立专业课程 <span>EDITION 2026.10 · 5 MODULES</span></footer>
+          <footer className={s.footer}>POST / TRAIN · 独立专业课程 <span>EDITION 03 · 15 ALGORITHM LABS</span></footer>
         </main>
       </div>
     </LessonSlidesProvider>
