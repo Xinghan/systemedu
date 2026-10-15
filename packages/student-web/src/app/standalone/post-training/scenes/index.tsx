@@ -1,15 +1,17 @@
 import { ALGORITHMS } from '../algorithm-catalog'
 import { adamTrajectory, bootstrap, ce, classification, dot, lora, NF4, preference, quantize, softmax, sum } from '../algorithm-math'
-import { AttentionScene, LoraGeometry, LoraScene, QuantizationScene, SoftmaxScene } from './core'
-import { AccumulationScene, BackpropScene, ChainScene, LoraGradientScene, OptimizerScene, PolicyScene, PreferenceScene } from './training'
-import { BootstrapScene, CheckpointScene, DoubleQuantScene, MetricsScene } from './resources'
+import { LoraGeometry, LoraScene } from './core'
+import { AttentionScene, ChainScene, PolicyScene, PreferenceScene, SoftmaxScene } from './probability'
+import { QuantizationScene, DoubleQuantScene, CheckpointScene } from './representation'
+import { AccumulationScene, BackpropScene, LoraGradientScene, OptimizerScene } from './optimization'
+import { BootstrapScene, MetricsScene } from './evaluation'
 import { n, smooth, type SceneProps } from './primitives'
 export const SCENES={chain:ChainScene,preference:PreferenceScene,policy:PolicyScene,attention:AttentionScene,softmax:SoftmaxScene,backprop:BackpropScene,accumulation:AccumulationScene,optimizer:OptimizerScene,lora:LoraScene,loragrad:LoraGradientScene,nf4:QuantizationScene,doublequant:DoubleQuantScene,checkpoint:CheckpointScene,metrics:MetricsScene,bootstrap:BootstrapScene}
 export function AlgorithmScene({id,...props}:SceneProps&{id:string}){const Scene=SCENES[id as keyof typeof SCENES];return id==='lora'&&props.geometry?<LoraGeometry {...props}/>:<Scene {...props}/>}
 export type Inspection={title:string;expression:string;explanation:string}
 export function inspect(id:string,v:Record<string,number>,focus:string,time:number):Inspection{
  const frames=ALGORITHMS[id].frames(v),frame=frames[Math.max(0,Math.min(frames.length-1,Math.floor(time)))]
- const fallback={title:focus?`追踪 ${focus}`:frame.title,expression:frame.formula,explanation:frame.explain}
+ const fallback={title:frame.title,expression:frame.formula,explanation:frame.explain}
  const [kind,a,b]=focus.split(':'),r=Number(a??0),c=Number(b??0),bounded=(x:number,max:number)=>Number.isInteger(x)&&x>=0&&x<=max?x:0
  if(id==='lora'){
   const d=lora(v.rank,v.alpha,[1,2,v.x]),x=[1,2,v.x],s=v.alpha/v.rank
@@ -24,12 +26,13 @@ export function inspect(id:string,v:Record<string,number>,focus:string,time:numb
  if(id==='attention'){
   const q=[1,1,2,1],k=[1,0,1,2],val=[1,2,3,4],row=kind==='attention'?bounded(r,3):v.query,col=kind==='attention'?bounded(c,3):0,probs=softmax(k.map((x,j)=>v.causal&&j>row?-Infinity:q[row]*x))
   if(kind==='attention')return {title:`query ${row} → key ${col}`,expression:v.causal&&col>row?'未来位置：score + (−∞) → probability 0':`score=${q[row]}×${k[col]}=${q[row]*k[col]} → p=${n(probs[col])}`,explanation:`对同一query的可读key做softmax。这一项对输出贡献 ${n(probs[col])} × V[${col}]=${val[col]} → ${n(probs[col]*val[col])}。`}
-  if(kind==='query'&&r>=0&&r<4)return {title:`跟随 query ${r}`,expression:`Q[${r}]=${q[r]}，h=${n(dot(probs,val))}`,explanation:'点选query后，注意力热图、可读位置、连线宽度与加权输出同步更新。标签mask不改变这些注意力权重。'}
+  if(kind==='query'&&r>=0&&r<4)return {title:`跟随 query ${r}`,expression:`Q[${r}]=${q[r]}，h=${n(dot(probs,val))}`,explanation:'点选query后，句子里的可读位置、弧线宽度与加权输出同步更新。标签mask不改变这些注意力权重。'}
  }
  if(id==='softmax'){
   const z=[v.z,1,0],prob=softmax(z),i=bounded(r,2),g=prob[i]-Number(i===v.target)
-  if(['logit','exp','prob'].includes(kind))return {title:`类别 ${i} 的完整路径`,expression:`p=${n(prob[i])}，target=${Number(i===v.target)}，∂L/∂z=${n(g)}`,explanation:`一次SGD将z[${i}]从${n(z[i])}更新到${n(z[i]-v.lr*g)}。其它类别也会影响softmax分母，因此目标loss与整个词表耦合。`}
-  if(kind==='loss'){const current=z.map((x,j)=>x-v.lr*(prob[j]-Number(j===v.target))*smooth(time-3)),p=softmax(current);return {title:'当前目标 token 的负对数似然',expression:`−log(${n(p[v.target])}) = ${n(ce(current,v.target))}`,explanation:'这不是把每个错误类别单独打分；log概率中的归一化分母让所有logits都收到梯度。反向箭头对应更新前的 p−one_hot。'}}
+  if(kind==='target')return {title:`目标顶点：类别 ${i}`,expression:`y = one_hot(${i})，p₀+p₁+p₂=1`,explanation:'顶点对应该类别概率为1。三角形里的每个点都是合法分布；一次更新同时改变三项概率，路径由softmax与梯度共同决定。'}
+  if(['logit','exp','prob'].includes(kind))return {title:`类别 ${i} 的更新`,expression:`p_before=${n(prob[i])}，p_now=${n(softmax(z.map((x,j)=>x-v.lr*(prob[j]-Number(j===v.target))*smooth(time-3)))[i])}，∂L/∂z=${n(g)}`,explanation:`一次SGD将z[${i}]从${n(z[i])}更新到${n(z[i]-v.lr*g)}。其它类别也会影响softmax分母，因此目标loss与整个词表耦合。`}
+  if(kind==='loss'){const current=z.map((x,j)=>x-v.lr*(prob[j]-Number(j===v.target))*smooth(time-3)),p=softmax(current);return {title:'当前目标 token 的负对数似然',expression:`−log(${n(p[v.target])}) = ${n(ce(current,v.target))}`,explanation:'这不是把每个错误类别单独打分；log概率中的归一化分母让所有logits都收到梯度。三角形中的移动由更新前的 p−one_hot 决定。'}}
  }
  if(id==='nf4'){
   const w=[-.7,-.3,-.1,0,.2,.4,.6,v.outlier],d=quantize(w,!!v.uniform),i=kind==='weight'?bounded(r,7):v.index,book=v.uniform?Array.from({length:16},(_,j)=>-1+2*j/15):NF4
@@ -38,9 +41,10 @@ export function inspect(id:string,v:Record<string,number>,focus:string,time:numb
  }
  if(id==='preference'){
   const d=preference(v.margin,v.mode?v.reference:0,v.mode?v.beta:1)
-  return {title:kind==='reference'?'为什么减去参考差值':'偏好差值的导数',expression:`z=${n(d.z)}，P=${n(d.p)}，dL/dmargin=${n(d.gradient)}`,explanation:kind==='reference'?'当前策略和参考策略有相同偏好差时，z=0，偏好概率为0.5。这里比较的是相对参考的改变。':'正 margin 很大时，偏好损失的梯度减弱；负 margin 很大时，dL/dmargin 接近 −β。梯度下降会提高 chosen 相对 rejected 的优势。金色切线表示 sigmoid 本身的局部斜率，须与 loss 的导数区分。'}
+  return {title:kind==='reference'?'为什么减去参考差值':'偏好差值的导数',expression:`z=${n(d.z)}，P=${n(d.p)}，dL/dmargin=${n(d.gradient)}`,explanation:kind==='reference'?'当前策略和参考策略有相同偏好差时，z=0，偏好概率为0.5。这里比较的是相对参考的改变。':'正 margin 很大时，偏好损失的梯度减弱；负 margin 很大时，dL/dmargin 接近 −β。梯度下降会提高 chosen 相对 rejected 的优势。仪表显示 sigmoid 的输出概率，旁边的梯度数值则是偏好损失对 margin 的导数。'}
  }
  if(id==='bootstrap'&&kind==='pair'&&r>=0&&r<8){const a=[1,1,0,1,0,1,0,0],b=[1,1,1,0,1,1,0,1];return {title:`样例 #${r} 是一个抽样单元`,expression:`base=${a[r]}，new=${b[r]}，Δ=${b[r]-a[r]}`,explanation:'重采样时，这两个分数始终一起被抽走。不能给两个模型分别抽索引，否则会破坏样例难度的配对关系。'}}
+ if(id==='chain'&&kind==='token'&&r===0)return {title:'给定输入：概率树的根',expression:'p(空前缀 | x)=1',explanation:'尚未生成任何目标 token，全部可能回答构成面积为1的样本空间；每沿一条边前进，就乘上一个条件概率。'}
  if(id==='chain'&&['token','nll'].includes(kind)){
   const probs=[.6,v.p,.9],i=bounded(kind==='token'?r-1:r,2)
   return {title:`第 ${i+1} 个目标的条件概率`,expression:`p=${n(probs[i])}，−log p=${n(-Math.log(probs[i]))}`,explanation:'条件中包含输入和真实的前缀。整条回答的概率是这些条件概率的乘积；取负对数后，各 token 的损失变成可相加的量。'}
@@ -54,11 +58,14 @@ export function inspect(id:string,v:Record<string,number>,focus:string,time:numb
   const expressions:Record<string,string>={input:'x=2',a:`∂L/∂a=${v.detach?'无路径':n(e*v.b*2)}`,h:`h=2a=${n(v.a*2)}；∂L/∂h=${v.detach?'无路径':n(e*v.b)}`,b:`∂ŷ/∂h=b=${n(v.b)}`, 'squared-loss':`ŷ=${n(y)}；L=½(ŷ−4)²=${n(e*e/2)}`}
   if(expressions[kind])return {title:kind==='b'?'冻结参数与切断路径的区别':`追踪 ${kind}`,expression:expressions[kind],explanation:kind==='b'?'冻结 b 只停止它的参数更新；局部导数 b 仍将误差信号乘回 h。detach 则移除上游的连接。':'从输出开始，将每条边的局部导数相乘。这里最终得到 (ŷ−4)×b×2；打开 detach 后，这条路径中断。'}
  }
+ if(id==='accumulation'&&kind==='batch-mean')return {title:'按 batch 等权的估计',expression:'G=(1+3)/2=2',explanation:'两个大砝码分别是两个 microbatch 的均值。它们各占一半，所以短 batch 的 token 获得更大权重；只有两批有效 token 数相同，才与 token 均值等价。'}
  if(id==='accumulation')return {title:'一个 token 在整个累积窗口中的权重',expression:`N=${2+v.n}；G=(2×1+${v.n}×3)/${2+v.n}=${n((2+v.n*3)/(2+v.n))}`,explanation:kind==='gradient-token'?`这一个 token 的梯度贡献为 ${n((r===0?1:3)/(2+v.n))}。累积时不按 microbatch 的数量重新平均。`:'每个有效 token 先按同一个总数 N 归一化，梯度相加后再执行一次 optimizer.step。'}
  if(id==='optimizer'){
   const row=adamTrajectory(v.lr,v.clip,v.decay)[Math.min(7,Math.floor(time))]
-  return {title:'同一次 AdamW 更新的数值路径',expression:`g=${n(row.raw)} → clip ${n(row.g)}；m̂=${n(row.mh)}，v̂=${n(row.vh)}`,explanation:`w=${n(row.before)} 先接受自适应更新和独立的权重衰减，得到 ${n(row.w)}。曲线上的紫点保留每次已完成的迭代；金色标记沿真实数值轨迹移动。`}
+  return {title:'同一次 AdamW 更新的数值路径',expression:`g=${n(row.raw)} → clip ${n(row.g)}；m̂=${n(row.mh)}，v̂=${n(row.vh)}`,explanation:`w=${n(row.before)} 先接受自适应更新和独立的权重衰减，得到 ${n(row.w)}。曲线上的金点保留每次已完成的迭代；金色标记沿真实数值轨迹移动。`}
  }
+ if(id==='loragrad'&&kind==='zero-origin')return {title:'双零原点是驻点',expression:'A=B=0 → gA=gB=0，L=0.5',explanation:'这里的损失并不最小，但两个梯度互相依赖另一个零因子，因此梯度下降无法从此点启动。'}
+ if(id==='loragrad'&&kind==='init-iteration')return {title:`第 ${r} 次更新后的参数位置`,expression:frame.formula,explanation:frame.explain}
  if(id==='loragrad'){
   const i=Math.min(2,Math.floor(time/2));let A=v.zero?0:.5,B=0
   for(let k=0;k<i;k++){const e=2*A*B-1,da=e*B*2,db=e*A*2;A-=v.lr*da;B-=v.lr*db}
@@ -69,10 +76,13 @@ export function inspect(id:string,v:Record<string,number>,focus:string,time:numb
   const scales=[.8,1,v.scale,2],offset=sum(scales)/4,s=Math.max(...scales.map(x=>Math.abs(x-offset))),i=bounded(r,3),q=Math.round(((scales[i]-offset)/s+1)*127.5),restored=(q/127.5-1)*s+offset
   return {title:kind==='scale-one'?`第一层 scale ${i} 的恢复`:'两层量化的依赖关系',expression:`scale=${n(scales[i])} → q₂=${q} → ŝ=${n(restored)}`,explanation:`先恢复 scale：offset + scale₂×(q₂/127.5−1)，再用这个 ŝ 解开第一层权重。这里二级采用中心化均匀8bit教学码本，非 bitsandbytes 内核逐位实现。`}
  }
- if(id==='checkpoint'&&kind==='activation')return {title:`激活 h${bounded(r,4)} 的生命周期`,expression:frame.values[bounded(r,4)]?'当前驻留，可供后续计算读取':'当前没有保存，需要边界或重算提供',explanation:frame.explain+' 灰色表示当前不在保存集合中；金色连线表示重算，而不是优化器更新。'}
+ if(id==='checkpoint'&&kind==='execution')return {title:`执行事件：${frame.title}`,expression:frame.formula,explanation:frame.explain}
+ if(id==='checkpoint'&&kind==='activation')return {title:`激活 h${bounded(r,4)} 的生命周期`,expression:frame.values[bounded(r,4)]?'当前驻留，可供后续计算读取':'当前没有保存，需要边界或重算提供',explanation:frame.explain+' 灰色表示当前不在保存集合中；金色格表示重算恢复的激活。'}
  if(id==='metrics'){
   const truth=[0,0,1,1,2,2],pred=[0,0,1,0,2,v.prediction],d=classification(truth,pred)
-  if(kind==='example'){const i=bounded(r,5);return {title:`样例 ${i} → 一个矩阵单元`,expression:`truth=${truth[i]}，prediction=${pred[i]<0?'invalid':pred[i]}`,explanation:'无效 JSON 也必须保留在评估分母。它对真值类别贡献一个 FN，不是直接删掉这条困难样例。'}}
+  if(kind==='prediction')return {title:`样例 #5 的预测已放入 ${['billing','account','bug'][v.prediction]??'invalid'} 篮子`,expression:`schema valid=${n(d.valid)}，category accuracy=${n(d.accuracy)}，macro F1=${n(d.macro)}`,explanation:'篮子决定预测类别，圆点颜色保留真实类别。改变预测后，同一条样例会重新进入相关类别的 TP、FP 或 FN 集合。'}
+  if(kind==='metric-class'){const i=bounded(r,2),m=d.perClass[i];return {title:`将 ${['billing','account','bug'][i]} 作为正类`,expression:`TP=${m.tp}，FP=${m.fp}，FN=${m.fn}，F1=${n(m.f1)}`,explanation:'只改变计数的观察角度，不修改任何预测。macro F1 将三个类别各自得到的 F1 等权平均。'}}
+  if(kind==='example'){const i=bounded(r,5);return {title:`样例 ${i} → 预测篮子`,expression:`truth=${truth[i]}，prediction=${pred[i]<0?'invalid':pred[i]}`,explanation:'无效 JSON 也必须保留在评估分母。它对真值类别贡献一个 FN，不是直接删掉这条困难样例。'}}
   if(kind==='confusion'){const row=bounded(r,2),col=bounded(c,3);return {title:`混淆矩阵 [${row},${col}]`,expression:`count=${d.matrix[row][col]}`,explanation:row===col?'对这个类别，这个单元是 TP；其它行在本列的计数是 FP。':`对真值类别 ${row} 是 FN。${col===3?'invalid 列不作为第四个正常类别参与 macro 平均。':`对预测类别 ${col} 同时是 FP。`}`}}
  }
  if(id==='bootstrap'){

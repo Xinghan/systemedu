@@ -10,7 +10,7 @@ const out = fs.mkdtempSync(path.join(os.tmpdir(), 'posttraining-scenes-'))
 try {
   fs.symlinkSync(path.join(web, 'node_modules'), path.join(out, 'node_modules'), 'dir')
   fs.mkdirSync(path.join(out, 'scenes'))
-  const files = ['algorithm-math.ts', 'algorithm-catalog.ts', 'record.ts', ...fs.readdirSync(path.join(src, 'scenes')).map(x => 'scenes/' + x)]
+  const files = ['algorithm-math.ts', 'algorithm-catalog.ts', 'algorithm-presentations.ts', 'record.ts', ...fs.readdirSync(path.join(src, 'scenes')).map(x => 'scenes/' + x)]
   for (const file of files) {
     const { outputText } = ts.transpileModule(fs.readFileSync(path.join(src, file), 'utf8'), {
       compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020, jsx: ts.JsxEmit.ReactJSX }, fileName: file
@@ -22,9 +22,14 @@ try {
   const records = require(path.join(out, 'record'))
   assert.deepEqual(Object.keys(SCENES).sort(), Object.keys(ALGORITHMS).sort())
   const noAction = () => {}, props = { focus: '', onPick: noAction, onHover: noAction, setValue: noAction, yaw: 35, pitch: 25 }
+  const representations = new Set()
   let rendered = 0, inspections = 0
   for (const [id, spec] of Object.entries(ALGORITHMS)) {
     const defaults = settings(id), configs = [defaults]
+    const primary = renderToStaticMarkup(React.createElement(AlgorithmScene, { ...props, id, v: defaults, time: 0, geometry: id === 'lora' }))
+    const representation = primary.match(/data-representation="([^"]+)"/)?.[1]
+    assert.ok(representation, `${id}: missing primary representation`)
+    representations.add(representation)
     if (id === 'preference') configs.push({ ...defaults, margin: 4, reference: -4, beta: 2 }, { ...defaults, margin: -4, reference: 4, beta: 2 })
     if (id === 'lora') configs.push({ rank: 2, alpha: 4, x: 2 })
     for (const c of spec.controls) for (const value of [c.min, c.max]) configs.push({ ...defaults, [c.key]: value })
@@ -44,6 +49,15 @@ try {
       }
     }
   }
+  assert.equal(representations.size, 15, 'Each algorithm must retain its own primary representation')
+  const { PRESENTATIONS } = require(path.join(out, 'algorithm-presentations'))
+  assert.deepEqual(Object.keys(PRESENTATIONS).sort(), Object.keys(ALGORITHMS).sort())
+  for (const [id, spec] of Object.entries(PRESENTATIONS)) for (const action of spec.actions) {
+    const v = { ...settings(id), ...action.values }
+    const sanitized = settings(id, { values: v })
+    for (const [key, value] of Object.entries(v)) assert.ok(Math.abs(sanitized[key] - value) < 1e-9, `${id}/${key}: scenario must use valid parameters`)
+    if (action.time !== undefined) assert.ok(action.time >= 0 && action.time < ALGORITHMS[id].frames(v).length)
+  }
   // Inspectors must explain the same numerical operation as the scene.
   assert.match(inspect('lora', { rank: 2, alpha: 2, x: -1 }, 'B:1:1', 2).expression, /= 3$/)
   assert.match(inspect('nf4', settings('nf4'), 'weight:4', 2).expression, /0\.161/)
@@ -59,5 +73,5 @@ try {
   const store = records.createRecordStore(); store.start()
   assert.deepEqual(store.snapshot().record, current)
   assert.ok(!records.isRecord({ ...old, experiments: { lora: { ...current.experiments.lora, view: { time: NaN, focus: '', mode: 'graph' } } } }))
-  console.log(JSON.stringify({ status: 'passed', sceneTypes: 15, svgRenders: rendered, elementInspections: inspections, preserved: ['v2 notes', 'slide index', 'legacy lab parameters', 'continuous time', 'selected element', 'geometry mode'] }, null, 2))
+  console.log(JSON.stringify({ status: 'passed', sceneTypes: 15, primaryRepresentations: [...representations], svgRenders: rendered, elementInspections: inspections, preserved: ['v2 notes', 'slide index', 'legacy lab parameters', 'continuous time', 'selected element', 'geometry mode'] }, null, 2))
 } finally { fs.rmSync(out, { recursive: true, force: true }) }

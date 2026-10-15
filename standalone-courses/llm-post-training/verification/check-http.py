@@ -20,12 +20,15 @@ class Page(HTMLParser):
         self.algorithms = []
         self.video_links = []
         self.spatial = []
+        self.representations = []
     def handle_starttag(self, tag, attrs):
         attrs = dict(attrs)
         if 'data-algorithm' in attrs:
             self.algorithms.append(attrs['data-algorithm'])
         if attrs.get('data-visualization') == 'spatial-explainer':
             self.spatial.append(attrs['data-algorithm'])
+        if 'data-representation' in attrs:
+            self.representations.append(attrs['data-representation'])
         if tag == 'a' and attrs.get('href', '').startswith('https://www.youtube.com/watch?v='):
             self.video_links.append(attrs['href'])
 
@@ -39,7 +42,9 @@ for i in range(1, 6):
         assert page.algorithms == expected, (module, page.algorithms, expected)
         assert page.spatial == expected
         assert page.video_links
-        result['pages'][module] = {'status': response.status, 'algorithms': page.algorithms, 'youtube_index': True}
+        assert len(page.representations) == len(expected)
+        result['pages'][module] = {'status': response.status, 'algorithms': page.algorithms, 'youtube_index': True, 'representations': page.representations}
+assert len({r for page in result['pages'].values() for r in page['representations']}) == 15
 with opener.open(f'{ORIGIN}/standalone/post-training/ticketlab-course.zip', timeout=30) as response:
     data = response.read()
     expected = (ROOT.parents[1]/'packages/student-web/public/standalone/post-training/ticketlab-course.zip').read_bytes()
