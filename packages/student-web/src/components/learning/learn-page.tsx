@@ -1,6 +1,8 @@
 "use client"
 
 import Link from "next/link"
+import { roboticsContext, roboticsLessonHref, roboticsMapHref, roboticsLibraryHref } from "@/lib/project-lines/robotics-mission"
+import { RoboticsLessonBrief, RoboticsLessonOutline, RoboticsLessonFooter } from "@/components/mission/robotics-mission-lesson"
 import { energyContext, energyMapHref, energyLessonHref, energyLibraryHref } from "@/lib/project-lines/energy-mission"
 import { EnergyLessonBrief, EnergyLessonOutline, EnergyLessonFooter } from "@/components/mission/energy-mission-lesson"
 
@@ -68,8 +70,9 @@ export default function LearnPage() {
   const mission = missionContext(slug, moduleId, routeSearch.get("mission") === "space")
   const bio=bioContext(slug,moduleId,routeSearch.get("mission")==="biomedicine")
   const energy=energyContext(slug,moduleId,routeSearch.get("mission")==="energy")
-  const returnPath = energy ? energyLessonHref(energy.node.ref) : bio ? bioLessonHref(bio.node.ref) : mission ? missionLessonHref(mission.node.ref) : lessonPath(slug, moduleId)
-  const enrollmentPath = energy ? energyLibraryHref(slug,moduleId) : bio ? bioLibraryHref(slug,moduleId) : mission ? missionLibraryHref(moduleId) : `/library/${encodeURIComponent(slug)}`
+  const robotics=roboticsContext(slug,moduleId,routeSearch.get("mission")==="robotics")
+  const returnPath = robotics ? roboticsLessonHref(robotics.node.ref) : energy ? energyLessonHref(energy.node.ref) : bio ? bioLessonHref(bio.node.ref) : mission ? missionLessonHref(mission.node.ref) : lessonPath(slug, moduleId)
+  const enrollmentPath = robotics ? roboticsLibraryHref(slug,moduleId) : energy ? energyLibraryHref(slug,moduleId) : bio ? bioLibraryHref(slug,moduleId) : mission ? missionLibraryHref(moduleId) : `/library/${encodeURIComponent(slug)}`
   const { loggedIn, hydrate } = useAuthStore()
 
   const [knodeMeta, setKnodeMeta] = useState<{
@@ -85,7 +88,7 @@ export default function LearnPage() {
   const [authReady, setAuthReady] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [agentOpen, setAgentOpen] = useState(!mission && !bio && !energy)
+  const [agentOpen, setAgentOpen] = useState(!mission && !bio && !energy && !robotics)
   const [search, setSearch] = useState("")
 
   useEffect(() => {
@@ -255,8 +258,8 @@ export default function LearnPage() {
 
   return (
     <main
-      className={mission || bio || energy ? missionStyles.lessonClassroom : undefined}
-      data-mission-classroom={mission ? "space" : bio ? "biomedicine" : energy ? "energy" : undefined}
+      className={mission || bio || energy || robotics ? missionStyles.lessonClassroom : undefined}
+      data-mission-classroom={mission ? "space" : bio ? "biomedicine" : energy ? "energy" : robotics ? "robotics" : undefined}
       style={{
         display: "grid",
         gridTemplateColumns: `300px 1fr ${agentOpen ? "380px" : "56px"}`,
@@ -273,7 +276,7 @@ export default function LearnPage() {
           flexDirection: "column",
         }}
       >
-        {mission ? <MissionLessonOutline station={mission.station} current={mission.primary}/> : bio ? <BiomedLessonOutline context={bio}/> : energy ? <EnergyLessonOutline context={energy}/> : <>
+        {mission ? <MissionLessonOutline station={mission.station} current={mission.primary}/> : bio ? <BiomedLessonOutline context={bio}/> : energy ? <EnergyLessonOutline context={energy}/> : robotics ? <RoboticsLessonOutline context={robotics}/> : <>
         <div
           style={{ padding: "16px 18px", borderBottom: "1px solid var(--border)" }}
         >
@@ -487,7 +490,7 @@ export default function LearnPage() {
         >
           <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
             <span className="tag violet">
-              {mission?.station.code || bio?.station.code || energy?.station.code || currentStage?.stage_id || "—"} · {moduleId}
+              {mission?.station.code || bio?.station.code || energy?.station.code || robotics?.station.code || currentStage?.stage_id || "—"} · {moduleId}
             </span>
             {knodeMeta?.duration_minutes ? (
               <span className="tag" style={{ background: "var(--paper-2)" }}>
@@ -501,7 +504,7 @@ export default function LearnPage() {
             ) : null}
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            {!mission && !bio && !energy && prev && (
+            {!mission && !bio && !energy && !robotics && prev && (
               <Link
                 href={lessonPath(slug, prev.module_id)}
                 className="btn btn-ghost btn-sm"
@@ -509,7 +512,7 @@ export default function LearnPage() {
                 <ChevronLeft size={13} strokeWidth={1.5} /> {prev.module_id}
               </Link>
             )}
-            {!mission && !bio && !energy && next && (
+            {!mission && !bio && !energy && !robotics && next && (
               <Link
                 href={lessonPath(slug, next.module_id)}
                 className="btn btn-ghost btn-sm"
@@ -540,7 +543,7 @@ export default function LearnPage() {
           }}
         >
           <div className="mono" style={{ fontSize: 11, color: "var(--sub)" }}>
-            {mission?.station.code || bio?.station.code || energy?.station.code || currentStage?.stage_id || "—"} · {moduleId}
+            {mission?.station.code || bio?.station.code || energy?.station.code || robotics?.station.code || currentStage?.stage_id || "—"} · {moduleId}
           </div>
           <h1
             style={{
@@ -568,7 +571,7 @@ export default function LearnPage() {
             </p>
           )}
 
-          {mission ? <MissionLessonBrief context={mission}/> : bio ? <BiomedLessonBrief context={bio}/> : energy ? <EnergyLessonBrief context={energy}/> : <SpaceJourneyProjectBanner projectId={slug} />}
+          {mission ? <MissionLessonBrief context={mission}/> : bio ? <BiomedLessonBrief context={bio}/> : energy ? <EnergyLessonBrief context={energy}/> : robotics ? <RoboticsLessonBrief context={robotics}/> : <SpaceJourneyProjectBanner projectId={slug} />}
           {/* CourseContentView 自己渲染 plan_markdown + ideas + theories + assignment */}
           <div style={{ marginTop: 24 }}>
             <CourseContentView
@@ -576,7 +579,7 @@ export default function LearnPage() {
               projectName={slug}
               nodeId={knodeForView.id}
               knode={knodeForView}
-              onClose={() => router.push(energy ? energyMapHref(energy.station.id) : bio ? bioMapHref(bio.station.id) : mission ? missionMapHref(mission.station.id) : `/library/${encodeURIComponent(slug)}`)}
+              onClose={() => router.push(robotics ? roboticsMapHref(robotics.station.id) : energy ? energyMapHref(energy.station.id) : bio ? bioMapHref(bio.station.id) : mission ? missionMapHref(mission.station.id) : `/library/${encodeURIComponent(slug)}`)}
               onMarkComplete={() => {
                 myProjects.setProgress(slug, moduleId).catch(() => {})
               }}
@@ -585,7 +588,7 @@ export default function LearnPage() {
 
           {mission && <MissionSupportingLessons context={mission}/>}
           {/* footer nav */}
-          {mission ? <MissionLessonFooter context={mission}/> : bio ? <BiomedLessonFooter context={bio}/> : energy ? <EnergyLessonFooter context={energy}/> : <div
+          {mission ? <MissionLessonFooter context={mission}/> : bio ? <BiomedLessonFooter context={bio}/> : energy ? <EnergyLessonFooter context={energy}/> : robotics ? <RoboticsLessonFooter context={robotics}/> : <div
             style={{
               marginTop: 48,
               paddingTop: 18,

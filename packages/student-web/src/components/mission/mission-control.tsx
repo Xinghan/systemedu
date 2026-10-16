@@ -62,7 +62,7 @@ function ControlSession({config}:{config:MissionControlConfig}) {
   const patch=(value:Parameters<typeof changeTask>[2])=>model.update(o=>changeTask(o,task.id,value,new Date().toISOString()))
   const editable=record.ready&&!record.attention&&!record.conflict&&!record.pending&&!!ops
   const shown=TASKS.filter(t=>query.trim()?`${t.code} ${t.title} ${t.id}`.toLowerCase().includes(query.trim().toLowerCase()):t.station===station.id)
-  const nextTaskId=task.role==="micro"?MISSION_STEPS[0]:sourceNode(task)?.anchor||MISSION_STEPS[MISSION_STEPS.indexOf(task.id)+1]
+  const nextTaskId=config.nextRef?config.nextRef(task.id):task.role==="micro"?MISSION_STEPS[0]:sourceNode(task)?.anchor||MISSION_STEPS[MISSION_STEPS.indexOf(task.id)+1]
   const stationDone=ops?station.steps.filter(id=>taskState(ops,id).status==="done").length:0
   const renderTasks=(items:MissionTask[])=>items.map(t=>{const state=ops?taskState(ops,t.id):null;return <button key={t.id} data-task-choice={t.id} aria-pressed={task.id===t.id} onClick={()=>select(t.id)}><span className={s.taskSymbol} data-state={state?.status}>{state?.status==="done"?<Check size={14}/>:state?.status==="blocked"?<AlertTriangle size={14}/>:<Circle size={11}/>}</span><span><small>{t.code} · {t.category}</small><strong>{t.title}</strong><em>{state?STATUS_LABELS[state.status]:"读取记录中"}{t.role!=="lesson"?` · ${roles[t.role]}`:""}</em></span></button>})
   return <main ref={root} className={s.center} data-mission-control data-room={station.id}>

@@ -11,6 +11,7 @@ export type MissionControlConfig = {
  initialProgress:()=>Record<string,MissionNodeState>;
  readProgress:(token:string|null,owner:string,update:(ref:string,state:MissionNodeState)=>void)=>Promise<void>;
  taskGroups?:{id:string;station:string;title:string;steps:string[]}[];
+ nextRef?:(ref:string)=>string|undefined;
  nextTask?:(ops:MissionOperations|null)=>MissionTask;
  TaskContext?:ComponentType<{task:MissionTask}>;
  Dossier:ComponentType
