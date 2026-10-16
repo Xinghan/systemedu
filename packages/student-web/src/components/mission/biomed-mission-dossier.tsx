@@ -4,6 +4,7 @@ import { useLearningIdentity, useLearningRecord } from "@/lib/hooks/use-learning
 import { LearningRecordStatus } from "@/components/learning/learning-record-status"
 import type { LearningBody, LearningScope } from "@/lib/api/learning-records"
 import { BIO_STATIONS, bioLessonHref } from "@/lib/project-lines/biomed-mission"
+import { BiomedHandoffArchive } from "./biomed-research-handoff"
 import s from "./space-mission-control.module.css"
 const FIELDS=[
  ["question","我要研究什么？","示例：针对原课选定靶点，在同一活性端点下比较候选；先写清对象和范围。"],
@@ -23,5 +24,5 @@ function Dossier(){
  {!valid&&<p role="alert">档案格式暂时无法读取，原数据保留。请先通过保存与恢复导出核对。</p>}
  {FIELDS.map(([id,title,hint])=><label className={s.field} key={id}>{title}<textarea rows={2} maxLength={1500} disabled={locked} placeholder={hint} value={record.body.answers.find(a=>a.question_id===id)?.answer||""} onChange={e=>record.session.update({...record.body,answers:record.body.answers.map(a=>a.question_id===id?{...a,answer:e.target.value}:a)})}/><small>{hint}</small></label>)}
  <button className={s.primary} disabled={locked||record.busy||record.body.answers.some(a=>!a.answer.trim())} onClick={()=>void record.session.submit()}>保存这版研究档案</button><LearningRecordStatus record={record}/>
- <div className={s.resourceList}><h3>回到各阶段的正式交付</h3>{BIO_STATIONS.filter(s=>s.steps.length).map(st=><Link key={st.id} href={bioLessonHref(st.steps.at(-1)!)}><div><strong>{st.code} · {st.place}</strong><small>{st.handoff}</small></div><span>核对原作品 →</span></Link>)}</div></section>
+ <BiomedHandoffArchive/><div className={s.resourceList}><h3>回到各阶段的正式交付</h3>{BIO_STATIONS.filter(s=>s.steps.length).map(st=><Link key={st.id} href={bioLessonHref(st.steps.at(-1)!)}><div><strong>{st.code} · {st.place}</strong><small>{st.handoff}</small></div><span>核对原作品 →</span></Link>)}</div></section>
 }

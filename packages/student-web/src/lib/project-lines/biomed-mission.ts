@@ -1,7 +1,12 @@
 import data from "./biomed-mission.json"
 import { lessonPath } from "../course-numbering"
-import { createMissionOperations, type MissionTask } from "./mission-operations-core"
+import { createMissionOperations, taskState, type MissionOperations, type MissionTask } from "./mission-operations-core"
 import type { MissionRoomSkin } from "@/components/mission/mission-room-environment"
+export const BIO_GROUPS = data.groups
+export const BIO_FOUNDATIONS = data.foundations
+export type BiomedGroup = typeof BIO_GROUPS[number]
+export const bioGroup = (id:string) => BIO_GROUPS.find(g=>g.id===id)
+export const bioGroupFor = (ref:string) => BIO_GROUPS.find(g=>g.steps.includes(ref))
 export const BIO_STATIONS = data.stations
 export const BIO_MODULES = data.modules
 export const BIO_STEPS = BIO_STATIONS.flatMap(s=>s.steps)
@@ -25,6 +30,18 @@ export function bioContext(project:string,module:string,enabled:boolean) {
  return {node,station,primary,previous:i>0?BIO_STEPS[i-1]:undefined,next:BIO_STEPS[i+1]}
 }
 export const BIO_ENGINE = createMissionOperations(BIO_TASKS,{library_slug:"biomedicine",module_id:"JOURNEY",activity_id:"mission-operations",kind:"classroom",content_version:"1.0"},"biomed-mission-operations/1",BIO_STEPS)
+export function bioSourceHref(ref:string) {
+ const n=bioNode(ref)
+ return !n?BIO_HOME:n.kind==="full"?lessonPath(n.project,n.module):`/explore/biomedicine/${n.project}?node=${n.module}`
+}
+export function bioNextTask(ops:MissionOperations|null) {
+ if(!ops)return BIO_TASKS[0]
+ const active=BIO_TASKS.find(t=>taskState(ops,t.id).status==="active")
+ if(active)return active
+ const started=BIO_TASKS.some(t=>taskState(ops,t.id).status==="done")
+ if(!started)return BIO_TASKS[0]
+ return BIO_TASKS.find(t=>t.role==="lesson"&&taskState(ops,t.id).status!=="done")||BIO_TASKS.at(-1)!
+}
 export const BIO_ROOM_SKIN: MissionRoomSkin = {title:"分子寻药 / 计算发现基地",base:"/mission/biomedicine/stations",version:"v2",fallback:"/mission/biomedicine/stations/observation-v2",rooms:{observation:"MOLECULAR OBSERVATORY",filter:"SCREENING RULES",prediction:"PREDICTION CHECK",systems:"DISCOVERY WORKBENCH",protocol:"RESEARCH PROTOCOL",data:"DATA & BASELINE",evaluation:"MODEL EVALUATION",delivery:"CANDIDATE REVIEW"}}
 
 /** Coordinates align the interactive pins with the generated campus pavilions. */

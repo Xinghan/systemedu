@@ -35,7 +35,7 @@ function ControlSession({config}:{config:MissionControlConfig}) {
   const [query,setQuery]=useState("")
   const root=useRef<HTMLElement>(null),[replay,setReplay]=useState(0)
   const [arrivalReady,setArrivalReady]=useState("")
-  const fallback=ops ? TASKS.find(t=>taskState(ops,t.id).status==="active") || TASKS.find(t=>t.role==="micro"&&taskState(ops,t.id).status!=="done") || taskById(MISSION_STEPS.find(id=>taskState(ops,id).status!=="done")||MISSION_STEPS[0])! : TASKS[0]
+  const fallback=config.nextTask ? config.nextTask(ops) : ops ? TASKS.find(t=>taskState(ops,t.id).status==="active") || TASKS.find(t=>t.role==="micro"&&taskState(ops,t.id).status!=="done") || taskById(MISSION_STEPS.find(id=>taskState(ops,id).status!=="done")||MISSION_STEPS[0])! : TASKS[0]
   const task=taskById(search.get("task")||"")||fallback
   const station=missionStation(task.station)!
   const arrivalKey=`${station.id}:${view}:${replay}`
@@ -64,6 +64,7 @@ function ControlSession({config}:{config:MissionControlConfig}) {
   const shown=TASKS.filter(t=>query.trim()?`${t.code} ${t.title} ${t.id}`.toLowerCase().includes(query.trim().toLowerCase()):t.station===station.id)
   const nextTaskId=task.role==="micro"?MISSION_STEPS[0]:sourceNode(task)?.anchor||MISSION_STEPS[MISSION_STEPS.indexOf(task.id)+1]
   const stationDone=ops?station.steps.filter(id=>taskState(ops,id).status==="done").length:0
+  const renderTasks=(items:MissionTask[])=>items.map(t=>{const state=ops?taskState(ops,t.id):null;return <button key={t.id} data-task-choice={t.id} aria-pressed={task.id===t.id} onClick={()=>select(t.id)}><span className={s.taskSymbol} data-state={state?.status}>{state?.status==="done"?<Check size={14}/>:state?.status==="blocked"?<AlertTriangle size={14}/>:<Circle size={11}/>}</span><span><small>{t.code} · {t.category}</small><strong>{t.title}</strong><em>{state?STATUS_LABELS[state.status]:"读取记录中"}{t.role!=="lesson"?` · ${roles[t.role]}`:""}</em></span></button>})
   return <main ref={root} className={s.center} data-mission-control data-room={station.id}>
     <MissionRoomArrival key={arrivalKey} station={station} skin={config.skin} moduleName={VIEWS.find(v=>v.id===view)!.label} root={root} onFinished={()=>setArrivalReady(arrivalKey)}/>
     <header className={s.topbar}><Link href={config.home}><ArrowLeft size={15}/>任务首页</Link><span><Radio size={15}/> {config.title} / 任务中心</span><Link href={`/library?view=lines&line=${config.line}`}>项目资料库<ArrowUpRight size={14}/></Link></header>
@@ -84,11 +85,12 @@ function ControlSession({config}:{config:MissionControlConfig}) {
         <div className={s.stationRail} data-room-reveal="chrome" aria-label="任务站选择">{MISSION_STATIONS.map(place=><button key={place.id} aria-pressed={place.id===station.id} onClick={()=>selectStation(place.id)}><small>{place.code}</small><span>{place.place}</span></button>)}</div>
         <div className={s.workbench}>
           <aside className={s.directory} data-room-reveal="left"><div className={s.sectionLabel}><span>子任务清单</span><small>{station.code} / {station.steps.length?`${stationDone} / ${station.steps.length} 主线自检`:"启程体验任选一个"}</small></div><label className={s.search}><Search size={15}/><input aria-label="搜索全部子任务" value={query} onChange={e=>setQuery(e.target.value)} placeholder={`搜索 ${TASKS.length} 个任务与材料`}/></label>
-            <div className={s.taskList}>{[true,false].map(primary=>{const items=shown.filter(t=>(t.role==="lesson"||t.role==="micro")===primary);return items.length>0&&<div key={String(primary)}><p>{query?"搜索结果 · ":""}{primary?"推荐推进顺序":"按需调用的任务材料"} <span>{items.length}</span></p>{items.map(t=>{const state=ops?taskState(ops,t.id):null;return <button key={t.id} data-task-choice={t.id} aria-pressed={task.id===t.id} onClick={()=>select(t.id)}><span className={s.taskSymbol} data-state={state?.status}>{state?.status==="done"?<Check size={14}/>:state?.status==="blocked"?<AlertTriangle size={14}/>:<Circle size={11}/>}</span><span><small>{t.code} · {t.category}</small><strong>{t.title}</strong><em>{state?STATUS_LABELS[state.status]:"读取记录中"}{t.role!=="lesson"?` · ${roles[t.role]}`:""}</em></span></button>})}</div>})}{shown.length===0&&<p className={s.note}>没有匹配的子任务，试试课程名称或任务编号。</p>}</div>
+            <div className={s.taskList}>{config.taskGroups&&!query&&station.steps.length?config.taskGroups.filter(g=>g.station===station.id).map(g=><details key={g.id+task.id} open={g.steps.includes(task.id)} data-task-group={g.id}><summary>{g.title}<small> · {g.steps.length} 步</small></summary>{renderTasks(shown.filter(t=>g.steps.includes(t.id)))}</details>):[true,false].map(primary=>{const items=shown.filter(t=>(t.role==="lesson"||t.role==="micro")===primary);return items.length>0&&<div key={String(primary)}><p>{query?"搜索结果 · ":""}{primary?"推荐推进顺序":"按需调用的任务材料"} <span>{items.length}</span></p>{renderTasks(items)}</div>})}{shown.length===0&&<p className={s.note}>没有匹配的子任务，试试课程名称或任务编号。</p>}</div>
           </aside>
           <article className={s.taskOrder} data-room-reveal="body" data-task-order={task.id} id="mission-task-order">
             <div className={s.screenBezel}><span><ClipboardList size={13}/>电子任务单</span><small>{task.code}</small></div>
             <div className={s.orderHeader}><span>{task.code} / {roles[task.role]}</span><span>{task.category}</span></div><h2>{task.title}</h2><p className={s.taskGoal}>{task.goal}</p>
+            {config.TaskContext&&<config.TaskContext task={task}/>}
             {task.note&&<p className={s.context}>{task.note}</p>}
             <div className={s.output}><Flag size={19}/><div><h3>这一步要带回</h3>{task.outputs.map((o,i)=><p key={i}>{o}</p>)}</div></div>
             <section className={s.orderSection}><h3><span>01</span>执行步骤</h3><ol>{task.actions.map((action,i)=><li key={i}>{action}</li>)}</ol><Link className={s.primary} data-task-classroom href={taskClassroomHref(task)}>进入{task.role==="micro"?"任务体验":"原课堂完成这一步"}<ArrowRight size={16}/></Link><p className={s.note}>课堂中的讲解、视频、动画、实验和作业沿用原有位置与记录。</p></section>
