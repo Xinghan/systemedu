@@ -1,5 +1,6 @@
 "use client"
 
+import { remainingContext } from "@/lib/project-lines/remaining-missions"
 import Link from "next/link"
 import { SpaceJourneyProjectBanner } from "@/components/mission/space-journey-links"
 import { projectCoverProps } from "@/lib/project-cover"
@@ -148,6 +149,7 @@ export default function ProjectHome() {
   const bio=bioContext(slug,searchParams.get("node")||"",searchParams.get("mission")==="biomedicine")
   const energy=energyContext(slug,searchParams.get("node")||"",searchParams.get("mission")==="energy")
   const robotics=roboticsContext(slug,searchParams.get("node")||"",searchParams.get("mission")==="robotics")
+  const remaining=remainingContext(slug,searchParams.get("node")||"",searchParams.get("mission"))
   const { loggedIn, hydrate } = useAuthStore()
 
   const [project, setProject] = useState<DetailProject | null>(null)
@@ -225,7 +227,7 @@ export default function ProjectHome() {
   }, [modules])
 
   const firstModuleId = modules[0]?.module_id
-  const targetModuleId = robotics?.node.module || energy?.node.module || bio?.node.module || mission?.node.module || lastModuleId || firstModuleId
+  const targetModuleId = remaining?.context.node.module || robotics?.node.module || energy?.node.module || bio?.node.module || mission?.node.module || lastModuleId || firstModuleId
   const completed = lastModuleId
     ? modules.findIndex((m) => m.module_id === lastModuleId)
     : 0
@@ -233,7 +235,7 @@ export default function ProjectHome() {
 
   async function handlePull() {
     if (!loggedIn) {
-      router.push(`/login?next=${encodeURIComponent(robotics ? roboticsLibraryHref(slug,robotics.node.module) : energy ? energyLibraryHref(slug,energy.node.module) : bio ? bioLibraryHref(slug,bio.node.module) : mission ? missionLibraryHref(mission.node.module) : `/library/${slug}`)}`)
+      router.push(`/login?next=${encodeURIComponent(remaining ? remaining.mission.libraryHref(slug,remaining.context.node.module) : robotics ? roboticsLibraryHref(slug,robotics.node.module) : energy ? energyLibraryHref(slug,energy.node.module) : bio ? bioLibraryHref(slug,bio.node.module) : mission ? missionLibraryHref(mission.node.module) : `/library/${slug}`)}`)
       return
     }
     setPulling(true)
@@ -241,7 +243,7 @@ export default function ProjectHome() {
       await myProjects.pull(slug)
       setPulled(true)
       toast.success(t("library.pulled_toast"))
-      router.push(robotics ? roboticsLessonHref(robotics.node.ref) : energy ? energyLessonHref(energy.node.ref) : bio ? bioLessonHref(bio.node.ref) : mission ? missionLessonHref(mission.node.ref) : "/home")
+      router.push(remaining ? remaining.mission.lessonHref(remaining.context.node.ref) : robotics ? roboticsLessonHref(robotics.node.ref) : energy ? energyLessonHref(energy.node.ref) : bio ? bioLessonHref(bio.node.ref) : mission ? missionLessonHref(mission.node.ref) : "/home")
     } catch (err) {
       toast.error(err instanceof Error ? err.message : t("library.pull_failed"))
     } finally {
@@ -509,7 +511,7 @@ export default function ProjectHome() {
               </Link>
             ) : !loggedIn ? (
               <Link
-                href={`/login?next=${encodeURIComponent(robotics ? roboticsLibraryHref(slug,robotics.node.module) : energy ? energyLibraryHref(slug,energy.node.module) : bio ? bioLibraryHref(slug,bio.node.module) : mission ? missionLibraryHref(mission.node.module) : `/library/${slug}`)}`}
+                href={`/login?next=${encodeURIComponent(remaining ? remaining.mission.libraryHref(slug,remaining.context.node.module) : robotics ? roboticsLibraryHref(slug,robotics.node.module) : energy ? energyLibraryHref(slug,energy.node.module) : bio ? bioLibraryHref(slug,bio.node.module) : mission ? missionLibraryHref(mission.node.module) : `/library/${slug}`)}`}
                 className="btn btn-violet btn-lg"
                 style={{ justifyContent: "center" }}
               >
@@ -528,7 +530,7 @@ export default function ProjectHome() {
               </button>
             ) : targetModuleId ? (
               <Link
-                href={robotics ? roboticsLessonHref(robotics.node.ref) : energy ? energyLessonHref(energy.node.ref) : bio ? bioLessonHref(bio.node.ref) : mission ? missionLessonHref(mission.node.ref) : lessonPath(slug, targetModuleId)}
+                href={remaining ? remaining.mission.lessonHref(remaining.context.node.ref) : robotics ? roboticsLessonHref(robotics.node.ref) : energy ? energyLessonHref(energy.node.ref) : bio ? bioLessonHref(bio.node.ref) : mission ? missionLessonHref(mission.node.ref) : lessonPath(slug, targetModuleId)}
                 className="btn btn-violet btn-lg"
                 style={{ justifyContent: "center" }}
               >

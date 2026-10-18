@@ -27,3 +27,7 @@ AI 主线：卫星 61 节＋地形标注 3 节＋预测检验 4 节；蚁群 60 
 ## 复查命令
 
 网站根目录：python3 tools/mission-authoring/integrate-remaining-missions.py；node artifacts/remaining-missions-20261018/verify-core.cjs；浏览器脚本用 4020 开发服务。构建与类型检查串行运行，避免 .next 类型文件被重写。
+
+## 本批完成状态
+
+2026-10-18：实施步骤 1–6 已完成并通过对应验收，网站与源仓库归档完成。详细证据见 artifacts/remaining-missions-20261018/verification-summary.md；本批不部署、不合并。

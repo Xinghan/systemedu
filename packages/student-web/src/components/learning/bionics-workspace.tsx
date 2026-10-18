@@ -1,4 +1,5 @@
 'use client'
+import { RemainingMicroBridge } from "@/components/mission/remaining-mission-lesson"
 import { useSearchParams } from "next/navigation"
 import { RoboticsWorkStrip } from "@/components/mission/robotics-mission-lesson"
 import { RoboticsBriefing } from "@/components/mission/robotics-briefing"
@@ -16,7 +17,7 @@ import {BionicsPlot,BionicsDelivery,BionicsPhysical,BionicsChallenge,bionicsBody
 import {LearningRecordStatus} from './learning-record-status'
 import s from './bionics-workspace.module.css'
 const labels={window:['平均窗口','点','越长可能越平滑，也可能拖慢响应。'],on:['闭合阈值','','达到此值才累计闭合确认。'],off:['松开阈值','','必须低于闭合阈值，中间区域保持状态。'],confirm:['连续确认','次','每 0.2 秒取一次样本。'],finger:['转轴到接触点','mm','打印夹指的有效长度。'],gap:['零位间隙','mm','水平夹指的接触点到固定承接面的距离。'],angle:['向下转角','°','理想点接触几何，不表示真实夹持力。'],bore:['名义配合孔径','mm','先打印试配片，再按实物调整。']} as const
-export function BionicsMicroProject({id,title}:{id:string;title:string}){const line=primaryProjectLine(id,'neuro-bionics')!,mission=useSearchParams().get('mission')==='robotics'&&id==='grasp-a-virtual-block';return <main className={s.micro}><Link href={mission?"/mission/robotics":`/library?view=lines&line=${line.id}`}>← {line.title.zh}</Link><p>01 / 约三分钟 · 先让一个想法动起来</p><h1>{title}</h1><p>{id==='open-a-signal-gate'?'先运行一次，让信号控制门；改一个阈值再试，找到误开和迟开的区别。':'转动夹指，比较碰不到、接近和过行程。留下自己的两版设计。'}</p><>{mission&&<><RoboticsWorkStrip taskId={"micro:"+id}/><RoboticsBriefing stationId="discovery"/></>}<BionicsWorkspace id={id} node="M01"/>{mission&&<Link href="/learn/aloha-bimanual-apprentice/M01?mission=robotics">领取双臂任务 →</Link>}</></main>}
+export function BionicsMicroProject({id,title}:{id:string;title:string}){const line=primaryProjectLine(id,'neuro-bionics')!,mission=useSearchParams().get('mission')==='robotics'&&id==='grasp-a-virtual-block';return <main className={s.micro}><Link href={mission?"/mission/robotics":`/library?view=lines&line=${line.id}`}>← {line.title.zh}</Link><p>01 / 约三分钟 · 先让一个想法动起来</p><h1>{title}</h1><p>{id==='open-a-signal-gate'?'先运行一次，让信号控制门；改一个阈值再试，找到误开和迟开的区别。':'转动夹指，比较碰不到、接近和过行程。留下自己的两版设计。'}</p><>{mission&&<><RoboticsWorkStrip taskId={"micro:"+id}/><RoboticsBriefing stationId="discovery"/></>}<RemainingMicroBridge project={id}/><BionicsWorkspace id={id} node="M01"/><RemainingMicroBridge project={id} after/>{mission&&<Link href="/learn/aloha-bimanual-apprentice/M01?mission=robotics">领取双臂任务 →</Link>}</></main>}
 export function BionicsCourseWorkspace({course,node}:{course:GuidedCourse;node:GuidedModule}){return <BionicsWorkspace id={course.id} node={node.module_id}/>}
 function BionicsWorkspace({id,node}:{id:string;node:string}){const identity=useLearningIdentity();return <Session key={`${id}:${identity.owner}`} id={id} node={node}/>}
 function Session({id,node}:{id:string;node:string}){
