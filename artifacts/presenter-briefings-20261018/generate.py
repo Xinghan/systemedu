@@ -2,9 +2,10 @@
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor
 from urllib.parse import urlparse
-import argparse,json,logging,os,subprocess,sys
+import argparse,json,logging,os,subprocess,sys,time
 import requests
 from dashscope import VideoSynthesis
+from curl_transport import verified_curl
 from systemedu.core.config import get_config
 from systemedu.core.education.tts import _without_proxy_env
 logging.disable(logging.CRITICAL)
@@ -25,10 +26,12 @@ def voice(f):
  prompt=f"写实电影单镜头，延续参考图中同一位中国{person['role']}{person['name']}的身份、面容、发型、衣着和真实实验室。第一人称学生视角，研究员向坐在对面的学生讲述任务。自然、专注、友好，保持眼神交流。前0.5秒自然眨眼，之后严格跟随提供的中文音频讲话，台词为‘{f['dialogue']}’。说话时有一次小幅开放手势和轻微点头，手保持正常形状，不触摸器材，不遮挡脸。音频结束时合嘴，自然停顿，不添加台词。稳定固定中景，无切镜，背景设备稳定。真实皮肤与自然口型，无夸张动作，不加字幕、文字、水印、额外人物。"
  (d/'prompt.txt').write_text(prompt+'\n');print(json.dumps({'line':f['line'],'station':f['station'],'voice_seconds':round(seconds,2)}),flush=True)
 
-def video(f,action):
+def video(f,action,retry_rejected=False):
  d=folder(f);state_path=d/'task.json';target=d/'source.mp4';key=get_config().tts.api_key or os.environ.get('DASHSCOPE_API_KEY');previous=json.loads(state_path.read_text()) if state_path.exists() else {}
  if not key:raise ValueError('Provider not configured')
  if action=='submit':
+  if previous and retry_rejected and previous.get('http_status')==429 and previous.get('code')=='Throttling.RateQuota' and not previous.get('task_id'):
+   history=d/'rejected-attempts.json';rejected=json.loads(history.read_text()) if history.exists() else [];rejected.append(previous);save(history,rejected);state_path.unlink();previous={}
   if previous:return print(json.dumps({'line':f['line'],'station':f['station'],'skipped_existing_task':True}),flush=True)
   with state_path.open('x') as fp:json.dump({'line':f['line'],'station':f['station'],'status':'SUBMITTING'},fp)
   response=VideoSynthesis.async_call(model='wan2.6-i2v',api_key=key,img_url=(P/f"mission/{f['line']}/video/posters/presenter-v2.webp").as_uri(),audio_url=(d/'input-10s.mp3').as_uri(),prompt=(d/'prompt.txt').read_text(),negative_prompt='换脸，人物变形，夸张笑容，嘴型不同步，机械动作，多余手指，融化的手，屏幕扭曲，镜头切换，字幕，文字，额外人物',resolution='1080P',duration=10,prompt_extend=False,watermark=False,seed=202610180+list(PEOPLE).index(f['line'])*8+f['level'])
@@ -50,10 +53,10 @@ def video(f,action):
   state.update(local_video=str(target.relative_to(R)),bytes=target.stat().st_size);save(state_path,state)
 
 if __name__=='__main__':
- parser=argparse.ArgumentParser();parser.add_argument('action',choices=['voice','submit','fetch']);parser.add_argument('--line');parser.add_argument('--station');parser.add_argument('--workers',type=int,default=3);args=parser.parse_args();items=[f for f in SCRIPTS if(not args.line or f['line']==args.line)and(not args.station or f['station']==args.station)]
+ parser=argparse.ArgumentParser();parser.add_argument('action',choices=['voice','submit','fetch']);parser.add_argument('--line');parser.add_argument('--station');parser.add_argument('--workers',type=int,default=1);parser.add_argument('--retry-rejected',action='store_true');args=parser.parse_args();items=[f for f in SCRIPTS if(not args.line or f['line']==args.line)and(not args.station or f['station']==args.station)]
  def work(f):
-  try:voice(f) if args.action=='voice' else video(f,args.action);return True
+  try:voice(f) if args.action=='voice' else video(f,args.action,args.retry_rejected);time.sleep(1 if args.action=='submit' else .3);return True
   except Exception as e:print(json.dumps({'line':f['line'],'station':f['station'],'error_type':type(e).__name__,'no_resubmission':True}),flush=True);return False
- with _without_proxy_env():
+ with _without_proxy_env(), verified_curl():
   with ThreadPoolExecutor(max_workers=args.workers)as pool:results=list(pool.map(work,items))
  sys.exit(0 if all(results) else 1)
