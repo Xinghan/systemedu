@@ -92,6 +92,7 @@ interface CourseContentViewProps {
   /** Already authorized and loaded course, using the same classroom renderer. */
   preparedLesson?: {
     data: CourseContentData
+    previewAudioSources?: Record<string, string>
     beforeContent?: React.ReactNode
     afterContent?: React.ReactNode
     assignment?: React.ReactNode
@@ -2857,6 +2858,7 @@ export function CourseContentView({
       moduleId={knode?.module_id ?? String(nodeId)}
       knodeDir={courseData?.knode_dir}
       title={knode?.title}
+      previewAudioSources={preparedLesson?.previewAudioSources}
     >
       <div className="flex flex-col h-full">
         <Header

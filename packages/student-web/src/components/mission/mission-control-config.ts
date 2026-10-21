@@ -1,5 +1,5 @@
 import type { ComponentType } from "react"
-import type { MissionEngine, MissionTask } from "@/lib/project-lines/mission-operations-core"
+import type { MissionEngine, MissionTask, MissionOperations } from "@/lib/project-lines/mission-operations-core"
 import type { MissionRoomSkin } from "./mission-room-environment"
 import type { MissionNodeState } from "@/lib/project-lines/space-mission-progress"
 export type ControlStation = {id:string;code:string;place:string;message:string;input:string;handoff:string;gate:string;dependsOn:string[];steps:string[]}
@@ -10,5 +10,9 @@ export type MissionControlConfig = {
  classroomHref:(task:MissionTask)=>string;
  initialProgress:()=>Record<string,MissionNodeState>;
  readProgress:(token:string|null,owner:string,update:(ref:string,state:MissionNodeState)=>void)=>Promise<void>;
+ taskGroups?:{id:string;station:string;title:string;steps:string[]}[];
+ nextRef?:(ref:string)=>string|undefined;
+ nextTask?:(ops:MissionOperations|null)=>MissionTask;
+ TaskContext?:ComponentType<{task:MissionTask}>;
  Dossier:ComponentType
 }

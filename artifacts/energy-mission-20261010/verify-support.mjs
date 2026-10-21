@@ -1,0 +1,6 @@
+import {createRequire} from 'node:module';
+const {chromium,expect}=createRequire(new URL('../../package.json',import.meta.url))('@playwright/test');
+import fs from 'node:fs/promises';
+const b=await chromium.launch({headless:true}),c=await b.newContext({reducedMotion:'reduce'}),p=await c.newPage(),errors=[];p.on('pageerror',e=>errors.push(e.message));
+await c.addInitScript(()=>{for(const s of ['harvest','integration'])localStorage.setItem(`systemedu:energy-stage-film:v1:guest:${s}`,'seen')});
+try{for(const id of ['compare-energy-settings','design-a-printed-transmission','build-a-printed-generator']){await p.goto(`http://127.0.0.1:4017/explore/energy-motion/${id}?node=M01&mission=energy`);await expect(p.locator(`[data-guided-course="${id}"]`)).toBeVisible();await expect(p.locator('[data-energy-context]')).toBeVisible();await expect(p.locator('#lesson-notebook')).toBeAttached();await expect(p.locator('[data-energy-footer]')).toContainText('回到当前工程任务')};expect(errors).toEqual([]);await fs.writeFile('artifacts/energy-mission-20261010/support-verification.json',JSON.stringify({passed:true,checks:['Three legacy support classrooms load and return to their main task anchors'],errors},null,2)+'\n')}finally{await b.close()}

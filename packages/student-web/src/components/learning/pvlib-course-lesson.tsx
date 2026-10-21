@@ -1,6 +1,8 @@
 "use client"
 
 import Link from "next/link"
+import { energyContext } from "@/lib/project-lines/energy-mission"
+import { EnergyLessonBrief, EnergyLessonFooter } from "@/components/mission/energy-mission-lesson"
 import { useRouter, useSearchParams } from "next/navigation"
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react"
 import ReactMarkdown from "react-markdown"
@@ -123,6 +125,7 @@ export interface PvlibCourseLessonProps {
 export function PvlibCourseLesson({ moduleId, courseTitle, modules, stages, knodeDir, content, slides, assignment, recordConfig, contentVersion, initialView = "reading", initialLabMode = "game", published = false, downloadControl }: PvlibCourseLessonProps) {
   const router = useRouter()
   const search = useSearchParams()
+  const energy = energyContext(PVLIB_SLUG,moduleId,search.get("mission")==="energy")
   const [level, setLevel] = useState<KnowledgeLevel>("K1")
   const [candidate, setCandidate] = useState<ArtifactCandidate | null>(null)
   const offeredLevels = (["K1", "K2", "K3", "K4", "K5"] as KnowledgeLevel[]).filter(candidate => candidate === "K1" || content.theories?.some(theory => theory.level_bodies?.some(body => body.level === candidate)))
@@ -138,7 +141,7 @@ export function PvlibCourseLesson({ moduleId, courseTitle, modules, stages, knod
   const index = modules.findIndex(module => module.id === moduleId)
   const current = modules[index]
   const stage = stages.find(stage => stage.id === current.stage)
-  const href = (id: string) => `${published ? `/learn/${PVLIB_SLUG}` : "/preview/pvlib"}/${encodeURIComponent(id)}`
+  const href = (id: string) => `${published ? `/learn/${PVLIB_SLUG}` : "/preview/pvlib"}/${encodeURIComponent(id)}${energy?"?mission=energy":""}`
   const classroomContent = useMemo(() => pvlibClassroomContent(content), [content])
   const data = useMemo(() => ({ status: "ready" as const, course_content: classroomContent, slides, knode_dir: knodeDir }), [classroomContent, slides, knodeDir])
   const knode: KnodeInfo = { id: 0, module_id: moduleId, title: current.title, summary: recordConfig.output, difficulty_level: 0, content_type: "lesson", acceptance_type: "artifact", estimated_minutes: 0, xp_reward: 0, prerequisite_indices: [] }
@@ -196,8 +199,9 @@ export function PvlibCourseLesson({ moduleId, courseTitle, modules, stages, knod
 
   return <main className="min-h-screen bg-[var(--paper)] text-[var(--ink)]" data-pvlib-classroom={moduleId}>
     <div className="mx-auto max-w-[1440px] px-4 py-5 sm:px-8">
+      {energy && <EnergyLessonBrief context={energy}/>}
       <nav aria-label="课程位置" className="mb-5 flex flex-wrap items-center gap-3 text-sm text-[var(--sub)]">
-        <Link href={`/library/${PVLIB_SLUG}`}>← {courseTitle}</Link><span> / {stage?.title} · {moduleId}</span>
+        <Link href={`/library/${PVLIB_SLUG}${energy ? `?mission=energy&node=${moduleId}` : ""}`}>← {courseTitle}</Link><span> / {stage?.title} · {moduleId}</span>
       </nav>
       <div className="grid min-w-0 gap-6 lg:grid-cols-[240px_minmax(0,1fr)]">
         <aside className="min-w-0 lg:sticky lg:top-20 lg:max-h-[calc(100dvh-7rem)] lg:overflow-auto lg:self-start" aria-label="课程目录">
@@ -216,12 +220,13 @@ export function PvlibCourseLesson({ moduleId, courseTitle, modules, stages, knod
                 {delivery.body.artifact && <p className="mt-2 text-sm">已关联实验操作产物</p>}<LearningRecordStatus record={delivery} />
               </div>}
             </div> }}>
-            <CourseContentView projectName={PVLIB_SLUG} nodeId={0} knode={knode} knowledgeLevel={level} onClose={() => router.push(`/library/${PVLIB_SLUG}`)}
+            <CourseContentView projectName={PVLIB_SLUG} nodeId={0} knode={knode} knowledgeLevel={level} onClose={() => router.push(`/library/${PVLIB_SLUG}${energy ? `?mission=energy&node=${moduleId}` : ""}`)}
               preparedLesson={{ data, beforeContent, afterContent, assignment: assignmentContent }} />
           </CourseMediaContext.Provider>
           <nav aria-label="顺序浏览课程" className="mt-8 flex justify-between gap-4 border-t border-[var(--border)] px-4 py-6 text-sm">{index > 0 ? <Link href={href(modules[index - 1].id)}>← {modules[index - 1].id} 上一节</Link> : <span />}<span>{index + 1} / {modules.length}</span>{index + 1 < modules.length ? <Link href={href(modules[index + 1].id)}>{modules[index + 1].id} 下一节 →</Link> : <span>本课程终点</span>}</nav>
         </div>
       </div>
     </div>
+    {energy && <EnergyLessonFooter context={energy}/>}
   </main>
 }
