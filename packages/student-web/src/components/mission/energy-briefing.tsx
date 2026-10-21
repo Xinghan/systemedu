@@ -41,7 +41,7 @@ function BriefingSession({ stationId, owner, auto }: { stationId: string; owner:
       openedOwner.current = owner
       setPlaying({ automatic: false, autoplay: true })
     }}><Play size={15}/>任务短片 · {station.place}</button>
-    {playing && <IntroFilm media={media} stationId={stationId} companion="能源实验室"
+    {playing && <IntroFilm media={media} stationId={stationId} companion={media.presenterName}
       poster={media.poster}
       autoPlay={playing.autoplay} close={close} onEnded={close}
       returnLabel={playing.automatic ? "跳过短片，开始任务" : "回到当前任务"}
