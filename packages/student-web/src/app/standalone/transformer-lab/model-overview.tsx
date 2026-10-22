@@ -30,8 +30,10 @@ export function ModelOverview({ onOpen, passed, storageMessage }: Props) {
   return <div className={s.overview}>
     <section className={s.intro} aria-labelledby='overview-title'>
       <div><span className={s.eyebrow}>THE BIG PICTURE / 先看整体</span><h1 id='overview-title' tabIndex={-1}>Transformer，<br />是一种怎样的结构？</h1></div>
-      <div className={s.definition}><p>它是一类处理序列的神经网络。<strong>自注意力</strong>让每个位置读取相关位置的信息，<strong>前馈网络</strong>进一步变换特征；把这样的模块叠起来，就得到逐层更新的上下文表示。</p><p>用于语言生成时，模型把这些表示转成<strong>下一个词元的概率</strong>，再不断重复。下面先读懂结构，再点击任意部件，进入它的动画、数学与代码实验。</p></div>
+      <div className={s.definition}><p>它是一类处理序列的神经网络。<strong>自注意力</strong>让每个位置读取相关位置的信息，<strong>前馈网络</strong>进一步变换特征；把这样的模块叠起来，就得到逐层更新的上下文表示。</p><p>用于语言生成时，模型把这些表示转成<strong>下一个词元的概率</strong>，再不断重复。下面先读懂结构，再点击任意部件，从数学基础、公式逐项解释和手算，走到代码与 3D 实验。</p></div>
     </section>
+
+    <section className={s.studyEntry} aria-label='从数学基础开始的引导路径'><div><span className={s.eyebrow}>NEW / 从简单计算走到完整模型</span><h2>不懂一个符号，就从它的基础学起。</h2><p>向量与形状 → 点积与矩阵 → 概率与统计 → 逐项拆解公式 → 手算与代码 → 真实 3D</p></div><button onClick={()=>open('embedding')}>从第一步开始<ArrowRight size={16}/></button></section>
 
     <section className={s.architecture} aria-label='Transformer 架构总览'>
       <div className={s.sectionTop}><div><span className={s.eyebrow}>01 / 架构与数据流</span><h2>从一串符号，到一次预测</h2></div><div className={s.variantButtons} role='group' aria-label='比较 Transformer 架构'><button aria-pressed={variant === 'decoder'} onClick={() => setVariant('decoder')}>本实验 · GPT 式</button><button aria-pressed={variant === 'original'} onClick={() => { setVariant('original'); setStep(null) }}>原始 Transformer</button></div></div>
@@ -56,7 +58,7 @@ export function ModelOverview({ onOpen, passed, storageMessage }: Props) {
     </section>
 
     <section className={s.cutaway} id='block-map' aria-labelledby='block-title'>
-      <div className={s.sectionTop}><div><span className={s.eyebrow}>02 / 打开一个 BLOCK</span><h2 id='block-title'>先交换信息，再加工特征</h2></div><span className={s.clickHint}><ScanLine size={15} />点击有 ↗ 的模块，进入交互学习</span></div>
+      <div className={s.sectionTop}><div><span className={s.eyebrow}>02 / 打开一个 BLOCK</span><h2 id='block-title'>先交换信息，再加工特征</h2></div><span className={s.clickHint}><ScanLine size={15} />点击模块，从数学基础逐步走向 3D</span></div>
       <div className={s.cutawayGrid}>
         <div className={s.block}>
           <div className={s.blockMeta}><span>GPT STYLE / PRE-LN</span><span>输入 x、输出 y ∈ ℝ<sup>T×48</sup></span></div>
@@ -95,7 +97,7 @@ export function ModelOverview({ onOpen, passed, storageMessage }: Props) {
           <p>先建立每个部件的作用与顺序，再打开细节。导览高亮的是结构步骤，不是数值推理动画。</p>
           {current ? <><div className={s.tourText} aria-live='polite' aria-atomic='true'><span className={s.tourCount}>{String(step! + 1).padStart(2, '0')} / {tour.length}</span><h4>{current.title}</h4><p>{current.text}</p><code>{current.shape}</code></div><div className={s.tourControls}><button aria-label='导览上一步' disabled={step === 0} onClick={() => setStep(i => Math.max(0, i! - 1))}><ChevronLeft size={16} /></button><button onClick={() => setStep(i => i === tour.length - 1 ? null : i! + 1)}>{step === tour.length - 1 ? '结束导览' : '下一步'}<ChevronRight size={16} /></button></div><button className={s.enter} onClick={() => open(current.concept)}>打开这一步的交互实验<ArrowUpRight size={16} /></button></> : <button className={s.enter} onClick={() => { setVariant('decoder'); setStep(0) }}>开始 10 步结构导览<ArrowRight size={16} /></button>}
           <div className={s.legend}><h4>读图时记住三件事</h4><p><b>Token</b> 是序列中的离散单位。在这个小模型中，一个字符就是一个 token。</p><p><b>T × 48</b> 表示 T 个位置，每个位置有 48 个特征。特征维没有预设的自然语言含义。</p><p><b>参数与表示不同。</b>权重是训练学到的；图中流动的表示随输入改变。这里观察的是一次前向计算。</p></div>
-          <div className={s.learningNote}><span>{passed.length} / 8 部件已通过</span><p>点击部件后可做概念题、代码填空与数值检查。仅浏览总览不会计为掌握。</p></div>
+          <div className={s.learningNote}><span>{passed.length} / 8 部件已通过</span><p>点击部件后先读基础与公式，再做手算、代码和 3D 检查。数学学习记录单独保存；此处为原模型验收进度。</p></div>
         </aside>
       </div>
     </section>

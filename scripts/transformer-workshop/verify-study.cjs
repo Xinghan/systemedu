@@ -1,0 +1,28 @@
+const fs = require('node:fs'), path = require('node:path'), assert = require('node:assert/strict');
+const ts = require('../../packages/student-web/node_modules/typescript');
+const katex = require('../../packages/student-web/node_modules/katex');
+for (const ext of ['.ts', '.tsx']) require.extensions[ext] = (m, f) => m._compile(ts.transpileModule(fs.readFileSync(f, 'utf8'), { fileName: f, compilerOptions: { target: ts.ScriptTarget.ES2020, module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX } }).outputText, f);
+const base = '../../packages/student-web/src/app/standalone/transformer-lab/';
+const { FOUNDATIONS, STUDIES } = require(base + 'study-content.ts');
+const { TOPICS } = require(base + 'model-content.ts');
+const { validStudyRecord } = require(base + 'study-record.ts');
+const { tinyAttention, normalize, tinyEmbedding, project, tinyMLP, matrixCell } = require(base + 'study-model.ts');
+const { softmax } = require(base + 'math.ts');
+const checks = [], check = (name, fn) => { fn(); checks.push({ name, pass: true }); };
+const close = (actual, expected, tolerance = 1e-6) => { assert.equal(actual.length, expected.length); actual.forEach((v, i) => assert.ok(Number.isFinite(v) && Math.abs(v - expected[i]) < tolerance, `${v} != ${expected[i]}`)); };
+let formulas = 0;
+function formula(s) { katex.renderToString(s, { throwOnError: true, trust: false, strict: 'error' }); formulas++; }
+check('all eight model topics have complete study paths', () => { assert.deepEqual(Object.keys(STUDIES).sort(), TOPICS.map(t => t.id).sort()); for (const study of Object.values(STUDIES)) { assert.ok(study.terms.length >= 7); assert.ok(study.derivation.length >= 3); assert.equal(study.questions.length, 2); study.questions.forEach(q => assert.ok(q.answer >= 0 && q.answer < q.options.length)); study.terms.forEach(t => assert.ok(FOUNDATIONS[t.foundation])); } });
+check('foundation links are complete and acyclic', () => { function visit(id, trail = []) { assert.ok(FOUNDATIONS[id]); assert.ok(!trail.includes(id), trail.join(' → ')); FOUNDATIONS[id].requires.forEach(next => visit(next, [...trail, id])); } Object.keys(FOUNDATIONS).forEach(id => visit(id)); Object.values(STUDIES).forEach(s => s.prerequisites.forEach(id => visit(id))); });
+check('every formula, symbol and derivation renders in KaTeX', () => { for (const f of Object.values(FOUNDATIONS)) { formula(f.formula); f.steps.forEach(s => formula(s.formula)); } for (const s of Object.values(STUDIES)) { formula(s.formula); s.terms.forEach(t => formula(t.symbol)); s.derivation.forEach(d => formula(d.formula)); } });
+check('masked attention agrees with hand-computed example', () => { const a = tinyAttention([1, 0], 1); close(a.weights, [.6697615493, .3302384507, 0]); close(a.output, [1.3395230986, 1.3209538028]); });
+check('causal first query reads only itself and unmasking changes output', () => { close(tinyAttention([1, 0], 0).weights, [1, 0, 0]); close(tinyAttention([1, 0], 0).output, [2, 0]); assert.ok(tinyAttention([1, 0], 1, false).output[1] > 2); });
+check('layer normalization uses population variance and finite constant input', () => { const n = normalize([1, 3]); close([n.mean, n.variance], [2, 1]); close(n.output, [-.999995, .999995]); close(normalize([5, 5, 5], 2, .5).output, [.5, .5, .5]); });
+check('embedding separates token identity from position', () => { close(tinyEmbedding(1, 1), [.2, 1.9]); close(tinyEmbedding(1, 2, false), [0, 2]); close(tinyEmbedding(2, 2), [-1.1, 1.3]); });
+check('matrix row-column and head projection examples agree with hand calculation', () => { close([matrixCell(0, 0), matrixCell(0, 1), matrixCell(1, 0), matrixCell(1, 1)], [0, 2, 2, 4]); close([project([1, 2, 3, 4, 5, 6], 0).output, project([1, 2, 3, 4, 5, 6], 1).output], [.5, 8]); });
+check('MLP nonlinearity prevents collapsing the two linear layers', () => { close(tinyMLP([1, 0], false).output, [0, 1]); close(tinyMLP([1, 0]).output, [.682384, .158808], 1e-5); });
+check('stable softmax survives large shared shifts and preserves masking', () => { close(softmax([1000, 1001, -Infinity]), softmax([0, 1, -Infinity])); close(softmax([Math.log(2), Math.log(3), -Infinity]), [.4, .6, 0]); });
+check('study restoration rejects incompatible and malformed records', () => { const empty = { version: 1, levels: {}, answers: {}, foundations: {}, codes: {}, results: {}, events: [] }; assert.ok(validStudyRecord(empty)); assert.ok(validStudyRecord({ ...empty, levels: { embedding: 4 }, codes: { embedding: 'draft' } })); for (const bad of [null, { ...empty, version: 2 }, { ...empty, levels: { output: 5 } }, { ...empty, codes: { unknown: 'x' } }, { ...empty, results: { output: { code: 'x', pass: 'true', text: '' } } }]) assert.ok(!validStudyRecord(bad)); });
+const evidence = { foundations: Object.keys(FOUNDATIONS).length, topics: Object.keys(STUDIES).length, explainedTerms: Object.values(STUDIES).reduce((n, s) => n + s.terms.length, 0), derivationSteps: Object.values(STUDIES).reduce((n, s) => n + s.derivation.length, 0), renderedFormulas: formulas, checks };
+const out = path.resolve(__dirname, '../../artifacts/transformer-foundations'); fs.mkdirSync(out, { recursive: true }); fs.writeFileSync(path.join(out, 'numerical-checks.json'), JSON.stringify(evidence, null, 2) + '\n');
+console.log(JSON.stringify(evidence, null, 2));

@@ -4,6 +4,7 @@ import { ArrowDownRight, ArrowUpRight, Box, ChevronRight, Code2, RotateCw, Pause
 import type { Concept, Explorer, Selection, Snapshot } from '@/lib/transformer-viz/bridge'
 import { TOPICS, HINTS } from './model-content'
 import { ModelOverview } from './model-overview'
+import { MathStudy } from './math-study'
 import { attention, fixtures, gradeRun, softmax, type AttentionOutput } from './math'
 import { usePython } from './use-python'
 import s from './model-explorer.module.css'
@@ -22,6 +23,7 @@ function valid(v:unknown):v is Notebook {
 export function TransformerModelExplorer(){
  const canvas=useRef<HTMLCanvasElement>(null),panel=useRef<HTMLElement>(null),pendingConcept=useRef<Concept|null>(null)
  const [overview,setOverview]=useState(true),[hasOpened,setHasOpened]=useState(false)
+ const [study,setStudy]=useState<Concept|null>(null),[lastStudy,setLastStudy]=useState<Concept>('embedding')
  const [controller,setController]=useState<Explorer|null>(null)
  const [snapshot,setSnapshot]=useState(initial),[status,setStatus]=useState('正在加载 3D 模型与训练权重…'),[error,setError]=useState('')
  const [selected,setSelected]=useState<Concept|null>(null),[cell,setCell]=useState<Selection|null>(null),[report,setReport]=useState(false)
@@ -49,11 +51,12 @@ export function TransformerModelExplorer(){
   return()=>{stopped=true;abort.abort();instance?.destroy();}
  },[log,hasOpened])
  useEffect(()=>{
-  const frame=requestAnimationFrame(()=>{if(overview)document.getElementById('overview-title')?.focus({preventScroll:true});else panel.current?.focus({preventScroll:true})})
+  const frame=requestAnimationFrame(()=>{if(overview)document.getElementById('overview-title')?.focus({preventScroll:true});else if(study)document.getElementById('study-title')?.focus({preventScroll:true});else panel.current?.focus({preventScroll:true})})
   return()=>cancelAnimationFrame(frame)
- },[overview])
- const backToOverview=()=>{controller?.scrub(snapshot.time);setOverview(true);window.scrollTo({top:0})}
- const choose=(id:Concept)=>{pendingConcept.current=id;setOverview(false);setHasOpened(true);window.scrollTo({top:0});panel.current?.scrollTo({top:0});setSelected(id);setCell(null);setReport(false);setExperiment(1);setCodeTrace(null);controller?.focus(id);log(id,'explore','定位模型部件')}
+ },[overview,study])
+ const openStudy=(id:Concept)=>{controller?.scrub(snapshot.time);setStudy(id);setLastStudy(id);setOverview(false);setReport(false);window.scrollTo({top:0})}
+ const backToOverview=()=>{controller?.scrub(snapshot.time);setStudy(null);setOverview(true);window.scrollTo({top:0})}
+ const choose=(id:Concept)=>{setStudy(null);pendingConcept.current=id;setOverview(false);setHasOpened(true);window.scrollTo({top:0});panel.current?.scrollTo({top:0});setSelected(id);setCell(null);setReport(false);setExperiment(1);setCodeTrace(null);controller?.focus(id);log(id,'explore','定位模型部件')}
  const currentCode=topic?(notebook.codes[topic.id]??topic.starter):''
  const answer=topic?notebook.answers[topic.id]:undefined,result=topic?notebook.results[topic.id]:undefined
  const passed=TOPICS.filter(t=>notebook.answers[t.id]===t.answer&&notebook.results[t.id]?.pass&&notebook.results[t.id]?.code===(notebook.codes[t.id]??t.starter))
@@ -77,9 +80,10 @@ export function TransformerModelExplorer(){
  }
  const progress=passed.length/8
  return <main className={s.app}>
-  <header className={s.header}><a href='/standalone/transformer-lab' onClick={e=>{e.preventDefault();backToOverview()}} className={s.brand}><Box size={23}/><span>TRANSFORMER<span className={s.brandSmall}>MODEL EXPLORER</span></span></a><div className={s.identity}>{overview?'从结构总览，走进模型内部':'结构总览 / '+(topic?.title??'3D 模型')}<span>minGPT · 3 blocks · 3 heads · d = 48</span></div>{!overview&&<button className={s.backOverview} onClick={backToOverview}><ArrowUpRight size={15}/>返回结构总览</button>}<button className={!overview&&report?s.activeButton:''} onClick={()=>{setHasOpened(true);setOverview(false);setReport(r=>overview||!r);panel.current?.scrollTo({top:0});window.scrollTo({top:0})}}><Route size={17}/>学习轨迹<span className={s.count}>{passed.length}/8</span></button></header>
-  <div hidden={!overview}><ModelOverview onOpen={choose} passed={passed.map(t=>t.id)} storageMessage={storageError||(restored?'学习记录保存在此浏览器 · 独立于原课程':'正在恢复记录…')}/></div>
-  {hasOpened&&<div className={s.workspace} hidden={overview}>
+  <header className={s.header}><a href='/standalone/transformer-lab' onClick={e=>{e.preventDefault();backToOverview()}} className={s.brand}><Box size={23}/><span>TRANSFORMER<span className={s.brandSmall}>MODEL EXPLORER</span></span></a><div className={s.identity}>{overview?'从结构总览，走进模型内部':study?'从数学基础逐步走进模型':'结构总览 / '+(topic?.title??'3D 模型')}<span>minGPT · 3 blocks · 3 heads · d = 48</span></div>{!overview&&<button className={s.backOverview} onClick={backToOverview}><ArrowUpRight size={15}/>返回结构总览</button>}<button className={!overview&&report?s.activeButton:''} onClick={()=>{setStudy(null);setHasOpened(true);setOverview(false);setReport(r=>overview||!r);panel.current?.scrollTo({top:0});window.scrollTo({top:0})}}><Route size={17}/>学习轨迹<span className={s.count}>{passed.length}/8</span></button></header>
+  <div hidden={!overview}><ModelOverview onOpen={openStudy} passed={passed.map(t=>t.id)} storageMessage={storageError||(restored?'学习记录保存在此浏览器 · 独立于原课程':'正在恢复记录…')}/></div>
+  <div hidden={!study}><MathStudy id={study??lastStudy} onTopic={openStudy} onModel={choose} onOverview={backToOverview}/></div>
+  {hasOpened&&<div className={s.workspace} hidden={overview||!!study}>
    <section className={s.stage} aria-label='可交互的 Transformer 三维模型'>
     <div className={s.inputBar}><div><span className={s.kicker}>INPUT SEQUENCE</span><div className={s.inputControls}><input aria-label='输入 A B C 序列' value={input} maxLength={6} onChange={e=>setInput(e.target.value.toUpperCase())}/><button disabled={!controller} onClick={()=>{try{controller?.input(input);setInputError('');setCodeTrace(null);setCell(null);if(selected)log(selected,'experiment','修改输入：'+input)}catch(e){setInputError(String(e))}}}>前向计算 <ArrowDownRight size={14}/></button><button disabled={!controller||snapshot.tokens.length>=11} onClick={()=>{controller?.step();setCodeTrace(null);setCell(null);log('output','experiment','greedy 生成下一词元')}}>生成下一词元</button></div></div><div className={s.taskLabel}>A / B / C 排序模型<span>真实激活 · 有效位置 {snapshot.tokens.length} / 11</span></div></div>
     {inputError&&<p role='alert' className={s.inputError}>{inputError}</p>}
@@ -95,7 +99,7 @@ export function TransformerModelExplorer(){
     {report?<><div className={s.panelTop}><span className={s.kicker}>YOUR EXPLORATION</span><button aria-label='关闭学习轨迹' onClick={()=>setReport(false)}><X size={18}/></button></div><h1>你的模型地图</h1><p>按真实探索、作答与代码检查记录。打开部件不等于掌握概念。</p><div className={s.progressTrack}><i style={{width:progress*100+'%'}}/></div><h2>{independent.length===8?'本轮独立验收通过':passed.length===8?'练习通过，仍有提示辅助':'仍在建立理解'}</h2><p>已通过 {passed.length}/8 个部件的概念与代码检查；其中 {independent.length} 个未使用代码提示。这是本地练习记录。</p><div className={s.map}>{TOPICS.map(t=>{const seen=notebook.events.filter(e=>e.node===t.id),fail=seen.filter(e=>e.pass===false).length,ok=passed.some(p=>p.id===t.id);return <button key={t.id} onClick={()=>choose(t.id)} style={{'--node-color':t.color} as React.CSSProperties}><i>{ok?<Check size={15}/>:<Box size={15}/>}</i><div><strong>{t.title}</strong><span>{seen.length===0?'尚未探索':ok?'概念与代码已通过':notebook.answers[t.id]===t.answer?'概念已答对 · 代码待验证':'需要继续验证'}</span></div><small>{fail>0?fail+' 次待修正':seen.length+' 条记录'}</small></button>})}</div><h3>实际经过的路径</h3><div className={s.path}>{notebook.events.filter(e=>e.kind==='explore').slice(-16).map(e=><button key={e.id} onClick={()=>choose(e.node)}>{TOPICS.find(t=>t.id===e.node)?.en}<ChevronRight size={12}/></button>)}</div><h3>最近的过程证据</h3><div className={s.events}>{notebook.events.slice(-15).reverse().map(e=><details key={e.id}><summary><span>{e.pass===false?'待修正':e.pass===true?'通过':e.kind==='hint'?'提示':'探索'}</span> {TOPICS.find(t=>t.id===e.node)?.title}<small>{new Date(e.at).toLocaleTimeString('zh-CN')}</small></summary><pre>{e.detail}</pre></details>)}</div><a className={s.projectLink} href='/standalone/transformer-lab/attention-project.zip'>课后项目：实现因果注意力 <ArrowDownRight size={16}/></a><p className={s.fine}>项目要求 Python 3.12、NumPy 2.0.2；包含测试、目录约定和 Git 管理说明。</p></>:topic?<>
       <div className={s.panelTop}><span className={s.kicker}>INSIDE THE MODEL</span><span className={s.topicIndex}>{String(TOPICS.indexOf(topic)+1).padStart(2,'0')} / 08</span></div><h1>{topic.title}</h1><div className={s.enTitle} style={{color:topic.color}}>{topic.en}</div>
       {cell&&<div className={s.cellInfo}><span>你点中的格子 · {cell.name}</span><b>{cell.value===null?'该格没有可读值':Number.isFinite(cell.value)?cell.value.toFixed(6):String(cell.value)}</b><small>索引 [{cell.index.join(', ')}] · 图形网格 {cell.shape.join(' × ')}（不是 PyTorch 轴顺序）</small></div>}
-      <div className={s.formula}>{topic.formula}</div><div className={s.observe}><Play size={16}/><p>{topic.observe}</p><button onClick={()=>{controller?.focus(topic.id);controller?.play()}}>播放此过程</button></div>
+      <div className={s.formula}>{topic.formula}</div><button className={s.mathDeepen} onClick={()=>openStudy(topic.id)}><BookOpen size={16}/>逐项读公式 · 回补数学基础<ArrowUpRight size={14}/></button><div className={s.observe}><Play size={16}/><p>{topic.observe}</p><button onClick={()=>{controller?.focus(topic.id);controller?.play()}}>播放此过程</button></div>
       {topic.explanation.map((p,i)=><p key={i}>{p}</p>)}
       {(topic.id==='attention'||topic.id==='softmax'||topic.id==='projection')&&<section className={s.experiment}><div className={s.sectionHeading}><h3>当前模型的注意力</h3><span>真实激活</span></div><div className={s.selectors}><label>Block<select value={layer} onChange={e=>{setLayer(Number(e.target.value));setCodeTrace(null)}}>{[0,1,2].map(i=><option key={i} value={i}>{i+1}</option>)}</select></label><label>Head<select value={head} onChange={e=>{setHead(Number(e.target.value));setCodeTrace(null)}}>{[0,1,2].map(i=><option key={i} value={i}>{i+1}</option>)}</select></label></div><Heatmap rows={realWeights} tokens={snapshot.tokens}/>{topic.id==='softmax'&&<><label className={s.sliderLabel}>观察温度 τ <b>{experiment.toFixed(2)}</b><input aria-label='注意力观察温度' type='range' min='.15' max='3' step='.05' value={experiment} onChange={e=>setExperiment(Number(e.target.value))} onPointerUp={()=>log('softmax','experiment','观察温度 '+experiment)}/></label><Heatmap rows={tempWeights} tokens={snapshot.tokens}/><p className={s.fine}>下图是温度干预实验；上图和 3D 模型仍保留原计算。行：query；列：key。</p></>}</section>}
       {topic.id==='mlp'&&<section className={s.experiment}><h3>检查非线性门控</h3><GeluPlot x={geluX}/><label className={s.sliderLabel}>输入 x <b>{geluX.toFixed(2)}</b><input aria-label='GELU 输入' type='range' min='-4' max='4' step='.05' value={geluX} onChange={e=>setGeluX(Number(e.target.value))} onPointerUp={()=>log('mlp','experiment','GELU 输入 '+geluX)}/></label></section>}
