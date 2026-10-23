@@ -102,7 +102,7 @@ export function ModelOverview({ onOpen, passed, storageMessage }: Props) {
       </div>
     </section>
 
-    <footer className={s.footer}><div><b>从真实模型走向算法</b><p>进入模块后继续使用 Brendan Bycroft 的 3D 引擎、模型权重与本地推理。</p><span>{storageMessage}</span></div><div><a href='https://bbycroft.net/llm' target='_blank' rel='noreferrer'>LLM Visualization · 原始模型<ArrowUpRight size={13} /></a><a href='https://poloclub.github.io/transformer-explainer/' target='_blank' rel='noreferrer'>Transformer Explainer · 对照阅读<ArrowUpRight size={13} /></a><a href='/standalone/transformer-lab/model/NOTICE.txt' target='_blank' rel='noreferrer'>开源来源与许可<ArrowUpRight size={13} /></a></div></footer>
+    <footer className={s.footer}><div><b>从真实模型走向算法</b><p>进入模块后使用自主编写的 3D 场景、数值推理与依赖追踪。公开训练权重单独注明来源。</p><span>{storageMessage}</span></div><div><a href='https://bbycroft.net/llm' target='_blank' rel='noreferrer'>LLM Visualization · 权重来源与参考<ArrowUpRight size={13} /></a><a href='https://poloclub.github.io/transformer-explainer/' target='_blank' rel='noreferrer'>Transformer Explainer · 对照阅读<ArrowUpRight size={13} /></a><a href='/standalone/transformer-lab/model/NOTICE.txt' target='_blank' rel='noreferrer'>开源来源与许可<ArrowUpRight size={13} /></a></div></footer>
   </div>
 }
 
