@@ -235,7 +235,7 @@ export default function ProjectHome() {
 
   async function handlePull() {
     if (!loggedIn) {
-      router.push(`/login?next=${encodeURIComponent(remaining ? remaining.mission.libraryHref(slug,remaining.context.node.module) : robotics ? roboticsLibraryHref(slug,robotics.node.module) : energy ? energyLibraryHref(slug,energy.node.module) : bio ? bioLibraryHref(slug,bio.node.module) : mission ? missionLibraryHref(mission.node.module) : `/library/${slug}`)}`)
+      router.push(`/login?next=${encodeURIComponent(remaining ? remaining.mission.libraryHref(slug,remaining.context.node.module) : robotics ? roboticsLibraryHref(slug,robotics.node.module) : energy ? energyLibraryHref(slug,energy.node.module) : bio ? bioLibraryHref(slug,bio.node.module) : mission ? missionLibraryHref(mission.node.module, slug) : `/library/${slug}`)}`)
       return
     }
     setPulling(true)
@@ -511,7 +511,7 @@ export default function ProjectHome() {
               </Link>
             ) : !loggedIn ? (
               <Link
-                href={`/login?next=${encodeURIComponent(remaining ? remaining.mission.libraryHref(slug,remaining.context.node.module) : robotics ? roboticsLibraryHref(slug,robotics.node.module) : energy ? energyLibraryHref(slug,energy.node.module) : bio ? bioLibraryHref(slug,bio.node.module) : mission ? missionLibraryHref(mission.node.module) : `/library/${slug}`)}`}
+                href={`/login?next=${encodeURIComponent(remaining ? remaining.mission.libraryHref(slug,remaining.context.node.module) : robotics ? roboticsLibraryHref(slug,robotics.node.module) : energy ? energyLibraryHref(slug,energy.node.module) : bio ? bioLibraryHref(slug,bio.node.module) : mission ? missionLibraryHref(mission.node.module, slug) : `/library/${slug}`)}`}
                 className="btn btn-violet btn-lg"
                 style={{ justifyContent: "center" }}
               >

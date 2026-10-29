@@ -75,7 +75,7 @@ export default function LearnPage() {
   const robotics=roboticsContext(slug,moduleId,routeSearch.get("mission")==="robotics")
   const remaining=remainingContext(slug,moduleId,routeSearch.get("mission"))
   const returnPath = remaining ? remaining.mission.lessonHref(remaining.context.node.ref) : robotics ? roboticsLessonHref(robotics.node.ref) : energy ? energyLessonHref(energy.node.ref) : bio ? bioLessonHref(bio.node.ref) : mission ? missionLessonHref(mission.node.ref) : lessonPath(slug, moduleId)
-  const enrollmentPath = remaining ? remaining.mission.libraryHref(slug,moduleId) : robotics ? roboticsLibraryHref(slug,moduleId) : energy ? energyLibraryHref(slug,moduleId) : bio ? bioLibraryHref(slug,moduleId) : mission ? missionLibraryHref(moduleId) : `/library/${encodeURIComponent(slug)}`
+  const enrollmentPath = remaining ? remaining.mission.libraryHref(slug,moduleId) : robotics ? roboticsLibraryHref(slug,moduleId) : energy ? energyLibraryHref(slug,moduleId) : bio ? bioLibraryHref(slug,moduleId) : mission ? missionLibraryHref(moduleId, slug) : `/library/${encodeURIComponent(slug)}`
   const { loggedIn, hydrate } = useAuthStore()
 
   const [knodeMeta, setKnodeMeta] = useState<{

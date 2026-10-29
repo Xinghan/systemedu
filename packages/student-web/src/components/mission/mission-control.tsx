@@ -51,7 +51,7 @@ function ControlSession({config}:{config:MissionControlConfig}) {
     return ()=>{active=false}
   },[record.identity.token,record.identity.owner,attempt,readMissionProgress])
   const progress=ops?mainProgress(ops):{done:0,total:MISSION_STEPS.length}
-  const total=ops?Object.values(ops.time.totals).reduce((a,b)=>a+b,0):0
+  const total=ops?TASKS.reduce((sum,t)=>sum+(ops.time.totals[t.id]||0),0):0
   const blocked=ops?TASKS.filter(t=>taskState(ops,t.id).status==="blocked"):[]
   const sourceReady=Object.values(nodes).every(v=>v!=="loading")
   const stops:CampusStop[]=MISSION_STATIONS.map((place,i)=>{

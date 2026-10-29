@@ -1,6 +1,8 @@
 "use client"
 
 import { useCourseMedia } from "./course-media-context"
+import { LightkurveMaterialLink } from "./lightkurve-material-link"
+import { lightkurveCourseLink, LIGHTKURVE_COURSE } from "@/lib/lightkurve-course-links"
 import { PersistentTheoryQuiz } from "./persistent-question"
 import { NodeAssignmentPanel } from "./node-assignment-panel"
 
@@ -467,6 +469,7 @@ function ContentWithLinkSections({ content }: { content: string }) {
 
 function MarkdownBlock({ content }: { content: string }) {
   const t = useT()
+  const { projectName } = useContext(CourseIdentityContext)
   const [ytModal, setYtModal] = useState<{ videoId: string; title: string } | null>(null)
 
   if (!content?.trim()) return null
@@ -531,6 +534,7 @@ function MarkdownBlock({ content }: { content: string }) {
           <blockquote className="border-l-2 border-primary/40 pl-4 italic text-on-surface-variant my-4">{children}</blockquote>
         ),
         a: ({ href, children, node }) => {
+          if (projectName === LIGHTKURVE_COURSE && href && lightkurveCourseLink(href)) return <LightkurveMaterialLink href={href}>{children}</LightkurveMaterialLink>
           const videoId = href ? extractYouTubeId(href) : null
           if (videoId) {
             // Check if hast node contains an <img> child (thumbnail embed style: [![alt](src)](href))

@@ -1,0 +1,126 @@
+"use client"
+
+import Link from "next/link"
+import { useRouter, useSearchParams } from "next/navigation"
+import { missionContext, missionLibraryHref, missionLessonHref } from "@/lib/project-lines/space-curriculum"
+import { useEffect, useState, type ComponentProps } from "react"
+import { PageLoading } from "@/components/ui/page-loading"
+import { myProjects } from "@/lib/api"
+import { getToken } from "@/lib/auth"
+import { useLearningIdentity } from "@/lib/hooks/use-learning-record"
+import { normalizeSlides } from "@/lib/normalize-slides"
+import { LIGHTKURVE_SLUG, type LightkurveRecordConfig } from "@/lib/lightkurve-preview"
+import type { CourseContent, TheoryEntry } from "@/lib/types/api"
+import { LightkurveCourseLesson } from "./lightkurve-course-lesson"
+import styles from "./lightkurve-course-preview.module.css"
+
+type Manifest = { title: string; planned_nodes?: number; knodes: { module_id: string; title: string; knode_dir: string; stage?: string }[] }
+type Tree = { modules: { module_id: string; title: string; stage_id: string }[]; stages: { stage_id: string; title: string }[] }
+type Lesson = Omit<ComponentProps<typeof LightkurveCourseLesson>, "published" | "downloadControl">
+
+class CourseRequestError extends Error {
+  constructor(public status: number) { super(`课程请求失败 (${status})`) }
+}
+
+// Course bytes use the existing login + enrolled-project authorization boundary.
+// No tokens are embedded in image URLs, downloadable files or sandboxed HTML.
+async function courseFile(relative: string, token: string, signal?: AbortSignal) {
+  if (!relative || relative.startsWith("/") || relative.split("/").some(part => part === ".." || part === ".") || /[\\\u0000-\u001f]/.test(relative)) throw new Error("课程资源路径无效")
+  const response = await fetch(myProjects.fileUrl(LIGHTKURVE_SLUG, relative.split("/").map(encodeURIComponent).join("/")), {
+    headers: { Authorization: `Bearer ${token}`, "X-Course-Numbering": "consecutive-v2" }, signal, cache: "no-store",
+  })
+  if (!response.ok) throw new CourseRequestError(response.status)
+  return response
+}
+
+function PracticeDownload({ token }: { token: string }) {
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState("")
+  async function download() {
+    setBusy(true); setError("")
+    try {
+      const response = await courseFile("downloads/lightkurve-practice-kit.zip", token)
+      const url = URL.createObjectURL(await response.blob())
+      const anchor = document.createElement("a")
+      anchor.href = url; anchor.download = "lightkurve-practice-kit.zip"
+      document.body.append(anchor); anchor.click(); anchor.remove()
+      setTimeout(() => URL.revokeObjectURL(url), 1000)
+    } catch { setError("实践包未能下载，请确认登录状态后重试。") }
+    finally { setBusy(false) }
+  }
+  return <div><button type="button" className={styles.download} disabled={busy} onClick={() => void download()}>{busy ? "正在下载…" : "下载 lightkurve 实践包 ↓"}</button>{error && <p role="alert">{error}</p>}</div>
+}
+
+export function LightkurvePublishedLesson({ moduleId }: { moduleId: string }) {
+  const router = useRouter()
+  const search = useSearchParams()
+  const mission = missionContext(LIGHTKURVE_SLUG, moduleId, search.get("mission") === "space")
+  const returnPath = mission ? missionLessonHref(mission.node.ref) : `/learn/${LIGHTKURVE_SLUG}/${moduleId}`
+  const libraryPath = mission ? missionLibraryHref(moduleId, LIGHTKURVE_SLUG) : `/library/${LIGHTKURVE_SLUG}`
+  const { token, owner } = useLearningIdentity()
+  const [loaded, setLoaded] = useState<{ owner: string; lesson: Lesson } | null>(null)
+  const [error, setError] = useState("")
+  const [retry, setRetry] = useState(0)
+  useEffect(() => {
+    if (!getToken()) router.replace(`/login?next=${encodeURIComponent(returnPath)}`)
+  }, [router, returnPath, token])
+  useEffect(() => {
+    if (!token) return
+    const controller = new AbortController()
+    const urls: string[] = []
+    const json = async <T,>(relative: string): Promise<T> => (await courseFile(relative, token, controller.signal)).json()
+    const text = async (relative: string) => (await courseFile(relative, token, controller.signal)).text()
+    async function load() {
+      const [manifest, tree] = await Promise.all([json<Manifest>("manifest.json"), json<Tree>("tree/knowledge_tree.json")])
+      const entry = manifest.knodes.find(node => node.module_id === moduleId)
+      if (!entry) throw new Error("课程节点不存在")
+      const dir = entry.knode_dir
+      const [rawSlides, sections, rawTheories, plan, assignment, rawRecord] = await Promise.all([
+        json<unknown>(`${dir}/slides.json`), json<CourseContent>(`${dir}/sections.json`),
+        json<TheoryEntry[] | { theories: TheoryEntry[] }>(`${dir}/theories.json`), text(`${dir}/lesson.md`),
+        text(`${dir}/assignment.md`), json<LightkurveRecordConfig>(`${dir}/learning-record.json`),
+      ])
+      // Preserve the local acceptance version so existing saved work can resume.
+      const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(JSON.stringify({ record: rawRecord, assignment })))
+      const contentVersion = Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, "0")).join("").slice(0, 32)
+      const media = async (src?: string) => {
+        if (!src || /^(https?:|data:|\/)/.test(src)) return src
+        const response = await courseFile(/^(knodes|downloads|images)\//.test(src) ? src : `${dir}/${src}`, token!, controller.signal)
+        const url = URL.createObjectURL(await response.blob())
+        if (controller.signal.aborted) { URL.revokeObjectURL(url); throw new DOMException("Aborted", "AbortError") }
+        urls.push(url); return url
+      }
+      for (const section of Object.values(sections.rendered_sections)) {
+        const source = section as typeof section & { html_path?: string }
+        if (!source.html && source.html_path) source.html = await text(`${dir}/${source.html_path}`)
+      }
+      const deck = normalizeSlides(Array.isArray(rawSlides) ? rawSlides : (rawSlides as { slides?: unknown })?.slides, moduleId)
+      // Keep authored slide paths: the shared player loads images/audio through
+      // its authenticated media loader, including production builds.
+      const recordConfig = { ...rawRecord, resources: await Promise.all((rawRecord.resources || []).map(async resource => ({ ...resource, media_url: await media(resource.media_url), poster_url: await media(resource.poster_url) }))) }
+      const modules = manifest.knodes.map(node => ({ id: node.module_id, title: tree.modules.find(item => item.module_id === node.module_id)?.title || node.title, stage: tree.modules.find(item => item.module_id === node.module_id)?.stage_id || node.stage || "course" }))
+      const lesson: Lesson = {
+        moduleId, courseTitle: manifest.title, modules, stages: tree.stages.map(stage => ({ id: stage.stage_id, title: stage.title })), plannedNodes: manifest.planned_nodes,
+        knodeDir: dir, content: { ...sections, theories: Array.isArray(rawTheories) ? rawTheories : rawTheories.theories, plan_markdown: plan },
+        slides: deck, images: {}, audio: {}, assignment, recordConfig, contentVersion,
+      }
+      if (!controller.signal.aborted) {
+        setLoaded({ owner, lesson }); setError("")
+        void myProjects.setProgress(LIGHTKURVE_SLUG, moduleId).catch(() => {})
+      }
+    }
+    void load().catch(reason => {
+      if (controller.signal.aborted) return
+      if (reason instanceof CourseRequestError && reason.status === 401) router.replace(`/login?next=${encodeURIComponent(returnPath)}`)
+      else if (reason instanceof CourseRequestError && reason.status === 403) router.replace(libraryPath)
+      else setError("课程未能载入，请重试。")
+    })
+    return () => { controller.abort(); urls.forEach(url => URL.revokeObjectURL(url)) }
+  }, [moduleId, token, owner, retry, router, returnPath, libraryPath])
+
+  if (error) return <main className={styles.page}><p role="alert">{error}</p><button type="button" onClick={() => { setError(""); setRetry(value => value + 1) }}>重新加载</button><Link href={libraryPath}>返回项目</Link></main>
+  if (!token || !loaded || loaded.owner !== owner || loaded.lesson.moduleId !== moduleId) {
+    return <main role="status" aria-busy="true"><PageLoading label="正在载入课程…" /></main>
+  }
+  return <LightkurveCourseLesson {...loaded.lesson} published downloadControl={<PracticeDownload key={owner} token={token} />} />
+}

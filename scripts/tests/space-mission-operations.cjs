@@ -18,9 +18,9 @@ const c = require(path.join(root,'lib/project-lines/space-curriculum.ts'));
 let ops=m.operationsFrom(m.INITIAL_OPERATIONS);
 assert(ops);
 const copy=()=>structuredClone(ops),task=m.taskById('pick-an-observation-site:M01'),at='2026-10-10T03:00:00.000Z';
-assert.equal(m.TASKS.length,88);
-assert.equal(new Set(m.TASKS.map(t=>t.id)).size,88);
-assert.equal(new Set(m.TASKS.map(t=>t.code)).size,88);
+assert.equal(m.TASKS.length,120);
+assert.equal(new Set(m.TASKS.map(t=>t.id)).size,120);
+assert.equal(new Set(m.TASKS.map(t=>t.code)).size,120);
 assert.deepEqual(new Set(m.TASKS.filter(t=>t.role!=='micro').map(t=>t.id)),new Set(c.MISSION_MODULES.map(t=>t.ref)));
 assert.deepEqual(new Set(m.TASKS.filter(t=>t.role==='lesson').map(t=>t.id)),new Set(c.MISSION_STEPS));
 for(const t of m.TASKS){
@@ -36,7 +36,7 @@ assert.throws(()=>m.changeTask(ops,task.id,{status:'blocked'},at));
 const checks=task.checks.map((_,i)=>`check-${i}`);
 ops=m.changeTask(ops,task.id,{checks,evidence:'原课堂的来源卡与自己的观察',status:'done'},at);
 assert.equal(m.taskState(ops,task.id).status,'done');
-assert.deepEqual(m.mainProgress(ops),{done:1,total:62});
+assert.deepEqual(m.mainProgress(ops),{done:1,total:94});
 ops=m.changeTask(ops,task.id,{blocker:'影像来源页暂时无法打开'},at);
 assert.equal(m.taskState(ops,task.id).status,'review');
 assert(!m.canFinish(task,m.taskState(ops,task.id)));
@@ -62,5 +62,5 @@ assert(m.operationsFrom({answers:[],artifact:ops}));
 for(const alter of [o=>o.schema='other',o=>o.tasks[task.id].due='2026-02-30',o=>o.time.totals[task.id]=-1,o=>o.plan.weeklyMinutes=0,o=>o.tasks[task.id].checks=['check-999'],o=>o.tasks['unknown']={},o=>o.plan.milestones.bad='2026-10-10']){
  const malformed=copy();alter(malformed);assert.equal(m.operationsFrom({answers:[],artifact:malformed}),null);
 }
-const results={passed:true,checks:['88 unique task orders cover all source nodes and retain 62 main steps; real assignment paragraphs rather than internal enums','Completion requires evidence, checks and no blocker; editing evidence revokes completion; optional tasks do not inflate main progress','Visible heartbeat bounds exclude hidden/sleep time; idempotent cumulative timer checkpoints; capped log retains all-time totals','Invalid dates, task IDs, checks, durations and schemas rejected; weekly time aggregation verified']};
-fs.writeFileSync(path.resolve(__dirname,'../../artifacts/space-mission-center-20261010/model-verification.json'),JSON.stringify(results,null,2)+'\n');console.log(JSON.stringify(results,null,2));
+const results={passed:true,checks:['120 unique task orders cover all source nodes and retain 62 rover steps plus 32 transit steps; real assignment paragraphs rather than internal enums','Completion requires evidence, checks and no blocker; editing evidence revokes completion; optional tasks do not inflate main progress','Visible heartbeat bounds exclude hidden/sleep time; idempotent cumulative timer checkpoints; capped log retains all-time totals','Invalid dates, task IDs, checks, durations and schemas rejected; weekly time aggregation verified']};
+fs.writeFileSync(path.resolve(__dirname,'../../artifacts/lightkurve-integration-20261029/operations-verification.json'),JSON.stringify(results,null,2)+'\n');console.log(JSON.stringify(results,null,2));

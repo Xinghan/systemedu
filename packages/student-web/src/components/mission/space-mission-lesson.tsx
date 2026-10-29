@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { ArrowLeft, ArrowRight, FileCheck2, Map } from "lucide-react"
-import { missionContext, missionLessonHref, missionMapHref, missionModule, missionSupport, sourceLessonHref, type MissionStation } from "@/lib/project-lines/space-curriculum"
+import { missionContext, routeMapHref, missionLessonHref, missionMapHref, missionModule, missionSupport, sourceLessonHref, type MissionStation } from "@/lib/project-lines/space-curriculum"
 import { SpaceStageBriefing } from "./space-stage-briefing"
 import { MissionWorkStrip } from "./mission-work-strip"
 import { useLearningRecord } from "@/lib/hooks/use-learning-record"
@@ -14,11 +14,13 @@ type Context = NonNullable<ReturnType<typeof missionContext>>
 export function MissionLessonBrief({ context }: { context: Context }) {
   const { station, node } = context
   const delivery = JOURNEY_DELIVERIES[node.project]
+  const transit = context.route === "transit"
+  const archive = transit ? "/mission/space?route=transit#mission-dossier" : "/mission/space#mission-dossier"
   return <section className={s.lessonBrief} data-mission-context={station.id}>
-    <nav><Link href={missionMapHref(station.id)}><Map size={15}/>任务地图 / {station.code} {station.place}</Link>{delivery && <Link href={`${missionLessonHref(`${node.project}:${delivery.module}`)}#project-delivery`}>查看我的最终作品</Link>}<Link href="/mission/space#mission-dossier"><FileCheck2 size={15}/>我的远征档案</Link></nav>
-    <p className={s.kicker}>火星地形观察远征 · 当前任务</p><h2>{station.message}</h2>
+    <nav><Link href={missionMapHref(station.id)}><Map size={15}/>任务地图 / {station.code} {station.place}</Link>{delivery && <Link href={`${missionLessonHref(`${node.project}:${delivery.module}`)}#project-delivery`}>查看我的最终作品</Link>}<Link href={archive}><FileCheck2 size={15}/>{transit ? "我的研究产物" : "我的远征档案"}</Link></nav>
+    <p className={s.kicker}>{transit ? "抓住行星的影子" : "火星地形观察远征"} · 当前任务</p><h2>{station.message}</h2>
     <div className={s.handoffPair}><p><small>带着什么来</small>{station.input}</p><p><small>这一站带走什么</small>{station.handoff}</p></div>
-    <MyMissionGoal station={station.id}/>
+    {!transit && <MyMissionGoal station={station.id}/>}
     <MissionWorkStrip taskId={node.ref}/>
     <details className={s.mobileOutline}><summary>查看本站任务步骤</summary><MissionLessonOutline station={station} current={context.primary}/></details>
     {node.note && <p className={s.contextNote}>{node.note}</p>}
@@ -41,7 +43,7 @@ function MyMissionGoal({ station }: { station: string }) {
   return <>{goal ? <p className={s.myGoal}>我的任务：{goal}</p> : <p className={s.hint}>还没有写下自己的观察目标？可以随时在<Link href="/mission/space#mission-dossier">远征档案</Link>中补充，不影响先学习。</p>}{linked.length > 0 && <details className={s.sourceDetails}><summary>已带来的任务材料 · {linked.length} 类</summary>{linked.map(project => { const evidence = dossier!.links.filter(e => e.scope.library_slug === project).at(-1)!; return <div key={project}><p>{evidence.summary}</p><small>{evidence.scope.module_id} · 版本 {evidence.scope.content_version} · {dossier?.checks?.[project]?.message || "已关联，需复核"}</small><Link href="/mission/space#mission-dossier">核对来源与版本</Link></div> })}</details>}</>
 }
 export function MissionLessonOutline({ station, current }: { station: MissionStation; current: string }) {
-  return <nav className={s.outline} data-mission-outline aria-label="本站任务步骤"><p>{station.code} / {station.place}</p>{station.steps.map((ref, index) => { const node = missionModule(ref)!; return <Link key={ref} href={missionLessonHref(ref)} aria-current={ref === current ? "step" : undefined}><span>{String(index + 1).padStart(2, "0")}</span><div><strong>{node.title}</strong><small>{node.kind === "full" ? "工程课程" : "引导课程"} · {node.module}</small></div></Link> })}<Link href={missionMapHref(station.id)}><Map size={14}/>返回地图选择其他任务站</Link></nav>
+  return <nav className={s.outline} data-mission-outline aria-label="本站任务步骤"><p>{station.code} / {station.place}</p>{station.steps.map((ref, index) => { const node = missionModule(ref)!; return <Link key={ref} href={missionLessonHref(ref)} aria-current={ref === current ? "step" : undefined}><span>{String(index + 1).padStart(2, "0")}</span><div><strong>{node.title}</strong><small>{node.project === "lightkurve-transit-detective" ? "观测研究" : node.kind === "full" ? "工程课程" : "引导课程"} · {node.module}</small></div></Link> })}<Link href={missionMapHref(station.id)}><Map size={14}/>返回地图选择其他任务站</Link></nav>
 }
 export function MissionSupportingLessons({ context }: { context: Context }) {
   const nodes = missionSupport(context.primary)
@@ -54,7 +56,7 @@ export function MissionReferenceAssignment({ context }: { context: Context }) {
 }
 export function MissionLessonFooter({ context }: { context: Context }) {
   if (context.node.mode !== "lesson") return <nav className={s.lessonFooter} data-mission-footer aria-label="回到远征任务"><Link href={missionMapHref(context.station.id)}><ArrowLeft size={16}/>任务地图</Link><Link href={context.primary ? missionLessonHref(context.primary) : "/mission/space?station=first-contact#journey-map"}>回到当前任务<ArrowRight size={16}/></Link></nav>
-  return <nav className={s.lessonFooter} data-mission-footer aria-label="按远征任务继续学习">{context.previous ? <Link href={missionLessonHref(context.previous)}><ArrowLeft size={16}/>上一步</Link> : <Link href={missionMapHref("first-contact")}><ArrowLeft size={16}/>启程观测港</Link>}{context.next ? <Link href={missionLessonHref(context.next)}>下一步：{missionModule(context.next)!.title}<ArrowRight size={16}/></Link> : <Link href="/mission/space?station=delivery#mission-dossier">整理我的任务档案<ArrowRight size={16}/></Link>}</nav>
+  return <nav className={s.lessonFooter} data-mission-footer aria-label="按远征任务继续学习">{context.previous ? <Link href={missionLessonHref(context.previous)}><ArrowLeft size={16}/>上一步</Link> : <Link href={context.route === "transit" ? routeMapHref("transit") : missionMapHref("first-contact")}><ArrowLeft size={16}/>{context.route === "transit" ? "凌星调查地图" : "启程观测港"}</Link>}{context.next ? <Link href={missionLessonHref(context.next)}>下一步：{missionModule(context.next)!.title}<ArrowRight size={16}/></Link> : <Link href={context.route === "transit" ? "/mission/space?route=transit#mission-dossier" : "/mission/space?station=delivery#mission-dossier"}>整理我的任务档案<ArrowRight size={16}/></Link>}</nav>
 }
 
 /** Explicitly adopt the student's brief into an empty field plan; never overwrite trials. */

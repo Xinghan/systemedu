@@ -6,10 +6,10 @@ import { useSearchParams } from "next/navigation"
 import { useEffect, useId, useState } from "react"
 import { ArrowLeft, ArrowRight, ClipboardList, Compass, FileCheck2, Flag, Layers, Map, Play, RotateCcw, Wrench } from "lucide-react"
 import { useLearningIdentity } from "@/lib/hooks/use-learning-record"
-import { JOURNEY_IDS, JOURNEY_LEVELS, JOURNEY_STATIONS, journeyProject } from "@/lib/project-lines/space-journey"
+import { JOURNEY_IDS, JOURNEY_LEVELS, journeyProject } from "@/lib/project-lines/space-journey"
 import { hasJourneyEvidence, waitingProgress } from "@/lib/project-lines/space-journey-progress"
 import { initialMissionProgress, nodeHasRecord, nodeProgressLabel, readMissionProgress, readMissionProjects, recommendMission } from "@/lib/project-lines/space-mission-progress"
-import { MISSION_MODULES, missionLessonHref, missionModule, stationStartHref } from "@/lib/project-lines/space-curriculum"
+import { MISSION_MODULES, routeStations, missionLessonHref, missionModule, stationStartHref } from "@/lib/project-lines/space-curriculum"
 import { ROVER_CAMPUS_POINTS, RoverCampusSurface, type CampusStop } from "@/components/learning/rover-campus-surface"
 import { IntroFilm } from "@/components/learning/rover-mission-center"
 import { projectCoverProps } from "@/lib/project-cover"
@@ -18,12 +18,17 @@ import { useSpaceStageFilm } from "./space-stage-briefing"
 import { SpaceMissionDossier } from "./space-mission-dossier"
 import s from "./space-journey.module.css"
 import c from "./space-mission-curriculum.module.css"
+import { SpaceTransitJourney } from "./space-transit-journey"
+import { SpaceRouteNavigation } from "./space-route-navigation"
+
+const JOURNEY_STATIONS = routeStations("rover")
 
 export function SpaceJourney() {
   const identity = useLearningIdentity(), search = useSearchParams()
   const [film, setFilm] = useState(false)
   const [stage, setStage] = useState<SpaceStage | null>(null)
   const { replay, dialog } = useSpaceStageFilm(stage, !film)
+  if (search.get("route") === "transit" || search.get("station")?.startsWith("transit-")) return <SpaceTransitJourney/>
   return <><JourneySession key={`${identity.owner}:${search.get("station") || ""}`} {...identity} openFilm={() => setFilm(true)} stageReady={setStage} replayStage={replay}/>{dialog}{film && <IntroFilm close={() => setFilm(false)} autoPlay onEnded={() => setFilm(false)} returnLabel="回到远征任务中心" description="火星探索序章：从观察开始，逐步设计、制造并升级自己的探测车，完成一次可以复查的远征。"/>}</>
 }
 function JourneySession({ token, owner, openFilm, stageReady, replayStage }: { token: string | null; owner: string; openFilm: () => void; stageReady: (stage: SpaceStage | null) => void; replayStage: () => void }) {
@@ -59,6 +64,7 @@ function JourneySession({ token, owner, openFilm, stageReady, replayStage }: { t
   const resources = MISSION_MODULES.filter(m => m.station === station.id && m.mode !== "lesson")
   return <main className={s.journey} data-space-journey data-curriculum-version="1.0">
     <header className={s.topbar}><Link href="/library?view=lines"><ArrowLeft size={16}/>所有项目线</Link><span>星际远航 / 火星地形观察远征</span><Link href="/mission/space/control" data-mission-center-entry><ClipboardList size={15}/>任务中心</Link><a href="#mission-dossier"><FileCheck2 size={15}/>我的远征档案</a></header>
+    <SpaceRouteNavigation route="rover"/>
     <section className={s.hero}><img src="/mission/rover/pointing-1920.webp" alt="任务搭档林岚在控制席邀请你加入远征" fetchPriority="high"/><div className={s.heroCopy}><p className={s.kicker}>一个目标，同一辆车，持续升级。</p><h1>从第一次观察，<br/>到自己的火星探测任务。</h1><p>接下任务，设计并打印你的车。<br/>再为它训练视觉、接通控制，带着证据完成远征。</p><div className={s.heroActions}><Link href={nextHref} data-journey-start><Compass size={18}/>{next ? "接着我的任务继续" : recommended.station === "delivery" ? "复查我的任务档案" : "从 3 分钟观察开始"}<ArrowRight size={17}/></Link><button onClick={openFilm}><Play size={15}/>火星探索序章 · 29 秒</button></div><a className={s.heroMap} href="#journey-map">展开我的任务地图<Map size={14}/></a><small>8 个任务站 · 同一份工程档案 · 从观察到远征</small></div><div className={s.heroNote}>任务搭档 / 林岚<small>AI 生成的虚构场景与角色</small></div></section>
     <div className={s.body}>
       <section className={s.roleSection} aria-label="五幕远征任务"><header><span>这次远征，怎样一步步完成</span><small>从提出问题，到拿出自己的测试证据</small></header><div className={s.roles}>{JOURNEY_LEVELS.map(item => <button key={item.level} data-journey-level={item.level} aria-pressed={item.level === station.level} onClick={() => { setSelected(JOURNEY_STATIONS.find(s => s.level === item.level)!.id); document.getElementById("journey-map")?.scrollIntoView({ behavior: "smooth" }) }}><small>0{item.level}</small><strong>{item.role}</strong><span>{item.task}</span></button>)}</div></section>
@@ -77,7 +83,7 @@ function JourneySession({ token, owner, openFilm, stageReady, replayStage }: { t
       </section>
       <SpaceMissionDossier/>
       <section id="journey-portfolio" className={s.portfolio}><header className={s.sectionHead}><div><p>ORIGINAL WORK · STILL YOURS</p><h2>原来的作品和课程，随时可查。</h2></div><button onClick={() => { setNodes(initialMissionProgress()); setProjects(waitingProgress()); setAttempt(n => n + 1) }} disabled={!ready}><RotateCcw size={14}/>刷新进展</button></header><p className={s.note}>{token ? "读取当前账号的原课程记录。三分钟体验仍使用本机相册，未自动归入账号。" : "访客记录保存在本机；完整工程登录后读取账号进展。"}提交记录、完成标记和能力评阅分别看待。</p>{failed > 0 && <p className={s.warning} role="status">{failed} 项学习记录暂未读全，请刷新重试；不会将读取失败算作未完成。</p>}<details className={s.allProjects}><summary><span><FileCheck2 size={17}/>原项目入口与历史作品</span><span>{records.length} 项已有作品记录</span></summary><div>{[JOURNEY_IDS.slice(0,6),JOURNEY_IDS.slice(6)].map((ids,i) => <section key={i}>{ids.map(id => { const p = journeyProject(id); return <Link key={id} href={p.href} data-journey-record={id}><FileCheck2 size={16}/><div><strong>{p.title}</strong><span>{projects[id].label}</span><small>{projects[id].note}</small></div><ArrowRight size={16}/></Link> })}</section>)}</div></details></section>
-      <aside className={c.sideQuest}><div><small>独立研究支线 / 不计入探测车必修</small><h3>想继续追问远方？寻找行星的影子。</h3><p>Lightkurve 用真实光变数据研究行星候选信号。它不要求你先造完探测车，也不会成为本次远征的前置锁。正式课堂接入待确认，可以先返回项目库了解这条研究支线。</p></div><Link href="/library?view=lines&line=space-exploration">返回项目库查看<ArrowRight size={14}/></Link></aside>
+      <aside className={c.sideQuest}><div><small>独立研究支线 / 不计入探测车必修</small><h3>想继续追问远方？寻找行星的影子。</h3><p>Lightkurve 用真实光变数据研究行星候选信号。它不要求你先造完探测车，也不会成为本次远征的前置锁。32 个原课程节点已按六阶段接入任务地图，课堂记录与研究产物继续保留在原课程。</p></div><Link href="/mission/space?route=transit#journey-map">进入凌星调查地图<ArrowRight size={14}/></Link></aside>
       <section className={s.parents}><div><p>给一起出发的家长</p><h2>陪他开始，逐步把决定交给他。</h2><span>先做出一点成果，再增加阅读、设计、制作与独立判断。地图让孩子知道当前为哪一个目标学习。</span></div><ol>{JOURNEY_LEVELS.map(item => <li key={item.level}><span>0{item.level}</span><div><strong>{item.role}</strong><p>{item.support}</p><small>这一幕留下：{item.evidence}</small></div></li>)}</ol></section><p className={s.boundary}>本线执行地面类比任务；轨道影像模型能否适用于地面相机需要实测。工程档案保存不代表通过能力评阅或获得工程师职业资质。</p>
     </div>
   </main>

@@ -21,8 +21,8 @@ global.localStorage = {getItem:k=>store.get(k)||null,setItem:(k,v)=>store.set(k,
 const result = {passed:false, checks:[]};
 async function main() {
  const source = JSON.parse(fs.readFileSync(path.resolve(__dirname,'../../artifacts/space-curriculum-audit-20261009/mars-analog-rover-tree.json')));
- assert.equal(curriculum.MISSION_MODULES.length,85);
- assert.deepEqual(new Set(curriculum.MISSION_MODULES.filter(m=>m.kind==='full').map(m=>m.module)),new Set(source.modules.map(m=>m.module_id)));
+ assert.equal(curriculum.MISSION_MODULES.length,117);
+ assert.deepEqual(new Set(curriculum.MISSION_MODULES.filter(m=>m.project==='mars-analog-rover').map(m=>m.module)),new Set(source.modules.map(m=>m.module_id)));
  assert.equal(new Set(curriculum.MISSION_STEPS).size,curriculum.MISSION_STEPS.length);
  assert(!curriculum.MISSION_STEPS.includes('mars-analog-rover:M24'));
  assert(!curriculum.MISSION_STEPS.includes('mars-analog-rover:M09'));
@@ -39,8 +39,10 @@ async function main() {
  for(const s of curriculum.MISSION_STATIONS)visit(s.id);
  assert.deepEqual(curriculum.missionStation('autonomy').dependsOn,['build','perception']);
  assert(!curriculum.missionStation('perception').dependsOn.includes('build'));
- for(const s of curriculum.MISSION_STATIONS)assert(!s.projects.includes('lightkurve-transit-detective'));
- result.checks.push('85 sources accounted for; 62 main steps; source replacement, optional research, acyclic artifact dependencies and cross-course order');
+ assert.equal(curriculum.routeStations('transit').length,6);
+ assert.equal(curriculum.routeSteps('rover').length,62);
+ assert.equal(curriculum.routeSteps('transit').length,32);
+ result.checks.push('117 sources accounted for; 62 rover and 32 transit steps; source replacement, optional research, acyclic artifact dependencies and cross-course order');
  const body={answers:[{question_id:'q1',question:'理由',answer:'我比较了同一段路。'}],artifact:{revision:1}};
  const scope=progress.reflectionScope('tune-a-chassis','M01','1.0');
  store.set(learningCacheKey('user:a',scope),JSON.stringify({version:1,body,dirty:true,submittedAt:'2026-10-09T00:00:00Z'}));
@@ -67,7 +69,7 @@ async function main() {
  assert.equal(dossier.dossierFrom({...dossier.INITIAL_MISSION_BODY,artifact:{schema:'unexpected'}}),null);
  result.checks.push('Stable content digest; explicit version matching; append-only source references; malformed dossier rejected');
  result.passed=true;
- fs.writeFileSync(path.resolve(__dirname,'../../artifacts/space-mission-curriculum-20261009/model-verification.json'),JSON.stringify(result,null,2)+'\n');
+ fs.writeFileSync(path.resolve(__dirname,'../../artifacts/lightkurve-integration-20261029/curriculum-verification.json'),JSON.stringify(result,null,2)+'\n');
  console.log(JSON.stringify(result,null,2));
 }
 main().catch(e=>{console.error(e);process.exitCode=1;});
