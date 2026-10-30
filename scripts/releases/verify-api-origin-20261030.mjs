@@ -50,7 +50,9 @@ try {
   for (const width of [1440, 390]) {
     const context = await browser.newContext({ viewport: { width, height: 1000 } })
     track(context)
-    await context.addInitScript(() => localStorage.setItem('systemedu_token', 'isolated-api-origin-fixture'))
+    await context.addInitScript(expectedOrigin => {
+      if (window === window.top && location.origin === expectedOrigin) localStorage.setItem('systemedu_token', 'isolated-api-origin-fixture')
+    }, siteOrigin)
     let empty = false
     const seen = new Set()
     await context.route('**/api/**', async route => {
@@ -65,7 +67,7 @@ try {
     const page = await context.newPage()
     await page.goto(`${origin}/my-projects`, { waitUntil: 'domcontentloaded' })
     await expect(page.getByRole('heading', { name: '凌星调查', exact: true })).toBeVisible()
-    await expect(page.getByRole('link', { name: /继续学习/ })).toHaveAttribute('href', '/learn/lightkurve-transit-detective/M02')
+    await expect(page.getByRole('link', { name: '继续学习', exact: true })).toHaveAttribute('href', '/learn/lightkurve-transit-detective/M02')
     await page.screenshot({ path: path.join(output, `my-projects-grid-${width}.png`) })
     await page.getByRole('button', { name: /^已暂停/ }).click()
     await expect(page.getByRole('heading', { name: '暂停项目验收' })).toBeVisible()
