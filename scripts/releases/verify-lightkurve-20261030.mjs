@@ -8,7 +8,7 @@ const expect = baseExpect.configure({ timeout: 30000 })
 const [origin, phase, build] = process.argv.slice(2)
 if (!origin || !['candidate', 'production'].includes(phase) || !build) throw Error('Usage: <origin> <candidate|production> <build>')
 const slug = 'lightkurve-transit-detective'
-const output = path.resolve('artifacts/lightkurve-release-20261030', phase)
+const output = path.resolve(process.env.LIGHTKURVE_RELEASE_OUTPUT || 'artifacts/lightkurve-release-20261030', phase)
 await fs.mkdir(output, { recursive: true })
 const browser = await chromium.launch({ headless: true })
 const errors = [], checks = []
