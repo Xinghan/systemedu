@@ -15,6 +15,7 @@ try {
   await context.addInitScript(() => { for (let i = 1; i <= 5; i++) localStorage.setItem(`systemedu:mission:space:stage-film:${i}:v1`, '1') })
   await context.route('**/api/**', async route => {
     const req = route.request(), url = new URL(req.url())
+    expect(url.origin).toBe(new URL(origin).origin)
     expect(req.method()).toBe('GET')
     expect(req.headers().authorization).toBeUndefined()
     await route.fulfill({ response: await context.request.get(`https://systeme.xin${url.pathname}${url.search}`) })

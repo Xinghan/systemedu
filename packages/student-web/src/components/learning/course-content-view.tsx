@@ -20,6 +20,7 @@ import remarkMath from "remark-math"
 import rehypeKatex from "rehype-katex"
 import "katex/dist/katex.min.css"
 import { gateway } from "@/lib/api"
+import { GATEWAY_API_URL } from "@/lib/api/origin"
 import { getCourseFactoryVariant } from "@/data/course-factory-variants"
 import { LessonSlidesProvider, LessonSlideCarousel, LessonSlideshowButton } from "./lesson-slides"
 import { firstMarkerSections, splitLessonParts } from "@/lib/lesson-slide-layout"
@@ -187,7 +188,7 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
     }
 
     stop()
-    const gatewayBase = (process.env.NEXT_PUBLIC_GATEWAY_URL ?? "http://localhost:18820")
+    const gatewayBase = GATEWAY_API_URL
     const audio = new Audio(`${gatewayBase}/api/media/${url}`)
     audio.preload = "metadata"
     audioRef.current = audio
@@ -1165,7 +1166,7 @@ function StoryBlock({
             <div key={idx} className="flex gap-6 p-6">
               {para.image_url ? (
                 <img
-                  src={`${(process.env.NEXT_PUBLIC_GATEWAY_URL ?? "http://localhost:18820")}${para.image_url}`}
+                  src={`${GATEWAY_API_URL}${para.image_url}`}
                   alt={t("course.story_illustration_n", { n: idx + 1 })}
                   className="w-36 h-28 rounded-xl object-cover shrink-0"
                 />
@@ -1412,8 +1413,7 @@ function ImageBlock({
   const rawSrc = section.src || ""
   // Local gateway paths (/api/...) must be prefixed with the gateway base URL,
   // because the Next.js dev server on :3000 doesn't proxy to the backend on :18820.
-  const gatewayBase =
-    (process.env.NEXT_PUBLIC_GATEWAY_URL ?? "http://localhost:18820")
+  const gatewayBase = GATEWAY_API_URL
   const src = rawSrc.startsWith("/api/") ? `${gatewayBase}${rawSrc}` : rawSrc
   const alt = section.alt || idea.topic || ""
   const caption = section.caption || ""

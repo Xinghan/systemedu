@@ -85,7 +85,7 @@ elif action == 'build':
     baseline()
     run('python3', str(UP/'cache-fonts.py'))
     with (RELEASE/'build.log').open('w') as out:
-        run('/usr/bin/node','node_modules/next/dist/bin/next','build','--webpack',cwd=CANDIDATE,stdout=out,stderr=subprocess.STDOUT,env={**os.environ,'NEXT_TELEMETRY_DISABLED':'1','NEXT_FONT_GOOGLE_MOCKED_RESPONSES':str(RELEASE/'font-responses.json')})
+        run('/usr/bin/node','node_modules/next/dist/bin/next','build','--webpack',cwd=CANDIDATE,stdout=out,stderr=subprocess.STDOUT,env={**os.environ,'NEXT_PUBLIC_STUDENT_API_URL':'','NEXT_PUBLIC_GATEWAY_URL':'','NEXT_TELEMETRY_DISABLED':'1','NEXT_FONT_GOOGLE_MOCKED_RESPONSES':str(RELEASE/'font-responses.json')})
     assert hashes(CANDIDATE) == read('web-expected.json')
     (RELEASE/'build.ok').touch()
     print(json.dumps({'built':True,'build':(CANDIDATE/'.next/BUILD_ID').read_text().strip()}))

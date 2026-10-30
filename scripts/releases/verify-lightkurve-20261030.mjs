@@ -28,6 +28,7 @@ try {
   // Public checks never send a token or write to production. Only anonymous GETs are forwarded.
   await context.route('**/api/**', async route => {
     const req = route.request(), url = new URL(req.url())
+    expect(url.origin).toBe(new URL(origin).origin)
     expect(req.method()).toBe('GET')
     expect(req.headers().authorization).toBeUndefined()
     await route.fulfill({ response: await context.request.get(`https://systeme.xin${url.pathname}${url.search}`) })
@@ -102,7 +103,9 @@ try {
     // Every API call in this context is intercepted. This verifies browser contracts,
     // not authenticated production persistence; the fake token never leaves the browser.
     await fixture.route('**/api/**', async route => {
-      const req = route.request(), url = new URL(req.url()), pathname = decodeURIComponent(url.pathname)
+      const req = route.request(), url = new URL(req.url())
+      const pathname = decodeURIComponent(url.pathname)
+      expect(url.origin).toBe(new URL(origin).origin)
       const json = data => route.fulfill({ status: 200, json: data })
       const relative = pathname.match(new RegExp(`/api/(?:library|my)/projects/${slug}/files/(.+)$`))?.[1]
       if (relative) {

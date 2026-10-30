@@ -9,10 +9,11 @@ import json
 import re
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 WEB = Path('/opt/systemedu/packages/student-web')
-RELEASE = Path('/opt/systemedu/releases/transit-format-20261030')
+RELEASE = Path(sys.argv[1]) if len(sys.argv) > 1 else Path('/opt/systemedu/releases/transit-format-20261030')
 output = RELEASE / 'fonts'
 output.mkdir(exist_ok=True)
 configs = [('Plus_Jakarta_Sans', ['400', '500', '600', '700', '800'], 'swap'),
