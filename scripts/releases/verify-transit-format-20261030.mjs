@@ -25,7 +25,17 @@ try {
     const attrs = el => { const s = getComputedStyle(el); return { font: s.fontFamily, size: s.fontSize, leading: s.lineHeight, color: s.color, background: s.backgroundColor } }
     return { page: attrs(document.querySelector('[data-space-journey]')), heading: attrs(document.querySelector('h1')), next: attrs(document.querySelector('[data-journey-section="next"]')), heroClass: document.querySelector('[data-journey-section="hero"]').className, stageClass: document.querySelector('[data-journey-section="stages"] > div').className }
   })
-  const imagesReady = async () => page.waitForFunction(() => Array.from(document.images).filter(img => { const r = img.getBoundingClientRect(); return r.top < innerHeight && r.bottom > 0 && r.width > 0 }).every(img => img.complete && img.naturalWidth > 0))
+  // Wait for real decoded pixels before capture; preserve diagnostics on a timeout.
+  const imagesReady = async () => {
+    try {
+      await page.waitForFunction(() => Array.from(document.images).filter(img => { const r = img.getBoundingClientRect(); return r.top < innerHeight && r.bottom > 0 && r.width > 0 }).every(img => img.complete && img.naturalWidth > 0), null, { timeout: phase === 'candidate' ? 120000 : 60000 })
+    } catch (error) {
+      report.pendingImages = await page.evaluate(() => Array.from(document.images).filter(img => !img.complete || !img.naturalWidth).map(img => ({ src: img.src, currentSrc: img.currentSrc, complete: img.complete, top: img.getBoundingClientRect().top })))
+      console.error(JSON.stringify(report.pendingImages))
+      await page.screenshot({ path: path.join(output, 'image-timeout.png') })
+      throw error
+    }
+  }
   for (const width of [1440, 390, 320]) {
     await page.setViewportSize({ width, height: 1000 })
     await page.goto(`${origin}/mission/space?route=rover`, { waitUntil: 'domcontentloaded' })
@@ -48,6 +58,8 @@ try {
     await expect(page.locator('[data-transit-briefing]')).toContainText('我是林岚')
     await page.keyboard.press('Escape')
     await expect(page.getByRole('button', { name: '凌星调查简报 · 文字' })).toBeFocused()
+    await page.locator('#journey-map').scrollIntoViewIfNeeded()
+    await imagesReady()
     const refs = new Set()
     for (let i = 1; i <= 6; i++) {
       const id = `transit-p${i}`
@@ -93,6 +105,17 @@ try {
   }
   expect(scenes.size).toBeGreaterThanOrEqual(4)
   report.checks.push('All six task rooms resolve designated unoccupied scenes and matching text briefings; none uses the generic missing-station fallback.')
+  await page.goto(`${origin}/mission/space?route=rover&station=mission-design`, { waitUntil: 'domcontentloaded' })
+  await page.locator('[data-stage-replay="2"]').click()
+  const film = page.getByRole('dialog').locator('video')
+  await expect(film).toHaveAttribute('src', '/mission/space/video/stage-2-v1.mp4')
+  await film.evaluate(async video => { video.muted = true; await video.play() })
+  await expect.poll(() => film.evaluate(video => video.currentTime)).toBeGreaterThan(0.2)
+  await page.keyboard.press('Escape')
+  await page.getByRole('navigation', { name: '星际远航研究路线' }).getByRole('link', { name: /抓住行星/ }).click()
+  await expect(page.locator('[data-transit-journey]')).toBeVisible()
+  await expect(page.getByRole('dialog')).toHaveCount(0)
+  report.checks.push('Original rover stage film still plays; switching to transit unmounts rover film state.')
   if (phase === 'production') expect(await (await page.request.get(`${origin}/mission/space?route=transit`)).text()).toContain(report.build)
   expect(report.errors).toEqual([])
   report.passed = true
