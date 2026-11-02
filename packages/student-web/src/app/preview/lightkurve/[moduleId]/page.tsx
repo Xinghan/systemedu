@@ -1,3 +1,4 @@
+import { lightkurveRecordVersion } from "@/lib/lightkurve-language-revision"
 import { createHash } from "node:crypto"
 import { headers } from "next/headers"
 import { notFound } from "next/navigation"
@@ -42,6 +43,6 @@ export default async function Page({ params, searchParams }: { params: Promise<{
   })
   const stages = tree.stages.map(stage => ({ id: stage.stage_id, title: stage.title }))
   for (const node of modules) if (!stages.some(stage => stage.id === node.stage)) stages.push({ id: node.stage, title: node.stage === "course" ? "课程节点" : node.stage })
-  const contentVersion = createHash("sha256").update(JSON.stringify({ record: rawRecord, assignment })).digest("hex").slice(0, 32)
+  const contentVersion = lightkurveRecordVersion(moduleId, createHash("sha256").update(JSON.stringify({ record: rawRecord, assignment })).digest("hex").slice(0, 32))
   return <LightkurveCoursePreview key={moduleId} moduleId={moduleId} courseTitle={manifest.title || "Lightkurve · 寻找系外行星凌星"} modules={modules} stages={stages} knodeDir={dir} content={content} slides={slides} images={images} audio={audio} assignment={assignment} recordConfig={recordConfig} contentVersion={contentVersion} initialView={lightkurveView(search.view)} initialLabMode={search.mode === "animation" ? "animation" : "game"} />
 }

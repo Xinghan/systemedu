@@ -47,7 +47,7 @@ async function main() {
  const scope=progress.reflectionScope('tune-a-chassis','M01','1.0');
  store.set(learningCacheKey('user:a',scope),JSON.stringify({version:1,body,dirty:true,submittedAt:'2026-10-09T00:00:00Z'}));
  global.fetch=async(url,init)=>{
-  const u=new URL(url),a=init.headers.Authorization==='Bearer a';
+  const u=new URL(url, 'http://test.local'),a=init.headers.Authorization==='Bearer a';
   const payload=u.pathname.includes('complete-status')?{completed_knode_ids:a?['M35']:[]}: {draft:null,submissions:a&&u.searchParams.get('library_slug')==='tune-a-chassis'?[{id:'one',body}]:[]};
   return {ok:true,json:async()=>payload};
  };
@@ -69,7 +69,7 @@ async function main() {
  assert.equal(dossier.dossierFrom({...dossier.INITIAL_MISSION_BODY,artifact:{schema:'unexpected'}}),null);
  result.checks.push('Stable content digest; explicit version matching; append-only source references; malformed dossier rejected');
  result.passed=true;
- fs.writeFileSync(path.resolve(__dirname,'../../artifacts/lightkurve-integration-20261029/curriculum-verification.json'),JSON.stringify(result,null,2)+'\n');
+ fs.writeFileSync(process.env.LIGHTKURVE_CURRICULUM_REPORT || path.resolve(__dirname,'../../artifacts/lightkurve-integration-20261029/curriculum-verification.json'),JSON.stringify(result,null,2)+'\n');
  console.log(JSON.stringify(result,null,2));
 }
 main().catch(e=>{console.error(e);process.exitCode=1;});

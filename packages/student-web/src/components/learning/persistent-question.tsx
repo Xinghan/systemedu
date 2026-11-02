@@ -1,5 +1,7 @@
 "use client"
 
+import { lightkurveTheoryVersion } from "@/lib/lightkurve-language-revision"
+
 import { useState } from "react"
 import { useParams } from "next/navigation"
 import { useLearningRecord } from "@/lib/hooks/use-learning-record"
@@ -28,7 +30,7 @@ function QuestionRecord({ projectName, moduleId, activityId, question, options, 
   options?: { value: string; label: string }[]; correctAnswer?: string; explanation?: string; referenceAnswer?: string
   kind: "quiz" | "assignment" | "exam"
 }) {
-  const record = useLearningRecord({ library_slug: projectName, module_id: moduleId, activity_id: activityId, kind, content_version: questionVersion({ question, options, correctAnswer, referenceAnswer }) }, { answers: [{ question_id: activityId, question, answer: "" }] })
+  const record = useLearningRecord({ library_slug: projectName, module_id: moduleId, activity_id: activityId, kind, content_version: lightkurveTheoryVersion(projectName, moduleId, activityId, questionVersion({ question, options, correctAnswer, referenceAnswer })) }, { answers: [{ question_id: activityId, question, answer: "" }] })
   const answer = record.body.answers[0]?.answer ?? ""
   const submitted = !!record.submittedAt
   const locked = record.pending || record.busy && !record.ready

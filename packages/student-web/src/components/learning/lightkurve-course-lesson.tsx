@@ -1,5 +1,7 @@
 "use client"
 
+import { lightkurveChoiceIndex } from "@/lib/lightkurve-language-revision"
+
 import Link from "next/link"
 import { missionContext } from "@/lib/project-lines/space-curriculum"
 import { MissionLessonBrief, MissionLessonFooter } from "@/components/mission/space-mission-lesson"
@@ -86,7 +88,8 @@ function AssessmentRecord({ moduleId, contentVersion, questions, kind }: { modul
   const complete = questions.every(question => record.body.answers.find(answer => answer.question_id === question.id)?.answer.trim())
   const label = kind === "exam" ? "阶段检验" : "理解自测"
   const choice = (index: number, option: string) => `${index + 1}. ${option}`
-  const correct = questions.filter(question => record.body.answers.find(answer => answer.question_id === question.id)?.answer === choice(question.correct, question.options[question.correct])).length
+  const selected = (question: LightkurveQuestion) => lightkurveChoiceIndex(moduleId, contentVersion, kind, question.id, question.options, record.body.answers.find(answer => answer.question_id === question.id)?.answer ?? "")
+  const correct = questions.filter(question => selected(question) === question.correct).length
   function select(questionId: string, answer: string) {
     setFeedback(false)
     record.session.update({ ...record.body, answers: record.body.answers.map(item => item.question_id === questionId ? { ...item, answer } : item) })
@@ -97,7 +100,7 @@ function AssessmentRecord({ moduleId, contentVersion, questions, kind }: { modul
     <p className={styles.note}>选择和提交尝试会单独保存。这里的答案解析仅供自查，账号提交状态为未评阅。</p>
     {questions.map((question, index) => <fieldset key={question.id} className={styles.quizQuestion} disabled={isLocked(record)}>
       <legend>{index + 1}. {question.question}</legend>
-      {question.options.map((option, optionIndex) => <label key={optionIndex}><input type="radio" name={`${kind}-${question.id}`} value={choice(optionIndex, option)} checked={record.body.answers.find(answer => answer.question_id === question.id)?.answer === choice(optionIndex, option)} onChange={event => select(question.id, event.target.value)} /><span>{option}</span></label>)}
+      {question.options.map((option, optionIndex) => <label key={optionIndex}><input type="radio" name={`${kind}-${question.id}`} value={choice(optionIndex, option)} checked={selected(question) === optionIndex} onChange={event => select(question.id, event.target.value)} /><span>{option}</span></label>)}
       {feedback && <div className={styles.feedback}><strong>参考答案：{question.options[question.correct]}</strong><p>{question.explanation}</p></div>}
     </fieldset>)}
     {feedback && <p role="status" className={styles.note}>本机自查：{correct} / {questions.length}。这不是服务器评分，也不自动标记掌握。</p>}
@@ -156,7 +159,7 @@ export function LightkurveCourseLesson({ moduleId, courseTitle, modules, stages,
     try {
       const raw = localStorage.getItem(key)
       let state = raw ? lightkurveValidationState(JSON.parse(raw)) : null
-      if (raw && !state) throw new Error("已有冻结记录无法读取；原记录未覆盖，请先导出检查。")
+      if (raw && !state) throw new Error("已有方法记录无法读取。请先导出检查，原记录仍然保留。")
       const accountArtifact = classroom.body.artifact
       const accountState = accountArtifact?.kind === "validation" ? lightkurveValidationState(accountArtifact.data) : null
       // Account restoration may bring a previously saved first result; it never replaces a different freeze.
@@ -166,36 +169,36 @@ export function LightkurveCourseLesson({ moduleId, courseTitle, modules, stages,
       }
       if (message.type === "systemedu-lightkurve-checkpoint") {
         if (state?.freeze && !sameFreeze(state, message.state)) {
-          notice("已保留原冻结配置；不同配置不能覆盖这次验证记录。")
+          notice("已保留首次配置。新的参数不能覆盖这次检验记录。")
         } else {
           state = state?.firstResult ? state : message.state
           // Write and read back before acknowledging or permitting access to held-out data.
           localStorage.setItem(key, JSON.stringify(state))
           const persisted = lightkurveValidationState(JSON.parse(localStorage.getItem(key) || "null"))
-          if (!persisted?.freeze) throw new Error("冻结记录未能持久保存，尚未读取保留观测。")
+          if (!persisted?.freeze) throw new Error("方法记录尚未保存成功，因此还没有读取 Q4。")
           state = persisted
-          notice(state.firstResult ? "首次结果已保留，后续结果不会覆盖它。账号保存状态见下方。" : classroom.session.token ? "冻结配置已保存到当前账号的本机草稿；账号同步状态见下方。" : "未登录：冻结配置仅保存在当前浏览器，可跨本课 M24 / M25 继续。")
+          notice(state.firstResult ? "首次结果已保留，后续结果不会覆盖它。账号保存状态见下方。" : classroom.session.token ? "分析配置已保存为当前账号的本机草稿；同步状态见下方。" : "未登录：分析配置保存在当前浏览器，可在本课 M24、M25 之间继续使用。")
         }
       }
       if (state?.freeze && !isLocked(classroom)) {
-        const artifact = { kind: "validation", title: "Q4 冻结与首次验证记录", data: state }
+        const artifact = { kind: "validation", title: "Q4 分析配置与首次检验结果", data: state }
         if (JSON.stringify(classroom.body.artifact) !== JSON.stringify(artifact)) classroom.session.update({ ...classroom.body, artifact })
       }
       if (message.type !== "systemedu-lightkurve-request-holdout") reply({ type: "systemedu-lightkurve-state", moduleId, state: state ?? { freeze: null, firstResult: null } })
       if (message.type !== "systemedu-lightkurve-request-holdout") return
-      if (moduleId !== "M25") { notice("本节只保存预测；请到 M25 按冻结方法揭开 Q4。"); return }
+      if (moduleId !== "M25") { notice("本节只保存预测；请到 M25 按已记录的方法查看 Q4。"); return }
       // A persisted freeze must exist even when this request arrives directly, without the UI workflow.
       const persisted = lightkurveValidationState(JSON.parse(localStorage.getItem(key) || "null"))
-      if (!persisted?.freeze) { notice("先保存冻结配置，再打开保留观测。尚未读取 Q4 数据。"); return }
+      if (!persisted?.freeze) { notice("请先保存分析配置，再查看 Q4。目前尚未读取 Q4 数据。"); return }
       const token = getToken()
       const response = published ? await lightkurveFile("practice/browser/holdout.json", token || "") : await fetch(holdoutUrl, { cache: "no-store" })
-      if (!response.ok) throw new Error("保留观测暂时无法读取；冻结记录仍已保存，请重试。")
+      if (!response.ok) throw new Error("Q4 观测暂时无法读取；分析配置仍已保存，请重试。")
       const data: unknown = await response.json()
       reply({ type: "systemedu-lightkurve-holdout", moduleId, data })
-      notice("已按已保存的冻结配置请求保留观测；首次结果生成后会独立保留。")
+      notice("已按保存的配置请求 Q4 观测；首次结果生成后会单独保留。")
     } catch (error) {
       reply({ type: "systemedu-lightkurve-error", moduleId })
-      notice(error instanceof Error ? error.message : "冻结记录未能保存，尚未读取保留观测。")
+      notice(error instanceof Error ? error.message : "分析配置未能保存，因此尚未读取 Q4。")
     }
   }
 
@@ -262,9 +265,9 @@ export function LightkurveCourseLesson({ moduleId, courseTitle, modules, stages,
         <div className="min-w-0" data-unified-course>
           <CourseMediaContext.Provider value={{ initialIdeaId: target?.startsWith("idea-") ? target.slice(5) : undefined,
             renderFrame: (idea, html) => <div className="flex h-full min-h-0 flex-col" data-lightkurve-experiment={idea.idea_id}>
-              <div className="min-h-0 flex-1">{validationActive && !classroom.ready ? <p>正在恢复冻结记录…</p> : <ArtifactFrame key={`${idea.idea_id}:${classroom.identity.owner}:${contentVersion}`} html={html} title={idea.topic} moduleId={moduleId}
+              <div className="min-h-0 flex-1">{validationActive && !classroom.ready ? <p>正在恢复已保存的方法记录…</p> : <ArtifactFrame key={`${idea.idea_id}:${classroom.identity.owner}:${contentVersion}`} html={html} title={idea.topic} moduleId={moduleId}
                 onArtifact={payload => setCandidate({ payload, idea_id: idea.idea_id, received_at: new Date().toISOString(), owner: classroom.identity.owner })} onValidation={validationProtocol} />}</div>
-              {validationActive && <div className="max-h-[25vh] overflow-auto bg-[var(--paper)] p-3 text-[var(--ink)]"><p role="status">{validationNotice?.owner === classroom.identity.owner ? validationNotice.message : "先封存参数和预测，再到 M25 揭示 Q4。首次结果会独立保留。"}</p><LearningRecordStatus record={classroom}/></div>}
+              {validationActive && <div className="max-h-[25vh] overflow-auto bg-[var(--paper)] p-3 text-[var(--ink)]"><p role="status">{validationNotice?.owner === classroom.identity.owner ? validationNotice.message : "先保存参数和预测，再到 M25 查看 Q4。首次结果会单独保留。"}</p><LearningRecordStatus record={classroom}/></div>}
               {idea.mode === "game" && <div className={`max-h-[30vh] shrink-0 overflow-auto bg-[var(--paper)] p-3 text-[var(--ink)] ${styles.records}`}>
                 <div className="flex flex-wrap items-center justify-between gap-3"><p role="status" className="text-sm">{currentCandidate?.idea_id === idea.idea_id ? "已收到本次操作记录，可以关联到本节作业。" : "在实验中生成操作记录后，可关联到本节作业。"}</p><button type="button" className={styles.primary} disabled={currentCandidate?.idea_id !== idea.idea_id || isLocked(delivery)} onClick={attachArtifact}>关联到本节作业</button></div>
                 {delivery.body.artifact && <p className="mt-2 text-sm">已关联实验操作产物</p>}<LearningRecordStatus record={delivery} />

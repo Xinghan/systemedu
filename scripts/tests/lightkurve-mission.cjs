@@ -63,7 +63,7 @@ async function main() {
  global.localStorage={getItem:()=>null};
  const requested=[];
  global.fetch=async url=>{
-  const u=new URL(url);requested.push(u.pathname);
+  const u=new URL(url, 'http://test.local');requested.push(u.pathname);
   return {ok:true,json:async()=>u.pathname.includes('complete-status')?{completed_knode_ids:u.pathname.includes('lightkurve')?['M24']:['M01']}:{draft:null,submissions:[]}};
  };
  let states={};await p.readMissionProgress('fixture','user:fixture',(id,state)=>states[id]=state);
@@ -80,7 +80,7 @@ async function main() {
  assert.deepEqual(p.recommendMission(completed,{},'transit'),{ref:null,station:'transit-p6'});
  checks.push('M01/M24 cannot leak across courses; per-course failure isolation, guest separation and finished-route recommendation');
  const source=process.env.LIGHTKURVE_SOURCE;
- assert(source,'Set LIGHTKURVE_SOURCE to the unchanged original course directory');
+ assert(source,'Set LIGHTKURVE_SOURCE to the reviewed course directory');
  const links=require(path.join(root,'lib/lightkurve-course-links.ts'));
  assert.deepEqual(links.lightkurveCourseLink('/preview/lightkurve/M24?view=lab&mode=game'),{kind:'lesson',module:'M24',href:'/learn/lightkurve-transit-detective/M24?view=lab&mode=game'});
  assert.equal(links.lightkurveCourseLink('/preview/lightkurve/media?path=downloads%2Flightkurve-practice-kit.zip').kind,'download');
@@ -111,9 +111,9 @@ async function main() {
  checks.push('Original M24 notebook / M25 assignment version fingerprints, frozen configuration and first-result artifacts restore without migration; identities stay isolated');
  for(const [file,digest] of Object.entries(sourceMap.source_sha256)) assert.equal(crypto.createHash('sha256').update(fs.readFileSync(path.join(source,file))).digest('hex'),digest,file);
  const zip=fs.readFileSync(path.join(source,'downloads/lightkurve-practice-kit.zip'));assert.equal(zip.readUInt32LE(0),0x04034b50);
- checks.push(`${Object.keys(sourceMap.source_sha256).length} source files still match SHA-256; original practical kit exists`);
+ checks.push(`${Object.keys(sourceMap.source_sha256).length} source files match the reviewed source map SHA-256; practice kit exists`);
  const report={passed:true,nodes:32,stations:6,checks};
- fs.writeFileSync(path.join(repo,'artifacts/lightkurve-integration-20261029/integration-verification.json'),JSON.stringify(report,null,2)+'\n');
+ fs.writeFileSync(process.env.LIGHTKURVE_MISSION_REPORT || path.join(repo,'artifacts/lightkurve-integration-20261029/integration-verification.json'),JSON.stringify(report,null,2)+'\n');
  console.log(JSON.stringify(report,null,2));
 }
 main().catch(e=>{console.error(e);process.exitCode=1});

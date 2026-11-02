@@ -1,5 +1,7 @@
 "use client"
 
+import { lightkurveRecordVersion } from "@/lib/lightkurve-language-revision"
+
 import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
 import { missionContext, missionLibraryHref, missionLessonHref } from "@/lib/project-lines/space-curriculum"
@@ -82,7 +84,7 @@ export function LightkurvePublishedLesson({ moduleId }: { moduleId: string }) {
       ])
       // Preserve the local acceptance version so existing saved work can resume.
       const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(JSON.stringify({ record: rawRecord, assignment })))
-      const contentVersion = Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, "0")).join("").slice(0, 32)
+      const contentVersion = lightkurveRecordVersion(moduleId, Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, "0")).join("").slice(0, 32))
       const media = async (src?: string) => {
         if (!src || /^(https?:|data:|\/)/.test(src)) return src
         const response = await courseFile(/^(knodes|downloads|images)\//.test(src) ? src : `${dir}/${src}`, token!, controller.signal)
