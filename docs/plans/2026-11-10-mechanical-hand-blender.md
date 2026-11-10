@@ -18,7 +18,7 @@ Reference: Yale OpenHand https://www.eng.yale.edu/grablab/openhand/ and Model T 
 
 ## Implementation batches
 
-1. `scripts/mechanical-hand/build_hand.py`, shared `rig.json`, public `.blend`, `.glb`, poster and manifest. Beveled link shells, axle pins, palm framework, return elements, five drives, named guide points and joint hierarchy. A sample 4-second Blender closing clip is included for editing; interactive controls evaluate poses directly.
+1. `scripts/mechanical-hand/build_hand.py`, shared `rig.json`, public `.blend`, `.glb`, poster and manifest. Beveled link shells, axle pins, palm framework, five drives, named guide points and joint hierarchy. A sample 4-second Blender closing clip is included for editing; interactive controls evaluate poses directly. Opening is prescribed; a return mechanism is not simulated.
 2. `src/components/learning/mechanical-hand/`: pure kinematics, GLB scene controller, accessible React controls and responsive layout. Controls: five fingers, opposition, linked closing, three presets, shell inspection, tendon visibility, part selection, camera presets and reset. Reference-ball mode limits motion at first capsule/sphere contact; state is geometric only, without force/friction/holding claims.
 3. `src/app/standalone/mechanical-hand/page.tsx`: direct preview, clear model assumptions, source links, downloadable editable assets. Pale workshop palette, orange tendons and teal reference object; large model viewport with compact controls.
 4. `scripts/tests/mechanical-hand.cjs` and browser test: shared-model/GLB agreement, joint continuity, constraints, reversible posing, tendon take-up, sphere clearance, control effects, fallback/retry, mobile layout and actual visual review. Check scoped lint and record existing full-project typecheck baseline.
@@ -30,4 +30,6 @@ Model unit = 10 mm. Link lengths and angles are chosen teaching dimensions. For 
 
 ## Status
 
-Research/design draft complete; implementation and browser verification pending.
+Implementation and local verification complete. Original Blender model, animated source tendons/drums, GLB, rendered fallback and the reusable viewer are integrated at `/standalone/mechanical-hand`. Model tests pass: 210 GLB/analytic endpoint comparisons, 456 animated source-tendon endpoint checks, 58 contact cases and enclosure of 93,660 rendered finger vertices. Browser controls, fallback/retry/context loss and 390px layout pass. Actual desktop and mobile screenshots reviewed.
+
+Scoped ESLint passes. Full-project TypeScript still reports the same six existing errors in unchanged `slide-demo/page.tsx` and `course-content-view.tsx`; no new component errors. No production build or deployment claimed. Evidence and reproduction commands: `artifacts/mechanical-hand-20261110/README.md`.

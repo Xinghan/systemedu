@@ -1,0 +1,32 @@
+const {chromium,expect}=require('@playwright/test'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path');
+const origin=process.env.HAND_ORIGIN||'http://127.0.0.1:4000',out=path.resolve(__dirname,'../../artifacts/mechanical-hand-20261110');fs.mkdirSync(out,{recursive:true});
+(async()=>{
+ const browser=await chromium.launch({headless:true}),context=await browser.newContext({viewport:{width:1440,height:1100},reducedMotion:'reduce'}),page=await context.newPage(),errors=[];
+ page.on('pageerror',e=>errors.push(e.message));page.on('console',m=>{if(m.type()==='error')errors.push(m.text())});
+ await page.goto(origin+'/standalone/mechanical-hand',{waitUntil:'networkidle'});
+ const canvas=page.locator('canvas[data-hand-canvas]'),model=page.locator('[data-model="blender-hand"]');
+ await expect(model).toHaveCount(1);await expect(canvas).toHaveCount(1);await page.screenshot({path:out+'/desktop.png',fullPage:true});
+ await page.getByRole('button',{name:/张开手掌/}).click();
+ await page.getByRole('slider',{name:'食指弯曲指令',exact:true}).fill('75');await expect(model).toHaveAttribute('data-selected','index');
+ await expect.poll(async()=>JSON.parse(await model.getAttribute('data-pose')).index).toBe(.75);
+ assert.equal(await page.locator('[data-angle="0"]').innerText(),'52.5°');assert(Number(await page.locator('[data-pull]').innerText())>8);
+ await page.screenshot({path:out+'/single-finger.png'});
+ await page.getByRole('checkbox',{name:'隐藏外壳，看内部'}).check();await expect(model).toHaveAttribute('data-shells','false');await page.screenshot({path:out+'/inside.png'});
+ await page.getByRole('checkbox',{name:'显示牵引绳'}).uncheck();await expect(model).toHaveAttribute('data-tendons','false');await page.getByRole('checkbox',{name:'显示牵引绳'}).check();
+ await page.getByRole('checkbox',{name:'隐藏外壳，看内部'}).uncheck();
+ await page.getByRole('button',{name:/五指合拢/}).click();await expect.poll(async()=>JSON.parse(await model.getAttribute('data-pose')).middle).toBe(1);await page.screenshot({path:out+'/closed.png'});
+ await page.getByRole('button',{name:/包握参考球/}).click();await expect.poll(async()=>Number(await model.getAttribute('data-contacts'))).toBeGreaterThan(1);await page.screenshot({path:out+'/ball.png'});
+ await page.getByRole('slider',{name:'拇指对掌',exact:true}).fill('90');await expect(model).toHaveAttribute('data-selected','thumb');
+ for(const name of ['掌面','侧面','立体'])await page.getByRole('button',{name,exact:true}).click();
+ await page.getByRole('button',{name:'播放逐指演示'}).click();await expect.poll(async()=>JSON.parse(await model.getAttribute('data-pose')).thumb).toBeGreaterThan(.1);
+ await page.getByRole('button',{name:'暂停逐指演示'}).click();const stopped=await model.getAttribute('data-pose');await page.waitForTimeout(200);assert.equal(await model.getAttribute('data-pose'),stopped);
+ await page.getByRole('button',{name:'复位',exact:true}).click();assert(Object.values(JSON.parse(await model.getAttribute('data-pose'))).every(v=>v===0));
+ await page.getByRole('button',{name:'查看静态结构图'}).click();await expect(page.locator('[data-hand-fallback]')).toBeVisible();await expect(page.getByRole('slider',{name:'食指弯曲指令'})).toBeDisabled();await page.screenshot({path:out+'/fallback.png'});
+ await page.getByRole('button',{name:'重新加载三维模型'}).click();await expect(page.getByRole('slider',{name:'食指弯曲指令'})).toBeEnabled();await expect(canvas).toHaveCount(1);
+ await page.setViewportSize({width:390,height:844});await page.reload({waitUntil:'networkidle'});await expect(model).toHaveCount(1);
+ assert((await canvas.boundingBox()).height>=550);assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));await page.screenshot({path:out+'/mobile.png',fullPage:true});
+ await page.getByRole('button',{name:/包握参考球/}).click();await page.screenshot({path:out+'/mobile-ball.png',fullPage:true});
+ for(const file of ['mechanical-hand.glb','mechanical-hand.blend','poster.png']){const res=await page.request.get(origin+'/mechanical-hand/'+file);assert.equal(res.status(),200);assert((await res.body()).length>1000)}
+ await canvas.evaluate(c=>c.dispatchEvent(new Event('webglcontextlost',{cancelable:true})));await expect(page.locator('[data-hand-fallback]')).toBeVisible();assert.deepEqual(errors,[]);
+ const report={passed:true,checks:['Actual Blender GLB displayed','Finger commands update pose and exact angle/pull readouts','Shell and tendon inspection controls','Closed pose and sphere contact limits','Thumb opposition and camera presets','Sequential demo, pause and reset','Fallback, retry and WebGL context loss','390px layout and downloadable source assets'],pageErrors:errors};fs.writeFileSync(out+'/browser-check.json',JSON.stringify(report,null,2)+'\n');console.log(JSON.stringify(report,null,2));await browser.close();
+})().catch(e=>{console.error(e);process.exit(1)});
