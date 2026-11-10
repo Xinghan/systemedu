@@ -1,7 +1,7 @@
 """Original articulated teaching hand. Blender 4.5: -b --python build_hand.py -- --render."""
 import argparse, hashlib, json, math, sys
 from pathlib import Path
-import bpy
+import bpy, bmesh
 from mathutils import Vector
 
 ROOT=Path(__file__).resolve().parents[2]
@@ -17,9 +17,9 @@ def mat(name,color,metal=0,rough=.45):
  m=bpy.data.materials.new(name);m.diffuse_color=(*color,1);m.use_nodes=True
  b=m.node_tree.nodes.get('Principled BSDF');b.inputs['Base Color'].default_value=(*color,1);b.inputs['Metallic'].default_value=metal;b.inputs['Roughness'].default_value=rough
  return m
-ivory=mat('Ceramic polymer',(.78,.79,.73),.15,.38);carbon=mat('Graphite chassis',(.07,.095,.10),.3,.46)
-metal=mat('Machined titanium',(.38,.46,.46),.78,.27);brass=mat('Brass bearings',(.67,.40,.15),.75,.3)
-rubber=mat('Elastomer pads',(.09,.14,.14),.02,.9);orange=mat('Tendon orange',(.9,.22,.045),.1,.4)
+ivory=mat('Pearl polymer shell',(.79,.81,.79),.22,.32);carbon=mat('Graphite chassis',(.045,.06,.065),.35,.4)
+metal=mat('Machined titanium',(.40,.46,.48),.8,.26);brass=mat('Satin bearing alloy',(.31,.38,.40),.8,.29)
+rubber=mat('Elastomer pads',(.045,.067,.071),.02,.8);orange=mat('Tendon orange',(.8,.25,.065),.1,.4)
 teal=mat('Actuator teal',(.07,.23,.24),.4,.34);black=mat('Fastener sockets',(.015,.025,.025),.1,.7)
 
 def group(name,parent=None,**extras):
@@ -55,23 +55,97 @@ def torus(name,loc,r,minor,m,parent,rot=(0,math.pi/2,0)):
  return finish(bpy.context.object,name,m,parent)
 def native(v):return (v[0],-v[2],v[1])
 
-hand=group('MechanicalHand',asset_id='tendon-hand-v1')
+def shaped_mesh(name,vertices,faces,m,parent):
+ data=bpy.data.meshes.new(name);data.from_pydata(vertices,[],faces);data.update()
+ bm=bmesh.new();bm.from_mesh(data);bmesh.ops.recalc_face_normals(bm,faces=bm.faces);bm.to_mesh(data);bm.free()
+ o=bpy.data.objects.new(name,data);scene.collection.objects.link(o);finish(o,name,m,parent)
+ for face in data.polygons:face.use_smooth=True
+ return o
+
+def loft(name,sections,m,parent,power=2.8):
+ """Rounded, tapered cross-sections: z, half-width, depth center, half-depth."""
+ n=48;verts=[]
+ for z,w,y,d in sections:
+  for i in range(n):
+   a=i*math.tau/n;c=math.cos(a);s=math.sin(a)
+   verts.append((w*math.copysign(abs(c)**(2/power),c),y+d*math.copysign(abs(s)**(2/power),s),z))
+ faces=[]
+ for row in range(len(sections)-1):
+  for i in range(n):a=row*n+i;b=row*n+(i+1)%n;faces.append((a,b,b+n,a+n))
+ faces.extend([tuple(reversed(range(n))),tuple(range((len(sections)-1)*n,len(sections)*n))])
+ return shaped_mesh(name,verts,faces,m,parent)
+
+def smooth_outline(points):
+ result=[];count=len(points)
+ for i in range(count):
+  p0,p1,p2,p3=[Vector(points[j%count]) for j in [i-1,i,i+1,i+2]]
+  for j in range(5):
+   t=j/5;v=.5*((2*p1)+(-p0+p2)*t+(2*p0-5*p1+4*p2-p3)*t*t+(-p0+3*p1-3*p2+p3)*t*t*t);result.append(tuple(v))
+ return result
+
+def sculpted_panel(name,outline,surface,m,parent,thickness=.13,bulge=0):
+ """An organic closed panel sampled on a curved surface, with an actual rim thickness."""
+ outline=smooth_outline(outline);n=len(outline)
+ cx=sum(p[0] for p in outline)/n;cz=sum(p[1] for p in outline)/n
+ rings=[.12,.3,.5,.7,.85,.95,1.0]
+ vertices=[(cx,surface(cx,cz)-bulge,cz)]
+ for r in rings:
+  for x,z in outline:
+   xx=cx+(x-cx)*r;zz=cz+(z-cz)*r;vertices.append((xx,surface(xx,zz)-bulge*(1-r*r),zz))
+ front=len(vertices);vertices.extend([(x,y+thickness,z) for x,y,z in vertices.copy()])
+ faces=[]
+ for i in range(n):faces.append((0,1+i,1+(i+1)%n))
+ for j in range(len(rings)-1):
+  for i in range(n):a=1+j*n+i;b=1+j*n+(i+1)%n;faces.append((a,b,b+n,a+n))
+ faces.extend([tuple(front+i for i in reversed(face)) for face in faces.copy()])
+ start=1+(len(rings)-1)*n
+ for i in range(n):a=start+i;b=start+(i+1)%n;faces.append((a,a+front,b+front,b))
+ return shaped_mesh(name,vertices,faces,m,parent)
+
+def palm_surface(x,z):
+ thenar=math.exp(-((x+2.7)/1.5)**2-((z-8.3)/2.2)**2)
+ ulnar=math.exp(-((x-2.5)/1.2)**2-((z-8.7)/2.5)**2)
+ return -.6-.82*thenar-.5*ulnar-.15*((z-9.4)/4.5)**2
+
+def surface_line(name,points,surface,m,parent,radius=.025):
+ for (x1,z1),(x2,z2) in zip(points,points[1:]):rod(name,(x1,surface(x1,z1)-.02,z1),(x2,surface(x2,z2)-.02,z2),radius,m,parent)
+
+hand=group('MechanicalHand',asset_id='tendon-hand-v1',appearance_revision=2)
 cuff=group('Wrist',hand,part='wrist')
-cyl('Wrist flange',(0,0,1.05),2.3,.45,metal,cuff,n=64)
-cyl('Wrist coupler',(0,0,2.0),1.85,1.6,carbon,cuff,n=64)
-for z in [1.3,2.7]:torus('Wrist ring',(0,0,z),1.85,.1,brass,cuff,rot=(0,0,0))
-box('Lower palm frame',(0,0,4.5),(6.9,1.85,3.8),carbon,hand,.3,part='palm')
-for x in [-2.6,2.6]:rod('Wrist strut',(x*.6,0,2.5),(x,0,6),.22,metal,hand)
+cyl('Wrist flange',(0,0,1.02),1.9,.42,metal,cuff,n=64)
+cyl('Wrist coupler',(0,0,2.0),1.5,1.5,carbon,cuff,n=64)
+fairing=group('WristShell',cuff,shell=True)
+loft('Tapered wrist fairing',[(1.15,1.9,0,1.3),(1.35,2.12,0,1.5),(2.3,2.5,0,1.6),(3.8,3.0,0,1.65),(4.8,2.95,0,1.6),(5.35,2.4,0,1.35),(5.8,1.85,0,1.0)],ivory,fairing,power=2.5)
+loft('Wrist gasket',[(1.13,1.9,0,1.31),(1.25,2.04,0,1.44),(1.31,2.08,0,1.47)],carbon,cuff,power=2.5)
+for x in [-1.2,1.2]:
+ rod('Wrist load strut',(x*.7,.25,2.1),(x,.2,6.5),.18,metal,hand)
+ bolt((x,-1.57,2.1),fairing,.09)
+for x in [-.7,0,.7]:box('Wrist ventilation slot',(x,-1.655,3.15),(.16,.035,.7),carbon,fairing,.06)
 palm=group('Palm',hand,part='palm')
-box('Palm backplate',(0,.8,9.55),(8.05,.65,7.65),carbon,palm,.6)
-for x in [-3.6,3.6]:box('Palm side rail',(x,0,9.3),(.42,1.95,7.3),metal,palm,.15)
-for z in [6.2,8.3,10.4,12.5]:box('Palm transverse rib',(0,.2,z),(7.45,.45,.28),metal,palm)
+outline=[(-1.7,5.1),(-2.4,6.15),(-3.5,7.1),(-4.22,8.05),(-4.3,8.85),(-3.7,10.1),(-3.85,11.5),(-3.6,12.55),(-3.1,13.1),(-2.2,13.12),(-1.35,13.5),(-.4,13.5),(.6,13.17),(1.7,13.14),(2.6,12.65),(3.43,12.55),(3.74,11.75),(3.48,9.6),(3.05,7.6),(2.4,6.05),(1.65,5.1)]
+rim=smooth_outline(outline)
+for i,((x,z),(xx,zz)) in enumerate(zip(rim,rim[1:]+rim[:1])):
+ rod('Palm perimeter chassis',(x,.15,z),(xx,.15,zz),.16,carbon,palm)
+for f in rig['fingers'][1:]:
+ x,_,z=native(f['base']);start=(x*.48,.35,6.2);end=(x,.25,z-.35)
+ rod('Metacarpal spar',start,end,.25,metal,palm)
+ for side in [-1,1]:rod('Metacarpal web',(start[0]+side*.25,.35,6.3),(x+side*.3,.25,z-.45),.07,carbon,palm)
+ cyl('Knuckle saddle',(x,0,z-.15),.53,f['radius']*2+.18,carbon,palm,rot=(0,math.pi/2,0))
+for z,w in [(6.45,2.5),(10.8,6.6)]:box('Internal cross brace',(0,.45,z),(w,.35,.28),carbon,palm,.1)
+cyl('Thumb opposition saddle',(-3.95,-.15,8.65),.8,.75,carbon,palm,rot=(math.pi/2,0,0))
+cyl('Thumb opposition bearing',(-3.95,-.56,8.65),.59,.13,metal,palm,rot=(math.pi/2,0,0))
 shell=group('PalmShell',palm,shell=True)
-box('Palm cover',(0,-1.08,9.5),(7.2,.34,6.2),ivory,shell,.5)
-box('Palm contact cushion',(0,-1.31,9.8),(4.8,.18,3.65),rubber,shell,.32)
-for x in [-2.95,2.95]:
- for z in [6.9,12.1]:bolt((x,-1.32,z),shell)
-for x in [-2,-1,0,1,2]:box('Palm cushion groove',(x,-1.415,9.8),(.035,.025,2.7),carbon,shell,.01)
+sculpted_panel('Sculpted palm shell',outline,palm_surface,ivory,shell,thickness=.17)
+sculpted_panel('Sculpted dorsal shell',outline,lambda x,z:.62+.28*math.exp(-(x/3.5)**2-((z-9.5)/3.6)**2),ivory,shell,thickness=.14)
+# Edge band joins the two sculpted skins without a box-shaped palm core.
+sideverts=[]
+for x,z in rim:sideverts.extend([(x,palm_surface(x,z),z),(x,.71,z)])
+sidefaces=[(2*i,2*((i+1)%len(rim)),2*((i+1)%len(rim))+1,2*i+1) for i in range(len(rim))]
+shaped_mesh('Palm edge band',sideverts,sidefaces,carbon,shell)
+pads=[('Thenar pad',[(-2.6,6.9),(-3.65,7.8),(-3.72,9.0),(-2.75,10.5),(-1.6,10.25),(-1.35,9.15),(-1.75,7.65)]),('Hypothenar pad',[(1.55,6.8),(2.45,7.15),(3.12,8.65),(3.15,10.65),(2.55,11.55),(1.7,11.05),(1.1,9.35)]),('Distal palm pad',[(-2.9,11.3),(-2.65,12.5),(-1.2,12.78),(.35,12.55),(1.6,12.45),(2.4,12.0),(1.8,11.6),(.2,11.8),(-1.2,11.5)])]
+for name,shape in pads:sculpted_panel(name,shape,lambda x,z:palm_surface(x,z)-.12,rubber,shell,thickness=.10,bulge=.1)
+for x,z in [(-2.65,11.0),(2.95,11.85),(-1.3,5.7),(1.3,5.7)]:bolt((x,palm_surface(x,z)-.07,z),shell,.095)
+surface_line('Palm central seam',[(-.5,6.0),(-.45,7.5),(-.1,8.9),(.5,9.85),(.8,10.6)],palm_surface,carbon,shell,.018)
 
 animated_routes=[]
 for f in rig['fingers']:
@@ -90,9 +164,9 @@ for f in rig['fingers']:
   box('Phalanx spine',(0,.12,length/2),(width*.52,.57,length-.35),carbon,joint,.12)
   for sign in [-1,1]:box('Link rail',(sign*width*.34,.03,length/2),(.15,.55,length-.5),metal,joint,.055)
   cover=group(f'Shell_{fid}_{i}',joint,shell=True)
-  box('Finger dorsal cover',(0,.43,length/2),(width,.36,length-.63),ivory,cover,.19)
-  box('Finger pad',(0,-.51,length/2),(width*.91,.31,length-.7),rubber,cover,.18)
-  for zz in [length*.37,length*.5,length*.63]:box('Pad groove',(0,-.675,zz),(width*.75,.025,.045),carbon,cover,.012)
+  loft('Tapered phalanx housing',[(.23,width*.34,.08,.34),(.4,width*.5,.08,.47),(length*.5,width*.47,.1,.47),(length-.38,width*.4,.1,.4),(length-.17,width*.23,.1,.27)],ivory,cover,power=2.6)
+  loft('Contoured finger contact pad',[(.38,width*.25,-.48,.08),(.55,width*.43,-.49,.15),(length*.52,width*.42,-.5,.15),(length-.38,width*.31,-.48,.12),(length-.22,width*.12,-.45,.06)],rubber,cover,power=2.5)
+  for zz in [length*.4,length*.53,length*.66]:box('Pad microgroove',(0,-.653,zz),(width*.55,.015,.025),carbon,cover,.008)
   for sign in [-1,1]:bolt((sign*width*.31,-.28,length*.6),joint,.09)
   for suffix,zz in [('in',.18),('out',length-.18)]:
    guide=group(f'Guide_{fid}_{i}_{suffix}',joint);guide.location=(0,-.72,zz)
@@ -115,9 +189,9 @@ for f in rig['fingers']:
   drum.rotation_euler[1]=sum(a*r for a,r in zip(f['limits'],f['arms_mm']))*math.pi/180/rig['drum_radius_mm']*amount
   drum.keyframe_insert(data_path='rotation_euler',frame=frame)
  for x in [-.46,.46]:bolt((x,-.6,-1.25),drive,.085)
- # Static route for editable source; browser replaces this with pose-dependent tubes.
+ # Guide-driven route, baked below for the source animation; browser updates its own tubes.
  route=group('SourceTendon_'+fid,hand,source_tendon=True)
- route_refs=[Vector((d[0],d[1]-.6,d[2]+.8)),Vector((d[0],-.8,7)),Vector((f['base'][0],-.85,f['base'][1]-.8))]
+ route_refs=[Vector((d[0],d[1]-.6,d[2]+.8)),Vector((d[0],-.1,7)),Vector((f['base'][0],-.1,f['base'][1]-.8))]
  scene.frame_set(0);bpy.context.view_layer.update()
  for i in range(len(f['lengths'])):
   for suffix in ['in','out']:route_refs.append(bpy.data.objects[f'Guide_{fid}_{i}_{suffix}'])
@@ -159,7 +233,7 @@ scene.view_settings.view_transform='AgX';bpy.context.preferences.filepaths.save_
 bpy.ops.wm.save_as_mainfile(filepath=str(out/'mechanical-hand.blend'),compress=True)
 bpy.ops.export_scene.gltf(filepath=str(out/'mechanical-hand.glb'),export_format='GLB',export_extras=True,export_animations=True,export_animation_mode='SCENE',export_anim_scene_split_object=False,export_force_sampling=True,export_cameras=False,export_lights=False)
 if args.render:bpy.ops.render.render(write_still=True)
-meta={'asset_id':'tendon-hand-v1','blender_version':bpy.app.version_string,'provenance':'Original procedural Blender mesh; no third-party geometry','source_script':'scripts/mechanical-hand/build_hand.py','rig':'packages/student-web/src/components/learning/mechanical-hand/rig.json','joints':15,'flexion_joints':14,'drives':5,'model_unit_mm':10,'source_animation_seconds':4,'runtime':'Browser evaluates joint poses and tendon paths; source closing clip is editable reference motion.','limitations':'Illustrative kinematic hand, not validated prosthesis, adaptive force equilibrium or grip-force simulation.','references':['https://www.eng.yale.edu/grablab/openhand/','https://www.eng.yale.edu/grablab/openhand/model_t.html']}
+meta={'asset_id':'tendon-hand-v1','appearance_revision':2,'blender_version':bpy.app.version_string,'provenance':'Original sculpted procedural Blender mesh; no third-party geometry','source_script':'scripts/mechanical-hand/build_hand.py','rig':'packages/student-web/src/components/learning/mechanical-hand/rig.json','joints':15,'flexion_joints':14,'drives':5,'model_unit_mm':10,'source_animation_seconds':4,'runtime':'Browser evaluates joint poses and tendon paths; source closing clip is editable reference motion.','limitations':'Illustrative kinematic hand, not validated prosthesis, adaptive force equilibrium or grip-force simulation.','references':['https://www.eng.yale.edu/grablab/openhand/','https://www.eng.yale.edu/grablab/openhand/model_t.html','https://www.shadowrobot.com/wp-content/uploads/2024/06/20240610-UPDATED-shadow_dexterous_hand_e_technical_specification.pdf','https://openbionics.com/en/prosthetic-hands-that-move/']}
 for name in ['mechanical-hand.glb','mechanical-hand.blend','poster.png']:
  if (out/name).exists():
   data=(out/name).read_bytes();meta[name]={'bytes':len(data),'sha256':hashlib.sha256(data).hexdigest()}

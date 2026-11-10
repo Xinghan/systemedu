@@ -33,3 +33,11 @@ Model unit = 10 mm. Link lengths and angles are chosen teaching dimensions. For 
 Implementation and local verification complete. Original Blender model, animated source tendons/drums, GLB, rendered fallback and the reusable viewer are integrated at `/standalone/mechanical-hand`. Model tests pass: 210 GLB/analytic endpoint comparisons, 456 animated source-tendon endpoint checks, 58 contact cases and enclosure of 93,660 rendered finger vertices. Browser controls, fallback/retry/context loss and 390px layout pass. Actual desktop and mobile screenshots reviewed.
 
 Scoped ESLint passes. Full-project TypeScript still reports the same six existing errors in unchanged `slide-demo/page.tsx` and `course-content-view.tsx`; no new component errors. No production build or deployment claimed. Evidence and reproduction commands: `artifacts/mechanical-hand-20261110/README.md`.
+
+## Appearance revision 02 — user review
+
+The user rejected the square, plate-like palm as visually implausible. Rebuilt the Blender geometry with a sampled asymmetric palm outline, curved front/dorsal panels, thenar/hypothenar contact regions, a narrower wrist, thumb opposition saddle, staggered knuckle supports and tapered rounded phalanges. Replaced the square internal frame with metacarpal spars. Five drives now sit inside a contoured wrist enclosure in a staggered arrangement; palm tendons route beneath the front shell.
+
+Visual references: Shadow Hand official June 2024 technical specification, page 4, and Open Bionics Hero Arm product images. These are shape/assembly references, not copied CAD or a claim of product equivalence. Existing articulation and source IDs remain; asset manifest records appearance revision 2. Controls default to the assembled exterior; removing shells reveals tendons automatically.
+
+Rebuilt `.blend`, GLB, poster and manifest. Scoped lint, geometric/model checks and desktop/mobile browser checks pass. The same six pre-existing full-project type errors remain. Revision evidence, before/after screenshots and commands: `artifacts/mechanical-hand-form-v2-20261110/README.md`. Not deployed.

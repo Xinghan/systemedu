@@ -1,5 +1,5 @@
 const fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict'),crypto=require('node:crypto');
-const root=path.resolve(__dirname,'../..'),out=path.join(root,'artifacts/mechanical-hand-20261110');fs.mkdirSync(out,{recursive:true});
+const root=path.resolve(__dirname,'../..'),out=path.resolve(root,process.env.HAND_ARTIFACT_DIR||'artifacts/mechanical-hand-20261110');fs.mkdirSync(out,{recursive:true});
 (async()=>{
  const ts=require('../../packages/student-web/node_modules/typescript'),dir=path.join(root,'packages/student-web/src/components/learning/mechanical-hand');
  const rig=JSON.parse(fs.readFileSync(path.join(dir,'rig.json')));

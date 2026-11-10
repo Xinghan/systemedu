@@ -23,7 +23,7 @@ function FingerPlot({ pose }: { pose: Pose }) {
 export function MechanicalHandViewer() {
   const [commands, setCommands] = useState<Commands>({ thumb: .12, index: .2, middle: .12, ring: .08, little: .05 })
   const [opposition, setOpposition] = useState(.15), [ball, setBall] = useState(false)
-  const [shells, setShells] = useState(true), [tendons, setTendons] = useState(true), [selected, setSelected] = useState<FingerId>("index")
+  const [shells, setShells] = useState(true), [tendons, setTendons] = useState(false), [selected, setSelected] = useState<FingerId>("index")
   const [ready, setReady] = useState(false), [fallback, setFallback] = useState(false), [retry, setRetry] = useState(0)
   const [playing, setPlaying] = useState(false), [demoTime, setDemoTime] = useState(0), [inView, setInView] = useState(true)
   const host = useRef<HTMLDivElement>(null), area = useRef<HTMLDivElement>(null), controller = useRef<HandController | null>(null)
@@ -70,10 +70,10 @@ export function MechanicalHandViewer() {
     if (playing) { setPlaying(false); return }
     setBall(false); setOpposition(.2); timeRef.current = 0; setDemoTime(0); setCommands({ ...OPEN }); setPlaying(true)
   }
-  function reset() { preset("open"); setShells(true); setTendons(true); setSelected("index"); timeRef.current = 0; setDemoTime(0); controller.current?.view("perspective") }
+  function reset() { preset("open"); setShells(true); setTendons(false); setSelected("index"); timeRef.current = 0; setDemoTime(0); controller.current?.view("perspective") }
   const disabled = !ready || fallback
   return <main className={s.page}>
-    <header className={s.header}><a href="/standalone/mars-landing"><ArrowLeft size={14}/> 火星车着陆</a><span className={s.brand}>SYSTEMEDU <small>OBJECT STUDIES / 02</small></span><span className={s.edition}>结构研究 · 机械手</span></header>
+    <header className={s.header}><a href="/standalone/mars-landing"><ArrowLeft size={14}/> 火星车着陆</a><span className={s.brand}>SYSTEMEDU <small>OBJECT STUDIES / 02</small></span><span className={s.edition}>机械手 · 外形修订 02</span></header>
     <div className={s.title}><div><p className={s.eyebrow}>从卷线轮，到指尖</p><h1>五指机械手<span>，</span><br className={s.mobileBreak}/>拆开动作看结构。</h1></div><p>弯一根手指，看看关节怎样跟随。<br/>再移开外壳，沿着橙色牵引绳找到驱动端。</p></div>
     <section className={s.workbench} aria-label="五指机械手交互工作台">
       <div className={s.visual}>
@@ -91,7 +91,7 @@ export function MechanicalHandViewer() {
           <div className={s.canvasBottom}><span>拖动旋转 · 滚轮缩放 · 点击手指</span><button disabled={disabled} onClick={reset}><RotateCcw size={13}/>复位</button></div>
         </div>
         <div className={s.inspection}>
-          <label><input type="checkbox" checked={!shells} disabled={disabled} onChange={e => setShells(!e.target.checked)}/>隐藏外壳，看内部</label>
+          <label><input type="checkbox" checked={!shells} disabled={disabled} onChange={e => { setShells(!e.target.checked); if (e.target.checked) setTendons(true) }}/>隐藏外壳，看内部</label>
           <label><input type="checkbox" checked={tendons} disabled={disabled} onChange={e => setTendons(e.target.checked)}/><i/>显示牵引绳</label>
           <button disabled={disabled} onClick={demo} aria-label={playing ? "暂停逐指演示" : "播放逐指演示"}>{playing ? <Pause size={14}/> : <Play size={14}/>} {playing ? "暂停演示" : "逐指演示"}<small>{demoTime.toFixed(1)} / 9 s</small></button>
         </div>
@@ -123,7 +123,7 @@ export function MechanicalHandViewer() {
     </section>
     <section className={s.notes}>
       <div><span>01 / 如何理解</span><h3>看结构，也看模型的边界。</h3><p>橙色线表示牵引绳的走向。卷线轮收绳，关节弯曲；松开后的复位在这里用预设姿态表示。关节比例、尺寸和恒定力臂都是教学设定，不包含绳索弹性、摩擦、复位弹簧受力或真实肌电控制。</p></div>
-      <div><span>02 / 参考原理</span><h3>从真实机构出发。</h3><p>参考 <a href="https://www.eng.yale.edu/grablab/openhand/" target="_blank" rel="noreferrer">Yale OpenHand <ArrowUpRight size={12}/></a> 的绳驱动设计，以及 <a href="https://www.eng.yale.edu/grablab/openhand/model_t.html" target="_blank" rel="noreferrer">Model T 的欠驱动机构</a>。本模型为原创五指结构，没有复制它的 CAD，也没有实现它的自适应差动传动。</p></div>
+      <div><span>02 / 参考原理</span><h3>从真实机构出发。</h3><p>绳驱动原理参考 <a href="https://www.eng.yale.edu/grablab/openhand/" target="_blank" rel="noreferrer">Yale OpenHand <ArrowUpRight size={12}/></a>。掌部、指节和腕部的外形参考 <a href="https://www.shadowrobot.com/wp-content/uploads/2024/06/20240610-UPDATED-shadow_dexterous_hand_e_technical_specification.pdf" target="_blank" rel="noreferrer">Shadow Hand 结构图</a> 与 <a href="https://openbionics.com/en/prosthetic-hands-that-move/" target="_blank" rel="noreferrer">Hero Arm</a>。这是原创教学模型，不是这些产品的 CAD 复刻，也未实现其全部机构。</p></div>
       <div><span>03 / 编辑与复用</span><h3>模型可以继续修改。</h3><p><a href="/mechanical-hand/mechanical-hand.blend" download>Blender 源文件 <ArrowDown size={12}/></a><br/><a href="/mechanical-hand/mechanical-hand.glb" download>GLB 模型与示例动画 <ArrowDown size={12}/></a><br/><button onClick={() => { setPlaying(false); setFallback(true) }}>查看静态结构图</button></p></div>
     </section>
     <footer className={s.footer}><span>SYSTEMEDU / MECHANISM STUDIES</span><span>Blender 建模 · Three.js 交互 · 运动学示意</span></footer>

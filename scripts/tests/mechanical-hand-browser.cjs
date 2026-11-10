@@ -1,5 +1,5 @@
 const {chromium,expect}=require('@playwright/test'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path');
-const origin=process.env.HAND_ORIGIN||'http://127.0.0.1:4000',out=path.resolve(__dirname,'../../artifacts/mechanical-hand-20261110');fs.mkdirSync(out,{recursive:true});
+const origin=process.env.HAND_ORIGIN||'http://127.0.0.1:4000',out=path.resolve(__dirname,'../..',process.env.HAND_ARTIFACT_DIR||'artifacts/mechanical-hand-20261110');fs.mkdirSync(out,{recursive:true});
 (async()=>{
  const browser=await chromium.launch({headless:true}),context=await browser.newContext({viewport:{width:1440,height:1100},reducedMotion:'reduce'}),page=await context.newPage(),errors=[];
  page.on('pageerror',e=>errors.push(e.message));page.on('console',m=>{if(m.type()==='error')errors.push(m.text())});

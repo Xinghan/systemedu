@@ -20,7 +20,7 @@ export async function createHandScene(host: HTMLElement, onSelect: (id: FingerId
   scene.add(new THREE.HemisphereLight(0xfafff2, 0x758f86, 2.5))
   const sun = new THREE.DirectionalLight(0xfff3dc, 3.2); sun.position.set(-12, 28, 25); sun.castShadow = true
   Object.assign(sun.shadow.camera, { left: -22, right: 22, top: 30, bottom: -10, near: .1, far: 80 })
-  sun.shadow.mapSize.set(2048, 2048); sun.shadow.normalBias = .025; scene.add(sun)
+  sun.shadow.mapSize.set(2048, 2048); sun.shadow.normalBias = .07; sun.shadow.bias = -.0001; scene.add(sun)
   const fill = new THREE.DirectionalLight(0xd8eeff, 2); fill.position.set(18, 20, -15); scene.add(fill)
   const ground = new THREE.Mesh(new THREE.PlaneGeometry(200, 200), new THREE.MeshStandardMaterial({ color: 0xe0e6e1, roughness: .95 }))
   ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true; ground.position.y = .72; scene.add(ground)
@@ -89,7 +89,7 @@ export async function createHandScene(host: HTMLElement, onSelect: (id: FingerId
     })
     for (const finger of rig.fingers) {
       const id = finger.id, start = new THREE.Vector3(...finger.drum as [number, number, number]).add(new THREE.Vector3(0, .8, .6))
-      const points = [start, new THREE.Vector3(finger.drum[0], 7, .8), new THREE.Vector3(finger.base[0], finger.base[1] - .8, .85)]
+      const points = [start, new THREE.Vector3(finger.drum[0], 7, .1), new THREE.Vector3(finger.base[0], finger.base[1] - .8, .1)]
       finger.lengths.forEach((_, i) => { for (const suffix of ["in", "out"]) points.push(root!.getObjectByName(`Guide_${id}_${i}_${suffix}`)!.getWorldPosition(new THREE.Vector3())) })
       const geometry = new THREE.TubeGeometry(new THREE.CatmullRomCurve3(points, false, "centripetal"), 64, id === next.selected ? .055 : .035, 6, false)
       let cable = cables.get(id)
@@ -116,7 +116,7 @@ export async function createHandScene(host: HTMLElement, onSelect: (id: FingerId
   }
   signal.addEventListener("abort", dispose, { once: true })
   try {
-    const response = await fetch("/mechanical-hand/mechanical-hand.glb", { signal }); if (!response.ok) throw Error("模型文件无法加载")
+    const response = await fetch("/mechanical-hand/mechanical-hand.glb?v=2", { signal }); if (!response.ok) throw Error("模型文件无法加载")
     const gltf = await new GLTFLoader().parseAsync(await response.arrayBuffer(), "/mechanical-hand/")
     if (signal.aborted) { disposeObject(gltf.scene); throw new DOMException("Aborted", "AbortError") }
     root = gltf.scene
