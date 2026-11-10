@@ -33,6 +33,10 @@ About 11 km: parachute deployed; heat shield discarded before backshell separati
 4. `scripts/tests/mars-landing.cjs`: structural asset tests, exported animation endpoints, reversible seeking and lifecycle/browser checks. Desktop/mobile screenshots, play/pause, phase jumps, camera, part selection, shell toggle, fallback, download checks, no console/page errors.
 5. Review actual rendered appearance; fix clipping and physically misleading geometry. Stage only these new paths; commit/push current branch, verify remote. Record candidate/integrated/browser-verified separately. Do not deploy.
 
-## Initial status
+## Verified implementation status — 2026-11-10
 
-Research and design complete. Blender download in progress. Implementation and visual verification pending.
+Original Blender geometry, editable `.blend`, one 42-second GLB animation, a rendered fallback and the reusable Three.js viewer are complete. The preview is available at `/standalone/mars-landing`; this batch does not deploy or replace the existing course activity.
+
+Structural checks pass: six wheels, shell enclosure before separation, ordered separation, attached cables, ground contact before cable cutting, flyaway and backwards seeking. Browser checks pass for five phases, playback, camera presets, selection, shell visibility, static fallback/retry/context loss and 390px layout. Visual review corrected canopy clipping, the closed shell envelope and mobile viewport sizing.
+
+Scoped ESLint passes. Full TypeScript checking remains blocked by six existing errors in unchanged `slide-demo/page.tsx` and `course-content-view.tsx`; no errors were reported in the new files. Full production build and deployment have not been claimed. Commands, evidence and limitations: `artifacts/mars-landing-20261110/README.md`.
