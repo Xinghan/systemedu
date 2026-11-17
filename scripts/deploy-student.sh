@@ -200,6 +200,8 @@ EOF"
 
 do_web() {
   echo "[web] npm ci + build (API 走相对路径 /api, 同源经 nginx)..."
+  # Local file dependency: install its pinned runtime dependencies before Next resolves shared source.
+  remote "cd $REPO_ROOT/packages/learning-runtime && npm ci --omit=dev --ignore-scripts --no-audit --no-fund"
   remote "cd $REPO_ROOT/packages/student-web && npm ci --silent 2>&1 | tail -2"
   # NEXT_PUBLIC_STUDENT_API_URL="" (空) → 前端用相对路径 /api/..., 自动跟随访问页面的
   # 协议+域名 (HTTP/HTTPS、IP/域名都对), 不再写死绝对地址 (修协议错配/跨域/ICP 拦截)。

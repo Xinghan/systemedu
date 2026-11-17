@@ -7,8 +7,9 @@ const nextConfig: NextConfig = {
     ignoreBuildErrors: true,
   },
   // monorepo 里有多个 lockfile, 显式告知 turbopack root
+  transpilePackages: ["@systemedu/learning-runtime"],
   turbopack: {
-    root: path.resolve(__dirname),
+    root: path.resolve(__dirname, "../.."),
   },
 };
 
