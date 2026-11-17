@@ -10,8 +10,7 @@ import { MissionLessonBrief, MissionLessonOutline, MissionLessonFooter, MissionS
 import { SpaceJourneyProjectBanner } from "@/components/mission/space-journey-links"
 import { useCallback, useEffect, useState } from "react"
 import { useSearchParams } from "next/navigation"
-import ReactMarkdown from "react-markdown"
-import remarkGfm from "remark-gfm"
+import { LessonMarkdown } from "@systemedu/learning-runtime/src/lesson-markdown"
 import { ArrowLeft, ArrowRight, BookOpen, Download, ExternalLink, FlaskConical } from "lucide-react"
 import type { GuidedCourse } from "@/lib/project-lines/guided-course"
 import { newCourseRecord, type CourseRecord } from "@/lib/project-lines/guided-progress"
@@ -118,10 +117,10 @@ function GuidedCourseSession({ course, token, owner }: { course: GuidedCourse; t
         <h2>{current.title}</h2><p className={styles.coreQuestion}>{current.core_question}</p>
         <div className={styles.objective}><BookOpen size={19} /><div><strong>这一节你要学会</strong><p>{current.objective}</p><small>留下：{current.output}</small>{current.depends_on.length > 0 && <small>建议先完成：{current.depends_on.join("、")} 的学习与记录；也可以随时回看。</small>}</div></div>
         <nav className={styles.sectionNav} aria-label="本节内容"><a href="#lesson-reading">学习正文</a><a href="#lesson-references">参考资料</a><a href="#lesson-videos">视频与观察</a><a href="#lesson-practice">实践与记录</a></nav>
-        <section id="lesson-reading" className={styles.markdown}><ReactMarkdown remarkPlugins={[remarkGfm]}>{current.lesson}</ReactMarkdown></section>
+        <section id="lesson-reading" className={styles.markdown}><LessonMarkdown>{current.lesson}</LessonMarkdown></section>
         <section id="lesson-references" className={styles.section}><h3>带着问题读资料</h3>{current.resources.filter(r => r.kind === "reference").map(resource => <article className={styles.resource} key={resource.url}><a className={styles.referenceHeading} href={resource.url} target="_blank" rel="noreferrer"><span className={styles.resourceIcon}><BookOpen size={18} /></span><div><span className={styles.resourceKind}>参考资料 · {resource.publisher}</span><h4>{resource.title}</h4><p>{resource.purpose}</p></div><ExternalLink size={15} /></a><div className={styles.watchTask}><strong>阅读后想一想</strong><p>{resource.prompt}</p></div><details><summary>中文阅读提示</summary><p>{resource.fallback}</p></details><small>来源核对：{resource.checked_at} · 英文资料配中文引导</small></article>)}</section>
         <section id="lesson-videos" className={styles.section}><h3>看一次，再说出你的发现</h3>{current.video_note && <p>{current.video_note}</p>}{current.resources.filter(r => r.kind === "video").map(resource => <CourseVideoResource key={current.module_id + resource.url} resource={resource} />)}</section>
-        <section id="lesson-practice" className={styles.section}><h3>实践与节点作品</h3><div className={styles.markdown}><ReactMarkdown remarkPlugins={[remarkGfm]}>{current.assignment}</ReactMarkdown></div>
+        <section id="lesson-practice" className={styles.section}><h3>实践与节点作品</h3><div className={styles.markdown}><LessonMarkdown>{current.assignment}</LessonMarkdown></div>
           {current.lab && <div className={styles.lab}><div><FlaskConical size={20} /><div><h4>驾驶规则实验工具</h4><p>用它完成本节任务；实验结果和课程学习记录分别保存。</p></div></div><div className={styles.labActions}><button onClick={() => setLabOpen(!labOpen)}>{labOpen ? "收起实验工具" : "打开本节实验"}<ArrowRight size={15} /></button><a href={course.lab_url} target="_blank" rel="noreferrer">独立窗口操作 <ExternalLink size={13} /></a></div>{labOpen && <iframe src={course.lab_url} title="驾驶规则实验工具" className={styles.labFrame} />}</div>}
           {course.id === "assemble-a-rover" && course.version === "2.0" ? <RoverSystemWorkspace course={course} node={current} /> : course.id === "run-an-expedition" && course.version === "2.0" ? <ExpeditionSystemWorkspace course={course} node={current} /> : isSpaceCourse(course.id) && <SpaceProjectWorkspace course={course} node={current} />}
           {lineId === "biomedicine" && <BiomedProjectWorkspace course={course} node={current} />}

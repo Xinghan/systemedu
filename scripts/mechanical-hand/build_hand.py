@@ -5,7 +5,7 @@ import bpy, bmesh
 from mathutils import Vector
 
 ROOT=Path(__file__).resolve().parents[2]
-rig=json.loads((ROOT/'packages/student-web/src/components/learning/mechanical-hand/rig.json').read_text())
+rig=json.loads((ROOT/'packages/learning-runtime/src/experiments/mechanical-hand/rig.json').read_text())
 p=argparse.ArgumentParser();p.add_argument('--render',action='store_true');p.add_argument('--output',default=str(ROOT/'packages/student-web/public/mechanical-hand'))
 args=p.parse_args(sys.argv[sys.argv.index('--')+1:] if '--' in sys.argv else [])
 out=Path(args.output);out.mkdir(parents=True,exist_ok=True)
@@ -233,7 +233,7 @@ scene.view_settings.view_transform='AgX';bpy.context.preferences.filepaths.save_
 bpy.ops.wm.save_as_mainfile(filepath=str(out/'mechanical-hand.blend'),compress=True)
 bpy.ops.export_scene.gltf(filepath=str(out/'mechanical-hand.glb'),export_format='GLB',export_extras=True,export_animations=True,export_animation_mode='SCENE',export_anim_scene_split_object=False,export_force_sampling=True,export_cameras=False,export_lights=False)
 if args.render:bpy.ops.render.render(write_still=True)
-meta={'asset_id':'tendon-hand-v1','appearance_revision':2,'blender_version':bpy.app.version_string,'provenance':'Original sculpted procedural Blender mesh; no third-party geometry','source_script':'scripts/mechanical-hand/build_hand.py','rig':'packages/student-web/src/components/learning/mechanical-hand/rig.json','joints':15,'flexion_joints':14,'drives':5,'model_unit_mm':10,'source_animation_seconds':4,'runtime':'Browser evaluates joint poses and tendon paths; source closing clip is editable reference motion.','limitations':'Illustrative kinematic hand, not validated prosthesis, adaptive force equilibrium or grip-force simulation.','references':['https://www.eng.yale.edu/grablab/openhand/','https://www.eng.yale.edu/grablab/openhand/model_t.html','https://www.shadowrobot.com/wp-content/uploads/2024/06/20240610-UPDATED-shadow_dexterous_hand_e_technical_specification.pdf','https://openbionics.com/en/prosthetic-hands-that-move/']}
+meta={'asset_id':'tendon-hand-v1','appearance_revision':2,'blender_version':bpy.app.version_string,'provenance':'Original sculpted procedural Blender mesh; no third-party geometry','source_script':'scripts/mechanical-hand/build_hand.py','rig':'packages/learning-runtime/src/experiments/mechanical-hand/rig.json','joints':15,'flexion_joints':14,'drives':5,'model_unit_mm':10,'source_animation_seconds':4,'runtime':'Browser evaluates joint poses and tendon paths; source closing clip is editable reference motion.','limitations':'Illustrative kinematic hand, not validated prosthesis, adaptive force equilibrium or grip-force simulation.','references':['https://www.eng.yale.edu/grablab/openhand/','https://www.eng.yale.edu/grablab/openhand/model_t.html','https://www.shadowrobot.com/wp-content/uploads/2024/06/20240610-UPDATED-shadow_dexterous_hand_e_technical_specification.pdf','https://openbionics.com/en/prosthetic-hands-that-move/']}
 for name in ['mechanical-hand.glb','mechanical-hand.blend','poster.png']:
  if (out/name).exists():
   data=(out/name).read_bytes();meta[name]={'bytes':len(data),'sha256':hashlib.sha256(data).hexdigest()}

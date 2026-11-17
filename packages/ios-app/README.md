@@ -1,6 +1,24 @@
 # SystemEdu iOS App
 
-状态：方案草案，等待产品验收。创建日期：2026-11-17。本目录目前只有设计文档，尚未创建 Xcode 工程、复制资源或实现 App。
+状态：第一批开发预览，2026-11-17。已建立可编译的 SwiftUI 工程、本地课堂、两个交互模型、课文预览和 SQLite 记录恢复。范围已确认覆盖整个 SystemEdu；账号、完整课程接入、课程下载和跨设备同步尚待后续阶段。
+
+## 运行当前版本
+
+在仓库根执行：
+
+```sh
+npm --prefix packages/learning-runtime ci --ignore-scripts
+python3 packages/ios-app/scripts/prepare-resources.py
+open packages/ios-app/SystemEdu.xcodeproj
+```
+
+Xcode 中选择 `SystemEdu` scheme 与可用 iPhone / iPad 模拟器，运行即可。使用真机时需配置自己的开发者团队。共享构建产物不提交，`prepare-resources.py` 从共用源码及既有 GLB 自动生成；修改实验源码后需重新运行此脚本再构建 App。新增 Swift 文件时运行 `python3 packages/ios-app/scripts/generate-project.py` 更新工程。
+
+当前可体验“学习 / 探索 / 我的”三个原生入口、机械手的逐指控制与接触限位、火星着陆播放与部件观察、现有 M01 课文、阅读笔记、重启恢复和 JSON 记录导出。所有记录明确标记为本机预览，不上传、不计入正式课程完成状态。
+
+网站也消费共享源码。首次安装网站依赖前，先执行上面的共享包 `npm ci`，然后在 `packages/student-web` 运行 `npm ci`；部署脚本已补同样的依赖安装步骤，本轮未运行部署。
+
+[本批实现与验收记录](docs/phase1-verification.md) · [课程兼容性清单](docs/content-compatibility.md)
 
 本方案按“整个 SystemEdu 学习平台的 iOS 客户端”设计。首批用一门完整课程和机械手、火星着陆两个实验验证体验，再扩展课程覆盖。
 
@@ -58,11 +76,11 @@
 - [架构、数据归属与关键决策](docs/architecture.md)
 - [分阶段实施计划](../../docs/plans/2026-11-17-ios-app.md)
 
-后续目录规划：
+目录结构（账号、同步与下载服务会在后续补齐）：
 
 ```text
 packages/ios-app/
-  SystemEdu.xcodeproj/             # 原生工程（待创建）
+  SystemEdu.xcodeproj/             # 原生工程
   SystemEdu/
     App/                          # 启动与导航
     Features/                     # 学习、探索、下载、账号、课堂
@@ -70,11 +88,11 @@ packages/ios-app/
     Persistence/                  # 本地记录、迁移、账号隔离
     WebBridge/                    # 课堂与原生容器通信
     Resources/WebRuntime/         # 共享组件构建产物
-    Resources/Bootstrap/          # 首次离线导览与精选模型
+                                  # 当前精选模型也由 WebRuntime 构建输出
   Tests/
   UITests/
   scripts/                        # 构建、资源校验
   docs/
 ```
 
-共享课堂源码计划抽到 `packages/learning-runtime/`，接口与资源包约定放到 `packages/learning-contracts/`。这两个目录均待实施阶段创建；避免在网站和 App 各维护一份相同的课堂代码。
+共享课堂源码位于 `packages/learning-runtime/`，接口与资源包约定位于 `packages/learning-contracts/`。本批已抽出两个实验及 Markdown 渲染组件；其余课堂组件按完整课程接入顺序继续迁移。
