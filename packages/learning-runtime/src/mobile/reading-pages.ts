@@ -1,13 +1,14 @@
 import { unified } from "unified"
 import remarkParse from "remark-parse"
 import remarkGfm from "remark-gfm"
+import remarkMath from "remark-math"
 import type { RootContent } from "mdast"
 
 export type ReadingPage = { id: string; section: string; markdown: string; fields?: { label: string; value: string }[]; row?: number; rows?: number }
 
 /** Paginate syntax nodes, never split Markdown with a character-count/line regex. */
 export function readingPages(source: string): ReadingPage[] {
-  const tree = unified().use(remarkParse).use(remarkGfm).parse(source)
+  const tree = unified().use(remarkParse).use(remarkGfm).use(remarkMath).parse(source)
   const pages: ReadingPage[] = []
   let section = "课文", sectionIndex = 0, index = 0
   const raw = (node: { position?: { start: { offset?: number }; end: { offset?: number } } }) => source.slice(node.position?.start.offset ?? 0, node.position?.end.offset ?? 0)

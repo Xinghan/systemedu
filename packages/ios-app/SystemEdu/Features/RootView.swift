@@ -12,7 +12,7 @@ struct RootView: View {
     var body: some View {
         TabView {
             NavigationStack { LearningHome(store: store) }.tabItem { Label("学习", systemImage: "book.closed") }
-            NavigationStack { ExploreView(store: store) }.tabItem { Label("探索", systemImage: "safari") }
+            NavigationStack { CatalogView(store: store) }.tabItem { Label("探索", systemImage: "safari") }
             NavigationStack { RecordsView(store: store) }.tabItem { Label("我的", systemImage: "person.crop.circle") }
         }.tint(.forest)
     }
@@ -47,8 +47,8 @@ private struct LearningHome: View {
                 }.padding(20).foregroundStyle(Color.paper).background(Color.forest, in: RoundedRectangle(cornerRadius: 20))
             }.buttonStyle(.plain).accessibilityIdentifier("continue-learning")
             HStack {
-                Text("我的学习内容").font(.subheadline.weight(.semibold))
-                Spacer(); Text("3 项 · 已下载").font(.caption).foregroundStyle(Color.quiet)
+                Text("快速体验").font(.subheadline.weight(.semibold))
+                Spacer(); NavigationLink("全部课程 →") { CatalogView(store: store) }.accessibilityIdentifier("all-courses").font(.caption).foregroundStyle(Color.quiet)
             }
             VStack(spacing: 10) {
                 ForEach(LearningActivity.allCases) { activity in
@@ -115,7 +115,8 @@ private struct RecordsView: View {
                 }
             }
             Section("离线内容") {
-                LabeledContent("已内置", value: "1 节课文 · 2 个实验")
+                LabeledContent("已内置课程", value: "\(ContentCatalog.current?.courses.count ?? 0) 门")
+                LabeledContent("课节总数", value: "\(ContentCatalog.nodes.count) 节")
                 Text("删除 App 会移除未导出的本机记录。当前没有上传到服务器的记录。").font(.caption).foregroundStyle(Color.quiet)
             }
             Section { NavigationLink("组件许可") { NoticesView() }; Text("SystemEdu · 开发预览 0.1").font(.caption).foregroundStyle(Color.quiet) }

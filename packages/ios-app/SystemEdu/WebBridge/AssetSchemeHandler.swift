@@ -14,7 +14,7 @@ final class AssetSchemeHandler: NSObject, WKURLSchemeHandler {
         guard !path.contains("\\"), !path.contains("\0"), !path.split(separator: "/").contains("..") else { throw AssetError.forbidden }
         let base = root.resolvingSymlinksInPath().standardizedFileURL
         let target = base.appendingPathComponent(String(path.dropFirst())).resolvingSymlinksInPath().standardizedFileURL
-        guard target.path.hasPrefix(base.path + "/"), ["html","js","css","json","glb","png","woff2","woff","ttf","txt"].contains(target.pathExtension) else { throw AssetError.forbidden }
+        guard target.path.hasPrefix(base.path + "/"), ["html","js","css","json","glb","gltf","bin","wasm","png","jpg","jpeg","webp","svg","woff2","woff","ttf","txt","md","mp3","m4a","wav","mp4","vtt","pdf","csv","ipynb","py","scad","stl","zip"].contains(target.pathExtension) else { throw AssetError.forbidden }
         guard FileManager.default.fileExists(atPath: target.path) else { throw AssetError.missing }
         return target
     }
@@ -28,10 +28,32 @@ final class AssetSchemeHandler: NSObject, WKURLSchemeHandler {
             let mime = special[file.pathExtension] ?? UTType(filenameExtension: file.pathExtension)?.preferredMIMEType ?? "application/octet-stream"
             // Fetch consumers (including GLTFLoader) need a real success status;
             // a plain URLResponse yields status 0 and response.ok == false.
-            let response = HTTPURLResponse(url: url, statusCode: 200, httpVersion: "HTTP/1.1", headerFields: ["Content-Type": mime, "Content-Length": String(data.count), "Access-Control-Allow-Origin": "*"])!
+            var headers = ["Content-Type": mime, "Content-Length": String(data.count), "Access-Control-Allow-Origin": "*", "Accept-Ranges": "bytes"]
+            var payload = data, status = 200
+            if let range = try Self.byteRange(urlSchemeTask.request.value(forHTTPHeaderField: "Range"), count: data.count) {
+                payload = data.subdata(in: range); status = 206
+                headers["Content-Range"] = "bytes \(range.lowerBound)-\(range.upperBound - 1)/\(data.count)"
+                headers["Content-Length"] = String(payload.count)
+            }
+            let response = HTTPURLResponse(url: url, statusCode: status, httpVersion: "HTTP/1.1", headerFields: headers)!
             urlSchemeTask.didReceive(response)
-            urlSchemeTask.didReceive(data); urlSchemeTask.didFinish()
+            urlSchemeTask.didReceive(payload); urlSchemeTask.didFinish()
         } catch { urlSchemeTask.didFailWithError(error) }
+    }
+    static func byteRange(_ header: String?, count: Int) throws -> Range<Int>? {
+        guard let header else { return nil }
+        guard count > 0, header.hasPrefix("bytes="), !header.contains(",") else { throw AssetError.forbidden }
+        let parts = header.dropFirst(6).split(separator: "-", omittingEmptySubsequences: false)
+        guard parts.count == 2 else { throw AssetError.forbidden }
+        if parts[0].isEmpty {
+            guard let suffix = Int(parts[1]), suffix > 0 else { throw AssetError.forbidden }
+            return max(0, count - suffix)..<count
+        }
+        guard let start = Int(parts[0]), start >= 0, start < count else { throw AssetError.forbidden }
+        let end: Int
+        if parts[1].isEmpty { end = count - 1 }
+        else { guard let requested = Int(parts[1]), requested >= start else { throw AssetError.forbidden }; end = min(requested, count - 1) }
+        return start..<(end + 1)
     }
     func webView(_ webView: WKWebView, stop urlSchemeTask: WKURLSchemeTask) {
         // Delivery is synchronous; there is no outstanding request after start returns.

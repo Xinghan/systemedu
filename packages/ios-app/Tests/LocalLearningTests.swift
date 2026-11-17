@@ -58,7 +58,7 @@ final class LocalLearningTests: XCTestCase {
         defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
         let store = try LearningStore(url: url)
         try store.save(.driving, state: ["note": "已保存"])
-        XCTAssertThrowsError(try store.save(.driving, state: ["note": String(repeating: "a", count: 128_001)]))
+        XCTAssertThrowsError(try store.save(.driving, state: ["note": String(repeating: "a", count: 512_001)]))
         XCTAssertEqual(store.load(.driving)?["note"] as? String, "已保存")
         let export = try store.export(.driving)
         let data = try JSONSerialization.jsonObject(with: Data(contentsOf: export)) as! [String: Any]
@@ -72,6 +72,52 @@ final class LocalLearningTests: XCTestCase {
         for (key, value) in [("method", "execute" as Any), ("version", true as Any), ("state", [] as Any), ("url", "file:///etc/passwd" as Any)] {
             var invalid = body; invalid[key] = value
             XCTAssertThrowsError(try BridgeRequest(body: invalid, activity: .landing, session: "session"))
+        }
+    }
+    func testCourseVersionsAndLegacyPreviewRecordsStayIndependent() throws {
+        let url = temporaryURL()
+        defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
+        let first = LearningActivity(rawValue: "course:lightkurve-transit-detective:0.2.0:M01")!
+        let newer = LearningActivity(rawValue: "course:lightkurve-transit-detective:0.3.0:M01")!
+        let store = try LearningStore(url: url)
+        try store.save(first, state: ["note": "旧版判断", "frames": ["model": ["state": "{angles:30}"]]])
+        try store.save(.driving, state: ["note": "原有导览"])
+        XCTAssertNil(store.load(newer))
+        let reopened = try LearningStore(url: url)
+        XCTAssertEqual(reopened.load(first)?["note"] as? String, "旧版判断")
+        XCTAssertEqual(reopened.load(.driving)?["note"] as? String, "原有导览")
+        XCTAssertNotNil(try reopened.export(first))
+    }
+    func testWorkspaceContinuesAcrossNodesWithoutMixingVersionsOrOwners() throws {
+        let url = temporaryURL()
+        defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
+        let first = LearningActivity(rawValue: "course:build-a-solar-tracker:1.0:M01")!
+        let second = LearningActivity(rawValue: "course:build-a-solar-tracker:1.0:M02")!
+        let changed = LearningActivity(rawValue: "course:build-a-solar-tracker:2.0:M02")!
+        let store = try LearningStore(url: url)
+        try store.save(first, state: ["note": "只属于第一课", "shared_workspace": ["tracker": "angle=40"]])
+        let restored = try LearningStore(url: url)
+        XCTAssertNil(restored.load(second)?["note"])
+        XCTAssertEqual((restored.load(second)?["shared_workspace"] as? [String: String])?["tracker"], "angle=40")
+        XCTAssertNil(restored.load(changed))
+        XCTAssertNil(try LearningStore(url: url, owner: "other").load(second))
+        XCTAssertEqual(restored.records.count, 1)
+    }
+    func testNarrationAndVideoRangesSupportSeeking() throws {
+        XCTAssertEqual(try AssetSchemeHandler.byteRange("bytes=0-1", count: 100), 0..<2)
+        XCTAssertEqual(try AssetSchemeHandler.byteRange("bytes=20-", count: 100), 20..<100)
+        XCTAssertEqual(try AssetSchemeHandler.byteRange("bytes=-10", count: 100), 90..<100)
+        XCTAssertEqual(try AssetSchemeHandler.byteRange("bytes=20-9999", count: 100), 20..<100)
+        XCTAssertThrowsError(try AssetSchemeHandler.byteRange("bytes=100-", count: 100))
+        XCTAssertThrowsError(try AssetSchemeHandler.byteRange("bytes=-0", count: 100))
+    }
+    func testFullCatalogAndNodeFilesAreBundled() throws {
+        let catalog = try ContentCatalog.result.get()
+        XCTAssertEqual(catalog.courses.count, 58)
+        XCTAssertEqual(catalog.courses.flatMap(\.modules).count, 843)
+        let root = try XCTUnwrap(Bundle.main.url(forResource: "WebRuntime", withExtension: nil))
+        for node in catalog.courses.flatMap(\.modules) {
+            XCTAssertNoThrow(try AssetSchemeHandler.resolve(URL(string: "systemedu://bundle" + node.path)!, root: root))
         }
     }
     func testAssetsCannotEscapeBundleThroughPathsOrSymlinks() throws {

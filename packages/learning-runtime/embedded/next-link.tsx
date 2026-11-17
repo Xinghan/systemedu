@@ -1,0 +1,1 @@
+export default function Link({ href, children, ...props }: any) { return <a {...props} href={String(href).startsWith('/') ? 'https://systeme.xin'+href : href} target="_blank" rel="noreferrer">{children}</a> }

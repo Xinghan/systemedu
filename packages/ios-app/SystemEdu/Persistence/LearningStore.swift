@@ -41,6 +41,7 @@ final class LearningStore: ObservableObject {
             try execute("PRAGMA journal_mode=WAL")
             try execute("PRAGMA synchronous=FULL")
             try execute("CREATE TABLE IF NOT EXISTS local_activity (owner TEXT NOT NULL, activity TEXT NOT NULL, state TEXT NOT NULL, updated_at REAL NOT NULL, PRIMARY KEY(owner, activity))")
+            try execute("CREATE TABLE IF NOT EXISTS local_workspace (owner TEXT NOT NULL, activity TEXT NOT NULL, state TEXT NOT NULL, updated_at REAL NOT NULL, PRIMARY KEY(owner, activity))")
             try execute("PRAGMA user_version=1")
             try refresh()
         } catch { sqlite3_close(database); database = nil; throw error }
@@ -57,14 +58,44 @@ final class LearningStore: ObservableObject {
         guard sqlite3_exec(database, sql, nil, nil, nil) == SQLITE_OK else { throw StoreError.database("数据库操作失败") }
     }
 
-    func load(_ activity: LearningActivity) -> [String: Any]? { records.first { $0.activity == activity }?.state }
+    private func workspaceKey(_ activity: LearningActivity) -> String? {
+        let parts = activity.rawValue.split(separator: ":")
+        return parts.count == 4 && parts[0] == "course" ? "\(parts[1]):\(parts[2])" : nil
+    }
+    func load(_ activity: LearningActivity) -> [String: Any]? {
+        var result = records.first { $0.activity == activity }?.state
+        if let key = workspaceKey(activity) {
+            var statement: OpaquePointer?
+            if sqlite3_prepare_v2(database, "SELECT state FROM local_workspace WHERE owner=? AND activity=?", -1, &statement, nil) == SQLITE_OK {
+                defer { sqlite3_finalize(statement) }
+                sqlite3_bind_text(statement, 1, owner, -1, transient); sqlite3_bind_text(statement, 2, key, -1, transient)
+                if sqlite3_step(statement) == SQLITE_ROW, let text = sqlite3_column_text(statement, 0),
+                   let state = try? JSONSerialization.jsonObject(with: Data(String(cString: text).utf8)) as? [String: String] {
+                    if result == nil { result = [:] }; result?["shared_workspace"] = state
+                }
+            }
+        }
+        return result
+    }
 
     @discardableResult
     func save(_ activity: LearningActivity, state: [String: Any]) throws -> Date {
         guard JSONSerialization.isValidJSONObject(state) else { throw StoreError.invalidState }
-        let bytes = try JSONSerialization.data(withJSONObject: state, options: [.sortedKeys])
-        guard bytes.count <= 128_000, let text = String(data: bytes, encoding: .utf8) else { throw StoreError.invalidState }
+        var classroom = state
+        let workspace = classroom.removeValue(forKey: "shared_workspace")
+        var workspaceText: String?
+        if let workspace {
+            guard workspaceKey(activity) != nil, let values = workspace as? [String: String] else { throw StoreError.invalidState }
+            let workspaceData = try JSONSerialization.data(withJSONObject: values, options: [.sortedKeys])
+            guard workspaceData.count <= 256_000 else { throw StoreError.invalidState }
+            workspaceText = String(data: workspaceData, encoding: .utf8)
+        }
+        let bytes = try JSONSerialization.data(withJSONObject: classroom, options: [.sortedKeys])
+        guard bytes.count <= 512_000, let text = String(data: bytes, encoding: .utf8) else { throw StoreError.invalidState }
         let date = Date()
+        try execute("BEGIN IMMEDIATE")
+        var committed = false
+        defer { if !committed { try? execute("ROLLBACK") } }
         var statement: OpaquePointer?
         guard sqlite3_prepare_v2(database, "INSERT INTO local_activity(owner, activity, state, updated_at) VALUES(?,?,?,?) ON CONFLICT(owner,activity) DO UPDATE SET state=excluded.state, updated_at=excluded.updated_at", -1, &statement, nil) == SQLITE_OK else { throw StoreError.database("无法准备保存") }
         defer { sqlite3_finalize(statement) }
@@ -73,6 +104,15 @@ final class LearningStore: ObservableObject {
         sqlite3_bind_text(statement, 3, text, -1, transient)
         sqlite3_bind_double(statement, 4, date.timeIntervalSince1970)
         guard sqlite3_step(statement) == SQLITE_DONE else { throw StoreError.database("写入未完成，请保留当前页面") }
+        if let text = workspaceText, let key = workspaceKey(activity) {
+            var shared: OpaquePointer?
+            guard sqlite3_prepare_v2(database, "INSERT INTO local_workspace(owner, activity, state, updated_at) VALUES(?,?,?,?) ON CONFLICT(owner,activity) DO UPDATE SET state=excluded.state, updated_at=excluded.updated_at", -1, &shared, nil) == SQLITE_OK else { throw StoreError.invalidState }
+            defer { sqlite3_finalize(shared) }
+            sqlite3_bind_text(shared, 1, owner, -1, transient); sqlite3_bind_text(shared, 2, key, -1, transient)
+            sqlite3_bind_text(shared, 3, text, -1, transient); sqlite3_bind_double(shared, 4, date.timeIntervalSince1970)
+            guard sqlite3_step(shared) == SQLITE_DONE else { throw StoreError.invalidState }
+        }
+        try execute("COMMIT"); committed = true
         try refresh()
         return date
     }
@@ -96,8 +136,7 @@ final class LearningStore: ObservableObject {
     }
 
     func export(_ activity: LearningActivity) throws -> URL {
-        let record = records.first { $0.activity == activity }
-        let data = try JSONSerialization.data(withJSONObject: ["schema_version": 1, "activity": activity.rawValue, "storage": "local-preview", "state": record?.state ?? [:]], options: [.prettyPrinted, .sortedKeys])
+        let data = try JSONSerialization.data(withJSONObject: ["schema_version": 1, "activity": activity.rawValue, "storage": "local-preview", "state": load(activity) ?? [:]], options: [.prettyPrinted, .sortedKeys])
         let url = FileManager.default.temporaryDirectory.appendingPathComponent("systemedu-\(activity.rawValue).json")
         try data.write(to: url, options: [.atomic, .completeFileProtection])
         return url

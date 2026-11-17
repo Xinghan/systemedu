@@ -17,7 +17,7 @@ struct ClassroomView: View {
             .navigationTitle(activity.title).navigationBarTitleDisplayMode(.inline)
             .toolbar(.visible, for: .navigationBar)
             .toolbar(.hidden, for: .tabBar)
-            .toolbar { ToolbarItem(placement: .topBarTrailing) { Image(systemName: "internaldrive").foregroundStyle(Color.forest).accessibilityLabel("本地课堂，离线可用") } }
+            .toolbar { ToolbarItem(placement: .topBarTrailing) { Image(systemName: "internaldrive").foregroundStyle(Color.forest).accessibilityLabel("课文与内置资源可离线阅读") } }
             .sheet(item: $export) { ShareSheet(url: $0.url) }
             .sheet(item: $external) { BrowserSheet(url: $0.url) }
             .alert("课堂暂时中断", isPresented: Binding(get: { error != nil }, set: { if !$0 { error = nil } })) { Button("知道了") { error = nil } } message: { Text(error ?? "") }

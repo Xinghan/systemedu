@@ -8,7 +8,7 @@ struct BridgeRequest {
 
     init(body: Any, activity: LearningActivity, session: String) throws {
         guard let value = body as? [String: Any], JSONSerialization.isValidJSONObject(value),
-              try JSONSerialization.data(withJSONObject: value).count <= 130_000,
+              try JSONSerialization.data(withJSONObject: value).count <= 514_000,
               Set(value.keys).isSubset(of: ["version", "session", "activity", "request_id", "method", "state"]),
               let version = value["version"] as? NSNumber, CFGetTypeID(version) != CFBooleanGetTypeID(), version == 1,
               value["session"] as? String == session, value["activity"] as? String == activity.rawValue,

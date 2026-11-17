@@ -47,6 +47,47 @@ final class ClassroomJourneyTests: XCTestCase {
     }
 
     @MainActor
+    func testCatalogCourseReadingAndRecordRestore() throws {
+        let app = XCUIApplication(); app.launch()
+        app.tabBars.buttons["探索"].tap()
+        let search = app.searchFields["搜索项目或课节"]
+        XCTAssertTrue(search.waitForExistence(timeout: 10)); search.tap(); search.typeText("凌星")
+        let course = app.buttons["course-lightkurve-transit-detective"]
+        XCTAssertTrue(course.waitForExistence(timeout: 10)); course.tap()
+        let node = app.buttons["node-M01"]
+        XCTAssertTrue(node.waitForExistence(timeout: 10)); node.tap()
+        let web = app.webViews.firstMatch
+        let notes = web.buttons["练习与笔记"]
+        XCTAssertTrue(notes.waitForExistence(timeout: 20)); onScreen(notes, in: web)
+        capture(app, name: "SystemEdu-full-course")
+        notes.tap()
+        let field = web.textViews.matching(identifier: "course-note").firstMatch
+        let note = field.exists ? field : web.textViews.allElementsBoundByIndex.last!
+        XCTAssertTrue(note.waitForExistence(timeout: 10))
+        note.tap(); note.typeText("ios-catalog-restoration")
+        web.buttons["关闭面板"].tap()
+        XCTAssertTrue(web.staticTexts["已保存到本机"].waitForExistence(timeout: 10))
+        app.terminate(); app.launch(); app.buttons["continue-learning"].tap()
+        XCTAssertTrue(app.webViews.buttons["练习与笔记"].waitForExistence(timeout: 20))
+    }
+
+    @MainActor
+    func testBundledCourseExperimentRunsInSandbox() throws {
+        let app = XCUIApplication(); app.launch()
+        app.tabBars.buttons["探索"].tap()
+        let search = app.searchFields["搜索项目或课节"]
+        XCTAssertTrue(search.waitForExistence(timeout: 10)); search.tap(); search.typeText("夹爪碰到")
+        let course = app.buttons["course-grasp-a-virtual-block"]
+        XCTAssertTrue(course.waitForExistence(timeout: 10)); course.tap(); app.buttons["node-M01"].tap()
+        let web = app.webViews.firstMatch
+        XCTAssertTrue(web.buttons["资料与实践"].waitForExistence(timeout: 20)); web.buttons["资料与实践"].tap()
+        web.buttons.matching(NSPredicate(format: "label CONTAINS %@", "让夹爪碰到目标")).firstMatch.tap()
+        XCTAssertTrue(web.buttons["全屏操作"].waitForExistence(timeout: 10)); web.buttons["全屏操作"].tap()
+        XCTAssertTrue(web.buttons["运行并保留本次实验"].waitForExistence(timeout: 30))
+        capture(app, name: "SystemEdu-bundled-experiment")
+    }
+
+    @MainActor
     func testModelsAndPrimaryControlsStayOnScreen() throws {
         let app = XCUIApplication(); app.launch()
         for name in ["open-driving-intro", "open-mechanical-hand", "open-mars-landing"] { onScreen(app.buttons[name], in: app) }

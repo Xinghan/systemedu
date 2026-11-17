@@ -31,3 +31,10 @@ test('cell cards preserve inline Markdown, escaped pipes, empty cells and refere
   assert.ok(pages[0].fields[1].value.includes('[ref]: https://example.com'))
   assert.equal(pages[1].fields[1].value.split('\n')[0], '')
 })
+
+test('display mathematics remain a complete block with internal blank lines', () => {
+  const equation='$$\n\\begin{aligned}\na&=b\\\\\n\nc&=d\n\\end{aligned}\n$$'
+  const pages=readingPages('# Formula\n\n'+equation+'\n\nExplanation.')
+  assert.equal(pages[0].markdown,equation)
+  assert.equal(pages[1].markdown,'Explanation.')
+})

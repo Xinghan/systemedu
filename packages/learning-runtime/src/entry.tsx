@@ -5,8 +5,10 @@ import { MobileHand } from "./mobile/hand"
 import { MobileLanding } from "./mobile/landing"
 import { MobileReader } from "./mobile/reader"
 import "./shell.css"
+import { CourseReader } from "./mobile/course-reader"
+import { loadLesson, type CourseLesson } from "./content"
 
-function Classroom({ host, initial, activity }: { host: LearningHost; initial: Snapshot; activity: ReturnType<typeof activityFrom> }) {
+function Classroom({ host, initial, activity, lesson }: { host: LearningHost; initial: Snapshot; activity: ReturnType<typeof activityFrom>; lesson?: CourseLesson }) {
   const [status, setStatus] = useState("记录保存在本机")
   const latest = useRef<Snapshot | null>(null), saving = useRef<Promise<void> | null>(null), mounted = useRef(true)
   const save = useCallback(async () => {
@@ -40,7 +42,7 @@ function Classroom({ host, initial, activity }: { host: LearningHost; initial: S
   }, [])
   return <div className="classroom-shell">
     <header className="session-bar"><span role="status"><i/>{status}</span><button onClick={() => { void save().then(() => host.exportState()).catch(() => setStatus("导出失败，请重试")) }}>导出记录 ↗</button></header>
-    {activity === "mechanical-hand" ? <MobileHand initial={initial} onChange={change} assetBase={assetBase}/> :
+    {lesson ? <CourseReader lesson={lesson} initial={initial} onChange={change} onCommit={async state => { change(state); await save() }}/> : activity === "mechanical-hand" ? <MobileHand initial={initial} onChange={change} assetBase={assetBase}/> :
       activity === "mars-landing" ? <MobileLanding initial={initial} onChange={change} assetBase={assetBase}/> : <MobileReader initial={initial} onChange={change}/>}
   </div>
 }
@@ -50,8 +52,8 @@ async function main() {
   try {
     const params = new URLSearchParams(location.search), activity = activityFrom(params.get("activity"))
     const host = location.protocol === "systemedu:" ? nativeHost(activity, params.get("session") ?? "") : browserHost(activity)
-    const snapshot = await host.load()
-    createRoot(target).render(<Classroom host={host} initial={snapshot ?? {}} activity={activity}/> )
+    const [snapshot, lesson] = await Promise.all([host.load(), activity.startsWith("course:") ? loadLesson(activity) : Promise.resolve(undefined)])
+    createRoot(target).render(<Classroom host={host} initial={snapshot ?? {}} activity={activity} lesson={lesson}/> )
   } catch (error) {
     target.className = "load-error"; target.textContent = error instanceof Error ? error.message : "课堂暂时无法打开，请返回后重试。"
   }
