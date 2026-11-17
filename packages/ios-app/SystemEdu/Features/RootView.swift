@@ -21,49 +21,58 @@ struct RootView: View {
 private struct LearningHome: View {
     @ObservedObject var store: LearningStore
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 30) {
-                HStack(alignment: .firstTextBaseline) {
-                    Text("SYSTEMEDU").font(.system(size: 13, weight: .semibold, design: .monospaced)).tracking(2)
-                    Spacer(); Label("本地预览", systemImage: "internaldrive").font(.caption).foregroundStyle(Color.quiet)
-                }
-                VStack(alignment: .leading, spacing: 13) {
-                    Text("从一个问题，\n走进真实世界。").font(.system(size: 34, weight: .medium, design: .serif)).lineSpacing(7).fixedSize(horizontal: false, vertical: true)
-                    Text("读懂一个概念，亲手改变一个模型。\n把每一次观察，变成下一步的发现。").font(.subheadline).foregroundStyle(Color.quiet).lineSpacing(6)
-                }
-                NavigationLink(value: store.records.first?.activity ?? LearningActivity.driving) {
-                    VStack(alignment: .leading, spacing: 18) {
-                        HStack { Text(store.records.isEmpty ? "从这里开始" : "继续上次学习").font(.caption).tracking(2); Spacer(); Image(systemName: "arrow.up.right") }
-                        Text((store.records.first?.activity ?? .driving).title).font(.title2.weight(.medium))
-                        HStack { Text(store.records.isEmpty ? "课程阅读 · 约 10 分钟" : "本机记录已恢复").font(.caption); Spacer(); Image(systemName: "arrow.right.circle.fill").font(.title2) }
-                    }.padding(24).foregroundStyle(Color.paper).background(Color.forest, in: RoundedRectangle(cornerRadius: 22))
-                }.buttonStyle(.plain).accessibilityIdentifier("continue-learning")
-                VStack(alignment: .leading, spacing: 16) {
-                    HStack { Text("动手理解").font(.title3.weight(.semibold)); Spacer(); Text("02 个实验").font(.caption.monospaced()).foregroundStyle(Color.quiet) }
-                    ForEach([LearningActivity.hand, .landing]) { activity in NavigationLink(value: activity) { ActivityCard(activity: activity) }.buttonStyle(.plain).accessibilityIdentifier("open-\(activity.rawValue)") }
-                }
-                HStack(alignment: .top, spacing: 12) {
-                    Image(systemName: "checkmark.icloud").font(.title3)
-                    Text("这三项内容已随 App 安装，可离线使用。笔记和实验参数保存在这台设备上。").font(.caption).lineSpacing(5)
-                }.foregroundStyle(Color.quiet).padding(.bottom, 14)
-            }.padding(24).frame(maxWidth: 760, alignment: .leading).frame(maxWidth: .infinity)
-        }.background(Color.paper).foregroundStyle(Color.forest)
+        ViewThatFits(in: .vertical) {
+            dashboard
+            ScrollView { dashboard }
+        }.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            .background(Color.paper.ignoresSafeArea()).foregroundStyle(Color.forest)
             .navigationDestination(for: LearningActivity.self) { ClassroomView(activity: $0, store: store) }
             .toolbar(.hidden, for: .navigationBar)
+    }
+    private var dashboard: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            HStack(alignment: .firstTextBaseline) {
+                Text("今天，从哪里开始？").font(.system(size: 26, weight: .medium, design: .serif))
+                Spacer()
+                Image(systemName: "internaldrive").foregroundStyle(Color.quiet).accessibilityLabel("离线内容")
+            }
+            NavigationLink(value: store.records.first?.activity ?? LearningActivity.driving) {
+                HStack(spacing: 16) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(store.records.isEmpty ? "从这里开始" : "继续上次学习").font(.caption)
+                        Text((store.records.first?.activity ?? .driving).title).font(.title3.weight(.medium))
+                    }
+                    Spacer()
+                    Image(systemName: "arrow.right.circle.fill").font(.title)
+                }.padding(20).foregroundStyle(Color.paper).background(Color.forest, in: RoundedRectangle(cornerRadius: 20))
+            }.buttonStyle(.plain).accessibilityIdentifier("continue-learning")
+            HStack {
+                Text("我的学习内容").font(.subheadline.weight(.semibold))
+                Spacer(); Text("3 项 · 已下载").font(.caption).foregroundStyle(Color.quiet)
+            }
+            VStack(spacing: 10) {
+                ForEach(LearningActivity.allCases) { activity in
+                    NavigationLink(value: activity) { ActivityCard(activity: activity, compact: true) }
+                        .buttonStyle(.plain).accessibilityIdentifier("open-\(activity.rawValue)")
+                }
+            }
+            Text("阅读位置、笔记与实验参数自动保存在本机。").font(.caption).foregroundStyle(Color.quiet)
+        }.padding(20).frame(maxWidth: 760, alignment: .leading).frame(maxWidth: .infinity)
     }
 }
 
 private struct ActivityCard: View {
     let activity: LearningActivity
+    var compact = false
     var body: some View {
-        HStack(spacing: 18) {
+        HStack(spacing: compact ? 12 : 18) {
             Group {
                 if let url = activity.posterURL, let image = UIImage(contentsOfFile: url.path) {
                     Image(uiImage: image).resizable().scaledToFill()
                 } else { Image(systemName: activity.symbol).font(.system(size: 34, weight: .light)).foregroundStyle(Color.rust).frame(maxWidth: .infinity, maxHeight: .infinity).background(Color.forest.opacity(0.06)) }
-            }.frame(width: 100, height: 112).clipped().clipShape(RoundedRectangle(cornerRadius: 12))
-            VStack(alignment: .leading, spacing: 9) {
-                Text(activity.category).font(.system(size: 10, weight: .medium)).foregroundStyle(Color.rust)
+            }.frame(width: compact ? 62 : 100, height: compact ? 70 : 112).clipped().clipShape(RoundedRectangle(cornerRadius: 12))
+            VStack(alignment: .leading, spacing: compact ? 5 : 9) {
+                if !compact { Text(activity.category).font(.system(size: 10, weight: .medium)).foregroundStyle(Color.rust) }
                 Text(activity.title).font(.headline).fixedSize(horizontal: false, vertical: true)
                 Text(activity.subtitle).font(.caption).foregroundStyle(Color.quiet).lineSpacing(4).fixedSize(horizontal: false, vertical: true)
             }
@@ -77,10 +86,9 @@ private struct ExploreView: View {
     @ObservedObject var store: LearningStore
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 22) {
-                Text("理解，来自探索。").font(.system(size: 30, weight: .medium, design: .serif))
-                Text("先体验已适配的课程与实验。整个课程平台将分批接入同一套课堂。").foregroundStyle(Color.quiet).font(.subheadline).lineSpacing(5)
-                ForEach(LearningActivity.allCases) { activity in NavigationLink(value: activity) { ActivityCard(activity: activity) }.buttonStyle(.plain) }
+            VStack(alignment: .leading, spacing: 16) {
+                Text("选择一个问题，动手试一试。").font(.title3).foregroundStyle(Color.quiet)
+                ForEach(LearningActivity.allCases) { activity in NavigationLink(value: activity) { ActivityCard(activity: activity, compact: true) }.buttonStyle(.plain) }
                 Label("全部已保存在本机", systemImage: "arrow.down.circle.fill").font(.caption).foregroundStyle(Color.quiet)
             }.padding(24).frame(maxWidth: 760).frame(maxWidth: .infinity)
         }.background(Color.paper).foregroundStyle(Color.forest).navigationTitle("探索").navigationBarTitleDisplayMode(.inline)

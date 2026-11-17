@@ -21,6 +21,9 @@ struct LearningWebView: UIViewRepresentable {
         let view = WKWebView(frame: .zero, configuration: configuration)
         view.isOpaque = false; view.backgroundColor = UIColor(Color.paper)
         view.scrollView.backgroundColor = UIColor(Color.paper)
+        // The classroom owns its viewport. Only focused reading cards and sheets scroll.
+        view.scrollView.bounces = false
+        view.scrollView.contentInsetAdjustmentBehavior = .never
         view.navigationDelegate = context.coordinator; view.uiDelegate = context.coordinator
         view.accessibilityIdentifier = "learning-webview"
         #if DEBUG

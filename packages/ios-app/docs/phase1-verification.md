@@ -57,3 +57,7 @@ xcodebuild -project packages/ios-app/SystemEdu.xcodeproj -scheme SystemEdu -show
 ## 模拟器截图
 
 [学习首页](screenshots/home.png) · [机械手](screenshots/hand.png) · [火星着陆](screenshots/landing.png)
+
+## 后续手机交互修订
+
+本文件保留首批技术验证记录。当前 App 已用独立手机布局替换上述长网页嵌入方案，不再需要沿画布两侧滑动寻找控制。当前布局、截图与验收结果见 [手机交互修订](mobile-interaction.md)。浏览器回归现分为 `scripts/ios/verify-mobile.mjs`（本地 App runtime）和 `scripts/ios/verify-browser.mjs`（原网站）。

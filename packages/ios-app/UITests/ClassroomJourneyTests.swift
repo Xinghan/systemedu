@@ -7,58 +7,99 @@ final class ClassroomJourneyTests: XCTestCase {
         attachment.name = name; attachment.lifetime = .keepAlways; add(attachment)
     }
     @MainActor
-    private func scrollPage(_ web: XCUIElement) {
-        // The model intentionally consumes drags for rotation. Scroll in the page gutter.
-        web.coordinate(withNormalizedOffset: CGVector(dx: 0.985, dy: 0.82))
-            .press(forDuration: 0.05, thenDragTo: web.coordinate(withNormalizedOffset: CGVector(dx: 0.985, dy: 0.22)))
+    private func onScreen(_ element: XCUIElement, in container: XCUIElement, file: StaticString = #filePath, line: UInt = #line) {
+        XCTAssertTrue(element.isHittable, "Primary action must be usable without scrolling", file: file, line: line)
+        XCTAssertTrue(container.frame.insetBy(dx: -1, dy: -1).contains(element.frame), "Primary action is outside the viewport", file: file, line: line)
     }
     @MainActor
-    func testOfflineReaderPersistsNoteAcrossAppRelaunch() throws {
-        let app = XCUIApplication()
-        app.launch()
-        app.tabBars.buttons["探索"].tap()
-        app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "先看路，再决定")).firstMatch.tap()
+    func testOfflineReaderPersistsPageAndNoteAcrossAppRelaunch() throws {
+        let app = XCUIApplication(); app.launch()
+        let reader = app.buttons["open-driving-intro"]
+        onScreen(reader, in: app); reader.tap()
         let web = app.webViews.firstMatch
         XCTAssertTrue(web.waitForExistence(timeout: 20))
+        let contents = web.buttons["打开课文目录"]
+        XCTAssertTrue(contents.waitForExistence(timeout: 15)); onScreen(contents, in: web); contents.tap()
+        web.buttons.matching(NSPredicate(format: "label CONTAINS %@", "先认识这间实验室的四种输入")).firstMatch.tap()
+        XCTAssertTrue(web.staticTexts["认识四种地形输入"].waitForExistence(timeout: 5))
+        onScreen(web.staticTexts["正常前进是否合适？"], in: web)
+        onScreen(web.buttons["下一页"], in: web)
+        capture(app, name: "SystemEdu-table")
+        web.buttons["下一页"].tap()
+        XCTAssertTrue(web.staticTexts["sand，柔软沙地"].waitForExistence(timeout: 5))
+        let notes = web.buttons.matching(NSPredicate(format: "label == %@ OR label == %@", "记笔记", "我的笔记")).firstMatch
+        onScreen(notes, in: web); notes.tap()
         let field = web.textViews.firstMatch
-        for _ in 0..<12 where !field.isHittable { web.swipeUp() }
-        XCTAssertTrue(field.waitForExistence(timeout: 15))
-        field.tap()
-        let marker = "观察笔记-" + String(UUID().uuidString.prefix(8))
+        XCTAssertTrue(field.waitForExistence(timeout: 10)); field.tap()
+        let marker = "mobile-" + String(UUID().uuidString.prefix(8))
         field.typeText(marker)
+        let close = web.buttons["关闭面板"]
+        onScreen(close, in: web)
+        capture(app, name: "SystemEdu-note")
+        close.tap()
         XCTAssertTrue(web.staticTexts["已保存到本机"].waitForExistence(timeout: 8))
-        app.terminate(); app.launch()
-        app.buttons["continue-learning"].tap()
+        app.terminate(); app.launch(); app.buttons["continue-learning"].tap()
+        XCTAssertTrue(app.webViews.staticTexts["sand，柔软沙地"].waitForExistence(timeout: 20))
+        app.webViews.buttons["我的笔记"].tap()
         let restored = app.webViews.textViews.firstMatch
-        XCTAssertTrue(restored.waitForExistence(timeout: 20))
+        XCTAssertTrue(restored.waitForExistence(timeout: 10))
         XCTAssertTrue((restored.value as? String)?.contains(marker) == true)
     }
 
     @MainActor
-    func testBothBundledModelsLoadAndControlsRespond() throws {
+    func testModelsAndPrimaryControlsStayOnScreen() throws {
         let app = XCUIApplication(); app.launch()
+        for name in ["open-driving-intro", "open-mechanical-hand", "open-mars-landing"] { onScreen(app.buttons[name], in: app) }
         capture(app, name: "SystemEdu-home")
         app.buttons["open-mechanical-hand"].tap()
-        let hand = app.webViews.firstMatch
-        let preset = hand.buttons.matching(NSPredicate(format: "label CONTAINS %@", "五指合拢")).firstMatch
+        let hand = app.webViews.firstMatch, preset = hand.buttons["五指合拢"]
         XCTAssertTrue(preset.waitForExistence(timeout: 30))
         let enabled = expectation(for: NSPredicate(format: "enabled == true"), evaluatedWith: preset)
         wait(for: [enabled], timeout: 30)
+        for label in ["五指合拢", "张开手掌", "包握参考球", "更多操作", "动作原理"] { onScreen(hand.buttons[label], in: hand) }
+        hand.buttons["张开手掌"].tap()
         capture(app, name: "SystemEdu-hand")
-        for _ in 0..<8 where !preset.isHittable { scrollPage(hand) }
         preset.tap()
+        hand.buttons["动作原理"].tap()
+        XCTAssertTrue(hand.buttons["下一页"].waitForExistence(timeout: 5)); hand.buttons["下一页"].tap()
+        XCTAssertTrue(hand.staticTexts["收回的绳长怎样计算"].waitForExistence(timeout: 5))
+        hand.buttons["关闭面板"].tap()
         XCTAssertTrue(hand.staticTexts["已保存到本机"].waitForExistence(timeout: 8))
         app.navigationBars.buttons.firstMatch.tap()
         let landing = app.buttons["open-mars-landing"]
-        for _ in 0..<4 where !landing.isHittable { app.swipeUp() }
-        landing.tap()
-        let play = app.webViews.buttons["播放演示"]
+        onScreen(landing, in: app); landing.tap()
+        let web = app.webViews.firstMatch, play = web.buttons["播放演示"]
         XCTAssertTrue(play.waitForExistence(timeout: 30))
         let ready = expectation(for: NSPredicate(format: "enabled == true"), evaluatedWith: play)
         wait(for: [ready], timeout: 30)
+        for label in ["播放演示", "降落伞减速", "触地后飞离", "部件目录", "想一想"] { onScreen(web.buttons[label], in: web) }
+        web.buttons["缆绳放下火星车"].tap()
         capture(app, name: "SystemEdu-landing")
-        for _ in 0..<8 where !play.isHittable { scrollPage(app.webViews.firstMatch) }
         play.tap()
-        XCTAssertTrue(app.webViews.buttons["暂停演示"].waitForExistence(timeout: 8))
+        XCTAssertTrue(web.buttons["暂停演示"].waitForExistence(timeout: 8))
+        web.buttons["暂停演示"].tap()
+        web.buttons["部件目录"].tap()
+        // WebKit exposes aria-pressed buttons as switches in the iOS AX tree.
+        let part = web.switches["动力下降级"]
+        XCTAssertTrue(part.waitForExistence(timeout: 5)); onScreen(part, in: web); part.tap()
+        XCTAssertTrue(web.buttons.matching(NSPredicate(format: "label CONTAINS %@", "选中部件")).firstMatch.waitForExistence(timeout: 5))
     }
+    @MainActor
+    func testLandscapeKeepsModelControlsReachable() throws {
+        let app = XCUIApplication(); app.launch()
+        defer { XCUIDevice.shared.orientation = .portrait }
+        app.buttons["open-mechanical-hand"].tap()
+        XCTAssertTrue(app.webViews.buttons["五指合拢"].waitForExistence(timeout: 30))
+        XCUIDevice.shared.orientation = .landscapeLeft
+        for label in ["五指合拢", "更多操作", "动作原理"] { onScreen(app.webViews.buttons[label], in: app.webViews.firstMatch) }
+        capture(app, name: "SystemEdu-hand-landscape")
+        XCUIDevice.shared.orientation = .portrait
+        app.navigationBars.buttons.firstMatch.tap()
+        app.buttons["open-mars-landing"].tap()
+        XCTAssertTrue(app.webViews.buttons["播放演示"].waitForExistence(timeout: 30))
+        XCUIDevice.shared.orientation = .landscapeLeft
+        for label in ["播放演示", "部件目录", "想一想"] { onScreen(app.webViews.buttons[label], in: app.webViews.firstMatch) }
+        capture(app, name: "SystemEdu-landing-landscape")
+    }
+
 }
