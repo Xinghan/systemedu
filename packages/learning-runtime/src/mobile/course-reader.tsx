@@ -3,10 +3,10 @@ import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import remarkMath from 'remark-math'
 import rehypeKatex from 'rehype-katex'
-import { BookOpen, List, NotebookPen, Presentation, CheckCircle, Play } from 'lucide-react'
+import { BookOpen, List, NotebookPen, Presentation, CheckCircle, Play, Gamepad2, FlaskConical, Box, Wrench } from 'lucide-react'
 import 'katex/dist/katex.min.css'
 import type { Snapshot } from '../host'
-import { assetURL, type CourseLesson, type Exercise, type Slide } from '../content'
+import { assetURL, type CourseLesson, type Exercise, type Slide, type Interaction } from '../content'
 import { receiveCourseArtifact } from '../course-artifacts'
 import { readingPages, restoreReadingPage } from './reading-pages'
 import { Pager, Sheet } from './primitives'
@@ -43,7 +43,7 @@ export function CourseReader({ lesson, initial, onChange, onCommit }: { lesson: 
         const [, kind, id] = match
         const theory = theories.find(t => t.theory_id === id || t.aliases?.includes(id)), lab = interactions.find(t => t.id === id)
         if (theory) return <button key={i} className="content-entry" onClick={() => setPanel(`theory:${id}`)}><BookOpen size={20}/><span>{theory.title}</span><span>理解概念 →</span></button>
-        if (lab) return <button key={i} className="content-entry" onClick={() => setPanel(`lab:${id}`)}><Play size={20}/><span>{lab.title}</span><span>动手试试 →</span></button>
+        if (lab) return <InteractionEntry key={i} interaction={lab} onOpen={() => setPanel(`lab:${id}`)}/>
         return <p className="muted" key={i}>{kind} · {id}：源课程未提供此资源。</p>
       }
       return <ReactMarkdown key={i} remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[[rehypeKatex, { trust: false, strict: false }]]} components={{
@@ -67,7 +67,7 @@ export function CourseReader({ lesson, initial, onChange, onCommit }: { lesson: 
       {page?.fields ? <dl className="comparison-card">{page.fields.map((field, i) => <div key={i}><dt>{markdown(field.label)}</dt><dd>{markdown(field.value || '—')}</dd></div>)}</dl> : <div className="reading-prose">{page ? markdown(page.markdown) : <p>本节暂未提供正文，可先查看作业与学习资料。</p>}</div>}
       {pages.length > 0 && index >= pages.length - 1 && <button className="wide-button" onClick={() => setCompleted(!completed)}><CheckCircle size={18}/>{completed ? '已标记读完 · 撤销' : '标记为已读完'}</button>}
     </article>
-    <div className="reader-controls"><Pager index={Math.max(0, Math.min(index, pages.length - 1))} count={Math.max(1, pages.length)} onChange={setIndex}/><div className="reader-actions"><button onClick={() => setPanel('work')}><NotebookPen size={18}/>练习与笔记</button><button onClick={() => setPanel('resources')}><BookOpen size={18}/>资料与实践</button></div></div>
+    <div className="reader-controls"><Pager index={Math.max(0, Math.min(index, pages.length - 1))} count={Math.max(1, pages.length)} onChange={setIndex}/><div className="reader-actions"><button onClick={() => setPanel('work')}><NotebookPen size={18}/>练习与笔记</button><button onClick={() => setPanel('resources')}><Play size={18}/>动画与互动</button></div></div>
     {panel === 'contents' && <Sheet title="本节阅读路径" onClose={() => setPanel(null)}><p>{lesson.core_question}</p><div className="contents-list">{sections.map((s, i) => <button key={s} onClick={() => { setIndex(pages.findIndex(p => p.section === s)); setPanel(null) }}><span>{i + 1}</span><strong>{s}</strong></button>)}</div></Sheet>}
     {panel === 'work' && <Sheet title="练习与笔记" onClose={() => setPanel(null)} footer={<label className="work-selector">选择练习内容<select aria-label="选择练习内容" value={workView} onChange={e=>setWorkView(e.target.value)}><option value="note">我的笔记与作业说明</option>{lesson.content_history && <option value="history">修订前的学习记录</option>}{lesson.assignment && <option value="assignment">阅读作业要求</option>}{(lesson.response_prompts ?? []).map((p,i)=><option value={'prompt:'+i} key={'p'+i}>{p.title}</option>)}{(lesson.assessments ?? []).filter(a=>a.questions.length).map(a=><option key={a.id} value={'assessment:'+a.id}>{a.title}</option>)}{interactions.filter(i=>i.exercises.length).map(i=><option key={i.id} value={'exercise:'+i.id}>{i.title}</option>)}</select></label>}>
       <p className="muted">答案和笔记保存在本机，可导出。本机练习和读完标记不代表正式评分。</p>
@@ -79,16 +79,45 @@ export function CourseReader({ lesson, initial, onChange, onCommit }: { lesson: 
       {interactions.filter(i => i.exercises.length && workView === 'exercise:'+i.id).map(lab => <Questions key={lab.id} questions={lab.exercises} prefix={lab.id} answers={answers} onAnswer={(id, answer) => setAnswers({ ...answers, [id]: answer })}/>)}
       {workView === "note" && <label className="answer-field" htmlFor="course-note">我的笔记与作业说明<textarea id="course-note" value={note} maxLength={20000} placeholder="记录你的判断、操作结果和作品文件位置。" onChange={e => setNote(e.target.value)}/></label>}
     </Sheet>}
-    {panel === 'resources' && <Sheet title="资料与实践" onClose={() => setPanel(null)}>
-      <p className="muted">课文和内置素材已保存在本机。外部网页、YouTube 和 Python 环境首次加载需要网络。</p><div className="resource-list">{(lesson.foundations ?? []).map(f => <details key={f.id}><summary>{f.title}</summary>{markdown(f.body_markdown)}</details>)}{theories.map(t => <button className="content-entry" key={t.theory_id} onClick={() => setPanel(`theory:${t.theory_id}`)}><BookOpen size={17}/>{t.title}</button>)}{interactions.map(i => <button className="content-entry" key={i.id} onClick={() => setPanel(`lab:${i.id}`)}><Play size={17}/>{i.title}</button>)}</div>
-      {lesson.lab_url && <a href={'https://systeme.xin'+lesson.lab_url}>打开本课工作台（联网） ↗</a>}
-      <div className="resource-list">{resources.map((r, i) => <div key={i}><a href={resolve(r.url!)} target="_blank" rel="noreferrer">{r.title ?? r.url} ↗</a><p>{r.purpose ?? r.focus ?? r.detail}</p>{r.media_url && <video controls playsInline preload="none" src={resolve(r.media_url)} poster={r.poster_url ? resolve(r.poster_url) : undefined} style={{width:"100%"}}/>}</div>)}</div>
-      {!resources.length && <p className="muted">本节资料链接保留在课文和作业原文中。</p>}
+    {panel === 'resources' && <Sheet title="动画、互动与资料" onClose={() => setPanel(null)}>
+      <section aria-label="本节活动">
+        {interactions.length ? interactions.map(i => <InteractionEntry key={i.id} interaction={i} onOpen={() => setPanel(`lab:${i.id}`)}/>) : <p className="muted">本节没有单独的动画或互动活动，可以继续查看下方资料。</p>}
+      </section>
+      {(theories.length > 0 || !!lesson.foundations?.length) && <section><h3>概念解释</h3>{(lesson.foundations ?? []).map(f => <details key={f.id}><summary>{f.title}</summary>{markdown(f.body_markdown)}</details>)}{theories.map(t => <button className="content-entry" key={t.theory_id} onClick={() => setPanel(`theory:${t.theory_id}`)}><BookOpen size={17}/>{t.title}</button>)}</section>}
+      <section><h3>资料与下载</h3>
+        <p className="muted">课文和内置素材已保存在本机。外部网页、YouTube 和 Python 环境首次加载需要网络。</p>
+        {lesson.lab_url && <a href={'https://systeme.xin'+lesson.lab_url}>打开本课工作台（联网） ↗</a>}
+        <div className="resource-list">{resources.map((r, i) => <div key={i}><a href={resolve(r.url!)} target="_blank" rel="noreferrer">{r.title ?? r.url} ↗</a><p>{r.purpose ?? r.focus ?? r.detail}</p>{r.media_url && <video controls playsInline preload="none" src={resolve(r.media_url)} poster={r.poster_url ? resolve(r.poster_url) : undefined} style={{width:"100%"}}/>}</div>)}</div>
+        {!resources.length && <p className="muted">本节资料链接保留在课文和作业原文中。</p>}
+      </section>
     </Sheet>}
     {activeTheory && <Sheet title={activeTheory.title} onClose={() => setPanel(null)}><TheoryBody key={activeTheory.theory_id} theory={activeTheory} render={markdown} questionPrefix={`theory:${activeTheory.theory_id}:${lesson.content_revision ?? lesson.content_version}`} answers={answers} onAnswer={(id, value) => setAnswers({ ...answers, [id]: value })}/></Sheet>}
-    {activeLab && <Sheet title="互动学习" onClose={() => setPanel(null)}><h3>{activeLab.title}</h3>{activeLab.path ? <InteractiveFrame path={resolve(activeLab.path)} title={activeLab.title} storage={workspace} onStorage={setWorkspace} onCommit={commitWorkspace} moduleId={lesson.module_id} ideaId={activeLab.id}/> : null}{activeLab.exercises.length > 0 && <Questions questions={activeLab.exercises} prefix={activeLab.id} answers={answers} onAnswer={(id, answer) => setAnswers({ ...answers, [id]: answer })}/>}</Sheet>}
+    {activeLab && <Sheet title={interactionPresentation(activeLab.mode).label} onClose={() => setPanel(null)}><h3>{activeLab.title}</h3>{activeLab.path ? <InteractiveFrame path={resolve(activeLab.path)} title={activeLab.title} storage={workspace} onStorage={setWorkspace} onCommit={commitWorkspace} moduleId={lesson.module_id} ideaId={activeLab.id}/> : null}{!activeLab.path && !activeLab.exercises.length && <p className="muted">本节尚未提供可打开的互动资源，请查看课文中的操作说明。</p>}{activeLab.exercises.length > 0 && <Questions questions={activeLab.exercises} prefix={activeLab.id} answers={answers} onAnswer={(id, answer) => setAnswers({ ...answers, [id]: answer })}/>}</Sheet>}
     {panel === 'lecture' && <Sheet title={`讲课 · ${Math.min(slideIndex + 1, slides.length)}/${slides.length}`} onClose={() => setPanel(null)} footer={<Pager index={Math.min(slideIndex, slides.length - 1)} count={slides.length} onChange={setSlideIndex}/>}><SlideCard slide={slides[Math.min(slideIndex, slides.length - 1)]} markdown={markdown} resolve={resolve} onTheory={id => setPanel(`theory:${id}`)} onLab={id => setPanel(`lab:${id}`)}/></Sheet>}
   </div>
+}
+
+// Historic modes include concept guides under "animation" and workbenches under "game".
+// Use honest umbrella labels without changing resource IDs or their saved state.
+function interactionPresentation(mode: string) {
+  switch (mode) {
+    case 'animation': return { label: '原理演示', action: '打开演示', Icon: Play }
+    case 'game': return { label: '互动活动', action: '开始互动', Icon: Gamepad2 }
+    case 'exercise': return { label: '练习', action: '开始练习', Icon: NotebookPen }
+    case 'diagram': return { label: '原理图解', action: '查看图解', Icon: BookOpen }
+    case '3d_object': return { label: '三维模型', action: '观察模型', Icon: Box }
+    case 'hands_on_kit': return { label: '动手实践', action: '打开实践', Icon: Wrench }
+    case 'lab': return { label: '实验', action: '进入实验', Icon: FlaskConical }
+    default: return { label: '学习活动', action: '打开活动', Icon: Play }
+  }
+}
+function InteractionEntry({ interaction, onOpen }: { interaction: Interaction; onOpen: () => void }) {
+  const { label, action, Icon } = interactionPresentation(interaction.mode)
+  return <button className="content-entry interaction-entry" aria-label={`${action}：${interaction.title}`} onClick={onOpen}>
+    <Icon size={20} aria-hidden="true"/>
+    <span className="entry-copy"><small>{label}</small><strong>{interaction.title}</strong></span>
+    <span className="entry-action">{action} →</span>
+  </button>
 }
 
 function DocumentPages({text,render}:{text:string;render:(text:string)=>React.ReactNode}) {

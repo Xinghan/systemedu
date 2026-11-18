@@ -70,6 +70,43 @@ final class ClassroomJourneyTests: XCTestCase {
     }
 
     @MainActor
+    func testActivitiesAreDiscoverableAndBundledAnimationRuns() throws {
+        let app = XCUIApplication(); app.launch()
+        app.buttons["all-courses"].tap()
+        app.buttons["course-ai-ant-ethologist"].tap()
+        app.buttons["node-M01"].tap()
+        let web = app.webViews.firstMatch
+        let activities = web.buttons["动画与互动"]
+        XCTAssertTrue(activities.waitForExistence(timeout: 20))
+        onScreen(activities, in: web); activities.tap()
+        let guide = web.buttons["打开演示：把问题与证据连起来"]
+        let workbench = web.buttons["开始互动：我的观察计划"]
+        XCTAssertTrue(guide.waitForExistence(timeout: 5))
+        onScreen(guide, in: web); onScreen(workbench, in: web)
+        capture(app, name: "Activities-direct-entry")
+        workbench.tap()
+        XCTAssertTrue(web.textViews.firstMatch.waitForExistence(timeout: 10))
+        capture(app, name: "Activities-local-workbench")
+        web.buttons["关闭面板"].tap()
+        app.navigationBars.buttons.firstMatch.tap()
+        app.buttons["node-M02"].tap()
+        XCTAssertTrue(activities.waitForExistence(timeout: 20)); activities.tap()
+        web.buttons["打开演示：同一条路径，两种记录"].tap()
+        XCTAssertTrue(web.buttons["全屏操作"].waitForExistence(timeout: 10))
+        web.buttons["全屏操作"].tap()
+        let indicator = web.staticTexts.matching(NSPredicate(format: "label MATCHES %@", "[1-4] / 4")).firstMatch
+        XCTAssertTrue(indicator.waitForExistence(timeout: 10))
+        let current = Int(indicator.label.prefix(1))!
+        let step = web.buttons[current < 4 ? "下一帧" : "上一帧"]
+        onScreen(step, in: web); step.tap()
+        XCTAssertTrue(web.staticTexts["\(current < 4 ? current + 1 : current - 1) / 4"].waitForExistence(timeout: 5))
+        web.buttons["播放"].tap()
+        XCTAssertTrue(web.buttons["暂停"].waitForExistence(timeout: 5))
+        web.buttons["暂停"].tap()
+        capture(app, name: "Activities-local-animation")
+    }
+
+    @MainActor
     func testRevisedAntCourseOpensConceptLectureAndWorkbench() throws {
         let app = XCUIApplication(); app.launch()
         app.buttons["all-courses"].tap()
@@ -212,7 +249,7 @@ final class ClassroomJourneyTests: XCTestCase {
         let course = app.buttons["course-grasp-a-virtual-block"]
         XCTAssertTrue(course.waitForExistence(timeout: 10)); course.tap(); app.buttons["node-M01"].tap()
         let web = app.webViews.firstMatch
-        XCTAssertTrue(web.buttons["资料与实践"].waitForExistence(timeout: 20)); web.buttons["资料与实践"].tap()
+        XCTAssertTrue(web.buttons["动画与互动"].waitForExistence(timeout: 20)); web.buttons["动画与互动"].tap()
         web.buttons.matching(NSPredicate(format: "label CONTAINS %@", "让夹爪碰到目标")).firstMatch.tap()
         XCTAssertTrue(web.buttons["全屏操作"].waitForExistence(timeout: 10)); web.buttons["全屏操作"].tap()
         XCTAssertTrue(web.buttons["运行并保留本次实验"].waitForExistence(timeout: 30))
