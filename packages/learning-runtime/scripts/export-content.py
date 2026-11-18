@@ -92,6 +92,18 @@ def export(source, out):
             for name in ['theories','slides','audio_scripts']:
                 p=directory/f'{name}.json'; m[name]=read(p,[])
                 if p.is_file(): track(p)
+            # Historic course sources use both id and theory_id. Keep their stable
+            # identity while presenting one shape to the shared mobile reader.
+            for theory in m['theories']:
+                theory['theory_id'] = theory.get('theory_id') or theory.get('id')
+                if not theory['theory_id']:
+                    raise ValueError(f'Missing theory ID: {slug}/{mid}')
+            history_path = directory/'content-history.json'
+            if history_path.is_file():
+                m['content_history'] = read(history_path)
+                track(history_path)
+            if manifest.get('content_revision'):
+                m['content_revision'] = manifest['content_revision']
             if isinstance(m['slides'],dict): m['slides']=m['slides'].get('slides',[])
             for slide in m['slides']:
                 audio_path=slide.get('audio_path')

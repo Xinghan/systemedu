@@ -102,7 +102,7 @@ function Plate({ img, lang }: { img: DemoImage; lang: Lang }) {
     const items = topIdx.map(({ a, i }) => {
       const el = labelRefs.current[i]
       const halfPct = el ? (el.offsetWidth / cw) * 100 / 2 : 4
-      return { i, ideal: anchorPct(a).x, half: halfPct }
+      return { i, ideal: anchorPct(a).x, half: halfPct, c: anchorPct(a).x }
     }).sort((p, q) => p.ideal - q.ideal)
 
     // 从左到右: 每个不早于 上一个右缘+gap+half, 且不越左边
@@ -111,7 +111,7 @@ function Plate({ img, lang }: { img: DemoImage; lang: Lang }) {
       const minCenter = cursor + gap + it.half
       let c = Math.max(it.ideal, minCenter, edge + it.half)
       c = Math.min(c, 100 - edge - it.half) // 不越右边
-      ;(it as { c: number }).c = c
+      it.c = c
       cursor = c + it.half
     }
     // 若最右超界, 从右到左回推(整体左移)
@@ -125,7 +125,7 @@ function Plate({ img, lang }: { img: DemoImage; lang: Lang }) {
       }
     }
     const next: Record<number, number> = {}
-    for (const it of items) next[it.i] = (it as { c: number }).c
+    for (const it of items) next[it.i] = it.c
     setLxByIdx((prev) => (JSON.stringify(prev) === JSON.stringify(next) ? prev : next))
   }, [img, lang]) // eslint-disable-line react-hooks/exhaustive-deps
 

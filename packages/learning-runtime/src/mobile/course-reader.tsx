@@ -14,11 +14,13 @@ import { Pager, Sheet } from './primitives'
 type Panel = 'contents' | 'work' | 'resources' | 'lecture' | `theory:${string}` | `lab:${string}` | null
 
 export function CourseReader({ lesson, initial, onChange, onCommit }: { lesson: CourseLesson; initial: Snapshot; onChange: (state: Snapshot) => void; onCommit: (state: Snapshot) => Promise<void> }) {
-  const [index, setIndex] = useState(() => Math.max(0, Number(initial.page_index) || 0))
+  const revised = !!lesson.content_revision && initial.content_revision !== lesson.content_revision
+  const previousCompletion = initial.previous_completion ?? (revised && initial.self_completed === true ? { revision: initial.content_revision ?? 'original', completed: true } : null)
+  const [index, setIndex] = useState(() => revised ? 0 : Math.max(0, Number(initial.page_index) || 0))
   const [note, setNote] = useState(typeof initial.note === 'string' ? initial.note : '')
   const [answers, setAnswers] = useState<Record<string, string>>((initial.answers as Record<string, string>) ?? {})
-  const [completed, setCompleted] = useState(initial.self_completed === true)
-  const [slideIndex, setSlideIndex] = useState(Number(initial.slide_index) || 0)
+  const [completed, setCompleted] = useState(!revised && initial.self_completed === true)
+  const [slideIndex, setSlideIndex] = useState(revised ? 0 : Number(initial.slide_index) || 0)
   const [workspace, setWorkspace] = useState<Record<string,string>>(() => Object.assign({}, ...Object.values((initial.frames as Record<string,Record<string,string>>) ?? {}), (initial.shared_workspace as Record<string,string>) ?? {}))
   const [workView, setWorkView] = useState('note')
   const [panel, setPanel] = useState<Panel>(null)
@@ -27,10 +29,10 @@ export function CourseReader({ lesson, initial, onChange, onCommit }: { lesson: 
   const sections = [...new Set(pages.map(p => p.section))]
   const resolve = (url: string) => assetURL(url, lesson.asset_base)
   const interactions = lesson.interactions ?? [], theories = lesson.theories ?? [], slides = lesson.slides ?? []
-  useEffect(() => onChange({ ...initial, note, answers, frames: {}, shared_workspace: workspace, page_index: index, reader_page: page?.id, slide_index: slideIndex, self_completed: completed, content_version: lesson.content_version, module_id: lesson.module_id, library_slug: lesson.course_id }), [note, answers, workspace, index, slideIndex, completed, onChange, lesson, page?.id])
+  useEffect(() => onChange({ ...initial, note, answers, frames: {}, shared_workspace: workspace, page_index: index, reader_page: page?.id, slide_index: slideIndex, self_completed: completed, previous_completion: previousCompletion, content_revision: lesson.content_revision, content_version: lesson.content_version, module_id: lesson.module_id, library_slug: lesson.course_id }), [note, answers, workspace, index, slideIndex, completed, onChange, lesson, page?.id])
   async function commitWorkspace(next: Record<string,string>) {
     setWorkspace(next)
-    await onCommit({...initial, note, answers, frames:{}, shared_workspace:next, page_index:index, slide_index:slideIndex, self_completed:completed, content_version:lesson.content_version, module_id:lesson.module_id, library_slug:lesson.course_id})
+    await onCommit({...initial, note, answers, frames:{}, shared_workspace:next, page_index:index, slide_index:slideIndex, self_completed:completed, previous_completion:previousCompletion, content_revision:lesson.content_revision, content_version:lesson.content_version, module_id:lesson.module_id, library_slug:lesson.course_id})
   }
   function markdown(value: string) {
     // Keep source text unchanged; markers become accessible in-context entry buttons.
@@ -39,7 +41,7 @@ export function CourseReader({ lesson, initial, onChange, onCommit }: { lesson: 
       const match = chunk.match(/^\[\[([^:]+):([^\]]+)\]\]$/)
       if (match) {
         const [, kind, id] = match
-        const theory = theories.find(t => t.theory_id === id), lab = interactions.find(t => t.id === id)
+        const theory = theories.find(t => t.theory_id === id || t.aliases?.includes(id)), lab = interactions.find(t => t.id === id)
         if (theory) return <button key={i} className="content-entry" onClick={() => setPanel(`theory:${id}`)}><BookOpen size={20}/><span>{theory.title}</span><span>理解概念 →</span></button>
         if (lab) return <button key={i} className="content-entry" onClick={() => setPanel(`lab:${id}`)}><Play size={20}/><span>{lab.title}</span><span>动手试试 →</span></button>
         return <p className="muted" key={i}>{kind} · {id}：源课程未提供此资源。</p>
@@ -54,7 +56,7 @@ export function CourseReader({ lesson, initial, onChange, onCommit }: { lesson: 
     })
   }
   const resources = [...(lesson.resources ?? []), ...(lesson.downloads ?? []), ...Object.values(lesson.external_resources ?? {}).flatMap(v => Array.isArray(v) ? v : [])].filter(r => r.url)
-  const activeTheory = panel?.startsWith('theory:') ? theories.find(t => t.theory_id === panel.slice(7)) : null
+  const activeTheory = panel?.startsWith('theory:') ? theories.find(t => t.theory_id === panel.slice(7) || t.aliases?.includes(panel.slice(7))) : null
   const activeLab = panel?.startsWith('lab:') ? interactions.find(t => t.id === panel.slice(4)) : null
   return <div className="mobile-reader course-reader">
     <header className="reading-heading"><button onClick={() => setPanel('contents')} aria-label="打开课文目录"><List size={18}/><span>{lesson.module_id} · 本节目录</span></button><button onClick={() => setPanel('lecture')} disabled={!slides.length}><Presentation size={17}/>讲课</button></header>
@@ -67,9 +69,11 @@ export function CourseReader({ lesson, initial, onChange, onCommit }: { lesson: 
     </article>
     <div className="reader-controls"><Pager index={Math.min(index, pages.length - 1)} count={Math.max(1, pages.length)} onChange={setIndex}/><div className="reader-actions"><button onClick={() => setPanel('work')}><NotebookPen size={18}/>练习与笔记</button><button onClick={() => setPanel('resources')}><BookOpen size={18}/>资料与实践</button></div></div>
     {panel === 'contents' && <Sheet title="本节阅读路径" onClose={() => setPanel(null)}><p>{lesson.core_question}</p><div className="contents-list">{sections.map((s, i) => <button key={s} onClick={() => { setIndex(pages.findIndex(p => p.section === s)); setPanel(null) }}><span>{i + 1}</span><strong>{s}</strong></button>)}</div></Sheet>}
-    {panel === 'work' && <Sheet title="练习与笔记" onClose={() => setPanel(null)} footer={<label className="work-selector">选择练习内容<select aria-label="选择练习内容" value={workView} onChange={e=>setWorkView(e.target.value)}><option value="note">我的笔记与作业说明</option>{lesson.assignment && <option value="assignment">阅读作业要求</option>}{(lesson.response_prompts ?? []).map((p,i)=><option value={'prompt:'+i} key={'p'+i}>{p.title}</option>)}{(lesson.assessments ?? []).filter(a=>a.questions.length).map(a=><option key={a.id} value={'assessment:'+a.id}>{a.title}</option>)}{interactions.filter(i=>i.exercises.length).map(i=><option key={i.id} value={'exercise:'+i.id}>{i.title}</option>)}</select></label>}>
+    {panel === 'work' && <Sheet title="练习与笔记" onClose={() => setPanel(null)} footer={<label className="work-selector">选择练习内容<select aria-label="选择练习内容" value={workView} onChange={e=>setWorkView(e.target.value)}><option value="note">我的笔记与作业说明</option>{lesson.content_history && <option value="history">修订前的学习记录</option>}{lesson.assignment && <option value="assignment">阅读作业要求</option>}{(lesson.response_prompts ?? []).map((p,i)=><option value={'prompt:'+i} key={'p'+i}>{p.title}</option>)}{(lesson.assessments ?? []).filter(a=>a.questions.length).map(a=><option key={a.id} value={'assessment:'+a.id}>{a.title}</option>)}{interactions.filter(i=>i.exercises.length).map(i=><option key={i.id} value={'exercise:'+i.id}>{i.title}</option>)}</select></label>}>
       <p className="muted">答案和笔记保存在本机，可导出。本机练习和读完标记不代表正式评分。</p>
       {workView === "assignment" && <DocumentPages text={lesson.assignment} render={markdown}/>}
+      {workView === 'history' && lesson.content_history && <section><h3>修订前的学习记录</h3><p>{lesson.content_history.notice}</p>{previousCompletion ? <p>保留了旧版的读完标记。新版内容需要重新核对。</p> : null}{lesson.content_history.questions.filter(q => answers[q.key] !== undefined).map(q => <article className="card" key={q.key}><h4>{q.question}</h4><p>原答案：{q.options?.[Number(answers[q.key])] ?? answers[q.key]}</p></article>)}{!lesson.content_history.questions.some(q => answers[q.key] !== undefined) && <p>这份本机记录中没有修订前的题目答案。原有笔记仍在“我的笔记与作业说明”中。</p>}<details><summary>查看保留的互动记录</summary><pre>{JSON.stringify(Object.fromEntries(Object.entries(workspace).filter(([key]) => !lesson.content_revision || !key.endsWith(':' + lesson.content_revision))), null, 2)}</pre></details></section>}
+
       {(lesson.assessments ?? []).filter(a => a.questions.length && workView === 'assessment:'+a.id).map(a => <section key={a.id}><h3>{a.title}</h3><Questions questions={a.questions} prefix={a.id} answers={answers} onAnswer={(id, answer) => setAnswers({ ...answers, [id]: answer })}/></section>)}
       {(lesson.response_prompts ?? []).map((prompt, p) => workView === 'prompt:'+p && <fieldset key={p}><legend>{prompt.title}</legend><p>{prompt.hint}</p>{prompt.fields.map(field => { const answerKey = `prompt:${p}:${field.id}`; return <label className="answer-field" key={field.id}>{field.label}{field.options ? <select value={answers[answerKey] ?? ''} onChange={e => setAnswers({ ...answers, [answerKey]: e.target.value })}><option value="">请选择</option>{field.options.map(o => <option key={o}>{o}</option>)}</select> : <textarea maxLength={3000} value={answers[answerKey] ?? ''} placeholder={field.placeholder} onChange={e => setAnswers({ ...answers, [answerKey]: e.target.value })}/>}</label> })}</fieldset>)}
       {interactions.filter(i => i.exercises.length && workView === 'exercise:'+i.id).map(lab => <Questions key={lab.id} questions={lab.exercises} prefix={lab.id} answers={answers} onAnswer={(id, answer) => setAnswers({ ...answers, [id]: answer })}/>)}

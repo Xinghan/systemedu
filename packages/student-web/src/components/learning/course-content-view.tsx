@@ -1862,7 +1862,7 @@ function SectionBlock({
 // ---------------------------------------------------------------------------
 export function PlanWithSections({ content }: { content: CourseContent }) {
   const ideaMap = new Map(content.ideas.map((i) => [i.idea_id, i]))
-  const theoryMap = new Map((content.theories ?? []).map((t) => [t.theory_id, t]))
+  const theoryMap = new Map((content.theories ?? []).flatMap((t) => [t.theory_id, ...(t.aliases ?? [])].map(id => [id, t] as const)))
   const markerOwners = firstMarkerSections(content.sections || [])
 
   return (
@@ -1898,7 +1898,7 @@ export function CourseReadingBody({ content, projectName, moduleId, knowledgeLev
 export function PlanWithIdeas({ content }: { content: CourseContent }) {
   const parts = splitLessonParts(content.plan_markdown ?? "")
   const ideaMap = new Map(content.ideas.map((i) => [i.idea_id, i]))
-  const theoryMap = new Map((content.theories ?? []).map((entry) => [entry.theory_id, entry]))
+  const theoryMap = new Map((content.theories ?? []).flatMap((entry) => [entry.theory_id, ...(entry.aliases ?? [])].map(id => [id, entry] as const)))
 
   return (
     <div className="space-y-10">
@@ -2661,7 +2661,7 @@ export function CourseContentView({
       }
 
       if (!abortRef.current && loadIdRef.current === myLoadId) {
-        const data = await gateway.getCourseV2(projectName, nodeId)
+        const data = await gateway.getCourseV2(projectName)
         setCourseData(data)
       }
     } catch (e) {
@@ -2684,8 +2684,8 @@ export function CourseContentView({
 
     const fetcher =
       versionMode === "v3"
-        ? gateway.getCourseV3(projectName, nodeId, v3SelectedVersion ?? undefined)
-        : gateway.getCourseV2(projectName, nodeId)
+        ? gateway.getCourseV3(projectName)
+        : gateway.getCourseV2(projectName)
 
     fetcher.then((data) => {
       if (data.status === "ready" && data.course_content && Object.keys(data.course_content).length > 0) {
@@ -2719,7 +2719,7 @@ export function CourseContentView({
     try {
       await gateway.setCourseV3ActiveVersion(projectName, nodeId, label)
       // 刷新版本列表 + 切到该版本显示
-      const fresh = await gateway.listCourseV3Versions(projectName, nodeId)
+      const fresh = await gateway.listCourseV3Versions(projectName)
       setV3Versions(fresh.versions || [])
       setV3SelectedVersion(label)
     } catch (e) {

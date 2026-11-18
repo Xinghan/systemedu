@@ -621,6 +621,7 @@ export interface TheoryExercise {
 
 export interface TheoryEntry {
   theory_id: string
+  aliases?: string[]
   title: string
   subject: string
   /** Default body (shown when no level-specific body matches). */
