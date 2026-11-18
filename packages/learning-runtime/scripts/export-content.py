@@ -6,6 +6,7 @@ from pathlib import Path
 import argparse, hashlib, json, os, re, shutil, subprocess
 from concurrent.futures import ThreadPoolExecutor
 from catalog_presentation import prepare_presentations
+from ios_media import read_variants
 
 REPO = Path(__file__).resolve().parents[3]
 PUBLIC = REPO / 'packages/student-web/public'
@@ -24,8 +25,10 @@ def safe(root, relative):
     if not p.is_relative_to(root.resolve()) or not p.is_file(): raise ValueError(f'Missing/unsafe content: {p}')
     return p
 
-def export(source, out):
+def export(source, out, *, preview_ios_drafts=False):
     courses, source_files, gaps = [], {}, []
+    ios_coverage = []
+    ios_assets = set()
     # Narration WAVs are derived into AAC, not copied as multi-gigabyte studio masters.
     cache=REPO/'packages/ios-app/build/narration-cache';cache.mkdir(parents=True,exist_ok=True)
     audio={}
@@ -74,6 +77,7 @@ def export(source, out):
             if not p.is_file() or p.suffix.lower() not in allowed: continue
             rel=p.relative_to(root)
             if any(x.startswith('.') or x in {'authoring','archive','archives','node_modules','__pycache__','build','dist','verification','_review'} for x in rel.parts): continue
+            if any(rel.parts[i:i+2] == ('mobile','ios') for i in range(len(rel.parts)-1)) and p not in ios_assets: continue
             if p.is_symlink(): raise ValueError(f'Symlink not allowed: {p}')
             copy(audio.get(p,p),f'content/assets/{slug}/{rel.with_suffix(".m4a") if p in audio else rel}')
     def family(line_id, slug):
@@ -113,6 +117,10 @@ def export(source, out):
                 if audio_path and ((root/audio_path) in audio or (directory/audio_path) in audio): slide['audio_path']=audio_path.removesuffix('.wav')+'.m4a'
             sections=read(directory/'sections.json',{})
             if (directory/'sections.json').is_file(): track(directory/'sections.json')
+            ios_variants, ios_sources, ios_status = read_variants(directory, sections, slug, mid, preview=preview_ios_drafts)
+            for p in ios_sources: track(p)
+            for variant in ios_variants.values(): ios_assets.update(directory/'mobile/ios'/relative for relative in variant['files'])
+            ios_coverage.extend(dict(course=slug,module=mid,idea_id=key,status=status) for key,status in ios_status.items())
             for key, item in sections.get('rendered_sections',{}).items():
                 entry=dict(id=key,title=next((i.get('topic') for i in sections.get('ideas',[]) if i.get('idea_id')==key),item.get('caption') or '互动学习'),mode=item.get('mode'),exercises=item.get('exercises') or [])
                 html=item.get('html')
@@ -121,6 +129,9 @@ def export(source, out):
                     target=out/filename;target.parent.mkdir(parents=True,exist_ok=True);target.write_text(html.replace('<head>', '<head><script src="/content-frame.js"></script>',1) if '<head>' in html else '<script src="/content-frame.js"></script>'+html)
                     entry['path']='/'+filename
                 elif item.get('html_path'): entry['path']=m['asset_base']+item['html_path']
+                if key in ios_variants:
+                    variant=ios_variants[key]
+                    entry.update(path=m['asset_base']+variant['path'],presentation_platform='ios',presentation_revision=variant['revision'],state_key=variant['state_key'])
                 m['interactions'].append(entry)
             m['external_resources']=sections.get('external_resources',{})
             record_path=directory/'learning-record.json'
@@ -195,11 +206,15 @@ def export(source, out):
     write(out/'content/catalog.json',catalog)
     report=dict(schema_version=1,courses=len(courses),nodes=sum(len(c['modules']) for c in courses),coverage=[dict(id=c['id'],version=c['version'],nodes=[m['moduleId'] for m in c['modules']]) for c in courses],source_files=source_files,gaps=gaps)
     write(out/'content/coverage.json',report)
+    write(out/'content/ios-media-coverage.json',dict(schema_version=1,preview=preview_ios_drafts,resources=ios_coverage))
     print(f'Exported {len(courses)} courses / {report["nodes"]} nodes')
     return report
 
 if __name__=='__main__':
     parser=argparse.ArgumentParser();parser.add_argument('--source',type=Path,default=Path(os.environ.get('SYSTEMEDU_CONTENT_SOURCE',str(REPO.parent/'systemeduidea/projects_data'))));parser.add_argument('--out',type=Path,default=REPO/'packages/learning-runtime/dist')
+    parser.add_argument('--preview-ios-drafts',action='store_true',help='Select draft variants for local testing only; requires a separate --out directory')
     args=parser.parse_args()
     if not args.source.is_dir(): parser.error('Set SYSTEMEDU_CONTENT_SOURCE to the shared projects_data directory')
-    export(args.source,args.out)
+    if args.preview_ios_drafts and (args.out.resolve()==(REPO/'packages/learning-runtime/dist').resolve() or args.out.resolve().is_relative_to((REPO/'packages/ios-app/SystemEdu/Resources').resolve())):
+        parser.error('Draft previews must use a separate output directory, not production runtime or App resources')
+    export(args.source,args.out,preview_ios_drafts=args.preview_ios_drafts)
