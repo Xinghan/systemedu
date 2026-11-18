@@ -120,6 +120,26 @@ final class LocalLearningTests: XCTestCase {
             XCTAssertNoThrow(try AssetSchemeHandler.resolve(URL(string: "systemedu://bundle" + node.path)!, root: root))
         }
     }
+    func testEveryProjectCoverDecodesOffline() throws {
+        for course in try ContentCatalog.result.get().courses {
+            let url = try XCTUnwrap(course.coverURL, course.id)
+            let image = try XCTUnwrap(CourseImageCache.load(url), course.id)
+            XCTAssertGreaterThan(image.size.width, 0, course.id)
+            XCTAssertFalse(course.summary?.isEmpty ?? true, course.id)
+        }
+    }
+    func testCourseResumeUsesOnlyItsOwnVersionAndAdvancesCompletedNodes() throws {
+        let course = try XCTUnwrap(ContentCatalog.current?.courses.first { $0.id == "lightkurve-transit-detective" })
+        let first = course.modules[0], second = course.modules[1]
+        let unrelated = LocalRecord(activity: .hand, state: [:], updatedAt: .now)
+        let old = LocalRecord(activity: LearningActivity(rawValue: "course:lightkurve-transit-detective:0.1:M32")!, state: [:], updatedAt: .now)
+        XCTAssertEqual(course.resumeNode(in: [unrelated, old])?.id, first.id)
+        let partial = LocalRecord(activity: first.activity, state: ["page": 4], updatedAt: .now)
+        XCTAssertEqual(course.resumeNode(in: [unrelated, partial])?.id, first.id)
+        let finished = LocalRecord(activity: first.activity, state: ["self_completed": true], updatedAt: .now)
+        XCTAssertEqual(course.resumeNode(in: [finished, old])?.id, second.id)
+        XCTAssertEqual(course.completedCount(in: [finished, old]), 1)
+    }
     func testAssetsCannotEscapeBundleThroughPathsOrSymlinks() throws {
         let root = temporaryURL().deletingLastPathComponent()
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)

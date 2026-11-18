@@ -11,9 +11,9 @@ struct RootView: View {
     @ObservedObject var store: LearningStore
     var body: some View {
         TabView {
-            NavigationStack { LearningHome(store: store) }.tabItem { Label("学习", systemImage: "book.closed") }
-            NavigationStack { CatalogView(store: store) }.tabItem { Label("探索", systemImage: "safari") }
-            NavigationStack { RecordsView(store: store) }.tabItem { Label("我的", systemImage: "person.crop.circle") }
+            AppNavigationStack(store: store) { LearningHome(store: store) }.tabItem { Label("学习", systemImage: "book.closed") }
+            AppNavigationStack(store: store) { CatalogView(store: store) }.tabItem { Label("探索", systemImage: "safari") }
+            AppNavigationStack(store: store) { RecordsView(store: store) }.tabItem { Label("我的", systemImage: "person.crop.circle") }
         }.tint(.forest)
     }
 }
@@ -26,7 +26,6 @@ private struct LearningHome: View {
             ScrollView { dashboard }
         }.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             .background(Color.paper.ignoresSafeArea()).foregroundStyle(Color.forest)
-            .navigationDestination(for: LearningActivity.self) { ClassroomView(activity: $0, store: store) }
             .toolbar(.hidden, for: .navigationBar)
     }
     private var dashboard: some View {
@@ -36,7 +35,7 @@ private struct LearningHome: View {
                 Spacer()
                 Image(systemName: "internaldrive").foregroundStyle(Color.quiet).accessibilityLabel("离线内容")
             }
-            NavigationLink(value: store.records.first?.activity ?? LearningActivity.driving) {
+            NavigationLink(value: AppRoute.activity(store.records.first?.activity ?? LearningActivity.driving)) {
                 HStack(spacing: 16) {
                     VStack(alignment: .leading, spacing: 8) {
                         Text(store.records.isEmpty ? "从这里开始" : "继续上次学习").font(.caption)
@@ -48,11 +47,11 @@ private struct LearningHome: View {
             }.buttonStyle(.plain).accessibilityIdentifier("continue-learning")
             HStack {
                 Text("快速体验").font(.subheadline.weight(.semibold))
-                Spacer(); NavigationLink("全部课程 →") { CatalogView(store: store) }.accessibilityIdentifier("all-courses").font(.caption).foregroundStyle(Color.quiet)
+                Spacer(); NavigationLink("全部课程 →", value: AppRoute.catalog).accessibilityIdentifier("all-courses").font(.caption).foregroundStyle(Color.quiet)
             }
             VStack(spacing: 10) {
                 ForEach(LearningActivity.allCases) { activity in
-                    NavigationLink(value: activity) { ActivityCard(activity: activity, compact: true) }
+                    NavigationLink(value: AppRoute.activity(activity)) { ActivityCard(activity: activity, compact: true) }
                         .buttonStyle(.plain).accessibilityIdentifier("open-\(activity.rawValue)")
                 }
             }
@@ -82,20 +81,6 @@ private struct ActivityCard: View {
     }
 }
 
-private struct ExploreView: View {
-    @ObservedObject var store: LearningStore
-    var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                Text("选择一个问题，动手试一试。").font(.title3).foregroundStyle(Color.quiet)
-                ForEach(LearningActivity.allCases) { activity in NavigationLink(value: activity) { ActivityCard(activity: activity, compact: true) }.buttonStyle(.plain) }
-                Label("全部已保存在本机", systemImage: "arrow.down.circle.fill").font(.caption).foregroundStyle(Color.quiet)
-            }.padding(24).frame(maxWidth: 760).frame(maxWidth: .infinity)
-        }.background(Color.paper).foregroundStyle(Color.forest).navigationTitle("探索").navigationBarTitleDisplayMode(.inline)
-            .navigationDestination(for: LearningActivity.self) { ClassroomView(activity: $0, store: store) }
-    }
-}
-
 private struct RecordsView: View {
     @ObservedObject var store: LearningStore
     @State private var export: SharedFile?
@@ -109,7 +94,7 @@ private struct RecordsView: View {
                 if store.records.isEmpty { Text("阅读或操作模型后，记录会出现在这里。").font(.subheadline).foregroundStyle(Color.quiet) }
                 ForEach(store.records) { record in
                     HStack {
-                        NavigationLink(value: record.activity) { VStack(alignment: .leading, spacing: 5) { Text(record.activity.title); Text(record.updatedAt, format: .dateTime.month().day().hour().minute()).font(.caption).foregroundStyle(Color.quiet) } }
+                        NavigationLink(value: AppRoute.activity(record.activity)) { VStack(alignment: .leading, spacing: 5) { Text(record.activity.title); Text(record.updatedAt, format: .dateTime.month().day().hour().minute()).font(.caption).foregroundStyle(Color.quiet) } }
                         Button { do { export = SharedFile(url: try store.export(record.activity)) } catch { self.error = error.localizedDescription } } label: { Image(systemName: "square.and.arrow.up") }.buttonStyle(.borderless).accessibilityLabel("导出\(record.activity.title)记录")
                     }
                 }
@@ -121,7 +106,6 @@ private struct RecordsView: View {
             }
             Section { NavigationLink("组件许可") { NoticesView() }; Text("SystemEdu · 开发预览 0.1").font(.caption).foregroundStyle(Color.quiet) }
         }.scrollContentBackground(.hidden).background(Color.paper).navigationTitle("我的").navigationBarTitleDisplayMode(.inline)
-            .navigationDestination(for: LearningActivity.self) { ClassroomView(activity: $0, store: store) }
             .sheet(item: $export) { ShareSheet(url: $0.url) }
             .alert("导出失败", isPresented: Binding(get: { error != nil }, set: { if !$0 { error = nil } })) { Button("知道了") {} } message: { Text(error ?? "") }
     }

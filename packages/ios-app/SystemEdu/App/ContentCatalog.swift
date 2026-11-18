@@ -11,6 +11,28 @@ struct ContentNode: Codable, Identifiable {
 struct ContentCourse: Codable, Identifiable, Hashable {
     let id: String; let title: String; let version: String; let lineId: String; let kind: String
     let stages: [ContentStage]; let modules: [ContentNode]; let sourceRoute: String
+    let coverPath: String?; let summary: String?; let outcome: String?
+    var lineTitle: String { ContentCatalog.current?.lines.first { $0.id == lineId }?.title ?? "课程" }
+    var kindTitle: String {
+        switch kind { case "full": return "完整项目"; case "guided": return "专题课程"; case "micro": return "动手探索"; default: return "专业课程" }
+    }
+    var coverURL: URL? {
+        guard let coverPath, coverPath.hasPrefix("/content/covers/"), !coverPath.contains("..") else { return nil }
+        return Bundle.main.url(forResource: "WebRuntime", withExtension: nil)?.appendingPathComponent(String(coverPath.dropFirst()))
+    }
+    func completedCount(in records: [LocalRecord]) -> Int {
+        let ids = Set(modules.map(\.id))
+        return records.filter { ids.contains($0.id) && $0.state["self_completed"] as? Bool == true }.count
+    }
+    func resumeNode(in records: [LocalRecord]) -> ContentNode? {
+        let byID = Dictionary(uniqueKeysWithValues: modules.map { ($0.id, $0) })
+        if let latest = records.first(where: { byID[$0.id] != nil }) {
+            if latest.state["self_completed"] as? Bool != true { return byID[latest.id] }
+            let completed = Set(records.filter { $0.state["self_completed"] as? Bool == true }.map(\.id))
+            return modules.first { !completed.contains($0.id) } ?? byID[latest.id]
+        }
+        return modules.first
+    }
     static func == (lhs: Self, rhs: Self) -> Bool { lhs.id == rhs.id && lhs.version == rhs.version }
     func hash(into hasher: inout Hasher) { hasher.combine(id); hasher.combine(version) }
 }

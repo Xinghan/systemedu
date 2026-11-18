@@ -5,6 +5,7 @@ No content generation. Missing nodes/files fail the build. Generated output is i
 from pathlib import Path
 import argparse, hashlib, json, os, re, shutil, subprocess
 from concurrent.futures import ThreadPoolExecutor
+from catalog_presentation import prepare_presentations
 
 REPO = Path(__file__).resolve().parents[3]
 PUBLIC = REPO / 'packages/student-web/public'
@@ -173,6 +174,7 @@ def export(source, out):
         for stem,p in current.items():
             item=next((x for x in film_groups.get(folder.parent.name,[]) if x.get('station')==stem or 'stage-'+str(x.get('level'))==stem),{})
             films.append(dict(id=f'{folder.parent.name}:{stem}',lineId={'space':'space-exploration','rover':'space-exploration','energy':'energy-motion','earth':'earth-discovery','biomed':'biomedicine','brain':'neuro-bionics','computing':'computing-ai','robotics':'robotics'}.get(folder.parent.name,folder.parent.name),title=item.get('title') or stem.replace('stage-','阶段 '),caption=item.get('brief') or item.get('dialogue',''),path='/'+str(p.relative_to(PUBLIC))))
+    prepare_presentations(REPO,source,out,courses)
     catalog=dict(schemaVersion=1,lines=lines,courses=courses,films=films)
     write(out/'content/catalog.json',catalog)
     report=dict(schema_version=1,courses=len(courses),nodes=sum(len(c['modules']) for c in courses),coverage=[dict(id=c['id'],version=c['version'],nodes=[m['moduleId'] for m in c['modules']]) for c in courses],source_files=source_files,gaps=gaps)

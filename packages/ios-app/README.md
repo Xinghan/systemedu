@@ -1,6 +1,6 @@
 # SystemEdu iOS App
 
-状态：手机交互修订后的开发预览，2026-11-17。已建立可编译的 SwiftUI 工程、本地课堂、两个交互模型、课文预览和 SQLite 记录恢复。范围已确认覆盖整个 SystemEdu；账号、完整课程接入、课程下载和跨设备同步尚待后续阶段。
+状态：完整课程目录的本地开发预览，2026-11-18。已接入 58 个项目、843 个节点，支持原生图文目录、项目详情、内置课堂和 SQLite 记录恢复。目录支持主题与类型筛选，项目详情提供固定的开始／继续学习按钮。账号、按需下载和跨设备同步仍待后续接入。
 
 ## 运行当前版本
 
@@ -18,7 +18,7 @@ Xcode 中选择 `SystemEdu` scheme 与可用 iPhone / iPad 模拟器，运行即
 
 网站也消费共享源码。首次安装网站依赖前，先执行上面的共享包 `npm ci`，然后在 `packages/student-web` 运行 `npm ci`；部署脚本已补同样的依赖安装步骤，本轮未运行部署。
 
-[手机交互与验收](docs/mobile-interaction.md) · [首批技术验收记录](docs/phase1-verification.md) · [课程兼容性清单](docs/content-compatibility.md)
+[课程目录与导航修订](docs/catalog-redesign.md) · [完整内容验收](docs/full-content-verification.md) · [手机交互与验收](docs/mobile-interaction.md) · [首批技术验收记录](docs/phase1-verification.md) · [课程兼容性清单](docs/content-compatibility.md)
 
 本方案按“整个 SystemEdu 学习平台的 iOS 客户端”设计。首批用一门完整课程和机械手、火星着陆两个实验验证体验，再扩展课程覆盖。
 

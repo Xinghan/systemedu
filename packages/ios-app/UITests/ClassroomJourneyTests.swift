@@ -3,13 +3,13 @@ import XCTest
 final class ClassroomJourneyTests: XCTestCase {
     @MainActor
     private func capture(_ app: XCUIApplication, name: String) {
-        let attachment = XCTAttachment(screenshot: app.screenshot())
+        let attachment = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
         attachment.name = name; attachment.lifetime = .keepAlways; add(attachment)
     }
     @MainActor
     private func onScreen(_ element: XCUIElement, in container: XCUIElement, file: StaticString = #filePath, line: UInt = #line) {
         XCTAssertTrue(element.isHittable, "Primary action must be usable without scrolling", file: file, line: line)
-        XCTAssertTrue(container.frame.insetBy(dx: -1, dy: -1).contains(element.frame), "Primary action is outside the viewport", file: file, line: line)
+        XCTAssertTrue(container.frame.insetBy(dx: -1, dy: -1).contains(element.frame), "Primary action \(element.frame) is outside viewport \(container.frame)", file: file, line: line)
     }
     @MainActor
     func testOfflineReaderPersistsPageAndNoteAcrossAppRelaunch() throws {
@@ -44,6 +44,85 @@ final class ClassroomJourneyTests: XCTestCase {
         let restored = app.webViews.textViews.firstMatch
         XCTAssertTrue(restored.waitForExistence(timeout: 10))
         XCTAssertTrue((restored.value as? String)?.contains(marker) == true)
+    }
+
+    @MainActor
+    func testHomeCatalogOpensCourseAndReturns() throws {
+        let app = XCUIApplication(); app.launch()
+        app.buttons["all-courses"].tap()
+        let course = app.buttons["course-ai-ant-ethologist"]
+        XCTAssertTrue(course.waitForExistence(timeout: 10))
+        capture(app, name: "SystemEdu-catalog-cards")
+        course.tap()
+        XCTAssertTrue(app.buttons["node-M01"].waitForExistence(timeout: 10), "Home → all courses → course must open the outline")
+        XCTAssertTrue(app.images["course-cover-ai-ant-ethologist"].waitForExistence(timeout: 10))
+        onScreen(app.buttons["course-start"], in: app)
+        capture(app, name: "SystemEdu-project-detail")
+        app.buttons["course-introduction"].tap()
+        XCTAssertTrue(app.navigationBars["项目介绍"].waitForExistence(timeout: 5))
+        app.navigationBars.buttons["完成"].tap()
+        app.buttons["course-start"].tap()
+        XCTAssertTrue(app.webViews.buttons["练习与笔记"].waitForExistence(timeout: 20))
+        app.navigationBars.buttons.firstMatch.tap()
+        XCTAssertTrue(app.buttons["course-start"].waitForExistence(timeout: 10))
+        app.navigationBars.buttons.firstMatch.tap()
+        XCTAssertTrue(course.waitForExistence(timeout: 10))
+        app.buttons["course-aloha-bimanual-apprentice"].tap()
+        XCTAssertTrue(app.images["course-cover-aloha-bimanual-apprentice"].waitForExistence(timeout: 10))
+        XCTAssertEqual(app.staticTexts["course-detail-title"].label, "教会双臂一起干活")
+        app.navigationBars.buttons.firstMatch.tap()
+        app.navigationBars.buttons.firstMatch.tap()
+        XCTAssertTrue(app.buttons["all-courses"].waitForExistence(timeout: 10))
+    }
+
+    @MainActor
+    func testCatalogFiltersEmptyStateAndLandscapeActions() throws {
+        let app = XCUIApplication(); app.launch()
+        app.tabBars.buttons["探索"].tap()
+        app.buttons["catalog-kind-filter"].tap()
+        app.buttons["动手探索"].tap()
+        XCTAssertEqual(app.staticTexts["catalog-count"].label, "14 项")
+        let search = app.searchFields["搜索项目或课节"]
+        search.tap(); search.typeText("no-such-course-94812")
+        XCTAssertTrue(app.staticTexts["没有找到匹配的课程"].waitForExistence(timeout: 5))
+        app.buttons["显示全部课程"].tap()
+        XCTAssertEqual(app.staticTexts["catalog-count"].label, "58 项")
+        search.tap(); search.typeText("Transformer")
+        app.buttons["course-transformer-lab"].tap()
+        XCTAssertTrue(app.buttons["course-start"].waitForExistence(timeout: 10))
+        onScreen(app.buttons["course-start"], in: app)
+        onScreen(app.buttons["node-M01"], in: app)
+        capture(app, name: "SystemEdu-professional-detail")
+        XCUIDevice.shared.orientation = .landscapeLeft
+        defer { XCUIDevice.shared.orientation = .portrait }
+        // The simulator reports orientation before its rotation animation completes.
+        // Wait for the actual landscape viewport and the full button bounds, not a delay.
+        let settled = expectation(for: NSPredicate { _, _ in
+            app.frame.width > app.frame.height && app.frame.insetBy(dx: -1, dy: -1).contains(app.buttons["course-start"].frame)
+        }, evaluatedWith: app)
+        wait(for: [settled], timeout: 8)
+        onScreen(app.buttons["course-start"], in: app)
+        let rendered = expectation(for: NSPredicate { _, _ in
+            let size = XCUIScreen.main.screenshot().image.size
+            return size.width > size.height
+        }, evaluatedWith: app)
+        wait(for: [rendered], timeout: 8)
+        onScreen(app.buttons["node-M01"], in: app)
+        capture(app, name: "SystemEdu-project-landscape")
+    }
+
+    @MainActor
+    func testCatalogAtAccessibilityTextSize() throws {
+        let app = XCUIApplication()
+        app.launchArguments += ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXL"]
+        app.launch()
+        app.tabBars.buttons["探索"].tap()
+        let course = app.buttons["course-ai-ant-ethologist"]
+        XCTAssertTrue(course.waitForExistence(timeout: 10)); course.tap()
+        XCTAssertTrue(app.buttons["course-start"].waitForExistence(timeout: 10))
+        onScreen(app.buttons["course-start"], in: app)
+        onScreen(app.buttons["course-introduction"], in: app)
+        capture(app, name: "SystemEdu-project-large-text")
     }
 
     @MainActor

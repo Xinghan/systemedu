@@ -6,6 +6,16 @@ const json = async p => JSON.parse(await readFile(p,'utf8'))
 const catalog = await json('dist/content/catalog.json')
 const coverage = await json('dist/content/coverage.json')
 
+test('every course includes a bundled JPEG cover and a readable introduction', async () => {
+  for (const course of catalog.courses) {
+    assert.match(course.coverPath, /^\/content\/covers\/[a-z0-9-]+\.jpg$/)
+    const image = await readFile(path.join('dist', course.coverPath))
+    assert.equal(image.readUInt16BE(0), 0xffd8, course.id)
+    assert.ok(image.length > 1000, course.id)
+    assert.ok(course.coverSource && course.summary?.trim(), course.id)
+  }
+})
+
 test('every exported source node has a unique versioned activity and an actual lesson', async () => {
   const activities=new Set()
   for(const course of catalog.courses) {
