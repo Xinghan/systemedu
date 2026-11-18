@@ -1,7 +1,7 @@
 export interface Resource { media_url?: string; poster_url?: string; title?: string; url?: string; purpose?: string; focus?: string; detail?: string; publisher?: string }
 export interface Exercise { id?: string; question?: string; prompt?: string; type?: string; options?: string[]; correct?: number | string; answer?: string; explanation?: string }
 export interface Interaction { id: string; title: string; mode: string; path?: string; exercises: Exercise[] }
-export interface Theory { theory_id: string; aliases?: string[]; title: string; body_markdown?: string; level_bodies?: { level: string; body_markdown: string }[] }
+export interface Theory { theory_id: string; aliases?: string[]; title: string; body_markdown?: string; level_bodies?: { level: string; body_markdown: string }[]; exercises?: Exercise[] }
 export interface Slide { slide_id?: string; title: string; kind?: string; body_markdown?: string; audio_script?: string; audio_path?: string; payload?: Record<string, unknown> }
 export interface CourseLesson {
   course_id: string; content_version: string; module_id: string; title: string; core_question?: string; lesson: string; assignment: string; asset_base: string

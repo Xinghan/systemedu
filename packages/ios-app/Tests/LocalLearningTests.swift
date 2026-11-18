@@ -152,6 +152,19 @@ final class LocalLearningTests: XCTestCase {
         try FileManager.default.createSymbolicLink(at: root.appendingPathComponent("escape.json"), withDestinationURL: URL(fileURLWithPath: "/etc/hosts"))
         XCTAssertThrowsError(try AssetSchemeHandler.resolve(URL(string: "systemedu://bundle/escape.json")!, root: root))
     }
+
+    func testRevisedCourseKeepsOldRecordsWithoutCountingThemAsNewCompletion() throws {
+        let course = try XCTUnwrap(ContentCatalog.current?.courses.first { $0.id == "ai-ant-ethologist" })
+        XCTAssertEqual(course.contentRevision, "20261118")
+        let first = course.modules[0]
+        let old = LocalRecord(activity: first.activity, state: ["self_completed": true, "note": "原笔记"], updatedAt: .now)
+        XCTAssertEqual(course.completedCount(in: [old]), 0)
+        XCTAssertEqual(course.resumeNode(in: [old])?.id, first.id)
+        XCTAssertEqual(old.state["note"] as? String, "原笔记")
+        let revised = LocalRecord(activity: first.activity, state: ["self_completed": true, "content_revision": "20261118"], updatedAt: .now)
+        XCTAssertEqual(course.completedCount(in: [revised]), 1)
+        XCTAssertEqual(course.resumeNode(in: [revised])?.id, course.modules[1].id)
+    }
 }
 
 @MainActor

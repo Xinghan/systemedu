@@ -52,7 +52,7 @@ def export(source, out):
     def line(slug, fallback):
         field=taxonomy.get(slug,{}).get('primary')
         return next((x['id'] for x in lines if x['fieldId']==field), fallback)
-    def finish(slug,title,version,line_id,kind,stages,modules,root,source_route):
+    def finish(slug,title,version,line_id,kind,stages,modules,root,source_route,revision=None):
         if not modules: raise ValueError(f'Empty course {slug}')
         if len({m['module_id'] for m in modules})!=len(modules): raise ValueError(f'Duplicate nodes {slug}')
         index=[]
@@ -65,6 +65,7 @@ def export(source, out):
             write(out/path,m)
             index.append(dict(id=activity,moduleId=m['module_id'],title=m['title'],stage=m.get('stage_id',''),path='/'+path,minutes=m.get('estimated_minutes') or 0,dependsOn=m.get('depends_on',[])))
         c=dict(id=slug,title=title,version=str(version),lineId=line_id,kind=kind,stages=[dict(id=s.get('stage_id',s.get('id','')),title=s.get('title','')) for s in stages],modules=index,sourceRoute=source_route)
+        if revision: c['contentRevision']=revision
         courses.append(c)
     def assets(root, slug):
         # Only curriculum artifacts: never build caches, credentials, tooling or private files.
@@ -72,7 +73,7 @@ def export(source, out):
         for p in root.rglob('*'):
             if not p.is_file() or p.suffix.lower() not in allowed: continue
             rel=p.relative_to(root)
-            if any(x.startswith('.') or x in {'archive','archives','node_modules','__pycache__','build','dist','verification','_review'} for x in rel.parts): continue
+            if any(x.startswith('.') or x in {'authoring','archive','archives','node_modules','__pycache__','build','dist','verification','_review'} for x in rel.parts): continue
             if p.is_symlink(): raise ValueError(f'Symlink not allowed: {p}')
             copy(audio.get(p,p),f'content/assets/{slug}/{rel.with_suffix(".m4a") if p in audio else rel}')
     def family(line_id, slug):
@@ -102,7 +103,9 @@ def export(source, out):
             if history_path.is_file():
                 m['content_history'] = read(history_path)
                 track(history_path)
-            if manifest.get('content_revision'):
+            # A source revision alone is descriptive metadata. Reset completion
+            # only when an authored history explicitly preserves the old edition.
+            if manifest.get('content_revision') and history_path.is_file():
                 m['content_revision'] = manifest['content_revision']
             if isinstance(m['slides'],dict): m['slides']=m['slides'].get('slides',[])
             for slide in m['slides']:
@@ -131,7 +134,8 @@ def export(source, out):
             modules.append(m)
         assets(root,slug)
         # Preserve formal source downloads and all module files; generated HTML avoids JSON copies in runtime memory.
-        finish(slug,tree.get('title') or manifest.get('title_zh') or manifest['title'],manifest['version'],line(slug,'earth-discovery'),'full',tree['stages'],modules,root,f'/projects/{slug}')
+        revision=manifest.get('content_revision') if any(m.get('content_history') for m in modules) else None
+        finish(slug,tree.get('title') or manifest.get('title_zh') or manifest['title'],manifest['version'],line(slug,'earth-discovery'),'full',tree['stages'],modules,root,f'/projects/{slug}',revision)
     # Guided courses include retained v1 routes as their own edition, never overwrite current nodes.
     for tree_path in sorted(PUBLIC.glob('project-lines/*/*/course*/tree/knowledge_tree.json')):
         root=tree_path.parent.parent;tree=read(tree_path);track(tree_path)

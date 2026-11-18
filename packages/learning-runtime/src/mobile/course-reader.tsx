@@ -85,7 +85,7 @@ export function CourseReader({ lesson, initial, onChange, onCommit }: { lesson: 
       <div className="resource-list">{resources.map((r, i) => <div key={i}><a href={resolve(r.url!)} target="_blank" rel="noreferrer">{r.title ?? r.url} ↗</a><p>{r.purpose ?? r.focus ?? r.detail}</p>{r.media_url && <video controls playsInline preload="none" src={resolve(r.media_url)} poster={r.poster_url ? resolve(r.poster_url) : undefined} style={{width:"100%"}}/>}</div>)}</div>
       {!resources.length && <p className="muted">本节资料链接保留在课文和作业原文中。</p>}
     </Sheet>}
-    {activeTheory && <Sheet title={activeTheory.title} onClose={() => setPanel(null)}><TheoryBody theory={activeTheory} render={markdown}/></Sheet>}
+    {activeTheory && <Sheet title={activeTheory.title} onClose={() => setPanel(null)}><TheoryBody key={activeTheory.theory_id} theory={activeTheory} render={markdown} questionPrefix={`theory:${activeTheory.theory_id}:${lesson.content_revision ?? lesson.content_version}`} answers={answers} onAnswer={(id, value) => setAnswers({ ...answers, [id]: value })}/></Sheet>}
     {activeLab && <Sheet title="互动学习" onClose={() => setPanel(null)}><h3>{activeLab.title}</h3>{activeLab.path ? <InteractiveFrame path={resolve(activeLab.path)} title={activeLab.title} storage={workspace} onStorage={setWorkspace} onCommit={commitWorkspace} moduleId={lesson.module_id} ideaId={activeLab.id}/> : null}{activeLab.exercises.length > 0 && <Questions questions={activeLab.exercises} prefix={activeLab.id} answers={answers} onAnswer={(id, answer) => setAnswers({ ...answers, [id]: answer })}/>}</Sheet>}
     {panel === 'lecture' && <Sheet title={`讲课 · ${Math.min(slideIndex + 1, slides.length)}/${slides.length}`} onClose={() => setPanel(null)} footer={<Pager index={Math.min(slideIndex, slides.length - 1)} count={slides.length} onChange={setSlideIndex}/>}><SlideCard slide={slides[Math.min(slideIndex, slides.length - 1)]} markdown={markdown} resolve={resolve} onTheory={id => setPanel(`theory:${id}`)} onLab={id => setPanel(`lab:${id}`)}/></Sheet>}
   </div>
@@ -96,10 +96,11 @@ function DocumentPages({text,render}:{text:string;render:(text:string)=>React.Re
  return <><h3>{page?.section}</h3>{render(page?.markdown ?? '')}{page?.fields?.map((f,i)=><div key={i}><strong>{f.label}</strong>{render(f.value)}</div>)}<Pager index={index} count={Math.max(1,pages.length)} onChange={setIndex}/></>
 }
 
-function TheoryBody({ theory, render }: { theory: CourseLesson['theories'][number]; render: (text: string) => React.ReactNode }) {
+function TheoryBody({ theory, render, questionPrefix, answers, onAnswer }: { theory: CourseLesson['theories'][number]; render: (text: string) => React.ReactNode; questionPrefix: string; answers: Record<string, string>; onAnswer: (id: string, value: string) => void }) {
   const levels = theory.level_bodies ?? [], [level, setLevel] = useState(0)
+  const [practice, setPractice] = useState(false)
   const pages = useMemo(() => readingPages(levels[level]?.body_markdown ?? theory.body_markdown ?? ''), [theory, level]), [index, setIndex] = useState(0)
-  return <><div className="level-picker">{levels.map((v, i) => <button key={v.level} aria-pressed={i === level} onClick={() => { setLevel(i); setIndex(0) }}>{v.level === 'K1' ? '基础解释' : v.level === 'K3' ? '深入理解' : v.level}</button>)}</div><h3>{pages[index]?.section}</h3>{render(pages[index]?.markdown ?? '')}{pages[index]?.fields?.map((f,i) => <div key={i}><strong>{f.label}</strong>{render(f.value)}</div>)}<Pager index={index} count={Math.max(1, pages.length)} onChange={setIndex}/></>
+  return <>{practice ? <><button className="wide-button" onClick={() => setPractice(false)}>返回概念解释</button><Questions questions={theory.exercises ?? []} prefix={questionPrefix} answers={answers} onAnswer={onAnswer}/></> : <><div className="level-picker">{levels.map((v, i) => <button key={v.level} aria-pressed={i === level} onClick={() => { setLevel(i); setIndex(0) }}>{v.level === 'K1' ? '基础解释' : v.level === 'K3' ? '深入理解' : v.level}</button>)}</div><h3>{pages[index]?.section}</h3>{render(pages[index]?.markdown ?? '')}{pages[index]?.fields?.map((f,i) => <div key={i}><strong>{f.label}</strong>{render(f.value)}</div>)}<Pager index={index} count={Math.max(1, pages.length)} onChange={setIndex}/>{!!theory.exercises?.length && <button className="wide-button" onClick={() => setPractice(true)}>概念自测 · {theory.exercises.length} 题</button>}</>}</>
 }
 function Questions({ questions, prefix, answers, onAnswer }: { questions: Exercise[]; prefix: string; answers: Record<string, string>; onAnswer: (id: string, value: string) => void }) {
   const [questionIndex, setQuestionIndex] = useState(0)
@@ -148,9 +149,15 @@ function InteractiveFrame({ path, title, storage, onStorage, onCommit, moduleId,
 function SlideCard({ slide, markdown, resolve, onTheory, onLab }: { slide?: Slide; markdown: (s: string) => React.ReactNode; resolve: (s: string) => string; onTheory: (s: string) => void; onLab: (s: string) => void }) {
   if (!slide) return <p>本节没有独立讲课稿。</p>
   const p = slide.payload ?? {}
-  return <div className="lecture-card"><h2>{slide.title}</h2>{slide.body_markdown && markdown(slide.body_markdown)}{Object.entries(p).map(([key, value]) => {
+  const hasPresentationText = ['hero_subtitle', 'key_takeaway', 'bullets', 'concept_cards'].some(key => {
+    const value = p[key]
+    return typeof value === 'string' ? !!value.trim() : Array.isArray(value) && value.length > 0
+  })
+  const fallbackBody = !hasPresentationText && (slide.body_markdown || (typeof p.body_markdown === 'string' ? p.body_markdown : ''))
+  return <div className="lecture-card"><h2>{slide.title}</h2>{fallbackBody && markdown(fallbackBody)}{Object.entries(p).map(([key, value]) => {
     if (key === 'technical_visual' && typeof value === 'object') return <InteractiveFrame key={key} title={slide.title} path={'/embedded.html?family=technical&visual='+encodeURIComponent(JSON.stringify(value))}/>
-    if (['theory_id','idea_id','level'].includes(key) || value == null) return null
+    if (['theory_id','idea_id','level','body_markdown'].includes(key) || value == null || (key === 'hero_title' && value === slide.title)) return null
+    if (key === 'bullets' && p.hero_subtitle && Array.isArray(value) && value.length === 1 && value[0] === p.hero_subtitle) return null
     if (key === 'inline_svg' && typeof value === 'string') return <img key={key} alt={String(p.svg_caption ?? slide.title)} src={'data:image/svg+xml;charset=utf-8,'+encodeURIComponent(value)}/>
     if (['src','html_path'].includes(key) && typeof value === 'string' && value.endsWith('.html')) return <InteractiveFrame key={key} title={slide.title} path={resolve(value)}/>
     if (key === 'formula' && typeof value === 'string') return <div key={key}>{markdown(`$$\n${value}\n$$`)}</div>

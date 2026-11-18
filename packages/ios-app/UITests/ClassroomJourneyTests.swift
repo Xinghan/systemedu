@@ -47,6 +47,36 @@ final class ClassroomJourneyTests: XCTestCase {
     }
 
     @MainActor
+    func testRevisedAntCourseOpensConceptLectureAndWorkbench() throws {
+        let app = XCUIApplication(); app.launch()
+        app.buttons["all-courses"].tap()
+        app.buttons["course-ai-ant-ethologist"].tap()
+        XCTAssertEqual(app.staticTexts["course-detail-title"].label, "AI 蚁群观察：测量、数据与研究记录")
+        app.buttons["node-M01"].tap()
+        let web = app.webViews.firstMatch
+        XCTAssertTrue(web.buttons["打开课文目录"].waitForExistence(timeout: 20))
+        web.buttons["讲课"].tap()
+        XCTAssertTrue(web.staticTexts["确定观察问题与研究范围"].waitForExistence(timeout: 5))
+        capture(app, name: "Ant-revised-lecture")
+        web.buttons["关闭面板"].tap()
+        web.buttons["打开课文目录"].tap()
+        web.buttons.matching(NSPredicate(format: "label CONTAINS %@", "概念详解")).firstMatch.tap()
+        web.buttons.matching(NSPredicate(format: "label CONTAINS %@", "研究问题与可检验的预测")).firstMatch.tap()
+        XCTAssertTrue(web.staticTexts["研究问题与可检验的预测"].waitForExistence(timeout: 5))
+        web.buttons.matching(NSPredicate(format: "label CONTAINS %@", "概念自测")).firstMatch.tap()
+        XCTAssertTrue(web.buttons["查看解析"].waitForExistence(timeout: 5))
+        web.buttons["关闭面板"].tap()
+        web.buttons["打开课文目录"].tap()
+        web.buttons.matching(NSPredicate(format: "label CONTAINS %@", "课堂实践")).firstMatch.tap()
+        web.buttons["下一页"].tap()
+        web.buttons["下一页"].tap()
+        web.buttons.matching(NSPredicate(format: "label CONTAINS %@", "我的观察计划")).firstMatch.tap()
+        XCTAssertTrue(web.buttons["全屏操作"].waitForExistence(timeout: 10))
+        XCTAssertTrue(web.textViews.firstMatch.waitForExistence(timeout: 10), "The bundled workbench must execute in WKWebView")
+        capture(app, name: "Ant-revised-workbench")
+    }
+
+    @MainActor
     func testHomeCatalogOpensCourseAndReturns() throws {
         let app = XCUIApplication(); app.launch()
         app.buttons["all-courses"].tap()
