@@ -47,6 +47,29 @@ final class ClassroomJourneyTests: XCTestCase {
     }
 
     @MainActor
+    func testCourseReadingSkipsAuthoringMetadataAndRestoresParagraph() throws {
+        let app = XCUIApplication(); app.launch()
+        app.buttons["all-courses"].tap()
+        app.buttons["course-ai-ant-ethologist"].tap()
+        app.buttons["node-M01"].tap()
+        let web = app.webViews.firstMatch
+        XCTAssertTrue(web.buttons["打开课文目录"].waitForExistence(timeout: 20))
+        web.buttons["打开课文目录"].tap()
+        web.buttons.matching(NSPredicate(format: "label CONTAINS %@", "确定观察问题与研究范围")).firstMatch.tap()
+        XCTAssertFalse(web.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Module: M01")).firstMatch.exists)
+        XCTAssertTrue(web.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "怎样把对蚂蚁的好奇")).firstMatch.waitForExistence(timeout: 5))
+        XCTAssertFalse(web.buttons["上一页"].isEnabled)
+        capture(app, name: "Reader-first-page-without-metadata")
+        web.buttons["下一页"].tap()
+        let paragraph = web.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "一群蚂蚁从巢口进出")).firstMatch
+        XCTAssertTrue(paragraph.waitForExistence(timeout: 5))
+        XCTAssertTrue(web.staticTexts["已保存到本机"].waitForExistence(timeout: 8))
+        app.terminate(); app.launch()
+        app.buttons["continue-learning"].tap()
+        XCTAssertTrue(app.webViews.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "一群蚂蚁从巢口进出")).firstMatch.waitForExistence(timeout: 20))
+    }
+
+    @MainActor
     func testRevisedAntCourseOpensConceptLectureAndWorkbench() throws {
         let app = XCUIApplication(); app.launch()
         app.buttons["all-courses"].tap()

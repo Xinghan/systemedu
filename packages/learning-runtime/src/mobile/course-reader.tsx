@@ -8,7 +8,7 @@ import 'katex/dist/katex.min.css'
 import type { Snapshot } from '../host'
 import { assetURL, type CourseLesson, type Exercise, type Slide } from '../content'
 import { receiveCourseArtifact } from '../course-artifacts'
-import { readingPages } from './reading-pages'
+import { readingPages, restoreReadingPage } from './reading-pages'
 import { Pager, Sheet } from './primitives'
 
 type Panel = 'contents' | 'work' | 'resources' | 'lecture' | `theory:${string}` | `lab:${string}` | null
@@ -16,7 +16,8 @@ type Panel = 'contents' | 'work' | 'resources' | 'lecture' | `theory:${string}` 
 export function CourseReader({ lesson, initial, onChange, onCommit }: { lesson: CourseLesson; initial: Snapshot; onChange: (state: Snapshot) => void; onCommit: (state: Snapshot) => Promise<void> }) {
   const revised = !!lesson.content_revision && initial.content_revision !== lesson.content_revision
   const previousCompletion = initial.previous_completion ?? (revised && initial.self_completed === true ? { revision: initial.content_revision ?? 'original', completed: true } : null)
-  const [index, setIndex] = useState(() => revised ? 0 : Math.max(0, Number(initial.page_index) || 0))
+  const pages = useMemo(() => readingPages(lesson.lesson), [lesson.lesson])
+  const [index, setIndex] = useState(() => revised ? 0 : restoreReadingPage(pages, initial.reader_page, initial.page_index))
   const [note, setNote] = useState(typeof initial.note === 'string' ? initial.note : '')
   const [answers, setAnswers] = useState<Record<string, string>>((initial.answers as Record<string, string>) ?? {})
   const [completed, setCompleted] = useState(!revised && initial.self_completed === true)
@@ -24,7 +25,6 @@ export function CourseReader({ lesson, initial, onChange, onCommit }: { lesson: 
   const [workspace, setWorkspace] = useState<Record<string,string>>(() => Object.assign({}, ...Object.values((initial.frames as Record<string,Record<string,string>>) ?? {}), (initial.shared_workspace as Record<string,string>) ?? {}))
   const [workView, setWorkView] = useState('note')
   const [panel, setPanel] = useState<Panel>(null)
-  const pages = useMemo(() => readingPages(lesson.lesson), [lesson.lesson])
   const page = pages[Math.min(index, pages.length - 1)]
   const sections = [...new Set(pages.map(p => p.section))]
   const resolve = (url: string) => assetURL(url, lesson.asset_base)
@@ -32,7 +32,7 @@ export function CourseReader({ lesson, initial, onChange, onCommit }: { lesson: 
   useEffect(() => onChange({ ...initial, note, answers, frames: {}, shared_workspace: workspace, page_index: index, reader_page: page?.id, slide_index: slideIndex, self_completed: completed, previous_completion: previousCompletion, content_revision: lesson.content_revision, content_version: lesson.content_version, module_id: lesson.module_id, library_slug: lesson.course_id }), [note, answers, workspace, index, slideIndex, completed, onChange, lesson, page?.id])
   async function commitWorkspace(next: Record<string,string>) {
     setWorkspace(next)
-    await onCommit({...initial, note, answers, frames:{}, shared_workspace:next, page_index:index, slide_index:slideIndex, self_completed:completed, previous_completion:previousCompletion, content_revision:lesson.content_revision, content_version:lesson.content_version, module_id:lesson.module_id, library_slug:lesson.course_id})
+    await onCommit({...initial, note, answers, frames:{}, shared_workspace:next, page_index:index, reader_page:page?.id, slide_index:slideIndex, self_completed:completed, previous_completion:previousCompletion, content_revision:lesson.content_revision, content_version:lesson.content_version, module_id:lesson.module_id, library_slug:lesson.course_id})
   }
   function markdown(value: string) {
     // Keep source text unchanged; markers become accessible in-context entry buttons.
@@ -64,10 +64,10 @@ export function CourseReader({ lesson, initial, onChange, onCommit }: { lesson: 
     <article className="reading-card" key={page?.id} aria-label={`课文第 ${index + 1} 页`} tabIndex={0}>
       <p className="overline">{page?.fields ? `逐项对照 · ${page.row} / ${page.rows}` : `阅读 · ${index + 1}`}</p>
       <h1>{page?.section ?? lesson.title}</h1>
-      {page?.fields ? <dl className="comparison-card">{page.fields.map((field, i) => <div key={i}><dt>{markdown(field.label)}</dt><dd>{markdown(field.value || '—')}</dd></div>)}</dl> : <div className="reading-prose">{markdown(page?.markdown || lesson.lesson)}</div>}
-      {index >= pages.length - 1 && <button className="wide-button" onClick={() => setCompleted(!completed)}><CheckCircle size={18}/>{completed ? '已标记读完 · 撤销' : '标记为已读完'}</button>}
+      {page?.fields ? <dl className="comparison-card">{page.fields.map((field, i) => <div key={i}><dt>{markdown(field.label)}</dt><dd>{markdown(field.value || '—')}</dd></div>)}</dl> : <div className="reading-prose">{page ? markdown(page.markdown) : <p>本节暂未提供正文，可先查看作业与学习资料。</p>}</div>}
+      {pages.length > 0 && index >= pages.length - 1 && <button className="wide-button" onClick={() => setCompleted(!completed)}><CheckCircle size={18}/>{completed ? '已标记读完 · 撤销' : '标记为已读完'}</button>}
     </article>
-    <div className="reader-controls"><Pager index={Math.min(index, pages.length - 1)} count={Math.max(1, pages.length)} onChange={setIndex}/><div className="reader-actions"><button onClick={() => setPanel('work')}><NotebookPen size={18}/>练习与笔记</button><button onClick={() => setPanel('resources')}><BookOpen size={18}/>资料与实践</button></div></div>
+    <div className="reader-controls"><Pager index={Math.max(0, Math.min(index, pages.length - 1))} count={Math.max(1, pages.length)} onChange={setIndex}/><div className="reader-actions"><button onClick={() => setPanel('work')}><NotebookPen size={18}/>练习与笔记</button><button onClick={() => setPanel('resources')}><BookOpen size={18}/>资料与实践</button></div></div>
     {panel === 'contents' && <Sheet title="本节阅读路径" onClose={() => setPanel(null)}><p>{lesson.core_question}</p><div className="contents-list">{sections.map((s, i) => <button key={s} onClick={() => { setIndex(pages.findIndex(p => p.section === s)); setPanel(null) }}><span>{i + 1}</span><strong>{s}</strong></button>)}</div></Sheet>}
     {panel === 'work' && <Sheet title="练习与笔记" onClose={() => setPanel(null)} footer={<label className="work-selector">选择练习内容<select aria-label="选择练习内容" value={workView} onChange={e=>setWorkView(e.target.value)}><option value="note">我的笔记与作业说明</option>{lesson.content_history && <option value="history">修订前的学习记录</option>}{lesson.assignment && <option value="assignment">阅读作业要求</option>}{(lesson.response_prompts ?? []).map((p,i)=><option value={'prompt:'+i} key={'p'+i}>{p.title}</option>)}{(lesson.assessments ?? []).filter(a=>a.questions.length).map(a=><option key={a.id} value={'assessment:'+a.id}>{a.title}</option>)}{interactions.filter(i=>i.exercises.length).map(i=><option key={i.id} value={'exercise:'+i.id}>{i.title}</option>)}</select></label>}>
       <p className="muted">答案和笔记保存在本机，可导出。本机练习和读完标记不代表正式评分。</p>
