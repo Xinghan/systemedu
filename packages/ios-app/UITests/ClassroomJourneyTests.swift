@@ -74,6 +74,7 @@ final class ClassroomJourneyTests: XCTestCase {
         let app = XCUIApplication(); app.launch()
         app.buttons["all-courses"].tap()
         app.buttons["course-ai-ant-ethologist"].tap()
+        app.buttons["course-stage-filter"].tap(); app.buttons["观察方法与 RFID 原理"].tap()
         app.buttons["node-M01"].tap()
         let web = app.webViews.firstMatch
         let activities = web.buttons["动画与互动"]
@@ -104,6 +105,86 @@ final class ClassroomJourneyTests: XCTestCase {
         XCTAssertTrue(web.buttons["暂停"].waitForExistence(timeout: 5))
         web.buttons["暂停"].tap()
         capture(app, name: "Activities-local-animation")
+    }
+
+    @MainActor
+    func testPhoneEEGFinalAnimationPreview() throws {
+        let app = XCUIApplication(); app.launch()
+        app.tabBars.buttons["探索"].tap()
+        let search = app.searchFields["搜索项目或课节"]
+        XCTAssertTrue(search.waitForExistence(timeout: 10)); search.tap(); search.typeText("EEG")
+        app.buttons["course-eeg-minecraft-bci"].tap(); app.buttons["node-M03"].tap()
+        let web = app.webViews.firstMatch
+        XCTAssertTrue(web.buttons["动画与互动"].waitForExistence(timeout: 20)); web.buttons["动画与互动"].tap()
+        web.buttons["打开演示：一串数连成波"].tap()
+        let previous = web.buttons["上一个"], next = web.buttons["下一个"]
+        XCTAssertTrue(next.waitForExistence(timeout: 10))
+        for _ in 0..<6 { if previous.isEnabled { previous.tap() } }
+        for _ in 0..<3 { next.tap() }
+        XCTAssertTrue(web.staticTexts["−10"].waitForExistence(timeout: 5))
+        web.buttons["播放过程"].tap()
+        XCTAssertTrue(web.buttons["重新播放"].waitForExistence(timeout: 10))
+        XCTAssertTrue(web.staticTexts["7 / 7"].exists)
+        for _ in 0..<3 { previous.tap() }
+        onScreen(web.buttons["播放过程"], in: web)
+        capture(app, name: "EEG-final-animation")
+    }
+
+    @MainActor
+    func testPhoneEEGAnimationAndGameRestore() throws {
+        let app = XCUIApplication(); app.launch()
+        app.tabBars.buttons["探索"].tap()
+        let search = app.searchFields["搜索项目或课节"]
+        XCTAssertTrue(search.waitForExistence(timeout: 10)); search.tap(); search.typeText("EEG")
+        let course = app.buttons["course-eeg-minecraft-bci"]
+        XCTAssertTrue(course.waitForExistence(timeout: 10)); course.tap()
+        app.buttons["node-M03"].tap()
+        let web = app.webViews.firstMatch
+        XCTAssertTrue(web.buttons["动画与互动"].waitForExistence(timeout: 20)); web.buttons["动画与互动"].tap()
+        web.buttons["打开演示：一串数连成波"].tap()
+        let next = web.buttons["下一个"]
+        XCTAssertTrue(next.waitForExistence(timeout: 10)); onScreen(next, in: web)
+        XCTAssertFalse(web.buttons["全屏操作"].exists)
+        onScreen(web.buttons["关闭面板"], in: web)
+        let previous = web.buttons["上一个"]
+        for _ in 0..<6 { if previous.isEnabled { previous.tap() } }
+        next.tap()
+        XCTAssertTrue(web.staticTexts["+20"].waitForExistence(timeout: 5))
+        web.buttons["播放过程"].tap()
+        XCTAssertTrue(web.buttons["暂停"].waitForExistence(timeout: 5)); web.buttons["暂停"].tap()
+        capture(app, name: "EEG-phone-animation")
+        for _ in 0..<6 { if previous.isEnabled { previous.tap() } }
+        web.buttons["播放过程"].tap()
+        XCUIDevice.shared.press(.home); app.activate()
+        XCTAssertTrue(web.buttons["播放过程"].waitForExistence(timeout: 10), "Returning from background must leave the animation paused")
+        XCTAssertFalse(web.buttons["暂停"].exists)
+        XCTAssertFalse(web.staticTexts["7 / 7"].exists, "The animation must not run to completion in the background")
+        web.buttons["关闭面板"].tap(); web.buttons["动画与互动"].tap()
+        web.buttons["开始互动：我的调波玩具"].tap()
+        let check = web.buttons["检查波形"]
+        XCTAssertTrue(check.waitForExistence(timeout: 10)); onScreen(check, in: web)
+        web.buttons["玩法"].tap(); web.buttons["重试本组"].tap()
+        check.tap()
+        XCTAssertTrue(web.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "0 / 3")).firstMatch.waitForExistence(timeout: 5))
+        // Tap alternative to dragging is available to touch and accessibility users.
+        web.switches.matching(NSPredicate(format: "label BEGINSWITH %@", "选择 3.9")).firstMatch.tap()
+        web.buttons["选中点升高 10 微伏"].tap(); web.buttons["选中点升高 10 微伏"].tap()
+        web.switches.matching(NSPredicate(format: "label BEGINSWITH %@", "选择 11.7")).firstMatch.tap()
+        web.buttons["选中点降低 10 微伏"].tap()
+        web.switches.matching(NSPredicate(format: "label BEGINSWITH %@", "选择 19.5")).firstMatch.tap()
+        web.buttons["选中点升高 10 微伏"].tap(); check.tap()
+        XCTAssertTrue(web.staticTexts["三个采样点都已补回，曲线与记录一致。"].waitForExistence(timeout: 5))
+        capture(app, name: "EEG-phone-game")
+        web.buttons["关闭面板"].tap()
+        XCTAssertTrue(web.staticTexts["已保存到本机"].waitForExistence(timeout: 8))
+        app.terminate(); app.launch(); app.buttons["continue-learning"].tap()
+        XCTAssertTrue(web.buttons["动画与互动"].waitForExistence(timeout: 20)); web.buttons["动画与互动"].tap()
+        web.buttons["开始互动：我的调波玩具"].tap()
+        XCTAssertTrue(check.waitForExistence(timeout: 10)); check.tap()
+        XCTAssertTrue(web.staticTexts["三个采样点都已补回，曲线与记录一致。"].waitForExistence(timeout: 5))
+        web.buttons["玩法"].tap()
+        XCTAssertTrue(web.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "完成，3/3")).firstMatch.waitForExistence(timeout: 5))
+        web.buttons["重试本组"].tap()
     }
 
     @MainActor
