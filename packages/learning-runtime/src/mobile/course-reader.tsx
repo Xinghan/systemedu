@@ -9,9 +9,10 @@ import type { Snapshot } from '../host'
 import { assetURL, type CourseLesson, type Exercise, type Slide, type Interaction } from '../content'
 import { receiveCourseArtifact } from '../course-artifacts'
 import { readingPages, restoreReadingPage } from './reading-pages'
+import { Q3Observations } from './q3-observations'
 import { Pager, Sheet } from './primitives'
 
-type Panel = 'contents' | 'work' | 'resources' | 'lecture' | `theory:${string}` | `lab:${string}` | null
+type Panel = 'observations' | 'contents' | 'work' | 'resources' | 'lecture' | `theory:${string}` | `lab:${string}` | null
 
 export function CourseReader({ lesson, initial, onChange, onCommit, tablet = false }: { tablet?: boolean; lesson: CourseLesson; initial: Snapshot; onChange: (state: Snapshot) => void; onCommit: (state: Snapshot) => Promise<void> }) {
   const revised = !!lesson.content_revision && initial.content_revision !== lesson.content_revision
@@ -30,6 +31,7 @@ export function CourseReader({ lesson, initial, onChange, onCommit, tablet = fal
   const inspection = tablet && (panel === 'work' || panel === 'resources' || panel?.startsWith('theory:'))
   const sections = [...new Set(pages.map(p => p.section))]
   const resolve = (url: string) => assetURL(url, lesson.asset_base)
+  const q3Table = '/content/assets/lightkurve-transit-detective/downloads/kepler10-q3.csv'
   const interactions = lesson.interactions ?? [], theories = lesson.theories ?? [], slides = lesson.slides ?? []
   useEffect(() => onChange({ ...initial, note, answers, frames: {}, shared_workspace: workspace, page_index: index, reader_page: page?.id, slide_index: slideIndex, self_completed: completed, previous_completion: previousCompletion, content_revision: lesson.content_revision, content_version: lesson.content_version, module_id: lesson.module_id, library_slug: lesson.course_id }), [note, answers, workspace, index, slideIndex, completed, onChange, lesson, page?.id])
   async function commitWorkspace(next: Record<string,string>) {
@@ -49,7 +51,9 @@ export function CourseReader({ lesson, initial, onChange, onCommit, tablet = fal
         return <p className="muted" key={i}>{kind} · {id}：源课程未提供此资源。</p>
       }
       return <ReactMarkdown key={i} remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[[rehypeKatex, { trust: false, strict: false }]]} components={{
-        a: ({ href, children }) => <a href={href ? resolve(href) : undefined} target="_blank" rel="noreferrer">{children} ↗</a>,
+        a: ({ href, children }) => href && resolve(href) === q3Table
+          ? <button type="button" className="inline-material" onClick={() => setPanel('observations')}>{children}</button>
+          : <a href={href ? resolve(href) : undefined} target="_blank" rel="noreferrer">{children} ↗</a>,
         img: ({ src, alt }) => <img src={typeof src === 'string' ? resolve(src) : undefined} alt={alt ?? ''} loading="lazy"/>,
         table: ({ children }) => <div className="table-detail">{children}</div>,
         tr: ({ children }) => <dl>{children}</dl>, th: ({ children }) => <dt>{children}</dt>, td: ({ children }) => <dd>{children}</dd>,
@@ -57,21 +61,25 @@ export function CourseReader({ lesson, initial, onChange, onCommit, tablet = fal
       }}>{chunk}</ReactMarkdown>
     })
   }
+  const position = lesson.course_position
   const resources = [...(lesson.resources ?? []), ...(lesson.downloads ?? []), ...Object.values(lesson.external_resources ?? {}).flatMap(v => Array.isArray(v) ? v : [])].filter(r => r.url)
   const activeTheory = panel?.startsWith('theory:') ? theories.find(t => t.theory_id === panel.slice(7) || t.aliases?.includes(panel.slice(7))) : null
   const activeLab = panel?.startsWith('lab:') ? interactions.find(t => t.id === panel.slice(4)) : null
   return <div className={`mobile-reader course-reader${tablet ? ' tablet-reader' : ''}${inspection ? ' has-inspector' : ''}`}>
-    {tablet && <aside className="tablet-outline" aria-label="课节内容导航"><p className="overline">{lesson.module_id} / 学习内容</p><h2>{lesson.title}</h2><nav>{sections.map((s, i) => <button key={s} aria-current={s === page?.section ? 'step' : undefined} onClick={() => setIndex(pages.findIndex(p => p.section === s))}><span>{String(i + 1).padStart(2, '0')}</span>{s}</button>)}</nav><p className="muted">原课文、讲课与实验均保留。学习进度记录在本机。</p></aside>}
+    {tablet && <aside className="tablet-outline" aria-label="课节内容导航"><p className="overline">{lesson.module_id} / 学习内容</p><h2>{lesson.title}</h2><nav>{sections.map((s, i) => <button key={s} aria-current={s === page?.section ? 'step' : undefined} onClick={() => setIndex(pages.findIndex(p => p.section === s))}><span>{String(i + 1).padStart(2, '0')}</span>{s}</button>)}</nav></aside>}
     <header className="reading-heading"><button onClick={() => setPanel('contents')} aria-label="打开课文目录"><List size={18}/><span>{lesson.module_id} · 本节目录</span></button><button onClick={() => setPanel('lecture')} disabled={!slides.length}><Presentation size={17}/>讲课</button></header>
     <div className="section-progress" aria-hidden="true">{sections.map((s, i) => <span key={s} data-active={i <= sections.indexOf(page?.section)}/>)}</div>
     <article className="reading-card" key={tablet ? page?.section : page?.id} aria-label={`课文第 ${index + 1} 页`} tabIndex={0}>
-      <p className="overline">{tablet ? `阅读 · ${Math.max(1, sections.indexOf(page?.section) + 1)} / ${sections.length}` : page?.fields ? `逐项对照 · ${page.row} / ${page.rows}` : `阅读 · ${index + 1}`}</p>
+      {position && <div className="lesson-location"><strong>{position.course}</strong><span>第 {position.number} 节，共 {position.total} 节</span>{position.stage && <span>{position.stage}</span>}</div>}
+      <p className="overline">{tablet ? `本节第 ${Math.max(1, sections.indexOf(page?.section) + 1)} / ${sections.length} 部分` : page?.fields ? `逐项对照 · ${page.row} / ${page.rows}` : `阅读 · ${index + 1}`}</p>
       <h1>{page?.section ?? lesson.title}</h1>
+      {lesson.mission_brief && (tablet ? sections[0] === page?.section : index === 0) && <aside className="mission-brief"><strong>{lesson.mission_brief.speaker}给你的任务</strong><p>{lesson.mission_brief.message}</p></aside>}
       {tablet ? <TabletSection pages={sectionPages} render={markdown}/> : page?.fields ? <dl className="comparison-card">{page.fields.map((field, i) => <div key={i}><dt>{markdown(field.label)}</dt><dd>{markdown(field.value || '—')}</dd></div>)}</dl> : <div className="reading-prose">{page ? markdown(page.markdown) : <p>本节暂未提供正文，可先查看作业与学习资料。</p>}</div>}
       {pages.length > 0 && (tablet ? page?.section === pages.at(-1)?.section : index >= pages.length - 1) && <button className="wide-button" onClick={() => setCompleted(!completed)}><CheckCircle size={18}/>{completed ? '已标记读完 · 撤销' : '标记为已读完'}</button>}
     </article>
     <div className="reader-controls"><Pager index={tablet ? Math.max(0, sections.indexOf(page?.section)) : Math.max(0, Math.min(index, pages.length - 1))} count={Math.max(1, tablet ? sections.length : pages.length)} onChange={i => setIndex(tablet ? pages.findIndex(p => p.section === sections[i]) : i)}/><div className="reader-actions"><button onClick={() => setPanel('work')}><NotebookPen size={18}/>练习与笔记</button><button onClick={() => setPanel('resources')}><Play size={18}/>动画与互动</button></div></div>
-    {panel === 'contents' && <Sheet title="本节阅读路径" onClose={() => setPanel(null)}><p>{lesson.core_question}</p><div className="contents-list">{sections.map((s, i) => <button key={s} onClick={() => { setIndex(pages.findIndex(p => p.section === s)); setPanel(null) }}><span>{i + 1}</span><strong>{s}</strong></button>)}</div></Sheet>}
+    {panel === 'observations' && <Sheet title="Q3 观测表" onClose={() => setPanel(null)}><Q3Observations url={q3Table} onNote={() => { setWorkView('note'); setPanel('work') }}/></Sheet>}
+    {panel === 'contents' && <Sheet title="本节阅读路径" onClose={() => setPanel(null)}><p>{lesson.core_question}</p>{lesson.learning_output && <p><strong>本节要留下什么</strong>　{lesson.learning_output}</p>}<div className="contents-list">{sections.map((s, i) => <button key={s} onClick={() => { setIndex(pages.findIndex(p => p.section === s)); setPanel(null) }}><span>{i + 1}</span><strong>{s}</strong></button>)}</div></Sheet>}
     {panel === 'work' && <Sheet docked={tablet} title="练习与笔记" onClose={() => setPanel(null)} footer={<label className="work-selector">选择练习内容<select aria-label="选择练习内容" value={workView} onChange={e=>setWorkView(e.target.value)}><option value="note">我的笔记与作业说明</option>{lesson.content_history && <option value="history">修订前的学习记录</option>}{lesson.assignment && <option value="assignment">阅读作业要求</option>}{(lesson.response_prompts ?? []).map((p,i)=><option value={'prompt:'+i} key={'p'+i}>{p.title}</option>)}{(lesson.assessments ?? []).filter(a=>a.questions.length).map(a=><option key={a.id} value={'assessment:'+a.id}>{a.title}</option>)}{interactions.filter(i=>i.exercises.length).map(i=><option key={i.id} value={'exercise:'+i.id}>{i.title}</option>)}</select></label>}>
       <p className="muted">答案和笔记保存在本机，可导出。本机练习和读完标记不代表正式评分。</p>
       {workView === "assignment" && <DocumentPages text={lesson.assignment} render={markdown}/>}

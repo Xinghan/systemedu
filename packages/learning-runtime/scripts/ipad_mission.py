@@ -54,7 +54,7 @@ def export_ipad_mission(repo: Path, out: Path, catalog):
     # Legacy editions stay reachable from the original project collection.
     project_ids += [c for c in courses if c.endswith('-legacy-v1') and c.removesuffix('-legacy-v1') in project_ids]
     result = dict(schemaVersion=1,id='space',version=source['version'],title=source['mission'],
-                  homeImage=asset('/mission/space/research-control-room-v1-1536.webp'),
+                  commander=source['commander'], homeImage=asset('/mission/space/research-control-room-v1-1536.webp'),
                   mapImage=asset('/mission/rover/campus-map-v1.webp'),
                   stations=stations,nodes=destinations,micro=micro,research=side,
                   courseIds=project_ids,films=films,bridges=source['bridges'])

@@ -4,6 +4,7 @@ import type { SpaceStage } from "./space-stage-films"
 
 export type MissionModule = typeof data.modules[number]
 export type MissionStation = Omit<typeof data.stations[number], "level" | "film"> & { level: SpaceStage; film: SpaceStage | null }
+export const SPACE_COMMANDER = data.commander
 export const MISSION_STATIONS = data.stations as MissionStation[]
 export const MISSION_MODULES = data.modules
 export const MISSION_STEPS = MISSION_STATIONS.flatMap(s => s.steps)

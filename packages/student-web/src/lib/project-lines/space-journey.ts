@@ -28,8 +28,8 @@ export function journeyProject(id: string) {
   // This newer research course is supplied by the content service, outside the legacy snapshots.
   // Summary follows its existing course manifest; availability is still checked by /library/[slug].
   const full = snapshots.find(p => p.slug === id) ?? (id === "lightkurve-transit-detective" ? {
-    title_zh: "抓住行星的影子 — 可复跑的真实凌星调查",
-    outcome: "真实光变数据、可复跑的分析程序与独立片段验证报告",
+    title_zh: "抓住行星的影子",
+    outcome: "用两个季度的星光记录检验同一个预测，并留下可以核对的分析报告",
     coverImage: "",
   } : undefined)
   if (!local && !full) throw new Error(`Missing journey project: ${id}`)

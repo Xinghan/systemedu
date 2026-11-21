@@ -36,3 +36,39 @@ test('guided workspaces include authored final-delivery metadata and a real driv
   assert.ok(lesson.interactions.some(i=>i.path==='/project-lines/space-exploration/write-driving-rules/index.html'))
   assert.ok(read('content/guided/assemble-a-rover-legacy-v1.json').legacy_edition)
 })
+
+test('Mars briefings cover every station and project, including the transit investigation', () => {
+  const mission = read('content/missions/space.json')
+  const catalog = read('content/catalog.json')
+  assert.equal(mission.commander.name, '林岚')
+  assert.equal(new Set(mission.stations.map(s => s.learnerRole)).size, mission.stations.length)
+  for (const station of mission.stations) assert.ok(station.briefing.length > 20, station.id)
+  for (const slug of mission.courseIds.filter(id => !id.endsWith('-legacy-v1'))) {
+    assert.ok(mission.commander.projects[slug], slug)
+    const course = catalog.courses.find(c => c.id === slug)
+    const lesson = read(course.modules[0].path)
+    assert.ok(lesson.mission_brief?.speaker === '林岚' || lesson.lesson.includes('林岚'), slug)
+  }
+})
+
+test('transit reader supplies the actual Q3 evidence at first use and locates every lesson', () => {
+  const course = read('content/catalog.json').courses.find(c => c.id === 'lightkurve-transit-detective')
+  course.modules.forEach((node, i) => {
+    const lesson = read(node.path)
+    assert.equal(lesson.course_position.number, i + 1)
+    assert.equal(lesson.course_position.total, 32)
+    assert.ok(lesson.course_position.stage && lesson.learning_output)
+    assert.ok(!lesson.lesson.includes('/preview/lightkurve/'))
+    for (const [ , rel ] of lesson.lesson.matchAll(/\/api\/library\/projects\/lightkurve-transit-detective\/files\/([^\s)]+)/g)) {
+      assert.ok(existsSync(path.join(root, 'content/assets', course.id, rel)), rel)
+    }
+  })
+  const section = read(course.modules[0].path).lesson.split('## 先描述看到的变化，再讨论原因')[1].split('\n## ')[0]
+  assert.match(section, /!\[.+?\]\(.+?kepler10-q3\.png\)/)
+  assert.match(section, /\[Q3 观测表（CSV）\]\(.+?kepler10-q3\.csv\)/)
+  const assets = path.join(root, 'content/assets', course.id)
+  const table = readFileSync(path.join(assets,'downloads/kepler10-q3.csv'),'utf8').trimEnd().split('\n')
+  const measurements = JSON.parse(readFileSync(path.join(assets,'practice/browser/development.json'),'utf8')).points
+  assert.equal(measurements.length, table.length - 1)
+  measurements.forEach((p,i) => assert.deepEqual(table[i+1].split(',').map(cell => cell === '' ? null : Number(cell)), [p.cadenceno,p.time_bkjd,p.pdcsap_flux,p.quality]))
+})

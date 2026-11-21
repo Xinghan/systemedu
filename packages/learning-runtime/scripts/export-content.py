@@ -56,16 +56,24 @@ def export(source, out, *, preview_ios_drafts=False):
     def line(slug, fallback):
         field=taxonomy.get(slug,{}).get('primary')
         return next((x['id'] for x in lines if x['fieldId']==field), fallback)
+    commander = read(LIB / "space-curriculum.json")["commander"]
     def finish(slug,title,version,line_id,kind,stages,modules,root,source_route,revision=None):
         if not modules: raise ValueError(f'Empty course {slug}')
         if len({m['module_id'] for m in modules})!=len(modules): raise ValueError(f'Duplicate nodes {slug}')
         index=[]
         for m in modules:
-            m.update(course_id=slug,content_version=str(version))
+            stage_id = m.get('stage_id', '')
+            stage = next((s for s in stages if s.get('stage_id', s.get('id')) == stage_id), {})
+            m.update(course_id=slug, content_version=str(version), course_position={
+                'course': title, 'stage': stage.get('title', ''), 'number': len(index) + 1, 'total': len(modules)
+            })
             # Source IDs are retained; content version isolates changed numbering/meaning.
             activity=f'course:{slug}:{version}:{m["module_id"]}'
             if not re.fullmatch(r'[A-Za-z0-9_.:-]+',activity): raise ValueError(activity)
             path=f'content/modules/{digest(activity.encode())[:24]}.json'
+            project_brief = commander['projects'].get(slug)
+            if project_brief and not index and slug != 'lightkurve-transit-detective':
+                m['mission_brief'] = {'speaker': commander['name'], 'message': project_brief}
             write(out/path,m)
             index.append(dict(id=activity,moduleId=m['module_id'],title=m['title'],stage=m.get('stage_id',''),path='/'+path,minutes=m.get('estimated_minutes') or 0,dependsOn=m.get('depends_on',[])))
         c=dict(id=slug,title=title,version=str(version),lineId=line_id,kind=kind,stages=[dict(id=s.get('stage_id',s.get('id','')),title=s.get('title','')) for s in stages],modules=index,sourceRoute=source_route)
@@ -139,6 +147,7 @@ def export(source, out, *, preview_ios_drafts=False):
             if record_path.exists():
                 record=read(record_path);track(record_path)
                 m['response_prompts']=record.get('response_prompts',[])
+                m['learning_output']=record.get('output', '')
                 m['foundations']=record.get('foundations',[])
                 m['resources']+=record.get('resources',[])
                 m['assessments']=[dict(id='quiz',title='理解自测',questions=record.get('quiz',[])),dict(id='exam',title='阶段检验',questions=record.get('exam',[]))]

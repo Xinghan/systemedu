@@ -4,7 +4,7 @@ import { useEffect, useState } from "react"
 import { myProjects } from "@/lib/api"
 import { getToken } from "@/lib/auth"
 
-function CourseImage({ src, alt, authenticated }: { src: string; alt: string; authenticated: boolean }) {
+export function CourseImage({ src, alt, authenticated }: { src: string; alt: string; authenticated: boolean }) {
   const [loaded, setLoaded] = useState<{ source: string; url?: string; failed?: boolean } | null>(null)
   useEffect(() => {
     if (!authenticated) return
@@ -23,7 +23,7 @@ function CourseImage({ src, alt, authenticated }: { src: string; alt: string; au
   }, [src, authenticated])
   const current = loaded?.source === src ? loaded : null
   const imageSrc = authenticated ? current?.url : src
-  if (!imageSrc) return <p role="status" className="text-sm text-[var(--sub)]">{current?.failed ? "图片未能加载 / Image unavailable" : "正在加载图片 / Loading image"}</p>
+  if (!imageSrc) return <span role="status" className="text-sm text-[var(--sub)]">{current?.failed ? "图片未能加载 / Image unavailable" : "正在加载图片 / Loading image"}</span>
   // eslint-disable-next-line @next/next/no-img-element
   return <img src={imageSrc} alt={alt} className="h-auto w-full rounded-lg object-contain" />
 }

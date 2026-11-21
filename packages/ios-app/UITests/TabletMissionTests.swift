@@ -64,4 +64,44 @@ final class TabletMissionTests: XCTestCase {
         app.buttons["ipad-area-home"].tap()
     }
 
+    @MainActor func testTransitEvidenceFromProjectLibrary() throws {
+        XCUIDevice.shared.orientation = .landscapeLeft
+        let app = XCUIApplication()
+        app.launch()
+        app.buttons["ipad-area-library"].tap()
+        app.buttons["ipad-library-transit"].tap()
+        let web = app.webViews.firstMatch
+        let next = web.buttons["下一页"]
+        XCTAssertTrue(next.waitForExistence(timeout: 20))
+        // Select by its section title so this also works with an existing bookmark.
+        web.buttons.matching(NSPredicate(format: "label CONTAINS %@", "先描述看到的变化")).firstMatch.tap()
+        let plot = web.images.matching(NSPredicate(format: "label CONTAINS %@", "Q3 的实测光变曲线")).firstMatch
+        XCTAssertTrue(plot.waitForExistence(timeout: 10))
+        XCTAssertTrue(web.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "共 32 节")).firstMatch.exists)
+        capture("Transit-Q3-real-data")
+        let file = web.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Q3 观测表")).firstMatch
+        XCTAssertTrue(file.exists)
+        file.tap()
+        XCTAssertTrue(web.staticTexts["321.4415"].waitForExistence(timeout: 10))
+        XCTAssertTrue(web.staticTexts["323.5461"].exists)
+        capture("Transit-Q3-measurements")
+        web.buttons["写下我的观察"].tap()
+        let note = web.textViews.firstMatch
+        XCTAssertTrue(note.waitForExistence(timeout: 5))
+        let marker = "Q3-" + String(UUID().uuidString.prefix(6))
+        note.tap(); note.typeText(marker)
+        web.buttons["关闭面板"].tap()
+        XCTAssertTrue(web.staticTexts["已保存到本机"].waitForExistence(timeout: 15))
+        app.terminate()
+        app.launch()
+        app.buttons["ipad-area-library"].tap()
+        app.buttons["ipad-library-transit"].tap()
+        XCTAssertTrue(plot.waitForExistence(timeout: 20))
+        web.buttons["练习与笔记"].tap()
+        XCTAssertTrue(note.waitForExistence(timeout: 5)); XCTAssertTrue((note.value as? String)?.contains(marker) == true)
+        web.buttons["关闭面板"].tap()
+        app.buttons["下一节"].tap()
+        XCTAssertTrue(web.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "第 2 节，共 32 节")).firstMatch.waitForExistence(timeout: 15))
+    }
+
 }

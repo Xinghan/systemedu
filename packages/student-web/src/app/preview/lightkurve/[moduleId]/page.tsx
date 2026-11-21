@@ -35,13 +35,16 @@ export default async function Page({ params, searchParams }: { params: Promise<{
     media_url: resource.media_url && !/^(https?:|data:|\/)/.test(resource.media_url) ? media(resource.media_url) : resource.media_url,
     poster_url: resource.poster_url && !/^(https?:|data:|\/)/.test(resource.poster_url) ? media(resource.poster_url) : resource.poster_url,
   }))
-  const content: CourseContent = { ...sections, theories: Array.isArray(rawTheories) ? rawTheories : rawTheories.theories, plan_markdown: plan }
+  const localMaterials = (text: string) => text.replace(/\]\(\/api\/library\/projects\/lightkurve-transit-detective\/files\/([A-Za-z0-9._/-]+)\)/g, (_, file: string) => `](${lightkurveMediaUrl(file)})`)
+  const content: CourseContent = { ...sections, theories: Array.isArray(rawTheories) ? rawTheories : rawTheories.theories, plan_markdown: localMaterials(plan) }
   const modules = manifest.knodes.map(item => {
     const node = tree.modules.find(node => node.module_id === item.module_id)
     return { id: item.module_id, title: node?.title || item.title || item.module_id, stage: node?.stage_id || item.stage_id || "course" }
   })
   const stages = tree.stages.map(stage => ({ id: stage.stage_id, title: stage.title }))
   for (const node of modules) if (!stages.some(stage => stage.id === node.stage)) stages.push({ id: node.stage, title: node.stage === "course" ? "课程节点" : node.stage })
-  const contentVersion = createHash("sha256").update(JSON.stringify({ record: rawRecord, assignment })).digest("hex").slice(0, 32)
-  return <LightkurveCoursePreview key={moduleId} moduleId={moduleId} courseTitle={manifest.title || "Lightkurve · 寻找系外行星凌星"} modules={modules} stages={stages} knodeDir={dir} content={content} slides={slides} images={images} audio={audio} assignment={assignment} recordConfig={recordConfig} contentVersion={contentVersion} initialView={lightkurveView(search.view)} initialLabMode={search.mode === "animation" ? "animation" : "game"} />
+  const fingerprint = createHash("sha256").update(JSON.stringify({ record: rawRecord, assignment })).digest("hex").slice(0, 32)
+  // This edition adds material links to M01 while retaining its questions and submission fields.
+  const contentVersion = moduleId === "M01" && fingerprint === "7f9502bbef2fbfa365e2c3443ecbcbbb" ? "a8c95f4009f87c0d050ab00069f6597f" : fingerprint
+  return <LightkurveCoursePreview key={moduleId} moduleId={moduleId} courseTitle={manifest.title || "Lightkurve · 寻找系外行星凌星"} modules={modules} stages={stages} knodeDir={dir} content={content} slides={slides} images={images} audio={audio} assignment={localMaterials(assignment)} recordConfig={recordConfig} contentVersion={contentVersion} initialView={lightkurveView(search.view)} initialLabMode={search.mode === "animation" ? "animation" : "game"} />
 }

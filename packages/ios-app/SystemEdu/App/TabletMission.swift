@@ -8,9 +8,18 @@ struct TabletMissionNode: Decodable, Identifiable {
         switch mode { case "support": return "补充学习"; case "optional": return "选学"; case "replaced": return "旧版参考"; case "experience": return "动手体验"; case "optional-research": return "拓展研究"; default: return "主线课节" }
     }
 }
+struct MissionCommander: Decodable {
+    let name: String
+    let title: String
+    let research: String
+    let projects: [String: String]
+    var signature: String { "\(name) · \(title)" }
+}
+
 struct TabletStation: Decodable, Identifiable {
     let id: String; let code: String; let place: String; let message: String; let handoff: String
     let input: String; let gate: String; let film: Int?; let steps: [String]; let projects: [String]
+    let briefing: String; let learnerRole: String
     let x: Double; let y: Double; let image: String
 }
 struct TabletFilm: Decodable, Identifiable {
@@ -19,6 +28,7 @@ struct TabletFilm: Decodable, Identifiable {
 struct TabletBridge: Decodable, Identifiable { let id: String; let title: String; let status: String; let acceptance: String }
 struct TabletMission: Decodable {
     let schemaVersion: Int; let id: String; let version: String; let title: String
+    let commander: MissionCommander
     let homeImage: String; let mapImage: String; let stations: [TabletStation]
     let nodes: [TabletMissionNode]; let micro: [TabletMissionNode]; let research: [TabletMissionNode]
     let courseIds: [String]; let films: [TabletFilm]; let bridges: [TabletBridge]

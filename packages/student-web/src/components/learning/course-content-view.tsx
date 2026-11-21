@@ -1,5 +1,7 @@
 "use client"
 
+import { CourseImage } from "./course-slide-images"
+import { CourseMaterialLink, courseMaterial } from "./course-material-link"
 import { useCourseMedia } from "./course-media-context"
 import { PersistentTheoryQuiz } from "./persistent-question"
 import { NodeAssignmentPanel } from "./node-assignment-panel"
@@ -531,6 +533,8 @@ function MarkdownBlock({ content }: { content: string }) {
           <blockquote className="border-l-2 border-primary/40 pl-4 italic text-on-surface-variant my-4">{children}</blockquote>
         ),
         a: ({ href, children, node }) => {
+          const material = courseMaterial(href)
+          if (material) return <CourseMaterialLink material={material}>{children}</CourseMaterialLink>
           const videoId = href ? extractYouTubeId(href) : null
           if (videoId) {
             // Check if hast node contains an <img> child (thumbnail embed style: [![alt](src)](href))
@@ -604,10 +608,13 @@ function MarkdownBlock({ content }: { content: string }) {
             </a>
           )
         },
-        img: ({ src, alt }) => (
+        img: ({ src, alt }) => {
+          const material = courseMaterial(typeof src === "string" ? src : undefined)
+          if (material) return <CourseImage src={material.url} alt={alt ?? ""} authenticated />
+          return (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={src} alt={alt || ""} className="max-w-full h-auto rounded-lg block" />
-        ),
+        )},
         table: ({ children }) => (
           <div className="overflow-x-auto my-4">
             <table className="w-full border-collapse text-sm">{children}</table>

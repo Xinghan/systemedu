@@ -18,6 +18,13 @@ struct TabletMissionView: View {
     private var station: TabletStation { mission.stations.first { $0.id == stationID } ?? mission.stations[0] }
     private var resume: TabletMissionNode { mission.resume(store.records) }
 
+    private var returning: Bool { store.records.contains { $0.id == resume.activityId } }
+    private var currentBriefing: String {
+        if !returning { return mission.stations[0].briefing }
+        let project = resume.ref.components(separatedBy: ":")[0]
+        return mission.commander.projects[project] ?? station.briefing
+    }
+
     var body: some View {
         NavigationStack(path: $path) {
             GeometryReader { size in
@@ -49,8 +56,11 @@ struct TabletMissionView: View {
                 case .catalog: CatalogView(store: store)
                 case .course(let c): CourseOutlineView(course: c, store: store)
                 case .activity(let activity): TabletLessonView(activity: activity, mission: mission, store: store, onMap: { selected in
-                    if let n = mission.allNodes.first(where: { $0.activityId == selected.rawValue }), n.station != "research" { stationID = n.station }
-                    area = .map; path = []
+                    if let n = mission.allNodes.first(where: { $0.activityId == selected.rawValue }), n.station != "research" {
+                        stationID = n.station; area = .map; path = []
+                    } else if let course = ContentCatalog.current?.courses.first(where: { $0.modules.contains { $0.id == selected.rawValue } }) {
+                        area = .library; path = [.course(course)]
+                    } else { area = .library; path = [] }
                 })
                 }
             }
@@ -97,9 +107,9 @@ struct TabletMissionView: View {
                     ZStack(alignment: .leading) {
                         BundledMissionImage(path: mission.homeImage).overlay(LinearGradient(colors: [.black.opacity(0.82), .black.opacity(0.16)], startPoint: .leading, endPoint: .trailing))
                         VStack(alignment: .leading, spacing: 18) {
-                            Text("一次完整的探索，从这里开始").font(.subheadline).foregroundStyle(Color(red: 0.79, green: 0.86, blue: 0.72))
-                            Text("从观察火星，\n到完成自己的探测任务。").font(.system(size: size.size.width > 900 ? 38 : 30, weight: .medium, design: .serif)).lineSpacing(9)
-                            Text("选择目标、设计车辆、训练视觉，\n再用实际结果检验你的方案。").font(.body).lineSpacing(6).foregroundStyle(.white.opacity(0.8))
+                            Text(mission.commander.signature).font(.subheadline).foregroundStyle(Color(red: 0.79, green: 0.86, blue: 0.72))
+                            Text(returning ? "回来啦，接着做你的任务。" : "欢迎来基地，观测员。").font(.system(size: size.size.width > 900 ? 38 : 30, weight: .medium, design: .serif)).lineSpacing(9)
+                            Text(currentBriefing).frame(maxWidth: 620, alignment: .leading).font(.body).lineSpacing(6).foregroundStyle(.white.opacity(0.8))
                             HStack(spacing: 12) {
                                 Button { open(resume) } label: { Label(store.records.contains { $0.id == resume.activityId } ? "继续学习" : "开始第一次观察", systemImage: "arrow.right") }
                                     .buttonStyle(.borderedProminent).tint(Color(red: 0.82, green: 0.89, blue: 0.65)).foregroundStyle(Color.forest).accessibilityIdentifier("ipad-resume")
@@ -113,7 +123,12 @@ struct TabletMissionView: View {
                         homeCard("完整课程与作品", detail: "课文、视频、实验和资料", symbol: "books.vertical") { area = .library }
                         homeCard("留下学习过程", detail: "回看笔记和实验记录", symbol: "square.and.pencil") { area = .records }
                     }
-                    Text("初次体验不需要器材。后续实物制作另有材料要求；可先学习数字部分。")
+                    if returning, let currentStation = mission.stations.first(where: { $0.id == resume.station }) {
+                        let lessons = mission.lessons(currentStation)
+                        let readCount = lessons.filter { mission.isRead($0, records: store.records) }.count
+                        Text("你在" + currentStation.place + "担任" + currentStation.learnerRole + "。本站已标记读完 " + String(readCount) + " / " + String(lessons.count) + " 节。").font(.subheadline)
+                    }
+                    Text("初次体验可直接在 iPad 上操作。实物课会另行说明材料和设备要求。")
                         .font(.caption).foregroundStyle(Color.quiet)
                 }.padding(26)
             }
@@ -177,7 +192,8 @@ struct TabletMissionView: View {
             VStack(alignment: .leading, spacing: 16) {
                 Text("\(station.code) / 当前任务").font(.caption.monospaced()).foregroundStyle(Color.rust)
                 Text(station.place).font(.title2.weight(.semibold))
-                Text(station.message).font(.headline).lineSpacing(4)
+                Text(mission.commander.signature + "　·　你的职责是" + station.learnerRole).font(.caption).foregroundStyle(Color.rust)
+                Text(station.briefing).font(.headline).lineSpacing(4)
                 if let number = station.film, let f = mission.films.first(where: { $0.id == "stage-\(number)" }) {
                     Button { film = f } label: { Label("观看任务简报", systemImage: "play.rectangle") }.buttonStyle(.bordered).accessibilityIdentifier("ipad-station-film")
                 }
@@ -187,6 +203,12 @@ struct TabletMissionView: View {
                 DisclosureGroup("补充与原版课节") {
                     ForEach(mission.nodes.filter { $0.station == station.id && !station.steps.contains($0.ref) }) { node in nodeButton(node) }
                 }.font(.subheadline)
+                if station.id == "first-contact", let node = mission.research.first {
+                    Divider()
+                    Text("选学任务 · 抓住行星的影子").font(.headline)
+                    Text(mission.commander.research).font(.subheadline).lineSpacing(4)
+                    Button("接下凌星调查") { open(node) }.accessibilityIdentifier("ipad-start-transit")
+                }
                 Divider()
                 Text("这一站的成果").font(.headline)
                 Text(station.handoff).font(.subheadline).lineSpacing(5)
@@ -210,6 +232,15 @@ struct TabletMissionView: View {
     }
     private var library: some View {
         List {
+            if let node = mission.research.first {
+                Section("林岚的选学任务") {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("抓住行星的影子").font(.headline)
+                        Text(mission.commander.research).font(.subheadline)
+                        Button("开始凌星调查") { open(node) }.accessibilityIdentifier("ipad-library-transit")
+                    }.padding(.vertical, 6)
+                }
+            }
             Section("项目影片 · 保留全部原片") {
                 ForEach(mission.films) { f in Button { film = f } label: { Label(f.title, systemImage: "play.rectangle").padding(.vertical, 6) } }
             }
@@ -243,21 +274,37 @@ private struct TabletLessonView: View {
     let mission: TabletMission
     @ObservedObject var store: LearningStore
     let onMap: (LearningActivity) -> Void
-    private var index: Int? { mission.mainSequence.firstIndex { $0.activityId == activity.rawValue } }
+    private var course: ContentCourse? { ContentCatalog.current?.courses.first { $0.modules.contains { $0.id == activity.rawValue } } }
+    private var onMainRoute: Bool { mission.mainSequence.contains { $0.activityId == activity.rawValue } }
+    private var sequence: [LearningActivity] {
+        onMainRoute ? mission.mainSequence.map(\.activity) : (course?.modules.map(\.activity) ?? [])
+    }
+    private var index: Int? { sequence.firstIndex(of: activity) }
+    private var briefing: String? { course.flatMap { mission.commander.projects[$0.id] } }
+    @State private var showBriefing = false
     var body: some View {
         ClassroomView(activity: activity, store: store, onOpenActivity: { activity = $0 }, onMissionMap: { onMap(activity) }).id(activity.rawValue)
             .navigationBarBackButtonHidden()
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) { Button { onMap(activity) } label: { Label("任务地图", systemImage: "map") }.accessibilityIdentifier("ipad-back-map") }
+                ToolbarItem(placement: .topBarLeading) { Button { onMap(activity) } label: { Label(onMainRoute ? "任务地图" : "课程目录", systemImage: onMainRoute ? "map" : "list.bullet") }.accessibilityIdentifier("ipad-back-map") }
                 ToolbarItem(placement: .topBarTrailing) {
                     HStack {
+                        if briefing != nil {
+                            Button("任务简报") { showBriefing = true }
+                                .popover(isPresented: $showBriefing) {
+                                    VStack(alignment: .leading, spacing: 12) {
+                                        Text(mission.commander.signature).font(.caption).foregroundStyle(Color.rust)
+                                        Text(briefing ?? "").lineSpacing(5)
+                                    }.padding(22).frame(idealWidth: 350)
+                                }
+                        }
                         Button("上一节") { move(-1) }.disabled(index == nil || index == 0)
-                        Button("下一节") { move(1) }.disabled(index == nil || index == mission.mainSequence.count - 1)
+                        Button("下一节") { move(1) }.disabled(index == nil || index == sequence.count - 1)
                     }
                 }
             }
     }
-    private func move(_ delta: Int) { if let i = index, mission.mainSequence.indices.contains(i + delta) { activity = mission.mainSequence[i + delta].activity } }
+    private func move(_ delta: Int) { if let i = index, sequence.indices.contains(i + delta) { activity = sequence[i + delta] } }
 }
 
 struct TabletFilmView: View {

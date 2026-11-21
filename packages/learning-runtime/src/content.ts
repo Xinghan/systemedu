@@ -8,6 +8,9 @@ export interface CourseLesson {
   resources: Resource[]; theories: Theory[]; slides: Slide[]; interactions: Interaction[]; external_resources?: Record<string, Resource[]>
   foundations?: {id: string; title: string; body_markdown: string}[]; assessments?: {id: string; title: string; questions: Exercise[]}[]; downloads?: Resource[]
   lab_url?: string; response_prompts?: { title: string; hint?: string; example?: string; fields: {id: string; label: string; type: string; options?: string[]; placeholder?: string}[] }[]
+  course_position?: { course: string; stage: string; number: number; total: number }
+  mission_brief?: { speaker: string; message: string }
+  learning_output?: string
   content_revision?: string
   content_history?: { revision: string; title: string; notice: string; questions: {key: string; question: string; options?: string[]}[] }
 }
