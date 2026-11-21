@@ -5,10 +5,11 @@ import { MobileHand } from "./mobile/hand"
 import { MobileLanding } from "./mobile/landing"
 import { MobileReader } from "./mobile/reader"
 import "./shell.css"
-import { CourseReader } from "./mobile/course-reader"
+import { CourseReader, InteractiveFrame } from "./mobile/course-reader"
 import { loadLesson, type CourseLesson } from "./content"
 
 function Classroom({ host, initial, activity, lesson }: { host: LearningHost; initial: Snapshot; activity: ReturnType<typeof activityFrom>; lesson?: CourseLesson }) {
+  const tablet = new URLSearchParams(location.search).get('presentation') === 'tablet'
   const [status, setStatus] = useState("记录保存在本机")
   const latest = useRef<Snapshot | null>(null), saving = useRef<Promise<void> | null>(null), mounted = useRef(true)
   const save = useCallback(async () => {
@@ -40,11 +41,16 @@ function Classroom({ host, initial, activity, lesson }: { host: LearningHost; in
     resize(); viewport?.addEventListener("resize", resize)
     return () => viewport?.removeEventListener("resize", resize)
   }, [])
-  return <div className="classroom-shell">
+  return <div className={tablet ? 'classroom-shell tablet-classroom' : 'classroom-shell'}>
     <header className="session-bar"><span role="status"><i/>{status}</span><button onClick={() => { void save().then(() => host.exportState()).catch(() => setStatus("导出失败，请重试")) }}>导出记录 ↗</button></header>
-    {lesson ? <CourseReader lesson={lesson} initial={initial} onChange={change} onCommit={async state => { change(state); await save() }}/> : activity === "mechanical-hand" ? <MobileHand initial={initial} onChange={change} assetBase={assetBase}/> :
+    {activity === "course:space-exploration:1.0:JOURNEY" ? <Dossier initial={initial} onChange={change}/> : lesson ? <CourseReader tablet={tablet} lesson={lesson} initial={initial} onChange={change} onCommit={async state => { change(state); await save() }}/> : activity === "mechanical-hand" ? <MobileHand initial={initial} onChange={change} assetBase={assetBase}/> :
       activity === "mars-landing" ? <MobileLanding initial={initial} onChange={change} assetBase={assetBase}/> : <MobileReader initial={initial} onChange={change}/>}
   </div>
+}
+
+function Dossier({initial, onChange}: {initial: Snapshot; onChange: (state: Snapshot) => void}) {
+  const [workspace, setWorkspace] = useState((initial.shared_workspace as Record<string,string>) ?? {})
+  return <InteractiveFrame mobile path="/embedded.html?family=mission" title="我的远征档案" storage={workspace} references={initial.reference_workspace as Record<string,string>} onStorage={value => { setWorkspace(value); onChange({...initial,shared_workspace:value}) }}/>
 }
 
 async function main() {
@@ -52,7 +58,7 @@ async function main() {
   try {
     const params = new URLSearchParams(location.search), activity = activityFrom(params.get("activity"))
     const host = location.protocol === "systemedu:" ? nativeHost(activity, params.get("session") ?? "") : browserHost(activity)
-    const [snapshot, lesson] = await Promise.all([host.load(), activity.startsWith("course:") ? loadLesson(activity) : Promise.resolve(undefined)])
+    const [snapshot, lesson] = await Promise.all([host.load(), activity.startsWith("course:") && activity !== "course:space-exploration:1.0:JOURNEY" ? loadLesson(activity) : Promise.resolve(undefined)])
     createRoot(target).render(<Classroom host={host} initial={snapshot ?? {}} activity={activity} lesson={lesson}/> )
   } catch (error) {
     target.className = "load-error"; target.textContent = error instanceof Error ? error.message : "课堂暂时无法打开，请返回后重试。"

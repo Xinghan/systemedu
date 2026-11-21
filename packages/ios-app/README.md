@@ -1,10 +1,8 @@
-# SystemEdu iOS App
+# SystemEdu iPad App
 
-状态：完整课程目录的本地开发预览，2026-11-18。已接入 58 个项目、843 个节点，支持原生图文目录、项目详情、内置课堂和 SQLite 记录恢复。目录支持主题与类型筛选，项目详情提供固定的开始／继续学习按钮。账号、按需下载和跨设备同步仍待后续接入。
+当前重点：iPad 火星探索试学版，2026-11-21。首页、八站任务地图、七段项目影片、统一课堂、原实验工具、远征档案和本机学习记录已经接入。完整目录仍保留 58 个项目、843 个课节；本轮只将火星探索作为重点试学入口。账号登录、跨设备同步、按需下载与商店分发尚未接入。
 
-## 运行当前版本
-
-在仓库根执行：
+## 运行与试学
 
 ```sh
 npm --prefix packages/learning-runtime ci --ignore-scripts
@@ -12,17 +10,15 @@ python3 packages/ios-app/scripts/prepare-resources.py
 open packages/ios-app/SystemEdu.xcodeproj
 ```
 
-Xcode 中选择 `SystemEdu` scheme 与可用 iPhone / iPad 模拟器，运行即可。使用真机时需配置自己的开发者团队。共享构建产物不提交，`prepare-resources.py` 从共用源码及既有 GLB 自动生成；修改实验源码后需重新运行此脚本再构建 App。新增 Swift 文件时运行 `python3 packages/ios-app/scripts/generate-project.py` 更新工程。
+选择 `SystemEdu` scheme 和 iPad 模拟器运行。先横屏体验“观看序章 → 开始第一次观察 → 任务地图”，也可以从地图选择任意任务。课文按完整小节阅读，左侧目录和右侧笔记可并排使用；讲课和实验使用较大的操作区域。iPhone 保留原来的界面，本轮不再以手机作为主要设计目标。
 
-首页的三个内容入口直接可见。课堂的模型与主要控制同屏，课文按要点翻页，宽表格转为逐项对照卡片。详细说明、资料和笔记按需打开。当前可体验“学习 / 探索 / 我的”三个原生入口、机械手的逐指控制与接触限位、火星着陆播放与部件观察、现有 M01 课文、阅读笔记、重启恢复和 JSON 记录导出。所有记录明确标记为本机预览，不上传、不计入正式课程完成状态。
+本地构建包约 1.92 GB，包含原课程与素材；不会在每次打开课堂时重新联网下载。修改共享源码后需再次运行 `prepare-resources.py`；新增 Swift 文件后运行 `python3 packages/ios-app/scripts/generate-project.py`。
 
-网站也消费共享源码。首次安装网站依赖前，先执行上面的共享包 `npm ci`，然后在 `packages/student-web` 运行 `npm ci`；部署脚本已补同样的依赖安装步骤，本轮未运行部署。
+作品只保存在本机，浏览课文、播放视频和关联作品均不会自动判定课程合格。原始课节 ID、版本、阅读位置和实验记录保持兼容。任务档案可以关联本机正式保存的作品，关联前仍需在原课程完成真实实验与交付。
 
-[课程目录与导航修订](docs/catalog-redesign.md) · [完整内容验收](docs/full-content-verification.md) · [手机交互与验收](docs/mobile-interaction.md) · [首批技术验收记录](docs/phase1-verification.md) · [课程兼容性清单](docs/content-compatibility.md)
+[本轮试学说明与验收范围](docs/ipad-mars-pilot.md) · [逐节点去向表](../../artifacts/ipad-mars/node-destinations.md) · [课程目录与导航](docs/catalog-redesign.md) · [早期手机实现](docs/mobile-interaction.md)
 
-本方案按“整个 SystemEdu 学习平台的 iOS 客户端”设计。首批用一门完整课程和机械手、火星着陆两个实验验证体验，再扩展课程覆盖。
-
-## 建议方案
+## 后续架构与分发方案（尚未全部实现）
 
 采用 **SwiftUI 原生界面 + 本地 WKWebView 课堂组件 + 现有 SystemEdu 服务**。支持 iPhone 和 iPad，最低系统暂定 iOS / iPadOS 17；实施第一阶段确认设备范围。
 
@@ -48,7 +44,7 @@ Xcode 中选择 `SystemEdu` scheme 与可用 iPhone / iPad 模拟器，运行即
 | 登录凭据 | 现有认证服务签发 | Keychain | 登录、失效或退出时更新 |
 | 字号、主题、下载偏好 | 设备设置 | 本地偏好设置 | 用户修改时保存 |
 
-安装包先内置两个小型实验及一节导览，使首次离线打开也能体验。两个现有 GLB 合计约 **6.66 MB**，连同原始预览图约 **9.94 MB**，尚未包含渲染引擎，不能视为最终 App 大小。Blender 源工程继续留在制作仓库；手机加载 GLB。完整课程视频、所有课程及模型不预装。
+安装包先内置两个小型实验及一节导览，使首次离线打开也能体验。两个现有 GLB 合计约 **6.66 MB**，连同原始预览图约 **9.94 MB**，尚未包含渲染引擎，不能视为最终 App 大小。Blender 源工程继续留在制作仓库；手机加载 GLB。正式发行计划按需下载；当前模拟器试学包为了完整验收，实际内置全部现有课程与素材。
 
 ## 使用过程
 

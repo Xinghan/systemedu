@@ -23,6 +23,40 @@ final class LocalLearningTests: XCTestCase {
     private func temporaryURL() -> URL {
         FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString).appendingPathComponent("learning.sqlite")
     }
+    func testMissionSourceLinksOpenInstalledOriginalModules() throws {
+        XCTAssertEqual(ContentCatalog.localActivity(for: URL(string: "https://systeme.xin/explore/space-exploration/pick-an-observation-site?node=M03&mission=space#project-delivery")!)?.rawValue, "course:pick-an-observation-site:1.0:M03")
+        XCTAssertNil(ContentCatalog.localActivity(for: URL(string: "https://example.org/explore/space-exploration/pick-an-observation-site?node=M03")!))
+        XCTAssertNil(ContentCatalog.localActivity(for: URL(string: "https://systeme.xin/explore/space-exploration/pick-an-observation-site?node=M999")!))
+    }
+    func testMissionReferencesDoNotOverwriteSourcesOrCrossOwners() throws {
+        let url = temporaryURL()
+        defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
+        let store = try LearningStore(url: url)
+        let source = LearningActivity(rawValue: "course:pick-an-observation-site:1.0:M03")!
+        let key = "systemedu:learning:v1:guest:final-deliverable"
+        try store.save(source, state: ["shared_workspace": [key: "original", "private-note": "not an input"]])
+        let input = try store.missionReferences(excluding: .spaceDossier)
+        XCTAssertEqual(input, [key: "original"])
+        try store.save(.spaceDossier, state: ["reference_workspace": [key: "stale"], "shared_workspace": ["dossier": "mine"]])
+        XCTAssertNil(store.load(.spaceDossier)?["reference_workspace"])
+        XCTAssertEqual(try store.missionReferences(excluding: .spaceDossier), input)
+        XCTAssertTrue(try store.missionReferences(excluding: source).isEmpty)
+        XCTAssertTrue(try LearningStore(url: url, owner: "another-account").missionReferences(excluding: .spaceDossier).isEmpty)
+    }
+    func testSandboxedMissionDossierCanHashEvidence() async throws {
+        let root = try XCTUnwrap(Bundle.main.url(forResource: "WebRuntime", withExtension: nil))
+        let config = WKWebViewConfiguration()
+        config.setURLSchemeHandler(AssetSchemeHandler(root: root), forURLScheme: "systemedu")
+        let finished = expectation(description: "sandbox SHA-256")
+        let observer = DigestObserver(finished)
+        config.userContentController.add(observer, name: "digestTest")
+        config.userContentController.addUserScript(WKUserScript(source: "if(window !== window.top) { (async()=>{try {const value=await crypto.subtle.digest('SHA-256',new TextEncoder().encode('abc')); window.webkit.messageHandlers.digestTest.postMessage(Array.from(new Uint8Array(value),b=>b.toString(16).padStart(2,'0')).join(''));} catch(e) {window.webkit.messageHandlers.digestTest.postMessage(String(e));}})(); }", injectionTime: .atDocumentEnd, forMainFrameOnly: false))
+        let view = WKWebView(frame: .zero, configuration: config)
+        view.loadHTMLString("<iframe sandbox='allow-scripts' src='systemedu://bundle/embedded.html?family=mission'></iframe>", baseURL: URL(string: "systemedu://bundle/"))
+        await fulfillment(of: [finished], timeout: 20)
+        XCTAssertEqual(observer.value, "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad")
+        config.userContentController.removeScriptMessageHandler(forName: "digestTest")
+    }
     func testNewerDatabaseVersionIsPreservedAndRejected() throws {
         let url = temporaryURL()
         try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
@@ -172,4 +206,11 @@ private final class PageObserver: NSObject, WKNavigationDelegate {
     let loaded: XCTestExpectation
     init(loaded: XCTestExpectation) { self.loaded = loaded }
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) { loaded.fulfill() }
+}
+
+private final class DigestObserver: NSObject, WKScriptMessageHandler {
+    let finished: XCTestExpectation
+    var value = ""
+    init(_ finished: XCTestExpectation) { self.finished = finished }
+    func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) { value = message.body as? String ?? ""; finished.fulfill() }
 }

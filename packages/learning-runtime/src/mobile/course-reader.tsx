@@ -13,7 +13,7 @@ import { Pager, Sheet } from './primitives'
 
 type Panel = 'contents' | 'work' | 'resources' | 'lecture' | `theory:${string}` | `lab:${string}` | null
 
-export function CourseReader({ lesson, initial, onChange, onCommit }: { lesson: CourseLesson; initial: Snapshot; onChange: (state: Snapshot) => void; onCommit: (state: Snapshot) => Promise<void> }) {
+export function CourseReader({ lesson, initial, onChange, onCommit, tablet = false }: { tablet?: boolean; lesson: CourseLesson; initial: Snapshot; onChange: (state: Snapshot) => void; onCommit: (state: Snapshot) => Promise<void> }) {
   const revised = !!lesson.content_revision && initial.content_revision !== lesson.content_revision
   const previousCompletion = initial.previous_completion ?? (revised && initial.self_completed === true ? { revision: initial.content_revision ?? 'original', completed: true } : null)
   const pages = useMemo(() => readingPages(lesson.lesson), [lesson.lesson])
@@ -26,6 +26,8 @@ export function CourseReader({ lesson, initial, onChange, onCommit }: { lesson: 
   const [workView, setWorkView] = useState('note')
   const [panel, setPanel] = useState<Panel>(null)
   const page = pages[Math.min(index, pages.length - 1)]
+  const sectionPages = pages.filter(p => p.section === page?.section)
+  const inspection = tablet && (panel === 'work' || panel === 'resources' || panel?.startsWith('theory:'))
   const sections = [...new Set(pages.map(p => p.section))]
   const resolve = (url: string) => assetURL(url, lesson.asset_base)
   const interactions = lesson.interactions ?? [], theories = lesson.theories ?? [], slides = lesson.slides ?? []
@@ -58,18 +60,19 @@ export function CourseReader({ lesson, initial, onChange, onCommit }: { lesson: 
   const resources = [...(lesson.resources ?? []), ...(lesson.downloads ?? []), ...Object.values(lesson.external_resources ?? {}).flatMap(v => Array.isArray(v) ? v : [])].filter(r => r.url)
   const activeTheory = panel?.startsWith('theory:') ? theories.find(t => t.theory_id === panel.slice(7) || t.aliases?.includes(panel.slice(7))) : null
   const activeLab = panel?.startsWith('lab:') ? interactions.find(t => t.id === panel.slice(4)) : null
-  return <div className="mobile-reader course-reader">
+  return <div className={`mobile-reader course-reader${tablet ? ' tablet-reader' : ''}${inspection ? ' has-inspector' : ''}`}>
+    {tablet && <aside className="tablet-outline" aria-label="课节内容导航"><p className="overline">{lesson.module_id} / 学习内容</p><h2>{lesson.title}</h2><nav>{sections.map((s, i) => <button key={s} aria-current={s === page?.section ? 'step' : undefined} onClick={() => setIndex(pages.findIndex(p => p.section === s))}><span>{String(i + 1).padStart(2, '0')}</span>{s}</button>)}</nav><p className="muted">原课文、讲课与实验均保留。学习进度记录在本机。</p></aside>}
     <header className="reading-heading"><button onClick={() => setPanel('contents')} aria-label="打开课文目录"><List size={18}/><span>{lesson.module_id} · 本节目录</span></button><button onClick={() => setPanel('lecture')} disabled={!slides.length}><Presentation size={17}/>讲课</button></header>
     <div className="section-progress" aria-hidden="true">{sections.map((s, i) => <span key={s} data-active={i <= sections.indexOf(page?.section)}/>)}</div>
-    <article className="reading-card" key={page?.id} aria-label={`课文第 ${index + 1} 页`} tabIndex={0}>
-      <p className="overline">{page?.fields ? `逐项对照 · ${page.row} / ${page.rows}` : `阅读 · ${index + 1}`}</p>
+    <article className="reading-card" key={tablet ? page?.section : page?.id} aria-label={`课文第 ${index + 1} 页`} tabIndex={0}>
+      <p className="overline">{tablet ? `阅读 · ${Math.max(1, sections.indexOf(page?.section) + 1)} / ${sections.length}` : page?.fields ? `逐项对照 · ${page.row} / ${page.rows}` : `阅读 · ${index + 1}`}</p>
       <h1>{page?.section ?? lesson.title}</h1>
-      {page?.fields ? <dl className="comparison-card">{page.fields.map((field, i) => <div key={i}><dt>{markdown(field.label)}</dt><dd>{markdown(field.value || '—')}</dd></div>)}</dl> : <div className="reading-prose">{page ? markdown(page.markdown) : <p>本节暂未提供正文，可先查看作业与学习资料。</p>}</div>}
-      {pages.length > 0 && index >= pages.length - 1 && <button className="wide-button" onClick={() => setCompleted(!completed)}><CheckCircle size={18}/>{completed ? '已标记读完 · 撤销' : '标记为已读完'}</button>}
+      {tablet ? <TabletSection pages={sectionPages} render={markdown}/> : page?.fields ? <dl className="comparison-card">{page.fields.map((field, i) => <div key={i}><dt>{markdown(field.label)}</dt><dd>{markdown(field.value || '—')}</dd></div>)}</dl> : <div className="reading-prose">{page ? markdown(page.markdown) : <p>本节暂未提供正文，可先查看作业与学习资料。</p>}</div>}
+      {pages.length > 0 && (tablet ? page?.section === pages.at(-1)?.section : index >= pages.length - 1) && <button className="wide-button" onClick={() => setCompleted(!completed)}><CheckCircle size={18}/>{completed ? '已标记读完 · 撤销' : '标记为已读完'}</button>}
     </article>
-    <div className="reader-controls"><Pager index={Math.max(0, Math.min(index, pages.length - 1))} count={Math.max(1, pages.length)} onChange={setIndex}/><div className="reader-actions"><button onClick={() => setPanel('work')}><NotebookPen size={18}/>练习与笔记</button><button onClick={() => setPanel('resources')}><Play size={18}/>动画与互动</button></div></div>
+    <div className="reader-controls"><Pager index={tablet ? Math.max(0, sections.indexOf(page?.section)) : Math.max(0, Math.min(index, pages.length - 1))} count={Math.max(1, tablet ? sections.length : pages.length)} onChange={i => setIndex(tablet ? pages.findIndex(p => p.section === sections[i]) : i)}/><div className="reader-actions"><button onClick={() => setPanel('work')}><NotebookPen size={18}/>练习与笔记</button><button onClick={() => setPanel('resources')}><Play size={18}/>动画与互动</button></div></div>
     {panel === 'contents' && <Sheet title="本节阅读路径" onClose={() => setPanel(null)}><p>{lesson.core_question}</p><div className="contents-list">{sections.map((s, i) => <button key={s} onClick={() => { setIndex(pages.findIndex(p => p.section === s)); setPanel(null) }}><span>{i + 1}</span><strong>{s}</strong></button>)}</div></Sheet>}
-    {panel === 'work' && <Sheet title="练习与笔记" onClose={() => setPanel(null)} footer={<label className="work-selector">选择练习内容<select aria-label="选择练习内容" value={workView} onChange={e=>setWorkView(e.target.value)}><option value="note">我的笔记与作业说明</option>{lesson.content_history && <option value="history">修订前的学习记录</option>}{lesson.assignment && <option value="assignment">阅读作业要求</option>}{(lesson.response_prompts ?? []).map((p,i)=><option value={'prompt:'+i} key={'p'+i}>{p.title}</option>)}{(lesson.assessments ?? []).filter(a=>a.questions.length).map(a=><option key={a.id} value={'assessment:'+a.id}>{a.title}</option>)}{interactions.filter(i=>i.exercises.length).map(i=><option key={i.id} value={'exercise:'+i.id}>{i.title}</option>)}</select></label>}>
+    {panel === 'work' && <Sheet docked={tablet} title="练习与笔记" onClose={() => setPanel(null)} footer={<label className="work-selector">选择练习内容<select aria-label="选择练习内容" value={workView} onChange={e=>setWorkView(e.target.value)}><option value="note">我的笔记与作业说明</option>{lesson.content_history && <option value="history">修订前的学习记录</option>}{lesson.assignment && <option value="assignment">阅读作业要求</option>}{(lesson.response_prompts ?? []).map((p,i)=><option value={'prompt:'+i} key={'p'+i}>{p.title}</option>)}{(lesson.assessments ?? []).filter(a=>a.questions.length).map(a=><option key={a.id} value={'assessment:'+a.id}>{a.title}</option>)}{interactions.filter(i=>i.exercises.length).map(i=><option key={i.id} value={'exercise:'+i.id}>{i.title}</option>)}</select></label>}>
       <p className="muted">答案和笔记保存在本机，可导出。本机练习和读完标记不代表正式评分。</p>
       {workView === "assignment" && <DocumentPages text={lesson.assignment} render={markdown}/>}
       {workView === 'history' && lesson.content_history && <section><h3>修订前的学习记录</h3><p>{lesson.content_history.notice}</p>{previousCompletion ? <p>保留了旧版的读完标记。新版内容需要重新核对。</p> : null}{lesson.content_history.questions.filter(q => answers[q.key] !== undefined).map(q => <article className="card" key={q.key}><h4>{q.question}</h4><p>原答案：{q.options?.[Number(answers[q.key])] ?? answers[q.key]}</p></article>)}{!lesson.content_history.questions.some(q => answers[q.key] !== undefined) && <p>这份本机记录中没有修订前的题目答案。原有笔记仍在“我的笔记与作业说明”中。</p>}<details><summary>查看保留的互动记录</summary><pre>{JSON.stringify(Object.fromEntries(Object.entries(workspace).filter(([key]) => !lesson.content_revision || !key.endsWith(':' + lesson.content_revision))), null, 2)}</pre></details></section>}
@@ -79,7 +82,7 @@ export function CourseReader({ lesson, initial, onChange, onCommit }: { lesson: 
       {interactions.filter(i => i.exercises.length && workView === 'exercise:'+i.id).map(lab => <Questions key={lab.id} questions={lab.exercises} prefix={lab.id} answers={answers} onAnswer={(id, answer) => setAnswers({ ...answers, [id]: answer })}/>)}
       {workView === "note" && <label className="answer-field" htmlFor="course-note">我的笔记与作业说明<textarea id="course-note" value={note} maxLength={20000} placeholder="记录你的判断、操作结果和作品文件位置。" onChange={e => setNote(e.target.value)}/></label>}
     </Sheet>}
-    {panel === 'resources' && <Sheet title="动画、互动与资料" onClose={() => setPanel(null)}>
+    {panel === 'resources' && <Sheet docked={tablet} title="动画、互动与资料" onClose={() => setPanel(null)}>
       <section aria-label="本节活动">
         {interactions.length ? interactions.map(i => <InteractionEntry key={i.id} interaction={i} onOpen={() => setPanel(`lab:${i.id}`)}/>) : <p className="muted">本节没有单独的动画或互动活动，可以继续查看下方资料。</p>}
       </section>
@@ -91,9 +94,9 @@ export function CourseReader({ lesson, initial, onChange, onCommit }: { lesson: 
         {!resources.length && <p className="muted">本节资料链接保留在课文和作业原文中。</p>}
       </section>
     </Sheet>}
-    {activeTheory && <Sheet title={activeTheory.title} onClose={() => setPanel(null)}><TheoryBody key={activeTheory.theory_id} theory={activeTheory} render={markdown} questionPrefix={`theory:${activeTheory.theory_id}:${lesson.content_revision ?? lesson.content_version}`} answers={answers} onAnswer={(id, value) => setAnswers({ ...answers, [id]: value })}/></Sheet>}
-    {activeLab && <Sheet title={activeLab.presentation_platform === 'ios' ? activeLab.title : interactionPresentation(activeLab.mode).label} immersive={activeLab.presentation_platform === 'ios'} onClose={() => setPanel(null)}>{activeLab.presentation_platform !== 'ios' && <h3>{activeLab.title}</h3>}{activeLab.path ? <InteractiveFrame mobile={activeLab.presentation_platform === 'ios'} path={resolve(activeLab.path)} title={activeLab.title} storage={workspace} onStorage={setWorkspace} onCommit={commitWorkspace} moduleId={lesson.module_id} ideaId={activeLab.id}/> : null}{!activeLab.path && !activeLab.exercises.length && <p className="muted">本节尚未提供可打开的互动资源，请查看课文中的操作说明。</p>}{activeLab.exercises.length > 0 && <Questions questions={activeLab.exercises} prefix={activeLab.id} answers={answers} onAnswer={(id, answer) => setAnswers({ ...answers, [id]: answer })}/>}</Sheet>}
-    {panel === 'lecture' && <Sheet title={`讲课 · ${Math.min(slideIndex + 1, slides.length)}/${slides.length}`} onClose={() => setPanel(null)} footer={<Pager index={Math.min(slideIndex, slides.length - 1)} count={slides.length} onChange={setSlideIndex}/>}><SlideCard slide={slides[Math.min(slideIndex, slides.length - 1)]} markdown={markdown} resolve={resolve} onTheory={id => setPanel(`theory:${id}`)} onLab={id => setPanel(`lab:${id}`)}/></Sheet>}
+    {activeTheory && <Sheet docked={tablet} title={activeTheory.title} onClose={() => setPanel(null)}><TheoryBody key={activeTheory.theory_id} theory={activeTheory} render={markdown} questionPrefix={`theory:${activeTheory.theory_id}:${lesson.content_revision ?? lesson.content_version}`} answers={answers} onAnswer={(id, value) => setAnswers({ ...answers, [id]: value })}/></Sheet>}
+    {activeLab && <Sheet title={tablet || activeLab.presentation_platform === 'ios' ? activeLab.title : interactionPresentation(activeLab.mode).label} immersive={tablet || activeLab.presentation_platform === 'ios'} onClose={() => setPanel(null)}>{!tablet && activeLab.presentation_platform !== 'ios' && <h3>{activeLab.title}</h3>}{activeLab.path ? <InteractiveFrame references={initial.reference_workspace as Record<string,string>} mobile={tablet || activeLab.presentation_platform === 'ios'} path={resolve(activeLab.path)} title={activeLab.title} storage={workspace} onStorage={setWorkspace} onCommit={commitWorkspace} moduleId={lesson.module_id} ideaId={activeLab.id}/> : null}{!activeLab.path && !activeLab.exercises.length && <p className="muted">本节尚未提供可打开的互动资源，请查看课文中的操作说明。</p>}{activeLab.exercises.length > 0 && <Questions questions={activeLab.exercises} prefix={activeLab.id} answers={answers} onAnswer={(id, answer) => setAnswers({ ...answers, [id]: answer })}/>}</Sheet>}
+    {panel === 'lecture' && <Sheet immersive={tablet} title={`讲课 · ${Math.min(slideIndex + 1, slides.length)}/${slides.length}`} onClose={() => setPanel(null)} footer={<Pager index={Math.min(slideIndex, slides.length - 1)} count={slides.length} onChange={setSlideIndex}/>}><SlideCard slide={slides[Math.min(slideIndex, slides.length - 1)]} markdown={markdown} resolve={resolve} onTheory={id => setPanel(`theory:${id}`)} onLab={id => setPanel(`lab:${id}`)}/></Sheet>}
   </div>
 }
 
@@ -120,6 +123,16 @@ function InteractionEntry({ interaction, onOpen }: { interaction: Interaction; o
   </button>
 }
 
+function TabletSection({ pages, render }: { pages: ReturnType<typeof readingPages>; render: (s: string) => React.ReactNode }) {
+  const blocks: typeof pages[] = []
+  for (const p of pages) {
+    const last = blocks.at(-1)
+    if (p.fields && p.row !== 1 && last?.[0].fields) last.push(p)
+    else blocks.push([p])
+  }
+  return <div className="tablet-prose">{blocks.map(block => block[0].fields ? <div className="tablet-table" key={block[0].id}><table><thead><tr>{block[0].fields.map((f,i)=><th key={i}>{render(f.label)}</th>)}</tr></thead><tbody>{block.map(p=><tr key={p.id} data-page-id={p.id}>{p.fields!.map((f,i)=><td key={i}>{render(f.value || '—')}</td>)}</tr>)}</tbody></table></div> : <div key={block[0].id} data-page-id={block[0].id}>{render(block[0].markdown)}</div>)}</div>
+}
+
 function DocumentPages({text,render}:{text:string;render:(text:string)=>React.ReactNode}) {
  const pages=useMemo(()=>readingPages(text),[text]),[index,setIndex]=useState(0),page=pages[index]
  return <><h3>{page?.section}</h3>{render(page?.markdown ?? '')}{page?.fields?.map((f,i)=><div key={i}><strong>{f.label}</strong>{render(f.value)}</div>)}<Pager index={index} count={Math.max(1,pages.length)} onChange={setIndex}/></>
@@ -136,11 +149,12 @@ function Questions({ questions, prefix, answers, onAnswer }: { questions: Exerci
   const [revealed, setRevealed] = useState<Record<string, boolean>>({})
   return <>{questions.map((q, i) => { if (i !== questionIndex) return null; const id = `${prefix}:${q.id ?? i}`; return <fieldset key={id}><legend>{i + 1}. {q.question ?? q.prompt}</legend>{q.options?.length ? q.options.map((option, n) => <label className="choice-answer" key={n}><input type="radio" name={id} checked={answers[id] === String(n)} onChange={() => onAnswer(id, String(n))}/>{option}</label>) : <textarea value={answers[id] ?? ''} maxLength={2000} onChange={e => onAnswer(id, e.target.value)}/>}<button className="wide-button" disabled={!answers[id] && answers[id] !== '0'} onClick={() => setRevealed({ ...revealed, [id]: true })}>查看解析</button>{revealed[id] && <p role="status">{typeof q.correct === 'number' ? answers[id] === String(q.correct) ? '回答正确。' : '再检查你的判断。' : ''}{q.explanation ?? q.answer ?? '请结合本节原理说明自己的理由。'}</p>}</fieldset> })}<Pager index={questionIndex} count={questions.length} onChange={setQuestionIndex} label="题"/></>
 }
-function InteractiveFrame({ path, title, storage, onStorage, onCommit, moduleId, ideaId, mobile = false }: { path: string; title: string; storage?: Record<string,string>; onStorage?: (value: Record<string,string>) => void; onCommit?: (value: Record<string,string>) => Promise<void>; moduleId?: string; ideaId?: string; mobile?: boolean }) {
+export function InteractiveFrame({ path, title, storage, references, onStorage, onCommit, moduleId, ideaId, mobile = false }: { path: string; title: string; storage?: Record<string,string>; references?: Record<string,string>; onStorage?: (value: Record<string,string>) => void; onCommit?: (value: Record<string,string>) => Promise<void>; moduleId?: string; ideaId?: string; mobile?: boolean }) {
   const [expanded, setExpanded] = useState(false), [error, setError] = useState('')
   const frame = useRef<HTMLIFrameElement>(null)
   const channel = useRef(Array.from(crypto.getRandomValues(new Uint8Array(12)),b=>b.toString(16).padStart(2,'0')).join(''))
-  const source = useRef(path.split('#')[0]+'#'+encodeURIComponent(JSON.stringify({channel:channel.current,storage:storage ?? {}})))
+  const framePath = path.split('#')[0] + (new URLSearchParams(location.search).get('presentation') === 'tablet' ? (path.includes('?') ? '&' : '?') + 'presentation=tablet' : '')
+  const source = useRef(framePath+'#'+encodeURIComponent(JSON.stringify({channel:channel.current,storage:storage ?? {},references:references ?? {}})))
   const change = useRef(onStorage); change.current = onStorage
   const stored = useRef(storage ?? {}), commit = useRef(onCommit); stored.current=storage ?? {};commit.current=onCommit
   const queue=useRef(Promise.resolve())
@@ -187,7 +201,7 @@ function SlideCard({ slide, markdown, resolve, onTheory, onLab }: { slide?: Slid
     if (key === 'technical_visual' && typeof value === 'object') return <InteractiveFrame key={key} title={slide.title} path={'/embedded.html?family=technical&visual='+encodeURIComponent(JSON.stringify(value))}/>
     if (['theory_id','idea_id','level','body_markdown'].includes(key) || value == null || (key === 'hero_title' && value === slide.title)) return null
     if (key === 'bullets' && p.hero_subtitle && Array.isArray(value) && value.length === 1 && value[0] === p.hero_subtitle) return null
-    if (key === 'inline_svg' && typeof value === 'string') return <img key={key} alt={String(p.svg_caption ?? slide.title)} src={'data:image/svg+xml;charset=utf-8,'+encodeURIComponent(value)}/>
+    if (key === 'inline_svg' && typeof value === 'string') return <img className="lecture-visual" key={key} alt={String(p.svg_caption ?? slide.title)} src={'data:image/svg+xml;charset=utf-8,'+encodeURIComponent(value)}/>
     if (['src','html_path'].includes(key) && typeof value === 'string' && value.endsWith('.html')) return <InteractiveFrame key={key} title={slide.title} path={resolve(value)}/>
     if (key === 'formula' && typeof value === 'string') return <div key={key}>{markdown(`$$\n${value}\n$$`)}</div>
     if (key === 'images' && Array.isArray(value)) return <div key={key}>{value.map((img, i) => { const v = img as Record<string,string>; return <figure key={i}><img src={resolve(v.src ?? v.path ?? v.url ?? v.asset ?? '')} alt={v.alt ?? v.caption ?? slide.title}/><figcaption>{v.caption}</figcaption></figure> })}</div>

@@ -10,6 +10,11 @@ extension Color {
 struct RootView: View {
     @ObservedObject var store: LearningStore
     var body: some View {
+        if UIDevice.current.userInterfaceIdiom == .pad, let mission = TabletMission.current {
+            TabletMissionView(store: store, mission: mission)
+        } else { phoneRoot }
+    }
+    private var phoneRoot: some View {
         TabView {
             AppNavigationStack(store: store) { LearningHome(store: store) }.tabItem { Label("学习", systemImage: "book.closed") }
             AppNavigationStack(store: store) { CatalogView(store: store) }.tabItem { Label("探索", systemImage: "safari") }
@@ -81,7 +86,7 @@ private struct ActivityCard: View {
     }
 }
 
-private struct RecordsView: View {
+struct RecordsView: View {
     @ObservedObject var store: LearningStore
     @State private var export: SharedFile?
     @State private var error: String?

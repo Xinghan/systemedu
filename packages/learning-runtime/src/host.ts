@@ -18,7 +18,7 @@ export function nativeHost(activity: Activity, session: string): LearningHost {
   }
   return {
     load: async () => await send("load") as Snapshot | null,
-    save: async state => await send("save", state) as { saved_at: string },
+    save: async state => { const {reference_workspace: _references, ...owned} = state; return await send("save", owned) as { saved_at: string } },
     exportState: () => send("export"),
   }
 }
@@ -27,8 +27,18 @@ export function browserHost(activity: Activity): LearningHost {
   const key = `systemedu:runtime-preview:v1:${activity}`
   const workspaceKey = activity.startsWith("course:") ? `systemedu:runtime-workspace:v1:${activity.split(":").slice(1,3).join(":")}` : null
   return {
-    async load() { const raw = localStorage.getItem(key), shared = workspaceKey ? localStorage.getItem(workspaceKey) : null; return raw || shared ? {...JSON.parse(raw ?? "{}"), ...(shared ? {shared_workspace:JSON.parse(shared)} : {})} as Snapshot : null },
-    async save(state) { if (workspaceKey && state.shared_workspace) localStorage.setItem(workspaceKey, JSON.stringify(state.shared_workspace)); localStorage.setItem(key, JSON.stringify(state)); return { saved_at: new Date().toISOString() } },
+    async load() {
+      const raw = localStorage.getItem(key), shared = workspaceKey ? localStorage.getItem(workspaceKey) : null
+      const references: Record<string,string> = {}
+      for (const project of ['pick-an-observation-site:1.0','plan-a-payload:1.0','tune-a-chassis:1.0','label-the-terrain:1.0','write-driving-rules:1.0','assemble-a-rover:2.0','run-an-expedition:2.0']) {
+        const source = `systemedu:runtime-workspace:v1:${project}`
+        if(source === workspaceKey) continue
+        const values = JSON.parse(localStorage.getItem(source) ?? '{}') as Record<string,string>
+        for(const [k,v] of Object.entries(values)) if(k.startsWith('systemedu:learning:v1:guest:') && k.includes('final-deliverable')) references[k]=v
+      }
+      return {...JSON.parse(raw ?? '{}'), ...(shared ? {shared_workspace:JSON.parse(shared)} : {}),reference_workspace:references} as Snapshot
+    },
+    async save(state) { const {reference_workspace: _references, ...owned} = state; if (workspaceKey && owned.shared_workspace) localStorage.setItem(workspaceKey, JSON.stringify(owned.shared_workspace)); localStorage.setItem(key, JSON.stringify(owned)); return { saved_at: new Date().toISOString() } },
     async exportState() {
       const blob = new Blob([localStorage.getItem(key) ?? "{}"], { type: "application/json" })
       const url = URL.createObjectURL(blob), link = document.createElement("a")

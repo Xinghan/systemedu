@@ -7,6 +7,7 @@ import argparse, hashlib, json, os, re, shutil, subprocess
 from concurrent.futures import ThreadPoolExecutor
 from catalog_presentation import prepare_presentations
 from ios_media import read_variants
+from ipad_mission import export_ipad_mission
 
 REPO = Path(__file__).resolve().parents[3]
 PUBLIC = REPO / 'packages/student-web/public'
@@ -151,6 +152,7 @@ def export(source, out, *, preview_ios_drafts=False):
     for tree_path in sorted(PUBLIC.glob('project-lines/*/*/course*/tree/knowledge_tree.json')):
         root=tree_path.parent.parent;tree=read(tree_path);track(tree_path)
         slug=tree['id']+('-legacy-v1' if root.name=='course-v1' else '');modules=[]
+        write(out/f'content/guided/{slug}.json', dict(tree,legacy_edition=root.name=='course-v1'))
         for node in tree['modules']:
             m=dict(node)
             for name in ['lesson','assignment']:
@@ -158,6 +160,9 @@ def export(source, out, *, preview_ios_drafts=False):
             resource=safe(root,node['resources']);m['resources']=read(resource,[]);track(resource)
             if isinstance(m['resources'],dict): m['resources']=m['resources'].get('resources',[])
             m.update(asset_base=f'/project-lines/{tree_path.parts[-5]}/{tree["id"]}/{root.name}/',theories=[],slides=[],interactions=[dict(id='workspace',title='本节实验工作台',mode='lab',exercises=[],path=f'/embedded.html?project={slug}&family={family(tree_path.parts[-5],tree["id"])}&node={node["module_id"]}&version={tree["version"]}')],lab_url=None)
+            if tree['id']=='write-driving-rules':
+                m['interactions'].insert(0,dict(id='driving-lab',title='驾驶规则实验',mode='game',exercises=[],path=tree['lab_url']))
+                m['interactions'][-1]['title']='学习记录与项目交付'
             modules.append(m)
         finish(slug,tree['title']+('（旧版）' if root.name=='course-v1' else ''),tree['version'],line(tree['id'],tree_path.parts[-5]),'guided',tree['stages'],modules,root,f'/explore/{tree_path.parts[-5]}/{tree["id"]}')
     # Independent professional course stays separate from SystemEdu project lines.
@@ -204,6 +209,7 @@ def export(source, out, *, preview_ios_drafts=False):
     prepare_presentations(REPO,source,out,courses)
     catalog=dict(schemaVersion=1,lines=lines,courses=courses,films=films)
     write(out/'content/catalog.json',catalog)
+    export_ipad_mission(REPO, out, catalog)
     report=dict(schema_version=1,courses=len(courses),nodes=sum(len(c['modules']) for c in courses),coverage=[dict(id=c['id'],version=c['version'],nodes=[m['moduleId'] for m in c['modules']]) for c in courses],source_files=source_files,gaps=gaps)
     write(out/'content/coverage.json',report)
     write(out/'content/ios-media-coverage.json',dict(schema_version=1,preview=preview_ios_drafts,resources=ios_coverage))

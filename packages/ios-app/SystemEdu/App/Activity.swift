@@ -9,6 +9,7 @@ struct LearningActivity: RawRepresentable, Hashable, Identifiable, Codable, Case
               rawValue.range(of: "^[A-Za-z0-9_.:-]+$", options: .regularExpression) != nil else { return nil }
         self.rawValue = rawValue
     }
+    static let spaceDossier = Self(rawValue: "course:space-exploration:1.0:JOURNEY")!
     static let driving = Self(rawValue: "driving-intro")!
     static let hand = Self(rawValue: "mechanical-hand")!
     static let landing = Self(rawValue: "mars-landing")!
@@ -16,6 +17,7 @@ struct LearningActivity: RawRepresentable, Hashable, Identifiable, Codable, Case
     var id: String { rawValue }
     var node: ContentNode? { ContentCatalog.nodes[rawValue] }
     var title: String {
+        if self == .spaceDossier { return "我的远征档案" }
         if let node { return node.title }
         switch self { case .driving: return "先看路，再决定"; case .hand: return "五指机械手"; case .landing: return "最后一段，怎样着陆？"; default: return "已保存的课程 · \(rawValue.split(separator: ":").last ?? "")" }
     }

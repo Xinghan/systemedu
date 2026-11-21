@@ -13,6 +13,9 @@ import { TransformerModelExplorer } from '../../student-web/src/app/standalone/t
 import { TechnicalVisual } from '../../student-web/src/components/learning/technical-visual'
 import { AlgorithmLab } from '../../student-web/src/app/standalone/post-training/algorithm-lab'
 import './phone.css'
+import './tablet.css'
+import { SpaceMissionDossier } from '../../student-web/src/components/mission/space-mission-dossier'
+import { GuidedCourseNotebook } from '../../student-web/src/components/learning/guided-course-notebook'
 
 function PostTrainingExperiment() {
  const algorithm = new URLSearchParams(location.search).get('algorithm') ?? 'lora'
@@ -21,10 +24,17 @@ function PostTrainingExperiment() {
  return <AlgorithmLab id={algorithm} state={state} update={next => { setState(next); localStorage.setItem(key, JSON.stringify(next)) }}/>
 }
 const params = new URLSearchParams(location.search)
+document.documentElement.dataset.presentation = params.get('presentation') ?? 'phone'
 const id = params.get('project') ?? '', family = params.get('family'), node = { module_id: params.get('node') ?? 'M01' } as any
-const course = { id: id.replace('-legacy-v1', ''), version: params.get('version') ?? '1.0', modules: [], title: id } as any
+let course = { id: id.replace('-legacy-v1', ''), version: params.get('version') ?? '1.0', modules: [], title: id } as any
 const micro = params.get('micro') === '1'
-const element = family === 'technical' ? <TechnicalVisual visual={JSON.parse(params.get('visual') ?? '{}')}/> : family === 'transformer' ? <TransformerModelExplorer/> : family === 'post-training' ? <PostTrainingExperiment/> :
+const root = createRoot(document.getElementById('root')!)
+async function render() {
+ if (id && !micro) {
+  const response = await fetch('/content/guided/'+encodeURIComponent(id)+'.json')
+  if (response.ok) { course = await response.json(); Object.assign(node, course.modules.find((n: any) => n.module_id === node.module_id) ?? {}) }
+ }
+const element = family === 'mission' ? <SpaceMissionDossier/> : id === 'write-driving-rules' ? <GuidedCourseNotebook course={course} node={node} onRecord={() => {}}/> : family === 'technical' ? <TechnicalVisual visual={JSON.parse(params.get('visual') ?? '{}')}/> : family === 'transformer' ? <TransformerModelExplorer/> : family === 'post-training' ? <PostTrainingExperiment/> :
  family === 'renewable' ? <RenewableWorkspace id={id} node={node.module_id} micro={micro}/> :
  family === 'energy' ? <EnergyWorkspace id={id} node={node.module_id} micro={micro}/> :
  family === 'bionics' ? <BionicsCourseWorkspace course={course} node={node}/> :
@@ -32,4 +42,6 @@ const element = family === 'technical' ? <TechnicalVisual visual={JSON.parse(par
  family === 'biomed' ? micro ? <BiomedMicroProject id={id as any}/> : <BiomedProjectWorkspace course={course} node={node}/> :
  id === 'assemble-a-rover' ? <RoverSystemWorkspace course={course} node={node}/> :
  id === 'run-an-expedition' ? <ExpeditionSystemWorkspace course={course} node={node}/> : <SpaceProjectWorkspace course={course} node={node}/>
-createRoot(document.getElementById('root')!).render(element)
+root.render(element)
+}
+void render().catch(() => root.render(<p role="alert">实验资料无法读取，请返回后重试。</p>))

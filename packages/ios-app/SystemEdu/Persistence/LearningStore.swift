@@ -82,6 +82,7 @@ final class LearningStore: ObservableObject {
     func save(_ activity: LearningActivity, state: [String: Any]) throws -> Date {
         guard JSONSerialization.isValidJSONObject(state) else { throw StoreError.invalidState }
         var classroom = state
+        classroom.removeValue(forKey: "reference_workspace")
         let workspace = classroom.removeValue(forKey: "shared_workspace")
         var workspaceText: String?
         if let workspace {
@@ -133,6 +134,29 @@ final class LearningStore: ObservableObject {
         }
         guard step == SQLITE_DONE else { throw StoreError.database("读取未完成") }
         records = result
+    }
+
+    // Other Mars projects are read-only inputs, never saved into this workspace.
+    func missionReferences(excluding activity: LearningActivity) throws -> [String: String] {
+        let projects: Set<String> = ["pick-an-observation-site:1.0", "plan-a-payload:1.0", "tune-a-chassis:1.0", "label-the-terrain:1.0", "write-driving-rules:1.0", "assemble-a-rover:2.0", "run-an-expedition:2.0"]
+        var statement: OpaquePointer?
+        guard sqlite3_prepare_v2(database, "SELECT activity,state FROM local_workspace WHERE owner=?", -1, &statement, nil) == SQLITE_OK else { throw StoreError.database("无法读取关联作品") }
+        defer { sqlite3_finalize(statement) }
+        sqlite3_bind_text(statement, 1, owner, -1, transient)
+        var result: [String: String] = [:]
+        var step = sqlite3_step(statement)
+        while step == SQLITE_ROW {
+            if let key = sqlite3_column_text(statement, 0), let text = sqlite3_column_text(statement, 1) {
+                let source = String(cString: key)
+                if projects.contains(source), source != workspaceKey(activity),
+                   let values = try JSONSerialization.jsonObject(with: Data(String(cString: text).utf8)) as? [String: String] {
+                    for (key, value) in values where key.hasPrefix("systemedu:learning:v1:guest:") && key.contains("final-deliverable") { result[key] = value }
+                }
+            }
+            step = sqlite3_step(statement)
+        }
+        guard step == SQLITE_DONE else { throw StoreError.database("关联作品读取未完成") }
+        return result
     }
 
     func export(_ activity: LearningActivity) throws -> URL {

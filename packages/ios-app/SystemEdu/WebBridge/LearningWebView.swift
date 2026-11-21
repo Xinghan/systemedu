@@ -29,7 +29,8 @@ struct LearningWebView: UIViewRepresentable {
         #if DEBUG
         view.isInspectable = true
         #endif
-        let url = URL(string: "systemedu://bundle/index.html?activity=\(activity.rawValue)&session=\(context.coordinator.session)")!
+        let presentation = UIDevice.current.userInterfaceIdiom == .pad ? "tablet" : "phone"
+        let url = URL(string: "systemedu://bundle/index.html?activity=\(activity.rawValue)&session=\(context.coordinator.session)&presentation=\(presentation)")!
         view.load(URLRequest(url: url))
         return view
     }
@@ -59,7 +60,10 @@ struct LearningWebView: UIViewRepresentable {
                       url.scheme == "systemedu", url.host == "bundle", url.path == "/index.html" else { throw AssetError.forbidden }
                 let request = try BridgeRequest(body: message.body, activity: activity, session: session)
                 switch request.method {
-                case .load: replyHandler((store.load(activity) as Any?) ?? NSNull(), nil)
+                case .load:
+                    var state = store.load(activity) ?? [:]
+                    state["reference_workspace"] = try store.missionReferences(excluding: activity)
+                    replyHandler(state, nil)
                 case .save:
                     let saved = try store.save(activity, state: request.state!)
                     replyHandler(["saved_at": ISO8601DateFormatter().string(from: saved)], nil)

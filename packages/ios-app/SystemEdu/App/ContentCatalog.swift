@@ -51,5 +51,12 @@ struct ContentCatalog: Codable {
         return catalog
     }
     static var current: ContentCatalog? { try? result.get() }
+    static func localActivity(for url: URL) -> LearningActivity? {
+        guard url.scheme == "https", url.host == "systeme.xin", let courses = current?.courses else { return nil }
+        let slug = url.lastPathComponent
+        guard let course = courses.first(where: { !$0.id.hasSuffix("-legacy-v1") && ($0.sourceRoute == url.path || (["library", "projects"].contains(url.path.split(separator: "/").first.map(String.init) ?? "") && $0.id == slug)) }) else { return nil }
+        let module = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.first { $0.name == "node" }?.value
+        return (module == nil ? course.modules.first : course.modules.first { $0.moduleId == module })?.activity
+    }
     static let nodes: [String: ContentNode] = Dictionary(uniqueKeysWithValues: (current?.courses ?? []).flatMap(\.modules).map { ($0.id, $0) })
 }
