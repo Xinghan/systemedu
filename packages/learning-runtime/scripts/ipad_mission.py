@@ -1,6 +1,7 @@
 """Export the existing Mars journey without inventing or renumbering lessons."""
 import json
 import re
+import subprocess
 from pathlib import Path
 
 
@@ -50,11 +51,19 @@ def export_ipad_mission(repo: Path, out: Path, catalog):
     films += [dict(id=f'stage-{i}',title=t,description=d,
                    path=asset(f'/mission/space/video/stage-{i}-v1.mp4'),
                    captions=asset(f'/mission/space/video/stage-{i}-zh.vtt')) for i,t,d in metadata]
+    # A frame from the same bundled briefing that opens from the task homepage.
+    opening = films[0]
+    poster = 'content/missions/mars-briefing.jpg'
+    (out / poster).parent.mkdir(parents=True, exist_ok=True)
+    subprocess.run(['ffmpeg', '-nostdin', '-v', 'error', '-y', '-ss', '1.3', '-i',
+                    str(out / opening['path'].lstrip('/')), '-frames:v', '1', '-vf',
+                    'scale=1080:-2', '-q:v', '3', str(out / poster)], check=True)
+    opening['poster'] = asset('/' + poster)
     project_ids = list(dict.fromkeys([*source['micro'], *[m['project'] for m in source['modules']],source['sideQuest']]))
     # Legacy editions stay reachable from the original project collection.
     project_ids += [c for c in courses if c.endswith('-legacy-v1') and c.removesuffix('-legacy-v1') in project_ids]
     result = dict(schemaVersion=1,id='space',version=source['version'],title=source['mission'],
-                  commander=source['commander'], homeImage=asset('/mission/space/research-control-room-v1-1536.webp'),
+                  home=source['missionHome'], commander=source['commander'], homeImage=asset('/mission/space/research-control-room-v1-1536.webp'),
                   mapImage=asset('/mission/rover/campus-map-v1.webp'),
                   stations=stations,nodes=destinations,micro=micro,research=side,
                   courseIds=project_ids,films=films,bridges=source['bridges'])

@@ -2,6 +2,7 @@
 import hashlib
 import json
 import subprocess
+from pathlib import Path
 
 
 def prepare_presentations(repo, source, out, courses):
@@ -12,6 +13,7 @@ def prepare_presentations(repo, source, out, courses):
     metadata = {x['slug']: x for x in read(library / 'course-snapshots.json')}
     for path in sorted(library.glob('*courses.json')):
         metadata.update({x['id']: x for x in read(path)})
+    colors = read(Path(__file__).with_name('project-colors.json'))
     variants = read(library / 'project-cover-variants.json')
     # These courses have no registered project cover. Use existing, relevant artwork;
     # coverSource records the exact origin instead of pretending these are new images.
@@ -35,6 +37,7 @@ def prepare_presentations(repo, source, out, courses):
     target.mkdir(parents=True, exist_ok=True)
     for course in courses:
         slug = course['id'].removesuffix('-legacy-v1')
+        course['accentHex'] = colors.get(slug, '#455C78')
         item = metadata.get(slug, {})
         manifest_path = source / slug / 'manifest.json'
         manifest = read(manifest_path) if manifest_path.exists() else {}

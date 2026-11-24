@@ -1,10 +1,17 @@
 import SwiftUI
 
 extension Color {
-    static let paper = Color(red: 0.966, green: 0.961, blue: 0.933)
-    static let forest = Color(red: 0.14, green: 0.29, blue: 0.23)
+    static let paper = UIDevice.current.userInterfaceIdiom == .pad ? Color.white : Color(red: 0.966, green: 0.961, blue: 0.933)
+    static let forest = UIDevice.current.userInterfaceIdiom == .pad ? Color(red: 0.13, green: 0.14, blue: 0.15) : Color(red: 0.14, green: 0.29, blue: 0.23)
     static let rust = Color(red: 0.70, green: 0.34, blue: 0.19)
-    static let quiet = Color(red: 0.43, green: 0.48, blue: 0.42)
+    static let quiet = UIDevice.current.userInterfaceIdiom == .pad ? Color(white: 0.39) : Color(red: 0.43, green: 0.48, blue: 0.42)
+}
+
+extension ContentCourse {
+    var projectTint: Color {
+        guard let hex = accentHex?.dropFirst(), let rgb = UInt32(hex, radix: 16) else { return .accentColor }
+        return Color(red: Double(rgb >> 16) / 255, green: Double((rgb >> 8) & 255) / 255, blue: Double(rgb & 255) / 255)
+    }
 }
 
 struct RootView: View {

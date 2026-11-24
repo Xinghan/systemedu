@@ -4,7 +4,13 @@ import SwiftUI
 struct SystemEduApp: App {
     private let store: Result<LearningStore, Error>
     init() {
-        store = Result { try LearningStore(url: LearningStore.defaultURL) }
+        var url = LearningStore.defaultURL
+        #if DEBUG && targetEnvironment(simulator)
+        if let value = ProcessInfo.processInfo.environment["SYSTEMEDU_TEST_STORE"], let id = UUID(uuidString: value) {
+            url = FileManager.default.temporaryDirectory.appendingPathComponent("uitest-\(id).sqlite")
+        }
+        #endif
+        store = Result { try LearningStore(url: url) }
     }
     var body: some Scene {
         WindowGroup {

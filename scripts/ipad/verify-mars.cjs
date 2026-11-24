@@ -1,5 +1,6 @@
 const fs=require('node:fs'),path=require('node:path'),http=require('node:http'),assert=require('node:assert/strict');
-const repo=path.resolve(__dirname,'../..'),root=path.join(repo,'packages/learning-runtime/dist'),out=path.join(repo,'artifacts/ipad-mars');
+const repo=path.resolve(__dirname,'../..'),root=path.join(repo,'packages/learning-runtime/dist'),out=process.env.SYSTEMEDU_IPAD_ARTIFACTS || path.join(repo,'artifacts/ipad-mars');
+fs.mkdirSync(out,{recursive:true});
 const {chromium}=require(path.join(repo,'node_modules/playwright'));
 const read=p=>JSON.parse(fs.readFileSync(path.join(root,p),'utf8'));
 const catalog=read('content/catalog.json'),mission=read('content/missions/space.json');
@@ -13,6 +14,9 @@ const server=http.createServer((req,res)=>{const rel=decodeURIComponent(new URL(
   const go=async n=>{await page.goto(`http://127.0.0.1:${server.address().port}/index.html?activity=${n.id}&presentation=tablet`);await page.locator('.tablet-reader .reading-card').waitFor();};
   await go(node('pick-an-observation-site','M01'));
   assert.ok(await page.locator('.reading-card').innerText());
+  const accent=await page.evaluate(()=>getComputedStyle(document.documentElement).getPropertyValue('--accent').trim());
+  assert.equal(accent.toUpperCase(),catalog.courses.find(c=>c.id==='pick-an-observation-site').accentHex);
+  assert.equal(await page.locator('body').evaluate(b=>getComputedStyle(b).backgroundColor),'rgb(255, 255, 255)');
   await page.getByRole('button',{name:'练习与笔记',exact:true}).click();
   await page.locator('#course-note').fill('iPad trial: compare source and scale before selecting a site.');
   assert.equal(await page.locator('dialog[open]').count(),0,'Notes must not make reading inert');
@@ -27,6 +31,8 @@ const server=http.createServer((req,res)=>{const rel=decodeURIComponent(new URL(
   await page.getByRole('button',{name:'进入实验：本节实验工作台',exact:true}).click();
   const frame=page.frameLocator('.mobile-activity iframe');await frame.locator('body').waitFor();
   await frame.locator('#root').locator(':scope > *').first().waitFor({timeout:15000});
+  assert.equal(await frame.locator('body').evaluate(b=>getComputedStyle(b).backgroundColor),'rgb(255, 255, 255)');
+  assert.equal(await frame.locator('html').evaluate(e=>e.style.getPropertyValue('--project-accent')),accent);
   assert.ok((await frame.locator('body').innerText()).length>100,'Embedded experiment must render content: '+(await frame.locator('body').innerText()));
   const bounds=await page.locator('.mobile-activity iframe').boundingBox();assert.ok(bounds.width>=width-8&&bounds.height>height*.75);
   if(width>=730) {
@@ -47,8 +53,16 @@ const server=http.createServer((req,res)=>{const rel=decodeURIComponent(new URL(
  const tableNode=nodes.find(n=>mission.nodes.some(m=>m.activityId===n.id)&&/\|.+\|\s*\n\|?\s*:?-/.test(read(n.path).lesson));
  assert.ok(tableNode,'At least one original table must exist');
  const page=await browser.newPage({viewport:{width:1194,height:750}});
- await page.goto(`http://127.0.0.1:${server.address().port}/index.html?activity=${tableNode.id}&presentation=tablet`);await page.locator('.tablet-outline button').first().waitFor();
- for(const b of await page.locator('.tablet-outline button').all()){await b.click();if(await page.locator('.tablet-table table').count())break;}
+ await page.goto(`http://127.0.0.1:${server.address().port}/index.html?activity=${tableNode.id}&presentation=tablet`);
+ const contents=page.getByRole('button',{name:'打开课文目录'});
+ await contents.click();
+ const sections=page.locator('.contents-list button');
+ const count=await sections.count();
+ for(let i=0;i<count;i++){
+   if(i)await contents.click();
+   await sections.nth(i).click();
+   if(await page.locator('.tablet-table table').count())break;
+ }
  assert.ok(await page.locator('.tablet-table th').count());assert.ok(await page.locator('.tablet-table td').count());await page.screenshot({path:path.join(out,'table-landscape.png')});
  await page.close();assert.deepEqual(errors,[]);
  fs.writeFileSync(path.join(out,'browser-verification.json'),JSON.stringify({status:'pass',viewports:[[1194,750],[834,1080],[600,800]],checks:['concurrent notes and reading','reload restoration','full-size original experiment','lecture mode','original table structure'],errors},null,2)+'\n');

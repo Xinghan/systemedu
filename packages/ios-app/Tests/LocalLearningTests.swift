@@ -174,6 +174,20 @@ final class LocalLearningTests: XCTestCase {
         XCTAssertEqual(course.resumeNode(in: [finished, old])?.id, second.id)
         XCTAssertEqual(course.completedCount(in: [finished, old]), 1)
     }
+    func testTaskHomepageResumesWithinTheLearnersChosenPath() throws {
+        let mission = try XCTUnwrap(TabletMission.current)
+        let start = mission.micro[0]
+        let first = mission.research[0]
+        let partial = LocalRecord(activity: first.activity, state: ["page_index": 2], updatedAt: .now)
+        let complete = LocalRecord(activity: first.activity, state: ["self_completed": true], updatedAt: .now)
+        XCTAssertEqual(mission.resume([]).id, start.id)
+        XCTAssertEqual(mission.resume([LocalRecord(activity: .hand, state: [:], updatedAt: .now)]).id, start.id)
+        XCTAssertEqual(mission.resume([partial]).id, first.id)
+        XCTAssertEqual(mission.resume([complete]).id, mission.research[1].id)
+        let main = LocalRecord(activity: start.activity, state: ["self_completed": true], updatedAt: .now)
+        XCTAssertEqual(mission.resume([main, partial]).id, mission.stations[1].steps[0])
+    }
+
     func testAssetsCannotEscapeBundleThroughPathsOrSymlinks() throws {
         let root = temporaryURL().deletingLastPathComponent()
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)

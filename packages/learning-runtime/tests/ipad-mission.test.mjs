@@ -72,3 +72,15 @@ test('transit reader supplies the actual Q3 evidence at first use and locates ev
   assert.equal(measurements.length, table.length - 1)
   measurements.forEach((p,i) => assert.deepEqual(table[i+1].split(',').map(cell => cell === '' ? null : Number(cell)), [p.cadenceno,p.time_bkjd,p.pdcsap_flux,p.quality]))
 })
+
+test('each installed project supplies a readable accent and the home briefing has an offline poster', () => {
+  const palette = JSON.parse(readFileSync(new URL('../scripts/project-colors.json', import.meta.url)))
+  for (const course of read('content/catalog.json').courses) {
+    assert.equal(course.accentHex, palette[course.id.replace(/-legacy-v1$/, '')], course.id)
+    const rgb = course.accentHex.slice(1).match(/../g).map(hex => parseInt(hex, 16) / 255)
+    const [r, g, b] = rgb.map(c => c <= .04045 ? c / 12.92 : ((c + .055) / 1.055) ** 2.4)
+    assert.ok(1.05 / (.2126 * r + .7152 * g + .0722 * b + .05) >= 4.5, course.id)
+  }
+  const opening = read('content/missions/space.json').films.find(f => f.id === 'opening')
+  assert.equal(readFileSync(path.join(root, opening.poster)).readUInt16BE(0), 0xffd8)
+})

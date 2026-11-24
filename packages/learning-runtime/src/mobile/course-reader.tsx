@@ -66,7 +66,6 @@ export function CourseReader({ lesson, initial, onChange, onCommit, tablet = fal
   const activeTheory = panel?.startsWith('theory:') ? theories.find(t => t.theory_id === panel.slice(7) || t.aliases?.includes(panel.slice(7))) : null
   const activeLab = panel?.startsWith('lab:') ? interactions.find(t => t.id === panel.slice(4)) : null
   return <div className={`mobile-reader course-reader${tablet ? ' tablet-reader' : ''}${inspection ? ' has-inspector' : ''}`}>
-    {tablet && <aside className="tablet-outline" aria-label="课节内容导航"><p className="overline">{lesson.module_id} / 学习内容</p><h2>{lesson.title}</h2><nav>{sections.map((s, i) => <button key={s} aria-current={s === page?.section ? 'step' : undefined} onClick={() => setIndex(pages.findIndex(p => p.section === s))}><span>{String(i + 1).padStart(2, '0')}</span>{s}</button>)}</nav></aside>}
     <header className="reading-heading"><button onClick={() => setPanel('contents')} aria-label="打开课文目录"><List size={18}/><span>{lesson.module_id} · 本节目录</span></button><button onClick={() => setPanel('lecture')} disabled={!slides.length}><Presentation size={17}/>讲课</button></header>
     <div className="section-progress" aria-hidden="true">{sections.map((s, i) => <span key={s} data-active={i <= sections.indexOf(page?.section)}/>)}</div>
     <article className="reading-card" key={tablet ? page?.section : page?.id} aria-label={`课文第 ${index + 1} 页`} tabIndex={0}>

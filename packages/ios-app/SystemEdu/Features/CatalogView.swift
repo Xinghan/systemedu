@@ -100,7 +100,7 @@ private struct CatalogCard: View {
     }
     private var information: some View {
         VStack(alignment: .leading, spacing: 7) {
-            Text(course.lineTitle).font(.caption2.weight(.semibold)).foregroundStyle(Color.rust)
+            Text(course.lineTitle).font(.caption2.weight(.semibold)).foregroundStyle(course.projectTint)
             Text(course.title).font(.system(.subheadline, design: .rounded, weight: .semibold))
                 .lineLimit(typeSize.isAccessibilitySize ? nil : 3).multilineTextAlignment(.leading)
             HStack(spacing: 5) {
@@ -109,7 +109,7 @@ private struct CatalogCard: View {
                 Image(systemName: "arrow.up.right").foregroundStyle(Color.forest)
             }.font(.caption2).foregroundStyle(Color.quiet)
             if completed > 0 {
-                ProgressView(value: Double(completed), total: Double(course.modules.count)).tint(.forest)
+                ProgressView(value: Double(completed), total: Double(course.modules.count)).tint(course.projectTint)
                     .accessibilityLabel("已读完 \(completed) 节，共 \(course.modules.count) 节")
             }
         }.frame(maxWidth: .infinity, alignment: .leading)
@@ -231,7 +231,7 @@ struct CourseOutlineView: View {
                     .font(.caption).foregroundStyle(Color.quiet)
                     .accessibilityLabel("已读完 \(completed) 节，共 \(course.modules.count) 节")
             }
-            ProgressView(value: Double(completed), total: Double(max(1, course.modules.count))).tint(.forest)
+            ProgressView(value: Double(completed), total: Double(max(1, course.modules.count))).tint(course.projectTint)
         }.padding(.horizontal, 20).padding(.top, 10).padding(.bottom, 8)
     }
     private var primaryAction: some View {
@@ -246,7 +246,7 @@ struct CourseOutlineView: View {
                         Spacer(minLength: 0)
                         Image(systemName: "arrow.right").font(.title3)
                     }.padding(.horizontal, 18).padding(.vertical, 14).foregroundStyle(.white)
-                        .background(Color.forest, in: RoundedRectangle(cornerRadius: 18))
+                        .background(course.projectTint, in: RoundedRectangle(cornerRadius: 18))
                 }.buttonStyle(CoursePressStyle()).accessibilityIdentifier("course-start")
             }
         }.padding(.horizontal, 20).padding(.top, 10).padding(.bottom, 8).frame(maxWidth: 760)

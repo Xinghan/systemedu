@@ -23,10 +23,16 @@ struct TabletStation: Decodable, Identifiable {
     let x: Double; let y: Double; let image: String
 }
 struct TabletFilm: Decodable, Identifiable {
-    let id: String; let title: String; let description: String; let path: String; let captions: String
+    let id: String; let title: String; let description: String; let path: String; let captions: String; let poster: String?
 }
 struct TabletBridge: Decodable, Identifiable { let id: String; let title: String; let status: String; let acceptance: String }
+struct MissionHome: Decodable {
+    let projectName: String
+    let primaryCourse: String
+    let brief: String
+}
 struct TabletMission: Decodable {
+    let home: MissionHome
     let schemaVersion: Int; let id: String; let version: String; let title: String
     let commander: MissionCommander
     let homeImage: String; let mapImage: String; let stations: [TabletStation]
@@ -50,9 +56,15 @@ struct TabletMission: Decodable {
         station.id == "first-contact" ? micro : station.steps.compactMap { ref in nodes.first { $0.ref == ref } }
     }
     func resume(_ records: [LocalRecord]) -> TabletMissionNode {
-        if let latest = records.first(where: { r in allNodes.contains { $0.activityId == r.id } }),
-           let node = allNodes.first(where: { $0.activityId == latest.id }) { return node }
-        return micro[0]
+        let nodes = allNodes
+        guard let current = records.lazy.compactMap({ record in nodes.first { $0.activityId == record.id } }).first else { return micro[0] }
+        guard isRead(current, records: records) else { return current }
+        // The three introductory experiences are alternatives. Completing one opens the first station task.
+        let sequence = current.station == "research" ? research : mainSequence.filter { $0.mode != "experience" }
+        let after = sequence.firstIndex(where: { $0.id == current.id }).map { $0 + 1 } ?? 0
+        if let next = sequence.dropFirst(after).first(where: { !isRead($0, records: records) })
+            ?? sequence.prefix(after).first(where: { !isRead($0, records: records) }) { return next }
+        return current
     }
     func isRead(_ node: TabletMissionNode, records: [LocalRecord]) -> Bool {
         guard let r = records.first(where: { $0.id == node.activityId }), r.state["self_completed"] as? Bool == true else { return false }

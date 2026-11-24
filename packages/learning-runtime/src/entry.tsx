@@ -57,8 +57,13 @@ async function main() {
   const target = document.getElementById("root")!
   try {
     const params = new URLSearchParams(location.search), activity = activityFrom(params.get("activity"))
+    const tablet = params.get('presentation') === 'tablet'
+    if (tablet) document.documentElement.dataset.presentation = 'tablet'
     const host = location.protocol === "systemedu:" ? nativeHost(activity, params.get("session") ?? "") : browserHost(activity)
     const [snapshot, lesson] = await Promise.all([host.load(), activity.startsWith("course:") && activity !== "course:space-exploration:1.0:JOURNEY" ? loadLesson(activity) : Promise.resolve(undefined)])
+    if (tablet && lesson?.accentHex && /^#[0-9a-f]{6}$/i.test(lesson.accentHex)) {
+      document.documentElement.style.setProperty('--accent', lesson.accentHex)
+    }
     createRoot(target).render(<Classroom host={host} initial={snapshot ?? {}} activity={activity} lesson={lesson}/> )
   } catch (error) {
     target.className = "load-error"; target.textContent = error instanceof Error ? error.message : "课堂暂时无法打开，请返回后重试。"

@@ -11,21 +11,23 @@ export interface CourseLesson {
   course_position?: { course: string; stage: string; number: number; total: number }
   mission_brief?: { speaker: string; message: string }
   learning_output?: string
+  accentHex?: string
   content_revision?: string
   content_history?: { revision: string; title: string; notice: string; questions: {key: string; question: string; options?: string[]}[] }
 }
 export interface CatalogNode { id: string; moduleId: string; title: string; path: string }
-export interface Catalog { schemaVersion: number; courses: { id: string; modules: CatalogNode[] }[] }
+export interface Catalog { schemaVersion: number; courses: { id: string; accentHex?: string; modules: CatalogNode[] }[] }
 export async function loadLesson(activity: string): Promise<CourseLesson> {
   const response = await fetch('content/catalog.json')
   if (!response.ok) throw new Error('课程目录无法读取，请重新安装课程包。')
   const catalog = await response.json() as Catalog
-  const node = catalog.courses.flatMap(course => course.modules).find(node => node.id === activity)
+  const course = catalog.courses.find(course => course.modules.some(node => node.id === activity))
+  const node = course?.modules.find(node => node.id === activity)
   if (!node) throw new Error('这份记录对应的课程版本尚未安装。原记录仍可在“我的”中导出。')
   if (!/^\/content\/modules\/[a-f0-9]+\.json$/.test(node.path)) throw new Error('课程路径不正确。')
   const file = await fetch(node.path)
   if (!file.ok) throw new Error('本节内容缺失，请重新安装课程包。')
-  return file.json()
+  return { ...await file.json(), accentHex: course?.accentHex }
 }
 export function assetURL(value: string, base: string): string {
   const preview = value.match(/^\/preview\/(lightkurve|pvlib|teachopencadd)\/media\?path=(.+)$/)

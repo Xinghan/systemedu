@@ -18,43 +18,31 @@ struct TabletMissionView: View {
     private var station: TabletStation { mission.stations.first { $0.id == stationID } ?? mission.stations[0] }
     private var resume: TabletMissionNode { mission.resume(store.records) }
 
-    private var returning: Bool { store.records.contains { $0.id == resume.activityId } }
-    private var currentBriefing: String {
-        if !returning { return mission.stations[0].briefing }
-        let project = resume.ref.components(separatedBy: ":")[0]
-        return mission.commander.projects[project] ?? station.briefing
-    }
+    @Environment(\.dynamicTypeSize) private var typeSize
+    @ScaledMetric(relativeTo: .largeTitle) private var titleSize: CGFloat = 44
+    private var marsTint: Color { ContentCatalog.current?.courses.first { $0.id == mission.home.primaryCourse }?.projectTint ?? .rust }
+    private var returning: Bool { store.records.contains { record in mission.allNodes.contains { $0.activityId == record.id } } }
 
     var body: some View {
         NavigationStack(path: $path) {
-            GeometryReader { size in
-                HStack(spacing: 0) {
-                    sidebar(compact: size.size.width < 1000)
-                    VStack(spacing: 0) {
-                        HStack {
-                            VStack(alignment: .leading, spacing: 5) {
-                                Text("SYSTEMEDU / 火星探索").font(.caption.monospaced()).foregroundStyle(Color.quiet)
-                                Text(area.rawValue).font(.title2.weight(.semibold))
-                            }
-                            Spacer()
-                            Button { journal = true } label: { Label("试学手记", systemImage: "square.and.pencil") }.buttonStyle(.bordered).accessibilityIdentifier("ipad-journal")
-                        }.padding(.horizontal, 26).padding(.vertical, 17)
-                        Divider()
-                        switch area {
-                        case .home: home
-                        case .map: mapLayout
-                        case .library: library
-                        case .records: RecordsView(store: store)
-                        case .dossier: ClassroomView(activity: .spaceDossier, store: store, onOpenActivity: { path.append(.activity($0)) }, onMissionMap: { area = .map })
-                        }
-                    }.frame(maxWidth: .infinity, maxHeight: .infinity)
-                }.background(Color.paper).foregroundStyle(Color.forest)
+            VStack(spacing: 0) {
+                header
+                Divider()
+                switch area {
+                case .home: home
+                case .map: mapLayout
+                case .library: library
+                case .records: RecordsView(store: store)
+                case .dossier: ClassroomView(activity: .spaceDossier, store: store, onOpenActivity: { path.append(.activity($0)) }, onMissionMap: { area = .map })
+                }
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(.white).foregroundStyle(Color.forest)
             .toolbar(.hidden, for: .navigationBar)
             .navigationDestination(for: AppRoute.self) { route in
                 switch route {
                 case .catalog: CatalogView(store: store)
-                case .course(let c): CourseOutlineView(course: c, store: store)
+                case .course(let c): CourseOutlineView(course: c, store: store).tint(c.projectTint)
                 case .activity(let activity): TabletLessonView(activity: activity, mission: mission, store: store, onMap: { selected in
                     if let n = mission.allNodes.first(where: { $0.activityId == selected.rawValue }), n.station != "research" {
                         stationID = n.station; area = .map; path = []
@@ -77,70 +65,139 @@ struct TabletMissionView: View {
                         .toolbar { ToolbarItem(placement: .confirmationAction) { Button("完成") { journal = false } } }
                 }.presentationDetents([.large])
             }
-        }.tint(.forest)
+        }.tint(marsTint)
     }
 
-    private func sidebar(compact: Bool) -> some View {
-        VStack(alignment: compact ? .center : .leading, spacing: 14) {
-            Image(systemName: "sparkle").font(.system(size: 30, weight: .light)).padding(.top, 28).padding(.bottom, 25)
-            ForEach(TabletArea.allCases, id: \.self) { item in
-                Button { area = item } label: {
-                    VStack(alignment: compact ? .center : .leading, spacing: 7) {
-                        Image(systemName: item.symbol).font(.title3)
-                        Text(item.rawValue).font(compact ? .caption2 : .subheadline.weight(.medium))
-                    }.frame(maxWidth: .infinity, minHeight: 62, alignment: compact ? .center : .leading)
-                        .padding(.horizontal, compact ? 2 : 18)
-                        .background(area == item ? Color.white.opacity(0.14) : Color.clear, in: RoundedRectangle(cornerRadius: 13))
-                }.buttonStyle(.plain).accessibilityIdentifier("ipad-area-\(item)")
+    private var header: some View {
+        HStack(spacing: 14) {
+            if area == .home {
+                Image(systemName: "globe.europe.africa.fill").font(.title2).foregroundStyle(marsTint)
+                Text("SystemEdu").font(.title3.weight(.bold))
+                Divider().frame(height: 18)
+                Text(mission.home.projectName).font(.subheadline.weight(.medium))
+            } else {
+                Button { area = .home } label: { Label("任务首页", systemImage: "chevron.left") }
+                    .accessibilityIdentifier("ipad-area-home")
+                Divider().frame(height: 18)
+                Text(area.rawValue).font(.headline)
             }
             Spacer()
-            Text(compact ? "本机保存" : "火星探索 · 试学版\n记录保存在本机")
-                .font(.caption2).lineSpacing(6).foregroundStyle(.white.opacity(0.6)).padding(.bottom, 25)
-        }.padding(.horizontal, compact ? 8 : 17).frame(width: compact ? 82 : 174)
-            .frame(maxHeight: .infinity).foregroundStyle(.white).background(Color(red: 0.07, green: 0.16, blue: 0.17))
+            Menu {
+                ForEach(TabletArea.allCases.filter { $0 != .home }, id: \.self) { item in
+                    Button {
+                        if item == .map { stationID = resume.station == "research" ? "first-contact" : resume.station }
+                        area = item
+                    } label: { Label(item.rawValue, systemImage: item.symbol) }
+                    .accessibilityIdentifier("ipad-area-\(item)")
+                }
+                Divider()
+                Button { journal = true } label: { Label("试学手记", systemImage: "square.and.pencil") }
+                    .accessibilityIdentifier("ipad-journal")
+            } label: {
+                Label("任务手册", systemImage: "book.closed").font(.subheadline.weight(.medium)).padding(.vertical, 10)
+            }.accessibilityIdentifier("ipad-mission-menu")
+        }
+        .frame(minHeight: 56).padding(.horizontal, 25).frame(maxWidth: .infinity)
+        .foregroundStyle(Color.forest).background(.white)
     }
 
     private var home: some View {
         GeometryReader { size in
+            let wide = size.size.width >= 880 && !typeSize.isAccessibilitySize
+            let margin: CGFloat = size.size.width < 600 ? 20 : (wide ? 52 : 36)
             ScrollView {
-                VStack(alignment: .leading, spacing: 22) {
-                    ZStack(alignment: .leading) {
-                        BundledMissionImage(path: mission.homeImage).overlay(LinearGradient(colors: [.black.opacity(0.82), .black.opacity(0.16)], startPoint: .leading, endPoint: .trailing))
-                        VStack(alignment: .leading, spacing: 18) {
-                            Text(mission.commander.signature).font(.subheadline).foregroundStyle(Color(red: 0.79, green: 0.86, blue: 0.72))
-                            Text(returning ? "回来啦，接着做你的任务。" : "欢迎来基地，观测员。").font(.system(size: size.size.width > 900 ? 38 : 30, weight: .medium, design: .serif)).lineSpacing(9)
-                            Text(currentBriefing).frame(maxWidth: 620, alignment: .leading).font(.body).lineSpacing(6).foregroundStyle(.white.opacity(0.8))
-                            HStack(spacing: 12) {
-                                Button { open(resume) } label: { Label(store.records.contains { $0.id == resume.activityId } ? "继续学习" : "开始第一次观察", systemImage: "arrow.right") }
-                                    .buttonStyle(.borderedProminent).tint(Color(red: 0.82, green: 0.89, blue: 0.65)).foregroundStyle(Color.forest).accessibilityIdentifier("ipad-resume")
-                                Button { film = mission.films.first { $0.id == "opening" } } label: { Label("观看序章", systemImage: "play.fill") }
-                                    .buttonStyle(.bordered).tint(.white).accessibilityIdentifier("ipad-opening-film")
-                            }.controlSize(.large)
-                        }.padding(30).foregroundStyle(.white)
-                    }.frame(height: size.size.height < 650 ? 330 : 390).clipShape(RoundedRectangle(cornerRadius: 22))
-                    HStack(alignment: .top, spacing: 16) {
-                        homeCard("8 个任务站", detail: "展开路线，选择当前任务", symbol: "map") { area = .map; stationID = resume.station == "research" ? "first-contact" : resume.station }
-                        homeCard("完整课程与作品", detail: "课文、视频、实验和资料", symbol: "books.vertical") { area = .library }
-                        homeCard("留下学习过程", detail: "回看笔记和实验记录", symbol: "square.and.pencil") { area = .records }
+                VStack(alignment: .leading, spacing: wide ? 38 : 26) {
+                    if wide {
+                        HStack(alignment: .center, spacing: 42) {
+                            missionDescription
+                            videoPreview.frame(width: min(size.size.width * 0.42, 510))
+                        }
+                    } else {
+                        missionDescription
+                        videoPreview.frame(maxWidth: size.size.height < 750 ? 390 : .infinity)
                     }
-                    if returning, let currentStation = mission.stations.first(where: { $0.id == resume.station }) {
-                        let lessons = mission.lessons(currentStation)
-                        let readCount = lessons.filter { mission.isRead($0, records: store.records) }.count
-                        Text("你在" + currentStation.place + "担任" + currentStation.learnerRole + "。本站已标记读完 " + String(readCount) + " / " + String(lessons.count) + " 节。").font(.subheadline)
-                    }
-                    Text("初次体验可直接在 iPad 上操作。实物课会另行说明材料和设备要求。")
-                        .font(.caption).foregroundStyle(Color.quiet)
-                }.padding(26)
+                    nextTask
+                }
+                .padding(.top, wide ? min(82, size.size.height * 0.09) : 24)
+                .padding(.bottom, 24)
+                .frame(maxWidth: 1100, alignment: .leading)
+                .padding(.horizontal, margin)
+                .frame(maxWidth: .infinity)
             }
         }
     }
-    private func homeCard(_ title: String, detail: String, symbol: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            VStack(alignment: .leading, spacing: 11) {
-                Image(systemName: symbol).font(.title2).foregroundStyle(Color.rust)
-                Text(title).font(.headline); Text(detail).font(.caption).foregroundStyle(Color.quiet)
-            }.frame(maxWidth: .infinity, minHeight: 96, alignment: .leading).padding(18).background(.white.opacity(0.75), in: RoundedRectangle(cornerRadius: 15))
-        }.buttonStyle(.plain)
+
+    private var missionDescription: some View {
+        VStack(alignment: .leading, spacing: 15) {
+            HStack(spacing: 9) {
+                Capsule().fill(marsTint).frame(width: 27, height: 3)
+                Text("你的远征任务").font(.subheadline.weight(.semibold)).foregroundStyle(marsTint)
+            }
+            Text(mission.title).font(.system(size: titleSize, weight: .bold)).tracking(-0.6)
+                .fixedSize(horizontal: false, vertical: true).accessibilityAddTraits(.isHeader)
+            Text(mission.home.brief)
+                .font(.title3).lineSpacing(6).foregroundStyle(Color(white: 0.28))
+                .fixedSize(horizontal: false, vertical: true)
+            Text(mission.commander.signature).font(.callout.weight(.medium))
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    @ViewBuilder private var videoPreview: some View {
+        if let openingFilm = mission.films.first(where: { $0.id == "opening" }) {
+            Button { film = openingFilm } label: {
+                Color(white: 0.92).aspectRatio(16/9, contentMode: .fit)
+                    .overlay { BundledMissionImage(path: openingFilm.poster ?? mission.homeImage) }
+                    .overlay(alignment: .bottomLeading) {
+                        HStack(spacing: 9) {
+                            Image(systemName: "play.fill").font(.footnote)
+                            Text("播放任务简报").font(.callout.bold())
+                        }.foregroundStyle(.white).padding(.horizontal, 15).padding(.vertical, 10)
+                            .background(.black.opacity(0.74), in: Capsule()).padding(16)
+                    }
+                    .clipShape(RoundedRectangle(cornerRadius: 18))
+            }
+            .buttonStyle(.plain).accessibilityLabel("播放林岚的任务简报").accessibilityIdentifier("ipad-opening-film")
+        }
+    }
+
+    private var nextTask: some View {
+        let node = resume
+        let course = ContentCatalog.current?.courses.first { $0.modules.contains { $0.id == node.activityId } }
+        let location = (node.station == "research" ? course?.title : mission.stations.first { $0.id == node.station }?.place)
+        let label = mission.isRead(node, records: store.records) ? "回顾学习" : (returning ? "继续学习" : "开始学习")
+        return VStack(alignment: .leading, spacing: 14) {
+            Divider()
+            HStack(spacing: 8) {
+                Image(systemName: "location.fill")
+                Text(returning ? "当前学习任务" : "第一个任务").fontWeight(.semibold)
+                if let location { Text("·").accessibilityHidden(true); Text(location) }
+            }.font(.subheadline).foregroundStyle(marsTint).padding(.top, 9)
+            ViewThatFits(in: .horizontal) {
+                HStack(alignment: .center, spacing: 28) {
+                    taskTitle(node).fixedSize(horizontal: true, vertical: true)
+                    Spacer(minLength: 10)
+                    learnButton(label, node: node)
+                }
+                VStack(alignment: .leading, spacing: 16) { taskTitle(node); learnButton(label, node: node) }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+    private func taskTitle(_ node: TabletMissionNode) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(node.title).font(.title2.weight(.semibold)).fixedSize(horizontal: false, vertical: true)
+            if !returning, let firstTask = mission.commander.projects[node.ref.components(separatedBy: ":")[0]] {
+                Text(firstTask).font(.body).foregroundStyle(Color.quiet).fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+    private func learnButton(_ label: String, node: TabletMissionNode) -> some View {
+        Button { open(node) } label: {
+            HStack(spacing: 18) { Text(label).font(.headline); Image(systemName: "arrow.right") }
+                .padding(.horizontal, 22).frame(minHeight: 52).foregroundStyle(.white)
+                .background(marsTint, in: RoundedRectangle(cornerRadius: 12))
+        }.buttonStyle(.plain).accessibilityIdentifier("ipad-resume")
     }
 
     private var mapLayout: some View {
@@ -281,12 +338,14 @@ private struct TabletLessonView: View {
     }
     private var index: Int? { sequence.firstIndex(of: activity) }
     private var briefing: String? { course.flatMap { mission.commander.projects[$0.id] } }
+    @Environment(\.dismiss) private var dismiss
     @State private var showBriefing = false
     var body: some View {
         ClassroomView(activity: activity, store: store, onOpenActivity: { activity = $0 }, onMissionMap: { onMap(activity) }).id(activity.rawValue)
             .navigationBarBackButtonHidden()
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) { Button { onMap(activity) } label: { Label(onMainRoute ? "任务地图" : "课程目录", systemImage: onMainRoute ? "map" : "list.bullet") }.accessibilityIdentifier("ipad-back-map") }
+                ToolbarItem(placement: .topBarLeading) { Button { dismiss() } label: { Label("返回", systemImage: "chevron.left") }.accessibilityIdentifier("ipad-lesson-back") }
+                ToolbarItem(placement: .topBarTrailing) { Button { onMap(activity) } label: { Label(onMainRoute ? "任务地图" : "课程目录", systemImage: onMainRoute ? "map" : "list.bullet") }.accessibilityIdentifier("ipad-back-map") }
                 ToolbarItem(placement: .topBarTrailing) {
                     HStack {
                         if briefing != nil {
@@ -303,6 +362,7 @@ private struct TabletLessonView: View {
                     }
                 }
             }
+            .tint(course?.projectTint ?? .rust)
     }
     private func move(_ delta: Int) { if let i = index, sequence.indices.contains(i + delta) { activity = sequence[i + delta] } }
 }
@@ -331,7 +391,7 @@ struct TabletFilmView: View {
                 .toolbar { ToolbarItem(placement: .confirmationAction) { Button("完成") { dismiss() } } }
                 .onAppear {
                     guard player == nil, let url = TabletMission.bundledURL(film.path) else { return }
-                    let p = AVPlayer(url: url); player = p
+                    let p = AVPlayer(url: url); player = p; p.play()
                     observer = p.addPeriodicTimeObserver(forInterval: CMTime(seconds: 0.25, preferredTimescale: 600), queue: .main) { t in seconds = t.seconds.isFinite ? t.seconds : 0 }
                 }
                 .onChange(of: scenePhase) { _, value in if value != .active { player?.pause() } }

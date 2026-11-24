@@ -11,6 +11,7 @@ struct ContentNode: Codable, Identifiable {
 struct ContentCourse: Codable, Identifiable, Hashable {
     let id: String; let title: String; let version: String; let lineId: String; let kind: String
     let stages: [ContentStage]; let modules: [ContentNode]; let sourceRoute: String
+    let accentHex: String?
     let coverPath: String?; let summary: String?; let outcome: String?
     let contentRevision: String?
     var lineTitle: String { ContentCatalog.current?.lines.first { $0.id == lineId }?.title ?? "课程" }

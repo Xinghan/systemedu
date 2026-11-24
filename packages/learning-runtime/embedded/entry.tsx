@@ -14,6 +14,7 @@ import { TechnicalVisual } from '../../student-web/src/components/learning/techn
 import { AlgorithmLab } from '../../student-web/src/app/standalone/post-training/algorithm-lab'
 import './phone.css'
 import './tablet.css'
+import projectColors from '../scripts/project-colors.json'
 import { SpaceMissionDossier } from '../../student-web/src/components/mission/space-mission-dossier'
 import { GuidedCourseNotebook } from '../../student-web/src/components/learning/guided-course-notebook'
 
@@ -26,6 +27,11 @@ function PostTrainingExperiment() {
 const params = new URLSearchParams(location.search)
 document.documentElement.dataset.presentation = params.get('presentation') ?? 'phone'
 const id = params.get('project') ?? '', family = params.get('family'), node = { module_id: params.get('node') ?? 'M01' } as any
+if (params.get('presentation') === 'tablet') {
+ const colorId = family === 'mission' ? 'mars-analog-rover' : id.replace(/-legacy-v1$/, '')
+ const accent = (projectColors as Record<string,string>)[colorId]
+ if (accent) document.documentElement.style.setProperty('--project-accent', accent)
+}
 let course = { id: id.replace('-legacy-v1', ''), version: params.get('version') ?? '1.0', modules: [], title: id } as any
 const micro = params.get('micro') === '1'
 const root = createRoot(document.getElementById('root')!)
