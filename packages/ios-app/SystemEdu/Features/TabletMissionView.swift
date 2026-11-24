@@ -1,5 +1,4 @@
 import SwiftUI
-import AVKit
 
 private enum TabletArea: String, CaseIterable {
     case home = "项目首页", map = "任务地图", library = "项目资料", dossier = "远征档案", records = "学习记录"
@@ -52,7 +51,7 @@ struct TabletMissionView: View {
                 })
                 }
             }
-            .sheet(item: $film) { TabletFilmView(film: $0) }
+            .fullScreenCover(item: $film) { TabletFilmView(film: $0) }
             .sheet(isPresented: $journal) {
                 NavigationStack {
                     VStack(alignment: .leading, spacing: 18) {
@@ -105,29 +104,32 @@ struct TabletMissionView: View {
         GeometryReader { size in
             let wide = size.size.width >= 880 && !typeSize.isAccessibilitySize
             let margin: CGFloat = size.size.width < 600 ? 20 : (wide ? 52 : 36)
-            ScrollView {
-                VStack(alignment: .leading, spacing: wide ? 38 : 26) {
-                    if wide {
-                        HStack(alignment: .center, spacing: 42) {
-                            missionDescription
-                            videoPreview.frame(width: min(size.size.width * 0.42, 510))
+            ScrollViewReader { scroll in
+                ScrollView {
+                    VStack(alignment: .leading, spacing: wide ? 38 : 26) {
+                        if wide {
+                            HStack(alignment: .center, spacing: 42) {
+                                missionDescription(scroll)
+                                videoPreview.frame(width: min(size.size.width * 0.42, 510))
+                            }
+                        } else {
+                            missionDescription(scroll)
+                            videoPreview.frame(maxWidth: size.size.height < 750 ? 390 : .infinity)
                         }
-                    } else {
-                        missionDescription
-                        videoPreview.frame(maxWidth: size.size.height < 750 ? 390 : .infinity)
+                        nextTask.id("current-task")
+                        missionOverview(scroll)
                     }
-                    nextTask
+                    .padding(.top, wide ? min(82, size.size.height * 0.09) : 24)
+                    .padding(.bottom, 24)
+                    .frame(maxWidth: 1100, alignment: .leading)
+                    .padding(.horizontal, margin)
+                    .frame(maxWidth: .infinity)
                 }
-                .padding(.top, wide ? min(82, size.size.height * 0.09) : 24)
-                .padding(.bottom, 24)
-                .frame(maxWidth: 1100, alignment: .leading)
-                .padding(.horizontal, margin)
-                .frame(maxWidth: .infinity)
             }
         }
     }
 
-    private var missionDescription: some View {
+    private func missionDescription(_ scroll: ScrollViewProxy) -> some View {
         VStack(alignment: .leading, spacing: 15) {
             HStack(spacing: 9) {
                 Capsule().fill(marsTint).frame(width: 27, height: 3)
@@ -139,6 +141,9 @@ struct TabletMissionView: View {
                 .font(.title3).lineSpacing(6).foregroundStyle(Color(white: 0.28))
                 .fixedSize(horizontal: false, vertical: true)
             Text(mission.commander.signature).font(.callout.weight(.medium))
+            Button { scroll.scrollTo("mission-overview", anchor: .top) } label: {
+                Label("阅读完整项目介绍", systemImage: "text.alignleft").frame(minHeight: 44)
+            }.font(.subheadline.weight(.semibold)).accessibilityIdentifier("ipad-read-overview")
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -198,6 +203,91 @@ struct TabletMissionView: View {
                 .padding(.horizontal, 22).frame(minHeight: 52).foregroundStyle(.white)
                 .background(marsTint, in: RoundedRectangle(cornerRadius: 12))
         }.buttonStyle(.plain).accessibilityIdentifier("ipad-resume")
+    }
+
+    private func missionOverview(_ scroll: ScrollViewProxy) -> some View {
+        VStack(alignment: .leading, spacing: 22) {
+            Divider()
+            HStack(alignment: .firstTextBaseline) {
+                Text("远征项目总览").font(.largeTitle.bold()).accessibilityAddTraits(.isHeader)
+                Spacer()
+                Menu {
+                    ForEach(mission.home.chapters) { chapter in
+                        Button(chapter.title) { scroll.scrollTo(chapter.id, anchor: .top) }
+                    }
+                    Button("选学 · 抓住行星的影子") { scroll.scrollTo("research-overview", anchor: .top) }
+                    Button("全平台项目") { scroll.scrollTo("platform-projects", anchor: .top) }
+                } label: { Label("跳至", systemImage: "list.bullet") }
+                .accessibilityIdentifier("ipad-overview-jump")
+            }
+            ForEach(mission.home.introduction, id: \.self) { text in overviewParagraph(text) }
+            ForEach(mission.home.chapters) { chapter in
+                if let stage = mission.stations.first(where: { $0.id == chapter.id }) {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Divider().padding(.bottom, 6)
+                        Text(stage.code + "  ·  " + stage.place).font(.subheadline.bold()).foregroundStyle(marsTint)
+                        Text(chapter.title).font(.title2.bold()).accessibilityAddTraits(.isHeader)
+                        overviewParagraph(chapter.body)
+                        ForEach(stage.projects, id: \.self) { project in
+                            if let course = ContentCatalog.current?.courses.first(where: { $0.id == project }) {
+                                projectLink(course)
+                            }
+                        }
+                    }.id(chapter.id)
+                }
+            }
+            VStack(alignment: .leading, spacing: 12) {
+                Divider().padding(.bottom, 6)
+                Text("选学 · 抓住行星的影子").font(.title2.bold()).accessibilityAddTraits(.isHeader)
+                overviewParagraph(mission.home.researchOverview)
+                if let research = mission.research.first,
+                   let course = ContentCatalog.current?.courses.first(where: { $0.modules.contains { $0.id == research.activityId } }) {
+                    projectLink(course)
+                }
+            }.id("research-overview")
+            VStack(alignment: .leading, spacing: 16) {
+                Divider().padding(.bottom, 6)
+                Text("全平台项目").font(.title2.bold()).accessibilityAddTraits(.isHeader)
+                if let catalog = ContentCatalog.current {
+                    ForEach(catalog.lines) { line in
+                        DisclosureGroup {
+                            ForEach(catalog.courses.filter { $0.lineId == line.id }) { course in
+                                VStack(alignment: .leading, spacing: 2) {
+                                    projectLink(course)
+                                    if let summary = course.summary { Text(summary).font(.callout).foregroundStyle(Color.quiet) }
+                                }.frame(maxWidth: .infinity, alignment: .leading).padding(.bottom, 8)
+                            }
+                        } label: {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(line.title).font(.headline)
+                                Text(line.description).font(.subheadline).foregroundStyle(Color.quiet)
+                            }.padding(.vertical, 4)
+                        }
+                        Divider()
+                    }
+                }
+            }.id("platform-projects")
+            Button { scroll.scrollTo("current-task", anchor: .center) } label: {
+                Label("回到当前学习任务", systemImage: "arrow.up")
+            }.padding(.vertical, 8)
+        }
+        .frame(maxWidth: 850, alignment: .leading)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .id("mission-overview")
+    }
+
+    private func overviewParagraph(_ text: String) -> some View {
+        Text(text).font(.body).lineSpacing(7).fixedSize(horizontal: false, vertical: true)
+    }
+
+    private func projectLink(_ course: ContentCourse) -> some View {
+        NavigationLink(value: AppRoute.course(course)) {
+            HStack(spacing: 6) {
+                Image(systemName: "book")
+                Text(course.title).multilineTextAlignment(.leading)
+                Image(systemName: "chevron.right").font(.caption)
+            }.font(.subheadline.weight(.medium)).frame(minHeight: 44)
+        }.foregroundStyle(course.projectTint)
     }
 
     private var mapLayout: some View {
@@ -365,37 +455,4 @@ private struct TabletLessonView: View {
             .tint(course?.projectTint ?? .rust)
     }
     private func move(_ delta: Int) { if let i = index, sequence.indices.contains(i + delta) { activity = sequence[i + delta] } }
-}
-
-struct TabletFilmView: View {
-    let film: TabletFilm
-    @Environment(\.dismiss) private var dismiss
-    @Environment(\.scenePhase) private var scenePhase
-    @State private var player: AVPlayer?
-    @State private var observer: Any?
-    @State private var seconds = 0.0
-    private var captions: [FilmCaption] { FilmCaption.load(film.captions) }
-    var body: some View {
-        NavigationStack {
-            VStack(alignment: .leading, spacing: 18) {
-                VideoPlayer(player: player).aspectRatio(16/9, contentMode: .fit).accessibilityIdentifier("ipad-film-player")
-                Text(captions.first { seconds >= $0.start && seconds < $0.end }?.text ?? " ").font(.headline).frame(maxWidth: .infinity, minHeight: 48).multilineTextAlignment(.center).accessibilityIdentifier("ipad-film-caption")
-                HStack {
-                    Button("播放") { player?.play() }.buttonStyle(.borderedProminent).accessibilityIdentifier("ipad-film-play")
-                    Button("暂停") { player?.pause() }.buttonStyle(.bordered)
-                    Text("已播放 \(Int(seconds)) 秒").font(.caption.monospaced()).accessibilityIdentifier("ipad-film-time")
-                }
-                Text(film.description).font(.subheadline).foregroundStyle(Color.quiet)
-                ScrollView { VStack(alignment: .leading, spacing: 10) { Text("完整字幕").font(.headline); ForEach(captions) { Text($0.text).font(.subheadline).lineSpacing(5) } }.frame(maxWidth: .infinity, alignment: .leading) }
-            }.padding(24).background(Color.paper).navigationTitle(film.title).navigationBarTitleDisplayMode(.inline)
-                .toolbar { ToolbarItem(placement: .confirmationAction) { Button("完成") { dismiss() } } }
-                .onAppear {
-                    guard player == nil, let url = TabletMission.bundledURL(film.path) else { return }
-                    let p = AVPlayer(url: url); player = p; p.play()
-                    observer = p.addPeriodicTimeObserver(forInterval: CMTime(seconds: 0.25, preferredTimescale: 600), queue: .main) { t in seconds = t.seconds.isFinite ? t.seconds : 0 }
-                }
-                .onChange(of: scenePhase) { _, value in if value != .active { player?.pause() } }
-                .onDisappear { player?.pause(); if let observer { player?.removeTimeObserver(observer) }; observer = nil }
-        }.presentationDetents([.large])
-    }
 }

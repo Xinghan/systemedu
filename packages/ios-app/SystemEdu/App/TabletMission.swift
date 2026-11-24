@@ -26,10 +26,19 @@ struct TabletFilm: Decodable, Identifiable {
     let id: String; let title: String; let description: String; let path: String; let captions: String; let poster: String?
 }
 struct TabletBridge: Decodable, Identifiable { let id: String; let title: String; let status: String; let acceptance: String }
+struct MissionChapter: Decodable, Identifiable {
+    let station: String
+    let title: String
+    let body: String
+    var id: String { station }
+}
 struct MissionHome: Decodable {
     let projectName: String
     let primaryCourse: String
     let brief: String
+    let introduction: [String]
+    let chapters: [MissionChapter]
+    let researchOverview: String
 }
 struct TabletMission: Decodable {
     let home: MissionHome

@@ -84,3 +84,14 @@ test('each installed project supplies a readable accent and the home briefing ha
   const opening = read('content/missions/space.json').films.find(f => f.id === 'opening')
   assert.equal(readFileSync(path.join(root, opening.poster)).readUInt16BE(0), 0xffd8)
 })
+
+test('the home overview explains each station and reaches every expedition project', () => {
+  const mission = read('content/missions/space.json')
+  assert.deepEqual(mission.home.chapters.map(c => c.station), mission.stations.map(s => s.id))
+  for (const c of mission.home.chapters) assert.ok(c.title && c.body.length > 80, c.station)
+  assert.ok(mission.home.introduction.length >= 2)
+  assert.match(mission.home.researchOverview, /Kepler-10/)
+  const projects = new Set(mission.stations.flatMap(s => s.projects))
+  projects.add(mission.research[0].ref.split(':')[0])
+  assert.deepEqual([...projects].sort(), mission.courseIds.filter(id => !id.endsWith('-legacy-v1')).sort())
+})

@@ -44,7 +44,22 @@ final class TabletMissionTests: XCTestCase {
         let timer = app.staticTexts["ipad-film-time"]
         let advancing = NSPredicate(format: "label MATCHES %@", "已播放 [1-9][0-9]* 秒")
         expectation(for: advancing, evaluatedWith: timer); waitForExpectations(timeout: 15)
-        app.buttons["暂停"].tap(); capture("iPad-Mars-film"); app.buttons["完成"].tap()
+        app.buttons["ipad-film-play"].tap()
+        let picture = app.descendants(matching: .any).matching(identifier: "ipad-film-player").firstMatch
+        XCTAssertTrue(picture.exists)
+        XCTAssertGreaterThan(picture.frame.width, app.frame.width * 0.94)
+        XCTAssertGreaterThan(picture.frame.height, app.frame.height * 0.92)
+        let subtitles = app.buttons["ipad-film-subtitles"]
+        let before = subtitles.value as? String
+        subtitles.tap()
+        XCTAssertNotEqual(subtitles.value as? String, before)
+        subtitles.tap()
+        XCTAssertEqual(subtitles.value as? String, before)
+        app.buttons["ipad-film-transcript"].tap()
+        XCTAssertTrue(app.staticTexts["完整字幕"].waitForExistence(timeout: 5))
+        app.buttons["收起"].tap()
+        capture("iPad-Mars-fullscreen-film")
+        app.buttons["ipad-close-film"].tap()
         app.buttons["ipad-resume"].tap()
         XCTAssertTrue(app.webViews.firstMatch.buttons["打开课文目录"].waitForExistence(timeout: 20))
         app.buttons["ipad-lesson-back"].tap()
@@ -82,6 +97,31 @@ final class TabletMissionTests: XCTestCase {
         XCUIDevice.shared.orientation = .landscapeLeft
         app.buttons["ipad-area-home"].tap()
     }
+    @MainActor func testMissionOverviewConnectsTheExpeditionAndTheCatalog() {
+        XCUIDevice.shared.orientation = .landscapeLeft
+        let app = freshApp()
+        app.buttons["ipad-read-overview"].tap()
+        let jump = app.buttons["ipad-overview-jump"]
+        XCTAssertTrue(jump.isHittable)
+        capture("iPad-Mars-project-overview")
+        jump.tap()
+        app.buttons["选学 · 抓住行星的影子"].tap()
+        let research = app.buttons["抓住行星的影子"].firstMatch
+        XCTAssertTrue(research.isHittable)
+        research.tap()
+        XCTAssertTrue(app.buttons["course-start"].waitForExistence(timeout: 10))
+        app.terminate(); app.launch()
+        app.buttons["ipad-read-overview"].tap()
+        app.buttons["ipad-overview-jump"].tap()
+        app.buttons["全平台项目"].tap()
+        let row = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "独立专业课程")).firstMatch
+        if !row.isHittable { app.swipeUp() }
+        XCTAssertTrue(row.exists)
+        row.tap()
+        let transformer = app.buttons.matching(NSPredicate(format: "label CONTAINS[c] %@", "Transformer")).firstMatch
+        XCTAssertTrue(transformer.exists)
+    }
+
     @MainActor func testIPadDossierEditsSurviveRelaunch() throws {
         XCUIDevice.shared.orientation = .landscapeLeft
         let app = freshApp()
