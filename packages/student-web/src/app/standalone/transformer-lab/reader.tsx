@@ -7,6 +7,7 @@ import { Experiment, Trace } from './reader-experiments'
 import { defaults, type Settings } from './pocket-model'
 import { mathNotes } from './reader-math-notes'
 import { ReaderCode } from './reader-code'
+import { ReaderIntroduction } from './reader-introduction'
 import { VectorFlight } from './vector-flight'
 import c from './reader.module.css'
 
@@ -35,6 +36,7 @@ function restore():Journal {
 }
 export function FirstPrinciples() {
   const [journal,setJournal] = useState<Journal>(initial)
+  const [intro,setIntro] = useState(true)
   const [ready,setReady] = useState(false)
   const [storageIssue,setStorageIssue] = useState(false)
   const [menu,setMenu] = useState(false)
@@ -47,8 +49,9 @@ export function FirstPrinciples() {
     function showHash() {
       if (['#block-map','#overview-title','#block-title'].includes(location.hash)) { location.replace(base+'?view=overview'+location.hash); return }
       const id = location.hash.slice('#lesson/'.length)
-      if (!location.hash.startsWith('#lesson/') || !known(id)) return
-      setJournal(j=>({...j,last:id}))
+      const reading = location.hash.startsWith('#lesson/') && known(id)
+      setIntro(!reading)
+      if (reading) setJournal(j=>({...j,last:id}))
       requestAnimationFrame(()=>{ document.getElementById('reader-title')?.focus({preventScroll:true}); window.scrollTo({top:0}) })
     }
     let active=true
@@ -68,12 +71,13 @@ export function FirstPrinciples() {
     try {localStorage.setItem(storageKey,JSON.stringify(journal)); localStorage.setItem(storageKey+':model',JSON.stringify(settings))}
     catch {queueMicrotask(()=>setStorageIssue(true))}
   },[ready,journal,settings,storageIssue])
-  const target = (view: string) => base+'?view='+view+'&part='+lesson.part+'&from='+lesson.id
-  const contents = <><p className={c.navTitle}>学习目录 <span>{lessons.length} 节</span></p>{groups.map(group=><div key={group} className={c.navGroup}><h3>{group}</h3>{lessons.map((l,i)=>l.group===group&&<a key={l.id} href={anchor(l.id)} aria-current={index===i?'step':undefined} onClick={()=>setMenu(false)}><span>{journal.answers[l.id]===l.check.answer?<Check size={13} aria-label="自测已通过"/>:String(i+1).padStart(2,'0')}</span>{l.title}</a>)}</div>)}<div className={c.journal}><b>已答对 {passed} / {lessons.length} 道自测</b><progress max={lessons.length} value={passed}/><small>{storageIssue?'当前浏览器无法保存进度。':'阅读位置与作答保存在此浏览器。'}</small></div></>
-  return <main className={c.page}><header className={c.mast}><a href={anchor(lessons[0].id)} className={c.brand}><span className={c.brandMark} aria-hidden="true">∑</span><span>Transformer <b>原理实验室</b></span></a><nav><button className={c.menuButton} aria-expanded={menu} disabled={!ready} onClick={()=>setMenu(open=>!open)}><Menu size={16}/>课程目录</button><a href={target('overview')}><BookOpen size={16}/>结构总览</a><a href={target('model')}><Box size={16}/>交互 3D</a></nav></header>
+  const target = (view: string) => base+'?view='+view+(intro?'':'&part='+lesson.part+'&from='+lesson.id)
+  const contents = <><p className={c.navTitle}>学习目录 <span>{lessons.length} 节</span></p><a className={c.introNav} href="#guide" aria-current={intro?'page':undefined} onClick={()=>setMenu(false)}>课程导读</a>{groups.map(group=><div key={group} className={c.navGroup}><h3>{group}</h3>{lessons.map((l,i)=>l.group===group&&<a key={l.id} href={anchor(l.id)} aria-current={!intro&&index===i?'step':undefined} onClick={()=>setMenu(false)}><span>{journal.answers[l.id]===l.check.answer?<Check size={13} aria-label="自测已通过"/>:String(i+1).padStart(2,'0')}</span>{l.title}</a>)}</div>)}<div className={c.journal}><b>已答对 {passed} / {lessons.length} 道自测</b><progress max={lessons.length} value={passed}/><small>{storageIssue?'当前浏览器无法保存进度。':'阅读位置与作答保存在此浏览器。'}</small></div></>
+  return <main className={c.page}><header className={c.mast}><a href="#guide" className={c.brand} onClick={()=>setMenu(false)}><span className={c.brandMark} aria-hidden="true">∑</span><span>Transformer <b>原理实验室</b></span></a><nav><button className={c.menuButton} aria-expanded={menu} disabled={!ready} onClick={()=>setMenu(open=>!open)}><Menu size={16}/>课程目录</button><a href={target('overview')}><BookOpen size={16}/>模型结构图</a><a href={target('model')}><Box size={16}/>交互 3D</a></nav></header>
     {menu&&<nav className={c.drawer} aria-label="移动端课节">{contents}</nav>}
-    <div className={c.layout}><aside className={c.sidebar}><nav aria-label="课节">{contents}</nav></aside><div className={c.main} key={lesson.id}>
-    <header className={c.lessonHead}><p className={c.kicker}>Transformer 架构 <ChevronRight size={13}/>{lesson.group}</p><div className={c.lessonIndex}>第 {index+1} 节 <i/> 共 {lessons.length} 节</div><h1 id="reader-title" tabIndex={-1}>{lesson.title}</h1><p>{lesson.question}</p><button className={c.jump} onClick={()=>document.getElementById('lesson-experiment')?.scrollIntoView({block:'start'})}>动手试一试 ↓</button></header>
+    <div className={c.layout}><aside className={c.sidebar}><nav aria-label="课节">{contents}</nav></aside><div className={c.main} key={intro?'guide':lesson.id}>
+    {intro ? <ReaderIntroduction first={lessons[0].id} resume={index>0?lesson:undefined}/> : <>
+    <header className={c.lessonHead}><p className={c.kicker}><a href="#guide">{index===0?'先读导读 · Transformer 是什么？':'课程导读'}</a><ChevronRight size={13}/>{lesson.group}</p><div className={c.lessonIndex}>第 {index+1} 节 <i/> 共 {lessons.length} 节</div><h1 id="reader-title" tabIndex={-1}>{lesson.title}</h1><p>{lesson.question}</p><button className={c.jump} onClick={()=>document.getElementById('lesson-experiment')?.scrollIntoView({block:'start'})}>动手试一试 ↓</button></header>
     {index===0&&<div className={c.introMap} aria-label="Transformer 的计算流程">{[['embedding','输入表示','文字 → 向量'],['routing','注意力','从前文读取'],['feedforward','前馈网络','更新每行特征'],['readout','词表预测','分数 → 概率']].map(([id,title,desc])=><a key={id} href={anchor(id)}><b>{title}</b><small>{desc}</small><ChevronRight size={15}/></a>)}</div>}
     <div className={c.columns}><article className={c.article}>{lesson.sections.map(section=><section key={section.title}><h2>{section.title}</h2><p>{section.text}</p>{section.equation&&<div className={c.equation}><Formula source={section.equation}/><p>{section.read}</p></div>}</section>)}
     {extraMath&&<details className={c.mathNote}><summary>数学慢读 · {extraMath.title}</summary>{extraMath.paragraphs.map(p=><p key={p}>{p}</p>)}<p><b>用纸笔试一次。</b>{extraMath.test}</p></details>}
@@ -84,6 +88,7 @@ export function FirstPrinciples() {
     <ReaderCode id={lesson.id}/>
     <section className={c.quiz}><small>换个例子，自己判断</small><h2>{lesson.check.prompt}</h2><div>{lesson.check.options.map((option,i)=><button key={option} aria-pressed={answer===i} onClick={()=>setJournal(j=>({...j,answers:{...j.answers,[lesson.id]:i}}))}>{option}</button>)}</div>{answer!==undefined&&<p role="status"><b>{answer===lesson.check.answer?'答对了。':'再算一次。'}</b>{lesson.check.reason}</p>}</section>
     <div className={c.references}><div><h3>继续推导与动手实现</h3><a href={target('math')}>打开分步推导、数学基础和 Python 填空 <ArrowRight size={14}/></a>{lesson.id==='audit'&&<><a download href={base+'/attention-project.zip'}>下载注意力编程项目（ZIP）</a><p>在 Python 环境中按 README 安装依赖，补全 src/attention.py，运行 python -m unittest discover -s tests -v，并在 reports/reflection.md 记录预测、结果与原因。</p></>}</div><div><h3>对照原始资料</h3>{lesson.sources.map(key=><a key={key} href={sources[key][1]} target="_blank" rel="noreferrer">{sources[key][0]} ↗</a>)}</div></div>
-    <footer className={c.pager}>{index>0&&<a href={anchor(lessons[index-1].id)}><ArrowLeft size={16}/>上一节</a>}{index<lessons.length-1?<a href={anchor(lessons[index+1].id)}>下一节 · {lessons[index+1].title}<ArrowRight size={16}/></a>:<a href={target('model')}>进入模型，完成独立验收 <ArrowRight size={16}/></a>}</footer>
+    <footer className={c.pager}><a href={index>0?anchor(lessons[index-1].id):'#guide'}><ArrowLeft size={16}/>{index>0?'上一节':'回到课程导读'}</a>{index<lessons.length-1?<a href={anchor(lessons[index+1].id)}>下一节 · {lessons[index+1].title}<ArrowRight size={16}/></a>:<a href={target('model')}>进入模型，完成独立验收 <ArrowRight size={16}/></a>}</footer>
+    </>}
     </div></div></main>
 }
