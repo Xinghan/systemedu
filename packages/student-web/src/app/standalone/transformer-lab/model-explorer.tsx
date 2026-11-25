@@ -22,13 +22,13 @@ function valid(v:unknown):v is Notebook {
  const n=v as Notebook,ids=TOPICS.map(t=>t.id)
  return n.version===1 && !!n.codes && !!n.results && !!n.answers && !!n.hints && Array.isArray(n.events) && n.events.length<=600 && n.events.every(e=>e && ids.includes(e.node)&&typeof e.kind==='string'&&typeof e.detail==='string') && Object.values(n.codes).every(x=>typeof x==='string'&&x.length<=20000) && Object.values(n.results).every(r=>r&&typeof r.code==='string'&&typeof r.pass==='boolean'&&typeof r.text==='string')
 }
-export function TransformerModelExplorer(){
- const canvas=useRef<HTMLCanvasElement>(null),panel=useRef<HTMLElement>(null),pendingConcept=useRef<Concept|null>(null)
- const [overview,setOverview]=useState(true),[hasOpened,setHasOpened]=useState(false)
- const [study,setStudy]=useState<Concept|null>(null),[lastStudy,setLastStudy]=useState<Concept>('embedding')
+export function TransformerModelExplorer({initialMode='overview',initialConcept='embedding',fromLesson}:{initialMode?:'overview'|'math'|'model';initialConcept?:Concept;fromLesson?:string}){
+ const canvas=useRef<HTMLCanvasElement>(null),panel=useRef<HTMLElement>(null),pendingConcept=useRef<Concept|null>(initialMode==='model'?initialConcept:null)
+ const [overview,setOverview]=useState(initialMode==='overview'),[hasOpened,setHasOpened]=useState(initialMode==='model')
+ const [study,setStudy]=useState<Concept|null>(initialMode==='math'?initialConcept:null),[lastStudy,setLastStudy]=useState<Concept>(initialConcept)
  const [controller,setController]=useState<Explorer|null>(null)
  const [snapshot,setSnapshot]=useState(initial),[status,setStatus]=useState('正在加载自主引擎与模型权重…'),[error,setError]=useState('')
- const [selected,setSelected]=useState<Concept|null>(null),[cell,setCell]=useState<Selection|null>(null),[report,setReport]=useState(false)
+ const [selected,setSelected]=useState<Concept|null>(initialMode==='model'?initialConcept:null),[cell,setCell]=useState<Selection|null>(null),[report,setReport]=useState(false)
  const [notebook,setNotebook]=useState<Notebook>(empty),[restored,setRestored]=useState(false),[storageError,setStorageError]=useState('')
  const [input,setInput]=useState('CBABBC'),[inputError,setInputError]=useState(''),[layer,setLayer]=useState(0),[head,setHead]=useState(0)
  const [experiment,setExperiment]=useState(1),[geluX,setGeluX]=useState(1),[codeTrace,setCodeTrace]=useState<{data:AttentionOutput;context:string}|null>(null),[runningNode,setRunningNode]=useState<Concept|null>(null)
@@ -83,7 +83,7 @@ export function TransformerModelExplorer(){
  }
  const progress=passed.length/8
  return <main className={s.app}>
-  <header className={s.header}><a href='/standalone/transformer-lab' onClick={e=>{e.preventDefault();backToOverview()}} className={s.brand}><Box size={23}/><span>TRANSFORMER<span className={s.brandSmall}>MODEL EXPLORER</span></span></a><div className={s.identity}>{overview?'从结构总览，走进模型内部':study?'从数学基础逐步走进模型':'结构总览 / '+(topic?.title??'3D 模型')}<span>minGPT · 3 blocks · 3 heads · d = 48</span></div>{!overview&&<button className={s.backOverview} onClick={backToOverview}><ArrowUpRight size={15}/>返回结构总览</button>}<button className={!overview&&report?s.activeButton:''} onClick={()=>{setStudy(null);setHasOpened(true);setOverview(false);setReport(r=>overview||!r);panel.current?.scrollTo({top:0});window.scrollTo({top:0})}}><Route size={17}/>学习轨迹<span className={s.count}>{passed.length}/8</span></button></header>
+  <header className={s.header}><a href='/standalone/transformer-lab' onClick={e=>{e.preventDefault();backToOverview()}} className={s.brand}><Box size={23}/><span>TRANSFORMER<span className={s.brandSmall}>MODEL EXPLORER</span></span></a><a href={'/standalone/transformer-lab'+(fromLesson?'#lesson/'+fromLesson:'')} style={{fontSize:13,whiteSpace:'nowrap'}}>{fromLesson?'回到本节课文':'从零开始学'}</a><div className={s.identity}>{overview?'从结构总览，走进模型内部':study?'从数学基础逐步走进模型':'结构总览 / '+(topic?.title??'3D 模型')}<span>minGPT · 3 blocks · 3 heads · d = 48</span></div>{!overview&&<button className={s.backOverview} onClick={backToOverview}><ArrowUpRight size={15}/>返回结构总览</button>}<button className={!overview&&report?s.activeButton:''} onClick={()=>{setStudy(null);setHasOpened(true);setOverview(false);setReport(r=>overview||!r);panel.current?.scrollTo({top:0});window.scrollTo({top:0})}}><Route size={17}/>学习轨迹<span className={s.count}>{passed.length}/8</span></button></header>
   <div hidden={!overview}><ModelOverview onOpen={openStudy} passed={passed.map(t=>t.id)} storageMessage={storageError||(restored?'学习记录保存在此浏览器 · 独立于原课程':'正在恢复记录…')}/></div>
   <div hidden={!study}><MathStudy id={study??lastStudy} onTopic={openStudy} onModel={choose} onOverview={backToOverview}/></div>
   {hasOpened&&<div className={s.workspace} hidden={overview||!!study}>

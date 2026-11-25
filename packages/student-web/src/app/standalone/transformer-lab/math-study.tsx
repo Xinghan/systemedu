@@ -1,7 +1,6 @@
 'use client'
-import { useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from 'react'
-import katex from 'katex'
-import 'katex/dist/katex.min.css'
+import { useEffect, useRef, useState, type Dispatch, type SetStateAction } from 'react'
+import { Formula } from './formula'
 import { ArrowLeft, ArrowRight, ArrowUpRight, BookOpen, Box, Check, ChevronRight, Code2, Route } from 'lucide-react'
 import type { Concept } from '@/lib/transformer-viz/bridge'
 import { TOPICS } from './model-content'
@@ -15,10 +14,6 @@ import s from './study.module.css'
 const stages=['补齐数学基础','逐项读懂公式','推导与数值实验','手算与代码检验','映射到 3D 模型']
 type Log=(node:Concept,kind:StudyEvent['kind'],detail:string,pass?:boolean)=>void
 type Props={id:Concept;onTopic:(id:Concept)=>void;onModel:(id:Concept)=>void;onOverview:()=>void}
-export function Formula({source,inline=false}:{source:string;inline?:boolean}){
- const html=useMemo(()=>katex.renderToString(source,{displayMode:!inline,throwOnError:false,trust:false,output:'htmlAndMathml',strict:'ignore'}),[source,inline])
- return <span className={inline?s.inlineMath:s.formula} dangerouslySetInnerHTML={{__html:html}}/>
-}
 export function MathStudy({id,onTopic,onModel,onOverview}:Props){
  const {record,setRecord,log,ready,error}=useStudyRecord(),[report,setReport]=useState(false)
  const topic=TOPICS.find(t=>t.id===id)!,level=record.levels[id]??0
