@@ -64,6 +64,42 @@ assert.ok(open.weights[1][2]>0)
 assert.notDeepEqual(open.logits[1],worked.logits[1])
 assert.notDeepEqual(worked.logits[1],pocketForward({...defaults,tokens:[2,1,2]}).logits[1])
 
+const { cellSteps, matrixExample, productGrid, scoreRow, sliceGrid, vocabRow } = require(path.join(dir, 'matrix-walkthrough.ts'))
+const practice = matrixExample('product', defaults)
+assert.deepEqual(productGrid(practice), [[-3, 7], [3, 14]])
+assert.deepEqual(productGrid(matrixExample('product', defaults, true)), [[-1, 7], [6, 14]])
+assert.deepEqual(sliceGrid(practice, 1), [[-2, 8], [-3, 12]])
+assert.deepEqual(cellSteps(practice, 0, 0).map(step => step.total), [2, 0, -3])
+for (const [i, row] of productGrid(practice).entries()) {
+  for (const [j, value] of row.entries()) {
+    assert.equal(practice.shared.reduce((sum, _, r) => sum + sliceGrid(practice, r)[i][j], 0), value)
+  }
+}
+const handVocab = matrixExample('dense', defaults)
+const handResult = vocabRow(productGrid(handVocab)[0], handVocab.bias)
+assert.deepEqual(handResult.logits, [1, 0, 0])
+close(handResult.prob[2], 1 / (Math.E + 2))
+for (const settings of [defaults, {...defaults, causal: false, scaled: false, position: false, nonlinear: false, tokens: [2, 2, 0], fishBias: -2.5}]) {
+  const forward = pocketForward(settings)
+  for (const [mode, stage] of [['query','q'], ['key','k'], ['value','v'], ['context','context'], ['hidden','hidden']]) {
+    const result = productGrid(matrixExample(mode, settings))
+    result.forEach((row, i) => row.forEach((value, j) => close(value, forward[stage][i][j])))
+  }
+  const back = productGrid(matrixExample('back', settings))
+  back.forEach((row, i) => row.forEach((value, j) => close(value + forward.u[i][j], forward.y[i][j])))
+  const score = matrixExample('scores', settings)
+  productGrid(score).forEach((raw, i) => {
+    const scores = scoreRow(raw, i, settings, score.shared.length)
+    assert.deepEqual(scores, forward.scores[i])
+    assert.deepEqual(softmax(scores), forward.weights[i])
+  })
+  const readout = matrixExample('readout', settings)
+  productGrid(readout).forEach((raw, i) => {
+    const prediction = vocabRow(raw, readout.bias)
+    assert.deepEqual(prediction.logits, forward.logits[i])
+    assert.deepEqual(prediction.prob, forward.prob[i])
+  })
+}
 const loss = b => -Math.log(pocketForward({...defaults,fishBias:b}).prob[1][2])
 for (const bias of [-3,0,3]) {
   const analytical = pocketForward({...defaults,fishBias:bias}).prob[1][2]-1

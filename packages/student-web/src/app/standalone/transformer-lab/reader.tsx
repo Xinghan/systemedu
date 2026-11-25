@@ -6,6 +6,9 @@ import { lessons, sources } from './reader-lessons'
 import { Experiment, Trace } from './reader-experiments'
 import { defaults, type Settings } from './pocket-model'
 import { mathNotes } from './reader-math-notes'
+import { MatrixFactorization } from './matrix-factorization'
+import { HeadSplit } from './head-split'
+import { MatrixDesk, hasMatrixDesk } from './matrix-desk'
 import { ReaderCode } from './reader-code'
 import { ReaderIntroduction } from './reader-introduction'
 import { VectorFlight } from './vector-flight'
@@ -87,15 +90,27 @@ export function FirstPrinciples() {
     })
     return ()=>cancelAnimationFrame(frame)
   },[ready,fragment])
+  const firstMatrix = lesson.sections.find(section => hasMatrixDesk(section.concept?.id))?.concept
   const target = (view: string) => base+'?view='+view+(intro?'':'&part='+lesson.part+'&from='+lesson.id)
   const contents = <><p className={c.navTitle}>学习目录 <span>{lessons.length} 节</span></p><a className={c.introNav} href="#guide" aria-current={intro?'page':undefined} onClick={()=>setMenu(false)}>课程导读</a>{groups.map(group=><div key={group} className={c.navGroup}><h3>{group}</h3>{lessons.map((l,i)=>l.group===group&&<a key={l.id} href={anchor(l.id)} aria-current={!intro&&index===i?'step':undefined} onClick={()=>setMenu(false)}><span>{journal.answers[l.id]===l.check.answer?<Check size={13} aria-label="自测已通过"/>:String(i+1).padStart(2,'0')}</span>{l.title}</a>)}</div>)}<div className={c.journal}><b>已答对 {passed} / {lessons.length} 道自测</b><progress max={lessons.length} value={passed}/><small>{storageIssue?'当前浏览器无法保存进度。':'阅读位置与作答保存在此浏览器。'}</small></div></>
   return <main className={c.page}><header className={c.mast}><a href="#guide" className={c.brand} onClick={()=>setMenu(false)}><span className={c.brandMark} aria-hidden="true">∑</span><span>Transformer <b>原理实验室</b></span></a><nav><button className={c.menuButton} aria-expanded={menu} disabled={!ready} onClick={()=>setMenu(open=>!open)}><Menu size={16}/>课程目录</button><a href="#concepts" onClick={()=>setMenu(false)}>概念索引</a><a href={target('overview')}><BookOpen size={16}/>模型结构图</a><a href={target('model')}><Box size={16}/>交互 3D</a></nav></header>
     {menu&&<nav className={c.drawer} aria-label="移动端课节">{contents}</nav>}
     <div className={c.layout}><aside className={c.sidebar}><nav aria-label="课节">{contents}</nav></aside><div className={c.main} key={intro?'guide':lesson.id}>
     {intro ? <ReaderIntroduction first={lessons[0].id} resume={index>0?lesson:undefined}/> : <>
-    <header className={c.lessonHead}><p className={c.kicker}><a href="#guide">{index===0?'先读导读 · Transformer 是什么？':'课程导读'}</a><ChevronRight size={13}/>{lesson.group}</p><div className={c.lessonIndex}>第 {index+1} 节 <i/> 共 {lessons.length} 节</div><h1 id="reader-title" tabIndex={-1}>{lesson.title}</h1><p>{lesson.question}</p><button className={c.jump} onClick={()=>document.getElementById('lesson-experiment')?.scrollIntoView({block:'start'})}>动手试一试 ↓</button></header>
+    <header className={c.lessonHead}><p className={c.kicker}><a href="#guide">{index===0?'先读导读 · Transformer 是什么？':'课程导读'}</a><ChevronRight size={13}/>{lesson.group}</p><div className={c.lessonIndex}>第 {index+1} 节 <i/> 共 {lessons.length} 节</div><h1 id="reader-title" tabIndex={-1}>{lesson.title}</h1><p>{lesson.question}</p><button className={c.jump} onClick={()=>document.getElementById('lesson-experiment')?.scrollIntoView({block:'start'})}>动手试一试 ↓</button>{firstMatrix && <a className={c.matrixJump} href={anchor(lesson.id)+'/'+firstMatrix.id}>逐格拆解矩阵 ↓</a>}</header>
     {index===0&&<div className={c.introMap} aria-label="Transformer 的计算流程">{[['embedding','输入表示','文字 → 向量'],['routing','注意力','从前文读取'],['feedforward','前馈网络','更新每行特征'],['readout','词表预测','分数 → 概率']].map(([id,title,desc])=><a key={id} href={anchor(id)}><b>{title}</b><small>{desc}</small><ChevronRight size={15}/></a>)}</div>}
-    <div className={c.columns}><article className={c.article}>{lesson.sections.map(section=><section key={section.title}><h2 id={section.concept?'lesson/'+lesson.id+'/'+section.concept.id:undefined} tabIndex={section.concept?-1:undefined}>{section.title}</h2>{section.text.split('\n\n').map((paragraph,i)=><p key={i}>{paragraph}</p>)}{section.equation&&<div className={c.equation}><Formula source={section.equation}/><p>{section.read}</p></div>}</section>)}
+    <div className={c.columns}><article className={c.article}>
+    {lesson.sections.map(section => {
+      const concept = section.concept?.id
+      return <section key={section.title}>
+        <h2 id={concept ? 'lesson/' + lesson.id + '/' + concept : undefined} tabIndex={concept ? -1 : undefined}>{section.title}</h2>
+        {section.text.split('\n\n').map((paragraph, i) => <p key={i}>{paragraph}</p>)}
+        {section.equation && <div className={c.equation}><Formula source={section.equation}/><p>{section.read}</p></div>}
+        <MatrixDesk concept={concept} settings={settings}/>
+        {concept === 'split-heads' && <HeadSplit/>}
+        {concept === 'factorization' && <MatrixFactorization/>}
+      </section>
+    })}
     {extraMath&&<details className={c.mathNote}><summary>数学慢读 · {extraMath.title}</summary>{extraMath.paragraphs.map(p=><p key={p}>{p}</p>)}<p><b>用纸笔试一次。</b>{extraMath.test}</p><details><summary>核对推理</summary><p>{extraMath.solution}</p></details></details>}
     <section className={c.faq}><h2>初学时容易卡在哪里？</h2>{lesson.ask.map(([q,a])=><details key={q}><summary>{q}</summary><p>{a}</p></details>)}</section>
     </article><aside id="lesson-experiment" className={c.labColumn}>{index===0&&<div className={c.firstFlight}><VectorFlight settings={settings}/></div>}<Trace lesson={lesson} settings={settings} update={update}/><div className={c.modelLink}><Box size={20}/><div><b>在训练过的模型里看这一步</b><p>{modelNotes[lesson.id]??'A/B/C 排序模型有 3 层、每层 3 个头。可旋转、播放，点格子追踪实际数值。'}</p><a href={target('model')}>定位对应的 3D 部件 <ArrowRight size={14}/></a></div></div></aside></div>

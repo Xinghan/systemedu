@@ -4,6 +4,19 @@ import { usePython } from './use-python'
 import c from './reader.module.css'
 
 const examples:Record<string,{title:string; prompt:string; code:string}> = {
+  algebra: {
+    title: '用三个循环算出四个格子',
+    prompt: 'i 选位置，j 选规则，r 逐个取特征。先预测程序会打印哪四个数。再把 W[1][0] 改成 0，核对哪些格子的和发生了变化。',
+    code: `X = [[1, 2, -1], [0, 3, 2]]
+W = [[2, 0], [-1, 4], [3, 1]]
+
+for i in range(len(X)):
+    for j in range(len(W[0])):
+        terms = []
+        for r in range(len(W)):
+            terms.append(X[i][r] * W[r][j])
+        print(f"位置 {i+1}，规则 {j+1}：{terms}，和为 {sum(terms)}")`,
+  },
   mask:{
     title:'从允许访问的位置算出权重',
     prompt:'先运行原例，再把 visible 的第三项改成 True。用同一组分数观察未来词会分走多少权重。',
