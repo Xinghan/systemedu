@@ -1,6 +1,7 @@
 'use client'
 import { useState } from 'react'
 import { ArrowRight } from 'lucide-react'
+import { ReaderConceptIndex } from './reader-concept-index'
 import c from './reader.module.css'
 
 const passages = [
@@ -59,5 +60,6 @@ export function ReaderIntroduction({first,resume}:Props) {
       <p>我们先选最容易亲手验算的一条路。读到「猫追」时，把候选词缩小到三个，你就能算清模型怎样利用前文，给每个候选词分配概率。到第 11 节，再用同样的部件搭回翻译器，解释译文里的每个位置怎样读取原文。</p>
     </section>
     <div className={c.startLinks}><a href={'#lesson/'+first}>进入第一节 · 算一次下一词预测 <ArrowRight size={16}/></a>{resume&&<a href={'#lesson/'+resume.id}>继续上次的课 · {resume.title}</a>}</div>
+    <ReaderConceptIndex/>
   </>
 }

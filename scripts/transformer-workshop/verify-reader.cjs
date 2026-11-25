@@ -10,6 +10,7 @@ require.extensions['.ts'] = (mod, file) => mod._compile(ts.transpileModule(fs.re
 const dir = path.resolve(__dirname, '../../packages/student-web/src/app/standalone/transformer-lab')
 const { defaults, pocketForward, traceStages } = require(path.join(dir, 'pocket-model.ts'))
 const { lessons, sources } = require(path.join(dir, 'reader-lessons.ts'))
+const { softmax } = require(path.join(dir, 'math.ts'))
 const { TOPICS } = require(path.join(dir, 'model-content.ts'))
 const close = (a, b, tolerance = 1e-8) => assert.ok(Math.abs(a-b) < tolerance, a+' differs from '+b)
 
@@ -20,12 +21,22 @@ for (const l of lessons) {
   assert.ok(traceStages.some(([key]) => key === l.stage))
   assert.ok(l.sources.every(key => key in sources))
   assert.ok(l.ask.length >= 2 && l.check.options[l.check.answer])
+  const terms = l.sections.filter(s => s.concept).map(s => s.concept)
+  assert.ok(terms.length, 'Missing concept text in '+l.id)
+  assert.equal(new Set(terms.map(t=>t.id)).size,terms.length, 'Duplicate anchor in '+l.id)
+  assert.ok(terms.every(t=>/^[a-z0-9-]+$/.test(t.id) && t.name.trim()))
   for (const s of l.sections.filter(s => s.equation)) {
     katex.renderToString(s.equation, { throwOnError:true })
     assert.ok(s.read)
   }
 }
 
+for (const row of [[0,1],[1000,1001]]) {
+  const probabilities = softmax(row)
+  close(probabilities[0],0.269,0.0005)
+  close(probabilities[1],0.731,0.0005)
+}
+close(softmax([0,Math.log(2),-Infinity])[1],2/3)
 const worked = pocketForward(defaults)
 for (const [name,col,expected] of [
   ['scores',0,1.124], ['scores',1,-0.298], ['weights',0,0.806], ['weights',1,0.194],
