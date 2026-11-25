@@ -39,7 +39,7 @@ def export_ipad_mission(repo: Path, out: Path, catalog):
                   mode='experience', note='', title=nodes[f'{slug}:M01']['title']) for slug in source['micro']]
     side_quest = courses[source['sideQuest']]
     side = [dict(ref=f'{side_quest["id"]}:{n["moduleId"]}', activityId=n['id'], station='research',
-                 mode='optional-research', note='独立研究方向，不计入火星车主线。', title=n['title']) for n in side_quest['modules']]
+                 mode='research', note='行星观测与研究', title=n['title']) for n in side_quest['modules']]
     metadata = re.findall(r'(\d): \{ title: "([^"]+)", description: "([^"]+)"', (lib/'space-stage-films.ts').read_text())
     if len(metadata) != 5: raise ValueError('Could not read all original stage film descriptions')
     films = [dict(id='opening',title='火星探索序章',description='林岚介绍这次探索任务。',
@@ -52,8 +52,8 @@ def export_ipad_mission(repo: Path, out: Path, catalog):
                    path=asset(f'/mission/space/video/stage-{i}-v1.mp4'),
                    captions=asset(f'/mission/space/video/stage-{i}-zh.vtt')) for i,t,d in metadata]
     # A frame from the same bundled briefing that opens from the task homepage.
-    opening = films[0]
-    poster = 'content/missions/mars-briefing.jpg'
+    opening = next(f for f in films if f['id'] == source['missionHome']['filmId'])
+    poster = 'content/missions/space-program-briefing.jpg'
     (out / poster).parent.mkdir(parents=True, exist_ok=True)
     subprocess.run(['ffmpeg', '-nostdin', '-v', 'error', '-y', '-ss', '1.3', '-i',
                     str(out / opening['path'].lstrip('/')), '-frames:v', '1', '-vf',

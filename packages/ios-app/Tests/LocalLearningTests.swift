@@ -185,7 +185,13 @@ final class LocalLearningTests: XCTestCase {
         XCTAssertEqual(mission.resume([partial]).id, first.id)
         XCTAssertEqual(mission.resume([complete]).id, mission.research[1].id)
         let main = LocalRecord(activity: start.activity, state: ["self_completed": true], updatedAt: .now)
-        XCTAssertEqual(mission.resume([main, partial]).id, mission.stations[1].steps[0])
+        XCTAssertTrue(mission.isChoosingDirection([main, partial]))
+        XCTAssertFalse(mission.isChoosingDirection([partial, main]))
+        let science = try XCTUnwrap(mission.home.tracks.first { $0.id == "transit" })
+        let engineering = try XCTUnwrap(mission.home.tracks.first { $0.id == "rover" })
+        XCTAssertEqual(mission.entry(for: science, records: [main])?.id, first.id)
+        XCTAssertEqual(mission.entry(for: science, records: [complete])?.id, mission.research[1].id)
+        XCTAssertEqual(mission.entry(for: engineering, records: [main, partial])?.id, mission.stations[1].steps[0])
     }
 
     func testAssetsCannotEscapeBundleThroughPathsOrSymlinks() throws {

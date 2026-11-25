@@ -81,7 +81,8 @@ test('each installed project supplies a readable accent and the home briefing ha
     const [r, g, b] = rgb.map(c => c <= .04045 ? c / 12.92 : ((c + .055) / 1.055) ** 2.4)
     assert.ok(1.05 / (.2126 * r + .7152 * g + .0722 * b + .05) >= 4.5, course.id)
   }
-  const opening = read('content/missions/space.json').films.find(f => f.id === 'opening')
+  const mission = read('content/missions/space.json')
+  const opening = mission.films.find(f => f.id === mission.home.filmId)
   assert.equal(readFileSync(path.join(root, opening.poster)).readUInt16BE(0), 0xffd8)
 })
 
@@ -94,4 +95,25 @@ test('the home overview explains each station and reaches every expedition proje
   const projects = new Set(mission.stations.flatMap(s => s.projects))
   projects.add(mission.research[0].ref.split(':')[0])
   assert.deepEqual([...projects].sort(), mission.courseIds.filter(id => !id.endsWith('-legacy-v1')).sort())
+})
+
+test('the space program opens real projects from a shared foundation, with distinct research and engineering outcomes', () => {
+  const mission = read('content/missions/space.json')
+  const program = mission.home
+  const nodes = new Map([...mission.micro, ...mission.nodes, ...mission.research].map(n => [n.ref, n]))
+  assert.equal(mission.title, '星际远航')
+  assert.equal(mission.micro[0].ref, 'spot-a-world:M01')
+  assert.equal(program.tracks.length, 2)
+  assert.equal(nodes.get(program.tracks.find(t => t.id === 'transit').entry).station, 'research')
+  assert.equal(nodes.get(program.tracks.find(t => t.id === 'rover').entry).station, 'mission-design')
+  for (const item of program.subjects) assert.ok(nodes.has(item.entry), item.entry)
+  const brief = mission.films.find(f => f.id === program.filmId)
+  const transcript = readFileSync(path.join(root, brief.captions), 'utf8')
+  assert.match(transcript, /探测车/); assert.match(transcript, /恒星数据/)
+  const catalog = read('content/catalog.json')
+  const project = catalog.courses.find(c => c.id === 'lightkurve-transit-detective')
+  assert.ok(!read(project.modules[0].path).lesson.includes('火星探索的选学任务'))
+  const map = readFileSync(new URL('../../../artifacts/ipad-mars/node-destinations.md', import.meta.url), 'utf8')
+  const mapped = [...map.matchAll(/`(course:[^`]+)`/g)].map(m => m[1]).sort()
+  assert.deepEqual(mapped, catalog.courses.filter(c => mission.courseIds.includes(c.id)).flatMap(c => c.modules.map(n => n.id)).sort())
 })

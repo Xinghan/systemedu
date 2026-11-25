@@ -7,18 +7,22 @@ extension Color {
     static let quiet = UIDevice.current.userInterfaceIdiom == .pad ? Color(white: 0.39) : Color(red: 0.43, green: 0.48, blue: 0.42)
 }
 
-extension ContentCourse {
-    var projectTint: Color {
-        guard let hex = accentHex?.dropFirst(), let rgb = UInt32(hex, radix: 16) else { return .accentColor }
+extension Color {
+    static func projectAccent(_ hex: String?) -> Color {
+        guard let hex, hex.count == 7, hex.first == "#", let rgb = UInt32(hex.dropFirst(), radix: 16) else { return .accentColor }
         return Color(red: Double(rgb >> 16) / 255, green: Double((rgb >> 8) & 255) / 255, blue: Double(rgb & 255) / 255)
     }
+}
+
+extension ContentCourse {
+    var projectTint: Color { .projectAccent(accentHex) }
 }
 
 struct RootView: View {
     @ObservedObject var store: LearningStore
     var body: some View {
         if UIDevice.current.userInterfaceIdiom == .pad, let mission = TabletMission.current {
-            TabletMissionView(store: store, mission: mission)
+            TabletHomeView(store: store, mission: mission)
         } else { phoneRoot }
     }
     private var phoneRoot: some View {
@@ -129,5 +133,103 @@ private struct NoticesView: View {
     private var notices: String {
         guard let url = Bundle.main.url(forResource: "WebRuntime", withExtension: nil)?.appendingPathComponent("THIRD_PARTY_NOTICES.txt"), let text = try? String(contentsOf: url, encoding: .utf8) else { return "许可文件未找到，请重新构建资源。" }
         return text
+    }
+}
+
+
+private enum TabletHomeArea: String, CaseIterable {
+    case projects = "我的项目", library = "项目库", records = "学习记录"
+    var symbol: String {
+        switch self {
+        case .projects: return "square.grid.2x2"
+        case .library: return "books.vertical"
+        case .records: return "clock"
+        }
+    }
+}
+
+private struct TabletHomeView: View {
+    @ObservedObject var store: LearningStore
+    let mission: TabletMission
+    @State private var area: TabletHomeArea = .projects
+    @State private var inProject = false
+    private var tint: Color { .projectAccent(mission.home.accentHex) }
+    private var progress: Int { mission.allNodes.filter { mission.isRead($0, records: store.records) }.count }
+
+    var body: some View {
+        if inProject {
+            TabletMissionView(store: store, mission: mission, onExit: { area = .projects; inProject = false })
+        } else {
+            VStack(spacing: 0) {
+                HStack(spacing: 24) {
+                    Label("SystemEdu", systemImage: "globe.europe.africa.fill").font(.title3.bold())
+                    Spacer()
+                    ForEach(TabletHomeArea.allCases, id: \.self) { item in
+                        Button { area = item } label: {
+                            Label(item.rawValue, systemImage: item.symbol)
+                                .font(.subheadline.weight(.semibold)).padding(.horizontal, 16).frame(minHeight: 46)
+                                .background(area == item ? tint.opacity(0.1) : .clear, in: Capsule())
+                        }.buttonStyle(.plain).foregroundStyle(area == item ? tint : Color.quiet)
+                            .accessibilityIdentifier("ipad-home-" + String(describing: item))
+                            .accessibilityAddTraits(area == item ? .isSelected : [])
+                    }
+                }.padding(.horizontal, 28).padding(.vertical, 12).background(.white)
+                Divider()
+                if area == .records {
+                    AppNavigationStack(store: store) { RecordsView(store: store) }
+                } else {
+                    AppNavigationStack(store: store) {
+                        ScrollView {
+                            VStack(alignment: .leading, spacing: 26) {
+                                VStack(alignment: .leading, spacing: 8) {
+                                    Text(area.rawValue).font(.largeTitle.bold()).accessibilityIdentifier("ipad-home-title")
+                                    Text(area == .projects ? "从一个好奇的问题，走向自己的发现。" : "选择一个项目，开始一段探索。")
+                                        .font(.title3).foregroundStyle(Color.quiet)
+                                }
+                                Button { inProject = true } label: {
+                                    VStack(alignment: .leading, spacing: 0) {
+                                        Color.clear.frame(height: 270)
+                                            .overlay { BundledMissionImage(path: mission.homeImage) }.clipped()
+                                            .overlay(alignment: .bottomLeading) {
+                                                VStack(alignment: .leading, spacing: 8) {
+                                                    Text("太空科技").font(.subheadline.weight(.semibold))
+                                                    Text(mission.title).font(.system(size: 38, weight: .bold))
+                                                }.foregroundStyle(.white).padding(26).frame(maxWidth: .infinity, alignment: .leading)
+                                                    .background(LinearGradient(colors: [.clear, .black.opacity(0.8)], startPoint: .top, endPoint: .bottom))
+                                            }
+                                        VStack(alignment: .leading, spacing: 18) {
+                                            Text("拍下第一张星球照片，寻找远方的行星，设计自己的探测任务。")
+                                                .font(.title3).foregroundStyle(Color.forest)
+                                            HStack {
+                                                Label("观测研究与探测工程", systemImage: "signpost.right")
+                                                Spacer()
+                                                Label("进入项目", systemImage: "arrow.right").fontWeight(.semibold).foregroundStyle(tint)
+                                            }.font(.subheadline).foregroundStyle(Color.quiet)
+                                            if progress > 0 {
+                                                Text("已读完 \(progress) 节 · 接下来，\(mission.resume(store.records).title)").font(.caption).foregroundStyle(Color.quiet)
+                                            }
+                                        }.padding(24)
+                                    }.background(.white, in: RoundedRectangle(cornerRadius: 24))
+                                        .clipShape(RoundedRectangle(cornerRadius: 24))
+                                }.buttonStyle(.plain).accessibilityIdentifier("ipad-project-space")
+                                if area == .library {
+                                    NavigationLink(value: AppRoute.catalog) {
+                                        HStack(spacing: 16) {
+                                            Image(systemName: "books.vertical").font(.title2)
+                                            VStack(alignment: .leading, spacing: 6) {
+                                                Text("浏览专题课程").font(.headline)
+                                                Text("机械、生命、能源与太空 · 按主题查找").font(.subheadline).foregroundStyle(Color.quiet)
+                                            }
+                                            Spacer()
+                                            Image(systemName: "chevron.right")
+                                        }.padding(24).background(.white, in: RoundedRectangle(cornerRadius: 18))
+                                    }.buttonStyle(.plain).accessibilityIdentifier("ipad-browse-catalog")
+                                }
+                            }.padding(32).frame(maxWidth: 1080).frame(maxWidth: .infinity)
+                        }.background(Color(white: 0.96)).toolbar(.hidden, for: .navigationBar)
+                    }
+                }
+            }.foregroundStyle(Color.forest).tint(tint)
+        }
     }
 }

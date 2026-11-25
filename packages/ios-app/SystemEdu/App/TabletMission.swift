@@ -5,7 +5,7 @@ struct TabletMissionNode: Decodable, Identifiable {
     var id: String { ref }
     var activity: LearningActivity { LearningActivity(rawValue: activityId)! }
     var modeTitle: String {
-        switch mode { case "support": return "补充学习"; case "optional": return "选学"; case "replaced": return "旧版参考"; case "experience": return "动手体验"; case "optional-research": return "拓展研究"; default: return "主线课节" }
+        switch mode { case "support": return "补充学习"; case "optional": return "选学"; case "replaced": return "旧版参考"; case "experience": return "动手体验"; case "optional-research", "research": return "行星观测研究"; default: return "主线课节" }
     }
 }
 struct MissionCommander: Decodable {
@@ -32,9 +32,31 @@ struct MissionChapter: Decodable, Identifiable {
     let body: String
     var id: String { station }
 }
+struct ProgramTrack: Decodable, Identifiable {
+    let id: String
+    let title: String
+    let question: String
+    let detail: String
+    let outcome: String
+    let entry: String
+}
+struct ProgramMilestone: Decodable {
+    let title: String
+    let detail: String
+}
+struct SpaceSubject: Decodable {
+    let title: String
+    let body: String
+    let entry: String
+}
 struct MissionHome: Decodable {
+    let subjects: [SpaceSubject]
+    let furtherStudy: String
+    let filmId: String
+    let tracks: [ProgramTrack]
+    let milestones: [ProgramMilestone]
     let projectName: String
-    let primaryCourse: String
+    let accentHex: String
     let brief: String
     let introduction: [String]
     let chapters: [MissionChapter]
@@ -63,6 +85,17 @@ struct TabletMission: Decodable {
     }
     func lessons(_ station: TabletStation) -> [TabletMissionNode] {
         station.id == "first-contact" ? micro : station.steps.compactMap { ref in nodes.first { $0.ref == ref } }
+    }
+    func isChoosingDirection(_ records: [LocalRecord]) -> Bool {
+        let first = micro[0]
+        let ids = Set(allNodes.map(\.activityId))
+        return records.first(where: { ids.contains($0.id) })?.id == first.activityId && isRead(first, records: records)
+    }
+    func entry(for track: ProgramTrack, records: [LocalRecord]) -> TabletMissionNode? {
+        let sequence = track.id == "transit" ? research : nodes + micro.filter { $0.id != micro[0].id }
+        let ids = Set(sequence.map(\.activityId))
+        let relevant = records.filter { ids.contains($0.id) }
+        return relevant.isEmpty ? sequence.first { $0.ref == track.entry } : resume(relevant)
     }
     func resume(_ records: [LocalRecord]) -> TabletMissionNode {
         let nodes = allNodes

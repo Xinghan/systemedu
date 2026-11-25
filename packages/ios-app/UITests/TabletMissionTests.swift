@@ -1,14 +1,22 @@
 import XCTest
 
 final class TabletMissionTests: XCTestCase {
-    @MainActor private func freshApp() -> XCUIApplication {
+    @MainActor private func freshApp(openProject: Bool = true) -> XCUIApplication {
         let app = XCUIApplication()
         app.launchEnvironment["SYSTEMEDU_TEST_STORE"] = UUID().uuidString
         app.launch()
+        if openProject { enterProject(app) }
         return app
     }
 
+    @MainActor private func enterProject(_ app: XCUIApplication) {
+        let project = app.buttons["ipad-project-space"]
+        XCTAssertTrue(project.waitForExistence(timeout: 15))
+        project.tap()
+    }
+
     @MainActor private func openHandbook(_ title: String, in app: XCUIApplication) {
+        if app.buttons["ipad-project-space"].exists { enterProject(app) }
         let menu = app.buttons["ipad-mission-menu"]
         XCTAssertTrue(menu.waitForExistence(timeout: 15))
         menu.tap()
@@ -23,7 +31,7 @@ final class TabletMissionTests: XCTestCase {
         let app = freshApp()
         XCTAssertTrue(app.buttons["ipad-resume"].waitForExistence(timeout: 15))
         XCTAssertTrue(app.buttons["ipad-resume"].isHittable)
-        XCTAssertEqual(app.buttons["ipad-resume"].label, "开始学习")
+        XCTAssertEqual(app.buttons["ipad-resume"].label, "进入第一阶段")
         XCTAssertFalse(app.buttons["任务地图"].exists)
         capture("iPad-Mars-home")
         XCUIDevice.shared.orientation = .portrait
@@ -31,8 +39,7 @@ final class TabletMissionTests: XCTestCase {
             let frame = app.frame
             let film = app.buttons["ipad-opening-film"].frame
             let learn = app.buttons["ipad-resume"].frame
-            return frame.height > frame.width && film.minY > app.staticTexts["火星地形观察远征"].frame.maxY
-                && frame.contains(film) && frame.contains(learn)
+            return frame.height > frame.width && frame.contains(film) && frame.contains(learn)
         }, evaluatedWith: app)
         wait(for: [portraitHome], timeout: 12)
         XCTAssertTrue(app.buttons["ipad-opening-film"].isHittable)
@@ -61,9 +68,10 @@ final class TabletMissionTests: XCTestCase {
         capture("iPad-Mars-fullscreen-film")
         app.buttons["ipad-close-film"].tap()
         app.buttons["ipad-resume"].tap()
+        app.buttons["ipad-stage-start"].tap()
         XCTAssertTrue(app.webViews.firstMatch.buttons["打开课文目录"].waitForExistence(timeout: 20))
         app.buttons["ipad-lesson-back"].tap()
-        openHandbook("任务地图", in: app)
+        openHandbook("探测工程地图", in: app)
         XCTAssertTrue(app.buttons["ipad-station-mission-design"].waitForExistence(timeout: 5)); capture("iPad-Mars-map")
         app.buttons["ipad-station-mission-design"].tap()
         app.buttons["ipad-node-pick-an-observation-site:M01"].tap()
@@ -80,10 +88,11 @@ final class TabletMissionTests: XCTestCase {
         XCTAssertTrue(web.buttons["关闭面板"].waitForExistence(timeout: 10)); capture("iPad-Mars-workspace")
         web.buttons["关闭面板"].tap()
         XCTAssertTrue(web.staticTexts["已保存到本机"].waitForExistence(timeout: 10))
-        app.terminate(); app.launch()
+        app.terminate(); app.launch(); enterProject(app)
         XCTAssertTrue(app.buttons["ipad-resume"].waitForExistence(timeout: 15))
         XCTAssertEqual(app.buttons["ipad-resume"].label, "继续学习")
         app.buttons["ipad-resume"].tap()
+        app.buttons["ipad-stage-start"].tap()
         XCTAssertTrue(web.buttons["练习与笔记"].waitForExistence(timeout: 20)); web.buttons["练习与笔记"].tap()
         XCTAssertTrue(note.waitForExistence(timeout: 10)); XCTAssertTrue((note.value as? String)?.contains(marker) == true)
         capture("iPad-Mars-reading-and-note")
@@ -97,29 +106,58 @@ final class TabletMissionTests: XCTestCase {
         XCUIDevice.shared.orientation = .landscapeLeft
         app.buttons["ipad-area-home"].tap()
     }
-    @MainActor func testMissionOverviewConnectsTheExpeditionAndTheCatalog() {
+    @MainActor func testProjectHomeLibraryAndVisualJourney() {
+        XCUIDevice.shared.orientation = .landscapeLeft
+        let app = freshApp(openProject: false)
+        XCTAssertTrue(app.staticTexts["ipad-home-title"].waitForExistence(timeout: 15))
+        XCTAssertEqual(app.staticTexts["ipad-home-title"].label, "我的项目")
+        capture("iPad-app-home")
+        app.buttons["ipad-home-library"].tap()
+        XCTAssertTrue(app.buttons["ipad-browse-catalog"].exists)
+        app.buttons["ipad-browse-catalog"].tap()
+        XCTAssertTrue(app.searchFields.firstMatch.waitForExistence(timeout: 10))
+        app.navigationBars.buttons.firstMatch.tap()
+        enterProject(app)
+        XCTAssertTrue(app.buttons["ipad-stage-first-contact"].waitForExistence(timeout: 10))
+        XCTAssertFalse(app.staticTexts["星际远航项目总览"].exists)
+        capture("iPad-visual-journey")
+        app.buttons["ipad-stage-first-contact"].tap()
+        XCTAssertEqual(app.staticTexts["ipad-stage-title"].label, "启程观测港")
+        XCTAssertTrue(app.buttons["ipad-stage-film"].exists)
+        capture("iPad-first-stage")
+        let next = app.buttons["ipad-stage-next"]
+        if !next.isHittable { app.swipeUp() }
+        next.tap()
+        app.buttons["ipad-track-rover"].tap()
+        XCTAssertEqual(app.staticTexts["ipad-stage-title"].label, "任务设计所")
+        capture("iPad-second-stage")
+        app.buttons["ipad-area-home"].tap()
+        app.buttons["ipad-exit-project"].tap()
+        XCTAssertTrue(app.buttons["ipad-project-space"].waitForExistence(timeout: 10))
+        XCTAssertEqual(app.staticTexts["ipad-home-title"].label, "我的项目")
+    }
+
+    @MainActor func testFirstObservationLeadsToBothResearchAndEngineering() throws {
         XCUIDevice.shared.orientation = .landscapeLeft
         let app = freshApp()
-        app.buttons["ipad-read-overview"].tap()
-        let jump = app.buttons["ipad-overview-jump"]
-        XCTAssertTrue(jump.isHittable)
-        capture("iPad-Mars-project-overview")
-        jump.tap()
-        app.buttons["选学 · 抓住行星的影子"].tap()
-        let research = app.buttons["抓住行星的影子"].firstMatch
-        XCTAssertTrue(research.isHittable)
-        research.tap()
-        XCTAssertTrue(app.buttons["course-start"].waitForExistence(timeout: 10))
-        app.terminate(); app.launch()
-        app.buttons["ipad-read-overview"].tap()
-        app.buttons["ipad-overview-jump"].tap()
-        app.buttons["全平台项目"].tap()
-        let row = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "独立专业课程")).firstMatch
-        if !row.isHittable { app.swipeUp() }
-        XCTAssertTrue(row.exists)
-        row.tap()
-        let transformer = app.buttons.matching(NSPredicate(format: "label CONTAINS[c] %@", "Transformer")).firstMatch
-        XCTAssertTrue(transformer.exists)
+        app.buttons["ipad-resume"].tap()
+        app.buttons["ipad-stage-start"].tap()
+        let choose = app.buttons["ipad-lesson-directions"]
+        XCTAssertTrue(choose.waitForExistence(timeout: 15))
+        choose.tap()
+        for track in ["transit", "rover"] {
+            let entry = app.buttons["ipad-track-" + track]
+            XCTAssertTrue(entry.waitForExistence(timeout: 8))
+            if !entry.isHittable { app.swipeUp() }
+            entry.tap()
+            app.buttons["ipad-stage-start"].tap()
+            XCTAssertTrue(app.webViews.firstMatch.buttons["打开课文目录"].waitForExistence(timeout: 20))
+            let expected = track == "transit" ? "从恒星的亮度变化提出研究问题" : "一张图片，也有自己的身份证"
+            XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", expected)).firstMatch.exists)
+            app.buttons["ipad-lesson-back"].tap()
+            app.buttons["ipad-area-home"].tap()
+            app.buttons["ipad-browse-tracks"].tap()
+        }
     }
 
     @MainActor func testIPadDossierEditsSurviveRelaunch() throws {
