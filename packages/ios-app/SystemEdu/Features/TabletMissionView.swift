@@ -91,58 +91,15 @@ private struct ExpeditionJourneyView: View {
         }.font(.subheadline).padding(.horizontal, 26).frame(height: 66).background(Color.expeditionNight)
     }
     private func chapterHome(_ chapter: ExpeditionChapter) -> some View {
-        let index = story.chapters.firstIndex { $0.id == chapter.id } ?? 0
         let draft = (try? store.document(story.draftKey(chapter), as: ExpeditionDraft.self)) ?? ExpeditionDraft()
-        let nodes = chapter.nodes(mission)
-        let allRead = nodes.allSatisfy { mission.isRead($0, records: store.records) }
-        return ScrollView {
-            VStack(alignment: .leading, spacing: 24) {
-                ZStack(alignment: .bottomLeading) {
-                    BundledMissionImage(path: chapter.image)
-                    LinearGradient(colors: [.black.opacity(0.05), .black.opacity(0.35), .expeditionNight], startPoint: .top, endPoint: .bottom)
-                    HStack(alignment: .bottom, spacing: 30) {
-                        VStack(alignment: .leading, spacing: 14) {
-                            Text("\(chapter.act)  /  \(String(format: "%02d", index + 1))").font(.subheadline.bold()).tracking(2).foregroundStyle(Color.expeditionGold)
-                            Text(chapter.title).font(.system(size: 38, weight: .bold)).fixedSize(horizontal: false, vertical: true).accessibilityIdentifier("expedition-chapter-title")
-                            Text("\(profile?.name ?? "队员")，\(chapter.arrival)").font(.title3).lineSpacing(5).foregroundStyle(.white.opacity(0.85)).frame(maxWidth: 620, alignment: .leading)
-                            Button { advance(chapter, draft: draft, allRead: allRead) } label: {
-                                HStack(spacing: 20) { Text(allRead ? "收好本章作品" : (draft.briefingSeen ? "继续当前任务" : "听林岚交代任务")); Image(systemName: "arrow.right") }
-                                    .font(.headline).padding(.horizontal, 24).frame(minHeight: 56).foregroundStyle(Color.expeditionNight).background(Color.expeditionGold, in: Capsule())
-                            }.buttonStyle(.plain).accessibilityIdentifier("expedition-continue")
-                        }.frame(maxWidth: .infinity, alignment: .leading)
-                        if let profile {
-                            VStack(spacing: 10) { CrewAvatar(profile: profile, size: 90); Text(profile.role.title).font(.caption.bold()).foregroundStyle(.white.opacity(0.8)) }
-                        }
-                    }.padding(32)
-                }.frame(minHeight: 470).clipShape(RoundedRectangle(cornerRadius: 26))
-                HStack(alignment: .top, spacing: 20) {
-                    Image(systemName: "shippingbox.fill").font(.title2).foregroundStyle(Color.expeditionGold)
-                    VStack(alignment: .leading, spacing: 7) {
-                        Text("这一章，你会带走").font(.caption).foregroundStyle(.white.opacity(0.6))
-                        Text(chapter.delivery.title).font(.title3.bold())
-                        Text(chapter.delivery.evidence.map(\.title).joined(separator: "  ·  ")).font(.subheadline).foregroundStyle(.white.opacity(0.75))
+        let allRead = chapter.isReadyForDelivery(mission: mission, store: store)
+        return Group {
+            if let profile {
+                ExpeditionHomeView(story: story, mission: mission, chapter: chapter, profile: profile, completed: receipts.count,
+                    actionTitle: allRead ? "收好本章作品" : (draft.briefingSeen ? "继续当前任务" : "听林岚交代任务")) {
+                        advance(chapter, draft: draft, allRead: allRead)
                     }
-                    Spacer()
-                    Text("\(nodes.count) 个学习步骤\n完成后整理作品").font(.caption).multilineTextAlignment(.trailing).foregroundStyle(.white.opacity(0.6))
-                }.padding(22).background(Color.expeditionPanel, in: RoundedRectangle(cornerRadius: 18))
-                if let previous = receipts.last {
-                    HStack(spacing: 12) { Image(systemName: "checkmark.seal").foregroundStyle(Color.expeditionGold); Text("随身档案：\(previous.title)"); Text("已保存，可在作品中回看").foregroundStyle(.white.opacity(0.5)) }.font(.caption)
-                }
-                HStack { Text("你的远航路线").font(.headline); Spacer(); Text("沿途完成任务，一章接着一章").font(.caption).foregroundStyle(.white.opacity(0.55)) }
-                ScrollView(.horizontal) {
-                    HStack(alignment: .top, spacing: 13) {
-                        ForEach(Array(story.chapters.enumerated()), id: \.element.id) { i, item in
-                            VStack(alignment: .leading, spacing: 9) {
-                                BundledMissionImage(path: item.image).frame(width: 166, height: 94).clipShape(RoundedRectangle(cornerRadius: 12))
-                                    .overlay(alignment: .topLeading) { Text(i < index ? "已入档" : (i == index ? "现在" : String(format: "%02d", i+1))).font(.caption2.bold()).padding(6).background(i == index ? Color.expeditionGold : Color.expeditionNight).foregroundStyle(i == index ? Color.expeditionNight : .white).clipShape(Capsule()).padding(7) }
-                                Text(item.title).font(.caption.bold()).fixedSize(horizontal: false, vertical: true)
-                            }.frame(width: 166, alignment: .leading).opacity(i > index ? 0.56 : 1)
-                                .accessibilityElement(children: .combine).accessibilityIdentifier("expedition-stop-" + item.id)
-                        }
-                    }
-                }.scrollIndicators(.hidden)
-                Text("场景为故事插画；观测与试验结果来自你在课堂中的实际操作。").font(.caption2).foregroundStyle(.white.opacity(0.4))
-            }.padding(.horizontal, 26).padding(.bottom, 32).frame(maxWidth: 1200).frame(maxWidth: .infinity)
+            }
         }
     }
     private var finish: some View {
@@ -186,7 +143,7 @@ private struct ExpeditionLessonView: View {
     @Environment(\.dismiss) private var dismiss
     private var nodes: [TabletMissionNode] { chapter.nodes(mission) }
     private var node: TabletMissionNode { nodes[min(index, nodes.count - 1)] }
-    private var canContinue: Bool { mission.isRead(node, records: store.records) || (chapter.id == "first-contact" && chapter.capturedPhoto(mission: mission, store: store) != nil) }
+    private var canContinue: Bool { chapter.id == "first-contact" ? chapter.isReadyForDelivery(mission: mission, store: store) : mission.isRead(node, records: store.records) }
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: 14) {
@@ -197,7 +154,7 @@ private struct ExpeditionLessonView: View {
                 Button(index == nodes.count - 1 ? "整理本章作品" : "继续下一步") { move(1) }.buttonStyle(.borderedProminent).tint(.expeditionGold).foregroundStyle(Color.expeditionNight).disabled(!canContinue).accessibilityIdentifier("expedition-next-step")
             }.padding(.horizontal, 20).padding(.vertical, 12).background(Color.expeditionNight).foregroundStyle(.white)
             if ready {
-                ClassroomView(activity: node.activity, store: store, onOpenActivity: { _ in error = "请先完成当前步骤。所有课程节点都会沿远航路线依次展开。" }, onMissionMap: { dismiss() }).id(node.activityId)
+                ClassroomView(activity: node.activity, store: store, crew: profile, onOpenActivity: { _ in error = "请先完成当前步骤。所有课程节点都会沿远航路线依次展开。" }, onMissionMap: { dismiss() }).id(node.activityId)
             }
         }.navigationBarBackButtonHidden().toolbar(.visible, for: .navigationBar)
             .toolbar { ToolbarItem(placement: .topBarLeading) { Button { dismiss() } label: { Label("远航任务", systemImage: "chevron.left") }.accessibilityIdentifier("ipad-lesson-back") } }

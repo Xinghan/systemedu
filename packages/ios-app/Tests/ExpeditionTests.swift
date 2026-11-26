@@ -25,6 +25,25 @@ final class ExpeditionTests: XCTestCase {
         XCTAssertEqual(Set(story.chapters.map(\.image)).count, 14)
         for chapter in story.chapters { XCTAssertFalse(chapter.delivery.evidence.isEmpty); XCTAssertFalse(chapter.delivery.checks.isEmpty); XCTAssertEqual(chapter.nodes(mission).count, chapter.refs.count) }
         XCTAssertEqual(story.films.count, 15)
+        let overview = try XCTUnwrap(story.overview)
+        let mapped = overview.acts.flatMap(\.chapters)
+        XCTAssertEqual(Set(mapped), Set(story.chapters.map(\.id)))
+        XCTAssertEqual(mapped.count, story.chapters.count)
+        for chapter in story.chapters { XCTAssertEqual(chapter.actions?.count, 3) }
+    }
+    func testCustomPortraitReachesClassroomWithoutChangingStoredIdentity() throws {
+        let role = try XCTUnwrap(Expedition.current?.roles[0])
+        let input = UIGraphicsImageRenderer(size: CGSize(width: 640, height: 640)).jpegData(withCompressionQuality: 0.9) { context in UIColor.purple.setFill(); context.fill(CGRect(x: 0, y: 0, width: 640, height: 640)) }
+        let profile = CrewProfile(name: "星禾\"\\测试", role: role, avatar: input)
+        let payload = CrewClassroomIdentity.payload(profile)
+        let encoded = try XCTUnwrap(payload["avatar"]?.split(separator: ",").last)
+        let image = try XCTUnwrap(Data(base64Encoded: String(encoded)).flatMap(UIImage.init(data:)))
+        XCTAssertEqual(image.size.width, 160)
+        XCTAssertEqual(payload["name"], profile.name)
+        XCTAssertEqual(profile.avatar, input)
+        let script = try XCTUnwrap(CrewClassroomIdentity.script(profile))
+        XCTAssertFalse(script.contains("localStorage"))
+        XCTAssertEqual(CrewClassroomIdentity.payload(CrewProfile(name: "新队员", role: role, avatar: nil))["avatar"], role.characterImagePath)
     }
     func testIdentityChangesDoNotResetLearningAndDocumentsStayOwnerScoped() throws {
         let (store, url) = try database(); defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
@@ -68,11 +87,13 @@ final class ExpeditionTests: XCTestCase {
         let node = try XCTUnwrap(chapter.nodes(mission).first)
         try store.save(node.activity, state: ["self_completed": true])
         XCTAssertNil(chapter.capturedPhoto(mission: mission, store: store))
+        XCTAssertFalse(chapter.isReadyForDelivery(mission: mission, store: store), "Reading alone must not route a learner into an empty first delivery")
         let image = UIGraphicsImageRenderer(size: CGSize(width: 64, height: 64)).jpegData(withCompressionQuality: 0.8) { context in UIColor.blue.setFill(); context.fill(CGRect(x: 0, y: 0, width: 64, height: 64)) }
         let photo: [String: Any] = ["id": "test-photo", "created_at": "2026-11-26T10:00:00Z", "origin": "simulated", "target": "moon", "view": ["yaw": 0.2, "pitch": 0.1, "zoom": 2], "schema_version": "spot-a-world/1", "artifact_id": "sky-observation", "image": "data:image/jpeg;base64," + image.base64EncodedString(), "evidence": ["manual_pan": true, "manual_zoom": true]]
         let text = String(data: try JSONSerialization.data(withJSONObject: [photo]), encoding: .utf8)!
         try store.save(node.activity, state: ["shared_workspace": ["systemedu:spot-a-world:v1": text]])
         XCTAssertNotNil(chapter.capturedPhoto(mission: mission, store: store))
+        XCTAssertTrue(chapter.isReadyForDelivery(mission: mission, store: store))
         XCTAssertEqual(try chapter.sources(mission: mission, store: store).first?.activityId, node.activityId)
     }
 }

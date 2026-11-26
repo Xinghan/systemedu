@@ -11,6 +11,7 @@ import { receiveCourseArtifact } from '../course-artifacts'
 import { readingPages, restoreReadingPage } from './reading-pages'
 import { Q3Observations } from './q3-observations'
 import { Pager, Sheet } from './primitives'
+import { currentCrew, MissionTaskIntro, MissionOperationBar, type CrewIdentity } from './mission-context'
 
 type Panel = 'observations' | 'contents' | 'work' | 'resources' | 'lecture' | `theory:${string}` | `lab:${string}` | null
 
@@ -27,12 +28,16 @@ export function CourseReader({ lesson, initial, onChange, onCommit, tablet = fal
   const [workView, setWorkView] = useState('note')
   const [panel, setPanel] = useState<Panel>(null)
   const page = pages[Math.min(index, pages.length - 1)]
+  const crew = useMemo(currentCrew, [])
+  const mission = tablet ? lesson.expedition : undefined
   const sectionPages = pages.filter(p => p.section === page?.section)
   const inspection = tablet && (panel === 'work' || panel === 'resources' || panel?.startsWith('theory:'))
   const sections = [...new Set(pages.map(p => p.section))]
   const resolve = (url: string) => assetURL(url, lesson.asset_base)
   const q3Table = '/content/assets/lightkurve-transit-detective/downloads/kepler10-q3.csv'
   const interactions = lesson.interactions ?? [], theories = lesson.theories ?? [], slides = lesson.slides ?? []
+  // Promote a single authored activity into its visual task card, keeping one inline entry.
+  const primaryInteraction = mission && sections[0] === page?.section && interactions.length === 1 && sectionPages.some(p => p.markdown.includes(`[[IDEA:${interactions[0].id}]]`) || p.markdown.includes(`[[LAB:${interactions[0].id}]]`)) ? interactions[0] : undefined
   useEffect(() => onChange({ ...initial, note, answers, frames: {}, shared_workspace: workspace, page_index: index, reader_page: page?.id, slide_index: slideIndex, self_completed: completed, previous_completion: previousCompletion, content_revision: lesson.content_revision, content_version: lesson.content_version, module_id: lesson.module_id, library_slug: lesson.course_id }), [note, answers, workspace, index, slideIndex, completed, onChange, lesson, page?.id])
   async function commitWorkspace(next: Record<string,string>) {
     setWorkspace(next)
@@ -47,7 +52,7 @@ export function CourseReader({ lesson, initial, onChange, onCommit, tablet = fal
         const [, kind, id] = match
         const theory = theories.find(t => t.theory_id === id || t.aliases?.includes(id)), lab = interactions.find(t => t.id === id)
         if (theory) return <button key={i} className="content-entry" onClick={() => setPanel(`theory:${id}`)}><BookOpen size={20}/><span>{theory.title}</span><span>理解概念 →</span></button>
-        if (lab) return <InteractionEntry key={i} interaction={lab} onOpen={() => setPanel(`lab:${id}`)}/>
+        if (lab) return primaryInteraction?.id === id ? null : <InteractionEntry key={i} interaction={lab} image={mission?.image} onOpen={() => setPanel(`lab:${id}`)}/>
         return <p className="muted" key={i}>{kind} · {id}：源课程未提供此资源。</p>
       }
       return <ReactMarkdown key={i} remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[[rehypeKatex, { trust: false, strict: false }]]} components={{
@@ -65,14 +70,15 @@ export function CourseReader({ lesson, initial, onChange, onCommit, tablet = fal
   const resources = [...(lesson.resources ?? []), ...(lesson.downloads ?? []), ...Object.values(lesson.external_resources ?? {}).flatMap(v => Array.isArray(v) ? v : [])].filter(r => r.url)
   const activeTheory = panel?.startsWith('theory:') ? theories.find(t => t.theory_id === panel.slice(7) || t.aliases?.includes(panel.slice(7))) : null
   const activeLab = panel?.startsWith('lab:') ? interactions.find(t => t.id === panel.slice(4)) : null
-  return <div className={`mobile-reader course-reader${tablet ? ' tablet-reader' : ''}${inspection ? ' has-inspector' : ''}`}>
+  return <div className={`mobile-reader course-reader${tablet ? ' tablet-reader' : ''}${mission ? ' expedition-reader' : ''}${inspection ? ' has-inspector' : ''}`}>
     <header className="reading-heading"><button onClick={() => setPanel('contents')} aria-label="打开课文目录"><List size={18}/><span>{lesson.module_id} · 本节目录</span></button><button onClick={() => setPanel('lecture')} disabled={!slides.length}><Presentation size={17}/>讲课</button></header>
     <div className="section-progress" aria-hidden="true">{sections.map((s, i) => <span key={s} data-active={i <= sections.indexOf(page?.section)}/>)}</div>
     <article className="reading-card" key={tablet ? page?.section : page?.id} aria-label={`课文第 ${index + 1} 页`} tabIndex={0}>
       {position && <div className="lesson-location"><strong>{position.course}</strong><span>第 {position.number} 节，共 {position.total} 节</span>{position.stage && <span>{position.stage}</span>}</div>}
       <p className="overline">{tablet ? `本节第 ${Math.max(1, sections.indexOf(page?.section) + 1)} / ${sections.length} 部分` : page?.fields ? `逐项对照 · ${page.row} / ${page.rows}` : `阅读 · ${index + 1}`}</p>
-      <h1>{page?.section ?? lesson.title}</h1>
-      {lesson.mission_brief && (tablet ? sections[0] === page?.section : index === 0) && <aside className="mission-brief"><strong>{lesson.mission_brief.speaker}给你的任务</strong><p>{lesson.mission_brief.message}</p></aside>}
+      {mission && sections[0] === page?.section ? <MissionTaskIntro lesson={lesson} crew={crew} entry={primaryInteraction && <InteractionEntry interaction={primaryInteraction} onOpen={() => setPanel(`lab:${primaryInteraction.id}`)}/>}/> : <h1>{page?.section ?? lesson.title}</h1>}
+      {mission && sections[0] !== page?.section && <MissionOperationBar crew={crew} title={`本章成果：${mission.outcome}`}/>}
+      {lesson.mission_brief && (tablet ? sections[0] === page?.section : index === 0) && <aside className="mission-brief">{mission && <img src={mission.commanderImage} alt="林岚指挥官"/>}<div><strong>{lesson.mission_brief.speaker}给你的任务</strong><p>{lesson.mission_brief.message}</p></div></aside>}
       {tablet ? <TabletSection pages={sectionPages} render={markdown}/> : page?.fields ? <dl className="comparison-card">{page.fields.map((field, i) => <div key={i}><dt>{markdown(field.label)}</dt><dd>{markdown(field.value || '—')}</dd></div>)}</dl> : <div className="reading-prose">{page ? markdown(page.markdown) : <p>本节暂未提供正文，可先查看作业与学习资料。</p>}</div>}
       {pages.length > 0 && (tablet ? page?.section === pages.at(-1)?.section : index >= pages.length - 1) && <button className="wide-button" onClick={() => setCompleted(!completed)}><CheckCircle size={18}/>{completed ? '已标记读完 · 撤销' : '标记为已读完'}</button>}
     </article>
@@ -91,7 +97,7 @@ export function CourseReader({ lesson, initial, onChange, onCommit, tablet = fal
     </Sheet>}
     {panel === 'resources' && <Sheet docked={tablet} title="动画、互动与资料" onClose={() => setPanel(null)}>
       <section aria-label="本节活动">
-        {interactions.length ? interactions.map(i => <InteractionEntry key={i.id} interaction={i} onOpen={() => setPanel(`lab:${i.id}`)}/>) : <p className="muted">本节没有单独的动画或互动活动，可以继续查看下方资料。</p>}
+        {interactions.length ? interactions.map(i => <InteractionEntry key={i.id} interaction={i} image={mission?.image} onOpen={() => setPanel(`lab:${i.id}`)}/>) : <p className="muted">本节没有单独的动画或互动活动，可以继续查看下方资料。</p>}
       </section>
       {(theories.length > 0 || !!lesson.foundations?.length) && <section><h3>概念解释</h3>{(lesson.foundations ?? []).map(f => <details key={f.id}><summary>{f.title}</summary>{markdown(f.body_markdown)}</details>)}{theories.map(t => <button className="content-entry" key={t.theory_id} onClick={() => setPanel(`theory:${t.theory_id}`)}><BookOpen size={17}/>{t.title}</button>)}</section>}
       <section><h3>资料与下载</h3>
@@ -102,7 +108,7 @@ export function CourseReader({ lesson, initial, onChange, onCommit, tablet = fal
       </section>
     </Sheet>}
     {activeTheory && <Sheet docked={tablet} title={activeTheory.title} onClose={() => setPanel(null)}><TheoryBody key={activeTheory.theory_id} theory={activeTheory} render={markdown} questionPrefix={`theory:${activeTheory.theory_id}:${lesson.content_revision ?? lesson.content_version}`} answers={answers} onAnswer={(id, value) => setAnswers({ ...answers, [id]: value })}/></Sheet>}
-    {activeLab && <Sheet title={tablet || activeLab.presentation_platform === 'ios' ? activeLab.title : interactionPresentation(activeLab.mode).label} immersive={tablet || activeLab.presentation_platform === 'ios'} onClose={() => setPanel(null)}>{!tablet && activeLab.presentation_platform !== 'ios' && <h3>{activeLab.title}</h3>}{activeLab.path ? <InteractiveFrame references={initial.reference_workspace as Record<string,string>} mobile={tablet || activeLab.presentation_platform === 'ios'} path={resolve(activeLab.path)} title={activeLab.title} storage={workspace} onStorage={setWorkspace} onCommit={commitWorkspace} moduleId={lesson.module_id} ideaId={activeLab.id}/> : null}{!activeLab.path && !activeLab.exercises.length && <p className="muted">本节尚未提供可打开的互动资源，请查看课文中的操作说明。</p>}{activeLab.exercises.length > 0 && <Questions questions={activeLab.exercises} prefix={activeLab.id} answers={answers} onAnswer={(id, answer) => setAnswers({ ...answers, [id]: answer })}/>}</Sheet>}
+    {activeLab && <Sheet title={tablet || activeLab.presentation_platform === 'ios' ? activeLab.title : interactionPresentation(activeLab.mode).label} immersive={tablet || activeLab.presentation_platform === 'ios'} onClose={() => setPanel(null)}>{!tablet && activeLab.presentation_platform !== 'ios' && <h3>{activeLab.title}</h3>}{activeLab.path ? <InteractiveFrame key={activeLab.id} crew={mission ? crew : undefined} references={initial.reference_workspace as Record<string,string>} mobile={tablet || activeLab.presentation_platform === 'ios'} path={resolve(activeLab.path)} title={activeLab.title} storage={workspace} onStorage={setWorkspace} onCommit={commitWorkspace} moduleId={lesson.module_id} ideaId={activeLab.id}/> : null}{!activeLab.path && !activeLab.exercises.length && <p className="muted">本节尚未提供可打开的互动资源，请查看课文中的操作说明。</p>}{activeLab.exercises.length > 0 && <Questions questions={activeLab.exercises} prefix={activeLab.id} answers={answers} onAnswer={(id, answer) => setAnswers({ ...answers, [id]: answer })}/>}</Sheet>}
     {panel === 'lecture' && <Sheet immersive={tablet} title={`讲课 · ${Math.min(slideIndex + 1, slides.length)}/${slides.length}`} onClose={() => setPanel(null)} footer={<Pager index={Math.min(slideIndex, slides.length - 1)} count={slides.length} onChange={setSlideIndex}/>}><SlideCard slide={slides[Math.min(slideIndex, slides.length - 1)]} markdown={markdown} resolve={resolve} onTheory={id => setPanel(`theory:${id}`)} onLab={id => setPanel(`lab:${id}`)}/></Sheet>}
   </div>
 }
@@ -121,10 +127,10 @@ function interactionPresentation(mode: string) {
     default: return { label: '学习活动', action: '打开活动', Icon: Play }
   }
 }
-function InteractionEntry({ interaction, onOpen }: { interaction: Interaction; onOpen: () => void }) {
+function InteractionEntry({ interaction, image, onOpen }: { interaction: Interaction; image?: string; onOpen: () => void }) {
   const { label, action, Icon } = interactionPresentation(interaction.mode)
-  return <button className="content-entry interaction-entry" aria-label={`${action}：${interaction.title}`} onClick={onOpen}>
-    <Icon size={20} aria-hidden="true"/>
+  return <button className={'content-entry interaction-entry'+(image ? ' illustrated-entry' : '')} aria-label={`${action}：${interaction.title}`} onClick={onOpen}>
+    {image ? <span className="entry-scene"><img src={image} alt=""/><span><Icon size={25} aria-hidden="true"/></span></span> : <Icon size={20} aria-hidden="true"/>}
     <span className="entry-copy"><small>{label}</small><strong>{interaction.title}</strong></span>
     <span className="entry-action">{action} →</span>
   </button>
@@ -156,8 +162,9 @@ function Questions({ questions, prefix, answers, onAnswer }: { questions: Exerci
   const [revealed, setRevealed] = useState<Record<string, boolean>>({})
   return <>{questions.map((q, i) => { if (i !== questionIndex) return null; const id = `${prefix}:${q.id ?? i}`; return <fieldset key={id}><legend>{i + 1}. {q.question ?? q.prompt}</legend>{q.options?.length ? q.options.map((option, n) => <label className="choice-answer" key={n}><input type="radio" name={id} checked={answers[id] === String(n)} onChange={() => onAnswer(id, String(n))}/>{option}</label>) : <textarea value={answers[id] ?? ''} maxLength={2000} onChange={e => onAnswer(id, e.target.value)}/>}<button className="wide-button" disabled={!answers[id] && answers[id] !== '0'} onClick={() => setRevealed({ ...revealed, [id]: true })}>查看解析</button>{revealed[id] && <p role="status">{typeof q.correct === 'number' ? answers[id] === String(q.correct) ? '回答正确。' : '再检查你的判断。' : ''}{q.explanation ?? q.answer ?? '请结合本节原理说明自己的理由。'}</p>}</fieldset> })}<Pager index={questionIndex} count={questions.length} onChange={setQuestionIndex} label="题"/></>
 }
-export function InteractiveFrame({ path, title, storage, references, onStorage, onCommit, moduleId, ideaId, mobile = false }: { path: string; title: string; storage?: Record<string,string>; references?: Record<string,string>; onStorage?: (value: Record<string,string>) => void; onCommit?: (value: Record<string,string>) => Promise<void>; moduleId?: string; ideaId?: string; mobile?: boolean }) {
+export function InteractiveFrame({ path, title, storage, references, onStorage, onCommit, moduleId, ideaId, mobile = false, crew }: { path: string; title: string; storage?: Record<string,string>; references?: Record<string,string>; onStorage?: (value: Record<string,string>) => void; onCommit?: (value: Record<string,string>) => Promise<void>; moduleId?: string; ideaId?: string; mobile?: boolean; crew?: CrewIdentity }) {
   const [expanded, setExpanded] = useState(false), [error, setError] = useState('')
+  const [ready, setReady] = useState(false), [timedOut, setTimedOut] = useState(false), [attempt, setAttempt] = useState(0), [saved, setSaved] = useState(false)
   const frame = useRef<HTMLIFrameElement>(null)
   const channel = useRef(Array.from(crypto.getRandomValues(new Uint8Array(12)),b=>b.toString(16).padStart(2,'0')).join(''))
   const framePath = path.split('#')[0] + (new URLSearchParams(location.search).get('presentation') === 'tablet' ? (path.includes('?') ? '&' : '?') + 'presentation=tablet' : '')
@@ -165,6 +172,7 @@ export function InteractiveFrame({ path, title, storage, references, onStorage, 
   const change = useRef(onStorage); change.current = onStorage
   const stored = useRef(storage ?? {}), commit = useRef(onCommit); stored.current=storage ?? {};commit.current=onCommit
   const queue=useRef(Promise.resolve())
+  useEffect(() => { if (ready) return; const timer = setTimeout(() => setTimedOut(true), 12000); return () => clearTimeout(timer) }, [ready, attempt])
   useEffect(() => {
     const receive = (event: MessageEvent) => {
       if (event.source !== frame.current?.contentWindow) return
@@ -174,17 +182,24 @@ export function InteractiveFrame({ path, title, storage, references, onStorage, 
         queue.current=queue.current.then(async()=>{
           await receiveCourseArtifact(data,moduleId,ideaId,stored.current,async value=>{
             if(!commit.current) throw new Error('本机保存服务未连接')
-            await commit.current(value);stored.current=value;setError('实验产物已保存到本机，可随学习记录导出。')
+            await commit.current(value);stored.current=value;setSaved(true);setError('实验产物已保存到本机，可随学习记录导出。')
           },message=>{if(frame.current?.contentWindow===sourceWindow)sourceWindow?.postMessage(message,'*')})
         }).catch(()=>setError('实验产物保存失败，请保留当前页面并重试。'))
         return
       }
       if(data?.channel !== channel.current) return
-      if (data.type === 'course-frame-state') {
+      if (data.type === 'course-frame-ready') { setReady(true); setTimedOut(false) }
+      else if (data.type === 'course-frame-state') {
         if (data.oversized) { setError('实验记录已超过本节容量，请使用实验内的导出按钮保存作品。'); return }
         if (!data.storage || typeof data.storage !== 'object' || Array.isArray(data.storage)) return
         if (Object.values(data.storage).some(v=>typeof v !== 'string') || new TextEncoder().encode(JSON.stringify(data.storage)).length>90000) return
-        change.current?.(data.storage)
+        if (commit.current && data.storage['systemedu:spot-a-world:v1'] && data.storage['systemedu:spot-a-world:v1'] !== stored.current['systemedu:spot-a-world:v1']) {
+          const sourceWindow=frame.current?.contentWindow
+          queue.current=queue.current.then(async()=>{
+            await commit.current!(data.storage); stored.current=data.storage; setSaved(true)
+            if(frame.current?.contentWindow===sourceWindow) sourceWindow?.postMessage({type:'course-frame-saved',channel:channel.current,photoRevision:data.photoRevision},'*')
+          }).catch(()=>setError('照片保存失败，请保留当前页面并重试。'))
+        } else change.current?.(data.storage)
       } else if (data.type === 'course-frame-download' && typeof data.data === 'string' && data.data.length<17_000_000 && /^data:[a-zA-Z0-9.+/-]+;base64,/.test(data.data)) {
         const link=document.createElement('a'); const name=String(data.name ?? 'experiment.json').replace(/[^a-zA-Z0-9_.\-\u4e00-\u9fff]/g,'_').slice(0,100)
         link.href=data.data+'#'+encodeURIComponent(name); link.download=name; link.click()
@@ -194,7 +209,13 @@ export function InteractiveFrame({ path, title, storage, references, onStorage, 
     }
     window.addEventListener('message',receive);return ()=>window.removeEventListener('message',receive)
   }, [])
-  return <div className={mobile ? 'interactive-viewport mobile-activity' : expanded ? 'interactive-viewport expanded' : 'interactive-viewport'}>{!mobile && <button className="wide-button" onClick={() => setExpanded(!expanded)}>{expanded ? '退出全屏' : '全屏操作'}</button>}<iframe ref={frame} title={title} src={source.current} sandbox="allow-scripts allow-downloads allow-pointer-lock" allow="fullscreen"/>{error && <p role="alert">{error}</p>}{!mobile && <p className="muted">原课程互动。较宽的实验可旋转手机横屏操作。</p>}</div>
+  return <div className={mobile ? 'interactive-viewport mobile-activity' : expanded ? 'interactive-viewport expanded' : 'interactive-viewport'}>
+    {crew && <MissionOperationBar crew={crew} title={title} saved={saved}/>}
+    {!mobile && <button className="wide-button" onClick={() => setExpanded(!expanded)}>{expanded ? '退出全屏' : '全屏操作'}</button>}
+    <div className="activity-frame-surface"><iframe key={attempt} ref={frame} title={title} src={source.current} onLoad={() => { if(crew) frame.current?.contentWindow?.postMessage({type:'course-frame-crew',channel:channel.current,crew},'*') }} sandbox="allow-scripts allow-downloads allow-pointer-lock" allow="fullscreen"/>
+      {!ready && <div className="activity-loading" role="status"><strong>{timedOut ? '活动尚未打开' : '正在打开活动…'}</strong><span>{timedOut ? '已保存的学习记录仍在，可以重试或关闭后重新进入。' : title}</span>{timedOut && <button onClick={() => {setReady(false);setTimedOut(false);setError('');source.current=framePath+'#'+encodeURIComponent(JSON.stringify({channel:channel.current,storage:stored.current,references:references ?? {}}));setAttempt(value=>value+1)}}>重新打开活动</button>}</div>}
+    </div>{error && <p role="alert">{error}</p>}{!mobile && <p className="muted">原课程互动。较宽的实验可旋转手机横屏操作。</p>}
+  </div>
 }
 function SlideCard({ slide, markdown, resolve, onTheory, onLab }: { slide?: Slide; markdown: (s: string) => React.ReactNode; resolve: (s: string) => string; onTheory: (s: string) => void; onLab: (s: string) => void }) {
   if (!slide) return <p>本节没有独立讲课稿。</p>

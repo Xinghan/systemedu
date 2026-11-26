@@ -96,3 +96,18 @@ def export_expedition(repo, out, mission, asset):
                            poster=asset(f'/mission/space/expedition-v2/video/{ident}-poster.jpg'))
                       for ident, title, description in items]
     (out / 'content/missions/space-expedition.json').write_text(json.dumps(story, ensure_ascii=False, separators=(',', ':')))
+    # Presentation context is additive; retain source lessons, media, IDs and versions verbatim.
+    catalog = json.loads((out / 'content/catalog.json').read_text())
+    by_id = {n['id']: n for c in catalog['courses'] for n in c['modules']}
+    by_ref = {n['ref']: n for n in mission['micro'] + mission['nodes'] + mission['research']}
+    for chapter_index, chapter in enumerate(story['chapters']):
+        for step, ref in enumerate(chapter['refs']):
+            node = by_id[by_ref[ref]['activityId']]
+            path = out / node['path'].lstrip('/')
+            lesson = json.loads(path.read_text())
+            lesson['expedition'] = dict(chapterId=chapter['id'], chapterTitle=chapter['title'],
+                chapterNumber=chapter_index + 1, act=chapter['act'], image=chapter['image'],
+                arrival=chapter['arrival'], actions=chapter.get('actions', []),
+                outcome=chapter['delivery']['title'], step=step + 1, total=len(chapter['refs']),
+                commanderImage=story['commanderImage'])
+            path.write_text(json.dumps(lesson, ensure_ascii=False, separators=(',', ':')))

@@ -13,6 +13,7 @@ struct Expedition: Decodable {
     let roles: [ExpeditionRole]
     let chapters: [ExpeditionChapter]
     let films: [TabletFilm]
+    let overview: ExpeditionOverview?
     static let current: Self? = {
         guard let url = TabletMission.bundledURL("/content/missions/space-expedition.json"),
               let data = try? Data(contentsOf: url), let story = try? JSONDecoder().decode(Self.self, from: data), story.schemaVersion == 1 else { return nil }
@@ -24,6 +25,13 @@ struct Expedition: Decodable {
     func receiptKey(_ chapter: ExpeditionChapter) -> String { "\(id):receipt:\(chapter.id)" }
     func draftKey(_ chapter: ExpeditionChapter) -> String { "\(id):draft:\(chapter.id)" }
 }
+struct ExpeditionOverview: Decodable {
+    let question: String; let summary: String; let boundary: String
+    let acts: [ExpeditionAct]
+}
+struct ExpeditionAct: Decodable, Identifiable {
+    let id: String; let title: String; let symbol: String; let summary: String; let outcome: String; let chapters: [String]
+}
 struct ExpeditionRole: Codable, Identifiable {
     let id: String; let title: String; let symbol: String; let duty: String
     var artwork: String? = nil
@@ -34,6 +42,7 @@ struct ExpeditionChapter: Decodable, Identifiable {
     let id: String; let act: String; let title: String; let arrival: String; let handoff: String
     let refs: [String]; let image: String; let filmId: String; let inputTitle: String?
     let delivery: ExpeditionContract
+    let actions: [String]?
     func nodes(_ mission: TabletMission) -> [TabletMissionNode] { refs.compactMap { ref in mission.allNodes.first { $0.ref == ref } } }
 }
 struct ExpeditionContract: Decodable {
@@ -92,6 +101,9 @@ struct ExpeditionReceipt: Codable, Identifiable {
 }
 
 extension ExpeditionChapter {
+    @MainActor func isReadyForDelivery(mission: TabletMission, store: LearningStore) -> Bool {
+        id == "first-contact" ? capturedPhoto(mission: mission, store: store) != nil : nodes(mission).allSatisfy { mission.isRead($0, records: store.records) }
+    }
     // Only a real capture with interaction evidence can enter the first chapter's delivery.
     @MainActor func capturedPhoto(mission: TabletMission, store: LearningStore) -> ExpeditionArtifact? {
         guard id == "first-contact", let node = nodes(mission).first, let state = store.load(node.activity) else { return nil }

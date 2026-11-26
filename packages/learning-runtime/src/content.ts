@@ -10,6 +10,7 @@ export interface CourseLesson {
   lab_url?: string; response_prompts?: { title: string; hint?: string; example?: string; fields: {id: string; label: string; type: string; options?: string[]; placeholder?: string}[] }[]
   course_position?: { course: string; stage: string; number: number; total: number }
   mission_brief?: { speaker: string; message: string }
+  expedition?: { chapterId: string; chapterTitle: string; chapterNumber: number; act: string; image: string; arrival: string; actions: string[]; outcome: string; step: number; total: number; commanderImage: string }
   learning_output?: string
   accentHex?: string
   content_revision?: string

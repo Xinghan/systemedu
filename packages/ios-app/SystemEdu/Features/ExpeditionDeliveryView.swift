@@ -16,7 +16,7 @@ struct ExpeditionDeliveryView: View {
     @State private var error: String?
     @State private var preview: SharedFile?
     private var missing: [String] { draft.missing(chapter) }
-    private var stepsDone: Bool { chapter.id == "first-contact" ? chapter.capturedPhoto(mission: mission, store: store) != nil : chapter.nodes(mission).allSatisfy { mission.isRead($0, records: store.records) } }
+    private var stepsDone: Bool { chapter.isReadyForDelivery(mission: mission, store: store) }
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {

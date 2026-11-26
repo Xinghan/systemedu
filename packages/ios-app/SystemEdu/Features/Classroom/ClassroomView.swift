@@ -6,13 +6,14 @@ struct SharedFile: Identifiable { let url: URL; var id: String { url.absoluteStr
 struct ClassroomView: View {
     let activity: LearningActivity
     @ObservedObject var store: LearningStore
+    var crew: CrewProfile? = nil
     var onOpenActivity: ((LearningActivity) -> Void)? = nil
     var onMissionMap: (() -> Void)? = nil
     @State private var export: SharedFile?
     @State private var external: SharedFile?
     @State private var error: String?
     var body: some View {
-        LearningWebView(activity: activity, store: store,
+        LearningWebView(activity: activity, store: store, crew: crew,
                         onExport: { export = SharedFile(url: $0) },
                         onExternal: { url in
                             if let activity = ContentCatalog.localActivity(for: url), let onOpenActivity { onOpenActivity(activity) }

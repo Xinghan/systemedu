@@ -4,6 +4,7 @@ import WebKit
 struct LearningWebView: UIViewRepresentable {
     let activity: LearningActivity
     let store: LearningStore
+    var crew: CrewProfile? = nil
     let onExport: (URL) -> Void
     let onExternal: (URL) -> Void
     let onError: (String) -> Void
@@ -18,6 +19,9 @@ struct LearningWebView: UIViewRepresentable {
             configuration.setURLSchemeHandler(AssetSchemeHandler(root: root), forURLScheme: "systemedu")
         }
         configuration.userContentController.addScriptMessageHandler(context.coordinator, contentWorld: .page, name: "learning")
+        if let crew, let script = CrewClassroomIdentity.script(crew) {
+            configuration.userContentController.addUserScript(WKUserScript(source: script, injectionTime: .atDocumentStart, forMainFrameOnly: true))
+        }
         let view = WKWebView(frame: .zero, configuration: configuration)
         view.isOpaque = false; view.backgroundColor = UIColor(Color.paper)
         view.scrollView.backgroundColor = UIColor(Color.paper)
@@ -102,5 +106,18 @@ struct LearningWebView: UIViewRepresentable {
         }
         func webViewWebContentProcessDidTerminate(_ webView: WKWebView) { onError("课堂进程已停止。已保存的记录仍在，可以返回后重新打开。") }
         func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) { onError("课堂加载失败，请返回后重试。") }
+    }
+}
+
+enum CrewClassroomIdentity {
+    static func payload(_ profile: CrewProfile) -> [String: String] {
+        let portrait = profile.avatar.flatMap { CrewImage.jpeg($0, side: 160) }
+        return ["name": profile.name, "role": profile.role.title, "duty": profile.role.duty,
+                "avatar": portrait.map { "data:image/jpeg;base64," + $0.base64EncodedString() } ?? profile.role.characterImagePath]
+    }
+    static func script(_ profile: CrewProfile) -> String? {
+        guard let data = try? JSONSerialization.data(withJSONObject: payload(profile)), let json = String(data: data, encoding: .utf8) else { return nil }
+        // Main-frame presentation context only; never sent to save/export or placed in URLs.
+        return "window.__systemeduCrew = Object.freeze(" + json + ");"
     }
 }

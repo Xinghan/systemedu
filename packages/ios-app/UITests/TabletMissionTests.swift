@@ -215,4 +215,62 @@ final class TabletMissionTests: XCTestCase {
         app.buttons["expedition-archive"].tap(); XCTAssertTrue(app.staticTexts["第一份星球观测"].waitForExistence(timeout: 10))
     }
 
+    @MainActor func testInlineMissionEntryOpensTelescope() {
+        XCUIDevice.shared.orientation = .landscapeLeft
+        let app = app(); enter(app); join(app)
+        app.buttons["expedition-continue"].tap()
+        XCTAssertTrue(app.buttons["ipad-film-continue"].waitForExistence(timeout: 10)); app.buttons["ipad-film-continue"].tap()
+        let web = app.webViews.firstMatch
+        let entry = web.buttons["进入实验：我的第一张星球照片"]
+        XCTAssertTrue(entry.waitForExistence(timeout: 20), app.debugDescription)
+        XCTAssertTrue(web.staticTexts["Starling，这是你的任务"].exists)
+        if !entry.isHittable { web.swipeUp() }
+        entry.tap()
+        XCTAssertTrue(web.buttons["镜头向左"].waitForExistence(timeout: 15), app.debugDescription)
+        XCTAssertTrue(web.staticTexts["Starling的操作席"].exists)
+        XCTAssertTrue(web.staticTexts["Starling的观测席"].exists)
+        capture("expedition-inline-telescope-open")
+        web.buttons["关闭面板"].tap()
+        XCTAssertTrue(entry.waitForExistence(timeout: 10))
+    }
+
+    @MainActor func testReadingAloneReturnsToObservationInsteadOfEmptyDelivery() {
+        XCUIDevice.shared.orientation = .landscapeLeft
+        let app = app(); enter(app); join(app)
+        app.buttons["expedition-continue"].tap()
+        XCTAssertTrue(app.buttons["ipad-film-continue"].waitForExistence(timeout: 10)); app.buttons["ipad-film-continue"].tap()
+        let web = app.webViews.firstMatch
+        XCTAssertTrue(web.buttons["下一页"].waitForExistence(timeout: 20)); web.buttons["下一页"].tap()
+        let read = web.buttons["标记为已读完"]
+        XCTAssertTrue(read.waitForExistence(timeout: 10))
+        if !read.isHittable { web.swipeUp() }
+        read.tap()
+        XCTAssertTrue(web.buttons["已标记读完 · 撤销"].waitForExistence(timeout: 10))
+        XCTAssertTrue(web.staticTexts["已保存到本机"].waitForExistence(timeout: 10))
+        XCTAssertFalse(app.buttons["expedition-next-step"].isEnabled)
+        app.buttons["ipad-lesson-back"].tap()
+        XCTAssertTrue(app.buttons["expedition-continue"].waitForExistence(timeout: 10)); app.buttons["expedition-continue"].tap()
+        XCTAssertTrue(web.buttons["练习与笔记"].waitForExistence(timeout: 20))
+        XCTAssertFalse(app.staticTexts["expedition-delivery-title"].exists)
+        XCTAssertFalse(app.buttons["expedition-next-step"].isEnabled)
+    }
+
+    @MainActor func testCurrentMapCardContinuesTheOnlyUnlockedChapter() {
+        XCUIDevice.shared.orientation = .landscapeLeft
+        let app = app(); enter(app); join(app)
+        XCTAssertTrue(app.staticTexts["expedition-overview-question"].exists)
+        capture("expedition-project-overview")
+        let current = app.buttons["expedition-map-current"]
+        for _ in 0..<5 { if current.isHittable { break }; app.swipeUp() }
+        XCTAssertTrue(current.isHittable, app.debugDescription)
+        XCTAssertEqual(app.buttons.matching(identifier: "expedition-map-current").count, 1)
+        XCTAssertFalse(app.buttons["expedition-stop-research-P1"].exists)
+        capture("expedition-detailed-task-map")
+        current.tap()
+        XCTAssertTrue(app.buttons["ipad-film-continue"].waitForExistence(timeout: 10))
+        app.buttons["ipad-film-continue"].tap()
+        XCTAssertTrue(app.webViews.firstMatch.staticTexts["Starling，这是你的任务"].waitForExistence(timeout: 20))
+        capture("expedition-personalized-classroom")
+    }
+
 }
