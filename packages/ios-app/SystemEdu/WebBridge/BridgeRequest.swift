@@ -2,7 +2,7 @@ import Foundation
 import CoreFoundation
 
 struct BridgeRequest {
-    enum Method: String { case load, save, export }
+    enum Method: String { case load, save, export, advance }
     let method: Method
     let state: [String: Any]?
 
@@ -14,7 +14,8 @@ struct BridgeRequest {
               value["session"] as? String == session, value["activity"] as? String == activity.rawValue,
               let requestID = value["request_id"] as? String, !requestID.isEmpty, requestID.count <= 80,
               let name = value["method"] as? String, let method = Method(rawValue: name),
-              method != .save || value["state"] is [String: Any] else { throw StoreError.invalidState }
+              method != .save || value["state"] is [String: Any],
+              method != .advance || value["state"] == nil else { throw StoreError.invalidState }
         self.method = method; state = value["state"] as? [String: Any]
     }
 }

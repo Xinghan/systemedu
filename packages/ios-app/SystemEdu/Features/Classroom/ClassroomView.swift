@@ -10,20 +10,22 @@ struct ClassroomView: View {
     var embeddedInMission = false
     var onOpenActivity: ((LearningActivity) -> Void)? = nil
     var onMissionMap: (() -> Void)? = nil
+    var missionContinueLabel: String? = nil
+    var onAdvance: ((LearningActivity) throws -> Void)? = nil
     var onImmersiveChange: (Bool) -> Void = { _ in }
     @State private var immersive = false
     @State private var export: SharedFile?
     @State private var external: SharedFile?
     @State private var error: String?
     var body: some View {
-        LearningWebView(activity: activity, store: store, crew: crew,
+        LearningWebView(activity: activity, store: store, crew: crew, missionContinueLabel: missionContinueLabel,
                         onExport: { export = SharedFile(url: $0) },
                         onExternal: { url in
                             if let activity = ContentCatalog.localActivity(for: url), let onOpenActivity { onOpenActivity(activity) }
                             else if url.host == "systeme.xin", url.path == "/mission/space", let onMissionMap { onMissionMap() }
                             else { external = SharedFile(url: url) }
                         },
-                        onError: { error = $0 }, onImmersiveChange: { value in immersive = value; onImmersiveChange(value) })
+                        onError: { error = $0 }, onAdvance: onAdvance, onImmersiveChange: { value in immersive = value; onImmersiveChange(value) })
             .navigationTitle(activity.title).navigationBarTitleDisplayMode(.inline)
             .toolbar(immersive || embeddedInMission ? .hidden : .visible, for: .navigationBar)
             .toolbar(.hidden, for: .tabBar)

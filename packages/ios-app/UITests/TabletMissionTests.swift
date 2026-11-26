@@ -339,11 +339,11 @@ final class TabletMissionTests: XCTestCase {
         XCTAssertTrue(app.buttons["ipad-film-continue"].waitForExistence(timeout: 10)); app.buttons["ipad-film-continue"].tap()
         let web = app.webViews.firstMatch
         XCTAssertTrue(web.buttons["下一页"].waitForExistence(timeout: 20)); web.buttons["下一页"].tap()
-        let read = web.buttons["标记为已读完"]
+        let read = web.buttons["完成本节，整理本章作品"]
         XCTAssertTrue(read.waitForExistence(timeout: 10))
         if !read.isHittable { web.swipeUp() }
         read.tap()
-        XCTAssertTrue(web.buttons["已标记读完 · 撤销"].waitForExistence(timeout: 10))
+        XCTAssertTrue(web.staticTexts["请先在望远镜里调整镜头并拍下一张照片，再整理本章作品。"].waitForExistence(timeout: 10))
         XCTAssertFalse(web.staticTexts["已保存到本机"].exists)
         XCTAssertFalse(app.buttons["expedition-next-step"].isEnabled)
         app.buttons["ipad-lesson-back"].tap()
@@ -351,6 +351,81 @@ final class TabletMissionTests: XCTestCase {
         XCTAssertTrue(web.buttons["练习与笔记"].waitForExistence(timeout: 20))
         XCTAssertFalse(app.staticTexts["expedition-delivery-title"].exists)
         XCTAssertFalse(app.buttons["expedition-next-step"].isEnabled)
+    }
+
+    @MainActor private func navigationApp(_ scenario: String) -> XCUIApplication {
+        let app = XCUIApplication()
+        app.launchEnvironment["SYSTEMEDU_TEST_STORE"] = UUID().uuidString
+        app.launchEnvironment["SYSTEMEDU_TEST_EXPEDITION"] = scenario
+        app.launch(); return app
+    }
+    @MainActor private func finishCurrentLesson(_ app: XCUIApplication, finalStep: Bool) {
+        let web = app.webViews.firstMatch
+        let contents = web.buttons["打开课文目录"]
+        XCTAssertTrue(contents.waitForExistence(timeout: 20))
+        // WKWebView accessibility can report controls before its first layout settles.
+        let visible = NSPredicate { _, _ in contents.isHittable && web.buttons["练习与笔记"].isHittable }
+        expectation(for: visible, evaluatedWith: contents); waitForExpectations(timeout: 10)
+        contents.tap()
+        // The final section contains the completion action in every original lesson.
+        let sections = web.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "阅读部分 "))
+        guard sections.firstMatch.waitForExistence(timeout: 10) else {
+            capture("completion-directory-did-not-open")
+            XCTFail("阅读目录未展开：" + web.debugDescription); return
+        }
+        XCTAssertGreaterThan(sections.count, 0, web.debugDescription)
+        let last = sections.element(boundBy: sections.count - 1)
+        for _ in 0..<12 { if last.isHittable { break }; web.swipeUp() }
+        XCTAssertTrue(last.isHittable, web.debugDescription); last.tap()
+        let finish = web.buttons[finalStep ? "完成本节，整理本章作品" : "完成本节，进入下一步"]
+        XCTAssertTrue(finish.waitForExistence(timeout: 10))
+        for _ in 0..<12 { if finish.isHittable { break }; web.swipeUp() }
+        XCTAssertTrue(finish.isHittable, web.debugDescription); finish.tap()
+    }
+    @MainActor func testCompletedLessonResumesForwardAndFinishesWithoutReturningToOldLesson() {
+        XCUIDevice.shared.orientation = .landscapeLeft
+        let app = navigationApp("stale-cursor"); enter(app)
+        app.buttons["expedition-continue"].tap()
+        let second = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "步骤 2 / 5")).firstMatch
+        XCTAssertTrue(second.waitForExistence(timeout: 20), app.debugDescription)
+        finishCurrentLesson(app, finalStep: false)
+        let third = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "步骤 3 / 5")).firstMatch
+        XCTAssertTrue(third.waitForExistence(timeout: 15), app.debugDescription)
+        capture("completion-forward-to-third-lesson")
+        app.buttons["ipad-lesson-back"].tap(); app.buttons["expedition-continue"].tap()
+        XCTAssertTrue(third.waitForExistence(timeout: 15))
+        app.terminate(); app.launch(); enter(app); app.buttons["expedition-continue"].tap()
+        XCTAssertTrue(third.waitForExistence(timeout: 20))
+    }
+    @MainActor func testEveryRemainingChapterFinishesAndOpensOnlyItsSuccessor() {
+        XCUIDevice.shared.orientation = .landscapeLeft
+        let app = navigationApp("chapter-endings"); enter(app)
+        let chapters = ["星光为什么变暗了", "整理来自望远镜的数据", "寻找重复出现的节奏", "调查其他可能的解释", "让新数据检验预测", "把研究交给下一位队员", "为近距离探测制定计划", "让设计站得稳", "造出第一辆原型车", "让车看懂脚下的地面", "把判断接到行动上", "完成一次有记录的远征", "把你的发现交给下一班"]
+        for (index, title) in chapters.enumerated() {
+            let heading = app.staticTexts["expedition-chapter-title"]
+            XCTAssertTrue(heading.waitForExistence(timeout: 15)); XCTAssertEqual(heading.label, title)
+            app.buttons["expedition-continue"].tap()
+            finishCurrentLesson(app, finalStep: true)
+            XCTAssertTrue(app.staticTexts["expedition-delivery-title"].waitForExistence(timeout: 15), title)
+            let checks = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "evidence-check-"))
+            for i in 0..<checks.count {
+                let check = app.buttons["evidence-check-\(i)"]
+                for _ in 0..<12 { if check.isHittable { break }; app.swipeUp() }
+                XCTAssertTrue(check.isHittable, title); check.tap()
+            }
+            let submit = app.buttons["expedition-submit"]
+            for _ in 0..<12 { if submit.isHittable { break }; app.swipeUp() }
+            XCTAssertTrue(submit.isEnabled, title); submit.tap()
+            let next = app.buttons["expedition-next-chapter"]
+            XCTAssertTrue(next.waitForExistence(timeout: 15), title)
+            for _ in 0..<12 { if next.isHittable { break }; app.swipeUp() }
+            if [0, 5, 12].contains(index) { capture("chapter-\(index + 2)-handoff") }
+            next.tap()
+        }
+        let finished = app.staticTexts["Navigation QA，远航档案已交接。"]
+        XCTAssertTrue(finished.waitForExistence(timeout: 15)); capture("all-chapters-finished")
+        app.terminate(); app.launch(); enter(app)
+        XCTAssertTrue(finished.waitForExistence(timeout: 15))
     }
 
     @MainActor func testCurrentMapCardContinuesTheOnlyUnlockedChapter() {

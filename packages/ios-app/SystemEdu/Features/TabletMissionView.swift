@@ -49,9 +49,9 @@ private struct ExpeditionJourneyView: View {
                         if destination.hasPrefix("work:") {
                             ExpeditionDeliveryView(story: story, chapter: chapter, mission: mission, profile: profile, store: store) { saved in
                                 receipt = saved; path = []
-                            }
+                            }.id(destination)
                         } else {
-                            ExpeditionLessonView(story: story, chapter: chapter, mission: mission, profile: profile, store: store) { path = ["work:" + chapter.id] }
+                            ExpeditionLessonView(story: story, chapter: chapter, mission: mission, profile: profile, store: store) { path = ["work:" + chapter.id] }.id(destination)
                         }
                     }
                 }
@@ -98,7 +98,7 @@ private struct ExpeditionJourneyView: View {
                 ExpeditionHomeView(story: story, mission: mission, chapter: chapter, profile: profile, completed: receipts.count,
                     actionTitle: allRead ? "收好本章作品" : (draft.briefingSeen ? "继续当前任务" : "听林岚交代任务")) {
                         advance(chapter, draft: draft, allRead: allRead)
-                    }
+                    }.id(chapter.id)
             }
         }
     }
@@ -165,22 +165,39 @@ private struct ExpeditionLessonView: View {
                 }.buttonStyle(.plain).disabled(!canContinue).accessibilityIdentifier("expedition-next-step")
             }.padding(.horizontal, 24).padding(.vertical, 10).background(Color.expeditionNight).foregroundStyle(.white) }
             if ready {
-                ClassroomView(activity: node.activity, store: store, crew: profile, embeddedInMission: true, onOpenActivity: { _ in error = "请先完成当前步骤。所有课程节点都会沿远航路线依次展开。" }, onMissionMap: { dismiss() }, onImmersiveChange: { immersive = $0 }).id(node.activityId)
+                ClassroomView(activity: node.activity, store: store, crew: profile, embeddedInMission: true,
+                    onOpenActivity: { _ in error = "请先完成当前步骤。所有课程节点都会沿远航路线依次展开。" }, onMissionMap: { dismiss() },
+                    missionContinueLabel: index == nodes.count - 1 ? "完成本节，整理本章作品" : "完成本节，进入下一步",
+                    onAdvance: { activity in
+                        guard activity == node.activity else { throw StoreError.invalidState }
+                        if chapter.id == "first-contact", !canContinue { throw ExpeditionNavigationError.photoRequired }
+                        try advanceLesson()
+                    }, onImmersiveChange: { immersive = $0 }).id(node.activityId)
             }
         }.background(Color.expeditionNight).navigationBarBackButtonHidden().toolbar(.hidden, for: .navigationBar)
             .task {
-                do { let draft = try store.document(story.draftKey(chapter), as: ExpeditionDraft.self); index = min(draft?.lessonIndex ?? 0, nodes.count - 1); ready = true }
-                catch { self.error = error.localizedDescription }
+                guard !ready else { return }
+                index = chapter.resumeLessonIndex(mission: mission, store: store)
+                ready = true
             }
             .alert("任务提示", isPresented: Binding(get: { error != nil }, set: { if !$0 { error = nil } })) { Button("知道了") {} } message: { Text(error ?? "") }
     }
     private func move(_ delta: Int) {
         guard delta < 0 || canContinue else { return }
-        if index + delta >= nodes.count { onDelivery(); return }
         do {
+            if delta > 0 { try advanceLesson(); return }
             var draft = (try store.document(story.draftKey(chapter), as: ExpeditionDraft.self)) ?? ExpeditionDraft()
             draft.lessonIndex = max(0, index + delta); try store.saveDocument(draft, key: story.draftKey(chapter)); index = draft.lessonIndex
         } catch { self.error = error.localizedDescription }
+    }
+    private func advanceLesson() throws {
+        guard canContinue else { throw StoreError.invalidState }
+        if index + 1 >= nodes.count { onDelivery(); return }
+        var draft = (try store.document(story.draftKey(chapter), as: ExpeditionDraft.self)) ?? ExpeditionDraft()
+        draft.lessonIndex = index + 1
+        try store.saveDocument(draft, key: story.draftKey(chapter))
+        immersive = false
+        index = draft.lessonIndex
     }
 }
 struct BundledMissionImage: View {

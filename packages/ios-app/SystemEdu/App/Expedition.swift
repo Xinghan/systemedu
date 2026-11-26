@@ -100,7 +100,18 @@ struct ExpeditionReceipt: Codable, Identifiable {
     let reviewStatus: String
 }
 
+enum ExpeditionNavigationError: LocalizedError {
+    case photoRequired
+    var errorDescription: String? { "请先在望远镜里调整镜头并拍下一张照片，再整理本章作品。" }
+}
+
 extension ExpeditionChapter {
+    // A saved cursor is a reading position, not the authority on progression.
+    // Completion may have been saved just before leaving the classroom.
+    @MainActor func resumeLessonIndex(mission: TabletMission, store: LearningStore) -> Int {
+        let lessons = nodes(mission)
+        return lessons.firstIndex { !mission.isRead($0, records: store.records) } ?? max(0, lessons.count - 1)
+    }
     @MainActor func isReadyForDelivery(mission: TabletMission, store: LearningStore) -> Bool {
         id == "first-contact" ? capturedPhoto(mission: mission, store: store) != nil : nodes(mission).allSatisfy { mission.isRead($0, records: store.records) }
     }

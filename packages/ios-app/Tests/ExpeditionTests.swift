@@ -96,4 +96,55 @@ final class ExpeditionTests: XCTestCase {
         XCTAssertTrue(chapter.isReadyForDelivery(mission: mission, store: store))
         XCTAssertEqual(try chapter.sources(mission: mission, store: store).first?.activityId, node.activityId)
     }
+    func testCompletedLessonWinsOverStaleCursorWithoutSkippingUnreadWork() throws {
+        let (store, url) = try database(); defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
+        let story = try XCTUnwrap(Expedition.current), mission = try XCTUnwrap(TabletMission.current), chapter = story.chapters[1]
+        let nodes = chapter.nodes(mission)
+        let revision = try XCTUnwrap(ContentCatalog.current?.courses.first { $0.id == "lightkurve-transit-detective" }?.contentRevision)
+        try store.save(nodes[0].activity, state: ["self_completed": true, "content_revision": revision, "note": "keep this observation"])
+        try store.saveDocument(ExpeditionDraft(), key: story.draftKey(chapter))
+        XCTAssertEqual(chapter.resumeLessonIndex(mission: mission, store: store), 1, "A completed lesson with cursor zero must resume at lesson two")
+        var ahead = ExpeditionDraft(); ahead.lessonIndex = nodes.count - 1
+        try store.saveDocument(ahead, key: story.draftKey(chapter))
+        XCTAssertEqual(chapter.resumeLessonIndex(mission: mission, store: store), 1, "A cursor cannot bypass unfinished lessons")
+        let reopened = try LearningStore(url: url)
+        XCTAssertEqual(chapter.resumeLessonIndex(mission: mission, store: reopened), 1)
+        XCTAssertEqual(reopened.load(nodes[0].activity)?["note"] as? String, "keep this observation")
+        try store.save(nodes[0].activity, state: ["self_completed": true, "content_revision": "old-version"])
+        XCTAssertEqual(chapter.resumeLessonIndex(mission: mission, store: store), 0, "Existing revision requirements still apply")
+    }
+    func testEveryChapterHandsOffToItsSuccessorAndSurvivesReopen() throws {
+        let (store, url) = try database(); defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
+        let story = try XCTUnwrap(Expedition.current), mission = try XCTUnwrap(TabletMission.current)
+        let profile = CrewProfile(name: "Navigation fixture", role: story.roles[0], avatar: nil)
+        for (index, chapter) in story.chapters.enumerated() {
+            XCTAssertEqual(story.currentChapter(store: store)?.id, chapter.id)
+            XCTAssertEqual(chapter.resumeLessonIndex(mission: mission, store: store), 0)
+            let receipt = ExpeditionReceipt(storyId: story.id, chapterId: chapter.id, title: chapter.delivery.title, profile: profile, work: ExpeditionDraft(), sources: [], submittedAt: Date(), reviewStatus: "unit navigation fixture")
+            try store.saveDocument(receipt, key: story.receiptKey(chapter), immutable: true)
+            let next = index + 1 < story.chapters.count ? story.chapters[index + 1].id : nil
+            XCTAssertEqual(story.currentChapter(store: store)?.id, next)
+            XCTAssertEqual(story.currentChapter(store: try LearningStore(url: url))?.id, next)
+        }
+    }
+    func testBridgeContinuationRequiresSavedCompletionAndRunsOnlyOnce() throws {
+        let (store, url) = try database(); defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
+        let mission = try XCTUnwrap(TabletMission.current), node = mission.research[0]
+        let revision = try XCTUnwrap(ContentCatalog.current?.courses.first { $0.id == "lightkurve-transit-detective" }?.contentRevision)
+        var advances = 0
+        let bridge = LearningWebView.Coordinator(activity: node.activity, store: store, onExport: { _ in }, onExternal: { _ in }, onError: { _ in }, onAdvance: { activity in
+            guard activity == node.activity, mission.isRead(node, records: store.records) else { throw StoreError.invalidState }
+            advances += 1
+        }, onImmersiveChange: { _ in })
+        XCTAssertThrowsError(try bridge.advanceOnce()); XCTAssertEqual(advances, 0)
+        try store.save(node.activity, state: ["self_completed": true, "content_revision": revision])
+        try bridge.advanceOnce(); XCTAssertEqual(advances, 1)
+        XCTAssertThrowsError(try bridge.advanceOnce()); XCTAssertEqual(advances, 1)
+        bridge.active = false
+        XCTAssertThrowsError(try bridge.advanceOnce())
+        let request: [String: Any] = ["version": 1, "session": "test", "activity": node.activityId, "request_id": "next", "method": "advance"]
+        XCTAssertEqual(try BridgeRequest(body: request, activity: node.activity, session: "test").method, .advance)
+        var forged = request; forged["state"] = ["self_completed": true]
+        XCTAssertThrowsError(try BridgeRequest(body: forged, activity: node.activity, session: "test"))
+    }
 }

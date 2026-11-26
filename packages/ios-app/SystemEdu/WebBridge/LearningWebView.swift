@@ -5,12 +5,14 @@ struct LearningWebView: UIViewRepresentable {
     let activity: LearningActivity
     let store: LearningStore
     var crew: CrewProfile? = nil
+    var missionContinueLabel: String? = nil
     let onExport: (URL) -> Void
     let onExternal: (URL) -> Void
     let onError: (String) -> Void
+    var onAdvance: ((LearningActivity) throws -> Void)? = nil
     var onImmersiveChange: (Bool) -> Void = { _ in }
 
-    func makeCoordinator() -> Coordinator { Coordinator(activity: activity, store: store, onExport: onExport, onExternal: onExternal, onError: onError, onImmersiveChange: onImmersiveChange) }
+    func makeCoordinator() -> Coordinator { Coordinator(activity: activity, store: store, onExport: onExport, onExternal: onExternal, onError: onError, onAdvance: onAdvance, onImmersiveChange: onImmersiveChange) }
 
     func makeUIView(context: Context) -> WKWebView {
         let configuration = WKWebViewConfiguration()
@@ -23,6 +25,11 @@ struct LearningWebView: UIViewRepresentable {
         configuration.userContentController.addScriptMessageHandler(context.coordinator, contentWorld: .page, name: "classroomPresentation")
         if let crew, let script = CrewClassroomIdentity.script(crew) {
             configuration.userContentController.addUserScript(WKUserScript(source: script, injectionTime: .atDocumentStart, forMainFrameOnly: true))
+        }
+        if onAdvance != nil, let missionContinueLabel,
+           let data = try? JSONSerialization.data(withJSONObject: ["continueLabel": missionContinueLabel]),
+           let json = String(data: data, encoding: .utf8) {
+            configuration.userContentController.addUserScript(WKUserScript(source: "window.__systemeduMissionNavigation = Object.freeze(" + json + ");", injectionTime: .atDocumentStart, forMainFrameOnly: true))
         }
         let view = WKWebView(frame: .zero, configuration: configuration)
         let canvas = UIDevice.current.userInterfaceIdiom == .pad ? Color.expeditionNight : Color.paper
@@ -58,11 +65,13 @@ struct LearningWebView: UIViewRepresentable {
         let onExport: (URL) -> Void
         let onExternal: (URL) -> Void
         let onError: (String) -> Void
+        let onAdvance: ((LearningActivity) throws -> Void)?
         let onImmersiveChange: (Bool) -> Void
         var active = true
-        init(activity: LearningActivity, store: LearningStore, onExport: @escaping (URL) -> Void, onExternal: @escaping (URL) -> Void, onError: @escaping (String) -> Void, onImmersiveChange: @escaping (Bool) -> Void) {
+        private var advanceRequested = false
+        init(activity: LearningActivity, store: LearningStore, onExport: @escaping (URL) -> Void, onExternal: @escaping (URL) -> Void, onError: @escaping (String) -> Void, onAdvance: ((LearningActivity) throws -> Void)? = nil, onImmersiveChange: @escaping (Bool) -> Void) {
             self.activity = activity; self.store = store; self.onExport = onExport; self.onExternal = onExternal; self.onError = onError
-            self.onImmersiveChange = onImmersiveChange
+            self.onAdvance = onAdvance; self.onImmersiveChange = onImmersiveChange
         }
         func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage, replyHandler: @escaping (Any?, String?) -> Void) {
             do {
@@ -85,8 +94,19 @@ struct LearningWebView: UIViewRepresentable {
                     replyHandler(["saved_at": ISO8601DateFormatter().string(from: saved)], nil)
                 case .export:
                     let url = try store.export(activity); onExport(url); replyHandler(["exported": true], nil)
+                case .advance:
+                    try advanceOnce()
+                    replyHandler(["advanced": true], nil)
                 }
             } catch { replyHandler(nil, error.localizedDescription) }
+        }
+        // The mission rechecks the persisted completion and current activity.
+        // A second message from the departing WebView cannot skip a lesson.
+        func advanceOnce() throws {
+            guard active, !advanceRequested, let onAdvance else { throw StoreError.invalidState }
+            advanceRequested = true
+            do { try onAdvance(activity) }
+            catch { advanceRequested = false; throw error }
         }
         func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction, decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
             guard let url = navigationAction.request.url else { decisionHandler(.cancel); return }

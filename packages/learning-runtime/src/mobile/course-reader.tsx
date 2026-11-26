@@ -16,7 +16,7 @@ import { currentCrew, CrewPortrait, MissionTaskIntro, MissionOperationBar, type 
 
 type Panel = 'observations' | 'contents' | 'work' | 'resources' | 'lecture' | `theory:${string}` | `lab:${string}` | null
 
-export function CourseReader({ lesson, initial, onChange, onCommit, tablet = false, sessionTools }: { tablet?: boolean; sessionTools?: ReactNode; lesson: CourseLesson; initial: Snapshot; onChange: (state: Snapshot) => void; onCommit: (state: Snapshot) => Promise<void> }) {
+export function CourseReader({ lesson, initial, onChange, onCommit, onAdvance, tablet = false, sessionTools }: { tablet?: boolean; sessionTools?: ReactNode; lesson: CourseLesson; initial: Snapshot; onChange: (state: Snapshot) => void; onCommit: (state: Snapshot) => Promise<void>; onAdvance?: () => Promise<unknown> }) {
   const revised = !!lesson.content_revision && initial.content_revision !== lesson.content_revision
   const previousCompletion = initial.previous_completion ?? (revised && initial.self_completed === true ? { revision: initial.content_revision ?? 'original', completed: true } : null)
   const pages = useMemo(() => readingPages(lesson.lesson), [lesson.lesson])
@@ -24,6 +24,11 @@ export function CourseReader({ lesson, initial, onChange, onCommit, tablet = fal
   const [note, setNote] = useState(typeof initial.note === 'string' ? initial.note : '')
   const [answers, setAnswers] = useState<Record<string, string>>((initial.answers as Record<string, string>) ?? {})
   const [completed, setCompleted] = useState(!revised && initial.self_completed === true)
+  const finishing = useRef(false)
+  const [finishingLesson, setFinishingLesson] = useState(false)
+  const [finishError, setFinishError] = useState('')
+  const navigation = typeof window === 'undefined' ? undefined : (window as unknown as { __systemeduMissionNavigation?: { continueLabel?: string } }).__systemeduMissionNavigation
+  const continueLabel = tablet && onAdvance && typeof navigation?.continueLabel === 'string' ? navigation.continueLabel : undefined
   const [slideIndex, setSlideIndex] = useState(revised ? 0 : Number(initial.slide_index) || 0)
   const [workspace, setWorkspace] = useState<Record<string,string>>(() => Object.assign({}, ...Object.values((initial.frames as Record<string,Record<string,string>>) ?? {}), (initial.shared_workspace as Record<string,string>) ?? {}))
   const [workView, setWorkView] = useState('note')
@@ -60,6 +65,19 @@ export function CourseReader({ lesson, initial, onChange, onCommit, tablet = fal
   async function commitWorkspace(next: Record<string,string>) {
     setWorkspace(next)
     await onCommit({...initial, note, answers, frames:{}, shared_workspace:next, page_index:index, reader_page:page?.id, slide_index:slideIndex, self_completed:completed, previous_completion:previousCompletion, content_revision:lesson.content_revision, content_version:lesson.content_version, module_id:lesson.module_id, library_slug:lesson.course_id})
+  }
+  async function finishLesson() {
+    if (finishing.current) return
+    finishing.current = true; setFinishingLesson(true); setFinishError('')
+    try {
+      // Persist before asking the native route to replace this WebView.
+      // Repeated taps never toggle a completed lesson back to unfinished.
+      await onCommit({...initial, note, answers, frames:{}, shared_workspace:workspace, page_index:index, reader_page:page?.id, slide_index:slideIndex, self_completed:true, previous_completion:previousCompletion, content_revision:lesson.content_revision, content_version:lesson.content_version, module_id:lesson.module_id, library_slug:lesson.course_id})
+      setCompleted(true)
+      if (continueLabel) await onAdvance!()
+    } catch (error) {
+      setFinishError(error instanceof Error ? error.message : '还没有进入下一步，请重试；当前内容已保留。')
+    } finally { finishing.current = false; setFinishingLesson(false) }
   }
   function markdown(value: string) {
     // Keep source text unchanged; markers become accessible in-context entry buttons.
@@ -100,7 +118,10 @@ export function CourseReader({ lesson, initial, onChange, onCommit, tablet = fal
       {mission && sections[0] === page?.section ? <MissionTaskIntro lesson={lesson} crew={crew} entry={primaryInteraction && <InteractionEntry interaction={primaryInteraction} onOpen={() => setPanel(`lab:${primaryInteraction.id}`)}/>}/> : <h1>{page?.section ?? lesson.title}</h1>}
       {lesson.mission_brief && (tablet ? sections[0] === page?.section : index === 0) && <aside className="mission-brief">{mission && <img src={mission.commanderImage} alt="林岚指挥官"/>}<div><strong>{lesson.mission_brief.speaker}给你的任务</strong><p>{lesson.mission_brief.message}</p></div></aside>}
       {tablet ? <TabletSection pages={sectionPages} render={markdown}/> : page?.fields ? <dl className="comparison-card">{page.fields.map((field, i) => <div key={i}><dt>{markdown(field.label)}</dt><dd>{markdown(field.value || '—')}</dd></div>)}</dl> : <div className="reading-prose">{page ? markdown(page.markdown) : <p>本节暂未提供正文，可先查看作业与学习资料。</p>}</div>}
-      {pages.length > 0 && (tablet ? page?.section === pages.at(-1)?.section : index >= pages.length - 1) && <button className="wide-button" onClick={() => setCompleted(!completed)}><CheckCircle size={18}/>{completed ? '已标记读完 · 撤销' : '标记为已读完'}</button>}
+      {pages.length > 0 && (tablet ? page?.section === pages.at(-1)?.section : index >= pages.length - 1) && <>
+        <button className="wide-button" data-testid="finish-lesson" disabled={finishingLesson || (completed && !continueLabel)} onClick={() => void finishLesson()}><CheckCircle size={18}/>{finishingLesson ? '正在完成…' : continueLabel ?? (completed ? '本节已读完' : '完成本节阅读')}</button>
+        {finishError && <p role="alert">{finishError}</p>}
+      </>}
     </article>
     <div className="reader-controls">{tablet ? <>
       <nav className="tablet-page-control" aria-label="阅读翻页">
@@ -116,7 +137,7 @@ export function CourseReader({ lesson, initial, onChange, onCommit, tablet = fal
       </div>
     </> : <><Pager index={Math.max(0, Math.min(index, pages.length - 1))} count={Math.max(1, pages.length)} onChange={setIndex}/><div className="reader-actions"><button onClick={() => setPanel('work')}><NotebookPen size={18}/>练习与笔记</button><button onClick={() => setPanel('resources')}><Play size={18}/>动画与互动</button></div></>}</div>
     {panel === 'observations' && <Sheet title="Q3 观测表" onClose={() => setPanel(null)}><Q3Observations url={q3Table} onNote={() => { setWorkView('note'); setPanel('work') }}/></Sheet>}
-    {panel === 'contents' && <Sheet title="本节阅读路径" onClose={() => setPanel(null)}>{position && <p className="lesson-location">{position.course} · 第 {position.number} / {position.total} 节 · {position.stage}</p>}<p>{lesson.core_question}</p>{lesson.learning_output && <p><strong>本节要留下什么</strong>　{lesson.learning_output}</p>}<div className="contents-list">{sections.map((s, i) => <button key={s} onClick={() => { if (tablet) turnSection(i); else setIndex(pages.findIndex(p => p.section === s)); setPanel(null) }}><span>{i + 1}</span><strong>{s}</strong></button>)}</div></Sheet>}
+    {panel === 'contents' && <Sheet title="本节阅读路径" onClose={() => setPanel(null)}>{position && <p className="lesson-location">{position.course} · 第 {position.number} / {position.total} 节 · {position.stage}</p>}<p>{lesson.core_question}</p>{lesson.learning_output && <p><strong>本节要留下什么</strong>　{lesson.learning_output}</p>}<div className="contents-list">{sections.map((s, i) => <button key={s} aria-label={`阅读部分 ${i + 1}：${s}`} onClick={() => { if (tablet) turnSection(i); else setIndex(pages.findIndex(p => p.section === s)); setPanel(null) }}><span>{i + 1}</span><strong>{s}</strong></button>)}</div></Sheet>}
     {panel === 'work' && <Sheet docked={tablet} title="练习与笔记" onClose={() => setPanel(null)} footer={<label className="work-selector">选择练习内容<select aria-label="选择练习内容" value={workView} onChange={e=>setWorkView(e.target.value)}><option value="note">我的笔记与作业说明</option>{lesson.content_history && <option value="history">修订前的学习记录</option>}{lesson.assignment && <option value="assignment">阅读作业要求</option>}{(lesson.response_prompts ?? []).map((p,i)=><option value={'prompt:'+i} key={'p'+i}>{p.title}</option>)}{(lesson.assessments ?? []).filter(a=>a.questions.length).map(a=><option key={a.id} value={'assessment:'+a.id}>{a.title}</option>)}{interactions.filter(i=>i.exercises.length).map(i=><option key={i.id} value={'exercise:'+i.id}>{i.title}</option>)}</select></label>}>
       {!tablet && <p className="muted">答案和笔记保存在本机，可导出。本机练习和读完标记不代表正式评分。</p>}
       {workView === "assignment" && <DocumentPages text={lesson.assignment} render={markdown}/>}

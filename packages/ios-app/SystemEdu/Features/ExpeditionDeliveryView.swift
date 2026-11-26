@@ -11,6 +11,7 @@ struct ExpeditionDeliveryView: View {
     let onSubmit: (ExpeditionReceipt) -> Void
     @State private var draft = ExpeditionDraft()
     @State private var ready = false
+    @State private var submitting = false
     @State private var importing = false
     @State private var requirement: ExpeditionRequirement?
     @State private var error: String?
@@ -72,7 +73,7 @@ struct ExpeditionDeliveryView: View {
                 if !stepsDone { Text("先完成本章的学习与操作步骤，再交付作品。").font(.callout).foregroundStyle(Color.expeditionGold) }
                 Button(action: submit) {
                     HStack { Image(systemName: "tray.and.arrow.down.fill"); Text("署名入档，完成本章任务"); Spacer(); Image(systemName: "arrow.right") }.font(.headline).padding(20).background(Color.expeditionGold, in: RoundedRectangle(cornerRadius: 16)).foregroundStyle(Color.expeditionNight)
-                }.buttonStyle(.plain).disabled(!ready || !missing.isEmpty || !stepsDone).opacity(!missing.isEmpty || !stepsDone ? 0.45 : 1).accessibilityIdentifier("expedition-submit")
+                }.buttonStyle(.plain).disabled(!ready || submitting || !missing.isEmpty || !stepsDone).opacity(!missing.isEmpty || !stepsDone ? 0.45 : 1).accessibilityIdentifier("expedition-submit")
                 Text("入档保留此刻的副本；材料齐备和自检不代替教师评阅。").font(.caption).foregroundStyle(.white.opacity(0.55))
             }.padding(30).frame(maxWidth: 900).frame(maxWidth: .infinity)
         }.background(Color.expeditionNight).foregroundStyle(.white).tint(.expeditionGold)
@@ -102,13 +103,14 @@ struct ExpeditionDeliveryView: View {
     private func save() { guard ready else { return }; do { try store.saveDocument(draft, key: story.draftKey(chapter)) } catch { self.error = error.localizedDescription } }
     private func open(_ artifact: ExpeditionArtifact) { do { preview = SharedFile(url: try artifact.previewURL()) } catch { self.error = error.localizedDescription } }
     private func submit() {
-        guard missing.isEmpty, stepsDone else { return }
+        guard ready, !submitting, missing.isEmpty, stepsDone else { return }
+        submitting = true
         do {
             let receipt = ExpeditionReceipt(storyId: story.id, chapterId: chapter.id, title: chapter.delivery.title, profile: profile, work: draft,
                 sources: try chapter.sources(mission: mission, store: store), submittedAt: Date(), reviewStatus: "材料已收齐 · 学生已自检 · 内容待评阅")
             try store.saveDocument(receipt, key: story.receiptKey(chapter), immutable: true)
             onSubmit(receipt)
-        } catch { self.error = error.localizedDescription }
+        } catch { submitting = false; self.error = error.localizedDescription }
     }
 }
 

@@ -4,6 +4,7 @@ export interface LearningHost {
   load(): Promise<Snapshot | null>
   save(state: Snapshot): Promise<{ saved_at: string }>
   exportState(): Promise<unknown>
+  advance?(): Promise<unknown>
 }
 // Presentation only: the native host keeps one navigation layer while an activity is open.
 export function setClassroomImmersive(immersive: boolean) {
@@ -27,6 +28,7 @@ export function nativeHost(activity: Activity, session: string): LearningHost {
     load: async () => await send("load") as Snapshot | null,
     save: async state => { const {reference_workspace: _references, ...owned} = state; return await send("save", owned) as { saved_at: string } },
     exportState: () => send("export"),
+    advance: () => send("advance"),
   }
 }
 // Browser preview is explicitly local and never claims account synchronization.

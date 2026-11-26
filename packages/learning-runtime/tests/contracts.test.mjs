@@ -30,6 +30,9 @@ test("host schema rejects executable methods, unknown fields, and malformed save
   assert.ok(validate(valid))
   for (const changed of [{ method: "eval" }, { version: true }, { activity: "unknown" }, { url: "file:///etc/passwd" }, { state: null }]) assert.equal(validate({ ...valid, ...changed }), false)
   const missing = { ...valid }; delete missing.state; assert.equal(validate(missing), false)
+  const advance = { ...missing, method: "advance" }
+  assert.ok(validate(advance))
+  assert.equal(validate({ ...advance, state: { self_completed: true } }), false)
 })
 
 test("course fixture retains the existing activity identity and exact authored text", async () => {
