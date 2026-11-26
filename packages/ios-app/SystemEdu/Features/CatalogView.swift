@@ -273,7 +273,7 @@ private struct CourseIntroduction: View {
                     }
                     Label("\(course.stages.count) 个阶段 · \(course.modules.count) 节课", systemImage: "list.bullet.rectangle")
                         .font(.subheadline)
-                    Text("阅读位置、笔记和实验记录保存在本机。外部视频与链接需要联网。").font(.caption).foregroundStyle(Color.quiet)
+                    Text("外部视频与链接需要联网。").font(.caption).foregroundStyle(Color.quiet)
                 }.padding(20).frame(maxWidth: 760).frame(maxWidth: .infinity)
             }.background(Color.paper).foregroundStyle(Color.forest)
                 .navigationTitle("项目介绍").navigationBarTitleDisplayMode(.inline)

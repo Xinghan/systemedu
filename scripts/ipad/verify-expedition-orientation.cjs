@@ -25,6 +25,7 @@ const server=http.createServer((req,res)=>{const pathname=decodeURIComponent(new
    await page.goto(url);await page.getByText('Nova，这是你的任务',{exact:true}).waitFor();
    assert.equal(await page.locator('.mission-action-steps li').count(),3);
    assert.equal(await page.locator('.mission-crew-portrait').getAttribute('src'),avatar);
+   await page.locator('.reading-card').evaluate(async e=>{await Promise.all(e.getAnimations().map(a=>a.finished))});
    await page.screenshot({path:path.join(out,`classroom-${width}.png`)});
    const entry=page.getByRole('button',{name:'进入实验：我的第一张星球照片',exact:true});await entry.tap();
    await page.locator('.activity-loading').waitFor({state:'hidden'});
@@ -41,12 +42,12 @@ const server=http.createServer((req,res)=>{const pathname=decodeURIComponent(new
    await frame.getByRole('button',{name:'放大',exact:true}).click();
    await frame.locator('#shutter').click();
    await frame.getByText('Nova · 亲手取景',{exact:true}).waitFor();
-   await page.locator('.activity-save-feedback').waitFor();
+   await page.locator('.interactive-viewport[data-artifact-saved="true"]').waitFor();
    await page.screenshot({path:path.join(out,`signed-observation-${width}.png`)});
    await frame.getByRole('button',{name:'关闭照片',exact:true}).click();
    await page.getByRole('button',{name:'关闭面板',exact:true}).click();
    await page.getByRole('button',{name:'练习与笔记',exact:true}).click();await page.locator('#course-note').fill('Nova observed the moon; keep this note.');
-   await page.getByRole('status').filter({hasText:'已保存到本机'}).waitFor();
+   await page.locator('.classroom-shell[data-save-state="saved"]').waitFor();
    const saved=await page.evaluate(key=>JSON.parse(localStorage.getItem(key)),`systemedu:runtime-preview:v1:${activity}`);
    assert.ok(!JSON.stringify(saved).includes('Nova的'));assert.ok(!JSON.stringify(saved).includes(avatar));
    assert.equal(JSON.parse(saved.shared_workspace['systemedu:spot-a-world:v1']).length,1);

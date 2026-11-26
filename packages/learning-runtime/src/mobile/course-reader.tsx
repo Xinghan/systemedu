@@ -118,7 +118,7 @@ export function CourseReader({ lesson, initial, onChange, onCommit, tablet = fal
     {panel === 'observations' && <Sheet title="Q3 观测表" onClose={() => setPanel(null)}><Q3Observations url={q3Table} onNote={() => { setWorkView('note'); setPanel('work') }}/></Sheet>}
     {panel === 'contents' && <Sheet title="本节阅读路径" onClose={() => setPanel(null)}>{position && <p className="lesson-location">{position.course} · 第 {position.number} / {position.total} 节 · {position.stage}</p>}<p>{lesson.core_question}</p>{lesson.learning_output && <p><strong>本节要留下什么</strong>　{lesson.learning_output}</p>}<div className="contents-list">{sections.map((s, i) => <button key={s} onClick={() => { if (tablet) turnSection(i); else setIndex(pages.findIndex(p => p.section === s)); setPanel(null) }}><span>{i + 1}</span><strong>{s}</strong></button>)}</div></Sheet>}
     {panel === 'work' && <Sheet docked={tablet} title="练习与笔记" onClose={() => setPanel(null)} footer={<label className="work-selector">选择练习内容<select aria-label="选择练习内容" value={workView} onChange={e=>setWorkView(e.target.value)}><option value="note">我的笔记与作业说明</option>{lesson.content_history && <option value="history">修订前的学习记录</option>}{lesson.assignment && <option value="assignment">阅读作业要求</option>}{(lesson.response_prompts ?? []).map((p,i)=><option value={'prompt:'+i} key={'p'+i}>{p.title}</option>)}{(lesson.assessments ?? []).filter(a=>a.questions.length).map(a=><option key={a.id} value={'assessment:'+a.id}>{a.title}</option>)}{interactions.filter(i=>i.exercises.length).map(i=><option key={i.id} value={'exercise:'+i.id}>{i.title}</option>)}</select></label>}>
-      <p className="muted">答案和笔记保存在本机，可导出。本机练习和读完标记不代表正式评分。</p>
+      {!tablet && <p className="muted">答案和笔记保存在本机，可导出。本机练习和读完标记不代表正式评分。</p>}
       {workView === "assignment" && <DocumentPages text={lesson.assignment} render={markdown}/>}
       {workView === 'history' && lesson.content_history && <section><h3>修订前的学习记录</h3><p>{lesson.content_history.notice}</p>{previousCompletion ? <p>保留了旧版的读完标记。新版内容需要重新核对。</p> : null}{lesson.content_history.questions.filter(q => answers[q.key] !== undefined).map(q => <article className="card" key={q.key}><h4>{q.question}</h4><p>原答案：{q.options?.[Number(answers[q.key])] ?? answers[q.key]}</p></article>)}{!lesson.content_history.questions.some(q => answers[q.key] !== undefined) && <p>这份本机记录中没有修订前的题目答案。原有笔记仍在“我的笔记与作业说明”中。</p>}<details><summary>查看保留的互动记录</summary><pre>{JSON.stringify(Object.fromEntries(Object.entries(workspace).filter(([key]) => !lesson.content_revision || !key.endsWith(':' + lesson.content_revision))), null, 2)}</pre></details></section>}
 
@@ -133,7 +133,7 @@ export function CourseReader({ lesson, initial, onChange, onCommit, tablet = fal
       </section>
       {(theories.length > 0 || !!lesson.foundations?.length) && <section><h3>概念解释</h3>{(lesson.foundations ?? []).map(f => <details key={f.id}><summary>{f.title}</summary>{markdown(f.body_markdown)}</details>)}{theories.map(t => <button className="content-entry" key={t.theory_id} onClick={() => setPanel(`theory:${t.theory_id}`)}><BookOpen size={17}/>{t.title}</button>)}</section>}
       <section><h3>资料与下载</h3>
-        <p className="muted">课文和内置素材已保存在本机。外部网页、YouTube 和 Python 环境首次加载需要网络。</p>
+        <p className="muted">外部网页、YouTube 和 Python 环境首次加载需要网络。</p>
         {lesson.lab_url && <a href={'https://systeme.xin'+lesson.lab_url}>打开本课工作台（联网） ↗</a>}
         <div className="resource-list">{resources.map((r, i) => <div key={i}><a href={resolve(r.url!)} target="_blank" rel="noreferrer">{r.title ?? r.url} ↗</a><p>{r.purpose ?? r.focus ?? r.detail}</p>{r.media_url && <video controls playsInline preload="none" src={resolve(r.media_url)} poster={r.poster_url ? resolve(r.poster_url) : undefined} style={{width:"100%"}}/>}</div>)}</div>
         {!resources.length && <p className="muted">本节资料链接保留在课文和作业原文中。</p>}
@@ -214,7 +214,7 @@ export function InteractiveFrame({ path, title, storage, references, onStorage, 
         queue.current=queue.current.then(async()=>{
           await receiveCourseArtifact(data,moduleId,ideaId,stored.current,async value=>{
             if(!commit.current) throw new Error('本机保存服务未连接')
-            await commit.current(value);stored.current=value;setSaved(true);setError('实验产物已保存到本机，可随学习记录导出。')
+            await commit.current(value);stored.current=value;setSaved(true);setError('')
           },message=>{if(frame.current?.contentWindow===sourceWindow)sourceWindow?.postMessage(message,'*')})
         }).catch(()=>setError('实验产物保存失败，请保留当前页面并重试。'))
         return
@@ -241,8 +241,8 @@ export function InteractiveFrame({ path, title, storage, references, onStorage, 
     }
     window.addEventListener('message',receive);return ()=>window.removeEventListener('message',receive)
   }, [])
-  return <div className={mobile ? 'interactive-viewport mobile-activity' : expanded ? 'interactive-viewport expanded' : 'interactive-viewport'}>
-    {crew && !compactHeader && <MissionOperationBar crew={crew} title={title} saved={saved}/>}{compactHeader && saved && <div className="activity-save-feedback" role="status">作品已保存到本机</div>}
+  return <div data-artifact-saved={saved} className={mobile ? 'interactive-viewport mobile-activity' : expanded ? 'interactive-viewport expanded' : 'interactive-viewport'}>
+    {crew && !compactHeader && <MissionOperationBar crew={crew} title={title} saved={saved}/>}
     {!mobile && <button className="wide-button" onClick={() => setExpanded(!expanded)}>{expanded ? '退出全屏' : '全屏操作'}</button>}
     <div className="activity-frame-surface"><iframe key={attempt} ref={frame} title={title} src={source.current} onLoad={() => { if(crew) frame.current?.contentWindow?.postMessage({type:'course-frame-crew',channel:channel.current,crew},'*') }} sandbox="allow-scripts allow-downloads allow-pointer-lock" allow="fullscreen"/>
       {!ready && <div className="activity-loading" role="status"><strong>{timedOut ? '活动尚未打开' : '正在打开活动…'}</strong><span>{timedOut ? '已保存的学习记录仍在，可以重试或关闭后重新进入。' : title}</span>{timedOut && <button onClick={() => {setReady(false);setTimedOut(false);setError('');source.current=framePath+'#'+encodeURIComponent(JSON.stringify({channel:channel.current,storage:stored.current,references:references ?? {}}));setAttempt(value=>value+1)}}>重新打开活动</button>}</div>}

@@ -73,7 +73,7 @@ struct ExpeditionDeliveryView: View {
                 Button(action: submit) {
                     HStack { Image(systemName: "tray.and.arrow.down.fill"); Text("署名入档，完成本章任务"); Spacer(); Image(systemName: "arrow.right") }.font(.headline).padding(20).background(Color.expeditionGold, in: RoundedRectangle(cornerRadius: 16)).foregroundStyle(Color.expeditionNight)
                 }.buttonStyle(.plain).disabled(!ready || !missing.isEmpty || !stepsDone).opacity(!missing.isEmpty || !stepsDone ? 0.45 : 1).accessibilityIdentifier("expedition-submit")
-                Text("作品与原课堂记录保存在本机。入档保留此刻的副本；材料齐备和自检不代替教师评阅。").font(.caption).foregroundStyle(.white.opacity(0.55))
+                Text("入档保留此刻的副本；材料齐备和自检不代替教师评阅。").font(.caption).foregroundStyle(.white.opacity(0.55))
             }.padding(30).frame(maxWidth: 900).frame(maxWidth: .infinity)
         }.background(Color.expeditionNight).foregroundStyle(.white).tint(.expeditionGold)
             .navigationTitle("本章作品").navigationBarTitleDisplayMode(.inline).toolbar(.visible, for: .navigationBar)

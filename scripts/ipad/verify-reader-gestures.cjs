@@ -1,6 +1,6 @@
 const fs=require('node:fs'),path=require('node:path'),http=require('node:http'),assert=require('node:assert/strict');
 const {chromium}=require('playwright');
-const repo=path.resolve(__dirname,'../..'),root=path.join(repo,'packages/learning-runtime/dist'),out=path.join(repo,'artifacts/space-expedition-20261126/ipad-reader');
+const repo=path.resolve(__dirname,'../..'),root=path.join(repo,'packages/learning-runtime/dist'),out=process.env.SYSTEMEDU_IPAD_ARTIFACTS||path.join(repo,'artifacts/space-expedition-20261126/ipad-reader');
 fs.mkdirSync(out,{recursive:true});
 const catalog=JSON.parse(fs.readFileSync(path.join(root,'content/catalog.json'))),course=catalog.courses.find(c=>c.id==='lightkurve-transit-detective'),activity=course.modules[0].id;
 const server=http.createServer((req,res)=>{const file=path.resolve(root,'.'+decodeURIComponent(new URL(req.url,'http://localhost').pathname));if(!file.startsWith(root+'/')||!fs.existsSync(file)||!fs.statSync(file).isFile()){res.writeHead(404);res.end();return}res.setHeader('Content-Type',({'.html':'text/html','.js':'text/javascript','.css':'text/css','.json':'application/json','.png':'image/png','.jpg':'image/jpeg','.svg':'image/svg+xml'})[path.extname(file)]||'application/octet-stream');fs.createReadStream(file).pipe(res)});
@@ -33,7 +33,7 @@ for(const [width,height] of [[1180,700],[820,1020],[600,800]]){
  // Keyboard access uses the same stable bookmark, independent of touch gestures.
  await card.focus();await page.keyboard.press('ArrowRight');assert.equal(await current(),'2');
  await page.keyboard.press('ArrowLeft');assert.equal(await current(),'1');
- await page.getByRole('status').filter({hasText:'已保存到本机'}).waitFor();await page.reload();await card.waitFor();assert.equal(await current(),'1');
+ await page.locator('.classroom-shell[data-save-state="saved"]').waitFor();await page.reload();await card.waitFor();assert.equal(await current(),'1');
  await page.getByRole('button',{name:'练习与笔记',exact:true}).click();const note=page.locator('#course-note');await note.fill('Swipe keeps my notes and source bookmark.');
  const nb=await note.boundingBox();await swipe(nb.x+nb.width*.7,nb.y+50,-nb.width*.5,0);assert.equal(await current(),'1');
  assert.equal(await note.inputValue(),'Swipe keeps my notes and source bookmark.');

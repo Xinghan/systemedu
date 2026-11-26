@@ -22,7 +22,7 @@ const server=http.createServer((req,res)=>{const rel=decodeURIComponent(new URL(
   assert.equal(await page.locator('dialog[open]').count(),0,'Notes must not make reading inert');
   const reader=await page.locator('.reading-card').boundingBox(),inspector=await page.locator('.tablet-inspector').boundingBox();
   if(width>=730)assert.ok(reader.x+reader.width<=inspector.x+1,'Reading and notes must sit beside one another');
-  await page.getByRole('status').filter({hasText:'已保存到本机'}).waitFor();
+  await page.locator('.classroom-shell[data-save-state="saved"]').waitFor();
   await page.screenshot({path:path.join(out,`reading-notes-${width}.png`)});
   await page.reload();await page.getByRole('button',{name:'练习与笔记',exact:true}).click();
   assert.match(await page.locator('#course-note').inputValue(),/compare source/);

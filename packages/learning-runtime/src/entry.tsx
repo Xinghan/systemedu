@@ -43,8 +43,10 @@ function Classroom({ host, initial, activity, lesson }: { host: LearningHost; in
     resize(); viewport?.addEventListener("resize", resize)
     return () => viewport?.removeEventListener("resize", resize)
   }, [])
-  const sessionTools = <div className="session-bar"><span role="status"><i/>{status}</span><button aria-label="导出记录" onClick={() => { void save().then(() => host.exportState()).catch(() => setStatus("导出失败，请重试")) }}>{tablet ? <Share size={19}/> : '导出记录 ↗'}</button></div>
-  return <div className={tablet ? 'classroom-shell tablet-classroom' : 'classroom-shell'}>
+  const failed = status.includes("失败")
+  const saveState = failed ? "error" : status === "已保存到本机" ? "saved" : status === "正在保存…" ? "saving" : "idle"
+  const sessionTools = <div className="session-bar">{(!tablet || failed) && <span role={failed ? "alert" : "status"}>{!failed && <i/>}{status}</span>}<button aria-label="导出记录" onClick={() => { void save().then(() => host.exportState()).catch(() => setStatus("导出失败，请重试")) }}>{tablet ? <Share size={19}/> : '导出记录 ↗'}</button></div>
+  return <div data-save-state={saveState} className={tablet ? 'classroom-shell tablet-classroom' : 'classroom-shell'}>
     {!(tablet && lesson) && sessionTools}
     {activity === "course:space-exploration:1.0:JOURNEY" ? <Dossier initial={initial} onChange={change}/> : lesson ? <CourseReader sessionTools={sessionTools} tablet={tablet} lesson={lesson} initial={initial} onChange={change} onCommit={async state => { change(state); await save() }}/> : activity === "mechanical-hand" ? <MobileHand initial={initial} onChange={change} assetBase={assetBase}/> :
       activity === "mars-landing" ? <MobileLanding initial={initial} onChange={change} assetBase={assetBase}/> : <MobileReader initial={initial} onChange={change}/>}

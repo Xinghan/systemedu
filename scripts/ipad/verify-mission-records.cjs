@@ -22,7 +22,7 @@ const server=http.createServer((req,res)=>{const rel=decodeURIComponent(new URL(
   for (const [question,answer] of [['我作出的关键选择','选择图中可见纹理作为观察目标。'],['证据支持什么，还不能证明什么','影像提供候选地点，但不能确定实地通行条件。'],['我制作与平台提供的部分','我标记位置，原始影像由课程提供。']]) await frame.getByRole('textbox',{name:question,exact:true}).fill(answer);
   await frame.getByRole('button',{name:'保存项目作品到本机',exact:true}).click();
   await frame.getByRole('button',{name:'当前版本已保存',exact:true}).waitFor();
-  await page.getByRole('status').filter({hasText:'已保存到本机'}).waitFor();
+  await page.locator('.classroom-shell[data-save-state="saved"]').waitFor();
   const source=await page.evaluate(()=>localStorage.getItem('systemedu:runtime-workspace:v1:pick-an-observation-site:1.0'));
   assert.ok(source.includes('submittedAt'));
   await visit('course:space-exploration:1.0:JOURNEY');
@@ -34,7 +34,7 @@ const server=http.createServer((req,res)=>{const rel=decodeURIComponent(new URL(
   const inputs=dossier.locator('[data-mission-dossier] input');
   for(const [index,text] of ['比较两处地形','教室地面两米范围','留下照片和两次测试记录'].entries()) await inputs.nth(index).fill(text);
   await dossier.getByRole('button',{name:'保存这版任务档案',exact:true}).click();
-  await page.getByRole('status').filter({hasText:'已保存到本机'}).waitFor();
+  await page.locator('.classroom-shell[data-save-state="saved"]').waitFor();
   await dossier.locator('body').evaluate(()=>window.scrollTo(0,0));
   await page.screenshot({path:path.join(out,'mission-dossier-landscape.png')});
   await page.reload();
