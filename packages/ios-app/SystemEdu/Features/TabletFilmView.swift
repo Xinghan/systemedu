@@ -34,6 +34,7 @@ struct TabletFilmView: View {
     @State private var duration = 0.0
     @State private var dragging = false
     @State private var playing = false
+    @State private var finished = false
     @State private var controlsVisible = true
     @State private var transcript = false
 
@@ -51,6 +52,7 @@ struct TabletFilmView: View {
             Button { controlsVisible.toggle() } label: { Color.clear.contentShape(Rectangle()) }
                 .buttonStyle(.plain).ignoresSafeArea()
                 .accessibilityLabel(controlsVisible ? "隐藏播放控件" : "显示播放控件")
+                .accessibilityIdentifier("ipad-film-surface")
 
             if hasCaptions, let caption = captions.first(where: { seconds >= $0.start && seconds < $0.end }) {
                 Text(caption.text).font(.title3.weight(.semibold))
@@ -60,13 +62,11 @@ struct TabletFilmView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
                     .allowsHitTesting(false).accessibilityIdentifier("ipad-film-caption")
             }
-            if controlsVisible {
-                VStack(spacing: 0) {
+            VStack(spacing: 0) {
                     HStack(spacing: 16) {
-                        Button { dismiss() } label: { Image(systemName: "xmark").frame(width: 44, height: 44) }
+                        Button { dismiss() } label: { Label("退出视频", systemImage: "xmark").frame(minHeight: 44) }
                             .accessibilityLabel("关闭简报").accessibilityIdentifier("ipad-close-film")
-                        Text(film.title).font(.headline)
-                        if let onContinue { Button("进入任务") { onContinue(); dismiss() }.font(.headline).accessibilityIdentifier("ipad-film-continue") }
+                        Text(film.title).font(.headline).lineLimit(1)
                         Spacer()
                         if !captions.isEmpty {
                             Button { hasCaptions.toggle() } label: {
@@ -77,8 +77,15 @@ struct TabletFilmView: View {
                                 .accessibilityLabel("查看完整字幕").accessibilityIdentifier("ipad-film-transcript")
                                 .popover(isPresented: $transcript) { transcriptView }
                         }
+                        if let onContinue {
+                            Button(finished ? "进入任务" : "跳过视频，进入任务") { onContinue(); dismiss() }
+                                .font(.headline).padding(.horizontal, 18).frame(minHeight: 44)
+                                .background(Color.expeditionGold, in: Capsule()).foregroundStyle(Color.expeditionNight)
+                                .accessibilityIdentifier("ipad-film-continue")
+                        }
                     }.padding(.horizontal, 16).padding(.vertical, 6).background(.black.opacity(0.72))
                     Spacer()
+                    if controlsVisible {
                     HStack(spacing: 16) {
                         Button { togglePlayback() } label: {
                             Image(systemName: playing ? "pause.fill" : "play.fill").font(.title3).frame(width: 44, height: 44)
@@ -91,8 +98,8 @@ struct TabletFilmView: View {
                         }.accessibilityLabel("播放进度").disabled(duration <= 0)
                         Text(time(duration)).monospacedDigit().accessibilityLabel("影片总时长")
                     }.font(.callout).padding(.horizontal, 24).padding(.vertical, 10).background(.black.opacity(0.72))
+                    }
                 }
-            }
         }
         .foregroundStyle(.white).tint(.white).buttonStyle(.plain).preferredColorScheme(.dark)
         .statusBarHidden().persistentSystemOverlays(.hidden)
@@ -107,6 +114,7 @@ struct TabletFilmView: View {
         .onReceive(NotificationCenter.default.publisher(for: AVPlayerItem.didPlayToEndTimeNotification)) { notice in
             guard let item = notice.object as? AVPlayerItem, item === player?.currentItem else { return }
             playing = false
+            finished = true
             controlsVisible = true
         }
     }
@@ -148,6 +156,7 @@ struct TabletFilmView: View {
 
     private func seek(_ value: Double) {
         seconds = max(0, value)
+        finished = duration > 0 && seconds >= duration - 0.2
         player?.seek(to: CMTime(seconds: seconds, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero)
     }
 

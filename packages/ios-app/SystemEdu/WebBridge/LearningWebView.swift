@@ -8,8 +8,9 @@ struct LearningWebView: UIViewRepresentable {
     let onExport: (URL) -> Void
     let onExternal: (URL) -> Void
     let onError: (String) -> Void
+    var onImmersiveChange: (Bool) -> Void = { _ in }
 
-    func makeCoordinator() -> Coordinator { Coordinator(activity: activity, store: store, onExport: onExport, onExternal: onExternal, onError: onError) }
+    func makeCoordinator() -> Coordinator { Coordinator(activity: activity, store: store, onExport: onExport, onExternal: onExternal, onError: onError, onImmersiveChange: onImmersiveChange) }
 
     func makeUIView(context: Context) -> WKWebView {
         let configuration = WKWebViewConfiguration()
@@ -19,6 +20,7 @@ struct LearningWebView: UIViewRepresentable {
             configuration.setURLSchemeHandler(AssetSchemeHandler(root: root), forURLScheme: "systemedu")
         }
         configuration.userContentController.addScriptMessageHandler(context.coordinator, contentWorld: .page, name: "learning")
+        configuration.userContentController.addScriptMessageHandler(context.coordinator, contentWorld: .page, name: "classroomPresentation")
         if let crew, let script = CrewClassroomIdentity.script(crew) {
             configuration.userContentController.addUserScript(WKUserScript(source: script, injectionTime: .atDocumentStart, forMainFrameOnly: true))
         }
@@ -43,6 +45,7 @@ struct LearningWebView: UIViewRepresentable {
         coordinator.active = false
         uiView.stopLoading(); uiView.navigationDelegate = nil; uiView.uiDelegate = nil
         uiView.configuration.userContentController.removeScriptMessageHandler(forName: "learning", contentWorld: .page)
+        uiView.configuration.userContentController.removeScriptMessageHandler(forName: "classroomPresentation", contentWorld: .page)
         uiView.loadHTMLString("", baseURL: nil)
     }
 
@@ -54,14 +57,22 @@ struct LearningWebView: UIViewRepresentable {
         let onExport: (URL) -> Void
         let onExternal: (URL) -> Void
         let onError: (String) -> Void
+        let onImmersiveChange: (Bool) -> Void
         var active = true
-        init(activity: LearningActivity, store: LearningStore, onExport: @escaping (URL) -> Void, onExternal: @escaping (URL) -> Void, onError: @escaping (String) -> Void) {
+        init(activity: LearningActivity, store: LearningStore, onExport: @escaping (URL) -> Void, onExternal: @escaping (URL) -> Void, onError: @escaping (String) -> Void, onImmersiveChange: @escaping (Bool) -> Void) {
             self.activity = activity; self.store = store; self.onExport = onExport; self.onExternal = onExternal; self.onError = onError
+            self.onImmersiveChange = onImmersiveChange
         }
         func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage, replyHandler: @escaping (Any?, String?) -> Void) {
             do {
                 guard active, message.frameInfo.isMainFrame, let url = message.frameInfo.request.url,
                       url.scheme == "systemedu", url.host == "bundle", url.path == "/index.html" else { throw AssetError.forbidden }
+                if message.name == "classroomPresentation" {
+                    guard let body = message.body as? [String: Any], body.count == 3,
+                          body["session"] as? String == session, body["activity"] as? String == activity.rawValue,
+                          let immersive = body["immersive"] as? Bool else { throw AssetError.forbidden }
+                    onImmersiveChange(immersive); replyHandler(["accepted": true], nil); return
+                }
                 let request = try BridgeRequest(body: message.body, activity: activity, session: session)
                 switch request.method {
                 case .load:
@@ -104,8 +115,8 @@ struct LearningWebView: UIViewRepresentable {
             if navigationAction.navigationType == .linkActivated, url.scheme == "https" { onExternal(url) }
             decisionHandler(.cancel)
         }
-        func webViewWebContentProcessDidTerminate(_ webView: WKWebView) { onError("课堂进程已停止。已保存的记录仍在，可以返回后重新打开。") }
-        func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) { onError("课堂加载失败，请返回后重试。") }
+        func webViewWebContentProcessDidTerminate(_ webView: WKWebView) { onImmersiveChange(false); onError("课堂进程已停止。已保存的记录仍在，可以返回后重新打开。") }
+        func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) { onImmersiveChange(false); onError("课堂加载失败，请返回后重试。") }
     }
 }
 

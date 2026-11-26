@@ -2,13 +2,13 @@ import { useEffect, useId, useRef, type ReactNode, type RefObject } from "react"
 import { X, ChevronLeft, ChevronRight } from "lucide-react"
 
 /** Native dialog supplies focus containment, Escape and an inert background in WKWebView. */
-export function Sheet({ title, children, onClose, footer, immersive = false, docked = false }: { title: string; children: ReactNode; onClose: () => void; footer?: ReactNode; immersive?: boolean; docked?: boolean }) {
+export function Sheet({ title, children, onClose, footer, immersive = false, docked = false, portrait, caption }: { title: string; children: ReactNode; onClose: () => void; footer?: ReactNode; immersive?: boolean; docked?: boolean; portrait?: ReactNode; caption?: string }) {
   const dialog = useRef<HTMLDialogElement>(null), heading = useId()
   useEffect(() => { const node = dialog.current; if (!node) return; node.showModal(); return () => node.close() }, [docked])
   if (docked) return <aside className="tablet-inspector" aria-labelledby={heading}><header><h2 id={heading}>{title}</h2><button className="icon-button" aria-label="关闭面板" onClick={onClose}><X size={21}/></button></header><div className="inspector-body">{children}</div>{footer && <footer>{footer}</footer>}</aside>
   return <dialog ref={dialog} className={immersive ? 'sheet immersive-sheet' : 'sheet'} aria-labelledby={heading} onCancel={event => { event.preventDefault(); onClose() }} onClick={event => { if (event.target === event.currentTarget) onClose() }}>
     <div className="sheet-layout">
-      <header><h2 id={heading}>{title}</h2><button className="icon-button" aria-label="关闭面板" autoFocus onClick={onClose}><X size={21}/></button></header>
+      <header>{portrait}<div className="sheet-heading"><h2 id={heading}>{title}</h2>{caption && <span>{caption}</span>}</div><button className="icon-button" aria-label="关闭面板" autoFocus onClick={onClose}><X size={21}/></button></header>
       <div className="sheet-body">{children}</div>
       {footer && <footer>{footer}</footer>}
     </div>

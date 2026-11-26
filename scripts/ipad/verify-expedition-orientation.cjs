@@ -1,7 +1,7 @@
 const fs=require('node:fs'),path=require('node:path'),http=require('node:http'),assert=require('node:assert/strict');
 const {execFileSync}=require('node:child_process');
 const {chromium}=require('playwright');
-const repo=path.resolve(__dirname,'../..'),root=path.join(repo,'packages/learning-runtime/dist'),out=path.join(repo,'artifacts/space-expedition-20261126/orientation');
+const repo=path.resolve(__dirname,'../..'),root=path.join(repo,'packages/learning-runtime/dist'),out=process.env.SYSTEMEDU_IPAD_ARTIFACTS||path.join(repo,'artifacts/space-expedition-20261126/orientation');
 fs.mkdirSync(out,{recursive:true});
 const read=p=>JSON.parse(fs.readFileSync(path.join(root,p),'utf8'));
 const catalog=read('content/catalog.json'),story=read('content/missions/space-expedition.json');
@@ -18,7 +18,7 @@ const server=http.createServer((req,res)=>{const pathname=decodeURIComponent(new
   const refs=story.chapters.flatMap(c=>c.refs);assert.equal(refs.length,120);assert.equal(new Set(refs).size,120);
   for(const chapter of story.chapters)assert.equal(chapter.actions.length,3);
   checks.push('14 chapters / 120 retained nodes / complete act map and action instructions');
-  for(const [width,height] of [[1180,680],[820,1050]]){
+  for(const [width,height] of [[1180,680],[820,1050],[700,660]]){
    const page=await browser.newPage({viewport:{width,height},hasTouch:true});page.on('pageerror',e=>errors.push(e.message));
    await page.addInitScript(crew=>{window.__systemeduCrew=crew;},{name:'Nova',role:'工程师',duty:'动手验证，让方案工作',avatar});
    const activity=node('spot-a-world').id,url=`http://127.0.0.1:${server.address().port}/index.html?activity=${activity}&presentation=tablet`;
@@ -29,6 +29,11 @@ const server=http.createServer((req,res)=>{const pathname=decodeURIComponent(new
    const entry=page.getByRole('button',{name:'进入实验：我的第一张星球照片',exact:true});await entry.tap();
    await page.locator('.activity-loading').waitFor({state:'hidden'});
    const frame=page.frameLocator('iframe');await frame.getByText('Nova的观测席',{exact:true}).waitFor();
+   const surface=await page.locator('iframe').boundingBox();assert.ok(surface.height>=height*.8,'The activity must own at least 80% of the available classroom');
+   const layout=await frame.locator('body').evaluate(()=>({height:innerHeight,scroll:document.documentElement.scrollHeight,buttons:[...document.querySelectorAll('[data-direction],#zoom-in,#zoom-out,#shutter')].map(el=>{const r=el.getBoundingClientRect();return {name:el.getAttribute('aria-label')||el.id,x:r.x,y:r.y,width:r.width,height:r.height}})}));
+   assert.ok(layout.scroll<=layout.height+1,'Observatory must fit vertically');
+   for(const rect of layout.buttons){assert.ok(rect.y>=0&&rect.y+rect.height<=layout.height+1,rect.name+' must be visible without scrolling');assert.ok(rect.width>=44&&rect.height>=44,rect.name+' must be touch sized');}
+   await page.screenshot({path:path.join(out,`observatory-${width}.png`)});
    assert.equal(await frame.locator('[data-crew-portrait]').getAttribute('src'),avatar);
    assert.ok(!(await page.locator('iframe').getAttribute('src')).includes('base64'));
    for(let i=0;i<5;i++)await frame.getByRole('button',{name:'镜头向左',exact:true}).click();
@@ -36,7 +41,7 @@ const server=http.createServer((req,res)=>{const pathname=decodeURIComponent(new
    await frame.getByRole('button',{name:'放大',exact:true}).click();
    await frame.locator('#shutter').click();
    await frame.getByText('Nova · 亲手取景',{exact:true}).waitFor();
-   await page.locator('.mission-operation-bar.is-saved').waitFor();
+   await page.locator('.activity-save-feedback').waitFor();
    await page.screenshot({path:path.join(out,`signed-observation-${width}.png`)});
    await frame.getByRole('button',{name:'关闭照片',exact:true}).click();
    await page.getByRole('button',{name:'关闭面板',exact:true}).click();
@@ -49,7 +54,7 @@ const server=http.createServer((req,res)=>{const pathname=decodeURIComponent(new
    await page.getByRole('button',{name:'关闭面板',exact:true}).click();await entry.tap();await page.locator('.activity-loading').waitFor({state:'hidden'});
    assert.equal(await frame.locator('#album-count').innerText(),'1');
    await page.getByRole('button',{name:'关闭面板',exact:true}).click();
-   checks.push(`${width}x${height}: touch entry, personalized observer seat and photo, committed artifact, no identity in learning state, reload restoration`);
+   checks.push(`${width}x${height}: controls visible without scrolling, 44px touch targets, personalized observer seat and photo, committed artifact, no identity in learning state, reload restoration`);
    await page.close();
   }
   const failure=await browser.newPage({viewport:{width:1180,height:680}});

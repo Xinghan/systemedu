@@ -5,6 +5,13 @@ export interface LearningHost {
   save(state: Snapshot): Promise<{ saved_at: string }>
   exportState(): Promise<unknown>
 }
+// Presentation only: the native host keeps one navigation layer while an activity is open.
+export function setClassroomImmersive(immersive: boolean) {
+  const handler = (window as unknown as { webkit?: { messageHandlers?: { classroomPresentation?: { postMessage: (message: unknown) => Promise<unknown> } } } }).webkit?.messageHandlers?.classroomPresentation
+  if (!handler) return
+  const params = new URLSearchParams(location.search)
+  void handler.postMessage({session:params.get('session'),activity:params.get('activity'),immersive}).catch(() => {})
+}
 export function activityFrom(value: string | null): Activity {
   if (value === "mechanical-hand" || value === "mars-landing" || value === "driving-intro" || (value && /^course:[A-Za-z0-9_.-]+:[A-Za-z0-9_.-]+:[A-Za-z0-9_.-]+$/.test(value) && value.length <= 220)) return value
   throw new Error("无法识别这项学习活动，请返回后重新打开。")

@@ -234,6 +234,74 @@ final class TabletMissionTests: XCTestCase {
         XCTAssertTrue(entry.waitForExistence(timeout: 10))
     }
 
+    @MainActor func testObservatoryFitsLandscapeAndPortraitWithoutScrolling() {
+        XCUIDevice.shared.orientation = .landscapeLeft
+        let app = app(); enter(app); join(app)
+        app.buttons["expedition-continue"].tap()
+        XCTAssertTrue(app.buttons["ipad-film-continue"].waitForExistence(timeout: 10)); app.buttons["ipad-film-continue"].tap()
+        let web = app.webViews.firstMatch
+        let entry = web.buttons["进入实验：我的第一张星球照片"]
+        XCTAssertTrue(entry.waitForExistence(timeout: 20)); entry.tap()
+        let left = web.buttons["镜头向左"]
+        XCTAssertTrue(left.waitForExistence(timeout: 20))
+        for orientation in [UIDeviceOrientation.landscapeLeft, .portrait, .landscapeLeft] {
+            XCUIDevice.shared.orientation = orientation
+            XCTAssertTrue(left.waitForExistence(timeout: 10))
+            XCTAssertFalse(app.buttons["expedition-next-step"].exists)
+            XCTAssertFalse(app.buttons["ipad-lesson-back"].exists)
+            for name in ["镜头向左", "镜头向右", "镜头向上", "镜头向下", "放大", "缩小"] {
+                let button = web.buttons[name]
+                XCTAssertTrue(button.isHittable, name + " should need no scrolling")
+                XCTAssertGreaterThanOrEqual(button.frame.width, 44)
+                XCTAssertGreaterThanOrEqual(button.frame.height, 44)
+            }
+            let shutter = web.buttons.matching(NSPredicate(format: "label CONTAINS %@", "拍下这张照片")).firstMatch
+            XCTAssertTrue(shutter.exists)
+            XCTAssertLessThanOrEqual(shutter.frame.maxY, web.frame.maxY)
+            XCTAssertGreaterThanOrEqual(shutter.frame.minY, web.frame.minY)
+            capture(orientation == .portrait ? "observatory-fitted-portrait" : "observatory-fitted-landscape")
+        }
+        web.buttons["关闭面板"].tap()
+        XCTAssertTrue(app.buttons["ipad-lesson-back"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.buttons["expedition-next-step"].exists)
+        XCTAssertTrue(entry.waitForExistence(timeout: 10))
+    }
+
+    @MainActor func testFilmCanExitWithHiddenControlsAndDoesNotBlockReentry() {
+        XCUIDevice.shared.orientation = .landscapeLeft
+        let app = app(); enter(app); join(app)
+        app.buttons["expedition-continue"].tap()
+        let timer = app.staticTexts["ipad-film-time"]
+        expectation(for: NSPredicate(format: "label MATCHES %@", "已播放 [1-9][0-9]* 秒"), evaluatedWith: timer)
+        waitForExpectations(timeout: 15)
+        app.buttons["ipad-film-surface"].tap()
+        XCTAssertTrue(app.buttons["ipad-close-film"].isHittable)
+        XCTAssertTrue(app.buttons["ipad-film-continue"].isHittable)
+        capture("film-persistent-exit-and-skip")
+        app.buttons["ipad-close-film"].tap()
+        XCTAssertTrue(app.buttons["expedition-continue"].waitForExistence(timeout: 10))
+        app.buttons["expedition-continue"].tap()
+        XCTAssertTrue(app.webViews.firstMatch.buttons["练习与笔记"].waitForExistence(timeout: 20))
+        XCTAssertFalse(app.buttons["ipad-film-player"].exists)
+    }
+
+    @MainActor func testFilmEndKeepsAVisibleRouteIntoTheLesson() {
+        XCUIDevice.shared.orientation = .portrait
+        let app = app(); enter(app); join(app)
+        app.buttons["expedition-continue"].tap()
+        let progress = app.sliders["播放进度"]
+        XCTAssertTrue(progress.waitForExistence(timeout: 10))
+        expectation(for: NSPredicate(format: "enabled == true"), evaluatedWith: progress)
+        waitForExpectations(timeout: 10)
+        progress.adjust(toNormalizedSliderPosition: 1)
+        let next = app.buttons["ipad-film-continue"]
+        expectation(for: NSPredicate(format: "label == %@", "进入任务"), evaluatedWith: next)
+        waitForExpectations(timeout: 10)
+        XCTAssertTrue(next.isHittable); capture("film-finished-portrait")
+        next.tap()
+        XCTAssertTrue(app.webViews.firstMatch.buttons["练习与笔记"].waitForExistence(timeout: 20))
+    }
+
     @MainActor func testReadingAloneReturnsToObservationInsteadOfEmptyDelivery() {
         XCUIDevice.shared.orientation = .landscapeLeft
         let app = app(); enter(app); join(app)

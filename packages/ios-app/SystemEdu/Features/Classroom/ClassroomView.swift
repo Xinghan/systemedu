@@ -9,6 +9,8 @@ struct ClassroomView: View {
     var crew: CrewProfile? = nil
     var onOpenActivity: ((LearningActivity) -> Void)? = nil
     var onMissionMap: (() -> Void)? = nil
+    var onImmersiveChange: (Bool) -> Void = { _ in }
+    @State private var immersive = false
     @State private var export: SharedFile?
     @State private var external: SharedFile?
     @State private var error: String?
@@ -20,9 +22,9 @@ struct ClassroomView: View {
                             else if url.host == "systeme.xin", url.path == "/mission/space", let onMissionMap { onMissionMap() }
                             else { external = SharedFile(url: url) }
                         },
-                        onError: { error = $0 })
+                        onError: { error = $0 }, onImmersiveChange: { value in immersive = value; onImmersiveChange(value) })
             .navigationTitle(activity.title).navigationBarTitleDisplayMode(.inline)
-            .toolbar(.visible, for: .navigationBar)
+            .toolbar(immersive ? .hidden : .visible, for: .navigationBar)
             .toolbar(.hidden, for: .tabBar)
             .toolbar { ToolbarItem(placement: .topBarTrailing) { Image(systemName: "internaldrive").foregroundStyle(Color.forest).accessibilityLabel("课文与内置资源可离线阅读") } }
             .sheet(item: $export) { ShareSheet(url: $0.url) }

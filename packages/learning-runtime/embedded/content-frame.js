@@ -1,5 +1,9 @@
 /* Runs only inside sandboxed course frames. No native bridge or account token. */
 (() => {
+  if(new URLSearchParams(location.search).get('presentation')==='tablet' && location.pathname.endsWith('/spot-a-world/index.html')) {
+    document.documentElement.dataset.presentation='tablet'
+    const style=document.createElement('link');style.rel='stylesheet';style.href='/ipad-observatory.css';document.head.append(style)
+  }
   let storage = {}, references = {}, channel = '', photoRevision = 0, savedPhotoRevision = 0
   try { const state = JSON.parse(decodeURIComponent(location.hash.slice(1))); storage = state.storage || {}; references = state.references || {}; channel = state.channel || '' } catch {}
   const publish = () => { const text=JSON.stringify(storage); parent.postMessage({type:'course-frame-state',channel,storage,photoRevision,oversized:new TextEncoder().encode(text).length>90000},'*') }

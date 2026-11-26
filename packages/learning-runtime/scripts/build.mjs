@@ -39,3 +39,4 @@ execFileSync("python3", [path.join(root, "scripts/export-content.py")], {stdio: 
 
 execFileSync(process.execPath, [path.join(root, "scripts/build-embedded.mjs")], {stdio: "inherit"})
 await cp(path.join(root, "embedded/content-frame.js"), path.join(out, "content-frame.js"))
+await cp(path.join(root, "embedded/ipad-observatory.css"), path.join(out, "ipad-observatory.css"))

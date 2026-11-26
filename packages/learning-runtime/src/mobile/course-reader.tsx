@@ -5,13 +5,13 @@ import remarkMath from 'remark-math'
 import rehypeKatex from 'rehype-katex'
 import { BookOpen, List, NotebookPen, Presentation, CheckCircle, Play, Gamepad2, FlaskConical, Box, Wrench } from 'lucide-react'
 import 'katex/dist/katex.min.css'
-import type { Snapshot } from '../host'
+import { setClassroomImmersive, type Snapshot } from '../host'
 import { assetURL, type CourseLesson, type Exercise, type Slide, type Interaction } from '../content'
 import { receiveCourseArtifact } from '../course-artifacts'
 import { readingPages, restoreReadingPage } from './reading-pages'
 import { Q3Observations } from './q3-observations'
 import { Pager, Sheet } from './primitives'
-import { currentCrew, MissionTaskIntro, MissionOperationBar, type CrewIdentity } from './mission-context'
+import { currentCrew, CrewPortrait, MissionTaskIntro, MissionOperationBar, type CrewIdentity } from './mission-context'
 
 type Panel = 'observations' | 'contents' | 'work' | 'resources' | 'lecture' | `theory:${string}` | `lab:${string}` | null
 
@@ -27,6 +27,8 @@ export function CourseReader({ lesson, initial, onChange, onCommit, tablet = fal
   const [workspace, setWorkspace] = useState<Record<string,string>>(() => Object.assign({}, ...Object.values((initial.frames as Record<string,Record<string,string>>) ?? {}), (initial.shared_workspace as Record<string,string>) ?? {}))
   const [workView, setWorkView] = useState('note')
   const [panel, setPanel] = useState<Panel>(null)
+  const immersive = tablet && (panel === 'lecture' || !!panel?.startsWith('lab:'))
+  useEffect(() => { setClassroomImmersive(immersive); return () => setClassroomImmersive(false) }, [immersive])
   const page = pages[Math.min(index, pages.length - 1)]
   const crew = useMemo(currentCrew, [])
   const mission = tablet ? lesson.expedition : undefined
@@ -108,7 +110,7 @@ export function CourseReader({ lesson, initial, onChange, onCommit, tablet = fal
       </section>
     </Sheet>}
     {activeTheory && <Sheet docked={tablet} title={activeTheory.title} onClose={() => setPanel(null)}><TheoryBody key={activeTheory.theory_id} theory={activeTheory} render={markdown} questionPrefix={`theory:${activeTheory.theory_id}:${lesson.content_revision ?? lesson.content_version}`} answers={answers} onAnswer={(id, value) => setAnswers({ ...answers, [id]: value })}/></Sheet>}
-    {activeLab && <Sheet title={tablet || activeLab.presentation_platform === 'ios' ? activeLab.title : interactionPresentation(activeLab.mode).label} immersive={tablet || activeLab.presentation_platform === 'ios'} onClose={() => setPanel(null)}>{!tablet && activeLab.presentation_platform !== 'ios' && <h3>{activeLab.title}</h3>}{activeLab.path ? <InteractiveFrame key={activeLab.id} crew={mission ? crew : undefined} references={initial.reference_workspace as Record<string,string>} mobile={tablet || activeLab.presentation_platform === 'ios'} path={resolve(activeLab.path)} title={activeLab.title} storage={workspace} onStorage={setWorkspace} onCommit={commitWorkspace} moduleId={lesson.module_id} ideaId={activeLab.id}/> : null}{!activeLab.path && !activeLab.exercises.length && <p className="muted">本节尚未提供可打开的互动资源，请查看课文中的操作说明。</p>}{activeLab.exercises.length > 0 && <Questions questions={activeLab.exercises} prefix={activeLab.id} answers={answers} onAnswer={(id, answer) => setAnswers({ ...answers, [id]: answer })}/>}</Sheet>}
+    {activeLab && <Sheet portrait={tablet && crew ? <CrewPortrait crew={crew} size="small"/> : undefined} caption={tablet && crew ? `${crew.name}的操作席` : undefined} title={tablet || activeLab.presentation_platform === 'ios' ? activeLab.title : interactionPresentation(activeLab.mode).label} immersive={tablet || activeLab.presentation_platform === 'ios'} onClose={() => setPanel(null)}>{!tablet && activeLab.presentation_platform !== 'ios' && <h3>{activeLab.title}</h3>}{activeLab.path ? <InteractiveFrame key={activeLab.id} compactHeader={tablet} crew={mission ? crew : undefined} references={initial.reference_workspace as Record<string,string>} mobile={tablet || activeLab.presentation_platform === 'ios'} path={resolve(activeLab.path)} title={activeLab.title} storage={workspace} onStorage={setWorkspace} onCommit={commitWorkspace} moduleId={lesson.module_id} ideaId={activeLab.id}/> : null}{!activeLab.path && !activeLab.exercises.length && <p className="muted">本节尚未提供可打开的互动资源，请查看课文中的操作说明。</p>}{activeLab.exercises.length > 0 && <Questions questions={activeLab.exercises} prefix={activeLab.id} answers={answers} onAnswer={(id, answer) => setAnswers({ ...answers, [id]: answer })}/>}</Sheet>}
     {panel === 'lecture' && <Sheet immersive={tablet} title={`讲课 · ${Math.min(slideIndex + 1, slides.length)}/${slides.length}`} onClose={() => setPanel(null)} footer={<Pager index={Math.min(slideIndex, slides.length - 1)} count={slides.length} onChange={setSlideIndex}/>}><SlideCard slide={slides[Math.min(slideIndex, slides.length - 1)]} markdown={markdown} resolve={resolve} onTheory={id => setPanel(`theory:${id}`)} onLab={id => setPanel(`lab:${id}`)}/></Sheet>}
   </div>
 }
@@ -162,7 +164,7 @@ function Questions({ questions, prefix, answers, onAnswer }: { questions: Exerci
   const [revealed, setRevealed] = useState<Record<string, boolean>>({})
   return <>{questions.map((q, i) => { if (i !== questionIndex) return null; const id = `${prefix}:${q.id ?? i}`; return <fieldset key={id}><legend>{i + 1}. {q.question ?? q.prompt}</legend>{q.options?.length ? q.options.map((option, n) => <label className="choice-answer" key={n}><input type="radio" name={id} checked={answers[id] === String(n)} onChange={() => onAnswer(id, String(n))}/>{option}</label>) : <textarea value={answers[id] ?? ''} maxLength={2000} onChange={e => onAnswer(id, e.target.value)}/>}<button className="wide-button" disabled={!answers[id] && answers[id] !== '0'} onClick={() => setRevealed({ ...revealed, [id]: true })}>查看解析</button>{revealed[id] && <p role="status">{typeof q.correct === 'number' ? answers[id] === String(q.correct) ? '回答正确。' : '再检查你的判断。' : ''}{q.explanation ?? q.answer ?? '请结合本节原理说明自己的理由。'}</p>}</fieldset> })}<Pager index={questionIndex} count={questions.length} onChange={setQuestionIndex} label="题"/></>
 }
-export function InteractiveFrame({ path, title, storage, references, onStorage, onCommit, moduleId, ideaId, mobile = false, crew }: { path: string; title: string; storage?: Record<string,string>; references?: Record<string,string>; onStorage?: (value: Record<string,string>) => void; onCommit?: (value: Record<string,string>) => Promise<void>; moduleId?: string; ideaId?: string; mobile?: boolean; crew?: CrewIdentity }) {
+export function InteractiveFrame({ path, title, storage, references, onStorage, onCommit, moduleId, ideaId, mobile = false, crew, compactHeader = false }: { path: string; title: string; storage?: Record<string,string>; references?: Record<string,string>; onStorage?: (value: Record<string,string>) => void; onCommit?: (value: Record<string,string>) => Promise<void>; moduleId?: string; ideaId?: string; mobile?: boolean; crew?: CrewIdentity; compactHeader?: boolean }) {
   const [expanded, setExpanded] = useState(false), [error, setError] = useState('')
   const [ready, setReady] = useState(false), [timedOut, setTimedOut] = useState(false), [attempt, setAttempt] = useState(0), [saved, setSaved] = useState(false)
   const frame = useRef<HTMLIFrameElement>(null)
@@ -210,7 +212,7 @@ export function InteractiveFrame({ path, title, storage, references, onStorage, 
     window.addEventListener('message',receive);return ()=>window.removeEventListener('message',receive)
   }, [])
   return <div className={mobile ? 'interactive-viewport mobile-activity' : expanded ? 'interactive-viewport expanded' : 'interactive-viewport'}>
-    {crew && <MissionOperationBar crew={crew} title={title} saved={saved}/>}
+    {crew && !compactHeader && <MissionOperationBar crew={crew} title={title} saved={saved}/>}{compactHeader && saved && <div className="activity-save-feedback" role="status">作品已保存到本机</div>}
     {!mobile && <button className="wide-button" onClick={() => setExpanded(!expanded)}>{expanded ? '退出全屏' : '全屏操作'}</button>}
     <div className="activity-frame-surface"><iframe key={attempt} ref={frame} title={title} src={source.current} onLoad={() => { if(crew) frame.current?.contentWindow?.postMessage({type:'course-frame-crew',channel:channel.current,crew},'*') }} sandbox="allow-scripts allow-downloads allow-pointer-lock" allow="fullscreen"/>
       {!ready && <div className="activity-loading" role="status"><strong>{timedOut ? '活动尚未打开' : '正在打开活动…'}</strong><span>{timedOut ? '已保存的学习记录仍在，可以重试或关闭后重新进入。' : title}</span>{timedOut && <button onClick={() => {setReady(false);setTimedOut(false);setError('');source.current=framePath+'#'+encodeURIComponent(JSON.stringify({channel:channel.current,storage:stored.current,references:references ?? {}}));setAttempt(value=>value+1)}}>重新打开活动</button>}</div>}

@@ -119,13 +119,13 @@ private struct ExpeditionJourneyView: View {
         } else { path = [(allRead ? "work:" : "lesson:") + chapter.id] }
     }
     private func afterFilm() {
-        guard continueAfterFilm else { return }; continueAfterFilm = false
+        let enterTask = continueAfterFilm; continueAfterFilm = false
         if openingFilm { openingFilm = false; return }
         guard let chapter else { return }
         do {
             var draft = (try store.document(story.draftKey(chapter), as: ExpeditionDraft.self)) ?? ExpeditionDraft()
             draft.briefingSeen = true; try store.saveDocument(draft, key: story.draftKey(chapter))
-            path = ["lesson:" + chapter.id]
+            if enterTask { path = ["lesson:" + chapter.id] }
         } catch { self.error = error.localizedDescription }
     }
 }
@@ -139,6 +139,7 @@ private struct ExpeditionLessonView: View {
     let onDelivery: () -> Void
     @State private var index = 0
     @State private var ready = false
+    @State private var immersive = false
     @State private var error: String?
     @Environment(\.dismiss) private var dismiss
     private var nodes: [TabletMissionNode] { chapter.nodes(mission) }
@@ -146,17 +147,17 @@ private struct ExpeditionLessonView: View {
     private var canContinue: Bool { chapter.id == "first-contact" ? chapter.isReadyForDelivery(mission: mission, store: store) : mission.isRead(node, records: store.records) }
     var body: some View {
         VStack(spacing: 0) {
-            HStack(spacing: 14) {
+            if !immersive { HStack(spacing: 14) {
                 CrewAvatar(profile: profile, size: 38)
                 VStack(alignment: .leading, spacing: 3) { Text("\(profile.name) · \(chapter.title)").font(.subheadline.bold()); Text("步骤 \(index + 1) / \(nodes.count) · 最后收下「\(chapter.delivery.title)」").font(.caption).foregroundStyle(.white.opacity(0.65)) }
                 Spacer()
                 if index > 0 { Button("回看上一步") { move(-1) }.font(.caption) }
                 Button(index == nodes.count - 1 ? "整理本章作品" : "继续下一步") { move(1) }.buttonStyle(.borderedProminent).tint(.expeditionGold).foregroundStyle(Color.expeditionNight).disabled(!canContinue).accessibilityIdentifier("expedition-next-step")
-            }.padding(.horizontal, 20).padding(.vertical, 12).background(Color.expeditionNight).foregroundStyle(.white)
+            }.padding(.horizontal, 20).padding(.vertical, 12).background(Color.expeditionNight).foregroundStyle(.white) }
             if ready {
-                ClassroomView(activity: node.activity, store: store, crew: profile, onOpenActivity: { _ in error = "请先完成当前步骤。所有课程节点都会沿远航路线依次展开。" }, onMissionMap: { dismiss() }).id(node.activityId)
+                ClassroomView(activity: node.activity, store: store, crew: profile, onOpenActivity: { _ in error = "请先完成当前步骤。所有课程节点都会沿远航路线依次展开。" }, onMissionMap: { dismiss() }, onImmersiveChange: { immersive = $0 }).id(node.activityId)
             }
-        }.navigationBarBackButtonHidden().toolbar(.visible, for: .navigationBar)
+        }.navigationBarBackButtonHidden().toolbar(immersive ? .hidden : .visible, for: .navigationBar)
             .toolbar { ToolbarItem(placement: .topBarLeading) { Button { dismiss() } label: { Label("远航任务", systemImage: "chevron.left") }.accessibilityIdentifier("ipad-lesson-back") } }
             .task {
                 do { let draft = try store.document(story.draftKey(chapter), as: ExpeditionDraft.self); index = min(draft?.lessonIndex ?? 0, nodes.count - 1); ready = true }
