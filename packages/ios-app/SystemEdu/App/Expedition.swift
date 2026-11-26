@@ -24,7 +24,12 @@ struct Expedition: Decodable {
     func receiptKey(_ chapter: ExpeditionChapter) -> String { "\(id):receipt:\(chapter.id)" }
     func draftKey(_ chapter: ExpeditionChapter) -> String { "\(id):draft:\(chapter.id)" }
 }
-struct ExpeditionRole: Codable, Identifiable { let id: String; let title: String; let symbol: String; let duty: String }
+struct ExpeditionRole: Codable, Identifiable {
+    let id: String; let title: String; let symbol: String; let duty: String
+    var artwork: String? = nil
+    // Older saved profiles and signed receipts have no artwork field.
+    var characterImagePath: String { artwork ?? "/mission/space/expedition-v2/crew/\(["observer", "engineer", "navigator"].contains(id) ? id : "observer").png" }
+}
 struct ExpeditionChapter: Decodable, Identifiable {
     let id: String; let act: String; let title: String; let arrival: String; let handoff: String
     let refs: [String]; let image: String; let filmId: String; let inputTitle: String?

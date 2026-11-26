@@ -62,11 +62,73 @@ final class TabletMissionTests: XCTestCase {
     }
     @MainActor func testPortraitOnboardingAndEmptyArchive() {
         XCUIDevice.shared.orientation = .portrait
-        let app = app(); enter(app); join(app); capture("expedition-portrait-home")
+        let app = app(); enter(app); capture("crew-character-portrait"); join(app); capture("expedition-portrait-home")
         XCTAssertTrue(app.buttons["expedition-continue"].isHittable)
         app.buttons["expedition-archive"].tap()
         XCTAssertTrue(app.staticTexts["第一份作品正在等你"].waitForExistence(timeout: 10)); app.buttons["完成"].tap()
         XCTAssertTrue(app.buttons["expedition-continue"].waitForExistence(timeout: 8))
+    }
+
+    @MainActor func testCharacterSelectionAndCameraCancellationKeepIdentity() {
+        XCUIDevice.shared.orientation = .landscapeLeft
+        let app = app(); app.terminate(); app.resetAuthorizationStatus(for: .camera); app.launch(); enter(app)
+        let name = app.textFields["crew-name"]; XCTAssertTrue(name.waitForExistence(timeout: 10))
+        name.tap(); name.typeText("Nova")
+        for role in ["engineer", "navigator", "observer"] {
+            app.buttons["crew-role-" + role].tap()
+            XCTAssertTrue(app.buttons["crew-role-" + role].isSelected)
+        }
+        capture("crew-character-landscape")
+        let camera = app.buttons["crew-take-photo"]
+        if !camera.isHittable { app.swipeUp() }
+        camera.tap()
+        let permission = XCUIApplication(bundleIdentifier: "com.apple.springboard").alerts["Allow “SystemEdu” to access your camera?"]
+        if permission.waitForExistence(timeout: 3) { permission.buttons["Allow"].tap() }
+        let alert = app.alerts["拍摄队员照片"]
+        if alert.waitForExistence(timeout: 2) {
+            XCTAssertTrue(alert.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "没有可用摄像头")).firstMatch.exists)
+            capture("crew-camera-unavailable"); alert.buttons["知道了"].tap()
+        } else {
+            let cancel = app.buttons.matching(NSPredicate(format: "identifier == %@ OR label IN %@", "DismissButton", ["Cancel", "取消"])).firstMatch
+            XCTAssertTrue(cancel.waitForExistence(timeout: 10), app.debugDescription)
+            capture("crew-system-camera"); cancel.tap()
+        }
+        XCTAssertTrue(name.waitForExistence(timeout: 5))
+        XCTAssertEqual(name.value as? String, "Nova")
+        XCTAssertTrue(app.buttons["crew-role-observer"].isSelected)
+        XCTAssertTrue(app.buttons["crew-choose-photo"].isEnabled)
+    }
+
+    @MainActor func testCameraPermissionDenialKeepsPhotoOptions() {
+        XCUIDevice.shared.orientation = .landscapeLeft
+        let app = app(); app.terminate(); app.resetAuthorizationStatus(for: .camera); app.launch(); enter(app)
+        let camera = app.buttons["crew-take-photo"]; XCTAssertTrue(camera.waitForExistence(timeout: 10)); camera.tap()
+        let permission = XCUIApplication(bundleIdentifier: "com.apple.springboard").alerts["Allow “SystemEdu” to access your camera?"]
+        if permission.waitForExistence(timeout: 3) {
+            XCTAssertEqual(permission.buttons.count, 2)
+            permission.buttons.matching(NSPredicate(format: "label != %@", "Allow")).firstMatch.tap()
+            let alert = app.alerts["拍摄队员照片"]
+            XCTAssertTrue(alert.waitForExistence(timeout: 5))
+            XCTAssertTrue(alert.buttons["前往设置"].exists)
+            capture("crew-camera-denied"); alert.buttons["知道了"].tap()
+            XCTAssertTrue(app.buttons["crew-choose-photo"].isEnabled)
+        } else {
+            XCTAssertTrue(app.alerts["拍摄队员照片"].waitForExistence(timeout: 3))
+            app.alerts["拍摄队员照片"].buttons["知道了"].tap()
+        }
+    }
+
+    @MainActor func testPhotoLibraryOpensAndCancelKeepsCharacter() {
+        XCUIDevice.shared.orientation = .landscapeLeft
+        let app = app(); enter(app)
+        let photos = app.buttons["crew-choose-photo"]; XCTAssertTrue(photos.waitForExistence(timeout: 10)); photos.tap()
+        let cancel = app.buttons.matching(NSPredicate(format: "label IN %@", ["Cancel", "取消"])).firstMatch
+        XCTAssertTrue(cancel.waitForExistence(timeout: 10), app.debugDescription)
+        capture("crew-system-photo-library"); cancel.tap()
+        XCTAssertTrue(app.buttons["crew-role-observer"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["crew-role-observer"].isSelected)
+        XCTAssertFalse(app.buttons["crew-generate"].exists)
+        join(app); capture("crew-avatar-task-home")
     }
     @MainActor func testCapturedWorkIsArchivedAndUnlocksOnlyTheNextChapter() {
         XCUIDevice.shared.orientation = .landscapeLeft

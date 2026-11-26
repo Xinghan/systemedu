@@ -122,6 +122,8 @@ test('personal expedition preserves all nodes on one route and gives every chapt
   const story = read('content/missions/space-expedition.json'), legacy = read('content/missions/space.json')
   const refs = story.chapters.flatMap(c => c.refs)
   assert.equal(story.chapters.length, 14)
+  assert.equal(new Set(story.roles.map(role => role.artwork)).size, 3)
+  for (const role of story.roles) assert.ok(existsSync(path.join(root, role.artwork)), role.id)
   assert.equal(refs.length, new Set(refs).size)
   assert.deepEqual([...refs].sort(), [...legacy.micro, ...legacy.nodes, ...legacy.research].map(n => n.ref).sort())
   assert.equal(new Set(story.chapters.map(c => c.image)).size, 14)

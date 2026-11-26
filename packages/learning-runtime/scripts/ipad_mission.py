@@ -80,6 +80,8 @@ def export_expedition(repo, out, mission, asset):
     if len(refs) != len(set(refs)) or set(refs) != expected:
         raise ValueError('Expedition must preserve every original node exactly once')
     asset(story['commanderImage'])
+    for role in story['roles']:
+        asset(role['artwork'])
     images = set()
     for chapter in story['chapters']:
         asset(chapter['image']); images.add(chapter['image'])
