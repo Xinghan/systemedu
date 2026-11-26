@@ -216,7 +216,8 @@ final class TabletMissionTests: XCTestCase {
         app.buttons["完成"].tap(); app.buttons["expedition-continue"].tap()
         XCTAssertTrue(app.buttons["ipad-film-continue"].waitForExistence(timeout: 10)); app.buttons["ipad-film-continue"].tap()
         XCTAssertTrue(web.buttons["下一页"].waitForExistence(timeout: 20))
-        let first = web.staticTexts["任务阅读　01 / 08"], second = web.staticTexts["任务阅读　02 / 08"]
+        let first = web.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "任务阅读　01 / ")).firstMatch
+        let second = web.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "任务阅读　02 / ")).firstMatch
         XCTAssertTrue(first.waitForExistence(timeout: 10))
         // Touch the reading surface, not its controls: real WKWebView gesture delivery.
         func swipe(_ left: Bool) {
@@ -224,6 +225,7 @@ final class TabletMissionTests: XCTestCase {
                 .press(forDuration: 0.05, thenDragTo: web.coordinate(withNormalizedOffset: CGVector(dx: left ? 0.28 : 0.72, dy: 0.16)))
         }
         swipe(true); XCTAssertTrue(second.waitForExistence(timeout: 5)); capture("ipad-reader-chapter-two-landscape")
+        XCTAssertTrue(web.staticTexts["先认识这次远航要研究的东西"].exists)
         XCTAssertTrue(app.buttons["ipad-lesson-back"].isHittable)
         XCTAssertFalse(app.buttons["expedition-next-step"].isEnabled)
         // An upward reading gesture scrolls within the current section.

@@ -13,7 +13,7 @@ for(const [width,height] of [[1180,700],[820,1020],[600,800]]){
  async function swipe(x,y,dx,dy){await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x,y}]});for(let i=1;i<=10;i++)await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x:x+dx*i/10,y:y+dy*i/10}]});await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});}
  const current=()=>card.getAttribute('data-section');
  await swipe(width*.7,110,-width*.42,4);await page.waitForFunction(()=>document.querySelector('.reading-card').dataset.section==='1');
- assert.equal(await card.locator('h1').innerText(),'为什么并非每颗行星都能产生可见的凌星');
+ assert.equal(await card.locator('h1').innerText(),'先认识这次远航要研究的东西');
  assert.equal(await card.evaluate(e=>getComputedStyle(e).borderTopWidth),'0px');
  assert.equal(await page.locator('body').evaluate(e=>getComputedStyle(e).backgroundColor),'rgb(9, 17, 27)');
  assert.equal(await page.getByRole('button',{name:'下一页',exact:true}).innerText(),'');
@@ -42,8 +42,9 @@ for(const [width,height] of [[1180,700],[820,1020],[600,800]]){
  await page.getByRole('button',{name:'关闭面板',exact:true}).click();
  // Text selection and an in-prose activity button own their horizontal gestures.
  await card.evaluate(e=>{const r=document.createRange();r.selectNodeContents(e.querySelector('h1'));getSelection().removeAllRanges();getSelection().addRange(r)});await swipe(width*.7,110,-width*.42,0);assert.equal(await current(),'1');await page.evaluate(()=>getSelection().removeAllRanges());
- const entry=card.locator('.content-entry').first();await entry.scrollIntoViewIfNeeded();const eb=await entry.boundingBox();await swipe(eb.x+eb.width*.7,eb.y+20,-eb.width*.4,0);assert.equal(await current(),'1');
- await card.evaluate(e=>e.scrollTop=0);await swipe(width*.3,110,width*.42,0);await page.waitForFunction(()=>document.querySelector('.reading-card').dataset.section==='0');
+ await page.getByRole('button',{name:'打开课文目录'}).click();await page.locator('.contents-list button').filter({hasText:'为什么并非每颗行星都能产生可见的凌星'}).click();
+ const activitySection=await current(),entry=card.locator('.content-entry').first();await entry.scrollIntoViewIfNeeded();const eb=await entry.boundingBox();await swipe(eb.x+eb.width*.7,eb.y+20,-eb.width*.4,0);assert.equal(await current(),activitySection);
+ await page.getByRole('button',{name:'打开课文目录'}).click();await page.locator('.contents-list button').first().click();assert.equal(await current(),'0');
  await swipe(width*.3,110,width*.42,0);assert.equal(await current(),'0');
  await page.getByRole('button',{name:'打开课文目录'}).click();const buttons=page.locator('.contents-list button');const count=await buttons.count();await buttons.last().click();assert.equal(await current(),String(count-1));assert.equal(await page.getByRole('button',{name:'下一页',exact:true}).isEnabled(),false);
  await swipe(width*.7,110,-width*.42,0);assert.equal(await current(),String(count-1));
