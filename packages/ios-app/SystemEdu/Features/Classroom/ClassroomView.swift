@@ -7,6 +7,7 @@ struct ClassroomView: View {
     let activity: LearningActivity
     @ObservedObject var store: LearningStore
     var crew: CrewProfile? = nil
+    var embeddedInMission = false
     var onOpenActivity: ((LearningActivity) -> Void)? = nil
     var onMissionMap: (() -> Void)? = nil
     var onImmersiveChange: (Bool) -> Void = { _ in }
@@ -24,7 +25,7 @@ struct ClassroomView: View {
                         },
                         onError: { error = $0 }, onImmersiveChange: { value in immersive = value; onImmersiveChange(value) })
             .navigationTitle(activity.title).navigationBarTitleDisplayMode(.inline)
-            .toolbar(immersive ? .hidden : .visible, for: .navigationBar)
+            .toolbar(immersive || embeddedInMission ? .hidden : .visible, for: .navigationBar)
             .toolbar(.hidden, for: .tabBar)
             .toolbar { ToolbarItem(placement: .topBarTrailing) { Image(systemName: "internaldrive").foregroundStyle(Color.forest).accessibilityLabel("课文与内置资源可离线阅读") } }
             .sheet(item: $export) { ShareSheet(url: $0.url) }

@@ -147,18 +147,27 @@ private struct ExpeditionLessonView: View {
     private var canContinue: Bool { chapter.id == "first-contact" ? chapter.isReadyForDelivery(mission: mission, store: store) : mission.isRead(node, records: store.records) }
     var body: some View {
         VStack(spacing: 0) {
-            if !immersive { HStack(spacing: 14) {
-                CrewAvatar(profile: profile, size: 38)
-                VStack(alignment: .leading, spacing: 3) { Text("\(profile.name) · \(chapter.title)").font(.subheadline.bold()); Text("步骤 \(index + 1) / \(nodes.count) · 最后收下「\(chapter.delivery.title)」").font(.caption).foregroundStyle(.white.opacity(0.65)) }
-                Spacer()
-                if index > 0 { Button("回看上一步") { move(-1) }.font(.caption) }
-                Button(index == nodes.count - 1 ? "整理本章作品" : "继续下一步") { move(1) }.buttonStyle(.borderedProminent).tint(.expeditionGold).foregroundStyle(Color.expeditionNight).disabled(!canContinue).accessibilityIdentifier("expedition-next-step")
-            }.padding(.horizontal, 20).padding(.vertical, 12).background(Color.expeditionNight).foregroundStyle(.white) }
+            if !immersive { HStack(spacing: 16) {
+                Button { dismiss() } label: { Image(systemName: "chevron.left").font(.title3.weight(.medium)).frame(width: 44, height: 44).background(.white.opacity(0.06), in: Circle()) }
+                    .accessibilityLabel("远航任务").accessibilityIdentifier("ipad-lesson-back")
+                CrewAvatar(profile: profile, size: 36)
+                VStack(alignment: .leading, spacing: 5) {
+                    Text("\(profile.name) · \(chapter.title)").font(.system(size: 16, weight: .semibold))
+                    Text("步骤 \(index + 1) / \(nodes.count) · \(chapter.delivery.title)").font(.system(size: 12)).foregroundStyle(.white.opacity(0.6))
+                }
+                Spacer(minLength: 8)
+                if index > 0 { Button("回看上一步") { move(-1) }.font(.caption).frame(minHeight: 44) }
+                Button { move(1) } label: {
+                    Label(index == nodes.count - 1 ? "整理本章作品" : "继续下一步", systemImage: "arrow.right")
+                        .font(.system(size: 13, weight: .semibold)).padding(.horizontal, 18).frame(minHeight: 44)
+                        .foregroundStyle(canContinue ? Color.expeditionNight : Color.white.opacity(0.48))
+                        .background(canContinue ? Color.expeditionGold : Color.white.opacity(0.07), in: Capsule())
+                }.buttonStyle(.plain).disabled(!canContinue).accessibilityIdentifier("expedition-next-step")
+            }.padding(.horizontal, 24).padding(.vertical, 10).background(Color.expeditionNight).foregroundStyle(.white) }
             if ready {
-                ClassroomView(activity: node.activity, store: store, crew: profile, onOpenActivity: { _ in error = "请先完成当前步骤。所有课程节点都会沿远航路线依次展开。" }, onMissionMap: { dismiss() }, onImmersiveChange: { immersive = $0 }).id(node.activityId)
+                ClassroomView(activity: node.activity, store: store, crew: profile, embeddedInMission: true, onOpenActivity: { _ in error = "请先完成当前步骤。所有课程节点都会沿远航路线依次展开。" }, onMissionMap: { dismiss() }, onImmersiveChange: { immersive = $0 }).id(node.activityId)
             }
-        }.navigationBarBackButtonHidden().toolbar(immersive ? .hidden : .visible, for: .navigationBar)
-            .toolbar { ToolbarItem(placement: .topBarLeading) { Button { dismiss() } label: { Label("远航任务", systemImage: "chevron.left") }.accessibilityIdentifier("ipad-lesson-back") } }
+        }.background(Color.expeditionNight).navigationBarBackButtonHidden().toolbar(.hidden, for: .navigationBar)
             .task {
                 do { let draft = try store.document(story.draftKey(chapter), as: ExpeditionDraft.self); index = min(draft?.lessonIndex ?? 0, nodes.count - 1); ready = true }
                 catch { self.error = error.localizedDescription }

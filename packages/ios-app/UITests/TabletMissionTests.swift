@@ -213,6 +213,34 @@ final class TabletMissionTests: XCTestCase {
         app.terminate(); app.launch(); enter(app)
         XCTAssertEqual(app.staticTexts["expedition-chapter-title"].label, "星光为什么变暗了")
         app.buttons["expedition-archive"].tap(); XCTAssertTrue(app.staticTexts["第一份星球观测"].waitForExistence(timeout: 10))
+        app.buttons["完成"].tap(); app.buttons["expedition-continue"].tap()
+        XCTAssertTrue(app.buttons["ipad-film-continue"].waitForExistence(timeout: 10)); app.buttons["ipad-film-continue"].tap()
+        XCTAssertTrue(web.buttons["下一页"].waitForExistence(timeout: 20))
+        let first = web.staticTexts["任务阅读　01 / 08"], second = web.staticTexts["任务阅读　02 / 08"]
+        XCTAssertTrue(first.waitForExistence(timeout: 10))
+        // Touch the reading surface, not its controls: real WKWebView gesture delivery.
+        func swipe(_ left: Bool) {
+            web.coordinate(withNormalizedOffset: CGVector(dx: left ? 0.72 : 0.28, dy: 0.16))
+                .press(forDuration: 0.05, thenDragTo: web.coordinate(withNormalizedOffset: CGVector(dx: left ? 0.28 : 0.72, dy: 0.16)))
+        }
+        swipe(true); XCTAssertTrue(second.waitForExistence(timeout: 5)); capture("ipad-reader-chapter-two-landscape")
+        XCTAssertTrue(app.buttons["ipad-lesson-back"].isHittable)
+        XCTAssertFalse(app.buttons["expedition-next-step"].isEnabled)
+        // An upward reading gesture scrolls within the current section.
+        web.coordinate(withNormalizedOffset: CGVector(dx: 0.6, dy: 0.65))
+            .press(forDuration: 0.05, thenDragTo: web.coordinate(withNormalizedOffset: CGVector(dx: 0.6, dy: 0.4)))
+        XCTAssertTrue(web.buttons["上一页"].isEnabled)
+        XCUIDevice.shared.orientation = .portrait
+        XCTAssertTrue(web.buttons["练习与笔记"].waitForExistence(timeout: 10))
+        web.buttons["上一页"].tap(); XCTAssertTrue(first.waitForExistence(timeout: 5))
+        swipe(true); XCTAssertTrue(second.waitForExistence(timeout: 5)); capture("ipad-reader-chapter-two-portrait")
+        web.buttons["练习与笔记"].tap()
+        let note = web.textViews.firstMatch; XCTAssertTrue(note.waitForExistence(timeout: 8)); note.tap(); note.typeText("The shadow depends on our viewing direction.")
+        web.buttons["关闭面板"].tap(); XCTAssertTrue(web.staticTexts["已保存到本机"].waitForExistence(timeout: 10))
+        app.terminate(); app.launch(); enter(app); app.buttons["expedition-continue"].tap()
+        XCTAssertTrue(second.waitForExistence(timeout: 20))
+        web.buttons["练习与笔记"].tap(); XCTAssertTrue(note.waitForExistence(timeout: 8)); XCTAssertTrue((note.value as? String)?.contains("viewing direction") == true)
+        web.buttons["关闭面板"].tap(); swipe(false); XCTAssertTrue(first.waitForExistence(timeout: 5))
     }
 
     @MainActor func testInlineMissionEntryOpensTelescope() {

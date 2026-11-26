@@ -16,7 +16,7 @@ const server=http.createServer((req,res)=>{const rel=decodeURIComponent(new URL(
   assert.ok(await page.locator('.reading-card').innerText());
   const accent=await page.evaluate(()=>getComputedStyle(document.documentElement).getPropertyValue('--accent').trim());
   assert.equal(accent.toUpperCase(),catalog.courses.find(c=>c.id==='pick-an-observation-site').accentHex);
-  assert.equal(await page.locator('body').evaluate(b=>getComputedStyle(b).backgroundColor),'rgb(255, 255, 255)');
+  assert.equal(await page.locator('body').evaluate(b=>getComputedStyle(b).backgroundColor),'rgb(9, 17, 27)');
   await page.getByRole('button',{name:'练习与笔记',exact:true}).click();
   await page.locator('#course-note').fill('iPad trial: compare source and scale before selecting a site.');
   assert.equal(await page.locator('dialog[open]').count(),0,'Notes must not make reading inert');

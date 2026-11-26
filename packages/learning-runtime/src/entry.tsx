@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react"
+import { Share } from "lucide-react"
 import { createRoot } from "react-dom/client"
 import { activityFrom, browserHost, nativeHost, type Snapshot, type LearningHost } from "./host"
 import { MobileHand } from "./mobile/hand"
 import { MobileLanding } from "./mobile/landing"
 import { MobileReader } from "./mobile/reader"
 import "./shell.css"
+import "./tablet-reader.css"
 import { CourseReader, InteractiveFrame } from "./mobile/course-reader"
 import { loadLesson, type CourseLesson } from "./content"
 
@@ -41,9 +43,10 @@ function Classroom({ host, initial, activity, lesson }: { host: LearningHost; in
     resize(); viewport?.addEventListener("resize", resize)
     return () => viewport?.removeEventListener("resize", resize)
   }, [])
+  const sessionTools = <div className="session-bar"><span role="status"><i/>{status}</span><button aria-label="导出记录" onClick={() => { void save().then(() => host.exportState()).catch(() => setStatus("导出失败，请重试")) }}>{tablet ? <Share size={19}/> : '导出记录 ↗'}</button></div>
   return <div className={tablet ? 'classroom-shell tablet-classroom' : 'classroom-shell'}>
-    <header className="session-bar"><span role="status"><i/>{status}</span><button onClick={() => { void save().then(() => host.exportState()).catch(() => setStatus("导出失败，请重试")) }}>导出记录 ↗</button></header>
-    {activity === "course:space-exploration:1.0:JOURNEY" ? <Dossier initial={initial} onChange={change}/> : lesson ? <CourseReader tablet={tablet} lesson={lesson} initial={initial} onChange={change} onCommit={async state => { change(state); await save() }}/> : activity === "mechanical-hand" ? <MobileHand initial={initial} onChange={change} assetBase={assetBase}/> :
+    {!(tablet && lesson) && sessionTools}
+    {activity === "course:space-exploration:1.0:JOURNEY" ? <Dossier initial={initial} onChange={change}/> : lesson ? <CourseReader sessionTools={sessionTools} tablet={tablet} lesson={lesson} initial={initial} onChange={change} onCommit={async state => { change(state); await save() }}/> : activity === "mechanical-hand" ? <MobileHand initial={initial} onChange={change} assetBase={assetBase}/> :
       activity === "mars-landing" ? <MobileLanding initial={initial} onChange={change} assetBase={assetBase}/> : <MobileReader initial={initial} onChange={change}/>}
   </div>
 }

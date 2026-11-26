@@ -1,21 +1,22 @@
-import { useEffect, useMemo, useState, useRef } from 'react'
+import { useEffect, useMemo, useState, useRef, type ReactNode } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import remarkMath from 'remark-math'
 import rehypeKatex from 'rehype-katex'
-import { BookOpen, List, NotebookPen, Presentation, CheckCircle, Play, Gamepad2, FlaskConical, Box, Wrench } from 'lucide-react'
+import { BookOpen, List, NotebookPen, Presentation, CheckCircle, Play, Gamepad2, FlaskConical, Box, Wrench, ChevronLeft, ChevronRight } from 'lucide-react'
 import 'katex/dist/katex.min.css'
 import { setClassroomImmersive, type Snapshot } from '../host'
 import { assetURL, type CourseLesson, type Exercise, type Slide, type Interaction } from '../content'
 import { receiveCourseArtifact } from '../course-artifacts'
 import { readingPages, restoreReadingPage } from './reading-pages'
+import { useTabletSwipe } from './tablet-swipe'
 import { Q3Observations } from './q3-observations'
 import { Pager, Sheet } from './primitives'
 import { currentCrew, CrewPortrait, MissionTaskIntro, MissionOperationBar, type CrewIdentity } from './mission-context'
 
 type Panel = 'observations' | 'contents' | 'work' | 'resources' | 'lecture' | `theory:${string}` | `lab:${string}` | null
 
-export function CourseReader({ lesson, initial, onChange, onCommit, tablet = false }: { tablet?: boolean; lesson: CourseLesson; initial: Snapshot; onChange: (state: Snapshot) => void; onCommit: (state: Snapshot) => Promise<void> }) {
+export function CourseReader({ lesson, initial, onChange, onCommit, tablet = false, sessionTools }: { tablet?: boolean; sessionTools?: ReactNode; lesson: CourseLesson; initial: Snapshot; onChange: (state: Snapshot) => void; onCommit: (state: Snapshot) => Promise<void> }) {
   const revised = !!lesson.content_revision && initial.content_revision !== lesson.content_revision
   const previousCompletion = initial.previous_completion ?? (revised && initial.self_completed === true ? { revision: initial.content_revision ?? 'original', completed: true } : null)
   const pages = useMemo(() => readingPages(lesson.lesson), [lesson.lesson])
@@ -35,6 +36,21 @@ export function CourseReader({ lesson, initial, onChange, onCommit, tablet = fal
   const sectionPages = pages.filter(p => p.section === page?.section)
   const inspection = tablet && (panel === 'work' || panel === 'resources' || panel?.startsWith('theory:'))
   const sections = [...new Set(pages.map(p => p.section))]
+  const sectionIndex = Math.max(0, sections.indexOf(page?.section))
+  const readingSurface = useRef<HTMLElement>(null)
+  const restoreKeyboardFocus = useRef(false)
+  useEffect(() => {
+    if (restoreKeyboardFocus.current) readingSurface.current?.focus({ preventScroll: true })
+    restoreKeyboardFocus.current = false
+  }, [page?.section])
+  const [turnDirection, setTurnDirection] = useState(1)
+  function turnSection(next: number) {
+    if (next < 0 || next >= sections.length || next === sectionIndex) return
+    restoreKeyboardFocus.current = document.activeElement === readingSurface.current
+    setTurnDirection(next > sectionIndex ? 1 : -1)
+    setIndex(pages.findIndex(p => p.section === sections[next]))
+  }
+  useTabletSwipe(readingSurface, tablet && panel === null, page?.section, direction => turnSection(sectionIndex + direction))
   const resolve = (url: string) => assetURL(url, lesson.asset_base)
   const q3Table = '/content/assets/lightkurve-transit-detective/downloads/kepler10-q3.csv'
   const interactions = lesson.interactions ?? [], theories = lesson.theories ?? [], slides = lesson.slides ?? []
@@ -73,20 +89,34 @@ export function CourseReader({ lesson, initial, onChange, onCommit, tablet = fal
   const activeTheory = panel?.startsWith('theory:') ? theories.find(t => t.theory_id === panel.slice(7) || t.aliases?.includes(panel.slice(7))) : null
   const activeLab = panel?.startsWith('lab:') ? interactions.find(t => t.id === panel.slice(4)) : null
   return <div className={`mobile-reader course-reader${tablet ? ' tablet-reader' : ''}${mission ? ' expedition-reader' : ''}${inspection ? ' has-inspector' : ''}`}>
-    <header className="reading-heading"><button onClick={() => setPanel('contents')} aria-label="打开课文目录"><List size={18}/><span>{lesson.module_id} · 本节目录</span></button><button onClick={() => setPanel('lecture')} disabled={!slides.length}><Presentation size={17}/>讲课</button></header>
-    <div className="section-progress" aria-hidden="true">{sections.map((s, i) => <span key={s} data-active={i <= sections.indexOf(page?.section)}/>)}</div>
-    <article className="reading-card" key={tablet ? page?.section : page?.id} aria-label={`课文第 ${index + 1} 页`} tabIndex={0}>
-      {position && <div className="lesson-location"><strong>{position.course}</strong><span>第 {position.number} 节，共 {position.total} 节</span>{position.stage && <span>{position.stage}</span>}</div>}
-      <p className="overline">{tablet ? `本节第 ${Math.max(1, sections.indexOf(page?.section) + 1)} / ${sections.length} 部分` : page?.fields ? `逐项对照 · ${page.row} / ${page.rows}` : `阅读 · ${index + 1}`}</p>
+    <header className="reading-heading"><button onClick={() => setPanel('contents')} aria-label="打开课文目录"><List size={20}/><span>{tablet ? '阅读路径' : `${lesson.module_id} · 本节目录`}</span>{tablet && <small>{sectionIndex + 1} / {sections.length}</small>}</button>{tablet ? sessionTools : <button onClick={() => setPanel('lecture')} disabled={!slides.length}><Presentation size={17}/>讲课</button>}</header>
+    {!tablet && <div className="section-progress" aria-hidden="true">{sections.map((s, i) => <span key={s} data-active={i <= sectionIndex}/>)}</div>}
+    <article ref={readingSurface} className="reading-card" key={tablet ? page?.section : page?.id} data-turn={turnDirection} data-section={sectionIndex} aria-label={tablet ? `阅读第 ${sectionIndex + 1} 部分，共 ${sections.length} 部分` : `课文第 ${index + 1} 页`} tabIndex={0} onKeyDown={e => {
+      if (!tablet || panel || e.target !== e.currentTarget || e.altKey || e.metaKey || e.ctrlKey || e.shiftKey) return
+      if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') { e.preventDefault(); turnSection(sectionIndex + (e.key === 'ArrowRight' ? 1 : -1)) }
+    }}>
+      {position && !tablet && <div className="lesson-location"><strong>{position.course}</strong><span>第 {position.number} 节，共 {position.total} 节</span>{position.stage && <span>{position.stage}</span>}</div>}
+      <p className="overline">{tablet ? `任务阅读　${String(sectionIndex + 1).padStart(2, '0')} / ${String(sections.length).padStart(2, '0')}` : page?.fields ? `逐项对照 · ${page.row} / ${page.rows}` : `阅读 · ${index + 1}`}</p>
       {mission && sections[0] === page?.section ? <MissionTaskIntro lesson={lesson} crew={crew} entry={primaryInteraction && <InteractionEntry interaction={primaryInteraction} onOpen={() => setPanel(`lab:${primaryInteraction.id}`)}/>}/> : <h1>{page?.section ?? lesson.title}</h1>}
-      {mission && sections[0] !== page?.section && <MissionOperationBar crew={crew} title={`本章成果：${mission.outcome}`}/>}
       {lesson.mission_brief && (tablet ? sections[0] === page?.section : index === 0) && <aside className="mission-brief">{mission && <img src={mission.commanderImage} alt="林岚指挥官"/>}<div><strong>{lesson.mission_brief.speaker}给你的任务</strong><p>{lesson.mission_brief.message}</p></div></aside>}
       {tablet ? <TabletSection pages={sectionPages} render={markdown}/> : page?.fields ? <dl className="comparison-card">{page.fields.map((field, i) => <div key={i}><dt>{markdown(field.label)}</dt><dd>{markdown(field.value || '—')}</dd></div>)}</dl> : <div className="reading-prose">{page ? markdown(page.markdown) : <p>本节暂未提供正文，可先查看作业与学习资料。</p>}</div>}
       {pages.length > 0 && (tablet ? page?.section === pages.at(-1)?.section : index >= pages.length - 1) && <button className="wide-button" onClick={() => setCompleted(!completed)}><CheckCircle size={18}/>{completed ? '已标记读完 · 撤销' : '标记为已读完'}</button>}
     </article>
-    <div className="reader-controls"><Pager index={tablet ? Math.max(0, sections.indexOf(page?.section)) : Math.max(0, Math.min(index, pages.length - 1))} count={Math.max(1, tablet ? sections.length : pages.length)} onChange={i => setIndex(tablet ? pages.findIndex(p => p.section === sections[i]) : i)}/><div className="reader-actions"><button onClick={() => setPanel('work')}><NotebookPen size={18}/>练习与笔记</button><button onClick={() => setPanel('resources')}><Play size={18}/>动画与互动</button></div></div>
+    <div className="reader-controls">{tablet ? <>
+      <nav className="tablet-page-control" aria-label="阅读翻页">
+        <button aria-label="上一页" disabled={sectionIndex === 0} onClick={() => turnSection(sectionIndex - 1)}><ChevronLeft size={21}/></button>
+        <div className="page-position"><span aria-live="polite" aria-atomic="true">{sectionIndex + 1} / {sections.length}</span><div className="page-dots" aria-hidden="true">{sections.map((s, i) => <i key={s} data-current={i === sectionIndex}/>)}</div></div>
+        <button aria-label="下一页" disabled={sectionIndex >= sections.length - 1} onClick={() => turnSection(sectionIndex + 1)}><ChevronRight size={21}/></button>
+      </nav>
+      <span className="swipe-hint">左右轻扫翻页</span>
+      <div className="reader-actions">
+        <button aria-label="讲课" onClick={() => setPanel('lecture')} disabled={!slides.length}><Presentation size={21} aria-hidden="true"/><span aria-hidden="true">讲课</span></button>
+        <button aria-label="练习与笔记" onClick={() => setPanel('work')} aria-expanded={panel === 'work'}><NotebookPen size={21} aria-hidden="true"/><span aria-hidden="true">笔记</span></button>
+        <button aria-label="动画与互动" onClick={() => setPanel('resources')} aria-expanded={panel === 'resources'}><FlaskConical size={21} aria-hidden="true"/><span aria-hidden="true">活动</span></button>
+      </div>
+    </> : <><Pager index={Math.max(0, Math.min(index, pages.length - 1))} count={Math.max(1, pages.length)} onChange={setIndex}/><div className="reader-actions"><button onClick={() => setPanel('work')}><NotebookPen size={18}/>练习与笔记</button><button onClick={() => setPanel('resources')}><Play size={18}/>动画与互动</button></div></>}</div>
     {panel === 'observations' && <Sheet title="Q3 观测表" onClose={() => setPanel(null)}><Q3Observations url={q3Table} onNote={() => { setWorkView('note'); setPanel('work') }}/></Sheet>}
-    {panel === 'contents' && <Sheet title="本节阅读路径" onClose={() => setPanel(null)}><p>{lesson.core_question}</p>{lesson.learning_output && <p><strong>本节要留下什么</strong>　{lesson.learning_output}</p>}<div className="contents-list">{sections.map((s, i) => <button key={s} onClick={() => { setIndex(pages.findIndex(p => p.section === s)); setPanel(null) }}><span>{i + 1}</span><strong>{s}</strong></button>)}</div></Sheet>}
+    {panel === 'contents' && <Sheet title="本节阅读路径" onClose={() => setPanel(null)}>{position && <p className="lesson-location">{position.course} · 第 {position.number} / {position.total} 节 · {position.stage}</p>}<p>{lesson.core_question}</p>{lesson.learning_output && <p><strong>本节要留下什么</strong>　{lesson.learning_output}</p>}<div className="contents-list">{sections.map((s, i) => <button key={s} onClick={() => { if (tablet) turnSection(i); else setIndex(pages.findIndex(p => p.section === s)); setPanel(null) }}><span>{i + 1}</span><strong>{s}</strong></button>)}</div></Sheet>}
     {panel === 'work' && <Sheet docked={tablet} title="练习与笔记" onClose={() => setPanel(null)} footer={<label className="work-selector">选择练习内容<select aria-label="选择练习内容" value={workView} onChange={e=>setWorkView(e.target.value)}><option value="note">我的笔记与作业说明</option>{lesson.content_history && <option value="history">修订前的学习记录</option>}{lesson.assignment && <option value="assignment">阅读作业要求</option>}{(lesson.response_prompts ?? []).map((p,i)=><option value={'prompt:'+i} key={'p'+i}>{p.title}</option>)}{(lesson.assessments ?? []).filter(a=>a.questions.length).map(a=><option key={a.id} value={'assessment:'+a.id}>{a.title}</option>)}{interactions.filter(i=>i.exercises.length).map(i=><option key={i.id} value={'exercise:'+i.id}>{i.title}</option>)}</select></label>}>
       <p className="muted">答案和笔记保存在本机，可导出。本机练习和读完标记不代表正式评分。</p>
       {workView === "assignment" && <DocumentPages text={lesson.assignment} render={markdown}/>}

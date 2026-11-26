@@ -25,8 +25,9 @@ struct LearningWebView: UIViewRepresentable {
             configuration.userContentController.addUserScript(WKUserScript(source: script, injectionTime: .atDocumentStart, forMainFrameOnly: true))
         }
         let view = WKWebView(frame: .zero, configuration: configuration)
-        view.isOpaque = false; view.backgroundColor = UIColor(Color.paper)
-        view.scrollView.backgroundColor = UIColor(Color.paper)
+        let canvas = UIDevice.current.userInterfaceIdiom == .pad ? Color.expeditionNight : Color.paper
+        view.isOpaque = false; view.backgroundColor = UIColor(canvas)
+        view.scrollView.backgroundColor = UIColor(canvas)
         // The classroom owns its viewport. Only focused reading cards and sheets scroll.
         view.scrollView.bounces = false
         view.scrollView.contentInsetAdjustmentBehavior = .never
