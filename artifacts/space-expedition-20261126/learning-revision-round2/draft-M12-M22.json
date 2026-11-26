@@ -1,0 +1,414 @@
+[
+  {
+    "module": "M12",
+    "prerequisite": "能按采样编号找回Q3记录；会中位数、时间窗口、布尔数组逐行选取；完成M11。",
+    "teaching": "## 在真实记录里看清一个窗口\n\n进入配套 `junior-guide.ipynb` 的 M12。先确认上一节的 `lc` 是未注入人工信号的 Q3 归一化曲线。这里保留两个新名字：`q3_flat_initial` 是第一次去趋势后的曲线，`q3_trend_initial` 是对应的背景估计。两个返回值不是两次独立观测。\n\n程序会展示一条实际采样编号及其同段、前后半天的全部记录。先在表上划出时间边界，再把参与点的通量排序找中位数。`segment` 是按缺口规则划分的连续段编号；`abs(t-centre)<=0.5` 逐行回答是否落入时间范围。两个条件同时成立才参与估计。请另选一条采样编号重复操作，说明哪些点变了。\n\n人工测试按五个动作执行：复制前六天 → 标出内窗 → 仅在副本内窗乘以 0.9992 → 两份副本分别去趋势 → 用同一内外窗口求深度差。内窗距中心小于 0.08 天；背景距中心大于 0.16 天且小于 0.7 天。中间留出的区域不属于这次深度测量的任一组。先预测窄窗口会不会跟着下降变低，再看真实输出；不能把不同窗口的结果写成必然符合预测。\n\n三联图分别显示输入、趋势、相除后的曲线，横轴完全相同。`trend-check.csv` 中 `computed` 表示完成了该次计算；支持点不足时深度留空并记录原因。当前函数只要有一个时刻不能估计趋势就拒绝整次调用，不等于整段资料都没有用，也不等于信号恢复量为零。正式 `lc` 始终不变。",
+    "cells": [
+      {
+        "type": "markdown",
+        "source": "## 在真实记录里看清一个窗口\n\n进入配套 `junior-guide.ipynb` 的 M12。先确认上一节的 `lc` 是未注入人工信号的 Q3 归一化曲线。这里保留两个新名字：`q3_flat_initial` 是第一次去趋势后的曲线，`q3_trend_initial` 是对应的背景估计。两个返回值不是两次独立观测。\n\n程序会展示一条实际采样编号及其同段、前后半天的全部记录。先在表上划出时间边界，再把参与点的通量排序找中位数。`segment` 是按缺口规则划分的连续段编号；`abs(t-centre)<=0.5` 逐行回答是否落入时间范围。两个条件同时成立才参与估计。请另选一条采样编号重复操作，说明哪些点变了。\n\n人工测试按五个动作执行：复制前六天 → 标出内窗 → 仅在副本内窗乘以 0.9992 → 两份副本分别去趋势 → 用同一内外窗口求深度差。内窗距中心小于 0.08 天；背景距中心大于 0.16 天且小于 0.7 天。中间留出的区域不属于这次深度测量的任一组。先预测窄窗口会不会跟着下降变低，再看真实输出；不能把不同窗口的结果写成必然符合预测。\n\n三联图分别显示输入、趋势、相除后的曲线，横轴完全相同。`trend-check.csv` 中 `computed` 表示完成了该次计算；支持点不足时深度留空并记录原因。当前函数只要有一个时刻不能估计趋势就拒绝整次调用，不等于整段资料都没有用，也不等于信号恢复量为零。正式 `lc` 始终不变。\n"
+      },
+      {
+        "type": "code",
+        "source": "from analyze import CONFIG, local_median\nassert CONFIG['detrend']['window_day'] == 1.0, '本教学版本使用总宽1天；改变规则须另记版本'\noriginal_flux_before_M12 = np.asarray(lc.flux.value).copy()\nq3_flat_initial, q3_trend_initial = local_median(lc, window_day=1.0)\nflat, trend = q3_flat_initial, q3_trend_initial\nwindow_time = np.asarray(lc.time.value)\nwindow_flux = np.asarray(lc.flux.value)\ntypical_step = float(np.median(np.diff(window_time)))\nsegment_id = np.r_[0, np.cumsum(np.diff(window_time) > 5*typical_step)]\nmanual_index = len(lc)//2  # 可以改成另一条记录的位置；记录实际CADENCENO\nmanual_centre = float(window_time[manual_index])\nin_time_window = np.abs(window_time-manual_centre) <= 0.5\nsame_segment = segment_id == segment_id[manual_index]\nparticipates = in_time_window & same_segment\nmanual_rows = [[int(lc.cadenceno[j]),float(window_time[j]),int(segment_id[j]),\n                bool(same_segment[j]),float(window_flux[j])]\n               for j in np.flatnonzero(in_time_window)]\nprint('中心采样编号/时间:',int(lc.cadenceno[manual_index]),manual_centre)\nprint('列: cadenceno, time_bkjd, segment, same_segment, relative_flux')\nfor row in manual_rows: print(row)\nprint('参与值排序:',np.sort(window_flux[participates]))\nmanual_value = float(np.median(window_flux[participates]))\nprint('手核中位数/函数趋势:',manual_value,float(q3_trend_initial.flux.value[manual_index]))\nassert np.isclose(manual_value,q3_trend_initial.flux.value[manual_index],rtol=0,atol=1e-14)\nsave_csv('M12/window-handcheck.csv',['cadenceno','time_bkjd','segment','same_segment','relative_flux'],manual_rows)\nsave_csv('M12/initial-curve.csv',['cadenceno','time_bkjd','normalized_flux','trend','detrended_flux','detrended_error','trend_support_count'],\n         [[int(lc.cadenceno[j]),float(window_time[j]),float(window_flux[j]),float(trend.flux.value[j]),float(flat.flux.value[j]),float(flat.flux_err.value[j]),int(flat['trend_support_count'][j])] for j in range(len(lc))])\nfig,axes=plt.subplots(3,1,sharex=True,figsize=(10,7))\naxes[0].scatter(window_time,window_flux,s=2);axes[0].set_ylabel('Normalized flux')\naxes[1].plot(window_time,trend.flux.value);axes[1].set_ylabel('Estimated trend')\naxes[2].scatter(window_time,flat.flux.value,s=2);axes[2].set_ylabel('Detrended flux');axes[2].set_xlabel('BKJD [day]')\nfig.tight_layout();save_plot('M12/original-trend-processed.png');plt.close(fig)\n"
+      },
+      {
+        "type": "markdown",
+        "source": "下面的代码中，`copy()` 建立可修改的副本；真假数组 `injection_mask` 与通量逐行对应。先查看内窗的采样编号，确认只有这些位置被修改。函数返回的深度定义是“内外均值相对差”，恢复量是注入版减原版。\n"
+      },
+      {
+        "type": "code",
+        "source": "probe_lc = lc[lc.time.value <= lc.time.value.min()+6.0].copy()\ninjection_centre = float(probe_lc.time.value.min()+2.0)\nprobe_offset = np.abs(probe_lc.time.value-injection_centre)\ninjection_mask = probe_offset < 0.08\nbackground_mask = (probe_offset > 0.16) & (probe_offset < 0.7)\ninjected_lc = probe_lc.copy()\ninjected_lc.flux[injection_mask] *= (1-800e-6)\nprint('仅修改这些采样编号:',list(map(int,probe_lc.cadenceno[injection_mask])))\ndef injection_depth_ppm(curve):\n    values=np.asarray(curve.flux.value)\n    if injection_mask.sum()<3 or background_mask.sum()<3:\n        raise ValueError('本例内窗或背景少于3点，暂不计算深度')\n    outer=float(np.mean(values[background_mask]))\n    inner=float(np.mean(values[injection_mask]))\n    if outer<=0: raise ValueError('背景必须为正')\n    return (outer-inner)/outer*1e6\nrecovery_rows=[]\nfor width in [0.15,0.5,1.0]:\n    try:\n        reference_test,_=local_median(probe_lc,window_day=width)\n        injected_test,_=local_median(injected_lc,window_day=width)\n        depth_before=injection_depth_ppm(reference_test)\n        depth_after=injection_depth_ppm(injected_test)\n        recovery_rows.append([width,'computed',depth_before,depth_after,depth_after-depth_before,''])\n    except ValueError as error:\n        recovery_rows.append([width,'insufficient_support',None,None,None,str(error)])\nfor row in recovery_rows: print(row)\nsave_csv('M12/trend-check.csv',['window_day','status','original_depth_ppm','injected_depth_ppm','recovered_depth_ppm','reason'],recovery_rows)\nsave_json('M12/injection-conditions.json',{'data_kind':'artificially modified copy of Q3','centre_bkjd':injection_centre,'duration_day':0.16,'input_depth_ppm':800,'background_offset_day':[0.16,0.7],'formal_curve_unmodified':bool(np.array_equal(original_flux_before_M12,lc.flux.value))})\nassert np.array_equal(original_flux_before_M12,lc.flux.value)\n"
+      }
+    ],
+    "outputs": [
+      "M12/window-handcheck.csv",
+      "M12/initial-curve.csv",
+      "M12/original-trend-processed.png",
+      "M12/trend-check.csv",
+      "M12/injection-conditions.json"
+    ],
+    "corrections": [
+      {
+        "old": "**本节学习目标：** 解释局部中位数趋势的计算，核对缺口与窗口规则，并用人工加入的已知下降比较不同参数。输入为 M11 的 Q3 数据 `lc`。 本节使用的程序和原始文件见[下载观测数据与 Notebook 实践包](/api/library/projects/lightkurve-transit-detective/files/downloads/lightkurve-practice-kit.zip)。参照 Notebook 第 3 部分及 analyze.py 的 local_median 函数，把相同算法应用到自己保留的 Q3 记录上。",
+        "new": "本节输入为 M11 的 Q3 归一化曲线 `lc`。打开配套 `junior-guide.ipynb` 的 M12，依次手核真实窗口、生成三联图、执行人工信号测试。参考算法为 `analyze.py` 的 `local_median`。首次处理输出另存为 `q3_flat_initial`，不能与 M17 的候选保护版混用。"
+      }
+    ],
+    "assignment_corrections": [
+      {
+        "old": "4. 比较 0.15、0.5、1.0 天窗口，记录恢复深度或点数不足，保存 trend-check.csv 及三种曲线。",
+        "new": "4. 在 junior-guide.ipynb 的 M12 比较 0.15、0.5、1.0 天窗口，保存 M12/trend-check.csv；失败时深度留空并记原因。三联图保存为 M12/original-trend-processed.png，人工副本不得覆盖正式Q3。"
+      }
+    ],
+    "insertion_before": "## 比较不同窗口的影响"
+  },
+  {
+    "module": "M13",
+    "prerequisite": "会均值、比例/百分数/ppm；会读M12三图；会逐行解释时间比较与真假选择。",
+    "teaching": "## 从一张分组表开始，再测自己的候选\n\n打开教程 M13。先处理六行构造记录：时间是相对中心的天数，不是 Kepler 的 BKJD；中间两条 97、99 在内部，另外四条 99、101、100、100 作背景。内部均值98、背景均值100，相对深度应为2%。我们先打印每条记录属于哪一组，再计算，这样能够发现选区错误。\n\n四个边界必须满足 `left < a < b < right`。左背景从 left 到 a，内部从 a 到 b，右背景从 b 到 right；各段都含左不含右。代码中的两个比较先分别产生真假数组，再用 `&` 表示同时满足、`|` 表示满足其中之一。它们是在对每一行分类，不是在把两个通量做按位运算。\n\n正式部分留有 `student_window=None`。找到 M04 的候选记录后，填入四个真实 BKJD 边界，先在当前 Q3 图上看区间，再运行测量。没有选出可信边界就保持未完成；构造例的2%不能填入真实表。至少两个点只是本段代码的最低计算条件，远不足以保证能测准微弱信号。\n\n本节的局部相对深度与参考 `analyze.measure` 不同：后者按周期合并多个事件，用归一化尺度的均值差作诊断，还留出不同背景间隔。不要直接拿它代替这里的四边界计算。下一节需要事件中心：开始落在10.00–10.02天、结束落在10.10–10.12天时，中心范围是10.05–10.07天，时长范围0.08–0.12天。这只是构造例的采样限制；真实边界看不清时可以留空，不能靠更多小数位补精度。",
+    "cells": [
+      {
+        "type": "markdown",
+        "source": "## 从一张分组表开始，再测自己的候选\n\n打开教程 M13。先处理六行构造记录：时间是相对中心的天数，不是 Kepler 的 BKJD；中间两条 97、99 在内部，另外四条 99、101、100、100 作背景。内部均值98、背景均值100，相对深度应为2%。我们先打印每条记录属于哪一组，再计算，这样能够发现选区错误。\n\n四个边界必须满足 `left < a < b < right`。左背景从 left 到 a，内部从 a 到 b，右背景从 b 到 right；各段都含左不含右。代码中的两个比较先分别产生真假数组，再用 `&` 表示同时满足、`|` 表示满足其中之一。它们是在对每一行分类，不是在把两个通量做按位运算。\n\n正式部分留有 `student_window=None`。找到 M04 的候选记录后，填入四个真实 BKJD 边界，先在当前 Q3 图上看区间，再运行测量。没有选出可信边界就保持未完成；构造例的2%不能填入真实表。至少两个点只是本段代码的最低计算条件，远不足以保证能测准微弱信号。\n\n本节的局部相对深度与参考 `analyze.measure` 不同：后者按周期合并多个事件，用归一化尺度的均值差作诊断，还留出不同背景间隔。不要直接拿它代替这里的四边界计算。下一节需要事件中心：开始落在10.00–10.02天、结束落在10.10–10.12天时，中心范围是10.05–10.07天，时长范围0.08–0.12天。这只是构造例的采样限制；真实边界看不清时可以留空，不能靠更多小数位补精度。\n"
+      },
+      {
+        "type": "code",
+        "source": "def local_relative_depth(time_values,flux_values,left,a,b,right):\n    if not left<a<b<right: raise ValueError('需要 left < a < b < right；先检查四条时间边界')\n    time_values=np.asarray(time_values,dtype=float)\n    flux_values=np.asarray(flux_values,dtype=float)\n    if time_values.shape!=flux_values.shape: raise ValueError('时间和通量必须逐行对应')\n    valid_values=np.isfinite(time_values)&np.isfinite(flux_values)\n    inside=(time_values>=a)&(time_values<b)&valid_values\n    outside=(((time_values>=left)&(time_values<a))|((time_values>=b)&(time_values<right)))&valid_values\n    if inside.sum()<2 or outside.sum()<2: raise ValueError('内部或背景少于2点；不返回零深度')\n    f_in=float(np.mean(flux_values[inside]));f_out=float(np.mean(flux_values[outside]))\n    if f_out<=0: raise ValueError('背景均值必须为正')\n    return {'baseline':f_out,'inside_mean':f_in,'relative_depth_ppm':(f_out-f_in)/f_out*1e6,\n            'n_in':int(inside.sum()),'n_out':int(outside.sum()),'minimum':float(np.min(flux_values[inside]))},inside,outside\ndemo_time=np.array([-0.3,-0.2,-0.1,0.1,0.2,0.3])\ndemo_flux=np.array([99.,101.,97.,99.,100.,100.])\ndemo_measure,demo_inside,demo_outside=local_relative_depth(demo_time,demo_flux,-0.4,-0.15,0.15,0.4)\ndemo_rows=[[float(x),float(y),bool(i),bool(o)] for x,y,i,o in zip(demo_time,demo_flux,demo_inside,demo_outside)]\nprint('构造例：相对天数、通量、内部、背景');print(*demo_rows,sep='\\n');print(demo_measure)\nassert np.isclose(demo_measure['relative_depth_ppm'],20000.)\nsave_csv('M13/constructed-grouping.csv',['relative_day','constructed_flux','inside','outside'],demo_rows)\nfig,ax=plt.subplots(figsize=(8,3));ax.scatter(demo_time[demo_outside],demo_flux[demo_outside],label='Background')\nax.scatter(demo_time[demo_inside],demo_flux[demo_inside],label='Inside');ax.axvspan(-0.15,0.15,alpha=.15)\nax.set(xlabel='Constructed relative time [day]',ylabel='Constructed flux');ax.legend();fig.tight_layout();save_plot('M13/constructed-groups.png');plt.close(fig)\n"
+      },
+      {
+        "type": "markdown",
+        "source": "先把构造例中两个内窗数改为99、101，其他不变，预测深度应该是多少，再运行核对。背景与内部均值相同应为零；若内部更亮则应为负，不能取绝对值。正式选区的参数和测量另外保存。\n"
+      },
+      {
+        "type": "code",
+        "source": "student_window=None  # 真正选区后填写 {'left':..., 'a':..., 'b':..., 'right':...}，单位BKJD天\nstudent_measurements=[]\nstudent_measurement_status={'status':'not_started','reason':'学生尚未填写真实Q3选区'}\nif student_window is not None:\n    bounds={key:float(student_window[key]) for key in ['left','a','b','right']}\n    try:\n        result,student_inside,student_outside=local_relative_depth(q3_flat_initial.time.value,q3_flat_initial.flux.value,**bounds)\n        result.update(bounds);result['event_id']='student-event-01';result['data_kind']='student-selected Q3 window'\n        student_measurements.append(result)\n        student_measurement_status={'status':'computed','reason':'仅已计算，不自动宣称可靠下降'}\n        selected=student_inside|student_outside\n        save_csv('M13/selected-observations.csv',['cadenceno','time_bkjd','detrended_flux','inside','outside'],\n                 [[int(q3_flat_initial.cadenceno[j]),float(q3_flat_initial.time.value[j]),float(q3_flat_initial.flux.value[j]),bool(student_inside[j]),bool(student_outside[j])] for j in np.flatnonzero(selected)])\n        fig,ax=plt.subplots(figsize=(9,4));ax.scatter(q3_flat_initial.time.value[selected],q3_flat_initial.flux.value[selected],s=12)\n        ax.axvspan(bounds['a'],bounds['b'],alpha=.15);ax.set(xlabel='Student-selected BKJD [day]',ylabel='Detrended relative flux')\n        fig.tight_layout();save_plot('M13/student-window.png');plt.close(fig)\n        print(result)\n    except ValueError as error:\n        student_measurement_status={'status':'cannot_measure','reason':str(error)}\nprint(student_measurement_status)\nsave_json('M13/student-window-status.json',student_measurement_status)\nsave_csv('M13/event-measurements.csv',['event_id','left','a','b','right','baseline','inside_mean','relative_depth_ppm','n_in','n_out','minimum','data_kind'],student_measurements)\n"
+      }
+    ],
+    "outputs": [
+      "M13/constructed-grouping.csv",
+      "M13/constructed-groups.png",
+      "M13/student-window-status.json",
+      "M13/event-measurements.csv"
+    ],
+    "corrections": [
+      {
+        "old": "**本节学习目标：** 定义测量区间，计算相对下降深度，并说明点数、噪声和处理方法怎样限制结果。使用 M12 未加入人工信号的 Q3 数据 `flat`，以及 M04 的候选区间。 本节使用的程序和原始文件见[下载观测数据与 Notebook 实践包](/api/library/projects/lightkurve-transit-detective/files/downloads/lightkurve-practice-kit.zip)。先取出第 4 节自己标记的时间区间和第 12 节算出的趋势。可对照 analyze.py 的 measure 函数，查看事件内外的数据怎样参与计算。",
+        "new": "本节使用 M12 未加入人工信号的 `q3_flat_initial` 与 M04 的候选记录。打开 `junior-guide.ipynb` 的 M13，先核对构造分组表，再填写本人的真实时间边界。使用本节的局部相对深度函数；`analyze.py` 的 `measure` 是不同窗口、不同深度定义的周期合并诊断，不能直接替代。"
+      }
+    ],
+    "assignment_corrections": [
+      {
+        "old": "1. 从未加入人工信号的 Q3 flat 选取候选及前后背景，保存时间边界和编号。",
+        "new": "1. 先完成 M13 的构造分组练习，再从未注入的 q3_flat_initial 选本人候选及背景。检查 left<a<b<right，保留边界和编号；尚无可信选区时真实表保持未完成。"
+      },
+      {
+        "old": "3. 用背景均值作分母计算相对深度，明确比例、百分比或 ppm 单位。",
+        "new": "3. 用局部背景均值作分母计算相对深度，明确比例、百分比或ppm。不得把 analyze.measure 的周期合并归一化通量差当作本节相同测量。"
+      }
+    ],
+    "insertion_before": "## 用自己的区间完成计算"
+  },
+  {
+    "module": "M14",
+    "prerequisite": "会时刻减法与间隔单位；会保留事件ID和中心范围；理解一次事件与一次采样的区别。",
+    "teaching": "## 真实中心不足时，也能诚实地继续学习\n\n这里先完成构造事件表：中心10.0、10.8、12.4天，分别带着事件A、B、C的身份。相邻差只有两行：A到B为0.8天，B到C为1.6天。把间隔除以1、2、3，是分别假设跨过这些圈数；它产生待查猜想，不会证明中间的事件真实发生。\n\n每个中心还可以带范围。例如后一中心最早12.0、最晚12.1，前一中心最早10.0、最晚10.1，差值最短用12.0−10.1，最长用12.1−10.0。表中必须保留是哪两个事件相减，不能只剩一串排序后的数。\n\n真实输入 `student_centres=None` 暂时不填。只有一次、两次或根本无法可靠定位事件，都按实际记录；不要求为了过关找出三个低点。构造练习通过后，M15 可以继续学习折叠坐标，真实周期仍标为待搜索，M17 才计算本人Q3候选。请在两天与一天的构造时间线上各标出一个额外预测位置，说明缺测与有足够精度却未见下降的区别。",
+    "cells": [
+      {
+        "type": "markdown",
+        "source": "## 真实中心不足时，也能诚实地继续学习\n\n这里先完成构造事件表：中心10.0、10.8、12.4天，分别带着事件A、B、C的身份。相邻差只有两行：A到B为0.8天，B到C为1.6天。把间隔除以1、2、3，是分别假设跨过这些圈数；它产生待查猜想，不会证明中间的事件真实发生。\n\n每个中心还可以带范围。例如后一中心最早12.0、最晚12.1，前一中心最早10.0、最晚10.1，差值最短用12.0−10.1，最长用12.1−10.0。表中必须保留是哪两个事件相减，不能只剩一串排序后的数。\n\n真实输入 `student_centres=None` 暂时不填。只有一次、两次或根本无法可靠定位事件，都按实际记录；不要求为了过关找出三个低点。构造练习通过后，M15 可以继续学习折叠坐标，真实周期仍标为待搜索，M17 才计算本人Q3候选。请在两天与一天的构造时间线上各标出一个额外预测位置，说明缺测与有足够精度却未见下降的区别。\n"
+      },
+      {
+        "type": "code",
+        "source": "constructed_centres=[('A',10.0),('B',10.8),('C',12.4)]\ninterval_rows=[]\nfor previous,current in zip(constructed_centres[:-1],constructed_centres[1:]):\n    interval=current[1]-previous[1]\n    for assumed_cycles in [1,2,3]:\n        interval_rows.append([previous[0],current[0],previous[1],current[1],interval,assumed_cycles,interval/assumed_cycles,'constructed'])\nprint('from,to,t_from,t_to,interval,assumed_cycles,trial_period,data_kind')\nfor row in interval_rows: print(row)\nsave_csv('M14/constructed-intervals.csv',['from_event','to_event','from_day','to_day','interval_day','assumed_cycles','trial_period_day','data_kind'],interval_rows)\nstudent_centres=None  # 可填写本人事件表，例如 [{'event_id':'自己的编号','centre_bkjd':...}, ...]；不能复制上面的构造值\nreal_interval_rows=[]\nif student_centres is None or len(student_centres)<2:\n    interval_status={'status':'insufficient_event_centres','reason':'尚无至少两个本人定位的真实中心；构造练习可继续'}\nelse:\n    ordered=sorted(student_centres,key=lambda item:item['centre_bkjd'])\n    for previous,current in zip(ordered[:-1],ordered[1:]):\n        delta=float(current['centre_bkjd'])-float(previous['centre_bkjd'])\n        if delta<=0: raise ValueError('中心重复或顺序有误；回查事件ID')\n        for assumed_cycles in [1,2,3]:\n            real_interval_rows.append([previous['event_id'],current['event_id'],previous['centre_bkjd'],current['centre_bkjd'],delta,assumed_cycles,delta/assumed_cycles,'student Q3 measurement'])\n    interval_status={'status':'computed_trial_intervals','reason':'候选仍需覆盖与形状检查'}\nsave_csv('M14/event-intervals.csv',['from_event','to_event','from_bkjd','to_bkjd','interval_day','assumed_cycles','trial_period_day','data_kind'],real_interval_rows)\nsave_json('M14/interval-status.json',interval_status);print(interval_status)\n"
+      }
+    ],
+    "outputs": [
+      "M14/constructed-intervals.csv",
+      "M14/event-intervals.csv",
+      "M14/interval-status.json"
+    ],
+    "corrections": [
+      {
+        "old": "```python\n# Fill this list from your own Q3 event-measurements table.\ncentres = np.array([float(x) for x in input('输入至少三个候选中心BKJD时间，用空格隔开: ').split()])\nassert len(centres)>=3\ncentres=np.sort(centres)\nintervals=np.diff(centres)\nprint('intervals [day]',intervals)\nfor delta in intervals:\n    print('candidate periods for 1,2,3 cycles:',delta/np.array([1,2,3]))\n```",
+        "new": "完整操作见 `junior-guide.ipynb` 的 M14：先按带事件编号的构造表核对相邻差，再填写真实中心。真实资料不足时保留不足状态，不要求凑齐三个事件；下一节先学坐标变换，第17节再由真实搜索产生候选。"
+      }
+    ],
+    "assignment_corrections": [
+      {
+        "old": "2. 手算至少两个相邻差值，并与程序核对。",
+        "new": "2. 用构造三事件手算两个相邻差值并核对。本人真实中心不足时保存不足状态，不凑事件；真实候选间隔与构造练习分别存放。"
+      }
+    ],
+    "insertion_before": "## 列出可以继续检查的候选周期"
+  },
+  {
+    "module": "M15",
+    "prerequisite": "会负数、余数、相位与天数换算；能区分列表位置、采样编号、事件圈号。",
+    "teaching": "## 圈号不是删掉小数，它要与相对时间一起核对\n\n相位手算继续用构造周期2天、参考时刻10天。代码把“经过几圈”加0.5后向下取整，得到最近预计中心的编号。向下取整不是删小数：−0.6向下是−1，不是0。参考时刻以前可以有负圈号；缺测不会让其他圈号改变。\n\n|原时刻|圈号|最近中心|相对天数|相位|\n|---|---|---|---|---|\n|9.8|0|10|−0.2|−0.1|\n|11.0|1|12|−1.0|−0.5|\n|12.2|1|12|0.2|0.1|\n\n11天刚好夹在10与12之间。本课约定相对天数含左端、不含右端，所以放在下一圈的−1天处。每行都应满足“参考时刻＋圈号×周期＋相对天数＝原时刻”。这既检查公式，也检查三个不同量没有混写。\n\n下面的图与表明确标注构造数据。真实试探参数留空；只有从自己M14记录提出了值才填入，且仍叫试探值。M17生成的新候选另存，不覆盖教学P/t0。真实图按圈号着色，CSV带采样编号；任意点都可以回到原观测，颜色相同不表示是同一次观测。",
+    "cells": [
+      {
+        "type": "markdown",
+        "source": "## 圈号不是删掉小数，它要与相对时间一起核对\n\n相位手算继续用构造周期2天、参考时刻10天。代码把“经过几圈”加0.5后向下取整，得到最近预计中心的编号。向下取整不是删小数：−0.6向下是−1，不是0。参考时刻以前可以有负圈号；缺测不会让其他圈号改变。\n\n|原时刻|圈号|最近中心|相对天数|相位|\n|---|---|---|---|---|\n|9.8|0|10|−0.2|−0.1|\n|11.0|1|12|−1.0|−0.5|\n|12.2|1|12|0.2|0.1|\n\n11天刚好夹在10与12之间。本课约定相对天数含左端、不含右端，所以放在下一圈的−1天处。每行都应满足“参考时刻＋圈号×周期＋相对天数＝原时刻”。这既检查公式，也检查三个不同量没有混写。\n\n下面的图与表明确标注构造数据。真实试探参数留空；只有从自己M14记录提出了值才填入，且仍叫试探值。M17生成的新候选另存，不覆盖教学P/t0。真实图按圈号着色，CSV带采样编号；任意点都可以回到原观测，颜色相同不表示是同一次观测。\n"
+      },
+      {
+        "type": "code",
+        "source": "demo_P,demo_t0=2.0,10.0\ndemo_times=np.array([7.8,9.8,10.,11.,12.2,13.8])\ndemo_cycles=np.floor((demo_times-demo_t0)/demo_P+0.5).astype(int)\ndemo_phase_day=((demo_times-demo_t0+demo_P/2)%demo_P)-demo_P/2\ndemo_phase_fraction=demo_phase_day/demo_P\ndemo_phase_rows=[[float(x),int(n),float(demo_t0+n*demo_P),float(p),float(p/demo_P)] for x,n,p in zip(demo_times,demo_cycles,demo_phase_day)]\nprint('time,cycle,nearest_centre,phase_day,dimensionless_phase');print(*demo_phase_rows,sep='\\n')\nassert np.allclose(demo_t0+demo_cycles*demo_P+demo_phase_day,demo_times,rtol=0,atol=1e-12)\nsave_csv('M15/constructed-phase.csv',['constructed_time_day','cycle','nearest_centre_day','phase_day','phase_fraction'],demo_phase_rows)\nfig,axes=plt.subplots(1,2,figsize=(9,3));demo_flux_for_plot=np.array([100.,99.,98.,100.,99.,98.])\naxes[0].scatter(demo_times,demo_flux_for_plot);axes[0].set(xlabel='Constructed time [day]',ylabel='Constructed flux')\naxes[1].scatter(demo_phase_fraction,demo_flux_for_plot,c=demo_cycles);axes[1].set(xlabel='Dimensionless phase',ylabel='Same constructed flux')\nfig.tight_layout();save_plot('M15/constructed-fold.png');plt.close(fig)\nstudent_trial=None  # {'period_day':本人M14试探值, 'epoch_bkjd':本人参考中心}；教学值不能冒充真实候选\nphase_rows=[]\nif student_trial is not None:\n    trial_period=float(student_trial['period_day']);trial_epoch=float(student_trial['epoch_bkjd'])\n    if not np.isfinite(trial_period) or trial_period<=0 or not np.isfinite(trial_epoch): raise ValueError('检查周期正值及参考时刻')\n    real_time=np.asarray(q3_flat_initial.time.value)\n    trial_cycles=np.floor((real_time-trial_epoch)/trial_period+0.5).astype(int)\n    trial_phase_day=((real_time-trial_epoch+trial_period/2)%trial_period)-trial_period/2\n    for j in range(len(real_time)):\n        phase_rows.append([int(q3_flat_initial.cadenceno[j]),float(real_time[j]),int(trial_cycles[j]),float(trial_phase_day[j]),float(trial_phase_day[j]/trial_period)])\n    assert np.allclose(trial_epoch+trial_cycles*trial_period+trial_phase_day,real_time,rtol=0,atol=1e-10)\n    fig,ax=plt.subplots(figsize=(9,4));sc=ax.scatter(trial_phase_day/trial_period,q3_flat_initial.flux.value,c=trial_cycles,s=4)\n    fig.colorbar(sc,ax=ax,label='Fixed cycle number');ax.set(xlabel='Dimensionless phase',ylabel='Relative flux')\n    fig.tight_layout();save_plot('M15/student-trial-fold.png');plt.close(fig)\nsave_csv('M15/phase-handcheck.csv',['cadenceno','time_bkjd','cycle','phase_day','phase_fraction'],phase_rows)\nsave_json('M15/phase-status.json',{'status':'trial_computed' if student_trial is not None else 'real_trial_not_started','student_trial':student_trial,'constructed_example_completed':True})\n"
+      }
+    ],
+    "outputs": [
+      "M15/constructed-phase.csv",
+      "M15/constructed-fold.png",
+      "M15/phase-handcheck.csv",
+      "M15/phase-status.json"
+    ],
+    "corrections": [
+      {
+        "old": "**本节学习目标：** 手算相位，区分无量纲相位与相对时间，并用保留原始编号的散点图检查重复关系。 本节使用的程序和原始文件见[下载观测数据与 Notebook 实践包](/api/library/projects/lightkurve-transit-detective/files/downloads/lightkurve-practice-kit.zip)。沿用自己在第 14 节记下的周期和参考时刻。analyze.py 中的 phase 函数可用来核对手算结果。",
+        "new": "本节在 `junior-guide.ipynb` 的 M15 先完成构造相位表，再按本人 M14 记录填写可选的真实试探参数。没有可靠中心时，真实表保持未完成，第17节再搜索候选。`analyze.py` 的 `phase(t,eph)` 返回相对天数，不能直接当作无量纲相位或圈号。"
+      }
+    ],
+    "assignment_corrections": [
+      {
+        "old": "1. 从 M14 选择有依据的 P 和 t0，注明单位。",
+        "new": "1. 先完成构造圈号和相位表；只有本人M14已有依据时再填真实试探P和t0。资料不足则保留真实试探未完成，等待M17搜索，不把教学参数冒充本人结果。"
+      }
+    ],
+    "insertion_before": "## 手算三个点的位置"
+  },
+  {
+    "module": "M16",
+    "prerequisite": "会平均、平方与残差；会真假数组选取；理解同一批点比较两个模型。",
+    "teaching": "## 先看到每个点怎样进入总分\n\n六点构造表把观测、内外组、模型预测、残差和残差平方并排列出。`np.where(inside,cin,cout)` 的意思是：这一行若在内部，取内部均值；否则取外部均值。它不会自动认识行星，也不决定哪些点应该属于内部。内外分组来自预先指定的时间规则。\n\n把残差直接相加可能抵消；每项平方后再加才是本节SSE。先看表算出常数模型4/3、盒形模型0，再把一个背景点加入内部，预测哪几行的模型值会改变。不能只改该点而沿用旧组均值。\n\n正式BLS使用误差时，还多了一步：同样差1单位，误差为1时相当于1份误差，误差为2时相当于半份。先除以误差再平方，后一项为前一项的四分之一。两次读数1、3、误差1、2，权重1和1/4，权重平均为(1×1＋3×1/4)/(1＋1/4)=1.4，不同于等权均值2。这只是构造计算规则，不是行星概率。M17输入的误差来自同一批Q3记录，已按趋势缩放；趋势本身的不确定性仍未完整计入。\n\n本节正式数据试验依赖自己的M15试探参数。未填写时只保存构造练习，不把教学周期套到真实数据后称为找到信号。",
+    "cells": [
+      {
+        "type": "markdown",
+        "source": "## 先看到每个点怎样进入总分\n\n六点构造表把观测、内外组、模型预测、残差和残差平方并排列出。`np.where(inside,cin,cout)` 的意思是：这一行若在内部，取内部均值；否则取外部均值。它不会自动认识行星，也不决定哪些点应该属于内部。内外分组来自预先指定的时间规则。\n\n把残差直接相加可能抵消；每项平方后再加才是本节SSE。先看表算出常数模型4/3、盒形模型0，再把一个背景点加入内部，预测哪几行的模型值会改变。不能只改该点而沿用旧组均值。\n\n正式BLS使用误差时，还多了一步：同样差1单位，误差为1时相当于1份误差，误差为2时相当于半份。先除以误差再平方，后一项为前一项的四分之一。两次读数1、3、误差1、2，权重1和1/4，权重平均为(1×1＋3×1/4)/(1＋1/4)=1.4，不同于等权均值2。这只是构造计算规则，不是行星概率。M17输入的误差来自同一批Q3记录，已按趋势缩放；趋势本身的不确定性仍未完整计入。\n\n本节正式数据试验依赖自己的M15试探参数。未填写时只保存构造练习，不把教学周期套到真实数据后称为找到信号。\n"
+      },
+      {
+        "type": "code",
+        "source": "def box_score(y,inside):\n    y=np.asarray(y,dtype=float);inside=np.asarray(inside,dtype=bool)\n    if y.shape!=inside.shape: raise ValueError('通量与内外标记长度必须相同')\n    if not np.all(np.isfinite(y)) or inside.sum()<2 or (~inside).sum()<2: raise ValueError('输入无效或某组少于2点')\n    constant=float(np.mean(y));inner=float(np.mean(y[inside]));outer=float(np.mean(y[~inside]))\n    model=np.where(inside,inner,outer)\n    residual=y-model\n    sse_constant=float(np.sum((y-constant)**2));sse_box=float(np.sum(residual**2))\n    return {'inside_mean':inner,'outside_mean':outer,'sse_constant':sse_constant,'sse_box':sse_box,'delta_sse':sse_constant-sse_box},model\nscore_demo=np.array([10.,10.,9.,9.,10.,10.]);score_inside=np.array([False,False,True,True,False,False])\nscore_result,score_model=box_score(score_demo,score_inside)\nscore_detail=[[j,float(score_demo[j]),bool(score_inside[j]),float(score_model[j]),float(score_demo[j]-score_model[j]),float((score_demo[j]-score_model[j])**2),float((score_demo[j]-score_demo.mean())**2)] for j in range(6)]\nprint('row,y,inside,model,residual,residual_squared,constant_residual_squared');print(*score_detail,sep='\\n');print(score_result)\nassert np.isclose(score_result['delta_sse'],4/3)\nsave_csv('M16/constructed-score-detail.csv',['row','constructed_flux','inside','model','residual','residual_squared','constant_residual_squared'],score_detail)\nerrors=np.array([1.,2.]);values=np.array([1.,3.]);weights=1/errors**2\nweighted_mean=float(np.sum(weights*values)/np.sum(weights))\nprint('构造加权：误差',errors,'权重',weights,'等权均值',values.mean(),'加权均值',weighted_mean)\nassert np.isclose(weighted_mean,1.4)\nscore_rows=[]\nif student_trial is not None:\n    pp=float(student_trial['period_day']);tt=float(student_trial['epoch_bkjd'])\n    phase_days=((q3_flat_initial.time.value-tt+pp/2)%pp)-pp/2\n    for duration in [0.06,0.10,0.14]:\n        if duration>=pp:\n            score_rows.append([duration,'invalid_duration',None,None,None,None,None]);continue\n        inside=np.abs(phase_days)<duration/2\n        try:\n            result,_=box_score(q3_flat_initial.flux.value,inside)\n            score_rows.append([duration,'computed',result['inside_mean'],result['outside_mean'],result['sse_constant'],result['sse_box'],result['delta_sse']])\n        except ValueError:\n            score_rows.append([duration,'insufficient_data',None,None,None,None,None])\nsave_csv('M16/box-score-handcheck.csv',['duration_day','status','inside_mean','outside_mean','sse_constant','sse_box','delta_sse'],score_rows)\nsave_json('M16/score-status.json',{'real_status':'trial_computed' if student_trial is not None else 'real_trial_not_started','constructed_score':score_result,'weighted_example':weighted_mean})\n"
+      }
+    ],
+    "outputs": [
+      "M16/constructed-score-detail.csv",
+      "M16/box-score-handcheck.csv",
+      "M16/score-status.json"
+    ],
+    "corrections": [
+      {
+        "old": "**本节学习目标：** 确定模型内外的观测，计算两组均值和残差平方和，并解释一个拟合评分从哪里来。 本节使用的程序和原始文件见[下载观测数据与 Notebook 实践包](/api/library/projects/lightkurve-transit-detective/files/downloads/lightkurve-practice-kit.zip)。用自己在第 15 节得到的相位表分组。参照 analyze.py 中的 measure 函数检查每组实际纳入了哪些点。",
+        "new": "本节在 `junior-guide.ipynb` 的 M16 逐行核对六点构造评分，并另存本人试探参数下的真实评分。这里定义的 `box_score` 计算等权 SSE；`analyze.py` 的 `measure` 返回盒深度及诊断误差，不是这个评分函数。"
+      }
+    ],
+    "assignment_corrections": [
+      {
+        "old": "3. 在真实 Q3 上比较几组持续时间，保存内外均值及分数。",
+        "new": "3. 已有本人真实试探参数时再比较Q3的几组持续时间；否则先保留构造评分成果，真实试验标未完成。各组合保存状态、内外均值及分数，不静默丢掉计算失败项。"
+      }
+    ],
+    "insertion_before": "## 逐项算一个六点例子"
+  },
+  {
+    "module": "M17",
+    "prerequisite": "会M12趋势、M15折叠、M16盒形评分及误差权重；能解释循环与同索引取字段。",
+    "teaching": "## 让每次搜索和每版趋势都留下可检查的输入\n\n打开教程M17，正式输入仍是M11的 `lc`。粗搜索在初次去趋势曲线上进行；得到粗候选后，仅让候选周围的点暂不参加趋势估计，再在粗峰附近细搜。最后按细候选重新估计趋势，得到后续诊断用的 `flat/trend/eph`。这些名字与M15的教学试探值分开。\n\n|阶段|趋势估计的候选参数|用途|\n|---|---|---|\n|initial|没有候选保护|粗搜索|\n|masked|粗候选e0|细搜索|\n|final|细候选eph|M18–M22的统一诊断|\n\n保护区总宽为1.5倍候选持续时间：事件内部左右各D/2，保护带左右各0.75D。保护带中的观测仍保留在曲线上，只是不帮助估计背景。程序逐项核对采样编号未被删掉，并保存三版支持点数，学生可以指出一次改变发生在哪里。\n\n`argmax` 返回最高分所在的位置。用同一个位置取出周期、时刻、时长和分数，才是同一候选。下面先用五行构造分数找局部峰，再用真实搜索表。20001点粗网格有20000个间隔，每隔0.00005天试一次；细网格间隔0.000001天。这不是仪器采样间隔，也不是最终周期误差。其余粗峰没有被逐一细搜，仍应保留以便检查。\n\n本节只生成候选草稿，不调用整套 `develop()`，不写方法冻结或读取Q4。后面先做替代解释检查，第23节再记录检验方法。图和程序生成成功不等于学生已接受任何结论。",
+    "cells": [
+      {
+        "type": "markdown",
+        "source": "## 让每次搜索和每版趋势都留下可检查的输入\n\n打开教程M17，正式输入仍是M11的 `lc`。粗搜索在初次去趋势曲线上进行；得到粗候选后，仅让候选周围的点暂不参加趋势估计，再在粗峰附近细搜。最后按细候选重新估计趋势，得到后续诊断用的 `flat/trend/eph`。这些名字与M15的教学试探值分开。\n\n|阶段|趋势估计的候选参数|用途|\n|---|---|---|\n|initial|没有候选保护|粗搜索|\n|masked|粗候选e0|细搜索|\n|final|细候选eph|M18–M22的统一诊断|\n\n保护区总宽为1.5倍候选持续时间：事件内部左右各D/2，保护带左右各0.75D。保护带中的观测仍保留在曲线上，只是不帮助估计背景。程序逐项核对采样编号未被删掉，并保存三版支持点数，学生可以指出一次改变发生在哪里。\n\n`argmax` 返回最高分所在的位置。用同一个位置取出周期、时刻、时长和分数，才是同一候选。下面先用五行构造分数找局部峰，再用真实搜索表。20001点粗网格有20000个间隔，每隔0.00005天试一次；细网格间隔0.000001天。这不是仪器采样间隔，也不是最终周期误差。其余粗峰没有被逐一细搜，仍应保留以便检查。\n\n本节只生成候选草稿，不调用整套 `develop()`，不写方法冻结或读取Q4。后面先做替代解释检查，第23节再记录检验方法。图和程序生成成功不等于学生已接受任何结论。\n"
+      },
+      {
+        "type": "code",
+        "source": "from analyze import search\ntest_power=np.array([1.,4.,2.,5.,1.])\ntest_peaks=[]\nfor j in range(1,len(test_power)-1):\n    if test_power[j]>test_power[j-1] and test_power[j]>=test_power[j+1]: test_peaks.append(j)\nprint('构造评分:',test_power,'局部峰位置:',test_peaks,'最高值所在位置:',int(np.argmax(test_power)))\nassert test_peaks==[1,3]\ninitial,initial_trend=local_median(lc,window_day=1.0)\nperiod_grid=np.linspace(0.5,1.5,20001)\ncoarse,e0=search(initial,period_grid)\nprint('粗候选:',e0)\nmasked,masked_trend=local_median(lc,ephemeris=e0,window_day=1.0)\nfine_period_grid=np.linspace(e0['period_day']-0.001,e0['period_day']+0.001,2001)\nfine,eph=search(masked,fine_period_grid)\nflat,trend=local_median(lc,ephemeris=eph,window_day=1.0)\nq3_flat_protected,q3_trend_protected=flat,trend\ncandidate_q3=dict(eph)\nfor curve in [initial,masked,flat]:\n    assert np.array_equal(np.asarray(curve.cadenceno),np.asarray(lc.cadenceno))\nstage_rows=[]\nfor label,curve,trend_curve in [('initial',initial,initial_trend),('masked',masked,masked_trend),('final',flat,trend)]:\n    stage_rows.append([label,len(curve),int(np.min(curve['trend_support_count'])),int(np.max(curve['trend_support_count']))])\n    save_csv(f'M17/{label}-curve.csv',['cadenceno','time_bkjd','detrended_flux','detrended_error','trend','trend_support_count'],\n             [[int(curve.cadenceno[j]),float(curve.time.value[j]),float(curve.flux.value[j]),float(curve.flux_err.value[j]),float(trend_curve.flux.value[j]),int(curve['trend_support_count'][j])] for j in range(len(curve))])\nprint('stage,number of observations,min support,max support');print(*stage_rows,sep='\\n')\nsave_csv('M17/trend-stage-check.csv',['stage','observations','minimum_support','maximum_support'],stage_rows)\nsave_json('M17/candidate-q3.json',{'status':'Q3 candidate draft; not frozen','candidate':eph,'coarse_candidate':e0,\n          'data_role':'development','source':bundle['rec'],'config':CONFIG,'trend_window_day':1.0,\n          'mask_total_duration_multiplier':CONFIG['transit_mask_duration_multiplier'],'input_cadence_count':len(lc),\n          'processing_sequence':['initial -> coarse','coarse candidate -> masked -> fine','fine candidate -> final diagnostic curve']})\n"
+      },
+      {
+        "type": "code",
+        "source": "power=np.asarray(coarse.power.value);peak_indices=[]\nfor j in range(1,len(power)-1):\n    if power[j]>power[j-1] and power[j]>=power[j+1]: peak_indices.append(j)\npeak_indices=sorted(peak_indices,key=lambda j:power[j],reverse=True)\ncandidate_rows=[[float(coarse.period.value[j]),float(power[j]),int(j)] for j in peak_indices[:5]]\nsave_csv('M17/bls-candidates-q3.csv',['period_day','bls_power','grid_index'],candidate_rows)\nsave_csv('M17/bls-coarse-grid.csv',['period_day','bls_power'],[[float(p),float(v)] for p,v in zip(coarse.period.value,power)])\nprint('五个局部粗峰:',candidate_rows)\ncoarse.plot();save_plot('M17/bls-coarse-q3.png');plt.close()\nfine.plot();save_plot('M17/bls-fine-q3.png');plt.close()\nfinal_phase_day=((flat.time.value-eph['epoch_bkjd']+eph['period_day']/2)%eph['period_day'])-eph['period_day']/2\nfig,ax=plt.subplots(figsize=(9,4));ax.scatter(final_phase_day*24,flat.flux.value,s=3)\nax.set(xlabel='Hours from candidate centre',ylabel='Detrended relative flux');fig.tight_layout();save_plot('M17/folded-candidate-q3.png');plt.close(fig)\nprint('最终候选（尚未确认）：',eph)\n"
+      }
+    ],
+    "outputs": [
+      "M17/candidate-q3.json",
+      "M17/initial-curve.csv",
+      "M17/masked-curve.csv",
+      "M17/final-curve.csv",
+      "M17/trend-stage-check.csv",
+      "M17/bls-candidates-q3.csv",
+      "M17/bls-coarse-grid.csv",
+      "M17/bls-coarse-q3.png",
+      "M17/bls-fine-q3.png",
+      "M17/folded-candidate-q3.png"
+    ],
+    "corrections": [
+      {
+        "old": "**本节学习目标：** 从原文件运行完整的 Q3 搜索，保存搜索范围、多个候选峰及对应图形，并说明候选结果的限制。 本节使用的程序和原始文件见[下载观测数据与 Notebook 实践包](/api/library/projects/lightkurve-transit-detective/files/downloads/lightkurve-practice-kit.zip)。打开 Notebook 第 4 部分，用自己的 Q3 数据执行搜索。相应的参考代码在 analyze.py 的 search 函数中。",
+        "new": "本节打开 `junior-guide.ipynb` 的 M17，依次执行初始趋势、粗搜索、候选保护趋势、细搜索和诊断曲线保存。`search(lc, periods)` 返回周期图及候选字典；原 `kepler10-reproduction.ipynb` 第4部分调用整套 `develop()`，会提前生成后续诊断和方法文件，作为整套复现参考保留，不作本节逐步教学入口。"
+      }
+    ],
+    "assignment_corrections": [
+      {
+        "old": "1. 从原 Q3 文件运行已核对的筛选、归一化和趋势估计。",
+        "new": "1. 在 junior-guide.ipynb 的M17，从已核对的本人Q3运行逐步搜索；保留初始/粗候选保护/细候选保护三版趋势，不以原Notebook的一次develop调用代替本节操作。"
+      }
+    ],
+    "insertion_before": "## 网格搜索具体试了什么"
+  },
+  {
+    "module": "M18",
+    "prerequisite": "能读周期/小时坐标；理解额外预测、缺测与无下降不同；已生成M17本人候选。",
+    "teaching": "## 用本人的候选生成三张图，再展开一个额外预测窗\n\n本节直接读取M17的 `eph` 与 `flat`，记录它们来自同一候选文件。三图仅改变周期倍率，采样编号、通量、参考时刻和纵轴范围都不变。横轴统一为相对中心小时；同样的相位宽度在不同周期中不是同样的小时数。\n\n两倍周期图中的另一处下降可能在左右边界分成两半，因为轴两端在周期上相接。先用0、2、4、6天的构造事件算一次：按4天折叠，2和6天落在半周期边界，不能只看中央一个凹陷。\n\n教程选择一处落在观测跨度内的半周期额外预测中心，即原周期相邻中心的中间。它只是程序选出的诊断位置，不是已经找到下降。表中列出该窗的全部观测，图画原时间轴；在学生判断栏先留空。只有记录数不等于能够排除信号，还要看前后覆盖、测量散布和当前模型的深度。缺测或测量能力不足时应写无法判断。\n\n页面互动使用课程内嵌的预处理Q3示例，默认参数也不是本人候选；它适合练读三图。正式作业使用本节生成的图表，不能把示例图称为本人同版本结果。",
+    "cells": [
+      {
+        "type": "markdown",
+        "source": "## 用本人的候选生成三张图，再展开一个额外预测窗\n\n本节直接读取M17的 `eph` 与 `flat`，记录它们来自同一候选文件。三图仅改变周期倍率，采样编号、通量、参考时刻和纵轴范围都不变。横轴统一为相对中心小时；同样的相位宽度在不同周期中不是同样的小时数。\n\n两倍周期图中的另一处下降可能在左右边界分成两半，因为轴两端在周期上相接。先用0、2、4、6天的构造事件算一次：按4天折叠，2和6天落在半周期边界，不能只看中央一个凹陷。\n\n教程选择一处落在观测跨度内的半周期额外预测中心，即原周期相邻中心的中间。它只是程序选出的诊断位置，不是已经找到下降。表中列出该窗的全部观测，图画原时间轴；在学生判断栏先留空。只有记录数不等于能够排除信号，还要看前后覆盖、测量散布和当前模型的深度。缺测或测量能力不足时应写无法判断。\n\n页面互动使用课程内嵌的预处理Q3示例，默认参数也不是本人候选；它适合练读三图。正式作业使用本节生成的图表，不能把示例图称为本人同版本结果。\n"
+      },
+      {
+        "type": "code",
+        "source": "P_current=float(eph['period_day']);epoch_current=float(eph['epoch_bkjd']);D_current=float(eph['duration_day'])\ndiagnostic_time=np.asarray(flat.time.value);diagnostic_flux=np.asarray(flat.flux.value)\ny_low=float(np.min(diagnostic_flux));y_high=float(np.max(diagnostic_flux));padding=max((y_high-y_low)*0.05,1e-6)\nfig,axes=plt.subplots(1,3,sharey=True,figsize=(14,4))\nalias_rows=[]\nfixed_cycles=np.floor((diagnostic_time-epoch_current)/P_current+0.5).astype(int)\nfor ax,factor in zip(axes,[0.5,1.,2.]):\n    trial_P=factor*P_current\n    folded_day=((diagnostic_time-epoch_current+trial_P/2)%trial_P)-trial_P/2\n    ax.scatter(folded_day*24,diagnostic_flux,c=fixed_cycles%2,s=3,cmap='coolwarm',vmin=0,vmax=1)\n    ax.axvspan(-D_current*12,D_current*12,alpha=.12)\n    ax.set(title=f'{factor:g} x P = {trial_P:.7f} day',xlabel='Hours from centre',ylim=(y_low-padding,y_high+padding))\n    ax.ticklabel_format(axis='y',style='plain',useOffset=False)\n    alias_rows.append([factor,trial_P,epoch_current,D_current,len(flat),'student interpretation pending'])\naxes[0].set_ylabel('Same detrended flux');fig.suptitle('Same Q3 observations: blue = even cycles, red = odd cycles, numbered at P')\nfig.tight_layout();save_plot('M18/aliases.png');plt.close(fig)\nsave_csv('M18/candidates.csv',['factor','period_day','epoch_bkjd','duration_day','observation_count','interpretation'],alias_rows)\nmid_time=float((diagnostic_time.min()+diagnostic_time.max())/2)\nextra_n=int(np.floor((mid_time-epoch_current)/P_current))\nextra_centre=epoch_current+(extra_n+0.5)*P_current\nextra_start,extra_end=extra_centre-D_current/2,extra_centre+D_current/2\nextra_inside=(diagnostic_time>=extra_start)&(diagnostic_time<extra_end)\nextra_display=np.abs(diagnostic_time-extra_centre)<P_current*0.45\nextra_rows=[[int(flat.cadenceno[j]),float(diagnostic_time[j]),float(diagnostic_flux[j]),bool(extra_inside[j])] for j in np.flatnonzero(extra_display)]\nsave_csv('M18/extra-observations.csv',['cadenceno','time_bkjd','detrended_flux','inside_prediction'],extra_rows)\nsave_csv('M18/extra-windows.csv',['candidate_factor','centre_bkjd','start_bkjd','end_bkjd','accepted_points_inside','student_judgment'],[[0.5,extra_centre,extra_start,extra_end,int(extra_inside.sum()),'']])\nprint('额外预测窗:',extra_start,extra_end,'内部有效点:',int(extra_inside.sum()),'学生判断尚未填写')\nfig,ax=plt.subplots(figsize=(9,4));ax.scatter(diagnostic_time[extra_display],diagnostic_flux[extra_display],s=14)\nax.axvspan(extra_start,extra_end,alpha=.18,label='Extra prediction for P/2')\nax.set(xlabel='Original BKJD [day]',ylabel='Detrended flux');ax.legend();fig.tight_layout();save_plot('M18/extra-window.png');plt.close(fig)\nsave_json('M18/source.json',{'candidate_file':'M17/candidate-q3.json','curve_file':'M17/final-curve.csv','period_day':P_current,'epoch_bkjd':epoch_current,'duration_day':D_current,'student_conclusion':None})\n"
+      }
+    ],
+    "outputs": [
+      "M18/aliases.png",
+      "M18/candidates.csv",
+      "M18/extra-observations.csv",
+      "M18/extra-windows.csv",
+      "M18/extra-window.png",
+      "M18/source.json"
+    ],
+    "corrections": [
+      {
+        "old": "**本节学习目标：** 使用同一批 Q3 数据比较 P/2、P、2P，并结合实际观测覆盖判断候选是否合理。 本节使用的程序和原始文件见[下载观测数据与 Notebook 实践包](/api/library/projects/lightkurve-transit-detective/files/downloads/lightkurve-practice-kit.zip)。先按正文给出的四个时刻手算，再用自己的候选周期查看 Q3 实验。实际搜索代码在 analyze.py 的 search 函数中。",
+        "new": "本节在 `junior-guide.ipynb` 的 M18，用本人 M17 保存的候选和同一处理后Q3曲线生成三联图、额外预测窗和原时间图。`search` 负责搜索，不负责生成本节全部比较成果。"
+      },
+      {
+        "old": "实验把同一份真实 Q3 数据分别按 P/2、P、2P 绘制。调整周期、参考时刻或模型宽度，观察三个面板的变化。滑块改变折叠参数，不改变原始亮度。",
+        "new": "页面三联图实验使用课程内嵌的预处理 Q3 示例，调整周期、参考时刻和宽度只改变图中排列，并不自动接入本人 M17 的数据与参数。本人正式比较图请在 `junior-guide.ipynb` 的 M18 生成，记录候选和处理版本。"
+      }
+    ],
+    "assignment_corrections": [
+      {
+        "old": "提交半周期、原周期、双周期的同尺度折叠图及比较表。使用同一份 Q3 数据、相同筛选和趋势处理，保存周期、参考时刻、持续时间及单位。",
+        "new": "提交 junior-guide.ipynb 的M18生成的半周期、原周期、双周期图及比较表，实际使用本人M17同一版本Q3曲线与候选，保存参数和单位。页面互动的课程预处理示例不能自动算作本人输出。"
+      }
+    ],
+    "insertion_before": "## 真实数据怎样公平比较"
+  },
+  {
+    "module": "M19",
+    "prerequisite": "会固定圈号、局部内外分组和相对深度；会中位数、范围与样本数；能区别点数与事件数。",
+    "teaching": "## 把“每次事件”与“所有点合并”分开\n\n先用同一P、t0列出完整预计编号，连没有数据的编号也列出来。每个中心的内部为左右D/2；背景使用距中心大于0.75D、又小于0.45P的记录，中间留过渡带。代码先打印第一行，学生应能从该中心找到内部、背景的采样编号，再看循环如何把同样规则用于其他行。\n\n表中的 `computed` 只表示本规则的均值算出来了。`coverage_status` 另外记录边缘、不连续采样或没有内部点；没有通过最低点数条件时深度留空。点数足够也不能保证检测可靠，所以程序不自动写“奇偶相同”或“已排除双星”。学生在同尺度散点图上比较各次深度、各组事件数和未知行。\n\n每事件相对深度的中位数，与把所有奇/偶观测点合并后测深度，是不同统计量。构造例：两个偶事件深度0、1000 ppm，内部点数2、20；每事件中位数500 ppm，合并内部点约909 ppm。点数多的事件在合并时影响更大。参考 `measure` 还报告归一化通量的均值差，没有再除局部背景。本节用单独文件保存这种参考诊断，不能贴到逐事件中位数组差上。\n\n可在构造表中把一个事件变成缺测，预测它的后续编号和组别：后续完全不变。对真实表挑一奇一偶，查回实际记录；再写自己的判断和仍需检查的问题，程序保留空白判断栏。",
+    "cells": [
+      {
+        "type": "markdown",
+        "source": "## 把“每次事件”与“所有点合并”分开\n\n先用同一P、t0列出完整预计编号，连没有数据的编号也列出来。每个中心的内部为左右D/2；背景使用距中心大于0.75D、又小于0.45P的记录，中间留过渡带。代码先打印第一行，学生应能从该中心找到内部、背景的采样编号，再看循环如何把同样规则用于其他行。\n\n表中的 `computed` 只表示本规则的均值算出来了。`coverage_status` 另外记录边缘、不连续采样或没有内部点；没有通过最低点数条件时深度留空。点数足够也不能保证检测可靠，所以程序不自动写“奇偶相同”或“已排除双星”。学生在同尺度散点图上比较各次深度、各组事件数和未知行。\n\n每事件相对深度的中位数，与把所有奇/偶观测点合并后测深度，是不同统计量。构造例：两个偶事件深度0、1000 ppm，内部点数2、20；每事件中位数500 ppm，合并内部点约909 ppm。点数多的事件在合并时影响更大。参考 `measure` 还报告归一化通量的均值差，没有再除局部背景。本节用单独文件保存这种参考诊断，不能贴到逐事件中位数组差上。\n\n可在构造表中把一个事件变成缺测，预测它的后续编号和组别：后续完全不变。对真实表挑一奇一偶，查回实际记录；再写自己的判断和仍需检查的问题，程序保留空白判断栏。\n"
+      },
+      {
+        "type": "code",
+        "source": "event_first=int(np.ceil((diagnostic_time.min()-D_current/2-epoch_current)/P_current))\nevent_last=int(np.floor((diagnostic_time.max()+D_current/2-epoch_current)/P_current))\nevents_q3=[]\nevent_point_rows=[]\ntypical_q3_step=float(np.median(np.diff(diagnostic_time)))\nif 0.75*D_current>=0.45*P_current: raise ValueError('背景窗口没有空间；需检查持续时间和周期规则')\nfor cycle_number in range(event_first,event_last+1):\n    centre=epoch_current+cycle_number*P_current\n    distance=np.abs(diagnostic_time-centre)\n    inside=distance<D_current/2\n    outside=(distance>0.75*D_current)&(distance<0.45*P_current)\n    n_in,n_out=int(inside.sum()),int(outside.sum())\n    edge=(centre-D_current/2<diagnostic_time.min()) or (centre+D_current/2>diagnostic_time.max())\n    local_times=diagnostic_time[distance<0.45*P_current]\n    has_gap=len(local_times)>1 and bool(np.any(np.diff(local_times)>5*typical_q3_step))\n    coverage='no_inside_points' if n_in==0 else ('edge_partial' if edge else ('local_gap' if has_gap else 'observed_points'))\n    f_in=f_out=depth_value=None\n    if n_in>=2 and n_out>=2:\n        f_in=float(np.mean(diagnostic_flux[inside]));f_out=float(np.mean(diagnostic_flux[outside]))\n        if f_out>0:\n            depth_value=(f_out-f_in)/f_out*1e6;status='computed'\n        else: status='nonpositive_background'\n    else: status='insufficient_points'\n    event={'cycle':cycle_number,'centre_bkjd':float(centre),'parity':'even' if cycle_number%2==0 else 'odd',\n           'inside_count':n_in,'outside_count':n_out,'coverage_status':coverage,'measurement_status':status,\n           'baseline_mean':f_out,'inside_mean':f_in,'relative_depth_ppm':depth_value,'student_judgment':''}\n    events_q3.append(event)\n    for j in np.flatnonzero(inside|outside):\n        event_point_rows.append([cycle_number,int(flat.cadenceno[j]),float(diagnostic_time[j]),float(diagnostic_flux[j]),'inside' if inside[j] else 'background'])\nevent_headers=['cycle','centre_bkjd','parity','inside_count','outside_count','coverage_status','measurement_status','baseline_mean','inside_mean','relative_depth_ppm','student_judgment']\nsave_csv('M19/events.csv',event_headers,events_q3)\nsave_csv('M19/event-observations.csv',['cycle','cadenceno','time_bkjd','detrended_flux','group'],event_point_rows)\nprint('前五个完整编号行：');print(*events_q3[:5],sep='\\n')\nsummary_rows=[]\nfig,ax=plt.subplots(figsize=(10,4))\nfor parity,color in [('even','tab:blue'),('odd','tab:orange')]:\n    valid_events=[event for event in events_q3 if event['parity']==parity and event['measurement_status']=='computed']\n    depths=[event['relative_depth_ppm'] for event in valid_events]\n    ax.scatter([event['cycle'] for event in valid_events],depths,label=parity,color=color,s=20)\n    summary_rows.append([parity,sum(event['parity']==parity for event in events_q3),len(valid_events),float(np.median(depths)) if depths else None,float(min(depths)) if depths else None,float(max(depths)) if depths else None,'not a significance test'])\nax.axhline(0,color='grey',linewidth=.6);ax.set(xlabel='Fixed cycle number',ylabel='Per-event relative depth [ppm]');ax.legend()\nfig.tight_layout();save_plot('M19/odd-even.png');plt.close(fig)\nsave_csv('M19/event-summary.csv',['parity','predicted_events','computed_events','median_relative_depth_ppm','minimum','maximum','limitation'],summary_rows)\n"
+      },
+      {
+        "type": "code",
+        "source": "from analyze import measure\ncycles_for_pool=np.floor((diagnostic_time-epoch_current)/P_current+0.5).astype(int)\npooled_even=measure(flat,eph,select=cycles_for_pool%2==0)\npooled_odd=measure(flat,eph,select=cycles_for_pool%2!=0)\nsave_json('M19/pooled-reference-diagnostic.json',{'definition':'difference of pooled normalized flux means; not per-event relative-depth median',\n          'even':pooled_even,'odd':pooled_odd,'student_conclusion':None,\n          'caveat':'经验标准误不是置信概率；未用此指标自动判定奇偶差异'})\nprint('构造反例：每事件中位数',np.median([0.,1000.]),'按内部点数合并',(0.*2+1000.*20)/22)\nsave_json('M19/student-comparison.json',{'status':'awaiting_student_interpretation','claim':None,'specific_events_checked':[],'limitations':[]})\n"
+      }
+    ],
+    "outputs": [
+      "M19/events.csv",
+      "M19/event-observations.csv",
+      "M19/odd-even.png",
+      "M19/event-summary.csv",
+      "M19/pooled-reference-diagnostic.json",
+      "M19/student-comparison.json"
+    ],
+    "corrections": [
+      {
+        "old": "**本节学习目标：** 使用固定编号整理事件，按相同方法测量两组深度，并结合样本数和观测覆盖解释差异。 本节使用的程序和原始文件见[下载观测数据与 Notebook 实践包](/api/library/projects/lightkurve-transit-detective/files/downloads/lightkurve-practice-kit.zip)。从自己的周期、参考时刻和事件编号表开始。要核对输入，可以回到 Notebook 第 4 部分的 Q3 分析。",
+        "new": "本节打开 `junior-guide.ipynb` 的 M19，从 M17 的同一候选与处理曲线生成完整编号的逐事件表。每事件相对深度与参考程序的奇偶合并通量差分别存放；原参考 Notebook 第4部分不会直接生成本节所需逐事件表。"
+      }
+    ],
+    "assignment_corrections": [
+      {
+        "old": "每行记录预测中心、组别、内部与背景点数、深度及能否评估。两组使用相同测量定义，另列每组有效事件数和差异。点数不足时不编造精密深度。",
+        "new": "每行记录预测中心、组别、内部与背景点数、局部相对深度及覆盖状态。逐事件深度中位数与参考measure把奇偶观测合并后的通量差分别存放、分别命名，不把合并标准误当成中位数组差的显著性。点数不足时深度留空，计算完成也不自动等于足以支持结论。"
+      }
+    ],
+    "insertion_before": "## 从构造例过渡到你自己的事件"
+  },
+  {
+    "module": "M20",
+    "prerequisite": "会原表/分析表对齐、质量掩码、互斥计数、共享时间轴；知道相关不等于因果。",
+    "teaching": "## 用原表同一行，把低点与质量状态连起来\n\n本节重新使用 `bundle['data']`，它保留原FITS表的所有行。不能把4134行分析曲线的位置直接拿去索引4370行原质量列。上下图均取同一原表的TIME、PDCSAP_FLUX、SAP_QUALITY，时间无效的行无法画在某个窗中，但全段台账仍保留；通量无效的行可在质量面板显示，不能补成零亮度。\n\n教程先选两处预计事件和一处中间非事件对照窗，明确标“程序选取的诊断示例”，没有自动判断任何原因。对每一窗计算三组互斥记录：质量不通过；质量通过但数值无效；最终保留。它们相加必须等于窗内原始行数。查看第一窗的采样编号后，另选一个真实窗口重新做同样核对。\n\n质量面板的每行是一种质量码类别，不是严重程度的高低。解码表列官方状态名与本规则是否排除。一次同时发生只提示继续调查；没有质量标记也不能保证无其他影响。学生要在对照窗比较同样的状态是否也常见，并保留判断栏为空直到亲自检查。",
+    "cells": [
+      {
+        "type": "markdown",
+        "source": "## 用原表同一行，把低点与质量状态连起来\n\n本节重新使用 `bundle['data']`，它保留原FITS表的所有行。不能把4134行分析曲线的位置直接拿去索引4370行原质量列。上下图均取同一原表的TIME、PDCSAP_FLUX、SAP_QUALITY，时间无效的行无法画在某个窗中，但全段台账仍保留；通量无效的行可在质量面板显示，不能补成零亮度。\n\n教程先选两处预计事件和一处中间非事件对照窗，明确标“程序选取的诊断示例”，没有自动判断任何原因。对每一窗计算三组互斥记录：质量不通过；质量通过但数值无效；最终保留。它们相加必须等于窗内原始行数。查看第一窗的采样编号后，另选一个真实窗口重新做同样核对。\n\n质量面板的每行是一种质量码类别，不是严重程度的高低。解码表列官方状态名与本规则是否排除。一次同时发生只提示继续调查；没有质量标记也不能保证无其他影响。学生要在对照窗比较同样的状态是否也常见，并保留判断栏为空直到亲自检查。\n"
+      },
+      {
+        "type": "code",
+        "source": "raw_table=bundle['data']\nraw_time=np.asarray(raw_table['TIME'],dtype=float)\nraw_flux=np.asarray(raw_table['PDCSAP_FLUX'],dtype=float)\nraw_quality=np.asarray(raw_table['SAP_QUALITY'],dtype=np.int64)\nraw_qkeep=np.asarray(bundle['qkeep'],dtype=bool);raw_finite=np.asarray(bundle['finite'],dtype=bool);raw_keep=np.asarray(bundle['keep'],dtype=bool)\nassert len(raw_time)==len(raw_quality)==len(raw_keep)\ninterior_events=[event for event in events_q3 if event['centre_bkjd']-D_current/2>=diagnostic_time.min() and event['centre_bkjd']+D_current/2<=diagnostic_time.max()]\nif len(interior_events)<2: raise ValueError('没有两处完整落在跨度内的预测窗；保留不足，不伪造窗口')\nchosen_events=[interior_events[len(interior_events)//3],interior_events[2*len(interior_events)//3]]\nquality_windows=[]\nfor event in chosen_events:\n    quality_windows.append({'window_id':f\"event-{event['cycle']}\",'kind':'predicted_event','centre':event['centre_bkjd']})\nquality_windows.append({'window_id':'control-midway','kind':'non_event_control','centre':chosen_events[0]['centre_bkjd']+P_current/2})\nwindow_ledger=[];window_records=[]\nfor item in quality_windows:\n    left=item['centre']-D_current/2;right=item['centre']+D_current/2\n    window=np.isfinite(raw_time)&(raw_time>=left)&(raw_time<right)\n    rejected_q=window&~raw_qkeep\n    rejected_f=window&raw_qkeep&~raw_finite\n    retained=window&raw_keep\n    counts=[int(window.sum()),int(rejected_q.sum()),int(rejected_f.sum()),int(retained.sum())]\n    assert counts[0]==sum(counts[1:])\n    window_ledger.append([item['window_id'],item['kind'],left,right,*counts,''])\n    for j in np.flatnonzero(window):\n        window_records.append([item['window_id'],int(raw_table['CADENCENO'][j]),float(raw_time[j]),int(raw_quality[j]),bool(raw_qkeep[j]),bool(raw_finite[j]),bool(raw_keep[j])])\nsave_csv('M20/window-ledger.csv',['window_id','kind','start_bkjd','end_bkjd','raw','quality_rejected','finite_rejected_after_quality','retained','student_judgment'],window_ledger)\nsave_csv('M20/window-records.csv',['window_id','cadenceno','time_bkjd','quality','quality_keep','finite_keep','retained'],window_records)\nprint('原行数=质量排除+质量后数值排除+保留');print(*window_ledger,sep='\\n')\nflag_rows=[]\nfor value in np.unique(raw_quality):\n    flag_rows.append([int(value),' | '.join(lk.KeplerQualityFlags.decode(int(value))),bool((int(value)&1130799)==0),int((raw_quality==value).sum())])\nsave_csv('M20/flag-notes.csv',['quality_integer','official_names','quality_rule_passed','whole_quarter_count'],flag_rows)\nfig,axes=plt.subplots(2,3,sharex='col',figsize=(14,7))\nfor column,item in enumerate(quality_windows):\n    context=np.isfinite(raw_time)&(np.abs(raw_time-item['centre'])<max(D_current*2,0.2))\n    flux_available=context&np.isfinite(raw_flux)\n    axes[0,column].scatter(raw_time[flux_available],raw_flux[flux_available],s=7)\n    shown_codes=sorted(set(map(int,raw_quality[context])))\n    code_to_row={value:index for index,value in enumerate(shown_codes)}\n    axes[1,column].scatter(raw_time[context],[code_to_row[int(value)] for value in raw_quality[context]],s=9)\n    axes[1,column].set_yticks(list(code_to_row.values()),[str(value) for value in shown_codes])\n    for axis in axes[:,column]: axis.axvspan(item['centre']-D_current/2,item['centre']+D_current/2,alpha=.15)\n    axes[0,column].set_title(item['window_id']);axes[1,column].set_xlabel('BKJD [day]')\n    if context.any():\n        tick_values=np.linspace(float(raw_time[context].min()),float(raw_time[context].max()),4)\n        axes[1,column].set_xticks(tick_values,[f'{value:.2f}' for value in tick_values])\naxes[0,0].set_ylabel('Original PDCSAP [electron/s]');axes[1,0].set_ylabel('Quality code (categories)')\nfig.tight_layout();save_plot('M20/timing.png');plt.close(fig)\nsave_json('M20/source.json',{'raw_file':bundle['rec'],'quality_mask':1130799,'windows_selected_by':'tutorial demonstration; student may choose another window','nonfinite_time_rows':int((~np.isfinite(raw_time)).sum()),'student_conclusion':None})\n"
+      }
+    ],
+    "outputs": [
+      "M20/window-ledger.csv",
+      "M20/window-records.csv",
+      "M20/flag-notes.csv",
+      "M20/timing.png",
+      "M20/source.json"
+    ],
+    "corrections": [],
+    "assignment_corrections": [],
+    "insertion_before": "## 画出共享时间轴的两幅图"
+  },
+  {
+    "module": "M21",
+    "prerequisite": "会二维行列、平均与色条；会比值；知道静态汇总图丢失时间信息。",
+    "teaching": "## 先读一个像素数值，再看整幅图\n\n本节教程读取同一目标Q3的真实目标像素文件，按官方默认质量规则保留记录，沿时间对每个固定像素求平均，得到一张二维平均图。一次有三帧时，每个像素就是把该格三次值相加除以3；不是把整幅图所有格子一起平均。\n\n新诊断图使用线性色标，旁边的数值色条单位为电子每秒。横纵轴是目标小图的局部列、行；来源文件另外记录对应探测器起点。孔径描边表示官方测光选区，不表示变化已经被定位。先从CSV找出一格的行、列和值，再到图和色条上找到它，最后看它是否位于孔径内。\n\n平均与中位数不是同一种汇总。构造序列0、0、90的平均是30、中位数是0。旧参考程序的PNG用时间中位数与对数显示，页面互动使用时间平均与幂律显示；本次正式教程图明确采用平均值和线性色标，不能要求它与另一显示方法的颜色相同。\n\n旁边的混光计算独立使用构造值：1000单位目标光、500单位恒定邻源光，目标下降10。自身深度1%，混合后约0.667%。它不根据真实像素颜色估计Kepler-10邻星亮度。学生的空间来源判断先留空：看平均图不能证明哪个像素在事件中变了，也没有完成多孔径重测光或质心定位。",
+    "cells": [
+      {
+        "type": "markdown",
+        "source": "## 先读一个像素数值，再看整幅图\n\n本节教程读取同一目标Q3的真实目标像素文件，按官方默认质量规则保留记录，沿时间对每个固定像素求平均，得到一张二维平均图。一次有三帧时，每个像素就是把该格三次值相加除以3；不是把整幅图所有格子一起平均。\n\n新诊断图使用线性色标，旁边的数值色条单位为电子每秒。横纵轴是目标小图的局部列、行；来源文件另外记录对应探测器起点。孔径描边表示官方测光选区，不表示变化已经被定位。先从CSV找出一格的行、列和值，再到图和色条上找到它，最后看它是否位于孔径内。\n\n平均与中位数不是同一种汇总。构造序列0、0、90的平均是30、中位数是0。旧参考程序的PNG用时间中位数与对数显示，页面互动使用时间平均与幂律显示；本次正式教程图明确采用平均值和线性色标，不能要求它与另一显示方法的颜色相同。\n\n旁边的混光计算独立使用构造值：1000单位目标光、500单位恒定邻源光，目标下降10。自身深度1%，混合后约0.667%。它不根据真实像素颜色估计Kepler-10邻星亮度。学生的空间来源判断先留空：看平均图不能证明哪个像素在事件中变了，也没有完成多孔径重测光或质心定位。\n"
+      },
+      {
+        "type": "code",
+        "source": "q3_pixel_path=ROOT/'raw/kplr011904151-2009350155506_lpd-targ.fits.gz'\ntpf_q3=lk.read(q3_pixel_path,quality_bitmask='default')\npixel_cube=np.asarray(tpf_q3.flux.value)\nprint('像素数组形状: 时间数、行数、列数 =',pixel_cube.shape)\npixel_mean=np.nanmean(pixel_cube,axis=0)\npipeline_mask=np.asarray(tpf_q3.pipeline_mask,dtype=bool)\npixel_rows=[]\nfor row in range(pixel_mean.shape[0]):\n    for column in range(pixel_mean.shape[1]):\n        value=float(pixel_mean[row,column])\n        pixel_rows.append([row,column,value if np.isfinite(value) else None,bool(pipeline_mask[row,column])])\nsave_csv('M21/pixel-values.csv',['cutout_row','cutout_column','temporal_mean_electron_per_second','pipeline_aperture'],pixel_rows)\nfig,ax=plt.subplots(figsize=(7,6));image=ax.imshow(pixel_mean,origin='lower',cmap='magma')\nfig.colorbar(image,ax=ax,label='Temporal mean flux [electron/s]')\nax.contour(pipeline_mask.astype(int),levels=[0.5],colors='cyan',linewidths=1.3)\nax.set(xlabel='Cutout column',ylabel='Cutout row',title='Kepler-10 Q3: mean image and official aperture')\nfig.tight_layout();save_plot('M21/pixels.png');plt.close(fig)\npixel_source={'target_kic':11904151,'quarter':3,'file':str(q3_pixel_path),'summary':'time mean; NaNs omitted per pixel','display':'linear colour scale',\n              'unit':'electron/s','time_start_bkjd':float(np.nanmin(tpf_q3.time.value)),'time_end_bkjd':float(np.nanmax(tpf_q3.time.value)),\n              'shape':list(map(int,pixel_cube.shape)),'quality_mask':1130799,\n              'detector_origin_column':int(tpf_q3.column),'detector_origin_row':int(tpf_q3.row),\n              'reextracted_photometry':False,'event_source_localization_performed':False,'student_observation':None}\nsave_json('M21/pixel-source.json',pixel_source)\nsave_csv('M21/dilution-constructed.csv',['target_baseline','constant_neighbour','target_decrease','target_relative_depth','mixed_relative_depth','data_kind'],[[1000,500,10,10/1000,10/1500,'constructed'],[200,200,4,4/200,4/400,'constructed']])\nsave_json('M21/student-spatial-review.json',{'status':'awaiting_student_interpretation','direct_observation':None,'what_image_cannot_establish':None,'further_check':None})\nprint('构造统计对照，平均/中位数:',np.mean([0,0,90]),np.median([0,0,90]))\nprint('真实图来源:',pixel_source)\n"
+      }
+    ],
+    "outputs": [
+      "M21/pixel-values.csv",
+      "M21/pixels.png",
+      "M21/pixel-source.json",
+      "M21/dilution-constructed.csv",
+      "M21/student-spatial-review.json"
+    ],
+    "corrections": [
+      {
+        "old": "**本节学习目标：** 阅读真实像素图，理解额外光源如何改变相对深度，并说明静态图还不能回答哪些问题。 本节使用的程序和原始文件见[下载观测数据与 Notebook 实践包](/api/library/projects/lightkurve-transit-detective/files/downloads/lightkurve-practice-kit.zip)。Q3 的目标像素文件是 raw/kplr011904151-2009350155506_lpd-targ.fits.gz。analyze.py 中的 pixel_diagnostics 生成相应的诊断图。",
+        "new": "本节在 `junior-guide.ipynb` 的 M21 读取 Q3 目标像素文件 `raw/kplr011904151-2009350155506_lpd-targ.fits.gz`，生成带数值色条的时间平均图并保存来源。旧参考函数 `pixel_diagnostics` 的PNG使用时间中位数和对数显示；不是本节线性平均图，也不能作为已完成本人空间来源分析的证明。"
+      }
+    ],
+    "assignment_corrections": [
+      {
+        "old": "提交一张带来源、坐标、色条与孔径说明的 Q3 像素诊断图，以及空间来源检查说明。注明目标、文件和时间范围；没有实际图时标记检查未完成。",
+        "new": "提交 junior-guide.ipynb 的M21实际生成的Q3时间平均图：带来源、局部行列坐标、电子每秒数值色条与官方孔径说明，另存 pixel-source.json。注明时间范围、平均方法和线性色标；旧参考中位数对数图与本图不是同一种汇总。尚未实际运行时如实标未完成。"
+      }
+    ],
+    "insertion_before": "## 使用像素显示和混光实验"
+  },
+  {
+    "module": "M22",
+    "prerequisite": "能读取M17–M21产物并按采样编号追溯；能区分观察、解释、未完成和证据不足。",
+    "teaching": "## 把判断留给学生，把查找过程做完整\n\n程序在本节只创建证据索引和空白结论表。先打开M19的第一条实际事件记录：通过 `cycle` 找预测中心，再用 `event-observations.csv` 找它包含哪些 `CADENCENO`，最后在原FITS表中查回一个编号。这演示“能追溯”的动作，不自动证明该事件是凌星。\n\n证据表每行写一项具体判断、支持/反对/未知状态、文件、行键或时间窗、方法版本与限制。空表不会因为文件存在而变成已完成研究。周期图和折叠图来自同一Q3，不是两段独立数据；质量图与像素平均图也不能自动排除全部其他解释。\n\n复查一条支持，以及一条反对、未知或目前最薄弱的检查。若未找到可靠反证，应如实说明，不为了填满“三类”而制造反对证据。没有做过的检查写未完成；做了但资料不足写无法评估；检查后暂未见问题也要限定方法和范围。\n\n第23节要保存方法前，先确认现在的 `lc` 仍为M11归一化Q3，`flat/trend` 是按当前 `eph` 和1天趋势规则得到的同一版本。改变方法应显式另存，而不是复查时悄悄重跑整套参考程序。这里仍不读取Q4，不代写学生科学结论。",
+    "cells": [
+      {
+        "type": "markdown",
+        "source": "## 把判断留给学生，把查找过程做完整\n\n程序在本节只创建证据索引和空白结论表。先打开M19的第一条实际事件记录：通过 `cycle` 找预测中心，再用 `event-observations.csv` 找它包含哪些 `CADENCENO`，最后在原FITS表中查回一个编号。这演示“能追溯”的动作，不自动证明该事件是凌星。\n\n证据表每行写一项具体判断、支持/反对/未知状态、文件、行键或时间窗、方法版本与限制。空表不会因为文件存在而变成已完成研究。周期图和折叠图来自同一Q3，不是两段独立数据；质量图与像素平均图也不能自动排除全部其他解释。\n\n复查一条支持，以及一条反对、未知或目前最薄弱的检查。若未找到可靠反证，应如实说明，不为了填满“三类”而制造反对证据。没有做过的检查写未完成；做了但资料不足写无法评估；检查后暂未见问题也要限定方法和范围。\n\n第23节要保存方法前，先确认现在的 `lc` 仍为M11归一化Q3，`flat/trend` 是按当前 `eph` 和1天趋势规则得到的同一版本。改变方法应显式另存，而不是复查时悄悄重跑整套参考程序。这里仍不读取Q4，不代写学生科学结论。\n"
+      },
+      {
+        "type": "code",
+        "source": "evidence_headers=['claim','category','data_role','file','row_or_window','method_version','limitation']\nsave_csv('M22/evidence.csv',evidence_headers,[])\nindex_rows=[['period search','M17/bls-candidates-q3.csv','period_day; grid_index'],\n            ['period alternatives','M18/extra-windows.csv','centre_bkjd'],\n            ['individual events','M19/events.csv','cycle'],\n            ['event observations','M19/event-observations.csv','cycle; cadenceno'],\n            ['quality timing','M20/window-ledger.csv','window_id'],\n            ['spatial image source','M21/pixel-source.json','file; quarter; summary']]\nsave_csv('M22/artifact-index.csv',['purpose','file','row_key'],index_rows)\ntrace_event=next((event for event in events_q3 if event['inside_count']>0),None)\ntrace_rows=[]\nif trace_event is not None:\n    selected_observations=[row for row in event_point_rows if row[0]==trace_event['cycle']]\n    if selected_observations:\n        trace_cadence=int(selected_observations[0][1])\n        raw_match=np.flatnonzero(np.asarray(bundle['data']['CADENCENO'])==trace_cadence)\n        assert len(raw_match)==1, '采样编号无法唯一回到原表'\n        raw_index=int(raw_match[0])\n        trace_rows.append([trace_event['cycle'],trace_cadence,raw_index,float(bundle['data']['TIME'][raw_index]),int(bundle['data']['SAP_QUALITY'][raw_index]),'demonstrated provenance, not a scientific conclusion'])\nsave_csv('M22/provenance-example.csv',['cycle','cadenceno','raw_row','raw_time_bkjd','quality','status'],trace_rows)\nprint('追溯示例：',trace_rows)\nsave_json('M22/student-decision.json',{'status':'awaiting_student_review','claim':None,'support':[],'against':[],'unknown':[],'decision':None,'reviewer':None,'q4_used_for_decision':False})\nlc=bundle['clean']\nassert CONFIG['detrend']['window_day']==1.0, '如更改趋势规则，须显式更新本次方法及版本'\nhandoff_flat,handoff_trend=local_median(lc,ephemeris=eph,window_day=CONFIG['detrend']['window_day'])\nassert np.array_equal(np.asarray(handoff_flat.cadenceno),np.asarray(flat.cadenceno))\nassert np.allclose(handoff_flat.flux.value,flat.flux.value,rtol=0,atol=1e-14)\nflat,trend=handoff_flat,handoff_trend\nsave_json('M22/handoff-state.json',{'candidate_file':'M17/candidate-q3.json','candidate':eph,'trend_window_day':1.0,'quality_source':bundle['rec'],'status':'outputs ready for student review; not method freeze','q4_flux_read_by_these_cells':False})\n"
+      }
+    ],
+    "outputs": [
+      "M22/evidence.csv",
+      "M22/artifact-index.csv",
+      "M22/provenance-example.csv",
+      "M22/student-decision.json",
+      "M22/handoff-state.json"
+    ],
+    "corrections": [
+      {
+        "old": "**本节学习目标：** 为每项判断找到具体材料，区分支持证据、反对证据和未知情况，并据此决定是否继续调查当前候选。 本节使用的程序和原始文件见[下载观测数据与 Notebook 实践包](/api/library/projects/lightkurve-transit-detective/files/downloads/lightkurve-practice-kit.zip)。先打开自己保存的周期搜索图、奇偶事件对照和像素图。需要重新生成参考图时，回到 Notebook 第 4 部分。",
+        "new": "本节在 `junior-guide.ipynb` 的 M22 整理本人 M17–M21 的实际产物，先完成一条从事件表到原采样编号的追溯，再填写空白证据表。需重画图时回到相应课节的绘图单元，避免调用整套 `develop()` 无意重建方法版本。"
+      },
+      {
+        "old": "选择一条最有力的支持证据，找到原始记录；再选择一条最需要解释的反对证据，检查它是否受到缺测、单位或处理变化影响。不同版本可以比较，但必须注明，不能拼成一套看似一致的结果。",
+        "new": "选择一条关键支持，找到原始记录；再检查一条反对、尚不明确或当前最薄弱的依据。未发现可靠反证时如实说明，不为了填表制造反对证据。不同版本可以比较，但必须注明，不能拼成一套看似一致的结果。"
+      }
+    ],
+    "assignment_corrections": [
+      {
+        "old": "请复查者任选一条支持证据和一条反对证据，找到原始记录并核对说明。保存复查问题及修改；本人自查也应如实标明。",
+        "new": "请复查者检查一条关键支持，以及一条反对、未决或目前最薄弱的检查，找到原始记录核对。没有可靠反证时如实说明，不为凑齐类别编造。保存问题与修改；本人自查也应如实标明。"
+      }
+    ],
+    "insertion_before": "## 每一行都应指向可找到的材料"
+  }
+]

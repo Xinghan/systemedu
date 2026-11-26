@@ -1,0 +1,360 @@
+[
+  {
+    "module": "M23",
+    "prerequisite": "能指出 M22 的 Q3 输入、候选周期/参考时刻/持续时间；理解 1 天窗口和候选事件排除规则；能区分输入与计算结果。",
+    "teaching": "## 这次交给下一组的，必须是你刚刚用过的方法\n\n上一节留下了五件东西：原始 Q3 记录 bundle、归一化光变 lc、候选参数 eph、保护候选事件后得到的 flat 和 trend。现在不再让程序另找一个周期。我们把这五件东西之间的关系保存下来，下一节才能回答“这个方法预先说了什么”。\n\n先找 eph 中三个字段。period_day 是两次预计中心之间隔多少天；epoch_bkjd 是编号 0 的中心；duration_day 是事件窗口的总宽。它们来自你的 Q3 计算。趋势窗口 1 天、最少支持点 5 个等设置说明怎样估计背景；它们不是观测结果。代码会再用相同参数核对 Q3 数组，若与你留下的数组不同，就停下来查哪一步发生了改变，不把另一套默认方法冒充你的方法。\n\n运行后打印出的路径位于本次持久的 RUN 目录。audit/method-freeze.json 是配置，audit/development-results.json 是 Q3 结果，M23-freeze-v1/analyze.py 是当时的程序副本。校验值像检查文件内容的指纹：内容变化会改变校验值，但它不证明科学方法正确。重跑本格只核对已有封存，不悄悄重写时间和参数；要修订则另建 run，并记录此前已看过哪些数据。\n\n查看 Q4 前先分清两个问题。第一，预测时段有没有记录、是否跨过整个窗口？第二，这些读数的精度能否分辨预计下降？三个散布很大的点，即使跨过窗口，也未必能分辨浅下降。因此后续表中的时间覆盖标签只说明采样，不自动宣布逐次预测成功。整段深度比较采用实践包的三条描述性规则：深度相对经验误差的比值、两季度深度差、整体时间移位。数值 5、5、半个持续时间是课程给定的比较规则，不是确认行星的概率标准。\n\n代码会建立 predeclared-rules.md 和 exposure.md 两个待填写文件。请在文件中解释你准备比较什么，并如实写此前是否见过 Q4。程序不替你填“没有看过”。若你已经见过，也能学习方法复现，只需让记录诚实。\n\n检查：从保存的 JSON 读出周期，指向 M22 的同一个值；说出“窗口宽度”和“趋势曲线上某个值”哪个是设置、哪个是结果。完成后带着配置去 M24，届时仍只读观测时间说明，不读 Q4 亮度。\n",
+    "cells": [
+      {
+        "type": "code",
+        "source": "from copy import deepcopy\nfrom datetime import datetime, timezone\nimport hashlib, io, contextlib, shutil, subprocess, sys, platform, importlib.metadata, traceback\nfrom analyze import CONFIG, digest, record, plain, read_role, local_median, measure, phase, validate, curve_plot, export_browser\n\ndef now_utc():\n    return datetime.now(timezone.utc).isoformat()\n\ndef keep_text(name, text):\n    \"\"\"Create a worksheet once; never overwrite a learner's edited answer.\"\"\"\n    target = RUN / name\n    target.parent.mkdir(parents=True, exist_ok=True)\n    if not target.exists():\n        target.write_text(text, encoding='utf-8')\n    return target\n\ndef read_json(path):\n    return json.loads(Path(path).read_text(encoding='utf-8'))\n\ndef log_process(command, log_path, cwd):\n    log_path.parent.mkdir(parents=True, exist_ok=True)\n    started = now_utc()\n    result = subprocess.run(command, cwd=cwd, text=True, capture_output=True)\n    record = (json.dumps({'started_utc': started, 'ended_utc': now_utc(),\n        'command': command, 'cwd': str(cwd), 'returncode': result.returncode}, ensure_ascii=False, indent=2)\n        + '\\nSTDOUT\\n' + result.stdout + '\\nSTDERR\\n' + result.stderr)\n    with log_path.open('a', encoding='utf-8') as stream:\n        stream.write(record + '\\n')\n    print('日志：', log_path, '退出码：', result.returncode)\n    return result\n\nRUN = Path(RUN).resolve()\nROOT = Path(ROOT).resolve()\nassert bundle['role'] == 'development', 'M23 只能封存 Q3 实际结果。'\nassert np.array_equal(np.asarray(lc.cadenceno), np.asarray(bundle['clean'].cadenceno))\nassert np.allclose(lc.flux.value, bundle['clean'].flux.value, rtol=0, atol=1e-12)\nassert CONFIG['detrend']['window_day'] == 1.0\nfor field in ['period_day', 'epoch_bkjd', 'duration_day']:\n    assert field in eph and np.isfinite(eph[field]), '回到 M17–M22 核对候选。'\nassert eph['period_day'] > 0 and 0 < eph['duration_day'] < eph['period_day']\nchecked_flat, checked_trend = local_median(lc, eph, window_day=1.0)\nassert np.array_equal(np.asarray(flat.cadenceno), np.asarray(checked_flat.cadenceno))\nassert np.allclose(flat.flux.value, checked_flat.flux.value, rtol=0, atol=1e-12), '当前 flat 不是已说明的保护式 1 天方法。'\nassert np.allclose(trend.flux.value, checked_trend.flux.value, rtol=0, atol=1e-12), '当前 trend 与封存规则不符。'\nq3_depth = plain(measure(flat, eph))\nfreeze_path = RUN / 'audit/method-freeze.json'\nproposed = plain({'schema_version': '1.0.0', 'frozen_at_utc': now_utc(),\n    'development_only': True, 'analysis_script_sha256': digest(ROOT/'analyze.py'),\n    'config': deepcopy(CONFIG), 'ephemeris': deepcopy(eph), 'development_depth': q3_depth,\n    'development_source': record('development', 'lightcurve'),\n    'holdout_source': record('holdout', 'lightcurve'),\n    'validation_rule': 'Fixed chosen Q3 ephemeris; same protected 1-day local median. No new period search.',\n    'course_coverage_rule': {'purpose': 'sampling description, not single-event detectability',\n        'maximum_gap_in_cadences': 1.5, 'minimum_inside_points': 2,\n        'signal_judgement': 'not inferred from sampling count'}})\nif freeze_path.exists():\n    frozen = read_json(freeze_path)\n    for key in ['config', 'ephemeris', 'development_depth', 'analysis_script_sha256', 'course_coverage_rule']:\n        assert frozen.get(key) == proposed[key], '封存后内容不同：'+key+'。保留旧 run，另建修订。'\n    print('沿用并核对已有封存：', freeze_path)\nelse:\n    assert not (RUN/'audit/holdout-first-results.json').exists(), '首次结果存在而配置缺失，先恢复原文件。'\n    save_json('audit/method-freeze.json', proposed)\n    frozen = proposed\nsave_json('audit/development-results.json', plain({'target': 'Kepler-10 known-signal analysis',\n    'method': deepcopy(CONFIG), 'ephemeris': deepcopy(eph), 'quality': bundle['counts'],\n    'fixed_box_depth': q3_depth, 'source': 'student Q3 stages M12–M22; no new search in M23'}))\nsave_json('M23-freeze-v1/q3-retained-ids.json', {'cadenceno': np.asarray(flat.cadenceno,dtype=int).tolist()})\ncode_copy = RUN/'M23-freeze-v1/analyze.py'\ncode_copy.parent.mkdir(parents=True, exist_ok=True)\nif code_copy.exists():\n    assert digest(code_copy) == frozen['analysis_script_sha256']\nelse:\n    shutil.copy2(ROOT/'analyze.py', code_copy)\nkeep_text('M23-freeze-v1/predeclared-rules.md', '# 查看 Q4 前的规则说明\\n\\n[待填写] 我准备比较的实际量及来源字段：\\n\\n[待填写] 只有时间采样、但不能判断单事件信号时，我如何记录：\\n\\n课程描述性阈值（不表示行星确认概率）：\\n'+json.dumps(frozen['config']['holdout_criteria'],ensure_ascii=False,indent=2)+'\\n')\nkeep_text('M23-freeze-v1/exposure.md', '# 此前接触 Q4 的情况\\n\\n[待填写] 是否已见过 Q4 曲线、示例或结果；大致何时、在哪里。程序不替我声明盲测。\\n')\n(RUN/'M23-freeze-v1/checksums.txt').write_text('\\n'.join(\n    digest(p)+'  '+str(p.relative_to(RUN)) for p in [freeze_path,code_copy])+'\\n', encoding='utf-8')\nprint('本次持久目录：',RUN)\nprint('封存参数：',frozen['ephemeris'])\nprint('Q3 盒内点数/盒外点数：',q3_depth['n_in'],q3_depth['n_out'])\nprint('个人规则解释与接触情况仍需填写。下一节生成预测，本格没有读取 Q4 亮度。')\n"
+      }
+    ],
+    "outputs": [
+      "audit/method-freeze.json",
+      "audit/development-results.json",
+      "M23-freeze-v1/analyze.py",
+      "M23-freeze-v1/checksums.txt",
+      "M23-freeze-v1/predeclared-rules.md",
+      "M23-freeze-v1/exposure.md",
+      "M23-freeze-v1/q3-retained-ids.json"
+    ],
+    "corrections": [
+      {
+        "old": "在 Notebook 第 4 部分找到保存 audit/method-freeze.json 的单元。",
+        "new": "在 junior-guide.ipynb 的 M23 单元找到保存 audit/method-freeze.json 的步骤。"
+      },
+      {
+        "old": "用这个配置重新运行 Q3，确认能得到已有分析结果。",
+        "new": "从配置读回已选参数，按固定候选重算 Q3 趋势和深度核对；此处不重新搜索周期。"
+      }
+    ],
+    "assignment_corrections": [
+      {
+        "old": "先在实践包目录运行 Q3 分析，例如 `.venv/bin/python analyze.py --stage develop --output my-first-run`。",
+        "new": "在 junior-guide.ipynb 的 M23 单元核对并保存 M22 已得到的 Q3 输入、候选参数和保护式趋势结果；本节不再调用 develop 重新搜索周期。"
+      },
+      {
+        "old": "提交 `M23-freeze-v1/`，包括本人程序生成的 `audit/method-freeze.json`、`audit/holdout-predictions-before-reveal.json`，以及 `checksums.txt`、`predeclared-rules.md` 和 `exposure.md`。",
+        "new": "在本人的 RUN 目录保存 `audit/method-freeze.json`、`audit/development-results.json`，以及 `M23-freeze-v1/` 中的代码副本、保留编号、校验值、规则解释和接触情况。预测 JSON 在 M24 生成；audit 与 M23-freeze-v1 是 RUN 下的同级目录。"
+      },
+      {
+        "old": "提交文件或字段：`M23-freeze-v1/`、`audit/method-freeze.json`、`audit/holdout-predictions-before-reveal.json`、`checksums.txt`、`predeclared-rules.md`、`exposure.md`、`.venv/bin/python analyze.py --stage develop --output my-first-run`。",
+        "new": "提交本人的 RUN 相对路径与 M23 单元实际输出；本节入口为 junior-guide.ipynb 的 M23，预测由 M24 继续生成。"
+      }
+    ],
+    "insertion_before": "## 保存并核对这个版本"
+  },
+  {
+    "module": "M24",
+    "prerequisite": "能从 method-freeze.json 找到 P、t0、D；知道 BKJD 单位是天，会用 t0+nP 和 D/2。",
+    "teaching": "## 用一条真实参数，走完一行预测\n\n先打开上一节打印的 method-freeze.json，找到 ephemeris。代码直接读取里面的完整数字，不让你从屏幕抄一个已四舍五入的周期。再从 manifest.json 找 Q4 的 lightcurve 条目，只取 fits_header 中的 TSTART 和 TSTOP。这两个数说明文件记录的起止范围，不说明中间每一时刻都有有效观测。\n\n一行预测需要四步：选整数编号 n；算中心 t0+nP；把中心减 D/2 得开始；加 D/2 得结束。代码循环只是把同样四步对每个编号做一遍。第一段输出全部事件到 predictions.csv；请用首行、中央一行、末行在纸上分别代入核对。差一点的小数显示不影响保存的完整精度。\n\n预测图只有时间和色条，尚无 Q4 亮度。横向色条表示名义事件区间；两条边线表示文件头的覆盖范围。边界表还检查中心在范围外、但区间与范围相交的情况，并说明主表是否收录。没有额外边界事件也保留只有表头的边界表，说明已检查而非忘记提交。\n\n先判断构造例：范围 105–112 天、中心 112 天、D=0.2 天，中心在范围内，但结束到 112.1 天；这叫名义窗口超出覆盖边界，并不能说实际观测了完整下降。现在查看自己的末行，用同一逻辑解释，不能把构造例数字复制成你的观测。\n\n代码把原预测 JSON 的校验值与配置关联。之后看到 Q4 低点偏到一边，也不得把这张表移动到低点处；新想法另存成探索。calculation.md 中留着你的三行验算位置。下节带着这张表打开 Q4，比较的是事先保存的时段。\n",
+    "cells": [
+      {
+        "type": "code",
+        "source": "frozen = read_json(RUN/'audit/method-freeze.json')\ne = frozen['ephemeris']\nmanifest = read_json(ROOT/'manifest.json')\nheader = next(f['fits_header'] for f in manifest['files'] if f['role']=='holdout' and f['kind']=='lightcurve')\na,b = float(header['TSTART']),float(header['TSTOP'])\nP,t0,D = e['period_day'],e['epoch_bkjd'],e['duration_day']\nn_first = int(np.ceil((a-t0)/P))\nn_last = int(np.floor((b-t0)/P))\nforecast=[]\nfor n in range(n_first,n_last+1):\n    centre=t0+n*P\n    forecast.append({'cycle':n,'centre_bkjd':centre,'start_bkjd':centre-D/2,'end_bkjd':centre+D/2})\nassert forecast,'预测为空：核对时间基准和覆盖，先不读取 Q4 亮度。'\nfsha=digest(RUN/'audit/method-freeze.json')\nprediction_obj={'freeze_sha256':fsha,'based_on_header_only':True,'windows':forecast}\nprediction_path=RUN/'audit/holdout-predictions-before-reveal.json'\nif prediction_path.exists():\n    assert read_json(prediction_path)==prediction_obj,'已有预测不同；保留原件并检查配置。'\nelse:\n    save_json('audit/holdout-predictions-before-reveal.json',prediction_obj)\nsave_csv('M24-predictions-v1/predictions.csv',\n    ['cycle','centre_bkjd','start_bkjd','end_bkjd','freeze_sha256'],\n    [dict(row,freeze_sha256=fsha) for row in forecast])\nedge_rows=[]\nfor n in range(int(np.ceil((a-D/2-t0)/P)),int(np.floor((b+D/2-t0)/P))+1):\n    centre=t0+n*P\n    start,end=centre-D/2,centre+D/2\n    if start<a or end>b or not a<=centre<=b:\n        edge_rows.append({'cycle':n,'centre_bkjd':centre,'start_bkjd':start,'end_bkjd':end,\n            'in_primary':a<=centre<=b,'overlap_start_bkjd':max(a,start),'overlap_end_bkjd':min(b,end),\n            'note':'nominal window intersects a header boundary; actual sampling not yet inspected'})\nsave_csv('M24-predictions-v1/edge-review.csv',\n    ['cycle','centre_bkjd','start_bkjd','end_bkjd','in_primary','overlap_start_bkjd','overlap_end_bkjd','note'],edge_rows)\nfig,ax=plt.subplots(figsize=(11,3))\nfor row in forecast:\n    ax.axvspan(row['start_bkjd'],row['end_bkjd'],color='#418eb8',alpha=.7)\nax.axvline(a,color='black',ls='--');ax.axvline(b,color='black',ls='--')\nax.set(xlim=(a-D,b+D),ylim=(0,1),yticks=[],xlabel='BKJD (day)',title='Predictions only; no Q4 flux loaded')\nfig.tight_layout();save_plot('M24-predictions-v1/predictions-only.png');plt.close(fig)\nkeep_text('M24-predictions-v1/calculation.md', '# 本人的预测验算\\n\\n[待填写] 首行：编号、完整参数代入式、开始和结束。\\n\\n[待填写] 中间一行：\\n\\n[待填写] 末行及覆盖边界说明：\\n\\n这些参数来自 audit/method-freeze.json，时间为 BKJD 天。\\n')\nfor index in sorted({0,len(forecast)//2,len(forecast)-1}):\n    print('待手算核对：',forecast[index])\nassert all(np.isclose(y['centre_bkjd']-x['centre_bkjd'],P,rtol=0,atol=1e-10) for x,y in zip(forecast,forecast[1:]))\nprint('已保存',len(forecast),'行预测；边界表',len(edge_rows),'行。本节没有读取 Q4 亮度。')\n"
+      }
+    ],
+    "outputs": [
+      "audit/holdout-predictions-before-reveal.json",
+      "M24-predictions-v1/predictions.csv",
+      "M24-predictions-v1/predictions-only.png",
+      "M24-predictions-v1/edge-review.csv",
+      "M24-predictions-v1/calculation.md"
+    ],
+    "corrections": [
+      {
+        "old": "包内 analyze.py 的 develop 函数可核对预测表的生成过程。",
+        "new": "junior-guide.ipynb 的 M24 单元逐行列出预测并导出 CSV、预测图和边界表，不调用 develop 重新搜索。"
+      }
+    ],
+    "assignment_corrections": [
+      {
+        "old": "从已保存的预测 JSON 导出 CSV，保留 `cycle`、`centre_bkjd`、`start_bkjd`、`end_bkjd` 及配置校验值。",
+        "new": "运行 junior-guide.ipynb 的 M24 单元，根据封存参数和 manifest 头信息生成预测 JSON，同时导出 CSV；保留 cycle、centre_bkjd、start_bkjd、end_bkjd 及 freeze_sha256。"
+      }
+    ],
+    "insertion_before": "## 核对程序生成的表"
+  },
+  {
+    "module": "M25",
+    "prerequisite": "已保存 M23 配置与 M24 原预测；能区分相同规则与相同数组，并知道此前见过 Q4 必须如实记录。",
+    "teaching": "## 先核对封存，再由你打开新观测\n\n下面的 Q4_REVEAL 默认是 False，表示还没有选择打开 Q4。本格先核对预测关联的配置校验值。如果你还没写完预期和此前接触情况，就先留在这里；后面的比较课会显示待完成，不用空数据编结果。\n\n准备好后，把这一行改为 True 并运行。这是操作选择，程序不能由这一个开关证明你过去从未见过公开的 Q4。它会从真实文件读取记录，按相同质量和有限值规则筛选，再用 Q4 自己的中位数归一化。趋势也从 Q4 重新估计，但候选周期、参考中心、持续时间、保护区间和 1 天窗口都来自此前封存。\n\n运行日志记录这次实际输出和报错。audit/holdout-first-results.json 保留第一次写入的结果；再次执行同样方法不会替换它。新的运行能复查旧计算，不能冒充新的未知检验。出现报错时先看日志，不能删除首次文件绕过保护。\n\n新增图将原预测窗画成竖向色带，再放上 Q4 的有效测量点。先找一条色带，指出附近哪些点在窗内、哪些在窗外；再问读数散布与预计下降相比如何。色带里有点不表示每次浅下降都能单独识别。现有程序主要对整段数据估计一个固定盒深度，单个事件的实际中心并没有被拟合。\n\n请在 observation.md 写三句话：你查看的是哪段数据；选中的预测编号是什么；从图能直接看到什么、还不能判断什么。不得把程序的 all_pass 或固定参考结论抄作自己的逐事件判断。下一节会给每一个原预测保留一行，不让缺测事件从表里消失。\n",
+    "cells": [
+      {
+        "type": "code",
+        "source": "Q4_REVEAL = False\nholdout_bundle=None\nholdout_flat=None\nholdout_trend=None\nfirst_holdout=None\nfrozen=read_json(RUN/'audit/method-freeze.json')\nforecast_obj=read_json(RUN/'audit/holdout-predictions-before-reveal.json')\nassert forecast_obj['freeze_sha256']==digest(RUN/'audit/method-freeze.json')\nprint('配置：',RUN/'audit/method-freeze.json')\nprint('预测：',RUN/'audit/holdout-predictions-before-reveal.json')\nif not Q4_REVEAL:\n    print('待完成：尚未选择打开 Q4。后续检验、比较与结论不生成观测结果。')\nelse:\n    log_path=RUN/'M25-first-validation/run.log'\n    log_path.parent.mkdir(parents=True,exist_ok=True)\n    capture=io.StringIO()\n    error=None\n    started=now_utc()\n    try:\n        with contextlib.redirect_stdout(capture),contextlib.redirect_stderr(capture):\n            validate(RUN)\n    except Exception:\n        error=traceback.format_exc()\n    with log_path.open('a',encoding='utf-8') as f:\n        f.write('\\nRUN '+started+'\\n'+capture.getvalue()+(error or '')+'\\nEND '+now_utc()+'\\n')\n    if error:\n        print(error)\n        raise RuntimeError('本次运行失败，日志已保存；不要删除首次材料。')\n    first_holdout=read_json(RUN/'audit/holdout-first-results.json')\n    holdout_bundle=read_role('holdout')\n    holdout_flat,holdout_trend=local_median(holdout_bundle['clean'],frozen['ephemeris'],window_day=1.0)\n    save_json('M25-first-validation/q4-retained-ids.json', {'cadenceno': np.asarray(holdout_flat.cadenceno,dtype=int).tolist()})\n    fig,ax=plt.subplots(figsize=(12,4))\n    ax.scatter(holdout_flat.time.value,(holdout_flat.flux.value-1)*1e6,s=6,color='#174d69',label='Q4 accepted observations')\n    for w in forecast_obj['windows']:\n        ax.axvspan(w['start_bkjd'],w['end_bkjd'],color='#e19a58',alpha=.2)\n    ax.set(xlabel='BKJD (day)',ylabel='Detrended relative flux - 1 (ppm)',title='Q4 with unchanged pre-reveal windows')\n    fig.tight_layout();save_plot('M25-first-validation/q4-with-frozen-windows.png');plt.close(fig)\n    keep_text('M25-first-validation/exposure.md','# 实际查看 Q4 的记录\\n\\n[待填写] 此前是否见过 Q4：见 ../M23-freeze-v1/exposure.md。\\n\\n[待填写] 本次打开与查看结果的情况；有没有改动方法。\\n')\n    keep_text('M25-first-validation/observation.md','# 本人观察\\n\\n[待填写] 所看数据、预测编号、图上的事实与暂不能判断的内容。\\n')\n    save_json('M25-first-validation/artifact-index.json',{'first_result':'audit/holdout-first-results.json',\n        'latest_same_method_result':'audit/holdout-results.json','plot':'audit/lightcurve-holdout.png',\n        'overlay':'M25-first-validation/q4-with-frozen-windows.png',\n        'first_result_sha256':digest(RUN/'audit/holdout-first-results.json'),\n        'note':'reference-results.json contains a program reference conclusion, not the learner answer'})\n    print('首次结果保留：',RUN/'audit/holdout-first-results.json')\n    print('固定盒深度/单位 ppm：',first_holdout['fixed_box_depth']['depth_ppm'])\n    print('个人观察仍待填写；程序没有逐个拟合事件中心。')\n"
+      }
+    ],
+    "outputs": [
+      "audit/holdout-first-results.json (only after reveal)",
+      "audit/holdout-results.json (only after reveal)",
+      "audit/lightcurve-holdout.png (only after reveal)",
+      "M25-first-validation/run.log (only after reveal)",
+      "M25-first-validation/q4-with-frozen-windows.png (only after reveal)",
+      "M25-first-validation/exposure.md (learner)",
+      "M25-first-validation/observation.md (learner)",
+      "M25-first-validation/artifact-index.json (only after reveal)",
+      "M25-first-validation/q4-retained-ids.json (after reveal)"
+    ],
+    "corrections": [
+      {
+        "old": "确认自己在第 24 节已保存预测后，再打开 Notebook 第 5 部分。该部分用 raw/kplr011904151-2010009091648_llc.fits 读取 Q4 的亮度。",
+        "new": "确认 M24 已保存预测后，在 junior-guide.ipynb 的 M25 单元明确选择打开 Q4；随后从 raw/kplr011904151-2010009091648_llc.fits 读取亮度。"
+      }
+    ],
+    "assignment_corrections": [
+      {
+        "old": "逐项记录有覆盖且下降、有覆盖但未见下降、缺测和部分覆盖的实际情况。",
+        "new": "先逐项记录有效采样和缺测事实；只有在说明信号可测性的依据后，才能进一步判断支持或不支持。现有程序不自动逐个检出浅事件。"
+      },
+      {
+        "old": "确认材料齐全后，在与 Q3 分析相同的输出目录运行 `.venv/bin/python analyze.py --stage validate --output my-first-run`。",
+        "new": "在 junior-guide.ipynb 的 M25 单元核对同一个 RUN 的封存配置与预测，再明确将 Q4_REVEAL 改为 True，按单元说明调用固定规则检验。"
+      },
+      {
+        "old": "提交 `M25-first-validation/`，包含 `audit/holdout-first-results.json`、`audit/holdout-results.json`、`audit/lightcurve-holdout.png`、`run.log` 和 `exposure.md`，并关联 M23 配置及 M24 预测原件。",
+        "new": "提交 RUN 下 `audit/` 的首次 JSON、同方法最新 JSON 和光变图，另提交 `M25-first-validation/` 的运行日志、叠图、观察与接触情况；两目录通过 artifact-index.json 关联 M23/M24 原件。"
+      },
+      {
+        "old": "提交文件或字段：`M25-first-validation/`、`audit/holdout-first-results.json`、`audit/holdout-results.json`、`audit/lightcurve-holdout.png`、`run.log`、`exposure.md`、`.venv/bin/python analyze.py --stage validate --output my-first-run`。",
+        "new": "提交 M25 实际输出和 RUN 相对路径；未选择打开 Q4 时保留待完成，不提交空首次结果。"
+      }
+    ],
+    "insertion_before": "## 使用首次检验实验"
+  },
+  {
+    "module": "M26",
+    "prerequisite": "会在预测图中找一个编号；知道采样点数与信号可测性不同；会按 Q4−Q3 相减，知道 ppm 单位。",
+    "teaching": "## 先把每个预测留下，再谈是否相符\n\n这节的第一张表从 M24 的原预测开始，一行也不删除。程序逐行寻找 Q4 记录，而不是只留下看起来成功的区间。窗内点数为 0 表示没有有效测量落进窗口，不是测得深度为 0。\n\n看 coverage_status 一列前，先读它的定义。本课的自动规则只检查时间采样：窗内至少两个点、窗口前后都有近邻点、相邻有效点间隔不超过典型间隔的 1.5 倍。这是用于描述数据缺口的操作规则，不是足以检出行星的物理标准。满足时写“跨窗连续采样；信号可测性待判断”；不满足则说明哪种采样不足。即使这一列满足，几个散布很大的点也可能测不准浅下降。\n\n每一行还有原始窗内点数、保留点数、前后点数、最大间隔及对应局部图。先从首行走一遍：找到两条窗口边线；数一数窗内点；查看周围有没有断档；把 CSV 数量与图相对照。原始有点而有效点减少时，要回查筛选，不能一律叫望远镜没观测。你的证据判断写在 learner_judgement 中；程序不替你填“支持”。\n\n第二份表聚合整段结果。它取 Q3 和首次 Q4 的固定盒深度，按 Q4−Q3 相减。例如 100−120=−20 ppm，表示后者测得较浅，不表示下降幅度本身是负数。实际数字从两份 JSON 的 fixed_box_depth.depth_ppm 读取，并在 aggregate.json 中保留来源字段。经验标准误与两者合成尺度一起列出；这些描述量未完整考虑相关噪声和趋势不确定性，不能当发现置信度。\n\n整体移位诊断另列分钟和天。它只问把整组预测一起平移时描述性指标如何变化；没有逐事件测出实际中心，因此不要填 O−C。请任选一行讲清采样事实，再引用整体测量解释你目前能支持到哪一步。这个解释会成为 M27 的材料。\n",
+    "cells": [
+      {
+        "type": "code",
+        "source": "windows_rows=[]\nif not Q4_REVEAL or not (RUN/'audit/holdout-first-results.json').exists():\n    print('M26 待完成：尚无已获准读取的 Q4 首次结果。')\nelse:\n    frozen=read_json(RUN/'audit/method-freeze.json')\n    forecasts=read_json(RUN/'audit/holdout-predictions-before-reveal.json')['windows']\n    first_holdout=read_json(RUN/'audit/holdout-first-results.json')\n    t=np.asarray(holdout_flat.time.value)\n    raw_t=np.asarray(holdout_bundle['data']['TIME'],dtype=float)\n    cadence=float(np.median(np.diff(t)))\n    rule=frozen['course_coverage_rule']\n    given_counts={row['cycle']:row['accepted_observations_inside'] for row in first_holdout['predicted_windows']}\n    for w in forecasts:\n        start,end=w['start_bkjd'],w['end_bkjd']\n        inside=(t>start)&(t<end)\n        count=int(inside.sum())\n        original=int(((raw_t>start)&(raw_t<end)&np.isfinite(raw_t)).sum())\n        li=int(np.searchsorted(t,start,side='right'))-1\n        ri=int(np.searchsorted(t,end,side='left'))\n        bracketed=li>=0 and ri<len(t)\n        maximum_gap=float(np.diff(t[li:ri+1]).max()) if bracketed and ri>li else None\n        near_sides=bracketed and start-t[li]<=rule['maximum_gap_in_cadences']*cadence and t[ri]-end<=rule['maximum_gap_in_cadences']*cadence\n        continuous=count>=rule['minimum_inside_points'] and near_sides and maximum_gap is not None and maximum_gap<=rule['maximum_gap_in_cadences']*cadence\n        if count==0:\n            status='窗内没有有效点'\n        elif continuous:\n            status='跨窗连续采样；信号可测性待判断'\n        else:\n            status='时间采样不完整；信号可测性待判断'\n        reason=f'原始窗内 {original} 点，保留 {count} 点；两侧近邻={bool(near_sides)}；最大相邻间隔={maximum_gap} 天。'\n        plot_name=f'M26-comparison-v1/events/cycle-{w[\"cycle\"]}.png'\n        local=(t>start-2*frozen['ephemeris']['duration_day'])&(t<end+2*frozen['ephemeris']['duration_day'])\n        fig,ax=plt.subplots(figsize=(7,3))\n        ax.errorbar(t[local],(holdout_flat.flux.value[local]-1)*1e6,\n            yerr=holdout_flat.flux_err.value[local]*1e6,fmt='.',ms=4,alpha=.7)\n        ax.axvspan(start,end,color='#e19a58',alpha=.25)\n        ax.set(xlabel='BKJD (day)',ylabel='Relative flux - 1 (ppm)',title=f'Frozen event {w[\"cycle\"]}: {count} accepted inside points')\n        fig.tight_layout();save_plot(plot_name);plt.close(fig)\n        windows_rows.append({'cycle':w['cycle'],'predicted_centre_bkjd':w['centre_bkjd'],\n            'start_bkjd':start,'end_bkjd':end,'inside_count':count,'raw_inside_count':original,\n            'coverage_status':status,'reason':reason,'maximum_gap_day':maximum_gap,\n            'first_json_inside_count':given_counts.get(w['cycle'],''),\n            'first_json_row_found':w['cycle'] in given_counts,'local_plot':plot_name,\n            'learner_judgement':'','judgement_evidence':''})\n    assert [r['cycle'] for r in windows_rows]==[r['cycle'] for r in forecasts]\n    save_csv('M26-comparison-v1/windows.csv',list(windows_rows[0]),windows_rows)\n    q3=read_json(RUN/'audit/development-results.json')['fixed_box_depth']\n    q4=first_holdout['fixed_box_depth']\n    aggregate={'definition':'Q4 minus Q3; whole-segment fixed-box estimates, not event-by-event fits',\n        'q3':q3,'q4_first':q4,'depth_difference_ppm':q4['depth_ppm']-q3['depth_ppm'],\n        'combined_empirical_scale_ppm':float(np.hypot(q3['empirical_standard_error_ppm'],q4['empirical_standard_error_ppm'])),\n        'descriptive_depth_difference_ratio':first_holdout['depth_difference_combined_empirical_sigma'],\n        'timing_diagnostic':first_holdout['timing_diagnostic'],'criteria':first_holdout['criteria'],\n        'checks':first_holdout['checks'],\n        'sampling_counts':{s:sum(r['coverage_status']==s for r in windows_rows) for s in sorted({r['coverage_status'] for r in windows_rows})},\n        'sources':{'q3':'audit/development-results.json#fixed_box_depth',\n            'q4':'audit/holdout-first-results.json#fixed_box_depth',\n            'predictions':'audit/holdout-predictions-before-reveal.json#windows'},\n        'single_event_detections':'not measured; do not infer from counts',\n        'caveat':'Descriptive checks do not give a calibrated discovery probability.'}\n    save_json('M26-comparison-v1/aggregate.json',aggregate)\n    keep_text('M26-comparison-v1/comparison.md','# 本人比较\\n\\n[待填写] 一个预测编号的采样事实、图表依据、仍不确定的内容。\\n\\n[待填写] 整体深度差及相减顺序：\\n\\n[待填写] 为什么整体移位不是每个事件的实际中心：\\n')\n    print('原预测/输出行数：',len(forecasts),len(windows_rows))\n    print('Q4−Q3 深度差 ppm：',aggregate['depth_difference_ppm'])\n    print('时间采样分组：',aggregate['sampling_counts'])\n    print('这些采样标签没有宣布逐个事件检出。请完成本人证据判断。')\n"
+      }
+    ],
+    "outputs": [
+      "M26-comparison-v1/windows.csv (after reveal)",
+      "M26-comparison-v1/aggregate.json (after reveal)",
+      "M26-comparison-v1/events/cycle-*.png (after reveal)",
+      "M26-comparison-v1/comparison.md (learner)"
+    ],
+    "corrections": [
+      {
+        "old": "需要核对计算步骤时，看 Notebook 第 5 部分和 analyze.py 的 validate 函数。",
+        "new": "在 junior-guide.ipynb 的 M26 单元核对逐窗采样和整体统计；validate 提供固定盒测量，不能单靠其点数自动判断单事件检出。"
+      },
+      {
+        "old": "预测表中的每个事件都应在结果表保留一行，分别标记覆盖充分、部分覆盖或完全缺测。",
+        "new": "预测表中的每个事件都应在结果表保留一行，先标记窗内有效点、跨窗采样和缺测事实；时间采样充分不等于信号有足够精度被单独测量。"
+      },
+      {
+        "old": "核对预测总数、可评估数量、部分覆盖数量和缺测数量，确保没有只导出匹配的区间。",
+        "new": "核对预测总数与逐窗采样表的编号、行数；仅在另有信号可测性依据时统计可评估数量，未判断的项目保留待评估。"
+      }
+    ],
+    "assignment_corrections": [
+      {
+        "old": "以 M24 的事先预测为主表，按 `cycle` 对照首次结果，保留 `predicted_centre_bkjd`、`inside_count`、`coverage_status` 和 `reason`。",
+        "new": "运行 junior-guide.ipynb 的 M26 单元，以 M24 原预测为主表逐个编号记录采样，保留 predicted_centre_bkjd、inside_count、coverage_status、reason、local_plot；coverage_status 只描述时间采样，learner_judgement 与 judgement_evidence 由本人填写。"
+      }
+    ],
+    "insertion_before": "## 保留完整的比较表"
+  },
+  {
+    "module": "M27",
+    "prerequisite": "能追踪 M26 一行预测的采样图和整体统计来源；知道真实数据未逐个拟合事件中心。",
+    "teaching": "## 机器整理证据，你来写判断\n\n本节不再产生新的天文测量。代码只将已经存在的材料列成证据索引：路径、校验值、哪个字段和它回答什么。文件没有找到就显示缺项，不能以一个空文件冒充完成。conclusion.md 中的空白句由你填写，程序不替你认定“支持”或“发现”。\n\n先从一个很小的判断开始：“编号……的预测窗内有……个有效点。”这个数量应能在 windows.csv 找到，也能在局部图中检查。再看强一点的句子：“这个事件已被单独检出。”后一句还需要能区分信号与噪声的证据，不能仅靠第一句的点数成立。当前程序计算了整段固定盒深度，没有逐事件中心拟合；你的结论必须保留这个边界。\n\n结论先写观测与计算事实，再写解释。数据是哪颗恒星、哪两段记录；Q3 怎样决定方法；Q4 按什么原预测比较；哪些限制仍在。指出没有做的来源定位或噪声建模比笼统说“可能有误差”更有用。不要把三条课程描述性检查通过等同于确认行星。\n\n看过结果后若改过任何方法，把改动放入 posthoc-changes.csv。空表表示尚未填写，并不自动表示没有改动；确实没有，也要由你在说明中写明。exposure.md 同样由本人说明。reference-results.json 是参考程序附带的固定说明，索引可注明它存在，但不能将其中 conclusion 自动复制为你的作品。\n\n完成后用荧光笔标出结论里的每个数量和动词，把它们连到来源。换一个人任选一句找证据；若暂时只有自己，就写自查，不写已独立评审。下一节会让同一方法在新的进程中重算，检查它是否依赖现在的内存。\n",
+    "cells": [
+      {
+        "type": "code",
+        "source": "if not Q4_REVEAL or not (RUN/'M26-comparison-v1/windows.csv').exists():\n    print('M27 待完成：先完成 Q4 首次处理与逐窗采样比较。')\nelse:\n    evidence_specs=[\n        ('method','audit/method-freeze.json','config; ephemeris','what was fixed'),\n        ('prediction','audit/holdout-predictions-before-reveal.json','windows','pre-reveal timing prediction'),\n        ('first','audit/holdout-first-results.json','fixed_box_depth; timing_diagnostic','first whole-segment estimates'),\n        ('sampling','M26-comparison-v1/windows.csv','cycle; coverage_status; reason','sampling facts, not single-event detection'),\n        ('aggregate','M26-comparison-v1/aggregate.json','depth_difference_ppm; sources','whole-segment comparison')]\n    evidence_rows=[]\n    for kind,rel,field,purpose in evidence_specs:\n        p=RUN/rel\n        evidence_rows.append({'kind':kind,'path':rel,'sha256':digest(p) if p.exists() else '',\n            'field':field,'purpose':purpose,'status':'exists' if p.exists() else 'missing'})\n    save_csv('M27-validation-review/first-evidence.csv',list(evidence_rows[0]),evidence_rows)\n    keep_text('M27-validation-review/conclusion.md', '# 本人的首次检验说明\\n\\n'\n        '[待填写] 研究对象与 Q3/Q4 各自用途：\\n\\n'\n        '[待填写] 首次方法版本和预先预测：\\n\\n'\n        '[待填写] 时间采样事实与相应 CSV/图：\\n\\n'\n        '[待填写] 整体测量说明了什么，证据路径与字段：\\n\\n'\n        '[待填写] 目前还不能排除什么、没有测量什么：\\n\\n'\n        '[待填写] 是否发生事后修订，另见修订清单：\\n\\n'\n        '[待填写] 谁检查过上述判断；若仅本人请写自查。\\n')\n    changes_path=RUN/'M27-validation-review/posthoc-changes.csv'\n    if not changes_path.exists():\n        save_csv('M27-validation-review/posthoc-changes.csv',\n            ['time','reason','changed_parameter','before','after','result_path','q4_already_seen'],[])\n    keep_text('M27-validation-review/exposure.md','# 本人接触情况与修订说明\\n\\n[待填写] 参见 M23/M25 的实际记录；没有修订也由本人说明。空表不自动表示没有改动。\\n')\n    print('证据索引已生成；conclusion.md 的判断全部留给本人填写。')\n    print('程序的 reference conclusion 不作为学生答案。')\n"
+      }
+    ],
+    "outputs": [
+      "M27-validation-review/first-evidence.csv (after reveal)",
+      "M27-validation-review/conclusion.md (learner)",
+      "M27-validation-review/posthoc-changes.csv (learner)",
+      "M27-validation-review/exposure.md (learner)"
+    ],
+    "corrections": [
+      {
+        "old": "Notebook 第 5 部分生成的 Q4 光变图可用于核对观测覆盖。",
+        "new": "junior-guide.ipynb 的 M25 预测窗叠图和 M26 逐窗图可核对时间采样；信号可测性需要另行说明。"
+      },
+      {
+        "old": "写明预测区间总数、覆盖充分、部分覆盖及缺测数量，链接到 M26 表格。",
+        "new": "写明预测区间总数及 M26 的时间采样分类数量；未建立逐事件可测性依据时，不把采样分类改称逐事件检出或成功数量。"
+      }
+    ],
+    "assignment_corrections": [],
+    "insertion_before": "## 完成一份结构清楚的结论说明"
+  },
+  {
+    "module": "M28",
+    "prerequisite": "能区分 Notebook 文件、当前内存和磁盘输出；能指出首次配置、代码校验值、原始输入在哪里。",
+    "teaching": "## 让一段新进程只靠文件重算\n\n现在的目标不是再寻找一个更漂亮的周期，而是把已经保存的方法交给一个不认识旧变量的新进程。下面保存的 replay_frozen.py 是这个入口。它读取三个位置：实践包目录 ROOT、本次历史目录 RUN、全新输出目录。它从 freeze 取得候选和处理规则，读原始文件，按固定候选重算趋势与深度；没有 search 或 develop 调用。\n\n先看依赖表中的一行。例如重算 Q4 需要原始 Q4 FITS、冻结配置和当时的代码；输出是采样编号、深度和诊断图。若只复制配置不带原文件，入口就找不到输入；若修改了程序，校验会拒绝悄悄当作原版。报错并非提醒你删掉检查，而是让你恢复应使用的版本，或明确开始修订。\n\nsubprocess 启动一个新的 Python 进程。它不能使用当前 Notebook 里的 lc 或 eph，因此成功运行才说明这次入口没有偷偷依赖这些旧变量。stdout、stderr、命令、起止时间和退出码都写入 run.log。退出码 0 表示程序此次执行完毕，不表示结果已被他人核验，更不证明科学解释正确。\n\n输出放入独立的 replay-时间目录；首次 JSON 不动。重算的 summary 明写“已看过 Q4 之后的相同方法重复计算”。没有打开 Q4 的学习者先得到入口和依赖说明，实际重算保持待完成，不能由本节绕过前面的访问选择。\n\n请从 summary 找出 Q3 保留点数，和历史文件的同一字段比较；再随机找一个保留编号，在原记录中定位。下一节我们记录当前到底用哪个 Python、哪些库，使另一个环境也能按说明找到这些步骤。\n",
+    "cells": [
+      {
+        "type": "code",
+        "source": "REPLAY_SOURCE = '#!/usr/bin/env python3\\n\"\"\"Repeat the saved method after Q4 has been seen; no search, no new blind claim.\"\"\"\\nimport argparse,json,sys,hashlib,platform,importlib.metadata\\nfrom pathlib import Path\\nfrom datetime import datetime,timezone\\nimport numpy as np\\n\\ndef read(p):return json.loads(Path(p).read_text(encoding=\\'utf-8\\'))\\ndef sha(p):return hashlib.sha256(Path(p).read_bytes()).hexdigest()\\ndef main():\\n    ap=argparse.ArgumentParser()\\n    ap.add_argument(\\'--practice-root\\',type=Path,required=True)\\n    ap.add_argument(\\'--source-run\\',type=Path,required=True)\\n    ap.add_argument(\\'--out\\',type=Path,required=True)\\n    args=ap.parse_args()\\n    root=args.practice_root.resolve();source=args.source_run.resolve();out=args.out.resolve()\\n    if out.exists():raise RuntimeError(\\'Choose a new output directory; do not overwrite earlier reruns.\\')\\n    if not (source/\\'audit/holdout-first-results.json\\').exists():raise RuntimeError(\\'First Q4 result is required. Replay must not reveal Q4 early.\\')\\n    sys.path.insert(0,str(root))\\n    import analyze\\n    from analyze import CONFIG,read_role,local_median,measure,plain,curve_plot\\n    frozen=read(source/\\'audit/method-freeze.json\\')\\n    predictions=read(source/\\'audit/holdout-predictions-before-reveal.json\\')\\n    first=read(source/\\'audit/holdout-first-results.json\\')\\n    fsha=sha(source/\\'audit/method-freeze.json\\')\\n    assert predictions[\\'freeze_sha256\\']==fsha and first[\\'freeze_sha256\\']==fsha\\n    assert Path(analyze.__file__).resolve()==root/\\'analyze.py\\'\\n    assert sha(root/\\'analyze.py\\')==frozen[\\'analysis_script_sha256\\'],\\'Code differs from frozen version.\\'\\n    assert CONFIG==frozen[\\'config\\'],\\'Current processing rules differ from frozen rules.\\'\\n    out.mkdir(parents=True)\\n    (out/\\'audit\\').mkdir()\\n    (out/\\'records\\').mkdir()\\n    eph=frozen[\\'ephemeris\\']\\n    summary={\\'kind\\':\\'same-method replay after Q4 exposure; not a new first validation\\',\\n        \\'started_utc\\':datetime.now(timezone.utc).isoformat(),\\'freeze_sha256\\':fsha,\\n        \\'code_sha256\\':sha(root/\\'analyze.py\\'),\\'prediction_sha256\\':sha(source/\\'audit/holdout-predictions-before-reveal.json\\'),\\n        \\'prediction_cycles\\':[r[\\'cycle\\'] for r in predictions[\\'windows\\']],\\n        \\'ephemeris\\':eph,\\'roles\\':{},\\'python\\':platform.python_version(),\\n        \\'versions\\':{x:importlib.metadata.version(x) for x in [\\'numpy\\',\\'astropy\\',\\'lightkurve\\',\\'matplotlib\\']}}\\n    for role in [\\'development\\',\\'holdout\\']:\\n        bundle=read_role(role)\\n        flat,trend=local_median(bundle[\\'clean\\'],eph,window_day=frozen[\\'config\\'][\\'detrend\\'][\\'window_day\\'])\\n        ids=np.asarray(flat.cadenceno,dtype=int).tolist()\\n        row={\\'quality\\':bundle[\\'counts\\'],\\'cadenceno\\':ids,\\'fixed_box_depth\\':plain(measure(flat,eph))}\\n        if role==\\'holdout\\':\\n            row[\\'prediction_inside_counts\\']=[{\\'cycle\\':w[\\'cycle\\'],\\'inside_count\\':int(((flat.time.value>w[\\'start_bkjd\\'])&(flat.time.value<w[\\'end_bkjd\\'])).sum())} for w in predictions[\\'windows\\']]\\n            shifts=np.linspace(-eph[\\'duration_day\\'],eph[\\'duration_day\\'],CONFIG[\\'holdout_timing_scan\\'][\\'count\\'])\\n            snr=np.array([measure(flat,eph,float(s))[\\'descriptive_depth_snr\\'] for s in shifts])\\n            row[\\'timing_diagnostic_best_shift_day\\']=float(shifts[int(np.argmax(snr))])\\n        summary[\\'roles\\'][role]=row\\n        curve_plot(bundle,flat,trend,eph,out)\\n        (out/\\'records\\'/f\\'{role}.json\\').write_text(json.dumps(plain(row),indent=2,allow_nan=False)+\\'\\\\n\\')\\n    summary[\\'ended_utc\\']=datetime.now(timezone.utc).isoformat()\\n    (out/\\'replay-summary.json\\').write_text(json.dumps(plain(summary),ensure_ascii=False,indent=2,allow_nan=False)+\\'\\\\n\\',encoding=\\'utf-8\\')\\n    print(json.dumps({\\'output\\':str(out),\\'status\\':\\'computed; numerical and human review still required\\'},indent=2))\\nif __name__==\\'__main__\\':main()\\n'\nreplay_script=RUN/'M28-entry-v1/replay_frozen.py'\nreplay_script.parent.mkdir(parents=True,exist_ok=True)\nreplay_script.write_text(REPLAY_SOURCE,encoding='utf-8')\ndependencies=[\n    ['load configuration','audit/method-freeze.json','M23','fixed ephemeris and processing rules'],\n    ['verify predictions','audit/holdout-predictions-before-reveal.json','M24','unchanged cycle identifiers'],\n    ['read original observations','ROOT/raw/*.fits','practice manifest','quality-selected Q3 and Q4 records'],\n    ['protected trend','fixed ephemeris + 1-day window','analyze.local_median','trend, flux, errors, support counts'],\n    ['fixed-box measurement','processed data + fixed ephemeris','analyze.measure','whole-segment depth and descriptive errors'],\n    ['history guard','audit/holdout-first-results.json','M25','prove replay follows the first recorded Q4 result']]\nsave_csv('M28-entry-v1/dependencies.csv',['step','input','provided_by','output_or_check'],dependencies)\nkeep_text('M28-entry-v1/README.md','# 固定方法重算入口\\n\\n在实践包根目录运行，使用安装了 requirements.txt 的 Python：\\n\\n'\n    '```text\\npython student-runs/<run-id>/M28-entry-v1/replay_frozen.py --practice-root . --source-run student-runs/<run-id> --out student-runs/<run-id>/M28-entry-v1/replay-manual-01\\n```\\n\\n'\n    '<run-id> 替换成自己的持久目录名；out 必须是不存在的新目录。该入口不重新搜索周期，不创建新的盲测声明。首次结果先前尚未生成时，不能用它提前查看 Q4。\\n')\nreplay_out=None\nif not Q4_REVEAL or not (RUN/'audit/holdout-first-results.json').exists():\n    print('M28 入口已保存；Q4 尚未开放，完整重算待完成。')\nelse:\n    replay_out=RUN/'M28-entry-v1'/('replay-'+datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S%fZ'))\n    command=[sys.executable,str(replay_script),'--practice-root',str(ROOT),'--source-run',str(RUN),'--out',str(replay_out)]\n    process=log_process(command,RUN/'M28-entry-v1/run.log',ROOT)\n    if process.returncode!=0:\n        print(process.stderr)\n        raise RuntimeError('固定方法重算失败；先查保存的日志。')\n    outputs=sorted(str(p.relative_to(RUN)) for p in replay_out.rglob('*') if p.is_file())\n    (RUN/'M28-entry-v1/outputs.txt').write_text('\\n'.join(outputs)+'\\n',encoding='utf-8')\n    save_json('M28-entry-v1/replay-location.json',{'relative_output':str(replay_out.relative_to(RUN)),\n        'script_sha256':digest(replay_script),'verification':'new local process; not independent peer review'})\n    print('新进程输出：',replay_out)\n"
+      }
+    ],
+    "outputs": [
+      "M28-entry-v1/replay_frozen.py",
+      "M28-entry-v1/dependencies.csv",
+      "M28-entry-v1/README.md",
+      "M28-entry-v1/run.log (after reveal)",
+      "M28-entry-v1/replay-*/replay-summary.json (after reveal)",
+      "M28-entry-v1/outputs.txt (after reveal)",
+      "M28-entry-v1/replay-location.json (after reveal)"
+    ],
+    "corrections": [
+      {
+        "old": "打开 kepler10-reproduction.ipynb，从第一个单元检查环境和文件路径。另建输出目录，保留首次检验结果。",
+        "new": "在 junior-guide.ipynb 的 M28 单元保存并运行 replay_frozen.py：读取首次配置，在新进程和新目录重算固定方法，保留历史结果。"
+      }
+    ],
+    "assignment_corrections": [
+      {
+        "old": "现有程序在含首次结果的目录拒绝再次执行 develop；按实践包说明使用新目录或已经核对的配置副本，不删除保护文件绕过检查。",
+        "new": "不要用 develop 代替本节的固定方法重算；使用 M28 提供的 replay_frozen.py，显式指定实践包、原 run 和全新输出目录，不删除保护文件。"
+      },
+      {
+        "old": "提交 `M28-entry-v1/kepler10-reproduction.ipynb` 或明确调用同一代码的入口，以及 `README.md`、`dependencies.csv`、`run.log` 和 `outputs.txt`。",
+        "new": "提交 `M28-entry-v1/replay_frozen.py`、README.md、dependencies.csv，以及实际新进程生成的 run.log、outputs.txt、replay-location.json 和独立 replay 输出目录。"
+      },
+      {
+        "old": "提交文件或字段：`M28-entry-v1/kepler10-reproduction.ipynb`、`README.md`、`dependencies.csv`、`run.log`、`outputs.txt`。",
+        "new": "提交 M28 的固定方法重算入口及真实日志。入口读取原 freeze，不重新搜索；尚无获准使用的 Q4 首次结果时，完整重算标为待完成。"
+      }
+    ],
+    "insertion_before": "## 重启后依次执行"
+  },
+  {
+    "module": "M29",
+    "prerequisite": "能区分当前 Python、安装依赖、原始数据和输出目录；知道库缺失与路径错误是两类问题。",
+    "teaching": "## 先记录现在实际运行的环境\n\nrequirements.txt 写的是希望安装哪些版本，不能证明当前 Notebook 正在用那些版本。代码会询问当前 Python 的路径、版本、操作系统和几个库的实际版本，再运行同一个 Python 的 pip freeze 与 pip check。前者列实际安装情况，后者检查依赖声明是否冲突；它们不代替完整天文程序的运行。\n\nenvironment.txt 记录本次环境，requirements.txt 保存实践包给定依赖，requirements-actual.txt 记录当前环境。若两份不同，先找原因，不要自动升级把差异藏起来。pip-check.log 是当前环境检查，不是新环境安装日志；新环境尚未建立时，状态明确写待验证。\n\n数据清单逐个读取 manifest 列出的四个文件，检查大小与 SHA256，再把相对路径、目标、季度、类型和官方来源写进 data-manifest.csv。CSV 的一行对应一个真实文件，不只写一个下载链接。请任选一行，在文件夹中找到它，再说出它为什么是 Q3 或 Q4。这里对文件计算字节校验并不展示 Q4 光变；读取亮度仍由 M25 的选择控制。\n\n需要新环境时，终端命令在本节单独列出，不能把 shell 命令当作普通 Python 表达式。代码也给出显式开关的安装步骤，默认不执行：选择后才创建独立环境、安装依赖并保存真实日志。未运行安装不产生成功日志。只读课程或运行 pip check 都不能写成“新环境已安装成功”。\n\n环境记录、数据清单和 M28 的入口一起交给下一位操作人。iPad 内保存的课堂笔记与电脑中的这些文件分别存在；尚未接入的云计算不会因为你读完本页而自动完成。下一节将用真正的新进程输出核对结果，同时把本人复算与同伴独立操作分开。\n",
+    "cells": [
+      {
+        "type": "code",
+        "source": "versions={name:importlib.metadata.version(name) for name in ['numpy','astropy','lightkurve','scipy','matplotlib']}\nenvironment={'python':platform.python_version(),'executable':sys.executable,\n    'system':platform.system(),'release':platform.release(),'machine':platform.machine(),\n    'versions':versions,'recorded_utc':now_utc(),'meaning':'currently executing environment, not a new installation test'}\nenvdir=RUN/'M29-dependencies-v1';envdir.mkdir(parents=True,exist_ok=True)\n(envdir/'environment.txt').write_text(json.dumps(environment,ensure_ascii=False,indent=2)+'\\n',encoding='utf-8')\nshutil.copy2(ROOT/'requirements.txt',envdir/'requirements.txt')\nfreeze_process=log_process([sys.executable,'-m','pip','freeze'],envdir/'pip-freeze.log',ROOT)\nif freeze_process.returncode==0:\n    (envdir/'requirements-actual.txt').write_text(freeze_process.stdout,encoding='utf-8')\npip_check=log_process([sys.executable,'-m','pip','check'],envdir/'pip-check.log',ROOT)\nmanifest=read_json(ROOT/'manifest.json')\nmanifest_rows=[]\nfor item in manifest['files']:\n    path=ROOT/'raw'/item['file']\n    exists=path.is_file()\n    actual_sha=digest(path) if exists else ''\n    actual_size=path.stat().st_size if exists else None\n    manifest_rows.append({'relative_path':'raw/'+item['file'],'target':'Kepler-10 / KIC 11904151',\n        'role':item['role'],'quarter':item['quarter'],'kind':item['kind'],'url':item['url'],\n        'expected_bytes':item['bytes'],'actual_bytes':actual_size,\n        'expected_sha256':item['sha256'],'actual_sha256':actual_sha,\n        'status':'matches' if exists and actual_sha==item['sha256'] and actual_size==item['bytes'] else 'missing_or_different'})\nsave_csv('M29-dependencies-v1/data-manifest.csv',list(manifest_rows[0]),manifest_rows)\nsave_json('M29-dependencies-v1/environment-check.json',{'current_pip_check_returncode':pip_check.returncode,\n    'input_files_match':all(r['status']=='matches' for r in manifest_rows),\n    'new_environment_installation':'not_run_in_this_cell','peer_execution':'not_verified'})\nkeep_text('M29-dependencies-v1/README.md','# 运行环境交接\\n\\n'\n    'environment.txt/requirements-actual.txt 是当前环境实录；requirements.txt 是配套依赖。\\n'\n    'pip-check.log 检查当前环境依赖，不证明新环境安装或天文结果正确。\\n'\n    'data-manifest.csv 列出原始输入及实际校验结果。运行入口见 ../M28-entry-v1/README.md。\\n\\n'\n    '[待填写] 新环境实际安装和运行情况，及哪些步骤仍待验证。\\n')\nprint('当前环境已记录；新环境安装与他人独立复查未由本格宣布完成。')\n"
+      },
+      {
+        "type": "code",
+        "source": "# 只有确实准备安装新环境时才改为 True；网络安装耗时另计。\nCREATE_NEW_ENVIRONMENT = False\nif not CREATE_NEW_ENVIRONMENT:\n    print('新环境安装待验证。当前 pip-check.log 不叫 install.log。')\nelse:\n    new_env=RUN/'M29-dependencies-v1'/'fresh-environment'\n    if new_env.exists():\n        raise RuntimeError('保留已有环境；为新的安装验证选择另一目录名。')\n    install_log=RUN/'M29-dependencies-v1/install.log'\n    command=[sys.executable,'-m','venv',str(new_env)]\n    create_result=log_process(command,install_log,ROOT)\n    if create_result.returncode!=0:\n        raise RuntimeError('环境创建失败，真实日志已保存。')\n    new_python=new_env/('Scripts/python.exe' if sys.platform=='win32' else 'bin/python')\n    install_result=log_process([str(new_python),'-m','pip','install','-r',str(ROOT/'requirements.txt')],\n        RUN/'M29-dependencies-v1/install-packages.log',ROOT)\n    if install_result.returncode!=0:\n        raise RuntimeError('安装未完成，保留日志，不标成功。')\n    check_result=log_process([str(new_python),'-m','pip','check'],\n        RUN/'M29-dependencies-v1/fresh-pip-check.log',ROOT)\n    save_json('M29-dependencies-v1/fresh-environment-status.json',{'python':str(new_python),\n        'install_returncode':install_result.returncode,'pip_check_returncode':check_result.returncode,\n        'full_analysis_replay':'not_run_by_installation_cell'})\n    print('安装步骤已实际执行；还需用这个 Python 运行固定方法入口。')\n"
+      }
+    ],
+    "outputs": [
+      "M29-dependencies-v1/environment.txt",
+      "M29-dependencies-v1/requirements.txt",
+      "M29-dependencies-v1/requirements-actual.txt",
+      "M29-dependencies-v1/pip-check.log",
+      "M29-dependencies-v1/data-manifest.csv",
+      "M29-dependencies-v1/environment-check.json",
+      "M29-dependencies-v1/README.md",
+      "M29-dependencies-v1/install.log (only if explicitly installing)",
+      "M29-dependencies-v1/install-packages.log (only if explicitly installing)"
+    ],
+    "corrections": [],
+    "assignment_corrections": [
+      {
+        "old": "按实践包依赖在新虚拟环境安装，执行 `pip check` 并保存输出。",
+        "new": "先用 M29 单元记录当前环境及 pip-check.log；明确选择安装新环境后才保存真实 install.log 与 install-packages.log。当前环境 pip check 不能冒充新环境已安装。"
+      }
+    ],
+    "insertion_before": "## 运行说明应能照着执行"
+  },
+  {
+    "module": "M30",
+    "prerequisite": "能运行 M28 的固定方法入口；知道精确相等、数值容差、天文不确定性三者不同。",
+    "teaching": "## 先写比较规则，再产生新结果\n\n本节先保存 expected-rules.csv，里面写参考文件、字段、单位和比较规则，然后才启动新的重算进程。这样不会看见差异后临时扩大容差。原始行数、保留编号、预测编号、配置和代码校验值应精确一致；浮点计算的细微差异单列数值容差。\n\n这里给固定方法重算设置的 ppm 容差只是计算一致性检查，不是恒星亮度测量误差，也不是行星参数精度声明。参考值为 a、新结果为 b，程序先算 |a−b|，再与绝对容差加相对容差乘 |a| 比较。看构造例 2 与 2.000002，差为 0.000002；若规则允许 0.000003，就通过。你的真实表保存各项实际数值，不能把这段教学数字填进去。\n\n比较从输入和保留编号开始。两次各有 90 个点仍可能不是同一组编号；所以还要逐项比 retained CADENCENO。若编号不同，应先回到筛选，不能只看最后深度是否接近。深度、经验误差和整体诊断移位逐项列 expected、actual、difference、status。失败记录保留，issues.md 由你解释定位和处理，不把最后成功一次当成全部历史。\n\n下面自动运行的是当前机器的新进程。它能检查隐藏内存依赖和数值重复性，但没有替另一位同伴安装、操作或签名。runner.md 中实际执行者、环境和是否由他人复查必须由人填写。若你已经在 M29 安装新环境，可以把 REPLAY_PYTHON 指到那个环境的 Python，再运行；如果由同伴操作，应由同伴保存自己的日志及比较文件。\n\n读完 comparison.csv 后任选一个通过项和一个需要解释的检查，说明它们分别证明什么。若全部数值一致，仍只说明这套程序可以重复计算；相同的错误算法也可能重复。因此最后还要保留你对单位、数据来源和科学解释的核对。\n",
+    "cells": [
+      {
+        "type": "code",
+        "source": "keep_text('M30-reproduction/runner.md','# 实际执行者\\n\\n[待填写] 谁操作、何时、使用哪个环境；本人新进程或本人新环境均不能称为他人独立复查。\\n')\nkeep_text('M30-reproduction/issues.md','# 差异与修复\\n\\n[待填写] 参考项、实际差异、首先出现分歧的步骤、修复过程；没有差异也由本人检查后说明。\\n')\nif not Q4_REVEAL or not (RUN/'audit/holdout-first-results.json').exists():\n    print('M30 待完成：尚无获准使用的 Q4 首次结果。')\nelse:\n    frozen=read_json(RUN/'audit/method-freeze.json')\n    q3_first=read_json(RUN/'audit/development-results.json')\n    q4_first=read_json(RUN/'audit/holdout-first-results.json')\n    predictions=read_json(RUN/'audit/holdout-predictions-before-reveal.json')\n    expected={\n        'freeze_sha256':digest(RUN/'audit/method-freeze.json'),\n        'code_sha256':frozen['analysis_script_sha256'],\n        'prediction_sha256':digest(RUN/'audit/holdout-predictions-before-reveal.json'),\n        'prediction_cycles':[w['cycle'] for w in predictions['windows']],\n        'ephemeris':frozen['ephemeris']}\n    specs=[]\n    for key in expected:\n        specs.append({'field':key,'unit':'identity','mode':'exact','atol':0.0,'rtol':0.0,\n            'reference':'audit/method-freeze.json or unchanged prediction file'})\n    for role,source,file in [('development',q3_first,'audit/development-results.json'),('holdout',q4_first,'audit/holdout-first-results.json')]:\n        expected[role+'.raw_rows']=source['quality']['raw_rows']\n        expected[role+'.retained_rows']=source['quality']['retained_rows']\n        ids_path=RUN/('M23-freeze-v1/q3-retained-ids.json' if role=='development' else 'M25-first-validation/q4-retained-ids.json')\n        expected[role+'.cadenceno']=read_json(ids_path)['cadenceno']\n        for name in ['raw_rows','retained_rows','cadenceno']:\n            specs.append({'field':role+'.'+name,'unit':'rows or exact identities','mode':'exact','atol':0.0,'rtol':0.0,'reference':file if name!='cadenceno' else str(ids_path.relative_to(RUN))})\n        for name in ['depth_ppm','empirical_standard_error_ppm']:\n            expected[role+'.'+name]=source['fixed_box_depth'][name]\n            specs.append({'field':role+'.'+name,'unit':'ppm','mode':'numeric','atol':1e-7,'rtol':1e-10,'reference':file+'#fixed_box_depth.'+name})\n    expected['holdout.best_shift_day']=q4_first['timing_diagnostic']['best_shift_day']\n    specs.append({'field':'holdout.best_shift_day','unit':'day','mode':'numeric','atol':1e-10,'rtol':1e-10,'reference':'audit/holdout-first-results.json#timing_diagnostic.best_shift_day'})\n    rules_path=save_csv('M30-reproduction/expected-rules.csv',['field','unit','mode','atol','rtol','reference'],specs)\n    rules_sha=digest(rules_path)\n    save_json('M30-reproduction/expected-values.json',expected)\n    REPLAY_PYTHON=sys.executable  # 若实际使用 M29 的新环境，可明确改成其 Python 路径。\n    other_out=RUN/'M30-reproduction'/('replay-'+datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S%fZ'))\n    process=log_process([str(REPLAY_PYTHON),str(RUN/'M28-entry-v1/replay_frozen.py'),\n        '--practice-root',str(ROOT),'--source-run',str(RUN),'--out',str(other_out)],RUN/'M30-reproduction/session.log',ROOT)\n    if process.returncode!=0:\n        print(process.stderr)\n        raise RuntimeError('重算未完成，日志已保存。')\n    actual_summary=read_json(other_out/'replay-summary.json')\n    actual={key:actual_summary[key] for key in ['freeze_sha256','code_sha256','prediction_sha256','prediction_cycles','ephemeris']}\n    for role in ['development','holdout']:\n        role_result=actual_summary['roles'][role]\n        for name in ['raw_rows','retained_rows']:\n            actual[role+'.'+name]=role_result['quality'][name]\n        actual[role+'.cadenceno']=role_result['cadenceno']\n        for name in ['depth_ppm','empirical_standard_error_ppm']:\n            actual[role+'.'+name]=role_result['fixed_box_depth'][name]\n    actual['holdout.best_shift_day']=actual_summary['roles']['holdout']['timing_diagnostic_best_shift_day']\n    comparisons=[]\n    for spec in specs:\n        key=spec['field'];a_value=expected[key];b_value=actual[key]\n        if spec['mode']=='numeric':\n            difference=abs(b_value-a_value)\n            limit=spec['atol']+spec['rtol']*abs(a_value)\n            passed=bool(np.isfinite(difference) and difference<=limit)\n        else:\n            difference='';limit='exact';passed=a_value==b_value\n        comparisons.append(dict(spec,expected=json.dumps(a_value,ensure_ascii=False),actual=json.dumps(b_value,ensure_ascii=False),\n            difference=difference,allowed_difference=limit,status='matches' if passed else 'DIFFERENT'))\n    assert digest(rules_path)==rules_sha,'比较规则在运行后被改变。'\n    save_csv('M30-reproduction/comparison.csv',list(comparisons[0]),comparisons)\n    save_json('M30-reproduction/check-status.json',{'rules_sha256_before_run':rules_sha,\n        'reference':'first recorded artifacts','all_compared_values_match':all(r['status']=='matches' for r in comparisons),\n        'execution_kind':'new process invoked by this notebook; independent peer review not verified',\n        'output':str(other_out.relative_to(RUN))})\n    print([(r['field'],r['status']) for r in comparisons])\n    print('这是真实数值比较；runner.md 和差异解释仍由本人/实际复查者填写。')\n"
+      }
+    ],
+    "outputs": [
+      "M30-reproduction/runner.md (learner)",
+      "M30-reproduction/issues.md (learner)",
+      "M30-reproduction/expected-rules.csv (after reveal)",
+      "M30-reproduction/expected-values.json (after reveal)",
+      "M30-reproduction/session.log (after reveal)",
+      "M30-reproduction/comparison.csv (after reveal)",
+      "M30-reproduction/check-status.json (after reveal)"
+    ],
+    "corrections": [
+      {
+        "old": "先让同伴按你写的说明操作。",
+        "new": "先用 M28 的固定方法重算入口和 M30 预先保存的比较规则做一次数值核对；若由同伴操作，另记实际执行者及环境，本机自动重算不替代同伴复查。"
+      }
+    ],
+    "assignment_corrections": [
+      {
+        "old": "新运行写入独立目录，先核对文件、代码、配置和行数，再比较预测编号、周期、深度与诊断量。",
+        "new": "使用 M28 的 replay_frozen.py 写入独立目录；M30 在执行前保存 expected-rules.csv，再核对文件、代码、配置、保留编号及深度/诊断量。自动新进程结果如实标本机复算，不自动称同伴独立复查。"
+      }
+    ],
+    "insertion_before": "## 怎样比较结果"
+  },
+  {
+    "module": "M31",
+    "prerequisite": "能指出原 freeze 的窗口、候选参数和排除规则；知道控制变量以及程序失败也需要记录。",
+    "teaching": "## 本次只改变窗口，候选仍用原来那一个\n\n先写自己的预期：窗口从 1.0 天改成 0.5 天，你预计哪一步可能变化、为什么、什么现象会让你重新考虑？不要只写“深度变小”。保护候选事件的算法不会让这些事件点参加背景估计，缩短窗口也可能几乎不改变趋势，或在缺口旁没有足够支持点。没有运行前的个人预期时，程序仍可演示计算，但它会标明这份学习任务尚未完整，不能在看到答案后把解释假装成事前预测。\n\n代码只把 WINDOW_TRIAL 传给 local_median 的 window_day 参数。原始 Q3、筛选后的 CADENCENO、归一化、分段、最少点数、事件排除规则和同一个 eph 全部保持不变；不调用搜索周期的函数。每次尝试另有时间编号，成功与失败都保存。0.5 天是一次教学参数试验，不是替真实天体测出新的周期。\n\n图的上半部放同一组原相对读数和两条趋势；下半部放相除后的结果，并采用相同坐标。先找一个具体时刻，比较原读数、旧趋势、新趋势，再解释除法怎样影响该点。comparison.csv 同时列深度、盒内外点数和最少支持点，不让最后一个深度数字遮住中间变化。\n\n若程序报告支持点不足，结果应写“这个窗口按原规则不能计算”，不能把缺失值填成 0，也不能顺手让事件点进入趋势。那会改变第二条规则。若两次都能算而深度接近，这也可以推翻你原先想象的必然变化。\n\n最后核对原配置和程序校验值没有改变，再用 M28 入口在新进程重算原方案，输出到 restore。这样证明恢复来自保存的原参数，而不是凭记忆把一个数改回去。Q4 尚未开启时，本节可以做 Q3 窗口演示，但完整复算仍等待此前步骤。请在 attempts.md 写真实结果、你的解释与尚未解决的问题。\n",
+    "cells": [
+      {
+        "type": "code",
+        "source": "WINDOW_TRIAL = 0.5\nFORECAST = \"\"  # 运行试验前由本人写预期及理由，代码不根据结果代填。\nfrozen=read_json(RUN/'audit/method-freeze.json')\ne=deepcopy(frozen['ephemeris'])\noriginal_window=float(frozen['config']['detrend']['window_day'])\nassert WINDOW_TRIAL>0 and WINDOW_TRIAL!=original_window,'本次应只改变一个正的窗口宽度。'\nfreeze_sha_before=digest(RUN/'audit/method-freeze.json')\ncode_sha_before=digest(ROOT/'analyze.py')\nassert code_sha_before==frozen['analysis_script_sha256']\nq3_for_trial=read_role('development')\nbase_flat,base_trend=local_median(q3_for_trial['clean'],e,window_day=original_window)\nbase_stats=plain(measure(base_flat,e))\nattempt='attempt-'+datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S%fZ')\nattempt_prefix='M31-challenge/'+attempt\nkeep_text('M31-challenge/forecast.md','# 运行前的本人预期\\n\\n'+(FORECAST.strip() if FORECAST.strip() else '[待填写] 改窗口可能影响的中间量、方向/可能不变、理由与反例。未填写不能算完整的事前预测试验。')+'\\n')\nconfig_diff={'changed_field':'detrend.window_day','before':original_window,'after':float(WINDOW_TRIAL),\n    'fixed_ephemeris':e,'quality_and_mask_rules_unchanged':True,'input_role':'development / Q3',\n    'forecast_entered_before_this_execution':bool(FORECAST.strip()),'forecast_text':FORECAST.strip() or None,\n    'method':'local_median(clean, same_ephemeris, window_day=one_changed_value); no period search'}\nsave_json(attempt_prefix+'/config-diff.json',config_diff)\nsave_json('M31-challenge/config-diff.json',config_diff)\nrows=[{'version':'original','window_day':original_window,'status':'computed',\n    'retained_rows':len(base_flat),'minimum_support':int(np.min(base_flat['trend_support_count'])),\n    'depth_ppm':base_stats['depth_ppm'],'n_in':base_stats['n_in'],'n_out':base_stats['n_out'],'error':''}]\ntrial_flat=None;trial_trend=None\ntry:\n    trial_flat,trial_trend=local_median(q3_for_trial['clean'],e,window_day=WINDOW_TRIAL)\n    assert np.array_equal(np.asarray(base_flat.cadenceno),np.asarray(trial_flat.cadenceno))\n    trial_stats=plain(measure(trial_flat,e))\n    rows.append({'version':'trial','window_day':float(WINDOW_TRIAL),'status':'computed',\n        'retained_rows':len(trial_flat),'minimum_support':int(np.min(trial_flat['trend_support_count'])),\n        'depth_ppm':trial_stats['depth_ppm'],'n_in':trial_stats['n_in'],'n_out':trial_stats['n_out'],'error':''})\nexcept ValueError as exc:\n    rows.append({'version':'trial','window_day':float(WINDOW_TRIAL),'status':'insufficient_window_support',\n        'retained_rows':len(q3_for_trial['clean']),'minimum_support':'','depth_ppm':'','n_in':'','n_out':'','error':str(exc)})\nsave_csv(attempt_prefix+'/comparison.csv',list(rows[0]),rows)\nsave_csv('M31-challenge/comparison.csv',list(rows[0]),rows)\nfig,axes=plt.subplots(2,1,figsize=(11,6),sharex=True)\nt=q3_for_trial['clean'].time.value\naxes[0].scatter(t,q3_for_trial['clean'].flux.value,s=2,color='#b1bac4',label='same normalized Q3')\naxes[0].plot(t,base_trend.flux.value,lw=1,label=f'protected W={original_window} day')\naxes[1].scatter(t,(base_flat.flux.value-1)*1e6,s=2,alpha=.5,label='original')\nif trial_flat is not None:\n    axes[0].plot(t,trial_trend.flux.value,lw=1,label=f'protected W={WINDOW_TRIAL} day')\n    axes[1].scatter(t,(trial_flat.flux.value-1)*1e6,s=2,alpha=.5,label='trial')\nelse:\n    axes[0].text(.02,.95,'Trial failed: insufficient support; no invented curve',transform=axes[0].transAxes,va='top')\naxes[0].set_ylabel('Relative flux and trend');axes[1].set(xlabel='BKJD (day)',ylabel='Detrended flux - 1 (ppm)')\nfor ax in axes:ax.legend(loc='best')\nfig.tight_layout();save_plot(attempt_prefix+'/before-after.png');plt.close(fig)\nshutil.copy2(RUN/attempt_prefix/'before-after.png',RUN/'M31-challenge/before-after.png')\nkeep_text('M31-challenge/attempts.md','# 本人的试验解释\\n\\n[待填写] 每次尝试编号、实际结果、中间趋势/支持点依据、与预期是否相符、下一步问题。\\n')\nsave_json(attempt_prefix+'/result.json',{'attempt':attempt,'rows':rows,'config_diff':config_diff,\n    'learner_explanation':'pending; numerical output does not fill explanation',\n    'frozen_config_unchanged':digest(RUN/'audit/method-freeze.json')==freeze_sha_before,\n    'source_code_unchanged':digest(ROOT/'analyze.py')==code_sha_before})\nassert digest(RUN/'audit/method-freeze.json')==freeze_sha_before\nassert digest(ROOT/'analyze.py')==code_sha_before\nif Q4_REVEAL and (RUN/'audit/holdout-first-results.json').exists():\n    restore_out=RUN/'M31-challenge/restore'/attempt\n    result=log_process([sys.executable,str(RUN/'M28-entry-v1/replay_frozen.py'),\n        '--practice-root',str(ROOT),'--source-run',str(RUN),'--out',str(restore_out)],\n        RUN/'M31-challenge/restore'/f'{attempt}.log',ROOT)\n    if result.returncode!=0:raise RuntimeError('原方法新进程复算失败；保留日志检查。')\n    restored=read_json(restore_out/'replay-summary.json')\n    old_q3=read_json(RUN/'audit/development-results.json')['fixed_box_depth']['depth_ppm']\n    old_q4=read_json(RUN/'audit/holdout-first-results.json')['fixed_box_depth']['depth_ppm']\n    restore_checks={'same_freeze':restored['freeze_sha256']==freeze_sha_before,\n        'q3_depth_matches':bool(np.isclose(restored['roles']['development']['fixed_box_depth']['depth_ppm'],old_q3,rtol=1e-10,atol=1e-7)),\n        'q4_depth_matches':bool(np.isclose(restored['roles']['holdout']['fixed_box_depth']['depth_ppm'],old_q4,rtol=1e-10,atol=1e-7))}\n    save_json('M31-challenge/restore/checks.json',{'checks':restore_checks,'output':str(restore_out.relative_to(RUN)),\n        'note':'numerical restoration check, not human explanation assessment'})\n    print('恢复原方法的真实比较：',restore_checks)\nelse:\n    print('Q3 窗口计算已记录；完整 restore 等待 Q4 首次处理后进行。')\nprint(rows)\nif not FORECAST.strip():print('事前预期未填写：本次只是技术计算，不能称为已完成本人单变量探究。')\n"
+      }
+    ],
+    "outputs": [
+      "M31-challenge/forecast.md (learner)",
+      "M31-challenge/config-diff.json",
+      "M31-challenge/comparison.csv",
+      "M31-challenge/before-after.png",
+      "M31-challenge/attempts.md (learner)",
+      "M31-challenge/attempt-*/result.json",
+      "M31-challenge/restore/checks.json (after reveal)"
+    ],
+    "corrections": [
+      {
+        "old": "参考实现位于 analyze.py。",
+        "new": "本节使用 junior-guide.ipynb 的 M31 单元：仅改变 window_day，固定同一候选并继续排除候选事件点；不使用 analyze.py 中未保护事件的窗口敏感性表代替本次试验。"
+      }
+    ],
+    "assignment_corrections": [
+      {
+        "old": "先在副本中写预期，再只改变周期或局部中位数窗口之一。",
+        "new": "基础路线在 M31 的 FORECAST 中先写本人预期，再只改变 WINDOW_TRIAL；固定同一候选和保护算法，不重新搜索周期。周期试验作为另行扩展，不与本次窗口试验混合。"
+      }
+    ],
+    "insertion_before": "## 结果与预测不同怎么办"
+  },
+  {
+    "module": "M32",
+    "prerequisite": "能把一句结论连到数据/配置/程序；知道文件存在、程序运行、本人解释、他人核验分别是什么。",
+    "teaching": "## 用真实文件建立总索引，也把缺口留下\n\n最后一节不自动宣布项目完成。代码先按前面各节实际产生的位置检查文件，给出存在、缺失、待本人填写三种状态。空模板虽然是一个文件，仍不算已经有了本人结论；没有实际安装新环境，就保留安装未验证。未打开 Q4 时，首次检验及后续材料缺失是诚实的待完成状态，不能造空结果让清单变绿。\n\nM32-final/README.md 中的链接指向同一 RUN 下的原文件。历史配置、首次结果、参数试验仍各在原位，索引不把它们覆盖到一个“最新版”里。分享时应带上实践包代码、依赖、manifest 和 raw，以及整个本人的 run；只发最后的 README 或一张图，链接就找不到。若实际需要压缩归档，应解压到另一位置再核对，不能把本机链接有效当作已验证他人可用。\n\n最终重算再开一个进程，使用最初封存的候选和方法，而不是 M31 的试验窗口。它输出新的时间和结果，再与首次深度核对。首次文件的校验值在重算前后相同，说明历史未被本次重算覆盖。即使这些数值全匹配，也只完成机器检查，不等于你能解释或结论已获独立审查。\n\n请从自己的报告任选一句，依次打开证据表、对应局部图、原始来源和方法配置。再请检查者选一个你没有预先背好的点，说明横轴、纵轴、时间单位、哪个季度、怎样筛选、图能支持到什么程度。如果没有检查者，就在 explanation-check.md 中记录自查的提问和回答；程序不写同伴姓名，也不替你判理解通过。\n\n回顾最初的学习：现在你应能解释“恒星的光量怎样被记录成点；为什么一次变暗不等于发现行星；为什么需要固定方法再看另一段数据”。若某一处还说不清，索引会帮你回到具体一节及其作品。完成是一条可以追查的证据链，不是把文件数量凑够。\n",
+    "cells": [
+      {
+        "type": "code",
+        "source": "required=[\n    ('inputs','M29-dependencies-v1/data-manifest.csv',False),\n    ('environment','M29-dependencies-v1/environment.txt',False),\n    ('environment','M29-dependencies-v1/requirements.txt',False),\n    ('environment','M29-dependencies-v1/install.log',False),\n    ('frozen','audit/method-freeze.json',False),\n    ('frozen','M23-freeze-v1/analyze.py',False),\n    ('frozen','M23-freeze-v1/predeclared-rules.md',True),\n    ('frozen','M23-freeze-v1/exposure.md',True),\n    ('first-validation','audit/holdout-predictions-before-reveal.json',False),\n    ('first-validation','audit/holdout-first-results.json',False),\n    ('first-validation','M25-first-validation/run.log',False),\n    ('first-validation','M26-comparison-v1/windows.csv',False),\n    ('first-validation','M26-comparison-v1/comparison.md',True),\n    ('review','M28-entry-v1/replay_frozen.py',False),\n    ('review','M30-reproduction/comparison.csv',False),\n    ('review','M30-reproduction/runner.md',True),\n    ('review','M31-challenge/comparison.csv',False),\n    ('review','M31-challenge/forecast.md',True),\n    ('review','M31-challenge/attempts.md',True),\n    ('review','M31-challenge/restore/checks.json',False),\n    ('report','M27-validation-review/conclusion.md',True),\n    ('report','M27-validation-review/first-evidence.csv',False)]\nindex_rows=[]\nfor section,rel,needs_answer in required:\n    p=RUN/rel\n    exists=p.is_file()\n    pending=exists and needs_answer and '[待填写]' in p.read_text(encoding='utf-8')\n    status='missing_or_not_run' if not exists else 'learner_answer_pending' if pending else 'exists; content review still required' if needs_answer else 'exists'\n    index_rows.append({'section':section,'relative_path':rel,'status':status,\n        'sha256':digest(p) if exists else '','bytes':p.stat().st_size if exists else ''})\nsave_csv('M32-final/artifact-index.csv',['section','relative_path','status','sha256','bytes'],index_rows)\nfinal_rerun_status='not_run: Q4 first validation is not available or not authorized'\nif Q4_REVEAL and (RUN/'audit/holdout-first-results.json').exists():\n    first_sha=digest(RUN/'audit/holdout-first-results.json')\n    final_out=RUN/'M32-final/final-rerun'/('run-'+datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S%fZ'))\n    process=log_process([sys.executable,str(RUN/'M28-entry-v1/replay_frozen.py'),\n        '--practice-root',str(ROOT),'--source-run',str(RUN),'--out',str(final_out)],RUN/'M32-final/final-rerun/run.log',ROOT)\n    if process.returncode==0:\n        summary=read_json(final_out/'replay-summary.json')\n        current_first=read_json(RUN/'audit/holdout-first-results.json')\n        comparison={'original_first_file_unchanged':digest(RUN/'audit/holdout-first-results.json')==first_sha,\n            'same_freeze':summary['freeze_sha256']==digest(RUN/'audit/method-freeze.json'),\n            'q3_depth_matches':bool(np.isclose(summary['roles']['development']['fixed_box_depth']['depth_ppm'],\n                read_json(RUN/'audit/development-results.json')['fixed_box_depth']['depth_ppm'],rtol=1e-10,atol=1e-7)),\n            'q4_depth_matches':bool(np.isclose(summary['roles']['holdout']['fixed_box_depth']['depth_ppm'],\n                current_first['fixed_box_depth']['depth_ppm'],rtol=1e-10,atol=1e-7))}\n        save_json('M32-final/final-rerun/comparison.json',{'checks':comparison,'output':str(final_out.relative_to(RUN))})\n        final_rerun_status='computed; numerical checks '+json.dumps(comparison,ensure_ascii=False)\n    else:\n        final_rerun_status='failed; see final-rerun/run.log'\nkeep_text('M32-final/explanation-check.md','# 本人的图表解释与核验\\n\\n[待填写] 实际检查者（若仅本人写自查）、提问、图上位置、回答及需回到哪一节改进。程序不替本人判断已掌握。\\n')\nlines=['# 本次项目总索引','',\n    '这是材料与执行状态索引，不是课程完成证书。首次结果、事后试验和重算分别保留。','',\n    '| 用途 | 实际文件 | 状态 |','|---|---|---|']\nfor row in index_rows:\n    rel=row['relative_path']\n    link=f'[{rel}](../{rel})' if (RUN/rel).is_file() else rel\n    lines.append(f'| {row[\"section\"]} | {link} | {row[\"status\"]} |')\nlines.extend(['','最终固定方法新进程：'+final_rerun_status,'',\n    '分享需要实践包中的 analyze.py、manifest.json、requirements.txt、原始 raw，以及整个本人的 run。',\n    '新环境安装、本人解释、科研结论和独立评审分别检查；文件存在不能替代这些检查。',\n    '本人解释与检查者记录见 [explanation-check.md](explanation-check.md)。'])\n(RUN/'M32-final/README.md').write_text('\\n'.join(lines)+'\\n',encoding='utf-8')\nmissing=[r['relative_path'] for r in index_rows if r['status']=='missing_or_not_run']\npending=[r['relative_path'] for r in index_rows if r['status']=='learner_answer_pending']\nsave_json('M32-final/completion-state.json',{'material_missing_or_not_run':missing,\n    'learner_answers_pending':pending,'final_rerun':final_rerun_status,\n    'scientific_conclusion_verified':False,'learner_understanding_verified':False,\n    'independent_peer_review_verified':False,\n    'note':'No automatic claim of project completion; false means not established by this program.'})\nprint('总索引：',RUN/'M32-final/README.md')\nprint('缺失/未运行：',missing)\nprint('待本人填写：',pending)\nprint('文件检查与真实重算均不替代本人解释和实际评审。')\n"
+      }
+    ],
+    "outputs": [
+      "M32-final/README.md",
+      "M32-final/artifact-index.csv",
+      "M32-final/completion-state.json",
+      "M32-final/explanation-check.md (learner)",
+      "M32-final/final-rerun/run.log (after reveal)",
+      "M32-final/final-rerun/comparison.json (after reveal)"
+    ],
+    "corrections": [],
+    "assignment_corrections": [
+      {
+        "old": "先退出试验副本，核对首次配置和对应代码，再从重启后的内核或新进程运行完整分析。",
+        "new": "用 M32 单元核对首次配置与代码，调用 M28 固定方法入口在新进程重算原方案，不调用 develop 再搜索。总索引列真实文件和待完成项，代码不代判本人理解或独立评审通过。"
+      }
+    ],
+    "insertion_before": "## 先按原方案重新运行"
+  }
+]
