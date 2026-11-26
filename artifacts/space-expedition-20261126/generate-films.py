@@ -69,12 +69,12 @@ def video(item, action):
 def compose(item):
     d=folder(item);out=MEDIA/'video';out.mkdir(parents=True,exist_ok=True)
     if not (d/'source.mp4').is_file(): raise ValueError('No generated motion clip')
-    ff('-i',d/'source.mp4','-vf','scale=1280:720,fps=24','-c:v','libx264','-preset','fast','-crf','23','-pix_fmt','yuv420p','-c:a','aac','-b:a','128k',d/'character.mp4')
+    ff('-i',d/'source.mp4','-vf','scale=1280:720,fps=24','-c:v','libx264','-preset','fast','-crf','23','-pix_fmt','yuv420p','-c:a','aac','-ar','48000','-ac','2','-b:a','128k',d/'character.mp4')
     # A genuine generated speaking shot, followed by an explicitly separate environment/evidence shot.
     if item['id']!='welcome':
         ff('-loop','1','-i',PUBLIC/item['image'].lstrip('/'),'-f','lavfi','-i','anullsrc=r=48000:cl=stereo','-t','4','-vf','scale=1280:720:force_original_aspect_ratio=increase,crop=1280:720,fps=24','-c:v','libx264','-preset','fast','-crf','23','-pix_fmt','yuv420p','-c:a','aac','-b:a','128k',d/'equipment.mp4')
         (d/'concat.txt').write_text("file 'character.mp4'\nfile 'equipment.mp4'\n")
-        ff('-f','concat','-safe','0','-i',d/'concat.txt','-c','copy','-movflags','+faststart',out/(item['id']+'.mp4'))
+        ff('-i',d/'character.mp4','-i',d/'equipment.mp4','-filter_complex','[0:v:0][0:a:0][1:v:0][1:a:0]concat=n=2:v=1:a=1[v][a]','-map','[v]','-map','[a]','-t','14','-c:v','libx264','-preset','fast','-crf','23','-c:a','aac','-ar','48000','-movflags','+faststart',out/(item['id']+'.mp4'))
     else:
         ff('-i',d/'character.mp4','-c','copy','-movflags','+faststart',out/'welcome.mp4')
     audio=json.loads((d/'audio.json').read_text());parts=[s for s in re.split('(?<=[。？])',item['dialogue']) if s]
@@ -82,6 +82,7 @@ def compose(item):
     for i,part in enumerate(parts):
         end=time+(audio['speech_end']-.4)*len(part)/len(item['dialogue'])
         lines += [str(i+1),f'00:00:{time:06.3f} --> 00:00:{end:06.3f}',part,''];time=end
+    if item['id']!='welcome': lines += ['scene', '00:00:10.000 --> 00:00:14.000', item['shot'], '']
     (out/(item['id']+'.vtt')).write_text('\n'.join(lines))
     ff('-ss','1.2','-i',d/'source.mp4','-frames:v','1','-vf','scale=960:-2',out/(item['id']+'-poster.jpg'))
     print(json.dumps(dict(id=item['id'],composed=True,seconds=duration(out/(item['id']+'.mp4')))),flush=True)

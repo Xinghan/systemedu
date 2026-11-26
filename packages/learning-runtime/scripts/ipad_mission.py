@@ -69,4 +69,28 @@ def export_ipad_mission(repo: Path, out: Path, catalog):
                   courseIds=project_ids,films=films,bridges=source['bridges'])
     target = out/'content/missions/space.json';target.parent.mkdir(parents=True,exist_ok=True)
     target.write_text(json.dumps(result,ensure_ascii=False,separators=(',',':')))
+    export_expedition(repo, out, result, asset)
     return result
+
+
+def export_expedition(repo, out, mission, asset):
+    story = json.loads((repo / 'packages/ios-app/content/space-expedition.json').read_text())
+    refs = [ref for chapter in story['chapters'] for ref in chapter['refs']]
+    expected = {n['ref'] for n in mission['micro'] + mission['nodes'] + mission['research']}
+    if len(refs) != len(set(refs)) or set(refs) != expected:
+        raise ValueError('Expedition must preserve every original node exactly once')
+    asset(story['commanderImage'])
+    images = set()
+    for chapter in story['chapters']:
+        asset(chapter['image']); images.add(chapter['image'])
+        if not chapter['delivery']['evidence'] or not chapter['delivery']['checks']:
+            raise ValueError('Every chapter must produce a checkable work product')
+    if len(images) != len(story['chapters']):
+        raise ValueError('Chapter artwork must be distinct')
+    items = [('welcome', '欢迎加入远航队', story['goal'])] + [(c['id'], c['title'], c['arrival']) for c in story['chapters']]
+    story['films'] = [dict(id='expedition-' + ident, title=title, description=description,
+                           path=asset(f'/mission/space/expedition-v2/video/{ident}.mp4'),
+                           captions=asset(f'/mission/space/expedition-v2/video/{ident}.vtt'),
+                           poster=asset(f'/mission/space/expedition-v2/video/{ident}-poster.jpg'))
+                      for ident, title, description in items]
+    (out / 'content/missions/space-expedition.json').write_text(json.dumps(story, ensure_ascii=False, separators=(',', ':')))

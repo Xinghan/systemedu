@@ -24,6 +24,7 @@ private struct FilmPicture: UIViewRepresentable {
 struct TabletFilmView: View {
     let film: TabletFilm
     let captions: [FilmCaption]
+    var onContinue: (() -> Void)?
     @Environment(\.dismiss) private var dismiss
     @Environment(\.scenePhase) private var scenePhase
     @AppStorage("systemedu.ipad.chinese-film-captions") private var hasCaptions = true
@@ -36,7 +37,8 @@ struct TabletFilmView: View {
     @State private var controlsVisible = true
     @State private var transcript = false
 
-    init(film: TabletFilm) {
+    init(film: TabletFilm, onContinue: (() -> Void)? = nil) {
+        self.onContinue = onContinue
         self.film = film
         self.captions = FilmCaption.load(film.captions)
     }
@@ -64,6 +66,7 @@ struct TabletFilmView: View {
                         Button { dismiss() } label: { Image(systemName: "xmark").frame(width: 44, height: 44) }
                             .accessibilityLabel("关闭简报").accessibilityIdentifier("ipad-close-film")
                         Text(film.title).font(.headline)
+                        if let onContinue { Button("进入任务") { onContinue(); dismiss() }.font(.headline).accessibilityIdentifier("ipad-film-continue") }
                         Spacer()
                         if !captions.isEmpty {
                             Button { hasCaptions.toggle() } label: {

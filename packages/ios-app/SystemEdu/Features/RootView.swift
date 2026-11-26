@@ -23,7 +23,7 @@ struct RootView: View {
     var body: some View {
         if UIDevice.current.userInterfaceIdiom == .pad, let mission = TabletMission.current {
             TabletHomeView(store: store, mission: mission)
-        } else { phoneRoot }
+        } else { phoneRoot.preferredColorScheme(.light) }
     }
     private var phoneRoot: some View {
         TabView {
@@ -189,7 +189,7 @@ private struct TabletHomeView: View {
                                 Button { inProject = true } label: {
                                     VStack(alignment: .leading, spacing: 0) {
                                         Color.clear.frame(height: 270)
-                                            .overlay { BundledMissionImage(path: mission.homeImage) }.clipped()
+                                            .overlay { BundledMissionImage(path: Expedition.current?.chapters.first?.image ?? mission.homeImage) }.clipped()
                                             .overlay(alignment: .bottomLeading) {
                                                 VStack(alignment: .leading, spacing: 8) {
                                                     Text("太空科技").font(.subheadline.weight(.semibold))
@@ -201,35 +201,23 @@ private struct TabletHomeView: View {
                                             Text("拍下第一张星球照片，寻找远方的行星，设计自己的探测任务。")
                                                 .font(.title3).foregroundStyle(Color.forest)
                                             HStack {
-                                                Label("观测研究与探测工程", systemImage: "signpost.right")
+                                                Label("14 章 · 一次完整远航", systemImage: "point.topleft.down.to.point.bottomright.curvepath")
                                                 Spacer()
                                                 Label("进入项目", systemImage: "arrow.right").fontWeight(.semibold).foregroundStyle(tint)
                                             }.font(.subheadline).foregroundStyle(Color.quiet)
                                             if progress > 0 {
-                                                Text("已读完 \(progress) 节 · 接下来，\(mission.resume(store.records).title)").font(.caption).foregroundStyle(Color.quiet)
+                                                Text("课堂阅读与作品各自保存 · 进入后继续当前任务").font(.caption).foregroundStyle(Color.quiet)
                                             }
                                         }.padding(24)
                                     }.background(.white, in: RoundedRectangle(cornerRadius: 24))
                                         .clipShape(RoundedRectangle(cornerRadius: 24))
                                 }.buttonStyle(.plain).accessibilityIdentifier("ipad-project-space")
-                                if area == .library {
-                                    NavigationLink(value: AppRoute.catalog) {
-                                        HStack(spacing: 16) {
-                                            Image(systemName: "books.vertical").font(.title2)
-                                            VStack(alignment: .leading, spacing: 6) {
-                                                Text("浏览专题课程").font(.headline)
-                                                Text("机械、生命、能源与太空 · 按主题查找").font(.subheadline).foregroundStyle(Color.quiet)
-                                            }
-                                            Spacer()
-                                            Image(systemName: "chevron.right")
-                                        }.padding(24).background(.white, in: RoundedRectangle(cornerRadius: 18))
-                                    }.buttonStyle(.plain).accessibilityIdentifier("ipad-browse-catalog")
-                                }
+
                             }.padding(32).frame(maxWidth: 1080).frame(maxWidth: .infinity)
                         }.background(Color(white: 0.96)).toolbar(.hidden, for: .navigationBar)
                     }
                 }
-            }.foregroundStyle(Color.forest).tint(tint)
+            }.foregroundStyle(Color.forest).tint(tint).preferredColorScheme(.light)
         }
     }
 }

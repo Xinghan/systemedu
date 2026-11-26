@@ -19,6 +19,7 @@ enum StoreError: LocalizedError {
 @MainActor
 final class LearningStore: ObservableObject {
     @Published private(set) var records: [LocalRecord] = []
+    @Published private(set) var documentRevision = 0
     private var database: OpaquePointer?
     // Phase 1 has no account login. A separate owner key prevents future account data mixing.
     private let owner: String
@@ -42,6 +43,7 @@ final class LearningStore: ObservableObject {
             try execute("PRAGMA synchronous=FULL")
             try execute("CREATE TABLE IF NOT EXISTS local_activity (owner TEXT NOT NULL, activity TEXT NOT NULL, state TEXT NOT NULL, updated_at REAL NOT NULL, PRIMARY KEY(owner, activity))")
             try execute("CREATE TABLE IF NOT EXISTS local_workspace (owner TEXT NOT NULL, activity TEXT NOT NULL, state TEXT NOT NULL, updated_at REAL NOT NULL, PRIMARY KEY(owner, activity))")
+            try execute("CREATE TABLE IF NOT EXISTS local_document (owner TEXT NOT NULL, key TEXT NOT NULL, data BLOB NOT NULL, PRIMARY KEY(owner, key))")
             try execute("PRAGMA user_version=1")
             try refresh()
         } catch { sqlite3_close(database); database = nil; throw error }
@@ -157,6 +159,33 @@ final class LearningStore: ObservableObject {
         }
         guard step == SQLITE_DONE else { throw StoreError.database("关联作品读取未完成") }
         return result
+    }
+
+    // Identity and expedition deliveries never masquerade as classroom progress.
+    func document<T: Decodable>(_ key: String, as type: T.Type = T.self) throws -> T? {
+        var statement: OpaquePointer?
+        guard sqlite3_prepare_v2(database, "SELECT data FROM local_document WHERE owner=? AND key=?", -1, &statement, nil) == SQLITE_OK else { throw StoreError.invalidState }
+        defer { sqlite3_finalize(statement) }
+        sqlite3_bind_text(statement, 1, owner, -1, transient)
+        sqlite3_bind_text(statement, 2, key, -1, transient)
+        let result = sqlite3_step(statement)
+        if result == SQLITE_DONE { return nil }
+        guard result == SQLITE_ROW, let bytes = sqlite3_column_blob(statement, 0) else { throw StoreError.invalidState }
+        return try JSONDecoder().decode(type, from: Data(bytes: bytes, count: Int(sqlite3_column_bytes(statement, 0))))
+    }
+
+    func saveDocument<T: Encodable>(_ value: T, key: String, immutable: Bool = false) throws {
+        let data = try JSONEncoder().encode(value)
+        guard data.count <= 48_000_000, key.count <= 200 else { throw StoreError.invalidState }
+        var statement: OpaquePointer?
+        let suffix = immutable ? "" : " ON CONFLICT(owner,key) DO UPDATE SET data=excluded.data"
+        guard sqlite3_prepare_v2(database, "INSERT INTO local_document(owner,key,data) VALUES(?,?,?)" + suffix, -1, &statement, nil) == SQLITE_OK else { throw StoreError.invalidState }
+        defer { sqlite3_finalize(statement) }
+        sqlite3_bind_text(statement, 1, owner, -1, transient)
+        sqlite3_bind_text(statement, 2, key, -1, transient)
+        _ = data.withUnsafeBytes { sqlite3_bind_blob(statement, 3, $0.baseAddress, Int32(data.count), transient) }
+        guard sqlite3_step(statement) == SQLITE_DONE else { throw StoreError.database("作品未保存，原记录仍保留") }
+        documentRevision += 1
     }
 
     func export(_ activity: LearningActivity) throws -> URL {

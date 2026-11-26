@@ -117,3 +117,22 @@ test('the space program opens real projects from a shared foundation, with disti
   const mapped = [...map.matchAll(/`(course:[^`]+)`/g)].map(m => m[1]).sort()
   assert.deepEqual(mapped, catalog.courses.filter(c => mission.courseIds.includes(c.id)).flatMap(c => c.modules.map(n => n.id)).sort())
 })
+
+test('personal expedition preserves all nodes on one route and gives every chapter a distinct work product', () => {
+  const story = read('content/missions/space-expedition.json'), legacy = read('content/missions/space.json')
+  const refs = story.chapters.flatMap(c => c.refs)
+  assert.equal(story.chapters.length, 14)
+  assert.equal(refs.length, new Set(refs).size)
+  assert.deepEqual([...refs].sort(), [...legacy.micro, ...legacy.nodes, ...legacy.research].map(n => n.ref).sort())
+  assert.equal(new Set(story.chapters.map(c => c.image)).size, 14)
+  for (const chapter of story.chapters) {
+    assert.ok(chapter.delivery.evidence.length && chapter.delivery.checks.length, chapter.id)
+    assert.ok(chapter.handoff && chapter.arrival && chapter.delivery.boundary, chapter.id)
+    assert.ok(existsSync(path.join(root, chapter.image)))
+  }
+  assert.equal(story.films.length, 15)
+  for (const film of story.films) {
+    for (const key of ['path', 'poster', 'captions']) assert.ok(existsSync(path.join(root, film[key])), film.id)
+    assert.match(readFileSync(path.join(root, film.captions), 'utf8'), /^WEBVTT/)
+  }
+})
