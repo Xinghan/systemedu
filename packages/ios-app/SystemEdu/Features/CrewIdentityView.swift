@@ -137,6 +137,13 @@ struct CrewIdentityView: View {
     }
     private var role: ExpeditionRole { story.roles.first { $0.id == roleID } ?? story.roles[0] }
     private var needsGeneration: Bool { photo != nil && avatar == nil }
+    private var usesMacCamera: Bool {
+        #if DEBUG && targetEnvironment(simulator)
+        return !(ProcessInfo.processInfo.environment["SYSTEMEDU_TEST_STORE"] != nil && ProcessInfo.processInfo.environment["SYSTEMEDU_TEST_NATIVE_CAMERA"] == "1")
+        #else
+        return false
+        #endif
+    }
     var body: some View {
         ScrollView {
             ViewThatFits(in: .horizontal) {
@@ -146,17 +153,12 @@ struct CrewIdentityView: View {
         }.background(Color.expeditionNight).foregroundStyle(.white).tint(.expeditionGold)
             .task(id: picker) { await loadPhoto() }
             .fullScreenCover(isPresented: $showingCamera) {
-                CrewCameraView { result in
-                    showingCamera = false
-                    switch result {
-                    case .cancelled: break
-                    case .unreadable: error = AvatarFailure.image.localizedDescription
-                    case .captured(let image):
-                        guard let bytes = image.jpegData(compressionQuality: 0.9), let clean = CrewImage.jpeg(bytes) else { error = AvatarFailure.image.localizedDescription; return }
-                        generation?.cancel(); selectionVersion = UUID(); generating = false
-                        picker = nil; photo = clean; avatar = nil; error = nil
-                    }
-                }.ignoresSafeArea()
+                #if DEBUG && targetEnvironment(simulator)
+                if usesMacCamera { MacCameraView(onComplete: finishCamera) }
+                else { CrewCameraView(onComplete: finishCamera).ignoresSafeArea() }
+                #else
+                CrewCameraView(onComplete: finishCamera).ignoresSafeArea()
+                #endif
             }
             .alert("拍摄队员照片", isPresented: Binding(get: { cameraIssue != nil }, set: { if !$0 { cameraIssue = nil } })) {
                 if cameraIssue == .denied {
@@ -251,7 +253,19 @@ struct CrewIdentityView: View {
             }.buttonStyle(.plain).disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || generating || loadingPhoto || requestingCamera).opacity(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? 0.45 : 1).accessibilityIdentifier(needsGeneration ? "crew-generate" : "crew-confirm")
         }
     }
+    private func finishCamera(_ result: CrewCameraResult) {
+        showingCamera = false
+        switch result {
+        case .cancelled: break
+        case .unreadable: error = AvatarFailure.image.localizedDescription
+        case .captured(let image):
+            guard let bytes = image.jpegData(compressionQuality: 0.9), let clean = CrewImage.jpeg(bytes) else { error = AvatarFailure.image.localizedDescription; return }
+            generation?.cancel(); selectionVersion = UUID(); generating = false
+            picker = nil; photo = clean; avatar = nil; error = nil
+        }
+    }
     @MainActor private func openCamera() async {
+        if usesMacCamera { showingCamera = true; return }
         guard !requestingCamera else { return }
         requestingCamera = true
         defer { requestingCamera = false }

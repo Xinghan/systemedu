@@ -16,9 +16,17 @@ open packages/ios-app/SystemEdu.xcodeproj
 
 每章作品保存在本机，可打开、导出与回看；材料齐备和学生自检不代表科研判断正确或教师评分通过。首章自动接收亲自拍摄的模拟望远镜照片，后续章收取实际工作文件。更换队员身份不重置进度，已署名档案保留当时身份。
 
-照片生成当前只连接 Debug 模拟器的[本机服务](services/README.md)，真实设备需要部署已认证的 HTTPS 服务。原生相机入口已接入；没有可用摄像头时提示从相册选择，真实 iPad 拍摄仍待硬件验收。所有照片先预览，点击生成才上传；不自动保存原照到相册。
+照片生成当前只连接 Debug 模拟器的[本机服务](services/README.md)，真实设备需要部署已认证的 HTTPS 服务。Debug 模拟器点击「拍一张」后通过 Mac 浏览器连接摄像头：先启动本机服务，在自动打开的页面点击「连接 Mac 摄像头」并授权，再回模拟器拍照。真机仍使用原生相机，真实 iPad 拍摄仍待硬件验收。所有照片先预览，点击生成才上传；不自动保存原照到相册。
 
-模拟器相册与 Mac「照片」图库相互独立，不会自动读取 Mac 图库。测试个人照片时，可先从 Mac「照片」导出所选图片，再拖入模拟器；也可运行 `xcrun simctl addmedia booted /absolute/path/photo.jpg`。此操作只导入选定文件，不导入整个 Mac 图库。
+模拟器相册与 Mac「照片」图库相互独立。先在 Mac「照片」选中图片，通过「文件 → 导出 → 导出照片」保存成 JPG 或 PNG。然后用下方命令导入；导入后关闭 App 的照片选择窗口，再重新点击「从相册选择」。不要把照片图库包（`.photoslibrary`）作为图片文件导入。
+
+```sh
+# 查看已经启动的模拟器，复制所需设备的 UDID。
+python3 packages/ios-app/scripts/import-simulator-photo.py --list
+python3 packages/ios-app/scripts/import-simulator-photo.py --device 设备UDID "/完整路径/照片.jpg"
+```
+
+也可直接运行 `xcrun simctl addmedia 设备UDID "/完整路径/照片.jpg"`。2026-11-26 本机 iPad Air 11-inch (M4) 的 UDID 为 `514BC1A2-E3D6-47CE-B4C6-823459A82BEB`，已用卡通测试图验证导入及 App 内选取。多台设备同时启动时须指定 UDID，不使用含糊的 `booted`。导入工具会在多设备时要求明确选择，只处理提供的文件。
 
 [本轮实现与限制](../../docs/plans/2026-11-26-ipad-expedition-implementation.md) · [120 节点去向表](../../docs/plans/2026-11-26-ipad-expedition-node-map.md) · [验收资料](../../artifacts/space-expedition-20261126/README.md)
 

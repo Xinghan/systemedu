@@ -14,6 +14,7 @@ from urllib.parse import urlsplit
 
 import requests
 from PIL import Image, ImageOps
+from camera_bridge import CameraSessions, handle_camera
 
 PORT = 8769
 MAX_BODY = 9_000_000
@@ -122,6 +123,8 @@ class Jobs:
 
 
 jobs = Jobs()
+cameras = CameraSessions(clean_image)
+threading.Thread(target=cameras.sweep, daemon=True).start()
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -143,6 +146,7 @@ class Handler(BaseHTTPRequestHandler):
         return not self.headers.get('Origin') and self.headers.get('Host') in (f'127.0.0.1:{PORT}', f'localhost:{PORT}')
 
     def do_POST(self):
+        if handle_camera(self, cameras): return
         self.connection.settimeout(15)
         if not self.allowed(): return self.reply(403, {'error': 'request denied'})
         if self.path != '/avatars' or self.headers.get('Content-Type') != 'application/json':
@@ -161,6 +165,7 @@ class Handler(BaseHTTPRequestHandler):
             self.reply(400, {'error': 'invalid image or request'})
 
     def do_GET(self):
+        if handle_camera(self, cameras): return
         if not self.allowed(): return self.reply(403, {'error': 'request denied'})
         if self.path == '/health': return self.reply(200, {'mode': 'simulator-preview'})
         match = re.fullmatch(r'/avatars/([a-f0-9]{32})', self.path)
@@ -168,6 +173,7 @@ class Handler(BaseHTTPRequestHandler):
         self.reply(200 if value else 404, value or {'error': 'expired'})
 
     def do_DELETE(self):
+        if handle_camera(self, cameras): return
         if not self.allowed(): return self.reply(403, {'error': 'request denied'})
         match = re.fullmatch(r'/avatars/([a-f0-9]{32})', self.path)
         if not match: return self.reply(404, {'error': 'not found'})

@@ -14,3 +14,8 @@
 实现与限制详见 docs/plans/2026-11-26-ipad-expedition-implementation.md；验收摘要见 verification.json。窗口连接工具故障后，界面验证依据 XCTest 截图与回归结果，不宣称人工逐屏操作已通过。
 
 卡通队员分别为观测员、工程师、领航员，内置 image_gen 生成；透明 PNG 与完整提示词见 `crew-image-prompts.json`。角色卡用半身人物，任务和署名头像使用面部裁切。系统相机的允许、拒绝后回退和取消，以及系统相册的打开和取消已通过模拟器自动化；尚未验证真实 iPad 拍摄。模拟器相册独立于 Mac 图库，不会自动读入电脑照片。
+## 照片导入与 Mac 相机补充验收
+
+2026-11-26：在用户指定的 iPad Air 11-inch (M4) 上，通过明确 UDID 导入卡通测试图，实际完成相册点选和原照预览。新增 Debug 模拟器 Mac 摄像头桥接；22 项本批次检查通过（10 项 Python、3 个浏览器合成摄像头场景、3 项原生单元测试、6 项 iPad UI 测试），详见 [camera-verification.json](camera-verification.json)。这些检查与此前批次存在重叠，不直接累加为独立测试总数。
+
+`ui/crew-imported-photo-*` 展示导入与选取结果，`ui/crew-mac-camera-*` 使用明确标记的合成测试画面。未使用学生照片、未开启真实 Mac 摄像头、未调用头像供应商。真实摄像头仍需要用户在浏览器授权后检查实际取景。

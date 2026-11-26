@@ -2,8 +2,11 @@ import XCTest
 
 final class TabletMissionTests: XCTestCase {
     override func setUp() { super.setUp(); continueAfterFailure = false }
-    @MainActor private func app() -> XCUIApplication {
-        let app = XCUIApplication(); app.launchEnvironment["SYSTEMEDU_TEST_STORE"] = UUID().uuidString; app.launch(); return app
+    @MainActor private func app(nativeCamera: Bool = false, cameraEndpoint: String? = nil) -> XCUIApplication {
+        let app = XCUIApplication(); app.launchEnvironment["SYSTEMEDU_TEST_STORE"] = UUID().uuidString
+        if nativeCamera { app.launchEnvironment["SYSTEMEDU_TEST_NATIVE_CAMERA"] = "1" }
+        if let cameraEndpoint { app.launchEnvironment["SYSTEMEDU_TEST_CAMERA_ENDPOINT"] = cameraEndpoint }
+        app.launch(); return app
     }
     @MainActor private func enter(_ app: XCUIApplication) {
         XCTAssertTrue(app.buttons["ipad-project-space"].waitForExistence(timeout: 20)); app.buttons["ipad-project-space"].tap()
@@ -71,7 +74,7 @@ final class TabletMissionTests: XCTestCase {
 
     @MainActor func testCharacterSelectionAndCameraCancellationKeepIdentity() {
         XCUIDevice.shared.orientation = .landscapeLeft
-        let app = app(); app.terminate(); app.resetAuthorizationStatus(for: .camera); app.launch(); enter(app)
+        let app = app(nativeCamera: true); app.terminate(); app.resetAuthorizationStatus(for: .camera); app.launch(); enter(app)
         let name = app.textFields["crew-name"]; XCTAssertTrue(name.waitForExistence(timeout: 10))
         name.tap(); name.typeText("Nova")
         for role in ["engineer", "navigator", "observer"] {
@@ -101,7 +104,7 @@ final class TabletMissionTests: XCTestCase {
 
     @MainActor func testCameraPermissionDenialKeepsPhotoOptions() {
         XCUIDevice.shared.orientation = .landscapeLeft
-        let app = app(); app.terminate(); app.resetAuthorizationStatus(for: .camera); app.launch(); enter(app)
+        let app = app(nativeCamera: true); app.terminate(); app.resetAuthorizationStatus(for: .camera); app.launch(); enter(app)
         let camera = app.buttons["crew-take-photo"]; XCTAssertTrue(camera.waitForExistence(timeout: 10)); camera.tap()
         let permission = XCUIApplication(bundleIdentifier: "com.apple.springboard").alerts["Allow “SystemEdu” to access your camera?"]
         if permission.waitForExistence(timeout: 3) {
@@ -130,6 +133,49 @@ final class TabletMissionTests: XCTestCase {
         XCTAssertFalse(app.buttons["crew-generate"].exists)
         join(app); capture("crew-avatar-task-home")
     }
+    // Import the documented synthetic fixture with simctl addmedia before this integration test.
+    @MainActor func testImportedSimulatorPhotoCanBeSelected() {
+        XCUIDevice.shared.orientation = .landscapeLeft
+        let app = app(); enter(app)
+        app.buttons["crew-choose-photo"].tap()
+        let cell = app.images.matching(identifier: "PXGGridLayout-Info").firstMatch
+        XCTAssertTrue(cell.waitForExistence(timeout: 45), app.debugDescription)
+        capture("crew-imported-photo-library"); cell.tap()
+        XCTAssertTrue(app.buttons["crew-generate"].waitForExistence(timeout: 15), app.debugDescription)
+        XCTAssertTrue(app.staticTexts["原照片 · 仅在本机预览"].exists)
+        capture("crew-imported-photo-preview")
+    }
+
+    // Run the synthetic fixture service on 8879; this never requests the Mac hardware camera.
+    @MainActor func testMacCameraCaptureAndCancel() {
+        XCUIDevice.shared.orientation = .landscapeLeft
+        let app = app(cameraEndpoint: "http://127.0.0.1:8879"); enter(app)
+        let name = app.textFields["crew-name"]; name.tap(); name.typeText("Nova")
+        app.buttons["crew-role-engineer"].tap(); app.buttons["crew-take-photo"].tap()
+        XCTAssertTrue(app.images["mac-camera-frame"].waitForExistence(timeout: 15), app.debugDescription)
+        capture("crew-mac-camera-synthetic-preview")
+        app.buttons["mac-camera-shutter"].tap()
+        XCTAssertTrue(app.buttons["crew-generate"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["原照片 · 仅在本机预览"].exists)
+        capture("crew-mac-camera-captured-preview")
+        app.buttons["crew-take-photo"].tap()
+        XCTAssertTrue(app.images["mac-camera-frame"].waitForExistence(timeout: 15))
+        app.buttons["mac-camera-cancel"].tap()
+        XCTAssertEqual(name.value as? String, "Nova")
+        XCTAssertTrue(app.buttons["crew-role-engineer"].isSelected)
+        XCTAssertTrue(app.buttons["crew-generate"].exists)
+    }
+
+    @MainActor func testMacCameraUnavailableAllowsReturnToPhotos() {
+        XCUIDevice.shared.orientation = .landscapeLeft
+        let app = app(cameraEndpoint: "http://127.0.0.1:1"); enter(app)
+        app.buttons["crew-take-photo"].tap()
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "Mac 相机连接服务未启动")).firstMatch.waitForExistence(timeout: 15))
+        XCTAssertFalse(app.buttons["mac-camera-shutter"].isEnabled)
+        app.buttons["mac-camera-cancel"].tap()
+        XCTAssertTrue(app.buttons["crew-choose-photo"].isEnabled)
+    }
+
     @MainActor func testCapturedWorkIsArchivedAndUnlocksOnlyTheNextChapter() {
         XCUIDevice.shared.orientation = .landscapeLeft
         let app = app(); enter(app); join(app)
